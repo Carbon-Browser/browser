@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/test_extension_environment.h"
 #include "chrome/browser/new_tab_page/chrome_colors/generated_colors_info.h"
@@ -228,8 +229,8 @@ TEST_F(ChromeCustomizeThemesHandlerTest, InstallThirdPartyTheme) {
       test_data_dir.AppendASCII("extensions/theme_minimal/manifest.json");
   std::string config_contents;
   ASSERT_TRUE(base::ReadFileToString(manifest_path, &config_contents));
-  absl::optional<base::Value> manifest =
-      base::JSONReader::Read(config_contents);
+  absl::optional<base::Value::Dict> manifest =
+      base::test::ParseJsonDict(config_contents);
   ASSERT_TRUE(manifest.has_value());
 
   test::ThemeServiceChangedWaiter waiter(theme_service());

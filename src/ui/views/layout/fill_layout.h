@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,6 @@ class VIEWS_EXPORT FillLayout : public LayoutManagerBase {
 
   ~FillLayout() override;
 
-  bool include_hidden_views() const { return include_hidden_views_; }
-  FillLayout& SetIncludeHiddenViews(bool include_hidden_views);
-
   bool minimum_size_enabled() const { return minimum_size_enabled_; }
   FillLayout& SetMinimumSizeEnabled(bool minimum_size_enabled);
 
@@ -41,14 +38,8 @@ class VIEWS_EXPORT FillLayout : public LayoutManagerBase {
   int GetPreferredHeightForWidth(const View* host, int width) const override;
 
  private:
-  // Uses |include_hidden_views| to determine whether a child should be
-  // included; calls either IsChildIncludedInLayout() or
-  // IsChildViewIgnoredByLayout() as appropriate.
-  bool ShouldIncludeChild(const View* view) const;
-
-  // Whether to include hidden views in size calculations. Default is to
-  // include for backwards compatibility.
-  bool include_hidden_views_ = true;
+  // Returns the size bounds of the content area of the view.
+  SizeBounds GetContentsSizeBounds(const View* host) const;
 
   // Whether to compute minimum size separately, as the maximum of all of the
   // included child views' minimum size (true), or to simply return the

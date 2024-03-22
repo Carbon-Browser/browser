@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,28 @@
 
 #include <string>
 
+#include "ash/constants/quick_settings_catalogs.h"
 #include "ash/system/network/network_feature_pod_button.h"
+#include "ash/system/network/network_feature_tile.h"
 #include "ash/system/network/network_icon_animation_observer.h"
 #include "ash/system/network/tray_network_state_observer.h"
-#include "ash/system/tray/system_tray_item_uma_type.h"
 #include "ash/system/unified/feature_pod_controller_base.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 
 namespace ash {
 
-class FeaturePodButton;
 class UnifiedSystemTrayController;
 
-// Controller of the feature pod button that allows users to toggle whether
-// certain network technologies are enabled or disabled, and that allows users
-// to navigate to a more detailed page with a network list.
+// Controller of the feature tile that allows users to toggle whether certain
+// network technologies are enabled or disabled, and that allows users to
+// navigate to a more detailed page with a network list.
 class ASH_EXPORT NetworkFeaturePodController
     : public network_icon::AnimationObserver,
       public FeaturePodControllerBase,
       public NetworkFeaturePodButton::Delegate,
+      public NetworkFeatureTile::Delegate,
       public TrayNetworkStateObserver {
  public:
   explicit NetworkFeaturePodController(
@@ -36,10 +39,10 @@ class ASH_EXPORT NetworkFeaturePodController
   ~NetworkFeaturePodController() override;
 
   // FeaturePodControllerBase:
-  FeaturePodButton* CreateButton() override;
+  std::unique_ptr<FeatureTile> CreateTile(bool compact = false) override;
+  QsFeatureCatalogName GetCatalogName() override;
   void OnIconPressed() override;
   void OnLabelPressed() override;
-  SystemTrayItemUmaType GetUmaType() const override;
 
  private:
   // network_icon::AnimationObserver:
@@ -47,6 +50,9 @@ class ASH_EXPORT NetworkFeaturePodController
 
   // NetworkFeaturePodButton::Delegate:
   void OnFeaturePodButtonThemeChanged() override;
+
+  // NetworkFeatureTile::Delegate:
+  void OnFeatureTileThemeChanged() override;
 
   // TrayNetworkStateObserver:
   void ActiveNetworkStateChanged() override;
@@ -58,11 +64,18 @@ class ASH_EXPORT NetworkFeaturePodController
       const chromeos::network_config::mojom::NetworkStateProperties* network)
       const;
 
-  // Updates |button_| state to reflect the current state of networks.
-  void UpdateButtonStateIfExists();
+  // Purges network icon cache and updates the button state.
+  void PropagateThemeChanged();
 
-  FeaturePodButton* button_ = nullptr;
-  UnifiedSystemTrayController* tray_controller_;
+  // Updates `tile_` state to reflect the current state of networks.
+  void UpdateTileStateIfExists();
+
+  // Owned by the views hierarchy.
+  raw_ptr<FeatureTile, DanglingUntriaged | ExperimentalAsh> tile_ = nullptr;
+  raw_ptr<UnifiedSystemTrayController, DanglingUntriaged | ExperimentalAsh>
+      tray_controller_;
+
+  base::WeakPtrFactory<NetworkFeaturePodController> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

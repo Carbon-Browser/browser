@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,7 +67,6 @@ class LifecycleHook implements ApplicationStateListener {
         }
     }
 
-
     @Override
     public void onApplicationStateChange(int newState) {
         Log.d(TAG, "onApplicationStateChange");
@@ -76,8 +75,11 @@ class LifecycleHook implements ApplicationStateListener {
         boolean newVisibility = ApplicationStatus.hasVisibleActivities();
         if (mIsApplicationVisible == newVisibility) return;
 
-        Log.d(TAG, "Application visibilty changed to %s. Updating state of %d client(s).",
-                newVisibility, mClientHelpers.size());
+        Log.d(
+                TAG,
+                "Application visibilty changed to %s. Updating state of %d client(s).",
+                newVisibility,
+                mClientHelpers.size());
 
         mIsApplicationVisible = newVisibility;
 

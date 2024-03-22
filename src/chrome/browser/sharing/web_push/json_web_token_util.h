@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class ECPrivateKey;
 //
 // https://tools.ietf.org/html/rfc7519
 absl::optional<std::string> CreateJSONWebToken(
-    const base::Value& claims,
+    const base::Value::Dict& claims,
     crypto::ECPrivateKey* private_key);
 
 #endif  // CHROME_BROWSER_SHARING_WEB_PUSH_JSON_WEB_TOKEN_UTIL_H_

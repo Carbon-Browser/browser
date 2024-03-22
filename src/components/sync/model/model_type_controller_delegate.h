@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/sync_stop_metadata_fate.h"
@@ -26,7 +25,7 @@ struct TypeEntitiesCount;
 class ModelTypeControllerDelegate {
  public:
   using AllNodesCallback =
-      base::OnceCallback<void(ModelType, std::unique_ptr<base::ListValue>)>;
+      base::OnceCallback<void(ModelType, base::Value::List)>;
   using StartCallback =
       base::OnceCallback<void(std::unique_ptr<DataTypeActivationResponse>)>;
 
@@ -43,7 +42,7 @@ class ModelTypeControllerDelegate {
   // |metadata_fate|, might delete all local sync metadata.
   virtual void OnSyncStopping(SyncStopMetadataFate metadata_fate) = 0;
 
-  // Returns a ListValue representing all nodes for the type to |callback|.
+  // Returns a Value::List representing all nodes for the type to |callback|.
   // Used for populating nodes in Sync Node Browser of chrome://sync-internals.
   virtual void GetAllNodesForDebugging(AllNodesCallback callback) = 0;
 
@@ -55,6 +54,9 @@ class ModelTypeControllerDelegate {
   // Records entities count and estimated memory usage of the type into
   // histograms.
   virtual void RecordMemoryUsageAndCountsHistograms() = 0;
+
+  // Clear metadata if the model is stopped.
+  virtual void ClearMetadataIfStopped() = 0;
 };
 
 }  // namespace syncer

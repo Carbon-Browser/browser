@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,17 @@ void LogNonReflectionUpdateFreshnessToUma(ModelType type,
       /*min=*/base::Milliseconds(100),
       /*max=*/base::Days(7),
       /*buckets=*/50);
+}
+
+void LogClearMetadataWhileStoppedHistogram(ModelType model_type,
+                                           bool is_delayed_call) {
+  base::UmaHistogramEnumeration("Sync.ClearMetadataWhileStopped",
+                                ModelTypeHistogramValue(model_type));
+  const char* histogram_name =
+      is_delayed_call ? "Sync.ClearMetadataWhileStopped.DelayedClear"
+                      : "Sync.ClearMetadataWhileStopped.ImmediateClear";
+  base::UmaHistogramEnumeration(histogram_name,
+                                ModelTypeHistogramValue(model_type));
 }
 
 }  // namespace syncer

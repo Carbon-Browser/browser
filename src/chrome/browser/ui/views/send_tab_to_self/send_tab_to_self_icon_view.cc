@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_device_picker_bubble_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/omnibox_view.h"
 #include "components/send_tab_to_self/features.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -29,10 +30,14 @@ SendTabToSelfIconView::SendTabToSelfIconView(
     : PageActionIconView(command_updater,
                          IDC_SEND_TAB_TO_SELF,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate) {
+                         page_action_icon_delegate,
+                         "SendTabToSelf") {
   SetVisible(false);
   SetLabel(l10n_util::GetStringUTF16(IDS_OMNIBOX_ICON_SEND_TAB_TO_SELF));
   SetUpForInOutAnimation();
+  SetAccessibilityProperties(
+      /*role*/ absl::nullopt,
+      l10n_util::GetStringUTF16(IDS_OMNIBOX_TOOLTIP_SEND_TAB_TO_SELF));
 }
 
 SendTabToSelfIconView::~SendTabToSelfIconView() {}
@@ -106,12 +111,9 @@ void SendTabToSelfIconView::OnExecuting(
     PageActionIconView::ExecuteSource execute_source) {}
 
 const gfx::VectorIcon& SendTabToSelfIconView::GetVectorIcon() const {
-  return kSendTabToSelfIcon;
-}
-
-std::u16string SendTabToSelfIconView::GetTextForTooltipAndAccessibleName()
-    const {
-  return l10n_util::GetStringUTF16(IDS_OMNIBOX_TOOLTIP_SEND_TAB_TO_SELF);
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? kDevicesChromeRefreshIcon
+             : kDevicesIcon;
 }
 
 SendTabToSelfBubbleController* SendTabToSelfIconView::GetController() const {

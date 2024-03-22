@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/input_method/assistive_window_properties.h"
@@ -58,8 +58,8 @@ bool ShouldHighlight(const views::Button& button) {
 void SetHighlighted(views::View& view, bool highlighted) {
   if (!!view.background() != highlighted) {
     view.SetBackground(highlighted
-                           ? views::CreateSolidBackground(
-                                 ResolveSemanticColor(kButtonHighlightColor))
+                           ? views::CreateRoundedRectBackground(
+                                 ResolveSemanticColor(kButtonHighlightColor), 2)
                            : nullptr);
   }
 }
@@ -88,8 +88,8 @@ SuggestionWindowView::CreateNonClientFrameView(views::Widget* widget) {
 }
 
 void SuggestionWindowView::Show(const SuggestionDetails& details) {
-  ResizeCandidateArea(0);
-
+  ResizeCandidateArea({});
+  Reorient(Orientation::kVertical);
   completion_view_->SetVisible(true);
   completion_view_->SetView(details);
   if (details.show_setting_link)
@@ -101,18 +101,20 @@ void SuggestionWindowView::Show(const SuggestionDetails& details) {
 }
 
 void SuggestionWindowView::ShowMultipleCandidates(
-    const ash::input_method::AssistiveWindowProperties& properties) {
+    const ash::input_method::AssistiveWindowProperties& properties,
+    Orientation orientation) {
   const std::vector<std::u16string>& candidates = properties.candidates;
   completion_view_->SetVisible(false);
-  ResizeCandidateArea(candidates.size());
-  for (size_t i = 0; i < candidates.size(); ++i) {
-    auto* const candidate = static_cast<views::LabelButton*>(
-        multiple_candidate_area_->children()[i]);
-    candidate->SetText(candidates[i]);
-  }
-
+  Reorient(orientation, /*extra_padding_on_right=*/
+           properties.type !=
+               ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion);
+  ResizeCandidateArea(
+      candidates,
+      properties.type == ash::ime::AssistiveWindowType::kEmojiSuggestion);
   learn_more_button_->SetVisible(properties.show_setting_link);
-
+  type_ = properties.type;
+  // Ensure colours are correct.
+  OnThemeChanged();
   MakeVisible();
 }
 
@@ -123,12 +125,12 @@ void SuggestionWindowView::SetButtonHighlighted(
     if (completion_view_->GetVisible()) {
       completion_view_->SetHighlighted(highlighted);
     } else {
-      const views::View::Views& candidates =
+      const views::View::Views& candidate_buttons =
           multiple_candidate_area_->children();
-      if (button.index < candidates.size()) {
-        SetCandidateHighlighted(
-            static_cast<views::LabelButton*>(candidates[button.index]),
-            highlighted);
+      if (button.index < candidate_buttons.size()) {
+        SetCandidateHighlighted(static_cast<IndexedSuggestionCandidateButton*>(
+                                    candidate_buttons[button.index]),
+                                highlighted);
       }
     }
   } else if (button.id == ButtonId::kSmartInputsSettingLink) {
@@ -152,17 +154,30 @@ void SuggestionWindowView::OnThemeChanged() {
   BubbleDialogDelegateView::OnThemeChanged();
 
   const auto* const color_provider = GetColorProvider();
-  learn_more_button_->SetBorder(views::CreatePaddedBorder(
-      views::CreateSolidSidedBorder(
-          gfx::Insets::TLBR(1, 0, 0, 0),
-          color_provider->GetColor(ui::kColorBubbleFooterBorder)),
-      views::LayoutProvider::Get()->GetInsetsMetric(
-          views::INSETS_VECTOR_IMAGE_BUTTON)));
-
+  if (type_ == ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion) {
+    const int inset = views::LayoutProvider::Get()->GetDistanceMetric(
+        views::DistanceMetric::DISTANCE_VECTOR_ICON_PADDING);
+    learn_more_button_->SetBorder(views::CreatePaddedBorder(
+        views::CreateSolidSidedBorder(
+            gfx::Insets::TLBR(inset, 0, inset, inset),
+            color_provider->GetColor(ui::kColorButtonBackground)),
+        views::LayoutProvider::Get()->GetInsetsMetric(
+            views::INSETS_VECTOR_IMAGE_BUTTON)));
+  } else {
+    learn_more_button_->SetBorder(views::CreatePaddedBorder(
+        views::CreateSolidSidedBorder(
+            gfx::Insets::TLBR(
+                views::LayoutProvider::Get()->GetShadowElevationMetric(
+                    views::Emphasis::kLow),
+                0, 0, 0),
+            color_provider->GetColor(ui::kColorBubbleFooterBorder)),
+        views::LayoutProvider::Get()->GetInsetsMetric(
+            views::INSETS_VECTOR_IMAGE_BUTTON)));
+  }
   // TODO(crbug.com/1099044): Update and use cros colors.
   learn_more_button_->SetImageModel(
       views::Button::ButtonState::STATE_NORMAL,
-      ui::ImageModel::FromVectorIcon(vector_icons::kHelpOutlineIcon,
+      ui::ImageModel::FromVectorIcon(vector_icons::kSettingsOutlineIcon,
                                      ui::kColorIconSecondary));
 }
 
@@ -171,30 +186,16 @@ SuggestionWindowView::SuggestionWindowView(gfx::NativeView parent,
                                            Orientation orientation)
     : delegate_(delegate) {
   DCHECK(parent);
-
+  // AccessibleRole determines whether the content is announced on pop-up.
+  // Inner content should not be announced when the window appears since this
+  // is handled by AssistiveAccessibilityView to announce a custom string.
+  SetAccessibleWindowRole(ax::mojom::Role::kNone);
   SetButtons(ui::DIALOG_BUTTON_NONE);
   SetCanActivate(false);
   set_parent_window(parent);
   set_margins(gfx::Insets());
+  set_adjust_if_offscreen(true);
 
-  views::BoxLayout::Orientation layout_orientation;
-  switch (orientation) {
-    case Orientation::kVertical: {
-      layout_orientation = views::BoxLayout::Orientation::kVertical;
-      break;
-    }
-    case Orientation::kHorizontal: {
-      layout_orientation = views::BoxLayout::Orientation::kHorizontal;
-      break;
-    }
-    default: {
-      // Unimplemented orientation.
-      NOTREACHED();
-      break;
-    }
-  }
-
-  SetLayoutManager(std::make_unique<views::BoxLayout>(layout_orientation));
   completion_view_ = AddChildView(
       std::make_unique<CompletionSuggestionView>(base::BindRepeating(
           &AssistiveDelegate::AssistiveWindowButtonClicked,
@@ -203,9 +204,8 @@ SuggestionWindowView::SuggestionWindowView(gfx::NativeView parent,
                                 .index = 0})));
   completion_view_->SetVisible(false);
   multiple_candidate_area_ = AddChildView(std::make_unique<views::View>());
-  multiple_candidate_area_->SetLayoutManager(
-      std::make_unique<views::BoxLayout>(layout_orientation));
   multiple_candidate_area_->SetVisible(false);
+  Reorient(orientation);
 
   setting_link_ = AddChildView(std::make_unique<views::Link>(
       l10n_util::GetStringUTF16(IDS_SUGGESTION_LEARN_MORE)));
@@ -227,11 +227,7 @@ SuggestionWindowView::SuggestionWindowView(gfx::NativeView parent,
 
   learn_more_button_ =
       AddChildView(std::make_unique<views::ImageButton>(base::BindRepeating(
-          &AssistiveDelegate::AssistiveWindowButtonClicked,
-          base::Unretained(delegate_),
-          AssistiveWindowButton{
-              .id = ui::ime::ButtonId::kLearnMore,
-              .window_type = ui::ime::AssistiveWindowType::kEmojiSuggestion})));
+          &SuggestionWindowView::LearnMoreClicked, base::Unretained(this))));
   learn_more_button_->SetImageHorizontalAlignment(
       views::ImageButton::ALIGN_CENTER);
   learn_more_button_->SetImageVerticalAlignment(
@@ -249,28 +245,41 @@ SuggestionWindowView::SuggestionWindowView(gfx::NativeView parent,
 
 SuggestionWindowView::~SuggestionWindowView() = default;
 
-void SuggestionWindowView::ResizeCandidateArea(size_t size) {
+void SuggestionWindowView::LearnMoreClicked() {
+  delegate_->AssistiveWindowButtonClicked(AssistiveWindowButton{
+      .id = ui::ime::ButtonId::kLearnMore, .window_type = type_});
+}
+
+raw_ptr<views::ImageButton, ExperimentalAsh>
+SuggestionWindowView::getLearnMoreButton() {
+  return learn_more_button_;
+}
+
+void SuggestionWindowView::ResizeCandidateArea(
+    const std::vector<std::u16string>& new_candidates,
+    bool use_legacy_candidate) {
   const views::View::Views& candidates = multiple_candidate_area_->children();
-  while (candidates.size() > size) {
+  while (candidates.size()) {
     subscriptions_.erase(
         multiple_candidate_area_->RemoveChildViewT(candidates.back()).get());
   }
 
-  for (size_t index = candidates.size(); index < size; ++index) {
-    // TODO(b/217560706): Separate this into a CandidateView that will follow
-    // specs and contain an index.
+  for (size_t index = 0; index < new_candidates.size(); ++index) {
     auto* const candidate = multiple_candidate_area_->AddChildView(
-        std::make_unique<views::LabelButton>(
+        std::make_unique<IndexedSuggestionCandidateButton>(
             base::BindRepeating(
                 &AssistiveDelegate::AssistiveWindowButtonClicked,
                 base::Unretained(delegate_),
                 AssistiveWindowButton{.id = ui::ime::ButtonId::kSuggestion,
                                       .index = index}),
-            u""));
-    candidate->SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(6, 10)));
+            /* candidate_text=*/new_candidates[index],
+            // Label indexes start from "1", hence we increment index by one.
+            /* index_text=*/base::FormatNumber(index + 1),
+            use_legacy_candidate));
 
     auto subscription = candidate->AddStateChangedCallback(base::BindRepeating(
-        [](SuggestionWindowView* window, views::LabelButton* button) {
+        [](SuggestionWindowView* window,
+           IndexedSuggestionCandidateButton* button) {
           window->SetCandidateHighlighted(button, ShouldHighlight(*button));
         },
         base::Unretained(this), base::Unretained(candidate)));
@@ -278,20 +287,53 @@ void SuggestionWindowView::ResizeCandidateArea(size_t size) {
   }
 }
 
+void SuggestionWindowView::Reorient(Orientation orientation,
+                                    bool extra_padding_on_right) {
+  views::BoxLayout::Orientation layout_orientation =
+      views::BoxLayout::Orientation::kVertical;
+  int multiple_candidate_area_padding = 0;
+  switch (orientation) {
+    case Orientation::kVertical: {
+      layout_orientation = views::BoxLayout::Orientation::kVertical;
+      // TODO(jhtin): remove this when emoji uses horizontal layout.
+      multiple_candidate_area_padding = 0;
+      break;
+    }
+    case Orientation::kHorizontal: {
+      layout_orientation = views::BoxLayout::Orientation::kHorizontal;
+      multiple_candidate_area_padding = 4;
+      break;
+    }
+  }
+
+  SetLayoutManager(std::make_unique<views::BoxLayout>(layout_orientation));
+  gfx::Insets inset(multiple_candidate_area_padding);
+  if (!extra_padding_on_right) {
+    inset.set_right(0);
+  }
+  multiple_candidate_area_->SetLayoutManager(std::make_unique<views::BoxLayout>(
+      layout_orientation, inset,
+      /* between_child_spacing=*/multiple_candidate_area_padding));
+}
+
 void SuggestionWindowView::MakeVisible() {
   multiple_candidate_area_->SetVisible(true);
   SizeToContents();
+  // Docs can put the cursor offscreen - force it onscreen.
+  GetWidget()->SetBoundsConstrained(GetBubbleBounds());
 }
 
-void SuggestionWindowView::SetCandidateHighlighted(views::LabelButton* view,
-                                                   bool highlighted) {
+void SuggestionWindowView::SetCandidateHighlighted(
+    IndexedSuggestionCandidateButton* view,
+    bool highlighted) {
   // Clear all highlights if any exists.
-  for (auto* candidate : multiple_candidate_area_->children()) {
-    SetHighlighted(*candidate, false);
+  for (auto* candidate_button : multiple_candidate_area_->children()) {
+    static_cast<IndexedSuggestionCandidateButton*>(candidate_button)
+        ->SetHighlight(false);
   }
 
   if (highlighted)
-    SetHighlighted(*view, highlighted);
+    view->SetHighlight(highlighted);
 }
 
 BEGIN_METADATA(SuggestionWindowView, views::BubbleDialogDelegateView)

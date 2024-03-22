@@ -28,8 +28,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/allocator/partition_allocator/oom.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/oom.h"
+#include "base/debug/crash_logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/trace_event.h"
@@ -40,6 +42,7 @@
 #include "third_party/blink/renderer/platform/bindings/dom_data_store.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/bindings/thread_debugger.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_object_constructor.h"
 #include "third_party/blink/renderer/platform/bindings/v8_private_property.h"
@@ -48,9 +51,48 @@
 #include "third_party/blink/renderer/platform/heap/thread_state_scopes.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/wtf/leak_annotations.h"
-#include "v8/include/v8.h"
 
 namespace blink {
+
+namespace {
+void AddCrashKey(v8::CrashKeyId id, const std::string& value) {
+  using base::debug::AllocateCrashKeyString;
+  using base::debug::CrashKeySize;
+  using base::debug::SetCrashKeyString;
+
+  switch (id) {
+    case v8::CrashKeyId::kIsolateAddress:
+      static auto* const isolate_address =
+          AllocateCrashKeyString("v8_isolate_address", CrashKeySize::Size32);
+      SetCrashKeyString(isolate_address, value);
+      break;
+    case v8::CrashKeyId::kReadonlySpaceFirstPageAddress:
+      static auto* const ro_space_firstpage_address = AllocateCrashKeyString(
+          "v8_ro_space_firstpage_address", CrashKeySize::Size32);
+      SetCrashKeyString(ro_space_firstpage_address, value);
+      break;
+    case v8::CrashKeyId::kMapSpaceFirstPageAddress:
+      static auto* const map_space_firstpage_address = AllocateCrashKeyString(
+          "v8_map_space_firstpage_address", CrashKeySize::Size32);
+      SetCrashKeyString(map_space_firstpage_address, value);
+      break;
+    case v8::CrashKeyId::kCodeSpaceFirstPageAddress:
+      static auto* const code_space_firstpage_address = AllocateCrashKeyString(
+          "v8_code_space_firstpage_address", CrashKeySize::Size32);
+      SetCrashKeyString(code_space_firstpage_address, value);
+      break;
+    case v8::CrashKeyId::kDumpType:
+      static auto* const dump_type =
+          AllocateCrashKeyString("dump-type", CrashKeySize::Size32);
+      SetCrashKeyString(dump_type, value);
+      break;
+    default:
+      // Doing nothing for new keys is a valid option. Having this case allows
+      // to introduce new CrashKeyId's without triggering a build break.
+      break;
+  }
+}
+}  // namespace
 
 // Function defined in third_party/blink/public/web/blink.h.
 v8::Isolate* MainThreadIsolate() {
@@ -63,63 +105,54 @@ static void BeforeCallEnteredCallback(v8::Isolate* isolate) {
   CHECK(!ScriptForbiddenScope::IsScriptForbidden());
 }
 
-static void MicrotasksCompletedCallback(v8::Isolate* isolate, void* data) {
-  V8PerIsolateData::From(isolate)->RunEndOfScopeTasks();
+static bool AllowAtomicWaits(
+    V8PerIsolateData::V8ContextSnapshotMode v8_context_snapshot_mode) {
+  return !IsMainThread() ||
+         v8_context_snapshot_mode ==
+             V8PerIsolateData::V8ContextSnapshotMode::kTakeSnapshot;
 }
 
 V8PerIsolateData::V8PerIsolateData(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    scoped_refptr<base::SingleThreadTaskRunner> low_priority_task_runner,
     V8ContextSnapshotMode v8_context_snapshot_mode,
     v8::CreateHistogramCallback create_histogram_callback,
     v8::AddHistogramSampleCallback add_histogram_sample_callback)
     : v8_context_snapshot_mode_(v8_context_snapshot_mode),
-      isolate_holder_(task_runner,
-                      gin::IsolateHolder::kSingleThread,
-                      IsMainThread() ? gin::IsolateHolder::kDisallowAtomicsWait
-                                     : gin::IsolateHolder::kAllowAtomicsWait,
-                      IsMainThread()
-                          ? gin::IsolateHolder::IsolateType::kBlinkMainThread
-                          : gin::IsolateHolder::IsolateType::kBlinkWorkerThread,
-                      gin::IsolateHolder::IsolateCreationMode::kNormal,
-                      create_histogram_callback,
-                      add_histogram_sample_callback),
+      isolate_holder_(
+          std::move(task_runner),
+          gin::IsolateHolder::kSingleThread,
+          AllowAtomicWaits(v8_context_snapshot_mode)
+              ? gin::IsolateHolder::kAllowAtomicsWait
+              : gin::IsolateHolder::kDisallowAtomicsWait,
+          IsMainThread() ? gin::IsolateHolder::IsolateType::kBlinkMainThread
+                         : gin::IsolateHolder::IsolateType::kBlinkWorkerThread,
+          v8_context_snapshot_mode ==
+                  V8PerIsolateData::V8ContextSnapshotMode::kTakeSnapshot
+              ? gin::IsolateHolder::IsolateCreationMode::kCreateSnapshot
+              : gin::IsolateHolder::IsolateCreationMode::kNormal,
+          create_histogram_callback,
+          add_histogram_sample_callback,
+          std::move(low_priority_task_runner)),
       string_cache_(std::make_unique<StringCache>(GetIsolate())),
       private_property_(std::make_unique<V8PrivateProperty>()),
       constructor_mode_(ConstructorMode::kCreateNewObject),
-      use_counter_disabled_(false),
-      is_handling_recursion_level_error_(false),
       runtime_call_stats_(base::DefaultTickClock::GetInstance()) {
-  // FIXME: Remove once all v8::Isolate::GetCurrent() calls are gone.
-  GetIsolate()->Enter();
-  GetIsolate()->AddBeforeCallEnteredCallback(&BeforeCallEnteredCallback);
-  GetIsolate()->AddMicrotasksCompletedCallback(&MicrotasksCompletedCallback);
-  if (IsMainThread())
+  if (v8_context_snapshot_mode == V8ContextSnapshotMode::kTakeSnapshot) {
+    // Snapshot should only execute on the main thread. SnapshotCreator enters
+    // the isolate, so we don't call Isolate::Enter() here.
+    CHECK(IsMainThread());
+  } else {
+    // FIXME: Remove once all v8::Isolate::GetCurrent() calls are gone.
+    GetIsolate()->Enter();
+    GetIsolate()->AddBeforeCallEnteredCallback(&BeforeCallEnteredCallback);
+  }
+  if (IsMainThread()) {
     g_main_thread_per_isolate_data = this;
-}
-
-// This constructor is used for creating a V8 context snapshot. It must run on
-// the main thread.
-// TODO(yukishiino): This constructor may not be necessary.  Probably We can
-// reuse V8PerIsolateData(task_runner, v8_context_snapshot_mode) constructor.
-V8PerIsolateData::V8PerIsolateData(
-    V8ContextSnapshotMode v8_context_snapshot_mode)
-    : v8_context_snapshot_mode_(v8_context_snapshot_mode),
-      isolate_holder_(Thread::Current()->GetTaskRunner(),
-                      gin::IsolateHolder::kSingleThread,
-                      gin::IsolateHolder::kAllowAtomicsWait,
-                      gin::IsolateHolder::IsolateType::kBlinkMainThread,
-                      gin::IsolateHolder::IsolateCreationMode::kCreateSnapshot),
-      string_cache_(std::make_unique<StringCache>(GetIsolate())),
-      private_property_(std::make_unique<V8PrivateProperty>()),
-      constructor_mode_(ConstructorMode::kCreateNewObject),
-      use_counter_disabled_(false),
-      is_handling_recursion_level_error_(false),
-      runtime_call_stats_(base::DefaultTickClock::GetInstance()) {
-  CHECK(IsMainThread());
-  CHECK_EQ(v8_context_snapshot_mode_, V8ContextSnapshotMode::kTakeSnapshot);
-
-  // SnapshotCreator enters the isolate, so we don't call Isolate::Enter() here.
-  g_main_thread_per_isolate_data = this;
+    GetIsolate()->SetAddCrashKeyCallback(AddCrashKey);
+    main_world_ = DOMWrapperWorld::Create(GetIsolate(),
+                                          DOMWrapperWorld::WorldType::kMain);
+  }
 }
 
 V8PerIsolateData::~V8PerIsolateData() = default;
@@ -131,19 +164,15 @@ v8::Isolate* V8PerIsolateData::MainThreadIsolate() {
 
 v8::Isolate* V8PerIsolateData::Initialize(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    scoped_refptr<base::SingleThreadTaskRunner> low_priority_task_runner,
     V8ContextSnapshotMode context_mode,
     v8::CreateHistogramCallback create_histogram_callback,
     v8::AddHistogramSampleCallback add_histogram_sample_callback) {
   TRACE_EVENT1("v8", "V8PerIsolateData::Initialize", "V8ContextSnapshotMode",
                context_mode);
-  V8PerIsolateData* data = nullptr;
-  if (context_mode == V8ContextSnapshotMode::kTakeSnapshot) {
-    data = new V8PerIsolateData(context_mode);
-  } else {
-    data = new V8PerIsolateData(task_runner, context_mode,
-                                create_histogram_callback,
-                                add_histogram_sample_callback);
-  }
+  V8PerIsolateData* data = new V8PerIsolateData(
+      std::move(task_runner), std::move(low_priority_task_runner), context_mode,
+      create_histogram_callback, add_histogram_sample_callback);
   DCHECK(data);
 
   v8::Isolate* isolate = data->GetIsolate();
@@ -163,9 +192,6 @@ void V8PerIsolateData::WillBeDestroyed(v8::Isolate* isolate) {
   V8PerIsolateData* data = From(isolate);
 
   data->thread_debugger_.reset();
-  // Clear any data that may have handles into the heap,
-  // prior to calling ThreadState::detach().
-  data->ClearEndOfScopeTasks();
 
   if (data->profiler_group_) {
     data->profiler_group_->WillBeDestroyed();
@@ -198,7 +224,6 @@ void V8PerIsolateData::SetGCCallbacks(
 // gets called but before the Isolate exits.
 void V8PerIsolateData::Destroy(v8::Isolate* isolate) {
   isolate->RemoveBeforeCallEnteredCallback(&BeforeCallEnteredCallback);
-  isolate->RemoveMicrotasksCompletedCallback(&MicrotasksCompletedCallback);
   V8PerIsolateData* data = From(isolate);
 
   // Clear everything before exiting the Isolate.
@@ -209,8 +234,9 @@ void V8PerIsolateData::Destroy(v8::Isolate* isolate) {
   data->string_cache_.reset();
   data->v8_template_map_for_main_world_.clear();
   data->v8_template_map_for_non_main_worlds_.clear();
-  if (IsMainThread())
+  if (IsMainThread()) {
     g_main_thread_per_isolate_data = nullptr;
+  }
 
   // FIXME: Remove once all v8::Isolate::GetCurrent() calls are gone.
   isolate->Exit();
@@ -305,11 +331,10 @@ V8PerIsolateData::FindOrCreateEternalNameCache(
     v8::Isolate* isolate = GetIsolate();
     Vector<v8::Eternal<v8::Name>> new_vector(
         base::checked_cast<wtf_size_t>(names.size()));
-    std::transform(names.begin(), names.end(), new_vector.begin(),
-                   [isolate](const char* name) {
-                     return v8::Eternal<v8::Name>(
-                         isolate, V8AtomicString(isolate, name));
-                   });
+    base::ranges::transform(
+        names, new_vector.begin(), [isolate](const char* name) {
+          return v8::Eternal<v8::Name>(isolate, V8AtomicString(isolate, name));
+        });
     vector = &eternal_name_cache_.Set(lookup_key, std::move(new_vector))
                   .stored_value->value;
   } else {
@@ -324,7 +349,7 @@ v8::Local<v8::Context> V8PerIsolateData::EnsureScriptRegexpContext() {
   if (!script_regexp_script_state_) {
     LEAK_SANITIZER_DISABLED_SCOPE;
     v8::Local<v8::Context> context(v8::Context::New(GetIsolate()));
-    script_regexp_script_state_ = MakeGarbageCollected<ScriptState>(
+    script_regexp_script_state_ = ScriptState::Create(
         context,
         DOMWrapperWorld::Create(GetIsolate(),
                                 DOMWrapperWorld::WorldType::kRegExp),
@@ -341,30 +366,10 @@ void V8PerIsolateData::ClearScriptRegexpContext() {
   script_regexp_script_state_ = nullptr;
 }
 
-void V8PerIsolateData::AddEndOfScopeTask(base::OnceClosure task) {
-  end_of_scope_tasks_.push_back(std::move(task));
-}
-
-void V8PerIsolateData::RunEndOfScopeTasks() {
-  Vector<base::OnceClosure> tasks;
-  tasks.swap(end_of_scope_tasks_);
-  for (auto& task : tasks)
-    std::move(task).Run();
-  DCHECK(end_of_scope_tasks_.IsEmpty());
-}
-
-void V8PerIsolateData::ClearEndOfScopeTasks() {
-  end_of_scope_tasks_.clear();
-}
-
 void V8PerIsolateData::SetThreadDebugger(
-    std::unique_ptr<V8PerIsolateData::Data> thread_debugger) {
+    std::unique_ptr<ThreadDebugger> thread_debugger) {
   DCHECK(!thread_debugger_);
   thread_debugger_ = std::move(thread_debugger);
-}
-
-V8PerIsolateData::Data* V8PerIsolateData::ThreadDebugger() {
-  return thread_debugger_.get();
 }
 
 void V8PerIsolateData::SetProfilerGroup(

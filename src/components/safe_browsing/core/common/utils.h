@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -71,6 +71,13 @@ void SetAccessTokenAndClearCookieInResourceRequest(
 void RecordHttpResponseOrErrorCode(const char* metric_name,
                                    int net_error,
                                    int response_code);
+
+// If the network response for a request has errors, the corresponding service
+// usually increments the backoff counter. However, some errors are not related
+// to the network infrastructure and therefore don't require this. This function
+// returns whether an error is considered retriable and doesn't need to
+// increment backoff.
+bool ErrorIsRetriable(int net_error, int http_error);
 
 }  // namespace safe_browsing
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/touch/touch_observer_hud.h"
+#include "base/memory/raw_ptr.h"
 
 namespace views {
 class Label;
@@ -68,8 +69,8 @@ class ASH_EXPORT TouchHudDebug : public TouchObserverHud {
 
   std::unique_ptr<TouchLog> touch_log_;
 
-  TouchHudCanvas* canvas_;
-  views::View* label_container_;
+  raw_ptr<TouchHudCanvas, ExperimentalAsh> canvas_;
+  raw_ptr<views::View, ExperimentalAsh> label_container_;
   views::Label* touch_labels_[kMaxTouchPoints];
 };
 

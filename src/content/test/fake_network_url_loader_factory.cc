@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/test/fake_network_url_loader_factory.h"
 
 #include "base/strings/string_util.h"
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/http/http_util.h"
 #include "services/network/public/mojom/url_loader.mojom.h"

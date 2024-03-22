@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,9 @@ enum USBTransferStatus {
 // https://wicg.github.io/webusb/#device-usage
 
 [
-    Exposed(DedicatedWorker WebUSBOnDedicatedWorkers, Window WebUSB),
+    Exposed(DedicatedWorker WebUSBOnDedicatedWorkers,
+            ServiceWorker WebUSBOnServiceWorkers,
+            Window WebUSB),
     SecureContext
 ] interface USBDevice {
     readonly attribute octet usbVersionMajor;
@@ -36,7 +38,7 @@ enum USBTransferStatus {
 
     [CallWith=ScriptState, MeasureAs=UsbDeviceOpen, RaisesException] Promise<void> open();
     [CallWith=ScriptState, MeasureAs=UsbDeviceClose, RaisesException] Promise<void> close();
-    [CallWith=ScriptState, MeasureAs=UsbDeviceForget, RaisesException, RuntimeEnabled=WebUsbDeviceForget] Promise<void> forget();
+    [CallWith=ScriptState, MeasureAs=UsbDeviceForget, RaisesException] Promise<void> forget();
     [CallWith=ScriptState, MeasureAs=UsbDeviceSelectConfiguration, RaisesException] Promise<void> selectConfiguration(octet configurationValue);
     [CallWith=ScriptState, MeasureAs=UsbDeviceClaimInterface, RaisesException] Promise<void> claimInterface(octet interfaceNumber);
     [CallWith=ScriptState, MeasureAs=UsbDeviceReleaseInterface, RaisesException] Promise<void> releaseInterface(octet interfaceNumber);

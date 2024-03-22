@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,35 +8,27 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/extensions/chrome_extension_function_details.h"
 #include "chrome/common/extensions/api/quick_unlock_private.h"
 #include "extensions/browser/extension_function.h"
 
 namespace ash {
-class AuthStatusConsumer;
-class ExtendedAuthenticator;
+class AuthenticationError;
 }  // namespace ash
 
 namespace extensions {
 
+class QuickUnlockPrivateGetAuthTokenHelper;
+
 class QuickUnlockPrivateGetAuthTokenFunction : public ExtensionFunction {
  public:
-  using AuthenticatorAllocator =
-      base::RepeatingCallback<ash::ExtendedAuthenticator*(
-          ash::AuthStatusConsumer* auth_status_consumer)>;
-
   QuickUnlockPrivateGetAuthTokenFunction();
   QuickUnlockPrivateGetAuthTokenFunction(
       const QuickUnlockPrivateGetAuthTokenFunction&) = delete;
   QuickUnlockPrivateGetAuthTokenFunction& operator=(
       const QuickUnlockPrivateGetAuthTokenFunction&) = delete;
-
-  // Use the given |allocator| to create an ExtendedAuthenticator instance. This
-  // lets tests intercept authentication calls.
-  void SetAuthenticatorAllocatorForTesting(
-      const AuthenticatorAllocator& allocator);
 
   DECLARE_EXTENSION_FUNCTION("quickUnlockPrivate.getAuthToken",
                              QUICKUNLOCKPRIVATE_GETAUTHTOKEN)
@@ -47,17 +39,12 @@ class QuickUnlockPrivateGetAuthTokenFunction : public ExtensionFunction {
   // ExtensionFunction overrides.
   ResponseAction Run() override;
 
-  // Continuation of Run(). Params match
-  // QuickUnlockPrivateGetAuthTokenHelper::ResultCallback.
-  void OnResult(
-      bool success,
-      std::unique_ptr<api::quick_unlock_private::TokenInfo> token_info,
-      const std::string& error_message);
+  void OnResult(absl::optional<api::quick_unlock_private::TokenInfo> token_info,
+                absl::optional<ash::AuthenticationError> error);
 
  private:
   ChromeExtensionFunctionDetails chrome_details_;
-  scoped_refptr<ash::ExtendedAuthenticator> extended_authenticator_;
-  AuthenticatorAllocator authenticator_allocator_;
+  std::unique_ptr<QuickUnlockPrivateGetAuthTokenHelper> helper_;
 };
 
 class QuickUnlockPrivateSetLockScreenEnabledFunction
@@ -252,7 +239,7 @@ class QuickUnlockPrivateSetModesFunction : public ExtensionFunction {
   void FireEvent(const std::vector<QuickUnlockMode>& modes);
 
   ChromeExtensionFunctionDetails chrome_details_;
-  std::unique_ptr<api::quick_unlock_private::SetModes::Params> params_;
+  absl::optional<api::quick_unlock_private::SetModes::Params> params_;
 
   std::vector<QuickUnlockMode> initial_modes_;
 

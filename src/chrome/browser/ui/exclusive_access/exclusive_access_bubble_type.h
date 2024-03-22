@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,10 @@ class ExtensionRegistry;
 // web page then requests mouse lock, "do you want to allow mouse lock"
 // will be shown.
 enum ExclusiveAccessBubbleType {
+  // This "type" typically signifies closing the exclusive access bubble, except
+  // when used with `notify_download == true`, in which case it means that a
+  // "download started" notice is added to whatever else the exclusive access
+  // bubble type would have been.
   EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE = 0,
 
   // For tab fullscreen mode.
@@ -31,9 +35,6 @@ enum ExclusiveAccessBubbleType {
   // For browser fullscreen mode.
   EXCLUSIVE_ACCESS_BUBBLE_TYPE_BROWSER_FULLSCREEN_EXIT_INSTRUCTION,
   EXCLUSIVE_ACCESS_BUBBLE_TYPE_EXTENSION_FULLSCREEN_EXIT_INSTRUCTION,
-
-  // To notify user that a download has started.
-  EXCLUSIVE_ACCESS_BUBBLE_TYPE_DOWNLOAD_STARTED
 };
 
 namespace exclusive_access_bubble {
@@ -53,7 +54,12 @@ std::u16string GetAllowButtonTextForType(ExclusiveAccessBubbleType type,
 // Gets the text instructing the user how to exit an exclusive access mode.
 // |accelerator| is the name of the key to exit fullscreen mode.
 std::u16string GetInstructionTextForType(ExclusiveAccessBubbleType type,
-                                         const std::u16string& accelerator);
+                                         const std::u16string& accelerator,
+                                         bool notify_download,
+                                         bool notify_overridden);
+
+// Helpers to categorize different types of ExclusiveAccessBubbleType.
+bool IsExclusiveAccessModeBrowserFullscreen(ExclusiveAccessBubbleType type);
 
 }  // namespace exclusive_access_bubble
 

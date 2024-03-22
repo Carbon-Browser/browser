@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "components/domain_reliability/google_configs.h"
 #include "net/base/url_util.h"
 
@@ -67,8 +67,7 @@ void DomainReliabilityContextManager::ClearBeacons(
     const base::RepeatingCallback<bool(const url::Origin&)>& origin_filter) {
   for (auto& context_entry : contexts_) {
     if (origin_filter.is_null() ||
-        origin_filter.Run(
-            url::Origin::Create(context_entry.second->config().origin))) {
+        origin_filter.Run(context_entry.second->config().origin)) {
       context_entry.second->ClearBeacons();
     }
   }
@@ -93,7 +92,7 @@ void DomainReliabilityContextManager::RemoveContexts(
   }
 
   for (auto it = contexts_.begin(); it != contexts_.end();) {
-    if (origin_filter.Run(url::Origin::Create(it->second->config().origin))) {
+    if (origin_filter.Run(it->second->config().origin)) {
       it = contexts_.erase(it);
       continue;
     }

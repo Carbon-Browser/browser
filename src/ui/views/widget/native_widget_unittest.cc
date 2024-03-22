@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,8 @@ class ScopedTestWidget {
   ScopedTestWidget& operator=(const ScopedTestWidget&) = delete;
 
   ~ScopedTestWidget() {
-    // |CloseNow| deletes both |native_widget_| and its associated
-    // |Widget|.
-    native_widget_->GetWidget()->CloseNow();
+    // `CloseNow` deletes both `native_widget_` and its associated `Widget`.
+    native_widget_.ExtractAsDangling()->GetWidget()->CloseNow();
   }
 
   internal::NativeWidgetPrivate* operator->() const { return native_widget_; }

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,6 +44,8 @@ class CompositorFrameSinkImpl : public mojom::CompositorFrameSink {
   // mojom::CompositorFrameSink:
   void SetNeedsBeginFrame(bool needs_begin_frame) override;
   void SetWantsAnimateOnlyBeginFrames() override;
+  void SetWantsBeginFrameAcks() override;
+  void SetAutoNeedsBeginFrame() override;
   void SubmitCompositorFrame(
       const LocalSurfaceId& local_surface_id,
       CompositorFrame frame,
@@ -61,6 +63,7 @@ class CompositorFrameSinkImpl : public mojom::CompositorFrameSink {
   void DidDeleteSharedBitmap(const SharedBitmapId& id) override;
   void InitializeCompositorFrameSinkType(
       mojom::CompositorFrameSinkType type) override;
+  void BindLayerContext(mojom::PendingLayerContextPtr context) override;
 #if BUILDFLAG(IS_ANDROID)
   void SetThreadIds(const std::vector<int32_t>& thread_ids) override;
 #endif

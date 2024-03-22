@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
+#include "base/containers/flat_map.h"
 #include "base/containers/small_map.h"
 #include "base/containers/span.h"
 #include "base/gtest_prod_util.h"
@@ -178,12 +178,12 @@ class ManifestHandlerRegistry {
   // ChromeExtensionsClientTest.CheckManifestHandlerRegistryForOverflow.
   //
   // Any new manifest handlers added may cause the small_map to overflow
-  // to the backup std::unordered_map, which we don't want, as that would
+  // to the backup base::flat_map, which we don't want, as that would
   // defeat the optimization of using small_map.
   static constexpr size_t kHandlerMax = 87;
-  using FallbackMap = std::unordered_map<std::string, ManifestHandler*>;
+  using FallbackMap = base::flat_map<std::string, ManifestHandler*>;
   using ManifestHandlerMap = base::small_map<FallbackMap, kHandlerMax>;
-  using FallbackPriorityMap = std::unordered_map<ManifestHandler*, int>;
+  using FallbackPriorityMap = base::flat_map<ManifestHandler*, int>;
   using ManifestHandlerPriorityMap =
       base::small_map<FallbackPriorityMap, kHandlerMax>;
 

@@ -1,17 +1,8 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ipc/ipc_message.h"
-
-#include "build/build_config.h"
-
-// ipc_message.h is a widely included header and its size can impact build time.
-// Try not to raise this limit unless necessary. See
-// https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
-#ifndef NACL_TC_REV
-#pragma clang max_tokens_here 600000
-#endif
 
 #include <limits.h>
 #include <stddef.h>
@@ -79,7 +70,7 @@ Message::Message(int32_t routing_id, uint32_t type, PriorityValue priority)
   Init();
 }
 
-Message::Message(const char* data, int data_len)
+Message::Message(const char* data, size_t data_len)
     : base::Pickle(data, data_len) {
   Init();
 }

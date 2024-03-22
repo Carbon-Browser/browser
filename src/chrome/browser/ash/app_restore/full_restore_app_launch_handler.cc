@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,17 @@
 #include <utility>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
+#include "ash/metrics/login_unlock_throughput_recorder.h"
+#include "ash/shell.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/metrics/app_platform_metrics.h"
 #include "chrome/browser/ash/app_restore/app_restore_arc_task_handler.h"
-#include "chrome/browser/ash/app_restore/arc_app_launch_handler.h"
+#include "chrome/browser/ash/app_restore/arc_app_queue_restore_handler.h"
 #include "chrome/browser/ash/app_restore/full_restore_service.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
@@ -38,8 +40,7 @@
 #undef ENABLED_VLOG_LEVEL
 #define ENABLED_VLOG_LEVEL 1
 
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 
 namespace {
 
@@ -52,6 +53,8 @@ constexpr char kSessionRestoreExitResultPrefix[] =
     "Apps.SessionRestoreExitResult";
 constexpr char kSessionRestoreWindowCountPrefix[] =
     "Apps.SessionRestoreWindowCount";
+constexpr char kFullRestoreTabCountPrefix[] = "Apps.FullRestoreTabCount";
+constexpr char kFullRestoreWindowCountPrefix[] = "Apps.FullRestoreWindowCount";
 
 }  // namespace
 
@@ -84,7 +87,7 @@ void FullRestoreAppLaunchHandler::LaunchBrowserWhenReady(
             profile())) {
       auto* cache = &apps::AppServiceProxyFactory::GetForProfile(profile())
                          ->AppRegistryCache();
-      Observe(cache);
+      ObserveCache(cache);
 
       for (const auto app_type : cache->InitializedAppTypes()) {
         OnAppTypeInitialized(app_type);
@@ -102,11 +105,13 @@ void FullRestoreAppLaunchHandler::LaunchBrowserWhenReady(
 
     // OS Setting should be launched after browser to have OS setting window in
     // front.
-    UserSessionManager::GetInstance()->MaybeLaunchSettings(profile());
+    UserSessionManager::GetInstance()->PerformPostBrowserLaunchOOBEActions(
+        profile());
     return;
   }
 
-  UserSessionManager::GetInstance()->MaybeLaunchSettings(profile());
+  UserSessionManager::GetInstance()->PerformPostBrowserLaunchOOBEActions(
+      profile());
 
   // If the restore data hasn't been loaded, or the user hasn't chosen to
   // restore, set `should_launch_browser_` as true, and wait the restore data
@@ -185,7 +190,8 @@ void FullRestoreAppLaunchHandler::OnStateChanged() {
 void FullRestoreAppLaunchHandler::ForceLaunchBrowserForTesting() {
   ::full_restore::AddChromeBrowserLaunchInfoForTesting(profile()->GetPath());
   UserSessionManager::GetInstance()->LaunchBrowser(profile());
-  UserSessionManager::GetInstance()->MaybeLaunchSettings(profile());
+  UserSessionManager::GetInstance()->PerformPostBrowserLaunchOOBEActions(
+      profile());
 }
 
 void FullRestoreAppLaunchHandler::OnExtensionLaunching(
@@ -227,7 +233,7 @@ void FullRestoreAppLaunchHandler::MaybePostRestore() {
   if (!should_restore_ || !restore_data())
     return;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FullRestoreAppLaunchHandler::MaybeRestore,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
@@ -238,6 +244,10 @@ void FullRestoreAppLaunchHandler::MaybeRestore() {
   ::full_restore::FullRestoreReadHandler::GetInstance()->SetCheckRestoreData(
       profile()->GetPath());
 
+  auto [window_count, tab_count, total_count] =
+      ::app_restore::GetWindowAndTabCount(*restore_data());
+  base::UmaHistogramCounts100(kFullRestoreWindowCountPrefix, window_count);
+
   if (should_launch_browser_ && CanLaunchBrowser()) {
     LaunchBrowser();
     should_launch_browser_ = false;
@@ -246,7 +256,7 @@ void FullRestoreAppLaunchHandler::MaybeRestore() {
   VLOG(1) << "Restore apps in " << profile()->GetPath();
   if (auto* arc_task_handler =
           app_restore::AppRestoreArcTaskHandler::GetForProfile(profile())) {
-    arc_task_handler->full_restore_arc_app_launch_handler()->RestoreArcApps(
+    arc_task_handler->GetFullRestoreArcAppQueueRestoreHandler()->RestoreArcApps(
         this);
   }
 
@@ -336,7 +346,8 @@ void FullRestoreAppLaunchHandler::LaunchBrowserForFirstRunFullRestore() {
                                    SessionRestore::RESTORE_APPS, startup_tabs);
   }
 
-  UserSessionManager::GetInstance()->MaybeLaunchSettings(profile());
+  UserSessionManager::GetInstance()->PerformPostBrowserLaunchOOBEActions(
+      profile());
 }
 
 void FullRestoreAppLaunchHandler::MaybeRestoreLacros() {
@@ -396,6 +407,7 @@ void FullRestoreAppLaunchHandler::RecordLaunchBrowserResult() {
   VLOG(1) << "Browser is restored (windows=" << window_count
           << " tabs=" << tab_count << ").";
   base::UmaHistogramEnumeration(kRestoreBrowserResultHistogramPrefix, result);
+  base::UmaHistogramCounts100(kFullRestoreTabCountPrefix, tab_count);
 
   if (result != RestoreTabResult::kNoTabs)
     return;
@@ -446,8 +458,15 @@ void FullRestoreAppLaunchHandler::RecordLaunchBrowserResult() {
 }
 
 void FullRestoreAppLaunchHandler::LogRestoreData() {
+  LoginUnlockThroughputRecorder* throughput_recorder =
+      Shell::HasInstance() ? Shell::Get()->login_unlock_throughput_recorder()
+                           : nullptr;
+
   if (!restore_data() || restore_data()->app_id_to_launch_list().empty()) {
     VLOG(1) << "There is no restore data from " << profile()->GetPath();
+    if (throughput_recorder) {
+      throughput_recorder->RestoreDataLoaded();
+    }
     return;
   }
 
@@ -462,7 +481,16 @@ void FullRestoreAppLaunchHandler::LogRestoreData() {
       continue;
     }
 
+    if (throughput_recorder) {
+      for (const auto& window : it.second) {
+        throughput_recorder->AddScheduledRestoreWindow(
+            window.first, it.first, LoginUnlockThroughputRecorder::kBrowser);
+      }
+    }
     ++other_app_count;
+  }
+  if (throughput_recorder) {
+    throughput_recorder->RestoreDataLoaded();
   }
   VLOG(1) << "There is restore data: Browser("
           << (::full_restore::HasAppTypeBrowser(profile()->GetPath())
@@ -515,5 +543,4 @@ ScopedLaunchBrowserForTesting::~ScopedLaunchBrowserForTesting() {
   g_launch_browser_for_testing = false;
 }
 
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore

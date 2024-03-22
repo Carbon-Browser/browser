@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -19,7 +19,7 @@
 #include "url/gurl.h"
 
 namespace net {
-class NetworkIsolationKey;
+class NetworkAnonymizationKey;
 }  // namespace net
 
 namespace domain_reliability {
@@ -48,7 +48,7 @@ class MockUploader : public DomainReliabilityUploader {
       const std::string& report_json,
       int max_upload_depth,
       const GURL& upload_url,
-      const net::NetworkIsolationKey& network_isolation_key,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
       UploadCallback upload_callback)>
       UploadRequestCallback;
 
@@ -59,11 +59,12 @@ class MockUploader : public DomainReliabilityUploader {
   virtual bool discard_uploads() const;
 
   // DomainReliabilityUploader implementation:
-  void UploadReport(const std::string& report_json,
-                    int max_upload_depth,
-                    const GURL& upload_url,
-                    const net::NetworkIsolationKey& network_isolation_key,
-                    UploadCallback callback) override;
+  void UploadReport(
+      const std::string& report_json,
+      int max_upload_depth,
+      const GURL& upload_url,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
+      UploadCallback callback) override;
   void Shutdown() override;
   void SetDiscardUploads(bool discard_uploads) override;
   int GetDiscardedUploadCount() const override;
@@ -147,7 +148,7 @@ class MockTime : public MockableTime {
 
 std::unique_ptr<DomainReliabilityConfig> MakeTestConfig();
 std::unique_ptr<DomainReliabilityConfig> MakeTestConfigWithOrigin(
-    const GURL& origin);
+    const url::Origin& origin);
 DomainReliabilityScheduler::Params MakeTestSchedulerParams();
 
 }  // namespace domain_reliability

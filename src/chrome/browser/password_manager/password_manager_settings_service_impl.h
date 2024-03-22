@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef CHROME_BROWSER_PASSWORD_MANAGER_PASSWORD_MANAGER_SETTINGS_SERVICE_IMPL_H_
@@ -27,7 +27,7 @@ class PasswordManagerSettingsServiceImpl
   ~PasswordManagerSettingsServiceImpl() override = default;
 
   bool IsSettingEnabled(
-      password_manager::PasswordManagerSetting setting) override;
+      password_manager::PasswordManagerSetting setting) const override;
   void TurnOffAutoSignIn() override;
 
   void RequestSettingsFromBackend() override;
@@ -36,4 +36,4 @@ class PasswordManagerSettingsServiceImpl
   raw_ptr<PrefService> pref_service_ = nullptr;
 };
 
-#endif  // CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_PASSWORD_SETTINGS_SERVICE_IMPL_H_
+#endif  // CHROME_BROWSER_PASSWORD_MANAGER_PASSWORD_MANAGER_SETTINGS_SERVICE_IMPL_H_

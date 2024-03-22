@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,18 @@
 #include <utility>
 
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "content/browser/browser_child_process_host_impl.h"
+#include "content/browser/child_process_host_impl.h"
 #include "content/browser/plugin_service_impl.h"
 #include "content/browser/ppapi_plugin_sandboxed_process_launcher_delegate.h"
 #include "content/browser/renderer_host/render_message_filter.h"
-#include "content/common/child_process_host_impl.h"
 #include "content/common/content_switches_internal.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -29,8 +29,8 @@
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_constants.h"
+#include "content/public/common/content_plugin_info.h"
 #include "content/public/common/content_switches.h"
-#include "content/public/common/pepper_plugin_info.h"
 #include "content/public/common/process_type.h"
 #include "ppapi/proxy/ppapi_messages.h"
 #include "sandbox/policy/mojom/sandbox.mojom.h"
@@ -90,7 +90,7 @@ PpapiPluginProcessHost::~PpapiPluginProcessHost() {
 
 // static
 PpapiPluginProcessHost* PpapiPluginProcessHost::CreatePluginHost(
-    const PepperPluginInfo& info,
+    const ContentPluginInfo& info,
     const base::FilePath& profile_data_directory,
     const absl::optional<url::Origin>& origin_lock) {
   PpapiPluginProcessHost* plugin_host =
@@ -170,7 +170,7 @@ void PpapiPluginProcessHost::OpenChannelToPlugin(Client* client) {
 }
 
 PpapiPluginProcessHost::PpapiPluginProcessHost(
-    const PepperPluginInfo& info,
+    const ContentPluginInfo& info,
     const base::FilePath& profile_data_directory,
     const absl::optional<url::Origin>& origin_lock)
     : profile_data_directory_(profile_data_directory),
@@ -200,7 +200,7 @@ PpapiPluginProcessHost::PpapiPluginProcessHost(
     network_observer_ = std::make_unique<PluginNetworkObserver>(this);
 }
 
-bool PpapiPluginProcessHost::Init(const PepperPluginInfo& info) {
+bool PpapiPluginProcessHost::Init(const ContentPluginInfo& info) {
   plugin_path_ = info.path;
   if (info.name.empty()) {
     process_->SetName(plugin_path_.BaseName().LossyDisplayName());
@@ -242,8 +242,7 @@ bool PpapiPluginProcessHost::Init(const PepperPluginInfo& info) {
   static const char* const kCommonForwardSwitches[] = {
     switches::kVModule
   };
-  cmd_line->CopySwitchesFrom(browser_command_line, kCommonForwardSwitches,
-                             std::size(kCommonForwardSwitches));
+  cmd_line->CopySwitchesFrom(browser_command_line, kCommonForwardSwitches);
 
   static const char* const kPluginForwardSwitches[] = {
     sandbox::policy::switches::kDisableSeccompFilterSandbox,
@@ -254,8 +253,7 @@ bool PpapiPluginProcessHost::Init(const PepperPluginInfo& info) {
     switches::kPpapiStartupDialog,
     switches::kTimeZoneForTesting,
   };
-  cmd_line->CopySwitchesFrom(browser_command_line, kPluginForwardSwitches,
-                             std::size(kPluginForwardSwitches));
+  cmd_line->CopySwitchesFrom(browser_command_line, kPluginForwardSwitches);
 
   std::string locale = GetContentClient()->browser()->GetApplicationLocale();
   if (!locale.empty()) {

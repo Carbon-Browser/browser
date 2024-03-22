@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class MockGeoLocation : public device::mojom::Geolocation {
 
  private:
   int query_next_position_called_times_ = 0;
-  device::mojom::Geoposition position_;
+  device::mojom::GeopositionResultPtr result_;
   mojo::Receiver<device::mojom::Geolocation> receiver_{this};
 };
 

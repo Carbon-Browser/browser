@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,23 +36,23 @@ std::vector<const FrameNode*> GraphOperations::GetFrameNodes(
 
 // static
 bool GraphOperations::VisitFrameTreePreOrder(const PageNode* page,
-                                             const FrameNodeVisitor& visitor) {
+                                             FrameNodeVisitor visitor) {
   return GraphImplOperations::VisitFrameTreePreOrder(
       PageNodeImpl::FromNode(page),
       [&visitor](FrameNodeImpl* frame_impl) -> bool {
         const FrameNode* frame = frame_impl;
-        return visitor.Run(frame);
+        return visitor(frame);
       });
 }
 
 // static
 bool GraphOperations::VisitFrameTreePostOrder(const PageNode* page,
-                                              const FrameNodeVisitor& visitor) {
+                                              FrameNodeVisitor visitor) {
   return GraphImplOperations::VisitFrameTreePostOrder(
       PageNodeImpl::FromNode(page),
       [&visitor](FrameNodeImpl* frame_impl) -> bool {
         const FrameNode* frame = frame_impl;
-        return visitor.Run(frame);
+        return visitor(frame);
       });
 }
 

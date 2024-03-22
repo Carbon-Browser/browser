@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/prefs/pref_change_registrar.h"
 
 class PrefRegistrySimple;
 
-namespace chromeos {
+namespace ash {
 
 // FastTransitionObserver is a singleton, owned by
 // `ChromeBrowserMainPartsAsh`.
@@ -34,15 +35,10 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) FastTransitionObserver {
   // Callback used when prefs::kFastTransitionEnabled changes
   void OnPreferenceChanged(const std::string& pref_name);
 
-  PrefService* local_state_;
+  raw_ptr<PrefService, ExperimentalAsh> local_state_;
   PrefChangeRegistrar pref_change_registrar_;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace ash {
-using ::chromeos::FastTransitionObserver;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_FAST_TRANSITION_OBSERVER_H_

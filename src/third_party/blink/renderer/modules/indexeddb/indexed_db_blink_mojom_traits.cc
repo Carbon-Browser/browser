@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 
 #include "base/numerics/safe_conversions.h"
 #include "mojo/public/cpp/base/string16_mojom_traits.h"
-#include "mojo/public/cpp/bindings/array_traits_wtf_vector.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/mojom/blob/blob.mojom-blink.h"
 #include "third_party/blink/public/platform/web_blob_info.h"
@@ -191,7 +190,7 @@ StructTraits<blink::mojom::IDBValueDataView, std::unique_ptr<blink::IDBValue>>::
     }
     blob_info->size = info.size();
     blob_info->uuid = info.Uuid();
-    DCHECK(!blob_info->uuid.IsEmpty());
+    DCHECK(!blob_info->uuid.empty());
     String mime_type = info.GetType();
     if (mime_type.IsNull())
       mime_type = g_empty_string;
@@ -214,18 +213,19 @@ bool StructTraits<blink::mojom::IDBValueDataView,
                   std::unique_ptr<blink::IDBValue>>::
     Read(blink::mojom::IDBValueDataView data,
          std::unique_ptr<blink::IDBValue>* out) {
-  Vector<uint8_t> value_bits;
-  if (!data.ReadBits(&value_bits))
+  Vector<char> value_bits;
+  if (!data.ReadBits(reinterpret_cast<Vector<uint8_t>*>(&value_bits))) {
     return false;
+  }
 
-  if (value_bits.IsEmpty()) {
+  if (value_bits.empty()) {
     *out = std::make_unique<blink::IDBValue>(scoped_refptr<SharedBuffer>(),
                                              Vector<blink::WebBlobInfo>());
     return true;
   }
 
-  scoped_refptr<SharedBuffer> value_buffer = SharedBuffer::Create(
-      reinterpret_cast<const char*>(value_bits.data()), value_bits.size());
+  scoped_refptr<SharedBuffer> value_buffer =
+      SharedBuffer::AdoptVector(value_bits);
 
   Vector<blink::mojom::blink::IDBExternalObjectPtr> external_objects;
   if (!data.ReadExternalObjects(&external_objects))

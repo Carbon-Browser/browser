@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,12 @@ namespace extensions {
 
 PermissionHelper::PermissionHelper(content::BrowserContext* context)
     : browser_context_(context),
-      process_map_(ProcessMap::Get(context)),
-      extension_registry_(ExtensionRegistry::Get(context)) {}
+      extension_registry_(ExtensionRegistry::Get(context)) {
+  // Ensure the dependency is constructed.
+  ProcessMap::Get(browser_context_);
+}
 
-PermissionHelper::~PermissionHelper() {}
+PermissionHelper::~PermissionHelper() = default;
 
 // static
 PermissionHelper* PermissionHelper::Get(content::BrowserContext* context) {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,24 +7,26 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_collection_controlling.h"
-#import "ios/chrome/browser/ui/thumb_strip/thumb_strip_supporting.h"
+#import "ios/chrome/browser/ui/ntp/new_tab_page_consumer.h"
+#import "ios/chrome/browser/ui/ntp/new_tab_page_header_view_controller_delegate.h"
+#import "ios/chrome/browser/ui/ntp/new_tab_page_view_delegate.h"
 
 @class BubblePresenter;
-@class ContentSuggestionsHeaderViewController;
 @class ContentSuggestionsViewController;
+@class FeedHeaderViewController;
 @class FeedMetricsRecorder;
 @class FeedWrapperViewController;
-@class FeedHeaderViewController;
 @protocol NewTabPageContentDelegate;
+@class NewTabPageHeaderViewController;
+@protocol NewTabPageMutator;
 @protocol OverscrollActionsControllerDelegate;
-@class ViewRevealingVerticalPanHandler;
 
 // View controller containing all the content presented on a standard,
 // non-incognito new tab page.
 @interface NewTabPageViewController
-    : UIViewController <ContentSuggestionsCollectionControlling,
-                        ThumbStripSupporting,
+    : UIViewController <NewTabPageConsumer,
+                        NewTabPageHeaderViewControllerDelegate,
+                        NewTabPageViewDelegate,
                         UIScrollViewDelegate>
 
 // View controller wrapping the feed.
@@ -35,28 +37,13 @@
 @property(nonatomic, weak) id<OverscrollActionsControllerDelegate>
     overscrollDelegate;
 
-// The content suggestions header, containing the fake omnibox and the doodle.
-@property(nonatomic, weak)
-    ContentSuggestionsHeaderViewController* headerController;
+// The NTP header, containing the fake omnibox and the doodle.
+@property(nonatomic, weak) NewTabPageHeaderViewController* headerViewController;
 
 // Delegate for actions relating to the NTP content.
-@property(nonatomic, weak) id<NewTabPageContentDelegate> ntpContentDelegate;
+@property(nonatomic, weak) id<NewTabPageContentDelegate> NTPContentDelegate;
 
-// The pan gesture handler to notify of scroll events happening in this view
-// controller.
-@property(nonatomic, weak) ViewRevealingVerticalPanHandler* panGestureHandler;
-
-// Identity disc shown in the NTP.
-// TODO(crbug.com/1170995): Remove once the Feed header properly supports
-// ContentSuggestions.
-@property(nonatomic, weak) UIButton* identityDiscButton;
-
-// View controller representing the NTP content suggestions. These suggestions
-// include the most visited site tiles, the shortcut tiles, the fake omnibox and
-// the Google doodle. `contentSuggestionsUIViewController` is used if
-// kContentSuggestionsUIViewControllerMigration is enabled.
-@property(nonatomic, strong)
-    UICollectionViewController* contentSuggestionsCollectionViewController;
+// The view controller representing the content suggestions.
 @property(nonatomic, strong)
     ContentSuggestionsViewController* contentSuggestionsViewController;
 
@@ -67,11 +54,11 @@
 @property(nonatomic, assign, getter=isFeedVisible) BOOL feedVisible;
 
 // The view controller representing the NTP feed header.
-@property(nonatomic, assign) FeedHeaderViewController* feedHeaderViewController;
+@property(nonatomic, weak) FeedHeaderViewController* feedHeaderViewController;
 
 // The view controller representing the Feed top section (between the feed
 // header and the feed collection).
-@property(nonatomic, assign) UIViewController* feedTopSectionViewController;
+@property(nonatomic, weak) UIViewController* feedTopSectionViewController;
 
 // Bubble presenter for displaying IPH bubbles relating to the NTP.
 @property(nonatomic, strong) BubblePresenter* bubblePresenter;
@@ -83,6 +70,16 @@
 // Whether the NTP should initially be scrolled into the feed.
 @property(nonatomic, assign) BOOL shouldScrollIntoFeed;
 
+// `YES` if the omnibox should be focused on when the view appears for voice
+// over.
+@property(nonatomic, assign) BOOL focusAccessibilityOmniboxWhenViewAppears;
+
+// The mutator to provide updates to the NTP mediator.
+@property(nonatomic, weak) id<NewTabPageMutator> mutator;
+
+// Whether or not the fake omnibox is pinned to the top of the NTP.
+@property(nonatomic, readonly) BOOL isFakeboxPinned;
+
 // Initializes the new tab page view controller.
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
 
@@ -90,34 +87,26 @@
                          bundle:(NSBundle*)bundle NS_UNAVAILABLE;
 - (instancetype)initWithCoder:(NSCoder*)coder NS_UNAVAILABLE;
 
+// Indicates to the receiver to update its state to focus the omnibox.
+- (void)focusOmnibox;
+
 // Called when a snapshot of the content will be taken.
 - (void)willUpdateSnapshot;
 
 // Stops scrolling in the scroll view.
 - (void)stopScrolling;
 
-// Sets the feed collection contentOffset from the saved state to `offset` to
-// set the initial scroll position.
-- (void)setSavedContentOffset:(CGFloat)offset;
-
-// Sets the feed collection contentOffset to the top of the page. Resets fake
-// omnibox back to initial state.
-- (void)setContentOffsetToTop;
-
 // Lays out content above feed and adjusts content suggestions.
 - (void)updateNTPLayout;
 
-// Scrolls up the collection view enough to focus the omnibox.
-- (void)focusFakebox;
+// Signals to the ViewController that the height above the feed needs to be
+// recalculated. Usually called in response to an event that happens after
+// all the content has been loaded (example: a UI element expanding). Keeps
+// the scroll position from the top the same.
+- (void)updateHeightAboveFeed;
 
 // Returns whether the NTP is scrolled to the top or not.
 - (BOOL)isNTPScrolledToTop;
-
-// Returns the height of the content above the feed. The views above the feed
-// (like the content suggestions) are added through a content inset in the feed
-// collection view, so this property is used to track the total height of those
-// additional views.
-- (CGFloat)heightAboveFeed;
 
 // Lays out and re-configures the NTP content after changing the containing
 // collection view, such as when changing feeds.
@@ -126,17 +115,30 @@
 // Resets hierarchy of views and view controllers.
 - (void)resetViewHierarchy;
 
-// Returns the y content offset of the NTP collection view.
-- (CGFloat)scrollPosition;
+// Resets any relevant NTP states due for a content reload.
+- (void)resetStateUponReload;
+
+// Sets the feed collection contentOffset to the top of the page. Resets fake
+// omnibox back to initial state.
+- (void)setContentOffsetToTop;
 
 // Sets the NTP collection view's scroll position to `contentOffset`, unless it
 // is beyond the top of the feed. In that case, sets the scroll position to the
 // top of the feed.
-- (void)setContentOffsetToTopOfFeed:(CGFloat)contentOffset;
+- (void)setContentOffsetToTopOfFeedOrLess:(CGFloat)contentOffset;
 
 // Checks the content size of the feed and updates the bottom content inset to
 // ensure the feed is still scrollable to the minimum height.
 - (void)updateFeedInsetsForMinimumHeight;
+
+// Updates the scroll position to account for the feed promo being removed.
+- (void)updateScrollPositionForFeedTopSectionClosed;
+
+// Signals that the feed has completed its updates (i.e. loading cards).
+- (void)feedLayoutDidEndUpdates;
+
+// Clears state and delegates.
+- (void)invalidate;
 
 @end
 

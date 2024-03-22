@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,13 @@ class MockMediaNotificationItem : public MediaNotificationItem {
   MOCK_METHOD(void, Dismiss, ());
   MOCK_METHOD(void, SetVolume, (float));
   MOCK_METHOD(void, SetMute, (bool));
-  MOCK_METHOD(media_message_center::SourceType, SourceType, ());
+  MOCK_METHOD(bool, RequestMediaRemoting, ());
+  MOCK_METHOD(media_message_center::Source, GetSource, (), (const));
+  MOCK_METHOD(media_message_center::SourceType, GetSourceType, (), (const));
+  MOCK_METHOD((absl::optional<base::UnguessableToken>),
+              GetSourceId,
+              (),
+              (const));
 
   base::WeakPtr<MockMediaNotificationItem> GetWeakPtr();
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -316,7 +316,7 @@ TEST(StreamModelTest, CommitEphemeralChange) {
   ASSERT_TRUE(store_observer.GetUpdate());
   const StoreUpdate& store_update = *store_observer.GetUpdate();
   ASSERT_EQ(3UL, store_update.operations.size());
-  EXPECT_EQ(feedstore::StreamStructure::CLUSTER,
+  EXPECT_EQ(feedstore::StreamStructure::GROUP,
             store_update.operations[0].structure().type());
   EXPECT_EQ(feedstore::StreamStructure::CONTENT,
             store_update.operations[1].structure().type());

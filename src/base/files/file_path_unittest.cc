@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "base/files/safe_base_name.h"
+#include "base/strings/utf_ostream_operators.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
@@ -22,6 +23,9 @@
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 #include "base/test/scoped_locale.h"
 #endif
+
+// This macro helps test `FILE_PATH_LITERAL` macro expansion.
+#define TEST_FILE "TestFile"
 
 // This macro helps avoid wrapped lines in the test structs.
 #define FPL(x) FILE_PATH_LITERAL(x)
@@ -88,6 +92,11 @@ TEST_F(FilePathTest, DirName) {
     {FPL("//aa/bb"), FPL("//aa")},
     {FPL("//aa/"), FPL("//")},
     {FPL("//aa"), FPL("//")},
+#if BUILDFLAG(IS_POSIX)
+    {FPL("///aa/"), FPL("/")},
+    {FPL("///aa"), FPL("/")},
+    {FPL("///"), FPL("/")},
+#endif  // BUILDFLAG(IS_POSIX)
     {FPL("0:"), FPL(".")},
     {FPL("@:"), FPL(".")},
     {FPL("[:"), FPL(".")},
@@ -479,6 +488,9 @@ TEST_F(FilePathTest, PathComponentsTest) {
   const struct UnaryTestData cases[] = {
     { FPL("//foo/bar/baz/"),          FPL("|//|foo|bar|baz")},
     { FPL("///"),                     FPL("|/")},
+#if BUILDFLAG(IS_POSIX)
+    {FPL("///foo//bar/baz"),          FPL("|/|foo|bar|baz")},
+#endif  // BUILDFLAG(IS_POSIX)
     { FPL("/foo//bar//baz/"),         FPL("|/|foo|bar|baz")},
     { FPL("/foo/bar/baz/"),           FPL("|/|foo|bar|baz")},
     { FPL("/foo/bar/baz//"),          FPL("|/|foo|bar|baz")},
@@ -737,6 +749,10 @@ TEST_F(FilePathTest, EqualityTest) {
       "inequality i: " << i << ", a: " << a.value() << ", b: " <<
       b.value();
   }
+}
+
+TEST_F(FilePathTest, MacroExpansion) {
+  EXPECT_EQ(FILE_PATH_LITERAL(TEST_FILE), FILE_PATH_LITERAL("TestFile"));
 }
 
 TEST_F(FilePathTest, Extension) {
@@ -1188,6 +1204,13 @@ TEST_F(FilePathTest, CompareIgnoreCase) {
     {{FPL("K\u0301U\u032DO\u0304\u0301N"), FPL("\u1E31\u1E77\u1E53n")}, 0},
     {{FPL("k\u0301u\u032Do\u0304\u0301n"), FPL("\u1E30\u1E76\u1E52n")}, 0},
     {{FPL("k\u0301u\u032Do\u0304\u0302n"), FPL("\u1E30\u1E76\u1E52n")}, 1},
+
+    // Codepoints > 0xFFFF
+    // Here, we compare the `Adlam Letter Shu` in its capital and small version.
+    {{FPL("\U0001E921"), FPL("\U0001E943")}, -1},
+    {{FPL("\U0001E943"), FPL("\U0001E921")}, 1},
+    {{FPL("\U0001E921"), FPL("\U0001E921")}, 0},
+    {{FPL("\U0001E943"), FPL("\U0001E943")}, 0},
 #endif
   };
 

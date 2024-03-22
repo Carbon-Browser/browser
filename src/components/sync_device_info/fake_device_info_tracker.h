@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,13 +40,22 @@ class FakeDeviceInfoTracker : public DeviceInfoTracker {
   std::vector<std::unique_ptr<DeviceInfo>> GetAllDeviceInfo() const override;
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
-  std::map<sync_pb::SyncEnums_DeviceType, int> CountActiveDevicesByType()
+  std::map<DeviceInfo::FormFactor, int> CountActiveDevicesByType()
       const override;
   void ForcePulseForTest() override;
   bool IsRecentLocalCacheGuid(const std::string& cache_guid) const override;
 
   // Adds a new DeviceInfo entry to |devices_|.
   void Add(const DeviceInfo* device);
+
+  // Adds a vector of new DeviceInfo entries to |devices_|.
+  void Add(const std::vector<const DeviceInfo*>& devices);
+
+  // Removes a DeviceInfo entry from the device list.
+  // FakeDeviceInfoTracker keeps raw pointers to previously added devices, so
+  // clients should take care of removing them after those are destroyed if the
+  // FakeDeviceInfoTracker may outlive them.
+  void Remove(const DeviceInfo* device);
 
   // Replaces |old_device| with |new_device|. |old_device| must be present in
   // the tracker.
@@ -55,7 +64,7 @@ class FakeDeviceInfoTracker : public DeviceInfoTracker {
   // Overrides the result of CountActiveDevicesByType() to |counts| instead of
   // the actual number of devices in |devices_|.
   void OverrideActiveDeviceCount(
-      const std::map<sync_pb::SyncEnums_DeviceType, int>& counts);
+      const std::map<DeviceInfo::FormFactor, int>& counts);
 
   // Marks an existing DeviceInfo entry as being on the local device.
   void SetLocalCacheGuid(const std::string& cache_guid);
@@ -64,7 +73,7 @@ class FakeDeviceInfoTracker : public DeviceInfoTracker {
   // DeviceInfo stored here are not owned.
   std::vector<const DeviceInfo*> devices_;
   std::string local_device_cache_guid_;
-  absl::optional<std::map<sync_pb::SyncEnums_DeviceType, int>>
+  absl::optional<std::map<DeviceInfo::FormFactor, int>>
       device_count_per_type_override_;
   // Registered observers, not owned.
   base::ObserverList<Observer, true>::Unchecked observers_;

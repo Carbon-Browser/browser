@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,7 @@ Cluster CreateCluster(const std::vector<VisitID>& visit_ids) {
                           [](const auto& visit_id) {
                             ClusterVisit visit;
                             visit.annotated_visit.visit_row.visit_id = visit_id;
+                            visit.score = 1;
                             return visit;
                           });
   return cluster;
@@ -64,13 +65,6 @@ std::vector<Cluster> CreateClusters(
   base::ranges::transform(visit_ids_per_cluster, std::back_inserter(clusters),
                           &CreateCluster);
   return clusters;
-}
-
-ClusterRow CreateClusterRow(int64_t cluster_id,
-                            const std::vector<int64_t>& visit_ids) {
-  ClusterRow cluster{cluster_id};
-  cluster.visit_ids = visit_ids;
-  return cluster;
 }
 
 }  // namespace history

@@ -1,18 +1,19 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
 
+#include <atomic>
 #include <string>
 #include <utility>
 
 #include "base/check_op.h"
-#include "base/strings/stringprintf.h"
 #include "media/base/audio_bus.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_source.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_audio_source.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 
@@ -36,11 +37,21 @@ MediaStreamAudioTrack::~MediaStreamAudioTrack() {
   Stop();
 }
 
+std::unique_ptr<MediaStreamTrackPlatform>
+MediaStreamAudioTrack::CreateFromComponent(
+    const MediaStreamComponent* component,
+    const String& id) {
+  MediaStreamSource* source = component->Source();
+  CHECK_EQ(source->GetType(), MediaStreamSource::kTypeAudio);
+  return MediaStreamAudioSource::From(source)->CreateMediaStreamAudioTrack(
+      id.Utf8());
+}
+
 // static
 MediaStreamAudioTrack* MediaStreamAudioTrack::From(
     const MediaStreamComponent* component) {
   if (!component ||
-      component->Source()->GetType() != MediaStreamSource::kTypeAudio) {
+      component->GetSourceType() != MediaStreamSource::kTypeAudio) {
     return nullptr;
   }
   return static_cast<MediaStreamAudioTrack*>(component->GetPlatformTrack());
@@ -58,7 +69,7 @@ void MediaStreamAudioTrack::AddSink(WebMediaStreamAudioSink* sink) {
   }
 
   deliverer_.AddConsumer(sink);
-  sink->OnEnabledChanged(!!base::subtle::NoBarrier_Load(&is_enabled_));
+  sink->OnEnabledChanged(is_enabled_.load(std::memory_order_relaxed));
 }
 
 void MediaStreamAudioTrack::RemoveSink(WebMediaStreamAudioSink* sink) {
@@ -77,7 +88,7 @@ void MediaStreamAudioTrack::SetEnabled(bool enabled) {
             (enabled ? "true" : "false"));
 
   const bool previously_enabled =
-      !!base::subtle::NoBarrier_AtomicExchange(&is_enabled_, enabled ? 1 : 0);
+      is_enabled_.exchange(enabled, std::memory_order_relaxed);
   if (enabled == previously_enabled)
     return;
 
@@ -89,7 +100,7 @@ void MediaStreamAudioTrack::SetEnabled(bool enabled) {
 
 bool MediaStreamAudioTrack::IsEnabled() const {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  return is_enabled_;
+  return is_enabled_.load(std::memory_order_relaxed);
 }
 
 void MediaStreamAudioTrack::SetContentHint(
@@ -157,9 +168,9 @@ void MediaStreamAudioTrack::OnData(const media::AudioBus& audio_bus,
     received_audio_callback_ = true;
   }
 
-  // Note: Using NoBarrier_Load because the timing of when the audio thread sees
-  // a changed |is_enabled_| value can be relaxed.
-  const bool deliver_data = !!base::subtle::NoBarrier_Load(&is_enabled_);
+  // Note: Using relaxed ordering because the timing of when the audio thread
+  // sees a changed |is_enabled_| value can be relaxed.
+  const bool deliver_data = is_enabled_.load(std::memory_order_relaxed);
 
   if (deliver_data) {
     deliverer_.OnData(audio_bus, reference_time);

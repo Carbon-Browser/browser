@@ -11,7 +11,12 @@ include_rules = [
 
 specific_include_rules = {
   "linux_ui_factory.cc": [
+    "+ui/color",
     "+ui/gtk",
     "+ui/qt",
+  ],
+  "fallback_linux_ui.cc": [
+    "+ui/events/keycodes",
+    "+ui/views/controls",
   ],
 }

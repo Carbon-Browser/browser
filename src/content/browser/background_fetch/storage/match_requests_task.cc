@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
 #include "content/browser/background_fetch/storage/database_helpers.h"
@@ -151,14 +151,9 @@ void MatchRequestsTask::FinishWithError(
     blink::mojom::BackgroundFetchError error) {
   if (HasStorageError())
     error = blink::mojom::BackgroundFetchError::STORAGE_ERROR;
-  ReportStorageError();
 
   std::move(callback_).Run(error, std::move(settled_fetches_));
   Finished();  // Destroys |this|.
-}
-
-std::string MatchRequestsTask::HistogramName() const {
-  return "MatchRequestsTask";
 }
 
 }  // namespace background_fetch

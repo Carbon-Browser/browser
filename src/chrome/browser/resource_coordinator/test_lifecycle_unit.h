@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,10 @@ class TestLifecycleUnit : public LifecycleUnitBase {
 
   void SetTitle(base::StringPiece16 title) { title_ = std::u16string(title); }
 
+  void SetDiscardFailureReason(DecisionFailureReason failure_reason) {
+    failure_reason_ = failure_reason;
+  }
+
   // LifecycleUnit:
   TabLifecycleUnitExternal* AsTabLifecycleUnitExternal() override;
   std::u16string GetTitle() const override;
@@ -49,7 +53,8 @@ class TestLifecycleUnit : public LifecycleUnitBase {
   int GetEstimatedMemoryFreedOnDiscardKB() const override;
   bool CanDiscard(LifecycleUnitDiscardReason reason,
                   DecisionDetails* decision_details) const override;
-  bool Discard(LifecycleUnitDiscardReason discard_reason) override;
+  bool Discard(LifecycleUnitDiscardReason discard_reason,
+               uint64_t resident_set_size_estimate) override;
   LifecycleUnitDiscardReason GetDiscardReason() const override;
 
  private:
@@ -58,6 +63,7 @@ class TestLifecycleUnit : public LifecycleUnitBase {
   base::ProcessHandle process_handle_;
   LifecycleUnit::SortKey sort_key_;
   bool can_discard_ = true;
+  std::optional<DecisionFailureReason> failure_reason_;
 };
 
 // Helper funtions for testing CanDiscard policy.

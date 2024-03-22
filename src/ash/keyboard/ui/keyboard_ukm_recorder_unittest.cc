@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ TEST(KeyboardUkmRecorderTest, RecordUkmWithEmptySource) {
   base::test::TaskEnvironment env;
 
   ukm::TestAutoSetUkmRecorder test_recorder;
-  test_recorder.EnableRecording(false /* extensions */);
+  test_recorder.UpdateRecording({ukm::MSBB});
   EXPECT_EQ(0u, test_recorder.entries_count());
 
   RecordUkmKeyboardShown(ukm::SourceId(), ui::TEXT_INPUT_TYPE_NONE);
@@ -28,7 +28,7 @@ TEST(KeyboardUkmRecorderTest, RecordUkmWithNavigationId) {
   base::test::TaskEnvironment env;
 
   ukm::TestAutoSetUkmRecorder test_recorder;
-  test_recorder.EnableRecording(false /* extensions */);
+  test_recorder.UpdateRecording({ukm::MSBB});
   ASSERT_EQ(0u, test_recorder.entries_count());
 
   const ukm::SourceId source =

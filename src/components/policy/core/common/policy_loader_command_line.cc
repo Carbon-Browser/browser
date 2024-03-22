@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,13 +19,13 @@ PolicyLoaderCommandLine::PolicyLoaderCommandLine(
     : command_line_(command_line) {}
 PolicyLoaderCommandLine::~PolicyLoaderCommandLine() = default;
 
-std::unique_ptr<PolicyBundle> PolicyLoaderCommandLine::Load() {
-  std::unique_ptr<PolicyBundle> bundle = std::make_unique<PolicyBundle>();
-  if (!command_line_.HasSwitch(switches::kChromePolicy))
+PolicyBundle PolicyLoaderCommandLine::Load() {
+  PolicyBundle bundle;
+  if (!command_line_->HasSwitch(switches::kChromePolicy))
     return bundle;
 
   auto policies = base::JSONReader::ReadAndReturnValueWithError(
-      command_line_.GetSwitchValueASCII(switches::kChromePolicy),
+      command_line_->GetSwitchValueASCII(switches::kChromePolicy),
       base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
 
   if (!policies.has_value()) {
@@ -37,10 +37,9 @@ std::unique_ptr<PolicyBundle> PolicyLoaderCommandLine::Load() {
     return bundle;
   }
 
-  bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()))
-      .LoadFrom(&base::Value::AsDictionaryValue(*policies),
-                POLICY_LEVEL_MANDATORY, POLICY_SCOPE_MACHINE,
-                POLICY_SOURCE_COMMAND_LINE);
+  bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()))
+      .LoadFrom(policies->GetDict(), POLICY_LEVEL_MANDATORY,
+                POLICY_SCOPE_MACHINE, POLICY_SOURCE_COMMAND_LINE);
   return bundle;
 }
 

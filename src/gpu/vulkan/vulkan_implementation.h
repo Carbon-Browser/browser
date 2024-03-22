@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_hardware_buffer_handle.h"
-#include "ui/gfx/geometry/size.h"
 #endif
 
 namespace gfx {
@@ -35,13 +34,6 @@ class VulkanImage;
 class VulkanInstance;
 struct GPUInfo;
 struct VulkanYCbCrInfo;
-
-#if BUILDFLAG(IS_FUCHSIA)
-class SysmemBufferCollection {
- public:
-  virtual ~SysmemBufferCollection() {}
-};
-#endif  // BUILDFLAG(IS_FUCHSIA)
 
 // Base class which provides functions for creating vulkan objects for different
 // platforms that use platform-specific extensions (e.g. for creation of
@@ -85,22 +77,23 @@ class COMPONENT_EXPORT(VULKAN) VulkanImplementation {
       VkFence vk_fence) = 0;
 
   // Creates a semaphore that can be exported using GetSemaphoreHandle().
-  virtual VkSemaphore CreateExternalSemaphore(VkDevice vk_device) = 0;
+  virtual VkSemaphore CreateExternalSemaphore(VkDevice vk_device);
 
   // Import a VkSemaphore from a platform-specific handle.
   // Handle types that don't allow permanent import are imported with
   // temporary permanence (VK_SEMAPHORE_IMPORT_TEMPORARY_BIT).
   virtual VkSemaphore ImportSemaphoreHandle(VkDevice vk_device,
-                                            SemaphoreHandle handle) = 0;
+                                            SemaphoreHandle handle);
 
   // Export a platform-specific handle for a Vulkan semaphore. Returns a null
   // handle in case of a failure.
   virtual SemaphoreHandle GetSemaphoreHandle(VkDevice vk_device,
-                                             VkSemaphore vk_semaphore) = 0;
+                                             VkSemaphore vk_semaphore);
 
-  // Returns VkExternalMemoryHandleTypeFlagBits that should be set when creating
-  // external images and memory.
-  virtual VkExternalMemoryHandleTypeFlagBits GetExternalImageHandleType() = 0;
+  // Returns VkExternalSemaphoreHandleTypeFlagBits that should be used when
+  // creating and exporting external semaphores.
+  virtual VkExternalSemaphoreHandleTypeFlagBits
+  GetExternalSemaphoreHandleType() = 0;
 
   // Returns true if the GpuMemoryBuffer of the specified type can be imported
   // into VkImage using CreateImageFromGpuMemoryHandle().
@@ -115,7 +108,11 @@ class COMPONENT_EXPORT(VULKAN) VulkanImplementation {
       VulkanDeviceQueue* device_queue,
       gfx::GpuMemoryBufferHandle gmb_handle,
       gfx::Size size,
-      VkFormat vk_format) = 0;
+      VkFormat vk_format,
+      const gfx::ColorSpace& color_space) = 0;
+
+  // Returns whether external semaphores are supported by this device.
+  virtual bool IsExternalSemaphoreSupported(VulkanDeviceQueue* device_queue);
 
 #if BUILDFLAG(IS_ANDROID)
   // Get the sampler ycbcr conversion information from the AHB.
@@ -126,20 +123,23 @@ class COMPONENT_EXPORT(VULKAN) VulkanImplementation {
 #endif
 
 #if BUILDFLAG(IS_FUCHSIA)
-  // Registers as sysmem buffer collection. The collection can be released by
-  // destroying the returned SysmemBufferCollection object. Once a collection is
-  // registered the individual buffers in the collection can be referenced by
-  // using the |id| as |buffer_collection_id| in |gmb_handle| passed to
+  // Registers a sysmem buffer collection. `service_handle` contains a handle
+  // for the eventpair that controls the lifetime of the collection. The
+  // implementation must drop the collection when all peer handles for
+  // that eventpair are destroyed (i.e. when `ZX_EVENTPAIR_PEER_CLOSED` is
+  // signaled on that handle). Once a collection is registered the individual
+  // buffers in the collection can be referenced by using the peer of
+  // `service_handle` as `buffer_collection_handle` in `gmb_handle` passed to
   // CreateImageFromGpuMemoryHandle().
-  virtual std::unique_ptr<SysmemBufferCollection>
-  RegisterSysmemBufferCollection(VkDevice device,
-                                 gfx::SysmemBufferCollectionId id,
-                                 zx::channel token,
-                                 gfx::BufferFormat format,
-                                 gfx::BufferUsage usage,
-                                 gfx::Size size,
-                                 size_t min_buffer_count,
-                                 bool register_with_image_pipe) = 0;
+  virtual void RegisterSysmemBufferCollection(
+      VkDevice device,
+      zx::eventpair service_handle,
+      zx::channel sysmem_token,
+      gfx::BufferFormat format,
+      gfx::BufferUsage usage,
+      gfx::Size size,
+      size_t min_buffer_count,
+      bool register_with_image_pipe) = 0;
 #endif  // BUILDFLAG(IS_FUCHSIA)
 
   bool use_swiftshader() const { return use_swiftshader_; }
@@ -155,7 +155,8 @@ std::unique_ptr<VulkanDeviceQueue> CreateVulkanDeviceQueue(
     VulkanImplementation* vulkan_implementation,
     uint32_t option,
     const GPUInfo* gpu_info = nullptr,
-    uint32_t heap_memory_limit = 0);
+    uint32_t heap_memory_limit = 0,
+    const bool is_thread_safe = false);
 
 }  // namespace gpu
 

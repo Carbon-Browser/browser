@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,7 +58,8 @@ ScriptPromise Worklet::addModule(ScriptState* script_state,
                     mojom::WebFeature::kWorkletAddModule);
 
   // Step 1: "Let promise be a new promise."
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   // Step 2: "Let worklet be the current Worklet."
@@ -87,10 +88,11 @@ ScriptPromise Worklet::addModule(ScriptState* script_state,
   // loading.
   GetExecutionContext()
       ->GetTaskRunner(TaskType::kInternalLoading)
-      ->PostTask(FROM_HERE,
-                 WTF::Bind(&Worklet::FetchAndInvokeScript, WrapPersistent(this),
-                           module_url_record, options->credentials(),
-                           WrapPersistent(pending_tasks)));
+      ->PostTask(
+          FROM_HERE,
+          WTF::BindOnce(&Worklet::FetchAndInvokeScript, WrapPersistent(this),
+                        module_url_record, options->credentials(),
+                        WrapPersistent(pending_tasks)));
   return promise;
 }
 
@@ -113,7 +115,7 @@ void Worklet::FinishPendingTasks(WorkletPendingTasks* pending_tasks) {
 
 WorkletGlobalScopeProxy* Worklet::FindAvailableGlobalScope() {
   DCHECK(IsMainThread());
-  return proxies_.at(SelectGlobalScope());
+  return proxies_.at(SelectGlobalScope()).Get();
 }
 
 // Implementation of the second half of the "addModule(moduleURL, options)"
@@ -138,9 +140,10 @@ void Worklet::FetchAndInvokeScript(const KURL& module_url_record,
               ->Fetcher()
               ->GetProperties()
               .GetFetchClientSettingsObject());
-  // Worklets don't support resource timing APIs yet.
+
   auto* outside_resource_timing_notifier =
-      MakeGarbageCollected<NullWorkerResourceTimingNotifier>();
+      WorkerResourceTimingNotifierImpl::CreateForInsideResourceFetcher(
+          *GetExecutionContext());
 
   // Specify TaskType::kInternalLoading because it's commonly used for module
   // loading.

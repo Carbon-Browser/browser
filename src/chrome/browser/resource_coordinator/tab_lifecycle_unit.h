@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -99,7 +99,8 @@ class TabLifecycleUnitSource::TabLifecycleUnit
   bool CanDiscard(LifecycleUnitDiscardReason reason,
                   DecisionDetails* decision_details) const override;
   LifecycleUnitDiscardReason GetDiscardReason() const override;
-  bool Discard(LifecycleUnitDiscardReason discard_reason) override;
+  bool Discard(LifecycleUnitDiscardReason discard_reason,
+               uint64_t memory_footprint_estimate) override;
   ukm::SourceId GetUkmSourceId() const override;
 
   // Implementations of some functions from TabLifecycleUnitExternal. These are
@@ -122,7 +123,8 @@ class TabLifecycleUnitSource::TabLifecycleUnit
   void CheckMediaUsage(DecisionDetails* decision_details) const;
 
   // Finishes a tab discard, invoked by Discard().
-  void FinishDiscard(LifecycleUnitDiscardReason discard_reason);
+  void FinishDiscard(LifecycleUnitDiscardReason discard_reason,
+                     uint64_t tab_resident_set_size_estimate);
 
   // Returns the RenderProcessHost associated with this tab.
   content::RenderProcessHost* GetRenderProcessHost() const;
@@ -145,7 +147,7 @@ class TabLifecycleUnitSource::TabLifecycleUnit
   raw_ptr<base::ObserverList<TabLifecycleObserver>::Unchecked> observers_;
 
   // TabStripModel to which this tab belongs.
-  raw_ptr<TabStripModel> tab_strip_model_;
+  raw_ptr<TabStripModel, DanglingUntriaged> tab_strip_model_;
 
   // Last time at which this tab was focused, or TimeTicks::Max() if it is
   // currently focused. For tabs that aren't currently focused this is

@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/editing/serializers/serialization.h"
 
 #include "testing/gmock/include/gmock/gmock-matchers.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/editing/position.h"
 #include "third_party/blink/renderer/core/editing/testing/editing_test_base.h"
@@ -49,6 +50,23 @@ TEST_F(SerializationTest, CantCreateFragmentCrash) {
   EXPECT_FALSE(sanitized);
 }
 
+// Regression test for https://crbug.com/1310535
+TEST_F(SerializationTest, CreateFragmentWithDataUrlCrash) {
+  // When same data: URL is set for filter and style image with a style element
+  // CreateSanitizedFragmentFromMarkupWithContext() triggers
+  // ResourceLoader::Start(), and EmptyLocalFrameClientWithFailingLoaderFactory
+  // ::CreateURLLoaderFactory() will be called.
+  // Note: Ideally ResourceLoader::Start() don't need to call
+  // EmptyLocalFrameClientWithFailingLoaderFactory::CreateURLLoaderFactory() for
+  // data: URL.
+  const String html =
+      "<div style=\"filter: url(data:image/gif;base64,xx);\">"
+      "<style>body {background: url(data:image/gif;base64,xx);}</style>";
+  DocumentFragment* sanitized = CreateSanitizedFragmentFromMarkupWithContext(
+      GetDocument(), html, 0, html.length(), KURL());
+  EXPECT_TRUE(sanitized);
+}
+
 // http://crbug.com/938590
 TEST_F(SerializationTest, Link) {
   InsertStyleElement(
@@ -70,7 +88,7 @@ TEST_F(SerializationTest, Link) {
   // a1
   ASSERT_THAT(style1.InsideLink(), EInsideLink::kNotInsideLink);
   ASSERT_THAT(style1.VisitedDependentColor(GetCSSPropertyColor()),
-              MakeRGB(1, 1, 1))
+              Color::FromRGB(1, 1, 1))
       << "should not be :visited/:link color";
   EXPECT_THAT(
       SerailizeToHTMLText(a1),
@@ -83,7 +101,7 @@ TEST_F(SerializationTest, Link) {
   // visited/unvisited state of link for privacy reason.
   ASSERT_THAT(style2.InsideLink(), EInsideLink::kInsideVisitedLink);
   ASSERT_THAT(style2.VisitedDependentColor(GetCSSPropertyColor()),
-              MakeRGB(3, 3, 3))
+              Color::FromRGB(3, 3, 3))
       << "should be :visited color";
   EXPECT_THAT(
       SerailizeToHTMLText(a2),
@@ -93,7 +111,7 @@ TEST_F(SerializationTest, Link) {
   // a3
   ASSERT_THAT(style3.InsideLink(), EInsideLink::kInsideUnvisitedLink);
   ASSERT_THAT(style3.VisitedDependentColor(GetCSSPropertyColor()),
-              MakeRGB(2, 2, 2))
+              Color::FromRGB(2, 2, 2))
       << "should be :link color";
   EXPECT_THAT(
       SerailizeToHTMLText(a3),

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,15 +25,16 @@ public class NotificationWrapperBuilderFactory {
      * ensures the notification channel has been initialized.
      *
      * @param channelId The ID of the channel the notification should be posted to. This channel
-     *                  will be created if it did not already exist. Must be a known channel within
-     *                  {@link ChannelsInitializer#ensureInitialized(String)}.
+     *     will be created if it did not already exist. Must be a known channel within {@link
+     *     ChannelsInitializer#ensureInitialized(String)}.
      */
     public static NotificationWrapperBuilder createNotificationWrapperBuilder(String channelId) {
-        return createNotificationWrapperBuilder(channelId, null /* metadata */);
+        return createNotificationWrapperBuilder(channelId, /* metadata= */ null);
     }
 
     /**
      * Same as above, with additional parameter:
+     *
      * @param metadata Metadata contains notification id, tag, etc.
      */
     public static NotificationWrapperBuilder createNotificationWrapperBuilder(
@@ -43,8 +44,11 @@ public class NotificationWrapperBuilderFactory {
         NotificationManagerProxyImpl notificationManagerProxy =
                 new NotificationManagerProxyImpl(context);
 
-        ChannelsInitializer channelsInitializer = new ChannelsInitializer(notificationManagerProxy,
-                ChromeChannelDefinitions.getInstance(), context.getResources());
+        ChannelsInitializer channelsInitializer =
+                new ChannelsInitializer(
+                        notificationManagerProxy,
+                        ChromeChannelDefinitions.getInstance(),
+                        context.getResources());
 
         return new ChromeNotificationWrapperCompatBuilder(
                 context, channelId, channelsInitializer, metadata);

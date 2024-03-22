@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,24 +6,35 @@
 
 #include <string>
 
-#include "ash/components/login/auth/public/user_context.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
+#include "base/files/file_util.h"
+#include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "chrome/browser/ash/app_mode/kiosk_controller.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/crosapi/move_migrator.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_base_test.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/local_state_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
+#include "chrome/browser/ash/login/test/profile_prepared_waiter.h"
+#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "chromeos/ash/components/standalone_browser/lacros_availability.h"
+#include "chromeos/ash/components/standalone_browser/migrator_util.h"
+#include "chromeos/ash/components/standalone_browser/standalone_browser_features.h"
+#include "components/account_id/account_id.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_constants.h"
+#include "components/user_manager/fake_user_manager.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_launcher.h"
 
@@ -31,10 +42,43 @@ namespace ash {
 
 namespace {
 
+const char kUserEmail[] = "test_user@gmail.com";
+const char kGaiaID[] = "22222";
+
 constexpr char kUserIdHash[] = "abcdefg";
 
-// As defined in /ash/components/login/auth/stub_authenticator.cc
-static const char kUserIdHashSuffix[] = "-hash";
+// This creates <profile directory>/Preferences file for the account so that
+// when `Profile` instance is created, it is considered a profile for an
+// existing user. This is to avoid profile migration being marked as completed
+// for a new user.
+bool CreatePreferenceFileForProfile(const AccountId& account_id) {
+  base::FilePath user_data_dir;
+  base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir);
+  const base::FilePath profile_data_dir =
+      ProfileHelper::GetProfilePathByUserIdHash(
+          user_manager::FakeUserManager::GetFakeUsernameHash(account_id));
+  {
+    base::ScopedAllowBlockingForTesting scoped_allow_blocking;
+    if (!(base::CreateDirectory(user_data_dir) &&
+          base::CreateDirectory(profile_data_dir) &&
+          base::WriteFile(profile_data_dir.Append("Preferences"), "{}"))) {
+      LOG(ERROR) << "Creating `Preferences` file failed.";
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void SetLacrosAvailability(
+    ash::standalone_browser::LacrosAvailability lacros_availability) {
+  policy::PolicyMap policy;
+  policy.Set(policy::key::kLacrosAvailability, policy::POLICY_LEVEL_MANDATORY,
+             policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
+             base::Value(GetLacrosAvailabilityPolicyName(lacros_availability)),
+             /*external_data_fetcher=*/nullptr);
+  crosapi::browser_util::CacheLacrosAvailability(policy);
+}
 
 }  // namespace
 
@@ -50,11 +94,12 @@ class BrowserDataMigratorOnSignIn : public ash::LoginManagerTest {
   BrowserDataMigratorOnSignIn& operator=(BrowserDataMigratorOnSignIn&) = delete;
   ~BrowserDataMigratorOnSignIn() override = default;
 
-  // ash::LoginManagerTest:
-  void SetUp() override {
-    login_manager_mixin_.AppendRegularUsers(1);
+  const LoginManagerMixin::TestUserInfo regular_user_{
+      AccountId::FromUserEmailGaiaId(kUserEmail, kGaiaID)};
 
-    ash::LoginManagerTest::SetUp();
+  bool LoginAsExistingRegularUser() {
+    return CreatePreferenceFileForProfile(regular_user_.account_id) &&
+           LoginAsRegularUser();
   }
 
   bool LoginAsRegularUser() {
@@ -64,11 +109,10 @@ class BrowserDataMigratorOnSignIn : public ash::LoginManagerTest {
       return false;
     }
 
-    const auto& test_user_info = login_manager_mixin_.users()[0];
-
     const UserContext user_context =
-        CreateUserContext(test_user_info.account_id, kPassword);
+        CreateUserContext(regular_user_.account_id, kPassword);
     SetExpectedCredentials(user_context);
+
     controller->Login(user_context, SigninSpecifics());
     return true;
   }
@@ -78,45 +122,7 @@ class BrowserDataMigratorOnSignIn : public ash::LoginManagerTest {
   }
 
  protected:
-  LoginManagerMixin login_manager_mixin_{&mixin_host_};
-};
-
-class BrowserDataMigratorCopyMigrateOnSignIn
-    : public BrowserDataMigratorOnSignIn {
- public:
-  BrowserDataMigratorCopyMigrateOnSignIn() = default;
-  BrowserDataMigratorCopyMigrateOnSignIn(
-      BrowserDataMigratorCopyMigrateOnSignIn&) = delete;
-  BrowserDataMigratorCopyMigrateOnSignIn& operator=(
-      BrowserDataMigratorCopyMigrateOnSignIn&) = delete;
-  ~BrowserDataMigratorCopyMigrateOnSignIn() override = default;
-
-  void SetUp() override {
-    feature_list_.InitWithFeatures(
-        {ash::features::kLacrosSupport,
-         ash::features::kLacrosProfileMigrationForAnyUser},
-        {});
-
-    BrowserDataMigratorOnSignIn::SetUp();
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-// Check that migration is triggered from signin flow if Lacros is enabled.
-IN_PROC_BROWSER_TEST_F(BrowserDataMigratorCopyMigrateOnSignIn,
-                       MigrateOnSignIn) {
-  base::RunLoop run_loop;
-  ScopedRestartAttemptForTesting scoped_restart_attempt(
-      base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
-  LoginAsRegularUser();
-  run_loop.Run();
-  EXPECT_TRUE(
-      FakeSessionManagerClient::Get()->request_browser_data_migration_called());
-  // Migration should be triggered in copy mode and not move mode.
-  EXPECT_FALSE(FakeSessionManagerClient::Get()
-                   ->request_browser_data_migration_for_move_called());
+  LoginManagerMixin login_manager_mixin_{&mixin_host_, {regular_user_}};
 };
 
 class BrowserDataMigratorMoveMigrateOnSignInByPolicy
@@ -128,27 +134,6 @@ class BrowserDataMigratorMoveMigrateOnSignInByPolicy
   BrowserDataMigratorMoveMigrateOnSignInByPolicy& operator=(
       BrowserDataMigratorMoveMigrateOnSignInByPolicy&) = delete;
   ~BrowserDataMigratorMoveMigrateOnSignInByPolicy() override = default;
-
-  void SetUp() override {
-    feature_list_.InitWithFeatures(
-        {ash::features::kLacrosProfileMigrationForAnyUser}, {});
-
-    BrowserDataMigratorOnSignIn::SetUp();
-  }
-
-  void SetLacrosAvailability(
-      crosapi::browser_util::LacrosAvailability lacros_availability) {
-    policy::PolicyMap policy;
-    policy.Set(
-        policy::key::kLacrosAvailability, policy::POLICY_LEVEL_MANDATORY,
-        policy::POLICY_SCOPE_USER, policy::POLICY_SOURCE_CLOUD,
-        base::Value(GetLacrosAvailabilityPolicyName(lacros_availability)),
-        /*external_data_fetcher=*/nullptr);
-    crosapi::browser_util::CacheLacrosAvailability(policy);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
 };
 
 // Enabling LacrosOnly by policy should trigger move migration during signin.
@@ -157,14 +142,18 @@ IN_PROC_BROWSER_TEST_F(BrowserDataMigratorMoveMigrateOnSignInByPolicy,
   base::RunLoop run_loop;
   ScopedRestartAttemptForTesting scoped_restart_attempt(
       base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
-  SetLacrosAvailability(crosapi::browser_util::LacrosAvailability::kLacrosOnly);
-  LoginAsRegularUser();
+  SetLacrosAvailability(
+      ash::standalone_browser::LacrosAvailability::kLacrosOnly);
+  ASSERT_TRUE(LoginAsExistingRegularUser());
   run_loop.Run();
   EXPECT_TRUE(
       FakeSessionManagerClient::Get()->request_browser_data_migration_called());
   EXPECT_TRUE(FakeSessionManagerClient::Get()
-                  ->request_browser_data_migration_for_move_called());
-};
+                  ->request_browser_data_migration_mode_called());
+  EXPECT_EQ(FakeSessionManagerClient::Get()
+                ->request_browser_data_migration_mode_value(),
+            "move");
+}
 
 class BrowserDataMigratorMoveMigrateOnSignInByFeature
     : public BrowserDataMigratorOnSignIn {
@@ -178,11 +167,7 @@ class BrowserDataMigratorMoveMigrateOnSignInByFeature
 
   void SetUp() override {
     feature_list_.InitWithFeatures(
-        {ash::features::kLacrosSupport, ash::features::kLacrosPrimary,
-         ash::features::kLacrosOnly,
-         ash::features::kLacrosProfileMigrationForAnyUser},
-        {});
-
+        {ash::standalone_browser::features::kLacrosOnly}, {});
     BrowserDataMigratorOnSignIn::SetUp();
   }
 
@@ -197,13 +182,42 @@ IN_PROC_BROWSER_TEST_F(BrowserDataMigratorMoveMigrateOnSignInByFeature,
   base::RunLoop run_loop;
   ScopedRestartAttemptForTesting scoped_restart_attempt(
       base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
-  LoginAsRegularUser();
+  ASSERT_TRUE(LoginAsExistingRegularUser());
   run_loop.Run();
   EXPECT_TRUE(
       FakeSessionManagerClient::Get()->request_browser_data_migration_called());
   EXPECT_TRUE(FakeSessionManagerClient::Get()
-                  ->request_browser_data_migration_for_move_called());
-};
+                  ->request_browser_data_migration_mode_called());
+  EXPECT_EQ(FakeSessionManagerClient::Get()
+                ->request_browser_data_migration_mode_value(),
+            "move");
+}
+
+// Check that migration marked as completed for a new user and thus migration is
+// not triggered from signin flow.
+IN_PROC_BROWSER_TEST_F(BrowserDataMigratorMoveMigrateOnSignInByFeature,
+                       SkipMigrateOnSignInForNewUser) {
+  ash::test::ProfilePreparedWaiter profile_prepared(regular_user_.account_id);
+  ASSERT_TRUE(LoginAsRegularUser());
+  // Note that `ProfilePreparedWaiter` waits for
+  // `ExistingUserController::OnProfilePrepared()` to be called and this is
+  // called after `UserSessionManager::InitializeUserSession()` is called, which
+  // leads to `BrowserDataMigratorImpl::MaybeRestartToMigrate()`. Therefore by
+  // the time the wait ends, migration check would have happened.
+  profile_prepared.Wait();
+  EXPECT_FALSE(
+      FakeSessionManagerClient::Get()->request_browser_data_migration_called());
+  const std::string user_id_hash =
+      user_manager::FakeUserManager::GetFakeUsernameHash(
+          regular_user_.account_id);
+  EXPECT_TRUE(ash::standalone_browser::migrator_util::
+                  IsProfileMigrationCompletedForUser(
+                      g_browser_process->local_state(), user_id_hash));
+  EXPECT_EQ(
+      ash::standalone_browser::migrator_util::GetCompletedMigrationMode(
+          g_browser_process->local_state(), user_id_hash),
+      ash::standalone_browser::migrator_util::MigrationMode::kSkipForNewUser);
+}
 
 class BrowserDataMigratorResumeOnSignIn : public BrowserDataMigratorOnSignIn,
                                           public LocalStateMixin::Delegate {
@@ -220,7 +234,7 @@ class BrowserDataMigratorResumeOnSignIn : public BrowserDataMigratorOnSignIn,
     const auto& user = login_manager_mixin_.users()[0];
 
     const std::string user_id_hash =
-        user.account_id.GetUserEmail() + kUserIdHashSuffix;
+        user_manager::FakeUserManager::GetFakeUsernameHash(user.account_id);
 
     // Setting this pref triggers a restart to resume move migration. Check
     // `BrowserDataMigratorImpl::MaybeForceResumeMoveMigration()`.
@@ -238,12 +252,15 @@ IN_PROC_BROWSER_TEST_F(BrowserDataMigratorResumeOnSignIn, ForceResumeOnLogin) {
   base::RunLoop run_loop;
   ScopedRestartAttemptForTesting scoped_restart_attempt(
       base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
-  LoginAsRegularUser();
+  ASSERT_TRUE(LoginAsExistingRegularUser());
   run_loop.Run();
   EXPECT_TRUE(
       FakeSessionManagerClient::Get()->request_browser_data_migration_called());
   EXPECT_TRUE(FakeSessionManagerClient::Get()
-                  ->request_browser_data_migration_for_move_called());
+                  ->request_browser_data_migration_mode_called());
+  EXPECT_EQ(FakeSessionManagerClient::Get()
+                ->request_browser_data_migration_mode_value(),
+            "move");
 }
 
 // Used to test whether migration gets triggered upon restart in session.
@@ -312,11 +329,7 @@ class BrowserDataMigratorMoveMigrateOnRestartInSessionByFeature
 
   void SetUp() override {
     feature_list_.InitWithFeatures(
-        {ash::features::kLacrosSupport, ash::features::kLacrosPrimary,
-         ash::features::kLacrosOnly,
-         ash::features::kLacrosProfileMigrationForAnyUser},
-        {});
-
+        {ash::standalone_browser::features::kLacrosOnly}, {});
     BrowserDataMigratorRestartInSession::SetUp();
   }
 };
@@ -329,7 +342,10 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(
       FakeSessionManagerClient::Get()->request_browser_data_migration_called());
   EXPECT_TRUE(FakeSessionManagerClient::Get()
-                  ->request_browser_data_migration_for_move_called());
+                  ->request_browser_data_migration_mode_called());
+  EXPECT_EQ(FakeSessionManagerClient::Get()
+                ->request_browser_data_migration_mode_value(),
+            "move");
 }
 
 class BrowserDataMigratorMoveMigrateOnRestartInSessionByPolicy
@@ -343,17 +359,10 @@ class BrowserDataMigratorMoveMigrateOnRestartInSessionByPolicy
   ~BrowserDataMigratorMoveMigrateOnRestartInSessionByPolicy() override =
       default;
 
-  void SetUp() override {
-    feature_list_.InitAndEnableFeature(
-        ash::features::kLacrosProfileMigrationForAnyUser);
-
-    BrowserDataMigratorRestartInSession::SetUp();
-  }
-
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitchASCII(
-        crosapi::browser_util::kLacrosAvailabilityPolicySwitch,
-        crosapi::browser_util::kLacrosAvailabilityPolicyLacrosOnly);
+        ash::standalone_browser::kLacrosAvailabilityPolicySwitch,
+        ash::standalone_browser::kLacrosAvailabilityPolicyLacrosOnly);
     BrowserDataMigratorRestartInSession::SetUpCommandLine(command_line);
   }
 };
@@ -365,7 +374,10 @@ IN_PROC_BROWSER_TEST_F(BrowserDataMigratorMoveMigrateOnRestartInSessionByPolicy,
   EXPECT_TRUE(
       FakeSessionManagerClient::Get()->request_browser_data_migration_called());
   EXPECT_TRUE(FakeSessionManagerClient::Get()
-                  ->request_browser_data_migration_for_move_called());
+                  ->request_browser_data_migration_mode_called());
+  EXPECT_EQ(FakeSessionManagerClient::Get()
+                ->request_browser_data_migration_mode_value(),
+            "move");
 }
 
 class BrowserDataMigratorResumeRestartInSession
@@ -396,7 +408,45 @@ IN_PROC_BROWSER_TEST_F(BrowserDataMigratorResumeRestartInSession,
   EXPECT_TRUE(
       FakeSessionManagerClient::Get()->request_browser_data_migration_called());
   EXPECT_TRUE(FakeSessionManagerClient::Get()
-                  ->request_browser_data_migration_for_move_called());
+                  ->request_browser_data_migration_mode_called());
+  EXPECT_EQ(FakeSessionManagerClient::Get()
+                ->request_browser_data_migration_mode_value(),
+            "move");
+}
+
+class BrowserDataMigratorForKiosk : public KioskBaseTest {
+ public:
+  BrowserDataMigratorForKiosk() = default;
+  BrowserDataMigratorForKiosk(BrowserDataMigratorForKiosk&) = delete;
+  BrowserDataMigratorForKiosk& operator=(BrowserDataMigratorForKiosk&) = delete;
+  ~BrowserDataMigratorForKiosk() override = default;
+
+  void SetUp() override {
+    feature_list_.InitWithFeatures(
+        {ash::standalone_browser::features::kLacrosOnly}, {});
+    KioskBaseTest::SetUp();
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(BrowserDataMigratorForKiosk, MigrateOnKioskLaunch) {
+  SetLacrosAvailability(
+      ash::standalone_browser::LacrosAvailability::kUserChoice);
+
+  // Register app in `KioskController` so its `AccountId` can be retrieved.
+  PrepareAppLaunch();
+  CreatePreferenceFileForProfile(test_kiosk_app().id().account_id);
+
+  base::RunLoop run_loop;
+  ScopedRestartAttemptForTesting scoped_restart_attempt(
+      base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
+  StartAppLaunchFromLoginScreen(
+      NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE);
+  run_loop.Run();
+  EXPECT_TRUE(
+      FakeSessionManagerClient::Get()->request_browser_data_migration_called());
 }
 
 }  // namespace ash

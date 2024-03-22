@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <linux/input.h>
 #include <stddef.h>
+
+#include "base/memory/raw_ptr_exclusion.h"
 
 namespace ui {
 
@@ -52,7 +54,9 @@ struct DeviceCapabilities {
   const char* ff;
 
   // EVIOCGABS.
-  const DeviceAbsoluteAxis* abs_axis;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const DeviceAbsoluteAxis* abs_axis;
   size_t abs_axis_count;
 
   // (/sys/class/input/*/device/device/function_row_physmap)
@@ -116,6 +120,7 @@ extern const DeviceCapabilities kDellLatitudeE6510Touchpad;
 extern const DeviceCapabilities kHPProBook6560bTouchpad;
 extern const DeviceCapabilities kJinlonKeyboard;
 extern const DeviceCapabilities kSymbolTechBarcodeScanner;
+extern const DeviceCapabilities kRexHeatmapTouchScreen;
 }  // namespace ui
 
 #endif  // UI_EVENTS_OZONE_EVDEV_EVENT_DEVICE_TEST_UTIL_H_

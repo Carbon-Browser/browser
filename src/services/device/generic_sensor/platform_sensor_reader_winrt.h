@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <functional>
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
@@ -98,7 +98,7 @@ class PlatformSensorReaderWinrtBase : public PlatformSensorReaderWinBase {
   // threads by PlatformSensorWin.
   base::Lock lock_;
   // Null if there is no client to notify, non-null otherwise.
-  raw_ptr<Client> client_ GUARDED_BY(lock_);
+  raw_ptr<Client, DanglingUntriaged> client_ GUARDED_BY(lock_);
 
   // Always report the first sample received after starting the sensor.
   bool has_received_first_sample_ = false;

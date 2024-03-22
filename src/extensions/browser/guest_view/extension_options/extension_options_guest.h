@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,20 +20,23 @@ class ExtensionOptionsGuest
  public:
   static const char Type[];
 
+  ~ExtensionOptionsGuest() override;
   ExtensionOptionsGuest(const ExtensionOptionsGuest&) = delete;
   ExtensionOptionsGuest& operator=(const ExtensionOptionsGuest&) = delete;
 
-  static guest_view::GuestViewBase* Create(
-      content::WebContents* owner_web_contents);
+  static std::unique_ptr<GuestViewBase> Create(
+      content::RenderFrameHost* owner_rfh);
 
  private:
-  explicit ExtensionOptionsGuest(content::WebContents* owner_web_contents);
-  ~ExtensionOptionsGuest() override;
+  explicit ExtensionOptionsGuest(content::RenderFrameHost* owner_rfh);
 
   // GuestViewBase implementation.
-  void CreateWebContents(const base::Value::Dict& create_params,
+  void CreateWebContents(std::unique_ptr<GuestViewBase> owned_this,
+                         const base::Value::Dict& create_params,
                          WebContentsCreatedCallback callback) final;
   void DidInitialize(const base::Value::Dict& create_params) final;
+  void MaybeRecreateGuestContents(
+      content::RenderFrameHost* outer_contents_frame) final;
   void GuestViewDidStopLoading() final;
   const char* GetAPINamespace() const final;
   int GetTaskPrefix() const final;
@@ -45,7 +48,7 @@ class ExtensionOptionsGuest
                       std::unique_ptr<content::WebContents> new_contents,
                       const GURL& target_url,
                       WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
+                      const blink::mojom::WindowFeatures& window_features,
                       bool user_gesture,
                       bool* was_blocked) final;
   content::WebContents* OpenURLFromTab(
@@ -54,6 +57,7 @@ class ExtensionOptionsGuest
   void CloseContents(content::WebContents* source) final;
   bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) final;
+  bool ShouldResumeRequestsForCreatedWindow() override;
   bool IsWebContentsCreationOverridden(
       content::SiteInstance* source_site_instance,
       content::mojom::WindowContainerType window_container_type,

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/time/time.h"
+#include "components/download/public/common/download_content.h"
 #include "components/download/public/common/download_danger_type.h"
 #include "components/safe_browsing/content/common/file_type_policies.h"
 
@@ -34,12 +35,15 @@ std::string GetDangerTypeMetricSuffix(
     case download::DOWNLOAD_DANGER_TYPE_UNCOMMON_CONTENT:
       return ".Uncommon";
     case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_SCANNING:
+    case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_LOCAL_PASSWORD_SCANNING:
     case download::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING:
+    case download::DOWNLOAD_DANGER_TYPE_ASYNC_LOCAL_PASSWORD_SCANNING:
     case download::DOWNLOAD_DANGER_TYPE_BLOCKED_PASSWORD_PROTECTED:
     case download::DOWNLOAD_DANGER_TYPE_BLOCKED_TOO_LARGE:
     case download::DOWNLOAD_DANGER_TYPE_SENSITIVE_CONTENT_WARNING:
     case download::DOWNLOAD_DANGER_TYPE_SENSITIVE_CONTENT_BLOCK:
     case download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_SAFE:
+    case download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_FAILED:
     case download::DOWNLOAD_DANGER_TYPE_BLOCKED_UNSUPPORTED_FILETYPE:
     case download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS:
     case download::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT:
@@ -108,11 +112,11 @@ void RecordDangerousDownloadWarningBypassed(
       base::UserMetricsAction("SafeBrowsing.Download.WarningBypassed"));
 }
 
-void RecordDownloadOpened(download::DownloadDangerType danger_type,
-                          download::DownloadContent download_content,
-                          base::Time download_opened_time,
-                          base::Time download_end_time,
-                          bool show_download_in_folder) {
+void RecordDownloadOpenedLatency(download::DownloadDangerType danger_type,
+                                 download::DownloadContent download_content,
+                                 base::Time download_opened_time,
+                                 base::Time download_end_time,
+                                 bool show_download_in_folder) {
   if (danger_type != download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS) {
     return;
   }
@@ -120,80 +124,6 @@ void RecordDownloadOpened(download::DownloadDangerType danger_type,
       show_download_in_folder ? ".ShowInFolder" : ".OpenDirectly";
   base::UmaHistogramCustomTimes(
       "SBClientDownload.SafeDownloadOpenedLatency2" + metric_suffix,
-      /* sample */ download_opened_time - download_end_time,
-      /* min */ base::Seconds(1),
-      /* max */ base::Days(1), /* buckets */ 50);
-
-  RecordDownloadOpenedFileType(download_content, download_opened_time,
-                               download_end_time);
-}
-
-void RecordDownloadOpenedFileType(download::DownloadContent download_content,
-                                  base::Time download_opened_time,
-                                  base::Time download_end_time) {
-  std::string download_content_str;
-  switch (download_content) {
-    case download::DownloadContent::UNRECOGNIZED:
-      download_content_str = "UNRECOGNIZED";
-      break;
-    case download::DownloadContent::TEXT:
-      download_content_str = "TEXT";
-      break;
-    case download::DownloadContent::IMAGE:
-      download_content_str = "IMAGE";
-      break;
-    case download::DownloadContent::AUDIO:
-      download_content_str = "AUDIO";
-      break;
-    case download::DownloadContent::VIDEO:
-      download_content_str = "VIDEO";
-      break;
-    case download::DownloadContent::OCTET_STREAM:
-      download_content_str = "OCTET_STREAM";
-      break;
-    case download::DownloadContent::PDF:
-      download_content_str = "PDF";
-      break;
-    case download::DownloadContent::DOCUMENT:
-      download_content_str = "DOCUMENT";
-      break;
-    case download::DownloadContent::SPREADSHEET:
-      download_content_str = "SPREADSHEET";
-      break;
-    case download::DownloadContent::PRESENTATION:
-      download_content_str = "PRESENTATION";
-      break;
-    case download::DownloadContent::ARCHIVE:
-      download_content_str = "ARCHIVE";
-      break;
-    case download::DownloadContent::EXECUTABLE:
-      download_content_str = "EXECUTABLE";
-      break;
-    case download::DownloadContent::DMG:
-      download_content_str = "DMG";
-      break;
-    case download::DownloadContent::CRX:
-      download_content_str = "CRX";
-      break;
-    case download::DownloadContent::WEB:
-      download_content_str = "WEB";
-      break;
-    case download::DownloadContent::EBOOK:
-      download_content_str = "EBOOK";
-      break;
-    case download::DownloadContent::FONT:
-      download_content_str = "FONT";
-      break;
-    case download::DownloadContent::APK:
-      download_content_str = "APK";
-      break;
-    case download::DownloadContent::MAX:
-      download_content_str = "MAX";
-      break;
-  }
-  base::UmaHistogramCustomTimes(
-      "SBClientDownload.SafeDownloadOpenedLatencyByContentType." +
-          download_content_str,
       /* sample */ download_opened_time - download_end_time,
       /* min */ base::Seconds(1),
       /* max */ base::Days(1), /* buckets */ 50);
@@ -230,11 +160,6 @@ void RecordDownloadFileTypeAttributes(
     base::UmaHistogramEnumeration(
         "SBClientDownload.UserGestureFileType.Attributes",
         UserGestureFileTypeAttributes::HAS_BYPASSED_DOWNLOAD_WARNING);
-    base::UmaHistogramCustomTimes(
-        "SBClientDownload.UserGestureFileType.LastBypassDownloadInterval",
-        /* sample */ base::Time::Now() - last_bypass_time.value(),
-        /* min */ base::Seconds(1),
-        /* max */ base::Days(1), /* buckets */ 50);
   }
 }
 

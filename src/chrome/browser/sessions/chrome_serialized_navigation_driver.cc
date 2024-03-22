@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,11 +72,6 @@ void ChromeSerializedNavigationDriver::Sanitize(
       (navigation->virtual_url().host_piece() == chrome::kChromeUIWelcomeHost ||
        navigation->virtual_url().host_piece() == chrome::kChromeUINewTabHost)) {
     ChangeDestination(GURL(chrome::kChromeUINativeNewTabURL), navigation);
-  }
-
-  if (navigation->virtual_url().SchemeIs(content::kChromeUIScheme) &&
-      navigation->virtual_url().host_piece() == chrome::kChromeUIHistoryHost) {
-    ChangeDestination(GURL(chrome::kChromeUINativeHistoryURL), navigation);
   }
 #endif  // BUILDFLAG(IS_ANDROID)
 }

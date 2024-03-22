@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/global_media_controls/media_notification_device_provider_impl.h"
+
+#include <algorithm>
 
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/ui/global_media_controls/media_notification_device_monitor.h"
@@ -16,11 +18,9 @@ namespace {
 // overwritten with |media::AudioDeviceDescription::kDefaultDeviceId|.
 void MaybeRemoveDefaultDevice(media::AudioDeviceDescriptions& descriptions) {
   // Determine which of the audio devices is the fallback "default" device.
-  auto default_device_it =
-      base::ranges::find_if(descriptions, [](const auto& description) {
-        return description.unique_id ==
-               media::AudioDeviceDescription::kDefaultDeviceId;
-      });
+  auto default_device_it = base::ranges::find(
+      descriptions, media::AudioDeviceDescription::kDefaultDeviceId,
+      &media::AudioDeviceDescription::unique_id);
 
   // If there is no default device, there is nothing to remove.
   if (default_device_it == descriptions.end())

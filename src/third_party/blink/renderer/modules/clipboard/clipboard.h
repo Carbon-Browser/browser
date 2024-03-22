@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,9 @@ namespace blink {
 
 class Navigator;
 class ScriptState;
+class ClipboardUnsanitizedFormats;
 
-class Clipboard : public EventTargetWithInlineData,
-                  public Supplement<Navigator> {
+class Clipboard : public EventTarget, public Supplement<Navigator> {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -28,7 +28,8 @@ class Clipboard : public EventTargetWithInlineData,
   Clipboard(const Clipboard&) = delete;
   Clipboard& operator=(const Clipboard&) = delete;
 
-  ScriptPromise read(ScriptState*);
+  ScriptPromise read(ScriptState*,
+                     ClipboardUnsanitizedFormats* formats = nullptr);
   ScriptPromise readText(ScriptState*);
 
   ScriptPromise write(ScriptState*, const HeapVector<Member<ClipboardItem>>&);
@@ -38,6 +39,9 @@ class Clipboard : public EventTargetWithInlineData,
   const AtomicString& InterfaceName() const override;
   ExecutionContext* GetExecutionContext() const override;
 
+  // Parses `format` as a web custom format type string. If successful, it
+  // returns just the (normalized) MIME type without the "web " prefix;
+  // otherwise returns an empty string.
   static String ParseWebCustomFormat(const String& format);
 
   void Trace(Visitor*) const override;

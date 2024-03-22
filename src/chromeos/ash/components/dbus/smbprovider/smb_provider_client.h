@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/smbprovider/directory_entry.pb.h"
 #include "chromeos/dbus/common/dbus_client.h"
@@ -24,7 +24,7 @@ namespace ash {
 // service. All methods should be called from the origin thread (UI thread)
 // which initializes the DBusThreadManager instance.
 class COMPONENT_EXPORT(ASH_DBUS_SMBPROVIDER) SmbProviderClient
-    : public DBusClient,
+    : public chromeos::DBusClient,
       public base::SupportsWeakPtr<SmbProviderClient> {
  public:
   using ReadDirectoryCallback = base::OnceCallback<void(

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """This is a library for wrapping Rust test executables in a way that is
@@ -150,7 +150,7 @@ class _TestExecutableWrapper:
         # output to the terminal).
         args = [
             self._path_to_test_executable, '--test', '--format=pretty',
-            '--exact'
+            '--color=always', '--exact'
         ]
         args.extend(list_of_tests_to_run)
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 
 #include "ui/views/view.h"
 
-namespace views {
-namespace internal {
+namespace views::internal {
 
 ViewBuilderCore::ViewBuilderCore() = default;
 
@@ -40,5 +39,4 @@ void ViewBuilderCore::SetProperties(View* view) {
     property->SetProperty(view);
 }
 
-}  // namespace internal
-}  // namespace views
+}  // namespace views::internal

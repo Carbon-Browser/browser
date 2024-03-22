@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,14 +15,14 @@ class StorageKey;
 }  // namespace blink
 
 namespace content {
-class BrowserContext;
+class StoragePartition;
 }
 
 namespace browsing_data {
 
 class MockSharedWorkerHelper : public SharedWorkerHelper {
  public:
-  explicit MockSharedWorkerHelper(content::BrowserContext* browser_context);
+  explicit MockSharedWorkerHelper(content::StoragePartition* storage_partition);
 
   MockSharedWorkerHelper(const MockSharedWorkerHelper&) = delete;
   MockSharedWorkerHelper& operator=(const MockSharedWorkerHelper&) = delete;

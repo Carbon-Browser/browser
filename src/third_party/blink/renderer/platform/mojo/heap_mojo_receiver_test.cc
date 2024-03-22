@@ -1,8 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/null_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -58,7 +59,7 @@ class ReceiverOwner : public GarbageCollected<ReceiverOwner<Mode>>,
   void GetPort(mojo::PendingReceiver<sample::blink::Port> port) override {}
 
   HeapMojoReceiver<sample::blink::Service, ReceiverOwner, Mode> receiver_;
-  HeapMojoReceiverGCBaseTest<Mode>* test_;
+  raw_ptr<HeapMojoReceiverGCBaseTest<Mode>, ExperimentalRenderer> test_;
 };
 
 template <HeapMojoWrapperMode Mode>
@@ -79,7 +80,7 @@ class HeapMojoReceiverGCBaseTest : public TestSupportingGC {
         base::MakeRefCounted<base::NullTaskRunner>();
     remote_ = mojo::Remote<sample::blink::Service>(
         owner_->receiver().BindNewPipeAndPassRemote(null_task_runner));
-    remote_.set_disconnect_handler(WTF::Bind(
+    remote_.set_disconnect_handler(WTF::BindOnce(
         [](HeapMojoReceiverGCBaseTest* receiver_test) {
           receiver_test->run_loop().Quit();
           receiver_test->disconnected() = true;
@@ -116,7 +117,7 @@ class HeapMojoReceiverDisconnectWithReasonHandlerBaseTest
         base::MakeRefCounted<base::NullTaskRunner>();
     this->remote_ = mojo::Remote<sample::blink::Service>(
         this->owner_->receiver().BindNewPipeAndPassRemote(null_task_runner));
-    this->remote_.set_disconnect_with_reason_handler(WTF::Bind(
+    this->remote_.set_disconnect_with_reason_handler(WTF::BindOnce(
         [](HeapMojoReceiverDisconnectWithReasonHandlerBaseTest* receiver_test,
            const uint32_t custom_reason, const std::string& description) {
           receiver_test->run_loop().Quit();

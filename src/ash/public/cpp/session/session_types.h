@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,8 @@ enum class AddUserSessionPolicy {
   ERROR_MAXIMUM_USERS_REACHED,
   // Disallowed multi-profile because device is locked to single user.
   ERROR_LOCKED_TO_SINGLE_USER,
-  // Disallowed multi-profile because Lacros is running, launching or
-  // terminating.
-  ERROR_LACROS_RUNNING,
+  // Disallowed multi-profile because Lacros is enabled.
+  ERROR_LACROS_ENABLED,
 };
 
 // Defines the cycle direction for |CycleActiveUser|.

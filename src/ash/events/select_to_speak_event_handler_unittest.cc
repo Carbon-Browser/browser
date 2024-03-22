@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/test/ash_test_helper.h"
 #include "ash/test/ash_test_views_delegate.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/test/aura_test_base.h"
 #include "ui/aura/window.h"
 #include "ui/display/manager/display_manager.h"
@@ -71,8 +72,7 @@ class TestDelegate : public SelectToSpeakEventHandlerDelegate {
   virtual ~TestDelegate() = default;
 
   bool CapturedMouseEvent(ui::EventType event_type) {
-    return mouse_events_captured_.find(event_type) !=
-           mouse_events_captured_.end();
+    return base::Contains(mouse_events_captured_, event_type);
   }
 
   void Reset() {
@@ -94,7 +94,8 @@ class TestDelegate : public SelectToSpeakEventHandlerDelegate {
     last_mouse_location_ = event.location();
     last_mouse_root_location_ = event.root_location();
   }
-  void DispatchKeyEvent(const ui::KeyEvent& event) override {
+  void DispatchKeysCurrentlyDown(
+      const std::set<ui::KeyboardCode>& pressed_keys) override {
     // Unused for now.
   }
 
@@ -142,9 +143,9 @@ class SelectToSpeakEventHandlerTest : public AshTestBase {
   }
 
  protected:
-  ui::test::EventGenerator* generator_ = nullptr;
+  raw_ptr<ui::test::EventGenerator, ExperimentalAsh> generator_ = nullptr;
   EventCapturer event_capturer_;
-  AccessibilityControllerImpl* controller_ = nullptr;
+  raw_ptr<AccessibilityControllerImpl, ExperimentalAsh> controller_ = nullptr;
   std::unique_ptr<TestDelegate> delegate_;
 };
 
@@ -211,12 +212,26 @@ TEST_F(SelectToSpeakEventHandlerTest, SearchPlusDrag) {
   generator_->DragMouseTo(drag_location);
   EXPECT_EQ(drag_location, delegate_->last_mouse_event_location());
   EXPECT_TRUE(delegate_->CapturedMouseEvent(ui::ET_MOUSE_DRAGGED));
-  EXPECT_TRUE(event_capturer_.last_mouse_event());
+  EXPECT_FALSE(event_capturer_.last_mouse_event());
   event_capturer_.Reset();
 
   generator_->ReleaseLeftButton();
   EXPECT_EQ(drag_location, delegate_->last_mouse_event_location());
   EXPECT_TRUE(delegate_->CapturedMouseEvent(ui::ET_MOUSE_RELEASED));
+
+  generator_->ReleaseKey(ui::VKEY_LWIN, ui::EF_COMMAND_DOWN);
+}
+
+TEST_F(SelectToSpeakEventHandlerTest, SearchPlusMove) {
+  generator_->PressKey(ui::VKEY_LWIN, ui::EF_COMMAND_DOWN);
+  gfx::Point initial_mouse_location = gfx::Point(100, 12);
+  generator_->set_current_screen_location(initial_mouse_location);
+
+  // Hovers are not passed through.
+  gfx::Point move_location = gfx::Point(120, 32);
+  generator_->MoveMouseTo(move_location);
+  EXPECT_FALSE(event_capturer_.last_mouse_event());
+  event_capturer_.Reset();
 
   generator_->ReleaseKey(ui::VKEY_LWIN, ui::EF_COMMAND_DOWN);
 }
@@ -322,9 +337,9 @@ TEST_F(SelectToSpeakEventHandlerTest, SearchPlusClickTwice) {
 }
 
 TEST_F(SelectToSpeakEventHandlerTest, SearchPlusKeyIgnoresClicks) {
-  // If the user presses the Search key and then some other key,
-  // we should assume the user does not want select-to-speak, and
-  // click events should be ignored.
+  // If the user presses the Search key and then some other key
+  // besides 's', we should assume the user does not want select-to-speak,
+  // and click events should be ignored.
 
   generator_->PressKey(ui::VKEY_LWIN, ui::EF_COMMAND_DOWN);
   ASSERT_TRUE(event_capturer_.last_key_event());
@@ -482,6 +497,16 @@ TEST_F(SelectToSpeakEventHandlerTest,
   EXPECT_FALSE(event_capturer_.last_key_event());
 }
 
+TEST_F(SelectToSpeakEventHandlerTest, PassesCtrlKey) {
+  generator_->PressKey(ui::VKEY_CONTROL, /*flags=*/0);
+  ASSERT_TRUE(event_capturer_.last_key_event());
+  EXPECT_FALSE(event_capturer_.last_key_event()->handled());
+  event_capturer_.Reset();
+  generator_->ReleaseKey(ui::VKEY_CONTROL, /*flags=*/0);
+  EXPECT_TRUE(event_capturer_.last_key_event());
+  EXPECT_FALSE(event_capturer_.last_key_event()->handled());
+}
+
 TEST_F(SelectToSpeakEventHandlerTest, SelectionRequestedWorksWithMouse) {
   gfx::Point click_location = gfx::Point(100, 12);
   generator_->set_current_screen_location(click_location);
@@ -510,7 +535,7 @@ TEST_F(SelectToSpeakEventHandlerTest, SelectionRequestedWorksWithMouse) {
   generator_->DragMouseTo(drag_location);
   EXPECT_EQ(drag_location, delegate_->last_mouse_event_location());
   EXPECT_TRUE(delegate_->CapturedMouseEvent(ui::ET_MOUSE_DRAGGED));
-  EXPECT_TRUE(event_capturer_.last_mouse_event());
+  EXPECT_FALSE(event_capturer_.last_mouse_event());
   event_capturer_.Reset();
 
   // Mouse up is the last event captured in the sequence
@@ -599,6 +624,22 @@ TEST_F(SelectToSpeakEventHandlerTest, SelectionRequestedIgnoresOtherInput) {
   // Complete the touch selection.
   generator_->ReleaseTouch();
   EXPECT_FALSE(event_capturer_.last_touch_event());
+  event_capturer_.Reset();
+}
+
+TEST_F(SelectToSpeakEventHandlerTest, SelectionRequestedPreventsHovers) {
+  // Start selection mode.
+  controller_->SetSelectToSpeakState(
+      SelectToSpeakState::kSelectToSpeakStateSelecting);
+
+  // Set the mouse.
+  gfx::Point initial_mouse_location = gfx::Point(100, 12);
+  generator_->set_current_screen_location(initial_mouse_location);
+
+  // Hovers are not passed through.
+  gfx::Point move_location = gfx::Point(120, 32);
+  generator_->MoveMouseTo(move_location);
+  EXPECT_FALSE(event_capturer_.last_mouse_event());
   event_capturer_.Reset();
 }
 

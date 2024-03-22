@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -123,16 +123,6 @@ CharacterRange ShapeResultBuffer::GetCharacterRange(
   if (from_x < to_x)
     return CharacterRange(from_x, to_x, -min_y, max_y);
   return CharacterRange(to_x, from_x, -min_y, max_y);
-}
-
-Vector<CharacterRange> ShapeResultBuffer::IndividualCharacterRanges(
-    TextDirection direction,
-    float total_width) const {
-  Vector<CharacterRange> ranges;
-  float current_x = direction == TextDirection::kRtl ? total_width : 0;
-  for (const scoped_refptr<const ShapeResult>& result : results_)
-    current_x = result->IndividualCharacterRanges(&ranges, current_x);
-  return ranges;
 }
 
 void ShapeResultBuffer::AddRunInfoAdvances(const ShapeResult::RunInfo& run_info,

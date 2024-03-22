@@ -16,6 +16,7 @@ limitations under the License.
 
 #include "pybind11/pybind11.h"
 #include "pybind11_abseil/status_casters.h"  // from @pybind11_abseil
+#include "tensorflow_lite_support/python/task/core/pybinds/task_utils.h"
 
 namespace tflite {
 namespace task {
@@ -43,13 +44,13 @@ PYBIND11_MODULE(image_utils, m) {
         int width = info.shape[1];
         int channels = info.ndim == 3 ? info.shape[2] : 1;
 
-        return ImageData{static_cast<uint8*>(info.ptr), width, height,
+        return ImageData{static_cast<uint8 *>(info.ptr), width, height,
                          channels};
       }))
       .def_readonly("width", &ImageData::width)
       .def_readonly("height", &ImageData::height)
       .def_readonly("channels", &ImageData::channels)
-      .def_buffer([](ImageData& data) -> py::buffer_info {
+      .def_buffer([](ImageData &data) -> py::buffer_info {
         return py::buffer_info(
             data.pixel_data, sizeof(uint8),
             py::format_descriptor<uint8>::format(), 3,
@@ -58,9 +59,18 @@ PYBIND11_MODULE(image_utils, m) {
              sizeof(uint8) * size_t(data.channels), sizeof(uint8)});
       });
 
-  m.def("DecodeImageFromFile", &DecodeImageFromFile);
-  m.def("EncodeImageToPngFile", &EncodeImageToPngFile);
-  m.def("ImageDataFree", &ImageDataFree);
+  m.def("decode_image_from_file",
+        [](const std::string &file_name) {
+          auto image_data = DecodeImageFromFile(file_name);
+          return core::get_value(image_data);
+        })
+      .def("decode_image_from_buffer",
+           [](const char *buffer, int len) {
+             auto image_data = DecodeImageFromBuffer(
+                 reinterpret_cast<unsigned char const *>(buffer), len);
+             return core::get_value(image_data);
+           })
+      .def("image_data_free", &ImageDataFree);
 }
 
 }  // namespace vision

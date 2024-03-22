@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,8 @@
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 
 namespace blink {
+
+class ConsoleMessage;
 
 // A pure virtual interface for console logging.
 // Retaining an instance of ConsoleLogger may be dangerous because after the
@@ -33,6 +35,11 @@ class PLATFORM_EXPORT ConsoleLogger : public GarbageCollectedMixin {
     AddConsoleMessageImpl(source, level, message, discard_duplicates, category);
   }
 
+  void AddConsoleMessage(ConsoleMessage* message,
+                         bool discard_duplicates = false) {
+    AddConsoleMessageImpl(message, discard_duplicates);
+  }
+
  private:
   virtual void AddConsoleMessageImpl(
       mojom::blink::ConsoleMessageSource,
@@ -40,6 +47,8 @@ class PLATFORM_EXPORT ConsoleLogger : public GarbageCollectedMixin {
       const String& message,
       bool discard_duplicates,
       absl::optional<mojom::blink::ConsoleMessageCategory> category) = 0;
+  virtual void AddConsoleMessageImpl(ConsoleMessage* message,
+                                     bool discard_duplicates) = 0;
 };
 
 // A ConsoleLogger subclass which has Detach() method. An instance of
@@ -75,6 +84,13 @@ class PLATFORM_EXPORT DetachableConsoleLogger final
     }
     logger_->AddConsoleMessage(source, level, message, discard_duplicates,
                                category);
+  }
+  void AddConsoleMessageImpl(ConsoleMessage* message,
+                             bool discard_duplicates) override {
+    if (!logger_) {
+      return;
+    }
+    logger_->AddConsoleMessage(message, discard_duplicates);
   }
 };
 

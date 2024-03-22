@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "chromeos/ui/frame/desks/move_to_desks_menu_model.h"
 #include "chromeos/ui/wm/desks/chromeos_desks_histogram_enums.h"
 #include "chromeos/ui/wm/desks/desks_helper.h"
+#include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/widget/widget.h"
 
@@ -16,7 +17,7 @@ namespace {
 
 int MapCommandIdToDeskIndex(int command_id) {
   DCHECK_GE(command_id, chromeos::MoveToDesksMenuModel::MOVE_TO_DESK_1);
-  DCHECK_LE(command_id, chromeos::MoveToDesksMenuModel::MOVE_TO_DESK_8);
+  DCHECK_LE(command_id, chromeos::MoveToDesksMenuModel::MOVE_TO_DESK_16);
   return command_id - chromeos::MoveToDesksMenuModel::MOVE_TO_DESK_1;
 }
 
@@ -27,7 +28,7 @@ bool IsAssignToAllDesksCommand(int command_id) {
 
 bool IsMoveToDeskCommand(int command_id) {
   return command_id >= chromeos::MoveToDesksMenuModel::MOVE_TO_DESK_1 &&
-         command_id <= chromeos::MoveToDesksMenuModel::MOVE_TO_DESK_8;
+         command_id <= chromeos::MoveToDesksMenuModel::MOVE_TO_DESK_16;
 }
 
 }  // namespace
@@ -53,8 +54,9 @@ bool MoveToDesksMenuDelegate::IsCommandIdChecked(int command_id) const {
 }
 
 bool MoveToDesksMenuDelegate::IsCommandIdEnabled(int command_id) const {
-  if (IsAssignToAllDesksCommand(command_id))
+  if (IsAssignToAllDesksCommand(command_id)) {
     return true;
+  }
 
   if (!IsMoveToDeskCommand(command_id))
     return false;
@@ -69,7 +71,7 @@ bool MoveToDesksMenuDelegate::IsCommandIdVisible(int command_id) const {
 
 bool MoveToDesksMenuDelegate::IsItemForCommandIdDynamic(int command_id) const {
   // The potential command_id is from MoveToDesksMenuModel::MOVE_TO_DESK_1
-  // to MoveToDesksMenuModel::MOVE_TO_DESK_8,
+  // to MoveToDesksMenuModel::MOVE_TO_DESK_16,
   // MoveToDesksMenuModel::TOGGLE_ASSIGN_TO_ALL_DESKS.
   // For Move window to desk menu, all the menu items are dynamic.
   // Therefore, checking whether command_id is within the range from

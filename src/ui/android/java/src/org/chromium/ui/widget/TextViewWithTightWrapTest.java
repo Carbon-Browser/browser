@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,14 +19,12 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Feature;
-import org.chromium.components.browser_ui.widget.R;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.ui.R;
 import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
 import org.chromium.ui.test.util.RenderTestRule;
 
-/**
-Render tests for {@link TextViewWithTightWrap}.
-*/
+/** Render tests for {@link TextViewWithTightWrap}. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class TextViewWithTightWrapTest extends BlankUiTestActivityTestCase {
     private static final int RENDER_TEST_REVISION = 2;
@@ -51,12 +49,14 @@ public class TextViewWithTightWrapTest extends BlankUiTestActivityTestCase {
         LayoutParams params =
                 new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         mTextView = mView.findViewById(R.id.message);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mView.setBackgroundColor(activity.getColor(R.color.filled_button_bg));
-            mTextView.setText("First line\nVery very very very long second line");
-            getActivity().setContentView(mView, params);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mView.setBackgroundColor(activity.getColor(R.color.filled_button_bg));
+                    mTextView.setText("First line\nVery very very very long second line");
+                    getActivity().setContentView(mView, params);
+                });
     }
+
     @Test
     @SmallTest
     @Feature({"RenderTest"})
@@ -92,7 +92,10 @@ public class TextViewWithTightWrapTest extends BlankUiTestActivityTestCase {
     @Feature({"RenderTest"})
     public void testTextViewWithSnooze() throws Exception {
         Button snoozeButton = (Button) mView.findViewById(R.id.button_snooze);
-        TestThreadUtils.runOnUiThreadBlocking(() -> { snoozeButton.setVisibility(View.VISIBLE); });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    snoozeButton.setVisibility(View.VISIBLE);
+                });
         // Render UI Elements.
         mRenderTestRule.render(mView, "TextViewWithTightWrap_MatchParent_WithSnooze");
     }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/template_util.h"
 #include "base/trace_event/base_tracing_forward.h"
+#include "base/types/supports_ostream_operator.h"
 
 namespace base {
 
@@ -76,6 +76,8 @@ namespace base {
 template <typename TagType, typename UnderlyingType>
 class StrongAlias {
  public:
+  using underlying_type = UnderlyingType;
+
   constexpr StrongAlias() = default;
   constexpr explicit StrongAlias(const UnderlyingType& v) : value_(v) {}
   constexpr explicit StrongAlias(UnderlyingType&& v) noexcept
@@ -152,7 +154,7 @@ class StrongAlias {
 template <typename TagType,
           typename UnderlyingType,
           typename = std::enable_if_t<
-              base::internal::SupportsOstreamOperator<UnderlyingType>::value>>
+              internal::SupportsOstreamOperator<UnderlyingType>>>
 std::ostream& operator<<(std::ostream& stream,
                          const StrongAlias<TagType, UnderlyingType>& alias) {
   return stream << alias.value();

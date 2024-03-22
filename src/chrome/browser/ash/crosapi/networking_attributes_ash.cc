@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,16 +47,15 @@ void NetworkingAttributesAsh::GetNetworkDetails(
     return;
   }
 
-  chromeos::NetworkStateHandler* network_state_handler =
-      chromeos::NetworkHandler::Get()->network_state_handler();
-  const chromeos::NetworkState* network =
-      network_state_handler->DefaultNetwork();
+  ash::NetworkStateHandler* network_state_handler =
+      ash::NetworkHandler::Get()->network_state_handler();
+  const ash::NetworkState* network = network_state_handler->DefaultNetwork();
   if (!network) {
     // Not connected to a network.
     std::move(callback).Run(Result::NewErrorMessage(kErrorNetworkNotConnected));
     return;
   }
-  const chromeos::DeviceState* device =
+  const ash::DeviceState* device =
       network_state_handler->GetDeviceState(network->device_path());
   if (!device) {
     std::move(callback).Run(Result::NewErrorMessage(kErrorNetworkNotConnected));

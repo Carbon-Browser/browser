@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,24 +8,15 @@
 namespace ash {
 class FakeCiceroneClient;
 class FakeConciergeClient;
+class FakeDlcserviceClient;
 class FakeSeneschalClient;
 }  // namespace ash
 
-namespace chromeos {
-class FakeDlcserviceClient;
-}  // namespace chromeos
-
 namespace guest_os {
-
-class BasicDBusHelper {
- public:
-  BasicDBusHelper();
-  ~BasicDBusHelper();
-};
 
 class FakeCiceroneHelper {
  public:
-  explicit FakeCiceroneHelper(BasicDBusHelper* basic_helper);
+  FakeCiceroneHelper();
   ~FakeCiceroneHelper();
 
   // Returns a handle to the dbus fake for cicerone.
@@ -34,7 +25,7 @@ class FakeCiceroneHelper {
 
 class FakeSeneschalHelper {
  public:
-  explicit FakeSeneschalHelper(BasicDBusHelper* basic_helper);
+  FakeSeneschalHelper();
   ~FakeSeneschalHelper();
 
   // Returns a handle to the dbus fake for seneschal.
@@ -43,10 +34,10 @@ class FakeSeneschalHelper {
 
 class FakeDlcserviceHelper {
  public:
-  explicit FakeDlcserviceHelper(BasicDBusHelper* basic_helper);
+  FakeDlcserviceHelper();
   ~FakeDlcserviceHelper();
 
-  chromeos::FakeDlcserviceClient* FakeDlcserviceClient();
+  ash::FakeDlcserviceClient* FakeDlcserviceClient();
 };
 
 class FakeConciergeHelper {
@@ -60,7 +51,7 @@ class FakeConciergeHelper {
 
 class FakeChunneldHelper {
  public:
-  explicit FakeChunneldHelper(BasicDBusHelper* basic_helper);
+  FakeChunneldHelper();
   ~FakeChunneldHelper();
 };
 
@@ -68,8 +59,7 @@ class FakeChunneldHelper {
 // class, and the dbus services common to most VMs get initialised with fakes
 // during before your test and torn down correctly after.
 // You can access the fakes with e.g. this->FakeConciergeClient.
-class FakeVmServicesHelper : public BasicDBusHelper,
-                             public FakeCiceroneHelper,
+class FakeVmServicesHelper : public FakeCiceroneHelper,
                              public FakeSeneschalHelper,
                              public FakeDlcserviceHelper,
                              public FakeConciergeHelper,

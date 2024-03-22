@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -15,14 +16,12 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_gc_controller.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_iterator_result_value.h"
 #include "third_party/blink/renderer/core/streams/readable_stream.h"
 #include "third_party/blink/renderer/core/streams/test_utils.h"
 #include "third_party/blink/renderer/core/streams/transform_stream_default_controller.h"
 #include "third_party/blink/renderer/core/streams/transform_stream_transformer.h"
 #include "third_party/blink/renderer/core/streams/writable_stream.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/to_v8.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
@@ -92,7 +91,7 @@ class TestTransformer : public TransformStreamTransformer {
                           TransformStreamDefaultController* controller,
                           ExceptionState& exception_state) override {
     TransformVoid(chunk, controller, exception_state);
-    return ScriptPromise::CastUndefined(script_state_);
+    return ScriptPromise::CastUndefined(script_state_.Get());
   }
 
   virtual void FlushVoid(TransformStreamDefaultController*, ExceptionState&) {}
@@ -100,10 +99,10 @@ class TestTransformer : public TransformStreamTransformer {
   ScriptPromise Flush(TransformStreamDefaultController* controller,
                       ExceptionState& exception_state) override {
     FlushVoid(controller, exception_state);
-    return ScriptPromise::CastUndefined(script_state_);
+    return ScriptPromise::CastUndefined(script_state_.Get());
   }
 
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(script_state_);
@@ -141,7 +140,7 @@ class MockTransformStreamTransformer : public TransformStreamTransformer {
                ScriptPromise(TransformStreamDefaultController*,
                              ExceptionState&));
 
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(script_state_);
@@ -176,7 +175,7 @@ TEST_F(TransformStreamTest, TransformIsCalled) {
       scope.GetScriptState());
   Init(mock, scope.GetScriptState(), ASSERT_NO_EXCEPTION);
   // Need to run microtasks so the startAlgorithm promise resolves.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   CopyReadableAndWritableToGlobal(scope);
 
   EXPECT_CALL(*mock, Transform(_, _, _))
@@ -199,7 +198,7 @@ TEST_F(TransformStreamTest, FlushIsCalled) {
       scope.GetScriptState());
   Init(mock, scope.GetScriptState(), ASSERT_NO_EXCEPTION);
   // Need to run microtasks so the startAlgorithm promise resolves.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   CopyReadableAndWritableToGlobal(scope);
 
   EXPECT_CALL(*mock, Flush(_, _))
@@ -220,15 +219,19 @@ bool IsIteratorForStringMatching(ScriptState* script_state,
   if (!value.IsObject()) {
     return false;
   }
+  v8::Local<v8::Value> chunk;
   bool done = false;
-  auto chunk = V8UnpackIteratorResult(
-      script_state,
-      value.V8Value()->ToObject(script_state->GetContext()).ToLocalChecked(),
-      &done);
-  if (done || chunk.IsEmpty())
+  if (!V8UnpackIterationResult(script_state,
+                               value.V8Value()
+                                   ->ToObject(script_state->GetContext())
+                                   .ToLocalChecked(),
+                               &chunk, &done)) {
     return false;
-  return ToCoreStringWithUndefinedOrNullCheck(chunk.ToLocalChecked()) ==
-         expected;
+  }
+  if (done)
+    return false;
+  return ToCoreStringWithUndefinedOrNullCheck(script_state->GetIsolate(),
+                                              chunk) == expected;
 }
 
 bool IsTypeError(ScriptState* script_state,
@@ -248,7 +251,8 @@ bool IsTypeError(ScriptState* script_state,
                ->Get(script_state->GetContext(),
                      V8AtomicString(script_state->GetIsolate(), key))
                .ToLocal(&actual) &&
-           ToCoreStringWithUndefinedOrNullCheck(actual) == value;
+           ToCoreStringWithUndefinedOrNullCheck(script_state->GetIsolate(),
+                                                actual) == value;
   };
 
   return Has("name", "TypeError") && Has("message", message);
@@ -458,7 +462,7 @@ TEST_F(TransformStreamTest, WaitInTransform) {
                                    ScriptPromise::Cast(script_state, promise));
 
   // Give Transform() the opportunity to be called.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_FALSE(write_tester.IsFulfilled());
   EXPECT_FALSE(transformer->FlushCalled());
@@ -516,7 +520,7 @@ TEST_F(TransformStreamTest, WaitInFlush) {
                                    ScriptPromise::Cast(script_state, promise));
 
   // Give Flush() the opportunity to be called.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   EXPECT_FALSE(close_tester.IsFulfilled());
   transformer->ResolvePromise();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,20 +12,24 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "net/base/address_family.h"
-#include "net/base/address_list.h"
 #include "net/base/features.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
-#include "net/base/test_completion_callback.h"
+#include "net/cert/ct_policy_enforcer.h"
+#include "net/cert/mock_cert_verifier.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/dns/public/secure_dns_policy.h"
+#include "net/http/transport_security_state.h"
 #include "net/log/net_log.h"
 #include "net/socket/connect_job_test_util.h"
 #include "net/socket/connection_attempts.h"
+#include "net/socket/ssl_client_socket.h"
 #include "net/socket/stream_socket.h"
 #include "net/socket/transport_client_socket_pool_test_util.h"
+#include "net/ssl/ssl_config_service.h"
+#include "net/ssl/test_ssl_config_service.h"
 #include "net/test/gtest_util.h"
 #include "net/test/test_with_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -52,25 +56,29 @@ class TransportConnectJobTest : public WithTaskEnvironment,
         common_connect_job_params_(
             &client_socket_factory_,
             &host_resolver_,
-            nullptr /* http_auth_cache */,
-            nullptr /* http_auth_handler_factory */,
-            nullptr /* spdy_session_pool */,
-            nullptr /* quic_supported_versions */,
-            nullptr /* quic_stream_factory */,
-            nullptr /* proxy_delegate */,
-            nullptr /* http_user_agent_settings */,
-            nullptr /* ssl_client_context */,
-            nullptr /* socket_performance_watcher_factory */,
-            nullptr /* network_quality_estimator */,
+            /*http_auth_cache=*/nullptr,
+            /*http_auth_handler_factory=*/nullptr,
+            /*spdy_session_pool=*/nullptr,
+            /*quic_supported_versions=*/nullptr,
+            /*quic_stream_factory=*/nullptr,
+            /*proxy_delegate=*/nullptr,
+            /*http_user_agent_settings=*/nullptr,
+            &ssl_client_context_,
+            /*socket_performance_watcher_factory=*/nullptr,
+            /*network_quality_estimator=*/nullptr,
             NetLog::Get(),
-            nullptr /* websocket_endpoint_lock_manager */) {}
+            /*websocket_endpoint_lock_manager=*/nullptr,
+            /*http_server_properties=*/nullptr,
+            /*alpn_protos=*/nullptr,
+            /*application_settings=*/nullptr,
+            /*ignore_certificate_errors=*/nullptr) {}
 
   ~TransportConnectJobTest() override = default;
 
   static scoped_refptr<TransportSocketParams> DefaultParams() {
     return base::MakeRefCounted<TransportSocketParams>(
         url::SchemeHostPort(url::kHttpScheme, kHostName, 80),
-        NetworkIsolationKey(), SecureDnsPolicy::kAllow,
+        NetworkAnonymizationKey(), SecureDnsPolicy::kAllow,
         OnHostResolutionCallback(),
         /*supported_alpns=*/base::flat_set<std::string>());
   }
@@ -78,7 +86,7 @@ class TransportConnectJobTest : public WithTaskEnvironment,
   static scoped_refptr<TransportSocketParams> DefaultHttpsParams() {
     return base::MakeRefCounted<TransportSocketParams>(
         url::SchemeHostPort(url::kHttpsScheme, kHostName, 443),
-        NetworkIsolationKey(), SecureDnsPolicy::kAllow,
+        NetworkAnonymizationKey(), SecureDnsPolicy::kAllow,
         OnHostResolutionCallback(),
         /*supported_alpns=*/base::flat_set<std::string>{"h2", "http/1.1"});
   }
@@ -87,6 +95,16 @@ class TransportConnectJobTest : public WithTaskEnvironment,
   MockHostResolver host_resolver_{/*default_result=*/MockHostResolverBase::
                                       RuleResolver::GetLocalhostResult()};
   MockTransportClientSocketFactory client_socket_factory_;
+  TestSSLConfigService ssl_config_service_{SSLContextConfig{}};
+  MockCertVerifier cert_verifier_;
+  TransportSecurityState transport_security_state_;
+  DefaultCTPolicyEnforcer ct_policy_enforcer_;
+  SSLClientContext ssl_client_context_{&ssl_config_service_,
+                                       &cert_verifier_,
+                                       &transport_security_state_,
+                                       &ct_policy_enforcer_,
+                                       /*ssl_client_session_cache=*/nullptr,
+                                       /*sct_auditing_delegate=*/nullptr};
   const CommonConnectJobParams common_connect_job_params_;
 };
 
@@ -248,7 +266,7 @@ TEST_F(TransportConnectJobTest, HandlesHttpsEndpoint) {
       DEFAULT_PRIORITY, SocketTag(), &common_connect_job_params_,
       base::MakeRefCounted<TransportSocketParams>(
           url::SchemeHostPort(url::kHttpsScheme, kHostName, 80),
-          NetworkIsolationKey(), SecureDnsPolicy::kAllow,
+          NetworkAnonymizationKey(), SecureDnsPolicy::kAllow,
           OnHostResolutionCallback(),
           /*supported_alpns=*/base::flat_set<std::string>{"h2", "http/1.1"}),
       &test_delegate, nullptr /* net_log */);
@@ -263,7 +281,7 @@ TEST_F(TransportConnectJobTest, HandlesNonStandardEndpoint) {
   TransportConnectJob transport_connect_job(
       DEFAULT_PRIORITY, SocketTag(), &common_connect_job_params_,
       base::MakeRefCounted<TransportSocketParams>(
-          HostPortPair(kHostName, 80), NetworkIsolationKey(),
+          HostPortPair(kHostName, 80), NetworkAnonymizationKey(),
           SecureDnsPolicy::kAllow, OnHostResolutionCallback(),
           /*supported_alpns=*/base::flat_set<std::string>()),
       &test_delegate, nullptr /* net_log */);
@@ -279,7 +297,7 @@ TEST_F(TransportConnectJobTest, SecureDnsPolicy) {
         DEFAULT_PRIORITY, SocketTag(), &common_connect_job_params_,
         base::MakeRefCounted<TransportSocketParams>(
             url::SchemeHostPort(url::kHttpScheme, kHostName, 80),
-            NetworkIsolationKey(), secure_dns_policy,
+            NetworkAnonymizationKey(), secure_dns_policy,
             OnHostResolutionCallback(),
             /*supported_alpns=*/base::flat_set<std::string>{}),
         &test_delegate, nullptr /* net_log */);
@@ -479,13 +497,15 @@ TEST_F(TransportConnectJobTest, EndpointResult) {
   endpoint.ip_endpoints = {IPEndPoint(ParseIP("1::"), 8443),
                            IPEndPoint(ParseIP("1.1.1.1"), 8443)};
   endpoint.metadata.supported_protocol_alpns = {"h2"};
-  host_resolver_.rules()->AddRule(kHostName, std::vector{endpoint});
+  host_resolver_.rules()->AddRule(
+      kHostName,
+      MockHostResolverBase::RuleResolver::RuleResult(std::vector{endpoint}));
 
   // The first access succeeds.
   MockTransportClientSocketFactory::Rule rule(
       MockTransportClientSocketFactory::Type::kSynchronous,
       std::vector{IPEndPoint(ParseIP("1::"), 8443)});
-  client_socket_factory_.SetRules(base::make_span(&rule, 1));
+  client_socket_factory_.SetRules(base::make_span(&rule, 1u));
 
   TestConnectJobDelegate test_delegate;
   TransportConnectJob transport_connect_job(
@@ -517,7 +537,8 @@ TEST_F(TransportConnectJobTest, MultipleRoutesFallback) {
   endpoints[1].metadata.supported_protocol_alpns = {"h3"};
   endpoints[2].ip_endpoints = {IPEndPoint(ParseIP("4::"), 443),
                                IPEndPoint(ParseIP("4.4.4.4"), 443)};
-  host_resolver_.rules()->AddRule(kHostName, endpoints);
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(endpoints));
 
   MockTransportClientSocketFactory::Rule rules[] = {
       // `endpoints[0]`'s addresses each fail.
@@ -568,8 +589,9 @@ TEST_F(TransportConnectJobTest, MultipleRoutesIPV4Fallback) {
   endpoint2.metadata.supported_protocol_alpns = {"h3"};
   endpoint3.ip_endpoints = {IPEndPoint(ParseIP("3::"), 443),
                             IPEndPoint(ParseIP("3.3.3.3"), 443)};
-  host_resolver_.rules()->AddRule(kHostName,
-                                  std::vector{endpoint1, endpoint2, endpoint3});
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(
+                     std::vector{endpoint1, endpoint2, endpoint3}));
 
   MockTransportClientSocketFactory::Rule rules[] = {
       // `endpoint1`'s IPv6 address fails, but takes long enough that the IPv4
@@ -630,14 +652,15 @@ TEST_F(TransportConnectJobTest, MultipleRoutesSuspended) {
   endpoints[0].ip_endpoints = {IPEndPoint(ParseIP("1::"), 8443)};
   endpoints[0].metadata.supported_protocol_alpns = {"h3", "h2", "http/1.1"};
   endpoints[1].ip_endpoints = {IPEndPoint(ParseIP("2::"), 443)};
-  host_resolver_.rules()->AddRule(kHostName, endpoints);
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(endpoints));
 
   // The first connect attempt will fail with `ERR_NETWORK_IO_SUSPENDED`.
   // `TransportConnectJob` should not attempt routes after receiving this error.
   MockTransportClientSocketFactory::Rule rule(
       MockTransportClientSocketFactory::Type::kFailing,
       endpoints[0].ip_endpoints, ERR_NETWORK_IO_SUSPENDED);
-  client_socket_factory_.SetRules(base::make_span(&rule, 1));
+  client_socket_factory_.SetRules(base::make_span(&rule, 1u));
 
   TestConnectJobDelegate test_delegate;
   TransportConnectJob transport_connect_job(
@@ -667,13 +690,14 @@ TEST_F(TransportConnectJobTest, NoAlpnProtocols) {
   endpoints[1].metadata.supported_protocol_alpns = {"baz"};
   endpoints[2].ip_endpoints = {IPEndPoint(ParseIP("3::"), 80),
                                IPEndPoint(ParseIP("3.3.3.3"), 80)};
-  host_resolver_.rules()->AddRule(kHostName, endpoints);
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(endpoints));
 
   // `endpoints[2]`'s first address succeeds.
   MockTransportClientSocketFactory::Rule rule(
       MockTransportClientSocketFactory::Type::kSynchronous,
       std::vector{endpoints[2].ip_endpoints[0]});
-  client_socket_factory_.SetRules(base::make_span(&rule, 1));
+  client_socket_factory_.SetRules(base::make_span(&rule, 1u));
 
   // Use `DefaultParams()`, an http scheme. That it is http is not very
   // important, but `url::SchemeHostPort` is difficult to use with unknown
@@ -705,7 +729,8 @@ TEST_F(TransportConnectJobTest, MultipleRoutesAllFailed) {
   endpoints[1].metadata.supported_protocol_alpns = {"h3"};
   endpoints[2].ip_endpoints = {IPEndPoint(ParseIP("3::"), 443),
                                IPEndPoint(ParseIP("3.3.3.3"), 443)};
-  host_resolver_.rules()->AddRule(kHostName, endpoints);
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(endpoints));
 
   MockTransportClientSocketFactory::Rule rules[] = {
       // `endpoints[0]`'s addresses each fail.
@@ -758,7 +783,8 @@ TEST_F(TransportConnectJobTest, NoUsableRoutes) {
   endpoints[1].ip_endpoints = {IPEndPoint(ParseIP("2::"), 8442),
                                IPEndPoint(ParseIP("2.2.2.2"), 8442)};
   endpoints[1].metadata.supported_protocol_alpns = {"unrecognized-protocol"};
-  host_resolver_.rules()->AddRule(kHostName, endpoints);
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(endpoints));
 
   // `TransportConnectJob` should not create any sockets.
   client_socket_factory_.set_default_client_socket_type(
@@ -783,7 +809,8 @@ TEST_F(TransportConnectJobTest, LastRouteUnusable) {
   endpoints[1].ip_endpoints = {IPEndPoint(ParseIP("2::"), 8442),
                                IPEndPoint(ParseIP("2.2.2.2"), 8442)};
   endpoints[1].metadata.supported_protocol_alpns = {"h3"};
-  host_resolver_.rules()->AddRule(kHostName, endpoints);
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(endpoints));
 
   MockTransportClientSocketFactory::Rule rules[] = {
       // `endpoints[0]`'s addresses each fail.
@@ -836,7 +863,8 @@ TEST_F(TransportConnectJobTest, GetHostResolverEndpointResult) {
   endpoints[3].ip_endpoints = {IPEndPoint(ParseIP("4::"), 8444)};
   endpoints[3].metadata.supported_protocol_alpns = {"http/1.1"};
   endpoints[3].metadata.ech_config_list = {13, 14, 15, 16};
-  host_resolver_.rules()->AddRule(kHostName, endpoints);
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(endpoints));
 
   MockTransportClientSocketFactory::Rule rules[] = {
       MockTransportClientSocketFactory::Rule(
@@ -874,8 +902,9 @@ TEST_F(TransportConnectJobTest, SvcbReliantIfEch) {
   endpoint2.metadata.ech_config_list = {1, 2, 3, 4};
   endpoint3.ip_endpoints = {IPEndPoint(ParseIP("3::"), 443)};
   // `endpoint3` has no `supported_protocol_alpns` and is thus a fallback route.
-  host_resolver_.rules()->AddRule(kHostName,
-                                  std::vector{endpoint1, endpoint2, endpoint3});
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(
+                     std::vector{endpoint1, endpoint2, endpoint3}));
 
   // `TransportConnectJob` should not try `endpoint3`.
   MockTransportClientSocketFactory::Rule rules[] = {
@@ -904,8 +933,9 @@ TEST_F(TransportConnectJobTest, SvcbReliantIfEch) {
   EXPECT_EQ(attempts[1].endpoint, IPEndPoint(ParseIP("2::"), 8442));
 }
 
-// SVCB-reliant mode should be disabled for ECH servers when ECH is disabled.
-TEST_F(TransportConnectJobTest, SvcbOptionalIfEchDisabled) {
+// SVCB-reliant mode should be disabled for ECH servers when ECH is disabled via
+// `base::Feature`.
+TEST_F(TransportConnectJobTest, SvcbOptionalIfEchDisabledFeature) {
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndDisableFeature(features::kEncryptedClientHello);
 
@@ -918,8 +948,54 @@ TEST_F(TransportConnectJobTest, SvcbOptionalIfEchDisabled) {
   endpoint2.metadata.ech_config_list = {1, 2, 3, 4};
   endpoint3.ip_endpoints = {IPEndPoint(ParseIP("3::"), 443)};
   // `endpoint3` has no `supported_protocol_alpns` and is thus a fallback route.
-  host_resolver_.rules()->AddRule(kHostName,
-                                  std::vector{endpoint1, endpoint2, endpoint3});
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(
+                     std::vector{endpoint1, endpoint2, endpoint3}));
+
+  // `TransportConnectJob` should try `endpoint3`.
+  MockTransportClientSocketFactory::Rule rules[] = {
+      MockTransportClientSocketFactory::Rule(
+          MockTransportClientSocketFactory::Type::kFailing,
+          std::vector{IPEndPoint(ParseIP("1::"), 8441)}),
+      MockTransportClientSocketFactory::Rule(
+          MockTransportClientSocketFactory::Type::kFailing,
+          std::vector{IPEndPoint(ParseIP("2::"), 8442)}),
+      MockTransportClientSocketFactory::Rule(
+          MockTransportClientSocketFactory::Type::kSynchronous,
+          std::vector{IPEndPoint(ParseIP("3::"), 443)}),
+  };
+  client_socket_factory_.SetRules(rules);
+
+  TestConnectJobDelegate test_delegate;
+  TransportConnectJob transport_connect_job(
+      DEFAULT_PRIORITY, SocketTag(), &common_connect_job_params_,
+      DefaultHttpsParams(), &test_delegate, /*net_log=*/nullptr);
+  test_delegate.StartJobExpectingResult(&transport_connect_job, OK,
+                                        /*expect_sync_result=*/false);
+}
+
+// SVCB-reliant mode should be disabled for ECH servers when ECH is disabled via
+// config.
+TEST_F(TransportConnectJobTest, SvcbOptionalIfEchDisabledConfig) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(features::kEncryptedClientHello);
+
+  SSLContextConfig config;
+  config.ech_enabled = false;
+  ssl_config_service_.UpdateSSLConfigAndNotify(config);
+
+  HostResolverEndpointResult endpoint1, endpoint2, endpoint3;
+  endpoint1.ip_endpoints = {IPEndPoint(ParseIP("1::"), 8441)};
+  endpoint1.metadata.supported_protocol_alpns = {"http/1.1"};
+  endpoint1.metadata.ech_config_list = {1, 2, 3, 4};
+  endpoint2.ip_endpoints = {IPEndPoint(ParseIP("2::"), 8442)};
+  endpoint2.metadata.supported_protocol_alpns = {"http/1.1"};
+  endpoint2.metadata.ech_config_list = {1, 2, 3, 4};
+  endpoint3.ip_endpoints = {IPEndPoint(ParseIP("3::"), 443)};
+  // `endpoint3` has no `supported_protocol_alpns` and is thus a fallback route.
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(
+                     std::vector{endpoint1, endpoint2, endpoint3}));
 
   // `TransportConnectJob` should try `endpoint3`.
   MockTransportClientSocketFactory::Rule rules[] = {
@@ -958,8 +1034,9 @@ TEST_F(TransportConnectJobTest, SvcbOptionalIfEchInconsistent) {
   endpoint2.metadata.ech_config_list = {};
   endpoint3.ip_endpoints = {IPEndPoint(ParseIP("3::"), 443)};
   // `endpoint3` has no `supported_protocol_alpns` and is thus a fallback route.
-  host_resolver_.rules()->AddRule(kHostName,
-                                  std::vector{endpoint1, endpoint2, endpoint3});
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(
+                     std::vector{endpoint1, endpoint2, endpoint3}));
 
   // `TransportConnectJob` should try `endpoint3`.
   MockTransportClientSocketFactory::Rule rules[] = {
@@ -1046,7 +1123,8 @@ TEST_F(TransportConnectJobTest, DedupIPEndPoints) {
                                IPEndPoint(ParseIP("1::"), 444),
                                IPEndPoint(ParseIP("2.2.2.2"), 443)};
   endpoints[3].metadata.supported_protocol_alpns = {"h2", "http/1.1"};
-  host_resolver_.rules()->AddRule(kHostName, endpoints);
+  host_resolver_.rules()->AddRule(
+      kHostName, MockHostResolverBase::RuleResolver::RuleResult(endpoints));
 
   MockTransportClientSocketFactory::Rule rules[] = {
       // First, try `endpoints[0]`'s addresses.

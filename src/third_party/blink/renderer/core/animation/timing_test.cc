@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,9 @@ class AnimationTimingTest : public testing::Test {
         playback_rate < 0 ? Timing::AnimationDirection::kBackwards
                           : Timing::AnimationDirection::kForwards;
     return timing_.CalculateTimings(local_time,
-                                    /* at_progress_timeline_boundary */ false,
-                                    normalized_timing_, animation_direction,
-                                    is_keyframe_effect, playback_rate);
+                                    /* is_idle */ false, normalized_timing_,
+                                    animation_direction, is_keyframe_effect,
+                                    playback_rate);
   }
   bool IsCurrent(absl::optional<double> local_time, double playback_rate) {
     absl::optional<AnimationTimeDelta> local_time_delta;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/time/time.h"
 #include "components/sync/base/model_type.h"
+#include "components/sync/engine/nigori/cross_user_sharing_public_key.h"
 #include "components/sync/engine/nigori/key_derivation_params.h"
 #include "components/sync/engine/nigori/nigori.h"
 #include "components/sync/protocol/encryption.pb.h"
@@ -93,6 +94,11 @@ struct NigoriState {
 
   // Some debug-only fields for passphrase type TRUSTED_VAULT_PASSPHRASE.
   sync_pb::NigoriSpecifics::TrustedVaultDebugInfo trusted_vault_debug_info;
+
+  // Current Public-key.
+  absl::optional<CrossUserSharingPublicKey> cross_user_sharing_public_key;
+  // Current Public-key version.
+  absl::optional<uint32_t> cross_user_sharing_key_pair_version;
 };
 
 }  // namespace syncer

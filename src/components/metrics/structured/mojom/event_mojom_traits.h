@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "components/metrics/structured/mojom/event.mojom.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
 #include "mojo/public/cpp/bindings/union_traits.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace mojo {
 
@@ -77,6 +78,13 @@ class StructTraits<metrics::structured::mojom::EventDataView,
   static const std::map<std::string, metrics::structured::Event::MetricValue>&
   metrics(const metrics::structured::Event& event) {
     return event.metric_values();
+  }
+
+  static absl::optional<base::TimeDelta> system_uptime(
+      const metrics::structured::Event& event);
+
+  static bool is_event_sequence(const metrics::structured::Event& event) {
+    return event.IsEventSequenceType();
   }
 
   static bool Read(metrics::structured::mojom::EventDataView event,

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,11 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "net/base/address_family.h"
 #include "net/base/address_list.h"
@@ -23,6 +25,7 @@
 #include "net/dns/context_host_resolver.h"
 #include "net/dns/fuzzed_host_resolver_util.h"
 #include "net/dns/host_resolver.h"
+#include "net/dns/host_resolver_proc.h"
 #include "net/dns/public/dns_query_type.h"
 #include "net/dns/public/host_resolver_source.h"
 #include "net/log/net_log.h"
@@ -178,7 +181,7 @@ class DnsRequest {
 
     const char* hostname = data_provider_->PickValueInArray(kHostNames);
     request_ = host_resolver_->CreateRequest(
-        net::HostPortPair(hostname, 80), net::NetworkIsolationKey(),
+        net::HostPortPair(hostname, 80), net::NetworkAnonymizationKey(),
         net::NetLogWithSource(), parameters);
     int rv = request_->Start(
         base::BindOnce(&DnsRequest::OnCallback, base::Unretained(this)));
@@ -211,7 +214,8 @@ class DnsRequest {
     if (parameters.source == net::HostResolverSource::MULTICAST_DNS &&
         (parameters.include_canonical_name || parameters.loopback_only ||
          parameters.cache_usage !=
-             net::HostResolver::ResolveHostParameters::CacheUsage::ALLOWED)) {
+             net::HostResolver::ResolveHostParameters::CacheUsage::ALLOWED ||
+         parameters.dns_query_type == net::DnsQueryType::HTTPS)) {
       return false;
     }
 
@@ -221,9 +225,9 @@ class DnsRequest {
   // Cancel the request, if not already completed. Otherwise, does nothing.
   void Cancel() { request_.reset(); }
 
-  net::HostResolver* host_resolver_;
-  FuzzedDataProvider* data_provider_;
-  std::vector<std::unique_ptr<DnsRequest>>* dns_requests_;
+  raw_ptr<net::HostResolver> host_resolver_;
+  raw_ptr<FuzzedDataProvider> data_provider_;
+  raw_ptr<std::vector<std::unique_ptr<DnsRequest>>> dns_requests_;
 
   // Non-null only while running.
   std::unique_ptr<net::HostResolver::ResolveHostRequest> request_;
@@ -231,6 +235,19 @@ class DnsRequest {
 
   std::unique_ptr<base::RunLoop> run_loop_;
 };
+
+class FuzzerEnvironment {
+ public:
+  FuzzerEnvironment() {
+    net::SetSystemDnsResolutionTaskRunnerForTesting(  // IN-TEST
+        base::SequencedTaskRunner::GetCurrentDefault());
+  }
+  ~FuzzerEnvironment() = default;
+};
+
+void EnsureInitFuzzerEnvironment() {
+  static FuzzerEnvironment init_environment;
+}
 
 }  // namespace
 
@@ -244,6 +261,9 @@ class DnsRequest {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   {
     FuzzedDataProvider data_provider(data, size);
+
+    EnsureInitFuzzerEnvironment();
+
     // Including an observer; even though the recorded results aren't currently
     // used, it'll ensure the netlogging code is fuzzed as well.
     net::RecordingNetLogObserver net_log_observer;

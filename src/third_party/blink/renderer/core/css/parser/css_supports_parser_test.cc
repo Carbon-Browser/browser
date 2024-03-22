@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/core/css/parser/css_parser_token_stream.h"
 #include "third_party/blink/renderer/core/css/parser/css_tokenizer.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
+#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
 namespace blink {
 
@@ -174,6 +175,7 @@ TEST_F(CSSSupportsParserTest, ConsumeSupportsCondition) {
 
   // <general-enclosed>
   EXPECT_EQ(Result::kUnsupported, ConsumeSupportsCondition("asdf(1)"));
+  EXPECT_EQ(Result::kUnsupported, ConsumeSupportsCondition("asdf()"));
 }
 
 TEST_F(CSSSupportsParserTest, ConsumeSupportsInParens) {
@@ -200,6 +202,7 @@ TEST_F(CSSSupportsParserTest, ConsumeSupportsInParens) {
 
   // <general-enclosed>
   EXPECT_EQ(Result::kUnsupported, ConsumeSupportsInParens("asdf(1)"));
+  EXPECT_EQ(Result::kUnsupported, ConsumeSupportsInParens("asdf()"));
 
   EXPECT_EQ(Result::kSupported,
             ConsumeSupportsInParens("(color:red)and (color:green)"));
@@ -257,6 +260,11 @@ TEST_F(CSSSupportsParserTest, ConsumeSupportsSelectorFn) {
             ConsumeSupportsSelectorFn("selector(a.cls::before)"));
   EXPECT_EQ(Result::kSupported,
             ConsumeSupportsSelectorFn("selector(div::-webkit-clear-button)"));
+  EXPECT_EQ(Result::kSupported, ConsumeSupportsSelectorFn("selector(:is(.a))"));
+  EXPECT_EQ(Result::kSupported,
+            ConsumeSupportsSelectorFn("selector(:where(.a))"));
+  EXPECT_EQ(Result::kSupported,
+            ConsumeSupportsSelectorFn("selector(:has(.a))"));
 
   EXPECT_EQ(Result::kUnsupported,
             ConsumeSupportsSelectorFn("selector(div::-webkit-asdf)"));
@@ -292,6 +300,51 @@ TEST_F(CSSSupportsParserTest, ConsumeSupportsSelectorFn) {
   EXPECT_EQ(Result::kUnsupported, ConsumeSupportsSelectorFn("selector(:asdf)"));
   EXPECT_EQ(Result::kUnsupported,
             ConsumeSupportsSelectorFn("selector(::asdf)"));
+  EXPECT_EQ(Result::kUnsupported, ConsumeSupportsSelectorFn("selector(:is())"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:where())"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:not())"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:is(:foo))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:is(:has(:foo)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:where(:foo))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:where(:has(:foo)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(:foo))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(:is(:foo)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(.a, :is(:foo)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(.a, .b, :is(:foo)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:is(.a, :foo))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:where(.a, :foo))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(.a, :foo))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(.a, .b, :foo))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(:has(.a)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(:is(:has(.a))))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(:is(:has(.a), .b)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(.a, :has(.b)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:has(.a, .b, :has(.c)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:host(:is(:foo)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(:host(:has(.a)))"));
+  EXPECT_EQ(Result::kUnsupported,
+            ConsumeSupportsSelectorFn("selector(::part(foo):has(.a)))"));
 }
 
 TEST_F(CSSSupportsParserTest, ConsumeSupportsDecl) {
@@ -330,9 +383,9 @@ TEST_F(CSSSupportsParserTest, ConsumeGeneralEnclosed) {
   EXPECT_EQ(Result::kUnsupported, ConsumeGeneralEnclosed("max(1, 2)"));
   EXPECT_EQ(Result::kUnsupported, ConsumeGeneralEnclosed("asdf(1, 2)"));
   EXPECT_EQ(Result::kUnsupported, ConsumeGeneralEnclosed("asdf(1, 2)\t"));
-
-  EXPECT_EQ(Result::kParseFailure, ConsumeGeneralEnclosed("("));
-  EXPECT_EQ(Result::kParseFailure, ConsumeGeneralEnclosed("()"));
+  EXPECT_EQ(Result::kUnsupported, ConsumeGeneralEnclosed("("));
+  EXPECT_EQ(Result::kUnsupported, ConsumeGeneralEnclosed("()"));
+  EXPECT_EQ(Result::kUnsupported, ConsumeGeneralEnclosed("( )"));
 
   // Invalid <any-value>:
   EXPECT_EQ(Result::kParseFailure, ConsumeGeneralEnclosed("(asdf})"));

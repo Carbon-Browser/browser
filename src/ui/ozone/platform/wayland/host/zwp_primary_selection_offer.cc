@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,10 @@ namespace ui {
 ZwpPrimarySelectionOffer::ZwpPrimarySelectionOffer(
     zwp_primary_selection_offer_v1* data_offer)
     : data_offer_(data_offer) {
-  static constexpr zwp_primary_selection_offer_v1_listener kListener = {
-      &OnOffer};
-  zwp_primary_selection_offer_v1_add_listener(data_offer, &kListener, this);
+  static constexpr zwp_primary_selection_offer_v1_listener
+      kPrimarySelectionOfferListener = {.offer = &OnOffer};
+  zwp_primary_selection_offer_v1_add_listener(
+      data_offer, &kPrimarySelectionOfferListener, this);
 }
 
 ZwpPrimarySelectionOffer::~ZwpPrimarySelectionOffer() {
@@ -49,9 +50,10 @@ base::ScopedFD ZwpPrimarySelectionOffer::Receive(const std::string& mime_type) {
 }
 
 // static
-void ZwpPrimarySelectionOffer::OnOffer(void* data,
-                                    zwp_primary_selection_offer_v1* data_offer,
-                                    const char* mime_type) {
+void ZwpPrimarySelectionOffer::OnOffer(
+    void* data,
+    zwp_primary_selection_offer_v1* data_offer,
+    const char* mime_type) {
   auto* self = static_cast<ZwpPrimarySelectionOffer*>(data);
   self->AddMimeType(mime_type);
 }

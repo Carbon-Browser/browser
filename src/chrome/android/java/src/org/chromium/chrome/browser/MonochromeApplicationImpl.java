@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,11 +40,12 @@ public class MonochromeApplicationImpl extends ChromeApplicationImpl {
                 // Frequently check current system webview provider and show/hide the icon
                 // accordingly by listening to Monochrome browser Activities status (whenever a
                 // browser activity comes to the foreground).
-                ApplicationStatus.registerStateListenerForAllActivities((activity, state) -> {
-                    if (state == ActivityState.STARTED) {
-                        WebViewApkApplication.postDeveloperUiLauncherIconTask();
-                    }
-                });
+                ApplicationStatus.registerStateListenerForAllActivities(
+                        (activity, state) -> {
+                            if (state == ActivityState.STARTED) {
+                                WebViewApkApplication.postDeveloperUiLauncherIconTask();
+                            }
+                        });
             }
         }
     }

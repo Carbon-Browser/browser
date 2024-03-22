@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_ASSISTANT_MODEL_UI_ASSISTANT_UI_ELEMENT_H_
 #define ASH_ASSISTANT_MODEL_UI_ASSISTANT_UI_ELEMENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 
 namespace ash {
 

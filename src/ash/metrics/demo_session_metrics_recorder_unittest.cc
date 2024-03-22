@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/window_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/timer/mock_timer.h"
 #include "components/app_constants/constants.h"
@@ -183,7 +184,8 @@ class DemoSessionMetricsRecorderTest : public AshTestBase {
   std::unique_ptr<DemoSessionMetricsRecorder> metrics_recorder_;
 
   // Owned by metics_recorder_.
-  base::MockRepeatingTimer* mock_timer_ = nullptr;
+  raw_ptr<base::MockRepeatingTimer, DanglingUntriaged | ExperimentalAsh>
+      mock_timer_ = nullptr;
 };
 
 // Verify samples are correct when one app window is active.

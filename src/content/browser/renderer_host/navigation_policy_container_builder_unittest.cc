@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,9 @@ PolicyContainerPolicies MakeTestPolicies() {
       /*is_web_secure_context=*/true, std::move(csp_list),
       network::CrossOriginOpenerPolicy(), network::CrossOriginEmbedderPolicy(),
       network::mojom::WebSandboxFlags::kNone,
-      /*is_anonymous=*/false);
+      /*is_credentialless=*/false,
+      /*can_navigate_top_without_user_gesture=*/true,
+      /*allow_cross_origin_isolation=*/false);
 }
 
 // Shorthand.
@@ -143,15 +145,21 @@ TEST_F(NavigationPolicyContainerBuilderTest, SetCrossOriginOpenerPolicy) {
 TEST_F(NavigationPolicyContainerBuilderTest, DefaultFinalPolicies) {
   NavigationPolicyContainerBuilder builder(nullptr, nullptr, nullptr);
   builder.ComputePolicies(GURL(), false, network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   PolicyContainerPolicies expected_policies;
   EXPECT_EQ(builder.FinalPolicies(), expected_policies);
+
+  scoped_refptr<PolicyContainerHost> cloned_host =
+      builder.GetPolicyContainerHost();
+  ASSERT_THAT(cloned_host, NotNull());
+  EXPECT_EQ(cloned_host->policies(), expected_policies);
 
   scoped_refptr<PolicyContainerHost> host =
       std::move(builder).TakePolicyContainerHost();
   ASSERT_THAT(host, NotNull());
   EXPECT_EQ(host->policies(), expected_policies);
+  ASSERT_THAT(cloned_host, NotNull());
 }
 
 // Verifies that when the URL of the document to commit does not have a local
@@ -165,7 +173,7 @@ TEST_F(NavigationPolicyContainerBuilderTest, FinalPoliciesNormalUrl) {
       builder.DeliveredPoliciesForTesting().Clone();
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), delivered_policies);
 }
@@ -180,7 +188,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
       builder.DeliveredPoliciesForTesting().Clone();
   builder.ComputePolicies(AboutBlankUrl(), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), delivered_policies);
 }
@@ -196,7 +204,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
       builder.DeliveredPoliciesForTesting().Clone();
   builder.ComputePolicies(AboutBlankUrl(), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), delivered_policies);
 }
@@ -237,7 +245,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   EXPECT_EQ(builder.FinalPolicies(), expected_policies);
 
   builder.ComputePoliciesForError();
@@ -253,7 +261,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   EXPECT_THAT(builder.FinalPolicies().content_security_policies, SizeIs(1));
 
   builder.ComputePoliciesForError();
@@ -304,7 +312,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
   NavigationPolicyContainerBuilder builder(nullptr, &token, nullptr);
   builder.ComputePolicies(AboutBlankUrl(), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), initiator_policies);
 }
@@ -323,7 +331,7 @@ TEST_F(NavigationPolicyContainerBuilderTest, FinalPoliciesBlobWithInitiator) {
   builder.ComputePolicies(
       GURL("blob:https://example.com/016ece86-b7f9-4b07-88c2-a0e36b7f1dd6"),
       false, network::mojom::WebSandboxFlags::kNone,
-      /*is_anonymous=*/false);
+      /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), initiator_policies);
 }
@@ -347,7 +355,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
   builder.AddContentSecurityPolicy(test_csp.Clone());
   builder.ComputePolicies(AboutBlankUrl(), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   initiator_policies.content_security_policies.push_back(std::move(test_csp));
   EXPECT_EQ(builder.FinalPolicies(), initiator_policies);
@@ -385,7 +393,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
   NavigationPolicyContainerBuilder builder(parent, nullptr, nullptr);
   builder.ComputePolicies(AboutSrcdocUrl(), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), parent_policies);
 }
@@ -403,7 +411,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
   EXPECT_TRUE(delivered_policies.is_web_secure_context);
 
   builder.ComputePolicies(GURL(), false, network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), delivered_policies);
 }
@@ -421,7 +429,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
   EXPECT_FALSE(delivered_policies.is_web_secure_context);
 
   builder.ComputePolicies(GURL(), false, network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), delivered_policies);
 }
@@ -442,7 +450,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_FALSE(builder.FinalPolicies().is_web_secure_context);
 }
@@ -467,7 +475,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(GURL("http://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), delivered_policies);
 }
@@ -492,7 +500,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), delivered_policies);
 }
@@ -514,7 +522,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
   builder.AddContentSecurityPolicy(test_csp.Clone());
   builder.ComputePolicies(AboutSrcdocUrl(), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   parent_policies.content_security_policies.push_back(std::move(test_csp));
   EXPECT_EQ(builder.FinalPolicies(), parent_policies);
@@ -525,10 +533,10 @@ TEST_F(NavigationPolicyContainerBuilderTest, ComputePoliciesTwiceDCHECK) {
   NavigationPolicyContainerBuilder builder(nullptr, nullptr, nullptr);
   GURL url("https://foo.test");
   builder.ComputePolicies(url, false, network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   EXPECT_DCHECK_DEATH(builder.ComputePolicies(
       url, false, network::mojom::WebSandboxFlags::kNone,
-      /*is_anonymous=*/false));
+      /*is_credentialless=*/false));
 }
 
 // Calling ComputePolicies() followed by ComputePoliciesForError() is supported.
@@ -536,7 +544,7 @@ TEST_F(NavigationPolicyContainerBuilderTest, ComputePoliciesThenError) {
   NavigationPolicyContainerBuilder builder(nullptr, nullptr, nullptr);
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   builder.ComputePoliciesForError();
 }
 
@@ -555,7 +563,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   EXPECT_THAT(builder.InitiatorPolicies(),
               Pointee(Eq(ByRef(initiator_policies))));
 
@@ -577,7 +585,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   EXPECT_THAT(builder.ParentPolicies(), Pointee(Eq(ByRef(parent_policies))));
 
   builder.ComputePoliciesForError();
@@ -596,7 +604,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
   NavigationPolicyContainerBuilder builder(parent, nullptr, nullptr);
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   EXPECT_EQ(builder.FinalPolicies(), PolicyContainerPolicies());
 
   builder.ResetForCrossDocumentRestart();
@@ -604,7 +612,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(AboutSrcdocUrl(), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   EXPECT_EQ(builder.FinalPolicies(), parent_policies);
 }
 
@@ -623,7 +631,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
 
   builder.ComputePolicies(GURL("https://foo.test"), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
   EXPECT_EQ(builder.FinalPolicies(), PolicyContainerPolicies());
 
   builder.ResetForCrossDocumentRestart();
@@ -631,7 +639,7 @@ TEST_F(NavigationPolicyContainerBuilderTest,
               Pointee(Eq(ByRef(initiator_policies))));
   builder.ComputePolicies(AboutBlankUrl(), false,
                           network::mojom::WebSandboxFlags::kNone,
-                          /*is_anonymous=*/false);
+                          /*is_credentialless=*/false);
 
   EXPECT_EQ(builder.FinalPolicies(), initiator_policies);
 }

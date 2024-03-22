@@ -1,32 +1,33 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './cluster.js';
 import './history_clusters_shared_style.css.js';
-import '../../cr_elements/cr_button/cr_button.m.js';
-import '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import '../../cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import '../../cr_elements/cr_toast/cr_toast.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import 'chrome://resources/polymer/v3_0/iron-scroll-threshold/iron-scroll-threshold.js';
 
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {Time} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
+import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
 import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {IronScrollThresholdElement} from 'chrome://resources/polymer/v3_0/iron-scroll-threshold/iron-scroll-threshold.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {CrDialogElement} from '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrLazyRenderElement} from '../../cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import {CrToastElement} from '../../cr_elements/cr_toast/cr_toast.js';
-import {assert} from '../../js/assert_ts.js';
-import {FocusOutlineManager} from '../../js/cr/ui/focus_outline_manager.m.js';
-import {loadTimeData} from '../../js/load_time_data.m.js';
-
 import {BrowserProxyImpl} from './browser_proxy.js';
 import {getTemplate} from './clusters.html.js';
-import {Cluster, PageCallbackRouter, PageHandlerRemote, QueryResult, URLVisit} from './history_clusters.mojom-webui.js';
+import {Cluster, URLVisit} from './history_cluster_types.mojom-webui.js';
+import {PageCallbackRouter, PageHandlerRemote, QueryResult} from './history_clusters.mojom-webui.js';
 
 /**
  * @fileoverview This file provides a custom element that requests and shows
@@ -37,11 +38,6 @@ import {Cluster, PageCallbackRouter, PageHandlerRemote, QueryResult, URLVisit} f
 declare global {
   interface HTMLElementTagNameMap {
     'history-clusters': HistoryClustersElement;
-  }
-
-  interface Window {
-    // https://github.com/microsoft/TypeScript/issues/40807
-    requestIdleCallback(callback: () => void): void;
   }
 }
 
@@ -67,6 +63,15 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
 
   static get properties() {
     return {
+      /**
+       * Whether the clusters are in the side panel.
+       */
+      inSidePanel_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('inSidePanel'),
+        reflectToAttribute: true,
+      },
+
       /**
        * The current query for which related clusters are requested and shown.
        */
@@ -116,9 +121,12 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
   query: string;
   private callbackRouter_: PageCallbackRouter;
   private headerText_: string;
+  private inSidePanel_: boolean;
   private onClustersQueryResultListenerId_: number|null = null;
+  private onClusterImageUpdatedListenerId_: number|null = null;
   private onVisitsRemovedListenerId_: number|null = null;
   private onHistoryDeletedListenerId_: number|null = null;
+  private onQueryChangedByUserListenerId_: number|null = null;
   private pageHandler_: PageHandlerRemote;
   private placeholderText_: string;
   private result_: QueryResult;
@@ -149,12 +157,22 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
     this.onClustersQueryResultListenerId_ =
         this.callbackRouter_.onClustersQueryResult.addListener(
             this.onClustersQueryResult_.bind(this));
+    this.onClusterImageUpdatedListenerId_ =
+        this.callbackRouter_.onClusterImageUpdated.addListener(
+            this.onClusterImageUpdated_.bind(this));
     this.onVisitsRemovedListenerId_ =
         this.callbackRouter_.onVisitsRemoved.addListener(
             this.onVisitsRemoved_.bind(this));
     this.onHistoryDeletedListenerId_ =
         this.callbackRouter_.onHistoryDeleted.addListener(
             this.onHistoryDeleted_.bind(this));
+    this.onQueryChangedByUserListenerId_ =
+        this.callbackRouter_.onQueryChangedByUser.addListener(
+            this.onQueryChangedByUser_.bind(this));
+
+    if (this.inSidePanel_) {
+      this.pageHandler_.showSidePanelUI();
+    }
   }
 
   override disconnectedCallback() {
@@ -165,6 +183,12 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
     assert(this.onVisitsRemovedListenerId_);
     this.callbackRouter_.removeListener(this.onVisitsRemovedListenerId_);
     this.onVisitsRemovedListenerId_ = null;
+    assert(this.onHistoryDeletedListenerId_);
+    this.callbackRouter_.removeListener(this.onHistoryDeletedListenerId_);
+    this.onHistoryDeletedListenerId_ = null;
+    assert(this.onQueryChangedByUserListenerId_);
+    this.callbackRouter_.removeListener(this.onQueryChangedByUserListenerId_);
+    this.onQueryChangedByUserListenerId_ = null;
   }
 
   //============================================================================
@@ -200,6 +224,20 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
   }
 
   /**
+   * Called with `event` received from a visit requesting to be hidden.
+   */
+  private onHideVisit_(event: CustomEvent<URLVisit>) {
+    this.pageHandler_.hideVisits([event.detail]);
+  }
+
+  /**
+   * Called with `event` received from visits requesting to be hidden.
+   */
+  private onHideVisits_(event: CustomEvent<URLVisit[]>) {
+    this.pageHandler_.hideVisits(event.detail);
+  }
+
+  /**
    * Called with `event` received from a cluster requesting to be removed from
    * the list when all its visits have been removed. Contains the cluster index.
    */
@@ -224,16 +262,6 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
     } else {
       // Bypass the confirmation dialog if removing one visit only.
       this.onRemoveButtonClick_();
-    }
-  }
-
-  /**
-   * Called when the value of the search field changes.
-   */
-  private onSearchChanged_(event: CustomEvent<string>) {
-    // Update the query based on the value of the search field, if necessary.
-    if (event.detail !== this.query) {
-      this.query = event.detail;
     }
   }
 
@@ -267,7 +295,8 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
     return this.result_.clusters.length ?
         '' :
         loadTimeData.getString(
-            this.result_.query ? 'noSearchResults' : 'noResults');
+            this.result_.query ? 'noSearchResults' :
+                                 'historyClustersNoResults');
   }
 
   /**
@@ -284,11 +313,18 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
   }
 
   /**
+   * Returns whether the given index corresponds to the last cluster.
+   */
+  private isLastCluster_(index: number): boolean {
+    return index === this.result_.clusters.length - 1;
+  }
+
+  /**
    * Returns a promise that resolves when the browser is idle.
    */
   private onBrowserIdle_(): Promise<void> {
     return new Promise(resolve => {
-      window.requestIdleCallback(() => {
+      requestIdleCallback(() => {
         resolve();
       });
     });
@@ -321,15 +357,19 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
     // Do this on browser idle to avoid jank and to give the DOM a chance to be
     // updated with the results we just got.
     this.onBrowserIdle_().then(() => {
-      if (this.scrollHeight <= this.clientHeight) {
+      if (this.scrollHeight <= this.clientHeight && this.result_.canLoadMore) {
         this.onLoadMoreButtonClick_();
       }
     });
     this.showSpinner_ = false;
+  }
 
-    if (loadTimeData.getBoolean('inSidePanel')) {
-      this.pageHandler_.showSidePanelUI();
-    }
+  /**
+   * Called when an image has become available for `clusterIndex`.
+   */
+  private onClusterImageUpdated_(clusterIndex: number, imageUrl: Url) {
+    // TODO(tommycli): Make deletions handle `clusterIndex` properly.
+    this.set(`result_.clusters.${clusterIndex}.imageUrl`, imageUrl);
   }
 
   /**
@@ -342,7 +382,9 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
         // Prevent sending further load-more requests until this one finishes.
         this.set('result_.canLoadMore', false);
       }
-      this.pageHandler_.startQueryClusters(this.query.trim());
+      this.pageHandler_.startQueryClusters(
+          this.query.trim(),
+          new URLSearchParams(window.location.search).has('recluster'));
     });
   }
 
@@ -366,6 +408,20 @@ export class HistoryClustersElement extends HistoryClustersElementBase {
     // the externally deleted History. It would be nice if we could save the
     // user's scroll position, but History doesn't do that either.
     this.onQueryChanged_();
+  }
+
+  /**
+   * Called when the query is changed by the user externally.
+   */
+  private onQueryChangedByUser_(query: string) {
+    // Don't directly change the query, but instead let the containing element
+    // update the searchbox UI. That in turn will cause this object to issue
+    // a new query to the backend.
+    this.dispatchEvent(new CustomEvent('query-changed-by-user', {
+      bubbles: true,
+      composed: true,
+      detail: query,
+    }));
   }
 }
 

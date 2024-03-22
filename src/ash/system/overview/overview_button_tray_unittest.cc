@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,7 @@
 #include "ui/display/manager/display_manager.h"
 #include "ui/events/devices/device_data_manager_test_api.h"
 #include "ui/events/devices/input_device.h"
+#include "ui/events/devices/keyboard_device.h"
 #include "ui/events/event.h"
 #include "ui/events/gestures/gesture_types.h"
 #include "ui/events/types/event_type.h"
@@ -60,19 +61,6 @@ OverviewButtonTray* GetSecondaryTray() {
       ->overview_button_tray();
 }
 
-ui::GestureEvent CreateTapEvent(
-    base::TimeDelta delta_from_start = base::TimeDelta()) {
-  return ui::GestureEvent(0, 0, 0, base::TimeTicks() + delta_from_start,
-                          ui::GestureEventDetails(ui::ET_GESTURE_TAP));
-}
-
-// Helper function to perform a double tap on the overview button tray.
-void PerformDoubleTap() {
-  ui::GestureEvent tap = CreateTapEvent();
-  GetTray()->PerformAction(tap);
-  GetTray()->PerformAction(tap);
-}
-
 }  // namespace
 
 class OverviewButtonTrayTest : public AshTestBase {
@@ -92,7 +80,7 @@ class OverviewButtonTrayTest : public AshTestBase {
 
     AshTestBase::SetUp();
 
-    ui::DeviceDataManagerTestApi().SetKeyboardDevices({ui::InputDevice(
+    ui::DeviceDataManagerTestApi().SetKeyboardDevices({ui::KeyboardDevice(
         3, ui::InputDeviceType::INPUT_DEVICE_INTERNAL, "keyboard")});
     base::RunLoop().RunUntilIdle();
     // State change is asynchronous on the device. Do the same
@@ -103,6 +91,12 @@ class OverviewButtonTrayTest : public AshTestBase {
   void NotifySessionStateChanged() {
     GetTray()->OnSessionStateChanged(
         Shell::Get()->session_controller()->GetSessionState());
+  }
+
+  // Helper function to perform a double tap on the overview button tray.
+  void PerformDoubleTap() {
+    GestureTapOn(GetTray());
+    GestureTapOn(GetTray());
   }
 
   SplitViewController* split_view_controller() {
@@ -129,31 +123,31 @@ TEST_F(OverviewButtonTrayTest, BasicConstruction) {
 TEST_F(OverviewButtonTrayTest, VisibilityTest) {
   ASSERT_FALSE(GetTray()->GetVisible());
   TabletModeControllerTestApi().EnterTabletMode();
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_TRUE(GetTray()->GetVisible());
 
   TabletModeControllerTestApi().LeaveTabletMode();
   EXPECT_FALSE(GetTray()->GetVisible());
-  EXPECT_FALSE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
 
   // When there is an window, it'll take an screenshot and
-  // switch becomes asynchronous.
+  // switch becomes asynchronous, but the display tablet state is synchronously
+  // updated.
   std::unique_ptr<aura::Window> window(
       CreateTestWindowInShellWithBounds(gfx::Rect(5, 5, 20, 20)));
 
   ASSERT_FALSE(GetTray()->GetVisible());
   TabletMode::Waiter waiter(/*enable=*/true);
   TabletModeControllerTestApi().EnterTabletMode();
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 
   waiter.Wait();
 
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
   EXPECT_TRUE(GetTray()->GetVisible());
 
   TabletModeControllerTestApi().LeaveTabletMode();
-  EXPECT_FALSE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 }
 
@@ -164,11 +158,12 @@ TEST_F(OverviewButtonTrayTest, PerformAction) {
   // Overview Mode only works when there is a window
   std::unique_ptr<aura::Window> window(
       CreateTestWindowInShellWithBounds(gfx::Rect(5, 5, 20, 20)));
-  GetTray()->PerformAction(CreateTapEvent());
+  GetTray()->SetVisiblePreferred(true);
+  GestureTapOn(GetTray());
   EXPECT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
 
   // Verify tapping on the button again closes overview mode.
-  GetTray()->PerformAction(CreateTapEvent());
+  GestureTapOn(GetTray());
   EXPECT_FALSE(Shell::Get()->overview_controller()->InOverviewSession());
 
   // Test in tablet mode.
@@ -176,11 +171,11 @@ TEST_F(OverviewButtonTrayTest, PerformAction) {
   TabletModeControllerTestApi().EnterTabletMode();
   waiter.Wait();
 
-  GetTray()->PerformAction(CreateTapEvent());
+  GestureTapOn(GetTray());
   EXPECT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
 
   // Verify tapping on the button again closes overview mode.
-  GetTray()->PerformAction(CreateTapEvent());
+  GestureTapOn(GetTray());
   EXPECT_FALSE(Shell::Get()->overview_controller()->InOverviewSession());
 }
 
@@ -204,16 +199,15 @@ TEST_F(OverviewButtonTrayTest, PerformDoubleTapAction) {
 
   // Verify that if we double tap on the window selection page, it acts as two
   // taps, and ends up on the window selection page again.
-  ui::GestureEvent tap = CreateTapEvent();
   ASSERT_TRUE(wm::IsActiveWindow(window1.get()));
-  GetTray()->PerformAction(tap);
+  GestureTapOn(GetTray());
   ASSERT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
   PerformDoubleTap();
   EXPECT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
 
   // Verify that if we minimize a window, double tapping the overlay tray button
   // will bring up the window, and it should be the active window.
-  GetTray()->PerformAction(tap);
+  GestureTapOn(GetTray());
   ASSERT_TRUE(!Shell::Get()->overview_controller()->InOverviewSession());
   ASSERT_TRUE(wm::IsActiveWindow(window1.get()));
   WindowState::Get(window2.get())->Minimize();
@@ -234,6 +228,8 @@ TEST_F(OverviewButtonTrayTest, PerformDoubleTapAction) {
 
 // Tests that tapping on the control will record the user action Tray_Overview.
 TEST_F(OverviewButtonTrayTest, TrayOverviewUserAction) {
+  TabletModeControllerTestApi().EnterTabletMode();
+
   ASSERT_FALSE(Shell::Get()->overview_controller()->InOverviewSession());
 
   // With one window present, tapping on the control to enter overview mode
@@ -241,15 +237,13 @@ TEST_F(OverviewButtonTrayTest, TrayOverviewUserAction) {
   base::UserActionTester user_action_tester;
   std::unique_ptr<aura::Window> window(
       CreateTestWindowInShellWithBounds(gfx::Rect(5, 5, 20, 20)));
-  GetTray()->PerformAction(
-      CreateTapEvent(OverviewButtonTray::kDoubleTapThresholdMs));
+  GestureTapOn(GetTray());
   ASSERT_TRUE(Shell::Get()->overview_controller()->InOverviewSession());
   EXPECT_EQ(1, user_action_tester.GetActionCount(kTrayOverview));
 
   // Tapping on the control to exit overview mode should record the
   // user action.
-  GetTray()->PerformAction(
-      CreateTapEvent(OverviewButtonTray::kDoubleTapThresholdMs * 2));
+  GestureTapOn(GetTray());
   ASSERT_FALSE(Shell::Get()->overview_controller()->InOverviewSession());
   EXPECT_EQ(2, user_action_tester.GetActionCount(kTrayOverview));
 }
@@ -266,7 +260,7 @@ TEST_F(OverviewButtonTrayTest, DisplaysOnBothDisplays) {
   base::RunLoop().RunUntilIdle();
   // DisplayConfigurationObserver enables mirror mode when tablet mode is
   // enabled. Disable mirror mode to test tablet mode with multiple displays.
-  display_manager()->SetMirrorMode(display::MirrorMode::kOff, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kOff, std::nullopt);
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(GetTray()->GetVisible());
   EXPECT_TRUE(GetSecondaryTray()->GetVisible());
@@ -370,6 +364,8 @@ TEST_F(OverviewButtonTrayTest, VisibilityChangesForSystemModalWindow) {
 // Verify that quick switch works properly when one of the windows has a
 // transient child.
 TEST_F(OverviewButtonTrayTest, TransientChildQuickSwitch) {
+  TabletModeControllerTestApi().EnterTabletMode();
+
   std::unique_ptr<aura::Window> window1 = CreateTestWindow();
   std::unique_ptr<aura::Window> window2 =
       CreateTestWindow(gfx::Rect(), aura::client::WINDOW_TYPE_POPUP);
@@ -400,22 +396,23 @@ TEST_F(OverviewButtonTrayTest, SplitviewModeQuickSwitch) {
   // Enter splitview mode. Snap |window1| to the left, this will be the default
   // splitview window.
   EnterOverview();
-  split_view_controller()->SnapWindow(window1.get(), SplitViewController::LEFT);
-  split_view_controller()->SnapWindow(window2.get(),
-                                      SplitViewController::RIGHT);
+  split_view_controller()->SnapWindow(
+      window1.get(), SplitViewController::SnapPosition::kPrimary);
+  split_view_controller()->SnapWindow(
+      window2.get(), SplitViewController::SnapPosition::kSecondary);
   ASSERT_EQ(window1.get(), split_view_controller()->GetDefaultSnappedWindow());
 
   // Verify that after double tapping, we have switched to |window3|, even
   // though |window1| is more recently used.
   PerformDoubleTap();
-  EXPECT_EQ(window3.get(), split_view_controller()->right_window());
+  EXPECT_EQ(window3.get(), split_view_controller()->secondary_window());
   EXPECT_EQ(window3.get(), window_util::GetActiveWindow());
 
   // Focus |window1|. Verify that after double tapping, |window2| is the on the
   // right side for splitview.
   wm::ActivateWindow(window1.get());
   PerformDoubleTap();
-  EXPECT_EQ(window2.get(), split_view_controller()->right_window());
+  EXPECT_EQ(window2.get(), split_view_controller()->secondary_window());
   EXPECT_EQ(window2.get(), window_util::GetActiveWindow());
 
   split_view_controller()->EndSplitView();
@@ -452,21 +449,17 @@ TEST_F(OverviewButtonTrayTest, ForDevTabletModeForcesTheButtonShown) {
   EXPECT_FALSE(GetTray()->GetVisible());
 
   // When there is a window, a screenshot will be taken and entering tablet mode
-  // becomes asynchronous.
+  // becomes asynchronous, but the display tablet state is synchronously
+  // updated.
   std::unique_ptr<aura::Window> window(
       CreateTestWindowInShellWithBounds(gfx::Rect(5, 5, 20, 20)));
 
   EXPECT_FALSE(GetTray()->GetVisible());
-  TabletMode::Waiter waiter(/*enable=*/true);
   Shell::Get()->tablet_mode_controller()->SetEnabledForDev(true);
-  EXPECT_FALSE(GetTray()->GetVisible());
-
-  waiter.Wait();
-
   EXPECT_TRUE(TabletModeControllerTestApi().IsTabletModeStarted());
   EXPECT_TRUE(GetTray()->GetVisible());
 
-  // However, disabling tablet mode is always synchronous.
+  // Disabling tablet mode is always synchronous.
   Shell::Get()->tablet_mode_controller()->SetEnabledForDev(false);
   EXPECT_FALSE(TabletModeControllerTestApi().IsTabletModeStarted());
   EXPECT_FALSE(GetTray()->GetVisible());
@@ -552,12 +545,12 @@ TEST_P(OverviewButtonTrayWithShelfControlsHiddenTest, VisibilityTest) {
   SetTestA11yFeatureEnabled(true);
 
   TabletModeControllerTestApi().EnterTabletMode();
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_EQ(HasTestingAccessibilityFeature(), GetTray()->GetVisible());
 
   TabletModeControllerTestApi().LeaveTabletMode();
   EXPECT_FALSE(GetTray()->GetVisible());
-  EXPECT_FALSE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
 
   // When there is an window, it'll take an screenshot and the tablet mode
   // switch becomes asynchronous.
@@ -568,23 +561,23 @@ TEST_P(OverviewButtonTrayWithShelfControlsHiddenTest, VisibilityTest) {
 
   TabletMode::Waiter waiter(/*enable=*/true);
   TabletModeControllerTestApi().EnterTabletMode();
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 
   waiter.Wait();
 
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_EQ(HasTestingAccessibilityFeature(), GetTray()->GetVisible());
 
   // Disable the accessibility feature while in tablet mode - the button should
   // be hidden.
   SetTestA11yFeatureEnabled(false);
 
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 
   TabletModeControllerTestApi().LeaveTabletMode();
-  EXPECT_FALSE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 }
 
@@ -593,23 +586,23 @@ TEST_P(OverviewButtonTrayWithShelfControlsHiddenTest, VisibilityTest) {
 TEST_P(OverviewButtonTrayWithShelfControlsHiddenTest,
        AccessibilityFeatureEnabledWhileInTabletMode) {
   Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 
   // The button should be shown if the feature gets enabled.
   SetTestA11yFeatureEnabled(true);
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_EQ(HasTestingAccessibilityFeature(), GetTray()->GetVisible());
 
   TabletModeControllerTestApi().LeaveTabletMode();
-  EXPECT_FALSE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 }
 
 TEST_P(OverviewButtonTrayWithShelfControlsHiddenTest,
        AccessibilityFeaturesChangeWhileInOverview) {
   Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 
   // Create a window to show in overview.
@@ -621,12 +614,12 @@ TEST_P(OverviewButtonTrayWithShelfControlsHiddenTest,
 
   // The button should be shown if the feature gets enabled.
   SetTestA11yFeatureEnabled(true);
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_EQ(HasTestingAccessibilityFeature(), GetTray()->GetVisible());
 
   // The button should be hidden if the feature gets disabled.
   SetTestA11yFeatureEnabled(false);
-  EXPECT_TRUE(Shell::Get()->tablet_mode_controller()->InTabletMode());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_FALSE(GetTray()->GetVisible());
 }
 

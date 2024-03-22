@@ -1,4 +1,4 @@
-// Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+// Copyright 2006-2008 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class FileSystemPolicy {
   // 'semantics' is the desired semantics for the open or create.
   // 'policy' is the policy generator to which the rules are going to be added.
   static bool GenerateRules(const wchar_t* name,
-                            Semantics semantics,
+                            FileSemantics semantics,
                             LowLevelPolicy* policy);
 
   // Performs the desired policy action on a create request with an

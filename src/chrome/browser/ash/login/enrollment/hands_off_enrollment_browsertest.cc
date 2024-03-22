@@ -1,11 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
-#include "chrome/browser/ash/login/enrollment/enterprise_enrollment_helper_mock.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/login_wizard.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
@@ -14,17 +13,19 @@
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/enrollment/enrollment_status.h"
+#include "chrome/browser/ui/webui/ash/login/network_screen_handler.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace ash {
+
 namespace {
 
 constexpr char kDefaultNetworkServicePath[] = "/service/eth1";
@@ -102,7 +103,7 @@ IN_PROC_BROWSER_TEST_F(HandsOffEnrollmentTest,
 
   SimulateNetworkConnected();
 
-  ShowLoginWizard(ash::OOBE_SCREEN_UNKNOWN);
+  ShowLoginWizard(OOBE_SCREEN_UNKNOWN);
 
   ForceBrandedBuild();
 
@@ -121,7 +122,7 @@ IN_PROC_BROWSER_TEST_F(HandsOffEnrollmentTest, WaitForNetworkConnection) {
   enrollment_helper_.ExpectAttestationEnrollmentSuccess();
   enrollment_helper_.DisableAttributePromptUpdate();
   enrollment_helper_.SetupClearAuth();
-  ShowLoginWizard(ash::OOBE_SCREEN_UNKNOWN);
+  ShowLoginWizard(OOBE_SCREEN_UNKNOWN);
 
   ForceBrandedBuild();
 
@@ -153,7 +154,7 @@ IN_PROC_BROWSER_TEST_F(HandsOffEnrollmentTest, DISABLED_EnrollmentError) {
 
   SimulateNetworkConnected();
 
-  ShowLoginWizard(ash::OOBE_SCREEN_UNKNOWN);
+  ShowLoginWizard(OOBE_SCREEN_UNKNOWN);
 
   ForceBrandedBuild();
 

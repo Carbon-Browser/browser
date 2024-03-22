@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@
 #include "base/command_line.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/uuid.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/env.h"
@@ -18,6 +20,8 @@
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/events/event.h"
 #include "ui/events/event_utils.h"
@@ -140,6 +144,8 @@ TEST_F(NativeWidgetAuraTest, CenterWindowSmallParentNotAtOrigin) {
 
 // View which handles both mouse and gesture events.
 class EventHandlingView : public View {
+  METADATA_HEADER(EventHandlingView, View)
+
  public:
   EventHandlingView() = default;
   EventHandlingView(const EventHandlingView&) = delete;
@@ -172,6 +178,9 @@ class EventHandlingView : public View {
  private:
   std::set<ui::EventType> handled_gestures_set_;
 };
+
+BEGIN_METADATA(EventHandlingView)
+END_METADATA
 
 // Verifies that when the mouse click interrupts the gesture scroll, the view
 // where the gesture scroll starts should receive the scroll end event.
@@ -250,6 +259,32 @@ TEST_F(NativeWidgetAuraTest, RestoreBounds) {
   transform.Translate(100.f, 100.f);
   widget->GetNativeWindow()->SetTransform(transform);
   EXPECT_EQ(gfx::Rect(400, 400), widget->GetRestoredBounds());
+}
+
+TEST_F(NativeWidgetAuraTest, GetWorkspace) {
+  Widget::InitParams params(Widget::InitParams::TYPE_WINDOW);
+  params.parent = nullptr;
+  params.context = root_window();
+  params.show_state = ui::SHOW_STATE_MINIMIZED;
+  params.bounds.SetRect(0, 0, 1024, 800);
+  UniqueWidgetPtr widget = std::make_unique<Widget>();
+  widget->Init(std::move(params));
+  widget->Show();
+
+  widget->GetNativeWindow()->SetProperty(
+      aura::client::kWindowWorkspaceKey,
+      aura::client::kWindowWorkspaceUnassignedWorkspace);
+  EXPECT_EQ("", widget->GetWorkspace());
+
+  widget->GetNativeWindow()->SetProperty(
+      aura::client::kWindowWorkspaceKey,
+      aura::client::kWindowWorkspaceVisibleOnAllWorkspaces);
+  EXPECT_EQ("", widget->GetWorkspace());
+
+  const int desk_index = 1;
+  widget->GetNativeWindow()->SetProperty(aura::client::kWindowWorkspaceKey,
+                                         desk_index);
+  EXPECT_EQ(base::NumberToString(desk_index), widget->GetWorkspace());
 }
 
 // A WindowObserver that counts kShowStateKey property changes.
@@ -388,7 +423,7 @@ class TestWidget : public Widget {
 // leads to noticable flashes.
 TEST_F(NativeWidgetAuraTest, ShowMaximizedDoesntBounceAround) {
   root_window()->SetBounds(gfx::Rect(0, 0, 640, 480));
-  root_window()->SetLayoutManager(new MaximizeLayoutManager);
+  root_window()->SetLayoutManager(std::make_unique<MaximizeLayoutManager>());
   UniqueWidgetPtr widget = std::make_unique<TestWidget>();
   Widget::InitParams params(Widget::InitParams::TYPE_WINDOW);
   params.parent = nullptr;
@@ -417,7 +452,8 @@ class PropertyTestLayoutManager : public TestLayoutManagerBase {
   void OnWindowAddedToLayout(aura::Window* child) override {
     EXPECT_EQ(aura::client::kResizeBehaviorCanResize |
                   aura::client::kResizeBehaviorCanMaximize |
-                  aura::client::kResizeBehaviorCanMinimize,
+                  aura::client::kResizeBehaviorCanMinimize |
+                  aura::client::kResizeBehaviorCanFullscreen,
               child->GetProperty(aura::client::kResizeBehaviorKey));
     added_ = true;
   }
@@ -428,8 +464,8 @@ class PropertyTestLayoutManager : public TestLayoutManagerBase {
 // Verifies the resize behavior when added to the layout manager.
 TEST_F(NativeWidgetAuraTest, TestPropertiesWhenAddedToLayout) {
   root_window()->SetBounds(gfx::Rect(0, 0, 640, 480));
-  PropertyTestLayoutManager* layout_manager = new PropertyTestLayoutManager();
-  root_window()->SetLayoutManager(layout_manager);
+  PropertyTestLayoutManager* layout_manager = root_window()->SetLayoutManager(
+      std::make_unique<PropertyTestLayoutManager>());
   UniqueWidgetPtr widget = std::make_unique<TestWidget>();
   Widget::InitParams params(Widget::InitParams::TYPE_WINDOW);
   params.delegate = new WidgetDelegate();
@@ -459,6 +495,8 @@ TEST_F(NativeWidgetAuraTest, GetClientAreaScreenBounds) {
 
 // View subclass that tracks whether it has gotten a gesture event.
 class GestureTrackingView : public View {
+  METADATA_HEADER(GestureTrackingView, View)
+
  public:
   GestureTrackingView() = default;
 
@@ -484,6 +522,9 @@ class GestureTrackingView : public View {
   // Dictates what OnGestureEvent() returns.
   bool consume_gesture_event_ = true;
 };
+
+BEGIN_METADATA(GestureTrackingView)
+END_METADATA
 
 // Verifies a capture isn't set on touch press and that the view that gets
 // the press gets the release.
@@ -847,6 +888,210 @@ TEST_F(NativeWidgetAuraTest, MinimizedWidgetRestoreBounds) {
 
   widget->Restore();
   EXPECT_EQ(restore_bounds, window->bounds());
+}
+
+// Tests that the `kDeskUuidKey` is set if the `workspace` parameter is
+// a uuid, and that the `kWindowWorkspaceKey` is set if it's a string
+// representation of an integer.
+TEST_F(NativeWidgetAuraTest, WorkspaceUuid) {
+  // If the `workspace` param is a uuid, `kDeskUuidKey` should be set.
+  Widget::InitParams params(Widget::InitParams::TYPE_WINDOW);
+  params.parent = nullptr;
+  params.context = root_window();
+  params.show_state = ui::SHOW_STATE_MINIMIZED;
+  params.bounds.SetRect(0, 0, 1024, 800);
+  const std::string uuid = "e1b6731b-2a99-48be-bcb7-54e3ba274d05";
+  params.workspace = base::Uuid::ParseLowercase(uuid).AsLowercaseString();
+  UniqueWidgetPtr widget = std::make_unique<Widget>();
+  widget->Init(std::move(params));
+  widget->Show();
+
+  EXPECT_EQ(-1, widget->GetNativeWindow()->GetProperty(
+                    aura::client::kWindowWorkspaceKey));
+  EXPECT_THAT(
+      widget->GetNativeWindow()->GetProperty(aura::client::kDeskUuidKey),
+      testing::Pointee(uuid));
+
+  // If the `workspace` param is an int, `kWindowWorkspaceKey` should be set.
+  Widget::InitParams params2(Widget::InitParams::TYPE_WINDOW);
+  params2.parent = nullptr;
+  params2.context = root_window();
+  params2.show_state = ui::SHOW_STATE_MINIMIZED;
+  params2.bounds.SetRect(0, 0, 1024, 800);
+  params2.workspace = "2";
+  UniqueWidgetPtr widget2 = std::make_unique<Widget>();
+  widget2->Init(std::move(params2));
+  widget2->Show();
+
+  EXPECT_EQ(2, widget2->GetNativeWindow()->GetProperty(
+                   aura::client::kWindowWorkspaceKey));
+  EXPECT_FALSE(
+      widget2->GetNativeWindow()->GetProperty(aura::client::kDeskUuidKey));
+}
+
+// NativeWidgetAura has a protected destructor.
+// Use a test object that overrides the destructor for unit tests.
+class TestNativeWidgetAura : public NativeWidgetAura {
+ public:
+  explicit TestNativeWidgetAura(internal::NativeWidgetDelegate* delegate)
+      : NativeWidgetAura(delegate) {}
+
+  TestNativeWidgetAura(const TestNativeWidgetAura&) = delete;
+  TestNativeWidgetAura& operator=(const TestNativeWidgetAura&) = delete;
+
+  ~TestNativeWidgetAura() override = default;
+};
+
+// Series of tests that verifies having a null NativeWidgetDelegate doesn't
+// crash.
+class NativeWidgetAuraWithNoDelegateTest : public NativeWidgetAuraTest {
+ public:
+  NativeWidgetAuraWithNoDelegateTest() = default;
+
+  NativeWidgetAuraWithNoDelegateTest(
+      const NativeWidgetAuraWithNoDelegateTest&) = delete;
+  NativeWidgetAuraWithNoDelegateTest& operator=(
+      const NativeWidgetAuraWithNoDelegateTest&) = delete;
+
+  ~NativeWidgetAuraWithNoDelegateTest() override = default;
+
+  // testing::Test overrides:
+  void SetUp() override {
+    NativeWidgetAuraTest::SetUp();
+    Widget widget;
+    native_widget_ = new TestNativeWidgetAura(&widget);
+    Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
+    params.ownership = views::Widget::InitParams::CLIENT_OWNS_WIDGET;
+    params.native_widget = native_widget_;
+    widget.Init(std::move(params));
+    widget.Show();
+    // Notify all widget observers that the widget is destroying so they can
+    // unregister properly and clear the pointer to the widget.
+    widget.OnNativeWidgetDestroying();
+    // Widget will create a DefaultWidgetDelegate if no delegates are provided.
+    // Call Widget::OnNativeWidgetDestroyed() to destroy
+    // the WidgetDelegate properly.
+    widget.OnNativeWidgetDestroyed();
+  }
+
+  void TearDown() override {
+    native_widget_->CloseNow();
+    ViewsTestBase::TearDown();
+  }
+
+  raw_ptr<TestNativeWidgetAura, DanglingUntriaged> native_widget_;
+};
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, GetHitTestMaskTest) {
+  SkPath mask;
+  native_widget_->GetHitTestMask(&mask);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, GetMaximumSizeTest) {
+  native_widget_->GetMaximumSize();
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, GetMinimumSizeTest) {
+  native_widget_->GetMinimumSize();
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, GetNonClientComponentTest) {
+  native_widget_->GetNonClientComponent(gfx::Point());
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, GetWidgetTest) {
+  native_widget_->GetWidget();
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, HasHitTestMaskTest) {
+  native_widget_->HasHitTestMask();
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnBoundsChangedTest) {
+  native_widget_->OnCaptureLost();
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnCaptureLostTest) {
+  native_widget_->OnBoundsChanged(gfx::Rect(), gfx::Rect());
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnGestureEventTest) {
+  ui::GestureEvent gesture(0, 0, 0, ui::EventTimeForNow(),
+                           ui::GestureEventDetails(ui::ET_GESTURE_TAP_DOWN));
+  native_widget_->OnGestureEvent(&gesture);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnKeyEventTest) {
+  ui::KeyEvent key(ui::ET_KEY_PRESSED, ui::VKEY_0, ui::EF_NONE);
+  native_widget_->OnKeyEvent(&key);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnMouseEventTest) {
+  ui::MouseEvent move(ui::ET_MOUSE_MOVED, gfx::Point(), gfx::Point(),
+                      ui::EventTimeForNow(), ui::EF_NONE, ui::EF_NONE);
+  native_widget_->OnMouseEvent(&move);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnPaintTest) {
+  native_widget_->OnPaint(ui::PaintContext(nullptr, 0, gfx::Rect(), false));
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnResizeLoopEndedTest) {
+  native_widget_->OnResizeLoopEnded(nullptr);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnResizeLoopStartedTest) {
+  native_widget_->OnResizeLoopStarted(nullptr);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnScrollEventTest) {
+  ui::ScrollEvent scroll(ui::ET_SCROLL, gfx::Point(), ui::EventTimeForNow(), 0,
+                         0, 0, 0, 0, 0);
+  native_widget_->OnScrollEvent(&scroll);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnTransientParentChangedTest) {
+  native_widget_->OnTransientParentChanged(nullptr);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnWindowAddedToRootWindowTest) {
+  native_widget_->OnWindowAddedToRootWindow(nullptr);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnWindowPropertyChangedTest) {
+  native_widget_->OnWindowPropertyChanged(nullptr, nullptr, 0);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnWindowRemovingFromRootWindowTest) {
+  native_widget_->OnWindowRemovingFromRootWindow(nullptr, nullptr);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest,
+       OnWindowTargetVisibilityChangedTest) {
+  native_widget_->OnWindowTargetVisibilityChanged(false);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnWindowActivatedTest) {
+  native_widget_->OnWindowActivated(
+      wm::ActivationChangeObserver::ActivationReason::ACTIVATION_CLIENT,
+      native_widget_->GetNativeView(), nullptr);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, OnWindowFocusedTest) {
+  native_widget_->OnWindowFocused(nullptr, nullptr);
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, ShouldActivateTest) {
+  native_widget_->ShouldActivate();
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest,
+       ShouldDescendIntoChildForEventHandlingTest) {
+  native_widget_->ShouldDescendIntoChildForEventHandling(nullptr, gfx::Point());
+}
+
+TEST_F(NativeWidgetAuraWithNoDelegateTest, UpdateVisualStateTest) {
+  native_widget_->UpdateVisualState();
 }
 
 }  // namespace

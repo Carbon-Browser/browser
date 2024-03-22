@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,6 @@ class AURA_EXPORT ScreenOzone : public display::Screen {
   ScreenOzone& operator=(const ScreenOzone&) = delete;
 
   ~ScreenOzone() override;
-
-  void Initialize();
 
   // display::Screen interface.
   gfx::Point GetCursorScreenPoint() override;
@@ -57,6 +55,11 @@ class AURA_EXPORT ScreenOzone : public display::Screen {
   std::string GetCurrentWorkspace() override;
   base::Value::List GetGpuExtraInfo(
       const gfx::GpuExtraInfo& gpu_extra_info) override;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  display::TabletState GetTabletState() const override;
+  void OverrideTabletStateForTesting(
+      display::TabletState tablet_state) override;
+#endif
 
   // Returns the NativeWindow associated with the AcceleratedWidget.
   virtual gfx::NativeWindow GetNativeWindowFromAcceleratedWidget(
@@ -91,22 +94,7 @@ class AURA_EXPORT ScreenOzone : public display::Screen {
   gfx::AcceleratedWidget GetAcceleratedWidgetForWindow(
       aura::Window* window) const;
 
-  virtual void OnBeforePlatformScreenInit();
-
   std::unique_ptr<ui::PlatformScreen> platform_screen_;
-};
-
-// ScopedScreenOzone creates a ScreenOzone instead of NativeScreen
-// (created by `CreateNativeScreen()`) if the screen hasn't been set.
-class AURA_EXPORT ScopedScreenOzone : public display::ScopedNativeScreen {
- public:
-  explicit ScopedScreenOzone(const base::Location& location = FROM_HERE);
-  ScopedScreenOzone(const ScopedScreenOzone&) = delete;
-  ScopedScreenOzone operator=(const ScopedScreenOzone&) = delete;
-  ~ScopedScreenOzone() override;
-
- private:
-  display::Screen* CreateScreen() override;
 };
 
 }  // namespace aura

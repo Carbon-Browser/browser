@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -104,7 +104,7 @@ class TestRtcpPacketBuilder {
   // Where the length field of the current packet is.
   // Note: 0 is not a legal value, it is used for "uninitialized".
   uint8_t buffer_[kMaxIpPacketSize];
-  raw_ptr<char> ptr_of_length_;
+  raw_ptr<char, AllowPtrArithmetic> ptr_of_length_;
   base::BigEndianWriter big_endian_writer_;
   base::BigEndianReader big_endian_reader_;
 };

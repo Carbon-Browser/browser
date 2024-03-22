@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr_exclusion.h"
 #include "ui/views/layout/layout_types.h"
 #include "ui/views/views_export.h"
 
@@ -105,7 +106,9 @@ class VIEWS_EXPORT LayoutManager {
 
  private:
   friend class views::View;
-  View* view_setting_visibility_on_ = nullptr;
+  // This field is not a raw_ptr<> because of a reference to raw_ptr in
+  // not-rewritten platform specific code and #addr-of.
+  RAW_PTR_EXCLUSION View* view_setting_visibility_on_ = nullptr;
 };
 
 }  // namespace views

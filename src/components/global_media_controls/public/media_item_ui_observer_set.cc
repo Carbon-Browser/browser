@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,10 @@ void MediaItemUIObserverSet::OnMediaItemUIDismissed(const std::string& id) {
 void MediaItemUIObserverSet::OnMediaItemUIDestroyed(const std::string& id) {
   owner_->OnMediaItemUIDestroyed(id);
   StopObserving(id);
+}
+
+void MediaItemUIObserverSet::OnMediaItemUIShowDevices(const std::string& id) {
+  owner_->OnMediaItemUIShowDevices(id);
 }
 
 }  // namespace global_media_controls

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,12 @@ class MockClipboardHost : public mojom::blink::ClipboardHost {
   void Bind(mojo::PendingReceiver<mojom::blink::ClipboardHost> receiver);
   // Clears all clipboard data.
   void Reset();
+
+  // These write methods exist only in the mock class because
+  // mojom::ClipboardHost does not provide equivalent methods.  These are here
+  // to simplify testing of the system clipboard.
+  void WriteRtf(const String& rtf_text);
+  void WriteFiles(mojom::blink::ClipboardFilesPtr files);
 
  private:
   // mojom::ClipboardHost
@@ -74,6 +80,8 @@ class MockClipboardHost : public mojom::blink::ClipboardHost {
   String plain_text_ = g_empty_string;
   String html_text_ = g_empty_string;
   String svg_text_ = g_empty_string;
+  String rtf_text_ = g_empty_string;
+  mojom::blink::ClipboardFilesPtr files_ = mojom::blink::ClipboardFiles::New();
   KURL url_;
   Vector<uint8_t> png_;
   // TODO(asully): Remove `image_` once ReadImage() path is removed.

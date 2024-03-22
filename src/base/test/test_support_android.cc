@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -186,7 +186,7 @@ bool GetTestProviderPath(int key, base::FilePath* result) {
     case base::DIR_ANDROID_APP_DATA:
     case base::DIR_ASSETS:
     case base::DIR_SRC_TEST_DATA_ROOT:
-    case base::DIR_GEN_TEST_DATA_ROOT:
+    case base::DIR_OUT_TEST_DATA_ROOT:
       CHECK(g_test_data_dir != nullptr);
       *result = *g_test_data_dir;
       return true;
@@ -217,7 +217,7 @@ void InitAndroidTestPaths(const FilePath& test_data_dir) {
   InitPathProvider(DIR_ANDROID_APP_DATA);
   InitPathProvider(DIR_ASSETS);
   InitPathProvider(DIR_SRC_TEST_DATA_ROOT);
-  InitPathProvider(DIR_GEN_TEST_DATA_ROOT);
+  InitPathProvider(DIR_OUT_TEST_DATA_ROOT);
 }
 
 void InitAndroidTestMessageLoop() {

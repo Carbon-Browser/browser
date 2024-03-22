@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -18,6 +18,8 @@ source_set("download") {
   ]
 
   sources = [
+    "crw_web_view_download.h",
+    "crw_web_view_download.mm",
     "data_url_download_task.h",
     "data_url_download_task.mm",
     "download_controller_impl.h",
@@ -35,8 +37,6 @@ source_set("download") {
   ]
 
   frameworks = [ "UIKit.framework" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("download_cookies") {
@@ -54,12 +54,9 @@ source_set("download_cookies") {
   ]
 
   frameworks = [ "Foundation.framework" ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("download_unittests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   deps = [
     ":download_cookies",
@@ -71,7 +68,6 @@ source_set("download_unittests") {
     "//ios/web/public/download",
     "//ios/web/public/test",
     "//ios/web/public/test:download_test_utils",
-    "//ios/web/public/test:test_fixture",
     "//ios/web/public/test:test_fixture",
     "//ios/web/public/test/fakes",
     "//ios/web/test/fakes",
@@ -91,7 +87,6 @@ source_set("download_unittests") {
 }
 
 source_set("download_inttests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   deps = [
     "//base/test:test_support",

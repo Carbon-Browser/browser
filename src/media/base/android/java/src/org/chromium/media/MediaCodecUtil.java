@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@ import android.media.MediaCodec.CryptoInfo;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecInfo.CodecCapabilities;
 import android.media.MediaCodecInfo.CodecProfileLevel;
-import android.media.MediaCodecInfo.VideoCapabilities;
 import android.media.MediaCodecList;
 import android.media.MediaCrypto;
 import android.media.MediaFormat;
@@ -18,10 +17,10 @@ import android.os.Build;
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.MainDex;
 import org.chromium.base.compat.ApiHelperForN;
 
 import java.lang.annotation.Retention;
@@ -30,17 +29,12 @@ import java.util.Iterator;
 import java.util.Locale;
 import java.util.NoSuchElementException;
 
-/**
- * A collection of MediaCodec utility functions.
- */
+/** A collection of MediaCodec utility functions. */
 @JNINamespace("media")
-@MainDex
 class MediaCodecUtil {
     private static final String TAG = "MediaCodecUtil";
 
-    /**
-     * Information returned by createDecoder()
-     */
+    /** Information returned by createDecoder() */
     public static class CodecCreationInfo {
         public MediaCodec mediaCodec;
         public boolean supportsAdaptivePlayback;
@@ -51,11 +45,11 @@ class MediaCodecUtil {
         public static final String VIDEO_MP4 = "video/mp4";
         public static final String VIDEO_WEBM = "video/webm";
         public static final String VIDEO_H264 = "video/avc";
-        public static final String VIDEO_DOLBY_VISION = "video/dolby-vision";
         public static final String VIDEO_HEVC = "video/hevc";
         public static final String VIDEO_VP8 = "video/x-vnd.on2.vp8";
         public static final String VIDEO_VP9 = "video/x-vnd.on2.vp9";
         public static final String VIDEO_AV1 = "video/av01";
+        public static final String VIDEO_DV = "video/dolby-vision";
         public static final String AUDIO_OPUS = "audio/opus";
     }
 
@@ -125,47 +119,66 @@ class MediaCodecUtil {
         }
     }
 
-    /**
-     * Return true if and only if info is a software codec.
-     */
-    private static boolean isSoftwareCodec(MediaCodecInfo info) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return !info.isHardwareAccelerated();
+    /** Return true if and only if info is a software codec. */
+    public static boolean isSoftwareCodec(MediaCodecInfo info) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (!info.isHardwareAccelerated() || info.isSoftwareOnly()) return true;
+        }
 
         String name = info.getName().toLowerCase(Locale.ROOT);
+
         // This is taken from libstagefright/OMXCodec.cpp for pre codec2.
         if (name.startsWith("omx.google.")) return true;
 
         // Codec2 names sw decoders this way.
         // See hardware/google/av/codec2/vndk/C2Store.cpp.
-        if (name.startsWith("c2.google.") || name.startsWith("c2.android.")) return true;
+        if (name.startsWith("c2.android.")) return true;
+
+        // Some Samsung devices have software codecs which don't report as software.
+        if (name.contains(".sw.dec") || name.contains(".sw.enc")) return true;
 
         return false;
     }
 
     /**
-     * Get a name of default android codec.
+     * Get the name of the first codec matching the provided parameters.
+     *
      * @param mime MIME type of the media.
      * @param direction Whether this is encoder or decoder.
      * @param requireSoftwareCodec Whether we require a software codec.
-     * @return name of the codec.
+     * @param requireHardwareCodec Whether we require a hardware codec.
+     * @return name of the codec or empty string if none exists.
      */
     @CalledByNative
     private static String getDefaultCodecName(
-            String mime, int direction, boolean requireSoftwareCodec) {
+            String mime,
+            int direction,
+            boolean requireSoftwareCodec,
+            boolean requireHardwareCodec) {
+        assert !(requireSoftwareCodec && requireHardwareCodec);
         MediaCodecListHelper codecListHelper = new MediaCodecListHelper();
         for (MediaCodecInfo info : codecListHelper) {
             int codecDirection =
                     info.isEncoder() ? MediaCodecDirection.ENCODER : MediaCodecDirection.DECODER;
             if (codecDirection != direction) continue;
 
-            if (requireSoftwareCodec && !isSoftwareCodec(info)) continue;
+            boolean isSoftware = isSoftwareCodec(info);
+            if (requireSoftwareCodec && !isSoftware) continue;
+            if (requireHardwareCodec && isSoftware) continue;
 
             for (String supportedType : info.getSupportedTypes()) {
                 if (supportedType.equalsIgnoreCase(mime)) return info.getName();
             }
         }
 
-        Log.e(TAG, "Decoder for type %s is not supported on this device", mime);
+        Log.e(
+                TAG,
+                "%s for type %s is not supported on this device [requireSoftware=%b, "
+                        + "requireHardware=%b].",
+                direction == MediaCodecDirection.ENCODER ? "Encoder" : "Decoder",
+                mime,
+                requireSoftwareCodec,
+                requireHardwareCodec);
         return "";
     }
 
@@ -194,11 +207,11 @@ class MediaCodecUtil {
     }
 
     /**
-      * Check if a given MIME type can be decoded.
-      * @param mime MIME type of the media.
-      * @param secure Whether secure decoder is required.
-      * @return true if system is able to decode, or false otherwise.
-      */
+     * Check if a given MIME type can be decoded.
+     * @param mime MIME type of the media.
+     * @param secure Whether secure decoder is required.
+     * @return true if system is able to decode, or false otherwise.
+     */
     @CalledByNative
     private static boolean canDecode(String mime, boolean isSecure) {
         // Not supported on some devices.
@@ -259,33 +272,7 @@ class MediaCodecUtil {
         return true;
     }
 
-    /**
-      * Needed on M and older to get correct information about VP9 support.
-      * @param profileLevels The CodecProfileLevelList to add supported profile levels to.
-      * @param videoCapabilities The MediaCodecInfo.VideoCapabilities used to infer support.
-      */
-    private static void addVp9CodecProfileLevels(CodecProfileLevelList profileLevels,
-            MediaCodecInfo.CodecCapabilities codecCapabilities) {
-        // https://www.webmproject.org/vp9/levels
-        final int[][] bitrateMapping = {
-                {200, 10}, {800, 11}, {1800, 20}, {3600, 21}, {7200, 30}, {12000, 31}, {18000, 40},
-                {30000, 41}, {60000, 50}, {120000, 51}, {180000, 52},
-        };
-        VideoCapabilities videoCapabilities = codecCapabilities.getVideoCapabilities();
-        for (int[] entry : bitrateMapping) {
-            int bitrate = entry[0];
-            int level = entry[1];
-            if (videoCapabilities.getBitrateRange().contains(bitrate)) {
-                // Assume all platforms before N only support VP9 profile 0.
-                profileLevels.addCodecProfileLevel(
-                        VideoCodec.VP9, VideoCodecProfile.VP9PROFILE_PROFILE0, level);
-            }
-        }
-    }
-
-    /**
-      * Return an array of supported codecs and profiles.
-      */
+    /** Return an array of supported codecs and profiles. */
     @CalledByNative
     private static Object[] getSupportedCodecProfileLevels() {
         CodecProfileLevelList profileLevels = new CodecProfileLevelList();
@@ -303,10 +290,6 @@ class MediaCodecUtil {
                 // https://developer.android.com/reference/android/media/MediaCodecInfo.CodecProfileLevel.html
                 try {
                     CodecCapabilities codecCapabilities = info.getCapabilitiesForType(mime);
-                    if (mime.endsWith("vp9") && Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
-                        addVp9CodecProfileLevels(profileLevels, codecCapabilities);
-                        continue;
-                    }
                     for (CodecProfileLevel profileLevel : codecCapabilities.profileLevels) {
                         profileLevels.addCodecProfileLevel(mime, profileLevel);
                     }
@@ -325,7 +308,7 @@ class MediaCodecUtil {
      * @return CodecCreationInfo object
      */
     static CodecCreationInfo createDecoder(String mime, int codecType) {
-        return createDecoder(mime,codecType,null);
+        return createDecoder(mime, codecType, null);
     }
 
     /**
@@ -354,14 +337,16 @@ class MediaCodecUtil {
             // "SECURE" only applies to video decoders.
             // Use MediaCrypto.requiresSecureDecoderComponent() for audio: crbug.com/727918
             if ((mime.startsWith("video") && codecType == CodecType.SECURE)
-                    || (mime.startsWith("audio") && mediaCrypto != null
-                               && mediaCrypto.requiresSecureDecoderComponent(mime))) {
+                    || (mime.startsWith("audio")
+                            && mediaCrypto != null
+                            && mediaCrypto.requiresSecureDecoderComponent(mime))) {
                 // Creating secure codecs is not supported directly on older
                 // versions of Android. Therefore, always get the non-secure
                 // codec name and append ".secure" to get the secure codec name.
                 // TODO(xhwang): Now b/15587335 is fixed, we should have better
                 // API support.
-                String decoderName = getDefaultCodecName(mime, MediaCodecDirection.DECODER, false);
+                String decoderName =
+                        getDefaultCodecName(mime, MediaCodecDirection.DECODER, false, false);
                 if (decoderName.equals("")) return result;
 
                 // To work around an issue that we cannot get the codec info
@@ -378,7 +363,7 @@ class MediaCodecUtil {
             } else {
                 if (codecType == CodecType.SOFTWARE) {
                     String decoderName =
-                            getDefaultCodecName(mime, MediaCodecDirection.DECODER, true);
+                            getDefaultCodecName(mime, MediaCodecDirection.DECODER, true, false);
                     result.mediaCodec = MediaCodec.createByCodecName(decoderName);
                 } else if (mime.equals(MediaFormat.MIMETYPE_AUDIO_RAW)) {
                     result.mediaCodec = MediaCodec.createByCodecName("OMX.google.raw.decoder");
@@ -392,6 +377,26 @@ class MediaCodecUtil {
             Log.e(TAG, "Failed to create MediaCodec: %s, codecType: %d", mime, codecType, e);
             result.mediaCodec = null;
         }
+        return result;
+    }
+
+    /**
+     * Create MediaCodec decoder with the given name.
+     * @param mime MIME type of the media.
+     * @param decoderName name of the decoder.
+     * @return CodecCreationInfo object
+     */
+    static CodecCreationInfo createDecoderByName(String mime, String decoderName) {
+        CodecCreationInfo result = new CodecCreationInfo();
+        try {
+            result.mediaCodec = MediaCodec.createByCodecName(decoderName);
+            result.supportsAdaptivePlayback =
+                    codecSupportsAdaptivePlayback(result.mediaCodec, mime);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to create MediaCodec by decoder name %s", decoderName, e);
+            result.mediaCodec = null;
+        }
+
         return result;
     }
 
@@ -417,7 +422,8 @@ class MediaCodecUtil {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false;
 
                 // The following chipsets have been confirmed by MediaTek to work on P+
-                return Build.HARDWARE.startsWith("mt5599") || Build.HARDWARE.startsWith("mt5895")
+                return Build.HARDWARE.startsWith("mt5599")
+                        || Build.HARDWARE.startsWith("mt5895")
                         || Build.HARDWARE.startsWith("mt8768")
                         || Build.HARDWARE.startsWith("mt5887");
             }
@@ -428,10 +434,6 @@ class MediaCodecUtil {
             }
         } else if (mime.equals(MimeTypes.VIDEO_AV1)) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false;
-        } else if (mime.equals(MimeTypes.VIDEO_DOLBY_VISION)) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-                return false;
-            }
         }
         // *************************************************************
         // *** DO NOT ADD ANY NEW CODECS WITHOUT UPDATING MIME_UTIL. ***
@@ -458,7 +460,7 @@ class MediaCodecUtil {
             MediaCodecInfo.CodecCapabilities capabilities = info.getCapabilitiesForType(mime);
             return (capabilities != null)
                     && capabilities.isFeatureSupported(
-                               MediaCodecInfo.CodecCapabilities.FEATURE_AdaptivePlayback);
+                            MediaCodecInfo.CodecCapabilities.FEATURE_AdaptivePlayback);
         } catch (IllegalArgumentException e) {
             Log.e(TAG, "Cannot retrieve codec information", e);
         }
@@ -466,9 +468,16 @@ class MediaCodecUtil {
     }
 
     // List of supported HW encoders.
-    @IntDef({HWEncoder.QcomVp8, HWEncoder.QcomH264, HWEncoder.ExynosVp8, HWEncoder.ExynosVp9,
-            HWEncoder.ExynosH264, HWEncoder.MediatekH264, HWEncoder.HisiH264,
-            HWEncoder.SpreadtrumH264})
+    @IntDef({
+        HWEncoder.QcomVp8,
+        HWEncoder.QcomH264,
+        HWEncoder.ExynosVp8,
+        HWEncoder.ExynosVp9,
+        HWEncoder.ExynosH264,
+        HWEncoder.MediatekH264,
+        HWEncoder.HisiH264,
+        HWEncoder.SpreadtrumH264
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface HWEncoder {
         int QcomVp8 = 0;
@@ -524,14 +533,12 @@ class MediaCodecUtil {
             case HWEncoder.QcomVp8:
             case HWEncoder.QcomH264:
             case HWEncoder.ExynosH264:
-                return Build.VERSION_CODES.LOLLIPOP;
+            case HWEncoder.HisiH264:
             case HWEncoder.ExynosVp8:
             case HWEncoder.ExynosVp9:
-                return Build.VERSION_CODES.M;
+                return Build.VERSION_CODES.N;
             case HWEncoder.MediatekH264:
                 return Build.VERSION_CODES.O_MR1;
-            case HWEncoder.HisiH264:
-                return Build.VERSION_CODES.N;
             case HWEncoder.SpreadtrumH264:
                 return Build.VERSION_CODES.R;
         }
@@ -599,8 +606,7 @@ class MediaCodecUtil {
         // MediaCodec.setOutputSurface().  http://crbug.com/683401
         // Huawei P9 lite will, eventually, get the decoder into a bad state if SetSurface is called
         // enough times (https://crbug.com/792261).
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && !Build.HARDWARE.equalsIgnoreCase("hi6210sft")
+        return !Build.HARDWARE.equalsIgnoreCase("hi6210sft")
                 && !Build.HARDWARE.equalsIgnoreCase("hi6250");
     }
 
@@ -627,7 +633,8 @@ class MediaCodecUtil {
             }
 
             // Check if this is supported HW encoder.
-            for (@HWEncoder int codecProperties = 0; codecProperties < HWEncoder.NUM_ENTRIES;
+            for (@HWEncoder int codecProperties = 0;
+                    codecProperties < HWEncoder.NUM_ENTRIES;
                     codecProperties++) {
                 if (!mime.equalsIgnoreCase(getMimeForHWEncoder(codecProperties))) continue;
 
@@ -635,7 +642,11 @@ class MediaCodecUtil {
                 if (encoderName.startsWith("omx." + prefix + ".")
                         || encoderName.startsWith("c2." + prefix + ".")) {
                     if (Build.VERSION.SDK_INT < getMinSDKForHWEncoder(codecProperties)) {
-                        Log.w(TAG, "Codec " + encoderName + " is disabled due to SDK version "
+                        Log.w(
+                                TAG,
+                                "Codec "
+                                        + encoderName
+                                        + " is disabled due to SDK version "
                                         + Build.VERSION.SDK_INT);
                         continue;
                     }
@@ -650,25 +661,12 @@ class MediaCodecUtil {
     }
 
     /**
-     * Returns true if and only if a platform with the given SDK API level supports the 'cbcs'
-     * encryption scheme, specifically AES CBC encryption with possibility of pattern encryption.
-     * While 'cbcs' scheme was originally implemented in N, there was a bug (in the
-     * DRM code) which means that it didn't really work properly until N-MR1).
-     */
-    @CalledByNative
-    static boolean platformSupportsCbcsEncryption(int sdk) {
-        return sdk >= Build.VERSION_CODES.N_MR1;
-    }
-
-    /**
      * Sets the encryption pattern value if and only if CryptoInfo.setPattern method is
      * supported.
-     * This method was introduced in Android N. Note that if platformSupportsCbcsEncryption
-     * returns true, then this function will set the pattern.
+     * Note that if platformSupportsCbcsEncryption returns true, then this function will set the
+     * pattern.
      */
     static void setPatternIfSupported(CryptoInfo cryptoInfo, int encrypt, int skip) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            ApiHelperForN.setCryptoInfoPattern(cryptoInfo, encrypt, skip);
-        }
+        ApiHelperForN.setCryptoInfoPattern(cryptoInfo, encrypt, skip);
     }
 }

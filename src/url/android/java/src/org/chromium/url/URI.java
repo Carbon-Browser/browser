@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ import java.net.URISyntaxException;
  */
 @Deprecated
 public class URI extends GURL {
-    /**
-     * Create a new GURL with a java.net.URI API shim.
-     */
+    /** Create a new GURL with a java.net.URI API shim. */
     public URI(String uri) throws URISyntaxException {
         super(uri);
         if (!isValid()) {

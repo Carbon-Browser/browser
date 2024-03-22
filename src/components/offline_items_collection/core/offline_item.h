@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,26 +39,9 @@ struct ContentId {
 
   bool operator==(const ContentId& content_id) const;
 
+  bool operator!=(const ContentId& content_id) const;
+
   bool operator<(const ContentId& content_id) const;
-};
-
-// Contains all the information to schedule the download of the offline item.
-struct OfflineItemSchedule {
- public:
-  OfflineItemSchedule(bool only_on_wifi, absl::optional<base::Time> start_time);
-
-  OfflineItemSchedule(const OfflineItemSchedule& other);
-  OfflineItemSchedule& operator=(const OfflineItemSchedule& other);
-  ~OfflineItemSchedule();
-
-  bool operator==(const OfflineItemSchedule& other) const;
-
-  // Whether the download should only happen on WIFI.
-  bool only_on_wifi;
-
-  // Time to start downloading the offline item. Will be ignored if
-  // |only_on_wifi_| is true.
-  absl::optional<base::Time> start_time;
 };
 
 // A Java counterpart will be generated for this enum.
@@ -200,6 +183,9 @@ struct OfflineItem {
   // Identifies the item's publisher.
   std::string attribution;
 
+  // The URL of document that is considered the referrer for the original URL.
+  GURL referrer_url;
+
   // In Progress Metadata.
   // ---------------------------------------------------------------------------
   // The current state of the OfflineItem.
@@ -235,9 +221,6 @@ struct OfflineItem {
   // Whether the download might be dangerous and will require additional
   // validation from user.
   bool is_dangerous;
-
-  // The criteria for when the offline item is likely to download.
-  absl::optional<OfflineItemSchedule> schedule;
 };
 
 // Implemented for test-only. See test_support/offline_item_test_support.cc.

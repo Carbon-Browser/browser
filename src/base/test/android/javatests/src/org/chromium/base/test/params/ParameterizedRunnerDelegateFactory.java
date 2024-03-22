@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Factory to generate delegate class runners for ParameterizedRunner
- */
+/** Factory to generate delegate class runners for ParameterizedRunner */
 public class ParameterizedRunnerDelegateFactory {
     /**
      * Create a runner that implements ParameterizedRunner and extends BlockJUnit4ClassRunner
@@ -25,16 +23,19 @@ public class ParameterizedRunnerDelegateFactory {
      * @param testClass the TestClass object for current test class
      * @param classParameterSet A parameter set for test constructor arguments
      * @param parameterizedRunnerDelegateClass the parameterized runner delegate class specified
-     *                                         through {@code @UseRunnerDelegate}
+     *     through {@code @UseRunnerDelegate}
      */
-    <T extends ParameterizedRunnerDelegate> T createRunner(TestClass testClass,
-            ParameterSet classParameterSet, Class<T> parameterizedRunnerDelegateClass)
+    <T extends ParameterizedRunnerDelegate> T createRunner(
+            TestClass testClass,
+            ParameterSet classParameterSet,
+            Class<T> parameterizedRunnerDelegateClass)
             throws ParameterizedRunnerDelegateInstantiationException {
         String testMethodPostfix = classParameterSet == null ? null : classParameterSet.getName();
         List<FrameworkMethod> unmodifiableFrameworkMethodList =
                 generateUnmodifiableFrameworkMethodList(testClass, testMethodPostfix);
-        ParameterizedRunnerDelegateCommon delegateCommon = new ParameterizedRunnerDelegateCommon(
-                testClass, classParameterSet, unmodifiableFrameworkMethodList);
+        ParameterizedRunnerDelegateCommon delegateCommon =
+                new ParameterizedRunnerDelegateCommon(
+                        testClass, classParameterSet, unmodifiableFrameworkMethodList);
         try {
             return parameterizedRunnerDelegateClass
                     .getDeclaredConstructor(Class.class, ParameterizedRunnerDelegateCommon.class)
@@ -81,8 +82,10 @@ public class ParameterizedRunnerDelegateFactory {
     public static class ParameterizedRunnerDelegateInstantiationException extends Exception {
         private ParameterizedRunnerDelegateInstantiationException(
                 String runnerDelegateClass, Exception e) {
-            super(String.format("Current class runner delegate %s can not be instantiated.",
-                          runnerDelegateClass),
+            super(
+                    String.format(
+                            "Current class runner delegate %s can not be instantiated.",
+                            runnerDelegateClass),
                     e);
         }
     }

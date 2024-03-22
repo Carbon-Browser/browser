@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,17 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/view_class_properties.h"
+
+using SidePanelWebUIViewT_ReadingListUI = SidePanelWebUIViewT<ReadingListUI>;
+BEGIN_TEMPLATE_METADATA(SidePanelWebUIViewT_ReadingListUI, SidePanelWebUIViewT)
+END_METADATA
 
 ReadLaterSidePanelWebView::ReadLaterSidePanelWebView(
     Browser* browser,
     base::RepeatingClosure close_cb)
     : SidePanelWebUIViewT(
-          browser,
           base::BindRepeating(
               &ReadLaterSidePanelWebView::UpdateActiveURLToActiveTab,
               base::Unretained(this)),
@@ -72,3 +76,6 @@ void ReadLaterSidePanelWebView::UpdateActiveURL(
 void ReadLaterSidePanelWebView::UpdateActiveURLToActiveTab() {
   UpdateActiveURL(browser_->tab_strip_model()->GetActiveWebContents());
 }
+
+BEGIN_METADATA(ReadLaterSidePanelWebView)
+END_METADATA

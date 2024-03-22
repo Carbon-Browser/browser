@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,65 +7,62 @@ import("//chrome/android/modules/buildflags.gni")
 import("//chrome/common/features.gni")
 import("//device/vr/buildflags/buildflags.gni")
 import("//testing/test.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 assert(enable_vr)
 
 static_library("vr_android") {
   defines = []
-
   sources = [
-    "android_ui_gesture_target.cc",
-    "android_ui_gesture_target.h",
-    "android_vsync_helper.cc",
-    "android_vsync_helper.h",
-    "autocomplete_controller.cc",
-    "autocomplete_controller.h",
-    "browser_renderer_factory.cc",
-    "browser_renderer_factory.h",
-    "cardboard_input_delegate.cc",
-    "cardboard_input_delegate.h",
-    "gl_browser_interface.h",
-    "gvr_graphics_delegate.cc",
-    "gvr_graphics_delegate.h",
-    "gvr_input_delegate.cc",
-    "gvr_input_delegate.h",
-    "gvr_install_helper.cc",
-    "gvr_install_helper.h",
-    "gvr_keyboard_delegate.cc",
-    "gvr_keyboard_delegate.h",
-    "gvr_keyboard_shim.cc",
-    "gvr_scheduler_delegate.cc",
-    "gvr_scheduler_delegate.h",
-    "gvr_util.cc",
-    "gvr_util.h",
-    "metrics_util_android.cc",
-    "metrics_util_android.h",
-    "register_gvr_jni.cc",
-    "register_gvr_jni.h",
-    "register_jni.h",
-    "scoped_gpu_trace.cc",
-    "scoped_gpu_trace.h",
-    "vr_controller.cc",
-    "vr_controller.h",
-    "vr_gl_thread.cc",
-    "vr_gl_thread.h",
-    "vr_input_connection.cc",
-    "vr_input_connection.h",
     "vr_module_provider.cc",
     "vr_module_provider.h",
-    "vr_shell.cc",
-    "vr_shell.h",
-    "vr_shell_delegate.cc",
-    "vr_shell_delegate.h",
-    "vrcore_install_helper.cc",
-    "vrcore_install_helper.h",
   ]
+
+  if (enable_gvr_services) {
+    sources += [
+      "android_vsync_helper.cc",
+      "android_vsync_helper.h",
+      "browser_renderer_factory.cc",
+      "browser_renderer_factory.h",
+      "cardboard_input_delegate.cc",
+      "cardboard_input_delegate.h",
+      "gl_browser_interface.h",
+      "gvr_graphics_delegate.cc",
+      "gvr_graphics_delegate.h",
+      "gvr_input_delegate.cc",
+      "gvr_input_delegate.h",
+      "gvr_install_helper.cc",
+      "gvr_install_helper.h",
+      "gvr_scheduler_delegate.cc",
+      "gvr_scheduler_delegate.h",
+      "gvr_util.cc",
+      "gvr_util.h",
+      "metrics_util_android.cc",
+      "metrics_util_android.h",
+      "register_gvr_jni.cc",
+      "register_gvr_jni.h",
+      "register_jni.h",
+      "scoped_gpu_trace.cc",
+      "scoped_gpu_trace.h",
+      "vr_controller.cc",
+      "vr_controller.h",
+      "vr_gl_thread.cc",
+      "vr_gl_thread.h",
+      "vr_shell.cc",
+      "vr_shell.h",
+      "vr_shell_delegate.cc",
+      "vr_shell_delegate.h",
+      "vrcore_install_helper.cc",
+      "vrcore_install_helper.h",
+    ]
+  }
 
   deps = [
     ":ui_factory",
     "//base",
     "//cc",
-    "//chrome/android/features/vr:jni_headers",
+    "//chrome/android:chrome_jni_headers",
+    "//chrome/android/features/vr:split_jni_headers",
     "//chrome/browser:browser_process",
     "//chrome/browser/profiles:profile",
     "//chrome/browser/ui",
@@ -89,10 +86,10 @@ static_library("vr_android") {
     "//device/vr:vr_util",
     "//device/vr/android:vr_android",
     "//device/vr/buildflags:buildflags",
+    "//gpu/command_buffer/service:gles2",
     "//services/device/public/mojom",
     "//services/metrics/public/cpp:ukm_builders",
     "//services/viz/public/cpp/gpu",
-    "//third_party/gvr-android-sdk:gvr_shim",
     "//ui/android",
     "//ui/base",
     "//ui/display",
@@ -111,10 +108,10 @@ static_library("vr_android") {
 
   libs = [ "android" ]
 
-  configs += [
-    "//third_party/gvr-android-keyboard:kb_config",
-    "//third_party/gvr-android-sdk:libgvr_config",
-  ]
+  if (enable_gvr_services) {
+    deps += [ "//third_party/gvr-android-sdk:gvr_shim" ]
+    configs += [ "//third_party/gvr-android-sdk:libgvr_config" ]
+  }
 }
 
 # The VR UI module factory interface.
@@ -170,12 +167,9 @@ if (enable_arcore) {
   }
 }
 
-if (current_toolchain == default_toolchain) {
-  generate_jni_registration("jni_registration") {
-    targets =
-        [ "//chrome/android:chrome_modern_public_bundle__vr_bundle_module" ]
-    header_output = "$target_gen_dir/${target_name}.h"
-    namespace = "vr"
+if (enable_cardboard) {
+  generate_jni("vr_jni_headers") {
+    sources = [ "//chrome/android/java/src/org/chromium/chrome/browser/vr/VrCompositorDelegateProviderImpl.java" ]
   }
 }
 
@@ -188,7 +182,7 @@ test("vr_android_unittests") {
     "arcore_device/arcore_device_unittest.cc",
     "arcore_device/fake_arcore.cc",
     "arcore_device/fake_arcore.h",
-    "register_jni.cc",
+    "register_jni_monochrome.cc",
     "test/ar_test_suite.cc",
     "test/ar_test_suite.h",
     "test/run_all_unittests.cc",
@@ -197,7 +191,6 @@ test("vr_android_unittests") {
   libs = [ "android" ]
 
   deps = [
-    ":jni_registration",
     ":test_support",
     ":vr_android",
     "//base/test:test_support",
@@ -205,7 +198,7 @@ test("vr_android_unittests") {
     "//components/translate/core/language_detection:language_detection",
     "//components/webxr:webxr",
     "//device/vr:vr_fakes",
-    "//device/vr/android/arcore",
+    "//device/vr/android:vr_android",
     "//device/vr/public/mojom:isolated_xr_service",
     "//mojo/core/embedder",
     "//mojo/public/cpp/bindings",
@@ -217,4 +210,8 @@ test("vr_android_unittests") {
     "//ui/android:ui_java",  # TODO: Remove once http://crbug.com/951419 is
                              # fixed!
   ]
+
+  if (enable_arcore) {
+    deps += [ "//device/vr/android/arcore" ]
+  }
 }

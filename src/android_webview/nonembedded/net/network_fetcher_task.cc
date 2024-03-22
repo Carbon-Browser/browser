@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@
 #include "android_webview/nonembedded/nonembedded_jni_headers/NetworkFetcherTask_jni.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"

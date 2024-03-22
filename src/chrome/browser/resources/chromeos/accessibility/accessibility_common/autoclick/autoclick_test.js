@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ AutoclickE2ETest = class extends E2ETestBase {
   }
 
   async setUpDeferred() {
-    this.mockAccessibilityPrivate = MockAccessibilityPrivate;
+    this.mockAccessibilityPrivate = new MockAccessibilityPrivate();
     chrome.accessibilityPrivate = this.mockAccessibilityPrivate;
 
     window.RoleType = chrome.automation.RoleType;
@@ -44,8 +44,8 @@ AutoclickE2ETest = class extends E2ETestBase {
     GEN(`
 #include "ash/accessibility/accessibility_delegate.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
     `);
   }

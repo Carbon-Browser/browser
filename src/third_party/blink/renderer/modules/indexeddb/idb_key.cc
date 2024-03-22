@@ -28,8 +28,6 @@
 #include <algorithm>
 #include <memory>
 
-#include "third_party/blink/public/common/indexeddb/web_idb_types.h"
-
 namespace blink {
 
 namespace {
@@ -201,7 +199,7 @@ Vector<std::unique_ptr<IDBKey>> IDBKey::ToMultiEntryArray(
   }
 
   // Remove duplicates using std::sort/std::unique rather than a hashtable to
-  // avoid the complexity of implementing DefaultHash<IDBKey>.
+  // avoid the complexity of implementing HashTraits<IDBKey>.
   std::sort(
       result.begin(), result.end(),
       [](const std::unique_ptr<IDBKey>& a, const std::unique_ptr<IDBKey>& b) {

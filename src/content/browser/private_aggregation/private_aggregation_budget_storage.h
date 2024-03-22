@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -45,6 +45,16 @@ class PrivateAggregationBudgets;
 // initialization; after that point, it has no specific lifetime requirements.
 class CONTENT_EXPORT PrivateAggregationBudgetStorage {
  public:
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class InitStatus {
+    kSuccess = 0,
+    kFailedToOpenDbInMemory = 1,
+    kFailedToOpenDbFile = 2,
+    kFailedToCreateDir = 3,
+    kMaxValue = kFailedToCreateDir,
+  };
+
   // Constructs and asynchronously initializes a new
   // `PrivateAggregationBudgetStorage`, including posting a task to
   // `db_task_runner` to initialize the underlying database on its sequence.
@@ -108,7 +118,8 @@ class CONTENT_EXPORT PrivateAggregationBudgetStorage {
 
   scoped_refptr<sqlite_proto::ProtoTableManager> table_manager_;
 
-  sqlite_proto::KeyValueTable<proto::PrivateAggregationBudgets> budgets_table_;
+  std::unique_ptr<sqlite_proto::KeyValueTable<proto::PrivateAggregationBudgets>>
+      budgets_table_;
   sqlite_proto::KeyValueData<proto::PrivateAggregationBudgets> budgets_data_;
 
   // Keep a handle on the DB task runner so that the destructor can use the DB

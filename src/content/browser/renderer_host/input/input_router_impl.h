@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,9 @@
 #include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "cc/input/touch_action.h"
 #include "content/browser/renderer_host/input/fling_scheduler.h"
-#include "content/browser/renderer_host/input/gesture_event_queue.h"
 #include "content/browser/renderer_host/input/input_router.h"
 #include "content/browser/renderer_host/input/input_router_client.h"
 #include "content/browser/renderer_host/input/mouse_wheel_event_queue.h"
@@ -24,8 +24,9 @@
 #include "content/browser/renderer_host/input/touchpad_pinch_event_queue.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/common/content_export.h"
+#include "content/common/input/gesture_event_queue.h"
 #include "content/common/input/input_event_stream_validator.h"
-#include "content/public/browser/native_web_keyboard_event.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
@@ -47,7 +48,8 @@ class CONTENT_EXPORT InputRouterImplClient : public InputRouterClient {
   virtual void OnImeCancelComposition() = 0;
   virtual void OnImeCompositionRangeChanged(
       const gfx::Range& range,
-      const std::vector<gfx::Rect>& bounds) = 0;
+      const absl::optional<std::vector<gfx::Rect>>& character_bounds,
+      const absl::optional<std::vector<gfx::Rect>>& line_bounds) = 0;
   virtual RenderWidgetHostViewBase* GetRenderWidgetHostViewBase() = 0;
   virtual void OnStartStylusWriting() = 0;
 };
@@ -101,7 +103,8 @@ class CONTENT_EXPORT InputRouterImpl
   void DidStartScrollingViewport() override;
   void ImeCompositionRangeChanged(
       const gfx::Range& range,
-      const std::vector<gfx::Rect>& bounds) override;
+      const absl::optional<std::vector<gfx::Rect>>& character_bounds,
+      const absl::optional<std::vector<gfx::Rect>>& line_bounds) override;
   void SetMouseCapture(bool capture) override;
   void RequestMouseLock(bool from_user_gesture,
                         bool unadjusted_movement,
@@ -152,7 +155,8 @@ class CONTENT_EXPORT InputRouterImpl
   void OnGestureEventAck(
       const GestureEventWithLatencyInfo& event,
       blink::mojom::InputEventResultSource ack_source,
-      blink::mojom::InputEventResultState ack_result) override;
+      blink::mojom::InputEventResultState ack_result,
+      blink::mojom::ScrollResultDataPtr scroll_result_data) override;
 
   // FlingControllerEventSenderClient
   void SendGeneratedWheelEvent(
@@ -193,32 +197,38 @@ class CONTENT_EXPORT InputRouterImpl
       const ui::LatencyInfo& latency_info,
       blink::mojom::WidgetInputHandler::DispatchEventCallback callback);
 
-  void KeyboardEventHandled(const NativeWebKeyboardEventWithLatencyInfo& event,
-                            KeyboardEventCallback event_result_callback,
-                            blink::mojom::InputEventResultSource source,
-                            const ui::LatencyInfo& latency,
-                            blink::mojom::InputEventResultState state,
-                            blink::mojom::DidOverscrollParamsPtr overscroll,
-                            blink::mojom::TouchActionOptionalPtr touch_action);
+  void KeyboardEventHandled(
+      const NativeWebKeyboardEventWithLatencyInfo& event,
+      KeyboardEventCallback event_result_callback,
+      blink::mojom::InputEventResultSource source,
+      const ui::LatencyInfo& latency,
+      blink::mojom::InputEventResultState state,
+      blink::mojom::DidOverscrollParamsPtr overscroll,
+      blink::mojom::TouchActionOptionalPtr touch_action,
+      blink::mojom::ScrollResultDataPtr scroll_result_data);
   void MouseEventHandled(const MouseEventWithLatencyInfo& event,
                          MouseEventCallback event_result_callback,
                          blink::mojom::InputEventResultSource source,
                          const ui::LatencyInfo& latency,
                          blink::mojom::InputEventResultState state,
                          blink::mojom::DidOverscrollParamsPtr overscroll,
-                         blink::mojom::TouchActionOptionalPtr touch_action);
+                         blink::mojom::TouchActionOptionalPtr touch_action,
+                         blink::mojom::ScrollResultDataPtr scroll_result_data);
   void TouchEventHandled(const TouchEventWithLatencyInfo& touch_event,
                          blink::mojom::InputEventResultSource source,
                          const ui::LatencyInfo& latency,
                          blink::mojom::InputEventResultState state,
                          blink::mojom::DidOverscrollParamsPtr overscroll,
-                         blink::mojom::TouchActionOptionalPtr touch_action);
-  void GestureEventHandled(const GestureEventWithLatencyInfo& gesture_event,
-                           blink::mojom::InputEventResultSource source,
-                           const ui::LatencyInfo& latency,
-                           blink::mojom::InputEventResultState state,
-                           blink::mojom::DidOverscrollParamsPtr overscroll,
-                           blink::mojom::TouchActionOptionalPtr touch_action);
+                         blink::mojom::TouchActionOptionalPtr touch_action,
+                         blink::mojom::ScrollResultDataPtr scroll_result_data);
+  void GestureEventHandled(
+      const GestureEventWithLatencyInfo& gesture_event,
+      blink::mojom::InputEventResultSource source,
+      const ui::LatencyInfo& latency,
+      blink::mojom::InputEventResultState state,
+      blink::mojom::DidOverscrollParamsPtr overscroll,
+      blink::mojom::TouchActionOptionalPtr touch_action,
+      blink::mojom::ScrollResultDataPtr scroll_result_data);
   void MouseWheelEventHandled(
       const MouseWheelEventWithLatencyInfo& event,
       MouseWheelEventQueueClient::MouseWheelEventHandledCallback callback,
@@ -226,7 +236,8 @@ class CONTENT_EXPORT InputRouterImpl
       const ui::LatencyInfo& latency,
       blink::mojom::InputEventResultState state,
       blink::mojom::DidOverscrollParamsPtr overscroll,
-      blink::mojom::TouchActionOptionalPtr touch_action);
+      blink::mojom::TouchActionOptionalPtr touch_action,
+      blink::mojom::ScrollResultDataPtr scroll_result_data);
 
   // Called when a touch timeout-affecting bit has changed, in turn toggling the
   // touch ack timeout feature of the |touch_event_queue_| as appropriate. Input
@@ -251,9 +262,8 @@ class CONTENT_EXPORT InputRouterImpl
   // Whether stylus writing has started.
   bool stylus_writing_started_ = false;
 
-  // Stores the pan action that can take place like stylus writing, moving
-  // cursor or scrolling. This is sent when the pointer is hovering and set from
-  // the main thread.
+  // Stores the pan action possible for element under hovering pointer. Ex:
+  // stylus writing, moving cursor or scrolling. This is set from main thread.
   blink::mojom::PanAction pan_action_ = blink::mojom::PanAction::kNone;
 
   MouseWheelEventQueue wheel_event_queue_;

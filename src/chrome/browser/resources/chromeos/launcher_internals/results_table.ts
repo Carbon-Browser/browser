@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,8 @@ export class LauncherResultsTableElement extends PolymerElement {
 
   clearResults() {
     this.results.clear();
-    this.$.resultsSection.innerHTML = '';
+    this.$.resultsSection.innerHTML =
+        window.trustedTypes ? (window.trustedTypes.emptyHTML) : '';
     for (const cell of this.headerCells.values()) {
       this.$.headerRow.removeChild(cell);
     }
@@ -100,7 +101,8 @@ export class LauncherResultsTableElement extends PolymerElement {
     }
 
     // Clear and repopulate the results table.
-    this.$.resultsSection.innerHTML = '';
+    this.$.resultsSection.innerHTML =
+        window.trustedTypes ? (window.trustedTypes.emptyHTML) : '';
     for (const result of sortedResults) {
       const newRow = this.$.resultsSection.insertRow();
       newRow.addEventListener('click', (e: Event) => this.toggleRowSelected(e));

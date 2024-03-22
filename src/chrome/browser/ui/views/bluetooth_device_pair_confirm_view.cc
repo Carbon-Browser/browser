@@ -1,11 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/bluetooth_device_pair_confirm_view.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "chrome/browser/ui/bluetooth/bluetooth_dialogs.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -19,12 +20,10 @@
 
 using ::content::BluetoothDelegate;
 
-namespace chrome {
-
 void ShowBluetoothDevicePairConfirmDialog(
     content::WebContents* web_contents,
     const std::u16string& device_identifier,
-    const absl::optional<std::u16string> pin,
+    const absl::optional<std::u16string>& pin,
     BluetoothDelegate::PairPromptCallback close_callback) {
   // This dialog owns itself. DialogDelegateView will delete |dialog| instance.
   auto* dialog = new BluetoothDevicePairConfirmView(device_identifier, pin,
@@ -32,11 +31,9 @@ void ShowBluetoothDevicePairConfirmDialog(
   constrained_window::ShowWebModalDialogViews(dialog, web_contents);
 }
 
-}  // namespace chrome
-
 BluetoothDevicePairConfirmView::BluetoothDevicePairConfirmView(
     const std::u16string& device_identifier,
-    const absl::optional<std::u16string> pin,
+    const absl::optional<std::u16string>& pin,
     BluetoothDelegate::PairPromptCallback close_callback)
     : close_callback_(std::move(close_callback)),
       display_pin_(pin.has_value()) {
@@ -61,7 +58,7 @@ BluetoothDevicePairConfirmView::~BluetoothDevicePairConfirmView() = default;
 
 void BluetoothDevicePairConfirmView::InitControls(
     const std::u16string& device_identifier,
-    const absl::optional<std::u16string> pin) {
+    const absl::optional<std::u16string>& pin) {
   //
   // Create the following layout:
   //
@@ -136,6 +133,7 @@ void BluetoothDevicePairConfirmView::InitControls(
                   IDS_BLUETOOTH_DEVICE_PAIR_CONFIRM_LABEL, device_identifier));
 
     prompt_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+    prompt_label->SetVerticalAlignment(gfx::ALIGN_TOP);
     prompt_label->SetMultiLine(true);
     contents_wrapper->AddChildView(std::move(prompt_label));
   }
@@ -144,7 +142,7 @@ void BluetoothDevicePairConfirmView::InitControls(
 }
 
 gfx::Size BluetoothDevicePairConfirmView::CalculatePreferredSize() const {
-  constexpr int kDialogWidth = 360;
+  constexpr int kDialogWidth = 440;
   int height =
       GetLayoutManager()->GetPreferredHeightForWidth(this, kDialogWidth);
   return gfx::Size(kDialogWidth, height);

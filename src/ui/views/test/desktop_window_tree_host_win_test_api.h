@@ -1,9 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_TEST_DESKTOP_WINDOW_TREE_HOST_WIN_TEST_API_H_
 #define UI_VIEWS_TEST_DESKTOP_WINDOW_TREE_HOST_WIN_TEST_API_H_
+
+#include <windows.h>
 
 #include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/point.h"
@@ -35,6 +37,10 @@ class DesktopWindowTreeHostWinTestApi {
   gfx::NativeViewAccessible GetNativeViewAccessible();
 
   HWNDMessageHandler* GetHwndMessageHandler();
+
+  LRESULT SimulatePenEventForTesting(UINT message,
+                                     UINT32 pointer_id,
+                                     POINTER_PEN_INFO pointer_pen_info);
 
   void SetMockCursorPositionForTesting(const gfx::Point& position);
 

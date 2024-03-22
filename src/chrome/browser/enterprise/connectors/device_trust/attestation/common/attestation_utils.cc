@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,13 +18,13 @@ namespace enterprise_connectors {
 
 std::string ProtobufChallengeToJsonChallenge(
     const std::string& challenge_response) {
-  base::Value signed_data(base::Value::Type::DICTIONARY);
+  base::Value::Dict signed_data;
 
   std::string encoded;
   base::Base64Encode(challenge_response, &encoded);
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetKey("challengeResponse", base::Value(encoded));
+  base::Value::Dict dict;
+  dict.Set("challengeResponse", base::Value(encoded));
 
   std::string json;
   base::JSONWriter::Write(dict, &json);

@@ -1,11 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/content/policy_blocklist_navigation_throttle.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "components/policy/content/policy_blocklist_service.h"
 #include "components/policy/core/browser/url_blocklist_manager.h"
 #include "components/policy/core/browser/url_blocklist_policy_handler.h"

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/unguessable_token.h"
 #include "cc/base/math_util.h"
@@ -33,6 +33,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/hdr_metadata.h"
+#include "ui/gfx/video_types.h"
 
 using testing::ElementsAreArray;
 
@@ -46,42 +47,55 @@ ResourceId NextId(ResourceId id) {
 }
 
 TEST(DrawQuadTest, CopySharedQuadState) {
-  gfx::Transform quad_transform = gfx::Transform(1.0, 0.0, 0.5, 1.0, 0.5, 0.0);
-  gfx::Rect layer_rect(26, 28);
-  gfx::Rect visible_layer_rect(10, 12, 14, 16);
-  gfx::Rect clip_rect(19, 21, 23, 25);
-  bool are_contents_opaque = true;
-  float opacity = 0.25f;
-  SkBlendMode blend_mode = SkBlendMode::kMultiply;
-  int sorting_context_id = 65536;
+  constexpr gfx::Transform quad_transform =
+      gfx::Transform::Affine(1.0, 0.5, 0.0, 1.0, 0.5, 0.0);
+  constexpr gfx::Rect layer_rect(26, 28);
+  const gfx::MaskFilterInfo mask_filter_rounded_corners(
+      gfx::RectF(5, 5), gfx::RoundedCornersF(2.5), gfx::LinearGradient());
+  constexpr gfx::Rect visible_layer_rect(10, 12, 14, 16);
+  constexpr gfx::Rect clip_rect(19, 21, 23, 25);
+  constexpr bool are_contents_opaque = true;
+  constexpr float opacity = 0.25f;
+  constexpr SkBlendMode blend_mode = SkBlendMode::kMultiply;
+  constexpr int sorting_context_id = 65536;
+  constexpr uint32_t layer_id = 0u;
+  constexpr bool is_fast_rounded_corner = true;
 
   auto state = std::make_unique<SharedQuadState>();
   state->SetAll(quad_transform, layer_rect, visible_layer_rect,
-                gfx::MaskFilterInfo(), clip_rect, are_contents_opaque, opacity,
-                blend_mode, sorting_context_id);
+                mask_filter_rounded_corners, clip_rect, are_contents_opaque,
+                opacity, blend_mode, sorting_context_id, layer_id,
+                is_fast_rounded_corner);
 
   auto copy = std::make_unique<SharedQuadState>(*state);
   EXPECT_EQ(quad_transform, copy->quad_to_target_transform);
   EXPECT_EQ(visible_layer_rect, copy->visible_quad_layer_rect);
+  EXPECT_EQ(mask_filter_rounded_corners, copy->mask_filter_info);
   EXPECT_EQ(opacity, copy->opacity);
   EXPECT_EQ(clip_rect, copy->clip_rect);
   EXPECT_EQ(are_contents_opaque, copy->are_contents_opaque);
   EXPECT_EQ(blend_mode, copy->blend_mode);
+  EXPECT_EQ(layer_id, copy->layer_id);
+  EXPECT_EQ(is_fast_rounded_corner, copy->is_fast_rounded_corner);
 }
 
 SharedQuadState* CreateSharedQuadState(CompositorRenderPass* render_pass) {
-  gfx::Transform quad_transform = gfx::Transform(1.0, 0.0, 0.5, 1.0, 0.5, 0.0);
-  gfx::Rect layer_rect(26, 28);
-  gfx::Rect visible_layer_rect(10, 12, 14, 16);
-  bool are_contents_opaque = true;
-  float opacity = 1.f;
-  int sorting_context_id = 65536;
-  SkBlendMode blend_mode = SkBlendMode::kSrcOver;
+  constexpr gfx::Transform quad_transform =
+      gfx::Transform::Affine(1.0, 0.5, 0.0, 1.0, 0.5, 0.0);
+  constexpr gfx::Rect layer_rect(26, 28);
+  constexpr gfx::Rect visible_layer_rect(10, 12, 14, 16);
+  constexpr bool are_contents_opaque = true;
+  constexpr float opacity = 1.f;
+  constexpr int sorting_context_id = 65536;
+  constexpr SkBlendMode blend_mode = SkBlendMode::kSrcOver;
+  constexpr bool is_fast_rounded_corner = false;
+  constexpr uint32_t layer_id = 0u;
 
   SharedQuadState* state = render_pass->CreateAndAppendSharedQuadState();
   state->SetAll(quad_transform, layer_rect, visible_layer_rect,
                 gfx::MaskFilterInfo(), absl::nullopt, are_contents_opaque,
-                opacity, blend_mode, sorting_context_id);
+                opacity, blend_mode, sorting_context_id, layer_id,
+                is_fast_rounded_corner);
   return state;
 }
 
@@ -96,6 +110,9 @@ void CompareSharedQuadState(const SharedQuadState* source_sqs,
   EXPECT_EQ(source_sqs->opacity, copy_sqs->opacity);
   EXPECT_EQ(source_sqs->blend_mode, copy_sqs->blend_mode);
   EXPECT_EQ(source_sqs->sorting_context_id, copy_sqs->sorting_context_id);
+  EXPECT_EQ(source_sqs->mask_filter_info, copy_sqs->mask_filter_info);
+  EXPECT_EQ(source_sqs->is_fast_rounded_corner,
+            copy_sqs->is_fast_rounded_corner);
 }
 
 void CompareDrawQuad(DrawQuad* quad, DrawQuad* copy) {
@@ -193,7 +210,7 @@ TEST(DrawQuadTest, CopyRenderPassDrawQuad) {
   ResourceId mask_resource_id(78);
   gfx::RectF mask_uv_rect(0, 0, 33.f, 19.f);
   gfx::Size mask_texture_size(128, 134);
-  gfx::Vector2dF filters_scale;
+  gfx::Vector2dF filters_scale(1.0f, 1.0f);
   gfx::PointF filters_origin;
   gfx::RectF tex_coord_rect(1, 1, 255, 254);
   bool force_anti_aliasing_off = false;
@@ -374,10 +391,9 @@ TEST(DrawQuadTest, CopyVideoHoleDrawQuad) {
 TEST(DrawQuadTest, CopyYUVVideoDrawQuad) {
   gfx::Rect visible_rect(40, 50, 30, 20);
   bool blending = true;
-  gfx::RectF ya_tex_coord_rect(40, 50, 30, 20);
-  gfx::RectF uv_tex_coord_rect(20, 25, 15, 10);
-  gfx::Size ya_tex_size(32, 68);
-  gfx::Size uv_tex_size(41, 51);
+  gfx::Size coded_size(32, 68);
+  gfx::Rect video_frame_visible_rect(4, 8, 32, 68);
+  gfx::Size uv_sample_size(2, 2);
   ResourceId y_plane_resource_id(45);
   ResourceId u_plane_resource_id(532);
   ResourceId v_plane_resource_id(4);
@@ -388,24 +404,27 @@ TEST(DrawQuadTest, CopyYUVVideoDrawQuad) {
   gfx::ProtectedVideoType protected_video_type =
       gfx::ProtectedVideoType::kHardwareProtected;
   gfx::ColorSpace video_color_space = gfx::ColorSpace::CreateJpeg();
-  gfx::HDRMetadata hdr_metadata = gfx::HDRMetadata();
-  hdr_metadata.max_content_light_level = 1000;
-  hdr_metadata.max_frame_average_light_level = 100;
+  gfx::HDRMetadata hdr_metadata =
+      gfx::HDRMetadata(gfx::HdrMetadataCta861_3(1000, 100));
 
   CREATE_SHARED_STATE();
 
-  CREATE_QUAD_NEW(YUVVideoDrawQuad, visible_rect, blending, ya_tex_coord_rect,
-                  uv_tex_coord_rect, ya_tex_size, uv_tex_size,
-                  y_plane_resource_id, u_plane_resource_id, v_plane_resource_id,
-                  a_plane_resource_id, video_color_space, resource_offset,
-                  resource_multiplier, bits_per_channel);
+  CREATE_QUAD_NEW(YUVVideoDrawQuad, visible_rect, blending, coded_size,
+                  video_frame_visible_rect, uv_sample_size, y_plane_resource_id,
+                  u_plane_resource_id, v_plane_resource_id, a_plane_resource_id,
+                  video_color_space, resource_offset, resource_multiplier,
+                  bits_per_channel, protected_video_type, hdr_metadata);
   EXPECT_EQ(DrawQuad::Material::kYuvVideoContent, copy_quad->material);
   EXPECT_EQ(visible_rect, copy_quad->visible_rect);
   EXPECT_EQ(blending, copy_quad->needs_blending);
-  EXPECT_EQ(ya_tex_coord_rect, copy_quad->ya_tex_coord_rect);
-  EXPECT_EQ(uv_tex_coord_rect, copy_quad->uv_tex_coord_rect);
-  EXPECT_EQ(ya_tex_size, copy_quad->ya_tex_size);
-  EXPECT_EQ(uv_tex_size, copy_quad->uv_tex_size);
+  EXPECT_EQ(coded_size, copy_quad->coded_size);
+  EXPECT_EQ(video_frame_visible_rect, copy_quad->video_visible_rect);
+  EXPECT_EQ(uv_sample_size.width(), copy_quad->u_scale);
+  EXPECT_EQ(uv_sample_size.height(), copy_quad->v_scale);
+  EXPECT_EQ(gfx::RectF(4, 8, 32, 68), copy_quad->ya_tex_coord_rect());
+  EXPECT_EQ(gfx::RectF(2, 4, 16, 34), copy_quad->uv_tex_coord_rect());
+  EXPECT_EQ(gfx::Size(32, 68), copy_quad->ya_tex_size());
+  EXPECT_EQ(gfx::Size(16, 34), copy_quad->uv_tex_size());
   EXPECT_EQ(y_plane_resource_id, copy_quad->y_plane_resource_id());
   EXPECT_EQ(u_plane_resource_id, copy_quad->u_plane_resource_id());
   EXPECT_EQ(v_plane_resource_id, copy_quad->v_plane_resource_id());
@@ -413,19 +432,19 @@ TEST(DrawQuadTest, CopyYUVVideoDrawQuad) {
   EXPECT_EQ(resource_offset, copy_quad->resource_offset);
   EXPECT_EQ(resource_multiplier, copy_quad->resource_multiplier);
   EXPECT_EQ(bits_per_channel, copy_quad->bits_per_channel);
-  EXPECT_EQ(gfx::ProtectedVideoType::kClear, copy_quad->protected_video_type);
-  EXPECT_EQ(absl::nullopt, copy_quad->hdr_metadata);
+  EXPECT_EQ(protected_video_type, copy_quad->protected_video_type);
+  EXPECT_EQ(hdr_metadata, copy_quad->hdr_metadata);
 
-  CREATE_QUAD_ALL(YUVVideoDrawQuad, ya_tex_coord_rect, uv_tex_coord_rect,
-                  ya_tex_size, uv_tex_size, y_plane_resource_id,
-                  u_plane_resource_id, v_plane_resource_id, a_plane_resource_id,
-                  video_color_space, resource_offset, resource_multiplier,
-                  bits_per_channel, protected_video_type, hdr_metadata);
+  CREATE_QUAD_ALL(YUVVideoDrawQuad, coded_size, video_frame_visible_rect,
+                  uv_sample_size, y_plane_resource_id, u_plane_resource_id,
+                  v_plane_resource_id, a_plane_resource_id, video_color_space,
+                  resource_offset, resource_multiplier, bits_per_channel,
+                  protected_video_type, hdr_metadata);
   EXPECT_EQ(DrawQuad::Material::kYuvVideoContent, copy_quad->material);
-  EXPECT_EQ(ya_tex_coord_rect, copy_quad->ya_tex_coord_rect);
-  EXPECT_EQ(uv_tex_coord_rect, copy_quad->uv_tex_coord_rect);
-  EXPECT_EQ(ya_tex_size, copy_quad->ya_tex_size);
-  EXPECT_EQ(uv_tex_size, copy_quad->uv_tex_size);
+  EXPECT_EQ(gfx::RectF(4, 8, 32, 68), copy_quad->ya_tex_coord_rect());
+  EXPECT_EQ(gfx::RectF(2, 4, 16, 34), copy_quad->uv_tex_coord_rect());
+  EXPECT_EQ(gfx::Size(32, 68), copy_quad->ya_tex_size());
+  EXPECT_EQ(gfx::Size(16, 34), copy_quad->uv_tex_size());
   EXPECT_EQ(y_plane_resource_id, copy_quad->y_plane_resource_id());
   EXPECT_EQ(u_plane_resource_id, copy_quad->u_plane_resource_id());
   EXPECT_EQ(v_plane_resource_id, copy_quad->v_plane_resource_id());
@@ -443,7 +462,6 @@ TEST(DrawQuadTest, CopyPictureDrawQuad) {
   gfx::RectF tex_coord_rect(31.f, 12.f, 54.f, 20.f);
   gfx::Size texture_size(85, 32);
   bool nearest_neighbor = true;
-  ResourceFormat texture_format = RGBA_8888;
   gfx::Rect content_rect(30, 40, 20, 30);
   float contents_scale = 3.141592f;
   scoped_refptr<cc::DisplayItemList> display_item_list =
@@ -452,27 +470,14 @@ TEST(DrawQuadTest, CopyPictureDrawQuad) {
   CREATE_SHARED_STATE();
 
   CREATE_QUAD_NEW(PictureDrawQuad, visible_rect, blending, tex_coord_rect,
-                  texture_size, nearest_neighbor, texture_format, content_rect,
-                  contents_scale, {}, display_item_list);
+                  texture_size, nearest_neighbor, content_rect, contents_scale,
+                  {}, display_item_list);
   EXPECT_EQ(DrawQuad::Material::kPictureContent, copy_quad->material);
   EXPECT_EQ(visible_rect, copy_quad->visible_rect);
   EXPECT_EQ(blending, copy_quad->needs_blending);
   EXPECT_EQ(tex_coord_rect, copy_quad->tex_coord_rect);
   EXPECT_EQ(texture_size, copy_quad->texture_size);
   EXPECT_EQ(nearest_neighbor, copy_quad->nearest_neighbor);
-  EXPECT_EQ(texture_format, copy_quad->texture_format);
-  EXPECT_EQ(content_rect, copy_quad->content_rect);
-  EXPECT_EQ(contents_scale, copy_quad->contents_scale);
-  EXPECT_EQ(display_item_list, copy_quad->display_item_list);
-
-  CREATE_QUAD_ALL(PictureDrawQuad, tex_coord_rect, texture_size,
-                  nearest_neighbor, texture_format, content_rect,
-                  contents_scale, {}, display_item_list);
-  EXPECT_EQ(DrawQuad::Material::kPictureContent, copy_quad->material);
-  EXPECT_EQ(tex_coord_rect, copy_quad->tex_coord_rect);
-  EXPECT_EQ(texture_size, copy_quad->texture_size);
-  EXPECT_EQ(nearest_neighbor, copy_quad->nearest_neighbor);
-  EXPECT_EQ(texture_format, copy_quad->texture_format);
   EXPECT_EQ(content_rect, copy_quad->content_rect);
   EXPECT_EQ(contents_scale, copy_quad->contents_scale);
   EXPECT_EQ(display_item_list, copy_quad->display_item_list);
@@ -611,10 +616,9 @@ TEST_F(DrawQuadIteratorTest, VideoHoleDrawQuad) {
 
 TEST_F(DrawQuadIteratorTest, YUVVideoDrawQuad) {
   gfx::Rect visible_rect(40, 50, 30, 20);
-  gfx::RectF ya_tex_coord_rect(0.0f, 0.0f, 0.75f, 0.5f);
-  gfx::RectF uv_tex_coord_rect(0.0f, 0.0f, 0.375f, 0.25f);
-  gfx::Size ya_tex_size(32, 68);
-  gfx::Size uv_tex_size(41, 51);
+  gfx::Size coded_size(32, 68);
+  gfx::Rect video_frame_visible_rect(4, 8, 32, 68);
+  gfx::Size uv_sample_size(2, 2);
   ResourceId y_plane_resource_id(45);
   ResourceId u_plane_resource_id(532);
   ResourceId v_plane_resource_id(4);
@@ -622,11 +626,11 @@ TEST_F(DrawQuadIteratorTest, YUVVideoDrawQuad) {
   gfx::ColorSpace video_color_space = gfx::ColorSpace::CreateJpeg();
 
   CREATE_SHARED_STATE();
-  CREATE_QUAD_NEW(YUVVideoDrawQuad, visible_rect, needs_blending,
-                  ya_tex_coord_rect, uv_tex_coord_rect, ya_tex_size,
-                  uv_tex_size, y_plane_resource_id, u_plane_resource_id,
-                  v_plane_resource_id, a_plane_resource_id, video_color_space,
-                  0.0, 1.0, 5);
+  CREATE_QUAD_NEW(YUVVideoDrawQuad, visible_rect, needs_blending, coded_size,
+                  video_frame_visible_rect, uv_sample_size, y_plane_resource_id,
+                  u_plane_resource_id, v_plane_resource_id, a_plane_resource_id,
+                  video_color_space, 0.0, 1.0, 5,
+                  gfx::ProtectedVideoType::kClear, absl::nullopt);
   EXPECT_EQ(DrawQuad::Material::kYuvVideoContent, copy_quad->material);
   EXPECT_EQ(y_plane_resource_id, quad_new->y_plane_resource_id());
   EXPECT_EQ(u_plane_resource_id, quad_new->u_plane_resource_id());

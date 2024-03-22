@@ -1,53 +1,30 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/enrollment/enrollment_requisition_manager.h"
 
 #include "base/logging.h"
+#include "build/chromeos_buildflags.h"
+#include "build/config/chromebox_for_meetings/buildflags.h"
 #include "chrome/browser/ash/login/demo_mode/demo_setup_controller.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
 namespace policy {
 
-namespace {
-
-// Fetches a machine statistic value from StatisticsProvider, returns an empty
-// string on failure.
-std::string GetMachineStatistic(const std::string& key) {
-  std::string value;
-  chromeos::system::StatisticsProvider* provider =
-      chromeos::system::StatisticsProvider::GetInstance();
-  if (!provider->GetMachineStatistic(key, &value))
-    return std::string();
-
-  return value;
-}
-
-// Gets a machine flag from StatisticsProvider, returns the given
-// |default_value| if not present.
-bool GetMachineFlag(const std::string& key, bool default_value) {
-  bool value = default_value;
-  chromeos::system::StatisticsProvider* provider =
-      chromeos::system::StatisticsProvider::GetInstance();
-  if (!provider->GetMachineFlag(key, &value))
-    return default_value;
-
-  return value;
-}
-
-}  // namespace
+using ::ash::system::StatisticsProvider;
 
 // static
 const char EnrollmentRequisitionManager::kNoRequisition[] = "none";
 const char EnrollmentRequisitionManager::kRemoraRequisition[] = "remora";
 const char EnrollmentRequisitionManager::kSharkRequisition[] = "shark";
 const char EnrollmentRequisitionManager::kRialtoRequisition[] = "rialto";
+const char EnrollmentRequisitionManager::kDemoRequisition[] = "cros-demo-mode";
 
 // static
 void EnrollmentRequisitionManager::Initialize() {
@@ -59,27 +36,32 @@ void EnrollmentRequisitionManager::Initialize() {
   // interrupted.
   ash::DemoSetupController::ClearDemoRequisition();
   auto* local_state = g_browser_process->local_state();
+  auto* provider = StatisticsProvider::GetInstance();
   const PrefService::Preference* pref =
       local_state->FindPreference(prefs::kDeviceEnrollmentRequisition);
   if (pref->IsDefaultValue()) {
-    std::string requisition =
-        GetMachineStatistic(chromeos::system::kOemDeviceRequisitionKey);
+    const absl::optional<base::StringPiece> requisition =
+        provider->GetMachineStatistic(ash::system::kOemDeviceRequisitionKey);
 
-    if (!requisition.empty()) {
-      local_state->SetString(prefs::kDeviceEnrollmentRequisition, requisition);
+    if (requisition && !requisition->empty()) {
+      // TODO(b/259661300): Remove copy of `requisition` once
+      // `PrefService::SetString()` uses StringPiece as an argument.
+      local_state->SetString(prefs::kDeviceEnrollmentRequisition,
+                             std::string(requisition.value()));
       if (requisition == kRemoraRequisition ||
           requisition == kSharkRequisition ||
           requisition == kRialtoRequisition) {
         SetDeviceEnrollmentAutoStart();
       } else {
-        local_state->SetBoolean(
-            prefs::kDeviceEnrollmentAutoStart,
-            GetMachineFlag(chromeos::system::kOemIsEnterpriseManagedKey,
-                           false));
-        local_state->SetBoolean(
-            prefs::kDeviceEnrollmentCanExit,
-            GetMachineFlag(chromeos::system::kOemCanExitEnterpriseEnrollmentKey,
-                           false));
+        const bool auto_start = StatisticsProvider::FlagValueToBool(
+            provider->GetMachineFlag(ash::system::kOemIsEnterpriseManagedKey),
+            /*default_value=*/false);
+        local_state->SetBoolean(prefs::kDeviceEnrollmentAutoStart, auto_start);
+        const bool can_exit = StatisticsProvider::FlagValueToBool(
+            provider->GetMachineFlag(
+                ash::system::kOemCanExitEnterpriseEnrollmentKey),
+            /*default_value=*/false);
+        local_state->SetBoolean(prefs::kDeviceEnrollmentCanExit, can_exit);
       }
     }
   }
@@ -131,6 +113,14 @@ bool EnrollmentRequisitionManager::IsRemoraRequisition() {
 // static
 bool EnrollmentRequisitionManager::IsSharkRequisition() {
   return GetDeviceRequisition() == kSharkRequisition;
+}
+
+bool EnrollmentRequisitionManager::IsMeetDevice() {
+#if BUILDFLAG(PLATFORM_CFM)
+  return true;
+#else
+  return IsRemoraRequisition();
+#endif  // BUILDFLAG(PLATFORM_CFM)
 }
 
 // static

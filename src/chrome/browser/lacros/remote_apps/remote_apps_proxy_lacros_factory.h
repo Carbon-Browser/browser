@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 #define CHROME_BROWSER_LACROS_REMOTE_APPS_REMOTE_APPS_PROXY_LACROS_FACTORY_H_
 
 #include "base/no_destructor.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace chromeos {
 
 class RemoteAppsProxyLacros;
 
 // Factory for the `RemoteAppsProxyLacros` KeyedService.
-class RemoteAppsProxyLacrosFactory : public BrowserContextKeyedServiceFactory {
+class RemoteAppsProxyLacrosFactory : public ProfileKeyedServiceFactory {
  public:
   static RemoteAppsProxyLacros* GetForBrowserContext(
       content::BrowserContext* browser_context);
@@ -31,7 +31,7 @@ class RemoteAppsProxyLacrosFactory : public BrowserContextKeyedServiceFactory {
   ~RemoteAppsProxyLacrosFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* browser_context) const override;
   bool ServiceIsNULLWhileTesting() const override;
   bool ServiceIsCreatedWithBrowserContext() const override;

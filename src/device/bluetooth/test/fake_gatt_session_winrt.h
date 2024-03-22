@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -101,7 +101,8 @@ class FakeGattSessionStaticsWinrt
               GattSession*>** operation) override;
 
  private:
-  raw_ptr<BluetoothTestWinrt> bluetooth_test_winrt_ = nullptr;
+  raw_ptr<BluetoothTestWinrt, DanglingUntriaged> bluetooth_test_winrt_ =
+      nullptr;
 };
 
 }  // namespace device

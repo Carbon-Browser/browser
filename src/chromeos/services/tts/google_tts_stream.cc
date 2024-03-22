@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <sys/resource.h>
 
 #include "base/files/file_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/services/tts/constants.h"
 #include "chromeos/services/tts/tts_service.h"
 
@@ -48,7 +49,7 @@ GoogleTtsStream::GoogleTtsStream(
       tts_player_(
           std::move(factory),
           media::AudioParameters(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                                 media::CHANNEL_LAYOUT_MONO,
+                                 media::ChannelLayoutConfig::Mono(),
                                  kDefaultSampleRate,
                                  kDefaultBufferSize)) {
   bool loaded = libchrometts_.Load(kLibchromettsPath);
@@ -122,7 +123,7 @@ void GoogleTtsStream::Speak(const std::vector<uint8_t>& text_jspb,
   tts_player_.Play(std::move(callback));
   is_buffering_ = true;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&GoogleTtsStream::ReadMoreFrames,
                      weak_factory_.GetWeakPtr(), true /* is_first_buffer */));
@@ -178,7 +179,7 @@ void GoogleTtsStream::ReadMoreFrames(bool is_first_buffer) {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&GoogleTtsStream::ReadMoreFrames,
                      weak_factory_.GetWeakPtr(), false /* is_first_buffer */));

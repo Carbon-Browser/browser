@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ash/child_accounts/family_user_metrics_service.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/services/app_service/public/cpp/app_types.h"
@@ -75,9 +77,14 @@ class FamilyUserAppMetrics : public FamilyUserMetricsService::Observer,
   // Returns true if the app is currently open.
   bool IsAppWindowOpen(const std::string& app_id);
 
-  const extensions::ExtensionRegistry* const extension_registry_;
-  apps::AppRegistryCache* const app_registry_;
-  apps::InstanceRegistry* const instance_registry_;
+  const raw_ptr<const extensions::ExtensionRegistry, ExperimentalAsh>
+      extension_registry_;
+  const raw_ptr<apps::AppRegistryCache, ExperimentalAsh> app_registry_;
+  const raw_ptr<apps::InstanceRegistry, ExperimentalAsh> instance_registry_;
+
+  base::ScopedObservation<apps::AppRegistryCache,
+                          apps::AppRegistryCache::Observer>
+      app_registry_cache_observer_{this};
 
   bool should_record_metrics_on_new_day_ = false;
   bool first_report_on_current_device_ = false;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,10 +27,11 @@ namespace {
 
 base::FilePath ResolveSourceRootRelativePath(const char* relative_path) {
   base::FilePath path;
-  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &path))
+  if (!base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path)) {
     return base::FilePath();
+  }
 
-  for (const base::StringPiece& component : base::SplitStringPiece(
+  for (const std::string_view& component : base::SplitStringPiece(
            relative_path, "/", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
     if (!component.empty())
       path = path.AppendASCII(component);

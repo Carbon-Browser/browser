@@ -1,10 +1,12 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_GEOMETRY_TRANSFORM_OPERATION_H_
 #define UI_GFX_GEOMETRY_TRANSFORM_OPERATION_H_
 
+// TODO(crbug.com/1359528): Remove dependency to Skia.
+#include "third_party/skia/include/core/SkScalar.h"
 #include "ui/gfx/geometry/geometry_skia_export.h"
 #include "ui/gfx/geometry/transform.h"
 

@@ -1,13 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://print/print_preview.js';
 
 import {PrintPreviewColorSettingsElement, PrintPreviewModelElement} from 'chrome://print/print_preview.js';
-
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, fakeDataBind} from 'chrome://webui-test/test_util.js';
+import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
 import {selectOption} from './print_preview_test_utils.js';
 
@@ -17,7 +17,7 @@ suite('ColorSettingsTest', function() {
   let model: PrintPreviewModelElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     model = document.createElement('print-preview-model');
     document.body.appendChild(model);
 
@@ -54,7 +54,7 @@ suite('ColorSettingsTest', function() {
     assertTrue(colorSection.getSetting('color').setFromUi);
   });
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   // Tests that if the setting is enforced by enterprise policy it is
   // disabled.
   test('disabled by policy', function() {

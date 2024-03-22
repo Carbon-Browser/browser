@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@ namespace gwp_asan {
 // for the malloc/PartitionAlloc hooks to the crash handler.
 const char kMallocCrashKey[] = "gwp-asan-malloc";
 const char kPartitionAllocCrashKey[] = "gwp-asan-partitionalloc";
+const char kLightweightDetectorCrashKey[] = "lightweight-uaf-detector";
 
 }  // namespace gwp_asan
 

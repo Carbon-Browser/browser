@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,7 +86,7 @@ bool EncryptionHeaderIterator::GetNext() {
     if (base::EqualsCaseInsensitiveASCII(name, "keyid")) {
       if (found_keyid)
         return false;
-      keyid_.assign(value.data(), value.size());
+      keyid_ = value;
       found_keyid = true;
     } else if (base::EqualsCaseInsensitiveASCII(name, "salt")) {
       if (found_salt || !ValueToDecodedString(value, &salt_))
@@ -135,7 +135,7 @@ bool CryptoKeyHeaderIterator::GetNext() {
     if (base::EqualsCaseInsensitiveASCII(name, "keyid")) {
       if (found_keyid)
         return false;
-      keyid_.assign(value.data(), value.size());
+      keyid_ = value;
       found_keyid = true;
     } else if (base::EqualsCaseInsensitiveASCII(name, "aesgcm128")) {
       if (found_aesgcm128 || !ValueToDecodedString(value, &aesgcm128_))

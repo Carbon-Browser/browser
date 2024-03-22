@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,11 +23,6 @@ void InputDelegateWin::UpdateController(const gfx::Transform& head_pose,
                                         base::TimeTicks current_time,
                                         bool is_webxr_frame) {
   // No input currently processed for desktop.
-}
-
-ControllerModel InputDelegateWin::GetControllerModel(
-    const gfx::Transform& head_pose) {
-  return {};
 }
 
 InputEventList InputDelegateWin::GetGestures(base::TimeTicks current_time) {

@@ -1,24 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/overlays/infobar_banner/autofill_address_profile/save_address_profile_infobar_banner_overlay_mediator.h"
 
-#include "base/strings/sys_string_conversions.h"
-#include "ios/chrome/browser/overlays/public/infobar_banner/infobar_banner_overlay_responses.h"
-#import "ios/chrome/browser/overlays/public/infobar_banner/save_address_profile_infobar_banner_overlay_request_config.h"
-#include "ios/chrome/browser/overlays/public/overlay_response.h"
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
-#import "ios/chrome/browser/ui/icons/infobar_icon.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/chrome/browser/overlays/model/public/infobar_banner/infobar_banner_overlay_responses.h"
+#import "ios/chrome/browser/overlays/model/public/infobar_banner/save_address_profile_infobar_banner_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_response.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_consumer.h"
 #import "ios/chrome/browser/ui/overlays/infobar_banner/infobar_banner_overlay_mediator+consumer_support.h"
 #import "ios/chrome/browser/ui/overlays/infobar_banner/infobar_banner_overlay_mediator.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_mediator+subclassing.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 using autofill_address_profile_infobar_overlays::
     SaveAddressProfileBannerRequestConfig;
@@ -66,15 +61,18 @@ using autofill_address_profile_infobar_overlays::
       setTitleText:base::SysUTF16ToNSString(self.config->message_text())];
   [self.consumer
       setSubtitleText:base::SysUTF16ToNSString(self.config->description())];
-  [self.consumer setRestrictSubtitleTextToSingleLine:YES];
 
-  if (UseSymbols()) {
-    [self.consumer setIconImage:DefaultSymbolWithPointSize(
-                                    kPinFillSymbol, kSymbolImagePointSize)];
-  } else {
-    [self.consumer
-        setIconImage:[UIImage imageNamed:self.config->icon_image_name()]];
+  if (!self.config->is_migration_to_account() &&
+      (!self.config->is_profile_an_account_profile() ||
+       self.config->is_update_banner())) {
+    [self.consumer setSubtitleNumberOfLines:1];
   }
+
+  [self.consumer setIconImage:CustomSymbolWithPointSize(
+                                  self.config->is_migration_to_account()
+                                      ? kCloudAndArrowUpSymbol
+                                      : kLocationSymbol,
+                                  kInfobarSymbolPointSize)];
   // This is done to hide the settings image from the banner view. The modal
   // would still be presented when the user chooses to pick the Save/Update
   // action.

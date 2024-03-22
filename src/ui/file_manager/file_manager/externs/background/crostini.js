@@ -1,8 +1,6 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-import {VolumeManager} from '../volume_manager.js';
 
 /**
  * Crostini shared path state handler.
@@ -18,29 +16,38 @@ export class Crostini {
 
   /**
    * Initialize Volume Manager.
-   * @param {!VolumeManager} volumeManager
+   * @param {!import('../volume_manager.js').VolumeManager} volumeManager
    */
+  // @ts-ignore: error TS6133: 'volumeManager' is declared but its value is
+  // never read.
   initVolumeManager(volumeManager) {}
 
   /**
-   * Set whether the specified VM is enabled.
+   * Set whether the specified Guest is enabled.
    * @param {string} vmName
+   * @param {string} containerName
    * @param {boolean} enabled
    */
-  setEnabled(vmName, enabled) {}
+  // @ts-ignore: error TS6133: 'enabled' is declared but its value is never
+  // read.
+  setEnabled(vmName, containerName, enabled) {}
 
   /**
    * Returns true if the specified VM is enabled.
    * @param {string} vmName
    * @return {boolean}
    */
-  isEnabled(vmName) {}
+  // @ts-ignore: error TS6133: 'vmName' is declared but its value is never read.
+  isEnabled(vmName) {
+    return false;
+  }
 
   /**
    * Registers an entry as a shared path for the specified VM.
    * @param {string} vmName
    * @param {!Entry} entry
    */
+  // @ts-ignore: error TS6133: 'entry' is declared but its value is never read.
   registerSharedPath(vmName, entry) {}
 
   /**
@@ -48,6 +55,7 @@ export class Crostini {
    * @param {string} vmName
    * @param {!Entry} entry
    */
+  // @ts-ignore: error TS6133: 'entry' is declared but its value is never read.
   unregisterSharedPath(vmName, entry) {}
 
   /**
@@ -57,7 +65,10 @@ export class Crostini {
    * @return {boolean} True if path is shared either by a direct
    *   share or from one of its ancestor directories.
    */
-  isPathShared(vmName, entry) {}
+  // @ts-ignore: error TS6133: 'entry' is declared but its value is never read.
+  isPathShared(vmName, entry) {
+    return false;
+  }
 
   /**
    * Returns true if entry can be shared with the specified VM.
@@ -66,5 +77,9 @@ export class Crostini {
    * @param {boolean} persist If path is to be persisted.
    * @return {boolean}
    */
-  canSharePath(vmName, entry, persist) {}
+  // @ts-ignore: error TS6133: 'persist' is declared but its value is never
+  // read.
+  canSharePath(vmName, entry, persist) {
+    return false;
+  }
 }

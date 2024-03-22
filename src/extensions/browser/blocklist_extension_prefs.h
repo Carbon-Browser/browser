@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "extensions/browser/blocklist_state.h"
+#include "extensions/common/extension_id.h"
 
 namespace extensions {
 class ExtensionPrefs;
@@ -88,6 +89,19 @@ void SetSafeBrowsingExtensionBlocklistState(
 // blocklist, please use blocklist_prefs::GetExtensionBlocklistState instead.
 BitMapBlocklistState GetSafeBrowsingExtensionBlocklistState(
     const std::string& extension_id,
+    ExtensionPrefs* extension_prefs);
+
+// Sets the `bitmap_blocklist_state` to the Extension Telemetry service
+// blocklist state pref.
+void SetExtensionTelemetryServiceBlocklistState(
+    const ExtensionId& extension_id,
+    BitMapBlocklistState bitmap_blocklist_state,
+    ExtensionPrefs* extension_prefs);
+
+// Returns the current Extension Telemetry service blocklist state of the
+// `extension_id`.
+BitMapBlocklistState GetExtensionTelemetryServiceBlocklistState(
+    const ExtensionId& extension_id,
     ExtensionPrefs* extension_prefs);
 
 }  // namespace blocklist_prefs

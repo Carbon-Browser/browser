@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 
 class ChromePasswordManagerClient;
+class ChromePasswordReuseDetectionManagerClient;
 
 namespace crosapi {
 
@@ -19,6 +20,7 @@ class COMPONENT_EXPORT(CROSAPI) ScopedAllowSyncCall {
  private:
   // Consumers of this class must be explicitly added as a friend.
   friend class ::ChromePasswordManagerClient;
+  friend class ::ChromePasswordReuseDetectionManagerClient;
 
   ScopedAllowSyncCall();
   ScopedAllowSyncCall(const ScopedAllowSyncCall&) = delete;

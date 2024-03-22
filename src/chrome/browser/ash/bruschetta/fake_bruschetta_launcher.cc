@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/bruschetta/fake_bruschetta_launcher.h"
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 
 namespace bruschetta {
 FakeBruschettaLauncher::FakeBruschettaLauncher()

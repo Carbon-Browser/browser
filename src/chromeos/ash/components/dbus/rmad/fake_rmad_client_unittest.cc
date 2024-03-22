@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,18 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/files/file_path.h"
 #include "base/logging.h"
-#include "base/run_loop.h"
-#include "base/test/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "dbus/message.h"
 #include "dbus/mock_bus.h"
 #include "dbus/mock_object_proxy.h"
 #include "dbus/object_path.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 using ::testing::_;
@@ -45,10 +46,11 @@ class FakeRmadClientTest : public testing::Test {
   void TearDown() override { RmadClient::Shutdown(); }
 
   FakeRmadClient* fake_client_() {
-    return google::protobuf::down_cast<FakeRmadClient*>(client_);
+    return google::protobuf::down_cast<FakeRmadClient*>(client_.get());
   }
 
-  RmadClient* client_ = nullptr;  // Unowned convenience pointer.
+  raw_ptr<RmadClient, DanglingUntriaged | ExperimentalAsh> client_ =
+      nullptr;  // Unowned convenience pointer.
   // A message loop to emulate asynchronous behavior.
   base::test::SingleThreadTaskEnvironment task_environment_;
 };
@@ -89,6 +91,8 @@ class TestObserver : public RmadClient::Observer {
   }
   int num_power_cable_state() { return num_power_cable_state_; }
   bool last_power_cable_state() { return last_power_cable_state_; }
+  int num_external_disk_state() const { return num_external_disk_state_; }
+  bool last_external_disk_state() const { return last_external_disk_state_; }
   int num_hardware_verification_result() const {
     return num_hardware_verification_result_;
   }
@@ -142,6 +146,12 @@ class TestObserver : public RmadClient::Observer {
     last_power_cable_state_ = plugged_in;
   }
 
+  // Called when external disk is plugged in or removed.
+  void ExternalDiskState(bool detected) override {
+    num_external_disk_state_++;
+    last_external_disk_state_ = detected;
+  }
+
   // Called when hardware verification completes.
   void HardwareVerificationResult(
       const rmad::HardwareVerificationResult& last_hardware_verification_result)
@@ -157,7 +167,7 @@ class TestObserver : public RmadClient::Observer {
   }
 
  private:
-  RmadClient* client_;  // Not owned.
+  raw_ptr<RmadClient, ExperimentalAsh> client_;  // Not owned.
   int num_error_ = 0;
   rmad::RmadErrorCode last_error_ = rmad::RmadErrorCode::RMAD_ERROR_NOT_SET;
   int num_calibration_progress_ = 0;
@@ -171,6 +181,8 @@ class TestObserver : public RmadClient::Observer {
   bool last_hardware_write_protection_state_ = true;
   int num_power_cable_state_ = 0;
   bool last_power_cable_state_ = true;
+  int num_external_disk_state_ = 0;
+  bool last_external_disk_state_ = true;
   int num_hardware_verification_result_ = 0;
   rmad::HardwareVerificationResult last_hardware_verification_result_;
   int num_ro_firmware_update_progress_ = 0;
@@ -208,15 +220,12 @@ rmad::GetStateReply CreateDeviceDestinationStateReply(
 }
 
 TEST_F(FakeRmadClientTest, GetCurrentState_Default_RmaNotRequired) {
-  base::RunLoop run_loop;
-  client_->GetCurrentState(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::GetStateReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
-        EXPECT_FALSE(response->has_state());
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+  client_->GetCurrentState(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
+  EXPECT_FALSE(response->has_state());
 }
 
 TEST_F(FakeRmadClientTest, GetCurrentState_Welcome_Ok) {
@@ -224,16 +233,13 @@ TEST_F(FakeRmadClientTest, GetCurrentState_Welcome_Ok) {
   fake_states.push_back(CreateWelcomeStateReply(rmad::RMAD_ERROR_OK));
   fake_client_()->SetFakeStateReplies(std::move(fake_states));
 
-  base::RunLoop run_loop;
-  client_->GetCurrentState(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::GetStateReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-        EXPECT_TRUE(response->has_state());
-        EXPECT_TRUE(response->state().has_welcome());
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+  client_->GetCurrentState(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+  EXPECT_TRUE(response->has_state());
+  EXPECT_TRUE(response->state().has_welcome());
 }
 
 TEST_F(FakeRmadClientTest, GetCurrentState_Welcome_CorrectStateReturned) {
@@ -246,33 +252,25 @@ TEST_F(FakeRmadClientTest, GetCurrentState_Welcome_CorrectStateReturned) {
   fake_states.push_back(std::move(state));
   fake_client_()->SetFakeStateReplies(std::move(fake_states));
 
-  base::RunLoop run_loop;
-  client_->GetCurrentState(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::GetStateReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_MISSING_COMPONENT);
-        EXPECT_TRUE(response->has_state());
-        EXPECT_TRUE(response->state().has_welcome());
-        EXPECT_EQ(
-            response->state().welcome().choice(),
+  base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+  client_->GetCurrentState(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_MISSING_COMPONENT);
+  EXPECT_TRUE(response->has_state());
+  EXPECT_TRUE(response->state().has_welcome());
+  EXPECT_EQ(response->state().welcome().choice(),
             rmad::WelcomeState_FinalizeChoice_RMAD_CHOICE_FINALIZE_REPAIR);
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
 }
 
 TEST_F(FakeRmadClientTest, TransitionNextState_Default_RmaNotRequired) {
-  base::RunLoop run_loop;
-  client_->TransitionNextState(
-      std::move(CreateWelcomeState()),
-      base::BindLambdaForTesting(
-          [&](absl::optional<rmad::GetStateReply> response) {
-            EXPECT_TRUE(response.has_value());
-            EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
-            EXPECT_FALSE(response->has_state());
-            run_loop.Quit();
-          }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+  client_->TransitionNextState(std::move(CreateWelcomeState()),
+                               future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
+  EXPECT_FALSE(response->has_state());
 }
 
 TEST_F(FakeRmadClientTest, TransitionNextState_NoNextState_Fails) {
@@ -281,18 +279,14 @@ TEST_F(FakeRmadClientTest, TransitionNextState_NoNextState_Fails) {
       rmad::GetStateReply(CreateWelcomeStateReply(rmad::RMAD_ERROR_OK)));
   fake_client_()->SetFakeStateReplies(std::move(fake_states));
 
-  base::RunLoop run_loop;
-  client_->TransitionNextState(
-      std::move(CreateWelcomeState()),
-      base::BindLambdaForTesting(
-          [&](absl::optional<rmad::GetStateReply> response) {
-            EXPECT_TRUE(response.has_value());
-            EXPECT_EQ(response->error(), rmad::RMAD_ERROR_TRANSITION_FAILED);
-            EXPECT_TRUE(response->has_state());
-            EXPECT_TRUE(response->state().has_welcome());
-            run_loop.Quit();
-          }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+  client_->TransitionNextState(std::move(CreateWelcomeState()),
+                               future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_TRANSITION_FAILED);
+  EXPECT_TRUE(response->has_state());
+  EXPECT_TRUE(response->state().has_welcome());
 }
 
 TEST_F(FakeRmadClientTest, TransitionNextState_HasNextState_Ok) {
@@ -303,18 +297,14 @@ TEST_F(FakeRmadClientTest, TransitionNextState_HasNextState_Ok) {
       CreateDeviceDestinationStateReply(rmad::RMAD_ERROR_OK)));
   fake_client_()->SetFakeStateReplies(std::move(fake_states));
 
-  base::RunLoop run_loop;
-  client_->TransitionNextState(
-      std::move(CreateWelcomeState()),
-      base::BindLambdaForTesting(
-          [&](absl::optional<rmad::GetStateReply> response) {
-            EXPECT_TRUE(response.has_value());
-            EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-            EXPECT_TRUE(response->has_state());
-            EXPECT_TRUE(response->state().has_device_destination());
-            run_loop.Quit();
-          }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+  client_->TransitionNextState(std::move(CreateWelcomeState()),
+                               future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+  EXPECT_TRUE(response->has_state());
+  EXPECT_TRUE(response->state().has_device_destination());
 }
 
 TEST_F(FakeRmadClientTest, TransitionNextState_WrongCurrentState_Invalid) {
@@ -325,30 +315,23 @@ TEST_F(FakeRmadClientTest, TransitionNextState_WrongCurrentState_Invalid) {
       CreateDeviceDestinationStateReply(rmad::RMAD_ERROR_OK)));
   fake_client_()->SetFakeStateReplies(std::move(fake_states));
 
-  base::RunLoop run_loop;
-  client_->TransitionNextState(
-      std::move(CreateDeviceDestinationState()),
-      base::BindLambdaForTesting(
-          [&](absl::optional<rmad::GetStateReply> response) {
-            EXPECT_TRUE(response.has_value());
-            EXPECT_EQ(response->error(), rmad::RMAD_ERROR_REQUEST_INVALID);
-            EXPECT_TRUE(response->has_state());
-            EXPECT_TRUE(response->state().has_welcome());
-            run_loop.Quit();
-          }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+  client_->TransitionNextState(std::move(CreateDeviceDestinationState()),
+                               future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_REQUEST_INVALID);
+  EXPECT_TRUE(response->has_state());
+  EXPECT_TRUE(response->state().has_welcome());
 }
 
 TEST_F(FakeRmadClientTest, TransitionPreviousState_Default_RmaNotRequired) {
-  base::RunLoop run_loop;
-  client_->TransitionPreviousState(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::GetStateReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
-        EXPECT_FALSE(response->has_state());
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+  client_->TransitionPreviousState(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
+  EXPECT_FALSE(response->has_state());
 }
 
 TEST_F(FakeRmadClientTest, TransitionPreviousState_HasPreviousState_Ok) {
@@ -360,31 +343,24 @@ TEST_F(FakeRmadClientTest, TransitionPreviousState_HasPreviousState_Ok) {
   fake_client_()->SetFakeStateReplies(std::move(fake_states));
 
   {
-    base::RunLoop run_loop;
-    client_->TransitionNextState(
-        std::move(CreateWelcomeState()),
-        base::BindLambdaForTesting(
-            [&](absl::optional<rmad::GetStateReply> response) {
-              EXPECT_TRUE(response.has_value());
-              EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-              EXPECT_TRUE(response->has_state());
-              EXPECT_TRUE(response->state().has_device_destination());
-              run_loop.Quit();
-            }));
-    run_loop.RunUntilIdle();
+    base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+    client_->TransitionNextState(std::move(CreateWelcomeState()),
+                                 future.GetCallback());
+    const auto& response = future.Get();
+    EXPECT_TRUE(response.has_value());
+    EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+    EXPECT_TRUE(response->has_state());
+    EXPECT_TRUE(response->state().has_device_destination());
   }
   {
-    base::RunLoop run_loop;
-    client_->TransitionPreviousState(base::BindLambdaForTesting(
-        [&](absl::optional<rmad::GetStateReply> response) {
-          LOG(ERROR) << "Prev started";
-          EXPECT_TRUE(response.has_value());
-          EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-          EXPECT_TRUE(response->has_state());
-          EXPECT_TRUE(response->state().has_welcome());
-          run_loop.Quit();
-        }));
-    run_loop.RunUntilIdle();
+    base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+    client_->TransitionPreviousState(future.GetCallback());
+    const auto& response = future.Get();
+    LOG(ERROR) << "Prev started";
+    EXPECT_TRUE(response.has_value());
+    EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+    EXPECT_TRUE(response->has_state());
+    EXPECT_TRUE(response->state().has_welcome());
   }
 }
 
@@ -397,135 +373,179 @@ TEST_F(FakeRmadClientTest,
   fake_client_()->SetFakeStateReplies(std::move(fake_states));
 
   {
-    base::RunLoop run_loop;
-    client_->GetCurrentState(base::BindLambdaForTesting(
-        [&](absl::optional<rmad::GetStateReply> response) {
-          EXPECT_TRUE(response.has_value());
-          EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-          EXPECT_TRUE(response->has_state());
-          EXPECT_TRUE(response->state().has_welcome());
-          EXPECT_EQ(response->state().welcome().choice(),
-                    rmad::WelcomeState_FinalizeChoice_RMAD_CHOICE_UNKNOWN);
-          run_loop.Quit();
-        }));
-    run_loop.RunUntilIdle();
+    base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+    client_->GetCurrentState(future.GetCallback());
+    EXPECT_TRUE(future.Get().has_value());
+    EXPECT_EQ(future.Get()->error(), rmad::RMAD_ERROR_OK);
+    EXPECT_TRUE(future.Get()->has_state());
+    EXPECT_TRUE(future.Get()->state().has_welcome());
+    EXPECT_EQ(future.Get()->state().welcome().choice(),
+              rmad::WelcomeState_FinalizeChoice_RMAD_CHOICE_UNKNOWN);
   }
   {
     rmad::RmadState current_state = CreateWelcomeState();
     current_state.mutable_welcome()->set_choice(
         rmad::WelcomeState_FinalizeChoice_RMAD_CHOICE_FINALIZE_REPAIR);
 
-    base::RunLoop run_loop;
-    client_->TransitionNextState(
-        std::move(current_state),
-        base::BindLambdaForTesting(
-            [&](absl::optional<rmad::GetStateReply> response) {
-              EXPECT_TRUE(response.has_value());
-              EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-              EXPECT_TRUE(response->has_state());
-              EXPECT_TRUE(response->state().has_device_destination());
-              run_loop.Quit();
-            }));
-    run_loop.RunUntilIdle();
+    base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+    client_->TransitionNextState(std::move(current_state),
+                                 future.GetCallback());
+    EXPECT_TRUE(future.Get().has_value());
+    EXPECT_EQ(future.Get()->error(), rmad::RMAD_ERROR_OK);
+    EXPECT_TRUE(future.Get()->has_state());
+    EXPECT_TRUE(future.Get()->state().has_device_destination());
   }
   {
-    base::RunLoop run_loop;
-    client_->TransitionPreviousState(base::BindLambdaForTesting(
-        [&](absl::optional<rmad::GetStateReply> response) {
-          LOG(ERROR) << "Prev started";
-          EXPECT_TRUE(response.has_value());
-          EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-          EXPECT_TRUE(response->has_state());
-          EXPECT_TRUE(response->state().has_welcome());
-          EXPECT_EQ(
-              response->state().welcome().choice(),
+    base::test::TestFuture<absl::optional<rmad::GetStateReply>> future;
+    client_->TransitionPreviousState(future.GetCallback());
+    const auto& response = future.Get();
+    LOG(ERROR) << "Prev started";
+    EXPECT_TRUE(response.has_value());
+    EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+    EXPECT_TRUE(response->has_state());
+    EXPECT_TRUE(response->state().has_welcome());
+    EXPECT_EQ(response->state().welcome().choice(),
               rmad::WelcomeState_FinalizeChoice_RMAD_CHOICE_FINALIZE_REPAIR);
-          run_loop.Quit();
-        }));
-    run_loop.RunUntilIdle();
   }
 }
 
 TEST_F(FakeRmadClientTest, Abortable_Default_Rma_Not_Required) {
-  base::RunLoop run_loop;
-  client_->AbortRma(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::AbortRmaReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::AbortRmaReply>> future;
+  client_->AbortRma(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
 }
 
 TEST_F(FakeRmadClientTest, Abortable_SetFalse_CannotCancel) {
   fake_client_()->SetAbortable(false);
-  base::RunLoop run_loop;
-  client_->AbortRma(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::AbortRmaReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_CANNOT_CANCEL_RMA);
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::AbortRmaReply>> future;
+  client_->AbortRma(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_CANNOT_CANCEL_RMA);
 }
 
 TEST_F(FakeRmadClientTest, Abortable_SetTrue_Rma_Not_Required) {
   fake_client_()->SetAbortable(true);
-  base::RunLoop run_loop;
-  client_->AbortRma(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::AbortRmaReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::AbortRmaReply>> future;
+  client_->AbortRma(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_RMA_NOT_REQUIRED);
 }
 
 TEST_F(FakeRmadClientTest, GetLog) {
   const std::string expected_log = "This is my test log for the RMA process";
   fake_client_()->SetGetLogReply(expected_log, rmad::RMAD_ERROR_OK);
-  base::RunLoop run_loop;
-  client_->GetLog(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::GetLogReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->log(), expected_log);
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::GetLogReply>> future;
+  client_->GetLog(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->log(), expected_log);
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
 }
 
 TEST_F(FakeRmadClientTest, SaveLog) {
   const std::string expected_save_path = "fake save path for testing";
   fake_client_()->SetSaveLogReply(expected_save_path, rmad::RMAD_ERROR_OK);
-  base::RunLoop run_loop;
-  client_->SaveLog(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::SaveLogReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->save_path(), expected_save_path);
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-        run_loop.Quit();
-      }));
-  run_loop.RunUntilIdle();
+  base::test::TestFuture<absl::optional<rmad::SaveLogReply>> future;
+  client_->SaveLog("Diagnostics log text", future.GetCallback());
+  const auto& response = future.Get();
+
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->save_path(), expected_save_path);
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
 }
 
 TEST_F(FakeRmadClientTest, RecordBrowserActionMetric) {
   fake_client_()->SetRecordBrowserActionMetricReply(rmad::RMAD_ERROR_OK);
-  base::RunLoop run_loop;
+  base::test::TestFuture<absl::optional<rmad::RecordBrowserActionMetricReply>>
+      future;
 
   rmad::RecordBrowserActionMetricRequest request;
   request.set_diagnostics(true);
   request.set_os_update(false);
 
-  client_->RecordBrowserActionMetric(
-      request,
-      base::BindLambdaForTesting(
-          [&](absl::optional<rmad::RecordBrowserActionMetricReply> response) {
-            EXPECT_TRUE(response.has_value());
-            EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-            run_loop.Quit();
-          }));
-  run_loop.RunUntilIdle();
+  client_->RecordBrowserActionMetric(request, future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+}
+
+TEST_F(FakeRmadClientTest, ExtractExternalDiagnosticsApp_NotFound) {
+  base::test::TestFuture<
+      absl::optional<rmad::ExtractExternalDiagnosticsAppReply>>
+      future;
+  client_->ExtractExternalDiagnosticsApp(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_DIAGNOSTICS_APP_NOT_FOUND);
+}
+
+TEST_F(FakeRmadClientTest, ExtractExternalDiagnosticsApp_Found) {
+  fake_client_()->external_diag_app_path() =
+      base::FilePath{"/example/diag_app"};
+
+  base::test::TestFuture<
+      absl::optional<rmad::ExtractExternalDiagnosticsAppReply>>
+      future;
+  client_->ExtractExternalDiagnosticsApp(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+  EXPECT_EQ(response->diagnostics_app_swbn_path(), "/example/diag_app.swbn");
+  EXPECT_EQ(response->diagnostics_app_crx_path(), "/example/diag_app.crx");
+}
+
+TEST_F(FakeRmadClientTest, InstallExtractedDiagnosticsApp_NotFound) {
+  base::test::TestFuture<
+      absl::optional<rmad::InstallExtractedDiagnosticsAppReply>>
+      future;
+  client_->InstallExtractedDiagnosticsApp(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_DIAGNOSTICS_APP_NOT_FOUND);
+}
+
+TEST_F(FakeRmadClientTest, InstallExtractedDiagnosticsApp_Found) {
+  fake_client_()->external_diag_app_path() =
+      base::FilePath{"/example/diag_app"};
+
+  base::test::TestFuture<
+      absl::optional<rmad::InstallExtractedDiagnosticsAppReply>>
+      future;
+  client_->InstallExtractedDiagnosticsApp(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+  // The installed path was set so the next `GetInstalledDiagnosticsApp` will
+  // get the installed package path.
+  EXPECT_EQ(fake_client_()->installed_diag_app_path(),
+            fake_client_()->external_diag_app_path());
+}
+
+TEST_F(FakeRmadClientTest, GetInstalledDiagnosticsApp_NotFound) {
+  base::test::TestFuture<absl::optional<rmad::GetInstalledDiagnosticsAppReply>>
+      future;
+  client_->GetInstalledDiagnosticsApp(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_DIAGNOSTICS_APP_NOT_FOUND);
+}
+
+TEST_F(FakeRmadClientTest, GetInstalledDiagnosticsApp_Found) {
+  fake_client_()->installed_diag_app_path() =
+      base::FilePath{"/example/diag_app"};
+
+  base::test::TestFuture<absl::optional<rmad::GetInstalledDiagnosticsAppReply>>
+      future;
+  client_->GetInstalledDiagnosticsApp(future.GetCallback());
+  const auto& response = future.Get();
+  EXPECT_TRUE(response.has_value());
+  EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+  EXPECT_EQ(response->diagnostics_app_swbn_path(), "/example/diag_app.swbn");
+  EXPECT_EQ(response->diagnostics_app_crx_path(), "/example/diag_app.crx");
 }
 
 // Tests that synchronous observers are notified about errors that occur outside
@@ -585,7 +605,8 @@ TEST_F(FakeRmadClientTest, ProvisioningProgressObservation) {
             rmad::ProvisionStatus::RMAD_PROVISION_ERROR_WP_ENABLED);
 }
 
-// Tests that synchronous observers are notified about provisioning progress.
+// Tests that synchronous observers are notified about hardware write protection
+// state.
 TEST_F(FakeRmadClientTest, HardwareWriteProtectionStateObservation) {
   TestObserver observer_1(client_);
 
@@ -598,7 +619,7 @@ TEST_F(FakeRmadClientTest, HardwareWriteProtectionStateObservation) {
   EXPECT_TRUE(observer_1.last_hardware_write_protection_state());
 }
 
-// Tests that synchronous observers are notified about provisioning progress.
+// Tests that synchronous observers are notified about power cable state.
 TEST_F(FakeRmadClientTest, PowerCableStateObservation) {
   TestObserver observer_1(client_);
 
@@ -609,6 +630,19 @@ TEST_F(FakeRmadClientTest, PowerCableStateObservation) {
   fake_client_()->TriggerPowerCableStateObservation(true);
   EXPECT_EQ(observer_1.num_power_cable_state(), 2);
   EXPECT_TRUE(observer_1.last_power_cable_state());
+}
+
+// Tests that synchronous observers are notified about external disk state.
+TEST_F(FakeRmadClientTest, ExternalDiskStateObservation) {
+  TestObserver observer_1(client_);
+
+  fake_client_()->TriggerExternalDiskStateObservation(false);
+  EXPECT_EQ(observer_1.num_external_disk_state(), 1);
+  EXPECT_FALSE(observer_1.last_external_disk_state());
+
+  fake_client_()->TriggerExternalDiskStateObservation(true);
+  EXPECT_EQ(observer_1.num_external_disk_state(), 2);
+  EXPECT_TRUE(observer_1.last_external_disk_state());
 }
 
 // Tests that synchronous observers are notified about hardware verification

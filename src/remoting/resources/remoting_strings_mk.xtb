@@ -4,6 +4,7 @@
 <translation id="1002108253973310084">Откривме некомпатибилна верзија на протоколот. Проверете дали ја имате инсталирано најновата верзија на софтверот на двата компјутера и обидете се повторно.</translation>
 <translation id="1008557486741366299">Не сега</translation>
 <translation id="1201402288615127009">Следно</translation>
+<translation id="1296511125400541222">Авторски права за 2023 г. на The Chromium Authors. Сите права се задржани.</translation>
 <translation id="1297009705180977556">Грешка при поврзување со <ph name="HOSTNAME" /></translation>
 <translation id="1450760146488584666">Бараниот објект не постои.</translation>
 <translation id="1480046233931937785">Заслуги</translation>
@@ -36,7 +37,6 @@
 <translation id="2599300881200251572">Уредот овозможува дојдовни врски од клиенти на Далечинска работна површина на Chrome.</translation>
 <translation id="2647232381348739934">Chromoting услуга</translation>
 <translation id="2676780859508944670">Работи…</translation>
-<translation id="2692522824157224199">Авторски права за 2022 г. на Google LLC. Сите права се задржани.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">Проблем при проверката. Најавете се повторно.</translation>
 <translation id="2803375539583399270">Внесете PIN.</translation>
@@ -65,7 +65,7 @@
 <translation id="405887016757208221">Далечинскиот компјутер не успеа да ја иницијализира сесијата. Ако проблемот продолжи, обидете се повторно да го конфигурирате хостот.</translation>
 <translation id="4060747889721220580">Преземете ја датотеката</translation>
 <translation id="4126409073460786861">Откако ќе завршите со поставувањето, освежете ја страницава, а потоа ќе може да пристапите до компјутерот така што ќе го изберете уредот и ќе го внесете PIN-кодот</translation>
-<translation id="4145029455188493639">Најавени сте како <ph name="EMAIL_ADDRESS" />.</translation>
+<translation id="4145029455188493639">Најавени сте како: <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="4155497795971509630">Недостасуваат некои потребни компоненти. Проверете дали сте ја инсталирале најновата верзија и обидете се повторно.</translation>
 <translation id="4176825807642096119">Пристапна шифра</translation>
 <translation id="4227991223508142681">Услуга за обезбедување на хостот</translation>
@@ -73,7 +73,6 @@
 <translation id="4257751272692708833">Проследувач на URL на <ph name="PRODUCT_NAME" /></translation>
 <translation id="4277736576214464567">Пристапната шифра е неважечка. Обидете се повторно.</translation>
 <translation id="4281844954008187215">Услови за користење</translation>
-<translation id="4372650392690220936">Авторски права за 2022 г. на The Chromium Authors. Сите права се задржани.</translation>
 <translation id="4405930547258349619">Основна библиотека</translation>
 <translation id="443560535555262820">Отвори поставки за „Пристапност“</translation>
 <translation id="4450893287417543264">Не прикажувај повторно</translation>
@@ -90,6 +89,7 @@
 <translation id="4808503597364150972">Внесете го PIN-кодот за <ph name="HOSTNAME" />.</translation>
 <translation id="4812684235631257312">Домаќин</translation>
 <translation id="4867841927763172006">Испрати PrtScn</translation>
+<translation id="4960795469833295568">Авторски права за 2023 г. на Google LLC. Сите права се задржани.</translation>
 <translation id="4974476491460646149">Врската е затворена за <ph name="HOSTNAME" /></translation>
 <translation id="4985296110227979402">Прво треба да го поставите компјутерот за далечински пристап</translation>
 <translation id="4987330545941822761">„Пристап оддалеку за Chrome“ не може да го одреди прелистувачот за отворање на URL-адресите локално. Изберете го од списокот подолу.</translation>
@@ -107,7 +107,7 @@
 <translation id="5601503069213153581">PIN</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">Работната површина моментално ја споделувате со <ph name="USER" />.</translation>
-<translation id="5750083143895808682">Најавени сте како <ph name="EMAIL_ADDRESS" />.</translation>
+<translation id="5750083143895808682">Најавени сте како: <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="579702532610384533">Поврзи се повторно</translation>
 <translation id="5810269635982033450">Екранот дејствува како подлога на допир</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> побара пристап да го гледа вашиот екран и да ги контролира тастатурата и глувчето. Притиснете „<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />“ ако не го очекувате ова барање. Во спротивно, изберете „<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />“ за да го дозволите поврзувањето кога ќе бидете спремни.</translation>
@@ -128,7 +128,7 @@
 <translation id="6654753848497929428">Сподели</translation>
 <translation id="677755392401385740">Стартуван домаќин за корисникот: <ph name="HOST_USERNAME" />.</translation>
 <translation id="6902524959760471898">Помошна апликација за отворање URL на клиентот <ph name="PRODUCT_NAME" /></translation>
-<translation id="6939719207673461467">Покажи/сокриј тастатура.</translation>
+<translation id="6939719207673461467">Прикажи/скриј тастатура.</translation>
 <translation id="6963936880795878952">Врските со далечинскиот компјутер се привремено блокирани бидејќи некој се обидуваше да се поврзе со него со неважечки PIN. Обидете се повторно подоцна.</translation>
 <translation id="6965382102122355670">Во ред</translation>
 <translation id="6985691951107243942">Дали сте сигурни дека сакате да ги оневозможите далечинските врски со <ph name="HOSTNAME" />? Доколку се премислите, ќе треба да го посетите тој компјутер за повторно да ги овозможите врските.</translation>

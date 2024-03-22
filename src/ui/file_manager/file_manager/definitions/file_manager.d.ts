@@ -1,8 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/// <reference types="./volume_manager" />
+import type {FileManagerBase} from '../background/js/file_manager_base.js';
+import type {VolumeManager} from '../externs/volume_manager.js';
+import type {MetadataModel} from '../foreground/js/metadata/metadata_model.js';
 
 /**
  * Type definition for foreground/js/file_manager.js:FileManager.
@@ -11,6 +13,18 @@
  */
 interface FileManager {
   volumeManager: VolumeManager;
+  metadataModel: MetadataModel;
+  crostini: Crostini;
+  selectionHandler: FileSelectionHandler;
+  taskController: TaskController;
+  dialogType: DialogType;
+  directoryModel: DirectoryModel;
+  directoryTreeNamingController: DirectoryTreeNamingController;
+}
+
+interface AppState {
+  currentDirectoryURL?: string;
+  selectionURL?: string;
 }
 
 /**
@@ -18,7 +32,35 @@ interface FileManager {
  */
 declare global {
   interface Window {
+    appID: string;
     fileManager: FileManager;
+    IN_TEST: boolean;
+    JSErrorCount: number;
+    store: Store;
+    /** Log action data in the console for debugging purpose. */
+    DEBUG_STORE: boolean;
+
+    /** Namespace used for test utils. */
+    test: any;
+
+    appState?: AppState;
+
+    webkitResolveLocalFileSystemURL(
+        url: string, successCallback: FileSystemEntryCallback,
+        errorCallback: ErrorCallback): void;
+
+    // Only used for grid.ts
+    cvox?: {
+      Api?: {
+        isChromeVoxActive: () => boolean,
+      },
+    };
+
+    // Defined in the file_manager_base.ts
+    background: FileManagerBase;
+
+    // Defined in the main_window_component.ts
+    isFocused?: () => boolean;
   }
 }
 

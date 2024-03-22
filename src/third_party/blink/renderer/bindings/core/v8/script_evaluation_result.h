@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 #include "base/dcheck_is_on.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "v8/include/v8.h"
 
 namespace blink {
 
 class ScriptPromise;
+class ScriptState;
 
 // ScriptEvaluationResult encapsulates the result of a classic or module script
 // evaluation:
@@ -27,9 +28,10 @@ class CORE_EXPORT ScriptEvaluationResult final {
 
  public:
   ScriptEvaluationResult() = delete;
-  ScriptEvaluationResult(const ScriptEvaluationResult& value) = default;
-  ScriptEvaluationResult& operator=(const ScriptEvaluationResult& value) =
-      default;
+  ScriptEvaluationResult(const ScriptEvaluationResult&) = delete;
+  ScriptEvaluationResult& operator=(const ScriptEvaluationResult&) = delete;
+  ScriptEvaluationResult(ScriptEvaluationResult&&) = default;
+  ScriptEvaluationResult& operator=(ScriptEvaluationResult&&) = default;
   ~ScriptEvaluationResult() = default;
 
   enum class ResultType {
@@ -116,6 +118,15 @@ class CORE_EXPORT ScriptEvaluationResult final {
   // Returns the exception thrown.
   // Can be called only when GetResultType() == kException.
   v8::Local<v8::Value> GetExceptionForModule() const;
+
+  // Returns the exception thrown for classic scripts for a worklet.
+  // Can be called only when GetResultType() == kException.
+  //
+  // TODO(crbug.com/1419253): Shared storage worklet is using a ClassicScript
+  // and relies on this method to get the exception. This is tentative.
+  // Eventually, this method should be removed once shared storage migrates to
+  // the blink-worklet's script loading infrastructure.
+  v8::Local<v8::Value> GetExceptionForWorklet() const;
 
   // Returns the exception thrown for both module and classic scripts.
   // Can be called only when GetResultType() == kException.

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include <algorithm>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
@@ -16,6 +17,7 @@
 #include "media/learning/common/media_learning_tasks.h"
 #include "media/learning/common/target_histogram.h"
 #include "media/learning/mojo/public/mojom/learning_task_controller.mojom-blink.h"
+#include "media/mojo/clients/mojo_video_encoder_metrics_provider.h"
 #include "media/mojo/mojom/media_metrics_provider.mojom-blink.h"
 #include "media/mojo/mojom/media_types.mojom-blink.h"
 #include "media/mojo/mojom/video_decode_perf_history.mojom-blink.h"
@@ -39,6 +41,7 @@
 #include "third_party/blink/renderer/core/frame/navigator.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/peerconnection/rtc_video_encoder_factory.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_view.h"
@@ -224,8 +227,9 @@ class FakeMediaMetricsProvider
 
  private:
   mojo::Receiver<media::mojom::blink::MediaMetricsProvider> receiver_{this};
-  MockLearningTaskControllerService* bad_window_service_;
-  MockLearningTaskControllerService* nnr_service_;
+  raw_ptr<MockLearningTaskControllerService, DanglingUntriaged>
+      bad_window_service_;
+  raw_ptr<MockLearningTaskControllerService, DanglingUntriaged> nnr_service_;
 };
 
 // Simple helper for saving back-end callbacks for pending decodingInfo() calls.
@@ -1464,9 +1468,14 @@ TEST(MediaCapabilitiesTests, WebrtcEncodePowerEfficientIsSmooth) {
   // supported and powerEfficient.
   MediaCapabilitiesTestContext context;
   media::MockGpuVideoAcceleratorFactories mock_gpu_factories(nullptr);
+
+  auto video_encoder_factory =
+      std::make_unique<RTCVideoEncoderFactory>(&mock_gpu_factories, nullptr);
+  // Ensure all the profiles in our mock GPU factory are allowed.
+  video_encoder_factory->clear_disabled_profiles_for_testing();
+
   WebrtcEncodingInfoHandler encoding_info_handler(
-      blink::CreateWebrtcVideoEncoderFactory(&mock_gpu_factories,
-                                             base::DoNothing()),
+      std::move(video_encoder_factory),
       blink::CreateWebrtcAudioEncoderFactory());
   context.GetMediaCapabilities()->set_webrtc_encoding_info_handler_for_test(
       &encoding_info_handler);
@@ -1484,6 +1493,11 @@ TEST(MediaCapabilitiesTests, WebrtcEncodePowerEfficientIsSmooth) {
   EXPECT_TRUE(info->supported());
   EXPECT_TRUE(info->smooth());
   EXPECT_TRUE(info->powerEfficient());
+
+  // RTCVideoEncoderFactory destroys MojoVideoEncoderMetricsProvider on the
+  // task runner of GpuVideoAcceleratorFactories.
+  EXPECT_CALL(mock_gpu_factories, GetTaskRunner())
+      .WillOnce(Return(base::SequencedTaskRunner::GetCurrentDefault()));
 }
 
 TEST(MediaCapabilitiesTests, WebrtcEncodeOverridePowerEfficientIsSmooth) {
@@ -1502,9 +1516,14 @@ TEST(MediaCapabilitiesTests, WebrtcEncodeOverridePowerEfficientIsSmooth) {
   // supported and powerEfficient.
   MediaCapabilitiesTestContext context;
   media::MockGpuVideoAcceleratorFactories mock_gpu_factories(nullptr);
+
+  auto video_encoder_factory =
+      std::make_unique<RTCVideoEncoderFactory>(&mock_gpu_factories, nullptr);
+  // Ensure all the profiles in our mock GPU factory are allowed.
+  video_encoder_factory->clear_disabled_profiles_for_testing();
+
   WebrtcEncodingInfoHandler encoding_info_handler(
-      blink::CreateWebrtcVideoEncoderFactory(&mock_gpu_factories,
-                                             base::DoNothing()),
+      std::move(video_encoder_factory),
       blink::CreateWebrtcAudioEncoderFactory());
   context.GetMediaCapabilities()->set_webrtc_encoding_info_handler_for_test(
       &encoding_info_handler);
@@ -1529,6 +1548,11 @@ TEST(MediaCapabilitiesTests, WebrtcEncodeOverridePowerEfficientIsSmooth) {
   EXPECT_TRUE(info->supported());
   EXPECT_FALSE(info->smooth());
   EXPECT_TRUE(info->powerEfficient());
+
+  // RTCVideoEncoderFactory destroys MojoVideoEncoderMetricsProvider on the
+  // task runner of GpuVideoAcceleratorFactories.
+  EXPECT_CALL(mock_gpu_factories, GetTaskRunner())
+      .WillOnce(Return(base::SequencedTaskRunner::GetCurrentDefault()));
 }
 
 }  // namespace blink

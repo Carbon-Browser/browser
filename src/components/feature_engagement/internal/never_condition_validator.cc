@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,12 @@ NeverConditionValidator::~NeverConditionValidator() = default;
 ConditionValidator::Result NeverConditionValidator::MeetsConditions(
     const base::Feature& feature,
     const FeatureConfig& config,
+    const std::vector<GroupConfig>& group_configs,
     const EventModel& event_model,
     const AvailabilityModel& availability_model,
     const DisplayLockController& display_lock_controller,
     const Configuration* configuration,
-    uint32_t current_day) const {
+    const TimeProvider& time_provider) const {
   return ConditionValidator::Result(false);
 }
 

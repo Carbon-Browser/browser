@@ -1,16 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // This file contains browsertests for Web Bluetooth that depend on behavior
 // defined in chrome/, not just in content/.
 
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/with_feature_override.h"
 #include "chrome/browser/bluetooth/bluetooth_chooser_context_factory.h"
@@ -174,8 +176,9 @@ class FakeBluetoothGattCharacteristic
 
   void ReadRemoteCharacteristic(ValueCallback callback) override {
     if (!(GetProperties() & BluetoothGattCharacteristic::PROPERTY_READ)) {
-      std::move(callback).Run(BluetoothGattService::GATT_ERROR_NOT_PERMITTED,
-                              std::vector<uint8_t>());
+      std::move(callback).Run(
+          BluetoothGattService::GattErrorCode::kNotPermitted,
+          std::vector<uint8_t>());
       return;
     }
     if (defer_read_until_notification_start_) {
@@ -190,13 +193,13 @@ class FakeBluetoothGattCharacteristic
                           ErrorCallback error_callback) override {
     if (!(GetProperties() & BluetoothGattCharacteristic::PROPERTY_NOTIFY)) {
       std::move(error_callback)
-          .Run(BluetoothGattService::GATT_ERROR_NOT_PERMITTED);
+          .Run(BluetoothGattService::GattErrorCode::kNotPermitted);
       return;
     }
     auto fake_notify_session =
         std::make_unique<testing::NiceMock<MockBluetoothGattNotifySession>>(
             GetWeakPtr());
-    active_notify_sessions_.insert(fake_notify_session.get());
+    active_notify_sessions_.insert(fake_notify_session->unique_id());
 
     if (deferred_read_callback_) {
       // A new value as a result of calling readValue().
@@ -212,7 +215,7 @@ class FakeBluetoothGattCharacteristic
       // renderer of the change. Do the same for |callback| to ensure
       // StartNotifySession completes after the value change notification is
       // received.
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(callback), std::move(fake_notify_session)));
     } else {
@@ -222,7 +225,7 @@ class FakeBluetoothGattCharacteristic
     EXPECT_TRUE(IsNotifying());
   }
 
-  void StopNotifySession(BluetoothGattNotifySession* session,
+  void StopNotifySession(BluetoothGattNotifySession::Id session,
                          base::OnceClosure callback) override {
     EXPECT_TRUE(base::Contains(active_notify_sessions_, session));
     std::move(callback).Run();
@@ -249,7 +252,7 @@ class FakeBluetoothGattCharacteristic
   ValueCallback deferred_read_callback_;
   bool defer_read_until_notification_start_ = false;
   bool emit_value_change_at_notification_start_ = false;
-  std::set<BluetoothGattNotifySession*> active_notify_sessions_;
+  std::set<BluetoothGattNotifySession::Id> active_notify_sessions_;
 };
 
 class FakeBluetoothGattConnection
@@ -537,10 +540,13 @@ class WebBluetoothTest : public InProcessBrowserTest {
       global_values_;
   scoped_refptr<FakeBluetoothAdapter> adapter_;
   TestContentBrowserClient browser_client_;
-  raw_ptr<content::ContentBrowserClient> old_browser_client_ = nullptr;
-  raw_ptr<FakeBluetoothGattCharacteristic> characteristic_ = nullptr;
+  raw_ptr<content::ContentBrowserClient, AcrossTasksDanglingUntriaged>
+      old_browser_client_ = nullptr;
+  raw_ptr<FakeBluetoothGattCharacteristic, AcrossTasksDanglingUntriaged>
+      characteristic_ = nullptr;
 
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
   std::unique_ptr<content::URLLoaderInterceptor> url_loader_interceptor_;
 
   // Web Bluetooth needs HTTPS to work (a secure context). Moreover,
@@ -557,13 +563,12 @@ IN_PROC_BROWSER_TEST_F(WebBluetoothTest, WebBluetoothAfterCrash) {
   // Make sure we can use Web Bluetooth after the tab crashes.
   // Set up adapter with one device.
   adapter_->SetIsPresent(false);
-  std::string result;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents_.get(),
-      "navigator.bluetooth.requestDevice({filters: [{services: [0x180d]}]})"
-      "  .catch(e => domAutomationController.send(e.toString()));",
-      &result));
-  EXPECT_EQ("NotFoundError: Bluetooth adapter not available.", result);
+  EXPECT_EQ(
+      "NotFoundError: Bluetooth adapter not available.",
+      content::EvalJs(
+          web_contents_.get(),
+          "navigator.bluetooth.requestDevice({filters: [{services: [0x180d]}]})"
+          "  .catch(e => e.toString());"));
 
   // Crash the renderer process.
   content::RenderProcessHost* process =
@@ -579,14 +584,12 @@ IN_PROC_BROWSER_TEST_F(WebBluetoothTest, WebBluetoothAfterCrash) {
       browser()->tab_strip_model()->GetActiveWebContents()));
 
   // Use Web Bluetooth again.
-  std::string result_after_crash;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents_.get(),
-      "navigator.bluetooth.requestDevice({filters: [{services: [0x180d]}]})"
-      "  .catch(e => domAutomationController.send(e.toString()));",
-      &result_after_crash));
-  EXPECT_EQ("NotFoundError: Bluetooth adapter not available.",
-            result_after_crash);
+  EXPECT_EQ(
+      "NotFoundError: Bluetooth adapter not available.",
+      content::EvalJs(
+          web_contents_.get(),
+          "navigator.bluetooth.requestDevice({filters: [{services: [0x180d]}]})"
+          "  .catch(e => e.toString());"));
 }
 
 IN_PROC_BROWSER_TEST_F(WebBluetoothTest, KillSwitchShouldBlock) {
@@ -598,22 +601,21 @@ IN_PROC_BROWSER_TEST_F(WebBluetoothTest, KillSwitchShouldBlock) {
   std::map<std::string, std::string> params;
   params["Bluetooth"] =
       permissions::PermissionContextBase::kPermissionsKillSwitchBlockedValue;
-  variations::AssociateVariationParams(
+  base::AssociateFieldTrialParams(
       permissions::PermissionContextBase::kPermissionsKillSwitchFieldStudy,
       "TestGroup", params);
   base::FieldTrialList::CreateFieldTrial(
       permissions::PermissionContextBase::kPermissionsKillSwitchFieldStudy,
       "TestGroup");
 
-  std::string rejection;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents_.get(),
-      "navigator.bluetooth.requestDevice({filters: [{name: 'Hello'}]})"
-      "  .then(() => { domAutomationController.send('Success'); },"
-      "        reason => {"
-      "      domAutomationController.send(reason.name + ': ' + reason.message);"
-      "  });",
-      &rejection));
+  std::string rejection =
+      content::EvalJs(
+          web_contents_.get(),
+          "navigator.bluetooth.requestDevice({filters: [{name: 'Hello'}]})"
+          "  .then(() => 'Success',"
+          "        reason => reason.name + ': ' + reason.message"
+          "  );")
+          .ExtractString();
   EXPECT_THAT(rejection,
               testing::MatchesRegex("NotFoundError: .*globally disabled.*"));
 }
@@ -627,8 +629,8 @@ IN_PROC_BROWSER_TEST_F(WebBluetoothTest, BlocklistShouldBlock) {
 
   if (base::FieldTrialList::TrialExists("WebBluetoothBlocklist")) {
     LOG(INFO) << "WebBluetoothBlocklist field trial already configured.";
-    ASSERT_NE(variations::GetVariationParamValue("WebBluetoothBlocklist",
-                                                 "blocklist_additions")
+    ASSERT_NE(base::GetFieldTrialParamValue("WebBluetoothBlocklist",
+                                            "blocklist_additions")
                   .find("ed5f25a4"),
               std::string::npos)
         << "ERROR: WebBluetoothBlocklist field trial being tested in\n"
@@ -640,21 +642,20 @@ IN_PROC_BROWSER_TEST_F(WebBluetoothTest, BlocklistShouldBlock) {
     // Create a field trial with test parameter.
     std::map<std::string, std::string> params;
     params["blocklist_additions"] = "ed5f25a4:e";
-    variations::AssociateVariationParams("WebBluetoothBlocklist", "TestGroup",
-                                         params);
+    base::AssociateFieldTrialParams("WebBluetoothBlocklist", "TestGroup",
+                                    params);
     base::FieldTrialList::CreateFieldTrial("WebBluetoothBlocklist",
                                            "TestGroup");
   }
 
-  std::string rejection;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents_.get(),
-      "navigator.bluetooth.requestDevice({filters: [{services: [0xed5f25a4]}]})"
-      "  .then(() => { domAutomationController.send('Success'); },"
-      "        reason => {"
-      "      domAutomationController.send(reason.name + ': ' + reason.message);"
-      "  });",
-      &rejection));
+  std::string rejection =
+      content::EvalJs(web_contents_.get(),
+                      "navigator.bluetooth.requestDevice({filters: [{services: "
+                      "[0xed5f25a4]}]})"
+                      "  .then(() => 'Success',"
+                      "        reason => reason.name + ': ' + reason.message"
+                      "  );")
+          .ExtractString();
   EXPECT_THAT(rejection,
               testing::MatchesRegex("SecurityError: .*blocklisted UUID.*"));
 }
@@ -754,7 +755,7 @@ IN_PROC_BROWSER_TEST_F(WebBluetoothTest, NotificationStartValueChangeRead) {
     })())");
 
   const base::Value promise_values = js_values.ExtractList();
-  EXPECT_EQ(2U, promise_values.GetListDeprecated().size());
+  EXPECT_EQ(2U, promise_values.GetList().size());
   EXPECT_EQ(content::ListValueOf(1, 1), js_values);
 }
 
@@ -1361,7 +1362,7 @@ class WebBluetoothTestWithNewPermissionsBackendEnabledInPrerendering
       default;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     WebBluetoothTestWithNewPermissionsBackendEnabled::SetUp();
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,9 @@ class putHR {
 #undef COMPACT_GOOGLE_LOG_EX_VERBOSE
 #endif
 
-#define COMPACT_GOOGLE_LOG_EX_VERBOSE(ClassName, ...) \
-  ::logging::ClassName(__FILE__, __LINE__, ::logging::LOG_INFO, ##__VA_ARGS__)
+#define COMPACT_GOOGLE_LOG_EX_VERBOSE(ClassName, ...)               \
+  ::logging::ClassName(__FILE__, __LINE__, ::logging::LOGGING_INFO, \
+                       ##__VA_ARGS__)
 
 // A helper macro which checks if the message should be logged based on log
 // level.

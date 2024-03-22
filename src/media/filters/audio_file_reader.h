@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -107,7 +107,7 @@ class MEDIA_EXPORT AudioFileReader {
   std::unique_ptr<AVCodecContext, ScopedPtrAVFreeContext> codec_context_;
 
   int stream_index_;
-  raw_ptr<FFmpegURLProtocol> protocol_;
+  raw_ptr<FFmpegURLProtocol, DanglingUntriaged> protocol_;
   AudioCodec audio_codec_;
   int channels_;
   int sample_rate_;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,14 @@ GWSPageLoadMetricsObserver::OnCommit(
   return page_load_metrics::IsGoogleSearchResultUrl(navigation_handle->GetURL())
              ? CONTINUE_OBSERVING
              : STOP_OBSERVING;
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+GWSPageLoadMetricsObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  // TODO(https://crbug.com/1317494): Handle Prerendering cases.
+  return STOP_OBSERVING;
 }
 
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy

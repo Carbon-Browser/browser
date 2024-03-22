@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,22 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
 #include "net/base/io_buffer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
+
+const char kFakeFileText[] =
+    "This is a testing file. Lorem ipsum dolor sit amet est.";
+
 namespace {
 
 const char kFakeFileName[] = "hello.txt";
-const char kFakeFileText[] =
-    "This is a testing file. Lorem ipsum dolor sit amet est.";
 const size_t kFakeFileSize = sizeof(kFakeFileText) - 1u;
 const char kFakeFileModificationTime[] = "Fri, 25 Apr 2014 01:47:53";
 const char kFakeFileMimeType[] = "text/plain";
@@ -39,15 +41,13 @@ constexpr char kBadFakeEntryName2[] = "bad2";
 const base::FilePath::CharType kFakeFilePath[] =
     FILE_PATH_LITERAL("/hello.txt");
 
-FakeEntry::FakeEntry() {
-}
+FakeEntry::FakeEntry() {}
 
 FakeEntry::FakeEntry(std::unique_ptr<EntryMetadata> metadata,
                      const std::string& contents)
     : metadata(std::move(metadata)), contents(contents) {}
 
-FakeEntry::~FakeEntry() {
-}
+FakeEntry::~FakeEntry() {}
 
 FakeProvidedFileSystem::FakeProvidedFileSystem(
     const ProvidedFileSystemInfo& file_system_info)
@@ -78,7 +78,8 @@ void FakeProvidedFileSystem::AddEntry(const base::FilePath& entry_path,
                                       base::Time modification_time,
                                       std::string mime_type,
                                       std::string contents) {
-  DCHECK(entries_.find(entry_path) == entries_.end());
+  DCHECK(entries_.find(entry_path) == entries_.end())
+      << "Already present " << entry_path;
   std::unique_ptr<EntryMetadata> metadata(new EntryMetadata);
 
   metadata->is_directory = std::make_unique<bool>(is_directory);
@@ -91,13 +92,48 @@ void FakeProvidedFileSystem::AddEntry(const base::FilePath& entry_path,
       std::make_unique<FakeEntry>(std::move(metadata), contents);
 }
 
-const FakeEntry* FakeProvidedFileSystem::GetEntry(
+FakeEntry* FakeProvidedFileSystem::GetEntry(
     const base::FilePath& entry_path) const {
   const Entries::const_iterator entry_it = entries_.find(entry_path);
   if (entry_it == entries_.end())
-    return NULL;
+    return nullptr;
 
   return entry_it->second.get();
+}
+
+base::File::Error FakeProvidedFileSystem::CopyOrMoveEntry(
+    const base::FilePath& source_path,
+    const base::FilePath& target_path,
+    bool is_move) {
+  // Check that the source entry exists.
+  const FakeEntry* source_entry = GetEntry(source_path);
+  if (!source_entry) {
+    return base::File::FILE_ERROR_NOT_FOUND;
+  }
+  // Delete `target_path` if it already exists, since AddEntry DCHECKs that
+  // there's no existing entry.
+  switch (auto err = DoDeleteEntry(target_path, /*recursive=*/false)) {
+    case base::File::Error::FILE_OK:
+    case base::File::Error::FILE_ERROR_NOT_FOUND:
+      break;
+    default:
+      return err;
+  }
+  // Copy source entry.
+  DCHECK_NE(source_entry->metadata, nullptr);
+  DCHECK_NE(source_entry->metadata->is_directory, nullptr);
+  DCHECK_NE(source_entry->metadata->name, nullptr);
+  DCHECK_NE(source_entry->metadata->size, nullptr);
+  DCHECK_NE(source_entry->metadata->modification_time, nullptr);
+  DCHECK_NE(source_entry->metadata->mime_type, nullptr);
+  AddEntry(target_path, *(source_entry->metadata->is_directory),
+           *(source_entry->metadata->name), *(source_entry->metadata->size),
+           *(source_entry->metadata->modification_time),
+           *(source_entry->metadata->mime_type), source_entry->contents);
+  if (is_move) {
+    entries_.erase(source_path);
+  }
+  return base::File::FILE_OK;
 }
 
 AbortCallback FakeProvidedFileSystem::RequestUnmount(
@@ -150,7 +186,6 @@ AbortCallback FakeProvidedFileSystem::GetMetadata(
 AbortCallback FakeProvidedFileSystem::GetActions(
     const std::vector<base::FilePath>& entry_paths,
     ProvidedFileSystemInterface::GetActionsCallback callback) {
-  // TODO(mtomasz): Implement it once needed.
   const std::vector<Action> actions;
   return PostAbortableTask(
       base::BindOnce(std::move(callback), actions, base::File::FILE_OK));
@@ -160,7 +195,6 @@ AbortCallback FakeProvidedFileSystem::ExecuteAction(
     const std::vector<base::FilePath>& entry_paths,
     const std::string& action_id,
     storage::AsyncFileUtil::StatusCallback callback) {
-  // TODO(mtomasz): Implement it once needed.
   return PostAbortableTask(
       base::BindOnce(std::move(callback), base::File::FILE_OK));
 }
@@ -173,7 +207,7 @@ AbortCallback FakeProvidedFileSystem::ReadDirectory(
   for (Entries::const_iterator it = entries_.begin(); it != entries_.end();
        ++it) {
     const base::FilePath file_path = it->first;
-    if (file_path == directory_path || directory_path.IsParent(file_path)) {
+    if (directory_path == file_path.DirName()) {
       const EntryMetadata* const metadata = it->second->metadata.get();
       filesystem::mojom::FsFileType entry_type =
           *metadata->is_directory ? filesystem::mojom::FsFileType::DIRECTORY
@@ -198,6 +232,12 @@ AbortCallback FakeProvidedFileSystem::OpenFile(const base::FilePath& entry_path,
     return PostAbortableTask(base::BindOnce(std::move(callback),
                                             0 /* file_handle */,
                                             base::File::FILE_ERROR_NOT_FOUND));
+  }
+
+  FakeEntry& entry = *entry_it->second;
+  if (mode == OPEN_FILE_MODE_WRITE && flush_required_) {
+    DCHECK(!entry.write_buffer);
+    entry.write_buffer = entry.contents;
   }
 
   const int file_handle = ++last_file_handle_;
@@ -261,10 +301,10 @@ AbortCallback FakeProvidedFileSystem::ReadFile(
     buffer->data()[current_offset - offset] = entry->contents[current_offset];
     const bool has_more =
         (current_offset + 1 < *entry->metadata->size) && (current_length - 1);
-    const int task_id =
-        tracker_.PostTask(base::ThreadTaskRunnerHandle::Get().get(), FROM_HERE,
-                          base::BindOnce(callback, 1 /* chunk_length */,
-                                         has_more, base::File::FILE_OK));
+    const int task_id = tracker_.PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(), FROM_HERE,
+        base::BindOnce(callback, 1 /* chunk_length */, has_more,
+                       base::File::FILE_OK));
     task_ids.push_back(task_id);
     current_offset++;
     current_length--;
@@ -278,7 +318,29 @@ AbortCallback FakeProvidedFileSystem::CreateDirectory(
     const base::FilePath& directory_path,
     bool recursive,
     storage::AsyncFileUtil::StatusCallback callback) {
-  // TODO(mtomasz): Implement it once needed.
+  // No-op if the directory already exists.
+  if (GetEntry(directory_path)) {
+    return PostAbortableTask(
+        base::BindOnce(std::move(callback), base::File::FILE_OK));
+  }
+  // Create directories recursively.
+  std::vector<base::FilePath::StringType> components =
+      directory_path.GetComponents();
+  CHECK_EQ(components[0], "/");
+  base::FilePath path(components[0]);
+  for (size_t i = 1; i < components.size(); ++i) {
+    path = path.AppendASCII(components[i]);
+    if (GetEntry(path)) {
+      continue;
+    }
+    // If `recursive` is set to false, only the last component of the provided
+    // path should be new.
+    if (!recursive && i < components.size() - 1) {
+      return PostAbortableTask(base::BindOnce(
+          std::move(callback), base::File::FILE_ERROR_INVALID_OPERATION));
+    }
+    AddEntry(path, true, path.BaseName().value(), 0, base::Time(), "", "");
+  }
   return PostAbortableTask(
       base::BindOnce(std::move(callback), base::File::FILE_OK));
 }
@@ -287,44 +349,82 @@ AbortCallback FakeProvidedFileSystem::DeleteEntry(
     const base::FilePath& entry_path,
     bool recursive,
     storage::AsyncFileUtil::StatusCallback callback) {
-  // TODO(mtomasz): Implement it once needed.
-  return PostAbortableTask(
-      base::BindOnce(std::move(callback), base::File::FILE_OK));
+  auto err = DoDeleteEntry(entry_path, recursive);
+  return PostAbortableTask(base::BindOnce(std::move(callback), err));
+}
+
+base::File::Error FakeProvidedFileSystem::DoDeleteEntry(
+    const base::FilePath& entry_path,
+    bool recursive) {
+  // Check that the entry to remove exists.
+  if (!GetEntry(entry_path)) {
+    return base::File::FILE_ERROR_NOT_FOUND;
+  }
+  // If `recursive` is false, check that `entry_path` is not parent of any entry
+  // path in `entries_`.
+  if (!recursive) {
+    const Entries::const_iterator it =
+        base::ranges::find_if(entries_, [entry_path](auto& entry_it) {
+          return entry_path.IsParent(entry_it.first);
+        });
+    if (it != entries_.end()) {
+      return base::File::FILE_ERROR_INVALID_OPERATION;
+    }
+  }
+  // Erase the entry with path `entry_path`, as well as all child entries.
+  for (Entries::const_iterator entry_it = entries_.begin();
+       entry_it != entries_.end();) {
+    if (entry_path == entry_it->first || entry_path.IsParent(entry_it->first)) {
+      entry_it = entries_.erase(entry_it);
+    } else {
+      ++entry_it;
+    }
+  }
+  return base::File::FILE_OK;
 }
 
 AbortCallback FakeProvidedFileSystem::CreateFile(
     const base::FilePath& file_path,
     storage::AsyncFileUtil::StatusCallback callback) {
-  const base::File::Error result = file_path.AsUTF8Unsafe() != kFakeFilePath
-                                       ? base::File::FILE_ERROR_EXISTS
-                                       : base::File::FILE_OK;
-
-  return PostAbortableTask(base::BindOnce(std::move(callback), result));
+  if (GetEntry(file_path)) {
+    return PostAbortableTask(
+        base::BindOnce(std::move(callback), base::File::FILE_ERROR_EXISTS));
+  }
+  AddEntry(file_path, false, file_path.BaseName().value(), 0, base::Time(),
+           kFakeFileMimeType, std::string());
+  return PostAbortableTask(
+      base::BindOnce(std::move(callback), base::File::FILE_OK));
 }
 
 AbortCallback FakeProvidedFileSystem::CopyEntry(
     const base::FilePath& source_path,
     const base::FilePath& target_path,
     storage::AsyncFileUtil::StatusCallback callback) {
-  // TODO(mtomasz): Implement it once needed.
-  return PostAbortableTask(
-      base::BindOnce(std::move(callback), base::File::FILE_OK));
+  return PostAbortableTask(base::BindOnce(
+      std::move(callback),
+      CopyOrMoveEntry(source_path, target_path, /*is_move=*/false)));
 }
 
 AbortCallback FakeProvidedFileSystem::MoveEntry(
     const base::FilePath& source_path,
     const base::FilePath& target_path,
     storage::AsyncFileUtil::StatusCallback callback) {
-  // TODO(mtomasz): Implement it once needed.
-  return PostAbortableTask(
-      base::BindOnce(std::move(callback), base::File::FILE_OK));
+  return PostAbortableTask(base::BindOnce(
+      std::move(callback),
+      CopyOrMoveEntry(source_path, target_path, /*is_move=*/true)));
 }
 
 AbortCallback FakeProvidedFileSystem::Truncate(
     const base::FilePath& file_path,
     int64_t length,
     storage::AsyncFileUtil::StatusCallback callback) {
-  // TODO(mtomasz): Implement it once needed.
+  FakeEntry* const entry = GetEntry(file_path);
+  if (!entry) {
+    return PostAbortableTask(
+        base::BindOnce(std::move(callback), base::File::FILE_ERROR_NOT_FOUND));
+  }
+  *entry->metadata->size = length;
+  entry->contents.resize(*entry->metadata->size);
   return PostAbortableTask(
       base::BindOnce(std::move(callback), base::File::FILE_OK));
 }
@@ -338,32 +438,61 @@ AbortCallback FakeProvidedFileSystem::WriteFile(
   const auto opened_file_it = opened_files_.find(file_handle);
 
   if (opened_file_it == opened_files_.end() ||
-      opened_file_it->second.file_path.AsUTF8Unsafe() != kFakeFilePath) {
+      !GetEntry(opened_file_it->second.file_path)) {
     return PostAbortableTask(base::BindOnce(
         std::move(callback), base::File::FILE_ERROR_INVALID_OPERATION));
   }
 
-  const Entries::iterator entry_it =
-      entries_.find(opened_file_it->second.file_path);
-  if (entry_it == entries_.end()) {
-    return PostAbortableTask(base::BindOnce(
-        std::move(callback), base::File::FILE_ERROR_INVALID_OPERATION));
+  FakeEntry* const entry = GetEntry(opened_file_it->second.file_path);
+  if (!entry) {
+    return PostAbortableTask(
+        base::BindOnce(std::move(callback), base::File::FILE_ERROR_NOT_FOUND));
   }
-
-  FakeEntry* const entry = entry_it->second.get();
-  if (offset > *entry->metadata->size) {
+  std::string& write_buffer =
+      entry->write_buffer ? *entry->write_buffer : entry->contents;
+  int64_t buffer_size = static_cast<int64_t>(write_buffer.size());
+  if (offset > buffer_size) {
     return PostAbortableTask(base::BindOnce(
         std::move(callback), base::File::FILE_ERROR_INVALID_OPERATION));
   }
 
   // Allocate the string size in advance.
-  if (offset + length > *entry->metadata->size) {
-    *entry->metadata->size = offset + length;
-    entry->contents.resize(*entry->metadata->size);
+  if (offset + length > buffer_size) {
+    if (!entry->write_buffer) {
+      // Only update metadata if we are writing contents directly.
+      *entry->metadata->size = offset + length;
+    }
+    write_buffer.resize(*entry->metadata->size);
   }
 
-  entry->contents.replace(offset, length, buffer->data(), length);
+  write_buffer.replace(offset, length, buffer->data(), length);
 
+  return PostAbortableTask(
+      base::BindOnce(std::move(callback), base::File::FILE_OK));
+}
+
+AbortCallback FakeProvidedFileSystem::FlushFile(
+    int file_handle,
+    storage::AsyncFileUtil::StatusCallback callback) {
+  const auto opened_file_it = opened_files_.find(file_handle);
+
+  if (opened_file_it == opened_files_.end() ||
+      !GetEntry(opened_file_it->second.file_path)) {
+    return PostAbortableTask(base::BindOnce(
+        std::move(callback), base::File::FILE_ERROR_INVALID_OPERATION));
+  }
+
+  FakeEntry* const entry = GetEntry(opened_file_it->second.file_path);
+  if (!entry) {
+    return PostAbortableTask(
+        base::BindOnce(std::move(callback), base::File::FILE_ERROR_NOT_FOUND));
+  }
+
+  if (entry->write_buffer) {
+    *entry->metadata->size = entry->write_buffer->size();
+    entry->contents = std::move(*entry->write_buffer);
+    entry->write_buffer = absl::nullopt;
+  }
   return PostAbortableTask(
       base::BindOnce(std::move(callback), base::File::FILE_OK));
 }
@@ -375,7 +504,7 @@ AbortCallback FakeProvidedFileSystem::AddWatcher(
     bool persistent,
     storage::AsyncFileUtil::StatusCallback callback,
     storage::WatcherManager::NotificationCallback notification_callback) {
-  // TODO(mtomasz): Implement it once needed.
+  // TODO(b/251698485): Implement it once needed.
   return PostAbortableTask(
       base::BindOnce(std::move(callback), base::File::FILE_OK));
 }
@@ -385,7 +514,7 @@ void FakeProvidedFileSystem::RemoveWatcher(
     const base::FilePath& entry_path,
     bool recursive,
     storage::AsyncFileUtil::StatusCallback callback) {
-  // TODO(mtomasz): Implement it once needed.
+  // TODO(b/251698485): Implement it once needed.
   std::move(callback).Run(base::File::FILE_OK);
 }
 
@@ -394,9 +523,9 @@ const ProvidedFileSystemInfo& FakeProvidedFileSystem::GetFileSystemInfo()
   return file_system_info_;
 }
 
-RequestManager* FakeProvidedFileSystem::GetRequestManager() {
+OperationRequestManager* FakeProvidedFileSystem::GetRequestManager() {
   NOTREACHED();
-  return NULL;
+  return nullptr;
 }
 
 Watchers* FakeProvidedFileSystem::GetWatchers() {
@@ -440,11 +569,16 @@ FakeProvidedFileSystem::GetWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
 }
 
+std::unique_ptr<ScopedUserInteraction>
+FakeProvidedFileSystem::StartUserInteraction() {
+  return nullptr;
+}
+
 AbortCallback FakeProvidedFileSystem::PostAbortableTask(
     base::OnceClosure callback) {
   const int task_id =
-      tracker_.PostTask(base::ThreadTaskRunnerHandle::Get().get(), FROM_HERE,
-                        std::move(callback));
+      tracker_.PostTask(base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+                        FROM_HERE, std::move(callback));
   return base::BindOnce(&FakeProvidedFileSystem::Abort,
                         weak_ptr_factory_.GetWeakPtr(), task_id);
 }
@@ -459,5 +593,4 @@ void FakeProvidedFileSystem::AbortMany(const std::vector<int>& task_ids) {
   }
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/single_thread_task_runner.h"
 #include "components/autofill/core/browser/payments/full_card_request.h"
-#include "components/autofill/core/browser/payments/payments_client.h"
+#include "components/autofill/core/browser/payments/payments_network_interface.h"
 #include "components/autofill/core/browser/test_address_normalizer.h"
 #include "components/autofill/core/browser/test_autofill_client.h"
 #include "components/payments/core/payment_request_delegate.h"
@@ -44,10 +44,6 @@ class TestPaymentRequestDelegate : public PaymentRequestDelegate {
   const std::string& GetApplicationLocale() const override;
   bool IsOffTheRecord() const override;
   const GURL& GetLastCommittedURL() const override;
-  void DoFullCardRequest(
-      const autofill::CreditCard& credit_card,
-      base::WeakPtr<autofill::payments::FullCardRequest::ResultDelegate>
-          result_delegate) override;
   autofill::AddressNormalizer* GetAddressNormalizer() override;
   autofill::RegionDataLoader* GetRegionDataLoader() override;
   ukm::UkmRecorder* GetUkmRecorder() override;
@@ -68,7 +64,7 @@ class TestPaymentRequestDelegate : public PaymentRequestDelegate {
   network::TestURLLoaderFactory test_url_loader_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> test_shared_loader_factory_;
   autofill::TestAutofillClient autofill_client_;
-  autofill::payments::PaymentsClient payments_client_;
+  autofill::payments::PaymentsNetworkInterface payments_network_interface_;
   autofill::payments::FullCardRequest full_card_request_;
 
   bool instantaneous_full_card_request_result_ = true;

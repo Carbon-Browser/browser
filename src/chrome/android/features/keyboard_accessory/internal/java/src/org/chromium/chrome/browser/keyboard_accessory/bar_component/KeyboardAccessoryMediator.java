@@ -1,43 +1,44 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory.bar_component;
 
+import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.ANIMATION_LISTENER;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.BAR_ITEMS;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.BOTTOM_OFFSET_PX;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.DISABLE_ANIMATIONS_FOR_TESTING;
-import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.KEYBOARD_TOGGLE_VISIBLE;
+import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.HAS_SUGGESTIONS;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.OBFUSCATED_CHILD_AT_CALLBACK;
-import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.SHEET_TITLE;
-import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.SHOW_KEYBOARD_CALLBACK;
+import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.SHEET_OPENER_ITEM;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.SHOW_SWIPING_IPH;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.SKIP_CLOSING_ANIMATION;
-import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.TAB_LAYOUT_ITEM;
 import static org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.VISIBLE;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.Px;
-import androidx.annotation.VisibleForTesting;
+import androidx.annotation.StringRes;
 
+import org.chromium.base.TraceEvent;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.keyboard_accessory.AccessoryAction;
 import org.chromium.chrome.browser.keyboard_accessory.AccessorySheetTrigger;
 import org.chromium.chrome.browser.keyboard_accessory.ManualFillingMetricsRecorder;
+import org.chromium.chrome.browser.keyboard_accessory.R;
+import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryCoordinator.BarVisibilityDelegate;
 import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryCoordinator.TabSwitchingDelegate;
-import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryCoordinator.VisibilityDelegate;
 import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.AutofillBarItem;
 import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.BarItem;
-import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.TabLayoutBarItem;
+import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryProperties.SheetOpenerBarItem;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData.Action;
 import org.chromium.chrome.browser.keyboard_accessory.data.Provider;
+import org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetCoordinator;
 import org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutCoordinator;
 import org.chromium.components.autofill.AutofillDelegate;
 import org.chromium.components.autofill.AutofillSuggestion;
 import org.chromium.components.autofill.PopupItemId;
 import org.chromium.components.feature_engagement.FeatureConstants;
-import org.chromium.ui.modelutil.ListModel;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyObservable;
@@ -45,6 +46,8 @@ import org.chromium.ui.modelutil.PropertyObservable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Predicate;
+import java.util.stream.StreamSupport;
 
 /**
  * This is the second part of the controller of the keyboard accessory component.
@@ -54,25 +57,31 @@ import java.util.List;
  * trigger when selecting them.
  */
 class KeyboardAccessoryMediator
-        implements PropertyObservable.PropertyObserver<PropertyKey>, Provider.Observer<Action[]>,
-                   KeyboardAccessoryTabLayoutCoordinator.AccessoryTabObserver {
+        implements PropertyObservable.PropertyObserver<PropertyKey>,
+                Provider.Observer<Action[]>,
+                KeyboardAccessoryTabLayoutCoordinator.AccessoryTabObserver {
     private final PropertyModel mModel;
-    private final VisibilityDelegate mVisibilityDelegate;
+    private final BarVisibilityDelegate mBarVisibilityDelegate;
+    private final AccessorySheetCoordinator.SheetVisibilityDelegate mSheetVisibilityDelegate;
     private final TabSwitchingDelegate mTabSwitcher;
 
-    KeyboardAccessoryMediator(PropertyModel model, VisibilityDelegate visibilityDelegate,
+    KeyboardAccessoryMediator(
+            PropertyModel model,
+            BarVisibilityDelegate barVisibilityDelegate,
+            AccessorySheetCoordinator.SheetVisibilityDelegate sheetVisibilityDelegate,
             TabSwitchingDelegate tabSwitcher,
-            KeyboardAccessoryTabLayoutCoordinator.TabLayoutCallbacks tabLayoutCallbacks) {
+            KeyboardAccessoryTabLayoutCoordinator.SheetOpenerCallbacks sheetOpenerCallbacks) {
         mModel = model;
-        mVisibilityDelegate = visibilityDelegate;
+        mBarVisibilityDelegate = barVisibilityDelegate;
+        mSheetVisibilityDelegate = sheetVisibilityDelegate;
         mTabSwitcher = tabSwitcher;
 
         // Add mediator as observer so it can use model changes as signal for accessory visibility.
         mModel.set(OBFUSCATED_CHILD_AT_CALLBACK, this::onSuggestionObfuscatedAt);
-        mModel.set(SHOW_KEYBOARD_CALLBACK, this::closeSheet);
-        mModel.set(TAB_LAYOUT_ITEM, new TabLayoutBarItem(tabLayoutCallbacks));
+        mModel.set(SHEET_OPENER_ITEM, new SheetOpenerBarItem(sheetOpenerCallbacks));
+        mModel.set(ANIMATION_LISTENER, mBarVisibilityDelegate::onBarFadeInAnimationEnd);
         if (ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)) {
-            mModel.get(BAR_ITEMS).add(mModel.get(TAB_LAYOUT_ITEM));
+            mModel.get(BAR_ITEMS).add(mModel.get(SHEET_OPENER_ITEM));
         }
         mModel.addObserver(this);
     }
@@ -87,29 +96,44 @@ class KeyboardAccessoryMediator
     Provider.Observer<AutofillSuggestion[]> createAutofillSuggestionsObserver(
             AutofillDelegate delegate) {
         return (@AccessoryAction int typeId, AutofillSuggestion[] suggestions) -> {
-            assert typeId
-                    == AccessoryAction.AUTOFILL_SUGGESTION
-                : "Autofill suggestions observer received wrong data: "
-                            + typeId;
+            assert typeId == AccessoryAction.AUTOFILL_SUGGESTION
+                    : "Autofill suggestions observer received wrong data: " + typeId;
             List<BarItem> retainedItems = collectItemsToRetain(AccessoryAction.AUTOFILL_SUGGESTION);
             retainedItems.addAll(toBarItems(suggestions, delegate));
             if (ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)) {
-                retainedItems.add(retainedItems.size(), mModel.get(TAB_LAYOUT_ITEM));
+                retainedItems.add(retainedItems.size(), mModel.get(SHEET_OPENER_ITEM));
             }
             mModel.get(BAR_ITEMS).set(retainedItems);
+            mModel.set(HAS_SUGGESTIONS, barHasSuggestions());
         };
+    }
+
+    private boolean barHasSuggestions() {
+        for (BarItem barItem : mModel.get(BAR_ITEMS)) {
+            if (barItem.getViewType() == BarItem.Type.SUGGESTION) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     public void onItemAvailable(
             @AccessoryAction int typeId, KeyboardAccessoryData.Action[] actions) {
-        assert typeId != DEFAULT_TYPE : "Did not specify which Action type has been updated.";
+        TraceEvent.begin("KeyboardAccessoryMediator#onItemAvailable");
+        assert typeId == AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY
+                        || typeId == AccessoryAction.GENERATE_PASSWORD_AUTOMATIC
+                : "Did not specify which Action type has been updated.";
         List<BarItem> retainedItems = collectItemsToRetain(typeId);
-        retainedItems.addAll(0, toBarItems(actions));
+        retainedItems.addAll(
+                typeId == AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY ? retainedItems.size() : 0,
+                toBarItems(actions));
         if (ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)) {
-            retainedItems.add(retainedItems.size(), mModel.get(TAB_LAYOUT_ITEM));
+            retainedItems.add(retainedItems.size(), mModel.get(SHEET_OPENER_ITEM));
         }
         mModel.get(BAR_ITEMS).set(retainedItems);
+        mModel.set(HAS_SUGGESTIONS, barHasSuggestions());
+        TraceEvent.end("KeyboardAccessoryMediator#onItemAvailable");
     }
 
     private List<BarItem> collectItemsToRetain(@AccessoryAction int actionType) {
@@ -129,25 +153,24 @@ class KeyboardAccessoryMediator
      * @return True iff the suggestion should be displayed.
      */
     private boolean shouldShowSuggestion(AutofillSuggestion suggestion) {
-        switch (suggestion.getSuggestionId()) {
-            case PopupItemId.ITEM_ID_INSECURE_CONTEXT_PAYMENT_DISABLED_MESSAGE:
+        switch (suggestion.getPopupItemId()) {
+            case PopupItemId.INSECURE_CONTEXT_PAYMENT_DISABLED_MESSAGE:
                 // The insecure context warning has a replacement in the fallback sheet.
-            case PopupItemId.ITEM_ID_SEPARATOR:
-            case PopupItemId.ITEM_ID_CLEAR_FORM:
-            case PopupItemId.ITEM_ID_CREDIT_CARD_SIGNIN_PROMO:
-            case PopupItemId.ITEM_ID_ALL_SAVED_PASSWORDS_ENTRY:
-            case PopupItemId.ITEM_ID_GENERATE_PASSWORD_ENTRY:
-            case PopupItemId.ITEM_ID_SHOW_ACCOUNT_CARDS:
-            case PopupItemId.ITEM_ID_AUTOFILL_OPTIONS:
+            case PopupItemId.SEPARATOR:
+            case PopupItemId.CLEAR_FORM:
+            case PopupItemId.ALL_SAVED_PASSWORDS_ENTRY:
+            case PopupItemId.GENERATE_PASSWORD_ENTRY:
+            case PopupItemId.SHOW_ACCOUNT_CARDS:
+            case PopupItemId.AUTOFILL_OPTIONS:
                 return false;
-            case PopupItemId.ITEM_ID_AUTOCOMPLETE_ENTRY:
-            case PopupItemId.ITEM_ID_PASSWORD_ENTRY:
-            case PopupItemId.ITEM_ID_DATALIST_ENTRY:
-            case PopupItemId.ITEM_ID_SCAN_CREDIT_CARD:
-            case PopupItemId.ITEM_ID_TITLE:
-            case PopupItemId.ITEM_ID_USERNAME_ENTRY:
-            case PopupItemId.ITEM_ID_ACCOUNT_STORAGE_PASSWORD_ENTRY:
-            case PopupItemId.ITEM_ID_ACCOUNT_STORAGE_USERNAME_ENTRY:
+            case PopupItemId.AUTOCOMPLETE_ENTRY:
+            case PopupItemId.PASSWORD_ENTRY:
+            case PopupItemId.DATALIST_ENTRY:
+            case PopupItemId.SCAN_CREDIT_CARD:
+            case PopupItemId.TITLE:
+            case PopupItemId.USERNAME_ENTRY:
+            case PopupItemId.ACCOUNT_STORAGE_PASSWORD_ENTRY:
+            case PopupItemId.ACCOUNT_STORAGE_USERNAME_ENTRY:
                 return true;
         }
         return true; // If it's not a special id, show the regular suggestion!
@@ -161,52 +184,47 @@ class KeyboardAccessoryMediator
             if (!shouldShowSuggestion(suggestion)) continue;
             barItems.add(new AutofillBarItem(suggestion, createAutofillAction(delegate, position)));
         }
-        return barItems;
-    }
 
-    /**
-     * Annotates the first suggestion in with an in-product help bubble. For password suggestions,
-     * the first suggestion is usually autofilled and therefore, the second element is annotated.
-     *
-     * This doesn't necessary mean that the IPH bubble will be shown - a final check will be
-     * performed right before the bubble can be displayed.
-     */
-    void prepareUserEducation() {
-        ListModel<BarItem> items = mModel.get(BAR_ITEMS);
+        // Annotates the first suggestion in with an in-product help bubble. For password
+        // suggestions, the first suggestion is usually autofilled and therefore, the second
+        // element is annotated.
+        // This doesn't necessary mean that the IPH bubble will be shown - a final check will be
+        // performed right before the bubble can be displayed.
         boolean skippedFirstPasswordItem = false;
-        for (int i = 0; i < items.size(); ++i) {
-            if (items.get(i).getViewType() != BarItem.Type.SUGGESTION) continue;
-            AutofillBarItem barItem = (AutofillBarItem) items.get(i);
+        for (AutofillBarItem barItem : barItems) {
             if (!skippedFirstPasswordItem && containsPasswordInfo(barItem.getSuggestion())) {
                 // For password suggestions, we want to educate about the 2nd entry.
                 skippedFirstPasswordItem = true;
                 continue;
             }
             barItem.setFeatureForIPH(getFeatureBySuggestionId(barItem.getSuggestion()));
-            items.update(i, barItem);
             break; // Only set IPH for one suggestions in the bar.
         }
+
+        return barItems;
     }
 
     private Collection<BarItem> toBarItems(Action[] actions) {
         List<BarItem> barItems = new ArrayList<>(actions.length);
         for (Action action : actions) {
-            barItems.add(new BarItem(toBarItemType(action.getActionType()), action));
+            barItems.add(
+                    new BarItem(
+                            toBarItemType(action.getActionType()),
+                            action,
+                            getCaptionId(action.getActionType())));
         }
         return barItems;
     }
 
-    private KeyboardAccessoryData.Action createAutofillAction(AutofillDelegate delegate, int pos) {
-        return new KeyboardAccessoryData.Action(
-                null, // Unused. The AutofillSuggestion has more meaningful labels.
+    private Action createAutofillAction(AutofillDelegate delegate, int pos) {
+        return new Action(
                 AccessoryAction.AUTOFILL_SUGGESTION,
-                result
-                -> {
+                result -> {
                     ManualFillingMetricsRecorder.recordActionSelected(
                             AccessoryAction.AUTOFILL_SUGGESTION);
                     delegate.suggestionSelected(pos);
                 },
-                result -> { delegate.deleteSuggestion(pos); });
+                result -> delegate.deleteSuggestion(pos));
     }
 
     private @BarItem.Type int toBarItemType(@AccessoryAction int accessoryAction) {
@@ -215,7 +233,10 @@ class KeyboardAccessoryMediator
                 return BarItem.Type.SUGGESTION;
             case AccessoryAction.GENERATE_PASSWORD_AUTOMATIC:
                 return BarItem.Type.ACTION_BUTTON;
+            case AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY:
+                return BarItem.Type.ACTION_CHIP;
             case AccessoryAction.MANAGE_PASSWORDS: // Intentional fallthrough - no view defined.
+            case AccessoryAction.CROSS_DEVICE_PASSKEY:
             case AccessoryAction.COUNT:
                 throw new IllegalArgumentException("No view defined for :" + accessoryAction);
         }
@@ -250,16 +271,14 @@ class KeyboardAccessoryMediator
             }
             return;
         }
-        if (propertyKey == KEYBOARD_TOGGLE_VISIBLE) {
-            KeyboardAccessoryData.Tab activeTab = mTabSwitcher.getActiveTab();
-            if (activeTab != null) mModel.set(SHEET_TITLE, activeTab.getTitle());
-            return;
-        }
-        if (propertyKey == BOTTOM_OFFSET_PX || propertyKey == SHOW_KEYBOARD_CALLBACK
-                || propertyKey == TAB_LAYOUT_ITEM || propertyKey == SHEET_TITLE
+        if (propertyKey == BOTTOM_OFFSET_PX
+                || propertyKey == SHEET_OPENER_ITEM
                 || propertyKey == SKIP_CLOSING_ANIMATION
                 || propertyKey == DISABLE_ANIMATIONS_FOR_TESTING
-                || propertyKey == OBFUSCATED_CHILD_AT_CALLBACK || propertyKey == SHOW_SWIPING_IPH) {
+                || propertyKey == OBFUSCATED_CHILD_AT_CALLBACK
+                || propertyKey == SHOW_SWIPING_IPH
+                || propertyKey == HAS_SUGGESTIONS
+                || propertyKey == ANIMATION_LISTENER) {
             return;
         }
         assert false : "Every property update needs to be handled explicitly!";
@@ -267,12 +286,12 @@ class KeyboardAccessoryMediator
 
     @Override
     public void onActiveTabChanged(Integer activeTab) {
-        mModel.set(KEYBOARD_TOGGLE_VISIBLE, activeTab != null);
         if (activeTab == null) {
-            mVisibilityDelegate.onCloseAccessorySheet();
+            if (ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)) return;
+            mSheetVisibilityDelegate.onCloseAccessorySheet();
             return;
         }
-        mVisibilityDelegate.onChangeAccessorySheet(activeTab);
+        mSheetVisibilityDelegate.onChangeAccessorySheet(activeTab);
     }
 
     @Override
@@ -281,11 +300,13 @@ class KeyboardAccessoryMediator
     }
 
     private void closeSheet() {
+        assert !ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
+                : "The bar cannot close the sheet when AUTOFILL_KEYBOARD_ACCESSORY is enabled. It"
+                        + " must be closed by the sheet.";
         assert mTabSwitcher.getActiveTab() != null;
         ManualFillingMetricsRecorder.recordSheetTrigger(
                 mTabSwitcher.getActiveTab().getRecordingType(), AccessorySheetTrigger.MANUAL_CLOSE);
-        mModel.set(KEYBOARD_TOGGLE_VISIBLE, false);
-        mVisibilityDelegate.onCloseAccessorySheet();
+        mSheetVisibilityDelegate.onCloseAccessorySheet();
     }
 
     private void onSuggestionObfuscatedAt(Integer indexOfLast) {
@@ -322,7 +343,6 @@ class KeyboardAccessoryMediator
         return mModel.get(VISIBLE) && mTabSwitcher.getActiveTab() != null;
     }
 
-    @VisibleForTesting
     PropertyModel getModelForTesting() {
         return mModel;
     }
@@ -330,17 +350,13 @@ class KeyboardAccessoryMediator
     private static String getFeatureBySuggestionId(AutofillSuggestion suggestion) {
         // If the suggestion has an explicit IPH feature defined, prefer that over the default IPH
         // features.
-        if (!suggestion.getFeatureForIPH().isEmpty()) {
+        if (suggestion.getFeatureForIPH() != null && !suggestion.getFeatureForIPH().isEmpty()) {
             return suggestion.getFeatureForIPH();
         }
         if (containsPasswordInfo(suggestion)) {
             return FeatureConstants.KEYBOARD_ACCESSORY_PASSWORD_FILLING_FEATURE;
         }
         if (containsCreditCardInfo(suggestion)) {
-            if (!suggestion.getItemTag().isEmpty()) {
-                // Prefer showing a linked cashback over the general IPH.
-                return FeatureConstants.KEYBOARD_ACCESSORY_PAYMENT_OFFER_FEATURE;
-            }
             return FeatureConstants.KEYBOARD_ACCESSORY_PAYMENT_FILLING_FEATURE;
         }
         if (containsAddressInfo(suggestion)) {
@@ -350,15 +366,48 @@ class KeyboardAccessoryMediator
     }
 
     private static boolean containsPasswordInfo(AutofillSuggestion suggestion) {
-        return suggestion.getSuggestionId() == PopupItemId.ITEM_ID_USERNAME_ENTRY
-                || suggestion.getSuggestionId() == PopupItemId.ITEM_ID_PASSWORD_ENTRY;
+        return suggestion.getPopupItemId() == PopupItemId.USERNAME_ENTRY
+                || suggestion.getPopupItemId() == PopupItemId.PASSWORD_ENTRY;
     }
 
     private static boolean containsCreditCardInfo(AutofillSuggestion suggestion) {
-        return suggestion.getSuggestionId() > 0 && (suggestion.getSuggestionId() & 0xFFFF0000) != 0;
+        return suggestion.getPopupItemId() == PopupItemId.CREDIT_CARD_ENTRY;
     }
 
     private static boolean containsAddressInfo(AutofillSuggestion suggestion) {
-        return suggestion.getSuggestionId() > 0 && (suggestion.getSuggestionId() & 0x0000FFFF) != 0;
+        return suggestion.getPopupItemId() == PopupItemId.ADDRESS_ENTRY;
+    }
+
+    private @StringRes int getCaptionId(@AccessoryAction int actionType) {
+        switch (actionType) {
+            case AccessoryAction.GENERATE_PASSWORD_AUTOMATIC:
+                return R.string.password_generation_accessory_button;
+            case AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY:
+                return getCaptionIdForCredManEntry();
+            case AccessoryAction.AUTOFILL_SUGGESTION:
+            case AccessoryAction.COUNT:
+            case AccessoryAction.TOGGLE_SAVE_PASSWORDS:
+            case AccessoryAction.USE_OTHER_PASSWORD:
+            case AccessoryAction.GENERATE_PASSWORD_MANUAL:
+            case AccessoryAction.MANAGE_ADDRESSES:
+            case AccessoryAction.MANAGE_CREDIT_CARDS:
+            case AccessoryAction.MANAGE_PASSWORDS:
+            case AccessoryAction.CROSS_DEVICE_PASSKEY:
+                assert false : "No caption defined for accessory action: " + actionType;
+        }
+        assert false : "Define a title for accessory action: " + actionType;
+        return 0;
+    }
+
+    private @StringRes int getCaptionIdForCredManEntry() {
+        Predicate<BarItem> hasWebAuthnCredential =
+                barItem ->
+                        barItem.getViewType() == BarItem.Type.SUGGESTION
+                                && ((AutofillBarItem) barItem).getSuggestion().getPopupItemId()
+                                        == PopupItemId.WEBAUTHN_CREDENTIAL;
+        return StreamSupport.stream(mModel.get(BAR_ITEMS).spliterator(), true)
+                        .anyMatch(hasWebAuthnCredential)
+                ? R.string.more_passkeys
+                : R.string.select_passkey;
     }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,8 @@ class WebContentsModalDialogHost;
 }
 
 namespace constrained_window {
+
+extern const void* kConstrainedWindowWidgetIdentifier;
 
 class ConstrainedWindowViewsClient;
 
@@ -88,13 +90,18 @@ views::Widget* CreateBrowserModalDialogViews(
 views::Widget* CreateBrowserModalDialogViews(views::DialogDelegate* dialog,
                                              gfx::NativeWindow parent);
 
-// Shows a browser-modal dialog based on `dialog_model`.
-void ShowBrowserModal(std::unique_ptr<ui::DialogModel> dialog_model,
-                      gfx::NativeWindow parent);
+// Shows a browser-modal dialog based on `dialog_model`, returns pointer
+// to the created widget.
+views::Widget* ShowBrowserModal(std::unique_ptr<ui::DialogModel> dialog_model,
+                                gfx::NativeWindow parent);
 
-// Shows a web/tab-modal dialog based on `dialog_model`.
-void ShowWebModal(std::unique_ptr<ui::DialogModel> dialog_model,
-                  content::WebContents* web_contents);
+// Shows a web/tab-modal dialog based on `dialog_model` and returns its widget.
+views::Widget* ShowWebModal(std::unique_ptr<ui::DialogModel> dialog_model,
+                            content::WebContents* web_contents);
+
+// True if the platform supports global screen coordinates. This is typically
+// supported by most platforms except linux-wayland.
+bool SupportsGlobalScreenCoordinates();
 
 }  // namespace constrained_window
 

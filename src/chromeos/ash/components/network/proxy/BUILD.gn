@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,8 +14,8 @@ source_set("proxy") {
   configs += [ "//chromeos/ash/components/network:network_config" ]
   deps = [
     "//base",
+    "//chromeos/ash/components/dbus/shill",
     "//chromeos/ash/components/network/onc",
-    "//chromeos/dbus/shill",
     "//components/onc",
     "//components/pref_registry",
     "//components/prefs",
@@ -38,9 +38,9 @@ source_set("unit_tests") {
   testonly = true
   deps = [
     "//base",
+    "//chromeos/ash/components/dbus/shill",
     "//chromeos/ash/components/network",
     "//chromeos/ash/components/network:test_support",
-    "//chromeos/dbus/shill",
     "//components/onc",
     "//components/prefs",
     "//components/prefs:test_support",

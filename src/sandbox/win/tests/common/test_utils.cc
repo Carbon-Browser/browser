@@ -1,4 +1,4 @@
-// Copyright (c) 2006-2010 The Chromium Authors. All rights reserved.
+// Copyright 2006-2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,6 +76,24 @@ bool DeleteReparsePoint(HANDLE source) {
   }
 
   return true;
+}
+
+bool IsSidInDacl(const base::win::AccessControlList& dacl,
+                 bool allowed,
+                 std::optional<ACCESS_MASK> mask,
+                 const base::win::Sid& sid) {
+  DWORD ace_type = allowed ? ACCESS_ALLOWED_ACE_TYPE : ACCESS_DENIED_ACE_TYPE;
+  PACL pacl = dacl.get();
+  for (unsigned int i = 0; i < pacl->AceCount; ++i) {
+    // Allowed and deny ACEs have the same structure.
+    PACCESS_ALLOWED_ACE ace;
+    if (::GetAce(pacl, i, reinterpret_cast<LPVOID*>(&ace)) &&
+        ace->Header.AceType == ace_type && sid.Equal(&ace->SidStart) &&
+        (!mask.has_value() || mask == ace->Mask)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace sandbox

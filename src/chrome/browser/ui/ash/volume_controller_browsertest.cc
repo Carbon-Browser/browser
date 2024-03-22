@@ -1,18 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <map>
 #include <memory>
 
-#include "ash/components/audio/cras_audio_handler.h"
-#include "ash/components/audio/sounds.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/shell.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
+#include "chromeos/ash/components/audio/sounds.h"
 #include "content/public/test/browser_test.h"
 #include "services/audio/public/cpp/sounds/sounds_manager.h"
 #include "ui/base/accelerators/accelerator.h"
@@ -31,7 +32,9 @@ class SoundsManagerTestImpl : public audio::SoundsManager {
 
   ~SoundsManagerTestImpl() override {}
 
-  bool Initialize(SoundKey key, const base::StringPiece& /* data */) override {
+  bool Initialize(SoundKey key,
+                  const base::StringPiece& /* data */,
+                  media::AudioCodec codec) override {
     is_sound_initialized_[key] = true;
     return true;
   }
@@ -58,7 +61,7 @@ class SoundsManagerTestImpl : public audio::SoundsManager {
 
 class VolumeControllerTest : public InProcessBrowserTest {
  public:
-  VolumeControllerTest() {}
+  VolumeControllerTest() = default;
 
   VolumeControllerTest(const VolumeControllerTest&) = delete;
   VolumeControllerTest& operator=(const VolumeControllerTest&) = delete;
@@ -85,22 +88,36 @@ class VolumeControllerTest : public InProcessBrowserTest {
   }
 
  protected:
-  ash::CrasAudioHandler* audio_handler_;  // Not owned.
+  raw_ptr<ash::CrasAudioHandler, DanglingUntriaged | ExperimentalAsh>
+      audio_handler_;  // Not owned.
 };
 
 IN_PROC_BROWSER_TEST_F(VolumeControllerTest, VolumeUpAndDown) {
   // Set initial value as 50%
   const int kInitVolume = 50;
   audio_handler_->SetOutputVolumePercent(kInitVolume);
+  int current_volume = audio_handler_->GetOutputVolumePercent();
+  EXPECT_EQ(current_volume, kInitVolume);
 
-  EXPECT_EQ(audio_handler_->GetOutputVolumePercent(), kInitVolume);
-
+  current_volume = audio_handler_->GetOutputVolumePercent();
   VolumeUp();
-  EXPECT_LT(kInitVolume, audio_handler_->GetOutputVolumePercent());
+  // number_of_volume_step = 25 mean we split volume into 25 level,
+  // and The volume goes up one level each for VolumeUp/VolumeDown event.
+  // For initial value is 48 - 51 volume will increase to 52,
+  // because 48 - 51 share same level,
+  // VolumeUp will increase to the min volume of next level, which is 52
+  // Original behavior will set volume to 54
+  EXPECT_LT(current_volume, audio_handler_->GetOutputVolumePercent());
+
+  current_volume = audio_handler_->GetOutputVolumePercent();
   VolumeDown();
-  EXPECT_EQ(kInitVolume, audio_handler_->GetOutputVolumePercent());
+  // VolumeUp will decrease to the min volume of previous level, which is 48
+  // Original behavior will set volume to 50
+  EXPECT_GT(current_volume, audio_handler_->GetOutputVolumePercent());
+
+  current_volume = audio_handler_->GetOutputVolumePercent();
   VolumeDown();
-  EXPECT_GT(kInitVolume, audio_handler_->GetOutputVolumePercent());
+  EXPECT_GT(current_volume, audio_handler_->GetOutputVolumePercent());
 }
 
 IN_PROC_BROWSER_TEST_F(VolumeControllerTest, VolumeDownToZero) {
@@ -139,26 +156,26 @@ IN_PROC_BROWSER_TEST_F(VolumeControllerTest, Mutes) {
   EXPECT_TRUE(audio_handler_->IsOutputMuted());
 
   // Right after the volume up after set_mute recovers to original volume.
+  // Press volume up key will increase the volume from the original volume.
   VolumeUp();
   EXPECT_FALSE(audio_handler_->IsOutputMuted());
-  EXPECT_EQ(initial_volume, audio_handler_->GetOutputVolumePercent());
+    EXPECT_LT(initial_volume, audio_handler_->GetOutputVolumePercent());
 
   VolumeMute();
-  // After the volume down, the volume goes down to zero explicitly.
+  // After the volume down, press volume down key will decrease the volume from
+  // the original volume while the volume is still muted.
   VolumeDown();
-  EXPECT_TRUE(audio_handler_->IsOutputMuted());
-  EXPECT_EQ(0, audio_handler_->GetOutputVolumePercent());
+    EXPECT_TRUE(audio_handler_->IsOutputMuted());
+    EXPECT_EQ(initial_volume, audio_handler_->GetOutputVolumePercent());
 
-  // Thus, further VolumeUp doesn't recover the volume, it's just slightly
-  // bigger than 0.
-  VolumeUp();
-  EXPECT_LT(0, audio_handler_->GetOutputVolumePercent());
-  EXPECT_GT(initial_volume, audio_handler_->GetOutputVolumePercent());
+    // Thus, further VolumeUp will increase the volume.
+    VolumeUp();
+    EXPECT_LT(initial_volume, audio_handler_->GetOutputVolumePercent());
 }
 
 class VolumeControllerSoundsTest : public VolumeControllerTest {
  public:
-  VolumeControllerSoundsTest() : sounds_manager_(NULL) {}
+  VolumeControllerSoundsTest() : sounds_manager_(nullptr) {}
 
   VolumeControllerSoundsTest(const VolumeControllerSoundsTest&) = delete;
   VolumeControllerSoundsTest& operator=(const VolumeControllerSoundsTest&) =
@@ -182,7 +199,8 @@ class VolumeControllerSoundsTest : public VolumeControllerTest {
   }
 
  private:
-  SoundsManagerTestImpl* sounds_manager_;
+  raw_ptr<SoundsManagerTestImpl, DanglingUntriaged | ExperimentalAsh>
+      sounds_manager_;
 };
 
 IN_PROC_BROWSER_TEST_F(VolumeControllerSoundsTest, Simple) {
@@ -233,7 +251,7 @@ IN_PROC_BROWSER_TEST_F(VolumeControllerSoundsTest, EdgeCases) {
 
 class VolumeControllerSoundsDisabledTest : public VolumeControllerSoundsTest {
  public:
-  VolumeControllerSoundsDisabledTest() {}
+  VolumeControllerSoundsDisabledTest() = default;
 
   VolumeControllerSoundsDisabledTest(
       const VolumeControllerSoundsDisabledTest&) = delete;

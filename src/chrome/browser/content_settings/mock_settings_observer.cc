@@ -1,10 +1,9 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/content_settings/mock_settings_observer.h"
 
-#include "chrome/browser/chrome_notification_types.h"
 #include "url/gurl.h"
 
 MockSettingsObserver::MockSettingsObserver(HostContentSettingsMap* map)

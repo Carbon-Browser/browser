@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@ extern const char kHistogramFromGWSFirstImagePaint[];
 extern const char kHistogramFromGWSFirstContentfulPaint[];
 extern const char kHistogramFromGWSLargestContentfulPaint[];
 extern const char kHistogramFromGWSParseStartToFirstContentfulPaint[];
-extern const char kHistogramFromGWSParseDuration[];
 extern const char kHistogramFromGWSParseStart[];
 extern const char kHistogramFromGWSFirstInputDelay[];
 extern const char kHistogramFromGWSAbortStopBeforePaint[];
@@ -114,9 +113,6 @@ class FromGWSPageLoadMetricsLogger {
   void OnParseStart(
       const page_load_metrics::mojom::PageLoadTiming& timing,
       const page_load_metrics::PageLoadMetricsObserverDelegate& delegate);
-  void OnParseStop(
-      const page_load_metrics::mojom::PageLoadTiming& timing,
-      const page_load_metrics::PageLoadMetricsObserverDelegate& delegate);
   void OnUserInput(
       const blink::WebInputEvent& event,
       const page_load_metrics::mojom::PageLoadTiming& timing,
@@ -180,6 +176,8 @@ class FromGWSPageLoadMetricsObserver
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override;
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override;
   ObservePolicy OnCommit(content::NavigationHandle* navigation_handle) override;
 
   ObservePolicy FlushMetricsOnAppEnterBackground(
@@ -198,8 +196,6 @@ class FromGWSPageLoadMetricsObserver
   void OnFirstInputInPage(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
   void OnParseStart(
-      const page_load_metrics::mojom::PageLoadTiming& timing) override;
-  void OnParseStop(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
 
   void OnComplete(

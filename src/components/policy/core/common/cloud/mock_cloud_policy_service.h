@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,11 +20,12 @@ class MockCloudPolicyService : public CloudPolicyService {
   MockCloudPolicyService& operator=(const MockCloudPolicyService&) = delete;
   ~MockCloudPolicyService() override;
 
-  MOCK_METHOD1(RefreshPolicy, void(RefreshPolicyCallback));
+  MOCK_METHOD2(RefreshPolicy, void(RefreshPolicyCallback, PolicyFetchReason));
 
  private:
   // Invokes real RefreshPolicy() method.
-  void InvokeRefreshPolicy(RefreshPolicyCallback callback);
+  void InvokeRefreshPolicy(RefreshPolicyCallback callback,
+                           PolicyFetchReason reason);
 };
 
 class MockCloudPolicyServiceObserver : public CloudPolicyService::Observer {

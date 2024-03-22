@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,7 +65,7 @@ base::Value::List GetFontList_SlowBlocking() {
     font_item.Append(localized_name.value());
     font_list.Append(std::move(font_item));
   }
-
+  std::sort(font_list.begin(), font_list.end());
   return font_list;
 }
 

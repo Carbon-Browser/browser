@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <fuchsia/element/cpp/fidl.h>
 #include <lib/fidl/cpp/interface_request.h>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/fuchsia/scoped_service_binding.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ui/browser_list_observer.h"
+#include "components/fuchsia_component_support/annotations_manager.h"
 
 namespace base {
 class CommandLine;
@@ -45,7 +46,9 @@ class ElementManagerImpl final : public fuchsia::element::Manager,
   ElementManagerImpl(const ElementManagerImpl&) = delete;
   ElementManagerImpl& operator=(const ElementManagerImpl&) = delete;
 
-  std::vector<fuchsia::element::Annotation> GetAnnotations();
+  fuchsia_component_support::AnnotationsManager& annotations_manager() {
+    return annotations_manager_;
+  }
 
   // fuchsia::element::Manager implementation
   void ProposeElement(
@@ -74,13 +77,12 @@ class ElementManagerImpl final : public fuchsia::element::Manager,
   void OnBrowserRemoved(Browser* browser) override;
 
   base::ScopedServiceBinding<fuchsia::element::Manager> binding_;
-  const NewProposalCallback callback_;
-  HaveBrowserCallback have_browser_for_test_;
+  const NewProposalCallback new_proposal_callback_;
+
   fidl::BindingSet<fuchsia::element::Controller> controller_bindings_;
-  base::flat_map<fuchsia::element::AnnotationKey,
-                 fuchsia::element::Annotation,
-                 AnnotationKeyCompare>
-      annotations_;
+  fuchsia_component_support::AnnotationsManager annotations_manager_;
+
+  HaveBrowserCallback have_browser_for_test_;
 };
 
 #endif  // CHROME_BROWSER_FUCHSIA_ELEMENT_MANAGER_IMPL_H_

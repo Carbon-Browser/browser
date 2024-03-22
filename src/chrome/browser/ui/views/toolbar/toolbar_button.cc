@@ -1,24 +1,25 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/color/chrome_color_provider_utils.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/ui_features.h"
@@ -29,9 +30,11 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/menu_source_utils.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/models/menu_model.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/display/display.h"
@@ -57,84 +60,6 @@ namespace {
 constexpr int kBorderThicknessDpWithLabel = 1;
 constexpr int kBorderThicknessDpWithoutLabel = 2;
 
-// Cycle duration of ink drop pulsing animation used for in-product help.
-constexpr base::TimeDelta kFeaturePromoPulseDuration = base::Milliseconds(800);
-
-// Max inset for pulsing animation.
-constexpr float kFeaturePromoPulseInsetDip = 3.0f;
-
-// An InkDropMask used to animate the size of the BrowserAppMenuButton's ink
-// drop. This is used when showing in-product help.
-class PulsingInkDropMask : public views::AnimationDelegateViews,
-                           public views::InkDropMask {
- public:
-  PulsingInkDropMask(views::View* layer_container,
-                     const gfx::Size& layer_size,
-                     const gfx::Insets& margins,
-                     float normal_corner_radius,
-                     float max_inset)
-      : AnimationDelegateViews(layer_container),
-        views::InkDropMask(layer_size),
-        layer_container_(layer_container),
-        margins_(margins),
-        normal_corner_radius_(normal_corner_radius),
-        max_inset_(max_inset),
-        throb_animation_(this) {
-    throb_animation_.SetThrobDuration(kFeaturePromoPulseDuration);
-    throb_animation_.StartThrobbing(-1);
-  }
-
- private:
-  // views::InkDropMask:
-  void OnPaintLayer(const ui::PaintContext& context) override {
-    cc::PaintFlags flags;
-    flags.setStyle(cc::PaintFlags::kFill_Style);
-    flags.setAntiAlias(true);
-
-    ui::PaintRecorder recorder(context, layer()->size());
-
-    gfx::RectF bounds(layer()->bounds());
-    bounds.Inset(gfx::InsetsF(margins_));
-
-    const float current_inset =
-        throb_animation_.CurrentValueBetween(0.0f, max_inset_);
-    bounds.Inset(gfx::InsetsF(current_inset));
-    const float corner_radius = normal_corner_radius_ - current_inset;
-
-    recorder.canvas()->DrawRoundRect(bounds, corner_radius, flags);
-  }
-
-  // views::AnimationDelegateViews:
-  void AnimationProgressed(const gfx::Animation* animation) override {
-    DCHECK_EQ(animation, &throb_animation_);
-    layer()->SchedulePaint(gfx::Rect(layer()->size()));
-
-    // This is a workaround for crbug.com/935808: for scale factors >1,
-    // invalidating the mask layer doesn't cause the whole layer to be repainted
-    // on screen. TODO(crbug.com/935808): remove this workaround once the bug is
-    // fixed.
-    layer_container_->SchedulePaint();
-  }
-
-  // The View that contains the InkDrop layer we're masking. This must outlive
-  // our instance.
-  const raw_ptr<views::View> layer_container_;
-
-  // Margins between the layer bounds and the visible ink drop. We use this
-  // because sometimes the View we're masking is larger than the ink drop we
-  // want to show.
-  const gfx::Insets margins_;
-
-  // Normal corner radius of the ink drop without animation. This is also the
-  // corner radius at the largest instant of the animation.
-  const float normal_corner_radius_;
-
-  // Max inset, used at the smallest instant of the animation.
-  const float max_inset_;
-
-  gfx::ThrobAnimation throb_animation_;
-};
-
 }  // namespace
 
 ToolbarButton::ToolbarButton(PressedCallback callback)
@@ -155,39 +80,6 @@ ToolbarButton::ToolbarButton(PressedCallback callback,
 
   set_context_menu_controller(this);
 
-  views::InkDrop::Get(this)->SetCreateMaskCallback(base::BindRepeating(
-      [](ToolbarButton* host) -> std::unique_ptr<views::InkDropMask> {
-        if (host->has_in_product_help_promo_) {
-          // This gets the latest ink drop insets. |SetTrailingMargin()| is
-          // called whenever our margins change (i.e. due to the window
-          // maximizing or minimizing) and updates our internal padding property
-          // accordingly.
-          const gfx::Insets ink_drop_insets = GetToolbarInkDropInsets(host);
-          const float corner_radius = (host->height() - ink_drop_insets.top() -
-                                       ink_drop_insets.bottom()) /
-                                      2.0f;
-          return std::make_unique<PulsingInkDropMask>(
-              host->ink_drop_container(), host->size(), ink_drop_insets,
-              corner_radius, kFeaturePromoPulseInsetDip);
-        }
-        return std::make_unique<views::PathInkDropMask>(host->size(),
-                                                        GetHighlightPath(host));
-      },
-      this));
-  views::InkDrop::Get(this)->SetBaseColorCallback(base::BindRepeating(
-      [](ToolbarButton* host) {
-        if (host->has_in_product_help_promo_) {
-          return host->GetColorProvider()->GetColor(
-              kColorToolbarFeaturePromoHighlight);
-        }
-        absl::optional<SkColor> drop_base_color =
-            host->highlight_color_animation_.GetInkDropBaseColor();
-        if (drop_base_color)
-          return *drop_base_color;
-        return GetToolbarInkDropBaseColor(host);
-      },
-      this));
-
   // Make sure icons are flipped by default so that back, forward, etc. follows
   // UI direction.
   SetFlipCanvasOnPaintForRTLUI(true);
@@ -201,7 +93,13 @@ ToolbarButton::ToolbarButton(PressedCallback callback,
   // allocate the property once and modify the value.
   SetProperty(views::kInternalPaddingKey, gfx::Insets());
 
+  if (features::IsChromeRefresh2023() &&
+      base::FeatureList::IsEnabled(features::kChromeRefresh2023TopChromeFont)) {
+    label()->SetTextStyle(views::style::STYLE_BODY_4_EMPHASIS);
+  }
+
   SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
+  views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);
 }
 
 ToolbarButton::~ToolbarButton() = default;
@@ -254,11 +152,11 @@ void ToolbarButton::UpdateColorsAndInsets() {
 
   SetEnabledTextColors(highlight_color_animation_.GetTextColor());
 
-  // ToolbarButtons are always the height the location bar.
+  // ToolbarButton height is constrained by the height of the location bar.
+  const int extra_height = std::max(
+      0, target_size.height() - GetLayoutConstant(LOCATION_BAR_HEIGHT));
   const gfx::Insets paint_insets =
-      gfx::Insets(
-          (target_size.height() - GetLayoutConstant(LOCATION_BAR_HEIGHT)) / 2) +
-      *GetProperty(views::kInternalPaddingKey);
+      gfx::Insets(extra_height / 2) + *GetProperty(views::kInternalPaddingKey);
 
   absl::optional<SkColor> background_color =
       highlight_color_animation_.GetBackgroundColor();
@@ -281,7 +179,7 @@ void ToolbarButton::UpdateColorsAndInsets() {
   if (!GetBorder() || target_insets != current_insets ||
       last_border_color_ != border_color ||
       last_paint_insets_ != paint_insets) {
-    if (border_color) {
+    if (ShouldPaintBorder() && border_color) {
       int border_thickness_dp = GetText().empty()
                                     ? kBorderThicknessDpWithoutLabel
                                     : kBorderThicknessDpWithLabel;
@@ -318,8 +216,7 @@ SkColor ToolbarButton::GetForegroundColor(ButtonState state) const {
     case ButtonState::STATE_NORMAL:
       return color_provider->GetColor(kColorToolbarButtonIcon);
     default:
-      NOTREACHED();
-      return gfx::kPlaceholderColor;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -328,9 +225,7 @@ void ToolbarButton::UpdateIconsWithColors(const gfx::VectorIcon& icon,
                                           SkColor hovered_color,
                                           SkColor pressed_color,
                                           SkColor disabled_color) {
-  const int icon_size = ui::TouchUiController::Get()->touch_ui()
-                            ? kDefaultTouchableIconSize
-                            : kDefaultIconSize;
+  const int icon_size = GetIconSize();
   SetImageModel(ButtonState::STATE_NORMAL,
                 ui::ImageModel::FromVectorIcon(icon, normal_color, icon_size));
   SetImageModel(ButtonState::STATE_HOVERED,
@@ -339,6 +234,35 @@ void ToolbarButton::UpdateIconsWithColors(const gfx::VectorIcon& icon,
                 ui::ImageModel::FromVectorIcon(icon, pressed_color, icon_size));
   SetImageModel(Button::STATE_DISABLED, ui::ImageModel::FromVectorIcon(
                                             icon, disabled_color, icon_size));
+}
+
+int ToolbarButton::GetIconSize() const {
+  if (ui::TouchUiController::Get()->touch_ui()) {
+    return kDefaultTouchableIconSize;
+  }
+
+  return features::IsChromeRefresh2023() ? kDefaultIconSizeChromeRefresh
+                                         : kDefaultIconSize;
+}
+
+bool ToolbarButton::ShouldPaintBorder() const {
+  return true;
+}
+
+bool ToolbarButton::ShouldBlendHighlightColor() const {
+  return !features::IsChromeRefresh2023();
+}
+
+bool ToolbarButton::ShouldDirectlyUseHighlightAsBackground() const {
+  return true;
+}
+
+absl::optional<SkColor> ToolbarButton::GetHighlightTextColor() const {
+  return absl::nullopt;
+}
+
+absl::optional<SkColor> ToolbarButton::GetHighlightBorderColor() const {
+  return absl::nullopt;
 }
 
 void ToolbarButton::SetVectorIcon(const gfx::VectorIcon& icon) {
@@ -468,7 +392,7 @@ bool ToolbarButton::OnMousePressed(const ui::MouseEvent& event) {
     y_position_on_lbuttondown_ = event.y();
 
     // Schedule a task that will show the menu.
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&ToolbarButton::ShowDropDownMenu,
                        show_menu_factory_.GetWeakPtr(),
@@ -533,6 +457,8 @@ void ToolbarButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {
 
 std::u16string ToolbarButton::GetTooltipText(const gfx::Point& p) const {
   // Suppress tooltip when IPH is showing.
+  // TODO(crbug.com/1419653): Investigate if we should suppress tooltip for all
+  // Buttons rather than just ToolbarButtons when IPH is on.
   return has_in_product_help_promo_ ? std::u16string()
                                     : views::LabelButton::GetTooltipText(p);
 }
@@ -549,44 +475,11 @@ void ToolbarButton::ShowContextMenuForViewImpl(View* source,
 
 void ToolbarButton::AfterPropertyChange(const void* key, int64_t old_value) {
   View::AfterPropertyChange(key, old_value);
-  if (key == user_education::kHasInProductHelpPromoKey)
-    SetHasInProductHelpPromo(
-        GetProperty(user_education::kHasInProductHelpPromoKey));
-}
-
-void ToolbarButton::SetHasInProductHelpPromo(bool has_in_product_help_promo) {
-  if (has_in_product_help_promo_ == has_in_product_help_promo)
-    return;
-
-  has_in_product_help_promo_ = has_in_product_help_promo;
-
-  // We call SetBaseColorCallback() and SetCreateMaskCallback(),
-  // returning the promo values if we are showing an in-product help promo.
-  // Calling HostSizeChanged() will force the new mask and color to be fetched.
-  //
-  // TODO(collinbaker): Consider adding explicit way to recreate mask instead
-  // of relying on HostSizeChanged() to do so.
-  views::InkDrop::Get(this)->GetInkDrop()->HostSizeChanged(size());
-
-  views::InkDropState next_state;
-  if (has_in_product_help_promo_ ||
-      (ShouldShowInkdropAfterIphInteraction() && GetVisible())) {
-    // If we are showing a promo, we must use the ACTIVATED state to show the
-    // highlight. Otherwise, if the menu is currently showing, we need to keep
-    // the ink drop in the ACTIVATED state.
-    next_state = views::InkDropState::ACTIVATED;
-  } else {
-    // If we are not showing a promo and the menu is hidden, we use the
-    // DEACTIVATED state.
-    next_state = views::InkDropState::DEACTIVATED;
-    // TODO(collinbaker): this is brittle since we don't know if something
-    // else should keep this ACTIVATED or in some other state. Consider adding
-    // code to track the correct state and restore to that.
+  if (key == user_education::kHasInProductHelpPromoKey) {
+    has_in_product_help_promo_ =
+        GetProperty(user_education::kHasInProductHelpPromoKey);
+    UpdateIcon();
   }
-  views::InkDrop::Get(this)->GetInkDrop()->AnimateToState(next_state);
-
-  UpdateIcon();
-  SchedulePaint();
 }
 
 bool ToolbarButton::ShouldShowMenu() {
@@ -627,8 +520,7 @@ void ToolbarButton::ShowDropDownMenu(ui::MenuSourceType source_type) {
 
   menu_showing_ = true;
 
-  views::InkDrop::Get(this)->AnimateToState(views::InkDropState::ACTIVATED,
-                                            nullptr /* event */);
+  menu_anchor_higlight_ = AddAnchorHighlight();
 
   // Exit if the model is null. Although ToolbarButton::ShouldShowMenu()
   // performs the same check, its overrides may not.
@@ -643,15 +535,16 @@ void ToolbarButton::ShowDropDownMenu(ui::MenuSourceType source_type) {
       model_.get(), base::BindRepeating(&ToolbarButton::OnMenuClosed,
                                         base::Unretained(this)));
   menu_model_adapter_->set_triggerable_event_flags(GetTriggerableEventFlags());
+  std::unique_ptr<views::MenuItemView> root = menu_model_adapter_->CreateMenu();
+  root->SetSubmenuId(menu_identifier_);
   menu_runner_ = std::make_unique<views::MenuRunner>(
-      menu_model_adapter_->CreateMenu(), views::MenuRunner::HAS_MNEMONICS);
+      std::move(root), views::MenuRunner::HAS_MNEMONICS);
   menu_runner_->RunMenuAt(GetWidget(), nullptr, menu_anchor_bounds,
                           views::MenuAnchorPosition::kTopLeft, source_type);
 }
 
 void ToolbarButton::OnMenuClosed() {
-  views::InkDrop::Get(this)->AnimateToState(views::InkDropState::DEACTIVATED,
-                                            nullptr /* event */);
+  menu_anchor_higlight_.reset();
 
   menu_showing_ = false;
 
@@ -712,8 +605,15 @@ absl::optional<SkColor> ToolbarButton::HighlightColorAnimation::GetTextColor()
     const {
   if (!IsShown() || !parent_->GetColorProvider())
     return absl::nullopt;
+
+  // Use the overridden value supplied by the button.
+  const absl::optional<SkColor> text_color_overridden =
+      parent_->GetHighlightTextColor();
   SkColor text_color;
-  if (highlight_color_) {
+
+  if (text_color_overridden.has_value()) {
+    text_color = *text_color_overridden;
+  } else if (highlight_color_) {
     text_color = *highlight_color_;
   } else {
     text_color = parent_->GetColorProvider()->GetColor(kColorToolbarButtonText);
@@ -727,9 +627,15 @@ absl::optional<SkColor> ToolbarButton::HighlightColorAnimation::GetBorderColor()
     return absl::nullopt;
   }
 
+  // Use the overridden value is supplied by the button
+  const absl::optional<SkColor> border_color_overridden =
+      parent_->GetHighlightBorderColor();
   SkColor border_color;
-  if (highlight_color_) {
-    border_color = *highlight_color_;
+
+  if (border_color_overridden.has_value()) {
+    border_color = border_color_overridden.value();
+  } else if (highlight_color_.has_value()) {
+    border_color = highlight_color_.value();
   } else {
     border_color =
         parent_->GetColorProvider()->GetColor(kColorToolbarButtonBorder);
@@ -744,10 +650,13 @@ ToolbarButton::HighlightColorAnimation::GetBackgroundColor() const {
     return absl::nullopt;
   SkColor bg_color =
       color_provider->GetColor(kColorToolbarButtonBackgroundHighlightedDefault);
-  if (highlight_color_) {
-    bg_color = color_utils::AlphaBlend(*highlight_color_,
-                                       color_provider->GetColor(kColorToolbar),
-                                       kToolbarInkDropHighlightVisibleOpacity);
+  if (highlight_color_.has_value()) {
+    bg_color =
+        parent_->ShouldBlendHighlightColor()
+            ? color_utils::AlphaBlend(highlight_color_.value(),
+                                      color_provider->GetColor(kColorToolbar),
+                                      kToolbarInkDropHighlightVisibleAlpha)
+            : highlight_color_.value();
   }
   return FadeWithAnimation(bg_color, highlight_color_animation_);
 }

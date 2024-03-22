@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,10 @@ public class ProgressBarDialogFragment extends DialogFragment {
                 .Builder(getActivity(), R.style.ThemeOverlay_BrowserUI_AlertDialog_NoActionBar)
                 .setView(dialog)
                 .setNegativeButton(R.string.cancel, mHandler)
-                .setTitle(getActivity().getResources().getString(
-                        R.string.settings_passwords_preparing_export))
+                .setTitle(
+                        getActivity()
+                                .getResources()
+                                .getString(R.string.settings_passwords_preparing_export))
                 .create();
     }
 

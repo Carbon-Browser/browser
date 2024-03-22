@@ -1,23 +1,29 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/settings/settings_security_key_handler.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/containers/cxx20_erase_vector.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
+#include "build/build_config.h"
+#include "chrome/browser/platform_util.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser_finder.h"
+#include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
-#include "chrome/browser/ui/webui/settings/settings_security_key_handler.h"
 #include "chrome/browser/webauthn/cablev2_devices.h"
+#include "chrome/browser/webauthn/local_credential_management.h"
+#include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
@@ -33,6 +39,10 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/icu/source/common/unicode/locid.h"
 #include "ui/base/l10n/l10n_util.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "device/fido/win/webauthn_api.h"
+#endif
 
 using content::BrowserThread;
 
@@ -66,7 +76,7 @@ bool DecodePublicKey(const std::string& value,
     return false;
   }
 
-  std::copy(bytes.begin(), bytes.end(), out->begin());
+  base::ranges::copy(bytes, out->begin());
   return true;
 }
 
@@ -154,8 +164,7 @@ void SecurityKeysPINHandler::OnGatherPIN(uint32_t current_min_pin_length,
     response.Set("retries", base::Value());
   }
 
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(response)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), response);
 }
 
 void SecurityKeysPINHandler::OnSetPINComplete(
@@ -174,8 +183,7 @@ void SecurityKeysPINHandler::OnSetPINComplete(
   base::Value::Dict response;
   response.Set("done", true);
   response.Set("error", static_cast<int>(code));
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(response)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), response);
 }
 
 void SecurityKeysPINHandler::HandleSetPIN(const base::Value::List& args) {
@@ -463,7 +471,7 @@ void SecurityKeysCredentialHandler::HandleUpdateUserInformation(
 
   device::PublicKeyCredentialUserEntity updated_user(
       std::move(user_handle), std::move(new_username),
-      std::move(new_displayname), absl::nullopt);
+      std::move(new_displayname));
 
   credential_management_->UpdateUserInformation(
       std::move(credential_id), std::move(updated_user),
@@ -527,8 +535,7 @@ void SecurityKeysCredentialHandler::OnHaveCredentials(
     }
   }
 
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(credentials)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), credentials);
 }
 
 void SecurityKeysCredentialHandler::OnGatherPIN(
@@ -548,8 +555,7 @@ void SecurityKeysCredentialHandler::OnGatherPIN(
     response.Set("supportsUpdateUserInformation",
                  authenticator_properties.supports_update_user_information);
     state_ = State::kPIN;
-    ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                              base::Value(std::move(response)));
+    ResolveJavascriptCallback(base::Value(std::move(callback_id_)), response);
     return;
   }
 
@@ -558,8 +564,7 @@ void SecurityKeysCredentialHandler::OnGatherPIN(
   base::Value::List response;
   response.Append(static_cast<int>(authenticator_properties.min_pin_length));
   response.Append(static_cast<int>(authenticator_properties.pin_retries));
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(response)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), response);
 }
 
 void SecurityKeysCredentialHandler::OnCredentialsDeleted(
@@ -580,8 +585,7 @@ void SecurityKeysCredentialHandler::OnCredentialsDeleted(
           status == device::CtapDeviceResponseCode::kSuccess
               ? IDS_SETTINGS_SECURITY_KEYS_CREDENTIAL_MANAGEMENT_DELETE_SUCCESS
               : IDS_SETTINGS_SECURITY_KEYS_CREDENTIAL_MANAGEMENT_DELETE_FAILED));
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(response)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), response);
 }
 
 void SecurityKeysCredentialHandler::OnUserInformationUpdated(
@@ -602,8 +606,7 @@ void SecurityKeysCredentialHandler::OnUserInformationUpdated(
           status == device::CtapDeviceResponseCode::kSuccess
               ? IDS_SETTINGS_SECURITY_KEYS_CREDENTIAL_MANAGEMENT_UPDATE_SUCCESS
               : IDS_SETTINGS_SECURITY_KEYS_CREDENTIAL_MANAGEMENT_UPDATE_FAILED));
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(response)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), response);
 }
 
 void SecurityKeysCredentialHandler::OnFinished(
@@ -796,8 +799,7 @@ void SecurityKeysBioEnrollmentHandler::OnGatherPIN(
   base::Value::List response;
   response.Append(static_cast<int>(min_pin_length));
   response.Append(static_cast<int>(retries));
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(response)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), response);
 }
 
 void SecurityKeysBioEnrollmentHandler::HandleProvidePIN(
@@ -821,8 +823,7 @@ void SecurityKeysBioEnrollmentHandler::HandleGetSensorInfo(
   if (sensor_info_.max_samples_for_enroll) {
     response.Set("maxSamplesForEnroll", *sensor_info_.max_samples_for_enroll);
   }
-  ResolveJavascriptCallback(base::Value(std::move(args[0].GetString())),
-                            base::Value(std::move(response)));
+  ResolveJavascriptCallback(base::Value(args[0].GetString()), response);
 }
 
 void SecurityKeysBioEnrollmentHandler::HandleEnumerate(
@@ -852,8 +853,7 @@ void SecurityKeysBioEnrollmentHandler::OnHaveEnumeration(
   }
 
   state_ = State::kReady;
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(list)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), list);
 }
 
 void SecurityKeysBioEnrollmentHandler::HandleStartEnrolling(
@@ -878,8 +878,7 @@ void SecurityKeysBioEnrollmentHandler::OnEnrollingResponse(
   base::Value::Dict d;
   d.Set("status", static_cast<int>(status));
   d.Set("remaining", static_cast<int>(remaining_samples));
-  FireWebUIListener("security-keys-bio-enroll-status",
-                    base::Value(std::move(d)));
+  FireWebUIListener("security-keys-bio-enroll-status", d);
 }
 
 void SecurityKeysBioEnrollmentHandler::OnEnrollmentFinished(
@@ -893,8 +892,7 @@ void SecurityKeysBioEnrollmentHandler::OnEnrollmentFinished(
     base::Value::Dict d;
     d.Set("code", static_cast<int>(code));
     d.Set("remaining", 0);
-    ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                              base::Value(std::move(d)));
+    ResolveJavascriptCallback(base::Value(std::move(callback_id_)), d);
     return;
   }
   if (code != device::CtapDeviceResponseCode::kSuccess) {
@@ -924,8 +922,7 @@ void SecurityKeysBioEnrollmentHandler::OnHavePostEnrollmentEnumeration(
   d.Set("remaining", 0);
   d.Set("enrollment", EncodeEnrollment(enrolled_template_id,
                                        (*enrollments)[enrolled_template_id]));
-  ResolveJavascriptCallback(base::Value(std::move(callback_id_)),
-                            base::Value(std::move(d)));
+  ResolveJavascriptCallback(base::Value(std::move(callback_id_)), d);
 }
 
 void SecurityKeysBioEnrollmentHandler::HandleDelete(
@@ -1064,13 +1061,11 @@ void SecurityKeysPhonesHandler::HandleRename(const base::Value::List& args) {
           Profile::FromBrowserContext(browser_ctx));
 
   // Remove the device that is getting renamed from the set of linked devices.
-  auto new_end = std::remove_if(
-      known_devices->linked_devices.begin(),
-      known_devices->linked_devices.end(),
-      [&public_key](const std::unique_ptr<device::cablev2::Pairing>& device)
-          -> bool { return device->peer_public_key_x962 == public_key; });
-  known_devices->linked_devices.erase(new_end,
-                                      known_devices->linked_devices.end());
+  base::EraseIf(
+      known_devices->linked_devices,
+      [&public_key](const std::unique_ptr<device::cablev2::Pairing>& device) {
+        return device->peer_public_key_x962 == public_key;
+      });
 
   PrefService* const prefs =
       Profile::FromBrowserContext(browser_ctx)->GetPrefs();
@@ -1112,7 +1107,180 @@ void SecurityKeysPhonesHandler::DoEnumerate(const base::Value& callback_id) {
   result.Append(std::move(synced));
   result.Append(std::move(linked));
 
-  ResolveJavascriptCallback(callback_id, base::Value(std::move(result)));
+  ResolveJavascriptCallback(callback_id, result);
 }
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+
+PasskeysHandler::PasskeysHandler() = default;
+
+PasskeysHandler::PasskeysHandler(
+    std::unique_ptr<LocalCredentialManagement> local_cred_man)
+    : local_cred_man_(std::move(local_cred_man)) {}
+
+PasskeysHandler::~PasskeysHandler() = default;
+
+void PasskeysHandler::OnJavascriptAllowed() {}
+void PasskeysHandler::OnJavascriptDisallowed() {
+  weak_factory_.InvalidateWeakPtrs();
+}
+
+void PasskeysHandler::RegisterMessages() {
+  web_ui()->RegisterMessageCallback(
+      "passkeysHasPasskeys",
+      base::BindRepeating(&PasskeysHandler::HandleHasPasskeys,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "passkeysManagePasskeys",
+      base::BindRepeating(&PasskeysHandler::HandleManagePasskeys,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "passkeysEnumerate",
+      base::BindRepeating(&PasskeysHandler::HandleEnumerate,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "passkeysDelete", base::BindRepeating(&PasskeysHandler::HandleDelete,
+                                            base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "passkeysEdit", base::BindRepeating(&PasskeysHandler::HandleEdit,
+                                          base::Unretained(this)));
+  if (!local_cred_man_) {
+    local_cred_man_ =
+        LocalCredentialManagement::Create(Profile::FromBrowserContext(
+            web_ui()->GetWebContents()->GetBrowserContext()));
+  }
+}
+
+void PasskeysHandler::HandleHasPasskeys(const base::Value::List& args) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_EQ(1u, args.size());
+
+  AllowJavascript();
+  local_cred_man_->HasCredentials(
+      base::BindOnce(&PasskeysHandler::OnHasPasskeysComplete,
+                     weak_factory_.GetWeakPtr(), args[0].GetString()));
+}
+
+void PasskeysHandler::OnHasPasskeysComplete(std::string callback_id,
+                                            bool has_passkeys) {
+  ResolveJavascriptCallback(base::Value(std::move(callback_id)),
+                            base::Value(has_passkeys));
+}
+
+void PasskeysHandler::HandleManagePasskeys(const base::Value::List& args) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_EQ(0u, args.size());
+
+  AllowJavascript();
+
+#if BUILDFLAG(IS_WIN)
+  auto* windows_api = device::WinWebAuthnApi::GetDefault();
+  // webauthn.dll version six includes management support, so if at least that
+  // version is found then Windows does management natively.
+  constexpr int kWebAuthnDLLWithManagementSupport = 6;
+  if (windows_api->IsAvailable() &&
+      windows_api->Version() >= kWebAuthnDLLWithManagementSupport) {
+    platform_util::OpenExternal(GURL("ms-settings:savedpasskeys"));
+    return;
+  }
+#endif
+
+  // If no system management exists, fall back to Chrome's own settings UI.
+  chrome::ShowSettingsSubPage(
+      chrome::FindBrowserWithTab(web_ui()->GetWebContents()),
+      chrome::kPasskeysSubPage);
+}
+
+void PasskeysHandler::HandleEnumerate(const base::Value::List& args) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_EQ(1u, args.size());
+
+  AllowJavascript();
+  DoEnumerate(args[0].GetString());
+}
+
+void PasskeysHandler::DoEnumerate(std::string callback_id) {
+  local_cred_man_->Enumerate(
+      base::BindOnce(&PasskeysHandler::OnEnumerateComplete,
+                     weak_factory_.GetWeakPtr(), std::move(callback_id)));
+}
+
+void PasskeysHandler::OnEnumerateComplete(
+    std::string callback_id,
+    absl::optional<std::vector<device::DiscoverableCredentialMetadata>>
+        credentials) {
+  base::Value result;
+
+  if (credentials.has_value()) {
+    base::Value::List passkeys;
+    for (const auto& cred : *credentials) {
+      // RP IDs with colons in them are assumed to be URLs and thus for
+      // protocols like SSH. In order to avoid confusing the UI, these are
+      // filtered out.
+      if (cred.rp_id.find(':') != std::string::npos) {
+        continue;
+      }
+
+      base::Value::Dict passkey;
+      passkey.Set("relyingPartyId", cred.rp_id);
+      passkey.Set("userName", cred.user.name.value_or(""));
+      passkey.Set("userDisplayName", cred.user.display_name.value_or(""));
+      passkey.Set("credentialId", base::HexEncode(cred.cred_id));
+      passkeys.Append(std::move(passkey));
+    }
+
+    result = base::Value(std::move(passkeys));
+  }
+
+  ResolveJavascriptCallback(base::Value(std::move(callback_id)), result);
+}
+
+void PasskeysHandler::HandleDelete(const base::Value::List& args) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_EQ(2u, args.size());
+
+  AllowJavascript();
+  std::vector<uint8_t> credential_id;
+  const bool ok = base::HexStringToBytes(args[1].GetString(), &credential_id);
+  DCHECK(ok);
+
+  local_cred_man_->Delete(
+      credential_id,
+      base::BindOnce(&PasskeysHandler::OnDeleteComplete,
+                     weak_factory_.GetWeakPtr(), args[0].GetString()));
+}
+
+void PasskeysHandler::OnDeleteComplete(std::string callback_id, bool ok) {
+  // The ok parameter is ignored. If it were false, it would mean
+  // Windows/Mac failed to delete the passkey. This can happen if API support
+  // is missing but no passkeys will be shown at all in that case so that
+  // should be impossible. It can also happen if the user attempts to delete a
+  // system-created credential. In this case the Javascript will notice that
+  // the credential didn't disappear and will show an error message.
+  DoEnumerate(std::move(callback_id));
+}
+
+void PasskeysHandler::HandleEdit(const base::Value::List& args) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_EQ(3u, args.size());
+
+  AllowJavascript();
+  std::vector<uint8_t> credential_id;
+  const bool ok = base::HexStringToBytes(args[1].GetString(), &credential_id);
+  DCHECK(ok);
+
+  std::string new_username = args[2].GetString();
+  local_cred_man_->Edit(
+      credential_id, std::move(new_username),
+      base::BindOnce(&PasskeysHandler::OnEditComplete,
+                     weak_factory_.GetWeakPtr(), args[0].GetString()));
+}
+
+void PasskeysHandler::OnEditComplete(std::string callback_id, bool ok) {
+  // The ok parameter is ignored. If it were false, it would mean
+  // Windows/Mac failed to edit the passkey.
+  DoEnumerate(std::move(callback_id));
+}
+#endif
 
 }  // namespace settings

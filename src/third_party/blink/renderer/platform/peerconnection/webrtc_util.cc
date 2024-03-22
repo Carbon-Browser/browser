@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,16 @@ webrtc::SdpVideoFormat::Parameters ConvertToSdpVideoFormatParameters(
     sdp_parameters[parameter.name.Utf8()] = parameter.value.Utf8();
   }
   return sdp_parameters;
+}
+
+base::TimeTicks PLATFORM_EXPORT ConvertToBaseTimeTicks(webrtc::Timestamp time) {
+  if (time == webrtc::Timestamp::PlusInfinity()) {
+    return base::TimeTicks::Max();
+  } else if (time == webrtc::Timestamp::MinusInfinity()) {
+    return base::TimeTicks::Min();
+  } else {
+    return base::TimeTicks() + base::Microseconds(time.us());
+  }
 }
 
 }  // namespace blink

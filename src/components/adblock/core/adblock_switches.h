@@ -18,13 +18,12 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_ADBLOCK_SWITCHES_H_
 #define COMPONENTS_ADBLOCK_CORE_ADBLOCK_SWITCHES_H_
 
-namespace adblock {
-namespace switches {
+namespace adblock::switches {
 
 extern const char kDisableAcceptableAds[];
 extern const char kDisableAdblock[];
+extern const char kDisableEyeoFiltering[];
 
-}  // namespace switches
-}  // namespace adblock
+}  // namespace adblock::switches
 
-#endif
+#endif  // COMPONENTS_ADBLOCK_CORE_ADBLOCK_SWITCHES_H_

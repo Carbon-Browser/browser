@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/interstitials/security_interstitial_page_test_utils.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -65,7 +66,7 @@ class ReaderModeIconViewBrowserTest : public InProcessBrowserTest {
     return https_server_secure_.get();
   }
 
-  raw_ptr<PageActionIconView> reader_mode_icon_;
+  raw_ptr<PageActionIconView, AcrossTasksDanglingUntriaged> reader_mode_icon_;
   std::unique_ptr<net::EmbeddedTestServer> https_server_secure_;
 
  private:

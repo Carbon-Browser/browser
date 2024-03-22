@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,10 @@ class MODULES_EXPORT AuthenticatorAssertionResponse final
   DOMArrayBuffer* signature() const { return signature_.Get(); }
 
   DOMArrayBuffer* userHandle() const { return user_handle_.Get(); }
+
+  absl::variant<AuthenticatorAssertionResponseJSON*,
+                AuthenticatorAttestationResponseJSON*>
+  toJSON() const override;
 
   void Trace(Visitor*) const override;
 

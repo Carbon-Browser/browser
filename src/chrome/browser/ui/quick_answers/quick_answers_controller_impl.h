@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,22 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
+#include "chromeos/components/editor_menu/public/cpp/read_write_card_controller.h"
 #include "chromeos/components/quick_answers/public/cpp/controller/quick_answers_controller.h"
 #include "chromeos/components/quick_answers/quick_answers_client.h"
 #include "chromeos/components/quick_answers/quick_answers_model.h"
 #include "ui/gfx/geometry/rect.h"
 
+class Profile;
 class QuickAnswersState;
 class QuickAnswersUiController;
 
 // Implementation of QuickAnswerController. It fetches quick answers
 // result via QuickAnswersClient and manages quick answers UI.
-class QuickAnswersControllerImpl : public QuickAnswersController,
+class QuickAnswersControllerImpl : public chromeos::ReadWriteCardController,
+                                   public QuickAnswersController,
                                    public quick_answers::QuickAnswersDelegate {
  public:
   QuickAnswersControllerImpl();
@@ -27,31 +32,28 @@ class QuickAnswersControllerImpl : public QuickAnswersController,
       delete;
   ~QuickAnswersControllerImpl() override;
 
-  // QuickAnswersController:
-  void SetClient(
-      std::unique_ptr<quick_answers::QuickAnswersClient> client) override;
+  // chromeos::ReadWriteCardController:
+  void OnContextMenuShown(Profile* profile) override;
+  void OnTextAvailable(const gfx::Rect& anchor_bounds,
+                       const std::string& selected_text,
+                       const std::string& surrounding_text) override;
+  void OnAnchorBoundsChanged(const gfx::Rect& anchor_bounds) override;
+  void OnDismiss(bool is_other_command_executed) override;
 
+  // QuickAnswersController:
   // SetClient is required to be called before using these methods.
   // TODO(yanxiao): refactor to delegate to browser.
-  void MaybeShowQuickAnswers(const gfx::Rect& anchor_bounds,
-                             const std::string& title,
-                             const quick_answers::Context& context) override;
-
+  void SetClient(
+      std::unique_ptr<quick_answers::QuickAnswersClient> client) override;
   void DismissQuickAnswers(
       quick_answers::QuickAnswersExitPoint exit_point) override;
-
-  // Update the bounds of the anchor view.
-  void UpdateQuickAnswersAnchorBounds(const gfx::Rect& anchor_bounds) override;
-
-  void SetPendingShowQuickAnswers() override;
-
   quick_answers::QuickAnswersDelegate* GetQuickAnswersDelegate() override;
-
   QuickAnswersVisibility GetVisibilityForTesting() const override;
+  void SetVisibility(QuickAnswersVisibility visibility) override;
 
   // QuickAnswersDelegate:
-  void OnQuickAnswerReceived(
-      std::unique_ptr<quick_answers::QuickAnswer> answer) override;
+  void OnQuickAnswerReceived(std::unique_ptr<quick_answers::QuickAnswersSession>
+                                 quick_answers_session) override;
   void OnNetworkError() override;
   void OnRequestPreprocessFinished(
       const quick_answers::QuickAnswersRequest& processed_request) override;
@@ -69,9 +71,17 @@ class QuickAnswersControllerImpl : public QuickAnswersController,
     return quick_answers_ui_controller_.get();
   }
 
- private:
-  void MaybeDismissQuickAnswersConsent();
+  quick_answers::QuickAnswer* quick_answer() {
+    return quick_answers_session_ ? quick_answers_session_->quick_answer.get()
+                                  : nullptr;
+  }
+  quick_answers::StructuredResult* structured_result() {
+    return quick_answers_session_
+               ? quick_answers_session_->structured_result.get()
+               : nullptr;
+  }
 
+ private:
   void HandleQuickAnswerRequest(
       const quick_answers::QuickAnswersRequest& request);
 
@@ -81,6 +91,9 @@ class QuickAnswersControllerImpl : public QuickAnswersController,
                        const std::u16string& intent_text);
 
   quick_answers::QuickAnswersRequest BuildRequest();
+
+  // Profile that initiated the current query.
+  raw_ptr<Profile> profile_ = nullptr;
 
   // Bounds of the anchor view.
   gfx::Rect anchor_bounds_;
@@ -94,14 +107,17 @@ class QuickAnswersControllerImpl : public QuickAnswersController,
   // Context information, including surrounding text and device properties.
   quick_answers::Context context_;
 
+  // Time that the context menu is shown.
+  base::TimeTicks menu_shown_time_;
+
   std::unique_ptr<quick_answers::QuickAnswersClient> quick_answers_client_;
 
   std::unique_ptr<QuickAnswersState> quick_answers_state_;
 
   std::unique_ptr<QuickAnswersUiController> quick_answers_ui_controller_;
 
-  // The last received QuickAnswer from client.
-  std::unique_ptr<quick_answers::QuickAnswer> quick_answer_;
+  // The last received `QuickAnswersSession` from client.
+  std::unique_ptr<quick_answers::QuickAnswersSession> quick_answers_session_;
 
   QuickAnswersVisibility visibility_ = QuickAnswersVisibility::kClosed;
 };

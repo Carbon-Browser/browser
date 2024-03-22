@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/heavy_ad_intervention/heavy_ad_service_factory.h"
-#include "chrome/browser/page_load_metrics/observers/aborts_page_load_metrics_observer.h"
+#include "chrome/browser/page_load_metrics/observers/bookmark_bar_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/core/amp_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/core/ukm_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/document_write_page_load_metrics_observer.h"
@@ -22,23 +22,22 @@
 #include "chrome/browser/page_load_metrics/observers/gws_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/https_engagement_metrics/https_engagement_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/javascript_frameworks_ukm_observer.h"
-#include "chrome/browser/page_load_metrics/observers/live_tab_count_page_load_metrics_observer.h"
+#include "chrome/browser/page_load_metrics/observers/lcp_critical_path_predictor_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/loading_predictor_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/local_network_requests_page_load_metrics_observer.h"
-#include "chrome/browser/page_load_metrics/observers/media_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/multi_tab_loading_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/omnibox_suggestion_used_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/optimization_guide_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/page_anchors_metrics_observer.h"
-#include "chrome/browser/page_load_metrics/observers/portal_page_load_metrics_observer.h"
-#include "chrome/browser/page_load_metrics/observers/prefetch_proxy_page_load_metrics_observer.h"
+#include "chrome/browser/page_load_metrics/observers/prefetch_page_load_metrics_observer.h"
+#include "chrome/browser/page_load_metrics/observers/preview_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/protocol_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/scheme_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/security_state_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/service_worker_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/signed_exchange_page_load_metrics_observer.h"
-#include "chrome/browser/page_load_metrics/observers/tab_restore_page_load_metrics_observer.h"
-#include "chrome/browser/page_load_metrics/observers/third_party_metrics_observer.h"
+#include "chrome/browser/page_load_metrics/observers/tab_strip_page_load_metrics_observer.h"
+#include "chrome/browser/page_load_metrics/observers/third_party_cookie_deprecation_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/observers/translate_page_load_metrics_observer.h"
 #include "chrome/browser/page_load_metrics/page_load_metrics_memory_tracker_factory.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/chrome_no_state_prefetch_contents_delegate.h"
@@ -47,6 +46,8 @@
 #include "components/no_state_prefetch/browser/no_state_prefetch_contents.h"
 #include "components/page_load_metrics/browser/metrics_web_contents_observer.h"
 #include "components/page_load_metrics/browser/observers/ad_metrics/ads_page_load_metrics_observer.h"
+#include "components/page_load_metrics/browser/observers/third_party_metrics_observer.h"
+#include "components/page_load_metrics/browser/observers/zstd_page_load_metrics_observer.h"
 #include "components/page_load_metrics/browser/page_load_metrics_embedder_base.h"
 #include "components/page_load_metrics/browser/page_load_metrics_memory_tracker.h"
 #include "components/page_load_metrics/browser/page_load_tracker.h"
@@ -56,8 +57,6 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/page_load_metrics/observers/android_page_load_metrics_observer.h"
-#else
-#include "chrome/browser/page_load_metrics/observers/session_restore_page_load_metrics_observer.h"
 #endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -123,7 +122,6 @@ void PageLoadMetricsEmbedder::RegisterEmbedderObservers(
   }
 
   if (!IsNoStatePrefetch(web_contents())) {
-    tracker->AddObserver(std::make_unique<AbortsPageLoadMetricsObserver>());
     tracker->AddObserver(std::make_unique<AMPPageLoadMetricsObserver>());
     tracker->AddObserver(std::make_unique<JavascriptFrameworksUkmObserver>());
     tracker->AddObserver(std::make_unique<SchemePageLoadMetricsObserver>());
@@ -132,11 +130,7 @@ void PageLoadMetricsEmbedder::RegisterEmbedderObservers(
     tracker->AddObserver(std::make_unique<ForegroundDurationUKMObserver>());
     tracker->AddObserver(
         std::make_unique<DocumentWritePageLoadMetricsObserver>());
-    tracker->AddObserver(
-        std::make_unique<PrefetchProxyPageLoadMetricsObserver>());
-    tracker->AddObserver(
-        std::make_unique<LiveTabCountPageLoadMetricsObserver>());
-    tracker->AddObserver(std::make_unique<MediaPageLoadMetricsObserver>());
+    tracker->AddObserver(std::make_unique<PrefetchPageLoadMetricsObserver>());
     tracker->AddObserver(
         std::make_unique<MultiTabLoadingPageLoadMetricsObserver>());
     tracker->AddObserver(
@@ -149,7 +143,6 @@ void PageLoadMetricsEmbedder::RegisterEmbedderObservers(
         std::make_unique<HttpsEngagementPageLoadMetricsObserver>(
             web_contents()->GetBrowserContext()));
     tracker->AddObserver(std::make_unique<ProtocolPageLoadMetricsObserver>());
-    tracker->AddObserver(std::make_unique<TabRestorePageLoadMetricsObserver>());
     std::unique_ptr<page_load_metrics::AdsPageLoadMetricsObserver>
         ads_observer =
             page_load_metrics::AdsPageLoadMetricsObserver::CreateIfNeeded(
@@ -168,10 +161,6 @@ void PageLoadMetricsEmbedder::RegisterEmbedderObservers(
     if (ukm_observer)
       tracker->AddObserver(std::move(ukm_observer));
 
-    auto portal_observer = PortalPageLoadMetricsObserver::CreateIfNeeded();
-    if (portal_observer)
-      tracker->AddObserver(std::move(portal_observer));
-
 #if BUILDFLAG(IS_ANDROID)
     tracker->AddObserver(std::make_unique<AndroidPageLoadMetricsObserver>());
 #endif  // BUILDFLAG(IS_ANDROID)
@@ -181,12 +170,17 @@ void PageLoadMetricsEmbedder::RegisterEmbedderObservers(
                 web_contents());
     if (loading_predictor_observer)
       tracker->AddObserver(std::move(loading_predictor_observer));
-#if !BUILDFLAG(IS_ANDROID)
     tracker->AddObserver(
-        std::make_unique<SessionRestorePageLoadMetricsObserver>());
-#endif
+        std::make_unique<LcpCriticalPathPredictorPageLoadMetricsObserver>());
     tracker->AddObserver(
         std::make_unique<LocalNetworkRequestsPageLoadMetricsObserver>());
+    tracker->AddObserver(
+        std::make_unique<TabStripPageLoadMetricsObserver>(web_contents()));
+    tracker->AddObserver(std::make_unique<PreviewPageLoadMetricsObserver>());
+    tracker->AddObserver(std::make_unique<BookmarkBarMetricsObserver>());
+    tracker->AddObserver(
+        std::make_unique<ThirdPartyCookieDeprecationMetricsObserver>(
+            web_contents()->GetBrowserContext()));
   }
   tracker->AddObserver(
       std::make_unique<OmniboxSuggestionUsedMetricsObserver>());
@@ -200,6 +194,7 @@ void PageLoadMetricsEmbedder::RegisterEmbedderObservers(
           tracker->GetWebContents());
   if (translate_observer)
     tracker->AddObserver(std::move(translate_observer));
+  tracker->AddObserver(std::make_unique<ZstdPageLoadMetricsObserver>());
 }
 
 bool PageLoadMetricsEmbedder::IsNewTabPageUrl(const GURL& url) {

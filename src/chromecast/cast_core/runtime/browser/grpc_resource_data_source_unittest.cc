@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,8 @@ class GrpcResourceDataSourceTest : public ::testing::Test {
 
  protected:
   std::string GetMimeType(const std::string& path) {
-    return grpc_resource_data_source_.GetMimeType(path);
+    const GURL url("chrome://chrome/" + path);
+    return grpc_resource_data_source_.GetMimeType(url);
   }
 
   std::string GetAccessControlAllowOriginForOrigin(const std::string& origin) {

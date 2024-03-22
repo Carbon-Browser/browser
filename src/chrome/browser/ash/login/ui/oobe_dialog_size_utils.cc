@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,9 @@ constexpr gfx::Size kMaxLandscapeDialogSize{1040, 680};
 constexpr gfx::Size kMinLandscapeDialogSize{738, 540};
 constexpr gfx::Size kMaxPortraitDialogSize{680, 1040};
 constexpr gfx::Size kMinPortraitDialogSize{461, 820};
+
+constexpr int kOobeDialogShadowElevation = 12;
+constexpr int kOobeDialogCornerRadius = 24;
 
 gfx::Size CalculateOobeDialogSize(const gfx::Size& host_size,
                                   int shelf_height,

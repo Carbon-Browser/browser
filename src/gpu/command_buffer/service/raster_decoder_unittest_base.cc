@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
-#include "components/viz/common/resources/resource_format_utils.h"
 #include "gpu/command_buffer/common/gles2_cmd_utils.h"
 #include "gpu/command_buffer/common/raster_cmd_format.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
@@ -64,8 +63,7 @@ RasterDecoderTestBase::RasterDecoderTestBase()
       shared_memory_address_(nullptr),
       shared_memory_base_(nullptr),
       ignore_cached_state_for_test_(GetParam()),
-      memory_tracker_(nullptr),
-      copy_texture_manager_(nullptr) {
+      memory_tracker_(nullptr) {
   memset(immediate_buffer_, 0xEE, sizeof(immediate_buffer_));
 }
 
@@ -73,8 +71,9 @@ RasterDecoderTestBase::~RasterDecoderTestBase() = default;
 
 void RasterDecoderTestBase::OnConsoleMessage(int32_t id,
                                              const std::string& message) {}
-void RasterDecoderTestBase::CacheShader(const std::string& key,
-                                        const std::string& shader) {}
+void RasterDecoderTestBase::CacheBlob(gpu::GpuDiskCacheType type,
+                                      const std::string& key,
+                                      const std::string& blob) {}
 void RasterDecoderTestBase::OnFenceSyncRelease(uint64_t release) {}
 void RasterDecoderTestBase::OnDescheduleUntilFinished() {}
 void RasterDecoderTestBase::OnRescheduleAfterFinished() {}
@@ -155,14 +154,10 @@ void RasterDecoderTestBase::InitDecoder(const InitState& init) {
   decoder_.reset(RasterDecoder::Create(
       this, command_buffer_service_.get(), &outputter_, gpu_feature_info,
       gpu_preferences_, nullptr /* memory_tracker */, &shared_image_manager_,
-      /*image_factory=*/nullptr, shared_context_state_,
-      true /* is_privileged */));
+      shared_context_state_, true /* is_privileged */));
   decoder_->SetIgnoreCachedStateForTest(ignore_cached_state_for_test_);
   decoder_->DisableFlushWorkaroundForTest();
   decoder_->GetLogger()->set_log_synthesized_gl_errors(false);
-
-  copy_texture_manager_ = new gles2::MockCopyTextureResourceManager();
-  decoder_->SetCopyTextureResourceManagerForTest(copy_texture_manager_);
 
   ContextCreationAttribs attribs;
   attribs.lose_context_when_out_of_memory =
@@ -203,13 +198,6 @@ void RasterDecoderTestBase::ResetDecoder() {
   EXPECT_EQ(GL_NO_ERROR, GetGLError());
 
   decoder_->EndDecoding();
-
-  if (!decoder_->WasContextLost()) {
-    EXPECT_CALL(*copy_texture_manager_, Destroy())
-        .Times(1)
-        .RetiresOnSaturation();
-    copy_texture_manager_ = nullptr;
-  }
 
   decoder_->Destroy(!decoder_->WasContextLost());
   decoder_.reset();

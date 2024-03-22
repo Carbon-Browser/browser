@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/printing/browser/print_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "content/public/browser/render_frame_host.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
@@ -42,7 +42,10 @@ void PrintManager::DidPrintDocument(mojom::DidPrintDocumentParamsPtr params,
   std::move(callback).Run(false);
 }
 
-void PrintManager::ShowInvalidPrinterSettingsError() {}
+void PrintManager::IsPrintingEnabled(IsPrintingEnabledCallback callback) {
+  // Assume printing is enabled by default.
+  std::move(callback).Run(true);
+}
 
 void PrintManager::PrintingFailed(int32_t cookie,
                                   mojom::PrintFailureReason reason) {

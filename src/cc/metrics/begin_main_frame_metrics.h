@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@ namespace cc {
 // The data is captured in LocalFrameViewUKMAggregator and passed back through
 // the proxy when a main frame ends. LayerTreeHost updates the update_layers_
 // value in LayerTreeHost::UpdateLayers.
-// TODO(schenney): Include work done in LayerTreeHost::AnimateLayers?
 struct CC_EXPORT BeginMainFrameMetrics {
   base::TimeDelta handle_input_events;
   base::TimeDelta animate;

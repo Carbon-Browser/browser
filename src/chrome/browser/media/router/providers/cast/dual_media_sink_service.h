@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
@@ -71,17 +71,11 @@ class DualMediaSinkService {
   base::CallbackListSubscription AddSinksDiscoveredCallback(
       const OnSinksDiscoveredProviderCallback& callback);
 
-  // Instantiate two PendingRemote objects. The objects will be bound with
-  // |logger_impl| and passed to |cast_media_sink_service_| and
-  // |dial_media_sink_service_|.
-  // The binding should be done once and the method is a no-op after the first
-  // call.
-  // Marked virtual for testing.
-  virtual void BindLogger(LoggerImpl* logger_impl);
+  void AddLogger(LoggerImpl* logger_impl);
 
-  virtual void RemoveLogger();
+  void RemoveLogger(LoggerImpl* logger_impl);
 
-  virtual void OnUserGesture();
+  virtual void DiscoverSinksNow();
 
 #if BUILDFLAG(IS_WIN)
   // Starts mDNS discovery on |cast_media_sink_service_| if it is not already
@@ -119,8 +113,6 @@ class DualMediaSinkService {
   std::unique_ptr<DialMediaSinkService> dial_media_sink_service_;
   std::unique_ptr<CastMediaSinkService> cast_media_sink_service_;
   std::unique_ptr<CastAppDiscoveryService> cast_app_discovery_service_;
-
-  bool logger_is_bound_ = false;
 
   OnSinksDiscoveredProviderCallbackList sinks_discovered_callbacks_;
   base::flat_map<std::string, std::vector<MediaSinkInternal>> current_sinks_;

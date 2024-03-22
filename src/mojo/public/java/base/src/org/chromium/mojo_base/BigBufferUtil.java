@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ import org.chromium.mojo_base.mojom.BigBufferSharedMemoryRegion;
 
 import java.nio.ByteBuffer;
 
-/**
- * Static helper methods for working with the mojom BigBuffer type.
- */
+/** Static helper methods for working with the mojom BigBuffer type. */
 public final class BigBufferUtil {
     public static final int MAX_INLINE_ARRAY_SIZE = 64 * 1024;
 

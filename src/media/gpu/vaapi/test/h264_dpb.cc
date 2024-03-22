@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -127,6 +127,16 @@ scoped_refptr<H264Picture> H264DPB::GetLongRefPicByLongTermPicNum(int pic_num) {
   }
 
   VLOG(1) << "Missing long term pic num: " << pic_num;
+  return nullptr;
+}
+
+scoped_refptr<H264Picture> H264DPB::GetLongRefPicByLongTermIdx(int idx) {
+  for (const auto& pic : pics_) {
+    if (pic->ref && pic->long_term && pic->long_term_frame_idx == idx) {
+      return pic;
+    }
+  }
+
   return nullptr;
 }
 

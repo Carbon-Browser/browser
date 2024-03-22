@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
@@ -17,7 +18,8 @@
 #include "content/public/common/content_features.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
-#include "third_party/blink/public/mojom/frame/frame.mojom.h"
+#include "third_party/blink/public/mojom/loader/keep_alive_handle.mojom.h"
+#include "third_party/blink/public/mojom/loader/keep_alive_handle_factory.mojom.h"
 
 namespace content {
 
@@ -99,9 +101,7 @@ KeepAliveHandleFactory::~KeepAliveHandleFactory() {
   // Extend the lifetime of `context_` a bit. Note that `context_` has an
   // ability to extend the lifetime of the associated render process.
   GetUIThreadTaskRunner({})->PostDelayedTask(
-      FROM_HERE,
-      base::BindOnce([](std::unique_ptr<Context>) {}, std::move(context_)),
-      timeout_);
+      FROM_HERE, base::DoNothingWithBoundArgs(std::move(context_)), timeout_);
 }
 
 void KeepAliveHandleFactory::Bind(

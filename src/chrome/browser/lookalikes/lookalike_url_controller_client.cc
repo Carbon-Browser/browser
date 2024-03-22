@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/lookalikes/lookalike_url_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/reputation/reputation_service.h"
 #include "chrome/common/url_constants.h"
 #include "components/security_interstitials/content/settings_page_helper.h"
 #include "components/security_interstitials/core/metrics_helper.h"
@@ -56,7 +56,7 @@ void LookalikeUrlControllerClient::GoBack() {
 }
 
 void LookalikeUrlControllerClient::Proceed() {
-  ReputationService::Get(
+  LookalikeUrlService::Get(
       Profile::FromBrowserContext(web_contents_->GetBrowserContext()))
       ->SetUserIgnore(request_url_);
   Reload();

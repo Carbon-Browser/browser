@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "chrome/browser/ash/attestation/tpm_challenge_key_subtle.h"
+#include "chromeos/ash/components/dbus/attestation/attestation_ca.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
@@ -23,8 +24,9 @@ class MockTpmChallengeKeySubtle : public TpmChallengeKeySubtle {
 
   MOCK_METHOD(void,
               StartPrepareKeyStep,
-              (AttestationKeyType key_type,
+              (::attestation::VerifiedAccessFlow flow_type,
                bool will_register_key,
+               ::attestation::KeyType key_crypto_type,
                const std::string& key_name,
                Profile* profile,
                TpmChallengeKeyCallback callback,
@@ -43,8 +45,9 @@ class MockTpmChallengeKeySubtle : public TpmChallengeKeySubtle {
 
   MOCK_METHOD(void,
               RestorePreparedKeyState,
-              (AttestationKeyType key_type,
+              (::attestation::VerifiedAccessFlow flow_type,
                bool will_register_key,
+               ::attestation::KeyType key_crypto_type,
                const std::string& key_name,
                const std::string& public_key,
                Profile* profile),

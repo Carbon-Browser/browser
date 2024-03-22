@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -80,6 +80,10 @@ class MockInputApi(object):
     self.presubmit_local_path = os.path.dirname(__file__)
     self.is_windows = sys.platform == 'win32'
     self.no_diffs = False
+    # Although this makes assumptions about command line arguments used by test
+    # scripts that create mocks, it is a convenient way to set up the verbosity
+    # via the input api.
+    self.verbose = '--verbose' in sys.argv
 
   def CreateMockFileInPath(self, f_list):
     self.os_path.exists = lambda x: x in f_list
@@ -129,7 +133,7 @@ class MockInputApi(object):
   def PresubmitLocalPath(self):
     return self.presubmit_local_path
 
-  def ReadFile(self, filename, mode='rU'):
+  def ReadFile(self, filename, mode='r'):
     if hasattr(filename, 'AbsoluteLocalPath'):
        filename = filename.AbsoluteLocalPath()
     for file_ in self.files:
@@ -142,7 +146,7 @@ class MockInputApi(object):
 class MockOutputApi(object):
   """Mock class for the OutputApi class.
 
-  An instance of this class can be passed to presubmit unittests for outputing
+  An instance of this class can be passed to presubmit unittests for outputting
   various types of results.
   """
 
@@ -205,6 +209,9 @@ class MockFile(object):
         self._scm_diff += "+%s\n" % l
     self._old_contents = old_contents
 
+  def __str__(self):
+    return self._local_path
+
   def Action(self):
     return self._action
 
@@ -257,6 +264,7 @@ class MockChange(object):
 
   def __init__(self, changed_files):
     self._changed_files = changed_files
+    self.author_email = None
     self.footers = defaultdict(list)
 
   def LocalPaths(self):

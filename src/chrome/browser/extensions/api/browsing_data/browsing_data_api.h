@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
 #include "components/signin/core/browser/account_reconcilor.h"
 #include "content/public/browser/browsing_data_filter_builder.h"
@@ -26,38 +27,47 @@ class PrefService;
 namespace extension_browsing_data_api_constants {
 
 // Parameter name keys.
-extern const char kDataRemovalPermittedKey[];
-extern const char kDataToRemoveKey[];
-extern const char kOptionsKey[];
+inline constexpr char kDataRemovalPermittedKey[] = "dataRemovalPermitted";
+inline constexpr char kDataToRemoveKey[] = "dataToRemove";
+inline constexpr char kOptionsKey[] = "options";
 
 // Type keys.
-extern const char kCacheKey[];
-extern const char kCookiesKey[];
-extern const char kDownloadsKey[];
-extern const char kFileSystemsKey[];
-extern const char kFormDataKey[];
-extern const char kHistoryKey[];
-extern const char kIndexedDBKey[];
-extern const char kPluginDataKey[];
-extern const char kLocalStorageKey[];
-extern const char kPasswordsKey[];
-extern const char kServiceWorkersKey[];
-extern const char kCacheStorageKey[];
-extern const char kWebSQLKey[];
+inline constexpr char kCacheKey[] = "cache";
+inline constexpr char kCookiesKey[] = "cookies";
+inline constexpr char kDownloadsKey[] = "downloads";
+inline constexpr char kFileSystemsKey[] = "fileSystems";
+inline constexpr char kFormDataKey[] = "formData";
+inline constexpr char kHistoryKey[] = "history";
+inline constexpr char kIndexedDBKey[] = "indexedDB";
+inline constexpr char kLocalStorageKey[] = "localStorage";
+inline constexpr char kPasswordsKey[] = "passwords";
+inline constexpr char kPluginDataKeyDeprecated[] = "pluginData";
+inline constexpr char kServiceWorkersKey[] = "serviceWorkers";
+inline constexpr char kCacheStorageKey[] = "cacheStorage";
+inline constexpr char kWebSQLKey[] = "webSQL";
 
 // Option keys.
-extern const char kExtensionsKey[];
-extern const char kOriginTypesKey[];
-extern const char kProtectedWebKey[];
-extern const char kSinceKey[];
-extern const char kUnprotectedWebKey[];
+inline constexpr char kExtensionsKey[] = "extension";
+inline constexpr char kOriginTypesKey[] = "originTypes";
+inline constexpr char kProtectedWebKey[] = "protectedWeb";
+inline constexpr char kSinceKey[] = "since";
+inline constexpr char kOriginsKey[] = "origins";
+inline constexpr char kExcludeOriginsKey[] = "excludeOrigins";
+inline constexpr char kUnprotectedWebKey[] = "unprotectedWeb";
 
 // Errors!
-extern const char kBadDataTypeDetails[];
-extern const char kDeleteProhibitedError[];
-extern const char kNonFilterableError[];
-extern const char kIncompatibleFilterError[];
-extern const char kInvalidOriginError[];
+// The placeholder will be filled by the name of the affected data type (e.g.,
+// "history").
+inline constexpr char kBadDataTypeDetails[] =
+    "Invalid value for data type '%s'.";
+inline constexpr char kDeleteProhibitedError[] =
+    "Browsing history and downloads are not "
+    "permitted to be removed.";
+inline constexpr char kNonFilterableError[] =
+    "At least one data type doesn't support filtering by origin.";
+inline constexpr char kIncompatibleFilterError[] =
+    "Don't set both 'origins' and 'excludeOrigins' at the same time.";
+inline constexpr char kInvalidOriginError[] = "'%s' is not a valid origin.";
 
 }  // namespace extension_browsing_data_api_constants
 
@@ -76,8 +86,8 @@ class BrowsingDataSettingsFunction : public ExtensionFunction {
   // indicating whether the data type is both selected and permitted to be
   // removed; and a value in the |permitted_dict| with the |data_type| as a
   // key, indicating only whether the data type is permitted to be removed.
-  void SetDetails(base::Value* selected_dict,
-                  base::Value* permitted_dict,
+  void SetDetails(base::Value::Dict* selected_dict,
+                  base::Value::Dict* permitted_dict,
                   const char* data_type,
                   bool is_selected);
 
@@ -127,15 +137,15 @@ class BrowsingDataRemoverFunction
   // that can be used with the BrowsingDataRemover.
   // Returns true if parsing was successful.
   // Pre-condition: `options` is a dictionary.
-  bool ParseOriginTypeMask(const base::Value& options,
+  bool ParseOriginTypeMask(const base::Value::Dict& options,
                            uint64_t* origin_type_mask);
 
   // Parses the developer-provided list of origins into |result|.
   // Returns whether or not parsing was successful. In case of parse failure,
   // |error_response| will contain the error response.
-  bool ParseOrigins(const base::Value& list_value,
-                    std::vector<url::Origin>* result,
-                    ResponseValue* error_response);
+  using OriginParsingResult =
+      base::expected<std::vector<url::Origin>, ResponseValue>;
+  OriginParsingResult ParseOrigins(const base::Value::List& list_value);
 
   // Called when we're ready to start removing data.
   void StartRemoving();

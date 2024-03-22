@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,6 @@ std::string RecreateSigninScopedDeviceId(PrefService* prefs);
 // GetSigninScopedDeviceId().
 // Creates a new device ID value.
 std::string GenerateSigninScopedDeviceId();
-
-// Helper method. The device ID should generally be obtained through
-// GetSigninScopedDeviceId().
-// Returns the device id read from the kGoogleServicesSigninScopedDeviceId pref.
-// If the pref is empty, a new device ID is created and stored in the pref.
-std::string GetOrCreateScopedDeviceId(PrefService* prefs);
 
 #endif
 

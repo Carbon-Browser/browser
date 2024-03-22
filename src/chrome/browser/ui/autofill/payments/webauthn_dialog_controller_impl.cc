@@ -1,26 +1,28 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/autofill/payments/webauthn_dialog_controller_impl.h"
 
+#include "chrome/browser/ui/autofill/payments/webauthn_dialog.h"
 #include "chrome/browser/ui/autofill/payments/webauthn_dialog_model.h"
 #include "chrome/browser/ui/autofill/payments/webauthn_dialog_state.h"
-#include "chrome/browser/ui/autofill/payments/webauthn_dialog_view.h"
 #include "components/autofill/core/browser/payments/webauthn_callback_types.h"
+#include "content/public/browser/web_contents.h"
 
 namespace autofill {
 
-WebauthnDialogControllerImpl::WebauthnDialogControllerImpl(
-    content::WebContents* web_contents)
-    : content::WebContentsUserData<WebauthnDialogControllerImpl>(
-          *web_contents) {}
+WebauthnDialogControllerImpl::WebauthnDialogControllerImpl(content::Page& page)
+    : content::PageUserData<WebauthnDialogControllerImpl>(page) {
+  // WebauthnDialogControllerImpl is only for the outermost primary page.
+  DCHECK(page.IsPrimary());
+}
 
 WebauthnDialogControllerImpl::~WebauthnDialogControllerImpl() {
   // This part of code is executed only if browser window is closed when the
   // dialog is visible. In this case the controller is destroyed before
-  // WebauthnDialogViewImpl::dtor() being called, but the reference to
-  // controller is not reset. Need to reset via WebauthnDialogViewImpl::Hide()
+  // WebauthnDialogView::dtor() being called, but the reference to
+  // controller is not reset. Need to reset via WebauthnDialogView::Hide()
   // to avoid crash.
   if (dialog_model_)
     dialog_model_->SetDialogState(WebauthnDialogState::kInactive);
@@ -31,9 +33,8 @@ void WebauthnDialogControllerImpl::ShowOfferDialog(
   DCHECK(!dialog_model_);
 
   callback_ = std::move(offer_dialog_callback);
-  dialog_view_ =
-      WebauthnDialogView::CreateAndShow(this, WebauthnDialogState::kOffer);
-  dialog_model_ = dialog_view_->GetDialogModel();
+  dialog_ = WebauthnDialog::CreateAndShow(this, WebauthnDialogState::kOffer);
+  dialog_model_ = dialog_->GetDialogModel();
 }
 
 void WebauthnDialogControllerImpl::ShowVerifyPendingDialog(
@@ -41,9 +42,9 @@ void WebauthnDialogControllerImpl::ShowVerifyPendingDialog(
   DCHECK(!dialog_model_);
 
   callback_ = std::move(verify_pending_dialog_callback);
-  dialog_view_ = WebauthnDialogView::CreateAndShow(
-      this, WebauthnDialogState::kVerifyPending);
-  dialog_model_ = dialog_view_->GetDialogModel();
+  dialog_ =
+      WebauthnDialog::CreateAndShow(this, WebauthnDialogState::kVerifyPending);
+  dialog_model_ = dialog_->GetDialogModel();
 }
 
 bool WebauthnDialogControllerImpl::CloseDialog() {
@@ -66,13 +67,12 @@ void WebauthnDialogControllerImpl::UpdateDialog(
 
 void WebauthnDialogControllerImpl::OnDialogClosed() {
   dialog_model_ = nullptr;
-  dialog_view_ = nullptr;
+  dialog_ = nullptr;
   callback_.Reset();
 }
 
 content::WebContents* WebauthnDialogControllerImpl::GetWebContents() {
-  return &content::WebContentsUserData<
-      WebauthnDialogControllerImpl>::GetWebContents();
+  return content::WebContents::FromRenderFrameHost(&page().GetMainDocument());
 }
 
 void WebauthnDialogControllerImpl::OnOkButtonClicked() {
@@ -102,6 +102,6 @@ void WebauthnDialogControllerImpl::OnCancelButtonClicked() {
   }
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(WebauthnDialogControllerImpl);
+PAGE_USER_DATA_KEY_IMPL(WebauthnDialogControllerImpl);
 
 }  // namespace autofill

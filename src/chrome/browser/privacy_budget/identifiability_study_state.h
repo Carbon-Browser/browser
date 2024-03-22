@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/thread_annotations.h"
 #include "chrome/browser/privacy_budget/encountered_surface_tracker.h"
 #include "chrome/browser/privacy_budget/mesa_distribution.h"
@@ -134,6 +134,10 @@ class IdentifiabilityStudyState {
   // range. See `MesaDistribution` for details. The distribution is the source
   // of random numbers for selecting identifiable surface for measurement.
   static constexpr double kMesaDistributionRatio = 0.9;
+
+  // The parameter of the geometric distribution used for the tail of the Mesa
+  // distribution.
+  static constexpr double kMesaDistributionGeometricDistributionParam = 0.5;
 
  private:
   friend class test_utils::InspectableIdentifiabilityStudyState;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import org.chromium.content.browser.RenderCoordinatesImpl;
 import org.chromium.content.browser.webcontents.WebContentsImpl;
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * Implementation of {@link AccessibilityDelegate} based on {@link WebContents}.
- */
+/** Implementation of {@link AccessibilityDelegate} based on {@link WebContents}. */
 public class WebContentsAccessibilityDelegate implements AccessibilityDelegate {
     private final WebContentsImpl mWebContents;
     private final AccessibilityCoordinatesImpl mAccessibilityCoordinatesImpl;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -248,7 +248,7 @@ TEST_F(CommanderEntityMatchTest, TabOnlyAudibleExcludesOthers) {
   CreateTabs({u"A", u"B", u"C"});
   browser()->tab_strip_model()->InsertWebContentsAt(
       1, content::WebContentsTester::CreateTestWebContents(profile(), nullptr),
-      TabStripModel::ADD_NONE);
+      AddTabTypes::ADD_NONE);
   content::WebContentsTester::For(
       browser()->tab_strip_model()->GetWebContentsAt(1))
       ->SetIsCurrentlyAudible(true);

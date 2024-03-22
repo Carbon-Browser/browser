@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,7 +69,9 @@ class MediaController::ImageObserverHolder {
   }
 
   void ClearImage() {
-    if (!did_send_image_last_)
+    // If the last thing we sent was a ClearImage, don't send another one. If we
+    // haven't sent anything before, then send a ClearImage.
+    if (!did_send_image_last_.value_or(true))
       return;
     did_send_image_last_ = false;
     observer_->MediaControllerImageChanged(type_, SkBitmap());
@@ -94,7 +96,8 @@ class MediaController::ImageObserverHolder {
   mojo::Remote<mojom::MediaControllerImageObserver> observer_;
 
   // Whether the last information sent to the observer was an image.
-  bool did_send_image_last_ = false;
+  // Empty if we have not yet sent anything.
+  absl::optional<bool> did_send_image_last_;
 
   base::WeakPtrFactory<ImageObserverHolder> weak_ptr_factory_{this};
 };
@@ -335,6 +338,21 @@ void MediaController::SetMute(bool mute) {
 
   if (session_)
     session_->ipc()->SetMute(mute);
+}
+
+void MediaController::RequestMediaRemoting() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (session_)
+    session_->ipc()->RequestMediaRemoting();
+}
+
+void MediaController::EnterAutoPictureInPicture() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (session_) {
+    session_->ipc()->EnterAutoPictureInPicture();
+  }
 }
 
 void MediaController::SetMediaSession(AudioFocusRequest* session) {

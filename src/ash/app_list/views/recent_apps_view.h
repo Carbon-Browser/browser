@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include "ash/app_list/model/app_list_model_observer.h"
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
@@ -20,6 +21,7 @@ class BoxLayout;
 
 namespace ash {
 
+class AppListKeyboardController;
 class AppListModel;
 class AppListConfig;
 class AppListItemView;
@@ -33,20 +35,8 @@ class ASH_EXPORT RecentAppsView : public AppListModelObserver,
  public:
   METADATA_HEADER(RecentAppsView);
 
-  class Delegate {
-   public:
-    virtual ~Delegate() = default;
-
-    // Requests that focus move up and out (usually to the continue tasks).
-    virtual void MoveFocusUpFromRecents() = 0;
-
-    // Requests that focus move down and out (usually to the apps grid).
-    // `column` is the column of the items that was focused in the recent apps
-    // list. The delegate should choose an appropriate item to focus.
-    virtual void MoveFocusDownFromRecents(int column) = 0;
-  };
-
-  RecentAppsView(Delegate* delegate, AppListViewDelegate* view_delegate);
+  RecentAppsView(AppListKeyboardController* keyboard_controller,
+                 AppListViewDelegate* view_delegate);
   RecentAppsView(const RecentAppsView&) = delete;
   RecentAppsView& operator=(const RecentAppsView&) = delete;
   ~RecentAppsView() override;
@@ -98,12 +88,14 @@ class ASH_EXPORT RecentAppsView : public AppListModelObserver,
   // Calculates how much padding is assigned to the AppListItemView.
   int CalculateTilePadding() const;
 
-  Delegate* const delegate_;
-  AppListViewDelegate* const view_delegate_;
-  const AppListConfig* app_list_config_ = nullptr;
-  views::BoxLayout* layout_ = nullptr;
-  AppListModel* model_ = nullptr;
-  SearchModel* search_model_ = nullptr;
+  const raw_ptr<AppListKeyboardController, DanglingUntriaged | ExperimentalAsh>
+      keyboard_controller_;
+  const raw_ptr<AppListViewDelegate, ExperimentalAsh> view_delegate_;
+  raw_ptr<const AppListConfig, DanglingUntriaged | ExperimentalAsh>
+      app_list_config_ = nullptr;
+  raw_ptr<views::BoxLayout, ExperimentalAsh> layout_ = nullptr;
+  raw_ptr<AppListModel, ExperimentalAsh> model_ = nullptr;
+  raw_ptr<SearchModel, ExperimentalAsh> search_model_ = nullptr;
 
   // The grid delegate for each AppListItemView.
   class GridDelegateImpl;

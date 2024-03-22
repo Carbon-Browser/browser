@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,9 +34,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-
-namespace protocol {
+namespace remoting::protocol {
 
 class MockAuthenticator : public Authenticator {
  public:
@@ -144,6 +142,7 @@ class MockHostStub : public HostStub {
   MOCK_METHOD1(DeliverClientMessage, void(const ExtensionMessage& message));
   MOCK_METHOD1(SelectDesktopDisplay,
                void(const SelectDesktopDisplayRequest& message));
+  MOCK_METHOD1(SetVideoLayout, void(const VideoLayout& video_layout));
 };
 
 class MockClientStub : public ClientStub {
@@ -162,6 +161,7 @@ class MockClientStub : public ClientStub {
   MOCK_METHOD1(DeliverHostMessage, void(const ExtensionMessage& message));
   MOCK_METHOD1(SetVideoLayout, void(const VideoLayout& layout));
   MOCK_METHOD1(SetTransportInfo, void(const TransportInfo& transport_info));
+  MOCK_METHOD1(SetActiveDisplay, void(const ActiveDisplay& active_display));
 
   // ClipboardStub mock implementation.
   MOCK_METHOD1(InjectClipboardEvent, void(const ClipboardEvent& event));
@@ -281,7 +281,6 @@ class SynchronousPairingRegistry : public PairingRegistry {
                 base::OnceClosure task) override;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_PROTOCOL_MOCK_OBJECTS_H_

@@ -1,8 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/common/cast_resource_delegate.h"
+
+#include <ostream>
 
 #include "base/files/file_path.h"
 #include "base/notreached.h"
@@ -66,9 +68,9 @@ base::RefCountedStaticMemory* CastResourceDelegate::LoadDataResourceBytes(
   return NULL;
 }
 
-absl::optional<std::string> CastResourceDelegate::LoadDataResourceString(
+std::optional<std::string> CastResourceDelegate::LoadDataResourceString(
     int resource_id) {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool CastResourceDelegate::GetRawDataResource(

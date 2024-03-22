@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/audio/display_speaker_controller.h"
 
-#include "ash/components/audio/cras_audio_handler.h"
 #include "ash/shell.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/manager/managed_display_info.h"

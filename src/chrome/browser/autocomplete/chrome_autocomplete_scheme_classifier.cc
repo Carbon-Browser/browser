@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,7 +67,7 @@ ChromeAutocompleteSchemeClassifier::GetInputTypeForScheme(
   // can be handled by web pages/apps.
   custom_handlers::ProtocolHandlerRegistry* registry =
       profile_ ? ProtocolHandlerRegistryFactory::GetForBrowserContext(profile_)
-               : NULL;
+               : nullptr;
   if (registry && registry->IsHandledProtocol(scheme))
     return metrics::OmniboxInputType::URL;
 
@@ -91,7 +91,7 @@ ChromeAutocompleteSchemeClassifier::GetInputTypeForScheme(
 
     case ExternalProtocolHandler::UNKNOWN: {
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-      // Linux impl of GetApplicationNameForProtocol doesn't distinguish
+      // Linux impl of GetApplicationNameForScheme doesn't distinguish
       // between URL schemes with handers and those without. This will
       // make the default behaviour be search on Linux.
       return metrics::OmniboxInputType::EMPTY;
@@ -100,7 +100,7 @@ ChromeAutocompleteSchemeClassifier::GetInputTypeForScheme(
       // for the url scheme.
       GURL url(scheme + "://");
       std::u16string application_name =
-          shell_integration::GetApplicationNameForProtocol(url);
+          shell_integration::GetApplicationNameForScheme(url);
       return application_name.empty() ? metrics::OmniboxInputType::EMPTY
                                       : metrics::OmniboxInputType::URL;
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -150,7 +150,7 @@ bool CastAudioInputStream::OnCaptureData(const char* data, size_t size) {
   DCHECK(input_callback_);
   input_callback_->OnData(audio_bus_.get(),
                           base::TimeTicks() + base::Microseconds(timestamp_us),
-                          /* volume */ 1.0);
+                          /* volume */ 1.0, {});
   return true;
 }
 

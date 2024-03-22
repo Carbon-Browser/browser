@@ -1,8 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// This file is copied from //base/immediate_crash.h.
+// This file has been copied from //base/immediate_crash.h.
+// TODO(https://crbug.com/1475734): Avoid code duplication / reuse code.
 
 #ifndef BUILD_RUST_STD_IMMEDIATE_CRASH_H_
 #define BUILD_RUST_STD_IMMEDIATE_CRASH_H_

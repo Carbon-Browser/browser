@@ -1,52 +1,36 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/content_settings/page_specific_content_settings_delegate.h"
 
 #include "build/build_config.h"
-#include "chrome/browser/browsing_data/access_context_audit_service.h"
-#include "chrome/browser/browsing_data/access_context_audit_service_factory.h"
 #include "chrome/browser/browsing_data/browsing_data_file_system_util.h"
+#include "chrome/browser/browsing_data/chrome_browsing_data_model_delegate.h"
 #include "chrome/browser/browsing_data/cookies_tree_model.h"
 #include "chrome/browser/content_settings/chrome_content_settings_utils.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/browser/permissions/permission_decision_auto_blocker_factory.h"
+#include "chrome/browser/picture_in_picture/picture_in_picture_window_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_switches.h"
-#include "chrome/common/pref_names.h"
 #include "chrome/common/renderer_configuration.mojom.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/content_settings/core/common/content_settings_utils.h"
+#include "components/permissions/permission_recovery_success_rate_tracker.h"
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "components/guest_view/browser/guest_view_base.h"
 #endif
+#include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
+#include "components/content_settings/core/common/features.h"
 #include "components/permissions/permission_decision_auto_blocker.h"
 #include "components/permissions/permission_uma_util.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_process_host.h"
 #include "ipc/ipc_channel_proxy.h"
-
-namespace {
-
-void RecordOriginStorageAccess(const url::Origin& origin,
-                               AccessContextAuditDatabase::StorageAPIType type,
-                               content::Page& page) {
-  if (page.GetMainDocument().IsFencedFrameRoot())
-    return;
-  auto* access_context_audit_service =
-      AccessContextAuditServiceFactory::GetForProfile(
-          Profile::FromBrowserContext(
-              page.GetMainDocument().GetBrowserContext()));
-  if (access_context_audit_service)
-    access_context_audit_service->RecordStorageAPIAccess(
-        origin, type, page.GetMainDocument().GetLastCommittedOrigin());
-}
-
-}  // namespace
 
 using content_settings::PageSpecificContentSettings;
 
@@ -55,13 +39,11 @@ namespace chrome {
 PageSpecificContentSettingsDelegate::PageSpecificContentSettingsDelegate(
     content::WebContents* web_contents)
     : WebContentsObserver(web_contents) {
-  auto* access_context_audit_service =
-      AccessContextAuditServiceFactory::GetForProfile(
-          Profile::FromBrowserContext(web_contents->GetBrowserContext()));
-  if (access_context_audit_service) {
-    cookie_access_helper_ =
-        std::make_unique<AccessContextAuditService::CookieAccessHelper>(
-            access_context_audit_service);
+  if (base::FeatureList::IsEnabled(
+          content_settings::features::kImprovedSemanticsActivityIndicators)) {
+    media_observation_.Observe(MediaCaptureDevicesDispatcher::GetInstance()
+                                   ->GetMediaStreamCaptureIndicator()
+                                   .get());
   }
 }
 
@@ -76,8 +58,67 @@ PageSpecificContentSettingsDelegate::FromWebContents(
       PageSpecificContentSettings::GetDelegateForWebContents(web_contents));
 }
 
+void PageSpecificContentSettingsDelegate::OnIsCapturingVideoChanged(
+    content::WebContents* web_contents,
+    bool is_capturing_video) {
+  PageSpecificContentSettings* pscs = PageSpecificContentSettings::GetForFrame(
+      web_contents->GetPrimaryMainFrame());
+
+  if (pscs == nullptr) {
+    // There are cases, e.g. MPArch, where there is no active instance of
+    // PageSpecificContentSettings for a frame.
+    return;
+  }
+
+  pscs->OnCapturingStateChanged(ContentSettingsType::MEDIASTREAM_CAMERA,
+                                is_capturing_video);
+}
+
+void PageSpecificContentSettingsDelegate::OnIsCapturingAudioChanged(
+    content::WebContents* web_contents,
+    bool is_capturing_audio) {
+  PageSpecificContentSettings* pscs = PageSpecificContentSettings::GetForFrame(
+      web_contents->GetPrimaryMainFrame());
+
+  if (pscs == nullptr) {
+    // There are cases, e.g. MPArch, where there is no active instance of
+    // PageSpecificContentSettings for a frame.
+    return;
+  }
+
+  pscs->OnCapturingStateChanged(ContentSettingsType::MEDIASTREAM_MIC,
+                                is_capturing_audio);
+}
+
 void PageSpecificContentSettingsDelegate::UpdateLocationBar() {
   content_settings::UpdateLocationBarUiForWebContents(web_contents());
+
+  PageSpecificContentSettings* pscs = PageSpecificContentSettings::GetForFrame(
+      web_contents()->GetPrimaryMainFrame());
+
+  if (pscs == nullptr) {
+    // There are cases, e.g. MPArch, where there is no active instance of
+    // PageSpecificContentSettings for a frame.
+    return;
+  }
+
+  PageSpecificContentSettings::MicrophoneCameraState state =
+      pscs->GetMicrophoneCameraState();
+
+  if (state.Has(PageSpecificContentSettings::kCameraAccessed) ||
+      state.Has(PageSpecificContentSettings::kMicrophoneAccessed)) {
+    auto* permission_tracker =
+        permissions::PermissionRecoverySuccessRateTracker::FromWebContents(
+            web_contents());
+
+    if (state.Has(PageSpecificContentSettings::kMicrophoneAccessed)) {
+      permission_tracker->TrackUsage(ContentSettingsType::MEDIASTREAM_MIC);
+    }
+
+    if (state.Has(PageSpecificContentSettings::kCameraAccessed)) {
+      permission_tracker->TrackUsage(ContentSettingsType::MEDIASTREAM_CAMERA);
+    }
+  }
 }
 
 PrefService* PageSpecificContentSettingsDelegate::GetPrefs() {
@@ -92,6 +133,13 @@ PrefService* PageSpecificContentSettingsDelegate::GetPrefs() {
 HostContentSettingsMap* PageSpecificContentSettingsDelegate::GetSettingsMap() {
   return HostContentSettingsMapFactory::GetForProfile(
       Profile::FromBrowserContext(web_contents()->GetBrowserContext()));
+}
+
+std::unique_ptr<BrowsingDataModel::Delegate>
+PageSpecificContentSettingsDelegate::CreateBrowsingDataModelDelegate() {
+  return ChromeBrowsingDataModelDelegate::CreateForStoragePartition(
+      Profile::FromBrowserContext(web_contents()->GetBrowserContext()),
+      web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
 }
 
 namespace {
@@ -132,8 +180,7 @@ void PageSpecificContentSettingsDelegate::SetDefaultRendererContentSettingRules(
       web_contents()->GetBrowserContext()->IsOffTheRecord();
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-  if (guest_view::GuestViewBase::IsGuest(
-          content::WebContents::FromRenderFrameHost(rfh))) {
+  if (guest_view::GuestViewBase::IsGuest(rfh)) {
     GetGuestViewDefaultContentSettingRules(is_off_the_record, rules);
     return;
   }
@@ -162,36 +209,9 @@ PageSpecificContentSettingsDelegate::GetIsDeletionDisabledCallback() {
       Profile::FromBrowserContext(web_contents()->GetBrowserContext()));
 }
 
-bool PageSpecificContentSettingsDelegate::IsMicrophoneCameraStateChanged(
-    PageSpecificContentSettings::MicrophoneCameraState microphone_camera_state,
-    const std::string& media_stream_selected_audio_device,
-    const std::string& media_stream_selected_video_device) {
-  PrefService* prefs = GetPrefs();
-  scoped_refptr<MediaStreamCaptureIndicator> media_indicator =
-      MediaCaptureDevicesDispatcher::GetInstance()
-          ->GetMediaStreamCaptureIndicator();
-
-  if ((microphone_camera_state &
-       PageSpecificContentSettings::MICROPHONE_ACCESSED) &&
-      prefs->GetString(prefs::kDefaultAudioCaptureDevice) !=
-          media_stream_selected_audio_device &&
-      media_indicator->IsCapturingAudio(web_contents()))
-    return true;
-
-  if ((microphone_camera_state &
-       PageSpecificContentSettings::CAMERA_ACCESSED) &&
-      prefs->GetString(prefs::kDefaultVideoCaptureDevice) !=
-          media_stream_selected_video_device &&
-      media_indicator->IsCapturingVideo(web_contents()))
-    return true;
-
-  return false;
-}
-
 PageSpecificContentSettings::MicrophoneCameraState
 PageSpecificContentSettingsDelegate::GetMicrophoneCameraState() {
-  PageSpecificContentSettings::MicrophoneCameraState state =
-      PageSpecificContentSettings::MICROPHONE_CAMERA_NOT_ACCESSED;
+  PageSpecificContentSettings::MicrophoneCameraState state;
 
   // Include capture devices in the state if there are still consumers of the
   // approved media stream.
@@ -199,11 +219,34 @@ PageSpecificContentSettingsDelegate::GetMicrophoneCameraState() {
       MediaCaptureDevicesDispatcher::GetInstance()
           ->GetMediaStreamCaptureIndicator();
   if (media_indicator->IsCapturingAudio(web_contents()))
-    state |= PageSpecificContentSettings::MICROPHONE_ACCESSED;
+    state.Put(PageSpecificContentSettings::kMicrophoneAccessed);
   if (media_indicator->IsCapturingVideo(web_contents()))
-    state |= PageSpecificContentSettings::CAMERA_ACCESSED;
+    state.Put(PageSpecificContentSettings::kCameraAccessed);
 
   return state;
+}
+
+content::WebContents* PageSpecificContentSettingsDelegate::
+    MaybeGetSyncedWebContentsForPictureInPicture(
+        content::WebContents* web_contents) {
+  DCHECK(web_contents);
+  content::WebContents* parent_web_contents =
+      PictureInPictureWindowManager::GetInstance()->GetWebContents();
+  content::WebContents* child_web_contents =
+      PictureInPictureWindowManager::GetInstance()->GetChildWebContents();
+
+  // For document picture-in-picture window, return the opener web contents.
+  if (web_contents == child_web_contents) {
+    DCHECK(parent_web_contents);
+    return parent_web_contents;
+  }
+
+  // For browser window that has opened a document picture-in-picture window,
+  // return the PiP window web contents.
+  if ((web_contents == parent_web_contents) && child_web_contents) {
+    return child_web_contents;
+  }
+  return nullptr;
 }
 
 void PageSpecificContentSettingsDelegate::OnContentAllowed(
@@ -217,8 +260,7 @@ void PageSpecificContentSettingsDelegate::OnContentAllowed(
   GetSettingsMap()->GetWebsiteSetting(web_contents()->GetLastCommittedURL(),
                                       web_contents()->GetLastCommittedURL(),
                                       type, &setting_info);
-  const base::Time grant_time = GetSettingsMap()->GetSettingLastModifiedDate(
-      setting_info.primary_pattern, setting_info.secondary_pattern, type);
+  const base::Time grant_time = setting_info.metadata.last_modified();
   if (grant_time.is_null())
     return;
   permissions::PermissionUmaUtil::RecordTimeElapsedBetweenGrantAndUse(
@@ -236,58 +278,9 @@ void PageSpecificContentSettingsDelegate::OnContentBlocked(
   }
 }
 
-void PageSpecificContentSettingsDelegate::OnCookieAccessAllowed(
-    const net::CookieList& accessed_cookies,
-    content::Page& page) {
-  if (page.GetMainDocument().IsFencedFrameRoot())
-    return;
-  if (cookie_access_helper_) {
-    cookie_access_helper_->RecordCookieAccess(
-        accessed_cookies, page.GetMainDocument().GetLastCommittedOrigin());
-  }
-}
-
-void PageSpecificContentSettingsDelegate::OnServiceWorkerAccessAllowed(
-    const url::Origin& origin,
-    content::Page& page) {
-  RecordOriginStorageAccess(
-      origin, AccessContextAuditDatabase::StorageAPIType::kServiceWorker, page);
-}
-
-void PageSpecificContentSettingsDelegate::OnStorageAccessAllowed(
-    content_settings::mojom::ContentSettingsManager::StorageType storage_type,
-    const url::Origin& origin,
-    content::Page& page) {
-  AccessContextAuditDatabase::StorageAPIType out_type = ([storage_type]() {
-    switch (storage_type) {
-      case StorageType::CACHE:
-        return AccessContextAuditDatabase::StorageAPIType::kCacheStorage;
-      case StorageType::DATABASE:
-        return AccessContextAuditDatabase::StorageAPIType::kWebDatabase;
-      case StorageType::FILE_SYSTEM:
-        return AccessContextAuditDatabase::StorageAPIType::kFileSystem;
-      case StorageType::INDEXED_DB:
-        return AccessContextAuditDatabase::StorageAPIType::kIndexedDB;
-      case StorageType::LOCAL_STORAGE:
-        return AccessContextAuditDatabase::StorageAPIType::kLocalStorage;
-      case StorageType::SESSION_STORAGE:
-        return AccessContextAuditDatabase::StorageAPIType::kSessionStorage;
-      case StorageType::WEB_LOCKS:
-        NOTREACHED();
-        return AccessContextAuditDatabase::StorageAPIType::kCacheStorage;
-    }
-  })();
-  RecordOriginStorageAccess(origin, out_type, page);
-}
-
 void PageSpecificContentSettingsDelegate::PrimaryPageChanged(
     content::Page& page) {
   ClearPendingProtocolHandler();
-
-  if (web_contents()->GetVisibleURL().SchemeIsHTTPOrHTTPS()) {
-    content_settings::RecordPluginsAction(
-        content_settings::PLUGINS_ACTION_TOTAL_NAVIGATIONS);
-  }
 }
 
 }  // namespace chrome

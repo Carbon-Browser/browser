@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,15 +24,15 @@ class FakePositionCache : public PositionCache {
 
   void CachePosition(const WifiData& wifi_data,
                      const mojom::Geoposition& position) override;
-  const mojom::Geoposition* FindPosition(
-      const WifiData& wifi_data) const override;
+  const mojom::Geoposition* FindPosition(const WifiData& wifi_data) override;
   size_t GetPositionCacheSize() const override;
-  const mojom::Geoposition& GetLastUsedNetworkPosition() const override;
-  void SetLastUsedNetworkPosition(const mojom::Geoposition& position) override;
+  const mojom::GeopositionResult* GetLastUsedNetworkPosition() const override;
+  void SetLastUsedNetworkPosition(
+      const mojom::GeopositionResult& position) override;
 
  private:
-  std::vector<std::pair<WifiData, mojom::Geoposition>> data;
-  mojom::Geoposition last_used_position;
+  std::vector<std::pair<WifiData, mojom::GeopositionPtr>> data;
+  mojom::GeopositionResultPtr last_used_result;
 };
 
 }  // namespace device

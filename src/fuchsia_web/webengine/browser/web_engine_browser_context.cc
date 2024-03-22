@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@
 #include "components/site_isolation/site_isolation_policy.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/client_hints_controller_delegate.h"
 #include "content/public/browser/resource_context.h"
 #include "fuchsia_web/webengine/browser/web_engine_net_log_observer.h"
 #include "fuchsia_web/webengine/switches.h"
@@ -47,17 +46,6 @@ std::unique_ptr<WebEngineNetLogObserver> CreateNetLogObserver() {
 }
 
 }  // namespace
-
-class WebEngineBrowserContext::ResourceContext
-    : public content::ResourceContext {
- public:
-  ResourceContext() = default;
-
-  ResourceContext(const ResourceContext&) = delete;
-  ResourceContext& operator=(const ResourceContext&) = delete;
-
-  ~ResourceContext() override = default;
-};
 
 // static
 std::unique_ptr<WebEngineBrowserContext>
@@ -169,6 +157,12 @@ WebEngineBrowserContext::GetBrowsingDataRemoverDelegate() {
   return nullptr;
 }
 
+content::ReduceAcceptLanguageControllerDelegate*
+WebEngineBrowserContext::GetReduceAcceptLanguageControllerDelegate() {
+  // There is no delegate since WebEngine doesn't support persistence.
+  return nullptr;
+}
+
 std::unique_ptr<media::VideoDecodePerfHistory>
 WebEngineBrowserContext::CreateVideoDecodePerfHistory() {
   if (!IsOffTheRecord()) {
@@ -201,7 +195,7 @@ WebEngineBrowserContext::WebEngineBrowserContext(
     : data_dir_path_(std::move(data_directory)),
       net_log_observer_(CreateNetLogObserver()),
       simple_factory_key_(GetPath(), IsOffTheRecord()),
-      resource_context_(std::make_unique<ResourceContext>()),
+      resource_context_(std::make_unique<content::ResourceContext>()),
       client_hints_delegate_(network_quality_tracker,
                              IsJavaScriptAllowedCallback(),
                              AreThirdPartyCookiesBlockedCallback(),

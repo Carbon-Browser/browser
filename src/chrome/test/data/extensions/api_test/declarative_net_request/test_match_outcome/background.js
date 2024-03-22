@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ chrome.test.runTests([
         chrome.test.callbackFail('Invalid test request initiator.'));
   },
 
-  function testInvalidInitiator() {
+  function testInvalidTabID() {
     chrome.declarativeNetRequest.testMatchOutcome(
         {url: 'http://example.example', type: 'sub_frame', tabId: -2},
         chrome.test.callbackFail('Invalid test request tab ID.'));

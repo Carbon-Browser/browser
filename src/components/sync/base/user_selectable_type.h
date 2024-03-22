@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SYNC_BASE_USER_SELECTABLE_TYPE_H_
 #define COMPONENTS_SYNC_BASE_USER_SELECTABLE_TYPE_H_
 
+#include <iosfwd>
 #include <string>
 
 #include "base/containers/enum_set.h"
@@ -14,6 +15,13 @@
 
 namespace syncer {
 
+// TODO(crbug.com/1286405): once it's impossible to launch Ash-browser only
+// UserSelectableOsType will be relevant for Ash, guard UserSelectableType with
+// #if !BUILDFLAG(IS_CHROMEOS_ASH) and remove lower level Ash-specific code.
+//
+// A Java counterpart will be generated for this enum.
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.sync
+//
 enum class UserSelectableType {
   kBookmarks,
   kFirstType = kBookmarks,
@@ -27,8 +35,9 @@ enum class UserSelectableType {
   kApps,
   kReadingList,
   kTabs,
-  kWifiConfigurations,
-  kLastType = kWifiConfigurations
+  kSavedTabGroups,
+  kPayments,
+  kLastType = kPayments
 };
 
 using UserSelectableTypeSet = base::EnumSet<UserSelectableType,
@@ -71,6 +80,11 @@ ModelType UserSelectableOsTypeToCanonicalModelType(UserSelectableOsType type);
 absl::optional<UserSelectableOsType> GetUserSelectableOsTypeFromString(
     const std::string& type);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+// For GTest.
+std::ostream& operator<<(std::ostream& stream, const UserSelectableType& type);
+std::ostream& operator<<(std::ostream& stream,
+                         const UserSelectableTypeSet& types);
 
 }  // namespace syncer
 

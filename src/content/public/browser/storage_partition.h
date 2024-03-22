@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <set>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list_types.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -18,6 +18,7 @@
 #include "components/services/storage/public/mojom/local_storage_control.mojom-forward.h"
 #include "content/common/content_export.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "services/network/public/mojom/cert_verifier_service.mojom-forward.h"
 #include "services/network/public/mojom/cookie_manager.mojom-forward.h"
 #include "services/network/public/mojom/restricted_cookie_manager.mojom-forward.h"
 #include "services/network/public/mojom/trust_tokens.mojom-forward.h"
@@ -50,10 +51,11 @@ class URLLoaderNetworkServiceObserver;
 }  // namespace network
 
 namespace storage {
-class QuotaManager;
-class SpecialStoragePolicy;
-struct QuotaSettings;
 class DatabaseTracker;
+class QuotaManager;
+struct QuotaSettings;
+class SharedStorageManager;
+class SpecialStoragePolicy;
 }  // namespace storage
 
 namespace url {
@@ -62,10 +64,13 @@ class Origin;
 
 namespace content {
 
+class AttributionDataModel;
 class BackgroundSyncContext;
 class BrowserContext;
+class BrowsingDataFilterBuilder;
 class BrowsingTopicsSiteDataManager;
 class ContentIndexContext;
+class CookieDeprecationLabelManager;
 class DedicatedWorkerService;
 class DevToolsBackgroundServicesContext;
 class DOMStorageContext;
@@ -74,10 +79,11 @@ class GeneratedCodeCacheContext;
 class HostZoomLevelContext;
 class HostZoomMap;
 class InterestGroupManager;
-class NativeIOContext;
 class PlatformNotificationContext;
+class PrivateAggregationDataModel;
 class ServiceWorkerContext;
 class SharedWorkerService;
+class StoragePartitionConfig;
 class ZoomLevelDelegate;
 class NavigationRequest;
 
@@ -89,12 +95,22 @@ class NavigationRequest;
 // the cookies, localStorage, etc., that normal web renderers have access to.
 class CONTENT_EXPORT StoragePartition {
  public:
-  virtual base::FilePath GetPath() = 0;
+  // Returns the StoragePartitionConfig that represents this StoragePartition.
+  virtual const StoragePartitionConfig& GetConfig() const = 0;
+
+  virtual const base::FilePath& GetPath() const = 0;
 
   // Returns a raw mojom::NetworkContext pointer. When network service crashes
   // or restarts, the raw pointer will not be valid or safe to use. Therefore,
   // caller should not hold onto this pointer beyond the same message loop task.
   virtual network::mojom::NetworkContext* GetNetworkContext() = 0;
+
+  virtual cert_verifier::mojom::CertVerifierServiceUpdater*
+  GetCertVerifierServiceUpdater() = 0;
+
+  // Returns the SharedStorageManager for the StoragePartition, or nullptr if it
+  // doesn't exist because the feature is disabled.
+  virtual storage::SharedStorageManager* GetSharedStorageManager() = 0;
 
   // Returns a pointer/info to a URLLoaderFactory/CookieManager owned by
   // the storage partition. Prefer to use this instead of creating a new
@@ -113,8 +129,6 @@ class CONTENT_EXPORT StoragePartition {
   // from RenderFrameHost::CreateNetworkServiceDefaultFactory).
   virtual scoped_refptr<network::SharedURLLoaderFactory>
   GetURLLoaderFactoryForBrowserProcess() = 0;
-  virtual scoped_refptr<network::SharedURLLoaderFactory>
-  GetURLLoaderFactoryForBrowserProcessWithCORBEnabled() = 0;
   virtual std::unique_ptr<network::PendingSharedURLLoaderFactory>
   GetURLLoaderFactoryForBrowserProcessIOThread() = 0;
   virtual network::mojom::CookieManager*
@@ -148,13 +162,15 @@ class CONTENT_EXPORT StoragePartition {
   virtual DevToolsBackgroundServicesContext*
   GetDevToolsBackgroundServicesContext() = 0;
   virtual ContentIndexContext* GetContentIndexContext() = 0;
-  virtual NativeIOContext* GetNativeIOContext() = 0;
   virtual HostZoomMap* GetHostZoomMap() = 0;
   virtual HostZoomLevelContext* GetHostZoomLevelContext() = 0;
   virtual ZoomLevelDelegate* GetZoomLevelDelegate() = 0;
   virtual PlatformNotificationContext* GetPlatformNotificationContext() = 0;
   virtual InterestGroupManager* GetInterestGroupManager() = 0;
   virtual BrowsingTopicsSiteDataManager* GetBrowsingTopicsSiteDataManager() = 0;
+  virtual AttributionDataModel* GetAttributionDataModel() = 0;
+  virtual PrivateAggregationDataModel* GetPrivateAggregationDataModel() = 0;
+  virtual CookieDeprecationLabelManager* GetCookieDeprecationLabelManager() = 0;
 
   virtual leveldb_proto::ProtoDatabaseProvider* GetProtoDatabaseProvider() = 0;
   // Must be set before the first call to GetProtoDatabaseProvider(), or a new
@@ -191,13 +207,16 @@ class CONTENT_EXPORT StoragePartition {
     REMOVE_DATA_MASK_INTEREST_GROUP_PERMISSIONS_CACHE = 1 << 15,
 
     REMOVE_DATA_MASK_ATTRIBUTION_REPORTING_INTERNAL = 1 << 16,
+    REMOVE_DATA_MASK_PRIVATE_AGGREGATION_INTERNAL = 1 << 17,
+    REMOVE_DATA_MASK_INTEREST_GROUPS_INTERNAL = 1 << 18,
 
     REMOVE_DATA_MASK_ALL = 0xFFFFFFFF,
 
     // Corresponds to storage::kStorageTypeTemporary.
     QUOTA_MANAGED_STORAGE_MASK_TEMPORARY = 1 << 0,
     // Corresponds to storage::kStorageTypePersistent.
-    QUOTA_MANAGED_STORAGE_MASK_PERSISTENT = 1 << 1,
+    // Deprecated since crbug.com/1233525.
+    // QUOTA_MANAGED_STORAGE_MASK_PERSISTENT = 1 << 1,
     // Corresponds to storage::kStorageTypeSyncable.
     QUOTA_MANAGED_STORAGE_MASK_SYNCABLE = 1 << 2,
     QUOTA_MANAGED_STORAGE_MASK_ALL = 0xFFFFFFFF,
@@ -222,13 +241,23 @@ class CONTENT_EXPORT StoragePartition {
                                   const GURL& storage_origin,
                                   base::OnceClosure callback) = 0;
 
+  // Starts a task that will clear the data of each bucket name for the
+  // specified storage key.
+  virtual void ClearDataForBuckets(const blink::StorageKey& storage_key,
+                                   const std::set<std::string>& storage_buckets,
+                                   base::OnceClosure callback) = 0;
+
   // A callback type to check if a given StorageKey matches a storage policy.
   // Can be passed empty/null where used, which means the StorageKey will always
-  // match.
+  // match. Returns true if the given StorageKey matches the storage policy,
+  // false otherwise.
   using StorageKeyPolicyMatcherFunction =
       base::RepeatingCallback<bool(const blink::StorageKey&,
                                    storage::SpecialStoragePolicy*)>;
 
+  // A callback type to check if a given StorageKey matches. Can be passed
+  // empty/null where used which means the StorageKey will always match. Returns
+  // true when the given StorageKey matches, false otherwise.
   using StorageKeyMatcherFunction =
       base::RepeatingCallback<bool(const blink::StorageKey&)>;
 
@@ -240,7 +269,7 @@ class CONTENT_EXPORT StoragePartition {
     // Called on a deletion event for storage keyed storage APIs.
     virtual void OnStorageKeyDataCleared(
         uint32_t remove_mask,
-        StorageKeyMatcherFunction storage_key_matcher,
+        StorageKeyMatcherFunction storage_key_policy_matcher,
         const base::Time begin,
         const base::Time end) = 0;
   };
@@ -258,8 +287,10 @@ class CONTENT_EXPORT StoragePartition {
 
   // Similar to ClearData().
   // Deletes all data out for the StoragePartition.
-  // * `storage_key_matcher` is present if special storage policy is to be
-  //   handled, otherwise the callback should be null.
+  // * `filter_builder` is present if origin/domain filters are to be handled,
+  //   otherwise should be nullptr.
+  // * `storage_key_policy_matcher` is present if special storage policy is to
+  //   be handled, otherwise the callback should be null.
   //   The StorageKey matcher does not apply to cookies, instead use:
   // * `cookie_deletion_filter` identifies the cookies to delete and will be
   //   used if `remove_mask` has the REMOVE_DATA_MASK_COOKIES bit set. Note:
@@ -278,7 +309,8 @@ class CONTENT_EXPORT StoragePartition {
   virtual void ClearData(
       uint32_t remove_mask,
       uint32_t quota_storage_remove_mask,
-      StorageKeyPolicyMatcherFunction storage_key_matcher,
+      BrowsingDataFilterBuilder* filter_builder,
+      StorageKeyPolicyMatcherFunction storage_key_policy_matcher,
       network::mojom::CookieDeletionFilterPtr cookie_deletion_filter,
       bool perform_storage_cleanup,
       const base::Time begin,
@@ -314,6 +346,10 @@ class CONTENT_EXPORT StoragePartition {
   // use only.
   virtual void FlushNetworkInterfaceForTesting() = 0;
 
+  // Call |FlushForTesting()| on Cert Verifier Service related interfaces. For
+  // test use only.
+  virtual void FlushCertVerifierInterfaceForTesting() = 0;
+
   // Wait until all deletions tasks are finished. For test use only.
   virtual void WaitForDeletionTasksForTesting() = 0;
 
@@ -328,11 +364,6 @@ class CONTENT_EXPORT StoragePartition {
   // a new instance and returns nullptr instead.
   virtual leveldb_proto::ProtoDatabaseProvider*
   GetProtoDatabaseProviderForTesting() = 0;
-
-  // Resets all state associated with the Attribution Reporting API for use in
-  // hermetic tests.
-  virtual void ResetAttributionManagerForTesting(
-      base::OnceCallback<void(bool success)> callback) = 0;
 
   // The value pointed to by |settings| should remain valid until the
   // the function is called again with a new value or a nullptr.

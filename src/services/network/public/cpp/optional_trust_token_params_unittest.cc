@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,10 @@ namespace {
 // changes.
 OptionalTrustTokenParams NonemptyTrustTokenParams() {
   return mojom::TrustTokenParams(
+      mojom::TrustTokenMajorVersion::kPrivateStateTokenV1,
       mojom::TrustTokenOperationType::kRedemption,
-      mojom::TrustTokenRefreshPolicy::kRefresh,
+      mojom::TrustTokenRefreshPolicy::kRefresh, "custom_key_commitment",
+      url::Origin::Create(GURL("https://custom-issuer.com")),
       mojom::TrustTokenSignRequestData::kInclude,
       /*include_timestamp_header=*/true,
       std::vector<url::Origin>{url::Origin::Create(GURL("https://issuer.com"))},
@@ -79,14 +81,20 @@ TEST(OptionalTrustTokenParams, CopyAndMove) {
 
 TEST(OptionalTrustTokenParams, Dereference) {
   OptionalTrustTokenParams in = NonemptyTrustTokenParams();
-  EXPECT_EQ(in->type, mojom::TrustTokenOperationType::kRedemption);
-  EXPECT_EQ(in.as_ptr()->type, mojom::TrustTokenOperationType::kRedemption);
-  EXPECT_EQ(in.value().type, mojom::TrustTokenOperationType::kRedemption);
+  EXPECT_EQ(in->version, mojom::TrustTokenMajorVersion::kPrivateStateTokenV1);
+  EXPECT_EQ(in.as_ptr()->version,
+            mojom::TrustTokenMajorVersion::kPrivateStateTokenV1);
+  EXPECT_EQ(in.value().version,
+            mojom::TrustTokenMajorVersion::kPrivateStateTokenV1);
+  EXPECT_EQ(in->operation, mojom::TrustTokenOperationType::kRedemption);
+  EXPECT_EQ(in.as_ptr()->operation,
+            mojom::TrustTokenOperationType::kRedemption);
+  EXPECT_EQ(in.value().operation, mojom::TrustTokenOperationType::kRedemption);
 }
 
 TEST(OptionalTrustTokenParams, DereferenceEmpty) {
   OptionalTrustTokenParams in = absl::nullopt;
-  EXPECT_CHECK_DEATH(std::ignore = in->type);
+  EXPECT_CHECK_DEATH(std::ignore = in->operation);
   EXPECT_CHECK_DEATH(std::ignore = in.value());
   EXPECT_EQ(in.as_ptr(), mojom::TrustTokenParamsPtr());
 }

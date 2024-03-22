@@ -19,9 +19,9 @@
 #define COMPONENTS_ADBLOCK_CORE_COMMON_ADBLOCK_UTILS_H_
 
 #include <string>
+#include <string_view>
 
-#include "base/callback_forward.h"
-
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "components/adblock/core/common/flatbuffer_data.h"
@@ -71,8 +71,8 @@ std::string ConvertBaseTimeToABPFilterVersionFormat(const base::Time& date);
 std::unique_ptr<FlatbufferData> MakeFlatbufferDataFromResourceBundle(
     int resource_id);
 
-bool RegexMatches(base::StringPiece pattern,
-                  base::StringPiece input,
+bool RegexMatches(std::string_view pattern,
+                  std::string_view input,
                   bool case_sensitive);
 
 }  // namespace utils

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/bind_post_task.h"
@@ -26,14 +26,13 @@
 #include "components/viz/service/frame_sinks/gmb_video_frame_pool_context_provider_impl.h"
 #include "components/viz/service/gl/gpu_service_impl.h"
 #include "components/viz/service/performance_hint/hint_session.h"
+#include "gpu/command_buffer/service/scheduler_sequence.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "gpu/config/gpu_switches.h"
-#include "gpu/ipc/scheduler_sequence.h"
 #include "gpu/ipc/service/gpu_memory_buffer_factory.h"
-#include "services/tracing/public/cpp/stack_sampling/tracing_sampler_profiler.h"
 #include "ui/gfx/switches.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -53,7 +52,7 @@ std::unique_ptr<VizCompositorThreadType> CreateAndStartCompositorThread() {
 
   std::unique_ptr<base::Thread> thread;
   base::Thread::Options thread_options;
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   auto* platform = ui::OzonePlatform::GetInstance();
   thread_options.message_pump_type =
       platform->GetPlatformProperties().message_pump_type_for_viz_compositor;
@@ -80,11 +79,6 @@ std::unique_ptr<VizCompositorThreadType> CreateAndStartCompositorThread() {
 #endif  // !BUILDFLAG(IS_APPLE)
 
   CHECK(thread->StartWithOptions(std::move(thread_options)));
-
-  // Setup tracing sampler profiler as early as possible.
-  thread->task_runner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&tracing::TracingSamplerProfiler::CreateOnChildThread));
 
   return thread;
 #endif  // !BUILDFLAG(IS_ANDROID)
@@ -125,7 +119,7 @@ void VizCompositorThreadRunnerImpl::CreateHintSessionFactoryOnCompositorThread(
   auto hint_session_factory = HintSessionFactory::Create(std::move(thread_ids));
   // Written this way so finch only considers the experiment active on device
   // which supports hint session.
-  if (hint_session_factory && features::IsAdpfEnabled()) {
+  if (hint_session_factory) {
     hint_session_factory_ = std::move(hint_session_factory);
     *wake_up_closure = base::BindPostTask(
         task_runner_,
@@ -236,6 +230,7 @@ void VizCompositorThreadRunnerImpl::TearDownOnCompositorThread() {
   frame_sink_manager_.reset();
   hint_session_factory_.reset();
   output_surface_provider_.reset();
+  gmb_video_frame_pool_context_provider_.reset();
   gpu_memory_buffer_manager_.reset();
   server_shared_bitmap_manager_.reset();
 }

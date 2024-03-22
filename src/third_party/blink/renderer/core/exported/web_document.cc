@@ -49,7 +49,6 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_statistics_collector.h"
 #include "third_party/blink/renderer/core/dom/document_type.h"
-#include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/dom/node.h"
@@ -70,7 +69,6 @@
 #include "third_party/blink/renderer/core/html/plugin_document.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/platform/graphics/dom_node_id.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
@@ -85,6 +83,10 @@ static const blink::WebStyleSheetKey GenerateStyleSheetKey() {
 }  // namespace
 
 namespace blink {
+
+const DocumentToken& WebDocument::Token() const {
+  return ConstUnwrap<Document>()->Token();
+}
 
 WebURL WebDocument::Url() const {
   return ConstUnwrap<Document>()->Url();
@@ -158,6 +160,10 @@ net::SiteForCookies WebDocument::SiteForCookies() const {
   return ConstUnwrap<Document>()->SiteForCookies();
 }
 
+bool WebDocument::HasStorageAccess() const {
+  return ConstUnwrap<Document>()->GetExecutionContext()->HasStorageAccess();
+}
+
 WebSecurityOrigin WebDocument::TopFrameOrigin() const {
   return ConstUnwrap<Document>()->TopFrameOrigin();
 }
@@ -207,7 +213,7 @@ WebVector<WebFormElement> WebDocument::Forms() const {
       const_cast<Document*>(ConstUnwrap<Document>())->forms();
 
   Vector<WebFormElement> form_elements;
-  form_elements.ReserveCapacity(forms->length());
+  form_elements.reserve(forms->length());
   for (Element* element : *forms) {
     form_elements.emplace_back(blink::To<HTMLFormElement>(element));
   }
@@ -249,11 +255,13 @@ WebStyleSheetKey WebDocument::InsertStyleSheet(
 }
 
 bool IsValidAbpRule(StyleRuleBase* rule) {
-  if (!rule->IsStyleRule())
+  if (!rule->IsStyleRule()) {
     return false;
+  }
   const auto& props = blink::To<StyleRule>(rule)->Properties();
-  if (props.PropertyCount() != 1)
+  if (props.PropertyCount() != 1) {
     return false;
+  }
   const auto& ref = props.PropertyAt(0);
   return ref.Id() == CSSPropertyID::kDisplay && ref.IsImportant();
 }
@@ -274,10 +282,10 @@ WebStyleSheetKey WebDocument::InsertAbpElemhideStylesheet(
   // Rule count is not validated because some selectors can be malformed for
   // third-party lists. Checking body is valid for all the rules is enough.
   for (unsigned n = 0; n < parsed_sheet->RuleCount();) {
-    if (IsValidAbpRule(parsed_sheet->RuleAt(n)))
+    if (IsValidAbpRule(parsed_sheet->RuleAt(n))) {
       ++n;
-    else {
-      parsed_sheet->SetMutable();
+    } else {
+      parsed_sheet->StartMutation();
       parsed_sheet->WrapperDeleteRule(n);
       LOG(WARNING) << "[eyeo] Broken rule";
     }
@@ -339,12 +347,11 @@ void WebDocument::SetShowBeforeUnloadDialog(bool show_dialog) {
   doc->SetShowBeforeUnloadDialog(show_dialog);
 }
 
-uint64_t WebDocument::GetVisualViewportScrollingElementIdForTesting() {
+cc::ElementId WebDocument::GetVisualViewportScrollingElementIdForTesting() {
   return blink::To<Document>(private_.Get())
       ->GetPage()
       ->GetVisualViewport()
-      .GetScrollElementId()
-      .GetStableId();
+      .GetScrollElementId();
 }
 
 bool WebDocument::IsLoaded() {
@@ -353,6 +360,10 @@ bool WebDocument::IsLoaded() {
 
 bool WebDocument::IsPrerendering() {
   return ConstUnwrap<Document>()->IsPrerendering();
+}
+
+bool WebDocument::HasDocumentPictureInPictureWindow() const {
+  return ConstUnwrap<Document>()->HasDocumentPictureInPictureWindow();
 }
 
 bool WebDocument::IsAccessibilityEnabled() {
@@ -369,15 +380,6 @@ void WebDocument::SetCookieManager(
     CrossVariantMojoRemote<network::mojom::RestrictedCookieManagerInterfaceBase>
         cookie_manager) {
   Unwrap<Document>()->SetCookieManager(std::move(cookie_manager));
-}
-
-WebElement WebDocument::GetElementByDevToolsNodeId(const int node_id) {
-  Node* node = DOMNodeIds::NodeForId(static_cast<DOMNodeId>(node_id));
-  if (!node || !node->IsElementNode() ||
-      !node->IsDescendantOrShadowDescendantOf(private_.Get())) {
-    return WebElement();
-  }
-  return WebElement(blink::To<Element>(node));
 }
 
 WebDocument::WebDocument(Document* elem) : WebNode(elem) {}

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
@@ -19,8 +19,8 @@
 #include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/entity_metadata.pb.h"
 #include "components/sync/protocol/session_specifics.pb.h"
-#include "components/sync/test/model/model_type_store_test_util.h"
-#include "components/sync/test/model/test_matchers.h"
+#include "components/sync/test/model_type_store_test_util.h"
+#include "components/sync/test/test_matchers.h"
 #include "components/sync_device_info/local_device_info_util.h"
 #include "components/sync_sessions/mock_sync_sessions_client.h"
 #include "components/sync_sessions/session_sync_prefs.h"

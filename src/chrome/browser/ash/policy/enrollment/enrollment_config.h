@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,13 +13,10 @@ class PrefService;
 
 namespace ash {
 class InstallAttributes;
-}
-
-namespace chromeos {
 namespace system {
 class StatisticsProvider;
 }
-}  // namespace chromeos
+}  // namespace ash
 
 namespace policy {
 
@@ -68,13 +65,13 @@ struct EnrollmentConfig {
     // Forced enrollment triggered as a fallback to attestation re-enrollment,
     // user can't skip.
     MODE_ATTESTATION_MANUAL_FALLBACK = 11,
-    // Deprecated: Demo mode does not support offline enrollment.
+    // Deprecated. Demo mode does not support offline enrollment.
     // Enrollment for offline demo mode with locally stored policy data.
-    MODE_OFFLINE_DEMO_DEPRECATED = 12,
-    // Obsolete. Flow that happens when already enrolled device undergoes
+    DEPRECATED_MODE_OFFLINE_DEMO = 12,
+    // Deprecated. Flow that happens when already enrolled device undergoes
     // version rollback. Enrollment information is preserved during rollback,
     // but some steps have to be repeated as stateful partition was wiped.
-    OBSOLETE_MODE_ENROLLED_ROLLBACK = 13,
+    DEPRECATED_MODE_ENROLLED_ROLLBACK = 13,
     // Server-backed-state-triggered forced initial enrollment, user can't
     // skip.
     MODE_INITIAL_SERVER_FORCED = 14,
@@ -84,6 +81,14 @@ struct EnrollmentConfig {
     // Forced enrollment triggered as a fallback to attestation initial
     // enrollment, user can't skip.
     MODE_ATTESTATION_INITIAL_MANUAL_FALLBACK = 16,
+    // An enterprise rollback just took place and the device was wiped.
+    // Attempt to re-enroll with attestation. This is forced from the
+    // client side. Cannot be skipped.
+    MODE_ATTESTATION_ROLLBACK_FORCED = 17,
+    // An enterprise rollback just took place and the device was wiped.
+    // Attestation re-enrollment just failed, attempt manual enrollment as
+    // fallback. Cannot be skipped.
+    MODE_ATTESTATION_ROLLBACK_MANUAL_FALLBACK = 18,
   };
 
   // An enumeration of authentication mechanisms that can be used for
@@ -96,6 +101,17 @@ struct EnrollmentConfig {
     // Let the system determine the best mechanism (typically the one
     // that requires the least user interaction).
     AUTH_MECHANISM_BEST_AVAILABLE = 2,
+  };
+
+  // An enumeration of assigned upgrades that a device can after initial
+  // enrollment.
+  enum class AssignedUpgradeType {
+    // Unspecified Upgrade
+    kAssignedUpgradeTypeUnspecified = 0,
+    // Chrome Enterprise Upgrade
+    kAssignedUpgradeTypeChromeEnterprise = 1,
+    // Kiosk & Signage Upgrade
+    kAssignedUpgradeTypeKioskAndSignage = 2,
   };
 
   // Get the enrollment configuration that has been set up via signals such as
@@ -112,7 +128,11 @@ struct EnrollmentConfig {
   static EnrollmentConfig GetPrescribedEnrollmentConfig(
       const PrefService& local_state,
       const ash::InstallAttributes& install_attributes,
-      chromeos::system::StatisticsProvider* statistics_provider);
+      ash::system::StatisticsProvider* statistics_provider);
+
+  // Returns the respective manual fallback enrollment mode when given an
+  // attestation mode.
+  static Mode GetManualFallbackMode(Mode attestation_mode);
 
   EnrollmentConfig();
   EnrollmentConfig(const EnrollmentConfig& config);
@@ -134,7 +154,8 @@ struct EnrollmentConfig {
   // Whether we fell back into manual enrollment.
   bool is_manual_fallback() const {
     return mode == MODE_ATTESTATION_MANUAL_FALLBACK ||
-           mode == MODE_ATTESTATION_INITIAL_MANUAL_FALLBACK;
+           mode == MODE_ATTESTATION_INITIAL_MANUAL_FALLBACK ||
+           mode == MODE_ATTESTATION_ROLLBACK_MANUAL_FALLBACK;
   }
 
   // Whether enrollment is forced. The user can't skip the enrollment step
@@ -145,7 +166,8 @@ struct EnrollmentConfig {
            mode == MODE_ATTESTATION_SERVER_FORCED ||
            mode == MODE_INITIAL_SERVER_FORCED ||
            mode == MODE_ATTESTATION_INITIAL_SERVER_FORCED ||
-           mode == MODE_RECOVERY || is_manual_fallback();
+           mode == MODE_ATTESTATION_ROLLBACK_FORCED || mode == MODE_RECOVERY ||
+           is_manual_fallback();
   }
 
   // Whether attestation-based authentication is forced. The user cannot enroll
@@ -160,10 +182,29 @@ struct EnrollmentConfig {
            mode == MODE_ATTESTATION_INITIAL_SERVER_FORCED;
   }
 
+  // Whether this configuration is in initial attestation forced mode per server
+  // request.
+  bool is_mode_initial_attestation_server_forced() const {
+    return mode == MODE_ATTESTATION_INITIAL_SERVER_FORCED;
+  }
+
+  // Whether this configuration is in attestation mode per client request.
+  bool is_mode_attestation_client() const {
+    return mode == MODE_ATTESTATION || mode == MODE_ATTESTATION_LOCAL_FORCED ||
+           mode == MODE_ATTESTATION_ROLLBACK_FORCED;
+  }
+
+  // Whether this configuration is an attestation mode that has a manual
+  // fallback. I.e. after a failed attempt at automatic enrolling, manual
+  // enrollment will be triggered.
+  bool is_mode_attestation_with_manual_fallback() const {
+    return is_mode_attestation_server() ||
+           mode == MODE_ATTESTATION_ROLLBACK_FORCED;
+  }
+
   // Whether this configuration is in attestation mode.
   bool is_mode_attestation() const {
-    return mode == MODE_ATTESTATION || mode == MODE_ATTESTATION_LOCAL_FORCED ||
-           is_mode_attestation_server();
+    return is_mode_attestation_client() || is_mode_attestation_server();
   }
 
   // Whether this configuration is in OAuth mode.
@@ -192,6 +233,12 @@ struct EnrollmentConfig {
   // Which type of license device has.
   LicenseType license_type = LicenseType::kNone;
 
+  // The assigned upgrade for a device after initial enrollment. Chrome
+  // Enterpise Upgrade is the default upgrade for ZTE devices, unless other is
+  // specified in the server-backed initial state retrieval.
+  AssignedUpgradeType assigned_upgrade_type =
+      AssignedUpgradeType::kAssignedUpgradeTypeChromeEnterprise;
+
   // The authentication mechanism to use.
   // TODO(drcrash): Change to best available once ZTE is everywhere.
   AuthMechanism auth_mechanism = AUTH_MECHANISM_INTERACTIVE;
@@ -199,6 +246,10 @@ struct EnrollmentConfig {
   // The path for the device policy blob data for the offline demo mode. This
   // should be empty and never used for other modes.
   base::FilePath offline_policy_path;
+
+  // User's email which can be passed from the Gaia screen in the enrollment
+  // nudge flow.
+  std::string enrollment_nudge_email;
 };
 
 }  // namespace policy

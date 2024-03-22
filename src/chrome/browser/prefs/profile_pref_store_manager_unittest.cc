@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
@@ -36,6 +38,10 @@
 #include "services/preferences/public/mojom/preferences.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+#if BUILDFLAG(IS_WIN)
+#include "base/test/test_reg_util_win.h"
+#endif  // BUILDFLAG(IS_WIN)
+
 namespace {
 
 using EnforcementLevel =
@@ -43,18 +49,6 @@ using EnforcementLevel =
 using PrefTrackingStrategy =
     prefs::mojom::TrackedPreferenceMetadata::PrefTrackingStrategy;
 using ValueType = prefs::mojom::TrackedPreferenceMetadata::ValueType;
-
-class FirstEqualsPredicate {
- public:
-  explicit FirstEqualsPredicate(const std::string& expected)
-      : expected_(expected) {}
-  bool operator()(const PrefValueMap::Map::value_type& pair) {
-    return pair.first == expected_;
-  }
-
- private:
-  const std::string expected_;
-};
 
 // Observes changes to the PrefStore and verifies that only registered prefs are
 // written.
@@ -65,10 +59,8 @@ class RegistryVerifier : public PrefStore::Observer {
 
   // PrefStore::Observer implementation
   void OnPrefValueChanged(const std::string& key) override {
-    EXPECT_TRUE(pref_registry_->end() !=
-                std::find_if(pref_registry_->begin(),
-                             pref_registry_->end(),
-                             FirstEqualsPredicate(key)))
+    EXPECT_TRUE(base::Contains(*pref_registry_, key,
+                               &PrefValueMap::Map::value_type::first))
         << "Unregistered key " << key << " was changed.";
   }
 
@@ -143,6 +135,9 @@ class ProfilePrefStoreManagerTest : public testing::Test,
         reset_recorded_(false) {}
 
   void SetUp() override {
+#if BUILDFLAG(IS_WIN)
+    registry_override_.OverrideRegistry(HKEY_CURRENT_USER);
+#endif  // BUILDFLAG(IS_WIN)
     mock_validation_delegate_record_ = new MockValidationDelegateRecord;
     mock_validation_delegate_ = std::make_unique<MockValidationDelegate>(
         mock_validation_delegate_record_);
@@ -227,8 +222,8 @@ class ProfilePrefStoreManagerTest : public testing::Test,
     scoped_refptr<PersistentPrefStore> pref_store =
         manager_->CreateProfilePrefStore(
             prefs::CloneTrackedConfiguration(configuration_), kReportingIdCount,
-            base::ThreadTaskRunnerHandle::Get(), std::move(observer),
-            std::move(validation_delegate));
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
+            std::move(observer), std::move(validation_delegate));
     InitializePrefStore(pref_store.get());
     pref_store = nullptr;
   }
@@ -255,13 +250,11 @@ class ProfilePrefStoreManagerTest : public testing::Test,
     PrefStoreReadObserver read_observer(pref_store);
     PersistentPrefStore::PrefReadError error = read_observer.Read();
     EXPECT_EQ(PersistentPrefStore::PREF_READ_ERROR_NO_FILE, error);
-    pref_store->SetValue(kTrackedAtomic, std::make_unique<base::Value>(kFoobar),
+    pref_store->SetValue(kTrackedAtomic, base::Value(kFoobar),
                          WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
-    pref_store->SetValue(kProtectedAtomic,
-                         std::make_unique<base::Value>(kHelloWorld),
+    pref_store->SetValue(kProtectedAtomic, base::Value(kHelloWorld),
                          WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
-    pref_store->SetValue(kUnprotectedPref,
-                         std::make_unique<base::Value>(kFoobar),
+    pref_store->SetValue(kUnprotectedPref, base::Value(kFoobar),
                          WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
     pref_store->RemoveObserver(&registry_verifier_);
     base::RunLoop run_loop;
@@ -281,7 +274,7 @@ class ProfilePrefStoreManagerTest : public testing::Test,
         validation_delegate.InitWithNewPipeAndPassReceiver());
     pref_store_ = manager_->CreateProfilePrefStore(
         prefs::CloneTrackedConfiguration(configuration_), kReportingIdCount,
-        base::ThreadTaskRunnerHandle::Get(), std::move(observer),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), std::move(observer),
         std::move(validation_delegate));
     pref_store_->AddObserver(&registry_verifier_);
     PrefStoreReadObserver read_observer(pref_store_);
@@ -299,14 +292,13 @@ class ProfilePrefStoreManagerTest : public testing::Test,
       std::string contents;
       EXPECT_TRUE(base::ReadFileToString(path, &contents));
       base::ReplaceSubstringsAfterOffset(&contents, 0u, find, replace);
-      EXPECT_EQ(static_cast<int>(contents.length()),
-                base::WriteFile(path, contents.c_str(), contents.length()));
+      EXPECT_TRUE(base::WriteFile(path, contents));
     }
   }
 
   void ExpectStringValueEquals(const std::string& name,
                                const std::string& expected) {
-    const base::Value* value = NULL;
+    const base::Value* value = nullptr;
     if (!pref_store_->GetValue(name, &value)) {
       ADD_FAILURE() << name << " is not a defined value.";
     } else if (!value->is_string()) {
@@ -325,6 +317,12 @@ class ProfilePrefStoreManagerTest : public testing::Test,
   }
 
   base::test::SingleThreadTaskEnvironment task_environment_;
+#if BUILDFLAG(IS_WIN)
+  // This is used to ensure that the registry starts in a well known state, and
+  // any registry changes by this test don't affect other parts of the registry
+  // on the machine running the test, and are cleaned up.
+  registry_util::RegistryOverrideManager registry_override_;
+#endif  // BUILDFLAG(IS_WIN)
   std::vector<prefs::mojom::TrackedPreferenceMetadataPtr> configuration_;
   base::ScopedTempDir profile_dir_;
   scoped_refptr<user_prefs::PrefRegistrySyncable> profile_pref_registry_;
@@ -380,7 +378,7 @@ TEST_F(ProfilePrefStoreManagerTest, ProtectValues) {
   // If preference tracking is supported, the tampered value of kProtectedAtomic
   // will be discarded at load time, leaving this preference undefined.
   EXPECT_NE(ProfilePrefStoreManager::kPlatformSupportsPreferenceTracking,
-            pref_store_->GetValue(kProtectedAtomic, NULL));
+            pref_store_->GetValue(kProtectedAtomic, nullptr));
   VerifyResetRecorded(
       ProfilePrefStoreManager::kPlatformSupportsPreferenceTracking);
 
@@ -389,10 +387,9 @@ TEST_F(ProfilePrefStoreManagerTest, ProtectValues) {
 }
 
 TEST_F(ProfilePrefStoreManagerTest, InitializePrefsFromMasterPrefs) {
-  auto master_prefs = std::make_unique<base::DictionaryValue>();
-  master_prefs->Set(kTrackedAtomic, std::make_unique<base::Value>(kFoobar));
-  master_prefs->Set(kProtectedAtomic,
-                    std::make_unique<base::Value>(kHelloWorld));
+  base::Value::Dict master_prefs;
+  master_prefs.Set(kTrackedAtomic, kFoobar);
+  master_prefs.Set(kProtectedAtomic, kHelloWorld);
   EXPECT_TRUE(manager_->InitializePrefsFromMasterPrefs(
       prefs::CloneTrackedConfiguration(configuration_), kReportingIdCount,
       std::move(master_prefs)));
@@ -447,7 +444,7 @@ TEST_F(ProfilePrefStoreManagerTest, UnprotectedToProtected) {
   ReplaceStringInPrefs(kBarfoo, kFoobar);
   LoadExistingPrefs();
   EXPECT_NE(ProfilePrefStoreManager::kPlatformSupportsPreferenceTracking,
-            pref_store_->GetValue(kUnprotectedPref, NULL));
+            pref_store_->GetValue(kUnprotectedPref, nullptr));
   VerifyResetRecorded(
       ProfilePrefStoreManager::kPlatformSupportsPreferenceTracking);
 }
@@ -508,7 +505,7 @@ TEST_F(ProfilePrefStoreManagerTest, UnprotectedToProtectedWithoutTrust) {
   // If preference tracking is supported, kUnprotectedPref will have been
   // discarded because new values are not accepted without a valid super MAC.
   EXPECT_NE(ProfilePrefStoreManager::kPlatformSupportsPreferenceTracking,
-            pref_store_->GetValue(kUnprotectedPref, NULL));
+            pref_store_->GetValue(kUnprotectedPref, nullptr));
   VerifyResetRecorded(
       ProfilePrefStoreManager::kPlatformSupportsPreferenceTracking);
 }
@@ -547,8 +544,7 @@ TEST_F(ProfilePrefStoreManagerTest, ProtectedToUnprotected) {
 
   // Trigger the logic that migrates it back to the unprotected preferences
   // file.
-  pref_store_->SetValue(kProtectedAtomic,
-                        std::make_unique<base::Value>(kGoodbyeWorld),
+  pref_store_->SetValue(kProtectedAtomic, base::Value(kGoodbyeWorld),
                         WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
   LoadExistingPrefs();
   ExpectStringValueEquals(kProtectedAtomic, kGoodbyeWorld);

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 
 #import <UIKit/UIKit.h>
 
+#import "base/observer_list_types.h"
+
 class FullscreenController;
 @class FullscreenAnimator;
 
 // Interface for listening to fullscreen state.
-class FullscreenControllerObserver {
+class FullscreenControllerObserver : public base::CheckedObserver {
  public:
   FullscreenControllerObserver() = default;
 
@@ -19,7 +21,7 @@ class FullscreenControllerObserver {
   FullscreenControllerObserver& operator=(const FullscreenControllerObserver&) =
       delete;
 
-  virtual ~FullscreenControllerObserver() = default;
+  ~FullscreenControllerObserver() override;
 
   // Invoked when the maximum or minimum viewport insets for `controller` have
   // been updated.

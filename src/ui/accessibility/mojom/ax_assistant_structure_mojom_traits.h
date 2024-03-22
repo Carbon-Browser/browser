@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,10 @@ struct StructTraits<ax::mojom::AssistantNodeDataView,
   static const std::vector<int32_t>& children_indices(
       const std::unique_ptr<ui::AssistantNode>& node) {
     return node->children_indices;
+  }
+  static const gfx::Rect& unclipped_rect(
+      const std::unique_ptr<ui::AssistantNode>& node) {
+    return node->unclipped_rect;
   }
   static const gfx::Rect& rect(const std::unique_ptr<ui::AssistantNode>& node) {
     return node->rect;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,15 @@
 #include "base/component_export.h"
 #include "base/values.h"
 #include "chromeos/components/onc/onc_mapper.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/components/onc/onc_signature.h"
+
+namespace chromeos::onc {
+struct OncValueSignature;
+}
 
 namespace ash::onc {
 
-class COMPONENT_EXPORT(CHROMEOS_NETWORK) Normalizer : public Mapper {
+class COMPONENT_EXPORT(CHROMEOS_NETWORK) Normalizer
+    : public chromeos::onc::Mapper {
  public:
   explicit Normalizer(bool remove_recommended_fields);
 
@@ -31,34 +34,30 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) Normalizer : public Mapper {
   // is set, but the field "HexSSID" is not, the contents of the "SSID" field is
   // converted to UTF-8 encoding, a hex representation of the byte sequence is
   // created and stored in the field "HexSSID".
-  base::Value NormalizeObject(const OncValueSignature* object_signature,
-                              const base::Value& onc_object);
+  base::Value::Dict NormalizeObject(
+      const chromeos::onc::OncValueSignature* object_signature,
+      const base::Value::Dict& onc_object);
 
  private:
   // Dispatch to the right normalization function according to |signature|.
-  base::Value MapObject(const OncValueSignature& signature,
-                        const base::Value& onc_object,
-                        bool* error) override;
+  base::Value::Dict MapObject(const chromeos::onc::OncValueSignature& signature,
+                              const base::Value::Dict& onc_object,
+                              bool* error) override;
 
-  void NormalizeCertificate(base::Value* cert);
-  void NormalizeEAP(base::Value* eap);
-  void NormalizeEthernet(base::Value* ethernet);
-  void NormalizeIPsec(base::Value* ipsec);
-  void NormalizeNetworkConfiguration(base::Value* network);
-  void NormalizeOpenVPN(base::Value* openvpn);
-  void NormalizeProxySettings(base::Value* proxy);
-  void NormalizeVPN(base::Value* vpn);
-  void NormalizeWiFi(base::Value* wifi);
-  void NormalizeStaticIPConfigForNetwork(base::Value* network);
+  void NormalizeCertificate(base::Value::Dict* cert);
+  void NormalizeEAP(base::Value::Dict* eap);
+  void NormalizeEthernet(base::Value::Dict* ethernet);
+  void NormalizeIPsec(base::Value::Dict* ipsec);
+  void NormalizeNetworkConfiguration(base::Value::Dict* network);
+  void NormalizeOpenVPN(base::Value::Dict* openvpn);
+  void NormalizeProxySettings(base::Value::Dict* proxy);
+  void NormalizeVPN(base::Value::Dict* vpn);
+  void NormalizeWiFi(base::Value::Dict* wifi);
+  void NormalizeStaticIPConfigForNetwork(base::Value::Dict* network);
 
   const bool remove_recommended_fields_;
 };
 
 }  // namespace ash::onc
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::onc {
-using ::ash::onc::Normalizer;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_ONC_ONC_NORMALIZER_H_

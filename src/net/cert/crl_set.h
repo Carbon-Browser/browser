@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,6 @@ namespace net {
 // A CRLSet is a structure that lists the serial numbers of revoked
 // certificates from a number of issuers where issuers are identified by the
 // SHA256 of their SubjectPublicKeyInfo.
-// CRLSetStorage is responsible for creating CRLSet instances.
 class NET_EXPORT CRLSet : public base::RefCountedThreadSafe<CRLSet> {
  public:
   enum Result {
@@ -35,13 +34,10 @@ class NET_EXPORT CRLSet : public base::RefCountedThreadSafe<CRLSet> {
   // Parses the bytes in |data| and, on success, puts a new CRLSet in
   // |out_crl_set| and returns true.
   static bool Parse(base::StringPiece data, scoped_refptr<CRLSet>* out_crl_set);
-  // Same as the above, but stores the string |data| in the resulting CRLSet.
-  static bool ParseAndStoreUnparsedData(std::string data,
-                                        scoped_refptr<CRLSet>* out_crl_set);
 
   // CheckSPKI checks whether the given SPKI has been listed as blocked.
   //   spki_hash: the SHA256 of the SubjectPublicKeyInfo of the certificate.
-  Result CheckSPKI(const base::StringPiece& spki_hash) const;
+  Result CheckSPKI(base::StringPiece spki_hash) const;
 
   // CheckSerial returns the information contained in the set for a given
   // certificate:
@@ -49,14 +45,14 @@ class NET_EXPORT CRLSet : public base::RefCountedThreadSafe<CRLSet> {
   //       value
   //   issuer_spki_hash: the SHA256 of the SubjectPublicKeyInfo of the CRL
   //       signer
-  Result CheckSerial(const base::StringPiece& serial_number,
-                     const base::StringPiece& issuer_spki_hash) const;
+  Result CheckSerial(base::StringPiece serial_number,
+                     base::StringPiece issuer_spki_hash) const;
 
   // CheckSubject returns the information contained in the set for a given,
-  // encoded subject name and SPKI hash. The subject name is encoded as a DER
-  // X.501 Name (see https://tools.ietf.org/html/rfc5280#section-4.1.2.4).
-  Result CheckSubject(const base::StringPiece& asn1_subject,
-                      const base::StringPiece& spki_hash) const;
+  // encoded subject name and SPKI SHA-256 hash. The subject name is encoded as
+  // a DER X.501 Name (see https://tools.ietf.org/html/rfc5280#section-4.1.2.4).
+  Result CheckSubject(base::StringPiece asn1_subject,
+                      base::StringPiece spki_hash) const;
 
   // Returns true if |spki_hash|, the SHA256 of the SubjectPublicKeyInfo,
   // is known to be used for interception by a party other than the device
@@ -72,11 +68,9 @@ class NET_EXPORT CRLSet : public base::RefCountedThreadSafe<CRLSet> {
   // numbers.
   uint32_t sequence() const;
 
-  const std::string& unparsed_crl_set() const;
-
   // CRLList contains a map of (issuer SPKI hash, revoked serial numbers)
   // pairs.
-  typedef std::unordered_map<std::string, std::vector<std::string>> CRLList;
+  using CRLList = std::unordered_map<std::string, std::vector<std::string>>;
 
   // crls returns the internal state of this CRLSet. It should only be used in
   // testing.
@@ -104,9 +98,9 @@ class NET_EXPORT CRLSet : public base::RefCountedThreadSafe<CRLSet> {
   static scoped_refptr<CRLSet> ForTesting(
       bool is_expired,
       const SHA256HashValue* issuer_spki,
-      const std::string& serial_number,
-      const std::string utf8_common_name,
-      const std::vector<std::string> acceptable_spki_hashes_for_cn);
+      base::StringPiece serial_number,
+      base::StringPiece utf8_common_name,
+      const std::vector<std::string>& acceptable_spki_hashes_for_cn);
 
  private:
   CRLSet();
@@ -131,12 +125,6 @@ class NET_EXPORT CRLSet : public base::RefCountedThreadSafe<CRLSet> {
   // limited_subjects_ is a map from the SHA256 hash of an X.501 subject name
   // to a list of allowed SPKI hashes for certificates with that subject name.
   std::unordered_map<std::string, std::vector<std::string>> limited_subjects_;
-
-  // A string that holds the unparsed version of the CRLSet. Only populated in
-  // the case that the OOP CertVerifier is enabled.
-  // TODO(crbug.com/1046728): temporary until the network service doesn't need
-  // to know about CRLSets.
-  std::string unparsed_crl_set_;
 };
 
 }  // namespace net

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,11 +43,7 @@
 
     // Revoke permission to the device. The promise is resolved once the
     // device is forgotten.
-    [
-        CallWith=ScriptState,
-        RaisesException,
-        RuntimeEnabled=HidDeviceForget
-    ] Promise<void> forget();
+    [CallWith=ScriptState, RaisesException] Promise<void> forget();
 
     // Send an output report to the device. Set |reportId| to the first byte of
     // the report and |data| to the remaining bytes. Set |reportId| to zero if

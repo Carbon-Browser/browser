@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -160,6 +160,19 @@ class ServiceWorkerDatabase {
   Status UpdateNavigationPreloadHeader(int64_t registration_id,
                                        const blink::StorageKey& key,
                                        const std::string& value);
+  // Updates a fetch handler type for the specified registration.
+  // Returns OK if it's successfully updated. Otherwise, returns an error.
+  Status UpdateFetchHandlerType(
+      int64_t registration_id,
+      const blink::StorageKey& key,
+      const blink::mojom::ServiceWorkerFetchHandlerType type);
+
+  // Updates script resource records for the specified registration.
+  // Returns OK if it's successfully updated. Otherwise, returns an error.
+  Status UpdateResourceSha256Checksums(
+      int64_t registration_id,
+      const blink::StorageKey& key,
+      const base::flat_map<int64_t, std::string>& updated_sha256_checksums);
 
   // Deletes a registration for |registration_id| and moves resource records
   // associated with it into the purgeable list. If deletion occurred, fills
@@ -267,11 +280,17 @@ class ServiceWorkerDatabase {
   Status PurgeUncommittedResourceIds(const std::vector<int64_t>& ids);
 
   // Deletes all data for |keys|, namely, unique origin, registrations and
-  // resource records. Resources are moved to the purgeable list. Returns OK if
+  // resource records.
+  //
+  // Specifically, this will delete data from any context where the origin
+  // matches or where the context is cross-site and the origin is same-site with
+  // the top-level-site.
+  //
+  // Resources are moved to the purgeable list. Returns OK if
   // they are successfully deleted or not found in the database. Otherwise,
   // returns an error.
-  Status DeleteAllDataForStorageKeys(
-      const std::set<blink::StorageKey>& keys,
+  Status DeleteAllDataForOrigins(
+      const std::set<url::Origin>& origins,
       std::vector<int64_t>* newly_purgeable_resources);
 
   // Completely deletes the contents of the database.
@@ -420,6 +439,10 @@ class ServiceWorkerDatabase {
   FRIEND_TEST_ALL_PREFIXES(ServiceWorkerDatabaseTest, InvalidWebFeature);
   FRIEND_TEST_ALL_PREFIXES(ServiceWorkerDatabaseTest,
                            NoCrossOriginEmbedderPolicyValue);
+  FRIEND_TEST_ALL_PREFIXES(ServiceWorkerDatabaseTest, NoFetchHandlerType);
+  FRIEND_TEST_ALL_PREFIXES(ServiceWorkerDatabaseTest, FetchHandlerType);
+  FRIEND_TEST_ALL_PREFIXES(ServiceWorkerDatabaseTest,
+                           RouterRulesLegacyPathname);
 };
 
 }  // namespace storage

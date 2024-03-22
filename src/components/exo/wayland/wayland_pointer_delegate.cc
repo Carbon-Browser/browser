@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -150,9 +150,11 @@ void WaylandPointerDelegate::OnPointerScroll(base::TimeTicks time_stamp,
                        wl_fixed_from_double(y_value));
 }
 
-void WaylandPointerDelegate::OnPointerScrollStop(base::TimeTicks time_stamp) {
+void WaylandPointerDelegate::OnFingerScrollStop(base::TimeTicks time_stamp) {
   if (wl_resource_get_version(pointer_resource_) >=
       WL_POINTER_AXIS_STOP_SINCE_VERSION) {
+    wl_pointer_send_axis_source(pointer_resource_,
+                                WL_POINTER_AXIS_SOURCE_FINGER);
     SendTimestamp(time_stamp);
     wl_pointer_send_axis_stop(pointer_resource_,
                               TimeTicksToMilliseconds(time_stamp),

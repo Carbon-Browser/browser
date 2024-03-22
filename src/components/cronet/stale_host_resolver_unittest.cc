@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,25 +8,26 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/cronet/url_request_context_config.h"
 #include "net/base/address_family.h"
 #include "net/base/host_port_pair.h"
+#include "net/base/ip_endpoint.h"
 #include "net/base/mock_network_change_notifier.h"
 #include "net/base/net_errors.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/network_change_notifier.h"
-#include "net/base/network_isolation_key.h"
 #include "net/cert/cert_verifier.h"
 #include "net/dns/context_host_resolver.h"
 #include "net/dns/dns_config.h"
@@ -35,6 +36,7 @@
 #include "net/dns/host_cache.h"
 #include "net/dns/host_resolver_manager.h"
 #include "net/dns/host_resolver_proc.h"
+#include "net/dns/host_resolver_system_task.h"
 #include "net/dns/public/dns_protocol.h"
 #include "net/dns/public/dns_query_type.h"
 #include "net/dns/public/host_resolver_source.h"
@@ -68,14 +70,15 @@ const int kAgeExpiredSec = kCacheEntryTTLSec * 2;
 // correctly, we won't end up waiting this long -- it's just a backup.
 const int kWaitTimeoutSec = 1;
 
-net::AddressList MakeAddressList(const char* ip_address_str) {
+std::vector<net::IPEndPoint> MakeEndpoints(const char* ip_address_str) {
   net::IPAddress address;
   bool rv = address.AssignFromIPLiteral(ip_address_str);
   DCHECK(rv);
+  return std::vector<net::IPEndPoint>({{address, 0}});
+}
 
-  net::AddressList address_list;
-  address_list.push_back(net::IPEndPoint(address, 0u));
-  return address_list;
+net::AddressList MakeAddressList(const char* ip_address_str) {
+  return net::AddressList(MakeEndpoints(ip_address_str));
 }
 
 std::unique_ptr<net::DnsClient> CreateMockDnsClientForHosts() {
@@ -182,8 +185,8 @@ class StaleHostResolverTest : public testing::Test {
     if (context)
       inner_resolver->SetRequestContext(context);
 
-    net::ProcTaskParams proc_params(mock_proc_, 1u);
-    inner_resolver->SetProcParamsForTesting(proc_params);
+    net::HostResolverSystemTask::Params system_params(mock_proc_, 1u);
+    inner_resolver->SetHostResolverSystemParamsForTest(system_params);
     if (dns_client) {
       inner_resolver->GetManagerForTesting()->SetDnsClientForTesting(
           std::move(dns_client));
@@ -212,8 +215,8 @@ class StaleHostResolverTest : public testing::Test {
   void DestroyResolver() {
     DCHECK(stale_resolver_);
 
-    stale_resolver_ = nullptr;
     resolver_ = nullptr;
+    stale_resolver_.reset();
   }
 
   void SetResolver(StaleHostResolver* stale_resolver,
@@ -224,6 +227,8 @@ class StaleHostResolverTest : public testing::Test {
     resolver_ = stale_resolver;
   }
 
+  void DropResolver() { resolver_ = nullptr; }
+
   // Creates a cache entry for |kHostname| that is |age_sec| seconds old.
   void CreateCacheEntry(int age_sec, int error) {
     DCHECK(resolver_);
@@ -232,11 +237,12 @@ class StaleHostResolverTest : public testing::Test {
     base::TimeDelta ttl(base::Seconds(kCacheEntryTTLSec));
     net::HostCache::Key key(kHostname, net::DnsQueryType::UNSPECIFIED, 0,
                             net::HostResolverSource::ANY,
-                            net::NetworkIsolationKey());
+                            net::NetworkAnonymizationKey());
     net::HostCache::Entry entry(
         error,
-        error == net::OK ? MakeAddressList(kCacheAddress) : net::AddressList(),
-        net::HostCache::Entry::SOURCE_UNKNOWN, ttl);
+        error == net::OK ? MakeEndpoints(kCacheAddress)
+                         : std::vector<net::IPEndPoint>(),
+        /*aliases=*/{}, net::HostCache::Entry::SOURCE_UNKNOWN, ttl);
     base::TimeDelta age = base::Seconds(age_sec);
     base::TimeTicks then = tick_clock_.NowTicks() - age;
     resolver_->GetHostCache()->Set(key, entry, then, ttl);
@@ -255,7 +261,7 @@ class StaleHostResolverTest : public testing::Test {
 
     net::HostCache::Key key(kHostname, net::DnsQueryType::UNSPECIFIED, 0,
                             net::HostResolverSource::ANY,
-                            net::NetworkIsolationKey());
+                            net::NetworkAnonymizationKey());
     base::TimeTicks now = tick_clock_.NowTicks();
     net::HostCache::EntryStaleness stale;
     EXPECT_TRUE(resolver_->GetHostCache()->LookupStale(key, now, &stale));
@@ -268,7 +274,7 @@ class StaleHostResolverTest : public testing::Test {
     EXPECT_FALSE(resolve_pending_);
 
     request_ = resolver_->CreateRequest(
-        net::HostPortPair(kHostname, kPort), net::NetworkIsolationKey(),
+        net::HostPortPair(kHostname, kPort), net::NetworkAnonymizationKey(),
         net::NetLogWithSource(), optional_parameters);
     resolve_pending_ = true;
     resolve_complete_ = false;
@@ -291,7 +297,7 @@ class StaleHostResolverTest : public testing::Test {
 
     // Run until resolve completes or timeout.
     resolve_closure_ = run_loop.QuitWhenIdleClosure();
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, resolve_closure_, base::Seconds(kWaitTimeoutSec));
     run_loop.Run();
   }
@@ -299,7 +305,7 @@ class StaleHostResolverTest : public testing::Test {
   void WaitForIdle() {
     base::RunLoop run_loop;
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, run_loop.QuitWhenIdleClosure());
     run_loop.Run();
   }
@@ -355,9 +361,12 @@ class StaleHostResolverTest : public testing::Test {
 
   scoped_refptr<MockHostResolverProc> mock_proc_;
 
-  raw_ptr<net::HostResolver> resolver_;
   StaleHostResolver::StaleOptions options_;
+
+  // Must outlive `resolver_`.
   std::unique_ptr<StaleHostResolver> stale_resolver_;
+
+  raw_ptr<net::HostResolver> resolver_;
 
   base::TimeTicks now_;
   std::unique_ptr<net::HostResolver::ResolveHostRequest> request_;
@@ -664,8 +673,6 @@ TEST_F(StaleHostResolverTest, CreatedByContext) {
       URLRequestContextConfig::CreateURLRequestContextConfig(
           // Enable QUIC.
           true,
-          // QUIC User Agent ID.
-          "Default QUIC User Agent ID",
           // Enable SPDY.
           true,
           // Enable Brotli.
@@ -721,6 +728,10 @@ TEST_F(StaleHostResolverTest, CreatedByContext) {
   EXPECT_EQ(1u, resolve_addresses().size());
   EXPECT_EQ(kCacheAddress, resolve_addresses()[0].ToStringWithoutPort());
   WaitForNetworkResolveComplete();
+
+  // Drop reference to resolver owned by local `context` above before
+  // it goes out-of-scope.
+  DropResolver();
 }
 
 }  // namespace

@@ -1,8 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/renderer_host/document_service_echo_impl.h"
 #include "content/public/browser/document_service.h"
 #include "content/public/browser/render_frame_host.h"
@@ -52,7 +52,7 @@ class DocumentServicePrerenderingBrowserTest
   ~DocumentServicePrerenderingBrowserTest() override = default;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     DocumentServiceBrowserTest::SetUp();
   }
 
@@ -99,12 +99,9 @@ IN_PROC_BROWSER_TEST_F(DocumentServicePrerenderingBrowserTest,
 class DocumentServiceBFCacheBrowserTest : public DocumentServiceBrowserTest {
  public:
   DocumentServiceBFCacheBrowserTest() {
-    std::vector<base::test::ScopedFeatureList::FeatureAndParams>
-        additional_features = {
-            {features::kBackForwardCache, {{"enable_same_site", "true"}}}};
     feature_list_.InitWithFeaturesAndParameters(
-        DefaultEnabledBackForwardCacheParametersForTests(additional_features),
-        DefaultDisabledBackForwardCacheParametersForTests());
+        GetDefaultEnabledBackForwardCacheFeaturesForTesting(),
+        GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
   ~DocumentServiceBFCacheBrowserTest() override = default;
 

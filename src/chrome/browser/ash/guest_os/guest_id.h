@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "base/values.h"
 #include "chrome/browser/ash/guest_os/public/types.h"
 
-class PrefService;
 class Profile;
 
 namespace guest_os {
@@ -22,6 +21,7 @@ struct GuestId {
   GuestId(VmType vm_type,
           std::string vm_name,
           std::string container_name) noexcept;
+  GuestId(std::string vm_name, std::string container_name) noexcept;
   explicit GuestId(const base::Value&) noexcept;
 
   base::flat_map<std::string, std::string> ToMap() const;
@@ -43,8 +43,9 @@ std::ostream& operator<<(std::ostream& ostream, const GuestId& container_id);
 // Returns a list of all containers in prefs.
 std::vector<GuestId> GetContainers(Profile* profile, VmType vm_type);
 
-// Remove duplicate containers in the existing kGuestOsContainers pref.
-void RemoveDuplicateContainerEntries(PrefService* prefs);
+// Returns true if the container_id's vm_name and container_name matches entries
+// in the dict.
+bool MatchContainerDict(const base::Value& dict, const GuestId& container_id);
 
 // Add a new container to the kGuestOsContainers pref
 void AddContainerToPrefs(Profile* profile,
@@ -68,6 +69,13 @@ void UpdateContainerPref(Profile* profile,
                          const GuestId& container_id,
                          const std::string& key,
                          base::Value value);
+
+// Merges |dict| into the existing dict pref value for |key| a specific
+// container. Sets |dict| as the value for |key| otherwise.
+void MergeContainerPref(Profile* profile,
+                        const GuestId& container_id,
+                        const std::string& key,
+                        base::Value::Dict dict);
 
 // Get "vm_type" int from pref and convert to VmType using TERMINA(0) as default
 // if field is not present.

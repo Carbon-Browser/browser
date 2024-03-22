@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,8 @@ class SyntheticGestureTargetAndroid : public SyntheticGestureTargetBase {
   void TouchSetPointer(int index, float x, float y, int id);
   void TouchSetScrollDeltas(float x, float y, float dx, float dy);
   void TouchInject(MotionEventAction action,
-                   int pointer_count,
+                   int num_pointers,
+                   int pointer_index,
                    base::TimeTicks time);
 
   RenderWidgetHostViewAndroid* GetView() const;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,8 @@ void OnCreateDigitalGoodsResponse(
   }
   DCHECK(pending_remote);
 
-  auto* digital_goods_service_ =
-      MakeGarbageCollected<DigitalGoodsService>(std::move(pending_remote));
+  auto* digital_goods_service_ = MakeGarbageCollected<DigitalGoodsService>(
+      resolver->GetExecutionContext(), std::move(pending_remote));
   resolver->Resolve(digital_goods_service_);
 }
 
@@ -48,7 +48,8 @@ void OnCreateDigitalGoodsResponse(
 
 const char DOMWindowDigitalGoods::kSupplementName[] = "DOMWindowDigitalGoods";
 
-DOMWindowDigitalGoods::DOMWindowDigitalGoods() : Supplement(nullptr) {}
+DOMWindowDigitalGoods::DOMWindowDigitalGoods(LocalDOMWindow& window)
+    : Supplement(window), mojo_service_(&window) {}
 
 ScriptPromise DOMWindowDigitalGoods::getDigitalGoodsService(
     ScriptState* script_state,
@@ -70,7 +71,8 @@ ScriptPromise DOMWindowDigitalGoods::GetDigitalGoodsService(
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
   auto* execution_context = ExecutionContext::From(script_state);
   DCHECK(execution_context);
@@ -82,8 +84,6 @@ ScriptPromise DOMWindowDigitalGoods::GetDigitalGoodsService(
     return promise;
   }
 
-  base::UmaHistogramBoolean("DigitalGoods.CrossSite",
-                            window.IsCrossSiteSubframeIncludingScheme());
   if (window.IsCrossSiteSubframeIncludingScheme()) {
     resolver->Reject(MakeGarbageCollected<DOMException>(
         DOMExceptionCode::kNotAllowedError,
@@ -99,7 +99,7 @@ ScriptPromise DOMWindowDigitalGoods::GetDigitalGoodsService(
     return promise;
   }
 
-  if (payment_method.IsEmpty()) {
+  if (payment_method.empty()) {
     resolver->Reject(V8ThrowException::CreateTypeError(
         script_state->GetIsolate(), "Empty payment method"));
     return promise;
@@ -107,17 +107,19 @@ ScriptPromise DOMWindowDigitalGoods::GetDigitalGoodsService(
 
   if (!mojo_service_) {
     execution_context->GetBrowserInterfaceBroker().GetInterface(
-        mojo_service_.BindNewPipeAndPassReceiver());
+        mojo_service_.BindNewPipeAndPassReceiver(
+            execution_context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
   }
 
   mojo_service_->CreateDigitalGoods(
       payment_method,
-      WTF::Bind(&OnCreateDigitalGoodsResponse, WrapPersistent(resolver)));
+      WTF::BindOnce(&OnCreateDigitalGoodsResponse, WrapPersistent(resolver)));
 
   return promise;
 }
 
 void DOMWindowDigitalGoods::Trace(Visitor* visitor) const {
+  visitor->Trace(mojo_service_);
   Supplement<LocalDOMWindow>::Trace(visitor);
 }
 
@@ -127,7 +129,7 @@ DOMWindowDigitalGoods* DOMWindowDigitalGoods::FromState(
   DOMWindowDigitalGoods* supplement =
       Supplement<LocalDOMWindow>::From<DOMWindowDigitalGoods>(window);
   if (!supplement) {
-    supplement = MakeGarbageCollected<DOMWindowDigitalGoods>();
+    supplement = MakeGarbageCollected<DOMWindowDigitalGoods>(*window);
     ProvideTo(*window, supplement);
   }
 

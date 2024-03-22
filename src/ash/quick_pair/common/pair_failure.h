@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,34 @@ enum class PairFailure {
   kPairingConnect = 21,
   // Failed to bond to device via public address.
   kAddressConnect = 22,
-  kMaxValue = kAddressConnect,
+  // BLE device instance lost mid pair with classic instance
+  kBleDeviceLostMidPair = 23,
+  // Timed out attempting to bond to device.
+  kCreateBondTimeout = 24,
+  // Potential pairing device lost between GATT connection attempts.
+  kPairingDeviceLostBetweenGattConnectionAttempts = 25,
+  // Timed out while waiting for the Bluetooth adapter event to confirm the
+  // passkey after pairing begins.
+  kConfirmPasskeyTimeout = 26,
+  // Failed to disconnect GATT connections from device between retries.
+  kFailureToDisconnectGattBetweenRetries = 27,
+  // Failed to create a GATT connection in the platform layer due to a Bluetooth
+  // device error.
+  kBluetoothDeviceFailureCreatingGattConnection = 28,
+  // Timed out while waiting for a response after attempt to disconnect.
+  kDisconnectResponseTimeout = 29,
+  // Failed to connect to discovered device after pairing when the device is
+  // known to the adapter.
+  kFailedToConnectAfterPairing = 30,
+  // Failed to write to Additional Data characteristic.
+  kAdditionalDataCharacteristicWrite = 31,
+  // Failed to discover Additional Data Characteristic.
+  // Currently this failure is not emitted anywhere.
+  // TODO(b/279654454) measure this pair failure in some metric.
+  kAdditionalDataCharacteristicDiscovery = 32,
+  // Timed out while writing to Additional Data characteristic.
+  kAdditionalDataCharacteristicWriteTimeout = 33,
+  kMaxValue = kAdditionalDataCharacteristicWriteTimeout,
 };
 
 COMPONENT_EXPORT(QUICK_PAIR_COMMON)

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,15 @@
 #include <unordered_set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -41,8 +41,6 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_handle.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_source.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
@@ -59,19 +57,23 @@
 #include "components/security_interstitials/content/captive_portal_helper_android.h"
 #endif
 
-const base::Feature kMITMSoftwareInterstitial{"MITMSoftwareInterstitial",
-                                              base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kMITMSoftwareInterstitial,
+             "MITMSoftwareInterstitial",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-const base::Feature kCaptivePortalInterstitial{
-    "CaptivePortalInterstitial", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kCaptivePortalInterstitial,
+             "CaptivePortalInterstitial",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-const base::Feature kCaptivePortalCertificateList{
-    "CaptivePortalCertificateList", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kCaptivePortalCertificateList,
+             "CaptivePortalCertificateList",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace {
 
-const base::Feature kSSLCommonNameMismatchHandling{
-    "SSLCommonNameMismatchHandling", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kSSLCommonNameMismatchHandling,
+             "SSLCommonNameMismatchHandling",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Default delay in milliseconds before displaying the SSL interstitial.
 // This can be changed in tests.
@@ -222,12 +224,12 @@ class ConfigSingleton {
 
   // Callback to call when the interstitial timer is started. Used for
   // testing.
-  raw_ptr<SSLErrorHandler::TimerStartedCallback> timer_started_callback_ =
-      nullptr;
+  raw_ptr<SSLErrorHandler::TimerStartedCallback, DanglingUntriaged>
+      timer_started_callback_ = nullptr;
 
   // The clock to use when deciding which error type to display. Used for
   // testing.
-  raw_ptr<base::Clock> testing_clock_ = nullptr;
+  raw_ptr<base::Clock, DanglingUntriaged> testing_clock_ = nullptr;
 
   base::OnceClosure report_network_connectivity_callback_;
 
@@ -534,7 +536,7 @@ void SSLErrorHandlerDelegateImpl::OnBlockingPageReady(
                                          "SSL_ERROR", cert_error_);
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(blocking_page_ready_callback_),
                                 std::move(interstitial_page)));
 }

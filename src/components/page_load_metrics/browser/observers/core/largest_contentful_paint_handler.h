@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef COMPONENTS_PAGE_LOAD_METRICS_BROWSER_OBSERVERS_CORE_LARGEST_CONTENTFUL_PAINT_HANDLER_H_
@@ -12,6 +12,7 @@
 #include "components/page_load_metrics/common/page_load_timing.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/performance/largest_contentful_paint_type.h"
+#include "url/gurl.h"
 
 namespace content {
 
@@ -40,25 +41,49 @@ class ContentfulPaintTimingInfo {
       const uint64_t& size,
       const LargestContentTextOrImage largest_content_type,
       double image_bpp,
+      const absl::optional<net::RequestPriority>& image_request_priority,
       bool in_main_frame,
       blink::LargestContentfulPaintType type);
   ContentfulPaintTimingInfo(const ContentfulPaintTimingInfo& other);
-  void Reset(const absl::optional<base::TimeDelta>&,
+  void Reset(const absl::optional<base::TimeDelta>& time,
              const uint64_t& size,
              blink::LargestContentfulPaintType type,
-             double image_bpp);
+             double image_bpp,
+             const absl::optional<net::RequestPriority>& image_request_priority,
+             const absl::optional<base::TimeDelta>& image_discovery_time,
+             const absl::optional<base::TimeDelta>& image_load_start,
+             const absl::optional<base::TimeDelta>& image_load_end);
   absl::optional<base::TimeDelta> Time() const { return time_; }
+  absl::optional<base::TimeDelta> ImageDiscoveryTime() const {
+    return image_discovery_time_;
+  }
+  absl::optional<base::TimeDelta> ImageLoadStart() const {
+    return image_load_start_;
+  }
+  absl::optional<base::TimeDelta> ImageLoadEnd() const {
+    return image_load_end_;
+  }
   bool InMainFrame() const { return in_main_frame_; }
   blink::LargestContentfulPaintType Type() const { return type_; }
   uint64_t Size() const { return size_; }
   LargestContentTextOrImage TextOrImage() const { return text_or_image_; }
   double ImageBPP() const { return image_bpp_; }
+  absl::optional<net::RequestPriority> ImageRequestPriority() const {
+    return image_request_priority_;
+  }
 
   // Returns true iff this object does not represent any paint.
   bool Empty() const {
-    // size_ and time_ should both be set or both be unset.
-    DCHECK((size_ != 0u && time_) || (size_ == 0u && !time_));
-    return !time_;
+    // We set timings at the renderer side only when size is >0. Therefore it
+    // could be either size == 0 and time is not set or size > 0 and time is
+    // set. Note that when time is set, it could be 0.
+    CHECK((size_ != 0u && time_.has_value()) ||
+          (size_ == 0u && !time_.has_value()));
+
+    // Returns if timing is not set because of 0 size.
+    // TODO(crbug.com/1473188) We should revisit if we should check timing being
+    // 0 too.
+    return (size_ == 0u && !time_.has_value());
   }
 
   // Returns true iff this object does not represent any paint OR represents an
@@ -79,7 +104,11 @@ class ContentfulPaintTimingInfo {
   blink::LargestContentfulPaintType type_ =
       blink::LargestContentfulPaintType::kNone;
   double image_bpp_ = 0.0;
+  absl::optional<net::RequestPriority> image_request_priority_;
   bool in_main_frame_;
+  absl::optional<base::TimeDelta> image_discovery_time_;
+  absl::optional<base::TimeDelta> image_load_start_;
+  absl::optional<base::TimeDelta> image_load_end_;
 };
 
 class ContentfulPaint {
@@ -118,12 +147,18 @@ class LargestContentfulPaintHandler {
       ContentfulPaintTimingInfo::LargestContentTextOrImage*
           largest_content_type);
 
-  void RecordTiming(
+  void RecordMainFrameTiming(
+      const page_load_metrics::mojom::LargestContentfulPaintTiming&
+          largest_contentful_paint,
+      const absl::optional<base::TimeDelta>&
+          first_input_or_scroll_notified_timestamp);
+  void RecordSubFrameTiming(
       const page_load_metrics::mojom::LargestContentfulPaintTiming&
           largest_contentful_paint,
       const absl::optional<base::TimeDelta>&
           first_input_or_scroll_notified_timestamp,
-      content::RenderFrameHost* subframe_rfh);
+      content::RenderFrameHost* subframe_rfh,
+      const GURL& main_frame_url);
   inline void RecordMainFrameTreeNodeId(int main_frame_tree_node_id) {
     main_frame_tree_node_id_.emplace(main_frame_tree_node_id);
   }
@@ -137,18 +172,9 @@ class LargestContentfulPaintHandler {
   const ContentfulPaintTimingInfo& MainFrameLargestContentfulPaint() const {
     return main_frame_contentful_paint_.MergeTextAndImageTiming();
   }
-  const ContentfulPaintTimingInfo& SubframesLargestContentfulPaint() const {
-    return subframe_contentful_paint_.MergeTextAndImageTiming();
-  }
   const ContentfulPaintTimingInfo& CrossSiteSubframesLargestContentfulPaint()
       const {
     return cross_site_subframe_contentful_paint_.MergeTextAndImageTiming();
-  }
-  const ContentfulPaintTimingInfo& MainFrameLargestImagePaint() const {
-    return main_frame_contentful_paint_.Image();
-  }
-  const ContentfulPaintTimingInfo& MainFrameLargestTextPaint() const {
-    return main_frame_contentful_paint_.Text();
   }
 
   // We merge the candidates from main frame and subframe to get the largest
@@ -159,8 +185,21 @@ class LargestContentfulPaintHandler {
       base::TimeTicks navigation_start);
   void OnSubFrameDeleted(int frame_tree_node_id);
 
+  const ContentfulPaintTimingInfo& GetImageContentfulPaintTimingInfo() const {
+    return main_frame_contentful_paint_.Image();
+  }
+
+  void UpdateSoftNavigationLargestContentfulPaint(
+      const page_load_metrics::mojom::LargestContentfulPaintTiming&);
+
+  const ContentfulPaintTimingInfo& GetSoftNavigationLargestContentfulPaint()
+      const {
+    return soft_navigation_contentful_paint_candidate_
+        .MergeTextAndImageTiming();
+  }
+
  private:
-  void RecordSubframeTiming(
+  void RecordSubFrameTimingInternal(
       const page_load_metrics::mojom::LargestContentfulPaintTiming&
           largest_contentful_paint,
       const absl::optional<base::TimeDelta>&
@@ -172,11 +211,6 @@ class LargestContentfulPaintHandler {
       const page_load_metrics::mojom::LargestContentfulPaintTiming&
           largest_contentful_paint,
       const base::TimeDelta& navigation_start_offset);
-  void RecordMainFrameTiming(
-      const page_load_metrics::mojom::LargestContentfulPaintTiming&
-          largest_contentful_paint,
-      const absl::optional<base::TimeDelta>&
-          first_input_or_scroll_notified_timestamp);
   void UpdateFirstInputOrScrollNotified(
       const absl::optional<base::TimeDelta>& candidate_new_time,
       const base::TimeDelta& navigation_start_offset);
@@ -195,6 +229,9 @@ class LargestContentfulPaintHandler {
   // `cross_site_subframe_contentful_paint_` keeps track of the most plausible
   // LCP candidate computed from the cross-site subframes.
   ContentfulPaint cross_site_subframe_contentful_paint_;
+
+  // Keeps track of the LCP candidate of a soft navigation.
+  ContentfulPaint soft_navigation_contentful_paint_candidate_;
 
   // Used for Telemetry to distinguish the LCP events from different
   // navigations.

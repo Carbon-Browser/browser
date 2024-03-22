@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,10 @@
 #include "chrome/browser/apps/app_discovery_service/app_fetcher_manager.h"
 
 namespace apps {
+
+BASE_FEATURE(kAlmanacGameMigration,
+             "AlmanacGameMigration",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 AppDiscoveryService::AppDiscoveryService(Profile* profile)
     : app_fetcher_manager_(std::make_unique<AppFetcherManager>(profile)) {}
@@ -28,11 +32,11 @@ void AppDiscoveryService::GetApps(ResultType result_type,
   app_fetcher_manager_->GetApps(result_type, std::move(callback));
 }
 
-void AppDiscoveryService::GetIcon(const std::string& app_id,
+void AppDiscoveryService::GetIcon(const std::string& icon_id,
                                   int32_t size_hint_in_dip,
                                   ResultType result_type,
                                   GetIconCallback callback) {
-  app_fetcher_manager_->GetIcon(app_id, size_hint_in_dip, result_type,
+  app_fetcher_manager_->GetIcon(icon_id, size_hint_in_dip, result_type,
                                 std::move(callback));
 }
 

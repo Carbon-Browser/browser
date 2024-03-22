@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,10 @@
 #include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "components/webapps/browser/webapps_client.h"
+
+namespace url {
+class Origin;
+}
 
 namespace webapps {
 
@@ -19,6 +23,7 @@ class ChromeWebappsClient : public WebappsClient {
   static ChromeWebappsClient* GetInstance();
 
   // WebappsClient:
+  bool IsOriginConsideredSecure(const url::Origin& origin) override;
   security_state::SecurityLevel GetSecurityLevelForWebContents(
       content::WebContents* web_contents) override;
   infobars::ContentInfoBarManager* GetInfoBarManagerForWebContents(
@@ -29,7 +34,7 @@ class ChromeWebappsClient : public WebappsClient {
       content::WebContents* web_contents) override;
 #if BUILDFLAG(IS_ANDROID)
   bool IsInstallationInProgress(content::WebContents* web_contents,
-                                const GURL& manifest_url) override;
+                                const GURL& manifest_id) override;
   bool CanShowAppBanners(content::WebContents* web_contents) override;
   void OnWebApkInstallInitiatedFromAppMenu(
       content::WebContents* web_contents) override;

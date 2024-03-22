@@ -28,7 +28,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/test/gtest_util.h"
@@ -171,7 +171,7 @@ TEST(FunctionalTest, RawPtr) {
 }
 
 void MakeClosure(base::OnceClosure** closure_out) {
-  *closure_out = new base::OnceClosure(WTF::Bind([] {}));
+  *closure_out = new base::OnceClosure(WTF::BindOnce([] {}));
   LEAK_SANITIZER_IGNORE_OBJECT(*closure_out);
 }
 

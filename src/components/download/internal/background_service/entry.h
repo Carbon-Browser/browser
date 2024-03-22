@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,8 @@ struct Entry {
   // The feature that is requesting this download.
   DownloadClient client = DownloadClient::INVALID;
 
-  // A unique GUID that represents this download.  See | base::GenerateGUID()|.
+  // A unique GUID that represents this download.  See
+  // `base::Uuid::GenerateRandomV4().AsLowercaseString()`.
   std::string guid;
 
   // The time when the entry is created.

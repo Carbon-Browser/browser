@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
  * @fileoverview Rewrites a braille key event.
  */
+import {BrailleKeyCommand, BrailleKeyEvent} from '../../common/braille/braille_key_types.js';
+import {QueueMode} from '../../common/tts_types.js';
 import {Output} from '../output/output.js';
 
 /**
@@ -15,6 +17,13 @@ export class BrailleKeyEventRewriter {
   constructor() {
     /** @private {Object} */
     this.incrementalKey_ = null;
+  }
+
+  static init() {
+    if (BrailleKeyEventRewriter.instance) {
+      throw new Error('Cannot create two BrailleKeyEventRewriter instances');
+    }
+    BrailleKeyEventRewriter.instance = new BrailleKeyEventRewriter();
   }
 
   /**
@@ -73,3 +82,6 @@ export class BrailleKeyEventRewriter {
     return false;
   }
 }
+
+/** @type {BrailleKeyEventRewriter} */
+BrailleKeyEventRewriter.instance;

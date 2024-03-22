@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "apps/launcher.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
@@ -48,6 +48,7 @@ apps::AppTypeName GetHistogrameAppType(apps::AppType app_type) {
     case apps::AppType::kStandaloneBrowserChromeApp:
     case apps::AppType::kRemote:
     case apps::AppType::kBorealis:
+    case apps::AppType::kBruschetta:
     case apps::AppType::kExtension:
     case apps::AppType::kStandaloneBrowserExtension:
       return apps::AppTypeName::kUnknown;
@@ -89,7 +90,7 @@ void AppLaunchHandler::OnAppUpdate(const apps::AppUpdate& update) {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&AppLaunchHandler::LaunchApp, GetWeakPtrAppLaunchHandler(),
                      update.AppType(), update.AppId()));
@@ -101,7 +102,7 @@ void AppLaunchHandler::OnAppTypeInitialized(apps::AppType app_type) {
 
 void AppLaunchHandler::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
-  apps::AppRegistryCache::Observer::Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }
 
 void AppLaunchHandler::LaunchApps() {
@@ -116,7 +117,7 @@ void AppLaunchHandler::LaunchApps() {
       apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile_));
   auto* cache = &apps::AppServiceProxyFactory::GetForProfile(profile_)
                      ->AppRegistryCache();
-  Observe(cache);
+  ObserveCache(cache);
   for (const auto app_type : cache->InitializedAppTypes()) {
     OnAppTypeInitialized(app_type);
   }
@@ -131,34 +132,13 @@ void AppLaunchHandler::LaunchApps() {
     }
   });
 
-#if !defined(OFFICIAL_BUILD)
-  base::TimeDelta current_delay = delay_;
-#endif
   for (const auto& app_id : app_ids) {
     // Chrome browser web pages are restored separately, so we don't need to
     // launch browser windows.
     if (app_id == app_constants::kChromeAppId)
       continue;
 
-    auto app_type = cache->GetAppType(app_id);
-#if !defined(OFFICIAL_BUILD)
-    // Make shift-click on the launch button launch apps with a delay. This
-    // allows developers to simulate delayed launch behaviors with ARC apps.
-    // TODO(crbug.com/1281685): Remove before feature launch.
-    if (delay_.is_zero()) {
-      LaunchApp(app_type, app_id);
-    } else {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-          FROM_HERE,
-          base::BindOnce(&AppLaunchHandler::LaunchApp,
-                         GetWeakPtrAppLaunchHandler(), app_type, app_id),
-          current_delay);
-      current_delay += delay_;
-    }
-#else
-    DCHECK(delay_.is_zero());
-    LaunchApp(app_type, app_id);
-#endif
+    LaunchApp(cache->GetAppType(app_id), app_id);
   }
 }
 
@@ -204,12 +184,21 @@ void AppLaunchHandler::LaunchApp(apps::AppType app_type,
     case apps::AppType::kMacOs:
     case apps::AppType::kRemote:
     case apps::AppType::kBorealis:
+    case apps::AppType::kBruschetta:
     case apps::AppType::kExtension:
     case apps::AppType::kStandaloneBrowserExtension:
       NOTREACHED();
       break;
   }
   restore_data_->RemoveApp(app_id);
+}
+
+void AppLaunchHandler::ObserveCache(apps::AppRegistryCache* source) {
+  DCHECK(source);
+  if (!app_registry_cache_observer_.IsObservingSource(source)) {
+    app_registry_cache_observer_.Reset();
+    app_registry_cache_observer_.Observe(source);
+  }
 }
 
 void AppLaunchHandler::LaunchSystemWebAppOrChromeApp(
@@ -232,10 +221,10 @@ void AppLaunchHandler::LaunchSystemWebAppOrChromeApp(
           extensions::ExtensionRegistry::Get(profile_)->GetInstalledExtension(
               app_id);
       if (extension) {
-        DCHECK(it.second->file_paths.has_value());
+        DCHECK(!it.second->file_paths.empty());
         apps::LaunchPlatformAppWithFileHandler(profile_, extension,
                                                it.second->handler_id.value(),
-                                               it.second->file_paths.value());
+                                               it.second->file_paths);
       }
       continue;
     }
@@ -251,9 +240,9 @@ void AppLaunchHandler::LaunchSystemWebAppOrChromeApp(
         app_id,
         static_cast<apps::LaunchContainer>(it.second->container.value()),
         static_cast<WindowOpenDisposition>(it.second->disposition.value()),
+        it.second->override_url.value_or(GURL()),
         apps::LaunchSource::kFromFullRestore, it.second->display_id.value(),
-        it.second->file_paths.has_value() ? it.second->file_paths.value()
-                                          : std::vector<base::FilePath>{},
+        it.second->file_paths,
         it.second->intent ? it.second->intent->Clone() : nullptr);
     params.restore_id = it.first;
     proxy->LaunchAppWithParams(std::move(params));

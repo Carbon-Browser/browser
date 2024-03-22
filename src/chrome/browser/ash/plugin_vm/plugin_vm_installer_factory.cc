@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@
 
 #include "chrome/browser/ash/plugin_vm/plugin_vm_installer.h"
 #include "chrome/browser/download/background_download_service_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace plugin_vm {
 
@@ -20,13 +18,19 @@ PluginVmInstaller* PluginVmInstallerFactory::GetForProfile(Profile* profile) {
 
 // static
 PluginVmInstallerFactory* PluginVmInstallerFactory::GetInstance() {
-  return base::Singleton<PluginVmInstallerFactory>::get();
+  static base::NoDestructor<PluginVmInstallerFactory> instance;
+  return instance.get();
 }
 
 PluginVmInstallerFactory::PluginVmInstallerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "PluginVmInstaller",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {
   DependsOn(BackgroundDownloadServiceFactory::GetInstance());
 }
 
@@ -35,11 +39,6 @@ PluginVmInstallerFactory::~PluginVmInstallerFactory() = default;
 KeyedService* PluginVmInstallerFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
   return new PluginVmInstaller(Profile::FromBrowserContext(context));
-}
-
-content::BrowserContext* PluginVmInstallerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
 }
 
 }  // namespace plugin_vm

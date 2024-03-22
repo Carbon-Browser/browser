@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,6 @@
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "components/cronet/native/test/test_upload_data_provider.h"
 #include "components/cronet/native/test/test_url_request_callback.h"
@@ -130,7 +129,7 @@ class Callback : public cronet::test::TestUrlRequestCallback {
  public:
   Callback()
       : TestUrlRequestCallback(true),
-        task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+        task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
   ~Callback() override { Cronet_UrlRequestCallback_Destroy(callback_); }
 
   // Start one repeated UrlRequest. |iterations_completed| is used to keep track
@@ -421,7 +420,7 @@ void PerfTest(const char* json_args) {
       << "Benchmark options string is not a dictionary: " << benchmark_options
       << " See DEFAULT_BENCHMARK_CONFIG in perf_test_util.py.";
   g_options =
-      std::make_unique<base::Value::Dict>(std::move(options_value->GetDict()));
+      std::make_unique<base::Value::Dict>(std::move(*options_value).TakeDict());
 
   // Run benchmarks putting timing results into |results|.
   base::Value::Dict results;

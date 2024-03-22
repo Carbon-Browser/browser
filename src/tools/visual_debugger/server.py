@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
+import json
+import sys
+
+if (sys.version_info < (3, )):
+  print("FAILURE. Python 3 or greater required. Please run with \"python3\".")
+  sys.exit(7)
 
 from http.server import HTTPServer, SimpleHTTPRequestHandler, test
 from functools import partial
@@ -17,29 +24,31 @@ remote_port = 7777
 
 class CORSRequestHandler(SimpleHTTPRequestHandler):
   def do_GET(self):
-    if (self.path == "/discover.html"):
+    if (self.path == "/discover.json"):
+      remote_discovery_url = "http://localhost:{remote_port}/json/version".format(
+          remote_port=remote_port)
       try:
-        contents = urllib.request.urlopen("http://localhost:" +
-                                          str(remote_port) +
-                                          "/json/version").read()
-        self.send_response(200)
+        contents = urllib.request.urlopen(remote_discovery_url).read()
 
       except Exception:
-        contents =\
-        "\n Cannot connect to remote discovery page on localhost:"+\
-             str(remote_port) +\
-            "\n check for target command line parameter: \n" +\
-            "        --remote-debugging-port=" + str(remote_port) +\
-            "\n and if the target is a remote DUT  tunnel forwarding"+\
-              " is required from local to remote : " + \
-            "\n      ssh root@$DUT_IP -L " + \
-            str(remote_port)+":localhost:" + str(remote_port)
+        output = {
+            "error":
+            '''\
+Cannot connect to remote discovery page on:
+        {remote_discovery_url}
+Check for target command line parameter:
+        --remote-debugging-port={remote_port}
+If the target is a remote DUT tunnel forwarding is required
+from local to remote:
+        ssh root@$DUT_IP -L {remote_port}:localhost:{remote_port}
+            '''.format(remote_port=remote_port,
+                       remote_discovery_url=remote_discovery_url)
+        }
+        contents = json.dumps(output)
         contents = bytes(contents, 'UTF-8')
-        # Used error code 206 to prevent console logs every time
-        # connection is unsuccessful.
-        self.send_response(206)
 
-      self.send_header("Content-type", "text/html")
+      self.send_response(200)
+      self.send_header("Content-type", "application/json")
       self.send_header("Content-length", len(contents))
       self.end_headers()
       self.wfile.write(contents)
@@ -54,7 +63,7 @@ if __name__ == '__main__':
     # Creates a partial object that will behave like a function called with args
     # and kwargs, while overriding directory with the given path.
     Handler = partial(CORSRequestHandler,
-                      directory=os.path.relpath(os.path.dirname(__file__)))
+                      directory=os.path.dirname(os.path.abspath(__file__)))
     socketserver.TCPServer.allow_reuse_address = True
     tpc_server = socketserver.TCPServer(("", debugger_port), Handler)
     # If socket is not specified it was assigned so we must grab it.

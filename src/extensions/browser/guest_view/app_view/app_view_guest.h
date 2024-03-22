@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,12 @@ class AppViewGuest : public guest_view::GuestView<AppViewGuest> {
  public:
   static const char Type[];
 
+  ~AppViewGuest() override;
   AppViewGuest(const AppViewGuest&) = delete;
   AppViewGuest& operator=(const AppViewGuest&) = delete;
+
+  static std::unique_ptr<GuestViewBase> Create(
+      content::RenderFrameHost* owner_rfh);
 
   // Completes the creation of a WebContents associated with the provided
   // |guest_extension_id| and |guest_instance_id| for the given
@@ -43,22 +47,21 @@ class AppViewGuest : public guest_view::GuestView<AppViewGuest> {
       const std::string& guest_extension_id,
       content::RenderProcessHost* guest_render_process_host);
 
-  static GuestViewBase* Create(content::WebContents* owner_web_contents);
-
   static std::vector<int> GetAllRegisteredInstanceIdsForTesting();
 
   // Sets the AppDelegate for this guest.
   void SetAppDelegateForTest(AppDelegate* delegate);
 
  private:
-  explicit AppViewGuest(content::WebContents* owner_web_contents);
-
-  ~AppViewGuest() override;
+  explicit AppViewGuest(content::RenderFrameHost* owner_rfh);
 
   // GuestViewBase implementation.
-  void CreateWebContents(const base::Value::Dict& create_params,
+  void CreateWebContents(std::unique_ptr<GuestViewBase> owned_this,
+                         const base::Value::Dict& create_params,
                          WebContentsCreatedCallback callback) final;
   void DidInitialize(const base::Value::Dict& create_params) final;
+  void MaybeRecreateGuestContents(
+      content::RenderFrameHost* outer_contents_frame) final;
   const char* GetAPINamespace() const final;
   int GetTaskPrefix() const final;
 
@@ -70,14 +73,16 @@ class AppViewGuest : public guest_view::GuestView<AppViewGuest> {
       const content::MediaStreamRequest& request,
       content::MediaResponseCallback callback) final;
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) final;
 
   void CompleteCreateWebContents(const GURL& url,
                                  const Extension* guest_extension,
+                                 std::unique_ptr<GuestViewBase> owned_this,
                                  WebContentsCreatedCallback callback);
 
   void LaunchAppAndFireEvent(
+      std::unique_ptr<GuestViewBase> owned_this,
       base::Value::Dict data,
       WebContentsCreatedCallback callback,
       std::unique_ptr<LazyContextTaskQueue::ContextInfo> context_info);

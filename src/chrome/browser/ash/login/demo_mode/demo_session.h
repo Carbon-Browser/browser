@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,16 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
+#include "base/values.h"
 #include "chrome/browser/ash/login/demo_mode/demo_extensions_external_loader.h"
+#include "chrome/browser/ash/login/demo_mode/demo_mode_window_closer.h"
 #include "chrome/browser/component_updater/cros_component_manager.h"
+#include "chromeos/dbus/power/power_manager_client.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
@@ -35,14 +38,14 @@ struct CountryCodeAndFullNamePair {
   std::u16string country_name;
 };
 
-class DemoResources;
+class DemoComponents;
 
 // Tracks global demo session state, such as whether the demo session has
 // started and the state of demo mode resources.
 class DemoSession : public session_manager::SessionManagerObserver,
                     public user_manager::UserManager::UserSessionStateObserver,
                     public extensions::AppWindowRegistry::Observer,
-                    public apps::AppRegistryCache::Observer {
+                    public chromeos::PowerManagerClient::Observer {
  public:
   // Type of demo mode configuration.
   // Warning: DemoModeConfig is stored in local state. Existing entries should
@@ -118,9 +121,6 @@ class DemoSession : public session_manager::SessionManagerObserver,
   // StartIfInDemoMode() or PreloadOfflineResourcesIfInDemoMode()).
   static DemoSession* Get();
 
-  // Returns an additional comma-separated language list for demo mode.
-  static std::string GetAdditionalLanguageList();
-
   // Returns the id of the screensaver app based on the board name.
   static std::string GetScreensaverAppId();
 
@@ -138,7 +138,7 @@ class DemoSession : public session_manager::SessionManagerObserver,
   // `value`: The ISO country code.
   // `title`: The display name of the country in the current locale.
   // `selected`: Whether the country is currently selected.
-  static base::Value GetCountryList();
+  static base::Value::List GetCountryList();
 
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 
@@ -174,20 +174,21 @@ class DemoSession : public session_manager::SessionManagerObserver,
 
   bool started() const { return started_; }
 
-  base::FilePath DemoAppComponentPath() {
-    DCHECK(!demo_app_component_path_.empty());
-    return demo_app_component_path_;
-  }
+  // Returns the Demo App component path, which defines the directory that the
+  // Demo Mode SWA should source its content from.
+  // If the demo-mode-swa-content-directory switch is set, we retrieve the
+  // content from there. Otherwise, the default location at
+  // /run/imageloader/demo-mode-app is used. When copying the directory to a
+  // custom location, make sure the permissions are set to 555.
+  base::FilePath GetDemoAppComponentPath();
 
-  const DemoResources* resources() const { return demo_resources_.get(); }
+  const DemoComponents* components() const { return components_.get(); }
 
  private:
   DemoSession();
   ~DemoSession() override;
 
-  void OnDemoAppComponentLoaded(
-      component_updater::CrOSComponentManager::Error error,
-      const base::FilePath& path);
+  void OnDemoAppComponentLoaded();
 
   // Get country code and full name in current language pair sorted by their
   // full name in currently selected language.
@@ -198,12 +199,11 @@ class DemoSession : public session_manager::SessionManagerObserver,
   // as apps and media.
   void InstallDemoResources();
 
-  // Installs the CRX file from an update URL. Observes `AppRegistryCache` to
-  // launch the app upon installation.
-  void InstallAppFromUpdateUrl(const std::string& id);
+  // Find image path then show the splash screen.
+  void ConfigureAndStartSplashScreen();
 
-  // Shows the splash screen after demo mode resources are installed.
-  void ShowSplashScreen();
+  // Show, and set the fallback timeout to remove, the splash screen.
+  void ShowSplashScreen(base::FilePath image_path);
 
   // Removes the splash screen.
   void RemoveSplashScreen();
@@ -216,10 +216,14 @@ class DemoSession : public session_manager::SessionManagerObserver,
   // session_manager::SessionManagerObserver:
   void OnSessionStateChanged() override;
 
-  // apps::AppRegistryCache::Observer:
-  void OnAppUpdate(const apps::AppUpdate& update) override;
-  void OnAppRegistryCacheWillBeDestroyed(
-      apps::AppRegistryCache* cache) override;
+  // Once received the keyboard brightness percentage, increase the keyboard
+  // brightness to the max level.
+  void SetKeyboardBrightnessToOneHundredPercentFromCurrentLevel(
+      absl::optional<double> keyboard_brightness_percentage);
+
+  // Allocate the device to a group in the experiment and register the
+  // synthetic field trial.
+  void RegisterDemoModeAAExperiment();
 
   // Whether demo session has been started.
   bool started_ = false;
@@ -228,7 +232,7 @@ class DemoSession : public session_manager::SessionManagerObserver,
   // device is offline.
   std::vector<std::string> ignore_pin_policy_offline_apps_;
 
-  std::unique_ptr<DemoResources> demo_resources_;
+  std::unique_ptr<DemoComponents> components_;
 
   base::ScopedObservation<session_manager::SessionManager,
                           session_manager::SessionManagerObserver>
@@ -238,30 +242,21 @@ class DemoSession : public session_manager::SessionManagerObserver,
                                      extensions::AppWindowRegistry::Observer>
       app_window_registry_observations_{this};
 
-  base::ScopedMultiSourceObservation<apps::AppRegistryCache,
-                                     apps::AppRegistryCache::Observer>
-      app_registry_cache_observation_{this};
-
   scoped_refptr<DemoExtensionsExternalLoader> extensions_external_loader_;
 
   // The fallback timer that ensures the splash screen is removed in case the
   // screensaver app takes an extra long time to be shown.
   std::unique_ptr<base::OneShotTimer> remove_splash_screen_fallback_timer_;
 
+  // Constructed when the demo mode user session starts.
+  std::unique_ptr<DemoModeWindowCloser> window_closer_;
+
   bool splash_screen_removed_ = false;
   bool screensaver_activated_ = false;
-
-  base::FilePath demo_app_component_path_;
 
   base::WeakPtrFactory<DemoSession> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::DemoSession;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_DEMO_MODE_DEMO_SESSION_H_

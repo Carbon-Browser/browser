@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,10 +35,10 @@ class BluetoothRemoteGATTDescriptor final : public ScriptWrappable {
 
   // IDL exposed interface:
   BluetoothRemoteGATTCharacteristic* characteristic() {
-    return characteristic_;
+    return characteristic_.Get();
   }
   String uuid() { return descriptor_->uuid; }
-  DOMDataView* value() const { return value_; }
+  DOMDataView* value() const { return value_.Get(); }
   ScriptPromise readValue(ScriptState*, ExceptionState&);
   ScriptPromise writeValue(ScriptState*, const DOMArrayPiece&, ExceptionState&);
 

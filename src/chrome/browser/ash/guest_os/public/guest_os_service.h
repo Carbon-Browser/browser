@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "chrome/browser/ash/guest_os/public/guest_os_mount_provider_registry.h"
+#include "chrome/browser/ash/guest_os/public/guest_os_sk_forwarder.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_terminal_provider_registry.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -36,10 +37,13 @@ class GuestOsService : public KeyedService {
 
   GuestOsWaylandServer* WaylandServer();
 
+  GuestOsSkForwarder* SkForwarder();
+
  private:
   GuestOsMountProviderRegistry mount_provider_registry_;
   GuestOsTerminalProviderRegistry terminal_provider_registry_;
   std::unique_ptr<GuestOsWaylandServer> wayland_server_;
+  GuestOsSkForwarder guest_os_sk_forwarder_;
 };
 
 }  // namespace guest_os

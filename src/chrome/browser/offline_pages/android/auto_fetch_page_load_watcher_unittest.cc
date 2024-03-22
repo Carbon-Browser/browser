@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,7 @@ using ::offline_pages::auto_fetch_internal::RequestInfo;
 using ::offline_pages::auto_fetch_internal::TabInfo;
 using ::testing::_;
 
-const int kDefaultTabId = 123;
-const base::Time kEpoch = base::Time::FromDoubleT(1.0e6);
+constexpr int kDefaultTabId = 123;
 
 GURL TestURL() {
   return GURL("http://www.url.com");

@@ -1,38 +1,34 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/language/language_settings_mediator.h"
 
-#include <memory>
+#import <memory>
 
-#include "base/check.h"
-#include "base/mac/foundation_util.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/notreached.h"
-#include "base/strings/sys_string_conversions.h"
-#include "components/language/core/browser/language_model_manager.h"
-#include "components/language/core/browser/pref_names.h"
-#include "components/language/core/common/language_util.h"
-#include "components/prefs/ios/pref_observer_bridge.h"
-#include "components/prefs/pref_change_registrar.h"
-#include "components/prefs/pref_service.h"
-#include "components/translate/core/browser/translate_pref_names.h"
-#include "components/translate/core/browser/translate_prefs.h"
-#include "ios/chrome/browser/application_context.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/language/language_model_manager_factory.h"
-#include "ios/chrome/browser/translate/chrome_ios_translate_client.h"
-#include "ios/chrome/browser/translate/translate_service_ios.h"
+#import "base/apple/foundation_util.h"
+#import "base/check.h"
+#import "base/containers/contains.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/notreached.h"
+#import "base/strings/sys_string_conversions.h"
+#import "components/language/core/browser/language_model_manager.h"
+#import "components/language/core/browser/pref_names.h"
+#import "components/language/core/common/language_util.h"
+#import "components/prefs/ios/pref_observer_bridge.h"
+#import "components/prefs/pref_change_registrar.h"
+#import "components/prefs/pref_service.h"
+#import "components/translate/core/browser/translate_pref_names.h"
+#import "components/translate/core/browser/translate_prefs.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/translate/model/chrome_ios_translate_client.h"
+#import "ios/chrome/browser/translate/model/translate_service_ios.h"
 #import "ios/chrome/browser/ui/settings/language/cells/language_item.h"
 #import "ios/chrome/browser/ui/settings/language/language_settings_consumer.h"
 #import "ios/chrome/browser/ui/settings/language/language_settings_histograms.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 @interface LanguageSettingsMediator () <PrefObserverDelegate> {
   // Registrar for pref change notifications.
@@ -51,8 +47,11 @@
   std::unique_ptr<translate::TranslatePrefs> _translatePrefs;
 }
 
-// The BrowserState passed to this instance.
-@property(nonatomic, assign) ChromeBrowserState* browserState;
+// The LanguageModelManager passed to this instance.
+@property(nonatomic, assign)
+    language::LanguageModelManager* languageModelManager;
+// The PrefService passed to this instance.
+@property(nonatomic, assign) PrefService* prefService;
 
 @end
 
@@ -60,14 +59,16 @@
 
 @synthesize consumer = _consumer;
 
-- (instancetype)initWithBrowserState:(ChromeBrowserState*)browserState {
-  DCHECK(browserState);
+- (instancetype)initWithLanguageModelManager:
+                    (language::LanguageModelManager*)languageModelManager
+                                 prefService:(PrefService*)prefService {
   self = [super init];
   if (self) {
-    _browserState = browserState;
+    _languageModelManager = languageModelManager;
+    _prefService = prefService;
 
     _prefChangeRegistrar = std::make_unique<PrefChangeRegistrar>();
-    _prefChangeRegistrar->Init(browserState->GetPrefs());
+    _prefChangeRegistrar->Init(self.prefService);
     _offerTranslatePrefObserverBridge =
         std::make_unique<PrefObserverBridge>(self);
     _offerTranslatePrefObserverBridge->ObserveChangesForPreference(
@@ -81,8 +82,8 @@
     _blockedLanguagesPrefObserverBridge->ObserveChangesForPreference(
         translate::prefs::kBlockedLanguages, _prefChangeRegistrar.get());
 
-    _translatePrefs = ChromeIOSTranslateClient::CreateTranslatePrefs(
-        browserState->GetPrefs());
+    _translatePrefs =
+        ChromeIOSTranslateClient::CreateTranslatePrefs(self.prefService);
   }
   return self;
 }
@@ -90,6 +91,8 @@
 - (void)dealloc {
   // In case this has not been explicitly called.
   [self stopObservingModel];
+  _languageModelManager = nullptr;
+  _prefService = nullptr;
 }
 
 #pragma mark - PrefObserverDelegate
@@ -133,8 +136,12 @@
     // Ignore unsupported languages.
     auto it = supportedLanguagesMap.find(languageCode);
     if (it == supportedLanguagesMap.end()) {
-      NOTREACHED() << languageCode + " is an accept language which is not "
-                                     "supported by the platform.";
+      // languageCodes comes from a synced pref and may contain language codes
+      // that are not supported on the platform, or on this device locale as
+      // defined by the GetLanguageInfoList above.
+      // Ignore them.
+      // TODO(crbug.com/1430745): Investigate why this happens and how to
+      // reconcile data.
       continue;
     }
     const translate::TranslateLanguageInfo& language = it->second;
@@ -147,9 +154,7 @@
     std::string canonicalLanguageCode = languageItem.languageCode;
     language::ToTranslateLanguageSynonym(&canonicalLanguageCode);
     std::string targetLanguageCode = TranslateServiceIOS::GetTargetLanguage(
-        self.browserState->GetPrefs(),
-        LanguageModelManagerFactory::GetForBrowserState(self.browserState)
-            ->GetPrimaryModel());
+        self.prefService, self.languageModelManager->GetPrimaryModel());
     languageItem.targetLanguage = targetLanguageCode == canonicalLanguageCode;
 
     // A language is Translate-blocked if the language is not supported by the
@@ -192,8 +197,7 @@
       [NSMutableArray arrayWithCapacity:languages.size()];
   for (const auto& language : languages) {
     // Ignore languages already in the accept languages list.
-    if (std::find(acceptLanguageCodes.begin(), acceptLanguageCodes.end(),
-                  language.code) != acceptLanguageCodes.end()) {
+    if (base::Contains(acceptLanguageCodes, language.code)) {
       continue;
     }
     LanguageItem* languageItem = [self languageItemFromLanguage:language];
@@ -204,12 +208,11 @@
 }
 
 - (BOOL)translateEnabled {
-  return self.browserState->GetPrefs()->GetBoolean(
-      translate::prefs::kOfferTranslateEnabled);
+  return self.prefService->GetBoolean(translate::prefs::kOfferTranslateEnabled);
 }
 
 - (BOOL)translateManaged {
-  return self.browserState->GetPrefs()->IsManagedPreference(
+  return self.prefService->IsManagedPreference(
       translate::prefs::kOfferTranslateEnabled);
 }
 
@@ -224,8 +227,8 @@
 #pragma mark - LanguageSettingsCommands
 
 - (void)setTranslateEnabled:(BOOL)enabled {
-  self.browserState->GetPrefs()->SetBoolean(
-      translate::prefs::kOfferTranslateEnabled, enabled);
+  self.prefService->SetBoolean(translate::prefs::kOfferTranslateEnabled,
+                               enabled);
 
   UMA_HISTOGRAM_ENUMERATION(
       kLanguageSettingsActionsHistogram,

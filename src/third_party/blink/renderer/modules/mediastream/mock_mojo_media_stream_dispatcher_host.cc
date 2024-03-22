@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ void MockMojoMediaStreamDispatcherHost::GenerateStreams(
 
   blink::mojom::StreamSelectionStrategy strategy =
       audio_stream_selection_info_ptr->strategy;
-  if (controls.audio.requested &&
+  if (controls.audio.requested() &&
       (strategy == blink::mojom::StreamSelectionStrategy::SEARCH_BY_DEVICE_ID ||
        strategy == blink::mojom::StreamSelectionStrategy::FORCE_NEW_STREAM)) {
     stream_devices_.audio_device = MediaStreamDevice(
@@ -40,7 +40,7 @@ void MockMojoMediaStreamDispatcherHost::GenerateStreams(
         "associated_output_device_id" + session_id_.ToString();
   }
 
-  if (controls.video.requested) {
+  if (controls.video.requested()) {
     stream_devices_.video_device = MediaStreamDevice(
         controls.video.stream_type,
         controls.video.device_id + session_id_.ToString(), "usb video camera");
@@ -60,6 +60,39 @@ void MockMojoMediaStreamDispatcherHost::GenerateStreams(
                             String("dummy") + String::Number(request_id_),
                             std::move(stream_devices_set),
                             /*pan_tilt_zoom_allowed=*/false);
+  }
+}
+
+void MockMojoMediaStreamDispatcherHost::GetOpenDevice(
+    int32_t request_id,
+    const base::UnguessableToken&,
+    const base::UnguessableToken&,
+    GetOpenDeviceCallback callback) {
+  request_id_ = request_id;
+  ++request_stream_counter_;
+
+  if (do_not_run_cb_) {
+    get_open_device_cb_ = std::move(callback);
+  } else {
+    blink::mojom::blink::StreamDevicesSetPtr stream_devices_set =
+        blink::mojom::blink::StreamDevicesSet::New();
+    stream_devices_set->stream_devices.emplace_back(stream_devices_.Clone());
+    if (stream_devices_.video_device) {
+      std::move(callback).Run(mojom::blink::MediaStreamRequestResult::OK,
+                              mojom::blink::GetOpenDeviceResponse::New(
+                                  String("dummy") + String::Number(request_id_),
+                                  *stream_devices_.video_device,
+                                  /*pan_tilt_zoom_allowed=*/false));
+    } else if (stream_devices_.audio_device) {
+      std::move(callback).Run(mojom::blink::MediaStreamRequestResult::OK,
+                              mojom::blink::GetOpenDeviceResponse::New(
+                                  String("dummy") + String::Number(request_id_),
+                                  *stream_devices_.audio_device,
+                                  /*pan_tilt_zoom_allowed=*/false));
+    } else {
+      std::move(callback).Run(
+          mojom::blink::MediaStreamRequestResult::INVALID_STATE, nullptr);
+    }
   }
 }
 
@@ -85,7 +118,11 @@ void MockMojoMediaStreamDispatcherHost::StopStreamDevice(
       return;
     }
   }
-  NOTREACHED();
+  // Require that the device is found if a new session id has not been
+  // requested.
+  if (session_id == session_id_) {
+    NOTREACHED();
+  }
 }
 
 void MockMojoMediaStreamDispatcherHost::OpenDevice(

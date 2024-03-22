@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,6 @@ bool IsUnsandboxedSandboxType(Sandbox sandbox_type) {
     case Sandbox::kNoSandboxAndElevatedPrivileges:
       return true;
     case Sandbox::kXrCompositing:
-      return !base::FeatureList::IsEnabled(features::kXRSandbox);
     case Sandbox::kPdfConversion:
     case Sandbox::kIconReader:
     case Sandbox::kMediaFoundationCdm:
@@ -45,12 +44,14 @@ bool IsUnsandboxedSandboxType(Sandbox sandbox_type) {
 #endif
     case Sandbox::kNetwork:
       return false;
+    case Sandbox::kOnDeviceModelExecution:
+      return false;
     case Sandbox::kRenderer:
     case Sandbox::kService:
     case Sandbox::kServiceWithJit:
     case Sandbox::kUtility:
     case Sandbox::kGpu:
-#if BUILDFLAG(ENABLE_PLUGINS)
+#if BUILDFLAG(ENABLE_PPAPI)
     case Sandbox::kPpapi:
 #endif
     case Sandbox::kCdm:
@@ -74,6 +75,7 @@ bool IsUnsandboxedSandboxType(Sandbox sandbox_type) {
 #endif  // // BUILDFLAG(IS_CHROMEOS_ASH)
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
     case Sandbox::kZygoteIntermediateSandbox:
+    case Sandbox::kHardwareVideoEncoding:
 #endif
 #if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
     case Sandbox::kScreenAI:
@@ -105,7 +107,7 @@ void SetCommandLineFlagsForSandboxType(base::CommandLine* command_line,
       DCHECK(command_line->GetSwitchValueASCII(switches::kProcessType) ==
              switches::kGpuProcess);
       break;
-#if BUILDFLAG(ENABLE_PLUGINS)
+#if BUILDFLAG(ENABLE_PPAPI)
     case Sandbox::kPpapi:
       if (command_line->GetSwitchValueASCII(switches::kProcessType) ==
           switches::kUtilityProcess) {
@@ -121,6 +123,7 @@ void SetCommandLineFlagsForSandboxType(base::CommandLine* command_line,
     case Sandbox::kServiceWithJit:
     case Sandbox::kUtility:
     case Sandbox::kNetwork:
+    case Sandbox::kOnDeviceModelExecution:
     case Sandbox::kCdm:
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
     case Sandbox::kPrintBackend:
@@ -141,6 +144,9 @@ void SetCommandLineFlagsForSandboxType(base::CommandLine* command_line,
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
     case Sandbox::kHardwareVideoDecoding:
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+    case Sandbox::kHardwareVideoEncoding:
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     case Sandbox::kIme:
     case Sandbox::kTts:
@@ -196,7 +202,7 @@ sandbox::mojom::Sandbox SandboxTypeFromCommandLine(
     return Sandbox::kGpu;
   }
 
-#if BUILDFLAG(ENABLE_PLUGINS)
+#if BUILDFLAG(ENABLE_PPAPI)
   if (process_type == switches::kPpapiPluginProcess)
     return Sandbox::kPpapi;
 #endif
@@ -209,9 +215,6 @@ sandbox::mojom::Sandbox SandboxTypeFromCommandLine(
     return Sandbox::kUtility;
 #endif
   }
-
-  if (process_type == switches::kNaClBrokerProcess)
-    return Sandbox::kNoSandbox;
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // Intermediate process gains a sandbox later.
@@ -241,7 +244,9 @@ std::string StringFromUtilitySandboxType(Sandbox sandbox_type) {
 #endif  // BUILDFLAG(IS_WIN)
     case Sandbox::kNetwork:
       return switches::kNetworkSandbox;
-#if BUILDFLAG(ENABLE_PLUGINS)
+    case Sandbox::kOnDeviceModelExecution:
+      return switches::kOnDeviceModelExecutionSandbox;
+#if BUILDFLAG(ENABLE_PPAPI)
     case Sandbox::kPpapi:
       return switches::kPpapiSandbox;
 #endif
@@ -291,6 +296,10 @@ std::string StringFromUtilitySandboxType(Sandbox sandbox_type) {
     case Sandbox::kHardwareVideoDecoding:
       return switches::kHardwareVideoDecodingSandbox;
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+    case Sandbox::kHardwareVideoEncoding:
+      return switches::kHardwareVideoEncodingSandbox;
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     case Sandbox::kIme:
       return switches::kImeSandbox;
@@ -337,9 +346,13 @@ sandbox::mojom::Sandbox UtilitySandboxTypeFromString(
     return Sandbox::kNoSandbox;
 #endif
   }
-  if (sandbox_string == switches::kNetworkSandbox)
+  if (sandbox_string == switches::kNetworkSandbox) {
     return Sandbox::kNetwork;
-#if BUILDFLAG(ENABLE_PLUGINS)
+  }
+  if (sandbox_string == switches::kOnDeviceModelExecutionSandbox) {
+    return Sandbox::kOnDeviceModelExecution;
+  }
+#if BUILDFLAG(ENABLE_PPAPI)
   if (sandbox_string == switches::kPpapiSandbox)
     return Sandbox::kPpapi;
 #endif
@@ -383,6 +396,10 @@ sandbox::mojom::Sandbox UtilitySandboxTypeFromString(
   if (sandbox_string == switches::kHardwareVideoDecodingSandbox)
     return Sandbox::kHardwareVideoDecoding;
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  if (sandbox_string == switches::kHardwareVideoEncodingSandbox)
+    return Sandbox::kHardwareVideoEncoding;
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (sandbox_string == switches::kImeSandbox)
     return Sandbox::kIme;

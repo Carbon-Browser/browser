@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,13 +41,9 @@ public class SelectLanguageFragment extends Fragment {
     // Intent key to receive type of languages to populate fragment with.
     static final String INTENT_POTENTIAL_LANGUAGES = "SelectLanguageFragment.PotentialLanguages";
 
-    /**
-     * A host to launch SelectLanguageFragment and receive the result.
-     */
+    /** A host to launch SelectLanguageFragment and receive the result. */
     interface Launcher {
-        /**
-         * Launches SelectLanguageFragment.
-         */
+        /** Launches SelectLanguageFragment. */
         void launchAddLanguage();
     }
 
@@ -124,22 +120,29 @@ public class SelectLanguageFragment extends Fragment {
                 new DividerItemDecoration(activity, layoutManager.getOrientation()));
 
         @LanguagesManager.LanguageListType
-        int languageOption = getActivity().getIntent().getIntExtra(
-                INTENT_POTENTIAL_LANGUAGES, LanguagesManager.LanguageListType.ACCEPT_LANGUAGES);
+        int languageOption =
+                getActivity()
+                        .getIntent()
+                        .getIntExtra(
+                                INTENT_POTENTIAL_LANGUAGES,
+                                LanguagesManager.LanguageListType.ACCEPT_LANGUAGES);
         mFilteredLanguages = LanguagesManager.getInstance().getPotentialLanguages(languageOption);
-        mItemClickListener = item -> {
-            Intent intent = new Intent();
-            intent.putExtra(INTENT_SELECTED_LANGUAGE, item.getCode());
-            activity.setResult(Activity.RESULT_OK, intent);
-            activity.finish();
-        };
+        mItemClickListener =
+                item -> {
+                    Intent intent = new Intent();
+                    intent.putExtra(INTENT_SELECTED_LANGUAGE, item.getCode());
+                    activity.setResult(Activity.RESULT_OK, intent);
+                    activity.finish();
+                };
         mAdapter = new LanguageSearchListAdapter(activity);
 
         mRecyclerView.setAdapter(mAdapter);
         mAdapter.setDisplayedLanguages(mFilteredLanguages);
-        mRecyclerView.getViewTreeObserver().addOnScrollChangedListener(
-                SettingsUtils.getShowShadowOnScrollListener(
-                        mRecyclerView, view.findViewById(R.id.shadow)));
+        mRecyclerView
+                .getViewTreeObserver()
+                .addOnScrollChangedListener(
+                        SettingsUtils.getShowShadowOnScrollListener(
+                                mRecyclerView, view.findViewById(R.id.shadow)));
         return view;
     }
 
@@ -151,28 +154,30 @@ public class SelectLanguageFragment extends Fragment {
         mSearchView = (SearchView) menu.findItem(R.id.search).getActionView();
         mSearchView.setImeOptions(EditorInfo.IME_FLAG_NO_FULLSCREEN);
 
-        mSearchView.setOnCloseListener(() -> {
-            mSearch = "";
-            mAdapter.setDisplayedLanguages(mFilteredLanguages);
-            return false;
-        });
+        mSearchView.setOnCloseListener(
+                () -> {
+                    mSearch = "";
+                    mAdapter.setDisplayedLanguages(mFilteredLanguages);
+                    return false;
+                });
 
-        mSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                return true;
-            }
+        mSearchView.setOnQueryTextListener(
+                new SearchView.OnQueryTextListener() {
+                    @Override
+                    public boolean onQueryTextSubmit(String query) {
+                        return true;
+                    }
 
-            @Override
-            public boolean onQueryTextChange(String query) {
-                if (TextUtils.isEmpty(query) || TextUtils.equals(query, mSearch)) {
-                    return true;
-                }
+                    @Override
+                    public boolean onQueryTextChange(String query) {
+                        if (TextUtils.isEmpty(query) || TextUtils.equals(query, mSearch)) {
+                            return true;
+                        }
 
-                mSearch = query;
-                mAdapter.search(mSearch);
-                return true;
-            }
-        });
+                        mSearch = query;
+                        mAdapter.search(mSearch);
+                        return true;
+                    }
+                });
     }
 }

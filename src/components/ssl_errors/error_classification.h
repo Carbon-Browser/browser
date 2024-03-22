@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -187,9 +187,6 @@ bool NameUnderAnyNames(const HostnameTokens& child,
 // appspot.com.
 bool AnyNamesUnderName(const std::vector<HostnameTokens>& potential_children,
                        const HostnameTokens& parent);
-
-// Exposed for teshting.
-size_t GetLevenshteinDistance(const std::string& str1, const std::string& str2);
 
 }  // namespace ssl_errors
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,27 +43,25 @@ PasswordEditDialogBridge::~PasswordEditDialogBridge() {
   DCHECK(java_password_dialog_.is_null());
 }
 
-void PasswordEditDialogBridge::Show(
-    const std::vector<std::u16string>& usernames,
-    int selected_username_index,
+void PasswordEditDialogBridge::ShowPasswordEditDialog(
+    const std::vector<std::u16string>& saved_usernames,
+    const std::u16string& username,
     const std::u16string& password,
-    const std::u16string& origin,
     const std::string& account_email) {
   JNIEnv* env = base::android::AttachCurrentThread();
 
-  base::android::ScopedJavaLocalRef<jobjectArray> j_usernames =
-      base::android::ToJavaArrayOfStrings(env, usernames);
-
+  base::android::ScopedJavaLocalRef<jobjectArray> j_saved_usernames =
+      base::android::ToJavaArrayOfStrings(env, saved_usernames);
+  base::android::ScopedJavaLocalRef<jstring> j_username =
+      base::android::ConvertUTF16ToJavaString(env, username);
   base::android::ScopedJavaLocalRef<jstring> j_password =
       base::android::ConvertUTF16ToJavaString(env, password);
-  base::android::ScopedJavaLocalRef<jstring> j_origin =
-      base::android::ConvertUTF16ToJavaString(env, origin);
   base::android::ScopedJavaLocalRef<jstring> j_account_email =
       base::android::ConvertUTF8ToJavaString(env, account_email);
 
-  Java_PasswordEditDialogBridge_show(env, java_password_dialog_, j_usernames,
-                                     selected_username_index, j_password,
-                                     j_origin, j_account_email);
+  Java_PasswordEditDialogBridge_showPasswordEditDialog(
+      env, java_password_dialog_, j_saved_usernames, j_username, j_password,
+      j_account_email);
 }
 
 void PasswordEditDialogBridge::Dismiss() {

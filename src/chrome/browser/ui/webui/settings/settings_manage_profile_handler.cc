@@ -1,13 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/settings/settings_manage_profile_handler.h"
 
+#include <cstdint>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -23,7 +24,7 @@
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/signin/profile_colors_util.h"
+#include "chrome/browser/ui/profiles/profile_colors_util.h"
 #include "chrome/browser/ui/webui/theme_source.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
@@ -103,8 +104,9 @@ void ManageProfileHandler::OnProfileHighResAvatarLoaded(
     return;
 
   // GAIA image is loaded asynchronously.
-  FireWebUIListener("available-icons-changed",
-                    base::Value(GetAvailableIcons()));
+  FireWebUIListener(
+      "available-icons-changed",
+      profiles::GetIconsAndLabelsForProfileAvatarSelector(profile_->GetPath()));
 }
 
 void ManageProfileHandler::OnProfileAvatarChanged(
@@ -113,8 +115,9 @@ void ManageProfileHandler::OnProfileAvatarChanged(
     return;
 
   // This is necessary to send the potentially updated GAIA photo.
-  FireWebUIListener("available-icons-changed",
-                    base::Value(GetAvailableIcons()));
+  FireWebUIListener(
+      "available-icons-changed",
+      profiles::GetIconsAndLabelsForProfileAvatarSelector(profile_->GetPath()));
 }
 
 void ManageProfileHandler::OnProfileThemeColorsChanged(
@@ -132,52 +135,9 @@ void ManageProfileHandler::HandleGetAvailableIcons(
   CHECK_EQ(1U, args.size());
   const base::Value& callback_id = args[0];
 
-  ResolveJavascriptCallback(callback_id, base::Value(GetAvailableIcons()));
-}
-
-base::Value::List ManageProfileHandler::GetAvailableIcons() {
-  ProfileAttributesEntry* entry =
-      g_browser_process->profile_manager()
-          ->GetProfileAttributesStorage()
-          .GetProfileAttributesWithPath(profile_->GetPath());
-  // TODO(msalama): Convert to a DCHECK.
-  if (!entry) {
-    LOG(ERROR) << "No profile attributes entry found for profile with path: "
-               << profile_->GetPath();
-    return base::Value::List();
-  }
-
-  bool using_gaia = entry->IsUsingGAIAPicture();
-  size_t selected_avatar_idx =
-      using_gaia ? SIZE_MAX : entry->GetAvatarIconIndex();
-
-  // Obtain a list of the modern avatar icons.
-  base::Value::List avatars(
-      profiles::GetCustomProfileAvatarIconsAndLabels(selected_avatar_idx));
-
-  if (entry->GetSigninState() == SigninState::kNotSignedIn) {
-    ProfileThemeColors colors = entry->GetProfileThemeColors();
-    auto generic_avatar_info = profiles::GetDefaultProfileAvatarIconAndLabel(
-        colors.default_avatar_fill_color, colors.default_avatar_stroke_color,
-        selected_avatar_idx == profiles::GetPlaceholderAvatarIndex());
-    avatars.Insert(avatars.begin(),
-                   base::Value(std::move(generic_avatar_info)));
-    return avatars;
-  }
-
-  // Add the GAIA picture to the beginning of the list if it is available.
-  const gfx::Image* icon = entry->GetGAIAPicture();
-  if (icon) {
-    gfx::Image avatar_icon = profiles::GetAvatarIconForWebUI(*icon);
-    auto gaia_picture_info = profiles::GetAvatarIconAndLabelDict(
-        /*url=*/webui::GetBitmapDataUrl(avatar_icon.AsBitmap()),
-        /*label=*/
-        l10n_util::GetStringUTF16(IDS_SETTINGS_CHANGE_PICTURE_PROFILE_PHOTO),
-        /*index=*/0, using_gaia, /*is_gaia_avatar=*/true);
-    avatars.Insert(avatars.begin(), base::Value(std::move(gaia_picture_info)));
-  }
-
-  return avatars;
+  ResolveJavascriptCallback(
+      callback_id,
+      profiles::GetIconsAndLabelsForProfileAvatarSelector(profile_->GetPath()));
 }
 
 void ManageProfileHandler::HandleSetProfileIconToGaiaAvatar(
@@ -194,10 +154,8 @@ void ManageProfileHandler::HandleSetProfileIconToGaiaAvatar(
     // Only log if they changed to the GAIA photo.
     // Selection of GAIA photo as avatar is logged as part of the function
     // below.
-    ProfileMetrics::LogProfileSwitchGaia(ProfileMetrics::GAIA_OPT_IN);
+    ProfileMetrics::LogProfileAvatarSelection(SIZE_MAX);
   }
-
-  ProfileMetrics::LogProfileUpdate(profile_->GetPath());
 }
 
 void ManageProfileHandler::HandleSetProfileIconToDefaultAvatar(
@@ -206,18 +164,8 @@ void ManageProfileHandler::HandleSetProfileIconToDefaultAvatar(
   CHECK_EQ(1u, args.size());
   CHECK(args[0].is_int());
 
-  size_t new_icon_index = args[0].GetInt();
-  CHECK(profiles::IsDefaultAvatarIconIndex(new_icon_index));
-
-  PrefService* pref_service = profile_->GetPrefs();
-  pref_service->SetInteger(prefs::kProfileAvatarIndex, new_icon_index);
-  pref_service->SetBoolean(
-      prefs::kProfileUsingDefaultAvatar,
-      new_icon_index == profiles::GetPlaceholderAvatarIndex());
-  pref_service->SetBoolean(prefs::kProfileUsingGAIAAvatar, false);
-
-  ProfileMetrics::LogProfileAvatarSelection(new_icon_index);
-  ProfileMetrics::LogProfileUpdate(profile_->GetPath());
+  size_t avatar_icon_index = args[0].GetInt();
+  profiles::SetDefaultProfileAvatarIndex(profile_, avatar_icon_index);
 }
 
 void ManageProfileHandler::HandleSetProfileName(const base::Value::List& args) {
@@ -229,8 +177,6 @@ void ManageProfileHandler::HandleSetProfileName(const base::Value::List& args) {
   base::TrimWhitespace(new_profile_name, base::TRIM_ALL, &new_profile_name);
   CHECK(!new_profile_name.empty());
   profiles::UpdateProfileName(profile_, new_profile_name);
-
-  ProfileMetrics::LogProfileUpdate(profile_->GetPath());
 }
 
 void ManageProfileHandler::HandleRequestProfileShortcutStatus(

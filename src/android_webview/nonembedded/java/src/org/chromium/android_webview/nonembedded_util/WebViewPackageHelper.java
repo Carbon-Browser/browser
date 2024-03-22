@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,14 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.webkit.WebView;
 
-import androidx.annotation.VisibleForTesting;
+import org.chromium.base.ResettersForTesting;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Locale;
 
-/**
- * A helper class to get info about WebView package.
- */
+/** A helper class to get info about WebView package. */
 public final class WebViewPackageHelper {
-    private static PackageInfo sWebViewCurrentPackage;
+    private static PackageInfo sWebViewCurrentPackageForTesting;
 
     /**
      * If WebView has already been loaded into the current process this method will return the
@@ -38,8 +36,8 @@ public final class WebViewPackageHelper {
     // TODO(crbug.com/1020024) use androidx.webkit.WebViewCompat#getCurrentWebViewPackage instead.
     @SuppressWarnings("WebViewApiAvailability")
     public static PackageInfo getCurrentWebViewPackage(Context context) {
-        if (sWebViewCurrentPackage != null) {
-            return sWebViewCurrentPackage;
+        if (sWebViewCurrentPackageForTesting != null) {
+            return sWebViewCurrentPackageForTesting;
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             return WebView.getCurrentWebViewPackage();
@@ -47,7 +45,9 @@ public final class WebViewPackageHelper {
             try {
                 PackageInfo loadedWebViewPackageInfo = getLoadedWebViewPackageInfo();
                 if (loadedWebViewPackageInfo != null) return loadedWebViewPackageInfo;
-            } catch (ClassNotFoundException | IllegalAccessException | InvocationTargetException
+            } catch (ClassNotFoundException
+                    | IllegalAccessException
+                    | InvocationTargetException
                     | NoSuchMethodException e) {
                 return null;
             }
@@ -66,8 +66,10 @@ public final class WebViewPackageHelper {
     // This method is copied from androidx.webkit.WebViewCompat.
     @SuppressLint("PrivateApi")
     private static PackageInfo getLoadedWebViewPackageInfo()
-            throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException,
-                   IllegalAccessException {
+            throws ClassNotFoundException,
+                    NoSuchMethodException,
+                    InvocationTargetException,
+                    IllegalAccessException {
         Class<?> webViewFactoryClass = Class.forName("android.webkit.WebViewFactory");
         return (PackageInfo) webViewFactoryClass.getMethod("getLoadedPackageInfo").invoke(null);
     }
@@ -81,25 +83,14 @@ public final class WebViewPackageHelper {
     private static PackageInfo getNotYetLoadedWebViewPackageInfo(Context context) {
         String webviewPackageName;
         try {
-            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.M) {
-                Class<?> webViewFactoryClass = Class.forName("android.webkit.WebViewFactory");
-
-                webviewPackageName = (String) webViewFactoryClass.getMethod("getWebViewPackageName")
-                                             .invoke(null);
-            } else {
-                Class<?> webviewUpdateServiceClass =
-                        Class.forName("android.webkit.WebViewUpdateService");
-                webviewPackageName =
-                        (String) webviewUpdateServiceClass.getMethod("getCurrentWebViewPackageName")
-                                .invoke(null);
-            }
-        } catch (ClassNotFoundException e) {
-            return null;
-        } catch (IllegalAccessException e) {
-            return null;
-        } catch (InvocationTargetException e) {
-            return null;
-        } catch (NoSuchMethodException e) {
+            Class<?> webviewUpdateServiceClass =
+                    Class.forName("android.webkit.WebViewUpdateService");
+            webviewPackageName =
+                    (String)
+                            webviewUpdateServiceClass
+                                    .getMethod("getCurrentWebViewPackageName")
+                                    .invoke(null);
+        } catch (Exception e) {
             return null;
         }
         if (webviewPackageName == null) return null;
@@ -135,9 +126,7 @@ public final class WebViewPackageHelper {
         return context.getPackageName().equals(systemWebViewPackage.packageName);
     }
 
-    /**
-     * Check if the system currently has a valid WebView implementation.
-     */
+    /** Check if the system currently has a valid WebView implementation. */
     public static boolean hasValidWebViewImplementation(Context context) {
         return getCurrentWebViewPackage(context) != null;
     }
@@ -164,9 +153,9 @@ public final class WebViewPackageHelper {
      * Inject a {@link PackageInfo} as the current webview package for testing. This PackageInfo
      * will be returned by {@link #getCurrentWebViewPackage}.
      */
-    @VisibleForTesting
     public static void setCurrentWebViewPackageForTesting(PackageInfo currentWebView) {
-        sWebViewCurrentPackage = currentWebView;
+        sWebViewCurrentPackageForTesting = currentWebView;
+        ResettersForTesting.register(() -> sWebViewCurrentPackageForTesting = null);
     }
 
     // Do not instantiate this class.

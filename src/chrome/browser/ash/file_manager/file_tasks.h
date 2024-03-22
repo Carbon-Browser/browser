@@ -1,7 +1,7 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-//
+
 // This file provides utility functions for "file tasks".
 //
 // WHAT ARE FILE TASKS?
@@ -87,6 +87,10 @@
 //  3. Tasks where the browser process opens Files app to a folder or file, e.g.
 //     "open" and "select", through file_manager::util::OpenItem().
 //
+//  "Virtual Tasks" don't belong to any one app, and don't have a JS
+//  implementation. Executing a virtual task simply means running their C++
+//  |Execute()| method. See VirtualTask for more.
+//
 // See also: ui/file_manager/file_manager/foreground/js/file_tasks.js
 //
 
@@ -98,9 +102,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/common/extensions/api/file_manager_private.h"
-#include "extensions/browser/api/file_handlers/app_file_handler_util.h"
+#include "ui/gfx/native_widget_types.h"
 #include "url/gurl.h"
 
 class PrefService;
@@ -114,17 +119,17 @@ namespace storage {
 class FileSystemURL;
 }
 
-namespace file_manager {
-namespace file_tasks {
+using storage::FileSystemURL;
 
-extern const char kActionIdView[];
-extern const char kActionIdSend[];
-extern const char kActionIdSendMultiple[];
-extern const char kActionIdHandleOffice[];
-extern const char kActionIdWebDriveOfficeWord[];
-extern const char kActionIdWebDriveOfficeExcel[];
-extern const char kActionIdWebDriveOfficePowerPoint[];
-extern const char kActionIdUploadOfficeToDrive[];
+namespace user_prefs {
+class PrefRegistrySyncable;
+}
+
+namespace file_manager::file_tasks {
+
+constexpr char kActionIdView[] = "view";
+constexpr char kActionIdSend[] = "send";
+constexpr char kActionIdSendMultiple[] = "send_multiple";
 
 // Task types as explained in the comment above. Search for <task-type>.
 enum TaskType {
@@ -136,6 +141,7 @@ enum TaskType {
   TASK_TYPE_CROSTINI_APP,
   TASK_TYPE_WEB_APP,
   TASK_TYPE_PLUGIN_VM_APP,
+  TASK_TYPE_BRUSCHETTA_APP,
   // The enum values must be kept in sync with FileManagerTaskType in
   // tools/metrics/histograms/enums.xml. Since enums for histograms are
   // append-only (for keeping the number consistent across versions), new values
@@ -146,26 +152,12 @@ enum TaskType {
 TaskType StringToTaskType(const std::string& str);
 std::string TaskTypeToString(TaskType task_type);
 
-// UMA metric name that tracks the result of trying to enable the Web Drive
-// Office task.
-constexpr char kWebDriveOfficeMetricName[] =
-    "FileBrowser.OfficeFiles.WebDriveOffice";
+// The SWA actionId is prefixed with chrome://file-manager/?ACTION_ID, just the
+// sub-string compatible with the extension/legacy e.g.: "view-pdf".
+std::string ParseFilesAppActionId(const std::string& action_id);
 
-// List of UMA enum value for Web Drive Office task results. The enum values
-// must be kept in sync with WebDriveOfficeTaskResult in
-// tools/metrics/histograms/enums.xml.
-enum class WebDriveOfficeTaskResult {
-  AVAILABLE = 0,
-  FLAG_DISABLED = 1,
-  OFFLINE = 2,
-  NOT_ON_DRIVE = 3,
-  DRIVE_ERROR = 4,
-  DRIVE_METADATA_ERROR = 5,
-  INVALID_ALTERNATE_URL = 6,
-  DRIVE_ALTERNATE_URL = 7,
-  UNEXPECTED_ALTERNATE_URL = 8,
-  kMaxValue = UNEXPECTED_ALTERNATE_URL,
-};
+// Turns the provided |action_id| into chrome://file-manager/?ACTION_ID.
+std::string ToSwaActionId(base::StringPiece action_id);
 
 // Describes a task.
 // See the comment above for <app-id>, <task-type>, and <action-id>.
@@ -173,9 +165,7 @@ struct TaskDescriptor {
   TaskDescriptor(const std::string& in_app_id,
                  TaskType in_task_type,
                  const std::string& in_action_id)
-      : app_id(in_app_id),
-        task_type(in_task_type),
-        action_id(in_action_id) {
+      : app_id(in_app_id), task_type(in_task_type), action_id(in_action_id) {
     // For web apps, the action_id must be a full valid URL if it exists.
     DCHECK(task_type != TASK_TYPE_WEB_APP || action_id.empty() ||
            GURL(action_id).is_valid());
@@ -183,6 +173,7 @@ struct TaskDescriptor {
   TaskDescriptor() = default;
 
   bool operator<(const TaskDescriptor& other) const;
+  bool operator==(const TaskDescriptor& other) const;
 
   std::string app_id;
   TaskType task_type;
@@ -191,14 +182,13 @@ struct TaskDescriptor {
 
 // Describes a task with extra information such as icon URL.
 struct FullTaskDescriptor {
-  FullTaskDescriptor(
-      const TaskDescriptor& task_descriptor,
-      const std::string& task_title,
-      const extensions::api::file_manager_private::Verb task_verb,
-      const GURL& icon_url,
-      bool is_default,
-      bool is_generic_file_handler,
-      bool is_file_extension_match);
+  FullTaskDescriptor(const TaskDescriptor& task_descriptor,
+                     const std::string& task_title,
+                     const GURL& icon_url,
+                     bool is_default,
+                     bool is_generic_file_handler,
+                     bool is_file_extension_match,
+                     bool is_dlp_blocked = false);
 
   FullTaskDescriptor(const FullTaskDescriptor& other);
   FullTaskDescriptor& operator=(const FullTaskDescriptor& other);
@@ -207,9 +197,6 @@ struct FullTaskDescriptor {
   TaskDescriptor task_descriptor;
   // The user-visible title/name of the app/extension/thing to be launched.
   std::string task_title;
-  // Describes different ways the same Task might handle file/s, e.g. open with,
-  // pack with, share with, etc.
-  extensions::api::file_manager_private::Verb task_verb;
   // The icon URL for the task (ex. app icon)
   GURL icon_url;
   // The default task is stored in user preferences and will be used when the
@@ -224,25 +211,58 @@ struct FullTaskDescriptor {
   // that declares no MIME types in its manifest, but matches with the
   // file_handlers "extensions" instead.
   bool is_file_extension_match;
+  // True if this task is blocked by Data Leak Prevention (DLP).
+  bool is_dlp_blocked;
 };
 
-// Returns true if the `task` is the generic task for Office files handling.
-bool IsHandleOfficeTask(const FullTaskDescriptor& task);
+// Describes how admin policy affects the default task in a ResultingTasks.
+enum class PolicyDefaultHandlerStatus {
+  // Indicates that the default task was selected according to the policy
+  // settings.
+  kDefaultHandlerAssignedByPolicy,
+
+  // Indicates that no default task was set due to some assignment conflicts.
+  // Possible reasons are:
+  //  * The user is trying to open multiple files which have different policy
+  //  default handlers;
+  //  * The admin-specified handler was not found in the list of tasks.
+  kIncorrectAssignment
+};
+
+// Represents a set of tasks capable of handling file entries.
+struct ResultingTasks {
+  ResultingTasks();
+  ~ResultingTasks();
+
+  std::vector<FullTaskDescriptor> tasks;
+  absl::optional<PolicyDefaultHandlerStatus> policy_default_handler_status;
+};
+
+// Registers profile prefs related to file_manager.
+void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable*);
 
 // Update the default file handler for the given sets of suffixes and MIME
+// types. If |replace_existing| is false, does not rewrite existing prefs.
+void UpdateDefaultTask(Profile* profile,
+                       const TaskDescriptor& task_descriptor,
+                       const std::set<std::string>& suffixes,
+                       const std::set<std::string>& mime_types,
+                       bool replace_existing = true);
+
+// Remove the specified file handler for the given sets of suffixes and MIME
 // types.
-void UpdateDefaultTask(PrefService* pref_service,
+void RemoveDefaultTask(Profile* profile,
                        const TaskDescriptor& task_descriptor,
                        const std::set<std::string>& suffixes,
                        const std::set<std::string>& mime_types);
 
 // Returns the default task for the given |mime_type|/|suffix| combination in
 // |task_out|. If it finds a MIME type match, then it prefers that over a suffix
-// match. If a default can't be found, then it returns false.
-bool GetDefaultTaskFromPrefs(const PrefService& pref_service,
-                             const std::string& mime_type,
-                             const std::string& suffix,
-                             TaskDescriptor* task_out);
+// match. If a default can't be found, then it returns absl::nullopt.
+absl::optional<TaskDescriptor> GetDefaultTaskFromPrefs(
+    const PrefService& pref_service,
+    const std::string& mime_type,
+    const std::string& suffix);
 
 // Generates task id for the task specified by |app_id|, |task_type| and
 // |action_id|.
@@ -256,13 +276,12 @@ std::string MakeTaskID(const std::string& app_id,
 // Converts |task_descriptor| to a task ID.
 std::string TaskDescriptorToId(const TaskDescriptor& task_descriptor);
 
-// Parses the task ID and extracts app ID, task type, and action ID into
-// |task|. On failure, returns false, and the contents of |task| are
-// undefined.
+// Parses the task ID, extracts app ID, task type, action ID and returns the
+// created TaskDescriptor. On failure, returns absl::nullopt.
 //
 // See also the comment at the beginning of the file for details for how
 // "task_id" looks like.
-bool ParseTaskID(const std::string& task_id, TaskDescriptor* task);
+absl::optional<TaskDescriptor> ParseTaskID(const std::string& task_id);
 
 // The callback is used for ExecuteFileTask().
 typedef base::OnceCallback<void(
@@ -276,28 +295,30 @@ typedef base::OnceCallback<void(
 // |done| can be a null callback.
 //
 // Parameters:
-// profile    - The profile used for making this function call.
-// task       - See the comment at TaskDescriptor struct.
-// file_urls  - URLs of the target files.
-// done       - The callback which will be called on completion.
-//              The callback won't be called if the function returns
-//              false.
+// profile      - The profile used for making this function call.
+// task         - See the comment at TaskDescriptor struct.
+// file_urls    - URLs of the target files.
+// modal_parent - Certain tasks like the Office setup flow can create WebUIs,
+//                which will be made modal to this parent, if not null.
+// done         - The callback which will be called on completion.
+//                The callback won't be called if the function returns
+//                false.
 bool ExecuteFileTask(Profile* profile,
                      const TaskDescriptor& task,
                      const std::vector<storage::FileSystemURL>& file_urls,
+                     gfx::NativeWindow modal_parent,
                      FileTaskFinishedCallback done);
 
-// Finds the file browser handler tasks (app/extensions declaring
-// "file_browser_handlers" in manifest.json) that can be used with the
-// given files, appending them to the |result_list|.
-void FindFileBrowserHandlerTasks(
-    Profile* profile,
-    const std::vector<GURL>& file_urls,
-    std::vector<FullTaskDescriptor>* result_list);
+// See ash::FilesInternalsDebugJSONProvider::FunctionPointerType in
+// chrome/browser/ash/system_web_apps/apps/files_internals_debug_json_provider.h
+void GetDebugJSONForKeyForExecuteFileTask(
+    std::string_view key,
+    base::OnceCallback<void(std::pair<std::string_view, base::Value>)>
+        callback);
 
 // Callback function type for FindAllTypesOfTasks.
 typedef base::OnceCallback<void(
-    std::unique_ptr<std::vector<FullTaskDescriptor>> result)>
+    std::unique_ptr<ResultingTasks> resulting_tasks)>
     FindTasksCallback;
 
 // Finds all types (file handlers, file browser handlers) of
@@ -306,23 +327,32 @@ typedef base::OnceCallback<void(
 // If |entries| contains a Google document, only the internal tasks of the
 // Files app (i.e., tasks having the app ID of the Files app) are listed.
 // This is to avoid listing normal file handler and file browser handler tasks,
-// which can handle only normal files.
+// which can handle only normal files. If passed, |dlp_source_urls| should have
+// the same length as |entries| and each element should represent the URL from
+// which the corresponding entry was downloaded from, and are used to check DLP
+// restrictions on the |entries|.
 void FindAllTypesOfTasks(Profile* profile,
                          const std::vector<extensions::EntryInfo>& entries,
                          const std::vector<GURL>& file_urls,
+                         const std::vector<std::string>& dlp_source_urls,
                          FindTasksCallback callback);
 
-// Chooses the default task in |tasks| and sets it as default, if the default
-// task is found (i.e. the default task may not exist in |tasks|). No tasks
-// should be set as default before calling this function.
-void ChooseAndSetDefaultTask(const PrefService& pref_service,
+// Chooses the default task in |resulting_tasks| and sets it as default, if the
+// default task is found (i.e. the default task may not exist in
+// |resulting_tasks|). No tasks should be set as default before calling this
+// function.
+void ChooseAndSetDefaultTask(Profile* profile,
                              const std::vector<extensions::EntryInfo>& entries,
-                             std::vector<FullTaskDescriptor>* tasks);
+                             ResultingTasks* resulting_tasks);
 
 // Returns whether |path| is an HTML file according to its extension.
 bool IsHtmlFile(const base::FilePath& path);
 
-}  // namespace file_tasks
-}  // namespace file_manager
+// Whether we have an explicit user preference stored for the file handler for
+// this extension. |extension| should contain the leading '.'.
+bool HasExplicitDefaultFileHandler(Profile* profile,
+                                   const std::string& extension);
+
+}  // namespace file_manager::file_tasks
 
 #endif  // CHROME_BROWSER_ASH_FILE_MANAGER_FILE_TASKS_H_

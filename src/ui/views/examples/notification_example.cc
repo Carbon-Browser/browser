@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/image/image.h"
+#include "ui/gfx/image/image_unittest_util.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
@@ -32,9 +33,8 @@ namespace {
 
 gfx::Image CreateTestImage(const gfx::Size& size,
                            const ui::ColorProvider* provider) {
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(size.width(), size.height());
-  bitmap.eraseColor(SK_ColorTRANSPARENT);
+  SkBitmap bitmap =
+      gfx::test::CreateBitmap(size.width(), size.height(), SK_ColorTRANSPARENT);
   SkCanvas canvas(bitmap);
   SkScalar radius = std::min(size.width(), size.height()) * SK_ScalarHalf;
   SkPaint paint;
@@ -72,11 +72,12 @@ void NotificationExample::OnViewAddedToWidget(View* observed_view) {
   message_center::RichNotificationData data;
   data.settings_button_handler = message_center::SettingsButtonHandler::INLINE;
   message_center::Notification notification(
-      message_center::NOTIFICATION_TYPE_BASE_FORMAT, "id", u"Title", u"Message",
+      message_center::NOTIFICATION_TYPE_SIMPLE, "id", u"Title", u"Message",
       ui::ImageModel::FromImage(CreateTestImage(gfx::Size(80, 80), cp)),
       std::u16string(), GURL(),
       message_center::NotifierId(
-          GURL(), l10n_util::GetStringUTF16(IDS_NOTIFICATION_TITLE_LABEL)),
+          GURL(), l10n_util::GetStringUTF16(IDS_NOTIFICATION_TITLE_LABEL),
+          /*web_app_id=*/absl::nullopt),
       data, base::MakeRefCounted<message_center::NotificationDelegate>());
   notification.set_small_image(CreateTestImage(gfx::Size(16, 16), cp));
   notification.set_image(CreateTestImage(gfx::Size(320, 240), cp));

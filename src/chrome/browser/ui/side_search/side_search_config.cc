@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,9 @@ void ApplyDSEConfiguration(Profile* profile, SideSearchConfig& config) {
       [](Profile* profile, const GURL& url) {
         const auto* template_url_service =
             TemplateURLServiceFactory::GetForProfile(profile);
-        return template_url_service
+
+        return template_url_service &&
+               template_url_service
                    ->IsSideSearchSupportedForDefaultSearchProvider() &&
                template_url_service
                    ->IsSearchResultsPageFromDefaultSearchProvider(url);
@@ -49,7 +51,8 @@ void ApplyDSEConfiguration(Profile* profile, SideSearchConfig& config) {
       [](Profile* profile, const GURL& url) {
         const auto* template_url_service =
             TemplateURLServiceFactory::GetForProfile(profile);
-        return template_url_service
+        return template_url_service &&
+               template_url_service
                    ->IsSideSearchSupportedForDefaultSearchProvider() &&
                !template_url_service
                     ->IsSearchResultsPageFromDefaultSearchProvider(url) &&
@@ -102,13 +105,6 @@ void ApplyGoogleSearchConfiguration(SideSearchConfig& config) {
 }  // namespace
 
 SideSearchConfig::SideSearchConfig(Profile* profile) : profile_(profile) {
-  // Only allow ChromeOS to toggle between DSE and non-DSE configurations.
-#if BUILDFLAG(IS_CHROMEOS)
-  if (!side_search::IsDSESupportEnabled(profile_)) {
-    ApplyGoogleSearchConfiguration(*this);
-    return;
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS)
   // `template_url_service` may be null in tests.
   if (auto* template_url_service =
           TemplateURLServiceFactory::GetForProfile(profile_)) {
@@ -136,6 +132,9 @@ SideSearchConfig* SideSearchConfig::Get(content::BrowserContext* context) {
 }
 
 void SideSearchConfig::OnTemplateURLServiceChanged() {
+  if (skip_on_template_url_changed_)
+    return;
+
   const auto* default_template_url =
       TemplateURLServiceFactory::GetForProfile(profile_)
           ->GetDefaultSearchProvider();
@@ -172,8 +171,7 @@ void SideSearchConfig::SetShouldNavigateInSidePanelCallback(
 }
 
 bool SideSearchConfig::CanShowSidePanelForURL(const GURL& url) {
-  return is_side_panel_srp_available_ &&
-         can_show_side_panel_for_url_callback_.Run(url);
+  return can_show_side_panel_for_url_callback_.Run(url);
 }
 
 void SideSearchConfig::SetCanShowSidePanelForURLCallback(
@@ -199,16 +197,8 @@ void SideSearchConfig::RemoveObserver(Observer* observer) {
 }
 
 void SideSearchConfig::ResetStateAndNotifyConfigChanged() {
-  // Reset the availabiliy bit before propagating notifications.
-  is_side_panel_srp_available_ = false;
-  page_action_label_shown_count_ = 0;
-
   for (auto& observer : observers_)
     observer.OnSideSearchConfigChanged();
-}
-
-void SideSearchConfig::DidShowPageActionLabel() {
-  ++page_action_label_shown_count_;
 }
 
 void SideSearchConfig::ApplyGoogleSearchConfigurationForTesting() {

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include "base/lazy_instance.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/lap_timer.h"
 #include "cc/raster/raster_buffer.h"
@@ -273,7 +272,7 @@ class TileManagerPerfTest : public TestLayerTreeHostBase {
 
       GlobalStateThatImpactsTilePriority global_state(GlobalStateForTest());
       tile_manager()->PrepareTiles(global_state);
-      tile_manager()->CheckForCompletedTasks();
+      tile_manager()->PrepareToDraw();
       timer_.NextLap();
     } while (!timer_.HasTimeLimitExpired());
 

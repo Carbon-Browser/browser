@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/ozone/common/egl_util.h"
@@ -19,9 +19,9 @@ constexpr size_t kBytesPerPixelBGRA = 4;
 
 }  // namespace
 
-GLSurfaceEglReadback::GLSurfaceEglReadback()
-    : PbufferGLSurfaceEGL(GLSurfaceEGL::GetGLDisplayEGL(), gfx::Size(1, 1)),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+GLSurfaceEglReadback::GLSurfaceEglReadback(gl::GLDisplayEGL* display)
+    : PbufferGLSurfaceEGL(display, gfx::Size(1, 1)),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 bool GLSurfaceEglReadback::Resize(const gfx::Size& size,
                                   float scale_factor,
@@ -47,12 +47,8 @@ bool GLSurfaceEglReadback::Resize(const gfx::Size& size,
   return true;
 }
 
-bool GLSurfaceEglReadback::IsOffscreen() {
-  return false;
-}
-
-gfx::SwapResult GLSurfaceEglReadback::SwapBuffers(
-    PresentationCallback callback) {
+gfx::SwapResult GLSurfaceEglReadback::SwapBuffers(PresentationCallback callback,
+                                                  gfx::FrameData data) {
   gfx::SwapResult swap_result = gfx::SwapResult::SWAP_FAILED;
   gfx::PresentationFeedback feedback;
 

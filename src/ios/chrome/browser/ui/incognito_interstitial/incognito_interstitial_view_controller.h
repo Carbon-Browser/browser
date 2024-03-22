@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,9 @@
 
 // Some URLs in the controlled view can be loaded.
 @property(nonatomic, weak) id<NewTabPageURLLoaderDelegate> URLLoaderDelegate;
+
+// URL text to display.
+@property(nonatomic, copy) NSString* URLText;
 
 @end
 

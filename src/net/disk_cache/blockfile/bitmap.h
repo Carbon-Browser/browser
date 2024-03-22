@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 #include <string.h>
+
+#include <memory>
 
 #include "base/memory/raw_ptr.h"
 #include "net/base/net_export.h"
@@ -132,7 +134,7 @@ class NET_EXPORT_PRIVATE Bitmap {
   int num_bits_ = 0;    // The upper bound of the bitmap.
   int array_size_ = 0;  // The physical size (in uint32s) of the bitmap.
   std::unique_ptr<uint32_t[]> allocated_map_;  // The allocated data.
-  raw_ptr<uint32_t> map_ = nullptr;            // The bitmap.
+  raw_ptr<uint32_t, AllowPtrArithmetic> map_ = nullptr;  // The bitmap.
 };
 
 }  // namespace disk_cache

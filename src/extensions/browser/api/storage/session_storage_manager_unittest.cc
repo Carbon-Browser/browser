@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,23 +42,23 @@ class SessionStorageManagerUnittest : public ExtensionsTest {
   SessionStorageManagerUnittest()
       : value_int_(123),
         value_string_("value"),
-        value_list_(base::Value::Type::LIST),
-        value_dict_(base::Value::Type::DICTIONARY) {
-    value_list_.Append(1);
-    value_list_.Append(2);
-    value_dict_.SetIntKey("int", 123);
-    value_dict_.SetStringKey("string", "abc");
+        value_list_(base::Value::Type::LIST) {
+    value_list_.GetList().Append(1);
+    value_list_.GetList().Append(2);
+    value_dict_.Set("int", 123);
+    value_dict_.Set("string", "abc");
   }
 
  protected:
   // ExtensionsTest:
   void SetUp() override;
+  void TearDown() override;
 
   // Values with different types.
   base::Value value_int_;
   base::Value value_string_;
   base::Value value_list_;
-  base::Value value_dict_;
+  base::Value::Dict value_dict_;
 
   // Session storage manager being tested.
   raw_ptr<SessionStorageManager> manager_;
@@ -70,6 +70,11 @@ void SessionStorageManagerUnittest::SetUp() {
       SessionStorageManager::GetFactory()->SetTestingFactoryAndUse(
           browser_context(),
           base::BindRepeating(&SetTestingSessionStorageManager)));
+}
+
+void SessionStorageManagerUnittest::TearDown() {
+  manager_ = nullptr;
+  ExtensionsTest::TearDown();
 }
 
 TEST_F(SessionStorageManagerUnittest, SetGetAndRemoveOneExtensionSuccessful) {

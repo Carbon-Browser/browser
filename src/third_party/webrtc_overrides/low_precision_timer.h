@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_WEBRTC_OVERRIDES_LOW_PRECISION_TIMER_H_
 #define THIRD_PARTY_BLINK_WEBRTC_OVERRIDES_LOW_PRECISION_TIMER_H_
 
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"

@@ -1,6 +1,6 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be found
-// in the LICENSE file.
+// Copyright 2020 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_STREAMS_READABLE_STREAM_CONTROLLER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_STREAMS_READABLE_STREAM_CONTROLLER_H_
@@ -9,9 +9,9 @@
 #include "v8/include/v8.h"
 
 namespace blink {
-
+class ExceptionState;
+class ReadRequest;
 class ScriptState;
-class StreamPromiseResolver;
 
 class ReadableStreamController : public ScriptWrappable {
  public:
@@ -23,7 +23,7 @@ class ReadableStreamController : public ScriptWrappable {
                                              v8::Local<v8::Value> reason) = 0;
 
   // https://streams.spec.whatwg.org/#abstract-opdef-readablestreamcontroller-pullsteps
-  virtual StreamPromiseResolver* PullSteps(ScriptState*) = 0;
+  virtual void PullSteps(ScriptState*, ReadRequest*, ExceptionState&) = 0;
 
   // https://streams.spec.whatwg.org/#abstract-opdef-readablestreamcontroller-releasesteps
   virtual void ReleaseSteps() = 0;

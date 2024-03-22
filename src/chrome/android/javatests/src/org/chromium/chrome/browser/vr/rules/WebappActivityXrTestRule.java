@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,21 +11,23 @@ import org.chromium.chrome.browser.vr.rules.XrActivityRestriction.SupportedActiv
 import org.chromium.chrome.browser.webapps.WebappActivityTestRule;
 
 /**
- * XR extension of WebappActivityTestRule. Applies WebappActivityTestRule then opens
- * up a WebappActivity to a blank page.
+ * XR extension of WebappActivityTestRule. Applies WebappActivityTestRule then opens up a
+ * WebappActivity to a blank page.
  */
 public class WebappActivityXrTestRule extends WebappActivityTestRule implements XrTestRule {
     private boolean mTrackerDirty;
 
     @Override
     public Statement apply(final Statement base, final Description desc) {
-        return super.apply(new Statement() {
-            @Override
-            public void evaluate() throws Throwable {
-                startWebappActivity();
-                base.evaluate();
-            }
-        }, desc);
+        return super.apply(
+                new Statement() {
+                    @Override
+                    public void evaluate() throws Throwable {
+                        startWebappActivity();
+                        base.evaluate();
+                    }
+                },
+                desc);
     }
 
     @Override

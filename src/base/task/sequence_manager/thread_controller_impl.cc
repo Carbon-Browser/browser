@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
-#include "base/task/sequence_manager/lazy_now.h"
+#include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/task/sequence_manager/sequenced_task_source.h"
 #include "base/trace_event/base_tracing.h"
@@ -76,12 +76,6 @@ void ThreadControllerImpl::SetSequencedTaskSource(
   DCHECK(sequence);
   DCHECK(!sequence_);
   sequence_ = sequence;
-}
-
-void ThreadControllerImpl::SetTimerSlack(TimerSlack timer_slack) {
-  if (!funneled_sequence_manager_)
-    return;
-  funneled_sequence_manager_->SetTimerSlack(timer_slack);
 }
 
 void ThreadControllerImpl::ScheduleWork() {
@@ -161,10 +155,8 @@ void ThreadControllerImpl::BindToCurrentThread(
   NOTREACHED();
 }
 
-void ThreadControllerImpl::WillQueueTask(PendingTask* pending_task,
-                                         const char* task_queue_name) {
-  task_annotator_.WillQueueTask("SequenceManager PostTask", pending_task,
-                                task_queue_name);
+void ThreadControllerImpl::WillQueueTask(PendingTask* pending_task) {
+  task_annotator_.WillQueueTask("SequenceManager PostTask", pending_task);
 }
 
 void ThreadControllerImpl::DoWork(WorkType work_type) {
@@ -188,6 +180,7 @@ void ThreadControllerImpl::DoWork(WorkType work_type) {
     // tracing. OnApplicationTaskSelected() assumes this ordering as well.
     DCHECK_GT(run_level_tracker_.num_run_levels(), 0U);
     run_level_tracker_.OnWorkStarted(lazy_now_select_task);
+    int run_depth = static_cast<int>(run_level_tracker_.num_run_levels());
 
     absl::optional<SequencedTaskSource::SelectedTask> selected_task =
         sequence_->SelectNextTask(lazy_now_select_task);
@@ -198,7 +191,7 @@ void ThreadControllerImpl::DoWork(WorkType work_type) {
             : TimeTicks(),
         lazy_now_task_selected);
     if (!selected_task) {
-      run_level_tracker_.OnWorkEnded(lazy_now_task_selected);
+      run_level_tracker_.OnWorkEnded(lazy_now_task_selected, run_depth);
       break;
     }
 
@@ -210,12 +203,14 @@ void ThreadControllerImpl::DoWork(WorkType work_type) {
 
       // Note: all arguments after task are just passed to a TRACE_EVENT for
       // logging so lambda captures are safe as lambda is executed inline.
+      SequencedTaskSource* source = sequence_;
       task_annotator_.RunTask(
           "ThreadControllerImpl::RunTask", selected_task->task,
-          [&selected_task](perfetto::EventContext& ctx) {
+          [&selected_task, &source](perfetto::EventContext& ctx) {
             if (selected_task->task_execution_trace_logger)
               selected_task->task_execution_trace_logger.Run(
                   ctx, selected_task->task);
+            source->MaybeEmitTaskDetails(ctx, *selected_task);
           });
       if (!weak_ptr)
         return;
@@ -224,7 +219,7 @@ void ThreadControllerImpl::DoWork(WorkType work_type) {
       // after it.
       LazyNow lazy_now_after_run_task(time_source_);
       sequence_->DidRunTask(lazy_now_after_run_task);
-      run_level_tracker_.OnWorkEnded(lazy_now_after_run_task);
+      run_level_tracker_.OnWorkEnded(lazy_now_after_run_task, run_depth);
 
       // If DidRunTask() read the clock (lazy_now_after_run_task.has_value()),
       // store it in `recent_time` so it can be reused by SelectNextTask() at
@@ -255,7 +250,6 @@ void ThreadControllerImpl::DoWork(WorkType work_type) {
   work_deduplicator_.WillCheckForMoreWork();
 
   LazyNow lazy_now_after_work(time_source_);
-  sequence_->RemoveAllCanceledDelayedTasksFromFront(&lazy_now_after_work);
   absl::optional<WakeUp> next_wake_up =
       sequence_->GetPendingWakeUp(&lazy_now_after_work);
   // The OnSystemIdle callback allows the TimeDomains to advance virtual time

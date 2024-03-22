@@ -1,20 +1,24 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {NetworkTestRunner} from 'network_test_runner';
+
+import * as Network from 'devtools/panels/network/network.js';
+
 (async function() {
   TestRunner.addResult(`Tests doamin filter.\n`);
-  await TestRunner.loadTestModule('network_test_runner');
   await TestRunner.showPanel('network');
 
   function checkSubdomains(domain) {
     TestRunner.addResult('');
     TestRunner.addResult('Domain: ' + domain);
-    TestRunner.addResult('Subdomains: ' + JSON.stringify(Network.NetworkLogView.subdomains(domain)));
+    TestRunner.addResult('Subdomains: ' + JSON.stringify(Network.NetworkLogView.NetworkLogView.subdomains(domain)));
   }
 
   function checkFilter(value, domains) {
-    var filter = Network.NetworkLogView.createRequestDomainFilter(value);
+    var filter = Network.NetworkLogView.NetworkLogView.createRequestDomainFilter(value);
     TestRunner.addResult('');
     TestRunner.addResult('Filter: ' + value);
     for (var i = 0; i < domains.length; ++i)

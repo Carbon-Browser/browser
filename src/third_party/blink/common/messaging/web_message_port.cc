@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/public/common/messaging/web_message_port.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/blink/public/common/messaging/message_port_channel.h"
 #include "third_party/blink/public/common/messaging/string_message_codec.h"
 #include "third_party/blink/public/common/messaging/transferable_message.h"
@@ -124,6 +125,15 @@ MessagePortDescriptor WebMessagePort::PassPort() {
   return port;
 }
 
+const base::UnguessableToken& WebMessagePort::GetEmbedderAgentClusterID() {
+  // This is creating a single agent cluster ID that would represent the
+  // embedder in MessagePort IPCs. While we could create a new ID on each call,
+  // providing a consistent one saves RNG work and could be useful in the future
+  // if we'd want to consistently identify messages from the embedder.
+  static const auto agent_cluster_id = base::UnguessableToken::Create();
+  return agent_cluster_id;
+}
+
 WebMessagePort::WebMessagePort(MessagePortDescriptor&& port)
     : port_(std::move(port)), is_closed_(false), is_transferable_(true) {
   DCHECK(port_.IsValid());
@@ -153,9 +163,13 @@ bool WebMessagePort::PostMessage(Message&& message) {
   // TODO(chrisha): Finally kill off MessagePortChannel, once
   // MessagePortDescriptor more thoroughly plays that role.
   blink::TransferableMessage transferable_message =
-      blink::EncodeWebMessagePayload(WebMessagePayload(message.data));
+      blink::EncodeWebMessagePayload(std::move(message.data));
   transferable_message.ports =
       blink::MessagePortChannel::CreateFromHandles(std::move(ports));
+
+  // Get the embedder assigned cluster ID, as these messages originate from the
+  // embedder.
+  transferable_message.sender_agent_cluster_id = GetEmbedderAgentClusterID();
 
   // TODO(chrisha): Notify the instrumentation delegate of a message being sent!
 
@@ -222,11 +236,11 @@ bool WebMessagePort::Accept(mojo::Message* mojo_message) {
           std::move(*mojo_message), &transferable_message)) {
     return false;
   }
-
+  auto ports = std::move(transferable_message.ports);
   // Decode the string portion of the message.
   Message message;
   absl::optional<WebMessagePayload> optional_payload =
-      blink::DecodeToWebMessagePayload(transferable_message);
+      blink::DecodeToWebMessagePayload(std::move(transferable_message));
   if (!optional_payload)
     return false;
   auto& payload = optional_payload.value();
@@ -238,8 +252,7 @@ bool WebMessagePort::Accept(mojo::Message* mojo_message) {
 
   // Convert raw handles to MessagePorts.
   // TODO(chrisha): Kill off MessagePortChannel entirely!
-  auto handles =
-      blink::MessagePortChannel::ReleaseHandles(transferable_message.ports);
+  auto handles = blink::MessagePortChannel::ReleaseHandles(ports);
   for (auto& handle : handles) {
     message.ports.emplace_back(WebMessagePort(std::move(handle)));
   }

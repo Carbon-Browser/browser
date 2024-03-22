@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,9 +42,12 @@ class BrowserAccessibilityAuraLinux : public BrowserAccessibility {
 
   ui::TextAttributeList ComputeTextAttributes() const override;
 
+  void SetIsPrimaryWebContentsForWindow() override;
+  bool IsPrimaryWebContentsForWindow() const override;
+
  private:
-  // TODO(nektar): Rename to platform_node_ to avoid confusion with ui::AXNode.
-  raw_ptr<ui::AXPlatformNodeAuraLinux, DanglingUntriaged> node_;
+  // TODO: use a unique_ptr since the node is owned by this class.
+  raw_ptr<ui::AXPlatformNodeAuraLinux> platform_node_;
 };
 
 CONTENT_EXPORT BrowserAccessibilityAuraLinux* ToBrowserAccessibilityAuraLinux(

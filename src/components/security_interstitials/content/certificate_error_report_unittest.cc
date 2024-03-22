@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@
 #include "components/security_interstitials/content/cert_logger.pb.h"
 #include "components/version_info/version_info.h"
 #include "net/cert/cert_status_flags.h"
+#include "net/cert/cert_verify_result.h"
 #include "net/net_buildflags.h"
 #include "net/ssl/ssl_info.h"
 #include "net/test/cert_test_util.h"
@@ -346,165 +347,5 @@ TEST(ErrorReportTest, AndroidAIAFetchingFeatureEnabled) {
       parsed.features_info().android_aia_fetching_status());
 }
 #endif
-
-#if BUILDFLAG(TRIAL_COMPARISON_CERT_VERIFIER_SUPPORTED)
-#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
-const int64_t kTestChromeRootVersion = 24601;
-#endif
-
-TEST(ErrorReportTest, TrialDebugInfo) {
-  scoped_refptr<net::X509Certificate> unverified_cert =
-      net::ImportCertFromFile(net::GetTestCertsDirectory(), "ok_cert.pem");
-  scoped_refptr<net::X509Certificate> chain1 =
-      net::CreateCertificateChainFromFile(net::GetTestCertsDirectory(),
-                                          "x509_verify_results.chain.pem",
-                                          net::X509Certificate::FORMAT_AUTO);
-  scoped_refptr<net::X509Certificate> chain2 =
-      net::CreateCertificateChainFromFile(net::GetTestCertsDirectory(),
-                                          "multi-root-chain1.pem",
-                                          net::X509Certificate::FORMAT_AUTO);
-  net::CertVerifyResult primary_result;
-  primary_result.verified_cert = chain1;
-  net::CertVerifyResult trial_result;
-  trial_result.verified_cert = chain2;
-
-  cert_verifier::mojom::CertVerifierDebugInfoPtr debug_info =
-      cert_verifier::mojom::CertVerifierDebugInfo::New();
-#if BUILDFLAG(IS_APPLE)
-  debug_info->mac_platform_debug_info =
-      cert_verifier::mojom::MacPlatformVerifierDebugInfo::New();
-  debug_info->mac_platform_debug_info->trust_result = 1;
-  debug_info->mac_platform_debug_info->result_code = 20;
-  cert_verifier::mojom::MacCertEvidenceInfoPtr info =
-      cert_verifier::mojom::MacCertEvidenceInfo::New();
-  info->status_bits = 30;
-  info->status_codes = {40, 41};
-  debug_info->mac_platform_debug_info->status_chain.push_back(std::move(info));
-  info = cert_verifier::mojom::MacCertEvidenceInfo::New();
-  info->status_bits = 50;
-  info->status_codes = {};
-  debug_info->mac_platform_debug_info->status_chain.push_back(std::move(info));
-  info = cert_verifier::mojom::MacCertEvidenceInfo::New();
-  info->status_bits = 70;
-  info->status_codes = {80, 81, 82};
-  debug_info->mac_platform_debug_info->status_chain.push_back(std::move(info));
-
-  debug_info->mac_combined_trust_debug_info =
-      net::TrustStoreMac::TRUST_SETTINGS_DICT_CONTAINS_APPLICATION |
-      net::TrustStoreMac::TRUST_SETTINGS_DICT_CONTAINS_RESULT;
-  debug_info->mac_trust_impl =
-      cert_verifier::mojom::CertVerifierDebugInfo::MacTrustImplType::kLruCache;
-#endif
-#if BUILDFLAG(IS_WIN)
-  debug_info->win_platform_debug_info =
-      cert_verifier::mojom::WinPlatformVerifierDebugInfo::New();
-  debug_info->win_platform_debug_info->authroot_this_update =
-      base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(8675309));
-  debug_info->win_platform_debug_info->authroot_sequence_number = {
-      'J', 'E', 'N', 'N', 'Y'};
-#endif
-#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
-  debug_info->chrome_root_store_debug_info =
-      cert_verifier::mojom::ChromeRootStoreDebugInfo::New();
-  debug_info->chrome_root_store_debug_info->chrome_root_store_version =
-      kTestChromeRootVersion;
-#endif
-
-  base::Time time = base::Time::Now();
-  debug_info->trial_verification_time = time;
-  debug_info->trial_der_verification_time = "it's just a string";
-
-  CertificateErrorReport report("example.com", *unverified_cert, false, false,
-                                false, false, "ocsp", "sct", primary_result,
-                                trial_result, std::move(debug_info));
-  std::string serialized_report;
-  ASSERT_TRUE(report.Serialize(&serialized_report));
-  chrome_browser_ssl::CertLoggerRequest parsed;
-  ASSERT_TRUE(parsed.ParseFromString(serialized_report));
-  ASSERT_TRUE(parsed.has_features_info());
-  ASSERT_TRUE(parsed.features_info().has_trial_verification_info());
-  const chrome_browser_ssl::TrialVerificationInfo& trial_info =
-      parsed.features_info().trial_verification_info();
-  ASSERT_TRUE(trial_info.has_stapled_ocsp());
-  EXPECT_EQ("ocsp", trial_info.stapled_ocsp());
-  ASSERT_TRUE(trial_info.has_sct_list());
-  EXPECT_EQ("sct", trial_info.sct_list());
-
-  VerifyDeserializedReportSystemInfo(parsed);
-
-#if BUILDFLAG(IS_APPLE)
-  ASSERT_TRUE(trial_info.has_mac_platform_debug_info());
-  EXPECT_EQ(1U, trial_info.mac_platform_debug_info().trust_result());
-  EXPECT_EQ(20, trial_info.mac_platform_debug_info().result_code());
-  ASSERT_EQ(3, trial_info.mac_platform_debug_info().status_chain_size());
-  EXPECT_EQ(30U,
-            trial_info.mac_platform_debug_info().status_chain(0).status_bits());
-  ASSERT_EQ(
-      2,
-      trial_info.mac_platform_debug_info().status_chain(0).status_codes_size());
-  EXPECT_EQ(
-      40, trial_info.mac_platform_debug_info().status_chain(0).status_codes(0));
-  EXPECT_EQ(
-      41, trial_info.mac_platform_debug_info().status_chain(0).status_codes(1));
-  EXPECT_EQ(50U,
-            trial_info.mac_platform_debug_info().status_chain(1).status_bits());
-  EXPECT_EQ(
-      0,
-      trial_info.mac_platform_debug_info().status_chain(1).status_codes_size());
-  EXPECT_EQ(70U,
-            trial_info.mac_platform_debug_info().status_chain(2).status_bits());
-  ASSERT_EQ(
-      3,
-      trial_info.mac_platform_debug_info().status_chain(2).status_codes_size());
-  EXPECT_EQ(
-      80, trial_info.mac_platform_debug_info().status_chain(2).status_codes(0));
-  EXPECT_EQ(
-      81, trial_info.mac_platform_debug_info().status_chain(2).status_codes(1));
-  EXPECT_EQ(
-      82, trial_info.mac_platform_debug_info().status_chain(2).status_codes(2));
-
-  ASSERT_EQ(2, trial_info.mac_combined_trust_debug_info_size());
-  EXPECT_EQ(chrome_browser_ssl::TrialVerificationInfo::
-                MAC_TRUST_SETTINGS_DICT_CONTAINS_APPLICATION,
-            trial_info.mac_combined_trust_debug_info()[0]);
-  EXPECT_EQ(chrome_browser_ssl::TrialVerificationInfo::
-                MAC_TRUST_SETTINGS_DICT_CONTAINS_RESULT,
-            trial_info.mac_combined_trust_debug_info()[1]);
-  EXPECT_TRUE(trial_info.has_mac_trust_impl());
-  EXPECT_EQ(chrome_browser_ssl::TrialVerificationInfo::MAC_TRUST_IMPL_MRU_CACHE,
-            trial_info.mac_trust_impl());
-#else
-  EXPECT_FALSE(trial_info.has_mac_platform_debug_info());
-  EXPECT_EQ(0, trial_info.mac_combined_trust_debug_info_size());
-  EXPECT_FALSE(trial_info.has_mac_trust_impl());
-#endif
-
-#if BUILDFLAG(IS_WIN)
-  ASSERT_TRUE(trial_info.has_win_platform_debug_info());
-  EXPECT_EQ(
-      8675309,
-      trial_info.win_platform_debug_info().authroot_this_update_time_usec());
-  EXPECT_EQ("JENNY",
-            trial_info.win_platform_debug_info().authroot_sequence_number());
-#else
-  EXPECT_FALSE(trial_info.has_win_platform_debug_info());
-#endif
-
-#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
-  ASSERT_TRUE(trial_info.has_chrome_root_store_debug_info());
-  EXPECT_EQ(
-      kTestChromeRootVersion,
-      trial_info.chrome_root_store_debug_info().chrome_root_store_version());
-#else
-  EXPECT_FALSE(trial_info.has_chrome_root_store_debug_info());
-#endif
-
-  ASSERT_TRUE(trial_info.has_trial_verification_time_usec());
-  EXPECT_EQ(time.ToDeltaSinceWindowsEpoch().InMicroseconds(),
-            trial_info.trial_verification_time_usec());
-  ASSERT_TRUE(trial_info.has_trial_der_verification_time());
-  EXPECT_EQ("it's just a string", trial_info.trial_der_verification_time());
-}
-#endif  // BUILDFLAG(TRIAL_COMPARISON_CERT_VERIFIER_SUPPORTED)
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,18 +26,20 @@ class ReportingDelegateFactoryAndroid : public ReportingDelegateFactory {
 
   // ReportingDelegateFactory implementation.
   std::unique_ptr<BrowserReportGenerator::Delegate>
-  GetBrowserReportGeneratorDelegate() override;
+  GetBrowserReportGeneratorDelegate() const override;
   std::unique_ptr<ProfileReportGenerator::Delegate>
-  GetProfileReportGeneratorDelegate() override;
+  GetProfileReportGeneratorDelegate() const override;
   std::unique_ptr<ReportGenerator::Delegate> GetReportGeneratorDelegate()
-      override;
+      const override;
   std::unique_ptr<ReportScheduler::Delegate> GetReportSchedulerDelegate()
-      override;
+      const override;
   std::unique_ptr<RealTimeReportGenerator::Delegate>
-  GetRealTimeReportGeneratorDelegate() override;
+  GetRealTimeReportGeneratorDelegate() const override;
+  std::unique_ptr<RealTimeReportController::Delegate>
+  GetRealTimeReportControllerDelegate() const override;
 
   std::unique_ptr<ReportScheduler::Delegate> GetReportSchedulerDelegate(
-      Profile* profile);
+      Profile* profile) const;
 };
 
 }  // namespace enterprise_reporting

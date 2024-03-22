@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,11 +22,11 @@ InputDeviceCapabilities* InputDeviceCapabilitiesConstants::FiresTouchEvents(
   if (fires_touch) {
     if (!fires_touch_events_)
       fires_touch_events_ = InputDeviceCapabilities::Create(true);
-    return fires_touch_events_;
+    return fires_touch_events_.Get();
   }
   if (!doesnt_fire_touch_events_)
     doesnt_fire_touch_events_ = InputDeviceCapabilities::Create(false);
-  return doesnt_fire_touch_events_;
+  return doesnt_fire_touch_events_.Get();
 }
 
 }  // namespace blink

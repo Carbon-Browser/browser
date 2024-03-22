@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "components/signin/public/identity_manager/primary_account_mutator.h"
 
 #if BUILDFLAG(IS_ANDROID)
+#include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "components/signin/public/android/jni_headers/IdentityMutator_jni.h"
 #include "components/signin/public/identity_manager/account_info.h"
@@ -23,10 +24,11 @@ namespace signin {
 JniIdentityMutator::JniIdentityMutator(IdentityMutator* identity_mutator)
     : identity_mutator_(identity_mutator) {}
 
-bool JniIdentityMutator::SetPrimaryAccount(
+jint JniIdentityMutator::SetPrimaryAccount(
     JNIEnv* env,
     const base::android::JavaParamRef<jobject>& primary_account_id,
-    jint j_consent_level) {
+    jint j_consent_level,
+    jint j_access_point) {
   PrimaryAccountMutator* primary_account_mutator =
       identity_mutator_->GetPrimaryAccountMutator();
   DCHECK(primary_account_mutator);
@@ -34,8 +36,9 @@ bool JniIdentityMutator::SetPrimaryAccount(
   PrimaryAccountMutator::PrimaryAccountError error =
       primary_account_mutator->SetPrimaryAccount(
           ConvertFromJavaCoreAccountId(env, primary_account_id),
-          static_cast<ConsentLevel>(j_consent_level));
-  return error == PrimaryAccountMutator::PrimaryAccountError::kNoError;
+          static_cast<ConsentLevel>(j_consent_level),
+          static_cast<signin_metrics::AccessPoint>(j_access_point));
+  return static_cast<jint>(error);
 }
 
 bool JniIdentityMutator::ClearPrimaryAccount(JNIEnv* env,
@@ -73,6 +76,35 @@ void JniIdentityMutator::ReloadAllAccountsFromSystemWithPrimaryAccount(
   }
   device_accounts_synchronizer->ReloadAllAccountsFromSystemWithPrimaryAccount(
       primary_account_id);
+}
+
+void JniIdentityMutator::SeedAccountsThenReloadAllAccountsWithPrimaryAccount(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobjectArray>& j_core_account_infos,
+    const base::android::JavaParamRef<jobject>& j_primary_account_id) {
+  std::vector<CoreAccountInfo> core_account_infos;
+  for (size_t i = 0;
+       i < base::android::SafeGetArrayLength(env, j_core_account_infos); i++) {
+    base::android::ScopedJavaLocalRef<jobject> core_account_info_java(
+        env, env->GetObjectArrayElement(j_core_account_infos.obj(), i));
+    core_account_infos.push_back(
+        ConvertFromJavaCoreAccountInfo(env, core_account_info_java));
+  }
+
+  absl::optional<CoreAccountId> primary_account_id;
+  if (j_primary_account_id) {
+    primary_account_id =
+        ConvertFromJavaCoreAccountId(env, j_primary_account_id);
+  } else {
+    primary_account_id = absl::nullopt;
+  }
+
+  DeviceAccountsSynchronizer* device_accounts_synchronizer =
+      identity_mutator_->GetDeviceAccountsSynchronizer();
+  CHECK(device_accounts_synchronizer);
+  device_accounts_synchronizer
+      ->SeedAccountsThenReloadAllAccountsWithPrimaryAccount(core_account_infos,
+                                                            primary_account_id);
 }
 #endif  // BUILDFLAG(IS_ANDROID)
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class CORE_EXPORT CustomElement {
   // may be a different object for a given element over its lifetime
   // as it moves between documents.
   static CustomElementRegistry* Registry(const Element&);
-  static CustomElementRegistry* Registry(const Document&);
+  static CustomElementRegistry* Registry(const TreeScope&);
 
   static CustomElementDefinition* DefinitionForElement(const Element*);
 
@@ -84,7 +84,7 @@ class CORE_EXPORT CustomElement {
 
   // Look up a definition, and create an autonomous custom element if
   // it's found.
-  static HTMLElement* CreateCustomElement(Document&,
+  static HTMLElement* CreateCustomElement(TreeScope&,
                                           const QualifiedName&,
                                           const CreateElementFlags);
 

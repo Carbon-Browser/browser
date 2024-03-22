@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/trace_event/trace_event.h"
@@ -161,7 +161,7 @@ DownloadFileImpl::DownloadFileImpl(
       num_active_streams_(0),
       is_paused_(false),
       download_id_(download_id),
-      main_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       observer_(observer) {
   TRACE_EVENT_INSTANT0("download", "DownloadFileCreated",
                        TRACE_EVENT_SCOPE_THREAD);
@@ -193,7 +193,7 @@ void DownloadFileImpl::Initialize(
   cancel_request_callback_ = cancel_request_callback;
   received_slices_ = received_slices;
   if (!task_runner_)
-    task_runner_ = base::SequencedTaskRunnerHandle::Get();
+    task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
 
   // If the last slice is finished, then we know the actual content size.
   if (!received_slices_.empty() && received_slices_.back().finished) {

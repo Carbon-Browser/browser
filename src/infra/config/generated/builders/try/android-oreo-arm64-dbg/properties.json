@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/android-oreo-arm64-dbg/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "Android arm64 Builder (dbg)",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-android-archive",
@@ -18,7 +21,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks"
+                  "download_xr_test_apks"
                 ],
                 "build_config": "Debug",
                 "config": "android",
@@ -27,8 +30,7 @@
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "android",
-                  "enable_reclient"
+                  "android"
                 ],
                 "config": "chromium"
               }
@@ -38,7 +40,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Oreo Phone Tester",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-android-archive",
@@ -49,7 +51,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks"
+                  "download_xr_test_apks"
                 ],
                 "build_config": "Debug",
                 "config": "android",
@@ -65,7 +67,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "Android arm64 Builder (dbg)",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           }
@@ -75,23 +77,23 @@
         {
           "bucket": "ci",
           "builder": "Android arm64 Builder (dbg)",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "builder_ids_in_scope_for_testing": [
         {
           "bucket": "ci",
           "builder": "Oreo Phone Tester",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ]
     }
   },
-  "$build/goma": {
-    "enable_ats": true,
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org",
-    "use_luci_auth": true
+  "$build/reclient": {
+    "instance": "rbe-chromium-untrusted",
+    "jobs": 150,
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

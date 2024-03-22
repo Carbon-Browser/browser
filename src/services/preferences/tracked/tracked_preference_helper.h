@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #include <string>
+#include <string_view>
 
 #include "services/preferences/tracked/pref_hash_filter.h"
 #include "services/preferences/tracked/pref_hash_store_transaction.h"
@@ -51,7 +52,7 @@ class TrackedPreferenceHelper {
   // |validation_type_suffix| is appended to the reported histogram's name.
   void ReportValidationResult(
       prefs::mojom::TrackedPreferenceValidationDelegate::ValueState value_state,
-      base::StringPiece validation_type_suffix) const;
+      std::string_view validation_type_suffix) const;
 
   // Reports |reset_action| via UMA under |reporting_id_|.
   void ReportAction(ResetAction reset_action) const;

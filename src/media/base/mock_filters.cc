@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/base/mock_filters.h"
 
 #include "base/check_op.h"
+#include "media/base/demuxer.h"
 
 using ::testing::_;
 using ::testing::NiceMock;
@@ -31,6 +32,10 @@ MockDemuxer::~MockDemuxer() = default;
 
 std::string MockDemuxer::GetDisplayName() const {
   return "MockDemuxer";
+}
+
+DemuxerType MockDemuxer::GetDemuxerType() const {
+  return DemuxerType::kMockDemuxer;
 }
 
 MockDemuxerStream::MockDemuxerStream(DemuxerStream::Type type) : type_(type) {}
@@ -150,10 +155,6 @@ MockRendererFactory::~MockRendererFactory() = default;
 MockTimeSource::MockTimeSource() = default;
 
 MockTimeSource::~MockTimeSource() = default;
-
-MockTextTrack::MockTextTrack() = default;
-
-MockTextTrack::~MockTextTrack() = default;
 
 MockCdmClient::MockCdmClient() = default;
 
@@ -313,4 +314,12 @@ MockMediaClient::MockMediaClient() = default;
 
 MockMediaClient::~MockMediaClient() = default;
 
+MockVideoEncoderMetricsProvider::MockVideoEncoderMetricsProvider() {
+  DETACH_FROM_SEQUENCE(sequence_checker_);
+}
+
+MockVideoEncoderMetricsProvider::~MockVideoEncoderMetricsProvider() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  MockDestroy();
+}
 }  // namespace media

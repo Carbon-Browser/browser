@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {BrowserServiceImpl, ensureLazyLoaded, ForeignSession, HistorySyncedDeviceCardElement, HistorySyncedDeviceManagerElement} from 'chrome://history/history.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks, waitBeforeNextRender} from 'chrome://webui-test/test_util.js';
+import {flushTasks, waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
 import {TestBrowserService} from './test_browser_service.js';
 import {createSession, createWindow} from './test_util.js';
@@ -37,7 +37,7 @@ suite('<history-synced-device-manager>', function() {
   }
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     window.history.replaceState({}, '', '/');
     testService = new TestBrowserService();
     BrowserServiceImpl.setInstance(testService);
@@ -264,7 +264,6 @@ suite('<history-synced-device-manager>', function() {
         })
         .then(args => {
           assertEquals('Chromebook', args.sessionTag, 'sessionTag is correct');
-          assertEquals(123, args.windowId, 'windowId is correct');
           assertEquals(456, args.tabId, 'tabId is correct');
           assertFalse(args.e.altKey, 'altKey is defined');
           assertFalse(args.e.ctrlKey, 'ctrlKey is defined');

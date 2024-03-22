@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,12 @@
 #include "components/user_manager/scoped_user_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 
 // Unit tests for full_restore_prefs.
 class FullRestorePrefsTest : public testing::Test {
  public:
-  FullRestorePrefsTest()
-      : user_manager_enabler_(std::make_unique<FakeChromeUserManager>()) {}
+  FullRestorePrefsTest() = default;
 
   void SetUp() override {
     pref_service_ =
@@ -33,8 +31,7 @@ class FullRestorePrefsTest : public testing::Test {
   }
 
   FakeChromeUserManager* GetFakeUserManager() const {
-    return static_cast<FakeChromeUserManager*>(
-        user_manager::UserManager::Get());
+    return fake_user_manager_.Get();
   }
 
   RestoreOption GetRestoreOption() const {
@@ -43,12 +40,13 @@ class FullRestorePrefsTest : public testing::Test {
   }
 
   std::unique_ptr<sync_preferences::TestingPrefServiceSyncable> pref_service_;
-  user_manager::ScopedUserManager user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_{std::make_unique<ash::FakeChromeUserManager>()};
 };
 
 // For a brand new user, set 'ask every time' as the default value.
 TEST_F(FullRestorePrefsTest, NewUser) {
-  GetFakeUserManager()->set_current_user_new(true);
+  GetFakeUserManager()->SetIsCurrentUserNew(true);
   RegisterProfilePrefs(registry());
 
   SetDefaultRestorePrefIfNecessary(pref_service_.get());
@@ -87,7 +85,7 @@ TEST_F(FullRestorePrefsTest, UpgradingFromNotRestore) {
 // For a new Chrome OS user, set 'always restore' as the default value if the
 // browser setting is 'continue where you left off'.
 TEST_F(FullRestorePrefsTest, NewChromeOSUserFromRestore) {
-  GetFakeUserManager()->set_current_user_new(true);
+  GetFakeUserManager()->SetIsCurrentUserNew(true);
 
   RegisterProfilePrefs(registry());
   SetDefaultRestorePrefIfNecessary(pref_service_.get());
@@ -107,7 +105,7 @@ TEST_F(FullRestorePrefsTest, NewChromeOSUserFromRestore) {
 // For a new Chrome OS user, set 'ask every time' as the default value if the
 // browser setting is 'new tab'.
 TEST_F(FullRestorePrefsTest, NewChromeOSUserFromNotRestore) {
-  GetFakeUserManager()->set_current_user_new(true);
+  GetFakeUserManager()->SetIsCurrentUserNew(true);
 
   RegisterProfilePrefs(registry());
   SetDefaultRestorePrefIfNecessary(pref_service_.get());
@@ -124,5 +122,4 @@ TEST_F(FullRestorePrefsTest, NewChromeOSUserFromNotRestore) {
   EXPECT_TRUE(CanPerformRestore(pref_service_.get()));
 }
 
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore

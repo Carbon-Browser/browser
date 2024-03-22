@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "components/history_clusters/core/cluster_finalizer.h"
 #include "components/history_clusters/core/config.h"
+#include "components/history_clusters/core/history_clusters_types.h"
 #include "components/history_clusters/core/on_device_clustering_features.h"
 
 namespace history_clusters {
@@ -22,12 +23,18 @@ class VisitScores {
   // weightings between each. Note, this score is not between [0, 1] as
   // normalization will consider all visits within a cluster.
   float GetTotalScore() const {
+    if (ntp_visit_attributes_score_) {
+      return *ntp_visit_attributes_score_ +
+             visit_duration_score_ *
+                 GetConfig().ntp_visit_duration_ranking_weight;
+    }
     return visit_duration_score_ * GetConfig().visit_duration_ranking_weight +
            foreground_duration_score_ *
                GetConfig().foreground_duration_ranking_weight +
            bookmark_score_ * GetConfig().bookmark_ranking_weight +
            srp_score_ * GetConfig().search_results_page_ranking_weight +
-           page_title_score_ * GetConfig().has_page_title_ranking_weight;
+           has_url_keyed_image_score_ *
+               GetConfig().has_url_keyed_image_ranking_weight;
   }
 
   void set_visit_duration_score(float score) { visit_duration_score_ = score; }
@@ -40,7 +47,11 @@ class VisitScores {
 
   void set_is_srp() { srp_score_ = 1.0; }
 
-  void set_has_page_title() { page_title_score_ = 1.0; }
+  void set_has_url_keyed_image() { has_url_keyed_image_score_ = 1.0; }
+
+  void set_ntp_visit_attributes_score(float score) {
+    ntp_visit_attributes_score_ = score;
+  }
 
  private:
   // The score for the duration associated with a visit.
@@ -51,14 +62,17 @@ class VisitScores {
   float bookmark_score_ = 0.0;
   // The score for whether the visit was on a search results page.
   float srp_score_ = 0.0;
-  // The score for whether the visit had a page title.
-  float page_title_score_ = 0.0;
+  // The score for whether the visit had a URL-keyed image.
+  float has_url_keyed_image_score_ = 0.0;
+  // The score for NTP visit attributes.
+  absl::optional<float> ntp_visit_attributes_score_;
 };
 
 // A cluster finalizer that scores visits based on visit duration.
 class RankingClusterFinalizer : public ClusterFinalizer {
  public:
-  RankingClusterFinalizer();
+  explicit RankingClusterFinalizer(
+      ClusteringRequestSource clustering_request_source);
   ~RankingClusterFinalizer() override;
 
   // ClusterFinalizer:
@@ -82,6 +96,8 @@ class RankingClusterFinalizer : public ClusterFinalizer {
   void ComputeFinalVisitScores(
       history::Cluster& cluster,
       base::flat_map<history::VisitID, VisitScores>& url_visit_scores);
+
+  const ClusteringRequestSource clustering_request_source_;
 };
 
 }  // namespace history_clusters

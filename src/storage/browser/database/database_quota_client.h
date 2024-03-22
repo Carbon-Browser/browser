@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define STORAGE_BROWSER_DATABASE_DATABASE_QUOTA_CLIENT_H_
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ref.h"
 #include "base/sequence_checker.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
@@ -46,7 +46,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) DatabaseQuotaClient
   SEQUENCE_CHECKER(sequence_checker_);
 
   // Reference use is safe here because the DatabaseTracker owns this.
-  DatabaseTracker& db_tracker_ GUARDED_BY_CONTEXT(sequence_checker_);
+  const raw_ref<DatabaseTracker> db_tracker_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 };
 
 }  // namespace storage

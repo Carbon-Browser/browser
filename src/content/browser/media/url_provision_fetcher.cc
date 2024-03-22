@@ -1,13 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/media/url_provision_fetcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "content/public/browser/provision_fetcher_factory.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/media_switches.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_util.h"

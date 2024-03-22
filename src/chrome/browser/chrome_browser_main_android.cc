@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/task/current_thread.h"
 #include "base/task/thread_pool.h"
@@ -17,8 +17,6 @@
 #include "chrome/browser/android/seccomp_support_detector.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/data_saver/data_saver.h"
-#include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/profiles/profile_manager_android.h"
 #include "chrome/browser/webauthn/android/cable_module_android.h"
 #include "components/crash/content/browser/child_exit_observer_android.h"
 #include "components/crash/content/browser/child_process_crash_observer_android.h"
@@ -37,6 +35,8 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/render_frame_host.h"
 #include "media/base/media_switches.h"
+
+#include "chrome/browser/profiles/profile.h"
 
 ChromeBrowserMainPartsAndroid::ChromeBrowserMainPartsAndroid(
     bool is_integration_test,
@@ -87,13 +87,12 @@ void ChromeBrowserMainPartsAndroid::PostProfileInit(Profile* profile,
   // installed in time.
   webauthn::authenticator::RegisterForCloudMessages();
 
-
   #if defined(OS_ANDROID)
-    if (profile->GetPrefs()->GetBoolean(prefs::kBackgroundVideoPlaybackEnabled)) {
-      content::RenderFrameHost::AllowInjectingJavaScript();
-      auto* command_line = base::CommandLine::ForCurrentProcess();
-      command_line->AppendSwitch(switches::kDisableBackgroundMediaSuspend);
-    }
+   if (profile->GetPrefs()->GetBoolean(prefs::kBackgroundVideoPlaybackEnabled)) {
+     content::RenderFrameHost::AllowInjectingJavaScript();
+     auto* command_line = base::CommandLine::ForCurrentProcess();
+     command_line->AppendSwitch(switches::kDisableBackgroundMediaSuspend);
+   }
   #endif
 }
 
@@ -105,13 +104,6 @@ int ChromeBrowserMainPartsAndroid::PreEarlyInitialization() {
   CHECK(base::CurrentThread::IsSet());
 
   return ChromeBrowserMainParts::PreEarlyInitialization();
-}
-
-void ChromeBrowserMainPartsAndroid::PostEarlyInitialization() {
-  profile_manager_android_ = std::make_unique<ProfileManagerAndroid>();
-  g_browser_process->profile_manager()->AddObserver(
-      profile_manager_android_.get());
-  ChromeBrowserMainParts::PostEarlyInitialization();
 }
 
 void ChromeBrowserMainPartsAndroid::PostBrowserStart() {

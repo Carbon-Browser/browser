@@ -1,14 +1,25 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/public/decorators/page_live_state_decorator.h"
 
-#include "base/bind.h"
+#include <memory>
+
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/thread_pool.h"
+#include "base/test/bind.h"
+#include "components/performance_manager/graph/page_node_impl.h"
+#include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/test_support/decorators_utils.h"
+#include "components/performance_manager/test_support/graph_test_harness.h"
 #include "components/performance_manager/test_support/performance_manager_test_harness.h"
+#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -39,6 +50,10 @@ class TestPageLiveStateObserver : public PageLiveStateObserver {
     kOnIsCapturingDisplayChanged,
     kOnIsAutoDiscardableChanged,
     kOnWasDiscardedChanged,
+    kOnIsActiveTabChanged,
+    kOnIsPinnedTabChanged,
+    kOnContentSettingsChanged,
+    kOnIsDevToolsOpenChanged,
   };
 
   void OnIsConnectedToUSBDeviceChanged(const PageNode* page_node) override {
@@ -80,9 +95,40 @@ class TestPageLiveStateObserver : public PageLiveStateObserver {
     latest_function_called_ = ObserverFunction::kOnWasDiscardedChanged;
     page_node_passed_ = page_node;
   }
+  void OnIsActiveTabChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnIsActiveTabChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnIsPinnedTabChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnIsPinnedTabChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnContentSettingsChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnContentSettingsChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnIsDevToolsOpenChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnIsDevToolsOpenChanged;
+    page_node_passed_ = page_node;
+  }
 
   ObserverFunction latest_function_called_ = ObserverFunction::kNone;
   raw_ptr<const PageNode> page_node_passed_ = nullptr;
+};
+
+class MockPageLiveStateDelegate
+    : public performance_manager::PageLiveStateDecorator::Delegate {
+ public:
+  MockPageLiveStateDelegate() = default;
+
+ private:
+  std::map<ContentSettingsType, ContentSetting> GetContentSettingsForUrl(
+      content::WebContents* web_contents,
+      const GURL& url) override {
+    return {
+        {ContentSettingsType::NOTIFICATIONS, CONTENT_SETTING_ALLOW},
+    };
+  }
 };
 
 }  // namespace
@@ -166,6 +212,16 @@ class PageLiveStateDecoratorTest : public PerformanceManagerTestHarness {
                 web_contents()),
             observer_.get(), expected_call, std::move(quit_closure)));
     run_loop.Run();
+  }
+
+  void OnGraphCreated(GraphImpl* graph) override {
+    graph->PassToGraph(std::make_unique<PageLiveStateDecorator>(
+        base::SequenceBound<MockPageLiveStateDelegate>(
+            content::GetUIThreadTaskRunner({}))));
+  }
+
+  scoped_refptr<base::SequencedTaskRunner> task_runner() {
+    return content::GetUIThreadTaskRunner({});
   }
 
  private:
@@ -256,6 +312,217 @@ TEST_F(PageLiveStateDecoratorTest, OnWasDiscardedChanged) {
       /*default_state=*/false);
   VerifyObserverExpectationOnPMSequence(
       TestPageLiveStateObserver::ObserverFunction::kOnWasDiscardedChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, OnIsActiveTabChanged) {
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsActiveTab,
+      &PageLiveStateDecorator::SetIsActiveTab,
+      /*default_state=*/false);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnIsActiveTabChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, OnIsPinnedTabChanged) {
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab,
+      &PageLiveStateDecorator::SetIsPinnedTab,
+      /*default_state=*/false);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnIsPinnedTabChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, OnContentSettingsChanged) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+
+  {
+    base::RunLoop run_loop;
+    PerformanceManager::CallOnGraph(
+        FROM_HERE, base::BindLambdaForTesting([&]() {
+          ASSERT_TRUE(node);
+          const PageLiveStateDecorator::Data* data =
+              PageLiveStateDecorator::Data::FromPageNode(node.get());
+          ASSERT_TRUE(data);
+          EXPECT_EQ(data->IsContentSettingTypeAllowed(
+                        ContentSettingsType::NOTIFICATIONS),
+                    false);
+          run_loop.Quit();
+        }));
+    run_loop.Run();
+  }
+
+  PageLiveStateDecorator::SetContentSettings(
+      web_contents(),
+      {
+          {ContentSettingsType::NOTIFICATIONS, CONTENT_SETTING_ALLOW},
+      });
+
+  {
+    base::RunLoop run_loop;
+    PerformanceManager::CallOnGraph(
+        FROM_HERE, base::BindLambdaForTesting([&]() {
+          ASSERT_TRUE(node);
+          const PageLiveStateDecorator::Data* data =
+              PageLiveStateDecorator::Data::FromPageNode(node.get());
+          ASSERT_TRUE(data);
+          EXPECT_EQ(data->IsContentSettingTypeAllowed(
+                        ContentSettingsType::NOTIFICATIONS),
+                    true);
+          run_loop.Quit();
+        }));
+    run_loop.Run();
+  }
+
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnContentSettingsChanged);
+
+  PageLiveStateDecorator::SetContentSettings(
+      web_contents(),
+      {
+          {ContentSettingsType::NOTIFICATIONS, CONTENT_SETTING_BLOCK},
+      });
+
+  {
+    base::RunLoop run_loop;
+    PerformanceManager::CallOnGraph(
+        FROM_HERE, base::BindLambdaForTesting([&]() {
+          ASSERT_TRUE(node);
+          const PageLiveStateDecorator::Data* data =
+              PageLiveStateDecorator::Data::FromPageNode(node.get());
+          ASSERT_TRUE(data);
+          EXPECT_EQ(data->IsContentSettingTypeAllowed(
+                        ContentSettingsType::NOTIFICATIONS),
+                    false);
+          run_loop.Quit();
+        }));
+    run_loop.Run();
+  }
+
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnContentSettingsChanged);
+}
+
+// Content settings aren't fetched on navigation on Android.
+#if !BUILDFLAG(IS_ANDROID)
+TEST_F(PageLiveStateDecoratorTest, GetContentSettingsOnNavigation) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  {
+    base::RunLoop run_loop;
+    auto quit_closure = run_loop.QuitClosure();
+    PerformanceManager::CallOnGraph(
+        FROM_HERE, base::BindLambdaForTesting([&]() {
+          ASSERT_TRUE(node);
+          const PageLiveStateDecorator::Data* data =
+              PageLiveStateDecorator::Data::FromPageNode(node.get());
+          ASSERT_TRUE(data);
+          EXPECT_EQ(data->IsContentSettingTypeAllowed(
+                        ContentSettingsType::NOTIFICATIONS),
+                    false);
+          PageNodeImpl::FromNode(node.get())
+              ->OnMainFrameNavigationCommitted(
+                  /*same_document=*/false,
+                  /*navigation_committed_time=*/base::TimeTicks::Now(),
+                  /*navigation_id=*/1,
+                  /*url=*/GURL("http://www.example.com"),
+                  /*contents_mime_type=*/"text/html");
+
+          // Posting the quit_closure run on the same task runner as the content
+          // settings fetch ensures it's run after the settings are done being
+          // retrieved.
+          task_runner()->PostTask(FROM_HERE, base::BindLambdaForTesting([&]() {
+                                    std::move(quit_closure).Run();
+                                  }));
+        }));
+    run_loop.Run();
+  }
+
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnContentSettingsChanged);
+
+  {
+    base::RunLoop run_loop;
+    PerformanceManager::CallOnGraph(
+        FROM_HERE, base::BindLambdaForTesting([&]() {
+          ASSERT_TRUE(node);
+          const PageLiveStateDecorator::Data* data =
+              PageLiveStateDecorator::Data::FromPageNode(node.get());
+          ASSERT_TRUE(data);
+          EXPECT_EQ(data->IsContentSettingTypeAllowed(
+                        ContentSettingsType::NOTIFICATIONS),
+                    true);
+          run_loop.Quit();
+        }));
+    run_loop.Run();
+  }
+
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnContentSettingsChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, OnIsDevToolsOpenChanged) {
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsDevToolsOpen,
+      &PageLiveStateDecorator::SetIsDevToolsOpen,
+      /*default_state=*/false);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnIsDevToolsOpenChanged);
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+TEST_F(PageLiveStateDecoratorTest, UpdateTitleInBackground) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  base::RunLoop run_loop;
+  PerformanceManager::CallOnGraph(
+      FROM_HERE, base::BindLambdaForTesting([&]() {
+        ASSERT_TRUE(node);
+        auto* node_impl = PageNodeImpl::FromNode(node.get());
+        auto* data =
+            PageLiveStateDecorator::Data::GetOrCreateForPageNode(node.get());
+
+        // Updating the title while the node is visible does nothing.
+        node_impl->SetIsVisible(true);
+        node_impl->OnTitleUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), false);
+
+        node_impl->SetIsVisible(false);
+        node_impl->OnTitleUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), true);
+
+        run_loop.Quit();
+      }));
+  run_loop.Run();
+}
+
+TEST_F(PageLiveStateDecoratorTest, UpdateFaviconInBackground) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  base::RunLoop run_loop;
+  PerformanceManager::CallOnGraph(
+      FROM_HERE, base::BindLambdaForTesting([&]() {
+        ASSERT_TRUE(node);
+        auto* node_impl = PageNodeImpl::FromNode(node.get());
+        auto* data =
+            PageLiveStateDecorator::Data::GetOrCreateForPageNode(node.get());
+
+        // Updating the favicon while the node is visible does nothing.
+        node_impl->SetIsVisible(true);
+        node_impl->OnFaviconUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), false);
+
+        node_impl->SetIsVisible(false);
+        node_impl->OnFaviconUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), true);
+
+        run_loop.Quit();
+      }));
+  run_loop.Run();
 }
 
 }  // namespace performance_manager

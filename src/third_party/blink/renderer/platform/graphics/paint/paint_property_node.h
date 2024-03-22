@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -118,6 +118,18 @@ class PaintPropertyNode
       n->ClearChanged(sequence_number);
   }
 
+  PaintPropertyChangeType SetParent(const NodeTypeOrAlias& parent) {
+    DCHECK(!IsRoot());
+    DCHECK_NE(&parent, this);
+    if (&parent == parent_) {
+      return PaintPropertyChangeType::kUnchanged;
+    }
+    parent_ = &parent;
+    static_cast<NodeTypeOrAlias*>(this)->AddChanged(
+        PaintPropertyChangeType::kChangedOnlyValues);
+    return PaintPropertyChangeType::kChangedOnlyValues;
+  }
+
   // Returns true if this node is an alias for its parent. A parent alias is a
   // node which on its own does not contribute to the rendering output, and only
   // exists to enforce a particular structure of the paint property tree. Its
@@ -209,23 +221,6 @@ class PaintPropertyNode
         changed_(PaintPropertyChangeType::kNodeAddedOrRemoved),
         parent_(&parent) {}
 
-  PaintPropertyChangeType SetParent(const NodeTypeOrAlias& parent) {
-    DCHECK(!IsRoot());
-    DCHECK_NE(&parent, this);
-    if (&parent == parent_)
-      return PaintPropertyChangeType::kUnchanged;
-
-    parent_ = &parent;
-    if (IsParentAlias()) {
-      static_cast<NodeTypeOrAlias*>(this)->AddChanged(
-          PaintPropertyChangeType::kChangedOnlyValues);
-    } else {
-      static_cast<NodeType*>(this)->AddChanged(
-          PaintPropertyChangeType::kChangedOnlyValues);
-    }
-    return PaintPropertyChangeType::kChangedOnlyValues;
-  }
-
   void AddChanged(PaintPropertyChangeType changed) {
     DCHECK(!IsRoot());
     changed_ = std::max(changed_, changed);
@@ -242,10 +237,13 @@ class PaintPropertyNode
 
   std::unique_ptr<JSONObject> ToJSONBase() const {
     auto json = std::make_unique<JSONObject>();
-    if (Parent())
+    json->SetString("this", String::Format("%p", this));
+    if (Parent()) {
       json->SetString("parent", String::Format("%p", Parent()));
-    if (IsParentAlias())
+    }
+    if (IsParentAlias()) {
       json->SetBoolean("is_alias", true);
+    }
     if (NodeChanged() != PaintPropertyChangeType::kUnchanged) {
       json->SetString("changed",
                       PaintPropertyChangeTypeToString(NodeChanged()));
@@ -263,8 +261,7 @@ class PaintPropertyNode
 
   // Indicates that the paint property value changed in the last update in the
   // prepaint lifecycle step. This is used for raster invalidation and damage
-  // in the compositor. This value is cleared through ClearChangedToRoot()
-  // called by PaintArtifactCompositor::ClearPropertyTreeChangedState().
+  // in the compositor. This value is cleared through ClearChangedToRoot().
   mutable PaintPropertyChangeType changed_;
   // The changed sequence number is an optimization to avoid an O(n^2) to O(n^4)
   // treewalk when clearing the changed bits for the entire tree. When starting
@@ -289,6 +286,8 @@ class PaintPropertyNode
 
 template <typename NodeType>
 class PropertyTreePrinter {
+  STACK_ALLOCATED();
+
  public:
   void AddNode(const NodeType* node) {
     if (node)
@@ -296,7 +295,7 @@ class PropertyTreePrinter {
   }
 
   String NodesAsTreeString() {
-    if (nodes_.IsEmpty())
+    if (nodes_.empty())
       return "";
     StringBuilder string_builder;
     BuildTreeString(string_builder, RootNode(), 0);
@@ -328,7 +327,7 @@ class PropertyTreePrinter {
     const auto* node = nodes_.back();
     while (!node->IsRoot())
       node = node->Parent();
-    if (node->DebugName().IsEmpty())
+    if (node->DebugName().empty())
       const_cast<NodeType*>(node)->SetDebugName("root");
     nodes_.insert(node);
     return *node;

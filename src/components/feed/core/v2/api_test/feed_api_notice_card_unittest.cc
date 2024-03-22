@@ -1,8 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "components/feed/core/v2/api_test/feed_api_test.h"
@@ -44,15 +44,13 @@ TEST_F(FeedApiNoticeCardTest, LoadStreamSendsNoticeCardAcknowledgement) {
       surface.initial_state->updated_slices(notice_card_index)
           .slice()
           .slice_id();
-  stream_->ReportSliceViewed(surface.GetSurfaceId(), surface.GetStreamType(),
-                             slice_id);
+  stream_->ReportSliceViewed(surface.GetSurfaceId(), slice_id);
   task_environment_.FastForwardBy(base::Hours(1));
-  stream_->ReportSliceViewed(surface.GetSurfaceId(), surface.GetStreamType(),
-                             slice_id);
+  stream_->ReportSliceViewed(surface.GetSurfaceId(), slice_id);
   task_environment_.FastForwardBy(base::Hours(1));
-  stream_->ReportSliceViewed(surface.GetSurfaceId(), surface.GetStreamType(),
-                             slice_id);
-  stream_->ReportOpenAction(GURL(), surface.GetStreamType(), slice_id);
+  stream_->ReportSliceViewed(surface.GetSurfaceId(), slice_id);
+  stream_->ReportOpenAction(GURL(), surface.GetSurfaceId(), slice_id,
+                            OpenActionType::kDefault);
 
   response_translator_.InjectResponse(model_generator_.MakeFirstPage());
   stream_->UnloadModel(surface.GetStreamType());
@@ -79,7 +77,7 @@ TEST_F(FeedApiNoticeCardTest, LoadStreamUpdateNoticeCardFulfillmentHistogram) {
     WaitForIdleTaskQueue();
   }
 
-  UnloadModel(kForYouStream);
+  UnloadModel(StreamType(StreamKind::kForYou));
 
   // Trigger another stream refresh that updates the histogram.
   {

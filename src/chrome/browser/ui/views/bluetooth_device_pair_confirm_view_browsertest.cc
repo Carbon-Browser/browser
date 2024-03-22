@@ -1,13 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/ui/bluetooth/bluetooth_dialogs.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
 #include "content/public/browser/bluetooth_delegate.h"
@@ -40,7 +40,7 @@ class BluetoothDevicePairConfirmViewBrowserTest
     auto passkey = DisplayPasskey() ? absl::optional<std::u16string>(kPasskey)
                                     : absl::nullopt;
 
-    chrome::ShowBluetoothDevicePairConfirmDialog(
+    ShowBluetoothDevicePairConfirmDialog(
         browser()->tab_strip_model()->GetActiveWebContents(), kDeviceIdentifier,
         passkey, base::NullCallback());
   }

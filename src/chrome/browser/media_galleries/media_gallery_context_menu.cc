@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@
 
 MediaGalleryContextMenu::MediaGalleryContextMenu(
     const ForgetGalleryCallback& callback)
-    : ui::SimpleMenuModel(NULL),
-      callback_(callback) {
-  set_delegate(this);
+    : ui::SimpleMenuModel(this), callback_(callback) {
   AddItem(1, l10n_util::GetStringUTF16(IDS_MEDIA_GALLERIES_DIALOG_DELETE));
 }
 

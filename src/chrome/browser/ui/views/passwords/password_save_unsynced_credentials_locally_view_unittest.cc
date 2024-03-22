@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/passwords/password_save_unsynced_credentials_locally_view.h"
 
+#include <utility>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -37,7 +38,7 @@ class PasswordSaveUnsyncedCredentialsLocallyViewTest
   void TearDown() override;
 
  protected:
-  raw_ptr<PasswordSaveUnsyncedCredentialsLocallyView> view_;
+  raw_ptr<PasswordSaveUnsyncedCredentialsLocallyView> view_ = nullptr;
   std::vector<password_manager::PasswordForm> unsynced_credentials_;
 };
 
@@ -50,8 +51,9 @@ void PasswordSaveUnsyncedCredentialsLocallyViewTest::CreateViewAndShow() {
 }
 
 void PasswordSaveUnsyncedCredentialsLocallyViewTest::TearDown() {
-  view_->GetWidget()->CloseWithReason(
-      views::Widget::ClosedReason::kCloseButtonClicked);
+  std::exchange(view_, nullptr)
+      ->GetWidget()
+      ->CloseWithReason(views::Widget::ClosedReason::kCloseButtonClicked);
 
   PasswordBubbleViewTestBase::TearDown();
 }

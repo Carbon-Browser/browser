@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,32 +6,29 @@
 
 #include "base/containers/cxx20_erase.h"
 #include "base/logging.h"  // DCHECK
-#include "chromeos/ui/base/display_util.h"
-#include "chromeos/ui/frame/caption_buttons/caption_button_model.h"
 #include "chromeos/ui/frame/caption_buttons/frame_caption_button_container_view.h"
 #include "chromeos/ui/frame/frame_utils.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
-#include "chromeos/ui/wm/features.h"
 #include "ui/base/class_property.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_tree_owner.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
-#include "ui/display/screen.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/scoped_canvas.h"
+#include "ui/views/background.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/native_widget_aura.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/window/caption_button_layout_constants.h"
 #include "ui/views/window/non_client_view.h"
-#include "ui/views/window/vector_icons/vector_icons.h"
 
 DEFINE_UI_CLASS_PROPERTY_TYPE(chromeos::FrameHeader*)
 
@@ -117,11 +114,12 @@ void FrameHeader::FrameAnimatorView::StartAnimation(base::TimeDelta duration) {
 
   layer_owner_ = std::move(old_layer_owner);
 
-  AddLayerBeneathView(old_layer);
+  AddLayerToRegion(old_layer, views::LayerRegion::kBelow);
 
-  // The old layer is on top and should fade out.
-  old_layer->SetOpacity(1.f);
-  new_layer->SetOpacity(1.f);
+  // The old layer is on top and should fade out. The new layer is given the
+  // opacity as the old layer is currently targeting. This ensures that we don't
+  // change the overall opacity, since it may have been set by something else.
+  new_layer->SetOpacity(old_layer->GetTargetOpacity());
   {
     ui::ScopedLayerAnimationSettings settings(old_layer->GetAnimator());
     settings.SetPreemptionStrategy(
@@ -163,7 +161,7 @@ void FrameHeader::FrameAnimatorView::OnImplicitAnimationsCompleted() {
   // TODO(crbug.com/1172694): Remove this DCHECK if this is indeed the cause.
   DCHECK(layer_owner_);
   if (layer_owner_) {
-    RemoveLayerBeneathView(layer_owner_->root());
+    RemoveLayerFromRegions(layer_owner_->root());
     layer_owner_.reset();
   }
 }
@@ -204,6 +202,11 @@ FrameHeader::~FrameHeader() {
   if (center_button_ && !center_button_->parent()) {
     delete center_button_;
     center_button_ = nullptr;
+  }
+
+  if (underneath_layer_owner_) {
+    underneath_layer_owner_->RemoveObserver(this);
+    underneath_layer_owner_ = nullptr;
   }
 
   auto* target_window = target_widget_->GetNativeView();
@@ -269,7 +272,8 @@ void FrameHeader::SetPaintAsActive(bool paint_as_active) {
     back_button_->SetPaintAsActive(paint_as_active);
   if (center_button_)
     center_button_->SetPaintAsActive(paint_as_active);
-  UpdateCaptionButtonColors();
+
+  UpdateFrameColors();
 }
 
 void FrameHeader::OnShowStateChanged(ui::WindowShowState show_state) {
@@ -277,6 +281,19 @@ void FrameHeader::OnShowStateChanged(ui::WindowShowState show_state) {
     return;
 
   LayoutHeaderInternal();
+}
+
+void FrameHeader::OnFloatStateChanged() {
+  LayoutHeaderInternal();
+}
+
+void FrameHeader::SetHeaderCornerRadius(int radius) {
+  if (radius == corner_radius_) {
+    return;
+  }
+
+  corner_radius_ = radius;
+  view_->SchedulePaint();
 }
 
 void FrameHeader::SetLeftHeaderView(views::View* left_header_view) {
@@ -322,6 +339,10 @@ SkPath FrameHeader::GetWindowMaskForFrameHeader(const gfx::Size& size) {
   return SkPath();
 }
 
+ui::ColorId FrameHeader::GetColorIdForCurrentMode() const {
+  return mode_ == MODE_ACTIVE ? ui::kColorFrameActive : ui::kColorFrameInactive;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // FrameHeader, protected:
 
@@ -337,17 +358,64 @@ void FrameHeader::UpdateFrameHeaderKey() {
   target_widget_->GetNativeView()->SetProperty(kFrameHeaderKey, this);
 }
 
+void FrameHeader::OnLayerRecreated(ui::Layer* old_layer) {
+  if (underneath_layer_owner_) {
+    frame_animator_->RemoveLayerFromRegionsKeepInLayerTree(old_layer);
+    frame_animator_->AddLayerToRegion(underneath_layer_owner_->layer(),
+                                      views::LayerRegion::kBelow);
+  }
+}
+
+void FrameHeader::AddLayerBeneath(ui::LayerOwner* layer_owner) {
+  if (layer_owner) {
+    underneath_layer_owner_ = layer_owner;
+    // A relationship between the layer_owner's layer and animation view is
+    // created, we need to observe the layer_owner in case of the layer gets
+    // recreated.
+    layer_owner->AddObserver(this);
+    frame_animator_->AddLayerToRegion(layer_owner->layer(),
+                                      views::LayerRegion::kBelow);
+  }
+}
+
+void FrameHeader::RemoveLayerBeneath() {
+  if (underneath_layer_owner_) {
+    frame_animator_->RemoveLayerFromRegionsKeepInLayerTree(
+        underneath_layer_owner_->layer());
+    underneath_layer_owner_->RemoveObserver(this);
+    underneath_layer_owner_ = nullptr;
+  }
+}
+
 gfx::Rect FrameHeader::GetPaintedBounds() const {
   return gfx::Rect(view_->width(), painted_height_);
 }
 
-void FrameHeader::UpdateCaptionButtonColors() {
+void FrameHeader::UpdateCaptionButtonColors(
+    absl::optional<ui::ColorId> icon_color_id) {
   const SkColor frame_color = GetCurrentFrameColor();
-  caption_button_container_->SetBackgroundColor(frame_color);
-  if (back_button_)
+  if (caption_button_container_->window_controls_overlay_enabled()) {
+    caption_button_container_->SetBackground(
+        views::CreateSolidBackground(frame_color));
+  }
+
+  if (icon_color_id.has_value()) {
+    caption_button_container_->SetButtonIconColor(*icon_color_id);
+    if (back_button_) {
+      back_button_->SetIconColorId(*icon_color_id);
+    }
+    if (center_button_) {
+      center_button_->SetIconColorId(*icon_color_id);
+    }
+    return;
+  }
+  caption_button_container_->SetButtonBackgroundColor(frame_color);
+  if (back_button_) {
     back_button_->SetBackgroundColor(frame_color);
-  if (center_button_)
+  }
+  if (center_button_) {
     center_button_->SetBackgroundColor(frame_color);
+  }
 }
 
 void FrameHeader::PaintTitleBar(gfx::Canvas* canvas) {
@@ -372,15 +440,6 @@ void FrameHeader::PaintTitleBar(gfx::Canvas* canvas) {
 void FrameHeader::SetCaptionButtonContainer(
     chromeos::FrameCaptionButtonContainerView* caption_button_container) {
   caption_button_container_ = caption_button_container;
-  caption_button_container_->SetButtonImage(views::CAPTION_BUTTON_ICON_MINIMIZE,
-                                            views::kWindowControlMinimizeIcon);
-  caption_button_container_->SetButtonImage(views::CAPTION_BUTTON_ICON_MENU,
-                                            chromeos::kFloatWindowIcon);
-  caption_button_container_->SetButtonImage(views::CAPTION_BUTTON_ICON_CLOSE,
-                                            views::kWindowControlCloseIcon);
-  caption_button_container_->SetButtonImage(views::CAPTION_BUTTON_ICON_FLOAT,
-                                            chromeos::kFloatButtonIcon);
-  UpdateSnapIcons();
 
   // Perform layout to ensure the container height is correct.
   LayoutHeaderInternal();
@@ -400,24 +459,7 @@ void FrameHeader::LayoutHeaderInternal() {
   // Make sure the animator view is at the bottom.
   view_->ReorderChildView(frame_animator_, 0);
 
-  bool use_zoom_icons = caption_button_container()->model()->InZoomMode();
-  const gfx::VectorIcon& restore_icon = use_zoom_icons
-                                            ? chromeos::kWindowControlDezoomIcon
-                                            : views::kWindowControlRestoreIcon;
-  const gfx::VectorIcon& maximize_icon =
-      use_zoom_icons ? chromeos::kWindowControlZoomIcon
-                     : views::kWindowControlMaximizeIcon;
-  // TODO(crbug.com/1092005): Investigate if we can move this to
-  // CaptionButtonModel and just check the model in
-  // chromeos::FrameCaptionButtonContainerView.
-  const bool use_restore_frame =
-      chromeos::ShouldUseRestoreFrame(target_widget_);
-  caption_button_container()->SetButtonImage(
-      views::CAPTION_BUTTON_ICON_MAXIMIZE_RESTORE,
-      use_restore_frame ? maximize_icon : restore_icon);
-  UpdateSnapIcons();
-
-  caption_button_container()->UpdateSizeButtonTooltip(use_restore_frame);
+  caption_button_container()->UpdateButtonsImageAndTooltip();
 
   caption_button_container()->SetButtonSize(
       views::GetCaptionButtonLayoutSize(GetButtonLayoutSize()));
@@ -468,22 +510,6 @@ gfx::Rect FrameHeader::GetTitleBounds() const {
       left_header_view_ ? left_header_view_.get() : back_button_.get();
   return GetAvailableTitleBounds(left_view, caption_button_container_,
                                  GetHeaderHeight());
-}
-
-void FrameHeader::UpdateSnapIcons() {
-  const bool is_horizontal_display = chromeos::IsDisplayLayoutHorizontal(
-      display::Screen::GetScreen()->GetDisplayNearestWindow(
-          target_widget_->GetNativeWindow()));
-  const bool is_horizontal_snap =
-      is_horizontal_display || !chromeos::wm::features::IsVerticalSnapEnabled();
-  caption_button_container()->SetButtonImage(
-      views::CAPTION_BUTTON_ICON_LEFT_TOP_SNAPPED,
-      is_horizontal_snap ? chromeos::kWindowControlLeftSnappedIcon
-                         : chromeos::kWindowControlTopSnappedIcon);
-  caption_button_container()->SetButtonImage(
-      views::CAPTION_BUTTON_ICON_RIGHT_BOTTOM_SNAPPED,
-      is_horizontal_snap ? chromeos::kWindowControlRightSnappedIcon
-                         : chromeos::kWindowControlBottomSnappedIcon);
 }
 
 }  // namespace chromeos

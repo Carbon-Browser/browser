@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,10 +19,10 @@ void PublishVersionInfoToInspect(sys::ComponentInspector* inspector) {
   // These values are managed by the inspector, since they won't be updated over
   // the lifetime of the component.
   // TODO(https://crbug.com/1077428): Add release channel.
-  inspector->root().CreateString(kVersion, version_info::GetVersionNumber(),
-                                 inspector);
-  inspector->root().CreateString(kLastChange, version_info::GetLastChange(),
-                                 inspector);
+  inspector->root().CreateString(
+      kVersion, std::string(version_info::GetVersionNumber()), inspector);
+  inspector->root().CreateString(
+      kLastChange, std::string(version_info::GetLastChange()), inspector);
 }
 
 }  // namespace fuchsia_component_support

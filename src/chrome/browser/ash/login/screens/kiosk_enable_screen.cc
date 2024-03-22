@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "base/logging.h"
 #include "chrome/browser/ash/customization/customization_document.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
-#include "chrome/browser/ui/webui/chromeos/login/kiosk_enable_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/kiosk_enable_screen_handler.h"
 
 namespace ash {
 namespace {
@@ -18,38 +18,29 @@ constexpr const char kEnable[] = "enable";
 }  // namespace
 
 KioskEnableScreen::KioskEnableScreen(
-    KioskEnableScreenView* view,
+    base::WeakPtr<KioskEnableScreenView> view,
     const base::RepeatingClosure& exit_callback)
     : BaseScreen(KioskEnableScreenView::kScreenId, OobeScreenPriority::DEFAULT),
-      view_(view),
+      view_(std::move(view)),
       exit_callback_(exit_callback) {
   DCHECK(view_);
-  if (view_)
-    view_->SetScreen(this);
 }
 
-KioskEnableScreen::~KioskEnableScreen() {
-  if (view_)
-    view_->SetScreen(nullptr);
-}
-
-void KioskEnableScreen::OnViewDestroyed(KioskEnableScreenView* view) {
-  if (view_ == view)
-    view_ = nullptr;
-}
+KioskEnableScreen::~KioskEnableScreen() = default;
 
 void KioskEnableScreen::ShowImpl() {
   if (view_)
     view_->Show();
-  KioskAppManager::Get()->GetConsumerKioskAutoLaunchStatus(
+  KioskChromeAppManager::Get()->GetConsumerKioskAutoLaunchStatus(
       base::BindOnce(&KioskEnableScreen::OnGetConsumerKioskAutoLaunchStatus,
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
 void KioskEnableScreen::OnGetConsumerKioskAutoLaunchStatus(
-    KioskAppManager::ConsumerKioskAutoLaunchStatus status) {
+    KioskChromeAppManager::ConsumerKioskAutoLaunchStatus status) {
   is_configurable_ =
-      (status == KioskAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable);
+      (status ==
+       KioskChromeAppManager::ConsumerKioskAutoLaunchStatus::kConfigurable);
   if (!is_configurable_) {
     LOG(WARNING) << "Consumer kiosk auto launch feature is not configurable!";
     HandleClose();
@@ -59,13 +50,14 @@ void KioskEnableScreen::OnGetConsumerKioskAutoLaunchStatus(
 
 void KioskEnableScreen::HideImpl() {}
 
-void KioskEnableScreen::OnUserActionDeprecated(const std::string& action_id) {
+void KioskEnableScreen::OnUserAction(const base::Value::List& args) {
+  const std::string& action_id = args[0].GetString();
   if (action_id == kClose)
     HandleClose();
   else if (action_id == kEnable)
     HandleEnable();
   else
-    BaseScreen::OnUserActionDeprecated(action_id);
+    BaseScreen::OnUserAction(args);
 }
 
 void KioskEnableScreen::HandleClose() {
@@ -78,13 +70,14 @@ void KioskEnableScreen::HandleEnable() {
     HandleClose();
     return;
   }
-  KioskAppManager::Get()->EnableConsumerKioskAutoLaunch(
+  KioskChromeAppManager::Get()->EnableConsumerKioskAutoLaunch(
       base::BindOnce(&KioskEnableScreen::OnEnableConsumerKioskAutoLaunch,
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
 void KioskEnableScreen::OnEnableConsumerKioskAutoLaunch(bool success) {
-  view_->ShowKioskEnabled(success);
+  if (view_)
+    view_->ShowKioskEnabled(success);
   if (!success) {
     LOG(WARNING) << "Consumer kiosk mode can't be enabled!";
   }

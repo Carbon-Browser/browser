@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2012 The Chromium Authors. All rights reserved.
+ * Copyright 2012 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -49,7 +49,7 @@ function startDetection(videoElementId, width, height) {
     }
   }, 100);
 
-  returnToTest('ok-started');
+  return logAndReturn('ok-started');
 }
 
 /**
@@ -68,14 +68,13 @@ function isVideoPlaying() {
       if (!allElementsRoughlyEqualTo_(gFingerprints, gFingerprints[0])) {
         clearInterval(gDetectorInterval);
         gDetectorInterval = null;
-        silentReturnToTest('video-playing');
-        return;
+        return 'video-playing';
       }
     }
   } catch (exception) {
     throw failTest('Failed to detect video: ' + exception.message);
   }
-  silentReturnToTest('video-not-playing');
+  return 'video-not-playing';
 }
 
 /**
@@ -87,17 +86,15 @@ function isVideoStopped() {
   // Video is considered to be stopped if the last 5 fingerprints are the same.
   // We only check for rough equality though to account for rounding errors.
   if (gFingerprints.length < 5) {
-    silentReturnToTest('video-not-stopped');
-    return;
+    return 'video-not-stopped';
   }
 
   if (allElementsRoughlyEqualTo_(gFingerprints.slice(-5),
                                  gFingerprints[gFingerprints.length - 1])) {
-    silentReturnToTest('video-stopped');
-    return;
+    return 'video-stopped';
   }
 
-  silentReturnToTest('video-not-stopped');
+  return 'video-not-stopped';
 }
 
 /**
@@ -112,7 +109,7 @@ function getStreamSize(videoElementId) {
   if (!video)
     throw failTest('Could not find video element with id ' + videoElementId);
 
-  returnToTest('ok-' + video.videoWidth + 'x' + video.videoHeight);
+  return logAndReturn('ok-' + video.videoWidth + 'x' + video.videoHeight);
 }
 
 // Internals.

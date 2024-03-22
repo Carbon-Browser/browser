@@ -1,16 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/text/icu_error.h"
 
-#include "base/allocator/partition_allocator/oom.h"
+#include <ostream>
+
+#include "base/allocator/partition_allocator/src/partition_alloc/oom.h"
 
 namespace blink {
 
 // Distinguish memory allocation failures from other errors.
 // https://groups.google.com/a/chromium.org/d/msg/platform-architecture-dev/MP0k9WGnCjA/zIBiJtilBwAJ
-static NOINLINE void ICUOutOfMemory() {
+NOINLINE static void ICUOutOfMemory() {
   OOM_CRASH(0);
 }
 

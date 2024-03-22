@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,6 @@
 #define IOS_CHROME_COMMON_UI_TABLE_VIEW_TABLE_VIEW_CELLS_CONSTANTS_H_
 
 #import <UIKit/UIKit.h>
-
-// The font text style of the sublabel.
-extern const UIFontTextStyle kTableViewSublabelFontStyle;
 
 // The minimum height for a TableViewHeaderFooterView.
 extern const CGFloat kTableViewHeaderFooterViewHeight;
@@ -70,11 +67,17 @@ extern NSString* const kTableViewTabsSearchSuggestedHistoryItemId;
 // Accessibility identifier for the badge icon.
 extern NSString* const kTableViewURLCellFaviconBadgeViewID;
 
+// Accessibility identifier for the metadata image view.
+extern NSString* const kTableViewURLCellMetadataImageID;
+
 // Returns a padding according to the width of the current device.
 extern CGFloat HorizontalPadding();
 
 // Accessibility identifier for UMA checkbox in the FRE and in Google services
 // settings.
 extern NSString* const kImproveChromeItemAccessibilityIdentifier;
+
+// Accessibility identifier for TableViewActivityIndicatorHeaderFooterView.
+extern NSString* const kTableViewActivityIndicatorHeaderFooterViewId;
 
 #endif  // IOS_CHROME_COMMON_UI_TABLE_VIEW_TABLE_VIEW_CELLS_CONSTANTS_H_

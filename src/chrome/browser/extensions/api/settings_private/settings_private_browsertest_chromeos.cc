@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ IN_PROC_BROWSER_TEST_F(SettingsPrivateGuestModeTest, GuestMode) {
   // default value.
   EXPECT_EQ(settings_private::SetPrefResult::PREF_NOT_MODIFIABLE,
             delegate->SetDefaultZoom(0.5));
-  EXPECT_EQ(delegate->GetDefaultZoom()->GetDouble(), 0.0);
+  EXPECT_EQ(delegate->GetDefaultZoom().GetDouble(), 0.0);
 }
 
 }  // namespace

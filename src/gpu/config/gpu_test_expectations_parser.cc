@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,11 +30,7 @@ enum LineParserStage {
 
 enum Token {
   // os
-  kConfigWinXP = 0,
-  kConfigWinVista,
-  kConfigWin7,
-  kConfigWin8,
-  kConfigWin10,
+  kConfigWin10 = 0,
   kConfigWin,
   kConfigMacLeopard,
   kConfigMacSnowLeopard,
@@ -49,6 +45,8 @@ enum Token {
   kConfigMacCatalina,
   kConfigMacBigSur,
   kConfigMacMonterey,
+  kConfigMacVentura,
+  kConfigMacSonoma,
   kConfigMac,
   kConfigLinux,
   kConfigChromeOS,
@@ -56,8 +54,10 @@ enum Token {
   // gpu vendor
   kConfigNVidia,
   kConfigAMD,
+  kConfigARM,
   kConfigIntel,
   kConfigVMWare,
+  kConfigQualcomm,
   // build type
   kConfigRelease,
   kConfigDebug,
@@ -93,10 +93,6 @@ struct TokenInfo {
 };
 
 const TokenInfo kTokenData[] = {
-    {"xp", GPUTestConfig::kOsWinXP},
-    {"vista", GPUTestConfig::kOsWinVista},
-    {"win7", GPUTestConfig::kOsWin7},
-    {"win8", GPUTestConfig::kOsWin8},
     {"win10", GPUTestConfig::kOsWin10},
     {"win", GPUTestConfig::kOsWin},
     {"leopard", GPUTestConfig::kOsMacLeopard},
@@ -112,14 +108,18 @@ const TokenInfo kTokenData[] = {
     {"catalina", GPUTestConfig::kOsMacCatalina},
     {"bigsur", GPUTestConfig::kOsMacBigSur},
     {"monterey", GPUTestConfig::kOsMacMonterey},
+    {"ventura", GPUTestConfig::kOsMacVentura},
+    {"sonoma", GPUTestConfig::kOsMacSonoma},
     {"mac", GPUTestConfig::kOsMac},
     {"linux", GPUTestConfig::kOsLinux},
     {"chromeos", GPUTestConfig::kOsChromeOS},
     {"android", GPUTestConfig::kOsAndroid},
     {"nvidia", 0x10DE},
     {"amd", 0x1002},
+    {"arm", 0x13b5},
     {"intel", 0x8086},
     {"vmware", 0x15ad},
+    {"qualcomm", 0x5143},
     {"release", GPUTestConfig::kBuildTypeRelease},
     {"debug", GPUTestConfig::kBuildTypeDebug},
     {"d3d9", GPUTestConfig::kAPID3D9},
@@ -264,10 +264,6 @@ bool GPUTestExpectationsParser::ParseConfig(
   for (size_t i = 0; i < tokens.size(); ++i) {
     Token token = ParseToken(tokens[i]);
     switch (token) {
-      case kConfigWinXP:
-      case kConfigWinVista:
-      case kConfigWin7:
-      case kConfigWin8:
       case kConfigWin10:
       case kConfigWin:
       case kConfigMacLeopard:
@@ -283,14 +279,18 @@ bool GPUTestExpectationsParser::ParseConfig(
       case kConfigMacCatalina:
       case kConfigMacBigSur:
       case kConfigMacMonterey:
+      case kConfigMacVentura:
+      case kConfigMacSonoma:
       case kConfigMac:
       case kConfigLinux:
       case kConfigChromeOS:
       case kConfigAndroid:
       case kConfigNVidia:
       case kConfigAMD:
+      case kConfigARM:
       case kConfigIntel:
       case kConfigVMWare:
+      case kConfigQualcomm:
       case kConfigRelease:
       case kConfigDebug:
       case kConfigD3D9:
@@ -331,10 +331,6 @@ bool GPUTestExpectationsParser::ParseLine(
       case kTokenComment:
         comments_encountered = true;
         break;
-      case kConfigWinXP:
-      case kConfigWinVista:
-      case kConfigWin7:
-      case kConfigWin8:
       case kConfigWin10:
       case kConfigWin:
       case kConfigMacLeopard:
@@ -350,14 +346,18 @@ bool GPUTestExpectationsParser::ParseLine(
       case kConfigMacCatalina:
       case kConfigMacBigSur:
       case kConfigMacMonterey:
+      case kConfigMacVentura:
+      case kConfigMacSonoma:
       case kConfigMac:
       case kConfigLinux:
       case kConfigChromeOS:
       case kConfigAndroid:
       case kConfigNVidia:
       case kConfigAMD:
+      case kConfigARM:
       case kConfigIntel:
       case kConfigVMWare:
+      case kConfigQualcomm:
       case kConfigRelease:
       case kConfigDebug:
       case kConfigD3D9:
@@ -461,10 +461,6 @@ bool GPUTestExpectationsParser::UpdateTestConfig(GPUTestConfig* config,
                                                  size_t line_number) {
   DCHECK(config);
   switch (token) {
-    case kConfigWinXP:
-    case kConfigWinVista:
-    case kConfigWin7:
-    case kConfigWin8:
     case kConfigWin10:
     case kConfigWin:
     case kConfigMacLeopard:
@@ -480,6 +476,8 @@ bool GPUTestExpectationsParser::UpdateTestConfig(GPUTestConfig* config,
     case kConfigMacCatalina:
     case kConfigMacBigSur:
     case kConfigMacMonterey:
+    case kConfigMacVentura:
+    case kConfigMacSonoma:
     case kConfigMac:
     case kConfigLinux:
     case kConfigChromeOS:
@@ -493,9 +491,10 @@ bool GPUTestExpectationsParser::UpdateTestConfig(GPUTestConfig* config,
       break;
     case kConfigNVidia:
     case kConfigAMD:
+    case kConfigARM:
     case kConfigIntel:
     case kConfigVMWare:
-      {
+    case kConfigQualcomm: {
       uint32_t gpu_vendor = static_cast<uint32_t>(kTokenData[token].flag);
         for (size_t i = 0; i < config->gpu_vendor().size(); ++i) {
           if (config->gpu_vendor()[i] == gpu_vendor) {
@@ -506,8 +505,7 @@ bool GPUTestExpectationsParser::UpdateTestConfig(GPUTestConfig* config,
           }
         }
         config->AddGPUVendor(gpu_vendor);
-      }
-      break;
+    } break;
     case kConfigRelease:
     case kConfigDebug:
       if ((config->build_type() & kTokenData[token].flag) != 0) {

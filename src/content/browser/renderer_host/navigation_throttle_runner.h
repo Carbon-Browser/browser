@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,12 +21,14 @@ namespace content {
 class CONTENT_EXPORT NavigationThrottleRunner {
  public:
   // The different event types that can be processed by NavigationThrottles.
+  // These values are recorded in metrics and should not be renumbered.
   enum class Event {
-    WillStartRequest,
-    WillRedirectRequest,
-    WillFailRequest,
-    WillProcessResponse,
-    NoEvent,
+    NoEvent = 0,
+    WillStartRequest = 1,
+    WillRedirectRequest = 2,
+    WillFailRequest = 3,
+    WillProcessResponse = 4,
+    WillCommitWithoutUrlLoader = 5,
   };
 
   class Delegate {
@@ -39,7 +41,9 @@ class CONTENT_EXPORT NavigationThrottleRunner {
         NavigationThrottle::ThrottleCheckResult result) = 0;
   };
 
-  NavigationThrottleRunner(Delegate* delegate, int64_t navigation_id);
+  NavigationThrottleRunner(Delegate* delegate,
+                           int64_t navigation_id,
+                           bool is_primary_main_frame);
 
   NavigationThrottleRunner(const NavigationThrottleRunner&) = delete;
   NavigationThrottleRunner& operator=(const NavigationThrottleRunner&) = delete;
@@ -61,7 +65,15 @@ class CONTENT_EXPORT NavigationThrottleRunner {
   // deferring NavigationThrottle do the resuming.
   void CallResumeForTesting();
 
+  // Registers the appropriate NavigationThrottles are added for a "standard"
+  // navigation (i.e., one with a URLLoader that goes through the
+  // WillSendRequest/WillProcessResponse callback sequence).
   void RegisterNavigationThrottles();
+
+  // Registers the appropriate NavigationThrottles for a navigation that can
+  // immediately commit because no URLLoader is required (about:blank,
+  // about:srcdoc, and most same-document navigations).
+  void RegisterNavigationThrottlesForCommitWithoutUrlLoader();
 
   // Returns the throttle that is currently deferring the navigation (i.e. the
   // throttle at index |next_index_ -1|). If the handle is not deferred, returns
@@ -80,6 +92,9 @@ class CONTENT_EXPORT NavigationThrottleRunner {
  private:
   void ProcessInternal();
   void InformDelegate(const NavigationThrottle::ThrottleCheckResult& result);
+
+  // Records UKM about the deferring throttle when the navigation is resumed.
+  void RecordDeferTimeUKM();
 
   const raw_ptr<Delegate> delegate_;
 
@@ -102,6 +117,10 @@ class CONTENT_EXPORT NavigationThrottleRunner {
 
   // The event currently being processed.
   Event current_event_ = Event::NoEvent;
+
+  // Whether the navigation is in the primary main frame.
+  bool is_primary_main_frame_ = false;
+
   base::WeakPtrFactory<NavigationThrottleRunner> weak_factory_{this};
 };
 

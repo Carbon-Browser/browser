@@ -1,7 +1,8 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {Context, ContextChecker} from '../context_checker.js';
 import {InputController} from '../input_controller.js';
 
 import {Macro, MacroError} from './macro.js';
@@ -15,7 +16,9 @@ export class SmartSelectBetweenMacro extends Macro {
    * @param {string} endPhrase
    */
   constructor(inputController, startPhrase, endPhrase) {
-    super(MacroName.SMART_SELECT_BTWN_INCL);
+    super(
+        MacroName.SMART_SELECT_BTWN_INCL,
+        new ContextChecker(inputController).add(Context.EMPTY_EDITABLE));
     /** @private {!InputController} */
     this.inputController_ = inputController;
     /** @private {string} */
@@ -25,13 +28,7 @@ export class SmartSelectBetweenMacro extends Macro {
   }
 
   /** @override */
-  checkContext() {
-    return this.createSuccessCheckContextResult_(
-        /*willImmediatelyDisambiguate=*/ false);
-  }
-
-  /** @override */
-  runMacro() {
+  run() {
     if (!this.inputController_.isActive()) {
       return this.createRunMacroResult_(
           /*isSuccess=*/ false, MacroError.FAILED_ACTUATION);

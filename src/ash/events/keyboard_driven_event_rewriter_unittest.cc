@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,12 +28,12 @@ class TestEventRewriterContinuation
   ~TestEventRewriterContinuation() override = default;
 
   ui::EventDispatchDetails SendEvent(const ui::Event* event) override {
-    passthrough_event = ui::Event::Clone(*event);
+    passthrough_event = event->Clone();
     return ui::EventDispatchDetails();
   }
 
   ui::EventDispatchDetails SendEventFinally(const ui::Event* event) override {
-    rewritten_event = ui::Event::Clone(*event);
+    rewritten_event = event->Clone();
     return ui::EventDispatchDetails();
   }
 

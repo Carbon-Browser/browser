@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
 #include "base/task/sequenced_task_runner.h"
@@ -292,8 +292,8 @@ void ModuleDatabase::RemoveObserver(ModuleDatabaseObserver* observer) {
   observer_list_.RemoveObserver(observer);
 }
 
-void ModuleDatabase::ForceStartInspection() {
-  module_inspector_.ForceStartInspection();
+void ModuleDatabase::StartInspection() {
+  module_inspector_.StartInspection();
 }
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -427,6 +427,8 @@ void ModuleDatabase::MaybeInitializeThirdPartyConflictsManager(
 
   if (IncompatibleApplicationsUpdater::IsWarningEnabled() ||
       ModuleBlocklistCacheUpdater::IsBlockingEnabled()) {
+    StartInspection();
+
     third_party_conflicts_manager_ =
         std::make_unique<ThirdPartyConflictsManager>(this);
 

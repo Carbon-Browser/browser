@@ -1,16 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/create_application_shortcut_view.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <utility>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/web_applications/extensions/web_app_extension_shortcut.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
+#include "chrome/browser/web_applications/os_integration/os_integration_sub_manager.h"
+#include "chrome/browser/web_applications/os_integration/web_app_shortcut.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
@@ -25,7 +30,7 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/shortcut.h"
-#include "base/win/windows_version.h"
+#include "chrome/installer/util/taskbar_util.h"
 #endif  // BUILDFLAG(IS_WIN)
 
 namespace chrome {
@@ -60,7 +65,8 @@ CreateChromeApplicationShortcutView::CreateChromeApplicationShortcutView(
     Profile* profile,
     const extensions::Extension* app,
     base::OnceCallback<void(bool)> close_callback)
-    : CreateChromeApplicationShortcutView(profile->GetPrefs(),
+    : CreateChromeApplicationShortcutView(profile,
+                                          /*is_extension=*/true,
                                           std::move(close_callback)) {
   // Get shortcut and icon information; needed for creating the shortcut.
   web_app::GetShortcutInfoForApp(
@@ -73,7 +79,8 @@ CreateChromeApplicationShortcutView::CreateChromeApplicationShortcutView(
     Profile* profile,
     const std::string& web_app_id,
     base::OnceCallback<void(bool)> close_callback)
-    : CreateChromeApplicationShortcutView(profile->GetPrefs(),
+    : CreateChromeApplicationShortcutView(profile,
+                                          /*is_extension=*/false,
                                           std::move(close_callback)) {
   web_app::WebAppProvider* provider =
       web_app::WebAppProvider::GetForWebApps(profile);
@@ -84,9 +91,13 @@ CreateChromeApplicationShortcutView::CreateChromeApplicationShortcutView(
 }
 
 CreateChromeApplicationShortcutView::CreateChromeApplicationShortcutView(
-    PrefService* prefs,
+    Profile* profile,
+    bool is_extension,
     base::OnceCallback<void(bool)> close_callback)
-    : prefs_(prefs), close_callback_(std::move(close_callback)) {
+    : profile_(profile),
+      prefs_(profile->GetPrefs()),
+      is_extension_(is_extension),
+      close_callback_(std::move(close_callback)) {
   SetModalType(ui::MODAL_TYPE_WINDOW);
   SetButtonLabel(ui::DIALOG_BUTTON_OK,
                  l10n_util::GetStringUTF16(IDS_CREATE_SHORTCUTS_COMMIT));
@@ -117,26 +128,18 @@ void CreateChromeApplicationShortcutView::InitControls() {
       prefs::kWebAppCreateOnDesktop);
 
   std::unique_ptr<views::Checkbox> menu_check_box;
-  std::unique_ptr<views::Checkbox> quick_launch_check_box;
+  std::unique_ptr<views::Checkbox> pin_to_taskbar_checkbox;
 
 #if BUILDFLAG(IS_WIN)
-  base::win::Version version = base::win::GetVersion();
-  // Do not allow creating shortcuts on the Start Screen for Windows 8.
-  if (version != base::win::Version::WIN8 &&
-      version != base::win::Version::WIN8_1) {
-    menu_check_box = AddCheckbox(
-        l10n_util::GetStringUTF16(IDS_CREATE_SHORTCUTS_START_MENU_CHKBOX),
-        prefs::kWebAppCreateInAppsMenu);
-  }
+  menu_check_box = AddCheckbox(
+      l10n_util::GetStringUTF16(IDS_CREATE_SHORTCUTS_START_MENU_CHKBOX),
+      prefs::kWebAppCreateInAppsMenu);
 
-  // Win10 actively prevents creating shortcuts on the taskbar so we eliminate
-  // that option from the dialog.
-  if (base::win::CanPinShortcutToTaskbar()) {
-    quick_launch_check_box =
-        AddCheckbox((version >= base::win::Version::WIN7)
-                        ? l10n_util::GetStringUTF16(IDS_PIN_TO_TASKBAR_CHKBOX)
-                        : l10n_util::GetStringUTF16(
-                              IDS_CREATE_SHORTCUTS_QUICK_LAUNCH_BAR_CHKBOX),
+  // Only include the pin-to-taskbar option when running on versions of Windows
+  // that support pinning.
+  if (CanPinShortcutToTaskbar()) {
+    pin_to_taskbar_checkbox =
+        AddCheckbox(l10n_util::GetStringUTF16(IDS_PIN_TO_TASKBAR_CHKBOX),
                     prefs::kWebAppCreateInQuickLaunchBar);
   }
 #elif BUILDFLAG(IS_POSIX)
@@ -154,8 +157,8 @@ void CreateChromeApplicationShortcutView::InitControls() {
   desktop_check_box_ = AddChildView(std::move(desktop_check_box));
   if (menu_check_box)
     menu_check_box_ = AddChildView(std::move(menu_check_box));
-  if (quick_launch_check_box)
-    quick_launch_check_box_ = AddChildView(std::move(quick_launch_check_box));
+  if (pin_to_taskbar_checkbox)
+    quick_launch_check_box_ = AddChildView(std::move(pin_to_taskbar_checkbox));
 }
 
 gfx::Size CreateChromeApplicationShortcutView::CalculatePreferredSize() const {
@@ -209,9 +212,23 @@ void CreateChromeApplicationShortcutView::OnDialogAccepted() {
   creation_locations.in_quick_launch_bar = false;
 #endif
 
-  web_app::CreateShortcutsWithInfo(web_app::SHORTCUT_CREATION_BY_USER,
-                                   creation_locations, base::DoNothing(),
-                                   std::move(shortcut_info_));
+  // If the dialog has been triggered from a web_app and the sub manager
+  // architecture for OS integration is enabled, then we need to perform OS
+  // integration using sub managers so that shortcuts can be properly added,
+  // updated or deleted.
+  if (!shortcut_info_->app_id.empty() && !is_extension_ &&
+      web_app::AreSubManagersExecuteEnabled()) {
+    auto* provider = web_app::WebAppProvider::GetForWebApps(profile_);
+    CHECK(provider);
+    provider->scheduler().SynchronizeOsIntegration(
+        shortcut_info_->app_id, base::DoNothing(),
+        web_app::ConvertShortcutLocationsToSynchronizeOptions(
+            creation_locations, web_app::SHORTCUT_CREATION_BY_USER));
+  } else {
+    web_app::CreateShortcutsWithInfo(web_app::SHORTCUT_CREATION_BY_USER,
+                                     creation_locations, base::DoNothing(),
+                                     std::move(shortcut_info_));
+  }
 }
 
 std::unique_ptr<views::Checkbox>

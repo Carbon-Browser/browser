@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,7 @@ class DynamicModuleResolverTestModulator final : public DummyModulator {
 
  private:
   // Implements Modulator:
-  ScriptState* GetScriptState() final { return script_state_; }
+  ScriptState* GetScriptState() final { return script_state_.Get(); }
 
   ModuleScript* GetFetchedModuleScript(const KURL& url,
                                        ModuleType module_type) final {
@@ -94,7 +94,8 @@ class DynamicModuleResolverTestModulator final : public DummyModulator {
                  network::mojom::RequestDestination,
                  const ScriptFetchOptions&,
                  ModuleScriptCustomFetchType custom_fetch_type,
-                 ModuleTreeClient* client) final {
+                 ModuleTreeClient* client,
+                 String) final {
     EXPECT_EQ(expected_fetch_tree_url_, url);
     EXPECT_EQ(expected_fetch_tree_module_type_, module_type);
 
@@ -142,8 +143,8 @@ class CaptureExportedStringFunction final : public ScriptFunction::Callable {
     v8::Local<v8::Value> exported_value =
         module_namespace->Get(context, V8String(isolate, export_name_))
             .ToLocalChecked();
-    captured_value_ =
-        ToCoreString(exported_value->ToString(context).ToLocalChecked());
+    captured_value_ = ToCoreString(
+        isolate, exported_value->ToString(context).ToLocalChecked());
 
     return ScriptValue();
   }
@@ -175,11 +176,12 @@ class CaptureErrorFunction final : public ScriptFunction::Callable {
 
     v8::Local<v8::Value> name =
         error_object->Get(context, V8String(isolate, "name")).ToLocalChecked();
-    name_ = ToCoreString(name->ToString(context).ToLocalChecked());
+    name_ = ToCoreString(isolate, name->ToString(context).ToLocalChecked());
     v8::Local<v8::Value> message =
         error_object->Get(context, V8String(isolate, "message"))
             .ToLocalChecked();
-    message_ = ToCoreString(message->ToString(context).ToLocalChecked());
+    message_ =
+        ToCoreString(isolate, message->ToString(context).ToLocalChecked());
 
     return ScriptValue();
   }
@@ -234,7 +236,7 @@ TEST_F(DynamicModuleResolverTest, ResolveSuccess) {
   resolver->ResolveDynamically(module_request, TestReferrerScriptInfo(),
                                promise_resolver);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_FALSE(capture->WasCalled());
 
   v8::Local<v8::Module> record = ModuleTestBase::CompileModule(
@@ -246,7 +248,7 @@ TEST_F(DynamicModuleResolverTest, ResolveSuccess) {
                   .IsEmpty());
   modulator->ResolveTreeFetch(module_script);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_TRUE(capture->WasCalled());
   EXPECT_EQ("hello", capture->CapturedValue());
 }
@@ -302,7 +304,7 @@ TEST_F(DynamicModuleResolverTest, ResolveSpecifierFailure) {
   resolver->ResolveDynamically(module_request, TestReferrerScriptInfo(),
                                promise_resolver);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_TRUE(capture->WasCalled());
   EXPECT_EQ("TypeError", capture->Name());
   EXPECT_TRUE(capture->Message().StartsWith("Failed to resolve"));
@@ -333,7 +335,7 @@ TEST_F(DynamicModuleResolverTest, ResolveModuleTypeFailure) {
   resolver->ResolveDynamically(module_request, TestReferrerScriptInfo(),
                                promise_resolver);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_TRUE(capture->WasCalled());
   EXPECT_EQ("TypeError", capture->Name());
   EXPECT_EQ("\"notARealType\" is not a valid module type.", capture->Message());
@@ -367,7 +369,7 @@ TEST_F(DynamicModuleResolverTest, FetchFailure) {
 
   modulator->ResolveTreeFetch(nullptr);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_TRUE(capture->WasCalled());
   EXPECT_EQ("TypeError", capture->Name());
   EXPECT_TRUE(capture->Message().StartsWith("Failed to fetch"));
@@ -408,7 +410,7 @@ TEST_F(DynamicModuleResolverTest, ExceptionThrown) {
                   .IsEmpty());
   modulator->ResolveTreeFetch(module_script);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_TRUE(capture->WasCalled());
   EXPECT_EQ("Error", capture->Name());
   EXPECT_EQ("bar", capture->Message());
@@ -440,7 +442,7 @@ TEST_F(DynamicModuleResolverTest, ResolveWithNullReferrerScriptSuccess) {
   resolver->ResolveDynamically(module_request, ReferrerScriptInfo(),
                                promise_resolver);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_FALSE(capture->WasCalled());
 
   v8::Local<v8::Module> record = ModuleTestBase::CompileModule(
@@ -453,7 +455,7 @@ TEST_F(DynamicModuleResolverTest, ResolveWithNullReferrerScriptSuccess) {
                   .IsEmpty());
   modulator->ResolveTreeFetch(module_script);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_TRUE(capture->WasCalled());
   EXPECT_EQ("hello", capture->CapturedValue());
 }
@@ -479,7 +481,7 @@ TEST_F(DynamicModuleResolverTest, ResolveWithReferrerScriptInfoBaseURL) {
       ReferrerScriptInfo(correct_base_url, ScriptFetchOptions()),
       promise_resolver);
 
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_TRUE(modulator->fetch_tree_was_called());
 }
 

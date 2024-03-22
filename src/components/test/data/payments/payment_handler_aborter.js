@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Chromium Authors. All rights reserved.
+ * Copyright 2020 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -12,7 +12,7 @@
  * @param {boolean} abortResponse - Whether the app should be abortable.
  * @return {string} - Either 'Abort completed' or an error message.
  */
-async function launchAndAbort(method, abortResponse) { // eslint-disable-line no-unused-vars, max-len
+async function launchAndAbort(method, abortResponse) {
   try {
     const details = {
       total: {label: 'TEST', amount: {currency: 'USD', value: '0.01'}},

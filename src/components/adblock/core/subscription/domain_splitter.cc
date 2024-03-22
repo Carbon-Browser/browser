@@ -18,28 +18,57 @@
 
 #include "components/adblock/core/subscription/domain_splitter.h"
 
+#include "base/logging.h"
 #include "base/strings/string_util.h"
+#include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 
 namespace adblock {
 
-DomainSplitter::DomainSplitter(base::StringPiece domain)
-    : domain_(base::TrimString(domain, ".", base::TRIM_ALL)) {}
-
-absl::optional<base::StringPiece> DomainSplitter::FindNextSubdomain() {
-  const auto old_dot_pos = dot_pos_;
-  if (dot_pos_ < domain_.size()) {
-    // Find next dot in domain, for future iteration to consume.
-    dot_pos_ = domain_.find('.', dot_pos_ + 1);
-    // First run is special because we found no dots yet.
-    if (old_dot_pos == 0)
-      return domain_;
-    // Return the part of domain *after* the dot we found in previous iteration.
-    return domain_.substr(old_dot_pos + 1);
+DomainSplitter::DomainSplitter(std::string_view domain)
+    : remaining_domain_(base::TrimString(domain, ".", base::TRIM_ALL)) {
+  // If the domain has a public registry, for "example info.domain.co.uk", we
+  // prepare to also iterate over the domain without the registry, i.e.
+  // "info.domain." in order to match wildcard filters.
+  const size_t registry_length =
+      net::registry_controlled_domains::GetCanonicalHostRegistryLength(
+          domain,
+          net::registry_controlled_domains::UnknownRegistryFilter::
+              EXCLUDE_UNKNOWN_REGISTRIES,
+          net::registry_controlled_domains::PrivateRegistryFilter::
+              EXCLUDE_PRIVATE_REGISTRIES);
+  if (registry_length != 0) {
+    domain_sans_registry_copy_ =
+        domain.substr(0, domain.size() - registry_length);
+    remaining_domain_sans_registry_ = domain_sans_registry_copy_;
   }
-  // Reached end of domain_.
-  // Reset in anticipation of future calls to FindNextSubdomain().
-  dot_pos_ = 0;
-  return absl::nullopt;
+}
+
+absl::optional<std::string_view> DomainSplitter::FindNextSubdomain() {
+  std::string_view& remaining_domain = GetNonEmptyRemainingDomain();
+  if (remaining_domain.empty()) {
+    // We've exhausted both remaining_domain_ and
+    // remaining_domain_sans_registry_, end iteration.
+    return absl::nullopt;
+  }
+
+  const std::string_view return_value = remaining_domain;
+
+  // Remove the next subdomain from remaining_domain:
+  const size_t next_dot_index = remaining_domain.find('.');
+  if (next_dot_index == std::string_view::npos) {
+    remaining_domain = "";
+  } else {
+    remaining_domain.remove_prefix(next_dot_index + 1);
+  }
+
+  return return_value;
+}
+
+std::string_view& DomainSplitter::GetNonEmptyRemainingDomain() {
+  if (!remaining_domain_.empty()) {
+    return remaining_domain_;
+  }
+  return remaining_domain_sans_registry_;
 }
 
 }  // namespace adblock

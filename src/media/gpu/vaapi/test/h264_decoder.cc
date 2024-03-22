@@ -1,10 +1,11 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/vaapi/test/h264_decoder.h"
 
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "media/base/subsample_entry.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/vaapi/test/h264_dpb.h"
@@ -90,8 +91,7 @@ bool FillH264PictureFromSliceHeader(const H264SPS* sps,
       break;
 
     default:
-      NOTREACHED();
-      return false;
+      NOTREACHED_NORETURN();
   }
   return true;
 }
@@ -575,8 +575,7 @@ void H264Decoder::ConstructReferencePicListsB() {
 
   // If lists identical, swap first two entries in RefPicList1 (spec 8.2.4.2.3)
   if (ref_pic_list_b1_.size() > 1 &&
-      std::equal(ref_pic_list_b0_.begin(), ref_pic_list_b0_.end(),
-                 ref_pic_list_b1_.begin()))
+      base::ranges::equal(ref_pic_list_b0_, ref_pic_list_b1_))
     std::swap(ref_pic_list_b1_[0], ref_pic_list_b1_[1]);
 }
 
@@ -1110,6 +1109,14 @@ bool H264Decoder::HandleMemoryManagementOps(scoped_refptr<H264Picture> pic) {
         to_mark = dpb_.GetShortRefPicByPicNum(pic_num_x);
         if (to_mark) {
           DCHECK(to_mark->ref && !to_mark->long_term);
+
+          scoped_refptr<H264Picture> long_term_mark =
+              dpb_.GetLongRefPicByLongTermIdx(
+                  ref_pic_marking->long_term_frame_idx);
+          if (long_term_mark) {
+            long_term_mark->ref = false;
+          }
+
           to_mark->long_term = true;
           to_mark->long_term_frame_idx = ref_pic_marking->long_term_frame_idx;
         } else {

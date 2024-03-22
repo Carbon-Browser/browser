@@ -1,11 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_POLICY_CORE_COMMON_PREFERENCES_MOCK_MAC_H_
 #define COMPONENTS_POLICY_CORE_COMMON_PREFERENCES_MOCK_MAC_H_
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "components/policy/core/common/preferences_mac.h"
 #include "components/policy/policy_export.h"
 
@@ -23,8 +23,6 @@ class POLICY_EXPORT MockPreferences : public MacPreferences {
                            CFStringRef application_id) override;
   Boolean IsManagedPolicyAvailableForMachineScope(CFStringRef key) override;
 
-  void LoadPolicyScopeDetectionPolicy(CFStringRef application_id) override;
-
   // Adds a preference item with the given info to the test set.
   void AddTestItem(CFStringRef key,
                    CFPropertyListRef value,
@@ -32,9 +30,9 @@ class POLICY_EXPORT MockPreferences : public MacPreferences {
                    bool is_machine);
 
  private:
-  base::ScopedCFTypeRef<CFMutableDictionaryRef> values_;
-  base::ScopedCFTypeRef<CFMutableSetRef> forced_;
-  base::ScopedCFTypeRef<CFMutableSetRef> machine_;
+  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> values_;
+  base::apple::ScopedCFTypeRef<CFMutableSetRef> forced_;
+  base::apple::ScopedCFTypeRef<CFMutableSetRef> machine_;
 };
 
 #endif  // COMPONENTS_POLICY_CORE_COMMON_PREFERENCES_MOCK_MAC_H_

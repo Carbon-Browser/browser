@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,6 @@ import org.chromium.components.version_info.VersionInfo;
  * - reporting that all partner bookmarks were read to the C++ side.
  */
 public class PartnerBookmarksShim {
-    private static final String TAG = "PartnerBookmarksShim";
-
     private static boolean sIsReadingAttempted;
 
     /**
@@ -36,7 +34,7 @@ public class PartnerBookmarksShim {
 
         boolean systemOrPreStable =
                 (context.getApplicationInfo().flags & ApplicationInfo.FLAG_SYSTEM) == 1
-                || !VersionInfo.isStableBuild();
+                        || !VersionInfo.isStableBuild();
         if (!systemOrPreStable) {
             reader.onBookmarksRead();
             return;
@@ -44,5 +42,4 @@ public class PartnerBookmarksShim {
 
         reader.readBookmarks();
     }
-
 }

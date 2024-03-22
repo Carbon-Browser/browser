@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,11 @@ static_assert(std::is_base_of<IDLBase, IDLBoolean>::value,
               "IDLBoolean inherits from IDLBase");
 static_assert(std::is_same<IDLBoolean::ImplType, bool>::value,
               "IDLBoolean's ImplType is bool");
+
+static_assert(std::is_base_of<IDLBase, IDLBigint>::value,
+              "IDLBigint inherits from IDLBase");
+static_assert(std::is_same<IDLBigint::ImplType, BigInt>::value,
+              "IDLBigint's ImplType is BigInt");
 
 static_assert(std::is_base_of<IDLBase, IDLByte>::value,
               "IDLByte inherits from IDLBase");

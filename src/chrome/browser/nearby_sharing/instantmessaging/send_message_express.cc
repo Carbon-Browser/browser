@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
-#include "chrome/browser/nearby_sharing/common/nearby_share_http_result.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/constants.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/proto/instantmessaging.pb.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/token_fetcher.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
+#include "chromeos/ash/components/nearby/common/client/nearby_http_result.h"
+#include "components/cross_device/logging/logging.h"
 #include "net/base/load_flags.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -28,7 +28,6 @@ constexpr int kMaxSendResponseSize = 256;
 // Timeout for network calls to instantmessaging servers.
 const base::TimeDelta kNetworkTimeout = base::Milliseconds(2500);
 
-// TODO(crbug.com/1123164) - Add nearby sharing policy when available.
 const net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("send_message_express", R"(
         semantics {
@@ -50,25 +49,29 @@ const net::NetworkTrafficAnnotationTag kTrafficAnnotation =
             cookies_allowed: NO
             setting:
               "This feature is only enabled for signed-in users who enable "
-              "Nearby sharing"
+              "Nearby sharing or Phone Hub."
             chrome_policy {
-              BrowserSignin {
+              NearbyShareAllowed {
                 policy_options {mode: MANDATORY}
-                BrowserSignin: 0
+                NearbyShareAllowed: false
+              },
+              PhoneHubAllowed {
+                policy_options {mode: MANDATORY}
+                PhoneHubAllowed: false
               }
             }
           })");
 
 void LogSendResult(bool success,
-                   const NearbyShareHttpStatus& http_status,
+                   const ash::nearby::NearbyHttpStatus& http_status,
                    const std::string& request_id) {
   std::stringstream ss;
   ss << "Instant messaging send express " << (success ? "succeeded" : "failed")
      << " for request " << request_id << ". HTTP status: " << http_status;
   if (success) {
-    NS_LOG(VERBOSE) << ss.str();
+    CD_LOG(VERBOSE, Feature::NS) << ss.str();
   } else {
-    NS_LOG(ERROR) << ss.str();
+    CD_LOG(ERROR, Feature::NS) << ss.str();
   }
   base::UmaHistogramBoolean(
       "Nearby.Connections.InstantMessaging.SendExpress.Result", success);
@@ -107,7 +110,7 @@ void SendMessageExpress::DoSendMessage(
       "Nearby.Connections.InstantMessaging.SendExpress.OAuthTokenFetchResult",
       !oauth_token.empty());
   if (oauth_token.empty()) {
-    NS_LOG(ERROR) << __func__ << ": Failed to fetch OAuth token.";
+    CD_LOG(ERROR, Feature::NS) << __func__ << ": Failed to fetch OAuth token.";
     std::move(callback).Run(false);
     // NOTE: |this| might be destroyed here after running the callback
     return;
@@ -144,8 +147,8 @@ void SendMessageExpress::OnSendMessageResponse(
     std::unique_ptr<network::SimpleURLLoader> url_loader,
     SuccessCallback callback,
     std::unique_ptr<std::string> response_body) {
-  NearbyShareHttpStatus http_status(url_loader->NetError(),
-                                    url_loader->ResponseInfo());
+  ash::nearby::NearbyHttpStatus http_status(url_loader->NetError(),
+                                            url_loader->ResponseInfo());
   bool success =
       http_status.IsSuccess() && response_body && !response_body->empty();
   LogSendResult(success, http_status, request_id);

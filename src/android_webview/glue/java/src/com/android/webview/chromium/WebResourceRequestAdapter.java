@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import org.chromium.android_webview.AwContentsClient.AwWebResourceRequest;
 
 import java.util.Map;
 
-/**
- * Adapter between WebResourceRequest and AwWebResourceRequest.
- */
+/** Adapter between WebResourceRequest and AwWebResourceRequest. */
 public class WebResourceRequestAdapter implements WebResourceRequest {
     private final AwWebResourceRequest mRequest;
 

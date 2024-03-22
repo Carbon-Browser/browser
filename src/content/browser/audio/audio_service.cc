@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/command_line.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/deferred_sequenced_task_runner.h"
 #include "base/threading/sequence_local_storage_slot.h"
@@ -21,6 +22,7 @@
 #include "content/public/common/content_switches.h"
 #include "media/audio/audio_manager.h"
 #include "media/base/media_switches.h"
+#include "media/media_buildflags.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/audio/public/cpp/audio_system_to_service_adapter.h"
 #include "services/audio/public/mojom/audio_service.mojom.h"
@@ -28,38 +30,21 @@
 #include "services/audio/service_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#if BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)
+#include "ui/display/util/edid_parser.h"
+
+#if BUILDFLAG(IS_LINUX)
+#include "ui/display/display_util.h"
+#endif  // BUILDFLAG(IS_LINUX)
+
+#if BUILDFLAG(IS_WIN)
+#include "ui/display/win/audio_edid_scan.h"
+#endif  // BUILDFLAG(IS_WIN)
+#endif  // BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)
+
 namespace content {
 
 namespace {
-
-absl::optional<base::TimeDelta> GetFieldTrialIdleTimeout() {
-  std::string timeout_str =
-      base::GetFieldTrialParamValue("AudioService", "teardown_timeout_s");
-  int timeout_s = 0;
-  if (!base::StringToInt(timeout_str, &timeout_s))
-    return absl::nullopt;
-  return base::Seconds(timeout_s);
-}
-
-absl::optional<base::TimeDelta> GetCommandLineIdleTimeout() {
-  const base::CommandLine& command_line =
-      *base::CommandLine::ForCurrentProcess();
-  std::string timeout_str =
-      command_line.GetSwitchValueASCII(switches::kAudioServiceQuitTimeoutMs);
-  int timeout_ms = 0;
-  if (!base::StringToInt(timeout_str, &timeout_ms))
-    return absl::nullopt;
-  return base::Milliseconds(timeout_ms);
-}
-
-absl::optional<base::TimeDelta> GetAudioServiceProcessIdleTimeout() {
-  absl::optional<base::TimeDelta> timeout = GetCommandLineIdleTimeout();
-  if (!timeout)
-    timeout = GetFieldTrialIdleTimeout();
-  if (timeout && timeout->is_negative())
-    return absl::nullopt;
-  return timeout;
-}
 
 bool IsAudioServiceOutOfProcess() {
   return !base::CommandLine::ForCurrentProcess()->HasSwitch(
@@ -101,6 +86,13 @@ void LaunchAudioServiceInProcess(
   if (!BrowserMainLoop::GetInstance())
     return;
 
+#if BUILDFLAG(IS_CHROMEOS_ASH) && defined(USE_CRAS)
+  if (GetContentClient()->browser()->EnforceSystemAudioEchoCancellation()) {
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        switches::kSystemAecEnabled);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH) && defined(USE_CRAS)
+
   // TODO(https://crbug.com/853254): Remove
   // BrowserMainLoop::GetAudioManager().
   audio::Service::GetInProcessTaskRunner()->PostTask(
@@ -118,39 +110,67 @@ void LaunchAudioServiceInProcess(
 }
 
 void LaunchAudioServiceOutOfProcess(
-    mojo::PendingReceiver<audio::mojom::AudioService> receiver) {
+    mojo::PendingReceiver<audio::mojom::AudioService> receiver,
+    uint32_t codec_bitmask) {
+  std::vector<std::string> switches;
+#if BUILDFLAG(IS_MAC)
+  // On Mac, the audio service requires a CFRunLoop provided by a
+  // UI MessageLoop type, to run AVFoundation and CoreAudio code.
+  // See https://crbug.com/834581.
+  switches.push_back(switches::kMessageLoopTypeUi);
+#elif BUILDFLAG(IS_WIN)
+  if (GetContentClient()->browser()->ShouldEnableAudioProcessHighPriority())
+    switches.push_back(switches::kAudioProcessHighPriority);
+#endif  // BUILDFLAG(IS_WIN)
+#if BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)
+  switches.push_back(base::StrCat({switches::kAudioCodecsFromEDID, "=",
+                                   base::NumberToString(codec_bitmask)}));
+#endif  // BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)
+#if BUILDFLAG(IS_CHROMEOS_ASH) && defined(USE_CRAS)
+  if (GetContentClient()->browser()->EnforceSystemAudioEchoCancellation()) {
+    switches.push_back(switches::kSystemAecEnabled);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS) && defined(USE_CRAS)
   ServiceProcessHost::Launch(
       std::move(receiver),
       ServiceProcessHost::Options()
           .WithDisplayName("Audio Service")
-#if BUILDFLAG(IS_MAC)
-          // On Mac, the audio service requires a CFRunLoop provided by a
-          // UI MessageLoop type, to run AVFoundation and CoreAudio code.
-          // See https://crbug.com/834581.
-          .WithExtraCommandLineSwitches({switches::kMessageLoopTypeUi})
-#elif BUILDFLAG(IS_WIN)
-          .WithExtraCommandLineSwitches(
-              GetContentClient()
-                      ->browser()
-                      ->ShouldEnableAudioProcessHighPriority()
-                  ? std::vector<std::string>(
-                        {switches::kAudioProcessHighPriority})
-                  : std::vector<std::string>())
-#endif
+          .WithExtraCommandLineSwitches(std::move(switches))
           .Pass());
 }
 
-void LaunchAudioService(mojo::Remote<audio::mojom::AudioService>* remote) {
-  auto receiver = remote->BindNewPipeAndPassReceiver();
+void LaunchAudioService(
+    mojo::PendingReceiver<audio::mojom::AudioService> receiver,
+    uint32_t codec_bitmask) {
+  // The static storage slot in GetAudioService() prevents LaunchAudioService
+  // from being called more than once.
   if (IsAudioServiceOutOfProcess()) {
-    LaunchAudioServiceOutOfProcess(std::move(receiver));
-    if (auto idle_timeout = GetAudioServiceProcessIdleTimeout())
-      remote->reset_on_idle_timeout(*idle_timeout);
+    LaunchAudioServiceOutOfProcess(std::move(receiver), codec_bitmask);
   } else {
     LaunchAudioServiceInProcess(std::move(receiver));
   }
-  remote->reset_on_disconnect();
 }
+
+#if BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)
+// Convert the EDID supported audio bitstream formats into media codec bitmasks.
+uint32_t ConvertEdidBitstreams(uint32_t formats) {
+  uint32_t codec_bitmask = 0;
+  if (formats & display::EdidParser::kAudioBitstreamPcmLinear)
+    codec_bitmask |= media::AudioParameters::AUDIO_PCM_LINEAR;
+  if (formats & display::EdidParser::kAudioBitstreamDts)
+    codec_bitmask |= media::AudioParameters::AUDIO_BITSTREAM_DTS;
+  if (formats & display::EdidParser::kAudioBitstreamDtsHd)
+    codec_bitmask |= media::AudioParameters::AUDIO_BITSTREAM_DTS_HD;
+  return codec_bitmask;
+}
+
+#if BUILDFLAG(IS_WIN)
+// Convert the EDID supported audio bitstream formats into media codec bitmasks.
+uint32_t ScanEdidBitstreams() {
+  return ConvertEdidBitstreams(display::win::ScanEdidBitstreams());
+}
+#endif  // BUILDFLAG(IS_WIN)
+#endif  // BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS)
 
 }  // namespace
 
@@ -165,8 +185,26 @@ audio::mojom::AudioService& GetAudioService() {
       mojo::Remote<audio::mojom::AudioService>>
       remote_slot;
   auto& remote = remote_slot.GetOrCreateValue();
-  if (!remote)
-    LaunchAudioService(&remote);
+  if (!remote) {
+    auto receiver = remote.BindNewPipeAndPassReceiver();
+#if BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS) && BUILDFLAG(IS_WIN)
+    // The EDID scan is done in a COM STA thread and the result
+    // passed to the audio service launcher.
+    base::ThreadPool::CreateCOMSTATaskRunner(
+        {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
+         base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN})
+        ->PostTaskAndReplyWithResult(
+            FROM_HERE, base::BindOnce(&ScanEdidBitstreams),
+            base::BindOnce(&LaunchAudioService, std::move(receiver)));
+#elif BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS) && BUILDFLAG(IS_LINUX)
+    LaunchAudioService(
+        std::move(receiver),
+        ConvertEdidBitstreams(display::DisplayUtil::GetAudioFormats()));
+#else
+    LaunchAudioService(std::move(receiver), 0);
+#endif  // BUILDFLAG(ENABLE_PASSTHROUGH_AUDIO_CODECS) && BUILDFLAG(IS_WIN)
+    remote.reset_on_disconnect();
+  }
   return *remote.get();
 }
 

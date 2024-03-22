@@ -1,14 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
-#include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/startup/browser_init_params.h"
 #include "components/policy/core/common/policy_loader_lacros.h"
+#include "components/prefs/pref_service.h"
+#include "content/public/browser/browser_main_parts.h"
 #include "content/public/test/browser_test.h"
 #include "extensions/browser/extension_registry.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -43,15 +45,18 @@ void SetupUserDeviceAffiliation() {
 class ContactCenterInsightsExtensionManagerBrowserTest
     : public ::extensions::ExtensionBrowserTest {
  protected:
-  void SetUpInProcessBrowserTestFixture() override {
-    ::extensions::ExtensionBrowserTest::SetUpInProcessBrowserTestFixture();
+  void CreatedBrowserMainParts(
+      content::BrowserMainParts* browser_parts) override {
+    // We need to set up user device affiliation before the
+    // `ContactCenterInsightsExtensionManager` is initialized, which happens
+    // right after profile init.
     SetupUserDeviceAffiliation();
+    ::extensions::ExtensionBrowserTest::CreatedBrowserMainParts(browser_parts);
   }
 
   void SetPrefValue(bool value) {
     profile()->GetPrefs()->SetBoolean(::prefs::kInsightsExtensionEnabled,
                                       value);
-    content::RunAllTasksUntilIdle();
   }
 };
 

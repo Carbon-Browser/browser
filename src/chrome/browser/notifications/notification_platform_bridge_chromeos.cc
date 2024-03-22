@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,10 @@
 #include "base/callback_list.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/notifications/notification_display_service_impl.h"
 #include "chrome/browser/notifications/profile_notification.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/app_icon_loader.h"
 #include "chrome/common/notifications/notification_operation.h"
 #include "ui/gfx/image/image.h"
@@ -84,6 +82,16 @@ void NotificationPlatformBridgeChromeOs::GetDisplayed(
     GetDisplayedNotificationsCallback callback) const {
   impl_->GetDisplayed(
       profile,
+      base::BindOnce(&NotificationPlatformBridgeChromeOs::OnGetDisplayed,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void NotificationPlatformBridgeChromeOs::GetDisplayedForOrigin(
+    Profile* profile,
+    const GURL& origin,
+    GetDisplayedNotificationsCallback callback) const {
+  impl_->GetDisplayedForOrigin(
+      profile, origin,
       base::BindOnce(&NotificationPlatformBridgeChromeOs::OnGetDisplayed,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define CONTENT_RENDERER_PEPPER_PEPPER_AUDIO_CONTROLLER_H_
 
 #include <set>
+
+#include "base/memory/raw_ptr.h"
 
 namespace content {
 
@@ -61,7 +63,7 @@ class PepperAudioController {
 
   // The Pepper instance which this controller is for. Will be null after
   // OnPepperInstanceDeleted() is called.
-  PepperPluginInstanceImpl* instance_;
+  raw_ptr<PepperPluginInstanceImpl, ExperimentalRenderer> instance_;
 };
 
 }  // namespace content

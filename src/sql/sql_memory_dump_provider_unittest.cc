@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class SQLMemoryDumpProviderTest : public testing::Test {
 
 TEST_F(SQLMemoryDumpProviderTest, OnMemoryDump) {
   base::trace_event::MemoryDumpArgs args = {
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED};
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed};
   base::trace_event::ProcessMemoryDump pmd(args);
   ASSERT_TRUE(SqlMemoryDumpProvider::GetInstance()->OnMemoryDump(args, &pmd));
   ASSERT_TRUE(pmd.GetAllocatorDump("sqlite"));

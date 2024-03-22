@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,15 +12,11 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModel.ReadableObjectPropertyKey;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor.ViewBinder;
 
-/**
- * This class binds an {@link OnClickListener} to a {@link View}.
- */
+/** This class binds an {@link OnClickListener} to a {@link View}. */
 class OnClickListenerViewBinder implements ViewBinder<PropertyModel, View, PropertyKey> {
     private final ReadableObjectPropertyKey<OnClickListener> mOnClickListenerKey;
 
-    /**
-     * Constructs a view binder for a key of {@link OnClickListener}.
-     */
+    /** Constructs a view binder for a key of {@link OnClickListener}. */
     OnClickListenerViewBinder(ReadableObjectPropertyKey<OnClickListener> onClickListenerKey) {
         mOnClickListenerKey = onClickListenerKey;
     }

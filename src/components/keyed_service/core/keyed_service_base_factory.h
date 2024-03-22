@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,7 @@ class PrefRegistrySyncable;
 // created in order to work correctly (see crbug.com/1150733). The standard way
 // to do this in a //content-based embedder is to call FooFactory::GetInstance()
 // for each factory used by your embedder from your embedder's implementation of
-// content::BrowserMainParts::PreMainMessageLoopRun(). See //weblayer's
-// browser_main_parts_impl.cc for a straightforward example.
+// content::BrowserMainParts::PreMainMessageLoopRun().
 class KEYED_SERVICE_EXPORT KeyedServiceBaseFactory : public DependencyNode {
  public:
   // The type is used to determine whether a service can depend on another.
@@ -50,6 +49,9 @@ class KEYED_SERVICE_EXPORT KeyedServiceBaseFactory : public DependencyNode {
 
   // Returns whether the service is created for the given context.
   virtual bool IsServiceCreated(void* context) const = 0;
+
+  // Enforces the creation of a service, used for testing only.
+  void CreateServiceNowForTesting(void* context);
 
  protected:
   KeyedServiceBaseFactory(const char* service_name,

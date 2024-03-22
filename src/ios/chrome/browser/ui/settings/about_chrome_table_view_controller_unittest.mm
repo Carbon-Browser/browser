@@ -1,23 +1,19 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/about_chrome_table_view_controller.h"
 
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/grit/ios_strings.h"
+#import "testing/gtest/include/gtest/gtest.h"
 
 namespace {
 
 class AboutChromeTableViewControllerTest
-    : public ChromeTableViewControllerTest {
+    : public LegacyChromeTableViewControllerTest {
  public:
-  ChromeTableViewController* InstantiateController() override {
+  LegacyChromeTableViewController* InstantiateController() override {
     return [[AboutChromeTableViewController alloc] init];
   }
 };

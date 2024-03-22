@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,13 +16,13 @@ class StatusControllerTest : public testing::Test {};
 TEST_F(StatusControllerTest, ReadYourWrites) {
   StatusController status;
 
-  status.set_last_download_updates_result(SyncerError(SyncerError::SYNCER_OK));
-  EXPECT_EQ(SyncerError::SYNCER_OK,
-            status.model_neutral_state().last_download_updates_result.value());
+  status.set_last_download_updates_result(SyncerError::Success());
+  EXPECT_EQ(status.model_neutral_state().last_download_updates_result.type(),
+            SyncerError::Type::kSuccess);
 
   status.set_commit_result(SyncerError::HttpError(net::HTTP_UNAUTHORIZED));
-  EXPECT_EQ(SyncerError::SYNC_AUTH_ERROR,
-            status.model_neutral_state().commit_result.value());
+  EXPECT_EQ(status.model_neutral_state().commit_result.type(),
+            SyncerError::Type::kHttpError);
 
   for (int i = 0; i < 14; i++)
     status.increment_num_successful_commits();

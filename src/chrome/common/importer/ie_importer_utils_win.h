@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,6 @@ namespace importer {
 // Returns the key to be used in HKCU to look for IE's favorites order blob.
 // Overridable by tests via ImporterTestRegistryOverrider.
 std::wstring GetIEFavoritesOrderKey();
-
-// Returns the key to be used in HKCU to look for IE7 passwords.
-// Overridable by tests via ImporterTestRegistryOverrider.
-std::wstring GetIE7PasswordsKey();
 
 // Returns the key to be used in HKCU to look for IE settings.
 // Overridable by tests via ImporterTestRegistryOverrider.

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,10 +31,6 @@ class EnvironmentProvider {
   // mount point for Drive. These are provided by ash because they are part of
   // the device account, not the Lacros profile.
   virtual crosapi::mojom::DefaultPathsPtr GetDefaultPaths();
-
-  // Deprecated. Use `GetDeviceAccount` instead.
-  // TODO(crbug.com/1195865): Remove this in M93.
-  virtual std::string GetDeviceAccountGaiaId();
 
   // Returns the account used to sign into the device. May be a Gaia account or
   // a Microsoft Active Directory account.

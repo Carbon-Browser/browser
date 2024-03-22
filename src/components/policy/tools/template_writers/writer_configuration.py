@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -62,7 +62,8 @@ def GetConfigurationForBuild(defines):
         'linux_policy_path': '/etc/chromium/policies/',
         'bundle_id': 'org.chromium',
     }
-  elif '_google_chrome' in defines:
+  elif '_google_chrome' in defines or '_is_chrome_for_testing_branded' in defines:
+    linux_policy_path = '/etc/opt/chrome/policies/' if '_google_chrome' in defines else '/etc/opt/chrome_for_testing/policies/'
     config = {
         'build': 'chrome',
         'app_name': 'Google Chrome',
@@ -116,7 +117,7 @@ def GetConfigurationForBuild(defines):
         'admx_using_namespaces': {
             'Google': 'Google.Policies'  # prefix: namespace
         },
-        'linux_policy_path': '/etc/opt/chrome/policies/',
+        'linux_policy_path': linux_policy_path,
         'bundle_id': 'com.google.chrome.ios',
     }
   else:

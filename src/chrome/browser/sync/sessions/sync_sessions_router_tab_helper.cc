@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "components/favicon/content/content_favicon_driver.h"
 #include "components/language/core/common/language_experiments.h"
 #include "components/sessions/content/session_tab_helper.h"
+#include "components/sync/base/features.h"
 #include "components/sync_sessions/synced_tab_delegate.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
@@ -24,17 +25,17 @@ SyncSessionsRouterTabHelper::SyncSessionsRouterTabHelper(
     SyncSessionsWebContentsRouter* router)
     : content::WebContentsUserData<SyncSessionsRouterTabHelper>(*web_contents),
       content::WebContentsObserver(web_contents),
-      router_(router) {
-  chrome_translate_client_ =
-      ChromeTranslateClient::FromWebContents(web_contents);
+      router_(router),
+      chrome_translate_client_(
+          ChromeTranslateClient::FromWebContents(web_contents)),
+      favicon_driver_(
+          favicon::ContentFaviconDriver::FromWebContents(web_contents)) {
   // A translate client is not always attached to web contents (e.g. tests).
   if (chrome_translate_client_) {
     chrome_translate_client_->GetTranslateDriver()
         ->AddLanguageDetectionObserver(this);
   }
 
-  favicon_driver_ =
-      favicon::ContentFaviconDriver::FromWebContents(web_contents);
   if (favicon_driver_) {
     favicon_driver_->AddObserver(this);
   }
@@ -87,11 +88,22 @@ void SyncSessionsRouterTabHelper::DidOpenRequestedURL(
   NotifyRouter();
 }
 
-void SyncSessionsRouterTabHelper::OnLanguageDetermined(
-    const translate::LanguageDetectionDetails& details) {
-  if (base::FeatureList::IsEnabled(language::kNotifySyncOnLanguageDetermined)) {
+void SyncSessionsRouterTabHelper::OnVisibilityChanged(
+    content::Visibility visibility) {
+  if (!base::FeatureList::IsEnabled(syncer::kSyncSessionOnVisibilityChanged)) {
+    return;
+  }
+
+  // Only notify a notification when the tab becomes visible. This is necessary
+  // to sync the last active time field.
+  if (visibility == content::Visibility::VISIBLE) {
     NotifyRouter();
   }
+}
+
+void SyncSessionsRouterTabHelper::OnLanguageDetermined(
+    const translate::LanguageDetectionDetails& details) {
+  NotifyRouter();
 }
 
 void SyncSessionsRouterTabHelper::NotifyRouter(bool page_load_completed) {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ void AddCreditCard(content::BrowserContext* browser_context,
   Profile* profile = Profile::FromBrowserContext(browser_context);
   autofill::PersonalDataManager* personal_data_manager =
       autofill::PersonalDataManagerFactory::GetForProfile(profile);
-  if (card.record_type() != autofill::CreditCard::LOCAL_CARD) {
+  if (card.record_type() != autofill::CreditCard::RecordType::kLocalCard) {
     personal_data_manager->AddServerCreditCardForTest(
         std::make_unique<autofill::CreditCard>(card));
     return;

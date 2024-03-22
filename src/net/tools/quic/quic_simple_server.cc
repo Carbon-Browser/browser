@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/log/net_log_source.h"
@@ -52,7 +51,7 @@ QuicSimpleServer::QuicSimpleServer(
           new QuicChromiumConnectionHelper(&clock_,
                                            quic::QuicRandom::GetInstance())),
       alarm_factory_(new QuicChromiumAlarmFactory(
-          base::ThreadTaskRunnerHandle::Get().get(),
+          base::SingleThreadTaskRunner::GetCurrentDefault().get(),
           &clock_)),
       config_(config),
       crypto_config_options_(crypto_config_options),
@@ -61,16 +60,13 @@ QuicSimpleServer::QuicSimpleServer(
                      std::move(proof_source),
                      quic::KeyExchangeSource::Default()),
       read_buffer_(base::MakeRefCounted<IOBufferWithSize>(kReadBufferSize)),
-      quic_simple_server_backend_(quic_simple_server_backend) {
+      quic_simple_server_backend_(quic_simple_server_backend),
+      connection_id_generator_(quic::kQuicDefaultConnectionIdLength) {
   DCHECK(quic_simple_server_backend);
   Initialize();
 }
 
 void QuicSimpleServer::Initialize() {
-#if MMSG_MORE
-  use_recvmmsg_ = true;
-#endif
-
   // If an initial flow control window has not explicitly been set, then use a
   // sensible value for a server: 1 MB for session, 64 KB for each stream.
   const uint32_t kInitialSessionFlowControlWindow = 1 * 1024 * 1024;  // 1 MB
@@ -114,7 +110,8 @@ bool QuicSimpleServer::Listen(const IPEndPoint& address) {
       std::make_unique<QuicSimpleServerSessionHelper>(
           quic::QuicRandom::GetInstance()),
       std::unique_ptr<quic::QuicAlarmFactory>(alarm_factory_),
-      quic_simple_server_backend_, quic::kQuicDefaultConnectionIdLength);
+      quic_simple_server_backend_, quic::kQuicDefaultConnectionIdLength,
+      connection_id_generator_);
   QuicSimpleServerPacketWriter* writer =
       new QuicSimpleServerPacketWriter(socket_.get(), dispatcher_.get());
   dispatcher_->InitializeWithWriter(writer);
@@ -157,7 +154,7 @@ void QuicSimpleServer::StartReading() {
     synchronous_read_count_ = 0;
     if (dispatcher_->HasChlosBuffered()) {
       // No more packets to read, so yield before processing buffered packets.
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&QuicSimpleServer::StartReading,
                                     weak_factory_.GetWeakPtr()));
     }
@@ -168,7 +165,7 @@ void QuicSimpleServer::StartReading() {
     synchronous_read_count_ = 0;
     // Schedule the processing through the message loop to 1) prevent infinite
     // recursion and 2) avoid blocking the thread for too long.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&QuicSimpleServer::OnReadComplete,
                                   weak_factory_.GetWeakPtr(), result));
   } else {

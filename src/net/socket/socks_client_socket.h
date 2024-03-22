@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "net/base/address_list.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/host_port_pair.h"
@@ -33,10 +33,10 @@ class NET_EXPORT_PRIVATE SOCKSClientSocket : public StreamSocket {
  public:
   // |destination| contains the hostname and port to which the socket above will
   // communicate to via the socks layer. For testing the referrer is optional.
-  // |network_isolation_key| is used for host resolution.
+  // |network_anonymization_key| is used for host resolution.
   SOCKSClientSocket(std::unique_ptr<StreamSocket> transport_socket,
                     const HostPortPair& destination,
-                    const NetworkIsolationKey& network_isolation_key,
+                    const NetworkAnonymizationKey& network_anonymization_key,
                     RequestPriority priority,
                     HostResolver* host_resolver,
                     SecureDnsPolicy secure_dns_policy,
@@ -57,7 +57,6 @@ class NET_EXPORT_PRIVATE SOCKSClientSocket : public StreamSocket {
   bool IsConnectedAndIdle() const override;
   const NetLogWithSource& NetLog() const override;
   bool WasEverUsed() const override;
-  bool WasAlpnNegotiated() const override;
   NextProto GetNegotiatedProtocol() const override;
   bool GetSSLInfo(SSLInfo* ssl_info) override;
   int64_t GetTotalReceivedBytes() const override;
@@ -143,11 +142,11 @@ class NET_EXPORT_PRIVATE SOCKSClientSocket : public StreamSocket {
   bool was_ever_used_ = false;
 
   // Used to resolve the hostname to which the SOCKS proxy will connect.
-  raw_ptr<HostResolver> host_resolver_;
+  raw_ptr<HostResolver, DanglingUntriaged> host_resolver_;
   SecureDnsPolicy secure_dns_policy_;
   std::unique_ptr<HostResolver::ResolveHostRequest> resolve_host_request_;
   const HostPortPair destination_;
-  const NetworkIsolationKey network_isolation_key_;
+  const NetworkAnonymizationKey network_anonymization_key_;
   RequestPriority priority_;
   ResolveErrorInfo resolve_error_info_;
 

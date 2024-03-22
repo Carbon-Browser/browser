@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -90,7 +90,8 @@ void RenderLineOfText(const std::string& line, int top, VideoFrame* frame) {
   const int stride = frame->stride(kPlane);
   uint8_t* p_ul =
       // Start at the first pixel in the first row...
-      frame->visible_data(kPlane) + (stride * top)
+      frame->GetWritableVisibleData(kPlane) +
+      (stride * top)
       // ...now move to the right edge of the visible part of the frame...
       + frame->visible_rect().width()
       // ...now move left to where line[0] would be rendered...
@@ -215,7 +216,7 @@ void RenderLineOfText(const std::string& line, int top, VideoFrame* frame) {
 
 }  // namespace
 
-scoped_refptr<VideoFrame> MaybeRenderPerformanceMetricsOverlay(
+scoped_refptr<VideoFrame> RenderPerformanceMetricsOverlay(
     base::TimeDelta target_playout_delay,
     bool in_low_latency_mode,
     int target_bitrate,
@@ -223,9 +224,6 @@ scoped_refptr<VideoFrame> MaybeRenderPerformanceMetricsOverlay(
     double encoder_utilization,
     double lossiness,
     scoped_refptr<VideoFrame> source) {
-  if (!VLOG_IS_ON(1))
-    return source;
-
   if (VideoFrame::PlaneHorizontalBitsPerPixel(source->format(), kPlane) != 8) {
     DLOG(WARNING) << "Cannot render overlay: Plane " << kPlane << " not 8bpp.";
     return source;
@@ -258,7 +256,7 @@ scoped_refptr<VideoFrame> MaybeRenderPerformanceMetricsOverlay(
         plane, source->format(), source->visible_rect().width());
     const uint8_t* src = source->visible_data(plane);
     const int src_stride = source->stride(plane);
-    uint8_t* dst = frame->visible_data(plane);
+    uint8_t* dst = frame->GetWritableVisibleData(plane);
     const int dst_stride = frame->stride(plane);
     for (size_t row = 0; row < row_count;
          ++row, src += src_stride, dst += dst_stride) {
@@ -303,8 +301,9 @@ scoped_refptr<VideoFrame> MaybeRenderPerformanceMetricsOverlay(
 
   // Move up one line's worth of pixels.
   top -= line_height;
-  if (top < 0 || !VLOG_IS_ON(2))
+  if (top < 0) {
     return frame;
+  }
 
   // Line 2: Capture duration, target playout delay, low-latency mode, and
   // target bitrate.
@@ -328,8 +327,9 @@ scoped_refptr<VideoFrame> MaybeRenderPerformanceMetricsOverlay(
 
   // Move up one line's worth of pixels.
   top -= line_height;
-  if (top < 0 || !VLOG_IS_ON(3))
+  if (top < 0) {
     return frame;
+  }
 
   // Line 1: Recent utilization metrics.
   const int encoder_pct =

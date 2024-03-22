@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,18 @@
  * the "dictionary" of custom words used for spell check.
  */
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/cr_elements/icons.html.js';
 import 'chrome://resources/polymer/v3_0/iron-a11y-keys/iron-a11y-keys.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
-import '../prefs/prefs.js';
+import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import {IronA11yKeysElement} from 'chrome://resources/polymer/v3_0/iron-a11y-keys/iron-a11y-keys.js';
 import {flush, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -99,7 +99,7 @@ export class SettingsEditDictionaryPageElement extends
     this.languageSettingsPrivate_ =
         LanguagesBrowserProxyImpl.getInstance().getLanguageSettingsPrivate();
 
-    this.languageSettingsPrivate_!.getSpellcheckWords(words => {
+    this.languageSettingsPrivate_!.getSpellcheckWords().then(words => {
       this.hasWords_ = words.length > 0;
       this.words_ = words;
     });
@@ -163,7 +163,7 @@ export class SettingsEditDictionaryPageElement extends
   /**
    * Handles tapping on the Add Word button.
    */
-  private onAddWordTap_() {
+  private onAddWordClick_() {
     this.addWordFromInput_();
     this.$.newWord.focus();
   }
@@ -225,7 +225,7 @@ export class SettingsEditDictionaryPageElement extends
   /**
    * Handles tapping on a "Remove word" icon button.
    */
-  private onRemoveWordTap_(e: {model: {item: string}}) {
+  private onRemoveWordClick_(e: {model: {item: string}}) {
     this.languageSettingsPrivate_!.removeSpellcheckWord(e.model.item);
   }
 }

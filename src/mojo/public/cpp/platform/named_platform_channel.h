@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,27 +68,27 @@ class COMPONENT_EXPORT(MOJO_CPP_PLATFORM) NamedPlatformChannel {
 
   NamedPlatformChannel(const Options& options);
   NamedPlatformChannel(NamedPlatformChannel&& other);
-
-  NamedPlatformChannel(const NamedPlatformChannel&) = delete;
-  NamedPlatformChannel& operator=(const NamedPlatformChannel&) = delete;
-
-  ~NamedPlatformChannel();
-
   NamedPlatformChannel& operator=(NamedPlatformChannel&& other);
+  ~NamedPlatformChannel();
 
   const PlatformChannelServerEndpoint& server_endpoint() const {
     return server_endpoint_;
   }
 
   // Helper to create a ServerName from a UTF8 string regardless of platform.
-  static ServerName ServerNameFromUTF8(base::StringPiece name);
+  static ServerName ServerNameFromUTF8(std::string_view name);
+
+#if BUILDFLAG(IS_WIN)
+  static ServerName GenerateRandomServerName();
+  static std::wstring GetPipeNameFromServerName(const ServerName& server_name);
+#endif
 
   // Passes the local server endpoint for the channel. On Windows, this is a
   // named pipe server; on POSIX it's a bound, listening domain socket. In each
   // case it should accept a single new connection.
   //
-  // Use the handle to send or receive an invitation, with the endpoint type as
-  // |MOJO_INVITATION_TRANSPORT_TYPE_CHANNEL_SERVER|.
+  // Use with PlatformChannelServer to wait for a new connection, yielding a
+  // PlatformChannelEndpoint that is usable with the Mojo invitations API.
   [[nodiscard]] PlatformChannelServerEndpoint TakeServerEndpoint() {
     return std::move(server_endpoint_);
   }

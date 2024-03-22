@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ function testSetAdapterState() {
   chrome.bluetooth.getAdapterState(function(state) {
     chrome.test.assertNoLastError();
     chrome.test.assertFalse(state.powered);
-    chrome.test.assertTrue(state.name != newAdapterName);
+    chrome.test.assertNe(newAdapterName, state.name);
     // TODO(tengs): Check if adapter is discoverable when the attribute is
     // exposed to the chrome.bluetooth API.
     setAdapterState();

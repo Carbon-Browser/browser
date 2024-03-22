@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "base/memory/ref_counted.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/in_memory_url_index_types.h"
-#include "components/omnibox/browser/suggestion_group.h"
+#include "components/omnibox/browser/suggestion_group_util.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 
 class AutocompleteInput;
@@ -173,6 +173,7 @@ class AutocompleteProvider
     TYPE_HISTORY_FUZZY = 1 << 16,
     TYPE_OPEN_TAB = 1 << 17,
     TYPE_HISTORY_CLUSTER_PROVIDER = 1 << 18,
+    TYPE_CALCULATOR = 1 << 19,
   };
 
   explicit AutocompleteProvider(Type type);
@@ -189,6 +190,21 @@ class AutocompleteProvider
   // `NotifyListeners().`
   void AddListener(AutocompleteProviderListener* listener);
   void NotifyListeners(bool updated_matches) const;
+
+  // Called on page load. Used start a prefetch request to warm up the
+  // provider's underlying service(s) and/or optionally cache the provider's
+  // otherwise async response. A prefetch request must conform to the following:
+  // - It must be posted on a sequence to minimize contention on page load.
+  // - It must *not* depend on or affect the provider's state.
+  // - It must *not* stop the provider.
+  // - It need *not* stop when the provider is stopped.
+  // - It must *not* call NotifyListeners() after completing a prefetch request.
+  // - It must make prefetched response accessible to other instances of the
+  //   provider, e.g., via user prefs or a keyed service, if applicable.
+  // The default implementation DCHECKs whether async requests are allowed.
+  // Overridden functions must call `AutocompleteProvider::StartPrefetch()` with
+  // the same arguments passed to the function.
+  virtual void StartPrefetch(const AutocompleteInput& input);
 
   // Called to start an autocomplete query.  The provider is responsible for
   // tracking its matches for this query and whether it is done processing the
@@ -211,12 +227,6 @@ class AutocompleteProvider
   // AutocompleteController::Start().
   virtual void Start(const AutocompleteInput& input, bool minimal_changes) = 0;
 
-  // Similar to Start(), but used to perform prefetch requests. Providers can
-  // override this method and perform a prefetch request in order to cache the
-  // response. Providers should *not* call NotifyListeners() after completing a
-  // prefetch request.
-  virtual void StartPrefetch(const AutocompleteInput& input) {}
-
   // Advises the provider to stop processing.  This may be called even if the
   // provider is already done.  If the provider caches any results, it should
   // clear the cache based on the value of `clear_cached_results`.  Normally,
@@ -234,7 +244,7 @@ class AutocompleteProvider
   // The default implementation sets `done_` to true and clears `matches_` if
   // `clear_cached_results` is true. Overridden functions must call
   // `AutocompleteProvider::Stop()` with the same arguments passed to the
-  // function unless there is a good and well-documented reason not to do so.
+  // function.
   virtual void Stop(bool clear_cached_results, bool due_to_user_inactivity);
 
   // Returns the enum equivalent to the name of this provider.
@@ -264,11 +274,6 @@ class AutocompleteProvider
   // information it wants to |provider_info|.
   virtual void AddProviderInfo(ProvidersInfo* provider_info) const;
 
-  // Called when a new omnibox session starts or the current session ends.
-  // This gives the opportunity to reset the internal state, if any, associated
-  // with the previous session.
-  virtual void ResetSession();
-
   // Estimates dynamic memory usage.
   // See base/trace_event/memory_usage_estimator.h for more info.
   //
@@ -278,7 +283,7 @@ class AutocompleteProvider
 
   // Returns a map of suggestion group IDs to suggestion group information
   // corresponding to |matches_|.
-  const SuggestionGroupsMap& suggestion_groups_map() const {
+  const omnibox::GroupConfigMap& suggestion_groups_map() const {
     return suggestion_groups_map_;
   }
 
@@ -313,62 +318,9 @@ class AutocompleteProvider
 
   typedef std::multimap<char16_t, std::u16string> WordMap;
 
-  // Finds the matches for |find_text| in |text|, classifies those matches,
-  // merges those classifications with |original_class|, and returns the merged
-  // classifications.
-  // If |text_is_search_query| is false, matches are classified as MATCH, and
-  // non-matches are classified as NONE. Otherwise, if |text_is_search_query| is
-  // true, matches are classified as NONE, and non-matches are classified as
-  // MATCH. This is done to mimic the behavior of SearchProvider which decorates
-  // matches according to the approach used by Google Suggest.
-  // |find_text| and |text| will be lowercased.
-  //
-  //   For example, given
-  //     |find_text| is "sp new",
-  //     |text| is "Sports and News at sports.somesite.com - visit us!",
-  //     |text_is_search_query| is false, and
-  //     |original_class| is {{0, NONE}, {19, URL}, {38, NONE}} (marking
-  //     "sports.somesite.com" as a URL),
-  //   Then this will return
-  //     {{0, MATCH}, {2, NONE}, {11, MATCH}, {14, NONE}, {19, URL|MATCH},
-  //     {21, URL}, {38, NONE}}; i.e.,
-  //     "Sports and News at sports.somesite.com - visit us!"
-  //      ^ ^        ^  ^    ^ ^                ^
-  //      0 2        11 14  19 21               38
-  //      M N        M  N  U|M U                N
-  //
-  //   For example, given
-  //     |find_text| is "canal",
-  //     |text| is "panama canal",
-  //     |text_is_search_query| is true, and
-  //     |original_class| is {{0, NONE}},
-  //   Then this will return
-  //     {{0,MATCH}, {7, NONE}}; i.e.,
-  //     "panama canal"
-  //      ^      ^
-  //      0 M    7 N
-  static ACMatchClassifications ClassifyAllMatchesInString(
-      const std::u16string& find_text,
-      const std::u16string& text,
-      const bool text_is_search_query,
-      const ACMatchClassifications& original_class = ACMatchClassifications());
-
   // Uses the keyword entry mode in `input` to decide if the user is currently
   // in keyword mode.
   static bool InKeywordMode(const AutocompleteInput& input);
-
-  // Used to determine if we're in keyword mode, if experimental keyword
-  // mode is enabled, and if we're confident that the user is intentionally
-  // (not accidentally) in keyword mode. Combined, this method returns
-  // whether the caller should perform steps that are only valid in this state.
-  static bool InExplicitExperimentalKeywordMode(const AutocompleteInput& input,
-                                                const std::u16string& keyword);
-
-  // Uses the keyword entry mode in `input` (and possibly compare the length
-  // of the user input vs `keyword`) to decide if the user intentionally
-  // entered keyword mode.
-  static bool InExplicitKeywordMode(const AutocompleteInput& input,
-                                    const std::u16string& keyword);
 
   // Trims "http:" or "https:" and up to two subsequent slashes from |url|. If
   // |trim_https| is true, trims "https:", otherwise trims "http:". Returns the
@@ -387,6 +339,12 @@ class AutocompleteProvider
   typedef std::pair<bool, std::u16string> FixupReturn;
 
   virtual ~AutocompleteProvider();
+
+  // Limits the size of `matches_` to `max_matches`. When ML scoring is enabled,
+  // the provider should pass all suggestions to the controller. In that case,
+  // this does not resize the list of matches, but instead marks all matches
+  // beyond `max_matches` as zero relevance and `culled_by_provider`.
+  void ResizeMatches(size_t max_matches, bool ml_scoring_enabled);
 
   // Fixes up user URL input to make it more possible to match against.  Among
   // many other things, this takes care of the following:
@@ -410,9 +368,11 @@ class AutocompleteProvider
   const size_t provider_max_matches_in_keyword_mode_{7};
 
   ACMatches matches_;
-  // A map of suggestion group IDs to suggestion group information corresponding
-  // to |matches_|.
-  SuggestionGroupsMap suggestion_groups_map_{};
+  // A map of suggestion group IDs to suggestion group information.
+  // `omnibox::BuildDefaultGroups()` will generate static groups. Providers can
+  // set this to create dynamic groups; e.g. the `ZeroSuggestProvider` does this
+  // based on groups received from the server.
+  omnibox::GroupConfigMap suggestion_groups_map_{};
   bool done_{true};
 
   Type type_;

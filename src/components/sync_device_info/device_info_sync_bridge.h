@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,17 +71,17 @@ class DeviceInfoSyncBridge : public ModelTypeSyncBridge,
   // ModelTypeSyncBridge implementation.
   void OnSyncStarting(const DataTypeActivationRequest& request) override;
   std::unique_ptr<MetadataChangeList> CreateMetadataChangeList() override;
-  absl::optional<ModelError> MergeSyncData(
+  absl::optional<ModelError> MergeFullSyncData(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_data) override;
-  absl::optional<ModelError> ApplySyncChanges(
+  absl::optional<ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
   void GetAllDataForDebugging(DataCallback callback) override;
   std::string GetClientTag(const EntityData& entity_data) override;
   std::string GetStorageKey(const EntityData& entity_data) override;
-  void ApplyStopSyncChanges(
+  void ApplyDisableSyncChanges(
       std::unique_ptr<MetadataChangeList> delete_metadata_change_list) override;
   ModelTypeSyncBridge::CommitAttemptFailedBehavior OnCommitAttemptFailed(
       syncer::SyncCommitError commit_error) override;
@@ -93,7 +93,7 @@ class DeviceInfoSyncBridge : public ModelTypeSyncBridge,
   std::vector<std::unique_ptr<DeviceInfo>> GetAllDeviceInfo() const override;
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
-  std::map<sync_pb::SyncEnums_DeviceType, int> CountActiveDevicesByType()
+  std::map<DeviceInfo::FormFactor, int> CountActiveDevicesByType()
       const override;
   bool IsRecentLocalCacheGuid(const std::string& cache_guid) const override;
 

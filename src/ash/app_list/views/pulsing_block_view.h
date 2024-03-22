@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define ASH_APP_LIST_VIEWS_PULSING_BLOCK_VIEW_H_
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace gfx {
@@ -17,10 +19,14 @@ namespace ash {
 
 // PulsingBlockView shows a pulsing white circle via layer animation.
 class PulsingBlockView : public views::View {
+  METADATA_HEADER(PulsingBlockView, views::View)
+
  public:
   // Constructs a PulsingBlockView of |size|. Starts the pulsing animation after
   // a |animation_delay|.
-  PulsingBlockView(const gfx::Size& size, base::TimeDelta animation_delay);
+  PulsingBlockView(const gfx::Size& size,
+                   base::TimeDelta animation_delay,
+                   float corner_radius);
 
   PulsingBlockView(const PulsingBlockView&) = delete;
   PulsingBlockView& operator=(const PulsingBlockView&) = delete;
@@ -42,12 +48,10 @@ class PulsingBlockView : public views::View {
  private:
   void OnStartDelayTimer();
 
-  // views::View overrides:
-  void OnPaint(gfx::Canvas* canvas) override;
-
   base::OneShotTimer start_delay_timer_;
 
-  views::View* background_color_view_ = nullptr;
+  raw_ptr<views::View, ExperimentalAsh> background_color_view_ = nullptr;
+
   const gfx::Size block_size_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,9 +56,10 @@ class TestSubSurface : public ServerObject {
   raw_ptr<wl_resource> surface_ = nullptr;
 
   // Parent surface resource.
-  raw_ptr<wl_resource> parent_resource_ = nullptr;
+  raw_ptr<wl_resource, DanglingUntriaged> parent_resource_ = nullptr;
 
-  raw_ptr<TestAugmentedSubSurface> augmented_subsurface_ = nullptr;
+  raw_ptr<TestAugmentedSubSurface, DanglingUntriaged> augmented_subsurface_ =
+      nullptr;
 };
 
 }  // namespace wl

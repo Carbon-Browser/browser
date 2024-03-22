@@ -1,16 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
 import 'chrome://new-tab-page/lazy_load.js';
 
 import {CustomizeBackgroundsElement} from 'chrome://new-tab-page/lazy_load.js';
 import {NewTabPageProxy, WindowProxy} from 'chrome://new-tab-page/new_tab_page.js';
 import {BackgroundCollection, CollectionImage, PageCallbackRouter, PageHandlerRemote} from 'chrome://new-tab-page/new_tab_page.mojom-webui.js';
 import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
-import {eventToPromise, flushTasks, isVisible} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
+import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
 
 import {assertNotStyle, assertStyle, createBackgroundImage, createTheme, installMock} from './test_support.js';
 
@@ -21,8 +21,8 @@ function createCollection(
 }
 
 suite('NewTabPageCustomizeBackgroundsTest', () => {
-  let windowProxy: TestBrowserProxy;
-  let handler: TestBrowserProxy;
+  let windowProxy: TestMock<WindowProxy>;
+  let handler: TestMock<PageHandlerRemote>;
 
   async function createCustomizeBackgrounds():
       Promise<CustomizeBackgroundsElement> {
@@ -38,7 +38,7 @@ suite('NewTabPageCustomizeBackgroundsTest', () => {
   }
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     windowProxy = installMock(WindowProxy);
     windowProxy.setResultFor('createIframeSrc', '');
@@ -112,6 +112,7 @@ suite('NewTabPageCustomizeBackgroundsTest', () => {
       previewImageUrl: {url: 'https://a.com/p.png'},
       attributionUrl: {url: ''},
       attribution2: '',
+      collectionId: '',
     };
     handler.setResultFor('getBackgroundImages', Promise.resolve({
       images: [image],
@@ -143,6 +144,7 @@ suite('NewTabPageCustomizeBackgroundsTest', () => {
       previewImageUrl: {url: 'https://example.com/image.png'},
       attributionUrl: {url: ''},
       attribution2: '',
+      collectionId: '',
     };
     const customizeBackgrounds = await createCustomizeBackgrounds();
     handler.setResultFor('getBackgroundImages', Promise.resolve({
@@ -167,6 +169,7 @@ suite('NewTabPageCustomizeBackgroundsTest', () => {
       previewImageUrl: {url: 'https://example.com/image.png'},
       attributionUrl: {url: ''},
       attribution2: '',
+      collectionId: '',
     };
     const customizeBackgrounds = await createCustomizeBackgrounds();
     handler.setResultFor('getBackgroundImages', Promise.resolve({
@@ -194,6 +197,7 @@ suite('NewTabPageCustomizeBackgroundsTest', () => {
       previewImageUrl: {url: 'https://example.com/image.png'},
       attributionUrl: {url: ''},
       attribution2: '',
+      collectionId: '',
     };
     const customizeBackgrounds = await createCustomizeBackgrounds();
     handler.setResultFor('getBackgroundImages', Promise.resolve({
@@ -218,6 +222,7 @@ suite('NewTabPageCustomizeBackgroundsTest', () => {
       previewImageUrl: {url: 'https://example.com/image.png'},
       attributionUrl: {url: ''},
       attribution2: '',
+      collectionId: '',
     };
     const customizeBackgrounds = await createCustomizeBackgrounds();
     customizeBackgrounds.theme.backgroundImage =
@@ -239,6 +244,7 @@ suite('NewTabPageCustomizeBackgroundsTest', () => {
       previewImageUrl: {url: 'https://example.com/image.png'},
       attributionUrl: {url: ''},
       attribution2: '',
+      collectionId: '',
     };
     const customizeBackgrounds = await createCustomizeBackgrounds();
     handler.setResultFor('getBackgroundImages', Promise.resolve({
@@ -291,7 +297,8 @@ suite('NewTabPageCustomizeBackgroundsTest', () => {
 
     test('not selected when refresh collection set', () => {
       const theme = createTheme();
-      theme.dailyRefreshCollectionId = 'landscape';
+      theme.dailyRefreshEnabled = true;
+      theme.backgroundImageCollectionId = 'landscape';
       customizeBackgrounds.theme = theme;
       assertSetNoBackgroundImageNotCalled();
     });

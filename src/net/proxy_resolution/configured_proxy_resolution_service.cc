@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -19,14 +19,13 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "net/base/net_errors.h"
 #include "net/base/net_info_source_list.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/proxy_delegate.h"
 #include "net/base/proxy_server.h"
 #include "net/base/proxy_string_util.h"
@@ -185,7 +184,7 @@ class ProxyResolverNull : public ProxyResolver {
 
   // ProxyResolver implementation.
   int GetProxyForURL(const GURL& url,
-                     const NetworkIsolationKey& network_isolation_key,
+                     const NetworkAnonymizationKey& network_anonymization_key,
                      ProxyInfo* results,
                      CompletionOnceCallback callback,
                      std::unique_ptr<Request>* request,
@@ -202,7 +201,7 @@ class ProxyResolverFromPacString : public ProxyResolver {
       : pac_string_(pac_string) {}
 
   int GetProxyForURL(const GURL& url,
-                     const NetworkIsolationKey& network_isolation_key,
+                     const NetworkAnonymizationKey& network_anonymization_key,
                      ProxyInfo* results,
                      CompletionOnceCallback callback,
                      std::unique_ptr<Request>* request,
@@ -289,32 +288,33 @@ class ProxyResolverFactoryForPacResult : public ProxyResolverFactory {
 };
 
 // Returns NetLog parameters describing a proxy configuration change.
-base::Value NetLogProxyConfigChangedParams(
+base::Value::Dict NetLogProxyConfigChangedParams(
     const absl::optional<ProxyConfigWithAnnotation>* old_config,
     const ProxyConfigWithAnnotation* new_config) {
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict dict;
   // The "old_config" is optional -- the first notification will not have
   // any "previous" configuration.
   if (old_config->has_value())
-    dict.SetKey("old_config", (*old_config)->value().ToValue());
-  dict.SetKey("new_config", new_config->value().ToValue());
+    dict.Set("old_config", (*old_config)->value().ToValue());
+  dict.Set("new_config", new_config->value().ToValue());
   return dict;
 }
 
-base::Value NetLogBadProxyListParams(const ProxyRetryInfoMap* retry_info) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  base::Value list(base::Value::Type::LIST);
+base::Value::Dict NetLogBadProxyListParams(
+    const ProxyRetryInfoMap* retry_info) {
+  base::Value::Dict dict;
+  base::Value::List list;
 
   for (const auto& retry_info_pair : *retry_info)
-    list.Append(retry_info_pair.first);
-  dict.SetKey("bad_proxy_list", std::move(list));
+    list.Append(retry_info_pair.first.ToDebugString());
+  dict.Set("bad_proxy_list", std::move(list));
   return dict;
 }
 
 // Returns NetLog parameters on a successful proxy resolution.
-base::Value NetLogFinishedResolvingProxyParams(const ProxyInfo* result) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("pac_string", result->ToPacString());
+base::Value::Dict NetLogFinishedResolvingProxyParams(const ProxyInfo* result) {
+  base::Value::Dict dict;
+  dict.Set("proxy_info", result->ToDebugString());
   return dict;
 }
 
@@ -642,7 +642,7 @@ class ConfiguredProxyResolutionService::PacFileDeciderPoller {
   void StartPollTimer() {
     DCHECK(!decider_.get());
 
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&PacFileDeciderPoller::DoPoll,
                        weak_factory_.GetWeakPtr()),
@@ -690,7 +690,7 @@ class ConfiguredProxyResolutionService::PacFileDeciderPoller {
       // calling it directly -- this is done to avoid an ugly destruction
       // sequence, since |this| might be destroyed as a result of the
       // notification.
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(
               &PacFileDeciderPoller::NotifyProxyResolutionServiceOfChange,
@@ -892,7 +892,7 @@ ConfiguredProxyResolutionService::CreateFixedFromAutoDetectedPacResultForTest(
 int ConfiguredProxyResolutionService::ResolveProxy(
     const GURL& raw_url,
     const std::string& method,
-    const NetworkIsolationKey& network_isolation_key,
+    const NetworkAnonymizationKey& network_anonymization_key,
     ProxyInfo* result,
     CompletionOnceCallback callback,
     std::unique_ptr<ProxyResolutionRequest>* out_request,
@@ -922,12 +922,13 @@ int ConfiguredProxyResolutionService::ResolveProxy(
   // using a direct connection for example).
   int rv = TryToCompleteSynchronously(url, result);
   if (rv != ERR_IO_PENDING) {
-    rv = DidFinishResolvingProxy(url, method, result, rv, net_log);
+    rv = DidFinishResolvingProxy(url, network_anonymization_key, method, result,
+                                 rv, net_log);
     return rv;
   }
 
   auto req = std::make_unique<ConfiguredProxyResolutionRequest>(
-      this, url, method, network_isolation_key, result, std::move(callback),
+      this, url, method, network_anonymization_key, result, std::move(callback),
       net_log);
 
   if (current_state_ == STATE_READY) {
@@ -1111,7 +1112,7 @@ void ConfiguredProxyResolutionService::OnInitProxyResolverComplete(int result) {
 bool ConfiguredProxyResolutionService::MarkProxiesAsBadUntil(
     const ProxyInfo& result,
     base::TimeDelta retry_delay,
-    const std::vector<ProxyServer>& additional_bad_proxies,
+    const std::vector<ProxyChain>& additional_bad_proxies,
     const NetLogWithSource& net_log) {
   result.proxy_list().UpdateRetryInfoOnFallback(&proxy_retry_info_, retry_delay,
                                                 false, additional_bad_proxies,
@@ -1131,8 +1132,8 @@ void ConfiguredProxyResolutionService::ReportSuccess(const ProxyInfo& result) {
     if (existing == proxy_retry_info_.end()) {
       proxy_retry_info_[iter.first] = iter.second;
       if (proxy_delegate_) {
-        const ProxyServer& bad_proxy =
-            ProxyUriToProxyServer(iter.first, ProxyServer::SCHEME_HTTP);
+        const ProxyChain& bad_proxy = iter.first;
+        DCHECK(!bad_proxy.is_direct());
         const ProxyRetryInfo& proxy_retry_info = iter.second;
         proxy_delegate_->OnFallback(bad_proxy, proxy_retry_info.net_error);
       }
@@ -1160,6 +1161,7 @@ void ConfiguredProxyResolutionService::RemovePendingRequest(
 
 int ConfiguredProxyResolutionService::DidFinishResolvingProxy(
     const GURL& url,
+    const NetworkAnonymizationKey& network_anonymization_key,
     const std::string& method,
     ProxyInfo* result,
     int result_code,
@@ -1171,7 +1173,8 @@ int ConfiguredProxyResolutionService::DidFinishResolvingProxy(
     // Allow the proxy delegate to interpose on the resolution decision,
     // possibly modifying the ProxyInfo.
     if (proxy_delegate_)
-      proxy_delegate_->OnResolveProxy(url, method, proxy_retry_info_, result);
+      proxy_delegate_->OnResolveProxy(url, network_anonymization_key, method,
+                                      proxy_retry_info_, result);
 
     net_log.AddEvent(
         NetLogEventType::PROXY_RESOLUTION_SERVICE_RESOLVED_PROXY_LIST,
@@ -1180,7 +1183,7 @@ int ConfiguredProxyResolutionService::DidFinishResolvingProxy(
     // This check is done to only log the NetLog event when necessary, it's
     // not a performance optimization.
     if (!proxy_retry_info_.empty()) {
-      result->DeprioritizeBadProxies(proxy_retry_info_);
+      result->DeprioritizeBadProxyChains(proxy_retry_info_);
       net_log.AddEvent(
           NetLogEventType::PROXY_RESOLUTION_SERVICE_DEPRIORITIZED_BAD_PROXIES,
           [&] { return NetLogFinishedResolvingProxyParams(result); });
@@ -1205,7 +1208,8 @@ int ConfiguredProxyResolutionService::DidFinishResolvingProxy(
       // Allow the proxy delegate to interpose on the resolution decision,
       // possibly modifying the ProxyInfo.
       if (proxy_delegate_)
-        proxy_delegate_->OnResolveProxy(url, method, proxy_retry_info_, result);
+        proxy_delegate_->OnResolveProxy(url, network_anonymization_key, method,
+                                        proxy_retry_info_, result);
     } else {
       result_code = ERR_MANDATORY_PROXY_CONFIGURATION_FAILED;
     }
@@ -1321,18 +1325,17 @@ base::Value::Dict ConfiguredProxyResolutionService::GetProxyNetLogValues() {
 
   // Log Bad Proxies.
   {
-    base::Value list(base::Value::Type::LIST);
+    base::Value::List list;
 
     for (const auto& it : proxy_retry_info_) {
-      const std::string& proxy_uri = it.first;
+      const std::string& proxy_chain_uri = it.first.ToDebugString();
       const ProxyRetryInfo& retry_info = it.second;
 
-      base::Value dict(base::Value::Type::DICTIONARY);
-      dict.SetStringKey("proxy_uri", proxy_uri);
-      dict.SetStringKey("bad_until",
-                        NetLog::TickCountToString(retry_info.bad_until));
+      base::Value::Dict dict;
+      dict.Set("proxy_chain_uri", proxy_chain_uri);
+      dict.Set("bad_until", NetLog::TickCountToString(retry_info.bad_until));
 
-      list.Append(std::move(dict));
+      list.Append(base::Value(std::move(dict)));
     }
 
     net_info_dict.Set(kNetInfoBadProxies, std::move(list));

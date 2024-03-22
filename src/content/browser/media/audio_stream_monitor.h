@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,13 @@
 
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/threading/thread_checker.h"
-#include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/web_contents_observer.h"
-
-namespace base {
-class TickClock;
-}
 
 namespace content {
 
@@ -89,17 +85,19 @@ class CONTENT_EXPORT AudioStreamMonitor : public WebContentsObserver {
   // Class to help automatically remove audible client.
   class CONTENT_EXPORT AudibleClientRegistration {
    public:
-    explicit AudibleClientRegistration(
-        AudioStreamMonitor* audio_stream_monitor);
+    AudibleClientRegistration(GlobalRenderFrameHostId host_id,
+                              AudioStreamMonitor* audio_stream_monitor);
     ~AudibleClientRegistration();
 
    private:
+    GlobalRenderFrameHostId host_id_;
     raw_ptr<AudioStreamMonitor> audio_stream_monitor_;
   };
 
   // Registers an audible client, which will be unregistered when the returned
   // AudibleClientRegistration is released.
-  std::unique_ptr<AudibleClientRegistration> RegisterAudibleClient();
+  std::unique_ptr<AudibleClientRegistration> RegisterAudibleClient(
+      GlobalRenderFrameHostId host_id);
 
  private:
   friend class AudioStreamMonitorTest;
@@ -135,16 +133,12 @@ class CONTENT_EXPORT AudioStreamMonitor : public WebContentsObserver {
   void UpdateStreams();
 
   // Adds/Removes Audible clients.
-  void AddAudibleClient();
-  void RemoveAudibleClient();
+  void AddAudibleClient(GlobalRenderFrameHostId host_id);
+  void RemoveAudibleClient(GlobalRenderFrameHostId host_id);
 
-  // The WebContents instance to receive indicator toggle notifications.  This
+  // The WebContents instance to receive indicator toggle notifications. This
   // pointer should be valid for the lifetime of AudioStreamMonitor.
   const raw_ptr<WebContents> web_contents_;
-
-  // Note: |clock_| is always a DefaultTickClock, except during unit
-  // testing.
-  const base::TickClock* const clock_;
 
   // Confirms single-threaded access in debug builds.
   base::ThreadChecker thread_checker_;
@@ -153,8 +147,11 @@ class CONTENT_EXPORT AudioStreamMonitor : public WebContentsObserver {
   // streams will have an entry in this map.
   base::flat_map<StreamID, bool> streams_;
 
-  // Number of non-stream audible clients, e.g. players not using AudioServices.
-  int audible_clients_ = 0;
+  // Map of non-stream audible clients, e.g. players not using AudioServices.
+  // size_t is the number of audible clients associated with the
+  // GlobalRenderFrameHostId. If size_t count reaches 0 there are no
+  // remaining audible clients for the associated host id.
+  base::flat_map<GlobalRenderFrameHostId, size_t> audible_clients_;
 
   // Records the last time at which all streams became silent.
   base::TimeTicks last_became_silent_time_;

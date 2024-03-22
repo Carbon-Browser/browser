@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/sequence_checker.h"
 #include "base/supports_user_data.h"
-#include "base/threading/thread_checker.h"
 #include "components/autofill/core/browser/webdata/autofill_change.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_backend.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service_observer.h"
@@ -51,10 +51,10 @@ class AutocompleteSyncBridge
   // syncer::ModelTypeSyncBridge implementation.
   std::unique_ptr<syncer::MetadataChangeList> CreateMetadataChangeList()
       override;
-  absl::optional<syncer::ModelError> MergeSyncData(
+  absl::optional<syncer::ModelError> MergeFullSyncData(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_data) override;
-  absl::optional<syncer::ModelError> ApplySyncChanges(
+  absl::optional<syncer::ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
@@ -63,21 +63,22 @@ class AutocompleteSyncBridge
   std::string GetStorageKey(const syncer::EntityData& entity_data) override;
 
   // AutofillWebDataServiceObserverOnDBSequence implementation.
-  void AutofillEntriesChanged(const AutofillChangeList& changes) override;
+  void AutocompleteEntriesChanged(
+      const AutocompleteChangeList& changes) override;
 
  private:
   // Returns the table associated with the |web_data_backend_|.
   AutofillTable* GetAutofillTable() const;
 
-  // Respond to local autofill entries changing by notifying sync of the
+  // Respond to local autocomplete entries changing by notifying sync of the
   // changes.
-  void ActOnLocalChanges(const AutofillChangeList& changes);
+  void ActOnLocalChanges(const AutocompleteChangeList& changes);
 
   // Synchronously load sync metadata from the autofill table and pass it to the
   // processor so that it can start tracking changes.
   void LoadMetadata();
 
-  base::ThreadChecker thread_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 
   // AutocompleteSyncBridge is owned by |web_data_backend_| through
   // SupportsUserData, so it's guaranteed to outlive |this|.

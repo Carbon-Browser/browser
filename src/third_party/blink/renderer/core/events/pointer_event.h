@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -101,6 +101,10 @@ class CORE_EXPORT PointerEvent : public MouseEvent {
 
   DispatchEventResult DispatchEvent(EventDispatcher&) override;
 
+  Document* GetDocument() const;
+
+  int32_t deviceId() const { return device_id_; }
+
   void Trace(Visitor*) const override;
 
  private:
@@ -125,6 +129,8 @@ class CORE_EXPORT PointerEvent : public MouseEvent {
   HeapVector<Member<PointerEvent>> coalesced_events_;
 
   HeapVector<Member<PointerEvent>> predicted_events_;
+
+  int32_t device_id_;
 };
 
 template <>

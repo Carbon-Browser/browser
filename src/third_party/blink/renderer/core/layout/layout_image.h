@@ -107,8 +107,21 @@ class CORE_EXPORT LayoutImage : public LayoutReplaced {
 
   void UpdateAfterLayout() override;
 
+  class MutableForPainting : public LayoutObject::MutableForPainting {
+   public:
+    void UpdatePaintedRect(const PhysicalRect& paint_rect);
+
+   private:
+    friend class LayoutImage;
+    explicit MutableForPainting(const LayoutImage& image)
+        : LayoutObject::MutableForPainting(image) {}
+  };
+  MutableForPainting GetMutableForPainting() const {
+    NOT_DESTROYED();
+    return MutableForPainting(*this);
+  }
+
  protected:
-  bool NeedsPreferredWidthsRecalculation() const final;
   SVGImage* EmbeddedSVGImage() const;
   bool CanApplyObjectViewBox() const override;
   void ComputeIntrinsicSizingInfo(IntrinsicSizingInfo&) const override;
@@ -150,15 +163,13 @@ class CORE_EXPORT LayoutImage : public LayoutReplaced {
     return true;
   }
 
-  LayoutUnit MinimumReplacedHeight() const override;
-
   bool NodeAtPoint(HitTestResult&,
                    const HitTestLocation&,
                    const PhysicalOffset& accumulated_offset,
                    HitTestPhase) final;
 
   void InvalidatePaintAndMarkForLayoutIfNeeded(CanDeferInvalidation);
-  void UpdateIntrinsicSizeIfNeeded(const LayoutSize&);
+  void UpdateIntrinsicSizeIfNeeded(const PhysicalSize&);
   bool NeedsLayoutOnIntrinsicSizeChange() const;
   // Override intrinsic sizing info to default if "unsized-media"
   // is disabled and the element has no sizing info.
@@ -176,11 +187,14 @@ class CORE_EXPORT LayoutImage : public LayoutReplaced {
   // and thus is stored in ComputedStyle (see ContentData::image) that gets
   // propagated to the anonymous LayoutImage in LayoutObject::createObject.
   Member<LayoutImageResource> image_resource_;
-  bool did_increment_visually_non_empty_pixel_count_;
+  float image_device_pixel_ratio_ = 1.0f;
+  bool did_increment_visually_non_empty_pixel_count_ = false;
 
   // This field stores whether this image is generated with 'content'.
-  bool is_generated_content_;
-  float image_device_pixel_ratio_;
+  bool is_generated_content_ = false;
+
+  friend class MutableForPainting;
+  PhysicalRect last_paint_rect_;
 };
 
 template <>

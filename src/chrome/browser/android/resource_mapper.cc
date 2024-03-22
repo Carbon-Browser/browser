@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,7 @@ void ResourceMapper::ConstructMap() {
 #define DECLARE_RESOURCE_ID(c_id, java_id) \
   g_id_map.Get()[c_id] = resource_id_list[next_id++];
 #include "chrome/browser/android/resource_id.h"
+#include "components/resources/android/autofill_resource_id.h"
 #include "components/resources/android/blocked_content_resource_id.h"
 #include "components/resources/android/page_info_resource_id.h"
 #include "components/resources/android/permissions_resource_id.h"

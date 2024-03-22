@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "ash/public/cpp/autotest_private_api_utils.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/window_user_data.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer_type.h"
 
@@ -27,7 +27,7 @@ class Data {
   ~Data() { *delete_setter_ = true; }
 
  private:
-  bool* delete_setter_;
+  raw_ptr<bool, ExperimentalAsh> delete_setter_;
 };
 
 }  // namespace

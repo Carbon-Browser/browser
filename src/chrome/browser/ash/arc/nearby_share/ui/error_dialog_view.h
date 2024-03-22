@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "chrome/browser/ash/arc/nearby_share/ui/base_dialog_delegate_view.h"
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 
 namespace aura {
 class Window;

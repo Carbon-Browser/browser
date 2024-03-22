@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,20 +59,6 @@ class AccessibilityTest : public RenderingTest {
   ScopedAccessibilityUseAXPositionForDocumentMarkersForTest use_ax_position{
       true};
 };
-
-class ParameterizedAccessibilityTest : public testing::WithParamInterface<bool>,
-                                       private ScopedLayoutNGForTest,
-                                       public AccessibilityTest {
- public:
-  ParameterizedAccessibilityTest() : ScopedLayoutNGForTest(GetParam()) {}
-
- protected:
-  bool LayoutNGEnabled() const {
-    return RuntimeEnabledFeatures::LayoutNGEnabled();
-  }
-};
-
-INSTANTIATE_TEST_SUITE_P(All, ParameterizedAccessibilityTest, testing::Bool());
 
 }  // namespace blink
 

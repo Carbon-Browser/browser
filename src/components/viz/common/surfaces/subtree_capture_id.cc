@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@
 namespace viz {
 
 std::string SubtreeCaptureId::ToString() const {
-  return base::StringPrintf("SubtreeCaptureId(%u)", subtree_id_);
+  return base::StringPrintf("SubtreeCaptureId(%s)",
+                            subtree_id_.ToString().c_str());
 }
 
 }  // namespace viz

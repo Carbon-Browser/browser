@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,86 +6,72 @@
 #define BASE_TASK_TASK_FEATURES_H_
 
 #include "base/base_export.h"
+#include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "build/build_config.h"
 
 namespace base {
 
-struct Feature;
+// Fixed amount of threads that will be used as a cap for thread pools.
+BASE_EXPORT BASE_DECLARE_FEATURE(kThreadPoolCap2);
 
-// Under this feature, workers blocked with MayBlock are replaced immediately
-// instead of waiting for a threshold in the foreground thread group.
-extern const BASE_EXPORT Feature kMayBlockWithoutDelay;
+extern const BASE_EXPORT base::FeatureParam<int> kThreadPoolCapRestrictedCount;
 
-// Under this feature, ThreadPool::ShouldYield() always returns false
-extern const BASE_EXPORT Feature kDisableJobYield;
-// Under this feature, JobTaskSource doesn't use worker count in its sort key
-// such that worker threads are not distributed among running jobs equally.
-extern const BASE_EXPORT Feature kDisableFairJobScheduling;
-// Under this feature, priority update on Jobs is disabled.
-extern const BASE_EXPORT Feature kDisableJobUpdatePriority;
-// Under this feature, another WorkerThread is signaled only after the current
-// thread was assigned work.
-extern const BASE_EXPORT Feature kWakeUpAfterGetWork;
+// Under this feature, a utility_thread_group will be created for
+// running USER_VISIBLE tasks.
+BASE_EXPORT BASE_DECLARE_FEATURE(kUseUtilityThreadGroup);
 
-// Strategy affecting how WorkerThreads are signaled to pick up pending work.
-enum class WakeUpStrategy {
-  // A single thread scheduling new work signals all required WorkerThreads.
-  kCentralizedWakeUps,
-  // Each thread signals at most a single thread, either when scheduling new
-  // work or picking up pending work.
-  kSerializedWakeUps,
-  // Each thread signals at most 2 threads, either when scheduling new
-  // work or picking up pending work.
-  kExponentialWakeUps,
-  // Each thread signals as many threads as necessary, either when scheduling
-  // new work or picking up pending work.
-  kGreedyWakeUps,
-};
+// Under this feature, worker threads are not reclaimed after a timeout. Rather,
+// only excess workers are cleaned up immediately after finishing a task.
+BASE_EXPORT BASE_DECLARE_FEATURE(kNoWorkerThreadReclaim);
 
-// Under this feature, a given WakeUpStrategy param is used.
-extern const BASE_EXPORT Feature kWakeUpStrategyFeature;
-extern const BASE_EXPORT base::FeatureParam<WakeUpStrategy>
-    kWakeUpStrategyParam;
-
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE)
-#define HAS_NATIVE_THREAD_POOL() 1
-#else
-#define HAS_NATIVE_THREAD_POOL() 0
-#endif
-
-#if HAS_NATIVE_THREAD_POOL()
-// Under this feature, ThreadPoolImpl will use a foreground ThreadGroup backed
-// by a native thread pool implementation. The Windows Thread Pool API and
-// libdispatch are used on Windows and macOS/iOS respectively.
-extern const BASE_EXPORT Feature kUseNativeThreadPool;
-// Under this feature, ThreadPoolImpl will use a background ThreadGroup backed
-// by a native thread pool implementation.
-extern const BASE_EXPORT Feature kUseBackgroundNativeThreadPool;
-#endif
-
-// Whether threads in the ThreadPool should be reclaimed after being idle for 5
-// minutes, instead of 30 seconds.
-extern const BASE_EXPORT Feature kUseFiveMinutesThreadReclaimTime;
-
-// Controls whether or not canceled delayed tasks are removed from task queues.
-extern const BASE_EXPORT base::Feature kRemoveCanceledTasksInTaskQueue;
+// This feature controls whether ThreadPool WorkerThreads should hold off waking
+// up to purge partition alloc within the first minute of their lifetime. See
+// base::internal::GetSleepTimeBeforePurge.
+BASE_EXPORT BASE_DECLARE_FEATURE(kDelayFirstWorkerWake);
 
 // Under this feature, a non-zero leeway is added to delayed tasks. Along with
 // DelayPolicy, this affects the time at which a delayed task runs.
-extern const BASE_EXPORT Feature kAddTaskLeewayFeature;
+BASE_EXPORT BASE_DECLARE_FEATURE(kAddTaskLeewayFeature);
+#if BUILDFLAG(IS_WIN)
+constexpr TimeDelta kDefaultLeeway = Milliseconds(16);
+#else
+constexpr TimeDelta kDefaultLeeway = Milliseconds(8);
+#endif  // #if !BUILDFLAG(IS_WIN)
 extern const BASE_EXPORT base::FeatureParam<TimeDelta> kTaskLeewayParam;
 
-// Under this feature, wake ups are aligned at a 4ms boundary when allowed per
+// We consider that delayed tasks above |kMaxPreciseDelay| never need
+// DelayPolicy::kPrecise. The default value is slightly above 30Hz timer.
+constexpr TimeDelta kDefaultMaxPreciseDelay = Milliseconds(36);
+extern const BASE_EXPORT base::FeatureParam<TimeDelta> kMaxPreciseDelay;
+
+// Under this feature, wake ups are aligned at a 8ms boundary when allowed per
 // DelayPolicy.
-extern const BASE_EXPORT base::Feature kAlignWakeUps;
+BASE_EXPORT BASE_DECLARE_FEATURE(kAlignWakeUps);
+
+// Under this feature, slack is added on mac message pumps that support it when
+// allowed per DelayPolicy.
+BASE_EXPORT BASE_DECLARE_FEATURE(kTimerSlackMac);
 
 // Under this feature, tasks that need high resolution timer are determined
 // based on explicit DelayPolicy rather than based on a threshold.
-extern const BASE_EXPORT base::Feature kExplicitHighResolutionTimerWin;
+BASE_EXPORT BASE_DECLARE_FEATURE(kExplicitHighResolutionTimerWin);
 
 // Feature to run tasks by batches before pumping out messages.
-extern const BASE_EXPORT base::Feature kRunTasksByBatches;
+BASE_EXPORT BASE_DECLARE_FEATURE(kRunTasksByBatches);
+
+BASE_EXPORT void InitializeTaskLeeway();
+BASE_EXPORT TimeDelta GetTaskLeewayForCurrentThread();
+BASE_EXPORT TimeDelta GetDefaultTaskLeeway();
+
+// Controls the max number of delayed tasks that can run before selecting an
+// immediate task in sequence manager.
+BASE_EXPORT BASE_DECLARE_FEATURE(kMaxDelayedStarvationTasks);
+extern const BASE_EXPORT base::FeatureParam<int>
+    kMaxDelayedStarvationTasksParam;
+
+// Feature to use a JobTaskSource implementation that minimizes lock contention.
+BASE_EXPORT BASE_DECLARE_FEATURE(kUseNewJobImplementation);
 
 }  // namespace base
 

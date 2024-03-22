@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 
 class Profile;
 
@@ -53,7 +54,8 @@ class UserPolicyTestHelper {
 
  private:
   const std::string account_id_;
-  ash::EmbeddedPolicyTestServerMixin* embedded_policy_server_ = nullptr;
+  raw_ptr<ash::EmbeddedPolicyTestServerMixin, ExperimentalAsh>
+      embedded_policy_server_ = nullptr;
 };
 
 }  // namespace policy

@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/window_restore/window_restore_util.h"
 
 #include "ash/public/cpp/app_types_util.h"
-#include "ash/public/cpp/desks_templates_delegate.h"
+#include "ash/public/cpp/saved_desk_delegate.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/window_state.h"
+#include "base/ranges/algorithm.h"
 #include "components/app_restore/window_properties.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/screen_position_client.h"
@@ -45,7 +46,7 @@ gfx::Rect GetBoundsIgnoringTransforms(const aura::Window* window,
 
 std::unique_ptr<app_restore::WindowInfo> BuildWindowInfo(
     aura::Window* window,
-    absl::optional<int> activation_index,
+    std::optional<int> activation_index,
     bool for_saved_desks,
     const std::vector<aura::Window*>& mru_windows) {
   auto window_info = std::make_unique<app_restore::WindowInfo>();
@@ -53,14 +54,26 @@ std::unique_ptr<app_restore::WindowInfo> BuildWindowInfo(
   if (activation_index) {
     window_activation_index = *activation_index;
   } else {
-    auto it = std::find(mru_windows.begin(), mru_windows.end(), window);
+    auto it = base::ranges::find(mru_windows, window);
     if (it != mru_windows.end())
       window_activation_index = it - mru_windows.begin();
   }
   if (window_activation_index != -1)
     window_info->activation_index = window_activation_index;
   window_info->window = window;
-  window_info->desk_id = window->GetProperty(aura::client::kWindowWorkspaceKey);
+
+  // Set either the `desk_id` or set the `desk_guid`, but not both.
+  const int desk_id = window->GetProperty(aura::client::kWindowWorkspaceKey);
+  if (desk_id == aura::client::kWindowWorkspaceVisibleOnAllWorkspaces) {
+    window_info->desk_id = desk_id;
+  } else {
+    const std::string* desk_uuid =
+        window->GetProperty(aura::client::kDeskUuidKey);
+    // It's possible for the desk to no longer exist or not be found in the case
+    // of CloseAll.
+    window_info->desk_guid =
+        desk_uuid ? base::Uuid::ParseLowercase(*desk_uuid) : base::Uuid();
+  }
 
   // If override bounds and window state are available (in tablet mode), save
   // those bounds.
@@ -68,10 +81,10 @@ std::unique_ptr<app_restore::WindowInfo> BuildWindowInfo(
   WindowState* window_state = WindowState::Get(window);
   if (override_bounds) {
     window_info->current_bounds = *override_bounds;
-    // Snapped state can be restored from tablet onto clamshell, so we do not
-    // use the restore override state here.
+    // Snapped and floated states can be restored from tablet onto clamshell, so
+    // we do not use the restore override state here.
     window_info->window_state_type =
-        window_state->IsSnapped()
+        window_state->IsSnapped() || window_state->IsFloated()
             ? window_state->GetStateType()
             : window->GetProperty(kRestoreWindowStateTypeOverrideKey);
   } else {
@@ -79,7 +92,9 @@ std::unique_ptr<app_restore::WindowInfo> BuildWindowInfo(
     // states with restore bounds (maximized, minimized, snapped, etc), they
     // will take the current bounds as their restore bounds and have the current
     // bounds determined by the system.
-    if (window_state->HasRestoreBounds()) {
+    // Note that for floated state, the window should be restored to its current
+    // floated bounds since it's not stored in restore bounds.
+    if (window_state->HasRestoreBounds() && !window_state->IsFloated()) {
       window_info->current_bounds = window_state->GetRestoreBoundsInScreen();
     } else {
       window_info->current_bounds =
@@ -105,11 +120,11 @@ std::unique_ptr<app_restore::WindowInfo> BuildWindowInfo(
   if (window_state->IsSnapped()) {
     // `WindowState::snap_ratio_` is stored as a float between 0 and 1. Convert
     // it to a percentage here.
-    absl::optional<float> snap_ratio = window_state->snap_ratio();
+    std::optional<float> snap_ratio = window_state->snap_ratio();
     window_info->snap_percentage =
-        snap_ratio.has_value() ? absl::make_optional(std::round(
+        snap_ratio.has_value() ? std::make_optional(std::round(
                                      100 * window_state->snap_ratio().value()))
-                               : absl::nullopt;
+                               : std::nullopt;
   }
 
   window_info->display_id =
@@ -121,10 +136,10 @@ std::unique_ptr<app_restore::WindowInfo> BuildWindowInfo(
   if (for_saved_desks) {
     std::string* app_id = window->GetProperty(kAppIDKey);
     window_info->app_title =
-        app_id ? base::UTF8ToUTF16(
-                     Shell::Get()->desks_templates_delegate()->GetAppShortName(
-                         *app_id))
-               : window->GetTitle();
+        app_id
+            ? base::UTF8ToUTF16(
+                  Shell::Get()->saved_desk_delegate()->GetAppShortName(*app_id))
+            : window->GetTitle();
   }
 
   // Save window size restriction of ARC app window.

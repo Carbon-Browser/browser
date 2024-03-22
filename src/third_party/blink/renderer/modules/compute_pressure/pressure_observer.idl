@@ -1,21 +1,21 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// https://wicg.github.io/compute-pressure/#dom-pressuresource
+// https://w3c.github.io/compute-pressure/#dom-pressuresource
 enum PressureSource {
   "cpu"
 };
 
-// https://wicg.github.io/compute-pressure/#dom-pressureobserver
+// https://w3c.github.io/compute-pressure/#the-pressureobserver-object
 [
-    Exposed=Window,
+    Exposed=(DedicatedWorker,SharedWorker,Window),
     RuntimeEnabled=ComputePressure,
     SecureContext
 ] interface PressureObserver {
   [
-    CallWith=ScriptState, RaisesException,
-    MeasureAs=PressureObserver_Constructor
+    MeasureAs=PressureObserver_Constructor,
+    RaisesException
   ] constructor(PressureUpdateCallback callback,
                 optional PressureObserverOptions options = {});
 

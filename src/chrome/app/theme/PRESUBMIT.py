@@ -1,4 +1,4 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,7 +10,6 @@ https://chromium.googlesource.com/chromium/src/+/main/styleguide/web/web.md
 for the rules we're checking against here.
 """
 
-USE_PYTHON3 = True
 
 def CheckChangeOnUpload(input_api, output_api):
   return _CommonChecks(input_api, output_api)

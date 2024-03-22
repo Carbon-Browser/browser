@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,10 @@
 
 ScopedMenuBarLock::ScopedMenuBarLock() {
   if ([NSMenu instancesRespondToSelector:@selector(_lockMenuPosition)])
-    [[NSApp mainMenu] _lockMenuPosition];
+    [NSApp.mainMenu _lockMenuPosition];
 }
 
 ScopedMenuBarLock::~ScopedMenuBarLock() {
   if ([NSMenu instancesRespondToSelector:@selector(_unlockMenuPosition)])
-    [[NSApp mainMenu] _unlockMenuPosition];
+    [NSApp.mainMenu _unlockMenuPosition];
 }

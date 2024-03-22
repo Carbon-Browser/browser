@@ -1,4 +1,4 @@
-/* Copyright 2014 The Chromium Authors. All rights reserved.
+/* Copyright 2014 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
@@ -27,16 +27,14 @@ button {
   margin-inline-end: 8px;
 }
 
-#log-checkbox-container label {
-  vertical-align: middle;
-}
-
-#log-checkbox-container input {
-  margin-bottom: 1px;
-  vertical-align: middle;
+#log-checkbox-container,
+label {
+  align-items: center;
+  display: inline-flex;
 }
 
 #log-level-select {
+  margin: 0 3px;
   padding: 0 5px;
 }
 
@@ -96,7 +94,7 @@ button {
   margin-inline-end: 5px;
   margin-top: 2px;
   padding: 0 4px 2px 4px;
-  width: 65px;
+  width: 80px;
 }
 
 .log-type-login {

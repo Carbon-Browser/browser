@@ -1,8 +1,8 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.m.js';
+import {NativeEventTarget as EventTarget} from 'chrome://resources/ash/common/event_target.js';
 
 import {AndroidAppListModel} from './android_app_list_model.js';
 
@@ -43,6 +43,9 @@ export function createFakeAndroidAppListModel(appNames) {
      *     |index|-th picker app.
      */
     item(index) {
+      // @ts-ignore: error TS2322: Type '{ name: string | undefined;
+      // packageName: string; activityName: string; } | undefined' is not
+      // assignable to type 'AndroidApp'.
       return this.apps_[index];
     }
   }

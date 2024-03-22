@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,9 @@
 namespace switches {
 
 bool IsElasticOverscrollEnabled() {
-// On macOS this value is adjusted in `UpdateScrollbarTheme()`,
+// On macOS and iOS this value is adjusted in `UpdateScrollbarTheme()`,
 // but the system default is true.
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   return true;
 #elif BUILDFLAG(IS_WIN)
   return base::FeatureList::IsEnabled(features::kElasticOverscroll);

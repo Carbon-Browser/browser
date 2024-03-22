@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,10 @@
 #include <set>
 #include <vector>
 
-#include "base/allocator/partition_allocator/address_pool_manager.h"
-#include "base/allocator/partition_allocator/partition_address_space.h"
-#include "base/allocator/partition_allocator/partition_alloc_config.h"
-#include "base/allocator/partition_allocator/partition_alloc_constants.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/address_pool_manager.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_address_space.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_constants.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/memory/page_size.h"
@@ -48,8 +48,9 @@ using memory_instrumentation::mojom::VmRegion;
 
 // NOTE: Descriptions for these feature params can be found in the userspace
 // swap header file for the UserspaceSwapConfig struct.
-const base::Feature kUserspaceSwap{"UserspaceSwapEnabled",
-                                   base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kUserspaceSwap,
+             "UserspaceSwapEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 const base::FeatureParam<int> kUserspaceSwapPagesPerRegion = {
     &kUserspaceSwap, "UserspaceSwapPagesPerRegion", 16};
 const base::FeatureParam<bool> kUserspaceSwapCompressedSwapFile = {
@@ -82,14 +83,14 @@ const base::FeatureParam<bool> kUserspaceSwapShuffleMapsOrder = {
 // g_global_disk_usage is the sum of all |written_to_disk| values from each
 // renderer. We keep track of this number because we need to enforce the global
 // total swap limit. This value is safe to be fetched from any sequence.
-std::atomic<uint64_t> g_global_disk_usage_bytes = ATOMIC_VAR_INIT(0);
+std::atomic<uint64_t> g_global_disk_usage_bytes{0};
 
 // This is the sum of all |reclaimed_bytes| values from each renderer. This
 // value is safe to be fetched from any sequence.
-std::atomic<uint64_t> g_global_reclaimed_bytes = ATOMIC_VAR_INIT(0);
+std::atomic<uint64_t> g_global_reclaimed_bytes{0};
 
 // This is our global swap kill switch.
-std::atomic<bool> g_global_swap_allowed = ATOMIC_VAR_INIT(true);
+std::atomic<bool> g_global_swap_allowed{true};
 
 class RendererSwapDataImpl : public RendererSwapData {
  public:
@@ -414,8 +415,7 @@ std::ostream& operator<<(std::ostream& out, const UserspaceSwapConfig& c) {
 // KernelSupportsUserspaceSwap will test for all features necessary to enable
 // userspace swap.
 COMPONENT_EXPORT(USERSPACE_SWAP) bool KernelSupportsUserspaceSwap() {
-#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
-    !defined(PA_HAS_64_BITS_POINTERS)
+#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || !BUILDFLAG(HAS_64_BIT_POINTERS)
   // We currently only support 64bit partition alloc.
   return false;
 #else
@@ -448,7 +448,7 @@ COMPONENT_EXPORT(USERSPACE_SWAP) bool KernelSupportsUserspaceSwap() {
 
   return userfault_fd_supported && mremap_dontunmap_supported;
 #endif  // !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) ||
-        // !defined(PA_HAS_64_BITS_POINTERS)
+        // !BUILDFLAG(HAS_64_BIT_POINTERS)
 }
 
 RendererSwapData::RendererSwapData() = default;
@@ -486,8 +486,7 @@ bool GetPartitionAllocSuperPagesInUse(
     int32_t max_superpages,
     std::vector<::userspace_swap::mojom::MemoryRegionPtr>& regions) {
   regions.clear();
-#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
-    !defined(PA_HAS_64_BITS_POINTERS)
+#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || !BUILDFLAG(HAS_64_BIT_POINTERS)
   return false;
 #else
 
@@ -498,8 +497,8 @@ bool GetPartitionAllocSuperPagesInUse(
       partition_alloc::internal::AddressPoolManager::GetInstance();
 
   for (partition_alloc::internal::pool_handle ph :
-       {partition_alloc::internal::PartitionAddressSpace::GetRegularPool(),
-        partition_alloc::internal::PartitionAddressSpace::GetBRPPool()}) {
+       {partition_alloc::internal::kRegularPoolHandle,
+        partition_alloc::internal::kBRPPoolHandle}) {
     uintptr_t pool_base = pool_manager.GetPoolBaseAddress(ph);
     DCHECK(pool_base);
 
@@ -537,7 +536,7 @@ bool GetPartitionAllocSuperPagesInUse(
 
   return true;
 #endif  // !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) ||
-        // !defined(PA_HAS_64_BITS_POINTERS)
+        // !BUILDFLAG(HAS_64_BIT_POINTERS)
 }
 
 COMPONENT_EXPORT(USERSPACE_SWAP) uint64_t GetGlobalMemoryReclaimed() {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <unordered_map>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/threading/sequence_bound.h"
 #include "components/user_notes/interfaces/user_note_metadata_snapshot.h"
 #include "components/user_notes/interfaces/user_note_storage.h"
@@ -36,11 +36,11 @@ class UserNoteStorageImpl : public UserNoteStorage {
   void RemoveObserver(Observer* observer) override;
 
   void GetNoteMetadataForUrls(
-      const std::vector<GURL>& urls,
+      const UserNoteStorage::UrlSet& urls,
       base::OnceCallback<void(UserNoteMetadataSnapshot)> callback) override;
 
   void GetNotesById(
-      const std::vector<base::UnguessableToken>& ids,
+      const UserNoteStorage::IdSet& ids,
       base::OnceCallback<void(std::vector<std::unique_ptr<UserNote>>)> callback)
       override;
 

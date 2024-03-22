@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -118,7 +118,7 @@ IN_PROC_BROWSER_TEST_F(WebApkIconHasherBrowserTest,
     base::RunLoop run_loop;
     webapps::WebApkIconHasher::DownloadAndComputeMurmur2Hash(
         url_loader_factory.get(), web_contents->GetWeakPtr(),
-        url::Origin::Create(kIconUrl), {kIconUrl},
+        url::Origin::Create(kIconUrl), {webapps::WebappIcon(kIconUrl)},
         base::BindOnce(&OnGotMurmur2Hash, run_loop.QuitClosure()));
     run_loop.Run();
   }

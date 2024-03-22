@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/page_load_metrics/integration_tests/metric_integration_test.h"
-#include "chrome/browser/scoped_disable_client_side_decorations_for_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/page_load_metrics/browser/metrics_web_contents_observer.h"
 #include "components/page_load_metrics/browser/observers/back_forward_cache_page_load_metrics_observer.h"
@@ -18,6 +17,7 @@
 #include "components/page_load_metrics/common/test/page_load_metrics_test_util.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -35,12 +35,9 @@ class BackForwardCachePageLoadMetricsObserverBrowserTest
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     feature_list_.InitWithFeaturesAndParameters(
-        {{features::kBackForwardCache,
-          {{"TimeToLiveInBackForwardCacheInSeconds", "3600"},
-           {"ignore_outstanding_network_request_for_testing", "true"}}},
-         {internal::kBackForwardCacheEmitZeroSamplesForKeyMetrics, {{}}}},
-        // Allow BackForwardCache for all devices regardless of their memory.
-        {features::kBackForwardCacheMemoryControls});
+        content::GetDefaultEnabledBackForwardCacheFeaturesForTesting(
+            {{internal::kBackForwardCacheEmitZeroSamplesForKeyMetrics, {{}}}}),
+        content::GetDefaultDisabledBackForwardCacheFeaturesForTesting());
 
     MetricIntegrationTest::SetUpCommandLine(command_line);
   }
@@ -144,7 +141,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
             kFirstPaintAfterBackForwardCacheRestore);
     web_contents()->GetController().GoBack();
     EXPECT_TRUE(WaitForLoadStop(web_contents()));
-    EXPECT_EQ(rfh_a.get(), top_frame_host());
+    EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
     EXPECT_NE(rfh_a->GetLifecycleState(),
               content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -176,7 +173,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
             kFirstPaintAfterBackForwardCacheRestore);
     web_contents()->GetController().GoBack();
     EXPECT_TRUE(WaitForLoadStop(web_contents()));
-    EXPECT_EQ(rfh_a.get(), top_frame_host());
+    EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
     EXPECT_NE(rfh_a->GetLifecycleState(),
               content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -222,7 +219,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
     web_contents()->WasHidden();
 
     EXPECT_TRUE(WaitForLoadStop(web_contents()));
-    EXPECT_EQ(rfh_a.get(), top_frame_host());
+    EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
     EXPECT_NE(rfh_a->GetLifecycleState(),
               content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -272,7 +269,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
 
     web_contents()->GetController().GoBack();
     EXPECT_TRUE(WaitForLoadStop(web_contents()));
-    EXPECT_EQ(rfh_a.get(), top_frame_host());
+    EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
     EXPECT_NE(rfh_a->GetLifecycleState(),
               content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -323,7 +320,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
   // Go back to A.
   web_contents()->GetController().GoBack();
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
-  EXPECT_EQ(rfh_a, top_frame_host());
+  EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
   EXPECT_NE(rfh_a->GetLifecycleState(),
             content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -334,11 +331,6 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
                        CumulativeLayoutShiftAfterBackForwardCacheRestore) {
-  // TODO(crbug.com/1240482): the test expectations fail if the window gets CSD
-  // and becomes smaller because of that.  Investigate this and remove the line
-  // below if possible.
-  ui::ScopedDisableClientSideDecorationsForTest scoped_disabled_csd;
-
   Start();
 
   const char path[] = "/layout-instability/simple-block-movement.html";
@@ -350,8 +342,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
     auto waiter = CreatePageLoadMetricsTestWaiter();
     waiter->AddPageExpectation(
         page_load_metrics::PageLoadMetricsTestWaiter::TimingField::kFirstPaint);
-    waiter->AddPageExpectation(page_load_metrics::PageLoadMetricsTestWaiter::
-                                   TimingField::kLayoutShift);
+    waiter->AddPageLayoutShiftExpectation();
     EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), url_a));
     waiter->Wait();
   }
@@ -370,11 +361,10 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
     waiter->AddPageExpectation(
         page_load_metrics::PageLoadMetricsTestWaiter::TimingField::
             kFirstPaintAfterBackForwardCacheRestore);
-    waiter->AddPageExpectation(page_load_metrics::PageLoadMetricsTestWaiter::
-                                   TimingField::kLayoutShift);
+    waiter->AddPageLayoutShiftExpectation();
     web_contents()->GetController().GoBack();
     EXPECT_TRUE(WaitForLoadStop(web_contents()));
-    EXPECT_EQ(rfh_a, top_frame_host());
+    EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
     EXPECT_NE(rfh_a->GetLifecycleState(),
               content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -436,7 +426,7 @@ return score;
   // Go back to A again.
   web_contents()->GetController().GoBack();
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
-  EXPECT_EQ(rfh_a, top_frame_host());
+  EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
   EXPECT_NE(rfh_a->GetLifecycleState(),
             content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -487,7 +477,7 @@ IN_PROC_BROWSER_TEST_F(
             kRequestAnimationFrameAfterBackForwardCacheRestore);
     web_contents()->GetController().GoBack();
     EXPECT_TRUE(WaitForLoadStop(web_contents()));
-    EXPECT_EQ(rfh_a, top_frame_host());
+    EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
     EXPECT_NE(rfh_a->GetLifecycleState(),
               content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -526,8 +516,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
     auto waiter = CreatePageLoadMetricsTestWaiter();
     waiter->AddPageExpectation(
         page_load_metrics::PageLoadMetricsTestWaiter::TimingField::kFirstPaint);
-    waiter->AddPageExpectation(page_load_metrics::PageLoadMetricsTestWaiter::
-                                   TimingField::kLayoutShift);
+    waiter->AddPageLayoutShiftExpectation();
     EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), url_a));
     waiter->Wait();
   }
@@ -546,11 +535,10 @@ IN_PROC_BROWSER_TEST_F(BackForwardCachePageLoadMetricsObserverBrowserTest,
     waiter->AddPageExpectation(
         page_load_metrics::PageLoadMetricsTestWaiter::TimingField::
             kFirstPaintAfterBackForwardCacheRestore);
-    waiter->AddPageExpectation(page_load_metrics::PageLoadMetricsTestWaiter::
-                                   TimingField::kLayoutShift);
+    waiter->AddPageLayoutShiftExpectation();
     web_contents()->GetController().GoBack();
     EXPECT_TRUE(WaitForLoadStop(web_contents()));
-    EXPECT_EQ(rfh_a, top_frame_host());
+    EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
     EXPECT_NE(rfh_a->GetLifecycleState(),
               content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -592,7 +580,7 @@ return score;
   // Go back to A again.
   web_contents()->GetController().GoBack();
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
-  EXPECT_EQ(rfh_a, top_frame_host());
+  EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
   EXPECT_NE(rfh_a->GetLifecycleState(),
             content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -678,10 +666,17 @@ IN_PROC_BROWSER_TEST_F(
   VerifyHistoryNavPageEndReasons(expected_reasons_b, url_b);
 }
 
-// TODO(crbug.com/1261828): Flaky on all platforms.
+// TODO(https://crbug.com/1494775): Test is flaky on MSAN.
+#if defined(MEMORY_SANITIZER)
+#define MAYBE_ResponsivenessMetricsNormalizationWithSendingAllLatencies \
+  DISABLED_ResponsivenessMetricsNormalizationWithSendingAllLatencies
+#else
+#define MAYBE_ResponsivenessMetricsNormalizationWithSendingAllLatencies \
+  ResponsivenessMetricsNormalizationWithSendingAllLatencies
+#endif
 IN_PROC_BROWSER_TEST_F(
     BackForwardCachePageLoadMetricsObserverBrowserTest,
-    DISABLED_ResponsivenessMetricsNormalizationWithSendingAllLatencies) {
+    MAYBE_ResponsivenessMetricsNormalizationWithSendingAllLatencies) {
   Start();
   GURL url_a(embedded_test_server()->GetURL("a.com", "/title1.html"));
   GURL url_b(embedded_test_server()->GetURL("b.com", "/title1.html"));
@@ -703,7 +698,7 @@ IN_PROC_BROWSER_TEST_F(
 
     web_contents()->GetController().GoBack();
     EXPECT_TRUE(WaitForLoadStop(web_contents()));
-    EXPECT_EQ(rfh_a.get(), top_frame_host());
+    EXPECT_TRUE(rfh_a->IsInPrimaryMainFrame());
     EXPECT_NE(rfh_a->GetLifecycleState(),
               content::RenderFrameHost::LifecycleState::kInBackForwardCache);
 
@@ -727,31 +722,20 @@ IN_PROC_BROWSER_TEST_F(
 
   std::vector<std::string> ukm_list = {
       "WorstUserInteractionLatencyAfterBackForwardCacheRestore."
-      "MaxEventduration",
-      "SumOfUserInteractionLatencyOverBudgetAfterBackForwardCacheRestore."
-      "MaxEventduration",
-      "SlowUserInteractionLatencyOverBudgetAfterBackForwardCacheRestore."
-      "HighPercentile2.MaxEventduration",
-      "AverageUserInteractionLatencyOverBudgetAfterBackForwardCacheRestore."
-      "MaxEventduration",
+      "MaxEventDuration2",
       "UserInteractionLatencyAfterBackForwardCacheRestore."
-      "HighPercentile2.MaxEventduration",
+      "HighPercentile2.MaxEventDuration",
       "NumInteractionsAfterBackForwardCacheRestore"};
 
   for (auto& ukm : ukm_list) {
+    SCOPED_TRACE(ukm);
     ExpectMetricCountForUrl(url_a, ukm.c_str(), 1);
     ExpectMetricCountForUrl(url_b, ukm.c_str(), 0);
   }
 
   std::vector<std::string> uma_list = {
       internal::
-          kAverageUserInteractionLatencyOverBudget_MaxEventDuration_AfterBackForwardCacheRestore,
-      internal::
-          kSlowUserInteractionLatencyOverBudgetHighPercentile2_MaxEventDuration_AfterBackForwardCacheRestore,
-      internal::
           kUserInteractionLatencyHighPercentile2_MaxEventDuration_AfterBackForwardCacheRestore,
-      internal::
-          kSumOfUserInteractionLatencyOverBudget_MaxEventDuration_AfterBackForwardCacheRestore,
       internal::
           kWorstUserInteractionLatency_MaxEventDuration_AfterBackForwardCacheRestore};
 

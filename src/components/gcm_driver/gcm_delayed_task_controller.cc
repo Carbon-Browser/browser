@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 #include <stddef.h>
 
 #include "base/check.h"
+#include "base/metrics/histogram_functions.h"
 
 namespace gcm {
 
-GCMDelayedTaskController::GCMDelayedTaskController() : ready_(false) {
-}
+GCMDelayedTaskController::GCMDelayedTaskController() = default;
 
 GCMDelayedTaskController::~GCMDelayedTaskController() = default;
 
@@ -20,6 +20,11 @@ void GCMDelayedTaskController::AddTask(base::OnceClosure task) {
 }
 
 void GCMDelayedTaskController::SetReady() {
+  if (!ready_) {
+    base::UmaHistogramMediumTimes("GCM.DelayedTaskControlledReadyTime",
+                                  base::TimeTicks::Now() - time_created_);
+  }
+
   ready_ = true;
   RunTasks();
 }

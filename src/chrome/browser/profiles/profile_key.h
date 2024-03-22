@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,8 @@ class ProfileKey : public SimpleFactoryKey {
 
  private:
   raw_ptr<PrefService> prefs_ = nullptr;
-  raw_ptr<leveldb_proto::ProtoDatabaseProvider> db_provider_ = nullptr;
+  raw_ptr<leveldb_proto::ProtoDatabaseProvider, AcrossTasksDanglingUntriaged>
+      db_provider_ = nullptr;
 
   // Points to the original (non off-the-record) ProfileKey.
   raw_ptr<ProfileKey> original_key_ = nullptr;

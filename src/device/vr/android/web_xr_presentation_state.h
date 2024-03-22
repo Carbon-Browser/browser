@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,19 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "components/viz/common/resources/resource_id.h"
 #include "gpu/command_buffer/common/mailbox_holder.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/transform.h"
+#include "ui/gl/scoped_egl_image.h"
 
 namespace gl {
 class GLFence;
-class GLImageEGL;
 }  // namespace gl
 
 namespace gpu {
@@ -103,10 +102,10 @@ struct WebXrSharedBuffer {
 
   // Resources in the local GL context
   uint32_t local_texture = 0;
-  // This refptr keeps the image alive while processing a frame. That's
+  // This object keeps the image alive while processing a frame. That's
   // required because it owns underlying resources, and must still be
   // alive when the mailbox texture backed by this image is used.
-  scoped_refptr<gl::GLImageEGL> local_glimage;
+  gl::ScopedEGLImage local_eglimage;
 
   // The ResourceId that was used to pass this buffer to the Viz Compositor.
   // Id should be set to kInvalidResourceId when it is not in use by the viz
@@ -165,12 +164,10 @@ struct WebXrFrame {
   // Viewport bounds used for rendering, in texture coordinates with uv=(0, 1)
   // corresponding to viewport pixel (0, 0) as set by UpdateLayerBounds.
   //
-  // Currently this is only used by the ARCore handheld AR mode which is
-  // monoscopic and uses the left viewport. TODO(https://crbug.com/1134203): The
-  // GVR device currently has its own separate bounds tracking implementation.
-  // That should be updated to use this implementation, at that time a matching
-  // bounds_right would need to be added.
+  // When used by monoscoping ARCore, only the left viewport/bounds are used.
+  // Cardboard makes use of both.
   gfx::RectF bounds_left;
+  gfx::RectF bounds_right;
 };
 
 class WebXrPresentationState {

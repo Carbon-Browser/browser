@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,24 @@
 #include "base/observer_list_types.h"
 
 class SidePanelEntry;
+class SidePanelRegistry;
 
 class SidePanelRegistryObserver : public base::CheckedObserver {
  public:
   // Called when a SidePanelEntry is added to the registry.
-  virtual void OnEntryRegistered(SidePanelEntry* entry) {}
+  virtual void OnEntryRegistered(SidePanelRegistry* registry,
+                                 SidePanelEntry* entry) {}
 
-  // Called immediately before a SidePanelEntry is being removed from the
+  // Called immediately before a SidePanelEntry is being removed from the given
   // registry.
-  virtual void OnEntryWillDeregister(SidePanelEntry* entry) {}
+  virtual void OnEntryWillDeregister(SidePanelRegistry* registry,
+                                     SidePanelEntry* entry) {}
+
+  // Called when a SidePanelEntry's icon has been updated.
+  virtual void OnEntryIconUpdated(SidePanelEntry* entry) {}
+
+  // Called when the `registry` is being destroyed.
+  virtual void OnRegistryDestroying(SidePanelRegistry* registry) {}
 
  protected:
   ~SidePanelRegistryObserver() override = default;

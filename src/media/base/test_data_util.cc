@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/base/test_data_util.h"
 
 #include <stdint.h>
+#include <ostream>
 
 #include "base/check_op.h"
 #include "base/containers/flat_map.h"
@@ -101,6 +102,8 @@ const FileToMimeTypeMap& GetFileToMimeTypeMap() {
        kWebMVorbisAudioVp8Video},
       {"bear-640x360-a_frag-cbcs.mp4", kMp4AacAudio},
       {"bear-640x360-a_frag-cenc.mp4", kMp4AacAudio},
+      {"bear-640x360-a_frag-cenc.mp4;bear-640x360-v_frag-cenc.mp4",
+       kMp4AacAudioAvc1Video},
       {"bear-640x360-a_frag.mp4", kMp4AacAudio},
       {"bear-640x360-av_frag.mp4", kMp4AacAudioAvc1Video},
       {"bear-640x360-v_frag-cbc1.mp4", kMp4Avc1Video},
@@ -180,7 +183,7 @@ const base::FilePath::CharType kTestDataPath[] =
 
 base::FilePath GetTestDataFilePath(const std::string& name) {
   base::FilePath file_path;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &file_path));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file_path));
   return file_path.Append(GetTestDataPath()).AppendASCII(name);
 }
 
@@ -220,6 +223,13 @@ scoped_refptr<DecoderBuffer> ReadTestDataFile(const std::string& name) {
   CHECK_EQ(file_size, base::ReadFile(file_path, data, file_size))
       << "Failed to read '" << name << "'";
 
+  return buffer;
+}
+
+scoped_refptr<DecoderBuffer> ReadTestDataFile(const std::string& name,
+                                              base::TimeDelta pts) {
+  auto buffer = ReadTestDataFile(name);
+  buffer->set_timestamp(pts);
   return buffer;
 }
 

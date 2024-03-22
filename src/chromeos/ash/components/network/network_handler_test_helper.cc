@@ -1,17 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 
+#include "ash/constants/ash_pref_names.h"
 #include "chromeos/ash/components/network/cellular_esim_profile_handler_impl.h"
 #include "chromeos/ash/components/network/managed_cellular_pref_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_metadata_store.h"
 #include "chromeos/ash/components/network/network_test_helper_base.h"
 #include "components/onc/onc_pref_names.h"
+#include "components/prefs/pref_registry_simple.h"
 
-namespace chromeos {
+namespace ash {
 
 NetworkHandlerTestHelper::NetworkHandlerTestHelper() {
   if (!NetworkHandler::IsInitialized()) {
@@ -37,6 +39,8 @@ void NetworkHandlerTestHelper::RegisterPrefs(
     NetworkMetadataStore::RegisterPrefs(user_registry);
     ::onc::RegisterProfilePrefs(user_registry);
   }
+  device_registry->RegisterBooleanPref(
+      prefs::kDeviceEphemeralNetworkPoliciesEnabled, false);
 }
 
 void NetworkHandlerTestHelper::InitializePrefs(PrefService* user_prefs,
@@ -44,4 +48,4 @@ void NetworkHandlerTestHelper::InitializePrefs(PrefService* user_prefs,
   NetworkHandler::Get()->InitializePrefServices(user_prefs, device_prefs);
 }
 
-}  // namespace chromeos
+}  // namespace ash

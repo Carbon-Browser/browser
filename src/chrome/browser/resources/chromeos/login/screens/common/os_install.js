@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,24 @@
  * @fileoverview Polymer element for OS install screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/cr_shared_vars.css.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/buttons/oobe_back_button.js';
+import '../../components/buttons/oobe_text_button.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+import '../../components/dialogs/oobe_loading_dialog.js';
+import '../../components/dialogs/oobe_modal_dialog.js';
+
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
+import {afterNextRender, html, mixinBehaviors, Polymer, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
 
 const OsInstallScreenState = {
   INTRO: 'intro',
@@ -23,14 +40,14 @@ const OsInstallScreenState = {
  * @implements {MultiStepBehaviorInterface}
  * @implements {OobeI18nBehaviorInterface}
  */
-const OsInstallScreenElementBase = Polymer.mixinBehaviors(
+const OsInstallScreenElementBase = mixinBehaviors(
     [
       OobeI18nBehavior,
       OobeDialogHostBehavior,
       LoginScreenBehavior,
       MultiStepBehavior,
     ],
-    Polymer.Element);
+    PolymerElement);
 
 /**
  * @polymer
@@ -40,7 +57,9 @@ class OsInstall extends OsInstallScreenElementBase {
     return 'os-install-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -59,11 +78,7 @@ class OsInstall extends OsInstallScreenElementBase {
   }
 
   get EXTERNAL_API() {
-    return [
-      'showStep',
-      'setServiceLogs',
-      'updateCountdownString',
-    ];
+    return ['showStep', 'setServiceLogs', 'updateCountdownString'];
   }
 
   defaultUIStep() {
@@ -129,8 +144,9 @@ class OsInstall extends OsInstallScreenElementBase {
    * @private
    */
   getErrorNoDestContentHtml_(locale) {
-    return this.i18nAdvanced(
-        'osInstallDialogErrorNoDestContent', {tags: ['p', 'ul', 'li']});
+    return this.i18nAdvanced('osInstallDialogErrorNoDestContent', {
+      tags: ['p', 'ul', 'li'],
+    });
   }
 
   /**
@@ -139,8 +155,9 @@ class OsInstall extends OsInstallScreenElementBase {
    * @private
    */
   getErrorFailedSubtitleHtml_(locale) {
-    return this.i18nAdvanced(
-        'osInstallDialogErrorFailedSubtitle', {tags: ['p']});
+    return this.i18nAdvanced('osInstallDialogErrorFailedSubtitle', {
+      tags: ['p'],
+    });
   }
 
   /**
@@ -166,11 +183,9 @@ class OsInstall extends OsInstallScreenElementBase {
    */
   focusLogsLink_() {
     if (this.uiStep == OsInstallScreenState.NO_DESTINATION_DEVICE_FOUND) {
-      Polymer.RenderStatus.afterNextRender(
-          this, () => this.$.noDestLogsLink.focus());
+      afterNextRender(this, () => this.$.noDestLogsLink.focus());
     } else if (this.uiStep == OsInstallScreenState.FAILED) {
-      Polymer.RenderStatus.afterNextRender(
-          this, () => this.$.serviceLogsLink.focus());
+      afterNextRender(this, () => this.$.serviceLogsLink.focus());
     }
   }
 
@@ -180,10 +195,8 @@ class OsInstall extends OsInstallScreenElementBase {
   setServiceLogs(serviceLogs) {
     this.$.serviceLogsFrame.src = 'data:text/html;charset=utf-8,' +
         encodeURIComponent('<style>' +
-                           'body {' +
-                           '  font-family: Roboto, sans-serif;' +
+                           'body {' + this.getServiceLogsFontsStyling() +
                            '  color: RGBA(0,0,0,.87);' +
-                           '  font-size: 14sp;' +
                            '  margin : 0;' +
                            '  padding : 0;' +
                            '  white-space: pre-wrap;' +
@@ -208,6 +221,26 @@ class OsInstall extends OsInstallScreenElementBase {
    */
   updateCountdownString(timeLeftMessage) {
     this.osInstallDialogSuccessSubtitile_ = timeLeftMessage;
+  }
+
+  /**
+   * Generates fonts styling for the service log WebView based on OobeJelly
+   * flag.
+   * @return {string}
+   * @private
+   */
+  getServiceLogsFontsStyling() {
+    const isOobeJellyEnabled = loadTimeData.getBoolean('isOobeJellyEnabled');
+    if (!isOobeJellyEnabled) {
+      return '  font-family: Roboto, sans-serif;' +
+          '  font-size: 14sp;';
+    }
+    // Those values correspond to the cros-body-1 token.
+    return (
+        '  font-family: Google Sans Text Regular, Google Sans, Roboto, sans-serif;' +
+        '  font-size: 14px;' +
+        '  font-weight: 400;' +
+        '  line-height: 20px;');
   }
 }
 

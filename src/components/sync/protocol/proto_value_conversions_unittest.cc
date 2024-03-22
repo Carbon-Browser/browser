@@ -1,10 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/protocol/proto_value_conversions.h"
 
+#include <memory>
 #include <string>
+#include <utility>
 
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
@@ -15,6 +17,8 @@
 #include "components/sync/protocol/app_specifics.pb.h"
 #include "components/sync/protocol/autofill_specifics.pb.h"
 #include "components/sync/protocol/bookmark_specifics.pb.h"
+#include "components/sync/protocol/contact_info_specifics.pb.h"
+#include "components/sync/protocol/data_type_progress_marker.pb.h"
 #include "components/sync/protocol/device_info_specifics.pb.h"
 #include "components/sync/protocol/encryption.pb.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
@@ -28,16 +32,20 @@
 #include "components/sync/protocol/preference_specifics.pb.h"
 #include "components/sync/protocol/priority_preference_specifics.pb.h"
 #include "components/sync/protocol/search_engine_specifics.pb.h"
+#include "components/sync/protocol/segmentation_specifics.pb.h"
 #include "components/sync/protocol/session_specifics.pb.h"
 #include "components/sync/protocol/sharing_message_specifics.pb.h"
 #include "components/sync/protocol/sync.pb.h"
 #include "components/sync/protocol/sync_entity.pb.h"
 #include "components/sync/protocol/theme_specifics.pb.h"
 #include "components/sync/protocol/typed_url_specifics.pb.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace syncer {
 namespace {
+
+using testing::Not;
 
 // Keep this file in sync with the .proto files in this directory.
 
@@ -45,9 +53,9 @@ namespace {
   TEST(ProtoValueConversionsTest, Proto_##Key##_SpecificsToValue) { \
     sync_pb::EntitySpecifics specifics;                             \
     specifics.mutable_##Key();                                      \
-    std::unique_ptr<base::DictionaryValue> value(                   \
-        EntitySpecificsToValue(specifics));                         \
-    EXPECT_EQ(1, static_cast<int>(value->DictSize()));              \
+    base::Value value = EntitySpecificsToValue(specifics);          \
+    ASSERT_TRUE(value.is_dict());                                   \
+    EXPECT_EQ(1u, value.GetDict().size());                          \
   }
 
 // We'd also like to check if we changed any field in our messages. However,
@@ -57,7 +65,7 @@ namespace {
 
 DEFINE_SPECIFICS_TO_VALUE_TEST(encrypted)
 
-static_assert(40 == syncer::GetNumModelTypes(),
+static_assert(47 == syncer::GetNumModelTypes(),
               "When adding a new field, add a DEFINE_SPECIFICS_TO_VALUE_TEST "
               "for your field below, and optionally a test for the specific "
               "conversions.");
@@ -70,25 +78,33 @@ DEFINE_SPECIFICS_TO_VALUE_TEST(autofill)
 DEFINE_SPECIFICS_TO_VALUE_TEST(autofill_offer)
 DEFINE_SPECIFICS_TO_VALUE_TEST(autofill_profile)
 DEFINE_SPECIFICS_TO_VALUE_TEST(autofill_wallet)
+DEFINE_SPECIFICS_TO_VALUE_TEST(autofill_wallet_credential)
+DEFINE_SPECIFICS_TO_VALUE_TEST(autofill_wallet_usage)
 DEFINE_SPECIFICS_TO_VALUE_TEST(bookmark)
+DEFINE_SPECIFICS_TO_VALUE_TEST(contact_info)
 DEFINE_SPECIFICS_TO_VALUE_TEST(device_info)
 DEFINE_SPECIFICS_TO_VALUE_TEST(dictionary)
 DEFINE_SPECIFICS_TO_VALUE_TEST(extension)
 DEFINE_SPECIFICS_TO_VALUE_TEST(extension_setting)
 DEFINE_SPECIFICS_TO_VALUE_TEST(history)
 DEFINE_SPECIFICS_TO_VALUE_TEST(history_delete_directive)
+DEFINE_SPECIFICS_TO_VALUE_TEST(incoming_password_sharing_invitation)
 DEFINE_SPECIFICS_TO_VALUE_TEST(managed_user_setting)
 DEFINE_SPECIFICS_TO_VALUE_TEST(nigori)
 DEFINE_SPECIFICS_TO_VALUE_TEST(os_preference)
 DEFINE_SPECIFICS_TO_VALUE_TEST(os_priority_preference)
+DEFINE_SPECIFICS_TO_VALUE_TEST(outgoing_password_sharing_invitation)
 DEFINE_SPECIFICS_TO_VALUE_TEST(password)
+DEFINE_SPECIFICS_TO_VALUE_TEST(power_bookmark)
 DEFINE_SPECIFICS_TO_VALUE_TEST(preference)
 DEFINE_SPECIFICS_TO_VALUE_TEST(printer)
 DEFINE_SPECIFICS_TO_VALUE_TEST(printers_authorization_server)
 DEFINE_SPECIFICS_TO_VALUE_TEST(priority_preference)
 DEFINE_SPECIFICS_TO_VALUE_TEST(reading_list)
+DEFINE_SPECIFICS_TO_VALUE_TEST(saved_tab_group)
 DEFINE_SPECIFICS_TO_VALUE_TEST(search_engine)
 DEFINE_SPECIFICS_TO_VALUE_TEST(security_event)
+DEFINE_SPECIFICS_TO_VALUE_TEST(segmentation)
 DEFINE_SPECIFICS_TO_VALUE_TEST(send_tab_to_self)
 DEFINE_SPECIFICS_TO_VALUE_TEST(session)
 DEFINE_SPECIFICS_TO_VALUE_TEST(sharing_message)
@@ -98,6 +114,7 @@ DEFINE_SPECIFICS_TO_VALUE_TEST(user_consent)
 DEFINE_SPECIFICS_TO_VALUE_TEST(user_event)
 DEFINE_SPECIFICS_TO_VALUE_TEST(wallet_metadata)
 DEFINE_SPECIFICS_TO_VALUE_TEST(web_app)
+DEFINE_SPECIFICS_TO_VALUE_TEST(webauthn_credential)
 DEFINE_SPECIFICS_TO_VALUE_TEST(wifi_configuration)
 DEFINE_SPECIFICS_TO_VALUE_TEST(workspace_desk)
 
@@ -109,41 +126,41 @@ TEST(ProtoValueConversionsTest, AutofillWalletSpecificsToValue) {
   specifics.mutable_cloud_token_data()->set_masked_card_id("1111");
 
   specifics.set_type(sync_pb::AutofillWalletSpecifics::UNKNOWN);
-  std::unique_ptr<base::DictionaryValue> value =
-      AutofillWalletSpecificsToValue(specifics);
-  EXPECT_FALSE(value->Get("masked_card", nullptr));
-  EXPECT_FALSE(value->Get("address", nullptr));
-  EXPECT_FALSE(value->Get("customer_data", nullptr));
-  EXPECT_FALSE(value->Get("cloud_token_data", nullptr));
+  base::Value::Dict value =
+      AutofillWalletSpecificsToValue(specifics).TakeDict();
+  EXPECT_FALSE(value.contains("masked_card"));
+  EXPECT_FALSE(value.contains("address"));
+  EXPECT_FALSE(value.contains("customer_data"));
+  EXPECT_FALSE(value.contains("cloud_token_data"));
 
   specifics.set_type(sync_pb::AutofillWalletSpecifics::MASKED_CREDIT_CARD);
-  value = AutofillWalletSpecificsToValue(specifics);
-  EXPECT_TRUE(value->Get("masked_card", nullptr));
-  EXPECT_FALSE(value->Get("address", nullptr));
-  EXPECT_FALSE(value->Get("customer_data", nullptr));
-  EXPECT_FALSE(value->Get("cloud_token_data", nullptr));
+  value = AutofillWalletSpecificsToValue(specifics).TakeDict();
+  EXPECT_TRUE(value.contains("masked_card"));
+  EXPECT_FALSE(value.contains("address"));
+  EXPECT_FALSE(value.contains("customer_data"));
+  EXPECT_FALSE(value.contains("cloud_token_data"));
 
   specifics.set_type(sync_pb::AutofillWalletSpecifics::POSTAL_ADDRESS);
-  value = AutofillWalletSpecificsToValue(specifics);
-  EXPECT_FALSE(value->Get("masked_card", nullptr));
-  EXPECT_TRUE(value->Get("address", nullptr));
-  EXPECT_FALSE(value->Get("customer_data", nullptr));
-  EXPECT_FALSE(value->Get("cloud_token_data", nullptr));
+  value = AutofillWalletSpecificsToValue(specifics).TakeDict();
+  EXPECT_FALSE(value.contains("masked_card"));
+  EXPECT_TRUE(value.contains("address"));
+  EXPECT_FALSE(value.contains("customer_data"));
+  EXPECT_FALSE(value.contains("cloud_token_data"));
 
   specifics.set_type(sync_pb::AutofillWalletSpecifics::CUSTOMER_DATA);
-  value = AutofillWalletSpecificsToValue(specifics);
-  EXPECT_FALSE(value->Get("masked_card", nullptr));
-  EXPECT_FALSE(value->Get("address", nullptr));
-  EXPECT_TRUE(value->Get("customer_data", nullptr));
-  EXPECT_FALSE(value->Get("cloud_token_data", nullptr));
+  value = AutofillWalletSpecificsToValue(specifics).TakeDict();
+  EXPECT_FALSE(value.contains("masked_card"));
+  EXPECT_FALSE(value.contains("address"));
+  EXPECT_TRUE(value.contains("customer_data"));
+  EXPECT_FALSE(value.contains("cloud_token_data"));
 
   specifics.set_type(
       sync_pb::AutofillWalletSpecifics::CREDIT_CARD_CLOUD_TOKEN_DATA);
-  value = AutofillWalletSpecificsToValue(specifics);
-  EXPECT_FALSE(value->Get("masked_card", nullptr));
-  EXPECT_FALSE(value->Get("address", nullptr));
-  EXPECT_FALSE(value->Get("customer_data", nullptr));
-  EXPECT_TRUE(value->Get("cloud_token_data", nullptr));
+  value = AutofillWalletSpecificsToValue(specifics).TakeDict();
+  EXPECT_FALSE(value.contains("masked_card"));
+  EXPECT_FALSE(value.contains("address"));
+  EXPECT_FALSE(value.contains("customer_data"));
+  EXPECT_TRUE(value.contains("cloud_token_data"));
 }
 
 TEST(ProtoValueConversionsTest, BookmarkSpecificsData) {
@@ -159,83 +176,100 @@ TEST(ProtoValueConversionsTest, BookmarkSpecificsData) {
   meta_2->set_key("key2");
   meta_2->set_value("value2");
 
-  std::unique_ptr<base::DictionaryValue> value(
-      BookmarkSpecificsToValue(specifics));
-  EXPECT_FALSE(value->DictEmpty());
-  std::string encoded_time;
-  EXPECT_TRUE(value->GetString("creation_time_us", &encoded_time));
+  base::Value::Dict value = BookmarkSpecificsToValue(specifics).TakeDict();
+  EXPECT_FALSE(value.empty());
+  const std::string* encoded_time = value.FindString("creation_time_us");
+  EXPECT_TRUE(encoded_time);
   EXPECT_EQ(base::NumberToString(creation_time.ToInternalValue()),
-            encoded_time);
-  std::string encoded_icon_url;
-  EXPECT_TRUE(value->GetString("icon_url", &encoded_icon_url));
-  EXPECT_EQ(icon_url, encoded_icon_url);
-  base::ListValue* meta_info_list;
-  ASSERT_TRUE(value->GetList("meta_info", &meta_info_list));
-  EXPECT_EQ(2u, meta_info_list->GetListDeprecated().size());
-  const base::Value* meta_info_value;
-  const base::DictionaryValue* meta_info;
+            *encoded_time);
+  const std::string* encoded_icon_url = value.FindString("icon_url");
+  EXPECT_TRUE(encoded_icon_url);
+  EXPECT_EQ(icon_url, *encoded_icon_url);
+
+  const base::Value::List* meta_info_list = value.FindList("meta_info");
+
+  EXPECT_EQ(2u, meta_info_list->size());
   std::string meta_key;
   std::string meta_value;
-  meta_info_value = &meta_info_list->GetListDeprecated()[0];
-  ASSERT_TRUE(meta_info_value->is_dict());
-  meta_info = &base::Value::AsDictionaryValue(*meta_info_value);
-  EXPECT_TRUE(meta_info->GetString("key", &meta_key));
-  EXPECT_TRUE(meta_info->GetString("value", &meta_value));
-  EXPECT_EQ("key1", meta_key);
-  EXPECT_EQ("value1", meta_value);
-  meta_info_value = &meta_info_list->GetListDeprecated()[1];
-  ASSERT_TRUE(meta_info_value->is_dict());
-  meta_info = &base::Value::AsDictionaryValue(*meta_info_value);
-  EXPECT_TRUE(meta_info->GetString("key", &meta_key));
-  EXPECT_TRUE(meta_info->GetString("value", &meta_value));
-  EXPECT_EQ("key2", meta_key);
-  EXPECT_EQ("value2", meta_value);
+  const auto& meta_info_value = (*meta_info_list)[0].GetDict();
+  ASSERT_TRUE((*meta_info_list)[0].is_dict());
+  EXPECT_STREQ("key1", meta_info_value.FindString("key")->c_str());
+  EXPECT_STREQ("value1", meta_info_value.FindString("value")->c_str());
+  const auto& meta_info_value_1 = (*meta_info_list)[1].GetDict();
+  ASSERT_TRUE((*meta_info_list)[1].is_dict());
+  EXPECT_STREQ("key2", meta_info_value_1.FindString("key")->c_str());
+  EXPECT_STREQ("value2", meta_info_value_1.FindString("value")->c_str());
 }
 
 TEST(ProtoValueConversionsTest, UniquePositionToValue) {
   sync_pb::SyncEntity entity;
   entity.mutable_unique_position()->set_custom_compressed_v1("test");
 
-  std::unique_ptr<base::DictionaryValue> value =
-      SyncEntityToValue(entity, false);
-  std::string unique_position;
-  EXPECT_TRUE(value->GetString("unique_position", &unique_position));
+  base::Value::Dict value =
+      SyncEntityToValue(entity, {.include_specifics = false}).TakeDict();
+  const std::string* unique_position = value.FindString("unique_position");
+  EXPECT_TRUE(unique_position);
 
   std::string expected_unique_position =
       UniquePosition::FromProto(entity.unique_position()).ToDebugString();
-  EXPECT_EQ(expected_unique_position, unique_position);
+  EXPECT_EQ(expected_unique_position, *unique_position);
 }
 
 TEST(ProtoValueConversionsTest, SyncEntityToValueIncludeSpecifics) {
   sync_pb::SyncEntity entity;
   entity.mutable_specifics();
 
-  std::unique_ptr<base::DictionaryValue> value =
-      SyncEntityToValue(entity, true /* include_specifics */);
-  EXPECT_TRUE(value->GetDictionary("specifics", nullptr));
+  base::Value::Dict value =
+      SyncEntityToValue(entity, {.include_specifics = true}).TakeDict();
+  EXPECT_TRUE(value.FindDict("specifics"));
 
-  value = SyncEntityToValue(entity, false /* include_specifics */);
-  EXPECT_FALSE(value->GetDictionary("specifics", nullptr));
+  value = SyncEntityToValue(entity, {.include_specifics = false}).TakeDict();
+  EXPECT_FALSE(value.FindDict("specifics"));
 }
 
 namespace {
 // Returns whether the given value has specifics under the entries in the given
 // path.
-bool ValueHasSpecifics(const base::DictionaryValue& value,
+bool ValueHasSpecifics(const base::Value::Dict& value,
                        const std::string& path) {
-  const base::ListValue* entities_list = nullptr;
-  if (!value.GetList(path, &entities_list))
+  const base::Value::List* entities_list = value.FindListByDottedPath(path);
+  if (!entities_list) {
     return false;
+  }
 
-  const base::Value& entry_dictionary_value =
-      entities_list->GetListDeprecated()[0];
+  const base::Value& entry_dictionary_value = (*entities_list)[0];
   if (!entry_dictionary_value.is_dict())
     return false;
 
-  const base::DictionaryValue& entry_dictionary =
-      base::Value::AsDictionaryValue(entry_dictionary_value);
-  const base::DictionaryValue* specifics_dictionary = nullptr;
-  return entry_dictionary.GetDictionary("specifics", &specifics_dictionary);
+  const base::Value::Dict& entry_dictionary = entry_dictionary_value.GetDict();
+  return entry_dictionary.FindDict("specifics") != nullptr;
+}
+
+MATCHER(ValueHasNonEmptyGetUpdateTriggers, "") {
+  const base::Value::Dict& value_dict = arg;
+
+  const base::Value::List* entities_list =
+      value_dict.FindListByDottedPath("get_updates.from_progress_marker");
+  if (!entities_list) {
+    *result_listener << "no from_progress_marker list";
+    return false;
+  }
+
+  const base::Value& entry_dictionary_value = entities_list->front();
+  if (!entry_dictionary_value.is_dict()) {
+    *result_listener << "from_progress_marker does not contain a dictionary";
+    return false;
+  }
+
+  const base::Value::Dict& entry_dictionary = entry_dictionary_value.GetDict();
+  const base::Value::Dict* get_update_triggers_dictionary =
+      entry_dictionary.FindDict("get_update_triggers");
+  if (!get_update_triggers_dictionary) {
+    *result_listener << "no get_update_triggers dictionary";
+    return false;
+  }
+
+  return !get_update_triggers_dictionary->empty();
 }
 }  // namespace
 
@@ -247,17 +281,46 @@ TEST(ProtoValueConversionsTest, ClientToServerMessageToValue) {
   sync_pb::SyncEntity* entity = commit_message->add_entries();
   entity->mutable_specifics();
 
-  std::unique_ptr<base::DictionaryValue> value_with_specifics(
-      ClientToServerMessageToValue(message, true /* include_specifics */));
-  EXPECT_FALSE(value_with_specifics->DictEmpty());
-  EXPECT_TRUE(
-      ValueHasSpecifics(*(value_with_specifics.get()), "commit.entries"));
+  base::Value::Dict value_with_specifics =
+      ClientToServerMessageToValue(message, {.include_specifics = true})
+          .TakeDict();
+  EXPECT_FALSE(value_with_specifics.empty());
+  EXPECT_TRUE(ValueHasSpecifics(value_with_specifics, "commit.entries"));
 
-  std::unique_ptr<base::DictionaryValue> value_without_specifics(
-      ClientToServerMessageToValue(message, false /* include_specifics */));
-  EXPECT_FALSE(value_without_specifics->DictEmpty());
-  EXPECT_FALSE(
-      ValueHasSpecifics(*(value_without_specifics.get()), "commit.entries"));
+  base::Value::Dict value_without_specifics =
+      ClientToServerMessageToValue(message, {.include_specifics = false})
+          .TakeDict();
+  EXPECT_FALSE(value_without_specifics.empty());
+  EXPECT_FALSE(ValueHasSpecifics(value_without_specifics, "commit.entries"));
+}
+
+TEST(ProtoValueConversionsTest, ClientToServerMessageToValueGUTriggers) {
+  sync_pb::ClientToServerMessage message;
+  sync_pb::GetUpdateTriggers* get_update_triggers =
+      message.mutable_get_updates()
+          ->add_from_progress_marker()
+          ->mutable_get_update_triggers();
+  get_update_triggers->set_client_dropped_hints(false);
+  get_update_triggers->set_server_dropped_hints(false);
+  get_update_triggers->set_datatype_refresh_nudges(0);
+  get_update_triggers->set_local_modification_nudges(0);
+  get_update_triggers->set_initial_sync_in_progress(false);
+  get_update_triggers->set_sync_for_resolve_conflict_in_progress(false);
+
+  base::Value::Dict value_with_full_gu_triggers =
+      ClientToServerMessageToValue(message,
+                                   {.include_full_get_update_triggers = true})
+          .TakeDict();
+  EXPECT_FALSE(value_with_full_gu_triggers.empty());
+  EXPECT_THAT(value_with_full_gu_triggers, ValueHasNonEmptyGetUpdateTriggers());
+
+  base::Value::Dict value_without_full_gu_triggers =
+      ClientToServerMessageToValue(message,
+                                   {.include_full_get_update_triggers = false})
+          .TakeDict();
+  EXPECT_FALSE(value_without_full_gu_triggers.empty());
+  EXPECT_THAT(value_without_full_gu_triggers,
+              Not(ValueHasNonEmptyGetUpdateTriggers()));
 }
 
 // Create a ClientToServerResponse with an EntitySpecifics.  Converting it to
@@ -268,17 +331,18 @@ TEST(ProtoValueConversionsTest, ClientToServerResponseToValue) {
   sync_pb::SyncEntity* entity = response->add_entries();
   entity->mutable_specifics();
 
-  std::unique_ptr<base::DictionaryValue> value_with_specifics(
-      ClientToServerResponseToValue(message, true /* include_specifics */));
-  EXPECT_FALSE(value_with_specifics->DictEmpty());
-  EXPECT_TRUE(
-      ValueHasSpecifics(*(value_with_specifics.get()), "get_updates.entries"));
+  base::Value::Dict value_with_specifics =
+      ClientToServerResponseToValue(message, {.include_specifics = true})
+          .TakeDict();
+  EXPECT_FALSE(value_with_specifics.empty());
+  EXPECT_TRUE(ValueHasSpecifics(value_with_specifics, "get_updates.entries"));
 
-  std::unique_ptr<base::DictionaryValue> value_without_specifics(
-      ClientToServerResponseToValue(message, false /* include_specifics */));
-  EXPECT_FALSE(value_without_specifics->DictEmpty());
-  EXPECT_FALSE(ValueHasSpecifics(*(value_without_specifics.get()),
-                                 "get_updates.entries"));
+  base::Value::Dict value_without_specifics =
+      ClientToServerResponseToValue(message, {.include_specifics = false})
+          .TakeDict();
+  EXPECT_FALSE(value_without_specifics.empty());
+  EXPECT_FALSE(
+      ValueHasSpecifics(value_without_specifics, "get_updates.entries"));
 }
 
 }  // namespace

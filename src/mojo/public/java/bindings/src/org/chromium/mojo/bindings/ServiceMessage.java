@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,9 +50,7 @@ public class ServiceMessage extends Message {
         return mHeader;
     }
 
-    /**
-     * Returns the payload of the message.
-     */
+    /** Returns the payload of the message. */
     public Message getPayload() {
         if (mPayload == null) {
             ByteBuffer truncatedBuffer =
@@ -63,11 +61,8 @@ public class ServiceMessage extends Message {
         return mPayload;
     }
 
-    /**
-     * Set the request identifier on the message.
-     */
+    /** Set the request identifier on the message. */
     void setRequestId(long requestId) {
         mHeader.setRequestId(getData(), requestId);
     }
-
 }

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,6 @@ class ShortcutHelper {
       content::WebContents* web_contents,
       const webapps::ShortcutInfo& info,
       const SkBitmap& icon_bitmap,
-      bool is_icon_maskable,
       webapps::InstallableStatusCode installable_status);
 
   // Stores the webapp splash screen in the WebappDataStorage associated with

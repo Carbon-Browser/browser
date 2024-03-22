@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,16 @@
 
 #include <stddef.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
-#include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -33,7 +32,6 @@
 #include "chrome/browser/download/download_target_determiner.h"
 #include "chrome/browser/download/trusted_sources_manager.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/pref_names.h"
@@ -61,6 +59,10 @@
 #include "chrome/browser/ui/pdf/adobe_reader_info_win.h"
 #endif
 
+#if !BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/download/bubble/download_bubble_prefs.h"
+#endif
+
 using content::BrowserContext;
 using content::BrowserThread;
 using content::DownloadManager;
@@ -84,7 +86,6 @@ bool DownloadPathIsDangerous(const base::FilePath& download_path) {
 #else
   base::FilePath desktop_dir;
   if (!base::PathService::Get(base::DIR_USER_DESKTOP, &desktop_dir)) {
-    NOTREACHED();
     return false;
   }
   return (download_path == desktop_dir);
@@ -108,14 +109,12 @@ class DefaultDownloadDirectory {
 
   void Initialize() {
     if (!base::PathService::Get(chrome::DIR_DEFAULT_DOWNLOADS, &path_)) {
-      NOTREACHED();
+      base::GetTempDir(&path_);
     }
     if (DownloadPathIsDangerous(path_)) {
       // This is only useful on platforms that support
       // DIR_DEFAULT_DOWNLOADS_SAFE.
-      if (!base::PathService::Get(chrome::DIR_DEFAULT_DOWNLOADS_SAFE, &path_)) {
-        NOTREACHED();
-      }
+      base::PathService::Get(chrome::DIR_DEFAULT_DOWNLOADS_SAFE, &path_);
     }
   }
 
@@ -148,13 +147,11 @@ DownloadPrefs::DownloadPrefs(Profile* profile) : profile_(profile) {
                                     prefs::kDownloadDefaultDirectory};
   for (const char* path_pref : kPathPrefs) {
     const PrefService::Preference* pref = prefs->FindPreference(path_pref);
-    const base::FilePath current = prefs->GetFilePath(path_pref);
-    base::FilePath migrated;
     // Update the download directory if the pref is from user pref store or
     // default pref.
-    LOG(ERROR) << "DownloadPrefs::DownloadPrefs" << pref->IsUserControlled()
-               << "," << pref->IsDefaultValue() << "," << current.value();
     if (pref->IsUserControlled()) {
+      const base::FilePath current = prefs->GetFilePath(path_pref);
+      base::FilePath migrated;
       if (!current.empty() &&
           file_manager::util::MigratePathFromOldFormat(
               profile_, GetDefaultDownloadDirectory(), current, &migrated)) {
@@ -220,7 +217,8 @@ DownloadPrefs::DownloadPrefs(Profile* profile) : profile_(profile) {
   safebrowsing_for_trusted_sources_enabled_.Init(
       prefs::kSafeBrowsingForTrustedSourcesEnabled, prefs);
   download_restriction_.Init(prefs::kDownloadRestrictions, prefs);
-  download_bubble_enabled_.Init(prefs::kDownloadBubbleEnabled, prefs);
+  prompt_for_duplicate_file_.Init(prefs::kDownloadDuplicateFilePromptEnabled,
+                                  prefs);
 
   pref_change_registrar_.Add(
       prefs::kDownloadExtensionsToOpenByPolicy,
@@ -290,7 +288,17 @@ void DownloadPrefs::RegisterProfilePrefs(
   registry->RegisterIntegerPref(prefs::kSaveFileType,
                                 content::SAVE_PAGE_TYPE_AS_COMPLETE_HTML);
   registry->RegisterIntegerPref(prefs::kDownloadRestrictions, 0);
-  registry->RegisterBooleanPref(prefs::kDownloadBubbleEnabled, true);
+  // The following two prefs are ignored on ChromeOS Lacros if SysUI integration
+  // is enabled.
+  // TODO(chlily): Clean them up once SysUI integration is enabled by default.
+  registry->RegisterBooleanPref(prefs::kDownloadBubblePartialViewEnabled, true);
+  registry->RegisterIntegerPref(prefs::kDownloadBubblePartialViewImpressions,
+                                0);
+  registry->RegisterBooleanPref(
+      prefs::kDownloadBubbleIphSuppression, false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterBooleanPref(prefs::kDownloadDuplicateFilePromptEnabled,
+                                true);
   registry->RegisterBooleanPref(prefs::kSafeBrowsingForTrustedSourcesEnabled,
                                 true);
 
@@ -299,8 +307,6 @@ void DownloadPrefs::RegisterProfilePrefs(
                                  default_download_path);
   registry->RegisterFilePathPref(prefs::kSaveFileDefaultDirectory,
                                  default_download_path);
-  registry->RegisterTimePref(prefs::kDownloadLastCompleteTime,
-                             /*default_value=*/base::Time());
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
     BUILDFLAG(IS_MAC)
   registry->RegisterBooleanPref(prefs::kOpenPdfDownloadInSystemReader, false);
@@ -378,15 +384,6 @@ void DownloadPrefs::SetSaveFileType(int type) {
   save_file_type_.SetValue(type);
 }
 
-base::Time DownloadPrefs::GetLastCompleteTime() {
-  return profile_->GetPrefs()->GetTime(prefs::kDownloadLastCompleteTime);
-}
-
-void DownloadPrefs::SetLastCompleteTime(const base::Time& last_complete_time) {
-  profile_->GetPrefs()->SetTime(prefs::kDownloadLastCompleteTime,
-                                last_complete_time);
-}
-
 bool DownloadPrefs::PromptForDownload() const {
   // If the DownloadDirectory policy is set, then |prompt_for_download_| should
   // always be false.
@@ -405,14 +402,6 @@ bool DownloadPrefs::PromptForDownload() const {
 #else
   return *prompt_for_download_;
 #endif
-}
-
-bool DownloadPrefs::PromptDownloadLater() const {
-  return false;
-}
-
-bool DownloadPrefs::HasDownloadLaterPromptShown() const {
-  return false;
 }
 
 bool DownloadPrefs::IsDownloadPathManaged() const {
@@ -652,11 +641,11 @@ base::FilePath DownloadPrefs::SanitizeDownloadTargetPath(
   }
 
   // Allow removable media.
-  if (chromeos::CrosDisksClient::GetRemovableDiskMountPoint().IsParent(path))
+  if (ash::CrosDisksClient::GetRemovableDiskMountPoint().IsParent(path))
     return path;
 
   // Allow paths under the Android files mount point.
-  if (base::FilePath(file_manager::util::kAndroidFilesPath).IsParent(path))
+  if (base::FilePath(file_manager::util::GetAndroidFilesPath()).IsParent(path))
     return path;
 
   // Allow Linux files mount point and subdirs.
@@ -684,7 +673,7 @@ void DownloadPrefs::UpdateAutoOpenByPolicy() {
 
   PrefService* prefs = profile_->GetPrefs();
   for (const auto& extension :
-       prefs->GetValueList(prefs::kDownloadExtensionsToOpenByPolicy)) {
+       prefs->GetList(prefs::kDownloadExtensionsToOpenByPolicy)) {
     base::FilePath::StringType extension_string =
         StringToFilePathString(extension.GetString());
     auto_open_by_policy_.insert(extension_string);
@@ -696,8 +685,7 @@ void DownloadPrefs::UpdateAllowedURLsForOpenByPolicy() {
       std::make_unique<policy::URLBlocklist>();
 
   PrefService* prefs = profile_->GetPrefs();
-  const auto& list =
-      prefs->GetValueList(prefs::kDownloadAllowedURLsForOpenByPolicy);
+  const auto& list = prefs->GetList(prefs::kDownloadAllowedURLsForOpenByPolicy);
 
   // We only need to configure |allowed_urls| if something is set by policy,
   // otherwise the default object does what we want.
@@ -712,6 +700,16 @@ void DownloadPrefs::UpdateAllowedURLsForOpenByPolicy() {
   }
 
   auto_open_allowed_by_urls_.swap(allowed_urls);
+}
+
+// TODO(chlily): Clean this up as this feature is no longer being pursued.
+bool DownloadPrefs::PromptForDuplicateFile() const {
+#if BUILDFLAG(IS_ANDROID)
+  return false;
+#else
+  return download::IsDownloadBubbleEnabled() &&
+         prompt_for_duplicate_file_.GetValue();
+#endif
 }
 
 bool DownloadPrefs::AutoOpenCompareFunctor::operator()(

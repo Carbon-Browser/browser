@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,11 @@
 #include "ash/public/cpp/message_center/arc_notification_constants.h"
 #include "ash/public/cpp/message_center/arc_notification_manager_delegate.h"
 #include "ash/system/message_center/message_view_factory.h"
-#include "base/bind.h"
+#include "ash/system/message_center/metrics_utils.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/message_center/lock_screen/lock_screen_controller.h"
 #include "ui/message_center/message_center_impl.h"
@@ -32,6 +34,7 @@ using arc::mojom::ArcDoNotDisturbStatusPtr;
 using arc::mojom::ArcNotificationData;
 using arc::mojom::ArcNotificationDataPtr;
 using arc::mojom::ArcNotificationEvent;
+using arc::mojom::ArcNotificationExpandState;
 using arc::mojom::ArcNotificationPriority;
 using arc::mojom::MessageCenterVisibility;
 using arc::mojom::NotificationConfiguration;
@@ -44,6 +47,7 @@ namespace {
 
 constexpr char kPlayStorePackageName[] = "com.android.vending";
 constexpr char kArcGmsPackageName[] = "org.chromium.arc.gms";
+constexpr char kArcHostVpnPackageName[] = "org.chromium.arc.hostvpn";
 
 constexpr char kManagedProvisioningPackageName[] =
     "com.android.managedprovisioning";
@@ -72,7 +76,7 @@ class DoNotDisturbManager : public message_center::MessageCenterObserver {
   }
 
  private:
-  ArcNotificationManager* const manager_;
+  const raw_ptr<ArcNotificationManager, ExperimentalAsh> manager_;
 };
 
 class VisibilityManager : public message_center::MessageCenterObserver {
@@ -99,7 +103,7 @@ class VisibilityManager : public message_center::MessageCenterObserver {
     return MessageCenterVisibility::VISIBILITY_TRANSIENT;
   }
 
-  ArcNotificationManager* const manager_;
+  const raw_ptr<ArcNotificationManager, ExperimentalAsh> manager_;
 };
 
 }  // namespace
@@ -223,6 +227,14 @@ void ArcNotificationManager::OnNotificationPosted(ArcNotificationDataPtr data) {
 
     metrics_utils::LogArcNotificationStyle(data->style);
     metrics_utils::LogArcNotificationActionEnabled(data->is_action_enabled);
+    metrics_utils::LogArcNotificationInlineReplyEnabled(
+        data->is_inline_reply_enabled);
+    metrics_utils::LogArcNotificationExpandState(
+        data->expand_state == ArcNotificationExpandState::FIXED_SIZE
+            ? metrics_utils::ArcNotificationExpandState::kFixedSize
+            : metrics_utils::ArcNotificationExpandState::kExpandable);
+    metrics_utils::LogArcNotificationIsCustomNotification(
+        data->is_custom_notification);
   }
 
   std::string app_id =
@@ -266,9 +278,9 @@ void ArcNotificationManager::OnNotificationUpdated(
              (previously_focused_notification_key_ == key)) {
     // The case that the previously-focused notification gets unfocused. Notify
     // the previously-focused notification if the notification still exists.
-    auto it = items_.find(previously_focused_notification_key_);
-    if (it != items_.end())
-      it->second->OnRemoteInputActivationChanged(false);
+    auto previous_it = items_.find(previously_focused_notification_key_);
+    if (previous_it != items_.end())
+      previous_it->second->OnRemoteInputActivationChanged(false);
 
     previously_focused_notification_key_.clear();
   }
@@ -352,6 +364,15 @@ void ArcNotificationManager::CancelUserAction(uint32_t id) {
   notifications_instance->CancelDeferredUserAction(id);
 }
 
+void ArcNotificationManager::LogInlineReplySent(const std::string& key) {
+  auto it = items_.find(key);
+  if (it == items_.end()) {
+    return;
+  }
+  metrics_utils::LogInlineReplySent(it->second->GetNotificationId(),
+                                    !message_center_->IsMessageCenterVisible());
+}
+
 void ArcNotificationManager::OnNotificationRemoved(const std::string& key) {
   auto it = items_.find(key);
   if (it == items_.end()) {
@@ -401,7 +422,7 @@ void ArcNotificationManager::SendNotificationRemovedFromChrome(
 
 void ArcNotificationManager::SendNotificationClickedOnChrome(
     const std::string& key) {
-  if (items_.find(key) == items_.end()) {
+  if (!base::Contains(items_, key)) {
     VLOG(3) << "Chrome requests to fire a click event on notification (key: "
             << key << "), but it is gone.";
     return;
@@ -424,7 +445,7 @@ void ArcNotificationManager::SendNotificationClickedOnChrome(
 void ArcNotificationManager::SendNotificationActivatedInChrome(
     const std::string& key,
     bool activated) {
-  if (items_.find(key) == items_.end()) {
+  if (!base::Contains(items_, key)) {
     VLOG(3)
         << "Chrome requests to fire an activation event on notification (key: "
         << key << "), but it is gone.";
@@ -446,8 +467,31 @@ void ArcNotificationManager::SendNotificationActivatedInChrome(
                      : ArcNotificationEvent::DEACTIVATED);
 }
 
+void ArcNotificationManager::SendNotificationButtonClickedOnChrome(
+    const std::string& key,
+    const int button_index,
+    const std::string& input) {
+  if (!base::Contains(items_, key)) {
+    VLOG(3) << "Chrome requests to fire a click event on notification (key: "
+            << key << "), but it is gone.";
+    return;
+  }
+  auto* notifications_instance = ARC_GET_INSTANCE_FOR_METHOD(
+      instance_owner_->holder(), SendNotificationButtonClickToAndroid);
+
+  // On shutdown, the ARC channel may quit earlier than notifications.
+  if (!notifications_instance) {
+    VLOG(2) << "ARC Notification (key: " << key
+            << ")'s button is clicked, but the ARC channel has already gone.";
+    return;
+  }
+
+  notifications_instance->SendNotificationButtonClickToAndroid(
+      key, button_index, input);
+}
+
 void ArcNotificationManager::CreateNotificationWindow(const std::string& key) {
-  if (items_.find(key) == items_.end()) {
+  if (!base::Contains(items_, key)) {
     VLOG(3) << "Chrome requests to create window on notification (key: " << key
             << "), but it is gone.";
     return;
@@ -462,7 +506,7 @@ void ArcNotificationManager::CreateNotificationWindow(const std::string& key) {
 }
 
 void ArcNotificationManager::CloseNotificationWindow(const std::string& key) {
-  if (items_.find(key) == items_.end()) {
+  if (!base::Contains(items_, key)) {
     VLOG(3) << "Chrome requests to close window on notification (key: " << key
             << "), but it is gone.";
     return;
@@ -477,7 +521,7 @@ void ArcNotificationManager::CloseNotificationWindow(const std::string& key) {
 }
 
 void ArcNotificationManager::OpenNotificationSettings(const std::string& key) {
-  if (items_.find(key) == items_.end()) {
+  if (!base::Contains(items_, key)) {
     DVLOG(3) << "Chrome requests to fire a click event on the notification "
              << "settings button (key: " << key << "), but it is gone.";
     return;
@@ -519,7 +563,7 @@ bool ArcNotificationManager::IsOpeningSettingsSupported() const {
 
 void ArcNotificationManager::SendNotificationToggleExpansionOnChrome(
     const std::string& key) {
-  if (items_.find(key) == items_.end()) {
+  if (!base::Contains(items_, key)) {
     VLOG(3) << "Chrome requests to fire a click event on notification (key: "
             << key << "), but it is gone.";
     return;
@@ -544,19 +588,22 @@ bool ArcNotificationManager::ShouldIgnoreNotification(
   if (data->priority == ArcNotificationPriority::NONE)
     return true;
 
-  // Notifications from Play Store are ignored in Public Session and Kiosk mode.
+  // Notifications from Play Store are ignored in Managed Guest Session and
+  // Kiosk mode.
   // TODO (sarakato): Use centralized const for Play Store package.
   if (data->package_name.has_value() &&
       *data->package_name == kPlayStorePackageName &&
-      delegate_->IsPublicSessionOrKiosk()) {
+      delegate_->IsManagedGuestSessionOrKiosk()) {
     return true;
   }
 
   // (b/186419166) Ignore notifications from managed provisioning and ARC GMS
   // Proxy.
+  // (b/147256449) Ignore notifications from facade VPN app
   if (data->package_name.has_value() &&
       (*data->package_name == kManagedProvisioningPackageName ||
-       *data->package_name == kArcGmsPackageName)) {
+       *data->package_name == kArcGmsPackageName ||
+       *data->package_name == kArcHostVpnPackageName)) {
     return true;
   }
 

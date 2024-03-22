@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/inspector/inspector_issue_conversion.h"
 
+#include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/inspector/inspector_issue.h"
+#include "third_party/blink/renderer/core/inspector/protocol/audits.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
@@ -25,7 +27,7 @@ std::unique_ptr<protocol::Audits::AffectedRequest> BuildAffectedRequest(
   auto protocol_request = protocol::Audits::AffectedRequest::create()
                               .setRequestId(request->request_id)
                               .build();
-  if (!request->url.IsEmpty()) {
+  if (!request->url.empty()) {
     protocol_request->setUrl(request->url);
   }
   return protocol_request;
@@ -52,20 +54,17 @@ blink::protocol::String InspectorIssueCodeValue(
           ContentSecurityPolicyIssue;
     case mojom::blink::InspectorIssueCode::kSharedArrayBufferIssue:
       return protocol::Audits::InspectorIssueCodeEnum::SharedArrayBufferIssue;
-    case mojom::blink::InspectorIssueCode::kTrustedWebActivityIssue:
-      CHECK(false);
-      return "";
-    case mojom::blink::InspectorIssueCode::kHeavyAdIssue:
-      CHECK(false);
-      return "";
     case mojom::blink::InspectorIssueCode::kLowTextContrastIssue:
       return protocol::Audits::InspectorIssueCodeEnum::LowTextContrastIssue;
+    case mojom::blink::InspectorIssueCode::kHeavyAdIssue:
     case mojom::blink::InspectorIssueCode::kFederatedAuthRequestIssue:
-      CHECK(false);
-      return "";
+    case mojom::blink::InspectorIssueCode::kFederatedAuthUserInfoRequestIssue:
+    case mojom::blink::InspectorIssueCode::kBounceTrackingIssue:
+    case mojom::blink::InspectorIssueCode::kCookieDeprecationMetadataIssue:
     case mojom::blink::InspectorIssueCode::kGenericIssue:
-      NOTREACHED();
-      return "";
+    case mojom::blink::InspectorIssueCode::kDeprecationIssue:
+    case mojom::blink::InspectorIssueCode::kAttributionReportingIssue:
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -84,6 +83,11 @@ protocol::String BuildCookieExclusionReason(
       return protocol::Audits::CookieExclusionReasonEnum::ExcludeSameSiteLax;
     case blink::mojom::blink::CookieExclusionReason::kExcludeSameSiteStrict:
       return protocol::Audits::CookieExclusionReasonEnum::ExcludeSameSiteStrict;
+    case blink::mojom::blink::CookieExclusionReason::kExcludeDomainNonASCII:
+      return protocol::Audits::CookieExclusionReasonEnum::ExcludeDomainNonASCII;
+    case blink::mojom::blink::CookieExclusionReason::kExcludeThirdPartyPhaseout:
+      return protocol::Audits::CookieExclusionReasonEnum::
+          ExcludeThirdPartyPhaseout;
   }
 }
 
@@ -136,6 +140,14 @@ protocol::String BuildCookieWarningReason(
         kWarnAttributeValueExceedsMaxSize:
       return protocol::Audits::CookieWarningReasonEnum::
           WarnAttributeValueExceedsMaxSize;
+    case blink::mojom::blink::CookieWarningReason::kWarnDomainNonASCII:
+      return protocol::Audits::CookieWarningReasonEnum::WarnDomainNonASCII;
+    case blink::mojom::blink::CookieWarningReason::kWarnThirdPartyPhaseout:
+      return protocol::Audits::CookieWarningReasonEnum::WarnThirdPartyPhaseout;
+    case blink::mojom::blink::CookieWarningReason::
+        kWarnCrossSiteRedirectDowngradeChangesInclusion:
+      return protocol::Audits::CookieWarningReasonEnum::
+          WarnCrossSiteRedirectDowngradeChangesInclusion;
   }
 }
 
@@ -230,6 +242,8 @@ protocol::String BuildMixedContentResourceType(
       return protocol::Audits::MixedContentResourceTypeEnum::ServiceWorker;
     case blink::mojom::blink::RequestContextType::SHARED_WORKER:
       return protocol::Audits::MixedContentResourceTypeEnum::SharedWorker;
+    case blink::mojom::blink::RequestContextType::SPECULATION_RULES:
+      return protocol::Audits::MixedContentResourceTypeEnum::SpeculationRules;
     case blink::mojom::blink::RequestContextType::STYLE:
       return protocol::Audits::MixedContentResourceTypeEnum::Stylesheet;
     case blink::mojom::blink::RequestContextType::SUBRESOURCE:
@@ -320,7 +334,7 @@ std::unique_ptr<protocol::Audits::SourceCodeLocation> BuildAffectedLocation(
           .setColumnNumber(affected_location->column)
           .setLineNumber(affected_location->line)
           .build();
-  if (!affected_location->script_id.IsEmpty())
+  if (!affected_location->script_id.empty())
     protocol_affected_location->setScriptId(affected_location->script_id);
   return protocol_affected_location;
 }

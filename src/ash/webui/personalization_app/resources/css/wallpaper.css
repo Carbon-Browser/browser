@@ -1,24 +1,11 @@
-/* Copyright 2022 The Chromium Authors. All rights reserved.
+/* Copyright 2022 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
 /* #css_wrapper_metadata_start
  * #type=style
- * import=chrome://resources/cr_elements/chromeos/cros_color_overrides.m.js
- * import=chrome://resources/cr_elements/shared_vars_css.m.js
- * import=chrome://resources/polymer/v3_0/paper-styles/color.js
+ * #import=chrome://resources/polymer/v3_0/paper-styles/color.js
  * #css_wrapper_metadata_end */
-
-/* Use !important to make sure there are no css ordering issues.
- * Subtract 0.25px to fix subpixel rounding issues with iron-list. This
- * makes sure all photo containers on a row add up to at least 1px smaller
- * than the parent width.*/
-
-@media (min-width: 720px) {
-  .photo-container {
-    width: calc(25% - 0.25px) !important;
-  }
-}
 
 main {
   height: 100%;
@@ -29,4 +16,13 @@ main:focus,
 main:focus-visible,
 main:focus-within {
   outline: none;
+}
+
+h2.wallpaper-collections-heading{
+  color: var(--cros-sys-secondary);
+  font: var(--cros-button-2-font);
+  height: 20px;
+  margin-block-start: 0;
+  margin-block-end: 0;
+  padding: 6px 10px 6px;
 }

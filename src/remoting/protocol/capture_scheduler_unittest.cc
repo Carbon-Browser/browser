@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_tick_clock.h"
@@ -18,10 +18,9 @@
 #include "remoting/proto/video.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
-static const int kTestInputs[] = { 100, 50, 30, 20, 10, 30, 60, 80 };
+static const int kTestInputs[] = {100, 50, 30, 20, 10, 30, 60, 80};
 static const int kMinumumFrameIntervalMs = 50;
 
 class CaptureSchedulerTest : public testing::Test {
@@ -39,9 +38,7 @@ class CaptureSchedulerTest : public testing::Test {
     scheduler_->Start();
   }
 
-  void DoCapture() {
-    capture_called_ = true;
-  }
+  void DoCapture() { capture_called_ = true; }
 
   void CheckCaptureCalled() {
     EXPECT_TRUE(capture_called_);
@@ -81,7 +78,7 @@ class CaptureSchedulerTest : public testing::Test {
   base::SimpleTestTickClock tick_clock_;
 
   // Owned by |scheduler_|.
-  raw_ptr<base::MockOneShotTimer> capture_timer_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> capture_timer_;
 
   bool capture_called_;
 };
@@ -196,5 +193,4 @@ TEST_F(CaptureSchedulerTest, MaximumPendingFrames) {
   EXPECT_TRUE(capture_timer_->IsRunning());
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

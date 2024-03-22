@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
 #include "chrome/browser/gcm/instance_id/instance_id_profile_service_factory.h"
@@ -33,8 +33,7 @@
 #include "components/gcm_driver/gcm_driver.h"
 #include "components/gcm_driver/gcm_profile_service.h"
 #include "components/gcm_driver/instance_id/instance_id_profile_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #include "components/sync_device_info/device_info_sync_service.h"
 #include "components/sync_device_info/local_device_info_provider.h"
 #include "content/public/browser/browser_context.h"
@@ -61,7 +60,8 @@ void CleanEncryptionInfoWithoutAuthorizedEntity(gcm::GCMDriver* gcm_driver) {
 
 // static
 SharingServiceFactory* SharingServiceFactory::GetInstance() {
-  return base::Singleton<SharingServiceFactory>::get();
+  static base::NoDestructor<SharingServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -72,9 +72,15 @@ SharingService* SharingServiceFactory::GetForBrowserContext(
 }
 
 SharingServiceFactory::SharingServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    // Sharing features are disabled in incognito.
+    : ProfileKeyedServiceFactory(
           kServiceName,
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(gcm::GCMProfileServiceFactory::GetInstance());
   DependsOn(instance_id::InstanceIDProfileServiceFactory::GetInstance());
   DependsOn(DeviceInfoSyncServiceFactory::GetInstance());
@@ -85,7 +91,8 @@ SharingServiceFactory::SharingServiceFactory()
 
 SharingServiceFactory::~SharingServiceFactory() = default;
 
-KeyedService* SharingServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SharingServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   syncer::SyncService* sync_service =
@@ -147,20 +154,11 @@ KeyedService* SharingServiceFactory::BuildServiceInstanceFor(
   auto fcm_handler = std::make_unique<SharingFCMHandler>(
       gcm_driver, device_info_tracker, fcm_sender_ptr, handler_registry.get());
 
-  return new SharingService(
+  return std::make_unique<SharingService>(
       std::move(sync_prefs), std::move(vapid_key_manager),
       std::move(sharing_device_registration), std::move(sharing_message_sender),
       std::move(device_source), std::move(handler_registry),
       std::move(fcm_handler), sync_service);
-}
-
-content::BrowserContext* SharingServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  // Sharing features are disabled in incognito.
-  if (context->IsOffTheRecord())
-    return nullptr;
-
-  return context;
 }
 
 bool SharingServiceFactory::ServiceIsNULLWhileTesting() const {

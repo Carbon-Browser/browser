@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "gpu/command_buffer/common/constants.h"
 #include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
 #include "gpu/command_buffer/common/mailbox.h"
+#include "gpu/command_buffer/service/dawn_caching_interface.h"
 #include "gpu/command_buffer/service/gl_context_virtual.h"
 #include "gpu/command_buffer/service/gl_state_restorer_impl.h"
 #include "gpu/command_buffer/service/logger.h"
@@ -32,7 +33,6 @@
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_switches.h"
-#include "ui/gl/gl_workarounds.h"
 #include "ui/gl/init/gl_factory.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -87,12 +87,6 @@ gpu::ContextResult WebGPUCommandBufferStub::Initialize(
     return ContextResult::kFatalFailure;
   }
 
-  if (surface_handle_ != kNullSurfaceHandle) {
-    LOG(ERROR) << "ContextResult::kFatalFailure: "
-                  "WebGPUInterface clients must render offscreen.";
-    return ContextResult::kFatalFailure;
-  }
-
   if (init_params.attribs.context_type != CONTEXT_TYPE_WEBGPU) {
     LOG(ERROR) << "ContextResult::kFatalFailure: Incompatible creation attribs "
                   "used with WebGPUDecoder";
@@ -114,12 +108,16 @@ gpu::ContextResult WebGPUCommandBufferStub::Initialize(
 
   memory_tracker_ = CreateMemoryTracker();
 
+  webgpu::DawnCacheOptions dawn_cache_options = {
+      manager->dawn_caching_interface_factory(),
+      channel_->GetCacheHandleForType(gpu::GpuDiskCacheType::kDawnWebGPU)};
+
   command_buffer_ =
       std::make_unique<CommandBufferService>(this, memory_tracker_.get());
   std::unique_ptr<webgpu::WebGPUDecoder> decoder(webgpu::WebGPUDecoder::Create(
       this, command_buffer_.get(), manager->shared_image_manager(),
       memory_tracker_.get(), manager->outputter(), manager->gpu_preferences(),
-      std::move(shared_context_state)));
+      std::move(shared_context_state), dawn_cache_options, channel_));
 
   sync_point_client_state_ =
       channel_->sync_point_manager()->CreateSyncPointClientState(

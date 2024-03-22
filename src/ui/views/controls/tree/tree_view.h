@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -180,14 +180,12 @@ class VIEWS_EXPORT TreeView : public View,
   bool HandleAccessibleAction(const ui::AXActionData& action_data) override;
 
   // TreeModelObserver overrides:
-  void TreeNodesAdded(ui::TreeModel* model,
-                      ui::TreeModelNode* parent,
-                      size_t start,
-                      size_t count) override;
-  void TreeNodesRemoved(ui::TreeModel* model,
-                        ui::TreeModelNode* parent,
-                        size_t start,
-                        size_t count) override;
+  void TreeNodeAdded(ui::TreeModel* model,
+                     ui::TreeModelNode* parent,
+                     size_t index) override;
+  void TreeNodeRemoved(ui::TreeModel* model,
+                       ui::TreeModelNode* parent,
+                       size_t index) override;
   void TreeNodeChanged(ui::TreeModel* model,
                        ui::TreeModelNode* model_node) override;
 
@@ -255,9 +253,6 @@ class VIEWS_EXPORT TreeView : public View,
 
     // Gets or sets a virtual accessibility view that is used to expose
     // information about this node to assistive software.
-    //
-    // This is a weak pointer. This class doesn't own its virtual accessibility
-    // view but the Views system does.
     void set_accessibility_view(AXVirtualView* accessibility_view) {
       accessibility_view_ = accessibility_view;
     }
@@ -276,7 +271,7 @@ class VIEWS_EXPORT TreeView : public View,
     int text_width() const { return text_width_; }
 
     // Returns the total number of descendants (including this node).
-    int NumExpandedNodes() const;
+    size_t NumExpandedNodes() const;
 
     // Returns the max width of all descendants (including this node). |indent|
     // is how many pixels each child is indented and |depth| is the depth of
@@ -289,10 +284,7 @@ class VIEWS_EXPORT TreeView : public View,
     raw_ptr<ui::TreeModelNode> model_node_ = nullptr;
 
     // A virtual accessibility view that is used to expose information about
-    // this node to assistive software.
-    //
-    // This is a weak pointer. This class doesn't own its virtual accessibility
-    // view but the Views system does.
+    // this node to assistive software. The view is owned by the Views system.
     raw_ptr<AXVirtualView> accessibility_view_ = nullptr;
 
     // Whether the children have been loaded.
@@ -503,7 +495,7 @@ class VIEWS_EXPORT TreeView : public View,
   bool editable_ = true;
 
   // The controller.
-  raw_ptr<TreeViewController> controller_ = nullptr;
+  raw_ptr<TreeViewController, DanglingUntriaged> controller_ = nullptr;
 
   // Whether or not the root is shown in the tree.
   bool root_shown_ = true;

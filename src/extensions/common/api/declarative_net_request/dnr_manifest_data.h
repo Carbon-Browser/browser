@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,7 @@
 #include "extensions/common/api/declarative_net_request/constants.h"
 #include "extensions/common/extension.h"
 
-namespace extensions {
-namespace declarative_net_request {
+namespace extensions::declarative_net_request {
 
 // Manifest data required for the kDeclarativeNetRequestKey manifest
 // key.
@@ -78,7 +77,6 @@ struct DNRManifestData : Extension::ManifestData {
   ManifestIDToRulesetMap manifest_id_to_ruleset_map;
 };
 
-}  // namespace declarative_net_request
-}  // namespace extensions
+}  // namespace extensions::declarative_net_request
 
 #endif  // EXTENSIONS_COMMON_API_DECLARATIVE_NET_REQUEST_DNR_MANIFEST_DATA_H_

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
+#include "services/device/public/mojom/serial.mojom-blink-forward.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_typedefs.h"
+#include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/streams/underlying_sink_base.h"
 
 namespace blink {
@@ -34,7 +36,7 @@ class SerialPortUnderlyingSink final : public UnderlyingSinkBase {
                       ScriptValue reason,
                       ExceptionState&) override;
 
-  void SignalError(DOMException*);
+  void SignalError(device::mojom::blink::SerialSendError);
 
   void Trace(Visitor*) const override;
 
@@ -50,6 +52,7 @@ class SerialPortUnderlyingSink final : public UnderlyingSinkBase {
   Member<SerialPort> serial_port_;
   Member<ScriptState> script_state_;
   Member<WritableStreamDefaultController> controller_;
+  Member<AbortSignal::AlgorithmHandle> abort_handle_;
 
   Member<V8BufferSource> buffer_source_;
   size_t offset_ = 0;

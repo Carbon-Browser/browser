@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ class DeviceInfoSyncClientImpl : public syncer::DeviceInfoSyncClient {
   absl::optional<syncer::ModelTypeSet> GetInterestedDataTypes() const override;
 
   // syncer::DeviceInfoSyncClient:
-  absl::optional<syncer::DeviceInfo::PhoneAsASecurityKeyInfo>
+  syncer::DeviceInfo::PhoneAsASecurityKeyInfo::StatusOrInfo
   GetPhoneAsASecurityKeyInfo() const override;
 
   // syncer::DeviceInfoSyncClient:

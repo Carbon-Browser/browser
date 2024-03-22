@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,8 +48,8 @@ FastPairServiceDataCreator::Builder::Build() {
 }
 
 FastPairServiceDataCreator::FastPairServiceDataCreator(
-    absl::optional<uint8_t> header,
-    absl::optional<std::string> model_id,
+    std::optional<uint8_t> header,
+    std::optional<std::string> model_id,
     std::vector<uint8_t> extra_field_headers,
     std::vector<std::string> extra_fields)
     : header_(header),

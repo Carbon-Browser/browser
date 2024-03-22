@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,7 @@ class ReportSchedulerTest
   base::test::ScopedFeatureList scoped_feature_list_;
   policy::FakeBrowserDMTokenStorage storage_;
   std::unique_ptr<base::RunLoop> run_loop_;
-  raw_ptr<ReportScheduler> report_scheduler_;
+  raw_ptr<ReportScheduler, DanglingUntriaged> report_scheduler_;
   bool has_cloud_reporting_launched = false;
 };
 

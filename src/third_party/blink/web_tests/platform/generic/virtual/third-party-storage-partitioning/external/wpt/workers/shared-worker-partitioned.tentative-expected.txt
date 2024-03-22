@@ -1,4 +1,0 @@
-This is a testharness.js-based test.
-PASS Test partitioning of shared workers
-Harness: the test ran to completion.
-

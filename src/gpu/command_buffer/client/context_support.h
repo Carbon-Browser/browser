@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/gfx/gpu_fence_handle.h"
 #include "ui/gfx/overlay_transform.h"
 

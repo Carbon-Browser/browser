@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,6 +69,9 @@ void CastMediaSessionController::Send(
     case media_session::mojom::MediaSessionAction::kHangUp:
     case media_session::mojom::MediaSessionAction::kRaise:
     case media_session::mojom::MediaSessionAction::kSetMute:
+    case media_session::mojom::MediaSessionAction::kPreviousSlide:
+    case media_session::mojom::MediaSessionAction::kNextSlide:
+    case media_session::mojom::MediaSessionAction::kEnterAutoPictureInPicture:
       NOTREACHED();
       return;
   }

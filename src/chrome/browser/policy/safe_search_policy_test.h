@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/test/scoped_feature_list.h"
 #include "base/values.h"
 #include "chrome/browser/policy/policy_test_utils.h"
 #include "chrome/test/base/chrome_test_utils.h"
@@ -32,6 +33,9 @@ class SafeSearchPolicyTest : public PolicyTest {
   static void CheckSafeSearch(Browser* browser,
                               bool expect_safe_search,
                               const std::string& url = "http://google.com/");
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
 };
 
 }  // namespace policy

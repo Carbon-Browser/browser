@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "build/build_config.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
+#include "skia/ext/font_utils.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_sample_collector.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
@@ -24,19 +25,14 @@ namespace blink {
 bool IdentifiabilityActiveSampler::IsFontFamilyAvailable(const char* family,
                                                          SkFontMgr* fm) {
   base::ScopedAllowBaseSyncPrimitives allow;
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  return !!fm->legacyMakeTypeface(family, SkFontStyle());
-#else
-  sk_sp<SkFontStyleSet> set(fm->matchFamily(family));
-  return set && set->count();
-#endif
+  return !!sk_sp<SkTypeface>(fm->matchFamilyStyle(family, SkFontStyle()));
 }
 
 // static
 void IdentifiabilityActiveSampler::ReportAvailableFontFamilies(
     std::vector<std::string> fonts_to_check,
     ukm::UkmRecorder* ukm_recorder) {
-  sk_sp<SkFontMgr> fontManager(SkFontMgr::RefDefault());
+  sk_sp<SkFontMgr> fontManager(skia::DefaultFontMgr());
   ukm::SourceId ukm_source_id = ukm::NoURLSourceId();
   blink::IdentifiabilityMetricBuilder builder(ukm_source_id);
   for (const std::string& font : fonts_to_check) {

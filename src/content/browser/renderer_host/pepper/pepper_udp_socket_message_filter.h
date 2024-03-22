@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/common/content_export.h"
@@ -34,11 +35,6 @@
 
 struct PP_NetAddress_Private;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/ash/components/network/firewall_hole.h"
-#include "content/public/browser/browser_thread.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
 namespace ppapi {
 
 class SocketOptionData;
@@ -46,13 +42,17 @@ class SocketOptionData;
 namespace host {
 struct ReplyMessageContext;
 }
-}
+}  // namespace ppapi
 
 namespace network {
 namespace mojom {
 class NetworkContext;
 }
 }  // namespace network
+
+namespace chromeos {
+class FirewallHole;
+}  // namespace chromeos
 
 namespace content {
 
@@ -140,14 +140,14 @@ class CONTENT_EXPORT PepperUDPSocketMessageFilter
                           listener_receiver,
                       const ppapi::host::ReplyMessageContext& context,
                       const PP_NetAddress_Private& net_address);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   void OnFirewallHoleOpened(
       mojo::PendingReceiver<network::mojom::UDPSocketListener>
           listener_receiver,
       const ppapi::host::ReplyMessageContext& context,
       const PP_NetAddress_Private& net_address,
       std::unique_ptr<chromeos::FirewallHole> hole);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
   void StartPendingSend();
   void Close();
 
@@ -226,15 +226,13 @@ class CONTENT_EXPORT PepperUDPSocketMessageFilter
   // on UI thread.
   mojo::Receiver<network::mojom::UDPSocketListener> receiver_{this};
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  std::unique_ptr<chromeos::FirewallHole,
-                  content::BrowserThread::DeleteOnUIThread>
-      firewall_hole_;
+#if BUILDFLAG(IS_CHROMEOS)
+  std::unique_ptr<chromeos::FirewallHole> firewall_hole_;
   // Allows for cancellation of opening a hole in the firewall in the case the
   // network service crashes.
   base::WeakPtrFactory<PepperUDPSocketMessageFilter>
       firewall_hole_weak_ptr_factory_{this};
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 };
 
 }  // namespace content

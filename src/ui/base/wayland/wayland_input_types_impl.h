@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,8 @@
       macro(AUTOCORRECT_ON) macro(AUTOCORRECT_OFF) macro(SPELLCHECK_ON)    \
           macro(SPELLCHECK_OFF) macro(AUTOCAPITALIZE_NONE)                 \
               macro(AUTOCAPITALIZE_CHARACTERS) macro(AUTOCAPITALIZE_WORDS) \
-                  macro(AUTOCAPITALIZE_SENTENCES) macro(HAS_BEEN_PASSWORD)
+                  macro(AUTOCAPITALIZE_SENTENCES) macro(HAS_BEEN_PASSWORD) \
+                      macro(VERTICAL)
 
 // Note: we assume that the source file including this header implementation
 // already includes either text-input-extension-unstable-v1-server-protocol.h

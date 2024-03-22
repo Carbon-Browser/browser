@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -61,7 +61,7 @@ def InputWithSelector(action_runner, input_text, input_selector):
       'document.querySelector({{selector}}).focus()', selector=input_selector)
   # Wait a bit to make sure the focus is properly set, otherwise we'll end up
   # losing some characters.
-  action_runner.Wait(0.5)
+  action_runner.Wait(1)
   action_runner.EnterText(input_text)
 
 def InputForm(action_runner, input_text, input_id, form_id=None):

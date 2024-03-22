@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/public/browser/media_stream_request.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -16,6 +16,7 @@
 namespace blink {
 namespace mojom {
 class FileChooserParams;
+class WindowFeatures;
 }
 }  // namespace blink
 
@@ -61,7 +62,7 @@ class AppDelegate {
       std::unique_ptr<content::WebContents> new_contents,
       const GURL& target_url,
       WindowOpenDisposition disposition,
-      const gfx::Rect& initial_rect,
+      const blink::mojom::WindowFeatures& window_features,
       bool user_gesture) = 0;
 
   // Feature support.
@@ -76,7 +77,7 @@ class AppDelegate {
       const Extension* extension) = 0;
   virtual bool CheckMediaAccessPermission(
       content::RenderFrameHost* render_frame_host,
-      const GURL& security_origin,
+      const url::Origin& security_origin,
       blink::mojom::MediaStreamType type,
       const Extension* extension) = 0;
   virtual int PreferredIconSize() const = 0;

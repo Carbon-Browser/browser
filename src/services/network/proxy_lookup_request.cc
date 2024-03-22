@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,8 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/net_errors.h"
-#include "net/http/http_network_session.h"
-#include "net/http/http_transaction_factory.h"
 #include "net/log/net_log_with_source.h"
 #include "net/proxy_resolution/configured_proxy_resolution_service.h"
 #include "net/proxy_resolution/proxy_resolution_request.h"
@@ -24,9 +22,9 @@ namespace network {
 ProxyLookupRequest::ProxyLookupRequest(
     mojo::PendingRemote<mojom::ProxyLookupClient> proxy_lookup_client,
     NetworkContext* network_context,
-    const net::NetworkIsolationKey& network_isolation_key)
+    const net::NetworkAnonymizationKey& network_anonymization_key)
     : network_context_(network_context),
-      network_isolation_key_(network_isolation_key),
+      network_anonymization_key_(network_anonymization_key),
       proxy_lookup_client_(std::move(proxy_lookup_client)) {
   DCHECK(proxy_lookup_client_);
 }
@@ -44,14 +42,15 @@ void ProxyLookupRequest::Start(const GURL& url) {
       base::BindOnce(&ProxyLookupRequest::DestroySelf, base::Unretained(this)));
   // TODO(mmenke): The NetLogWithSource() means nothing is logged. Fix that.
   //
-  // TODO(https://crbug.com/1023435): Pass along a NetworkIsolationKey.
-  int result = network_context_->url_request_context()
-                   ->proxy_resolution_service()
-                   ->ResolveProxy(
-                       url, std::string(), network_isolation_key_, &proxy_info_,
-                       base::BindOnce(&ProxyLookupRequest::OnResolveComplete,
-                                      base::Unretained(this)),
-                       &request_, net::NetLogWithSource());
+  // TODO(https://crbug.com/1023435): Pass along a NetworkAnonymizationKey.
+  int result =
+      network_context_->url_request_context()
+          ->proxy_resolution_service()
+          ->ResolveProxy(url, std::string(), network_anonymization_key_,
+                         &proxy_info_,
+                         base::BindOnce(&ProxyLookupRequest::OnResolveComplete,
+                                        base::Unretained(this)),
+                         &request_, net::NetLogWithSource());
   if (result != net::ERR_IO_PENDING)
     OnResolveComplete(result);
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ class CastResourceDelegate : public ui::ResourceBundle::Delegate {
   base::RefCountedStaticMemory* LoadDataResourceBytes(
       int resource_id,
       ui::ResourceScaleFactor scale_factor) override;
-  absl::optional<std::string> LoadDataResourceString(int resource_id) override;
+  std::optional<std::string> LoadDataResourceString(int resource_id) override;
   bool GetRawDataResource(int resource_id,
                           ui::ResourceScaleFactor scale_factor,
                           base::StringPiece* value) const override;

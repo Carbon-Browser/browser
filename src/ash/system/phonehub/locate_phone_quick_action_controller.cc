@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/phonehub/phone_hub_metrics.h"
 #include "ash/system/phonehub/quick_action_item.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/timer/timer.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -67,28 +67,7 @@ void LocatePhoneQuickActionController::OnPhoneRingingStateChanged() {
 }
 
 void LocatePhoneQuickActionController::UpdateState() {
-  // Disable Locate Phone if Silence Phone is on, otherwise change accordingly
-  // based on status from FindMyDeviceController.
-  switch (find_my_device_controller_->GetPhoneRingingStatus()) {
-    case Status::kRingingOff:
-      state_ = ActionState::kOff;
-      break;
-    case Status::kRingingOn:
-      state_ = ActionState::kOn;
-      break;
-    case Status::kRingingNotAvailable:
-      state_ = ActionState::kNotAvailable;
-      break;
-  }
-
-  SetItemState(state_);
-
-  // If |requested_state_| correctly resembles the current state, reset it and
-  // the timer.
-  if (state_ == requested_state_) {
-    check_requested_state_timer_.reset();
-    requested_state_.reset();
-  }
+  UpdateQuickActionItemUi();
 }
 
 void LocatePhoneQuickActionController::SetItemState(ActionState state) {
@@ -139,6 +118,31 @@ void LocatePhoneQuickActionController::CheckRequestedState() {
 
   check_requested_state_timer_.reset();
   requested_state_.reset();
+}
+
+void LocatePhoneQuickActionController::UpdateQuickActionItemUi() {
+  // Disable Locate Phone if Silence Phone is on, otherwise change accordingly
+  // based on status from FindMyDeviceController.
+  switch (find_my_device_controller_->GetPhoneRingingStatus()) {
+    case Status::kRingingOff:
+      state_ = ActionState::kOff;
+      break;
+    case Status::kRingingOn:
+      state_ = ActionState::kOn;
+      break;
+    case Status::kRingingNotAvailable:
+      state_ = ActionState::kNotAvailable;
+      break;
+  }
+
+  SetItemState(state_);
+
+  // If |requested_state_| correctly resembles the current state, reset it and
+  // the timer.
+  if (state_ == requested_state_) {
+    check_requested_state_timer_.reset();
+    requested_state_.reset();
+  }
 }
 
 }  // namespace ash

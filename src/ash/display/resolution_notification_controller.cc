@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/screen_layout_observer.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/display/display_features.h"
@@ -77,13 +77,13 @@ bool ResolutionNotificationController::PrepareNotificationAndSetDisplayMode(
     int64_t display_id,
     const display::ManagedDisplayMode& old_resolution,
     const display::ManagedDisplayMode& new_resolution,
-    mojom::DisplayConfigSource source,
+    crosapi::mojom::DisplayConfigSource source,
     base::OnceClosure accept_callback) {
   Shell::Get()->screen_layout_observer()->SetDisplayChangedFromSettingsUI(
       display_id);
   display::DisplayManager* const display_manager =
       Shell::Get()->display_manager();
-  if (source == mojom::DisplayConfigSource::kPolicy ||
+  if (source == crosapi::mojom::DisplayConfigSource::kPolicy ||
       display::IsInternalDisplayId(display_id)) {
     // We don't show notifications to confirm/revert the resolution change in
     // the case of an internal display or policy-forced changes.

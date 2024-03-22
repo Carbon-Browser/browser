@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,8 @@ class RecentlyUsedFoldersComboModel : public ui::ComboboxModel,
                          size_t new_index) override;
   void BookmarkNodeAdded(bookmarks::BookmarkModel* model,
                          const bookmarks::BookmarkNode* parent,
-                         size_t index) override;
+                         size_t index,
+                         bool added_by_user) override;
   void OnWillRemoveBookmarks(bookmarks::BookmarkModel* model,
                              const bookmarks::BookmarkNode* parent,
                              size_t old_index,
@@ -87,7 +88,7 @@ class RecentlyUsedFoldersComboModel : public ui::ComboboxModel,
 
   const raw_ptr<bookmarks::BookmarkModel> bookmark_model_;
 
-  const raw_ptr<const bookmarks::BookmarkNode> parent_node_;
+  const raw_ptr<const bookmarks::BookmarkNode, DanglingUntriaged> parent_node_;
 };
 
 #endif  // CHROME_BROWSER_UI_BOOKMARKS_RECENTLY_USED_FOLDERS_COMBO_MODEL_H_

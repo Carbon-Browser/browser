@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -315,12 +315,12 @@ cvox.NavigationManager.prototype.hasNext_ = function() {
   if (this.shifterStack_.length > 0) {
     return true;
   }
-  var dummySel = this.curSel_.clone();
+  var emptySel = this.curSel_.clone();
   var result = false;
-  var dummyNavShifter = new cvox.NavigationShifter();
-  dummyNavShifter.setGranularity(this.shifter_.getGranularity());
-  dummyNavShifter.sync(dummySel);
-  if (dummyNavShifter.next(dummySel)) {
+  var emptyNavShifter = new cvox.NavigationShifter();
+  emptyNavShifter.setGranularity(this.shifter_.getGranularity());
+  emptyNavShifter.sync(emptySel);
+  if (emptyNavShifter.next(emptySel)) {
     result = true;
   }
   return result;

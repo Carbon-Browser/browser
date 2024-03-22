@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.android_webview.test.services;
@@ -16,9 +16,7 @@ import org.chromium.base.test.util.CallbackHelper;
 
 import java.io.File;
 
-/**
- * Mock service that feeds mock data to components download directory.
- */
+/** Mock service that feeds mock data to components download directory. */
 public class MockAwComponentUpdateService extends Service {
     public static ResultReceiver sFinishCallback;
     private static CallbackHelper sServiceFinishedCallbackHelper = new CallbackHelper();

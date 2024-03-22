@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,20 @@
 
 #include <string>
 
-#include "chrome/browser/ash/notifications/echo_dialog_listener.h"
+#include "base/values.h"
 #include "extensions/browser/extension_function.h"
 
 class PrefRegistrySimple;
 
 namespace chromeos {
 
-// Namespace to register the EchoCheckedOffers field in Local State.
 namespace echo_offer {
 
+// Registers the EchoCheckedOffers field in Local State.
 void RegisterPrefs(PrefRegistrySimple* registry);
+
+// Removes nested empty dictionaries from |dict|.
+void RemoveEmptyValueDicts(base::Value::Dict& dict);
 
 }  // namespace echo_offer
 

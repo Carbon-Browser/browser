@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,7 +9,10 @@ import("//remoting/host/installer/win/wix_path.gni")
 action("remoting_me2me_host_archive") {
   script = "//remoting/host/installer/build-installer-archive.py"
 
-  sources = [ "//build/android/gyp/util/build_utils.py" ]
+  sources = [
+    # Used by build-installer-archive.py.
+    "//build/zip_helpers.py",
+  ]
 
   deps = [
     "//remoting/host:remoting_native_messaging_manifests",

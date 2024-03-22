@@ -19,8 +19,8 @@
 
 #include "components/adblock/content/browser/test/mock_element_hider.h"
 #include "components/adblock/content/browser/test/mock_frame_hierarchy_builder.h"
-#include "components/adblock/core/subscription/test/mock_subscription_updater.h"
-#include "components/adblock/core/test/mock_adblock_controller.h"
+#include "components/adblock/core/subscription/subscription_service.h"
+#include "components/adblock/core/subscription/test/mock_subscription_service.h"
 #include "components/adblock/core/test/mock_sitekey_storage.h"
 #include "content/public/test/mock_navigation_handle.h"
 #include "content/public/test/test_renderer_host.h"
@@ -35,21 +35,27 @@ class AdblockWebContentObserverTest
 
     auto* web_contents = this->web_contents();
     AdblockWebContentObserver::CreateForWebContents(
-        web_contents, &controller_, &hider_, &storage_,
+        web_contents, &service_, &hider_, &storage_,
         std::make_unique<MockFrameHierarchyBuilder>());
     observer_ = AdblockWebContentObserver::FromWebContents(web_contents);
   }
 
-  MockAdblockController controller_;
+  void TearDown() override {
+    observer_ = nullptr;
+    content::RenderViewHostTestHarness::TearDown();
+  }
+
+  MockSubscriptionService service_;
   MockElementHider hider_;
   MockSitekeyStorage storage_;
-  AdblockWebContentObserver* observer_;
+  raw_ptr<AdblockWebContentObserver> observer_;
 };
 
 TEST_F(AdblockWebContentObserverTest, DidFinishNavigationNotCommited) {
   content::MockNavigationHandle mock_navigation_handle;
   mock_navigation_handle.set_has_committed(false);
 
+  service_.WillRequireFiltering(true);
   EXPECT_CALL(hider_, HideBlockedElement(testing::_, testing::_)).Times(0);
   EXPECT_CALL(hider_,
               ApplyElementHidingEmulationOnPage(
@@ -67,7 +73,7 @@ TEST_F(AdblockWebContentObserverTest, DidFinishNavigationWithNiceUrl) {
   mock_navigation_handle.set_url(url);
   mock_navigation_handle.set_render_frame_host(frame_host);
 
-  EXPECT_CALL(controller_, IsAdblockEnabled()).WillOnce(testing::Return(true));
+  service_.WillRequireFiltering(true);
   EXPECT_CALL(storage_, FindSiteKeyForAnyUrl(std::vector<GURL>{}))
       .WillOnce(testing::Return(absl::nullopt));
   EXPECT_CALL(hider_, HideBlockedElement(testing::_, testing::_)).Times(0);
@@ -84,6 +90,7 @@ TEST_F(AdblockWebContentObserverTest, DidFinishNavigationWithErrorPage) {
   mock_navigation_handle.set_has_committed(true);
   mock_navigation_handle.set_is_error_page(true);
 
+  service_.WillRequireFiltering(true);
   EXPECT_CALL(hider_, HideBlockedElement(testing::_, testing::_)).Times(0);
   EXPECT_CALL(hider_,
               ApplyElementHidingEmulationOnPage(
@@ -98,6 +105,7 @@ TEST_F(AdblockWebContentObserverTest, DidFinishNavigationWithAboutBlank) {
   mock_navigation_handle.set_has_committed(true);
   mock_navigation_handle.set_url(GURL("about:blank"));
 
+  service_.WillRequireFiltering(true);
   EXPECT_CALL(hider_, HideBlockedElement(testing::_, testing::_)).Times(0);
   EXPECT_CALL(hider_,
               ApplyElementHidingEmulationOnPage(
@@ -111,6 +119,7 @@ TEST_F(AdblockWebContentObserverTest, DidFinishNavigationWithBlockedFrame) {
   GURL url("https://test.com/frame");
   GURL parent("https://test.com");
   content::RenderFrameHost* frame_host = main_rfh();
+  service_.WillRequireFiltering(true);
   NavigateAndCommit(parent);
 
   content::RenderFrameHost* child_frame =
@@ -124,6 +133,26 @@ TEST_F(AdblockWebContentObserverTest, DidFinishNavigationWithBlockedFrame) {
   mock_navigation_handle.set_url(url);
 
   EXPECT_CALL(hider_, HideBlockedElement(url, frame_host)).Times(1);
+  EXPECT_CALL(hider_,
+              ApplyElementHidingEmulationOnPage(
+                  testing::_, testing::_, testing::_, testing::_, testing::_))
+      .Times(0);
+
+  observer_->DidFinishNavigation(&mock_navigation_handle);
+}
+
+TEST_F(AdblockWebContentObserverTest, NoElementHidingWhenFilteringDisabled) {
+  service_.WillRequireFiltering(false);
+
+  content::MockNavigationHandle mock_navigation_handle;
+  mock_navigation_handle.set_has_committed(true);
+  mock_navigation_handle.set_url(GURL("https://test.com"));
+  mock_navigation_handle.set_render_frame_host(main_rfh());
+
+  // Despite a correct navigation handle, there will be no attempt to apply
+  // element hiding on the page because there are no enabled
+  // FilteringConfigurations in SubscriptionService.
+  EXPECT_CALL(hider_, HideBlockedElement(testing::_, testing::_)).Times(0);
   EXPECT_CALL(hider_,
               ApplyElementHidingEmulationOnPage(
                   testing::_, testing::_, testing::_, testing::_, testing::_))

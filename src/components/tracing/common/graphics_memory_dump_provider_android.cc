@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,8 +41,9 @@ bool GraphicsMemoryDumpProvider::OnMemoryDump(
     const base::trace_event::MemoryDumpArgs& args,
     base::trace_event::ProcessMemoryDump* pmd) {
   if (args.level_of_detail !=
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED)
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed) {
     return true;  // Dump on detailed memory dumps only.
+  }
 
   const char kAbstractSocketName[] = "chrome_tracing_memtrack_helper";
   struct sockaddr_un addr;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -53,27 +53,22 @@ class VersionUpdaterCrosTest : public ::testing::Test {
       : version_updater_(VersionUpdater::Create(nullptr)),
         version_updater_cros_ptr_(
             reinterpret_cast<VersionUpdaterCros*>(version_updater_.get())),
-        fake_update_engine_client_(NULL),
-        mock_user_manager_(new MockUserManager()),
-        user_manager_enabler_(base::WrapUnique(mock_user_manager_)) {}
+        fake_update_engine_client_(nullptr),
+        user_manager_enabler_(std::make_unique<FakeChromeUserManager>()) {}
 
   ~VersionUpdaterCrosTest() override {}
 
   void SetUp() override {
-    DBusThreadManager::Initialize();
     fake_update_engine_client_ =
         ash::UpdateEngineClient::InitializeFakeForTest();
 
-    EXPECT_CALL(*mock_user_manager_, IsCurrentUserOwner())
-        .WillRepeatedly(Return(false));
-    EXPECT_CALL(*mock_user_manager_, Shutdown()).Times(AtLeast(0));
-
-    network_handler_test_helper_ = std::make_unique<NetworkHandlerTestHelper>();
+    network_handler_test_helper_ =
+        std::make_unique<ash::NetworkHandlerTestHelper>();
     base::RunLoop().RunUntilIdle();
   }
 
   void SetEthernetService() {
-    ShillServiceClient::TestInterface* service_test =
+    ash::ShillServiceClient::TestInterface* service_test =
         network_handler_test_helper_->service_test();
     service_test->ClearServices();
     service_test->AddService("/service/eth",
@@ -85,7 +80,7 @@ class VersionUpdaterCrosTest : public ::testing::Test {
   }
 
   void SetCellularService() {
-    ShillServiceClient::TestInterface* service_test =
+    ash::ShillServiceClient::TestInterface* service_test =
         network_handler_test_helper_->service_test();
     service_test->ClearServices();
     service_test->AddService("/service/cell", "cell" /* guid */, "cell",
@@ -98,18 +93,18 @@ class VersionUpdaterCrosTest : public ::testing::Test {
     network_handler_test_helper_.reset();
     version_updater_.reset();
     ash::UpdateEngineClient::Shutdown();
-    DBusThreadManager::Shutdown();
   }
 
   content::BrowserTaskEnvironment task_environment_;
-  std::unique_ptr<NetworkHandlerTestHelper> network_handler_test_helper_;
+  std::unique_ptr<ash::NetworkHandlerTestHelper> network_handler_test_helper_;
   std::unique_ptr<VersionUpdater> version_updater_;
-  VersionUpdaterCros* version_updater_cros_ptr_;
-  ash::FakeUpdateEngineClient* fake_update_engine_client_;  // Not owned.
+  raw_ptr<VersionUpdaterCros, DanglingUntriaged | ExperimentalAsh>
+      version_updater_cros_ptr_;
+  raw_ptr<ash::FakeUpdateEngineClient, DanglingUntriaged | ExperimentalAsh>
+      fake_update_engine_client_;  // Not owned.
 
-  MockUserManager* mock_user_manager_;  // Not owned.
   user_manager::ScopedUserManager user_manager_enabler_;
-  ScopedCrosSettingsTestHelper cros_settings_test_helper_;
+  ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
 };
 
 // The test checks following behaviour:
@@ -221,6 +216,73 @@ TEST_F(VersionUpdaterCrosTest, GetUpdateStatus_CallbackDuringUpdates) {
   version_updater_cros_ptr_->GetUpdateStatus(mock_callback.Get());
 }
 
+TEST_F(VersionUpdaterCrosTest,
+       GetUpdateStatus_SetToUpdatedForNonInteractiveDeferredUpdate) {
+  SetEthernetService();
+  update_engine::StatusResult status;
+  // The update is non-interactive and will be deferred.
+  status.set_is_interactive(false);
+  status.set_will_defer_update(true);
+  fake_update_engine_client_->set_default_status(status);
+
+  // Expect to set status to `UPDATED`.
+  StrictMock<base::MockCallback<VersionUpdater::StatusCallback>> mock_callback;
+  EXPECT_CALL(mock_callback, Run(VersionUpdater::UPDATED, 0, _, _, _, _, _))
+      .Times(1);
+  version_updater_cros_ptr_->GetUpdateStatus(mock_callback.Get());
+}
+
+TEST_F(VersionUpdaterCrosTest, GetUpdateStatus_UpdatedButDeferred) {
+  SetEthernetService();
+  update_engine::StatusResult status;
+  // The update is deferred.
+  status.set_is_interactive(false);
+  status.set_will_defer_update(true);
+  status.set_current_operation(update_engine::Operation::UPDATED_BUT_DEFERRED);
+  fake_update_engine_client_->set_default_status(status);
+
+  // Expect the status to be `DEFERRED`.
+  StrictMock<base::MockCallback<VersionUpdater::StatusCallback>> mock_callback;
+  EXPECT_CALL(mock_callback, Run(VersionUpdater::DEFERRED, _, _, _, _, _, _))
+      .Times(1);
+  version_updater_cros_ptr_->GetUpdateStatus(mock_callback.Get());
+}
+
+TEST_F(VersionUpdaterCrosTest, GetUpdateStatus_UpdatedNeedReboot) {
+  SetEthernetService();
+  update_engine::StatusResult status;
+  status.set_is_interactive(false);
+  status.set_current_operation(update_engine::Operation::UPDATED_NEED_REBOOT);
+  fake_update_engine_client_->set_default_status(status);
+
+  // Expect the status to be `NEARLY_UPDATED`.
+  StrictMock<base::MockCallback<VersionUpdater::StatusCallback>> mock_callback;
+  EXPECT_CALL(mock_callback,
+              Run(VersionUpdater::NEARLY_UPDATED, _, _, _, _, _, _))
+      .Times(1);
+  version_updater_cros_ptr_->GetUpdateStatus(mock_callback.Get());
+}
+
+TEST_F(VersionUpdaterCrosTest,
+       GetUpdateStatus_UpdateToRollbackVersionDisallowed) {
+  SetEthernetService();
+  update_engine::StatusResult status;
+  status.set_is_interactive(true);
+  status.set_current_operation(update_engine::Operation::DISABLED);
+  int32_t error_code = static_cast<int32_t>(
+      update_engine::ErrorCode::kOmahaUpdateIgnoredPerPolicy);
+  status.set_last_attempt_error(error_code);
+  fake_update_engine_client_->set_default_status(status);
+
+  // Expect the status to be `UPDATE_TO_ROLLBACK_VERSION_DISALLOWED`.
+  StrictMock<base::MockCallback<VersionUpdater::StatusCallback>> mock_callback;
+  EXPECT_CALL(mock_callback,
+              Run(VersionUpdater::UPDATE_TO_ROLLBACK_VERSION_DISALLOWED, _, _,
+                  _, _, _, _))
+      .Times(1);
+  version_updater_cros_ptr_->GetUpdateStatus(mock_callback.Get());
+}
+
 TEST_F(VersionUpdaterCrosTest, ToggleFeature) {
   EXPECT_EQ(0, fake_update_engine_client_->toggle_feature_count());
   version_updater_->ToggleFeature("feature-foo", true);
@@ -239,6 +301,17 @@ TEST_F(VersionUpdaterCrosTest, IsFeatureEnabled) {
                                               mock_callback.Get());
 
   EXPECT_EQ(1, fake_update_engine_client_->is_feature_enabled_count());
+}
+
+TEST_F(VersionUpdaterCrosTest, ApplyDeferredUpdate) {
+  update_engine::StatusResult status;
+  status.set_current_operation(update_engine::Operation::UPDATED_BUT_DEFERRED);
+  fake_update_engine_client_->set_default_status(status);
+  fake_update_engine_client_->NotifyObserversThatStatusChanged(status);
+
+  EXPECT_EQ(0, fake_update_engine_client_->apply_deferred_update_count());
+  version_updater_cros_ptr_->ApplyDeferredUpdate();
+  EXPECT_EQ(1, fake_update_engine_client_->apply_deferred_update_count());
 }
 
 }  // namespace chromeos

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,9 @@ bool StructTraits<display::mojom::DisplayModeDataView,
   gfx::Size size;
   if (!data.ReadSize(&size))
     return false;
-  *out = std::make_unique<display::DisplayMode>(size, data.is_interlaced(),
-                                                data.refresh_rate());
+  *out = std::make_unique<display::DisplayMode>(
+      size, data.is_interlaced(), data.refresh_rate(), data.htotal(),
+      data.vtotal(), data.clock());
   return true;
 }
 

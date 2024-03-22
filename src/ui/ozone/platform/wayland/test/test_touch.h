@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace wl {
 
 extern const struct wl_pointer_interface kTestTouchImpl;
 
-class MockZcrTouchStylus;
+class TestZcrTouchStylus;
 
 class TestTouch : public ServerObject {
  public:
@@ -27,13 +27,13 @@ class TestTouch : public ServerObject {
 
   ~TestTouch() override;
 
-  void set_touch_stylus(MockZcrTouchStylus* touch_stylus) {
+  void set_touch_stylus(TestZcrTouchStylus* touch_stylus) {
     touch_stylus_ = touch_stylus;
   }
-  MockZcrTouchStylus* touch_stylus() const { return touch_stylus_; }
+  TestZcrTouchStylus* touch_stylus() const { return touch_stylus_; }
 
  private:
-  raw_ptr<MockZcrTouchStylus> touch_stylus_ = nullptr;
+  raw_ptr<TestZcrTouchStylus, DanglingUntriaged> touch_stylus_ = nullptr;
 };
 
 }  // namespace wl

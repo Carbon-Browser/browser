@@ -1,28 +1,24 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/sessions/ios_chrome_tab_restore_service_client.h"
+#import "ios/chrome/browser/sessions/ios_chrome_tab_restore_service_client.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "components/sessions/ios/ios_live_tab.h"
-#include "components/tab_groups/tab_group_id.h"
-#include "ios/chrome/browser/application_context.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state_manager.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/chrome/browser/main/browser.h"
-#include "ios/chrome/browser/main/browser_list.h"
-#include "ios/chrome/browser/main/browser_list_factory.h"
-#include "ios/chrome/browser/sessions/live_tab_context_browser_agent.h"
-#include "ios/chrome/browser/tabs/synced_window_delegate_browser_agent.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/functional/bind.h"
+#import "base/functional/callback.h"
+#import "components/sessions/ios/ios_live_tab.h"
+#import "components/tab_groups/tab_group_id.h"
+#import "ios/chrome/browser/sessions/live_tab_context_browser_agent.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list_factory.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state_manager.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/tabs/model/synced_window_delegate_browser_agent.h"
+#import "url/gurl.h"
 
 namespace {
 sessions::LiveTabContext* FindLiveTabContextWithCondition(

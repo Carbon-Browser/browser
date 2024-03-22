@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,12 @@
 
 #import "base/notreached.h"
 #import "ios/chrome/browser/net/crurl.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_suggestion_icon_util.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/public/provider/chrome/browser/branded_images/branded_images_api.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface SimpleOmniboxIcon ()
 
@@ -43,46 +40,45 @@
 
 - (instancetype)init {
   return [self initWithIconType:OmniboxIconTypeSuggestionIcon
-             suggestionIconType:DEFAULT_FAVICON
+             suggestionIconType:OmniboxSuggestionIconType::kDefaultFavicon
                        isAnswer:NO
                        imageURL:[[CrURL alloc] initWithGURL:GURL()]];
 }
 
 - (UIImage*)iconImage {
-  if (self.suggestionIconType == FALLBACK_ANSWER &&
-      self.defaultSearchEngineIsGoogle && [self fallbackAnswerBrandedIcon]) {
-    return [[self fallbackAnswerBrandedIcon]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+#if BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
+  if (self.suggestionIconType == OmniboxSuggestionIconType::kFallbackAnswer &&
+      self.defaultSearchEngineIsGoogle) {
+    return GetBrandedGoogleIconForOmnibox();
   }
+#endif  // BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
   return GetOmniboxSuggestionIcon(self.suggestionIconType);
 }
 
 - (BOOL)hasCustomAnswerIcon {
   switch (self.suggestionIconType) {
-    case BOOKMARK:
-    case DEFAULT_FAVICON:
-    case HISTORY:
-    case SEARCH:
-    case SEARCH_HISTORY:
+    case OmniboxSuggestionIconType::kDefaultFavicon:
+    case OmniboxSuggestionIconType::kSearch:
+    case OmniboxSuggestionIconType::kSearchHistory:
+    case OmniboxSuggestionIconType::kSearchTrend:
       return NO;
-    case CALCULATOR:
-    case CONVERSION:
-    case DICTIONARY:
-    case STOCK:
-    case SUNRISE:
-    case LOCAL_TIME:
-    case WHEN_IS:
-    case TRANSLATION:
+    case OmniboxSuggestionIconType::kCalculator:
+    case OmniboxSuggestionIconType::kConversion:
+    case OmniboxSuggestionIconType::kDictionary:
+    case OmniboxSuggestionIconType::kStock:
+    case OmniboxSuggestionIconType::kSunrise:
+    case OmniboxSuggestionIconType::kWhenIs:
+    case OmniboxSuggestionIconType::kTranslation:
       return YES;
     // For the fallback answer, this depends on whether the branded icon exists
     // and whether the default search engine is Google (the icon only exists for
     // Google branding).
     // The default fallback answer icon uses the grey background styling, like
     // the non-answer icons.
-    case FALLBACK_ANSWER:
+    case OmniboxSuggestionIconType::kFallbackAnswer:
       return self.defaultSearchEngineIsGoogle &&
              [self fallbackAnswerBrandedIcon];
-    case OMNIBOX_SUGGESTION_ICON_TYPE_COUNT:
+    case OmniboxSuggestionIconType::kCount:
       NOTREACHED();
       return NO;
   }
@@ -106,21 +102,6 @@
   }
 }
 
-- (UIImage*)backgroundImage {
-  switch (self.iconType) {
-    case OmniboxIconTypeImage:
-      return nil;
-    case OmniboxIconTypeSuggestionIcon:
-      if ([self hasCustomAnswerIcon]) {
-        return [[UIImage imageNamed:@"background_solid"]
-            imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-      }
-      return nil;
-    case OmniboxIconTypeFavicon:
-      return nil;
-  }
-}
-
 - (UIColor*)backgroundImageTintColor {
   switch (self.iconType) {
     case OmniboxIconTypeImage:
@@ -135,16 +116,7 @@
   }
 }
 
-- (UIImage*)overlayImage {
-  switch (self.iconType) {
-    case OmniboxIconTypeImage:
-    case OmniboxIconTypeSuggestionIcon:
-    case OmniboxIconTypeFavicon:
-      return nil;
-  }
-}
-
-- (UIColor*)overlayImageTintColor {
+- (UIColor*)borderColor {
   return nil;
 }
 

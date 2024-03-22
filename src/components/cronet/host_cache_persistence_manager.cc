@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "components/prefs/pref_service.h"
 #include "net/log/net_log.h"
@@ -56,8 +56,7 @@ void HostCachePersistenceManager::ReadFromDisk() {
     return;
 
   net_log_.BeginEvent(net::NetLogEventType::HOST_CACHE_PREF_READ);
-  const base::Value::List& pref_value =
-      pref_service_->GetList(pref_name_)->GetList();
+  const base::Value::List& pref_value = pref_service_->GetList(pref_name_);
   bool success = cache_->RestoreFromListValue(pref_value);
   net_log_.AddEntryWithBoolParams(net::NetLogEventType::HOST_CACHE_PREF_READ,
                                   net::NetLogEventPhase::END, "success",

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,6 @@
 #include "third_party/blink/renderer/core/css/resolver/style_builder.h"
 #include "third_party/blink/renderer/core/css/resolver/style_cascade.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
-#include "third_party/blink/renderer/core/css/scoped_css_value.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/style_property_shorthand.h"
 
@@ -104,7 +103,7 @@ class ResolvedRegisteredCustomPropertyChecker
     const CSSValue* resolved = css_environment.Resolve(property_, value_);
     scoped_refptr<CSSVariableData> resolved_tokens;
     if (const auto* decl = DynamicTo<CSSCustomPropertyDeclaration>(resolved))
-      resolved_tokens = decl->Value();
+      resolved_tokens = &decl->Value();
 
     return base::ValuesEquivalent(resolved_tokens, resolved_tokens_);
   }
@@ -124,8 +123,7 @@ class RevertChecker : public CSSInterpolationType::ConversionChecker {
 
   RevertChecker(const PropertyHandle& property_handle,
                 const CSSValue* resolved_value)
-      : property_handle_(property_handle), resolved_value_(resolved_value) {
-  }
+      : property_handle_(property_handle), resolved_value_(resolved_value) {}
 
  private:
   bool IsValid(const InterpolationEnvironment& environment,
@@ -178,9 +176,8 @@ InterpolationValue CSSInterpolationType::MaybeConvertSingleInternal(
     return MaybeConvertNeutral(underlying, conversion_checkers);
 
   if (GetProperty().IsCSSCustomProperty()) {
-    return MaybeConvertCustomPropertyDeclaration(
-        To<CSSCustomPropertyDeclaration>(*value), environment,
-        conversion_checkers);
+    return MaybeConvertCustomPropertyDeclaration(*value, environment,
+                                                 conversion_checkers);
   }
 
   if (value->IsVariableReferenceValue() ||
@@ -223,7 +220,7 @@ InterpolationValue CSSInterpolationType::MaybeConvertSingleInternal(
 }
 
 InterpolationValue CSSInterpolationType::MaybeConvertCustomPropertyDeclaration(
-    const CSSCustomPropertyDeclaration& declaration,
+    const CSSValue& declaration,
     const InterpolationEnvironment& environment,
     ConversionCheckers& conversion_checkers) const {
   const auto& css_environment = To<CSSInterpolationEnvironment>(environment);
@@ -235,12 +232,12 @@ InterpolationValue CSSInterpolationType::MaybeConvertCustomPropertyDeclaration(
   value = css_environment.Resolve(GetProperty(), value);
   DCHECK(value) << "CSSVarCycleInterpolationType should have handled nullptr";
 
-  if (declaration.IsRevert()) {
+  if (declaration.IsRevertValue()) {
     conversion_checkers.push_back(
         std::make_unique<RevertChecker<cssvalue::CSSRevertValue>>(GetProperty(),
                                                                   value));
   }
-  if (declaration.IsRevertLayer()) {
+  if (declaration.IsRevertLayerValue()) {
     conversion_checkers.push_back(
         std::make_unique<RevertChecker<cssvalue::CSSRevertLayerValue>>(
             GetProperty(), value));
@@ -252,7 +249,7 @@ InterpolationValue CSSInterpolationType::MaybeConvertCustomPropertyDeclaration(
     if (resolved_declaration != &declaration) {
       conversion_checkers.push_back(
           std::make_unique<ResolvedRegisteredCustomPropertyChecker>(
-              GetProperty(), declaration, resolved_declaration->Value()));
+              GetProperty(), declaration, &resolved_declaration->Value()));
     }
   }
 
@@ -260,35 +257,31 @@ InterpolationValue CSSInterpolationType::MaybeConvertCustomPropertyDeclaration(
   // CSSCustomPropertyDeclaration. Expand those keywords into real CSSValues
   // if present.
   bool is_inherited = Registration().Inherits();
-  if (const auto* resolved_declaration =
-          DynamicTo<CSSCustomPropertyDeclaration>(value)) {
-    if (resolved_declaration->IsInitial(is_inherited))
-      value = CSSInitialValue::Create();
-    else if (resolved_declaration->IsInherit(is_inherited))
-      value = CSSInheritedValue::Create();
-  }
+  const StyleInitialData* initial_data =
+      state.StyleBuilder().InitialData().get();
+  DCHECK(initial_data);
+  const CSSValue* initial_value = initial_data->GetVariableValue(name);
 
   // Handle CSS-wide keywords (except 'revert', which should have been
   // handled already).
   DCHECK(!value->IsRevertValue());
   if (value->IsInitialValue() || (value->IsUnsetValue() && !is_inherited)) {
-    value = Registration().Initial();
+    value = initial_value;
   } else if (value->IsInheritedValue() ||
              (value->IsUnsetValue() && is_inherited)) {
     value = state.ParentStyle()->GetVariableValue(name, is_inherited);
     if (!value) {
-      value = Registration().Initial();
+      value = initial_value;
     }
     conversion_checkers.push_back(
-        std::make_unique<InheritedCustomPropertyChecker>(
-            name, is_inherited, value, Registration().Initial()));
+        std::make_unique<InheritedCustomPropertyChecker>(name, is_inherited,
+                                                         value, initial_value));
   }
 
   if (const auto* resolved_declaration =
           DynamicTo<CSSCustomPropertyDeclaration>(value)) {
-    DCHECK(resolved_declaration->Value());
-    DCHECK(!resolved_declaration->Value()->NeedsVariableResolution());
-    value = resolved_declaration->Value()->ParseForSyntax(
+    DCHECK(!resolved_declaration->Value().NeedsVariableResolution());
+    value = resolved_declaration->Value().ParseForSyntax(
         registration_->Syntax(),
         state.GetDocument().GetExecutionContext()->GetSecureContextMode());
     if (!value)
@@ -302,7 +295,7 @@ InterpolationValue CSSInterpolationType::MaybeConvertCustomPropertyDeclaration(
 InterpolationValue CSSInterpolationType::MaybeConvertUnderlyingValue(
     const InterpolationEnvironment& environment) const {
   const ComputedStyle& style =
-      To<CSSInterpolationEnvironment>(environment).Style();
+      To<CSSInterpolationEnvironment>(environment).BaseStyle();
   if (!GetProperty().IsCSSCustomProperty()) {
     return MaybeConvertStandardPropertyUnderlyingValue(style);
   }
@@ -342,25 +335,8 @@ void CSSInterpolationType::ApplyCustomPropertyValue(
   const CSSValue* css_value =
       CreateCSSValue(interpolable_value, non_interpolable_value, state);
   DCHECK(!css_value->IsCustomPropertyDeclaration());
-
-  // TODO(alancutter): Defer tokenization of the CSSValue until it is needed.
-  String string_value = css_value->CssText();
-  CSSTokenizer tokenizer(string_value);
-  const auto tokens = tokenizer.TokenizeToEOF();
-  bool is_animation_tainted = true;
-  bool needs_variable_resolution = false;
-  scoped_refptr<CSSVariableData> variable_data = CSSVariableData::Create(
-      {CSSParserTokenRange(tokens), StringView(string_value)},
-      is_animation_tainted, needs_variable_resolution, KURL(),
-      WTF::TextEncoding());
-  const PropertyHandle property = GetProperty();
-
-  // TODO(andruud): Avoid making the CSSCustomPropertyDeclaration by allowing
-  // any CSSValue in CustomProperty::ApplyValue.
-  const CSSValue* value = MakeGarbageCollected<CSSCustomPropertyDeclaration>(
-      std::move(variable_data));
   StyleBuilder::ApplyProperty(GetProperty().GetCSSPropertyName(), state,
-                              ScopedCSSValue(*value, nullptr));
+                              *css_value, StyleBuilder::ValueMode::kAnimated);
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class ScriptPromiseResolver;
 class ScriptState;
 
 class MODULES_EXPORT PaymentRequest final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public payments::mojom::blink::PaymentRequestClient,
       public PaymentStateResolver,
       public PaymentRequestDelegate,
@@ -94,7 +94,7 @@ class MODULES_EXPORT PaymentRequest final
   // ScriptWrappable:
   bool HasPendingActivity() const override;
 
-  // EventTargetWithInlineData:
+  // EventTarget:
   const AtomicString& InterfaceName() const override;
   ExecutionContext* GetExecutionContext() const override;
 
@@ -147,6 +147,11 @@ class MODULES_EXPORT PaymentRequest final
   void OnHasEnrolledInstrument(
       payments::mojom::blink::HasEnrolledInstrumentQueryResult) override;
   void WarnNoFavicon() override;
+  void AllowConnectToSource(
+      const KURL& url,
+      const KURL& url_before_redirects,
+      bool did_follow_redirect,
+      AllowConnectToSourceCallback response_callback) override;
 
   void OnCompleteTimeout(TimerBase*);
   void OnUpdatePaymentDetailsTimeout(TimerBase*);

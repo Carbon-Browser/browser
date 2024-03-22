@@ -1,25 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/infobars/overlays/translate_overlay_tab_helper.h"
 
-#include "ios/chrome/browser/infobars/infobar_ios.h"
-#include "ios/chrome/browser/infobars/infobar_manager_impl.h"
+#import "ios/chrome/browser/infobars/infobar_ios.h"
+#import "ios/chrome/browser/infobars/infobar_manager_impl.h"
 #import "ios/chrome/browser/infobars/overlays/infobar_overlay_request_inserter.h"
-#include "ios/chrome/browser/infobars/overlays/infobar_overlay_util.h"
+#import "ios/chrome/browser/infobars/overlays/infobar_overlay_util.h"
 #import "ios/chrome/browser/infobars/overlays/translate_infobar_placeholder_overlay_request_cancel_handler.h"
-#import "ios/chrome/browser/overlays/public/infobar_banner/infobar_banner_placeholder_request_config.h"
-#import "ios/chrome/browser/overlays/public/infobar_banner/translate_infobar_banner_overlay_request_config.h"
-#import "ios/chrome/browser/overlays/public/overlay_request_queue.h"
-#include "ios/chrome/browser/overlays/public/overlay_request_queue_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/overlays/model/public/default/default_infobar_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/infobar_banner/infobar_banner_placeholder_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request_queue.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request_queue_util.h"
 
 using translate_infobar_overlays::PlaceholderRequestCancelHandler;
-using translate_infobar_overlays::TranslateBannerRequestConfig;
 
 namespace {
 // Creates a matcher callback for ConfigType and config's InfoBar.
@@ -67,7 +62,7 @@ void TranslateOverlayTabHelper::TranslateDidStart(infobars::InfoBar* infobar) {
   size_t insert_index = 0;
   bool translate_banner_found = GetIndexOfMatchingRequest(
       banner_queue_, &insert_index,
-      ConfigAndInfoBarMatcher<TranslateBannerRequestConfig>(infobar));
+      ConfigAndInfoBarMatcher<DefaultInfobarOverlayRequestConfig>(infobar));
 
   if (!translate_banner_found) {
     return;
@@ -87,22 +82,19 @@ void TranslateOverlayTabHelper::TranslateDidStart(infobars::InfoBar* infobar) {
 
 void TranslateOverlayTabHelper::TranslateDidFinish(infobars::InfoBar* infobar,
                                                    bool success) {
-  if (success) {
-    static_cast<InfoBarIOS*>(infobar)->set_accepted(true);
+  static_cast<InfoBarIOS*>(infobar)->set_accepted(success);
 
-    size_t insert_index = 0;
-    bool placeholder_found = GetIndexOfMatchingRequest(
-        banner_queue_, &insert_index,
-        ConfigAndInfoBarMatcher<PlaceholderRequestConfig>(infobar));
+  size_t insert_index = 0;
+  bool placeholder_found = GetIndexOfMatchingRequest(
+      banner_queue_, &insert_index,
+      ConfigAndInfoBarMatcher<PlaceholderRequestConfig>(infobar));
 
-    InsertParams params(static_cast<InfoBarIOS*>(infobar));
-    params.overlay_type = InfobarOverlayType::kBanner;
-    params.insertion_index =
-        placeholder_found ? insert_index + 1 : banner_queue_->size();
-    params.source = InfobarOverlayInsertionSource::kInfoBarDelegate;
-    inserter_->InsertOverlayRequest(params);
-  }
-  // TODO(crbug.com/1071914): Handle Translate failure case.
+  InsertParams params(static_cast<InfoBarIOS*>(infobar));
+  params.overlay_type = InfobarOverlayType::kBanner;
+  params.insertion_index =
+      placeholder_found ? insert_index + 1 : banner_queue_->size();
+  params.source = InfobarOverlayInsertionSource::kInfoBarDelegate;
+  inserter_->InsertOverlayRequest(params);
 
   for (auto& observer : observers_) {
     observer.TranslationFinished(this, success);
@@ -130,7 +122,7 @@ TranslateOverlayTabHelper::TranslateStepObserver::~TranslateStepObserver() =
 
 void TranslateOverlayTabHelper::TranslateStepObserver::OnTranslateStepChanged(
     translate::TranslateStep step,
-    translate::TranslateErrors::Type error_type) {
+    translate::TranslateErrors error_type) {
   switch (step) {
     case translate::TranslateStep::TRANSLATE_STEP_AFTER_TRANSLATE: {
       tab_helper_->TranslateDidFinish(translate_infobar_, true);

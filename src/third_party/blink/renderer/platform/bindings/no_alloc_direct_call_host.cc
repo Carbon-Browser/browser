@@ -1,10 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/bindings/no_alloc_direct_call_host.h"
+#include "third_party/blink/renderer/platform/heap/thread_state.h"
 
 namespace blink {
+
+NoAllocDirectCallHost::NoAllocDirectCallHost()
+    : heap_handle_(ThreadState::Current()->cpp_heap().GetHeapHandle()) {}
 
 void NoAllocDirectCallHost::PostDeferrableAction(DeferrableAction&& action) {
   if (IsInFastMode()) {

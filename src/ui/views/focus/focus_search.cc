@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,8 +93,6 @@ View* FocusSearch::FindNextFocusableView(
     v = FindNextFocusableView(nullptr, search_direction, traversal_direction,
                               check_starting_view, can_go_into_anchored_dialog,
                               focus_traversable, focus_traversable_view);
-    DCHECK(IsFocusable(v));
-    return v;
   }
 
   // Doing some sanity checks.

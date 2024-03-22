@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -168,8 +168,9 @@ class TestMessageReceiver {
 void Send(IPC::SyncMessage* msg) {
   static TestMessageReceiver receiver;
 
-  IPC::MessageReplyDeserializer* reply_serializer = msg->GetReplyDeserializer();
-  DCHECK(reply_serializer != NULL);
+  std::unique_ptr<IPC::MessageReplyDeserializer> reply_serializer =
+      msg->TakeReplyDeserializer();
+  DCHECK(reply_serializer);
 
   // "send" the message
   receiver.OnMessageReceived(*msg);
@@ -182,7 +183,6 @@ void Send(IPC::SyncMessage* msg) {
   DCHECK(result);
   delete g_reply;
   g_reply = NULL;
-  delete reply_serializer;
 }
 
 TEST(IPCSyncMessageTest, Main) {

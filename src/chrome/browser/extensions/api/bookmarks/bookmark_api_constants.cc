@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,8 @@ const char kFolderNotEmptyError[] =
     "Can't remove non-empty folder (use recursive to force).";
 const char kInvalidIdError[] = "Bookmark id is invalid.";
 const char kInvalidIndexError[] = "Index out of bounds.";
+const char kInvalidParentError[] =
+    "Parameter 'parentId' does not specify a folder.";
 const char kInvalidUrlError[] = "Invalid URL.";
 const char kModifySpecialError[] = "Can't modify the root bookmark folders.";
 const char kEditBookmarksDisabled[] = "Bookmark editing is disabled.";

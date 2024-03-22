@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,13 +45,16 @@ DesktopAutomationHandler = function(node) {
   this.addListener_(
       e.ACTIVE_DESCENDANT_CHANGED, this.onActiveDescendantChanged);
   this.addListener_(e.ALERT, this.onAlert);
-  this.addListener_(e.ARIA_ATTRIBUTE_CHANGED, this.onEventIfInRange);
+  // TODO(crbug.com/1464633) Fully remove ARIA_ATTRIBUTE_CHANGED_DEPRECATED
+  // starting in 122, because although it was removed in 118, it is still
+  // present in earlier versions of LaCros.
+  this.addListener_(e.ARIA_ATTRIBUTE_CHANGED_DEPRECATED, this.onEventIfInRange);
   this.addListener_(e.CHECKED_STATE_CHANGED, this.onEventIfInRange);
   this.addListener_(e.FOCUS, this.onFocus);
   this.addListener_(e.HOVER, this.onHover);
   this.addListener_(e.LOAD_COMPLETE, this.onLoadComplete);
   this.addListener_(e.MENU_END, this.onMenuEnd);
-  this.addListener_(e.MENU_LIST_ITEM_SELECTED, this.onEventIfSelected);
+  this.addListener_(e.MENU_ITEM_SELECTED, this.onEventIfSelected);
   this.addListener_(e.MENU_START, this.onMenuStart);
   this.addListener_(e.SCROLL_POSITION_CHANGED, this.onScrollPositionChanged);
   this.addListener_(e.SELECTION, this.onSelection);

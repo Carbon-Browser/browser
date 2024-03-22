@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,12 +23,9 @@ class BackgroundFetchManagerTest : public testing::Test {
   // declarations necessary in the BackgroundFetchManager.
   Vector<mojom::blink::FetchAPIRequestPtr> CreateFetchAPIRequestVector(
       V8TestingScope& scope,
-      const V8UnionRequestInfoOrRequestOrUSVStringSequence* requests
-  ) {
-    bool has_requests_with_body;
+      const V8UnionRequestInfoOrRequestOrUSVStringSequence* requests) {
     return BackgroundFetchManager::CreateFetchAPIRequestVector(
-        scope.GetScriptState(), requests, scope.GetExceptionState(),
-        &has_requests_with_body);
+        scope.GetScriptState(), requests, scope.GetExceptionState());
   }
 };
 

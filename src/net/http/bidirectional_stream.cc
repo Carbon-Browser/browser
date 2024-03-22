@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
 #include "net/base/load_flags.h"
@@ -29,7 +29,7 @@
 #include "net/spdy/spdy_log_util.h"
 #include "net/ssl/ssl_cert_request_info.h"
 #include "net/ssl/ssl_config.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "url/gurl.h"
 
@@ -37,24 +37,24 @@ namespace net {
 
 namespace {
 
-base::Value NetLogHeadersParams(const spdy::Http2HeaderBlock* headers,
-                                NetLogCaptureMode capture_mode) {
+base::Value::Dict NetLogHeadersParams(const spdy::Http2HeaderBlock* headers,
+                                      NetLogCaptureMode capture_mode) {
   base::Value::Dict dict;
   dict.Set("headers", ElideHttp2HeaderBlockForNetLog(*headers, capture_mode));
-  return base::Value(std::move(dict));
+  return dict;
 }
 
-base::Value NetLogParams(const GURL& url,
-                         const std::string& method,
-                         const HttpRequestHeaders* headers,
-                         NetLogCaptureMode capture_mode) {
+base::Value::Dict NetLogParams(const GURL& url,
+                               const std::string& method,
+                               const HttpRequestHeaders* headers,
+                               NetLogCaptureMode capture_mode) {
   base::Value::Dict dict;
   dict.Set("url", url.possibly_invalid_spec());
   dict.Set("method", method);
   base::Value headers_param(
       headers->NetLogParams(/*request_line=*/std::string(), capture_mode));
   dict.Set("headers", std::move(headers_param));
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 }  // namespace
@@ -104,7 +104,7 @@ BidirectionalStream::BidirectionalStream(
   }
 
   if (!request_info_->url.SchemeIs(url::kHttpsScheme)) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&BidirectionalStream::NotifyFailed,
                        weak_factory_.GetWeakPtr(), ERR_DISALLOWED_URL_SCHEME));
@@ -209,8 +209,7 @@ void BidirectionalStream::StartRequest(const SSLConfig& ssl_config) {
   http_request_info.socket_tag = request_info_->socket_tag;
   stream_request_ =
       session_->http_stream_factory()->RequestBidirectionalStreamImpl(
-          http_request_info, request_info_->priority, ssl_config, ssl_config,
-          this,
+          http_request_info, request_info_->priority, ssl_config, this,
           /* enable_ip_based_pooling = */ true,
           /* enable_alternative_services = */ true, net_log_);
   // Check that this call does not fail.
@@ -259,7 +258,7 @@ void BidirectionalStream::OnHeadersReceived(
   load_timing_info_.receive_headers_end = base::TimeTicks::Now();
   read_end_time_ = load_timing_info_.receive_headers_end;
   session_->http_stream_factory()->ProcessAlternativeServices(
-      session_, net::NetworkIsolationKey(), response_info.headers.get(),
+      session_, net::NetworkAnonymizationKey(), response_info.headers.get(),
       url::SchemeHostPort(request_info_->url));
   delegate_->OnHeadersReceived(response_headers);
 }

@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button_delegate.h"
 
 #include "base/check_op.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -17,9 +17,11 @@
 #include "chrome/browser/signin/signin_ui_util.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/sync/sync_ui_util.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
+#include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "components/signin/public/base/consent_level.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #include "ui/base/resource/resource_bundle.h"
 
 namespace {
@@ -41,10 +43,11 @@ ProfileAttributesEntry* GetProfileAttributesEntry(Profile* profile) {
 
 AvatarToolbarButtonDelegate::AvatarToolbarButtonDelegate(
     AvatarToolbarButton* button,
-    Profile* profile)
+    Browser* browser)
     : avatar_toolbar_button_(button),
-      profile_(profile),
-      last_avatar_error_(::GetAvatarSyncErrorType(profile)) {
+      browser_(browser),
+      profile_(browser->profile()),
+      last_avatar_error_(::GetAvatarSyncErrorType(profile_)) {
   profile_observation_.Observe(&GetProfileAttributesStorage());
 
   if (auto* sync_service = SyncServiceFactory::GetForProfile(profile_))
@@ -63,12 +66,18 @@ AvatarToolbarButtonDelegate::AvatarToolbarButtonDelegate(
   }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  // On CrOS this button should only show as badging for Incognito and Guest
-  // sessions. It's only enabled for Incognito where a menu is available for
-  // closing all Incognito windows.
+  // On CrOS this button should only show as badging for Incognito, Guest and
+  // captivie portal signin. It's only enabled for non captive portal Incognito
+  // where a menu is available for closing all Incognito windows.
   avatar_toolbar_button_->SetEnabled(
-      state == AvatarToolbarButton::State::kIncognitoProfile);
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+      state == AvatarToolbarButton::State::kIncognitoProfile &&
+      !profile_->GetOTRProfileID().IsCaptivePortal());
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  // On Lacros we need to disable the button for captivie portal signin.
+  avatar_toolbar_button_->SetEnabled(
+      state != AvatarToolbarButton::State::kIncognitoProfile ||
+      !profile_->GetOTRProfileID().IsCaptivePortal());
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 }
 
 AvatarToolbarButtonDelegate::~AvatarToolbarButtonDelegate() {
@@ -152,10 +161,16 @@ AvatarToolbarButton::State AvatarToolbarButtonDelegate::GetState() const {
   if (profile_->IsOffTheRecord())
     return AvatarToolbarButton::State::kIncognitoProfile;
 
-  if (identity_animation_state_ == IdentityAnimationState::kShowing)
+  if (button_text_state_ == ButtonTextState::kShowingName) {
     return AvatarToolbarButton::State::kAnimatedUserIdentity;
+  }
+  if (button_text_state_ == ButtonTextState::kShowingSigninText) {
+    return AvatarToolbarButton::State::kSignInTextShowing;
+  }
 
-  if (!SyncServiceFactory::IsSyncAllowed(profile_)) {
+  // Web app has limited toolbar space, thus always show kNormal state.
+  if (web_app::AppBrowserController::IsWebApp(browser_) ||
+      !SyncServiceFactory::IsSyncAllowed(profile_)) {
     return AvatarToolbarButton::State::kNormal;
   }
 
@@ -166,7 +181,7 @@ AvatarToolbarButton::State AvatarToolbarButtonDelegate::GetState() const {
   if (!last_avatar_error_)
     return AvatarToolbarButton::State::kNormal;
 
-  if (last_avatar_error_ == AvatarSyncErrorType::kAuthError &&
+  if (last_avatar_error_ == AvatarSyncErrorType::kSyncPaused &&
       AccountConsistencyModeManager::IsDiceEnabledForProfile(profile_)) {
     return AvatarToolbarButton::State::kSyncPaused;
   }
@@ -191,7 +206,7 @@ void AvatarToolbarButtonDelegate::ShowHighlightAnimation() {
   DCHECK_NE(GetState(), AvatarToolbarButton::State::kGuestSession);
   avatar_toolbar_button_->UpdateText();
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&AvatarToolbarButtonDelegate::HideHighlightAnimation,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -204,9 +219,7 @@ bool AvatarToolbarButtonDelegate::IsHighlightAnimationVisible() const {
 
 void AvatarToolbarButtonDelegate::MaybeShowIdentityAnimation(
     const gfx::Image& gaia_account_image) {
-  // TODO(crbug.com/990286): Get rid of this logic completely when we cache the
-  // Google account image in the profile cache and thus it is always available.
-  if (identity_animation_state_ != IdentityAnimationState::kWaitingForImage ||
+  if (button_text_state_ != ButtonTextState::kWaitingForImage ||
       gaia_account_image.IsEmpty()) {
     return;
   }
@@ -214,7 +227,7 @@ void AvatarToolbarButtonDelegate::MaybeShowIdentityAnimation(
   // Check that the user is still signed in. See https://crbug.com/1025674
   if (!IdentityManagerFactory::GetForProfile(profile_)->HasPrimaryAccount(
           signin::ConsentLevel::kSignin)) {
-    identity_animation_state_ = IdentityAnimationState::kNotShowing;
+    button_text_state_ = ButtonTextState::kNotShowing;
     return;
   }
 
@@ -245,10 +258,6 @@ void AvatarToolbarButtonDelegate::OnBlur() {
   MaybeHideIdentityAnimation();
 }
 
-void AvatarToolbarButtonDelegate::OnHighlightChanged() {
-  MaybeHideIdentityAnimation();
-}
-
 void AvatarToolbarButtonDelegate::OnBrowserAdded(Browser* browser) {
   avatar_toolbar_button_->UpdateIcon();
   avatar_toolbar_button_->UpdateText();
@@ -257,21 +266,6 @@ void AvatarToolbarButtonDelegate::OnBrowserAdded(Browser* browser) {
 void AvatarToolbarButtonDelegate::OnBrowserRemoved(Browser* browser) {
   avatar_toolbar_button_->UpdateIcon();
   avatar_toolbar_button_->UpdateText();
-}
-
-void AvatarToolbarButtonDelegate::OnProfileAdded(
-    const base::FilePath& profile_path) {
-  // Adding any profile changes the profile count, we might go from showing a
-  // generic avatar button to profile pictures here. Update icon accordingly.
-  avatar_toolbar_button_->UpdateIcon();
-}
-
-void AvatarToolbarButtonDelegate::OnProfileWasRemoved(
-    const base::FilePath& profile_path,
-    const std::u16string& profile_name) {
-  // Removing a profile changes the profile count, we might go from showing
-  // per-profile icons back to a generic avatar icon. Update icon accordingly.
-  avatar_toolbar_button_->UpdateIcon();
 }
 
 void AvatarToolbarButtonDelegate::OnProfileAvatarChanged(
@@ -339,6 +333,11 @@ void AvatarToolbarButtonDelegate::OnExtendedAccountInfoRemoved(
   avatar_toolbar_button_->UpdateIcon();
 }
 
+void AvatarToolbarButtonDelegate::OnIdentityManagerShutdown(
+    signin::IdentityManager*) {
+  identity_manager_observation_.Reset();
+}
+
 void AvatarToolbarButtonDelegate::OnStateChanged(syncer::SyncService*) {
   const absl::optional<AvatarSyncErrorType> error =
       ::GetAvatarSyncErrorType(profile_);
@@ -350,11 +349,17 @@ void AvatarToolbarButtonDelegate::OnStateChanged(syncer::SyncService*) {
   avatar_toolbar_button_->UpdateText();
 }
 
+void AvatarToolbarButtonDelegate::OnSyncShutdown(syncer::SyncService*) {
+  sync_service_observation_.Reset();
+}
+
 void AvatarToolbarButtonDelegate::OnUserIdentityChanged() {
   signin_ui_util::RecordAnimatedIdentityTriggered(profile_);
-  identity_animation_state_ = IdentityAnimationState::kWaitingForImage;
+  button_text_state_ = ButtonTextState::kWaitingForImage;
   // If we already have a gaia image, the pill will be immediately displayed by
-  // UpdateIcon().
+  // `UpdateIcon()`. If not, it can still be displayed later, since the button
+  // text state is now set to `ButtonTextState::kWaitingForImage`. This state
+  // will trigger the animation in `MaybeShowIdentityAnimation(...)`.
   avatar_toolbar_button_->UpdateIcon();
 }
 
@@ -362,16 +367,19 @@ void AvatarToolbarButtonDelegate::OnIdentityAnimationTimeout() {
   --identity_animation_timeout_count_;
   // If the count is > 0, there's at least one more pending
   // OnIdentityAnimationTimeout() that will hide it after the proper delay.
-  if (identity_animation_timeout_count_ > 0)
+  // Also return if the button is showing the signin text rather than the name.
+  if (identity_animation_timeout_count_ > 0 ||
+      button_text_state_ == ButtonTextState::kShowingSigninText) {
     return;
+  }
 
-  DCHECK_EQ(identity_animation_state_, IdentityAnimationState::kShowing);
+  DCHECK_EQ(button_text_state_, ButtonTextState::kShowingName);
   MaybeHideIdentityAnimation();
 }
 
 void AvatarToolbarButtonDelegate::MaybeHideIdentityAnimation() {
   // No-op if not showing or if the timeout hasn't passed, yet.
-  if (identity_animation_state_ != IdentityAnimationState::kShowing ||
+  if (button_text_state_ != ButtonTextState::kShowingName ||
       identity_animation_timeout_count_ > 0) {
     return;
   }
@@ -384,7 +392,7 @@ void AvatarToolbarButtonDelegate::MaybeHideIdentityAnimation() {
     return;
   }
 
-  identity_animation_state_ = IdentityAnimationState::kNotShowing;
+  button_text_state_ = ButtonTextState::kNotShowing;
   // Update the text to the pre-shown state. This also makes sure that we now
   // reflect changes that happened while the identity pill was shown.
   avatar_toolbar_button_->UpdateText();
@@ -399,14 +407,26 @@ void AvatarToolbarButtonDelegate::HideHighlightAnimation() {
 }
 
 void AvatarToolbarButtonDelegate::ShowIdentityAnimation() {
-  identity_animation_state_ = IdentityAnimationState::kShowing;
+  button_text_state_ = ButtonTextState::kShowingName;
   avatar_toolbar_button_->UpdateText();
 
   // Hide the pill after a while.
   ++identity_animation_timeout_count_;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&AvatarToolbarButtonDelegate::OnIdentityAnimationTimeout,
                      weak_ptr_factory_.GetWeakPtr()),
       kIdentityAnimationDuration);
 }
+
+#if !BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_CHROMEOS_ASH)
+void AvatarToolbarButtonDelegate::ShowSignInText() {
+  button_text_state_ = ButtonTextState::kShowingSigninText;
+  avatar_toolbar_button_->UpdateText();
+}
+
+void AvatarToolbarButtonDelegate::HideSignInText() {
+  button_text_state_ = ButtonTextState::kNotShowing;
+  avatar_toolbar_button_->UpdateText();
+}
+#endif

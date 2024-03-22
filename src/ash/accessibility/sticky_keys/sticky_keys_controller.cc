@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ ui::EventRewriteStatus RewriteUpdate(
   if (!released && !flags_rewritten)
     return ui::EVENT_REWRITE_CONTINUE;
 
-  *rewritten_event = ui::Event::Clone(event);
+  *rewritten_event = event.Clone();
   if (mod_down_flags & ~event.flags()) {
     (*rewritten_event)->set_flags(event.flags() | mod_down_flags);
   }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "chrome/browser/ui/tabs/organization/tab_organization_observer.h"
 #include "chrome/browser/ui/views/bubble/webui_bubble_manager.h"
 #include "chrome/browser/ui/webui/tab_search/tab_search_ui.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -22,7 +23,8 @@ class Profile;
 
 // TabSearchBubbleHost assumes responsibility for configuring its button,
 // showing / hiding the tab search bubble and handling metrics collection.
-class TabSearchBubbleHost : public views::WidgetObserver {
+class TabSearchBubbleHost : public views::WidgetObserver,
+                            public TabOrganizationObserver {
  public:
   TabSearchBubbleHost(views::Button* button, Profile* profile);
   TabSearchBubbleHost(const TabSearchBubbleHost&) = delete;
@@ -33,11 +35,20 @@ class TabSearchBubbleHost : public views::WidgetObserver {
   void OnWidgetVisibilityChanged(views::Widget* widget, bool visible) override;
   void OnWidgetDestroying(views::Widget* widget) override;
 
+  // views::TabOrganizationObserver:
+  void OnOrganizationAccepted(const Browser* browser) override;
+  void OnUserInvokedFeature(const Browser* browser) override;
+
   // When this is called the bubble may already be showing or be loading in.
   // This returns true if the method call results in the creation of a new Tab
   // Search bubble.
-  bool ShowTabSearchBubble(bool triggered_by_keyboard_shortcut = false);
+  // TODO(emshack): Either use an enum for tab_index here or break this out
+  // into multiple methods for improved readability.
+  bool ShowTabSearchBubble(bool triggered_by_keyboard_shortcut = false,
+                           int tab_index = -1);
   void CloseTabSearchBubble();
+
+  const Browser* GetBrowser() const;
 
   views::View* button() { return button_; }
 
@@ -48,6 +59,10 @@ class TabSearchBubbleHost : public views::WidgetObserver {
       const {
     return bubble_created_time_;
   }
+
+  // Return whether the tab search button is shown before tab strip.
+  // This also determines tab search bubble's anchor position.
+  static bool ShouldTabSearchRenderBeforeTabStrip();
 
  private:
   void ButtonPressed(const ui::Event& event);

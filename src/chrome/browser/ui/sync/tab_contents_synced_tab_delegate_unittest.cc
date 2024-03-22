@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/sync/tab_contents_synced_tab_delegate.h"
 
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
+#include "components/sync/protocol/sync_enums.pb.h"
 #include "components/sync_sessions/mock_sync_sessions_client.h"
 #include "components/sync_sessions/test_synced_window_delegates_getter.h"
 #include "content/public/browser/navigation_controller.h"
@@ -30,6 +31,11 @@ class TestSyncedTabDelegate : public TabContentsSyncedTabDelegate {
     // Returns false so the ShouldSyncReturnsFalse* tests would not return early
     // because this function returns true.
     return false;
+  }
+  std::unique_ptr<SyncedTabDelegate> CreatePlaceholderTabSyncedTabDelegate()
+      override {
+    NOTREACHED();
+    return nullptr;
   }
 };
 
@@ -65,23 +71,17 @@ TEST_F(TabContentsSyncedTabDelegateTest, InvalidEntryIndexReturnsDefault) {
 }
 
 // Test that ShouldSync will return false if the WebContents has not navigated
-// anywhere yet. When InitialNavigationEntry is turned off, the WebContents will
-// have no NavigationEntries so there is nothing to sync. When
-// InitialNavigationEntry is turned on, the WebContents will be on the initial
-// NavigationEntry and also have nothing to sync, because the function will
-// return "false" early (rather than iterate through the entries list).
+// anywhere yet. The WebContents will be on the initial NavigationEntry and
+// have nothing to sync, because the function will return "false" early (rather
+// than iterate through the entries list).
 TEST_F(TabContentsSyncedTabDelegateTest,
        ShouldSyncReturnsFalseOnWebContentsOnInitialNavigationEntry) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(blink::features::kInitialNavigationEntry);
-
   std::unique_ptr<content::WebContents> web_contents(CreateTestWebContents());
   TestSyncedTabDelegate delegate(web_contents.get());
-  window_getter_.AddWindow(sync_pb::SessionWindow_BrowserType_TYPE_TABBED,
+  window_getter_.AddWindow(sync_pb::SyncEnums_BrowserType_TYPE_TABBED,
                            delegate.GetWindowId());
 
-  // The WebContents has not navigated yet and InitialNavigationEntry is
-  // enabled, so it's on initial NavigationEntry.
+  // The WebContents has not navigated, so it's on the initial NavigationEntry.
   ASSERT_TRUE(
       web_contents->GetController().GetLastCommittedEntry()->IsInitialEntry());
 
@@ -93,30 +93,6 @@ TEST_F(TabContentsSyncedTabDelegateTest,
 
   // ShouldSync should return false because there it's on the initial
   // NavigationEntry.
-  EXPECT_FALSE(delegate.ShouldSync(&mock_sync_sessions_client_));
-}
-
-TEST_F(TabContentsSyncedTabDelegateTest,
-       ShouldSyncReturnsFalseOnWebContentsWithNoNavigationEntry) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndDisableFeature(blink::features::kInitialNavigationEntry);
-
-  std::unique_ptr<content::WebContents> web_contents(CreateTestWebContents());
-  TestSyncedTabDelegate delegate(web_contents.get());
-  window_getter_.AddWindow(sync_pb::SessionWindow_BrowserType_TYPE_TABBED,
-                           delegate.GetWindowId());
-
-  // The WebContents has not navigated yet and InitialNavigationEntry is
-  // disabled, so there is no NavigationEntry.
-  ASSERT_EQ(nullptr, web_contents->GetController().GetLastCommittedEntry());
-
-  // TestSyncedTabDelegate intentionally returns false for
-  // IsInitialBlankNavigation() even though no navigation has committed
-  // to ensure ShouldSync() won't return early because of it (which is possible
-  // in case the tab was restored before and hasn't navigated anywhere).
-  ASSERT_FALSE(delegate.IsInitialBlankNavigation());
-
-  // ShouldSync should return false because there is no NavigationEntry.
   EXPECT_FALSE(delegate.ShouldSync(&mock_sync_sessions_client_));
 }
 

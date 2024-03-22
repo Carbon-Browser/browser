@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,15 +78,6 @@ class ImportantSitesUtil {
   static std::vector<ImportantDomainInfo> GetImportantRegisterableDomains(
       Profile* profile,
       size_t max_results);
-
-#if !BUILDFLAG(IS_ANDROID)
-  // Return the top |<=max_results| important registrable domains that have an
-  // associated installed app. |max_results| is assumed to be small.
-  static std::vector<ImportantDomainInfo> GetInstalledRegisterableDomains(
-      browsing_data::TimePeriod time_period,
-      Profile* profile,
-      size_t max_results);
-#endif
 
   static std::set<std::string> GetInstalledRegisterableDomains(
       Profile* profile);

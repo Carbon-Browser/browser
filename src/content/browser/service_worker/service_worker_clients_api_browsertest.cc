@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/task_traits.h"
@@ -125,7 +125,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerClientsApiBrowserTest,
   EXPECT_EQ("navigate failed", EvalJs(shell(), "requestToNavigate();"));
 
   // The browser-initiated navigation should finish.
-  navigation.WaitForNavigationFinished();  // Resume navigation.
+  ASSERT_TRUE(navigation.WaitForNavigationFinished());  // Resume navigation.
   EXPECT_TRUE(navigation.was_successful());
 }
 

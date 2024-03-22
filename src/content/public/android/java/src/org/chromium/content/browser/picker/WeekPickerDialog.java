@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import android.content.Context;
 
 import org.chromium.content.R;
 
-/**
- * A week picker dialog.
- */
+/** A week picker dialog. */
 public class WeekPickerDialog extends TwoFieldDatePickerDialog {
 
     /**
@@ -19,10 +17,13 @@ public class WeekPickerDialog extends TwoFieldDatePickerDialog {
      * @param year The initial year of the dialog.
      * @param weekOfYear The initial week of the dialog.
      */
-    public WeekPickerDialog(Context context,
-             OnValueSetListener callBack,
-            int year, int weekOfYear,
-            double minValue, double maxValue) {
+    public WeekPickerDialog(
+            Context context,
+            OnValueSetListener callBack,
+            int year,
+            int weekOfYear,
+            double minValue,
+            double maxValue) {
         this(context, 0, callBack, year, weekOfYear, minValue, maxValue);
     }
 
@@ -33,12 +34,14 @@ public class WeekPickerDialog extends TwoFieldDatePickerDialog {
      * @param year The initial year of the dialog.
      * @param weekOfYear The initial week of the dialog.
      */
-    public WeekPickerDialog(Context context,
+    public WeekPickerDialog(
+            Context context,
             int theme,
-             OnValueSetListener callBack,
+            OnValueSetListener callBack,
             int year,
             int weekOfYear,
-            double minValue, double maxValue) {
+            double minValue,
+            double maxValue) {
         super(context, theme, callBack, year, weekOfYear, minValue, maxValue);
         setTitle(R.string.week_picker_dialog_title);
     }

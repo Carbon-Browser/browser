@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,10 +88,30 @@ enum VideoPixelFormat {
   PIXEL_FORMAT_YUV422AP10 = 37,
   PIXEL_FORMAT_YUV444AP10 = 38,
 
+  // 20bpp YUVA planar 1x1 Y, 2x2 interleaved UV, 1x1 A samples.
+  PIXEL_FORMAT_NV12A = 39,
+
   // Please update UMA histogram enumeration when adding new formats here.
   PIXEL_FORMAT_MAX =
-      PIXEL_FORMAT_YUV444AP10,  // Must always be equal to largest entry logged.
+      PIXEL_FORMAT_NV12A,  // Must always be equal to largest entry logged.
 };
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class VideoChromaSampling : uint8_t {
+  kUnknown = 0,
+  k420,  // 4:2:0 chroma channel has 1/2 height/width of luma channel.
+  k422,  // 4:2:2 chroma channel has same height & 1/2 width of luma channel.
+  k444,  // 4:4:4 chroma channel has same height/width of luma channel.
+  k400,  // 4:0:0 monochrome without chroma subsampling.
+
+  // Please update UMA histogram enumeration when adding new formats here.
+  kMaxValue = k400,  // Must always be equal to largest entry logged.
+};
+
+// Return the name of chroma sampling format as a string.
+MEDIA_SHMEM_EXPORT std::string VideoChromaSamplingToString(
+    VideoChromaSampling chroma_sampling);
 
 // Returns the name of a Format as a string.
 MEDIA_SHMEM_EXPORT std::string VideoPixelFormatToString(

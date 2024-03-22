@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,8 +74,8 @@ class AppSessionServiceTest : public BrowserWithTestWindowTest {
     app_helper_.SetService(nullptr);
   }
 
-  void AppUpdateNavigation(const SessionID& window_session_id,
-                           const SessionID& tab_id,
+  void AppUpdateNavigation(SessionID window_session_id,
+                           SessionID tab_id,
                            const SerializedNavigationEntry& navigation,
                            bool select) {
     app_service()->UpdateTabNavigation(window_session_id, tab_id, navigation);
@@ -118,8 +118,8 @@ class AppSessionServiceTest : public BrowserWithTestWindowTest {
   }
 
   // SetUp already includes one add, add one more.
-  void CreateAndWriteSessionWithTwoApps(const SessionID& app2_id,
-                                        const SessionID& tab1_id,
+  void CreateAndWriteSessionWithTwoApps(SessionID app2_id,
+                                        SessionID tab1_id,
                                         SerializedNavigationEntry* nav1) {
     *nav1 = ContentTestHelper::CreateNavigation("http://google.com", "abc");
 

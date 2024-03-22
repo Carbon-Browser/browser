@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "ui/color/color_mixer.h"
 #include "ui/color/color_provider_utils.h"
@@ -82,8 +82,13 @@ void ColorProvider::GenerateColorMap() {
   // computed values. Use a std::map rather than a base::flat_map since it has
   // frequent inserts and could grow very large.
   std::map<ColorId, SkColor> color_map;
-  for (const auto& color_id : color_ids)
-    color_map.insert({color_id, mixers_.front().GetResultColor(color_id)});
+  for (const auto& color_id : color_ids) {
+    SkColor resulting_color = mixers_.front().GetResultColor(color_id);
+    DVLOG(2) << "GenerateColorMap:"
+             << " Color Id: " << ColorIdName(color_id)
+             << " Resulting Color: " << SkColorName(resulting_color);
+    color_map.insert({color_id, resulting_color});
+  }
 
   // Construct the color_map_.
   color_map_ = ColorMap(color_map.begin(), color_map.end());
@@ -91,6 +96,11 @@ void ColorProvider::GenerateColorMap() {
   // Clear away all associated mixers as these are no longer needed.
   mixers_.clear();
   first_postprocessing_mixer_ = mixers_.before_begin();
+}
+
+bool ColorProvider::IsColorMapEmpty() const {
+  DCHECK(color_map_);
+  return color_map_->empty();
 }
 
 void ColorProvider::SetColorForTesting(ColorId id, SkColor color) {

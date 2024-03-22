@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,7 +8,8 @@ import("//build/config/features.gni")
 
 if (is_android) {
   import("//build/config/android/config.gni")
-  import("//build/config/android/rules.gni")  # For generate_jni().
+  import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 source_set("geolocation") {
@@ -44,18 +45,22 @@ source_set("geolocation") {
     "wifi_data.h",
     "wifi_data_provider.cc",
     "wifi_data_provider.h",
-    "wifi_data_provider_manager.cc",
-    "wifi_data_provider_manager.h",
+    "wifi_data_provider_handle.cc",
+    "wifi_data_provider_handle.h",
     "wifi_polling_policy.cc",
     "wifi_polling_policy.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base",
+    "//components/device_event_log",
     "//mojo/public/cpp/bindings",
     "//mojo/public/cpp/system",
     "//net",
     "//services/device/public/cpp:device_features",
+    "//services/device/public/mojom:geolocation_internals",
     "//ui/gfx",
   ]
   public_deps = [
@@ -81,7 +86,7 @@ source_set("geolocation") {
     ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     frameworks = [ "Security.framework" ]
     sources += [
       "core_location_provider.cc",
@@ -136,7 +141,7 @@ source_set("geolocation") {
       "wifi_data_provider_win.h",
     ]
   } else {
-    # WifiDataProviderManager declares a static factory method that is defined
+    # WifiDataProviderHandle declares a static factory method that is defined
     # by the platform implementation. Platforms with no Wi-Fi data provider must
     # include EmptyWifiDataProvider to provide this definition.
     sources += [
@@ -155,6 +160,7 @@ if (is_android) {
   }
 
   android_library("geolocation_java") {
+    srcjar_deps = [ ":geolocation_jni_headers" ]
     sources = [
       "android/java/src/org/chromium/device/geolocation/LocationProviderAdapter.java",
       "android/java/src/org/chromium/device/geolocation/LocationProviderAndroid.java",
@@ -169,14 +175,13 @@ if (is_android) {
       "$google_play_services_package:google_play_services_location_java",
       "$google_play_services_package:google_play_services_tasks_java",
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//components/location/android:location_java",
       "//services/device/public/java:geolocation_java",
       "//third_party/android_deps:chromium_play_services_availability_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
     ]
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
   }
 }
 
@@ -188,17 +193,20 @@ source_set("test_support") {
     "fake_location_provider.h",
     "fake_position_cache.cc",
     "fake_position_cache.h",
+    "mock_wifi_data_provider.cc",
+    "mock_wifi_data_provider.h",
     "position_cache_test_util.cc",
     "position_cache_test_util.h",
   ]
   public_deps = [ ":geolocation" ]
   deps = [
     "//services/device/public/cpp/geolocation",
+    "//services/device/public/mojom:geolocation_internals",
     "//testing/gmock",
     "//testing/gtest",
   ]
 
   if (is_chromeos_ash) {
-    deps += [ "//chromeos/dbus/shill" ]
+    deps += [ "//chromeos/ash/components/dbus/shill" ]
   }
 }

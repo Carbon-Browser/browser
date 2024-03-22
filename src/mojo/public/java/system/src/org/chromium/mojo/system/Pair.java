@@ -1,9 +1,8 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.mojo.system;
-
 
 /**
  * A pair of object.
@@ -27,9 +26,7 @@ public class Pair<F, S> {
         this.second = second;
     }
 
-    /**
-     * equals() that handles null values.
-     */
+    /** equals() that handles null values. */
     private boolean equals(Object o1, Object o2) {
         return o1 == null ? o2 == null : o1.equals(o2);
     }

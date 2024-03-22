@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/memory/enterprise_memory_limit_pref_observer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/memory_pressure_monitor.h"
 #include "build/build_config.h"
 #include "chrome/browser/resource_coordinator/utils.h"

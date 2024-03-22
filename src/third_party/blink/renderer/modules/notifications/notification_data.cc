@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,6 +36,15 @@ mojom::blink::NotificationDirection ToDirectionEnumValue(
   return mojom::blink::NotificationDirection::AUTO;
 }
 
+mojom::blink::NotificationScenario ToScenarioEnumValue(const String& scenario) {
+  if (scenario == "default")
+    return mojom::blink::NotificationScenario::DEFAULT;
+  if (scenario == "incoming-call")
+    return mojom::blink::NotificationScenario::INCOMING_CALL;
+  NOTREACHED() << "Unknown scenario: " << scenario;
+  return mojom::blink::NotificationScenario::DEFAULT;
+}
+
 KURL CompleteURL(ExecutionContext* context, const String& string_url) {
   KURL url = context->CompleteURL(string_url);
   if (url.IsValid())
@@ -60,7 +69,7 @@ mojom::blink::NotificationDataPtr CreateNotificationData(
   }
 
   // If renotify is true, the notification must have a tag.
-  if (options->renotify() && options->tag().IsEmpty()) {
+  if (options->renotify() && options->tag().empty()) {
     RecordPersistentNotificationDisplayResult(
         PersistentNotificationDisplayResult::kRenotifyWithoutTag);
     exception_state.ThrowTypeError(
@@ -77,13 +86,13 @@ mojom::blink::NotificationDataPtr CreateNotificationData(
   notification_data->body = options->body();
   notification_data->tag = options->tag();
 
-  if (options->hasImage() && !options->image().IsEmpty())
+  if (options->hasImage() && !options->image().empty())
     notification_data->image = CompleteURL(context, options->image());
 
-  if (options->hasIcon() && !options->icon().IsEmpty())
+  if (options->hasIcon() && !options->icon().empty())
     notification_data->icon = CompleteURL(context, options->icon());
 
-  if (options->hasBadge() && !options->badge().IsEmpty())
+  if (options->hasBadge() && !options->badge().empty())
     notification_data->badge = CompleteURL(context, options->badge());
 
   VibrationController::VibrationPattern vibration_pattern;
@@ -95,9 +104,10 @@ mojom::blink::NotificationDataPtr CreateNotificationData(
   notification_data->vibration_pattern->Append(vibration_pattern.data(),
                                                vibration_pattern.size());
 
-  notification_data->timestamp = options->hasTimestamp()
-                                     ? static_cast<double>(options->timestamp())
-                                     : base::Time::Now().ToDoubleT() * 1000.0;
+  notification_data->timestamp =
+      options->hasTimestamp()
+          ? static_cast<double>(options->timestamp())
+          : base::Time::Now().InMillisecondsFSinceUnixEpoch();
   notification_data->renotify = options->renotify();
   notification_data->silent = options->silent();
   notification_data->require_interaction = options->requireInteraction();
@@ -158,7 +168,7 @@ mojom::blink::NotificationDataPtr CreateNotificationData(
 
     notification_action->placeholder = action->placeholder();
 
-    if (action->hasIcon() && !action->icon().IsEmpty())
+    if (action->hasIcon() && !action->icon().empty())
       notification_action->icon = CompleteURL(context, action->icon());
 
     actions.push_back(std::move(notification_action));
@@ -170,7 +180,8 @@ mojom::blink::NotificationDataPtr CreateNotificationData(
     UseCounter::Count(context, WebFeature::kNotificationShowTrigger);
 
     auto* timestamp_trigger = options->showTrigger();
-    auto timestamp = base::Time::FromJsTime(timestamp_trigger->timestamp());
+    auto timestamp = base::Time::FromMillisecondsSinceUnixEpoch(
+        base::checked_cast<int64_t>(timestamp_trigger->timestamp()));
 
     if (timestamp - base::Time::Now() > kMaxNotificationShowTriggerDelay) {
       RecordPersistentNotificationDisplayResult(
@@ -182,6 +193,8 @@ mojom::blink::NotificationDataPtr CreateNotificationData(
 
     notification_data->show_trigger_timestamp = timestamp;
   }
+
+  notification_data->scenario = ToScenarioEnumValue(options->scenario());
 
   return notification_data;
 }

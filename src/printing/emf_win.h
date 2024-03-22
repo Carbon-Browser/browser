@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -132,7 +132,7 @@ class COMPONENT_EXPORT(PRINTING_METAFILE) Emf::Record {
  private:
   friend class Emf;
   friend class Enumerator;
-  const ENHMETARECORD* record_;
+  raw_ptr<const ENHMETARECORD> record_;
 };
 
 // Retrieves individual records out of a Emf buffer. The main use is to skip

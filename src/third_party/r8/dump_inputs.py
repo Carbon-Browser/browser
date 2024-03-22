@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Convenience script for running proguard.py with --dump-inputs."""
@@ -38,6 +38,8 @@ def main():
 
     command += ' --dump-inputs'
     print('Running:', command)
+    # Ninja commands are meant to be run from within the build directory.
+    os.chdir(build_dir)
     sys.exit(os.system(command))
 
 

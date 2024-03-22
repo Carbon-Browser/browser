@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,6 @@ extern NSString* const kFieldTrialVersionKey;
 // The current version of the credential provider extension's password creation
 // feature.
 extern const int kPasswordCreationFeatureVersion;
-
-// The current version of the credential provider extension's password manager
-// branding update feature.
-extern const int kPasswordManagerBrandingUpdateFeatureVersion;
 
 // The current version of the credential provider extension's favicon display
 // feature.

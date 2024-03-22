@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "chrome/browser/invalidation/profile_invalidation_provider_factory.h"
 #include "chrome/browser/policy/cloud/user_cloud_policy_invalidator.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
 #else
@@ -21,19 +20,27 @@ namespace policy {
 // static
 UserCloudPolicyInvalidatorFactory*
     UserCloudPolicyInvalidatorFactory::GetInstance() {
-  return base::Singleton<UserCloudPolicyInvalidatorFactory>::get();
+  static base::NoDestructor<UserCloudPolicyInvalidatorFactory> instance;
+  return instance.get();
 }
 
 UserCloudPolicyInvalidatorFactory::UserCloudPolicyInvalidatorFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "UserCloudPolicyInvalidator",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(invalidation::ProfileInvalidationProviderFactory::GetInstance());
 }
 
-UserCloudPolicyInvalidatorFactory::~UserCloudPolicyInvalidatorFactory() {}
+UserCloudPolicyInvalidatorFactory::~UserCloudPolicyInvalidatorFactory() =
+    default;
 
-KeyedService* UserCloudPolicyInvalidatorFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+UserCloudPolicyInvalidatorFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = static_cast<Profile*>(context);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -42,9 +49,9 @@ KeyedService* UserCloudPolicyInvalidatorFactory::BuildServiceInstanceFor(
   CloudPolicyManager* policy_manager = profile->GetUserCloudPolicyManager();
 #endif
   if (!policy_manager)
-    return NULL;
+    return nullptr;
 
-  return new UserCloudPolicyInvalidator(profile, policy_manager);
+  return std::make_unique<UserCloudPolicyInvalidator>(profile, policy_manager);
 }
 
 bool UserCloudPolicyInvalidatorFactory::

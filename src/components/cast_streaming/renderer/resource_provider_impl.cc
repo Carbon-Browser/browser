@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/cast_streaming/renderer/resource_provider_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "components/cast_streaming/public/cast_streaming_url.h"
-#include "components/cast_streaming/public/features.h"
-#include "components/cast_streaming/renderer/cast_streaming_demuxer.h"
+#include "components/cast_streaming/common/public/cast_streaming_url.h"
+#include "components/cast_streaming/common/public/features.h"
+#include "components/cast_streaming/renderer/frame/frame_injecting_demuxer.h"
 #include "media/base/demuxer.h"
 
 namespace cast_streaming {
@@ -60,15 +61,15 @@ ResourceProviderImpl::GetDemuxerConnectorBinder() {
 
 std::unique_ptr<media::Demuxer> ResourceProviderImpl::MaybeGetDemuxerOverride(
     const GURL& url,
-    scoped_refptr<base::SingleThreadTaskRunner> media_task_runner) {
-  // Do not create a CastStreamingDemuxer if the Cast Streaming MessagePort
+    scoped_refptr<base::SequencedTaskRunner> media_task_runner) {
+  // Do not create a FrameInjectingDemuxer if the Cast Streaming MessagePort
   // was not set in the browser process. This will manifest as an unbound
   // DemuxerConnector object in the renderer process.
   // TODO(crbug.com/1082821): Simplify the instantiation conditions for the
-  // CastStreamingDemuxer.
+  // FrameInjectingDemuxer.
   if (per_frame_resources_ && IsCastStreamingMediaSourceUrl(url) &&
       per_frame_resources_->demuxer_connector().IsBound()) {
-    return std::make_unique<CastStreamingDemuxer>(
+    return std::make_unique<FrameInjectingDemuxer>(
         &per_frame_resources_->demuxer_connector(),
         std::move(media_task_runner));
   }

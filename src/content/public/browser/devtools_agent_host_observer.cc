@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,9 @@ void DevToolsAgentHostObserver::DevToolsAgentHostCreated(
 }
 
 void DevToolsAgentHostObserver::DevToolsAgentHostNavigated(
+    DevToolsAgentHost* agent_host) {}
+
+void DevToolsAgentHostObserver::DevToolsAgentHostProcessChanged(
     DevToolsAgentHost* agent_host) {}
 
 void DevToolsAgentHostObserver::DevToolsAgentHostAttached(

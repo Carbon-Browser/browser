@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/autofill_private/autofill_private_event_router_factory.h"
 
+#include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/extensions/api/autofill_private/autofill_private_event_router.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/extension_system_provider.h"
 #include "extensions/browser/extensions_browser_client.h"
@@ -23,25 +23,28 @@ AutofillPrivateEventRouterFactory::GetForProfile(
 // static
 AutofillPrivateEventRouterFactory*
 AutofillPrivateEventRouterFactory::GetInstance() {
-  return base::Singleton<AutofillPrivateEventRouterFactory>::get();
+  static base::NoDestructor<AutofillPrivateEventRouterFactory> instance;
+  return instance.get();
 }
 
 AutofillPrivateEventRouterFactory::AutofillPrivateEventRouterFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AutofillPrivateEventRouter",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+  DependsOn(autofill::PersonalDataManagerFactory::GetInstance());
 }
 
-KeyedService* AutofillPrivateEventRouterFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AutofillPrivateEventRouterFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return AutofillPrivateEventRouter::Create(context);
-}
-
-content::BrowserContext*
-AutofillPrivateEventRouterFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+  // TODO(1426498): pass router's dependencies directly instead of context.
+  return std::make_unique<AutofillPrivateEventRouter>(context);
 }
 
 bool AutofillPrivateEventRouterFactory::

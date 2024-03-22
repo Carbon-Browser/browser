@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,11 @@
  * dropdown matches the previously saved dropdown value. This property can be
  * used to disable certain user actions when the dropdown is invalid.
  */
-import '../cr_input/cr_input.m.js';
-import '../hidden_style_css.m.js';
-import '../icons.m.js';
-import '../shared_style_css.m.js';
-import '../shared_vars_css.m.js';
+import '../cr_input/cr_input.js';
+import '../cr_hidden_style.css.js';
+import '../icons.html.js';
+import '../cr_shared_style.css.js';
+import '../cr_shared_vars.css.js';
 import '//resources/polymer/v3_0/iron-dropdown/iron-dropdown.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
@@ -26,7 +26,7 @@ import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import {IronDropdownElement} from '//resources/polymer/v3_0/iron-dropdown/iron-dropdown.js';
 import {DomRepeatEvent, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {CrInputElement} from '../cr_input/cr_input.m.js';
+import {CrInputElement} from '../cr_input/cr_input.js';
 
 import {getTemplate} from './cr_searchable_drop_down.html.js';
 

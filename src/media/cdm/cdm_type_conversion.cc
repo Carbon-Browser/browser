@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -538,7 +538,7 @@ cdm::AudioDecoderConfig_2 ToCdmAudioDecoderConfig(
   cdm_config.codec = ToCdmAudioCodec(config.codec());
   cdm_config.channel_count =
       ChannelLayoutToChannelCount(config.channel_layout());
-  cdm_config.bits_per_channel = config.bits_per_channel();
+  cdm_config.bits_per_channel = config.bytes_per_channel() * 8;
   cdm_config.samples_per_second = config.samples_per_second();
   cdm_config.extra_data = const_cast<uint8_t*>(config.extra_data().data());
   cdm_config.extra_data_size = config.extra_data().size();

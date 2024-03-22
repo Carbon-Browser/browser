@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,11 +33,14 @@ CastDevToolsManagerDelegate::~CastDevToolsManagerDelegate() {
 }
 
 content::DevToolsAgentHost::List
-CastDevToolsManagerDelegate::RemoteDebuggingTargets() {
+CastDevToolsManagerDelegate::RemoteDebuggingTargets(
+    content::DevToolsManagerDelegate::TargetType target_type) {
   content::DevToolsAgentHost::List enabled_hosts;
   for (auto* web_contents : enabled_webcontents_) {
     enabled_hosts.push_back(
-        content::DevToolsAgentHost::GetOrCreateFor(web_contents));
+        target_type == content::DevToolsManagerDelegate::kTab
+            ? content::DevToolsAgentHost::GetOrCreateForTab(web_contents)
+            : content::DevToolsAgentHost::GetOrCreateFor(web_contents));
   }
   return enabled_hosts;
 }

@@ -4,15 +4,22 @@ This document describes PartitionAlloc at a high level, with some architectural
 details. For implementation details, see the comments in
 `partition_alloc_constants.h`.
 
+## Quick Links
+
+* [Glossary](./glossary.md): Definitions of terms commonly used in
+  PartitionAlloc. The present document largely avoids defining terms.
+
+* [Build Config](./build_config.md): Pertinent GN args, buildflags, and
+  macros.
+
+* [Chrome-External Builds](./external_builds.md): Further considerations
+  for standalone PartitionAlloc, plus an embedder's guide for some extra
+  GN args.
+
 ## Overview
 
 PartitionAlloc is a memory allocator optimized for space efficiency,
 allocation latency, and security.
-
-*** note
-This document largely avoids defining terms; consult the
-[glossary](./glossary.md) for a complete reference.
-***
 
 ### Performance
 
@@ -21,7 +28,10 @@ paths of allocation and deallocation require very few (reasonably predictable)
 branches. The number of operations in the fast paths is minimal, leading to the
 possibility of inlining.
 
-![general architecture](./dot/layers.png)
+![The central allocator manages slots and spans. It is locked on a
+  per-partition basis. Separately, the thread cache consumes slots
+  from the central allocator, allowing it to hand out memory
+  quickly to individual threads.](./src/partition_alloc/dot/layers.png)
 
 However, even the fast path isn't the fastest, because it requires taking
 a per-partition lock. Although we optimized the lock, there was still room for
@@ -71,7 +81,7 @@ PartitionAlloc guarantees that returned pointers are aligned on
 64-bit systems, and 8B on 32-bit).
 
 PartitionAlloc also supports higher levels of alignment, that can be requested
-via `PartitionAlloc::AlignedAllocWithFlags()` or platform-specific APIs (such as
+via `PartitionAlloc::AlignedAlloc()` or platform-specific APIs (such as
 `posix_memalign()`). The requested
 alignment has to be a power of two. PartitionAlloc reserves the right to round
 up the requested size to the nearest power of two, greater than or equal to the
@@ -90,7 +100,10 @@ The first and the last partition page are permanently inaccessible and serve
 as guard pages, with the exception of one system page in the middle of the first
 partition page that holds metadata (32B struct per partition page).
 
-![anatomy of a super page](./dot/super-page.png)
+![A super page is shown full of slot spans. The slot spans are logically
+  strung together to form buckets. At both extremes of the super page
+  are guard pages. PartitionAlloc metadata is hidden inside the
+  guard pages at the "front."](./src/partition_alloc/dot/super-page.png)
 
 * The slot span numbers provide a visual hint of their size (in partition
   pages).
@@ -179,12 +192,12 @@ There is no need for a full span list. The lists are updated lazily. An empty,
 decommitted or full span may stay on the active list for some time, until
 `PartitionBucket::SetNewActiveSlotSpan()` encounters it.
 A decommitted span may stay on the empty list for some time,
-until `PartitionBucket<thread_safe>::SlowPathAlloc()` encounters it. However,
+until `PartitionBucket::SlowPathAlloc()` encounters it. However,
 the inaccuracy can't happen in the other direction, i.e. an active span can only
 be on the active list, and an empty span can only be on the active or empty
 list.
 
-[PartitionPage]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/partition_allocator/partition_page.h;l=314;drc=e5b03e85ea180d1d1ab0dec471c7fd5d1706a9e4
-[SlotSpanMetadata]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/partition_allocator/partition_page.h;l=120;drc=e5b03e85ea180d1d1ab0dec471c7fd5d1706a9e4
-[SubsequentPageMetadata]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/partition_allocator/partition_page.h;l=295;drc=e5b03e85ea180d1d1ab0dec471c7fd5d1706a9e4
-[payload-start]: https://source.chromium.org/chromium/chromium/src/+/35b2deed603dedd4abb37f204d516ed62aa2b85c:base/allocator/partition_allocator/partition_page.h;l=454
+[PartitionPage]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/partition_allocator/src/partition_alloc/partition_page.h;l=314;drc=e5b03e85ea180d1d1ab0dec471c7fd5d1706a9e4
+[SlotSpanMetadata]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/partition_allocator/src/partition_alloc/partition_page.h;l=120;drc=e5b03e85ea180d1d1ab0dec471c7fd5d1706a9e4
+[SubsequentPageMetadata]: https://source.chromium.org/chromium/chromium/src/+/main:base/allocator/partition_allocator/src/partition_alloc/partition_page.h;l=295;drc=e5b03e85ea180d1d1ab0dec471c7fd5d1706a9e4
+[payload-start]: https://source.chromium.org/chromium/chromium/src/+/35b2deed603dedd4abb37f204d516ed62aa2b85c:base/allocator/partition_allocator/src/partition_alloc/partition_page.h;l=454

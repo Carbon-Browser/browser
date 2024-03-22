@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/app_list/views/result_selection_controller.h"
 
 #include <gtest/gtest.h>
-#include <cctype>
+
 #include <map>
 #include <memory>
 #include <string>
@@ -17,7 +17,7 @@
 #include "ash/app_list/views/search_result_actions_view.h"
 #include "ash/app_list/views/search_result_actions_view_delegate.h"
 #include "ash/app_list/views/search_result_container_view.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/strings/stringprintf.h"
 #include "ui/events/event.h"
@@ -87,7 +87,7 @@ struct TestContainerParams {
 
   // If set, the container will contain TestResultViewWithActions that
   // have |actions_per_result| actions each.
-  absl::optional<int> actions_per_result;
+  std::optional<int> actions_per_result;
 };
 
 class TestContainer : public SearchResultContainerView {
@@ -96,6 +96,7 @@ class TestContainer : public SearchResultContainerView {
                 test::AppListTestViewDelegate* view_delegate)
       : SearchResultContainerView(view_delegate) {
     set_horizontally_traversable(params.horizontal);
+    SetActive(true);
 
     for (int i = 0; i < params.result_count; ++i) {
       std::string result_id =
@@ -110,7 +111,7 @@ class TestContainer : public SearchResultContainerView {
             std::vector<SearchResult::Action>(
                 params.actions_per_result.value(),
                 SearchResult::Action(SearchResultActionType::kRemove,
-                                     std::u16string(), false)));
+                                     std::u16string())));
         search_result_views_.emplace_back(std::move(result_view));
       } else {
         auto result_view = std::make_unique<TestResultView>();
@@ -138,6 +139,11 @@ class TestContainer : public SearchResultContainerView {
 
  private:
   int DoUpdate() override { return search_result_views_.size(); }
+  void UpdateResultsVisibility(bool force_hide) override {}
+  views::View* GetTitleLabel() override { return nullptr; }
+  std::vector<views::View*> GetViewsToAnimate() override {
+    return std::vector<views::View*>();
+  }
 
   std::map<std::string, std::unique_ptr<TestSearchResult>> results_;
   std::vector<std::unique_ptr<TestResultView>> search_result_views_;
@@ -358,8 +364,9 @@ class ResultSelectionTest : public testing::Test,
               locations[3]);
 
     // Expect no change in location.
-    ASSERT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-              result_selection_controller_->MoveSelection(*forward));
+    ASSERT_EQ(
+        ResultSelectionController::MoveResult::kSelectionCycleAfterLastResult,
+        result_selection_controller_->MoveSelection(*forward));
     EXPECT_EQ(0, GetAndResetSelectionChangeCount());
     ASSERT_EQ(*result_selection_controller_->selected_location_details(),
               locations[3]);
@@ -373,8 +380,9 @@ class ResultSelectionTest : public testing::Test,
               locations[0]);
 
     // Expect no change in location.
-    ASSERT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-              result_selection_controller_->MoveSelection(*backward));
+    ASSERT_EQ(
+        ResultSelectionController::MoveResult::kSelectionCycleBeforeFirstResult,
+        result_selection_controller_->MoveSelection(*backward));
     EXPECT_EQ(0, GetAndResetSelectionChangeCount());
     ASSERT_EQ(*result_selection_controller_->selected_location_details(),
               locations[0]);
@@ -441,11 +449,11 @@ class ResultSelectionTest : public testing::Test,
       }
 
       // Change Containers, if not the last container.
-      ASSERT_EQ(
-          i == num_containers - 1
-              ? ResultSelectionController::MoveResult::kSelectionCycleRejected
-              : ResultSelectionController::MoveResult::kResultChanged,
-          result_selection_controller_->MoveSelection(*vertical_forward));
+      ASSERT_EQ(i == num_containers - 1
+                    ? ResultSelectionController::MoveResult::
+                          kSelectionCycleAfterLastResult
+                    : ResultSelectionController::MoveResult::kResultChanged,
+                result_selection_controller_->MoveSelection(*vertical_forward));
       EXPECT_EQ(i == num_containers - 1 ? 0 : 1,
                 GetAndResetSelectionChangeCount());
     }
@@ -873,8 +881,9 @@ TEST_F(ResultSelectionTest, TabCycleInContainerWithResultActions) {
   EXPECT_TRUE(CurrentResultActionNotSelected());
 
   // Shift TAB - reject.
-  EXPECT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-            result_selection_controller_->MoveSelection(shift_tab_key_));
+  EXPECT_EQ(
+      ResultSelectionController::MoveResult::kSelectionCycleBeforeFirstResult,
+      result_selection_controller_->MoveSelection(shift_tab_key_));
   EXPECT_EQ(0, GetAndResetSelectionChangeCount());
 
   ASSERT_EQ(create_test_location(0, 0), GetCurrentLocation());
@@ -908,8 +917,9 @@ TEST_F(ResultSelectionTest, TabCycleInContainerWithResultActions) {
   EXPECT_TRUE(CurrentResultActionSelected(0));
 
   // TAB - rejected, as selection would cycle to the beginning.
-  EXPECT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-            result_selection_controller_->MoveSelection(tab_key_));
+  EXPECT_EQ(
+      ResultSelectionController::MoveResult::kSelectionCycleAfterLastResult,
+      result_selection_controller_->MoveSelection(tab_key_));
   EXPECT_EQ(0, GetAndResetSelectionChangeCount());
   ASSERT_EQ(create_test_location(1, 0), GetCurrentLocation());
   EXPECT_TRUE(CurrentResultActionSelected(0));
@@ -936,15 +946,17 @@ TEST_F(ResultSelectionTest, TabCycleInContainerSingleResult) {
 
   // Shift TAB - reject going to the last result (even though it's the same as
   // the first result).
-  EXPECT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-            result_selection_controller_->MoveSelection(shift_tab_key_));
+  EXPECT_EQ(
+      ResultSelectionController::MoveResult::kSelectionCycleBeforeFirstResult,
+      result_selection_controller_->MoveSelection(shift_tab_key_));
   EXPECT_EQ(0, GetAndResetSelectionChangeCount());
   ASSERT_EQ(create_test_location(0, 0), GetCurrentLocation());
 
   // TAB - reject goting to the first result (event though it's the same as the
   // last result).
-  EXPECT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-            result_selection_controller_->MoveSelection(tab_key_));
+  EXPECT_EQ(
+      ResultSelectionController::MoveResult::kSelectionCycleAfterLastResult,
+      result_selection_controller_->MoveSelection(tab_key_));
   EXPECT_EQ(0, GetAndResetSelectionChangeCount());
   ASSERT_EQ(create_test_location(0, 0), GetCurrentLocation());
 }
@@ -972,8 +984,9 @@ TEST_F(ResultSelectionTest, TabCycleInContainerSingleResultWithActionUsingTab) {
   EXPECT_TRUE(CurrentResultActionNotSelected());
 
   // Shift TAB - reject going to the last result.
-  EXPECT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-            result_selection_controller_->MoveSelection(shift_tab_key_));
+  EXPECT_EQ(
+      ResultSelectionController::MoveResult::kSelectionCycleBeforeFirstResult,
+      result_selection_controller_->MoveSelection(shift_tab_key_));
   EXPECT_EQ(0, GetAndResetSelectionChangeCount());
 
   ASSERT_EQ(create_test_location(0, 0), GetCurrentLocation());
@@ -989,8 +1002,9 @@ TEST_F(ResultSelectionTest, TabCycleInContainerSingleResultWithActionUsingTab) {
   EXPECT_TRUE(CurrentResultActionSelected(0));
 
   // TAB - rejected, as selection would cycle to the beginning.
-  EXPECT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-            result_selection_controller_->MoveSelection(tab_key_));
+  EXPECT_EQ(
+      ResultSelectionController::MoveResult::kSelectionCycleAfterLastResult,
+      result_selection_controller_->MoveSelection(tab_key_));
   EXPECT_EQ(0, GetAndResetSelectionChangeCount());
   ASSERT_EQ(create_test_location(0, 0), GetCurrentLocation());
   EXPECT_TRUE(CurrentResultActionSelected(0));
@@ -1020,8 +1034,9 @@ TEST_F(ResultSelectionTest,
   EXPECT_TRUE(CurrentResultActionNotSelected());
 
   // UP - reject going to the last result.
-  EXPECT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-            result_selection_controller_->MoveSelection(up_arrow_));
+  EXPECT_EQ(
+      ResultSelectionController::MoveResult::kSelectionCycleBeforeFirstResult,
+      result_selection_controller_->MoveSelection(up_arrow_));
   EXPECT_EQ(0, GetAndResetSelectionChangeCount());
 
   ASSERT_EQ(create_test_location(0, 0), GetCurrentLocation());
@@ -1029,8 +1044,9 @@ TEST_F(ResultSelectionTest,
 
   // DOWN - rejected, as selection would cycle to the beginning (even though the
   // first element is the same as the last).
-  EXPECT_EQ(ResultSelectionController::MoveResult::kSelectionCycleRejected,
-            result_selection_controller_->MoveSelection(down_arrow_));
+  EXPECT_EQ(
+      ResultSelectionController::MoveResult::kSelectionCycleAfterLastResult,
+      result_selection_controller_->MoveSelection(down_arrow_));
   EXPECT_EQ(0, GetAndResetSelectionChangeCount());
   ASSERT_EQ(create_test_location(0, 0), GetCurrentLocation());
   EXPECT_TRUE(CurrentResultActionNotSelected());
@@ -1287,7 +1303,7 @@ TEST_F(ResultSelectionTest, ActionRemovedWhileSelected) {
   selected_view->AsResultViewWithActions()->GetActionsView()->SetActions(
       std::vector<SearchResult::Action>(
           1, SearchResult::Action(ash::SearchResultActionType::kRemove,
-                                  std::u16string(), false)));
+                                  std::u16string())));
   ASSERT_EQ(create_test_location(0, 1), GetCurrentLocation());
   EXPECT_TRUE(CurrentResultActionNotSelected());
 
@@ -1325,7 +1341,7 @@ TEST_F(ResultSelectionTest, MoveNullSelectionForward) {
 }
 
 TEST_F(ResultSelectionTest, MoveNullSelectionBack) {
-  TestMoveNullSelection(left_arrow_, false /*reverse*/,
+  TestMoveNullSelection(left_arrow_, true /*reverse*/,
                         false /*expect_action_selected*/);
 }
 

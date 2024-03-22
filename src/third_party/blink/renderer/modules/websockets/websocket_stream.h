@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBSOCKETS_WEBSOCKET_STREAM_H_
 
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
+#include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/websockets/websocket_channel_client.h"
@@ -58,7 +59,7 @@ class MODULES_EXPORT WebSocketStream final
 
   // IDL properties
   const KURL& url() const { return common_.Url(); }
-  ScriptPromise connection(ScriptState*) const;
+  ScriptPromise opened(ScriptState*) const;
   ScriptPromise closed(ScriptState*) const;
 
   // IDL functions
@@ -101,9 +102,9 @@ class MODULES_EXPORT WebSocketStream final
   // Closes the connection. If |maybe_reason| is an object with a valid "code"
   // property and optionally a valid "reason" property, will use them as the
   // code and reason, otherwise will close with unspecified close.
-  void CloseMaybeWithReason(ScriptValue maybe_reason);
+  void CloseMaybeWithReason(ScriptValue maybe_reason, ExceptionState&);
 
-  void CloseWithUnspecifiedCode();
+  void CloseWithUnspecifiedCode(ExceptionState&);
   void CloseInternal(int code,
                      const String& reason,
                      ExceptionState& exception_state);
@@ -113,13 +114,13 @@ class MODULES_EXPORT WebSocketStream final
   static WebSocketCloseInfo* MakeCloseInfo(uint16_t code, const String& reason);
 
   const Member<ScriptState> script_state_;
-  const Member<ScriptPromiseResolver> connection_resolver_;
+  const Member<ScriptPromiseResolver> opened_resolver_;
   const Member<ScriptPromiseResolver> closed_resolver_;
 
   // These need to be cached because the Promise() method on
   // ScriptPromiseResolver doesn't work any more once the promise is resolved or
   // rejected.
-  const TraceWrapperV8Reference<v8::Promise> connection_;
+  const TraceWrapperV8Reference<v8::Promise> opened_;
   const TraceWrapperV8Reference<v8::Promise> closed_;
 
   Member<WebSocketChannel> channel_;
@@ -127,10 +128,12 @@ class MODULES_EXPORT WebSocketStream final
   Member<UnderlyingSource> source_;
   Member<UnderlyingSink> sink_;
 
+  Member<AbortSignal::AlgorithmHandle> abort_handle_;
+
   WebSocketCommon common_;
 
   // We need to distinguish between "closing during handshake" and "closing
-  // after handshake" in order to reject the |connection_resolver_| correctly.
+  // after handshake" in order to reject the |opened_resolver_| correctly.
   bool was_ever_connected_ = false;
 };
 

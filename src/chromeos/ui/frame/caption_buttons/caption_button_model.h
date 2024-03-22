@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class CaptionButtonModel {
   // Returns true if |type| is enabled.
   virtual bool IsEnabled(views::CaptionButtonIcon type) const = 0;
 
-  // In zoom mode, the maximize/restore button will be repalced
+  // In zoom mode, the maximize/restore button will be replaced
   // with zoom/unzoom button.
   virtual bool InZoomMode() const = 0;
 };

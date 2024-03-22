@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,12 +38,10 @@ class ASH_EXPORT DragWindowResizer : public WindowResizer {
   void RevertDrag() override;
   void FlingOrSwipe(ui::GestureEvent* event) override;
 
-  WindowResizer* next_window_resizer_for_testing() {
-    return next_window_resizer_.get();
-  }
-
  private:
   FRIEND_TEST_ALL_PREFIXES(DragWindowResizerTest, DragWindowController);
+  FRIEND_TEST_ALL_PREFIXES(DragWindowResizerTest,
+                           DragWindowControllerLatchesTargetOpacity);
   FRIEND_TEST_ALL_PREFIXES(DragWindowResizerTest,
                            DragWindowControllerAcrossThreeDisplays);
 

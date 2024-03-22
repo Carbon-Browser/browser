@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,18 @@ class PolicyConversionsClient;
 
 extern const POLICY_EXPORT webui::LocalizedString
     kPolicySources[POLICY_SOURCE_COUNT];
+
+extern const POLICY_EXPORT char kIdKey[];
+extern const POLICY_EXPORT char kNameKey[];
+extern const POLICY_EXPORT char kPoliciesKey[];
+extern const POLICY_EXPORT char kPolicyNamesKey[];
+extern const POLICY_EXPORT char kChromePoliciesId[];
+extern const POLICY_EXPORT char kChromePoliciesName[];
+
+#if !BUILDFLAG(IS_CHROMEOS)
+extern const POLICY_EXPORT char kPrecedencePoliciesId[];
+extern const POLICY_EXPORT char kPrecedencePoliciesName[];
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 // A convenience class to retrieve all policies values.
 class POLICY_EXPORT PolicyConversions {
@@ -65,29 +77,12 @@ class POLICY_EXPORT PolicyConversions {
   // Set to drop the policies of which value is a default one set by the policy
   // provider. Disabled by default.
   virtual PolicyConversions& SetDropDefaultValues(bool enabled);
-  // Set to get extension policies.
-  // Enabled by default.
-  // TODO(b/233209041): Remove this option when extension policies are removed
-  // from ArrayPolicyConversions.
-  virtual PolicyConversions& EnableExtensionPolicies(bool enabled);
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  // Sets the updater policies.
-  virtual PolicyConversions& WithUpdaterPolicies(
-      std::unique_ptr<PolicyMap> policies);
-
-  // Sets the updater policy schemas.
-  virtual PolicyConversions& WithUpdaterPolicySchemas(
-      PolicyToSchemaMap schemas);
-#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
   // Returns the policy data as a JSON string;
   virtual std::string ToJSON() = 0;
 
  protected:
   PolicyConversionsClient* client() { return client_.get(); }
-
-  bool extension_policies_enabled_ = true;
 
  private:
   std::unique_ptr<PolicyConversionsClient> client_;
@@ -117,18 +112,6 @@ class POLICY_EXPORT DictionaryPolicyConversions : public PolicyConversions {
 
   DictionaryPolicyConversions& SetDropDefaultValues(bool enabled) override;
 
-  DictionaryPolicyConversions& EnableExtensionPolicies(bool enabled) override;
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  // Sets the updater policies.
-  DictionaryPolicyConversions& WithUpdaterPolicies(
-      std::unique_ptr<PolicyMap> policies) override;
-
-  // Sets the updater policy schemas.
-  DictionaryPolicyConversions& WithUpdaterPolicySchemas(
-      PolicyToSchemaMap schemas) override;
-#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   base::Value::Dict GetExtensionPolicies();
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
@@ -145,67 +128,41 @@ class POLICY_EXPORT DictionaryPolicyConversions : public PolicyConversions {
 #endif
 };
 
-class POLICY_EXPORT ArrayPolicyConversions : public PolicyConversions {
+// PolicyConversions implementation that retrieves Chrome policies. The
+// retrieved policies include precedence policies for non-ChromeOS and device
+// local account policies and identity fields for ChromeOS Ash.
+class POLICY_EXPORT ChromePolicyConversions : public PolicyConversions {
  public:
-  explicit ArrayPolicyConversions(
+  explicit ChromePolicyConversions(
       std::unique_ptr<PolicyConversionsClient> client);
-  ArrayPolicyConversions(const ArrayPolicyConversions&) = delete;
-  ArrayPolicyConversions& operator=(const ArrayPolicyConversions&) = delete;
-  ~ArrayPolicyConversions() override;
+  ChromePolicyConversions(const ChromePolicyConversions&) = delete;
+  ChromePolicyConversions& operator=(const ChromePolicyConversions&) = delete;
+  ~ChromePolicyConversions() override;
 
-  ArrayPolicyConversions& EnableConvertTypes(bool enabled) override;
+  ChromePolicyConversions& EnableConvertTypes(bool enabled) override;
 
-  ArrayPolicyConversions& EnableConvertValues(bool enabled) override;
+  ChromePolicyConversions& EnableConvertValues(bool enabled) override;
 
-  ArrayPolicyConversions& EnableDeviceLocalAccountPolicies(
+  ChromePolicyConversions& EnableDeviceLocalAccountPolicies(
       bool enabled) override;
 
-  ArrayPolicyConversions& EnableDeviceInfo(bool enabled) override;
+  ChromePolicyConversions& EnableDeviceInfo(bool enabled) override;
 
-  ArrayPolicyConversions& EnablePrettyPrint(bool enabled) override;
+  ChromePolicyConversions& EnablePrettyPrint(bool enabled) override;
 
-  ArrayPolicyConversions& EnableUserPolicies(bool enabled) override;
+  ChromePolicyConversions& EnableUserPolicies(bool enabled) override;
 
-  ArrayPolicyConversions& SetDropDefaultValues(bool enabled) override;
-
-  ArrayPolicyConversions& EnableExtensionPolicies(bool enabled) override;
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  // Sets the updater policies.
-  ArrayPolicyConversions& WithUpdaterPolicies(
-      std::unique_ptr<PolicyMap> policies) override;
-
-  // Sets the updater policy schemas.
-  ArrayPolicyConversions& WithUpdaterPolicySchemas(
-      PolicyToSchemaMap schemas) override;
-#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  ChromePolicyConversions& SetDropDefaultValues(bool enabled) override;
 
   std::string ToJSON() override;
 
-  base::Value::List ToValueList();
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // Additional Chrome policies that need to be displayed, though not available
-  // through policy service.
-  void WithAdditionalChromePolicies(base::Value::Dict policies);
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+  base::Value::Dict ToValueDict();
 
  private:
   base::Value::Dict GetChromePolicies();
+#if !BUILDFLAG(IS_CHROMEOS)
   base::Value::Dict GetPrecedencePolicies();
-
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  // Returns extension policies in a list.
-  base::Value::List GetExtensionPolicies();
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  base::Value::Dict GetUpdaterPolicies();
-#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  base::Value::Dict additional_chrome_policies_;
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 };
 
 }  // namespace policy

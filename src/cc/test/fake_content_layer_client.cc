@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <cstddef>
 
 #include "cc/paint/paint_op_buffer.h"
+#include "skia/ext/font_utils.h"
+#include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkTextBlob.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/skia_conversions.h"
@@ -84,7 +86,7 @@ FakeContentLayerClient::PaintContentsToDisplayList() {
     if (!it->transform.IsIdentity()) {
       display_list->StartPaint();
       display_list->push<SaveOp>();
-      display_list->push<ConcatOp>(it->transform.GetMatrixAsSkM44());
+      display_list->push<ConcatOp>(gfx::TransformToSkM44(it->transform));
       display_list->EndPaintOfPairedBegin();
     }
 
@@ -152,8 +154,9 @@ FakeContentLayerClient::PaintContentsToDisplayList() {
 
   if (has_draw_text_op_) {
     display_list->StartPaint();
-    display_list->push<DrawTextBlobOp>(
-        SkTextBlob::MakeFromString("any", SkFont()), 0.0f, 0.0f, PaintFlags());
+    SkFont font = skia::DefaultFont();
+    display_list->push<DrawTextBlobOp>(SkTextBlob::MakeFromString("any", font),
+                                       0.0f, 0.0f, PaintFlags());
     display_list->EndPaintOfUnpaired(PaintableRegion());
   }
 

@@ -1,12 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/run_loop.h"
-#include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/libfuzzer/proto/lpm_interface.h"
-#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybufferallowshared_arraybufferviewallowshared_readablestream.h"
@@ -34,17 +32,6 @@
 namespace blink {
 
 namespace {
-
-String ToPremultiplyAlpha(wc_fuzzer::ImageBitmapOptions_PremultiplyAlpha type) {
-  switch (type) {
-    case wc_fuzzer::ImageBitmapOptions_PremultiplyAlpha_PREMULTIPLY_NONE:
-      return "none";
-    case wc_fuzzer::ImageBitmapOptions_PremultiplyAlpha_PREMULTIPLY:
-      return "premultiply";
-    case wc_fuzzer::ImageBitmapOptions_PremultiplyAlpha_PREMULTIPLY_DEFAULT:
-      return "default";
-  }
-}
 
 String ToColorSpaceConversion(
     wc_fuzzer::ImageBitmapOptions_ColorSpaceConversion type) {
@@ -99,10 +86,8 @@ DEFINE_BINARY_PROTO_FUZZER(
   }();
 
   // Request a full GC upon returning.
-  auto scoped_gc = MakeScopedGarbageCollectionRequest();
-
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(features::kJXL);
+  auto scoped_gc =
+      MakeScopedGarbageCollectionRequest(test_support.GetIsolate());
 
   //
   // NOTE: GC objects that need to survive iterations of the loop below
@@ -131,8 +116,6 @@ DEFINE_BINARY_PROTO_FUZZER(
         proto.config().data().data(), proto.config().data().size());
     image_decoder_init->setData(
         MakeGarbageCollected<V8ImageBufferSource>(data_copy));
-    image_decoder_init->setPremultiplyAlpha(
-        ToPremultiplyAlpha(proto.config().options().premultiply_alpha()));
     image_decoder_init->setColorSpaceConversion(ToColorSpaceConversion(
         proto.config().options().color_space_conversion()));
 
@@ -160,7 +143,7 @@ DEFINE_BINARY_PROTO_FUZZER(
 
       // Collect what we can after the first fuzzing loop; this keeps memory
       // pressure down during ReadableStream fuzzing.
-      V8PerIsolateData::MainThreadIsolate()->RequestGarbageCollectionForTesting(
+      script_state->GetIsolate()->RequestGarbageCollectionForTesting(
           v8::Isolate::kFullGarbageCollection);
     }
 

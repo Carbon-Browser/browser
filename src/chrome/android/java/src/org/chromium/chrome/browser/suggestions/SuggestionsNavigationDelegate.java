@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,14 @@ import org.chromium.chrome.browser.ui.native_page.NativePageHost;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.ui.base.PageTransition;
 
-/**
- * Extension of {@link NativePageNavigationDelegate} with suggestions-specific methods.
- */
+/** Extension of {@link NativePageNavigationDelegate} with suggestions-specific methods. */
 public class SuggestionsNavigationDelegate extends NativePageNavigationDelegateImpl {
-    private static final String NEW_TAB_URL_HELP = "https://support.google.com/chrome/?p=new_tab";
-
-    public SuggestionsNavigationDelegate(Activity activity, Profile profile, NativePageHost host,
-            TabModelSelector tabModelSelector, Tab tab) {
+    public SuggestionsNavigationDelegate(
+            Activity activity,
+            Profile profile,
+            NativePageHost host,
+            TabModelSelector tabModelSelector,
+            Tab tab) {
         super(activity, profile, host, tabModelSelector, tab);
     }
 

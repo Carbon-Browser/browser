@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -32,6 +32,11 @@ avd_settings {
   advanced_features {
     key: "GLESDynamicVersion"
     value: "on"
+  }
+  # crbug.com/1110997: Disable GLDMA for android-25
+  advanced_features {
+    key: "GLDMA"
+    value: "off"
   }
   # Tests can run into low memory issue with the default ram size 1024MB
   # Incease to 2048MB, which is the same as that on Nexus 5X

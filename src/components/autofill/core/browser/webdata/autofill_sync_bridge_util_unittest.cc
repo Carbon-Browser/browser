@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 
 #include <vector>
 
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
+#include "components/autofill/core/browser/data_model/autofill_wallet_usage_data.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/data_model/credit_card_cloud_token_data.h"
 #include "components/autofill/core/browser/payments/payments_customer_data.h"
@@ -21,6 +23,7 @@
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/protocol/autofill_offer_specifics.pb.h"
 #include "components/sync/protocol/autofill_specifics.pb.h"
+#include "components/sync/protocol/autofill_wallet_usage_specifics.pb.h"
 #include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -42,9 +45,9 @@ class TestAutofillTable : public AutofillTable {
   ~TestAutofillTable() override {}
 
   bool GetServerCreditCards(
-      std::vector<std::unique_ptr<CreditCard>>* cards) const override {
+      std::vector<std::unique_ptr<CreditCard>>& cards) const override {
     for (const auto& card_on_disk : cards_on_disk_)
-      cards->push_back(std::make_unique<CreditCard>(card_on_disk));
+      cards.push_back(std::make_unique<CreditCard>(card_on_disk));
     return true;
   }
 
@@ -63,7 +66,7 @@ EntityData SpecificsToEntity(const sync_pb::AutofillWalletSpecifics& specifics,
 
 class AutofillSyncBridgeUtilTest : public testing::Test {
  public:
-  AutofillSyncBridgeUtilTest() {}
+  AutofillSyncBridgeUtilTest() = default;
 
   AutofillSyncBridgeUtilTest(const AutofillSyncBridgeUtilTest&) = delete;
   AutofillSyncBridgeUtilTest& operator=(const AutofillSyncBridgeUtilTest&) =
@@ -74,155 +77,176 @@ class AutofillSyncBridgeUtilTest : public testing::Test {
 
 // Tests that PopulateWalletTypesFromSyncData behaves as expected.
 TEST_F(AutofillSyncBridgeUtilTest, PopulateWalletTypesFromSyncData) {
-  // Add an address first.
   syncer::EntityChangeList entity_data;
-  std::string address_id("address1");
-  entity_data.push_back(EntityChange::CreateAdd(
-      address_id,
-      SpecificsToEntity(CreateAutofillWalletSpecificsForAddress(address_id),
-                        /*client_tag=*/"address-address1")));
   // Add two credit cards.
   std::string credit_card_id_1 = "credit_card_1";
   std::string credit_card_id_2 = "credit_card_2";
+  // Add one IBAN.
+  std::string iban_id = "12345678";
   // Add the first card that has its billing address id set to the address's id.
   // No nickname is set.
   sync_pb::AutofillWalletSpecifics wallet_specifics_card1 =
       CreateAutofillWalletSpecificsForCard(
-          /*id=*/credit_card_id_1,
-          /*billing_address_id=*/address_id);
+          /*client_tag=*/credit_card_id_1,
+          /*billing_address_id=*/"1");
   wallet_specifics_card1.mutable_masked_card()
       ->set_virtual_card_enrollment_state(
           sync_pb::WalletMaskedCreditCard::UNENROLLED);
+  wallet_specifics_card1.mutable_masked_card()
+      ->mutable_card_issuer()
+      ->set_issuer_id("amex");
   // Add the second card that has nickname.
   std::string nickname("Grocery card");
   sync_pb::AutofillWalletSpecifics wallet_specifics_card2 =
       CreateAutofillWalletSpecificsForCard(
-          /*id=*/credit_card_id_2,
+          /*client_tag=*/credit_card_id_2,
           /*billing_address_id=*/"", /*nickname=*/nickname);
   // Set the second card's issuer to GOOGLE.
   wallet_specifics_card2.mutable_masked_card()
       ->mutable_card_issuer()
       ->set_issuer(sync_pb::CardIssuer::GOOGLE);
   wallet_specifics_card2.mutable_masked_card()
+      ->mutable_card_issuer()
+      ->set_issuer_id("google");
+  wallet_specifics_card2.mutable_masked_card()
       ->set_virtual_card_enrollment_state(
           sync_pb::WalletMaskedCreditCard::ENROLLED);
+  wallet_specifics_card2.mutable_masked_card()
+      ->set_virtual_card_enrollment_type(
+          sync_pb::WalletMaskedCreditCard::NETWORK);
   wallet_specifics_card2.mutable_masked_card()->set_card_art_url(
       "https://www.example.com/card.png");
+  wallet_specifics_card2.mutable_masked_card()->set_product_description(
+      "fake product description");
+  sync_pb::AutofillWalletSpecifics wallet_specifics_iban =
+      CreateAutofillWalletSpecificsForIban(
+          /*client_tag=*/iban_id);
   entity_data.push_back(EntityChange::CreateAdd(
       credit_card_id_1,
       SpecificsToEntity(wallet_specifics_card1, /*client_tag=*/"card-card1")));
   entity_data.push_back(EntityChange::CreateAdd(
       credit_card_id_2,
       SpecificsToEntity(wallet_specifics_card2, /*client_tag=*/"card-card2")));
+  entity_data.push_back(EntityChange::CreateAdd(
+      iban_id,
+      SpecificsToEntity(wallet_specifics_iban, /*client_tag=*/"iban")));
   // Add payments customer data.
   entity_data.push_back(EntityChange::CreateAdd(
       "deadbeef",
       SpecificsToEntity(CreateAutofillWalletSpecificsForPaymentsCustomerData(
-                            /*specifics_id=*/"deadbeef"),
+                            /*client_tag=*/"deadbeef"),
                         /*client_tag=*/"customer-deadbeef")));
   // Add cloud token data.
   entity_data.push_back(EntityChange::CreateAdd(
       "data1", SpecificsToEntity(
                    CreateAutofillWalletSpecificsForCreditCardCloudTokenData(
-                       /*specifics_id=*/"data1"),
+                       /*client_tag=*/"data1"),
                    /*client_tag=*/"token-data1")));
 
   std::vector<CreditCard> wallet_cards;
-  std::vector<AutofillProfile> wallet_addresses;
+  std::vector<Iban> wallet_ibans;
   std::vector<PaymentsCustomerData> customer_data;
   std::vector<CreditCardCloudTokenData> cloud_token_data;
-  PopulateWalletTypesFromSyncData(entity_data, &wallet_cards, &wallet_addresses,
-                                  &customer_data, &cloud_token_data);
+  PopulateWalletTypesFromSyncData(entity_data, wallet_cards, wallet_ibans,
+                                  customer_data, cloud_token_data);
 
   ASSERT_EQ(2U, wallet_cards.size());
-  ASSERT_EQ(1U, wallet_addresses.size());
 
   EXPECT_EQ("deadbeef", customer_data.back().customer_id);
 
   EXPECT_EQ("data1", cloud_token_data.back().instrument_token);
 
-  // Make sure the first card's billing address id is equal to the address'
-  // server id.
-  EXPECT_EQ(wallet_addresses.back().server_id(),
-            wallet_cards.front().billing_address_id());
   // The first card's nickname is empty.
   EXPECT_TRUE(wallet_cards.front().nickname().empty());
 
   // Make sure the second card's nickname is correctly populated from sync data.
   EXPECT_EQ(base::UTF8ToUTF16(nickname), wallet_cards.back().nickname());
 
-  // Verify that the card_issuer is set correctly.
-  EXPECT_EQ(wallet_cards.front().card_issuer(), CreditCard::ISSUER_UNKNOWN);
-  EXPECT_EQ(wallet_cards.back().card_issuer(), CreditCard::GOOGLE);
+  // Verify that the issuer and the issuer id are set correctly.
+  EXPECT_EQ(wallet_cards.front().card_issuer(),
+            CreditCard::Issuer::kExternalIssuer);
+  EXPECT_EQ(wallet_cards.front().issuer_id(), "amex");
+  EXPECT_EQ(wallet_cards.back().card_issuer(), CreditCard::Issuer::kGoogle);
+  EXPECT_EQ(wallet_cards.back().issuer_id(), "google");
 
   // Verify that the virtual_card_enrollment_state is set correctly.
   EXPECT_EQ(wallet_cards.front().virtual_card_enrollment_state(),
-            CreditCard::UNENROLLED);
+            CreditCard::VirtualCardEnrollmentState::kUnenrolled);
   EXPECT_EQ(wallet_cards.back().virtual_card_enrollment_state(),
-            CreditCard::ENROLLED);
+            CreditCard::VirtualCardEnrollmentState::kEnrolled);
+
+  // Verify that the virtual_card_enrollment_type is set correctly.
+  EXPECT_EQ(wallet_cards.back().virtual_card_enrollment_type(),
+            CreditCard::VirtualCardEnrollmentType::kNetwork);
 
   // Verify that the card_art_url is set correctly.
   EXPECT_TRUE(wallet_cards.front().card_art_url().is_empty());
   EXPECT_EQ(wallet_cards.back().card_art_url().spec(),
             "https://www.example.com/card.png");
+
+  // Verify that the product_description is set correctly.
+  EXPECT_TRUE(wallet_cards.front().product_description().empty());
+  EXPECT_EQ(wallet_cards.back().product_description(),
+            u"fake product description");
 }
 
 // Verify that the billing address id from the card saved on disk is kept if it
 // is a local profile guid.
 TEST_F(AutofillSyncBridgeUtilTest,
-       CopyRelevantWalletMetadataFromDisk_KeepLocalAddresses) {
-  std::vector<CreditCard> cards_on_disk;
+       CopyRelevantWalletMetadataAndCvc_KeepLocalAddresses) {
+  std::vector<CreditCard> cards_from_local_storage;
   std::vector<CreditCard> wallet_cards;
 
   // Create a local profile to be used as a billing address.
-  AutofillProfile billing_address;
+  AutofillProfile billing_address(AddressCountryCode("US"));
 
   // Create a card on disk that refers to that local profile as its billing
   // address.
-  cards_on_disk.push_back(CreditCard());
-  cards_on_disk.back().set_billing_address_id(billing_address.guid());
+  cards_from_local_storage.emplace_back();
+  cards_from_local_storage.back().set_billing_address_id(
+      billing_address.guid());
 
   // Create a card pulled from wallet with the same id, but a different billing
   // address id.
-  wallet_cards.push_back(CreditCard(cards_on_disk.back()));
+  wallet_cards.emplace_back(cards_from_local_storage.back());
   wallet_cards.back().set_billing_address_id("1234");
 
-  // Setup the TestAutofillTable with the cards_on_disk.
-  TestAutofillTable table(cards_on_disk);
+  // Setup the TestAutofillTable with the `cards_from_local_storage`.
+  TestAutofillTable table(cards_from_local_storage);
 
-  CopyRelevantWalletMetadataFromDisk(table, &wallet_cards);
+  CopyRelevantWalletMetadataAndCvc(table, &wallet_cards);
 
   ASSERT_EQ(1U, wallet_cards.size());
 
   // Make sure the wallet card replace its billing address id for the one that
   // was saved on disk.
-  EXPECT_EQ(cards_on_disk.back().billing_address_id(),
+  EXPECT_EQ(cards_from_local_storage.back().billing_address_id(),
             wallet_cards.back().billing_address_id());
 }
 
 // Verify that the billing address id from the card saved on disk is overwritten
 // if it does not refer to a local profile.
 TEST_F(AutofillSyncBridgeUtilTest,
-       CopyRelevantWalletMetadataFromDisk_OverwriteOtherAddresses) {
+       CopyRelevantWalletMetadataAndCvc_OverwriteOtherAddresses) {
   std::string old_billing_id = "1234";
   std::string new_billing_id = "9876";
-  std::vector<CreditCard> cards_on_disk;
+  std::vector<CreditCard> cards_from_local_storage;
   std::vector<CreditCard> wallet_cards;
 
   // Create a card on disk that does not refer to a local profile (which have 36
   // chars ids).
-  cards_on_disk.push_back(CreditCard());
-  cards_on_disk.back().set_billing_address_id(old_billing_id);
+  cards_from_local_storage.emplace_back();
+  cards_from_local_storage.back().set_billing_address_id(old_billing_id);
 
   // Create a card pulled from wallet with the same id, but a different billing
   // address id.
-  wallet_cards.push_back(CreditCard(cards_on_disk.back()));
+  wallet_cards.emplace_back(cards_from_local_storage.back());
   wallet_cards.back().set_billing_address_id(new_billing_id);
 
-  // Setup the TestAutofillTable with the cards_on_disk.
-  TestAutofillTable table(cards_on_disk);
+  // Setup the TestAutofillTable with the `cards_from_local_storage`.
+  TestAutofillTable table(cards_from_local_storage);
 
-  CopyRelevantWalletMetadataFromDisk(table, &wallet_cards);
+  CopyRelevantWalletMetadataAndCvc(table, &wallet_cards);
 
   ASSERT_EQ(1U, wallet_cards.size());
 
@@ -233,35 +257,60 @@ TEST_F(AutofillSyncBridgeUtilTest,
 
 // Verify that the use stats on disk are kept when server cards are synced.
 TEST_F(AutofillSyncBridgeUtilTest,
-       CopyRelevantWalletMetadataFromDisk_KeepUseStats) {
+       CopyRelevantWalletMetadataAndCvc_KeepUseStats) {
   TestAutofillClock test_clock;
-  base::Time arbitrary_time = base::Time::FromDoubleT(25);
-  base::Time disk_time = base::Time::FromDoubleT(10);
+  base::Time arbitrary_time = base::Time::FromSecondsSinceUnixEpoch(25);
+  base::Time disk_time = base::Time::FromSecondsSinceUnixEpoch(10);
   test_clock.SetNow(arbitrary_time);
 
-  std::vector<CreditCard> cards_on_disk;
+  std::vector<CreditCard> cards_from_local_storage;
   std::vector<CreditCard> wallet_cards;
 
   // Create a card on disk with specific use stats.
-  cards_on_disk.push_back(CreditCard());
-  cards_on_disk.back().set_use_count(3U);
-  cards_on_disk.back().set_use_date(disk_time);
+  cards_from_local_storage.emplace_back();
+  cards_from_local_storage.back().set_use_count(3U);
+  cards_from_local_storage.back().set_use_date(disk_time);
 
   // Create a card pulled from wallet with the same id, but a different billing
   // address id.
-  wallet_cards.push_back(CreditCard());
+  wallet_cards.emplace_back();
   wallet_cards.back().set_use_count(10U);
 
-  // Setup the TestAutofillTable with the cards_on_disk.
-  TestAutofillTable table(cards_on_disk);
+  // Setup the TestAutofillTable with the `cards_from_local_storage`.
+  TestAutofillTable table(cards_from_local_storage);
 
-  CopyRelevantWalletMetadataFromDisk(table, &wallet_cards);
+  CopyRelevantWalletMetadataAndCvc(table, &wallet_cards);
 
   ASSERT_EQ(1U, wallet_cards.size());
 
   // Make sure the use stats from disk were kept
   EXPECT_EQ(3U, wallet_cards.back().use_count());
   EXPECT_EQ(disk_time, wallet_cards.back().use_date());
+}
+
+// Verify that the credential data on disk are kept when server cards are
+// synced.
+TEST_F(AutofillSyncBridgeUtilTest,
+       CopyRelevantWalletMetadataAndCvc_KeepCredentialData) {
+  std::vector<CreditCard> cards_from_local_storage;
+  std::vector<CreditCard> wallet_cards;
+
+  // Create a card on disk with specific use stats.
+  cards_from_local_storage.emplace_back();
+  cards_from_local_storage.back().set_cvc(u"123");
+
+  // Create a card pulled from wallet with the same id, but with an empty CVC.
+  wallet_cards.emplace_back();
+
+  // Setup the TestAutofillTable with the `cards_from_local_storage`.
+  TestAutofillTable table(cards_from_local_storage);
+
+  CopyRelevantWalletMetadataAndCvc(table, &wallet_cards);
+
+  ASSERT_EQ(1U, wallet_cards.size());
+
+  // Verify the wallet credential (CVC) data.
+  EXPECT_EQ(u"123", wallet_cards.back().cvc());
 }
 
 // Test to ensure the general-purpose fields from an AutofillOfferData are
@@ -417,6 +466,149 @@ TEST_F(AutofillSyncBridgeUtilTest, IsOfferSpecificsValid) {
   // Expects promo code offer specifics without promo code to be invalid.
   specifics.mutable_promo_code_offer_data()->clear_promo_code();
   EXPECT_FALSE(IsOfferSpecificsValid(specifics));
+}
+
+// Test to ensure that Wallet Usage Data for virtual card retrieval is correctly
+// converted to AutofillWalletUsageSpecifics.
+TEST_F(AutofillSyncBridgeUtilTest, WalletUsageSpecificsFromWalletUsageData) {
+  sync_pb::AutofillWalletUsageSpecifics usage_specifics;
+  AutofillWalletUsageData usage_data =
+      AutofillWalletUsageData::ForVirtualCard(test::GetVirtualCardUsageData1());
+  SetAutofillWalletUsageSpecificsFromAutofillWalletUsageData(usage_data,
+                                                             &usage_specifics);
+
+  EXPECT_EQ(usage_specifics.guid(),
+            *usage_data.virtual_card_usage_data().usage_data_id());
+  EXPECT_EQ(usage_specifics.virtual_card_usage_data().instrument_id(),
+            *usage_data.virtual_card_usage_data().instrument_id());
+  EXPECT_EQ(
+      base::UTF8ToUTF16(
+          usage_specifics.virtual_card_usage_data().virtual_card_last_four()),
+      *usage_data.virtual_card_usage_data().virtual_card_last_four());
+  EXPECT_EQ(usage_specifics.virtual_card_usage_data().merchant_url(),
+            usage_data.virtual_card_usage_data().merchant_origin().Serialize());
+}
+
+// Test to ensure that Wallet Usage Data for virtual card retrieval is correctly
+// converted to AutofillWalletUsageSpecifics.
+TEST_F(AutofillSyncBridgeUtilTest, VirtualCardUsageDataFromUsageSpecifics) {
+  sync_pb::AutofillWalletUsageSpecifics usage_specifics;
+  SetAutofillWalletUsageSpecificsFromAutofillWalletUsageData(
+      AutofillWalletUsageData::ForVirtualCard(test::GetVirtualCardUsageData1()),
+      &usage_specifics);
+
+  VirtualCardUsageData virtual_card_usage_data =
+      VirtualCardUsageDataFromUsageSpecifics(usage_specifics);
+
+  EXPECT_EQ(*virtual_card_usage_data.usage_data_id(), usage_specifics.guid());
+  EXPECT_EQ(*virtual_card_usage_data.instrument_id(),
+            usage_specifics.virtual_card_usage_data().instrument_id());
+  EXPECT_EQ(
+      base::UTF16ToUTF8(*virtual_card_usage_data.virtual_card_last_four()),
+      usage_specifics.virtual_card_usage_data().virtual_card_last_four());
+  EXPECT_EQ(virtual_card_usage_data.merchant_origin().Serialize(),
+            usage_specifics.virtual_card_usage_data().merchant_url());
+}
+
+// Test to ensure that WalletCredential struct data for CVV storage is correctly
+// converted to AutofillWalletCredentialSpecifics.
+TEST_F(AutofillSyncBridgeUtilTest,
+       AutofillWalletCredentialSpecificsFromStructData) {
+  std::unique_ptr<ServerCvc> server_cvc = std::make_unique<ServerCvc>(
+      1234, u"890", base::Time::UnixEpoch() + base::Milliseconds(25000));
+
+  sync_pb::AutofillWalletCredentialSpecifics wallet_credential_specifics =
+      AutofillWalletCredentialSpecificsFromStructData(*server_cvc);
+
+  EXPECT_EQ(base::NumberToString(server_cvc->instrument_id),
+            wallet_credential_specifics.instrument_id());
+  EXPECT_EQ(base::UTF16ToUTF8(server_cvc->cvc),
+            wallet_credential_specifics.cvc());
+  EXPECT_EQ((server_cvc->last_updated_timestamp - base::Time::UnixEpoch())
+                .InMilliseconds(),
+            wallet_credential_specifics.last_updated_time_unix_epoch_millis());
+  EXPECT_EQ((server_cvc->last_updated_timestamp - base::Time::UnixEpoch())
+                .InMilliseconds(),
+            25000);
+}
+
+TEST_F(AutofillSyncBridgeUtilTest, AutofillWalletStructDataFromUsageSpecifics) {
+  sync_pb::AutofillWalletCredentialSpecifics wallet_credential_specifics;
+  wallet_credential_specifics.set_instrument_id("123");
+  wallet_credential_specifics.set_cvc("890");
+  wallet_credential_specifics.set_last_updated_time_unix_epoch_millis(
+      base::Milliseconds(25000).InMilliseconds());
+
+  ServerCvc server_cvc =
+      AutofillWalletCvcStructDataFromWalletCredentialSpecifics(
+          wallet_credential_specifics);
+
+  EXPECT_EQ(base::NumberToString(server_cvc.instrument_id),
+            wallet_credential_specifics.instrument_id());
+  EXPECT_EQ(base::UTF16ToUTF8(server_cvc.cvc),
+            wallet_credential_specifics.cvc());
+  EXPECT_EQ((server_cvc.last_updated_timestamp - base::Time::UnixEpoch())
+                .InMilliseconds(),
+            wallet_credential_specifics.last_updated_time_unix_epoch_millis());
+  EXPECT_EQ((server_cvc.last_updated_timestamp - base::Time::UnixEpoch())
+                .InMilliseconds(),
+            25000);
+}
+
+// Round trip test to ensure that WalletCredential struct data for CVV storage
+// is correctly converted to AutofillWalletCredentialSpecifics and then from
+// the converted AutofillWalletCredentialSpecifics to WalletCredential struct
+// data. In the end we compare the original and the converted struct data.
+TEST_F(AutofillSyncBridgeUtilTest,
+       AutofillWalletCredentialStructDataRoundTripTest) {
+  // Step 1 - Convert WalletCredential struct data to
+  // AutofillWalletCredentialSpecifics.
+  std::unique_ptr<ServerCvc> server_cvc = std::make_unique<ServerCvc>(
+      1234, u"890", base::Time::UnixEpoch() + base::Milliseconds(25000));
+
+  sync_pb::AutofillWalletCredentialSpecifics
+      wallet_credential_specifics_from_conversion =
+          AutofillWalletCredentialSpecificsFromStructData(*server_cvc);
+
+  EXPECT_EQ(base::NumberToString(server_cvc->instrument_id),
+            wallet_credential_specifics_from_conversion.instrument_id());
+  EXPECT_EQ(base::UTF16ToUTF8(server_cvc->cvc),
+            wallet_credential_specifics_from_conversion.cvc());
+  EXPECT_EQ((server_cvc->last_updated_timestamp - base::Time::UnixEpoch())
+                .InMilliseconds(),
+            wallet_credential_specifics_from_conversion
+                .last_updated_time_unix_epoch_millis());
+  EXPECT_EQ((server_cvc->last_updated_timestamp - base::Time::UnixEpoch())
+                .InMilliseconds(),
+            25000);
+
+  // Step 2 - Convert AutofillWalletCredentialSpecifics to WalletCredential
+  // struct data.
+  ServerCvc server_cvc_from_conversion =
+      AutofillWalletCvcStructDataFromWalletCredentialSpecifics(
+          wallet_credential_specifics_from_conversion);
+
+  EXPECT_EQ(base::NumberToString(server_cvc_from_conversion.instrument_id),
+            wallet_credential_specifics_from_conversion.instrument_id());
+  EXPECT_EQ(base::UTF16ToUTF8(server_cvc_from_conversion.cvc),
+            wallet_credential_specifics_from_conversion.cvc());
+  EXPECT_EQ((server_cvc_from_conversion.last_updated_timestamp -
+             base::Time::UnixEpoch())
+                .InMilliseconds(),
+            wallet_credential_specifics_from_conversion
+                .last_updated_time_unix_epoch_millis());
+  EXPECT_EQ((server_cvc_from_conversion.last_updated_timestamp -
+             base::Time::UnixEpoch())
+                .InMilliseconds(),
+            25000);
+
+  // Step 3 - Compare the original WalletCredential struct data to the
+  // converted WalletCredential struct data.
+  EXPECT_EQ(server_cvc_from_conversion.instrument_id,
+            server_cvc->instrument_id);
+  EXPECT_EQ(server_cvc_from_conversion.cvc, server_cvc->cvc);
+  EXPECT_EQ(server_cvc_from_conversion.last_updated_timestamp,
+            server_cvc->last_updated_timestamp);
 }
 
 }  // namespace

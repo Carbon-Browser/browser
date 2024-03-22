@@ -1,11 +1,12 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_SETTINGS_SHUTDOWN_POLICY_HANDLER_H_
 #define CHROME_BROWSER_ASH_SETTINGS_SHUTDOWN_POLICY_HANDLER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 
@@ -38,9 +39,9 @@ class ShutdownPolicyHandler {
   void NotifyDelegateWithShutdownPolicy();
 
  private:
-  CrosSettings* cros_settings_;
+  raw_ptr<CrosSettings, ExperimentalAsh> cros_settings_;
 
-  Delegate* delegate_;
+  raw_ptr<Delegate, ExperimentalAsh> delegate_;
 
   base::CallbackListSubscription shutdown_policy_subscription_;
 

@@ -1,18 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_SAFE_BROWSING_DOWNLOAD_PROTECTION_FILE_ANALYZER_H_
 #define CHROME_BROWSER_SAFE_BROWSING_DOWNLOAD_PROTECTION_FILE_ANALYZER_H_
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/common/safe_browsing/binary_feature_extractor.h"
 #include "chrome/services/file_util/public/cpp/sandboxed_rar_analyzer.h"
+#include "chrome/services/file_util/public/cpp/sandboxed_seven_zip_analyzer.h"
 #include "chrome/services/file_util/public/cpp/sandboxed_zip_analyzer.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "third_party/protobuf/src/google/protobuf/repeated_field.h"
@@ -79,6 +80,9 @@ class FileAnalyzer {
 
     // For archives, the features and metadata extracted from the file.
     ClientDownloadRequest::ArchiveSummary archive_summary;
+
+    // Information about the encryption on this file.
+    EncryptionInfo encryption_info;
   };
 
   explicit FileAnalyzer(
@@ -86,6 +90,7 @@ class FileAnalyzer {
   ~FileAnalyzer();
   void Start(const base::FilePath& target_path,
              const base::FilePath& tmp_path,
+             base::optional_ref<const std::string> password,
              base::OnceCallback<void(Results)> callback);
 
  private:
@@ -111,27 +116,39 @@ class FileAnalyzer {
       const DocumentAnalyzerResults& document_results);
 #endif
 
+  void StartExtractSevenZipFeatures();
+  void OnSevenZipAnalysisFinished(
+      const ArchiveAnalyzerResults& archive_results);
+
   void LogAnalysisDurationWithAndWithoutSuffix(const std::string& suffix);
 
   base::FilePath target_path_;
   base::FilePath tmp_path_;
+  absl::optional<std::string> password_;
   scoped_refptr<BinaryFeatureExtractor> binary_feature_extractor_;
   base::OnceCallback<void(Results)> callback_;
   base::Time start_time_;
   Results results_;
 
-  scoped_refptr<SandboxedZipAnalyzer> zip_analyzer_;
+  std::unique_ptr<SandboxedZipAnalyzer, base::OnTaskRunnerDeleter>
+      zip_analyzer_{nullptr, base::OnTaskRunnerDeleter(nullptr)};
 
-  scoped_refptr<SandboxedRarAnalyzer> rar_analyzer_;
+  std::unique_ptr<SandboxedRarAnalyzer, base::OnTaskRunnerDeleter>
+      rar_analyzer_{nullptr, base::OnTaskRunnerDeleter(nullptr)};
 
 #if BUILDFLAG(IS_MAC)
-  scoped_refptr<SandboxedDMGAnalyzer> dmg_analyzer_;
+  std::unique_ptr<SandboxedDMGAnalyzer, base::OnTaskRunnerDeleter>
+      dmg_analyzer_{nullptr, base::OnTaskRunnerDeleter(nullptr)};
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
-  scoped_refptr<SandboxedDocumentAnalyzer> document_analyzer_;
+  std::unique_ptr<SandboxedDocumentAnalyzer, base::OnTaskRunnerDeleter>
+      document_analyzer_{nullptr, base::OnTaskRunnerDeleter(nullptr)};
   base::TimeTicks document_analysis_start_time_;
 #endif
+
+  std::unique_ptr<SandboxedSevenZipAnalyzer, base::OnTaskRunnerDeleter>
+      seven_zip_analyzer_{nullptr, base::OnTaskRunnerDeleter(nullptr)};
 
   base::WeakPtrFactory<FileAnalyzer> weakptr_factory_{this};
 };

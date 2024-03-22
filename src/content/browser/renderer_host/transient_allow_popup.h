@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 namespace content {
 
 // This class manages a transient affordance for a frame to open a popup window.
-// Sites with window-placement permission may open a popup on another screen
+// Sites with Window Management permission may open a popup on another screen
 // after requesting fullscreen on a specific screen of a multi-screen device.
 // This enables multi-screen content experiences from a single user gesture.
 class CONTENT_EXPORT TransientAllowPopup {

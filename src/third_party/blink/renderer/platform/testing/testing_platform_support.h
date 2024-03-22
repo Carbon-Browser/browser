@@ -35,13 +35,13 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_utilities.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-#include "third_party/blink/renderer/platform/testing/code_cache_loader_mock.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "v8/include/v8-platform.h"
 
@@ -69,6 +69,8 @@ class TestingPlatformSupport : public Platform {
   std::string GetDataResourceString(int resource_id) override;
   ThreadSafeBrowserInterfaceBrokerProxy* GetBrowserInterfaceBroker() override;
   bool IsThreadedAnimationEnabled() override;
+  std::unique_ptr<blink::WebV8ValueConverter> CreateWebV8ValueConverter()
+      override;
 
   virtual void RunUntilIdle();
   void SetThreadedAnimationEnabled(bool enabled);
@@ -90,7 +92,7 @@ class TestingPlatformSupport : public Platform {
  protected:
   class TestingBrowserInterfaceBroker;
 
-  Platform* const old_platform_;
+  const raw_ptr<Platform, ExperimentalRenderer> old_platform_;
   scoped_refptr<TestingBrowserInterfaceBroker> interface_broker_;
 
  private:
@@ -149,7 +151,7 @@ class ScopedTestingPlatformSupport final {
 
  private:
   std::unique_ptr<T> testing_platform_support_;
-  Platform* original_platform_;
+  raw_ptr<Platform, ExperimentalRenderer> original_platform_;
 };
 
 class ScopedUnittestsEnvironmentSetup final {

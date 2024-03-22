@@ -1,20 +1,50 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/ash/clipboard_image_model_factory_impl.h"
 
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "components/user_manager/user_manager.h"
 
-ClipboardImageModelFactoryImpl::ClipboardImageModelFactoryImpl(
-    Profile* primary_profile)
-    : primary_profile_(primary_profile),
-      idle_timer_(FROM_HERE,
+namespace {
+
+// Helpers ---------------------------------------------------------------------
+
+// Analogous to `ProfileManager::GetPrimaryUserProfile()` except this method
+// returns `nullptr` in the case where the primary user profile is not ready.
+Profile* GetPrimaryUserProfile() {
+  const auto* const user_manager = user_manager::UserManager::Get();
+  if (!user_manager) {
+    return nullptr;
+  }
+
+  const auto* const user = user_manager->GetPrimaryUser();
+  if (!user) {
+    return nullptr;
+  }
+
+  auto* const helper = ash::BrowserContextHelper::Get();
+  if (!helper) {
+    return nullptr;
+  }
+
+  auto* const browser_context = helper->GetBrowserContextByUser(user);
+  return browser_context ? Profile::FromBrowserContext(browser_context)
+                         : nullptr;
+}
+
+}  // namespace
+
+// ClipboardImageModelFactoryImpl ----------------------------------------------
+
+ClipboardImageModelFactoryImpl::ClipboardImageModelFactoryImpl()
+    : idle_timer_(FROM_HERE,
                   base::Minutes(2),
                   this,
-                  &ClipboardImageModelFactoryImpl::OnRequestIdle) {
-  DCHECK(primary_profile_);
-}
+                  &ClipboardImageModelFactoryImpl::OnRequestIdle) {}
 
 ClipboardImageModelFactoryImpl::~ClipboardImageModelFactoryImpl() = default;
 
@@ -36,11 +66,8 @@ void ClipboardImageModelFactoryImpl::CancelRequest(
     return;
   }
 
-  auto iter =
-      std::find_if(pending_list_.begin(), pending_list_.end(),
-                   [&id](const ClipboardImageModelRequest::Params& params) {
-                     return id == params.id;
-                   });
+  auto iter = base::ranges::find(pending_list_, id,
+                                 &ClipboardImageModelRequest::Params::id);
   if (iter == pending_list_.end())
     return;
 
@@ -91,8 +118,10 @@ void ClipboardImageModelFactoryImpl::StartNextRequest() {
   }
 
   if (!request_) {
+    // Use the primary profile instead of the active profile to create the
+    // `content::WebContents` that renders html.
     request_ = std::make_unique<ClipboardImageModelRequest>(
-        primary_profile_,
+        GetPrimaryUserProfile(),
         base::BindRepeating(&ClipboardImageModelFactoryImpl::StartNextRequest,
                             weak_ptr_factory_.GetWeakPtr()));
   }

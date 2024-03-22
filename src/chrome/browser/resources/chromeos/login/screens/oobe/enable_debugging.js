@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,24 @@
  * @fileoverview Enable developer features screen implementation.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/cr_elements/action_link.css.js';
+import '//resources/cr_elements/cr_input/cr_input.js';
+import '//resources/js/action_link.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+import '../../components/dialogs/oobe_loading_dialog.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeTextButton} from '../../components/buttons/oobe_text_button.js';
+
 
 /**
  * Possible UI states of the enable debugging screen.
@@ -29,9 +46,8 @@ const EnableDebuggingState = {
  * @implements {LoginScreenBehaviorInterface}
  * @implements {MultiStepBehaviorInterface}
  */
- const EnableDebuggingBase = Polymer.mixinBehaviors(
-  [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior],
-  Polymer.Element);
+const EnableDebuggingBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
 
 /**
  * @typedef {{
@@ -51,7 +67,9 @@ class EnableDebugging extends EnableDebuggingBase {
     return 'enable-debugging-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   get EXTERNAL_API() {
     return ['updateState'];

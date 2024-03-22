@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,14 +38,10 @@ public class CancelAwareAnimatorListener extends AnimatorListenerAdapter {
         onEnd(animation);
     }
 
-    /**
-     * Notifies the start of the animator.
-     */
+    /** Notifies the start of the animator. */
     public void onStart(Animator animator) {}
 
-    /**
-     * Notifies that the animator was cancelled.
-     */
+    /** Notifies that the animator was cancelled. */
     public void onCancel(Animator animator) {}
 
     /**

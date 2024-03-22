@@ -1,13 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/privacy_budget/privacy_budget_reid_score_estimator.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/rand_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/privacy_budget/privacy_budget_prefs.h"
 #include "chrome/common/privacy_budget/field_trial_param_conversions.h"
 #include "chrome/common/privacy_budget/types.h"
@@ -91,6 +92,32 @@ void PrivacyBudgetReidScoreEstimator::ReidBlockStorage::Record(
   }
 }
 
+uint64_t
+PrivacyBudgetReidScoreEstimator::ReidBlockStorage::ComputeHashForReidScore() {
+  std::vector<uint64_t> tokens;
+  uint64_t salt = base::RandGenerator(salt_range_);
+
+  tokens.emplace_back(salt);
+  for (blink::IdentifiableToken value : GetValues()) {
+    tokens.emplace_back(static_cast<uint64_t>(value.ToUkmMetricValue()));
+  }
+  // Initialize Reid hash with random noise.
+  uint64_t reid_hash = base::RandUint64();
+  // Calculate the real hash if the random number is greater than the Reid noise
+  // probability.
+  if (base::RandDouble() >= noise_probability_) {
+    // Use the hash function embedded in IdentifiableToken.
+    reid_hash = blink::IdentifiabilityDigestOfBytes(
+        base::as_bytes(base::make_span(tokens)));
+  }
+  // Create mask based on reid_bits required.
+  constexpr uint64_t kTypedOne = 1;
+  uint64_t mask = (kTypedOne << number_of_bits_) - 1;
+  uint64_t needed_bits = reid_hash & mask;
+  // Return salt in the left 32 bits and Reid b-bits hash in the right 32 bits.
+  return ((salt << 32) | needed_bits);
+}
+
 std::vector<blink::IdentifiableToken>
 PrivacyBudgetReidScoreEstimator::ReidBlockStorage::GetValues() const {
   DCHECK(Full());
@@ -124,6 +151,7 @@ PrivacyBudgetReidScoreEstimator::PrivacyBudgetReidScoreEstimator(
     : settings_(state_settings), pref_service_(pref_service) {}
 
 void PrivacyBudgetReidScoreEstimator::Init() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!settings_->enabled() || !settings_->IsUsingReidScoreEstimator())
     return;
 
@@ -153,6 +181,7 @@ PrivacyBudgetReidScoreEstimator::~PrivacyBudgetReidScoreEstimator() = default;
 void PrivacyBudgetReidScoreEstimator::ProcessForReidScore(
     blink::IdentifiableSurface surface,
     blink::IdentifiableToken token) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   bool at_least_one_reported_block = false;
   for (auto block_itr = surface_blocks_.begin();
        block_itr != surface_blocks_.end();) {
@@ -161,10 +190,10 @@ void PrivacyBudgetReidScoreEstimator::ProcessForReidScore(
       // Report new Reid surface if the map is full.
 
       // Compute the Reid hash for the needed Reid block.
-      uint64_t reid_hash = ComputeHashForReidScore(*block_itr);
+      uint64_t reid_hash = block_itr->ComputeHashForReidScore();
 
       // Report to UKM in a separate task in order to avoid re-entrancy.
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&ReportHashForReidScore,
                                     block_itr->reid_surface_key(), reid_hash));
 
@@ -194,33 +223,8 @@ void PrivacyBudgetReidScoreEstimator::WriteReportedReidBlocksToPrefs() const {
       EncodeIdentifiabilityFieldTrialParam(already_reported_reid_blocks_));
 }
 
-uint64_t PrivacyBudgetReidScoreEstimator::ComputeHashForReidScore(
-    const ReidBlockStorage& reid_block) {
-  std::vector<uint64_t> tokens;
-  uint64_t salt = base::RandGenerator(reid_block.salt_range());
-
-  tokens.emplace_back(salt);
-  for (blink::IdentifiableToken value : reid_block.GetValues()) {
-    tokens.emplace_back(static_cast<uint64_t>(value.ToUkmMetricValue()));
-  }
-  // Initialize Reid hash with random noise.
-  uint64_t reid_hash = base::RandUint64();
-  // Calculate the real hash if the random number is greater than the Reid noise
-  // probability.
-  if (base::RandDouble() >= reid_block.noise_probability()) {
-    // Use the hash function embedded in IdentifiableToken.
-    reid_hash = blink::IdentifiabilityDigestOfBytes(
-        base::as_bytes(base::make_span(tokens)));
-  }
-  // Create mask based on reid_bits required.
-  constexpr uint64_t kTypedOne = 1;
-  uint64_t mask = (kTypedOne << reid_block.number_of_bits()) - 1;
-  uint64_t needed_bits = reid_hash & mask;
-  // Return salt in the left 32 bits and Reid b-bits hash in the right 32 bits.
-  return ((salt << 32) | needed_bits);
-}
-
 void PrivacyBudgetReidScoreEstimator::ResetPersistedState() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   pref_service_->ClearPref(prefs::kPrivacyBudgetReportedReidBlocks);
   already_reported_reid_blocks_.clear();
   surface_blocks_.clear();

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "components/policy/core/common/policy_types.h"
 #include "components/policy/core/common/schema_map.h"
 #include "components/policy/core/common/schema_registry.h"
 
@@ -45,8 +46,9 @@ bool SchemaRegistryTrackingPolicyProvider::IsFirstPolicyLoadComplete(
   return state_ == READY;
 }
 
-void SchemaRegistryTrackingPolicyProvider::RefreshPolicies() {
-  delegate_->RefreshPolicies();
+void SchemaRegistryTrackingPolicyProvider::RefreshPolicies(
+    PolicyFetchReason reason) {
+  delegate_->RefreshPolicies(reason);
 }
 
 void SchemaRegistryTrackingPolicyProvider::OnSchemaRegistryReady() {
@@ -66,7 +68,7 @@ void SchemaRegistryTrackingPolicyProvider::OnSchemaRegistryReady() {
   }
 
   state_ = WAITING_FOR_REFRESH;
-  RefreshPolicies();
+  RefreshPolicies(PolicyFetchReason::kUnspecified);
 }
 
 void SchemaRegistryTrackingPolicyProvider::OnSchemaRegistryUpdated(
@@ -74,7 +76,7 @@ void SchemaRegistryTrackingPolicyProvider::OnSchemaRegistryUpdated(
   if (state_ != READY)
     return;
   if (has_new_schemas) {
-    RefreshPolicies();
+    RefreshPolicies(PolicyFetchReason::kUnspecified);
   } else {
     // Remove the policies that were being served for the component that have
     // been removed. This is important so that update notifications are also
@@ -90,16 +92,16 @@ void SchemaRegistryTrackingPolicyProvider::OnUpdatePolicy(
   if (state_ == WAITING_FOR_REFRESH)
     state_ = READY;
 
-  std::unique_ptr<PolicyBundle> bundle(new PolicyBundle());
+  PolicyBundle bundle;
   if (state_ == READY) {
-    bundle->CopyFrom(delegate_->policies());
-    schema_map()->FilterBundle(bundle.get(),
+    bundle = delegate_->policies().Clone();
+    schema_map()->FilterBundle(bundle,
                                /*drop_invalid_component_policies=*/true);
   } else {
     // Always pass on the Chrome policy, even if the components are not ready
     // yet.
     const PolicyNamespace chrome_ns(POLICY_DOMAIN_CHROME, "");
-    bundle->Get(chrome_ns) = delegate_->policies().Get(chrome_ns).Clone();
+    bundle.Get(chrome_ns) = delegate_->policies().Get(chrome_ns).Clone();
   }
 
   UpdatePolicy(std::move(bundle));

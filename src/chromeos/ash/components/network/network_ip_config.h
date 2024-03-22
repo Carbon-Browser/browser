@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 
-namespace chromeos {
+namespace ash {
 
 // ipconfig types (see flimflam/files/doc/ipconfig-api.txt)
 enum IPConfigType {
@@ -44,6 +44,6 @@ struct COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkIPConfig {
 
 typedef std::vector<NetworkIPConfig> NetworkIPConfigVector;
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_IP_CONFIG_H_

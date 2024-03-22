@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_consumer.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_consumer.h"
 
 @class TableViewItem;
 
 // Consumer protocol for Safe Browsing Privacy setting.
-@protocol PrivacySafeBrowsingConsumer <ChromeTableViewConsumer>
+@protocol PrivacySafeBrowsingConsumer <LegacyChromeTableViewConsumer>
 
 // Reload cells for items. Does nothing if the model is not loaded yet.
 - (void)reloadCellsForItems;

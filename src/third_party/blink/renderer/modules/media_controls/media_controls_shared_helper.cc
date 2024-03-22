@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,8 +79,7 @@ MediaControlsSharedHelpers::GetCurrentBufferedTimeRange(
 
   DCHECK(buffered_time_ranges);
 
-  if (std::isnan(duration) || std::isinf(duration) || !duration ||
-      std::isnan(current_time)) {
+  if (!std::isfinite(duration) || !duration || std::isnan(current_time)) {
     return absl::nullopt;
   }
 

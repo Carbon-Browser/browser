@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,11 +44,10 @@ std::string GetVersionString(WithExtendedStable with_extended_stable);
 // effect on Chrome OS Ash or Android due to lack of support for extended stable
 // on those configurations.
 //
-// On Windows, the channel name may be modified with additional information
-// after a hyphen (e.g., "canary-dcheck"). In branded builds, when the channel
-// cannot be determined, "unknown" will be returned. In unbranded builds, the
-// modifier is usually an empty string (""), although on Linux, it may vary in
-// certain distributions. To simply test the channel, use GetChannel().
+// In branded builds, when the channel cannot be determined, "unknown" will be
+// returned. In unbranded builds, the modifier is usually an empty string (""),
+// although on Linux, it may vary in certain distributions. To simply test the
+// channel, use GetChannel().
 std::string GetChannelName(WithExtendedStable with_extended_stable);
 
 // Returns the channel for the installation. In branded builds, this will be
@@ -103,6 +102,10 @@ void ClearChannelForTesting();
 // default user data directory, allowing multiple channels to run side-by-side.
 // In the stable channel and in unbranded builds, this returns the empty string.
 std::string GetChannelSuffixForDataDir();
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+std::string GetChannelSuffixForExtraFlagsEnvVarName();
 #endif
 
 // TODO(crbug.com/1052397): Revisit the macro expression once build flag switch

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ IntersectionObservation* ElementIntersectionObserverData::GetObservationFor(
   auto i = observations_.find(&observer);
   if (i == observations_.end())
     return nullptr;
-  return i->value;
+  return i->value.Get();
 }
 
 void ElementIntersectionObserverData::AddObservation(
@@ -63,9 +63,12 @@ bool ElementIntersectionObserverData::ComputeIntersectionsForTarget(
     unsigned flags) {
   bool needs_occlusion_tracking = false;
   absl::optional<base::TimeTicks> monotonic_time;
+  absl::optional<IntersectionGeometry::RootGeometry> root_geometry;
   for (auto& entry : observations_) {
     needs_occlusion_tracking |= entry.key->NeedsOcclusionTracking();
-    entry.value->ComputeIntersection(flags, monotonic_time);
+    entry.value->ComputeIntersection(flags,
+                                     IntersectionGeometry::kInfiniteScrollDelta,
+                                     monotonic_time, root_geometry);
   }
   return needs_occlusion_tracking;
 }
@@ -88,6 +91,7 @@ void ElementIntersectionObserverData::InvalidateCachedRects() {
 void ElementIntersectionObserverData::Trace(Visitor* visitor) const {
   visitor->Trace(observations_);
   visitor->Trace(observers_);
+  ElementRareDataField::Trace(visitor);
 }
 
 }  // namespace blink

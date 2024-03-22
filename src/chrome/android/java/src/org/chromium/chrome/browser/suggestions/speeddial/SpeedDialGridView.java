@@ -1,7 +1,6 @@
 package org.chromium.chrome.browser.suggestions.speeddial;
 
 import android.os.Bundle;
-import android.support.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,7 @@ class TestWebContents : public WebContentsImpl, public WebContentsTester {
   static TestWebContents* Create(const CreateParams& params);
 
   // WebContentsImpl overrides (returning the same values, but in Test* types)
+  const TestRenderFrameHost* GetPrimaryMainFrame() const override;
   TestRenderFrameHost* GetPrimaryMainFrame() override;
   TestRenderViewHost* GetRenderViewHost() override;
   // Overrides to avoid establishing Mojo connection with renderer process.
@@ -132,14 +133,13 @@ class TestWebContents : public WebContentsImpl, public WebContentsTester {
 
   void SetLastActiveTime(base::TimeTicks last_active_time) override;
 
+  void TestIncrementUsbActiveFrameCount() override;
+  void TestDecrementUsbActiveFrameCount() override;
+
   void TestIncrementBluetoothConnectedDeviceCount() override;
   void TestDecrementBluetoothConnectedDeviceCount() override;
 
   base::UnguessableToken GetAudioGroupId() override;
-
-  const blink::PortalToken& CreatePortal(
-      std::unique_ptr<WebContents> portal_web_contents) override;
-  WebContents* GetPortalContents(const blink::PortalToken&) override;
 
   void OnWebPreferencesChanged() override;
 
@@ -161,8 +161,21 @@ class TestWebContents : public WebContentsImpl, public WebContentsTester {
   std::unique_ptr<NavigationSimulator> AddPrerenderAndStartNavigation(
       const GURL& url) override;
   void ActivatePrerenderedPage(const GURL& url) override;
+  // This is equivalent to ActivatePrerenderedPage() except that this activates
+  // a prerendered page by navigation initiated by the address bar.
+  void ActivatePrerenderedPageFromAddressBar(const GURL& url);
 
   base::TimeTicks GetTabSwitchStartTime() final;
+
+  void SetPictureInPictureOptions(
+      absl::optional<blink::mojom::PictureInPictureWindowOptions> options)
+      override;
+
+  void SetOverscrollNavigationEnabled(bool enabled) override;
+  bool GetOverscrollNavigationEnabled() override;
+
+  void SetSafeAreaInsetsHost(
+      std::unique_ptr<SafeAreaInsetsHost> safe_area_insets_host);
 
  protected:
   // The deprecated WebContentsTester still needs to subclass this.
@@ -188,7 +201,7 @@ class TestWebContents : public WebContentsImpl, public WebContentsTester {
   void ShowCreatedWindow(RenderFrameHostImpl* opener,
                          int route_id,
                          WindowOpenDisposition disposition,
-                         const gfx::Rect& initial_rect,
+                         const blink::mojom::WindowFeatures& window_features,
                          bool user_gesture) override;
   void ShowCreatedWidget(int process_id,
                          int route_id,
@@ -202,6 +215,8 @@ class TestWebContents : public WebContentsImpl, public WebContentsTester {
   void ReattachToOuterWebContentsFrame() override {}
   void SetPageFrozen(bool frozen) override;
   bool IsBackForwardCacheSupported() override;
+  const absl::optional<blink::mojom::PictureInPictureWindowOptions>&
+  GetPictureInPictureOptions() const override;
 
   raw_ptr<RenderViewHostDelegateView> delegate_view_override_;
 
@@ -219,6 +234,9 @@ class TestWebContents : public WebContentsImpl, public WebContentsTester {
   bool is_page_frozen_;
   bool back_forward_cache_supported_ = true;
   base::TimeTicks tab_switch_start_time_;
+  absl::optional<blink::mojom::PictureInPictureWindowOptions>
+      picture_in_picture_options_;
+  bool overscroll_enabled_ = true;
 };
 
 }  // namespace content

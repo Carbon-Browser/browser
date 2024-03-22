@@ -1,23 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/web/lookalike_url_app_interface.h"
 
-#include "components/lookalikes/core/lookalike_url_util.h"
+#import "components/lookalikes/core/lookalike_url_util.h"
 #import "ios/chrome/browser/web/lookalike_url_constants.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/chrome/test/app/tab_test_util.h"
-#include "ios/components/security_interstitials/lookalikes/lookalike_url_container.h"
-#include "ios/components/security_interstitials/lookalikes/lookalike_url_error.h"
-#include "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
+#import "ios/components/security_interstitials/lookalikes/lookalike_url_container.h"
+#import "ios/components/security_interstitials/lookalikes/lookalike_url_error.h"
+#import "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
 #import "ios/web/public/navigation/web_state_policy_decider.h"
 #import "ios/web/public/web_state_user_data.h"
 #import "net/base/mac/url_conversions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -61,14 +57,14 @@ class LookalikeUrlDecider : public web::WebStatePolicyDecider,
       }
       lookalike_container->SetLookalikeUrlInfo(
           response_url.ReplaceComponents(safeReplacements), response_url,
-          LookalikeUrlMatchType::kSkeletonMatchTop5k);
+          lookalikes::LookalikeUrlMatchType::kSkeletonMatchTop5k);
       std::move(callback).Run(CreateLookalikeErrorDecision());
       return;
     }
     if (response_url.path() == kLookalikePageEmptyUrlPathForTesting) {
       lookalike_container->SetLookalikeUrlInfo(
           GURL::EmptyGURL(), response_url,
-          LookalikeUrlMatchType::kSkeletonMatchTop5k);
+          lookalikes::LookalikeUrlMatchType::kSkeletonMatchTop5k);
       std::move(callback).Run(CreateLookalikeErrorDecision());
       return;
     }

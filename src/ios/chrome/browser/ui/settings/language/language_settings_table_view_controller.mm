@@ -1,21 +1,30 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/language/language_settings_table_view_controller.h"
 
-#include "base/check_op.h"
-#include "base/mac/foundation_util.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#include "base/notreached.h"
-#include "components/password_manager/core/common/password_manager_features.h"
-#include "components/prefs/pref_service.h"
-#include "components/translate/core/browser/translate_pref_names.h"
-#include "ios/chrome/browser/application_context.h"
+#import "base/apple/foundation_util.h"
+#import "base/check_op.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/notreached.h"
+#import "components/password_manager/core/common/password_manager_features.h"
+#import "components/prefs/pref_service.h"
+#import "components/translate/core/browser/translate_pref_names.h"
 #import "ios/chrome/browser/net/crurl.h"
-#import "ios/chrome/browser/ui/list_model/list_item+Controller.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_item+Controller.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_cell.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_link_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_cell.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_cells_constants.h"
 #import "ios/chrome/browser/ui/settings/elements/enterprise_info_popover_view_controller.h"
 #import "ios/chrome/browser/ui/settings/language/add_language_table_view_controller.h"
@@ -26,24 +35,11 @@
 #import "ios/chrome/browser/ui/settings/language/language_settings_histograms.h"
 #import "ios/chrome/browser/ui/settings/language/language_settings_ui_constants.h"
 #import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_cell.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_cell.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "net/base/mac/url_conversions.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 
@@ -127,7 +123,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   self.navigationController.toolbarHidden = NO;
 }
 
-#pragma mark - ChromeTableViewController
+#pragma mark - LegacyChromeTableViewController
 
 - (void)loadModel {
   [super loadModel];
@@ -192,12 +188,6 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (void)updateUIForEditState {
   [super updateUIForEditState];
 
-  // The following two lines cause the table view to refresh the cell heights
-  // with animation without reloading the cells. This is needed for language
-  // cells that can be significantly taller in edit mode.
-  [self.tableView beginUpdates];
-  [self.tableView endUpdates];
-
   [self setAddLanguageItemEnabled:!self.isEditing];
   if (_translateSwitchItem) {
     [self setTranslateSwitchItemEnabled:!self.isEditing];
@@ -216,7 +206,10 @@ typedef NS_ENUM(NSInteger, ItemType) {
 }
 
 - (void)settingsWillBeDismissed {
+  // TODO(crbug.com/1454777)
+  DUMP_WILL_BE_CHECK(self.dataSource);
   [self.dataSource stopObservingModel];
+  self.dataSource = nil;
 }
 
 #pragma mark - UITableViewDelegate
@@ -231,7 +224,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     return UITableViewCellEditingStyleNone;
 
   // The last Translate-blocked language cannot be deleted.
-  LanguageItem* languageItem = base::mac::ObjCCastStrict<LanguageItem>(item);
+  LanguageItem* languageItem = base::apple::ObjCCastStrict<LanguageItem>(item);
   return ([languageItem isBlocked] && [self numberOfBlockedLanguages] <= 1)
              ? UITableViewCellEditingStyleNone
              : UITableViewCellEditingStyleDelete;
@@ -257,7 +250,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       (ItemType)[self.tableViewModel itemTypeForIndexPath:indexPath];
   switch (itemType) {
     case ItemTypeLanguage: {
-      LanguageItem* languageItem = base::mac::ObjCCastStrict<LanguageItem>(
+      LanguageItem* languageItem = base::apple::ObjCCastStrict<LanguageItem>(
           [self.tableViewModel itemAtIndexPath:indexPath]);
       languageItem.canOfferTranslate =
           [self canOfferTranslateForLanguage:languageItem];
@@ -333,7 +326,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
      forRowAtIndexPath:(NSIndexPath*)indexPath {
   DCHECK_EQ(editingStyle, UITableViewCellEditingStyleDelete);
 
-  LanguageItem* languageItem = base::mac::ObjCCastStrict<LanguageItem>(
+  LanguageItem* languageItem = base::apple::ObjCCastStrict<LanguageItem>(
       [self.tableViewModel itemAtIndexPath:indexPath]);
 
   // Update the model and the table view.
@@ -359,7 +352,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   // Update the model.
   TableViewModel* model = self.tableViewModel;
-  LanguageItem* languageItem = base::mac::ObjCCastStrict<LanguageItem>(
+  LanguageItem* languageItem = base::apple::ObjCCastStrict<LanguageItem>(
       [model itemAtIndexPath:sourceIndexPath]);
   [model removeItemWithType:ItemTypeLanguage
       fromSectionWithIdentifier:SectionIdentifierLanguages
@@ -385,7 +378,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   switch (itemType) {
     case ItemTypeTranslateSwitch: {
       TableViewSwitchCell* switchCell =
-          base::mac::ObjCCastStrict<TableViewSwitchCell>(cell);
+          base::apple::ObjCCastStrict<TableViewSwitchCell>(cell);
       [switchCell.switchView addTarget:self
                                 action:@selector(translateSwitchChanged:)
                       forControlEvents:UIControlEventValueChanged];
@@ -393,7 +386,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     }
     case ItemTypeTranslateManaged: {
       TableViewInfoButtonCell* managedCell =
-          base::mac::ObjCCastStrict<TableViewInfoButtonCell>(cell);
+          base::apple::ObjCCastStrict<TableViewInfoButtonCell>(cell);
       [managedCell.trailingButton
                  addTarget:self
                     action:@selector(didTapManagedUIInfoButton:)
@@ -565,7 +558,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
                                               NSUInteger idx, BOOL* stop) {
     if (item.type != ItemTypeLanguage)
       return;
-    LanguageItem* languageItem = base::mac::ObjCCastStrict<LanguageItem>(item);
+    LanguageItem* languageItem =
+        base::apple::ObjCCastStrict<LanguageItem>(item);
     if ([languageItem isBlocked])
       numberOfBlockedLanguages++;
   }];

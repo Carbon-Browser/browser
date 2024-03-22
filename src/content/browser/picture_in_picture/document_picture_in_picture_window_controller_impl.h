@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <map>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/common/content_export.h"
@@ -53,10 +53,12 @@ class CONTENT_EXPORT DocumentPictureInPictureWindowControllerImpl
   void CloseAndFocusInitiator() override;
   void OnWindowDestroyed(bool should_pause_video) override;
   WebContents* GetWebContents() override;
+  absl::optional<gfx::Rect> GetWindowBounds() override;
+  WebContents* GetChildWebContents() override;
+  absl::optional<url::Origin> GetOrigin() override;
 
   // DocumentPictureInPictureWindowController:
   void SetChildWebContents(WebContents* child_contents) override;
-  WebContents* GetChildWebContents() override;
 
   // WebContentsObserver:
   void WebContentsDestroyed() override;
@@ -105,6 +107,9 @@ class CONTENT_EXPORT DocumentPictureInPictureWindowControllerImpl
 
     // If the PiP window is destroyed, notify the opener.
     void WebContentsDestroyed() override;
+
+    // The PiP window should never be duplicated.
+    void DidCloneToNewWebContents(WebContents*, WebContents*) override;
 
    private:
     // Called, via post, to request that the pip session end.

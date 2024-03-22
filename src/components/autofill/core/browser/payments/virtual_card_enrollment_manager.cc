@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,10 @@
 #include "components/autofill/core/browser/metrics/payments/virtual_card_enrollment_metrics.h"
 #include "components/autofill/core/browser/payments/payments_util.h"
 #include "components/autofill/core/browser/payments/virtual_card_enrollment_flow.h"
-#include "components/autofill/core/browser/payments/virtual_card_enrollment_strike_database.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
-#include "components/autofill/core/browser/strike_database.h"
-#include "components/autofill/core/browser/strike_database_base.h"
+#include "components/autofill/core/browser/strike_databases/payments/virtual_card_enrollment_strike_database.h"
+#include "components/autofill/core/browser/strike_databases/strike_database.h"
+#include "components/autofill/core/browser/strike_databases/strike_database_base.h"
 #include "components/autofill/core/common/autofill_clock.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -30,6 +30,8 @@ VirtualCardEnrollmentFields::VirtualCardEnrollmentFields(
 VirtualCardEnrollmentFields& VirtualCardEnrollmentFields::operator=(
     const VirtualCardEnrollmentFields&) = default;
 VirtualCardEnrollmentFields::~VirtualCardEnrollmentFields() = default;
+bool VirtualCardEnrollmentFields::operator==(
+    const VirtualCardEnrollmentFields&) const = default;
 
 VirtualCardEnrollmentProcessState::VirtualCardEnrollmentProcessState() =
     default;
@@ -43,11 +45,11 @@ VirtualCardEnrollmentProcessState::~VirtualCardEnrollmentProcessState() =
 
 VirtualCardEnrollmentManager::VirtualCardEnrollmentManager(
     PersonalDataManager* personal_data_manager,
-    payments::PaymentsClient* payments_client,
+    payments::PaymentsNetworkInterface* payments_network_interface,
     AutofillClient* autofill_client)
     : autofill_client_(autofill_client),
       personal_data_manager_(personal_data_manager),
-      payments_client_(payments_client) {
+      payments_network_interface_(payments_network_interface) {
   // |autofill_client_| does not exist on Clank settings page where this flow
   // can also be triggered.
   if (base::FeatureList::IsEnabled(
@@ -64,10 +66,10 @@ VirtualCardEnrollmentManager::~VirtualCardEnrollmentManager() = default;
 void VirtualCardEnrollmentManager::InitVirtualCardEnroll(
     const CreditCard& credit_card,
     VirtualCardEnrollmentSource virtual_card_enrollment_source,
-    absl::optional<
-        payments::PaymentsClient::GetDetailsForEnrollmentResponseDetails>
+    absl::optional<payments::PaymentsNetworkInterface::
+                       GetDetailsForEnrollmentResponseDetails>
         get_details_for_enrollment_response_details,
-    const raw_ptr<PrefService> user_prefs,
+    PrefService* user_prefs,
     RiskAssessmentFunction risk_assessment_function,
     VirtualCardEnrollmentFieldsLoadedCallback
         virtual_card_enrollment_fields_loaded_callback) {
@@ -127,7 +129,7 @@ void VirtualCardEnrollmentManager::Enroll(
   LogUpdateVirtualCardEnrollmentRequestAttempt(
       state_.virtual_card_enrollment_fields.virtual_card_enrollment_source,
       VirtualCardEnrollmentRequestType::kEnroll);
-  payments::PaymentsClient::UpdateVirtualCardEnrollmentRequestDetails
+  payments::PaymentsNetworkInterface::UpdateVirtualCardEnrollmentRequestDetails
       request_details;
   request_details.virtual_card_enrollment_source =
       state_.virtual_card_enrollment_fields.virtual_card_enrollment_source;
@@ -142,7 +144,7 @@ void VirtualCardEnrollmentManager::Enroll(
   virtual_card_enrollment_update_response_callback_ =
       std::move(virtual_card_enrollment_update_response_callback);
 
-  payments_client_->UpdateVirtualCardEnrollment(
+  payments_network_interface_->UpdateVirtualCardEnrollment(
       request_details,
       base::BindOnce(&VirtualCardEnrollmentManager::
                          OnDidGetUpdateVirtualCardEnrollmentResponse,
@@ -163,7 +165,7 @@ void VirtualCardEnrollmentManager::Unenroll(
       VirtualCardEnrollmentSource::kSettingsPage,
       VirtualCardEnrollmentRequestType::kUnenroll);
 
-  payments::PaymentsClient::UpdateVirtualCardEnrollmentRequestDetails
+  payments::PaymentsNetworkInterface::UpdateVirtualCardEnrollmentRequestDetails
       request_details;
   state_.virtual_card_enrollment_fields.virtual_card_enrollment_source =
       VirtualCardEnrollmentSource::kSettingsPage;
@@ -181,7 +183,7 @@ void VirtualCardEnrollmentManager::Unenroll(
   virtual_card_enrollment_update_response_callback_ =
       std::move(virtual_card_enrollment_update_response_callback);
 
-  payments_client_->UpdateVirtualCardEnrollment(
+  payments_network_interface_->UpdateVirtualCardEnrollment(
       request_details,
       base::BindOnce(&VirtualCardEnrollmentManager::
                          OnDidGetUpdateVirtualCardEnrollmentResponse,
@@ -271,6 +273,13 @@ void VirtualCardEnrollmentManager::SetSaveCardBubbleAcceptedTimestamp(
 void VirtualCardEnrollmentManager::OnDidGetUpdateVirtualCardEnrollmentResponse(
     VirtualCardEnrollmentRequestType type,
     AutofillClient::PaymentsRpcResult result) {
+  // Add a strike if enrollment attempt was not successful.
+  if (type == VirtualCardEnrollmentRequestType::kEnroll &&
+      result != AutofillClient::PaymentsRpcResult::kSuccess) {
+    AddStrikeToBlockOfferingVirtualCardEnrollment(base::NumberToString(
+        state_.virtual_card_enrollment_fields.credit_card.instrument_id()));
+  }
+
   LogUpdateVirtualCardEnrollmentRequestResult(
       state_.virtual_card_enrollment_fields.virtual_card_enrollment_source,
       type, result == AutofillClient::PaymentsRpcResult::kSuccess);
@@ -285,7 +294,7 @@ void VirtualCardEnrollmentManager::OnDidGetUpdateVirtualCardEnrollmentResponse(
 }
 
 void VirtualCardEnrollmentManager::Reset() {
-  payments_client_->CancelRequest();
+  payments_network_interface_->CancelRequest();
   weak_ptr_factory_.InvalidateWeakPtrs();
   state_ = VirtualCardEnrollmentProcessState();
   avatar_animation_complete_ = false;
@@ -350,6 +359,15 @@ void VirtualCardEnrollmentManager::ShowVirtualCardEnrollBubble() {
           weak_ptr_factory_.GetWeakPtr()));
 }
 
+void VirtualCardEnrollmentManager::OnVirtualCardEnrollmentBubbleCancelled() {
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillEnableUpdateVirtualCardEnrollment)) {
+    AddStrikeToBlockOfferingVirtualCardEnrollment(base::NumberToString(
+        state_.virtual_card_enrollment_fields.credit_card.instrument_id()));
+  }
+  Reset();
+}
+
 void VirtualCardEnrollmentManager::OnRiskDataLoadedForVirtualCard(
     const std::string& risk_data) {
   state_.risk_data = risk_data;
@@ -358,24 +376,10 @@ void VirtualCardEnrollmentManager::OnRiskDataLoadedForVirtualCard(
   // GetDetailsForEnrollmentResponseDetails were already received, then we
   // received it from the UploadCardResponseDetails. Thus, we can skip making
   // another GetDetailsForEnrollmentRequest and go straight to showing the
-  // bubble if the avatar animation is complete.
+  // bubble.
   if (state_.virtual_card_enrollment_fields.virtual_card_enrollment_source ==
           VirtualCardEnrollmentSource::kUpstream &&
       enroll_response_details_received_) {
-#if !BUILDFLAG(IS_ANDROID)
-    if (base::FeatureList::IsEnabled(
-            features::kAutofillEnableToolbarStatusChip) &&
-        base::FeatureList::IsEnabled(
-            features::kAutofillCreditCardUploadFeedback) &&
-        !avatar_animation_complete_) {
-      // If status chip and upload feedback is enabled, we need to make sure
-      // we wait for the upload card animation to complete before showing the
-      // virtual card enroll bubble, or else we will have a conflict and the
-      // virtual card enroll bubble will not show.
-      return;
-    }
-#endif
-
     // We are about to show the virtual card enroll bubble, so make sure the
     // card art image is set to then display in the bubble.
     EnsureCardArtImageIsSetBeforeShowingUI();
@@ -391,7 +395,7 @@ void VirtualCardEnrollmentManager::OnRiskDataLoadedForVirtualCard(
 }
 
 void VirtualCardEnrollmentManager::GetDetailsForEnroll() {
-  payments::PaymentsClient::GetDetailsForEnrollmentRequestDetails
+  payments::PaymentsNetworkInterface::GetDetailsForEnrollmentRequestDetails
       request_details;
   request_details.app_locale = personal_data_manager_->app_locale();
   request_details.risk_data = state_.risk_data.value_or("");
@@ -404,7 +408,7 @@ void VirtualCardEnrollmentManager::GetDetailsForEnroll() {
 
   get_details_for_enrollment_request_sent_timestamp_ = AutofillClock::Now();
 
-  payments_client_->GetVirtualCardEnrollmentDetails(
+  payments_network_interface_->GetVirtualCardEnrollmentDetails(
       request_details,
       base::BindOnce(
           &VirtualCardEnrollmentManager::OnDidGetDetailsForEnrollResponse,
@@ -415,8 +419,8 @@ void VirtualCardEnrollmentManager::GetDetailsForEnroll() {
 
 void VirtualCardEnrollmentManager::OnDidGetDetailsForEnrollResponse(
     AutofillClient::PaymentsRpcResult result,
-    const payments::PaymentsClient::GetDetailsForEnrollmentResponseDetails&
-        response) {
+    const payments::PaymentsNetworkInterface::
+        GetDetailsForEnrollmentResponseDetails& response) {
   if (get_details_for_enrollment_request_sent_timestamp_.has_value()) {
     LogGetDetailsForEnrollmentRequestLatency(
         state_.virtual_card_enrollment_fields.virtual_card_enrollment_source,
@@ -447,22 +451,6 @@ void VirtualCardEnrollmentManager::OnDidGetDetailsForEnrollResponse(
   DCHECK(IsValidGetDetailsForEnrollmentResponseDetails(response));
   SetGetDetailsForEnrollmentResponseDetails(response);
 
-#if !BUILDFLAG(IS_ANDROID)
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillEnableToolbarStatusChip) &&
-      base::FeatureList::IsEnabled(
-          features::kAutofillCreditCardUploadFeedback) &&
-      state_.virtual_card_enrollment_fields.virtual_card_enrollment_source ==
-          VirtualCardEnrollmentSource::kUpstream &&
-      !avatar_animation_complete_) {
-    // If status chip and upload feedback is enabled, we need to make sure
-    // we wait for the upload card animation to complete before showing the
-    // virtual card enroll bubble, or else we will have a conflict and the
-    // virtual card enroll bubble will not show.
-    return;
-  }
-#endif
-
   // We are about to show the UI for virtual card enrollment, so make sure the
   // card art image is set to then display in the bubble.
   EnsureCardArtImageIsSetBeforeShowingUI();
@@ -480,8 +468,8 @@ void VirtualCardEnrollmentManager::OnDidGetDetailsForEnrollResponse(
 }
 
 void VirtualCardEnrollmentManager::SetGetDetailsForEnrollmentResponseDetails(
-    const payments::PaymentsClient::GetDetailsForEnrollmentResponseDetails&
-        response) {
+    const payments::PaymentsNetworkInterface::
+        GetDetailsForEnrollmentResponseDetails& response) {
   enroll_response_details_received_ = true;
   state_.virtual_card_enrollment_fields.google_legal_message =
       std::move(response.google_legal_message);
@@ -508,7 +496,7 @@ void VirtualCardEnrollmentManager::EnsureCardArtImageIsSetBeforeShowingUI() {
   // The card art image might not be present in the upstream flow if the
   // chrome sync server has not synced down the card art url yet for the card
   // just uploaded.
-  raw_ptr<gfx::Image> cached_card_art_image =
+  gfx::Image* cached_card_art_image =
       personal_data_manager_->GetCachedCardArtImageForUrl(
           state_.virtual_card_enrollment_fields.credit_card.card_art_url());
   if (cached_card_art_image && !cached_card_art_image->IsEmpty()) {
@@ -549,7 +537,7 @@ void VirtualCardEnrollmentManager::SetInitialVirtualCardEnrollFields(
   // request to sync the |card_art_image|, and before showing the
   // VirtualCardEnrollmentBubble we will try to fetch the |card_art_image|
   // from the local cache.
-  raw_ptr<gfx::Image> card_art_image =
+  gfx::Image* card_art_image =
       personal_data_manager_->GetCreditCardArtImageForUrl(
           credit_card.card_art_url());
   if (card_art_image && !card_art_image->IsEmpty()) {
@@ -563,8 +551,9 @@ void VirtualCardEnrollmentManager::SetInitialVirtualCardEnrollFields(
 
 bool VirtualCardEnrollmentManager::
     IsValidGetDetailsForEnrollmentResponseDetails(
-        const payments::PaymentsClient::GetDetailsForEnrollmentResponseDetails&
-            get_details_for_enrollment_response_details) {
+        const payments::PaymentsNetworkInterface::
+            GetDetailsForEnrollmentResponseDetails&
+                get_details_for_enrollment_response_details) {
   if (get_details_for_enrollment_response_details.google_legal_message.empty())
     return false;
 
@@ -572,15 +561,6 @@ bool VirtualCardEnrollmentManager::
     return false;
 
   return true;
-}
-
-void VirtualCardEnrollmentManager::OnVirtualCardEnrollmentBubbleCancelled() {
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillEnableUpdateVirtualCardEnrollment)) {
-    AddStrikeToBlockOfferingVirtualCardEnrollment(base::NumberToString(
-        state_.virtual_card_enrollment_fields.credit_card.instrument_id()));
-  }
-  Reset();
 }
 
 }  // namespace autofill

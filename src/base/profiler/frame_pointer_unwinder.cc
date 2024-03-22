@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,9 @@ namespace {
 // `frame_pointer`.
 uintptr_t DecodeFrame(uintptr_t frame_pointer, uintptr_t* return_address) {
 #if BUILDFLAG(IS_APPLE)
-  if (__builtin_available(macOS 10.14, iOS 12, *))
+  if (__builtin_available(iOS 12, *)) {
     return pthread_stack_frame_decode_np(frame_pointer, return_address);
+  }
 #endif
   const uintptr_t* fp = reinterpret_cast<uintptr_t*>(frame_pointer);
   uintptr_t next_frame = *fp;
@@ -45,7 +46,7 @@ bool FramePointerUnwinder::CanUnwindFrom(const Frame& current_frame) const {
 
 UnwindResult FramePointerUnwinder::TryUnwind(RegisterContext* thread_context,
                                              uintptr_t stack_top,
-                                             std::vector<Frame>* stack) const {
+                                             std::vector<Frame>* stack) {
   // We expect the frame corresponding to the |thread_context| register state to
   // exist within |stack|.
   DCHECK_GT(stack->size(), 0u);

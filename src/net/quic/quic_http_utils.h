@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 #include "net/base/request_priority.h"
 #include "net/log/net_log_capture_mode.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_stream_priority.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_protocol.h"
 
 namespace net {
@@ -25,14 +26,14 @@ ConvertQuicPriorityToRequestPriority(spdy::SpdyPriority priority);
 
 // Converts a spdy::Http2HeaderBlock, stream_id and priority into NetLog event
 // parameters.
-NET_EXPORT base::Value QuicRequestNetLogParams(
+NET_EXPORT base::Value::Dict QuicRequestNetLogParams(
     quic::QuicStreamId stream_id,
     const spdy::Http2HeaderBlock* headers,
-    spdy::SpdyPriority priority,
+    quic::QuicStreamPriority priority,
     NetLogCaptureMode capture_mode);
 
 // Converts a spdy::Http2HeaderBlock and stream into NetLog event parameters.
-NET_EXPORT base::Value QuicResponseNetLogParams(
+NET_EXPORT base::Value::Dict QuicResponseNetLogParams(
     quic::QuicStreamId stream_id,
     bool fin_received,
     const spdy::Http2HeaderBlock* headers,

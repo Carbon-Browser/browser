@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_COMMON_GL_OZONE_EGL_H_
 #define UI_OZONE_COMMON_GL_OZONE_EGL_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/khronos/EGL/eglplatform.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_surface_egl.h"
@@ -24,7 +24,10 @@ class GLOzoneEGL : public GLOzone {
   ~GLOzoneEGL() override {}
 
   // GLOzone:
-  gl::GLDisplay* InitializeGLOneOffPlatform(uint64_t system_device_id) override;
+  gl::GLDisplay* InitializeGLOneOffPlatform(
+      bool supports_angle,
+      std::vector<gl::DisplayType> init_displays,
+      gl::GpuPreference gpu_preference) override;
   bool InitializeStaticGLBindings(
       const gl::GLImplementationParts& implementation) override;
   void SetDisabledExtensionsPlatform(
@@ -49,10 +52,13 @@ class GLOzoneEGL : public GLOzone {
       gl::GLSurface* compatible_surface,
       const gl::GLContextAttribs& attribs) override;
   scoped_refptr<gl::GLSurface> CreateViewGLSurface(
+      gl::GLDisplay* display,
       gfx::AcceleratedWidget window) override = 0;
-  scoped_refptr<gl::GLSurface> CreateSurfacelessViewGLSurface(
+  scoped_refptr<gl::Presenter> CreateSurfacelessViewGLSurface(
+      gl::GLDisplay* display,
       gfx::AcceleratedWidget window) override;
   scoped_refptr<gl::GLSurface> CreateOffscreenGLSurface(
+      gl::GLDisplay* display,
       const gfx::Size& size) override = 0;
 
  protected:

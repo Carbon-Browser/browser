@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.Log;
-import org.chromium.chrome.browser.bookmarks.BookmarkBridge;
-import org.chromium.chrome.browser.bookmarks.BookmarkBridge.BookmarkItem;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.bookmarks.BookmarkModel;
-import org.chromium.chrome.browser.bookmarks.BookmarkUndoController;
 import org.chromium.chrome.browser.bookmarks.BookmarkUtils;
-import org.chromium.chrome.browser.bookmarks.ReadingListFeatures;
-import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.bookmarks.BookmarkId;
+import org.chromium.components.bookmarks.BookmarkItem;
 import org.chromium.components.bookmarks.BookmarkType;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.embedder_support.util.UrlUtilities;
@@ -44,45 +41,34 @@ public final class ReadingListUtils {
         return UrlUtilities.isHttpOrHttps(url);
     }
 
-    /** Removes from the reading list the entry for the current tab. */
-    public static void deleteFromReadingList(final BookmarkModel bookmarkModel,
-            SnackbarManager snackbarManager, Activity activity, Tab currentTab) {
-        // This undo controller will dismiss itself when any action is taken.
-        BookmarkUndoController.createOneshotBookmarkUndoController(
-                activity, bookmarkModel, snackbarManager);
-        bookmarkModel.finishLoadingBookmarkModel(() -> {
-            BookmarkBridge.BookmarkItem bookmarkItem =
-                    bookmarkModel.getReadingListItem(currentTab.getOriginalUrl());
-            bookmarkModel.deleteBookmarks(bookmarkItem.getId());
-        });
-    }
-
     /**
      * Determines if the given {@link BookmarkId} is a type-swappable reading list item.
      * @param id The BookmarkId to check.
      * @return Whether the given {@link BookmarkId} is a type-swappable reading list item.
      */
     public static boolean isSwappableReadingListItem(@Nullable BookmarkId id) {
-        return ReadingListFeatures.shouldAllowBookmarkTypeSwapping()
-                && id.getType() == BookmarkType.READING_LIST;
+        return id.getType() == BookmarkType.READING_LIST;
     }
 
     /**
-     * Attempts to type swap and show the save flow when the "Add to reading list" menu item
-     * is selected but there's an existing bookmark.
+     * Attempts to type swap and show the save flow when the "Add to reading list" menu item is
+     * selected but there's an existing bookmark.
      *
      * @param activity The current Activity.
      * @param bottomsheetController The BottomsheetController, used to show the save flow.
-     * @param bookmarkBridge The BookmarkBridge which is used for bookmark operations.
+     * @param bookmarkModel The BookmarkModel which is used for bookmark operations.
      * @param bookmarkId The existing BookmarkId.
      * @param bookmarkType The intended bookmark type.
      * @return Whether the given bookmark item has been type-swapped and the save flow shown.
      */
-    public static boolean maybeTypeSwapAndShowSaveFlow(@NonNull Activity activity,
+    public static boolean maybeTypeSwapAndShowSaveFlow(
+            @NonNull Activity activity,
             @NonNull BottomSheetController bottomsheetController,
-            @NonNull BookmarkBridge bookmarkBridge, @NonNull BookmarkId bookmarkId,
-            @BookmarkType int bookmarkType) {
-        if (!ReadingListFeatures.shouldAllowBookmarkTypeSwapping() || bookmarkId == null
+            @NonNull BookmarkModel bookmarkModel,
+            @NonNull BookmarkId bookmarkId,
+            @BookmarkType int bookmarkType,
+            @NonNull Profile profile) {
+        if (bookmarkId == null
                 || bookmarkId.getType() != BookmarkType.NORMAL
                 || bookmarkType != BookmarkType.READING_LIST) {
             return false;
@@ -93,17 +79,25 @@ public final class ReadingListUtils {
         List<BookmarkId> bookmarkIds = new ArrayList<>();
         bookmarkIds.add(bookmarkId);
         List<BookmarkId> typeSwappedBookmarks = new ArrayList<>();
-        typeSwapBookmarksIfNecessary(bookmarkBridge, bookmarkIds, typeSwappedBookmarks,
-                bookmarkBridge.getReadingListFolder());
+        typeSwapBookmarksIfNecessary(
+                bookmarkModel,
+                bookmarkIds,
+                typeSwappedBookmarks,
+                bookmarkModel.getReadingListFolder());
 
         assert typeSwappedBookmarks.size() == 1;
         if (typeSwappedBookmarks.size() != 1) return false;
 
         BookmarkId newBookmark = typeSwappedBookmarks.get(0);
         if (Boolean.TRUE.equals(sSkipShowSaveFlowForTesting)) return true;
-        BookmarkUtils.showSaveFlow(activity, bottomsheetController,
-                /*fromExplicitTrackUi=*/false, newBookmark,
-                /*wasBookmarkMoved=*/true);
+        BookmarkUtils.showSaveFlow(
+                activity,
+                bottomsheetController,
+                /* fromExplicitTrackUi= */ false,
+                newBookmark,
+                /* wasBookmarkMoved= */ true,
+                /* isNewBookmark= */ false,
+                profile);
         return true;
     }
 
@@ -111,18 +105,18 @@ public final class ReadingListUtils {
      * Performs type swapping on the given bookmarks if necessary. The input list will be modified,
      * removing bookmarks that have been type swapped and thus don't need to be moved.
      *
-     * @param bookmarkBridge The BookmarkBridge to perform add/delete operations.
+     * @param bookmarkModel The BookmarkModel to perform add/delete operations.
      * @param bookmarksToMove The List of bookmarks to potentially type swap.
      * @param typeSwappedBookmarks The list of bookmarks which have been type-swapped and thus don't
      *         need to be moved.
      * @param newParentId The new parentId to use, the {@link BookmarkType} of this is used to
      *         determine if type-swapping is necessary.
      */
-    public static void typeSwapBookmarksIfNecessary(BookmarkBridge bookmarkBridge,
-            List<BookmarkId> bookmarksToMove, List<BookmarkId> typeSwappedBookmarks,
+    public static void typeSwapBookmarksIfNecessary(
+            BookmarkModel bookmarkModel,
+            List<BookmarkId> bookmarksToMove,
+            List<BookmarkId> typeSwappedBookmarks,
             BookmarkId newParentId) {
-        if (!ReadingListFeatures.shouldAllowBookmarkTypeSwapping()) return;
-
         List<BookmarkId> outputList = new ArrayList<>();
         while (!bookmarksToMove.isEmpty()) {
             BookmarkId bookmarkId = bookmarksToMove.remove(0);
@@ -131,22 +125,26 @@ public final class ReadingListUtils {
                 continue;
             }
 
-            BookmarkItem existingBookmark = bookmarkBridge.getBookmarkById(bookmarkId);
+            BookmarkItem existingBookmark = bookmarkModel.getBookmarkById(bookmarkId);
             BookmarkId newBookmark = null;
             if (newParentId.getType() == BookmarkType.NORMAL) {
-                newBookmark = bookmarkBridge.addBookmark(newParentId,
-                        bookmarkBridge.getChildCount(newParentId), existingBookmark.getTitle(),
-                        existingBookmark.getUrl());
+                newBookmark =
+                        bookmarkModel.addBookmark(
+                                newParentId,
+                                bookmarkModel.getChildCount(newParentId),
+                                existingBookmark.getTitle(),
+                                existingBookmark.getUrl());
             } else if (newParentId.getType() == BookmarkType.READING_LIST) {
-                newBookmark = bookmarkBridge.addToReadingList(
-                        existingBookmark.getTitle(), existingBookmark.getUrl());
+                newBookmark =
+                        bookmarkModel.addToReadingList(
+                                existingBookmark.getTitle(), existingBookmark.getUrl());
             }
 
             if (newBookmark == null) {
                 Log.e(TAG, "Null bookmark after typeswapping.");
                 continue;
             }
-            bookmarkBridge.deleteBookmark(bookmarkId);
+            bookmarkModel.deleteBookmark(bookmarkId);
             typeSwappedBookmarks.add(newBookmark);
         }
 
@@ -156,6 +154,7 @@ public final class ReadingListUtils {
     /** For cases where GURLs are faked for testing (e.g. test pages). */
     public static void setReadingListSupportedForTesting(Boolean supported) {
         sReadingListSupportedForTesting = supported;
+        ResettersForTesting.register(() -> sReadingListSupportedForTesting = null);
     }
 
     /**
@@ -164,13 +163,13 @@ public final class ReadingListUtils {
      * @param isIncognito Whether the bookmark manager should open in incognito mode.
      */
     public static void showReadingList(boolean isIncognito) {
-        if (!ReadingListFeatures.isReadingListEnabled()) return;
         BookmarkUtils.showBookmarkManager(
-                null, new BookmarkId(0, BookmarkType.READING_LIST), /*isIncognito=*/isIncognito);
+                null, new BookmarkId(0, BookmarkType.READING_LIST), /* isIncognito= */ isIncognito);
     }
 
     /** For cases where we don't want to mock the entire bookmarks save flow infra. */
     public static void setSkipShowSaveFlowForTesting(Boolean skipShowSaveFlowForTesting) {
         sSkipShowSaveFlowForTesting = skipShowSaveFlowForTesting;
+        ResettersForTesting.register(() -> sSkipShowSaveFlowForTesting = null);
     }
 }

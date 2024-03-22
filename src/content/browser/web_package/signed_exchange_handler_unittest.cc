@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
@@ -30,7 +31,7 @@
 #include "net/base/features.h"
 #include "net/base/io_buffer.h"
 #include "net/base/load_flags.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/test_completion_callback.h"
 #include "net/cert/ct_policy_enforcer.h"
 #include "net/cert/mock_cert_verifier.h"
@@ -44,6 +45,7 @@
 #include "net/url_request/url_request_context_builder.h"
 #include "net/url_request/url_request_test_util.h"
 #include "services/network/network_context.h"
+#include "services/network/public/cpp/network_service_buildflags.h"
 #include "services/network/public/cpp/network_switches.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -68,41 +70,16 @@ const int kOutputBufferSize = 4096;
 
 constexpr char kTestSxgInnerURL[] = "https://test.example.org/test/";
 
+bool IsCTSupported() {
+#if BUILDFLAG(IS_CT_SUPPORTED)
+  return true;
+#else
+  return false;
+#endif
+}
+
 // "wildcard_example.org.public.pem.cbor" has dummy data in its "ocsp" field.
 constexpr base::StringPiece kDummyOCSPDer = "OCSP";
-
-// ExpectCTReporter implementation that logs a single report.
-class MockExpectCTReporter
-    : public net::TransportSecurityState::ExpectCTReporter {
- public:
-  MockExpectCTReporter() = default;
-  ~MockExpectCTReporter() override = default;
-
-  void OnExpectCTFailed(
-      const net::HostPortPair& host_port_pair,
-      const GURL& report_uri,
-      base::Time expiration,
-      const net::X509Certificate* validated_certificate_chain,
-      const net::X509Certificate* served_certificate_chain,
-      const net::SignedCertificateTimestampAndStatusList&
-          signed_certificate_timestamps,
-      const net::NetworkIsolationKey& network_isolation_key) override {
-    num_failures_++;
-    report_uri_ = report_uri;
-    network_isolation_key_ = network_isolation_key;
-  }
-
-  int num_failures() const { return num_failures_; }
-  const GURL& report_uri() const { return report_uri_; }
-  const net::NetworkIsolationKey& network_isolation_key() const {
-    return network_isolation_key_;
-  }
-
- private:
-  int num_failures_ = 0;
-  GURL report_uri_;
-  net::NetworkIsolationKey network_isolation_key_;
-};
 
 class TestBrowserClient : public ContentBrowserClient {
   bool CanAcceptUntrustedExchangesIfNeeded() override { return true; }
@@ -148,7 +125,7 @@ class MockSignedExchangeCertFetcherFactory
         base::as_bytes(base::make_span(cert_str_)), devtools_proxy);
     EXPECT_TRUE(cert_chain);
 
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), SignedExchangeLoadResult::kSuccess,
                        std::move(cert_chain), net::IPAddress()));
@@ -178,6 +155,8 @@ class GMockCertVerifier : public net::CertVerifier {
                    std::unique_ptr<net::CertVerifier::Request>* out_req,
                    const net::NetLogWithSource& net_log));
   MOCK_METHOD1(SetConfig, void(const net::CertVerifier::Config& config));
+  MOCK_METHOD1(AddObserver, void(Observer* observer));
+  MOCK_METHOD1(RemoveObserver, void(Observer* observer));
 };
 
 class MockCTPolicyEnforcer : public net::CTPolicyEnforcer {
@@ -240,6 +219,8 @@ class SignedExchangeHandlerTest
   }
 
   void TearDown() override {
+    source_ = nullptr;
+    mock_cert_fetcher_factory_ =nullptr;
     if (original_ignore_errors_spki_list_) {
       SignedExchangeCertificateChain::IgnoreErrorsSPKIList::
           SetInstanceForTesting(std::move(original_ignore_errors_spki_list_));
@@ -272,8 +253,8 @@ class SignedExchangeHandlerTest
   net::CertVerifyResult CreateCertVerifyResult() {
     net::CertVerifyResult result;
     result.cert_status = net::OK;
-    result.ocsp_result.response_status = net::OCSPVerifyResult::PROVIDED;
-    result.ocsp_result.revocation_status = net::OCSPRevocationStatus::GOOD;
+    result.ocsp_result.response_status = bssl::OCSPVerifyResult::PROVIDED;
+    result.ocsp_result.revocation_status = bssl::OCSPRevocationStatus::GOOD;
     return result;
   }
 
@@ -305,8 +286,8 @@ class SignedExchangeHandlerTest
   // returns the number of bytes read. If |output| is non-null, appends data
   // read to it.
   int ReadStream(net::SourceStream* stream, std::string* output) {
-    scoped_refptr<net::IOBuffer> output_buffer =
-        base::MakeRefCounted<net::IOBuffer>(kOutputBufferSize);
+    auto output_buffer =
+        base::MakeRefCounted<net::IOBufferWithSize>(kOutputBufferSize);
     int bytes_read = 0;
     while (true) {
       net::TestCompletionCallback callback;
@@ -368,7 +349,7 @@ class SignedExchangeHandlerTest
         std::move(source_stream_),
         base::BindOnce(&SignedExchangeHandlerTest::OnHeaderFound,
                        base::Unretained(this)),
-        std::move(cert_fetcher_factory_), network_isolation_key_,
+        std::move(cert_fetcher_factory_), network_anonymization_key_,
         absl::nullopt /* outer_request_isolation_info */, net::LOAD_NORMAL,
         net::IPEndPoint(),
         std::make_unique<blink::WebPackageRequestMatcher>(
@@ -389,9 +370,9 @@ class SignedExchangeHandlerTest
       absl::optional<SignedExchangeSignatureVerifier::Result> signature_result,
       absl::optional<int32_t> cert_result,
       absl::optional<net::ct::CTPolicyCompliance> ct_result,
-      absl::optional<net::OCSPVerifyResult::ResponseStatus>
+      absl::optional<bssl::OCSPVerifyResult::ResponseStatus>
           ocsp_response_status,
-      absl::optional<net::OCSPRevocationStatus> ocsp_revocation_status) {
+      absl::optional<bssl::OCSPRevocationStatus> ocsp_revocation_status) {
     // CertVerificationResult histogram records negated net::Error code.
     if (cert_result.has_value())
       *cert_result = -*cert_result;
@@ -407,15 +388,16 @@ class SignedExchangeHandlerTest
                              ocsp_revocation_status);
   }
 
-  // Sets the NetworkIsolationKey used by CreateSignedExchangeHandler().
-  void set_network_isolation_key(
-      const net::NetworkIsolationKey& network_isolation_key) {
-    network_isolation_key_ = network_isolation_key;
+  // Sets the NetworkAnonymizationKey used by CreateSignedExchangeHandler().
+  void set_network_anonymization_key(
+      const net::NetworkAnonymizationKey& network_anonymization_key) {
+    network_anonymization_key_ = network_anonymization_key;
   }
 
  protected:
   const base::HistogramTester histogram_tester_;
-  raw_ptr<MockSignedExchangeCertFetcherFactory> mock_cert_fetcher_factory_;
+  raw_ptr<MockSignedExchangeCertFetcherFactory>
+      mock_cert_fetcher_factory_;
   std::unique_ptr<net::CertVerifier> cert_verifier_;
   std::unique_ptr<MockCTPolicyEnforcer> mock_ct_policy_enforcer_;
   std::unique_ptr<MockSCTAuditingDelegate> mock_sct_auditing_delegate_;
@@ -457,7 +439,7 @@ class SignedExchangeHandlerTest
       original_ignore_errors_spki_list_;
   std::unique_ptr<net::MockSourceStream> source_stream_;
   std::unique_ptr<MockSignedExchangeCertFetcherFactory> cert_fetcher_factory_;
-  net::NetworkIsolationKey network_isolation_key_;
+  net::NetworkAnonymizationKey network_anonymization_key_;
 
   bool read_header_ = false;
   SignedExchangeLoadResult result_;
@@ -513,8 +495,11 @@ TEST_P(SignedExchangeHandlerTest, Simple) {
   EXPECT_EQ(rv, static_cast<int>(expected_payload.size()));
   ExpectHistogramValues(
       SignedExchangeSignatureVerifier::Result::kSuccess, net::OK,
-      net::ct::CTPolicyCompliance::CT_POLICY_COMPLIES_VIA_SCTS,
-      net::OCSPVerifyResult::PROVIDED, net::OCSPRevocationStatus::GOOD);
+      /*ct_result=*/
+      IsCTSupported() ? net::ct::CTPolicyCompliance::CT_POLICY_COMPLIES_VIA_SCTS
+                      : net::ct::CTPolicyCompliance::
+                            CT_POLICY_COMPLIANCE_DETAILS_NOT_AVAILABLE,
+      bssl::OCSPVerifyResult::PROVIDED, bssl::OCSPRevocationStatus::GOOD);
 }
 
 TEST_P(SignedExchangeHandlerTest, MimeType) {
@@ -751,7 +736,7 @@ TEST_P(SignedExchangeHandlerTest, OCSPNotChecked) {
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));
   net::CertVerifyResult cert_result = CreateCertVerifyResult();
-  cert_result.ocsp_result.response_status = net::OCSPVerifyResult::NOT_CHECKED;
+  cert_result.ocsp_result.response_status = bssl::OCSPVerifyResult::NOT_CHECKED;
   SetupMockCertVerifier("prime256v1-sha256.public.pem", cert_result);
   SetSourceStreamContents("test.example.org_test.sxg");
 
@@ -771,7 +756,7 @@ TEST_P(SignedExchangeHandlerTest, OCSPNotProvided) {
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));
   net::CertVerifyResult cert_result = CreateCertVerifyResult();
-  cert_result.ocsp_result.response_status = net::OCSPVerifyResult::MISSING;
+  cert_result.ocsp_result.response_status = bssl::OCSPVerifyResult::MISSING;
   SetupMockCertVerifier("prime256v1-sha256.public.pem", cert_result);
   SetSourceStreamContents("test.example.org_test.sxg");
 
@@ -791,7 +776,8 @@ TEST_P(SignedExchangeHandlerTest, OCSPInvalid) {
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));
   net::CertVerifyResult cert_result = CreateCertVerifyResult();
-  cert_result.ocsp_result.response_status = net::OCSPVerifyResult::INVALID_DATE;
+  cert_result.ocsp_result.response_status =
+      bssl::OCSPVerifyResult::INVALID_DATE;
   SetupMockCertVerifier("prime256v1-sha256.public.pem", cert_result);
   SetSourceStreamContents("test.example.org_test.sxg");
 
@@ -811,9 +797,9 @@ TEST_P(SignedExchangeHandlerTest, OCSPRevoked) {
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));
   net::CertVerifyResult cert_result = CreateCertVerifyResult();
-  cert_result.ocsp_result.response_status = net::OCSPVerifyResult::PROVIDED;
+  cert_result.ocsp_result.response_status = bssl::OCSPVerifyResult::PROVIDED;
   cert_result.ocsp_result.revocation_status =
-      net::OCSPRevocationStatus::REVOKED;
+      bssl::OCSPRevocationStatus::REVOKED;
   SetupMockCertVerifier("prime256v1-sha256.public.pem", cert_result);
   SetSourceStreamContents("test.example.org_test.sxg");
 
@@ -840,8 +826,8 @@ TEST_P(SignedExchangeHandlerTest, CertVerifierParams) {
   net::CertVerifyResult fake_result;
   fake_result.verified_cert = original_cert;
   fake_result.cert_status = net::OK;
-  fake_result.ocsp_result.response_status = net::OCSPVerifyResult::PROVIDED;
-  fake_result.ocsp_result.revocation_status = net::OCSPRevocationStatus::GOOD;
+  fake_result.ocsp_result.response_status = bssl::OCSPVerifyResult::PROVIDED;
+  fake_result.ocsp_result.revocation_status = bssl::OCSPRevocationStatus::GOOD;
 
   std::unique_ptr<GMockCertVerifier> gmock_cert_verifier =
       std::make_unique<GMockCertVerifier>();
@@ -876,6 +862,10 @@ TEST_P(SignedExchangeHandlerTest, CertVerifierParams) {
 }
 
 TEST_P(SignedExchangeHandlerTest, NotEnoughSCTsFromPubliclyTrustedCert) {
+  if (!IsCTSupported()) {
+    GTEST_SKIP() << "CT not supported";
+  }
+
   mock_cert_fetcher_factory_->ExpectFetch(
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));
@@ -907,19 +897,15 @@ TEST_P(SignedExchangeHandlerTest, NotEnoughSCTsFromPubliclyTrustedCert) {
 }
 
 TEST_P(SignedExchangeHandlerTest, ReportUsesNetworkIsolationKey) {
-  const net::NetworkIsolationKey kNetworkIsolationKey =
-      net::NetworkIsolationKey::CreateTransient();
+  if (!IsCTSupported()) {
+    GTEST_SKIP() << "CT not supported";
+  }
+
+  const net::NetworkAnonymizationKey kNetworkIsolationKey =
+      net::NetworkAnonymizationKey::CreateTransient();
   const GURL kReportUri = GURL("https://report.test/");
 
-  set_network_isolation_key(kNetworkIsolationKey);
-
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitWithFeatures(
-      // enabled_features
-      {net::TransportSecurityState::kDynamicExpectCTFeature,
-       net::features::kPartitionExpectCTStateByNetworkIsolationKey},
-      // disabled_features
-      {});
+  set_network_anonymization_key(kNetworkIsolationKey);
 
   mock_cert_fetcher_factory_->ExpectFetch(
       GURL("https://cert.example.org/cert.msg"),
@@ -937,13 +923,6 @@ TEST_P(SignedExchangeHandlerTest, ReportUsesNetworkIsolationKey) {
 
   std::unique_ptr<net::URLRequestContext> url_request_context =
       CreateTestURLRequestContext();
-  url_request_context->transport_security_state()->AddExpectCT(
-      "test.example.org", base::Time::Now() + base::Days(1) /* expiry */,
-      false /* include_subdomains */, kReportUri, kNetworkIsolationKey);
-  MockExpectCTReporter expect_ct_reporter;
-  url_request_context->transport_security_state()->SetExpectCTReporter(
-      &expect_ct_reporter);
-
   CreateSignedExchangeHandler(std::move(url_request_context));
   WaitForHeader();
 
@@ -958,13 +937,13 @@ TEST_P(SignedExchangeHandlerTest, ReportUsesNetworkIsolationKey) {
                         absl::nullopt /* ocsp_revocation_status */);
   // Drain the MockSourceStream, otherwise its destructer causes DCHECK failure.
   ReadStream(source_, nullptr);
-
-  ASSERT_EQ(1, expect_ct_reporter.num_failures());
-  EXPECT_EQ(kReportUri, expect_ct_reporter.report_uri());
-  EXPECT_EQ(kNetworkIsolationKey, expect_ct_reporter.network_isolation_key());
 }
 
 TEST_P(SignedExchangeHandlerTest, CTRequirementsMetForPubliclyTrustedCert) {
+  if (!IsCTSupported()) {
+    GTEST_SKIP() << "CT not supported";
+  }
+
   mock_cert_fetcher_factory_->ExpectFetch(
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));
@@ -988,14 +967,12 @@ TEST_P(SignedExchangeHandlerTest, CTRequirementsMetForPubliclyTrustedCert) {
   // EV status should be preserved.
   EXPECT_TRUE(resource_response().ssl_info->cert_status &
               net::CERT_STATUS_IS_EV);
-  EXPECT_FALSE(resource_response().ssl_info->cert_status &
-               net::CERT_STATUS_CT_COMPLIANCE_FAILED);
   EXPECT_EQ(net::ct::CTPolicyCompliance::CT_POLICY_COMPLIES_VIA_SCTS,
             resource_response().ssl_info->ct_policy_compliance);
   ExpectHistogramValues(
       SignedExchangeSignatureVerifier::Result::kSuccess, net::OK,
       net::ct::CTPolicyCompliance::CT_POLICY_COMPLIES_VIA_SCTS,
-      net::OCSPVerifyResult::PROVIDED, net::OCSPRevocationStatus::GOOD);
+      bssl::OCSPVerifyResult::PROVIDED, bssl::OCSPRevocationStatus::GOOD);
 
   std::string payload;
   int rv = ReadPayloadStream(&payload);
@@ -1005,13 +982,15 @@ TEST_P(SignedExchangeHandlerTest, CTRequirementsMetForPubliclyTrustedCert) {
 }
 
 TEST_P(SignedExchangeHandlerTest, CTNotRequiredForLocalAnchors) {
+  if (!IsCTSupported()) {
+    GTEST_SKIP() << "CT not supported";
+  }
   mock_cert_fetcher_factory_->ExpectFetch(
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));
 
   net::CertVerifyResult cert_result = CreateCertVerifyResult();
   cert_result.is_issued_by_known_root = false;  // Local anchor.
-  cert_result.cert_status = net::CERT_STATUS_IS_EV;
   SetupMockCertVerifier("prime256v1-sha256.public.pem", cert_result);
 
   // Lets the mock CT policy enforcer return CT_POLICY_NOT_ENOUGH_SCTS.
@@ -1026,17 +1005,12 @@ TEST_P(SignedExchangeHandlerTest, CTNotRequiredForLocalAnchors) {
   ASSERT_TRUE(read_header());
   EXPECT_EQ(SignedExchangeLoadResult::kSuccess, result());
   EXPECT_EQ(net::OK, error());
-  // EV status should be removed.
-  EXPECT_FALSE(resource_response().ssl_info->cert_status &
-               net::CERT_STATUS_IS_EV);
-  EXPECT_TRUE(resource_response().ssl_info->cert_status &
-              net::CERT_STATUS_CT_COMPLIANCE_FAILED);
   EXPECT_EQ(net::ct::CTPolicyCompliance::CT_POLICY_NOT_ENOUGH_SCTS,
             resource_response().ssl_info->ct_policy_compliance);
   ExpectHistogramValues(
       SignedExchangeSignatureVerifier::Result::kSuccess, net::OK,
       net::ct::CTPolicyCompliance::CT_POLICY_NOT_ENOUGH_SCTS,
-      net::OCSPVerifyResult::PROVIDED, net::OCSPRevocationStatus::GOOD);
+      bssl::OCSPVerifyResult::PROVIDED, bssl::OCSPRevocationStatus::GOOD);
 
   std::string payload;
   int rv = ReadPayloadStream(&payload);
@@ -1048,6 +1022,10 @@ TEST_P(SignedExchangeHandlerTest, CTNotRequiredForLocalAnchors) {
 // Test that SignedExchangeHandler calls CTPolicyEnforcer with appropriate
 // arguments.
 TEST_P(SignedExchangeHandlerTest, CTVerifierParams) {
+  if (!IsCTSupported()) {
+    GTEST_SKIP() << "CT not supported";
+  }
+
   mock_cert_fetcher_factory_->ExpectFetch(
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));
@@ -1096,6 +1074,9 @@ TEST_P(SignedExchangeHandlerTest, CTVerifierParams) {
 
 // Test that SignedExchangeHandler calls SCTAuditingDelegate to enqueue reports.
 TEST_P(SignedExchangeHandlerTest, SCTAuditingReportEnqueued) {
+  if (!IsCTSupported()) {
+    GTEST_SKIP() << "CT not supported";
+  }
   mock_cert_fetcher_factory_->ExpectFetch(
       GURL("https://cert.example.org/cert.msg"),
       GetTestFileContents("test.example.org.public.pem.cbor"));

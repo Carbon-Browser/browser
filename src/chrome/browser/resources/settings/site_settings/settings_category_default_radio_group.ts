@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
  * a certain category under Site Settings.
  */
 import '../settings_shared.css.js';
-import '../controls/settings_radio_group.js';
+import '/shared/settings/controls/settings_radio_group.js';
 import '../privacy_page/collapse_radio_button.js';
 
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
@@ -39,7 +39,7 @@ export interface SettingsCategoryDefaultRadioGroupElement {
 }
 
 const SettingsCategoryDefaultRadioGroupElementBase =
-    SiteSettingsMixin(WebUIListenerMixin(PolymerElement));
+    SiteSettingsMixin(WebUiListenerMixin(PolymerElement));
 
 export class SettingsCategoryDefaultRadioGroupElement extends
     SettingsCategoryDefaultRadioGroupElementBase {
@@ -111,21 +111,17 @@ export class SettingsCategoryDefaultRadioGroupElement extends
   blockOptionLabel: string;
   blockOptionSubLabel: string;
   blockOptionIcon: string;
-  private pref_: chrome.settingsPrivate.PrefObject;
+  private pref_: chrome.settingsPrivate.PrefObject<number>;
 
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'contentSettingCategoryChanged',
         (category: ContentSettingsTypes) => this.onCategoryChanged_(category));
   }
 
   private getAllowOptionForCategory_(): ContentSetting {
-    /**
-     * This list must be kept in sync with the list in
-     * category_default_setting.js
-     */
     switch (this.category) {
       case ContentSettingsTypes.ADS:
       case ContentSettingsTypes.BACKGROUND_SYNC:
@@ -142,6 +138,7 @@ export class SettingsCategoryDefaultRadioGroupElement extends
         // "Allowed" vs "Blocked".
         return ContentSetting.ALLOW;
       case ContentSettingsTypes.AR:
+      case ContentSettingsTypes.AUTO_PICTURE_IN_PICTURE:
       case ContentSettingsTypes.AUTOMATIC_DOWNLOADS:
       case ContentSettingsTypes.BLUETOOTH_DEVICES:
       case ContentSettingsTypes.BLUETOOTH_SCANNING:
@@ -153,12 +150,14 @@ export class SettingsCategoryDefaultRadioGroupElement extends
       case ContentSettingsTypes.IDLE_DETECTION:
       case ContentSettingsTypes.LOCAL_FONTS:
       case ContentSettingsTypes.MIC:
+      case ContentSettingsTypes.MIDI:
       case ContentSettingsTypes.MIDI_DEVICES:
       case ContentSettingsTypes.NOTIFICATIONS:
       case ContentSettingsTypes.SERIAL_PORTS:
+      case ContentSettingsTypes.STORAGE_ACCESS:
       case ContentSettingsTypes.USB_DEVICES:
       case ContentSettingsTypes.VR:
-      case ContentSettingsTypes.WINDOW_PLACEMENT:
+      case ContentSettingsTypes.WINDOW_MANAGEMENT:
         // "Ask" vs "Blocked".
         return ContentSetting.ASK;
       default:
@@ -211,6 +210,9 @@ export class SettingsCategoryDefaultRadioGroupElement extends
           break;
       }
       this.set('pref_.controlledBy', controlledBy);
+    } else {
+      this.set('pref_.enforcement', undefined);
+      this.set('pref_.controlledBy', undefined);
     }
 
     const enabled = this.computeIsSettingEnabled(update.setting);

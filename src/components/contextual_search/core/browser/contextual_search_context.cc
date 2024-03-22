@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,6 @@
 #include "components/translate/core/language_detection/language_detection_util.h"
 
 ContextualSearchContext::ContextualSearchContext() = default;
-
-ContextualSearchContext::ContextualSearchContext(
-    const std::string& home_country,
-    const GURL& page_url,
-    const std::string& encoding)
-    : can_resolve_(true),
-      can_send_base_page_url_(true),
-      home_country_(home_country),
-      base_page_url_(page_url),
-      base_page_encoding_(encoding) {}
-
 ContextualSearchContext::~ContextualSearchContext() = default;
 
 void ContextualSearchContext::SetResolveProperties(
@@ -48,7 +37,10 @@ void ContextualSearchContext::PrepareToResolve(
     const std::string& related_searches_stamp) {
   is_exact_resolve_ = is_exact_resolve;
   related_searches_stamp_ = related_searches_stamp;
-  do_related_searches_ = !related_searches_stamp_.empty();
+  if (!related_searches_stamp_.empty()) {
+    // Only RELATED_SEARCHES queries pass a stamp.
+    request_type_ = RequestType::RELATED_SEARCHES;
+  }
 }
 
 std::string ContextualSearchContext::DetectLanguage() const {

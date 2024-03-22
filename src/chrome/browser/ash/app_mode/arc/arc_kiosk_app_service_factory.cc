@@ -1,13 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/app_mode/arc/arc_kiosk_app_service_factory.h"
 
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs_factory.h"
 #include "chrome/browser/ash/app_mode/arc/arc_kiosk_app_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace ash {
 
@@ -15,18 +14,24 @@ namespace ash {
 ArcKioskAppService* ArcKioskAppServiceFactory::GetForBrowserContext(
     content::BrowserContext* context) {
   return static_cast<ArcKioskAppService*>(
-      GetInstance()->GetServiceForBrowserContext(context, true /* create */));
+      GetInstance()->GetServiceForBrowserContext(context, /*create=*/true));
 }
 
 // static
 ArcKioskAppServiceFactory* ArcKioskAppServiceFactory::GetInstance() {
-  return base::Singleton<ArcKioskAppServiceFactory>::get();
+  static base::NoDestructor<ArcKioskAppServiceFactory> instance;
+  return instance.get();
 }
 
 ArcKioskAppServiceFactory::ArcKioskAppServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ArcKioskAppService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ArcAppListPrefsFactory::GetInstance());
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_item.h"
 
 // SettingsImageDetailTextItem is an item that displays an image, a title and
 // a detail text (optional). This item uses multi-lines text field.
@@ -18,6 +18,9 @@
 // UIImageRenderingModeAlwaysTemplate.
 @property(nonatomic, strong) UIImage* image;
 
+// The image view's alpha.
+@property(nonatomic, assign) CGFloat imageViewAlpha;
+
 // The image View's tint color.
 @property(nonatomic, strong) UIColor* imageViewTintColor;
 
@@ -26,6 +29,9 @@
 
 // The title text to display.
 @property(nonatomic, copy) NSString* text;
+
+// UIColor for the cell's textLabel. If not set, `kTextPrimaryColor` is used.
+@property(nonatomic, strong) UIColor* textColor;
 
 // The attributed text to display.
 @property(nonatomic, copy) NSAttributedString* attributedText;

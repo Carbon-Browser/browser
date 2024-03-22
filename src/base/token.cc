@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,11 @@
 
 #include <inttypes.h>
 
+#include "base/check.h"
+#include "base/hash/hash.h"
 #include "base/pickle.h"
 #include "base/rand_util.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -20,6 +23,9 @@ Token Token::CreateRandom() {
   // Use base::RandBytes instead of crypto::RandBytes, because crypto calls the
   // base version directly, and to prevent the dependency from base/ to crypto/.
   base::RandBytes(&token, sizeof(token));
+
+  CHECK(!token.is_zero());
+
   return token;
 }
 
@@ -67,6 +73,10 @@ absl::optional<Token> ReadTokenFromPickle(PickleIterator* pickle_iterator) {
     return absl::nullopt;
 
   return Token(high, low);
+}
+
+size_t TokenHash::operator()(const Token& token) const {
+  return HashInts64(token.high(), token.low());
 }
 
 }  // namespace base

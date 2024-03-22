@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,7 @@ class WebViewTranslateClient : public translate::TranslateClient {
       PrefService* pref_service,
       translate::TranslateRanker* translate_ranker,
       language::LanguageModel* language_model,
+      language::UrlLanguageHistogram* url_language_histogram,
       web::WebState* web_state,
       language::AcceptLanguagesService* accept_languages);
 
@@ -75,15 +76,14 @@ class WebViewTranslateClient : public translate::TranslateClient {
   bool ShowTranslateUI(translate::TranslateStep step,
                        const std::string& source_language,
                        const std::string& target_language,
-                       translate::TranslateErrors::Type error_type,
+                       translate::TranslateErrors error_type,
                        bool triggered_from_menu) override;
   bool IsTranslatableURL(const GURL& url) override;
-  bool IsAutofillAssistantRunning() const override;
 
  private:
   PrefService* pref_service_;
-  translate::TranslateManager translate_manager_;
   translate::IOSTranslateDriver translate_driver_;
+  translate::TranslateManager translate_manager_;
   language::AcceptLanguagesService* accept_languages_;
 
   // ObjC class that wraps this class.

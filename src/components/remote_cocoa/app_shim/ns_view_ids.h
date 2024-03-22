@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class REMOTE_COCOA_APP_SHIM_EXPORT ScopedNSViewIdMapping {
   ~ScopedNSViewIdMapping();
 
  private:
-  NSView* const ns_view_;
+  NSView* const __strong ns_view_;
   const uint64_t ns_view_id_;
 };
 

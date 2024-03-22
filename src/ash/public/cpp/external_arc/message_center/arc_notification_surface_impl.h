@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/public/cpp/external_arc/message_center/arc_notification_surface.h"
+#include "base/memory/raw_ptr.h"
 
 namespace exo {
 class NotificationSurface;
@@ -42,8 +43,8 @@ class ArcNotificationSurfaceImpl : public ArcNotificationSurface {
   exo::NotificationSurface* surface() const { return surface_; }
 
  private:
-  exo::NotificationSurface* surface_;
-  views::NativeViewHost* native_view_host_ = nullptr;
+  raw_ptr<exo::NotificationSurface, ExperimentalAsh> surface_;
+  raw_ptr<views::NativeViewHost, ExperimentalAsh> native_view_host_ = nullptr;
   std::unique_ptr<aura::Window> native_view_;
   ui::AXTreeID ax_tree_id_ = ui::AXTreeIDUnknown();
 };

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,11 +74,14 @@ TEST(VideoEncodeAcceleratorConfigStructTraitTest, RoundTrip) {
 
   ::media::VideoEncodeAccelerator::Config input_config(
       ::media::PIXEL_FORMAT_NV12, kBaseSize, ::media::VP9PROFILE_PROFILE0,
-      kBitrate, kBaseFramerate, absl::nullopt, absl::nullopt, false,
-      ::media::VideoEncodeAccelerator::Config::StorageType::kGpuMemoryBuffer,
-      ::media::VideoEncodeAccelerator::Config::ContentType::kCamera,
-      input_spatial_layers,
-      ::media::VideoEncodeAccelerator::Config::InterLayerPredMode::kOnKeyPic);
+      kBitrate);
+  input_config.initial_framerate = kBaseFramerate;
+  input_config.storage_type =
+      ::media::VideoEncodeAccelerator::Config::StorageType::kGpuMemoryBuffer;
+  input_config.content_type =
+      ::media::VideoEncodeAccelerator::Config::ContentType::kCamera;
+  input_config.spatial_layers = input_spatial_layers;
+  input_config.inter_layer_pred = ::media::SVCInterLayerPredMode::kOnKeyPic;
 
   ::media::VideoEncodeAccelerator::Config output_config{};
   ASSERT_TRUE(mojo::test::SerializeAndDeserialize<

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,6 @@
 #import "ios/web/public/download/download_controller_delegate.h"
 #import "net/base/mac/url_conversions.h"
 #import "net/http/http_request_headers.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const char kDownloadControllerKey = 0;
@@ -88,7 +84,7 @@ void DownloadControllerImpl::CreateNativeDownloadTask(
     const std::string& content_disposition,
     int64_t total_bytes,
     const std::string& mime_type,
-    DownloadNativeTaskBridge* download) API_AVAILABLE(ios(15)) {
+    DownloadNativeTaskBridge* download) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!delegate_) {
     [download cancel];

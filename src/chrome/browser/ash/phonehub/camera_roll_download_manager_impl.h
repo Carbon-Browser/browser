@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,18 @@
 
 #include <string>
 
-#include "ash/components/phonehub/camera_roll_download_manager.h"
-#include "ash/components/phonehub/proto/phonehub_api.pb.h"
-#include "ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
 #include "base/files/safe_base_name.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service.h"
+#include "chromeos/ash/components/phonehub/camera_roll_download_manager.h"
+#include "chromeos/ash/components/phonehub/proto/phonehub_api.pb.h"
+#include "chromeos/ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
 
 namespace ash {
 namespace phonehub {
@@ -77,7 +78,8 @@ class CameraRollDownloadManagerImpl
   int CalculateItemTransferRate(const DownloadItem& download_item) const;
 
   const base::FilePath download_path_;
-  ash::HoldingSpaceKeyedService* holding_space_keyed_service_;
+  raw_ptr<ash::HoldingSpaceKeyedService, ExperimentalAsh>
+      holding_space_keyed_service_;
   // Performs blocking I/O operations for creating and deleting payload files.
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
 

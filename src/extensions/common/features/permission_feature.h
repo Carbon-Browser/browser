@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,8 @@ class PermissionFeature : public SimpleFeature {
       const GURL& url,
       Feature::Platform platform,
       int context_id,
-      bool check_developer_mode) const override;
+      bool check_developer_mode,
+      const ContextData& context_data) const override;
 };
 
 }  // namespace extensions

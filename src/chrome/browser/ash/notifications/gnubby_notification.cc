@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ void GnubbyNotification::CreateNotification() {
   const message_center::SystemNotificationWarningLevel colorType =
       message_center::SystemNotificationWarningLevel::NORMAL;
 
-  GnubbyNotification::notification_prompt_ = ash::CreateSystemNotification(
+  GnubbyNotification::notification_prompt_ = ash::CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE,
       GnubbyNotification::kNotificationID, title, message, std::u16string(),
       GURL(), message_center::NotifierId(),

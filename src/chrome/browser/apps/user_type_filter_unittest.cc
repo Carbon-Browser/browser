@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,9 @@
 
 #include "base/values.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/supervised_user/core/common/buildflags.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -20,13 +22,13 @@ namespace apps {
 namespace {
 
 // Helper that simulates Json file with embedded user type filter.
-std::unique_ptr<base::DictionaryValue> CreateJsonWithFilter(
+base::Value::Dict CreateJsonWithFilter(
     const std::vector<std::string>& user_types) {
-  auto root = std::make_unique<base::DictionaryValue>();
-  base::ListValue filter;
+  base::Value::List filter;
   for (const auto& user_type : user_types)
     filter.Append(base::Value(user_type));
-  root->SetKey(kKeyUserType, std::move(filter));
+  base::Value::Dict root;
+  root.Set(kKeyUserType, std::move(filter));
   return root;
 }
 
@@ -54,17 +56,17 @@ class UserTypeFilterTest : public testing::Test {
   }
 
   bool Match(const std::unique_ptr<TestingProfile>& profile,
-             const std::unique_ptr<base::Value>& json_root) {
-    return UserTypeMatchesJsonUserType(
-        DetermineUserType(profile.get()), std::string() /* app_id */,
-        json_root.get(), nullptr /* default_user_types */);
+             const base::Value::Dict& json_root) {
+    return UserTypeMatchesJsonUserType(DetermineUserType(profile.get()),
+                                       std::string() /* app_id */, json_root,
+                                       nullptr /* default_user_types */);
   }
 
   bool MatchDefault(const std::unique_ptr<TestingProfile>& profile,
-                    const base::ListValue& default_user_types) {
-    base::DictionaryValue json_root;
+                    const base::Value::List& default_user_types) {
+    base::Value::Dict json_root;
     return UserTypeMatchesJsonUserType(DetermineUserType(profile.get()),
-                                       std::string() /* app_id */, &json_root,
+                                       std::string() /* app_id */, json_root,
                                        &default_user_types);
   }
 
@@ -101,6 +103,18 @@ TEST_F(UserTypeFilterTest, ManagedUser) {
       profile, CreateJsonWithFilter({kUserTypeUnmanaged, kUserTypeManaged})));
 }
 
+#if BUILDFLAG(IS_CHROMEOS)
+TEST_F(UserTypeFilterTest, ManagedGuestUser) {
+  profiles::testing::ScopedTestManagedGuestSession test_managed_guest_session;
+  const auto profile = CreateProfile();
+  profile->GetProfilePolicyConnector()->OverrideIsManagedForTesting(true);
+  EXPECT_FALSE(Match(profile, CreateJsonWithFilter({kUserTypeManaged})));
+  EXPECT_TRUE(Match(profile, CreateJsonWithFilter({kUserTypeManagedGuest})));
+  EXPECT_TRUE(Match(profile, CreateJsonWithFilter(
+                                 {kUserTypeUnmanaged, kUserTypeManagedGuest})));
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 TEST_F(UserTypeFilterTest, UnmanagedUser) {
   EXPECT_TRUE(
       Match(CreateProfile(), CreateJsonWithFilter({kUserTypeUnmanaged})));
@@ -112,7 +126,7 @@ TEST_F(UserTypeFilterTest, EmptyFilter) {
 
 TEST_F(UserTypeFilterTest, DefaultFilter) {
   auto profile = CreateProfile();
-  base::ListValue default_filter;
+  base::Value::List default_filter;
   default_filter.Append(base::Value(kUserTypeUnmanaged));
   default_filter.Append(base::Value(kUserTypeGuest));
 

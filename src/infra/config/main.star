@@ -1,5 +1,5 @@
 #!/usr/bin/env lucicfg
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 # for information on starlark/lucicfg
 
 load("//lib/branches.star", "branches")
+load("//lib/chrome_settings.star", "chrome_settings")
 load("//project.star", "settings")
 
 lucicfg.check_version(
-    min = "1.31.1",
+    min = "1.40.0",
     message = "Update depot_tools",
 )
 
@@ -22,12 +23,16 @@ lucicfg.config(
     config_dir = "generated",
     tracked_files = [
         "builders/*/*/*",
+        "builders/gn_args_locations.json",
         "cq-builders.md",
         "cq-usage/default.cfg",
         "cq-usage/full.cfg",
+        "cq-usage/mega_cq_bots.txt",
+        "health-specs/health-specs.json",
         "luci/commit-queue.cfg",
-        "luci/chops-weetbix.cfg",
         "luci/cr-buildbucket.cfg",
+        "luci/luci-analysis.cfg",
+        "luci/luci-bisection.cfg",
         "luci/luci-logdog.cfg",
         "luci/luci-milo.cfg",
         "luci/luci-notify.cfg",
@@ -39,6 +44,7 @@ lucicfg.config(
         "outages.pyl",
         "sheriff-rotations/*.txt",
         "project.pyl",
+        "testing/*.pyl",
     ],
     fail_on_warnings = True,
     lint_checks = [
@@ -58,11 +64,16 @@ lucicfg.emit(
     data = io.read_file("tricium-prod.cfg"),
 )
 
-# Weetbix configuration is also copied verbatim to generated
-# outputs.
+# Just copy LUCI Analysis config to generated outputs.
 lucicfg.emit(
-    dest = "luci/chops-weetbix.cfg",
-    data = io.read_file("chops-weetbix.cfg"),
+    dest = "luci/luci-analysis.cfg",
+    data = io.read_file("luci-analysis.cfg"),
+)
+
+# Just copy LUCI Bisection config to generated outputs.
+lucicfg.emit(
+    dest = "luci/luci-bisection.cfg",
+    data = io.read_file("luci-bisection.cfg"),
 )
 
 luci.project(
@@ -95,7 +106,28 @@ luci.project(
     bindings = [
         luci.binding(
             roles = "role/configs.validator",
-            groups = "project-chromium-try-task-accounts",
+            groups = [
+                "project-chromium-try-task-accounts",
+                "project-chromium-ci-task-accounts",
+            ],
+        ),
+        # Roles for LUCI Analysis.
+        luci.binding(
+            roles = "role/analysis.reader",
+            groups = "all",
+        ),
+        luci.binding(
+            roles = "role/analysis.queryUser",
+            groups = "authenticated-users",
+        ),
+        luci.binding(
+            roles = "role/analysis.editor",
+            groups = ["project-chromium-committers", "googlers"],
+        ),
+        # Role for builder health indicators
+        luci.binding(
+            roles = "role/buildbucket.healthUpdater",
+            users = ["guterman@google.com", "generate-builder@cr-builder-health-indicators.iam.gserviceaccount.com", "tne@google.com"],
         ),
     ],
 )
@@ -116,6 +148,10 @@ luci.milo(
 
 luci.notify(
     tree_closing_enabled = True,
+)
+
+chrome_settings.per_builder_outputs(
+    root_dir = "builders",
 )
 
 # An all-purpose public realm.
@@ -166,6 +202,34 @@ luci.realm(
     ],
 )
 
+# Allows builders to write baselines and query ResultDB for new tests.
+# TODO(crbug/1465953) @project is not available, and @root should inherit into
+# project so we'll do this for now until @project is supported.
+luci.realm(
+    name = "@root",
+    bindings = [
+        luci.binding(
+            roles = "role/resultdb.baselineWriter",
+            groups = [
+                "project-chromium-ci-task-accounts",
+                "project-chromium-try-task-accounts",
+            ],
+            users = [
+                "chromium-orchestrator@chops-service-accounts.iam.gserviceaccount.com",
+            ],
+        ),
+        luci.binding(
+            roles = "role/resultdb.baselineReader",
+            groups = [
+                "project-chromium-try-task-accounts",
+            ],
+            users = [
+                "chromium-orchestrator@chops-service-accounts.iam.gserviceaccount.com",
+            ],
+        ),
+    ],
+)
+
 luci.realm(
     name = "webrtc",
     bindings = [
@@ -182,15 +246,26 @@ luci.builder.defaults.test_presentation.set(resultdb.test_presentation(grouping_
 exec("//swarming.star")
 
 exec("//recipes.star")
+exec("//gn_args/gn_args.star")
+exec("//targets/basic_suites.star")
+exec("//targets/compound_suites.star")
+exec("//targets/matrix_compound_suites.star")
+exec("//targets/mixins.star")
+exec("//targets/targets.star")
+exec("//targets/variants.star")
 
 exec("//notifiers.star")
 
+exec("//subprojects/build/subproject.star")
+exec("//subprojects/chrome/subproject.star")
 exec("//subprojects/chromium/subproject.star")
+exec("//subprojects/infra.star")
 branches.exec("//subprojects/codesearch/subproject.star")
 branches.exec("//subprojects/findit/subproject.star")
 branches.exec("//subprojects/flakiness/subproject.star")
 branches.exec("//subprojects/goma/subproject.star")
 branches.exec("//subprojects/reclient/subproject.star")
+branches.exec("//subprojects/reviver/subproject.star")
 branches.exec("//subprojects/webrtc/subproject.star")
 
 exec("//generators/cq-usage.star")
@@ -198,6 +273,9 @@ branches.exec("//generators/cq-builders-md.star")
 
 exec("//generators/sort-consoles.star")
 
+# Execute validators after eveything except the outage file so that we're
+# validating the final non-outages configuration
+exec("//validators/builder-group-triggers.star")
 exec("//validators/builders-in-consoles.star")
 
 # Execute this file last so that any configuration changes needed for handling

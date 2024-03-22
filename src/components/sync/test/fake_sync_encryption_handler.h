@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "base/time/time.h"
 #include "components/sync/engine/nigori/keystore_keys_handler.h"
 #include "components/sync/engine/sync_encryption_handler.h"
-#include "components/sync/test/engine/fake_cryptographer.h"
+#include "components/sync/test/fake_cryptographer.h"
 
 namespace syncer {
 

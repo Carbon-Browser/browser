@@ -1,20 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/media/audio/audio_renderer_mixer_manager.h"
 
-#include <algorithm>
 #include <limits>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "build/build_config.h"
 #include "media/audio/audio_device_description.h"
 #include "media/base/audio_renderer_mixer.h"
@@ -29,7 +30,7 @@ namespace {
 media::AudioParameters GetMixerOutputParams(
     const media::AudioParameters& input_params,
     const media::AudioParameters& hardware_params,
-    media::AudioLatency::LatencyType latency) {
+    media::AudioLatency::Type latency) {
   // For a compressed bitstream, no audio post processing is allowed, hence the
   // output parameters should be the same as input parameters.
   if (input_params.IsBitstreamFormat())
@@ -48,7 +49,7 @@ media::AudioParameters GetMixerOutputParams(
 
     // For playback, prefer the input params buffer size unless the hardware
     // needs something even larger (say for Bluetooth devices).
-    if (latency == media::AudioLatency::LATENCY_PLAYBACK) {
+    if (latency == media::AudioLatency::Type::kPlayback) {
       preferred_output_buffer_size =
           std::max(input_params.frames_per_buffer(),
                    hardware_params.frames_per_buffer());
@@ -65,19 +66,19 @@ media::AudioParameters GetMixerOutputParams(
 
   // Adjust output buffer size according to the latency requirement.
   switch (latency) {
-    case media::AudioLatency::LATENCY_INTERACTIVE:
+    case media::AudioLatency::Type::kInteractive:
       output_buffer_size = media::AudioLatency::GetInteractiveBufferSize(
           hardware_params.frames_per_buffer());
       break;
-    case media::AudioLatency::LATENCY_RTC:
+    case media::AudioLatency::Type::kRtc:
       output_buffer_size = media::AudioLatency::GetRtcBufferSize(
           output_sample_rate, preferred_output_buffer_size);
       break;
-    case media::AudioLatency::LATENCY_PLAYBACK:
+    case media::AudioLatency::Type::kPlayback:
       output_buffer_size = media::AudioLatency::GetHighLatencyBufferSize(
           output_sample_rate, preferred_output_buffer_size);
       break;
-    case media::AudioLatency::LATENCY_EXACT_MS:
+    case media::AudioLatency::Type::kExactMS:
     // TODO(olka): add support when WebAudio requires it.
     default:
       NOTREACHED();
@@ -86,12 +87,8 @@ media::AudioParameters GetMixerOutputParams(
   DCHECK_NE(output_buffer_size, 0);
 
   media::AudioParameters params(input_params.format(),
-                                input_params.channel_layout(),
+                                input_params.channel_layout_config(),
                                 output_sample_rate, output_buffer_size);
-
-  // Use the actual channel count when the channel layout is "DISCRETE".
-  if (input_params.channel_layout() == media::CHANNEL_LAYOUT_DISCRETE)
-    params.set_channels_for_discrete(input_params.channels());
 
   // Specify the effects info the passed to the browser side.
   params.set_effects(input_params.effects());
@@ -122,7 +119,7 @@ AudioRendererMixerManager::CreateInput(
     const blink::LocalFrameToken& source_frame_token,
     const base::UnguessableToken& session_id,
     const std::string& device_id,
-    media::AudioLatency::LatencyType latency) {
+    media::AudioLatency::Type latency) {
   // AudioRendererMixerManager lives on the renderer thread and is destroyed on
   // renderer thread destruction, so it's safe to pass its pointer to a mixer
   // input.
@@ -137,7 +134,7 @@ AudioRendererMixerManager::CreateInput(
 media::AudioRendererMixer* AudioRendererMixerManager::GetMixer(
     const blink::LocalFrameToken& source_frame_token,
     const media::AudioParameters& input_params,
-    media::AudioLatency::LatencyType latency,
+    media::AudioLatency::Type latency,
     const media::OutputDeviceInfo& sink_info,
     scoped_refptr<media::AudioRendererSink> sink) {
   // Ownership of the sink must be given to GetMixer().
@@ -171,7 +168,8 @@ media::AudioRendererMixer* AudioRendererMixerManager::GetMixer(
   media::AudioRendererMixer* mixer =
       new media::AudioRendererMixer(mixer_output_params, std::move(sink));
   mixers_[key] = {mixer, 1};
-  DVLOG(1) << __func__ << " mixer: " << mixer << " latency: " << latency
+  DVLOG(1) << __func__ << " mixer: " << mixer
+           << " latency: " << base::to_underlying(latency)
            << "\n input: " << input_params.AsHumanReadableString()
            << "\noutput: " << mixer_output_params.AsHumanReadableString();
   return mixer;
@@ -188,7 +186,7 @@ scoped_refptr<media::AudioRendererSink> AudioRendererMixerManager::GetSink(
 media::AudioRendererMixer* AudioRendererMixerManager::GetMixer(
     const base::UnguessableToken& source_frame_token,
     const media::AudioParameters& input_params,
-    media::AudioLatency::LatencyType latency,
+    media::AudioLatency::Type latency,
     const media::OutputDeviceInfo& sink_info,
     scoped_refptr<media::AudioRendererSink> sink) {
   // Ownership of the sink must be given to GetMixer().
@@ -202,10 +200,10 @@ media::AudioRendererMixer* AudioRendererMixerManager::GetMixer(
 
 void AudioRendererMixerManager::ReturnMixer(media::AudioRendererMixer* mixer) {
   base::AutoLock auto_lock(mixers_lock_);
-  auto it = std::find_if(
-      mixers_.begin(), mixers_.end(),
-      [mixer](const std::pair<MixerKey, AudioRendererMixerReference>& val) {
-        return val.second.mixer == mixer;
+  auto it = base::ranges::find(
+      mixers_, mixer,
+      [](const std::pair<MixerKey, AudioRendererMixerReference>& val) {
+        return val.second.mixer;
       });
   DCHECK(it != mixers_.end());
 
@@ -228,7 +226,7 @@ scoped_refptr<media::AudioRendererSink> AudioRendererMixerManager::GetSink(
 AudioRendererMixerManager::MixerKey::MixerKey(
     const blink::LocalFrameToken& source_frame_token,
     const media::AudioParameters& params,
-    media::AudioLatency::LatencyType latency,
+    media::AudioLatency::Type latency,
     const std::string& device_id)
     : source_frame_token(source_frame_token),
       params(params),

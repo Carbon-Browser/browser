@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,12 @@ const char* TaskTypeNames::TaskTypeToString(TaskType task_type) {
       return "Networking";
     case TaskType::kNetworkingUnfreezable:
       return "NetworkingUnfreezable";
+    case TaskType::kNetworkingUnfreezableImageLoading:
+      return "NetworkingUnfreezableImageLoading";
     case TaskType::kNetworkingControl:
       return "NetworkingControl";
+    case TaskType::kLowPriorityScriptExecution:
+      return "LowPriorityScriptExecution";
     case TaskType::kHistoryTraversal:
       return "HistoryTraversal";
     case TaskType::kEmbed:
@@ -77,6 +81,8 @@ const char* TaskTypeNames::TaskTypeToString(TaskType task_type) {
       return "ServiceWorkerClientMessage";
     case TaskType::kWebLocks:
       return "WebLocks";
+    case TaskType::kStorage:
+      return "Storage";
     case TaskType::kInternalDefault:
       return "InternalDefault";
     case TaskType::kInternalLoading:
@@ -95,6 +101,8 @@ const char* TaskTypeNames::TaskTypeToString(TaskType task_type) {
       return "InternalInspector";
     case TaskType::kMainThreadTaskQueueV8:
       return "MainThreadTaskQueueV8";
+    case TaskType::kMainThreadTaskQueueV8LowPriority:
+      return "MainThreadTaskQueueV8LowPriority";
     case TaskType::kMainThreadTaskQueueCompositor:
       return "MainThreadTaskQueueCompositor";
     case TaskType::kMainThreadTaskQueueDefault:

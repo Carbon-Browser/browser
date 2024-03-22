@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,6 @@ void FakeIntentHelperHost::FactoryResetArc() {}
 void FakeIntentHelperHost::OpenWallpaperPicker() {}
 void FakeIntentHelperHost::OpenVolumeControl() {}
 void FakeIntentHelperHost::OnOpenWebApp(const std::string& url) {}
-void FakeIntentHelperHost::RecordShareFilesMetricsDeprecated(
-    mojom::ShareFiles flag) {}
 void FakeIntentHelperHost::LaunchCameraApp(uint32_t intent_id,
                                            arc::mojom::CameraIntentMode mode,
                                            bool should_handle_result,
@@ -47,10 +45,10 @@ void FakeIntentHelperHost::IsChromeAppEnabled(
     arc::mojom::ChromeApp app,
     IsChromeAppEnabledCallback callback) {}
 void FakeIntentHelperHost::OnSupportedLinksChanged(
-    std::vector<arc::mojom::SupportedLinksPtr> added_packages,
-    std::vector<arc::mojom::SupportedLinksPtr> removed_packages,
+    std::vector<arc::mojom::SupportedLinksPackagePtr> added_packages,
+    std::vector<arc::mojom::SupportedLinksPackagePtr> removed_packages,
     arc::mojom::SupportedLinkChangeSource source) {}
-void FakeIntentHelperHost::OnDownloadAdded(
+void FakeIntentHelperHost::OnDownloadAddedDeprecated(
     const std::string& relative_path,
     const std::string& owner_package_name) {}
 void FakeIntentHelperHost::OnOpenAppWithIntent(
@@ -58,5 +56,8 @@ void FakeIntentHelperHost::OnOpenAppWithIntent(
     arc::mojom::LaunchIntentPtr intent) {}
 void FakeIntentHelperHost::OnOpenGlobalActions() {}
 void FakeIntentHelperHost::OnCloseSystemDialogs() {}
+void FakeIntentHelperHost::OnAndroidSettingChange(
+    arc::mojom::AndroidSetting setting,
+    bool is_enabled) {}
 
 }  // namespace arc

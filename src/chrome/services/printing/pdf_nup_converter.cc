@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,6 +100,10 @@ void PdfNupConverter::SetWebContentsURL(const GURL& url) {
   // for users using print preview by default.
   static crash_reporter::CrashKeyString<1024> crash_key("main-frame-url");
   crash_key.Set(url.spec());
+}
+
+void PdfNupConverter::SetUseSkiaRendererPolicy(bool use_skia) {
+  chrome_pdf::SetUseSkiaRendererPolicy(use_skia);
 }
 
 }  // namespace printing

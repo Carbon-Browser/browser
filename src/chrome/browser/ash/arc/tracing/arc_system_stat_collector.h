@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -111,7 +111,7 @@ class ArcSystemStatCollector {
     int64_t mem_info[std::size(kMemInfoColumns) - 1] = {0};
     // objects, used bytes.
     int64_t gem_info[std::size(kGemInfoColumns) - 1] = {0};
-    // Temperature of CPU, Core 0.
+    // Temperature of CPU, either the package or Core 0.
     int64_t cpu_temperature = std::numeric_limits<int>::min();
     // CPU Frequency.
     int64_t cpu_frequency = 0;

@@ -1,4 +1,4 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,21 @@
 #include "build/build_config.h"
 
 namespace base {
+
+// CountUnicodeCharacters ------------------------------------------------------
+
+absl::optional<size_t> CountUnicodeCharacters(std::string_view text,
+                                              size_t limit) {
+  base_icu::UChar32 unused = 0;
+  size_t count = 0;
+  for (size_t index = 0; count < limit && index < text.size();
+       ++count, ++index) {
+    if (!ReadUnicodeCharacter(text.data(), text.size(), &index, &unused)) {
+      return absl::nullopt;
+    }
+  }
+  return count;
+}
 
 // ReadUnicodeCharacter --------------------------------------------------------
 
@@ -51,7 +66,7 @@ bool ReadUnicodeCharacter(const char16_t* src,
   return IsValidCodepoint(*code_point);
 }
 
-#if defined(WCHAR_T_IS_UTF32)
+#if defined(WCHAR_T_IS_32_BIT)
 bool ReadUnicodeCharacter(const wchar_t* src,
                           size_t src_len,
                           size_t* char_index,
@@ -62,7 +77,7 @@ bool ReadUnicodeCharacter(const wchar_t* src,
   // Validate the value.
   return IsValidCodepoint(*code_point);
 }
-#endif  // defined(WCHAR_T_IS_UTF32)
+#endif  // defined(WCHAR_T_IS_32_BIT)
 
 // WriteUnicodeCharacter -------------------------------------------------------
 

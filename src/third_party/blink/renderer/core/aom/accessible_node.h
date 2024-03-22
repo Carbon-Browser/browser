@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/dom/element_rare_data_field.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
@@ -24,10 +25,12 @@ class QualifiedName;
 // All of the properties of AccessibleNode that have type "string".
 enum class AOMStringProperty {
   kAutocomplete,
+  kAriaBrailleLabel,
+  kAriaBrailleRoleDescription,
   kChecked,
   kCurrent,
   kDescription,
-  kHasPopUp,
+  kHasPopup,
   kInvalid,
   kKeyShortcuts,
   kLabel,
@@ -70,13 +73,13 @@ enum class AOMUIntProperty {
 
 enum class AOMRelationProperty {
   kActiveDescendant,
-  kErrorMessage,
 };
 
 enum class AOMRelationListProperty {
   kDescribedBy,
   kDetails,
   kControls,
+  kErrorMessage,
   kFlowTo,
   kLabeledBy,
   kOwns,
@@ -105,7 +108,8 @@ class CORE_EXPORT AOMPropertyClient {
 // Accessibility Object Model node
 // Explainer: https://github.com/WICG/aom/blob/gh-pages/explainer.md
 // Spec: https://wicg.github.io/aom/spec/
-class CORE_EXPORT AccessibleNode : public EventTargetWithInlineData {
+class CORE_EXPORT AccessibleNode : public EventTarget,
+                                   public ElementRareDataField {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -116,13 +120,13 @@ class CORE_EXPORT AccessibleNode : public EventTargetWithInlineData {
   static AccessibleNode* Create(Document&);
 
   // Gets the associated element, if any.
-  Element* element() const { return element_; }
+  Element* element() const { return element_.Get(); }
 
   // Gets the associated document.
   Document* GetDocument() const;
 
   // Returns the parent of this node.
-  AccessibleNode* GetParent() { return parent_; }
+  AccessibleNode* GetParent() { return parent_.Get(); }
 
   // Children. These are only virtual AccessibleNodes that were added
   // explicitly, never AccessibleNodes from DOM Elements.
@@ -163,6 +167,10 @@ class CORE_EXPORT AccessibleNode : public EventTargetWithInlineData {
   // ARIA attribute.
   static const AtomicString& GetPropertyOrARIAAttribute(Element*,
                                                         AOMStringProperty);
+
+  static const AtomicString& GetPropertyOrARIAAttributeValue(
+      Element* element,
+      AOMRelationProperty property);
 
   // Returns the given relation property if the Element has an AccessibleNode,
   // otherwise returns the equivalent ARIA attribute.
@@ -208,6 +216,12 @@ class CORE_EXPORT AccessibleNode : public EventTargetWithInlineData {
   absl::optional<bool> busy() const;
   void setBusy(absl::optional<bool>);
 
+  AtomicString brailleLabel() const;
+  void setBrailleLabel(const AtomicString&);
+
+  AtomicString brailleRoleDescription() const;
+  void setBrailleRoleDescription(const AtomicString&);
+
   AtomicString checked() const;
   void setChecked(const AtomicString&);
 
@@ -238,8 +252,8 @@ class CORE_EXPORT AccessibleNode : public EventTargetWithInlineData {
   absl::optional<bool> disabled() const;
   void setDisabled(absl::optional<bool>);
 
-  AccessibleNode* errorMessage() const;
-  void setErrorMessage(AccessibleNode*);
+  AccessibleNodeList* errorMessage() const;
+  void setErrorMessage(AccessibleNodeList*);
 
   absl::optional<bool> expanded() const;
   void setExpanded(absl::optional<bool>);
@@ -247,8 +261,8 @@ class CORE_EXPORT AccessibleNode : public EventTargetWithInlineData {
   AccessibleNodeList* flowTo() const;
   void setFlowTo(AccessibleNodeList*);
 
-  AtomicString hasPopUp() const;
-  void setHasPopUp(const AtomicString&);
+  AtomicString hasPopup() const;
+  void setHasPopup(const AtomicString&);
 
   absl::optional<bool> hidden() const;
   void setHidden(absl::optional<bool>);
@@ -397,7 +411,7 @@ class CORE_EXPORT AccessibleNode : public EventTargetWithInlineData {
       relation_list_properties_;
 
   // This object's owner Element, if it corresponds to an Element.
-  Member<Element> element_;
+  const Member<Element> element_;
 
   // The object's owner Document. Only set if |element_| is nullptr.
   Member<Document> document_;

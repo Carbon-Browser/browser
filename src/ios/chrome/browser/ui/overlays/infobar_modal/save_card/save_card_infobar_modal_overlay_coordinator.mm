@@ -1,33 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/overlays/infobar_modal/save_card/save_card_infobar_modal_overlay_coordinator.h"
 
-#include "base/check.h"
-#import "ios/chrome/browser/overlays/public/infobar_modal/save_card_infobar_modal_overlay_request_config.h"
-#import "ios/chrome/browser/overlays/public/infobar_modal/save_card_infobar_modal_overlay_responses.h"
-#include "ios/chrome/browser/overlays/public/overlay_callback_manager.h"
-#include "ios/chrome/browser/overlays/public/overlay_response.h"
+#import "base/check.h"
+#import "components/autofill/core/browser/payments/autofill_save_card_infobar_delegate_mobile.h"
+#import "ios/chrome/browser/overlays/model/public/default/default_infobar_overlay_request_config.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_save_card_table_view_controller.h"
 #import "ios/chrome/browser/ui/overlays/infobar_modal/infobar_modal_overlay_coordinator+modal_configuration.h"
 #import "ios/chrome/browser/ui/overlays/infobar_modal/save_card/save_card_infobar_modal_overlay_mediator.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using save_card_infobar_overlays::SaveCardModalRequestConfig;
-using save_card_infobar_overlays::SaveCardLoadURL;
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 
 @interface SaveCardInfobarModalOverlayCoordinator ()
 // Redefine ModalConfiguration properties as readwrite.
 @property(nonatomic, strong, readwrite) OverlayRequestMediator* modalMediator;
 @property(nonatomic, strong, readwrite) UIViewController* modalViewController;
 // The request's config.
-@property(nonatomic, assign, readonly) SaveCardModalRequestConfig* config;
+@property(nonatomic, assign, readonly)
+    DefaultInfobarOverlayRequestConfig* config;
 // URL to load when the modal UI finishes dismissing.
 @property(nonatomic, assign) GURL pendingURLToLoad;
 @end
@@ -36,15 +28,16 @@ using save_card_infobar_overlays::SaveCardLoadURL;
 
 #pragma mark - Accessors
 
-- (SaveCardModalRequestConfig*)config {
-  return self.request ? self.request->GetConfig<SaveCardModalRequestConfig>()
-                      : nullptr;
+- (DefaultInfobarOverlayRequestConfig*)config {
+  return self.request
+             ? self.request->GetConfig<DefaultInfobarOverlayRequestConfig>()
+             : nullptr;
 }
 
 #pragma mark - Public
 
 + (const OverlayRequestSupport*)requestSupport {
-  return SaveCardModalRequestConfig::RequestSupport();
+  return DefaultInfobarOverlayRequestConfig::RequestSupport();
 }
 
 #pragma mark - SaveCardInfobarModalOverlayMediatorDelegate
@@ -79,9 +72,12 @@ using save_card_infobar_overlays::SaveCardLoadURL;
   DCHECK(self.modalMediator);
   DCHECK(self.modalViewController);
   if (!self.pendingURLToLoad.is_empty() && self.request) {
-    self.request->GetCallbackManager()->DispatchResponse(
-        OverlayResponse::CreateWithInfo<SaveCardLoadURL>(
-            self.pendingURLToLoad));
+    autofill::AutofillSaveCardInfoBarDelegateMobile* delegate =
+        static_cast<autofill::AutofillSaveCardInfoBarDelegateMobile*>(
+            self.config->delegate());
+    if (delegate) {
+      delegate->OnLegalMessageLinkClicked(self.pendingURLToLoad);
+    }
   }
   self.modalMediator = nil;
   self.modalViewController = nil;

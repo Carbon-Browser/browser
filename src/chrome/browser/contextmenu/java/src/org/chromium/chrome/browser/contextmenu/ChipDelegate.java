@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.chrome.browser.contextmenu;
 
 import org.chromium.base.Callback;
 
-/**
- * Interface to handle chip data and actions.
- */
+/** Interface to handle chip data and actions. */
 public interface ChipDelegate {
     /**
      * Determines whether the chip delegate is able to support a chip in the chosen context.
@@ -23,9 +21,7 @@ public interface ChipDelegate {
      */
     void getChipRenderParams(Callback<ChipRenderParams> callback);
 
-    /**
-     * Called when the context menu is closed.
-     */
+    /** Called when the context menu is closed. */
     void onMenuClosed();
 
     /**

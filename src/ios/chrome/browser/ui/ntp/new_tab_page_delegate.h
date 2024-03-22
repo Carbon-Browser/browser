@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,15 @@
 
 // Returns whether Google is the user's default search engine.
 - (BOOL)isGoogleDefaultSearchEngine;
+
+// Returns whether the current NTP is a start surface.
+- (BOOL)isStartSurface;
+
+// Called when the feed top section is manually dismissed.
+- (void)handleFeedTopSectionClosed;
+
+// Returns whether sign-in is enabled for the user.
+- (BOOL)isSignInAllowed;
 
 @end
 

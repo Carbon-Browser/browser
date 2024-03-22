@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,7 +59,7 @@ InfoBubble::InfoBubble(View* anchor,
   set_margins(LayoutProvider::Get()->GetInsetsMetric(
       InsetsMetric::INSETS_TOOLTIP_BUBBLE));
   SetCanActivate(false);
-  SetAccessibleRole(ax::mojom::Role::kAlertDialog);
+  SetAccessibleWindowRole(ax::mojom::Role::kAlertDialog);
   // TODO(pbos): This hacks around a bug where focus order in the parent dialog
   // breaks because it tries to focus InfoBubble without anything focusable in
   // it. FocusSearch should handle this case and this should be removable.
@@ -124,12 +124,6 @@ void InfoBubble::UpdatePosition() {
     SizeToContents();
     widget->SetVisibilityChangedAnimationsEnabled(true);
     widget->ShowInactive();
-#if BUILDFLAG(IS_MAC)
-    // In mac fullscreen for a info bubble on top of another bubble,
-    // explicitly request stacking above the anchored widget, otherwise
-    // the info bubble will be occluded (crbug.com/1348119).
-    widget->StackAboveWidget(anchor_widget());
-#endif
   } else {
     widget->SetVisibilityChangedAnimationsEnabled(false);
     widget->Hide();

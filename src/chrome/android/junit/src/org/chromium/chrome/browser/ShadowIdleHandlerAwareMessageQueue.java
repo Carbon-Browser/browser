@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ import org.robolectric.shadows.ShadowLegacyMessageQueue;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Shadow MessageQueue implementation that adds support for IdleHandler(s).
- */
+/** Shadow MessageQueue implementation that adds support for IdleHandler(s). */
 @Implements(MessageQueue.class)
 public class ShadowIdleHandlerAwareMessageQueue extends ShadowLegacyMessageQueue {
     private final List<IdleHandler> mIdleHandlers = new ArrayList<>();
@@ -38,9 +36,7 @@ public class ShadowIdleHandlerAwareMessageQueue extends ShadowLegacyMessageQueue
         }
     }
 
-    /**
-     * Run all idle handlers.
-     */
+    /** Run all idle handlers. */
     public void runIdleHandlers() {
         List<IdleHandler> idleHandlers;
         synchronized (mIdleHandlersLock) {

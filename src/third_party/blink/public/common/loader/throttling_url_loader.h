@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -30,7 +30,7 @@
 #include "third_party/blink/public/common/loader/url_loader_throttle.h"
 
 namespace base {
-class SingleThreadTaskRunner;
+class SequencedTaskRunner;
 }
 
 namespace blink {
@@ -60,7 +60,7 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
       network::ResourceRequest* url_request,
       network::mojom::URLLoaderClient* client,
       const net::NetworkTrafficAnnotationTag& traffic_annotation,
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
       absl::optional<std::vector<std::string>> cors_exempt_header_list =
           absl::nullopt);
 
@@ -111,12 +111,21 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
 
   void CancelWithError(int error_code, base::StringPiece custom_reason);
 
+  void CancelWithExtendedError(int error_code,
+                               int extended_reason_code,
+                               base::StringPiece custom_reason);
+
   // Sets the forwarding client to receive all subsequent notifications.
   void set_forwarding_client(network::mojom::URLLoaderClient* client) {
     forwarding_client_ = client;
   }
 
   bool response_intercepted() const { return response_intercepted_; }
+
+  // Indicates a restart did occur due to a Critical-CH HTTP Header.
+  void DidRestartForCriticalClientHint() {
+    critical_ch_restart_time_ = base::TimeTicks::Now();
+  }
 
  private:
   class ForwardingThrottleDelegate;
@@ -130,7 +139,7 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
              int32_t request_id,
              uint32_t options,
              network::ResourceRequest* url_request,
-             scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+             scoped_refptr<base::SequencedTaskRunner> task_runner,
              absl::optional<std::vector<std::string>> cors_exempt_header_list);
 
   void StartNow();
@@ -159,15 +168,16 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
 
   // network::mojom::URLLoaderClient implementation:
   void OnReceiveEarlyHints(network::mojom::EarlyHintsPtr early_hints) override;
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr response_head,
-                         mojo::ScopedDataPipeConsumerHandle body) override;
+  void OnReceiveResponse(
+      network::mojom::URLResponseHeadPtr response_head,
+      mojo::ScopedDataPipeConsumerHandle body,
+      absl::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(
       const net::RedirectInfo& redirect_info,
       network::mojom::URLResponseHeadPtr response_head) override;
   void OnUploadProgress(int64_t current_position,
                         int64_t total_size,
                         OnUploadProgressCallback ack_callback) override;
-  void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
@@ -217,8 +227,8 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
     ThrottleEntry& operator=(ThrottleEntry&& other);
     ~ThrottleEntry();
 
-    std::unique_ptr<ForwardingThrottleDelegate> delegate;
     std::unique_ptr<URLLoaderThrottle> throttle;
+    std::unique_ptr<ForwardingThrottleDelegate> delegate;
   };
 
   std::vector<ThrottleEntry> throttles_;
@@ -242,7 +252,7 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
         int32_t in_request_id,
         uint32_t in_options,
         network::ResourceRequest* in_url_request,
-        scoped_refptr<base::SingleThreadTaskRunner> in_task_runner,
+        scoped_refptr<base::SequencedTaskRunner> in_task_runner,
         absl::optional<std::vector<std::string>> in_cors_exempt_header_list);
     ~StartInfo();
 
@@ -252,7 +262,7 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
 
     network::ResourceRequest url_request;
     // |task_runner| is used to set up |client_receiver_|.
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner;
+    scoped_refptr<base::SequencedTaskRunner> task_runner;
     absl::optional<std::vector<std::string>> cors_exempt_header_list;
   };
   // Holds any info needed to start or restart the request. Used when start is
@@ -268,6 +278,7 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
   // Set if response is deferred.
   std::unique_ptr<ResponseInfo> response_info_;
   mojo::ScopedDataPipeConsumerHandle body_;
+  absl::optional<mojo_base::BigBuffer> cached_metadata_;
 
   struct RedirectInfo {
     RedirectInfo(const net::RedirectInfo& in_redirect_info,
@@ -317,6 +328,8 @@ class BLINK_COMMON_EXPORT ThrottlingURLLoader
 
   int pending_restart_flags_ = 0;
   bool has_pending_restart_ = false;
+
+  base::TimeTicks critical_ch_restart_time_;
 
   base::WeakPtrFactory<ThrottlingURLLoader> weak_factory_{this};
 };

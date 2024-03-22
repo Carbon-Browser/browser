@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,11 +31,7 @@ void DevToolsTraceableScreenshot::AppendAsTraceFormat(std::string* out) const {
     std::vector<unsigned char> data;
     bool encoded = gfx::JPEGCodec::Encode(frame_, 80, &data);
     if (encoded) {
-      std::string encoded_data;
-      base::Base64Encode(
-          base::StringPiece(reinterpret_cast<char*>(&data[0]), data.size()),
-          &encoded_data);
-      out->append(encoded_data);
+      base::Base64EncodeAppend(base::make_span(data), out);
     }
   }
   out->append("\"");

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,17 @@
 #include <memory>
 #include <string>
 
-#include "ash/components/smbfs/smbfs_host.h"
-#include "ash/components/smbfs/smbfs_mounter.h"
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/smb_client/smb_errors.h"
 #include "chrome/browser/ash/smb_client/smb_url.h"
+#include "chromeos/ash/components/smbfs/smbfs_host.h"
+#include "chromeos/ash/components/smbfs/smbfs_mounter.h"
 
 class Profile;
 
@@ -32,7 +33,7 @@ class SmbFsShare : public smbfs::SmbFsHost::Delegate {
   using KerberosOptions = smbfs::SmbFsMounter::KerberosOptions;
   using MountOptions = smbfs::SmbFsMounter::MountOptions;
   using MountCallback = base::OnceCallback<void(SmbMountResult)>;
-  using UnmountCallback = base::OnceCallback<void(chromeos::MountError)>;
+  using UnmountCallback = base::OnceCallback<void(MountError)>;
   using RemoveCredentialsCallback = base::OnceCallback<void(bool)>;
   using DeleteRecursivelyCallback = base::OnceCallback<void(base::File::Error)>;
   using MounterCreationCallback =
@@ -97,8 +98,7 @@ class SmbFsShare : public smbfs::SmbFsHost::Delegate {
                    std::unique_ptr<smbfs::SmbFsHost> smbfs_host);
 
   // Called after cros-disks has attempted to unmount the share.
-  void OnUnmountDone(SmbFsShare::UnmountCallback callback,
-                     chromeos::MountError result);
+  void OnUnmountDone(SmbFsShare::UnmountCallback callback, MountError result);
 
   // Callback for smb_dialog::SmbCredentialsDialog::Show().
   void OnSmbCredentialsDialogShowDone(RequestCredentialsCallback callback,
@@ -131,7 +131,7 @@ class SmbFsShare : public smbfs::SmbFsHost::Delegate {
   // Generate the input for stable mount ID hash (simplifies testing).
   std::string GenerateStableMountIdInput() const;
 
-  Profile* const profile_;
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
   const SmbUrl share_url_;
   const std::string display_name_;
   MountOptions options_;

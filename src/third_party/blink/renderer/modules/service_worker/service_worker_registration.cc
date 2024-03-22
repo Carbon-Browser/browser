@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -140,9 +140,12 @@ ServiceWorkerRegistration* ServiceWorkerRegistration::Take(
 ServiceWorkerRegistration::ServiceWorkerRegistration(
     ExecutionContext* execution_context,
     WebServiceWorkerRegistrationObjectInfo info)
-    : ExecutionContextLifecycleObserver(execution_context),
+    : ActiveScriptWrappable<ServiceWorkerRegistration>({}),
+      ExecutionContextLifecycleObserver(execution_context),
       registration_id_(info.registration_id),
       scope_(std::move(info.scope)),
+      host_(execution_context),
+      receiver_(this, execution_context),
       stopped_(false) {
   DCHECK_NE(mojom::blink::kInvalidServiceWorkerRegistrationId,
             registration_id_);
@@ -152,9 +155,12 @@ ServiceWorkerRegistration::ServiceWorkerRegistration(
 ServiceWorkerRegistration::ServiceWorkerRegistration(
     ExecutionContext* execution_context,
     mojom::blink::ServiceWorkerRegistrationObjectInfoPtr info)
-    : ExecutionContextLifecycleObserver(execution_context),
+    : ActiveScriptWrappable<ServiceWorkerRegistration>({}),
+      ExecutionContextLifecycleObserver(execution_context),
       registration_id_(info->registration_id),
       scope_(std::move(info->scope)),
+      host_(execution_context),
+      receiver_(this, execution_context),
       stopped_(false) {
   DCHECK_NE(mojom::blink::kInvalidServiceWorkerRegistrationId,
             registration_id_);
@@ -182,7 +188,7 @@ void ServiceWorkerRegistration::Attach(
 
   // If |host_| is bound, it already points to the same object host as
   // |info.host_remote|, so there is no need to bind again.
-  if (!host_) {
+  if (!host_.is_bound()) {
     host_.Bind(std::move(info.host_remote),
                GetExecutionContext()->GetTaskRunner(
                    blink::TaskType::kInternalDefault));
@@ -214,7 +220,7 @@ const AtomicString& ServiceWorkerRegistration::InterfaceName() const {
 NavigationPreloadManager* ServiceWorkerRegistration::navigationPreload() {
   if (!navigation_preload_)
     navigation_preload_ = MakeGarbageCollected<NavigationPreloadManager>(this);
-  return navigation_preload_;
+  return navigation_preload_.Get();
 }
 
 String ServiceWorkerRegistration::scope() const {
@@ -237,22 +243,32 @@ String ServiceWorkerRegistration::updateViaCache() const {
 void ServiceWorkerRegistration::EnableNavigationPreload(
     bool enable,
     ScriptPromiseResolver* resolver) {
+  if (!host_.is_bound()) {
+    return;
+  }
   host_->EnableNavigationPreload(
-      enable, WTF::Bind(&DidEnableNavigationPreload, WrapPersistent(resolver)));
+      enable,
+      WTF::BindOnce(&DidEnableNavigationPreload, WrapPersistent(resolver)));
 }
 
 void ServiceWorkerRegistration::GetNavigationPreloadState(
     ScriptPromiseResolver* resolver) {
+  if (!host_.is_bound()) {
+    return;
+  }
   host_->GetNavigationPreloadState(
-      WTF::Bind(&DidGetNavigationPreloadState, WrapPersistent(resolver)));
+      WTF::BindOnce(&DidGetNavigationPreloadState, WrapPersistent(resolver)));
 }
 
 void ServiceWorkerRegistration::SetNavigationPreloadHeader(
     const String& value,
     ScriptPromiseResolver* resolver) {
+  if (!host_.is_bound()) {
+    return;
+  }
   host_->SetNavigationPreloadHeader(
       value,
-      WTF::Bind(&DidSetNavigationPreloadHeader, WrapPersistent(resolver)));
+      WTF::BindOnce(&DidSetNavigationPreloadHeader, WrapPersistent(resolver)));
 }
 
 ScriptPromise ServiceWorkerRegistration::update(
@@ -288,7 +304,7 @@ ScriptPromise ServiceWorkerRegistration::update(
   if (GetExecutionContext()->IsWindow()) {
     Document* document = To<LocalDOMWindow>(GetExecutionContext())->document();
     if (document->IsPrerendering()) {
-      document->AddPostPrerenderingActivationStep(WTF::Bind(
+      document->AddPostPrerenderingActivationStep(WTF::BindOnce(
           &ServiceWorkerRegistration::UpdateInternal, WrapWeakPersistent(this),
           std::move(mojom_settings_object), WrapPersistent(resolver)));
       return resolver->Promise();
@@ -318,8 +334,8 @@ ScriptPromise ServiceWorkerRegistration::unregister(
     Document* document = To<LocalDOMWindow>(GetExecutionContext())->document();
     if (document->IsPrerendering()) {
       document->AddPostPrerenderingActivationStep(
-          WTF::Bind(&ServiceWorkerRegistration::UnregisterInternal,
-                    WrapWeakPersistent(this), WrapPersistent(resolver)));
+          WTF::BindOnce(&ServiceWorkerRegistration::UnregisterInternal,
+                        WrapWeakPersistent(this), WrapPersistent(resolver)));
       return resolver->Promise();
     }
   }
@@ -340,7 +356,9 @@ void ServiceWorkerRegistration::Trace(Visitor* visitor) const {
   visitor->Trace(waiting_);
   visitor->Trace(active_);
   visitor->Trace(navigation_preload_);
-  EventTargetWithInlineData::Trace(visitor);
+  visitor->Trace(host_);
+  visitor->Trace(receiver_);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
   Supplementable<ServiceWorkerRegistration>::Trace(visitor);
 }
@@ -386,18 +404,20 @@ void ServiceWorkerRegistration::UpdateFound() {
 void ServiceWorkerRegistration::UpdateInternal(
     mojom::blink::FetchClientSettingsObjectPtr mojom_settings_object,
     ScriptPromiseResolver* resolver) {
-  if (!host_)
+  if (!host_.is_bound()) {
     return;
-  host_->Update(
-      std::move(mojom_settings_object),
-      WTF::Bind(&DidUpdate, WrapPersistent(resolver), WrapPersistent(this)));
+  }
+  host_->Update(std::move(mojom_settings_object),
+                WTF::BindOnce(&DidUpdate, WrapPersistent(resolver),
+                              WrapPersistent(this)));
 }
 
 void ServiceWorkerRegistration::UnregisterInternal(
     ScriptPromiseResolver* resolver) {
-  if (!host_)
+  if (!host_.is_bound()) {
     return;
-  host_->Unregister(WTF::Bind(&DidUnregister, WrapPersistent(resolver)));
+  }
+  host_->Unregister(WTF::BindOnce(&DidUnregister, WrapPersistent(resolver)));
 }
 
 }  // namespace blink

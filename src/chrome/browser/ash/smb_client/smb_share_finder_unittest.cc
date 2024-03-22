@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <algorithm>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/smb_client/discovery/in_memory_host_locator.h"
 #include "chrome/browser/ash/smb_client/smb_constants.h"
@@ -176,7 +177,8 @@ class SmbShareFinderTest : public testing::Test {
 
   int32_t discovery_callback_counter_ = 0;
 
-  InMemoryHostLocator* host_locator_;
+  raw_ptr<InMemoryHostLocator, DanglingUntriaged | ExperimentalAsh>
+      host_locator_;
   std::unique_ptr<FakeSmbProviderClient> fake_client_;
   std::unique_ptr<SmbShareFinder> share_finder_;
 };

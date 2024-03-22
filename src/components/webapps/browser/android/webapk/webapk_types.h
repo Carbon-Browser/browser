@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,10 @@ enum class WebApkUpdateReason {
   WEB_SHARE_TARGET_DIFFERS,
   MANUALLY_TRIGGERED,
   SHORTCUTS_DIFFER,
+  DARK_BACKGROUND_COLOR_DIFFERS,
+  DARK_THEME_COLOR_DIFFERS,
+  PRIMARY_ICON_CHANGE_BELOW_THRESHOLD,
+  PRIMARY_ICON_CHANGE_SHELL_UPDATE,
 };
 
 // A Java counterpart will be generated for this enum.
@@ -89,10 +93,6 @@ enum class WebApkInstallResult {
 enum class WebApkDetailsForDefaultOfflinePage {
   SHORT_NAME = 0,
   ICON,
-  BACKGROUND_COLOR,
-  BACKGROUND_COLOR_DARK_MODE,
-  THEME_COLOR,
-  THEME_COLOR_DARK_MODE,
 };
 
 }  // namespace webapps

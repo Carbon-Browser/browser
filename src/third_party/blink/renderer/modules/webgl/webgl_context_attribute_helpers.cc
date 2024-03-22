@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,7 @@ WebGLContextAttributes* ToWebGLContextAttributes(
 
 Platform::ContextAttributes ToPlatformContextAttributes(
     const CanvasContextCreationAttributesCore& attrs,
-    Platform::ContextType context_type,
-    bool support_own_offscreen_surface) {
+    Platform::ContextType context_type) {
   Platform::ContextAttributes result;
   result.prefer_low_power_gpu =
       (PowerPreferenceToGpuPreference(attrs.power_preference) ==
@@ -37,14 +36,6 @@ Platform::ContextAttributes ToPlatformContextAttributes(
   result.fail_if_major_performance_caveat =
       attrs.fail_if_major_performance_caveat;
   result.context_type = context_type;
-  if (support_own_offscreen_surface) {
-    // Only ask for alpha/depth/stencil/antialias if we may be using the default
-    // framebuffer. They are not needed for standard offscreen rendering.
-    result.support_alpha = attrs.alpha;
-    result.support_depth = attrs.depth;
-    result.support_stencil = attrs.stencil;
-    result.support_antialias = attrs.antialias;
-  }
   return result;
 }
 

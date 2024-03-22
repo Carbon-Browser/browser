@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,11 +75,8 @@ class GpuMemoryBufferImpl : public gfx::GpuMemoryBuffer {
     handle.type = gfx::SHARED_MEMORY_BUFFER;
     handle.region = region_.Duplicate();
     handle.offset = base::checked_cast<uint32_t>(offset_);
-    handle.stride = base::checked_cast<int32_t>(stride_);
+    handle.stride = base::checked_cast<uint32_t>(stride_);
     return handle;
-  }
-  ClientBuffer AsClientBuffer() override {
-    return reinterpret_cast<ClientBuffer>(this);
   }
   void OnMemoryDump(
       base::trace_event::ProcessMemoryDump* pmd,
@@ -126,9 +123,6 @@ class GpuMemoryBufferFromClient : public gfx::GpuMemoryBuffer {
   }
   gfx::GpuMemoryBufferHandle CloneHandle() const override {
     return client_buffer_->CloneHandle();
-  }
-  ClientBuffer AsClientBuffer() override {
-    return client_buffer_->AsClientBuffer();
   }
   void OnMemoryDump(
       base::trace_event::ProcessMemoryDump* pmd,
@@ -199,10 +193,6 @@ TestGpuMemoryBufferManager::CreateGpuMemoryBuffer(
   buffers_[last_gpu_memory_buffer_id_] = result.get();
   return result;
 }
-
-void TestGpuMemoryBufferManager::SetDestructionSyncToken(
-    gfx::GpuMemoryBuffer* buffer,
-    const gpu::SyncToken& sync_token) {}
 
 void TestGpuMemoryBufferManager::CopyGpuMemoryBufferAsync(
     gfx::GpuMemoryBufferHandle buffer_handle,

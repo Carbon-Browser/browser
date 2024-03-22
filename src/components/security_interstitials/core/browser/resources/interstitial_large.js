@@ -1,12 +1,44 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+// Note: The following chrome:// URLs are not actually fetched at runtime. They
+// are handled in
+// components/security_interstitials/core/browser/resources:bundle_js, which
+// finds the correct files and inlines them.
+import {HIDDEN_CLASS, preventDefaultOnPoundLinkClicks, SecurityInterstitialCommandId, sendCommand} from 'chrome://interstitials/common/resources/interstitial_common.js';
+import {mobileNav} from 'chrome://interstitials/common/resources/interstitial_mobile_nav.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+
+import {setupEnhancedProtectionMessage} from './enhanced_protection_message.js';
+import {setupExtendedReportingCheckbox} from './extended_reporting.js';
+import {setupSSLDebuggingInfo} from './ssl.js';
 
 // This is the shared code for the new (Chrome 37) security interstitials. It is
 // used for both SSL interstitials and Safe Browsing interstitials.
 
 let expandedDetails = false;
 let keyPressState = 0;
+
+// Only begin clickjacking delay tracking when the DOM contents have
+// fully loaded.
+let timePageLastFocused = null;
+
+// The amount of delay (in ms) before the proceed button accepts
+// a "click" event.
+const PROCEED_CLICKJACKING_DELAY = 500;
+
+/**
+ * This checks whether the clickjacking delay has been passed
+ * since page was first loaded or last focused.
+ * @return {boolean} Whether the clickjacking delay has passed or not.
+ */
+function clickjackingDelayHasPassed() {
+  return (
+      timePageLastFocused != null &&
+      (window.performance.now() - timePageLastFocused >=
+       PROCEED_CLICKJACKING_DELAY));
+}
 
 /**
  * This allows errors to be skippped by typing a secret phrase into the page.
@@ -28,42 +60,10 @@ function handleKeypress(e) {
   }
 }
 
-/**
- * This appends a piece of debugging information to the end of the warning.
- * When complete, the caller must also make the debugging div
- * (error-debugging-info) visible.
- * @param {string} title  The name of this debugging field.
- * @param {string} value  The value of the debugging field.
- * @param {boolean=} fixedWidth If true, the value field is displayed fixed
- *                              width.
- */
-function appendDebuggingField(title, value, fixedWidth) {
-  // The values input here are not trusted. Never use innerHTML on these
-  // values!
-  const spanTitle = document.createElement('span');
-  spanTitle.classList.add('debugging-title');
-  spanTitle.innerText = title + ': ';
-
-  const spanValue = document.createElement('span');
-  spanValue.classList.add('debugging-content');
-  if (fixedWidth) {
-    spanValue.classList.add('debugging-content-fixed-width');
-  }
-  spanValue.innerText = value;
-
-  const pElem = document.createElement('p');
-  pElem.classList.add('debugging-content');
-  pElem.appendChild(spanTitle);
-  pElem.appendChild(spanValue);
-  $('error-debugging-info').appendChild(pElem);
-}
-
-function toggleDebuggingInfo() {
-  const hiddenDebug = $('error-debugging-info').classList.toggle(HIDDEN_CLASS);
-  $('error-code').setAttribute('aria-expanded', !hiddenDebug);
-}
-
 function setupEvents() {
+  // `loadTimeDataRaw` is injected to the `window` scope from C++.
+  loadTimeData.data = window.loadTimeDataRaw;
+
   const overridable = loadTimeData.getBoolean('overridable');
   const interstitialType = loadTimeData.getString('type');
   const ssl = interstitialType === 'SSL';
@@ -75,39 +75,52 @@ function setupEvents() {
   const blockedInterception = interstitialType === 'BLOCKED_INTERCEPTION';
   const insecureForm = interstitialType == 'INSECURE_FORM';
   const httpsOnly = interstitialType == 'HTTPS_ONLY';
+  const enterpriseBlock = interstitialType === 'ENTERPRISE_BLOCK';
+  const enterpriseWarn = interstitialType === 'ENTERPRISE_WARN';
   const hidePrimaryButton = loadTimeData.getBoolean('hide_primary_button');
-  const showRecurrentErrorParagraph = loadTimeData.getBoolean(
-    'show_recurrent_error_paragraph');
+  const showRecurrentErrorParagraph =
+      loadTimeData.getBoolean('show_recurrent_error_paragraph');
+  const shouldUseNewDangerIcon =
+      loadTimeData.valueExists('shouldUseNewDangerIcon') ?
+      loadTimeData.getBoolean('shouldUseNewDangerIcon') :
+      false;
 
+  const body = document.querySelector('#body');
   if (ssl || blockedInterception) {
-    $('body').classList.add(badClock ? 'bad-clock' : 'ssl');
+    body.classList.add(badClock ? 'bad-clock' : 'ssl');
     if (loadTimeData.valueExists('errorCode')) {
-      $('error-code').textContent = loadTimeData.getString('errorCode');
-      $('error-code').classList.remove(HIDDEN_CLASS);
+      const errorCode = document.querySelector('#error-code');
+      errorCode.textContent = loadTimeData.getString('errorCode');
+      errorCode.classList.remove(HIDDEN_CLASS);
     }
   } else if (captivePortal) {
-    $('body').classList.add('captive-portal');
+    body.classList.add('captive-portal');
   } else if (billing) {
-    $('body').classList.add('safe-browsing-billing');
+    body.classList.add('safe-browsing-billing');
   } else if (lookalike) {
-    $('body').classList.add('lookalike-url');
+    body.classList.add('lookalike-url');
   } else if (insecureForm) {
-    $('body').classList.add('insecure-form');
+    body.classList.add('insecure-form');
   } else if (httpsOnly) {
-    $('body').classList.add('https-only');
+    body.classList.add('https-only');
+  } else if (enterpriseBlock) {
+    body.classList.add('enterprise-block');
+  } else if (enterpriseWarn) {
+    body.classList.add('enterprise-warn');
   } else {
-    $('body').classList.add('safe-browsing');
+    body.classList.add('safe-browsing');
     // Override the default theme color.
-    document.querySelector('meta[name=theme-color]').setAttribute('content',
-      'rgb(217, 48, 37)');
+    document.querySelector('meta[name=theme-color]')
+        .setAttribute('content', 'rgb(217, 48, 37)');
   }
 
-  $('icon').classList.add('icon');
+  document.querySelector('#icon').classList.add('icon');
 
+  const primaryButton = document.querySelector('#primary-button');
   if (hidePrimaryButton) {
-    $('primary-button').classList.add(HIDDEN_CLASS);
+    primaryButton.classList.add(HIDDEN_CLASS);
   } else {
-    $('primary-button').addEventListener('click', function() {
+    primaryButton.addEventListener('click', function() {
       switch (interstitialType) {
         case 'CAPTIVE_PORTAL':
           sendCommand(SecurityInterstitialCommandId.CMD_OPEN_LOGIN);
@@ -124,6 +137,8 @@ function setupEvents() {
           break;
 
         case 'SAFEBROWSING':
+        case 'ENTERPRISE_BLOCK':
+        case 'ENTERPRISE_WARN':
         case 'ORIGIN_POLICY':
           sendCommand(SecurityInterstitialCommandId.CMD_DONT_PROCEED);
           break;
@@ -139,83 +154,95 @@ function setupEvents() {
     });
   }
 
-  if (lookalike || insecureForm || httpsOnly) {
-    const proceedButton = 'proceed-button';
-    $(proceedButton).classList.remove(HIDDEN_CLASS);
-    $(proceedButton).textContent = loadTimeData.getString('proceedButtonText');
-    $(proceedButton).addEventListener('click', function(event) {
-      sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+  if (lookalike || insecureForm || httpsOnly || enterpriseWarn) {
+    const proceedButton = document.querySelector('#proceed-button');
+    proceedButton.classList.remove(HIDDEN_CLASS);
+    proceedButton.textContent = loadTimeData.getString('proceedButtonText');
+    proceedButton.addEventListener('click', function(event) {
+      if (clickjackingDelayHasPassed()) {
+        sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+      }
     });
   }
   if (lookalike) {
     // Lookalike interstitials with a suggested URL have a link in the title:
     // "Did you mean <link>example.com</link>?". Handle those clicks. Lookalike
     // interstitails without a suggested URL don't have this link.
-    const dontProceedLink = 'dont-proceed-link';
-    if ($(dontProceedLink)) {
-      $(dontProceedLink).addEventListener('click', function(event) {
+    const dontProceedLink = document.querySelector('#dont-proceed-link');
+    if (dontProceedLink) {
+      dontProceedLink.addEventListener('click', function(event) {
         sendCommand(SecurityInterstitialCommandId.CMD_DONT_PROCEED);
       });
     }
   }
 
   if (overridable) {
-    const overrideElement = billing ? 'proceed-button' : 'proceed-link';
+    const overrideElement =
+        document.querySelector(billing ? '#proceed-button' : '#proceed-link');
     // Captive portal page isn't overridable.
-    $(overrideElement).addEventListener('click', function(event) {
-      sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+    overrideElement.addEventListener('click', function(event) {
+      if (!billing || clickjackingDelayHasPassed()) {
+        sendCommand(SecurityInterstitialCommandId.CMD_PROCEED);
+      }
     });
 
     if (ssl) {
-      $(overrideElement).classList.add('small-link');
+      overrideElement.classList.add('small-link');
     } else if (billing) {
-      $(overrideElement).classList.remove(HIDDEN_CLASS);
-      $(overrideElement).textContent =
-          loadTimeData.getString('proceedButtonText');
+      overrideElement.classList.remove(HIDDEN_CLASS);
+      overrideElement.textContent = loadTimeData.getString('proceedButtonText');
     }
   } else if (!ssl) {
-    $('final-paragraph').classList.add(HIDDEN_CLASS);
+    document.querySelector('#final-paragraph').classList.add(HIDDEN_CLASS);
   }
 
 
   if (!ssl || !showRecurrentErrorParagraph) {
-    $('recurrent-error-message').classList.add(HIDDEN_CLASS);
+    document.querySelector('#recurrent-error-message')
+        .classList.add(HIDDEN_CLASS);
   } else {
-    $('body').classList.add('showing-recurrent-error-message');
+    body.classList.add('showing-recurrent-error-message');
   }
 
-  if ($('diagnostic-link')) {
-    $('diagnostic-link').addEventListener('click', function(event) {
+  const diagnosticLink = document.querySelector('#diagnostic-link');
+  if (diagnosticLink) {
+    diagnosticLink.addEventListener('click', function(event) {
       sendCommand(SecurityInterstitialCommandId.CMD_OPEN_DIAGNOSTIC);
     });
   }
 
-  if ($('learn-more-link')) {
-    $('learn-more-link').addEventListener('click', function(event) {
+  const learnMoreLink = document.querySelector('#learn-more-link');
+  if (learnMoreLink) {
+    learnMoreLink.addEventListener('click', function(event) {
       sendCommand(SecurityInterstitialCommandId.CMD_OPEN_HELP_CENTER);
     });
   }
 
-  if (captivePortal || billing || lookalike || insecureForm || httpsOnly) {
-    // Captive portal, billing, lookalike pages, insecure form, and
-    // HTTPS only mode interstitials don't have details buttons.
-    $('details-button').classList.add('hidden');
+  const detailsButton = document.querySelector('#details-button');
+  if (captivePortal || billing || lookalike || insecureForm || httpsOnly ||
+      enterpriseWarn || enterpriseBlock) {
+    // Captive portal, billing, lookalike pages, insecure form, enterprise warn,
+    // enterprise block, and HTTPS only mode interstitials don't
+    // have details buttons.
+    detailsButton.classList.add('hidden');
   } else {
-    $('details-button')
-        .setAttribute(
-            'aria-expanded', !$('details').classList.contains(HIDDEN_CLASS));
-    $('details-button').addEventListener('click', function(event) {
-      const hiddenDetails = $('details').classList.toggle(HIDDEN_CLASS);
-      $('details-button').setAttribute('aria-expanded', !hiddenDetails);
+    detailsButton.setAttribute(
+        'aria-expanded',
+        !document.querySelector('#details').classList.contains(HIDDEN_CLASS));
+    detailsButton.addEventListener('click', function(event) {
+      const hiddenDetails =
+          document.querySelector('#details').classList.toggle(HIDDEN_CLASS);
+      detailsButton.setAttribute('aria-expanded', !hiddenDetails);
 
+      const mainContent = document.querySelector('#main-content');
       if (mobileNav) {
         // Details appear over the main content on small screens.
-        $('main-content').classList.toggle(HIDDEN_CLASS, !hiddenDetails);
+        mainContent.classList.toggle(HIDDEN_CLASS, !hiddenDetails);
       } else {
-        $('main-content').classList.remove(HIDDEN_CLASS);
+        mainContent.classList.remove(HIDDEN_CLASS);
       }
 
-      $('details-button').innerText = hiddenDetails ?
+      detailsButton.innerText = hiddenDetails ?
           loadTimeData.getString('openDetails') :
           loadTimeData.getString('closeDetails');
       if (!expandedDetails) {
@@ -226,19 +253,22 @@ function setupEvents() {
     });
   }
 
-  if ($('report-error-link')) {
-    $('report-error-link').addEventListener('click', function(event) {
+  const reportErrorLink = document.querySelector('#report-error-link');
+  if (reportErrorLink) {
+    reportErrorLink.addEventListener('click', function(event) {
       sendCommand(SecurityInterstitialCommandId.CMD_REPORT_PHISHING_ERROR);
     });
   }
 
   if (lookalike) {
-    console.warn(
-        'Chrome has determined that ' +
-        loadTimeData.getString('lookalikeRequestHostname') +
-        ' could be fake or fraudulent.\n\n' +
-        'If you believe this is shown in error please visit ' +
-        'https://g.co/chrome/lookalike-warnings');
+    console.warn(loadTimeData.getString('lookalikeConsoleMessage'));
+  }
+
+  if (shouldUseNewDangerIcon) {
+    // If red interstitial facelift is enabled, use new stop sign icons.
+    if (document.getElementById('icon')) {
+      document.getElementById('icon').classList.add('new-icon');
+    }
   }
 
   preventDefaultOnPoundLinkClicks();
@@ -246,6 +276,11 @@ function setupEvents() {
   setupEnhancedProtectionMessage();
   setupSSLDebuggingInfo();
   document.addEventListener('keypress', handleKeypress);
+
+  // Begin tracking for the clickjacking delay.
+  timePageLastFocused = window.performance.now();
+  window.addEventListener(
+      'focus', () => timePageLastFocused = window.performance.now());
 }
 
 document.addEventListener('DOMContentLoaded', setupEvents);

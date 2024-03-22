@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <string>
 #include <utility>
 
-#include "ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
@@ -17,6 +16,7 @@
 #include "chrome/services/sharing/public/cpp/advertisement.h"
 #include "chrome/services/sharing/public/cpp/conversions.h"
 #include "chrome/services/sharing/public/proto/wire_format.pb.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -199,7 +199,8 @@ class NearbySharingDecoderTest : public testing::Test {
  public:
   NearbySharingDecoderTest() {
     decoder_ = std::make_unique<NearbySharingDecoder>(
-        remote_.BindNewPipeAndPassReceiver());
+        remote_.BindNewPipeAndPassReceiver(),
+        /*on_disconnect=*/base::DoNothing());
   }
 
   NearbySharingDecoder* decoder() const { return decoder_.get(); }

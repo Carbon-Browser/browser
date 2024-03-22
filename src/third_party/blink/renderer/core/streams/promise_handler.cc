@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,6 +57,7 @@ v8::Local<v8::Promise> StreamThenPromise(v8::Local<v8::Context> context,
                                          v8::Local<v8::Promise> promise,
                                          ScriptFunction* on_fulfilled,
                                          ScriptFunction* on_rejected) {
+  v8::Context::Scope v8_context_scope(context);
   v8::MaybeLocal<v8::Promise> result_maybe;
   if (!on_fulfilled) {
     DCHECK(on_rejected);

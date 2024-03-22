@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,15 @@
 #include <algorithm>
 #include <memory>
 #include <ostream>
+#include <string_view>
 #include <utility>
 
 #include "base/check_op.h"
 #include "base/no_destructor.h"
-#include "base/strings/string_piece.h"
+#include "base/notreached.h"
 #include "base/strings/string_util.h"
+#include "base/trace_event/base_tracing.h"
 #include "base/trace_event/memory_usage_estimator.h"
-#include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 #include "url/url_canon_stdstring.h"
 #include "url/url_util.h"
 
@@ -42,11 +43,11 @@ GURL::GURL(GURL&& other) noexcept
   other.parsed_ = url::Parsed();
 }
 
-GURL::GURL(base::StringPiece url_string) {
+GURL::GURL(std::string_view url_string) {
   InitCanonical(url_string, true);
 }
 
-GURL::GURL(base::StringPiece16 url_string) {
+GURL::GURL(std::u16string_view url_string) {
   InitCanonical(url_string, true);
 }
 
@@ -158,7 +159,9 @@ const std::string& GURL::spec() const {
   if (is_valid_ || spec_.empty())
     return spec_;
 
-  DCHECK(false) << "Trying to get the spec of an invalid URL!";
+  // TODO(crbug.com/851128): Make sure this no longer hits before making
+  // NOTREACHED_NORETURN();
+  NOTREACHED() << "Trying to get the spec of an invalid URL!";
   return base::EmptyString();
 }
 
@@ -171,7 +174,7 @@ bool GURL::operator>(const GURL& other) const {
 }
 
 // Note: code duplicated below (it's inconvenient to use a template here).
-GURL GURL::Resolve(base::StringPiece relative) const {
+GURL GURL::Resolve(std::string_view relative) const {
   // Not allowed for invalid URLs.
   if (!is_valid_)
     return GURL();
@@ -197,7 +200,7 @@ GURL GURL::Resolve(base::StringPiece relative) const {
 }
 
 // Note: code duplicated above (it's inconvenient to use a template here).
-GURL GURL::Resolve(base::StringPiece16 relative) const {
+GURL GURL::Resolve(std::u16string_view relative) const {
   // Not allowed for invalid URLs.
   if (!is_valid_)
     return GURL();
@@ -331,6 +334,15 @@ GURL GURL::GetWithoutFilename() const {
   return Resolve(".");
 }
 
+GURL GURL::GetWithoutRef() const {
+  if (!has_ref())
+    return GURL(*this);
+
+  Replacements replacements;
+  replacements.ClearRef();
+  return ReplaceComponents(replacements);
+}
+
 bool GURL::IsStandard() const {
   return url::IsStandard(spec_.data(), parsed_.scheme);
 }
@@ -343,7 +355,7 @@ bool GURL::IsAboutSrcdoc() const {
   return IsAboutUrl(url::kAboutSrcdocPath);
 }
 
-bool GURL::SchemeIs(base::StringPiece lower_ascii_scheme) const {
+bool GURL::SchemeIs(std::string_view lower_ascii_scheme) const {
   DCHECK(base::IsStringASCII(lower_ascii_scheme));
   DCHECK(base::ToLowerASCII(lower_ascii_scheme) == lower_ascii_scheme);
 
@@ -353,7 +365,7 @@ bool GURL::SchemeIs(base::StringPiece lower_ascii_scheme) const {
 }
 
 bool GURL::SchemeIsHTTPOrHTTPS() const {
-  return SchemeIs(url::kHttpScheme) || SchemeIs(url::kHttpsScheme);
+  return SchemeIs(url::kHttpsScheme) || SchemeIs(url::kHttpScheme);
 }
 
 bool GURL::SchemeIsWSOrWSS() const {
@@ -366,7 +378,7 @@ bool GURL::SchemeIsCryptographic() const {
   return SchemeIsCryptographic(scheme_piece());
 }
 
-bool GURL::SchemeIsCryptographic(base::StringPiece lower_ascii_scheme) {
+bool GURL::SchemeIsCryptographic(std::string_view lower_ascii_scheme) {
   DCHECK(base::IsStringASCII(lower_ascii_scheme));
   DCHECK(base::ToLowerASCII(lower_ascii_scheme) == lower_ascii_scheme);
 
@@ -401,14 +413,14 @@ std::string GURL::ExtractFileName() const {
   return ComponentString(file_component);
 }
 
-base::StringPiece GURL::PathForRequestPiece() const {
-  DCHECK(parsed_.path.len > 0)
+std::string_view GURL::PathForRequestPiece() const {
+  DCHECK(parsed_.path.is_nonempty())
       << "Canonical path for requests should be non-empty";
-  if (parsed_.ref.len >= 0) {
+  if (parsed_.ref.is_valid()) {
     // Clip off the reference when it exists. The reference starts after the
     // #-sign, so we have to subtract one to also remove it.
-    return base::StringPiece(&spec_[parsed_.path.begin],
-                             parsed_.ref.begin - parsed_.path.begin - 1);
+    return std::string_view(spec_).substr(
+        parsed_.path.begin, parsed_.ref.begin - parsed_.path.begin - 1);
   }
   // Compute the actual path length, rather than depending on the spec's
   // terminator. If we're an inner_url, our spec continues on into our outer
@@ -417,7 +429,7 @@ base::StringPiece GURL::PathForRequestPiece() const {
   if (parsed_.query.is_valid())
     path_len = parsed_.query.end() - parsed_.path.begin;
 
-  return base::StringPiece(&spec_[parsed_.path.begin], path_len);
+  return std::string_view(spec_).substr(parsed_.path.begin, path_len);
 }
 
 std::string GURL::PathForRequest() const {
@@ -428,7 +440,7 @@ std::string GURL::HostNoBrackets() const {
   return std::string(HostNoBracketsPiece());
 }
 
-base::StringPiece GURL::HostNoBracketsPiece() const {
+std::string_view GURL::HostNoBracketsPiece() const {
   // If host looks like an IPv6 literal, strip the square brackets.
   url::Component h(parsed_.host);
   if (h.len >= 2 && spec_[h.begin] == '[' && spec_[h.end() - 1] == ']') {
@@ -442,11 +454,11 @@ std::string GURL::GetContent() const {
   return std::string(GetContentPiece());
 }
 
-base::StringPiece GURL::GetContentPiece() const {
+std::string_view GURL::GetContentPiece() const {
   if (!is_valid_)
-    return base::StringPiece();
+    return std::string_view();
   url::Component content_component = parsed_.GetContent();
-  if (!SchemeIs(url::kJavaScriptScheme) && parsed_.ref.len >= 0)
+  if (!SchemeIs(url::kJavaScriptScheme) && parsed_.ref.is_valid())
     content_component.len -= parsed_.ref.len + 1;
   return ComponentStringPiece(content_component);
 }
@@ -460,7 +472,7 @@ const GURL& GURL::EmptyGURL() {
   return *empty_gurl;
 }
 
-bool GURL::DomainIs(base::StringPiece canonical_domain) const {
+bool GURL::DomainIs(std::string_view canonical_domain) const {
   if (!is_valid_)
     return false;
 
@@ -474,8 +486,8 @@ bool GURL::EqualsIgnoringRef(const GURL& other) const {
   int ref_position = parsed_.CountCharactersBefore(url::Parsed::REF, true);
   int ref_position_other =
       other.parsed_.CountCharactersBefore(url::Parsed::REF, true);
-  return base::StringPiece(spec_).substr(0, ref_position) ==
-         base::StringPiece(other.spec_).substr(0, ref_position_other);
+  return std::string_view(spec_).substr(0, ref_position) ==
+         std::string_view(other.spec_).substr(0, ref_position_other);
 }
 
 void GURL::Swap(GURL* other) {
@@ -491,7 +503,7 @@ size_t GURL::EstimateMemoryUsage() const {
          (parsed_.inner_parsed() ? sizeof(url::Parsed) : 0);
 }
 
-bool GURL::IsAboutUrl(base::StringPiece allowed_path) const {
+bool GURL::IsAboutUrl(std::string_view allowed_path) const {
   if (!SchemeIs(url::kAboutScheme))
     return false;
 
@@ -502,8 +514,8 @@ bool GURL::IsAboutUrl(base::StringPiece allowed_path) const {
 }
 
 // static
-bool GURL::IsAboutPath(base::StringPiece actual_path,
-                       base::StringPiece allowed_path) {
+bool GURL::IsAboutPath(std::string_view actual_path,
+                       std::string_view allowed_path) {
   if (!base::StartsWith(actual_path, allowed_path))
     return false;
 
@@ -537,22 +549,22 @@ bool operator!=(const GURL& x, const GURL& y) {
   return !(x == y);
 }
 
-bool operator==(const GURL& x, const base::StringPiece& spec) {
+bool operator==(const GURL& x, std::string_view spec) {
   DCHECK_EQ(GURL(spec).possibly_invalid_spec(), spec)
       << "Comparisons of GURLs and strings must ensure as a precondition that "
          "the string is fully canonicalized.";
   return x.possibly_invalid_spec() == spec;
 }
 
-bool operator==(const base::StringPiece& spec, const GURL& x) {
+bool operator==(std::string_view spec, const GURL& x) {
   return x == spec;
 }
 
-bool operator!=(const GURL& x, const base::StringPiece& spec) {
+bool operator!=(const GURL& x, std::string_view spec) {
   return !(x == spec);
 }
 
-bool operator!=(const base::StringPiece& spec, const GURL& x) {
+bool operator!=(std::string_view spec, const GURL& x) {
   return !(x == spec);
 }
 

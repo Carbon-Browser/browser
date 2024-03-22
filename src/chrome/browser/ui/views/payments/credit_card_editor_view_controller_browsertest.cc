@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/test_autofill_clock.h"
 #include "components/autofill/core/browser/ui/address_combobox_model.h"
-#include "components/payments/content/autofill_payment_app.h"
 #include "components/payments/content/payment_request.h"
 #include "components/payments/content/payment_request_spec.h"
 #include "components/payments/core/features.h"
@@ -36,8 +35,9 @@ namespace payments {
 
 namespace {
 
-const base::Time kJanuary2017 = base::Time::FromDoubleT(1484505871);
-const base::Time kJune2017 = base::Time::FromDoubleT(1497552271);
+const base::Time kJanuary2017 =
+    base::Time::FromSecondsSinceUnixEpoch(1484505871);
+const base::Time kJune2017 = base::Time::FromSecondsSinceUnixEpoch(1497552271);
 
 }  // namespace
 

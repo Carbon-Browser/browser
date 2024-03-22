@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,12 @@ class EmptyOverrideGeneratorClassAdapter extends ClassVisitor {
     }
 
     @Override
-    public void visit(int version, int access, String name, String signature, String superName,
+    public void visit(
+            int version,
+            int access,
+            String name,
+            String signature,
+            String superName,
             String[] interfaces) {
         super.visit(version, access, name, signature, superName, interfaces);
 
@@ -52,8 +57,9 @@ class EmptyOverrideGeneratorClassAdapter extends ClassVisitor {
                 continue;
             }
 
-            MethodVisitor mv = super.visitMethod(
-                    method.access, method.methodName, method.description, null, null);
+            MethodVisitor mv =
+                    super.visitMethod(
+                            method.access, method.methodName, method.description, null, null);
             writeOverrideCode(mv, method.access, method.methodName, method.description);
         }
 
@@ -75,6 +81,7 @@ class EmptyOverrideGeneratorClassAdapter extends ClassVisitor {
      */
     private void writeOverrideCode(
             MethodVisitor mv, final int access, final String name, final String descriptor) {
+        assert access != 0;
         Type[] argTypes = Type.getArgumentTypes(descriptor);
         Type returnType = Type.getReturnType(descriptor);
 

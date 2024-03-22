@@ -1,24 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/strings/sys_string_conversions.h"
-#include "components/password_manager/core/common/password_manager_features.h"
-#include "components/strings/grit/components_strings.h"
+#import "base/strings/sys_string_conversions.h"
+#import "components/password_manager/core/common/password_manager_features.h"
+#import "components/strings/grit/components_strings.h"
 #import "ios/chrome/browser/ui/passwords/password_breach_app_interface.h"
 #import "ios/chrome/browser/ui/passwords/password_constants.h"
+#import "ios/chrome/browser/ui/settings/password/password_settings_app_interface.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_table_view_constants.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/gtest/include/gtest/gtest.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
 
@@ -29,7 +26,7 @@ id<GREYMatcher> PasswordBreachMatcher() {
 }
 
 id<GREYMatcher> PasswordListMatcher() {
-  return grey_accessibilityID(kPasswordsTableViewId);
+  return grey_accessibilityID(kPasswordsTableViewID);
 }
 
 id<GREYMatcher> CheckPasswordButton() {
@@ -59,11 +56,19 @@ id<GREYMatcher> CheckPasswordButton() {
   [[EarlGrey selectElementWithMatcher:PasswordBreachMatcher()]
       assertWithMatcher:grey_notNil()];
 
+  // Mock successful auth for opening the password manager.
+  [PasswordSettingsAppInterface setUpMockReauthenticationModule];
+  [PasswordSettingsAppInterface mockReauthenticationModuleExpectedResult:
+                                    ReauthenticationResult::kSuccess];
+
   [[EarlGrey selectElementWithMatcher:CheckPasswordButton()]
       performAction:grey_tap()];
 
   [[EarlGrey selectElementWithMatcher:PasswordListMatcher()]
       assertWithMatcher:grey_notNil()];
+
+  // Cleanup mock reauth module.
+  [PasswordSettingsAppInterface removeMockReauthenticationModule];
 }
 
 @end

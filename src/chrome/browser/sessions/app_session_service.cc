@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,8 +59,7 @@ AppSessionService::~AppSessionService() {
   DestroyCommandStorageManager();
 }
 
-void AppSessionService::TabClosed(const SessionID& window_id,
-                                  const SessionID& tab_id) {
+void AppSessionService::TabClosed(SessionID window_id, SessionID tab_id) {
   if (!tab_id.id())
     return;  // Happens when the tab is replaced.
 
@@ -89,7 +88,7 @@ void AppSessionService::WindowOpened(Browser* browser) {
   SetWindowWorkspace(browser->session_id(), browser->window()->GetWorkspace());
 }
 
-void AppSessionService::WindowClosing(const SessionID& window_id) {
+void AppSessionService::WindowClosing(SessionID window_id) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
@@ -99,7 +98,7 @@ void AppSessionService::WindowClosing(const SessionID& window_id) {
   RebuildCommandsIfRequired();
 }
 
-void AppSessionService::WindowClosed(const SessionID& window_id) {
+void AppSessionService::WindowClosed(SessionID window_id) {
   if (!ShouldTrackChangesToWindow(window_id)) {
     return;
   }
@@ -111,8 +110,7 @@ void AppSessionService::WindowClosed(const SessionID& window_id) {
   ScheduleCommand(sessions::CreateWindowClosedCommand(window_id));
 }
 
-void AppSessionService::SetWindowType(const SessionID& window_id,
-                                      Browser::Type type) {
+void AppSessionService::SetWindowType(SessionID window_id, Browser::Type type) {
   sessions::SessionWindow::WindowType window_type =
       WindowTypeForBrowserType(type);
   if (!ShouldRestoreWindowOfType(window_type))

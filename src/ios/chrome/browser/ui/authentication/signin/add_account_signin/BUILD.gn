@@ -1,11 +1,10 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/chrome_build.gni")
 
 source_set("add_account_signin") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "add_account_signin_coordinator.h",
     "add_account_signin_coordinator.mm",
@@ -16,16 +15,19 @@ source_set("add_account_signin") {
   deps = [
     "//components/prefs",
     "//components/signin/public/identity_manager",
-    "//components/strings:components_strings_grit",
-    "//ios/chrome/app/strings:ios_strings_grit",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/main",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/ui/alert_coordinator",
+    "//components/strings",
+    "//components/sync/base:features",
+    "//ios/chrome/app/strings",
+    "//ios/chrome/browser/main/model",
+    "//ios/chrome/browser/shared/coordinator/alert",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/signin/model:system_identity_manager",
     "//ios/chrome/browser/ui/authentication",
+    "//ios/chrome/browser/ui/authentication/history_sync",
     "//ios/chrome/browser/ui/authentication/signin:signin_protected",
-    "//ios/public/provider/chrome/browser",
-    "//ios/public/provider/chrome/browser/signin",
     "//ui/base",
   ]
   public_deps = [
@@ -35,7 +37,6 @@ source_set("add_account_signin") {
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [ "add_account_signin_manager_unittest.mm" ]
   deps = [
@@ -43,11 +44,11 @@ source_set("unit_tests") {
     "//base/test:test_support",
     "//components/prefs",
     "//components/prefs:test_support",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/signin",
-    "//ios/public/provider/chrome/browser/signin",
-    "//ios/public/provider/chrome/browser/signin:fake_chrome_identity",
-    "//ios/public/provider/chrome/browser/signin:test_support",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/signin/model:fake_system_identity",
+    "//ios/chrome/browser/signin/model:fake_system_identity_manager",
     "//ios/web/common:uikit",
     "//ios/web/public/test",
     "//testing/gmock",

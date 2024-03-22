@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,7 @@ class OptimizationGuideInternalsPageHandlerImpl
  private:
   // optimization_guide::OptimizationGuideLogger::Observer overrides.
   void OnLogMessageAdded(base::Time event_time,
+                         optimization_guide_common::mojom::LogSource log_source,
                          const std::string& source_file,
                          int source_line,
                          const std::string& message) override;

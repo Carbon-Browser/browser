@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,11 +20,12 @@ import com.google.android.gms.common.GoogleApiAvailability;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.StrictModeContext;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.components.embedder_support.util.Origin;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.gms.ChromiumPlayServicesAvailability;
 
 /**
@@ -44,21 +45,18 @@ public class ExternalAuthUtils {
         mGoogleDelegate = new ExternalAuthGoogleDelegateImpl();
     }
 
-    /**
-     * @return The singleton instance of ExternalAuthUtils.
-     */
+    /** @return The singleton instance of ExternalAuthUtils. */
     public static ExternalAuthUtils getInstance() {
         return sInstance;
     }
 
     /**
      * Gets the calling package names for the current transaction.
-     * @param context The context to use for accessing the package manager.
      * @return The calling package names.
      */
-    private static String[] getCallingPackages(Context context) {
+    private static String[] getCallingPackages() {
         int callingUid = Binder.getCallingUid();
-        PackageManager pm = context.getApplicationContext().getPackageManager();
+        PackageManager pm = ContextUtils.getApplicationContext().getPackageManager();
         return pm.getPackagesForUid(callingUid);
     }
 
@@ -119,12 +117,12 @@ public class ExternalAuthUtils {
      * @param packageToMatch The package name to compare with the caller.
      * @return Whether the caller meets the authentication requirements.
      */
-    private boolean isCallerValid(Context context, int authRequirements, String packageToMatch) {
+    private boolean isCallerValid(int authRequirements, String packageToMatch) {
         boolean shouldBeGoogleSigned = (authRequirements & FLAG_SHOULD_BE_GOOGLE_SIGNED) != 0;
         boolean shouldBeSystem = (authRequirements & FLAG_SHOULD_BE_SYSTEM) != 0;
 
-        String[] callingPackages = getCallingPackages(context);
-        PackageManager pm = context.getApplicationContext().getPackageManager();
+        String[] callingPackages = getCallingPackages();
+        PackageManager pm = ContextUtils.getApplicationContext().getPackageManager();
         boolean matchFound = false;
 
         for (String packageName : callingPackages) {
@@ -146,11 +144,10 @@ public class ExternalAuthUtils {
      * @param packageToMatch The package name to compare with the caller. Should be non-empty.
      * @return Whether the caller meets the authentication requirements.
      */
-    public boolean isCallerValidForPackage(
-            Context context, int authRequirements, String packageToMatch) {
+    public boolean isCallerValidForPackage(int authRequirements, String packageToMatch) {
         assert !TextUtils.isEmpty(packageToMatch);
 
-        return isCallerValid(context, authRequirements, packageToMatch);
+        return isCallerValid(authRequirements, packageToMatch);
     }
 
     /**
@@ -160,8 +157,8 @@ public class ExternalAuthUtils {
      * @param authRequirements The requirements to be exercised on the caller.
      * @return Whether the caller meets the authentication requirements.
      */
-    public boolean isCallerValid(Context context, int authRequirements) {
-        return isCallerValid(context, authRequirements, "");
+    public boolean isCallerValid(int authRequirements) {
+        return isCallerValid(authRequirements, "");
     }
 
     /**
@@ -171,10 +168,9 @@ public class ExternalAuthUtils {
      *         when it is updating.
      */
     public boolean isGooglePlayServicesMissing(final Context context) {
-        // final int resultCode = checkGooglePlayServicesAvailable(context);
-        // return (resultCode == ConnectionResult.SERVICE_MISSING
-        //         || resultCode == ConnectionResult.SERVICE_INVALID);
-        return true;
+        final int resultCode = checkGooglePlayServicesAvailable(context);
+        return (resultCode == ConnectionResult.SERVICE_MISSING
+                || resultCode == ConnectionResult.SERVICE_INVALID);
     }
 
     /**
@@ -189,21 +185,21 @@ public class ExternalAuthUtils {
      * @return true if and only if Google Play Services can be used
      */
     public boolean canUseGooglePlayServices(final UserRecoverableErrorHandler errorHandler) {
-        // Context context = ContextUtils.getApplicationContext();
-        // final int resultCode = checkGooglePlayServicesAvailable(context);
-        // if (resultCode == ConnectionResult.SUCCESS) return true;
-        // // resultCode is some kind of error.
-        // Log.v(TAG, "Unable to use Google Play Services: %s", describeError(resultCode));
-        // if (isUserRecoverableError(resultCode)) {
-        //     Runnable errorHandlerTask = new Runnable() {
-        //         @Override
-        //         public void run() {
-        //             errorHandler.handleError(context, resultCode);
-        //         }
-        //     };
-        //     PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, errorHandlerTask);
-        // }
-        // return false;
+        Context context = ContextUtils.getApplicationContext();
+        final int resultCode = checkGooglePlayServicesAvailable(context);
+        if (resultCode == ConnectionResult.SUCCESS) return true;
+        // resultCode is some kind of error.
+        Log.v(TAG, "Unable to use Google Play Services: %s", describeError(resultCode));
+        if (isUserRecoverableError(resultCode)) {
+            Runnable errorHandlerTask =
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            errorHandler.handleError(context, resultCode);
+                        }
+                    };
+            PostTask.runOrPostTask(TaskTraits.UI_DEFAULT, errorHandlerTask);
+        }
         return false;
     }
 
@@ -247,10 +243,7 @@ public class ExternalAuthUtils {
         return canUseFirstPartyGooglePlayServices(new UserRecoverableErrorHandler.Silent());
     }
 
-    /**
-     * @return this object's {@link ExternalAuthGoogleDelegate} instance.
-     */
-    @VisibleForTesting
+    /** @return this object's {@link ExternalAuthGoogleDelegate} instance. */
     public ExternalAuthGoogleDelegate getGoogleDelegateForTesting() {
         return mGoogleDelegate;
     }
@@ -296,6 +289,8 @@ public class ExternalAuthUtils {
      * @param externalAuthUtils The instance to set for testing.
      */
     public static void setInstanceForTesting(ExternalAuthUtils externalAuthUtils) {
+        var oldValue = sInstance;
         sInstance = externalAuthUtils;
+        ResettersForTesting.register(() -> sInstance = oldValue);
     }
 }

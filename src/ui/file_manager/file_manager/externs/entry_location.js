@@ -1,9 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {VolumeManagerCommon} from '../common/js/volume_manager_types.js';
-import {VolumeInfo} from './volume_info.js';
+import {RootType} from '../common/js/volume_manager_types.js';
 
 /**
  * Location information which shows where the path points in FileManager's
@@ -14,13 +13,13 @@ export class EntryLocation {
   constructor() {
     /**
      * Volume information.
-     * @type {VolumeInfo}
+     * @type {?import("./volume_info.js").VolumeInfo}
      */
     this.volumeInfo;
 
     /**
      * Root type.
-     * @type {VolumeManagerCommon.RootType}
+     * @type {RootType}
      */
     this.rootType;
 

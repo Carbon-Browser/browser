@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,17 @@
 #include <string>
 #include <vector>
 
-#include "ash/public/cpp/session/session_types.h"
+#include "ash/login_status.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/system/diagnostics/diagnostics_browser_delegate.h"
+#include "ash/system/diagnostics/keyboard_input_log.h"
 #include "ash/system/diagnostics/networking_log.h"
 #include "ash/system/diagnostics/routine_log.h"
 #include "ash/system/diagnostics/telemetry_log.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/logging.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_util.h"
 #include "base/task/thread_pool.h"
@@ -39,6 +39,7 @@ const char kDiaganosticsDirName[] = "diagnostics";
 const char kRoutineLogSubsectionHeader[] = "--- Test Routines --- \n";
 const char kSystemLogSectionHeader[] = "=== System === \n";
 const char kNetworkingLogSectionHeader[] = "=== Networking === \n";
+const char kKeyboardLogSectionHeader[] = "=== Keyboard === \n";
 const char kNoRoutinesRun[] =
     "No routines of this type were run in the session.\n";
 
@@ -51,6 +52,32 @@ std::string GetRoutineResultsString(const std::string& results) {
 
   return section_header + results;
 }
+
+// Determines if LoginStatus state update should trigger a reset of log
+// pointers.
+bool ShouldResetAndInitializeLogWritersForLoginStatus(
+    LoginStatus previous_status,
+    LoginStatus current_status) {
+  if (previous_status == current_status)
+    return false;
+
+  switch (current_status) {
+    case ash::LoginStatus::LOCKED:
+      // User has not changed.
+      return false;
+    case LoginStatus::GUEST:
+    case LoginStatus::PUBLIC:
+    case LoginStatus::KIOSK_APP:
+    case LoginStatus::USER:
+    case LoginStatus::CHILD:
+      // Do not reset if user has just unlocked screen.
+      return previous_status != ash::LoginStatus::LOCKED;
+    case LoginStatus::NOT_LOGGED_IN:
+      // When status goes to not_logged_in we should clear existing logs.
+      return true;
+  }
+}
+
 // Determines if profile should be accessed with current session state.  If at
 // sign-in screen, guest user, kiosk app, or before the profile has
 // successfully loaded temporary path should be used for storing logs.
@@ -67,6 +94,8 @@ DiagnosticsLogController::DiagnosticsLogController()
   DCHECK_EQ(nullptr, g_instance);
   ash::Shell::Get()->session_controller()->AddObserver(this);
   g_instance = this;
+  g_instance->previous_status_ =
+      ash::Shell::Get()->session_controller()->login_status();
 }
 
 DiagnosticsLogController::~DiagnosticsLogController() {
@@ -91,6 +120,8 @@ void DiagnosticsLogController::Initialize(
   DCHECK(g_instance);
   DCHECK_CALLED_ON_VALID_SEQUENCE(g_instance->sequence_checker_);
   g_instance->delegate_ = std::move(delegate);
+  g_instance->previous_status_ =
+      ash::Shell::Get()->session_controller()->login_status();
   g_instance->ResetAndInitializeLogWriters();
 
   // Schedule removal of log directory.
@@ -101,9 +132,8 @@ void DiagnosticsLogController::Initialize(
                      g_instance->log_base_path_));
 }
 
-bool DiagnosticsLogController::GenerateSessionLogOnBlockingPool(
-    const base::FilePath& save_file_path) {
-  DCHECK(!save_file_path.empty());
+std::string DiagnosticsLogController::GenerateSessionStringOnBlockingPool()
+    const {
   std::vector<std::string> log_pieces;
 
   // Fetch system data from TelemetryLog.
@@ -119,23 +149,33 @@ bool DiagnosticsLogController::GenerateSessionLogOnBlockingPool(
   // Add the routine section for the system category.
   log_pieces.push_back(GetRoutineResultsString(system_routines));
 
-  if (features::IsNetworkingInDiagnosticsAppEnabled()) {
-    // Add networking category.
-    log_pieces.push_back(kNetworkingLogSectionHeader);
+  // Add networking category.
+  log_pieces.push_back(kNetworkingLogSectionHeader);
 
-    // Add the network info section.
-    log_pieces.push_back(networking_log_->GetNetworkInfo());
+  // Add the network info section.
+  log_pieces.push_back(networking_log_->GetNetworkInfo());
 
-    // Add the routine section for the network category.
-    const std::string network_routines = routine_log_->GetContentsForCategory(
-        RoutineLog::RoutineCategory::kNetwork);
-    log_pieces.push_back(GetRoutineResultsString(network_routines));
+  // Add the routine section for the network category.
+  const std::string network_routines = routine_log_->GetContentsForCategory(
+      RoutineLog::RoutineCategory::kNetwork);
+  log_pieces.push_back(GetRoutineResultsString(network_routines));
 
-    // Add the network events section.
-    log_pieces.push_back(networking_log_->GetNetworkEvents());
+  // Add the network events section.
+  log_pieces.push_back(networking_log_->GetNetworkEvents());
+
+  std::string input_log_contents = keyboard_input_log_->GetLogContents();
+  if (!input_log_contents.empty()) {
+    log_pieces.push_back(kKeyboardLogSectionHeader);
+    log_pieces.push_back(std::move(input_log_contents));
   }
 
-  return base::WriteFile(save_file_path, base::JoinString(log_pieces, "\n"));
+  return base::JoinString(log_pieces, "\n");
+}
+
+bool DiagnosticsLogController::GenerateSessionLogOnBlockingPool(
+    const base::FilePath& save_file_path) {
+  DCHECK(!save_file_path.empty());
+  return base::WriteFile(save_file_path, GenerateSessionStringOnBlockingPool());
 }
 
 void DiagnosticsLogController::ResetAndInitializeLogWriters() {
@@ -144,27 +184,34 @@ void DiagnosticsLogController::ResetAndInitializeLogWriters() {
   }
 
   ResetLogBasePath();
-
+  keyboard_input_log_ = std::make_unique<KeyboardInputLog>(log_base_path_);
   networking_log_ = std::make_unique<NetworkingLog>(log_base_path_);
   routine_log_ = std::make_unique<RoutineLog>(log_base_path_);
   telemetry_log_ = std::make_unique<TelemetryLog>();
 }
 
-NetworkingLog* DiagnosticsLogController::GetNetworkingLog() {
-  return networking_log_.get();
+KeyboardInputLog& DiagnosticsLogController::GetKeyboardInputLog() {
+  return *keyboard_input_log_;
 }
 
-RoutineLog* DiagnosticsLogController::GetRoutineLog() {
-  return routine_log_.get();
+NetworkingLog& DiagnosticsLogController::GetNetworkingLog() {
+  return *networking_log_;
 }
 
-TelemetryLog* DiagnosticsLogController::GetTelemetryLog() {
-  return telemetry_log_.get();
+RoutineLog& DiagnosticsLogController::GetRoutineLog() {
+  return *routine_log_;
+}
+
+TelemetryLog& DiagnosticsLogController::GetTelemetryLog() {
+  return *telemetry_log_;
 }
 
 void DiagnosticsLogController::ResetLogBasePath() {
   const session_manager::SessionState state =
       ash::Shell::Get()->session_controller()->GetSessionState();
+  // g_instance->previous_status_ is updated OnLoginStatusChanged after
+  // ResetLogBasePath. To ensure we have the current status we need to query the
+  // session_controller for it.
   const LoginStatus status =
       ash::Shell::Get()->session_controller()->login_status();
 
@@ -190,7 +237,20 @@ void DiagnosticsLogController::OnLoginStatusChanged(LoginStatus login_status) {
     return;
   }
 
-  g_instance->ResetAndInitializeLogWriters();
+  if (ShouldResetAndInitializeLogWritersForLoginStatus(
+          g_instance->previous_status_, login_status)) {
+    g_instance->ResetAndInitializeLogWriters();
+
+    // Schedule removal of log directory as this should happen every time a user
+    // logs in.
+    base::ThreadPool::PostTask(
+        FROM_HERE, {base::MayBlock()},
+        base::BindOnce(&DiagnosticsLogController::RemoveDirectory,
+                       g_instance->weak_ptr_factory_.GetWeakPtr(),
+                       g_instance->log_base_path_));
+  }
+
+  g_instance->previous_status_ = login_status;
 }
 
 void DiagnosticsLogController::RemoveDirectory(const base::FilePath& path) {
@@ -199,6 +259,26 @@ void DiagnosticsLogController::RemoveDirectory(const base::FilePath& path) {
   if (base::PathExists(path)) {
     base::DeletePathRecursively(path);
   }
+}
+
+void DiagnosticsLogController::SetKeyboardInputLogForTesting(
+    std::unique_ptr<KeyboardInputLog> keyboard_input_log) {
+  keyboard_input_log_ = std::move(keyboard_input_log);
+}
+
+void DiagnosticsLogController::SetNetworkingLogForTesting(
+    std::unique_ptr<NetworkingLog> networking_log) {
+  networking_log_ = std::move(networking_log);
+}
+
+void DiagnosticsLogController::SetRoutineLogForTesting(
+    std::unique_ptr<RoutineLog> routine_log) {
+  routine_log_ = std::move(routine_log);
+}
+
+void DiagnosticsLogController::SetTelemetryLogForTesting(
+    std::unique_ptr<TelemetryLog> telemetry_log) {
+  telemetry_log_ = std::move(telemetry_log);
 }
 
 }  // namespace diagnostics

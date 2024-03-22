@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/sync/test/integration/updated_progress_marker_checker.h"
-#include "components/sync/driver/sync_service_impl.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
 #include "components/sync/protocol/data_type_progress_marker.pb.h"
-#include "components/sync/test/fake_server/fake_server.h"
+#include "components/sync/service/sync_service_impl.h"
+#include "components/sync/test/fake_server.h"
 
 namespace {
 
@@ -27,9 +27,9 @@ bool AreProgressMarkersEquivalent(const std::string& serialized1,
   sync_pb::DataTypeProgressMarker marker2;
   CHECK(marker1.ParseFromString(serialized1));
   CHECK(marker2.ParseFromString(serialized2));
-  marker1.clear_gc_directive();
-  marker2.clear_gc_directive();
   DCHECK(marker1.data_type_id() == marker2.data_type_id());
+  DCHECK(!marker1.has_gc_directive());
+  DCHECK(!marker2.has_gc_directive());
 
   if (syncer::GetModelTypeFromSpecificsFieldNumber(marker1.data_type_id()) ==
           syncer::AUTOFILL_WALLET_DATA ||

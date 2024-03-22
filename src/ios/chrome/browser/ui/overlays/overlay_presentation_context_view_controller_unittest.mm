@@ -1,26 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/overlays/overlay_presentation_context_view_controller.h"
 
 #import "base/test/ios/wait_util.h"
-#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#include "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/test_modality/test_presented_overlay_request_config.h"
-#import "ios/chrome/browser/overlays/public/test_modality/test_resizing_presented_overlay_request_config.h"
+#import "build/branding_buildflags.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/test_modality/test_presented_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/test_modality/test_resizing_presented_overlay_request_config.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/ui/overlays/overlay_presentation_context_impl.h"
-#include "ios/chrome/browser/ui/overlays/test/fake_overlay_request_coordinator_delegate.h"
+#import "ios/chrome/browser/ui/overlays/test/fake_overlay_request_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/overlays/test_modality/test_presented_overlay_coordinator.h"
 #import "ios/chrome/browser/ui/overlays/test_modality/test_resizing_presented_overlay_coordinator.h"
-#include "ios/chrome/test/scoped_key_window.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/test/scoped_key_window.h"
+#import "ios/web/public/test/web_task_environment.h"
+#import "testing/platform_test.h"
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForUIElementTimeout;
@@ -90,6 +87,13 @@ TEST_F(OverlayPresentationContextViewControllerTest, NoPresentedUI) {
 // showing overlay UI presented over its context.
 TEST_F(OverlayPresentationContextViewControllerTest,
        PresentedOverCurrentContext) {
+  if (@available(iOS 15.7.1, *)) {
+    if (@available(iOS 15.7.2, *)) {
+    } else {
+      // TODO(crbug.com/1409884): Failing on a few 15.7.1 devices.
+      return;
+    }
+  }
   // Create a fake overlay coordinator that presents its UI over
   // `view_controller_`.
   std::unique_ptr<OverlayRequest> request =
@@ -123,11 +127,14 @@ TEST_F(OverlayPresentationContextViewControllerTest,
   EXPECT_TRUE(CGRectEqualToRect([view convertRect:view.bounds toView:nil],
                                 root_window_frame));
 
-  // Stop the coordinator and wait for its dismissal to finish.
+  // Stop the coordinator, wait for its dismissal to finish, and make sure the
+  // layout is updated.
   [coordinator stopAnimated:NO];
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForUIElementTimeout, ^bool {
     return !overlay_view_controller.presentingViewController;
   }));
+  [container_view layoutIfNeeded];
+  [view layoutIfNeeded];
 
   // Verify that the views are resized to CGRectZero when nothing is presented
   // upon it.
@@ -139,6 +146,13 @@ TEST_F(OverlayPresentationContextViewControllerTest,
 // container view if it is shown using custom UIViewController presentation that
 // resizes the contianer view.
 TEST_F(OverlayPresentationContextViewControllerTest, ResizingPresentedOverlay) {
+  if (@available(iOS 15.7.1, *)) {
+    if (@available(iOS 15.7.2, *)) {
+    } else {
+      // TODO(crbug.com/1409884): Failing on a few 15.7.1 devices.
+      return;
+    }
+  }
   // Create a fake overlay coordinator that presents its UI over
   // `view_controller_` and resizes its presentation container view to
   // kWindowFrame.
@@ -178,11 +192,14 @@ TEST_F(OverlayPresentationContextViewControllerTest, ResizingPresentedOverlay) {
                                                              toView:nil],
                                 kWindowFrame));
 
-  // Stop the coordinator and wait for its dismissal to finish.
+  // Stop the coordinator, wait for its dismissal to finish, and make sure the
+  // layout is updated.
   [coordinator stopAnimated:NO];
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForUIElementTimeout, ^bool {
     return !overlay_view_controller.presentingViewController;
   }));
+  [container_view layoutIfNeeded];
+  [view layoutIfNeeded];
 
   // Verify that the views are resized to CGRectZero when nothing is presented
   // upon it.

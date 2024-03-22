@@ -1,5 +1,5 @@
 <!--
-Copyright 2020 The Chromium Authors. All rights reserved.
+Copyright 2020 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -22,22 +22,8 @@ chromium-metrics-reviews@google.com.
 
 <histograms>
 
-<histogram name="DigitalGoods.CrossSite" enum="Boolean"
-    expires_after="2022-11-20">
-  <owner>glenrob@chromium.org</owner>
-  <owner>dominickn@chromium.org</owner>
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>
-    Records whether the |GetDigitalGoodsService| method was called from a
-    cross-site sub-frame. This metric is emitted when the cross-site check is
-    made in the renderer, i.e. only when the payment method is non-empty and the
-    script context is not being destroyed.
-  </summary>
-</histogram>
-
 <histogram name="PaymentRequest.CheckoutFunnel"
-    enum="PaymentRequestCheckoutFunnelSteps" expires_after="2023-01-15">
+    enum="PaymentRequestCheckoutFunnelSteps" expires_after="2024-04-28">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -47,13 +33,6 @@ chromium-metrics-reviews@google.com.
     1- Initiated, 2- show() called 3- Payment request triggered 4- Payment
     handler invoked, 5- Completed.
   </summary>
-</histogram>
-
-<histogram name="PaymentRequest.CheckoutFunnel.Aborted"
-    enum="PaymentRequestAbortReason" expires_after="2022-11-22">
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>The reason that lead to an abort of the Payment Request.</summary>
 </histogram>
 
 <histogram name="PaymentRequest.CheckoutFunnel.NoShow"
@@ -66,7 +45,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PaymentRequest.EventResponse.CanMakePayment" enum="Boolean"
-    expires_after="2022-11-27">
+    expires_after="2024-02-20">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -82,7 +61,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PaymentRequest.EventResponse.IsReadyToPay" enum="Boolean"
-    expires_after="2022-11-27">
+    expires_after="2023-07-02">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -99,7 +78,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PaymentRequest.Events" units="bitfield value"
-    expires_after="2022-12-18">
+    expires_after="2023-08-27">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -109,7 +88,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PaymentRequest.Events2" units="bitfield value"
-    expires_after="2023-06-26">
+    expires_after="2024-05-19">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -119,7 +98,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PaymentRequest.JourneyLoggerHasRecorded" enum="Boolean"
-    expires_after="2022-12-25">
+    expires_after="2023-09-03">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -136,42 +115,34 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="PaymentRequest.MissingContactFields"
-    enum="PaymentRequestMissingContactFields" expires_after="2022-10-30">
-  <owner>rouslan@chromium.org</owner>
+<histogram name="PaymentRequest.ManifestVerifierCacheHitPaymentMethod"
+    enum="Boolean" expires_after="2024-03-24">
+  <owner>pkotwicz@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
-    A bitfield representing different missing fields of the contact section in
-    payment sheet. This only gets recorded when no complete contact profile is
-    available. In case of multiple partially complete profiles, this is only
-    recorded for the most complete one which is also the first profile in the
-    suggestion list.
+    Records whether the payment ManifestVerifier found the payment method
+    manifest in the browser cache.
   </summary>
 </histogram>
 
-<histogram name="PaymentRequest.MissingPaymentFields"
-    enum="PaymentRequestMissingPaymentFields" expires_after="2022-06-26">
-  <owner>rouslan@chromium.org</owner>
+<histogram
+    name="PaymentRequest.ManifestVerifierCheckCachePaymentMethodDuration"
+    units="ms" expires_after="2024-03-24">
+  <owner>pkotwicz@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
-    A bitfield representing different missing fields of the payment info section
-    in the payment sheet. This only gets recorded when no complete payment
-    instrument is available (SW based instruments are always considered as
-    complete). In case of multiple partially complete cards this is only
-    recorded for the first card in the suggestion list.
+    Records how long it takes to check the browser cache for the payment method
+    manifest.
   </summary>
 </histogram>
 
-<histogram name="PaymentRequest.MissingShippingFields"
-    enum="PaymentRequestMissingShippingFields" expires_after="2022-10-30">
-  <owner>rouslan@chromium.org</owner>
+<histogram
+    name="PaymentRequest.ManifestVerifierDownloadAndParseMethodManifestDuration"
+    units="ms" expires_after="2024-03-24">
+  <owner>pkotwicz@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
-    A bitfield representing different missing fields of the shipping section in
-    the payment sheet. This only gets recorded when no complete shipping profile
-    is available. In case of multiple partially complete profiles, this is only
-    recorded for the most complete one which is also the first profile in the
-    suggestion list.
+    Records how long it takes to download the payment method manifest.
   </summary>
 </histogram>
 
@@ -195,7 +166,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PaymentRequest.PaymentHandlerInstallSuccess"
-    enum="BooleanSuccess" expires_after="2023-01-01">
+    enum="BooleanSuccess" expires_after="2024-05-19">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -205,7 +176,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PaymentRequest.PrePurchaseQuery"
-    enum="PaymentRequestPrePurchaseQuery" expires_after="2023-07-07">
+    enum="PaymentRequestPrePurchaseQuery" expires_after="2023-09-10">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -229,7 +200,7 @@ chromium-metrics-reviews@google.com.
 <histogram
     name="PaymentRequest.SecurePaymentConfirmation.Funnel.AuthenticationDialogResult"
     enum="SecurePaymentConfirmationAuthenticationDialogResult"
-    expires_after="2022-11-22">
+    expires_after="2023-08-20">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -242,40 +213,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram
-    name="PaymentRequest.SecurePaymentConfirmation.Funnel.EnrollDialogResult"
-    enum="SecurePaymentConfirmationEnrollDialogResult"
-    expires_after="2022-11-22">
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>
-    Records the result of the Secure Payment Confirmation enrollment dialog. The
-    result is Accepted if the user has clicked to confirm the enrollment, such
-    as via the &quot;Use Touch ID&quot; button, Canceled if the user has clicked
-    the button to cancel the enrollment, or Closed if the user has closed the
-    dialog in any way, such as by closing the tab. Logged when the enrollment
-    dialog closes.
-  </summary>
-</histogram>
-
-<histogram
-    name="PaymentRequest.SecurePaymentConfirmation.Funnel.EnrollDialogShown"
-    enum="SecurePaymentConfirmationEnrollDialogShown"
-    expires_after="2022-11-22">
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>
-    Records whether the website was able to display the Secure Payment
-    Confirmation enrollment dialog. The result is Shown if the dialog was
-    displayed to the user or CouldNotShow if the dialog could not be displayed,
-    e.g., if another enrollment dialog was already displaying. Logged in the
-    browser process when a website attempts to display the enrollment dialog.
-  </summary>
-</histogram>
-
-<histogram
     name="PaymentRequest.SecurePaymentConfirmation.Funnel.EnrollSystemPromptResult"
     enum="SecurePaymentConfirmationEnrollSystemPromptResult"
-    expires_after="2022-11-22">
+    expires_after="2023-11-19">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -290,7 +230,7 @@ chromium-metrics-reviews@google.com.
 <histogram
     name="PaymentRequest.SecurePaymentConfirmation.Funnel.SystemPromptResult"
     enum="SecurePaymentConfirmationSystemPromptResult"
-    expires_after="2022-11-22">
+    expires_after="2023-11-19">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -303,7 +243,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="PaymentRequest.SecurePaymentConfirmationCredentialIdSizeInBytes"
-    units="bytes" expires_after="2022-11-22">
+    units="bytes" expires_after="2023-06-18">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -319,63 +259,8 @@ chromium-metrics-reviews@google.com.
   <summary>True when a service worker times out 5 mins after request.</summary>
 </histogram>
 
-<histogram name="PaymentRequest.TimeToCheckout.Completed" units="ms"
-    expires_after="2023-01-15">
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>
-    Records the time between a payment request .show() and its completion.
-  </summary>
-</histogram>
-
-<histogram name="PaymentRequest.TimeToCheckout.Completed.Shown" units="ms"
-    expires_after="2022-11-22">
-<!-- Name completed by histogram_suffixes name="PaymentRequestCompletedInstrument" -->
-
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>
-    Records the time between a payment request .show() and its completion when
-    payment sheet is shown.
-  </summary>
-</histogram>
-
-<histogram name="PaymentRequest.TimeToCheckout.Completed.SkippedShow"
-    units="ms" expires_after="2023-01-15">
-<!-- Name completed by histogram_suffixes name="PaymentRequestCompletedInstrument" -->
-
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>
-    Records the time between a payment request .show() and its completion when
-    payment sheet is skipped.
-  </summary>
-</histogram>
-
-<histogram name="PaymentRequest.TimeToCheckout.OtherAborted" units="ms"
-    expires_after="2022-05-01">
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>
-    Records the time between a payment request .show() and its termination by
-    any factors other than the user (e.g. merchant).
-  </summary>
-</histogram>
-
-<histogram name="PaymentRequest.TimeToCheckout.UserAborted" units="ms"
-    expires_after="2022-07-03">
-<!-- Name completed by histogram_suffixes name="PaymentRequestPaymentSheetShowStatus" -->
-
-  <owner>rouslan@chromium.org</owner>
-  <owner>web-payments-team@google.com</owner>
-  <summary>
-    Records the time between a payment request .show() and its termination by
-    user.
-  </summary>
-</histogram>
-
 <histogram name="PaymentRequest.TransactionAmount.Completed"
-    enum="PaymentRequestTransactionSize" expires_after="2023-01-15">
+    enum="PaymentRequestTransactionSize" expires_after="2023-07-30">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>
@@ -385,7 +270,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PaymentRequest.TransactionAmount.Triggered"
-    enum="PaymentRequestTransactionSize" expires_after="2023-01-15">
+    enum="PaymentRequestTransactionSize" expires_after="2023-07-30">
   <owner>rouslan@chromium.org</owner>
   <owner>web-payments-team@google.com</owner>
   <summary>

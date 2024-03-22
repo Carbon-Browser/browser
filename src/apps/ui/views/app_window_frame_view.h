@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/views/controls/button/button.h"
 #include "ui/views/window/non_client_view.h"
 
 namespace extensions {
@@ -56,7 +55,11 @@ class AppWindowFrameView : public views::NonClientFrameView {
   void SetResizeSizes(int resize_inside_bounds_size,
                       int resize_outside_bounds_size,
                       int resize_area_corner_size);
+  void SetFrameCornerRadius(int radius);
   int resize_inside_bounds_size() const { return resize_inside_bounds_size_; }
+
+ protected:
+  bool draw_frame() const { return draw_frame_; }
 
  private:
   // views::NonClientFrameView implementation.
@@ -64,10 +67,6 @@ class AppWindowFrameView : public views::NonClientFrameView {
   gfx::Rect GetWindowBoundsForClientBounds(
       const gfx::Rect& client_bounds) const override;
   int NonClientHitTest(const gfx::Point& point) override;
-  void GetWindowMask(const gfx::Size& size, SkPath* window_mask) override;
-  void ResetWindowControls() override {}
-  void UpdateWindowIcon() override {}
-  void UpdateWindowTitle() override {}
   void SizeConstraintsChanged() override;
 
   // views::View implementation.
@@ -84,15 +83,15 @@ class AppWindowFrameView : public views::NonClientFrameView {
   // Return the current frame color based on the active state of the window.
   SkColor CurrentFrameColor();
 
-  raw_ptr<views::Widget> widget_;
-  raw_ptr<extensions::NativeAppWindow> window_;
+  raw_ptr<views::Widget, DanglingUntriaged> widget_;
+  raw_ptr<extensions::NativeAppWindow, DanglingUntriaged> window_;
   bool draw_frame_;
   SkColor active_frame_color_;
   SkColor inactive_frame_color_;
-  raw_ptr<views::ImageButton> close_button_ = nullptr;
-  raw_ptr<views::ImageButton> maximize_button_ = nullptr;
-  raw_ptr<views::ImageButton> restore_button_ = nullptr;
-  raw_ptr<views::ImageButton> minimize_button_ = nullptr;
+  raw_ptr<views::ImageButton, DanglingUntriaged> close_button_ = nullptr;
+  raw_ptr<views::ImageButton, DanglingUntriaged> maximize_button_ = nullptr;
+  raw_ptr<views::ImageButton, DanglingUntriaged> restore_button_ = nullptr;
+  raw_ptr<views::ImageButton, DanglingUntriaged> minimize_button_ = nullptr;
 
   // Allow resize for clicks this many pixels inside the bounds.
   int resize_inside_bounds_size_ = 5;
@@ -102,6 +101,9 @@ class AppWindowFrameView : public views::NonClientFrameView {
 
   // Size in pixels of the lower-right corner resize handle.
   int resize_area_corner_size_ = 16;
+
+  // Radius for the top two corners of the frame.
+  int frame_corner_radius_ = 0;
 };
 
 }  // namespace apps

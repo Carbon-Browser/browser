@@ -1,16 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/supervised_user/kids_chrome_management/kids_chrome_management_client_factory.h"
 
+#include "base/feature_list.h"
 #include "base/no_destructor.h"
-#include "chrome/browser/supervised_user/kids_chrome_management/kids_chrome_management_client.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/supervised_user/supervised_user_browser_utils.h"
+#include "components/supervised_user/core/browser/kids_chrome_management_client.h"
+#include "components/supervised_user/core/common/features.h"
+#include "content/public/browser/storage_partition.h"
 
 // static
-KidsChromeManagementClient*
-KidsChromeManagementClientFactory::GetForBrowserContext(Profile* profile) {
+KidsChromeManagementClient* KidsChromeManagementClientFactory::GetForProfile(
+    Profile* profile) {
   return static_cast<KidsChromeManagementClient*>(
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
@@ -23,14 +27,20 @@ KidsChromeManagementClientFactory::GetInstance() {
 }
 
 KidsChromeManagementClientFactory::KidsChromeManagementClientFactory()
-    : BrowserContextKeyedServiceFactory(
-          "KidsChromeManagementClientFactory",
-          BrowserContextDependencyManager::GetInstance()) {}
+    : ProfileKeyedServiceFactory(
+          "KidsChromeManagementClient",
+          supervised_user::BuildProfileSelectionsForRegularAndGuest()) {
+  DependsOn(IdentityManagerFactory::GetInstance());
+}
 
 KidsChromeManagementClientFactory::~KidsChromeManagementClientFactory() =
     default;
 
 KeyedService* KidsChromeManagementClientFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
-  return new KidsChromeManagementClient(static_cast<Profile*>(context));
+  Profile* profile = Profile::FromBrowserContext(context);
+  return new KidsChromeManagementClient(
+      profile->GetDefaultStoragePartition()
+          ->GetURLLoaderFactoryForBrowserProcess(),
+      IdentityManagerFactory::GetForProfile(profile));
 }

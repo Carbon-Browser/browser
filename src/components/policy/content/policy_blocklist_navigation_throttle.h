@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class PolicyBlocklistNavigationThrottle : public content::NavigationThrottle {
                                  ThrottleCheckResult cancel_result);
   SafeSitesNavigationThrottle safe_sites_navigation_throttle_;
 
-  raw_ptr<PolicyBlocklistService> blocklist_service_;
+  raw_ptr<PolicyBlocklistService, DanglingUntriaged> blocklist_service_;
 
   raw_ptr<PrefService> prefs_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,16 @@
 #include <map>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "components/autofill/core/browser/autofill_subject.h"
 #include "components/autofill/core/browser/single_field_form_filler.h"
 #include "components/autofill/core/browser/ui/suggestion.h"
-#include "components/autofill/core/browser/webdata/autofill_entry.h"
+#include "components/autofill/core/browser/webdata/autocomplete_entry.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/autofill/core/common/form_data.h"
+#include "components/autofill/core/common/unique_ids.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_member.h"
 #include "components/prefs/pref_service.h"
@@ -32,8 +32,7 @@ struct SuggestionsContext;
 // through WebDataServiceBase.
 class AutocompleteHistoryManager : public SingleFieldFormFiller,
                                    public KeyedService,
-                                   public WebDataServiceConsumer,
-                                   public AutofillSubject {
+                                   public WebDataServiceConsumer {
  public:
   AutocompleteHistoryManager();
 
@@ -44,22 +43,20 @@ class AutocompleteHistoryManager : public SingleFieldFormFiller,
   ~AutocompleteHistoryManager() override;
 
   // SingleFieldFormFiller overrides:
-  void OnGetSingleFieldSuggestions(int query_id,
-                                   bool is_autocomplete_enabled,
-                                   bool autoselect_first_suggestion,
-                                   const std::u16string& name,
-                                   const std::u16string& prefix,
-                                   const std::string& form_control_type,
-                                   base::WeakPtr<SuggestionsHandler> handler,
-                                   const SuggestionsContext& context) override;
+  [[nodiscard]] bool OnGetSingleFieldSuggestions(
+      AutofillSuggestionTriggerSource trigger_source,
+      const FormFieldData& field,
+      const AutofillClient& client,
+      OnSuggestionsReturnedCallback on_suggestions_returned,
+      const SuggestionsContext& context) override;
   void OnWillSubmitFormWithFields(const std::vector<FormFieldData>& fields,
                                   bool is_autocomplete_enabled) override;
-  void CancelPendingQueries(const SuggestionsHandler* handler) override;
+  void CancelPendingQueries() override;
   void OnRemoveCurrentSingleFieldSuggestion(const std::u16string& field_name,
                                             const std::u16string& value,
-                                            int frontend_id) override;
+                                            PopupItemId popup_item_id) override;
   void OnSingleFieldSuggestionSelected(const std::u16string& value,
-                                       int frontend_id) override;
+                                       PopupItemId popup_item_id) override;
 
   // Initializes the instance with the given parameters.
   // |profile_database_| is a profile-scope DB used to access autocomplete data.
@@ -79,51 +76,42 @@ class AutocompleteHistoryManager : public SingleFieldFormFiller,
 
  private:
   friend class AutocompleteHistoryManagerTest;
-  FRIEND_TEST_ALL_PREFIXES(AutocompleteHistoryManagerTest,
-                           AutocompleteUMAQueryCreated);
 
-  // The class measure the percentage field that triggers the query and the
-  // percentage field that has the suggestion.
-  // TODO(crbug.com/908562): Move this to AutofillMetrics with the other
-  // Autocomplete metrics for better consistency.
-  class UMARecorder {
-   public:
-    UMARecorder() = default;
+  // Internal data object used to keep a request's context to associate it
+  // with the appropriate response.
+  struct QueryHandler {
+    QueryHandler(FieldGlobalId field_id,
+                 AutofillSuggestionTriggerSource trigger_source,
+                 std::u16string prefix,
+                 OnSuggestionsReturnedCallback on_suggestions_returned);
+    QueryHandler(const QueryHandler&) = delete;
+    QueryHandler(QueryHandler&&);
+    ~QueryHandler();
 
-    UMARecorder(const UMARecorder&) = delete;
-    UMARecorder& operator=(const UMARecorder&) = delete;
+    // The queried field ID.
+    FieldGlobalId field_id_;
 
-    ~UMARecorder() = default;
+    // Describes what caused the suggestions to trigger. This value was provided
+    // by the handler when requesting suggestions. It is temporarily stored
+    // while suggestions are queried, so it can be passed on to the
+    // `on_suggestions_returned_` callback.
+    AutofillSuggestionTriggerSource trigger_source_;
 
-    void OnGetAutocompleteSuggestions(
-        const std::u16string& name,
-        WebDataServiceBase::Handle pending_query_handle);
-    void OnWebDataServiceRequestDone(
-        WebDataServiceBase::Handle pending_query_handle,
-        bool has_suggestion);
+    // Prefix used to search suggestions, submitted by the handler.
+    std::u16string prefix_;
 
-   private:
-    // The query handle should be measured for UMA.
-    WebDataServiceBase::Handle measuring_query_handle_ = 0;
-
-    // The name of field that is currently measured, we don't repeatedly measure
-    // the query of the same field while user is filling the field.
-    std::u16string measuring_name_;
+    // Callback to-be-executed once a response from the DB is available.
+    OnSuggestionsReturnedCallback on_suggestions_returned_;
   };
 
-  // Sends the autocomplete |suggestions| to the |query_handler|'s handler for
-  // display in the associated Autofill popup. The parameter may be empty if
-  // there are no new autocomplete additions.
-  void SendSuggestions(const std::vector<AutofillEntry>& entries,
-                       const QueryHandler& query_handler);
+  // Sends the autocomplete `entries` to the `query_handler` for display in the
+  // associated Autofill popup. The parameter may be empty if there are no new
+  // autocomplete additions.
+  void SendSuggestions(const std::vector<AutocompleteEntry>& entries,
+                       QueryHandler query_handler);
 
   // Cancels all outstanding queries and clears out the |pending_queries_| map.
   void CancelAllPendingQueries();
-
-  // Cleans-up the dictionary of |pending_queries_| by checking
-  // - If any handler instance was destroyed (known via WeakPtr)
-  // - If the given |handler| pointer is associated with a query.
-  void CleanupEntries(const SuggestionsHandler* handler);
 
   // Function handling WebDataService responses of type AUTOFILL_VALUE_RESULT.
   // |current_handle| is the DB query handle, and is used to retrieve the
@@ -166,13 +154,11 @@ class AutocompleteHistoryManager : public SingleFieldFormFiller,
 
   // Cached results of the last batch of autocomplete suggestions.
   // Key are the suggestions' values, and values are the associated
-  // AutofillEntry.
-  std::map<std::u16string, AutofillEntry> last_entries_;
+  // AutocompletEntry.
+  std::map<std::u16string, AutocompleteEntry> last_entries_;
 
   // Whether the service is associated with an off-the-record browser context.
   bool is_off_the_record_ = false;
-
-  UMARecorder uma_recorder_;
 
   base::WeakPtrFactory<AutocompleteHistoryManager> weak_ptr_factory_{this};
 };

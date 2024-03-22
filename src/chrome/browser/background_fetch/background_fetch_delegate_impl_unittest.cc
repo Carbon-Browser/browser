@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,8 +51,11 @@ class BackgroundFetchDelegateImplTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
 
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> recorder_;
-  raw_ptr<BackgroundFetchDelegateImpl> delegate_;
   std::unique_ptr<TestingProfile> profile_;
+
+  // Can't outlive `profile_` which owns it.
+  raw_ptr<BackgroundFetchDelegateImpl> delegate_;
+
   const GURL kOriginUrl{"https://example.com/"};
 };
 

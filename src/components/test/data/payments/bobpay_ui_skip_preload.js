@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 The Chromium Authors. All rights reserved.
+ * Copyright 2017 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,7 +11,7 @@
  */
 function initPaymentRequest() {
   var supportedInstruments = [{
-    supportedMethods: 'https://bobpay.com',
+    supportedMethods: 'https://bobpay.test',
   }];
 
   var details = {
@@ -48,7 +48,7 @@ function initPaymentRequest() {
  * Preloads the second instance of PaymentRequest while the first instance is
  * showing.
  */
-function buy() { // eslint-disable-line no-unused-vars
+function buy() {
   var request = initPaymentRequest();
   request.show()
       .then(function(instrumentResponse) {

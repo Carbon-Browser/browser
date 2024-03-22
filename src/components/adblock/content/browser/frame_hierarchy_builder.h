@@ -47,8 +47,7 @@ class FrameHierarchyBuilder {
   virtual ~FrameHierarchyBuilder();
 
   virtual content::RenderFrameHost* FindRenderFrameHost(
-      int32_t process_id,
-      int32_t routing_id) const;
+      content::GlobalRenderFrameHostId render_frame_host_id) const;
 
   virtual std::vector<GURL> BuildFrameHierarchy(
       content::RenderFrameHost* host) const;

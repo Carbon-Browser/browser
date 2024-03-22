@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,10 @@ class UkmBackgroundRecorderBrowserTest : public InProcessBrowserTest {
         GURL(kVisitedUrl), base::Time::Now(), history::SOURCE_BROWSED);
   }
 
+  void TearDownOnMainThread() override {
+    background_recorder_service_ = nullptr;
+  }
+
  protected:
   absl::optional<ukm::SourceId> GetSourceId(const url::Origin& origin) {
     absl::optional<ukm::SourceId> result;
@@ -66,7 +70,8 @@ class UkmBackgroundRecorderBrowserTest : public InProcessBrowserTest {
   }
 
  private:
-  raw_ptr<ukm::UkmBackgroundRecorderService> background_recorder_service_;
+  raw_ptr<ukm::UkmBackgroundRecorderService> background_recorder_service_ =
+      nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(UkmBackgroundRecorderBrowserTest,

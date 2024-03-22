@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ const size_t kTwoBytePayloadLengthField = 126;
 const size_t kEightBytePayloadLengthField = 127;
 const size_t kMaskingKeyWidthInBytes = 4;
 
-WebSocket::ParseResult DecodeFrameHybi17(const base::StringPiece& frame,
+WebSocket::ParseResult DecodeFrameHybi17(base::StringPiece frame,
                                          bool client_frame,
                                          int* bytes_consumed,
                                          std::string* output,
@@ -293,10 +293,9 @@ WebSocketEncoder::WebSocketEncoder(Type type,
 
 WebSocketEncoder::~WebSocketEncoder() = default;
 
-WebSocket::ParseResult WebSocketEncoder::DecodeFrame(
-    const base::StringPiece& frame,
-    int* bytes_consumed,
-    std::string* output) {
+WebSocket::ParseResult WebSocketEncoder::DecodeFrame(base::StringPiece frame,
+                                                     int* bytes_consumed,
+                                                     std::string* output) {
   bool compressed;
   std::string current_output;
   WebSocket::ParseResult result = DecodeFrameHybi17(
@@ -339,6 +338,13 @@ void WebSocketEncoder::EncodeTextFrame(base::StringPiece frame,
     EncodeFrameHybi17(compressed, masking_key, true, op_code, output);
   else
     EncodeFrameHybi17(frame, masking_key, false, op_code, output);
+}
+
+void WebSocketEncoder::EncodeCloseFrame(base::StringPiece frame,
+                                        int masking_key,
+                                        std::string* output) {
+  constexpr auto op_code = WebSocketFrameHeader::OpCodeEnum::kOpCodeClose;
+  EncodeFrameHybi17(frame, masking_key, false, op_code, output);
 }
 
 void WebSocketEncoder::EncodePongFrame(base::StringPiece frame,

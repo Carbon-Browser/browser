@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,21 +43,19 @@ void UrlHandlerInfo::Reset() {
 }
 
 base::Value UrlHandlerInfo::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetStringKey("origin", origin.GetDebugString());
-  root.SetBoolKey("has_origin_wildcard", has_origin_wildcard);
+  base::Value::Dict root;
+  root.Set("origin", origin.GetDebugString());
+  root.Set("has_origin_wildcard", has_origin_wildcard);
 
-  base::Value& paths_json =
-      *root.SetKey("paths", base::Value(base::Value::Type::LIST));
+  base::Value::List& paths_json = *root.EnsureList("paths");
   for (const std::string& path : paths)
     paths_json.Append(path);
 
-  base::Value& exclude_paths_json =
-      *root.SetKey("exclude_paths", base::Value(base::Value::Type::LIST));
+  base::Value::List& exclude_paths_json = *root.EnsureList("exclude_paths");
   for (const std::string& path : exclude_paths)
     exclude_paths_json.Append(path);
 
-  return root;
+  return base::Value(std::move(root));
 }
 
 bool operator==(const UrlHandlerInfo& handler1,

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace enterprise_connectors::test {
@@ -21,14 +21,16 @@ class MockSecureEnclaveHelper : public SecureEnclaveHelper {
   MockSecureEnclaveHelper();
   ~MockSecureEnclaveHelper() override;
 
-  MOCK_METHOD(base::ScopedCFTypeRef<SecKeyRef>,
+  MOCK_METHOD(base::apple::ScopedCFTypeRef<SecKeyRef>,
               CreateSecureKey,
-              (CFDictionaryRef),
+              (CFDictionaryRef, OSStatus*),
               (override));
-  MOCK_METHOD(bool, Update, (CFDictionaryRef, CFDictionaryRef), (override));
-  MOCK_METHOD(bool, Delete, (CFDictionaryRef), (override));
-  MOCK_METHOD(bool, CheckExists, (CFDictionaryRef), (override));
-  MOCK_METHOD(bool, CheckKeychainUnlocked, (), (override));
+  MOCK_METHOD(base::apple::ScopedCFTypeRef<SecKeyRef>,
+              CopyKey,
+              (CFDictionaryRef, OSStatus*),
+              (override));
+  MOCK_METHOD(OSStatus, Update, (CFDictionaryRef, CFDictionaryRef), (override));
+  MOCK_METHOD(OSStatus, Delete, (CFDictionaryRef), (override));
   MOCK_METHOD(bool, IsSecureEnclaveSupported, (), (override));
 };
 

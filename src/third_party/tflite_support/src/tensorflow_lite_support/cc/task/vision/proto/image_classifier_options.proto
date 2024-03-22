@@ -17,14 +17,14 @@ syntax = "proto2";
 
 package tflite.task.vision;
 
-import "tensorflow/lite/experimental/acceleration/configuration/configuration.proto";
+import "tensorflow/lite/acceleration/configuration/configuration.proto";
 import "tensorflow_lite_support/cc/task/core/proto/base_options.proto";
 import "tensorflow_lite_support/cc/task/core/proto/external_file.proto";
 
 // Options for setting up an ImageClassifier.
 // Next Id: 15
 message ImageClassifierOptions {
-  // Base options for configuring Task library, such as specifying the TfLite
+  // Base options for configuring MediaPipe Tasks, such as specifying the TfLite
   // model file with metadata, accelerator options, etc.
   optional tflite.task.core.BaseOptions base_options = 14;
 
@@ -87,7 +87,7 @@ message ImageClassifierOptions {
   // https://github.com/tensorflow/tflite-support/blob/master/tensorflow_lite_support/cc/task/vision/BUILD
   //
   // See settings definition at:
-  // https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/experimental/acceleration/configuration/configuration.proto
+  // https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/acceleration/configuration/configuration.proto
   //
   // Deprecated: only works with `model_file_with_metadata`. Prefer using
   // `base_options` to specifying the TFLite model and using

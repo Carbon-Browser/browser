@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
-#include "base/android/jni_int_wrapper.h"
 #include "base/android/jni_string.h"
+#include "third_party/jni_zero/jni_int_wrapper.h"
 
 namespace content {
 
@@ -38,7 +38,11 @@ void ViewStructureBuilder_setViewStructureNodeBounds(
     JniIntWrapper parent_relative_left,
     JniIntWrapper parent_relative_top,
     JniIntWrapper width,
-    JniIntWrapper height);
+    JniIntWrapper height,
+    JniIntWrapper unclipped_left,
+    JniIntWrapper unclipped_top,
+    JniIntWrapper unclipped_width,
+    JniIntWrapper unclipped_height);
 
 void ViewStructureBuilder_setViewStructureNodeHtmlInfo(
     JNIEnv* env,

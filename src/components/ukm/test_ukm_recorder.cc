@@ -1,15 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/ukm/test_ukm_recorder.h"
 
-#include <algorithm>
 #include <iterator>
 
 #include "base/check_op.h"
 #include "base/metrics/metrics_hashes.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/ranges/algorithm.h"
 #include "services/metrics/public/cpp/delegating_ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_source.h"
@@ -36,18 +35,12 @@ void MergeEntry(const mojom::UkmEntry* in, mojom::UkmEntry* out) {
 }  // namespace
 
 TestUkmRecorder::TestUkmRecorder() {
-  EnableRecording(/*extensions=*/true);
+  UpdateRecording(UkmConsentState::All());
   InitDecodeMap();
   SetSamplingForTesting(1);  // 1-in-1 == unsampled
 }
 
 TestUkmRecorder::~TestUkmRecorder() {}
-
-bool TestUkmRecorder::ShouldRestrictToWhitelistedSourceIds() const {
-  // In tests, we want to record all source ids (not just those that are
-  // whitelisted).
-  return false;
-}
 
 void TestUkmRecorder::AddEntry(mojom::UkmEntryPtr entry) {
   const bool should_run_callback =
@@ -190,11 +183,11 @@ TestUkmRecorder::FilteredHumanReadableMetricForEntry(
     const std::string& entry_name,
     const std::string& metric_name) const {
   std::vector<std::string> metric_name_vector(1, metric_name);
-  auto metrics = GetMetrics(entry_name, metric_name_vector);
   std::vector<ukm::TestAutoSetUkmRecorder::HumanReadableUkmMetrics>
       filtered_result;
-  std::copy_if(
-      metrics.begin(), metrics.end(), std::back_inserter(filtered_result),
+  base::ranges::copy_if(
+      GetMetrics(entry_name, metric_name_vector),
+      std::back_inserter(filtered_result),
       [&metric_name](
           ukm::TestAutoSetUkmRecorder::HumanReadableUkmMetrics metric) {
         if (metric.empty())
@@ -218,6 +211,15 @@ TestUkmRecorder::HumanReadableUkmEntry::~HumanReadableUkmEntry() = default;
 bool TestUkmRecorder::HumanReadableUkmEntry::operator==(
     const HumanReadableUkmEntry& other) const {
   return source_id == other.source_id && metrics == other.metrics;
+}
+
+void PrintTo(const TestUkmRecorder::HumanReadableUkmEntry& entry,
+             std::ostream* os) {
+  (*os) << "Entry{source=" << entry.source_id << " ";
+  for (const auto& name_value : entry.metrics) {
+    (*os) << name_value.first << "=" << name_value.second << ' ';
+  }
+  (*os) << "}";
 }
 
 }  // namespace ukm

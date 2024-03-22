@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef DEVICE_BLUETOOTH_TEST_FAKE_CENTRAL_H_
@@ -165,6 +165,9 @@ class FakeCentral final : public mojom::FakeCentral,
   void SetDiscoverable(bool discoverable,
                        base::OnceClosure callback,
                        ErrorCallback error_callback) override;
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  base::TimeDelta GetDiscoverableTimeout() const override;
+#endif
   bool IsDiscovering() const override;
   UUIDList GetUUIDs() const override;
   void CreateRfcommService(const device::BluetoothUUID& uuid,
@@ -191,7 +194,7 @@ class FakeCentral final : public mojom::FakeCentral,
       const std::string& address,
       const absl::optional<device::BluetoothDevice::AddressType>& address_type,
       ConnectDeviceCallback callback,
-      ErrorCallback error_callback) override;
+      ConnectDeviceErrorCallback error_callback) override;
 #endif
   device::BluetoothLocalGattService* GetGattService(
       const std::string& identifier) const override;

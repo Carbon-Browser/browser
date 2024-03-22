@@ -1,12 +1,53 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/autofill/core/browser/autofill_type.h"
+
+#include "components/autofill/core/browser/autofill_field.h"
+#include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/field_types.h"
+#include "components/autofill/core/common/autofill_test_utils.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace autofill {
 namespace {
+
+using ::testing::AllOf;
+using ::testing::ElementsAre;
+using ::testing::Matcher;
+using ::testing::Property;
+using FieldPrediction =
+    AutofillQueryResponse::FormSuggestion::FieldSuggestion::FieldPrediction;
+
+// TODO(crbug.com/1466435): Consolidate the prediction matchers used in
+// different files and move them to a central location.
+Matcher<FieldPrediction> EqualsPrediction(ServerFieldType prediction) {
+  return AllOf(Property("type", &FieldPrediction::type, prediction),
+               Property("source", &FieldPrediction::source,
+                        FieldPrediction::SOURCE_AUTOFILL_DEFAULT));
+}
+
+class AutofillTypeServerPredictionTest : public ::testing::Test {
+ private:
+  test::AutofillUnitTestEnvironment autofill_environment_;
+};
+
+TEST_F(AutofillTypeServerPredictionTest, PredictionFromAutofillField) {
+  AutofillField field = AutofillField(test::CreateTestFormField(
+      "label", "name", "value", /*type=*/FormControlType::kInputText));
+  field.set_server_predictions(
+      {test::CreateFieldPrediction(ServerFieldType::EMAIL_ADDRESS),
+       test::CreateFieldPrediction(ServerFieldType::USERNAME)});
+  field.set_may_use_prefilled_placeholder(true);
+
+  AutofillType::ServerPrediction prediction(field);
+  EXPECT_THAT(prediction.server_predictions,
+              ElementsAre(EqualsPrediction(ServerFieldType::EMAIL_ADDRESS),
+                          EqualsPrediction(ServerFieldType::USERNAME)));
+  EXPECT_TRUE(prediction.may_use_prefilled_placeholder);
+}
 
 TEST(AutofillTypeTest, ServerFieldTypes) {
   // No server data.
@@ -27,7 +68,7 @@ TEST(AutofillTypeTest, ServerFieldTypes) {
   // Type with group and subgroup.
   AutofillType phone(PHONE_HOME_NUMBER);
   EXPECT_EQ(PHONE_HOME_NUMBER, phone.GetStorableType());
-  EXPECT_EQ(FieldTypeGroup::kPhoneHome, phone.group());
+  EXPECT_EQ(FieldTypeGroup::kPhone, phone.group());
 
   // Boundary (error) condition.
   AutofillType boundary(MAX_VALID_FIELD_TYPE);
@@ -47,34 +88,51 @@ TEST(AutofillTypeTest, ServerFieldTypes) {
 
 TEST(AutofillTypeTest, HtmlFieldTypes) {
   // Unknown type.
-  AutofillType unknown(HTML_TYPE_UNSPECIFIED, HTML_MODE_NONE);
+  AutofillType unknown(HtmlFieldType::kUnspecified);
   EXPECT_EQ(UNKNOWN_TYPE, unknown.GetStorableType());
   EXPECT_EQ(FieldTypeGroup::kNoGroup, unknown.group());
 
   // Type with group but no subgroup.
-  AutofillType first(HTML_TYPE_GIVEN_NAME, HTML_MODE_NONE);
+  AutofillType first(HtmlFieldType::kGivenName);
   EXPECT_EQ(NAME_FIRST, first.GetStorableType());
   EXPECT_EQ(FieldTypeGroup::kName, first.group());
 
   // Type with group and subgroup.
-  AutofillType phone(HTML_TYPE_TEL, HTML_MODE_NONE);
+  AutofillType phone(HtmlFieldType::kTel);
   EXPECT_EQ(PHONE_HOME_WHOLE_NUMBER, phone.GetStorableType());
-  EXPECT_EQ(FieldTypeGroup::kPhoneHome, phone.group());
+  EXPECT_EQ(FieldTypeGroup::kPhone, phone.group());
 
   // Last value, to check any offset errors.
-  AutofillType last(HTML_TYPE_CREDIT_CARD_EXP_4_DIGIT_YEAR, HTML_MODE_NONE);
+  AutofillType last(HtmlFieldType::kCreditCardExp4DigitYear);
   EXPECT_EQ(CREDIT_CARD_EXP_4_DIGIT_YEAR, last.GetStorableType());
   EXPECT_EQ(FieldTypeGroup::kCreditCard, last.group());
+}
 
-  // Shipping mode.
-  AutofillType shipping_first(HTML_TYPE_GIVEN_NAME, HTML_MODE_SHIPPING);
-  EXPECT_EQ(NAME_FIRST, shipping_first.GetStorableType());
-  EXPECT_EQ(FieldTypeGroup::kName, shipping_first.group());
+class AutofillTypeTestForHtmlFieldTypes
+    : public ::testing::TestWithParam<std::underlying_type_t<HtmlFieldType>> {
+ public:
+  HtmlFieldType html_field_type() const {
+    return ToSafeHtmlFieldType(GetParam(), HtmlFieldType::kUnrecognized);
+  }
+};
 
-  // Billing mode.
-  AutofillType billing_first(HTML_TYPE_GIVEN_NAME, HTML_MODE_BILLING);
-  EXPECT_EQ(NAME_FIRST, billing_first.GetStorableType());
-  EXPECT_EQ(FieldTypeGroup::kNameBilling, billing_first.group());
+INSTANTIATE_TEST_SUITE_P(
+    AutofillTypeTest,
+    AutofillTypeTestForHtmlFieldTypes,
+    testing::Range(base::to_underlying(HtmlFieldType::kMinValue),
+                   base::to_underlying(HtmlFieldType::kMaxValue)));
+
+TEST_P(AutofillTypeTestForHtmlFieldTypes, GroupsOfHtmlFieldTypes) {
+  if (HtmlFieldTypeToBestCorrespondingServerFieldType(html_field_type()) ==
+      UNKNOWN_TYPE) {
+    return;
+  }
+  AutofillType t(html_field_type());
+  SCOPED_TRACE(testing::Message()
+               << "html_field_type=" << FieldTypeToStringView(html_field_type())
+               << " "
+               << "field_type=" << FieldTypeToStringView(t.GetStorableType()));
+  EXPECT_EQ(t.group(), GroupTypeOfServerFieldType(t.GetStorableType()));
 }
 
 }  // namespace

@@ -16,19 +16,18 @@
       "name": "HorizontalScrollbar",
       "position": [0, 185],
       "bounds": [600, 15],
-      "contentsOpaqueForText": true,
       "transform": 1
     },
     {
       "name": "VerticalScrollbar",
       "position": [585, 0],
       "bounds": [15, 185],
+      "contentsOpaque": true,
       "transform": 1
     },
     {
       "name": "LayoutNGBlockFlow (relative positioned) DIV",
       "bounds": [585, 400],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [400, 0, 50, 50],
         [0, 0, 50, 50]

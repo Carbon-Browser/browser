@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/renderer_host/pepper/browser_ppapi_host_impl.h"
@@ -37,9 +38,9 @@
 #include "ppapi/shared_impl/private/net_address_private_impl.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/ash/components/network/firewall_hole.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/firewall_hole/firewall_hole.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 using ppapi::NetAddressPrivateImpl;
 using ppapi::host::NetErrorToPepperError;
@@ -73,13 +74,14 @@ PepperTCPServerSocketMessageFilter::PepperTCPServerSocketMessageFilter(
   ++g_num_instances;
   DCHECK(factory_);
   DCHECK(ppapi_host_);
-  if (!host->GetRenderFrameIDsForInstance(
-          instance, &render_process_id_, &render_frame_id_)) {
+  if (!host->GetRenderFrameIDsForInstance(instance, &render_process_id_,
+                                          &render_frame_id_)) {
     NOTREACHED();
   }
 }
 
 PepperTCPServerSocketMessageFilter::~PepperTCPServerSocketMessageFilter() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   --g_num_instances;
 }
 
@@ -141,10 +143,8 @@ int32_t PepperTCPServerSocketMessageFilter::OnMsgListen(
   SocketPermissionRequest request =
       pepper_socket_utils::CreateSocketPermissionRequest(
           SocketPermissionRequest::TCP_LISTEN, addr);
-  if (!pepper_socket_utils::CanUseSocketAPIs(external_plugin_,
-                                             private_api_,
-                                             &request,
-                                             render_process_id_,
+  if (!pepper_socket_utils::CanUseSocketAPIs(external_plugin_, private_api_,
+                                             &request, render_process_id_,
                                              render_frame_id_)) {
     return PP_ERROR_NOACCESS;
   }
@@ -173,8 +173,10 @@ int32_t PepperTCPServerSocketMessageFilter::OnMsgListen(
   ppapi::host::ReplyMessageContext reply_context =
       context->MakeReplyMessageContext();
 
+  auto options = network::mojom::TCPServerSocketOptions::New();
+  options->backlog = backlog;
   network_context->CreateTCPServerSocket(
-      net::IPEndPoint(net::IPAddress(address), port), backlog,
+      net::IPEndPoint(net::IPAddress(address), port), std::move(options),
       pepper_socket_utils::PepperTCPNetworkAnnotationTag(),
       socket_.BindNewPipeAndPassReceiver(),
       mojo::WrapCallbackWithDefaultInvokeIfNotRun(
@@ -253,7 +255,7 @@ void PepperTCPServerSocketMessageFilter::OnListenCompleted(
     return;
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   OpenFirewallHole(context, *local_addr);
 #else
   SendListenReply(context, PP_OK, bound_addr_);
@@ -261,7 +263,7 @@ void PepperTCPServerSocketMessageFilter::OnListenCompleted(
 #endif
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 void PepperTCPServerSocketMessageFilter::OpenFirewallHole(
     const ppapi::host::ReplyMessageContext& context,
     const net::IPEndPoint& local_addr) {
@@ -270,7 +272,7 @@ void PepperTCPServerSocketMessageFilter::OpenFirewallHole(
   pepper_socket_utils::OpenTCPFirewallHole(
       local_addr,
       base::BindOnce(&PepperTCPServerSocketMessageFilter::OnFirewallHoleOpened,
-                     this, context));
+                     weak_ptr_factory_.GetWeakPtr(), context));
 }
 
 void PepperTCPServerSocketMessageFilter::OnFirewallHoleOpened(
@@ -284,7 +286,7 @@ void PepperTCPServerSocketMessageFilter::OnFirewallHoleOpened(
   SendListenReply(context, PP_OK, bound_addr_);
   state_ = STATE_LISTENING;
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 void PepperTCPServerSocketMessageFilter::OnAcceptCompleted(
     const ppapi::host::ReplyMessageContext& context,
@@ -388,9 +390,9 @@ void PepperTCPServerSocketMessageFilter::Close() {
   state_ = STATE_CLOSED;
 
   socket_.reset();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   firewall_hole_.reset();
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
 void PepperTCPServerSocketMessageFilter::SendListenReply(
@@ -406,8 +408,8 @@ void PepperTCPServerSocketMessageFilter::SendListenReply(
 void PepperTCPServerSocketMessageFilter::SendListenError(
     const ppapi::host::ReplyMessageContext& context,
     int32_t pp_result) {
-  SendListenReply(
-      context, pp_result, NetAddressPrivateImpl::kInvalidNetAddress);
+  SendListenReply(context, pp_result,
+                  NetAddressPrivateImpl::kInvalidNetAddress);
 }
 
 void PepperTCPServerSocketMessageFilter::SendAcceptReply(
@@ -418,17 +420,14 @@ void PepperTCPServerSocketMessageFilter::SendAcceptReply(
     const PP_NetAddress_Private& remote_addr) {
   ppapi::host::ReplyMessageContext reply_context(context);
   reply_context.params.set_result(pp_result);
-  SendReply(reply_context,
-            PpapiPluginMsg_TCPServerSocket_AcceptReply(
-                pending_resource_id, local_addr, remote_addr));
+  SendReply(reply_context, PpapiPluginMsg_TCPServerSocket_AcceptReply(
+                               pending_resource_id, local_addr, remote_addr));
 }
 
 void PepperTCPServerSocketMessageFilter::SendAcceptError(
     const ppapi::host::ReplyMessageContext& context,
     int32_t pp_result) {
-  SendAcceptReply(context,
-                  pp_result,
-                  0,
+  SendAcceptReply(context, pp_result, 0,
                   NetAddressPrivateImpl::kInvalidNetAddress,
                   NetAddressPrivateImpl::kInvalidNetAddress);
 }

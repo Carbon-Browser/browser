@@ -1,13 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/accessibility/testing/accessibility_selection_test.h"
 
-#include <algorithm>
 #include <iterator>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/ranges/algorithm.h"
 #include "third_party/blink/public/platform/file_path_conversion.h"
 #include "third_party/blink/renderer/core/dom/character_data.h"
 #include "third_party/blink/renderer/core/dom/container_node.h"
@@ -34,8 +34,6 @@ namespace {
 
 constexpr char kSelectionTestsRelativePath[] = "selection/";
 constexpr char kTestFileSuffix[] = ".html";
-constexpr char kLayoutNGSuffix[] = "-ax-layout-ng.txt";
-constexpr char kLayoutNGDisabledSuffix[] = "-ax-layout-ng-disabled.txt";
 constexpr char kAXTestExpectationSuffix[] = "-ax.txt";
 
 // Serialize accessibility subtree to selection text.
@@ -219,11 +217,11 @@ class AXSelectionDeserializer final {
         << "There should be an equal number of '^'s and '|'s in the HTML that "
            "is being deserialized, or if caret placement is required, only a "
            "single '|'.";
-    if (foci_->IsEmpty())
+    if (foci_->empty())
       return {};
 
     Vector<AXSelection> ax_selections;
-    if (anchors_->IsEmpty()) {
+    if (anchors_->empty()) {
       // Handle the case when there is just a single '|' marker representing the
       // position of the caret.
       DCHECK(foci_->at(0).first);
@@ -275,7 +273,7 @@ class AXSelectionDeserializer final {
       builder.Append(character);
     }
 
-    if (base_offsets.IsEmpty() && extent_offsets.IsEmpty())
+    if (base_offsets.empty() && extent_offsets.empty())
       return;
 
     // Remove the markers, otherwise they would be duplicated if the AXSelection
@@ -350,6 +348,13 @@ AccessibilitySelectionTest::AccessibilitySelectionTest(
     LocalFrameClient* local_frame_client)
     : AccessibilityTest(local_frame_client) {}
 
+void AccessibilitySelectionTest::SetUp() {
+  RenderingTest::SetUp();
+  // Do not include noisy inline textboxes in selection tests.
+  ax_context_ =
+      std::make_unique<AXContext>(GetDocument(), ui::AXMode::kWebContents);
+}
+
 std::string AccessibilitySelectionTest::GetCurrentSelectionText() const {
   const SelectionInDOMTree selection =
       GetFrame().Selection().GetSelectionInDOMTree();
@@ -379,7 +384,7 @@ AXSelection AccessibilitySelectionTest::SetSelectionText(
   const Vector<AXSelection> ax_selections =
       AXSelectionDeserializer(GetAXObjectCache())
           .Deserialize(selection_text, *body);
-  if (ax_selections.IsEmpty())
+  if (ax_selections.empty())
     return AXSelection::Builder().Build();
   return ax_selections.front();
 }
@@ -390,7 +395,7 @@ AXSelection AccessibilitySelectionTest::SetSelectionText(
   const Vector<AXSelection> ax_selections =
       AXSelectionDeserializer(GetAXObjectCache())
           .Deserialize(selection_text, element);
-  if (ax_selections.IsEmpty())
+  if (ax_selections.empty())
     return AXSelection::Builder().Build();
   return ax_selections.front();
 }
@@ -405,10 +410,9 @@ void AccessibilitySelectionTest::RunSelectionTest(
 
   const String test_file = test_path + String::FromUTF8(kTestFileSuffix);
   scoped_refptr<SharedBuffer> test_file_buffer = test::ReadFromFile(test_file);
-  auto test_file_chars = test_file_buffer->CopyAs<Vector<char>>();
   std::string test_file_contents;
-  std::copy(test_file_chars.begin(), test_file_chars.end(),
-            std::back_inserter(test_file_contents));
+  base::ranges::copy(test_file_buffer->CopyAs<Vector<char>>(),
+                     std::back_inserter(test_file_contents));
   ASSERT_FALSE(test_file_contents.empty())
       << "Test file cannot be empty.\n"
       << test_file.Utf8()
@@ -418,10 +422,9 @@ void AccessibilitySelectionTest::RunSelectionTest(
       test_path +
       String::FromUTF8(suffix.empty() ? kAXTestExpectationSuffix : suffix);
   scoped_refptr<SharedBuffer> ax_file_buffer = test::ReadFromFile(ax_file);
-  auto ax_file_chars = ax_file_buffer->CopyAs<Vector<char>>();
   std::string ax_file_contents;
-  std::copy(ax_file_chars.begin(), ax_file_chars.end(),
-            std::back_inserter(ax_file_contents));
+  base::ranges::copy(ax_file_buffer->CopyAs<Vector<char>>(),
+                     std::back_inserter(ax_file_contents));
   ASSERT_FALSE(ax_file_contents.empty())
       << "Expectations file cannot be empty.\n"
       << ax_file.Utf8()
@@ -442,25 +445,17 @@ void AccessibilitySelectionTest::RunSelectionTest(
     actual_ax_file_contents += GetCurrentSelectionText();
   }
 
-  EXPECT_EQ(ax_file_contents, actual_ax_file_contents);
+  EXPECT_TRUE(ax_file_contents == actual_ax_file_contents)
+      << "\nSelection does not match expectations. Legend: ^=selection start  "
+         "|=selection end"
+      << "\n\nExpected:\n--------\n"
+      << ax_file_contents << "\n\nActual:\n------\n"
+      << actual_ax_file_contents;
 
   // Uncomment these lines to write the output to the expectations file.
   // TODO(dmazzoni): make this a command-line parameter.
   // if (ax_file_contents != actual_ax_file_contents)
   //  base::WriteFile(WebStringToFilePath(ax_file), actual_ax_file_contents);
-}
-
-ParameterizedAccessibilitySelectionTest::
-    ParameterizedAccessibilitySelectionTest(
-        LocalFrameClient* local_frame_client)
-    : ScopedLayoutNGForTest(GetParam()),
-      AccessibilitySelectionTest(local_frame_client) {}
-
-void ParameterizedAccessibilitySelectionTest::RunSelectionTest(
-    const std::string& test_name) const {
-  std::string suffix =
-      LayoutNGEnabled() ? kLayoutNGSuffix : kLayoutNGDisabledSuffix;
-  AccessibilitySelectionTest::RunSelectionTest(test_name, suffix);
 }
 
 }  // namespace blink

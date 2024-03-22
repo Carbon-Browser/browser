@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,14 +23,15 @@ public class SpellCheckPopupWindow extends SuggestionsPopupWindow {
      * @param windowAndroid The current WindowAndroid instance.
      * @param parentView The view used to attach the PopupWindow.
      */
-    public SpellCheckPopupWindow(Context context, TextSuggestionHost textSuggestionHost,
-            WindowAndroid windowAndroid, View parentView) {
+    public SpellCheckPopupWindow(
+            Context context,
+            TextSuggestionHost textSuggestionHost,
+            WindowAndroid windowAndroid,
+            View parentView) {
         super(context, textSuggestionHost, windowAndroid, parentView);
     }
 
-    /**
-     * Shows the spell check menu at the specified coordinates (relative to the viewport).
-     */
+    /** Shows the spell check menu at the specified coordinates (relative to the viewport). */
     public void show(double caretX, double caretY, String highlightedText, String[] suggestions) {
         mSuggestions = suggestions.clone();
         setAddToDictionaryEnabled(true);

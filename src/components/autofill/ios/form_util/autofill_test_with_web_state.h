@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,9 @@ class AutofillTestWithWebState : public web::WebTestWithWebState {
 
   // Toggles tracking form mutations in a |frame| and waits for completion.
   void TrackFormMutations(web::WebFrame* frame);
+
+  // web::WebTestWithWebState:
+  id ExecuteJavaScript(NSString* script) override;
 };
 
 #endif  // COMPONENTS_AUTOFILL_IOS_FORM_UTIL_AUTOFILL_TEST_WITH_WEB_STATE_H_

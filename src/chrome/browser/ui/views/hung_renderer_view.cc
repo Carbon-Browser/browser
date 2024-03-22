@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -181,13 +181,16 @@ HungPagesTableModel::WebContentsObserverImpl::WebContentsObserverImpl(
     WebContents* tab)
     : content::WebContentsObserver(tab), model_(model) {}
 
-void HungPagesTableModel::WebContentsObserverImpl::RenderViewHostChanged(
-    content::RenderViewHost* old_host,
-    content::RenderViewHost* new_host) {
+void HungPagesTableModel::WebContentsObserverImpl::RenderFrameHostChanged(
+    content::RenderFrameHost* old_host,
+    content::RenderFrameHost* new_host) {
+  if (!new_host->IsInPrimaryMainFrame())
+    return;
+
   // If |new_host| is currently responsive dismiss this dialog, otherwise
   // let the model know the tab has been updated. Updating the tab will
   // dismiss the current dialog but restart the hung renderer timeout.
-  if (!new_host->GetWidget()->IsCurrentlyUnresponsive()) {
+  if (!new_host->GetRenderWidgetHost()->IsCurrentlyUnresponsive()) {
     model_->TabDestroyed(this);
     return;
   }
@@ -236,8 +239,9 @@ void HungRendererDialogView::Show(
     return;
 
   // Only show for WebContents in a browser window.
-  if (!chrome::FindBrowserWithWebContents(contents))
+  if (!chrome::FindBrowserWithTab(contents)) {
     return;
+  }
 
   // Don't show the warning unless the foreground window is the frame. If the
   // user has another window or application selected, activating ourselves is

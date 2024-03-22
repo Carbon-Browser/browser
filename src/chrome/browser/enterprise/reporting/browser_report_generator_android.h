@@ -1,14 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ENTERPRISE_REPORTING_BROWSER_REPORT_GENERATOR_ANDROID_H_
 #define CHROME_BROWSER_ENTERPRISE_REPORTING_BROWSER_REPORT_GENERATOR_ANDROID_H_
 
-#include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "components/enterprise/browser/reporting/browser_report_generator.h"
 
 namespace enterprise_management {
@@ -21,9 +19,6 @@ namespace enterprise_reporting {
 // browser report generation.
 class BrowserReportGeneratorAndroid : public BrowserReportGenerator::Delegate {
  public:
-  using ReportCallback = base::OnceCallback<void(
-      std::unique_ptr<enterprise_management::BrowserReport>)>;
-
   BrowserReportGeneratorAndroid();
   BrowserReportGeneratorAndroid(const BrowserReportGeneratorAndroid&) = delete;
   BrowserReportGeneratorAndroid& operator=(
@@ -38,9 +33,6 @@ class BrowserReportGeneratorAndroid : public BrowserReportGenerator::Delegate {
   bool IsExtendedStableChannel() override;
   void GenerateBuildStateInfo(
       enterprise_management::BrowserReport* report) override;
-  void GeneratePluginsIfNeeded(
-      ReportCallback callback,
-      std::unique_ptr<enterprise_management::BrowserReport> report) override;
 };
 
 }  // namespace enterprise_reporting

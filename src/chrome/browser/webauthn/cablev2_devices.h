@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,15 +17,21 @@
 class PrefService;
 class Profile;
 
+namespace base {
+class Time;
+}
+
+namespace syncer {
+class DeviceInfo;
+}
+
 namespace user_prefs {
 class PrefRegistrySyncable;
 }
 
-namespace device {
-namespace cablev2 {
+namespace device::cablev2 {
 struct Pairing;
-}  // namespace cablev2
-}  // namespace device
+}
 
 namespace cablev2 {
 
@@ -33,6 +39,12 @@ namespace cablev2 {
 // must be called at browser startup otherwise the preferences won't be
 // usable.
 void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
+
+// PairingFromSyncedDevice parses a `Pairing` from Sync's information about a
+// device. This is exposed for testing.
+std::unique_ptr<device::cablev2::Pairing> PairingFromSyncedDevice(
+    syncer::DeviceInfo* device,
+    const base::Time& now);
 
 // KnownDevices reflects the browser's knowledge of known caBLEv2 devices.
 // caBLEv2 is the protocol used when phones are acting as security keys. (Except

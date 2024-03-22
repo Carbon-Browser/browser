@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,6 +63,10 @@ class CORE_EXPORT DocumentMarkerList
                             unsigned offset,
                             unsigned old_length,
                             unsigned new_length) = 0;
+
+  // Update the marker list by merging any overlapping markers that should be
+  // merged. Only Custom Highlights and Text Fragment markers need to merge.
+  virtual void MergeOverlappingMarkers() = 0;
 
   virtual void Trace(Visitor* visitor) const {}
 

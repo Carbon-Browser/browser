@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,12 +24,16 @@ ChromeAboutThisSiteServiceClient::ChromeAboutThisSiteServiceClient(
 
 ChromeAboutThisSiteServiceClient::~ChromeAboutThisSiteServiceClient() = default;
 
+bool ChromeAboutThisSiteServiceClient::IsOptimizationGuideAllowed() {
+  return optimization_guide::IsUserPermittedToFetchFromRemoteOptimizationGuide(
+      is_off_the_record_, prefs_);
+}
+
 optimization_guide::OptimizationGuideDecision
 ChromeAboutThisSiteServiceClient::CanApplyOptimization(
     const GURL& url,
     optimization_guide::OptimizationMetadata* optimization_metadata) {
-  if (!optimization_guide::IsUserPermittedToFetchFromRemoteOptimizationGuide(
-          is_off_the_record_, prefs_)) {
+  if (!IsOptimizationGuideAllowed()) {
     return optimization_guide::OptimizationGuideDecision::kUnknown;
   }
   return optimization_guide_decider_->CanApplyOptimization(

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,15 @@
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_FORM_PARSING_PASSWORD_FIELD_PREDICTION_H_
 
 #include <stdint.h>
+
 #include <vector>
 
+#include "base/containers/flat_map.h"
 #include "build/build_config.h"
+#include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/common/signatures.h"
 #include "components/autofill/core/common/unique_ids.h"
-
-namespace autofill {
-class FormStructure;
-}  // namespace autofill
 
 namespace password_manager {
 
@@ -34,14 +33,14 @@ CredentialFieldType DeriveFromServerFieldType(autofill::ServerFieldType type);
 
 // Contains server predictions for a field.
 struct PasswordFieldPrediction {
-  // Field identifier generated in Blink on non-iOS platforms.
   autofill::FieldRendererId renderer_id;
-#if BUILDFLAG(IS_IOS)
-  std::u16string unique_id;
-#endif
   autofill::FieldSignature signature;
   autofill::ServerFieldType type;
   bool may_use_prefilled_placeholder = false;
+  bool is_override = false;
+
+  friend bool operator==(const PasswordFieldPrediction& lhs,
+                         const PasswordFieldPrediction& rhs) = default;
 };
 
 // Contains server predictions for a form.
@@ -58,12 +57,18 @@ struct FormPredictions {
 
   autofill::FormSignature form_signature;
   std::vector<PasswordFieldPrediction> fields;
+
+  friend bool operator==(const FormPredictions& lhs,
+                         const FormPredictions& rhs) = default;
 };
 
-// Extracts all password related server predictions from |form_structure|.
+// Extracts password related server predictions from `form` and `predictions`.
 FormPredictions ConvertToFormPredictions(
     int driver_id,
-    const autofill::FormStructure& form_structure);
+    const autofill::FormData& form,
+    const base::flat_map<autofill::FieldGlobalId,
+                         autofill::AutofillType::ServerPrediction>&
+        predictions);
 
 }  // namespace password_manager
 

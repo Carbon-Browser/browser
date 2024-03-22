@@ -1,27 +1,24 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/download/download_manager_mediator.h"
 
-#include <UIKit/UIKit.h>
+#import <UIKit/UIKit.h>
 
-#include "base/bind.h"
-#include "base/files/file_path.h"
-#include "base/files/file_util.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/task/thread_pool.h"
-#include "ios/chrome/browser/download/download_directory_util.h"
-#import "ios/chrome/browser/download/external_app_util.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "base/apple/foundation_util.h"
+#import "base/feature_list.h"
+#import "base/files/file_path.h"
+#import "base/files/file_util.h"
+#import "base/functional/bind.h"
+#import "base/task/thread_pool.h"
+#import "ios/chrome/browser/download/model/download_directory_util.h"
+#import "ios/chrome/browser/download/model/external_app_util.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/download/download_task.h"
-#include "net/base/net_errors.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/base/net_errors.h"
+#import "ui/base/l10n/l10n_util.h"
 
 DownloadManagerMediator::DownloadManagerMediator() : weak_ptr_factory_(this) {}
 DownloadManagerMediator::~DownloadManagerMediator() {
@@ -76,27 +73,35 @@ void DownloadManagerMediator::UpdateConsumer() {
   DownloadManagerState state = GetDownloadManagerState();
 
   if (state == kDownloadManagerStateSucceeded) {
-    download_path_ = task_->GetResponsePath();
+    base::FilePath user_download_path;
+    GetDownloadsDirectory(&user_download_path);
+    download_path_ = user_download_path.Append(task_->GenerateFileName());
+
+    base::FilePath task_path = task_->GetResponsePath();
 
     base::ThreadPool::PostTaskAndReplyWithResult(
         FROM_HERE,
         {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-        base::BindOnce(base::PathExists, download_path_),
+        base::BindOnce(base::PathExists, task_path),
         base::BindOnce(
             &DownloadManagerMediator::MoveToUserDocumentsIfFileExists,
-            weak_ptr_factory_.GetWeakPtr(), download_path_));
+            weak_ptr_factory_.GetWeakPtr(), task_path));
   }
 
-  if (state == kDownloadManagerStateSucceeded && !IsGoogleDriveAppInstalled()) {
+  if (!base::FeatureList::IsEnabled(kIOSSaveToDrive) &&
+      state == kDownloadManagerStateSucceeded && !IsGoogleDriveAppInstalled() &&
+      [consumer_ respondsToSelector:@selector(setInstallDriveButtonVisible:
+                                                                  animated:)]) {
     [consumer_ setInstallDriveButtonVisible:YES animated:YES];
   }
+
   [consumer_ setState:state];
   [consumer_ setCountOfBytesReceived:task_->GetReceivedBytes()];
   [consumer_ setCountOfBytesExpectedToReceive:task_->GetTotalBytes()];
   [consumer_ setProgress:GetDownloadManagerProgress()];
 
   base::FilePath filename = task_->GenerateFileName();
-  [consumer_ setFileName:base::SysUTF8ToNSString(filename.AsUTF8Unsafe())];
+  [consumer_ setFileName:base::apple::FilePathToNSString(filename)];
 
   int a11y_announcement = GetDownloadManagerA11yAnnouncement();
   if (a11y_announcement != -1) {
@@ -106,28 +111,22 @@ void DownloadManagerMediator::UpdateConsumer() {
 }
 
 void DownloadManagerMediator::MoveToUserDocumentsIfFileExists(
-    base::FilePath download_path,
+    base::FilePath task_path,
     bool file_exists) {
-  if (!file_exists || !task_)
+  if (!file_exists || !task_) {
     return;
-
-  base::FilePath user_download_path;
-  GetDownloadsDirectory(&user_download_path);
-  user_download_path = user_download_path.Append(task_->GenerateFileName());
+  }
 
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,
       {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-      base::BindOnce(&base::Move, download_path, user_download_path),
-      base::BindOnce(&DownloadManagerMediator::RestoreDownloadPath,
-                     weak_ptr_factory_.GetWeakPtr(), user_download_path));
+      base::BindOnce(&base::Move, task_path, download_path_),
+      base::BindOnce(&DownloadManagerMediator::MoveComplete,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
-void DownloadManagerMediator::RestoreDownloadPath(
-    base::FilePath user_download_path,
-    bool moveCompleted) {
-  DCHECK(moveCompleted);
-  download_path_ = user_download_path;
+void DownloadManagerMediator::MoveComplete(bool move_completed) {
+  DCHECK(move_completed);
 }
 
 DownloadManagerState DownloadManagerMediator::GetDownloadManagerState() const {

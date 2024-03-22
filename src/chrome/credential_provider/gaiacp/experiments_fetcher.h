@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ class ExperimentsFetcher {
   HRESULT FetchAndStoreExperimentsInternal(
       const std::wstring& sid,
       const std::string& access_token,
-      std::unique_ptr<base::DictionaryValue> request_dict);
+      std::unique_ptr<base::Value::Dict> request_dict);
 };
 
 }  // namespace credential_provider

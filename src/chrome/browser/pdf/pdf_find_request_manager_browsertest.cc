@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,7 @@ class PdfFindRequestManagerTest : public InProcessBrowserTest {
   void TearDownOnMainThread() override {
     // Swap the WebContents's delegate back to its usual delegate.
     contents()->SetDelegate(normal_delegate_);
+    normal_delegate_ = nullptr;
   }
 
  protected:
@@ -166,8 +167,14 @@ void SendRangeResponse(net::test_server::ControllableHttpResponse* response,
 
 // Tests searching in a PDF received in chunks via range-requests.  See also
 // https://crbug.com/1027173.
+// TODO(crbug.com/1470995): flaky on Linux debug.
+#if BUILDFLAG(IS_LINUX) && !defined(NDEBUG)
+#define MAYBE_FindInChunkedPDF DISABLED_FindInChunkedPDF
+#else
+#define MAYBE_FindInChunkedPDF FindInChunkedPDF
+#endif
 IN_PROC_BROWSER_TEST_F(PdfFindRequestManagerTestWithPdfPartialLoading,
-                       FindInChunkedPDF) {
+                       MAYBE_FindInChunkedPDF) {
   constexpr uint32_t kStalledResponseSize =
       chrome_pdf::DocumentLoaderImpl::kDefaultRequestSize + 123;
 
@@ -245,8 +252,10 @@ IN_PROC_BROWSER_TEST_F(PdfFindRequestManagerTestWithPdfPartialLoading,
   // Verify that find-in-page works fine.
   auto options = blink::mojom::FindOptions::New();
   Find("FXCMAP_CMap", options.Clone());
+  delegate()->WaitForFinalReply();
   options->new_session = false;
   Find("FXCMAP_CMap", options.Clone());
+  delegate()->WaitForFinalReply();
   Find("FXCMAP_CMap", options.Clone());
   delegate()->WaitForFinalReply();
 

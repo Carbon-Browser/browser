@@ -1,16 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/vaapi/vaapi_video_decoder_delegate.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "build/chromeos_buildflags.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/cdm_context.h"
 #include "media/gpu/decode_surface_handler.h"
 #include "media/gpu/vaapi/va_surface.h"
@@ -24,9 +25,6 @@
 #include "chromeos/components/cdm_factory_daemon/chromeos_cdm_factory.h"  // nogncheck
 
 namespace {
-// During playback of protected content, we need to request the keys at an
-// interval no greater than this. This allows updating of key usage data.
-constexpr base::TimeDelta kKeyRetrievalMaxPeriod = base::Minutes(1);
 // This increments the lower 64 bit counter of an 128 bit IV.
 void ctr128_inc64(uint8_t* counter) {
   uint32_t n = 16;
@@ -128,7 +126,7 @@ VaapiVideoDecoderDelegate::SetupDecryptDecode(
     }
     // We need to start the creation of this, first part requires getting the
     // hw config data from the daemon.
-    chromeos::ChromeOsCdmFactory::GetHwConfigData(BindToCurrentLoop(
+    chromeos_cdm_context_->GetHwConfigData(base::BindPostTaskToCurrentDefault(
         base::BindOnce(&VaapiVideoDecoderDelegate::OnGetHwConfigData,
                        weak_factory_.GetWeakPtr())));
     protected_session_state_ = ProtectedSessionState::kInProcess;
@@ -191,34 +189,20 @@ VaapiVideoDecoderDelegate::SetupDecryptDecode(
     DVLOG(1) << "Looking up the key data for: " << decrypt_config_->key_id();
     chromeos_cdm_context_->GetHwKeyData(
         decrypt_config_.get(), hw_identifier_,
-        BindToCurrentLoop(base::BindOnce(
+        base::BindPostTaskToCurrentDefault(base::BindOnce(
             &VaapiVideoDecoderDelegate::OnGetHwKeyData,
             weak_factory_.GetWeakPtr(), decrypt_config_->key_id())));
-    last_key_retrieval_time_ =
-        base::DefaultTickClock::GetInstance()->NowTicks();
     // Don't change our state here because we are created, but we just return
     // kInProcess for now to trigger a wait/retry state.
     return ProtectedSessionState::kInProcess;
   }
 
-  // We may also need to request the key in order to update key usage times in
-  // OEMCrypto. We do care about the return value, because it will indicate key
-  // validity for us.
-  if (base::DefaultTickClock::GetInstance()->NowTicks() -
-          last_key_retrieval_time_ >
-      kKeyRetrievalMaxPeriod) {
-    chromeos_cdm_context_->GetHwKeyData(
-        decrypt_config_.get(), hw_identifier_,
-        BindToCurrentLoop(base::BindOnce(
-            &VaapiVideoDecoderDelegate::OnGetHwKeyData,
-            weak_factory_.GetWeakPtr(), decrypt_config_->key_id())));
-
-    last_key_retrieval_time_ =
-        base::DefaultTickClock::GetInstance()->NowTicks();
-  }
-
   crypto_params->num_segments += subsamples.size();
-  if (decrypt_config_->HasPattern()) {
+  // If the pattern has no skip blocks, which means the entire thing is
+  // encrypted, then don't specify a pattern at all as Intel's implementation
+  // does not expect that.
+  if (decrypt_config_->HasPattern() &&
+      decrypt_config_->encryption_pattern()->skip_byte_block()) {
     crypto_params->blocks_stripe_encrypted =
         decrypt_config_->encryption_pattern()->crypt_byte_block();
     crypto_params->blocks_stripe_clear =
@@ -352,15 +336,20 @@ void VaapiVideoDecoderDelegate::RecoverProtectedSession() {
   protected_session_state_ = ProtectedSessionState::kNeedsRecovery;
   hw_key_data_map_.clear();
   hw_identifier_.clear();
-  vaapi_wrapper_->DestroyProtectedSession();
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (chromeos_cdm_context_ && chromeos_cdm_context_->UsingArcCdm()) {
+  CHECK(chromeos_cdm_context_);
+  // ARC will not re-seek, so we cannot do the VAContext recreation for it.
+  if (!chromeos_cdm_context_->UsingArcCdm()) {
+    OnVAContextDestructionSoon();
+    vaapi_wrapper_->DestroyContext();
+  }
+  vaapi_wrapper_->DestroyProtectedSession();
+  if (chromeos_cdm_context_->UsingArcCdm()) {
     // The ARC decoder doesn't handle the WaitingCB that'll get invoked so we
     // need to trigger a protected update ourselves in order to get decoding
     // running again.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE,
-        base::BindRepeating(on_protected_session_update_cb_, true));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindRepeating(on_protected_session_update_cb_, true));
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }

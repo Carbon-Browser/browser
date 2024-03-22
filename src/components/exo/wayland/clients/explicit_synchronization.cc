@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ void BufferReleaseFencedRelease(
     int32_t fd) {
   ClientBase::Buffer* buffer = static_cast<ClientBase::Buffer*>(data);
   gfx::GpuFenceHandle release_fence;
-  release_fence.owned_fd = base::ScopedFD(fd);
+  release_fence.Adopt(base::ScopedFD(fd));
   gfx::GpuFence(std::move(release_fence)).Wait();
   buffer->busy = false;
 }

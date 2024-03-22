@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include "base/timer/timer.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/label.h"
 
 namespace ui {
@@ -15,6 +16,8 @@ namespace ime {
 
 // Label used for ChromeVox announcements via live regions.
 class SuggestionAccessibilityLabel : public views::Label {
+  METADATA_HEADER(SuggestionAccessibilityLabel, views::Label)
+
  public:
   SuggestionAccessibilityLabel();
   ~SuggestionAccessibilityLabel() override;

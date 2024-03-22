@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <bitset>
 #include <memory>
 
-#include "ash/components/audio/cras_audio_handler.h"
-#include "base/memory/weak_ptr.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/scoped_observation.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "media/capture/video/chromeos/camera_hal_dispatcher_impl.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -86,11 +86,14 @@ class VmCameraMicManager : public media::CameraActiveClientObserver,
   void MaybeSubscribeToCameraService(bool should_use_cros_camera_service);
 
   // media::CameraActiveClientObserver
-  void OnActiveClientChange(cros::mojom::CameraClientType type,
-                            bool is_active) override;
+  void OnActiveClientChange(
+      cros::mojom::CameraClientType type,
+      bool is_new_active_client,
+      const base::flat_set<std::string>& active_device_ids) override;
 
   // media::CameraPrivacySwitchObserver
-  void OnCameraPrivacySwitchStatusChanged(
+  void OnCameraHWPrivacySwitchStateChanged(
+      const std::string& device_id,
       cros::mojom::CameraPrivacySwitchState state) override;
 
   // CrasAudioHandler::AudioObserver
@@ -105,18 +108,13 @@ class VmCameraMicManager : public media::CameraActiveClientObserver,
   void UpdateVmInfo(VmType vm, void (VmInfo::*updator)(bool), bool value);
   void NotifyActiveChanged();
 
-  Profile* primary_profile_ = nullptr;
+  raw_ptr<Profile, LeakedDanglingUntriaged | ExperimentalAsh> primary_profile_ =
+      nullptr;
   std::map<VmType, VmInfo> vm_info_map_;
 
   base::ObserverList<Observer> observers_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-using ::ash::VmCameraMicManager;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_CAMERA_MIC_VM_CAMERA_MIC_MANAGER_H_

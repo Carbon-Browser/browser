@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,15 +32,6 @@ class NoteServiceBridge : public base::SupportsUserData::Data {
   void GetTemplates(JNIEnv* env,
                     const JavaParamRef<jobject>& jcaller,
                     const JavaParamRef<jobject>& jcallback);
-
-  jboolean IsPublishAvailable(JNIEnv* env,
-                              const JavaParamRef<jobject>& jcaller);
-
-  void PublishNote(JNIEnv* env,
-                   const JavaParamRef<jobject>& jcaller,
-                   jstring selectedText,
-                   jstring shareUrl,
-                   const JavaParamRef<jobject>& jcallback);
 
  private:
   ScopedJavaGlobalRef<jobject> java_obj_;

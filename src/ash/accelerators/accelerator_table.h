@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,9 +65,6 @@ struct DeprecatedAcceleratorData {
   // The ID of the localized notification message to show to users informing
   // them about the deprecation.
   int notification_message_id;
-
-  // The ID of the localized old deprecated shortcut key.
-  int old_shortcut_id;
 
   // The ID of the localized new shortcut key.
   int new_shortcut_id;

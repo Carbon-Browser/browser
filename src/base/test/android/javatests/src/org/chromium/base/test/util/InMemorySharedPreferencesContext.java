@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import android.content.SharedPreferences;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * ContextWrapper that causes SharedPreferences to not persist to disk.
- */
+/** ContextWrapper that causes SharedPreferences to not persist to disk. */
 public class InMemorySharedPreferencesContext extends ApplicationContextWrapper {
     protected final Map<String, SharedPreferences> mSharedPreferences =
             new HashMap<String, SharedPreferences>();
@@ -35,9 +33,7 @@ public class InMemorySharedPreferencesContext extends ApplicationContextWrapper 
         }
     }
 
-    /**
-     * Calls .clear() on all SharedPreferences.
-     */
+    /** Calls .clear() on all SharedPreferences. */
     public void clearSharedPreferences() {
         synchronized (mSharedPreferences) {
             // Clear each instance rather than the map in case there are any registered listeners

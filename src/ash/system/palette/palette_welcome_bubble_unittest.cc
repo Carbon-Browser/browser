@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -143,6 +143,15 @@ TEST_F(PaletteWelcomeBubbleTest, BubbleShownForSecondUser) {
 TEST_F(PaletteWelcomeBubbleTest, BubbleNotShownInactiveSession) {
   GetSessionControllerClient()->SetSessionState(
       session_manager::SessionState::LOGGED_IN_NOT_ACTIVE);
+  welcome_bubble_->ShowIfNeeded();
+  EXPECT_FALSE(welcome_bubble_->GetBubbleViewForTesting());
+}
+
+TEST_F(PaletteWelcomeBubbleTest, BubbleNotShownKiosk) {
+  ClearLogin();
+  SimulateKioskMode(user_manager::USER_TYPE_WEB_KIOSK_APP);
+  SetCanLockScreen(false);
+
   welcome_bubble_->ShowIfNeeded();
   EXPECT_FALSE(welcome_bubble_->GetBubbleViewForTesting());
 }

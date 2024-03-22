@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
-#include "components/sync/driver/sync_service_observer.h"
 #include "components/sync/engine/events/protocol_event_observer.h"
 #include "components/sync/invalidations/invalidations_listener.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "ios/web/public/webui/web_ui_ios_message_handler.h"
 
 namespace syncer {
@@ -47,7 +47,7 @@ class SyncInternalsMessageHandler : public web::WebUIIOSMessageHandler,
   // Fires an event to send the initial state of the "include specifics" flag.
   void HandleRequestIncludeSpecificsInitialState(const base::Value::List& args);
 
-  // Handler for getAllNodes message.  Needs a |request_id| argument.
+  // Handler for getAllNodes message.  Needs a `request_id` argument.
   void HandleGetAllNodes(const base::Value::List& args);
 
   // Handler for setting internal state of if specifics should be included in
@@ -57,9 +57,6 @@ class SyncInternalsMessageHandler : public web::WebUIIOSMessageHandler,
   // Handler for requestStart message.
   void HandleRequestStart(const base::Value::List& args);
 
-  // Handler for requestStopKeepData message.
-  void HandleRequestStopKeepData(const base::Value::List& args);
-
   // Handler for requestStopClearData message.
   void HandleRequestStopClearData(const base::Value::List& args);
 
@@ -68,7 +65,7 @@ class SyncInternalsMessageHandler : public web::WebUIIOSMessageHandler,
 
   // Callback used in GetAllNodes.
   void OnReceivedAllNodes(const std::string& callback_id,
-                          std::unique_ptr<base::ListValue> nodes);
+                          base::Value::List nodes);
 
   // syncer::SyncServiceObserver implementation.
   void OnStateChanged(syncer::SyncService* sync) override;
@@ -95,7 +92,8 @@ class SyncInternalsMessageHandler : public web::WebUIIOSMessageHandler,
   // return null (e.g. if sync invalidations are not enabled).
   syncer::SyncInvalidationsService* GetSyncInvalidationsService();
 
-  void DispatchEvent(const std::string& name, const base::Value& details_value);
+  void DispatchEvent(const std::string& name,
+                     const base::ValueView details_value);
 
   // A flag used to prevent double-registration with SyncService.
   bool is_registered_ = false;

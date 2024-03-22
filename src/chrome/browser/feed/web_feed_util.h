@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_FEED_WEB_FEED_UTIL_H_
 
 #include <string>
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/feed/core/v2/public/types.h"
 #include "components/feed/core/v2/public/web_feed_subscriptions.h"
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,10 @@
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/message_center/message_center_style.h"
 #include "ui/message_center/public/cpp/message_center_constants.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/constants/chromeos_features.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace message_center {
 
@@ -48,8 +52,14 @@ void ProportionalImageView::OnPaint(gfx::Canvas* canvas) {
 
   if (apply_rounded_corners_) {
     SkPath path;
-    const SkScalar corner_radius =
-        SkIntToScalar(message_center::kImageCornerRadius);
+    SkScalar corner_radius = SkIntToScalar(message_center::kImageCornerRadius);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    if (chromeos::features::IsJellyEnabled()) {
+      corner_radius = SkIntToScalar(message_center::kJellyImageCornerRadius);
+    }
+#endif
+
     const SkScalar kRadius[8] = {corner_radius, corner_radius, corner_radius,
                                  corner_radius, corner_radius, corner_radius,
                                  corner_radius, corner_radius};

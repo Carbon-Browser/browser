@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ size_t GetDemuxerStreamAudioMemoryLimit(
     case AudioCodec::kAC3:
     case AudioCodec::kDTS:
     case AudioCodec::kDTSXP2:
+    case AudioCodec::kDTSE:
     case AudioCodec::kMpegHAudio:
       return internal::kDemuxerStreamAudioMemoryLimitMedium;
     case AudioCodec::kAAC:

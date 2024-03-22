@@ -1,21 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/ios/ios_util.h"
-#include "base/strings/stringprintf.h"
+#import "base/ios/ios_util.h"
+#import "base/strings/stringprintf.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "net/test/embedded_test_server/http_request.h"
-#include "net/test/embedded_test_server/http_response.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/test/element_selector.h"
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "net/test/embedded_test_server/http_request.h"
+#import "net/test/embedded_test_server/http_response.h"
 
 namespace {
 
@@ -28,6 +25,7 @@ const char kWebShareValidLinkUrl[] = "/share_link.html";
 const char kWebShareFileUrl[] = "/share_file.html";
 const char kWebShareRelativeLinkUrl[] = "/share_relative_link.html";
 const char kWebShareRelativeFilenameFileUrl[] = "/share_filename_file.html";
+const char kWebShareUrlObjectUrl[] = "/share_url_object.html";
 
 const char kWebSharePageContents[] =
     "<html>"
@@ -36,8 +34,8 @@ const char kWebSharePageContents[] =
     "async function tryUrl() {"
     "  document.getElementById(\"result\").innerHTML = '';"
     "  try {"
-    "    var opts = {url: \"%s\"};"
-    "    navigator.share(opts);"
+    "    var opts = {url: %s};"
+    "    await navigator.share(opts);"
     "    document.getElementById(\"result\").innerHTML = 'success';"
     "  } catch {"
     "    document.getElementById(\"result\").innerHTML = 'failure';"
@@ -57,24 +55,35 @@ std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
 
   if (request.relative_url == kWebShareValidLinkUrl) {
     std::string content =
-        base::StringPrintf(kWebSharePageContents, "https://example.com");
+        base::StringPrintf(kWebSharePageContents, "\"https://example.com\"");
     http_response->set_content(content);
   } else if (request.relative_url == kWebShareFileUrl) {
     std::string content =
-        base::StringPrintf(kWebSharePageContents, "file:///Users/u/data");
+        base::StringPrintf(kWebSharePageContents, "\"file:///Users/u/data\"");
     http_response->set_content(content);
   } else if (request.relative_url == kWebShareRelativeLinkUrl) {
     std::string content =
-        base::StringPrintf(kWebSharePageContents, "/something.png");
+        base::StringPrintf(kWebSharePageContents, "\"/something.png\"");
     http_response->set_content(content);
   } else if (request.relative_url == kWebShareRelativeFilenameFileUrl) {
     std::string content =
-        base::StringPrintf(kWebSharePageContents, "filename.zip");
+        base::StringPrintf(kWebSharePageContents, "\"filename.zip\"");
+    http_response->set_content(content);
+  } else if (request.relative_url == kWebShareUrlObjectUrl) {
+    std::string content =
+        base::StringPrintf(kWebSharePageContents, "window.location");
     http_response->set_content(content);
   } else {
     return nullptr;
   }
   return std::move(http_response);
+}
+
+// Taps the Web Share button in the web view.
+void TapWebShareButton() {
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
+      performAction:chrome_test_util::TapWebElementUnverified([ElementSelector
+                        selectorWithElementID:kWebShareButtonId])];
 }
 
 }  // namespace
@@ -95,11 +104,9 @@ std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
 - (void)testShareUrl {
   const GURL pageURL = self.testServer->GetURL(kWebShareValidLinkUrl);
   [ChromeEarlGrey loadURL:pageURL];
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
-      performAction:chrome_test_util::TapWebElementWithId(kWebShareButtonId)];
+  TapWebShareButton();
 
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityLabel(@"Copy")]
-      performAction:grey_tap()];
+  [ChromeEarlGrey tapButtonInActivitySheetWithID:@"Copy"];
 
   [ChromeEarlGrey waitForWebStateContainingText:kWebShareStatusSuccess];
 }
@@ -108,11 +115,9 @@ std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
 - (void)testShareRelativeUrl {
   const GURL pageURL = self.testServer->GetURL(kWebShareRelativeLinkUrl);
   [ChromeEarlGrey loadURL:pageURL];
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
-      performAction:chrome_test_util::TapWebElementWithId(kWebShareButtonId)];
+  TapWebShareButton();
 
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityLabel(@"Copy")]
-      performAction:grey_tap()];
+  [ChromeEarlGrey tapButtonInActivitySheetWithID:@"Copy"];
 
   [ChromeEarlGrey waitForWebStateContainingText:kWebShareStatusSuccess];
 }
@@ -122,11 +127,9 @@ std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
   const GURL pageURL =
       self.testServer->GetURL(kWebShareRelativeFilenameFileUrl);
   [ChromeEarlGrey loadURL:pageURL];
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
-      performAction:chrome_test_util::TapWebElementWithId(kWebShareButtonId)];
+  TapWebShareButton();
 
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityLabel(@"Copy")]
-      performAction:grey_tap()];
+  [ChromeEarlGrey tapButtonInActivitySheetWithID:@"Copy"];
 
   [ChromeEarlGrey waitForWebStateContainingText:kWebShareStatusSuccess];
 }
@@ -135,14 +138,23 @@ std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
 - (void)testShareFileUrl {
   const GURL pageURL = self.testServer->GetURL(kWebShareFileUrl);
   [ChromeEarlGrey loadURL:pageURL];
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::WebViewMatcher()]
-      performAction:chrome_test_util::TapWebElementWithId(kWebShareButtonId)];
+  TapWebShareButton();
 
   [ChromeEarlGrey waitForWebStateContainingText:kWebShareStatusFailure];
 
   // Share sheet should not display.
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityLabel(@"Copy")]
-      assertWithMatcher:grey_nil()];
+  [ChromeEarlGrey verifyActivitySheetNotVisible];
+}
+
+// Tests that an url object can be shared.
+- (void)testShareUrlObject {
+  const GURL pageURL = self.testServer->GetURL(kWebShareUrlObjectUrl);
+  [ChromeEarlGrey loadURL:pageURL];
+  TapWebShareButton();
+
+  [ChromeEarlGrey tapButtonInActivitySheetWithID:@"Copy"];
+
+  [ChromeEarlGrey waitForWebStateContainingText:kWebShareStatusSuccess];
 }
 
 @end

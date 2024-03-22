@@ -1,14 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/cocoa/first_run_dialog_controller.h"
 
 #include "base/i18n/rtl.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/strings/sys_string_conversions.h"
-#include "chrome/browser/ui/cocoa/key_equivalent_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #import "third_party/google_toolbox_for_mac/src/AppKit/GTMUILocalizerAndLayoutTweaker.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -77,22 +75,15 @@ void CenterVertically(NSView* view) {
 }  // namespace
 
 @implementation FirstRunDialogViewController {
-  // These are owned by the NSView hierarchy:
-  NSButton* _defaultBrowserCheckbox;
-  NSButton* _statsCheckbox;
-
-  // This is owned by NSViewController:
-  NSView* _view;
+  NSButton* __strong _defaultBrowserCheckbox;
+  NSButton* __strong _statsCheckbox;
 
   BOOL _statsCheckboxInitiallyChecked;
-  BOOL _defaultBrowserCheckboxVisible;
 }
 
-- (instancetype)initWithStatsCheckboxInitiallyChecked:(BOOL)checked
-                        defaultBrowserCheckboxVisible:(BOOL)visible {
+- (instancetype)initWithStatsCheckboxInitiallyChecked:(BOOL)checked {
   if ((self = [super init])) {
     _statsCheckboxInitiallyChecked = checked;
-    _defaultBrowserCheckboxVisible = visible;
   }
   return self;
 }
@@ -100,27 +91,12 @@ void CenterVertically(NSView* view) {
 - (void)loadView {
   const int kDialogWidth = 480;
 
-  BOOL isDarkMode = NO;
-  if (@available(macOS 10.14, *)) {
-    NSAppearanceName appearance =
-        [[NSApp effectiveAppearance] bestMatchFromAppearancesWithNames:@[
-          NSAppearanceNameAqua, NSAppearanceNameDarkAqua
-        ]];
-    isDarkMode = [appearance isEqual:NSAppearanceNameDarkAqua];
-  }
-  NSColor* topBoxColor = isDarkMode
-                             ? [NSColor colorWithCalibratedRed:0x32 / 255.0
-                                                         green:0x36 / 255.0
-                                                          blue:0x39 / 255.0
-                                                         alpha:1.0]
-                             : [NSColor whiteColor];
-
-  NSBox* topBox = [[[NSBox alloc]
-      initWithFrame:NSMakeRect(0, 137, kDialogWidth, 52)] autorelease];
-  [topBox setFillColor:topBoxColor];
-  [topBox setBoxType:NSBoxCustom];
-  [topBox setBorderType:NSNoBorder];
-  [topBox setContentViewMargins:NSZeroSize];
+  NSBox* topBox =
+      [[NSBox alloc] initWithFrame:NSMakeRect(0, 137, kDialogWidth, 52)];
+  topBox.boxType = NSBoxCustom;
+  topBox.contentViewMargins = NSZeroSize;
+  topBox.fillColor = NSColor.controlColor;
+  topBox.borderWidth = 0;
 
   // This string starts with the app name, which is strongly LTR, so force the
   // correct layout.
@@ -138,9 +114,7 @@ void CenterVertically(NSView* view) {
                  action:nil];
   [_defaultBrowserCheckbox
       setFrame:NSMakeRect(45, 107, kDialogWidth - 2 * 45, 18)];
-  [_defaultBrowserCheckbox setState:NSOnState];
-  if (!_defaultBrowserCheckboxVisible)
-    [_defaultBrowserCheckbox setHidden:YES];
+  [_defaultBrowserCheckbox setState:NSControlStateValueOn];
 
   _statsCheckbox = [NSButton
       checkboxWithTitle:NSStringWithProductName(
@@ -149,7 +123,7 @@ void CenterVertically(NSView* view) {
                  action:nil];
   [_statsCheckbox setFrame:NSMakeRect(45, 82, kDialogWidth - 2 * 45, 19)];
   if (_statsCheckboxInitiallyChecked)
-    [_statsCheckbox setState:NSOnState];
+    [_statsCheckbox setState:NSControlStateValueOn];
 
   NSButton* startChromeButton =
       [NSButton buttonWithTitle:NSStringWithProductName(
@@ -157,22 +131,21 @@ void CenterVertically(NSView* view) {
                          target:self
                          action:@selector(ok:)];
   [startChromeButton setFrame:NSMakeRect(161, 12, 306, 32)];
-  [startChromeButton setKeyEquivalent:kKeyEquivalentReturn];
+  [startChromeButton setKeyEquivalent:@"\r"];
 
-  NSBox* topSeparator = [[[NSBox alloc]
-      initWithFrame:NSMakeRect(0, 136, kDialogWidth, 1)] autorelease];
+  NSBox* topSeparator =
+      [[NSBox alloc] initWithFrame:NSMakeRect(0, 136, kDialogWidth, 1)];
   [topSeparator setBoxType:NSBoxSeparator];
 
-  NSBox* bottomSeparator = [[[NSBox alloc]
-      initWithFrame:NSMakeRect(0, 55, kDialogWidth, 5)] autorelease];
+  NSBox* bottomSeparator =
+      [[NSBox alloc] initWithFrame:NSMakeRect(0, 55, kDialogWidth, 5)];
   [bottomSeparator setBoxType:NSBoxSeparator];
 
   [topBox addSubview:completionLabel];
   CenterVertically(completionLabel);
 
-  base::scoped_nsobject<NSView> content_view(
-      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, kDialogWidth, 190)]);
-  self.view = content_view.get();
+  self.view =
+      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, kDialogWidth, 190)];
   [self.view addSubview:topBox];
   [self.view addSubview:topSeparator];
   [self.view addSubview:_defaultBrowserCheckbox];
@@ -198,9 +171,9 @@ void CenterVertically(NSView* view) {
           delta);
       NSRect frame = [self.view frame];
       frame.size.height += delta;
-      [self.view setAutoresizesSubviews:NO];
-      [self.view setFrame:frame];
-      [self.view setAutoresizesSubviews:YES];
+      self.view.autoresizesSubviews = NO;
+      self.view.frame = frame;
+      self.view.autoresizesSubviews = YES;
     }
   }
 
@@ -215,19 +188,6 @@ void CenterVertically(NSView* view) {
   if (base::i18n::IsRTL())
     frame.origin.x = kDialogWidth - NSMaxX(frame);
   [startChromeButton setFrame:frame];
-
-  // Lastly, if the default browser checkbox is actually invisible, move the
-  // views above it downward so that there's not a big open space in the content
-  // view, and resize the content view itself so there isn't extra space.
-  if (!_defaultBrowserCheckboxVisible) {
-    CGFloat delta = NSHeight([_defaultBrowserCheckbox frame]);
-    MoveViewsVertically(@[ topBox, topSeparator ], -delta);
-    NSRect frame = [self.view frame];
-    frame.size.height -= delta;
-    [self.view setAutoresizesSubviews:NO];
-    [self.view setFrame:frame];
-    [self.view setAutoresizesSubviews:YES];
-  }
 }
 
 - (NSString*)windowTitle {
@@ -235,15 +195,15 @@ void CenterVertically(NSView* view) {
 }
 
 - (BOOL)isStatsReportingEnabled {
-  return [_statsCheckbox state] == NSOnState;
+  return [_statsCheckbox state] == NSControlStateValueOn;
 }
 
 - (BOOL)isMakeDefaultBrowserEnabled {
-  return [_defaultBrowserCheckbox state] == NSOnState;
+  return [_defaultBrowserCheckbox state] == NSControlStateValueOn;
 }
 
 - (void)ok:(id)sender {
-  [[[self view] window] close];
+  [self.view.window close];
   [NSApp stopModal];
 }
 

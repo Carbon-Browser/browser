@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,21 +9,24 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
-#include "extensions/common/api/system_display.h"
+#include "extensions/browser/api/system_display/display_info_provider.h"
 #include "extensions/common/permissions/permissions_data.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "extensions/common/manifest_handlers/kiosk_mode_info.h"
 #endif
 
 namespace extensions {
 
 namespace display = api::system_display;
+
+const char SystemDisplayFunction::kApiNotAvailableError[] =
+    "System display API is not available.";
 
 const char SystemDisplayCrOSRestrictedFunction::kCrosOnlyError[] =
     "Function available only on ChromeOS.";
@@ -48,12 +51,12 @@ class OverscanTracker {
                             const std::string& id);
   static void RemoveObserver(content::WebContents* web_contents);
 
-  OverscanTracker() {}
+  OverscanTracker() = default;
 
   OverscanTracker(const OverscanTracker&) = delete;
   OverscanTracker& operator=(const OverscanTracker&) = delete;
 
-  ~OverscanTracker() {}
+  ~OverscanTracker() = default;
 
  private:
   class OverscanWebObserver;
@@ -76,18 +79,20 @@ class OverscanTracker::OverscanWebObserver
   OverscanWebObserver(const OverscanWebObserver&) = delete;
   OverscanWebObserver& operator=(const OverscanWebObserver&) = delete;
 
-  ~OverscanWebObserver() override {}
+  ~OverscanWebObserver() override = default;
 
   // WebContentsObserver
   void RenderFrameDeleted(
       content::RenderFrameHost* render_frame_host) override {
+    DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+    DCHECK(provider);
     if (!render_frame_host->IsInPrimaryMainFrame())
       return;
     for (const std::string& id : display_ids_) {
       // Reset any uncomitted calibraiton changes and complete calibration to
       // hide the overlay.
-      DisplayInfoProvider::Get()->OverscanCalibrationReset(id);
-      DisplayInfoProvider::Get()->OverscanCalibrationComplete(id);
+      provider->OverscanCalibrationReset(id);
+      provider->OverscanCalibrationComplete(id);
     }
     OverscanTracker::RemoveObserver(web_contents());  // Deletes this.
   }
@@ -160,7 +165,7 @@ bool HasAutotestPrivate(const ExtensionFunction& function) {
              mojom::APIPermissionID::kAutoTestPrivate);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
 // |edid| is available only to Chrome OS kiosk mode applications.
 bool ShouldRestrictEdidInformation(const ExtensionFunction& function) {
   if (function.extension()) {
@@ -174,14 +179,23 @@ bool ShouldRestrictEdidInformation(const ExtensionFunction& function) {
 
 }  // namespace
 
-bool SystemDisplayCrOSRestrictedFunction::PreRunValidation(std::string* error) {
+bool SystemDisplayFunction::PreRunValidation(std::string* error) {
   if (!ExtensionFunction::PreRunValidation(error))
     return false;
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-  *error = kCrosOnlyError;
-  return false;
-#else
+  if (!DisplayInfoProvider::Get()) {
+    *error = kApiNotAvailableError;
+    return false;
+  }
+
+  return true;
+}
+
+bool SystemDisplayCrOSRestrictedFunction::PreRunValidation(std::string* error) {
+  if (!SystemDisplayFunction::PreRunValidation(error))
+    return false;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
   if (!ShouldRestrictToKioskAndWebUI())
     return true;
 
@@ -191,6 +205,9 @@ bool SystemDisplayCrOSRestrictedFunction::PreRunValidation(std::string* error) {
     return true;
   *error = kKioskOnlyError;
   return false;
+#else
+  *error = kCrosOnlyError;
+  return false;
 #endif
 }
 
@@ -199,40 +216,40 @@ bool SystemDisplayCrOSRestrictedFunction::ShouldRestrictToKioskAndWebUI() {
 }
 
 ExtensionFunction::ResponseAction SystemDisplayGetInfoFunction::Run() {
-  std::unique_ptr<display::GetInfo::Params> params(
-      display::GetInfo::Params::Create(args()));
+  std::optional<display::GetInfo::Params> params =
+      display::GetInfo::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+
   bool single_unified = params->flags && params->flags->single_unified &&
                         *params->flags->single_unified;
-  DisplayInfoProvider::Get()->GetAllDisplaysInfo(
+  provider->GetAllDisplaysInfo(
       single_unified,
       base::BindOnce(&SystemDisplayGetInfoFunction::Response, this));
   return RespondLater();
 }
 
 void SystemDisplayGetInfoFunction::Response(
-    DisplayInfoProvider::DisplayUnitInfoList all_displays_info) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+    std::vector<api::system_display::DisplayUnitInfo> all_displays_info) {
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
   if (ShouldRestrictEdidInformation(*this)) {
     for (auto& display_info : all_displays_info)
       display_info.edid.reset();
   }
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  // Kiosk mode work for Lacros has not been scoped out. For now, just strip
-  // all EDID information by default.
-  for (auto& display_info : all_displays_info)
-    display_info.edid.reset();
 #endif
   Respond(ArgumentList(display::GetInfo::Results::Create(all_displays_info)));
 }
 
 ExtensionFunction::ResponseAction SystemDisplayGetDisplayLayoutFunction::Run() {
-  DisplayInfoProvider::Get()->GetDisplayLayout(
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  provider->GetDisplayLayout(
       base::BindOnce(&SystemDisplayGetDisplayLayoutFunction::Response, this));
   return RespondLater();
 }
 
 void SystemDisplayGetDisplayLayoutFunction::Response(
-    DisplayInfoProvider::DisplayLayoutList display_layout) {
+    std::vector<api::system_display::DisplayLayout> display_layout) {
   return Respond(
       ArgumentList(display::GetDisplayLayout::Results::Create(display_layout)));
 }
@@ -243,9 +260,11 @@ bool SystemDisplayGetDisplayLayoutFunction::ShouldRestrictToKioskAndWebUI() {
 
 ExtensionFunction::ResponseAction
 SystemDisplaySetDisplayPropertiesFunction::Run() {
-  std::unique_ptr<display::SetDisplayProperties::Params> params(
-      display::SetDisplayProperties::Params::Create(args()));
-  DisplayInfoProvider::Get()->SetDisplayProperties(
+  std::optional<display::SetDisplayProperties::Params> params =
+      display::SetDisplayProperties::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  provider->SetDisplayProperties(
       params->id, params->info,
       base::BindOnce(&SystemDisplaySetDisplayPropertiesFunction::Response,
                      this));
@@ -253,37 +272,43 @@ SystemDisplaySetDisplayPropertiesFunction::Run() {
 }
 
 void SystemDisplaySetDisplayPropertiesFunction::Response(
-    absl::optional<std::string> error) {
+    std::optional<std::string> error) {
   Respond(error ? Error(*error) : NoArguments());
 }
 
 ExtensionFunction::ResponseAction SystemDisplaySetDisplayLayoutFunction::Run() {
-  std::unique_ptr<display::SetDisplayLayout::Params> params(
-      display::SetDisplayLayout::Params::Create(args()));
-  DisplayInfoProvider::Get()->SetDisplayLayout(
+  std::optional<display::SetDisplayLayout::Params> params =
+      display::SetDisplayLayout::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  provider->SetDisplayLayout(
       params->layouts,
       base::BindOnce(&SystemDisplaySetDisplayLayoutFunction::Response, this));
   return RespondLater();
 }
 
 void SystemDisplaySetDisplayLayoutFunction::Response(
-    absl::optional<std::string> error) {
+    std::optional<std::string> error) {
   Respond(error ? Error(*error) : NoArguments());
 }
 
 ExtensionFunction::ResponseAction
 SystemDisplayEnableUnifiedDesktopFunction::Run() {
-  std::unique_ptr<display::EnableUnifiedDesktop::Params> params(
-      display::EnableUnifiedDesktop::Params::Create(args()));
-  DisplayInfoProvider::Get()->EnableUnifiedDesktop(params->enabled);
+  std::optional<display::EnableUnifiedDesktop::Params> params =
+      display::EnableUnifiedDesktop::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  provider->EnableUnifiedDesktop(params->enabled);
   return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
 SystemDisplayOverscanCalibrationStartFunction::Run() {
-  std::unique_ptr<display::OverscanCalibrationStart::Params> params(
-      display::OverscanCalibrationStart::Params::Create(args()));
-  if (!DisplayInfoProvider::Get()->OverscanCalibrationStart(params->id))
+  std::optional<display::OverscanCalibrationStart::Params> params =
+      display::OverscanCalibrationStart::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  if (!provider->OverscanCalibrationStart(params->id))
     return RespondNow(Error("Invalid display ID: " + params->id));
   OverscanTracker::AddDisplay(GetSenderWebContents(), params->id);
   return RespondNow(NoArguments());
@@ -291,12 +316,14 @@ SystemDisplayOverscanCalibrationStartFunction::Run() {
 
 ExtensionFunction::ResponseAction
 SystemDisplayOverscanCalibrationAdjustFunction::Run() {
-  std::unique_ptr<display::OverscanCalibrationAdjust::Params> params(
-      display::OverscanCalibrationAdjust::Params::Create(args()));
+  std::optional<display::OverscanCalibrationAdjust::Params> params =
+      display::OverscanCalibrationAdjust::Params::Create(args());
   if (!params)
     return RespondNow(Error("Invalid parameters"));
-  if (!DisplayInfoProvider::Get()->OverscanCalibrationAdjust(params->id,
-                                                             params->delta)) {
+
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  if (!provider->OverscanCalibrationAdjust(params->id, params->delta)) {
     return RespondNow(
         Error("Calibration not started for display ID: " + params->id));
   }
@@ -305,9 +332,11 @@ SystemDisplayOverscanCalibrationAdjustFunction::Run() {
 
 ExtensionFunction::ResponseAction
 SystemDisplayOverscanCalibrationResetFunction::Run() {
-  std::unique_ptr<display::OverscanCalibrationReset::Params> params(
-      display::OverscanCalibrationReset::Params::Create(args()));
-  if (!DisplayInfoProvider::Get()->OverscanCalibrationReset(params->id))
+  std::optional<display::OverscanCalibrationReset::Params> params =
+      display::OverscanCalibrationReset::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  if (!provider->OverscanCalibrationReset(params->id))
     return RespondNow(
         Error("Calibration not started for display ID: " + params->id));
   return RespondNow(NoArguments());
@@ -315,9 +344,11 @@ SystemDisplayOverscanCalibrationResetFunction::Run() {
 
 ExtensionFunction::ResponseAction
 SystemDisplayOverscanCalibrationCompleteFunction::Run() {
-  std::unique_ptr<display::OverscanCalibrationComplete::Params> params(
-      display::OverscanCalibrationComplete::Params::Create(args()));
-  if (!DisplayInfoProvider::Get()->OverscanCalibrationComplete(params->id)) {
+  std::optional<display::OverscanCalibrationComplete::Params> params =
+      display::OverscanCalibrationComplete::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  if (!provider->OverscanCalibrationComplete(params->id)) {
     return RespondNow(
         Error("Calibration not started for display ID: " + params->id));
   }
@@ -327,9 +358,11 @@ SystemDisplayOverscanCalibrationCompleteFunction::Run() {
 
 ExtensionFunction::ResponseAction
 SystemDisplayShowNativeTouchCalibrationFunction::Run() {
-  std::unique_ptr<display::ShowNativeTouchCalibration::Params> params(
-      display::ShowNativeTouchCalibration::Params::Create(args()));
-  DisplayInfoProvider::Get()->ShowNativeTouchCalibration(
+  std::optional<display::ShowNativeTouchCalibration::Params> params =
+      display::ShowNativeTouchCalibration::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  provider->ShowNativeTouchCalibration(
       params->id,
       base::BindOnce(&SystemDisplayShowNativeTouchCalibrationFunction::
                          OnCalibrationComplete,
@@ -338,15 +371,17 @@ SystemDisplayShowNativeTouchCalibrationFunction::Run() {
 }
 
 void SystemDisplayShowNativeTouchCalibrationFunction::OnCalibrationComplete(
-    absl::optional<std::string> error) {
-  Respond(error ? Error(*error) : OneArgument(base::Value(true)));
+    std::optional<std::string> error) {
+  Respond(error ? Error(*error) : WithArguments(true));
 }
 
 ExtensionFunction::ResponseAction
 SystemDisplayStartCustomTouchCalibrationFunction::Run() {
-  std::unique_ptr<display::StartCustomTouchCalibration::Params> params(
-      display::StartCustomTouchCalibration::Params::Create(args()));
-  if (!DisplayInfoProvider::Get()->StartCustomTouchCalibration(params->id)) {
+  std::optional<display::StartCustomTouchCalibration::Params> params =
+      display::StartCustomTouchCalibration::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  if (!provider->StartCustomTouchCalibration(params->id)) {
     return RespondNow(
         Error("Custom touch calibration not available for display."));
   }
@@ -355,10 +390,12 @@ SystemDisplayStartCustomTouchCalibrationFunction::Run() {
 
 ExtensionFunction::ResponseAction
 SystemDisplayCompleteCustomTouchCalibrationFunction::Run() {
-  std::unique_ptr<display::CompleteCustomTouchCalibration::Params> params(
-      display::CompleteCustomTouchCalibration::Params::Create(args()));
-  if (!DisplayInfoProvider::Get()->CompleteCustomTouchCalibration(
-          params->pairs, params->bounds)) {
+  std::optional<display::CompleteCustomTouchCalibration::Params> params =
+      display::CompleteCustomTouchCalibration::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  if (!provider->CompleteCustomTouchCalibration(params->pairs,
+                                                params->bounds)) {
     return RespondNow(Error("Custom touch calibration completion failed."));
   }
   return RespondNow(NoArguments());
@@ -366,25 +403,29 @@ SystemDisplayCompleteCustomTouchCalibrationFunction::Run() {
 
 ExtensionFunction::ResponseAction
 SystemDisplayClearTouchCalibrationFunction::Run() {
-  std::unique_ptr<display::ClearTouchCalibration::Params> params(
-      display::ClearTouchCalibration::Params::Create(args()));
-  if (!DisplayInfoProvider::Get()->ClearTouchCalibration(params->id))
+  std::optional<display::ClearTouchCalibration::Params> params =
+      display::ClearTouchCalibration::Params::Create(args());
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  if (!provider->ClearTouchCalibration(params->id))
     return RespondNow(Error("Failed to clear custom touch calibration data."));
   return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction SystemDisplaySetMirrorModeFunction::Run() {
-  std::unique_ptr<display::SetMirrorMode::Params> params(
-      display::SetMirrorMode::Params::Create(args()));
+  std::optional<display::SetMirrorMode::Params> params =
+      display::SetMirrorMode::Params::Create(args());
 
-  DisplayInfoProvider::Get()->SetMirrorMode(
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
+  DCHECK(provider);
+  provider->SetMirrorMode(
       params->info,
       base::BindOnce(&SystemDisplaySetMirrorModeFunction::Response, this));
   return RespondLater();
 }
 
 void SystemDisplaySetMirrorModeFunction::Response(
-    absl::optional<std::string> error) {
+    std::optional<std::string> error) {
   Respond(error ? Error(*error) : NoArguments());
 }
 

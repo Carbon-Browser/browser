@@ -1,9 +1,8 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/static_data_navigation_body_loader.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
 
 namespace blink {
 
@@ -40,23 +39,11 @@ void StaticDataNavigationBodyLoader::SetDefersLoading(LoaderFreezeMode mode) {
 }
 
 void StaticDataNavigationBodyLoader::StartLoadingBody(
-    WebNavigationBodyLoader::Client* client,
-    CodeCacheHost* code_cache_host) {
+    WebNavigationBodyLoader::Client* client) {
   DCHECK(!is_in_continue_);
   client_ = client;
-
-  if (client_) {
-    auto weak_self = weak_factory_.GetWeakPtr();
-    client_->BodyCodeCacheReceived(mojo_base::BigBuffer());
-    if (!weak_self)
-      return;
-  }
-
   Continue();
 }
-
-void StaticDataNavigationBodyLoader::StartLoadingCodeCache(
-    CodeCacheHost* code_cache_host) {}
 
 void StaticDataNavigationBodyLoader::Continue() {
   if (freeze_mode_ != LoaderFreezeMode::kNone || !client_ || is_in_continue_)
@@ -99,8 +86,7 @@ void StaticDataNavigationBodyLoader::Continue() {
     client_ = nullptr;
     client->BodyLoadingFinished(
         base::TimeTicks::Now(), total_encoded_data_length_,
-        total_encoded_data_length_, total_encoded_data_length_, false,
-        absl::nullopt);
+        total_encoded_data_length_, total_encoded_data_length_, absl::nullopt);
     // |this| can be destroyed from BodyLoadingFinished.
     if (!weak_self)
       return;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,9 @@ NetworkConnectivityMetricsService::NetworkConnectivityMetricsService(
     PrefService* prefs)
     : prefs_(prefs) {
   // This check is needed only for tests without initialized network stubs.
-  if (!NetworkHandler::IsInitialized())
+  if (!NetworkHandler::IsInitialized()) {
     return;
+  }
   network_state_handler_ = NetworkHandler::Get()->network_state_handler();
   is_online_ = (network_state_handler_->ConnectedNetworkByType(
                     NetworkTypePattern::Default()) != nullptr);
@@ -47,13 +48,14 @@ NetworkConnectivityMetricsService::NetworkConnectivityMetricsService(
   ReportPreviousSessionNetworkDrops();
 }
 NetworkConnectivityMetricsService::~NetworkConnectivityMetricsService() {
-  if (!NetworkHandler::IsInitialized())
+  if (!NetworkHandler::IsInitialized()) {
     return;
+  }
   network_state_handler_->RemoveObserver(this, FROM_HERE);
 }
 
 void NetworkConnectivityMetricsService::NetworkConnectionStateChanged(
-    const chromeos::NetworkState* network) {
+    const NetworkState* network) {
   // If there is at least one connected network, the device is online.
   if (network_state_handler_->ConnectedNetworkByType(
           NetworkTypePattern::Default())) {
@@ -70,24 +72,14 @@ void NetworkConnectivityMetricsService::NetworkConnectionStateChanged(
 }
 
 void NetworkConnectivityMetricsService::LogNetworkDrops(int network_drops) {
-  if (!prefs_->GetDictionary(prefs::kKioskMetrics)) {
-    prefs_->SetDict(prefs::kKioskMetrics, base::Value::Dict());
-  }
   prefs::ScopedDictionaryPrefUpdate update(prefs_, prefs::kKioskMetrics);
 
   update->SetInteger(kKioskNetworkDrops, network_drops);
 }
 
 void NetworkConnectivityMetricsService::ReportPreviousSessionNetworkDrops() {
-  const auto* metrics_value = prefs_->GetDictionary(prefs::kKioskMetrics);
-  if (!metrics_value) {
-    LogNetworkDrops(0);
-    return;
-  }
-  const auto* metrics_dict = metrics_value->GetIfDict();
-  DCHECK(metrics_dict);
-
-  const auto* network_drops_value = metrics_dict->Find(kKioskNetworkDrops);
+  const auto& metrics_dict = prefs_->GetDict(prefs::kKioskMetrics);
+  const auto* network_drops_value = metrics_dict.Find(kKioskNetworkDrops);
   if (!network_drops_value) {
     LogNetworkDrops(0);
     return;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,12 @@
     // ID names for UA shadow elements
     //
     {
+      // This has an experimental pseudo-element to expose it to the Web.
       name: "details-content",
       Symbol: "kIdDetailsContent",
     },
     {
+      // This has an experimental pseudo-element to expose it to the Web.
       name: "details-summary",
       Symbol: "kIdDetailsSummary",
     },
@@ -55,6 +57,10 @@
     {
       name: "password-reveal",
       Symbol: "kIdPasswordRevealButton",
+    },
+    {
+      name: "password-strong-label",
+      Symbol: "kIdPasswordStrongLabel",
     },
     {
       name: "thumb",
@@ -102,6 +108,10 @@
       Symbol: "kPseudoMediaControlsSegmentedTrack",
     },
     {
+      name: "-webkit-calendar-picker-indicator",
+      Symbol: "kPseudoCalendarPickerIndicator",
+    },
+    {
       name: "-webkit-media-slider-container",
       Symbol: "kPseudoMediaSliderContainer",
     },
@@ -128,6 +138,14 @@
     {
       name: "-webkit-textfield-decoration-container",
       Symbol: "kPseudoTextFieldDecorationContainer",
+    },
+    {
+      name: "-internal-datetime-container",
+      Symbol: "kPseudoInternalDatetimeContainer",
+    },
+    {
+      name: "-internal-permission-text",
+      Symbol: "kPseudoInternalPermissionTextSpan",
     },
   ],
 }

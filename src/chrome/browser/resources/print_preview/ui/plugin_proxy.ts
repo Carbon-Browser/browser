@@ -1,9 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {pdfCreateOutOfProcessPlugin, PDFPlugin} from 'chrome://print/pdf/pdf_scripting_api.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {pdfCreateOutOfProcessPlugin, PdfPlugin} from 'chrome://print/pdf/pdf_scripting_api.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
 export type ViewportChangedCallback =
     (pageX: number, pageY: number, pageWidth: number, viewportWidth: number,
@@ -22,7 +22,7 @@ export interface PluginProxy {
    * @param index The preview index to load.
    * @return The created plugin.
    */
-  createPlugin(previewUid: number, index: number): PDFPlugin;
+  createPlugin(previewUid: number, index: number): PdfPlugin;
 
   /**
    * @param previewUid Unique identifier of preview.
@@ -74,7 +74,7 @@ export interface PluginProxy {
 }
 
 export class PluginProxyImpl implements PluginProxy {
-  private plugin_: PDFPlugin|null = null;
+  private plugin_: PdfPlugin|null = null;
 
   pluginReady() {
     return !!this.plugin_;
@@ -83,7 +83,8 @@ export class PluginProxyImpl implements PluginProxy {
   createPlugin(previewUid: number, index: number) {
     assert(!this.plugin_);
     const srcUrl = this.getPreviewUrl_(previewUid, index);
-    this.plugin_ = pdfCreateOutOfProcessPlugin(srcUrl, 'chrome://print/pdf');
+    this.plugin_ = pdfCreateOutOfProcessPlugin(
+        srcUrl, 'chrome://print/pdf/index_print.html');
     this.plugin_!.classList.add('preview-area-plugin');
     // NOTE: The plugin's 'id' field must be set to 'pdf-viewer' since
     // chrome/renderer/printing/print_render_frame_helper.cc actually

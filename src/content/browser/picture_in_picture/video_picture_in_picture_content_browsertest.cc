@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
+#include "content/public/test/content_browser_test_content_browser_client.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/shell/browser/shell.h"
 #include "net/dns/mock_host_resolver.h"
@@ -35,12 +36,11 @@ class TestVideoOverlayWindow : public VideoOverlayWindow {
 
   ~TestVideoOverlayWindow() override = default;
 
-  bool IsActive() override { return false; }
+  bool IsActive() const override { return false; }
   void Close() override { visible_ = false; }
   void ShowInactive() override { visible_ = true; }
   void Hide() override { visible_ = false; }
-  bool IsVisible() override { return visible_; }
-  bool IsAlwaysOnTop() override { return false; }
+  bool IsVisible() const override { return visible_; }
   gfx::Rect GetBounds() override { return gfx::Rect(size_); }
   void UpdateNaturalSize(const gfx::Size& natural_size) override {
     size_ = natural_size;
@@ -69,8 +69,9 @@ class TestVideoOverlayWindow : public VideoOverlayWindow {
   void SetToggleMicrophoneButtonVisibility(bool is_visible) override {}
   void SetToggleCameraButtonVisibility(bool is_visible) override {}
   void SetHangUpButtonVisibility(bool is_visible) override {}
+  void SetNextSlideButtonVisibility(bool is_visible) override {}
+  void SetPreviousSlideButtonVisibility(bool is_visible) override {}
   void SetSurfaceId(const viz::SurfaceId& surface_id) override {}
-  cc::Layer* GetLayerForTesting() override { return nullptr; }
 
   const absl::optional<PlaybackState>& playback_state() const {
     return playback_state_;
@@ -106,7 +107,7 @@ class TestVideoOverlayWindow : public VideoOverlayWindow {
   absl::optional<bool> next_track_button_visible_;
 };
 
-class TestContentBrowserClient : public ContentBrowserClient {
+class TestContentBrowserClient : public ContentBrowserTestContentBrowserClient {
  public:
   std::unique_ptr<VideoOverlayWindow> CreateWindowForVideoPictureInPicture(
       VideoPictureInPictureWindowController* controller) override {
@@ -146,24 +147,12 @@ class TestWebContentsDelegate : public WebContentsDelegate {
 
 class VideoPictureInPictureContentBrowserTest : public ContentBrowserTest {
  public:
-  ~VideoPictureInPictureContentBrowserTest() override {
-    if (old_browser_client_.has_value())
-      SetBrowserClientForTesting(old_browser_client_.value());
-  }
-
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    ContentBrowserTest::SetUpCommandLine(command_line);
-
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        switches::kEnableBlinkFeatures, "PictureInPictureAPI");
-  }
-
   void SetUpOnMainThread() override {
     ContentBrowserTest::SetUpOnMainThread();
 
     host_resolver()->AddRule("*", "127.0.0.1");
 
-    old_browser_client_ = SetBrowserClientForTesting(&content_browser_client_);
+    content_browser_client_ = std::make_unique<TestContentBrowserClient>();
 
     web_contents_delegate_ = std::make_unique<TestWebContentsDelegate>(shell());
     shell()->web_contents()->SetDelegate(web_contents_delegate_.get());
@@ -207,8 +196,7 @@ class VideoPictureInPictureContentBrowserTest : public ContentBrowserTest {
 
  private:
   std::unique_ptr<TestWebContentsDelegate> web_contents_delegate_;
-  absl::optional<raw_ptr<ContentBrowserClient>> old_browser_client_;
-  TestContentBrowserClient content_browser_client_;
+  std::unique_ptr<TestContentBrowserClient> content_browser_client_;
 };
 
 }  // namespace
@@ -446,6 +434,31 @@ IN_PROC_BROWSER_TEST_F(VideoPictureInPictureContentBrowserTest,
   WaitForPlaybackState(VideoOverlayWindow::PlaybackState::kPaused);
 }
 
+// Tests that the pip window bounds are accordingly updated when the window size
+// is updated.
+IN_PROC_BROWSER_TEST_F(VideoPictureInPictureContentBrowserTest,
+                       CheckWindowBounds) {
+  EXPECT_TRUE(NavigateToURL(
+      shell(), GetTestUrl("media/picture_in_picture", "two-videos.html")));
+
+  // Play first video.
+  ASSERT_TRUE(ExecJs(shell(), "videos[0].play();"));
+
+  WaitForTitle(u"videos[0] playing");
+  // Send first video in Picture-in-Picture.
+  ASSERT_TRUE(ExecJs(shell(), "videos[0].requestPictureInPicture();"));
+
+  WaitForTitle(u"videos[0] entered picture-in-picture");
+  EXPECT_TRUE(web_contents_delegate()->is_in_picture_in_picture());
+
+  ASSERT_TRUE(overlay_window()->IsVisible());
+  gfx::Size new_size(50, 50);
+  overlay_window()->UpdateNaturalSize(new_size);
+
+  EXPECT_EQ(window_controller()->GetWindowBounds().value(),
+            gfx::Rect(new_size));
+}
+
 class MediaSessionPictureInPictureContentBrowserTest
     : public VideoPictureInPictureContentBrowserTest {
  public:
@@ -453,7 +466,7 @@ class MediaSessionPictureInPictureContentBrowserTest
     ContentBrowserTest::SetUpCommandLine(command_line);
 
     command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
-                                    "PictureInPictureAPI,MediaSession");
+                                    "MediaSession");
     scoped_feature_list_.InitWithFeatures(
         {media_session::features::kMediaSessionService}, {});
   }
@@ -572,73 +585,15 @@ IN_PROC_BROWSER_TEST_F(MediaSessionPictureInPictureContentBrowserTest,
   WaitForPlaybackState(VideoOverlayWindow::PlaybackState::kPlaying);
 }
 
-// When the player object associated with a video element is destroyed, any
-// Media Session actions that were set are no longer available.
-IN_PROC_BROWSER_TEST_F(MediaSessionPictureInPictureContentBrowserTest,
-                       ResettingPlayerDisablesActions) {
+IN_PROC_BROWSER_TEST_F(VideoPictureInPictureContentBrowserTest,
+                       EnterPictureInPictureHasNoChildWebContents) {
   ASSERT_TRUE(NavigateToURL(
       shell(), GetTestUrl("media/picture_in_picture", "one-video.html")));
   ASSERT_EQ(true, EvalJs(shell(), "enterPictureInPicture();"));
+  ASSERT_TRUE(web_contents_delegate()->is_in_picture_in_picture());
 
-  ASSERT_TRUE(ExecJs(shell(), "setMediaSessionPlayActionHandler();"));
-  ASSERT_TRUE(ExecJs(shell(), "setMediaSessionPauseActionHandler();"));
-  ASSERT_TRUE(ExecJs(shell(), "setMediaSessionNextTrackActionHandler();"));
-
-  ASSERT_EQ(true, EvalJs(shell(), "resetVideo();"));
-
-  // Media Session actions are unavailable with the player removed.
-  EXPECT_EQ(overlay_window()->play_pause_button_visible().value_or(true),
-            false);
-  EXPECT_EQ(overlay_window()->next_track_button_visible().value_or(true),
-            false);
-
-  // Load new media on the video element. This creates a new player.
-  ASSERT_EQ(true, EvalJs(shell(), "updateVideoSrcAndPlay();"));
-
-  // The play/pause/replay and next buttons should be functional again.
-  EXPECT_EQ(overlay_window()->play_pause_button_visible().value_or(false),
-            true);
-  window_controller()->TogglePlayPause();
-  WaitForPlaybackState(VideoOverlayWindow::PlaybackState::kPaused);
-
-  EXPECT_EQ(overlay_window()->next_track_button_visible().value_or(false),
-            true);
-  window_controller()->NextTrack();
-  WaitForPlaybackState(VideoOverlayWindow::PlaybackState::kPlaying);
-}
-
-class AutoPictureInPictureContentBrowserTest
-    : public VideoPictureInPictureContentBrowserTest {
- public:
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    ContentBrowserTest::SetUpCommandLine(command_line);
-
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        switches::kEnableBlinkFeatures,
-        "PictureInPictureAPI,AutoPictureInPicture");
-  }
-};
-
-// Show/hide fullscreen page and check that Auto Picture-in-Picture is
-// triggered.
-IN_PROC_BROWSER_TEST_F(AutoPictureInPictureContentBrowserTest,
-                       AutoPictureInPictureTriggeredWhenFullscreen) {
-  ASSERT_TRUE(NavigateToURL(
-      shell(), GetTestUrl("media/picture_in_picture", "one-video.html")));
-
-  ASSERT_EQ(true, EvalJs(shell(), "enterFullscreen();"));
-
-  ASSERT_TRUE(ExecJs(shell(), "video.autoPictureInPicture = true;"));
-  ASSERT_TRUE(ExecJs(shell(), "addPictureInPictureEventListeners();"));
-  ASSERT_EQ(true, EvalJs(shell(), "play();"));
-
-  // Hide page and check that video entered Picture-in-Picture automatically.
-  shell()->web_contents()->WasHidden();
-  WaitForTitle(u"enterpictureinpicture");
-
-  // Show page and check that video left Picture-in-Picture automatically.
-  shell()->web_contents()->WasShown();
-  WaitForTitle(u"leavepictureinpicture");
+  ASSERT_TRUE(window_controller()->GetWebContents());
+  ASSERT_FALSE(window_controller()->GetChildWebContents());
 }
 
 }  // namespace content

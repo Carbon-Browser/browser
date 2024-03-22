@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "net/url_request/url_request_context_getter.h"
-#include "remoting/base/url_request.h"
 #include "remoting/protocol/chromium_port_allocator_factory.h"
 #include "remoting/protocol/connection_tester.h"
 #include "remoting/protocol/fake_authenticator.h"
@@ -32,8 +30,7 @@
 
 using testing::_;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -46,8 +43,9 @@ const char kChannelName[] = "test_channel";
 ACTION_P2(QuitRunLoopOnCounter, run_loop, counter) {
   --(*counter);
   EXPECT_GE(*counter, 0);
-  if (*counter == 0)
+  if (*counter == 0) {
     run_loop->Quit();
+  }
 }
 
 class MockChannelCreatedCallback {
@@ -73,7 +71,7 @@ class TestTransportEventHandler : public IceTransport::EventHandler {
 
   // IceTransport::EventHandler interface.
   void OnIceTransportRouteChange(const std::string& channel_name,
-                              const TransportRoute& route) override {}
+                                 const TransportRoute& route) override {}
   void OnIceTransportError(ErrorCode error) override {
     error_callback_.Run(error);
   }
@@ -100,9 +98,10 @@ class IceTransportTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
-  void ProcessTransportInfo(std::unique_ptr<IceTransport>* target_transport,
-                            std::unique_ptr<jingle_xmpp::XmlElement> transport_info) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  void ProcessTransportInfo(
+      std::unique_ptr<IceTransport>* target_transport,
+      std::unique_ptr<jingle_xmpp::XmlElement> transport_info) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&IceTransportTest::DeliverTransportInfo,
                        base::Unretained(this), target_transport,
@@ -110,8 +109,9 @@ class IceTransportTest : public testing::Test {
         transport_info_delay_);
   }
 
-  void DeliverTransportInfo(std::unique_ptr<IceTransport>* target_transport,
-                            std::unique_ptr<jingle_xmpp::XmlElement> transport_info) {
+  void DeliverTransportInfo(
+      std::unique_ptr<IceTransport>* target_transport,
+      std::unique_ptr<jingle_xmpp::XmlElement> transport_info) {
     ASSERT_TRUE(target_transport);
     EXPECT_TRUE(
         (*target_transport)->ProcessTransportInfo(transport_info.get()));
@@ -293,8 +293,7 @@ TEST_F(IceTransportTest, MAYBE_FailedChannelAuth) {
   EXPECT_FALSE(host_message_pipe_);
   EXPECT_EQ(CHANNEL_CONNECTION_ERROR, error_);
 
-  client_transport_->GetChannelFactory()->CancelChannelCreation(
-      kChannelName);
+  client_transport_->GetChannelFactory()->CancelChannelCreation(kChannelName);
 }
 
 // Verify that channels are never marked connected if connection cannot be
@@ -325,10 +324,8 @@ TEST_F(IceTransportTest, TestBrokenTransport) {
   EXPECT_FALSE(host_message_pipe_);
   EXPECT_EQ(CHANNEL_CONNECTION_ERROR, error_);
 
-  client_transport_->GetChannelFactory()->CancelChannelCreation(
-      kChannelName);
-  host_transport_->GetChannelFactory()->CancelChannelCreation(
-      kChannelName);
+  client_transport_->GetChannelFactory()->CancelChannelCreation(kChannelName);
+  host_transport_->GetChannelFactory()->CancelChannelCreation(kChannelName);
 }
 
 TEST_F(IceTransportTest, TestCancelChannelCreation) {
@@ -337,8 +334,7 @@ TEST_F(IceTransportTest, TestCancelChannelCreation) {
   client_transport_->GetChannelFactory()->CreateChannel(
       kChannelName, base::BindOnce(&IceTransportTest::OnClientChannelCreated,
                                    base::Unretained(this)));
-  client_transport_->GetChannelFactory()->CancelChannelCreation(
-      kChannelName);
+  client_transport_->GetChannelFactory()->CancelChannelCreation(kChannelName);
 
   EXPECT_TRUE(!client_message_pipe_.get());
 }
@@ -371,5 +367,4 @@ TEST_F(IceTransportTest, MAYBE_TestDelayedSignaling) {
   tester.RunAndCheckResults();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

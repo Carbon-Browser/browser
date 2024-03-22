@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "chrome/browser/policy/policy_test_utils.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser.h"
+#include "chrome/test/base/chrome_test_utils.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/policy_service.h"
@@ -32,9 +32,9 @@ void VerifyProxyPrefs(PrefService* prefs,
                       absl::optional<bool> expected_proxy_pac_mandatory,
                       const std::string& expected_proxy_bypass_list,
                       const ProxyPrefs::ProxyMode& expected_proxy_mode) {
-  const base::Value& value = prefs->GetValue(proxy_config::prefs::kProxy);
-  ASSERT_TRUE(value.is_dict());
-  ProxyConfigDictionary dict(value.Clone());
+  const base::Value::Dict& pref_dict =
+      prefs->GetDict(proxy_config::prefs::kProxy);
+  ProxyConfigDictionary dict(pref_dict.Clone());
   std::string s;
   bool b;
   if (expected_proxy_server.empty()) {
@@ -78,8 +78,8 @@ IN_PROC_BROWSER_TEST_F(PolicyTest, SeparateProxyPoliciesMerging) {
   VerifyProxyPrefs(g_browser_process->local_state(), std::string(),
                    std::string(), absl::nullopt, std::string(),
                    ProxyPrefs::MODE_SYSTEM);
-  VerifyProxyPrefs(browser()->profile()->GetPrefs(), std::string(),
-                   std::string(), absl::nullopt, std::string(),
+  VerifyProxyPrefs(chrome_test_utils::GetProfile(this)->GetPrefs(),
+                   std::string(), std::string(), absl::nullopt, std::string(),
                    ProxyPrefs::MODE_SYSTEM);
 }
 

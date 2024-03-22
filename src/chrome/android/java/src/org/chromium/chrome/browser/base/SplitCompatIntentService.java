@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,6 @@ package org.chromium.chrome.browser.base;
 import android.app.IntentService;
 import android.content.Context;
 import android.content.Intent;
-
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.BundleUtils;
 
@@ -38,7 +36,6 @@ public class SplitCompatIntentService extends IntentService {
         mImpl.onHandleIntent(intent);
     }
 
-    @VisibleForTesting
     public void attachBaseContextForTesting(Context context, Impl impl) {
         mImpl = impl;
         super.attachBaseContext(context);

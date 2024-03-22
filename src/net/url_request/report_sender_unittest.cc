@@ -1,13 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/url_request/report_sender.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/load_flags.h"
 #include "net/base/network_delegate_impl.h"
 #include "net/base/upload_bytes_element_reader.h"
@@ -151,9 +150,9 @@ class TestReportSenderNetworkDelegate : public NetworkDelegateImpl {
     expected_content_type_ = content_type;
   }
 
-  void set_expected_network_isolation_key(
-      const NetworkIsolationKey& expected_network_isolation_key) {
-    expected_network_isolation_key_ = expected_network_isolation_key;
+  void set_expected_network_anonymization_key(
+      const NetworkAnonymizationKey& expected_network_anonymization_key) {
+    expected_network_anonymization_key_ = expected_network_anonymization_key;
   }
 
   // NetworkDelegateImpl implementation.
@@ -166,8 +165,8 @@ class TestReportSenderNetworkDelegate : public NetworkDelegateImpl {
     EXPECT_FALSE(request->allow_credentials());
     EXPECT_TRUE(request->load_flags() & LOAD_DO_NOT_SAVE_COOKIES);
 
-    EXPECT_EQ(expected_network_isolation_key_,
-              request->isolation_info().network_isolation_key());
+    EXPECT_EQ(expected_network_anonymization_key_,
+              request->isolation_info().network_anonymization_key());
     EXPECT_EQ(IsolationInfo::RequestType::kOther,
               request->isolation_info().request_type());
     EXPECT_TRUE(request->site_for_cookies().IsNull());
@@ -198,7 +197,7 @@ class TestReportSenderNetworkDelegate : public NetworkDelegateImpl {
   GURL expect_url_;
   std::set<std::string> expect_reports_;
   std::string expected_content_type_;
-  NetworkIsolationKey expected_network_isolation_key_;
+  NetworkAnonymizationKey expected_network_anonymization_key_;
 };
 
 class ReportSenderTest : public TestWithTaskEnvironment {
@@ -237,8 +236,8 @@ class ReportSenderTest : public TestWithTaskEnvironment {
       size_t request_sequence_number,
       base::OnceCallback<void()> success_callback,
       base::OnceCallback<void(const GURL&, int, int)> error_callback) {
-    NetworkIsolationKey network_isolation_key =
-        NetworkIsolationKey::CreateTransient();
+    NetworkAnonymizationKey network_anonymization_key =
+        NetworkAnonymizationKey::CreateTransient();
 
     base::RunLoop run_loop;
     network_delegate().set_url_request_destroyed_callback(
@@ -247,12 +246,12 @@ class ReportSenderTest : public TestWithTaskEnvironment {
     network_delegate().set_expect_url(url);
     network_delegate().ExpectReport(report);
     network_delegate().set_expected_content_type("application/foobar");
-    network_delegate().set_expected_network_isolation_key(
-        network_isolation_key);
+    network_delegate().set_expected_network_anonymization_key(
+        network_anonymization_key);
 
     EXPECT_EQ(request_sequence_number, network_delegate().num_requests());
 
-    reporter->Send(url, "application/foobar", report, network_isolation_key,
+    reporter->Send(url, "application/foobar", report, network_anonymization_key,
                    std::move(success_callback), std::move(error_callback));
 
     // The report is sent asynchronously, so wait for the report's
@@ -306,11 +305,11 @@ TEST_F(ReportSenderTest, SendMultipleReportsSimultaneously) {
 
   EXPECT_EQ(0u, network_delegate().num_requests());
 
-  reporter.Send(url, "application/foobar", kDummyReport, NetworkIsolationKey(),
-                base::OnceCallback<void()>(),
+  reporter.Send(url, "application/foobar", kDummyReport,
+                NetworkAnonymizationKey(), base::OnceCallback<void()>(),
                 base::OnceCallback<void(const GURL&, int, int)>());
   reporter.Send(url, "application/foobar", kSecondDummyReport,
-                NetworkIsolationKey(), base::OnceCallback<void()>(),
+                NetworkAnonymizationKey(), base::OnceCallback<void()>(),
                 base::OnceCallback<void(const GURL&, int, int)>());
 
   run_loop.Run();
@@ -335,8 +334,8 @@ TEST_F(ReportSenderTest, PendingRequestGetsDeleted) {
 
   auto reporter =
       std::make_unique<ReportSender>(context(), TRAFFIC_ANNOTATION_FOR_TESTS);
-  reporter->Send(url, "application/foobar", kDummyReport, NetworkIsolationKey(),
-                 base::OnceCallback<void()>(),
+  reporter->Send(url, "application/foobar", kDummyReport,
+                 NetworkAnonymizationKey(), base::OnceCallback<void()>(),
                  base::OnceCallback<void(const GURL&, int, int)>());
   reporter.reset();
 

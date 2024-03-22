@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,7 @@ struct MEDIA_EXPORT VideoType {
 
 MEDIA_EXPORT bool operator==(const AudioType& x, const AudioType& y);
 MEDIA_EXPORT bool operator!=(const AudioType& x, const AudioType& y);
+MEDIA_EXPORT bool operator<(const AudioType& x, const AudioType& y);
 MEDIA_EXPORT bool operator==(const VideoType& x, const VideoType& y);
 MEDIA_EXPORT bool operator!=(const VideoType& x, const VideoType& y);
 

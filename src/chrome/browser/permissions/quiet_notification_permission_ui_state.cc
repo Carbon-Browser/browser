@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,21 +16,30 @@ void QuietNotificationPermissionUiState::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
   // TODO(crbug.com/1001857): Consider making this syncable.
   registry->RegisterBooleanPref(prefs::kEnableQuietNotificationPermissionUi,
-                                false /* default_value */);
+                                /*default_value=*/false);
+  registry->RegisterBooleanPref(prefs::kEnableQuietGeolocationPermissionUi,
+                                /*default_value=*/false);
   registry->RegisterBooleanPref(
       prefs::kQuietNotificationPermissionShouldShowPromo,
-      false /* default_value */);
+      /*default_value=*/false);
   registry->RegisterBooleanPref(
       prefs::kQuietNotificationPermissionPromoWasShown,
-      false /* default_value */);
+      /*default_value=*/false);
   registry->RegisterBooleanPref(
       prefs::kHadThreeConsecutiveNotificationPermissionDenies,
-      false /* default_value */);
+      /*default_value=*/false);
   registry->RegisterIntegerPref(
       prefs::kQuietNotificationPermissionUiEnablingMethod,
       static_cast<int>(EnablingMethod::kUnspecified));
   registry->RegisterTimePref(prefs::kQuietNotificationPermissionUiDisabledTime,
                              base::Time());
+  registry->RegisterBooleanPref(prefs::kEnableNotificationCPSS,
+                                /*default_value=*/true);
+  registry->RegisterBooleanPref(prefs::kEnableGeolocationCPSS,
+                                /*default_value=*/true);
+  registry->RegisterBooleanPref(
+      prefs::kDidMigrateAdaptiveNotifiationQuietingToCPSS,
+      /*default_value=*/false);
 }
 
 // static

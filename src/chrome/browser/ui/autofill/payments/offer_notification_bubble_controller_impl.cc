@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/metrics/payments/offers_metrics.h"
+#include "components/autofill/core/browser/payments/offer_notification_options.h"
 #include "components/autofill/core/common/autofill_clock.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
@@ -65,16 +66,13 @@ OfferNotificationBubbleControllerImpl::OfferNotificationBubbleControllerImpl(
 }
 
 std::u16string OfferNotificationBubbleControllerImpl::GetWindowTitle() const {
-  switch (offer_->GetOfferType()) {
+  switch (offer_.GetOfferType()) {
     case AutofillOfferData::OfferType::GPAY_CARD_LINKED_OFFER:
       return l10n_util::GetStringUTF16(
           IDS_AUTOFILL_CARD_LINKED_OFFER_REMINDER_TITLE);
     case AutofillOfferData::OfferType::GPAY_PROMO_CODE_OFFER:
       return l10n_util::GetStringUTF16(
-          base::FeatureList::IsEnabled(
-              features::kAutofillFillMerchantPromoCodeFields)
-              ? IDS_AUTOFILL_GPAY_PROMO_CODE_OFFERS_REMINDER_TITLE
-              : IDS_AUTOFILL_PROMO_CODE_OFFERS_REMINDER_TITLE);
+          IDS_AUTOFILL_GPAY_PROMO_CODE_OFFERS_REMINDER_TITLE);
     case AutofillOfferData::OfferType::FREE_LISTING_COUPON_OFFER:
       return l10n_util::GetStringUTF16(
           IDS_AUTOFILL_PROMO_CODE_OFFERS_REMINDER_TITLE);
@@ -85,7 +83,7 @@ std::u16string OfferNotificationBubbleControllerImpl::GetWindowTitle() const {
 }
 
 std::u16string OfferNotificationBubbleControllerImpl::GetOkButtonLabel() const {
-  DCHECK_EQ(offer_->GetOfferType(),
+  DCHECK_EQ(offer_.GetOfferType(),
             AutofillOfferData::OfferType::GPAY_CARD_LINKED_OFFER);
   return l10n_util::GetStringUTF16(
       IDS_AUTOFILL_OFFERS_REMINDER_POSITIVE_BUTTON_LABEL);
@@ -113,11 +111,19 @@ const CreditCard* OfferNotificationBubbleControllerImpl::GetLinkedCard() const {
 
 const AutofillOfferData* OfferNotificationBubbleControllerImpl::GetOffer()
     const {
-  return offer_;
+  return &offer_;
 }
 
 bool OfferNotificationBubbleControllerImpl::IsIconVisible() const {
   return bubble_state_ != BubbleState::kHidden;
+}
+
+bool OfferNotificationBubbleControllerImpl::ShouldIconExpand() const {
+  return icon_should_expand_;
+}
+
+void OfferNotificationBubbleControllerImpl::OnIconExpanded() {
+  icon_should_expand_ = false;
 }
 
 void OfferNotificationBubbleControllerImpl::OnBubbleClosed(
@@ -127,61 +133,66 @@ void OfferNotificationBubbleControllerImpl::OnBubbleClosed(
   UpdatePageActionIcon();
 
   // Log bubble result according to the closed reason.
-  AutofillMetrics::OfferNotificationBubbleResultMetric metric;
+  autofill_metrics::OfferNotificationBubbleResultMetric metric;
   switch (closed_reason) {
     case PaymentsBubbleClosedReason::kAccepted:
-      metric = AutofillMetrics::OfferNotificationBubbleResultMetric::
+      metric = autofill_metrics::OfferNotificationBubbleResultMetric::
           OFFER_NOTIFICATION_BUBBLE_ACKNOWLEDGED;
       break;
     case PaymentsBubbleClosedReason::kClosed:
-      metric = AutofillMetrics::OfferNotificationBubbleResultMetric::
+      metric = autofill_metrics::OfferNotificationBubbleResultMetric::
           OFFER_NOTIFICATION_BUBBLE_CLOSED;
       break;
     case PaymentsBubbleClosedReason::kNotInteracted:
-      metric = AutofillMetrics::OfferNotificationBubbleResultMetric::
+      metric = autofill_metrics::OfferNotificationBubbleResultMetric::
           OFFER_NOTIFICATION_BUBBLE_NOT_INTERACTED;
       break;
     case PaymentsBubbleClosedReason::kLostFocus:
-      metric = AutofillMetrics::OfferNotificationBubbleResultMetric::
+      metric = autofill_metrics::OfferNotificationBubbleResultMetric::
           OFFER_NOTIFICATION_BUBBLE_LOST_FOCUS;
       break;
     default:
       NOTREACHED();
       return;
   }
-  AutofillMetrics::LogOfferNotificationBubbleResultMetric(
-      offer_->GetOfferType(), metric, is_user_gesture_);
+  autofill_metrics::LogOfferNotificationBubbleResultMetric(
+      offer_.GetOfferType(), metric, is_user_gesture_);
 }
 
 void OfferNotificationBubbleControllerImpl::OnPromoCodeButtonClicked() {
   promo_code_button_clicked_ = true;
 
-  AutofillMetrics::LogOfferNotificationBubblePromoCodeButtonClicked(
-      offer_->GetOfferType());
+  autofill_metrics::LogOfferNotificationBubblePromoCodeButtonClicked(
+      offer_.GetOfferType(), web_contents()->GetLastCommittedURL());
 }
 
 void OfferNotificationBubbleControllerImpl::ShowOfferNotificationIfApplicable(
     const AutofillOfferData* offer,
     const CreditCard* card,
-    bool should_show_icon_only) {
+    const OfferNotificationOptions& options) {
   DCHECK(offer);
 
-  // If offer to be shown has not changed and it has not been shown for more
-  // than kAutofillBubbleSurviveNavigationTime, do not dismiss the bubble.
-  if (offer_ == offer && bubble_shown_timestamp_.has_value() &&
+  icon_should_expand_ = options.expand_notification_icon;
+
+  // If this is not the bubble's first show, and offer to be shown has not
+  // changed, and it has not been shown for more than
+  // kAutofillBubbleSurviveNavigationTime, do not dismiss the bubble.
+  if (offer_.GetOfferType() != AutofillOfferData::OfferType::UNKNOWN &&
+      offer_ == *offer && bubble_shown_timestamp_.has_value() &&
       AutofillClock::Now() - *bubble_shown_timestamp_ <
           kAutofillBubbleSurviveNavigationTime) {
     return;
   }
 
-  offer_ = offer;
+  offer_ = *offer;
 
   // Hides the old bubble. Sets bubble_state_ to show icon here since we are
   // going to show another bubble anyway.
   HideBubbleAndClearTimestamp(/*should_show_icon=*/true);
 
   DCHECK(IsIconVisible());
-  autofill_metrics::LogPageLoadsWithOfferIconShown(offer->GetOfferType());
+  autofill_metrics::LogPageLoadsWithOfferIconShown(
+      offer->GetOfferType(), web_contents()->GetLastCommittedURL());
 
   if (card)
     card_ = *card;
@@ -193,7 +204,7 @@ void OfferNotificationBubbleControllerImpl::ShowOfferNotificationIfApplicable(
     if (!last_display_time.is_null() &&
         (base::Time::Now() - last_display_time) <
             commerce::kCouponDisplayInterval.Get()) {
-      AutofillMetrics::LogOfferNotificationBubbleSuppressed(
+      autofill_metrics::LogOfferNotificationBubbleSuppressed(
           AutofillOfferData::OfferType::FREE_LISTING_COUPON_OFFER);
       return;
     }
@@ -204,10 +215,11 @@ void OfferNotificationBubbleControllerImpl::ShowOfferNotificationIfApplicable(
 
   is_user_gesture_ = false;
 
-  if (should_show_icon_only)
-    HideBubbleAndClearTimestamp(/*should_show_icon=*/true);
-  else
+  if (options.show_notification_automatically) {
     Show();
+  } else {
+    HideBubbleAndClearTimestamp(/*should_show_icon=*/true);
+  }
 }
 
 void OfferNotificationBubbleControllerImpl::ReshowBubble() {
@@ -226,7 +238,8 @@ void OfferNotificationBubbleControllerImpl::DismissNotification() {
 
 void OfferNotificationBubbleControllerImpl::OnCouponInvalidated(
     const autofill::AutofillOfferData& offer_data) {
-  if (!offer_ || *offer_ != offer_data)
+  if (offer_.GetOfferType() == AutofillOfferData::OfferType::UNKNOWN ||
+      offer_ != offer_data)
     return;
   DismissNotification();
 }
@@ -253,7 +266,7 @@ void OfferNotificationBubbleControllerImpl::DoShowBubble() {
   if (!IsWebContentsActive())
     return;
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents());
+  Browser* browser = chrome::FindBrowserWithTab(web_contents());
   set_bubble_view(browser->window()
                       ->GetAutofillBubbleHandler()
                       ->ShowOfferNotificationBubble(web_contents(), this,
@@ -271,8 +284,9 @@ void OfferNotificationBubbleControllerImpl::DoShowBubble() {
   if (observer_for_testing_)
     observer_for_testing_->OnBubbleShown();
 
-  AutofillMetrics::LogOfferNotificationBubbleOfferMetric(offer_->GetOfferType(),
-                                                         is_user_gesture_);
+  autofill_metrics::LogOfferNotificationBubbleOfferMetric(
+      offer_.GetOfferType(), is_user_gesture_,
+      web_contents()->GetLastCommittedURL());
 }
 
 bool OfferNotificationBubbleControllerImpl::IsWebContentsActive() {

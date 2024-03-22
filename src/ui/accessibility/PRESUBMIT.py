@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,8 +7,6 @@
 import json
 import os
 import re
-
-USE_PYTHON3 = True
 
 AX_MOJOM = 'ui/accessibility/ax_enums.mojom'
 AUTOMATION_IDL = 'extensions/common/api/automation.idl'
@@ -34,7 +32,7 @@ def CamelToLowerHacker(str):
 def GetEnumsFromFile(fullpath, get_raw_enum_value=False):
   enum_name = None
   enums = {}
-  for line in open(fullpath).readlines():
+  for line in open(fullpath, encoding='utf-8').readlines():
     # Strip out comments
     line = re.sub('//.*', '', line)
 
@@ -222,7 +220,7 @@ def CheckAXEnumsOrdinals(input_api, output_api):
 # header)
 def GetConstexprFromFile(fullpath):
   values = []
-  for line in open(fullpath).readlines():
+  for line in open(fullpath, encoding='utf-8').readlines():
     # Strip out comments
     line = re.sub('//.*', '', line)
 
@@ -231,7 +229,7 @@ def GetConstexprFromFile(fullpath):
     if m:
       value = m.group(1)
       # Skip first/last sentinels
-      if value == 'kFirstModeFlag' or value == 'kLastModeFlag':
+      if (value in ['kNone', 'kFirstModeFlag', 'kLastModeFlag']):
         continue
       values.append(value)
 
@@ -242,10 +240,10 @@ def GetConstexprFromFile(fullpath):
 def GetAccessibilityModesFromFile(fullpath):
   values = []
   inside = False
-  for line in open(fullpath).readlines():
+  for line in open(fullpath, encoding='utf-8').readlines():
     if not inside:
       # Look for the block of code that defines the AXMode enum.
-      m = re.search('^enum AXMode {$', line)
+      m = re.search('^enum AxMode {$', line)
       if m:
         inside = True
       continue
@@ -287,6 +285,10 @@ def CheckModesMatch(input_api, output_api):
     'kAXModeWebContentsOnly',
     'kAXModeComplete',
     'kAXModeCompleteNoHTML',
+    'kAXModeFormControls',
+    'kExperimentalFirstFlag',
+    'kExperimentalFormControls',
+    'kExperimentalLastFlag',
   ]
 
   for value in ax_modes_in_header:

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,8 @@ class SelectToSpeakEventHandlerDelegateImpl
 
  private:
   // SelectToSpeakEventHandlerDelegate:
-  void DispatchKeyEvent(const ui::KeyEvent& event) override;
+  void DispatchKeysCurrentlyDown(
+      const std::set<ui::KeyboardCode>& pressed_keys) override;
   void DispatchMouseEvent(const ui::MouseEvent& event) override;
 };
 

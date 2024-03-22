@@ -1,8 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/menu_test_base.h"
+
+#include <utility>
 
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/test/base/interactive_test_utils.h"
@@ -54,13 +56,16 @@ void MenuTestBase::SetUp() {
 
   views::test::DisableMenuClosureAnimations();
 
-  menu_ = new views::MenuItemView(this);
+  auto menu_owning = std::make_unique<views::MenuItemView>(/*delegate=*/this);
+  menu_ = menu_owning.get();
   BuildMenu(menu_);
-  menu_runner_ =
-      std::make_unique<views::MenuRunner>(menu_, GetMenuRunnerFlags());
+  menu_runner_ = std::make_unique<views::MenuRunner>(std::move(menu_owning),
+                                                     GetMenuRunnerFlags());
 }
 
 void MenuTestBase::TearDown() {
+  button_ = nullptr;
+  menu_ = nullptr;
   // We cancel the menu first because certain operations (like a menu opened
   // with views::MenuRunner::FOR_DROP) don't take kindly to simply pulling the
   // runner out from under them.

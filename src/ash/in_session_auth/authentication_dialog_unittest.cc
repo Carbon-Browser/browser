@@ -1,39 +1,48 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/in_session_auth/authentication_dialog.h"
 
-#include <cctype>
-
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "ash/components/login/auth/auth_performer.h"
-#include "ash/components/login/auth/mock_auth_performer.h"
-#include "ash/components/login/auth/public/auth_factors_data.h"
-#include "ash/components/login/auth/public/cryptohome_key_constants.h"
 #include "ash/public/cpp/in_session_auth_token_provider.h"
 #include "ash/public/cpp/test/mock_in_session_auth_token_provider.h"
 #include "ash/test/ash_test_base.h"
 #include "base/logging.h"
 #include "base/test/bind.h"
 #include "base/unguessable_token.h"
+#include "chromeos/ash/components/cryptohome/common_types.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
+#include "chromeos/ash/components/login/auth/auth_performer.h"
+#include "chromeos/ash/components/login/auth/mock_auth_performer.h"
+#include "chromeos/ash/components/login/auth/public/authentication_error.h"
+#include "chromeos/ash/components/login/auth/public/cryptohome_key_constants.h"
+#include "chromeos/ash/components/login/auth/public/session_auth_factors.h"
+#include "chromeos/ash/components/osauth/public/common_types.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/textfield/textfield.h"
 
 namespace ash {
+
 namespace {
+
+using ::cryptohome::KeyLabel;
+using ::testing::_;
+
 const char kTestAccount[] = "user@test.com";
 const char kExpectedPassword[] = "qwerty";
-base::UnguessableToken kToken = base::UnguessableToken::Create();
-using testing::_;
+AuthProofToken kToken = "auth-proof-token";
+
 }  // namespace
 
 class AuthenticationDialogTest : public AshTestBase {
  public:
+  AuthenticationDialogTest() = default;
+
   void SetUp() override {
     AshTestBase::SetUp();
     UserDataAuthClient::InitializeFake();
@@ -41,13 +50,16 @@ class AuthenticationDialogTest : public AshTestBase {
   }
 
   void StartAuthSession(std::unique_ptr<UserContext> user_context,
-                        bool ephemeral,
+                        bool /*ephemeral*/,
+                        AuthSessionIntent /*intent*/,
                         AuthPerformer::StartSessionCallback callback) {
-    user_context->SetAuthFactorsData(
-        AuthFactorsData{{cryptohome::KeyDefinition::CreateForPassword(
-            "secret", kCryptohomeGaiaKeyLabel, 0)}});
-
-    std::move(callback).Run(true, std::move(user_context), absl::nullopt);
+    cryptohome::AuthFactorRef ref{cryptohome::AuthFactorType::kPassword,
+                                  KeyLabel(kCryptohomeGaiaKeyLabel)};
+    cryptohome::AuthFactorCommonMetadata metadata{};
+    cryptohome::AuthFactor factor{std::move(ref), std::move(metadata)};
+    user_context->SetSessionAuthFactors(
+        SessionAuthFactors{{std::move(factor)}});
+    std::move(callback).Run(true, std::move(user_context), std::nullopt);
   }
 
   void GetAuthToken(std::unique_ptr<UserContext> user_context,
@@ -69,7 +81,7 @@ class AuthenticationDialogTest : public AshTestBase {
     // underlying widget.
     dialog_ = new AuthenticationDialog(
         base::BindLambdaForTesting([&](bool success,
-                                       const base::UnguessableToken& token,
+                                       const AuthProofToken& token,
                                        base::TimeDelta timeout) {
           success_ = success;
           token_ = token;
@@ -89,7 +101,7 @@ class AuthenticationDialogTest : public AshTestBase {
     generator->ClickLeftButton();
 
     for (char c : password) {
-      EXPECT_TRUE(std::isalpha(c));
+      EXPECT_TRUE(absl::ascii_isalpha(static_cast<unsigned char>(c)));
       generator->PressAndReleaseKey(
           static_cast<ui::KeyboardCode>(ui::KeyboardCode::VKEY_A + (c - 'a')),
           ui::EF_NONE);
@@ -103,11 +115,11 @@ class AuthenticationDialogTest : public AshTestBase {
     generator->ClickLeftButton();
   }
 
-  absl::optional<bool> success_;
-  base::UnguessableToken token_;
-  base::raw_ptr<AuthenticationDialog> dialog_;
+  std::optional<bool> success_;
+  AuthProofToken token_;
+  raw_ptr<AuthenticationDialog, AcrossTasksDanglingUntriaged> dialog_;
   std::unique_ptr<MockInSessionAuthTokenProvider> auth_token_provider_;
-  base::raw_ptr<MockAuthPerformer> auth_performer_;
+  raw_ptr<MockAuthPerformer, AcrossTasksDanglingUntriaged> auth_performer_;
   std::unique_ptr<AuthenticationDialog::TestApi> test_api_;
 };
 
@@ -135,7 +147,7 @@ TEST_F(AuthenticationDialogTest, CorrectPasswordProvided) {
       .WillOnce([](const std::string& key_label, const std::string& password,
                    std::unique_ptr<UserContext> user_context,
                    AuthOperationCallback callback) {
-        std::move(callback).Run(std::move(user_context), absl::nullopt);
+        std::move(callback).Run(std::move(user_context), std::nullopt);
       });
 
   EXPECT_CALL(*auth_token_provider_, ExchangeForToken)
@@ -161,8 +173,8 @@ TEST_F(AuthenticationDialogTest, IncorrectPasswordProvidedThenCorrect) {
         std::move(callback).Run(
             std::move(user_context),
             password == kExpectedPassword
-                ? absl::nullopt
-                : absl::optional<CryptohomeError>{CryptohomeError{
+                ? std::nullopt
+                : std::optional<AuthenticationError>{AuthenticationError{
                       user_data_auth::
                           CRYPTOHOME_ERROR_AUTHORIZATION_KEY_NOT_FOUND}});
       });
@@ -196,8 +208,8 @@ TEST_F(AuthenticationDialogTest, AuthSessionRestartedWhenExpired) {
         std::move(callback).Run(
             std::move(user_context),
             number_of_calls++
-                ? absl::nullopt
-                : absl::optional<CryptohomeError>{CryptohomeError{
+                ? std::nullopt
+                : std::optional<AuthenticationError>{AuthenticationError{
                       user_data_auth::CRYPTOHOME_INVALID_AUTH_SESSION_TOKEN}});
       });
 

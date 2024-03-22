@@ -1,12 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/gamepad/test_support/fake_iraw_game_controller.h"
 
 #include "base/notreached.h"
-#include "base/strings/string_piece.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/win/scoped_hstring.h"
 #include "device/gamepad/test_support/fake_winrt_wgi_environment.h"
 
@@ -15,7 +13,7 @@ namespace device {
 FakeIRawGameController::FakeIRawGameController(int64_t gamepad_id,
                                                UINT16 hardware_product_id,
                                                UINT16 hardware_vendor_id,
-                                               base::StringPiece display_name)
+                                               std::string_view display_name)
     : gamepad_id_(gamepad_id),
       hardware_product_id_(hardware_product_id),
       hardware_vendor_id_(hardware_vendor_id),
@@ -42,7 +40,7 @@ HRESULT WINAPI FakeIRawGameController::get_ForceFeedbackMotors(
 
 HRESULT WINAPI FakeIRawGameController::get_HardwareProductId(UINT16* value) {
   if (FakeWinrtWgiEnvironment::GetError() ==
-      ErrorCode::kErrorWgiRawGameControllerGetHardwareProductIdFailed) {
+      WgiTestErrorCode::kErrorWgiRawGameControllerGetHardwareProductIdFailed) {
     return E_FAIL;
   }
   *value = hardware_product_id_;
@@ -51,7 +49,7 @@ HRESULT WINAPI FakeIRawGameController::get_HardwareProductId(UINT16* value) {
 
 HRESULT WINAPI FakeIRawGameController::get_HardwareVendorId(UINT16* value) {
   if (FakeWinrtWgiEnvironment::GetError() ==
-      ErrorCode::kErrorWgiRawGameControllerGetHardwareVendorIdFailed) {
+      WgiTestErrorCode::kErrorWgiRawGameControllerGetHardwareVendorIdFailed) {
     return E_FAIL;
   }
   *value = hardware_vendor_id_;
@@ -103,7 +101,7 @@ HRESULT WINAPI FakeIRawGameController::get_NonRoamableId(HSTRING* value) {
 
 HRESULT WINAPI FakeIRawGameController::get_DisplayName(HSTRING* value) {
   if (FakeWinrtWgiEnvironment::GetError() ==
-      ErrorCode::kErrorWgiRawGameControllerGetDisplayNameFailed) {
+      WgiTestErrorCode::kErrorWgiRawGameControllerGetDisplayNameFailed) {
     return E_FAIL;
   }
   *value = base::win::ScopedHString::Create(display_name_).release();

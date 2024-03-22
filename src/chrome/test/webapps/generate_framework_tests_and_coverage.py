@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Script used to generate the tests definitions for Web App testing framework.
@@ -48,12 +48,16 @@ def check_partition_prefixes(partition_a: TestPartitionDescription,
 
 def generate_framework_tests_and_coverage(
         supported_framework_action_file: TextIOWrapper,
-        enums_file: TextIOWrapper, actions_file: TextIOWrapper,
+        enums_file: TextIOWrapper,
+        actions_file: TextIOWrapper,
         coverage_required_file: TextIOWrapper,
         custom_partitions: List[TestPartitionDescription],
-        default_partition: TestPartitionDescription, coverage_output_dir: str,
-        graph_output_dir: Optional[str]):
-
+        default_partition: TestPartitionDescription,
+        coverage_output_dir: str,
+        graph_output_dir: Optional[str],
+        delete_in_place: bool = False,
+        add_to_file: bool = False,
+        suppress_coverage: bool = False):
     for partition_a in custom_partitions:
         check_partition_prefixes(partition_a, default_partition)
         for partition_b in custom_partitions:
@@ -68,7 +72,7 @@ def generate_framework_tests_and_coverage(
         actions_csv, enums, platform_supported_actions)
 
     required_coverage_tests = read_unprocessed_coverage_tests_file(
-        coverage_required_file.readlines(), actions,
+        coverage_required_file.readlines(), actions, enums,
         action_base_name_to_default_param)
 
     required_coverage_tests = expand_parameterized_tests(
@@ -130,21 +134,28 @@ def generate_framework_tests_and_coverage(
     # Find all existing tests.
     all_partitions = [default_partition]
     all_partitions.extend(custom_partitions)
-    (existing_tests_ids_by_platform_set, disabled_test_ids_by_platform
-     ) = find_existing_and_disabled_tests(all_partitions)
+
+    (existing_tests_ids_names_by_platform_set,
+     disabled_test_ids_names_by_platform) = find_existing_and_disabled_tests(
+         all_partitions, required_coverage_by_platform_set, delete_in_place)
 
     # Print all diffs that are required.
     compare_and_print_tests_to_remove_and_add(
-        existing_tests_ids_by_platform_set, required_coverage_by_platform_set,
-        custom_partitions, default_partition)
+        existing_tests_ids_names_by_platform_set,
+        required_coverage_by_platform_set, custom_partitions,
+        default_partition, add_to_file)
+
+    if suppress_coverage:
+        return
 
     # To calculate coverage we need to incorporate any disabled tests.
     # Remove any disabled tests from the generated tests per platform.
     for platform, tests in generated_tests_by_platform.items():
-        disabled_tests = disabled_test_ids_by_platform.get(platform, [])
+        disabled_tests = disabled_test_ids_names_by_platform.get(platform, [])
+        disabled_test_ids = set([test_id for (test_id, _) in disabled_tests])
         tests_minus_disabled: List[CoverageTest] = []
         for test in tests:
-            if test.id not in disabled_tests:
+            if test.id not in disabled_test_ids:
                 tests_minus_disabled.append(test)
             else:
                 logging.info("Removing disabled test from coverage: " +
@@ -165,7 +176,7 @@ def generate_framework_tests_and_coverage(
     return
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description='WebApp Test List Processor')
     parser.add_argument('-v',
                         dest='v',
@@ -178,7 +189,26 @@ def main():
                         action='store_true',
                         help='Output dot graphs from all steps.',
                         required=False)
-    options = parser.parse_args()
+
+    parser.add_argument('--delete-in-place',
+                        dest='delete_in_place',
+                        action='store_true',
+                        help='Delete test cases no longer needed in place',
+                        required=False)
+
+    parser.add_argument('--add-to-file',
+                        dest='add_to_file',
+                        action='store_true',
+                        help='Add test cases to existing test file',
+                        required=False)
+
+    parser.add_argument('--suppress-coverage',
+                        dest='suppress_coverage',
+                        action='store_true',
+                        help='Do not write coverage information.',
+                        required=False)
+
+    options = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO if options.v else logging.WARN,
                         format='[%(asctime)s %(levelname)s] %(message)s',
                         datefmt='%H:%M:%S')
@@ -203,13 +233,13 @@ def main():
             action_name_prefixes={"switch_profile_clients", "sync_"},
             browsertest_dir=sync_tests_location,
             test_file_prefix="two_client_web_apps_integration_test",
-            test_fixture="TwoClientWebAppsIntegrationTest")
+            test_fixture="WebAppIntegration")
     ]
     default_partition = TestPartitionDescription(
         action_name_prefixes=set(),
         browsertest_dir=default_tests_location,
         test_file_prefix="web_app_integration_browsertest",
-        test_fixture="WebAppIntegrationBrowserTest")
+        test_fixture="WebAppIntegration")
 
     graph_output_dir = None
     if options.graphs:
@@ -222,12 +252,11 @@ def main():
                 as enums_file, \
             open(coverage_required_filename, 'r', encoding="utf-8") \
                 as coverage_file:
-        generate_framework_tests_and_coverage(supported_actions, enums_file,
-                                              actions_file, coverage_file,
-                                              custom_partitions,
-                                              default_partition,
-                                              coverage_output_dir,
-                                              graph_output_dir)
+        generate_framework_tests_and_coverage(
+            supported_actions, enums_file, actions_file, coverage_file,
+            custom_partitions, default_partition, coverage_output_dir,
+            graph_output_dir, options.delete_in_place, options.add_to_file,
+            options.suppress_coverage)
 
 
 if __name__ == '__main__':

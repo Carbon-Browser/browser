@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -92,7 +92,7 @@ class ChromeContentVerifierDelegate : public ContentVerifierDelegate {
   // Returns information needed for content verification of |extension|.
   VerifyInfo GetVerifyInfo(const Extension& extension) const;
 
-  raw_ptr<content::BrowserContext> context_;
+  raw_ptr<content::BrowserContext, AcrossTasksDanglingUntriaged> context_;
   VerifyInfo::Mode default_mode_;
 
   // This maps an extension id to a backoff entry for slowing down

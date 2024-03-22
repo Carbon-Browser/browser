@@ -1,14 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // https://wicg.github.io/navigation-api/
 [
-  Exposed=Window,
-  RuntimeEnabled=NavigationApi
+  Exposed=Window
 ] interface NavigationDestination {
-  readonly attribute DOMString? key;
-  readonly attribute DOMString? id;
+  readonly attribute DOMString key;
+  readonly attribute DOMString id;
   readonly attribute USVString url;
   readonly attribute long long index;
   readonly attribute boolean sameDocument;

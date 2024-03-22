@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,10 +30,13 @@ class COMPONENT_EXPORT(HIBERMAN_CLIENT) FakeHibermanClient
   static FakeHibermanClient* Get();
 
   // HibermanClient override:
+  bool IsAlive() const override;
+  bool IsEnabled() const override;
   void WaitForServiceToBeAvailable(
       chromeos::WaitForServiceToBeAvailableCallback callback) override;
   void ResumeFromHibernate(const std::string& account_id,
-                           ResumeFromHibernateCallback callback) override;
+                           const std::string& auth_session_id) override;
+  void AbortResumeHibernate(const std::string& reason) override;
 };
 
 }  // namespace ash

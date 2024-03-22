@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,11 @@
 #include "base/files/file_path.h"
 #include "base/strings/string_util.h"
 
-ExtensionIconSet::ExtensionIconSet() {}
+ExtensionIconSet::ExtensionIconSet() = default;
 
 ExtensionIconSet::ExtensionIconSet(const ExtensionIconSet& other) = default;
 
-ExtensionIconSet::~ExtensionIconSet() {}
+ExtensionIconSet::~ExtensionIconSet() = default;
 
 void ExtensionIconSet::Clear() {
   map_.clear();
@@ -66,9 +66,10 @@ int ExtensionIconSet::GetIconSizeFromPath(base::StringPiece path) const {
   DCHECK_NE(path[0], '/') <<
       "ExtensionIconSet stores icon paths without leading slash.";
 
-  for (auto iter = map_.cbegin(); iter != map_.cend(); ++iter) {
-    if (iter->second == path)
-      return iter->first;
+  for (const auto& entry : map_) {
+    if (entry.second == path) {
+      return entry.first;
+    }
   }
 
   return 0;

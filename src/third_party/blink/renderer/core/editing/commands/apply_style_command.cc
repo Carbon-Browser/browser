@@ -556,17 +556,22 @@ HTMLElement* ApplyStyleCommand::SplitAncestorsWithUnicodeBidi(
   ContainerNode* next_highest_ancestor_with_unicode_bidi = nullptr;
   CSSValueID highest_ancestor_unicode_bidi = CSSValueID::kInvalid;
   for (Node& runner : NodeTraversal::AncestorsOf(*node)) {
-    if (runner == block)
+    if (runner == block) {
       break;
+    }
+    Element* element = DynamicTo<Element>(runner);
+    if (!element) {
+      continue;
+    }
     CSSValueID unicode_bidi = GetIdentifierValue(
-        MakeGarbageCollected<CSSComputedStyleDeclaration>(&runner),
+        MakeGarbageCollected<CSSComputedStyleDeclaration>(element),
         CSSPropertyID::kUnicodeBidi);
     if (IsValidCSSValueID(unicode_bidi) &&
         unicode_bidi != CSSValueID::kNormal) {
       highest_ancestor_unicode_bidi = unicode_bidi;
       next_highest_ancestor_with_unicode_bidi =
           highest_ancestor_with_unicode_bidi;
-      highest_ancestor_with_unicode_bidi = static_cast<ContainerNode*>(&runner);
+      highest_ancestor_with_unicode_bidi = element;
     }
   }
 
@@ -582,7 +587,7 @@ HTMLElement* ApplyStyleCommand::SplitAncestorsWithUnicodeBidi(
           mojo_base::mojom::blink::TextDirection::UNKNOWN_DIRECTION &&
       highest_ancestor_unicode_bidi != CSSValueID::kBidiOverride &&
       highest_ancestor_html_element &&
-      MakeGarbageCollected<EditingStyle>(highest_ancestor_with_unicode_bidi,
+      MakeGarbageCollected<EditingStyle>(highest_ancestor_html_element,
                                          EditingStyle::kAllProperties)
           ->GetTextDirection(highest_ancestor_direction) &&
       highest_ancestor_direction == allowed_direction) {
@@ -641,8 +646,8 @@ void ApplyStyleCommand::RemoveEmbeddingUpToEnclosingBlock(
     } else {
       MutableCSSPropertyValueSet* inline_style =
           CopyStyleOrCreateEmpty(element->InlineStyle());
-      inline_style->SetProperty(CSSPropertyID::kUnicodeBidi,
-                                CSSValueID::kNormal);
+      inline_style->SetLonghandProperty(CSSPropertyID::kUnicodeBidi,
+                                        CSSValueID::kNormal);
       inline_style->RemoveProperty(CSSPropertyID::kDirection);
       SetNodeAttribute(element, html_names::kStyleAttr,
                        AtomicString(inline_style->AsText()));
@@ -661,7 +666,7 @@ static HTMLElement* HighestEmbeddingAncestor(Node* start_node,
     auto* html_element = DynamicTo<HTMLElement>(n);
     if (html_element &&
         EditingStyleUtilities::IsEmbedOrIsolate(GetIdentifierValue(
-            MakeGarbageCollected<CSSComputedStyleDeclaration>(n),
+            MakeGarbageCollected<CSSComputedStyleDeclaration>(html_element),
             CSSPropertyID::kUnicodeBidi))) {
       return html_element;
     }
@@ -1827,7 +1832,7 @@ void ApplyStyleCommand::AddBlockStyle(const StyleChange& style_change,
   StringBuilder css_text;
   css_text.Append(css_style);
   if (const CSSPropertyValueSet* decl = block->InlineStyle()) {
-    if (!css_style.IsEmpty())
+    if (!css_style.empty())
       css_text.Append(' ');
     css_text.Append(decl->AsText());
   }
@@ -1948,7 +1953,7 @@ void ApplyStyleCommand::ApplyInlineStyleChange(
         String existing_text = existing_style->AsText();
         StringBuilder css_text;
         css_text.Append(existing_text);
-        if (!existing_text.IsEmpty())
+        if (!existing_text.empty())
           css_text.Append(' ');
         css_text.Append(style_change.CssStyle());
         SetNodeAttribute(style_container, html_names::kStyleAttr,
@@ -2031,8 +2036,15 @@ void ApplyStyleCommand::ApplyInlineStyleChange(
 float ApplyStyleCommand::ComputedFontSize(Node* node) {
   if (!node)
     return 0;
+  Element* element = DynamicTo<Element>(node);
+  if (!element) {
+    element = FlatTreeTraversal::ParentElement(*node);
+  }
+  if (!element) {
+    return 0;
+  }
 
-  auto* style = MakeGarbageCollected<CSSComputedStyleDeclaration>(node);
+  auto* style = MakeGarbageCollected<CSSComputedStyleDeclaration>(element);
   if (!style)
     return 0;
 

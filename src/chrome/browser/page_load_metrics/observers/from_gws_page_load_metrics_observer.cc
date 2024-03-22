@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,6 @@ const char kHistogramFromGWSLargestContentfulPaint[] =
 const char kHistogramFromGWSParseStartToFirstContentfulPaint[] =
     "PageLoad.Clients.FromGoogleSearch.PaintTiming."
     "ParseStartToFirstContentfulPaint";
-const char kHistogramFromGWSParseDuration[] =
-    "PageLoad.Clients.FromGoogleSearch.ParseTiming.ParseDuration";
 const char kHistogramFromGWSParseStart[] =
     "PageLoad.Clients.FromGoogleSearch.ParseTiming.NavigationToParseStart";
 const char kHistogramFromGWSFirstInputDelay[] =
@@ -127,7 +125,8 @@ const char kHistogramFromGWSCumulativeLayoutShiftMainFrame[] =
     "MainFrame";
 
 const char kHistogramFromGWSMaxCumulativeShiftScoreSessionWindow[] =
-    "PageLoad.LayoutInstability.MaxCumulativeShiftScore.SessionWindow.Gap1000ms"
+    "PageLoad.Clients.FromGoogleSearch.LayoutInstability."
+    "MaxCumulativeShiftScore.SessionWindow.Gap1000ms"
     ".Max5000ms2";
 
 const char kHistogramFromGWSFromSidePanelFirstInputDelay[] =
@@ -441,6 +440,15 @@ FromGWSPageLoadMetricsObserver::OnFencedFramesStart(
 }
 
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+FromGWSPageLoadMetricsObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  // This class focuses on measuring pages outside the current scope of
+  // Prerendering: cross-origin/cross-site.
+  return STOP_OBSERVING;
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
 FromGWSPageLoadMetricsObserver::OnCommit(
     content::NavigationHandle* navigation_handle) {
   // If this is a side panel initiated navigation the bit determining whether
@@ -505,11 +513,6 @@ void FromGWSPageLoadMetricsObserver::OnFirstInputInPage(
 void FromGWSPageLoadMetricsObserver::OnParseStart(
     const page_load_metrics::mojom::PageLoadTiming& timing) {
   logger_.OnParseStart(timing, GetDelegate());
-}
-
-void FromGWSPageLoadMetricsObserver::OnParseStop(
-    const page_load_metrics::mojom::PageLoadTiming& timing) {
-  logger_.OnParseStop(timing, GetDelegate());
 }
 
 void FromGWSPageLoadMetricsObserver::OnComplete(
@@ -745,17 +748,6 @@ void FromGWSPageLoadMetricsLogger::OnParseStart(
                                           delegate)) {
     PAGE_LOAD_HISTOGRAM(internal::kHistogramFromGWSParseStart,
                         timing.parse_timing->parse_start.value());
-  }
-}
-
-void FromGWSPageLoadMetricsLogger::OnParseStop(
-    const page_load_metrics::mojom::PageLoadTiming& timing,
-    const page_load_metrics::PageLoadMetricsObserverDelegate& delegate) {
-  if (ShouldLogForegroundEventAfterCommit(timing.parse_timing->parse_stop,
-                                          delegate)) {
-    PAGE_LOAD_HISTOGRAM(internal::kHistogramFromGWSParseDuration,
-                        timing.parse_timing->parse_stop.value() -
-                            timing.parse_timing->parse_start.value());
   }
 }
 

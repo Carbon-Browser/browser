@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,12 @@
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
+namespace gfx {
+class Transform;
+}
+
 namespace blink {
 
-class TransformationMatrix;
 class XRSession;
 class XRSpace;
 
@@ -27,7 +30,7 @@ class XRImageTrackingResult : public ScriptWrappable {
       const device::mojom::blink::XRTrackedImageData& image_tracking_result);
 
   XRSpace* imageSpace() const;
-  absl::optional<TransformationMatrix> MojoFromObject() const;
+  absl::optional<gfx::Transform> MojoFromObject() const;
 
   device::mojom::blink::XRNativeOriginInformationPtr NativeOrigin() const;
 

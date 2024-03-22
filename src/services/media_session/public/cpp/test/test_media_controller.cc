@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -274,6 +274,10 @@ void TestMediaController::ExitPictureInPicture() {
   // TODO(crbug.com/1040263): Implement ExitPictureInPicture.
 }
 
+void TestMediaController::RequestMediaRemoting() {
+  ++request_media_remoting_count_;
+}
+
 void TestMediaController::SimulateMediaSessionInfoChanged(
     mojom::MediaSessionInfoPtr session_info) {
   for (auto& observer : observers_)
@@ -284,6 +288,18 @@ void TestMediaController::SimulateMediaSessionActionsChanged(
     const std::vector<mojom::MediaSessionAction>& actions) {
   for (auto& observer : observers_)
     observer->MediaSessionActionsChanged(actions);
+}
+
+void TestMediaController::SimulateMediaSessionChanged(
+    base::UnguessableToken token) {
+  for (auto& observer : observers_)
+    observer->MediaSessionChanged(token);
+}
+
+void TestMediaController::SimulateMediaSessionMetadataChanged(
+    const media_session::MediaMetadata& meta_data) {
+  for (auto& observer : observers_)
+    observer->MediaSessionMetadataChanged(meta_data);
 }
 
 void TestMediaController::Flush() {

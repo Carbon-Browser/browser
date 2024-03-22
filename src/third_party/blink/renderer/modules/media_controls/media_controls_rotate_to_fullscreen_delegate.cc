@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -128,10 +128,15 @@ void MediaControlsRotateToFullscreenDelegate::OnStateChange() {
 
   if (needs_intersection_observer && !intersection_observer_) {
     intersection_observer_ = IntersectionObserver::Create(
-        {}, {kIntersectionThreshold}, &video_element_->GetDocument(),
+        /* (root) margin */ Vector<Length>(),
+        /* scroll_margin */ Vector<Length>(),
+        /* thresholds */ {kIntersectionThreshold},
+        /* document */ &video_element_->GetDocument(),
+        /* callback */
         WTF::BindRepeating(
             &MediaControlsRotateToFullscreenDelegate::OnIntersectionChange,
             WrapWeakPersistent(this)),
+        /* ukm_metric_id */
         LocalFrameUkmAggregator::kMediaIntersectionObserver);
     intersection_observer_->observe(video_element_);
   } else if (!needs_intersection_observer && intersection_observer_) {

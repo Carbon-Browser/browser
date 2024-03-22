@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,15 @@ MockMojoIndexedDBDatabaseCallbacks::~MockMojoIndexedDBDatabaseCallbacks() =
 mojo::PendingAssociatedRemote<blink::mojom::IDBDatabaseCallbacks>
 MockMojoIndexedDBDatabaseCallbacks::CreateInterfacePtrAndBind() {
   return receiver_.BindNewEndpointAndPassRemote();
+}
+
+mojo::PendingAssociatedRemote<blink::mojom::IDBDatabaseCallbacks>
+MockMojoIndexedDBDatabaseCallbacks::BindNewEndpointAndPassDedicatedRemote() {
+  return receiver_.BindNewEndpointAndPassDedicatedRemote();
+}
+
+void MockMojoIndexedDBDatabaseCallbacks::FlushForTesting() {
+  receiver_.FlushForTesting();
 }
 
 }  // namespace content

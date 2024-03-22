@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,10 +21,7 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.ApiCompatibilityUtils;
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.performance_hints.PerformanceHintsObserver;
-import org.chromium.chrome.browser.performance_hints.PerformanceHintsObserver.PerformanceClass;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.components.browser_ui.widget.RoundedIconGenerator;
@@ -40,34 +37,31 @@ class ContextMenuHeaderMediator implements View.OnClickListener {
     private Context mContext;
     private GURL mPlainUrl;
 
-    ContextMenuHeaderMediator(Context context, PropertyModel model,
-            @PerformanceClass int performanceClass, ContextMenuParams params, Profile profile,
+    ContextMenuHeaderMediator(
+            Context context,
+            PropertyModel model,
+            ContextMenuParams params,
+            Profile profile,
             ContextMenuNativeDelegate nativeDelegate) {
         mContext = context;
         mPlainUrl = params.getUrl();
         mModel = model;
         mModel.set(ContextMenuHeaderProperties.TITLE_AND_URL_CLICK_LISTENER, this);
 
-        // Skip setting up the image header if context menu is in pop up style.
-        if (!model.get(ContextMenuHeaderProperties.HIDE_HEADER_IMAGE)) {
-            if (params.isImage()) {
-                final Resources res = mContext.getResources();
-                final int imageMaxSize =
-                        res.getDimensionPixelSize(R.dimen.context_menu_header_image_max_size);
-                nativeDelegate.retrieveImageForContextMenu(
-                        imageMaxSize, imageMaxSize, this::onImageThumbnailRetrieved);
-            } else if (!params.isImage() && !params.isVideo()) {
-                LargeIconBridge iconBridge = new LargeIconBridge(profile);
-                iconBridge.getLargeIconForUrl(mPlainUrl,
-                        context.getResources().getDimensionPixelSize(
-                                R.dimen.default_favicon_min_size),
-                        this::onFaviconAvailable);
-            } else if (params.isVideo()) {
-                setVideoIcon();
-            }
-        }
-        if (PerformanceHintsObserver.isContextMenuPerformanceInfoEnabled() && params.isAnchor()) {
-            mModel.set(ContextMenuHeaderProperties.URL_PERFORMANCE_CLASS, performanceClass);
+        if (params.isImage()) {
+            final Resources res = mContext.getResources();
+            final int imageMaxSize =
+                    res.getDimensionPixelSize(R.dimen.context_menu_header_image_max_size);
+            nativeDelegate.retrieveImageForContextMenu(
+                    imageMaxSize, imageMaxSize, this::onImageThumbnailRetrieved);
+        } else if (!params.isImage() && !params.isVideo()) {
+            LargeIconBridge iconBridge = new LargeIconBridge(profile);
+            iconBridge.getLargeIconForUrl(
+                    mPlainUrl,
+                    context.getResources().getDimensionPixelSize(R.dimen.default_favicon_min_size),
+                    this::onFaviconAvailable);
+        } else if (params.isVideo()) {
+            setVideoIcon();
         }
     }
 
@@ -82,11 +76,12 @@ class ContextMenuHeaderMediator implements View.OnClickListener {
         // TODO(sinansahin): Handle the case where the retrieval of the thumbnail fails.
     }
 
-    /**
-     * See {@link org.chromium.components.favicon.LargeIconBridge#getLargeIconForUrl}
-     */
-    private void onFaviconAvailable(@Nullable Bitmap icon, @ColorInt int fallbackColor,
-            boolean isColorDefault, @IconType int iconType) {
+    /** See {@link org.chromium.components.favicon.LargeIconBridge#getLargeIconForUrl} */
+    private void onFaviconAvailable(
+            @Nullable Bitmap icon,
+            @ColorInt int fallbackColor,
+            boolean isColorDefault,
+            @IconType int iconType) {
         // If we didn't get a favicon, generate a monogram instead
         if (icon == null) {
             final RoundedIconGenerator iconGenerator = createRoundedIconGenerator(fallbackColor);
@@ -112,7 +107,6 @@ class ContextMenuHeaderMediator implements View.OnClickListener {
      */
     @Override
     public void onClick(View v) {
-        RecordHistogram.recordBooleanHistogram("ContextMenu.URLClicked", true);
         if (mModel.get(ContextMenuHeaderProperties.URL_MAX_LINES) == Integer.MAX_VALUE) {
             // URL and title should both be expanded.
             assert mModel.get(ContextMenuHeaderProperties.TITLE_MAX_LINES) == Integer.MAX_VALUE;
@@ -138,8 +132,11 @@ class ContextMenuHeaderMediator implements View.OnClickListener {
         // 1. Create a bitmap for the checkerboard pattern.
         Drawable drawable =
                 ApiCompatibilityUtils.getDrawable(res, R.drawable.checkerboard_background);
-        Bitmap tileBitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
-                drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Bitmap tileBitmap =
+                Bitmap.createBitmap(
+                        drawable.getIntrinsicWidth(),
+                        drawable.getIntrinsicHeight(),
+                        Bitmap.Config.ARGB_8888);
         Canvas tileCanvas = new Canvas(tileBitmap);
         drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
         drawable.draw(tileCanvas);
@@ -166,12 +163,16 @@ class ContextMenuHeaderMediator implements View.OnClickListener {
     }
 
     private void setVideoIcon() {
-        Drawable drawable = ApiCompatibilityUtils.getDrawable(
-                mContext.getResources(), R.drawable.gm_filled_videocam_24);
+        Drawable drawable =
+                ApiCompatibilityUtils.getDrawable(
+                        mContext.getResources(), R.drawable.gm_filled_videocam_24);
         drawable.setColorFilter(
                 SemanticColorUtils.getDefaultIconColor(mContext), PorterDuff.Mode.SRC_IN);
-        Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
-                drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        drawable.getIntrinsicWidth(),
+                        drawable.getIntrinsicHeight(),
+                        Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         drawable.draw(canvas);

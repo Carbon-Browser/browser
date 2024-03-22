@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -44,9 +44,9 @@ namespace network_time {
 class NetworkTimeTracker;
 }
 
-extern const base::Feature kMITMSoftwareInterstitial;
-extern const base::Feature kCaptivePortalInterstitial;
-extern const base::Feature kCaptivePortalCertificateList;
+BASE_DECLARE_FEATURE(kMITMSoftwareInterstitial);
+BASE_DECLARE_FEATURE(kCaptivePortalInterstitial);
+BASE_DECLARE_FEATURE(kCaptivePortalCertificateList);
 
 // This class is responsible for deciding what type of interstitial to display
 // for an SSL validation error and actually displaying it. The display of the
@@ -256,7 +256,8 @@ class SSLErrorHandler : public content::WebContentsUserData<SSLErrorHandler>,
   // The below field is unused if captive portal detection is not enabled,
   // which causes a compiler error.
 #if BUILDFLAG(ENABLE_CAPTIVE_PORTAL_DETECTION)
-  raw_ptr<captive_portal::CaptivePortalService> captive_portal_service_;
+  raw_ptr<captive_portal::CaptivePortalService, DanglingUntriaged>
+      captive_portal_service_;
 #endif
 
   base::CallbackListSubscription subscription_;

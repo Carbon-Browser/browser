@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -242,24 +242,26 @@ std::u16string NormalizePhoneNumber(const std::u16string& value,
   return normalized_number;
 }
 
-bool ConstructPhoneNumber(const std::u16string& country_code,
-                          const std::u16string& city_code,
-                          const std::u16string& number,
+bool ConstructPhoneNumber(const std::u16string& input_whole_number,
                           const std::string& region,
-                          std::u16string* whole_number) {
+                          std::u16string* output_whole_number) {
   DCHECK_EQ(2u, region.size());
-  whole_number->clear();
+  output_whole_number->clear();
 
-  std::u16string unused_country_code, unused_city_code, unused_number;
+  std::u16string parsed_country_code, unused_city_code, unused_number;
   std::string unused_region;
   ::i18n::phonenumbers::PhoneNumber phone_number;
-  if (!ParsePhoneNumber(country_code + city_code + number, region,
-                        &unused_country_code, &unused_city_code, &unused_number,
-                        &unused_region, &phone_number)) {
+  if (!ParsePhoneNumber(input_whole_number, region, &parsed_country_code,
+                        &unused_city_code, &unused_number, &unused_region,
+                        &phone_number)) {
     return false;
   }
 
-  FormatValidatedNumber(phone_number, country_code, whole_number, nullptr);
+  // We pass the parsed_country_code so that if the phone number contained a
+  // country code, the formatted phone number is returned in international
+  // format with a country code as well.
+  FormatValidatedNumber(phone_number, parsed_country_code, output_whole_number,
+                        nullptr);
   return true;
 }
 
@@ -386,9 +388,12 @@ PhoneObject::PhoneObject(const std::u16string& number,
         i18n_number_->has_country_code()) {
       country_code_ = base::NumberToString16(i18n_number_->country_code());
     }
+    // Autofill doesn't support filling extensions, so we should not store them.
+    i18n_number_->clear_extension();
   } else {
     // Parsing failed. Store passed phone "as is" into |whole_number_|.
     whole_number_ = number;
+    // We have no way of removing any extensions.
   }
 }
 

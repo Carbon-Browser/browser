@@ -1,17 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/concierge_helper_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/system/sys_info.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "content/public/browser/browser_context.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -21,7 +20,8 @@ namespace {
 void OnSetVmCpuRestriction(
     absl::optional<vm_tools::concierge::SetVmCpuRestrictionResponse> response) {
   if (!response || !response->success()) {
-    LOG(ERROR) << "Failed to call SetVmCpuRestriction";
+    LOG_IF(ERROR, base::SysInfo::IsRunningOnChromeOS())
+        << "Failed to call SetVmCpuRestriction";
     return;
   }
 }
@@ -113,15 +113,19 @@ ConciergeHelperService* ConciergeHelperServiceFactory::GetForBrowserContext(
 }
 
 ConciergeHelperServiceFactory::ConciergeHelperServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ConciergeHelperServiceFactory",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
-KeyedService* ConciergeHelperServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ConciergeHelperServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  if (context->IsOffTheRecord())
-    return nullptr;
-  return new ConciergeHelperService();
+  return std::make_unique<ConciergeHelperService>();
 }
 
 }  // namespace ash

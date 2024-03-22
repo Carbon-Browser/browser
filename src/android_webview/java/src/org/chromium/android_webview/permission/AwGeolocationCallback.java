@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,8 +63,10 @@ public class AwGeolocationCallback implements AwGeolocationPermissions.Callback 
     @Override
     public void invoke(String origin, boolean allow, boolean retain) {
         if (mCleanupRunable == null || mCleanupReference == null) {
-            Log.w(TAG, "Response for this geolocation request has been received."
-                    + " Ignoring subsequent responses");
+            Log.w(
+                    TAG,
+                    "Response for this geolocation request has been received."
+                            + " Ignoring subsequent responses");
             return;
         }
         mCleanupRunable.setResponse(origin, allow, retain);

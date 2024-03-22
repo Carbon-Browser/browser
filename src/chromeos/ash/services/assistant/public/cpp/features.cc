@@ -1,52 +1,64 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 
 #include "ash/constants/ash_features.h"
+#include "base/command_line.h"
 #include "base/feature_list.h"
+#include "sandbox/policy/switches.h"
 
-namespace chromeos {
-namespace assistant {
-namespace features {
+namespace ash::assistant::features {
 
-const base::Feature kAssistantAudioEraser{"AssistantAudioEraser",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kAssistantAudioEraser,
+             "AssistantAudioEraser",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kAssistantAppSupport{"AssistantAppSupport",
-                                         base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kAssistantAppSupport,
+             "AssistantAppSupport",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-const base::Feature kAssistantDebugging{"AssistantDebugging",
-                                        base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kAssistantDebugging,
+             "AssistantDebugging",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kAssistantRoutines{"AssistantRoutines",
-                                       base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kAssistantWaitScheduling,
+             "AssistantWaitScheduling",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-const base::Feature kAssistantWaitScheduling{"AssistantWaitScheduling",
-                                             base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kEnableDspHotword,
+             "EnableDspHotword",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kEnableDspHotword{"EnableDspHotword",
-                                      base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnableStereoAudioInput,
+             "AssistantEnableStereoAudioInput",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kEnableStereoAudioInput{"AssistantEnableStereoAudioInput",
-                                            base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnablePowerManager,
+             "ChromeOSAssistantEnablePowerManager",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kEnablePowerManager{"ChromeOSAssistantEnablePowerManager",
-                                        base::FEATURE_DISABLED_BY_DEFAULT};
-
-const base::Feature kEnableLibAssistantBetaBackend{
-    "LibAssistantBetaBackend", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnableLibAssistantBetaBackend,
+             "LibAssistantBetaBackend",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Disable voice match for test purpose.
-const base::Feature kDisableVoiceMatch{"DisableVoiceMatch",
-                                       base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDisableVoiceMatch,
+             "DisableVoiceMatch",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kEnableLibAssistantSandbox{
-    "LibAssistantSandbox", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnableLibAssistantDLC,
+             "LibAssistantDLC",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-const base::Feature kEnableLibAssistantV2{"LibAssistantV2",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnableAssistantLearnMore,
+             "AssistantLearnMore",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kEnableAssistantOnboarding,
+             "AssistantOnboarding",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsAppSupportEnabled() {
   return base::FeatureList::IsEnabled(
@@ -73,10 +85,6 @@ bool IsLibAssistantBetaBackendEnabled() {
   return base::FeatureList::IsEnabled(kEnableLibAssistantBetaBackend);
 }
 
-bool IsRoutinesEnabled() {
-  return base::FeatureList::IsEnabled(kAssistantRoutines);
-}
-
 bool IsStereoAudioInputEnabled() {
   return base::FeatureList::IsEnabled(kEnableStereoAudioInput) ||
          // Audio eraser requires 2 channel input.
@@ -92,13 +100,20 @@ bool IsWaitSchedulingEnabled() {
 }
 
 bool IsLibAssistantSandboxEnabled() {
-  return base::FeatureList::IsEnabled(kEnableLibAssistantSandbox);
+  return !base::CommandLine::ForCurrentProcess()->HasSwitch(
+      sandbox::policy::switches::kNoSandbox);
 }
 
-bool IsLibAssistantV2Enabled() {
-  return base::FeatureList::IsEnabled(kEnableLibAssistantV2);
+bool IsLibAssistantDLCEnabled() {
+  return base::FeatureList::IsEnabled(kEnableLibAssistantDLC);
 }
 
-}  // namespace features
-}  // namespace assistant
-}  // namespace chromeos
+bool IsAssistantLearnMoreEnabled() {
+  return base::FeatureList::IsEnabled(kEnableAssistantLearnMore);
+}
+
+bool IsOnboardingEnabled() {
+  return base::FeatureList::IsEnabled(kEnableAssistantOnboarding);
+}
+
+}  // namespace ash::assistant::features

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "base/task/thread_pool.h"
 #include "chrome/services/sharing/nearby/platform/bidirectional_stream.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -94,4 +93,3 @@ void WifiLanSocket::CloseTcpSocketIfNecessary() {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

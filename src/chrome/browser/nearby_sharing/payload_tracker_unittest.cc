@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,6 @@
 
 #include "base/files/file_path.h"
 #include "base/test/mock_callback.h"
-#include "base/test/scoped_feature_list.h"
-#include "chrome/browser/nearby_sharing/common/nearby_share_features.h"
 #include "chrome/browser/nearby_sharing/constants.h"
 #include "chrome/browser/nearby_sharing/transfer_metadata_builder.h"
 #include "content/public/test/browser_task_environment.h"
@@ -68,10 +66,6 @@ class PayloadTrackerTest : public testing::Test {
       share_target_.text_attachments.push_back(std::move(text));
     }
 
-    base::test::ScopedFeatureList scoped_feature_list;
-    scoped_feature_list.InitAndEnableFeature(
-        features::kNearbySharingReceiveWifiCredentials);
-
     WifiCredentialsAttachment wifi_credentials_ok(
         kWifiCredentialsIdOk, kWifiSecurityType, kWifiSsidOk);
 
@@ -100,21 +94,18 @@ class PayloadTrackerTest : public testing::Test {
   MockUpdateCallback& callback() { return callback_; }
 
   void MarkSuccessful(int payload_id) {
-    UpdatePayloadStatus(
-        payload_id,
-        location::nearby::connections::mojom::PayloadStatus::kSuccess);
+    UpdatePayloadStatus(payload_id,
+                        nearby::connections::mojom::PayloadStatus::kSuccess);
   }
 
   void MarkCancelled(int payload_id) {
-    UpdatePayloadStatus(
-        payload_id,
-        location::nearby::connections::mojom::PayloadStatus::kCanceled);
+    UpdatePayloadStatus(payload_id,
+                        nearby::connections::mojom::PayloadStatus::kCanceled);
   }
 
   void MarkFailure(int payload_id) {
-    UpdatePayloadStatus(
-        payload_id,
-        location::nearby::connections::mojom::PayloadStatus::kFailure);
+    UpdatePayloadStatus(payload_id,
+                        nearby::connections::mojom::PayloadStatus::kFailure);
   }
 
   void WaitBetweenUpdates() {
@@ -122,16 +113,14 @@ class PayloadTrackerTest : public testing::Test {
   }
 
  private:
-  void UpdatePayloadStatus(
-      int payload_id,
-      location::nearby::connections::mojom::PayloadStatus status) {
-    location::nearby::connections::mojom::PayloadTransferUpdatePtr payload =
-        location::nearby::connections::mojom::PayloadTransferUpdate::New(
+  void UpdatePayloadStatus(int payload_id,
+                           nearby::connections::mojom::PayloadStatus status) {
+    nearby::connections::mojom::PayloadTransferUpdatePtr payload =
+        nearby::connections::mojom::PayloadTransferUpdate::New(
             payload_id, status,
             /*total_bytes=*/kTotalSize, /*bytes_transferred=*/kTotalSize);
     payload_tracker_->OnStatusUpdate(
-        std::move(payload),
-        location::nearby::connections::mojom::Medium::kWebRtc);
+        std::move(payload), nearby::connections::mojom::Medium::kWebRtc);
   }
 
   content::BrowserTaskEnvironment task_environment_;

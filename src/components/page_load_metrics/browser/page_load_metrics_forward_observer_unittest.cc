@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,11 @@ class TestPageLoadMetricsObserver final : public PageLoadMetricsObserver {
     return CONTINUE_OBSERVING;
   }
 
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override {
+    return STOP_OBSERVING;
+  }
+
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override {
@@ -85,7 +90,6 @@ class PageLoadMetricsForwardObserverTest
         {
             {blink::features::kFencedFrames,
              {{"implementation_type", "mparch"}}},
-            {blink::features::kInitialNavigationEntry, {}},
         },
         {});
   }

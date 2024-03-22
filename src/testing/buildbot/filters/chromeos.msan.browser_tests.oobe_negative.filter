@@ -23,11 +23,13 @@
 -All/SAMLDeviceAttestationEnrolledTest.*
 -All/SAMLDeviceAttestationTest.*
 -All/SAMLEnrollmentTest.*
+-All/SAMLLocalesTest.*
 -All/SAMLPasswordAttributesTest.*
 -All/SAMLPolicyTest.*
 -All/SamlTestWithFeatures.*
 -All/SmartPrivacyProtectionScreenTest.*
 -All/SshWarningTest.*
+-All/SsoProfileTest.*
 -All/SyncConsentPolicyDisabledTest.*
 -All/SyncConsentTestWithModesParams.*
 -All/SyncConsentTestWithParams.*
@@ -73,7 +75,6 @@
 -EncryptionMigrationTest.*
 -EnrollmentLocalPolicyServerBase.*
 -EnrollmentRecoveryTest.*
--EnrollmentScreenChromadMigrationTest.*
 -EnrollmentScreenHandsOffTest.*
 -EnrollmentScreenTest.*
 -EnterpriseEnrollmentTest.*
@@ -133,6 +134,8 @@
 -PolicyProvidedCertsOnUserSessionInitTest.*
 -PresetPolicyDeviceDisablingTest.*
 -PrimaryUserPoliciesProxiedTest.*
+-QuickStartBrowserTest.*
+-QuickStartNotDeterminedBrowserTest.*
 -RecommendAppsScreenManagedTest.*
 -RecommendAppsScreenTest.*
 -ResetFirstAfterBootTest.*
@@ -163,6 +166,7 @@
 -UserCreationScreenTest.*
 -UserSelectionScreenBlockOfflineTest.*
 -WebKioskTest.*
+-WebUIWebViewBrowserTest.*
 -WebviewChildLoginTest.*
 -WebviewClientCertsLoginTest.*
 -WebviewClientCertsLoginTestBase.*
@@ -171,7 +175,6 @@
 -WebviewLoginTest.*
 -WebviewProxyAuthLoginTest.*
 -WelcomeScreenBrowserTest.*
--WelcomeScreenChromadMigrationBrowserTest.*
 -WelcomeScreenChromeVoxHintTest.*
 -WelcomeScreenHandsOffBrowserTest.*
 -WelcomeScreenInternationalChromeVoxHintTest.*

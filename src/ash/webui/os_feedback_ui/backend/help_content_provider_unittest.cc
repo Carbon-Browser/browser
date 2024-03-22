@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <memory>
 #include <string>
 
-#include "ash/webui/os_feedback_ui/mojom/os_feedback_ui.mojom-test-utils.h"
 #include "ash/webui/os_feedback_ui/mojom/os_feedback_ui.mojom.h"
 #include "base/json/json_reader.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "base/values.h"
 #include "content/public/test/browser_task_environment.h"
 #include "google_apis/google_api_keys.h"
@@ -30,7 +30,6 @@ namespace feedback {
 
 using data_decoder::test::InProcessDataDecoder;
 using os_feedback_ui::mojom::HelpContent;
-using os_feedback_ui::mojom::HelpContentProviderAsyncWaiter;
 using os_feedback_ui::mojom::HelpContentPtr;
 using os_feedback_ui::mojom::HelpContentType;
 using os_feedback_ui::mojom::SearchRequest;
@@ -40,11 +39,19 @@ using os_feedback_ui::mojom::SearchResponsePtr;
 
 constexpr char kFakeResponse[] = R"({"resource": [
     {
+      "language": "en-US",
       "url": "/chromebook/fake1?hl=en-gb",
       "title": "fake-title-1",
       "resultType": "CT_ANSWER"
     },
     {
+      "language": "zh-Hans",
+      "resultType": "CT_ANSWER",
+      "title": "将Chromecast 与Chromebook 搭配使用",
+      "url": "/chromebook/answer/3289520?hl=zh-Hans"
+    },
+    {
+      "language": "en-gb",
       "url": "https://support.google.com/chromebook/fake2?hl=en-gb",
       "title": "fake-title-2",
       "resultType": "CT_SUPPORT_FORUM_THREAD"
@@ -58,14 +65,11 @@ class HelpContentProviderTest : public testing::Test {
     test_shared_loader_factory_ =
         base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
             &test_url_loader_factory_);
-    provider_ = std::make_unique<HelpContentProvider>(
-        "en", test_shared_loader_factory_);
   }
   ~HelpContentProviderTest() override = default;
 
   void SetUp() override {
     in_process_data_decoder_ = std::make_unique<InProcessDataDecoder>();
-    provider_->BindInterface(provider_remote_.BindNewPipeAndPassReceiver());
   }
 
   const std::string GetApiUrl() const {
@@ -77,18 +81,26 @@ class HelpContentProviderTest : public testing::Test {
   // Call the GetHelpContents of the remote provider async and return the
   // response.
   SearchResponsePtr GetHelpContentsAndWait(SearchRequestPtr request) {
-    SearchResponsePtr response;
-    HelpContentProviderAsyncWaiter(provider_remote_.get())
-        .GetHelpContents(std::move(request), &response);
-    return response;
+    base::test::TestFuture<SearchResponsePtr> response;
+    provider_remote_->GetHelpContents(std::move(request),
+                                      response.GetCallback());
+    return response.Take();
+  }
+
+  // Initialize provider.
+  void InitializeProvider(const bool is_child_account) {
+    provider_ = std::make_unique<HelpContentProvider>(
+        "en", is_child_account, test_shared_loader_factory_);
+    provider_->BindInterface(provider_remote_.BindNewPipeAndPassReceiver());
   }
 
   // Parse the json and call PopulateSearchResponse if successful.
   void PopulateSearchResponseHelper(const std::string& json,
                                     SearchResponsePtr& search_response) {
-    absl::optional<base::Value> search_result = base::JSONReader::Read(json);
+    std::optional<base::Value> search_result = base::JSONReader::Read(json);
     if (search_result) {
-      PopulateSearchResponse(search_result.value(), search_response);
+      PopulateSearchResponse("en-gb", /*is_child_account=*/false, 5u,
+                             search_result.value(), search_response);
     }
   }
 
@@ -121,9 +133,19 @@ TEST_F(HelpContentProviderTest, ConvertToHelpContentType) {
 // Test the ConvertSearchRequestToJson utility function.
 TEST_F(HelpContentProviderTest, ConvertSearchRequestToJson) {
   auto request = SearchRequest::New(u"how do", 10);
-  EXPECT_EQ(R"({"helpcenter":"chromeos","language":"zh",)"
-            R"("max_results":"10","query":"how do"})",
-            ConvertSearchRequestToJson("zh", request));
+  EXPECT_EQ(
+      R"({"helpcenter":"chromeos","language":"zh",)"
+      R"("max_results":"20","query":"how do"})",
+      ConvertSearchRequestToJson("zh", /*is_child_account=*/false, request));
+}
+
+// Test the ConvertSearchRequestToJsonWithChildAccount utility function.
+TEST_F(HelpContentProviderTest, ConvertSearchRequestToJsonWithChildAccount) {
+  auto request = SearchRequest::New(u"how do", 10);
+  EXPECT_EQ(
+      R"({"helpcenter":"chromeos","language":"zh",)"
+      R"("max_results":"30","query":"how do"})",
+      ConvertSearchRequestToJson("zh", /*is_child_account=*/true, request));
 }
 
 // Test the PopulateSearchResponse utility function with empty json string.
@@ -169,8 +191,23 @@ TEST_F(HelpContentProviderTest, ResponseSuccessful) {
                                        net::HTTP_OK);
 
   auto request = SearchRequest::New(u"how do I login", 2);
+  InitializeProvider(/*is_child_account=*/false);
   auto response = GetHelpContentsAndWait(std::move(request));
   EXPECT_EQ(response->results.size(), 2u);
+  EXPECT_EQ(response->total_results, 2000000u);
+}
+
+// Test Help Contents are feched Successfully with a child account.
+TEST_F(HelpContentProviderTest, ResponseSuccessfulWithChildAccount) {
+  test_url_loader_factory_.AddResponse(GetApiUrl(), kFakeResponse,
+                                       net::HTTP_OK);
+
+  auto request = SearchRequest::New(u"how do I login", 2);
+  InitializeProvider(/*is_child_account=*/true);
+  auto response = GetHelpContentsAndWait(std::move(request));
+  EXPECT_EQ(response->results.size(), 1u);
+  const HelpContentPtr& first = response->results[0];
+  EXPECT_EQ(HelpContentType::kArticle, first->content_type);
   EXPECT_EQ(response->total_results, 2000000u);
 }
 
@@ -180,9 +217,20 @@ TEST_F(HelpContentProviderTest, NetworkError) {
                                        net::HTTP_INTERNAL_SERVER_ERROR);
 
   auto request = SearchRequest::New(u"how do I login", 2);
+  InitializeProvider(/*is_child_account=*/false);
   auto response = GetHelpContentsAndWait(std::move(request));
   EXPECT_EQ(response->results.size(), 0u);
   EXPECT_EQ(response->total_results, 0u);
+}
+
+TEST_F(HelpContentProviderTest, ResetReceiverOnBindInterface) {
+  // This test simulates a user trying to open a second instant. The receiver
+  // should be reset before binding the new receiver. Otherwise we would get a
+  // DCHECK error from mojo::Receiver
+  InitializeProvider(/*is_child_account=*/false);
+  provider_remote_.reset();  // reset the binding done in Setup.
+  provider_->BindInterface(provider_remote_.BindNewPipeAndPassReceiver());
+  base::RunLoop().RunUntilIdle();
 }
 
 }  // namespace feedback

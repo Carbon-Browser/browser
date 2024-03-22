@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -44,11 +44,11 @@ void LoginScreenExtensionsStorageCleaner::
   std::vector<std::string> installed_extension_ids;
   const PrefService::Preference* const pref =
       prefs_->FindPreference(extensions::pref_names::kInstallForceList);
-  if (pref && pref->IsManaged() &&
-      pref->GetType() == base::Value::Type::DICTIONARY) {
+  if (pref && pref->IsManaged() && pref->GetType() == base::Value::Type::DICT) {
     // Each `item` contains a pair of extension ID and update URL.
-    for (const auto item : pref->GetValue()->DictItems())
+    for (const auto item : pref->GetValue()->GetDict()) {
       installed_extension_ids.push_back(item.first);
+    }
   }
   SessionManagerClient::Get()->LoginScreenStorageListKeys(base::BindOnce(
       &LoginScreenExtensionsStorageCleaner::

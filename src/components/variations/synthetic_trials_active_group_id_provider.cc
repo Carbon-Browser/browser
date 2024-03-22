@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,11 @@ SyntheticTrialsActiveGroupIdProvider::GetInstance() {
   return base::Singleton<SyntheticTrialsActiveGroupIdProvider>::get();
 }
 
-SyntheticTrialsActiveGroupIdProvider::SyntheticTrialsActiveGroupIdProvider() {}
+SyntheticTrialsActiveGroupIdProvider::SyntheticTrialsActiveGroupIdProvider() =
+    default;
 
-SyntheticTrialsActiveGroupIdProvider::~SyntheticTrialsActiveGroupIdProvider() {}
+SyntheticTrialsActiveGroupIdProvider::~SyntheticTrialsActiveGroupIdProvider() =
+    default;
 
 void SyntheticTrialsActiveGroupIdProvider::GetActiveGroupIds(
     std::vector<ActiveGroupId>* output) {
@@ -32,6 +34,8 @@ void SyntheticTrialsActiveGroupIdProvider::ResetForTesting() {
 }
 
 void SyntheticTrialsActiveGroupIdProvider::OnSyntheticTrialsChanged(
+    const std::vector<SyntheticTrialGroup>& trials_updated,
+    const std::vector<SyntheticTrialGroup>& trials_removed,
     const std::vector<SyntheticTrialGroup>& groups) {
   {
     base::AutoLock scoped_lock(lock_);

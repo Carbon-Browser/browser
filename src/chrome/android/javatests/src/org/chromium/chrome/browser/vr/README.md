@@ -14,7 +14,7 @@
    Don't touch phone while the tests are running.
 
 If you are reproducing an issue with the AR tests, run
-`export DOWNLOAD_VR_TEST_APKS=1 && gclient runhooks` in order to get the
+`export DOWNLOAD_XR_TEST_APKS=1 && gclient runhooks` in order to get the
 playback datasets that are necessary. This requires authentication, run
 `gsutil.py config` [documentation](https://chromium.googlesource.com/chromiumos/docs/+/main/gsutil.md) 
 to set this up if necessary.
@@ -54,14 +54,14 @@ Contains the VrCore settings files for running VR instrumentation tests (see the
 * [`//chrome/test/data/xr/e2e_test_files/`][html_dir] - Contains the JavaScript
 and HTML files for XR instrumentation tests.
 * [`//third_party/gvr-android-sdk/test-apks`][vr_test_apks] - Contains the VR
-APKs used for testing, such as VrCore. You must have `DOWNLOAD_VR_TEST_APKS` set
+APKs used for testing, such as VrCore. You must have `DOWNLOAD_XR_TEST_APKS` set
 as an environment variable when you run gclient runhooks in order to actually
 download these from storage.
 * [`//third_party/gvr-android-sdk/test-libraries`][vr_test_libraries] - Contains
 third party VR testing libraries. Currently, only has the Daydream controller
 test library used for sending controller events to VrCore using intents.
 * [`//third_party/arcore-android-sdk/test-apks`][ar_test_apks] - Contains the AR
-APKs used for testing, such as ArCore. You must have `DOWNLOAD_VR_TEST_APKS` set
+APKs used for testing, such as ArCore. You must have `DOWNLOAD_XR_TEST_APKS` set
 as an environment variable when you run gclient runhooks in order to actually
 download these from storage.
 
@@ -100,11 +100,6 @@ For VR tests, you'll likely want to use `--additional-apk
 third_party/gvr-android-sdk/test-apks/vr_services/vr_services_current.apk` to
 ensure that the VrCore version used is the one used for automated testing at
 whatever your current git revision is.
-
-For AR tests, you'll likely want to use `--additional-apk
-third_party/arcore-android-sdk/test-apks/arcore/arcore_current.apk` to ensure
-that the ArCore version used is the one used for automated testing at whatever
-your current git revision is.
 
 **NOTE** Using this argument for VR on most Pixel devices will fail, as VrCore
 is pre-installed as a system app. This can be dealt with in the following ways:

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "cc/paint/skia_paint_canvas.h"
 #include "components/viz/common/surfaces/subtree_capture_id.h"
@@ -178,8 +178,8 @@ void DevToolsVideoConsumer::OnFrameCaptured(
   // portion of the frame that contains content is used.
   scoped_refptr<media::VideoFrame> frame = media::VideoFrame::WrapExternalData(
       info->pixel_format, info->coded_size, content_rect, content_rect.size(),
-      const_cast<uint8_t*>(static_cast<const uint8_t*>(mapping.memory())),
-      mapping.size(), info->timestamp);
+      static_cast<const uint8_t*>(mapping.memory()), mapping.size(),
+      info->timestamp);
   if (!frame) {
     DLOG(ERROR) << "Unable to create VideoFrame wrapper around the shmem.";
     return;
@@ -191,8 +191,7 @@ void DevToolsVideoConsumer::OnFrameCaptured(
              callbacks) {},
       std::move(data), std::move(mapping), std::move(callbacks)));
   frame->set_metadata(info->metadata);
-  if (info->color_space.has_value())
-    frame->set_color_space(info->color_space.value());
+  frame->set_color_space(info->color_space);
 
   callback_.Run(std::move(frame));
 }

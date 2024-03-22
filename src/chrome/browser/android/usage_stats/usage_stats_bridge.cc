@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,9 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 
+using base::android::AppendJavaStringArrayToStringVector;
 using base::android::AttachCurrentThread;
+using base::android::JavaArrayOfByteArrayToStringVector;
 using base::android::JavaParamRef;
 using base::android::JavaRef;
 using base::android::ScopedJavaLocalRef;
@@ -89,7 +91,8 @@ void UsageStatsBridge::QueryEventsInRange(JNIEnv* j_env,
   ScopedJavaGlobalRef<jobject> callback(j_callback);
 
   usage_stats_database_->QueryEventsInRange(
-      base::Time::FromJavaTime(j_start), base::Time::FromJavaTime(j_end),
+      base::Time::FromMillisecondsSinceUnixEpoch(j_start),
+      base::Time::FromMillisecondsSinceUnixEpoch(j_end),
       base::BindOnce(&UsageStatsBridge::OnGetEventsDone,
                      weak_ptr_factory_.GetWeakPtr(), callback));
 }
@@ -136,7 +139,8 @@ void UsageStatsBridge::DeleteEventsInRange(JNIEnv* j_env,
   ScopedJavaGlobalRef<jobject> callback(j_callback);
 
   usage_stats_database_->DeleteEventsInRange(
-      base::Time::FromJavaTime(j_start), base::Time::FromJavaTime(j_end),
+      base::Time::FromMillisecondsSinceUnixEpoch(j_start),
+      base::Time::FromMillisecondsSinceUnixEpoch(j_end),
       base::BindOnce(&UsageStatsBridge::OnUpdateDone,
                      weak_ptr_factory_.GetWeakPtr(), callback));
 }
@@ -329,8 +333,8 @@ void UsageStatsBridge::OnURLsDeleted(
       Java_UsageStatsBridge_onHistoryDeletedForDomains(
           env, j_this_, ToJavaArrayOfStrings(env, domains));
     } else {
-      int64_t startTimeMs = time_range.begin().ToJavaTime();
-      int64_t endTimeMs = time_range.end().ToJavaTime();
+      int64_t startTimeMs = time_range.begin().InMillisecondsSinceUnixEpoch();
+      int64_t endTimeMs = time_range.end().InMillisecondsSinceUnixEpoch();
 
       Java_UsageStatsBridge_onHistoryDeletedInRange(env, j_this_, startTimeMs,
                                                     endTimeMs);

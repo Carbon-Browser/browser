@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,16 +17,15 @@ import org.chromium.chrome.browser.download.internal.R;
 import org.chromium.components.browser_ui.util.date.StringUtils;
 import org.chromium.ui.modelutil.PropertyModel;
 
-/**
- * A {@link ViewHolder} specifically meant to display a section header.
- */
+/** A {@link ViewHolder} specifically meant to display a section header. */
 public class SectionTitleViewHolder extends ListItemViewHolder {
     private final TextView mTitle;
 
     /** Create a new {@link SectionTitleViewHolder} instance. */
     public static SectionTitleViewHolder create(ViewGroup parent) {
-        View view = LayoutInflater.from(parent.getContext())
-                            .inflate(R.layout.download_manager_section_header, null);
+        View view =
+                LayoutInflater.from(parent.getContext())
+                        .inflate(R.layout.download_manager_section_header, null);
         return new SectionTitleViewHolder(view);
     }
 
@@ -49,8 +48,6 @@ public class SectionTitleViewHolder extends ListItemViewHolder {
                 return StringUtils.dateToHeaderString(sectionItem.date);
             case SectionHeaderType.JUST_NOW:
                 return context.getResources().getString(R.string.download_manager_just_now);
-            case SectionHeaderType.SCHEDULED_LATER:
-                return context.getResources().getString(R.string.download_manager_scheduled_later);
         }
         assert false : "Unknown section header type.";
         return null;

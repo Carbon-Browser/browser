@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -19,7 +19,6 @@ source_set("first_run") {
   ]
   deps = [
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/ui/first_run/welcome:welcome_ui",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/promo_style",
     "//ios/chrome/common/ui/util",
@@ -27,5 +26,4 @@ source_set("first_run") {
     "//ui/base",
   ]
   frameworks = [ "UIKit.framework" ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }

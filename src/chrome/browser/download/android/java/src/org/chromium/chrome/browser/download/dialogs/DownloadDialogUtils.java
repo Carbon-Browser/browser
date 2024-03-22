@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import org.chromium.ui.modelutil.PropertyModel.ReadableObjectPropertyKey;
 
 import java.util.ArrayList;
 
-/**
- * Utility functions used in download dialogs.
- */
+/** Utility functions used in download dialogs. */
 public class DownloadDialogUtils {
     // The threshold to determine if a location suggestion is triggered.
     private static final double LOCATION_SUGGESTION_THRESHOLD = 0.05;

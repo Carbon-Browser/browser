@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -485,10 +485,9 @@ int DiffImages(const base::FilePath& file1,
   image_diff_png::EncodeRGBAPNG(
       diff_image.data(), diff_image.w(), diff_image.h(),
       diff_image.w() * 4, &png_encoding);
-  if (base::WriteFile(out_file,
-          reinterpret_cast<char*>(&png_encoding.front()),
-          base::checked_cast<int>(png_encoding.size())) < 0)
+  if (!base::WriteFile(out_file, png_encoding)) {
     return kStatusError;
+  }
 
   return kStatusDifferent;
 }

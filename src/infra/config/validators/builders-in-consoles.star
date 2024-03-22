@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,6 +14,8 @@ def _validate_builders_in_console(ctx):
     builders_without_console = []
 
     for bucket in ctx.output["luci/cr-buildbucket.cfg"].buckets:
+        if not proto.has(bucket, "swarming"):
+            continue
         bucket_builders = builders.get(bucket.name, {})
         for builder in bucket.swarming.builders:
             if builder.name not in bucket_builders:

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,16 @@
 
 #include "ash/public/cpp/assistant/assistant_state_base.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/assistant/public/proto/settings_ui.pb.h"
 #include "chromeos/ash/services/assistant/service_context.h"
-#include "chromeos/dbus/util/version_loader.h"
-#include "chromeos/services/libassistant/public/mojom/settings_controller.mojom.h"
-#include "chromeos/services/libassistant/public/mojom/speaker_id_enrollment_controller.mojom.h"
+#include "chromeos/ash/services/libassistant/public/mojom/settings_controller.mojom.h"
+#include "chromeos/ash/services/libassistant/public/mojom/speaker_id_enrollment_controller.mojom.h"
+#include "chromeos/version/version_loader.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 AssistantSettingsImpl::AssistantSettingsImpl(ServiceContext* context)
     : context_(context) {}
@@ -26,11 +25,18 @@ AssistantSettingsImpl::AssistantSettingsImpl(ServiceContext* context)
 AssistantSettingsImpl::~AssistantSettingsImpl() = default;
 
 void AssistantSettingsImpl::Initialize(
-    mojo::PendingRemote<
-        chromeos::libassistant::mojom::SpeakerIdEnrollmentController> remote,
-    chromeos::libassistant::mojom::SettingsController* settings_controller) {
+    mojo::PendingRemote<libassistant::mojom::SpeakerIdEnrollmentController>
+        remote,
+    libassistant::mojom::SettingsController* settings_controller) {
+  DCHECK(!settings_controller_);
+
   speaker_id_enrollment_remote_.Bind(std::move(remote));
   settings_controller_ = settings_controller;
+}
+
+void AssistantSettingsImpl::Stop() {
+  speaker_id_enrollment_remote_.reset();
+  settings_controller_ = nullptr;
 }
 
 void AssistantSettingsImpl::GetSettings(const std::string& selector,
@@ -68,8 +74,7 @@ void AssistantSettingsImpl::StopSpeakerIdEnrollment() {
 }
 
 void AssistantSettingsImpl::SyncSpeakerIdEnrollmentStatus() {
-  if (assistant_state()->allowed_state() !=
-          chromeos::assistant::AssistantAllowedState::ALLOWED ||
+  if (assistant_state()->allowed_state() != AssistantAllowedState::ALLOWED ||
       features::IsVoiceMatchDisabled()) {
     return;
   }
@@ -97,7 +102,7 @@ void AssistantSettingsImpl::SyncDeviceAppsStatus(
 }
 
 void AssistantSettingsImpl::HandleSpeakerIdEnrollmentStatusSync(
-    chromeos::libassistant::mojom::SpeakerIdEnrollmentStatusPtr status) {
+    libassistant::mojom::SpeakerIdEnrollmentStatusPtr status) {
   if (!status->user_model_exists) {
     // If hotword is enabled but there is no voice model found, launch the
     // enrollment flow.
@@ -140,19 +145,18 @@ void AssistantSettingsImpl::HandleDeviceAppsStatusSync(
   std::move(callback).Run(gaia_user_context_ui.device_apps_enabled());
 }
 
-ash::AssistantStateBase* AssistantSettingsImpl::assistant_state() {
+AssistantStateBase* AssistantSettingsImpl::assistant_state() {
   return context_->assistant_state();
 }
 
-ash::AssistantController* AssistantSettingsImpl::assistant_controller() {
+AssistantController* AssistantSettingsImpl::assistant_controller() {
   return context_->assistant_controller();
 }
 
-chromeos::libassistant::mojom::SettingsController&
+libassistant::mojom::SettingsController&
 AssistantSettingsImpl::settings_controller() {
   DCHECK(settings_controller_);
   return *settings_controller_;
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

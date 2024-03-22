@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -159,8 +159,7 @@ TEST_F(NaClValidationCacheTest, SerializeDeserializeTruncated) {
 
   base::Pickle pickle;
   cache1.Serialize(&pickle);
-  base::Pickle truncated(static_cast<const char*>(pickle.data()),
-                         pickle.size() - 20);
+  base::Pickle truncated(pickle.data_as_char(), pickle.size() - 20);
   ASSERT_FALSE(cache2.Deserialize(&truncated));
   ASSERT_EQ(0, (int) cache2.size());
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,14 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
 #include "chrome/browser/feature_guide/notifications/feature_type.h"
 #include "chrome/browser/notifications/scheduler/public/notification_scheduler_client.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/segmentation_platform/public/features.h"
 
 namespace notifications {
 class NotificationSchedulerClient;
@@ -24,17 +26,14 @@ namespace feature_guide {
 namespace features {
 
 // Main feature flag for the feature notification guide feature.
-extern const base::Feature kFeatureNotificationGuide;
-
-// Feature flag used for running the segmentation model for low engaged users.
-extern const base::Feature kSegmentationModelLowEngagedUsers;
+BASE_DECLARE_FEATURE(kFeatureNotificationGuide);
 
 // Feature flag to determine whether to skip check for the low engaged users.
-extern const base::Feature kSkipCheckForLowEngagedUsers;
+BASE_DECLARE_FEATURE(kSkipCheckForLowEngagedUsers);
 
 // Feature flag to determine whether feature engagement tracker should be used
 // instead of segmentation platform.
-extern const base::Feature kUseFeatureEngagementForUserTargeting;
+BASE_DECLARE_FEATURE(kUseFeatureEngagementForUserTargeting);
 
 }  // namespace features
 
@@ -77,7 +76,7 @@ class FeatureNotificationGuideService : public KeyedService,
     virtual ~Delegate();
 
    private:
-    FeatureNotificationGuideService* service_{nullptr};
+    raw_ptr<FeatureNotificationGuideService> service_{nullptr};
   };
 
   using NotificationDataCallback = base::OnceCallback<void(

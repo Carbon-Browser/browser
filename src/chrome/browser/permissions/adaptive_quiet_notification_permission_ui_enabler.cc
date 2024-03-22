@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,10 @@
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/adapters.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/values_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
@@ -28,6 +29,7 @@
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "components/permissions/features.h"
 #include "components/permissions/permission_actions_history.h"
 #include "components/permissions/permission_request_enums.h"
 #include "components/permissions/permission_util.h"
@@ -35,6 +37,10 @@
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/scoped_user_pref_update.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/profiles/profile_helper.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace {
 
@@ -46,7 +52,7 @@ constexpr int kConsecutiveDeniesThresholdForActivation = 3u;
 constexpr char kDidAdaptivelyEnableQuietUiInPrefs[] =
     "Permissions.QuietNotificationPrompts.DidEnableAdapativelyInPrefs";
 constexpr char kIsQuietUiEnabledInPrefs[] =
-    "Permissions.QuietNotificationPrompts.IsEnabledInPrefs";
+    "Permissions.QuietNotificationPrompts.RegularProfile.IsEnabledInPrefs";
 constexpr char kQuietUiEnabledStateInPrefsChangedTo[] =
     "Permissions.QuietNotificationPrompts.EnabledStateInPrefsChangedTo";
 
@@ -97,25 +103,24 @@ AdaptiveQuietNotificationPermissionUiEnabler::Factory::GetInstance() {
 }
 
 AdaptiveQuietNotificationPermissionUiEnabler::Factory::Factory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AdaptiveQuietNotificationPermissionUiEnabler",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 
-AdaptiveQuietNotificationPermissionUiEnabler::Factory::~Factory() {}
+AdaptiveQuietNotificationPermissionUiEnabler::Factory::~Factory() = default;
 
-KeyedService*
-AdaptiveQuietNotificationPermissionUiEnabler::Factory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
-  return new AdaptiveQuietNotificationPermissionUiEnabler(
+std::unique_ptr<KeyedService> AdaptiveQuietNotificationPermissionUiEnabler::
+    Factory::BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
+  return std::make_unique<AdaptiveQuietNotificationPermissionUiEnabler>(
       static_cast<Profile*>(context));
-}
-
-content::BrowserContext*
-AdaptiveQuietNotificationPermissionUiEnabler::Factory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
 }
 
 // AdaptiveQuietNotificationPermissionUiEnabler ------------------------------
@@ -195,21 +200,36 @@ AdaptiveQuietNotificationPermissionUiEnabler::
           &AdaptiveQuietNotificationPermissionUiEnabler::OnQuietUiStateChanged,
           base::Unretained(this)));
 
-  // Record whether the quiet UI is enabled, but only when notifications are not
-  // completely blocked.
-  auto* host_content_settings_map =
-      HostContentSettingsMapFactory::GetForProfile(profile_);
-  const ContentSetting notifications_setting =
-      host_content_settings_map->GetDefaultContentSetting(
-          ContentSettingsType::NOTIFICATIONS, nullptr /* provider_id */);
-  if (notifications_setting != CONTENT_SETTING_BLOCK) {
-    const bool is_quiet_ui_enabled_in_prefs = profile_->GetPrefs()->GetBoolean(
-        prefs::kEnableQuietNotificationPermissionUi);
-    base::UmaHistogramBoolean(kIsQuietUiEnabledInPrefs,
-                              is_quiet_ui_enabled_in_prefs);
+  bool should_record_metrics = profile_->IsRegularProfile();
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // ChromeOS creates various irregular profiles (login, lock screen...); they
+  // are of type kRegular (returns true for `Profile::IsRegular()`), that aren't
+  // used to browse the web and users can't configure. Don't collect metrics
+  // about them.
+  should_record_metrics =
+      should_record_metrics && ash::ProfileHelper::IsUserProfile(profile_);
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  if (should_record_metrics) {
+    // Record whether the quiet UI is enabled, but only when notifications are
+    // not completely blocked.
+    auto* host_content_settings_map =
+        HostContentSettingsMapFactory::GetForProfile(profile_);
+    const ContentSetting notifications_setting =
+        host_content_settings_map->GetDefaultContentSetting(
+            ContentSettingsType::NOTIFICATIONS, nullptr /* provider_id */);
+
+    if (notifications_setting != CONTENT_SETTING_BLOCK) {
+      const bool is_quiet_ui_enabled_in_prefs =
+          profile_->GetPrefs()->GetBoolean(
+              prefs::kEnableQuietNotificationPermissionUi);
+      base::UmaHistogramBoolean(kIsQuietUiEnabledInPrefs,
+                                is_quiet_ui_enabled_in_prefs);
+    }
   }
 
   BackfillEnablingMethodIfMissing();
+  MigrateAdaptiveNotificationQuietingToCPSS();
 }
 
 AdaptiveQuietNotificationPermissionUiEnabler::
@@ -254,9 +274,9 @@ void AdaptiveQuietNotificationPermissionUiEnabler::
   }
 
   // `kQuietNotificationPermissionUiEnablingMethod` was not populated prior to
-  // M88, but `kQuietNotificationPermissionShouldShowPromo` is a solid indicator
-  // as to how the setting was enabled in the first place because it's only set
-  // to true when the quiet UI has been enabled adaptively.
+  // M88, but `kQuietNotificationPermissionShouldShowPromo` is a solid
+  // indicator as to how the setting was enabled in the first place because
+  // it's only set to true when the quiet UI has been enabled adaptively.
   const bool has_enabled_adaptively = profile_->GetPrefs()->GetBoolean(
       prefs::kQuietNotificationPermissionShouldShowPromo);
 
@@ -264,4 +284,37 @@ void AdaptiveQuietNotificationPermissionUiEnabler::
       prefs::kQuietNotificationPermissionUiEnablingMethod,
       static_cast<int>(has_enabled_adaptively ? EnablingMethod::kAdaptive
                                               : EnablingMethod::kManual));
+}
+
+void AdaptiveQuietNotificationPermissionUiEnabler::
+    MigrateAdaptiveNotificationQuietingToCPSS() {
+  if (!base::FeatureList::IsEnabled(
+          permissions::features::kPermissionDedicatedCpssSetting)) {
+    return;
+  }
+  if (profile_->GetPrefs()->GetBoolean(
+          prefs::kDidMigrateAdaptiveNotifiationQuietingToCPSS)) {
+    return;
+  }
+
+  const bool is_quiet_ui_enabled_in_prefs = profile_->GetPrefs()->GetBoolean(
+      prefs::kEnableQuietNotificationPermissionUi);
+  const EnablingMethod enabling_method =
+      QuietNotificationPermissionUiState::GetQuietUiEnablingMethod(profile_);
+  if (is_quiet_ui_enabled_in_prefs &&
+      enabling_method == EnablingMethod::kManual) {
+    profile_->GetPrefs()->SetBoolean(prefs::kEnableNotificationCPSS,
+                                     /*value=*/false);
+  } else {
+    profile_->GetPrefs()->SetBoolean(prefs::kEnableNotificationCPSS,
+                                     /*value=*/true);
+    profile_->GetPrefs()->SetBoolean(
+        prefs::kEnableQuietNotificationPermissionUi, /*value=*/false);
+  }
+
+  profile_->GetPrefs()->SetBoolean(
+      prefs::kDidMigrateAdaptiveNotifiationQuietingToCPSS,
+      /*value=*/true);
+  profile_->GetPrefs()->ClearPref(
+      prefs::kQuietNotificationPermissionUiEnablingMethod);
 }

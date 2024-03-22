@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "base/bind.h"
+#include "base/apple/bundle_locations.h"
+#import "base/apple/foundation_util.h"
+#include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/mac/bundle_locations.h"
-#import "base/mac/foundation_util.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/path_service.h"
 #include "base/strings/sys_string_conversions.h"
@@ -25,15 +26,17 @@
 #include "chrome/browser/first_run/first_run.h"
 #include "chrome/browser/mac/install_from_dmg.h"
 #import "chrome/browser/mac/keystone_glue.h"
-#include "chrome/browser/mac/mac_startup_profiler.h"
 #include "chrome/browser/ui/cocoa/main_menu_builder.h"
+#include "chrome/browser/updater/browser_updater_client_util.h"
+#include "chrome/browser/updater/scheduler.h"
 #include "chrome/common/channel_info.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/metrics/metrics_service.h"
-#include "components/os_crypt/os_crypt.h"
+#include "components/os_crypt/sync/os_crypt.h"
 #include "components/version_info/channel.h"
 #include "content/public/common/main_function_params.h"
 #include "content/public/common/result_codes.h"
@@ -44,10 +47,6 @@
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/resource/resource_handle.h"
 #include "ui/native_theme/native_theme_mac.h"
-
-#if BUILDFLAG(ENABLE_CHROMIUM_UPDATER)
-#include "chrome/browser/mac/install_updater.h"
-#endif  // BUILDFLAG(ENABLE_CHROMIUM_UPDATER)
 
 // ChromeBrowserMainPartsMac ---------------------------------------------------
 
@@ -71,22 +70,24 @@ int ChromeBrowserMainPartsMac::PreEarlyInitialization() {
 }
 
 void ChromeBrowserMainPartsMac::PreCreateMainMessageLoop() {
-  MacStartupProfiler::GetInstance()->Profile(
-      MacStartupProfiler::PRE_MAIN_MESSAGE_LOOP_START);
   ChromeBrowserMainPartsPosix::PreCreateMainMessageLoop();
 
   // ChromeBrowserMainParts should have loaded the resource bundle by this
   // point (needed to load the nib).
   CHECK(ui::ResourceBundle::HasSharedInstance());
 
-#if BUILDFLAG(ENABLE_CHROMIUM_UPDATER)
-  InstallUpdaterAndRegisterBrowser();
-#else
-  // This is a no-op if the KeystoneRegistration framework is not present.
-  // The framework is only distributed with branded Google Chrome builds.
-  [[KeystoneGlue defaultKeystoneGlue] registerWithKeystone];
-#endif  // BUILDFLAG(ENABLE_CHROMIUM_UPDATER)
+#if BUILDFLAG(ENABLE_UPDATER)
+  if (base::FeatureList::IsEnabled(features::kUseChromiumUpdater)) {
+    EnsureUpdater(base::DoNothing(), base::DoNothing());
+  } else {
+    // This is a no-op if the KeystoneRegistration framework is not present.
+    // The framework is only distributed with branded Google Chrome builds.
+    [[KeystoneGlue defaultKeystoneGlue] registerWithKeystone];
+  }
+  updater::SchedulePeriodicTasks();
+#endif  // BUILDFLAG(ENABLE_UPDATER)
 
+#if !BUILDFLAG(CHROME_FOR_TESTING)
   // Disk image installation is sort of a first-run task, so it shares the
   // no first run switches.
   //
@@ -107,11 +108,12 @@ void ChromeBrowserMainPartsMac::PreCreateMainMessageLoop() {
       exit(0);
     }
   }
+#endif  // !BUILDFLAG(CHROME_FOR_TESTING)
 
-  // Create the app delegate. This object is intentionally leaked as a global
-  // singleton. It is accessed through -[NSApp delegate].
-  AppController* app_controller = [[AppController alloc] init];
-  [NSApp setDelegate:app_controller];
+  // Create the app delegate by requesting the shared AppController.
+  CHECK_EQ(nil, NSApp.delegate);
+  AppController* app_controller = AppController.sharedController;
+  CHECK_NE(nil, NSApp.delegate);
 
   chrome::BuildMainMenu(NSApp, app_controller,
                         l10n_util::GetStringUTF16(IDS_PRODUCT_NAME), false);
@@ -134,16 +136,12 @@ void ChromeBrowserMainPartsMac::PreCreateMainMessageLoop() {
 }
 
 void ChromeBrowserMainPartsMac::PostCreateMainMessageLoop() {
-  MacStartupProfiler::GetInstance()->Profile(
-      MacStartupProfiler::POST_MAIN_MESSAGE_LOOP_START);
   ChromeBrowserMainPartsPosix::PostCreateMainMessageLoop();
 
   net::InitializeTrustStoreMacCache();
 }
 
 void ChromeBrowserMainPartsMac::PreProfileInit() {
-  MacStartupProfiler::GetInstance()->Profile(
-      MacStartupProfiler::PRE_PROFILE_INIT);
   ChromeBrowserMainPartsPosix::PreProfileInit();
 
   // This is called here so that the app shim socket is only created after
@@ -153,11 +151,6 @@ void ChromeBrowserMainPartsMac::PreProfileInit() {
 
 void ChromeBrowserMainPartsMac::PostProfileInit(Profile* profile,
                                                 bool is_initial_profile) {
-  if (is_initial_profile) {
-    MacStartupProfiler::GetInstance()->Profile(
-        MacStartupProfiler::POST_PROFILE_INIT);
-  }
-
   ChromeBrowserMainPartsPosix::PostProfileInit(profile, is_initial_profile);
 
   if (!is_initial_profile)
@@ -174,7 +167,5 @@ void ChromeBrowserMainPartsMac::PostProfileInit(Profile* profile,
 }
 
 void ChromeBrowserMainPartsMac::DidEndMainMessageLoop() {
-  AppController* appController =
-      base::mac::ObjCCastStrict<AppController>([NSApp delegate]);
-  [appController didEndMainMessageLoop];
+  [AppController.sharedController didEndMainMessageLoop];
 }

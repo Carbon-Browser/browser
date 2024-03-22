@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -28,9 +28,9 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/extensions/extension_test_util.h"
 #include "chrome/grit/generated_resources.h"
@@ -95,8 +95,8 @@ class ExtensionInstallDialogViewTestBase
   content::WebContents* web_contents() { return web_contents_; }
 
  private:
-  raw_ptr<const extensions::Extension> extension_;
-  raw_ptr<content::WebContents> web_contents_;
+  raw_ptr<const extensions::Extension, AcrossTasksDanglingUntriaged> extension_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_;
 };
 
 ExtensionInstallDialogViewTestBase::ExtensionInstallDialogViewTestBase()
@@ -226,8 +226,8 @@ class ExtensionInstallDialogViewTest
 
 IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewTest, NotifyDelegate) {
   {
-    // User presses install. Note that we have to wait for the 0ms delay for
-    // the install button to become enabled, hence the RunLoop later.
+    // User presses install. Note that we have to wait for the 0ms delay for the
+    // install button to become enabled, hence the RunLoop later.
     ExtensionInstallDialogView::SetInstallButtonDelayForTesting(0);
     ExtensionInstallPromptTestHelper helper;
     ExtensionInstallDialogView* delegate_view = CreateAndShowPrompt(&helper);
@@ -308,8 +308,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewTest,
     int tab1_idx = tab_strip_model->GetIndexOfWebContents(originator_contents);
     content::WebContentsDestroyedWatcher tab_destroyed_watcher(
         tab_strip_model->GetWebContentsAt(tab1_idx));
-    EXPECT_TRUE(tab_strip_model->CloseWebContentsAt(tab1_idx,
-                                                    TabStripModel::CLOSE_NONE));
+    int previous_tab_count = tab_strip_model->count();
+    tab_strip_model->CloseWebContentsAt(tab1_idx, TabCloseTypes::CLOSE_NONE);
+    EXPECT_EQ(previous_tab_count - 1, tab_strip_model->count());
     tab_destroyed_watcher.Wait();
   }
 
@@ -397,8 +398,6 @@ class ExtensionInstallDialogViewInteractiveBrowserTest
       prompt->AddPermissionSet(*permission_set_);
     else
       prompt->AddPermissionMessages(permission_messages_);
-    prompt->set_retained_files(retained_files_);
-    prompt->set_retained_device_messages(retained_devices_);
 
     if (from_webstore_)
       prompt->SetWebstoreData("69,420", true, 2.5, 37);
@@ -426,14 +425,6 @@ class ExtensionInstallDialogViewInteractiveBrowserTest
         PermissionMessage(base::ASCIIToUTF16(permission), PermissionIDSet()));
   }
 
-  void AddRetainedFile(const base::FilePath& path) {
-    retained_files_.push_back(path);
-  }
-
-  void AddRetainedDevice(const std::string& device) {
-    retained_devices_.push_back(base::ASCIIToUTF16(device));
-  }
-
   void AddPermissionWithDetails(
       std::string main_permission,
       std::vector<std::u16string> detailed_permissions) {
@@ -448,8 +439,6 @@ class ExtensionInstallDialogViewInteractiveBrowserTest
   bool from_webstore_ = false;
   std::unique_ptr<PermissionSet> permission_set_;
   PermissionMessages permission_messages_;
-  std::vector<base::FilePath> retained_files_;
-  std::vector<std::u16string> retained_devices_;
 
   base::test::ScopedFeatureList feature_list_;
 };
@@ -475,21 +464,6 @@ IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
 IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
                        InvokeUi_ReEnable) {
   set_type(ExtensionInstallPrompt::RE_ENABLE_PROMPT);
-  AddPermission("Example permission");
-  ShowAndVerifyUi();
-}
-
-IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_FromWebstore) {
-  set_type(ExtensionInstallPrompt::WEBSTORE_WIDGET_PROMPT);
-  set_from_webstore();
-  ShowAndVerifyUi();
-}
-
-IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_FromWebstoreWithPermission) {
-  set_type(ExtensionInstallPrompt::WEBSTORE_WIDGET_PROMPT);
-  set_from_webstore();
   AddPermission("Example permission");
   ShowAndVerifyUi();
 }
@@ -531,27 +505,6 @@ IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
   ShowAndVerifyUi();
 }
 
-IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_WithRetainedFiles) {
-  AddRetainedFile(base::FilePath(FILE_PATH_LITERAL("/dev/null")));
-  AddRetainedFile(base::FilePath(FILE_PATH_LITERAL("/dev/zero")));
-  AddRetainedFile(base::FilePath(FILE_PATH_LITERAL("/dev/random")));
-  AddRetainedFile(base::FilePath(FILE_PATH_LITERAL(
-      "/some/very/very/very/very/very/long/path/longer/than/the/"
-      "line/length/file_with_long_name_too.txt")));
-  ShowAndVerifyUi();
-}
-
-IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_WithRetainedDevices) {
-  AddRetainedDevice("USB Device");
-  AddRetainedDevice("USB Device With Longer Name");
-  AddRetainedDevice(
-      "Another USB Device With A Very Very Very Very Very Very "
-      "Long Name So That It Hopefully Wraps to A New Line");
-  ShowAndVerifyUi();
-}
-
 // TODO(https://crbug.com/1126741): Flaky on Win10.
 #if BUILDFLAG(IS_WIN)
 #define MAYBE_InvokeUi_WithWithholdingOption \
@@ -573,14 +526,18 @@ IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
   ShowAndVerifyUi();
 }
 
+// TODO(crbug.com/1445932): Flaky on Win10.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_InvokeUi_AllInfoTypes DISABLED_InvokeUi_AllInfoTypes
+#else
+#define MAYBE_InvokeUi_AllInfoTypes InvokeUi_AllInfoTypes
+#endif
 IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_AllInfoTypes) {
+                       MAYBE_InvokeUi_AllInfoTypes) {
   AddPermission("Example permission");
   AddPermissionWithDetails(
       "This permission has details",
       {u"Detailed permission 1", u"Detailed permission 2"});
-  AddRetainedDevice("USB Device");
-  AddRetainedFile(base::FilePath(FILE_PATH_LITERAL("/dev/null")));
   ShowAndVerifyUi();
 }
 
@@ -740,7 +697,7 @@ class ExtensionInstallDialogWithWithholdPermissionsUI
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-// Verifies that some UI is displayed in the extra view for withholding
+// Verifies that some UI is displayed in the extra view when withholding
 // permissions on installation.
 IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogWithWithholdPermissionsUI,
                        ShowsWithholdUI) {
@@ -775,10 +732,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogWithWithholdPermissionsUI,
 class ExtensionInstallDialogViewRequestTest
     : public ExtensionInstallDialogViewTestBase {
  public:
-  ExtensionInstallDialogViewRequestTest() {
-    feature_list_.InitAndEnableFeature(
-        features::kExtensionWorkflowJustification);
-  }
+  ExtensionInstallDialogViewRequestTest() = default;
   ExtensionInstallDialogViewRequestTest(
       const ExtensionInstallDialogViewRequestTest&) = delete;
   ExtensionInstallDialogViewRequestTest& operator=(
@@ -807,9 +761,6 @@ class ExtensionInstallDialogViewRequestTest
 
     return delegate_view;
   }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(ExtensionInstallDialogViewRequestTest, NotifyDelegate) {

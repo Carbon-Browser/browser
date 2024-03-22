@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,13 +16,16 @@
 #include "ash/app_list/model/search/search_model.h"
 #include "ash/app_list/model/search/search_result.h"
 #include "ash/app_list/views/app_list_item_view.h"
+#include "ash/app_list/views/app_list_keyboard_controller.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
 #include "ash/public/cpp/app_list/app_list_config_provider.h"
 #include "ash/public/cpp/app_list/app_list_notifier.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/string_util.h"
 #include "extensions/common/constants.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -39,18 +42,6 @@ namespace {
 constexpr size_t kMinRecommendedApps = 4;
 constexpr size_t kMaxRecommendedApps = 5;
 
-// Sorts increasing by display index, then decreasing by position priority.
-struct CompareByDisplayIndexAndPositionPriority {
-  bool operator()(const SearchResult* result1,
-                  const SearchResult* result2) const {
-    SearchResultDisplayIndex index1 = result1->display_index();
-    SearchResultDisplayIndex index2 = result2->display_index();
-    if (index1 != index2)
-      return index1 < index2;
-    return result1->position_priority() > result2->position_priority();
-  }
-};
-
 // Converts a search result app ID to an app list item ID.
 std::string ItemIdFromAppId(const std::string& app_id) {
   // Convert chrome-extension://<id> to just <id>.
@@ -61,33 +52,49 @@ std::string ItemIdFromAppId(const std::string& app_id) {
   return app_id;
 }
 
+struct RecentAppInfo {
+  RecentAppInfo(AppListItem* item, SearchResult* result)
+      : item(item), result(result) {}
+  RecentAppInfo(const RecentAppInfo&) = default;
+  RecentAppInfo& operator=(RecentAppInfo&) = default;
+  ~RecentAppInfo() = default;
+
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION AppListItem* item;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION SearchResult* result;
+};
+
 // Returns a list of recent apps by filtering zero-state suggestion data.
-std::vector<SearchResult*> GetRecentApps(
+std::vector<RecentAppInfo> GetRecentApps(
+    AppListModel* model,
     SearchModel* search_model,
     const std::vector<std::string>& ids_to_ignore) {
+  std::vector<RecentAppInfo> recent_apps;
+
   SearchModel::SearchResults* results = search_model->results();
-  auto filter_function = base::BindRepeating(
-      [](const std::vector<std::string>& ids_to_ignore,
-         const SearchResult& r) -> bool {
-        if (r.display_type() != SearchResultDisplayType::kRecentApps)
-          return false;
+  for (size_t i = 0; i < results->item_count(); ++i) {
+    SearchResult* result = results->GetItemAt(i);
+    if (result->display_type() != SearchResultDisplayType::kRecentApps)
+      continue;
 
-        for (std::string id : ids_to_ignore) {
-          if (base::EndsWith(r.id(), id))
-            return false;
-        }
+    std::string item_id = ItemIdFromAppId(result->id());
+    if (base::Contains(ids_to_ignore, item_id))
+      continue;
 
-        return true;
-      },
-      ids_to_ignore);
-  std::vector<SearchResult*> app_suggestion_results =
-      SearchModel::FilterSearchResultsByFunction(
-          results, filter_function,
-          /*max_results=*/kMaxRecommendedApps);
+    AppListItem* item = model->FindItem(item_id);
+    if (!item)
+      continue;
 
-  std::sort(app_suggestion_results.begin(), app_suggestion_results.end(),
-            CompareByDisplayIndexAndPositionPriority());
-  return app_suggestion_results;
+    recent_apps.emplace_back(item, result);
+
+    if (recent_apps.size() == kMaxRecommendedApps)
+      break;
+  }
+
+  return recent_apps;
 }
 
 }  // namespace
@@ -114,6 +121,7 @@ class RecentAppsView::GridDelegateImpl : public AppListItemView::GridDelegate {
     selected_view_ = view;
     // Ensure the translucent background of this selection is painted.
     selected_view_->SchedulePaint();
+    selected_view_->NotifyAccessibilityEvent(ax::mojom::Event::kFocus, true);
   }
   void ClearSelectedView() override { selected_view_ = nullptr; }
   bool IsSelectedView(const AppListItemView* view) const override {
@@ -145,16 +153,17 @@ class RecentAppsView::GridDelegateImpl : public AppListItemView::GridDelegate {
   }
 
  private:
-  AppListViewDelegate* const view_delegate_;
-  AppListItemView* selected_view_ = nullptr;
+  const raw_ptr<AppListViewDelegate, ExperimentalAsh> view_delegate_;
+  raw_ptr<AppListItemView, DanglingUntriaged | ExperimentalAsh> selected_view_ =
+      nullptr;
 };
 
-RecentAppsView::RecentAppsView(Delegate* delegate,
+RecentAppsView::RecentAppsView(AppListKeyboardController* keyboard_controller,
                                AppListViewDelegate* view_delegate)
-    : delegate_(delegate),
+    : keyboard_controller_(keyboard_controller),
       view_delegate_(view_delegate),
       grid_delegate_(std::make_unique<GridDelegateImpl>(view_delegate_)) {
-  DCHECK(delegate_);
+  DCHECK(keyboard_controller_);
   DCHECK(view_delegate_);
   layout_ = SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kHorizontal));
@@ -202,17 +211,9 @@ void RecentAppsView::UpdateResults(
   item_views_.clear();
   RemoveAllChildViews();
 
-  std::vector<SearchResult*> apps = GetRecentApps(search_model_, ids_to_ignore);
-  std::vector<AppListItem*> items;
-
-  for (SearchResult* app : apps) {
-    std::string item_id = ItemIdFromAppId(app->id());
-    AppListItem* item = model_->FindItem(item_id);
-    if (item)
-      items.push_back(item);
-  }
-
-  if (items.size() < kMinRecommendedApps) {
+  std::vector<RecentAppInfo> apps =
+      GetRecentApps(model_, search_model_, ids_to_ignore);
+  if (apps.size() < kMinRecommendedApps) {
     if (auto* notifier = view_delegate_->GetNotifier()) {
       notifier->NotifyResultsUpdated(SearchResultDisplayType::kRecentApps, {});
     }
@@ -221,15 +222,16 @@ void RecentAppsView::UpdateResults(
 
   if (auto* notifier = view_delegate_->GetNotifier()) {
     std::vector<AppListNotifier::Result> notifier_results;
-    for (const SearchResult* app : apps)
-      notifier_results.emplace_back(app->id(), app->metrics_type());
+    for (const RecentAppInfo& app : apps)
+      notifier_results.emplace_back(app.result->id(),
+                                    app.result->metrics_type());
     notifier->NotifyResultsUpdated(SearchResultDisplayType::kRecentApps,
                                    notifier_results);
   }
 
-  for (AppListItem* item : items) {
+  for (const RecentAppInfo& app : apps) {
     auto* item_view = AddChildView(std::make_unique<AppListItemView>(
-        app_list_config_, grid_delegate_.get(), item, view_delegate_,
+        app_list_config_, grid_delegate_.get(), app.item, view_delegate_,
         AppListItemView::Context::kRecentAppsView));
     item_view->UpdateAppListConfig(app_list_config_);
     item_views_.push_back(item_view);
@@ -312,7 +314,7 @@ void RecentAppsView::MoveFocusUp() {
   // This function should only run when a child has focus.
   DCHECK(Contains(GetFocusManager()->GetFocusedView()));
   DCHECK(!children().empty());
-  delegate_->MoveFocusUpFromRecents();
+  keyboard_controller_->MoveFocusUpFromRecents();
 }
 
 void RecentAppsView::MoveFocusDown() {
@@ -321,7 +323,7 @@ void RecentAppsView::MoveFocusDown() {
   DCHECK(Contains(GetFocusManager()->GetFocusedView()));
   int column = GetColumnOfFocusedChild();
   DCHECK_GE(column, 0);
-  delegate_->MoveFocusDownFromRecents(column);
+  keyboard_controller_->MoveFocusDownFromRecents(column);
 }
 
 int RecentAppsView::GetColumnOfFocusedChild() const {

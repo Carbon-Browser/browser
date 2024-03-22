@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,7 +86,7 @@ class VIEWS_EXPORT MenuClosureAnimationMac
   std::unique_ptr<gfx::Animation> fade_animation_;
   raw_ptr<MenuItemView> item_;
   raw_ptr<SubmenuView> menu_;
-  AnimationStep step_;
+  AnimationStep step_ = AnimationStep::kStart;
 };
 
 }  // namespace views

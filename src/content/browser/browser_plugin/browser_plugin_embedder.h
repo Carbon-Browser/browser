@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,16 +55,8 @@ class BrowserPluginEmbedder {
 
   BrowserPluginGuestManager* GetBrowserPluginGuestManager() const;
 
-  // Closes modal dialogs in |guest_web_contents|.
-  static bool CancelDialogs(WebContents* guest_web_contents);
-
-  static bool UnlockMouseIfNecessaryCallback(bool* mouse_unlocked,
-                                             WebContents* guest);
-
-  static bool GuestCurrentlyAudibleCallback(WebContents* guest);
-
   // Pointer to the WebContentsImpl that owns this object.
-  raw_ptr<WebContentsImpl> web_contents_;
+  raw_ptr<WebContentsImpl, DanglingUntriaged> web_contents_;
 };
 
 }  // namespace content

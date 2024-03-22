@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/cfm_hotline_client.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -15,8 +15,6 @@ namespace ash::cfm {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
-namespace cros_healthd = ::chromeos::cros_healthd;
 namespace mojom = ::chromeos::cfm::mojom;
 
 static DiagnosticsService* g_info_service = nullptr;
@@ -50,23 +48,26 @@ bool DiagnosticsService::IsInitialized() {
 
 void DiagnosticsService::GetCrosHealthdTelemetry(
     GetCrosHealthdTelemetryCallback callback) {
-  cros_healthd::ServiceConnection::GetInstance()->ProbeTelemetryInfo(
-      {cros_healthd::mojom::ProbeCategoryEnum::kNonRemovableBlockDevices,
-       cros_healthd::mojom::ProbeCategoryEnum::kCpu,
-       cros_healthd::mojom::ProbeCategoryEnum::kTimezone,
-       cros_healthd::mojom::ProbeCategoryEnum::kMemory,
-       cros_healthd::mojom::ProbeCategoryEnum::kFan,
-       cros_healthd::mojom::ProbeCategoryEnum::kStatefulPartition,
-       cros_healthd::mojom::ProbeCategoryEnum::kSystem,
-       cros_healthd::mojom::ProbeCategoryEnum::kNetwork},
-      std::move(callback));
+  cros_healthd::ServiceConnection::GetInstance()
+      ->GetProbeService()
+      ->ProbeTelemetryInfo(
+          {cros_healthd::mojom::ProbeCategoryEnum::kNonRemovableBlockDevices,
+           cros_healthd::mojom::ProbeCategoryEnum::kCpu,
+           cros_healthd::mojom::ProbeCategoryEnum::kTimezone,
+           cros_healthd::mojom::ProbeCategoryEnum::kMemory,
+           cros_healthd::mojom::ProbeCategoryEnum::kFan,
+           cros_healthd::mojom::ProbeCategoryEnum::kStatefulPartition,
+           cros_healthd::mojom::ProbeCategoryEnum::kSystem,
+           cros_healthd::mojom::ProbeCategoryEnum::kNetwork},
+          std::move(callback));
 }
 
 void DiagnosticsService::GetCrosHealthdProcessInfo(
     uint32_t pid,
     GetCrosHealthdProcessInfoCallback callback) {
-  cros_healthd::ServiceConnection::GetInstance()->ProbeProcessInfo(
-      static_cast<pid_t>(pid), std::move(callback));
+  cros_healthd::ServiceConnection::GetInstance()
+      ->GetProbeService()
+      ->ProbeProcessInfo(static_cast<pid_t>(pid), std::move(callback));
 }
 
 bool DiagnosticsService::ServiceRequestReceived(

@@ -1,12 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/lacros/account_manager/account_profile_mapper.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
@@ -14,16 +11,22 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lacros/account_manager/add_account_helper.h"
+#include "chrome/browser/profiles/delete_profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_metrics.h"
 #include "components/account_manager_core/account.h"
+#include "components/account_manager_core/chromeos/account_manager_facade_factory.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "google_apis/gaia/oauth2_access_token_fetcher.h"
 #include "google_apis/gaia/oauth2_access_token_fetcher_immediate_error.h"
@@ -120,6 +123,23 @@ AccountProfileMapper::CreateAccessTokenFetcher(
   }
 
   return account_manager_facade_->CreateAccessTokenFetcher(account, consumer);
+}
+
+void AccountProfileMapper::ReportAuthError(
+    const base::FilePath& profile_path,
+    const account_manager::AccountKey& account,
+    const GoogleServiceAuthError& error) {
+  if (!initialized_) {
+    initialization_callbacks_.push_back(base::BindOnce(
+        &AccountProfileMapper::ReportAuthError, weak_factory_.GetWeakPtr(),
+        profile_path, account, error));
+    return;
+  }
+
+  if (!ProfileContainsAccount(profile_path, account))
+    return;
+
+  account_manager_facade_->ReportAuthError(account, error);
 }
 
 void AccountProfileMapper::GetAccountsMap(MapAccountsCallback callback) {
@@ -272,6 +292,35 @@ void AccountProfileMapper::OnAccountRemoved(
   account_manager_facade_->GetAccounts(
       base::BindOnce(&AccountProfileMapper::OnGetAccountsCompleted,
                      weak_factory_.GetWeakPtr()));
+}
+
+void AccountProfileMapper::OnAuthErrorChanged(
+    const account_manager::AccountKey& account,
+    const GoogleServiceAuthError& error) {
+  if (!initialized_) {
+    initialization_callbacks_.push_back(
+        base::BindOnce(&AccountProfileMapper::OnAuthErrorChanged,
+                       weak_factory_.GetWeakPtr(), account, error));
+    return;
+  }
+
+  DCHECK_EQ(account.account_type(), account_manager::AccountType::kGaia);
+  if (!account_cache_.FindAccountByGaiaId(account.id())) {
+    LOG(ERROR) << "Ignoring account error update for unknown account";
+    return;
+  }
+
+  std::vector<ProfileAttributesEntry*> entries =
+      profile_attributes_storage_->GetAllProfilesAttributes();
+  for (const ProfileAttributesEntry* entry : entries) {
+    if (!entry->GetGaiaIds().contains(account.id())) {
+      continue;
+    }
+
+    for (auto& observer : observers_) {
+      observer.OnAuthErrorChanged(entry->GetPath(), account, error);
+    }
+  }
 }
 
 void AccountProfileMapper::OnProfileWillBeRemoved(
@@ -462,9 +511,11 @@ AccountProfileMapper::RemoveStaleAccounts() {
       // profile.
       // TODO(https://crbug.com/1257610): ensure that the user cannot cancel the
       // profile deletion.
-      g_browser_process->profile_manager()->MaybeScheduleProfileForDeletion(
-          entry->GetPath(), base::DoNothing(),
-          ProfileMetrics::DELETE_PROFILE_PRIMARY_ACCOUNT_REMOVED_LACROS);
+      g_browser_process->profile_manager()
+          ->GetDeleteProfileHelper()
+          .MaybeScheduleProfileForDeletion(
+              entry->GetPath(), base::DoNothing(),
+              ProfileMetrics::DELETE_PROFILE_PRIMARY_ACCOUNT_REMOVED_LACROS);
     }
   }
   return removed_ids;
@@ -627,10 +678,12 @@ bool AccountProfileMapper::ShouldDeleteProfile(
 
   if (Profile::IsMainProfilePath(entry->GetPath())) {
     // Never delete the main profile.
-    if (primary_account_deleted) {
+    if (primary_account_deleted && !MaybeGetAshAccountManagerForTests()) {
       // Primary account of the main profile must never be deleted. A CHECK here
       // can possibly put a device in a crash loop, so upload a crash report
       // silently instead.
+      // Do not emit these in tests, as some tests don't have an account in the
+      // main profile, in particular if they are shared with desktop platforms.
       DLOG(ERROR) << "Primary account has been removed from the main profile";
       base::debug::DumpWithoutCrashing();
     }

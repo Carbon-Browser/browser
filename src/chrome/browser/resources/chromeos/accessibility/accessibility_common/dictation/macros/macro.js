@@ -1,6 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {Context, ContextChecker} from '../context_checker.js';
 
 import {MacroName} from './macro_names.js';
 
@@ -16,10 +18,10 @@ export const MacroError = {
   // User intent was poorly formed. For example, a numerical field was set
   // to a string value.
   INVALID_USER_INTENT: 1,
-  // Returned when the user tries to interact with something not present,
+  // Returned when the context is invalid for a macro execution,
   // for example selecting the word "cat" when there is no word "cat" in
   // the text area.
-  NO_MATCH: 2,
+  BAD_CONTEXT: 2,
   // Actuation would fail to be successful. For example, the text area might
   // no longer be active, or the action cannot be taken in the given context.
   FAILED_ACTUATION: 3,
@@ -29,16 +31,14 @@ export const MacroError = {
  * Results of checking whether the macro is able to execute in the current
  * context or the MacroError if not.
  * |canTryAction| is true if the macro could be executed in the current context.
- * |willImmediatelyDisambiguate| is true if the macro would need to disambiguate
- * in order to execute an action. If |canTryAction| is false,
- * |willImmediatelyDisambiguate| may be undefined. Similar to CheckContextResult
- * in google3/intelligence/dbw/proto/macros/results/check_context_result.proto.
+ * Similar to CheckContextResult in
+ * google3/intelligence/dbw/proto/macros/results/check_context_result.proto.
  * TODO(crbug.com/1264544): Information for disambiguation, like a list of
  * matched nodes, could be added here.
  * @typedef {{
  *   canTryAction: boolean,
- *   willImmediatelyDisambiguate: (boolean|undefined),
  *   error: (MacroError|undefined),
+ *   failedContext: (!Context|undefined),
  * }}
  */
 let CheckContextResult;
@@ -62,17 +62,20 @@ let RunMacroResult;
 export class Macro {
   /**
    * @param {MacroName} macroName The name of this macro.
+   * @param {!ContextChecker=} checker
    */
-  constructor(macroName) {
+  constructor(macroName, checker) {
     /** @private {MacroName} */
     this.macroName_ = macroName;
+    /** @private {!ContextChecker|undefined} */
+    this.checker_ = checker;
   }
 
   /**
    * Gets the description of the macro the user intends to execute.
    * @return {MacroName}
    */
-  getMacroName() {
+  getName() {
     return this.macroName_;
   }
 
@@ -80,7 +83,7 @@ export class Macro {
    * Gets the human-readable description of the macro. Useful for debugging.
    * @return {string}
    */
-  getMacroNameString() {
+  getNameAsString() {
     const name =
         Object.keys(MacroName).find(key => MacroName[key] === this.macroName_);
     return name ? name : 'UNKNOWN';
@@ -89,37 +92,49 @@ export class Macro {
   /**
    * Checks whether a macro can attempt to run in the current context.
    * If this macro has several steps, just checks the first step.
-   * @return {CheckContextResult}
-   * @abstract
+   * @return {!CheckContextResult}
    */
-  checkContext() {}
+  checkContext() {
+    if (!this.checker_) {
+      // Unable to check context.
+      return this.createSuccessCheckContextResult_();
+    }
+
+    const failedContext = this.checker_.getFailedContext();
+    if (!failedContext) {
+      return this.createSuccessCheckContextResult_();
+    }
+
+    return this.createFailureCheckContextResult_(
+        MacroError.BAD_CONTEXT, failedContext);
+  }
 
   /**
    * Attempts to execute a macro in the current context.
-   * @returns {RunMacroResult}
+   * @return {RunMacroResult}
    * @abstract
    */
-  runMacro() {}
+  run() {}
 
   /**
    * Protected helper method to create a CheckContextResult with an error.
    * @param {MacroError} error
-   * @return {CheckContextResult}
+   * @param {!Context} failedContext
+   * @return {!CheckContextResult}
    * @protected
    */
-  createFailureCheckContextResult_(error) {
-    return {canTryAction: false, error};
+  createFailureCheckContextResult_(error, failedContext) {
+    return {canTryAction: false, error, failedContext};
   }
 
   /**
    * Protected helper method to create a CheckContextResult representing
    * success.
-   * @param {boolean} willImmediatelyDisambiguate
-   * @return {CheckContextResult}
+   * @return {!CheckContextResult}
    * @protected
    */
-  createSuccessCheckContextResult_(willImmediatelyDisambiguate) {
-    return {canTryAction: true, willImmediatelyDisambiguate};
+  createSuccessCheckContextResult_() {
+    return {canTryAction: true};
   }
 
   /**

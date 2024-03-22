@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,15 +25,24 @@ class TraceEventAdderClassAdapter extends ClassVisitor {
     }
 
     @Override
-    public void visit(int version, int access, String name, String signature, String superName,
+    public void visit(
+            int version,
+            int access,
+            String name,
+            String signature,
+            String superName,
             String[] interfaces) {
         super.visit(version, access, name, signature, superName, interfaces);
         mShortClassName = name.substring(name.lastIndexOf('/') + 1);
     }
 
     @Override
-    public MethodVisitor visitMethod(final int access, final String name, String desc,
-            String signature, String[] exceptions) {
+    public MethodVisitor visitMethod(
+            final int access,
+            final String name,
+            String desc,
+            String signature,
+            String[] exceptions) {
         MethodVisitor mv = super.visitMethod(access, name, desc, signature, exceptions);
 
         for (MethodDescription method : mMethodsToTrace) {

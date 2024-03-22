@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Chromium Authors. All rights reserved.
+ * Copyright 2019 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -62,6 +62,10 @@ self.addEventListener('paymentrequest', (evt) => {
   requestEvent = evt;
   evt.respondWith(new Promise((responder) => {
     respond = responder;
-    evt.openWindow('payment_handler_window.html');
+    paymentHandlerWindow = evt.methodData[0]['data'] !== undefined &&
+            evt.methodData[0]['data']['windowPage'] !== undefined ?
+        evt.methodData[0]['data']['windowPage'] :
+        'payment_handler_window.html';
+    evt.openWindow(paymentHandlerWindow);
   }));
 });

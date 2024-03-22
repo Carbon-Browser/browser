@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/browser_process.h"
@@ -52,6 +52,10 @@ CheckFileSystemAccessWriteRequest::CheckFileSystemAccessWriteRequest(
 CheckFileSystemAccessWriteRequest ::~CheckFileSystemAccessWriteRequest() =
     default;
 
+download::DownloadItem* CheckFileSystemAccessWriteRequest::item() const {
+  return nullptr;
+}
+
 bool CheckFileSystemAccessWriteRequest::IsSupportedDownload(
     DownloadCheckResultReason* reason) {
   if (!FileTypePolicies::GetInstance()->IsCheckedBinaryFile(
@@ -84,8 +88,10 @@ void CheckFileSystemAccessWriteRequest::NotifySendRequest(
       request->referrer_chain().size());
 }
 
-void CheckFileSystemAccessWriteRequest::SetDownloadPingToken(
-    const std::string& token) {
+void CheckFileSystemAccessWriteRequest::SetDownloadProtectionData(
+    const std::string& token,
+    const ClientDownloadResponse::Verdict& verdict,
+    const ClientDownloadResponse::TailoredVerdict& tailored_verdict) {
   // TODO(https://crbug.com/996797): Actually store token for
   // IncidentReportingService usage.
 }
@@ -114,6 +120,20 @@ bool CheckFileSystemAccessWriteRequest::ShouldPromptForDeepScanning(
   return false;
 }
 
+bool CheckFileSystemAccessWriteRequest::ShouldPromptForLocalDecryption(
+    bool server_requests_prompt) const {
+  return false;
+}
+
+bool CheckFileSystemAccessWriteRequest::ShouldPromptForIncorrectPassword()
+    const {
+  return false;
+}
+
+bool CheckFileSystemAccessWriteRequest::ShouldShowScanFailure() const {
+  return false;
+}
+
 void CheckFileSystemAccessWriteRequest::NotifyRequestFinished(
     DownloadCheckResult result,
     DownloadCheckResultReason reason) {
@@ -126,6 +146,10 @@ bool CheckFileSystemAccessWriteRequest::IsAllowlistedByPolicy() const {
   if (!profile)
     return false;
   return IsURLAllowlistedByPolicy(item_->frame_url, *profile->GetPrefs());
+}
+
+void CheckFileSystemAccessWriteRequest::LogDeepScanningPrompt() const {
+  NOTREACHED();
 }
 
 }  // namespace safe_browsing

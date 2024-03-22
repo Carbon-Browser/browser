@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -169,7 +169,8 @@ void GetX509CertSignedEntry(SignedEntryData* entry) {
 }
 
 void GetX509CertTreeLeaf(MerkleTreeLeaf* tree_leaf) {
-  tree_leaf->timestamp = base::Time::FromJsTime(kTestTimestamp);
+  tree_leaf->timestamp =
+      base::Time::FromMillisecondsSinceUnixEpoch(kTestTimestamp);
   GetX509CertSignedEntry(&tree_leaf->signed_entry);
   tree_leaf->extensions = HexDecode(kDefaultExtensions);
 }
@@ -186,7 +187,8 @@ void GetPrecertSignedEntry(SignedEntryData* entry) {
 }
 
 void GetPrecertTreeLeaf(MerkleTreeLeaf* tree_leaf) {
-  tree_leaf->timestamp = base::Time::FromJsTime(kTestTimestamp);
+  tree_leaf->timestamp =
+      base::Time::FromMillisecondsSinceUnixEpoch(kTestTimestamp);
   GetPrecertSignedEntry(&tree_leaf->signed_entry);
   tree_leaf->extensions = HexDecode(kDefaultExtensions);
 }
@@ -372,7 +374,7 @@ std::string CreateConsistencyProofJsonString(
 std::string GetSCTListForTesting() {
   const std::string sct = ct::GetTestSignedCertificateTimestamp();
   std::string sct_list;
-  ct::EncodeSCTListForTesting(sct, &sct_list);
+  ct::EncodeSCTListForTesting({sct}, &sct_list);
   return sct_list;
 }
 
@@ -384,7 +386,7 @@ std::string GetSCTListWithInvalidSCT() {
   sct[15] = 't';
 
   std::string sct_list;
-  ct::EncodeSCTListForTesting(sct, &sct_list);
+  ct::EncodeSCTListForTesting({sct}, &sct_list);
   return sct_list;
 }
 

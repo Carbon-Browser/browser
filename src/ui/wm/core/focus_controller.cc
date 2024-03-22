@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -112,10 +112,15 @@ void FocusController::FocusWindow(aura::Window* window) {
 
 void FocusController::ResetFocusWithinActiveWindow(aura::Window* window) {
   DCHECK(window);
-  if (!active_window_)
+  if (!active_window_) {
     return;
-  if (!active_window_->Contains(window))
+  }
+  if (!active_window_->Contains(window)) {
     return;
+  }
+  if (!rules_->CanFocusWindow(window, nullptr)) {
+    return;
+  }
   SetFocusedWindow(window);
 }
 
@@ -469,7 +474,8 @@ void FocusController::WindowFocusedFromInputEvent(aura::Window* window,
                                                   const ui::Event* event) {
   // For focus follows cursor: avoid activating when `window` is a child of the
   // currently active window.
-  if (event->type() == ui::ET_MOUSE_ENTERED && active_window_ &&
+  bool is_mouse_entered_event = event->type() == ui::ET_MOUSE_ENTERED;
+  if (is_mouse_entered_event && active_window_ &&
       active_window_->Contains(window)) {
     return;
   }
@@ -480,7 +486,7 @@ void FocusController::WindowFocusedFromInputEvent(aura::Window* window,
   if (rules_->CanFocusWindow(GetToplevelWindow(window), event)) {
     FocusAndActivateWindow(
         ActivationChangeObserver::ActivationReason::INPUT_EVENT, window,
-        event->type() == ui::ET_MOUSE_ENTERED);
+        /*no_stacking=*/is_mouse_entered_event);
   }
 }
 

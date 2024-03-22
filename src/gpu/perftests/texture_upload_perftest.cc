@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_enums.h"
 #include "ui/gl/gl_surface.h"
+#include "ui/gl/gl_utils.h"
 #include "ui/gl/gl_version_info.h"
 #include "ui/gl/gpu_timing.h"
 #include "ui/gl/init/gl_factory.h"
@@ -179,7 +180,8 @@ class TextureUploadPerfTest : public testing::Test {
   // Overridden from testing::Test
   void SetUp() override {
     // Initialize an offscreen surface and a gl context.
-    surface_ = gl::init::CreateOffscreenGLSurface(gfx::Size());
+    surface_ = gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(),
+                                                  gfx::Size());
     gl_context_ =
         gl::init::CreateGLContext(nullptr,  // share_group
                                   surface_.get(), gl::GLContextAttribs());
@@ -454,7 +456,7 @@ TEST_F(TextureUploadPerfTest, upload) {
   formats.push_back(GL_RGBA);
 
   if (!gl_context_->GetVersionInfo()->is_es3) {
-    // Used by default for ResourceProvider::yuv_resource_format_.
+    // Used by default.
     formats.push_back(GL_LUMINANCE);
   }
 
@@ -464,8 +466,7 @@ TEST_F(TextureUploadPerfTest, upload) {
                               gl_context_->HasExtension("GL_ARB_texture_rg");
 
   if (has_texture_rg) {
-    // Used as ResourceProvider::yuv_resource_format_ if
-    // {ARB,EXT}_texture_rg are available.
+    // Used if {ARB,EXT}_texture_rg are available.
     formats.push_back(GL_RED);
   }
 

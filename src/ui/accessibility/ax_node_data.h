@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ struct AX_BASE_EXPORT AXNodeData {
 
   AXNodeData(const AXNodeData& other);
   AXNodeData(AXNodeData&& other);
-  AXNodeData& operator=(AXNodeData other);
+  AXNodeData& operator=(const AXNodeData& other);
 
   // Accessing accessibility attributes:
   //
@@ -151,15 +151,60 @@ struct AX_BASE_EXPORT AXNodeData {
 
   // Adds the name attribute or replaces it if already present. Also sets the
   // NameFrom attribute if not already set.
+  //
+  // [[deprecated("Replaced by `SetNameChecked` and `SetNameExplicitlyEmpty`")]]
+  // See `SetNameChecked` and `SetNameExplicitlyEmpty` which have DCHECKs for
+  // conditions expected to be true, which in reality are not always true.
+  // Tracked by crbug.com/1348081.
   void SetName(const std::string& name);
+  // [[deprecated("Replaced by `SetNameChecked` and `SetNameExplicitlyEmpty`")]]
+  // See `SetNameChecked` and `SetNameExplicitlyEmpty` which have DCHECKs for
+  // conditions expected to be true, which in reality are not always true.
+  // Tracked by crbug.com/1348081.
   void SetName(const std::u16string& name);
 
-  // Allows nameless objects to pass accessibility checks.
+  // Adds the accessible name attribute or replaces it if already present, and
+  // also sets the NameFrom attribute if not already set.
+  //
+  // The value of the accessible name is a localized, end-user-consumable string
+  // which may be derived from visible information (e.g. the text on a button)
+  // or invisible information (e.g. the alternative text describing an icon).
+  // In the case of focusable objects, the name will be presented by the screen
+  // reader when that object gains focus and is critical to understanding the
+  // purpose of that object non-visually.
+  //
+  // Note that `SetNameChecked` must only be used to set a non-empty name, a
+  // condition enforced by a DCHECK. This is done to prevent UI from
+  // accidentally being given an empty name because, as a general rule, nameless
+  // controls tend to be inaccessible. However, because there can be valid
+  // reasons to remove or prevent naming of an item `SetNameExplicitlyEmpty`
+  // provides a means for developers to do so.
+  void SetNameChecked(const std::string& name);
+  void SetNameChecked(const std::u16string& name);
+
+  // Indicates this object should not have an accessible name. One use case is
+  // to prevent screen readers from speaking redundant information, for instance
+  // if the parent View has the same name as this View, causing the screen
+  // reader to speak the name twice. This function can also be used to allow
+  // focusable nameless objects to pass accessibility checks in tests, a
+  // practice that should not be applied in production code.
   void SetNameExplicitlyEmpty();
 
-  // Adds the description attribute or replaces it if already present.
+  // Adds the description attribute or replaces it if already present. Also
+  // sets the DescriptionFrom attribute if not already set. Note that
+  // `SetDescription` must only be used to set a non-empty description, a
+  // condition enforced by a DCHECK. If an object should not have an accessible
+  // description in order to improve the user experience, use
+  // `SetDescriptionExplicitlyEmpty`.
   void SetDescription(const std::string& description);
   void SetDescription(const std::u16string& description);
+
+  // Indicates this object should not have an accessible description. One use
+  // case is to prevent screen readers from speaking redundant information, for
+  // instance if a View's description comes from a tooltip whose content is
+  // similar to that View's accessible name, the screen reader presentation may
+  // be overly verbose.
+  void SetDescriptionExplicitlyEmpty();
 
   // Adds the value attribute or replaces it if already present.
   void SetValue(const std::string& value);
@@ -177,8 +222,6 @@ struct AX_BASE_EXPORT AXNodeData {
   void RemoveState(ax::mojom::State state);
   void AddAction(ax::mojom::Action action);
   void AddTextStyle(ax::mojom::TextStyle text_style);
-  // aria-dropeffect is deprecated in WAI-ARIA 1.1.
-  void AddDropeffect(ax::mojom::Dropeffect dropeffect);
 
   // Helper functions to get or set some common int attributes with some
   // specific enum types. To remove an attribute, set it to None.
@@ -191,6 +234,8 @@ struct AX_BASE_EXPORT AXNodeData {
   void SetDefaultActionVerb(ax::mojom::DefaultActionVerb default_action_verb);
   ax::mojom::HasPopup GetHasPopup() const;
   void SetHasPopup(ax::mojom::HasPopup has_popup);
+  ax::mojom::IsPopup GetIsPopup() const;
+  void SetIsPopup(ax::mojom::IsPopup is_popup);
   ax::mojom::InvalidState GetInvalidState() const;
   void SetInvalidState(ax::mojom::InvalidState invalid_state);
   ax::mojom::NameFrom GetNameFrom() const;
@@ -279,11 +324,12 @@ struct AX_BASE_EXPORT AXNodeData {
   // attribute.
   bool IsNonAtomicTextField() const;
 
-  // Some spinners are text fields, and some are not. For example, an ordinary
-  // <input type="number"> allows caret movement and behaves like a textfield,
-  // but the <input type="number"> used inside date, datetime, datetime-local,
-  // month, time, and week types does not allow this. In either type, pressing
-  // up/down arrow will change the value to the previous/next allowed value.
+  // Any element that has `spinbutton` set on the root editable element should
+  // be treated as a SpinnerTextField.
+  // For example, <input type="text" role=spinbutton> is a spinner text field.
+  // Richly editable elements should be treated as spinners when they have
+  // their roles set to `spinbutton` and when they are not the descendant of a
+  // <contenteditable> element.
   bool IsSpinnerTextField() const;
 
   // Helper to determine if the data belongs to a node that supports
@@ -295,7 +341,24 @@ struct AX_BASE_EXPORT AXNodeData {
   bool SupportsExpandCollapse() const;
 
   // Return a string representation of this data, for debugging.
-  virtual std::string ToString() const;
+  virtual std::string ToString(bool verbose = true) const;
+
+  // Returns the approximate size in bytes.
+  size_t ByteSize() const;
+
+  struct AX_BASE_EXPORT AXNodeDataSize {
+    size_t int_attribute_size = 0;
+    size_t float_attribute_size = 0;
+    size_t bool_attribute_size = 0;
+    size_t string_attribute_size = 0;
+    size_t int_list_attribhute_size = 0;
+    size_t string_list_attribute_size = 0;
+    size_t html_attribute_size = 0;
+    size_t child_ids_size = 0;
+
+    size_t ByteSize() const;
+  };
+  void AccumulateSize(AXNodeDataSize& node_data_size) const;
 
   // Return a string representation of |aria-dropeffect| values, for testing
   // and debugging.

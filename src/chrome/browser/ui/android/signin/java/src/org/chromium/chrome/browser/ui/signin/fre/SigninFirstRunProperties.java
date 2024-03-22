@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,9 @@ class SigninFirstRunProperties {
      * When forced sign-in will be supported, we could use an enum field in this class
      * instead of the boolean property.
      */
-    static class FrePolicy { public boolean metricsReportingDisabledByPolicy; }
+    static class FrePolicy {
+        public boolean metricsReportingDisabledByPolicy;
+    }
 
     static final ReadableObjectPropertyKey<OnClickListener> ON_SELECTED_ACCOUNT_CLICKED =
             new ReadableObjectPropertyKey<>("on_selected_account_clicked");
@@ -47,8 +49,8 @@ class SigninFirstRunProperties {
     static final WritableBooleanPropertyKey SHOW_SIGNIN_PROGRESS_SPINNER =
             new WritableBooleanPropertyKey("show_signin_progress_spinner");
 
-    static final WritableBooleanPropertyKey ARE_NATIVE_AND_POLICY_LOADED =
-            new WritableBooleanPropertyKey("are_native_and_policy_loaded");
+    static final WritableBooleanPropertyKey SHOW_INITIAL_LOAD_PROGRESS_SPINNER =
+            new WritableBooleanPropertyKey("show_initial_load_progress_spinner");
 
     static final WritableObjectPropertyKey<FrePolicy> FRE_POLICY =
             new WritableObjectPropertyKey<>("fre_policy");
@@ -59,25 +61,27 @@ class SigninFirstRunProperties {
     static final WritableObjectPropertyKey<CharSequence> FOOTER_STRING =
             new WritableObjectPropertyKey<>("footer_string");
 
-    static final PropertyKey[] ALL_KEYS = new PropertyKey[] {
-            ON_SELECTED_ACCOUNT_CLICKED,
-            SELECTED_ACCOUNT_DATA,
-            IS_SELECTED_ACCOUNT_SUPERVISED,
-            ON_CONTINUE_AS_CLICKED,
-            ON_DISMISS_CLICKED,
-            SHOW_SIGNIN_PROGRESS_SPINNER_WITH_TEXT,
-            SHOW_SIGNIN_PROGRESS_SPINNER,
-            ARE_NATIVE_AND_POLICY_LOADED,
-            FRE_POLICY,
-            IS_SIGNIN_SUPPORTED,
-            FOOTER_STRING,
-    };
+    static final PropertyKey[] ALL_KEYS =
+            new PropertyKey[] {
+                ON_SELECTED_ACCOUNT_CLICKED,
+                SELECTED_ACCOUNT_DATA,
+                IS_SELECTED_ACCOUNT_SUPERVISED,
+                ON_CONTINUE_AS_CLICKED,
+                ON_DISMISS_CLICKED,
+                SHOW_SIGNIN_PROGRESS_SPINNER_WITH_TEXT,
+                SHOW_SIGNIN_PROGRESS_SPINNER,
+                SHOW_INITIAL_LOAD_PROGRESS_SPINNER,
+                FRE_POLICY,
+                IS_SIGNIN_SUPPORTED,
+                FOOTER_STRING,
+            };
 
-    /**
-     * Creates a default model for FRE bottom group.
-     */
-    static PropertyModel createModel(Runnable onSelectedAccountClicked,
-            Runnable onContinueAsClicked, Runnable onDismissClicked, boolean isSigninSupported,
+    /** Creates a default model for FRE bottom group. */
+    static PropertyModel createModel(
+            Runnable onSelectedAccountClicked,
+            Runnable onContinueAsClicked,
+            Runnable onDismissClicked,
+            boolean isSigninSupported,
             SpannableString footerString) {
         return new PropertyModel.Builder(ALL_KEYS)
                 .with(ON_SELECTED_ACCOUNT_CLICKED, v -> onSelectedAccountClicked.run())
@@ -85,9 +89,9 @@ class SigninFirstRunProperties {
                 .with(IS_SELECTED_ACCOUNT_SUPERVISED, false)
                 .with(ON_CONTINUE_AS_CLICKED, v -> onContinueAsClicked.run())
                 .with(ON_DISMISS_CLICKED, v -> onDismissClicked.run())
-                .with(ARE_NATIVE_AND_POLICY_LOADED, false)
+                .with(SHOW_INITIAL_LOAD_PROGRESS_SPINNER, true)
                 .with(FRE_POLICY, null)
-                .with(IS_SIGNIN_SUPPORTED, isSigninSupported)
+                .with(IS_SIGNIN_SUPPORTED, false)
                 .with(FOOTER_STRING, footerString)
                 .build();
     }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,7 @@ bool SuppressError(const std::string& dbus_error_message) {
 
 }  // namespace
 
-namespace chromeos {
-namespace network_handler {
+namespace ash::network_handler {
 
 // This message is not user-facing, it should only appear in logs.
 const char kDBusFailedError[] = "Error.DBusFailed";
@@ -55,5 +54,4 @@ void ShillErrorCallbackFunction(const std::string& error_name,
   std::move(error_callback).Run(error_name);
 }
 
-}  // namespace network_handler
-}  // namespace chromeos
+}  // namespace ash::network_handler

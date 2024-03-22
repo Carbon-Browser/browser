@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,8 @@ bool operator<(const TopicData& lhs, const TopicData& rhs) {
   return lhs.is_public < rhs.is_public;
 }
 
-Topics ConvertTopicSetToLegacyTopicMap(const std::set<TopicData>& topics) {
-  Topics result;
+TopicMap ConvertTopicSetToLegacyTopicMap(const std::set<TopicData>& topics) {
+  TopicMap result;
   for (const TopicData& topic : topics) {
     result.emplace(topic.name, TopicMetadata{/*is_public=*/topic.is_public});
   }

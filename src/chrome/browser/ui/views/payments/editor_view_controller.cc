@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,29 +40,21 @@
 namespace payments {
 namespace {
 
-class ErrorLabelView : public views::Label {
- public:
-  METADATA_HEADER(ErrorLabelView);
+constexpr int kErrorLabelTopPadding = 6;
 
-  ErrorLabelView(const std::u16string& error, autofill::ServerFieldType type)
-      : views::Label(error, CONTEXT_DIALOG_BODY_TEXT_SMALL) {
-    SetID(static_cast<int>(DialogViewID::ERROR_LABEL_OFFSET) + type);
-    SetMultiLine(true);
-    SetHorizontalAlignment(gfx::ALIGN_LEFT);
-    constexpr int kErrorLabelTopPadding = 6;
-    SetBorder(views::CreateEmptyBorder(
-        gfx::Insets::TLBR(kErrorLabelTopPadding, 0, 0, 0)));
-  }
-
-  // views::Label:
-  void OnThemeChanged() override {
-    views::Label::OnThemeChanged();
-    SetEnabledColor(GetColorProvider()->GetColor(ui::kColorAlertHighSeverity));
-  }
-};
-
-BEGIN_METADATA(ErrorLabelView, views::Label)
-END_METADATA
+std::unique_ptr<views::Label> CreateErrorLabel(const std::u16string& error,
+                                               autofill::ServerFieldType type) {
+  return views::Builder<views::Label>()
+      .SetText(error)
+      .SetTextContext(CONTEXT_DIALOG_BODY_TEXT_SMALL)
+      .SetID(static_cast<int>(DialogViewID::ERROR_LABEL_OFFSET) + type)
+      .SetMultiLine(true)
+      .SetHorizontalAlignment(gfx::ALIGN_LEFT)
+      .SetBorder(views::CreateEmptyBorder(
+          gfx::Insets::TLBR(kErrorLabelTopPadding, 0, 0, 0)))
+      .SetEnabledColorId(ui::kColorAlertHighSeverity)
+      .Build();
+}
 
 }  // namespace
 
@@ -160,6 +152,13 @@ void EditorViewController::FillContentView(views::View* content_view) {
 
   // The heart of the editor dialog: all the input fields with their labels.
   content_view->AddChildView(CreateEditorView().release());
+}
+
+bool EditorViewController::ShouldAccelerateEnterKey() {
+  // We allow the user to confirm their details by pressing 'enter' irregardless
+  // of which edit field is currently focused, for quicker navigation through
+  // the form.
+  return true;
 }
 
 void EditorViewController::UpdateEditorView() {
@@ -449,7 +448,7 @@ void EditorViewController::AddOrUpdateErrorMessageForField(
     if (label_view_it->second->children().empty()) {
       // If there was no error label view, add it.
       label_view_it->second->AddChildView(
-          std::make_unique<ErrorLabelView>(error_message, type));
+          CreateErrorLabel(error_message, type));
     } else {
       // The error view is the only child, and has a Label as only child itself.
       static_cast<views::Label*>(label_view_it->second->children().front())
@@ -458,7 +457,7 @@ void EditorViewController::AddOrUpdateErrorMessageForField(
   }
 }
 
-void EditorViewController::SaveButtonPressed() {
+void EditorViewController::SaveButtonPressed(const ui::Event& event) {
   if (!ValidateModelAndSave())
     return;
   if (back_navigation_type_ == BackNavigationType::kOneStep) {

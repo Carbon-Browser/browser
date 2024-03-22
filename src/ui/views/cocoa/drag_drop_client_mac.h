@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/remote_cocoa/app_shim/drag_drop_client.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
@@ -77,7 +77,7 @@ class VIEWS_EXPORT DragDropClientMac : public remote_cocoa::DragDropClient {
   int last_operation_ = 0;
 
   // The bridge between the content view and the drag drop client.
-  raw_ptr<remote_cocoa::NativeWidgetNSWindowBridge>
+  raw_ptr<remote_cocoa::NativeWidgetNSWindowBridge, DanglingUntriaged>
       bridge_;  // Weak. Owns |this|.
 
   // The closure for the drag and drop's run loop.

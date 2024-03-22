@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,6 +50,9 @@ constexpr const char* kEncryptedMediaPermissionsPolicyConsoleWarning =
     "applied to the current document. See https://goo.gl/EuHzyv for more "
     "details.";
 
+class LocalDOMWindow;
+class WebEncryptedMediaClient;
+
 class EncryptedMediaUtils {
   STATIC_ONLY(EncryptedMediaUtils);
 
@@ -69,6 +72,9 @@ class EncryptedMediaUtils {
   ConvertToMediaKeysRequirement(const String&);
   static String ConvertMediaKeysRequirementToString(
       WebMediaKeySystemConfiguration::Requirement);
+
+  static WebEncryptedMediaClient* GetEncryptedMediaClientFromLocalDOMWindow(
+      LocalDOMWindow*);
 
   // Get interface and property name for |type|, e.t. "MediaKeys" and "load",
   // respectively.

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 #include <map>
 #include <vector>
 
-#include "ash/services/nearby/public/cpp/nearby_process_manager.h"
-#include "ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
-#include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
+#include "chromeos/ash/services/nearby/public/cpp/nearby_process_manager.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class NearbyConnection;
@@ -63,10 +64,10 @@ class IncomingFramesReader {
       absl::optional<sharing::mojom::V1Frame::Tag> frame_type);
   sharing::mojom::NearbySharingDecoder* GetOrStartNearbySharingDecoder();
 
-  ash::nearby::NearbyProcessManager* process_manager_;
+  raw_ptr<ash::nearby::NearbyProcessManager, ExperimentalAsh> process_manager_;
   std::unique_ptr<ash::nearby::NearbyProcessManager::NearbyProcessReference>
       process_reference_;
-  NearbyConnection* connection_;
+  raw_ptr<NearbyConnection, ExperimentalAsh> connection_;
   absl::optional<sharing::mojom::V1Frame::Tag> frame_type_;
   base::OnceCallback<void(absl::optional<sharing::mojom::V1FramePtr>)>
       callback_;

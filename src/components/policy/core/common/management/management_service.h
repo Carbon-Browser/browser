@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "components/policy/policy_export.h"
 #include "components/prefs/persistent_pref_store.h"
@@ -115,6 +115,14 @@ class POLICY_EXPORT ManagementService {
 
   // Returns whether there is any management authority at all.
   bool IsManaged();
+
+  // Returns whether the profile is managed because the signed in account is a
+  // managed account.
+  bool IsAccountManaged();
+
+  // Returns whether the profile is managed because the whole browser is
+  // managed.
+  bool IsBrowserManaged();
 
   const absl::optional<int>& management_authorities_for_testing() {
     return management_authorities_for_testing_;

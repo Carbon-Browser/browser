@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,8 @@ class CONTENT_EXPORT MessagePortProvider {
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& source_origin,
       const base::android::JavaParamRef<jstring>& target_origin,
-      const base::android::JavaParamRef<jstring>& data,
+      /* org.chromium.content_public.browser.MessagePayload */
+      const base::android::JavaParamRef<jobject>& payload,
       const base::android::JavaParamRef<jobjectArray>& ports);
 #endif  // BUILDFLAG(IS_ANDROID)
 

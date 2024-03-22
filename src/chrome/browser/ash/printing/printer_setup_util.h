@@ -1,13 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_PRINTING_PRINTER_SETUP_UTIL_H_
 #define CHROME_BROWSER_ASH_PRINTING_PRINTER_SETUP_UTIL_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/browser/ash/printing/cups_printers_manager.h"
-#include "chrome/browser/ash/printing/printer_configurer.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "printing/backend/print_backend.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -25,7 +24,6 @@ using GetPrinterCapabilitiesCallback = base::OnceCallback<void(
 // This function is called when setting up a printer from Print Preview
 // and records a metric with the printer setup result code.
 void SetUpPrinter(CupsPrintersManager* printers_manager,
-                  PrinterConfigurer* printer_configurer,
                   const chromeos::Printer& printer,
                   GetPrinterCapabilitiesCallback cb);
 

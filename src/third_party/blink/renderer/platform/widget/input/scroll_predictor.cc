@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ ScrollPredictor::ScrollPredictor()
         blink::features::kFilteringScrollPrediction, "filter");
 
     input_prediction::FilterType filter_type =
-        filter_factory_->GetFilterTypeFromName(filter_name);
+        FilterFactory::GetFilterTypeFromName(filter_name);
 
     filter_factory_ = std::make_unique<FilterFactory>(
         blink::features::kFilteringScrollPrediction, predictor_type,

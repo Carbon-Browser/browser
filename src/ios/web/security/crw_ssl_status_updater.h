@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "ios/web/public/security/security_style.h"
 #include "net/cert/cert_status_flags.h"
 
@@ -26,8 +26,8 @@ class NavigationManagerImpl;
 // Delegate for CRWSSLStatusUpdater. Can be nil.
 @property(nonatomic, weak) id<CRWSSLStatusUpdaterDelegate> delegate;
 
-// Initializes CRWSSLStatusUpdater. |navManager| can not be null, will be stored
-// as a weak pointer and must outlive updater. |dataSource| can not be nil, will
+// Initializes CRWSSLStatusUpdater. `navManager` can not be null, will be stored
+// as a weak pointer and must outlive updater. `dataSource` can not be nil, will
 // be stored as a weak reference and must outlive updater.
 - (instancetype)initWithDataSource:(id<CRWSSLStatusUpdaterDataSource>)dataSource
                  navigationManager:
@@ -37,16 +37,17 @@ class NavigationManagerImpl;
 - (instancetype)init NS_UNAVAILABLE;
 
 // Updates SSL status for the current navigation item. The SSL Status is
-// obtained from |host|, |chain| and |hasOnlySecureContent| flag.
-- (void)updateSSLStatusForNavigationItem:(web::NavigationItem*)navigationItem
-                            withCertHost:(NSString*)host
-                                   trust:
-                                       (base::ScopedCFTypeRef<SecTrustRef>)trust
-                    hasOnlySecureContent:(BOOL)hasOnlySecureContent;
+// obtained from `host`, `chain` and `hasOnlySecureContent` flag.
+- (void)
+    updateSSLStatusForNavigationItem:(web::NavigationItem*)navigationItem
+                        withCertHost:(NSString*)host
+                               trust:(base::apple::ScopedCFTypeRef<SecTrustRef>)
+                                         trust
+                hasOnlySecureContent:(BOOL)hasOnlySecureContent;
 
 @end
 
-// |SSLStatusUpdater:querySSLStatusForTrust:host:completionHandler| completion
+// `SSLStatusUpdater:querySSLStatusForTrust:host:completionHandler` completion
 // handler.
 typedef void (^StatusQueryHandler)(web::SecurityStyle, net::CertStatus);
 
@@ -55,11 +56,11 @@ typedef void (^StatusQueryHandler)(web::SecurityStyle, net::CertStatus);
 
 @required
 
-// Called when updater needs SSLStatus for the given |certChain| and |host|.
-// |completionHandler| is called asynchronously when web::SecurityStyle and
+// Called when updater needs SSLStatus for the given `certChain` and `host`.
+// `completionHandler` is called asynchronously when web::SecurityStyle and
 // net::CertStatus are computed.
 - (void)SSLStatusUpdater:(CRWSSLStatusUpdater*)SSLStatusUpdater
-    querySSLStatusForTrust:(base::ScopedCFTypeRef<SecTrustRef>)trust
+    querySSLStatusForTrust:(base::apple::ScopedCFTypeRef<SecTrustRef>)trust
                       host:(NSString*)host
          completionHandler:(StatusQueryHandler)completionHandler;
 

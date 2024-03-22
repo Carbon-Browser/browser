@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,22 +16,22 @@
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/rand_util.h"
 #include "base/unguessable_token.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_suggestion.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_suggestion.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
 
 namespace {
 
-using chromeos::assistant::AssistantSuggestion;
-using chromeos::assistant::AssistantSuggestionType;
-using chromeos::assistant::prefs::AssistantOnboardingMode;
+using assistant::AssistantSuggestion;
+using assistant::AssistantSuggestionType;
+using assistant::prefs::AssistantOnboardingMode;
 
 // Conversation starters -------------------------------------------------------
 
@@ -67,8 +67,8 @@ void AssistantSuggestionsControllerImpl::OnAssistantControllerDestroying() {
 void AssistantSuggestionsControllerImpl::OnUiVisibilityChanged(
     AssistantVisibility new_visibility,
     AssistantVisibility old_visibility,
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   // When Assistant is finishing a session, we update our cache of conversation
   // starters so that they're fresh for the next launch.
   if (assistant::util::IsFinishingSession(new_visibility))
@@ -166,7 +166,7 @@ void AssistantSuggestionsControllerImpl::UpdateOnboardingSuggestions() {
 
   std::vector<AssistantSuggestion> onboarding_suggestions;
 
-  using chromeos::assistant::AssistantBetterOnboardingType;
+  using assistant::AssistantBetterOnboardingType;
   auto AddSuggestion = [&CreateIconResourceLink, &onboarding_suggestions](
                            int message_id, AssistantBetterOnboardingType type) {
     onboarding_suggestions.emplace_back();

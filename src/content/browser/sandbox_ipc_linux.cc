@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -160,7 +160,7 @@ void SandboxIPCHandler::SendRendererReply(
     int reply_fd) {
   struct msghdr msg;
   memset(&msg, 0, sizeof(msg));
-  struct iovec iov = {const_cast<void*>(reply.data()), reply.size()};
+  struct iovec iov = {const_cast<uint8_t*>(reply.data()), reply.size()};
   msg.msg_iov = &iov;
   msg.msg_iovlen = 1;
 

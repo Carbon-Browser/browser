@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,29 @@
  * @fileoverview Polymer element for displaying material design offline login.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
+import '//resources/cr_elements/cr_button/cr_button.js';
+import '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import '//resources/cr_elements/cr_input/cr_input.js';
+import '../../components/gaia_header.js';
+import '../../components/gaia_input_form.js';
+import '../../components/gaia_button.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/buttons/oobe_back_button.js';
+import '../../components/buttons/oobe_next_button.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeContentDialog} from '../../components/dialogs/oobe_content_dialog.js';
+
 
 const DEFAULT_EMAIL_DOMAIN = '@gmail.com';
-const INPUT_EMAIL_PATTERN = '^[a-zA-Z0-9.!#$%&\'*+=?^_`{|}~-]+(@[^\\s@]+)?$';
+const INPUT_EMAIL_PATTERN =
+    '^[a-zA-Z0-9.!#$%&\'*+=?^_`\\{\\|\\}~\\-]+(@[^\\s@]+)?$';
 
 const LOGIN_SECTION = {
   EMAIL: 'emailSection',
@@ -22,20 +41,29 @@ const LOGIN_SECTION = {
  * @implements {LoginScreenBehaviorInterface}
  * @implements {OobeI18nBehaviorInterface}
  */
-const OfflineLoginBase = Polymer.mixinBehaviors(
+const OfflineLoginBase = mixinBehaviors(
     [OobeI18nBehavior, OobeDialogHostBehavior, LoginScreenBehavior],
-    Polymer.Element);
+    PolymerElement);
 
 /**
  * @typedef {{
  *   emailInput: CrInputElement,
  *   passwordInput: CrInputElement,
- *   dialog: OobeContentDialogElement,
+ *   dialog: OobeContentDialog,
  *   forgotPasswordDlg: CrDialogElement,
  *   onlineRequiredDialog: CrDialogElement,
  * }}
  */
 OfflineLoginBase.$;
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   enterpriseDomainManager: (string|undefined),
+ *   emailDomain: (string|undefined),
+ * }}
+ */
+let OfflineLoginScreenData;
 
 /**
  * @polymer
@@ -45,7 +73,9 @@ class OfflineLogin extends OfflineLoginBase {
     return 'offline-login-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -83,17 +113,26 @@ class OfflineLogin extends OfflineLoginBase {
       /**
        * Current value of e-mail input field.
        */
-      email_: String,
+      email_: {
+        type: String,
+        value: '',
+      },
 
       /**
        * Current value of password input field.
        */
-      password_: String,
+      password_: {
+        type: String,
+        value: '',
+      },
 
       /**
        * Proper e-mail with domain, displayed on password page.
        */
-      fullEmail_: String,
+      fullEmail_: {
+        type: String,
+        value: '',
+      },
 
       activeSection: {
         type: String,
@@ -105,13 +144,6 @@ class OfflineLogin extends OfflineLoginBase {
         value: false,
       },
     };
-  }
-
-  constructor() {
-    super();
-    this.email_ = '';
-    this.password_ = '';
-    this.fullEmail_ = '';
   }
 
   /** Overridden from LoginScreenBehavior. */
@@ -158,8 +190,7 @@ class OfflineLogin extends OfflineLoginBase {
   }
 
   /**
-   *
-   * @param {Object} params
+   * @param {OfflineLoginScreenData} params
    */
   onBeforeShow(params) {
     this.reset();

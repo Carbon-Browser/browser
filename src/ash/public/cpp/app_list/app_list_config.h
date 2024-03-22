@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_PUBLIC_CPP_APP_LIST_APP_LIST_CONFIG_H_
 #define ASH_PUBLIC_CPP_APP_LIST_APP_LIST_CONFIG_H_
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/ash_public_export.h"
 #include "base/no_destructor.h"
@@ -31,9 +32,11 @@ class ASH_PUBLIC_EXPORT SharedAppListConfig {
     return default_grid_icon_dimension_;
   }
 
-  size_t max_search_results() const { return max_search_results_; }
+  int shortcut_badge_icon_dimension() const {
+    return shortcut_badge_icon_dimension_;
+  }
 
-  size_t max_search_result_tiles() const { return max_search_result_tiles_; }
+  size_t max_search_results() const { return max_search_results_; }
 
   size_t max_search_result_list_items() const {
     return max_search_result_list_items_;
@@ -42,8 +45,6 @@ class ASH_PUBLIC_EXPORT SharedAppListConfig {
   size_t max_assistant_search_result_list_items() const {
     return max_assistant_search_result_list_items_;
   }
-
-  size_t num_start_page_tiles() const { return num_start_page_tiles_; }
 
   int search_tile_icon_dimension() const { return search_tile_icon_dimension_; }
 
@@ -87,15 +88,15 @@ class ASH_PUBLIC_EXPORT SharedAppListConfig {
     return suggestion_chip_icon_dimension_;
   }
 
-  ui::ResourceBundle::FontStyle search_result_title_font_style() const {
-    return search_result_title_font_style_;
-  }
-
-  gfx::FontList search_result_recommendation_title_font() const {
-    return search_result_recommendation_title_font_;
-  }
-
   int search_tile_height() const { return search_tile_height_; }
+
+  size_t max_results_with_categorical_search() const {
+    return max_results_with_categorical_search_;
+  }
+
+  int answer_card_max_results() const { return answer_card_max_results_; }
+
+  size_t image_search_max_results() const { return image_search_max_results_; }
 
   // Returns the maximum number of items allowed in a page in the apps grid.
   int GetMaxNumOfItemsPerPage() const;
@@ -104,17 +105,18 @@ class ASH_PUBLIC_EXPORT SharedAppListConfig {
   int GetPreferredIconDimension(SearchResultDisplayType display_type) const;
 
  private:
-  friend class base::NoDestructor<SharedAppListConfig>;
+  friend class SharedAppListConfig;
   SharedAppListConfig();
 
   // The icon dimension of tile views in apps grid view.
   const int default_grid_icon_dimension_ = 64;
 
+  // The badge icon dimension of a shortcut in apps grid view.
+  // TODO(crbug.com/1480423): Update the size after the effects visual done.
+  const int shortcut_badge_icon_dimension_ = 32;
+
   // Maximum number of results to show in the launcher Search UI.
   const size_t max_search_results_ = 6;
-
-  // Max number of search result tiles in the launcher suggestion window.
-  const size_t max_search_result_tiles_ = 6;
 
   // Max number of search result list items in the launcher suggestion window.
   const size_t max_search_result_list_items_ = 5;
@@ -122,9 +124,6 @@ class ASH_PUBLIC_EXPORT SharedAppListConfig {
   // Max number of Assistant search result list items in the launcher suggestion
   // window. Appears in the list after normal search results.
   const size_t max_assistant_search_result_list_items_ = 1;
-
-  // The number of apps shown in the start page app grid.
-  const size_t num_start_page_tiles_ = 5;
 
   // The icon dimension of tile views in search result page view.
   const int search_tile_icon_dimension_ = 48;
@@ -148,16 +147,18 @@ class ASH_PUBLIC_EXPORT SharedAppListConfig {
   // The suggestion chip icon dimension.
   const int suggestion_chip_icon_dimension_ = 20;
 
-  // Font style for AppListSearchResultItemViews that are not suggested
-  // apps.
-  const ui::ResourceBundle::FontStyle search_result_title_font_style_;
-
-  // Font style for AppListSearchResultTileItemViews that are suggested
-  // apps.
-  const gfx::FontList search_result_recommendation_title_font_;
-
   // The height of tiles in search result.
   const int search_tile_height_ = 92;
+
+  // The maximum number of filtered results within categorical search
+  const size_t max_results_with_categorical_search_ = 3;
+
+  // The maximum number of filtered results of type answer card within
+  // categorical search
+  const int answer_card_max_results_ = 1;
+
+  // The maximum number of results shown in the launcher image search category.
+  const size_t image_search_max_results_ = 3;
 };
 
 // Contains app list layout information for an app list view. `AppListConfig`
@@ -172,19 +173,9 @@ class ASH_PUBLIC_EXPORT AppListConfig {
   explicit AppListConfig(AppListConfigType type);
 
   // Constructor for scaled app list configuration.
-  // |scale_x| - The scale at which apps grid tile should be scaled
+  // `scale_x` - The scale at which apps grid tile should be scaled
   // horizontally.
-  // |scale_y| - The scale at which apps grid tile should be scaled
-  // vertically.
-  // |inner_title_scale_y| - The scale to use to vertically scale dimensions
-  // |min_y_scale| - Whether |scale_y| is the minimum scale allowed.
-  // within the apps grid tile. Different from |scale_y| because tile title
-  // height is not vertically scaled.
-  AppListConfig(const AppListConfig& base_config,
-                float scale_x,
-                float scale_y,
-                float inner_tile_scale_y,
-                bool min_y_scale);
+  AppListConfig(const AppListConfig& base_config, float scale_x);
 
   AppListConfig(const AppListConfig&) = delete;
   AppListConfig& operator=(const AppListConfig&) = delete;
@@ -193,7 +184,6 @@ class ASH_PUBLIC_EXPORT AppListConfig {
 
   AppListConfigType type() const { return type_; }
   float scale_x() const { return scale_x_; }
-  float scale_y() const { return scale_y_; }
   int grid_tile_width() const { return grid_tile_width_; }
   int grid_tile_height() const { return grid_tile_height_; }
   int grid_icon_dimension() const { return grid_icon_dimension_; }
@@ -207,47 +197,54 @@ class ASH_PUBLIC_EXPORT AppListConfig {
   int grid_focus_corner_radius() const { return grid_focus_corner_radius_; }
   int app_title_max_line_height() const { return app_title_max_line_height_; }
   const gfx::FontList& app_title_font() const { return app_title_font_; }
-  int folder_bubble_radius() const { return folder_bubble_radius_; }
-  int folder_icon_dimension() const { return folder_icon_dimension_; }
-  int folder_unclipped_icon_dimension() const {
-    return folder_unclipped_icon_dimension_;
+  const gfx::FontList& item_counter_in_folder_icon_font() const {
+    return item_counter_in_folder_icon_font_;
   }
+  int folder_bubble_radius() const { return folder_bubble_radius_; }
+  int icon_visible_dimension() const { return icon_visible_dimension_; }
+  int folder_icon_dimension() const { return folder_icon_dimension_; }
   int folder_icon_radius() const { return folder_icon_radius_; }
-  int folder_background_radius() const { return folder_background_radius_; }
+  int icon_extended_background_dimension() const {
+    return icon_extended_background_dimension_;
+  }
+  int icon_extended_background_radius() const {
+    return icon_extended_background_radius_;
+  }
   int item_icon_in_folder_icon_dimension() const {
     return item_icon_in_folder_icon_dimension_;
   }
   int item_icon_in_folder_icon_margin() const {
     return item_icon_in_folder_icon_margin_;
   }
-  int folder_dropping_circle_radius() const {
-    return folder_dropping_circle_radius_;
+  int shortcut_host_badge_icon_dimension() const {
+    return shortcut_host_badge_icon_dimension_;
   }
+  int shortcut_host_badge_icon_border_margin() const {
+    return shortcut_host_badge_icon_border_margin_;
+  }
+  int shortcut_background_border_margin() const {
+    return shortcut_background_border_margin_;
+  }
+  int promise_icon_dimension_installing() const {
+    return promise_icon_dimension_installing_;
+  }
+  int promise_icon_dimension_pending() const {
+    return promise_icon_dimension_pending_;
+  }
+  int GetShortcutHostBadgeIconContainerDimension() const;
+  int GetShortcutBackgroundContainerDimension() const;
+  gfx::Size GetShortcutIconSize() const;
 
   gfx::Size grid_icon_size() const {
     return gfx::Size(grid_icon_dimension_, grid_icon_dimension_);
   }
 
-  gfx::Size grid_focus_size() const {
-    return gfx::Size(grid_focus_dimension_, grid_focus_dimension_);
+  gfx::Size icon_visible_size() const {
+    return gfx::Size(icon_visible_dimension_, icon_visible_dimension_);
   }
 
   gfx::Size folder_icon_size() const {
     return gfx::Size(folder_icon_dimension_, folder_icon_dimension_);
-  }
-
-  gfx::Size folder_unclipped_icon_size() const {
-    return gfx::Size(folder_unclipped_icon_dimension_,
-                     folder_unclipped_icon_dimension_);
-  }
-
-  gfx::Insets folder_icon_insets() const {
-    int folder_icon_dimension_diff =
-        folder_unclipped_icon_dimension_ - folder_icon_dimension_;
-    return gfx::Insets::TLBR(folder_icon_dimension_diff / 2,
-                             folder_icon_dimension_diff / 2,
-                             (folder_icon_dimension_diff + 1) / 2,
-                             (folder_icon_dimension_diff + 1) / 2);
   }
 
   gfx::Size item_icon_in_folder_icon_size() const {
@@ -259,9 +256,9 @@ class ASH_PUBLIC_EXPORT AppListConfig {
   const AppListConfigType type_;
 
   // Current config scale values - should be different from 1 for
-  // AppListConfigType::kShared only.
+  // AppListConfigType::kShared only. Note that `scale_x_` should be always less
+  // or equal to 1.
   const float scale_x_;
-  const float scale_y_;
 
   // The tile view's width and height of the item in apps grid view.
   const int grid_tile_width_;
@@ -282,11 +279,6 @@ class ASH_PUBLIC_EXPORT AppListConfig {
   // The title width of tile views in apps grid view.
   const int grid_title_width_;
 
-  // The focus dimension of tile views in apps grid view. Only used when
-  // ProductivityLauncher is disabled. ProductivityLauncher draws the focus ring
-  // around the entire AppListItemView.
-  const int grid_focus_dimension_;
-
   // Corner radius of the focus ring for tile views in apps grid view.
   const int grid_focus_corner_radius_;
 
@@ -296,25 +288,32 @@ class ASH_PUBLIC_EXPORT AppListConfig {
   // The font for app title in app list.
   const gfx::FontList app_title_font_;
 
+  // The font used to the number of apps in a folder on the fonder icon. Only
+  // used if app collection folder icon refresh is enabled.
+  const gfx::FontList item_counter_in_folder_icon_font_;
+
   // The radius of the circle in a folder icon (i.e. the gray circle underneath
   // the mini app icons).
   const int folder_bubble_radius_;
 
-  // The size of the folder icon in its usual state (e.g. in the apps grid, not
-  // when the user is dragging an item over it).
-  const int folder_icon_dimension_;
+  // Because the nature of how an app is drawn, the visual size is slightly
+  // smaller than its actual icon size. `icon_visible_dimension_` is used to
+  // cache the visible size of an app. This is also the size of the folder icon
+  // in its usual state (e.g. in the apps grid, not when the user is dragging an
+  // item over it).
+  const int icon_visible_dimension_;
 
-  // The size of the folder icon in its expanded state (e.g. when the user drags
-  // an item on top of the folder). In the non-expanded state, the folder is
-  // actually drawn at this size, then clipped to `folder_icon_dimensions_`.
-  // When animating to the expanded state, the code just animates the clipping.
-  const int folder_unclipped_icon_dimension_;
+  // The folder icon size.
+  const int folder_icon_dimension_;
 
   // The corner radius of folder icon.
   const int folder_icon_radius_;
 
-  // The corner radius of folder background.
-  const int folder_background_radius_;
+  // The width and height of background for item icons in extended state.
+  const int icon_extended_background_dimension_;
+
+  // The background corner radius of an item icon in extended state.
+  const int icon_extended_background_radius_;
 
   // The dimension of the item icon in folder icon.
   const int item_icon_in_folder_icon_dimension_;
@@ -322,9 +321,20 @@ class ASH_PUBLIC_EXPORT AppListConfig {
   // The margin between item icons inside a folder icon.
   const int item_icon_in_folder_icon_margin_;
 
-  // Radius of the circle, in which if entered, show folder dropping preview
-  // UI.
-  const int folder_dropping_circle_radius_;
+  // The dimension of a host badge icon of a shortcut.
+  const int shortcut_host_badge_icon_dimension_;
+
+  // The dimension of a host badge icon container border of a shortcut.
+  const int shortcut_host_badge_icon_border_margin_;
+
+  // The dimension of a background container border of a shortcut.
+  const int shortcut_background_border_margin_;
+
+  // The preferred icon size for the promise apps on installing state.
+  const int promise_icon_dimension_installing_;
+
+  // The preferred icon size for the promise apps on pending state.
+  const int promise_icon_dimension_pending_;
 };
 
 }  // namespace ash

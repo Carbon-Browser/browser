@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "ash/quick_pair/feature_status_tracker/fake_bluetooth_adapter.h"
-#include "base/callback.h"
+#include "ash/quick_pair/common/fake_bluetooth_adapter.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/mock_callback.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"

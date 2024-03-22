@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 
+#include <concepts>
 #include <type_traits>
 
 #include "base/check.h"
@@ -260,37 +261,21 @@ class ScopedGeneric {
     }
   }
 
-  template <typename Void = void>
-  typename std::enable_if_t<
-      std::is_base_of<ScopedGenericOwnershipTracking, Traits>::value,
-      Void>
-  TrackAcquire(const T& value) {
-    if (value != traits_type::InvalidValue()) {
-      data_.Acquire(static_cast<const ScopedGeneric&>(*this), value);
+  void TrackAcquire(const T& value) {
+    if constexpr (std::derived_from<Traits, ScopedGenericOwnershipTracking>) {
+      if (value != traits_type::InvalidValue()) {
+        data_.Acquire(static_cast<const ScopedGeneric&>(*this), value);
+      }
     }
   }
 
-  template <typename Void = void>
-  typename std::enable_if_t<
-      !std::is_base_of<ScopedGenericOwnershipTracking, Traits>::value,
-      Void>
-  TrackAcquire(const T& value) {}
-
-  template <typename Void = void>
-  typename std::enable_if_t<
-      std::is_base_of<ScopedGenericOwnershipTracking, Traits>::value,
-      Void>
-  TrackRelease(const T& value) {
-    if (value != traits_type::InvalidValue()) {
-      data_.Release(static_cast<const ScopedGeneric&>(*this), value);
+  void TrackRelease(const T& value) {
+    if constexpr (std::derived_from<Traits, ScopedGenericOwnershipTracking>) {
+      if (value != traits_type::InvalidValue()) {
+        data_.Release(static_cast<const ScopedGeneric&>(*this), value);
+      }
     }
   }
-
-  template <typename Void = void>
-  typename std::enable_if_t<
-      !std::is_base_of<ScopedGenericOwnershipTracking, Traits>::value,
-      Void>
-  TrackRelease(const T& value) {}
 
   // Forbid comparison. If U != T, it totally doesn't make sense, and if U ==
   // T, it still doesn't make sense because you should never have the same

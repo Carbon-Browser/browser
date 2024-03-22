@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,12 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace base {
 namespace win {
@@ -58,7 +59,7 @@ using AsyncAbiT = typename ABI::Windows::Foundation::Internal::GetAbiType<
 // information.
 template <typename T>
 using AsyncResultsT = std::conditional_t<
-    std::is_convertible<AsyncAbiT<T>, IUnknown*>::value,
+    std::is_convertible_v<AsyncAbiT<T>, IUnknown*>,
     Microsoft::WRL::ComPtr<std::remove_pointer_t<AsyncAbiT<T>>>,
     AsyncAbiT<T>>;
 
@@ -109,34 +110,28 @@ template <typename T>
 HRESULT PostAsyncOperationCompletedHandler(
     IAsyncOperationT<T>* async_operation,
     IAsyncOperationCompletedHandlerT<T> completed_handler) {
-  auto internal_completed_handler = base::BindOnce(
-      [](scoped_refptr<base::SequencedTaskRunner> task_runner,
-         IAsyncOperationCompletedHandlerT<T> completed_handler,
-         IAsyncOperationT<T>* async_operation, AsyncStatus async_status) {
-        // The raw |async_operation| pointer received as part of this
-        // CompletedHandler is only guaranteed to be valid for the lifetime of
-        // this call, so to ensure it is still valid through the lifetime of the
-        // call to the |completed_handler| we capture it in an appropriate
-        // ref-counted pointer.
-        Microsoft::WRL::ComPtr<IAsyncOperationT<T>> ref_counted_async_operation(
-            async_operation);
+  using AsyncResult =
+      std::pair<Microsoft::WRL::ComPtr<IAsyncOperationT<T>>, AsyncStatus>;
 
+  auto internal_completed_handler =
+      base::BindOnce([](IAsyncOperationT<T>* async_operation,
+                        AsyncStatus async_status) -> AsyncResult {
         // Posting the results to the TaskRunner is required, since this
-        // CompletedHandler might be invoked on an arbitrary thread.
-        task_runner->PostTask(
-            FROM_HERE,
-            BindOnce(
-                [](IAsyncOperationCompletedHandlerT<T> completed_handler,
-                   Microsoft::WRL::ComPtr<IAsyncOperationT<T>> async_operation,
-                   AsyncStatus async_status) {
-                  std::move(completed_handler)
-                      .Run(async_operation.Get(), async_status);
-                },
-                std::move(completed_handler), ref_counted_async_operation,
-                async_status));
-        return S_OK;
-      },
-      base::SequencedTaskRunnerHandle::Get(), std::move(completed_handler));
+        // CompletedHandler might be invoked on an arbitrary thread however
+        // the raw |async_operation| pointer is only guaranteed to be valid
+        // for the lifetime of this call, so to ensure it is still valid
+        // through the lifetime of the call to the |completed_handler| we
+        // capture it in an appropriate ref-counted pointer.
+        return std::make_pair(async_operation, async_status);
+      })
+          .Then(
+              base::BindPostTaskToCurrentDefault(base::BindOnce(
+                  [](IAsyncOperationCompletedHandlerT<T> completed_handler,
+                     AsyncResult async_result) {
+                    std::move(completed_handler)
+                        .Run(async_result.first.Get(), async_result.second);
+                  },
+                  std::move(completed_handler))));
 
   using CompletedHandler = Microsoft::WRL::Implements<
       Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
@@ -148,8 +143,9 @@ HRESULT PostAsyncOperationCompletedHandler(
           [internal_completed_handler(std::move(internal_completed_handler))](
               IAsyncOperationT<T>* async_operation,
               AsyncStatus async_status) mutable {
-            return std::move(internal_completed_handler)
+            std::move(internal_completed_handler)
                 .Run(async_operation, async_status);
+            return S_OK;
           })
           .Get());
 }

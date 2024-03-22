@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,7 @@
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/view.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 BoxLayoutExample::BoxLayoutExample() : LayoutExampleBase("Box Layout") {}
 
@@ -137,5 +136,4 @@ void BoxLayoutExample::CrossAxisAlignmentChanged() {
   RefreshLayoutPanel(false);
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

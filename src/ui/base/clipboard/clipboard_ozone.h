@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ class ClipboardOzone : public Clipboard {
 
   // Clipboard overrides:
   void OnPreShutdown() override;
-  DataTransferEndpoint* GetSource(ClipboardBuffer buffer) const override;
+  absl::optional<DataTransferEndpoint> GetSource(
+      ClipboardBuffer buffer) const override;
   const ClipboardSequenceNumberToken& GetSequenceNumber(
       ClipboardBuffer buffer) const override;
   std::vector<std::u16string> GetStandardFormats(
@@ -85,40 +86,31 @@ class ClipboardOzone : public Clipboard {
       const ObjectMap& objects,
       std::vector<Clipboard::PlatformRepresentation> platform_representations,
       std::unique_ptr<DataTransferEndpoint> data_src) override;
-  void WriteText(const char* text_data, size_t text_len) override;
-  void WriteHTML(const char* markup_data,
-                 size_t markup_len,
-                 const char* url_data,
-                 size_t url_len) override;
-  void WriteSvg(const char* markup_data, size_t markup_len) override;
-  void WriteRTF(const char* rtf_data, size_t data_len) override;
+  void WriteText(base::StringPiece text) override;
+  void WriteHTML(base::StringPiece markup,
+                 absl::optional<base::StringPiece> source_url) override;
+  void WriteUnsanitizedHTML(
+      base::StringPiece markup,
+      absl::optional<base::StringPiece> source_url) override;
+  void WriteSvg(base::StringPiece markup) override;
+  void WriteRTF(base::StringPiece rtf) override;
   void WriteFilenames(std::vector<ui::FileInfo> filenames) override;
-  void WriteBookmark(const char* title_data,
-                     size_t title_len,
-                     const char* url_data,
-                     size_t url_len) override;
+  void WriteBookmark(base::StringPiece title, base::StringPiece url) override;
   void WriteWebSmartPaste() override;
   void WriteBitmap(const SkBitmap& bitmap) override;
   void WriteData(const ClipboardFormatType& format,
-                 const char* data_data,
-                 size_t data_len) override;
+                 base::span<const uint8_t> data) override;
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // Used for syncing clipboard sources between Lacros and Ash in ChromeOS.
   void AddClipboardSourceToDataOffer(const ClipboardBuffer buffer);
+
+  // Updates the source for the given buffer. It is used by
+  // `async_clipboard_ozone_` whenever some text is copied from Ash and pasted
+  // to Lacros.
+  void SetSource(ClipboardBuffer buffer,
+                 std::unique_ptr<DataTransferEndpoint> data_src);
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-
-  // Retrieves the clipboard source data transfer endpoint. This source and
-  // clipboard destination are passed to the DLP stack to check if restrictions
-  // allow or prevent the clipboard read. If no clipboard source exists in the
-  // internal store (i.e. none was initially provided), an attempt to parse the
-  // source from the data offer occurs since clipboard sources from Ash are
-  // offered to Lacros through a custom MIME type.
-  bool GetSourceAndCheckIfReadIsAllowed(const ClipboardBuffer buffer,
-                                        const DataTransferEndpoint* data_dst,
-                                        const base::span<uint8_t> data) const;
-
-  base::span<uint8_t> ReadPngInternal(const ClipboardBuffer buffer) const;
 
   class AsyncClipboardOzone;
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/pref_registry/pref_registry_syncable.h"
+#include "components/prefs/in_memory_pref_store.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/sync_preferences/pref_service_syncable_factory.h"
@@ -110,9 +111,9 @@ class StateStoreTest : public PlatformStateStoreTestBase {
     std::unique_ptr<base::Value> prefs(JSONFileValueDeserializer(GetPrefsPath())
                                            .Deserialize(nullptr, nullptr));
     ASSERT_NE(nullptr, prefs.get());
-    base::DictionaryValue* dict = nullptr;
-    ASSERT_TRUE(prefs->GetAsDictionary(&dict));
-    ASSERT_TRUE(dict->RemovePath(prefs::kSafeBrowsingIncidentsSent));
+    base::Value::Dict* dict = prefs->GetIfDict();
+    ASSERT_TRUE(dict);
+    ASSERT_TRUE(dict->RemoveByDottedPath(prefs::kSafeBrowsingIncidentsSent));
     ASSERT_TRUE(JSONFileValueSerializer(GetPrefsPath()).Serialize(*dict));
   }
 
@@ -121,6 +122,7 @@ class StateStoreTest : public PlatformStateStoreTestBase {
     // Create the testing profile with a file-backed user pref store.
     sync_preferences::PrefServiceSyncableFactory factory;
     factory.SetUserPrefsFile(GetPrefsPath(), task_runner_.get());
+    factory.SetAccountPrefStore(base::MakeRefCounted<InMemoryPrefStore>());
     user_prefs::PrefRegistrySyncable* pref_registry =
         new user_prefs::PrefRegistrySyncable();
     RegisterUserProfilePrefs(pref_registry);
@@ -133,7 +135,7 @@ class StateStoreTest : public PlatformStateStoreTestBase {
   static const char kProfileName_[];
   static const TestData kTestData_[];
   content::BrowserTaskEnvironment task_environment_;
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
 
  private:

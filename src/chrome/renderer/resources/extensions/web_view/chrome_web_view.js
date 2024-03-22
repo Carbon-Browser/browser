@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,8 @@ var ChromeWebViewSchema =
 var CreateEvent = require('guestViewEvents').CreateEvent;
 var GuestViewInternalNatives = requireNative('guest_view_internal');
 var idGeneratorNatives = requireNative('id_generator');
-var registerElement = require('guestViewContainerElement').registerElement;
 var utils = require('utils');
-var WebViewElement = require('webViewElement').WebViewElement;
 var WebViewImpl = require('webView').WebViewImpl;
-var WebViewAttributeNames = require('webViewConstants').WebViewAttributeNames;
 
 // This is the only "webViewInternal.onClicked" named event for this renderer.
 //
@@ -206,15 +203,4 @@ ChromeWebViewImpl.prototype.setupContextMenus = function() {
       });
 };
 
-class ChromeWebViewElement extends WebViewElement {
-  static get observedAttributes() {
-    return WebViewAttributeNames;
-  }
-
-  constructor() {
-    super();
-    privates(this).internal = new ChromeWebViewImpl(this);
-  }
-}
-
-registerElement('WebView', ChromeWebViewElement);
+exports.$set('ChromeWebViewImpl', ChromeWebViewImpl);

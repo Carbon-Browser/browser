@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,8 @@ public class TwaIntentHandlingStrategy implements CustomTabIntentHandlingStrateg
     private final TwaSharingController mSharingController;
 
     @Inject
-    public TwaIntentHandlingStrategy(DefaultCustomTabIntentHandlingStrategy defaultStrategy,
+    public TwaIntentHandlingStrategy(
+            DefaultCustomTabIntentHandlingStrategy defaultStrategy,
             TwaSharingController sharingController) {
         mDefaultStrategy = defaultStrategy;
         mSharingController = sharingController;
@@ -30,26 +31,29 @@ public class TwaIntentHandlingStrategy implements CustomTabIntentHandlingStrateg
 
     @Override
     public void handleInitialIntent(BrowserServicesIntentDataProvider intentDataProvider) {
-        handleIntent(intentDataProvider, true /* isInitialIntent */);
+        handleIntent(intentDataProvider, /* isInitialIntent= */ true);
     }
 
     @Override
     public void handleNewIntent(BrowserServicesIntentDataProvider intentDataProvider) {
         // TODO(pshmakov): we can have a significant delay here in case of POST sharing.
         // Allow showing splash screen, if it's provided in the intent.
-        handleIntent(intentDataProvider, false /* isInitialIntent */);
+        handleIntent(intentDataProvider, /* isInitialIntent= */ false);
     }
 
     private void handleIntent(
             BrowserServicesIntentDataProvider intentDataProvider, boolean isInitialIntent) {
-        mSharingController.deliverToShareTarget(intentDataProvider).then((delivered) -> {
-            if (delivered) return;
+        mSharingController
+                .deliverToShareTarget(intentDataProvider)
+                .then(
+                        (delivered) -> {
+                            if (delivered) return;
 
-            if (isInitialIntent) {
-                mDefaultStrategy.handleInitialIntent(intentDataProvider);
-            } else {
-                mDefaultStrategy.handleNewIntent(intentDataProvider);
-            }
-        });
+                            if (isInitialIntent) {
+                                mDefaultStrategy.handleInitialIntent(intentDataProvider);
+                            } else {
+                                mDefaultStrategy.handleNewIntent(intentDataProvider);
+                            }
+                        });
     }
 }

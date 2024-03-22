@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory.tab_layout_component;
 
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.ACTIVE_TAB;
+import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.BUTTON_SELECTION_CALLBACKS;
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.TABS;
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.TAB_SELECTION_CALLBACKS;
 
-import androidx.annotation.VisibleForTesting;
+import android.view.View;
+
 import androidx.viewpager.widget.ViewPager;
 
 import com.google.android.material.tabs.TabLayout;
@@ -27,32 +29,32 @@ import java.util.HashMap;
  */
 public class KeyboardAccessoryTabLayoutCoordinator {
     private final PropertyModel mModel =
-            new PropertyModel.Builder(TABS, ACTIVE_TAB, TAB_SELECTION_CALLBACKS)
+            new PropertyModel.Builder(
+                            TABS, ACTIVE_TAB, TAB_SELECTION_CALLBACKS, BUTTON_SELECTION_CALLBACKS)
                     .with(TABS, new ListModel<>())
                     .with(ACTIVE_TAB, null)
                     .build();
     private final KeyboardAccessoryTabLayoutMediator mMediator;
 
-    private final HashMap<TabLayout, TemporaryTabLayoutBindings> mBindings = new HashMap<>();
+    private final HashMap<View, TemporarySheetOpenerBindings> mBindings = new HashMap<>();
 
-    private final TabLayoutCallbacks mTabLayoutCallbacks = new TabLayoutCallbacks() {
-        @Override
-        public void onTabLayoutBound(TabLayout tabLayout) {
-            if (!mBindings.containsKey(tabLayout)) {
-                mBindings.put(tabLayout, new TemporaryTabLayoutBindings(tabLayout));
-            }
-        }
+    private final SheetOpenerCallbacks mSheetOpenerCallbacks =
+            new SheetOpenerCallbacks() {
+                @Override
+                public void onViewBound(View view) {
+                    if (!mBindings.containsKey(view)) {
+                        mBindings.put(view, new TemporarySheetOpenerBindings(view));
+                    }
+                }
 
-        @Override
-        public void onTabLayoutUnbound(TabLayout tabLayout) {
-            TemporaryTabLayoutBindings binding = mBindings.remove(tabLayout);
-            if (binding != null) binding.destroy();
-        }
-    };
+                @Override
+                public void onViewUnbound(View view) {
+                    TemporarySheetOpenerBindings binding = mBindings.remove(view);
+                    if (binding != null) binding.destroy();
+                }
+            };
 
-    /**
-     * This observer gets notified when a tab get selected, reselected or when any tab changes.
-     */
+    /** This observer gets notified when a tab get selected, reselected or when any tab changes. */
     public interface AccessoryTabObserver {
         /**
          * Called when the active tab changes.
@@ -70,34 +72,36 @@ public class KeyboardAccessoryTabLayoutCoordinator {
     }
 
     /**
-     * These callbacks are triggered when the view corresponding to the tab layout is bound or
-     * unbound which provides opportunity to initialize and clean up.
+     * These callbacks are triggered when the view corresponding to the sheet opener buttons or tabs
+     * is bound or unbound which provides opportunity to initialize and clean up.
      */
-    public interface TabLayoutCallbacks {
+    public interface SheetOpenerCallbacks {
         /**
          * Called when the this item is bound to a view. It's useful for setting up MCPs that
          * need the view for initialization.
-         * @param tabs The {@link TabLayout} representing this item.
+         * @param sheetOpenerView The {@link View} representing this item.
          */
-        void onTabLayoutBound(TabLayout tabs);
+        void onViewBound(View sheetOpenerView);
 
         /**
          * Called right before the view currently representing this item gets recycled.
          * It's useful for cleaning up Adapters and MCPs.
-         * @param tabs The {@link TabLayout} representing this item.
+         * @param tabs The {@link View} representing this item.
          */
-        void onTabLayoutUnbound(TabLayout tabs);
+        void onViewUnbound(View sheetOpenerView);
     }
 
-    private class TemporaryTabLayoutBindings {
+    private class TemporarySheetOpenerBindings {
         private PropertyModelChangeProcessor mMcp;
-        private TabLayout.TabLayoutOnPageChangeListener mOnPageChangeListener;
+        private ViewPager.OnPageChangeListener mOnPageChangeListener;
 
-        TemporaryTabLayoutBindings(TabLayout tabLayout) {
-            mMcp = PropertyModelChangeProcessor.create(mModel,
-                    (KeyboardAccessoryTabLayoutView) tabLayout,
-                    KeyboardAccessoryTabLayoutViewBinder::bind);
-            mOnPageChangeListener = new TabLayout.TabLayoutOnPageChangeListener(tabLayout);
+        TemporarySheetOpenerBindings(View view) {
+            mMcp =
+                    PropertyModelChangeProcessor.create(
+                            mModel,
+                            (KeyboardAccessoryButtonGroupView) view,
+                            KeyboardAccessoryButtonGroupViewBinder::bind);
+            mOnPageChangeListener = new ViewPager.SimpleOnPageChangeListener();
             mMediator.addPageChangeListener(mOnPageChangeListener);
         }
 
@@ -120,14 +124,33 @@ public class KeyboardAccessoryTabLayoutCoordinator {
             PropertyModel model, KeyboardAccessoryTabLayoutView inflatedView) {
         KeyboardAccessoryTabLayoutViewBinder tabViewBinder =
                 new KeyboardAccessoryTabLayoutViewBinder();
-        model.get(TABS).addObserver(
-                new ListModelChangeProcessor<>(model.get(TABS), inflatedView, tabViewBinder));
+        model.get(TABS)
+                .addObserver(
+                        new ListModelChangeProcessor<>(
+                                model.get(TABS), inflatedView, tabViewBinder));
         return tabViewBinder;
     }
 
     /**
-     * Creates a new Tab Layout component that isn't assigned to any view yet.
+     * Creates the {@link KeyboardAccessoryButtonGroupViewBinder} that is linked to the
+     * {@link ListModelChangeProcessor} that connects the given
+     * {@link KeyboardAccessoryButtonGroupView} to the given tab list.
+     * @param model the {@link PropertyModel} with {@link KeyboardAccessoryTabLayoutProperties}.
+     * @param inflatedView the {@link KeyboardAccessoryButtonGroupView}.
+     * @return Returns a fully initialized and wired {@link KeyboardAccessoryButtonGroupViewBinder}.
      */
+    static KeyboardAccessoryButtonGroupViewBinder createButtonGroupViewBinder(
+            PropertyModel model, KeyboardAccessoryButtonGroupView inflatedView) {
+        KeyboardAccessoryButtonGroupViewBinder buttonGroupViewBinder =
+                new KeyboardAccessoryButtonGroupViewBinder();
+        model.get(TABS)
+                .addObserver(
+                        new ListModelChangeProcessor<>(
+                                model.get(TABS), inflatedView, buttonGroupViewBinder));
+        return buttonGroupViewBinder;
+    }
+
+    /** Creates a new Tab Layout component that isn't assigned to any view yet. */
     public KeyboardAccessoryTabLayoutCoordinator() {
         mMediator = new KeyboardAccessoryTabLayoutMediator(mModel);
     }
@@ -138,12 +161,14 @@ public class KeyboardAccessoryTabLayoutCoordinator {
      */
     public void assignNewView(TabLayout tabLayout) {
         mMediator.addPageChangeListener(new TabLayout.TabLayoutOnPageChangeListener(tabLayout));
-        PropertyModelChangeProcessor.create(mModel, (KeyboardAccessoryTabLayoutView) tabLayout,
+        PropertyModelChangeProcessor.create(
+                mModel,
+                (KeyboardAccessoryTabLayoutView) tabLayout,
                 KeyboardAccessoryTabLayoutViewBinder::bind);
     }
 
-    public TabLayoutCallbacks getTabLayoutCallbacks() {
-        return mTabLayoutCallbacks;
+    public SheetOpenerCallbacks getSheetOpenerCallbacks() {
+        return mSheetOpenerCallbacks;
     }
 
     /**
@@ -172,12 +197,10 @@ public class KeyboardAccessoryTabLayoutCoordinator {
         return mMediator.getStableOnPageChangeListener();
     }
 
-    @VisibleForTesting
     PropertyModel getModelForTesting() {
         return mModel;
     }
 
-    @VisibleForTesting
     KeyboardAccessoryTabLayoutMediator getMediatorForTesting() {
         return mMediator;
     }

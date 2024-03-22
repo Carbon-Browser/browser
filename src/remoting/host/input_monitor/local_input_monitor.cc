@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/host/client_session_control.h"
@@ -63,15 +63,18 @@ LocalInputMonitorImpl::LocalInputMonitorImpl(
 LocalInputMonitorImpl::~LocalInputMonitorImpl() {
   // LocalInputMonitor sub-classes expect to be torn down on the caller thread.
   if (!caller_task_runner_->BelongsToCurrentThread()) {
-    if (hotkey_input_monitor_)
+    if (hotkey_input_monitor_) {
       caller_task_runner_->DeleteSoon(FROM_HERE,
                                       hotkey_input_monitor_.release());
-    if (keyboard_input_monitor_)
+    }
+    if (keyboard_input_monitor_) {
       caller_task_runner_->DeleteSoon(FROM_HERE,
                                       keyboard_input_monitor_.release());
-    if (pointer_input_monitor_)
+    }
+    if (pointer_input_monitor_) {
       caller_task_runner_->DeleteSoon(FROM_HERE,
                                       pointer_input_monitor_.release());
+    }
   }
   caller_task_runner_ = nullptr;
 }

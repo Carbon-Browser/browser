@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,8 @@ extern const char kUpdateUrlPrefix[];
 extern const char kToolbarPin[];
 extern const char kForcePinned[];
 extern const char kDefaultUnpinned[];
+
+extern const char kFileUrlNavigationAllowed[];
 
 // If the install of an extension is blocked this admin defined message is
 // appended to the error message displayed in the Chrome Webstore.

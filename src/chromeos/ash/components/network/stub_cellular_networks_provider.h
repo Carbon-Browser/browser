@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 // Provides stub cellular for use by NetworkStateHandler. In this context,
 // cellular stub networks correspond to networks shown exposed by
@@ -70,15 +71,18 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) StubCellularNetworksProvider
       const base::flat_set<std::string>* shill_iccids,
       NetworkStateHandler::ManagedStateList& network_list);
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  CellularESimProfileHandler* cellular_esim_profile_handler_ = nullptr;
-  ManagedCellularPrefHandler* managed_cellular_pref_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler, ExperimentalAsh> network_state_handler_ =
+      nullptr;
+  raw_ptr<CellularESimProfileHandler, ExperimentalAsh>
+      cellular_esim_profile_handler_ = nullptr;
+  raw_ptr<ManagedCellularPrefHandler, DanglingUntriaged | ExperimentalAsh>
+      managed_cellular_pref_handler_ = nullptr;
 
   // Map which stores the GUID used for stubs created by this class. Each
   // network should use a consistent GUID throughout a session.
   base::flat_map<std::string, std::string> iccid_to_guid_map_;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_STUB_CELLULAR_NETWORKS_PROVIDER_H_

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,8 @@ class StartSmartSelectionActionMenu : public RenderViewContextMenuObserver {
   bool IsCommandIdChecked(int command_id) override;
   bool IsCommandIdEnabled(int command_id) override;
   void ExecuteCommand(int command_id) override;
+  void OnContextMenuShown(const content::ContextMenuParams& params,
+                          const gfx::Rect& bounds_in_screen) override;
 
  private:
   void HandleTextSelectionActions(

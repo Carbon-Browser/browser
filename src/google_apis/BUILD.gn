@@ -1,8 +1,10 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/buildflag_header.gni")
 import("//build/config/chrome_build.gni")
+import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import("//extensions/buildflags/buildflags.gni")
 import("//testing/test.gni")
@@ -17,14 +19,13 @@ declare_args() {
   # Set the variable to false to not use the internal file, even for
   # Chrome-branded builds or when it exists in your checkout.
   #
-  # Leave it unset or set to "" to have the variable
-  # implicitly set to true if you have
-  # src/google_apis/internal/google_chrome_api_keys.h in your
-  # checkout, and implicitly set to false if not.
-  #
-  # Note that Chrome-branded builds always behave as if the variable
-  # was explicitly set to true, i.e. they always use official keys,
-  # and will fail to build if the internal file is missing.
+  # Leave it set to "" to have the variable implicitly set to true for
+  # Chrome-branded builds or if
+  # //src/google_apis/internal/google_chrome_api_keys.h is present and false
+  # otherwise.
+  # This does not apply to iOS builds, which use different mechanisms and always
+  # evaluate to use_official_google_api_keys=false.
+  # See https://crbug.com/1183709.
   use_official_google_api_keys = ""
 
   # Set these to bake the specified API keys and OAuth client
@@ -36,9 +37,8 @@ declare_args() {
   # require server-side APIs may fail to work if no keys are
   # provided.
   #
-  # Note that when building a Chrome-branded build or if
-  # `use_official_google_api_keys` has been set to `true` (explicitly or
-  # implicitly), these values will be ignored and the official
+  # Note that if `use_official_google_api_keys` has been set to true
+  # (explicitly or implicitly), these values will be ignored and the official
   # keys will be used instead.
   google_api_key = ""
 
@@ -50,21 +50,53 @@ declare_args() {
 }
 
 if (use_official_google_api_keys == "") {
-  # Default behavior, check if the key file exists.
-  check_internal_result =
-      exec_script("build/check_internal.py",
-                  [ rebase_path("internal/google_chrome_api_keys.h",
-                                root_build_dir) ],
-                  "value")
-  use_official_google_api_keys = check_internal_result == 1
+  # No override set. Determine the default behavior.
+  if (is_chrome_branded) {
+    # Chrome-branded builds default to behaving as if
+    #`use_official_google_api_keys` was explicitly set to true and will fail to
+    # build if the file is missing.
+    use_official_google_api_keys = true
+  } else {
+    # Check if the key file exists.
+    check_internal_result =
+        exec_script("build/check_internal.py",
+                    [ rebase_path("internal/google_chrome_api_keys.h",
+                                  root_build_dir) ],
+                    "value")
+    use_official_google_api_keys = check_internal_result == 1
+  }
+}
+
+# Official API keys should always be used for Chrome-branded builds except on
+# iOS (see https://crbug.com/1183709) and Fuchsia (see the description of
+# https://crbug.com/1171510 for background).
+assert(
+    use_official_google_api_keys || !is_chrome_branded || is_ios || is_fuchsia)
+
+declare_args() {
+  # Whether the SetAPIKey() method is defined.
+  # iOS and Fuchsia builds that do not use the built-in key use this.
+  support_external_google_api_key =
+      is_ios || (is_fuchsia && !use_official_google_api_keys)
+}
+
+# internal:generate_metrics_key_header must be a deps when
+# USE_OFFICIAL_GOOGLE_API_KEYS` is defined. Use this variable for both.
+# On iOS, Chrome branding had been overriding use_official_google_api_keys.
+# TODO(crbug.com/1362160): Fix this logic on iOS. Can this variable be replaced
+# with just use_official_google_api_keys?
+_use_official_google_keys_and_generate_metrics_key_header =
+    use_official_google_api_keys || (is_ios && is_chrome_branded)
+
+buildflag_header("buildflags") {
+  header = "buildflags.h"
+  flags = [ "SUPPORT_EXTERNAL_GOOGLE_API_KEY=$support_external_google_api_key" ]
 }
 
 config("key_defines") {
   defines = []
 
-  # TODO(crbug.com/1294915): Refactor so use_official_google_api_keys can be
-  # used for Fuchsia.
-  if (!is_fuchsia && (is_chrome_branded || use_official_google_api_keys)) {
+  if (_use_official_google_keys_and_generate_metrics_key_header) {
     defines += [ "USE_OFFICIAL_GOOGLE_API_KEYS=1" ]
   }
   if (google_api_key != "") {
@@ -79,95 +111,95 @@ config("key_defines") {
   }
 }
 
-# Variables:
-#   deps: Extra dependencies
-template("google_apis_tmpl") {
-  source_set(target_name) {
-    sources = [
-      "gaia/core_account_id.cc",
-      "gaia/core_account_id.h",
-      "gaia/gaia_access_token_fetcher.cc",
-      "gaia/gaia_access_token_fetcher.h",
-      "gaia/gaia_auth_consumer.cc",
-      "gaia/gaia_auth_consumer.h",
-      "gaia/gaia_auth_fetcher.cc",
-      "gaia/gaia_auth_fetcher.h",
-      "gaia/gaia_auth_util.cc",
-      "gaia/gaia_auth_util.h",
-      "gaia/gaia_config.cc",
-      "gaia/gaia_config.h",
-      "gaia/gaia_constants.cc",
-      "gaia/gaia_constants.h",
-      "gaia/gaia_oauth_client.cc",
-      "gaia/gaia_oauth_client.h",
-      "gaia/gaia_switches.cc",
-      "gaia/gaia_switches.h",
-      "gaia/gaia_urls.cc",
-      "gaia/gaia_urls.h",
-      "gaia/google_service_auth_error.cc",
-      "gaia/google_service_auth_error.h",
-      "gaia/oauth2_access_token_consumer.cc",
-      "gaia/oauth2_access_token_consumer.h",
-      "gaia/oauth2_access_token_fetcher.cc",
-      "gaia/oauth2_access_token_fetcher.h",
-      "gaia/oauth2_access_token_fetcher_immediate_error.cc",
-      "gaia/oauth2_access_token_fetcher_immediate_error.h",
-      "gaia/oauth2_access_token_fetcher_impl.cc",
-      "gaia/oauth2_access_token_fetcher_impl.h",
-      "gaia/oauth2_access_token_manager.cc",
-      "gaia/oauth2_access_token_manager.h",
-      "gaia/oauth2_api_call_flow.cc",
-      "gaia/oauth2_api_call_flow.h",
-      "gaia/oauth2_id_token_decoder.cc",
-      "gaia/oauth2_id_token_decoder.h",
-      "gaia/oauth2_mint_token_flow.cc",
-      "gaia/oauth2_mint_token_flow.h",
-      "gaia/oauth_multilogin_result.cc",
-      "gaia/oauth_multilogin_result.h",
-      "gaia/oauth_request_signer.cc",
-      "gaia/oauth_request_signer.h",
-      "google_api_keys.cc",
-      "google_api_keys.h",
-    ]
+component("google_apis") {
+  sources = [
+    "credentials_mode.cc",
+    "credentials_mode.h",
+    "gaia/core_account_id.cc",
+    "gaia/core_account_id.h",
+    "gaia/gaia_access_token_fetcher.cc",
+    "gaia/gaia_access_token_fetcher.h",
+    "gaia/gaia_auth_consumer.cc",
+    "gaia/gaia_auth_consumer.h",
+    "gaia/gaia_auth_fetcher.cc",
+    "gaia/gaia_auth_fetcher.h",
+    "gaia/gaia_auth_util.cc",
+    "gaia/gaia_auth_util.h",
+    "gaia/gaia_config.cc",
+    "gaia/gaia_config.h",
+    "gaia/gaia_constants.cc",
+    "gaia/gaia_constants.h",
+    "gaia/gaia_oauth_client.cc",
+    "gaia/gaia_oauth_client.h",
+    "gaia/gaia_switches.cc",
+    "gaia/gaia_switches.h",
+    "gaia/gaia_urls.cc",
+    "gaia/gaia_urls.h",
+    "gaia/google_service_auth_error.cc",
+    "gaia/google_service_auth_error.h",
+    "gaia/oauth2_access_token_consumer.cc",
+    "gaia/oauth2_access_token_consumer.h",
+    "gaia/oauth2_access_token_fetcher.cc",
+    "gaia/oauth2_access_token_fetcher.h",
+    "gaia/oauth2_access_token_fetcher_immediate_error.cc",
+    "gaia/oauth2_access_token_fetcher_immediate_error.h",
+    "gaia/oauth2_access_token_fetcher_impl.cc",
+    "gaia/oauth2_access_token_fetcher_impl.h",
+    "gaia/oauth2_access_token_manager.cc",
+    "gaia/oauth2_access_token_manager.h",
+    "gaia/oauth2_api_call_flow.cc",
+    "gaia/oauth2_api_call_flow.h",
+    "gaia/oauth2_id_token_decoder.cc",
+    "gaia/oauth2_id_token_decoder.h",
+    "gaia/oauth2_mint_access_token_fetcher_adapter.cc",
+    "gaia/oauth2_mint_access_token_fetcher_adapter.h",
+    "gaia/oauth2_mint_token_flow.cc",
+    "gaia/oauth2_mint_token_flow.h",
+    "gaia/oauth_multilogin_result.cc",
+    "gaia/oauth_multilogin_result.h",
+    "gaia/oauth_request_signer.cc",
+    "gaia/oauth_request_signer.h",
+    "google_api_keys.cc",
+    "google_api_keys.h",
+  ]
 
-    configs += [ ":key_defines" ]
+  configs += [
+    ":key_defines",
+    "//build/config/compiler:wexit_time_destructors",
+  ]
 
-    deps = [
-      ":oauth2_mint_token_consent_result_proto",
-      "//base",
-      "//base/third_party/dynamic_annotations",
-      "//build:branding_buildflags",
-      "//build:chromeos_buildflags",
-      "//crypto",
-      "//mojo/public/cpp/bindings:struct_traits",
-      "//services/network/public/cpp",
-    ]
-
-    if (is_chrome_branded || use_official_google_api_keys) {
-      deps += [ "internal:generate_metrics_key_header" ]
-    }
-
-    if (defined(invoker.deps)) {
-      deps += invoker.deps
-    }
-
-    if (is_apple) {
-      sources += [
-        "google_api_keys_mac.h",
-        "google_api_keys_mac.mm",
-      ]
-
-      frameworks = [ "Foundation.framework" ]
-    }
-  }
-}
-
-google_apis_tmpl("google_apis") {
-  deps = [
-    "//net",
+  public_deps = [
+    ":buildflags",
+    "//base",
+    "//build:chromeos_buildflags",
     "//services/network/public/cpp",
+  ]
+
+  deps = [
+    ":oauth2_mint_token_consent_result_proto",
+    "//base/third_party/dynamic_annotations",
+    "//build:branding_buildflags",
+    "//build:chromeos_buildflags",
+    "//crypto",
+    "//mojo/public/cpp/bindings:struct_traits",
+    "//net",
     "//services/network/public/mojom",
   ]
+
+  if (_use_official_google_keys_and_generate_metrics_key_header) {
+    deps += [ "internal:generate_metrics_key_header" ]
+  }
+
+  if (is_apple) {
+    sources += [
+      "google_api_keys_mac.h",
+      "google_api_keys_mac.mm",
+    ]
+
+    frameworks = [ "Foundation.framework" ]
+  }
+
+  defines = [ "IS_GOOGLE_APIS_IMPL" ]
 }
 
 proto_library("oauth2_mint_token_consent_result_proto") {
@@ -177,17 +209,21 @@ proto_library("oauth2_mint_token_consent_result_proto") {
 static_library("test_support") {
   testonly = true
   sources = [
-    "gaia/core_account_id_for_testing.cc",
     "gaia/fake_gaia.cc",
     "gaia/fake_gaia.h",
     "gaia/fake_oauth2_access_token_manager.cc",
     "gaia/fake_oauth2_access_token_manager.h",
+    "gaia/gaia_auth_test_util.cc",
+    "gaia/gaia_auth_test_util.h",
+    "gaia/gaia_urls_overrider_for_testing.cc",
+    "gaia/gaia_urls_overrider_for_testing.h",
     "gaia/oauth2_access_token_manager_test_util.cc",
     "gaia/oauth2_access_token_manager_test_util.h",
   ]
 
   public_deps = [
     ":google_apis",
+    ":oauth2_mint_token_consent_result_proto",
     "//base",
     "//base/test:test_support",
     "//net:test_support",
@@ -219,6 +255,7 @@ test("google_apis_unittests") {
     "gaia/oauth2_access_token_manager_unittest.cc",
     "gaia/oauth2_api_call_flow_unittest.cc",
     "gaia/oauth2_id_token_decoder_unittest.cc",
+    "gaia/oauth2_mint_access_token_fetcher_adapter_unittest.cc",
     "gaia/oauth2_mint_token_flow_unittest.cc",
     "gaia/oauth_multilogin_result_unittest.cc",
     "gaia/oauth_request_signer_unittest.cc",
@@ -254,7 +291,6 @@ test("google_apis_unittests") {
   }
 
   if (is_fuchsia) {
-    use_cfv1 = false
     additional_manifest_fragments =
         [ "//build/config/fuchsia/test/network.shard.test-cml" ]
   }
@@ -268,6 +304,13 @@ test("google_apis_unittests") {
 
     deps += [ "//third_party/ocmock" ]
   }
+
+  if (is_chromeos) {
+    deps += [
+      "//google_apis/classroom:classroom_unittests",
+      "//google_apis/tasks:tasks_unittests",
+    ]
+  }
 }
 
 bundle_data("google_apis_unittest_bundle_data") {
@@ -275,6 +318,8 @@ bundle_data("google_apis_unittest_bundle_data") {
   sources = [
     "test/data/calendar/event_self_response_statuses.json",
     "test/data/calendar/event_statuses.json",
+    "test/data/calendar/event_with_invalid_conference_data_uri.json",
+    "test/data/calendar/event_with_missing_entry_point_type.json",
     "test/data/calendar/events.json",
     "test/data/calendar/invalid_events.json",
     "test/data/gaia/all_base_urls.json",
@@ -286,6 +331,9 @@ bundle_data("google_apis_unittest_bundle_data") {
     "test/data/gaia/not_a_json.txt",
     "test/data/gaia/one_base_url.json",
     "test/data/gaia/one_url.json",
+    "test/data/tasks/task.json",
+    "test/data/tasks/task_lists.json",
+    "test/data/tasks/tasks.json",
   ]
   outputs = [ "{{bundle_resources_dir}}/" +
               "{{source_root_relative_dir}}/{{source_file_part}}" ]

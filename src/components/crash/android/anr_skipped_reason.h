@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,9 @@ enum class AnrSkippedReason {
   kFilesystemReadFailure = 0,
   kFilesystemWriteFailure = 1,
   kMissingVersion = 2,
-  kMaxValue = kMissingVersion,
+  kOnlyMissingNative = 3,
+  kNotSkipped = 4,
+  kMaxValue = kNotSkipped,
 };
 
 #endif  // COMPONENTS_CRASH_ANDROID_ANR_SKIPPED_REASON_H_

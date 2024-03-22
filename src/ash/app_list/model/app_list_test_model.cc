@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,12 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "ash/public/cpp/app_list/app_list_config.h"
+#include "ash/public/cpp/app_list/app_list_controller.h"
 #include "base/memory/ptr_util.h"
+#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -39,7 +42,7 @@ AppListTestModel::AppListTestItem::AppListTestItem(const std::string& id,
   const int icon_dimension =
       SharedAppListConfig::instance().default_grid_icon_dimension();
   SetDefaultIconAndColor(CreateImageSkia(icon_dimension, icon_dimension),
-                         IconColor());
+                         IconColor(), /*is_placeholder_icon=*/false);
 }
 
 AppListTestModel::AppListTestItem::~AppListTestItem() = default;
@@ -152,6 +155,13 @@ void AppListTestModel::RequestAppListSortRevert() {
   requested_sort_order_.reset();
 }
 
+void AppListTestModel::RequestCommitTemporarySortOrder() {
+  // Committing the temporary sort order should not introduce item reorder so
+  // reset the sort order without reorder animation.
+  AppListController::Get()->UpdateAppListWithNewTemporarySortOrder(
+      /*new_order=*/std::nullopt, /*animate=*/false, base::NullCallback());
+}
+
 AppListItem* AppListTestModel::AddItemToFolder(AppListItem* item,
                                                const std::string& folder_id) {
   return AppListModel::AddItemToFolder(base::WrapUnique(item), folder_id);
@@ -207,14 +217,12 @@ void AppListTestModel::PopulateAppWithId(int id) {
 }
 
 std::string AppListTestModel::GetModelContent() {
-  std::string content;
-  for (size_t i = 0; i < top_level_item_list()->item_count(); ++i) {
-    if (i > 0)
-      content += ',';
-    AppListItem* item = top_level_item_list()->item_at(i);
-    content += item->is_page_break() ? "PageBreakItem" : item->id();
-  }
-  return content;
+  std::vector<std::string> ids;
+  ids.reserve(top_level_item_list()->item_count());
+
+  for (size_t i = 0; i < top_level_item_list()->item_count(); ++i)
+    ids.push_back(top_level_item_list()->item_at(i)->id());
+  return base::JoinString(ids, ",");
 }
 
 AppListTestModel::AppListTestItem* AppListTestModel::CreateItem(
@@ -236,6 +244,14 @@ AppListTestModel::AppListTestItem* AppListTestModel::CreateItem(
 AppListTestModel::AppListTestItem* AppListTestModel::CreateAndAddItem(
     const std::string& id) {
   std::unique_ptr<AppListTestItem> test_item(CreateItem(id));
+  AppListItem* item = AppListModel::AddItem(std::move(test_item));
+  return static_cast<AppListTestItem*>(item);
+}
+
+AppListTestModel::AppListTestItem* AppListTestModel::CreateAndAddPromiseItem(
+    const std::string& id) {
+  std::unique_ptr<AppListTestItem> test_item(CreateItem(id));
+  test_item->UpdateAppStatusForTesting(AppStatus::kPending);
   AppListItem* item = AppListModel::AddItem(std::move(test_item));
   return static_cast<AppListTestItem*>(item);
 }

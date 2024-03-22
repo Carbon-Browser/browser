@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import android.nfc.tech.TagTechnology;
 
 import java.io.IOException;
 
-/**
- * Utility class that provides I/O operations for NFC tags.
- */
+/** Utility class that provides I/O operations for NFC tags. */
 public class NfcTagHandler {
     private final TagTechnology mTech;
     private final TagTechnologyHandler mTechHandler;
@@ -56,9 +54,12 @@ public class NfcTagHandler {
     private interface TagTechnologyHandler {
         public void write(NdefMessage message)
                 throws IOException, TagLostException, FormatException, IllegalStateException;
+
         public boolean makeReadOnly() throws IOException, TagLostException;
+
         public NdefMessage read()
                 throws IOException, TagLostException, FormatException, IllegalStateException;
+
         public boolean canAlwaysOverwrite()
                 throws IOException, TagLostException, FormatException, IllegalStateException;
     }
@@ -143,9 +144,7 @@ public class NfcTagHandler {
         mSerialNumber = bytesToSerialNumber(id);
     }
 
-    /**
-     * Convert byte array to serial number string (4-7 ASCII hex digits concatenated by ":").
-     */
+    /** Convert byte array to serial number string (4-7 ASCII hex digits concatenated by ":"). */
     private static String bytesToSerialNumber(byte[] octets) {
         if (octets.length < 0) return null;
 
@@ -159,48 +158,26 @@ public class NfcTagHandler {
         return sb.toString();
     }
 
-    /**
-     * Get the serial number of this NFC tag.
-     */
+    /** Get the serial number of this NFC tag. */
     public String serialNumber() {
         return mSerialNumber;
     }
 
-    /**
-     * Connects to NFC tag.
-     */
-    public void connect() throws IOException, TagLostException {
+    /** Connects to NFC tag. */
+    public void connect() throws IOException, SecurityException, TagLostException {
         if (!mTech.isConnected()) {
             mTech.connect();
             mWasConnected = true;
         }
     }
 
-    /**
-     * Checks if NFC tag is connected.
-     */
-    public boolean isConnected() {
-        return mTech.isConnected();
-    }
-
-    /**
-     * Closes connection.
-     */
-    public void close() throws IOException {
-        mTech.close();
-    }
-
-    /**
-     * Writes NdefMessage to NFC tag.
-     */
+    /** Writes NdefMessage to NFC tag. */
     public void write(NdefMessage message)
             throws IOException, TagLostException, FormatException, IllegalStateException {
         mTechHandler.write(message);
     }
 
-    /**
-     * Make NFC tag read-only.
-     */
+    /** Make NFC tag read-only. */
     public boolean makeReadOnly() throws IOException, TagLostException {
         return mTechHandler.makeReadOnly();
     }
@@ -217,7 +194,7 @@ public class NfcTagHandler {
     public boolean isTagOutOfRange() {
         try {
             connect();
-        } catch (IOException e) {
+        } catch (IOException | SecurityException e) {
             return mWasConnected;
         }
         return false;

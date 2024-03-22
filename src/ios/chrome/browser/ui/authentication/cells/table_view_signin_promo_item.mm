@@ -1,17 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/authentication/cells/table_view_signin_promo_item.h"
 
-#include "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_configurator.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_constants.h"
 
 namespace {
 // The inner insets of the View content.
@@ -34,23 +31,14 @@ const CGFloat kMargin = 16;
            withStyler:(ChromeTableViewStyler*)styler {
   [super configureCell:tableCell withStyler:styler];
   TableViewSigninPromoCell* cell =
-      base::mac::ObjCCastStrict<TableViewSigninPromoCell>(tableCell);
+      base::apple::ObjCCastStrict<TableViewSigninPromoCell>(tableCell);
   cell.signinPromoView.delegate = self.delegate;
   cell.signinPromoView.textLabel.text = self.text;
   [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
-  [self.configurator configureSigninPromoView:cell.signinPromoView];
+  [self.configurator configureSigninPromoView:cell.signinPromoView
+                                    withStyle:SigninPromoViewStyleStandard];
   if (styler.cellTitleColor)
     cell.signinPromoView.textLabel.textColor = styler.cellTitleColor;
-  if (styler.tintColor) {
-    cell.signinPromoView.primaryButton.backgroundColor = styler.tintColor;
-    [cell.signinPromoView.secondaryButton setTitleColor:styler.tintColor
-                                               forState:UIControlStateNormal];
-  }
-  if (styler.solidButtonTextColor) {
-    [cell.signinPromoView.primaryButton
-        setTitleColor:styler.solidButtonTextColor
-             forState:UIControlStateNormal];
-  }
 }
 
 @end
@@ -87,6 +75,11 @@ const CGFloat kMargin = 16;
     ]];
   }
   return self;
+}
+
+- (void)prepareForReuse {
+  [super prepareForReuse];
+  [self.signinPromoView prepareForReuse];
 }
 
 @end

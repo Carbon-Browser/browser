@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,11 +52,7 @@ void LoginTabHelper::DidStartNavigation(
       navigation_handle->IsSameDocument())
     return;
 
-  if (!login_handler_)
-    return;
-
   login_handler_.reset();
-  url_for_login_handler_ = GURL();
 }
 
 void LoginTabHelper::DidFinishNavigation(
@@ -108,10 +104,9 @@ void LoginTabHelper::DidFinishNavigation(
   }
 
   challenge_ = navigation_handle->GetAuthChallengeInfo().value();
-  network_isolation_key_ =
-      navigation_handle->GetIsolationInfo().network_isolation_key();
+  network_anonymization_key_ =
+      navigation_handle->GetIsolationInfo().network_anonymization_key();
 
-  url_for_login_handler_ = navigation_handle->GetURL();
   login_handler_ = LoginHandler::Create(
       navigation_handle->GetAuthChallengeInfo().value(),
       navigation_handle->GetWebContents(),
@@ -217,7 +212,6 @@ LoginTabHelper::LoginTabHelper(content::WebContents* web_contents)
 void LoginTabHelper::HandleCredentials(
     const absl::optional<net::AuthCredentials>& credentials) {
   login_handler_.reset();
-  url_for_login_handler_ = GURL();
 
   if (credentials.has_value()) {
     content::StoragePartition* storage_partition =
@@ -227,7 +221,7 @@ void LoginTabHelper::HandleCredentials(
     // LoginTabHelper) could be destroyed while the network service is
     // processing the new cache entry.
     storage_partition->GetNetworkContext()->AddAuthCacheEntry(
-        challenge_, network_isolation_key_, credentials.value(),
+        challenge_, network_anonymization_key_, credentials.value(),
         base::BindOnce(&LoginTabHelper::Reload,
                        weak_ptr_factory_.GetWeakPtr()));
   }

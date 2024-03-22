@@ -39,8 +39,7 @@ namespace blink {
 AudioDSPKernelProcessor::AudioDSPKernelProcessor(float sample_rate,
                                                  unsigned number_of_channels,
                                                  unsigned render_quantum_frames)
-    : AudioProcessor(sample_rate, number_of_channels, render_quantum_frames),
-      has_just_reset_(true) {}
+    : AudioProcessor(sample_rate, number_of_channels, render_quantum_frames) {}
 
 void AudioDSPKernelProcessor::Initialize() {
   if (IsInitialized()) {
@@ -56,7 +55,6 @@ void AudioDSPKernelProcessor::Initialize() {
   }
 
   initialized_ = true;
-  has_just_reset_ = true;
 }
 
 void AudioDSPKernelProcessor::Uninitialize() {
@@ -122,11 +120,6 @@ void AudioDSPKernelProcessor::Reset() {
     return;
   }
 
-  // Forces snap to parameter values - first time.
-  // Any processing depending on this value must set it to false at the
-  // appropriate time.
-  has_just_reset_ = true;
-
   base::AutoLock locker(process_lock_);
   for (auto& kernel : kernels_) {
     kernel->Reset();
@@ -152,7 +145,7 @@ double AudioDSPKernelProcessor::TailTime() const {
   base::AutoTryLock try_locker(process_lock_);
   if (try_locker.is_acquired()) {
     // It is expected that all the kernels have the same tailTime.
-    return !kernels_.IsEmpty() ? kernels_.front()->TailTime() : 0;
+    return !kernels_.empty() ? kernels_.front()->TailTime() : 0;
   }
   // Since we don't want to block the Audio Device thread, we return a large
   // value instead of trying to acquire the lock.
@@ -164,7 +157,7 @@ double AudioDSPKernelProcessor::LatencyTime() const {
   base::AutoTryLock try_locker(process_lock_);
   if (try_locker.is_acquired()) {
     // It is expected that all the kernels have the same latencyTime.
-    return !kernels_.IsEmpty() ? kernels_.front()->LatencyTime() : 0;
+    return !kernels_.empty() ? kernels_.front()->LatencyTime() : 0;
   }
   // Since we don't want to block the Audio Device thread, we return a large
   // value instead of trying to acquire the lock.

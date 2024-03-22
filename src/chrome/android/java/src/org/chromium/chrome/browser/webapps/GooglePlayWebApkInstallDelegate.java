@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.chrome.browser.webapps;
 
 import org.chromium.base.Callback;
 
-/**
- * Defines an interface for installing WebAPKs via Google Play.
- */
+/** Defines an interface for installing WebAPKs via Google Play. */
 public interface GooglePlayWebApkInstallDelegate {
     /**
      * Uses Google Play to install WebAPK asynchronously.
@@ -18,7 +16,11 @@ public interface GooglePlayWebApkInstallDelegate {
      * @param token The token from WebAPK Minter Server.
      * @param callback The callback to invoke when the install completes, times out or fails.
      */
-    void installAsync(String packageName, int version, String title, String token,
+    void installAsync(
+            String packageName,
+            int version,
+            String title,
+            String token,
             Callback<Integer> callback);
 
     /**
@@ -29,6 +31,10 @@ public interface GooglePlayWebApkInstallDelegate {
      * @param token The token from WebAPK Minter Server.
      * @param callback The callback to invoke when the update completes, times out or fails.
      */
-    void updateAsync(String packageName, int version, String title, String token,
+    void updateAsync(
+            String packageName,
+            int version,
+            String title,
+            String token,
             Callback<Integer> callback);
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,10 +32,6 @@ gfx::Point NullAXActionTarget::MaximumScrollOffset() const {
 }
 
 void NullAXActionTarget::SetScrollOffset(const gfx::Point& point) const {}
-
-bool NullAXActionTarget::SetSelected(bool selected) const {
-  return false;
-}
 
 bool NullAXActionTarget::SetSelection(const AXActionTarget* anchor_object,
                                       int anchor_offset,

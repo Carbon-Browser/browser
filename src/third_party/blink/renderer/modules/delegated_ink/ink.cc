@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@ namespace blink {
 const char Ink::kSupplementName[] = "Ink";
 
 Ink* Ink::ink(Navigator& navigator) {
-  DCHECK(RuntimeEnabledFeatures::DelegatedInkTrailsEnabled());
   Ink* ink = Supplement<Navigator>::From<Ink>(navigator);
   if (!ink) {
     ink = MakeGarbageCollected<Ink>(navigator);
@@ -31,8 +30,6 @@ Ink::Ink(Navigator& navigator) : Supplement<Navigator>(navigator) {}
 ScriptPromise Ink::requestPresenter(ScriptState* state,
                                     InkPresenterParam* presenter_param,
                                     ExceptionState& exception_state) {
-  DCHECK(RuntimeEnabledFeatures::DelegatedInkTrailsEnabled());
-
   if (!state->ContextIsValid()) {
     exception_state.ThrowException(
         ToExceptionCode(ESErrorType::kError),

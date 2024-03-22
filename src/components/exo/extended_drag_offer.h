@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/data_offer_observer.h"
 
 namespace gfx {
@@ -42,11 +43,11 @@ class ExtendedDragOffer : public DataOfferObserver {
   // DataOfferObserver:
   void OnDataOfferDestroying(DataOffer* offer) override;
 
-  DataOffer* offer_ = nullptr;
+  raw_ptr<DataOffer, ExperimentalAsh> offer_ = nullptr;
 
   // Created and destroyed at wayland/zcr_extended_drag.cc and its lifetime is
   // tied to the zcr_extended_drag_source_v1 object it's attached to.
-  Delegate* const delegate_;
+  const raw_ptr<Delegate, ExperimentalAsh> delegate_;
 };
 
 }  // namespace exo

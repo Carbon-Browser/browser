@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,9 +29,7 @@ HRESULT FontFilePathAndTtcIndex(IDWriteFont* font,
                                 uint32_t& ttc_index);
 HRESULT AddFilesForFont(IDWriteFont* font,
                         const std::u16string& windows_fonts_path,
-                        std::set<std::wstring>* path_set,
-                        std::set<std::wstring>* custom_font_path_set,
-                        uint32_t* ttc_index);
+                        std::set<std::wstring>* path_set);
 
 std::u16string GetWindowsFontsPath();
 

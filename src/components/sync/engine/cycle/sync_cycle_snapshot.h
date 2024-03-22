@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,11 @@
 #include <vector>
 
 #include "base/time/time.h"
+#include "base/values.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/progress_marker_map.h"
 #include "components/sync/engine/cycle/model_neutral_state.h"
 #include "components/sync/protocol/sync_enums.pb.h"
-
-namespace base {
-class DictionaryValue;
-}
 
 namespace syncer {
 
@@ -46,7 +43,7 @@ class SyncCycleSnapshot {
   SyncCycleSnapshot(const SyncCycleSnapshot& other);
   ~SyncCycleSnapshot();
 
-  std::unique_ptr<base::DictionaryValue> ToValue() const;
+  base::Value::Dict ToValue() const;
 
   std::string ToString() const;
 

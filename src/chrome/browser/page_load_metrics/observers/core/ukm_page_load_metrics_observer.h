@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,16 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "base/trace_event/typed_macros.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer.h"
 #include "content/public/browser/navigation_handle_timing.h"
 #include "content/public/browser/site_instance_process_assignment.h"
 #include "net/base/load_timing_info.h"
-#include "net/http/http_response_info.h"
+#include "net/http/http_connection_info.h"
 #include "net/nqe/effective_connection_type.h"
 #include "services/metrics/public/cpp/ukm_source.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/perfetto/include/perfetto/tracing/event_context.h"
 #include "ui/base/page_transition_types.h"
 
 namespace content {
@@ -102,10 +104,11 @@ class UkmPageLoadMetricsObserver
       content::RenderFrameHost* subframe_rfh,
       const page_load_metrics::mojom::CpuTiming& timing) override;
 
-  void DidActivatePortal(base::TimeTicks activation_time) override;
-
   void OnFirstContentfulPaintInPage(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
+
+  void OnSoftNavigationUpdated(
+      const page_load_metrics::mojom::SoftNavigationMetrics&) override;
 
   // Whether the current page load is an Offline Preview. Must be called from
   // OnCommit. Virtual for testing.
@@ -139,6 +142,28 @@ class UkmPageLoadMetricsObserver
 
   void ReportLayoutStability();
 
+  // Returns the current Core Web Vital definition of Cumulative Layout Shift.
+  // Returns nullopt if current value should not be reported to UKM.
+  absl::optional<float> GetCoreWebVitalsCLS();
+  absl::optional<float> GetCoreWebVitalsSoftNavigationIntervalCLS();
+
+  // Returns the current Core Web Vital definition of Largest Contentful Paint.
+  // The caller needs to check whether the value should be reported to UKM based
+  // on when the page was backgrounded and other validations.
+  const page_load_metrics::ContentfulPaintTimingInfo&
+  GetCoreWebVitalsLcpTimingInfo();
+
+  const page_load_metrics::ContentfulPaintTimingInfo&
+  GetSoftNavigationLargestContentfulPaint() const;
+
+  void RecordSoftNavigationMetrics(
+      ukm::SourceId ukm_source_id,
+      page_load_metrics::mojom::SoftNavigationMetrics& soft_navigation_metrics);
+
+  void RecordResponsivenessMetricsBeforeSoftNavigationForMainFrame();
+
+  void RecordLayoutShiftBeforeSoftNavigationForMainFrame();
+
   void RecordAbortMetrics(
       const page_load_metrics::mojom::PageLoadTiming& timing,
       base::TimeTicks page_end_time,
@@ -148,11 +173,9 @@ class UkmPageLoadMetricsObserver
       ukm::builders::PageLoad& builder,
       const page_load_metrics::PageEndReason page_end_reason);
 
-  void RecordInputTimingMetrics();
   void RecordSmoothnessMetrics();
   void RecordResponsivenessMetrics();
 
-  void RecordMobileFriendlinessMetrics();
   void RecordPageLoadTimestampMetrics(ukm::builders::PageLoad& builder);
 
   // Captures the site engagement score for the committed URL and
@@ -204,6 +227,18 @@ class UkmPageLoadMetricsObserver
   // background.
   void ReportLayoutInstabilityAfterFirstForeground();
 
+  // Record some largest contentful paint metrics that have occurred on the
+  // page until the first time the page starts in the foreground and moves to
+  // the background.
+  void ReportLargestContentfulPaintAfterFirstForeground();
+
+  // Record some Responsiveness metrics that have occurred on the page until
+  // the first time the page moves from the foreground to the background.
+  void ReportResponsivenessAfterFirstForeground();
+
+  // Tracing helper for key page load events.
+  void EmitUserTimingEvent(base::TimeDelta duration, const char event_name[]);
+
   // Guaranteed to be non-null during the lifetime of |this|.
   raw_ptr<network::NetworkQualityTracker> network_quality_tracker_;
 
@@ -241,6 +276,9 @@ class UkmPageLoadMetricsObserver
   content::NavigationHandleTiming navigation_handle_timing_;
   absl::optional<net::LoadTimingInfo> main_frame_timing_;
 
+  // First contentful paint as reported in OnFirstContentfulPaintInPage.
+  absl::optional<base::TimeDelta> first_contentful_paint_;
+
   // How the SiteInstance for the committed page was assigned a renderer.
   absl::optional<content::SiteInstanceProcessAssignment>
       render_process_assignment_;
@@ -253,6 +291,9 @@ class UkmPageLoadMetricsObserver
 
   // True if the page main resource was served from disk cache.
   bool was_cached_ = false;
+
+  // True if the navigation is a reload after the page has been discarded.
+  bool was_discarded_ = false;
 
   // Whether the first URL in the redirect chain matches the default search
   // engine template.
@@ -270,16 +311,17 @@ class UkmPageLoadMetricsObserver
   // didn't get a response from the CookieManager before recording metrics.
   absl::optional<bool> main_frame_request_had_cookies_;
 
+  // Set to true if the main frame resource has a 'Cache-control: no-store'
+  // response header and set to false otherwise. Not set if there is no response
+  // header present.
+  absl::optional<bool> main_frame_resource_has_no_store_;
+
   // The browser context this navigation is operating in.
   raw_ptr<content::BrowserContext> browser_context_ = nullptr;
 
   // Whether the navigation resulted in the main frame being hosted in
   // a different process.
   bool navigation_is_cross_process_ = false;
-
-  // True if this page was loaded in a portal and never activated. UKMs are
-  // not recorded for this page unless the portal is activated.
-  bool is_portal_ = false;
 
   // Difference between indices of the previous and current navigation entries
   // (i.e. item history for the current tab).
@@ -303,7 +345,7 @@ class UkmPageLoadMetricsObserver
   base::Time navigation_start_time_;
 
   // The connection info for the committed URL.
-  absl::optional<net::HttpResponseInfo::ConnectionInfo> connection_info_;
+  absl::optional<net::HttpConnectionInfo> connection_info_;
 
   base::ReadOnlySharedMemoryMapping ukm_smoothness_data_;
 
@@ -314,6 +356,12 @@ class UkmPageLoadMetricsObserver
   // True if the TemplateURLService has a search engine template for the
   // navigation and a scoped search would have been possible.
   bool was_scoped_search_like_navigation_ = false;
+
+  // True if the refresh rate is capped at 30Hz because of power saver mode when
+  // navigation starts. It is possible but very unlikely for this to change mid
+  // navigation, for instance due to a change by the user in settings or the
+  // battery being recharged above 20%.
+  bool refresh_rate_throttled_ = false;
 
   base::WeakPtrFactory<UkmPageLoadMetricsObserver> weak_factory_{this};
 };

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,7 @@ std::unique_ptr<APIPermission> CreateAPIPermission(
 // add the corresponding permission message rule to
 // ChromePermissionMessageRule::GetAllRules as well.
 constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
+    {APIPermissionID::kActiveTab, "activeTab"},
     {APIPermissionID::kAlarms, "alarms",
      APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kAlphaEnabled, "app.window.alpha",
@@ -66,7 +67,7 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
     {APIPermissionID::kDiagnostics, "diagnostics",
      APIPermissionInfo::kFlagCannotBeOptional},
     {APIPermissionID::kDns, "dns"},
-    {APIPermissionID::kExternallyConnectableAllUrls,
+    {APIPermissionID::kDeprecated_ExternallyConnectableAllUrls,
      "externally_connectable.all_urls",
      APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kFeedbackPrivate, "feedbackPrivate",
@@ -113,8 +114,11 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
     {APIPermissionID::kNetworkingPrivate, "networkingPrivate",
      APIPermissionInfo::kFlagCannotBeOptional},
     {APIPermissionID::kNewTabPageOverride, "newTabPageOverride",
-     APIPermissionInfo::kFlagCannotBeOptional |
+     APIPermissionInfo::kFlagInternal |
+         APIPermissionInfo::kFlagCannotBeOptional |
          APIPermissionInfo::kFlagRequiresManagementUIWarning},
+    {APIPermissionID::kOdfsConfigPrivate, "odfsConfigPrivate",
+     APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kOffscreen, "offscreen",
      APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kPower, "power",
@@ -138,6 +142,8 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
      APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kSystemCpu, "system.cpu",
      APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
+    {APIPermissionID::kSystemLog, "systemLog",
+     APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kSystemMemory, "system.memory",
      APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kSystemNetwork, "system.network",
@@ -150,6 +156,8 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
      APIPermissionInfo::kFlagCannotBeOptional |
          APIPermissionInfo::kFlagSupportsContentCapabilities |
          APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
+    {APIPermissionID::kUserScripts, "userScripts",
+     APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kUsb, "usb", APIPermissionInfo::kFlagNone},
     {APIPermissionID::kUsbDevice, "usbDevices",
      extensions::APIPermissionInfo::kFlagNone,
@@ -161,6 +169,7 @@ constexpr APIPermissionInfo::InitInfo permissions_to_register[] = {
      APIPermissionInfo::kFlagCannotBeOptional |
          APIPermissionInfo::kFlagDoesNotRequireManagedSessionFullLoginWarning},
     {APIPermissionID::kWebRequest, "webRequest"},
+    {APIPermissionID::kWebRequestAuthProvider, "webRequestAuthProvider"},
     {APIPermissionID::kWebRequestBlocking, "webRequestBlocking"},
     {APIPermissionID::kWebView, "webview",
      APIPermissionInfo::kFlagCannotBeOptional},

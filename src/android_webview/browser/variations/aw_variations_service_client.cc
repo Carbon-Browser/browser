@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,5 +42,10 @@ bool AwVariationsServiceClient::OverridesRestrictParameter(
 bool AwVariationsServiceClient::IsEnterprise() {
   return false;
 }
+
+// WebView doesn't support Profiles (or user signin / sync) and therefore there
+// is nothing to do here.
+void AwVariationsServiceClient::RemoveGoogleGroupsFromPrefsForDeletedProfiles(
+    PrefService* local_state) {}
 
 }  // namespace android_webview

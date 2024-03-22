@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -217,8 +217,8 @@ class GPU_EXPORT CommonDecoder {
 
   #undef COMMON_COMMAND_BUFFER_CMD_OP
 
-  raw_ptr<CommandBufferServiceBase> command_buffer_service_;
-  raw_ptr<DecoderClient> client_;
+  raw_ptr<CommandBufferServiceBase, DanglingUntriaged> command_buffer_service_;
+  raw_ptr<DecoderClient, DanglingUntriaged> client_;
   size_t max_bucket_size_;
 
   using BucketMap = std::map<uint32_t, std::unique_ptr<Bucket>>;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include "base/strings/stringprintf.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/frame_impl_browser_test_base.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/test_data.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
@@ -28,6 +28,11 @@ class PermissionsBrowserTest : public FrameImplTestBaseWithServer {
   void SetUpOnMainThread() override {
     FrameImplTestBaseWithServer::SetUpOnMainThread();
     frame_ = FrameForTest::Create(context(), fuchsia::web::CreateFrameParams());
+  }
+
+  void TearDownOnMainThread() override {
+    frame_ = {};
+    FrameImplTestBaseWithServer::TearDownOnMainThread();
   }
 
   void GrantPermission(fuchsia::web::PermissionType type,

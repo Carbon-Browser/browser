@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,44 +40,45 @@ declare global {
         MODIFIED = 'modified',
       }
 
-      export type ExtensionActivity = {
-        activityId?: string,
-        extensionId?: string, activityType: ExtensionActivityType,
-        time?: number,
-        apiCall?: string,
-        args?: string,
-        count?: number,
-        pageUrl?: string,
-        pageTitle?: string,
-        argUrl?: string,
+      export interface ExtensionActivity {
+        activityId?: string;
+        extensionId?: string;
+        activityType: ExtensionActivityType;
+        time?: number;
+        apiCall?: string;
+        args?: string;
+        count?: number;
+        pageUrl?: string;
+        pageTitle?: string;
+        argUrl?: string;
         other?: {
           prerender?: boolean,
           domVerb?: ExtensionActivityDomVerb,
           webRequest?: string,
           extra?: string,
-        },
-      };
+        };
+      }
 
-      export type Filter = {
-        extensionId?: string, activityType: ExtensionActivityFilter,
-        apiCall?: string,
-        pageUrl?: string,
-        argUrl?: string,
-        daysAgo?: number
-      };
+      export interface Filter {
+        extensionId?: string;
+        activityType: ExtensionActivityFilter;
+        apiCall?: string;
+        pageUrl?: string;
+        argUrl?: string;
+        daysAgo?: number;
+      }
 
-      export type ActivityResultSet = {
-        activities: chrome.activityLogPrivate.ExtensionActivity[],
-      };
+      export interface ActivityResultSet {
+        activities: chrome.activityLogPrivate.ExtensionActivity[];
+      }
 
       type VoidCallback = () => void;
 
-      export function getExtensionActivities(
-          filter: Filter, callback: (result: ActivityResultSet) => void): void;
-      export function deleteActivities(
-          activityIds: string[], callback?: VoidCallback): void;
-      export function deleteActivitiesByExtension(
-          extensionId: string, callback?: VoidCallback): void;
+      export function getExtensionActivities(filter: Filter):
+          Promise<ActivityResultSet>;
+      export function deleteActivities(activityIds: string[]): Promise<void>;
+      export function deleteActivitiesByExtension(extensionId: string):
+          Promise<void>;
       export function deleteDatabase(): void;
       export function deleteUrls(urls: string[]): void;
 

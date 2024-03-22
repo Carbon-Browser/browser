@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -122,7 +122,7 @@ TEST(NtlmBufferReaderTest, ReadBytes) {
   ASSERT_TRUE(reader.ReadBytes(actual));
   ASSERT_EQ(0, memcmp(actual, expected, std::size(actual)));
   ASSERT_TRUE(reader.IsEndOfBuffer());
-  ASSERT_FALSE(reader.ReadBytes(base::make_span(actual, 1)));
+  ASSERT_FALSE(reader.ReadBytes(base::make_span(actual, 1u)));
 }
 
 TEST(NtlmBufferReaderTest, ReadSecurityBuffer) {

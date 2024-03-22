@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,23 +32,23 @@ namespace {
 
 // Obtain an authenticated DRM fd from X11 and create a GbmDevice with it.
 std::unique_ptr<ui::GbmDevice> CreateX11GbmDevice() {
+  if (getenv("RUNNING_UNDER_RR") != nullptr) {
+    LOG(WARNING) << "Running under rr, disabling dri3";
+    return nullptr;
+  }
+
   auto* connection = x11::Connection::Get();
   // |connection| may be nullptr in headless mode.
   if (!connection) {
-    LOG(ERROR) << "Could not create x11 connection.";
+    LOG(WARNING) << "Could not create x11 connection.";
     return nullptr;
   }
 
   auto& dri3 = connection->dri3();
   if (!dri3.present()) {
-    LOG(ERROR) << "dri3 extension not supported.";
+    LOG(WARNING) << "dri3 extension not supported.";
     return nullptr;
   }
-
-  // Let the X11 server know the DRI3 client version. This is required to use
-  // the DRI3 extension. We don't care about the returned server version because
-  // we only use features from the original DRI3 interface.
-  dri3.QueryVersion({x11::Dri3::major_version, x11::Dri3::minor_version});
 
   // Obtain an authenticated DRM fd.
   auto reply = dri3.Open({connection->default_root(), 0}).Sync();
@@ -148,6 +148,12 @@ std::unique_ptr<GbmBuffer> GpuMemoryBufferSupportX11::CreateBuffer(
 
   return device_->CreateBuffer(GetFourCCFormatFromBufferFormat(format), size,
                                BufferUsageToGbmFlags(usage));
+}
+
+bool GpuMemoryBufferSupportX11::CanCreateNativePixmapForFormat(
+    gfx::BufferFormat format) {
+  return device_ && device_->CanCreateBufferForFormat(
+                        GetFourCCFormatFromBufferFormat(format));
 }
 
 std::unique_ptr<GbmBuffer> GpuMemoryBufferSupportX11::CreateBufferFromHandle(

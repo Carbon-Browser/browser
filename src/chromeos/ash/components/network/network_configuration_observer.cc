@@ -1,10 +1,10 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/network_configuration_observer.h"
 
-namespace chromeos {
+namespace ash {
 
 // NetworkConfigurationObserver::NetworkConfigurationObserver() = default;
 
@@ -17,7 +17,7 @@ void NetworkConfigurationObserver::OnConfigurationCreated(
 void NetworkConfigurationObserver::OnConfigurationModified(
     const std::string& service_path,
     const std::string& guid,
-    const base::Value* set_properties) {}
+    const base::Value::Dict* set_properties) {}
 
 void NetworkConfigurationObserver::OnBeforeConfigurationRemoved(
     const std::string& service_path,
@@ -29,4 +29,4 @@ void NetworkConfigurationObserver::OnConfigurationRemoved(
 
 void NetworkConfigurationObserver::OnShuttingDown() {}
 
-}  // namespace chromeos
+}  // namespace ash

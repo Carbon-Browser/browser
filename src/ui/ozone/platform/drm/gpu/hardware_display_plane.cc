@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,15 @@
 
 #include <drm_fourcc.h>
 #include <drm_mode.h>
+
 #include <string>
 
 #include "base/logging.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/trace_event/traced_value.h"
+#include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 #include "ui/ozone/platform/drm/common/drm_util.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
 #include "ui/ozone/platform/drm/gpu/drm_gpu_util.h"
@@ -47,37 +50,37 @@ std::string IdSetToString(const base::flat_set<uint32_t>& ids) {
 }
 
 }  // namespace
+
 HardwareDisplayPlane::Properties::Properties() = default;
 HardwareDisplayPlane::Properties::~Properties() = default;
 
 HardwareDisplayPlane::HardwareDisplayPlane(uint32_t id) : id_(id) {}
 
-HardwareDisplayPlane::~HardwareDisplayPlane() {}
+HardwareDisplayPlane::~HardwareDisplayPlane() = default;
 
 bool HardwareDisplayPlane::CanUseForCrtcId(uint32_t crtc_id) const {
   return possible_crtc_ids_.contains(crtc_id);
 }
 
-void HardwareDisplayPlane::AsValueInto(
-    base::trace_event::TracedValue* value) const {
-  value->SetInteger("plane_id", id_);
-  value->SetInteger("owning_crtc", owning_crtc_);
-  value->SetBoolean("in_use", in_use_);
-  {
-    auto scoped_array = value->BeginArrayScoped("possible_crtc_ids");
-    for (auto id : possible_crtc_ids_)
-      value->AppendInteger(id);
-  }
+void HardwareDisplayPlane::WriteIntoTrace(perfetto::TracedValue context) const {
+  auto dict = std::move(context).WriteDictionary();
 
+  dict.Add("plane_id", id_);
+  dict.Add("owning_crtc", owning_crtc_);
+  dict.Add("in_use", in_use_);
+
+  dict.Add("possible_crtc_ids", possible_crtc_ids_);
+
+  auto type = dict.AddItem("type");
   switch (properties_.type.value) {
     case DRM_PLANE_TYPE_OVERLAY:
-      value->SetString("type", "DRM_PLANE_TYPE_OVERLAY");
+      std::move(type).WriteString("DRM_PLANE_TYPE_OVERLAY");
       break;
     case DRM_PLANE_TYPE_PRIMARY:
-      value->SetString("type", "DRM_PLANE_TYPE_PRIMARY");
+      std::move(type).WriteString("DRM_PLANE_TYPE_PRIMARY");
       break;
     case DRM_PLANE_TYPE_CURSOR:
-      value->SetString("type", "DRM_PLANE_TYPE_CURSOR");
+      std::move(type).WriteString("DRM_PLANE_TYPE_CURSOR");
       break;
     default:
       NOTREACHED();
@@ -96,7 +99,7 @@ bool HardwareDisplayPlane::Initialize(DrmDevice* drm) {
   if (properties_.in_formats.id) {
     ScopedDrmPropertyBlobPtr blob(
         drm->GetPropertyBlob(properties_.in_formats.value));
-    DCHECK(blob);
+    DCHECK(blob) << "No blob found with id=" << properties_.in_formats.value;
     ParseSupportedFormatsAndModifiers(blob.get(), &supported_formats_,
                                       &supported_format_modifiers_);
   }
@@ -110,11 +113,10 @@ bool HardwareDisplayPlane::Initialize(DrmDevice* drm) {
     type_ = properties_.type.value;
 
   if (properties_.plane_color_encoding.id) {
-    color_encoding_bt601_ =
-        GetEnumValueForName(drm->get_fd(), properties_.plane_color_encoding.id,
-                            "ITU-R BT.601 YCbCr");
+    color_encoding_bt601_ = GetEnumValueForName(
+        *drm, properties_.plane_color_encoding.id, "ITU-R BT.601 YCbCr");
     color_range_limited_ = GetEnumValueForName(
-        drm->get_fd(), properties_.plane_color_range.id, "YCbCr limited range");
+        *drm, properties_.plane_color_range.id, "YCbCr limited range");
   }
 
   VLOG(3) << "Initialized plane=" << id_
@@ -151,8 +153,7 @@ std::vector<uint64_t> HardwareDisplayPlane::ModifiersForFormat(
     uint32_t format) const {
   std::vector<uint64_t> modifiers;
 
-  auto it =
-      std::find(supported_formats_.begin(), supported_formats_.end(), format);
+  auto it = base::ranges::find(supported_formats_, format);
   if (it == supported_formats_.end())
     return modifiers;
 
@@ -197,6 +198,10 @@ void HardwareDisplayPlane::InitializeProperties(DrmDevice* drm) {
                         &properties_.plane_color_encoding);
   GetDrmPropertyForName(drm, props.get(), "COLOR_RANGE",
                         &properties_.plane_color_range);
+  if (display::features::IsPanelSelfRefresh2Enabled()) {
+    GetDrmPropertyForName(drm, props.get(), "FB_DAMAGE_CLIPS",
+                          &properties_.plane_fb_damage_clips);
+  }
 }
 
 }  // namespace ui

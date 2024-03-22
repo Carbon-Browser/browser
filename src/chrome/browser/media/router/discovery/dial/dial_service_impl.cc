@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,19 @@
 
 #include <algorithm>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -40,7 +42,6 @@
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "base/task/task_runner_util.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -125,9 +126,9 @@ std::string BuildRequest() {
       "USER-AGENT: %s/%s %s\r\n"
       "\r\n",
       kDialRequestAddress, kDialRequestPort, kDialMaxResponseDelaySecs,
-      kDialSearchType, version_info::GetProductName().c_str(),
-      version_info::GetVersionNumber().c_str(),
-      version_info::GetOSType().c_str()));
+      kDialSearchType, version_info::GetProductName().data(),
+      version_info::GetVersionNumber().data(),
+      version_info::GetOSType().data()));
   // 1500 is a good MTU value for most Ethernet LANs.
   DCHECK_LE(request.size(), 1500U);
   return request;
@@ -137,11 +138,11 @@ std::string BuildRequest() {
 // Finds the IP address of the preferred interface of network type |type|
 // to bind the socket and inserts the address into |bind_address_list|. This
 // ChromeOS version can prioritize wifi and ethernet interfaces.
-void InsertBestBindAddressChromeOS(const chromeos::NetworkTypePattern& type,
+void InsertBestBindAddressChromeOS(const ash::NetworkTypePattern& type,
                                    net::IPAddressList* bind_address_list) {
-  const chromeos::NetworkState* state = chromeos::NetworkHandler::Get()
-                                            ->network_state_handler()
-                                            ->ConnectedNetworkByType(type);
+  const ash::NetworkState* state = ash::NetworkHandler::Get()
+                                       ->network_state_handler()
+                                       ->ConnectedNetworkByType(type);
   if (!state)
     return;
   std::string state_ip_address = state->GetIpAddress();
@@ -156,10 +157,10 @@ net::IPAddressList GetBestBindAddressOnUIThread() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   net::IPAddressList bind_address_list;
-  if (chromeos::NetworkHandler::IsInitialized()) {
-    InsertBestBindAddressChromeOS(chromeos::NetworkTypePattern::Ethernet(),
+  if (ash::NetworkHandler::IsInitialized()) {
+    InsertBestBindAddressChromeOS(ash::NetworkTypePattern::Ethernet(),
                                   &bind_address_list);
-    InsertBestBindAddressChromeOS(chromeos::NetworkTypePattern::WiFi(),
+    InsertBestBindAddressChromeOS(ash::NetworkTypePattern::WiFi(),
                                   &bind_address_list);
   }
   return bind_address_list;
@@ -537,7 +538,7 @@ void DialServiceImpl::NotifyOnDiscoveryRequest() {
     return;
   }
 
-  client_.OnDiscoveryRequest();
+  client_->OnDiscoveryRequest();
   // If we need to send additional requests, schedule a timer to do so.
   if (num_requests_sent_ < max_requests_ && num_requests_sent_ == 1) {
     // TODO(imcheng): Move this to SendOneRequest() once the implications are
@@ -553,13 +554,13 @@ void DialServiceImpl::NotifyOnDeviceDiscovered(
   if (!discovery_active_) {
     return;
   }
-  client_.OnDeviceDiscovered(device_data);
+  client_->OnDeviceDiscovered(device_data);
 }
 
 void DialServiceImpl::NotifyOnError() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  client_.OnError(HasOpenSockets() ? DIAL_SERVICE_SOCKET_ERROR
-                                   : DIAL_SERVICE_NO_INTERFACES);
+  client_->OnError(HasOpenSockets() ? DIAL_SERVICE_SOCKET_ERROR
+                                    : DIAL_SERVICE_NO_INTERFACES);
 }
 
 void DialServiceImpl::FinishDiscovery() {
@@ -571,7 +572,7 @@ void DialServiceImpl::FinishDiscovery() {
   request_timer_.Stop();
   discovery_active_ = false;
   num_requests_sent_ = 0;
-  client_.OnDiscoveryFinished();
+  client_->OnDiscoveryFinished();
 }
 
 bool DialServiceImpl::HasOpenSockets() {

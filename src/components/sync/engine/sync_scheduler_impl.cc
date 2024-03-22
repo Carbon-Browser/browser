@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,19 @@
 #include <cstring>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
 #include "base/rand_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/sync/base/features.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/engine/backoff_delay_provider.h"
+#include "components/sync/engine/sync_protocol_error.h"
 #include "components/sync/protocol/sync_enums.pb.h"
 
 using base::TimeTicks;
@@ -58,7 +59,6 @@ bool ShouldRequestEarlyExit(const SyncProtocolError& error) {
       return false;
     case NOT_MY_BIRTHDAY:
     case CLIENT_DATA_OBSOLETE:
-    case CLEAR_PENDING:
     case DISABLED_BY_ADMIN:
     case ENCRYPTION_OBSOLETE:
       // If we send terminate sync early then |sync_cycle_ended| notification
@@ -67,18 +67,20 @@ bool ShouldRequestEarlyExit(const SyncProtocolError& error) {
       // waiting forever. So assert we would send something.
       DCHECK_NE(error.action, UNKNOWN_ACTION);
       return true;
-    // Make UNKNOWN_ERROR a NOTREACHED. All the other error should be explicitly
-    // handled.
     case UNKNOWN_ERROR:
       // TODO(crbug.com/1081266): This NOTREACHED is questionable because the
       // sync server can cause it.
+      NOTREACHED();
+      return false;
+    case CONFLICT:
+    case INVALID_MESSAGE:
       NOTREACHED();
       return false;
   }
   return false;
 }
 
-bool IsActionableError(const SyncProtocolError& error) {
+bool IsActionableProtocolError(const SyncProtocolError& error) {
   return (error.action != UNKNOWN_ACTION);
 }
 
@@ -91,16 +93,16 @@ SyncSchedulerImpl::SyncSchedulerImpl(
     std::unique_ptr<BackoffDelayProvider> delay_provider,
     SyncCycleContext* context,
     std::unique_ptr<Syncer> syncer,
-    bool ignore_auth_credentials)
+    bool ignore_auth_credentials,
+    bool sync_poll_immediately_on_every_startup)
     : name_(name),
-      started_(false),
-      syncer_poll_interval_seconds_(context->poll_interval()),
-      mode_(CONFIGURATION_MODE),
+      syncer_poll_interval_(context->poll_interval()),
       delay_provider_(std::move(delay_provider)),
       syncer_(std::move(syncer)),
       cycle_context_(context),
-      next_sync_cycle_job_priority_(NORMAL_PRIORITY),
-      ignore_auth_credentials_(ignore_auth_credentials) {}
+      ignore_auth_credentials_(ignore_auth_credentials),
+      sync_poll_immediately_on_every_startup_(
+          sync_poll_immediately_on_every_startup) {}
 
 SyncSchedulerImpl::~SyncSchedulerImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -142,11 +144,11 @@ void SyncSchedulerImpl::OnServerConnectionErrorFixed() {
   // 3. A nudge was saved previously due to not having a valid access token.
   // 4. A nudge was scheduled + saved while in configuration mode.
   //
-  // In all cases except (2), we want to retry contacting the server. We
-  // call TryCanaryJob to achieve this, and note that nothing -- not even a
+  // In all cases except (2), we want to retry contacting the server. We use
+  // CANARY_PRIORITY to achieve this, and note that nothing -- not even a
   // canary job -- can bypass a THROTTLED WaitInterval. The only thing that
   // has the authority to do that is the Unthrottle timer.
-  TryCanaryJob();
+  TrySyncCycleJob(CANARY_PRIORITY);
 }
 
 void SyncSchedulerImpl::Start(Mode mode, base::Time last_poll_time) {
@@ -162,23 +164,20 @@ void SyncSchedulerImpl::Start(Mode mode, base::Time last_poll_time) {
     SendInitialSnapshot();
   }
 
-  DCHECK(syncer_);
-
   Mode old_mode = mode_;
   mode_ = mode;
   base::Time now = base::Time::Now();
 
-  // Only adjust the poll reset time if it was valid and in the past.
+  // Only adjust the poll reset time if the last poll is valid and in the past.
   if (!last_poll_time.is_null() && last_poll_time <= now) {
-    // Convert from base::Time to base::TimeTicks. The reason we use Time
-    // for persisting is that TimeTicks can stop making forward progress when
-    // the machine is suspended. This implies that on resume the client might
-    // actually have miss the real poll, unless the client is restarted.
-    // Fixing that would require using an AlarmTimer though, which is only
-    // supported on certain platforms.
-    last_poll_reset_ =
-        TimeTicks::Now() -
-        (now - ComputeLastPollOnStart(last_poll_time, GetPollInterval(), now));
+    base::Time adjusted_last_poll_time =
+        ComputeLastPollOnStart(last_poll_time, GetPollInterval(), now,
+                               sync_poll_immediately_on_every_startup_);
+    // Convert from base::Time (used for persisting) to base::TimeTicks (used
+    // for scheduling). Note that TimeTicks values are not safe to persist, and
+    // may "pause" while the device is suspended.
+    base::TimeDelta time_since_last_poll = now - adjusted_last_poll_time;
+    last_poll_reset_ = TimeTicks::Now() - time_since_last_poll;
   }
 
   if (old_mode != mode_ && mode_ == NORMAL_MODE) {
@@ -191,7 +190,7 @@ void SyncSchedulerImpl::Start(Mode mode, base::Time last_poll_time) {
     nudge_tracker_.SetSyncCycleStartTime(TimeTicks::Now());
     if (nudge_tracker_.IsSyncRequired(GetEnabledAndUnblockedTypes()) &&
         CanRunNudgeJobNow(NORMAL_PRIORITY)) {
-      TrySyncCycleJob();
+      TrySyncCycleJob(NORMAL_PRIORITY);
     }
   }
 }
@@ -200,20 +199,12 @@ void SyncSchedulerImpl::Start(Mode mode, base::Time last_poll_time) {
 base::Time SyncSchedulerImpl::ComputeLastPollOnStart(
     base::Time last_poll,
     base::TimeDelta poll_interval,
-    base::Time now) {
-  if (base::FeatureList::IsEnabled(kSyncResetPollIntervalOnStart)) {
-    return now;
-  }
-  // Handle immediate polls on start-up separately.
-  if (last_poll + poll_interval <= now) {
-    // Doing polls on start-up is generally a risk as other bugs in Chrome
-    // might cause start-ups -- potentially synchronized to a specific time.
-    // (think about a system timer waking up Chrome).
-    // To minimize that risk, we randomly delay polls on start-up to a max
-    // of 1% of the poll interval. Assuming a poll rate of 4h, that's at
-    // most 2.4 mins.
-    base::TimeDelta random_delay = base::RandDouble() * 0.01 * poll_interval;
-    return now - (poll_interval - random_delay);
+    base::Time now,
+    bool sync_poll_immediately_on_every_startup) {
+  if (sync_poll_immediately_on_every_startup) {
+    // Hack: Pretend the last poll happened sufficiently long ago to trigger a
+    // poll.
+    return now - (poll_interval + base::Seconds(1));
   }
   return last_poll;
 }
@@ -224,6 +215,11 @@ ModelTypeSet SyncSchedulerImpl::GetEnabledAndUnblockedTypes() {
       Intersection(ProtocolTypes(), enabled_types);
   ModelTypeSet blocked_types = nudge_tracker_.GetBlockedTypes();
   return Difference(enabled_protocol_types, blocked_types);
+}
+
+void SyncSchedulerImpl::SetHasPendingInvalidations(ModelType type,
+                                                   bool has_invalidation) {
+  nudge_tracker_.SetHasPendingInvalidations(type, has_invalidation);
 }
 
 void SyncSchedulerImpl::SendInitialSnapshot() {
@@ -255,7 +251,7 @@ void SyncSchedulerImpl::ScheduleConfiguration(
     // Cache configuration parameters since TrySyncCycleJob() posts a task.
     pending_configure_params_ = std::make_unique<ConfigurationParams>(
         origin, types_to_download, std::move(ready_task));
-    TrySyncCycleJob();
+    TrySyncCycleJob(NORMAL_PRIORITY);
   } else {
     SDVLOG(2) << "No change in routing info, calling ready task directly.";
     std::move(ready_task).Run();
@@ -326,16 +322,14 @@ void SyncSchedulerImpl::ScheduleLocalRefreshRequest(ModelTypeSet types) {
   ScheduleNudgeImpl(nudge_delay);
 }
 
-void SyncSchedulerImpl::ScheduleInvalidationNudge(
-    ModelType model_type,
-    std::unique_ptr<SyncInvalidation> invalidation) {
+void SyncSchedulerImpl::ScheduleInvalidationNudge(ModelType model_type) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!syncer_->IsSyncing());
 
   SDVLOG(2) << "Scheduling sync because we received invalidation for "
             << ModelTypeToDebugString(model_type);
-  base::TimeDelta nudge_delay = nudge_tracker_.RecordRemoteInvalidation(
-      model_type, std::move(invalidation));
+  base::TimeDelta nudge_delay =
+      nudge_tracker_.GetRemoteInvalidationDelay(model_type);
   ScheduleNudgeImpl(nudge_delay);
 }
 
@@ -415,9 +409,8 @@ SyncSchedulerImpl::ConfigurationParams::ConfigurationParams(
 
 SyncSchedulerImpl::ConfigurationParams::~ConfigurationParams() = default;
 
-void SyncSchedulerImpl::DoNudgeSyncCycleJob(JobPriority priority) {
+void SyncSchedulerImpl::DoNudgeSyncCycleJob() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(CanRunNudgeJobNow(priority));
 
   ModelTypeSet types = GetEnabledAndUnblockedTypes();
   DVLOG(2) << "Will run normal mode sync cycle with types "
@@ -431,9 +424,7 @@ void SyncSchedulerImpl::DoNudgeSyncCycleJob(JobPriority priority) {
     // Note that some types might have become blocked (throttled) during the
     // cycle. NudgeTracker knows of that, and won't clear any "outstanding work"
     // flags for these types.
-    // TODO(crbug.com/930074): Consider renaming this method to
-    // RecordSuccessfulSyncCycleIfNotBlocked.
-    nudge_tracker_.RecordSuccessfulSyncCycle(types);
+    nudge_tracker_.RecordSuccessfulSyncCycleIfNotBlocked(types);
     HandleSuccess();
 
     // If this was a canary, we may need to restart the poll timer (the poll
@@ -526,7 +517,7 @@ void SyncSchedulerImpl::DoPollSyncCycleJob() {
 }
 
 base::TimeDelta SyncSchedulerImpl::GetPollInterval() {
-  return syncer_poll_interval_seconds_;
+  return syncer_poll_interval_;
 }
 
 void SyncSchedulerImpl::AdjustPolling(PollAdjustType type) {
@@ -535,38 +526,33 @@ void SyncSchedulerImpl::AdjustPolling(PollAdjustType type) {
   if (!started_)
     return;
 
-  base::TimeDelta poll_interval = GetPollInterval();
-  base::TimeDelta poll_delay = poll_interval;
-  const TimeTicks now = TimeTicks::Now();
+  const base::TimeTicks now = base::TimeTicks::Now();
 
-  if (type == UPDATE_INTERVAL) {
-    if (!last_poll_reset_.is_null()) {
-      // Override the delay based on the last successful poll time (if it was
-      // set).
-      TimeTicks new_poll_time = poll_interval + last_poll_reset_;
-      poll_delay = new_poll_time - TimeTicks::Now();
-
-      if (poll_delay.is_negative()) {
-        // The desired poll time was in the past, so trigger a poll now (the
-        // timer will post the task asynchronously, so re-entrancy isn't an
-        // issue).
-        poll_delay = base::TimeDelta();
+  switch (type) {
+    case UPDATE_INTERVAL:
+      if (last_poll_reset_.is_null()) {
+        // There was no previous poll. Treat this as if a poll had just been
+        // completed.
+        last_poll_reset_ = now;
       }
-    } else {
-      // There was no previous poll. Keep the delay set to the normal interval,
-      // as if we had just completed a poll.
-      DCHECK_EQ(GetPollInterval(), poll_delay);
+      break;
+    case FORCE_RESET:
+      // Just restart the timer.
       last_poll_reset_ = now;
-    }
-  } else {
-    // Otherwise just restart the timer.
-    DCHECK_EQ(FORCE_RESET, type);
-    DCHECK_EQ(GetPollInterval(), poll_delay);
-    last_poll_reset_ = now;
+      break;
   }
 
-  SDVLOG(1) << "Updating polling delay to " << poll_delay.InMinutes()
-            << " minutes.";
+  const base::TimeTicks new_poll_time = last_poll_reset_ + GetPollInterval();
+  base::TimeDelta poll_delay = new_poll_time - now;
+
+  if (poll_delay.is_negative()) {
+    // The desired poll time was in the past, so trigger a poll now (the
+    // timer will post the task asynchronously, so re-entrancy isn't an
+    // issue).
+    poll_delay = base::TimeDelta();
+  }
+
+  SDVLOG(1) << "Scheduling a poll in " << poll_delay.InMinutes() << " minutes.";
 
   // Adjust poll rate. Start will reset the timer if it was already running.
   poll_timer_.Start(FROM_HERE, poll_delay, this,
@@ -632,28 +618,14 @@ void SyncSchedulerImpl::Stop() {
     started_ = false;
 }
 
-// This is the only place where we invoke DoSyncCycleJob with canary
-// privileges.  Everyone else should use NORMAL_PRIORITY.
-void SyncSchedulerImpl::TryCanaryJob() {
-  next_sync_cycle_job_priority_ = CANARY_PRIORITY;
-  SDVLOG(2) << "Attempting canary job";
-  TrySyncCycleJob();
-}
-
-void SyncSchedulerImpl::TrySyncCycleJob() {
-  // Post call to TrySyncCycleJobImpl on current sequence. Later request for
-  // access token will be here.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+void SyncSchedulerImpl::TrySyncCycleJob(JobPriority priority) {
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SyncSchedulerImpl::TrySyncCycleJobImpl,
-                                weak_ptr_factory_.GetWeakPtr()));
+                                weak_ptr_factory_.GetWeakPtr(), priority));
 }
 
-void SyncSchedulerImpl::TrySyncCycleJobImpl() {
+void SyncSchedulerImpl::TrySyncCycleJobImpl(JobPriority priority) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  // TODO(treib): Pass this as a parameter instead.
-  JobPriority priority = next_sync_cycle_job_priority_;
-  next_sync_cycle_job_priority_ = NORMAL_PRIORITY;
 
   nudge_tracker_.SetSyncCycleStartTime(TimeTicks::Now());
 
@@ -665,8 +637,11 @@ void SyncSchedulerImpl::TrySyncCycleJobImpl() {
   } else if (CanRunNudgeJobNow(priority)) {
     if (nudge_tracker_.IsSyncRequired(GetEnabledAndUnblockedTypes())) {
       SDVLOG(2) << "Found pending nudge job";
-      DoNudgeSyncCycleJob(priority);
+      DoNudgeSyncCycleJob();
     } else if (((TimeTicks::Now() - last_poll_reset_) >= GetPollInterval())) {
+      // TODO(crbug.com/1497926): When using a WallClockTimer to schedule
+      // polling, use Time instead of TimeTicks for the above computation for
+      // consistency.
       SDVLOG(2) << "Found pending poll";
       DoPollSyncCycleJob();
     }
@@ -684,11 +659,11 @@ void SyncSchedulerImpl::PollTimerCallback() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!syncer_->IsSyncing());
 
-  TrySyncCycleJob();
+  TrySyncCycleJob(NORMAL_PRIORITY);
 }
 
 void SyncSchedulerImpl::RetryTimerCallback() {
-  TrySyncCycleJob();
+  TrySyncCycleJob(NORMAL_PRIORITY);
 }
 
 void SyncSchedulerImpl::Unthrottle() {
@@ -703,7 +678,7 @@ void SyncSchedulerImpl::Unthrottle() {
   // was just created (e.g via ScheduleNudgeImpl). The main implication is
   // that we're careful to update routing info (etc) with such potentially
   // stale canary jobs.
-  TryCanaryJob();
+  TrySyncCycleJob(CANARY_PRIORITY);
 }
 
 void SyncSchedulerImpl::OnTypesUnblocked() {
@@ -715,7 +690,7 @@ void SyncSchedulerImpl::OnTypesUnblocked() {
   // If not a good time, reschedule a new run.
   if (nudge_tracker_.IsSyncRequired(GetEnabledAndUnblockedTypes()) &&
       CanRunNudgeJobNow(NORMAL_PRIORITY)) {
-    TrySyncCycleJob();
+    TrySyncCycleJob(NORMAL_PRIORITY);
   } else {
     RestartWaiting();
   }
@@ -725,7 +700,7 @@ void SyncSchedulerImpl::PerformDelayedNudge() {
   // Circumstances may have changed since we scheduled this delayed nudge.
   // We must check to see if it's OK to run the job before we do so.
   if (CanRunNudgeJobNow(NORMAL_PRIORITY)) {
-    TrySyncCycleJob();
+    TrySyncCycleJob(NORMAL_PRIORITY);
   } else {
     // If we set |wait_interval_| while this PerformDelayedNudge was pending
     // callback scheduled to |retry_timer_|, it's possible we didn't re-schedule
@@ -736,7 +711,7 @@ void SyncSchedulerImpl::PerformDelayedNudge() {
 }
 
 void SyncSchedulerImpl::ExponentialBackoffRetry() {
-  TryCanaryJob();
+  TrySyncCycleJob(CANARY_PRIORITY);
 }
 
 void SyncSchedulerImpl::NotifyRetryTime(base::Time retry_time) {
@@ -781,6 +756,7 @@ bool SyncSchedulerImpl::IsGlobalBackoff() const {
 
 void SyncSchedulerImpl::OnThrottled(const base::TimeDelta& throttle_duration) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  base::UmaHistogramBoolean("Sync.ThrottledAllModelTypes", true);
   wait_interval_ = std::make_unique<WaitInterval>(
       WaitInterval::BlockingMode::kThrottled, throttle_duration);
   for (SyncEngineEventListener& observer : *cycle_context_->listeners()) {
@@ -795,6 +771,10 @@ void SyncSchedulerImpl::OnTypesThrottled(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   SDVLOG(1) << "Throttling " << ModelTypeSetToDebugString(types) << " for "
             << throttle_duration.InSeconds() << " seconds.";
+  for (ModelType type : types) {
+    base::UmaHistogramEnumeration("Sync.ThrottledSomeModelTypes",
+                                  ModelTypeHistogramValue(type));
+  }
   nudge_tracker_.SetTypesThrottledUntil(types, throttle_duration,
                                         TimeTicks::Now());
   RestartWaiting();
@@ -803,6 +783,8 @@ void SyncSchedulerImpl::OnTypesThrottled(
 void SyncSchedulerImpl::OnTypesBackedOff(ModelTypeSet types) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (ModelType type : types) {
+    base::UmaHistogramEnumeration("Sync.BackedOffModelType",
+                                  ModelTypeHistogramValue(type));
     base::TimeDelta last_backoff_time = kInitialBackoffRetryTime;
     if (nudge_tracker_.GetTypeBlockingMode(type) ==
         WaitInterval::BlockingMode::kExponentialBackoffRetrying) {
@@ -825,11 +807,12 @@ void SyncSchedulerImpl::OnReceivedPollIntervalUpdate(
     const base::TimeDelta& new_interval) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (new_interval == syncer_poll_interval_seconds_)
+  if (new_interval == syncer_poll_interval_) {
     return;
+  }
   SDVLOG(1) << "Updating poll interval to " << new_interval.InMinutes()
             << " minutes.";
-  syncer_poll_interval_seconds_ = new_interval;
+  syncer_poll_interval_ = new_interval;
   AdjustPolling(UPDATE_INTERVAL);
 }
 
@@ -845,15 +828,6 @@ void SyncSchedulerImpl::OnReceivedCustomNudgeDelays(
   }
 }
 
-void SyncSchedulerImpl::OnReceivedClientInvalidationHintBufferSize(int size) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  if (size > 0)
-    nudge_tracker_.SetHintBufferSize(size);
-  else
-    NOTREACHED() << "Hint buffer size should be > 0.";
-}
-
 void SyncSchedulerImpl::OnSyncProtocolError(
     const SyncProtocolError& sync_protocol_error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -862,10 +836,10 @@ void SyncSchedulerImpl::OnSyncProtocolError(
     SDVLOG(2) << "Sync Scheduler requesting early exit.";
     Stop();
   }
-  if (IsActionableError(sync_protocol_error)) {
-    SDVLOG(2) << "OnActionableError";
+  if (IsActionableProtocolError(sync_protocol_error)) {
+    SDVLOG(2) << "OnActionableProtocolError";
     for (SyncEngineEventListener& observer : *cycle_context_->listeners())
-      observer.OnActionableError(sync_protocol_error);
+      observer.OnActionableProtocolError(sync_protocol_error);
   }
 }
 

@@ -16,26 +16,26 @@
       "name": "HorizontalScrollbar",
       "position": [0, 285],
       "bounds": [285, 15],
+      "contentsOpaque": true,
       "transform": 1
     },
     {
       "name": "VerticalScrollbar",
       "position": [285, 0],
       "bounds": [15, 285],
+      "contentsOpaque": true,
       "transform": 1
     },
     {
       "name": "Scroll corner of LayoutNGBlockFlow (positioned) DIV id='transformed'",
       "position": [285, 285],
       "bounds": [15, 15],
-      "contentsOpaqueForText": true,
       "transform": 1
     },
     {
       "name": "LayoutNGBlockFlow (relative positioned) DIV id='relative'",
       "position": [50, 50],
       "bounds": [1000, 1000],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [50, 100, 100, 100]
       ],

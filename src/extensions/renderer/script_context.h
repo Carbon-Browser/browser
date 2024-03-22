@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/unguessable_token.h"
 #include "extensions/common/features/feature.h"
@@ -20,10 +21,10 @@
 #include "extensions/common/script_constants.h"
 #include "extensions/renderer/module_system.h"
 #include "extensions/renderer/safe_builtins.h"
-#include "extensions/renderer/script_injection_callback.h"
+#include "third_party/blink/public/web/web_script_execution_callback.h"
 #include "url/gurl.h"
-#include "v8-exception.h"
 #include "v8/include/v8-context.h"
+#include "v8/include/v8-exception.h"
 #include "v8/include/v8-forward.h"
 #include "v8/include/v8-script.h"
 
@@ -129,7 +130,7 @@ class ScriptContext {
   void SafeCallFunction(const v8::Local<v8::Function>& function,
                         int argc,
                         v8::Local<v8::Value> argv[],
-                        ScriptInjectionCallback::CompleteCallback callback);
+                        blink::WebScriptExecutionCallback callback);
 
   // Returns the availability of the API |api_name|.
   Feature::Availability GetAvailability(const std::string& api_name);
@@ -200,8 +201,8 @@ class ScriptContext {
     ~ScopedFrameDocumentLoader();
 
    private:
-    blink::WebLocalFrame* frame_;
-    blink::WebDocumentLoader* document_loader_;
+    raw_ptr<blink::WebLocalFrame, ExperimentalRenderer> frame_;
+    raw_ptr<blink::WebDocumentLoader, ExperimentalRenderer> document_loader_;
   };
 
   // TODO(devlin): Move all these Get*URL*() methods out of here? While they are
@@ -290,7 +291,7 @@ class ScriptContext {
 
   // The WebLocalFrame associated with this context. This can be NULL because
   // this object can outlive is destroyed asynchronously.
-  blink::WebLocalFrame* web_frame_;
+  raw_ptr<blink::WebLocalFrame, ExperimentalRenderer> web_frame_;
 
   // The extension associated with this context, or NULL if there is none. This
   // might be a hosted app in the case that this context is hosting a web URL.
@@ -323,7 +324,7 @@ class ScriptContext {
   // invalidation.
   std::vector<base::OnceClosure> invalidate_observers_;
 
-  v8::Isolate* isolate_;
+  raw_ptr<v8::Isolate, ExperimentalRenderer> isolate_;
 
   GURL url_;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@ namespace identity {
   };
 
   enum AccountStatus {
-    // Sync is enabled for the primary account.
+    // Specifies that Sync is enabled for the primary account.
     SYNC,
-    // Any primary account, if exists.
+    // Specifies the existence of a primary account, if any.
     ANY
   };
 
@@ -77,16 +77,38 @@ namespace identity {
     // Whether to launch auth flow in interactive mode.
     //
     // Since some auth flows may immediately redirect to a result URL,
-    // <code>launchWebAuthFlow</code> hides its web view until the
-    // first navigation either redirects to the final URL, or finishes
-    // loading a page meant to be displayed.
+    // <code>launchWebAuthFlow</code> hides its web view until the first
+    // navigation either redirects to the final URL, or finishes loading a page
+    // meant to be displayed.
     //
-    // If the interactive flag is <code>true</code>, the window will
-    // be displayed when a page load completes. If the flag is
-    // <code>false</code> or omitted, <code>launchWebAuthFlow</code>
-    // will return with an error if the initial navigation does not
-    // complete the flow.
+    // If the <code>interactive</code> flag is <code>true</code>, the window
+    // will be displayed when a page load completes. If the flag is
+    // <code>false</code> or omitted, <code>launchWebAuthFlow</code> will return
+    // with an error if the initial navigation does not complete the flow.
+    //
+    // For flows that use JavaScript for redirection,
+    // <code>abortOnLoadForNonInteractive</code> can be set to <code>false</code>
+    // in combination with setting <code>timeoutMsForNonInteractive</code> to give
+    // the page a chance to perform any redirects.
     boolean? interactive;
+
+    // Whether to terminate <code>launchWebAuthFlow</code> for non-interactive
+    // requests after the page loads. This parameter does not affect interactive
+    // flows.
+    //
+    // When set to <code>true</code> (default) the flow will terminate
+    // immediately after the page loads. When set to <code>false</code>, the
+    // flow will only terminate after the
+    // <code>timeoutMsForNonInteractive</code> passes. This is useful for
+    // identity providers that use JavaScript to perform redirections after the
+    // page loads.
+    boolean? abortOnLoadForNonInteractive;
+
+    // The maximum amount of time, in miliseconds,
+    // <code>launchWebAuthFlow</code> is allowed to run in non-interactive mode
+    // in total. Only has an effect if <code>interactive</code> is
+    // <code>false</code>.
+    long? timeoutMsForNonInteractive;
   };
 
   dictionary GetAuthTokenResult {
@@ -109,7 +131,7 @@ namespace identity {
     // present on the profile.
     //
     // <code>getAccounts</code> is only supported on dev channel.
-    static void getAccounts(GetAccountsCallback callback);
+    [supportsPromises] static void getAccounts(GetAccountsCallback callback);
 
     // Gets an OAuth2 access token using the client ID and scopes
     // specified in the <a
@@ -155,7 +177,7 @@ namespace identity {
     // |callback|: Called with the <code>ProfileUserInfo</code> of the primary
     // Chrome account, of an empty <code>ProfileUserInfo</code> if the account
     // with given <code>details</code> doesn't exist.
-    static void getProfileUserInfo(
+    [supportsPromises] static void getProfileUserInfo(
         optional ProfileDetails details,
         GetProfileUserInfoCallback callback);
 
@@ -168,7 +190,7 @@ namespace identity {
     //
     // |details| : Token information.
     // |callback| : Called when the token has been removed from the cache.
-    static void removeCachedAuthToken(
+    [supportsPromises] static void removeCachedAuthToken(
         InvalidTokenDetails details,
         optional InvalidateAuthTokenCallback callback);
 
@@ -180,7 +202,7 @@ namespace identity {
     // </ul>
     //
     // |callback| : Called when the state has been cleared.
-    static void clearAllCachedAuthTokens(
+    [supportsPromises] static void clearAllCachedAuthTokens(
         ClearAllCachedAuthTokensCallback callback);
 
     // Starts an auth flow at the specified URL.
@@ -201,8 +223,9 @@ namespace identity {
     //
     // |details| : WebAuth flow options.
     // |callback| : Called with the URL redirected back to your application.
-    static void launchWebAuthFlow(WebAuthFlowDetails details,
-                                  LaunchWebAuthFlowCallback callback);
+    [supportsPromises] static void launchWebAuthFlow(
+        WebAuthFlowDetails details,
+        LaunchWebAuthFlowCallback callback);
 
     // Generates a redirect URL to be used in |launchWebAuthFlow|.
     //

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -215,21 +215,6 @@ download_pb::InProgressInfo DownloadDBConversions::InProgressInfoToProto(
   proto.set_metered(in_progress_info.metered);
   proto.set_bytes_wasted(in_progress_info.bytes_wasted);
   proto.set_auto_resume_count(in_progress_info.auto_resume_count);
-  if (base::FeatureList::IsEnabled(download::features::kDownloadLater) &&
-      in_progress_info.download_schedule.has_value()) {
-    DCHECK_NE(in_progress_info.download_schedule->only_on_wifi(),
-              in_progress_info.metered);
-    auto download_schedule_proto =
-        std::make_unique<download_pb::DownloadSchedule>(DownloadScheduleToProto(
-            in_progress_info.download_schedule.value()));
-    proto.set_allocated_download_schedule(download_schedule_proto.release());
-  }
-  // Fill in the output proto's |reroute_info| iff |in_progress_info|'s
-  // |reroute_info| is initialized, because it has a required field and parsing
-  // an uninitialized one to and from serialized strings would fail.
-  if (in_progress_info.reroute_info.IsInitialized()) {
-    *proto.mutable_reroute_info() = in_progress_info.reroute_info;
-  }
   proto.set_credentials_mode(
       static_cast<int32_t>(in_progress_info.credentials_mode));
   proto.set_range_request_from(in_progress_info.range_request_from);
@@ -285,15 +270,6 @@ InProgressInfo DownloadDBConversions::InProgressInfoFromProto(
   info.metered = proto.metered();
   info.bytes_wasted = proto.bytes_wasted();
   info.auto_resume_count = proto.auto_resume_count();
-  if (base::FeatureList::IsEnabled(download::features::kDownloadLater) &&
-      proto.has_download_schedule()) {
-    info.download_schedule = DownloadScheduleFromProto(
-        proto.download_schedule(), !proto.metered() /*only_on_wifi*/);
-    DCHECK_NE(info.download_schedule->only_on_wifi(), info.metered);
-  }
-  if (proto.has_reroute_info()) {
-    info.reroute_info = proto.reroute_info();
-  }
   if (proto.has_credentials_mode()) {
     info.credentials_mode = static_cast<::network::mojom::CredentialsMode>(
         proto.credentials_mode());
@@ -320,27 +296,6 @@ download_pb::UkmInfo DownloadDBConversions::UkmInfoToProto(
   proto.set_download_source(DownloadSourceToProto(info.download_source));
   proto.set_ukm_download_id(info.ukm_download_id);
   return proto;
-}
-
-download_pb::DownloadSchedule DownloadDBConversions::DownloadScheduleToProto(
-    const DownloadSchedule& download_schedule) {
-  // download::DownloadSchedule.only_on_wifi is not persisted, use
-  // InProgressInfo.metered instead.
-  download_pb::DownloadSchedule proto;
-  if (download_schedule.start_time().has_value()) {
-    proto.set_start_time(
-        FromTimeToMilliseconds(download_schedule.start_time().value()));
-  }
-  return proto;
-}
-
-DownloadSchedule DownloadDBConversions::DownloadScheduleFromProto(
-    const download_pb::DownloadSchedule& proto,
-    bool only_on_wifi) {
-  absl::optional<base::Time> start_time;
-  if (proto.has_start_time())
-    start_time = FromMillisecondsToTime(proto.start_time());
-  return DownloadSchedule(only_on_wifi, std::move(start_time));
 }
 
 DownloadInfo DownloadDBConversions::DownloadInfoFromProto(

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_downloader.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_downloader_impl.h"
@@ -51,7 +52,7 @@ class FakeNearbyShareContactDownloader : public NearbyShareContactDownloader {
 
     std::vector<FakeNearbyShareContactDownloader*> instances_;
     base::TimeDelta latest_timeout_;
-    NearbyShareClientFactory* latest_client_factory_;
+    raw_ptr<NearbyShareClientFactory, ExperimentalAsh> latest_client_factory_;
   };
 
   FakeNearbyShareContactDownloader(const std::string& device_id,

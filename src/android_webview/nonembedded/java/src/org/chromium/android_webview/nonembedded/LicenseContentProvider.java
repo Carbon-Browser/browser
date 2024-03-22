@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,13 +24,15 @@ import java.io.OutputStream;
  * Content provider for about:credits.
  * Used by SystemWebview and TrichromeWebview, but not Monochrome.
  */
-public class LicenseContentProvider
-        extends ContentProvider implements ContentProvider.PipeDataWriter<String> {
+public class LicenseContentProvider extends ContentProvider
+        implements ContentProvider.PipeDataWriter<String> {
     public static final String LICENSES_URI_SUFFIX = "LicenseContentProvider/webview_licenses";
     public static final String LICENSES_CONTENT_TYPE = "text/html";
+    private static boolean sLibraryLoaded;
 
     @Override
     public boolean onCreate() {
+        sLibraryLoaded = WebViewApkApplication.ensureNativeInitialized();
         return true;
     }
 
@@ -45,7 +47,7 @@ public class LicenseContentProvider
     @Override
     public void writeDataToPipe(
             ParcelFileDescriptor output, Uri uri, String mimeType, Bundle opts, String filename) {
-        if (WebViewApkApplication.ensureNativeInitialized()) {
+        if (sLibraryLoaded) {
             CreditUtilsJni.get().writeCreditsHtml(output.detachFd());
         } else {
             // Missing native library means we're the webview stub and licenses are stored as an
@@ -83,7 +85,11 @@ public class LicenseContentProvider
     }
 
     @Override
-    public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
+    public Cursor query(
+            Uri uri,
+            String[] projection,
+            String selection,
+            String[] selectionArgs,
             String sortOrder) {
         throw new UnsupportedOperationException();
     }

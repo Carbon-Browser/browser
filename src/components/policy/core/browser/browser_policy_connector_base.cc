@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,8 +93,9 @@ PolicyService* BrowserPolicyConnectorBase::GetPolicyService() {
     provider->Init(GetSchemaRegistry());
 
   g_created_policy_service = true;
-  policy_service_ =
-      std::make_unique<PolicyServiceImpl>(GetProvidersForPolicyService());
+  policy_service_ = std::make_unique<PolicyServiceImpl>(
+      GetProvidersForPolicyService(),
+      std::vector<std::unique_ptr<PolicyMigrator>>());
   return policy_service_.get();
 }
 

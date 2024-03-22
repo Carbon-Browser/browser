@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace autofill {
-namespace structured_address {
 
 // Element-wise comparison operator.
 bool operator==(const AddressToken& lhs, const AddressToken& rhs) {
@@ -229,9 +228,21 @@ TEST(AutofillStructuredAddressUtils, NormalizeValue) {
 }
 
 TEST(AutofillStructuredAddressUtils, TestGetRewriter) {
-  EXPECT_EQ(RewriterCache::Rewrite(u"us", u"unit #3"), u"unit 3");
-  EXPECT_EQ(RewriterCache::Rewrite(u"us", u"california"), u"ca");
+  EXPECT_EQ(NormalizeAndRewrite(u"us", u"unit #3",
+                                /*keep_white_space=*/true),
+            u"u 3");
+  EXPECT_EQ(NormalizeAndRewrite(u"us", u"california",
+                                /*keep_white_space=*/true),
+            u"ca");
 }
 
-}  // namespace structured_address
+TEST(AutofillStructuredAddressUtils, AreStringTokenCompatible) {
+  EXPECT_TRUE(AreStringTokenCompatible(u"moto hello", u"hello, moto"));
+  EXPECT_TRUE(AreStringTokenCompatible(u"moto hello", u"hello, moto cross"));
+  EXPECT_FALSE(
+      AreStringTokenCompatible(u"moto hello, extra", u"hello, moto cross"));
+  EXPECT_TRUE(AreStringTokenCompatible(u"us foo", u"used, foo,us"));
+  EXPECT_FALSE(AreStringTokenCompatible(u"us foo", u"used, foo"));
+}
+
 }  // namespace autofill

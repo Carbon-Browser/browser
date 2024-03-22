@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define IOS_CHROME_COMMON_UI_UTIL_CONSTRAINTS_UI_UTIL_H_
 
 #import <UIKit/UIKit.h>
+#import <type_traits>
 
 // A bitmask to refer to sides of a layout rectangle.
 enum class LayoutSides {
@@ -29,25 +30,9 @@ constexpr LayoutSides operator&(LayoutSides lhs, LayoutSides rhs) {
       static_cast<std::underlying_type<LayoutSides>::type>(rhs));
 }
 
-// Returns whether the |flag| is set in |mask|.
+// Returns whether the `flag` is set in `mask`.
 constexpr bool IsLayoutSidesMaskSet(LayoutSides mask, LayoutSides flag) {
   return (mask & flag) == flag;
-}
-
-// Same as NSDirectionalEdgeInsets but available on iOS 10.
-struct ChromeDirectionalEdgeInsets {
-  CGFloat top, leading, bottom, trailing;  // specify amount to inset (positive)
-                                           // for each of the edges. values can
-                                           // be negative to 'outset'
-};
-
-inline ChromeDirectionalEdgeInsets ChromeDirectionalEdgeInsetsMake(
-    CGFloat top,
-    CGFloat leading,
-    CGFloat bottom,
-    CGFloat trailing) {
-  ChromeDirectionalEdgeInsets insets = {top, leading, bottom, trailing};
-  return insets;
 }
 
 // Defines a protocol for the edge anchor methods of UIView and UILayoutGuide.
@@ -65,7 +50,7 @@ inline ChromeDirectionalEdgeInsets ChromeDirectionalEdgeInsetsMake(
 // A base layout guide to serve the anchors not defined with a provider.
 @property(nonatomic, weak) id<EdgeLayoutGuideProvider> baseLayoutGuide;
 // Each of the edge anchors can have a different provider assigned. If none is
-// assigned, the respective |baseLayoutGuide| anchor will be returned.
+// assigned, the respective `baseLayoutGuide` anchor will be returned.
 @property(nonatomic, weak) id<EdgeLayoutGuideProvider> leadingAnchorProvider;
 @property(nonatomic, weak) id<EdgeLayoutGuideProvider> trailingAnchorProvider;
 @property(nonatomic, weak) id<EdgeLayoutGuideProvider> topAnchorProvider;
@@ -92,17 +77,17 @@ inline ChromeDirectionalEdgeInsets ChromeDirectionalEdgeInsetsMake(
 
 #pragma mark - Visual constraints.
 
-// Applies all |constraints| to views in |subviewsDictionary|.
+// Applies all `constraints` to views in `subviewsDictionary`.
 void ApplyVisualConstraints(NSArray* constraints,
                             NSDictionary* subviewsDictionary);
 
-// Applies all |constraints| with |metrics| to views in |subviewsDictionary|.
+// Applies all `constraints` with `metrics` to views in `subviewsDictionary`.
 void ApplyVisualConstraintsWithMetrics(NSArray* constraints,
                                        NSDictionary* subviewsDictionary,
                                        NSDictionary* metrics);
 
-// Applies all |constraints| with |metrics| and |options| to views in
-// |subviewsDictionary|.
+// Applies all `constraints` with `metrics` and `options` to views in
+// `subviewsDictionary`.
 void ApplyVisualConstraintsWithMetricsAndOptions(
     NSArray* constraints,
     NSDictionary* subviewsDictionary,
@@ -110,13 +95,13 @@ void ApplyVisualConstraintsWithMetricsAndOptions(
     NSLayoutFormatOptions options);
 
 // Returns constraints based on the visual constraints described with
-// |constraints| and |metrics| to views in |subviewsDictionary|.
+// `constraints` and `metrics` to views in `subviewsDictionary`.
 NSArray* VisualConstraintsWithMetrics(NSArray* constraints,
                                       NSDictionary* subviewsDictionary,
                                       NSDictionary* metrics);
 
 // Returns constraints based on the visual constraints described with
-// |constraints|, |metrics| and |options| to views in |subviewsDictionary|.
+// `constraints`, `metrics` and `options` to views in `subviewsDictionary`.
 NSArray* VisualConstraintsWithMetricsAndOptions(
     NSArray* constraints,
     NSDictionary* subviewsDictionary,
@@ -126,13 +111,13 @@ NSArray* VisualConstraintsWithMetricsAndOptions(
 #pragma mark - Constraints between two views.
 // Most methods in this group can take a layout guide or a view.
 
-// Adds a constraint that |view1| and |view2| are center-aligned horizontally
+// Adds a constraint that `view1` and `view2` are center-aligned horizontally
 // and vertically.
 void AddSameCenterConstraints(id<LayoutGuideProvider> view1,
                               id<LayoutGuideProvider> view2);
 
-// Adds a constraint that |view1| and |view2| are center-aligned horizontally.
-// |view1| and |view2| must be in the same view hierarchy.
+// Adds a constraint that `view1` and `view2` are center-aligned horizontally.
+// `view1` and `view2` must be in the same view hierarchy.
 void AddSameCenterXConstraint(id<LayoutGuideProvider> view1,
                               id<LayoutGuideProvider> view2);
 // Deprecated version:
@@ -140,8 +125,8 @@ void AddSameCenterXConstraint(UIView* unused_parentView,
                               id<LayoutGuideProvider> subview1,
                               id<LayoutGuideProvider> subview2);
 
-// Adds a constraint that |view1| and |view2| are center-aligned vertically.
-// |view1| and |view2| must be in the same view hierarchy.
+// Adds a constraint that `view1` and `view2` are center-aligned vertically.
+// `view1` and `view2` must be in the same view hierarchy.
 void AddSameCenterYConstraint(id<LayoutGuideProvider> view1,
                               id<LayoutGuideProvider> view2);
 // Deprecated version:
@@ -154,34 +139,34 @@ void AddSameCenterYConstraint(UIView* unused_parentView,
 void AddSameConstraints(id<EdgeLayoutGuideProvider> view1,
                         id<EdgeLayoutGuideProvider> view2);
 
-// Constraints all sides of |innerView| and |outerView| together, with
-// |innerView| inset by |insets|.
+// Constraints all sides of `innerView` and `outerView` together, with
+// `innerView` inset by `insets`.
 void AddSameConstraintsWithInsets(id<EdgeLayoutGuideProvider> innerView,
                                   id<EdgeLayoutGuideProvider> outerView,
-                                  ChromeDirectionalEdgeInsets insets);
+                                  NSDirectionalEdgeInsets insets);
 
-// Adds constraints to make |innerView| leading, trailing, top and bottom
-// anchors equals to |outerView| safe area (or view bounds) anchors.
+// Adds constraints to make `innerView` leading, trailing, top and bottom
+// anchors equals to `outerView` safe area (or view bounds) anchors.
 void PinToSafeArea(id<EdgeLayoutGuideProvider> innerView, UIView* outerView);
 
-// Constraints |side_flags| of |view1| and |view2| together.
+// Constraints `side_flags` of `view1` and `view2` together.
 // Example usage: AddSameConstraintsToSides(view1, view2,
 // LayoutSides::kTop|LayoutSides::kLeading)
 void AddSameConstraintsToSides(id<EdgeLayoutGuideProvider> view1,
                                id<EdgeLayoutGuideProvider> view2,
                                LayoutSides side_flags);
 
-// Constraints |side_flags| sides of |innerView| and |outerView| together, with
-// |innerView| inset by |insets|. Example usage:
+// Constraints `side_flags` sides of `innerView` and `outerView` together, with
+// `innerView` inset by `insets`. Example usage:
 // AddSameConstraintsToSidesWithInsets(view1, view2,
-// LayoutSides::kTop|LayoutSides::kLeading, ChromeDirectionalEdgeInsets{10, 5,
+// LayoutSides::kTop|LayoutSides::kLeading, NSDirectionalEdgeInsets{10, 5,
 // 10, 5}) - This will constraint innerView to be inside of outerView, with
 // leading/trailing inset by 10 and top/bottom inset by 5.
-// Edge insets for sides not listed in |side_flags| are ignored.
+// Edge insets for sides not listed in `side_flags` are ignored.
 void AddSameConstraintsToSidesWithInsets(id<EdgeLayoutGuideProvider> innerView,
                                          id<EdgeLayoutGuideProvider> outerView,
                                          LayoutSides side_flags,
-                                         ChromeDirectionalEdgeInsets insets);
+                                         NSDirectionalEdgeInsets insets);
 
 // Adds an optional amount of padding to the top and bottom of a view using a
 // constraint with a lowered priority. One use case is with a collectionview or
@@ -189,7 +174,7 @@ void AddSameConstraintsToSidesWithInsets(id<EdgeLayoutGuideProvider> innerView,
 // and expand the cell to add the desired padding around the inner views, but
 // the padding is optional so that the inner views are not artificially
 // shortened when fixed-size cells cut into that padding.  The padding is added
-// between |outerView| and |innerView|.
+// between `outerView` and `innerView`.
 // Returns the top and bottom layouts that have been created.
 NSArray<NSLayoutConstraint*>* AddOptionalVerticalPadding(
     id<EdgeLayoutGuideProvider> outerView,
@@ -201,8 +186,8 @@ NSArray<NSLayoutConstraint*>* AddOptionalVerticalPadding(
     id<EdgeLayoutGuideProvider> bottomInnerView,
     CGFloat padding);
 
-// Returns the vertical constraint of |innerView| and |outerView|. The height of
-// |outerView| equals to the height of |innerView| plus |inset|.
+// Returns the vertical constraint of `innerView` and `outerView`. The height of
+// `outerView` equals to the height of `innerView` plus `inset`.
 NSLayoutConstraint* VerticalConstraintsWithInset(UIView* innerView,
                                                  UIView* outerView,
                                                  CGFloat inset);

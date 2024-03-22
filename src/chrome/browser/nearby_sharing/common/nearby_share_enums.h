@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NEARBY_SHARING_COMMON_NEARBY_SHARE_ENUMS_H_
 #define CHROME_BROWSER_NEARBY_SHARING_COMMON_NEARBY_SHARE_ENUMS_H_
 
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 
 // Represents the advertising bluetooth power for Nearby Connections.
 enum class PowerLevel {

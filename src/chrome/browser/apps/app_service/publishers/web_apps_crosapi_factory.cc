@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 #include "base/feature_list.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/publishers/web_apps_crosapi.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace apps {
 
@@ -22,7 +20,8 @@ WebAppsCrosapi* WebAppsCrosapiFactory::GetForProfile(Profile* profile) {
 
 // static
 WebAppsCrosapiFactory* WebAppsCrosapiFactory::GetInstance() {
-  return base::Singleton<WebAppsCrosapiFactory>::get();
+  static base::NoDestructor<WebAppsCrosapiFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -34,33 +33,20 @@ void WebAppsCrosapiFactory::ShutDownForTesting(
 }
 
 WebAppsCrosapiFactory::WebAppsCrosapiFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "WebAppsCrosapi",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithGuest(ProfileSelection::kOffTheRecordOnly)
+              .Build()) {
   DependsOn(AppServiceProxyFactory::GetInstance());
 }
 
-KeyedService* WebAppsCrosapiFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+WebAppsCrosapiFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new WebAppsCrosapi(AppServiceProxyFactory::GetForProfile(
-      Profile::FromBrowserContext(context)));
-}
-
-content::BrowserContext* WebAppsCrosapiFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  Profile* const profile = Profile::FromBrowserContext(context);
-  if (!profile) {
-    return nullptr;
-  }
-
-  // Use OTR profile for Guest Session.
-  if (profile->IsGuestSession()) {
-    return profile->IsOffTheRecord()
-               ? chrome::GetBrowserContextOwnInstanceInIncognito(context)
-               : nullptr;
-  }
-
-  return BrowserContextKeyedServiceFactory::GetBrowserContextToUse(context);
+  return std::make_unique<WebAppsCrosapi>(
+      AppServiceProxyFactory::GetForProfile(
+          Profile::FromBrowserContext(context)));
 }
 
 }  // namespace apps

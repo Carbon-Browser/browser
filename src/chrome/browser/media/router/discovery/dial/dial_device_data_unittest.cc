@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,8 +90,6 @@ TEST(DialDeviceDataTest, TestUpdateFrom) {
 }
 
 TEST(DialDeviceDataTest, TestIsValidUrl) {
-  base::test::ScopedFeatureList enabled_features(kDialEnforceUrlIPAddress);
-
   net::IPAddress ipv4_address_1;
   ASSERT_TRUE(ipv4_address_1.AssignFromIPLiteral("192.168.1.1"));
   net::IPAddress ipv4_address_2;

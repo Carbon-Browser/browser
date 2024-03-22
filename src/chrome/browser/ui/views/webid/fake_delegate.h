@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,17 +16,20 @@ class FakeDelegate : public AccountSelectionView::Delegate {
 
   ~FakeDelegate() override = default;
 
-  void OnAccountSelected(const Account& account) override {}
+  void OnAccountSelected(const GURL& idp_config_url,
+                         const Account& account) override {}
 
   void OnDismiss(content::IdentityRequestDialogController::DismissReason
                      dismiss_reason) override {}
+  void OnLoginToIdP(const GURL& idp_login_url) override {}
+  void OnMoreDetails() override {}
 
   // AccountSelectionView::Delegate
   gfx::NativeView GetNativeView() override;
   content::WebContents* GetWebContents() override;
 
  private:
-  raw_ptr<content::WebContents> web_contents_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEBID_FAKE_DELEGATE_H_

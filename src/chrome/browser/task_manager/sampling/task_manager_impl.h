@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -110,6 +111,8 @@ class TaskManagerImpl : public TaskManagerInterface,
       int64_t recv_bytes,
       int64_t sent_bytes);
 
+  bool is_running() const { return is_running_; }
+
  private:
   using PidToTaskGroupMap =
       std::map<base::ProcessId, std::unique_ptr<TaskGroup>>;
@@ -129,7 +132,7 @@ class TaskManagerImpl : public TaskManagerInterface,
   void StartUpdating() override;
   void StopUpdating() override;
 
-  // Lookup a task by the global render frame host id. The empty
+  // Lookup a task by the global RenderFrameHost id. The empty
   // GlobalRenderFrameHostId works as well, which would lead to the task
   // being attributed to the browser process.
   Task* GetTaskByRoute(
@@ -189,7 +192,8 @@ class TaskManagerImpl : public TaskManagerInterface,
   // Task provider handling crosapi task data.
   // Once CrosapiTaskProvider is created and added to the task_providers_, it
   // should never be removed from task_providers_ unless in the destructor.
-  CrosapiTaskProviderAsh* crosapi_task_provider_ = nullptr;
+  raw_ptr<CrosapiTaskProviderAsh, ExperimentalAsh> crosapi_task_provider_ =
+      nullptr;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // This will be set to true while there are observers and the task manager is

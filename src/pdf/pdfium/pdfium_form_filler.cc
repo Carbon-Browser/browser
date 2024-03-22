@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -22,6 +22,7 @@
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/web/blink.h"
 #include "third_party/pdfium/public/fpdf_annot.h"
+#include "ui/base/window_open_disposition_utils.h"
 #include "ui/gfx/geometry/rect.h"
 #include "v8/include/v8-isolate.h"
 
@@ -201,17 +202,15 @@ FPDF_SYSTEMTIME PDFiumFormFiller::Form_GetLocalTime(FPDF_FORMFILLINFO* param) {
   base::Time time = base::Time::Now();
   base::Time::Exploded exploded;
   time.LocalExplode(&exploded);
-
-  FPDF_SYSTEMTIME rv;
-  rv.wYear = exploded.year;
-  rv.wMonth = exploded.month;
-  rv.wDayOfWeek = exploded.day_of_week;
-  rv.wDay = exploded.day_of_month;
-  rv.wHour = exploded.hour;
-  rv.wMinute = exploded.minute;
-  rv.wSecond = exploded.second;
-  rv.wMilliseconds = exploded.millisecond;
-  return rv;
+  return FPDF_SYSTEMTIME{
+      .wYear = static_cast<unsigned short>(exploded.year),
+      .wMonth = static_cast<unsigned short>(exploded.month),
+      .wDayOfWeek = static_cast<unsigned short>(exploded.day_of_week),
+      .wDay = static_cast<unsigned short>(exploded.day_of_month),
+      .wHour = static_cast<unsigned short>(exploded.hour),
+      .wMinute = static_cast<unsigned short>(exploded.minute),
+      .wSecond = static_cast<unsigned short>(exploded.second),
+      .wMilliseconds = static_cast<unsigned short>(exploded.millisecond)};
 }
 
 // static

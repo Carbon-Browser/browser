@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_dialogs.h"
@@ -29,7 +28,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/zoom/page_zoom.h"
 #include "components/zoom/zoom_controller.h"
-#include "content/public/browser/notification_source.h"
 #include "extensions/browser/extension_zoom_request_client.h"
 #include "extensions/common/api/extension_action/action_info.h"
 #include "extensions/common/manifest_handlers/icons_handler.h"
@@ -38,13 +36,13 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/text_utils.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/native_theme/native_theme.h"
-#include "ui/views/accessibility/ax_virtual_view.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/button/image_button_factory.h"
@@ -55,6 +53,10 @@
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
+
+#if BUILDFLAG(IS_MAC)
+#include "chrome/browser/ui/fullscreen_util_mac.h"
+#endif
 
 namespace {
 
@@ -105,7 +107,8 @@ class ZoomValue : public views::Label {
   ~ZoomValue() override = default;
 
   // views::Label:
-  gfx::Size CalculatePreferredSize() const override {
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override {
     return gfx::Size(max_width_, GetHeightForWidth(max_width_));
   }
 
@@ -141,6 +144,11 @@ bool IsBrowserFullscreen(Browser* browser) {
 
 views::View* GetAnchorViewForBrowser(Browser* browser) {
   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
+#if BUILDFLAG(IS_MAC)
+  if (fullscreen_utils::IsInContentFullscreen(browser)) {
+    return nullptr;
+  }
+#endif
   if (!IsBrowserFullscreen(browser) || browser_view->IsToolbarVisible() ||
       browser_view->immersive_mode_controller()->IsRevealed()) {
     return browser_view->toolbar_button_provider()->GetAnchorView(
@@ -192,7 +200,7 @@ ZoomBubbleView* ZoomBubbleView::zoom_bubble_ = nullptr;
 // static
 void ZoomBubbleView::ShowBubble(content::WebContents* web_contents,
                                 DisplayReason reason) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   // |web_contents| could have been unloaded if a tab gets closed and a mouse
   // event arrives before the zoom icon gets hidden.
   if (!browser)
@@ -249,7 +257,7 @@ bool ZoomBubbleView::CanRefresh(const content::WebContents* web_contents) {
   if (!zoom_bubble_ || (zoom_bubble_->web_contents() != web_contents))
     return false;
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser ||
       (zoom_bubble_->GetAnchorView() != GetAnchorViewForBrowser(browser)))
     return false;
@@ -281,8 +289,6 @@ ZoomBubbleView* ZoomBubbleView::GetZoomBubble() {
 
 void ZoomBubbleView::Refresh() {
   UpdateZoomPercent();
-  zoom_level_alert_->GetCustomData().SetName(GetAccessibleWindowTitle());
-  zoom_level_alert_->NotifyAccessibilityEvent(ax::mojom::Event::kAlert);
   StartTimerIfNecessary();
 }
 
@@ -295,8 +301,7 @@ ZoomBubbleView::ZoomBubbleView(
       auto_close_duration_(kBubbleCloseDelayDefault),
       auto_close_(reason == AUTOMATIC),
       immersive_mode_controller_(immersive_mode_controller),
-      session_id_(
-          chrome::FindBrowserWithWebContents(web_contents)->session_id()) {
+      session_id_(chrome::FindBrowserWithTab(web_contents)->session_id()) {
   SetButtons(ui::DIALOG_BUTTON_NONE);
 
   SetNotifyEnterExitOnChild(true);
@@ -412,14 +417,16 @@ void ZoomBubbleView::Init() {
     image_button->SetTooltipText(
         l10n_util::GetStringFUTF16(IDS_TOOLTIP_ZOOM_EXTENSION_ICON,
                                    base::UTF8ToUTF16(extension_info_.name)));
-    image_button->SetImage(views::Button::STATE_NORMAL,
-                           &extension_info_.icon_image->image_skia());
+    image_button->SetImageModel(views::Button::STATE_NORMAL,
+                                ui::ImageModel::FromImageSkia(
+                                    extension_info_.icon_image->image_skia()));
     image_button_ = AddChildView(std::move(image_button));
   }
 
   // Add zoom label with the new zoom percent.
   auto label = std::make_unique<ZoomValue>(web_contents());
   label->SetProperty(views::kMarginsKey, gfx::Insets(label_margin));
+  label->SetAccessibleRole(ax::mojom::Role::kAlert);
   label_ = label.get();
   AddChildView(std::move(label));
 
@@ -450,11 +457,6 @@ void ZoomBubbleView::Init() {
   reset_button->SetTooltipText(
       l10n_util::GetStringUTF16(IDS_ACCNAME_ZOOM_SET_DEFAULT));
   reset_button_ = AddChildView(std::move(reset_button));
-
-  auto zoom_level_alert = std::make_unique<views::AXVirtualView>();
-  zoom_level_alert->GetCustomData().role = ax::mojom::Role::kAlert;
-  zoom_level_alert_ = zoom_level_alert.get();
-  GetViewAccessibility().AddVirtualChildView(std::move(zoom_level_alert));
 
   UpdateZoomPercent();
   StartTimerIfNecessary();
@@ -493,8 +495,9 @@ void ZoomBubbleView::OnImmersiveModeControllerDestroyed() {
 
 void ZoomBubbleView::OnExtensionIconImageChanged(
     extensions::IconImage* /* image */) {
-  image_button_->SetImage(views::Button::STATE_NORMAL,
-                          &extension_info_.icon_image->image_skia());
+  image_button_->SetImageModel(
+      views::Button::STATE_NORMAL,
+      ui::ImageModel::FromImageSkia(extension_info_.icon_image->image_skia()));
   image_button_->SchedulePaint();
 }
 
@@ -535,6 +538,8 @@ void ZoomBubbleView::SetExtensionInfo(const extensions::Extension* extension) {
 void ZoomBubbleView::UpdateZoomPercent() {
   label_->SetText(base::FormatPercent(
       zoom::ZoomController::FromWebContents(web_contents())->GetZoomPercent()));
+  label_->SetAccessibleName(GetAccessibleWindowTitle());
+  label_->NotifyAccessibilityEvent(ax::mojom::Event::kAlert, true);
 
   // Disable buttons at min, max and default
   auto* zoom_controller = zoom::ZoomController::FromWebContents(web_contents());
@@ -597,8 +602,7 @@ void ZoomBubbleView::ImageButtonPressed() {
 }
 
 Browser* ZoomBubbleView::GetBrowser() const {
-  return web_contents() ? chrome::FindBrowserWithWebContents(web_contents())
-                        : nullptr;
+  return web_contents() ? chrome::FindBrowserWithTab(web_contents()) : nullptr;
 }
 
 ZoomBubbleView::ZoomBubbleExtensionInfo::ZoomBubbleExtensionInfo() {}

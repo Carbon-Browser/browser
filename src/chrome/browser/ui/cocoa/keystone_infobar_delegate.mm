@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#import "base/task/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/first_run/first_run.h"
 #include "chrome/browser/infobars/confirm_infobar_creator.h"
 #import "chrome/browser/mac/keystone_glue.h"
@@ -18,9 +20,11 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/cocoa/last_active_browser_cocoa.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/updater/browser_updater_client_util.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/infobars/content/content_infobar_manager.h"
@@ -47,20 +51,16 @@ void KeystonePromotionInfoBarDelegate::Create(
 
 KeystonePromotionInfoBarDelegate::KeystonePromotionInfoBarDelegate(
     PrefService* prefs)
-    : ConfirmInfoBarDelegate(),
-      prefs_(prefs),
-      can_expire_(false),
-      weak_ptr_factory_(this) {
+    : prefs_(prefs), can_expire_(false), weak_ptr_factory_(this) {
   const base::TimeDelta kCanExpireOnNavigationAfterDelay = base::Seconds(8);
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&KeystonePromotionInfoBarDelegate::SetCanExpire,
                      weak_ptr_factory_.GetWeakPtr()),
       kCanExpireOnNavigationAfterDelay);
 }
 
-KeystonePromotionInfoBarDelegate::~KeystonePromotionInfoBarDelegate() {
-}
+KeystonePromotionInfoBarDelegate::~KeystonePromotionInfoBarDelegate() = default;
 
 infobars::InfoBarDelegate::InfoBarIdentifier
 KeystonePromotionInfoBarDelegate::GetIdentifier() const {
@@ -88,7 +88,11 @@ std::u16string KeystonePromotionInfoBarDelegate::GetButtonLabel(
 }
 
 bool KeystonePromotionInfoBarDelegate::Accept() {
-  [[KeystoneGlue defaultKeystoneGlue] promoteTicket];
+  if (base::FeatureList::IsEnabled(features::kUseChromiumUpdater)) {
+    SetupSystemUpdater();
+  } else {
+    [[KeystoneGlue defaultKeystoneGlue] promoteTicket];
+  }
   return true;
 }
 
@@ -105,11 +109,12 @@ bool KeystonePromotionInfoBarDelegate::Cancel() {
 - (void)removeObserver;
 @end  // @interface KeystonePromotionInfoBar
 
+KeystonePromotionInfoBar* g_currentPromotionInfoBar;
+
 @implementation KeystonePromotionInfoBar
 
 - (void)dealloc {
   [self removeObserver];
-  [super dealloc];
 }
 
 - (void)checkAndShowInfoBarForProfile:(Profile*)profile {
@@ -135,20 +140,32 @@ bool KeystonePromotionInfoBarDelegate::Cancel() {
     return;
   }
 
-  // Stay alive as long as needed.  This is balanced by a release in
-  // -updateStatus:.
-  [self retain];
-
-  AutoupdateStatus recentStatus = [keystoneGlue recentStatus];
-  if (recentStatus == kAutoupdateNone ||
-      recentStatus == kAutoupdateRegistering) {
-    NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
-    [center addObserver:self
-               selector:@selector(updateStatus:)
-                   name:kAutoupdateStatusNotification
-                 object:nil];
+  if (base::FeatureList::IsEnabled(features::kUseChromiumUpdater)) {
+    EnsureUpdater(base::BindOnce([]() {
+                    Browser* browser = chrome::GetLastActiveBrowser();
+                    if (browser) {
+                      content::WebContents* webContents =
+                          browser->tab_strip_model()->GetActiveWebContents();
+                      if (webContents)
+                        KeystonePromotionInfoBarDelegate::Create(webContents);
+                    }
+                  }),
+                  base::DoNothing());
   } else {
-    [self updateStatus:[keystoneGlue recentNotification]];
+    // Stay alive as long as needed.  This is balanced in -updateStatus:.
+    g_currentPromotionInfoBar = self;
+
+    AutoupdateStatus recentStatus = [keystoneGlue recentStatus];
+    if (recentStatus == kAutoupdateNone ||
+        recentStatus == kAutoupdateRegistering) {
+      [NSNotificationCenter.defaultCenter
+          addObserver:self
+             selector:@selector(updateStatus:)
+                 name:kAutoupdateStatusNotification
+               object:nil];
+    } else {
+      [self updateStatus:[keystoneGlue recentNotification]];
+    }
   }
 }
 
@@ -174,11 +191,11 @@ bool KeystonePromotionInfoBarDelegate::Cancel() {
     }
   }
 
-  [self release];
+  g_currentPromotionInfoBar = nil;
 }
 
 - (void)removeObserver {
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
 @end  // @implementation KeystonePromotionInfoBar
@@ -186,7 +203,7 @@ bool KeystonePromotionInfoBarDelegate::Cancel() {
 // static
 void KeystoneInfoBar::PromotionInfoBar(Profile* profile) {
   KeystonePromotionInfoBar* promotionInfoBar =
-      [[[KeystonePromotionInfoBar alloc] init] autorelease];
+      [[KeystonePromotionInfoBar alloc] init];
 
   [promotionInfoBar checkAndShowInfoBarForProfile:profile];
 }

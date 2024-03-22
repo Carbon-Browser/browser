@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <set>
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
@@ -20,7 +21,7 @@ namespace extensions {
 // Tests that the ExtensionEvents enum in enums.xml exactly matches the
 // C++ enum definition.
 TEST(ExtensionEventHistogramValueTest, CheckEnums) {
-  absl::optional<base::HistogramEnumEntryMap> enums =
+  std::optional<base::HistogramEnumEntryMap> enums =
       base::ReadEnumFromEnumsXml("ExtensionEvents");
   ASSERT_TRUE(enums);
   // The number of enums in the histogram entry should be equal to the number of
@@ -28,7 +29,7 @@ TEST(ExtensionEventHistogramValueTest, CheckEnums) {
   EXPECT_EQ(events::ENUM_BOUNDARY, enums->size());
 
   base::FilePath src_root;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_root));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_root));
   base::FilePath event_histogram_value =
       src_root.AppendASCII("extensions")
           .AppendASCII("browser")
@@ -44,7 +45,7 @@ TEST(ExtensionEventHistogramValueTest, CheckEnums) {
     // expecting to find the string "ENTRY = <value>" somewhere in the file.
     std::string expected_string =
         base::StringPrintf("%s = %d,", entry.second.c_str(), entry.first);
-    EXPECT_NE(std::string::npos, file_contents.find(expected_string))
+    EXPECT_TRUE(base::Contains(file_contents, expected_string))
         << "Failed to find entry " << entry.second << " with value "
         << entry.first << ". Make sure events::HistogramValue and the "
         << "ExtensionEvents enum in enums.xml agree with each other.";

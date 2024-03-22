@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,11 +20,11 @@ enum CaptionButtonIcon {
   CAPTION_BUTTON_ICON_MENU,
   CAPTION_BUTTON_ICON_ZOOM,
   CAPTION_BUTTON_ICON_CENTER,
+  CAPTION_BUTTON_ICON_FLOAT,
   // The custom icon type allows clients to instantiate a caption button that is
   // specific to their use case (e.g. tab search caption button in the browser
   // window frame).
   CAPTION_BUTTON_ICON_CUSTOM,
-  CAPTION_BUTTON_ICON_FLOAT,
   CAPTION_BUTTON_ICON_COUNT,
 };
 

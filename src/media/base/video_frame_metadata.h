@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,9 @@ struct MEDIA_EXPORT VideoFrameMetadata {
 
   // Merges internal values from |metadata_source|.
   void MergeMetadataFrom(const VideoFrameMetadata& metadata_source);
+
+  // CLear metadata fields that only make sense for texture backed frames.
+  void ClearTextureFrameMedatada();
 
   // Sources of VideoFrames use this marker to indicate that the associated
   // VideoFrame can be overlaid, case in which its contents do not need to be
@@ -69,13 +72,12 @@ struct MEDIA_EXPORT VideoFrameMetadata {
   // https://crbug.com/1327560.
   absl::optional<gfx::Rect> region_capture_rect;
 
-  // Whenever cropTo() is called, Blink increments the crop_version and records
-  // a Promise as associated with that crop_version.
-  // When Blink observes a frame with this new version or a later one,
-  // Blink resolves the Promise.
-  // Frames associated with a source which cannot be cropped will always
-  // have this value set to zero.
-  uint32_t crop_version = 0;
+  // Whenever cropTo() or restrictTo() are called, Blink increments the
+  // sub_capture_target_version and records a Promise as associated with that
+  // sub_capture_target_version. When Blink observes a frame with this new
+  // version or a later one, Blink resolves the Promise. Frames associated with
+  // a source which cannot be cropped will always have this value set to zero.
+  uint32_t sub_capture_target_version = 0;
 
   // Indicates that mailbox created in one context, is also being used in a
   // different context belonging to another share group and video frames are
@@ -192,7 +194,7 @@ struct MEDIA_EXPORT VideoFrameMetadata {
   absl::optional<base::TimeDelta> processing_time;
 
   // The RTP timestamp associated with this video frame. Stored as a double
-  // since base::DictionaryValue doesn't have a uint32_t type.
+  // since base::Value::Dict doesn't have a uint32_t type.
   //
   // https://w3c.github.io/webrtc-pc/#dom-rtcrtpcontributingsource-rtptimestamp
   absl::optional<double> rtp_timestamp;
@@ -214,6 +216,12 @@ struct MEDIA_EXPORT VideoFrameMetadata {
   // This is an experimental feature, see crbug.com/1138888 for more
   // information.
   absl::optional<int> maximum_composition_delay_in_frames;
+
+  // Identifies a BeginFrameArgs (along with the source_id).
+  // See comments in components/viz/common/frame_sinks/begin_frame_args.h.
+  //
+  // Only set for video frames produced by the frame sink video capturer.
+  absl::optional<uint64_t> frame_sequence;
 };
 
 }  // namespace media

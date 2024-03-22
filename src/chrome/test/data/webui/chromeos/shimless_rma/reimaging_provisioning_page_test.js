@@ -1,24 +1,24 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import {PromiseResolver} from 'chrome://resources/ash/common/promise_resolver.js';
 import {FakeShimlessRmaService} from 'chrome://shimless-rma/fake_shimless_rma_service.js';
 import {setShimlessRmaServiceForTesting} from 'chrome://shimless-rma/mojo_interface_provider.js';
-import {ReimagingProvisioningPage} from 'chrome://shimless-rma/reimaging_provisioning_page.js';
+import {PROVISIONING_ERROR_CODE_PREFIX, ReimagingProvisioningPage} from 'chrome://shimless-rma/reimaging_provisioning_page.js';
 import {ShimlessRma} from 'chrome://shimless-rma/shimless_rma.js';
-import {ProvisioningError, ProvisioningStatus} from 'chrome://shimless-rma/shimless_rma_types.js';
+import {ProvisioningError, ProvisioningStatus, RmadErrorCode} from 'chrome://shimless-rma/shimless_rma_types.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {flushTasks} from '../../test_util.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-export function reimagingProvisioningPageTest() {
+suite('reimagingProvisioningPageTest', function() {
   /**
    * ShimlessRma is needed to handle the 'transition-state' event used
    * when handling calibration overall progress signals.
    * @type {?ShimlessRma}
    */
-  let shimless_rma_component = null;
+  let shimlessRmaComponent = null;
 
   /** @type {?ReimagingProvisioningPage} */
   let component = null;
@@ -27,14 +27,14 @@ export function reimagingProvisioningPageTest() {
   let service = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
     service = new FakeShimlessRmaService();
     setShimlessRmaServiceForTesting(service);
   });
 
   teardown(() => {
-    shimless_rma_component.remove();
-    shimless_rma_component = null;
+    shimlessRmaComponent.remove();
+    shimlessRmaComponent = null;
     component.remove();
     component = null;
     service.reset();
@@ -46,10 +46,10 @@ export function reimagingProvisioningPageTest() {
   function initializeWaitForProvisioningPage() {
     assertFalse(!!component);
 
-    shimless_rma_component =
+    shimlessRmaComponent =
         /** @type {!ShimlessRma} */ (document.createElement('shimless-rma'));
-    assertTrue(!!shimless_rma_component);
-    document.body.appendChild(shimless_rma_component);
+    assertTrue(!!shimlessRmaComponent);
+    document.body.appendChild(shimlessRmaComponent);
 
     component = /** @type {!ReimagingProvisioningPage} */ (
         document.createElement('reimaging-provisioning-page'));
@@ -111,16 +111,31 @@ export function reimagingProvisioningPageTest() {
   test('ProvisioningFailedNonWpError', async () => {
     await initializeWaitForProvisioningPage();
 
+    let hardwareErrorEventFired = false;
+    const expectedProvisoningError = ProvisioningError.kInternal;
+
+    const eventHandler = (event) => {
+      hardwareErrorEventFired = true;
+      assertEquals(
+          RmadErrorCode.kProvisioningFailed, event.detail.rmadErrorCode);
+      assertEquals(
+          PROVISIONING_ERROR_CODE_PREFIX + expectedProvisoningError,
+          event.detail.fatalErrorCode);
+    };
+    component.addEventListener('fatal-hardware-error', eventHandler);
+
     const wpEnabledDialog =
         component.shadowRoot.querySelector('#wpEnabledDialog');
     assertTrue(!!wpEnabledDialog);
     assertFalse(wpEnabledDialog.open);
 
     service.triggerProvisioningObserver(
-        ProvisioningStatus.kFailedBlocking, 1.0, ProvisioningError.kInternal,
-        0);
+        ProvisioningStatus.kFailedBlocking, 1.0, expectedProvisoningError, 0);
     await flushTasks();
 
     assertFalse(wpEnabledDialog.open);
+    assertTrue(hardwareErrorEventFired);
+
+    component.removeEventListener('fatal-hardware-error', eventHandler);
   });
-}
+});

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/display/screen_orientation_controller.h"
 #include "ash/public/cpp/notification_utils.h"
@@ -19,9 +18,8 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/tray/tray_constants.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/metrics/user_metrics.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -72,17 +70,13 @@ std::u16string GetDisplaySize(int64_t display_id) {
 }
 
 // Callback to handle a user selecting the notification view.
-void OnNotificationClicked(absl::optional<int> button_index) {
+void OnNotificationClicked(std::optional<int> button_index) {
   DCHECK(!button_index);
 
-  base::RecordAction(
-      base::UserMetricsAction("StatusArea_Display_Notification_Selected"));
   // Settings may be blocked, e.g. at the lock screen.
   if (Shell::Get()->session_controller()->ShouldEnableSettings() &&
       Shell::Get()->system_tray_model()->client()) {
     Shell::Get()->system_tray_model()->client()->ShowDisplaySettings();
-    base::RecordAction(base::UserMetricsAction(
-        "StatusArea_Display_Notification_Show_Settings"));
   }
   message_center::MessageCenter::Get()->RemoveNotification(
       ScreenLayoutObserver::kNotificationId, /*by_user=*/true);
@@ -313,7 +307,7 @@ void ScreenLayoutObserver::CreateOrUpdateNotification(
     return;
   }
 
-  std::unique_ptr<Notification> notification = CreateSystemNotification(
+  std::unique_ptr<Notification> notification = CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, kNotificationId, message,
       additional_message,
       std::u16string(),  // display_source
@@ -328,8 +322,6 @@ void ScreenLayoutObserver::CreateOrUpdateNotification(
       message_center::SystemNotificationWarningLevel::NORMAL);
   notification->set_priority(message_center::SYSTEM_PRIORITY);
 
-  base::RecordAction(
-      base::UserMetricsAction("StatusArea_Display_Notification_Created"));
   message_center::MessageCenter::Get()->AddNotification(
       std::move(notification));
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <stddef.h>
 
 #include <iterator>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "components/password_manager/core/browser/import/csv_password.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace password_manager {
 
@@ -64,7 +64,7 @@ class CSVPasswordIterator {
   // |csv_row_| contains the CSV row which the iterator points at.
   base::StringPiece csv_row_;
   // Contains a CSVPassword created from |map_| and |csv_row_| if possible.
-  absl::optional<CSVPassword> password_;
+  std::optional<CSVPassword> password_;
 };
 
 // ConsumeCSVLine is a shared utility between CSVPasswordIterator (which uses

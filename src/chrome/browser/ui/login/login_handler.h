@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
@@ -29,8 +30,7 @@ class GURL;
 
 // This is the base implementation for the OS-specific classes that prompt for
 // authentication information.
-class LoginHandler : public content::LoginDelegate,
-                     public content::NotificationObserver {
+class LoginHandler : public content::LoginDelegate {
  public:
   // The purpose of this struct is to enforce that BuildViewImpl receives either
   // both the login model and the observed form, or none. That is a bit spoiled
@@ -44,7 +44,7 @@ class LoginHandler : public content::LoginDelegate,
                    const password_manager::PasswordForm& observed_form);
 
     const raw_ptr<password_manager::HttpAuthManager> model;
-    const password_manager::PasswordForm& form;
+    const raw_ref<const password_manager::PasswordForm> form;
   };
 
   ~LoginHandler() override;
@@ -57,6 +57,9 @@ class LoginHandler : public content::LoginDelegate,
       const net::AuthChallengeInfo& auth_info,
       content::WebContents* web_contents,
       LoginAuthRequiredCallback auth_required_callback);
+
+  // Exposed for testing.
+  static std::vector<LoginHandler*> GetAllLoginHandlersForTest();
 
   // The main entry point for an auth request for a main-frame request. This
   // method allows extensions to handle the auth request, and otherwise cancels
@@ -90,14 +93,6 @@ class LoginHandler : public content::LoginDelegate,
   // Display the error page without asking for credentials again.
   // This function can be called from either thread.
   void CancelAuth();
-
-  // Implements the content::NotificationObserver interface.
-  // Listens for AUTH_SUPPLIED and AUTH_CANCELLED notifications from other
-  // LoginHandlers so that this LoginHandler has the chance to dismiss itself
-  // if it was waiting for the same authentication.
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
 
   // Who/where/what asked for the authentication.
   const net::AuthChallengeInfo& auth_info() const { return auth_info_; }
@@ -137,6 +132,15 @@ class LoginHandler : public content::LoginDelegate,
 
   // Notify observers that authentication is cancelled.
   void NotifyAuthCancelled();
+
+  // When any handler finishes, called on every other handler. |username| and
+  // |password| are only valid if |supplied| is true. If |supplied| is false
+  // then the handler was cancelled. This gives |this| handler the opportunity
+  // to dismiss itself if it was waiting for the same authentication.
+  void OtherHandlerFinished(bool supplied,
+                            LoginHandler* other_handler,
+                            const std::u16string& username,
+                            const std::u16string& password);
 
   // Returns the PasswordManagerClient from the web content.
   password_manager::PasswordManagerClient*
@@ -234,7 +238,8 @@ class LoginNotificationDetails {
  private:
   LoginNotificationDetails() = default;
 
-  raw_ptr<LoginHandler> handler_;  // Where to send the response.
+  raw_ptr<LoginHandler, DanglingUntriaged>
+      handler_;  // Where to send the response.
 };
 
 // Details to provide the NotificationObserver.  Used by the automation proxy

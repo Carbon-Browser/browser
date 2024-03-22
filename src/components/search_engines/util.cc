@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <algorithm>
 #include <limits>
 #include <map>
 #include <set>
@@ -16,8 +15,12 @@
 #include <vector>
 
 #include "base/check_op.h"
+#include "base/feature_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "components/prefs/pref_service.h"
+#include "components/search_engines/search_engine_choice_utils.h"
+#include "components/search_engines/search_engines_pref_names.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_prepopulate_data.h"
 #include "components/search_engines/template_url_service.h"
@@ -182,7 +185,8 @@ TemplateURL* FindURLByPrepopulateID(
 }
 
 void MergeIntoEngineData(const TemplateURL* original_turl,
-                         TemplateURLData* url_to_update) {
+                         TemplateURLData* url_to_update,
+                         TemplateURLMergeOption merge_option) {
   DCHECK(original_turl->prepopulate_id() == 0 ||
          original_turl->prepopulate_id() == url_to_update->prepopulate_id);
   DCHECK(original_turl->starter_pack_id() == 0 ||
@@ -190,8 +194,11 @@ void MergeIntoEngineData(const TemplateURL* original_turl,
   // When the user modified search engine's properties or search engine is
   // imported from Play API data we need to preserve certain search engine
   // properties from overriding with prepopulated data.
-  if (!original_turl->safe_for_autoreplace() ||
-      original_turl->created_from_play_api()) {
+  bool preserve_user_edits =
+      (merge_option != TemplateURLMergeOption::kOverwriteUserEdits &&
+       (!original_turl->safe_for_autoreplace() ||
+        original_turl->created_from_play_api()));
+  if (preserve_user_edits) {
     url_to_update->safe_for_autoreplace = original_turl->safe_for_autoreplace();
     url_to_update->SetShortName(original_turl->short_name());
     url_to_update->SetKeyword(original_turl->keyword());
@@ -312,18 +319,50 @@ ActionsFromCurrentData CreateActionsFromCurrentPrepopulateData(
   return actions;
 }
 
+const std::string& GetDefaultSearchProviderPrefValue(PrefService& prefs) {
+  if (search_engines::IsChoiceScreenFlagEnabled(
+          search_engines::ChoicePromo::kAny)) {
+    const auto& default_search_provider =
+        prefs.GetString(prefs::kDefaultSearchProviderGUID);
+
+    if (!default_search_provider.empty()) {
+      return default_search_provider;
+    }
+
+    const auto& synced_default_search_provider =
+        prefs.GetString(prefs::kSyncedDefaultSearchProviderGUID);
+    if (!synced_default_search_provider.empty()) {
+      prefs.SetString(prefs::kDefaultSearchProviderGUID,
+                      synced_default_search_provider);
+    }
+    return synced_default_search_provider;
+  }
+  return prefs.GetString(prefs::kSyncedDefaultSearchProviderGUID);
+}
+
+void SetDefaultSearchProviderPrefValue(PrefService& prefs,
+                                       const std::string& value) {
+  if (search_engines::IsChoiceScreenFlagEnabled(
+          search_engines::ChoicePromo::kAny)) {
+    prefs.SetString(prefs::kDefaultSearchProviderGUID, value);
+  } else {
+    prefs.SetString(prefs::kSyncedDefaultSearchProviderGUID, value);
+  }
+}
+
 void MergeEnginesFromStarterPackData(
     KeywordWebDataService* service,
     TemplateURLService::OwnedTemplateURLVector* template_urls,
     TemplateURL* default_search_provider,
-    std::set<std::string>* removed_keyword_guids) {
+    std::set<std::string>* removed_keyword_guids,
+    TemplateURLMergeOption merge_option) {
   DCHECK(template_urls);
 
   std::vector<std::unique_ptr<TemplateURLData>> starter_pack_urls =
       TemplateURLStarterPackData::GetStarterPackEngines();
 
   ActionsFromCurrentData actions(CreateActionsFromCurrentStarterPackData(
-      &starter_pack_urls, *template_urls));
+      &starter_pack_urls, *template_urls, merge_option));
 
   ApplyActionsFromCurrentData(actions, service, template_urls,
                               default_search_provider, removed_keyword_guids);
@@ -331,7 +370,8 @@ void MergeEnginesFromStarterPackData(
 
 ActionsFromCurrentData CreateActionsFromCurrentStarterPackData(
     std::vector<std::unique_ptr<TemplateURLData>>* starter_pack_urls,
-    const TemplateURLService::OwnedTemplateURLVector& existing_urls) {
+    const TemplateURLService::OwnedTemplateURLVector& existing_urls,
+    TemplateURLMergeOption merge_option) {
   // Create a map to hold all provided |template_urls| that originally came from
   // starter_pack data (i.e. have a non-zero starter_pack_id()).
   std::map<int, TemplateURL*> id_to_turl;
@@ -359,8 +399,9 @@ ActionsFromCurrentData CreateActionsFromCurrentStarterPackData(
 
     if (existing_url != nullptr) {
       // Update the data store with the new prepopulated data. Preserve user
-      // edits to the name and keyword.
-      MergeIntoEngineData(existing_url, url.get());
+      // edits to the name and keyword unless `merge_option` is set to
+      // kOverwriteUserEdits.
+      MergeIntoEngineData(existing_url, url.get(), merge_option);
       // Update last_modified to ensure that if this entry is later merged with
       // entries from Sync, the conflict resolution logic knows that this was
       // updated and propagates the new values to the server.
@@ -462,6 +503,13 @@ void GetSearchProvidersUsingKeywordResult(
       service, prefs, template_urls, default_search_provider, search_terms_data,
       new_resource_keyword_version, new_resource_starter_pack_version,
       removed_keyword_guids);
+
+  // If a data change happened (new version != 0), it should not be caused by a
+  // version downgrade. Upgrades (builtin > new) or feature-related merges
+  // (builtin == new) only are expected.
+  DCHECK(*new_resource_keyword_version == 0 ||
+         *new_resource_keyword_version >=
+             keyword_result.builtin_keyword_version);
 }
 
 void GetSearchProvidersUsingLoadedEngines(
@@ -483,20 +531,41 @@ void GetSearchProvidersUsingLoadedEngines(
 
   const int prepopulate_resource_keyword_version =
       TemplateURLPrepopulateData::GetDataVersion(prefs);
-  if (*resource_keyword_version < prepopulate_resource_keyword_version) {
+  bool should_keywords_use_extended_list =
+      search_engines::IsChoiceScreenFlagEnabled(
+          search_engines::ChoicePromo::kAny);
+  bool force_re_merge =
+      prefs->GetBoolean(prefs::kDefaultSearchProviderKeywordsUseExtendedList) !=
+          should_keywords_use_extended_list &&
+      // Guard against the risk of a version downgrade.
+      *resource_keyword_version == prepopulate_resource_keyword_version;
+
+  if (*resource_keyword_version < prepopulate_resource_keyword_version ||
+      force_re_merge) {
     MergeEnginesFromPrepopulateData(service, &prepopulated_urls, template_urls,
                                     default_search_provider,
                                     removed_keyword_guids);
     *resource_keyword_version = prepopulate_resource_keyword_version;
+    if (should_keywords_use_extended_list) {
+      prefs->SetBoolean(prefs::kDefaultSearchProviderKeywordsUseExtendedList,
+                        true);
+    } else {
+      prefs->ClearPref(prefs::kDefaultSearchProviderKeywordsUseExtendedList);
+    }
   } else {
     *resource_keyword_version = 0;
   }
 
   const int starter_pack_data_version =
       TemplateURLStarterPackData::GetDataVersion();
+  bool overwrite_user_edits =
+      (*resource_starter_pack_version <
+       TemplateURLStarterPackData::GetFirstCompatibleDataVersion());
   if (*resource_starter_pack_version < starter_pack_data_version) {
     MergeEnginesFromStarterPackData(
-        service, template_urls, default_search_provider, removed_keyword_guids);
+        service, template_urls, default_search_provider, removed_keyword_guids,
+        (overwrite_user_edits ? TemplateURLMergeOption::kOverwriteUserEdits
+                              : TemplateURLMergeOption::kDefault));
     *resource_starter_pack_version = starter_pack_data_version;
   } else {
     *resource_starter_pack_version = 0;
@@ -518,8 +587,5 @@ bool DeDupeEncodings(std::vector<std::string>* encodings) {
 TemplateURLService::OwnedTemplateURLVector::iterator FindTemplateURL(
     TemplateURLService::OwnedTemplateURLVector* urls,
     const TemplateURL* url) {
-  return std::find_if(urls->begin(), urls->end(),
-                      [url](const std::unique_ptr<TemplateURL>& ptr) {
-                        return ptr.get() == url;
-                      });
+  return base::ranges::find(*urls, url, &std::unique_ptr<TemplateURL>::get);
 }

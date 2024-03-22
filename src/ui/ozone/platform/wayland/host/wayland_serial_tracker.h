@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,6 +55,8 @@ class SerialTracker final {
   absl::optional<Serial> GetSerial(const std::vector<SerialType>& types) const;
 
   void ClearForTesting();
+
+  std::string ToString() const;
 
  private:
   const base::TimeTicks base_time_;

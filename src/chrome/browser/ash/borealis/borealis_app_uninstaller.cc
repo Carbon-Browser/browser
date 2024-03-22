@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ void BorealisAppUninstaller::Uninstall(std::string app_id,
     std::move(callback).Run(UninstallResult::kError);
     return;
   }
-  absl::optional<int> uninstall_app_id = GetBorealisAppId(registration->Exec());
+  absl::optional<int> uninstall_app_id = ParseSteamGameId(registration->Exec());
   if (!uninstall_app_id.has_value()) {
     LOG(ERROR) << "Couldn't retrieve the borealis app id from the exec "
                   "information provided";

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,7 @@ class ASH_PUBLIC_EXPORT ColorProvider {
     kTransparent40,
     kTransparent60,
     kTransparent80,
+    kInvertedTransparent80,
     kTransparent90,
     kTransparent95,
 
@@ -56,12 +57,6 @@ class ASH_PUBLIC_EXPORT ColorProvider {
     kControlBackgroundColorPositive,
     kFocusAuraColor,
     kFocusRingColor,
-    kHighlightColor1,
-    kHighlightColor2,
-    kHighlightColor3,
-    kBorderColor1,
-    kBorderColor2,
-    kBorderColor3,
   };
 
   enum class ContentLayerType {
@@ -76,6 +71,7 @@ class ASH_PUBLIC_EXPORT ColorProvider {
     kTextColorWarning,
     kTextColorPositive,
     kTextColorURL,
+    kTextColorSuggestion,
 
     kIconColorPrimary,
     kIconColorSecondary,
@@ -104,9 +100,6 @@ class ASH_PUBLIC_EXPORT ColorProvider {
     // Color for app state indicator.
     kAppStateIndicatorColor,
     kAppStateIndicatorColorInactive,
-
-    // Color for the shelf drag handle in tablet mode.
-    kShelfHandleColor,
 
     // Color for slider.
     kSliderColorActive,
@@ -153,26 +146,17 @@ class ASH_PUBLIC_EXPORT ColorProvider {
 
   // Gets the color of |type| of the corresponding layer based on the current
   // color mode.
-  virtual SkColor GetShieldLayerColor(ShieldLayerType type) const = 0;
   virtual SkColor GetBaseLayerColor(BaseLayerType type) const = 0;
   virtual SkColor GetControlsLayerColor(ControlsLayerType type) const = 0;
   virtual SkColor GetContentLayerColor(ContentLayerType type) const = 0;
 
-  // Gets the active or inactive dialog title bar color in the current color
-  // mode.
-  virtual SkColor GetActiveDialogTitleBarColor() const = 0;
-  virtual SkColor GetInactiveDialogTitleBarColor() const = 0;
-
   // Gets the ink drop base color and opacity. Since the inkdrop ripple and
   // highlight have the same opacity, we are keeping only one opacity here. The
   // base color will be gotten based on current color mode, which will be WHITE
-  // in dark mode and BLACK in light mode. Some parts of the UI use inverted
-  // ink drop colors which will be BLACK in dark mode and WHITE in light mode.
-  // Please provide `background_color` if different base color needed on current
-  // color mode. See more details of IsDarkModeEnabled for current color mode.
+  // in dark mode and BLACK in light mode. Please provide `background_color` if
+  // different base color needed on current color mode. See more details of
+  // IsDarkModeEnabled for current color mode.
   virtual std::pair<SkColor, float> GetInkDropBaseColorAndOpacity(
-      SkColor background_color = gfx::kPlaceholderColor) const = 0;
-  virtual std::pair<SkColor, float> GetInvertedInkDropBaseColorAndOpacity(
       SkColor background_color = gfx::kPlaceholderColor) const = 0;
 
  protected:

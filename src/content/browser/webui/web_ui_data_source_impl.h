@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/values.h"
 #include "content/browser/webui/url_data_manager.h"
@@ -59,6 +59,7 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   void DisableDenyXFrameOptions() override;
   void EnableReplaceI18nInJS() override;
   std::string GetSource() override;
+  void SetSupportedScheme(base::StringPiece scheme) override;
 
   // Add the locale to the load time data defaults. May be called repeatedly.
   void EnsureLoadTimeDataDefaultsAdded();
@@ -78,17 +79,18 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   virtual const base::Value::Dict* GetLocalizedStrings() const;
 
   // Protected for testing.
-  int PathToIdrOrDefault(const std::string& path) const;
+  int URLToIdrOrDefault(const GURL& url) const;
 
  private:
   class InternalDataSource;
   friend class InternalDataSource;
+  friend class URLDataManagerBackend;
   friend class WebUIDataSource;
   friend class WebUIDataSourceTest;
 
   // Methods that match URLDataSource which are called by
   // InternalDataSource.
-  std::string GetMimeType(const std::string& path) const;
+  std::string GetMimeType(const GURL& url) const;
   void StartDataRequest(const GURL& url,
                         const WebContents::Getter& wc_getter,
                         URLDataSource::GotDataCallback callback);
@@ -129,6 +131,9 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   bool replace_existing_source_ = true;
   bool should_replace_i18n_in_js_ = false;
   std::set<GURL> frame_ancestors_;
+
+  // Supported scheme if not one of the default supported schemes.
+  absl::optional<std::string> supported_scheme_;
 };
 
 }  // namespace content

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,12 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "components/signin/public/identity_manager/scope_set.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/data_decoder/public/cpp/json_sanitizer.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace network {
 struct ResourceRequest;
@@ -29,9 +31,16 @@ class IdentityManager;
 class GoogleServiceAuthError;
 class GURL;
 
+enum class FetchErrorType {
+  kAuthError = 0,
+  kNetError = 1,
+  kResultParseError = 2,
+};
+
 struct EndpointResponse {
   std::string response;
-  // TODO(crbug.com/993393) Add more detailed error messaging
+  int http_status_code{-1};
+  absl::optional<FetchErrorType> error_type;
 };
 
 using EndpointFetcherCallback =
@@ -62,7 +71,8 @@ class EndpointFetcher {
       int64_t timeout_ms,
       const std::string& post_data,
       const net::NetworkTrafficAnnotationTag& annotation_tag,
-      signin::IdentityManager* const identity_manager);
+      signin::IdentityManager* identity_manager,
+      signin::ConsentLevel consent_level);
 
   // Constructor if Chrome API Key is used for authentication
   EndpointFetcher(
@@ -94,7 +104,8 @@ class EndpointFetcher {
       const std::string& post_data,
       const net::NetworkTrafficAnnotationTag& annotation_tag,
       const scoped_refptr<network::SharedURLLoaderFactory>& url_loader_factory,
-      signin::IdentityManager* const identity_manager);
+      signin::IdentityManager* identity_manager,
+      signin::ConsentLevel consent_level);
 
   // This Constructor can be used in a background thread.
   EndpointFetcher(
@@ -107,7 +118,7 @@ class EndpointFetcher {
       const std::vector<std::string>& cors_exempt_headers,
       const net::NetworkTrafficAnnotationTag& annotation_tag,
       const scoped_refptr<network::SharedURLLoaderFactory>& url_loader_factory,
-      const bool is_oauth_fetch);
+      bool is_oauth_fetch);
 
   EndpointFetcher(const EndpointFetcher& endpoint_fetcher) = delete;
 
@@ -116,7 +127,7 @@ class EndpointFetcher {
   virtual ~EndpointFetcher();
 
   // TODO(crbug.com/999256) enable cancellation support
-  void Fetch(EndpointFetcherCallback callback);
+  virtual void Fetch(EndpointFetcherCallback callback);
   virtual void PerformRequest(EndpointFetcherCallback endpoint_fetcher_callback,
                               const char* key);
 
@@ -133,7 +144,8 @@ class EndpointFetcher {
                           signin::AccessTokenInfo access_token_info);
   void OnResponseFetched(EndpointFetcherCallback callback,
                          std::unique_ptr<std::string> response_body);
-  void OnSanitizationResult(EndpointFetcherCallback endpoint_fetcher_callback,
+  void OnSanitizationResult(std::unique_ptr<EndpointResponse> response,
+                            EndpointFetcherCallback endpoint_fetcher_callback,
                             data_decoder::JsonSanitizer::Result result);
 
   enum AuthType { CHROME_API_KEY, OAUTH, NO_AUTH };
@@ -154,7 +166,13 @@ class EndpointFetcher {
 
   // Members set in constructor
   const scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
-  const raw_ptr<signin::IdentityManager> identity_manager_;
+  // `identity_manager_` can be null if it is not needed for authentication (in
+  // this case, callers should invoke `PerformRequest` directly).
+  const raw_ptr<signin::IdentityManager, AcrossTasksDanglingUntriaged>
+      identity_manager_;
+  // `consent_level_` is used together with `identity_manager_`, so it can be
+  // null if `identity_manager_` is null.
+  const absl::optional<signin::ConsentLevel> consent_level_;
   bool sanitize_response_;
   bool is_stable_channel_;
 

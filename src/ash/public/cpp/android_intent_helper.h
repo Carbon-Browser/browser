@@ -1,15 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_PUBLIC_CPP_ANDROID_INTENT_HELPER_H_
 #define ASH_PUBLIC_CPP_ANDROID_INTENT_HELPER_H_
 
+#include <optional>
 #include <string>
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -26,8 +26,8 @@ class ASH_PUBLIC_EXPORT AndroidIntentHelper {
 
   // Get the intent that can be used to launch an Android activity specified by
   // the |app_info|.
-  virtual absl::optional<std::string> GetAndroidAppLaunchIntent(
-      const chromeos::assistant::AndroidAppInfo& app_info) = 0;
+  virtual std::optional<std::string> GetAndroidAppLaunchIntent(
+      const assistant::AndroidAppInfo& app_info) = 0;
 
  protected:
   AndroidIntentHelper();

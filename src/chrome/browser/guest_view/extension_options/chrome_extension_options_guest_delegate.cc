@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ bool ChromeExtensionOptionsGuestDelegate::HandleContextMenu(
 
 content::WebContents* ChromeExtensionOptionsGuestDelegate::OpenURLInNewTab(
     const content::OpenURLParams& params) {
-  Browser* browser = chrome::FindBrowserWithWebContents(
+  Browser* browser = chrome::FindBrowserWithTab(
       extension_options_guest()->embedder_web_contents());
   return browser->OpenURL(params);
 }

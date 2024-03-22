@@ -43,7 +43,7 @@ static inline void TestLinkRelAttribute(const String& value,
                                         bool is_link_prerender,
                                         bool is_preconnect = false,
                                         bool is_canonical = false,
-                                        bool is_web_bundle = false) {
+                                        bool is_dictionary = false) {
   SCOPED_TRACE(value.Utf8());
   LinkRelAttribute link_rel_attribute(value);
   ASSERT_EQ(is_style_sheet, link_rel_attribute.IsStyleSheet());
@@ -53,7 +53,7 @@ static inline void TestLinkRelAttribute(const String& value,
   ASSERT_EQ(is_link_prerender, link_rel_attribute.IsLinkPrerender());
   ASSERT_EQ(is_preconnect, link_rel_attribute.IsPreconnect());
   ASSERT_EQ(is_canonical, link_rel_attribute.IsCanonical());
-  ASSERT_EQ(is_web_bundle, link_rel_attribute.IsWebBundle());
+  ASSERT_EQ(is_dictionary, link_rel_attribute.IsDictionary());
 }
 
 TEST(LinkRelAttributeTest, Constructor) {
@@ -138,14 +138,15 @@ TEST(LinkRelAttributeTest, Constructor) {
   TestLinkRelAttribute("caNONiCAL", false,
                        mojom::blink::FaviconIconType::kInvalid, false, false,
                        false, /*is_preconnect=*/false, /*is_canonical=*/true);
-  TestLinkRelAttribute("webbundle", false,
+
+  TestLinkRelAttribute("dictionary", false,
                        mojom::blink::FaviconIconType::kInvalid, false, false,
                        false, /*is_preconnect=*/false, /*is_canonical=*/false,
-                       /*is_web_bundle=*/true);
-  TestLinkRelAttribute("wEbBundle", false,
+                       /*is_dictionary=*/true);
+  TestLinkRelAttribute("diCtIonAry", false,
                        mojom::blink::FaviconIconType::kInvalid, false, false,
                        false, /*is_preconnect=*/false, /*is_canonical=*/false,
-                       /*is_web_bundle=*/true);
+                       /*is_dictionary=*/true);
 }
 
 }  // namespace blink

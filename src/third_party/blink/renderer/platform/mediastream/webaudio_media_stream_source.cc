@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
@@ -44,10 +45,8 @@ void WebAudioMediaStreamSource::SetFormat(int number_of_channels,
   // running on.
   fifo_.Reset(sample_rate / 100);
   media::AudioParameters params(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                                channel_layout, sample_rate,
-                                fifo_.frames_per_buffer());
-  // Take care of the discrete channel layout case.
-  params.set_channels_for_discrete(number_of_channels);
+                                {channel_layout, number_of_channels},
+                                sample_rate, fifo_.frames_per_buffer());
   MediaStreamAudioSource::SetFormat(params);
 
   if (!wrapper_bus_ || wrapper_bus_->channels() != params.channels())

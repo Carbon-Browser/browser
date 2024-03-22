@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,13 @@ class HistoryCluster {
     private final List<String> mRelatedSearches;
     private final String mRawLabel;
 
-    public HistoryCluster(List<ClusterVisit> visits, String label, String rawLabel,
-            List<MatchPosition> matchPositions, long timestamp, List<String> relatedSearches) {
+    public HistoryCluster(
+            List<ClusterVisit> visits,
+            String label,
+            String rawLabel,
+            List<MatchPosition> matchPositions,
+            long timestamp,
+            List<String> relatedSearches) {
         mVisits = visits;
         mLabel = label;
         mRawLabel = rawLabel;

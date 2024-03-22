@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,19 +10,16 @@
 #include <string>
 #include <utility>
 
-#include "ash/components/settings/timezone_settings.h"
-#include "ash/components/timezone/timezone_request.h"
-#include "ash/components/tpm/install_attributes.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/i18n/rtl.h"
 #include "base/i18n/unicodestring.h"
 #include "base/lazy_instance.h"
+#include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
-#include "base/values.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/system/timezone_resolver_manager.h"
@@ -31,6 +28,9 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/ash/components/settings/timezone_settings.h"
+#include "chromeos/ash/components/timezone/timezone_request.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user.h"
@@ -121,8 +121,8 @@ std::u16string GetTimezoneName(const icu::TimeZone& timezone) {
   int min_remainder = minute_offset % 60;
   // Some timezones have a non-integral hour offset. So, we need to use hh:mm
   // form.
-  std::string  offset_str = base::StringPrintf(offset >= 0 ?
-      "UTC+%d:%02d" : "UTC-%d:%02d", hour_offset, min_remainder);
+  std::string offset_str = base::StringPrintf(
+      "UTC%c%d:%02d", offset >= 0 ? '+' : '-', hour_offset, min_remainder);
 
   // TODO(jungshik): When coming up with a better list of timezones, we also
   // have to come up with better 'display' names. One possibility is to list
@@ -173,7 +173,6 @@ bool CanSetSystemTimezone(const user_manager::User* user) {
     case user_manager::USER_TYPE_REGULAR:
     case user_manager::USER_TYPE_KIOSK_APP:
     case user_manager::USER_TYPE_ARC_KIOSK_APP:
-    case user_manager::USER_TYPE_ACTIVE_DIRECTORY:
     case user_manager::USER_TYPE_WEB_KIOSK_APP:
     case user_manager::USER_TYPE_CHILD:
       return true;
@@ -218,14 +217,14 @@ std::u16string GetCurrentTimezoneName() {
 }
 
 // Creates a list of pairs of each timezone's ID and name.
-std::unique_ptr<base::ListValue> GetTimezoneList() {
+base::Value::List GetTimezoneList() {
   const auto& timezones = TimezoneSettings::GetInstance()->GetTimezoneList();
-  auto timezone_list = std::make_unique<base::ListValue>();
+  base::Value::List timezone_list;
   for (const auto& timezone : timezones) {
     base::Value::List option;
     option.Append(TimezoneSettings::GetTimezoneID(*timezone));
     option.Append(GetTimezoneName(*timezone));
-    timezone_list->GetList().Append(std::move(option));
+    timezone_list.Append(std::move(option));
   }
   return timezone_list;
 }

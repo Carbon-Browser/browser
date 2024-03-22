@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,19 @@
 #include <memory>
 
 #include "base/android/scoped_hardware_buffer_fence_sync.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/debug/alias.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "gpu/command_buffer/service/abstract_texture.h"
+#include "gpu/command_buffer/service/abstract_texture_android.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "ui/gl/scoped_binders.h"
 #include "ui/gl/scoped_make_current.h"
+#include "ui/gl/scoped_restore_texture.h"
 
 namespace gpu {
 namespace {
@@ -48,7 +48,7 @@ std::unique_ptr<ui::ScopedMakeCurrent> MakeCurrentIfNeeded(
 }  // namespace
 
 SurfaceTextureGLOwner::SurfaceTextureGLOwner(
-    std::unique_ptr<gles2::AbstractTexture> texture,
+    std::unique_ptr<AbstractTextureAndroid> texture,
     scoped_refptr<SharedContextState> context_state)
     : TextureOwner(true /*binds_texture_on_update */,
                    std::move(texture),
@@ -58,7 +58,6 @@ SurfaceTextureGLOwner::SurfaceTextureGLOwner(
       surface_(gl::GLSurface::GetCurrent()) {
   DCHECK(context_);
   DCHECK(surface_);
-  DCHECK(!features::NeedThreadSafeAndroidMedia());
 }
 
 SurfaceTextureGLOwner::~SurfaceTextureGLOwner() {
@@ -109,14 +108,16 @@ void SurfaceTextureGLOwner::UpdateTexImage() {
     // UpdateTexImage might change gl binding and we never should alter gl
     // binding without updating state tracking, which we can't do here, so
     // restore previous after we done.
-    ScopedRestoreTextureBinding scoped_restore_texture;
+    // NOTE: We pass `restore_prev_even_if_invalid=true` to maintain behavior
+    // from when this class was using a custom implementation rather than the
+    // common utility.
+    // TODO(crbug.com/1367187): Eliminate this behavior with a Finch
+    // killswitch.
+    gl::ScopedRestoreTexture scoped_restore_texture(
+        gl::g_current_gl_context, GL_TEXTURE_EXTERNAL_OES,
+        /*restore_prev_even_if_invalid=*/true);
     surface_texture_->UpdateTexImage();
   }
-}
-
-void SurfaceTextureGLOwner::EnsureTexImageBound(GLuint service_id) {
-  // We can't bind SurfaceTexture to different ids.
-  DCHECK_EQ(service_id, GetTextureId());
 }
 
 void SurfaceTextureGLOwner::ReleaseBackBuffers() {

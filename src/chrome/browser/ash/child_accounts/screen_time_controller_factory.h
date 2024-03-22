@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ASH_CHILD_ACCOUNTS_SCREEN_TIME_CONTROLLER_FACTORY_H_
 
 #include "base/no_destructor.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
 class BrowserContext;
@@ -18,7 +18,7 @@ class ScreenTimeController;
 // Singleton that owns all ScreenTimeController and associates them with
 // BrowserContexts. Listens for the BrowserContext's destruction notification
 // and cleans up the associated ScreenTimeController.
-class ScreenTimeControllerFactory : public BrowserContextKeyedServiceFactory {
+class ScreenTimeControllerFactory : public ProfileKeyedServiceFactory {
  public:
   static ScreenTimeController* GetForBrowserContext(
       content::BrowserContext* context);
@@ -36,15 +36,10 @@ class ScreenTimeControllerFactory : public BrowserContextKeyedServiceFactory {
   ~ScreenTimeControllerFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::ScreenTimeControllerFactory;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_CHILD_ACCOUNTS_SCREEN_TIME_CONTROLLER_FACTORY_H_

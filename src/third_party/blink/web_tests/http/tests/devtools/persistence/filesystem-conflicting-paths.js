@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {BindingsTestRunner} from 'bindings_test_runner';
+
 (async function() {
   TestRunner.addResult(`Verifies that uiSourceCode.delete actually deltes file from IsolatedFileSystem.\n`);
-  await TestRunner.loadTestModule('bindings_test_runner');
 
   var fs1 = new BindingsTestRunner.TestFileSystem('/var/www');
   var file1 = fs1.addFile('foo.js', 'foo.js', 0);

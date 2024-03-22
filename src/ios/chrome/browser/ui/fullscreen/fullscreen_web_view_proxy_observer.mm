@@ -1,20 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_web_view_proxy_observer.h"
 
-#include "base/check.h"
+#import "base/check.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_content_adjustment_util.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_mediator.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_model.h"
-#include "ios/chrome/browser/ui/util/ui_util.h"
+#import "ios/chrome/common/ui/util/ui_util.h"
+#import "ios/web/common/features.h"
 #import "ios/web/public/ui/crw_web_view_proxy.h"
 #import "ios/web/public/ui/crw_web_view_scroll_view_proxy.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface FullscreenWebViewProxyObserver ()<CRWWebViewScrollViewProxyObserver>
 // The model and mediator passed on initialization.
@@ -62,6 +59,55 @@
   BOOL scrollToTop = !AreCGFloatsEqual(self.model->progress(), 0.0);
   self.mediator->ExitFullscreen();
   return scrollToTop;
+}
+
+- (void)webViewScrollViewDidScroll:
+    (CRWWebViewScrollViewProxy*)webViewScrollViewProxy {
+  if (!base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    self.model->SetYContentOffset(webViewScrollViewProxy.contentOffset.y);
+  }
+}
+
+- (void)webViewScrollViewWillBeginDragging:
+    (CRWWebViewScrollViewProxy*)webViewScrollViewProxy {
+  if (!base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    self.model->SetScrollViewIsScrolling(true);
+    self.model->SetScrollViewIsDragging(true);
+  }
+}
+
+- (void)webViewScrollViewWillEndDragging:
+            (CRWWebViewScrollViewProxy*)webViewScrollViewProxy
+                            withVelocity:(CGPoint)velocity
+                     targetContentOffset:(inout CGPoint*)targetContentOffset {
+  if (!base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    self.model->SetScrollViewIsScrolling(false);
+    self.model->SetScrollViewIsDragging(false);
+  }
+}
+
+- (void)webViewScrollViewDidEndDragging:
+            (CRWWebViewScrollViewProxy*)webViewScrollViewProxy
+                         willDecelerate:(BOOL)decelerate {
+  if (!base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    self.model->SetScrollViewIsScrolling(false);
+    self.model->SetScrollViewIsDragging(false);
+  }
+}
+
+- (void)webViewScrollViewWillBeginZooming:
+    (CRWWebViewScrollViewProxy*)webViewScrollViewProxy {
+  if (!base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    self.model->SetScrollViewIsZooming(true);
+  }
+}
+
+- (void)webViewScrollViewDidEndZooming:
+            (CRWWebViewScrollViewProxy*)webViewScrollViewProxy
+                               atScale:(CGFloat)scale {
+  if (!base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    self.model->SetScrollViewIsZooming(false);
+  }
 }
 
 @end

@@ -49,8 +49,6 @@ bool Puffer::PuffDeflate(BitReaderInterface* br,
     br->DropBits(1);
     uint8_t type = br->ReadBits(2);  // BTYPE
     br->DropBits(2);
-    DVLOG(2) << "Read block type: "
-             << BlockTypeToString(static_cast<BlockType>(type));
 
     // If it is the final block and we are just looking for deflate locations,
     // we consider this the end of the search.
@@ -77,8 +75,6 @@ bool Puffer::PuffDeflate(BitReaderInterface* br,
         br->DropBits(16);
 
         if ((len ^ nlen) != 0xFFFF) {
-          LOG(ERROR) << "Length of uncompressed data is invalid;"
-                     << " LEN(" << len << ") NLEN(" << nlen << ")";
           return false;
         }
 
@@ -129,8 +125,6 @@ bool Puffer::PuffDeflate(BitReaderInterface* br,
         break;
 
       default:
-        LOG(ERROR) << "Invalid block compression type: "
-                   << static_cast<int>(type);
         return false;
     }
 
@@ -182,16 +176,13 @@ bool Puffer::PuffDeflate(BitReaderInterface* br,
         auto bits_to_cache = cur_ht->DistanceMaxBits();
         if (!br->CacheBits(bits_to_cache)) {
           // This is a corner case that is present in the older versions of the
-          // puffin. So we need to catch it and correctly discard this kind of
+          // Puffin. So we need to catch it and correctly discard this kind of
           // deflate when we encounter it. See crbug.com/915559 for more info.
           bits_to_cache = br->BitsRemaining();
           TEST_AND_RETURN_FALSE(br->CacheBits(bits_to_cache));
           if (exclude_bad_distance_caches_) {
             include_deflate = false;
           }
-          LOG(WARNING) << "A rare condition that older puffin clients fail to"
-                       << " recognize happened. Nothing to worry about."
-                       << " See crbug.com/915559";
         }
         auto read_bits = br->ReadBits(bits_to_cache);
         size_t nbits = 0;

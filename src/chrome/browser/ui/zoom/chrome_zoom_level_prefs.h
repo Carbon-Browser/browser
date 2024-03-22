@@ -1,25 +1,21 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_ZOOM_CHROME_ZOOM_LEVEL_PREFS_H_
 #define CHROME_BROWSER_UI_ZOOM_CHROME_ZOOM_LEVEL_PREFS_H_
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "components/prefs/json_pref_store.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/pref_store.h"
 #include "content/public/browser/host_zoom_map.h"
 #include "content/public/browser/zoom_level_delegate.h"
-
-namespace base {
-class DictionaryValue;
-}
 
 namespace zoom {
 class ZoomEventManager;
@@ -56,9 +52,8 @@ class ChromeZoomLevelPrefs : public content::ZoomLevelDelegate {
   base::CallbackListSubscription RegisterDefaultZoomLevelCallback(
       base::RepeatingClosure callback);
 
-  void ExtractPerHostZoomLevels(
-      const base::DictionaryValue* host_zoom_dictionary,
-      bool sanitize_partition_host_zoom_levels);
+  void ExtractPerHostZoomLevels(const base::Value::Dict& host_zoom_dictionary,
+                                bool sanitize_partition_host_zoom_levels);
 
   // content::ZoomLevelDelegate
   void InitHostZoomMap(content::HostZoomMap* host_zoom_map) override;

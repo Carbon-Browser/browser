@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,8 @@ class X509Certificate;
 // Delegate which is used by LocationBarModel class.
 class LocationBarModelDelegate {
  public:
+  LocationBarModelDelegate() = default;
+
   // Formats |url| using AutocompleteInput::FormattedStringWithEquivalentMeaning
   // providing an appropriate AutocompleteSchemeClassifier for the embedder.
   virtual std::u16string FormattedStringWithEquivalentMeaning(
@@ -88,9 +90,6 @@ class LocationBarModelDelegate {
 
   // Returns whether |url| corresponds to the user's home page.
   virtual bool IsHomePage(const GURL& url) const;
-
-  // Returns whether there is an accuracy tip shown for the active web contents.
-  virtual bool IsShowingAccuracyTip() const;
 
   // Returns the AutocompleteClassifier instance for the current page.
   virtual AutocompleteClassifier* GetAutocompleteClassifier();

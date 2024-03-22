@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/system/sys_info.h"
@@ -239,7 +239,8 @@ void BluezDBusManager::OnFlossObjectManagerSupported(dbus::Response* response) {
   DVLOG(1) << "Floss manager present. Making sure Floss is enabled/disabled.";
   floss_manager_client_ = floss::FlossManagerClient::Create();
   floss_manager_client_->Init(GetSystemBus(), floss::kManagerInterface,
-                              std::string());
+                              /*adapter_index=*/0, base::Version(),
+                              base::DoNothing());
 }
 
 void BluezDBusManager::OnFlossObjectManagerNotSupported(

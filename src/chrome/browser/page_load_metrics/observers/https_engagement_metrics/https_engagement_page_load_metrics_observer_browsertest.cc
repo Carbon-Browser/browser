@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,7 +102,9 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
 
     content::WebContentsDestroyedWatcher destroyed_watcher(
         tab_strip_model->GetWebContentsAt(0));
-    EXPECT_TRUE(tab_strip_model->CloseWebContentsAt(0, 0));
+    int previous_tab_count = tab_strip_model->count();
+    tab_strip_model->CloseWebContentsAt(0, 0);
+    EXPECT_EQ(previous_tab_count - 1, tab_strip_model->count());
     destroyed_watcher.Wait();
     EXPECT_EQ(1, tab_strip_model->count());
 
@@ -126,7 +128,9 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
 
     content::WebContentsDestroyedWatcher destroyed_watcher(
         tab_strip_model->GetWebContentsAt(1));
-    EXPECT_TRUE(tab_strip_model->CloseWebContentsAt(1, 0));
+    int previous_tab_count = tab_strip_model->count();
+    tab_strip_model->CloseWebContentsAt(1, 0);
+    EXPECT_EQ(previous_tab_count - 1, tab_strip_model->count());
     destroyed_watcher.Wait();
     EXPECT_EQ(1, tab_strip_model->count());
   }
@@ -151,7 +155,9 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
     base::TimeTicks start = base::TimeTicks::Now();
     content::WebContentsDestroyedWatcher destroyed_watcher(
         tab_strip_model->GetWebContentsAt(0));
-    EXPECT_TRUE(tab_strip_model->CloseWebContentsAt(0, 0));
+    int previous_tab_count = tab_strip_model->count();
+    tab_strip_model->CloseWebContentsAt(0, 0);
+    EXPECT_EQ(previous_tab_count - 1, tab_strip_model->count());
     destroyed_watcher.Wait();
 
     // Now the background tab should have moved to the foreground.
@@ -168,7 +174,7 @@ class HttpsEngagementPageLoadMetricsBrowserTest : public InProcessBrowserTest {
   }
 
   void FakeUserMetricsUpload() {
-    metrics_provider_->ProvideCurrentSessionData(NULL);
+    metrics_provider_->ProvideCurrentSessionData(nullptr);
   }
 
  protected:
@@ -288,8 +294,9 @@ IN_PROC_BROWSER_TEST_F(HttpsEngagementPageLoadMetricsBrowserTest,
       browser(), https_test_server_->GetURL("/simple.html")));
   content::WebContentsDestroyedWatcher destroyed_watcher(
       tab_strip_model->GetActiveWebContents());
-  EXPECT_TRUE(
-      tab_strip_model->CloseWebContentsAt(tab_strip_model->active_index(), 0));
+  int previous_tab_count = tab_strip_model->count();
+  tab_strip_model->CloseWebContentsAt(tab_strip_model->active_index(), 0);
+  EXPECT_EQ(previous_tab_count - 1, tab_strip_model->count());
   destroyed_watcher.Wait();
   histogram_tester_.ExpectTotalCount(internal::kHttpEngagementHistogram, 0);
   histogram_tester_.ExpectTotalCount(internal::kHttpsEngagementHistogram, 0);

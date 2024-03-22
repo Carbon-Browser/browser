@@ -45,7 +45,7 @@ function calculateExpectedScroll(container, pixelsToScrollX, pixelsToScrollY) {
     );
   }
 
-  return {x: expectedScrollX, y: expectedScrollY};
+  return {x: Math.round(expectedScrollX), y: Math.round(expectedScrollY)};
 }
 
 // This is an inverse of the above function.
@@ -177,7 +177,6 @@ function moveViewportToVisible(point) {
   let visual_rect = shrink(getVisualViewportRect(), 10);
   let visual_delta = offsetFromBounds(point, visual_rect);
   let visual_target = cssVisualToCssClient(visual_delta)
-  visual_target = scaleCssToBlinkPixels(visual_target);
   internals.setVisualViewportOffset(visual_target.x, visual_target.y);
 
   // Note that layout viewport = client

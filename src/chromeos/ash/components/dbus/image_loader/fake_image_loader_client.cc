@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
@@ -45,34 +45,34 @@ void FakeImageLoaderClient::RegisterComponent(
     const std::string& name,
     const std::string& version,
     const std::string& component_folder_abs_path,
-    DBusMethodCallback<bool> callback) {
+    chromeos::DBusMethodCallback<bool> callback) {
   registered_components_[name] = version;
   component_install_paths_[name] =
       base::FilePath(component_folder_abs_path).AppendASCII(version);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), absl::make_optional(true)));
 }
 
 void FakeImageLoaderClient::LoadComponent(
     const std::string& name,
-    DBusMethodCallback<std::string> callback) {
+    chromeos::DBusMethodCallback<std::string> callback) {
   const auto& version_it = registered_components_.find(name);
   if (version_it == registered_components_.end()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
 
   const auto& mount_path_it = mount_paths_.find(name);
   if (mount_path_it == mount_paths_.end()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
 
   loaded_components_.insert(name);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           std::move(callback),
@@ -83,10 +83,10 @@ void FakeImageLoaderClient::LoadComponent(
 void FakeImageLoaderClient::LoadComponentAtPath(
     const std::string& name,
     const base::FilePath& path,
-    DBusMethodCallback<base::FilePath> callback) {
+    chromeos::DBusMethodCallback<base::FilePath> callback) {
   const auto& mount_path_it = mount_paths_.find(name);
   if (mount_path_it == mount_paths_.end()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
@@ -94,13 +94,14 @@ void FakeImageLoaderClient::LoadComponentAtPath(
   loaded_components_.insert(name);
   component_install_paths_[name] = path;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback),
                                 absl::make_optional(mount_path_it->second)));
 }
 
-void FakeImageLoaderClient::RemoveComponent(const std::string& name,
-                                            DBusMethodCallback<bool> callback) {
+void FakeImageLoaderClient::RemoveComponent(
+    const std::string& name,
+    chromeos::DBusMethodCallback<bool> callback) {
   registered_components_.erase(name);
   component_install_paths_.erase(name);
   UnmountComponent(name, std::move(callback));
@@ -108,24 +109,24 @@ void FakeImageLoaderClient::RemoveComponent(const std::string& name,
 
 void FakeImageLoaderClient::RequestComponentVersion(
     const std::string& name,
-    DBusMethodCallback<std::string> callback) {
+    chromeos::DBusMethodCallback<std::string> callback) {
   const auto& version_it = registered_components_.find(name);
   if (version_it == registered_components_.end()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback),
                                 absl::make_optional(version_it->second)));
 }
 
 void FakeImageLoaderClient::UnmountComponent(
     const std::string& name,
-    DBusMethodCallback<bool> callback) {
+    chromeos::DBusMethodCallback<bool> callback) {
   loaded_components_.erase(name);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), absl::make_optional(true)));
 }

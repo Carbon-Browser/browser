@@ -1,4 +1,4 @@
-<!-- Copyright 2020 The Chromium Authors. All rights reserved.
+<!-- Copyright 2020 The Chromium Authors
      Use of this source code is governed by a BSD-style license that can be
      found in the LICENSE file. -->
 <!DOCTYPE html>
@@ -22,14 +22,15 @@
     html {
       background-color: var(--cros-bg-color);
     }
+
+    html:has(body.jelly-enabled) {
+      background-color: var(--cros-sys-app_base);
+    }
   </style>
   <body>
     <scanning-app></scanning-app>
 
     <script type="module" src="scanning_app.js"></script>
     <script type="module" src="mojo_interface_provider.js"></script>
-    <!-- Below mojo script required to run browser tests -->
-    <script src="chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js">
-    </script>
   </body>
 </html>

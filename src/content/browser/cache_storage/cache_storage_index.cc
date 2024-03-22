@@ -1,10 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/cache_storage/cache_storage_index.h"
 
 #include <utility>
+
+#include "base/containers/contains.h"
 
 namespace content {
 
@@ -30,8 +32,7 @@ CacheStorageIndex& CacheStorageIndex::operator=(CacheStorageIndex&& rhs) {
 
 void CacheStorageIndex::Insert(const CacheMetadata& cache_metadata) {
   DCHECK(!has_doomed_cache_);
-  DCHECK(cache_metadata_map_.find(cache_metadata.name) ==
-         cache_metadata_map_.end());
+  DCHECK(!base::Contains(cache_metadata_map_, cache_metadata.name));
   ordered_cache_metadata_.push_back(cache_metadata);
   cache_metadata_map_[cache_metadata.name] = --ordered_cache_metadata_.end();
   storage_size_ = CacheStorage::kSizeUnknown;

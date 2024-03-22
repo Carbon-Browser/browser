@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ TEST_F(V4StorePerftest, StressTest) {
 #endif
 
   static_assert(kMaxHashPrefixLength == crypto::kSHA256Length,
-                "SHA256 produces a valid FullHash");
+                "SHA256 produces a valid FullHashStr");
   CHECK(base::IsValidForType<size_t>(
       base::CheckMul(kNumPrefixes, kMaxHashPrefixLength)));
 

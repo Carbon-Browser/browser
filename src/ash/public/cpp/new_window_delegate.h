@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 class GURL;
 
@@ -31,6 +31,7 @@ class ASH_PUBLIC_EXPORT NewWindowDelegate {
     kFeedbackSourceAsh,
     kFeedbackSourceAssistant,
     kFeedbackSourceQuickAnswers,
+    kFeedbackSourceChannelIndicator,
   };
 
   virtual ~NewWindowDelegate();
@@ -70,12 +71,22 @@ class ASH_PUBLIC_EXPORT NewWindowDelegate {
   // If the |from| is kArc, then the new window is annotated a special tag,
   // so that on requesting to opening ARC app from the page, confirmation
   // dialog will be skipped.
+  // |Disposition| corresponds to the subset of |WindowOpenDisposition| that is
+  // supported by crosapi.
   enum class OpenUrlFrom {
     kUnspecified,
     kUserInteraction,
     kArc,
   };
-  virtual void OpenUrl(const GURL& url, OpenUrlFrom from) = 0;
+  enum class Disposition {
+    kNewForegroundTab,
+    kNewWindow,
+    kOffTheRecord,
+    kSwitchToTab,
+  };
+  virtual void OpenUrl(const GURL& url,
+                       OpenUrlFrom from,
+                       Disposition disposition) = 0;
 
   // Invoked when an accelerator (calculator key) is used to open calculator.
   virtual void OpenCalculator() = 0;
@@ -100,6 +111,9 @@ class ASH_PUBLIC_EXPORT NewWindowDelegate {
 
   // Show the keyboard shortcut viewer.
   virtual void ShowKeyboardShortcutViewer() = 0;
+
+  // Show the shortcut customization app.
+  virtual void ShowShortcutCustomizationApp() = 0;
 
   // Shows the task manager window.
   virtual void ShowTaskManager() = 0;

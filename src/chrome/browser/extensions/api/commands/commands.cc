@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,13 @@ ExtensionFunction::ResponseAction GetAllCommandsFunction::Run() {
     command_list.Append(CreateCommandValue(browser_action, active));
   }
 
+  extensions::Command action;
+  if (command_service->GetExtensionActionCommand(
+          extension_->id(), extensions::ActionInfo::TYPE_ACTION,
+          extensions::CommandService::ALL, &action, &active)) {
+    command_list.Append(CreateCommandValue(action, active));
+  }
+
   extensions::Command page_action;
   if (command_service->GetExtensionActionCommand(
           extension_->id(), extensions::ActionInfo::TYPE_PAGE,
@@ -65,5 +72,5 @@ ExtensionFunction::ResponseAction GetAllCommandsFunction::Run() {
     command_list.Append(CreateCommandValue(iter->second, active));
   }
 
-  return RespondNow(OneArgument(base::Value(std::move(command_list))));
+  return RespondNow(WithArguments(std::move(command_list)));
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 #include <cstring>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/page_size.h"
 #include "base/posix/unix_domain_socket.h"
 #include "base/test/bind.h"

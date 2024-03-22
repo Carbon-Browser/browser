@@ -1,11 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/lacros/dbus/lacros_dbus_helper.h"
 
 #include "base/feature_list.h"
+#include "chromeos/dbus/dlp/dlp_client.h"
 #include "chromeos/dbus/init/initialize_dbus_client.h"
+#include "chromeos/dbus/ip_peripheral/ip_peripheral_service_client.h"
 #include "chromeos/dbus/missive/missive_client.h"
 #include "chromeos/dbus/permission_broker/permission_broker_client.h"
 #include "chromeos/dbus/power/power_manager_client.h"
@@ -28,15 +30,13 @@ void LacrosInitializeDBus() {
   // Initialize Chrome D-Bus clients.
   dbus::Bus* bus = LacrosDBusThreadManager::Get()->GetSystemBus();
 
+  InitializeDBusClient<IpPeripheralServiceClient>(bus);
   InitializeDBusClient<PermissionBrokerClient>(bus);
-
   InitializeDBusClient<MissiveClient>(bus);
-
   InitializeDBusClient<chromeos::PowerManagerClient>(bus);
-
   InitializeDBusClient<TpmManagerClient>(bus);
-
   InitializeDBusClient<U2FClient>(bus);
+  InitializeDBusClient<DlpClient>(bus);
 }
 
 void LacrosInitializeFeatureListDependentDBus() {
@@ -50,16 +50,20 @@ void LacrosInitializeFeatureListDependentDBus() {
 
 void LacrosShutdownDBus() {
   // Shut down D-Bus clients in reverse order of initialization.
-  if (floss::features::IsFlossEnabled()) {
+
+  // FeatureList is no longer available at this stage. Relying on the actual
+  // Bluetooth DBUS manager properties rather than feature flags.
+  if (floss::FlossDBusManager::IsInitialized()) {
     floss::FlossDBusManager::Shutdown();
-  } else {
+  }
+  if (bluez::BluezDBusManager::IsInitialized()) {
     bluez::BluezDBusManager::Shutdown();
   }
 
+  DlpClient::Shutdown();
   MissiveClient::Shutdown();
-
   PermissionBrokerClient::Shutdown();
-
+  IpPeripheralServiceClient::Shutdown();
   LacrosDBusThreadManager::Shutdown();
 }
 

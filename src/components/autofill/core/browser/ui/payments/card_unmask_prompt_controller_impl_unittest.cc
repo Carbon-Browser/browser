@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <stddef.h>
 
 #include <memory>
+#include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -18,7 +19,10 @@
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
+#include "components/autofill/core/browser/payments/card_unmask_challenge_option.h"
+#include "components/autofill/core/browser/ui/payments/card_unmask_prompt_options.h"
 #include "components/autofill/core/browser/ui/payments/card_unmask_prompt_view.h"
+#include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/autofill/core/common/autofill_prefs.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -66,13 +70,13 @@ class TestCardUnmaskPromptView : public CardUnmaskPromptView {
     // Notify the controller that the view was dismissed.
     controller_->OnUnmaskDialogClosed();
   }
-  void ControllerGone() override {}
+  void ControllerGone() override { controller_ = nullptr; }
   void DisableAndWaitForVerification() override {}
   void GotVerificationResult(const std::u16string& error_message,
                              bool allow_retry) override {}
 
  private:
-  raw_ptr<CardUnmaskPromptController> controller_;
+  raw_ptr<CardUnmaskPromptController> controller_ = nullptr;
 };
 
 class TestCardUnmaskPromptController : public CardUnmaskPromptControllerImpl {
@@ -115,36 +119,45 @@ class CardUnmaskPromptControllerImplGenericTest {
     pref_service_ = std::make_unique<TestingPrefServiceSimple>();
     controller_ =
         std::make_unique<TestCardUnmaskPromptController>(pref_service_.get());
-    test_unmask_prompt_view_ =
-        std::make_unique<TestCardUnmaskPromptView>(controller_.get());
     delegate_ = std::make_unique<TestCardUnmaskDelegate>();
   }
 
-  void ShowPrompt(bool should_unmask_virtual_card = false) {
-    card_.set_record_type(should_unmask_virtual_card
-                              ? CreditCard::VIRTUAL_CARD
-                              : CreditCard::MASKED_SERVER_CARD);
+  // Shows the Card Unmask Prompt. `challenge_option` being present denotes that
+  // we are in the virtual card use-case.
+  void ShowPrompt(const absl::optional<autofill::CardUnmaskChallengeOption>&
+                      challenge_option = absl::nullopt) {
+    card_.set_record_type(challenge_option.has_value()
+                              ? CreditCard::RecordType::kVirtualCard
+                              : CreditCard::RecordType::kMaskedServerCard);
+
+    CardUnmaskPromptOptions card_unmask_prompt_options =
+        CardUnmaskPromptOptions(challenge_option,
+                                AutofillClient::UnmaskCardReason::kAutofill);
+
     controller_->ShowPrompt(
-        base::BindOnce(
-            &CardUnmaskPromptControllerImplGenericTest::GetCardUnmaskPromptView,
-            base::Unretained(this)),
-        card_, AutofillClient::UnmaskCardReason::kAutofill,
-        delegate_->GetWeakPtr());
+        base::BindOnce(&CardUnmaskPromptControllerImplGenericTest::
+                           CreateCardUnmaskPromptView,
+                       base::Unretained(this)),
+        card_, card_unmask_prompt_options, delegate_->GetWeakPtr());
+  }
+
+  void DismissPrompt() {
+    test_unmask_prompt_view_->Dismiss();
+    test_unmask_prompt_view_.reset();
   }
 
   void ShowPromptAndSimulateResponse(bool enable_fido_auth,
                                      bool should_unmask_virtual_card = false) {
-    ShowPrompt(should_unmask_virtual_card);
+    ShowPrompt(should_unmask_virtual_card
+                   ? absl::optional<autofill::CardUnmaskChallengeOption>(
+                         test::GetCardUnmaskChallengeOptions(
+                             {CardUnmaskChallengeOptionType::kCvc})[0])
+                   : absl::nullopt);
     controller_->OnUnmaskPromptAccepted(u"444", u"01", u"2050",
                                         enable_fido_auth);
   }
 
  protected:
-  void SetImportCheckboxState(bool value) {
-    pref_service_->SetBoolean(prefs::kAutofillWalletImportStorageCheckboxState,
-                              value);
-  }
-
   void SetCreditCardForTesting(CreditCard card) { card_ = card; }
 
   CreditCard card_ = test::GetMaskedServerCard();
@@ -155,7 +168,9 @@ class CardUnmaskPromptControllerImplGenericTest {
   std::unique_ptr<TestCardUnmaskDelegate> delegate_;
 
  private:
-  CardUnmaskPromptView* GetCardUnmaskPromptView() {
+  CardUnmaskPromptView* CreateCardUnmaskPromptView() {
+    test_unmask_prompt_view_ =
+        std::make_unique<TestCardUnmaskPromptView>(controller_.get());
     return test_unmask_prompt_view_.get();
   }
 };
@@ -175,8 +190,6 @@ class CardUnmaskPromptControllerImplTest
 
   void SetUp() override {
     CardUnmaskPromptControllerImplGenericTest::SetUp();
-    pref_service_->registry()->RegisterBooleanPref(
-        prefs::kAutofillWalletImportStorageCheckboxState, false);
 #if BUILDFLAG(IS_ANDROID)
     pref_service_->registry()->RegisterBooleanPref(
         prefs::kAutofillCreditCardFidoAuthOfferCheckboxState, true);
@@ -187,8 +200,6 @@ class CardUnmaskPromptControllerImplTest
 #if BUILDFLAG(IS_ANDROID)
 TEST_F(CardUnmaskPromptControllerImplTest,
        FidoAuthOfferCheckboxStatePersistent) {
-  scoped_feature_list_.InitAndEnableFeature(
-      features::kAutofillCreditCardAuthentication);
   ShowPromptAndSimulateResponse(/*enable_fido_auth=*/true);
   EXPECT_TRUE(pref_service_->GetBoolean(
       prefs::kAutofillCreditCardFidoAuthOfferCheckboxState));
@@ -200,8 +211,6 @@ TEST_F(CardUnmaskPromptControllerImplTest,
 
 TEST_F(CardUnmaskPromptControllerImplTest,
        PopulateCheckboxToUserProvidedUnmaskDetails) {
-  scoped_feature_list_.InitAndEnableFeature(
-      features::kAutofillCreditCardAuthentication);
   ShowPromptAndSimulateResponse(/*enable_fido_auth=*/true);
 
   EXPECT_TRUE(delegate_->details().enable_fido_auth);
@@ -274,62 +283,236 @@ TEST_F(CardUnmaskPromptControllerImplTest,
       1);
 }
 
+class CardUnmaskPromptContentTest : public CardUnmaskPromptControllerImplTest,
+                                    public testing::WithParamInterface<bool> {
+ public:
+  CardUnmaskPromptContentTest() {
+#if BUILDFLAG(IS_ANDROID)
+    touch_to_fill_for_credit_cards_enabled_ = GetParam();
+    scoped_feature_list_.InitWithFeatureState(
+        features::kAutofillTouchToFillForCreditCardsAndroid,
+        touch_to_fill_for_credit_cards_enabled_);
+#endif
+  }
+
+  CardUnmaskPromptContentTest(const CardUnmaskPromptContentTest&) = delete;
+  CardUnmaskPromptContentTest& operator=(const CardUnmaskPromptContentTest&) =
+      delete;
+
+  ~CardUnmaskPromptContentTest() override = default;
+
+  bool touch_to_fill_for_credit_cards_enabled() const {
+#if BUILDFLAG(IS_ANDROID)
+    return touch_to_fill_for_credit_cards_enabled_;
+#else
+    return false;
+#endif
+  }
+
+#if BUILDFLAG(IS_ANDROID)
+ private:
+  bool touch_to_fill_for_credit_cards_enabled_;
+#endif
+};
+
+INSTANTIATE_TEST_SUITE_P(All, CardUnmaskPromptContentTest, ::testing::Bool());
+
 // Ensures the card information is shown correctly in the instruction message on
-// iOS and in the title on other platforms.
-TEST_F(CardUnmaskPromptControllerImplTest, DisplayCardInformation) {
+// iOS, in the card details section on Android, and in the title on other
+// platforms.
+TEST_P(CardUnmaskPromptContentTest, DisplayCardInformation) {
   ShowPrompt();
 #if BUILDFLAG(IS_IOS)
-  EXPECT_TRUE(base::UTF16ToUTF8(controller_->GetInstructionsMessage())
-                  .find("Mastercard  " + test::ObfuscatedCardDigitsAsUTF8(
-                                             "2109")) != std::string::npos);
+  EXPECT_TRUE(controller_->GetInstructionsMessage().find(
+                  card_.CardNameAndLastFourDigits()) != std::string::npos);
 #else
-  EXPECT_TRUE(base::UTF16ToUTF8(controller_->GetWindowTitle())
-                  .find("Mastercard  " + test::ObfuscatedCardDigitsAsUTF8(
-                                             "2109")) != std::string::npos);
+  if (touch_to_fill_for_credit_cards_enabled()) {
+#if BUILDFLAG(IS_ANDROID)
+    EXPECT_EQ(controller_->GetCardName(), card_.CardNameForAutofillDisplay());
+    EXPECT_EQ(controller_->GetCardLastFourDigits(),
+              card_.ObfuscatedNumberWithVisibleLastFourDigits());
+#endif
+  } else {
+    EXPECT_TRUE(controller_->GetWindowTitle().find(
+                    card_.CardNameAndLastFourDigits()) != std::string::npos);
+  }
 #endif
 }
 
-// Ensures to fallback to network name in the instruction message on iOS and in
-// the title on other platforms when the nickname is invalid.
-TEST_F(CardUnmaskPromptControllerImplTest, Nickname_NicknameInvalid) {
-  SetCreditCardForTesting(test::GetMaskedServerCardWithInvalidNickname());
+// Tests the title and instructions message in the credit card unmask dialog.
+TEST_P(CardUnmaskPromptContentTest, TitleAndInstructionMessage) {
   ShowPrompt();
 #if BUILDFLAG(IS_IOS)
-  EXPECT_TRUE(
-      base::UTF16ToUTF8(controller_->GetInstructionsMessage()).find("Visa") !=
-      std::string::npos);
-  EXPECT_FALSE(base::UTF16ToUTF8(controller_->GetInstructionsMessage())
-                   .find("Invalid nickname which is too long") !=
-               std::string::npos);
+  EXPECT_EQ(controller_->GetWindowTitle(), u"Confirm Card");
+  EXPECT_EQ(controller_->GetInstructionsMessage(),
+            u"Enter the CVC for " + card_.CardNameAndLastFourDigits() +
+                u". After you confirm, card details from your Google Account "
+                u"will be shared with this site.");
 #else
-  EXPECT_TRUE(base::UTF16ToUTF8(controller_->GetWindowTitle()).find("Visa") !=
-              std::string::npos);
-  EXPECT_FALSE(base::UTF16ToUTF8(controller_->GetWindowTitle())
-                   .find("Invalid nickname which is too long") !=
-               std::string::npos);
+  if (touch_to_fill_for_credit_cards_enabled()) {
+    EXPECT_EQ(controller_->GetWindowTitle(), u"Enter your CVC");
+  } else {
+    EXPECT_EQ(controller_->GetWindowTitle(),
+              u"Enter the CVC for " + card_.CardNameAndLastFourDigits());
+  }
+  // On Desktop/Android, if the issuer is not Amex, the instructions message
+  // prompts users to enter the CVC located on the back of the card.
+  EXPECT_EQ(
+      controller_->GetInstructionsMessage(),
+      u"To help keep your card secure, enter the CVC on the back of your card");
 #endif
+  DismissPrompt();
 }
 
-// Ensures the nickname is displayed (instead of network) in the instruction
-// message on iOS and in the title on other platforms when the nickname is
-// valid.
-TEST_F(CardUnmaskPromptControllerImplTest, Nickname_NicknameValid) {
-  SetCreditCardForTesting(test::GetMaskedServerCardWithNickname());
+TEST_P(CardUnmaskPromptContentTest, TitleAndInstructionMessageAmex) {
+  // On Amex cards, the CVC is present on the front of the card. Test that the
+  // dialog relays this information to the users.
+  card_ = test::GetMaskedServerCardAmex();
   ShowPrompt();
 #if BUILDFLAG(IS_IOS)
-  EXPECT_FALSE(
-      base::UTF16ToUTF8(controller_->GetInstructionsMessage()).find("Visa") !=
-      std::string::npos);
-  EXPECT_TRUE(base::UTF16ToUTF8(controller_->GetInstructionsMessage())
-                  .find("Test nickname") != std::string::npos);
+  EXPECT_EQ(controller_->GetWindowTitle(), u"Confirm Card");
+  EXPECT_EQ(controller_->GetInstructionsMessage(),
+            u"Enter the CVC for " + card_.CardNameAndLastFourDigits() +
+                u". After you confirm, card details from your Google Account "
+                u"will be shared with this site.");
 #else
-  EXPECT_FALSE(base::UTF16ToUTF8(controller_->GetWindowTitle()).find("Visa") !=
-               std::string::npos);
-  EXPECT_TRUE(
-      base::UTF16ToUTF8(controller_->GetWindowTitle()).find("Test nickname") !=
-      std::string::npos);
+  if (touch_to_fill_for_credit_cards_enabled()) {
+    EXPECT_EQ(controller_->GetWindowTitle(), u"Enter your CVC");
+  } else {
+    EXPECT_EQ(controller_->GetWindowTitle(),
+              u"Enter the CVC for " + card_.CardNameAndLastFourDigits());
+  }
+  // On Desktop/Android, if the issuer is Amex, the instructions message prompts
+  // users to enter the CVC located on the front of the card.
+  EXPECT_EQ(controller_->GetInstructionsMessage(),
+            u"To help keep your card secure, enter the CVC on the front of "
+            u"your card");
 #endif
+  DismissPrompt();
 }
+
+// Tests the title and instructions message in the credit card unmask dialog for
+// expired cards.
+TEST_P(CardUnmaskPromptContentTest, ExpiredCardTitleAndInstructionMessage) {
+  card_ = test::GetExpiredCreditCard();
+  ShowPrompt();
+#if BUILDFLAG(IS_IOS)
+  EXPECT_EQ(controller_->GetWindowTitle(), u"Confirm Card");
+  EXPECT_EQ(
+      controller_->GetInstructionsMessage(),
+      u"Enter the expiration date and CVC for " +
+          card_.CardNameAndLastFourDigits() +
+          u" to update your card details. After you confirm, card details from "
+          u"your Google Account will be shared with this site.");
+#else
+  if (touch_to_fill_for_credit_cards_enabled()) {
+    EXPECT_EQ(controller_->GetWindowTitle(), u"Card expired");
+  } else {
+    EXPECT_EQ(controller_->GetWindowTitle(),
+              u"Enter the expiration date and CVC for " +
+                  card_.CardNameAndLastFourDigits());
+  }
+  EXPECT_EQ(controller_->GetInstructionsMessage(),
+            u"Enter your new expiration date and CVC on the back of your card");
+#endif
+  DismissPrompt();
+}
+
+// This test ensures that the expected CVC length is correctly set for server
+// cards.
+TEST_P(CardUnmaskPromptContentTest, GetExpectedCvcLength) {
+  // Test that if the network is not American Express and there is no challenge
+  // option, the expected length of the security code is 3.
+  card_ = test::GetMaskedServerCard();
+  ShowPrompt();
+  EXPECT_EQ(controller_->GetExpectedCvcLength(), 3);
+  DismissPrompt();
+}
+
+TEST_P(CardUnmaskPromptContentTest, GetExpectedCvcLengthAmex) {
+  // Test that if the network is American Express and there is no challenge
+  // option, the expected length of the security code is 4.
+  card_ = test::GetMaskedServerCardAmex();
+  ShowPrompt();
+  EXPECT_EQ(controller_->GetExpectedCvcLength(), 4);
+  DismissPrompt();
+}
+
+// Ensures the instruction message and window title is correctly displayed when
+// showing the card unmask prompt for a virtual card. This test also checks that
+// the expected CVC length is correctly set for virtual cards. Virtual cards are
+// not currently supported on iOS, so we don't test on the platform.
+#if !BUILDFLAG(IS_IOS)
+TEST_P(CardUnmaskPromptContentTest,
+       ChallengeOptionInstructionMessageAndWindowTitleAndExpectedCvcLength) {
+  // Test that if the network is not American Express and the challenge option
+  // denotes that the security code is on the back of the card, its expected
+  // length is 3.
+  card_.set_record_type(CreditCard::RecordType::kVirtualCard);
+  ShowPrompt(test::GetCardUnmaskChallengeOptions(
+      {CardUnmaskChallengeOptionType::kCvc})[0]);
+  EXPECT_EQ(controller_->GetInstructionsMessage(),
+            u"Enter the 3-digit security code on the back of your card so your "
+            u"bank can verify it's you");
+  if (touch_to_fill_for_credit_cards_enabled()) {
+    EXPECT_EQ(controller_->GetWindowTitle(), u"Enter your security code");
+  } else {
+    EXPECT_EQ(
+        controller_->GetWindowTitle(),
+        u"Enter your security code for " + card_.CardNameAndLastFourDigits());
+  }
+  EXPECT_EQ(controller_->GetExpectedCvcLength(), 3);
+  DismissPrompt();
+}
+
+TEST_P(
+    CardUnmaskPromptContentTest,
+    ChallengeOptionInstructionMessageAndWindowTitleAndExpectedCvcLengthAmex) {
+  // Test that if the network is American Express and the challenge option
+  // denotes that the security code is on the back of the card, its expected
+  // length is still 3.
+  card_ = test::GetMaskedServerCardAmex();
+  card_.set_record_type(CreditCard::RecordType::kVirtualCard);
+  ShowPrompt(test::GetCardUnmaskChallengeOptions(
+      {CardUnmaskChallengeOptionType::kCvc})[0]);
+  EXPECT_EQ(controller_->GetInstructionsMessage(),
+            u"Enter the 3-digit security code on the back of your card so your "
+            u"bank can verify it's you");
+  if (touch_to_fill_for_credit_cards_enabled()) {
+    EXPECT_EQ(controller_->GetWindowTitle(), u"Enter your security code");
+  } else {
+    EXPECT_EQ(
+        controller_->GetWindowTitle(),
+        u"Enter your security code for " + card_.CardNameAndLastFourDigits());
+  }
+  EXPECT_EQ(controller_->GetExpectedCvcLength(), 3);
+  DismissPrompt();
+}
+#endif
+
+// Ensures that the CVC hint image has the correct announcement for finding the
+// location of the CVC on the card.
+#if BUILDFLAG(IS_ANDROID)
+TEST_P(CardUnmaskPromptContentTest, CvcHintImageAnnouncement) {
+  // Test that if the network is not American Express, the CVC hint image
+  // announces that the CVC can be found on the back of the card.
+  card_ = test::GetMaskedServerCardVisa();
+  ShowPrompt();
+  EXPECT_EQ(controller_->GetCvcImageAnnouncement(),
+            u"Your CVC is on the back of your card. It’s the last 3 digits at "
+            u"the top right of the signature box.");
+}
+
+TEST_P(CardUnmaskPromptContentTest, CvcHintImageAnnouncementAmex) {
+  // Test that for American Express cards, the CVC hint image announces that the
+  // CVC can be found on the front of the card.
+  card_ = test::GetMaskedServerCardAmex();
+  ShowPrompt();
+  EXPECT_EQ(controller_->GetCvcImageAnnouncement(),
+            u"Your CVC is on the front of your card. It’s the 4-digit code at "
+            u"the top right above your card number.");
+}
+#endif
 
 class LoggingValidationTestForNickname
     : public CardUnmaskPromptControllerImplGenericTest,
@@ -346,8 +529,6 @@ class LoggingValidationTestForNickname
 
   void SetUp() override {
     CardUnmaskPromptControllerImplGenericTest::SetUp();
-    pref_service_->registry()->RegisterBooleanPref(
-        prefs::kAutofillWalletImportStorageCheckboxState, false);
 #if BUILDFLAG(IS_ANDROID)
     pref_service_->registry()->RegisterBooleanPref(
         prefs::kAutofillCreditCardFidoAuthOfferCheckboxState, true);
@@ -363,12 +544,27 @@ class LoggingValidationTestForNickname
   bool card_has_nickname_;
 };
 
-TEST_P(LoggingValidationTestForNickname, LogShown) {
+TEST_P(LoggingValidationTestForNickname,
+       MaskedServerCard_LogUnmaskPromptShown) {
   base::HistogramTester histogram_tester;
   ShowPrompt();
 
-  histogram_tester.ExpectUniqueSample("Autofill.UnmaskPrompt.Events",
+  histogram_tester.ExpectUniqueSample("Autofill.UnmaskPrompt.ServerCard.Events",
                                       AutofillMetrics::UNMASK_PROMPT_SHOWN, 1);
+  histogram_tester.ExpectUniqueSample(
+      "Autofill.UnmaskPrompt.Events.WithNickname",
+      AutofillMetrics::UNMASK_PROMPT_SHOWN, card_has_nickname() ? 1 : 0);
+}
+
+TEST_P(LoggingValidationTestForNickname, VirtualCard_LogUnmaskPromptShown) {
+  base::HistogramTester histogram_tester;
+  ShowPrompt(absl::optional<autofill::CardUnmaskChallengeOption>(
+      test::GetCardUnmaskChallengeOptions(
+          {CardUnmaskChallengeOptionType::kCvc})[0]));
+
+  histogram_tester.ExpectUniqueSample(
+      "Autofill.UnmaskPrompt.VirtualCard.Events",
+      AutofillMetrics::UNMASK_PROMPT_SHOWN, 1);
   histogram_tester.ExpectUniqueSample(
       "Autofill.UnmaskPrompt.Events.WithNickname",
       AutofillMetrics::UNMASK_PROMPT_SHOWN, card_has_nickname() ? 1 : 0);
@@ -377,10 +573,10 @@ TEST_P(LoggingValidationTestForNickname, LogShown) {
 TEST_P(LoggingValidationTestForNickname, LogClosedNoAttempts) {
   ShowPrompt();
   base::HistogramTester histogram_tester;
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
+      "Autofill.UnmaskPrompt.ServerCard.Events",
       AutofillMetrics::UNMASK_PROMPT_CLOSED_NO_ATTEMPTS, 1);
   histogram_tester.ExpectBucketCount(
       "Autofill.UnmaskPrompt.Events.WithNickname",
@@ -392,10 +588,10 @@ TEST_P(LoggingValidationTestForNickname, LogClosedAbandonUnmasking) {
   ShowPromptAndSimulateResponse(/*enable_fido_auth=*/false);
   base::HistogramTester histogram_tester;
 
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
+      "Autofill.UnmaskPrompt.ServerCard.Events",
       AutofillMetrics::UNMASK_PROMPT_CLOSED_ABANDON_UNMASKING, 1);
   histogram_tester.ExpectBucketCount(
       "Autofill.UnmaskPrompt.Events.WithNickname",
@@ -411,13 +607,13 @@ TEST_P(LoggingValidationTestForNickname, LogClosedFailedToUnmaskRetriable) {
 
   EXPECT_EQ(AutofillClient::PaymentsRpcResult::kTryAgainFailure,
             controller_->GetVerificationResult());
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
   // State should be cleared when the dialog is closed.
   EXPECT_EQ(AutofillClient::PaymentsRpcResult::kNone,
             controller_->GetVerificationResult());
 
   histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
+      "Autofill.UnmaskPrompt.ServerCard.Events",
       AutofillMetrics ::UNMASK_PROMPT_CLOSED_FAILED_TO_UNMASK_RETRIABLE_FAILURE,
       1);
   histogram_tester.ExpectBucketCount(
@@ -434,13 +630,13 @@ TEST_P(LoggingValidationTestForNickname, LogClosedFailedToUnmaskNonRetriable) {
 
   EXPECT_EQ(AutofillClient::PaymentsRpcResult::kPermanentFailure,
             controller_->GetVerificationResult());
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
   // State should be cleared when the dialog is closed.
   EXPECT_EQ(AutofillClient::PaymentsRpcResult::kNone,
             controller_->GetVerificationResult());
 
   histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
+      "Autofill.UnmaskPrompt.ServerCard.Events",
       AutofillMetrics ::
           UNMASK_PROMPT_CLOSED_FAILED_TO_UNMASK_NON_RETRIABLE_FAILURE,
       1);
@@ -460,13 +656,13 @@ TEST_P(LoggingValidationTestForNickname, LogUnmaskedCardFirstAttempt) {
 
   EXPECT_EQ(AutofillClient::PaymentsRpcResult::kSuccess,
             controller_->GetVerificationResult());
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
   // State should be cleared when the dialog is closed.
   EXPECT_EQ(AutofillClient::PaymentsRpcResult::kNone,
             controller_->GetVerificationResult());
 
   histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
+      "Autofill.UnmaskPrompt.ServerCard.Events",
       AutofillMetrics::UNMASK_PROMPT_UNMASKED_CARD_FIRST_ATTEMPT, 1);
   histogram_tester.ExpectBucketCount(
       "Autofill.UnmaskPrompt.Events.WithNickname",
@@ -485,10 +681,10 @@ TEST_P(LoggingValidationTestForNickname, LogUnmaskedCardAfterFailure) {
 
   controller_->OnVerificationResult(
       AutofillClient::PaymentsRpcResult::kSuccess);
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
+      "Autofill.UnmaskPrompt.ServerCard.Events",
       AutofillMetrics::UNMASK_PROMPT_UNMASKED_CARD_AFTER_FAILED_ATTEMPTS, 1);
   histogram_tester.ExpectBucketCount(
       "Autofill.UnmaskPrompt.Events.WithNickname",
@@ -496,42 +692,11 @@ TEST_P(LoggingValidationTestForNickname, LogUnmaskedCardAfterFailure) {
       card_has_nickname() ? 1 : 0);
 }
 
-TEST_P(LoggingValidationTestForNickname, DontLogForHiddenCheckbox) {
-  ShowPromptAndSimulateResponse(/*enable_fido_auth=*/false);
-  base::HistogramTester histogram_tester;
-  controller_->OnUnmaskDialogClosed();
-
-  histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
-      AutofillMetrics::UNMASK_PROMPT_LOCAL_SAVE_DID_OPT_IN, 0);
-  histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
-      AutofillMetrics::UNMASK_PROMPT_LOCAL_SAVE_DID_NOT_OPT_IN, 0);
-  histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
-      AutofillMetrics::UNMASK_PROMPT_LOCAL_SAVE_DID_OPT_OUT, 0);
-  histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
-      AutofillMetrics::UNMASK_PROMPT_LOCAL_SAVE_DID_NOT_OPT_OUT, 0);
-  histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events.WithNickname",
-      AutofillMetrics::UNMASK_PROMPT_LOCAL_SAVE_DID_OPT_IN, 0);
-  histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events.WithNickname",
-      AutofillMetrics::UNMASK_PROMPT_LOCAL_SAVE_DID_NOT_OPT_IN, 0);
-  histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events.WithNickname",
-      AutofillMetrics::UNMASK_PROMPT_LOCAL_SAVE_DID_OPT_OUT, 0);
-  histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events.WithNickname",
-      AutofillMetrics::UNMASK_PROMPT_LOCAL_SAVE_DID_NOT_OPT_OUT, 0);
-}
-
 TEST_P(LoggingValidationTestForNickname, LogDurationNoAttempts) {
   ShowPrompt();
   base::HistogramTester histogram_tester;
 
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration", 1);
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration.NoAttempts",
@@ -548,7 +713,7 @@ TEST_P(LoggingValidationTestForNickname, LogDurationAbandonUnmasking) {
   ShowPromptAndSimulateResponse(/*enable_fido_auth=*/false);
   base::HistogramTester histogram_tester;
 
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration", 1);
   histogram_tester.ExpectTotalCount(
@@ -567,7 +732,7 @@ TEST_P(LoggingValidationTestForNickname, LogDurationFailedToUnmaskRetriable) {
       AutofillClient::PaymentsRpcResult::kTryAgainFailure);
   base::HistogramTester histogram_tester;
 
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration", 1);
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration.Failure",
@@ -587,7 +752,7 @@ TEST_P(LoggingValidationTestForNickname,
       AutofillClient::PaymentsRpcResult::kPermanentFailure);
   base::HistogramTester histogram_tester;
 
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration", 1);
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration.Failure",
@@ -606,7 +771,7 @@ TEST_P(LoggingValidationTestForNickname, LogDurationCardFirstAttempt) {
 
   controller_->OnVerificationResult(
       AutofillClient::PaymentsRpcResult::kSuccess);
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration", 1);
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration.Success",
@@ -629,7 +794,7 @@ TEST_P(LoggingValidationTestForNickname, LogDurationUnmaskedCardAfterFailure) {
 
   controller_->OnVerificationResult(
       AutofillClient::PaymentsRpcResult::kSuccess);
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration", 1);
   histogram_tester.ExpectTotalCount("Autofill.UnmaskPrompt.Duration.Success",
@@ -646,7 +811,7 @@ TEST_P(LoggingValidationTestForNickname, LogTimeBeforeAbandonUnmasking) {
   ShowPromptAndSimulateResponse(/*enable_fido_auth=*/false);
   base::HistogramTester histogram_tester;
 
-  controller_->OnUnmaskDialogClosed();
+  DismissPrompt();
 
   histogram_tester.ExpectTotalCount(
       "Autofill.UnmaskPrompt.TimeBeforeAbandonUnmasking", 1);
@@ -678,8 +843,6 @@ class CvcInputValidationTest : public CardUnmaskPromptControllerImplGenericTest,
 
   void SetUp() override {
     CardUnmaskPromptControllerImplGenericTest::SetUp();
-    pref_service_->registry()->RegisterBooleanPref(
-        prefs::kAutofillWalletImportStorageCheckboxState, false);
 #if BUILDFLAG(IS_ANDROID)
     pref_service_->registry()->RegisterBooleanPref(
         prefs::kAutofillCreditCardFidoAuthOfferCheckboxState, true);
@@ -723,8 +886,6 @@ class CvcInputAmexValidationTest
 
   void SetUp() override {
     CardUnmaskPromptControllerImplGenericTest::SetUp();
-    pref_service_->registry()->RegisterBooleanPref(
-        prefs::kAutofillWalletImportStorageCheckboxState, false);
 #if BUILDFLAG(IS_ANDROID)
     pref_service_->registry()->RegisterBooleanPref(
         prefs::kAutofillCreditCardFidoAuthOfferCheckboxState, true);
@@ -777,8 +938,6 @@ class ExpirationDateValidationTest
 
   void SetUp() override {
     CardUnmaskPromptControllerImplGenericTest::SetUp();
-    pref_service_->registry()->RegisterBooleanPref(
-        prefs::kAutofillWalletImportStorageCheckboxState, false);
 #if BUILDFLAG(IS_ANDROID)
     pref_service_->registry()->RegisterBooleanPref(
         prefs::kAutofillCreditCardFidoAuthOfferCheckboxState, true);
@@ -810,8 +969,6 @@ class VirtualCardErrorTest
  public:
   void SetUp() override {
     CardUnmaskPromptControllerImplGenericTest::SetUp();
-    pref_service_->registry()->RegisterBooleanPref(
-        prefs::kAutofillWalletImportStorageCheckboxState, false);
 #if BUILDFLAG(IS_ANDROID)
     pref_service_->registry()->RegisterBooleanPref(
         prefs::kAutofillCreditCardFidoAuthOfferCheckboxState, true);
@@ -832,7 +989,7 @@ TEST_P(VirtualCardErrorTest, VirtualCardFailureDismissesUnmaskPrompt) {
             controller_->GetVerificationResult());
   // Verify that prompt closing metrics are logged.
   histogram_tester.ExpectBucketCount(
-      "Autofill.UnmaskPrompt.Events",
+      "Autofill.UnmaskPrompt.VirtualCard.Events",
       AutofillMetrics::
           UNMASK_PROMPT_CLOSED_FAILED_TO_UNMASK_NON_RETRIABLE_FAILURE,
       1);

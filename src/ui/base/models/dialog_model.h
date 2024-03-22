@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,14 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/types/pass_key.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/models/dialog_model_field.h"
 #include "ui/base/models/dialog_model_host.h"
@@ -83,8 +85,21 @@ class COMPONENT_EXPORT(UI_BASE) DialogModelDelegate {
 // views::Widget* const widget =
 //     views::BubbleDialogDelegate::CreateBubble(std::move(bubble));
 // widget->Show();
-class COMPONENT_EXPORT(UI_BASE) DialogModel final {
+class COMPONENT_EXPORT(UI_BASE) DialogModel final : public DialogModelBase {
  public:
+  // A variant for button callbacks that allows different behavior to be
+  // specified when a button is pressed.
+  using ButtonCallbackVariant = absl::variant<
+      // This is the default -- no callback action is taken when the button is
+      // pressed and the dialog is closed.
+      decltype(base::DoNothing()),
+      // Called exactly once when the button is pressed. The dialog will be
+      // closed after the callback is run.
+      base::OnceClosure,
+      // Returns whether the dialog should be closed. This will be called each
+      // time the button is pressed.
+      base::RepeatingCallback<bool()>>;
+
   // Builder for DialogModel. Used for properties that are either only or
   // commonly const after construction.
   class COMPONENT_EXPORT(UI_BASE) Builder final {
@@ -135,6 +150,16 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
       return *this;
     }
 
+    Builder& SetAccessibleTitle(std::u16string accessible_title) {
+      model_->accessible_title_ = std::move(accessible_title);
+      return *this;
+    }
+
+    Builder& SetSubtitle(std::u16string subtitle) {
+      model_->subtitle_ = std::move(subtitle);
+      return *this;
+    }
+
     Builder& SetBannerImage(ImageModel banner,
                             ImageModel dark_mode_banner = ImageModel()) {
       model_->banner_ = std::move(banner);
@@ -146,6 +171,11 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
                      ImageModel dark_mode_icon = ImageModel()) {
       model_->icon_ = std::move(icon);
       model_->dark_mode_icon_ = std::move(dark_mode_icon);
+      return *this;
+    }
+
+    Builder& SetMainImage(ImageModel main_image) {
+      model_->main_image_ = std::move(main_image);
       return *this;
     }
 
@@ -191,29 +221,27 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
     // buttons for accepting/cancelling. Also "ok" should be "accept" to be in
     // sync with other APIs?
     Builder& AddOkButton(
-        base::OnceClosure callback,
-        std::u16string label = std::u16string(),
+        ButtonCallbackVariant callback,
         const DialogModelButton::Params& params = DialogModelButton::Params());
     Builder& AddCancelButton(
-        base::OnceClosure callback,
-        std::u16string label = std::u16string(),
+        ButtonCallbackVariant callback,
         const DialogModelButton::Params& params = DialogModelButton::Params());
 
     // Use of the extra button in new dialogs are discouraged. If this is deemed
     // necessary please double-check with UX before adding any new dialogs with
-    // them.
+    // them. A button label is required to be set in `params`.
     Builder& AddExtraButton(
         base::RepeatingCallback<void(const Event&)> callback,
-        std::u16string label,
-        const DialogModelButton::Params& params = DialogModelButton::Params());
+        const DialogModelButton::Params& params);
 
     // Adds an extra link to the dialog.
-    Builder& AddExtraLink(ui::DialogModelLabel::Link link);
+    Builder& AddExtraLink(DialogModelLabel::TextReplacement link);
 
-    // Adds body text. See DialogModel::AddBodyText().
-    Builder& AddBodyText(const DialogModelLabel& label,
-                         ElementIdentifier id = ElementIdentifier()) {
-      model_->AddBodyText(label, id);
+    // Adds a paragraph. See DialogModel::AddParagraph().
+    Builder& AddParagraph(const DialogModelLabel& label,
+                          std::u16string header = std::u16string(),
+                          ElementIdentifier id = ElementIdentifier()) {
+      model_->AddParagraph(label, header, id);
       return *this;
     }
 
@@ -272,11 +300,21 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
       return *this;
     }
 
+    // Overrides default button. Can only be called once. The new default button
+    // must exist.
+    Builder& OverrideDefaultButton(DialogButton button);
+
     // Sets which field should be initially focused in the dialog model. Must be
     // called after that field has been added. Can only be called once.
     Builder& SetInitiallyFocusedField(ElementIdentifier id);
 
    private:
+    Builder& AddButtonInternal(
+        ButtonCallbackVariant callback,
+        const DialogModelButton::Params& params,
+        absl::optional<ui::DialogModelButton>& model_button,
+        ButtonCallbackVariant& model_callback);
+
     std::unique_ptr<DialogModel> model_;
   };
 
@@ -292,9 +330,11 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
   // during Host construction where it takes ownership of |this|.
   DialogModelHost* host() { return host_; }
 
-  // Adds body text at the end of the dialog model.
-  void AddBodyText(const DialogModelLabel& label,
-                   ElementIdentifier id = ElementIdentifier());
+  // Adds a paragraph at the end of the dialog model. A paragraph consists of a
+  // label and an optional header.
+  void AddParagraph(const DialogModelLabel& label,
+                    std::u16string header,
+                    ElementIdentifier id = ElementIdentifier());
 
   // Adds a checkbox ([checkbox] label) at the end of the dialog model.
   void AddCheckbox(ElementIdentifier id,
@@ -345,14 +385,20 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
   DialogModelCheckbox* GetCheckboxByUniqueId(ElementIdentifier id);
   DialogModelCombobox* GetComboboxByUniqueId(ElementIdentifier id);
   DialogModelTextfield* GetTextfieldByUniqueId(ElementIdentifier id);
+  DialogModelButton* GetButtonByUniqueId(ElementIdentifier id);
 
   // Methods with base::PassKey<DialogModelHost> are only intended to be called
-  // by the DialogModelHost implementation.
-  void OnDialogAcceptAction(base::PassKey<DialogModelHost>);
-  void OnDialogCancelAction(base::PassKey<DialogModelHost>);
+  // by the DialogModelHost implementation. The returned boolean is used to
+  // indicate whether the dialog should close as a result of the action.
+  bool OnDialogAcceptAction(base::PassKey<DialogModelHost>);
+  bool OnDialogCancelAction(base::PassKey<DialogModelHost>);
   void OnDialogCloseAction(base::PassKey<DialogModelHost>);
 
   void OnDialogDestroying(base::PassKey<DialogModelHost>);
+
+  void SetVisible(ElementIdentifier id, bool visible);
+
+  void SetButtonLabel(DialogModelButton* button, const std::u16string& label);
 
   // Called when added to a DialogModelHost.
   void set_host(base::PassKey<DialogModelHost>, DialogModelHost* host) {
@@ -372,6 +418,18 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
     return title_;
   }
 
+  const std::u16string& accessible_title(base::PassKey<DialogModelHost>) const {
+    return accessible_title_;
+  }
+
+  const std::u16string& subtitle(base::PassKey<DialogModelHost>) const {
+    return subtitle_;
+  }
+
+  const ImageModel& main_image(base::PassKey<DialogModelHost>) const {
+    return main_image_;
+  }
+
   const ImageModel& icon(base::PassKey<DialogModelHost>) const { return icon_; }
 
   const ImageModel& dark_mode_icon(base::PassKey<DialogModelHost>) const {
@@ -384,6 +442,11 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
 
   const ImageModel& dark_mode_banner(base::PassKey<DialogModelHost>) const {
     return dark_mode_banner_;
+  }
+
+  const absl::optional<DialogButton>& override_default_button(
+      base::PassKey<DialogModelHost>) const {
+    return override_default_button_;
   }
 
   ElementIdentifier initially_focused_field(
@@ -407,7 +470,8 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
     return extra_button_.has_value() ? &extra_button_.value() : nullptr;
   }
 
-  DialogModelLabel::Link* extra_link(base::PassKey<DialogModelHost>) {
+  DialogModelLabel::TextReplacement* extra_link(
+      base::PassKey<DialogModelHost>) {
     return extra_link_.has_value() ? &extra_link_.value() : nullptr;
   }
 
@@ -415,20 +479,19 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
     return close_on_deactivate_;
   }
 
-  // Accessor for ordered fields in the model. This includes DialogButtons even
-  // though they should be handled separately (OK button has fixed position in
-  // dialog).
+  // TODO(pbos): Replace this with a section() or something.
   const std::vector<std::unique_ptr<DialogModelField>>& fields(
       base::PassKey<DialogModelHost>) {
-    return fields_;
+    return contents_.fields(GetPassKey());
   }
 
  private:
-  base::PassKey<DialogModel> GetPassKey() {
-    return base::PassKey<DialogModel>();
-  }
-
   void AddField(std::unique_ptr<DialogModelField> field);
+
+  // Runs the appropriate variant of the provided ButtonCallbackVariant and
+  // returns whether the dialog should close as a result.
+  static bool RunDialogModelButtonCallback(
+      ButtonCallbackVariant& callback_variant);
 
   std::unique_ptr<DialogModelDelegate> delegate_;
   raw_ptr<DialogModelHost> host_ = nullptr;
@@ -437,23 +500,28 @@ class COMPONENT_EXPORT(UI_BASE) DialogModel final {
   bool close_on_deactivate_ = true;
   std::string internal_name_;
   std::u16string title_;
+  std::u16string accessible_title_;
+  std::u16string subtitle_;
   ImageModel icon_;
   ImageModel dark_mode_icon_;
+
+  ImageModel main_image_;
 
   ImageModel banner_;
   ImageModel dark_mode_banner_;
 
-  std::vector<std::unique_ptr<DialogModelField>> fields_;
+  absl::optional<DialogButton> override_default_button_;
+  DialogModelSection contents_;
   ElementIdentifier initially_focused_field_;
   bool is_alert_dialog_ = false;
 
   absl::optional<DialogModelButton> ok_button_;
   absl::optional<DialogModelButton> cancel_button_;
   absl::optional<DialogModelButton> extra_button_;
-  absl::optional<DialogModelLabel::Link> extra_link_;
+  absl::optional<DialogModelLabel::TextReplacement> extra_link_;
 
-  base::OnceClosure accept_action_callback_;
-  base::OnceClosure cancel_action_callback_;
+  ButtonCallbackVariant accept_action_callback_;
+  ButtonCallbackVariant cancel_action_callback_;
   base::OnceClosure close_action_callback_;
 
   base::OnceClosure dialog_destroying_callback_;

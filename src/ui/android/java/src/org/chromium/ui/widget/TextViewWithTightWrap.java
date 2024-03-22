@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,7 @@ import android.widget.TextView;
  * calculation in the overwritten OnMeasure() method.
  */
 public class TextViewWithTightWrap extends TextView {
-    /**
-     * Constructing TextViewWithTightWrap programmatically is similar to a normal TextView.
-     */
+    /** Constructing TextViewWithTightWrap programmatically is similar to a normal TextView. */
     public TextViewWithTightWrap(Context context) {
         super(context);
     }

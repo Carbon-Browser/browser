@@ -1,32 +1,28 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/suggested_actions/suggested_actions_view_controller.h"
 
-#import "ios/chrome/browser/ui/table_view/cells/table_view_image_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "testing/gtest/include/gtest/gtest.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_image_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/grit/ios_strings.h"
+#import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-#include "ui/base/l10n/l10n_util_mac.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 #import "third_party/ocmock/OCMock/OCMock.h"
-#include "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "third_party/ocmock/gtest_support.h"
 
 // Test fixture for testing SuggestedActionsViewController class.
 class SuggestedActionsViewControllerTest
-    : public ChromeTableViewControllerTest {
+    : public LegacyChromeTableViewControllerTest {
  protected:
   SuggestedActionsViewControllerTest()
       : delegate_(OCMProtocolMock(
             @protocol(SuggestedActionsViewControllerDelegate))) {}
 
-  ChromeTableViewController* InstantiateController() override {
+  LegacyChromeTableViewController* InstantiateController() override {
     return [[SuggestedActionsViewController alloc] initWithDelegate:delegate_];
   }
   // Delegate mock conforming to SuggestedActionsViewControllerDelegate

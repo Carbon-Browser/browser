@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/video_capture/video_source_provider_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "services/video_capture/public/mojom/producer.mojom.h"
 #include "services/video_capture/video_source_impl.h"
 #include "services/video_capture/virtual_device_enabled_device_factory.h"
@@ -31,7 +32,12 @@ void VideoSourceProviderImpl::AddClient(
 }
 
 void VideoSourceProviderImpl::GetSourceInfos(GetSourceInfosCallback callback) {
-  device_factory_->GetDeviceInfos(std::move(callback));
+  // The service might be shut down before the callback has a chance to be
+  // executed. This triggers the CHECK in mojo code, which assumes that
+  // callbacks are either executed or the underlying channel is closed. Wrap
+  // the callback to ensure it will be executed on destruction.
+  device_factory_->GetDeviceInfos(mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+      std::move(callback), std::vector<media::VideoCaptureDeviceInfo>()));
 }
 
 void VideoSourceProviderImpl::GetVideoSource(
@@ -54,13 +60,10 @@ void VideoSourceProviderImpl::GetVideoSource(
 void VideoSourceProviderImpl::AddSharedMemoryVirtualDevice(
     const media::VideoCaptureDeviceInfo& device_info,
     mojo::PendingRemote<mojom::Producer> producer,
-    bool send_buffer_handles_to_producer_as_raw_file_descriptors,
     mojo::PendingReceiver<mojom::SharedMemoryVirtualDevice>
         virtual_device_receiver) {
   device_factory_->AddSharedMemoryVirtualDevice(
-      device_info, std::move(producer),
-      send_buffer_handles_to_producer_as_raw_file_descriptors,
-      std::move(virtual_device_receiver));
+      device_info, std::move(producer), std::move(virtual_device_receiver));
 }
 
 void VideoSourceProviderImpl::AddTextureVirtualDevice(
@@ -76,6 +79,14 @@ void VideoSourceProviderImpl::RegisterVirtualDevicesChangedObserver(
     bool raise_event_if_virtual_devices_already_present) {
   device_factory_->RegisterVirtualDevicesChangedObserver(
       std::move(observer), raise_event_if_virtual_devices_already_present);
+}
+
+void VideoSourceProviderImpl::RegisterDevicesChangedObserver(
+    mojo::PendingRemote<mojom::DevicesChangedObserver> observer) {
+  if (!devices_changed_notifier_) {
+    devices_changed_notifier_.emplace();
+  }
+  devices_changed_notifier_->RegisterObserver(std::move(observer));
 }
 
 void VideoSourceProviderImpl::Close(CloseCallback callback) {

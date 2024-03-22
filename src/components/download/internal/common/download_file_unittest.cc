@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,18 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_file_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/download/public/common/download_create_info.h"
 #include "components/download/public/common/download_destination_observer.h"
@@ -268,7 +269,7 @@ class DownloadFileTest : public testing::Test {
     DownloadInterruptReason result = DOWNLOAD_INTERRUPT_REASON_NONE;
     base::RunLoop loop_runner;
     download_file_->SetTaskRunnerForTesting(
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
     download_file_->Initialize(
         base::BindRepeating(&DownloadFileTest::SetInterruptReasonCallback,
                             weak_ptr_factory.GetWeakPtr(),
@@ -308,8 +309,7 @@ class DownloadFileTest : public testing::Test {
     for (size_t i = 0; i < num_chunks; i++) {
       const char* source_data = data_chunks[i];
       size_t length = strlen(source_data);
-      scoped_refptr<net::IOBuffer> data =
-          base::MakeRefCounted<net::IOBuffer>(length);
+      auto data = base::MakeRefCounted<net::IOBufferWithSize>(length);
       memcpy(data->data(), source_data, length);
       EXPECT_CALL(*input_stream, Read(_, _))
           .InSequence(s)
@@ -498,7 +498,9 @@ class DownloadFileTest : public testing::Test {
 
   // Stream for sending data into the download file.
   // Owned by download_file_; will be alive for lifetime of download_file_.
-  StrictMock<MockInputStream>* input_stream_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION StrictMock<MockInputStream>* input_stream_;
 
   // Additional streams to test multiple stream write.
   std::vector<StrictMock<MockInputStream>*> additional_streams_;
@@ -664,8 +666,7 @@ TEST_F(DownloadFileTest, RenameOverwrites) {
 
   ASSERT_FALSE(base::PathExists(path_1));
   static const char file_data[] = "xyzzy";
-  ASSERT_EQ(static_cast<int>(sizeof(file_data)),
-            base::WriteFile(path_1, file_data, sizeof(file_data)));
+  ASSERT_TRUE(base::WriteFile(path_1, file_data));
   ASSERT_TRUE(base::PathExists(path_1));
 
   base::FilePath new_path;
@@ -695,8 +696,7 @@ TEST_F(DownloadFileTest, RenameUniquifies) {
 
   ASSERT_FALSE(base::PathExists(path_1));
   static const char file_data[] = "xyzzy";
-  ASSERT_EQ(static_cast<int>(sizeof(file_data)),
-            base::WriteFile(path_1, file_data, sizeof(file_data)));
+  ASSERT_TRUE(base::WriteFile(path_1, file_data));
   ASSERT_TRUE(base::PathExists(path_1));
 
   EXPECT_EQ(DOWNLOAD_INTERRUPT_REASON_NONE, RenameAndUniquify(path_1, nullptr));
@@ -841,7 +841,7 @@ TEST_P(DownloadFileTestWithRename, MAYBE_RenameWithErrorRetry) {
     // Rename() will be in front of the QuitClosure(). Running the message loop
     // now causes the just the first retry task to be run. The rename still
     // fails, so another retry task would get queued behind the QuitClosure().
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, first_failing_run.QuitClosure());
     first_failing_run.Run();
     EXPECT_FALSE(did_run_callback);
@@ -849,7 +849,7 @@ TEST_P(DownloadFileTestWithRename, MAYBE_RenameWithErrorRetry) {
     // Running another loop should have the same effect as the above as long as
     // kMaxRenameRetries is greater than 2.
     base::RunLoop second_failing_run;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, second_failing_run.QuitClosure());
     second_failing_run.Run();
     EXPECT_FALSE(did_run_callback);

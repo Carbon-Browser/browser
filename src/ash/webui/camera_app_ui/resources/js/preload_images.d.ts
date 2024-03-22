@@ -1,8 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// TODO(pihsun): Remove this file once we have generated preload_images.js
-// checked into the source tree.
+import {TemplateResult} from 'chrome://resources/mwc/lit/index.js';
 
 export const preloadImagesList: string[];
+
+/**
+ * Mapping of SVG file name to it's content as lit template.
+ */
+export const preloadedImages: Map<string, TemplateResult>;

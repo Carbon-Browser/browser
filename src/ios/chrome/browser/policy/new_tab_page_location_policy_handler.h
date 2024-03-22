@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class NewTabPageLocationPolicyHandler : public TypeCheckingPolicyHandler {
  private:
   // Format the New Tab Page Location URL string to be the correct format of a
   // URL.
-  std::string FormatNewTabPageLocationURL(const std::string ntp_location);
+  std::string FormatNewTabPageLocationURL(const std::string& ntp_location);
 
   // Verifies that the value is a valid URL.
   bool ValidateNewTabPageLocationURL(const base::Value* value);

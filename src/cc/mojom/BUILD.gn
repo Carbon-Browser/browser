@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -28,6 +28,11 @@ mojom("mojom") {
     "render_frame_metadata.mojom",
     "touch_action.mojom",
   ]
+
+  enabled_features = []
+  if (is_android || is_ios) {
+    enabled_features += [ "is_android_or_ios" ]
+  }
 
   public_deps = [
     "//mojo/public/mojom/base",

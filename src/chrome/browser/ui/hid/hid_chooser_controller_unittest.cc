@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
@@ -26,10 +26,10 @@
 #include "content/public/browser/hid_chooser.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/web_contents_tester.h"
-#include "services/device/hid/test_report_descriptors.h"
-#include "services/device/hid/test_util.h"
-#include "services/device/public/cpp/hid/fake_hid_manager.h"
 #include "services/device/public/cpp/hid/hid_switches.h"
+#include "services/device/public/cpp/test/fake_hid_manager.h"
+#include "services/device/public/cpp/test/hid_test_util.h"
+#include "services/device/public/cpp/test/test_report_descriptors.h"
 #include "services/device/public/mojom/hid.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/resource/resource_bundle.h"

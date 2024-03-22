@@ -1,16 +1,19 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/command_buffer/service/shared_image/test_image_backing.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
-#include "components/viz/common/resources/resource_format_utils.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_format_service_utils.h"
 #include "skia/ext/legacy_display_globals.h"
-#include "third_party/skia/include/core/SkPromiseImageTexture.h"
+#include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
+#include "third_party/skia/include/gpu/gl/GrGLTypes.h"
 #include "third_party/skia/include/gpu/mock/GrMockTypes.h"
+#include "third_party/skia/include/private/chromium/GrPromiseImageTexture.h"
 
 namespace gpu {
 namespace {
@@ -23,10 +26,14 @@ class TestGLTextureImageRepresentation : public GLTextureImageRepresentation {
       : GLTextureImageRepresentation(manager, backing, tracker),
         texture_(texture) {}
 
-  gles2::Texture* GetTexture() override { return texture_; }
+  gles2::Texture* GetTexture(int plane_index) override {
+    DCHECK_EQ(plane_index, 0);
+    return texture_;
+  }
   bool BeginAccess(GLenum mode) override {
     return static_cast<TestImageBacking*>(backing())->can_access();
   }
+  void EndAccess() override {}
 
  private:
   const raw_ptr<gles2::Texture> texture_;
@@ -43,61 +50,86 @@ class TestGLTexturePassthroughImageRepresentation
       : GLTexturePassthroughImageRepresentation(manager, backing, tracker),
         texture_(std::move(texture)) {}
 
-  const scoped_refptr<gles2::TexturePassthrough>& GetTexturePassthrough()
-      override {
+  const scoped_refptr<gles2::TexturePassthrough>& GetTexturePassthrough(
+      int plane_index) override {
+    DCHECK_EQ(plane_index, 0);
     return texture_;
   }
   bool BeginAccess(GLenum mode) override {
     return static_cast<TestImageBacking*>(backing())->can_access();
   }
+  void EndAccess() override {}
 
  private:
   const scoped_refptr<gles2::TexturePassthrough> texture_;
 };
 
-class TestSkiaImageRepresentation : public SkiaImageRepresentation {
+class TestSkiaImageRepresentation : public SkiaGaneshImageRepresentation {
  public:
-  TestSkiaImageRepresentation(SharedImageManager* manager,
+  TestSkiaImageRepresentation(GrDirectContext* gr_context,
+                              SharedImageManager* manager,
                               SharedImageBacking* backing,
                               MemoryTypeTracker* tracker)
-      : SkiaImageRepresentation(manager, backing, tracker) {}
+      : SkiaGaneshImageRepresentation(gr_context, manager, backing, tracker) {}
 
  protected:
-  sk_sp<SkSurface> BeginWriteAccess(
+  std::vector<sk_sp<SkSurface>> BeginWriteAccess(
       int final_msaa_count,
       const SkSurfaceProps& surface_props,
-      std::vector<GrBackendSemaphore>* begin_semaphores,
-      std::vector<GrBackendSemaphore>* end_semaphores) override {
-    if (!static_cast<TestImageBacking*>(backing())->can_access()) {
-      return nullptr;
-    }
-    SkSurfaceProps props = skia::LegacyDisplayGlobals::GetSkSurfaceProps();
-    return SkSurface::MakeRasterN32Premul(size().width(), size().height(),
-                                          &props);
-  }
-  sk_sp<SkPromiseImageTexture> BeginWriteAccess(
+      const gfx::Rect& update_rect,
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override {
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override {
     if (!static_cast<TestImageBacking*>(backing())->can_access()) {
-      return nullptr;
+      return {};
     }
-    GrBackendTexture backend_tex(size().width(), size().height(),
-                                 GrMipMapped::kNo, GrMockTextureInfo());
-    return SkPromiseImageTexture::Make(backend_tex);
+    SkSurfaceProps props = skia::LegacyDisplayGlobals::GetSkSurfaceProps();
+    auto surface = SkSurfaces::Raster(
+        SkImageInfo::MakeN32Premul(size().width(), size().height()), &props);
+    if (!surface)
+      return {};
+    return {surface};
   }
-  void EndWriteAccess(sk_sp<SkSurface> surface) override {}
-  sk_sp<SkPromiseImageTexture> BeginReadAccess(
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginWriteAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
-      std::vector<GrBackendSemaphore>* end_semaphores) override {
+      std::vector<GrBackendSemaphore>* end_semaphores,
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override {
     if (!static_cast<TestImageBacking*>(backing())->can_access()) {
-      return nullptr;
+      return {};
     }
-    GrBackendTexture backend_tex(size().width(), size().height(),
-                                 GrMipMapped::kNo, GrMockTextureInfo());
-    return SkPromiseImageTexture::Make(backend_tex);
+
+    auto promise_texture = GrPromiseImageTexture::Make(backend_tex());
+    if (!promise_texture)
+      return {};
+    return {promise_texture};
+  }
+  void EndWriteAccess() override {}
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginReadAccess(
+      std::vector<GrBackendSemaphore>* begin_semaphores,
+      std::vector<GrBackendSemaphore>* end_semaphores,
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override {
+    if (!static_cast<TestImageBacking*>(backing())->can_access()) {
+      return {};
+    }
+
+    auto promise_texture = GrPromiseImageTexture::Make(backend_tex());
+    if (!promise_texture)
+      return {};
+    return {promise_texture};
   }
   void EndReadAccess() override {}
+
+ private:
+  GrBackendTexture backend_tex() {
+    auto format_desc =
+        GLFormatCaps().ToGLFormatDesc(format(), /*plane_index=*/0);
+    return GrBackendTextures::MakeGL(
+        size().width(), size().height(), skgpu::Mipmapped::kNo,
+        GrGLTextureInfo{
+            GL_TEXTURE_EXTERNAL_OES,
+            static_cast<TestImageBacking*>(backing())->service_id(),
+            static_cast<GrGLenum>(format_desc.storage_internal_format)});
+  }
 };
 
 class TestDawnImageRepresentation : public DawnImageRepresentation {
@@ -107,17 +139,48 @@ class TestDawnImageRepresentation : public DawnImageRepresentation {
                               MemoryTypeTracker* tracker)
       : DawnImageRepresentation(manager, backing, tracker) {}
 
-  WGPUTexture BeginAccess(WGPUTextureUsage usage) override {
+  wgpu::Texture BeginAccess(wgpu::TextureUsage usage) override {
     if (!static_cast<TestImageBacking*>(backing())->can_access()) {
       return nullptr;
     }
 
-    // Return a dummy value.
-    return reinterpret_cast<WGPUTexture>(203);
+    return wgpu::Texture(reinterpret_cast<WGPUTexture>(203));
   }
 
   void EndAccess() override {}
 };
+
+class TestMetalSkiaGraphiteImageRepresentation
+    : public SkiaGraphiteImageRepresentation {
+ public:
+  TestMetalSkiaGraphiteImageRepresentation(SharedImageManager* manager,
+                                           SharedImageBacking* backing,
+                                           MemoryTypeTracker* tracker)
+      : SkiaGraphiteImageRepresentation(manager, backing, tracker) {}
+
+  std::vector<skgpu::graphite::BackendTexture> BeginReadAccess() override {
+    return {};
+  }
+  void EndReadAccess() override {}
+
+  std::vector<sk_sp<SkSurface>> BeginWriteAccess(
+      const SkSurfaceProps& surface_props,
+      const gfx::Rect& update_rect) override {
+    std::vector<sk_sp<SkSurface>> surfaces;
+    for (int plane = 0; plane < format().NumberOfPlanes(); plane++) {
+      auto plane_size = format().GetPlaneSize(plane, size());
+      surfaces.push_back(
+          SkSurfaces::Null(plane_size.width(), plane_size.height()));
+    }
+    return surfaces;
+  }
+  std::vector<skgpu::graphite::BackendTexture> BeginWriteAccess() override {
+    return {};
+  }
+  void EndWriteAccess() override {}
+};
+
+}  // namespace
 
 class TestOverlayImageRepresentation : public OverlayImageRepresentation {
  public:
@@ -130,13 +193,17 @@ class TestOverlayImageRepresentation : public OverlayImageRepresentation {
     return true;
   }
   void EndReadAccess(gfx::GpuFenceHandle release_fence) override {}
-  gl::GLImage* GetGLImage() override { return nullptr; }
+
+#if BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<base::android::ScopedHardwareBufferFenceSync>
+  GetAHardwareBufferFenceSync() override {
+    return nullptr;
+  }
+#endif
 };
 
-}  // namespace
-
 TestImageBacking::TestImageBacking(const Mailbox& mailbox,
-                                   viz::ResourceFormat format,
+                                   viz::SharedImageFormat format,
                                    const gfx::Size& size,
                                    const gfx::ColorSpace& color_space,
                                    GrSurfaceOrigin surface_origin,
@@ -152,7 +219,7 @@ TestImageBacking::TestImageBacking(const Mailbox& mailbox,
                          alpha_type,
                          usage,
                          estimated_size,
-                         false /* is_thread_safe */),
+                         /*is_thread_safe=*/false),
       service_id_(texture_id) {
   texture_ = new gles2::Texture(service_id_);
   texture_->SetLightweightRef();
@@ -161,16 +228,19 @@ TestImageBacking::TestImageBacking(const Mailbox& mailbox,
   texture_->set_mag_filter(GL_LINEAR);
   texture_->set_wrap_t(GL_CLAMP_TO_EDGE);
   texture_->set_wrap_s(GL_CLAMP_TO_EDGE);
-  texture_->SetLevelInfo(GL_TEXTURE_2D, 0, GLInternalFormat(format),
+  GLFormatDesc format_desc =
+      GLFormatCaps().ToGLFormatDesc(format, /*plane_index=*/0);
+  texture_->SetLevelInfo(GL_TEXTURE_2D, 0, format_desc.image_internal_format,
                          size.width(), size.height(), 1, 0,
-                         GLDataFormat(format), GLDataType(format), gfx::Rect());
+                         format_desc.data_format, format_desc.data_type,
+                         gfx::Rect());
   texture_->SetImmutable(true, true);
   texture_passthrough_ = base::MakeRefCounted<gles2::TexturePassthrough>(
       service_id_, GL_TEXTURE_2D);
 }
 
 TestImageBacking::TestImageBacking(const Mailbox& mailbox,
-                                   viz::ResourceFormat format,
+                                   viz::SharedImageFormat format,
                                    const gfx::Size& size,
                                    const gfx::ColorSpace& color_space,
                                    GrSurfaceOrigin surface_origin,
@@ -185,7 +255,7 @@ TestImageBacking::TestImageBacking(const Mailbox& mailbox,
                        alpha_type,
                        usage,
                        estimated_size,
-                       203 /* texture_id */) {
+                       /*texture_id=*/203) {
   // Using a dummy |texture_id|, so lose our context so we don't do anything
   // real with it.
   OnContextLost();
@@ -194,7 +264,7 @@ TestImageBacking::TestImageBacking(const Mailbox& mailbox,
 TestImageBacking::~TestImageBacking() {
   // Pretend our context is lost to avoid actual cleanup in |texture_| or
   // |passthrough_texture_|.
-  texture_->RemoveLightweightRef(false /* have_context */);
+  texture_.ExtractAsDangling()->RemoveLightweightRef(/*have_context=*/false);
   texture_passthrough_->MarkContextLost();
   texture_passthrough_.reset();
 
@@ -204,6 +274,10 @@ TestImageBacking::~TestImageBacking() {
 
 bool TestImageBacking::GetUploadFromMemoryCalledAndReset() {
   return std::exchange(upload_from_memory_called_, false);
+}
+
+bool TestImageBacking::GetReadbackToMemoryCalledAndReset() {
+  return std::exchange(readback_to_memory_called_, false);
 }
 
 SharedImageBackingType TestImageBacking::GetType() const {
@@ -218,13 +292,26 @@ void TestImageBacking::SetClearedRect(const gfx::Rect& cleared_rect) {
   texture_->SetLevelClearedRect(texture_->target(), 0, cleared_rect);
 }
 
-bool TestImageBacking::UploadFromMemory(const SkPixmap& pixmap) {
+void TestImageBacking::SetPurgeable(bool purgeable) {
+  if (purgeable) {
+    if (set_purgeable_callback_)
+      set_purgeable_callback_.Run(mailbox());
+  } else {
+    if (set_not_purgeable_callback_)
+      set_not_purgeable_callback_.Run(mailbox());
+  }
+}
+
+bool TestImageBacking::UploadFromMemory(const std::vector<SkPixmap>& pixmap) {
+  DCHECK_EQ(format().NumberOfPlanes(), static_cast<int>(pixmap.size()));
   upload_from_memory_called_ = true;
   return true;
 }
 
-bool TestImageBacking::ProduceLegacyMailbox(MailboxManager* mailbox_manager) {
-  return false;
+bool TestImageBacking::ReadbackToMemory(const std::vector<SkPixmap>& pixmaps) {
+  DCHECK_EQ(format().NumberOfPlanes(), static_cast<int>(pixmaps.size()));
+  readback_to_memory_called_ = true;
+  return true;
 }
 
 std::unique_ptr<GLTextureImageRepresentation>
@@ -241,19 +328,36 @@ TestImageBacking::ProduceGLTexturePassthrough(SharedImageManager* manager,
       manager, this, tracker, texture_passthrough_);
 }
 
-std::unique_ptr<SkiaImageRepresentation> TestImageBacking::ProduceSkia(
+std::unique_ptr<SkiaGaneshImageRepresentation>
+TestImageBacking::ProduceSkiaGanesh(
     SharedImageManager* manager,
     MemoryTypeTracker* tracker,
     scoped_refptr<SharedContextState> context_state) {
-  return std::make_unique<TestSkiaImageRepresentation>(manager, this, tracker);
+  return std::make_unique<TestSkiaImageRepresentation>(
+      context_state ? context_state->gr_context() : nullptr, manager, this,
+      tracker);
 }
 
 std::unique_ptr<DawnImageRepresentation> TestImageBacking::ProduceDawn(
     SharedImageManager* manager,
     MemoryTypeTracker* tracker,
-    WGPUDevice device,
-    WGPUBackendType backend_type) {
+    const wgpu::Device& device,
+    wgpu::BackendType backend_type,
+    std::vector<wgpu::TextureFormat> view_formats) {
   return std::make_unique<TestDawnImageRepresentation>(manager, this, tracker);
+}
+
+std::unique_ptr<SkiaGraphiteImageRepresentation>
+TestImageBacking::ProduceSkiaGraphite(
+    SharedImageManager* manager,
+    MemoryTypeTracker* tracker,
+    scoped_refptr<SharedContextState> context_state) {
+#if BUILDFLAG(SKIA_USE_METAL)
+  return std::make_unique<TestMetalSkiaGraphiteImageRepresentation>(
+      manager, this, tracker);
+#else
+  return nullptr;
+#endif  // BUILDFLAG(SKIA_USE_METAL)
 }
 
 std::unique_ptr<OverlayImageRepresentation> TestImageBacking::ProduceOverlay(

@@ -9,7 +9,6 @@
     {
       "name": "LayoutNGBlockFlow (positioned) DIV id='composited'",
       "bounds": [300, 300],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {

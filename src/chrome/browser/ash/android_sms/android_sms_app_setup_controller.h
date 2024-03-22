@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_ANDROID_SMS_ANDROID_SMS_APP_SETUP_CONTROLLER_H_
 #define CHROME_BROWSER_ASH_ANDROID_SMS_ANDROID_SMS_APP_SETUP_CONTROLLER_H_
 
-#include "base/callback_forward.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "base/functional/callback_forward.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
@@ -41,7 +41,7 @@ class AndroidSmsAppSetupController {
 
   // Returns the id for the PWA at |install_url|; if no PWA exists,
   // absl::nullopt is returned.
-  virtual absl::optional<web_app::AppId> GetPwa(const GURL& install_url) = 0;
+  virtual absl::optional<webapps::AppId> GetPwa(const GURL& install_url) = 0;
 
   // Deletes the cookie which causes the PWA to remember this computer by
   // default. Note that this does not actually stop the PWA from remembering

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,9 @@
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/renderer_host/text_input_manager.h"
 #include "content/common/content_switches_internal.h"
+#include "content/common/features.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
-#include "content/public/common/content_features.h"
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/scoped_keyboard_hook.h"
@@ -264,7 +264,7 @@ void RenderWidgetHostViewEventHandler::OnKeyEvent(ui::KeyEvent* event) {
   // If the key has been reserved as part of the active KeyboardLock request,
   // then we want to mark it as such so it is not intercepted by the browser.
   if (IsKeyLocked(*event))
-    webkit_event.skip_in_browser = true;
+    webkit_event.skip_if_unhandled = true;
 
   bool mark_event_as_handled = true;
   delegate_->ForwardKeyboardEventWithLatencyInfo(
@@ -327,7 +327,7 @@ void RenderWidgetHostViewEventHandler::OnMouseEvent(ui::MouseEvent* event) {
   // breaks drop-down lists which means something is incorrectly setting
   // event->handled to true (http://crbug.com/577983).
 
-  if (mouse_locked_ && !window_->GetHost()->SupportsMouseLock()) {
+  if (mouse_locked_) {
     HandleMouseEventWhileLocked(event);
     return;
   }
@@ -536,6 +536,8 @@ void RenderWidgetHostViewEventHandler::OnGestureEvent(ui::GestureEvent* event) {
     blink::WebGestureEvent fling_cancel = gesture;
     fling_cancel.SetType(blink::WebInputEvent::Type::kGestureFlingCancel);
     fling_cancel.SetSourceDevice(blink::WebGestureDevice::kTouchscreen);
+    fling_cancel.data.fling_cancel.prevent_boosting = false;
+    fling_cancel.data.fling_cancel.target_viewport = false;
     if (ShouldRouteEvents()) {
       host_->delegate()->GetInputEventRouter()->RouteGestureEvent(
           host_view_, &fling_cancel,
@@ -584,6 +586,7 @@ void RenderWidgetHostViewEventHandler::GestureEventAck(
     const blink::WebGestureEvent& event,
     blink::mojom::InputEventResultState ack_result) {
   mouse_wheel_phase_handler_.GestureEventAck(event, ack_result);
+  HandleSwipeToMoveCursorGestureAck(event);
 }
 
 bool RenderWidgetHostViewEventHandler::CanRendererHandleEvent(
@@ -659,7 +662,7 @@ void RenderWidgetHostViewEventHandler::ForwardMouseEventToParent(
 
   // Take a copy of |event|, to avoid ConvertLocationToTarget mutating the
   // event.
-  std::unique_ptr<ui::Event> event_copy = ui::Event::Clone(*event);
+  std::unique_ptr<ui::Event> event_copy = event->Clone();
   ui::MouseEvent* mouse_event = static_cast<ui::MouseEvent*>(event_copy.get());
   mouse_event->ConvertLocationToTarget(window_.get(), window_->parent());
   window_->parent()->delegate()->OnMouseEvent(mouse_event);
@@ -674,6 +677,12 @@ void RenderWidgetHostViewEventHandler::HandleGestureForTouchSelection(
       delegate_->selection_controller()->HandleLongPressEvent(
           event->time_stamp(), event->location_f());
       break;
+    case ui::ET_GESTURE_TAP_DOWN:
+      if (event->details().tap_down_count() == 2) {
+        delegate_->selection_controller()->HandleDoublePressEvent(
+            event->time_stamp(), event->location_f());
+      }
+      break;
     case ui::ET_GESTURE_TAP:
       delegate_->selection_controller()->HandleTapEvent(
           event->location_f(), event->details().tap_count());
@@ -684,6 +693,34 @@ void RenderWidgetHostViewEventHandler::HandleGestureForTouchSelection(
     case ui::ET_GESTURE_SCROLL_END:
       delegate_->selection_controller_client()->OnScrollCompleted();
       break;
+    default:
+      break;
+  }
+}
+
+void RenderWidgetHostViewEventHandler::HandleSwipeToMoveCursorGestureAck(
+    const blink::WebGestureEvent& event) {
+  if (!delegate_->selection_controller_client()) {
+    return;
+  }
+
+  switch (event.GetType()) {
+    case blink::WebInputEvent::Type::kGestureScrollBegin: {
+      if (!event.data.scroll_begin.cursor_control) {
+        break;
+      }
+      swipe_to_move_cursor_activated_ = true;
+      delegate_->selection_controller_client()->OnSwipeToMoveCursorBegin();
+      break;
+    }
+    case blink::WebInputEvent::Type::kGestureScrollEnd: {
+      if (!swipe_to_move_cursor_activated_) {
+        break;
+      }
+      swipe_to_move_cursor_activated_ = false;
+      delegate_->selection_controller_client()->OnSwipeToMoveCursorEnd();
+      break;
+    }
     default:
       break;
   }
@@ -702,9 +739,8 @@ void RenderWidgetHostViewEventHandler::HandleMouseEventWhileLocked(
     // If we receive non client mouse messages while we are in the locked state
     // it probably means that the mouse left the borders of our window and
     // needs to be moved back to the center.
-    if (event->flags() & ui::EF_IS_NON_CLIENT) {
-      // TODO(jonross): ideally this would not be done for mus
-      // (crbug.com/621412)
+    if ((event->flags() & ui::EF_IS_NON_CLIENT) &&
+        !window_->GetHost()->SupportsMouseLock()) {
       MoveCursorToCenter(event);
       return;
     }

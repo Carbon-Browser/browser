@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_rtp_transceiver_init.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
@@ -27,7 +26,8 @@ class RTCRtpReceiver;
 class RTCRtpSender;
 
 webrtc::RtpTransceiverInit ToRtpTransceiverInit(ExecutionContext* context,
-                                                const RTCRtpTransceiverInit*);
+                                                const RTCRtpTransceiverInit*,
+                                                const String& kind);
 
 class RTCRtpTransceiver final : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
@@ -72,14 +72,13 @@ class RTCRtpTransceiver final : public ScriptWrappable {
   bool DirectionHasRecv() const;
   bool FiredDirectionHasRecv() const;
 
-  void setOfferedRtpHeaderExtensions(
-      const HeapVector<Member<RTCRtpHeaderExtensionCapability>>&
-          header_extensions_to_offer,
+  void setHeaderExtensionsToNegotiate(
+      const HeapVector<Member<RTCRtpHeaderExtensionCapability>>& extensions,
       ExceptionState& exception_state);
-  HeapVector<Member<RTCRtpHeaderExtensionCapability>> headerExtensionsToOffer()
-      const;
   HeapVector<Member<RTCRtpHeaderExtensionCapability>>
-  headerExtensionsNegotiated() const;
+  getHeaderExtensionsToNegotiate() const;
+  HeapVector<Member<RTCRtpHeaderExtensionCapability>>
+  getNegotiatedHeaderExtensions() const;
 
   void Trace(Visitor*) const override;
 

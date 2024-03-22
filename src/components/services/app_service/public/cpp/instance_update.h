@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/services/app_service/public/cpp/instance.h"
 
@@ -80,8 +81,8 @@ class InstanceUpdate {
   bool BrowserContextChanged() const;
 
  private:
-  const Instance* state_;
-  const Instance* delta_;
+  raw_ptr<const Instance, ExperimentalAsh> state_;
+  raw_ptr<const Instance, ExperimentalAsh> delta_;
 };
 
 }  // namespace apps

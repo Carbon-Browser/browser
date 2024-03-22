@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@ namespace viz {
 
 namespace {
 bool SubTargetIsValid(const VideoCaptureSubTarget& sub_target) {
-  if (absl::holds_alternative<absl::monostate>(sub_target)) {
+  if (IsEntireTabCapture(sub_target)) {
     return true;
   }
   if (const auto* crop_id = absl::get_if<RegionCaptureCropId>(&sub_target)) {

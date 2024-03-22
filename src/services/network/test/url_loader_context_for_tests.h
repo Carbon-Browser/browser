@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,10 +38,11 @@ class URLLoaderContextForTests : public URLLoaderContext {
   }
 
   // URLLoaderContext implementation.
-  bool ShouldRequireNetworkIsolationKey() const override;
+  bool ShouldRequireIsolationInfo() const override;
   const cors::OriginAccessList& GetOriginAccessList() const override;
   const mojom::URLLoaderFactoryParams& GetFactoryParams() const override;
   mojom::CookieAccessObserver* GetCookieAccessObserver() const override;
+  mojom::TrustTokenAccessObserver* GetTrustTokenAccessObserver() const override;
   mojom::CrossOriginEmbedderPolicyReporter* GetCoepReporter() const override;
   mojom::DevToolsObserver* GetDevToolsObserver() const override;
   mojom::NetworkContextClient* GetNetworkContextClient() const override;
@@ -53,14 +54,17 @@ class URLLoaderContextForTests : public URLLoaderContext {
   scoped_refptr<ResourceSchedulerClient> GetResourceSchedulerClient()
       const override;
   corb::PerFactoryState& GetMutableCorbState() override;
+  bool DataUseUpdatesEnabled() override;
 
  private:
   mojom::URLLoaderFactoryParams factory_params_;
   cors::OriginAccessList origin_access_list_;
   corb::PerFactoryState corb_state_;
 
-  raw_ptr<mojom::NetworkContextClient> network_context_client_ = nullptr;
-  raw_ptr<net::URLRequestContext> url_request_context_ = nullptr;
+  raw_ptr<mojom::NetworkContextClient, DanglingUntriaged>
+      network_context_client_ = nullptr;
+  raw_ptr<net::URLRequestContext, DanglingUntriaged> url_request_context_ =
+      nullptr;
   scoped_refptr<ResourceSchedulerClient> resource_scheduler_client_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,14 @@ import {GUEST_TEST} from './guest_query_receiver.js';
 // Test that language is set correctly on the guest frame.
 GUEST_TEST('GuestHasLang', () => {
   assertEquals(document.documentElement.lang, 'en-US');
+});
+
+GUEST_TEST('GuestLoadsLoadTimeData', () => {
+  /** @type {{getString: function(string): string}} */
+  const loadTimeData = window['loadTimeData'];
+  // Check `LoadTimeData` exists on the global window object.
+  chai.assert.isTrue(loadTimeData !== undefined);
+  chai.expect(loadTimeData.getString('appLocale')).to.equal('en-US');
 });
 
 /**
@@ -238,4 +246,16 @@ GUEST_TEST('GuestCanClearSearchIndex', async () => {
 
   const res = await delegate.findInSearchIndex('Chrome');
   assertDeepEquals(res, {results: null});
+});
+
+// Test that the guest frame can get device info.
+GUEST_TEST('GuestCanGetDeviceInfo', async () => {
+  const delegate = window.customLaunchData.delegate;
+
+  const deviceInfo = await delegate.getDeviceInfo();
+  chai.expect(deviceInfo.board).to.be.a('string');
+  chai.expect(deviceInfo.model).to.be.a('string');
+  chai.expect(deviceInfo.userType).to.be.a('string');
+
+  chai.expect(deviceInfo.isSteamAllowed).to.be.a('boolean');
 });

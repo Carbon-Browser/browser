@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,12 @@
 @protocol ApplicationCommands;
 @protocol ActivityServiceCommands;
 @protocol PopupMenuCommands;
-@protocol FindInPageCommands;
 @protocol OmniboxCommands;
 
 class WebNavigationBrowserAgent;
+namespace feature_engagement {
+class Tracker;
+}
 
 // Handler for the actions associated with the different toolbar buttons.
 @interface ToolbarButtonActionsHandler : NSObject
@@ -22,13 +24,18 @@ class WebNavigationBrowserAgent;
 @property(nonatomic, weak) id<ApplicationCommands> applicationHandler;
 @property(nonatomic, weak) id<ActivityServiceCommands> activityHandler;
 @property(nonatomic, weak) id<PopupMenuCommands> menuHandler;
-@property(nonatomic, weak) id<FindInPageCommands> findHandler;
 @property(nonatomic, weak) id<OmniboxCommands> omniboxHandler;
 
 @property(nonatomic, assign) WebNavigationBrowserAgent* navigationAgent;
 
 // Whether this handler is created in incognito.
 @property(nonatomic, assign) BOOL incognito;
+
+- (instancetype)init NS_UNAVAILABLE;
+
+// Initilizer, `engagementTracker` must be non-null.
+- (instancetype)initWithEngagementTracker:
+    (feature_engagement::Tracker*)engagementTracker NS_DESIGNATED_INITIALIZER;
 
 // Action when the back button is tapped.
 - (void)backAction;
@@ -54,8 +61,8 @@ class WebNavigationBrowserAgent;
 // Action when the stop button is tapped.
 - (void)stopAction;
 
-// Action when the search button is tapped.
-- (void)searchAction:(id)sender;
+// Action when the new tab button is tapped.
+- (void)newTabAction:(id)sender;
 
 // Action when the button to cancel the omnibox focus is tapped.
 - (void)cancelOmniboxFocusAction;

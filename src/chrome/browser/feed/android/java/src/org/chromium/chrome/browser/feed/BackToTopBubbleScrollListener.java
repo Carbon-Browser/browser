@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,7 @@ public class BackToTopBubbleScrollListener implements ScrollListener {
 
     private int mTriggeredPosition;
 
-    /**
-     * Constructor for "Back to top" callout triggering.
-     */
+    /** Constructor for "Back to top" callout triggering. */
     public BackToTopBubbleScrollListener(FeedBubbleDelegate delegate, ResultHandler resultHandler) {
         mDelegate = delegate;
         mResultHandler = resultHandler;

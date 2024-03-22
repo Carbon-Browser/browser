@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -95,6 +95,18 @@ ui::AnimationThroughputReporter CreateAnimationReporter(
 
 void RecordCalendarKeyboardNavigation(
     const CalendarKeyboardNavigationSource key_source);
+
+void RecordEventListItemInUpNextLaunched(const ui::Event& event);
+
+void RecordUpNextEventCount(const int event_count);
+
+void RecordJoinButtonPressedFromEventListView(const ui::Event& event);
+
+void RecordJoinButtonPressedFromUpNextView(const ui::Event& event);
+
+void RecordEventListEventCount(const int event_count);
+
+void RecordEventsDisplayedToUser();
 
 }  // namespace calendar_metrics
 

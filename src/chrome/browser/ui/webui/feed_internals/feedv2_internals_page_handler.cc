@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/webui/feed_internals/feed_internals.mojom.h"
@@ -21,8 +21,6 @@
 #include "components/feed/core/v2/public/types.h"
 #include "components/feed/core/v2/public/web_feed_subscriptions.h"
 #include "components/feed/feed_feature_list.h"
-#include "components/offline_pages/core/prefetch/prefetch_prefs.h"
-#include "components/offline_pages/core/prefetch/suggestions_provider.h"
 #include "components/prefs/pref_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -33,7 +31,7 @@ namespace {
 const char kFeedHistogramPrefix[] = "ContentSuggestions.Feed.";
 
 // Converts |t| to a delta from the JS epoch, or 0 if |t| is null.
-base::TimeDelta ToJsTimeDelta(base::Time t) {
+base::TimeDelta InMillisecondsFSinceUnixEpochDelta(base::Time t) {
   return t.is_null() ? base::TimeDelta() : t - base::Time::UnixEpoch();
 }
 
@@ -60,8 +58,7 @@ void FeedV2InternalsPageHandler::GetGeneralProperties(
 
   properties->is_feed_visible = feed_stream_->IsArticlesListVisible();
   properties->is_feed_allowed = IsFeedAllowed();
-  properties->is_prefetching_enabled =
-      offline_pages::prefetch_prefs::IsEnabled(pref_service_);
+  properties->is_prefetching_enabled = false;
   properties->is_web_feed_follow_intro_debug_enabled =
       IsWebFeedFollowIntroDebugEnabled();
   properties->use_feed_query_requests = ShouldUseFeedQueryRequests();
@@ -85,24 +82,28 @@ void FeedV2InternalsPageHandler::GetLastFetchProperties(
   if (debug_data.fetch_info) {
     const feed::NetworkResponseInfo& net_info = *debug_data.fetch_info;
     properties->last_fetch_status = net_info.status_code;
-    properties->last_fetch_time = ToJsTimeDelta(net_info.fetch_time);
+    properties->last_fetch_time =
+        InMillisecondsFSinceUnixEpochDelta(net_info.fetch_time);
     properties->last_bless_nonce = net_info.bless_nonce;
   }
   if (debug_data.upload_info) {
     const feed::NetworkResponseInfo& net_info = *debug_data.upload_info;
     properties->last_action_upload_status = net_info.status_code;
-    properties->last_action_upload_time = ToJsTimeDelta(net_info.fetch_time);
+    properties->last_action_upload_time =
+        InMillisecondsFSinceUnixEpochDelta(net_info.fetch_time);
   }
 
   std::move(callback).Run(std::move(properties));
 }
 
 void FeedV2InternalsPageHandler::RefreshForYouFeed() {
-  feed_stream_->ForceRefreshForDebugging(feed::kForYouStream);
+  feed_stream_->ForceRefreshForDebugging(
+      feed::StreamType(feed::StreamKind::kForYou));
 }
 
 void FeedV2InternalsPageHandler::RefreshFollowingFeed() {
-  feed_stream_->ForceRefreshForDebugging(feed::kWebFeedStream);
+  feed_stream_->ForceRefreshForDebugging(
+      feed::StreamType(feed::StreamKind::kFollowing));
 }
 
 void FeedV2InternalsPageHandler::RefreshWebFeedSuggestions() {
@@ -167,8 +168,8 @@ void FeedV2InternalsPageHandler::SetUseFeedQueryRequests(
 
 feed_internals::mojom::FeedOrder
 FeedV2InternalsPageHandler::GetFollowingFeedOrder() {
-  feed::ContentOrder order =
-      feed_stream_->GetContentOrderFromPrefs(feed::kWebFeedStream);
+  feed::ContentOrder order = feed_stream_->GetContentOrderFromPrefs(
+      feed::StreamType(feed::StreamKind::kFollowing));
   switch (order) {
     case feed::ContentOrder::kUnspecified:
       return feed_internals::mojom::FeedOrder::kUnspecified;
@@ -193,5 +194,6 @@ void FeedV2InternalsPageHandler::SetFollowingFeedOrder(
       order_to_set = feed::ContentOrder::kReverseChron;
       break;
   }
-  feed_stream_->SetContentOrder(feed::kWebFeedStream, order_to_set);
+  feed_stream_->SetContentOrder(feed::StreamType(feed::StreamKind::kFollowing),
+                                order_to_set);
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,10 +44,6 @@ extern const char kAccessCodeCastFlagParamType[];
 namespace switches {
 // Specifies the URL from which to obtain cast discovery information.
 extern const char kDiscoveryEndpointSwitch[];
-
-// Specifies and overwrites the duration that should be set for the
-// kAccessCodeCastDeviceDuration.
-extern const char kAccessCodeCastDeviceDurationSwitch[];
 
 }  // namespace switches
 }  // namespace media_router

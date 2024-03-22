@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
@@ -42,6 +43,9 @@ enum class LockScreenAppSupport {
   // from the lock screen UI.
   kEnabled = 3,
 };
+
+// For logging and debug purposes.
+std::ostream& operator<<(std::ostream& out, const LockScreenAppSupport& app);
 
 // Tracks available lock screen apps. Only exists for the primary profile.
 class LockScreenApps : public KeyedService {
@@ -86,7 +90,7 @@ class LockScreenApps : public KeyedService {
   void OnAllowedLockScreenAppsChanged();
 
   // The profile for which lock screen apps are enabled.
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile, ExperimentalAsh> profile_ = nullptr;
 
   // Tracks kNoteTakingAppsLockScreenAllowlist pref for the profile for which
   // lock screen apps are enabled.

@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,7 +9,7 @@ import collections
 import itertools
 import sys
 import tempfile
-import typing
+from typing import Iterable, Set
 import unittest
 
 import six
@@ -21,8 +21,7 @@ from unexpected_passes_common import result_output
 from unexpected_passes_common import unittest_utils as uu
 
 
-def CreateTextOutputPermutations(text: str, inputs: typing.Iterable[str]
-                                 ) -> typing.Set[str]:
+def CreateTextOutputPermutations(text: str, inputs: Iterable[str]) -> Set[str]:
   """Creates permutations of |text| filled with the contents of |inputs|.
 
   Some output ordering is not guaranteed, so this acts as a way to generate
@@ -260,8 +259,8 @@ class ConvertUnusedExpectationsToStringDictUnittest(unittest.TestCase):
       # Set ordering does not appear to be stable between test runs, as we can
       # get either order of tags. So, generate them now instead of hard coding
       # them.
-      tags = ' '.join(set(['win', 'nvidia']))
-      results = ' '.join(set(['Failure', 'Timeout']))
+      tags = ' '.join(['nvidia', 'win'])
+      results = ' '.join(['Failure', 'Timeout'])
       expected_output = {
           'foo_file': [
               '[ %s ] foo/test [ %s ]' % (tags, results),
@@ -764,73 +763,6 @@ class OutputUrlsForClDescriptionUnittest(fake_filesystem_unittest.TestCase):
     with open(self._filepath) as f:
       self.assertEqual(f.read(), ('Affected bugs for CL description:\n'
                                   'Fixed: 1, 2\n'))
-
-
-class ConvertBuilderMapToPassOrderedStringDictUnittest(unittest.TestCase):
-  def testEmptyInput(self) -> None:
-    """Tests that an empty input doesn't cause breakage."""
-    output = result_output.ConvertBuilderMapToPassOrderedStringDict(
-        data_types.BuilderStepMap())
-    expected_output = collections.OrderedDict()
-    expected_output[result_output.FULL_PASS] = {}
-    expected_output[result_output.NEVER_PASS] = {}
-    expected_output[result_output.PARTIAL_PASS] = {}
-    self.assertEqual(output, expected_output)
-
-  def testBasic(self) -> None:
-    """Tests that a map is properly converted."""
-    builder_map = data_types.BuilderStepMap({
-        'fully pass':
-        data_types.StepBuildStatsMap({
-            'step1': uu.CreateStatsWithPassFails(1, 0),
-        }),
-        'never pass':
-        data_types.StepBuildStatsMap({
-            'step3': uu.CreateStatsWithPassFails(0, 1),
-        }),
-        'partial pass':
-        data_types.StepBuildStatsMap({
-            'step5': uu.CreateStatsWithPassFails(1, 1),
-        }),
-        'mixed':
-        data_types.StepBuildStatsMap({
-            'step7': uu.CreateStatsWithPassFails(1, 0),
-            'step8': uu.CreateStatsWithPassFails(0, 1),
-            'step9': uu.CreateStatsWithPassFails(1, 1),
-        }),
-    })
-    output = result_output.ConvertBuilderMapToPassOrderedStringDict(builder_map)
-
-    expected_output = collections.OrderedDict()
-    expected_output[result_output.FULL_PASS] = {
-        'fully pass': [
-            'step1 (1/1 passed)',
-        ],
-        'mixed': [
-            'step7 (1/1 passed)',
-        ],
-    }
-    expected_output[result_output.NEVER_PASS] = {
-        'never pass': [
-            'step3 (0/1 passed)',
-        ],
-        'mixed': [
-            'step8 (0/1 passed)',
-        ],
-    }
-    expected_output[result_output.PARTIAL_PASS] = {
-        'partial pass': {
-            'step5 (1/2 passed)': [
-                'http://ci.chromium.org/b/build_id0',
-            ],
-        },
-        'mixed': {
-            'step9 (1/2 passed)': [
-                'http://ci.chromium.org/b/build_id0',
-            ],
-        },
-    }
-    self.assertEqual(output, expected_output)
 
 
 def _Dedent(s: str) -> str:

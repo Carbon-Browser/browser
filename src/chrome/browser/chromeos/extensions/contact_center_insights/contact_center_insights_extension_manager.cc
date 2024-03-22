@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/no_destructor.h"
 #include "chrome/browser/enterprise/util/affiliation.h"
 #include "chrome/browser/extensions/component_loader.h"
 #include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/browser_resources.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/extension_system.h"
@@ -28,7 +27,7 @@ namespace chromeos {
 namespace {
 
 class ContactCenterInsightsExtensionManagerFactory
-    : public BrowserContextKeyedServiceFactory {
+    : public ProfileKeyedServiceFactory {
  public:
   ContactCenterInsightsExtensionManagerFactory();
   ContactCenterInsightsExtensionManagerFactory(
@@ -48,9 +47,14 @@ class ContactCenterInsightsExtensionManagerFactory
 
 ContactCenterInsightsExtensionManagerFactory::
     ContactCenterInsightsExtensionManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ContactCenterInsightsExtensionManager",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 ContactCenterInsightsExtensionManagerFactory::
     ~ContactCenterInsightsExtensionManagerFactory() = default;
@@ -174,6 +178,11 @@ void ContactCenterInsightsExtensionManager::RemoveExtensionIfInstalled() {
   if (delegate_->IsExtensionInstalled(component_loader_)) {
     delegate_->UninstallExtension(component_loader_);
   }
+}
+
+// static
+void ContactCenterInsightsExtensionManager::EnsureFactoryBuilt() {
+  ContactCenterInsightsExtensionManager::GetFactory();
 }
 
 }  // namespace chromeos

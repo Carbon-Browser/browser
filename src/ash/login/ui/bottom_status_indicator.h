@@ -1,12 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_LOGIN_UI_BOTTOM_STATUS_INDICATOR_H_
 #define ASH_LOGIN_UI_BOTTOM_STATUS_INDICATOR_H_
 
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
+#include "base/memory/weak_ptr.h"
 #include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/view.h"
 
@@ -16,7 +18,11 @@ struct VectorIcon;
 
 namespace ash {
 
-class BottomStatusIndicator : public views::LabelButton {
+class BottomStatusIndicator
+    : public views::LabelButton,
+      public base::SupportsWeakPtr<BottomStatusIndicator> {
+  METADATA_HEADER(BottomStatusIndicator, views::LabelButton)
+
  public:
   using TappedCallback = base::RepeatingClosure;
 
@@ -26,7 +32,8 @@ class BottomStatusIndicator : public views::LabelButton {
   ~BottomStatusIndicator() override;
 
   void SetIcon(const gfx::VectorIcon& vector_icon,
-               AshColorProvider::ContentLayerType type);
+               ui::ColorId color_id,
+               int icon_size = 0);
 
   void set_role_for_accessibility(ax::mojom::Role role) { role_ = role; }
 

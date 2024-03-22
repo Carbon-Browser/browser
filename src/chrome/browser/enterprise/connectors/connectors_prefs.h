@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,6 @@ class PrefRegistrySimple;
 
 namespace enterprise_connectors {
 
-// Pref that maps to the "SendDownloadToCloudEnterpriseConnector" policy.
-extern const char kSendDownloadToCloudPref[];
-
 // Pref that maps to the "OnFileAttachedEnterpriseConnector" policy.
 extern const char kOnFileAttachedPref[];
 
@@ -27,7 +24,7 @@ extern const char kOnBulkDataEntryPref[];
 // Pref that maps to the "OnPrintEnterpriseConnector" policy.
 extern const char kOnPrintPref[];
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 // Pref that maps to the "OnFileTransferEnterpriseConnector" policy.
 extern const char kOnFileTransferPref[];
 #endif
@@ -35,34 +32,21 @@ extern const char kOnFileTransferPref[];
 // Pref that maps to the "OnSecurityEventEnterpriseConnector" policy.
 extern const char kOnSecurityEventPref[];
 
-// Pref that maps to the "ContextAwareAccessSignalsAllowlistPref" policy.
-extern const char kContextAwareAccessSignalsAllowlistPref[];
-
 // Prefs that map to the scope of each policy using a
 // EnterpriseConnectorsPolicyHandler.
 extern const char kOnFileAttachedScopePref[];
 extern const char kOnFileDownloadedScopePref[];
 extern const char kOnBulkDataEntryScopePref[];
 extern const char kOnPrintScopePref[];
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 extern const char kOnFileTransferScopePref[];
 #endif
 extern const char kOnSecurityEventScopePref[];
 
-#if BUILDFLAG(IS_MAC)
-// The pref on whether the device trust key creation is disabled for the
-// current user. The device trust key creation is disabled when a key for
-// the device is already present on the Server but a key upload is
-// requested with a another key not signed by the previous one. The key
-// creation is enabled by default.
-extern const char kDeviceTrustDisableKeyCreationPref[];
-#endif
+extern const char kLatestCrashReportCreationTime[];
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry);
-
-#if BUILDFLAG(IS_MAC)
-void RegisterLocalPrefs(PrefRegistrySimple* registry);
-#endif
+void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 
 }  // namespace enterprise_connectors
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -211,7 +211,7 @@ class ContentVerifier : public base::RefCountedThreadSafe<ContentVerifier>,
   // Updated and accessed only on IO thread.
   bool shutdown_on_io_ = false;
 
-  const raw_ptr<content::BrowserContext> context_;
+  const raw_ptr<content::BrowserContext, AcrossTasksDanglingUntriaged> context_;
 
   // Guards creation of |hash_helper_|, limiting number of creation to <= 1.
   // Accessed only on IO thread.

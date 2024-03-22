@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include "base/at_exit.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/debug/stack_trace.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/metrics/field_trial.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/synchronization/waitable_event.h"
@@ -77,6 +78,7 @@ std::unique_ptr<IPCSupport>& GetIPCSupport() {
 class GlobalStateInitializer {
  public:
   GlobalStateInitializer() = default;
+  ~GlobalStateInitializer() = delete;
 
   bool Initialize(int argc, const char* const* argv) {
     if (initialized_)
@@ -109,7 +111,17 @@ class GlobalStateInitializer {
 #endif
 
     base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-    base::FeatureList::InitializeInstance(
+    // If FieldTrialList::GetInstance() returns nullptr,
+    // FeatureList::InitFromCommandLine(), used by FeatureList::
+    // InitInstance internally, creates no field trials. This causes
+    // DCHECK() failure if we have an command line like
+    // --enable-features=TestFeature:TestParam/TestValue.
+    // We don't need to care about FieldTrialList duplication here, because
+    // this code is available for static build. If base library is not shared,
+    // libmojo_core.so and the caller of LoadAndInitializeCoreLibrary doesn't
+    // share FieldTrialList::GetInstance().
+    field_trial_list_ = std::make_unique<base::FieldTrialList>();
+    base::FeatureList::InitInstance(
         command_line->GetSwitchValueASCII(switches::kEnableFeatures),
         command_line->GetSwitchValueASCII(switches::kDisableFeatures));
 #endif  // !defined(COMPONENT_BUILD)
@@ -118,6 +130,7 @@ class GlobalStateInitializer {
 
  private:
   bool initialized_ = false;
+  std::unique_ptr<base::FieldTrialList> field_trial_list_;
 };
 
 }  // namespace
@@ -146,9 +159,9 @@ MojoResult InitializeImpl(const struct MojoInitializeOptions* options) {
     argv = options->argv;
   }
 
-  static GlobalStateInitializer global_state_initializer;
+  static base::NoDestructor<GlobalStateInitializer> global_state_initializer;
   const bool was_global_state_already_initialized =
-      !global_state_initializer.Initialize(argc, argv);
+      !global_state_initializer->Initialize(argc, argv);
 
   if (!should_initialize_ipc_support) {
     if (was_global_state_already_initialized)
@@ -183,7 +196,7 @@ MojoResult ShutdownImpl(const struct MojoShutdownOptions* options) {
   return MOJO_RESULT_OK;
 }
 
-MojoSystemThunks64 g_thunks = {0};
+MojoSystemThunks2 g_thunks = {0};
 
 }  // namespace
 
@@ -193,7 +206,7 @@ MojoSystemThunks64 g_thunks = {0};
 #define EXPORT_FROM_MOJO_CORE __attribute__((visibility("default")))
 #endif
 
-EXPORT_FROM_MOJO_CORE void MojoGetSystemThunks(MojoSystemThunks64* thunks) {
+EXPORT_FROM_MOJO_CORE void MojoGetSystemThunks(MojoSystemThunks2* thunks) {
   if (!g_thunks.size) {
     g_thunks = mojo::core::GetSystemThunks();
     g_thunks.Initialize = InitializeImpl;
@@ -202,7 +215,7 @@ EXPORT_FROM_MOJO_CORE void MojoGetSystemThunks(MojoSystemThunks64* thunks) {
 
   // Caller must provide a thunk structure at least large enough to hold Core
   // ABI version 0. SetQuota is the first function introduced in ABI version 1.
-  CHECK_GE(thunks->size, offsetof(MojoSystemThunks64, SetQuota));
+  CHECK_GE(thunks->size, offsetof(MojoSystemThunks2, SetQuota));
 
   // NOTE: This also overrites |thunks->size| with the actual size of our own
   // thunks if smaller than the caller's. This informs the caller that we

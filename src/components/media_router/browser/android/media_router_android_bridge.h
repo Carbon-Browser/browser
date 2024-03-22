@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,6 +86,11 @@ class MediaRouterAndroidBridge {
                  const base::android::JavaRef<jobject>& obj,
                  const base::android::JavaRef<jstring>& jmedia_route_id,
                  const base::android::JavaRef<jstring>& jmessage);
+  void OnRouteMediaSourceUpdated(
+      JNIEnv* env,
+      const base::android::JavaRef<jobject>& obj,
+      const base::android::JavaRef<jstring>& jmedia_route_id,
+      const base::android::JavaRef<jstring>& jmedia_source_id);
 
  private:
   raw_ptr<MediaRouterAndroid> native_media_router_;

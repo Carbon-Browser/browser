@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -41,7 +42,6 @@ struct IgnoredValue {
 #define INTERNAL_TRACE_EVENT_ADD(...) INTERNAL_TRACE_IGNORE(__VA_ARGS__)
 #define INTERNAL_TRACE_EVENT_ADD_SCOPED(...) INTERNAL_TRACE_IGNORE(__VA_ARGS__)
 #define INTERNAL_TRACE_EVENT_ADD_WITH_ID(...) INTERNAL_TRACE_IGNORE(__VA_ARGS__)
-#define INTERNAL_TRACE_LOG_MESSAGE(...) INTERNAL_TRACE_IGNORE(__VA_ARGS__)
 #define INTERNAL_TRACE_EVENT_ADD_SCOPED_WITH_FLOW(...) \
   INTERNAL_TRACE_IGNORE(__VA_ARGS__)
 #define INTERNAL_TRACE_EVENT_ADD_WITH_ID_TID_AND_TIMESTAMP(...) \
@@ -135,27 +135,6 @@ class BASE_EXPORT TracedValueJSON : public TracedValue {
   std::string ToFormattedJSON() const { return ""; }
 };
 
-class BASE_EXPORT BlameContext {
- public:
-  BlameContext(const char* category,
-               const char* name,
-               const char* type,
-               const char* scope,
-               int64_t id,
-               const BlameContext* parent_context) {}
-
-  void Initialize() {}
-  void Enter() {}
-  void Leave() {}
-  void TakeSnapshot() {}
-
-  const char* category() const { return nullptr; }
-  const char* name() const { return nullptr; }
-  const char* type() const { return nullptr; }
-  const char* scope() const { return nullptr; }
-  int64_t id() const { return 0; }
-};
-
 struct MemoryDumpArgs;
 class ProcessMemoryDump;
 
@@ -178,11 +157,16 @@ class BASE_EXPORT MemoryDumpManager {
       TRACE_DISABLED_BY_DEFAULT("memory-infra");
 };
 
+inline uint64_t GetNextGlobalTraceId() {
+  return 0;
+}
+
 }  // namespace trace_event
 }  // namespace base
 
 // Stub implementation for
-// perfetto::StaticString/ThreadTrack/TracedValue/TracedDictionary/TracedArray.
+// perfetto::StaticString/ThreadTrack/TracedValue/TracedDictionary/TracedArray/
+// Track.
 namespace perfetto {
 
 class TracedArray;
@@ -246,6 +230,44 @@ class TracedArray {
 template <class T>
 void WriteIntoTracedValue(TracedValue, T&&) {}
 
+struct Track {
+  explicit Track(uint64_t id) {}
+};
+
+namespace protos::pbzero {
+namespace SequenceManagerTask {
+
+enum class QueueName {
+  UNKNOWN_TQ = 0,
+  DEFAULT_TQ = 1,
+  TASK_ENVIRONMENT_DEFAULT_TQ = 2,
+  TEST2_TQ = 3,
+  TEST_TQ = 4,
+};
+inline const char* QueueName_Name(QueueName value) {
+  switch (value) {
+    case QueueName::UNKNOWN_TQ:
+      return "UNKNOWN_TQ";
+    case QueueName::DEFAULT_TQ:
+      return "DEFAULT_TQ";
+    case QueueName::TASK_ENVIRONMENT_DEFAULT_TQ:
+      return "TASK_ENVIRONMENT_DEFAULT_TQ";
+    case QueueName::TEST2_TQ:
+      return "TEST2_TQ";
+    case QueueName::TEST_TQ:
+      return "TEST_TQ";
+  }
+}
+
+}  // namespace SequenceManagerTask
+
+namespace ChromeProcessDescriptor {
+
+enum ProcessType {};
+
+}  // namespace ChromeProcessDescriptor
+
+}  // namespace protos::pbzero
 }  // namespace perfetto
 
 #endif  // BASE_TRACE_EVENT_TRACE_EVENT_STUB_H_

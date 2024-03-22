@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,8 @@ class ContextMenuDelegateUserData : public base::SupportsUserData::Data {
   ContextMenuDelegate* menu_delegate() { return menu_delegate_; }
 
  private:
-  raw_ptr<ContextMenuDelegate> menu_delegate_;  // not owned by us.
+  raw_ptr<ContextMenuDelegate, AcrossTasksDanglingUntriaged>
+      menu_delegate_;  // not owned by us.
 };
 
 }  // namespace

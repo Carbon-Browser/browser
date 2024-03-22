@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,9 +35,10 @@ class SettingsPrivateEventRouter
       public EventRouter::Observer,
       public settings_private::GeneratedPref::Observer {
  public:
-  static SettingsPrivateEventRouter* Create(
+  static std::unique_ptr<SettingsPrivateEventRouter> Create(
       content::BrowserContext* browser_context);
 
+  explicit SettingsPrivateEventRouter(content::BrowserContext* context);
   SettingsPrivateEventRouter(const SettingsPrivateEventRouter&) = delete;
   SettingsPrivateEventRouter& operator=(const SettingsPrivateEventRouter&) =
       delete;
@@ -50,8 +51,6 @@ class SettingsPrivateEventRouter
   content::BrowserContext* context_for_test() { return context_; }
 
  protected:
-  explicit SettingsPrivateEventRouter(content::BrowserContext* context);
-
   // KeyedService overrides:
   void Shutdown() override;
 

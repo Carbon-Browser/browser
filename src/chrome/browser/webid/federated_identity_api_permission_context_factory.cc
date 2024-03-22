@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,8 @@
 
 #include "base/no_destructor.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/webid/federated_identity_api_permission_context.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 // static
 FederatedIdentityApiPermissionContext*
@@ -29,23 +27,22 @@ FederatedIdentityApiPermissionContextFactory::GetInstance() {
 
 FederatedIdentityApiPermissionContextFactory::
     FederatedIdentityApiPermissionContextFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "FederatedIdentityApiPermissionContext",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 
 FederatedIdentityApiPermissionContextFactory::
     ~FederatedIdentityApiPermissionContextFactory() = default;
 
-content::BrowserContext*
-FederatedIdentityApiPermissionContextFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
-}
-
-KeyedService*
-FederatedIdentityApiPermissionContextFactory::BuildServiceInstanceFor(
-    content::BrowserContext* profile) const {
-  return new FederatedIdentityApiPermissionContext(profile);
+std::unique_ptr<KeyedService> FederatedIdentityApiPermissionContextFactory::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* profile) const {
+  return std::make_unique<FederatedIdentityApiPermissionContext>(profile);
 }

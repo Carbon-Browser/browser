@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "components/query_tiles/internal/tile_service_impl.h"
@@ -131,7 +131,7 @@ class InitAwareTileServiceTest : public testing::Test {
 
  private:
   base::test::TaskEnvironment task_environment_;
-  raw_ptr<MockInitializableTileService> mock_service_;
+  raw_ptr<MockInitializableTileService, DanglingUntriaged> mock_service_;
   std::unique_ptr<InitAwareTileService> init_aware_service_;
 };
 

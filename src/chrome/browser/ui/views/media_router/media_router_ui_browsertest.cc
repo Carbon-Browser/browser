@@ -1,11 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/media/router/media_router_feature.h"
@@ -44,8 +43,8 @@ class MediaRouterUIBrowserTest : public InProcessBrowserTest {
  public:
   MediaRouterUIBrowserTest()
       : issue_(IssueInfo("title notification",
-                         IssueInfo::Action::DISMISS,
-                         IssueInfo::Severity::NOTIFICATION)) {}
+                         IssueInfo::Severity::NOTIFICATION,
+                         "sinkId1")) {}
   ~MediaRouterUIBrowserTest() override {}
 
   void SetUpOnMainThread() override {
@@ -79,7 +78,8 @@ class MediaRouterUIBrowserTest : public InProcessBrowserTest {
   // A vector of MediaRoutes that includes a local route.
   std::vector<MediaRoute> routes_;
 
-  raw_ptr<MediaRouterActionController> action_controller_ = nullptr;
+  raw_ptr<MediaRouterActionController, DanglingUntriaged> action_controller_ =
+      nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(MediaRouterUIBrowserTest,

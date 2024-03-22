@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,12 @@ public final class Topic {
 
     @Override
     public String toString() {
-        return "Topic{topicId=" + mTopicId + ", taxonomyVersion=" + mTaxonomyVersion
-                + ", name=" + mName + '}';
+        return "Topic{topicId="
+                + mTopicId
+                + ", taxonomyVersion="
+                + mTaxonomyVersion
+                + ", name="
+                + mName
+                + '}';
     }
 }

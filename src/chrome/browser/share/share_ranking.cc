@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/share/share_ranking.h"
 
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
@@ -92,8 +94,8 @@ void SwapRankingElement(std::vector<std::string>& ranking,
   DCHECK(RankingContains(ranking, from));
   DCHECK(RankingContains(ranking, to));
 
-  auto from_loc = std::find(ranking.begin(), ranking.end(), from);
-  auto to_loc = std::find(ranking.begin(), ranking.end(), to);
+  auto from_loc = base::ranges::find(ranking, from);
+  auto to_loc = base::ranges::find(ranking, to);
   *from_loc = to;
   *to_loc = from;
 }
@@ -102,10 +104,10 @@ std::vector<std::string> ReplaceUnavailableEntries(
     const std::vector<std::string>& ranking,
     const std::vector<std::string>& available) {
   std::vector<std::string> result;
-  std::transform(ranking.begin(), ranking.end(), std::back_inserter(result),
-                 [&](const std::string& e) {
-                   return RankingContains(available, e) ? e : "";
-                 });
+  base::ranges::transform(
+      ranking, std::back_inserter(result), [&](const std::string& e) {
+        return RankingContains(available, e) ? e : std::string();
+      });
   return result;
 }
 
@@ -248,16 +250,6 @@ bool AtMostOneSlotChanged(const std::vector<std::string>& old_ranking,
   return true;
 }
 
-bool NoEmptySlots(const std::vector<std::string>& display_ranking,
-                  unsigned int length) {
-  if (display_ranking.size() < length)
-    return false;
-  for (unsigned int i = 0; i < length; i++) {
-    if (display_ranking[i] == "")
-      return false;
-  }
-  return true;
-}
 #endif  // DCHECK_IS_ON()
 
 std::map<std::string, int> BuildHistoryMap(
@@ -326,13 +318,13 @@ void ShareRanking::GetRanking(const std::string& type,
   }
 
   if (db_init_status_ != leveldb_proto::Enums::kOK) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
 
   if (ranking_.contains(type)) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   absl::make_optional(ranking_[type])));
     return;
@@ -390,7 +382,6 @@ void ShareRanking::ComputeRanking(
   // Preconditions:
   DCHECK_LE(fold, length);
   DCHECK_GE(old_ranking.size(), length - 1);
-  DCHECK_GE(available_on_system.size(), length - 1);
 
   Ranking augmented_old_ranking = AddMissingItemsFromHistory(
       AddMissingItemsFromHistory(old_ranking, all_share_history),
@@ -431,7 +422,6 @@ void ShareRanking::ComputeRanking(
     DCHECK(EveryElementInList(*display_ranking, available));
     DCHECK(ElementIndexesAreUnchanged(*display_ranking, old_ranking, fold - 1));
     DCHECK(AtMostOneSlotChanged(old_ranking, *persisted_ranking, fold - 1));
-    DCHECK(NoEmptySlots(*display_ranking, length));
 
     DCHECK(RankingContains(*display_ranking, kMoreTarget));
 

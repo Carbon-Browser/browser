@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,8 @@
 
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service_factory.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/invalidation/profile_invalidation_provider_factory.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace ash {
 namespace cert_provisioning {
@@ -45,9 +43,11 @@ CertProvisioningSchedulerUserServiceFactory::GetInstance() {
 
 CertProvisioningSchedulerUserServiceFactory::
     CertProvisioningSchedulerUserServiceFactory()
-    : BrowserContextKeyedServiceFactory(
-          "CertProvisioningSchedulerUserService",
-          BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory("CertProvisioningSchedulerUserService",
+                                 ProfileSelections::Builder()
+                                     .WithGuest(ProfileSelection::kOriginalOnly)
+                                     .WithAshInternals(ProfileSelection::kNone)
+                                     .Build()) {
   DependsOn(platform_keys::PlatformKeysServiceFactory::GetInstance());
   DependsOn(invalidation::ProfileInvalidationProviderFactory::GetInstance());
 }
@@ -57,16 +57,15 @@ bool CertProvisioningSchedulerUserServiceFactory::
   return true;
 }
 
-KeyedService*
-CertProvisioningSchedulerUserServiceFactory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
+std::unique_ptr<KeyedService> CertProvisioningSchedulerUserServiceFactory::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  if (!profile || !ProfileHelper::IsRegularProfile(profile) ||
-      !profile->GetProfilePolicyConnector()->IsManaged()) {
+  if (!profile || !profile->GetProfilePolicyConnector()->IsManaged()) {
     return nullptr;
   }
 
-  return new CertProvisioningSchedulerUserService(profile);
+  return std::make_unique<CertProvisioningSchedulerUserService>(profile);
 }
 
 }  // namespace cert_provisioning

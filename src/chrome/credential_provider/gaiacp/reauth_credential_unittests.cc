@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -502,9 +502,9 @@ TEST_F(GcpReauthCredentialGlsRunnerTest, UserGaiaIdMismatch) {
   std::string unexpected_gaia_id = "unexpected-gaia-id";
 
   // Create an signin result with the unexpected gaia id.
-  base::Value unexpected_full_result =
+  base::Value::Dict unexpected_full_result =
       test_data_storage.expected_full_result().Clone();
-  unexpected_full_result.SetKey(kKeyId, base::Value(unexpected_gaia_id));
+  unexpected_full_result.Set(kKeyId, base::Value(unexpected_gaia_id));
   std::string signin_result_utf8;
   EXPECT_TRUE(
       base::JSONWriter::Write(unexpected_full_result, &signin_result_utf8));

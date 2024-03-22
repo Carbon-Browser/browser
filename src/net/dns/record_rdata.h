@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class NET_EXPORT RecordRdata {
   // Return true if `data` represents RDATA in the wire format with a valid size
   // for the give `type`. Always returns true for unrecognized `type`s as the
   // size is never known to be invalid.
-  static bool HasValidSize(const base::StringPiece& data, uint16_t type);
+  static bool HasValidSize(base::StringPiece data, uint16_t type);
 
   virtual bool IsEqual(const RecordRdata* other) const = 0;
   virtual uint16_t Type() const = 0;
@@ -54,7 +54,7 @@ class NET_EXPORT_PRIVATE SrvRecordRdata : public RecordRdata {
   SrvRecordRdata& operator=(const SrvRecordRdata&) = delete;
 
   ~SrvRecordRdata() override;
-  static std::unique_ptr<SrvRecordRdata> Create(const base::StringPiece& data,
+  static std::unique_ptr<SrvRecordRdata> Create(base::StringPiece data,
                                                 const DnsRecordParser& parser);
 
   bool IsEqual(const RecordRdata* other) const override;
@@ -86,7 +86,7 @@ class NET_EXPORT ARecordRdata : public RecordRdata {
   ARecordRdata& operator=(const ARecordRdata&) = delete;
 
   ~ARecordRdata() override;
-  static std::unique_ptr<ARecordRdata> Create(const base::StringPiece& data,
+  static std::unique_ptr<ARecordRdata> Create(base::StringPiece data,
                                               const DnsRecordParser& parser);
   bool IsEqual(const RecordRdata* other) const override;
   uint16_t Type() const override;
@@ -109,7 +109,7 @@ class NET_EXPORT AAAARecordRdata : public RecordRdata {
   AAAARecordRdata& operator=(const AAAARecordRdata&) = delete;
 
   ~AAAARecordRdata() override;
-  static std::unique_ptr<AAAARecordRdata> Create(const base::StringPiece& data,
+  static std::unique_ptr<AAAARecordRdata> Create(base::StringPiece data,
                                                  const DnsRecordParser& parser);
   bool IsEqual(const RecordRdata* other) const override;
   uint16_t Type() const override;
@@ -133,7 +133,7 @@ class NET_EXPORT_PRIVATE CnameRecordRdata : public RecordRdata {
 
   ~CnameRecordRdata() override;
   static std::unique_ptr<CnameRecordRdata> Create(
-      const base::StringPiece& data,
+      base::StringPiece data,
       const DnsRecordParser& parser);
   bool IsEqual(const RecordRdata* other) const override;
   uint16_t Type() const override;
@@ -156,7 +156,7 @@ class NET_EXPORT_PRIVATE PtrRecordRdata : public RecordRdata {
   PtrRecordRdata& operator=(const PtrRecordRdata&) = delete;
 
   ~PtrRecordRdata() override;
-  static std::unique_ptr<PtrRecordRdata> Create(const base::StringPiece& data,
+  static std::unique_ptr<PtrRecordRdata> Create(base::StringPiece data,
                                                 const DnsRecordParser& parser);
   bool IsEqual(const RecordRdata* other) const override;
   uint16_t Type() const override;
@@ -180,7 +180,7 @@ class NET_EXPORT_PRIVATE TxtRecordRdata : public RecordRdata {
   TxtRecordRdata& operator=(const TxtRecordRdata&) = delete;
 
   ~TxtRecordRdata() override;
-  static std::unique_ptr<TxtRecordRdata> Create(const base::StringPiece& data,
+  static std::unique_ptr<TxtRecordRdata> Create(base::StringPiece data,
                                                 const DnsRecordParser& parser);
   bool IsEqual(const RecordRdata* other) const override;
   uint16_t Type() const override;
@@ -205,7 +205,7 @@ class NET_EXPORT_PRIVATE NsecRecordRdata : public RecordRdata {
   NsecRecordRdata& operator=(const NsecRecordRdata&) = delete;
 
   ~NsecRecordRdata() override;
-  static std::unique_ptr<NsecRecordRdata> Create(const base::StringPiece& data,
+  static std::unique_ptr<NsecRecordRdata> Create(base::StringPiece data,
                                                  const DnsRecordParser& parser);
   bool IsEqual(const RecordRdata* other) const override;
   uint16_t Type() const override;
@@ -226,135 +226,6 @@ class NET_EXPORT_PRIVATE NsecRecordRdata : public RecordRdata {
   NsecRecordRdata();
 
   std::vector<uint8_t> bitmap_;
-};
-
-// OPT record format (https://tools.ietf.org/html/rfc6891):
-class NET_EXPORT_PRIVATE OptRecordRdata : public RecordRdata {
- public:
-  class NET_EXPORT_PRIVATE Opt {
-   public:
-    static constexpr size_t kHeaderSize = 4;  // sizeof(code) + sizeof(size)
-
-    Opt(uint16_t code, base::StringPiece data);
-
-    bool operator==(const Opt& other) const;
-
-    uint16_t code() const { return code_; }
-    base::StringPiece data() const { return data_; }
-
-   private:
-    uint16_t code_;
-    std::string data_;
-  };
-
-  static const uint16_t kType = dns_protocol::kTypeOPT;
-
-  OptRecordRdata();
-
-  OptRecordRdata(const OptRecordRdata&) = delete;
-  OptRecordRdata& operator=(const OptRecordRdata&) = delete;
-
-  OptRecordRdata(OptRecordRdata&& other);
-
-  ~OptRecordRdata() override;
-
-  OptRecordRdata& operator=(OptRecordRdata&& other);
-
-  static std::unique_ptr<OptRecordRdata> Create(const base::StringPiece& data,
-                                                const DnsRecordParser& parser);
-  bool IsEqual(const RecordRdata* other) const override;
-  uint16_t Type() const override;
-
-  const std::vector<char>& buf() const { return buf_; }
-  const std::multimap<uint16_t, Opt>& opts() { return opts_; }
-
-  void AddOpt(const Opt& opt);
-
-  // Add all Opts from |other| to |this|.
-  void AddOpts(const OptRecordRdata& other);
-
-  // Checks if an Opt with the specified opt_code is in opts_.
-  bool ContainsOptCode(uint16_t opt_code) const;
-
- private:
-  // Opt objects are stored in a multimap; key is the opt code.
-  std::multimap<uint16_t, Opt> opts_;
-  std::vector<char> buf_;
-};
-
-// This class parses and serializes the INTEGRITY DNS record.
-//
-// This RR was invented for a preliminary HTTPSSVC experiment. See the public
-// design doc:
-// https://docs.google.com/document/d/14eCqVyT_3MSj7ydqNFl1Yl0yg1fs6g24qmYUUdi5V-k/edit?usp=sharing
-//
-// The wire format of INTEGRITY records consists of a U16-prefixed nonce
-// followed by |kDigestLen| bytes, which should be equal to the SHA256 hash of
-// the nonce contents.
-class NET_EXPORT IntegrityRecordRdata : public RecordRdata {
- public:
-  static constexpr uint16_t kType = dns_protocol::kExperimentalTypeIntegrity;
-
-  static constexpr size_t kDigestLen = SHA256_DIGEST_LENGTH;
-
-  using Nonce = std::vector<uint8_t>;
-  using Digest = std::array<uint8_t, kDigestLen>;
-
-  IntegrityRecordRdata() = delete;
-  // Constructs a new record, computing the digest value from |nonce|.
-  explicit IntegrityRecordRdata(Nonce nonce);
-  IntegrityRecordRdata(IntegrityRecordRdata&&);
-  IntegrityRecordRdata(const IntegrityRecordRdata&);
-  ~IntegrityRecordRdata() override;
-
-  IntegrityRecordRdata& operator=(const IntegrityRecordRdata&) = default;
-  IntegrityRecordRdata& operator=(IntegrityRecordRdata&&) = default;
-
-  // RecordRdata:
-  bool IsEqual(const RecordRdata* other) const override;
-  uint16_t Type() const override;
-
-  // Attempts to parse an INTEGRITY record from |data|. Never returns nullptr.
-  // The caller can check the intactness of the record with |IsIntact()|.
-  static std::unique_ptr<IntegrityRecordRdata> Create(
-      const base::StringPiece& data);
-
-  // Generate an integrity record with a random nonce and corresponding digest.
-  // Postcondition: |IsIntact()| is true.
-  static IntegrityRecordRdata Random();
-
-  // Serialize |this| using the INTEGRITY wire format. Returns |absl::nullopt|
-  // when |!IsIntact()|.
-  absl::optional<std::vector<uint8_t>> Serialize() const;
-
-  // Precondition: |IsIntact()|.
-  const Nonce& nonce() const {
-    CHECK(is_intact_);
-    return nonce_;
-  }
-
-  // Precondition: |IsIntact()|.
-  const Digest& digest() const {
-    CHECK(is_intact_);
-    return digest_;
-  }
-
-  // To be considered intact, this record must have parsed successfully (if
-  // parsed by |Create()|) and the digest must match the hash of the nonce.
-  bool IsIntact() const { return is_intact_; }
-
- private:
-  IntegrityRecordRdata(Nonce nonce_, Digest digest_, size_t rdata_len);
-
-  static Digest Hash(const Nonce& nonce);
-
-  // Returns the exact number of bytes a record constructed from |nonce| would
-  // occupy when serialized.
-  static size_t LengthForSerialization(const Nonce& nonce);
-
-  Nonce nonce_;
-  Digest digest_;
-  bool is_intact_;
 };
 
 }  // namespace net

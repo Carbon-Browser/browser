@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace ash {
 
 CollapseButton::CollapseButton(PressedCallback callback)
     : IconButton(std::move(callback),
-                 IconButton::Type::kSmallFloating,
+                 IconButton::Type::kMediumFloating,
                  &kUnifiedMenuExpandIcon,
                  IDS_ASH_STATUS_TRAY_COLLAPSE) {}
 

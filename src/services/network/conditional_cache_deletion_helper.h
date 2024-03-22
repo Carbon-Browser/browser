@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner_helpers.h"
@@ -58,7 +58,10 @@ class ConditionalCacheDeletionHelper {
   base::OnceClosure completion_callback_;
 
   std::unique_ptr<disk_cache::Backend::Iterator> iterator_;
-  raw_ptr<disk_cache::Entry> previous_entry_ = nullptr;
+  // This dangling raw_ptr occurred in:
+  // content_unittests: StoragePartitionImplTest.ClearCodeCacheSpecificURL
+  // https://ci.chromium.org/ui/p/chromium/builders/try/linux-rel/1425174/test-results?q=ExactID%3Aninja%3A%2F%2Fcontent%2Ftest%3Acontent_unittests%2FStoragePartitionImplTest.ClearCodeCacheSpecificURL+VHash%3Ab3ba0803668e9981
+  raw_ptr<disk_cache::Entry, FlakyDanglingUntriaged> previous_entry_ = nullptr;
 
   base::WeakPtrFactory<ConditionalCacheDeletionHelper> weak_factory_{this};
 };

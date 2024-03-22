@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,8 @@ void ShelfWindowWatcherItemDelegate::ItemSelected(
 void ShelfWindowWatcherItemDelegate::GetContextMenu(
     int64_t display_id,
     GetContextMenuCallback callback) {
-  auto menu = std::make_unique<ShelfContextMenuModel>(this, display_id);
+  auto menu = std::make_unique<ShelfContextMenuModel>(this, display_id,
+                                                      /*menu_in_shelf=*/false);
   // Show a default context menu with just an extra close item.
   menu->AddItemWithStringIdAndIcon(
       CommandId::MENU_CLOSE, IDS_CLOSE,

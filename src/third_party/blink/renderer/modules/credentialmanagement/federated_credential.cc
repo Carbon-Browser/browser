@@ -1,10 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/credentialmanagement/federated_credential.h"
 
 #include "base/metrics/histogram_macros.h"
+#include "third_party/blink/public/web/modules/credentialmanagement/throttle_helper.h"
+#include "third_party/blink/public/web/web_frame.h"
+#include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_credential_request_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_federated_credential_init.h"
@@ -22,11 +25,11 @@ constexpr char kFederatedCredentialType[] = "federated";
 FederatedCredential* FederatedCredential::Create(
     const FederatedCredentialInit* data,
     ExceptionState& exception_state) {
-  if (data->id().IsEmpty()) {
+  if (data->id().empty()) {
     exception_state.ThrowTypeError("'id' must not be empty.");
     return nullptr;
   }
-  if (data->provider().IsEmpty()) {
+  if (data->provider().empty()) {
     exception_state.ThrowTypeError("'provider' must not be empty.");
     return nullptr;
   }
@@ -73,6 +76,16 @@ FederatedCredential::FederatedCredential(
 
 bool FederatedCredential::IsFederatedCredential() const {
   return true;
+}
+
+void SetIdpSigninStatus(WebLocalFrame* frame,
+                        const url::Origin& origin,
+                        mojom::blink::IdpSigninStatus status) {
+  LocalFrame* local_frame = To<LocalFrame>(WebFrame::ToCoreFrame(*frame));
+  auto* auth_request = CredentialManagerProxy::From(local_frame->DomWindow())
+                           ->FederatedAuthRequest();
+  auth_request->SetIdpSigninStatus(SecurityOrigin::CreateFromUrlOrigin(origin),
+                                   status);
 }
 
 }  // namespace blink

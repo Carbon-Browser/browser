@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,20 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// A particular type of content to care about.  We give the user various types
+// A particular type of content to care about. We give the user various types
 // of controls over each of these.
 // When adding/removing values from this enum, be sure to update the
-// kHistogramValue array in content_settings.cc as well.
+// kHistogramValue array in c/c/c/browser/content_settings_uma_util.cc as well.
 // A Java counterpart will be generated for this enum.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.content_settings
 enum class ContentSettingsType : int32_t {
   // "DEFAULT" is only used as an argument to the Content Settings Window
   // opener; there it means "whatever was last shown".
   DEFAULT = -1,
+  // This setting governs whether cookies are enabled by the user in the
+  // provided context. However, it may be overridden by other settings. This
+  // enum should NOT be read directly to determine whether cookies are enabled;
+  // the client should instead rely on the CookieSettings API.
   COOKIES = 0,
   IMAGES,
   JAVASCRIPT,
@@ -35,9 +39,14 @@ enum class ContentSettingsType : int32_t {
   MEDIASTREAM_MIC,
   MEDIASTREAM_CAMERA,
   PROTOCOL_HANDLERS,
-  PPAPI_BROKER,
+  DEPRECATED_PPAPI_BROKER,
   AUTOMATIC_DOWNLOADS,
+
+  // Advanced device-specific functions on MIDI devices. MIDI-SysEx
+  // communications can be used for changing the MIDI device's persistent state
+  // such as firmware.
   MIDI_SYSEX,
+
   SSL_CERT_DECISIONS,
   PROTECTED_MEDIA_IDENTIFIER,
   APP_BANNER,
@@ -55,8 +64,9 @@ enum class ContentSettingsType : int32_t {
   // decisions for whether or not to show the UI.
   ADS_DATA,
 
-  // This is special-cased in the permissions layer to always allow, and as
-  // such doesn't have associated prefs data.
+  // MIDI stands for Musical Instrument Digital Interface. It is a standard that
+  // allows electronic musical instruments, computers, and other devices to
+  // communicate with each other.
   MIDI,
 
   // This content setting type is for caching password protection service's
@@ -111,9 +121,6 @@ enum class ContentSettingsType : int32_t {
   // Used to store whether to allow a website to detect user active/idle state.
   IDLE_DETECTION,
 
-  // Setting for enabling auto-select of all screens for getDisplayMediaSet.
-  GET_DISPLAY_MEDIA_SET_SELECT_ALL_SCREENS,
-
   // Content settings for access to serial ports. The "guard" content setting
   // stores whether to allow sites to ask for permission to access a port. The
   // permissions granted to access particular ports are stored in the "chooser
@@ -160,10 +167,6 @@ enum class ContentSettingsType : int32_t {
   // File System Access API.
   FILE_SYSTEM_WRITE_GUARD,
 
-  // Content settings for installed web apps that browsing history may be
-  // inferred from e.g. last update check timestamp.
-  INSTALLED_WEB_APP_METADATA,
-
   // Used to store whether to allow a website to exchange data with NFC devices.
   NFC,
 
@@ -207,10 +210,11 @@ enum class ContentSettingsType : int32_t {
   // movements. It does not give access to camera.
   CAMERA_PAN_TILT_ZOOM,
 
-  // Content setting for Screen Enumeration and Window Placement functionality.
-  // Permits access to information about the screens, like size and position.
-  // Permits creating and placing windows across the set of connected screens.
-  WINDOW_PLACEMENT,
+  // Content setting for Screen Enumeration and Screen Detail functionality.
+  // Permits access to detailed multi-screen information, like size and
+  // position. Permits placing fullscreen and windowed content on specific
+  // screens. See also: https://w3c.github.io/window-placement
+  WINDOW_MANAGEMENT,
 
   // Stores whether to allow insecure websites to make private network requests.
   // See also: https://wicg.github.io/cors-rfc1918
@@ -229,17 +233,17 @@ enum class ContentSettingsType : int32_t {
   // by the File System Access API.
   FILE_SYSTEM_LAST_PICKED_DIRECTORY,
 
-  // Controls access to the getDisplayMedia API when {preferCurrentTab: true}
-  // is specified.
-  // TODO(crbug.com/1150788): Also apply this when getDisplayMedia() is called
-  // without specifying {preferCurrentTab: true}.
+  // Controls access to the getDisplayMedia API.
   // No values are stored for this type, this is solely needed to be able to
   // register the PermissionContext.
   DISPLAY_CAPTURE,
 
   // Website setting to store permissions metadata granted to paths on the local
   // file system via the File System Access API. |FILE_SYSTEM_WRITE_GUARD| is
-  // the corresponding "guard" setting.
+  // the corresponding "guard" setting. The stored data represents valid
+  // permission only if |FILE_SYSTEM_ACCESS_EXTENDED_PERMISSION| is enabled
+  // via user opt-in. Otherwise, they represent "recently granted but revoked
+  // permission", which are used to restore the permission.
   FILE_SYSTEM_ACCESS_CHOOSER_DATA,
 
   // Stores a grant that allows a relying party to send a request for identity
@@ -267,7 +271,8 @@ enum class ContentSettingsType : int32_t {
   // a specified account. When this is present it allows access to session
   // management capabilities between the sites. This setting is associated
   // with the relying party's origin.
-  FEDERATED_IDENTITY_ACTIVE_SESSION,
+  // Obsolete on Nov 2023.
+  DEPRECATED_FEDERATED_IDENTITY_ACTIVE_SESSION,
 
   // Setting to indicate whether Chrome should automatically apply darkening to
   // web content.
@@ -286,6 +291,85 @@ enum class ContentSettingsType : int32_t {
   // notification interaction or display is assigned to the last Monday midnight
   // in local time.
   NOTIFICATION_INTERACTIONS,
+
+  // Website setting which stores the last reduced accept language negotiated
+  // for a given origin, to be used on future visits to the origin.
+  REDUCED_ACCEPT_LANGUAGE,
+
+  // Website setting which is used for NotificationPermissionReviewService to
+  // store origin blocklist from review notification permissions feature.
+  NOTIFICATION_PERMISSION_REVIEW,
+
+  // Website setting to store permissions granted to access particular devices
+  // in private network.
+  PRIVATE_NETWORK_GUARD,
+  PRIVATE_NETWORK_CHOOSER_DATA,
+
+  // Website setting which stores whether the browser has observed the user
+  // signing into an identity-provider based on observing the IdP-SignIn-Status
+  // HTTP header.
+  FEDERATED_IDENTITY_IDENTITY_PROVIDER_SIGNIN_STATUS,
+
+  // Website setting which is used for UnusedSitePermissionsService to
+  // store revoked permissions of unused sites from unused site permissions
+  // feature.
+  REVOKED_UNUSED_SITE_PERMISSIONS,
+
+  // Similar to STORAGE_ACCESS, but applicable at the page-level rather than
+  // being specific to a frame.
+  TOP_LEVEL_STORAGE_ACCESS,
+
+  // Setting to indicate whether user has opted in to allowing auto re-authn via
+  // the FedCM API.
+  FEDERATED_IDENTITY_AUTO_REAUTHN_PERMISSION,
+
+  // Website setting which stores whether the user has explicitly registered
+  // a website as an identity-provider.
+  FEDERATED_IDENTITY_IDENTITY_PROVIDER_REGISTRATION,
+
+  // Content setting which is used to indicate whether anti-abuse functionality
+  // should be enabled.
+  ANTI_ABUSE,
+
+  // Content setting used to indicate whether third-party storage partitioning
+  // should be enabled.
+  THIRD_PARTY_STORAGE_PARTITIONING,
+
+  // Used to indicate whether HTTPS-First Mode is enabled on the hostname.
+  HTTPS_ENFORCED,
+
+  // Setting for enabling the `getAllScreensMedia` API. Spec link:
+  // https://github.com/screen-share/capture-all-screens
+  ALL_SCREEN_CAPTURE,
+
+  // Stores per origin metadata for cookie controls.
+  COOKIE_CONTROLS_METADATA,
+
+  // Content Setting for 3PC accesses granted via 3PC deprecation trial.
+  TPCD_SUPPORT,
+
+  // Content setting used to indicate whether entering picture-in-picture
+  // automatically should be enabled.
+  AUTO_PICTURE_IN_PICTURE,
+
+  // Content Setting for 3PC accesses granted by metadata delivered via the
+  // component updater service. This type will only be used when
+  // `net::features::kTpcdMetadataGrants` is enabled.
+  TPCD_METADATA_GRANTS,
+
+  // Whether user has opted into keeping file/directory permissions persistent
+  // between visits for a given origin. When enabled, permission metadata stored
+  // under |FILE_SYSTEM_ACCESS_CHOOSER_DATA| can auto-grant incoming permission
+  // request.
+  FILE_SYSTEM_ACCESS_EXTENDED_PERMISSION,
+
+  // Content Setting for temporary 3PC accesses granted by user behavior
+  // heuristics.
+  TPCD_HEURISTICS_GRANTS,
+
+  // Whether the FSA Persistent Permissions restore prompt is eligible to be
+  // shown to the user, for a given origin.
+  FILE_SYSTEM_ACCESS_RESTORE_PERMISSION,
 
   NUM_TYPES,
 };

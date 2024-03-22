@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,8 @@
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
@@ -23,13 +25,14 @@
 #include "base/test/scoped_command_line.h"
 #include "base/values.h"
 #include "chrome/browser/apps/app_service/app_service_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_test_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_install_finalizer.h"
@@ -114,7 +117,6 @@ class AppServiceWrapperTest : public ::testing::Test {
 
     app_service_test_.SetUp(&profile_);
     arc_test_.SetUp(&profile_);
-    app_service_test_.FlushMojoCalls();
     task_environment_.RunUntilIdle();
 
     tested_wrapper_.AddObserver(&test_listener_);
@@ -149,8 +151,8 @@ class AppServiceWrapperTest : public ::testing::Test {
     }
 
     if (app_id.app_type() == apps::AppType::kChromeApp) {
-      scoped_refptr<extensions::Extension> ext = CreateExtension(
-          app_id.app_id(), app_name, url.value(), false /*is_bookmark_app*/);
+      scoped_refptr<extensions::Extension> ext =
+          CreateExtension(app_id.app_id(), app_name, url.value());
       extension_service_->AddExtension(ext.get());
       task_environment_.RunUntilIdle();
       return;
@@ -158,17 +160,10 @@ class AppServiceWrapperTest : public ::testing::Test {
 
     if (app_id.app_type() == apps::AppType::kWeb) {
       DCHECK(url.has_value());
-      const web_app::AppId installed_app_id = web_app::test::InstallDummyWebApp(
-          &profile_, app_name, GURL(url.value()));
+      const webapps::AppId installed_app_id = web_app::test::InstallDummyWebApp(
+          &profile_, app_name, GURL(url.value()),
+          webapps::WebappInstallSource::EXTERNAL_DEFAULT);
       EXPECT_EQ(installed_app_id, app_id.app_id());
-      task_environment_.RunUntilIdle();
-      return;
-    }
-
-    if (app_id.app_type() == apps::AppType::kWeb) {
-      scoped_refptr<extensions::Extension> web_app = CreateExtension(
-          app_id.app_id(), app_name, url.value(), true /*is_bookmark_app*/);
-      extension_service_->AddExtension(web_app.get());
       task_environment_.RunUntilIdle();
       return;
     }
@@ -184,16 +179,13 @@ class AppServiceWrapperTest : public ::testing::Test {
 
     if (app_id.app_type() == apps::AppType::kWeb) {
       base::RunLoop run_loop;
-      WebAppProvider::GetForTest(&profile_)
-          ->install_finalizer()
-          .UninstallExternalWebApp(
-              app_id.app_id(), web_app::WebAppManagement::kDefault,
-              webapps::WebappUninstallSource::kExternalPreinstalled,
-              base::BindLambdaForTesting(
-                  [&](webapps::UninstallResultCode code) {
-                    EXPECT_EQ(code, webapps::UninstallResultCode::kSuccess);
-                    run_loop.Quit();
-                  }));
+      WebAppProvider::GetForTest(&profile_)->scheduler().RemoveInstallSource(
+          app_id.app_id(), web_app::WebAppManagement::kDefault,
+          webapps::WebappUninstallSource::kExternalPreinstalled,
+          base::BindLambdaForTesting([&](webapps::UninstallResultCode code) {
+            EXPECT_EQ(code, webapps::UninstallResultCode::kSuccess);
+            run_loop.Quit();
+          }));
       run_loop.Run();
       task_environment_.RunUntilIdle();
       return;
@@ -222,8 +214,8 @@ class AppServiceWrapperTest : public ::testing::Test {
     }
 
     if (app_id.app_type() == apps::AppType::kWeb) {
-      WebAppProvider::GetForTest(&profile_)->sync_bridge().SetAppIsDisabled(
-          app_id.app_id(), disabled);
+      WebAppProvider::GetForTest(&profile_)->scheduler().SetAppIsDisabled(
+          app_id.app_id(), disabled, base::DoNothing());
       task_environment_.RunUntilIdle();
       return;
     }
@@ -250,7 +242,8 @@ class AppServiceWrapperTest : public ::testing::Test {
   apps::AppServiceTest app_service_test_;
   ArcAppTest arc_test_;
 
-  extensions::ExtensionService* extension_service_ = nullptr;
+  raw_ptr<extensions::ExtensionService, ExperimentalAsh> extension_service_ =
+      nullptr;
 
   AppServiceWrapper tested_wrapper_{&profile_};
   MockListener test_listener_;

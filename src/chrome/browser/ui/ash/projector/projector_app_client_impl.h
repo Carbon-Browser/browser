@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,12 @@
 
 #include <memory>
 
+#include "ash/public/cpp/projector/projector_annotator_controller.h"
 #include "ash/webui/projector_app/projector_app_client.h"
+#include "ash/webui/projector_app/untrusted_annotator_page_handler_impl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ui/ash/projector/pending_screencast_manager.h"
-#include "chrome/browser/ui/ash/projector/projector_soda_installation_controller.h"
 #include "chrome/browser/ui/ash/projector/screencast_manager.h"
 
 namespace network {
@@ -40,30 +42,50 @@ class ProjectorAppClientImpl : public ash::ProjectorAppClient {
   network::mojom::URLLoaderFactory* GetUrlLoaderFactory() override;
   void OnNewScreencastPreconditionChanged(
       const ash::NewScreencastPrecondition& precondition) override;
-  const ash::PendingScreencastSet& GetPendingScreencasts() const override;
+  const ash::PendingScreencastContainerSet& GetPendingScreencasts()
+      const override;
   bool ShouldDownloadSoda() const override;
   void InstallSoda() override;
   void OnSodaInstallProgress(int combined_progress) override;
   void OnSodaInstallError() override;
   void OnSodaInstalled() override;
   void OpenFeedbackDialog() const override;
-  void GetScreencast(
-      const std::string& screencast_id,
-      ash::ProjectorAppClient::OnGetScreencastCallback callback) override;
+  void GetVideo(
+      const std::string& video_file_id,
+      const absl::optional<std::string>& resource_key,
+      ash::ProjectorAppClient::OnGetVideoCallback callback) const override;
+  void SetAnnotatorPageHandler(
+      ash::UntrustedAnnotatorPageHandlerImpl* handler) override;
+  void ResetAnnotatorPageHandler(
+      ash::UntrustedAnnotatorPageHandlerImpl* handler) override;
+  void SetTool(const ash::AnnotatorTool& tool) override;
+  void Clear() override;
+  void NotifyAppUIActive(bool active) override;
+  void ToggleFileSyncingNotificationForPaths(
+      const std::vector<base::FilePath>& screencast_paths,
+      bool suppress) override;
+  void HandleAccountReauth(const std::string& email) override;
+
+  ash::UntrustedAnnotatorPageHandlerImpl* get_annotator_handler_for_test() {
+    return annotator_handler_;
+  }
+  PendingScreencastManager* get_pending_screencast_manager_for_test() {
+    return &pending_screencast_manager_;
+  }
 
  private:
   void NotifyScreencastsPendingStatusChanged(
-      const ash::PendingScreencastSet& pending_screencast);
+      const ash::PendingScreencastContainerSet& pending_screencast_containers);
 
   base::ObserverList<Observer> observers_;
-
-  std::unique_ptr<ProjectorSodaInstallationController>
-      soda_installation_controller_;
 
   // TODO(b/239098953): This should be owned by `screencast_manager_`;
   PendingScreencastManager pending_screencast_manager_;
 
   ash::ScreencastManager screencast_manager_;
+
+  raw_ptr<ash::UntrustedAnnotatorPageHandlerImpl, ExperimentalAsh>
+      annotator_handler_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_PROJECTOR_PROJECTOR_APP_CLIENT_IMPL_H_

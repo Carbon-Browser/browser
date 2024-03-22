@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -19,7 +19,9 @@ git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git $SCRI
 PATH=$SCRIPT_DIR/depot_tools:$PATH tools/gradle.py r8
 
 # Shrink (improves r8/d8 launch time):
-$DEPS_PREFIX/current/bin/java -jar build/libs/r8.jar --debug --classfile --output r8.jar \
+# Needs the -D flag to avoid compilation error, see http://b/311202383.
+$DEPS_PREFIX/current/bin/java -Dcom.android.tools.r8.enableKeepAnnotations=1 \
+    -jar build/libs/r8.jar --debug --classfile --output r8.jar \
     --lib $DEPS_PREFIX/current --pg-conf src/main/keep.txt \
     --no-minification --no-desugaring build/libs/r8.jar
 

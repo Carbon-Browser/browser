@@ -1,100 +1,138 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/input_overlay/display_overlay_controller.h"
 
-#include "ash/shell.h"
-#include "base/json/json_reader.h"
-#include "base/test/bind.h"
-#include "chrome/browser/ash/arc/input_overlay/test/arc_test_window.h"
+#include "ash/public/cpp/arc_game_controls_flag.h"
+#include "chrome/browser/ash/arc/input_overlay/test/game_controls_test_base.h"
 #include "chrome/browser/ash/arc/input_overlay/touch_injector.h"
-#include "components/exo/test/exo_test_base.h"
-#include "testing/gtest/include/gtest/gtest.h"
+#include "chrome/browser/ash/arc/input_overlay/util.h"
+#include "ui/aura/window.h"
+#include "ui/views/widget/widget.h"
 
-namespace arc {
-namespace input_overlay {
-namespace {
+namespace arc::input_overlay {
 
-constexpr const char kValidJson[] =
-    R"json({
-      "tap": [
-        {
-          "input_sources": [
-            "keyboard"
-          ],
-          "name": "Run",
-          "key": "KeyB",
-          "location": [
-            {
-              "type": "position",
-              "anchor_to_target": [
-                0.8,
-                0.8
-              ]
-            }
-          ]
-        }
-      ]
-    })json";
-}  // namespace
-
-class DisplayOverlayControllerTest : public exo::test::ExoTestBase {
+class DisplayOverlayControllerTest : public GameControlsTestBase {
  public:
   DisplayOverlayControllerTest() = default;
+  ~DisplayOverlayControllerTest() override = default;
 
-  gfx::Rect GetInputMappingViewBounds() {
-    return controller_->GetInputMappingViewBoundsForTesting();
+  void RemoveAllActions() {
+    for (const auto& action : touch_injector_->actions()) {
+      controller_->RemoveAction(action.get());
+    }
   }
 
-  void DismissEducationalDialog() {
-    controller_->DismissEducationalViewForTesting();
+  void EnableGIO(aura::Window* window, bool enable) {
+    // In GD, once Game Controls feature is turned on or off, the
+    // mapping hint is also set to on or off.
+    window->SetProperty(
+        ash::kArcGameControlsFlagsKey,
+        UpdateFlag(window->GetProperty(ash::kArcGameControlsFlagsKey),
+                   static_cast<ash::ArcGameControlsFlag>(
+                       ash::ArcGameControlsFlag::kEnabled |
+                       ash::ArcGameControlsFlag::kHint),
+                   /*enable_flag=*/enable));
   }
 
- protected:
-  std::unique_ptr<input_overlay::test::ArcTestWindow> arc_test_window_;
-  std::unique_ptr<DisplayOverlayController> controller_;
-
- private:
-  void SetUp() override {
-    exo::test::ExoTestBase::SetUp();
-    arc_test_window_ = std::make_unique<input_overlay::test::ArcTestWindow>(
-        exo_test_helper(), ash::Shell::GetPrimaryRootWindow(),
-        "org.chromium.arc.testapp.inputoverlay");
-    injector_ = std::make_unique<TouchInjector>(
-        arc_test_window_->GetWindow(),
-        base::BindLambdaForTesting(
-            [&](std::unique_ptr<AppDataProto>, const std::string&) {}));
-    auto json_value = base::JSONReader::ReadAndReturnValueWithError(kValidJson);
-    injector_->ParseActions(*json_value);
-    controller_ =
-        std::make_unique<DisplayOverlayController>(injector_.get(), false);
+  void CheckWidgets(bool has_input_mapping_widget,
+                    bool hint_visible,
+                    bool has_editing_list_widget) {
+    EXPECT_EQ(has_input_mapping_widget, !!controller_->input_mapping_widget_);
+    if (has_input_mapping_widget) {
+      EXPECT_EQ(hint_visible, controller_->input_mapping_widget_->IsVisible());
+    }
+    EXPECT_EQ(has_editing_list_widget, !!controller_->editing_list_widget_);
   }
 
-  void TearDown() override {
-    controller_.reset();
-    injector_.reset();
-    arc_test_window_.reset();
-    exo::test::ExoTestBase::TearDown();
-  }
-
-  std::unique_ptr<TouchInjector> injector_;
+  bool CanRewriteEvent() { return touch_injector_->can_rewrite_event_; }
 };
 
-TEST_F(DisplayOverlayControllerTest, TestWindowBoundsChange) {
-  // Make sure educational dialog is bypassed.
-  DismissEducationalDialog();
-  auto original_bounds = GetInputMappingViewBounds();
-  auto new_bounds = gfx::Rect(original_bounds);
-  new_bounds.set_width(new_bounds.size().width() + 50);
-  new_bounds.set_height(new_bounds.size().height() + 50);
+TEST_F(DisplayOverlayControllerTest, TestDisableEnableFeature) {
+  CheckWidgets(/*has_input_mapping_widget=*/true, /*hint_visible=*/true,
+               /*has_editing_list_widget=*/false);
+  EXPECT_TRUE(CanRewriteEvent());
 
-  display::Display display = display::Screen::GetScreen()->GetPrimaryDisplay();
-  arc_test_window_->SetBounds(display, new_bounds);
-  controller_->OnWindowBoundsChanged();
-  auto updated_bounds = GetInputMappingViewBounds();
-  EXPECT_NE(original_bounds, updated_bounds);
+  auto* window = touch_injector_->window();
+
+  // 1. Disable and enable GIO in `kView` mode. All the widgets shouldn't show
+  // up when GIO is disabled.
+  // Disable GIO. In GD, once Game Controls feature is turned on or off, the
+  // mapping hint is also set to on or off.
+  EnableGIO(window, /*enable=*/false);
+  CheckWidgets(/*has_input_mapping_widget=*/false,
+               /*hint_visible=*/false, /*has_editing_list_widget=*/false);
+  EXPECT_FALSE(CanRewriteEvent());
+  // Enable GIO back.
+  EnableGIO(window, /*enable=*/true);
+  CheckWidgets(/*has_input_mapping_widget=*/true, /*hint_visible=*/true,
+               /*has_editing_list_widget=*/false);
+  EXPECT_TRUE(CanRewriteEvent());
+
+  // 2. Disable and enable GIO in `kEdit` mode. All the widgets shouldn't show
+  // up when GIO is disabled.
+  EnableDisplayMode(DisplayMode::kEdit);
+  EXPECT_FALSE(CanRewriteEvent());
+  CheckWidgets(/*has_input_mapping_widget=*/true, /*hint_visible=*/true,
+               /*has_editing_list_widget=*/true);
+  // Disable GIO.
+  EnableGIO(window, /*enable=*/false);
+  CheckWidgets(/*has_input_mapping_widget=*/false, /*hint_visible=*/false,
+               /*has_editing_list_widget=*/false);
+  // Enable GIO and overlay is displayed as view mode.
+  EnableGIO(window, /*enable=*/true);
+  CheckWidgets(/*has_input_mapping_widget=*/true, /*hint_visible=*/true,
+               /*has_editing_list_widget=*/false);
+  EXPECT_TRUE(CanRewriteEvent());
 }
 
-}  // namespace input_overlay
-}  // namespace arc
+TEST_F(DisplayOverlayControllerTest, TestHideMappingHint) {
+  CheckWidgets(/*has_input_mapping_widget=*/true, /*hint_visible=*/true,
+               /*has_editing_list_widget=*/false);
+  EXPECT_TRUE(CanRewriteEvent());
+
+  // Hide the mapping hint. Mapping hint is hidden in `kView` mode and
+  // showing up in `kEdit` mode.
+  auto* window = touch_injector_->window();
+  window->SetProperty(
+      ash::kArcGameControlsFlagsKey,
+      UpdateFlag(window->GetProperty(ash::kArcGameControlsFlagsKey),
+                 ash::ArcGameControlsFlag::kHint, /*enable_flag=*/false));
+  CheckWidgets(/*has_input_mapping_widget=*/true,
+               /*hint_visible=*/false, /*has_editing_list_widget=*/false);
+  EXPECT_TRUE(CanRewriteEvent());
+  EnableDisplayMode(DisplayMode::kEdit);
+  // `input_mapping_widget_` is always showing up in edit mode.
+  CheckWidgets(/*has_input_mapping_widget=*/true, /*hint_visible=*/true,
+               /*has_editing_list_widget=*/true);
+  EXPECT_FALSE(CanRewriteEvent());
+  EnableDisplayMode(DisplayMode::kView);
+  CheckWidgets(/*has_input_mapping_widget=*/true,
+               /*hint_visible=*/false, /*has_editing_list_widget=*/false);
+  EXPECT_TRUE(CanRewriteEvent());
+}
+
+TEST_F(DisplayOverlayControllerTest, TestRemoveAllActions) {
+  CheckWidgets(/*has_input_mapping_widget=*/true, /*hint_visible=*/true,
+               /*has_editing_list_widget=*/false);
+  EXPECT_TRUE(CanRewriteEvent());
+
+  EnableDisplayMode(DisplayMode::kEdit);
+  EXPECT_FALSE(CanRewriteEvent());
+
+  // `input_mappinging_widget_` is not created or destroyed in the view mode
+  // when no active actions list, but it is created and shows up in `kEdit`
+  // mode.
+  RemoveAllActions();
+  CheckWidgets(/*has_input_mapping_widget=*/true, /*hint_visible=*/true,
+               /*has_editing_list_widget=*/true);
+  EnableDisplayMode(DisplayMode::kView);
+  // Don't create `input_mapping_widget_` if the action list is empty.
+  CheckWidgets(/*has_input_mapping_widget=*/false, /*hint_visible=*/false,
+               /*has_editing_list_widget=*/false);
+  // `TouchInjector` stop rewriting events if there is no active action.
+  EXPECT_FALSE(CanRewriteEvent());
+}
+
+}  // namespace arc::input_overlay

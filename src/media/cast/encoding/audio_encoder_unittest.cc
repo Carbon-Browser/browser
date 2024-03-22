@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,10 @@
 #include <sstream>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "media/base/audio_bus.h"
@@ -25,6 +26,7 @@
 #include "media/cast/common/sender_encoded_frame.h"
 #include "media/cast/test/utility/audio_utility.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/openscreen/src/cast/streaming/encoded_frame.h"
 
 namespace media {
 namespace cast {
@@ -57,7 +59,8 @@ class TestEncodedAudioFrameReceiver {
 
   void FrameEncoded(std::unique_ptr<SenderEncodedFrame> encoded_frame,
                     int samples_skipped) {
-    EXPECT_EQ(encoded_frame->dependency, EncodedFrame::KEY);
+    EXPECT_EQ(encoded_frame->dependency,
+              openscreen::cast::EncodedFrame::Dependency::kKeyFrame);
     EXPECT_EQ(frames_received_, encoded_frame->frame_id - FrameId::first());
     EXPECT_EQ(encoded_frame->frame_id, encoded_frame->referenced_frame_id);
     // RTP timestamps should be monotonically increasing and integer multiples
@@ -87,7 +90,7 @@ class TestEncodedAudioFrameReceiver {
 };
 
 struct TestScenario {
-  const int64_t* durations_in_ms;
+  raw_ptr<const int64_t, AllowPtrArithmetic> durations_in_ms;
   size_t num_durations;
 
   TestScenario(const int64_t* d, size_t n)
@@ -148,6 +151,18 @@ class AudioEncoderTest : public ::testing::TestWithParam<TestScenario> {
         task_runner_->RunTasks();
         testing_clock_.Advance(duration);
       }
+
+      if (codec == Codec::kAudioOpus) {
+        const int bitrate = audio_encoder_->GetBitrate();
+        EXPECT_GT(bitrate, 0);
+        // Typically Opus has a max of 120000, but this may change if the
+        // library gets rolled. It would be very surprising for it to
+        // surpass this value and getting a test failure is reasonable.
+        EXPECT_LT(bitrate, 256000);
+      } else {
+        // Bit rate is only implemented for opus.
+        EXPECT_EQ(0, audio_encoder_->GetBitrate());
+      }
     }
 
     DVLOG(1) << "Received " << receiver_->frames_received()
@@ -180,16 +195,16 @@ class AudioEncoderTest : public ::testing::TestWithParam<TestScenario> {
 };
 
 TEST_P(AudioEncoderTest, EncodeOpus) {
-  RunTestForCodec(CODEC_AUDIO_OPUS);
+  RunTestForCodec(Codec::kAudioOpus);
 }
 
 TEST_P(AudioEncoderTest, EncodePcm16) {
-  RunTestForCodec(CODEC_AUDIO_PCM16);
+  RunTestForCodec(Codec::kAudioPcm16);
 }
 
 #if BUILDFLAG(IS_MAC)
 TEST_P(AudioEncoderTest, EncodeAac) {
-  RunTestForCodec(CODEC_AUDIO_AAC);
+  RunTestForCodec(Codec::kAudioAac);
 }
 #endif
 

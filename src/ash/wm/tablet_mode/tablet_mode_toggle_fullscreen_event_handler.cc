@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,10 @@ bool TabletModeToggleFullscreenEventHandler::ProcessEvent(
     const ui::TouchEvent& event) {
   switch (event.type()) {
     case ui::ET_TOUCH_PRESSED: {
-      DCHECK(!drag_data_);
+      // Another drag is already underway from another finger.
+      if (drag_data_) {
+        return false;
+      }
 
       aura::Window* active_window = window_util::GetActiveWindow();
       if (!active_window || !CanToggleFullscreen(active_window))

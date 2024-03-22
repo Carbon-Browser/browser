@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
@@ -118,7 +118,9 @@ void CreateJavaAXSnapshot(JNIEnv* env,
   // Bounding box.
   ViewStructureBuilder_setViewStructureNodeBounds(
       env, j_view_structure_builder, j_view_structure_node, is_root,
-      node->rect.x(), node->rect.y(), node->rect.width(), node->rect.height());
+      node->rect.x(), node->rect.y(), node->rect.width(), node->rect.height(),
+      node->unclipped_rect.x(), node->unclipped_rect.y(),
+      node->unclipped_rect.width(), node->unclipped_rect.height());
 
   // HTML/CSS attributes.
   ScopedJavaLocalRef<jstring> j_html_tag =
@@ -258,6 +260,16 @@ void WebContentsAndroid::RemoveDestructionObserver(
   destruction_observers_.RemoveObserver(observer);
 }
 
+// static
+void WebContentsAndroid::ReportDanglingPtrToBrowserContext(
+    JNIEnv* env,
+    WebContents* web_contents) {
+  if (base::android::ScopedJavaLocalRef<jthrowable> java_creator =
+          web_contents->GetJavaCreatorLocation()) {
+    Java_WebContentsImpl_reportDanglingPtrToBrowserContext(env, java_creator);
+  }
+}
+
 base::android::ScopedJavaLocalRef<jobject>
 WebContentsAndroid::GetTopLevelNativeWindow(JNIEnv* env) {
   ui::WindowAndroid* window_android = web_contents_->GetTopLevelNativeWindow();
@@ -302,6 +314,10 @@ ScopedJavaLocalRef<jobject> WebContentsAndroid::GetFocusedFrame(
   return rfh->GetJavaRenderFrameHost();
 }
 
+bool WebContentsAndroid::IsFocusedElementEditable(JNIEnv* env) {
+  return web_contents_->IsFocusedElementEditable();
+}
+
 ScopedJavaLocalRef<jobject> WebContentsAndroid::GetRenderFrameHostFromId(
     JNIEnv* env,
     jint render_process_id,
@@ -316,11 +332,8 @@ ScopedJavaLocalRef<jobject> WebContentsAndroid::GetRenderFrameHostFromId(
 ScopedJavaLocalRef<jobjectArray> WebContentsAndroid::GetAllRenderFrameHosts(
     JNIEnv* env) const {
   std::vector<RenderFrameHost*> frames;
-  web_contents_->ForEachRenderFrameHost(base::BindRepeating(
-      [](std::vector<RenderFrameHost*>* frames, RenderFrameHostImpl* rfh) {
-        frames->push_back(rfh);
-      },
-      &frames));
+  web_contents_->ForEachRenderFrameHost(
+      [&frames](RenderFrameHostImpl* rfh) { frames.push_back(rfh); });
   ScopedJavaLocalRef<jobjectArray> jframes =
       Java_WebContentsImpl_createRenderFrameHostArray(env, frames.size());
   for (size_t i = 0; i < frames.size(); i++) {
@@ -338,6 +351,10 @@ ScopedJavaLocalRef<jstring> WebContentsAndroid::GetTitle(JNIEnv* env) const {
 ScopedJavaLocalRef<jobject> WebContentsAndroid::GetVisibleURL(
     JNIEnv* env) const {
   return url::GURLAndroid::FromNativeGURL(env, web_contents_->GetVisibleURL());
+}
+
+jint WebContentsAndroid::GetVirtualKeyboardMode(JNIEnv* env) const {
+  return static_cast<jint>(web_contents_->GetVirtualKeyboardMode());
 }
 
 bool WebContentsAndroid::IsLoading(JNIEnv* env) const {
@@ -415,6 +432,12 @@ jint WebContentsAndroid::GetVisibility(JNIEnv* env) {
   return static_cast<jint>(web_contents_->GetVisibility());
 }
 
+void WebContentsAndroid::UpdateWebContentsVisibility(JNIEnv* env,
+                                                     jint visibiity) {
+  web_contents_->UpdateWebContentsVisibility(
+      static_cast<Visibility>(visibiity));
+}
+
 RenderWidgetHostViewAndroid*
     WebContentsAndroid::GetRenderWidgetHostViewAndroid() {
   RenderWidgetHostView* rwhv = NULL;
@@ -486,23 +509,36 @@ void WebContentsAndroid::ScrollFocusedEditableNodeIntoView(JNIEnv* env) {
   if (!input_handler)
     return;
   bool should_overlay_content =
-      web_contents_->GetPrimaryPage().virtual_keyboard_overlays_content();
+      web_contents_->GetPrimaryPage().virtual_keyboard_mode() ==
+      ui::mojom::VirtualKeyboardMode::kOverlaysContent;
+  // TODO(bokan): Autofill is notified of focus changes at the end of the
+  // scrollIntoView call using DidCompleteFocusChangeInFrame, see
+  // https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/web_local_frame_impl.cc;l=3047;drc=aeadb03c8553c39e88d5d11d10f706d42f06a1d7.
+  // By avoiding this call in should_overlay_content, we never notify autofill
+  // of changed focus so we don't e.g. show the keyboard accessory.
   if (!should_overlay_content)
     input_handler->ScrollFocusedEditableNodeIntoView();
 }
 
 void WebContentsAndroid::SelectAroundCaretAck(
+    int startOffset,
+    int endOffset,
+    int surroundingTextLength,
     blink::mojom::SelectAroundCaretResultPtr result) {
   RenderWidgetHostViewAndroid* rwhva = GetRenderWidgetHostViewAndroid();
   if (rwhva) {
-    rwhva->SelectAroundCaretAck(std::move(result));
+    rwhva->SelectAroundCaretAck(startOffset, endOffset, surroundingTextLength,
+                                std::move(result));
   }
 }
 
 void WebContentsAndroid::SelectAroundCaret(JNIEnv* env,
                                            jint granularity,
                                            jboolean should_show_handle,
-                                           jboolean should_show_context_menu) {
+                                           jboolean should_show_context_menu,
+                                           jint startOffset,
+                                           jint endOffset,
+                                           jint surroundingTextLength) {
   auto* input_handler = web_contents_->GetFocusedFrameWidgetInputHandler();
   if (!input_handler)
     return;
@@ -510,7 +546,8 @@ void WebContentsAndroid::SelectAroundCaret(JNIEnv* env,
       static_cast<blink::mojom::SelectionGranularity>(granularity),
       should_show_handle, should_show_context_menu,
       base::BindOnce(&WebContentsAndroid::SelectAroundCaretAck,
-                     weak_factory_.GetWeakPtr()));
+                     weak_factory_.GetWeakPtr(), startOffset, endOffset,
+                     surroundingTextLength));
 }
 
 void WebContentsAndroid::AdjustSelectionByCharacterOffset(
@@ -601,7 +638,7 @@ void WebContentsAndroid::AddMessageToDevToolsConsole(
 
 void WebContentsAndroid::PostMessageToMainFrame(
     JNIEnv* env,
-    const JavaParamRef<jstring>& jmessage,
+    const JavaParamRef<jobject>& jmessage,
     const JavaParamRef<jstring>& jsource_origin,
     const JavaParamRef<jstring>& jtarget_origin,
     const JavaParamRef<jobjectArray>& jports) {
@@ -683,8 +720,7 @@ void WebContentsAndroid::RequestAccessibilitySnapshot(
               &WebContentsAndroid::AXTreeSnapshotCallback,
               weak_factory_.GetWeakPtr(), std::move(j_view_structure_root),
               std::move(j_view_structure_builder), std::move(j_callback)),
-          ui::AXMode(ui::kAXModeComplete.mode() | ui::AXMode::kHTMLMetadata),
-          /* exclude_offscreen= */ false,
+          ui::AXMode(ui::kAXModeComplete.flags() | ui::AXMode::kHTMLMetadata),
           /* max_nodes= */ 5000,
           /* timeout= */ base::Seconds(2));
 }
@@ -854,6 +890,10 @@ void WebContentsAndroid::NotifyRendererPreferenceUpdate(JNIEnv* env) {
 
 void WebContentsAndroid::NotifyBrowserControlsHeightChanged(JNIEnv* env) {
   web_contents_->GetNativeView()->OnBrowserControlsHeightChanged();
+}
+
+bool WebContentsAndroid::NeedToFireBeforeUnloadOrUnloadEvents(JNIEnv* env) {
+  return web_contents_->NeedToFireBeforeUnloadOrUnloadEvents();
 }
 
 }  // namespace content

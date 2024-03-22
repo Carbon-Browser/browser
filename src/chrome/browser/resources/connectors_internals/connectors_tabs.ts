@@ -1,14 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './strings.m.js';
 
 import {CustomElement} from 'chrome://resources/js/custom_element.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 
 import {getTemplate} from './connectors_tabs.html.js';
-import {ZeroTrustConnectorElement} from './zero_trust_connector.js';
+import {DeviceTrustConnectorElement} from './device_trust_connector.js';
 
 interface ConnectorTab {
   // Title used as the tab button's text.
@@ -26,12 +25,12 @@ interface ConnectorTab {
 // Set of all connector tabs. Adding a new entry here will make it automatically
 // show in the UI.
 const connectorTabs: ConnectorTab[] = [{
-  title: 'Zero Trust',
-  directive: ZeroTrustConnectorElement.is,
-  isEnabled: loadTimeData.getBoolean('zeroTrustConnectorEnabled'),
+  title: 'Device Trust',
+  directive: DeviceTrustConnectorElement.is,
+  isEnabled: true,
 }];
 
-export class ConnectorsTabsElement extends CustomElement {
+class ConnectorsTabsElement extends CustomElement {
   static get is() {
     return 'connectors-tabs';
   }
@@ -129,7 +128,7 @@ export class ConnectorsTabsElement extends CustomElement {
     const contentElement = document.createElement('div');
     contentElement.classList.add('tabcontent');
     contentElement.id = tab.directive;
-    contentElement.innerHTML = `<${tab.directive}></${tab.directive}>`;
+    contentElement.appendChild(document.createElement(tab.directive));
     contentRoot.appendChild(contentElement);
   }
 

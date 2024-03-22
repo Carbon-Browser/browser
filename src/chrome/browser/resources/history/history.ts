@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@ export {BrowserProxyImpl} from 'chrome://resources/cr_components/history_cluster
 export {ClusterAction, PageCallbackRouter, PageHandlerRemote, RelatedSearchAction, VisitAction, VisitType} from 'chrome://resources/cr_components/history_clusters/history_clusters.mojom-webui.js';
 export {MetricsProxy, MetricsProxyImpl} from 'chrome://resources/cr_components/history_clusters/metrics_proxy.js';
 export {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-export {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
+export {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+export {getTrustedHTML} from 'chrome://resources/js/static_types.js';
 export {ensureLazyLoaded, HistoryAppElement, listenForPrivilegedLinkClicks} from './app.js';
 export {BrowserService, BrowserServiceImpl, QueryResult, RemoveVisitsRequest} from './browser_service.js';
 export {HistoryPageViewHistogram, SYNCED_TABS_HISTOGRAM_NAME, SyncedTabsHistogram} from './constants.js';

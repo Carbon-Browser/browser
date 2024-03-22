@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // API for integration testing. To be used on test images with a test component
 // extension.
 [platforms=("chromeos"),
- implemented_in="chrome/browser/chromeos/extensions/autotest_private/autotest_private_api.h"]
+ implemented_in="chrome/browser/ash/extensions/autotest_private/autotest_private_api.h"]
 namespace autotestPrivate {
 
   enum ShelfAlignmentType {
@@ -40,7 +40,8 @@ namespace autotestPrivate {
     PluginVm,
     StandaloneBrowser,
     Remote,
-    Borealis
+    Borealis,
+    Bruschetta
   };
 
   // A mapping of apps::mojom::InstallSource
@@ -52,7 +53,9 @@ namespace autotestPrivate {
     Default,
     Sync,
     User,
-    SubApp
+    SubApp,
+    Kiosk,
+    CommandLine
   };
 
   // A mapping of apps::mojom::Readiness
@@ -67,6 +70,16 @@ namespace autotestPrivate {
     UninstalledByMigration
   };
 
+  // A mapping of arc::mojom::WakefulnessMode
+  enum WakefulnessMode {
+    Unknown,
+    Asleep,
+    Awake,
+    Dreaming,
+    Dozing
+  };
+  callback WakefulnessModeCallback = void (WakefulnessMode mode);
+
   // A subset of Window State types in ash::WindowStateType. We may add more
   // into the set in the future.
   enum WindowStateType {
@@ -74,9 +87,10 @@ namespace autotestPrivate {
     Minimized,
     Maximized,
     Fullscreen,
-    LeftSnapped,
-    RightSnapped,
-    PIP
+    PrimarySnapped,
+    SecondarySnapped,
+    PIP,
+    Floated
   };
 
   // A subset of WM event types in ash::WMEventType. We may add more in the
@@ -86,8 +100,9 @@ namespace autotestPrivate {
     WMEventMaximize,
     WMEventMinimize,
     WMEventFullscreen,
-    WMEventSnapLeft,
-    WMEventSnapRight
+    WMEventSnapPrimary,
+    WMEventSnapSecondary,
+    WMEventFloat
   };
 
   // Display orientation type.
@@ -103,8 +118,6 @@ namespace autotestPrivate {
 
   enum LauncherStateType {
     Closed,
-    Peeking,
-    Half,
     FullscreenAllApps,
     FullscreenSearch
   };
@@ -139,8 +152,12 @@ namespace autotestPrivate {
     boolean isOwner;
     // Is the screen locked?
     boolean isScreenLocked;
+    // Is the wallpaper blur layer still animating in?
+    boolean isLockscreenWallpaperAnimating;
     // Is the screen ready for password?
     boolean isReadyForPassword;
+    // Are the avatar images loaded for all users?
+    boolean areAllUserImagesLoaded;
 
     // Is the logged-in user a regular user? Set only if `isLoggedIn`.
     boolean? isRegularUser;
@@ -241,6 +258,10 @@ namespace autotestPrivate {
     DOMString? text;
     // HTML response returned from server.
     DOMString? htmlResponse;
+    // Open URL response returned from server.
+    DOMString? openUrl;
+    // Open Android app response returned from server.
+    DOMString? openAppResponse;
   };
   dictionary AssistantQueryStatus {
     // Indicates whether this might be a voice interaction.
@@ -259,16 +280,42 @@ namespace autotestPrivate {
 
   callback IsArcPackageListInitialRefreshedCallback = void (boolean refreshed);
 
-  callback IsLacrosPrimaryBrowserCallback = void (boolean primary);
+  // A mapping of crosapi::BrowserManager::State
+  enum LacrosState {
+    NotInitialized,
+    Reloading,
+    Mounting,
+    Unavailable,
+    Stopped,
+    PreparingForLaunch,
+    WaitingOwnerFetch,
+    PreLaunched,
+    Starting,
+    Running,
+    Terminating
+  };
+
+  // A mapping of crosapi::browser_util::LacrosMode
+  enum LacrosMode {
+    Disabled,
+    Only
+  };
 
   dictionary LacrosInfo {
-    // True iff lacros is running currently.
-    boolean isRunning;
+    // The state of lacros.
+    LacrosState state;
     // True iff keepalive is enabled for lacros.
     boolean isKeepAlive;
     // Path to lacros-chrome directory. Note that this may change over time if
     // omaha is used. This also may be empty if lacros is not running.
     DOMString lacrosPath;
+    // Specifies the mode Lacros is currently running.
+    // For a full list of supported mode, see LacrosMode enum definition.
+    // DEPRECATED: please use isEnabled.
+    // TODO(crbug.com/1494005): Remove this field after tests are fixed.
+    LacrosMode mode;
+    // True iff Lacros is enabled for the current user session's primary user.
+    boolean isEnabled;
   };
 
   callback GetLacrosInfoCallback = void (LacrosInfo info);
@@ -308,7 +355,6 @@ namespace autotestPrivate {
     DOMString lastBackupAndroidId;
     double lastBackupTime;
     boolean shouldSync;
-    boolean system;
     boolean vpnProvider;
   };
   callback GetArcPackageCallback = void (ArcPackageDict package);
@@ -331,8 +377,6 @@ namespace autotestPrivate {
     double commitDeviation;
     double renderQuality;
   };
-
-  callback LaunchArcAppCallback = void (boolean appLaunched);
 
   callback TakeScreenshotCallback = void (DOMString base64Png);
 
@@ -396,14 +440,6 @@ namespace autotestPrivate {
 
   callback GetAllInstalledAppsCallback = void (App[] apps);
 
-  dictionary CryptohomeRecoveryDataDict {
-    DOMString reauthProofToken;
-    DOMString refreshToken;
-  };
-
-  callback GetCryptohomeRecoveryDataCallback = void (
-    CryptohomeRecoveryDataDict dict);
-
   dictionary ShelfItem {
     DOMString appId;
     DOMString launchId;
@@ -412,6 +448,7 @@ namespace autotestPrivate {
     ShelfItemStatus status;
     boolean showsTooltip;
     boolean pinnedByPolicy;
+    boolean pinStateForcedByType;
     boolean hasNotification;
   };
 
@@ -501,6 +538,10 @@ namespace autotestPrivate {
     boolean hasCapture;
     boolean canResize;
 
+    // Stacking order of the window in relation to its siblings. 0 indicates
+    // that the window is topmost. -1 if stacking info is not available
+    long stackingOrder;
+
     // Window frame info
     FrameMode frameMode;
     boolean isFrameVisible;
@@ -515,7 +556,13 @@ namespace autotestPrivate {
 
     OverviewInfo? overviewInfo;
 
+    // The identifier of the app associated with the window that was launched
+    // from full restore. This should be same as |appId| when the window was
+    // restored from full restore, otherwise null.
     DOMString? fullRestoreWindowAppId;
+
+    // The identifier of the app associated with the window.
+    DOMString? appId;
   };
 
   dictionary Accelerator {
@@ -576,11 +623,27 @@ namespace autotestPrivate {
     ScrollableShelfInfo scrollableShelfInfo;
   };
 
+  // Information about all desks.
+  dictionary DesksInfo {
+    long activeDeskIndex;
+    long numDesks;
+    boolean isAnimating;
+    DOMString[] deskContainers;
+  };
+
+  // Information about launcher's search box.
+  dictionary LauncherSearchBoxState {
+    DOMString ghostText;
+  };
+
   callback GetShelfItemsCallback = void (ShelfItem[] items);
 
   callback GetDefaultPinnedAppIdsCallback = void (DOMString[] items);
 
   callback GetShelfAutoHideBehaviorCallback = void (DOMString behavior);
+
+  callback GetLauncherSearchBoxStateCallback = void (
+      LauncherSearchBoxState state);
 
   callback GetShelfAlignmentCallback = void (ShelfAlignmentType alignment);
 
@@ -596,10 +659,31 @@ namespace autotestPrivate {
 
   callback DesksCallback = void (boolean success);
 
+  callback GetDeskCountCallback = void (long count);
+
+  callback GetDesksInfoCallback = void (DesksInfo desks);
+
   callback GetScrollableShelfInfoForStateCallback = void (
       ScrollableShelfInfo info);
 
   callback GetShelfUIInfoForStateCallback = void (ShelfUIInfo info);
+
+  // Frame counting record for one frame sink/compositor.
+  dictionary FrameCountingPerSinkData {
+    // Type of the frame sink. This corresponds to CompositorFrameSinkType.
+    DOMString sinkType;
+    // Whether the frame sink is the root.
+    boolean isRoot;
+    // Debug label of the frame sink.
+    DOMString debugLabel;
+
+    // Number of presented frames grouped using `bucketSizeInSeconds` arg in
+    // startFrameCounting call. It would be fps if the `bucketSizeInSeconds` is
+    // 1s.
+    long[] presentedFrames;
+  };
+
+  callback StopFrameCountingCallback = void (FrameCountingPerSinkData[] data);
 
   // Result of calling setWindowBounds, which returns the actual bounds and
   // display the window was set to. This may be different than the requested
@@ -637,6 +721,12 @@ namespace autotestPrivate {
   // Collected ui::ThroughputTracker data for one animation. It is based on
   // cc::FrameSequenceMetrics::ThroughputData.
   dictionary ThroughputTrackerAnimationData {
+    // Animation start time in milliseconds, relative to when
+    // `startThroughputTrackerDataCollection` is called.
+    long startOffsetMs;
+    // Animation stop time in milliseconds, relative to when
+    // `startThroughputTrackerDataCollection` is called.
+    long stopOffsetMs;
     // Number of frames expected to be shown for this animation.
     long framesExpected;
     // Number of frames actually shown for this animation.
@@ -649,6 +739,12 @@ namespace autotestPrivate {
   // Callback invoked to report the collection ui::ThroughputTracker data
   // after stopThroughputTrackerDataCollection is called.
   callback StopThroughputTrackerDataCollectionCallback = void
+      (ThroughputTrackerAnimationData[] data);
+
+  // Callback invoked to report the currently collected ui::ThroughputTracker
+  // animation data. Note that the data reported is removed to avoid reporting
+  // duplicated data.
+  callback GetThroughtputTrackerDataCallback = void
       (ThroughputTrackerAnimationData[] data);
 
   // Callback invoked to report the number of system web apps that should be
@@ -672,7 +768,7 @@ namespace autotestPrivate {
 
   callback CouldAllowCrostiniCallback = void (boolean canBeAllowed);
 
-  // Collected chromeos::LoginEventRecorder data.
+  // Collected ash::LoginEventRecorder data.
   dictionary LoginEventRecorderData {
     // Event name
     DOMString name;
@@ -713,6 +809,41 @@ namespace autotestPrivate {
   callback IsInputMethodReadyForTestingCallback = void
       (boolean isReady);
 
+  // Response data for <code>makeFuseboxTempDir</code>.
+  dictionary MakeFuseboxTempDirData {
+    DOMString fuseboxFilePath;
+    DOMString underlyingFilePath;
+  };
+
+  // Callback invoked when the temporary directory was made.
+  callback MakeFuseboxTempDirCallback = void(MakeFuseboxTempDirData data);
+
+  // Callback invoked when the temporary directory was removed.
+  callback RemoveFuseboxTempDirCallback = void();
+
+  callback IsFeatureEnabledCallback = void(boolean enabled);
+
+  // Response data for <code>getCurrentInputMethodDescriptor</code>.
+  // Add more fields from ash/input_method/InputMethodDescriptor as needed.
+  dictionary GetCurrentInputMethodDescriptorData {
+    DOMString keyboardLayout;
+  };
+
+  // Response callback for current input method keyboard layout.
+  callback GetCurrentInputMethodDescriptorCallback = void
+      (GetCurrentInputMethodDescriptorData data);
+
+  // Response callback to report if a field trial exists and has been activated.
+  callback IsFieldTrialActiveCallback = void(boolean active);
+
+  // Request data containing the mock responses from
+  // overrideOrcaResponseForTesting.
+  dictionary OrcaResponseArray {
+    DOMString[] responses;
+  };
+
+  callback OverrideOrcaResponseForTestingCallback = void(boolean success);
+
   interface Functions {
     // Must be called to allow autotestPrivateAPI events to be fired.
     static void initializeEvents();
@@ -747,6 +878,9 @@ namespace autotestPrivate {
     // Refreshes the Enterprise Policies.
     [supportsPromises] static void refreshEnterprisePolicies(
         VoidCallback callback);
+
+    // Refreshes the remote commands.
+    [supportsPromises] static void refreshRemoteCommands(VoidCallback callback);
 
     // Simulates a memory access bug for asan testing.
     static void simulateAsanMemoryBug();
@@ -816,13 +950,6 @@ namespace autotestPrivate {
     [supportsPromises] static void isArcProvisioned(
         IsArcProvisionedCallback callback);
 
-    // Returns true if Lacros is the primary browser. This includes the case
-    // where Lacros is the only browser.
-    // NOTE: Because the answer depends on the policy, this function should
-    // be used only after profile initialization.
-    [supportsPromises] static void isLacrosPrimaryBrowser(
-        IsLacrosPrimaryBrowserCallback callback);
-
     // Gets various information about the state of lacros on the system.
     [supportsPromises] static void getLacrosInfo(
         GetLacrosInfoCallback callback);
@@ -840,10 +967,6 @@ namespace autotestPrivate {
         DOMString packageName,
         GetArcPackageCallback callback);
 
-    // Gets the data needed for Cryptohome Recovery.
-    [supportsPromises] static void getCryptohomeRecoveryData(
-        GetCryptohomeRecoveryDataCallback callback);
-
     // Waits for system web apps to complete the installation.
     [supportsPromises] static void waitForSystemWebAppsInstall(
         VoidCallback callback);
@@ -860,13 +983,6 @@ namespace autotestPrivate {
     [supportsPromises] static void isSystemWebAppOpen(
         DOMString appId,
         IsSystemWebAppOpenCallback callback);
-
-    // Launches ARC app with optional intent. Returns true if ARC is active,
-    // app exists and launch request is passed to Android.
-    [supportsPromises] static void launchArcApp(
-        DOMString appId,
-        DOMString intent,
-        LaunchArcAppCallback callback);
 
     // Launches an application from the launcher with the given appId.
     [supportsPromises] static void launchApp(DOMString appId,
@@ -989,12 +1105,6 @@ namespace autotestPrivate {
         DOMString display_id,
         TakeScreenshotCallback callback);
 
-    // Makes a basic request to ML Service, triggering 1. ML Service
-    // daemon startup, and 2. the initial D-Bus -> Mojo IPC bootstrap.
-    // |callback|: Called when the operation has completed.
-    [supportsPromises] static void bootstrapMachineLearningService(
-        VoidCallback callback);
-
     // Triggers an on-demand update of smart dim component and checks whether
     // it's successfully loaded by smart dim ml_agent.
     // |callback|: Called when the operation has completed.
@@ -1047,6 +1157,12 @@ namespace autotestPrivate {
         IsArcPackageListInitialRefreshedCallback callback);
 
     // Set value for the specified user pref in the pref tree.
+    [supportsPromises] static void setAllowedPref(DOMString pref_name,
+                                                  any value,
+                                                  VoidCallback callback);
+
+    // DEPRECATED: use SetAllowedPref instead, see crbug/1262034
+    // Set value for the specified user pref in the pref tree.
     [supportsPromises] static void setWhitelistedPref(DOMString pref_name,
                                                       any value,
                                                       VoidCallback callback);
@@ -1086,6 +1202,10 @@ namespace autotestPrivate {
     // Get the list of all shelf items
     [supportsPromises] static void getShelfItems(
         GetShelfItemsCallback callback);
+
+    // Get the launcher search box search state.
+    [supportsPromises] static void getLauncherSearchBoxState(
+        GetLauncherSearchBoxStateCallback callback);
 
     // Get the shelf auto hide behavior.
     // |displayId|: display that contains the shelf.
@@ -1268,6 +1388,19 @@ namespace autotestPrivate {
         long index,
         DesksCallback callback);
 
+    // Fetches the number of open desks in the `DesksController` at the time of
+    // call.
+    // `callback`: callback that is passed the number of open desks.
+    [supportsPromises] static void getDeskCount(
+        GetDeskCountCallback callback
+    );
+
+    // Fetches info about the open desks at the time of the call.
+    // `callback`: callback that is passed desks information.
+    [supportsPromises] static void getDesksInfo(
+        GetDesksInfoCallback callback
+    );
+
     // Create mouse events to cause a mouse click.
     // |button|: the mouse button for the click event.
     // |callback|: called after the mouse click finishes.
@@ -1364,6 +1497,13 @@ namespace autotestPrivate {
         long timeout,
         VoidCallback callback);
 
+    // Waits for ambient video to successfully start playback.
+    // |timeout|: the timeout in seconds.
+    // |callback|: Called when the operation has completed.
+    [supportsPromises] static void waitForAmbientVideo(
+        long timeout,
+        VoidCallback callback);
+
     // Disables the automation feature. Note that the event handlers and caches
     // of automation nodes still remain in the test extension and so the next
     // automation.getDesktop will miss initialization. The caller should ensure
@@ -1376,9 +1516,13 @@ namespace autotestPrivate {
         VoidCallback callback);
 
     // Stops ui::ThroughputTracker data collection and reports the collected
-    // data since the start.
+    // data since the start or the last GetThroughtputTrackerData call.
     [supportsPromises] static void stopThroughputTrackerDataCollection(
         StopThroughputTrackerDataCollectionCallback callback);
+
+    // Reports the currently collected animation data.
+    [supportsPromises] static void getThroughputTrackerData(
+        GetThroughtputTrackerDataCallback callback);
 
     // Gets the smoothness of a display. If the display id is not specified,
     // the primary display is used.
@@ -1392,15 +1536,17 @@ namespace autotestPrivate {
         VoidCallback callback);
 
     // Starts collection of ui::LoginEventRecorder data.
-    static void startLoginEventRecorderDataCollection(VoidCallback callback);
+    [supportsPromises] static void startLoginEventRecorderDataCollection(
+        VoidCallback callback);
 
     // Stops ui::LoginEventRecorder data collection and reports all the
     // collected data.
-    static void getLoginEventRecorderLoginEvents(
+    [supportsPromises] static void getLoginEventRecorderLoginEvents(
         GetLoginEventRecorderLoginEventsCallback callback);
 
     // Adds login event to test LoginEventRecorderDataCollection API.
-    static void addLoginEventForTesting(VoidCallback callback);
+    [supportsPromises] static void addLoginEventForTesting(
+        VoidCallback callback);
 
     // Force auto theme mode in dark mode or light mode for testing.
     [supportsPromises] static void forceAutoThemeMode(boolean darkModeEnabled, VoidCallback callback);
@@ -1413,6 +1559,69 @@ namespace autotestPrivate {
     // Returns whether the current input method is ready to accept key events.
     [supportsPromises] static void isInputMethodReadyForTesting(
         IsInputMethodReadyForTestingCallback callback);
+
+    // Creates a temporary directory visible under the Fusebox mount point.
+    [supportsPromises] static void makeFuseboxTempDir(
+        MakeFuseboxTempDirCallback callback);
+
+    // Removes a temporary directory visible under the Fusebox mount point. The
+    // fuseboxFilePath argument was returned by the MakeFuseboxTempDirCallback.
+    [supportsPromises] static void removeFuseboxTempDir(
+        DOMString fuseboxFilePath,
+        RemoveFuseboxTempDirCallback callback);
+
+    // Remove the specified component extension.
+    [supportsPromises] static void removeComponentExtension(
+        DOMString extensionId, VoidCallback callback);
+
+    // Starts frame counting in viz. `bucketSizeInSeconds` decides the bucket
+    // size of the frame count records. If it is X seconds, each record is
+    // the number of presented frames in X seconds.
+    [supportsPromises] static void startFrameCounting(long bucketSizeInSeconds,
+        VoidCallback callback);
+
+    // Ends frame counting in viz and return the collected data.
+    [supportsPromises] static void stopFrameCounting(
+        StopFrameCountingCallback  callback);
+
+    // Install a bruschetta VM.
+    [supportsPromises] static void installBruschetta(
+      DOMString vm_name, VoidCallback callback);
+
+    // Delete a bruschetta VM.
+    [supportsPromises] static void removeBruschetta(
+      DOMString vm_name, VoidCallback callback);
+
+    // Returns whether a base::Feature is enabled. The state may change because
+    // a Chrome uprev into ChromeOS changed the default feature state.
+    [supportsPromises] static void isFeatureEnabled(
+      DOMString feature_name, IsFeatureEnabledCallback callback);
+
+    // Returns keyboard layout used for current input method.
+    [supportsPromises] static void getCurrentInputMethodDescriptor(
+        GetCurrentInputMethodDescriptorCallback callback);
+
+    // Overrides the response from Orca Provider and returns the boolean value
+    // that indicates if the overriding is successful or not.
+    [supportsPromises] static void overrideOrcaResponseForTesting(
+        OrcaResponseArray array,
+        OverrideOrcaResponseForTestingCallback callback);
+
+    // ARC set interactive enable/disable state.
+    // |enabled|: Enable ARC interactive.
+    // |callback|: Called when the operation sent to ARC by mojo.
+    [supportsPromises] static void setArcInteractiveState(
+      boolean enabled, VoidCallback callback);
+
+    // Returns whether a field trial exists and has been activated.
+    [supportsPromises] static void isFieldTrialActive(
+        DOMString trial_name,
+        DOMString group_name,
+        IsFieldTrialActiveCallback callback);
+
+    // ARC get wakefulness mode.
+    [supportsPromises] static void getArcWakefulnessMode(
+      WakefulnessModeCallback callback);
   };
 
   interface Events {

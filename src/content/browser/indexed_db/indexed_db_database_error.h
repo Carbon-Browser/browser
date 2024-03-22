@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,8 @@ class CONTENT_EXPORT IndexedDBDatabaseError {
  public:
   IndexedDBDatabaseError();
   explicit IndexedDBDatabaseError(blink::mojom::IDBException code);
-  IndexedDBDatabaseError(blink::mojom::IDBException code, const char* message);
+  IndexedDBDatabaseError(blink::mojom::IDBException code,
+                         const std::string& message);
   IndexedDBDatabaseError(blink::mojom::IDBException code,
                          const std::u16string& message);
   ~IndexedDBDatabaseError();

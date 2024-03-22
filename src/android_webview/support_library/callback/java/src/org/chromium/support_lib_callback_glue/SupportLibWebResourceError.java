@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@ package org.chromium.support_lib_callback_glue;
 import org.chromium.android_webview.AwContentsClient.AwWebResourceError;
 import org.chromium.support_lib_boundary.WebResourceErrorBoundaryInterface;
 
-/**
- * Adapter between {@link AwWebResourceError} and {@link WebResourceErrorBoundaryInterface}.
- */
+/** Adapter between {@link AwWebResourceError} and {@link WebResourceErrorBoundaryInterface}. */
 public class SupportLibWebResourceError implements WebResourceErrorBoundaryInterface {
     private AwWebResourceError mError;
 
@@ -30,4 +28,5 @@ public class SupportLibWebResourceError implements WebResourceErrorBoundaryInter
     public CharSequence getDescription() {
         return mError.description;
     }
-};
+}
+;

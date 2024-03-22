@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -162,8 +162,6 @@ class ThemeProperties {
 
     COLOR_NTP_LOGO,
     COLOR_NTP_SECTION_BORDER,
-    // Color for the background of the most visited/custom link tile.
-    COLOR_NTP_SHORTCUT,
     COLOR_NTP_TEXT_LIGHT,
 
 #if BUILDFLAG(IS_WIN)

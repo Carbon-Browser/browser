@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,7 +84,8 @@ public class PartnerBookmarksFaviconThrottle {
 
         if (result == FaviconFetchResult.FAILURE_SERVER_ERROR) {
             mNewEntries.put(url, System.currentTimeMillis() + FAVICON_RETRIEVAL_TIMEOUT_MS);
-        } else if (!isSuccessfulFetchResult(result) && !shouldFetchFromServerIfNecessary(url)
+        } else if (!isSuccessfulFetchResult(result)
+                && !shouldFetchFromServerIfNecessary(url)
                 && (System.currentTimeMillis() < mCurrentEntries.get(url))) {
             // Keep storing an entry if it hasn't yet expired and we get didn't just get a success
             // response.

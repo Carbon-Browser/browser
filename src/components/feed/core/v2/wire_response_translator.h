@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,10 @@
 #define COMPONENTS_FEED_CORE_V2_WIRE_RESPONSE_TRANSLATOR_H_
 
 #include "components/feed/core/v2/protocol_translator.h"
+
+namespace supervised_user {
+class GetDiscoverFeedResponse;
+}  // namespace supervised_user
 
 namespace feed {
 struct AccountInfo;
@@ -18,6 +22,11 @@ class WireResponseTranslator {
   ~WireResponseTranslator() = default;
   virtual RefreshResponseData TranslateWireResponse(
       feedwire::Response response,
+      StreamModelUpdateRequest::Source source,
+      const AccountInfo& account_info,
+      base::Time current_time) const;
+  virtual RefreshResponseData TranslateWireResponse(
+      supervised_user::GetDiscoverFeedResponse response,
       StreamModelUpdateRequest::Source source,
       const AccountInfo& account_info,
       base::Time current_time) const;

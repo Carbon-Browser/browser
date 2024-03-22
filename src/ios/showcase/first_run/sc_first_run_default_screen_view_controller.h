@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #import "ios/chrome/common/ui/promo_style/promo_style_view_controller.h"
 
-// A view controller to showcase an example default screen for the new first run
+// A view controller to showcase an example default screen for the first run
 // experience.
 @interface SCFirstRunDefaultScreenViewController : PromoStyleViewController
 @end

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,12 +26,6 @@ base::RefCountedMemory* GetFaviconResourceBytes(
     ui::ResourceScaleFactor scale_factor) {
   return ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytesForScale(
       IDR_SETTINGS_FAVICON, scale_factor);
-}
-
-base::RefCountedMemory* GetPrivacySandboxFaviconResourceBytes(
-    ui::ResourceScaleFactor scale_factor) {
-  return ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytesForScale(
-      IDR_FLAGS_FAVICON, scale_factor);
 }
 
 }  // namespace settings_utils

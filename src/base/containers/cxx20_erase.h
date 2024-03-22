@@ -1,18 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_CONTAINERS_CXX20_ERASE_H_
 #define BASE_CONTAINERS_CXX20_ERASE_H_
 
-#include "base/containers/cxx20_erase_deque.h"
-#include "base/containers/cxx20_erase_forward_list.h"
-#include "base/containers/cxx20_erase_list.h"
 #include "base/containers/cxx20_erase_map.h"
-#include "base/containers/cxx20_erase_set.h"
-#include "base/containers/cxx20_erase_string.h"
-#include "base/containers/cxx20_erase_unordered_map.h"
-#include "base/containers/cxx20_erase_unordered_set.h"
 #include "base/containers/cxx20_erase_vector.h"
 
 // Erase/EraseIf are based on C++20's uniform container erasure API:

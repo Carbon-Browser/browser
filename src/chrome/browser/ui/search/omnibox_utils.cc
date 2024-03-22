@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,10 @@
 namespace search {
 
 OmniboxView* GetOmniboxView(content::WebContents* web_contents) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  return GetOmniboxView(chrome::FindBrowserWithTab(web_contents));
+}
+
+OmniboxView* GetOmniboxView(Browser* browser) {
   if (!browser)
     return nullptr;
   return browser->window()->GetLocationBar()->GetOmniboxView();

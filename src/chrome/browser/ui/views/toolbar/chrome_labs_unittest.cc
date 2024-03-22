@@ -1,8 +1,6 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view.h"
 
 #include "base/containers/cxx20_erase_vector.h"
 #include "base/memory/raw_ptr.h"
@@ -11,15 +9,16 @@
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "chrome/browser/about_flags.h"
+#include "chrome/browser/ui/toolbar/chrome_labs_model.h"
 #include "chrome/browser/ui/toolbar/chrome_labs_prefs.h"
+#include "chrome/browser/ui/toolbar/chrome_labs_utils.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
-#include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view_model.h"
+#include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs_button.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs_coordinator.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs_item_view.h"
-#include "chrome/browser/ui/views/toolbar/chrome_labs_utils.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs_view_controller.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/browser/unexpire_flags.h"
@@ -39,16 +38,22 @@
 #include "ui/views/widget/widget.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "base/memory/ptr_util.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/settings/about_flags.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_manager.h"
 #endif
+
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/test/base/scoped_channel_override.h"
+#endif
+
+#if !BUILDFLAG(IS_CHROMEOS_ASH) || !BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
 namespace {
 
@@ -62,15 +67,13 @@ const char kTestFeatureWithVariationId[] = "feature-2";
 const char kThirdTestFeatureId[] = "feature-3";
 const char kExpiredFlagTestFeatureId[] = "expired-feature";
 
-const base::Feature kTestFeature1{"FeatureName1",
-                                  base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kTestFeature2{"FeatureName2",
-                                  base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kTestFeature3{"FeatureName3",
-                                  base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kTestFeature1, "FeatureName1", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kTestFeature2, "FeatureName2", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kTestFeature3, "FeatureName3", base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kExpiredFlagTestFeature{"Expired",
-                                            base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kExpiredFlagTestFeature,
+             "Expired",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 const flags_ui::FeatureEntry::FeatureParam kTestVariationOther2[] = {
     {"Param1", "Value"}};
@@ -106,7 +109,11 @@ class ChromeLabsCoordinatorTest : public TestWithBrowserView {
             base::test::SingleThreadTaskEnvironment::TimeSource::MOCK_TIME),
 #if BUILDFLAG(IS_CHROMEOS_ASH)
         user_manager_(new ash::FakeChromeUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)),
+        user_manager_enabler_(base::WrapUnique(user_manager_.get())),
+#endif
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+        channel_override_(chrome::ScopedChannelOverride(
+            chrome::ScopedChannelOverride::Channel::kDev)),
 #endif
         scoped_feature_entries_(
             {{kFirstTestFeatureId, "", "",
@@ -117,8 +124,8 @@ class ChromeLabsCoordinatorTest : public TestWithBrowserView {
               FEATURE_WITH_PARAMS_VALUE_TYPE(kTestFeature2,
                                              kTestVariations2,
                                              "TestTrial")},
-             // kThirdTestFeatureId will be the Id of a FeatureEntry that is not
-             // compatible with the current platform.
+             // kThirdTestFeatureId will be the Id of a FeatureEntry that is
+             // not compatible with the current platform.
              {kThirdTestFeatureId, "", "", 0,
               FEATURE_VALUE_TYPE(kTestFeature3)},
              {kExpiredFlagTestFeatureId, "", "",
@@ -136,14 +143,16 @@ class ChromeLabsCoordinatorTest : public TestWithBrowserView {
     user_manager_->LoginUser(account_id);
 #endif
 
-    scoped_feature_list_.InitAndEnableFeature(features::kChromeLabs);
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        features::kChromeLabs,
+        {{features::kChromeLabsActivationPercentage.name, "100"}});
 
     // Set up test data on the model.
     scoped_chrome_labs_model_data_.SetModelDataForTesting(TestLabInfo());
 
     TestWithBrowserView::SetUp();
-    profile()->GetPrefs()->SetBoolean(chrome_labs_prefs::kBrowserLabsEnabled,
-                                      true);
+    profile()->GetPrefs()->SetBoolean(
+        chrome_labs_prefs::kBrowserLabsEnabledEnterprisePolicy, true);
 
     ChromeLabsButton* button = browser_view()->toolbar()->chrome_labs_button();
     chrome_labs_coordinator_ = std::make_unique<ChromeLabsCoordinator>(
@@ -156,11 +165,11 @@ class ChromeLabsCoordinatorTest : public TestWithBrowserView {
   }
 
   views::View* chrome_labs_menu_item_container() {
-    return chrome_labs_coordinator_->GetChromeLabsBubbleViewForTesting()
+    return chrome_labs_coordinator_->GetChromeLabsBubbleView()
         ->GetMenuItemContainerForTesting();
   }
 
-  ChromeLabsBubbleViewModel* chrome_labs_model() {
+  ChromeLabsModel* chrome_labs_model() {
     return browser_view()->toolbar()->chrome_labs_model();
   }
 
@@ -175,10 +184,14 @@ class ChromeLabsCoordinatorTest : public TestWithBrowserView {
 
  private:
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::FakeChromeUserManager* user_manager_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged | ExperimentalAsh>
+      user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
 #endif
 
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  chrome::ScopedChannelOverride channel_override_;
+#endif
   about_flags::testing::ScopedFeatureEntries scoped_feature_entries_;
   base::test::ScopedFeatureList scoped_feature_list_;
 };
@@ -188,19 +201,15 @@ TEST_F(ChromeLabsCoordinatorTest, ShowBubbleTest) {
   EXPECT_TRUE(chrome_labs_coordinator_->BubbleExists());
 
   views::test::WidgetDestroyedWaiter first_destroyed_waiter(
-      chrome_labs_coordinator_->GetChromeLabsBubbleViewForTesting()
-          ->GetWidget());
+      chrome_labs_coordinator_->GetChromeLabsBubbleView()->GetWidget());
   chrome_labs_coordinator_->Hide();
   first_destroyed_waiter.Wait();
   EXPECT_FALSE(chrome_labs_coordinator_->BubbleExists());
   chrome_labs_coordinator_->Show();
   // The bubble can be closed by the user clicking off of the bubble.
   views::test::WidgetDestroyedWaiter second_destroyed_waiter(
-      chrome_labs_coordinator_->GetChromeLabsBubbleViewForTesting()
-          ->GetWidget());
-  chrome_labs_coordinator_->GetChromeLabsBubbleViewForTesting()
-      ->GetWidget()
-      ->Close();
+      chrome_labs_coordinator_->GetChromeLabsBubbleView()->GetWidget());
+  chrome_labs_coordinator_->GetChromeLabsBubbleView()->GetWidget()->Close();
   second_destroyed_waiter.Wait();
   EXPECT_FALSE(chrome_labs_coordinator_->BubbleExists());
 }
@@ -211,8 +220,7 @@ TEST_F(ChromeLabsCoordinatorTest, NewBadgeTest) {
   chrome_labs_coordinator_->Show();
   EXPECT_TRUE(first_lab_item()->GetNewBadgeForTesting()->GetDisplayNewBadge());
   views::test::WidgetDestroyedWaiter destroyed_waiter(
-      chrome_labs_coordinator_->GetChromeLabsBubbleViewForTesting()
-          ->GetWidget());
+      chrome_labs_coordinator_->GetChromeLabsBubbleView()->GetWidget());
   chrome_labs_coordinator_->Hide();
   destroyed_waiter.Wait();
   constexpr base::TimeDelta kDelay = base::Days(8);
@@ -231,8 +239,7 @@ TEST_F(ChromeLabsCoordinatorTest, ShowBubbleWhenUserIsOwner) {
   chrome_labs_coordinator_->Show(
       ChromeLabsCoordinator::ShowUserType::kChromeOsOwnerUserType);
   views::test::WidgetDestroyedWaiter destroyed_waiter(
-      chrome_labs_coordinator_->GetChromeLabsBubbleViewForTesting()
-          ->GetWidget());
+      chrome_labs_coordinator_->GetChromeLabsBubbleView()->GetWidget());
   chrome_labs_coordinator_->Hide();
   destroyed_waiter.Wait();
   chrome_labs_coordinator_->Show(
@@ -248,7 +255,11 @@ class ChromeLabsViewControllerTest : public TestWithBrowserView {
             base::test::SingleThreadTaskEnvironment::TimeSource::MOCK_TIME),
 #if BUILDFLAG(IS_CHROMEOS_ASH)
         user_manager_(new ash::FakeChromeUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)),
+        user_manager_enabler_(base::WrapUnique(user_manager_.get())),
+#endif
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+        channel_override_(chrome::ScopedChannelOverride(
+            chrome::ScopedChannelOverride::Channel::kDev)),
 #endif
         scoped_feature_entries_(
             {{kFirstTestFeatureId, "", "",
@@ -259,8 +270,8 @@ class ChromeLabsViewControllerTest : public TestWithBrowserView {
               FEATURE_WITH_PARAMS_VALUE_TYPE(kTestFeature2,
                                              kTestVariations2,
                                              "TestTrial")},
-             // kThirdTestFeatureId will be the Id of a FeatureEntry that is not
-             // compatible with the current platform.
+             // kThirdTestFeatureId will be the Id of a FeatureEntry that is
+             // not compatible with the current platform.
              {kThirdTestFeatureId, "", "", 0,
               FEATURE_VALUE_TYPE(kTestFeature3)},
              {kExpiredFlagTestFeatureId, "", "",
@@ -278,14 +289,15 @@ class ChromeLabsViewControllerTest : public TestWithBrowserView {
     user_manager_->LoginUser(account_id);
 #endif
 
-    scoped_feature_list_.InitAndEnableFeature(features::kChromeLabs);
+    scoped_feature_list_.InitAndEnableFeatureWithParameters(
+        features::kChromeLabs,
+        {{features::kChromeLabsActivationPercentage.name, "100"}});
 
     // Set up test data on the model.
     scoped_chrome_labs_model_data_.SetModelDataForTesting(TestLabInfo());
-
     TestWithBrowserView::SetUp();
-    profile()->GetPrefs()->SetBoolean(chrome_labs_prefs::kBrowserLabsEnabled,
-                                      true);
+    profile()->GetPrefs()->SetBoolean(
+        chrome_labs_prefs::kBrowserLabsEnabledEnterprisePolicy, true);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     // On ash-chrome we expect the PrefService from the profile to be used.
@@ -297,8 +309,7 @@ class ChromeLabsViewControllerTest : public TestWithBrowserView {
 #endif
 
     std::unique_ptr<ChromeLabsBubbleView> bubble_view =
-        std::make_unique<ChromeLabsBubbleView>(chrome_labs_button(),
-                                               browser_view()->browser());
+        std::make_unique<ChromeLabsBubbleView>(chrome_labs_button());
     bubble_view_ = bubble_view.get();
     bubble_widget_ =
         views::BubbleDialogDelegateView::CreateBubble(std::move(bubble_view));
@@ -320,7 +331,7 @@ class ChromeLabsViewControllerTest : public TestWithBrowserView {
     return chrome_labs_bubble()->GetMenuItemContainerForTesting();
   }
 
-  ChromeLabsBubbleViewModel* chrome_labs_model() {
+  ChromeLabsModel* chrome_labs_model() {
     return browser_view()->toolbar()->chrome_labs_model();
   }
 
@@ -386,15 +397,18 @@ class ChromeLabsViewControllerTest : public TestWithBrowserView {
 
  protected:
   ScopedChromeLabsModelDataForTesting scoped_chrome_labs_model_data_;
-  raw_ptr<ChromeLabsBubbleView> bubble_view_;
-  raw_ptr<views::Widget> bubble_widget_;
+  raw_ptr<ChromeLabsBubbleView, DanglingUntriaged> bubble_view_;
+  raw_ptr<views::Widget, DanglingUntriaged> bubble_widget_;
 
  private:
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::FakeChromeUserManager* user_manager_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged | ExperimentalAsh>
+      user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
 #endif
-
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  chrome::ScopedChannelOverride channel_override_;
+#endif
   about_flags::testing::ScopedFeatureEntries scoped_feature_entries_;
   base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<flags_ui::PrefServiceFlagsStorage> flags_storage_;
@@ -472,7 +486,7 @@ class ChromeLabsAshFeatureTest : public ChromeLabsFeatureTest {
   ChromeLabsAshFeatureTest()
       : ChromeLabsFeatureTest(),
         user_manager_(new FakeChromeUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)) {
+        user_manager_enabler_(base::WrapUnique(user_manager_.get())) {
     SessionManagerClient::InitializeFakeInMemory();
     FakeSessionManagerClient::Get()->set_supports_browser_restart(true);
     const AccountId account_id(
@@ -482,7 +496,8 @@ class ChromeLabsAshFeatureTest : public ChromeLabsFeatureTest {
   }
 
  private:
-  FakeChromeUserManager* user_manager_;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged | ExperimentalAsh>
+      user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
 };
 
@@ -612,18 +627,17 @@ TEST_F(ChromeLabsViewControllerTest, DISABLED_ShowFeedbackPage) {
 // This test checks that experiments that are removed from the model will be
 // removed from the PrefService when updating new badge prefs.
 TEST_F(ChromeLabsViewControllerTest, CleanUpNewBadgePrefsTest) {
+  const base::Value::Dict& new_badge_prefs =
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  const base::Value* new_badge_prefs =
-      browser_view()->browser()->profile()->GetPrefs()->GetDictionary(
+      browser_view()->browser()->profile()->GetPrefs()->GetDict(
           chrome_labs_prefs::kChromeLabsNewBadgeDictAshChrome);
 #else
-  const base::Value* new_badge_prefs =
-      g_browser_process->local_state()->GetDictionary(
+      g_browser_process->local_state()->GetDict(
           chrome_labs_prefs::kChromeLabsNewBadgeDict);
 #endif
 
-  EXPECT_TRUE(new_badge_prefs->FindKey(kFirstTestFeatureId));
-  EXPECT_TRUE(new_badge_prefs->FindKey(kTestFeatureWithVariationId));
+  EXPECT_TRUE(new_badge_prefs.contains(kFirstTestFeatureId));
+  EXPECT_TRUE(new_badge_prefs.contains(kTestFeatureWithVariationId));
 
   // Remove two experiments.
   std::vector<LabInfo> test_experiments = TestLabInfo();
@@ -638,6 +652,8 @@ TEST_F(ChromeLabsViewControllerTest, CleanUpNewBadgePrefsTest) {
 
   UpdateChromeLabsNewBadgePrefs(browser_view()->browser()->profile(),
                                 chrome_labs_model());
-  EXPECT_FALSE(new_badge_prefs->FindKey(kFirstTestFeatureId));
-  EXPECT_FALSE(new_badge_prefs->FindKey(kTestFeatureWithVariationId));
+  EXPECT_FALSE(new_badge_prefs.contains(kFirstTestFeatureId));
+  EXPECT_FALSE(new_badge_prefs.contains(kTestFeatureWithVariationId));
 }
+
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH) || !BUILDFLAG(GOOGLE_CHROME_BRANDING)

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,8 @@ void DecodeImageData(SharedBuffer* data, ImageMeta* image) {
 
   std::unique_ptr<ImageDecoder> decoder = ImageDecoder::Create(
       data, all_data_received, ImageDecoder::kAlphaPremultiplied,
-      ImageDecoder::kDefaultBitDepth, ColorBehavior::Ignore());
+      ImageDecoder::kDefaultBitDepth, ColorBehavior::kIgnore,
+      Platform::GetMaxDecodedImageBytes());
 
   auto start = std::chrono::steady_clock::now();
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Merge results from code-coverage/pgo swarming runs.
@@ -54,8 +54,11 @@ def _MergeAPIArgumentParser(*args, **kwargs):
       '--javascript-coverage-dir',
       help='directory for JavaScript coverage data')
   parser.add_argument(
-      '--merged-js-cov-filename', help='filename to uniquely identify merged '
-                                       'json coverage data')
+      '--chromium-src-dir',
+      help='directory for chromium/src checkout')
+  parser.add_argument(
+      '--build-dir',
+      help='directory for the build directory in chromium/src')
   parser.add_argument(
       '--per-cl-coverage',
       action='store_true',
@@ -97,7 +100,8 @@ def main():
 
   failed = False
 
-  if params.javascript_coverage_dir:
+  if params.javascript_coverage_dir and params.chromium_src_dir \
+      and params.build_dir:
     current_dir = os.path.dirname(__file__)
     merge_js_results_script = os.path.join(current_dir, 'merge_js_results.py')
     args = [
@@ -107,8 +111,10 @@ def main():
       params.task_output_dir,
       '--javascript-coverage-dir',
       params.javascript_coverage_dir,
-      '--merged-js-cov-filename',
-      params.merged_js_cov_filename,
+      '--chromium-src-dir',
+      params.chromium_src_dir,
+      '--build-dir',
+      params.build_dir,
     ]
 
     rc = subprocess.call(args)
@@ -182,7 +188,8 @@ def main():
         'This script was told to merge test results, but no additional merge '
         'script was given.')
 
-  return 1 if (failed or bool(invalid_profiles)) else 0
+  # TODO(crbug.com/1369158): Return non-zero if invalid_profiles is not None
+  return 1 if failed else 0
 
 
 if __name__ == '__main__':

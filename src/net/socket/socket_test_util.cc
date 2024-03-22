@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,22 +8,21 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/rand_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "net/base/address_family.h"
@@ -48,6 +47,7 @@
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
@@ -69,9 +69,7 @@ inline char AsciifyLow(char x) {
 }
 
 inline char Asciify(char x) {
-  if ((x < 0) || !isprint(x))
-    return '.';
-  return x;
+  return absl::ascii_isprint(static_cast<unsigned char>(x)) ? x : '.';
 }
 
 void DumpData(const char* data, int data_len) {
@@ -430,7 +428,6 @@ SequencedSocketData::SequencedSocketData(const MockConnect& connect,
     : SequencedSocketData(reads, writes) {
   set_connect_data(connect);
 }
-
 MockRead SequencedSocketData::OnRead() {
   CHECK_EQ(IoState::kIdle, read_state_);
   CHECK(!helper_.AllReadDataConsumed())
@@ -459,7 +456,7 @@ MockRead SequencedSocketData::OnRead() {
         run_until_paused_run_loop_->Quit();
       return MockRead(SYNCHRONOUS, ERR_IO_PENDING);
     }
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&SequencedSocketData::OnReadComplete,
                                   weak_factory_.GetWeakPtr()));
     CHECK_NE(IoState::kCompleting, write_state_);
@@ -519,7 +516,7 @@ MockWriteResult SequencedSocketData::OnWrite(const std::string& data) {
     }
 
     NET_TRACE(1, " *** ") << "Posting task to complete write";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&SequencedSocketData::OnWriteComplete,
                                   weak_factory_.GetWeakPtr()));
     CHECK_NE(IoState::kCompleting, read_state_);
@@ -637,7 +634,7 @@ void SequencedSocketData::MaybePostReadCompleteTask() {
 
   NET_TRACE(1, " ****** ") << "Posting task to complete read: "
                            << sequence_number_;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SequencedSocketData::OnReadComplete,
                                 weak_factory_.GetWeakPtr()));
   CHECK_NE(IoState::kCompleting, write_state_);
@@ -664,7 +661,7 @@ void SequencedSocketData::MaybePostWriteCompleteTask() {
 
   NET_TRACE(1, " ****** ") << "Posting task to complete write: "
                            << sequence_number_;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SequencedSocketData::OnWriteComplete,
                                 weak_factory_.GetWeakPtr()));
   CHECK_NE(IoState::kCompleting, read_state_);
@@ -797,12 +794,9 @@ std::unique_ptr<SSLClientSocket> MockClientSocketFactory::CreateSSLClientSocket(
     const SSLConfig& ssl_config) {
   SSLSocketDataProvider* next_ssl_data = mock_ssl_data_.GetNext();
   if (next_ssl_data->next_protos_expected_in_ssl_config.has_value()) {
-    EXPECT_EQ(next_ssl_data->next_protos_expected_in_ssl_config.value().size(),
-              ssl_config.alpn_protos.size());
-    EXPECT_TRUE(std::equal(
-        next_ssl_data->next_protos_expected_in_ssl_config.value().begin(),
-        next_ssl_data->next_protos_expected_in_ssl_config.value().end(),
-        ssl_config.alpn_protos.begin()));
+    EXPECT_TRUE(base::ranges::equal(
+        next_ssl_data->next_protos_expected_in_ssl_config.value(),
+        ssl_config.alpn_protos));
   }
 
   // The protocol version used is a combination of the per-socket SSLConfig and
@@ -834,13 +828,17 @@ std::unique_ptr<SSLClientSocket> MockClientSocketFactory::CreateSSLClientSocket(
   if (next_ssl_data->expected_host_and_port) {
     EXPECT_EQ(*next_ssl_data->expected_host_and_port, host_and_port);
   }
-  if (next_ssl_data->expected_network_isolation_key) {
-    EXPECT_EQ(*next_ssl_data->expected_network_isolation_key,
-              ssl_config.network_isolation_key);
+  if (next_ssl_data->expected_ignore_certificate_errors) {
+    EXPECT_EQ(*next_ssl_data->expected_ignore_certificate_errors,
+              ssl_config.ignore_certificate_errors);
   }
-  if (next_ssl_data->expected_disable_legacy_crypto) {
-    EXPECT_EQ(*next_ssl_data->expected_disable_legacy_crypto,
-              ssl_config.disable_legacy_crypto);
+  if (next_ssl_data->expected_network_anonymization_key) {
+    EXPECT_EQ(*next_ssl_data->expected_network_anonymization_key,
+              ssl_config.network_anonymization_key);
+  }
+  if (next_ssl_data->expected_disable_sha1_server_signatures) {
+    EXPECT_EQ(*next_ssl_data->expected_disable_sha1_server_signatures,
+              ssl_config.disable_sha1_server_signatures);
   }
   if (next_ssl_data->expected_ech_config_list) {
     EXPECT_EQ(*next_ssl_data->expected_ech_config_list,
@@ -905,10 +903,6 @@ const NetLogWithSource& MockClientSocket::NetLog() const {
   return net_log_;
 }
 
-bool MockClientSocket::WasAlpnNegotiated() const {
-  return false;
-}
-
 NextProto MockClientSocket::GetNegotiatedProtocol() const {
   return kProtoUnknown;
 }
@@ -917,7 +911,7 @@ MockClientSocket::~MockClientSocket() = default;
 
 void MockClientSocket::RunCallbackAsync(CompletionOnceCallback callback,
                                         int result) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MockClientSocket::RunCallback, weak_factory_.GetWeakPtr(),
                      std::move(callback), result));
@@ -1395,10 +1389,6 @@ int MockSSLClientSocket::GetPeerAddress(IPEndPoint* address) const {
   return stream_socket_->GetPeerAddress(address);
 }
 
-bool MockSSLClientSocket::WasAlpnNegotiated() const {
-  return data_->next_proto != kProtoUnknown;
-}
-
 NextProto MockSSLClientSocket::GetNegotiatedProtocol() const {
   return data_->next_proto;
 }
@@ -1448,16 +1438,16 @@ void MockSSLClientSocket::GetSSLCertRequestInfo(
     cert_request_info->is_proxy = data_->cert_request_info->is_proxy;
     cert_request_info->cert_authorities =
         data_->cert_request_info->cert_authorities;
-    cert_request_info->cert_key_types =
-        data_->cert_request_info->cert_key_types;
+    cert_request_info->signature_algorithms =
+        data_->cert_request_info->signature_algorithms;
   } else {
     cert_request_info->Reset();
   }
 }
 
-int MockSSLClientSocket::ExportKeyingMaterial(const base::StringPiece& label,
+int MockSSLClientSocket::ExportKeyingMaterial(base::StringPiece label,
                                               bool has_context,
-                                              const base::StringPiece& context,
+                                              base::StringPiece context,
                                               unsigned char* out,
                                               unsigned int outlen) {
   memset(out, 'A', outlen);
@@ -1470,7 +1460,7 @@ std::vector<uint8_t> MockSSLClientSocket::GetECHRetryConfigs() {
 
 void MockSSLClientSocket::RunCallbackAsync(CompletionOnceCallback callback,
                                            int result) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MockSSLClientSocket::RunCallback,
                      weak_factory_.GetWeakPtr(), std::move(callback), result));
@@ -1571,82 +1561,6 @@ int MockUDPClientSocket::Write(
   return write_result.result;
 }
 
-int MockUDPClientSocket::WriteAsync(
-    const char* buffer,
-    size_t buf_len,
-    CompletionOnceCallback callback,
-    const NetworkTrafficAnnotationTag& /* traffic_annotation */) {
-  DCHECK(buffer);
-  DCHECK_GT(buf_len, 0u);
-  DCHECK(callback);
-
-  if (!connected_ || !data_)
-    return ERR_UNEXPECTED;
-  data_transferred_ = true;
-
-  std::string data(buffer, buf_len);
-  MockWriteResult write_result = data_->OnWrite(data);
-
-  // ERR_IO_PENDING is a signal that the socket data will call back
-  // asynchronously.
-  if (write_result.result == ERR_IO_PENDING) {
-    pending_write_callback_ = std::move(callback);
-    return ERR_IO_PENDING;
-  }
-  if (write_result.mode == ASYNC) {
-    RunCallbackAsync(std::move(callback), write_result.result);
-    return ERR_IO_PENDING;
-  }
-  return write_result.result;
-}
-
-int MockUDPClientSocket::WriteAsync(
-    DatagramBuffers buffers,
-    CompletionOnceCallback callback,
-    const NetworkTrafficAnnotationTag& /* traffic_annotation */) {
-  DCHECK(!buffers.empty());
-  DCHECK(callback);
-
-  if (!connected_ || !data_)
-    return ERR_UNEXPECTED;
-
-  unwritten_buffers_ = std::move(buffers);
-
-  int rv = 0;
-  size_t buf_len = 0;
-  do {
-    auto& buf = unwritten_buffers_.front();
-
-    buf_len = buf->length();
-    std::string data(buf->data(), buf_len);
-    MockWriteResult write_result = data_->OnWrite(data);
-    rv = write_result.result;
-
-    // ERR_IO_PENDING is a signal that the socket data will call back
-    // asynchronously.
-    if (write_result.result == ERR_IO_PENDING) {
-      pending_write_callback_ = std::move(callback);
-      return ERR_IO_PENDING;
-    }
-    if (write_result.mode == ASYNC) {
-      RunCallbackAsync(std::move(callback), write_result.result);
-      return ERR_IO_PENDING;
-    }
-
-    if (rv < 0) {
-      return rv;
-    }
-
-    unwritten_buffers_.pop_front();
-  } while (!unwritten_buffers_.empty());
-
-  return buf_len;
-}
-
-DatagramBuffers MockUDPClientSocket::GetUnwrittenBuffers() {
-  return std::move(unwritten_buffers_);
-}
-
 int MockUDPClientSocket::SetReceiveBufferSize(int32_t size) {
   return OK;
 }
@@ -1656,6 +1570,10 @@ int MockUDPClientSocket::SetSendBufferSize(int32_t size) {
 }
 
 int MockUDPClientSocket::SetDoNotFragment() {
+  return OK;
+}
+
+int MockUDPClientSocket::SetRecvEcn() {
   return OK;
 }
 
@@ -1678,14 +1596,6 @@ int MockUDPClientSocket::GetLocalAddress(IPEndPoint* address) const {
 
 void MockUDPClientSocket::UseNonBlockingIO() {}
 
-void MockUDPClientSocket::SetWriteAsyncEnabled(bool enabled) {}
-bool MockUDPClientSocket::WriteAsyncEnabled() {
-  return false;
-}
-void MockUDPClientSocket::SetMaxPacketSize(size_t max_packet_size) {}
-void MockUDPClientSocket::SetWriteMultiCoreEnabled(bool enabled) {}
-void MockUDPClientSocket::SetSendmmsgEnabled(bool enabled) {}
-void MockUDPClientSocket::SetWriteBatchingActive(bool active) {}
 int MockUDPClientSocket::SetMulticastInterface(uint32_t interface_index) {
   return OK;
 }
@@ -1697,17 +1607,18 @@ const NetLogWithSource& MockUDPClientSocket::NetLog() const {
 int MockUDPClientSocket::Connect(const IPEndPoint& address) {
   if (!data_)
     return ERR_UNEXPECTED;
+  DCHECK_NE(data_->connect_data().result, ERR_IO_PENDING);
   connected_ = true;
   peer_addr_ = address;
   return data_->connect_data().result;
 }
 
-int MockUDPClientSocket::ConnectUsingNetwork(
-    NetworkChangeNotifier::NetworkHandle network,
-    const IPEndPoint& address) {
+int MockUDPClientSocket::ConnectUsingNetwork(handles::NetworkHandle network,
+                                             const IPEndPoint& address) {
   DCHECK(!connected_);
   if (!data_)
     return ERR_UNEXPECTED;
+  DCHECK_NE(data_->connect_data().result, ERR_IO_PENDING);
   network_ = network;
   connected_ = true;
   peer_addr_ = address;
@@ -1718,14 +1629,69 @@ int MockUDPClientSocket::ConnectUsingDefaultNetwork(const IPEndPoint& address) {
   DCHECK(!connected_);
   if (!data_)
     return ERR_UNEXPECTED;
+  DCHECK_NE(data_->connect_data().result, ERR_IO_PENDING);
   network_ = kDefaultNetworkForTests;
   connected_ = true;
   peer_addr_ = address;
   return data_->connect_data().result;
 }
 
-NetworkChangeNotifier::NetworkHandle MockUDPClientSocket::GetBoundNetwork()
-    const {
+int MockUDPClientSocket::ConnectAsync(const IPEndPoint& address,
+                                      CompletionOnceCallback callback) {
+  DCHECK(callback);
+  if (!data_) {
+    return ERR_UNEXPECTED;
+  }
+  connected_ = true;
+  peer_addr_ = address;
+  int result = data_->connect_data().result;
+  IoMode mode = data_->connect_data().mode;
+  if (mode == SYNCHRONOUS) {
+    return result;
+  }
+  RunCallbackAsync(std::move(callback), result);
+  return ERR_IO_PENDING;
+}
+
+int MockUDPClientSocket::ConnectUsingNetworkAsync(
+    handles::NetworkHandle network,
+    const IPEndPoint& address,
+    CompletionOnceCallback callback) {
+  DCHECK(callback);
+  DCHECK(!connected_);
+  if (!data_)
+    return ERR_UNEXPECTED;
+  network_ = network;
+  connected_ = true;
+  peer_addr_ = address;
+  int result = data_->connect_data().result;
+  IoMode mode = data_->connect_data().mode;
+  if (mode == SYNCHRONOUS) {
+    return result;
+  }
+  RunCallbackAsync(std::move(callback), result);
+  return ERR_IO_PENDING;
+}
+
+int MockUDPClientSocket::ConnectUsingDefaultNetworkAsync(
+    const IPEndPoint& address,
+    CompletionOnceCallback callback) {
+  DCHECK(!connected_);
+  if (!data_)
+    return ERR_UNEXPECTED;
+  network_ = kDefaultNetworkForTests;
+  connected_ = true;
+  peer_addr_ = address;
+  int result = data_->connect_data().result;
+  IoMode mode = data_->connect_data().mode;
+  if (mode == SYNCHRONOUS) {
+    return result;
+  }
+  RunCallbackAsync(std::move(callback), result);
+  return ERR_IO_PENDING;
+}
+
+handles::NetworkHandle MockUDPClientSocket::GetBoundNetwork() const {
   return network_;
 }
 
@@ -1813,7 +1779,7 @@ int MockUDPClientSocket::CompleteRead() {
 
 void MockUDPClientSocket::RunCallbackAsync(CompletionOnceCallback callback,
                                            int result) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MockUDPClientSocket::RunCallback,
                      weak_factory_.GetWeakPtr(), std::move(callback), result));
@@ -1926,8 +1892,8 @@ void MockTransportClientSocketPool::MockConnectJob::OnConnect(int rv) {
     // sockets.
     LoadTimingInfo::ConnectTiming connect_timing;
     base::TimeTicks now = base::TimeTicks::Now();
-    connect_timing.dns_start = now;
-    connect_timing.dns_end = now;
+    connect_timing.domain_lookup_start = now;
+    connect_timing.domain_lookup_end = now;
     connect_timing.connect_start = now;
     connect_timing.connect_end = now;
     handle_->set_connect_timing(connect_timing);
@@ -1955,7 +1921,7 @@ MockTransportClientSocketPool::MockTransportClientSocketPool(
           max_sockets,
           max_sockets_per_group,
           base::Seconds(10) /* unused_idle_socket_timeout */,
-          ProxyServer::Direct(),
+          ProxyChain::Direct(),
           false /* is_for_websockets */,
           common_connect_job_params),
       client_socket_factory_(common_connect_job_params->client_socket_factory) {
@@ -2059,10 +2025,6 @@ const NetLogWithSource& WrappedStreamSocket::NetLog() const {
 
 bool WrappedStreamSocket::WasEverUsed() const {
   return transport_->WasEverUsed();
-}
-
-bool WrappedStreamSocket::WasAlpnNegotiated() const {
-  return transport_->WasAlpnNegotiated();
 }
 
 NextProto WrappedStreamSocket::GetNegotiatedProtocol() const {

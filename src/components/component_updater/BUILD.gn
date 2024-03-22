@@ -1,6 +1,14 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
+static_library("component_updater_paths") {
+  sources = [
+    "component_updater_paths.cc",
+    "component_updater_paths.h",
+  ]
+  deps = [ "//base" ]
+}
 
 static_library("component_updater") {
   sources = [
@@ -8,8 +16,6 @@ static_library("component_updater") {
     "component_installer.h",
     "component_updater_command_line_config_policy.cc",
     "component_updater_command_line_config_policy.h",
-    "component_updater_paths.cc",
-    "component_updater_paths.h",
     "component_updater_service.cc",
     "component_updater_service.h",
     "component_updater_service_internal.h",
@@ -28,7 +34,11 @@ static_library("component_updater") {
     "timer_update_scheduler.cc",
     "timer_update_scheduler.h",
     "update_scheduler.h",
+    "url_param_filter_remover.cc",
+    "url_param_filter_remover.h",
   ]
+
+  public_deps = [ ":component_updater_paths" ]
 
   deps = [
     "//base",
@@ -41,15 +51,6 @@ static_library("component_updater") {
     "//ui/base",
     "//url",
   ]
-}
-
-static_library("crl_set_remover") {
-  sources = [
-    "crl_set_remover.cc",
-    "crl_set_remover.h",
-  ]
-
-  deps = [ "//base" ]
 }
 
 static_library("test_support") {

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/file_manager/io_task_util.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -21,8 +21,9 @@ namespace io_task {
 
 DeleteIOTask::DeleteIOTask(
     std::vector<storage::FileSystemURL> file_urls,
-    scoped_refptr<storage::FileSystemContext> file_system_context)
-    : file_system_context_(file_system_context) {
+    scoped_refptr<storage::FileSystemContext> file_system_context,
+    bool show_notification)
+    : IOTask(show_notification), file_system_context_(file_system_context) {
   progress_.state = State::kQueued;
   progress_.type = OperationType::kDelete;
   progress_.bytes_transferred = 0;
@@ -69,7 +70,7 @@ void DeleteIOTask::Cancel() {
 // accessed after calling this.
 void DeleteIOTask::Complete(State state) {
   progress_.state = state;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(complete_callback_), std::move(progress_)));
 }

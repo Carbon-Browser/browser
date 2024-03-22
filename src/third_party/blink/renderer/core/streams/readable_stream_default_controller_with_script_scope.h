@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,9 @@ class ScriptState;
 class CORE_EXPORT ReadableStreamDefaultControllerWithScriptScope
     : public GarbageCollected<ReadableStreamDefaultControllerWithScriptScope> {
  public:
-  ReadableStreamDefaultControllerWithScriptScope(ScriptState* script_state,
-                                                 ScriptValue controller);
+  ReadableStreamDefaultControllerWithScriptScope(
+      ScriptState* script_state,
+      ReadableStreamDefaultController* controller);
 
   // After calling this the other methods will no longer do anything.
   void Deactivate();
@@ -46,7 +47,7 @@ class CORE_EXPORT ReadableStreamDefaultControllerWithScriptScope
   }
 
   ReadableStreamDefaultController* GetOriginalController() {
-    return controller_;
+    return controller_.Get();
   }
 
   void Trace(Visitor*) const;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,10 +25,8 @@ namespace ipcz {
 
 namespace {
 
-constexpr BufferId kPrimaryBufferId{0};
-
-// Fixed allocation size for each NodeLink's primary shared buffer.
-constexpr size_t kPrimaryBufferSize = 64 * 1024;
+// Fixed allocation size for each NodeLink's primary shared buffer. (128 kB)
+constexpr size_t kPrimaryBufferSize = 128 * 1024;
 
 // The front of the primary buffer is reserved for special current and future
 // uses which require synchronous availability throughout a link's lifetime.
@@ -49,7 +47,7 @@ constexpr size_t kMinBlockAllocatorCapacity = 8;
 // given fragment size within the BufferPool. This is not a hard cap on capacity
 // per fragment size, but it sets a limit on how large the pool will grow
 // automatically in response to failed allocation requests.
-constexpr size_t kMaxBlockAllocatorCapacityPerFragmentSize = 256 * 1024;
+constexpr size_t kMaxBlockAllocatorCapacityPerFragmentSize = 2 * 1024 * 1024;
 
 // The minimum fragment size (in bytes) to support with dedicated BufferPool
 // capacity. All fragment sizes are powers of two. Fragment allocations below
@@ -59,7 +57,11 @@ constexpr size_t kMinFragmentSize = 64;
 // The maximum fragment size to support with dedicated BlockAllocator capacity
 // within the BufferPool. Allocations beyond this size must fail or fall back
 // onto a different allocation scheme which does not use a BlockAllocator.
-constexpr size_t kMaxFragmentSizeForBlockAllocation = 16 * 1024;
+constexpr size_t kMaxFragmentSizeForBlockAllocation = 1024 * 1024;
+
+// The minimum fallback fragment size to attempt for best-effort allocations
+// when the requested size cannot be accommodated.
+constexpr size_t kMinBestEffortFallbackBlockSize = 4096;
 
 // The number of fixed RouterLinkState locations in the primary buffer. This
 // limits the maximum number of initial portals supported by the ConnectNode()
@@ -111,14 +113,17 @@ struct IPCZ_ALIGN(8) NodeLinkMemory::PrimaryBuffer {
   // portals.
   InitialRouterLinkStateArray initial_link_states;
 
-  // Reserved memory for a series of fixed block allocators. Additional
-  // allocators may be adopted by a NodeLinkMemory over its lifetime, but these
-  // ones remain fixed within the primary buffer.
-  std::array<uint8_t, 4096> mem_for_64_byte_blocks;
-  std::array<uint8_t, 12288> mem_for_256_byte_blocks;
-  std::array<uint8_t, 15360> mem_for_512_byte_blocks;
-  std::array<uint8_t, 11264> mem_for_1024_byte_blocks;
-  std::array<uint8_t, 16384> mem_for_2048_byte_blocks;
+  // Reserved memory for 64-byte block allocators required for RouterLinkState
+  // allocation, as well as (optional) small message and parcel data buffer
+  // allocation. Additional allocators for this and other block sizes may be
+  // adopted by a NodeLinkMemory over its lifetime, but these remain fixed
+  // within the primary buffer.
+  std::array<uint8_t, 64 * 1484> mem_for_64_byte_blocks;
+  std::array<uint8_t, 256 * 9> mem_for_256_byte_blocks;
+  std::array<uint8_t, 512 * 8> mem_for_512_byte_blocks;
+  std::array<uint8_t, 1024 * 4> mem_for_1k_blocks;
+  std::array<uint8_t, 2048 * 4> mem_for_2k_blocks;
+  std::array<uint8_t, 4096 * 4> mem_for_4k_blocks;
 
   BlockAllocator block_allocator_64() {
     return BlockAllocator(absl::MakeSpan(mem_for_64_byte_blocks), 64);
@@ -132,33 +137,39 @@ struct IPCZ_ALIGN(8) NodeLinkMemory::PrimaryBuffer {
     return BlockAllocator(absl::MakeSpan(mem_for_512_byte_blocks), 512);
   }
 
-  BlockAllocator block_allocator_1024() {
-    return BlockAllocator(absl::MakeSpan(mem_for_1024_byte_blocks), 1024);
+  BlockAllocator block_allocator_1k() {
+    return BlockAllocator(absl::MakeSpan(mem_for_1k_blocks), 1024);
   }
 
-  BlockAllocator block_allocator_2048() {
-    return BlockAllocator(absl::MakeSpan(mem_for_2048_byte_blocks), 2048);
+  BlockAllocator block_allocator_2k() {
+    return BlockAllocator(absl::MakeSpan(mem_for_2k_blocks), 2048);
+  }
+
+  BlockAllocator block_allocator_4k() {
+    return BlockAllocator(absl::MakeSpan(mem_for_4k_blocks), 4096);
   }
 };
 
 NodeLinkMemory::NodeLinkMemory(Ref<Node> node,
                                DriverMemoryMapping primary_buffer_memory)
     : node_(std::move(node)),
+      allow_memory_expansion_for_parcel_data_(
+          (node_->options().memory_flags & IPCZ_MEMORY_FIXED_PARCEL_CAPACITY) ==
+          0),
       primary_buffer_memory_(primary_buffer_memory.bytes()),
       primary_buffer_(
           *reinterpret_cast<PrimaryBuffer*>(primary_buffer_memory_.data())) {
   // Consistency check here, because PrimaryBuffer is private to NodeLinkMemory.
   static_assert(sizeof(PrimaryBuffer) <= kPrimaryBufferSize,
                 "PrimaryBuffer structure is too large.");
+  ABSL_HARDENING_ASSERT(primary_buffer_memory_.size() >= kPrimaryBufferSize);
 
-  const BlockAllocator allocators[] = {
-      primary_buffer_.block_allocator_64(),
-      primary_buffer_.block_allocator_256(),
-      primary_buffer_.block_allocator_512(),
-      primary_buffer_.block_allocator_1024(),
-      primary_buffer_.block_allocator_2048(),
-  };
-
+  const BlockAllocator allocators[] = {primary_buffer_.block_allocator_64(),
+                                       primary_buffer_.block_allocator_256(),
+                                       primary_buffer_.block_allocator_512(),
+                                       primary_buffer_.block_allocator_1k(),
+                                       primary_buffer_.block_allocator_2k(),
+                                       primary_buffer_.block_allocator_4k()};
   buffer_pool_.AddBlockBuffer(kPrimaryBufferId,
                               std::move(primary_buffer_memory), allocators);
 }
@@ -166,21 +177,41 @@ NodeLinkMemory::NodeLinkMemory(Ref<Node> node,
 NodeLinkMemory::~NodeLinkMemory() = default;
 
 void NodeLinkMemory::SetNodeLink(Ref<NodeLink> link) {
-  absl::MutexLock lock(&mutex_);
-  node_link_ = std::move(link);
+  std::vector<size_t> block_sizes_needed;
+  {
+    absl::MutexLock lock(&mutex_);
+    node_link_ = std::move(link);
+    if (!node_link_) {
+      return;
+    }
+
+    // Any capcity requests accumulated before NodeLink activation can be
+    // carried out now.
+    for (auto& [size, callbacks] : capacity_callbacks_) {
+      block_sizes_needed.push_back(size);
+    }
+  }
+
+  for (size_t size : block_sizes_needed) {
+    RequestBlockCapacity(size, [](bool) {});
+  }
 }
 
 // static
-NodeLinkMemory::Allocation NodeLinkMemory::Allocate(Ref<Node> node) {
-  DriverMemory primary_buffer_memory(node->driver(), sizeof(PrimaryBuffer));
-  if (!primary_buffer_memory.is_valid()) {
-    return {.node_link_memory = nullptr, .primary_buffer_memory = {}};
+DriverMemoryWithMapping NodeLinkMemory::AllocateMemory(
+    const IpczDriver& driver) {
+  DriverMemory memory(driver, kPrimaryBufferSize);
+  if (!memory.is_valid()) {
+    return {};
   }
 
-  auto memory = AdoptRef(
-      new NodeLinkMemory(std::move(node), primary_buffer_memory.Map()));
+  DriverMemoryMapping mapping = memory.Map();
+  if (!mapping.is_valid()) {
+    return {};
+  }
 
-  PrimaryBuffer& primary_buffer = memory->primary_buffer_;
+  PrimaryBuffer& primary_buffer =
+      *reinterpret_cast<PrimaryBuffer*>(mapping.bytes().data());
 
   // The first allocable BufferId is 1, because the primary buffer uses 0.
   primary_buffer.header.next_buffer_id.store(1, std::memory_order_relaxed);
@@ -193,25 +224,21 @@ NodeLinkMemory::Allocation NodeLinkMemory::Allocate(Ref<Node> node) {
   primary_buffer.header.next_sublink_id.store(kMaxInitialPortals,
                                               std::memory_order_relaxed);
 
-  // Note: Each InitializeRegion() performs an atomic release, so atomic stores
+  // Note: InitializeRegion() performs an atomic release, so atomic stores
   // before this section can be relaxed.
   primary_buffer.block_allocator_64().InitializeRegion();
   primary_buffer.block_allocator_256().InitializeRegion();
   primary_buffer.block_allocator_512().InitializeRegion();
-  primary_buffer.block_allocator_1024().InitializeRegion();
-  primary_buffer.block_allocator_2048().InitializeRegion();
-
-  return {
-      .node_link_memory = std::move(memory),
-      .primary_buffer_memory = std::move(primary_buffer_memory),
-  };
+  primary_buffer.block_allocator_1k().InitializeRegion();
+  primary_buffer.block_allocator_2k().InitializeRegion();
+  primary_buffer.block_allocator_4k().InitializeRegion();
+  return {std::move(memory), std::move(mapping)};
 }
 
 // static
-Ref<NodeLinkMemory> NodeLinkMemory::Adopt(Ref<Node> node,
-                                          DriverMemory primary_buffer_memory) {
-  return AdoptRef(
-      new NodeLinkMemory(std::move(node), primary_buffer_memory.Map()));
+Ref<NodeLinkMemory> NodeLinkMemory::Create(Ref<Node> node,
+                                           DriverMemoryMapping memory) {
+  return AdoptRef(new NodeLinkMemory(std::move(node), std::move(memory)));
 }
 
 BufferId NodeLinkMemory::AllocateNewBufferId() {
@@ -233,8 +260,9 @@ FragmentRef<RouterLinkState> NodeLinkMemory::GetInitialRouterLinkState(
   FragmentDescriptor descriptor(kPrimaryBufferId,
                                 ToOffset(state, primary_buffer_memory_.data()),
                                 sizeof(RouterLinkState));
-  return FragmentRef<RouterLinkState>(RefCountedFragment::kUnmanagedRef,
-                                      Fragment(descriptor, state));
+  return FragmentRef<RouterLinkState>(
+      RefCountedFragment::kUnmanagedRef,
+      Fragment::FromDescriptorUnsafe(descriptor, state));
 }
 
 Fragment NodeLinkMemory::GetFragment(const FragmentDescriptor& descriptor) {
@@ -268,6 +296,23 @@ Fragment NodeLinkMemory::AllocateFragment(size_t size) {
     }
   }
   return fragment;
+}
+
+Fragment NodeLinkMemory::AllocateFragmentBestEffort(size_t size) {
+  // TODO: Support an alternative allocation scheme for larger requests.
+  const size_t ideal_block_size = GetBlockSizeForFragmentSize(size);
+  const size_t largest_block_size =
+      std::min(ideal_block_size, kMaxFragmentSizeForBlockAllocation);
+  const size_t smallest_block_size = kMinBestEffortFallbackBlockSize;
+  for (size_t block_size = largest_block_size;
+       block_size >= smallest_block_size; block_size /= 2) {
+    const Fragment fragment = AllocateFragment(block_size);
+    if (!fragment.is_null()) {
+      return fragment;
+    }
+  }
+
+  return {};
 }
 
 bool NodeLinkMemory::FreeFragment(const Fragment& fragment) {
@@ -322,8 +367,9 @@ void NodeLinkMemory::WaitForBufferAsync(
 }
 
 bool NodeLinkMemory::CanExpandBlockCapacity(size_t block_size) {
-  return buffer_pool_.GetTotalBlockCapacity(block_size) <
-         kMaxBlockAllocatorCapacityPerFragmentSize;
+  return allow_memory_expansion_for_parcel_data_ &&
+         buffer_pool_.GetTotalBlockCapacity(block_size) <
+             kMaxBlockAllocatorCapacityPerFragmentSize;
 }
 
 void NodeLinkMemory::RequestBlockCapacity(
@@ -347,18 +393,25 @@ void NodeLinkMemory::RequestBlockCapacity(
       // will be run when that request completes.
       return;
     }
+
+    if (!node_link_) {
+      // Allocation requests will be fulfilled once the NodeLink is activated
+      // and we're given a reference to it via SetNodeLink().
+      return;
+    }
+
     link = node_link_;
   }
 
   node_->AllocateSharedMemory(
       buffer_size, [self = WrapRefCounted(this), block_size,
                     link = std::move(link)](DriverMemory memory) {
-        if (!memory.is_valid()) {
+        DriverMemoryMapping mapping = memory.Map();
+        if (!mapping.is_valid()) {
           self->OnCapacityRequestComplete(block_size, false);
           return;
         }
 
-        DriverMemoryMapping mapping = memory.Map();
         BlockAllocator allocator(mapping.bytes(), block_size);
         allocator.InitializeRegion();
 

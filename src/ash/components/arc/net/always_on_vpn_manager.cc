@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 
 #include "ash/components/arc/arc_prefs.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/values.h"
 #include "chromeos/ash/components/network/network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
@@ -33,7 +33,7 @@ AlwaysOnVpnManager::~AlwaysOnVpnManager() {
       registrar_.prefs()->GetString(prefs::kAlwaysOnVpnPackage);
   bool lockdown = registrar_.prefs()->GetBoolean(prefs::kAlwaysOnVpnLockdown);
   if (lockdown && !package.empty()) {
-    chromeos::NetworkHandler::Get()
+    ash::NetworkHandler::Get()
         ->network_configuration_handler()
         ->SetManagerProperty(shill::kAlwaysOnVpnPackageProperty,
                              base::Value(std::string()));
@@ -49,7 +49,7 @@ void AlwaysOnVpnManager::OnPrefChanged() {
     always_on_vpn_package =
         registrar_.prefs()->GetString(prefs::kAlwaysOnVpnPackage);
   }
-  chromeos::NetworkHandler::Get()
+  ash::NetworkHandler::Get()
       ->network_configuration_handler()
       ->SetManagerProperty(shill::kAlwaysOnVpnPackageProperty,
                            base::Value(always_on_vpn_package));

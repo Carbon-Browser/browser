@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,12 @@ class WebContentsView {
   // Returns the current drop data, if any.
   virtual DropData* GetDropData() const = 0;
 
+  // Used to transfer WebContentsViewDragSecurityInfo across portal activation
+  // (where we destroy and create a new WebContentsView for a tab).
+  // TODO(crbug.com/1254770): We don't need this after we migrate portals to
+  // MPArch.
+  virtual void TransferDragSecurityInfo(WebContentsView* view) = 0;
+
   // Get the bounds of the View, relative to the parent.
   virtual gfx::Rect GetViewBounds() const = 0;
 
@@ -89,7 +95,8 @@ class WebContentsView {
   // trying to find a specific window.
   virtual void SetPageTitle(const std::u16string& title) = 0;
 
-  // Invoked when the WebContents is notified that the RenderView is ready.
+  // Invoked when the WebContents is notified that the `blink::WebView` is
+  // ready.
   virtual void RenderViewReady() = 0;
 
   // Invoked when the WebContents is notified that the RenderViewHost has been
@@ -111,6 +118,13 @@ class WebContentsView {
   // loop has ended.
   virtual bool CloseTabAfterEventTrackingIfNeeded() = 0;
 #endif
+
+  virtual void FullscreenStateChanged(bool is_fullscreen) = 0;
+
+  // Intended for desktop PWAs with manifest entry of window-controls-overlay,
+  // this informs the view of which area at the top of the view is available for
+  // web contents.
+  virtual void UpdateWindowControlsOverlay(const gfx::Rect& bounding_rect) = 0;
 };
 
 // Factory function to create `WebContentsView`s. Implemented in the platform
@@ -118,7 +132,7 @@ class WebContentsView {
 std::unique_ptr<WebContentsView> CreateWebContentsView(
     WebContentsImpl* web_contents,
     std::unique_ptr<WebContentsViewDelegate> delegate,
-    RenderViewHostDelegateView** render_view_host_delegate_view);
+    raw_ptr<RenderViewHostDelegateView>* render_view_host_delegate_view);
 
 }  // namespace content
 

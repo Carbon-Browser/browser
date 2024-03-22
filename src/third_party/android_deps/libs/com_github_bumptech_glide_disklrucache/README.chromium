@@ -6,6 +6,7 @@ License: Apache 2.0
 License File: LICENSE
 CPEPrefix: unknown
 Security Critical: yes
+Shipped: yes
 
 Description:
 A cache that uses a bounded amount of space on a filesystem. Based on Jake Wharton's tailored for Glide.

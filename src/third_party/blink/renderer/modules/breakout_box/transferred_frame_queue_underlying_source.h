@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_BREAKOUT_BOX_TRANSFERRED_FRAME_QUEUE_UNDERLYING_SOURCE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_BREAKOUT_BOX_TRANSFERRED_FRAME_QUEUE_UNDERLYING_SOURCE_H_
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "third_party/blink/renderer/modules/breakout_box/frame_queue_underlying_source.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
@@ -19,8 +20,9 @@ class TransferredFrameQueueUnderlyingSource
 
   TransferredFrameQueueUnderlyingSource(
       ScriptState*,
-      FrameQueueHost*,
-      scoped_refptr<base::SequencedTaskRunner> host_runner);
+      CrossThreadPersistent<FrameQueueHost>,
+      scoped_refptr<base::SequencedTaskRunner> host_runner,
+      CrossThreadOnceClosure transferred_source_destroyed_callback);
   ~TransferredFrameQueueUnderlyingSource() override = default;
 
   TransferredFrameQueueUnderlyingSource(
@@ -32,11 +34,15 @@ class TransferredFrameQueueUnderlyingSource
   bool StartFrameDelivery() override;
   void StopFrameDelivery() override;
 
+  // ExecutionLifecycleObserver
+  void ContextDestroyed() override;
+
   void Trace(Visitor*) const override;
 
  private:
   scoped_refptr<base::SequencedTaskRunner> host_runner_;
   CrossThreadPersistent<FrameQueueHost> host_;
+  CrossThreadOnceClosure transferred_source_destroyed_callback_;
 };
 
 extern template class MODULES_EXTERN_TEMPLATE_EXPORT

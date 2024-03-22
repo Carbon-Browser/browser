@@ -1,9 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {stringToMojoString16} from 'chrome://resources/ash/common/mojo_utils.js';
-import {FeedbackContext, HelpContentList, HelpContentType, SearchRequest, SearchResponse} from './feedback_types.js';
+import {stringToMojoString16} from 'chrome://resources/js/mojo_type_util.js';
+
+import {HelpContentList} from './feedback_types.js';
+import {FeedbackContext, HelpContentType, SearchRequest, SearchResponse} from './os_feedback_ui.mojom-webui.js';
 
 /**
  * @fileoverview
@@ -55,6 +57,9 @@ export const fakeHelpContentList = [
   },
 ];
 
+/** @type {!HelpContentList} */
+export const fakeEmptyHelpContentList = [];
+
 /** @type {!SearchRequest} */
 export const fakeSearchRequest = {
   maxResults: 5,
@@ -67,16 +72,90 @@ export const fakeSearchResponse = {
   totalResults: 10,
 };
 
+/** @type {!SearchResponse} */
+export const fakeEmptySearchResponse = {
+  results: fakeEmptyHelpContentList,
+  totalResults: 0,
+};
+
 /** @type {!FeedbackContext} */
 export const fakeFeedbackContext = {
   email: 'test.user2@test.com',
   pageUrl: {url: 'chrome://tab/'},
+  isInternalAccount: false,
+  fromAssistant: false,
+  assistantDebugInfoAllowed: false,
+  fromSettingsSearch: false,
+  fromAutofill: false,
+  autofillMetadata: '',
+  wifiDebugLogsAllowed: false,
+  traceId: 1,
+  categoryTag: 'MediaApp',
+  hasLinkedCrossDevicePhone: false,
 };
 
 /** @type {!FeedbackContext} */
 export const fakeEmptyFeedbackContext = {
   email: '',
   pageUrl: {url: ''},
+  isInternalAccount: false,
+  fromAssistant: false,
+  assistantDebugInfoAllowed: false,
+  fromSettingsSearch: false,
+  fromAutofill: false,
+  autofillMetadata: '',
+  wifiDebugLogsAllowed: false,
+  traceId: 0,
+  hasLinkedCrossDevicePhone: false,
+};
+
+/**
+ * Feedback context for login flow, i.e., on oobe or login screen.
+ * @type {!FeedbackContext}
+ */
+export const fakeLoginFlowFeedbackContext = {
+  email: '',
+  pageUrl: {url: ''},
+  isInternalAccount: false,
+  fromAssistant: false,
+  assistantDebugInfoAllowed: false,
+  fromSettingsSearch: false,
+  fromAutofill: false,
+  autofillMetadata: '',
+  wifiDebugLogsAllowed: false,
+  traceId: 0,
+  categoryTag: 'Login',
+  hasLinkedCrossDevicePhone: false,
+};
+
+/** @type {!FeedbackContext} */
+export const fakeInternalUserFeedbackContext = {
+  email: 'test.user@google.com',
+  pageUrl: {url: 'chrome://tab/'},
+  isInternalAccount: true,
+  fromAssistant: true,
+  assistantDebugInfoAllowed: false,
+  fromSettingsSearch: true,
+  fromAutofill: false,
+  autofillMetadata: '',
+  wifiDebugLogsAllowed: false,
+  traceId: 1,
+  hasLinkedCrossDevicePhone: true,
+};
+
+/** @type {!FeedbackContext} */
+export const fakeFeedbackContextWithoutLinkedCrossDevicePhone = {
+  email: 'test.user@google.com',
+  pageUrl: {url: 'chrome://tab/'},
+  isInternalAccount: true,
+  fromAssistant: true,
+  assistantDebugInfoAllowed: false,
+  fromSettingsSearch: true,
+  fromAutofill: false,
+  autofillMetadata: '',
+  wifiDebugLogsAllowed: false,
+  traceId: 1,
+  hasLinkedCrossDevicePhone: false,
 };
 
 /** @type {!Array<number>} */

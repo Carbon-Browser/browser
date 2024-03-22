@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,6 @@ struct COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) StringTraits<WTF::String> {
   static WTF::StringUTF8Adaptor GetUTF8(const WTF::String& input);
 
   static bool Read(StringDataView input, WTF::String* output);
-
-  static bool IsValidUTF8(const WTF::String& value);
 };
 
 }  // namespace mojo

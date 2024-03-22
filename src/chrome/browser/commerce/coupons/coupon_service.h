@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,9 @@ class CouponService : public KeyedService,
   using CouponDisplayTimeMap =
       base::flat_map<std::pair<GURL, int64_t>, base::Time>;
 
+  // Use |CouponServiceFactory::GetForProfile(...)| to get an instance of this
+  // service.
+  explicit CouponService(std::unique_ptr<CouponDB> coupon_db);
   CouponService(const CouponService&) = delete;
   CouponService& operator=(const CouponService&) = delete;
   ~CouponService() override;
@@ -77,10 +80,6 @@ class CouponService : public KeyedService,
   friend class CouponServiceFactory;
   friend class CouponServiceTest;
   friend class CartServiceCouponTest;
-
-  // Use |CouponServiceFactory::GetForProfile(...)| to get an instance of this
-  // service.
-  explicit CouponService(std::unique_ptr<CouponDB> coupon_db);
 
   // Initialize the coupon map in cache layer from storage.
   void InitializeCouponsMap();

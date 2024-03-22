@@ -1,14 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/devtools/protocol/devtools_network_resource_loader.h"
 #include <cstddef>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
-#include "content/browser/devtools/protocol/devtools_network_resource_loader.h"
 #include "net/base/load_flags.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -32,7 +31,7 @@ DevToolsNetworkResourceLoader::DevToolsNetworkResourceLoader(
 DevToolsNetworkResourceLoader::~DevToolsNetworkResourceLoader() = default;
 
 // We can trust the |origin| parameter here, as it is the last committed origin
-// of a render frame host identified by a DevTools frame token. Note that there
+// of a RenderFrameHost identified by a DevTools frame token. Note that there
 // is a potential race condition when DevTools sends a request while the frame
 // already navigates away. This is difficult to fix before the
 // RenderDocumentHost refactoring is done.
@@ -104,7 +103,7 @@ void DevToolsNetworkResourceLoader::DownloadAsStream() {
 
 void DevToolsNetworkResourceLoader::OnDataReceived(base::StringPiece chunk,
                                                    base::OnceClosure resume) {
-  content_.append(chunk.data(), chunk.size());
+  content_.append(chunk);
   std::move(resume).Run();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,82 +90,107 @@ TEST(ULPMetricsLoggerTest, TestNeverLanguagesMissingFromULPCount) {
                                1);
 }
 
-TEST(ULPMetricsLoggerTest, TestDetermineLanguageStatus) {
+TEST(ULPMetricsLoggerTest, TestAcceptLanguagesPageLanguageOverlap) {
   ULPMetricsLogger logger;
+  base::HistogramTester histogram;
+
+  logger.RecordInitiationAcceptLanguagesPageLanguageOverlap(30);
+  histogram.ExpectUniqueSample(
+      kInitiationAcceptLanguagesPageLanguageOverlapHistogram, 30, 1);
+}
+
+TEST(ULPMetricsLoggerTest, TestPageLanguagesMissingFromULP) {
+  ULPMetricsLogger logger;
+  base::HistogramTester histogram;
+
+  std::vector<std::string> page_languages_not_in_ulp = {"en-GB", "sw"};
+  logger.RecordInitiationPageLanguagesMissingFromULP(page_languages_not_in_ulp);
+  histogram.ExpectBucketCount(kInitiationPageLanguagesMissingFromULPHistogram,
+                              base::HashMetricName("en-GB"), 1);
+  histogram.ExpectBucketCount(kInitiationPageLanguagesMissingFromULPHistogram,
+                              base::HashMetricName("sw"), 1);
+}
+
+TEST(ULPMetricsLoggerTest, TestPageLanguagesMissingFromULPCount) {
+  ULPMetricsLogger logger;
+  base::HistogramTester histogram;
+
+  logger.RecordInitiationPageLanguagesMissingFromULPCount(2);
+  histogram.ExpectUniqueSample(
+      kInitiationPageLanguagesMissingFromULPCountHistogram, 2, 1);
+}
+
+TEST(ULPMetricsLoggerTest, TestDetermineLanguageStatus) {
   std::vector<std::string> ulp_languages = {"en-US", "es-419", "pt-BR", "de",
                                             "fr-CA"};
 
   EXPECT_EQ(ULPLanguageStatus::kTopULPLanguageExactMatch,
-            logger.DetermineLanguageStatus("en-US", ulp_languages));
+            ULPMetricsLogger::DetermineLanguageStatus("en-US", ulp_languages));
 
   EXPECT_EQ(ULPLanguageStatus::kNonTopULPLanguageExactMatch,
-            logger.DetermineLanguageStatus("de", ulp_languages));
+            ULPMetricsLogger::DetermineLanguageStatus("de", ulp_languages));
 
   EXPECT_EQ(ULPLanguageStatus::kTopULPLanguageBaseMatch,
-            logger.DetermineLanguageStatus("en-GB", ulp_languages));
+            ULPMetricsLogger::DetermineLanguageStatus("en-GB", ulp_languages));
 
   EXPECT_EQ(ULPLanguageStatus::kNonTopULPLanguageBaseMatch,
-            logger.DetermineLanguageStatus("pt", ulp_languages));
+            ULPMetricsLogger::DetermineLanguageStatus("pt", ulp_languages));
 
   EXPECT_EQ(ULPLanguageStatus::kLanguageNotInULP,
-            logger.DetermineLanguageStatus("zu", ulp_languages));
+            ULPMetricsLogger::DetermineLanguageStatus("zu", ulp_languages));
 
   EXPECT_EQ(ULPLanguageStatus::kLanguageEmpty,
-            logger.DetermineLanguageStatus("", ulp_languages));
+            ULPMetricsLogger::DetermineLanguageStatus("", ulp_languages));
 
   EXPECT_EQ(ULPLanguageStatus::kLanguageEmpty,
-            logger.DetermineLanguageStatus("und", ulp_languages));
+            ULPMetricsLogger::DetermineLanguageStatus("und", ulp_languages));
 }
 
-TEST(ULPMetricsLoggerTest, TestULPLanguagesInAcceptLanguagesRatio) {
-  ULPMetricsLogger logger;
-  std::vector<std::string> ulp_languages = {"en-US", "es", "pt-BR", "de",
-                                            "fr-CA"};
+TEST(ULPMetricsLoggerTest, TestULPLanguagesOverlapRatio) {
+  std::vector<std::string> languages = {"en-US", "es", "pt-BR", "de", "fr-CA"};
 
-  EXPECT_EQ(0, logger.ULPLanguagesInAcceptLanguagesRatio({"fi-FI", "af", "zu"},
-                                                         ulp_languages));
+  EXPECT_EQ(0, ULPMetricsLogger::LanguagesOverlapRatio(languages,
+                                                       {"fi-FI", "af", "zu"}));
 
-  EXPECT_EQ(20, logger.ULPLanguagesInAcceptLanguagesRatio({"en-GB", "af", "zu"},
-                                                          ulp_languages));
+  EXPECT_EQ(20, ULPMetricsLogger::LanguagesOverlapRatio(languages,
+                                                        {"en-GB", "af", "zu"}));
 
-  EXPECT_EQ(20, logger.ULPLanguagesInAcceptLanguagesRatio({"en", "af", "zu"},
-                                                          ulp_languages));
+  EXPECT_EQ(20, ULPMetricsLogger::LanguagesOverlapRatio(languages,
+                                                        {"en", "af", "zu"}));
 
-  EXPECT_EQ(40, logger.ULPLanguagesInAcceptLanguagesRatio(
-                    {"en-US", "af", "zu", "es"}, ulp_languages));
+  EXPECT_EQ(40, ULPMetricsLogger::LanguagesOverlapRatio(
+                    languages, {"en-US", "af", "zu", "es"}));
 
-  EXPECT_EQ(60, logger.ULPLanguagesInAcceptLanguagesRatio(
-                    {"en-US", "af", "pt-BR", "es"}, ulp_languages));
+  EXPECT_EQ(60, ULPMetricsLogger::LanguagesOverlapRatio(
+                    languages, {"en-US", "af", "pt-BR", "es"}));
 
-  EXPECT_EQ(60, logger.ULPLanguagesInAcceptLanguagesRatio(
-                    {"en", "af", "pt", "es"}, ulp_languages));
+  EXPECT_EQ(60, ULPMetricsLogger::LanguagesOverlapRatio(
+                    languages, {"en", "af", "pt", "es"}));
 
-  EXPECT_EQ(60, logger.ULPLanguagesInAcceptLanguagesRatio(
-                    {"en", "af", "pt-PT", "es"}, ulp_languages));
+  EXPECT_EQ(60, ULPMetricsLogger::LanguagesOverlapRatio(
+                    languages, {"en", "af", "pt-PT", "es"}));
 
-  EXPECT_EQ(80, logger.ULPLanguagesInAcceptLanguagesRatio(
-                    {"en-US", "af", "pt-BR", "es", "de"}, ulp_languages));
+  EXPECT_EQ(80, ULPMetricsLogger::LanguagesOverlapRatio(
+                    languages, {"en-US", "af", "pt-BR", "es", "de"}));
 
-  EXPECT_EQ(100,
-            logger.ULPLanguagesInAcceptLanguagesRatio(
-                {"en-US", "af", "pt-BR", "es", "de", "fr-CA"}, ulp_languages));
+  EXPECT_EQ(100, ULPMetricsLogger::LanguagesOverlapRatio(
+                     languages, {"en-US", "af", "pt-BR", "es", "de", "fr-CA"}));
 }
 
 TEST(ULPMetricsLoggerTest, TestRemoveULPLanguages) {
-  ULPMetricsLogger logger;
   std::vector<std::string> ulp_languages = {"en-US", "es", "pt-BR", "de"};
 
-  EXPECT_THAT(
-      logger.RemoveULPLanguages({"af", "en", "am", "as"}, ulp_languages),
-      ElementsAre("af", "am", "as"));
+  EXPECT_THAT(ULPMetricsLogger::RemoveULPLanguages({"af", "en", "am", "as"},
+                                                   ulp_languages),
+              ElementsAre("af", "am", "as"));
 
-  EXPECT_THAT(logger.RemoveULPLanguages(
+  EXPECT_THAT(ULPMetricsLogger::RemoveULPLanguages(
                   {"en-GB", "af", "en-AU", "am", "pt", "as"}, ulp_languages),
               ElementsAre("af", "am", "as"));
 
-  EXPECT_THAT(
-      logger.RemoveULPLanguages({"en", "pt-BR", "es-MX"}, ulp_languages),
-      IsEmpty());
+  EXPECT_THAT(ULPMetricsLogger::RemoveULPLanguages({"en", "pt-BR", "es-MX"},
+                                                   ulp_languages),
+              IsEmpty());
 }
 
 }  // namespace language

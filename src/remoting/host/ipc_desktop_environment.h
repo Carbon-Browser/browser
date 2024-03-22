@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,13 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/system/message_pipe.h"
+#include "remoting/host/active_display_monitor.h"
 #include "remoting/host/desktop_environment.h"
 #include "remoting/host/desktop_session_connector.h"
 #include "remoting/host/file_transfer/ipc_file_operations.h"
@@ -25,7 +26,7 @@
 
 namespace base {
 class SingleThreadTaskRunner;
-}  // base
+}  // namespace base
 
 namespace remoting {
 
@@ -66,14 +67,14 @@ class IpcDesktopEnvironment : public DesktopEnvironment {
   std::unique_ptr<KeyboardLayoutMonitor> CreateKeyboardLayoutMonitor(
       base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback)
       override;
+  std::unique_ptr<ActiveDisplayMonitor> CreateActiveDisplayMonitor(
+      ActiveDisplayMonitor::Callback callback) override;
   std::unique_ptr<FileOperations> CreateFileOperations() override;
   std::unique_ptr<UrlForwarderConfigurator> CreateUrlForwarderConfigurator()
       override;
   std::string GetCapabilities() const override;
   void SetCapabilities(const std::string& capabilities) override;
   uint32_t GetDesktopSessionId() const override;
-  std::unique_ptr<DesktopAndCursorConditionalComposer>
-  CreateComposingVideoCapturer() override;
   std::unique_ptr<RemoteWebAuthnStateChangeNotifier>
   CreateRemoteWebAuthnStateChangeNotifier() override;
 
@@ -83,9 +84,8 @@ class IpcDesktopEnvironment : public DesktopEnvironment {
 
 // Used to create IpcDesktopEnvironment objects integrating with the desktop via
 // a helper process and talking to that process via IPC.
-class IpcDesktopEnvironmentFactory
-    : public DesktopEnvironmentFactory,
-      public DesktopSessionConnector {
+class IpcDesktopEnvironmentFactory : public DesktopEnvironmentFactory,
+                                     public DesktopSessionConnector {
  public:
   // Passes a reference to the IPC channel connected to the daemon process and
   // relevant task runners. |daemon_channel| must outlive this object.

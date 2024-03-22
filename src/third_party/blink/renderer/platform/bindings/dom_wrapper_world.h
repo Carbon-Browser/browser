@@ -89,6 +89,12 @@ class PLATFORM_EXPORT DOMWrapperWorld : public RefCounted<DOMWrapperWorld> {
     kRegExp,
     kForV8ContextSnapshotNonMain,
     kWorker,
+    // Shadow realms do not have a corresponding Frame nor DOMWindow so they're
+    // very different from the main world. Shadow realms are not workers nor
+    // worklets obviously, nor Chrome extensions' content scripts. So, we use
+    // a distinguishable world type. Shadow realms can be created not only in
+    // the main isolate but also in worker isolates and other isolates.
+    kShadowRealm,
   };
 
   static bool IsIsolatedWorldId(int32_t world_id) {
@@ -112,7 +118,8 @@ class PLATFORM_EXPORT DOMWrapperWorld : public RefCounted<DOMWrapperWorld> {
     return number_of_non_main_worlds_in_main_thread_;
   }
 
-  static void AllWorldsInCurrentThread(
+  static void AllWorldsInIsolate(
+      v8::Isolate* isolate,
       Vector<scoped_refptr<DOMWrapperWorld>>& worlds);
 
   static DOMWrapperWorld& World(v8::Local<v8::Context> context) {
@@ -123,7 +130,7 @@ class PLATFORM_EXPORT DOMWrapperWorld : public RefCounted<DOMWrapperWorld> {
     return World(isolate->GetCurrentContext());
   }
 
-  static DOMWrapperWorld& MainWorld();
+  static DOMWrapperWorld& MainWorld(v8::Isolate* isolate);
 
   static void SetNonMainWorldStableId(int32_t world_id, const String&);
   String NonMainWorldStableId() const;
@@ -147,10 +154,11 @@ class PLATFORM_EXPORT DOMWrapperWorld : public RefCounted<DOMWrapperWorld> {
   scoped_refptr<const SecurityOrigin> IsolatedWorldSecurityOrigin(
       const base::UnguessableToken& cluster_id) const;
 
-  static bool HasWrapperInAnyWorldInMainThread(ScriptWrappable*);
-
   bool IsMainWorld() const { return world_type_ == WorldType::kMain; }
   bool IsWorkerWorld() const { return world_type_ == WorldType::kWorker; }
+  bool IsShadowRealmWorld() const {
+    return world_type_ == WorldType::kShadowRealm;
+  }
   bool IsIsolatedWorld() const {
     return world_type_ == WorldType::kIsolated ||
            world_type_ == WorldType::kInspectorIsolated;
@@ -165,6 +173,11 @@ class PLATFORM_EXPORT DOMWrapperWorld : public RefCounted<DOMWrapperWorld> {
 
   // Clear the reference pointing from |object| to |handle| in any world.
   static bool UnsetSpecificWrapperIfSet(
+      ScriptWrappable* object,
+      const v8::TracedReference<v8::Object>& handle);
+
+  // Clear the reference pointing from |object| to |handle| in any world.
+  static bool UnsetMainWorldWrapperIfSet(
       ScriptWrappable* object,
       const v8::TracedReference<v8::Object>& handle);
 
@@ -189,12 +202,20 @@ class PLATFORM_EXPORT DOMWrapperWorld : public RefCounted<DOMWrapperWorld> {
 };
 
 // static
+inline bool DOMWrapperWorld::UnsetMainWorldWrapperIfSet(
+    ScriptWrappable* object,
+    const v8::TracedReference<v8::Object>& handle) {
+  return object->UnsetMainWorldWrapperIfSet(handle);
+}
+
+// static
 inline bool DOMWrapperWorld::UnsetSpecificWrapperIfSet(
     ScriptWrappable* object,
     const v8::TracedReference<v8::Object>& handle) {
   // Fast path for main world.
-  if (object->UnsetMainWorldWrapperIfSet(handle))
+  if (UnsetMainWorldWrapperIfSet(object, handle)) {
     return true;
+  }
 
   // Slow path: |object| may point to |handle| in any non-main DOM world.
   return DOMWrapperWorld::UnsetNonMainWorldWrapperIfSet(object, handle);

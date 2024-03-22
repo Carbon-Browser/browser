@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,6 @@ struct CC_EXPORT UkmSmoothnessData {
   double percentile_95 = 0.0;
   double variance = 0.0;
   double buckets[7] = {0};
-  base::TimeDelta time_max_delta = base::Milliseconds(1);
 
   double scroll_focused_median = 0.0;
   double scroll_focused_percentile_95 = 0.0;

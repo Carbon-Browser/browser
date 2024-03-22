@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,17 +31,13 @@ class CORE_EXPORT ClassicScript final : public Script {
       const ScriptFetchOptions&,
       ScriptSourceLocationType = ScriptSourceLocationType::kUnknown,
       SanitizeScriptErrors = SanitizeScriptErrors::kSanitize,
-      SingleCachedMetadataHandler* = nullptr,
+      CachedMetadataHandler* = nullptr,
       const TextPosition& start_position = TextPosition::MinimumPosition(),
       ScriptStreamer::NotStreamingReason =
           ScriptStreamer::NotStreamingReason::kInlineScript,
       InlineScriptStreamer* = nullptr);
   static ClassicScript* CreateFromResource(ScriptResource*,
-                                           const KURL& base_url,
-                                           const ScriptFetchOptions&,
-                                           ResourceScriptStreamer*,
-                                           ScriptStreamer::NotStreamingReason,
-                                           ScriptCacheConsumer*);
+                                           const ScriptFetchOptions&);
 
   // For scripts not specified in the HTML spec.
   //
@@ -66,7 +62,7 @@ class CORE_EXPORT ClassicScript final : public Script {
       const ScriptFetchOptions&,
       ScriptSourceLocationType,
       SanitizeScriptErrors,
-      SingleCachedMetadataHandler* = nullptr,
+      CachedMetadataHandler* = nullptr,
       const TextPosition& start_position = TextPosition::MinimumPosition(),
       ScriptStreamer* = nullptr,
       ScriptStreamer::NotStreamingReason =
@@ -86,14 +82,14 @@ class CORE_EXPORT ClassicScript final : public Script {
     return sanitize_script_errors_;
   }
 
-  SingleCachedMetadataHandler* CacheHandler() const { return cache_handler_; }
+  CachedMetadataHandler* CacheHandler() const { return cache_handler_.Get(); }
 
-  ScriptStreamer* Streamer() const { return streamer_; }
+  ScriptStreamer* Streamer() const { return streamer_.Get(); }
   ScriptStreamer::NotStreamingReason NotStreamingReason() const {
     return not_streaming_reason_;
   }
 
-  ScriptCacheConsumer* CacheConsumer() const { return cache_consumer_; }
+  ScriptCacheConsumer* CacheConsumer() const { return cache_consumer_.Get(); }
 
   const String& SourceMapUrl() const { return source_map_url_; }
 
@@ -109,10 +105,14 @@ class CORE_EXPORT ClassicScript final : public Script {
       LocalDOMWindow*,
       int32_t world_id);
 
+  v8::ScriptOrigin CreateScriptOrigin(v8::Isolate* isolate) const;
+
  private:
   mojom::blink::ScriptType GetScriptType() const override {
     return mojom::blink::ScriptType::kClassic;
   }
+
+  v8::Local<v8::Data> CreateHostDefinedOptions(v8::Isolate* isolate) const;
 
   const ParkableString source_text_;
 
@@ -120,7 +120,7 @@ class CORE_EXPORT ClassicScript final : public Script {
 
   const SanitizeScriptErrors sanitize_script_errors_;
 
-  const Member<SingleCachedMetadataHandler> cache_handler_;
+  const Member<CachedMetadataHandler> cache_handler_;
 
   const Member<ScriptStreamer> streamer_;
   const ScriptStreamer::NotStreamingReason not_streaming_reason_;

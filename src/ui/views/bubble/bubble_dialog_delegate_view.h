@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,24 @@
 #define UI_VIEWS_BUBBLE_BUBBLE_DIALOG_DELEGATE_VIEW_H_
 
 #include <memory>
+#include <string>
+#include <unordered_set>
 #include <utility>
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/base/class_property.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_utils.h"
 #include "ui/views/bubble/bubble_border.h"
 #include "ui/views/bubble/bubble_frame_view.h"
 #include "ui/views/metadata/view_factory.h"
 #include "ui/views/view_tracker.h"
+#include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -67,6 +72,9 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
 
   void SetAnchorView(View* view);
   View* GetAnchorView() const;
+
+  void SetMainImage(ui::ImageModel main_image);
+  const ui::ImageModel& GetMainImage() const { return main_image_; }
 
   // GetAnchorRect() takes into account the presence of an anchor view, while
   // anchor_rect() always returns the configured anchor rect, regardless of
@@ -139,7 +147,25 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   // GetAnchorRect() has changed. You only need to do this if you have
   // overridden GetAnchorRect() - if you are using an anchor view or anchor rect
   // normally, do not call this.
-  void OnAnchorBoundsChanged();
+  virtual void OnAnchorBoundsChanged();
+
+  // Call this method to update view shown time stamp of underneath input
+  // protectors.
+  void UpdateInputProtectorsTimeStamp();
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Subtitle:
+  //
+  // Bubbles have an optional a Subtitle label under the Title.
+  // This subtitle label is represented in BubbleFrameView.
+
+  // This method is virtual for BubbleFrameViewUnitTest purposes.
+  // Not intended to be overridden in production.
+  virtual std::u16string GetSubtitle() const;
+  void SetSubtitle(const std::u16string& subtitle);
+
+  bool GetSubtitleAllowCharacterBreak() const;
+  void SetSubtitleAllowCharacterBreak(bool allow);
 
   //////////////////////////////////////////////////////////////////////////////
   // Miscellaneous bubble behaviors:
@@ -251,6 +277,11 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
     title_margins_ = title_margins;
   }
 
+  gfx::Insets footnote_margins() const { return footnote_margins_; }
+  void set_footnote_margins(const gfx::Insets& footnote_margins) {
+    footnote_margins_ = footnote_margins;
+  }
+
   // Sets whether or not CreateClientView() returns a Layer backed ClientView.
   // TODO(pbos): Remove all calls to this, then remove `paint_client_to_layer_`.
   // See comment around `paint_client_to_layer_`.
@@ -269,6 +300,8 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   // Get the maximum available screen space to place a bubble anchored to
   // |anchor_view| at |arrow|. If offscreen adjustment is on, this would return
   // the max space corresponding to the possible arrow positions of the bubble.
+  // NOTE: This function should not be called in ozone platforms where global
+  // screen coordinates are not available.
   static gfx::Size GetMaxAvailableScreenSpaceToPlaceBubble(
       View* anchor_view,
       BubbleBorder::Arrow arrow,
@@ -289,6 +322,45 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   void SizeToContents();
 
  protected:
+  // A helper class for logging UMA metrics related to bubbles.
+  // The class logs metrics to:
+  // 1. An aggregated histogram for all bubbles.
+  // 2. A histogram specific to a bubble subclass when its name is provided.
+  class VIEWS_EXPORT BubbleUmaLogger {
+   public:
+    BubbleUmaLogger();
+    ~BubbleUmaLogger();
+
+    void set_delegate(views::BubbleDialogDelegate* delegate) {
+      delegate_ = delegate;
+    }
+    void set_bubble_view(views::View* view) { bubble_view_ = view; }
+
+    void set_allowed_class_names_for_testing(
+        const base::span<const char*>& value) {
+      allowed_class_names_for_testing_ = value;
+    }
+
+    absl::optional<std::string> GetBubbleName() const;
+
+    base::WeakPtr<BubbleUmaLogger> GetWeakPtr();
+
+    // Logs a metric value to UMA histograms. This method logs to:
+    // - "Bubble.All.{histogram_name}" for the general bubble metric.
+    // - "Bubble.{bubble_name}.{histogram_name}" for a specific bubble
+    //   subclass, if `bubble_name` is set.
+    template <typename Value>
+    void LogMetric(void (*uma_func)(const std::string&, Value),
+                   const std::string& histogram_name,
+                   Value value) const;
+
+   private:
+    absl::optional<raw_ptr<views::View>> bubble_view_;
+    absl::optional<raw_ptr<views::BubbleDialogDelegate>> delegate_;
+    absl::optional<base::span<const char*>> allowed_class_names_for_testing_;
+    base::WeakPtrFactory<BubbleUmaLogger> weak_factory_{this};
+  };
+
   // Override this method if you want to position the bubble regardless of its
   // anchor, while retaining the other anchor view logic.
   virtual gfx::Rect GetBubbleBounds();
@@ -303,6 +375,8 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   void set_color_internal(SkColor color) { color_ = color; }
 
   bool color_explicitly_set() const { return color_explicitly_set_; }
+
+  BubbleUmaLogger& bubble_uma_logger() { return bubble_uma_logger_; }
 
   // Redeclarations of virtuals that BubbleDialogDelegate used to inherit from
   // WidgetObserver. These should not exist; do not add new overrides of them.
@@ -339,6 +413,7 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   friend class AnchorViewObserver;
   friend class AnchorWidgetObserver;
   friend class BubbleWidgetObserver;
+  friend class TestBubbleUmaLogger;
   friend class ThemeObserver;
 
   friend class BubbleBorderDelegate;
@@ -372,6 +447,7 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   void SetAnchoredDialogKey();
 
   gfx::Insets title_margins_;
+  gfx::Insets footnote_margins_;
   BubbleBorder::Arrow arrow_ = BubbleBorder::NONE;
   BubbleBorder::Shadow shadow_;
   SkColor color_ = gfx::kPlaceholderColor;
@@ -384,6 +460,9 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   bool adjust_if_offscreen_ = true;
   bool focus_traversable_from_anchor_view_ = true;
   ViewTracker highlighted_button_tracker_;
+  ui::ImageModel main_image_;
+  std::u16string subtitle_;
+  bool subtitle_allow_character_break_ = false;
 
   // A flag controlling bubble closure on deactivation.
   bool close_on_deactivate_ = true;
@@ -396,7 +475,7 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   mutable absl::optional<gfx::Rect> anchor_rect_;
 
   bool accept_events_ = true;
-  gfx::NativeView parent_window_ = nullptr;
+  gfx::NativeView parent_window_ = gfx::NativeView();
 
   // By default, all BubbleDialogDelegates have parent windows.
   bool has_parent_ = true;
@@ -425,6 +504,20 @@ class VIEWS_EXPORT BubbleDialogDelegate : public DialogDelegate {
   // monitor clicks as well for the desired behavior.
   std::unique_ptr<ui::BubbleCloser> mac_bubble_closer_;
 #endif
+
+  // Used to ensure the button remains anchored while this dialog is open.
+  absl::optional<Button::ScopedAnchorHighlight> button_anchor_higlight_;
+
+  // The helper class that logs common bubble metrics.
+  BubbleUmaLogger bubble_uma_logger_;
+
+  absl::optional<base::TimeTicks> bubble_created_time_;
+
+  // Timestamp when the bubble turns visible.
+  absl::optional<base::TimeTicks> bubble_shown_time_;
+
+  // Cumulated time of bubble being visible.
+  base::TimeDelta bubble_shown_duration_;
 };
 
 // BubbleDialogDelegateView is a BubbleDialogDelegate that is also a View.
@@ -437,9 +530,17 @@ class VIEWS_EXPORT BubbleDialogDelegateView : public BubbleDialogDelegate,
  public:
   METADATA_HEADER(BubbleDialogDelegateView);
 
+  template <typename T>
+  static bool IsBubbleDialogDelegateView(const BubbleDialogDelegateView* view) {
+    return ui::metadata::IsClass<T, BubbleDialogDelegateView>(view);
+  }
+
   // Create and initialize the bubble Widget(s) with proper bounds.
-  static Widget* CreateBubble(
-      std::unique_ptr<BubbleDialogDelegateView> delegate);
+  template <typename T>
+  static Widget* CreateBubble(std::unique_ptr<T> delegate) {
+    CHECK(IsBubbleDialogDelegateView<T>(delegate.get()));
+    return BubbleDialogDelegate::CreateBubble(std::move(delegate));
+  }
   static Widget* CreateBubble(BubbleDialogDelegateView* bubble_delegate);
 
   BubbleDialogDelegateView();
@@ -476,7 +577,7 @@ class VIEWS_EXPORT BubbleDialogDelegateView : public BubbleDialogDelegate,
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, BubbleDialogDelegateView, View)
-VIEW_BUILDER_PROPERTY(ax::mojom::Role, AccessibleRole)
+VIEW_BUILDER_PROPERTY(ax::mojom::Role, AccessibleWindowRole)
 VIEW_BUILDER_PROPERTY(std::u16string, AccessibleTitle)
 VIEW_BUILDER_PROPERTY(bool, CanMaximize)
 VIEW_BUILDER_PROPERTY(bool, CanMinimize)
@@ -485,8 +586,9 @@ VIEW_BUILDER_VIEW_TYPE_PROPERTY(views::View, ExtraView)
 VIEW_BUILDER_VIEW_TYPE_PROPERTY(views::View, FootnoteView)
 VIEW_BUILDER_PROPERTY(bool, FocusTraversesOut)
 VIEW_BUILDER_PROPERTY(bool, EnableArrowKeyTraversal)
-VIEW_BUILDER_PROPERTY(gfx::ImageSkia, Icon)
-VIEW_BUILDER_PROPERTY(gfx::ImageSkia, AppIcon)
+VIEW_BUILDER_PROPERTY(ui::ImageModel, Icon)
+VIEW_BUILDER_PROPERTY(ui::ImageModel, AppIcon)
+VIEW_BUILDER_PROPERTY(ui::ImageModel, MainImage)
 VIEW_BUILDER_PROPERTY(ui::ModalType, ModalType)
 VIEW_BUILDER_PROPERTY(bool, OwnedByWidget)
 VIEW_BUILDER_PROPERTY(bool, ShowCloseButton)

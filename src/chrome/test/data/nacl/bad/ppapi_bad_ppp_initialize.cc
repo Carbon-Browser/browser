@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,5 +28,4 @@ PP_EXPORT void PPP_ShutdownModule() {
 PP_EXPORT const void* PPP_GetInterface(const char* interface_name) {
   printf("PPP_GetInterface\n");
   NACL_NOTREACHED();  // If initialization fails, this should not be called.
-  return NULL;
 }

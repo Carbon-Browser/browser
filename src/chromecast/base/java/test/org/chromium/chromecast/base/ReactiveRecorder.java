@@ -1,9 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chromecast.base;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.hamcrest.Matchers.not;
 
@@ -69,12 +70,12 @@ public class ReactiveRecorder {
         }
 
         public void end() {
-            Assert.assertThat(mRecord, emptyIterable());
+            assertThat(mRecord, emptyIterable());
         }
     }
 
     private Event pop() {
-        Assert.assertThat(mRecord, not(emptyIterable()));
+        assertThat(mRecord, not(emptyIterable()));
         return mRecord.remove(0);
     }
 
@@ -92,7 +93,7 @@ public class ReactiveRecorder {
         return result;
     }
 
-    private class Event {
+    private static class Event {
         public String type;
         public Object value;
 

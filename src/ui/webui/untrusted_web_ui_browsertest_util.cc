@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,8 @@ TestUntrustedWebUIConfig::TestUntrustedWebUIConfig(
 TestUntrustedWebUIConfig::~TestUntrustedWebUIConfig() = default;
 
 std::unique_ptr<content::WebUIController>
-TestUntrustedWebUIConfig::CreateWebUIController(content::WebUI* web_ui) {
+TestUntrustedWebUIConfig::CreateWebUIController(content::WebUI* web_ui,
+                                                const GURL& url) {
   return std::make_unique<TestUntrustedWebUIController>(web_ui, host(),
                                                         headers_);
 }

@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "third_party/blink/renderer/modules/clipboard/clipboard_reader.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/clipboard/clipboard.mojom-blink.h"
 #include "third_party/blink/renderer/core/clipboard/clipboard_mime_types.h"
 #include "third_party/blink/renderer/core/clipboard/system_clipboard.h"
@@ -15,6 +16,7 @@
 #include "third_party/blink/renderer/modules/clipboard/clipboard.h"
 #include "third_party/blink/renderer/modules/clipboard/clipboard_promise.h"
 #include "third_party/blink/renderer/modules/clipboard/clipboard_writer.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_handle.h"
 #include "third_party/blink/renderer/platform/image-encoders/image_encoder.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
@@ -72,26 +74,26 @@ class ClipboardTextReader final : public ClipboardReader {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     system_clipboard()->ReadPlainText(
         mojom::blink::ClipboardBuffer::kStandard,
-        WTF::Bind(&ClipboardTextReader::OnRead, WrapPersistent(this)));
+        WTF::BindOnce(&ClipboardTextReader::OnRead, WrapPersistent(this)));
   }
 
  private:
   void OnRead(const String& plain_text) {
-    if (plain_text.IsEmpty()) {
+    if (plain_text.empty()) {
       NextRead(Vector<uint8_t>());
       return;
     }
 
     worker_pool::PostTask(
-        FROM_HERE, CrossThreadBindOnce(
-                       &ClipboardTextReader::EncodeOnBackgroundThread,
-                       std::move(plain_text), WrapCrossThreadPersistent(this),
-                       std::move(clipboard_task_runner_)));
+        FROM_HERE,
+        CrossThreadBindOnce(&ClipboardTextReader::EncodeOnBackgroundThread,
+                            std::move(plain_text), MakeCrossThreadHandle(this),
+                            std::move(clipboard_task_runner_)));
   }
 
   static void EncodeOnBackgroundThread(
       String plain_text,
-      ClipboardTextReader* reader,
+      CrossThreadHandle<ClipboardTextReader> reader,
       scoped_refptr<base::SingleThreadTaskRunner> clipboard_task_runner) {
     DCHECK(!IsMainThread());
 
@@ -101,10 +103,13 @@ class ClipboardTextReader final : public ClipboardReader {
     utf8_bytes.ReserveInitialCapacity(utf8_text.size());
     utf8_bytes.Append(utf8_text.data(), utf8_text.size());
 
-    PostCrossThreadTask(*clipboard_task_runner, FROM_HERE,
-                        CrossThreadBindOnce(&ClipboardTextReader::NextRead,
-                                            WrapCrossThreadPersistent(reader),
-                                            std::move(utf8_bytes)));
+    PostCrossThreadTask(
+        *clipboard_task_runner, FROM_HERE,
+        CrossThreadBindOnce(
+            &ClipboardTextReader::NextRead,
+            MakeUnwrappingCrossThreadHandle<ClipboardTextReader>(
+                std::move(reader)),
+            std::move(utf8_bytes)));
   }
 
   void NextRead(Vector<uint8_t> utf8_bytes) override {
@@ -122,17 +127,20 @@ class ClipboardTextReader final : public ClipboardReader {
 class ClipboardHtmlReader final : public ClipboardReader {
  public:
   explicit ClipboardHtmlReader(SystemClipboard* system_clipboard,
-                               ClipboardPromise* promise)
-      : ClipboardReader(system_clipboard, promise) {}
+                               ClipboardPromise* promise,
+                               bool sanitize_html)
+      : ClipboardReader(system_clipboard, promise),
+        sanitize_html_(sanitize_html) {}
   ~ClipboardHtmlReader() override = default;
 
   void Read() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
     promise_->GetExecutionContext()->CountUse(
-        WebFeature::kHtmlClipboardApiRead);
+        sanitize_html_ ? WebFeature::kHtmlClipboardApiRead
+                       : WebFeature::kHtmlClipboardApiUnsanitizedRead);
     system_clipboard()->ReadHTML(
-        WTF::Bind(&ClipboardHtmlReader::OnRead, WrapPersistent(this)));
+        WTF::BindOnce(&ClipboardHtmlReader::OnRead, WrapPersistent(this)));
   }
 
  private:
@@ -141,34 +149,38 @@ class ClipboardHtmlReader final : public ClipboardReader {
               unsigned fragment_start,
               unsigned fragment_end) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    DCHECK_GE(fragment_start, 0u);
+    DCHECK_LE(fragment_end, html_string.length());
+    DCHECK_LE(fragment_start, fragment_end);
 
     LocalFrame* frame = promise_->GetLocalFrame();
-    if (html_string.IsEmpty()) {
+    if (!frame || html_string.empty()) {
       NextRead(Vector<uint8_t>());
       return;
     }
 
-    // Now sanitize the HTML string.
-    // This must be called on the main thread because HTML DOM nodes can
-    // only be used on the main thread.
-    String sanitized_html = CreateSanitizedMarkupWithContext(
-        *frame->GetDocument(), html_string, fragment_start, fragment_end, url,
-        kIncludeNode, kResolveAllURLs);
-
-    if (sanitized_html.IsEmpty()) {
+    // Sanitize the HTML string if needed.
+    // `CreateSanitizedMarkupWithContext` must be called on the main thread
+    // because HTML DOM nodes can only be used on the main thread.
+    String final_html =
+        sanitize_html_ ? CreateSanitizedMarkupWithContext(
+                             *frame->GetDocument(), html_string, fragment_start,
+                             fragment_end, url, kIncludeNode, kResolveAllURLs)
+                       : html_string;
+    if (final_html.empty()) {
       NextRead(Vector<uint8_t>());
       return;
     }
     worker_pool::PostTask(
         FROM_HERE,
         CrossThreadBindOnce(&ClipboardHtmlReader::EncodeOnBackgroundThread,
-                            std::move(sanitized_html),
-                            WrapCrossThreadPersistent(this),
+                            std::move(final_html), MakeCrossThreadHandle(this),
                             std::move(clipboard_task_runner_)));
   }
+
   static void EncodeOnBackgroundThread(
       String plain_text,
-      ClipboardHtmlReader* reader,
+      CrossThreadHandle<ClipboardHtmlReader> reader,
       scoped_refptr<base::SingleThreadTaskRunner> clipboard_task_runner) {
     DCHECK(!IsMainThread());
 
@@ -178,10 +190,11 @@ class ClipboardHtmlReader final : public ClipboardReader {
     utf8_bytes.ReserveInitialCapacity(utf8_text.size());
     utf8_bytes.Append(utf8_text.data(), utf8_text.size());
 
-    PostCrossThreadTask(*clipboard_task_runner, FROM_HERE,
-                        CrossThreadBindOnce(&ClipboardHtmlReader::NextRead,
-                                            WrapCrossThreadPersistent(reader),
-                                            std::move(utf8_bytes)));
+    PostCrossThreadTask(
+        *clipboard_task_runner, FROM_HERE,
+        CrossThreadBindOnce(&ClipboardHtmlReader::NextRead,
+                            MakeUnwrappingCrossThreadHandle(std::move(reader)),
+                            std::move(utf8_bytes)));
   }
 
   void NextRead(Vector<uint8_t> utf8_bytes) override {
@@ -193,6 +206,8 @@ class ClipboardHtmlReader final : public ClipboardReader {
     }
     promise_->OnRead(blob);
   }
+
+  bool sanitize_html_ = true;
 };
 
 // Reads SVG from the System Clipboard as a Blob with image/svg+xml content.
@@ -208,7 +223,7 @@ class ClipboardSvgReader final : public ClipboardReader {
   void Read() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     system_clipboard()->ReadSvg(
-        WTF::Bind(&ClipboardSvgReader::OnRead, WrapPersistent(this)));
+        WTF::BindOnce(&ClipboardSvgReader::OnRead, WrapPersistent(this)));
   }
 
  private:
@@ -228,21 +243,20 @@ class ClipboardSvgReader final : public ClipboardReader {
         *frame->GetDocument(), svg_string, fragment_start, svg_string.length(),
         url, kIncludeNode, kResolveAllURLs);
 
-    if (sanitized_svg.IsEmpty()) {
+    if (sanitized_svg.empty()) {
       NextRead(Vector<uint8_t>());
       return;
     }
     worker_pool::PostTask(
-        FROM_HERE,
-        CrossThreadBindOnce(&ClipboardSvgReader::EncodeOnBackgroundThread,
-                            std::move(sanitized_svg),
-                            WrapCrossThreadPersistent(this),
-                            std::move(clipboard_task_runner_)));
+        FROM_HERE, CrossThreadBindOnce(
+                       &ClipboardSvgReader::EncodeOnBackgroundThread,
+                       std::move(sanitized_svg), MakeCrossThreadHandle(this),
+                       std::move(clipboard_task_runner_)));
   }
 
   static void EncodeOnBackgroundThread(
       String plain_text,
-      ClipboardSvgReader* reader,
+      CrossThreadHandle<ClipboardSvgReader> reader,
       scoped_refptr<base::SingleThreadTaskRunner> clipboard_task_runner) {
     DCHECK(!IsMainThread());
 
@@ -252,10 +266,11 @@ class ClipboardSvgReader final : public ClipboardReader {
     utf8_bytes.ReserveInitialCapacity(utf8_text.size());
     utf8_bytes.Append(utf8_text.data(), utf8_text.size());
 
-    PostCrossThreadTask(*clipboard_task_runner, FROM_HERE,
-                        CrossThreadBindOnce(&ClipboardSvgReader::NextRead,
-                                            WrapCrossThreadPersistent(reader),
-                                            std::move(utf8_bytes)));
+    PostCrossThreadTask(
+        *clipboard_task_runner, FROM_HERE,
+        CrossThreadBindOnce(&ClipboardSvgReader::NextRead,
+                            MakeUnwrappingCrossThreadHandle(std::move(reader)),
+                            std::move(utf8_bytes)));
   }
 
   void NextRead(Vector<uint8_t> utf8_bytes) override {
@@ -283,8 +298,9 @@ class ClipboardCustomFormatReader final : public ClipboardReader {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
     system_clipboard()->ReadUnsanitizedCustomFormat(
-        mime_type_, WTF::Bind(&ClipboardCustomFormatReader::OnCustomFormatRead,
-                              WrapPersistent(this)));
+        mime_type_,
+        WTF::BindOnce(&ClipboardCustomFormatReader::OnCustomFormatRead,
+                      WrapPersistent(this)));
   }
 
   void OnCustomFormatRead(mojo_base::BigBuffer data) {
@@ -306,29 +322,36 @@ class ClipboardCustomFormatReader final : public ClipboardReader {
 // static
 ClipboardReader* ClipboardReader::Create(SystemClipboard* system_clipboard,
                                          const String& mime_type,
-                                         ClipboardPromise* promise) {
+                                         ClipboardPromise* promise,
+                                         bool sanitize_html) {
   DCHECK(ClipboardWriter::IsValidType(mime_type));
   // If this is a web custom format then read the unsanitized version.
   if (RuntimeEnabledFeatures::ClipboardCustomFormatsEnabled() &&
-      !Clipboard::ParseWebCustomFormat(mime_type).IsNull()) {
+      !Clipboard::ParseWebCustomFormat(mime_type).empty()) {
     // We read the custom MIME type that has the "web " prefix.
     // These MIME types are found in the web custom format map written by
     // native applications.
     return MakeGarbageCollected<ClipboardCustomFormatReader>(
         system_clipboard, promise, mime_type);
   }
+
   if (mime_type == kMimeTypeImagePng) {
     return MakeGarbageCollected<ClipboardPngReader>(system_clipboard, promise);
   }
-  if (mime_type == kMimeTypeTextPlain)
-    return MakeGarbageCollected<ClipboardTextReader>(system_clipboard, promise);
 
-  if (mime_type == kMimeTypeTextHTML)
-    return MakeGarbageCollected<ClipboardHtmlReader>(system_clipboard, promise);
+  if (mime_type == kMimeTypeTextPlain) {
+    return MakeGarbageCollected<ClipboardTextReader>(system_clipboard, promise);
+  }
+
+  if (mime_type == kMimeTypeTextHTML) {
+    return MakeGarbageCollected<ClipboardHtmlReader>(system_clipboard, promise,
+                                                     sanitize_html);
+  }
 
   if (mime_type == kMimeTypeImageSvg &&
-      RuntimeEnabledFeatures::ClipboardSvgEnabled())
+      RuntimeEnabledFeatures::ClipboardSvgEnabled()) {
     return MakeGarbageCollected<ClipboardSvgReader>(system_clipboard, promise);
+  }
 
   NOTREACHED()
       << "IsValidType() and Create() have inconsistent implementations.";

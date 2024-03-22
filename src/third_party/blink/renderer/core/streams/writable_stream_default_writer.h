@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,16 +89,17 @@ class CORE_EXPORT WritableStreamDefaultWriter final : public ScriptWrappable {
   // https://streams.spec.whatwg.org/#writable-stream-default-writer-write
   static v8::Local<v8::Promise> Write(ScriptState*,
                                       WritableStreamDefaultWriter*,
-                                      v8::Local<v8::Value> chunk);
+                                      v8::Local<v8::Value> chunk,
+                                      ExceptionState&);
 
   //
   // Accessors used by ReadableStream and WritableStream. These do
   // not appear in the standard.
   //
 
-  StreamPromiseResolver* ClosedPromise() { return closed_promise_; }
-  StreamPromiseResolver* ReadyPromise() { return ready_promise_; }
-  WritableStream* OwnerWritableStream() { return owner_writable_stream_; }
+  StreamPromiseResolver* ClosedPromise() { return closed_promise_.Get(); }
+  StreamPromiseResolver* ReadyPromise() { return ready_promise_.Get(); }
+  WritableStream* OwnerWritableStream() { return owner_writable_stream_.Get(); }
 
   // This is a variant of GetDesiredSize() that doesn't create an intermediate
   // JavaScript object. Instead it returns absl::nullopt where the JavaScript

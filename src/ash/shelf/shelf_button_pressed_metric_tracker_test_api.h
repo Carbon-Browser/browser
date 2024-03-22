@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_SHELF_SHELF_BUTTON_PRESSED_METRIC_TRACKER_TEST_API_H_
 
 #include "ash/shelf/shelf_button_pressed_metric_tracker.h"
+#include "base/memory/raw_ptr.h"
 
 #include "ui/events/event.h"
 
@@ -33,7 +34,8 @@ class ShelfButtonPressedMetricTrackerTestAPI {
   void SetTickClock(const base::TickClock* tick_clock);
 
  private:
-  ShelfButtonPressedMetricTracker* const shelf_button_pressed_metric_tracker_;
+  const raw_ptr<ShelfButtonPressedMetricTracker, ExperimentalAsh>
+      shelf_button_pressed_metric_tracker_;
 };
 
 }  // namespace ash

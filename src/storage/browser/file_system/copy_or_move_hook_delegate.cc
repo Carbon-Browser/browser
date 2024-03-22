@@ -1,19 +1,22 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "storage/browser/file_system/copy_or_move_hook_delegate.h"
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "storage/browser/file_system/file_system_url.h"
 
 namespace storage {
 
-CopyOrMoveHookDelegate::CopyOrMoveHookDelegate() {
+CopyOrMoveHookDelegate::CopyOrMoveHookDelegate(bool is_composite)
+    : is_composite_(is_composite) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
+
+CopyOrMoveHookDelegate::~CopyOrMoveHookDelegate() = default;
 
 void CopyOrMoveHookDelegate::OnBeginProcessFile(
     const FileSystemURL& source_url,
@@ -39,8 +42,10 @@ void CopyOrMoveHookDelegate::OnProgress(const FileSystemURL& source_url,
 
 void CopyOrMoveHookDelegate::OnError(const FileSystemURL& source_url,
                                      const FileSystemURL& destination_url,
-                                     base::File::Error error) {
+                                     base::File::Error error,
+                                     ErrorCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  std::move(callback).Run(ErrorAction::kDefault);
 }
 
 void CopyOrMoveHookDelegate::OnEndCopy(const FileSystemURL& source_url,

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,7 +81,7 @@ class Av1Decoder : public VideoDecoder {
   std::vector<scoped_refptr<SharedVASurface>> display_surfaces_;
 
   // Parser for the IVF stream to decode.
-  std::unique_ptr<IvfParser> ivf_parser_;
+  const std::unique_ptr<IvfParser> ivf_parser_;
 };
 
 }  // namespace vaapi_test

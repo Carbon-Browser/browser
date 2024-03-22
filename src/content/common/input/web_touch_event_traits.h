@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,14 +21,6 @@ class CONTENT_EXPORT WebTouchEventTraits {
   // Returns whether all touches in the event have the specified state.
   static bool AllTouchPointsHaveState(const blink::WebTouchEvent& event,
                                       blink::WebTouchPoint::State state);
-
-  // Returns whether this event represents a transition from no active
-  // touches to some active touches (the start of a new "touch sequence").
-  static bool IsTouchSequenceStart(const blink::WebTouchEvent& event);
-
-  // Returns whether this event represents a transition from active
-  // touches to no active touches (the end of a "touch sequence").
-  static bool IsTouchSequenceEnd(const blink::WebTouchEvent& event);
 
   // Sets the type of |event| to |type|, resetting any other type-specific
   // properties and updating the timestamp.

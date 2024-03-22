@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,13 @@
 - (void)formInputAccessoryViewDidTapCloseButton:(FormInputAccessoryView*)sender;
 - (FormInputAccessoryViewTextData*)textDataforFormInputAccessoryView:
     (FormInputAccessoryView*)sender;
+- (void)fromInputAccessoryViewDidTapOmniboxTypingShield:
+    (FormInputAccessoryView*)sender;
 @end
 
 extern NSString* const kFormInputAccessoryViewAccessibilityID;
+extern NSString* const
+    kFormInputAccessoryViewOmniboxTypingShieldAccessibilityID;
 
 // Subview of the accessory view for web forms. Shows a custom view with form
 // navigation controls above the keyboard. Enables input clicks by way of the
@@ -38,15 +42,21 @@ extern NSString* const kFormInputAccessoryViewAccessibilityID;
 // The leading view.
 @property(nonatomic, readonly, weak) UIView* leadingView;
 
-// Sets up the view with the given |leadingView|. Navigation controls are shown
-// on the trailing side and use |delegate| for actions.
+// Sets up the view with the given `leadingView`. Navigation controls are shown
+// on the trailing side and use `delegate` for actions.
 - (void)setUpWithLeadingView:(UIView*)leadingView
           navigationDelegate:(id<FormInputAccessoryViewDelegate>)delegate;
 
-// Sets up the view with the given |leadingView|. Navigation controls are
-// replaced with |customTrailingView|.
+// Sets up the view with the given `leadingView`. Navigation controls are
+// replaced with `customTrailingView`.
 - (void)setUpWithLeadingView:(UIView*)leadingView
           customTrailingView:(UIView*)customTrailingView;
+
+// Sets the height of the omnibox typing shield. Set a height of 0 to hide the
+// typing shield. The omnibox typing shield is a transparent view on the top
+// edge of the input accessory view for the collapsed bottom omnibox
+// (crbug.com/1490601).
+- (void)setOmniboxTypingShieldHeight:(CGFloat)typingShieldHeight;
 
 @end
 

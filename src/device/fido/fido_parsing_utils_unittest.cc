@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -279,7 +279,7 @@ TEST(U2fParsingUtils, CreateSHA256Hash) {
 
 TEST(U2fParsingUtils, ConvertSpanToStringPiece) {
   constexpr uint8_t kTestAsciiAbcd[] = {'a', 'b', 'c', 'd'};
-  EXPECT_EQ("abcd", ConvertToStringPiece(kTestAsciiAbcd));
+  EXPECT_EQ("abcd", ConvertToStringView(kTestAsciiAbcd));
 }
 
 }  // namespace fido_parsing_utils

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,11 +85,6 @@ class MockLayoutHost implements LayoutManagerHost, LayoutRenderHost {
     }
 
     @Override
-    public float getHeightMinusBrowserControls() {
-        return getHeight();
-    }
-
-    @Override
     public int getTopControlsHeightPixels() {
         return 0;
     }
@@ -106,9 +101,6 @@ class MockLayoutHost implements LayoutManagerHost, LayoutRenderHost {
 
     @Override
     public void pushDebugRect(Rect rect, int color) {}
-
-    @Override
-    public void loadPersitentTextureDataIfNeeded() {}
 
     @Override
     public void setContentOverlayVisibility(boolean visible, boolean canBeFocusable) {}
@@ -135,6 +127,5 @@ class MockLayoutHost implements LayoutManagerHost, LayoutRenderHost {
     public void onContentChanged() {}
 
     @Override
-    public void hideKeyboard(Runnable postHideTask) {
-    }
+    public void hideKeyboard(Runnable postHideTask) {}
 }

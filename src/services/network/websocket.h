@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/supports_user_data.h"
 #include "base/time/time.h"
 #include "base/types/strong_alias.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -61,6 +62,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) WebSocket : public mojom::WebSocket {
       const GURL& url,
       const std::vector<std::string>& requested_protocols,
       const net::SiteForCookies& site_for_cookies,
+      bool has_storage_access,
       const net::IsolationInfo& isolation_info,
       std::vector<mojom::HttpHeaderPtr> additional_headers,
       const url::Origin& origin,
@@ -146,6 +148,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) WebSocket : public mojom::WebSocket {
   void AddChannel(const GURL& socket_url,
                   const std::vector<std::string>& requested_protocols,
                   const net::SiteForCookies& site_for_cookies,
+                  bool has_storage_access,
                   const net::IsolationInfo& isolation_info,
                   std::vector<mojom::HttpHeaderPtr> additional_headers);
   void OnSSLCertificateErrorResponse(

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -206,9 +207,22 @@ GLenum GetInternalFormat(const GLVersionInfo* version, GLenum internal_format) {
 }
 
 void InitializeStaticGLBindingsGL() {
-  g_current_gl_context_tls = new base::ThreadLocalPointer<CurrentGL>;
   g_no_context_current_gl = new CurrentGL;
   g_no_context_current_gl->Api = new NoContextGLApi;
+}
+
+CurrentGL*& ThreadLocalCurrentGL() {
+  thread_local CurrentGL* current_gl = nullptr;
+  return current_gl;
+}
+
+CurrentGL* GetThreadLocalCurrentGL() {
+  // This prevents mutation of the thread local CurrentGL pointer.
+  return ThreadLocalCurrentGL();
+}
+
+void SetThreadLocalCurrentGL(CurrentGL* current) {
+  ThreadLocalCurrentGL() = current ? current : g_no_context_current_gl;
 }
 
 void ClearBindingsGL() {
@@ -219,11 +233,7 @@ void ClearBindingsGL() {
     delete g_no_context_current_gl;
     g_no_context_current_gl = nullptr;
   }
-
-  if (g_current_gl_context_tls) {
-    delete g_current_gl_context_tls;
-    g_current_gl_context_tls = nullptr;
-  }
+  ThreadLocalCurrentGL() = nullptr;
 }
 
 bool SetNullDrawGLBindingsEnabled(bool enabled) {
@@ -236,31 +246,23 @@ bool GetNullDrawBindingsEnabled() {
   return g_null_draw_bindings_enabled;
 }
 
-void SetCurrentGL(CurrentGL* current) {
-  CurrentGL* new_current = current ? current : g_no_context_current_gl;
-  g_current_gl_context_tls->Set(new_current);
-}
+GLApi::GLApi() = default;
 
-GLApi::GLApi() {
-}
-
-GLApi::~GLApi() {
-}
+GLApi::~GLApi() = default;
 
 GLApiBase::GLApiBase() : driver_(nullptr) {}
 
-GLApiBase::~GLApiBase() {
-}
+GLApiBase::~GLApiBase() = default;
 
 void GLApiBase::InitializeBase(DriverGL* driver) {
   driver_ = driver;
 }
 
-RealGLApi::RealGLApi() {
-}
+RealGLApi::RealGLApi()
+    : logging_enabled_(base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kEnableGPUServiceLogging)) {}
 
-RealGLApi::~RealGLApi() {
-}
+RealGLApi::~RealGLApi() = default;
 
 void RealGLApi::Initialize(DriverGL* driver) {
   InitializeBase(driver);
@@ -308,21 +310,6 @@ void RealGLApi::glTexImage2DFn(GLenum target,
   GLenum gl_format = GetTexFormat(version_.get(), format);
   GLenum gl_type = GetPixelType(version_.get(), type, format);
 
-  // TODO(yizhou): Check if cubemap, 3d texture or texture2d array has the same
-  // bug on intel mac.
-  if (!version_->is_angle && gl_workarounds_.reset_teximage2d_base_level &&
-      target == GL_TEXTURE_2D) {
-    GLint base_level = 0;
-    GLApiBase::glGetTexParameterivFn(target, GL_TEXTURE_BASE_LEVEL,
-                                     &base_level);
-    if (base_level) {
-      GLApiBase::glTexParameteriFn(target, GL_TEXTURE_BASE_LEVEL, 0);
-      GLApiBase::glTexImage2DFn(target, level, gl_internal_format, width,
-                                height, border, gl_format, gl_type, pixels);
-      GLApiBase::glTexParameteriFn(target, GL_TEXTURE_BASE_LEVEL, base_level);
-      return;
-    }
-  }
   GLApiBase::glTexImage2DFn(target, level, gl_internal_format, width, height,
                             border, gl_format, gl_type, pixels);
 }
@@ -426,36 +413,30 @@ void RealGLApi::glReadPixelsFn(GLint x,
 }
 
 void RealGLApi::glClearFn(GLbitfield mask) {
-  if (!g_null_draw_bindings_enabled)
+  if (!g_null_draw_bindings_enabled) {
     GLApiBase::glClearFn(mask);
-}
-
-void RealGLApi::glClearColorFn(GLclampf red,
-                               GLclampf green,
-                               GLclampf blue,
-                               GLclampf alpha) {
-  if (!version_->is_angle && gl_workarounds_.clear_to_zero_or_one_broken &&
-      (1 == red || 0 == red) && (1 == green || 0 == green) &&
-      (1 == blue || 0 == blue) && (1 == alpha || 0 == alpha)) {
-    if (1 == alpha)
-      alpha = 2;
-    else
-      alpha = -1;
+  } else if (logging_enabled_) {
+    LOG(WARNING) << "Skipped glClear()";
   }
-  GLApiBase::glClearColorFn(red, green, blue, alpha);
 }
 
 void RealGLApi::glDrawArraysFn(GLenum mode, GLint first, GLsizei count) {
-  if (!g_null_draw_bindings_enabled)
+  if (!g_null_draw_bindings_enabled) {
     GLApiBase::glDrawArraysFn(mode, first, count);
+  } else if (logging_enabled_) {
+    LOG(WARNING) << "Skipped glDrawArrays()";
+  }
 }
 
 void RealGLApi::glDrawElementsFn(GLenum mode,
                                  GLsizei count,
                                  GLenum type,
                                  const void* indices) {
-  if (!g_null_draw_bindings_enabled)
+  if (!g_null_draw_bindings_enabled) {
     GLApiBase::glDrawElementsFn(mode, count, type, indices);
+  } else if (logging_enabled_) {
+    LOG(WARNING) << "Skipped glDrawElements()";
+  }
 }
 
 void RealGLApi::glClearDepthFn(GLclampd depth) {
@@ -553,25 +534,18 @@ void RealGLApi::ClearCachedGLExtensions() {
   filtered_exts_str_.clear();
 }
 
-void RealGLApi::set_gl_workarounds(const GLWorkarounds& workarounds) {
-  gl_workarounds_ = workarounds;
-}
-
 void RealGLApi::set_version(std::unique_ptr<GLVersionInfo> version) {
   version_ = std::move(version);
 }
 
-TraceGLApi::~TraceGLApi() {
-}
+TraceGLApi::~TraceGLApi() = default;
 
 LogGLApi::LogGLApi(GLApi* gl_api) : gl_api_(gl_api) {}
 
-LogGLApi::~LogGLApi() {}
+LogGLApi::~LogGLApi() = default;
 
-NoContextGLApi::NoContextGLApi() {
-}
+NoContextGLApi::NoContextGLApi() = default;
 
-NoContextGLApi::~NoContextGLApi() {
-}
+NoContextGLApi::~NoContextGLApi() = default;
 
 }  // namespace gl

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ std::string GetTwaPackageName(content::RenderFrameHost* render_frame_host) {
   if (!web_contents)
     return std::string();
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!web_app::AppBrowserController::IsWebApp(browser)) {
     return std::string();
   }
@@ -52,8 +52,8 @@ std::string GetScope(content::RenderFrameHost* render_frame_host) {
     return std::string();
   }
 
-  const web_app::WebAppRegistrar& registrar = provider->registrar();
-  absl::optional<web_app::AppId> app_id = registrar.FindAppWithUrlInScope(
+  const web_app::WebAppRegistrar& registrar = provider->registrar_unsafe();
+  absl::optional<webapps::AppId> app_id = registrar.FindAppWithUrlInScope(
       render_frame_host->GetMainFrame()->GetLastCommittedURL());
   if (!app_id) {
     return std::string();

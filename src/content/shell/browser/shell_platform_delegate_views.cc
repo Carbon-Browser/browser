@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -61,7 +61,7 @@ namespace content {
 struct ShellPlatformDelegate::ShellData {
   gfx::Size content_size;
   // Self-owned Widget, destroyed through CloseNow().
-  views::Widget* window_widget = nullptr;
+  raw_ptr<views::Widget> window_widget = nullptr;
 };
 
 struct ShellPlatformDelegate::PlatformData {
@@ -99,9 +99,11 @@ class ShellView : public views::BoxLayoutView,
   void SetWebContents(WebContents* web_contents, const gfx::Size& size) {
     // If there was a previous WebView in this Shell it should be removed and
     // deleted.
-    if (web_view_)
-      contents_view_->RemoveChildViewT(web_view_.get());
-
+    if (web_view_) {
+      // ExtractAsDangling clears the underlying pointer and returns another
+      // raw_ptr instance that is allowed to dangle.
+      contents_view_->RemoveChildViewT(web_view_.ExtractAsDangling().get());
+    }
     views::Builder<views::View>(contents_view_)
         .AddChild(views::Builder<views::WebView>()
                       .CopyAddressTo(&web_view_)
@@ -304,7 +306,7 @@ class ShellView : public views::BoxLayoutView,
 
   // Contents view contains the web contents view
   raw_ptr<views::View> contents_view_ = nullptr;
-  raw_ptr<views::WebView, DanglingUntriaged> web_view_ = nullptr;
+  raw_ptr<views::WebView> web_view_ = nullptr;
 };
 
 BEGIN_METADATA(ShellView, views::View)
@@ -358,7 +360,8 @@ void ShellPlatformDelegate::CreatePlatformWindow(
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   shell_data.window_widget = views::Widget::CreateWindowWithContext(
       std::move(delegate),
-      platform_->wm_test_helper->GetDefaultParent(nullptr, gfx::Rect()),
+      platform_->wm_test_helper->GetDefaultParent(nullptr, gfx::Rect(),
+                                                  display::kInvalidDisplayId),
       gfx::Rect(initial_size));
 #else
   shell_data.window_widget = new views::Widget();

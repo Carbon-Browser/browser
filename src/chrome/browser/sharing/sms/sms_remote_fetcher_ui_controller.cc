@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -16,6 +16,7 @@
 #include "chrome/browser/shell_integration.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/browser/sms_fetcher.h"
@@ -66,7 +67,9 @@ std::u16string SmsRemoteFetcherUiController::GetContentType() const {
 }
 
 const gfx::VectorIcon& SmsRemoteFetcherUiController::GetVectorIcon() const {
-  return kSmartphoneIcon;
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? kSmartphoneRefreshIcon
+             : kSmartphoneIcon;
 }
 
 bool SmsRemoteFetcherUiController::ShouldShowLoadingIcon() const {
@@ -76,6 +79,14 @@ bool SmsRemoteFetcherUiController::ShouldShowLoadingIcon() const {
 std::u16string
 SmsRemoteFetcherUiController::GetTextForTooltipAndAccessibleName() const {
   return std::u16string();
+}
+
+bool SmsRemoteFetcherUiController::HasAccessibleUi() const {
+  // crrev.com/c/2964059 stopped all UI from being shown and removed the
+  // accessible name. That did not remove the icon from the accessibility
+  // tree. To stop this UI from being shown to assistive technologies, we
+  // return false here.
+  return false;
 }
 
 SharingFeatureName SmsRemoteFetcherUiController::GetFeatureMetricsPrefix()

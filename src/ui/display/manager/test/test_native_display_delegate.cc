@@ -1,35 +1,33 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/display/manager/test/test_native_display_delegate.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/display/manager/test/action_logger.h"
 #include "ui/display/types/display_mode.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/display/types/native_display_observer.h"
 #include "ui/gfx/geometry/size.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 std::string GetModesetFlag(uint32_t flag) {
   std::string flags_str;
   if (flag & kTestModeset)
-    flags_str = base::StrCat({flags_str, kTestModesetStr, ", "});
+    flags_str = base::StrCat({flags_str, kTestModesetStr, ","});
   if (flag & kCommitModeset)
-    flags_str = base::StrCat({flags_str, kCommitModesetStr, ", "});
+    flags_str = base::StrCat({flags_str, kCommitModesetStr, ","});
   if (flag & kSeamlessModeset)
-    flags_str = base::StrCat({flags_str, kSeamlessModesetStr, ", "});
+    flags_str = base::StrCat({flags_str, kSeamlessModesetStr, ","});
 
-  // Remove trailing comma and space.
+  // Remove trailing comma.
   if (!flags_str.empty())
-    flags_str.resize(flags_str.size() - 2);
+    flags_str.resize(flags_str.size() - 1);
   return flags_str;
 }
 
@@ -66,7 +64,7 @@ void TestNativeDisplayDelegate::GetDisplays(GetDisplaysCallback callback) {
     observer.OnDisplaySnapshotsInvalidated();
 
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), outputs_));
   } else {
     std::move(callback).Run(outputs_);
@@ -141,17 +139,31 @@ void TestNativeDisplayDelegate::Configure(
   log_->AppendAction(config_outcome);
 
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), config_success));
   } else {
     std::move(callback).Run(config_success);
   }
 }
 
+void TestNativeDisplayDelegate::SetHdcpKeyProp(
+    int64_t display_id,
+    const std::string& key,
+    SetHdcpKeyPropCallback callback) {
+  log_->AppendAction(GetSetHdcpKeyPropAction(display_id, true));
+
+  if (run_async_) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), true));
+  } else {
+    std::move(callback).Run(true);
+  }
+}
+
 void TestNativeDisplayDelegate::GetHDCPState(const DisplaySnapshot& output,
                                              GetHDCPStateCallback callback) {
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), get_hdcp_expectation_,
                                   hdcp_state_, content_protection_method_));
   } else {
@@ -166,7 +178,7 @@ void TestNativeDisplayDelegate::SetHDCPState(
     ContentProtectionMethod protection_method,
     SetHDCPStateCallback callback) {
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TestNativeDisplayDelegate::DoSetHDCPState,
                        base::Unretained(this), output.display_id(), state,
@@ -217,10 +229,9 @@ bool TestNativeDisplayDelegate::SetColorMatrix(
 
 bool TestNativeDisplayDelegate::SetGammaCorrection(
     int64_t display_id,
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
-  log_->AppendAction(
-      SetGammaCorrectionAction(display_id, degamma_lut, gamma_lut));
+    const display::GammaCurve& degamma,
+    const display::GammaCurve& gamma) {
+  log_->AppendAction(SetGammaCorrectionAction(display_id, degamma, gamma));
   return true;
 }
 
@@ -245,5 +256,4 @@ FakeDisplayController* TestNativeDisplayDelegate::GetFakeDisplayController() {
   return nullptr;
 }
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test

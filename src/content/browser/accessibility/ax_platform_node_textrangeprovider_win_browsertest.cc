@@ -1,14 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/platform/ax_platform_node_textrangeprovider_win.h"
 
 #include "base/command_line.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/win/scoped_bstr.h"
 #include "base/win/scoped_safearray.h"
 #include "base/win/scoped_variant.h"
-#include "base/win/windows_version.h"
 #include "content/browser/accessibility/accessibility_content_browsertest.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_com_win.h"
@@ -22,8 +22,9 @@
 #include "content/shell/browser/shell.h"
 #include "content/test/content_browser_test_utils_internal.h"
 #include "net/dns/mock_host_resolver.h"
-#include "ui/accessibility/accessibility_switches.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_node_position.h"
+#include "ui/accessibility/ax_selection.h"
 #include "ui/accessibility/ax_tree_id.h"
 
 using Microsoft::WRL::ComPtr;
@@ -115,8 +116,8 @@ class AXPlatformNodeTextRangeProviderWinBrowserTest
       base::as_wcstr(&ui::AXPlatformNodeBase::kEmbeddedCharacter), 1};
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    base::CommandLine::ForCurrentProcess()->AppendSwitch(
-        ::switches::kEnableExperimentalUIAutomation);
+    base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
+    cl->AppendSwitchASCII(switches::kForceDeviceScaleFactor, "1.0");
   }
 
   void SetUpOnMainThread() override {
@@ -160,8 +161,8 @@ class AXPlatformNodeTextRangeProviderWinBrowserTest
   void GetDocumentRangeForMarkup(const std::string& html_markup,
                                  ITextRangeProvider** text_range_provider) {
     LoadInitialAccessibilityTreeFromHtml(html_markup);
-    GetTextRangeProviderFromTextNode(*GetManager()->GetRoot(),
-                                     text_range_provider);
+    GetTextRangeProviderFromTextNode(
+        *GetManager()->GetBrowserAccessibilityRoot(), text_range_provider);
   }
 
   // Run through ITextRangeProvider::ScrollIntoView top tests. It's assumed that
@@ -269,7 +270,7 @@ class AXPlatformNodeTextRangeProviderWinBrowserTest
         BrowserAccessibilityManager::FromID(iframe_tree_id);
     ASSERT_NE(nullptr, iframe_browser_accessibility_manager);
     BrowserAccessibility* root_iframe_browser_accessibility =
-        iframe_browser_accessibility_manager->GetRoot();
+        iframe_browser_accessibility_manager->GetBrowserAccessibilityRoot();
     ASSERT_NE(nullptr, root_iframe_browser_accessibility);
     ASSERT_EQ(ax::mojom::Role::kRootWebArea,
               root_iframe_browser_accessibility->GetRole());
@@ -303,9 +304,9 @@ class AXPlatformNodeTextRangeProviderWinBrowserTest
         ToBrowserAccessibilityWin(browser_accessibility_start)->GetCOM();
     ASSERT_NE(nullptr, start_browser_accessibility_com_win);
 
-    ComPtr<ITextRangeProvider> text_range_provider =
-        ui::AXPlatformNodeTextRangeProviderWin::CreateTextRangeProvider(
-            std::move(start), std::move(end));
+    ComPtr<ITextRangeProvider> text_range_provider;
+    ui::AXPlatformNodeTextRangeProviderWin::CreateTextRangeProvider(
+        std::move(start), std::move(end), &text_range_provider);
     ASSERT_NE(nullptr, text_range_provider);
 
     gfx::Rect previous_range_bounds =
@@ -421,6 +422,9 @@ class AXPlatformNodeTextRangeProviderWinBrowserTest
     EXPECT_EQ(0, count_moved);
     EXPECT_EQ(0u, index);
   }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_{::features::kUiaProvider};
 };
 
 IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
@@ -581,6 +585,137 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       GetTextEmptyButtonWithAriaLabelRangeAnchoredInSpans) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+          <span>before</span>
+          <button aria-label="middle"><svg aria-hidden="true"></svg></button>
+          <span>after</span>
+  )HTML");
+
+  BrowserAccessibility* root = GetRootAndAssertNonNull();
+
+  ComPtr<ITextRangeProvider> text_range_provider;
+  GetTextRangeProviderFromTextNode(*root, &text_range_provider);
+  ASSERT_NE(nullptr, text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"before\nmiddle\nafter");
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 6,
+      /*expected_text*/ L"\nmiddle\nafter",
+      /*expected_count*/ 6);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 7,
+      /*expected_text*/ L"\nafter",
+      /*expected_count*/ 7);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       GetTextEmptyButtonWithAriaLabel) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+          <button aria-label="middle"><svg aria-hidden="true"></svg></button>
+  )HTML");
+
+  BrowserAccessibility* root = GetRootAndAssertNonNull();
+
+  ComPtr<ITextRangeProvider> text_range_provider;
+  GetTextRangeProviderFromTextNode(*root, &text_range_provider);
+  ASSERT_NE(nullptr, text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"middle");
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 3,
+      /*expected_text*/ L"dle",
+      /*expected_count*/ 3);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       GetTextEmptyButtonWithAriaLabelStartAnchoredInSpan) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+          <span>before</span>
+          <button aria-label="middle"><svg aria-hidden="true"></svg></button>
+  )HTML");
+
+  BrowserAccessibility* root = GetRootAndAssertNonNull();
+
+  ComPtr<ITextRangeProvider> text_range_provider;
+  GetTextRangeProviderFromTextNode(*root, &text_range_provider);
+  ASSERT_NE(nullptr, text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"before\nmiddle");
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 8,
+      /*expected_text*/ L"iddle",
+      /*expected_count*/ 8);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       GetTextEmptyButtonWithAriaLabelButtonEndAnchoredInSpan) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+          <button aria-label="middle"><svg aria-hidden="true"></svg></button>
+          <span>after</span>
+  )HTML");
+
+  BrowserAccessibility* root = GetRootAndAssertNonNull();
+
+  ComPtr<ITextRangeProvider> text_range_provider;
+  GetTextRangeProviderFromTextNode(*root, &text_range_provider);
+  ASSERT_NE(nullptr, text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"middle\nafter");
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 6,
+      /*expected_text*/ L"\nafter",
+      /*expected_count*/ 6);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       GetTextEmptyTextfieldWithAriaLabel) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+          <input type="text" aria-label="before">
+          <span>after</span>
+  )HTML");
+
+  BrowserAccessibility* root = GetRootAndAssertNonNull();
+
+  ComPtr<ITextRangeProvider> text_range_provider;
+  GetTextRangeProviderFromTextNode(*root, &text_range_provider);
+  ASSERT_NE(nullptr, text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"before\nafter");
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 6,
+      /*expected_text*/ L"\nafter",
+      /*expected_count*/ 6);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       GetTextNonEmptyTextfieldWithAriaLabel) {
+  LoadInitialAccessibilityTreeFromHtml(R"HTML(
+      <!DOCTYPE html>
+          <input type="text" aria-label="before" value="go blue">
+          <span>after</span>
+  )HTML");
+
+  BrowserAccessibility* root = GetRootAndAssertNonNull();
+
+  ComPtr<ITextRangeProvider> text_range_provider;
+  GetTextRangeProviderFromTextNode(*root, &text_range_provider);
+  ASSERT_NE(nullptr, text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"go blue\nafter");
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 6,
+      /*expected_text*/ L"e\nafter",
+      /*expected_count*/ 6);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
                        GetAttributeValue) {
   LoadInitialAccessibilityTreeFromHtml(R"HTML(
       <!DOCTYPE html>
@@ -633,14 +768,16 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
       <!DOCTYPE html>
       <html>
         <body>
-          <input readonly type="text" aria-label="input_text">
-          <input type="search" aria-label="input_search">
+          <input readonly type="text">
+          <input type="search">
         </body>
       </html>
   )HTML");
 
+  BrowserAccessibility* root = GetRootAndAssertNonNull();
+
   BrowserAccessibility* input_text_node =
-      FindNode(ax::mojom::Role::kTextField, "input_text");
+      root->InternalGetFirstChild()->InternalGetFirstChild();
   ASSERT_NE(nullptr, input_text_node);
   EXPECT_TRUE(input_text_node->IsLeaf());
   EXPECT_EQ(0u, input_text_node->PlatformChildCount());
@@ -660,7 +797,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   value.Reset();
 
   BrowserAccessibility* input_search_node =
-      FindNode(ax::mojom::Role::kSearchBox, "input_search");
+      input_text_node->InternalGetNextSibling();
   ASSERT_NE(nullptr, input_search_node);
   EXPECT_TRUE(input_search_node->IsLeaf());
   EXPECT_EQ(0u, input_search_node->PlatformChildCount());
@@ -752,6 +889,11 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
               class="non-atomic-text-field">
               <p>value2</p>
           </div>
+          <div contenteditable="false" data-placeholder="@mention or comment"
+              role="textbox" aria-readonly="true" aria-label="text_field_3"
+              class="non-atomic-text-field">
+              <p>value3</p>
+          </div>
         </body>
       </html>
   )HTML");
@@ -762,6 +904,9 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   BrowserAccessibility* text_field_node_2 =
       FindNode(ax::mojom::Role::kTextField, "text_field_2");
   ASSERT_NE(nullptr, text_field_node_2);
+  BrowserAccessibility* text_field_node_3 =
+      FindNode(ax::mojom::Role::kTextField, "text_field_3");
+  ASSERT_NE(nullptr, text_field_node_3);
 
   ComPtr<ITextRangeProvider> text_range_provider;
   GetTextRangeProviderFromTextNode(*text_field_node_1, &text_range_provider);
@@ -779,6 +924,17 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   GetTextRangeProviderFromTextNode(*text_field_node_2, &text_range_provider);
   ASSERT_NE(nullptr, text_range_provider.Get());
   EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"@mention or comment\nvalue2");
+
+  EXPECT_HRESULT_SUCCEEDED(text_range_provider->GetAttributeValue(
+      UIA_IsReadOnlyAttributeId, value.Receive()));
+  EXPECT_EQ(value.type(), VT_BOOL);
+  EXPECT_EQ(V_BOOL(value.ptr()), VARIANT_FALSE);
+  text_range_provider.Reset();
+  value.Reset();
+
+  GetTextRangeProviderFromTextNode(*text_field_node_3, &text_range_provider);
+  ASSERT_NE(nullptr, text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"@mention or comment\nvalue3");
 
   EXPECT_HRESULT_SUCCEEDED(text_range_provider->GetAttributeValue(
       UIA_IsReadOnlyAttributeId, value.Receive()));
@@ -899,9 +1055,9 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   // Make the range degenerate.
   EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
       text_range_provider, TextPatternRangeEndpoint_End, TextUnit_Character,
-      /*count*/ 1,
+      /*count*/ 2,
       /*expected_text*/ L"\n3",
-      /*expected_count*/ 1);
+      /*expected_count*/ 2);
 
   // The range should now span two nodes: start: "item<>", end: "<3>.14".
   EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"\n3");
@@ -925,6 +1081,61 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
       TextPatternRangeEndpoint_End, text_range_provider_clone.Get(),
       TextPatternRangeEndpoint_Start, &result));
   ASSERT_EQ(1, result);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       CompareAriaInvalidTextRange) {
+  // This test is needed since there was a bug with this scenario, and it
+  // differs from others since the "aria-invalid" attribute causes the tree to
+  // be different, with an extra generic container that we do not have in the
+  // case without aria-invalid="spelling".
+  LoadInitialAccessibilityTreeFromHtml(std::string(R"HTML(
+      <!DOCTYPE html>
+      <html>
+        <div contentEditable="true">x <span aria-invalid="spelling">He</span></div>
+      </html>
+  )HTML"));
+
+  BrowserAccessibility* static_text_node_1 =
+      FindNode(ax::mojom::Role::kStaticText, "He");
+  ASSERT_NE(nullptr, static_text_node_1);
+  BrowserAccessibility* static_text_node_2 =
+      FindNode(ax::mojom::Role::kStaticText, "x ");
+  ASSERT_NE(nullptr, static_text_node_2);
+
+  ComPtr<ITextRangeProvider> text_range_provider_1;
+  GetTextRangeProviderFromTextNode(*static_text_node_1, &text_range_provider_1);
+
+  // We are moving the endpoints to replicate a bug where the text ranges looked
+  // like:
+  // 1. H<e>
+  // 2. x <>
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider_1, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 1,
+      /*expected_text*/ L"e",
+      /*expected_count*/ 1);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider_1, TextPatternRangeEndpoint_End, TextUnit_Character,
+      /*count*/ -1,
+      /*expected_text*/ L"",
+      /*expected_count*/ -1);
+  ASSERT_NE(nullptr, text_range_provider_1.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider_1, L"");
+
+  ComPtr<ITextRangeProvider> text_range_provider_2;
+  GetTextRangeProviderFromTextNode(*static_text_node_2, &text_range_provider_2);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
+      text_range_provider_2, TextPatternRangeEndpoint_Start, TextUnit_Character,
+      /*count*/ 2,
+      /*expected_text*/ L"",
+      /*expected_count*/ 2);
+  ASSERT_NE(nullptr, text_range_provider_2.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(text_range_provider_2, L"");
+
+  BOOL are_same;
+  text_range_provider_1->Compare(text_range_provider_2.Get(), &are_same);
+  EXPECT_FALSE(are_same);
 }
 
 IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
@@ -1084,9 +1295,9 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   // Now remove "Node 1" from the DOM and verify the text range created from
   // "Node 1" is still functional.
   {
-    AccessibilityNotificationWaiter waiter(shell()->web_contents(),
-                                           ui::kAXModeComplete,
-                                           ax::mojom::Event::kChildrenChanged);
+    AccessibilityNotificationWaiter waiter(
+        shell()->web_contents(), ui::kAXModeComplete,
+        ui::AXEventGenerator::Event::CHILDREN_CHANGED);
     EXPECT_TRUE(
         ExecJs(shell()->web_contents(),
                "document.getElementById('wrapper').removeChild(document."
@@ -1103,9 +1314,9 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   // Now remove all children from the DOM and verify the text range created from
   // "Node 1" is still valid (it got moved to a non-deleted ancestor node).
   {
-    AccessibilityNotificationWaiter waiter(shell()->web_contents(),
-                                           ui::kAXModeComplete,
-                                           ax::mojom::Event::kChildrenChanged);
+    AccessibilityNotificationWaiter waiter(
+        shell()->web_contents(), ui::kAXModeComplete,
+        ui::AXEventGenerator::Event::CHILDREN_CHANGED);
     EXPECT_TRUE(ExecJs(shell()->web_contents(),
                        "while(document.body.childElementCount > 0) {"
                        "  document.body.removeChild(document.body.firstChild);"
@@ -2573,9 +2784,9 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
       /*expected_count*/ 1);
   EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
       text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
-      /*count*/ -17,
+      /*count*/ -18,
       /*expected_text*/ L"iframe\nAfter frame",
-      /*expected_count*/ -17);
+      /*expected_count*/ -18);
   EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(text_range_provider,
                                    TextPatternRangeEndpoint_End, TextUnit_Line,
                                    /*count*/ -1,
@@ -2599,21 +2810,21 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
                   /*expected_count*/ -1);
   EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
       text_range_provider, TextPatternRangeEndpoint_End, TextUnit_Character,
-      /*count*/ 1,
+      /*count*/ 2,
       /*expected_text*/ L"frame\nT",
-      /*expected_count*/ 1);
+      /*expected_count*/ 2);
   EXPECT_UIA_MOVE(text_range_provider, TextUnit_Character,
-                  /*count*/ 6,
+                  /*count*/ 7,
                   /*expected_text*/ L"e",
-                  /*expected_count*/ 6);
+                  /*expected_count*/ 7);
   EXPECT_UIA_MOVE(text_range_provider, TextUnit_Character,
-                  /*count*/ 19,
+                  /*count*/ 20,
                   /*expected_text*/ L"f",
-                  /*expected_count*/ 19);
+                  /*expected_count*/ 20);
   EXPECT_UIA_MOVE(text_range_provider, TextUnit_Character,
-                  /*count*/ -7,
+                  /*count*/ -8,
                   /*expected_text*/ L"e",
-                  /*expected_count*/ -7);
+                  /*expected_count*/ -8);
   EXPECT_UIA_MOVE(text_range_provider, TextUnit_Line,
                   /*count*/ 1,
                   /*expected_text*/ L"After frame",
@@ -2753,15 +2964,15 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
 
   EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
       text_range_provider, TextPatternRangeEndpoint_End, TextUnit_Character,
-      /*count*/ 3,
+      /*count*/ 4,
       /*expected_text*/ L"plain\ntext\nita",
-      /*expected_count*/ 3);
+      /*expected_count*/ 4);
 
   EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(
       text_range_provider, TextPatternRangeEndpoint_Start, TextUnit_Character,
-      /*count*/ 10,
+      /*count*/ 12,
       /*expected_text*/ L"ta",
-      /*expected_count*/ 10);
+      /*expected_count*/ 12);
 
   ASSERT_HRESULT_SUCCEEDED(
       text_range_provider->ExpandToEnclosingUnit(TextUnit_Format));
@@ -3083,9 +3294,23 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   </html>)HTML";
 
   const std::vector<const wchar_t*> characters = {
-      L"S", L"o", L"m", L"e", L" ",
-      L"t", L"e", L"x", L"t", kEmbeddedCharacterAsString.c_str(),
-      L"a", L"f", L"t", L"e", L"r"};
+      L"S",
+      L"o",
+      L"m",
+      L"e",
+      L" ",
+      L"t",
+      L"e",
+      L"x",
+      L"t",
+      L"\n",
+      kEmbeddedCharacterAsString.c_str(),
+      L"\n",
+      L"a",
+      L"f",
+      L"t",
+      L"e",
+      L"r"};
 
   AssertMoveByUnitForMarkup(TextUnit_Character, html_markup, characters);
 }
@@ -3107,6 +3332,31 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   const std::vector<const wchar_t*> words = {
       L"Some ",  L"text ", kEmbeddedCharacterAsString.c_str(),
       L"after ", L"input", kEmbeddedCharacterAsString.c_str()};
+
+  AssertMoveByUnitForMarkup(TextUnit_Word, html_markup, words);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       MoveByWordWithDialogAndButton) {
+  const std::string html_markup = R"HTML(<!DOCTYPE html>
+  <html>
+    <body>
+      <h1>One</h1>
+      <h1>Two</h1>
+      <div style="visibility:hidden">
+        <div role="dialog">
+          <div>
+            <div>
+              <button aria-label="close" type="button"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <h1>Three</h1>
+    </body>
+  </html>)HTML";
+
+  const std::vector<const wchar_t*> words = {L"One", L"Two", L"Three"};
 
   AssertMoveByUnitForMarkup(TextUnit_Word, html_markup, words);
 }
@@ -3153,7 +3403,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
 
   EXPECT_UIA_MOVE(text_range_provider, TextUnit_Character,
                   /*count*/ 19,
-                  /*expected_text*/ L"e",
+                  /*expected_text*/ L"t",
                   /*expected_count*/ 19);
   text_range_provider->ExpandToEnclosingUnit(TextUnit_Word);
   EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"item");
@@ -3239,7 +3489,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   EXPECT_HRESULT_SUCCEEDED(text_range_provider->Select());
 
   ASSERT_TRUE(waiter.WaitForNotification());
-  ui::AXTree::Selection selection = node->GetUnignoredSelection();
+  ui::AXSelection selection = node->GetUnignoredSelection();
   EXPECT_EQ(selection.anchor_object_id, node->GetId());
   EXPECT_EQ(selection.anchor_offset, 0);
   EXPECT_EQ(selection.focus_object_id, node->GetId());
@@ -3281,7 +3531,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
     EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"Before frame");
 
     AccessibilityNotificationWaiter waiter(web_contents, ui::kAXModeComplete,
-                                           ax::mojom::Event::kChildrenChanged);
+                                           ax::mojom::Event::kLayoutComplete);
 
     // Updating the style on that particular node is going to invalidate the
     // leaf text node and will replace it with a new one with the updated style.
@@ -3309,7 +3559,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
         /*expected_count*/ 1);
 
     AccessibilityNotificationWaiter waiter(web_contents, ui::kAXModeComplete,
-                                           ax::mojom::Event::kChildrenChanged);
+                                           ax::mojom::Event::kLayoutComplete);
 
     // Updating the style on that particular node is going to invalidate the
     // leaf text node and will replace it with a new one with the updated style.
@@ -3341,7 +3591,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
         /*expected_count*/ -1);
 
     AccessibilityNotificationWaiter waiter(web_contents, ui::kAXModeComplete,
-                                           ax::mojom::Event::kChildrenChanged);
+                                           ax::mojom::Event::kEndOfTest);
 
     // Updating the style on that particular node is going to invalidate the
     // leaf text node and will replace it with a new one with the updated style.
@@ -3350,6 +3600,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
         web_contents,
         "document.getElementById('s2').style.outline = '1px solid black';"));
 
+    GetManager()->SignalEndOfTest();
     ASSERT_TRUE(waiter.WaitForNotification());
     EXPECT_UIA_TEXTRANGE_EQ(text_range_provider, L"iframe\nAfter frame");
   }
@@ -3379,8 +3630,9 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
     // Reloading changes the tree id, triggering an AXTreeManager replacement.
     shell()->Reload();
 
-    AccessibilityNotificationWaiter waiter(web_contents, ui::kAXModeComplete,
-                                           ax::mojom::Event::kChildrenChanged);
+    AccessibilityNotificationWaiter waiter(
+        web_contents, ui::kAXModeComplete,
+        ui::AXEventGenerator::Event::FOCUS_CHANGED);
 
     // We do a style change here only to trigger an AXTree update - apparently,
     // a shell reload doesn't update the tree by itself.
@@ -3418,13 +3670,14 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
         /*expected_count*/ 1);
 
     AccessibilityNotificationWaiter waiter(web_contents, ui::kAXModeComplete,
-                                           ax::mojom::Event::kChildrenChanged);
+                                           ax::mojom::Event::kEndOfTest);
 
     // We do a style change here only to trigger an AXTree update.
     EXPECT_TRUE(ExecJs(
         web_contents,
         "document.getElementById('s2').style.outline = '1px solid black';"));
 
+    GetManager()->SignalEndOfTest();
     ASSERT_TRUE(waiter.WaitForNotification());
 
     // If the previous observer was not removed correctly, this will cause a
@@ -3476,11 +3729,6 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
                        DegenerateRangeBoundingRect) {
-  // Due to https://crbug.com/1193359, custom fonts do not load consistently in
-  // Windows 7. So not running this test on Windows 7.
-  if (base::win::GetVersion() == base::win::Version::WIN7)
-    return;
-
   LoadInitialAccessibilityTreeFromHtmlFilePath(
       "/accessibility/html/fixed-width-text.html");
 
@@ -3655,6 +3903,261 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
   EXPECT_HRESULT_SUCCEEDED(
       text_range_provider->GetBoundingRectangles(rectangles.Receive()));
   EXPECT_UIA_DOUBLE_SAFEARRAY_EQ(rectangles.Get(), expected_values);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       TextDeletedInTextFieldAdjustmentNeeded) {
+  // This test, tests a scenario where an AT is used to make a deletion on some
+  // text and then manually moves the caret around: On the input "hello world
+  // red green<> blue" where the caret position is noted by <>:
+  // 1. The AT creates a degenerate text range provider on the caret position
+  // 2. The AT selects "world" and then simulates a backspace to delete the
+  // word.
+  // 3. The AT moves the caret back to the original position (right after
+  // "green")
+  LoadInitialAccessibilityTreeFromHtml(
+      R"HTML(<input id='input' type='text' value='hello world red green blue'/>)HTML");
+
+  auto* node =
+      FindNode(ax::mojom::Role::kTextField, "hello world red green blue");
+  ASSERT_NE(nullptr, node);
+
+  ComPtr<ITextRangeProvider> original_text_range_provider;
+  GetTextRangeProviderFromTextNode(*node, &original_text_range_provider);
+  ASSERT_NE(nullptr, original_text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(original_text_range_provider,
+                          L"hello world red green blue");
+
+  ComPtr<ITextRangeProvider> deletion_text_range_provider;
+  GetTextRangeProviderFromTextNode(*node, &deletion_text_range_provider);
+  ASSERT_NE(nullptr, deletion_text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(deletion_text_range_provider,
+                          L"hello world red green blue");
+
+  base::win::ScopedBstr find_string(L"world");
+  EXPECT_HRESULT_SUCCEEDED(original_text_range_provider->FindText(
+      find_string.Get(), false, false, &deletion_text_range_provider));
+
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Word,
+                                   /*count*/ 1,
+                                   /*expected_text*/ L"world red green blue",
+                                   /*expected_count*/ 1);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Word,
+                                   /*count*/ 1,
+                                   /*expected_text*/ L"red green blue",
+                                   /*expected_count*/ 1);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Word,
+                                   /*count*/ 1,
+                                   /*expected_text*/ L"green blue",
+                                   /*expected_count*/ 1);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_End, TextUnit_Word,
+                                   /*count*/ -1,
+                                   /*expected_text*/ L"green ",
+                                   /*expected_count*/ -1);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Character,
+                                   /*count*/ 5,
+                                   /*expected_text*/ L" ",
+                                   /*expected_count*/ 5);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_End,
+                                   TextUnit_Character,
+                                   /*count*/ -1,
+                                   /*expected_text*/ L"",
+                                   /*expected_count*/ -1);
+
+  // At this point, `original_text_range_provider` should be a degenerate range
+  // acting as the caret here: "hello red green<> blue" and
+  // `deletion_text_range_provider` should have "<w>orld<>".
+
+  EXPECT_HRESULT_SUCCEEDED(deletion_text_range_provider->Select());
+
+  // Now we delete "world".
+  AccessibilityNotificationWaiter waiter(shell()->web_contents(),
+                                         ui::kAXModeComplete,
+                                         ax::mojom::Event::kLayoutComplete);
+  SimulateKeyPress(shell()->web_contents(), ui::DomKey::BACKSPACE,
+                   ui::DomCode::BACKSPACE, ui::VKEY_BACK, false, false, false,
+                   false);
+  ASSERT_TRUE(waiter.WaitForNotification());
+
+  // Since our deletion text range provider is also an observer to the deletion
+  // event, it will be set to nullposition after the deletion, since by design
+  // we return nullpositions when the deletion range encompasses the observing
+  // endpoints. As such, we create this textrange provider that mimmicks where
+  // blink would set the selection after the deletion is done.
+  ComPtr<ITextRangeProvider> blink_selection_text_range_provider;
+  GetTextRangeProviderFromTextNode(*node, &blink_selection_text_range_provider);
+  ASSERT_NE(nullptr, blink_selection_text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(blink_selection_text_range_provider,
+                          L"hello  red green blue");
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(blink_selection_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Character,
+                                   /*count*/ 6,
+                                   /*expected_text*/ L" red green blue",
+                                   /*expected_count*/ 6);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(blink_selection_text_range_provider,
+                                   TextPatternRangeEndpoint_End,
+                                   TextUnit_Character,
+                                   /*count*/ -15,
+                                   /*expected_text*/ L"",
+                                   /*expected_count*/ -15);
+
+  // Now we move the `deletion` text range to the original, which was the
+  // original caret position.
+  EXPECT_HRESULT_SUCCEEDED(
+      blink_selection_text_range_provider->MoveEndpointByRange(
+          TextPatternRangeEndpoint_Start, original_text_range_provider.Get(),
+          TextPatternRangeEndpoint_Start));
+  EXPECT_HRESULT_SUCCEEDED(
+      blink_selection_text_range_provider->MoveEndpointByRange(
+          TextPatternRangeEndpoint_End, original_text_range_provider.Get(),
+          TextPatternRangeEndpoint_End));
+
+  EXPECT_UIA_TEXTRANGE_EQ(blink_selection_text_range_provider, L"");
+
+  // Since the original caret position was right after "green" if we now expand
+  // the resulting range we would expect to have "green" here as well.
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(blink_selection_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Character,
+                                   /*count*/ -5,
+                                   /*expected_text*/ L"green",
+                                   /*expected_count*/ -5);
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeTextRangeProviderWinBrowserTest,
+                       TextDeletedInTextFieldAdjustmentNeededNodeDeleted) {
+  // This test, tests a scenario where an AT is used to make a deletion on some
+  // text and then manually moves the caret around: On the input "go hello
+  // <>blue" where the caret position is noted by <>: This covers the scenario
+  // where the deleted text actually deletes a node in the DOM.
+  // 1. The AT creates a degenerate text range provider on the caret position
+  // 2. The AT selects "hello" and then simulates a backspace to delete the
+  // word.
+  // 3. The AT moves the caret back to the original position (right before
+  // "blue")
+  LoadInitialAccessibilityTreeFromHtml(
+      R"HTML(<div id='input' contenteditable='true'>go <span>hello</span> blue<div/>)HTML");
+
+  auto* node = FindNode(ax::mojom::Role::kGenericContainer, "go hello blue");
+  ASSERT_NE(nullptr, node);
+
+  ComPtr<ITextRangeProvider> original_text_range_provider;
+  GetTextRangeProviderFromTextNode(*node, &original_text_range_provider);
+  ASSERT_NE(nullptr, original_text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(original_text_range_provider, L"go hello blue");
+
+  ComPtr<ITextRangeProvider> deletion_text_range_provider;
+  GetTextRangeProviderFromTextNode(*node, &deletion_text_range_provider);
+  ASSERT_NE(nullptr, deletion_text_range_provider.Get());
+  EXPECT_UIA_TEXTRANGE_EQ(deletion_text_range_provider, L"go hello blue");
+
+  base::win::ScopedBstr find_string(L"hello");
+  EXPECT_HRESULT_SUCCEEDED(original_text_range_provider->FindText(
+      find_string.Get(), false, false, &deletion_text_range_provider));
+
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Word,
+                                   /*count*/ 1,
+                                   /*expected_text*/ L"hello blue",
+                                   /*expected_count*/ 1);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Word,
+                                   /*count*/ 1,
+                                   /*expected_text*/ L"blue",
+                                   /*expected_count*/ 1);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(original_text_range_provider,
+                                   TextPatternRangeEndpoint_End,
+                                   TextUnit_Character,
+                                   /*count*/ -4,
+                                   /*expected_text*/ L"",
+                                   /*expected_count*/ -4);
+
+  // At this point, `original_text_range_provider` should be a degenerate range
+  // acting as the caret here: "go hello <>blue" and
+  // `deletion_text_range_provider` should have "<h>ello<>".
+
+  AccessibilityNotificationWaiter sel_waiter(
+      shell()->web_contents(), ui::kAXModeComplete,
+      ax::mojom::Event::kDocumentSelectionChanged);
+
+  EXPECT_HRESULT_SUCCEEDED(deletion_text_range_provider->Select());
+
+  ASSERT_TRUE(sel_waiter.WaitForNotification());
+
+  // Now we delete "hello".
+  AccessibilityNotificationWaiter waiter(shell()->web_contents(),
+                                         ui::kAXModeComplete,
+                                         ax::mojom::Event::kLayoutComplete);
+  SimulateKeyPress(shell()->web_contents(), ui::DomKey::BACKSPACE,
+                   ui::DomCode::BACKSPACE, ui::VKEY_BACK, /* control */ false,
+                   /* shift */ false, /* alt */ false,
+                   /* command */ false);
+  ASSERT_TRUE(waiter.WaitForNotification());
+
+  // Since our deletion text range provider is also an observer to the deletion
+  // event, it will be set to nullposition after the deletion, since by design
+  // we return nullpositions when the deletion range encompasses the observing
+  // endpoints. As such, we create this textrange provider that mimmicks where
+  // blink would set the selection after the deletion is done.
+  ComPtr<ITextRangeProvider> blink_selection_text_range_provider;
+  GetTextRangeProviderFromTextNode(*node, &blink_selection_text_range_provider);
+  ASSERT_NE(nullptr, blink_selection_text_range_provider.Get());
+  wchar_t text[11] = L"go ";
+  wchar_t non_breaking_space[2] = L"\xA0";
+  wchar_t blue[5] = L"blue";
+  wcscat(text, non_breaking_space);
+  wcscat(text, blue);
+  wchar_t text_2[7] = L"\xA0";
+  wcscat(text_2, blue);
+  EXPECT_UIA_TEXTRANGE_EQ(blink_selection_text_range_provider, text);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(blink_selection_text_range_provider,
+                                   TextPatternRangeEndpoint_Start,
+                                   TextUnit_Character,
+                                   /*count*/ 3,
+                                   /*expected_text*/ text_2,
+                                   /*expected_count*/ 3);
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(blink_selection_text_range_provider,
+                                   TextPatternRangeEndpoint_End,
+                                   TextUnit_Character,
+                                   /*count*/ -5,
+                                   /*expected_text*/ L"",
+                                   /*expected_count*/ -5);
+
+  // Now we move the 'deletion' text range to the original, which was the
+  // original caret position.
+  EXPECT_HRESULT_SUCCEEDED(
+      blink_selection_text_range_provider->MoveEndpointByRange(
+          TextPatternRangeEndpoint_Start, original_text_range_provider.Get(),
+          TextPatternRangeEndpoint_Start));
+  EXPECT_HRESULT_SUCCEEDED(
+      blink_selection_text_range_provider->MoveEndpointByRange(
+          TextPatternRangeEndpoint_End, original_text_range_provider.Get(),
+          TextPatternRangeEndpoint_End));
+
+  EXPECT_UIA_TEXTRANGE_EQ(blink_selection_text_range_provider, L"");
+
+  // Since the original caret position was right after "blue" if we now expand
+  // the resulting range we would expect to have "blue" here as well, and the
+  // full text would be "go blue".
+  EXPECT_UIA_MOVE_ENDPOINT_BY_UNIT(blink_selection_text_range_provider,
+                                   TextPatternRangeEndpoint_End,
+                                   TextUnit_Character,
+                                   /*count*/ 4,
+                                   /*expected_text*/ L"blue",
+                                   /*expected_count*/ 4);
 }
 
 }  // namespace content

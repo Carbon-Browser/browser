@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ class WebMessageHostFactory {
   // Creates a WebMessageHost for the specified page. |proxy| is valid for
   // the life of the host and may be used to send messages back to the page.
   virtual std::unique_ptr<WebMessageHost> CreateHost(
+      const std::string& top_level_origin_string,
       const std::string& origin_string,
       bool is_main_frame,
       WebMessageReplyProxy* proxy) = 0;

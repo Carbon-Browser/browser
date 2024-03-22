@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,14 @@
  */
 
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import '../settings_shared.css.js';
 import '../site_favicon.js';
 
-import {ListPropertyUpdateMixin} from 'chrome://resources/js/list_property_update_mixin.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {ListPropertyUpdateMixin} from 'chrome://resources/cr_elements/list_property_update_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -33,7 +33,7 @@ export interface ZoomLevelsElement {
 }
 
 const ZoomLevelsElementBase = ListPropertyUpdateMixin(
-    SiteSettingsMixin(WebUIListenerMixin(PolymerElement)));
+    SiteSettingsMixin(WebUiListenerMixin(PolymerElement)));
 
 export class ZoomLevelsElement extends ZoomLevelsElementBase {
   static get is() {
@@ -67,7 +67,7 @@ export class ZoomLevelsElement extends ZoomLevelsElementBase {
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'onZoomLevelsChanged',
         (sites: ZoomLevelEntry[]) => this.onZoomLevelsChanged_(sites));
     this.browserProxy.fetchZoomLevels();
@@ -78,7 +78,7 @@ export class ZoomLevelsElement extends ZoomLevelsElementBase {
    * @param sites The up to date list of sites and their zoom levels.
    */
   private onZoomLevelsChanged_(sites: ZoomLevelEntry[]) {
-    this.updateList('sites_', item => item.origin, sites);
+    this.updateList('sites_', item => item.hostOrSpec, sites);
     this.showNoSites_ = this.sites_.length === 0;
   }
 
@@ -87,7 +87,7 @@ export class ZoomLevelsElement extends ZoomLevelsElementBase {
    */
   private removeZoomLevel_(event: DomRepeatEvent<ZoomLevelEntry>) {
     const site = this.sites_[event.model.index];
-    this.browserProxy.removeZoomLevel(site.origin);
+    this.browserProxy.removeZoomLevel(site.hostOrSpec);
   }
 }
 

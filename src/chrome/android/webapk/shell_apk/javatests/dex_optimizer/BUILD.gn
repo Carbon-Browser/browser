@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,10 +7,6 @@ import("//build/config/android/rules.gni")
 android_apk("dex_optimizer_apk") {
   # Used as an additional_apk in test scripts.
   never_incremental = true
-
-  # Multidex requires a custom Application class to initialize it. Simpler to
-  # just disable it.
-  enable_multidex = false
 
   android_manifest = "AndroidManifest.xml"
   apk_name = "DexOptimizer"

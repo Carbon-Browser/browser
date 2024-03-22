@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,15 @@
 #include <utility>
 
 #include "base/atomic_sequence_num.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
 #include "gpu/ipc/client/client_shared_image_interface.h"
 #include "gpu/ipc/common/command_buffer_id.h"
 #include "gpu/ipc/common/gpu_watchdog_timeout.h"
 #include "ipc/ipc_channel_mojo.h"
-#include "mojo/public/cpp/bindings/lib/message_quota_checker.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "url/gurl.h"
 
@@ -30,10 +28,12 @@ GpuChannelHost::GpuChannelHost(
     int channel_id,
     const gpu::GPUInfo& gpu_info,
     const gpu::GpuFeatureInfo& gpu_feature_info,
+    const gpu::SharedImageCapabilities& shared_image_capabilities,
     mojo::ScopedMessagePipeHandle handle,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
-    : io_thread_(io_task_runner ? io_task_runner
-                                : base::ThreadTaskRunnerHandle::Get()),
+    : io_thread_(io_task_runner
+                     ? io_task_runner
+                     : base::SingleThreadTaskRunner::GetCurrentDefault()),
       channel_id_(channel_id),
       gpu_info_(gpu_info),
       gpu_feature_info_(gpu_feature_info),
@@ -41,8 +41,8 @@ GpuChannelHost::GpuChannelHost(
       connection_tracker_(base::MakeRefCounted<ConnectionTracker>()),
       shared_image_interface_(
           this,
-          static_cast<int32_t>(
-              GpuChannelReservedRoutes::kSharedImageInterface)),
+          static_cast<int32_t>(GpuChannelReservedRoutes::kSharedImageInterface),
+          shared_image_capabilities),
       image_decode_accelerator_proxy_(
           this,
           static_cast<int32_t>(
@@ -175,6 +175,25 @@ int32_t GpuChannelHost::GenerateRouteID() {
   return next_route_id_.GetNext();
 }
 
+void GpuChannelHost::CreateGpuMemoryBuffer(
+    const gfx::Size& size,
+    const viz::SharedImageFormat& format,
+    gfx::BufferUsage buffer_usage,
+    gfx::GpuMemoryBufferHandle* buffer_handle) {
+  GetGpuChannel().CreateGpuMemoryBuffer(size, format, buffer_usage,
+                                        buffer_handle);
+}
+
+void GpuChannelHost::GetGpuMemoryBufferHandleInfo(
+    const Mailbox& mailbox,
+    gfx::GpuMemoryBufferHandle* handle,
+    viz::SharedImageFormat* format,
+    gfx::Size* size,
+    gfx::BufferUsage* buffer_usage) {
+  GetGpuChannel().GetGpuMemoryBufferHandleInfo(mailbox, handle, format, size,
+                                               buffer_usage);
+}
+
 void GpuChannelHost::CrashGpuProcessForTesting() {
   GetGpuChannel().CrashForTesting();
 }
@@ -215,9 +234,9 @@ void GpuChannelHost::Listener::Initialize(
     mojo::PendingAssociatedReceiver<mojom::GpuChannel> receiver,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner) {
   base::AutoLock lock(lock_);
-  channel_ = IPC::ChannelMojo::Create(
-      std::move(handle), IPC::Channel::MODE_CLIENT, this, io_task_runner,
-      io_task_runner, mojo::internal::MessageQuotaChecker::MaybeCreate());
+  channel_ =
+      IPC::ChannelMojo::Create(std::move(handle), IPC::Channel::MODE_CLIENT,
+                               this, io_task_runner, io_task_runner);
   DCHECK(channel_);
   bool result = channel_->Connect();
   DCHECK(result);

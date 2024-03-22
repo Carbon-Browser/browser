@@ -1,8 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.vr;
+
 import android.view.MotionEvent;
 import android.view.ViewGroup;
 
@@ -16,9 +17,7 @@ import org.chromium.chrome.browser.compositor.CompositorViewHolder;
 import org.chromium.components.webxr.ArCompositorDelegate;
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * Concrete, Chrome-specific implementation of ArCompositorDelegate interface.
- */
+/** Concrete, Chrome-specific implementation of ArCompositorDelegate interface. */
 public class ArCompositorDelegateImpl implements ArCompositorDelegate {
     private ChromeActivity mActivity;
     private CompositorViewHolder mCompositorViewHolder;
@@ -44,8 +43,7 @@ public class ArCompositorDelegateImpl implements ArCompositorDelegate {
     }
 
     @Override
-    @NonNull
-    public ViewGroup getArSurfaceParent() {
+    public @NonNull ViewGroup getArSurfaceParent() {
         // the ar_view_holder is a FrameLayout, up-cast to a ViewGroup.
         return (ViewGroup) mActivity.findViewById(R.id.ar_view_holder);
     }

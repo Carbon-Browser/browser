@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,10 +61,10 @@ bool CompositorRenderPassListFromJSON(
     return false;
   }
   auto dict = ReadValueFromJson(*json_path);
-  if (!dict) {
+  if (!dict || !dict->is_dict()) {
     return false;
   }
-  return CompositorRenderPassListFromDict(dict.value(), render_pass_list);
+  return CompositorRenderPassListFromDict(dict->GetDict(), render_pass_list);
 }
 
 absl::optional<base::FilePath> UnzipFrameData(const std::string& group,
@@ -86,6 +86,9 @@ absl::optional<base::FilePath> UnzipFrameData(const std::string& group,
                  .AppendASCII(group)
                  .AppendASCII(name);
 
+  // We are dumping the contents of the zip into a folder so we need to clean
+  // out this folder.
+  base::DeletePathRecursively(out_path);
   if (!zip::Unzip(zip_path, out_path)) {
     LOG(ERROR) << "Failed to unzip frame data from: " << zip_path;
     return absl::nullopt;
@@ -97,10 +100,10 @@ absl::optional<base::FilePath> UnzipFrameData(const std::string& group,
 bool FrameDataFromJson(base::FilePath& json_path,
                        std::vector<FrameData>* frame_data_list) {
   auto list = ReadValueFromJson(json_path);
-  if (!list) {
+  if (!list || !list->is_list()) {
     return false;
   }
-  return FrameDataFromList(list.value(), frame_data_list);
+  return FrameDataFromList(list->GetList(), frame_data_list);
 }
 
 namespace {

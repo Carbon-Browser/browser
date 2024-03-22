@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/public/cpp/projector/projector_annotator_controller.h"
 #include "ash/public/cpp/projector/projector_client.h"
 #include "ash/public/cpp/projector/projector_new_screencast_precondition.h"
+#include "ash/public/cpp/projector/speech_recognition_availability.h"
 #include "base/files/scoped_temp_dir.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -28,9 +29,12 @@ class MockProjectorClient : public ProjectorClient,
   ~MockProjectorClient() override;
 
   // ProjectorClient:
+  MOCK_CONST_METHOD0(GetSpeechRecognitionAvailability,
+                     SpeechRecognitionAvailability());
   MOCK_METHOD0(StartSpeechRecognition, void());
   MOCK_METHOD0(StopSpeechRecognition, void());
-  bool GetDriveFsMountPointPath(base::FilePath* result) const override;
+  MOCK_METHOD0(ForceEndSpeechRecognition, void());
+  bool GetBaseStoragePath(base::FilePath* result) const override;
   MOCK_CONST_METHOD0(IsDriveFsMounted, bool());
   MOCK_CONST_METHOD0(IsDriveFsMountFailed, bool());
   MOCK_CONST_METHOD0(OpenProjectorApp, void());
@@ -38,8 +42,8 @@ class MockProjectorClient : public ProjectorClient,
   MOCK_CONST_METHOD0(CloseProjectorApp, void());
   MOCK_CONST_METHOD1(OnNewScreencastPreconditionChanged,
                      void(const NewScreencastPrecondition&));
-  MOCK_METHOD1(SetAnnotatorMessageHandler, void(AnnotatorMessageHandler*));
-  MOCK_METHOD1(ResetAnnotatorMessageHandler, void(AnnotatorMessageHandler*));
+  MOCK_METHOD2(ToggleFileSyncingNotificationForPaths,
+               void(const std::vector<base::FilePath>&, bool));
 
   // ProjectorAnnotatorController:
   MOCK_METHOD1(SetTool, void(const AnnotatorTool&));

@@ -47,13 +47,13 @@ TEST(StringTest, CreationFromLiteral) {
 TEST(StringTest, CreationFromHashTraits) {
   String zero;
   EXPECT_TRUE(zero.IsNull());
-  EXPECT_TRUE(zero.IsEmpty());
+  EXPECT_TRUE(zero.empty());
   EXPECT_TRUE(HashTraits<String>::IsEmptyValue(zero));
   EXPECT_EQ(zero, HashTraits<String>::EmptyValue());
 
   String empty = "";
   EXPECT_FALSE(empty.IsNull());
-  EXPECT_TRUE(empty.IsEmpty());
+  EXPECT_TRUE(empty.empty());
   EXPECT_FALSE(HashTraits<String>::IsEmptyValue(empty));
   EXPECT_NE(empty, HashTraits<String>::EmptyValue());
 }
@@ -170,6 +170,25 @@ TEST(StringTest, ComparisonOfSameStringVectors) {
   EXPECT_EQ(string_vector, same_string_vector);
 }
 
+TEST(WTF, LengthWithStrippedWhiteSpace) {
+  String stripped("Hello  world");
+  EXPECT_EQ(stripped.LengthWithStrippedWhiteSpace(), stripped.length());
+  EXPECT_EQ(String("  Hello  world  ").LengthWithStrippedWhiteSpace(),
+            stripped.length());
+  EXPECT_EQ(String("Hello  world  ").LengthWithStrippedWhiteSpace(),
+            stripped.length());
+  EXPECT_EQ(String("  Hello  world").LengthWithStrippedWhiteSpace(),
+            stripped.length());
+  EXPECT_EQ(String("\nHello\n world  ").LengthWithStrippedWhiteSpace(),
+            stripped.length());
+  EXPECT_EQ(String().LengthWithStrippedWhiteSpace(), 0u);
+  EXPECT_EQ(String("").LengthWithStrippedWhiteSpace(), 0u);
+  EXPECT_EQ(String("\n").LengthWithStrippedWhiteSpace(), 0u);
+  EXPECT_EQ(String("\n\n").LengthWithStrippedWhiteSpace(), 0u);
+  String only_spaces("   ");
+  EXPECT_EQ(only_spaces.LengthWithStrippedWhiteSpace(), 0u);
+}
+
 TEST(WTF, SimplifyWhiteSpace) {
   String extra_spaces("  Hello  world  ");
   EXPECT_EQ(String("Hello world"), extra_spaces.SimplifyWhiteSpace());
@@ -188,6 +207,16 @@ TEST(WTF, SimplifyWhiteSpace) {
   EXPECT_EQ(
       String("  Hello  world  "),
       extra_spaces_and_tabs.SimplifyWhiteSpace(WTF::kDoNotStripWhiteSpace));
+
+  auto is_space_or_g = [](UChar character) {
+    return character == ' ' || character == 'G';
+  };
+  String extra_spaces_and_gs(" GGG Hello G world G G");
+  EXPECT_EQ(String("Hello world"),
+            extra_spaces_and_gs.SimplifyWhiteSpace(is_space_or_g));
+  EXPECT_EQ(String("     Hello   world    "),
+            extra_spaces_and_gs.SimplifyWhiteSpace(is_space_or_g,
+                                                   WTF::kDoNotStripWhiteSpace));
 }
 
 TEST(StringTest, StartsWithIgnoringUnicodeCase) {
@@ -296,14 +325,14 @@ TEST(StringTest, Ensure16Bit) {
   EXPECT_TRUE(empty8.Is8Bit());
   empty8.Ensure16Bit();
   EXPECT_FALSE(empty8.Is8Bit());
-  EXPECT_TRUE(empty8.IsEmpty());
+  EXPECT_TRUE(empty8.empty());
   EXPECT_FALSE(empty8.IsNull());
 
   String empty16(StringImpl::empty16_bit_);
   EXPECT_FALSE(empty16.Is8Bit());
   empty16.Ensure16Bit();
   EXPECT_FALSE(empty16.Is8Bit());
-  EXPECT_TRUE(empty16.IsEmpty());
+  EXPECT_TRUE(empty16.empty());
   EXPECT_FALSE(empty16.IsNull());
 
   String null_string;

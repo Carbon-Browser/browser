@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <memory>
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/certificate_provider/certificate_provider.h"
 #include "chrome/browser/lacros/cert/cert_db_initializer.h"
 #include "content/public/test/browser_task_environment.h"
@@ -55,7 +55,7 @@ class ClientCertStoreLacrosTest : public ::testing::Test {
   void FakeGetClientCerts(
       const net::SSLCertRequestInfo& cert_request_info,
       ClientCertStoreLacros::ClientCertListCallback callback) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), net::ClientCertIdentityList()));
   }

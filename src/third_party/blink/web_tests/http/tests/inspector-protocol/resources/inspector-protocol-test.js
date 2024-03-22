@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,13 @@ var TestRunner = class {
     ];
   }
 
+  static extendStabilizeNames(extended){
+    return [
+      ...TestRunner.stabilizeNames,
+      ...extended
+    ]
+  };
+
   startDumpingProtocolMessages() {
     this._dumpInspectorProtocolMessages = true;
   };
@@ -57,7 +64,12 @@ var TestRunner = class {
   }
 
   params(name) {
-    return name ? this._params.get(name) : this._params;
+    if (name) {
+      return this._params instanceof URLSearchParams
+          ? this._params.get(name) : this._params[name];
+    }
+
+    return this._params;
   }
 
   _logObject(object, title, stabilizeNames = TestRunner.stabilizeNames) {
@@ -112,7 +124,13 @@ var TestRunner = class {
   }
 
   url(relative) {
-    if (relative.startsWith('http://') || relative.startsWith('https://') || relative.startsWith('file://'))
+    if (
+      relative.startsWith('http://') ||
+      relative.startsWith('https://') ||
+      relative.startsWith('file://') ||
+      relative.startsWith('chrome://') ||
+      relative === 'about:blank'
+    )
       return relative;
     return this._targetBaseURL + relative;
   }
@@ -185,8 +203,18 @@ var TestRunner = class {
     })
   };
 
+  browserSession() {
+    return this._browserSession;
+  }
+
   browserP() {
     return this._browserSession.protocol;
+  }
+
+  async attachFullBrowserSession() {
+    const bp = this._browserSession.protocol;
+    const browserSessionId = (await bp.Target.attachToBrowserTarget()).result.sessionId;
+    return new TestRunner.Session(this, browserSessionId);
   }
 
   async createPage(options) {
@@ -252,6 +280,28 @@ var TestRunner = class {
     options.createContextOptions = {};
     options.enableBeginFrameControl = true;
     return this._start(description, options);
+  }
+
+  async startBlankWithTabTarget(description) {
+    try {
+      if (!description)
+        throw new Error('Please provide a description for the test!');
+      this.log(description);
+
+      const bp = this.browserP();
+      const params = {url: 'about:blank', forTab: true};
+      const tabTargetId =
+          (await bp.Target.createTarget(params)).result.targetId;
+      const tabTargetSessionId = (await bp.Target.attachToTarget({
+          targetId: tabTargetId,
+                                   flatten: true
+                                 })).result.sessionId;
+      const tabTargetSession = new TestRunner.Session(this, tabTargetSessionId);
+
+      return {tabTargetSession};
+    } catch (e) {
+      this.die('Error starting the test', e);
+    }
   }
 
   async logStackTrace(debuggers, stackTrace, debuggerId) {
@@ -360,6 +410,11 @@ TestRunner.Session = class {
     const session = new TestRunner.Session(this._testRunner, sessionId);
     session._parentSessionId = this._sessionId;
     return session;
+  }
+
+  async attachChild(targetId) {
+    const {sessionId} = (await this.protocol.Target.attachToTarget({targetId, flatten: true})).result;
+    return this.createChild(sessionId);
   }
 
   async sendCommand(method, params) {
@@ -472,6 +527,54 @@ TestRunner.Session = class {
   }
 };
 
+// Helper class to collect information of auto attached targets and
+// create `TestRunner.Session` from them.
+TestRunner.ChildTargetManager = class {
+  // @param {TestRunner} testRunner
+  // @param {Session} session
+  constructor(testRunner, session) {
+    this._testRunner = testRunner;
+    this._session = session;
+    this._attachedTargets = [];
+  }
+
+  // @param {object|undefined} autoAttachParams
+  // @return {void}
+  //
+  // Issues `Target.setAutoAttach` and starts collecting auto attached
+  // `TargetInfo`.
+  async startAutoAttach(autoAttachParams) {
+    autoAttachParams = autoAttachParams ||
+        {autoAttach: true, flatten: true, waitForDebuggerOnStart: false};
+    this._session.protocol.Target.onAttachedToTarget(event => {
+      this._attachedTargets.push(event.params);
+    });
+    await this._session.protocol.Target.setAutoAttach(autoAttachParams);
+  }
+
+  // @param {(TargetInfo): bool} pred
+  // @return {TestRunner.Session|null}
+  findAttachedSession(pred) {
+    const found =
+        this._attachedTargets.find(({targetInfo}) => pred(targetInfo));
+    return found ? this._session.createChild(found.sessionId) : null;
+  }
+
+  // @return {TestRunner.Session|null}
+  findAttachedSessionPrimaryMainFrame() {
+    return this.findAttachedSession(
+        targetInfo =>
+            targetInfo.type === 'page' && targetInfo.subtype === undefined);
+  }
+
+  // @return {TestRunner.Session|null}
+  findAttachedSessionPrerender() {
+    return this.findAttachedSession(
+        targetInfo =>
+            targetInfo.type === 'page' && targetInfo.subtype === 'prerender');
+  }
+};
+
 var DevToolsAPI = {};
 DevToolsAPI._requestId = 0;
 DevToolsAPI._embedderMessageId = 0;
@@ -567,6 +670,8 @@ testRunner.setPopupBlockingEnabled(false);
 
 window.addEventListener('load', () => {
   var params = new URLSearchParams(window.location.search);
+  if (!params.get('test'))
+    return;
 
   var testScriptURL = params.get('test');
   var testBaseURL = testScriptURL.substring(0, testScriptURL.lastIndexOf('/') + 1);

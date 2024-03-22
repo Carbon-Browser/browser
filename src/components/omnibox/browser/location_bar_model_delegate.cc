@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,10 +57,6 @@ bool LocationBarModelDelegate::IsNewTabPageURL(const GURL& url) const {
 }
 
 bool LocationBarModelDelegate::IsHomePage(const GURL& url) const {
-  return false;
-}
-
-bool LocationBarModelDelegate::IsShowingAccuracyTip() const {
   return false;
 }
 

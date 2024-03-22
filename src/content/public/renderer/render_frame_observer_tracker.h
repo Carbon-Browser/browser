@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,7 @@
 #include <map>
 
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 
 namespace content {
 
@@ -46,7 +47,7 @@ class RenderFrameObserverTracker {
     render_frame_map_.Get()[render_frame] = this;
   }
 
-  RenderFrameObserverTracker<T>(const RenderFrameObserverTracker<T>&) = delete;
+  RenderFrameObserverTracker(const RenderFrameObserverTracker<T>&) = delete;
   RenderFrameObserverTracker<T>& operator=(
       const RenderFrameObserverTracker<T>&) = delete;
 
@@ -55,7 +56,7 @@ class RenderFrameObserverTracker {
   }
 
  private:
-  const RenderFrame* render_frame_;
+  raw_ptr<const RenderFrame, ExperimentalRenderer> render_frame_;
 
   static typename base::LazyInstance<
       std::map<const RenderFrame*, RenderFrameObserverTracker<T>*>>::

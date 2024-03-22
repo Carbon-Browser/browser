@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,10 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ref_counted_memory.h"
@@ -52,13 +52,13 @@ constexpr char kStreamFormatJSON[] = "json";
 perfetto::TracingSession* g_tracing_session = nullptr;
 
 void OnGotCategories(WebUIDataSource::GotDataCallback callback,
-                     const std::set<std::string>& categorySet) {
-  base::ListValue category_list;
-  for (auto it = categorySet.begin(); it != categorySet.end(); it++) {
-    category_list.Append(*it);
+                     const std::set<std::string>& category_set) {
+  base::Value::List category_list;
+  for (const std::string& category : category_set) {
+    category_list.Append(category);
   }
 
-  scoped_refptr<base::RefCountedString> res(new base::RefCountedString());
+  auto res = base::MakeRefCounted<base::RefCountedString>();
   base::JSONWriter::Write(category_list, &res->data());
   std::move(callback).Run(res);
 }
@@ -74,8 +74,7 @@ bool BeginRecording(const std::string& data64,
 
   // TODO(skyostil): Migrate all use cases from TracingController to Perfetto.
   if (stream_format == kStreamFormatProtobuf) {
-    if (g_tracing_session)
-      delete g_tracing_session;
+    delete g_tracing_session;
     g_tracing_session =
         perfetto::Tracing::NewTrace(perfetto::BackendType::kCustomBackend)
             .release();
@@ -99,7 +98,8 @@ void OnTraceBufferUsageResult(WebUIDataSource::GotDataCallback callback,
                               float percent_full,
                               size_t approximate_event_count) {
   std::string str = base::NumberToString(percent_full);
-  std::move(callback).Run(base::RefCountedString::TakeString(&str));
+  std::move(callback).Run(
+      base::MakeRefCounted<base::RefCountedString>(std::move(str)));
 }
 
 bool GetTraceBufferUsage(WebUIDataSource::GotDataCallback callback) {
@@ -121,7 +121,8 @@ bool GetTraceBufferUsage(WebUIDataSource::GotDataCallback callback) {
             usage = base::NumberToString(percent_full);
           }
           std::move(shared_callback->data)
-              .Run(base::RefCountedString::TakeString(&usage));
+              .Run(base::MakeRefCounted<base::RefCountedString>(
+                  std::move(usage)));
         });
     return true;
   }
@@ -219,7 +220,7 @@ void OnTracingRequest(const std::string& path,
   if (!OnBeginJSONRequest(path, std::move(split_callback.first))) {
     std::string error("##ERROR##");
     std::move(split_callback.second)
-        .Run(base::RefCountedString::TakeString(&error));
+        .Run(base::MakeRefCounted<base::RefCountedString>(std::move(error)));
   }
 }
 
@@ -264,20 +265,21 @@ bool TracingUI::GetTracingOptions(const std::string& data64,
     LOG(ERROR) << "Options were not valid JSON";
     return false;
   }
-  if (!options->is_dict()) {
+  base::Value::Dict* options_dict = options->GetIfDict();
+  if (!options_dict) {
     LOG(ERROR) << "Options must be dict";
     return false;
   }
 
   if (const std::string* stream_format =
-          options->FindStringKey(kStreamFormat)) {
+          options_dict->FindString(kStreamFormat)) {
     out_stream_format = *stream_format;
   } else {
     out_stream_format = kStreamFormatJSON;
   }
 
-  // New style options dictionary.
-  trace_config = base::trace_event::TraceConfig(*options);
+  // New-style options dictionary.
+  trace_config = base::trace_event::TraceConfig(*options_dict);
   return true;
 }
 

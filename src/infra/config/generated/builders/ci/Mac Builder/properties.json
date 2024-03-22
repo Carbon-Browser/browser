@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/Mac Builder/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac Builder",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-mac-archive",
@@ -15,8 +18,7 @@
               "execution_mode": "COMPILE_AND_TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
@@ -28,69 +30,6 @@
                   "use_clang_coverage"
                 ],
                 "config": "chromium"
-              }
-            }
-          },
-          {
-            "builder_id": {
-              "bucket": "ci",
-              "builder": "Mac10.13 Tests",
-              "project": "chromium"
-            },
-            "builder_spec": {
-              "build_gs_bucket": "chromium-mac-archive",
-              "builder_group": "chromium.mac",
-              "execution_mode": "TEST",
-              "legacy_chromium_config": {
-                "apply_configs": [
-                  "mb",
-                  "goma_use_local"
-                ],
-                "build_config": "Release",
-                "config": "chromium",
-                "target_bits": 64,
-                "target_platform": "mac"
-              },
-              "legacy_gclient_config": {
-                "apply_configs": [
-                  "use_clang_coverage"
-                ],
-                "config": "chromium"
-              },
-              "parent": {
-                "bucket": "ci",
-                "builder": "Mac Builder",
-                "project": "chromium"
-              }
-            }
-          },
-          {
-            "builder_id": {
-              "bucket": "ci",
-              "builder": "Mac10.14 Tests",
-              "project": "chromium"
-            },
-            "builder_spec": {
-              "build_gs_bucket": "chromium-mac-archive",
-              "builder_group": "chromium.mac",
-              "execution_mode": "TEST",
-              "legacy_chromium_config": {
-                "apply_configs": [
-                  "mb",
-                  "goma_use_local"
-                ],
-                "build_config": "Release",
-                "config": "chromium",
-                "target_bits": 64,
-                "target_platform": "mac"
-              },
-              "legacy_gclient_config": {
-                "config": "chromium"
-              },
-              "parent": {
-                "bucket": "ci",
-                "builder": "Mac Builder",
-                "project": "chromium"
               }
             }
           },
@@ -98,7 +37,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac10.15 Tests",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-mac-archive",
@@ -106,8 +45,7 @@
               "execution_mode": "TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
@@ -120,7 +58,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "Mac Builder",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           },
@@ -128,15 +66,14 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac11 Tests",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "builder_group": "chromium.mac",
               "execution_mode": "TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
@@ -149,7 +86,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "Mac Builder",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           },
@@ -157,15 +94,14 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac12 Tests",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "builder_group": "chromium.mac",
               "execution_mode": "TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
@@ -178,7 +114,35 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "Mac Builder",
-                "project": "chromium"
+                "project": "chromium-m121"
+              }
+            }
+          },
+          {
+            "builder_id": {
+              "bucket": "ci",
+              "builder": "Mac13 Tests",
+              "project": "chromium-m121"
+            },
+            "builder_spec": {
+              "builder_group": "chromium.mac",
+              "execution_mode": "TEST",
+              "legacy_chromium_config": {
+                "apply_configs": [
+                  "mb"
+                ],
+                "build_config": "Release",
+                "config": "chromium",
+                "target_bits": 64,
+                "target_platform": "mac"
+              },
+              "legacy_gclient_config": {
+                "config": "chromium"
+              },
+              "parent": {
+                "bucket": "ci",
+                "builder": "Mac Builder",
+                "project": "chromium-m121"
               }
             }
           }
@@ -188,48 +152,56 @@
         {
           "bucket": "ci",
           "builder": "Mac Builder",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "builder_ids_in_scope_for_testing": [
         {
           "bucket": "ci",
-          "builder": "Mac10.13 Tests",
-          "project": "chromium"
-        },
-        {
-          "bucket": "ci",
-          "builder": "Mac10.14 Tests",
-          "project": "chromium"
-        },
-        {
-          "bucket": "ci",
           "builder": "Mac10.15 Tests",
-          "project": "chromium"
+          "project": "chromium-m121"
         },
         {
           "bucket": "ci",
           "builder": "Mac11 Tests",
-          "project": "chromium"
+          "project": "chromium-m121"
         },
         {
           "bucket": "ci",
           "builder": "Mac12 Tests",
-          "project": "chromium"
+          "project": "chromium-m121"
+        },
+        {
+          "bucket": "ci",
+          "builder": "Mac13 Tests",
+          "project": "chromium-m121"
         }
       ],
       "mirroring_builder_group_and_names": [
         {
           "builder": "mac-rel",
           "group": "tryserver.chromium.mac"
+        },
+        {
+          "builder": "mac12-tests",
+          "group": "tryserver.chromium.mac"
+        },
+        {
+          "builder": "mac_chromium_10.15_rel_ng",
+          "group": "tryserver.chromium.mac"
+        },
+        {
+          "builder": "mac_chromium_11.0_rel_ng",
+          "group": "tryserver.chromium.mac"
         }
       ]
     }
   },
-  "$build/goma": {
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org",
-    "use_luci_auth": true
+  "$build/reclient": {
+    "instance": "rbe-chromium-trusted",
+    "jobs": 250,
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

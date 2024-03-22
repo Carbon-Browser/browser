@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "device/bluetooth/bluetooth_discovery_filter.h"
@@ -35,7 +37,7 @@ T ValueOrDefault(Optional&& opt) {
 }
 
 device::BluetoothDevice::ManufacturerDataMap ToManufacturerDataMap(
-    base::flat_map<uint8_t, std::vector<uint8_t>>&& map) {
+    base::flat_map<uint16_t, std::vector<uint8_t>>&& map) {
   return device::BluetoothDevice::ManufacturerDataMap(
       std::make_move_iterator(map.begin()), std::make_move_iterator(map.end()));
 }
@@ -197,12 +199,10 @@ void FakeCentral::SetNextGATTDiscoveryResponse(
 }
 
 bool FakeCentral::AllResponsesConsumed() {
-  return std::all_of(devices_.begin(), devices_.end(), [](const auto& e) {
+  return base::ranges::all_of(devices_, [](const auto& e) {
     // static_cast is safe because the parent class's devices_ is only
     // populated via this FakeCentral, and only with FakePeripherals.
-    FakePeripheral* fake_peripheral =
-        static_cast<FakePeripheral*>(e.second.get());
-    return fake_peripheral->AllResponsesConsumed();
+    return static_cast<FakePeripheral*>(e.second.get())->AllResponsesConsumed();
   });
 }
 
@@ -554,6 +554,13 @@ void FakeCentral::SetDiscoverable(bool discoverable,
   NOTREACHED();
 }
 
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+base::TimeDelta FakeCentral::GetDiscoverableTimeout() const {
+  NOTREACHED();
+  return base::Microseconds(0);
+}
+#endif
+
 bool FakeCentral::IsDiscovering() const {
   NOTREACHED();
   return false;
@@ -603,7 +610,7 @@ void FakeCentral::ConnectDevice(
     const std::string& address,
     const absl::optional<device::BluetoothDevice::AddressType>& address_type,
     ConnectDeviceCallback callback,
-    ErrorCallback error_callback) {
+    ConnectDeviceErrorCallback error_callback) {
   NOTREACHED();
 }
 #endif
@@ -654,7 +661,7 @@ void FakeCentral::UpdateFilter(
     std::unique_ptr<device::BluetoothDiscoveryFilter> discovery_filter,
     DiscoverySessionResultCallback callback) {
   if (!IsPresent()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             std::move(callback), /*is_error=*/true,
@@ -662,7 +669,7 @@ void FakeCentral::UpdateFilter(
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), /*is_error=*/false,
                      device::UMABluetoothDiscoverySessionOutcome::SUCCESS));
@@ -672,7 +679,7 @@ void FakeCentral::StartScanWithFilter(
     std::unique_ptr<device::BluetoothDiscoveryFilter> discovery_filter,
     DiscoverySessionResultCallback callback) {
   if (!IsPresent()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             std::move(callback), /*is_error=*/true,
@@ -680,7 +687,7 @@ void FakeCentral::StartScanWithFilter(
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), /*is_error=*/false,
                      device::UMABluetoothDiscoverySessionOutcome::SUCCESS));
@@ -688,7 +695,7 @@ void FakeCentral::StartScanWithFilter(
 
 void FakeCentral::StopScan(DiscoverySessionResultCallback callback) {
   if (!IsPresent()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             std::move(callback), /*is_error=*/false,
@@ -696,7 +703,7 @@ void FakeCentral::StopScan(DiscoverySessionResultCallback callback) {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           std::move(callback), /*is_error=*/false,

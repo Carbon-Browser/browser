@@ -1,26 +1,22 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/ui/webui/local_state/local_state_ui.h"
+#import "ios/chrome/browser/ui/webui/local_state/local_state_ui.h"
 
-#include <memory>
+#import <memory>
 
-#include "base/bind.h"
-#include "base/values.h"
-#include "components/grit/dev_ui_components_resources.h"
-#include "components/local_state/local_state_utils.h"
-#include "components/prefs/pref_service.h"
-#include "ios/chrome/browser/application_context.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/web/public/webui/web_ui_ios.h"
-#include "ios/web/public/webui/web_ui_ios_data_source.h"
-#include "ios/web/public/webui/web_ui_ios_message_handler.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/functional/bind.h"
+#import "base/values.h"
+#import "components/grit/dev_ui_components_resources.h"
+#import "components/local_state/local_state_utils.h"
+#import "components/prefs/pref_service.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/web/public/webui/web_ui_ios.h"
+#import "ios/web/public/webui/web_ui_ios_data_source.h"
+#import "ios/web/public/webui/web_ui_ios_message_handler.h"
 
 namespace {
 
@@ -51,12 +47,15 @@ void LocalStateUIHandler::RegisterMessages() {
 }
 
 void LocalStateUIHandler::HandleRequestJson(const base::Value::List& args) {
-  std::string json;
-  if (!GetPrefsAsJson(GetApplicationContext()->GetLocalState(), &json))
+  std::optional<std::string> json = local_state_utils::GetPrefsAsJson(
+      GetApplicationContext()->GetLocalState());
+  if (!json) {
     json = "Error loading Local State file.";
+  }
 
   const base::Value& callback_id = args[0];
-  web_ui()->ResolveJavascriptCallback(callback_id, base::Value(json));
+  web_ui()->ResolveJavascriptCallback(callback_id,
+                                      base::Value(std::move(*json)));
 }
 
 }  // namespace

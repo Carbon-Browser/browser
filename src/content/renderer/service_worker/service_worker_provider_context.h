@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
+#include "third_party/blink/public/mojom/service_worker/controller_service_worker.mojom-shared.h"
 #include "third_party/blink/public/mojom/service_worker/controller_service_worker.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_container.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_container_type.mojom-forward.h"
@@ -186,8 +187,13 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
   blink::CrossVariantMojoRemote<
       blink::mojom::ServiceWorkerContainerHostInterfaceBase>
   CloneRemoteContainerHost() override;
+  // SetController must be called before these functions.
   blink::mojom::ControllerServiceWorkerMode GetControllerServiceWorkerMode()
       const override;
+  blink::mojom::ServiceWorkerFetchHandlerType GetFetchHandlerType()
+      const override;
+  blink::mojom::ServiceWorkerFetchHandlerBypassOption
+  GetFetchHandlerBypassOption() const override;
   const blink::WebString client_id() const override;
 
  private:
@@ -275,6 +281,27 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
 
   blink::mojom::ControllerServiceWorkerMode controller_mode_ =
       blink::mojom::ControllerServiceWorkerMode::kNoController;
+
+  blink::mojom::ServiceWorkerFetchHandlerType fetch_handler_type_ =
+      blink::mojom::ServiceWorkerFetchHandlerType::kNoHandler;
+  blink::mojom::ServiceWorkerFetchHandlerType effective_fetch_handler_type_ =
+      blink::mojom::ServiceWorkerFetchHandlerType::kNoHandler;
+
+  blink::mojom::ServiceWorkerFetchHandlerBypassOption
+      fetch_handler_bypass_option_ =
+          blink::mojom::ServiceWorkerFetchHandlerBypassOption::kDefault;
+
+  absl::optional<std::string> sha256_script_checksum_;
+
+  absl::optional<blink::ServiceWorkerRouterRules> router_rules_;
+  // TODO(crbug.com/1501047): It may be better to make this an optional, so it
+  // is possible to distinguish between unset and kStopped, which are not really
+  // equivalent.
+  blink::EmbeddedWorkerStatus initial_running_status_ =
+      blink::EmbeddedWorkerStatus::kStopped;
+  mojo::PendingRemote<blink::mojom::CacheStorage> remote_cache_storage_;
+  mojo::PendingReceiver<blink::mojom::ServiceWorkerRunningStatusCallback>
+      running_status_receiver_;
 
   // Tracks feature usage for UseCounter.
   std::set<blink::mojom::WebFeature> used_features_;

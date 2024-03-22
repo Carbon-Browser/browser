@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/android/tab_android.h"
 #include "chrome/browser/ui/android/chrome_http_auth_handler.h"
-#include "chrome/browser/vr/vr_tab_helper.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "net/base/auth.h"
@@ -49,12 +48,6 @@ class LoginHandlerAndroid : public LoginHandler {
     content::WebContents* contents =
         web_contents()->GetResponsibleWebContents();
     CHECK(contents);
-
-    if (vr::VrTabHelper::IsUiSuppressedInVr(
-            contents, vr::UiSuppressedElement::kHttpAuth)) {
-      CancelAuth();
-      return;
-    }
 
     TabAndroid* tab = TabAndroid::FromWebContents(contents);
     ui::ViewAndroid* view = contents->GetNativeView();

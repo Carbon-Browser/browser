@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -27,6 +28,7 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/table_model.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/window_open_disposition_utils.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -191,7 +193,9 @@ void DeprecatedAppsDialogView::InitDialog() {
   SetAcceptCallback(base::BindOnce(&DeprecatedAppsDialogView::OnAccept,
                                    base::Unretained(this)));
 
-  if (launched_extension_name_) {
+  bool hide_launch_anyways =
+      features::kChromeAppsDeprecationHideLaunchAnyways.Get();
+  if (launched_extension_name_ && !hide_launch_anyways) {
     SetButtonLabel(
         ui::DIALOG_BUTTON_CANCEL,
         l10n_util::GetStringUTF16(IDS_DEPRECATED_APPS_LAUNCH_ANYWAY_LABEL));
@@ -264,7 +268,10 @@ void DeprecatedAppsDialogView::OnAccept() {
 }
 
 void DeprecatedAppsDialogView::OnCancel() {
-  std::move(launch_anyways_).Run();
+  bool hide_launch_anyways =
+      features::kChromeAppsDeprecationHideLaunchAnyways.Get();
+  if (!hide_launch_anyways)
+    std::move(launch_anyways_).Run();
   CloseDialog();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "content/browser/devtools/devtools_agent_host_impl.h"
 #include "content/browser/renderer_host/back_forward_cache_disable.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
@@ -102,6 +103,11 @@ bool SecurityHandler::NotifyCertificateError(int cert_error,
 }
 
 Response SecurityHandler::Enable() {
+  if (host_) {
+    Response response = AssureTopLevelActiveFrame();
+    if (response.IsError())
+      return response;
+  }
   enabled_ = true;
   if (host_)
     AttachToRenderFrameHost();
@@ -119,7 +125,7 @@ Response SecurityHandler::Disable() {
 
 Response SecurityHandler::HandleCertificateError(int event_id,
                                                  const String& action) {
-  if (cert_error_callbacks_.find(event_id) == cert_error_callbacks_.end()) {
+  if (!base::Contains(cert_error_callbacks_, event_id)) {
     return Response::ServerError(
         String("Unknown event id: " + std::to_string(event_id)));
   }
@@ -163,6 +169,20 @@ Response SecurityHandler::SetIgnoreCertificateErrors(bool ignore) {
   } else {
     cert_error_override_mode_ = CertErrorOverrideMode::kDisabled;
   }
+  return Response::Success();
+}
+
+Response SecurityHandler::AssureTopLevelActiveFrame() {
+  DCHECK(host_);
+  constexpr char kCommandIsOnlyAvailableAtTopTarget[] =
+      "Command can only be executed on top-level targets";
+  if (host_->GetParentOrOuterDocument())
+    return Response::ServerError(kCommandIsOnlyAvailableAtTopTarget);
+
+  constexpr char kErrorInactivePage[] = "Not attached to an active page";
+  if (!host_->IsActive())
+    return Response::ServerError(kErrorInactivePage);
+
   return Response::Success();
 }
 

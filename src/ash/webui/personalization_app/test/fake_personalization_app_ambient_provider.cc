@@ -1,14 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/personalization_app/test/fake_personalization_app_ambient_provider.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/webui/personalization_app/mojom/personalization_app.mojom-forward.h"
 #include "content/public/browser/web_ui.h"
 
-namespace ash {
-namespace personalization_app {
+namespace ash::personalization_app {
 
 FakePersonalizationAppAmbientProvider::FakePersonalizationAppAmbientProvider(
     content::WebUI* web_ui) {}
@@ -28,5 +28,9 @@ void FakePersonalizationAppAmbientProvider::IsAmbientModeEnabled(
   std::move(callback).Run(std::move(true));
 }
 
-}  // namespace personalization_app
-}  // namespace ash
+void FakePersonalizationAppAmbientProvider::ShouldShowTimeOfDayBanner(
+    ShouldShowTimeOfDayBannerCallback callback) {
+  std::move(callback).Run(features::IsTimeOfDayScreenSaverEnabled());
+}
+
+}  // namespace ash::personalization_app

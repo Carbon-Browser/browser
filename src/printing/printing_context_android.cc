@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
+#include "base/check_op.h"
 #include "base/files/file.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
@@ -63,8 +64,8 @@ void GetPageRanges(JNIEnv* env,
 // static
 std::unique_ptr<PrintingContext> PrintingContext::CreateImpl(
     Delegate* delegate,
-    bool skip_system_calls) {
-  DCHECK(!skip_system_calls);
+    ProcessBehavior process_behavior) {
+  DCHECK_EQ(process_behavior, ProcessBehavior::kOopDisabled);
   return std::make_unique<PrintingContextAndroid>(delegate);
 }
 
@@ -86,7 +87,7 @@ void PrintingContextAndroid::SetPendingPrint(
 }
 
 PrintingContextAndroid::PrintingContextAndroid(Delegate* delegate)
-    : PrintingContext(delegate) {
+    : PrintingContext(delegate, ProcessBehavior::kOopDisabled) {
   // The constructor is run in the IO thread.
 }
 

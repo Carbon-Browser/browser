@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 #include <map>
 #include <memory>
 
-#include "base/containers/flat_map.h"
-#include "base/containers/flat_set.h"
+#include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
@@ -18,12 +17,8 @@
 #include "base/types/pass_key.h"
 #include "base/values.h"
 #include "chrome/browser/web_applications/commands/web_app_command.h"
-#include "chrome/browser/web_applications/web_app_constants.h"
-#include "chrome/browser/web_applications/web_app_id.h"
-#include "chrome/browser/web_applications/web_app_url_loader.h"
-#include "components/services/storage/indexed_db/locks/disjoint_range_lock_manager.h"
-#include "components/services/storage/indexed_db/locks/leveled_lock_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/web_applications/locks/web_app_lock_manager.h"
+#include "components/webapps/common/web_app_id.h"
 
 class Profile;
 
@@ -33,16 +28,18 @@ class WebContents;
 
 namespace web_app {
 
-class WebAppInstallManager;
+class WebAppProvider;
+class WebAppUrlLoader;
 
 // The command manager is used to schedule commands or callbacks to write & read
 // from the WebAppProvider system. To use, simply call `ScheduleCommand` to
 // schedule the given command or a CallbackCommand with given callback.
 //
-// Commands will be executed (`Start()` will be called) in-order based on
-// command's `WebAppCommandLock`, the `WebAppCommandLock` specifies which apps
-// or particular entities it wants to lock on. The next command will not execute
-// until `SignalCompletionAndSelfDestruct()` was called by the last command.
+// Commands will be executed (`StartWithLock()` will be called) in-order based
+// on command's `WebAppCommandLock`, the `WebAppCommandLock` specifies which
+// apps or particular entities it wants to lock on. The next command will not
+// execute until `SignalCompletionAndSelfDestruct()` was called by the last
+// command.
 class WebAppCommandManager {
  public:
   using PassKey = base::PassKey<WebAppCommandManager>;
@@ -50,42 +47,47 @@ class WebAppCommandManager {
   explicit WebAppCommandManager(Profile* profile);
   ~WebAppCommandManager();
 
+  void SetProvider(base::PassKey<WebAppProvider>, WebAppProvider& provider);
+
+  // Starts running commands.
+  void Start();
+
   // Enqueues the given command in the queue corresponding to the command's
-  // `queue_id()`. `Start()` will always be called asynchronously.
-  void ScheduleCommand(std::unique_ptr<WebAppCommand> command);
+  // `lock_description()`. `Start()` will always be called asynchronously.
+  void ScheduleCommand(std::unique_ptr<WebAppCommand> command,
+                       const base::Location& location = FROM_HERE);
 
   // Called on system shutdown. This call is also forwarded to any commands that
   // have been `Start()`ed.
   void Shutdown();
 
-  // Called by the sync integration when a list of apps have had their sync
-  // sources removed and `is_uninstalling()` set to true. Any commands that
-  // whose `queue_id()`s match an id in `app_id` who have also been `Start()`ed
-  // will also be notified.
-  void NotifySyncSourceRemoved(const std::vector<AppId>& app_ids);
-
   // Outputs a debug value of the state of the commands system, including
   // running and queued commands.
   base::Value ToDebugValue();
 
-  void SetSubsystems(WebAppInstallManager* install_manager);
-  void LogToInstallManager(base::Value);
+  void LogToInstallManager(base::Value::Dict);
 
   // Returns whether an installation is already scheduled with the same web
   // contents.
   bool IsInstallingForWebContents(
       const content::WebContents* web_contents) const;
 
-  std::size_t GetCommandCountForTesting() { return commands_.size(); }
+  std::size_t GetCommandCountForTesting();
+
+  std::size_t GetCommandsInstallingForWebContentsForTesting();
 
   void AwaitAllCommandsCompleteForTesting();
-
-  // TODO(https://crbug.com/1329934): Figure out better ownership of this.
-  void SetUrlLoaderForTesting(std::unique_ptr<WebAppUrlLoader> url_loader);
 
   bool has_web_contents_for_testing() const {
     return shared_web_contents_.get();
   }
+
+  WebAppLockManager& lock_manager() { return lock_manager_; }
+
+  // Only used by `WebAppLockManager` to give web contents access to certain
+  // locks.
+  content::WebContents* EnsureWebContentsCreated(
+      base::PassKey<WebAppLockManager>);
 
  protected:
   friend class WebAppCommand;
@@ -97,40 +99,31 @@ class WebAppCommandManager {
  private:
   void AddValueToLog(base::Value value);
 
-  void OnLockAcquired(WebAppCommand::Id command_id);
+  void OnLockAcquired(WebAppCommand::Id command_id,
+                      base::OnceClosure start_command);
 
-  void StartCommandOrPrepareForLoad(WebAppCommand* command);
-
-  void OnAboutBlankLoadedForCommandStart(WebAppCommand* command,
-                                         WebAppUrlLoader::Result result);
+  void StartCommand(base::WeakPtr<WebAppCommand> command,
+                    base::OnceClosure start_command);
 
   content::WebContents* EnsureWebContentsCreated();
 
-  struct CommandState {
-    explicit CommandState(std::unique_ptr<WebAppCommand> command);
-    ~CommandState();
-
-    std::unique_ptr<WebAppCommand> command;
-    content::LeveledLockHolder lock_holder;
-  };
-
   SEQUENCE_CHECKER(command_sequence_checker_);
 
-  std::map<WebAppCommand::Id, CommandState> commands_{};
+  std::vector<std::unique_ptr<WebAppCommand>> commands_waiting_for_start_;
 
-  raw_ptr<Profile> profile_;
-  // TODO(https://crbug.com/1329934): Figure out better ownership of this.
-  // Perhaps set as subsystem?
-  std::unique_ptr<WebAppUrlLoader> url_loader_;
+  raw_ptr<Profile> profile_ = nullptr;
+  raw_ptr<WebAppProvider> provider_ = nullptr;
+
   std::unique_ptr<content::WebContents> shared_web_contents_;
+  std::unique_ptr<WebAppUrlLoader> url_loader_;
 
+  bool started_ = false;
   bool is_in_shutdown_ = false;
   std::deque<base::Value> command_debug_log_;
 
-  content::DisjointRangeLockManager lock_manager_{
-      static_cast<int>(WebAppCommandLock::LockLevel::kMaxValue) + 1};
+  WebAppLockManager lock_manager_;
 
-  raw_ptr<WebAppInstallManager> install_manager_;
+  std::map<WebAppCommand::Id, std::unique_ptr<WebAppCommand>> commands_{};
 
   std::unique_ptr<base::RunLoop> run_loop_for_testing_;
 

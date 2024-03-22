@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ ChunkToLayerMapper::ChunkToLayerMapper(const PropertyTreeState& layer_state,
     : layer_state_(layer_state),
       layer_offset_(layer_offset),
       chunk_state_(layer_state_),
-      translation_2d_or_matrix_(-layer_offset) {}
+      transform_(gfx::Transform::MakeTranslation(-layer_offset)) {}
 
 void ChunkToLayerMapper::SwitchToChunk(const PaintChunk& chunk) {
   raster_effect_outset_ = chunk.raster_effect_outset;
@@ -28,37 +28,25 @@ void ChunkToLayerMapper::SwitchToChunk(const PaintChunk& chunk) {
 
   if (new_chunk_state == layer_state_) {
     has_filter_that_moves_pixels_ = false;
-    translation_2d_or_matrix_ =
-        GeometryMapper::Translation2DOrMatrix(-layer_offset_);
+    transform_ = gfx::Transform::MakeTranslation(-layer_offset_);
     clip_rect_ = FloatClipRect();
     chunk_state_ = new_chunk_state;
     return;
   }
 
   if (&new_chunk_state.Transform() != &chunk_state_.Transform()) {
-    translation_2d_or_matrix_ = GeometryMapper::SourceToDestinationProjection(
+    transform_ = GeometryMapper::SourceToDestinationProjection(
         new_chunk_state.Transform(), layer_state_.Transform());
-    translation_2d_or_matrix_.PostTranslate(-layer_offset_.x(),
-                                            -layer_offset_.y());
+    transform_.PostTranslate(-layer_offset_);
   }
 
-  bool new_has_filter_that_moves_pixels = has_filter_that_moves_pixels_;
-  if (&new_chunk_state.Effect() != &chunk_state_.Effect()) {
-    new_has_filter_that_moves_pixels = false;
-    for (const auto* effect = &new_chunk_state.Effect();
-         effect && effect != &layer_state_.Effect();
-         effect = effect->UnaliasedParent()) {
-      if (effect->HasFilterThatMovesPixels()) {
-        new_has_filter_that_moves_pixels = true;
-        break;
-      }
-    }
-  }
+  has_filter_that_moves_pixels_ =
+      new_chunk_state.Clip().NearestPixelMovingFilterClip() !=
+      layer_state_.Clip().NearestPixelMovingFilterClip();
 
-  bool needs_clip_recalculation =
-      new_has_filter_that_moves_pixels != has_filter_that_moves_pixels_ ||
-      &new_chunk_state.Clip() != &chunk_state_.Clip();
-  if (needs_clip_recalculation) {
+  if (has_filter_that_moves_pixels_) {
+    clip_rect_ = InfiniteLooseFloatClipRect();
+  } else if (&new_chunk_state.Clip() != &chunk_state_.Clip()) {
     clip_rect_ =
         GeometryMapper::LocalToAncestorClipRect(new_chunk_state, layer_state_);
     if (!clip_rect_.IsInfinite())
@@ -66,7 +54,6 @@ void ChunkToLayerMapper::SwitchToChunk(const PaintChunk& chunk) {
   }
 
   chunk_state_ = new_chunk_state;
-  has_filter_that_moves_pixels_ = new_has_filter_that_moves_pixels;
 }
 
 gfx::Rect ChunkToLayerMapper::MapVisualRect(const gfx::Rect& rect) const {
@@ -76,8 +63,7 @@ gfx::Rect ChunkToLayerMapper::MapVisualRect(const gfx::Rect& rect) const {
   if (UNLIKELY(has_filter_that_moves_pixels_))
     return MapUsingGeometryMapper(rect);
 
-  gfx::RectF mapped_rect(rect);
-  translation_2d_or_matrix_.MapRect(mapped_rect);
+  gfx::RectF mapped_rect = transform_.MapRect(gfx::RectF(rect));
   if (!mapped_rect.IsEmpty() && !clip_rect_.IsInfinite())
     mapped_rect.Intersect(clip_rect_.Rect());
 

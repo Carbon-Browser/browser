@@ -1,8 +1,8 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {parseHtmlSubset, sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.m.js';
+import {parseHtmlSubset, sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
 import {assertEquals, assertFalse, assertThrows} from 'chrome://webui-test/chai_assert.js';
 
 declare global {
@@ -11,7 +11,7 @@ declare global {
   }
 }
 
-suite('ParseHtmlSubsetModuleTest', function() {
+suite('ParseHtmlSubsetTest', function() {
   function parseAndAssertThrows(
       s: string, extraTags?: string[], extraAttrs?: string[]) {
     assertThrows(function() {
@@ -127,11 +127,11 @@ suite('ParseHtmlSubsetModuleTest', function() {
   test('sanitizeInnerHtml', function() {
     assertEquals(
         '<a href="chrome://foo"></a>',
-        sanitizeInnerHtml('<a href="chrome://foo"></a>'));
+        sanitizeInnerHtml('<a href="chrome://foo"></a>').toString());
     assertThrows(() => {
       sanitizeInnerHtml('<iframe></iframe>');
     }, 'IFRAME is not supported');
-    assertEquals('<div></div>', sanitizeInnerHtml('<div></div>'));
+    assertEquals('<div></div>', sanitizeInnerHtml('<div></div>').toString());
   });
 
   test('on error async', function(done) {

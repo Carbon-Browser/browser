@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,7 +91,7 @@ class SocketsTcpServerListenFunction : public TCPServerSocketApiFunction {
  private:
   void OnCompleted(int result, const std::string& error_msg);
 
-  std::unique_ptr<sockets_tcp_server::Listen::Params> params_;
+  std::optional<sockets_tcp_server::Listen::Params> params_;
   raw_ptr<TCPServerSocketEventDispatcher> socket_event_dispatcher_;
 };
 

@@ -1,12 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
 
-#include "base/ios/ios_util.h"
-#include "ios/chrome/browser/pref_names.h"
+#import "base/ios/ios_util.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_constants.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
@@ -15,17 +15,13 @@
 #import "ios/testing/earl_grey/app_launch_manager.h"
 
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ios/third_party/earl_grey2/src/CommonLib/Matcher/GREYLayoutConstraint.h"  // nogncheck
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/third_party/earl_grey2/src/CommonLib/Matcher/GREYLayoutConstraint.h"  // nogncheck
 
 namespace {
 // Unexpectedly, the first and last destinations in the carousel overlap their
-// neighbors. This makes |RightConstraint()| an insufficient layout constraint
+// neighbors. This makes `RightConstraint()` an insufficient layout constraint
 // for comparing destinations at the carousel's ends. A constraint with
-// negative minimum separation, |RightConstraintWithOverlap()|, must be
+// negative minimum separation, `RightConstraintWithOverlap()`, must be
 // introduced to account for this.
 GREYLayoutConstraint* RightConstraintWithOverlap() {
   return [GREYLayoutConstraint
@@ -52,6 +48,8 @@ GREYLayoutConstraint* RightConstraint() {
   [super setUp];
   [ChromeEarlGrey
       resetDataForLocalStatePref:prefs::kOverflowMenuDestinationUsageHistory];
+  [ChromeEarlGrey
+      resetDataForLocalStatePref:prefs::kOverflowMenuNewDestinations];
 }
 
 - (void)tearDown {
@@ -62,7 +60,7 @@ GREYLayoutConstraint* RightConstraint() {
 
 #pragma mark - Helpers
 
-// Tests the destination carousel displays the default sort order, which is:
+// Verifies the destination carousel displays the default sort order, which is:
 // 1. Bookmarks
 // 2. History
 // 3. Reading List
@@ -72,7 +70,7 @@ GREYLayoutConstraint* RightConstraint() {
 // 7. Site Information
 // 8. Settings
 //
-// When |isNTP| is true, this method excludes the Site Information (#7)
+// When `isNTP` is true, this method excludes the Site Information (#7)
 // destination from the layout check, because Site Information is excluded from
 // the destinations carousel on the NTP.
 + (void)verifyCarouselHasDefaultSortOrderOnNTP:(BOOL)isNTP {
@@ -139,8 +137,8 @@ GREYLayoutConstraint* RightConstraint() {
   [ChromeEarlGreyUI closeToolsMenu];
 }
 
-// Tests the destination carousel displays the default sort order for incognito,
-// which is:
+// Verifies the destination carousel displays the default sort order for
+// incognito, which is:
 // 1. Bookmarks
 // 2. Reading List
 // 3. Password Manager
@@ -148,7 +146,7 @@ GREYLayoutConstraint* RightConstraint() {
 // 5. Site Information
 // 6. Settings
 //
-// When |isNTP| is true, this method excludes the Site Information (#5)
+// When `isNTP` is true, this method excludes the Site Information (#5)
 // destination from the layout check, because Site Information is excluded from
 // the destinations carousel on the NTP.
 + (void)verifyCarouselHasDefaultSortOrderOnNTPForIncognito:(BOOL)isNTP {
@@ -270,8 +268,8 @@ GREYLayoutConstraint* RightConstraint() {
 // non-visible "below-the-fold" destinations; "below-the-fold" destinations are
 // made visible to the user when they scroll the carousel.
 
-// Tests an above-the-fold destination never moves within group (A), regardless
-// of usage.
+// Tests an above-the-fold destination never moves within group (A),
+// regardless of usage.
 - (void)testAboveFoldDestinationNeverPromotes {
   // Tap the above-fold destination, Password Manager, 5 times.
   for (int i = 0; i < 5; i++) {
@@ -342,9 +340,9 @@ GREYLayoutConstraint* RightConstraint() {
                             chrome_test_util::RecentTabsDestinationButton())];
 }
 
-// Tests a below-the-fold destination is not promoted until the third click for
-// a fresh destination usage history.
-- (void)testNoSwapUntilMinNumClicksReached {
+// Tests a below-the-fold destination is not promoted until the third click
+// for a fresh destination usage history.
+- (void)testNoSwapUntilMinClickCountReached {
   [DestinationUsageHistoryCase verifyCarouselHasDefaultSortOrderOnNTP:YES];
 
   // 1st Settings tap (no promotion expected after this tap)

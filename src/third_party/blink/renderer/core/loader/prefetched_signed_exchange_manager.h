@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,12 +19,12 @@ namespace blink {
 
 class AlternateSignedExchangeResourceInfo;
 class LocalFrame;
-class WebURLLoader;
+class URLLoader;
 class WebURLRequest;
+class URLLoaderThrottle;
 
-// For SignedExchangeSubresourcePrefetch feature. This class holds the
-// prefetched signed exchange info and will returns loaders for matching
-// requests.
+// This class holds the prefetched signed exchange info and will returns
+// loaders for matching requests.
 class PrefetchedSignedExchangeManager final
     : public GarbageCollected<PrefetchedSignedExchangeManager> {
  public:
@@ -62,8 +62,9 @@ class PrefetchedSignedExchangeManager final
   //
   // The returned loader doesn't start loading until
   // StartPrefetchedLinkHeaderPreloads() will be called.
-  std::unique_ptr<WebURLLoader> MaybeCreateURLLoader(
-      const WebURLRequest& request);
+  std::unique_ptr<URLLoader> MaybeCreateURLLoader(
+      const WebURLRequest& request,
+      Vector<std::unique_ptr<URLLoaderThrottle>>& throttles);
 
   // If the all loaders which have been created by MaybeCreateURLLoader() have
   // a matching "alternate" link header in the outer response and the matching
@@ -84,10 +85,12 @@ class PrefetchedSignedExchangeManager final
   class PrefetchedSignedExchangeLoader;
 
   void TriggerLoad();
-  std::unique_ptr<WebURLLoader> CreateDefaultURLLoader(
-      const WebURLRequest& request);
-  std::unique_ptr<WebURLLoader> CreatePrefetchedSignedExchangeURLLoader(
+  std::unique_ptr<URLLoader> CreateDefaultURLLoader(
       const WebURLRequest& request,
+      Vector<std::unique_ptr<URLLoaderThrottle>> throttles);
+  std::unique_ptr<URLLoader> CreatePrefetchedSignedExchangeURLLoader(
+      const WebURLRequest& request,
+      Vector<std::unique_ptr<URLLoaderThrottle>> throttles,
       mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>
           loader_factory);
 
@@ -97,7 +100,7 @@ class PrefetchedSignedExchangeManager final
       prefetched_exchanges_map_;
   bool started_ = false;
 
-  WTF::Vector<base::WeakPtr<PrefetchedSignedExchangeLoader>> loaders_;
+  Vector<base::WeakPtr<PrefetchedSignedExchangeLoader>> loaders_;
 };
 
 }  // namespace blink

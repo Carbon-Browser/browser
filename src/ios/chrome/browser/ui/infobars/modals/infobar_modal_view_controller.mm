@@ -1,18 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_view_controller.h"
 
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
-#import "ios/chrome/browser/ui/icons/infobar_icon.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_constants.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_delegate.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface InfobarModalViewController ()
 
@@ -44,12 +39,8 @@
                            target:self.infobarModalDelegate
                            action:@selector(dismissInfobarModal:)];
   cancelButton.accessibilityIdentifier = kInfobarModalCancelButton;
-  UIImage* gearImage =
-      UseSymbols()
-          ? DefaultSymbolWithPointSize(kGearShapeSymbol, kSymbolImagePointSize)
-          : [UIImage imageNamed:@"infobar_settings_icon"];
-  gearImage =
-      [gearImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  UIImage* gearImage = DefaultSymbolWithPointSize(kSettingsFilledSymbol,
+                                                  kInfobarSymbolPointSize);
   UIBarButtonItem* settingsButton =
       [[UIBarButtonItem alloc] initWithImage:gearImage
                                        style:UIBarButtonItemStylePlain

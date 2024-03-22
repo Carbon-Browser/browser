@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,8 @@ extern const uint8_t kEmptyPakContents[];
 extern const size_t kEmptyPakSize;
 extern const uint8_t kSampleCorruptPakContents[];
 extern const size_t kSampleCorruptPakSize;
+extern const uint8_t kSampleMisorderedPakContents[];
+extern const size_t kSampleMisorderedPakSize;
 
 }  // namespace ui
 

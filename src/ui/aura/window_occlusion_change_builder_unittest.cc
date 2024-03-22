@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,13 +38,14 @@ class OcclusionTrackWindowDelegate : public test::TestWindowDelegate {
  private:
   // test::TestWindowDelegate:
   void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) override {
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) override {
     ++occlusion_change_count_;
-    last_occlusion_state_ = occlusion_state;
+    last_occlusion_state_ = new_occlusion_state;
     last_occluded_region_ = window_->occluded_region_in_root();
   }
 
-  raw_ptr<Window> window_ = nullptr;
+  raw_ptr<Window, DanglingUntriaged> window_ = nullptr;
   int occlusion_change_count_ = 0;
   Window::OcclusionState last_occlusion_state_ =
       Window::OcclusionState::UNKNOWN;

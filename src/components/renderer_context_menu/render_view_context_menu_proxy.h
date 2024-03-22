@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -116,6 +116,9 @@ class RenderViewContextMenuProxy {
 
   // Add accessibility labels service item to the context menu.
   virtual void AddAccessibilityLabelsServiceItem(bool is_checked) = 0;
+
+  // Add PDF OCR item to the context menu.
+  virtual void AddPdfOcrMenuItem() = 0;
 
   // Retrieve the given associated objects with a context menu.
   virtual content::RenderViewHost* GetRenderViewHost() const = 0;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_FRAME_FRAME_CONTEXT_MENU_CONTROLLER_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/views/context_menu_controller.h"
 
@@ -51,11 +52,11 @@ class ASH_EXPORT FrameContextMenuController
 
  private:
   // The widget that `this` controls the context menu for.
-  views::Widget* frame_;
+  raw_ptr<views::Widget, ExperimentalAsh> frame_;
 
   // A delegate who is responsible for determining whether the context menu
   // should be shown at a point.
-  Delegate* delegate_;
+  raw_ptr<Delegate, ExperimentalAsh> delegate_;
 
   std::unique_ptr<chromeos::MoveToDesksMenuModel> move_to_desks_menu_model_;
   std::unique_ptr<views::MenuRunner> menu_runner_;

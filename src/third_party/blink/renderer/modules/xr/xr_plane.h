@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/core/geometry/dom_point_read_only.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -22,7 +22,7 @@ class XRPlane : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  enum Orientation { kHorizontal, kVertical };
+  enum class Orientation { kHorizontal, kVertical };
 
   XRPlane(uint64_t id,
           XRSession* session,
@@ -33,7 +33,7 @@ class XRPlane : public ScriptWrappable {
 
   XRSpace* planeSpace() const;
 
-  absl::optional<TransformationMatrix> MojoFromObject() const;
+  absl::optional<gfx::Transform> MojoFromObject() const;
 
   device::mojom::blink::XRNativeOriginInformationPtr NativeOrigin() const;
 

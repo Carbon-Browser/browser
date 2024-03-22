@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,8 @@
 #include "content/ppapi_plugin/plugin_process_dispatcher.h"
 #include "content/ppapi_plugin/ppapi_blink_platform_impl.h"
 #include "content/public/common/content_client.h"
+#include "content/public/common/content_plugin_info.h"
 #include "content/public/common/content_switches.h"
-#include "content/public/common/pepper_plugin_info.h"
 #include "ipc/ipc_channel_handle.h"
 #include "ipc/ipc_platform_file.h"
 #include "ipc/ipc_sync_channel.h"
@@ -52,6 +52,7 @@
 #if BUILDFLAG(IS_WIN)
 #include "base/win/win_util.h"
 #include "content/child/font_warmup_win.h"
+#include "sandbox/policy/win/sandbox_warmup.h"
 #include "sandbox/win/src/sandbox.h"
 #endif
 
@@ -244,8 +245,8 @@ void PpapiThread::OnLoadPlugin(const base::FilePath& path,
   // Trusted Pepper plugins may be "internal", i.e. built-in to the browser
   // binary.  If we're being asked to load such a plugin (e.g. the Chromoting
   // client) then fetch the entry points from the embedder, rather than a DLL.
-  std::vector<PepperPluginInfo> plugins;
-  GetContentClient()->AddPepperPlugins(&plugins);
+  std::vector<ContentPluginInfo> plugins;
+  GetContentClient()->AddPlugins(&plugins);
   for (const auto& plugin : plugins) {
     if (plugin.is_internal && plugin.path == path) {
       // An internal plugin is being loaded, so fetch the entry points.
@@ -303,9 +304,7 @@ void PpapiThread::OnLoadPlugin(const base::FilePath& path,
   // can be loaded. TODO(cpu): consider changing to the loading style of
   // regular plugins.
   if (g_target_services) {
-    // Cause advapi32 to load before the sandbox is turned on.
-    unsigned int dummy_rand;
-    rand_s(&dummy_rand);
+    sandbox::policy::WarmupRandomnessInfrastructure();
 
     WarmupWindowsLocales(permissions);
 

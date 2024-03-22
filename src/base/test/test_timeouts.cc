@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <string>
 
+#include "base/cfi_buildflags.h"
 #include "base/check_op.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/command_line.h"
@@ -53,6 +54,8 @@ void InitializeTimeout(const char* switch_name,
 #else
   constexpr int kTimeoutMultiplier = 6;
 #endif
+#elif BUILDFLAG(CFI_DIAG)
+  constexpr int kTimeoutMultiplier = 3;
 #elif defined(ADDRESS_SANITIZER) && BUILDFLAG(IS_WIN)
   // ASan/Win has not been optimized yet, give it a higher
   // timeout multiplier. See http://crbug.com/412471
@@ -67,10 +70,10 @@ void InitializeTimeout(const char* switch_name,
   // On coverage build, tests run 3x slower.
   constexpr int kTimeoutMultiplier = 3;
 #elif !defined(NDEBUG) && BUILDFLAG(IS_CHROMEOS_ASH)
-  // TODO(crbug.com/1295825): reduce the multiplier back to 2x.
+  // TODO(crbug.com/1058022): reduce the multiplier back to 2x.
   // A number of tests on ChromeOS run very close to the base limit, so ChromeOS
-  // gets 4x.
-  constexpr int kTimeoutMultiplier = 4;
+  // gets 3x.
+  constexpr int kTimeoutMultiplier = 3;
 #elif !defined(NDEBUG) && BUILDFLAG(IS_MAC)
   // A lot of browser_tests on Mac debug time out.
   constexpr int kTimeoutMultiplier = 2;

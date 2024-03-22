@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,46 +11,50 @@
 #include "ash/components/arc/mojom/intent_helper.mojom.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/new_window_delegate.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "base/check.h"
 #include "base/containers/fixed_flat_map.h"
 #include "base/files/file_path.h"
 #include "base/files/safe_base_name.h"
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/intent_util.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/apps/apk_web_app_service.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_content_file_system_url_util.h"
 #include "chrome/browser/ash/arc/intent_helper/custom_tab_session_impl.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
+#include "chrome/browser/ash/fileapi/external_file_url_util.h"
 #include "chrome/browser/ash/fusebox/fusebox_server.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_arc_tracker.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/browser/webshare/prepare_directory_task.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/arc/intent_helper/arc_intent_helper_bridge.h"
 #include "components/arc/intent_helper/custom_tab.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/app_update.h"
+#include "components/services/app_service/public/cpp/intent.h"
 #include "components/services/app_service/public/cpp/intent_filter_util.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
 #include "components/services/app_service/public/cpp/types_util.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/user_manager/user_manager.h"
+#include "components/webapps/common/web_app_id.h"
+#include "content/public/common/url_constants.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/filename_util.h"
 #include "net/base/url_util.h"
@@ -75,12 +79,12 @@ constexpr auto kOSSettingsMap = base::MakeFixedFlatMap<ChromePage,
      chromeos::settings::mojom::kBluetoothDevicesSubpagePath},
     {ChromePage::BLUETOOTHDEVICES,
      chromeos::settings::mojom::kBluetoothDevicesSubpagePath},
-    {ChromePage::CHANGEPICTURE,
-     chromeos::settings::mojom::kChangePictureSubpagePath},
     {ChromePage::CUPSPRINTERS,
      chromeos::settings::mojom::kPrintingDetailsSubpagePath},
     {ChromePage::DATETIME, chromeos::settings::mojom::kDateAndTimeSectionPath},
     {ChromePage::DISPLAY, chromeos::settings::mojom::kDisplaySubpagePath},
+    {ChromePage::GRAPHICSTABLET,
+     chromeos::settings::mojom::kGraphicsTabletSubpagePath},
     {ChromePage::HELP, chromeos::settings::mojom::kAboutChromeOsSectionPath},
     {ChromePage::KEYBOARDOVERLAY,
      chromeos::settings::mojom::kKeyboardSubpagePath},
@@ -88,7 +92,7 @@ constexpr auto kOSSettingsMap = base::MakeFixedFlatMap<ChromePage,
      chromeos::settings::mojom::kSecurityAndSignInSubpagePathV2},
     {ChromePage::MAIN, ""},
     {ChromePage::MANAGEACCESSIBILITY,
-     chromeos::settings::mojom::kManageAccessibilitySubpagePath},
+     chromeos::settings::mojom::kAccessibilitySectionPath},
     {ChromePage::MANAGEACCESSIBILITYTTS,
      chromeos::settings::mojom::kTextToSpeechSubpagePath},
     {ChromePage::MULTIDEVICE,
@@ -99,6 +103,14 @@ constexpr auto kOSSettingsMap = base::MakeFixedFlatMap<ChromePage,
      chromeos::settings::mojom::kInputSubpagePath},
     {ChromePage::OSLANGUAGESLANGUAGES,
      chromeos::settings::mojom::kLanguagesSubpagePath},
+    {ChromePage::PERDEVICEKEYBOARD,
+     chromeos::settings::mojom::kPerDeviceKeyboardSubpagePath},
+    {ChromePage::PERDEVICEMOUSE,
+     chromeos::settings::mojom::kPerDeviceMouseSubpagePath},
+    {ChromePage::PERDEVICEPOINTINGSTICK,
+     chromeos::settings::mojom::kPerDevicePointingStickSubpagePath},
+    {ChromePage::PERDEVICETOUCHPAD,
+     chromeos::settings::mojom::kPerDeviceTouchpadSubpagePath},
     {ChromePage::POINTEROVERLAY,
      chromeos::settings::mojom::kPointersSubpagePath},
     {ChromePage::POWER, chromeos::settings::mojom::kPowerSubpagePath},
@@ -142,34 +154,36 @@ GURL ConvertArcUrlToExternalFileUrlIfNeeded(const GURL& url) {
   return url;
 }
 
-// Converts an externalfile:// ARC URL to a file:// URL managed by the FuseBox
-// Moniker system. This Moniker file is readable on the Linux filesystem like
-// any other file. Returns the input URL if a Moniker could not be created.
-GURL ConvertToMonikerFileUrl(Profile* profile, GURL external_file_url) {
-  const base::FilePath virtual_path =
-      chromeos::ExternalFileURLToVirtualPath(external_file_url);
+// Converts a content:// ARC URL to a file:// URL managed by the FuseBox Moniker
+// system. This Moniker file is readable on the Linux filesystem like any other
+// file. Returns an empty URL if a Moniker could not be created.
+GURL ConvertToMonikerFileUrl(Profile* profile, GURL content_url) {
+  const base::FilePath virtual_path = ash::ExternalFileURLToVirtualPath(
+      arc::ArcUrlToExternalFileUrl(content_url));
 
   const storage::FileSystemURL fs_url =
       file_manager::util::GetFileManagerFileSystemContext(profile)
           ->CreateCrackedFileSystemURL(
-              blink::StorageKey(file_manager::util::GetFilesAppOrigin()),
+              blink::StorageKey::CreateFirstParty(
+                  file_manager::util::GetFilesAppOrigin()),
               storage::kFileSystemTypeExternal, virtual_path);
   if (!fs_url.is_valid()) {
-    return external_file_url;
+    return GURL();
   }
 
   fusebox::Server* fusebox_server = fusebox::Server::GetInstance();
   if (!fusebox_server) {
-    return external_file_url;
+    return GURL();
   }
 
-  fusebox::Moniker moniker = fusebox_server->CreateMoniker(fs_url);
+  constexpr bool kReadOnly = true;
+  fusebox::Moniker moniker = fusebox_server->CreateMoniker(fs_url, kReadOnly);
 
   // Keep the Moniker alive for the same time as a file shared through the Web
   // Share API. We could be cleverer about scheduling the clean up, but "destroy
   // after a fixed amount of time" is simple and works well enough in
   // practice.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(
           [](fusebox::Moniker moniker) {
@@ -185,15 +199,12 @@ GURL ConvertToMonikerFileUrl(Profile* profile, GURL external_file_url) {
       base::FilePath(fusebox::MonikerMap::GetFilename(moniker)));
 }
 
-apps::mojom::IntentPtr ConvertLaunchIntent(
+apps::IntentPtr ConvertLaunchIntent(
     Profile* profile,
     const arc::mojom::LaunchIntentPtr& launch_intent) {
-  apps::mojom::IntentPtr intent = apps::mojom::Intent::New();
-
   const char* action =
       apps_util::ConvertArcToAppServiceIntentAction(launch_intent->action);
-  if (action)
-    intent->action = action;
+  auto intent = std::make_unique<apps::Intent>(action ? action : "");
 
   intent->url = launch_intent->data;
   intent->mime_type = launch_intent->type;
@@ -202,19 +213,22 @@ apps::mojom::IntentPtr ConvertLaunchIntent(
 
   if (launch_intent->files.has_value() && launch_intent->files->size() > 0) {
     std::vector<std::string> mime_types;
-    intent->files = std::vector<apps::mojom::IntentFilePtr>();
     for (const auto& file_info : *launch_intent->files) {
-      auto file = apps::mojom::IntentFile::New();
-
-      file->url = arc::ArcUrlToExternalFileUrl(file_info->content_uri);
-      if (ash::features::IsArcFuseBoxFileSharingEnabled()) {
-        file->url = ConvertToMonikerFileUrl(profile, file->url);
+      GURL moniker_url =
+          ConvertToMonikerFileUrl(profile, file_info->content_uri);
+      if (moniker_url.is_empty()) {
+        // Continue launching the web app, but without any invalid attached
+        // files.
+        continue;
       }
+
+      apps::IntentFilePtr file =
+          std::make_unique<apps::IntentFile>(moniker_url);
 
       file->mime_type = file_info->type;
       file->file_name = file_info->name;
       file->file_size = file_info->size;
-      intent->files->push_back(std::move(file));
+      intent->files.push_back(std::move(file));
       mime_types.push_back(file_info->type);
     }
 
@@ -288,8 +302,26 @@ void ArcOpenUrlDelegateImpl::OpenUrlFromArc(const GURL& url) {
     return;
 
   GURL url_to_open = ConvertArcUrlToExternalFileUrlIfNeeded(url);
+  // If Lacros is enabled, convert externalfile:// url into file:// url
+  // managed by the FuseBox moniker system because Lacros cannot handle
+  // externalfile:// urls.
+  // TODO(crbug.com/1374575): Check if other externalfile:// urls can use the
+  // same logic. If so, move this code into CrosapiNewWindowDelegate::OpenUrl()
+  // which is only for Lacros.
+  if (crosapi::browser_util::IsLacrosEnabled() &&
+      url_to_open.SchemeIs(content::kExternalFileScheme)) {
+    Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(
+        user_manager::UserManager::Get()->GetPrimaryUser());
+    // `profile` may be null if sign-in has happened but the profile isn't
+    // loaded yet.
+    if (!profile)
+      return;
+    url_to_open = ConvertToMonikerFileUrl(profile, url);
+  }
+
   ash::NewWindowDelegate::GetPrimary()->OpenUrl(
-      url_to_open, ash::NewWindowDelegate::OpenUrlFrom::kArc);
+      url_to_open, ash::NewWindowDelegate::OpenUrlFrom::kArc,
+      ash::NewWindowDelegate::Disposition::kNewForegroundTab);
 }
 
 void ArcOpenUrlDelegateImpl::OpenWebAppFromArc(const GURL& url) {
@@ -303,13 +335,13 @@ void ArcOpenUrlDelegateImpl::OpenWebAppFromArc(const GURL& url) {
   if (!user)
     return;
 
-  // |profile| may be null if sign-in has happened but the profile isn't loaded
+  // `profile` may be null if sign-in has happened but the profile isn't loaded
   // yet.
   Profile* profile = ash::ProfileHelper::Get()->GetProfileByUser(user);
   if (!profile)
     return;
 
-  absl::optional<web_app::AppId> app_id =
+  absl::optional<webapps::AppId> app_id =
       web_app::IsWebAppsCrosapiEnabled()
           ? FindWebAppForURL(profile, url)
           : web_app::FindInstalledAppWithUrlInScope(profile, url,
@@ -335,7 +367,7 @@ void ArcOpenUrlDelegateImpl::OpenWebAppFromArc(const GURL& url) {
       });
 
   proxy->LaunchAppWithUrl(*app_id, event_flags, url,
-                          apps::mojom::LaunchSource::kFromArc);
+                          apps::LaunchSource::kFromArc);
 
   ash::ApkWebAppService* apk_web_app_service =
       ash::ApkWebAppService::Get(profile);
@@ -364,8 +396,8 @@ void ArcOpenUrlDelegateImpl::OpenWebAppFromArc(const GURL& url) {
   if (!arc_tracker)
     return;
 
-  for (const auto& app_id : prefs->GetAppsForPackage(package_name.value()))
-    arc_tracker->CloseWindows(app_id);
+  for (const auto& id : prefs->GetAppsForPackage(package_name.value()))
+    arc_tracker->CloseWindows(id);
 }
 
 void ArcOpenUrlDelegateImpl::OpenArcCustomTab(
@@ -406,8 +438,9 @@ void ArcOpenUrlDelegateImpl::OpenArcCustomTab(
 void ArcOpenUrlDelegateImpl::OpenChromePageFromArc(ChromePage page) {
   if (auto* it = kOSSettingsMap.find(page); it != kOSSettingsMap.end()) {
     Profile* profile = ProfileManager::GetActiveUserProfile();
+    std::string sub_page = it->second;
     chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(profile,
-                                                                 it->second);
+                                                                 sub_page);
     return;
   }
 
@@ -443,7 +476,7 @@ void ArcOpenUrlDelegateImpl::OpenAppWithIntent(
   if (!profile)
     return;
 
-  web_app::AppId app_id =
+  webapps::AppId app_id =
       web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, start_url);
 
   bool app_installed = false;
@@ -459,7 +492,7 @@ void ArcOpenUrlDelegateImpl::OpenAppWithIntent(
     return;
   }
 
-  apps::mojom::IntentPtr intent = ConvertLaunchIntent(profile, arc_intent);
+  apps::IntentPtr intent = ConvertLaunchIntent(profile, arc_intent);
 
   auto disposition = WindowOpenDisposition::NEW_WINDOW;
   proxy->AppRegistryCache().ForOneApp(
@@ -473,5 +506,6 @@ void ArcOpenUrlDelegateImpl::OpenAppWithIntent(
                                         /*prefer_container=*/false);
 
   proxy->LaunchAppWithIntent(app_id, event_flags, std::move(intent),
-                             apps::mojom::LaunchSource::kFromArc);
+                             apps::LaunchSource::kFromArc, nullptr,
+                             base::DoNothing());
 }

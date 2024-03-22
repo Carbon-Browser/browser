@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/renderer/extension_js_runner.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/renderer/worker_thread.h"
 #include "extensions/renderer/script_context.h"
-#include "extensions/renderer/script_injection_callback.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/public/web/web_script_execution_callback.h"
 #include "v8/include/v8-function.h"
 #include "v8/include/v8-isolate.h"
 #include "v8/include/v8-microtask-queue.h"
@@ -17,14 +17,14 @@ namespace extensions {
 
 ExtensionJSRunner::ExtensionJSRunner(ScriptContext* script_context)
     : script_context_(script_context) {}
-ExtensionJSRunner::~ExtensionJSRunner() {}
+ExtensionJSRunner::~ExtensionJSRunner() = default;
 
 void ExtensionJSRunner::RunJSFunction(v8::Local<v8::Function> function,
                                       v8::Local<v8::Context> context,
                                       int argc,
                                       v8::Local<v8::Value> argv[],
                                       ResultCallback callback) {
-  ScriptInjectionCallback::CompleteCallback wrapper_callback;
+  blink::WebScriptExecutionCallback wrapper_callback;
   if (callback) {
     wrapper_callback =
         base::BindOnce(&ExtensionJSRunner::OnFunctionComplete,
@@ -46,7 +46,7 @@ v8::MaybeLocal<v8::Value> ExtensionJSRunner::RunJSFunctionSync(
   v8::Isolate* isolate = context->GetIsolate();
   DCHECK(context == isolate->GetCurrentContext());
 
-  v8::MicrotasksScope microtasks(isolate,
+  v8::MicrotasksScope microtasks(isolate, context->GetMicrotaskQueue(),
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   v8::Local<v8::Object> global = context->Global();
@@ -73,15 +73,12 @@ v8::MaybeLocal<v8::Value> ExtensionJSRunner::RunJSFunctionSync(
   return result;
 }
 
-void ExtensionJSRunner::OnFunctionComplete(
-    ResultCallback callback,
-    const std::vector<v8::Local<v8::Value>>& results) {
+void ExtensionJSRunner::OnFunctionComplete(ResultCallback callback,
+                                           std::optional<base::Value> value,
+                                           base::TimeTicks start_time) {
   DCHECK(script_context_->is_valid());
 
-  v8::MaybeLocal<v8::Value> result;
-  if (!results.empty() && !results[0].IsEmpty())
-    result = results[0];
-  std::move(callback).Run(script_context_->v8_context(), result);
+  std::move(callback).Run(script_context_->v8_context(), std::move(value));
 }
 
 }  // namespace extensions

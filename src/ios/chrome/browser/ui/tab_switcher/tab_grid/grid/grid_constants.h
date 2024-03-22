@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,10 +28,6 @@ extern NSString* const kSuggestedActionsGridCellIdentifier;
 
 // Grid styling.
 extern NSString* const kGridBackgroundColor;
-
-// PlusSignCell styling
-extern NSString* const kPlusSignCellBackgroundColor;
-extern NSString* const kPlusSignCellBackgroundDarkColor;
 
 // GridLayout.
 // Extra-small screens require a slightly different layout configuration (e.g.,
@@ -75,18 +71,6 @@ extern const int kGridHeaderValueColor;
 // The space between different labels inside the GridHeader.
 extern const CGFloat kGridHeaderContentSpacing;
 
-// GridCell styling.
-// All kxxxColor constants after this are RGB values stored in a Hex integer.
-// These will be converted into UIColors using the UIColorFromRGB() function,
-// from uikit_ui_util.h.
-// TODO(crbug.com/981889): remove with iOS 12.
-// Extra dark theme colors until iOS 12 gets removed.
-extern const int kGridDarkThemeCellTitleColor;
-extern const int kGridDarkThemeCellDetailColor;
-extern const CGFloat kGridDarkThemeCellDetailAlpha;
-extern const int kGridDarkThemeCellTintColor;
-extern const int kGridDarkThemeCellSolidButtonTextColor;
-
 // GridCell dimensions.
 extern const CGSize kGridCellSizeSmall;
 extern const CGSize kGridCellSizeMedium;
@@ -100,9 +84,11 @@ extern const CGFloat kGridCellHeaderAccessibilityHeight;
 extern const CGFloat kGridCellHeaderLeadingInset;
 extern const CGFloat kGridCellCloseTapTargetWidthHeight;
 extern const CGFloat kGridCellCloseButtonContentInset;
+extern const CGFloat kGridCellCloseButtonTopSpacing;
 extern const CGFloat kGridCellTitleLabelContentInset;
 extern const CGFloat kGridCellIconDiameter;
 extern const CGFloat kGridCellSelectIconContentInset;
+extern const CGFloat kGridCellSelectIconTopSpacing;
 extern const CGFloat kGridCellSelectIconSize;
 extern const CGFloat kGridCellSelectionRingGapWidth;
 extern const CGFloat kGridCellSelectionRingTintWidth;
@@ -111,22 +97,5 @@ extern const CGFloat kGridCellSelectionRingTintWidth;
 extern const CGFloat kGridCellPriceDropTopSpacing;
 extern const CGFloat kGridCellPriceDropLeadingSpacing;
 extern const CGFloat kGridCellPriceDropTrailingSpacing;
-
-// Horizontal distance from the center of the plus sign image to the trailing of
-// the tab grid.
-extern const CGFloat kPlusSignImageTrailingCenterDistance;
-// Threshold after which the thumb strip's plus sign button should be hidden.
-extern const CGFloat kScrollThresholdForPlusSignButtonHide;
-// Vertical distance from the center of the plus sign image and the top of the
-// tab grid.
-extern const CGFloat kPlusSignImageYCenterConstant;
-// With of the plus sign button.
-extern const CGFloat kPlusSignButtonWidth;
-// Expected collection view top content inset. If mismatch, the extra space
-// is communicated to the plus sign button to align + sign correctly.
-extern const CGFloat kGridExpectedTopContentInset;
-// Height of the view that is revealed. The thumb strip has a height equal to a
-// small grid cell + edge insets (top and bottom) from thumb strip layout.
-extern const CGFloat kThumbStripHeight;
 
 #endif  // IOS_CHROME_BROWSER_UI_TAB_SWITCHER_TAB_GRID_GRID_GRID_CONSTANTS_H_

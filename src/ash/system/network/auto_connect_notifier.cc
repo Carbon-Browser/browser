@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "ash/public/cpp/system/toast_data.h"
 #include "ash/public/cpp/system/toast_manager.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -20,8 +20,6 @@
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
 #include "ui/base/l10n/l10n_util.h"
-
-using chromeos::NetworkHandler;
 
 namespace ash {
 
@@ -76,9 +74,9 @@ void AutoConnectNotifier::ConnectToNetworkRequested(
 }
 
 void AutoConnectNotifier::NetworkConnectionStateChanged(
-    const chromeos::NetworkState* network) {
+    const NetworkState* network) {
   // Ignore non WiFi networks completely.
-  if (!network->Matches(chromeos::NetworkTypePattern::WiFi()))
+  if (!network->Matches(NetworkTypePattern::WiFi()))
     return;
 
   // The notification is only shown when a connection has succeeded; if
@@ -119,8 +117,8 @@ void AutoConnectNotifier::OnAutoConnectedInitiated(int auto_connect_reasons) {
   // policy or certificate. Other reasons (e.g., joining a network due to login)
   // do not require that a notification be shown.
   const int kManagedNetworkReasonsBitmask =
-      chromeos::AutoConnectHandler::AUTO_CONNECT_REASON_POLICY_APPLIED |
-      chromeos::AutoConnectHandler::AUTO_CONNECT_REASON_CERTIFICATE_RESOLVED;
+      AutoConnectHandler::AUTO_CONNECT_REASON_POLICY_APPLIED |
+      AutoConnectHandler::AUTO_CONNECT_REASON_CERTIFICATE_RESOLVED;
   if (!(auto_connect_reasons & kManagedNetworkReasonsBitmask))
     return;
 
@@ -140,7 +138,7 @@ void AutoConnectNotifier::OnAutoConnectedInitiated(int auto_connect_reasons) {
   timer_->Start(FROM_HERE, kNetworkConnectionTimeout, base::DoNothing());
 }
 
-void AutoConnectNotifier::DisplayToast(const chromeos::NetworkState* network) {
+void AutoConnectNotifier::DisplayToast(const NetworkState* network) {
   NET_LOG(EVENT) << "Show AutoConnect Toast for: " << NetworkId(network);
   // Remove previous toast if one was already being shown.
   ash::ToastManager::Get()->Cancel(kAutoConnectToastId);

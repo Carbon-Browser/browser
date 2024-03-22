@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,19 @@
 #include <unordered_map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/json/json_file_value_serializer.h"
-#include "base/json/json_string_value_serializer.h"
+#include "base/json/json_writer.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/uuid.h"
 #include "components/bookmarks/browser/bookmark_codec.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node.h"
-#include "components/bookmarks/common/bookmark_constants.h"
 #include "components/bookmarks/common/bookmark_metrics.h"
 
 namespace bookmarks {
@@ -43,15 +42,12 @@ void BackupCallback(const base::FilePath& path) {
 constexpr base::TimeDelta BookmarkStorage::kSaveDelay;
 
 BookmarkStorage::BookmarkStorage(BookmarkModel* model,
-                                 const base::FilePath& profile_path)
+                                 const base::FilePath& file_path)
     : model_(model),
       backend_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
            base::TaskShutdownBehavior::BLOCK_SHUTDOWN})),
-      writer_(profile_path.Append(kBookmarksFileName),
-              backend_task_runner_,
-              kSaveDelay,
-              "BookmarkStorage"),
+      writer_(file_path, backend_task_runner_, kSaveDelay, "BookmarkStorage"),
       last_scheduled_save_(base::TimeTicks::Now()) {}
 
 BookmarkStorage::~BookmarkStorage() {
@@ -94,11 +90,14 @@ BookmarkStorage::GetSerializedDataProducerForBackgroundSequence() {
       codec.Encode(model_, model_->client()->EncodeBookmarkSyncMetadata()));
 
   return base::BindOnce(
-      [](base::Value value, std::string* output) {
+      [](base::Value value) -> absl::optional<std::string> {
         // This runs on the background sequence.
-        JSONStringValueSerializer serializer(output);
-        serializer.set_pretty_print(true);
-        return serializer.Serialize(value);
+        std::string output;
+        if (!base::JSONWriter::WriteWithOptions(
+                value, base::JSONWriter::OPTIONS_PRETTY_PRINT, &output)) {
+          return absl::nullopt;
+        }
+        return output;
       },
       std::move(value));
 }

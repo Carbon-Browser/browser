@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/message_center/message_center_controller.h"
 
+#include <memory>
 #include <utility>
 
 #include "ash/constants/ash_features.h"
@@ -15,6 +16,7 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/message_center/arc_notification_manager_delegate_impl.h"
 #include "ash/system/message_center/ash_message_center_lock_screen_controller.h"
+#include "ash/system/message_center/ash_notification_drag_controller.h"
 #include "ash/system/message_center/fullscreen_notification_blocker.h"
 #include "ash/system/message_center/inactive_user_notification_blocker.h"
 #include "ash/system/message_center/session_state_notification_blocker.h"
@@ -86,10 +88,13 @@ MessageCenterController::MessageCenterController() {
 
   fullscreen_notification_blocker_ =
       std::make_unique<FullscreenNotificationBlocker>(MessageCenter::Get());
+  fullscreen_notification_blocker_->Init();
   inactive_user_notification_blocker_ =
       std::make_unique<InactiveUserNotificationBlocker>(MessageCenter::Get());
+  inactive_user_notification_blocker_->Init();
   session_state_notification_blocker_ =
       std::make_unique<SessionStateNotificationBlocker>(MessageCenter::Get());
+  session_state_notification_blocker_->Init();
 
   Shell::Get()->session_controller()->AddObserver(this);
 
@@ -97,9 +102,10 @@ MessageCenterController::MessageCenterController() {
           switches::kSuppressMessageCenterPopups)) {
     all_popup_blocker_ =
         std::make_unique<PopupNotificationBlocker>(MessageCenter::Get());
+    all_popup_blocker_->Init();
   }
 
-  if (chromeos::features::IsPhoneHubEnabled()) {
+  if (features::IsPhoneHubEnabled()) {
     phone_hub_notification_controller_ =
         std::make_unique<PhoneHubNotificationController>();
   }
@@ -114,11 +120,16 @@ MessageCenterController::MessageCenterController() {
   // "ChromiumOS").
   message_center::MessageCenter::Get()->SetSystemNotificationAppName(
       l10n_util::GetStringUTF16(IDS_ASH_MESSAGE_CENTER_SYSTEM_APP_NAME));
+
+  if (features::IsNotificationImageDragEnabled()) {
+    drag_controller_ = std::make_unique<AshNotificationDragController>();
+  }
 }
 
 MessageCenterController::~MessageCenterController() {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnArcNotificationInitializerDestroyed(this);
+  }
 
   // These members all depend on the MessageCenter instance, so must be
   // destroyed first.
@@ -145,8 +156,9 @@ void MessageCenterController::SetArcNotificationManagerInstance(
           ->user_info.account_id,
       message_center::MessageCenter::Get());
 
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnSetArcNotificationsInstance(arc_notification_manager_.get());
+  }
 }
 
 ArcNotificationManagerBase*
@@ -164,14 +176,13 @@ void MessageCenterController::RemoveObserver(Observer* observer) {
 
 void MessageCenterController::OnActiveUserPrefServiceChanged(
     PrefService* prefs) {
-  if (!features::IsNotificationExperimentalShortTimeoutsEnabled() ||
-      DisableShortNotificationsForAccessibility(prefs)) {
+  if (DisableShortNotificationsForAccessibility(prefs)) {
     return;
   }
 
   message_center::PopupTimersController::SetNotificationTimeouts(
       message_center::kAutocloseShortDelaySeconds,
-      message_center::kAutocloseShortDelaySeconds);
+      message_center::kAutocloseCrosHighPriorityDelaySeconds);
 }
 
 }  // namespace ash

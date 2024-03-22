@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <set>
 #include <unordered_map>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
@@ -53,10 +53,11 @@ class ServiceWorkerInternalsHandler : public WebUIMessageHandler {
 
   void OnRunningStateChanged();
   void OnVersionStateChanged(int partition_id, int64_t version_id);
+  void OnVersionRouterRulesChanged();
   void OnErrorEvent(const std::string& event_name,
                     int partition_id,
                     int64_t version_id,
-                    base::Value details);
+                    const base::Value::Dict& details);
   void OnRegistrationEvent(const std::string& event_name, const GURL& scope);
   void OnDidGetRegistrations(
       int partition_id,
@@ -90,9 +91,6 @@ class ServiceWorkerInternalsHandler : public WebUIMessageHandler {
   bool GetServiceWorkerContext(
       int partition_id,
       scoped_refptr<ServiceWorkerContextWrapper>* context);
-  void FindStoragePartitionById(int partition_id,
-                                StoragePartition** result_partition,
-                                StoragePartition* storage_partition) const;
 
   void StopWorkerWithId(scoped_refptr<ServiceWorkerContextWrapper> context,
                         int64_t version_id,

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,19 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/i18n/case_conversion.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/escape.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/ash/file_manager/open_with_browser.h"
-#include "chrome/browser/chromeos/fileapi/file_system_backend.h"
+#include "chrome/browser/ash/fileapi/file_system_backend.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -51,61 +52,15 @@ using content::ChildProcessSecurityPolicy;
 using content::SiteInstance;
 using content::WebContents;
 using extensions::Extension;
-using storage::FileSystemURL;
 using file_manager::util::EntryDefinition;
 using file_manager::util::EntryDefinitionList;
 using file_manager::util::FileDefinition;
 using file_manager::util::FileDefinitionList;
+using storage::FileSystemURL;
 
-namespace file_manager {
-namespace file_browser_handlers {
+namespace file_manager::file_browser_handlers {
+
 namespace {
-
-std::string EscapedUtf8ToLower(const std::string& str) {
-  std::u16string utf16 = base::UTF8ToUTF16(
-      base::UnescapeURLComponent(str, base::UnescapeRule::NORMAL));
-  return base::EscapeUrlEncodedData(
-      base::UTF16ToUTF8(base::i18n::ToLower(utf16)),
-      false /* do not replace space with plus */);
-}
-
-// Finds file browser handlers that can handle the |selected_file_url|.
-FileBrowserHandlerList FindFileBrowserHandlersForURL(
-    Profile* profile,
-    const GURL& selected_file_url) {
-  extensions::ExtensionRegistry* registry =
-      extensions::ExtensionRegistry::Get(profile);
-  // In unit-tests, we may not have an ExtensionRegistry.
-  if (!registry)
-    return FileBrowserHandlerList();
-
-  // We need case-insensitive matching, and pattern in the handler is already
-  // in lower case.
-  const GURL lowercase_url(EscapedUtf8ToLower(selected_file_url.spec()));
-
-  FileBrowserHandlerList results;
-  for (const scoped_refptr<const Extension>& extension :
-       registry->enabled_extensions()) {
-    if (profile->IsOffTheRecord() &&
-        !extensions::util::IsIncognitoEnabled(extension->id(), profile))
-      continue;
-    FileBrowserHandler::List* handler_list =
-        FileBrowserHandler::GetHandlers(extension.get());
-    if (!handler_list)
-      continue;
-    for (FileBrowserHandler::List::const_iterator handler_iter =
-             handler_list->begin();
-         handler_iter != handler_list->end();
-         ++handler_iter) {
-      const FileBrowserHandler* handler = handler_iter->get();
-      if (!handler->MatchesURL(lowercase_url))
-        continue;
-
-      results.push_back(handler);
-    }
-  }
-  return results;
-}
 
 // This class is used to execute a file browser handler task. Here's how this
 // works:
@@ -163,7 +118,7 @@ class FileBrowserHandlerExecutor {
       const Extension* extension,
       int handler_pid);
 
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
   scoped_refptr<const Extension> extension_;
   const std::string action_id_;
   file_tasks::FileTaskFinishedCallback done_;
@@ -178,8 +133,7 @@ FileBrowserHandlerExecutor::SetupFileAccessPermissions(
     const std::vector<FileSystemURL>& file_urls) {
   DCHECK(handler_extension.get());
 
-  storage::ExternalFileSystemBackend* backend =
-      file_system_context_handler->external_backend();
+  auto* backend = ash::FileSystemBackend::Get(*file_system_context_handler);
 
   std::unique_ptr<FileDefinitionList> file_definition_list(
       new FileDefinitionList);
@@ -192,14 +146,11 @@ FileBrowserHandlerExecutor::SetupFileAccessPermissions(
     base::FilePath local_path = url.path();
     base::FilePath virtual_path = url.virtual_path();
 
-    const bool is_native_file =
-        url.type() == storage::kFileSystemTypeLocal ||
-        url.type() == storage::kFileSystemTypeRestrictedLocal;
+    const bool is_native_file = url.type() == storage::kFileSystemTypeLocal;
 
     // If the file is from a physical volume, actual file must be found.
     if (is_native_file) {
-      if (!base::PathExists(local_path) ||
-          base::IsLink(local_path) ||
+      if (!base::PathExists(local_path) || base::IsLink(local_path) ||
           !base::GetFileInfo(local_path, &file_info)) {
         continue;
       }
@@ -272,8 +223,8 @@ void FileBrowserHandlerExecutor::ExecuteDoneOnUIThread(
     // TASK_RESULT_MESSAGE_SENT.
     std::move(done_).Run(
         success
-            ? extensions::api::file_manager_private::TASK_RESULT_MESSAGE_SENT
-            : extensions::api::file_manager_private::TASK_RESULT_FAILED,
+            ? extensions::api::file_manager_private::TaskResult::kMessageSent
+            : extensions::api::file_manager_private::TaskResult::kFailed,
         failure_reason);
   }
   delete this;
@@ -336,8 +287,8 @@ void FileBrowserHandlerExecutor::SetupPermissionsAndDispatchEvent(
     return;
   }
 
-  SetupHandlerHostFileAccessPermissions(
-      file_definition_list.get(), extension_.get(), handler_pid);
+  SetupHandlerHostFileAccessPermissions(file_definition_list.get(),
+                                        extension_.get(), handler_pid);
 
   base::Value::List event_args;
   event_args.Append(action_id_);
@@ -347,8 +298,7 @@ void FileBrowserHandlerExecutor::SetupPermissionsAndDispatchEvent(
   auto file_entries = file_manager::util::ConvertEntryDefinitionListToListValue(
       *entry_definition_list);
 
-  details.Set("entries",
-              base::Value::FromUniquePtrValue(std::move(file_entries)));
+  details.Set("entries", std::move(file_entries));
   event_args.Append(std::move(details));
   auto event = std::make_unique<extensions::Event>(
       extensions::events::FILE_BROWSER_HANDLER_ON_EXECUTE,
@@ -365,17 +315,17 @@ void FileBrowserHandlerExecutor::SetupHandlerHostFileAccessPermissions(
   const FileBrowserHandler* action =
       FileBrowserHandler::FindForActionId(extension_.get(), action_id_);
   for (FileDefinitionList::const_iterator iter = file_definition_list->begin();
-       iter != file_definition_list->end();
-       ++iter) {
-    if (!action)
+       iter != file_definition_list->end(); ++iter) {
+    if (!action) {
       continue;
+    }
     if (action->CanRead()) {
       content::ChildProcessSecurityPolicy::GetInstance()->GrantReadFile(
           handler_pid, iter->absolute_path);
     }
     if (action->CanWrite()) {
-      content::ChildProcessSecurityPolicy::GetInstance()->
-          GrantCreateReadWriteFile(handler_pid, iter->absolute_path);
+      content::ChildProcessSecurityPolicy::GetInstance()
+          ->GrantCreateReadWriteFile(handler_pid, iter->absolute_path);
     }
   }
 }
@@ -388,8 +338,9 @@ bool ExecuteFileBrowserHandler(Profile* profile,
                                const std::vector<FileSystemURL>& file_urls,
                                file_tasks::FileTaskFinishedCallback done) {
   // Forbid calling undeclared handlers.
-  if (!FileBrowserHandler::FindForActionId(extension, action_id))
+  if (!FileBrowserHandler::FindForActionId(extension, action_id)) {
     return false;
+  }
 
   // The executor object will be self deleted on completion.
   (new FileBrowserHandlerExecutor(profile, extension, action_id))
@@ -397,43 +348,4 @@ bool ExecuteFileBrowserHandler(Profile* profile,
   return true;
 }
 
-FileBrowserHandlerList FindFileBrowserHandlers(
-    Profile* profile,
-    const std::vector<GURL>& file_list) {
-  FileBrowserHandlerList common_handlers;
-  for (std::vector<GURL>::const_iterator it = file_list.begin();
-       it != file_list.end(); ++it) {
-    FileBrowserHandlerList handlers =
-        FindFileBrowserHandlersForURL(profile, *it);
-    // If there is nothing to do for one file, the intersection of handlers
-    // for all files will be empty at the end, so no need to check further.
-    if (handlers.empty())
-      return FileBrowserHandlerList();
-
-    // For the very first file, just copy all the elements.
-    if (it == file_list.begin()) {
-      common_handlers = handlers;
-    } else {
-      // For all additional files, find intersection between the accumulated and
-      // file specific set.
-      FileBrowserHandlerList intersection;
-      std::set<const FileBrowserHandler*> common_handler_set(
-          common_handlers.begin(), common_handlers.end());
-
-      for (FileBrowserHandlerList::const_iterator itr = handlers.begin();
-           itr != handlers.end(); ++itr) {
-        if (base::Contains(common_handler_set, *itr))
-          intersection.push_back(*itr);
-      }
-
-      std::swap(common_handlers, intersection);
-      if (common_handlers.empty())
-        return FileBrowserHandlerList();
-    }
-  }
-
-  return common_handlers;
-}
-
-}  // namespace file_browser_handlers
-}  // namespace file_manager
+}  // namespace file_manager::file_browser_handlers

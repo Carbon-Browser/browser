@@ -1,10 +1,6 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-// This source code is a part of eyeo Chromium SDK.
-// Use of this source code is governed by the GPLv3 that can be found in the
-// components/adblock/LICENSE file.
 
 #include "net/url_request/redirect_info.h"
 

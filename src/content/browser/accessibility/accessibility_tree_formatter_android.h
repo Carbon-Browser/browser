@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,33 +10,31 @@
 
 namespace content {
 
-class BrowserAccessibility;
-
 class CONTENT_EXPORT AccessibilityTreeFormatterAndroid
     : public ui::AXTreeFormatterBase {
  public:
   AccessibilityTreeFormatterAndroid();
   ~AccessibilityTreeFormatterAndroid() override;
 
-  base::Value BuildTree(ui::AXPlatformNodeDelegate* root) const override;
-  base::Value BuildTreeForSelector(
+  base::Value::Dict BuildTree(ui::AXPlatformNodeDelegate* root) const override;
+  base::Value::Dict BuildTreeForSelector(
       const AXTreeSelector& selector) const override;
 
-  base::Value BuildNode(ui::AXPlatformNodeDelegate* node) const override;
+  base::Value::Dict BuildNode(ui::AXPlatformNodeDelegate* node) const override;
 
  protected:
   void AddDefaultFilters(
       std::vector<AXPropertyFilter>* property_filters) override;
 
  private:
-  void RecursiveBuildTree(const BrowserAccessibility& node,
-                          base::DictionaryValue* dict) const;
+  void RecursiveBuildTree(const ui::AXPlatformNodeDelegate& node,
+                          base::Value::Dict* dict) const;
 
-  void AddProperties(const BrowserAccessibility& node,
-                     base::DictionaryValue* dict) const;
+  void AddProperties(const ui::AXPlatformNodeDelegate& node,
+                     base::Value::Dict* dict) const;
 
   std::string ProcessTreeForOutput(
-      const base::DictionaryValue& node) const override;
+      const base::Value::Dict& node) const override;
 };
 
 }  // namespace content

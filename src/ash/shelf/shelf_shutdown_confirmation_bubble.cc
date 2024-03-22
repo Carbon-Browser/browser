@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,14 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/pill_button.h"
+#include "ash/style/typography.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/tray/tray_utils.h"
-#include "base/bind.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/notreached.h"
-#include "base/strings/strcat.h"
-#include "base/time/time.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -35,16 +34,13 @@
 namespace ash {
 namespace {
 
-// The preferred width of the shutdown confirmation bubble's content.
-constexpr int kBubblePreferredWidth = 175;
-
 // The insets of the shutdown confirmation bubble. The value of
 // Insets-leading-side is taken from the system.
 constexpr int kShutdownConfirmationBubbleInsetsBottom = 12;
 constexpr int kShutdownConfirmationBubbleInsetsTop = 8;
 
-gfx::Insets GetShutdownConfirmationBubbleInsets() {
-  gfx::Insets insets = GetTrayBubbleInsets();
+gfx::Insets GetShutdownConfirmationBubbleInsets(aura::Window* window) {
+  gfx::Insets insets = GetTrayBubbleInsets(window);
   insets.set_top(kShutdownConfirmationBubbleInsetsTop);
   insets.set_bottom(kShutdownConfirmationBubbleInsetsBottom);
   return insets;
@@ -55,30 +51,6 @@ gfx::Insets GetShutdownConfirmationBubbleInsets() {
 constexpr char kActionHistogramName[] =
     "Ash.Shelf.ShutdownConfirmationBubble.Action";
 
-// Histogram for tracking the time delta between bubble opened and actions taken
-// on the shelf shutdown confirmation bubble.
-constexpr char kActionDurationHistogramPrefix[] =
-    "Ash.Shelf.ShutdownConfirmationBubble.ActionDuration.";
-
-// Suffix for shutdown confirmation action. Should match suffixes of the
-// Ash.Shelf.ShutdownConfirmationBubble.ActionDuration.* metrics in
-// metadata/ash/histograms.xml
-std::string BubbleActionSuffix(
-    ShelfShutdownConfirmationBubble::BubbleAction action) {
-  switch (action) {
-    case ShelfShutdownConfirmationBubble::kCancelled:
-      return "Cancel";
-    case ShelfShutdownConfirmationBubble::kConfirmed:
-      return "Confirm";
-    case ShelfShutdownConfirmationBubble::kDismissed:
-      return "Dismiss";
-    case ShelfShutdownConfirmationBubble::kOpened:
-    case ShelfShutdownConfirmationBubble::kMaxValue:
-      NOTREACHED();
-      return "";
-  }
-}
-
 }  // namespace
 
 ShelfShutdownConfirmationBubble::ShelfShutdownConfirmationBubble(
@@ -86,8 +58,10 @@ ShelfShutdownConfirmationBubble::ShelfShutdownConfirmationBubble(
     ShelfAlignment alignment,
     base::OnceClosure on_confirm_callback,
     base::OnceClosure on_cancel_callback)
-    : ShelfBubble(anchor, alignment),
-      bubble_opened_timestamp_(base::TimeTicks::Now()) {
+    : ShelfBubble(anchor,
+                  alignment,
+                  /*for_tooltip=*/false,
+                  /*arrow_position=*/std::nullopt) {
   DCHECK(on_confirm_callback);
   DCHECK(on_cancel_callback);
   confirm_callback_ = std::move(on_confirm_callback);
@@ -95,7 +69,8 @@ ShelfShutdownConfirmationBubble::ShelfShutdownConfirmationBubble(
 
   auto* layout_provider = views::LayoutProvider::Get();
   const gfx::Insets kShutdownConfirmationBubbleInsets =
-      GetShutdownConfirmationBubbleInsets();
+      GetShutdownConfirmationBubbleInsets(
+          anchor_widget()->GetNativeWindow()->GetRootWindow());
   const gfx::Insets dialog_insets =
       layout_provider->GetInsetsMetric(views::INSETS_DIALOG);
   set_margins(kShutdownConfirmationBubbleInsets + dialog_insets);
@@ -122,8 +97,14 @@ ShelfShutdownConfirmationBubble::ShelfShutdownConfirmationBubble(
   title_ = AddChildView(std::make_unique<views::Label>());
   title_->SetMultiLine(true);
   title_->SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT);
-  TrayPopupUtils::SetLabelFontList(title_,
-                                   TrayPopupUtils::FontStyle::kSubHeader);
+  if (chromeos::features::IsJellyEnabled()) {
+    title_->SetAutoColorReadabilityEnabled(false);
+    TypographyProvider::Get()->StyleLabel(TypographyToken::kCrosHeadline1,
+                                          *title_);
+  } else {
+    TrayPopupUtils::SetLabelFontList(title_,
+                                     TrayPopupUtils::FontStyle::kSubHeader);
+  }
   title_->SetText(
       l10n_util::GetStringUTF16(IDS_ASH_SHUTDOWN_CONFIRMATION_TITLE));
   title_->SetProperty(
@@ -144,7 +125,8 @@ ShelfShutdownConfirmationBubble::ShelfShutdownConfirmationBubble(
   auto cancel_button = std::make_unique<PillButton>(
       base::BindRepeating(&ShelfShutdownConfirmationBubble::OnCancelled,
                           base::Unretained(this)),
-      l10n_util::GetStringUTF16(IDS_CANCEL), PillButton::Type::kIconless,
+      l10n_util::GetStringUTF16(IDS_CANCEL),
+      PillButton::Type::kDefaultWithoutIcon,
       /*icon=*/nullptr);
   cancel_button->SetID(static_cast<int>(ButtonId::kCancel));
   cancel_ = button_container->AddChildView(std::move(cancel_button));
@@ -153,7 +135,7 @@ ShelfShutdownConfirmationBubble::ShelfShutdownConfirmationBubble(
       base::BindRepeating(&ShelfShutdownConfirmationBubble::OnConfirmed,
                           base::Unretained(this)),
       l10n_util::GetStringUTF16(IDS_ASH_SHUTDOWN_CONFIRM_BUTTON),
-      PillButton::Type::kIconless, /*icon=*/nullptr);
+      PillButton::Type::kDefaultWithoutIcon, /*icon=*/nullptr);
   confirm_button->SetID(static_cast<int>(ButtonId::kShutdown));
   confirm_ = button_container->AddChildView(std::move(confirm_button));
 
@@ -169,8 +151,9 @@ ShelfShutdownConfirmationBubble::ShelfShutdownConfirmationBubble(
   GetBubbleFrameView()->SetBackgroundColor(GetBackgroundColor());
   GetWidget()->Show();
 
-  base::UmaHistogramEnumeration(kActionHistogramName,
-                                ShelfShutdownConfirmationBubble::kOpened);
+  base::UmaHistogramEnumeration(
+      kActionHistogramName,
+      ShelfShutdownConfirmationBubble::BubbleAction::kOpened);
 }
 
 ShelfShutdownConfirmationBubble::~ShelfShutdownConfirmationBubble() {
@@ -203,7 +186,7 @@ void ShelfShutdownConfirmationBubble::OnThemeChanged() {
 void ShelfShutdownConfirmationBubble::GetAccessibleNodeData(
     ui::AXNodeData* node_data) {
   node_data->role = ax::mojom::Role::kDialog;
-  node_data->SetName(title_->GetText());
+  node_data->SetNameChecked(title_->GetText());
 }
 
 std::u16string ShelfShutdownConfirmationBubble::GetAccessibleWindowTitle()
@@ -224,22 +207,20 @@ void ShelfShutdownConfirmationBubble::OnConfirmed() {
 void ShelfShutdownConfirmationBubble::OnClosed() {
   switch (dialog_result_) {
     case DialogResult::kCancelled:
-      ReportBubbleAction(ShelfShutdownConfirmationBubble::kCancelled);
+      ReportBubbleAction(
+          ShelfShutdownConfirmationBubble::BubbleAction::kCancelled);
       std::move(cancel_callback_).Run();
       break;
     case DialogResult::kConfirmed:
-      ReportBubbleAction(ShelfShutdownConfirmationBubble::kConfirmed);
+      ReportBubbleAction(
+          ShelfShutdownConfirmationBubble::BubbleAction::kConfirmed);
       std::move(confirm_callback_).Run();
       break;
     case DialogResult::kNone:
-      ReportBubbleAction(ShelfShutdownConfirmationBubble::kDismissed);
+      ReportBubbleAction(
+          ShelfShutdownConfirmationBubble::BubbleAction::kDismissed);
       break;
   }
-}
-
-gfx::Size ShelfShutdownConfirmationBubble::CalculatePreferredSize() const {
-  return gfx::Size(kBubblePreferredWidth,
-                   GetHeightForWidth(kBubblePreferredWidth));
 }
 
 bool ShelfShutdownConfirmationBubble::ShouldCloseOnPressDown() {
@@ -253,12 +234,6 @@ bool ShelfShutdownConfirmationBubble::ShouldCloseOnMouseExit() {
 void ShelfShutdownConfirmationBubble::ReportBubbleAction(
     ShelfShutdownConfirmationBubble::BubbleAction action) {
   base::UmaHistogramEnumeration(kActionHistogramName, action);
-
-  const std::string action_suffix = BubbleActionSuffix(action);
-  auto elapsed_time = base::TimeTicks::Now() - bubble_opened_timestamp_;
-  base::UmaHistogramMediumTimes(
-      base::StrCat({kActionDurationHistogramPrefix, action_suffix}),
-      elapsed_time);
 }
 
 }  // namespace ash

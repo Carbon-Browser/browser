@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class PlaybackImageButton : public OverlayWindowImageButton {
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
  private:
-  void UpdateImageAndTooltipText();
+  void UpdateImageAndText();
 
   VideoOverlayWindowViews::PlaybackState playback_state_ =
       VideoOverlayWindowViews::PlaybackState::kEndOfVideo;

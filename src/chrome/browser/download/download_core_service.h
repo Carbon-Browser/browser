@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "extensions/buildflags/buildflags.h"
 
 class ChromeDownloadManagerDelegate;
+class DownloadUIController;
 class ExtensionDownloadsEventRouter;
 
 namespace content {
@@ -36,6 +37,9 @@ class DownloadCoreService : public KeyedService {
   // Get the download manager delegate, creating it if it doesn't already exist.
   virtual ChromeDownloadManagerDelegate* GetDownloadManagerDelegate() = 0;
 
+  // Get the download UI controller, return nullptr if it doesn't already exist.
+  virtual DownloadUIController* GetDownloadUIController() = 0;
+
   // Get the interface to the history system. Returns NULL if profile is
   // incognito or if the DownloadManager hasn't been created yet or if there is
   // no HistoryService for profile. Virtual for testing.
@@ -49,15 +53,15 @@ class DownloadCoreService : public KeyedService {
   // Has a download manager been created?
   virtual bool HasCreatedDownloadManager() = 0;
 
-  // Number of non-malicious downloads associated with this instance of the
+  // Number of downloads blocking shutdown associated with this instance of the
   // service.
-  virtual int NonMaliciousDownloadCount() const = 0;
+  virtual int BlockingShutdownCount() const = 0;
 
   // Cancels all in-progress downloads for this profile.
   virtual void CancelDownloads() = 0;
 
-  // Number of non-malicious downloads associated with all profiles.
-  static int NonMaliciousDownloadCountAllProfiles();
+  // Number of downloads blocking shutdown associated with all profiles.
+  static int BlockingShutdownCountAllProfiles();
 
   // Cancels all in-progress downloads for all profiles.
   static void CancelAllDownloads();

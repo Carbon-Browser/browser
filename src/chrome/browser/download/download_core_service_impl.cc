@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/download/chrome_download_manager_delegate.h"
@@ -94,6 +94,10 @@ DownloadCoreServiceImpl::GetDownloadManagerDelegate() {
   return manager_delegate_.get();
 }
 
+DownloadUIController* DownloadCoreServiceImpl::GetDownloadUIController() {
+  return download_ui_ ? download_ui_.get() : nullptr;
+}
+
 DownloadHistory* DownloadCoreServiceImpl::GetDownloadHistory() {
   if (!download_manager_created_) {
     GetDownloadManagerDelegate();
@@ -113,10 +117,10 @@ bool DownloadCoreServiceImpl::HasCreatedDownloadManager() {
   return download_manager_created_;
 }
 
-int DownloadCoreServiceImpl::NonMaliciousDownloadCount() const {
+int DownloadCoreServiceImpl::BlockingShutdownCount() const {
   if (!download_manager_created_)
     return 0;
-  return profile_->GetDownloadManager()->NonMaliciousInProgressCount();
+  return profile_->GetDownloadManager()->BlockingShutdownCount();
 }
 
 void DownloadCoreServiceImpl::CancelDownloads() {

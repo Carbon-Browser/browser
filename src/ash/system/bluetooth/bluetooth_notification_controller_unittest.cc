@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,19 +9,17 @@
 
 #include "ash/public/cpp/test/test_nearby_share_delegate.h"
 #include "ash/public/cpp/test/test_system_tray_client.h"
-#include "ash/services/nearby/public/cpp/nearby_client_uuids.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/bluetooth/bluetooth_power_controller.h"
 #include "ash/system/toast/toast_manager_impl.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "ash/test/ash_test_base.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/test/scoped_feature_list.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 #include "device/bluetooth/test/mock_bluetooth_adapter.h"
 #include "device/bluetooth/test/mock_bluetooth_device.h"
@@ -52,7 +50,7 @@ class TestMessageCenter : public message_center::FakeMessageCenter {
     message_center::Notification* notification =
         FindVisibleNotificationById(id);
     DCHECK(notification);
-    notification->delegate()->Click(absl::nullopt, absl::nullopt);
+    notification->delegate()->Click(std::nullopt, std::nullopt);
   }
 };
 
@@ -94,18 +92,6 @@ class BluetoothNotificationControllerTest : public AshTestBase {
     toast_manager_ = Shell::Get()->toast_manager();
   }
 
-  void ClickPairedNotification(const device::BluetoothDevice* device) {
-    test_message_center_.ClickOnNotification(
-        BluetoothNotificationController::GetPairedNotificationId(device));
-  }
-
-  void DismissPairedNotification(const device::BluetoothDevice* device,
-                                 bool by_user) {
-    test_message_center_.RemoveNotification(
-        BluetoothNotificationController::GetPairedNotificationId(device),
-        by_user);
-  }
-
   void VerifyDiscoverableToastVisibility(bool visible) {
     if (visible) {
       ToastOverlay* overlay = GetCurrentOverlay();
@@ -119,22 +105,11 @@ class BluetoothNotificationControllerTest : public AshTestBase {
     }
   }
 
-  void VerifyPairedNotificationIsNotVisible(
-      const device::BluetoothDevice* device) {
-    EXPECT_FALSE(test_message_center_.FindVisibleNotificationById(
-        BluetoothNotificationController::GetPairedNotificationId(device)));
-  }
-
-  void VerifyPairedNotificationIsVisible(
-      const device::BluetoothDevice* device) {
-    message_center::Notification* visible_notification =
-        test_message_center_.FindVisibleNotificationById(
-            BluetoothNotificationController::GetPairedNotificationId(device));
-    EXPECT_TRUE(visible_notification);
-    EXPECT_EQ(std::u16string(), visible_notification->title());
-    EXPECT_EQ(l10n_util::GetStringFUTF16(IDS_ASH_STATUS_TRAY_BLUETOOTH_PAIRED,
-                                         device->GetNameForDisplay()),
-              visible_notification->message());
+  void VerifyPairingNotificationVisibility(bool visible) {
+    EXPECT_EQ(test_message_center_.FindVisibleNotificationById(
+                  BluetoothNotificationController::
+                      kBluetoothDevicePairingNotificationId) != nullptr,
+              visible);
   }
 
   // Run the notification controller to simulate showing a toast.
@@ -143,10 +118,24 @@ class BluetoothNotificationControllerTest : public AshTestBase {
     notification_controller->NotifyAdapterDiscoverable();
   }
 
-  void ShowPairedNotification(
+  void ShowPairingNotification(
       BluetoothNotificationController* notification_controller,
-      device::MockBluetoothDevice* bluetooth_device) {
-    notification_controller->NotifyPairedDevice(bluetooth_device);
+      device::MockBluetoothDevice* mock_device) {
+    notification_controller->AuthorizePairing(mock_device);
+  }
+
+  void SimulateDevicePaired(
+      BluetoothNotificationController* notification_controller,
+      device::MockBluetoothDevice* mock_device) {
+    ON_CALL(*mock_device, IsPaired()).WillByDefault(Return(true));
+    notification_controller->DeviceChanged(mock_adapter_.get(), mock_device);
+  }
+
+  void SimulateDeviceBonded(
+      BluetoothNotificationController* notification_controller,
+      device::MockBluetoothDevice* mock_device) {
+    ON_CALL(*mock_device, IsBonded()).WillByDefault(Return(true));
+    notification_controller->DeviceChanged(mock_adapter_.get(), mock_device);
   }
 
   ToastOverlay* GetCurrentOverlay() {
@@ -156,45 +145,26 @@ class BluetoothNotificationControllerTest : public AshTestBase {
   TestMessageCenter test_message_center_;
   scoped_refptr<device::MockBluetoothAdapter> mock_adapter_;
   std::unique_ptr<BluetoothNotificationController> notification_controller_;
-  TestSystemTrayClient* system_tray_client_;
+  raw_ptr<TestSystemTrayClient, DanglingUntriaged | ExperimentalAsh>
+      system_tray_client_;
   std::unique_ptr<device::MockBluetoothDevice> bluetooth_device_1_;
   std::unique_ptr<device::MockBluetoothDevice> bluetooth_device_2_;
-  ToastManagerImpl* toast_manager_ = nullptr;
-};
-
-// Legacy test class used to provide additional setup to a subset of the tests
-// below that we would still like to run, but cannot be run with the Bluetooth
-// revamp feature flag enabled since we no longer show a notification when a
-// device becomes paired.
-class BluetoothNotificationControllerTestLegacy
-    : public BluetoothNotificationControllerTest {
- public:
-  BluetoothNotificationControllerTestLegacy() = default;
-
-  BluetoothNotificationControllerTestLegacy(
-      const BluetoothNotificationControllerTestLegacy&) = delete;
-  BluetoothNotificationControllerTestLegacy& operator=(
-      const BluetoothNotificationControllerTestLegacy&) = delete;
-
-  void SetUp() override {
-    // These tests should only be run with the kBluetoothRevamp feature flag is
-    // disabled, and so we force it off here and ensure that the local state
-    // prefs that would have been registered had the feature flag been off are
-    // registered.
-    if (ash::features::IsBluetoothRevampEnabled()) {
-      feature_list_.InitAndDisableFeature(features::kBluetoothRevamp);
-      BluetoothPowerController::RegisterLocalStatePrefs(
-          local_state()->registry());
-    }
-    BluetoothNotificationControllerTest::SetUp();
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
+  raw_ptr<ToastManagerImpl, DanglingUntriaged | ExperimentalAsh>
+      toast_manager_ = nullptr;
 };
 
 TEST_F(BluetoothNotificationControllerTest, DiscoverableToast) {
   VerifyDiscoverableToastVisibility(/*visible=*/false);
+
+  GetSessionControllerClient()->SetSessionState(
+      session_manager::SessionState::LOCKED);
+
+  ShowDiscoverableToast(notification_controller_.get());
+
+  VerifyDiscoverableToastVisibility(/*visible=*/false);
+
+  GetSessionControllerClient()->SetSessionState(
+      session_manager::SessionState::ACTIVE);
 
   ShowDiscoverableToast(notification_controller_.get());
 
@@ -227,82 +197,24 @@ TEST_F(BluetoothNotificationControllerTest,
   VerifyDiscoverableToastVisibility(/*visible=*/false);
 }
 
-TEST_F(BluetoothNotificationControllerTestLegacy,
-       PairedDeviceNotification_TapNotification) {
-  // Show the notification to the user.
-  ShowPairedNotification(notification_controller_.get(),
-                         bluetooth_device_1_.get());
+TEST_F(BluetoothNotificationControllerTest, PairingNotification) {
+  VerifyPairingNotificationVisibility(/*visible=*/false);
 
-  VerifyPairedNotificationIsVisible(bluetooth_device_1_.get());
+  ShowPairingNotification(notification_controller_.get(),
+                          bluetooth_device_1_.get());
+  VerifyPairingNotificationVisibility(/*visible=*/true);
 
-  ClickPairedNotification(bluetooth_device_1_.get());
+  // Simulate the device being paired. This should not remove the pairing
+  // notification.
+  SimulateDevicePaired(notification_controller_.get(),
+                       bluetooth_device_1_.get());
+  VerifyPairingNotificationVisibility(/*visible=*/true);
 
-  // The notification shouldn't dismiss after a click.
-  VerifyPairedNotificationIsVisible(bluetooth_device_1_.get());
-
-  // Check the notification controller tried to open the UI.
-  EXPECT_EQ(1, system_tray_client_->show_bluetooth_settings_count());
-}
-
-TEST_F(BluetoothNotificationControllerTestLegacy,
-       PairedDeviceNotification_MultipleNotifications) {
-  // Show the notification to the user.
-  ShowPairedNotification(notification_controller_.get(),
-                         bluetooth_device_1_.get());
-  VerifyPairedNotificationIsVisible(bluetooth_device_1_.get());
-
-  // Pairing a new device should create a new notification.
-  ShowPairedNotification(notification_controller_.get(),
-                         bluetooth_device_2_.get());
-  VerifyPairedNotificationIsVisible(bluetooth_device_1_.get());
-  VerifyPairedNotificationIsVisible(bluetooth_device_2_.get());
-}
-
-TEST_F(BluetoothNotificationControllerTestLegacy,
-       PairedDeviceNotification_UserDismissesNotification) {
-  ShowPairedNotification(notification_controller_.get(),
-                         bluetooth_device_1_.get());
-  ShowPairedNotification(notification_controller_.get(),
-                         bluetooth_device_2_.get());
-
-  VerifyPairedNotificationIsVisible(bluetooth_device_1_.get());
-  VerifyPairedNotificationIsVisible(bluetooth_device_2_.get());
-
-  // Remove one notification, the other one should still be visible.
-  DismissPairedNotification(bluetooth_device_1_.get(), true /* by_user */);
-
-  VerifyPairedNotificationIsNotVisible(bluetooth_device_1_.get());
-  VerifyPairedNotificationIsVisible(bluetooth_device_2_.get());
-
-  // The settings UI should not open when closing the notification.
-  EXPECT_EQ(0, system_tray_client_->show_bluetooth_settings_count());
-}
-
-TEST_F(BluetoothNotificationControllerTestLegacy,
-       PairedDeviceNotification_SystemDismissesNotification) {
-  ShowPairedNotification(notification_controller_.get(),
-                         bluetooth_device_1_.get());
-
-  VerifyPairedNotificationIsVisible(bluetooth_device_1_.get());
-
-  DismissPairedNotification(bluetooth_device_1_.get(), false /* by_user */);
-
-  VerifyPairedNotificationIsNotVisible(bluetooth_device_1_.get());
-  EXPECT_EQ(0, system_tray_client_->show_bluetooth_settings_count());
-}
-
-TEST_F(BluetoothNotificationControllerTestLegacy,
-       PairedDeviceNotification_DeviceConnectionInitiatedByNearbyClient) {
-  VerifyPairedNotificationIsNotVisible(bluetooth_device_1_.get());
-
-  base::flat_set<device::BluetoothUUID> uuid_set;
-  uuid_set.insert(nearby::GetNearbyClientUuids()[0]);
-  ON_CALL(*bluetooth_device_1_, GetUUIDs()).WillByDefault(Return(uuid_set));
-
-  ShowPairedNotification(notification_controller_.get(),
-                         bluetooth_device_1_.get());
-
-  VerifyPairedNotificationIsNotVisible(bluetooth_device_1_.get());
+  // Simulate the device being bonded. This should remove the pairing
+  // notification.
+  SimulateDeviceBonded(notification_controller_.get(),
+                       bluetooth_device_1_.get());
+  VerifyPairingNotificationVisibility(/*visible=*/false);
 }
 
 }  // namespace ash

@@ -1,16 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "media/base/android/media_codec_bridge.h"
@@ -31,6 +31,7 @@ using testing::SetArgPointee;
 namespace media {
 
 constexpr gfx::Size kInitialCodedSize(640, 480);
+constexpr gfx::Size kCodedSizeAlignment(16, 16);
 
 class CodecWrapperTest : public testing::Test {
  public:
@@ -42,7 +43,8 @@ class CodecWrapperTest : public testing::Test {
         CodecSurfacePair(std::move(codec), surface_bundle_),
         output_buffer_release_cb_.Get(),
         // Unrendered output buffers are released on our thread.
-        base::SequencedTaskRunnerHandle::Get(), kInitialCodedSize);
+        base::SequencedTaskRunner::GetCurrentDefault(), kInitialCodedSize,
+        kCodedSizeAlignment);
     ON_CALL(*codec_, DequeueOutputBuffer(_, _, _, _, _, _, _))
         .WillByDefault(Return(MEDIA_CODEC_OK));
     ON_CALL(*codec_, DequeueInputBuffer(_, _))
@@ -221,6 +223,58 @@ TEST_F(CodecWrapperTest, CodecOutputBuffersHaveTheCorrectSize) {
           DoAll(SetArgPointee<0>(gfx::Size(42, 42)), Return(MEDIA_CODEC_OK)));
   auto codec_buffer = DequeueCodecOutputBuffer();
   ASSERT_EQ(codec_buffer->size(), gfx::Size(42, 42));
+}
+
+TEST_F(CodecWrapperTest, CodecOutputBuffersGuessCodedSize) {
+  EXPECT_CALL(*codec_, DequeueOutputBuffer(_, _, _, _, _, _, _))
+      .WillOnce(Return(MEDIA_CODEC_OUTPUT_FORMAT_CHANGED))
+      .WillOnce(Return(MEDIA_CODEC_OK));
+  EXPECT_CALL(*codec_, GetOutputSize(_))
+      .WillOnce(
+          DoAll(SetArgPointee<0>(gfx::Size(42, 42)), Return(MEDIA_CODEC_OK)));
+  auto codec_buffer = DequeueCodecOutputBuffer();
+  ASSERT_EQ(codec_buffer->size(), gfx::Size(42, 42));
+  EXPECT_TRUE(codec_buffer->CanGuessCodedSize());
+  EXPECT_EQ(codec_buffer->GuessCodedSize(), gfx::Size(48, 48));
+}
+
+TEST_F(CodecWrapperTest, CodecOutputBuffersGuessCodedSizeNoAlignment) {
+  auto surface_pair = wrapper_->TakeCodecSurfacePair();
+  wrapper_ = std::make_unique<CodecWrapper>(
+      std::move(surface_pair), output_buffer_release_cb_.Get(),
+      // Unrendered output buffers are released on our thread.
+      base::SequencedTaskRunner::GetCurrentDefault(), kInitialCodedSize,
+      absl::nullopt);
+
+  EXPECT_CALL(*codec_, DequeueOutputBuffer(_, _, _, _, _, _, _))
+      .WillOnce(Return(MEDIA_CODEC_OUTPUT_FORMAT_CHANGED))
+      .WillOnce(Return(MEDIA_CODEC_OK));
+  EXPECT_CALL(*codec_, GetOutputSize(_))
+      .WillOnce(
+          DoAll(SetArgPointee<0>(gfx::Size(42, 42)), Return(MEDIA_CODEC_OK)));
+  auto codec_buffer = DequeueCodecOutputBuffer();
+  ASSERT_EQ(codec_buffer->size(), gfx::Size(42, 42));
+  EXPECT_FALSE(codec_buffer->CanGuessCodedSize());
+}
+
+TEST_F(CodecWrapperTest, CodecOutputBuffersGuessCodedSizeWeirdAlignment) {
+  auto surface_pair = wrapper_->TakeCodecSurfacePair();
+  wrapper_ = std::make_unique<CodecWrapper>(
+      std::move(surface_pair), output_buffer_release_cb_.Get(),
+      // Unrendered output buffers are released on our thread.
+      base::SequencedTaskRunner::GetCurrentDefault(), kInitialCodedSize,
+      gfx::Size(128, 1));
+
+  EXPECT_CALL(*codec_, DequeueOutputBuffer(_, _, _, _, _, _, _))
+      .WillOnce(Return(MEDIA_CODEC_OUTPUT_FORMAT_CHANGED))
+      .WillOnce(Return(MEDIA_CODEC_OK));
+  EXPECT_CALL(*codec_, GetOutputSize(_))
+      .WillOnce(
+          DoAll(SetArgPointee<0>(gfx::Size(42, 42)), Return(MEDIA_CODEC_OK)));
+  auto codec_buffer = DequeueCodecOutputBuffer();
+  ASSERT_EQ(codec_buffer->size(), gfx::Size(42, 42));
+  EXPECT_TRUE(codec_buffer->CanGuessCodedSize());
+  EXPECT_EQ(codec_buffer->GuessCodedSize(), gfx::Size(128, 42));
 }
 
 TEST_F(CodecWrapperTest, OutputBufferReleaseCbIsCalledWhenRendering) {

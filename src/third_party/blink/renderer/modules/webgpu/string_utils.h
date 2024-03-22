@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,12 @@ namespace blink {
 // that fallbacks to Latin1 for invalid UTF8 strings so that we are always able
 // to display something.
 WTF::String StringFromASCIIAndUTF8(const char* message);
+
+// Create a utf8 std::string from a WTF:String and replace `\0` with `\0xFFFD`
+// which is the unicode replacement codepoint. This used for some strings passed
+// to Dawn which expects null terminated strings.
+std::string UTF8StringFromUSVStringWithNullReplacedByReplacementCodePoint(
+    const String& s);
 
 }  // namespace blink
 

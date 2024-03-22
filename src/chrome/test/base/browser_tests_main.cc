@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,11 @@
 #include "ui/compositor/compositor_switches.h"
 
 #if BUILDFLAG(IS_WIN)
+#include "base/win/dark_mode_support.h"
 #include "base/win/win_util.h"
 #endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_FUCHSIA)
-#include "base/test/test_switches.h"
 #include "ui/gfx/switches.h"
 #include "ui/ozone/public/ozone_switches.h"  // nogncheck
 #endif
@@ -37,6 +37,10 @@ int main(int argc, char** argv) {
   base::win::PinUser32();
 
   base::win::EnableHighDPISupport();
+
+  // Like user32.dll above, some tests require uxtheme.dll to be loaded. This
+  // call will ensure uxtheme.dll is pinned early on startup.
+  base::win::IsDarkModeAvailable();
 #endif  // BUILDFLAG(IS_WIN)
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();

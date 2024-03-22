@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#import "ios/chrome/browser/ui/table_view/cells/table_view_multi_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_multi_detail_text_item.h"
 
 // Item for autofill credit card.
 @interface AutofillCardItem : TableViewMultiDetailTextItem

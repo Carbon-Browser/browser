@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,8 @@ class MediaRouterActionControllerUnitTest : public BrowserWithTestWindowTest {
   MediaRouterActionControllerUnitTest()
       : issue_(media_router::IssueInfo(
             "title notification",
-            media_router::IssueInfo::Action::DISMISS,
-            media_router::IssueInfo::Severity::NOTIFICATION)) {}
+            media_router::IssueInfo::Severity::NOTIFICATION,
+            "sinkId1")) {}
 
   MediaRouterActionControllerUnitTest(
       const MediaRouterActionControllerUnitTest&) = delete;

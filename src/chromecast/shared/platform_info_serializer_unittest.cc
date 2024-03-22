@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace chromecast {
 PlatformInfoSerializer ConvertAndValidate(
     const PlatformInfoSerializer& parser) {
   std::string base64 = parser.Serialize();
-  absl::optional<PlatformInfoSerializer> deserialized_parser =
+  std::optional<PlatformInfoSerializer> deserialized_parser =
       PlatformInfoSerializer::Deserialize(base64);
   EXPECT_TRUE(deserialized_parser);
   EXPECT_EQ(parser.Serialize(), deserialized_parser->Serialize());

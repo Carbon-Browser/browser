@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/extensions/extension_function_test_utils.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
@@ -146,16 +145,16 @@ class AdvancedTestBackgroundModeManager : public TestBackgroundModeManager {
 
   // TestBackgroundModeManager:
   bool HasPersistentBackgroundClient() const override {
-    return std::find_if(profile_app_counts_.begin(), profile_app_counts_.end(),
-                        [](const auto& profile_count_pair) {
-                          return profile_count_pair.second.persistent > 0;
-                        }) != profile_app_counts_.end();
+    return base::ranges::any_of(
+        profile_app_counts_, [](const auto& profile_count_pair) {
+          return profile_count_pair.second.persistent > 0;
+        });
   }
   bool HasAnyBackgroundClient() const override {
-    return std::find_if(profile_app_counts_.begin(), profile_app_counts_.end(),
-                        [](const auto& profile_count_pair) {
-                          return profile_count_pair.second.any > 0;
-                        }) != profile_app_counts_.end();
+    return base::ranges::any_of(profile_app_counts_,
+                                [](const auto& profile_count_pair) {
+                                  return profile_count_pair.second.any > 0;
+                                });
   }
   bool HasPersistentBackgroundClientForProfile(
       const Profile* profile) const override {
@@ -293,7 +292,7 @@ class BackgroundModeManagerWithExtensionsTest : public testing::Test {
 
   std::unique_ptr<TestingProfileManager> profile_manager_;
   // Test profile used by all tests - this is owned by profile_manager_.
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
 
  private:
   // Required for extension service.

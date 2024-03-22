@@ -1,14 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.js';
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import './strings.m.js';
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './privacy_sandbox_dialog_app.html.js';
@@ -69,15 +69,13 @@ export class PrivacySandboxDialogAppElement extends PolymerElement {
       // to fit the content into dialog bounds.
       this.fitIntoDialogClass_ = 'fit-into-size';
 
-      // After the layout is adjusted to fit into the dialog...
-      afterNextRender(this, () => {
-        // ...save if the dialog is scrollable and add a divider if needed.
-        this.didStartWithScrollbar_ =
-            this.$.contentArea.offsetHeight < this.$.contentArea.scrollHeight;
-        this.canScrollClass_ = this.didStartWithScrollbar_ ? 'can-scroll' : '';
+      // After the layout is adjusted to fit into the dialog, save if the
+      // dialog is scrollable and add a divider if needed.
+      this.didStartWithScrollbar_ =
+          this.$.contentArea.offsetHeight < this.$.contentArea.scrollHeight;
+      this.canScrollClass_ = this.didStartWithScrollbar_ ? 'can-scroll' : '';
 
-        proxy.showDialog();
-      });
+      proxy.showDialog();
     });
 
     window.addEventListener('keydown', event => {

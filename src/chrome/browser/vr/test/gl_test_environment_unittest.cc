@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,18 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/size.h"
 
-#if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-#endif
-
 namespace vr {
 
-TEST(GlTestEnvironmentTest, InitializeAndCleanup) {
-#if BUILDFLAG(IS_WIN)
-  // VR is not supported on Windows 7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return;
+// TODO(crbug.com/1394319): Re-enable this test on MSAN if not removed.
+// TODO(crbug.com/1231934): Re-enable this test on Linux in general, or fully
+// remove if DrawVrBrowsingMode is removed (see
+// https://chromium-review.googlesource.com/c/chromium/src/+/4102520/comments/b1cb2e21_5078eef7).
+#if BUILDFLAG(IS_LINUX)
+#define MAYBE_InitializeAndCleanup DISABLED_InitializeAndCleanup
+#else
+#define MAYBE_InitializeAndCleanup InitializeAndCleanup
 #endif
+TEST(GlTestEnvironmentTest, MAYBE_InitializeAndCleanup) {
   GlTestEnvironment gl_test_environment(gfx::Size(100, 100));
   EXPECT_NE(gl_test_environment.GetFrameBufferForTesting(), 0u);
   EXPECT_EQ(glGetError(), (GLenum)GL_NO_ERROR);

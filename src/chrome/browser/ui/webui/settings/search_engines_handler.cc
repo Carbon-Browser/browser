@@ -1,14 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/settings/search_engines_handler.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/check_deref.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/string_number_conversions.h"
@@ -19,10 +19,14 @@
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/search_engines/ui_thread_search_terms_data.h"
 #include "chrome/browser/ui/search_engines/template_url_table_model.h"
+#include "chrome/browser/ui/webui/search_engine_choice/icon_utils.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
+#include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_service.h"
+#include "components/search_engines/search_engine_choice_utils.h"
+#include "components/search_engines/search_engines_pref_names.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
 #include "content/public/browser/web_ui.h"
@@ -30,6 +34,10 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/management_policy.h"
 #include "extensions/common/extension.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/public/cpp/new_window_delegate.h"
+#endif
 
 namespace {
 // The following strings need to match with the IDs of the text input elements
@@ -92,6 +100,13 @@ void SearchEnginesHandler::RegisterMessages() {
       base::BindRepeating(
           &SearchEnginesHandler::HandleSearchEngineEditCompleted,
           base::Unretained(this)));
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  web_ui()->RegisterMessageCallback(
+      "openBrowserSearchSettings",
+      base::BindRepeating(
+          &SearchEnginesHandler::HandleOpenBrowserSearchSettings,
+          base::Unretained(this)));
+#endif
 }
 
 void SearchEnginesHandler::OnJavascriptAllowed() {
@@ -120,8 +135,7 @@ base::Value::Dict SearchEnginesHandler::GetSearchEnginesList() {
     defaults.Append(CreateDictionaryForEngine(i, i == default_index));
   }
 
-  // Build the second list (active search engines). This will not have any
-  // entries if the new Search Engines page is not enabled.
+  // Build the second list (active search engines).
   base::Value::List actives;
   size_t last_active_engine_index =
       list_controller_.table_model()->last_active_engine_index();
@@ -133,7 +147,7 @@ base::Value::Dict SearchEnginesHandler::GetSearchEnginesList() {
     actives.Append(CreateDictionaryForEngine(i, i == default_index));
   }
 
-  // Build the second list (other search engines).
+  // Build the third list (other search engines).
   base::Value::List others;
   size_t last_other_engine_index =
       list_controller_.table_model()->last_other_engine_index();
@@ -166,8 +180,7 @@ base::Value::Dict SearchEnginesHandler::GetSearchEnginesList() {
 
 void SearchEnginesHandler::OnModelChanged() {
   AllowJavascript();
-  FireWebUIListener("search-engines-changed",
-                    base::Value(GetSearchEnginesList()));
+  FireWebUIListener("search-engines-changed", GetSearchEnginesList());
 }
 
 void SearchEnginesHandler::OnItemsChanged(size_t start, size_t length) {
@@ -207,10 +220,28 @@ base::Value::Dict SearchEnginesHandler::CreateDictionaryForEngine(
   Profile* profile = Profile::FromWebUI(web_ui());
   dict.Set("url",
            template_url->url_ref().DisplayURL(UIThreadSearchTermsData()));
-  dict.Set("urlLocked", template_url->prepopulate_id() > 0);
+  dict.Set("urlLocked", ((template_url->prepopulate_id() > 0) ||
+                         (template_url->starter_pack_id() > 0)));
   GURL icon_url = template_url->favicon_url();
   if (icon_url.is_valid())
     dict.Set("iconURL", icon_url.spec());
+
+  const bool is_search_engine_choice_settings_ui =
+      search_engines::IsChoiceScreenFlagEnabled(
+          search_engines::ChoicePromo::kAny);
+
+  // The icons that are used for search engines in the EEA region are bundled
+  // with Chrome. We use the favicon service for countries outside the EEA
+  // region to guarantee having icons for all search engines.
+  const bool is_eea_region = search_engines::IsEeaChoiceCountry(
+      search_engines::GetSearchEngineChoiceCountryId(profile_->GetPrefs()));
+  if (is_search_engine_choice_settings_ui && is_eea_region &&
+      template_url->prepopulate_id() != 0) {
+    const std::u16string icon_path = GetGeneratedIconPath(
+        template_url->keyword(), /*parent_directory_path=*/u"images/");
+    dict.Set("iconPath", icon_path);
+  }
+
   dict.Set("modelIndex", base::checked_cast<int>(index));
 
   dict.Set("canBeRemoved", list_controller_.CanRemove(template_url));
@@ -230,14 +261,13 @@ base::Value::Dict SearchEnginesHandler::CreateDictionaryForEngine(
             template_url->GetExtensionId(),
             extensions::ExtensionRegistry::EVERYTHING);
     if (extension) {
-      std::unique_ptr<base::DictionaryValue> ext_info =
+      base::Value::Dict ext_info =
           extensions::util::GetExtensionInfo(extension);
-      ext_info->SetBoolKey("canBeDisabled",
-                           !extensions::ExtensionSystem::Get(profile)
-                                ->management_policy()
-                                ->MustRemainEnabled(extension, nullptr));
-      dict.Set("extension",
-               base::Value::FromUniquePtrValue(std::move(ext_info)));
+      ext_info.Set("canBeDisabled",
+                   !extensions::ExtensionSystem::Get(profile)
+                        ->management_policy()
+                        ->MustRemainEnabled(extension, nullptr));
+      dict.Set("extension", std::move(ext_info));
     }
   }
   return dict;
@@ -248,12 +278,12 @@ void SearchEnginesHandler::HandleGetSearchEnginesList(
   CHECK_EQ(1U, args.size());
   const base::Value& callback_id = args[0];
   AllowJavascript();
-  ResolveJavascriptCallback(callback_id, base::Value(GetSearchEnginesList()));
+  ResolveJavascriptCallback(callback_id, GetSearchEnginesList());
 }
 
 void SearchEnginesHandler::HandleSetDefaultSearchEngine(
     const base::Value::List& args) {
-  CHECK_EQ(1U, args.size());
+  CHECK_EQ(2U, args.size());
   int index = args[0].GetInt();
   if (index < 0 || static_cast<size_t>(index) >=
                        list_controller_.table_model()->RowCount()) {
@@ -261,6 +291,23 @@ void SearchEnginesHandler::HandleSetDefaultSearchEngine(
   }
 
   list_controller_.MakeDefaultTemplateURL(index);
+
+#if BUILDFLAG(ENABLE_SEARCH_ENGINE_CHOICE)
+  Profile& profile = CHECK_DEREF(Profile::FromWebUI(web_ui()));
+  TemplateURLService* template_url_service =
+      TemplateURLServiceFactory::GetForProfile(&profile);
+  search_engines::ChoiceMadeLocation choice_made_location =
+      static_cast<search_engines::ChoiceMadeLocation>(args[1].GetInt());
+
+  CHECK(choice_made_location ==
+            search_engines::ChoiceMadeLocation::kSearchSettings ||
+        choice_made_location ==
+            search_engines::ChoiceMadeLocation::kSearchEngineSettings);
+  // `RecordChoiceMade` should always be called after setting the default
+  // search engine.
+  search_engines::RecordChoiceMade(profile.GetPrefs(), choice_made_location,
+                                   template_url_service);
+#endif
 
   base::RecordAction(base::UserMetricsAction("Options_SearchEngineSetDefault"));
 }
@@ -380,5 +427,15 @@ void SearchEnginesHandler::HandleSearchEngineEditCompleted(
                                       base::UTF8ToUTF16(keyword), query_url);
   }
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+void SearchEnginesHandler::HandleOpenBrowserSearchSettings(
+    const base::Value::List& args) {
+  ash::NewWindowDelegate::GetPrimary()->OpenUrl(
+      GURL(chrome::kChromeUISettingsURL).Resolve(chrome::kSearchSubPage),
+      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      ash::NewWindowDelegate::Disposition::kSwitchToTab);
+}
+#endif
 
 }  // namespace settings

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,8 @@
 #include "gpu/vulkan/vulkan_device_queue.h"
 #include "gpu/vulkan/vulkan_function_pointers.h"
 #include "gpu/vulkan/vulkan_util.h"
+#include "third_party/skia/include/gpu/vk/GrVkMemoryAllocator.h"
+#include "third_party/skia/include/gpu/vk/GrVkTypes.h"
 
 namespace gpu {
 
@@ -29,30 +31,31 @@ class GrVkMemoryAllocatorImpl : public GrVkMemoryAllocator {
 
  private:
   VkResult allocateImageMemory(VkImage image,
-                               AllocationPropertyFlags flags,
+                               uint32_t flags,
                                GrVkBackendMemory* backend_memory) override {
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("gpu.vulkan.vma"),
                  "GrVkMemoryAllocatorImpl::allocateMemoryForImage");
-    VmaAllocationCreateInfo info;
-    info.flags = 0;
-    info.usage = VMA_MEMORY_USAGE_UNKNOWN;
-    info.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    info.preferredFlags = 0;
-    info.memoryTypeBits = 0;
-    info.pool = VK_NULL_HANDLE;
-    info.pUserData = nullptr;
+    VmaAllocationCreateInfo info = {
+        .flags = 0,
+        .usage = VMA_MEMORY_USAGE_UNKNOWN,
+        .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        .preferredFlags = 0,
+        .memoryTypeBits = 0,
+        .pool = VK_NULL_HANDLE,
+        .pUserData = nullptr,
+    };
 
-    if (AllocationPropertyFlags::kDedicatedAllocation & flags) {
+    if (kDedicatedAllocation_AllocationPropertyFlag & flags) {
       info.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
     }
 
-    if (AllocationPropertyFlags::kLazyAllocation & flags) {
+    if (kLazyAllocation_AllocationPropertyFlag & flags) {
       // If the caller asked for lazy allocation then they already set up the
       // VkImage for it so we must require the lazy property.
       info.requiredFlags |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
     }
 
-    if (AllocationPropertyFlags::kProtected & flags) {
+    if (kProtected_AllocationPropertyFlag & flags) {
       info.requiredFlags |= VK_MEMORY_PROPERTY_PROTECTED_BIT;
     }
 
@@ -66,7 +69,7 @@ class GrVkMemoryAllocatorImpl : public GrVkMemoryAllocator {
 
   VkResult allocateBufferMemory(VkBuffer buffer,
                                 BufferUsage usage,
-                                AllocationPropertyFlags flags,
+                                uint32_t flags,
                                 GrVkBackendMemory* backend_memory) override {
     TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("gpu.vulkan.vma"),
                  "GrVkMemoryAllocatorImpl::allocateMemoryForBuffer");
@@ -98,16 +101,16 @@ class GrVkMemoryAllocatorImpl : public GrVkMemoryAllocator {
         break;
     }
 
-    if (AllocationPropertyFlags::kDedicatedAllocation & flags) {
+    if (kDedicatedAllocation_AllocationPropertyFlag & flags) {
       info.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
     }
 
-    if ((AllocationPropertyFlags::kLazyAllocation & flags) &&
+    if ((kLazyAllocation_AllocationPropertyFlag & flags) &&
         BufferUsage::kGpuOnly == usage) {
       info.preferredFlags |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
     }
 
-    if (AllocationPropertyFlags::kPersistentlyMapped & flags) {
+    if (kPersistentlyMapped_AllocationPropertyFlag & flags) {
       SkASSERT(BufferUsage::kGpuOnly != usage);
       info.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
     }
@@ -143,7 +146,7 @@ class GrVkMemoryAllocatorImpl : public GrVkMemoryAllocator {
     if (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & mem_flags) {
       flags |= GrVkAlloc::kMappable_Flag;
     }
-    if (!SkToBool(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT & mem_flags)) {
+    if (!(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT & mem_flags)) {
       flags |= GrVkAlloc::kNoncoherent_Flag;
     }
     if (VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT & mem_flags) {
@@ -193,16 +196,19 @@ class GrVkMemoryAllocatorImpl : public GrVkMemoryAllocator {
     return vma::InvalidateAllocation(allocator_, allocation, offset, size);
   }
 
-  uint64_t totalUsedMemory() const override {
-    VmaStats stats;
-    vma::CalculateStats(allocator_, &stats);
-    return stats.total.usedBytes;
-  }
-
-  uint64_t totalAllocatedMemory() const override {
-    VmaStats stats;
-    vma::CalculateStats(allocator_, &stats);
-    return stats.total.usedBytes + stats.total.unusedBytes;
+  std::pair<uint64_t, uint64_t> totalAllocatedAndUsedMemory() const override {
+    uint64_t total_allocated_memory = 0, total_used_memory = 0;
+    VmaBudget budget[VK_MAX_MEMORY_HEAPS];
+    vma::GetBudget(allocator_, budget);
+    const VkPhysicalDeviceMemoryProperties* physical_device_memory_properties;
+    vmaGetMemoryProperties(allocator_, &physical_device_memory_properties);
+    for (uint32_t i = 0; i < physical_device_memory_properties->memoryHeapCount;
+         ++i) {
+      total_allocated_memory += budget[i].statistics.blockBytes;
+      total_used_memory += budget[i].statistics.allocationBytes;
+    }
+    DCHECK_LE(total_used_memory, total_allocated_memory);
+    return {total_allocated_memory, total_used_memory};
   }
 
   const VmaAllocator allocator_;

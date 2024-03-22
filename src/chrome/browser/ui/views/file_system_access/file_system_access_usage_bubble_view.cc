@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -257,9 +257,13 @@ size_t FileSystemAccessUsageBubbleView::FilePathListModel::RowCount() {
 std::u16string FileSystemAccessUsageBubbleView::FilePathListModel::GetText(
     size_t row,
     int column_id) {
-  if (row < files_.size())
-    return file_system_access_ui_helper::GetPathForDisplay(files_[row]);
-  return file_system_access_ui_helper::GetPathForDisplay(
+  // Use the non-eliding version of GetPathForDisplay since these are files the
+  // user has already granted the site access to.
+  if (row < files_.size()) {
+    return file_system_access_ui_helper::GetPathForDisplayAsParagraph(
+        files_[row]);
+  }
+  return file_system_access_ui_helper::GetPathForDisplayAsParagraph(
       directories_[row - files_.size()]);
 }
 
@@ -293,7 +297,7 @@ void FileSystemAccessUsageBubbleView::ShowBubble(
   base::RecordAction(
       base::UserMetricsAction("NativeFileSystemAPI.OpenedBubble"));
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser)
     return;
 
@@ -364,7 +368,7 @@ FileSystemAccessUsageBubbleView::~FileSystemAccessUsageBubbleView() = default;
 
 std::u16string FileSystemAccessUsageBubbleView::GetAccessibleWindowTitle()
     const {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents());
+  Browser* browser = chrome::FindBrowserWithTab(web_contents());
   // Don't crash if the web_contents is destroyed/unloaded.
   if (!browser)
     return {};
@@ -402,12 +406,13 @@ void FileSystemAccessUsageBubbleView::Init() {
 
   if (!embedded_path.empty()) {
     AddChildView(file_system_access_ui_helper::CreateOriginPathLabel(
-        heading_message_id, origin_, embedded_path,
+        web_contents(), heading_message_id, origin_, embedded_path,
         views::style::CONTEXT_DIALOG_BODY_TEXT,
         /*show_emphasis=*/false));
   } else {
     AddChildView(file_system_access_ui_helper::CreateOriginLabel(
-        heading_message_id, origin_, views::style::CONTEXT_DIALOG_BODY_TEXT,
+        web_contents(), heading_message_id, origin_,
+        views::style::CONTEXT_DIALOG_BODY_TEXT,
         /*show_emphasis=*/false));
 
     if (writable_paths_model_.RowCount() > 0) {
@@ -453,9 +458,7 @@ void FileSystemAccessUsageBubbleView::OnDialogCancelled() {
   if (!context)
     return;
 
-  context->RevokeGrants(
-      origin_, ChromeFileSystemAccessPermissionContext::
-                   PersistedPermissionOptions::kUpdatePersistedPermission);
+  context->RevokeGrants(origin_);
 }
 
 void FileSystemAccessUsageBubbleView::WindowClosing() {

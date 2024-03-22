@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_parsing/autofill_parsing_utils.h"
 #include "components/autofill/core/browser/form_parsing/field_candidates.h"
@@ -25,6 +26,11 @@ namespace autofill {
 class AutofillField;
 class AutofillScanner;
 class LogManager;
+
+// When kNoLegacyPattern is passed to ParseField/ParseFieldSpecifics as the
+// pattern, the functions always default to the MatchPatternRefs, regardless
+// of the status of features::kAutofillParsingPatternProvider.
+inline constexpr std::u16string_view kNoLegacyPattern = u"no-legacy-pattern";
 
 // This helper struct allows passing information into ParseField() and
 // ParseFieldSpecifics() that can be used to create a log entry in
@@ -46,23 +52,60 @@ class FormField {
   virtual ~FormField() = default;
 
   // Classifies each field in |fields| with its heuristically detected type.
-  // Each field has a derived unique name that is used as the key into the
-  // returned FieldCandidatesMap.
-  static FieldCandidatesMap ParseFormFields(
+  // Each field has a derived unique name that is used as the key into
+  // |field_candidates|.
+  static void ParseFormFields(
       const std::vector<std::unique_ptr<AutofillField>>& fields,
+      const GeoIpCountryCode& client_country,
       const LanguageCode& page_language,
       bool is_form_tag,
       PatternSource pattern_source,
+      FieldCandidatesMap& field_candidates,
       LogManager* log_manager = nullptr);
 
-  // Looks for a promo code field in |fields|. Each field has a derived unique
-  // name that is used as the key into the returned FieldCandidatesMap.
-  static FieldCandidatesMap ParseFormFieldsForPromoCodes(
+  // Looks for types that are allowed to appear in solitary (such as merchant
+  // promo codes) inside |fields|. Each field has a derived unique name that is
+  // used as the key into |field_candidates|.
+  static void ParseSingleFieldForms(
       const std::vector<std::unique_ptr<AutofillField>>& fields,
+      const GeoIpCountryCode& client_country,
       const LanguageCode& page_language,
       bool is_form_tag,
       PatternSource pattern_source,
+      FieldCandidatesMap& field_candidates,
       LogManager* log_manager = nullptr);
+
+  // Search for standalone CVC fields inside `fields`. Standalone CVC fields
+  // are CVC fields that should appear without any credit card field or email
+  // address in the same form. Each field has a derived unique name that is
+  // used as the key into `field_candidates`. Standalone CVC fields have unique
+  // prerequisites in that there shouldn't be other credit card or email fields
+  // in the form, which is why its parsing logic is extracted to its own method.
+  static void ParseStandaloneCVCFields(
+      const std::vector<std::unique_ptr<AutofillField>>& fields,
+      const GeoIpCountryCode& client_country,
+      const LanguageCode& page_language,
+      PatternSource pattern_source,
+      FieldCandidatesMap& field_candidates,
+      LogManager* log_manager = nullptr);
+
+  // Search for standalone email fields inside `fields`. Used because email
+  // fields are commonly the only recognized field on account registration
+  // sites. Currently called only when `kAutofillEnableEmailOnlyAddressForms` is
+  // enabled.
+  static void ParseStandaloneEmailFields(
+      const std::vector<std::unique_ptr<AutofillField>>& fields,
+      const GeoIpCountryCode& client_country,
+      const LanguageCode& page_language,
+      PatternSource pattern_source,
+      FieldCandidatesMap& field_candidates,
+      LogManager* log_manager = nullptr);
+
+  // Returns true if `field` matches one of the the passed `patterns`.
+  static bool FieldMatchesMatchPatternRef(
+      base::span<const MatchPatternRef> patterns,
+      const AutofillField& field,
+      const RegExLogging& logging = {});
 
 #if defined(UNIT_TEST)
   static bool MatchForTesting(const AutofillField* field,
@@ -74,14 +117,15 @@ class FormField {
 
   static bool ParseInAnyOrderForTesting(
       AutofillScanner* scanner,
-      std::vector<std::pair<AutofillField**, base::RepeatingCallback<bool()>>>
+      std::vector<
+          std::pair<raw_ptr<AutofillField>*, base::RepeatingCallback<bool()>>>
           fields_and_parsers) {
     return FormField::ParseInAnyOrder(scanner, fields_and_parsers);
   }
 
   // Assign types to the fields for the testing purposes.
   void AddClassificationsForTesting(
-      FieldCandidatesMap* field_candidates_for_testing) const {
+      FieldCandidatesMap& field_candidates_for_testing) const {
     AddClassifications(field_candidates_for_testing);
   }
 #endif
@@ -90,49 +134,60 @@ class FormField {
   // Initial values assigned to FieldCandidates by their corresponding parsers.
   // There's an implicit precedence determined by the values assigned here.
   // Email is currently the most important followed by Phone, Travel, Address,
-  // Birthdate, Credit Card, Price, Name, Merchant promo code, and Search.
+  // Birthdate, Credit Card, IBAN, Price, Name, Merchant promo code, and Search.
   static constexpr float kBaseEmailParserScore = 1.4f;
   static constexpr float kBasePhoneParserScore = 1.3f;
   static constexpr float kBaseTravelParserScore = 1.2f;
   static constexpr float kBaseAddressParserScore = 1.1f;
   static constexpr float kBaseBirthdateParserScore = 1.05f;
   static constexpr float kBaseCreditCardParserScore = 1.0f;
+  static constexpr float kBaseIbanParserScore = 0.975f;
   static constexpr float kBasePriceParserScore = 0.95f;
   static constexpr float kBaseNameParserScore = 0.9f;
   static constexpr float kBaseMerchantPromoCodeParserScore = 0.85f;
   static constexpr float kBaseSearchParserScore = 0.8f;
+  static constexpr float kBaseNumericQuantityParserScore = 0.75f;
+  static constexpr float kBaseAutocompleteParserScore = 0.05f;
 
   // Only derived classes may instantiate.
   FormField() = default;
 
-  // Same as ::autofill::MatchesPattern(), but uses a different lock.
-  // TODO(crbug.com/1309848): If ParseForm() is called from the same thread,
-  // use a thread-unsafe parser.
-  static bool MatchesPattern(const base::StringPiece16& input,
-                             const base::StringPiece16& pattern,
-                             std::vector<std::u16string>* groups = nullptr);
+  // Calls MatchesRegex() with a thread-safe cache.
+  // Should not be called from the UI thread as it may be blocked on a worker
+  // thread.
+  static bool MatchesRegexWithCache(
+      base::StringPiece16 input,
+      base::StringPiece16 pattern,
+      std::vector<std::u16string>* groups = nullptr);
 
   // Attempts to parse a form field with the given pattern.  Returns true on
-  // success and fills |match| with a pointer to the field.
+  // success and fills `match` with a pointer to the field.
+  // When `kNoLegacyPattern` is passed as the `pattern`, the functions always
+  // default to `patterns`, regardless of the status of
+  // `features::kAutofillParsingPatternProvider`.
   static bool ParseField(AutofillScanner* scanner,
                          base::StringPiece16 pattern,
                          base::span<const MatchPatternRef> patterns,
-                         AutofillField** match,
+                         raw_ptr<AutofillField>* match,
                          const RegExLogging& logging = {});
 
   // TODO(crbug/1142936): Remove `projection` if it's not needed anymore.
+  // When `kNoLegacyPattern` is passed as the `pattern`, the functions always
+  // default to `patterns`, regardless of the status of
+  // `features::kAutofillParsingPatternProvider`.
   static bool ParseFieldSpecifics(
       AutofillScanner* scanner,
       base::StringPiece16 pattern,
       const MatchParams& match_type,
       base::span<const MatchPatternRef> patterns,
-      AutofillField** match,
+      raw_ptr<AutofillField>* match,
       const RegExLogging& logging,
       MatchingPattern (*projection)(const MatchingPattern&) = nullptr);
 
-  // Attempts to parse a field with an empty label.  Returns true
+  // Attempts to parse a field with an empty label. Returns true
   // on success and fills |match| with a pointer to the field.
-  static bool ParseEmptyLabel(AutofillScanner* scanner, AutofillField** match);
+  static bool ParseEmptyLabel(AutofillScanner* scanner,
+                              raw_ptr<AutofillField>* match);
 
   // Attempts to parse several fields using the specified parsing functions in
   // arbitrary order. This is useful e.g. when parsing dates, where both dd/mm
@@ -143,7 +198,8 @@ class FormField {
   // reset to nullptr and the scanner is rewound to it's original position.
   static bool ParseInAnyOrder(
       AutofillScanner* scanner,
-      std::vector<std::pair<AutofillField**, base::RepeatingCallback<bool()>>>
+      std::vector<
+          std::pair<raw_ptr<AutofillField>*, base::RepeatingCallback<bool()>>>
           fields_and_parsers);
 
   // Adds an association between a |field| and a |type| into |field_candidates|.
@@ -152,32 +208,49 @@ class FormField {
   static void AddClassification(const AutofillField* field,
                                 ServerFieldType type,
                                 float score,
-                                FieldCandidatesMap* field_candidates);
+                                FieldCandidatesMap& field_candidates);
 
   // Returns true iff |type| matches |match_type|.
   static bool MatchesFormControlType(base::StringPiece type,
                                      DenseSet<MatchFieldType> match_type);
+
+ protected:
+  // Returns true if |field_type| is a single field parseable type.
+  static bool IsSingleFieldParseableType(ServerFieldType field_type);
 
   // Derived classes must implement this interface to supply field type
   // information.  |ParseFormFields| coordinates the parsing and extraction
   // of types from an input vector of |AutofillField| objects and delegates
   // the type extraction via this method.
   virtual void AddClassifications(
-      FieldCandidatesMap* field_candidates) const = 0;
+      FieldCandidatesMap& field_candidates) const = 0;
 
  private:
   // Function pointer type for the parsing function that should be passed to the
   // ParseFormFieldsPass() helper function.
   typedef std::unique_ptr<FormField> ParseFunction(
       AutofillScanner* scanner,
+      const GeoIpCountryCode& client_country,
       const LanguageCode& page_language,
       PatternSource pattern_source,
+      LogManager* log_manager);
+
+  // Removes entries from `field_candidates` in case
+  // - not enough fields were classified by local heuristics.
+  // - fields were not explicitly allow-listed because they appear in
+  //   contexts that don't contain enough fields (e.g. forms with only an
+  //   email address).
+  static void ClearCandidatesIfHeuristicsDidNotFindEnoughFields(
+      const std::vector<std::unique_ptr<AutofillField>>& fields,
+      FieldCandidatesMap& field_candidates,
+      bool is_form_tag,
+      const GeoIpCountryCode& client_country,
       LogManager* log_manager);
 
   static bool ParseFieldSpecificsWithNewPatterns(
       AutofillScanner* scanner,
       base::span<const MatchPatternRef> patterns,
-      AutofillField** match,
+      raw_ptr<AutofillField>* match,
       const RegExLogging& logging,
       MatchingPattern (*projection)(const MatchingPattern&));
 
@@ -186,11 +259,12 @@ class FormField {
   // matches, |match| will be set to the matched field, and the scanner would
   // advance by one step. A |true| result is returned in the case of a
   // successful match, false otherwise.
-  static bool ParseFieldSpecificsWithLegacyPattern(AutofillScanner* scanner,
-                                                   base::StringPiece16 pattern,
-                                                   MatchParams match_type,
-                                                   AutofillField** match,
-                                                   const RegExLogging& logging);
+  static bool ParseFieldSpecificsWithLegacyPattern(
+      AutofillScanner* scanner,
+      base::StringPiece16 pattern,
+      MatchParams match_type,
+      raw_ptr<AutofillField>* match,
+      const RegExLogging& logging);
 
   // Removes checkable fields and returns fields to be processed for field
   // detection.
@@ -204,7 +278,7 @@ class FormField {
   static bool MatchAndAdvance(AutofillScanner* scanner,
                               base::StringPiece16 pattern,
                               MatchParams match_type,
-                              AutofillField** match,
+                              raw_ptr<AutofillField>* match,
                               const RegExLogging& logging = {});
 
   // Matches the regular expression |pattern| against the components of
@@ -222,10 +296,17 @@ class FormField {
   // |field_candidates|.
   static void ParseFormFieldsPass(ParseFunction parse,
                                   const std::vector<AutofillField*>& fields,
-                                  FieldCandidatesMap* field_candidates,
+                                  FieldCandidatesMap& field_candidates,
+                                  const GeoIpCountryCode& client_country,
                                   const LanguageCode& page_language,
                                   PatternSource pattern_source,
                                   LogManager* log_manager);
+
+  // Interpret the fields' `parsable_name()` (id or name attribute) as an
+  // autocomplete type and classify them by it. E.g. <input id=given-name>.
+  static void ParseUsingAutocompleteAttributes(
+      const std::vector<AutofillField*>& fields,
+      FieldCandidatesMap& field_candidates);
 };
 
 }  // namespace autofill

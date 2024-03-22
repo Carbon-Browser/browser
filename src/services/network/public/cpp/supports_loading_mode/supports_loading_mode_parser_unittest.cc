@@ -1,10 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/public/cpp/supports_loading_mode/supports_loading_mode_parser.h"
 
-#include "base/strings/string_piece.h"
 #include "net/http/http_response_headers.h"
 #include "services/network/public/mojom/supports_loading_mode.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -37,9 +36,11 @@ TEST(SupportsLoadingModeParserTest, Valid) {
               SupportedModesAre(mojom::LoadingMode::kDefault,
                                 mojom::LoadingMode::kUncredentialedPrefetch));
   EXPECT_THAT(ParseSupportsLoadingMode(
-                  "uncredentialed-prerender, uncredentialed-prefetch"),
+                  "uncredentialed-prerender, credentialed-prerender, "
+                  "uncredentialed-prefetch"),
               SupportedModesAre(mojom::LoadingMode::kDefault,
                                 mojom::LoadingMode::kUncredentialedPrerender,
+                                mojom::LoadingMode::kCredentialedPrerender,
                                 mojom::LoadingMode::kUncredentialedPrefetch));
 }
 

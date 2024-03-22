@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,36 +7,19 @@
 //    ../../third_party/xcbproto/src \
 //    gen/ui/gfx/x \
 //    bigreq \
-//    composite \
-//    damage \
-//    dpms \
-//    dri2 \
 //    dri3 \
-//    ge \
 //    glx \
-//    present \
 //    randr \
-//    record \
 //    render \
-//    res \
 //    screensaver \
 //    shape \
 //    shm \
 //    sync \
-//    xc_misc \
-//    xevie \
-//    xf86dri \
-//    xf86vidmode \
 //    xfixes \
-//    xinerama \
 //    xinput \
 //    xkb \
-//    xprint \
 //    xproto \
-//    xselinux \
-//    xtest \
-//    xv \
-//    xvmc
+//    xtest
 
 #ifndef UI_GFX_X_GENERATED_PROTOS_SHM_H_
 #define UI_GFX_X_GENERATED_PROTOS_SHM_H_
@@ -83,7 +66,7 @@ class COMPONENT_EXPORT(X11) Shm {
   enum class Seg : uint32_t {};
 
   struct CompletionEvent {
-    static constexpr int type_id = 15;
+    static constexpr uint8_t type_id = 7;
     static constexpr uint8_t opcode = 0;
     uint16_t sequence{};
     Drawable drawable{};
@@ -91,10 +74,6 @@ class COMPONENT_EXPORT(X11) Shm {
     uint8_t major_event{};
     Seg shmseg{};
     uint32_t offset{};
-
-    x11::Window* GetWindow() {
-      return reinterpret_cast<x11::Window*>(&drawable);
-    }
   };
 
   struct BadSegError : public x11::Error {

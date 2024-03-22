@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,16 +13,19 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/profiles/profile_metrics.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/views/close_bubble_on_tab_activation_helper.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/flex_layout_view.h"
 #include "ui/views/style/typography.h"
 
 class Browser;
@@ -41,6 +44,8 @@ class ImageModel;
 class ProfileMenuViewBase : public content::WebContentsDelegate,
                             public views::BubbleDialogDelegateView {
  public:
+  METADATA_HEADER(ProfileMenuViewBase);
+
   // Enumeration of all actionable items in the profile menu.
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused.
@@ -66,7 +71,8 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
     kSyncSettingsButton = 16,
     kEditProfileButton = 17,
     // DEPRECATED: kCreateIncognitoShortcutButton = 18,
-    kMaxValue = kEditProfileButton,
+    kEnableSyncForWebOnlyAccountButton = 19,
+    kMaxValue = kEnableSyncForWebOnlyAccountButton,
   };
 
   struct EditButtonParams {
@@ -76,27 +82,15 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
     EditButtonParams(const EditButtonParams&);
     ~EditButtonParams();
 
-    const gfx::VectorIcon* edit_icon;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION const gfx::VectorIcon* edit_icon;
     std::u16string edit_tooltip_text;
     base::RepeatingClosure edit_action;
   };
 
   // Size of the large identity image in the menu.
   static constexpr int kIdentityImageSize = 64;
-
-  // Shows the bubble if one is not already showing.  This allows us to easily
-  // make a button toggle the bubble on and off when clicked: we unconditionally
-  // call this function when the button is clicked and if the bubble isn't
-  // showing it will appear while if it is showing, nothing will happen here and
-  // the existing bubble will auto-close due to focus loss.
-  static void ShowBubble(views::Button* anchor_button,
-                         Browser* browser,
-                         bool is_source_accelerator);
-
-  static bool IsShowing();
-  static void Hide();
-
-  static ProfileMenuViewBase* GetBubbleForTesting();
 
   ProfileMenuViewBase(views::Button* anchor_button,
                       Browser* browser);
@@ -139,13 +133,16 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
                         const gfx::VectorIcon& icon = gfx::kNoneIcon,
                         float icon_to_image_ratio = 1.0f);
   void SetProfileManagementHeading(const std::u16string& heading);
-  void AddSelectableProfile(const ui::ImageModel& image_model,
-                            const std::u16string& name,
-                            bool is_guest,
-                            base::RepeatingClosure action);
+  void AddAvailableProfile(const ui::ImageModel& image_model,
+                           const std::u16string& name,
+                           bool is_guest,
+                           bool is_enabled,
+                           base::RepeatingClosure action);
   void AddProfileManagementShortcutFeatureButton(const gfx::VectorIcon& icon,
                                                  const std::u16string& text,
                                                  base::RepeatingClosure action);
+  void AddProfileManagementManagedHint(const gfx::VectorIcon& icon,
+                                       const std::u16string& text);
   void AddProfileManagementFeatureButton(const gfx::VectorIcon& icon,
                                          const std::u16string& text,
                                          base::RepeatingClosure action);
@@ -171,6 +168,7 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
  private:
   class AXMenuWidgetObserver;
 
+  friend class ProfileMenuCoordinator;
   friend class ProfileMenuViewExtensionsTest;
 
   void Reset();
@@ -179,6 +177,15 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
   // Requests focus for the first profile in the 'Other profiles' section (if it
   // exists).
   void FocusFirstProfileButton();
+
+  void BuildIdentityInfoColorCallback(const ui::ColorProvider* color_provider);
+
+  void BuildProfileBackgroundContainer(
+      std::unique_ptr<views::View> heading_label,
+      SkColor background_color,
+      std::unique_ptr<views::View> avatar_image_view,
+      std::unique_ptr<views::View> edit_button,
+      const ui::ThemedVectorIcon& avatar_header_art);
 
   void BuildSyncInfoCallToActionBackground(
       ui::ColorId background_color_id,
@@ -193,6 +200,8 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
                          const content::ContextMenuParams& params) override;
 
   void ButtonPressed(base::RepeatingClosure action);
+
+  void CreateAXWidgetObserver(views::Widget* widget);
 
   const raw_ptr<Browser> browser_;
 
@@ -209,6 +218,10 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
   raw_ptr<views::View> profile_mgmt_shortcut_features_container_ = nullptr;
   raw_ptr<views::View> profile_mgmt_features_container_ = nullptr;
 
+  // Child components of `identity_info_container_`.
+  raw_ptr<views::FlexLayoutView> profile_background_container_ = nullptr;
+  raw_ptr<views::Label> heading_label_ = nullptr;
+
   // The first profile button that should be focused when the menu is opened
   // using a key accelerator.
   raw_ptr<views::Button> first_profile_button_ = nullptr;
@@ -218,6 +231,13 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
   bool perform_menu_actions_ = true;
 
   CloseBubbleOnTabActivationHelper close_bubble_helper_;
+
+  // Builds the colors for `profile_background_container_` and `heading_label_`
+  // in `identity_info_container_`. This requires ui::ColorProvider, which is
+  // only available once OnThemeChanged() is called, so the class caches this
+  // callback and calls it afterwards.
+  base::RepeatingCallback<void(const ui::ColorProvider*)>
+      identity_info_color_callback_ = base::DoNothing();
 
   // Builds the background for |sync_info_container_|. This requires
   // ui::ColorProvider, which is only available once OnThemeChanged() is called,

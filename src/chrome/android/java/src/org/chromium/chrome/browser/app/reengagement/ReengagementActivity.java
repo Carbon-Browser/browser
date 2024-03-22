@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ public class ReengagementActivity extends Activity {
         String action = getIntent().getAction();
         if (ReengagementNotificationController.LAUNCH_NTP_ACTION.equals(action)) {
             Intent intent =
-                    IntentHandler.createTrustedOpenNewTabIntent(this, /* incognito = */ false);
+                    IntentHandler.createTrustedOpenNewTabIntent(this, /* incognito= */ false);
             try (StrictModeContext ignored = StrictModeContext.allowDiskWrites()) {
                 startActivity(intent);
             }

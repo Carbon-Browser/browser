@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,15 @@
 
 #include "base/memory/ref_counted.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/reload_type.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/site_instance.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/referrer.h"
 #include "ipc/ipc_message.h"
 #include "services/network/public/cpp/resource_request_body.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
@@ -29,10 +30,6 @@
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
-
-namespace network {
-class SharedURLLoaderFactory;
-}
 
 namespace content {
 
@@ -90,6 +87,10 @@ struct CONTENT_EXPORT OpenURLParams {
 
   // The origin of the initiator of the navigation.
   absl::optional<url::Origin> initiator_origin;
+
+  // The base url of the initiator of the navigation. This will be non-null only
+  // if the navigation is about:blank or about:srcdoc.
+  absl::optional<GURL> initiator_base_url;
 
   // SiteInstance of the frame that initiated the navigation or null if we
   // don't know it.

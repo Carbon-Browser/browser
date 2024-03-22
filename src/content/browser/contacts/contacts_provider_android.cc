@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,32 +10,16 @@
 #include <vector>
 
 #include "base/android/jni_string.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "components/url_formatter/elide_url.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/public/android/content_jni_headers/ContactsDialogHost_jni.h"
-#include "content/public/browser/contacts_picker_properties_requested.h"
+#include "content/public/browser/contacts_picker_properties.h"
 #include "content/public/browser/web_contents.h"
 #include "url/origin.h"
 
 namespace content {
-
-namespace {
-
-void RecordAddressContainsDerivedField(
-    const payments::mojom::PaymentAddress& address) {
-  if (address.address_line.empty() || address.address_line.front().empty())
-    return;
-
-  bool has_derived_field = !address.city.empty() || !address.country.empty() ||
-                           !address.postal_code.empty() ||
-                           !address.region.empty();
-  base::UmaHistogramBoolean("Android.ContactsPicker.AddressHasDerivedField",
-                            has_derived_field);
-}
-
-}  // namespace
 
 ContactsProviderAndroid::ContactsProviderAndroid(
     RenderFrameHostImpl* render_frame_host) {
@@ -95,21 +79,24 @@ void ContactsProviderAndroid::AddContact(
   absl::optional<std::vector<std::string>> names;
   if (names_java) {
     std::vector<std::string> names_vector;
-    AppendJavaStringArrayToStringVector(env, names_java, &names_vector);
+    base::android::AppendJavaStringArrayToStringVector(env, names_java,
+                                                       &names_vector);
     names = std::move(names_vector);
   }
 
   absl::optional<std::vector<std::string>> emails;
   if (emails_java) {
     std::vector<std::string> emails_vector;
-    AppendJavaStringArrayToStringVector(env, emails_java, &emails_vector);
+    base::android::AppendJavaStringArrayToStringVector(env, emails_java,
+                                                       &emails_vector);
     emails = std::move(emails_vector);
   }
 
   absl::optional<std::vector<std::string>> tel;
   if (tel_java) {
     std::vector<std::string> tel_vector;
-    AppendJavaStringArrayToStringVector(env, tel_java, &tel_vector);
+    base::android::AppendJavaStringArrayToStringVector(env, tel_java,
+                                                       &tel_vector);
     tel = std::move(tel_vector);
   }
 
@@ -125,7 +112,6 @@ void ContactsProviderAndroid::AddContact(
               env->GetDirectBufferCapacity(j_address.obj()), &address)) {
         continue;
       }
-      RecordAddressContainsDerivedField(*address);
       addresses_vector.push_back(std::move(address));
     }
 
@@ -161,8 +147,8 @@ void ContactsProviderAndroid::EndContactsList(JNIEnv* env,
                                               jint percentage_shared,
                                               jint properties_requested) {
   DCHECK(callback_);
-  ContactsPickerPropertiesRequested properties =
-      static_cast<ContactsPickerPropertiesRequested>(properties_requested);
+  ContactsPickerProperties properties =
+      static_cast<ContactsPickerProperties>(properties_requested);
   std::move(callback_).Run(std::move(contacts_), percentage_shared, properties);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,8 +44,10 @@ enum class DownloadClient {
 
   OPTIMIZATION_GUIDE_PREDICTION_MODELS = 6,
 
+  BRUSCHETTA = 7,
+
   // New clients should be added above here.
-  BOUNDARY = 7,
+  BOUNDARY = 8,
 };
 
 // Get a string that represents a particular client. Used in histograms and

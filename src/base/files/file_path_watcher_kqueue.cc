@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,17 @@
 #include <stddef.h>
 #include <sys/param.h>
 
-#include <algorithm>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/file_descriptor_posix.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 // On some platforms these are not defined.
 #if !defined(EV_RECEIPT)
@@ -269,7 +269,7 @@ bool FilePathWatcherKQueue::Watch(const FilePath& path,
   callback_ = callback;
   target_ = path;
 
-  set_task_runner(SequencedTaskRunnerHandle::Get());
+  set_task_runner(SequencedTaskRunner::GetCurrentDefault());
 
   kqueue_ = kqueue();
   if (kqueue_ == -1) {
@@ -325,7 +325,7 @@ void FilePathWatcherKQueue::Cancel() {
       DPLOG(ERROR) << "close kqueue";
     }
     kqueue_ = -1;
-    std::for_each(events_.begin(), events_.end(), ReleaseEvent);
+    base::ranges::for_each(events_, ReleaseEvent);
     events_.clear();
     callback_.Reset();
   }

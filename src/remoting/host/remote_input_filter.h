@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ namespace remoting {
 // notified of local input recently.
 class RemoteInputFilter : public protocol::InputStub {
  public:
-  // Creates a filter forwarding events to the specified InputEventTracker.
+  // Creates a filter which forwards events to the specified InputEventTracker.
   // The filter needs a tracker to release buttons & keys when blocking input.
   explicit RemoteInputFilter(protocol::InputEventTracker* event_tracker);
 

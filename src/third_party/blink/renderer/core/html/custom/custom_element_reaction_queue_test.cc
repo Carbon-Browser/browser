@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 namespace blink {
 
 TEST(CustomElementReactionQueueTest, invokeReactions_one) {
+  CustomElementTestingScope testing_scope;
   Vector<char> log;
   CustomElementReactionQueue* queue =
       MakeGarbageCollected<CustomElementReactionQueue>();
@@ -28,6 +29,7 @@ TEST(CustomElementReactionQueueTest, invokeReactions_one) {
 }
 
 TEST(CustomElementReactionQueueTest, invokeReactions_many) {
+  CustomElementTestingScope testing_scope;
   Vector<char> log;
   CustomElementReactionQueue* queue =
       MakeGarbageCollected<CustomElementReactionQueue>();
@@ -53,6 +55,7 @@ TEST(CustomElementReactionQueueTest, invokeReactions_many) {
 }
 
 TEST(CustomElementReactionQueueTest, invokeReactions_recursive) {
+  CustomElementTestingScope testing_scope;
   Vector<char> log;
   CustomElementReactionQueue* queue =
       MakeGarbageCollected<CustomElementReactionQueue>();
@@ -84,6 +87,7 @@ TEST(CustomElementReactionQueueTest, invokeReactions_recursive) {
 }
 
 TEST(CustomElementReactionQueueTest, clear_duringInvoke) {
+  CustomElementTestingScope testing_scope;
   Vector<char> log;
   CustomElementReactionQueue* queue =
       MakeGarbageCollected<CustomElementReactionQueue>();
@@ -95,7 +99,7 @@ TEST(CustomElementReactionQueueTest, clear_duringInvoke) {
   }
   {
     HeapVector<Member<Command>> commands;
-    commands.push_back(MakeGarbageCollected<Call>(WTF::Bind(
+    commands.push_back(MakeGarbageCollected<Call>(WTF::BindOnce(
         [](CustomElementReactionQueue* queue, Element&) { queue->Clear(); },
         WrapPersistent(queue))));
     queue->Add(*MakeGarbageCollected<TestReaction>(std::move(commands)));

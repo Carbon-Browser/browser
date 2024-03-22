@@ -1,11 +1,12 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import logging
 import sys
-from .finch_skia_gold_properties import FinchSkiaGoldProperties
-from .finch_skia_gold_session_manager import FinchSkiaGoldSessionManager
+
+from skia_gold_common.skia_gold_properties import SkiaGoldProperties
+from skia_gold_common.skia_gold_session_manager import SkiaGoldSessionManager
 
 # This is the corpus used by skia gold to identify the data set.
 # We are not using the same corpus as the rest of the skia gold chromium tests.
@@ -15,8 +16,8 @@ CORPUS = 'finch-smoke-tests'
 
 class FinchSkiaGoldUtil:
   def __init__(self, temp_dir, args):
-    self._skia_gold_properties = FinchSkiaGoldProperties(args)
-    self._skia_gold_session_manager = FinchSkiaGoldSessionManager(
+    self._skia_gold_properties = SkiaGoldProperties(args)
+    self._skia_gold_session_manager = SkiaGoldSessionManager(
         temp_dir, self._skia_gold_properties)
     self._skia_gold_session = self._GetSkiaGoldSession()
     self._retry_without_patch = False

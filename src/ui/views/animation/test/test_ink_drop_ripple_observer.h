@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ class TestInkDropRippleObserver
   InkDropState target_state_at_last_animation_ended_ = InkDropState::HIDDEN;
 
   // An InkDropRipple to spy info from when notifications are handled.
-  raw_ptr<InkDropRipple> ink_drop_ripple_;
+  raw_ptr<InkDropRipple, DanglingUntriaged> ink_drop_ripple_;
 };
 
 }  // namespace test

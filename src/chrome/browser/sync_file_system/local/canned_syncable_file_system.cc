@@ -1,25 +1,24 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sync_file_system/local/canned_syncable_file_system.h"
 
 #include <stddef.h>
-#include <algorithm>
+
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/uuid.h"
 #include "chrome/browser/sync_file_system/file_change.h"
 #include "chrome/browser/sync_file_system/local/local_file_change_tracker.h"
 #include "chrome/browser/sync_file_system/local/local_file_sync_context.h"
@@ -77,7 +76,8 @@ R RunOnThread(base::SingleThreadTaskRunner* task_runner,
       base::BindOnce(std::move(task),
                      base::BindRepeating(
                          &AssignAndQuit<R>,
-                         base::RetainedRef(base::ThreadTaskRunnerHandle::Get()),
+                         base::RetainedRef(
+                             base::SingleThreadTaskRunner::GetCurrentDefault()),
                          run_loop.QuitClosure(), base::Unretained(&result))));
   run_loop.Run();
   return result;
@@ -91,7 +91,7 @@ void RunOnThread(base::SingleThreadTaskRunner* task_runner,
       location, std::move(task),
       base::BindOnce(
           base::IgnoreResult(&base::SingleThreadTaskRunner::PostTask),
-          base::ThreadTaskRunnerHandle::Get(), FROM_HERE,
+          base::SingleThreadTaskRunner::GetCurrentDefault(), FROM_HERE,
           run_loop.QuitClosure()));
   run_loop.Run();
 }
@@ -155,7 +155,7 @@ class DirectoryHelper {
                        bool has_more) {
     DCHECK(entries_out);
     entries_out->reserve(entries_out->size() + entries.size());
-    std::copy(entries.begin(), entries.end(), std::back_inserter(*entries_out));
+    base::ranges::copy(entries, std::back_inserter(*entries_out));
 
     if (!has_more)
       std::move(callback_).Run(error);
@@ -172,9 +172,10 @@ class WriteHelper {
               const std::string& blob_data)
       : bytes_written_(0),
         blob_storage_context_(std::move(blob_storage_context)),
-        blob_data_(new ScopedTextBlob(blob_storage_context_.get(),
-                                      base::GenerateGUID(),
-                                      blob_data)) {}
+        blob_data_(new ScopedTextBlob(
+            blob_storage_context_.get(),
+            base::Uuid::GenerateRandomV4().AsLowercaseString(),
+            blob_data)) {}
 
   WriteHelper(const WriteHelper&) = delete;
   WriteHelper& operator=(const WriteHelper&) = delete;
@@ -241,20 +242,18 @@ CannedSyncableFileSystem::CannedSyncableFileSystem(
 
 CannedSyncableFileSystem::~CannedSyncableFileSystem() = default;
 
-void CannedSyncableFileSystem::SetUp(QuotaMode quota_mode) {
+void CannedSyncableFileSystem::SetUp() {
   ASSERT_FALSE(is_filesystem_set_up_);
   ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
 
   auto storage_policy =
       base::MakeRefCounted<storage::MockSpecialStoragePolicy>();
 
-  if (quota_mode == QUOTA_ENABLED) {
-    quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
-        /*is_incognito=*/false, data_dir_.GetPath(), io_task_runner_.get(),
-        storage_policy.get());
-    quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), io_task_runner_.get());
-  }
+  quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
+      /*is_incognito=*/false, data_dir_.GetPath(), io_task_runner_.get(),
+      storage_policy.get());
+  quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
+      quota_manager_.get(), io_task_runner_.get());
 
   std::vector<std::string> additional_allowed_schemes;
   additional_allowed_schemes.push_back(origin_.scheme());
@@ -268,8 +267,7 @@ void CannedSyncableFileSystem::SetUp(QuotaMode quota_mode) {
   file_system_context_ = FileSystemContext::Create(
       io_task_runner_, file_task_runner_,
       storage::ExternalMountPoints::CreateRefCounted(),
-      std::move(storage_policy),
-      quota_manager_.get() ? quota_manager_proxy_.get() : nullptr,
+      std::move(storage_policy), quota_manager_proxy_.get(),
       std::move(additional_backends),
       std::vector<storage::URLRequestAutoMountHandler>(), data_dir_.GetPath(),
       options);
@@ -278,13 +276,16 @@ void CannedSyncableFileSystem::SetUp(QuotaMode quota_mode) {
 }
 
 void CannedSyncableFileSystem::TearDown() {
-  quota_manager_ = nullptr;
   file_system_context_ = nullptr;
 
   // Make sure we give some more time to finish tasks on other threads.
   EnsureLastTaskRuns(io_task_runner_.get());
   EnsureLastTaskRuns(file_task_runner_.get());
   base::ThreadPoolInstance::Get()->FlushForTesting();
+
+  // `quota_manager_` might be used by pending tasks, so wait to destroy this
+  // until after we've ensured all tasks have finished.
+  quota_manager_ = nullptr;
 }
 
 FileSystemURL CannedSyncableFileSystem::URL(const std::string& path) const {
@@ -305,7 +306,8 @@ File::Error CannedSyncableFileSystem::OpenFileSystem() {
           &CannedSyncableFileSystem::DoOpenFileSystem, base::Unretained(this),
           base::BindOnce(&CannedSyncableFileSystem::DidOpenFileSystem,
                          base::Unretained(this),
-                         base::RetainedRef(base::ThreadTaskRunnerHandle::Get()),
+                         base::RetainedRef(
+                             base::SingleThreadTaskRunner::GetCurrentDefault()),
                          run_loop.QuitClosure())));
   run_loop.Run();
 
@@ -467,8 +469,10 @@ File::Error CannedSyncableFileSystem::DeleteFileSystem() {
   EXPECT_TRUE(is_filesystem_set_up_);
   return RunOnThread<File::Error>(
       io_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&FileSystemContext::DeleteFileSystem, file_system_context_,
-                     blink::StorageKey(url::Origin::Create(origin_)), type_));
+      base::BindOnce(
+          &FileSystemContext::DeleteFileSystem, file_system_context_,
+          blink::StorageKey::CreateFirstParty(url::Origin::Create(origin_)),
+          type_));
 }
 
 blink::mojom::QuotaStatusCode CannedSyncableFileSystem::GetUsageAndQuota(
@@ -528,9 +532,9 @@ void CannedSyncableFileSystem::DoOpenFileSystem(
   EXPECT_TRUE(io_task_runner_->RunsTasksInCurrentSequence());
   EXPECT_FALSE(is_filesystem_opened_);
   file_system_context_->OpenFileSystem(
-      blink::StorageKey(url::Origin::Create(origin_)), /*bucket=*/absl::nullopt,
-      type_, storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
-      std::move(callback));
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(origin_)),
+      /*bucket=*/absl::nullopt, type_,
+      storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT, std::move(callback));
 }
 
 void CannedSyncableFileSystem::DoCreateDirectory(const FileSystemURL& url,
@@ -681,7 +685,8 @@ void CannedSyncableFileSystem::DoGetUsageAndQuota(
   EXPECT_TRUE(is_filesystem_opened_);
   DCHECK(quota_manager_.get());
   quota_manager_->GetUsageAndQuota(
-      blink::StorageKey(url::Origin::Create(origin_)), storage_type(),
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(origin_)),
+      storage_type(),
       base::BindOnce(&DidGetUsageAndQuota, std::move(callback), usage, quota));
 }
 

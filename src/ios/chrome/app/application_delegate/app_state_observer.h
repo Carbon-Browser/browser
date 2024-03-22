@@ -1,11 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef IOS_CHROME_APP_APPLICATION_DELEGATE_APP_STATE_OBSERVER_H_
 #define IOS_CHROME_APP_APPLICATION_DELEGATE_APP_STATE_OBSERVER_H_
 
 @class AppState;
-@class UIWindow;
 @class SceneState;
 
 // App initialization stages. The app will go sequentially in-order through each
@@ -23,6 +22,11 @@ typedef NS_ENUM(NSUInteger, InitStage) {
   // at the InitStageSafeMode stage if safe mode is needed, or will move to the
   // next stage otherwise.
   InitStageSafeMode,
+  // The app is waiting for the Finch seed to be fetched on first run. The app
+  // will stay at the InitStageVariationsSeed if it is the first launch after
+  // installation, and the seed has not been fetched; it moves to the next stage
+  // otherwise.
+  InitStageVariationsSeed,
   // The app is initializing the browser objects for the background handlers.
   // In particular this creates ChromeMain instances which initialises many
   // low-level objects (such as PostTask, ChromeBrowserStateManager, named
@@ -66,19 +70,21 @@ typedef NS_ENUM(NSUInteger, InitStage) {
 - (void)appState:(AppState*)appState
     firstSceneHasInitializedUI:(SceneState*)sceneState;
 
-// Called when `AppState.lastTappedWindow` changes.
-- (void)appState:(AppState*)appState lastTappedWindowChanged:(UIWindow*)window;
-
 // Called when the app is about to transition to `nextInitStage`. The init stage
 // of the app at that moment is still `nextInitStage` - 1.
 - (void)appState:(AppState*)appState
     willTransitionToInitStage:(InitStage)nextInitStage;
 
 // Called right after the app is transitioned out of to the
-// `previousInitStage`. he init stage of the app at that
+// `previousInitStage`. The init stage of the app at that
 // moment is `previousInitStage` + 1.
 - (void)appState:(AppState*)appState
     didTransitionFromInitStage:(InitStage)previousInitStage;
+
+// Called when Scene with activation level SceneActivationLevelForegroundActive
+// is available.
+- (void)appState:(AppState*)appState
+    sceneDidBecomeActive:(SceneState*)sceneState;
 
 @end
 

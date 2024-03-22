@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,12 @@
 #include <string>
 #include <vector>
 
+#include "components/sync/nigori/nigori_key_bag.h"
+
 namespace sync_pb {
 
 class EncryptedData;
 class NigoriKey;
-
 }  // namespace sync_pb
 
 namespace syncer {
@@ -66,11 +67,21 @@ class KeystoreKeysCryptographer {
       const sync_pb::EncryptedData& keystore_decryptor_token,
       sync_pb::NigoriKey* keystore_decryptor_key) const;
 
+  // Returns NigoriKeyBag that contains keys derived from all keystore keys.
+  const NigoriKeyBag& GetKeystoreKeybag() const;
+
  private:
-  KeystoreKeysCryptographer(std::unique_ptr<CryptographerImpl> cryptographer,
+  KeystoreKeysCryptographer(NigoriKeyBag key_bag,
+                            const std::string& last_keystore_key_name,
                             const std::vector<std::string>& keystore_keys);
 
-  std::unique_ptr<CryptographerImpl> cryptographer_;
+  // Contains all keys derived from |keystore_keys_|.
+  NigoriKeyBag key_bag_;
+
+  // Used to EncryptKeystoreDecryptorToken(). Empty if there is no
+  // |keystore_keys_|.
+  std::string last_keystore_key_name_;
+
   std::vector<std::string> keystore_keys_;
 };
 

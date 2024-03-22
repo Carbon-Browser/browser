@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -156,7 +156,8 @@ void ModuleTreeLinker::AdvanceState(State new_state) {
 void ModuleTreeLinker::FetchRoot(const KURL& original_url,
                                  ModuleType module_type,
                                  const ScriptFetchOptions& options,
-                                 base::PassKey<ModuleTreeLinkerRegistry>) {
+                                 base::PassKey<ModuleTreeLinkerRegistry>,
+                                 String referrer) {
 #if DCHECK_IS_ON()
   original_url_ = original_url;
   module_type_ = module_type;
@@ -190,8 +191,8 @@ void ModuleTreeLinker::FetchRoot(const KURL& original_url,
   if (!url.IsValid()) {
     result_ = nullptr;
     modulator_->TaskRunner()->PostTask(
-        FROM_HERE, WTF::Bind(&ModuleTreeLinker::AdvanceState,
-                             WrapPersistent(this), State::kFinished));
+        FROM_HERE, WTF::BindOnce(&ModuleTreeLinker::AdvanceState,
+                                 WrapPersistent(this), State::kFinished));
     return;
   }
 
@@ -219,9 +220,16 @@ void ModuleTreeLinker::FetchRoot(const KURL& original_url,
   // module script given url, fetch client settings object, destination,
   // options, module map settings object, "client", and with the top-level
   // module fetch flag set. ...</spec>
-  ModuleScriptFetchRequest request(
-      url, module_type, context_type_, destination_, options,
-      Referrer::ClientReferrerString(), TextPosition::MinimumPosition());
+  //
+  // Note that we don't *always* pass in "client" for the referrer string, as
+  // mentioned in the spec prose above. Because our implementation is organized
+  // slightly different from the spec, this path is hit for dynamic imports as
+  // well, so we pass through `referrer` which is usually the client string
+  // (`Referrer::ClientReferrerString()`), but isn't for the dynamic import
+  // case.
+  ModuleScriptFetchRequest request(url, module_type, context_type_,
+                                   destination_, options, referrer,
+                                   TextPosition::MinimumPosition());
   ++num_incomplete_fetches_;
   modulator_->FetchSingle(request, fetch_client_settings_object_fetcher_.Get(),
                           ModuleGraphLevel::kTopLevelModuleFetch,
@@ -263,8 +271,8 @@ void ModuleTreeLinker::FetchRootInline(
   // <spec step="4">Fetch the descendants of and instantiate script, ...</spec>
   modulator_->TaskRunner()->PostTask(
       FROM_HERE,
-      WTF::Bind(&ModuleTreeLinker::FetchDescendants, WrapPersistent(this),
-                WrapPersistent(module_script)));
+      WTF::BindOnce(&ModuleTreeLinker::FetchDescendants, WrapPersistent(this),
+                    WrapPersistent(module_script)));
 }
 
 // Returning from #fetch-a-single-module-script, calling from
@@ -405,7 +413,7 @@ void ModuleTreeLinker::FetchDescendants(const ModuleScript* module_script) {
     }
   }
 
-  if (module_requests.IsEmpty()) {
+  if (module_requests.empty()) {
     // <spec step="3">... if record.[[RequestedModules]] is empty,
     // asynchronously complete this algorithm with module script.</spec>
     //

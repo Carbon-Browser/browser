@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/cert/cert_and_ct_verifier.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "net/cert/ct_verifier.h"
 
 namespace net {
@@ -42,7 +42,7 @@ int CertAndCTVerifier::Verify(const RequestParams& params,
   if (result != ERR_IO_PENDING &&
       (result == OK || IsCertificateError(result))) {
     DCHECK(verify_result->verified_cert);
-    ct_verifier_->Verify(params.hostname(), verify_result->verified_cert.get(),
+    ct_verifier_->Verify(verify_result->verified_cert.get(),
                          params.ocsp_response(), params.sct_list(),
                          &verify_result->scts, net_log);
   }
@@ -54,6 +54,14 @@ void CertAndCTVerifier::SetConfig(const Config& config) {
   cert_verifier_->SetConfig(config);
 }
 
+void CertAndCTVerifier::AddObserver(Observer* observer) {
+  cert_verifier_->AddObserver(observer);
+}
+
+void CertAndCTVerifier::RemoveObserver(Observer* observer) {
+  cert_verifier_->RemoveObserver(observer);
+}
+
 void CertAndCTVerifier::OnCertVerifyComplete(const RequestParams& params,
                                              CompletionOnceCallback callback,
                                              CertVerifyResult* verify_result,
@@ -63,7 +71,7 @@ void CertAndCTVerifier::OnCertVerifyComplete(const RequestParams& params,
   // successfully.
   if (result == OK || IsCertificateError(result)) {
     DCHECK(verify_result->verified_cert);
-    ct_verifier_->Verify(params.hostname(), verify_result->verified_cert.get(),
+    ct_verifier_->Verify(verify_result->verified_cert.get(),
                          params.ocsp_response(), params.sct_list(),
                          &verify_result->scts, net_log);
   }

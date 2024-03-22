@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright (c) 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -238,12 +238,16 @@ class ClankCompiler:
   """Handles compilation of clank."""
 
   def __init__(self, out_dir, step_recorder, arch, use_goma, goma_dir,
-               system_health_profiling, monochrome, public, orderfile_location):
+               use_remoteexec, ninja_command, system_health_profiling,
+               monochrome, public, orderfile_location):
     self._out_dir = out_dir
     self._step_recorder = step_recorder
     self._arch = arch
+    # TODO(b/236070141): remove goma config.
     self._use_goma = use_goma
     self._goma_dir = goma_dir
+    self._use_remoteexec = use_remoteexec
+    self._ninja_command = ninja_command
     self._system_health_profiling = system_health_profiling
     self._public = public
     self._orderfile_location = orderfile_location
@@ -288,6 +292,7 @@ class ClankCompiler:
         'symbol_level=1',  # to fit 30 GiB RAM on the bot when LLD is running
         'target_os="android"',
         'use_goma=' + str(self._use_goma).lower(),
+        'use_remoteexec=' + str(self._use_remoteexec).lower(),
         'use_order_profiling=' + str(instrumented).lower(),
         'use_call_graph=' + str(use_call_graph).lower(),
     ]
@@ -309,8 +314,7 @@ class ClankCompiler:
          '--args=' + ' '.join(args)])
 
     self._step_recorder.RunCommand(
-        ['autoninja', '-C',
-         os.path.join(self._out_dir, 'Release'), target])
+        self._ninja_command + [os.path.join(self._out_dir, 'Release'), target])
 
   def ForceRelink(self):
     """Forces libchrome.so or libmonochrome.so to be re-linked.
@@ -538,6 +542,12 @@ class OrderfileGenerator:
 
   def __init__(self, options, orderfile_updater_class):
     self._options = options
+    self._ninja_command = ['autoninja']
+    if self._options.ninja_path:
+      self._ninja_command = [self._options.ninja_path]
+    if self._options.ninja_j:
+      self._ninja_command += ['-j', self._options.ninja_j]
+    self._ninja_command += ['-C']
     self._instrumented_out_dir = os.path.join(
         self._BUILD_ROOT, self._options.arch + '_instrumented_out')
     if self._options.use_call_graph:
@@ -903,6 +913,8 @@ class OrderfileGenerator:
       self._compiler = ClankCompiler(out_directory, self._step_recorder,
                                      self._options.arch, self._options.use_goma,
                                      self._options.goma_dir,
+                                     self._options.use_remoteexec,
+                                     self._ninja_command,
                                      self._options.system_health_orderfile,
                                      self._monochrome, self._options.public,
                                      self._GetPathToOrderfile())
@@ -950,6 +962,7 @@ class OrderfileGenerator:
         self._compiler = ClankCompiler(
             self._instrumented_out_dir, self._step_recorder, self._options.arch,
             self._options.use_goma, self._options.goma_dir,
+            self._options.use_remoteexec, self._ninja_command,
             self._options.system_health_orderfile, self._monochrome,
             self._options.public, self._GetPathToOrderfile())
         if not self._options.pregenerated_profiles:
@@ -988,6 +1001,7 @@ class OrderfileGenerator:
         self._compiler = ClankCompiler(
             self._uninstrumented_out_dir, self._step_recorder,
             self._options.arch, self._options.use_goma, self._options.goma_dir,
+            self._options.use_remoteexec, self._ninja_command,
             self._options.system_health_orderfile, self._monochrome,
             self._options.public, self._GetPathToOrderfile())
 
@@ -1072,6 +1086,17 @@ def CreateArgumentParser():
   parser.add_argument('--goma-dir', help='GOMA directory.')
   parser.add_argument(
       '--use-goma', action='store_true', help='Enable GOMA.', default=False)
+  parser.add_argument('--use-remoteexec',
+                      action='store_true',
+                      help='Enable remoteexec. see //build/toolchain/rbe.gni.',
+                      default=False)
+  parser.add_argument('--ninja-path',
+                      help='Path to the ninja binary. If given, use this'
+                      'instead of autoninja.')
+  parser.add_argument('--ninja-j',
+                      help='-j value passed to ninja.'
+                      'pass -j to ninja. no need to set this when '
+                      '--ninja-path is not specified.')
   parser.add_argument('--adb-path', help='Path to the adb binary.')
 
   parser.add_argument('--public',

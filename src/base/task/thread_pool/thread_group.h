@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,16 +84,11 @@ class BASE_EXPORT ThreadGroup {
   // Implementations should instantiate a concrete ScopedCommandsExecutor and
   // invoke PushTaskSourceAndWakeUpWorkersImpl().
   virtual void PushTaskSourceAndWakeUpWorkers(
-      TransactionWithRegisteredTaskSource transaction_with_task_source) = 0;
+      RegisteredTaskSourceAndTransaction transaction_with_task_source) = 0;
 
-  // Removes all task sources from this ThreadGroup's PriorityQueue and enqueues
-  // them in another |destination_thread_group|. After this method is called,
-  // any task sources posted to this ThreadGroup will be forwarded to
-  // |destination_thread_group|.
-  //
-  // TODO(crbug.com/756547): Remove this method once the UseNativeThreadPool
-  // experiment is complete.
-  void InvalidateAndHandoffAllTaskSourcesToOtherThreadGroup(
+  // Move all task sources except the ones with TaskPriority::USER_BLOCKING,
+  // from this ThreadGroup's PriorityQueue to the |destination_thread_group|'s.
+  void HandoffNonUserBlockingTaskSourcesToOtherThreadGroup(
       ThreadGroup* destination_thread_group);
 
   // Returns true if a task with |sort_key| running in this thread group should
@@ -122,6 +117,10 @@ class BASE_EXPORT ThreadGroup {
   virtual void DidUpdateCanRunPolicy() = 0;
 
   virtual void OnShutdownStarted() = 0;
+
+  // Returns true if a thread group is registered in TLS. Used by diagnostic
+  // code to check whether it's inside a ThreadPool task.
+  static bool CurrentThreadHasGroup();
 
  protected:
   // Derived classes must implement a ScopedCommandsExecutor that derives from
@@ -152,30 +151,22 @@ class BASE_EXPORT ThreadGroup {
     ScopedReenqueueExecutor& operator=(const ScopedReenqueueExecutor&) = delete;
     ~ScopedReenqueueExecutor();
 
-    // A TransactionWithRegisteredTaskSource and the ThreadGroup in which it
+    // A RegisteredTaskSourceAndTransaction and the ThreadGroup in which it
     // should be enqueued.
     void SchedulePushTaskSourceAndWakeUpWorkers(
-        TransactionWithRegisteredTaskSource transaction_with_task_source,
+        RegisteredTaskSourceAndTransaction transaction_with_task_source,
         ThreadGroup* destination_thread_group);
 
    private:
-    // A TransactionWithRegisteredTaskSource and the thread group in which it
+    // A RegisteredTaskSourceAndTransaction and the thread group in which it
     // should be enqueued.
-    absl::optional<TransactionWithRegisteredTaskSource>
+    absl::optional<RegisteredTaskSourceAndTransaction>
         transaction_with_task_source_;
     raw_ptr<ThreadGroup> destination_thread_group_ = nullptr;
   };
 
-  // |predecessor_thread_group| is a ThreadGroup whose lock can be acquired
-  // before the constructed ThreadGroup's lock. This is necessary to move all
-  // task sources from |predecessor_thread_group| to the constructed ThreadGroup
-  // and support the UseNativeThreadPool experiment.
-  //
-  // TODO(crbug.com/756547): Remove |predecessor_thread_group| once the
-  // experiment is complete.
   ThreadGroup(TrackedRef<TaskTracker> task_tracker,
-              TrackedRef<Delegate> delegate,
-              ThreadGroup* predecessor_thread_group = nullptr);
+              TrackedRef<Delegate> delegate);
 
 #if BUILDFLAG(IS_WIN)
   static std::unique_ptr<win::ScopedWindowsThreadEnvironment>
@@ -209,7 +200,7 @@ class BASE_EXPORT ThreadGroup {
   void ReEnqueueTaskSourceLockRequired(
       BaseScopedCommandsExecutor* workers_executor,
       ScopedReenqueueExecutor* reenqueue_executor,
-      TransactionWithRegisteredTaskSource transaction_with_task_source)
+      RegisteredTaskSourceAndTransaction transaction_with_task_source)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Returns the next task source from |priority_queue_| if permitted to run and
@@ -224,13 +215,13 @@ class BASE_EXPORT ThreadGroup {
                          TaskSource::Transaction transaction);
   void PushTaskSourceAndWakeUpWorkersImpl(
       BaseScopedCommandsExecutor* executor,
-      TransactionWithRegisteredTaskSource transaction_with_task_source);
+      RegisteredTaskSourceAndTransaction transaction_with_task_source);
 
   // Synchronizes accesses to all members of this class which are neither const,
   // atomic, nor immutable after start. Since this lock is a bottleneck to post
   // and schedule work, only simple data structure manipulations are allowed
   // within its scope (no thread creation or wake up).
-  mutable CheckedLock lock_;
+  mutable CheckedLock lock_{};
 
   bool disable_fair_scheduling_ GUARDED_BY(lock_){false};
 

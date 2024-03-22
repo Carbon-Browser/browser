@@ -20,11 +20,9 @@
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_URL_KEYWORD_EXTRACTOR_H_
 
 #include <string>
+#include <string_view>
 
 #include "absl/types/optional.h"
-
-#include "base/strings/string_piece_forward.h"
-#include "third_party/re2/src/re2/re2.h"
 #include "url/gurl.h"
 
 namespace adblock {
@@ -47,13 +45,13 @@ namespace adblock {
 // could match anything.
 class UrlKeywordExtractor {
  public:
-  explicit UrlKeywordExtractor(base::StringPiece url);
+  explicit UrlKeywordExtractor(std::string_view url);
   ~UrlKeywordExtractor();
-  absl::optional<std::string> GetNextKeyword();
+  absl::optional<std::string_view> GetNextKeyword();
 
  private:
-  re2::StringPiece input_;
-  re2::StringPiece::iterator end_of_last_keyword_;
+  std::string url_with_nulls_;
+  std::string_view input_;
 };
 
 }  // namespace adblock

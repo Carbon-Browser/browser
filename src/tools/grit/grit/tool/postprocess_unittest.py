@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,7 +8,6 @@
    modify the grd data tree, changing the message name attributes.
 '''
 
-from __future__ import print_function
 
 import os
 import re
@@ -33,16 +32,16 @@ BEGIN
 END
     '''
     tool = rc2grd.Rc2Grd()
-    class DummyOpts(object):
+    class DummyOpts:
       verbose = False
       extra_verbose = False
     tool.o = DummyOpts()
     tool.post_process = 'grit.tool.postprocess_unittest.DummyPostProcessor'
     result = tool.Process(rctext, '.\resource.rc')
 
-    self.failUnless(
+    self.assertTrue(
       result.children[2].children[2].children[0].attrs['name'] == 'SMART_STRING_1')
-    self.failUnless(
+    self.assertTrue(
       result.children[2].children[2].children[1].attrs['name'] == 'SMART_STRING_2')
 
 class DummyPostProcessor(grit.tool.postprocess_interface.PostProcessor):

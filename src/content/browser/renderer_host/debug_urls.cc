@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/debug/asan_invalid_access.h"
 #include "base/debug/profiler.h"
+#include "base/functional/bind.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/sanitizer_buildflags.h"
 #include "base/strings/utf_string_conversions.h"
@@ -162,44 +162,36 @@ bool HandleDebugURL(const GURL& url,
   }
 
   if (url == blink::kChromeUIGpuCleanURL) {
-    GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED,
-                             false /* force_create */,
-                             base::BindOnce([](GpuProcessHost* host) {
-                               if (host)
-                                 host->gpu_service()->DestroyAllChannels();
-                             }));
+    auto* host = GpuProcessHost::Get();
+    if (host) {
+      host->gpu_service()->DestroyAllChannels();
+    }
     return true;
   }
 
   if (url == blink::kChromeUIGpuCrashURL) {
-    GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED,
-                             false /* force_create */,
-                             base::BindOnce([](GpuProcessHost* host) {
-                               if (host)
-                                 host->gpu_service()->Crash();
-                             }));
+    auto* host = GpuProcessHost::Get();
+    if (host) {
+      host->gpu_service()->Crash();
+    }
     return true;
   }
 
 #if BUILDFLAG(IS_ANDROID)
   if (url == blink::kChromeUIGpuJavaCrashURL) {
-    GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED,
-                             false /* force_create */,
-                             base::BindOnce([](GpuProcessHost* host) {
-                               if (host)
-                                 host->gpu_service()->ThrowJavaException();
-                             }));
+    auto* host = GpuProcessHost::Get();
+    if (host) {
+      host->gpu_service()->ThrowJavaException();
+    }
     return true;
   }
 #endif
 
   if (url == blink::kChromeUIGpuHangURL) {
-    GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED,
-                             false /* force_create */,
-                             base::BindOnce([](GpuProcessHost* host) {
-                               if (host)
-                                 host->gpu_service()->Hang();
-                             }));
+    auto* host = GpuProcessHost::Get();
+    if (host) {
+      host->gpu_service()->Hang();
+    }
     return true;
   }
 

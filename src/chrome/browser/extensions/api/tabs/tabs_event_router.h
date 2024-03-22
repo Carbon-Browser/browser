@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,6 +72,8 @@ class TabsEventRouter : public TabStripModelObserver,
                               int index) override;
 
   // ZoomObserver:
+  void OnZoomControllerDestroyed(
+      zoom::ZoomController* zoom_controller) override;
   void OnZoomChanged(
       const zoom::ZoomController::ZoomChangedEventData& data) override;
 
@@ -212,6 +214,8 @@ class TabsEventRouter : public TabStripModelObserver,
   base::ScopedMultiSourceObservation<favicon::FaviconDriver,
                                      favicon::FaviconDriverObserver>
       favicon_scoped_observations_{this};
+  base::ScopedMultiSourceObservation<zoom::ZoomController, zoom::ZoomObserver>
+      zoom_scoped_observations_{this};
 
   BrowserTabStripTracker browser_tab_strip_tracker_;
 

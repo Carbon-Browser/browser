@@ -26,7 +26,6 @@
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/xml/xsl_style_sheet.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 
@@ -44,7 +43,6 @@ class XSLTProcessor final : public ScriptWrappable {
 
  public:
   static XSLTProcessor* Create(Document& document) {
-    DCHECK(RuntimeEnabledFeatures::XSLTEnabled());
     return MakeGarbageCollected<XSLTProcessor>(document);
   }
 
@@ -79,7 +77,7 @@ class XSLTProcessor final : public ScriptWrappable {
 
   void reset();
 
-  static void ParseErrorFunc(void* user_data, xmlError*);
+  static void ParseErrorFunc(void* user_data, const xmlError*);
   static void GenericErrorFunc(void* user_data, const char* msg, ...);
 
   // Only for libXSLT callbacks

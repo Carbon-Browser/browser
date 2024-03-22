@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -41,7 +41,7 @@ class COMPONENT_EXPORT(ASH_MEMORY) ZramWritebackController {
 
   void PeriodicWriteback();
   void ReadyToWriteback();
-  void OnEnableWriteback(bool result, int64_t writeback_size_mb);
+  void OnEnableWriteback(int64_t writeback_size_mb);
   void OnSetWritebackLimit(bool result, int64_t num_pages);
   void CompleteInitialization(uint64_t zram_size_mb,
                               uint64_t writeback_size_mb);

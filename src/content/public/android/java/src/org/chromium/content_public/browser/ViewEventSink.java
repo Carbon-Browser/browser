@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import android.view.MotionEvent;
 
 import org.chromium.content.browser.ViewEventSinkImpl;
 
-/**
- * Interface for updating content with view events.
- */
+/** Interface for updating content with view events. */
 public interface ViewEventSink {
     /**
      * Interface that consumers of WebContents must implement to allow the proper
@@ -92,5 +90,6 @@ public interface ViewEventSink {
     void setAccessDelegate(InternalAccessDelegate internalDispatcher);
 
     void onPauseForTesting();
+
     void onResumeForTesting();
 }

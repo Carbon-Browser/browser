@@ -1,5 +1,5 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
-// Use of this source code if governed by a BSD-style license that can be
+// Copyright 2017 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
 // found in LICENSE file.
 
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
@@ -50,7 +50,8 @@ class FencedFrameFrameSchedulerTest
 };
 
 TEST_F(FencedFrameFrameSchedulerTest, GetFrameType) {
-  InitializeFencedFrameRoot(mojom::blink::FencedFrameMode::kDefault);
+  InitializeFencedFrameRoot(
+      blink::FencedFrame::DeprecatedFencedFrameMode::kDefault);
   SimRequest main_resource("https://example.com/", "text/html");
   LoadURL("https://example.com/");
   main_resource.Complete(R"HTML(

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -158,6 +158,8 @@ v8::Local<v8::FunctionTemplate> CreateFunctionTemplate(
         v8::ConstructorBehavior::kThrow, v8_side_effect,
         {v8_cfunction_table_data, v8_cfunction_table_size});
   } else {
+    DCHECK(!v8_cfunction_table_data);
+    DCHECK_EQ(v8_cfunction_table_size, 0u);
     function_template = v8::FunctionTemplate::NewWithCache(
         isolate, callback,
         V8PrivateProperty::GetCachedAccessor(isolate, v8_cached_accessor)

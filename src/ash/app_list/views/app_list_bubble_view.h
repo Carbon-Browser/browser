@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,17 @@
 #define ASH_APP_LIST_VIEWS_APP_LIST_BUBBLE_VIEW_H_
 
 #include <memory>
+#include <set>
 
+#include "ash/app_list/app_list_view_provider.h"
 #include "ash/app_list/views/app_list_folder_controller.h"
+#include "ash/app_list/views/search_box_view_delegate.h"
 #include "ash/ash_export.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
-#include "ash/search_box/search_box_view_delegate.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -38,6 +42,8 @@ class ViewShadow;
 class ASH_EXPORT AppListBubbleView : public views::View,
                                      public SearchBoxViewDelegate,
                                      public AppListFolderController {
+  METADATA_HEADER(AppListBubbleView, views::View)
+
  public:
   AppListBubbleView(AppListViewDelegate* view_delegate,
                     ApplicationDragAndDropHost* drag_and_drop_host);
@@ -88,24 +94,31 @@ class ASH_EXPORT AppListBubbleView : public views::View,
   // Handles `AppListController::UpdateAppListWithNewSortingOrder()` for the
   // app list bubble view.
   void UpdateForNewSortingOrder(
-      const absl::optional<AppListSortOrder>& new_order,
+      const std::optional<AppListSortOrder>& new_order,
       bool animate,
       base::OnceClosure update_position_closure);
 
   // views::View:
-  const char* GetClassName() const override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
-  void OnThemeChanged() override;
   void Layout() override;
+  bool GetDropFormats(int* formats,
+                      std::set<ui::ClipboardFormatType>* format_types) override;
+  bool CanDrop(const OSExchangeData& data) override;
+  int OnDragUpdated(const ui::DropTargetEvent& event) override;
+  void OnDragEntered(const ui::DropTargetEvent& event) override;
+  void OnDragExited() override;
+  DropCallback GetDropCallback(const ui::DropTargetEvent& event) override;
 
   // SearchBoxViewDelegate:
-  void QueryChanged(SearchBoxViewBase* sender) override;
+  void QueryChanged(const std::u16string& trimmed_query,
+                    bool initiated_by_user) override;
   void AssistantButtonPressed() override;
-  void BackButtonPressed() override {}
   void CloseButtonPressed() override;
   void ActiveChanged(SearchBoxViewBase* sender) override {}
   void OnSearchBoxKeyEvent(ui::KeyEvent* event) override;
   bool CanSelectSearchResults() override;
+  bool HandleFocusMoveAboveSearchResults(
+      const ui::KeyEvent& key_event) override;
 
   // AppListFolderController:
   void ShowFolderForItemView(AppListItemView* folder_item_view,
@@ -114,6 +127,24 @@ class ASH_EXPORT AppListBubbleView : public views::View,
   void ShowApps(AppListItemView* folder_item_view, bool select_folder) override;
   void ReparentFolderItemTransit(AppListFolderItem* folder_item) override;
   void ReparentDragEnded() override;
+
+  // Initialize Assistant UIs for bubble view. Assistant UIs
+  // (AppListAssistantMainStage, SuggestionContainerView) expect that their
+  // OnUiVisibilityChanged methods get called via value update in
+  // AssistantUiModel.
+  //
+  // But it does not happen for bubble view as AppListBubblePresenter have an
+  // async call for OnZeroStateSearchDone. AppListBubbleView is instantiated
+  // after the async call and those UIs will miss the event.
+  //
+  // This is a helper method to manually trigger the UI initialization.
+  //
+  // This method is designed to be explicitly called from AppListBubblePresenter
+  // (i.e. instead of doing this in the constructor of AppListBubbleView) to
+  // make the intention clear.
+  //
+  // TODO(b/239754561): Clean up: refactor Assistant UI initialization
+  void InitializeUIForBubbleView();
 
   AppListBubblePage current_page_for_test() { return current_page_; }
   ViewShadow* view_shadow_for_test() { return view_shadow_.get(); }
@@ -157,7 +188,7 @@ class ASH_EXPORT AppListBubbleView : public views::View,
   // Focuses the search box if the view is not hiding.
   void MaybeFocusAndActivateSearchBox();
 
-  AppListViewDelegate* const view_delegate_;
+  const raw_ptr<AppListViewDelegate, ExperimentalAsh> view_delegate_;
 
   std::unique_ptr<AppListA11yAnnouncer> a11y_announcer_;
 
@@ -173,17 +204,20 @@ class ASH_EXPORT AppListBubbleView : public views::View,
 
   // The individual views are implementation details and are intentionally not
   // exposed via getters (except for tests).
-  SearchBoxView* search_box_view_ = nullptr;
-  views::View* separator_ = nullptr;
-  AppListBubbleAppsPage* apps_page_ = nullptr;
-  AppListBubbleSearchPage* search_page_ = nullptr;
-  AppListBubbleAssistantPage* assistant_page_ = nullptr;
+  raw_ptr<SearchBoxView, ExperimentalAsh> search_box_view_ = nullptr;
+  raw_ptr<views::View, ExperimentalAsh> separator_ = nullptr;
+  raw_ptr<AppListBubbleAppsPage, ExperimentalAsh> apps_page_ = nullptr;
+  raw_ptr<AppListBubbleSearchPage, ExperimentalAsh> search_page_ = nullptr;
+  raw_ptr<AppListBubbleAssistantPage, ExperimentalAsh> assistant_page_ =
+      nullptr;
 
   // Lives in this class because it can overlap the search box.
-  AppListFolderView* folder_view_ = nullptr;
+  raw_ptr<AppListFolderView, DanglingUntriaged | ExperimentalAsh> folder_view_ =
+      nullptr;
 
   // Used to close an open folder view.
-  FolderBackgroundView* folder_background_view_ = nullptr;
+  raw_ptr<FolderBackgroundView, ExperimentalAsh> folder_background_view_ =
+      nullptr;
 
   // Whether we're showing the folder view. This is different from
   // folder_view_->GetVisible() because the view is "visible" but hidden when

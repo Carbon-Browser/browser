@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,10 @@ bool HandleMessage(int severity,
                    int line,
                    size_t message_start,
                    const std::string& str) {
-  if (severity == logging::LOG_ERROR && file && file == std::string("CONSOLE"))
+  if (severity == logging::LOGGING_ERROR && file &&
+      file == std::string("CONSOLE")) {
     had_console_errors = true;
+  }
   return false;
 }
 
@@ -47,7 +49,7 @@ class NewTabUIBrowserTest : public InProcessBrowserTest {
     logging::SetLogMessageHandler(&HandleMessage);
   }
 
-  ~NewTabUIBrowserTest() override { logging::SetLogMessageHandler(NULL); }
+  ~NewTabUIBrowserTest() override { logging::SetLogMessageHandler(nullptr); }
 
   void TearDown() override {
     InProcessBrowserTest::TearDown();

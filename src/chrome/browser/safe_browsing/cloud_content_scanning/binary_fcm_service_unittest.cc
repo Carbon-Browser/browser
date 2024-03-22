@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -179,31 +179,6 @@ TEST_F(BinaryFCMServiceTest, RoutesMessages) {
   EXPECT_EQ(response2.request_token(), "");
 }
 
-TEST_F(BinaryFCMServiceTest, EmitsMessageHasValidTokenHistogram) {
-  gcm::IncomingMessage incoming_message;
-  enterprise_connectors::ContentAnalysisResponse message;
-
-  message.set_request_token("token1");
-  std::string serialized_message;
-  ASSERT_TRUE(message.SerializeToString(&serialized_message));
-  base::Base64Encode(serialized_message, &serialized_message);
-  incoming_message.data["proto"] = serialized_message;
-
-  {
-    base::HistogramTester histograms;
-    binary_fcm_service_->OnMessage("app_id", incoming_message);
-    histograms.ExpectUniqueSample(
-        "SafeBrowsingFCMService.IncomingMessageHasValidToken", false, 1);
-  }
-  {
-    binary_fcm_service_->SetCallbackForToken("token1", base::DoNothing());
-    base::HistogramTester histograms;
-    binary_fcm_service_->OnMessage("app_id", incoming_message);
-    histograms.ExpectUniqueSample(
-        "SafeBrowsingFCMService.IncomingMessageHasValidToken", true, 1);
-  }
-}
-
 TEST_F(BinaryFCMServiceTest, UnregisterToken) {
   // Get an instance ID
   std::string received_instance_id = BinaryFCMService::kInvalidId;
@@ -364,7 +339,7 @@ TEST_F(BinaryFCMServiceTest, UnregisterTwoTokensTwoCalls) {
 
   EXPECT_CALL(instance_id, DeleteToken)
       .Times(2)
-      .WillOnce(
+      .WillRepeatedly(
           Invoke([](const std::string&, const std::string&,
                     instance_id::InstanceID::DeleteTokenCallback callback) {
             std::move(callback).Run(instance_id::InstanceID::Result::SUCCESS);

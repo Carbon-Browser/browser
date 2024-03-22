@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,6 +57,7 @@ enum UpdateState {
   kRestarting,
   kFailed,
   kSuccess,
+  kWaitingForUser,
 };
 
 // Send update descriptions.
@@ -102,5 +103,5 @@ interface InstallController {
   BeginUpdate(string device_id, mojo_base.mojom.FilePath filepath);
   // Registers an observer that will be notified of changes to
   // the inflight update's progress.
-  AddObserver(pending_remote<UpdateProgressObserver> observer);
+  AddUpdateProgressObserver(pending_remote<UpdateProgressObserver> observer);
 };

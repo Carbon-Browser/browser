@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,6 +58,7 @@ bool RegisterPlugins(base::CommandLine* command_line,
     args += plugin.mime_type;
   }
   command_line->AppendSwitchNative(switches::kRegisterPepperPlugins, args);
+  command_line->AppendSwitch(switches::kAllowCommandLinePlugins);
   return true;
 }
 

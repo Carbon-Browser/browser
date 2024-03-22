@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,14 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include <optional>
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "pdf/document_layout.h"
 #include "printing/mojom/print.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-forward.h"
 #include "ui/base/window_open_disposition.h"
@@ -78,7 +78,11 @@ enum class DocumentPermission {
 // Do one time initialization of the SDK.
 // If `enable_v8` is false, then the PDFEngine will not be able to run
 // JavaScript.
-void InitializeSDK(bool enable_v8, FontMappingMode font_mapping_mode);
+// When `use_skia` is true, the PDFEngine will use Skia renderer. Otherwise, it
+// will use AGG renderer.
+void InitializeSDK(bool enable_v8,
+                   bool use_skia,
+                   FontMappingMode font_mapping_mode);
 // Tells the SDK that we're shutting down.
 void ShutdownSDK();
 
@@ -304,10 +308,10 @@ class PDFEngine {
   virtual bool HandleInputEvent(const blink::WebInputEvent& event) = 0;
   virtual void PrintBegin() = 0;
   virtual std::vector<uint8_t> PrintPages(
-      const std::vector<int>& page_numbers,
+      const std::vector<int>& page_index,
       const blink::WebPrintParams& print_params) = 0;
   virtual void PrintEnd() = 0;
-  virtual void StartFind(const std::string& text, bool case_sensitive) = 0;
+  virtual void StartFind(const std::u16string& text, bool case_sensitive) = 0;
   virtual bool SelectFindResult(bool forward) = 0;
   virtual void StopFind() = 0;
   virtual void ZoomUpdated(double new_zoom_level) = 0;
@@ -315,7 +319,7 @@ class PDFEngine {
   virtual void RotateCounterclockwise() = 0;
   virtual bool IsReadOnly() const = 0;
   virtual void SetReadOnly(bool enable) = 0;
-  virtual void SetTwoUpView(bool enable) = 0;
+  virtual void SetDocumentLayout(DocumentLayout::PageSpread page_spread) = 0;
   virtual void DisplayAnnotations(bool display) = 0;
 
   // Applies the document layout options proposed by a call to
@@ -362,7 +366,7 @@ class PDFEngine {
   // Gets the number of pages in the document.
   virtual int GetNumberOfPages() const = 0;
   // Gets the named destination by name.
-  virtual absl::optional<PDFEngine::NamedDestination> GetNamedDestination(
+  virtual std::optional<PDFEngine::NamedDestination> GetNamedDestination(
       const std::string& destination) = 0;
   // Gets the index of the most visible page, or -1 if none are visible.
   virtual int GetMostVisiblePage() = 0;
@@ -373,6 +377,9 @@ class PDFEngine {
   // Returns a page's rect in screen coordinates, as well as its surrounding
   // border areas and bottom separator.
   virtual gfx::Rect GetPageScreenRect(int page_index) const = 0;
+  // Return a page's bounding box rectangle, or an empty rectangle if
+  // `page_index` is invalid.
+  virtual gfx::RectF GetPageBoundingBox(int page_index) = 0;
   // Set color / grayscale rendering modes.
   virtual void SetGrayscale(bool grayscale) = 0;
   // Get the number of characters on a given page.
@@ -383,9 +390,9 @@ class PDFEngine {
   virtual uint32_t GetCharUnicode(int page_index, int char_index) = 0;
   // Given a start char index, find the longest continuous run of text that's
   // in a single direction and with the same text style. Return a filled out
-  // AccessibilityTextRunInfo on success or absl::nullopt on failure. e.g. When
+  // AccessibilityTextRunInfo on success or std::nullopt on failure. e.g. When
   // `start_char_index` is out of bounds.
-  virtual absl::optional<AccessibilityTextRunInfo> GetTextRunInfo(
+  virtual std::optional<AccessibilityTextRunInfo> GetTextRunInfo(
       int page_index,
       int start_char_index) = 0;
   // For all the links on page `page_index`, get their urls, underlying text
@@ -401,6 +408,8 @@ class PDFEngine {
   virtual std::vector<AccessibilityImageInfo> GetImageInfo(
       int page_index,
       uint32_t text_run_count) = 0;
+  // Returns the image as a 32-bit bitmap format for OCR.
+  virtual SkBitmap GetImageForOcr(int page_index, int image_index) = 0;
   // For all the highlights in page `page_index`, get their underlying text
   // ranges and bounding boxes.
   virtual std::vector<AccessibilityHighlightInfo> GetHighlightInfo(
@@ -420,8 +429,8 @@ class PDFEngine {
   // Returns the duplex setting.
   virtual printing::mojom::DuplexMode GetDuplexMode() = 0;
   // Returns the uniform page size of the document in points. Returns
-  // `absl::nullopt` if the document has more than one page size.
-  virtual absl::optional<gfx::Size> GetUniformPageSizePoints() = 0;
+  // `std::nullopt` if the document has more than one page size.
+  virtual std::optional<gfx::Size> GetUniformPageSizePoints() = 0;
 
   // Returns a list of Values of Bookmarks. Each Bookmark is a dictionary Value
   // which contains the following key/values:
@@ -508,7 +517,7 @@ class PDFEngineExports {
 #if BUILDFLAG(IS_WIN)
   // See the definition of RenderPDFPageToDC in pdf.cc for details.
   virtual bool RenderPDFPageToDC(base::span<const uint8_t> pdf_buffer,
-                                 int page_number,
+                                 int page_index,
                                  const RenderingSettings& settings,
                                  HDC dc) = 0;
 
@@ -517,7 +526,7 @@ class PDFEngineExports {
 
   // See the definition of RenderPDFPageToBitmap in pdf.cc for details.
   virtual bool RenderPDFPageToBitmap(base::span<const uint8_t> pdf_buffer,
-                                     int page_number,
+                                     int page_index,
                                      const RenderingSettings& settings,
                                      void* bitmap_buffer) = 0;
 
@@ -539,10 +548,10 @@ class PDFEngineExports {
                              int* page_count,
                              float* max_page_width) = 0;
 
-  // Whether the PDF is Tagged (see 10.7 "Tagged PDF" in PDF Reference 1.7).
+  // Whether the PDF is Tagged (see ISO 32000-1:2008 14.8 "Tagged PDF").
   // Returns true if it's a tagged (accessible) PDF, false if it's a valid
   // PDF but untagged, and nullopt if the PDF can't be parsed.
-  virtual absl::optional<bool> IsPDFDocTagged(
+  virtual std::optional<bool> IsPDFDocTagged(
       base::span<const uint8_t> pdf_buffer) = 0;
 
   // Given a tagged PDF (see IsPDFDocTagged, above), return the portion of
@@ -550,11 +559,16 @@ class PDFEngineExports {
   virtual base::Value GetPDFStructTreeForPage(
       base::span<const uint8_t> pdf_buffer,
       int page_index) = 0;
+  // Whether the PDF has a Document Outline (see ISO 32000-1:2008 12.3.3
+  // "Document Outline"). Returns true if the PDF has an outline, false if it's
+  // a valid PDF without an outline, and nullopt if the PDF can't be parsed.
+  virtual std::optional<bool> PDFDocHasOutline(
+      base::span<const uint8_t> pdf_buffer) = 0;
 
   // See the definition of GetPDFPageSizeByIndex in pdf.cc for details.
-  virtual absl::optional<gfx::SizeF> GetPDFPageSizeByIndex(
+  virtual std::optional<gfx::SizeF> GetPDFPageSizeByIndex(
       base::span<const uint8_t> pdf_buffer,
-      int page_number) = 0;
+      int page_index) = 0;
 };
 
 }  // namespace chrome_pdf

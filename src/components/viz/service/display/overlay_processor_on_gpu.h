@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,14 +32,7 @@ namespace viz {
 // destroyed on the gpu thread.
 class VIZ_SERVICE_EXPORT OverlayProcessorOnGpu {
  public:
-#if BUILDFLAG(IS_APPLE)
-  using CandidateList = CALayerOverlayList;
-#elif BUILDFLAG(IS_WIN)
-  using CandidateList = DCLayerOverlayList;
-#else
-  // Default.
   using CandidateList = OverlayCandidateList;
-#endif
 
   explicit OverlayProcessorOnGpu(
       gpu::DisplayCompositorMemoryAndTaskControllerOnGpu*

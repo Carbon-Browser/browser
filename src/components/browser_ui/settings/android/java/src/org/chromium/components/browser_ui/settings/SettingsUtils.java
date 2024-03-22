@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,7 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import org.chromium.components.browser_ui.util.ToolbarUtils;
 
-/**
- * A helper class for Settings.
- */
+/** A helper class for Settings. */
 public class SettingsUtils {
     /**
      * A helper that is used to load preferences from XML resources without causing a
@@ -63,16 +61,12 @@ public class SettingsUtils {
         };
     }
 
-    /**
-     * Creates a {@link Drawable} for the given resource id with the default icon color applied.
-     */
+    /** Creates a {@link Drawable} for the given resource id with the default icon color applied. */
     public static Drawable getTintedIcon(Context context, @DrawableRes int resId) {
         return getTintedIcon(context, resId, R.color.default_icon_color_tint_list);
     }
 
-    /**
-     * Creates a {@link Drawable} for the given resource id with provided color id applied.
-     */
+    /** Creates a {@link Drawable} for the given resource id with provided color id applied. */
     public static Drawable getTintedIcon(
             Context context, @DrawableRes int resId, @ColorRes int colorId) {
         Drawable icon = AppCompatResources.getDrawable(context, resId);

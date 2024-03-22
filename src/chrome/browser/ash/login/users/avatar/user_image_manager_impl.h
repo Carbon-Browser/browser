@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,11 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
+#include "base/values.h"
 #include "chrome/browser/ash/login/users/avatar/user_image_manager.h"
 #include "chrome/browser/profiles/profile_downloader_delegate.h"
 #include "components/user_manager/user.h"
@@ -72,6 +74,7 @@ class UserImageManagerImpl : public UserImageManager,
 
   static void IgnoreProfileDataDownloadDelayForTesting();
   static void SkipProfileImageDownloadForTesting();
+  static void SkipDefaultUserImageDownloadForTesting();
 
   // Key for a dictionary that maps user IDs to user image data with images
   // stored in JPEG format.
@@ -80,6 +83,7 @@ class UserImageManagerImpl : public UserImageManager,
   static const char kImagePathNodeName[];
   static const char kImageIndexNodeName[];
   static const char kImageURLNodeName[];
+  static const char kImageCacheUpdated[];
 
  private:
   friend class UserImageManagerTestBase;
@@ -146,6 +150,9 @@ class UserImageManagerImpl : public UserImageManager,
   // allowed to be synced and no sync observer exists yet.
   void TryToCreateImageSyncObserver();
 
+  // Returns the image properties for the user's user image.
+  const base::Value::Dict* GetImageProperties();
+
   // Returns immutable version of user with `user_id_`.
   const user_manager::User* GetUser() const;
 
@@ -155,8 +162,12 @@ class UserImageManagerImpl : public UserImageManager,
   // Returns true if user with `user_id_` is logged in and has gaia account.
   bool IsUserLoggedInAndHasGaiaAccount() const;
 
+  // Returns true if user avatar customization selectors are enabled. Profile
+  // image download will only occur if this returns true
+  bool IsCustomizationSelectorsPrefEnabled() const;
+
   // The user manager.
-  user_manager::UserManager* user_manager_;
+  raw_ptr<user_manager::UserManager, ExperimentalAsh> user_manager_;
 
   // Whether the `profile_downloader_` is downloading the profile image for the
   // currently logged-in user (and not just the full name). Only valid when a

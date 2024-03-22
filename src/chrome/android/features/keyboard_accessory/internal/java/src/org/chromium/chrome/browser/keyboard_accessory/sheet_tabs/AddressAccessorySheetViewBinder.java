@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.chromium.chrome.browser.keyboard_accessory.R;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
 import org.chromium.chrome.browser.keyboard_accessory.data.UserInfoField;
-import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabModel.AccessorySheetDataPiece;
+import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabItemsModel.AccessorySheetDataPiece;
 import org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabViewBinder.ElementViewHolder;
 import org.chromium.components.browser_ui.widget.chips.ChipView;
 import org.chromium.ui.modelutil.ListModel;
@@ -36,9 +36,7 @@ class AddressAccessorySheetViewBinder {
         return null;
     }
 
-    /**
-     * Holds a View representing a set of address data.
-     */
+    /** Holds a View representing a set of address data. */
     static class AddressInfoViewHolder
             extends ElementViewHolder<KeyboardAccessoryData.UserInfo, AddressAccessoryInfoView> {
         AddressInfoViewHolder(ViewGroup parent) {
@@ -73,7 +71,7 @@ class AddressAccessorySheetViewBinder {
         }
     }
 
-    static void initializeView(RecyclerView view, AccessorySheetTabModel model) {
+    static void initializeView(RecyclerView view, AccessorySheetTabItemsModel model) {
         view.setAdapter(AddressAccessorySheetCoordinator.createAdapter(model));
         view.addItemDecoration(new DynamicInfoViewBottomSpacer(AddressAccessoryInfoView.class));
     }

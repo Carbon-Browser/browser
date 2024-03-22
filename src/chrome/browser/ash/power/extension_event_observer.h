@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/time/time.h"
@@ -40,7 +40,7 @@ namespace ash {
 class ExtensionEventObserver : public ProfileManagerObserver,
                                public extensions::ProcessManagerObserver,
                                public extensions::ExtensionHostObserver,
-                               public PowerManagerClient::Observer {
+                               public chromeos::PowerManagerClient::Observer {
  public:
   class TestApi {
    public:

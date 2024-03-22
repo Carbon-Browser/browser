@@ -1,9 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/printing/print_preview_context_menu_observer.h"
 
+#include "base/check.h"
 #include "base/notreached.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/printing/print_preview_dialog_controller.h"
@@ -16,11 +17,9 @@ PrintPreviewContextMenuObserver::~PrintPreviewContextMenuObserver() {
 }
 
 bool PrintPreviewContextMenuObserver::IsPrintPreviewDialog() {
-  printing::PrintPreviewDialogController* controller =
-      printing::PrintPreviewDialogController::GetInstance();
-  if (!controller)
-    return false;
-  return (controller->GetPrintPreviewForContents(contents_) != nullptr);
+  auto* controller = printing::PrintPreviewDialogController::GetInstance();
+  CHECK(controller);
+  return !!controller->GetPrintPreviewForContents(contents_);
 }
 
 bool PrintPreviewContextMenuObserver::IsCommandIdSupported(int command_id) {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,6 @@ const char kHistogramFencedFramesNavigationToFirstImagePaint[] =
 const char kHistogramFencedFramesNavigationToFirstContentfulPaint[] =
     "PageLoad.Clients.FencedFrames.PaintTiming."
     "NavigationToFirstContentfulPaint";
-const char kHistogramFencedFramesNavigationToFirstContentfulPaintBackground[] =
-    "PageLoad.Clients.FencedFrames.PaintTiming."
-    "NavigationToFirstContentfulPaint.Background";
 const char kHistogramFencedFramesNavigationToLargestContentfulPaint2[] =
     "PageLoad.Clients.FencedFrames.PaintTiming."
     "NavigationToLargestContentfulPaint2";
@@ -51,6 +48,15 @@ FencedFramesPageLoadMetricsObserver::OnFencedFramesStart(
   return CONTINUE_OBSERVING;
 }
 
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+FencedFramesPageLoadMetricsObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  // Pages that contain FencedFrames are not eligible for prerendering.
+  // TODO(https://crbug.com/1335481): Make those pages prerenderable.
+  return STOP_OBSERVING;
+}
+
 void FencedFramesPageLoadMetricsObserver::OnFirstPaintInPage(
     const page_load_metrics::mojom::PageLoadTiming& timing) {
   if (page_load_metrics::WasStartedInForegroundOptionalEventInForeground(
@@ -76,11 +82,6 @@ void FencedFramesPageLoadMetricsObserver::OnFirstContentfulPaintInPage(
           timing.paint_timing->first_contentful_paint, GetDelegate())) {
     PAGE_LOAD_HISTOGRAM(
         internal::kHistogramFencedFramesNavigationToFirstContentfulPaint,
-        timing.paint_timing->first_contentful_paint.value());
-  } else {
-    PAGE_LOAD_HISTOGRAM(
-        internal::
-            kHistogramFencedFramesNavigationToFirstContentfulPaintBackground,
         timing.paint_timing->first_contentful_paint.value());
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ import org.chromium.mojo.system.MessagePipeHandle;
  */
 public class InterfaceRequest<P extends Interface> implements HandleOwner<MessagePipeHandle> {
 
-    /**
-     * The handle which will be sent and will be connected to the implementation.
-     */
+    /** The handle which will be sent and will be connected to the implementation. */
     private final MessagePipeHandle mHandle;
 
     /**

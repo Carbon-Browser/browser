@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,37 +7,16 @@
 
 #include <memory>
 
-#include "base/scoped_observation.h"
-#include "base/unguessable_token.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
+#include "chrome/browser/ui/browser_user_data.h"
 #include "components/user_notes/interfaces/user_notes_ui.h"
-#include "ui/base/interaction/element_identifier.h"
 #include "ui/views/view.h"
 #include "ui/views/view_observer.h"
 
-namespace user_notes {
-class UserNoteInstance;
-}
-
 class SidePanelRegistry;
-class UserNoteView;
+class UserNotesSidePanelUI;
 
-namespace user_notes {
-class UserNoteInstance;
-}
-
-namespace views {
-class ScrollView;
-}
-
-namespace base {
-class UnguessableToken;
-}
-
-class UserNoteUICoordinator : public user_notes::UserNotesUI,
-                              public TabStripModelObserver,
-                              public views::ViewObserver {
+class UserNoteUICoordinator : public user_notes::UserNotesUI {
  public:
   // Creates a UserNoteUICoordinator and attaches it to the specified Browser
   // using the user data key of UserNotesUI. If an instance is already attached,
@@ -55,46 +34,22 @@ class UserNoteUICoordinator : public user_notes::UserNotesUI,
   UserNoteUICoordinator& operator=(const UserNoteUICoordinator&) = delete;
   ~UserNoteUICoordinator() override;
 
-  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kScrollViewElementIdForTesting);
-
-  void CreateAndRegisterEntry(SidePanelRegistry* global_registry);
-  void OnNoteDeleted(const base::UnguessableToken& id,
-                     UserNoteView* user_note_view);
-  void OnNoteCreationDone(const base::UnguessableToken& id,
-                          const std::u16string& note_content);
-  void OnNoteCreationCancelled(const base::UnguessableToken& id,
-                               UserNoteView* user_note_view);
-  void OnNoteUpdated(const base::UnguessableToken& id,
-                     const std::u16string& note_content);
-  void OnNoteSelected(const base::UnguessableToken& id);
-
-  // UserNoteUI overrides
-  void FocusNote(const base::UnguessableToken& guid) override;
-  void StartNoteCreation(user_notes::UserNoteInstance* instance) override;
-  void Invalidate() override;
+  // UserNoteUI:
+  void SwitchTabsAndStartNoteCreation(int tab_index) override;
+  void StartNoteCreation() override;
   void Show() override;
 
-  // TabStripModelObserver overrides
-  void OnTabStripModelChanged(
-      TabStripModel* tab_strip_model,
-      const TabStripModelChange& change,
-      const TabStripSelectionChange& selection) override;
-
-  // views::ViewObserver:
-  void OnViewBoundsChanged(views::View* observed_view) override;
+  void CreateAndRegisterEntry(SidePanelRegistry* global_registry);
 
  private:
   explicit UserNoteUICoordinator(Browser* browser);
 
   void CreateSidePanelEntry(SidePanelRegistry* global_registry);
-  void ScrollToNote();
-  std::unique_ptr<views::View> CreateUserNotesView();
+  std::unique_ptr<views::View> CreateUserNotesWebUIView();
 
   raw_ptr<Browser> browser_;
-  raw_ptr<views::ScrollView> scroll_view_ = nullptr;
-  base::ScopedObservation<views::View, views::ViewObserver>
-      scoped_view_observer_{this};
-  base::UnguessableToken scroll_to_note_id_ = base::UnguessableToken::Null();
+  // A weak reference to the last-created UI object for this browser.
+  base::WeakPtr<UserNotesSidePanelUI> notes_ui_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_SIDE_PANEL_USER_NOTE_USER_NOTE_UI_COORDINATOR_H_

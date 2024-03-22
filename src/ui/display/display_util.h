@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,9 @@ class DISPLAY_EXPORT DisplayUtil {
   // Compute the orientation type of the display assuming it is a desktop.
   static display::mojom::ScreenOrientation GetOrientationTypeForDesktop(
       const display::Display& display);
+
+  // Report audio formats supported (based on display EDID).
+  static uint32_t GetAudioFormats();
 };
 
 }  // namespace display

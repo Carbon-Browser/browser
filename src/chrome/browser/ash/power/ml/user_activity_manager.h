@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_POWER_ML_USER_ACTIVITY_MANAGER_H_
 
 #include "base/cancelable_callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -16,7 +17,6 @@
 #include "chrome/browser/ash/power/ml/smart_dim/ml_agent.h"
 #include "chrome/browser/ash/power/ml/user_activity_event.pb.h"
 #include "chrome/browser/ash/power/ml/user_activity_ukm_logger.h"
-#include "chrome/browser/resource_coordinator/tab_metrics_event.pb.h"
 #include "chromeos/crosapi/mojom/web_page_info.mojom.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/idle.pb.h"
@@ -81,7 +81,7 @@ enum class WebPageInfoSource { kAsh = 0, kLacros = 1, kMaxValue = kLacros };
 // Logs user activity after an idle event is observed.
 // TODO(renjieliu): Add power-related activity as well.
 class UserActivityManager : public ui::UserActivityObserver,
-                            public PowerManagerClient::Observer,
+                            public chromeos::PowerManagerClient::Observer,
                             public viz::mojom::VideoDetectorObserver,
                             public session_manager::SessionManagerObserver,
                             public crosapi::WebPageInfoFactoryAsh::Observer {
@@ -218,7 +218,7 @@ class UserActivityManager : public ui::UserActivityObserver,
 
   BootClock boot_clock_;
 
-  UserActivityUkmLogger* const ukm_logger_;
+  const raw_ptr<UserActivityUkmLogger, ExperimentalAsh> ukm_logger_;
 
   base::ScopedObservation<ui::UserActivityDetector, ui::UserActivityObserver>
       user_activity_observation_{this};
@@ -229,13 +229,15 @@ class UserActivityManager : public ui::UserActivityObserver,
                           session_manager::SessionManagerObserver>
       session_manager_observation_{this};
 
-  session_manager::SessionManager* const session_manager_;
+  const raw_ptr<session_manager::SessionManager, ExperimentalAsh>
+      session_manager_;
 
   mojo::Receiver<viz::mojom::VideoDetectorObserver> receiver_;
 
-  const ChromeUserManager* const user_manager_;
+  const raw_ptr<const ChromeUserManager, ExperimentalAsh> user_manager_;
 
-  chromeos::PowerManagerClient* const power_manager_client_;
+  const raw_ptr<chromeos::PowerManagerClient, ExperimentalAsh>
+      power_manager_client_;
 
   // Delays to dim and turn off the screen. Zero means disabled.
   base::TimeDelta screen_dim_delay_;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "url/gurl.h"
 
@@ -50,6 +50,7 @@ struct TrieNode;
 // the size is not enforced here. The list size can be enforced at
 // Java level if necessary.
 //
+// Lifetime: Singleton
 class AwSafeBrowsingAllowlistManager {
  public:
   // Must be constructed on the UI thread.

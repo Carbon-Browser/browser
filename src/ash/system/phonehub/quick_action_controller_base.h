@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,9 @@ class ASH_EXPORT QuickActionControllerBase : public QuickActionItem::Delegate {
   // The view will be owned by views hierarchy. The view will be always deleted
   // after the controller is destructed.
   virtual QuickActionItem* CreateItem() = 0;
+
+  // Used to update the QuickActionItem UI properties.
+  virtual void UpdateQuickActionItemUi() = 0;
 };
 
 }  // namespace ash

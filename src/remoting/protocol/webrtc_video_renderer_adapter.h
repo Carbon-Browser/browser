@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <list>
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "remoting/protocol/client_video_stats_dispatcher.h"
@@ -27,8 +27,7 @@ class DesktopFrame;
 class VideoFrameBuffer;
 }  // namespace webrtc
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class MessagePipe;
 class VideoRenderer;
@@ -91,7 +90,6 @@ class WebrtcVideoRendererAdapter
   base::WeakPtrFactory<WebrtcVideoRendererAdapter> weak_factory_{this};
 };
 
-}  // namespace remoting
-}  // namespace protocol
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_WEBRTC_VIDEO_RENDERER_ADAPTER_H_

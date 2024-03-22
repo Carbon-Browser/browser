@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,8 @@ class ExtensionPoliciesValueProvider
   ~ExtensionPoliciesValueProvider() override;
 
   // PolicyValueProvider overrides.
-  base::Value::List GetValues() override;
+  // Returns each individual extension policy in a dictionary.
+  base::Value::Dict GetValues() override;
 
   base::Value::Dict GetNames() override;
 
@@ -54,7 +55,7 @@ class ExtensionPoliciesValueProvider
   base::ScopedObservation<extensions::ExtensionRegistry,
                           extensions::ExtensionRegistryObserver>
       extension_registry_observation_{this};
-  base::raw_ptr<Profile> profile_;
+  raw_ptr<Profile> profile_;
 };
 
 #endif  // CHROME_BROWSER_POLICY_VALUE_PROVIDER_EXTENSION_POLICIES_VALUE_PROVIDER_H_

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
-#include "url/gurl.h"
 #include "url/url_constants.h"
 #endif
 
@@ -30,7 +29,7 @@ bool DoesOriginContainAnyInstalledWebApp(
   // that WebAppProvider is started.
   if (!provider || !provider->on_registry_ready().is_signaled())
     return false;
-  return provider->registrar().DoesScopeContainAnyApp(origin);
+  return provider->registrar_unsafe().DoesScopeContainAnyApp(origin);
 #endif
 }
 
@@ -45,7 +44,7 @@ std::set<GURL> GetOriginsWithInstalledWebApps(
   // that WebAppProvider is started.
   if (!provider || !provider->on_registry_ready().is_signaled())
     return std::set<GURL>();
-  const web_app::WebAppRegistrar& registrar = provider->registrar();
+  const web_app::WebAppRegistrar& registrar = provider->registrar_unsafe();
   auto app_ids = registrar.GetAppIds();
   std::set<GURL> installed_origins;
   for (auto& app_id : app_ids) {

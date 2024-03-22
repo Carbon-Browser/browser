@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,17 +14,16 @@ import java.lang.annotation.RetentionPolicy;
  * numeric values should never be reused. To be kept in sync with PasswordChangeType in
  * enums.xml.
  */
-@IntDef({PasswordChangeType.UNKNOWN, PasswordChangeType.MANUAL_CHANGE,
-        PasswordChangeType.AUTOMATED_CHANGE})
+@IntDef({PasswordChangeType.UNKNOWN, PasswordChangeType.MANUAL_CHANGE})
 @Retention(RetentionPolicy.SOURCE)
 public @interface PasswordChangeType {
     int UNKNOWN = 0;
-    /**
-     * A user opened a site to change a password manually.
-     */
+
+    /** A user opened a site to change a password manually. */
     int MANUAL_CHANGE = 1;
+
     /**
-     * A user started an automated password change flow.
+     * Deprecated as a part of APC removal (crbug.com/1386065).
+     * int AUTOMATED_CHANGE = 2;
      */
-    int AUTOMATED_CHANGE = 2;
 }

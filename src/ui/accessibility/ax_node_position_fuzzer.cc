@@ -1,7 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/at_exit.h"
+#include "base/i18n/icu_util.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -14,7 +17,6 @@
 #include "ui/accessibility/ax_tree_fuzzer_util.h"
 #include "ui/accessibility/ax_tree_id.h"
 #include "ui/accessibility/ax_tree_update.h"
-#include "ui/accessibility/test_ax_tree_manager.h"
 
 // Max amount of fuzz data needed to create the next position
 const size_t kNextNodePositionMaxDataSize = 4;
@@ -30,7 +32,7 @@ const size_t kMinFuzzDataSize =
     kMinNodeCount * AXTreeFuzzerGenerator::kMinTextFuzzDataSize +
     2 * kNextNodePositionMaxDataSize;
 // Cap fuzz data to avoid slowness.
-const size_t kMaxFuzzDataSize = 20000;
+const size_t kMaxFuzzDataSize = 3500;
 
 using TestPositionType =
     std::unique_ptr<ui::AXPosition<ui::AXNodePosition, ui::AXNode>>;
@@ -66,9 +68,9 @@ class AXNodePositionFuzzerGenerator {
                                      ui::AXPositionKind position_kind,
                                      ax::mojom::TextAffinity affinity);
 
-  ui::AXTree* tree_;
+  raw_ptr<ui::AXTree> tree_;
   const ui::AXNodeID max_id_;
-  FuzzerData& fuzzer_data_;
+  const raw_ref<FuzzerData> fuzzer_data_;
 };
 
 AXNodePositionFuzzerGenerator::AXNodePositionFuzzerGenerator(
@@ -78,9 +80,9 @@ AXNodePositionFuzzerGenerator::AXNodePositionFuzzerGenerator(
     : tree_(tree), max_id_(max_id), fuzzer_data_(fuzzer_data) {}
 
 TestPositionType AXNodePositionFuzzerGenerator::CreateNewPosition() {
-  return CreateNewPosition(fuzzer_data_.NextByte(), fuzzer_data_.NextByte(),
-                           GeneratePositionKind(fuzzer_data_.NextByte()),
-                           GenerateTextAffinity(fuzzer_data_.NextByte()));
+  return CreateNewPosition(fuzzer_data_->NextByte(), fuzzer_data_->NextByte(),
+                           GeneratePositionKind(fuzzer_data_->NextByte()),
+                           GenerateTextAffinity(fuzzer_data_->NextByte()));
 }
 
 TestPositionType AXNodePositionFuzzerGenerator::CreateNewPosition(
@@ -102,8 +104,8 @@ TestPositionType AXNodePositionFuzzerGenerator::CreateNewPosition(
           anchor->GetChildCount()
               ? child_index_or_text_offset % anchor->GetChildCount()
               : 0;
-      return ui::AXNodePosition::CreateTreePosition(
-          tree_->GetAXTreeID(), anchor_id, child_index_or_text_offset);
+      return ui::AXNodePosition::CreateTreePosition(*anchor,
+                                                    child_index_or_text_offset);
     case ui::AXPositionKind::TEXT_POSITION: {
       // Avoid division by zero in the case where the node has no text.
       child_index_or_text_offset =
@@ -111,8 +113,7 @@ TestPositionType AXNodePositionFuzzerGenerator::CreateNewPosition(
               ? child_index_or_text_offset % anchor->GetTextContentLengthUTF16()
               : 0;
       return ui::AXNodePosition::CreateTextPosition(
-          tree_->GetAXTreeID(), anchor_id, child_index_or_text_offset,
-          affinity);
+          *anchor, child_index_or_text_offset, affinity);
       case ui::AXPositionKind::NULL_POSITION:
         NOTREACHED();
         return ui::AXNodePosition::CreateNullPosition();
@@ -157,7 +158,7 @@ ui::AXMovementOptions AXNodePositionFuzzerGenerator::GenerateMovementOptions(
 TestPositionType AXNodePositionFuzzerGenerator::GenerateNextPosition(
     TestPositionType& current_position,
     TestPositionType& previous_position) {
-  switch (fuzzer_data_.NextByte() % 55) {
+  switch (fuzzer_data_->NextByte() % 55) {
     case 0:
     default:
       return CreateNewPosition();
@@ -175,11 +176,11 @@ TestPositionType AXNodePositionFuzzerGenerator::GenerateNextPosition(
       return current_position->AsDomSelectionPosition();
     case 7:
       return current_position->AsUnignoredPosition(
-          GenerateAdjustmentBehavior(fuzzer_data_.NextByte()));
+          GenerateAdjustmentBehavior(fuzzer_data_->NextByte()));
     case 8:
       return current_position->CreateAncestorPosition(
           previous_position->GetAnchor(),
-          GenerateMoveDirection(fuzzer_data_.NextByte()));
+          GenerateMoveDirection(fuzzer_data_->NextByte()));
     case 9:
       return current_position->CreatePositionAtStartOfAnchor();
     case 10:
@@ -193,11 +194,11 @@ TestPositionType AXNodePositionFuzzerGenerator::GenerateNextPosition(
     case 14:
       return current_position->CreatePositionAtEndOfContent();
     case 15:
-      return current_position->CreateChildPositionAt(fuzzer_data_.NextByte() %
+      return current_position->CreateChildPositionAt(fuzzer_data_->NextByte() %
                                                      10);
     case 16:
       return current_position->CreateParentPosition(
-          GenerateMoveDirection(fuzzer_data_.NextByte()));
+          GenerateMoveDirection(fuzzer_data_->NextByte()));
     case 17:
       return current_position->CreateNextLeafTreePosition();
     case 18:
@@ -212,121 +213,121 @@ TestPositionType AXNodePositionFuzzerGenerator::GenerateNextPosition(
       return current_position->AsLeafTextPositionAfterCharacter();
     case 23:
       return current_position->CreatePreviousCharacterPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 24:
       return current_position->CreateNextWordStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 25:
       return current_position->CreatePreviousWordStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 26:
       return current_position->CreateNextWordEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 27:
       return current_position->CreatePreviousWordEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 28:
       return current_position->CreateNextLineStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 29:
       return current_position->CreatePreviousLineStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 30:
       return current_position->CreateNextLineEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 31:
       return current_position->CreatePreviousLineEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 32:
       return current_position->CreateNextFormatStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 33:
       return current_position->CreatePreviousFormatStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 34:
       return current_position->CreateNextFormatEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 35:
       return current_position->CreatePreviousFormatEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 36:
       return current_position->CreateNextSentenceStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 37:
       return current_position->CreatePreviousSentenceStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 38:
       return current_position->CreateNextSentenceEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 39:
       return current_position->CreatePreviousSentenceEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 40:
       return current_position->CreateNextParagraphStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 41:
       return current_position
           ->CreateNextParagraphStartPositionSkippingEmptyParagraphs(
-              GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                      fuzzer_data_.NextByte()));
+              GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                      fuzzer_data_->NextByte()));
     case 42:
       return current_position->CreatePreviousParagraphStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 43:
       return current_position
           ->CreatePreviousParagraphStartPositionSkippingEmptyParagraphs(
-              GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                      fuzzer_data_.NextByte()));
+              GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                      fuzzer_data_->NextByte()));
     case 44:
       return current_position->CreateNextParagraphEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 45:
       return current_position->CreatePreviousParagraphEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 46:
       return current_position->CreateNextPageStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 47:
       return current_position->CreatePreviousPageStartPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 48:
       return current_position->CreateNextPageEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 49:
       return current_position->CreatePreviousPageEndPosition(
-          GenerateMovementOptions(fuzzer_data_.NextByte(),
-                                  fuzzer_data_.NextByte()));
+          GenerateMovementOptions(fuzzer_data_->NextByte(),
+                                  fuzzer_data_->NextByte()));
     case 52:
       return current_position->CreateNextAnchorPosition();
     case 53:
       return current_position->CreatePreviousAnchorPosition();
     case 54:
       return current_position->LowestCommonAncestorPosition(
-          *previous_position, GenerateMoveDirection(fuzzer_data_.NextByte()));
+          *previous_position, GenerateMoveDirection(fuzzer_data_->NextByte()));
   }
 }
 
@@ -367,16 +368,22 @@ void AXNodePositionFuzzerGenerator::CallPositionAPIs(
   std::ignore = position->GetRole();
 }
 
+struct Environment {
+  Environment() { CHECK(base::i18n::InitializeICU()); }
+  base::AtExitManager at_exit_manager;
+};
+
 // Entry point for LibFuzzer.
 extern "C" int LLVMFuzzerTestOneInput(const unsigned char* data, size_t size) {
   if (size < kMinFuzzDataSize || size > kMaxFuzzDataSize)
     return 0;
+  static Environment env;
   AXTreeFuzzerGenerator generator;
   FuzzerData fuzz_data(data, size);
   const size_t node_count =
       kMinNodeCount + fuzz_data.NextByte() % kMaxNodeCount;
-  ui::AXNodeID max_id;
-  generator.GenerateInitialUpdate(fuzz_data, node_count, max_id);
+  generator.GenerateInitialUpdate(fuzz_data, node_count);
+  ui::AXNodeID max_id = generator.GetMaxAssignedID();
 
   ui::AXTree* tree = generator.GetTree();
 

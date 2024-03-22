@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/strings/string_piece.h"
+#include "components/printing/browser/print_to_pdf/pdf_print_result.h"
 #include "components/printing/common/print.mojom.h"
 #include "printing/page_range.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -16,11 +17,9 @@
 
 namespace print_to_pdf {
 
-enum class PageRangeError { kSyntaxError, kInvalidRange };
-
 // Converts textual representation of the page range to printing::PageRanges,
-// page range error is returned as the PageRangeError variant case.
-absl::variant<printing::PageRanges, PageRangeError> TextPageRangesToPageRanges(
+// page range error is returned as the PdfPrintResult variant case.
+absl::variant<printing::PageRanges, PdfPrintResult> TextPageRangesToPageRanges(
     base::StringPiece page_range_text);
 
 // Converts print settings to printing::mojom::PrintPagesParamsPtr,
@@ -39,7 +38,9 @@ GetPrintPagesParams(const GURL& page_url,
                     absl::optional<double> margin_right,
                     absl::optional<std::string> header_template,
                     absl::optional<std::string> footer_template,
-                    absl::optional<bool> prefer_css_page_size);
+                    absl::optional<bool> prefer_css_page_size,
+                    absl::optional<bool> generate_tagged_pdf,
+                    absl::optional<bool> generate_document_outline);
 
 }  // namespace print_to_pdf
 

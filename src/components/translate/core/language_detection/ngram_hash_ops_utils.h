@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_TRANSLATE_CORE_LANGUAGE_DETECTION_NGRAM_HASH_OPS_UTILS_H_
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace translate {

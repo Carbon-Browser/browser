@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 
 class AccountTrackerService;
 class PrefService;
-class ProfileOAuth2TokenService;
 class PrimaryAccountManager;
+class SigninClient;
 
 namespace signin {
 
@@ -21,24 +21,27 @@ namespace signin {
 // PrimaryAccountManager API.
 class PrimaryAccountMutatorImpl : public PrimaryAccountMutator {
  public:
-  PrimaryAccountMutatorImpl(
-      AccountTrackerService* account_tracker,
-      ProfileOAuth2TokenService* token_service,
-      PrimaryAccountManager* primary_account_manager,
-      PrefService* pref_service,
-      signin::AccountConsistencyMethod account_consistency);
+  PrimaryAccountMutatorImpl(AccountTrackerService* account_tracker,
+                            PrimaryAccountManager* primary_account_manager,
+                            PrefService* pref_service,
+                            SigninClient* signin_client);
   ~PrimaryAccountMutatorImpl() override;
 
   // PrimaryAccountMutator implementation.
-  PrimaryAccountError SetPrimaryAccount(const CoreAccountId& account_id,
-                                        ConsentLevel consent_level) override;
+  PrimaryAccountError SetPrimaryAccount(
+      const CoreAccountId& account_id,
+      ConsentLevel consent_level,
+      signin_metrics::AccessPoint access_point) override;
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
   void RevokeSyncConsent(signin_metrics::ProfileSignout source_metric,
                          signin_metrics::SignoutDelete delete_metric) override;
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
   bool ClearPrimaryAccount(
       signin_metrics::ProfileSignout source_metric,
       signin_metrics::SignoutDelete delete_metric) override;
-#endif
+  bool RemovePrimaryAccountButKeepTokens(
+      signin_metrics::ProfileSignout source_metric,
+      signin_metrics::SignoutDelete delete_metric) override;
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
  private:
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
@@ -49,11 +52,12 @@ class PrimaryAccountMutatorImpl : public PrimaryAccountMutator {
 
   // Pointers to the services used by the PrimaryAccountMutatorImpl. They
   // *must* outlive this instance.
-  raw_ptr<AccountTrackerService> account_tracker_ = nullptr;
-  raw_ptr<ProfileOAuth2TokenService> token_service_ = nullptr;
-  raw_ptr<PrimaryAccountManager> primary_account_manager_ = nullptr;
+  raw_ptr<AccountTrackerService, AcrossTasksDanglingUntriaged>
+      account_tracker_ = nullptr;
+  raw_ptr<PrimaryAccountManager, AcrossTasksDanglingUntriaged>
+      primary_account_manager_ = nullptr;
   raw_ptr<PrefService> pref_service_ = nullptr;
-  signin::AccountConsistencyMethod account_consistency_;
+  raw_ptr<SigninClient> signin_client_ = nullptr;
 };
 
 }  // namespace signin

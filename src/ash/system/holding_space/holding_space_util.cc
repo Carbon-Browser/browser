@@ -1,47 +1,67 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/holding_space/holding_space_util.h"
 
 #include <memory>
+#include <optional>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_element.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_animation_sequence.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/gfx/canvas.h"
+#include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/rrect_f.h"
 #include "ui/views/background.h"
 #include "ui/views/painter.h"
 #include "ui/views/view.h"
 
-namespace ash {
-namespace holding_space_util {
+namespace ash::holding_space_util {
 
 namespace {
 
-// CirclePainter ---------------------------------------------------------------
+// CallbackPathGenerator -------------------------------------------------------
 
-class CirclePainter : public views::Painter {
+class CallbackPathGenerator : public views::HighlightPathGenerator {
  public:
-  CirclePainter(SkColor color, size_t fixed_size)
-      : color_(color), fixed_size_(fixed_size) {}
+  using Callback = base::RepeatingCallback<gfx::RRectF()>;
 
-  CirclePainter(SkColor color, const gfx::InsetsF& insets)
-      : color_(color), insets_(insets) {}
-
-  CirclePainter(const CirclePainter&) = delete;
-  CirclePainter& operator=(const CirclePainter&) = delete;
-  ~CirclePainter() override = default;
+  explicit CallbackPathGenerator(Callback callback)
+      : callback_(std::move(callback)) {}
+  CallbackPathGenerator(const CallbackPathGenerator&) = delete;
+  CallbackPathGenerator& operator=(const CallbackPathGenerator&) = delete;
+  ~CallbackPathGenerator() override = default;
 
  private:
-  // views::Painter:
-  gfx::Size GetMinimumSize() const override { return gfx::Size(); }
+  // views::HighlightPathGenerator:
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
+    return callback_.Run();
+  }
 
-  void Paint(gfx::Canvas* canvas, const gfx::Size& size) override {
-    gfx::RectF bounds{gfx::SizeF(size)};
+  Callback callback_;
+};
+
+// CircleBackground ------------------------------------------------------------
+
+class CircleBackground : public views::Background {
+ public:
+  CircleBackground(ui::ColorId color_id, size_t fixed_size)
+      : color_id_(color_id), fixed_size_(fixed_size) {}
+
+  CircleBackground(ui::ColorId color_id, const gfx::InsetsF& insets)
+      : color_id_(color_id), insets_(insets) {}
+
+  CircleBackground(const CircleBackground&) = delete;
+  CircleBackground& operator=(const CircleBackground&) = delete;
+  ~CircleBackground() override = default;
+
+  // views::Background:
+  void Paint(gfx::Canvas* canvas, views::View* view) const override {
+    gfx::RectF bounds(view->GetLocalBounds());
 
     if (insets_.has_value())
       bounds.Inset(insets_.value());
@@ -53,14 +73,20 @@ class CirclePainter : public views::Painter {
 
     cc::PaintFlags flags;
     flags.setAntiAlias(true);
-    flags.setColor(color_);
+    flags.setColor(get_color());
 
     canvas->DrawCircle(bounds.CenterPoint(), radius, flags);
   }
 
-  const SkColor color_;
-  const absl::optional<size_t> fixed_size_;
-  const absl::optional<gfx::InsetsF> insets_;
+  void OnViewThemeChanged(views::View* view) override {
+    SetNativeControlColor(view->GetColorProvider()->GetColor(color_id_));
+    view->SchedulePaint();
+  }
+
+ private:
+  const ui::ColorId color_id_;
+  const std::optional<size_t> fixed_size_;
+  const std::optional<gfx::InsetsF> insets_;
 };
 
 // Helpers ---------------------------------------------------------------------
@@ -122,18 +148,20 @@ void AnimateOut(views::View* view,
             observer);
 }
 
-std::unique_ptr<views::Background> CreateCircleBackground(SkColor color,
+std::unique_ptr<views::Background> CreateCircleBackground(ui::ColorId color_id,
                                                           size_t fixed_size) {
-  return views::CreateBackgroundFromPainter(
-      std::make_unique<CirclePainter>(color, fixed_size));
+  return std::make_unique<CircleBackground>(color_id, fixed_size);
 }
 
 std::unique_ptr<views::Background> CreateCircleBackground(
-    SkColor color,
+    ui::ColorId color_id,
     const gfx::InsetsF& insets) {
-  return views::CreateBackgroundFromPainter(
-      std::make_unique<CirclePainter>(color, insets));
+  return std::make_unique<CircleBackground>(color_id, insets);
 }
 
-}  // namespace holding_space_util
-}  // namespace ash
+std::unique_ptr<views::HighlightPathGenerator> CreateHighlightPathGenerator(
+    base::RepeatingCallback<gfx::RRectF()> callback) {
+  return std::make_unique<CallbackPathGenerator>(std::move(callback));
+}
+
+}  // namespace ash::holding_space_util

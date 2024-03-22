@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,6 @@
 #include "ui/message_center/public/cpp/message_center_constants.h"
 #include "ui/message_center/views/message_popup_collection.h"
 #include "ui/message_center/views/message_view.h"
-#include "ui/views/accessibility/accessibility_paint_checks.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/widget/widget.h"
 
@@ -50,10 +49,6 @@ MessagePopupView::MessagePopupView(MessagePopupCollection* popup_collection)
     : message_view_(nullptr),
       popup_collection_(popup_collection),
       a11y_feedback_on_init_(false) {
-  // TODO(crbug.com/1218186): Remove this, this is in place temporarily to be
-  // able to submit accessibility checks. This crashes if fetching a11y node
-  // data during paint because message_view_ is null.
-  SetProperty(views::kSkipAccessibilityPaintChecks, true);
   set_suppress_default_focus_handling();
   SetLayoutManager(std::make_unique<views::FillLayout>());
 }
@@ -88,6 +83,23 @@ void MessagePopupView::UpdateContents(const Notification& notification) {
     if (old_name != new_name)
       NotifyAccessibilityEvent(ax::mojom::Event::kAlert, true);
   }
+}
+
+void MessagePopupView::UpdateContentsForChildNotification(
+    const std::string& notification_id,
+    const Notification& notification) {
+  if (!IsWidgetValid()) {
+    return;
+  }
+
+  auto* child_notification_view = static_cast<MessageView*>(
+      message_view_->FindGroupNotificationView(notification_id));
+  if (!child_notification_view) {
+    return;
+  }
+
+  child_notification_view->UpdateWithNotification(notification);
+  popup_collection_->NotifyPopupResized();
 }
 
 #if !BUILDFLAG(IS_APPLE)
@@ -147,12 +159,16 @@ void MessagePopupView::Show() {
   widget->Init(std::move(params));
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  // On Chrome OS, this widget is shown in the shelf container. It means this
-  // widget would inherit the parent's window targeter (ShelfWindowTarget) by
-  // default. But it is not good for popup. So we override it with the normal
-  // WindowTargeter.
+  // On Chrome OS, notification pop-ups are shown in the
+  // `SettingBubbleContainer`, together with other shelf pod bubbles. This
+  // widget would inherit the parent's window targeter by default. But it is not
+  // good for popup. So we override it with the normal WindowTargeter.
   gfx::NativeWindow native_window = widget->GetNativeWindow();
   native_window->SetEventTargeter(std::make_unique<aura::WindowTargeter>());
+
+  // Newly shown popups are stacked at the bottom so they do not cast shadows
+  // on previously shown popups.
+  native_window->parent()->StackChildAtBottom(native_window);
 #endif
 
   widget->SetOpacity(0.0);

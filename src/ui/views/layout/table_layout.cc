@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,9 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/ranges/algorithm.h"
@@ -109,9 +112,9 @@ template <class T>
 int TotalSize(size_t start, size_t length, const std::vector<T>& elements) {
   DCHECK_GT(length, 0u);
   DCHECK_LE(start + length, elements.size());
-  const auto begin = elements.cbegin() + start;
+  const auto begin = elements.cbegin() + static_cast<ptrdiff_t>(start);
   return std::accumulate(
-      begin, begin + length, 0,
+      begin, begin + static_cast<ptrdiff_t>(length), 0,
       [](int size, const auto& elem) { return size + elem.size(); });
 }
 
@@ -143,7 +146,7 @@ void CalculateLocationAndSize(int pref_size,
         *location = *location + available_size - *size;
         break;
       default:
-        NOTREACHED();
+        NOTREACHED_NORETURN();
     }
   }
 }
@@ -281,7 +284,9 @@ struct TableLayout::ViewState {
     DCHECK_GT(row_span, 0u);
   }
 
-  View* view = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION View* view = nullptr;
   size_t start_col = 0;
   size_t start_row = 0;
   size_t col_span = 0;
@@ -370,12 +375,6 @@ TableLayout& TableLayout::SetMinimumSize(const gfx::Size& size) {
   return *this;
 }
 
-TableLayout& TableLayout::SetIncludeHidden(bool include_hidden) {
-  include_hidden_ = include_hidden;
-  OnLayoutChanged();
-  return *this;
-}
-
 ProposedLayout TableLayout::CalculateProposedLayout(
     const SizeBounds& size_bounds) const {
   ProposedLayout layout;
@@ -425,8 +424,9 @@ void TableLayout::SetViewStates() const {
   size_t col = 0, row = 0;
   std::vector<ViewState*> row_spans;
   for (View* child : GetChildViewsInPaintOrder(host_view())) {
-    if (!IsChildIncludedInLayout(child, include_hidden_))
+    if (!IsChildIncludedInLayout(child)) {
       continue;
+    }
 
     // Move (col, row) to next open cell.
     for (; row < rows_.size(); ++row) {
@@ -448,16 +448,14 @@ void TableLayout::SetViewStates() const {
         break;
       col = 0;
     }
-    if (row == rows_.size()) {
-      NOTREACHED() << "There're not enough cells for layout. Did you forget to "
-                      "call AddRows()?";
-      break;
-    }
+    CHECK_LT(row, rows_.size())
+        << "There're not enough cells for layout. Did you forget to "
+           "call AddRows()?";
 
     // Construct a ViewState for this `child`.
     const gfx::Size* span = child->GetProperty(kTableColAndRowSpanKey);
-    const size_t col_span = span ? span->width() : 1;
-    const size_t row_span = span ? span->height() : 1;
+    const size_t col_span = span ? static_cast<size_t>(span->width()) : 1;
+    const size_t row_span = span ? static_cast<size_t>(span->height()) : 1;
     LayoutAlignment* const child_h_align =
         child->GetProperty(kTableHorizAlignKey);
     const LayoutAlignment h_align =
@@ -582,39 +580,26 @@ gfx::Size TableLayout::SizeRowsAndColumns(const SizeBounds& bounds) const {
 }
 
 void TableLayout::DistributeRemainingHeight(ViewState& view_state) const {
-  int height = view_state.remaining_height;
-  if (height <= 0)
+  if (view_state.remaining_height <= 0) {
     return;
+  }
 
   // Determine the number of resizable rows the view touches.
-  size_t start_row = view_state.start_row;
-  size_t max_row = view_state.start_row + view_state.row_span;
-  const int resizable_rows =
-      std::count_if(rows_.cbegin() + start_row, rows_.cbegin() + max_row,
-                    [](const auto& row) { return row.resizable(); });
-
-  const auto adjust_row = [&height](Row& row, int delta) {
-    height -= delta;
-    // If there is slop, we're on the last row; give it all the slop.
-    if (height < delta)
-      delta += height;
-    row.set_size(row.size() + delta);
-  };
-
-  if (resizable_rows > 0) {
-    // There are resizable rows, give the remaining height to them.
-    int row_delta = height / resizable_rows;
-    for (size_t i = start_row; i < max_row; ++i) {
-      if (rows_[i].resizable())
-        adjust_row(rows_[i], row_delta);
+  const base::span<Row> rows_to_resize = base::make_span(
+      rows_.begin() + static_cast<ptrdiff_t>(view_state.start_row),
+      view_state.row_span);
+  const auto resizable_rows = static_cast<size_t>(
+      base::ranges::count_if(rows_to_resize, &Row::resizable));
+  size_t remaining_rows =
+      resizable_rows ? resizable_rows : rows_to_resize.size();
+  for (Row& row : rows_to_resize) {
+    if (!resizable_rows || row.resizable()) {
+      const int delta = base::ClampRound(
+          static_cast<float>(view_state.remaining_height) / remaining_rows);
+      row.set_size(row.size() + delta);
+      view_state.remaining_height -= delta;
+      --remaining_rows;
     }
-  } else {
-    // None of the rows are resizable, divvy the remaining height up equally
-    // among all rows the view touches.
-    int row_delta = height / view_state.row_span;
-    for (size_t i = start_row; i < max_row; ++i)
-      adjust_row(rows_[i], row_delta);
-    view_state.remaining_height = 0;
   }
 }
 
@@ -666,7 +651,7 @@ void TableLayout::DistributeRemainingWidth(ViewState& view_state) const {
   } else if (pref_size_columns > 0) {
     // None of the columns are resizable, distribute the width among those
     // that use the preferred size.
-    int column_delta = width / pref_size_columns;
+    int column_delta = width / static_cast<int>(pref_size_columns);
     for (size_t i = start_col; i < max_col; ++i) {
       if (columns_[i].size_type() == ColumnSize::kUsePreferred) {
         width -= column_delta;
@@ -701,7 +686,7 @@ void TableLayout::CalculateSize(
       if (size.height() > view_state->height)
         size.set_height(view_state->height);
     } else {
-      size = view_state->view->GetPreferredSize();
+      size = view_state->view->GetPreferredSize({/* Unbounded */});
       view_state->pref_size = size;
     }
     view_state->remaining_width = view_state->width = size.width();
@@ -756,7 +741,7 @@ void TableLayout::Resize(int delta) const {
 void TableLayout::ResizeUsingMin(int total_delta) const {
   struct ColumnMinResizeData {
     // The column being resized.
-    Column* column;
+    raw_ptr<Column> column;
 
     // The remaining amount of space available (the difference between the
     // preferred and minimum).
@@ -830,7 +815,7 @@ void TableLayout::ResizeUsingMin(int total_delta) const {
       if (data.available == 0) {
         data.column->set_size(data.column->size() - data.delta);
         next_iteration_total_resize -= data.column->resize();
-        resize_data.erase(resize_data.begin() + (i - 1));
+        resize_data.erase(resize_data.begin() + static_cast<ptrdiff_t>(i - 1));
       }
     }
     DCHECK_LT(next_iteration_delta, total_delta);
@@ -843,10 +828,13 @@ void TableLayout::ResizeUsingMin(int total_delta) const {
 }
 
 bool TableLayout::CanUseMinimum(const ViewState& view_state) const {
-  const auto begin = columns_.cbegin() + view_state.start_col;
-  return std::all_of(begin, begin + view_state.col_span, [](const auto& col) {
-    return col.resizable() && col.size_type() != ColumnSize::kFixed;
-  });
+  const auto begin =
+      columns_.cbegin() + static_cast<ptrdiff_t>(view_state.start_col);
+  return std::any_of(begin, begin + static_cast<ptrdiff_t>(view_state.col_span),
+                     [](const auto& col) {
+                       return col.resizable() &&
+                              col.size_type() != ColumnSize::kFixed;
+                     });
 }
 
 }  // namespace views

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ class WebAppRunOnOsLoginWinTest : public WebAppTest {
 
   std::unique_ptr<ShortcutInfo> GetShortcutInfo() {
     auto shortcut_info = std::make_unique<ShortcutInfo>();
-    shortcut_info->extension_id = "app-id";
+    shortcut_info->app_id = "app-id";
     shortcut_info->title = kAppTitle;
     shortcut_info->profile_path = profile()->GetPath();
 
@@ -58,9 +58,9 @@ class WebAppRunOnOsLoginWinTest : public WebAppTest {
 
   base::FilePath GetStartupFolder() {
     base::FilePath location;
-    ShellUtil::GetShortcutPath(
+    EXPECT_TRUE(ShellUtil::GetShortcutPath(
         ShellUtil::ShortcutLocation::SHORTCUT_LOCATION_STARTUP,
-        ShellUtil::ShellChange::CURRENT_USER, &location);
+        ShellUtil::ShellChange::CURRENT_USER, &location));
     return location;
   }
 
@@ -120,8 +120,8 @@ TEST_F(WebAppRunOnOsLoginWinTest, Unregister) {
   EXPECT_TRUE(result);
   VerifyShortcutCreated();
 
-  internals::UnregisterRunOnOsLogin(shortcut_info->extension_id,
-                                    profile()->GetPath(), kAppTitle);
+  internals::UnregisterRunOnOsLogin(shortcut_info->app_id, profile()->GetPath(),
+                                    kAppTitle);
   VerifyShortcutDeleted();
 }
 

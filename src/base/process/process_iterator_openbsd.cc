@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,7 @@
 namespace base {
 
 ProcessIterator::ProcessIterator(const ProcessFilter* filter)
-    : index_of_kinfo_proc_(),
-      filter_(filter) {
-
+    : filter_(filter) {
   int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_UID, getuid(),
                 sizeof(struct kinfo_proc), 0 };
 
@@ -61,8 +59,7 @@ ProcessIterator::ProcessIterator(const ProcessFilter* filter)
   }
 }
 
-ProcessIterator::~ProcessIterator() {
-}
+ProcessIterator::~ProcessIterator() = default;
 
 bool ProcessIterator::CheckForNextProcess() {
   std::string data;

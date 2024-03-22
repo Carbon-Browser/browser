@@ -1,8 +1,6 @@
-/*
- * Copyright 2019 The Chromium Authors. All rights reserved.
- * Use of this source code is governed by a BSD-style license that can be
- * found in the LICENSE file.
- */
+// Copyright 2019 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 package org.chromium.chrome.browser.customtabs.content;
 
@@ -26,18 +24,14 @@ import javax.inject.Inject;
  */
 @ActivityScope
 public class CustomTabActivityTabProvider {
-    private final ObserverList<Observer> mObservers =  new ObserverList<>();
+    private final ObserverList<Observer> mObservers = new ObserverList<>();
 
-    @Nullable
-    private Tab mTab;
-    @TabCreationMode
-    private int mTabCreationMode = TabCreationMode.NONE;
-    @Nullable
-    private String mSpeculatedUrl;
+    @Nullable private Tab mTab;
+    private @TabCreationMode int mTabCreationMode = TabCreationMode.NONE;
+    @Nullable private String mSpeculatedUrl;
 
     @Inject
     CustomTabActivityTabProvider() {}
-
 
     /** Adds an {@link Observer} */
     public void addObserver(Observer observer) {
@@ -59,8 +53,7 @@ public class CustomTabActivityTabProvider {
      *
      * During reparenting, both this method and ActivityTabProvider return null.
      */
-    @Nullable
-    public Tab getTab() {
+    public @Nullable Tab getTab() {
         return mTab;
     }
 
@@ -68,16 +61,12 @@ public class CustomTabActivityTabProvider {
      * Returns a {@link TabCreationMode} specifying how the initial tab was created.
      * Returns {@link TabCreationMode#NONE} if and only if the initial tab has not been yet created.
      */
-    @TabCreationMode
-    public int getInitialTabCreationMode() {
+    public @TabCreationMode int getInitialTabCreationMode() {
         return mTabCreationMode;
     }
 
-    /**
-     * Returns speculated url, if there was one.
-     */
-    @Nullable
-    public String getSpeculatedUrl() {
+    /** Returns speculated url, if there was one. */
+    public @Nullable String getSpeculatedUrl() {
         return mSpeculatedUrl;
     }
 
@@ -127,9 +116,7 @@ public class CustomTabActivityTabProvider {
      * activity.
      */
     public abstract static class Observer {
-        /**
-         * Fired when the initial tab has been created.
-         */
+        /** Fired when the initial tab has been created. */
         public void onInitialTabCreated(@NonNull Tab tab, @TabCreationMode int mode) {}
 
         /**

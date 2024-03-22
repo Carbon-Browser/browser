@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
  */
 
 // clang-format off
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 import {ChooserType,ContentSetting,ContentSettingsTypes,SiteSettingSource} from './constants.js';
 // clang-format on
@@ -34,110 +34,146 @@ export enum ContentSettingProvider {
 /**
  * Stores information about if a content setting is valid, and why.
  */
-type IsValid = {
-  isValid: boolean,
-  reason: string|null,
-};
+interface IsValid {
+  isValid: boolean;
+  reason: string|null;
+}
 
 /**
  * Stores origin information. The |hasPermissionSettings| will be set to true
  * when this origin has permissions or when there is a pattern permission
  * affecting this origin.
  */
-export type OriginInfo = {
-  origin: string,
-  engagement: number,
-  usage: number,
-  numCookies: number,
-  hasPermissionSettings: boolean,
-  isInstalled: boolean,
-  isPartitioned: boolean,
-};
+export interface OriginInfo {
+  origin: string;
+  engagement: number;
+  usage: number;
+  numCookies: number;
+  hasPermissionSettings: boolean;
+  isInstalled: boolean;
+  isPartitioned: boolean;
+}
 
 /**
- * Represents a list of sites, grouped under the same eTLD+1. For example, an
- * origin "https://www.example.com" would be grouped together with
- * "https://login.example.com" and "http://example.com" under a common eTLD+1 of
- * "example.com".
+ * Represents a list of related sites, grouped by 'groupingKey', which will be
+ * an eTLD+1 for HTTP(S) sites, or an origin for other schemes. 'groupingKey'
+ * will be unique for each SiteGroup, but should be treated as an opaque token
+ * in UI code.
  */
-export type SiteGroup = {
-  etldPlus1: string,
-  numCookies: number,
-  origins: OriginInfo[],
-  hasInstalledPWA: boolean,
-};
+export interface SiteGroup {
+  groupingKey: string;
+  displayName: string;
+  numCookies: number;
+  origins: OriginInfo[];
+  etldPlus1?: string;
+  fpsOwner?: string;
+  fpsNumMembers?: number;
+  fpsEnterpriseManaged?: boolean;
+  hasInstalledPWA: boolean;
+}
 
 /**
  * The site exception information passed from the C++ handler.
  * See also: SiteException.
  */
-export type RawSiteException = {
-  embeddingOrigin: string,
-  incognito: boolean,
-  isEmbargoed: boolean,
-  origin: string,
-  displayName: string,
-  type: string,
-  setting: ContentSetting,
-  source: SiteSettingSource,
-};
+export interface RawSiteException {
+  embeddingOrigin: string;
+  incognito: boolean;
+  isEmbargoed: boolean;
+  origin: string;
+  displayName: string;
+  type: string;
+  description?: string;
+  setting: ContentSetting;
+  source: SiteSettingSource;
+}
 
 /**
  * The site exception after it has been converted/filtered for UI use.
  * See also: RawSiteException.
  */
-export type SiteException = {
-  category: ContentSettingsTypes,
-  embeddingOrigin: string,
-  incognito: boolean,
-  isEmbargoed: boolean,
-  origin: string,
-  displayName: string,
-  setting: ContentSetting,
-  enforcement: chrome.settingsPrivate.Enforcement|null,
-  controlledBy: chrome.settingsPrivate.ControlledBy,
-  // <if expr="chromeos_ash">
-  showAndroidSmsNote?: boolean,
-  // </if>
-};
+export interface SiteException {
+  category: ContentSettingsTypes;
+  embeddingOrigin: string;
+  incognito: boolean;
+  isEmbargoed: boolean;
+  origin: string;
+  displayName: string;
+  setting: ContentSetting;
+  description?: string;
+  enforcement: chrome.settingsPrivate.Enforcement|null;
+  controlledBy: chrome.settingsPrivate.ControlledBy;
+}
+
+/**
+ * A group of storage access site exceptions with the same origin for UI use.
+ * See also: StorageAccessEmbeddingException.
+ */
+export interface StorageAccessSiteException {
+  origin: string;
+  displayName: string;
+  setting: ContentSetting;
+
+  // Information needed for a static row.
+  description?: string;
+  incognito?: boolean;
+
+  // Information needed for a grouped row.
+  closeDescription?: string;
+  openDescription?: string;
+
+  exceptions: StorageAccessEmbeddingException[];
+}
+
+/**
+ * A storage access site exception for UI use. To be always used within
+ * StorageAccessSiteException.
+ */
+export interface StorageAccessEmbeddingException {
+  embeddingOrigin: string;
+  embeddingDisplayName: string;
+  description?: string;  // includes case for embargoed exception.
+  incognito: boolean;
+}
 
 /**
  * Represents a list of exceptions recently configured for a site, where recent
  * is defined by the maximum number of sources parameter passed to
  * GetRecentSitePermissions.
  */
-export type RecentSitePermissions = {
-  origin: string,
-  incognito: boolean,
-  recentPermissions: RawSiteException[],
-};
+export interface RecentSitePermissions {
+  origin: string;
+  displayName: string;
+  incognito: boolean;
+  recentPermissions: RawSiteException[];
+}
 
 /**
  * The chooser exception information passed from the C++ handler.
  * See also: ChooserException.
  */
-export type RawChooserException = {
-  chooserType: ChooserType,
-  displayName: string,
-  object: Object,
-  sites: RawSiteException[],
-};
+export interface RawChooserException {
+  chooserType: ChooserType;
+  displayName: string;
+  object: Object;
+  sites: RawSiteException[];
+}
 
 /**
  * The chooser exception after it has been converted/filtered for UI use.
  * See also: RawChooserException.
  */
-export type ChooserException = {
-  chooserType: ChooserType,
-  displayName: string,
-  object: Object,
-  sites: SiteException[],
-};
+export interface ChooserException {
+  chooserType: ChooserType;
+  displayName: string;
+  object: Object;
+  sites: SiteException[];
+}
 
-export type DefaultContentSetting = {
-  setting: ContentSetting,
-  source: ContentSettingProvider,
-};
+export interface DefaultContentSetting {
+  setting: ContentSetting;
+  source: ContentSettingProvider;
+}
 
 /**
  * The primary cookie setting states that are possible. Must be kept in sync
@@ -151,19 +187,34 @@ export enum CookiePrimarySetting {
   BLOCK_ALL = 3,
 }
 
-export type MediaPickerEntry = {
-  name: string,
-  id: string,
-};
+export interface MediaPickerEntry {
+  name: string;
+  id: string;
+}
 
-export type ZoomLevelEntry = {
-  displayName: string,
-  origin: string,
-  originForFavicon: string,
-  setting: string,
-  source: string,
-  zoom: string,
-};
+export interface ZoomLevelEntry {
+  displayName: string;
+  hostOrSpec: string;
+  originForFavicon: string;
+  zoom: string;
+}
+
+/**
+ * TODO(crbug.com/1373962): Remove the origin key from `FileSystemGrant`
+ * before the launch of the Persistent Permissions settings page UI.
+ */
+export interface FileSystemGrant {
+  origin: string;
+  filePath: string;
+  displayName: string;
+  isDirectory: boolean;
+}
+
+export interface OriginFileSystemGrants {
+  origin: string;
+  viewGrants: FileSystemGrant[];
+  editGrants: FileSystemGrant[];
+}
 
 export interface SiteSettingsPrefsBrowserProxy {
   /**
@@ -195,11 +246,6 @@ export interface SiteSettingsPrefsBrowserProxy {
   getCategoryList(origin: string): Promise<ContentSettingsTypes[]>;
 
   /**
-   * Get the string which describes the current effective cookie setting.
-   */
-  getCookieSettingDescription(): Promise<string>;
-
-  /**
    * Gets most recently changed permissions grouped by host and limited to
    * numSources different origin/profile (inconigto/regular) pairings.
    * This includes permissions adjusted by embargo, but excludes any set
@@ -228,6 +274,18 @@ export interface SiteSettingsPrefsBrowserProxy {
    */
   getExceptionList(contentType: ContentSettingsTypes):
       Promise<RawSiteException[]>;
+
+  getStorageAccessExceptionList(categorySubtype: ContentSetting):
+      Promise<StorageAccessSiteException[]>;
+
+  /**
+   * Gets the File System Access permission grants, grouped by origin.
+   */
+  getFileSystemGrants(): Promise<OriginFileSystemGrants[]>;
+
+  revokeFileSystemGrant(origin: string, filePath: string): void;
+
+  revokeFileSystemGrants(origin: string): void;
 
   /**
    * Gets a list of category permissions for a given origin. Note that this
@@ -274,12 +332,10 @@ export interface SiteSettingsPrefsBrowserProxy {
    * origin.
    * @param chooserType The chooser exception type
    * @param origin The origin to look up the permission for.
-   * @param embeddingOrigin the embedding origin to look up.
    * @param exception The exception to revoke permission for.
    */
   resetChooserExceptionForSite(
-      chooserType: ChooserType, origin: string, embeddingOrigin: string,
-      exception: Object): void;
+      chooserType: ChooserType, origin: string, exception: Object): void;
 
   /**
    * Sets the category permission for a given origin (expressed as primary and
@@ -413,10 +469,10 @@ export interface SiteSettingsPrefsBrowserProxy {
   fetchBlockAutoplayStatus(): void;
 
   /**
-   * Clears all the web storage data and cookies for a given etld+1.
-   * @param etldPlus1 The etld+1 to clear data from.
+   * Clears all the web storage data and cookies for a given site group.
+   * @param groupingKey The group to clear data from.
    */
-  clearEtldPlus1DataAndCookies(etldPlus1: string): void;
+  clearSiteGroupDataAndCookies(groupingKey: string): void;
 
   /**
    * Clears all the unpartitioned web storage data and cookies for a given
@@ -426,17 +482,32 @@ export interface SiteSettingsPrefsBrowserProxy {
   clearUnpartitionedOriginDataAndCookies(origin: string): void;
 
   /**
-   * Clears all the storage for |origin| which is partitioned on |etldPlus1|.
+   * Clears all the storage for |origin| which is partitioned on |groupingKey|.
    * @param origin The origin to clear data from.
-   * @param etldPlus1 The etld+1 which the data is partitioned for.
+   * @param groupingKey The groupingKey which the data is partitioned for.
    */
-  clearPartitionedOriginDataAndCookies(origin: string, etldPlus1: string): void;
+  clearPartitionedOriginDataAndCookies(origin: string, groupingKey: string):
+      void;
 
   /**
    * Record All Sites Page action for metrics.
    * @param action number.
    */
   recordAction(action: number): void;
+
+  /**
+   * Gets display string for FPS information of owner and member count.
+   * @param fpsNumMembers The number of members in the first party set.
+   * @param fpsOwner The eTLD+1 for the first party set owner.
+   */
+  getFpsMembershipLabel(fpsNumMembers: number, fpsOwner: string):
+      Promise<string>;
+
+  /**
+   * Gets the plural string for a given number of cookies.
+   * @param numCookies The number of cookies.
+   */
+  getNumCookiesString(numCookies: number): Promise<string>;
 }
 
 export class SiteSettingsPrefsBrowserProxyImpl implements
@@ -457,10 +528,6 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
     return sendWithPromise('getCategoryList', origin);
   }
 
-  getCookieSettingDescription() {
-    return sendWithPromise('getCookieSettingDescription');
-  }
-
   getRecentSitePermissions(numSources: number) {
     return sendWithPromise('getRecentSitePermissions', numSources);
   }
@@ -475,6 +542,22 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
 
   getExceptionList(contentType: ContentSettingsTypes) {
     return sendWithPromise('getExceptionList', contentType);
+  }
+
+  getStorageAccessExceptionList(categorySubtype: ContentSetting) {
+    return sendWithPromise('getStorageAccessExceptionList', categorySubtype);
+  }
+
+  getFileSystemGrants() {
+    return sendWithPromise('getFileSystemGrants');
+  }
+
+  revokeFileSystemGrant(origin: string, filePath: string) {
+    chrome.send('revokeFileSystemGrant', [origin, filePath]);
+  }
+
+  revokeFileSystemGrants(origin: string) {
+    chrome.send('revokeFileSystemGrants', [origin]);
   }
 
   getOriginPermissions(origin: string, contentTypes: ContentSettingsTypes[]) {
@@ -496,11 +579,9 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
   }
 
   resetChooserExceptionForSite(
-      chooserType: ChooserType, origin: string, embeddingOrigin: string,
-      exception: Object) {
+      chooserType: ChooserType, origin: string, exception: Object) {
     chrome.send(
-        'resetChooserExceptionForSite',
-        [chooserType, origin, embeddingOrigin, exception]);
+        'resetChooserExceptionForSite', [chooserType, origin, exception]);
   }
 
   setCategoryPermissionForPattern(
@@ -575,20 +656,28 @@ export class SiteSettingsPrefsBrowserProxyImpl implements
     chrome.send('fetchBlockAutoplayStatus');
   }
 
-  clearEtldPlus1DataAndCookies(etldPlus1: string) {
-    chrome.send('clearEtldPlus1DataAndCookies', [etldPlus1]);
+  clearSiteGroupDataAndCookies(groupingKey: string) {
+    chrome.send('clearSiteGroupDataAndCookies', [groupingKey]);
   }
 
   clearUnpartitionedOriginDataAndCookies(origin: string) {
     chrome.send('clearUnpartitionedUsage', [origin]);
   }
 
-  clearPartitionedOriginDataAndCookies(origin: string, etldPlus1: string) {
-    chrome.send('clearPartitionedUsage', [origin, etldPlus1]);
+  clearPartitionedOriginDataAndCookies(origin: string, groupingKey: string) {
+    chrome.send('clearPartitionedUsage', [origin, groupingKey]);
   }
 
   recordAction(action: number) {
     chrome.send('recordAction', [action]);
+  }
+
+  getFpsMembershipLabel(fpsNumMembers: number, fpsOwner: string) {
+    return sendWithPromise('getFpsMembershipLabel', fpsNumMembers, fpsOwner);
+  }
+
+  getNumCookiesString(numCookies: number) {
+    return sendWithPromise('getNumCookiesString', numCookies);
   }
 
   static getInstance(): SiteSettingsPrefsBrowserProxy {

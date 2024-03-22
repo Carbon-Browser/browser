@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -130,7 +131,7 @@ class DownloadUIControllerTest : public ChromeRenderViewHostTestHarness {
   // QueryDownloads is called.
   class HistoryAdapter : public DownloadHistory::HistoryAdapter {
    public:
-    HistoryAdapter() : DownloadHistory::HistoryAdapter(NULL) {}
+    HistoryAdapter() : DownloadHistory::HistoryAdapter(nullptr) {}
     HistoryService::DownloadQueryCallback download_query_callback_;
 
    private:
@@ -148,12 +149,19 @@ class DownloadUIControllerTest : public ChromeRenderViewHostTestHarness {
       content::BrowserContext* browser_context);
 
   std::unique_ptr<MockDownloadManager> manager_;
-  content::DownloadManager::Observer* download_history_manager_observer_;
-  content::DownloadManager::Observer* manager_observer_;
-  download::DownloadItem* notified_item_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION content::DownloadManager::Observer*
+      download_history_manager_observer_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION content::DownloadManager::Observer* manager_observer_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION download::DownloadItem* notified_item_;
   base::WeakPtrFactory<download::DownloadItem*> notified_item_receiver_factory_;
 
-  raw_ptr<HistoryAdapter> history_adapter_;
+  raw_ptr<HistoryAdapter, DanglingUntriaged> history_adapter_;
 };
 
 // static
@@ -177,12 +185,11 @@ void DownloadUIControllerTest::SetUp() {
   EXPECT_CALL(*manager_, IsManagerInitialized()).Times(AnyNumber());
   EXPECT_CALL(*manager_, AddObserver(_))
       .WillOnce(SaveArg<0>(&download_history_manager_observer_));
-  EXPECT_CALL(*manager_,
-              RemoveObserver(testing::Eq(
-                  testing::ByRef(download_history_manager_observer_))))
+  EXPECT_CALL(*manager_, RemoveObserver(testing::Eq(testing::ByRef(
+                             download_history_manager_observer_))))
       .WillOnce(testing::Assign(
           &download_history_manager_observer_,
-          static_cast<content::DownloadManager::Observer*>(NULL)));
+          static_cast<content::DownloadManager::Observer*>(nullptr)));
   EXPECT_CALL(*manager_, GetAllDownloads(_)).Times(AnyNumber());
 
   std::unique_ptr<HistoryAdapter> history_adapter(new HistoryAdapter);
@@ -197,7 +204,7 @@ void DownloadUIControllerTest::SetUp() {
               RemoveObserver(testing::Eq(testing::ByRef(manager_observer_))))
       .WillOnce(testing::Assign(
           &manager_observer_,
-          static_cast<content::DownloadManager::Observer*>(NULL)));
+          static_cast<content::DownloadManager::Observer*>(nullptr)));
   TestDownloadCoreService* download_core_service =
       static_cast<TestDownloadCoreService*>(
           DownloadCoreServiceFactory::GetInstance()->SetTestingFactoryAndUse(
@@ -321,16 +328,17 @@ TEST_F(DownloadUIControllerTest, DownloadUIController_NotifyBasic_FileBlocked) {
       .WillRepeatedly(Return(download::DOWNLOAD_INTERRUPT_REASON_FILE_BLOCKED));
 
   // If the download is a silently blocked mixed content download, don't notify.
-  EXPECT_CALL(*item, GetMixedContentStatus())
+  EXPECT_CALL(*item, GetInsecureDownloadStatus())
       .WillRepeatedly(
-          Return(download::DownloadItem::MixedContentStatus::SILENT_BLOCK));
+          Return(download::DownloadItem::InsecureDownloadStatus::SILENT_BLOCK));
   ASSERT_TRUE(manager_observer());
   manager_observer()->OnDownloadCreated(manager(), item.get());
   EXPECT_FALSE(notified_item());
 
   // Notify even though the destination hasn't been determined yet.
-  EXPECT_CALL(*item, GetMixedContentStatus())
-      .WillRepeatedly(Return(download::DownloadItem::MixedContentStatus::SAFE));
+  EXPECT_CALL(*item, GetInsecureDownloadStatus())
+      .WillRepeatedly(
+          Return(download::DownloadItem::InsecureDownloadStatus::SAFE));
   item->NotifyObserversDownloadUpdated();
   EXPECT_EQ(static_cast<download::DownloadItem*>(item.get()), notified_item());
 }

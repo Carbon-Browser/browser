@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ import org.chromium.base.Log;
 
 import java.lang.reflect.Method;
 
-/**
- * Check whether a test case should be skipped.
- */
+/** Check whether a test case should be skipped. */
 public abstract class SkipCheck {
 
     private static final String TAG = "base_test";
@@ -40,10 +38,13 @@ public abstract class SkipCheck {
             Method m = testCase.getClass().getMethod(testCase.getName(), (Class[]) null);
             return shouldSkip(new FrameworkMethod(m));
         } catch (NoSuchMethodException e) {
-            Log.e(TAG, "Unable to find %s in %s", testCase.getName(),
-                    testCase.getClass().getName(), e);
+            Log.e(
+                    TAG,
+                    "Unable to find %s in %s",
+                    testCase.getName(),
+                    testCase.getClass().getName(),
+                    e);
             return false;
         }
     }
 }
-

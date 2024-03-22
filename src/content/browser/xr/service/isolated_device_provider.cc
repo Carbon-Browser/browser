@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/xr/service/isolated_device_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/xr/service/xr_device_service.h"
 #include "content/browser/xr/xr_utils.h"
 #include "content/public/browser/xr_integration_client.h"

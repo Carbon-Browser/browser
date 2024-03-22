@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,14 @@
 #include <string>
 #include <vector>
 
-#include "base/containers/cxx20_erase.h"
 #include "base/containers/flat_set.h"
 #include "base/logging.h"
 #include "base/ranges/ranges.h"
 #include "base/strings/utf_string_conversions.h"
-#include "components/autofill/core/browser/autofill_regexes.h"
 #include "components/autofill/core/browser/form_parsing/buildflags.h"
 #include "components/autofill/core/browser/form_parsing/regex_patterns_inl.h"
 #include "components/autofill/core/common/autofill_features.h"
+#include "components/autofill/core/common/autofill_regexes.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -59,10 +58,12 @@ MatchPatternRefTestApi test_api(MatchPatternRef p) {
   return MatchPatternRefTestApi(p);
 }
 
-auto Matches(base::StringPiece16 pattern) {
-  return ::testing::Truly([pattern](base::StringPiece actual) {
-    return MatchesPattern(base::UTF8ToUTF16(actual), pattern);
-  });
+auto Matches(base::StringPiece16 regex) {
+  icu::RegexPattern regex_pattern = *CompileRegex(regex);
+  return ::testing::Truly(
+      [regex_pattern = std::move(regex_pattern)](base::StringPiece actual) {
+        return MatchesRegex(base::UTF8ToUTF16(actual), regex_pattern);
+      });
 }
 
 auto Matches(MatchingPattern pattern) {
@@ -116,7 +117,7 @@ class RegexPatternsTest : public testing::TestWithParam<PatternSource> {
 INSTANTIATE_TEST_SUITE_P(RegexPatternsTest,
                          RegexPatternsTest,
                          ::testing::Values(
-#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
+#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
                              PatternSource::kLegacy
 #else
                              PatternSource::kLegacy,
@@ -171,6 +172,14 @@ TEST_F(RegexPatternsTest, MatchPatternRefDereference) {
   EXPECT_THAT((*b).match_field_attributes, ElementsAre(MatchAttribute::kName));
 }
 
+TEST_F(RegexPatternsTest, IsSupportedLanguageCode) {
+  EXPECT_TRUE(IsSupportedLanguageCode(LanguageCode("en")));
+  EXPECT_TRUE(IsSupportedLanguageCode(LanguageCode("de")));
+  EXPECT_TRUE(IsSupportedLanguageCode(LanguageCode("fr")));
+  EXPECT_TRUE(IsSupportedLanguageCode(LanguageCode("zh-CN")));
+  EXPECT_TRUE(IsSupportedLanguageCode(LanguageCode("zh-TW")));
+}
+
 // Tests that for a given pattern name, the pseudo-language-code "" contains the
 // patterns of all real languages.
 TEST_P(RegexPatternsTest, PseudoLanguageIsUnionOfLanguages) {
@@ -193,7 +202,7 @@ TEST_P(RegexPatternsTest, PseudoLanguageIsUnionOfLanguages) {
         GetMatchPatterns(kSomeName, LanguageCode(lang), pattern_source());
     expected.insert(expected.end(), patterns.begin(), patterns.end());
   }
-  base::EraseIf(expected,
+  std::erase_if(expected,
                 [](auto p) { return test_api(p).is_supplementary(); });
 
   EXPECT_THAT(GetMatchPatterns(kSomeName, absl::nullopt, pattern_source()),
@@ -286,7 +295,7 @@ INSTANTIATE_TEST_SUITE_P(
     RegexPatternsTest,
     RegexPatternsTestWithSamples,
     testing::Values(
-#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
+#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
         PatternTestCase{
             .pattern_source = PatternSource::kLegacy,
             .pattern_name = "PATTERN_SOURCE_DUMMY",
@@ -386,7 +395,7 @@ INSTANTIATE_TEST_SUITE_P(
                              "Zip code", "postal code",
                              // Specifically added for "de":
                              "postleitzahl"}}
-#if BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
+#if BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
         ,
         PatternTestCase{
             .pattern_source = PatternSource::kExperimental,

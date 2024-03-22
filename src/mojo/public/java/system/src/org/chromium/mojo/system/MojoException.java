@@ -1,26 +1,20 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.mojo.system;
 
-/**
- * Exception for the core mojo API.
- */
+/** Exception for the core mojo API. */
 public class MojoException extends RuntimeException {
 
     private final int mCode;
 
-    /**
-     * Constructor.
-     */
+    /** Constructor. */
     public MojoException(int code) {
         mCode = code;
     }
 
-    /**
-     * Constructor.
-     */
+    /** Constructor. */
     public MojoException(Throwable cause) {
         super(cause);
         mCode = MojoResult.UNKNOWN;

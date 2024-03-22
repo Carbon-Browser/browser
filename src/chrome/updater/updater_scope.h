@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,6 +47,9 @@ UpdaterScope GetUpdaterScopeForCommandLine(
 // the presence and content of the --tag argument, and the integrity level
 // of the process, where applicable.
 UpdaterScope GetUpdaterScope();
+
+bool IsSystemInstall();
+bool IsSystemInstall(UpdaterScope scope);
 
 }  // namespace updater
 

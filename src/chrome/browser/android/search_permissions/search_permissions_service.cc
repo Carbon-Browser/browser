@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/permissions/permission_decision_auto_blocker_factory.h"
@@ -20,7 +21,6 @@
 #include "components/content_settings/core/browser/content_settings_utils.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings_types.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/permissions/features.h"
 #include "components/permissions/permission_decision_auto_blocker.h"
 #include "components/permissions/permission_uma_util.h"
@@ -104,9 +104,14 @@ SearchPermissionsService::Factory::GetInstance() {
 }
 
 SearchPermissionsService::Factory::Factory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SearchPermissionsService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
   DependsOn(TemplateURLServiceFactory::GetInstance());
 }
@@ -226,23 +231,21 @@ void SearchPermissionsService::InitializeSettingsIfNeeded() {
 }
 
 SearchPermissionsService::PrefValue SearchPermissionsService::GetDSEPref() {
-  // TODO(crbug.com/1187061): Refactor this to remove base::DictionaryValue.
-  const base::DictionaryValue* dict = &base::Value::AsDictionaryValue(
-      *pref_service_->GetDictionary(prefs::kDSEPermissionsSettings));
+  const base::Value::Dict& dict =
+      pref_service_->GetDict(prefs::kDSEPermissionsSettings);
 
   PrefValue pref;
-  std::u16string dse_name;
-  std::string dse_origin;
+  const std::string* dse_name = dict.FindString(kDSENameKey);
+  const std::string* dse_origin = dict.FindString(kDSEOriginKey);
   absl::optional<int> geolocation_setting_to_restore =
-      dict->FindIntKey(kDSEGeolocationSettingKey);
+      dict.FindInt(kDSEGeolocationSettingKey);
   absl::optional<int> notifications_setting_to_restore =
-      dict->FindIntKey(kDSENotificationsSettingKey);
+      dict.FindInt(kDSENotificationsSettingKey);
 
-  if (dict->GetString(kDSENameKey, &dse_name) &&
-      dict->GetString(kDSEOriginKey, &dse_origin) &&
-      geolocation_setting_to_restore && notifications_setting_to_restore) {
-    pref.dse_name = dse_name;
-    pref.dse_origin = dse_origin;
+  if (dse_name && dse_origin && geolocation_setting_to_restore &&
+      notifications_setting_to_restore) {
+    pref.dse_name = base::UTF8ToUTF16(*dse_name);
+    pref.dse_origin = *dse_origin;
     pref.geolocation_setting_to_restore =
         IntToContentSetting(*geolocation_setting_to_restore);
     pref.notifications_setting_to_restore =
@@ -314,10 +317,10 @@ void SearchPermissionsService::RecordEffectiveDSEOriginPermissions() {
 void SearchPermissionsService::SetDSEPrefForTesting(
     ContentSetting geolocation_setting_to_restore,
     ContentSetting notifications_setting_to_restore) {
-  base::DictionaryValue dict;
-  dict.SetStringKey(kDSENameKey, delegate_->GetDSEName());
-  dict.SetStringKey(kDSEOriginKey, delegate_->GetDSEOrigin().GetURL().spec());
-  dict.SetIntKey(kDSEGeolocationSettingKey, geolocation_setting_to_restore);
-  dict.SetIntKey(kDSENotificationsSettingKey, notifications_setting_to_restore);
-  pref_service_->Set(prefs::kDSEPermissionsSettings, dict);
+  base::Value::Dict dict;
+  dict.Set(kDSENameKey, delegate_->GetDSEName());
+  dict.Set(kDSEOriginKey, delegate_->GetDSEOrigin().GetURL().spec());
+  dict.Set(kDSEGeolocationSettingKey, geolocation_setting_to_restore);
+  dict.Set(kDSENotificationsSettingKey, notifications_setting_to_restore);
+  pref_service_->SetDict(prefs::kDSEPermissionsSettings, std::move(dict));
 }

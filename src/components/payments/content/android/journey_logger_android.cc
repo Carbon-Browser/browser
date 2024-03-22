@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,18 @@ void JourneyLoggerAndroid::SetHasEnrolledInstrumentValue(
     const base::android::JavaParamRef<jobject>& jcaller,
     jboolean jvalue) {
   journey_logger_.SetHasEnrolledInstrumentValue(jvalue);
+}
+
+void JourneyLoggerAndroid::SetOptOutOffered(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& jcaller) {
+  journey_logger_.SetOptOutOffered();
+}
+
+void JourneyLoggerAndroid::SetActivationlessShow(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& jcaller) {
+  journey_logger_.SetActivationlessShow();
 }
 
 void JourneyLoggerAndroid::SetSkippedShow(
@@ -154,6 +166,12 @@ void JourneyLoggerAndroid::SetNotShown(
   DCHECK_LT(jreason, JourneyLogger::NotShownReason::NOT_SHOWN_REASON_MAX);
   journey_logger_.SetNotShown(
       static_cast<JourneyLogger::NotShownReason>(jreason));
+}
+
+void JourneyLoggerAndroid::SetNoMatchingCredentialsShown(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& jcaller) {
+  journey_logger_.SetNoMatchingCredentialsShown();
 }
 
 void JourneyLoggerAndroid::RecordCheckoutStep(

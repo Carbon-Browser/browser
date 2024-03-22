@@ -1,26 +1,24 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/lock_layout_manager.h"
 
-#include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/wm/lock_window_state.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
 #include "ui/aura/env.h"
+#include "ui/display/display.h"
+#include "ui/display/screen.h"
 #include "ui/events/event.h"
 #include "ui/events/gestures/gesture_recognizer.h"
 
 namespace ash {
 
-LockLayoutManager::LockLayoutManager(aura::Window* window, Shelf* shelf)
-    : WmDefaultLayoutManager(),
-      window_(window),
-      root_window_(window->GetRootWindow()) {
+LockLayoutManager::LockLayoutManager(aura::Window* window)
+    : window_(window), root_window_(window->GetRootWindow()) {
   root_window_->AddObserver(this);
   keyboard::KeyboardUIController::Get()->AddObserver(this);
-  shelf_observation_.Observe(shelf);
 }
 
 LockLayoutManager::~LockLayoutManager() {
@@ -31,11 +29,11 @@ LockLayoutManager::~LockLayoutManager() {
 
   for (aura::Window* child : window_->children())
     child->RemoveObserver(this);
-
 }
 
 void LockLayoutManager::OnWindowResized() {
-  const WMEvent event(WM_EVENT_WORKAREA_BOUNDS_CHANGED);
+  const DisplayMetricsChangedWMEvent event(
+      display::DisplayObserver::DISPLAY_METRIC_WORK_AREA);
   AdjustWindowsForWorkAreaChange(&event);
 }
 
@@ -69,9 +67,6 @@ void LockLayoutManager::OnWindowRemovedFromLayout(aura::Window* child) {
   keyboard::KeyboardUIController::Get()->UpdateKeyboardConfig(config);
 }
 
-void LockLayoutManager::OnChildWindowVisibilityChanged(aura::Window* child,
-                                                       bool visible) {}
-
 void LockLayoutManager::SetChildBounds(aura::Window* child,
                                        const gfx::Rect& requested_bounds) {
   WindowState* window_state = WindowState::Get(child);
@@ -96,18 +91,23 @@ void LockLayoutManager::OnWindowBoundsChanged(aura::Window* window,
   }
 }
 
-void LockLayoutManager::WillChangeVisibilityState(
-    ShelfVisibilityState visibility) {
-  // This will be called when shelf work area changes.
-  //  * LockLayoutManager windows depend on changes to the accessibility panel
-  //    height.
-  //  * LockActionHandlerLayoutManager windows bounds depend on the work area
-  //    bound defined by the shelf layout (see
-  //    screen_util::GetDisplayWorkAreaBoundsInParentForLockScreen).
-  // In short, when shelf bounds change, the windows in this layout manager
-  // should be updated, too.
-  const WMEvent event(WM_EVENT_WORKAREA_BOUNDS_CHANGED);
-  AdjustWindowsForWorkAreaChange(&event);
+void LockLayoutManager::OnDisplayMetricsChanged(const display::Display& display,
+                                                uint32_t changed_metrics) {
+  if (!root_window_) {
+    return;
+  }
+
+  if (display::Screen::GetScreen()
+          ->GetDisplayNearestWindow(root_window_)
+          .id() != display.id()) {
+    return;
+  }
+
+  if (changed_metrics & display::DisplayObserver::DISPLAY_METRIC_WORK_AREA) {
+    const DisplayMetricsChangedWMEvent event(
+        display::DisplayObserver::DISPLAY_METRIC_WORK_AREA);
+    AdjustWindowsForWorkAreaChange(&event);
+  }
 }
 
 void LockLayoutManager::OnKeyboardOccludedBoundsChanged(
@@ -116,8 +116,10 @@ void LockLayoutManager::OnKeyboardOccludedBoundsChanged(
 }
 
 void LockLayoutManager::AdjustWindowsForWorkAreaChange(const WMEvent* event) {
-  DCHECK(event->type() == WM_EVENT_DISPLAY_BOUNDS_CHANGED ||
-         event->type() == WM_EVENT_WORKAREA_BOUNDS_CHANGED);
+  const DisplayMetricsChangedWMEvent* display_event =
+      event->AsDisplayMetricsChangedWMEvent();
+  CHECK(display_event->display_bounds_changed() ||
+        display_event->work_area_changed());
 
   for (aura::Window* child : window_->children())
     WindowState::Get(child)->OnWMEvent(event);

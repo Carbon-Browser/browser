@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/process/current_process.h"
+#include "base/strings/pattern.h"
 #include "build/build_config.h"
 #include "content/child/child_thread_impl.h"
 #include "content/public/utility/utility_thread.h"
@@ -75,6 +77,15 @@ class UtilityThreadImpl : public UtilityThread,
   // the main thread of its service process.
   std::unique_ptr<mojo::ServiceFactory> main_thread_services_;
 };
+
+using CurrentProcessType = base::CurrentProcessType;
+
+struct ServiceCurrentProcessType {
+  const char* name;
+  CurrentProcessType type;
+};
+
+CurrentProcessType GetCurrentProcessType(const std::string& name);
 
 }  // namespace content
 

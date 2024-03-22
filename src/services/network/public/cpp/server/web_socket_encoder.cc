@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@
 #include "net/websockets/websocket_extension_parser.h"
 #include "net/websockets/websocket_frame.h"
 
-namespace network {
-
-namespace server {
+namespace network::server {
 
 const char WebSocketEncoder::kClientExtensions[] =
     "permessage-deflate; client_max_window_bits";
@@ -42,7 +40,7 @@ const size_t kTwoBytePayloadLengthField = 126;
 const size_t kEightBytePayloadLengthField = 127;
 const size_t kMaskingKeyWidthInBytes = 4;
 
-WebSocket::ParseResult DecodeFrameHybi17(const base::StringPiece& frame,
+WebSocket::ParseResult DecodeFrameHybi17(const std::string_view& frame,
                                          bool client_frame,
                                          int* bytes_consumed,
                                          std::string* output,
@@ -147,7 +145,7 @@ WebSocket::ParseResult DecodeFrameHybi17(const base::StringPiece& frame,
   return final ? WebSocket::FRAME_OK_FINAL : WebSocket::FRAME_OK_MIDDLE;
 }
 
-void EncodeFrameHybi17(base::StringPiece message,
+void EncodeFrameHybi17(std::string_view message,
                        int masking_key,
                        bool compressed,
                        net::WebSocketFrameHeader::OpCodeEnum op_code,
@@ -296,7 +294,7 @@ WebSocketEncoder::WebSocketEncoder(
 WebSocketEncoder::~WebSocketEncoder() = default;
 
 WebSocket::ParseResult WebSocketEncoder::DecodeFrame(
-    const base::StringPiece& frame,
+    const std::string_view& frame,
     int* bytes_consumed,
     std::string* output) {
   bool compressed;
@@ -323,7 +321,7 @@ WebSocket::ParseResult WebSocketEncoder::DecodeFrame(
   return result;
 }
 
-void WebSocketEncoder::EncodeTextFrame(base::StringPiece frame,
+void WebSocketEncoder::EncodeTextFrame(std::string_view frame,
                                        int masking_key,
                                        std::string* output) {
   std::string compressed;
@@ -334,7 +332,7 @@ void WebSocketEncoder::EncodeTextFrame(base::StringPiece frame,
     EncodeFrameHybi17(frame, masking_key, false, op_code, output);
 }
 
-void WebSocketEncoder::EncodePongFrame(base::StringPiece frame,
+void WebSocketEncoder::EncodePongFrame(std::string_view frame,
                                        int masking_key,
                                        std::string* output) {
   constexpr auto op_code = net::WebSocketFrameHeader::OpCodeEnum::kOpCodePong;
@@ -363,7 +361,7 @@ bool WebSocketEncoder::Inflate(std::string* message) {
   return true;
 }
 
-bool WebSocketEncoder::Deflate(base::StringPiece message, std::string* output) {
+bool WebSocketEncoder::Deflate(std::string_view message, std::string* output) {
   if (!deflater_)
     return false;
   if (!deflater_->AddBytes(message.data(), message.length())) {
@@ -380,6 +378,4 @@ bool WebSocketEncoder::Deflate(base::StringPiece message, std::string* output) {
   return true;
 }
 
-}  // namespace server
-
-}  // namespace network
+}  // namespace network::server

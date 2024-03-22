@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ InterpolationValue CSSLengthListInterpolationType::MaybeConvertNeutral(
 static InterpolationValue MaybeConvertLengthList(
     const Vector<Length>& length_list,
     float zoom) {
-  if (length_list.IsEmpty())
+  if (length_list.empty())
     return nullptr;
 
   return ListInterpolationFunctions::CreateList(
@@ -178,8 +178,8 @@ void CSSLengthListInterpolationType::ApplyStandardPropertyValue(
         To<InterpolableLength>(*interpolable_list.Get(i))
             .CreateLength(state.CssToLengthConversionData(), value_range_);
   }
-  LengthListPropertyFunctions::SetLengthList(CssProperty(), *state.Style(),
-                                             std::move(result));
+  LengthListPropertyFunctions::SetLengthList(
+      CssProperty(), state.StyleBuilder(), std::move(result));
 }
 
 }  // namespace blink

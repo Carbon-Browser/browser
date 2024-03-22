@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,11 +50,8 @@ class AudioProcessHighPriorityEnabledTest
 
 IN_PROC_BROWSER_TEST_P(AudioProcessHighPriorityEnabledTest, IsRespected) {
   absl::optional<bool> enable_high_priority_via_policy = GetParam();
-  bool is_high_priority_enabled_by_default =
-      base::FeatureList::IsEnabled(features::kAudioProcessHighPriorityWin);
 
-  ASSERT_EQ(enable_high_priority_via_policy.value_or(
-                is_high_priority_enabled_by_default),
+  ASSERT_EQ(enable_high_priority_via_policy.value_or(false),
             IsAudioProcessHighPriorityEnabled());
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "testing/gmock/include/gmock/gmock.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_ice_candidate_platform.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_peer_connection_handler_client.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_rtp_receiver_platform.h"
@@ -18,7 +19,8 @@
 namespace blink {
 
 class MockRTCPeerConnectionHandlerClient
-    : public RTCPeerConnectionHandlerClient {
+    : public GarbageCollected<MockRTCPeerConnectionHandlerClient>,
+      public RTCPeerConnectionHandlerClient {
  public:
   MockRTCPeerConnectionHandlerClient();
 
@@ -47,19 +49,9 @@ class MockRTCPeerConnectionHandlerClient
                     RTCSessionDescriptionPlatform*));
   MOCK_METHOD1(DidChangeIceGatheringState,
                void(webrtc::PeerConnectionInterface::IceGatheringState state));
-  MOCK_METHOD1(DidChangeIceConnectionState,
-               void(webrtc::PeerConnectionInterface::IceConnectionState state));
   MOCK_METHOD1(
       DidChangePeerConnectionState,
       void(webrtc::PeerConnectionInterface::PeerConnectionState state));
-  void DidModifyReceiversPlanB(
-      webrtc::PeerConnectionInterface::SignalingState signaling_state,
-      Vector<std::unique_ptr<RTCRtpReceiverPlatform>> receivers_added,
-      Vector<std::unique_ptr<RTCRtpReceiverPlatform>> receivers_removed)
-      override {
-    DidModifyReceiversPlanBForMock(signaling_state, &receivers_added,
-                                   &receivers_removed);
-  }
   MOCK_METHOD1(DidModifySctpTransport,
                void(blink::WebRTCSctpTransportSnapshot snapshot));
   void DidModifyTransceivers(
@@ -71,16 +63,12 @@ class MockRTCPeerConnectionHandlerClient
                                  is_remote_description);
   }
   MOCK_METHOD1(DidAddRemoteDataChannel,
-               void(scoped_refptr<webrtc::DataChannelInterface>));
+               void(rtc::scoped_refptr<webrtc::DataChannelInterface>));
   MOCK_METHOD1(DidNoteInterestingUsage, void(int));
   MOCK_METHOD0(UnregisterPeerConnectionHandler, void());
 
   // Move-only arguments do not play nicely with MOCK, the workaround is to
   // EXPECT_CALL with these instead.
-  MOCK_METHOD3(DidModifyReceiversPlanBForMock,
-               void(webrtc::PeerConnectionInterface::SignalingState,
-                    Vector<std::unique_ptr<RTCRtpReceiverPlatform>>*,
-                    Vector<std::unique_ptr<RTCRtpReceiverPlatform>>*));
   MOCK_METHOD3(DidModifyTransceiversForMock,
                void(webrtc::PeerConnectionInterface::SignalingState,
                     Vector<std::unique_ptr<RTCRtpTransceiverPlatform>>*,

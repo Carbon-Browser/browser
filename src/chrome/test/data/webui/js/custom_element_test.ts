@@ -1,14 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {CustomElement} from 'chrome://resources/js/custom_element.js';
-
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 class TestElement extends CustomElement {
   static override get template() {
-    return '<div id="content"></div>';
+    return getTrustedHTML`<div id="content"></div>`;
   }
 }
 
@@ -18,12 +18,14 @@ let testElement: TestElement;
 
 suite('CustomElementTest', function() {
   setup(function() {
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     testElement = document.createElement('test-element') as TestElement;
     document.body.appendChild(testElement);
   });
 
   test('Template', function() {
-    assertEquals(TestElement.template, testElement.shadowRoot!.innerHTML);
+    assertEquals(
+        TestElement.template.toString(), testElement.shadowRoot!.innerHTML);
   });
 
   test('Test $()', function() {
@@ -35,6 +37,12 @@ suite('CustomElementTest', function() {
   test('Test $all()', function() {
     assertTrue(
         testElement.$all('#content')[0] ===
+        testElement.shadowRoot!.getElementById('content'));
+  });
+
+  test('Test getRequiredElement()', function() {
+    assertTrue(
+        testElement.getRequiredElement('#content') ===
         testElement.shadowRoot!.getElementById('content'));
   });
 });

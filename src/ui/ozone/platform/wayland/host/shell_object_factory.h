@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,7 @@ class ShellPopupWrapper;
 class WaylandConnection;
 class WaylandWindow;
 
-// Shell factory that creates shell objects for different protocols. Preferred
-// protocols are defined in the following order:
-// 1) xdg-shell-stable-protocol.
-// 2) xdg-shell-v6-unstable-protocol.
+// Creates Wayland shell objects.
 class ShellObjectFactory {
  public:
   ShellObjectFactory();

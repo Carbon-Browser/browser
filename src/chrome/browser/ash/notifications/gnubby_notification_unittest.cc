@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/gnubby/gnubby_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 
@@ -24,7 +23,6 @@ class GnubbyNotificationTest : public BrowserWithTestWindowTest {
   ~GnubbyNotificationTest() override {}
 
   void SetUp() override {
-    DBusThreadManager::Initialize();
     GnubbyClient::InitializeFake();
     ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
     BrowserWithTestWindowTest::SetUp();
@@ -49,7 +47,6 @@ class GnubbyNotificationTest : public BrowserWithTestWindowTest {
     BrowserWithTestWindowTest::TearDown();
     ConciergeClient::Shutdown();
     GnubbyClient::Shutdown();
-    DBusThreadManager::Shutdown();
   }
 
   void OnNotificationAdded() { notification_count_++; }

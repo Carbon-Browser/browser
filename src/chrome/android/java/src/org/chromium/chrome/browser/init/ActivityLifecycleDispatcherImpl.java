@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
+
+import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ObserverList;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
@@ -155,6 +157,7 @@ public class ActivityLifecycleDispatcherImpl implements ActivityLifecycleDispatc
     }
 
     void dispatchPostInflationStartup() {
+        if (isActivityFinishingOrDestroyed()) return;
         for (InflationObserver observer : mInflationObservers) {
             observer.onPostInflationStartup();
         }
@@ -203,7 +206,8 @@ public class ActivityLifecycleDispatcherImpl implements ActivityLifecycleDispatc
         mDestroyed = true;
     }
 
-    void dispatchOnDestroy() {
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+    protected void dispatchOnDestroy() {
         mActivityState = ActivityState.DESTROYED;
 
         for (DestroyObserver destroyable : mDestroyables) {

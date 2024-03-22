@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,22 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "google_apis/common/request_sender.h"
 #include "google_apis/common/task_util.h"
+#include "google_apis/credentials_mode.h"
 #include "net/base/load_flags.h"
+#include "net/http/http_request_headers.h"
 #include "net/http/http_util.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -50,8 +54,7 @@ std::string GetResponseHeadersAsString(
 
 namespace google_apis {
 
-absl::optional<std::string> MapJsonErrorToReason(
-    const std::string& error_body) {
+std::optional<std::string> MapJsonErrorToReason(const std::string& error_body) {
   DVLOG(1) << error_body;
   const char kErrorKey[] = "error";
   const char kErrorErrorsKey[] = "errors";
@@ -60,28 +63,28 @@ absl::optional<std::string> MapJsonErrorToReason(
   const char kErrorCodeKey[] = "code";
 
   std::unique_ptr<const base::Value> value(google_apis::ParseJson(error_body));
-  const base::DictionaryValue* dictionary = nullptr;
-  const base::DictionaryValue* error = nullptr;
-  if (value && value->GetAsDictionary(&dictionary) &&
-      dictionary->GetDictionaryWithoutPathExpansion(kErrorKey, &error)) {
+  const base::Value::Dict* dictionary = value ? value->GetIfDict() : nullptr;
+  const base::Value::Dict* error =
+      dictionary ? dictionary->FindDict(kErrorKey) : nullptr;
+  if (error) {
     // Get error message and code.
-    const std::string* message = error->FindStringKey(kErrorMessageKey);
-    absl::optional<int> code = error->FindIntKey(kErrorCodeKey);
+    const std::string* message = error->FindString(kErrorMessageKey);
+    std::optional<int> code = error->FindInt(kErrorCodeKey);
     DLOG(ERROR) << "code: " << (code ? code.value() : OTHER_ERROR)
                 << ", message: " << (message ? *message : "");
 
     // Returns the reason of the first error.
-    const base::ListValue* errors = nullptr;
-    if (error->GetListWithoutPathExpansion(kErrorErrorsKey, &errors)) {
-      const base::Value& first_error = errors->GetListDeprecated()[0];
-      if (first_error.is_dict()) {
-        const std::string* reason = first_error.FindStringKey(kErrorReasonKey);
-        if (reason)
+    if (const base::Value::List* errors = error->FindList(kErrorErrorsKey)) {
+      const base::Value::Dict* first_error = errors->front().GetIfDict();
+      if (first_error) {
+        const std::string* reason = first_error->FindString(kErrorReasonKey);
+        if (reason) {
           return *reason;
+        }
       }
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::unique_ptr<base::Value> ParseJson(const std::string& json) {
@@ -103,6 +106,21 @@ std::unique_ptr<base::Value> ParseJson(const std::string& json) {
     return nullptr;
   }
   return base::Value::ToUniquePtrValue(std::move(*parsed_json));
+}
+
+std::string HttpRequestMethodToString(HttpRequestMethod method) {
+  switch (method) {
+    case HttpRequestMethod::kGet:
+      return net::HttpRequestHeaders::kGetMethod;
+    case HttpRequestMethod::kPost:
+      return net::HttpRequestHeaders::kPostMethod;
+    case HttpRequestMethod::kPut:
+      return net::HttpRequestHeaders::kPutMethod;
+    case HttpRequestMethod::kPatch:
+      return net::HttpRequestHeaders::kPatchMethod;
+    case HttpRequestMethod::kDelete:
+      return net::HttpRequestHeaders::kDeleteMethod;
+  }
 }
 
 UrlFetchRequestBase::UrlFetchRequestBase(
@@ -160,7 +178,7 @@ void UrlFetchRequestBase::StartAfterPrepare(
     // to connect to the server.  We need to call CompleteRequestWithError
     // asynchronously because client code does not assume result callback is
     // called synchronously.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&UrlFetchRequestBase::CompleteRequestWithError,
                        weak_ptr_factory_.GetWeakPtr(), error_code));
@@ -172,9 +190,9 @@ void UrlFetchRequestBase::StartAfterPrepare(
 
   auto request = std::make_unique<network::ResourceRequest>();
   request->url = url;
-  request->method = GetRequestType();
+  request->method = HttpRequestMethodToString(GetRequestType());
   request->load_flags = net::LOAD_DISABLE_CACHE;
-  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  request->credentials_mode = GetOmitCredentialsModeForGaiaRequests();
 
   // Add request headers.
   // Note that SetHeader clears the current headers and sets it to the passed-in
@@ -263,8 +281,7 @@ UrlFetchRequestBase::DownloadData::DownloadData(
 UrlFetchRequestBase::DownloadData::~DownloadData() {
   if (output_file.IsValid()) {
     blocking_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce([](base::File file) {}, std::move(output_file)));
+        FROM_HERE, base::DoNothingWithBoundArgs(std::move(output_file)));
   }
 }
 
@@ -323,8 +340,8 @@ void UrlFetchRequestBase::OnDataReceived(base::StringPiece string_piece,
 
   if (!download_data_->output_file_path.empty()) {
     DownloadData* download_data_ptr = download_data_.get();
-    base::PostTaskAndReplyWithResult(
-        blocking_task_runner(), FROM_HERE,
+    blocking_task_runner()->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&UrlFetchRequestBase::WriteFileData,
                        std::string(string_piece), download_data_ptr),
         base::BindOnce(&UrlFetchRequestBase::OnWriteComplete,
@@ -333,8 +350,7 @@ void UrlFetchRequestBase::OnDataReceived(base::StringPiece string_piece,
     return;
   }
 
-  download_data_->response_body.append(string_piece.data(),
-                                       string_piece.size());
+  download_data_->response_body.append(string_piece);
   std::move(resume).Run();
 }
 
@@ -342,8 +358,7 @@ void UrlFetchRequestBase::OnComplete(bool success) {
   DCHECK(download_data_);
   blocking_task_runner()->PostTaskAndReply(
       FROM_HERE,
-      base::BindOnce([](base::File file) {},
-                     std::move(download_data_->output_file)),
+      base::DoNothingWithBoundArgs(std::move(download_data_->output_file)),
       base::BindOnce(&UrlFetchRequestBase::OnOutputFileClosed,
                      weak_ptr_factory_.GetWeakPtr(), success));
 }
@@ -362,7 +377,7 @@ void UrlFetchRequestBase::OnOutputFileClosed(bool success) {
     }
     if (!download_data_->response_body.empty()) {
       if (!IsSuccessfulErrorCode(error_code_.value())) {
-        absl::optional<std::string> reason =
+        std::optional<std::string> reason =
             MapJsonErrorToReason(download_data_->response_body);
         if (reason.has_value())
           error_code_ = MapReasonToError(error_code_.value(), reason.value());
@@ -394,8 +409,8 @@ void UrlFetchRequestBase::OnRetry(base::OnceClosure start_retry) {
   NOTREACHED();
 }
 
-std::string UrlFetchRequestBase::GetRequestType() const {
-  return "GET";
+HttpRequestMethod UrlFetchRequestBase::GetRequestType() const {
+  return HttpRequestMethod::kGet;
 }
 
 std::vector<std::string> UrlFetchRequestBase::GetExtraRequestHeaders() const {

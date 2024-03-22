@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,15 +21,12 @@ MediaTrack::~MediaTrack() = default;
 
 const char* TrackTypeToStr(MediaTrack::Type type) {
   switch (type) {
-    case MediaTrack::Audio:
+    case MediaTrack::Type::kAudio:
       return "audio";
-    case MediaTrack::Text:
-      return "text";
-    case MediaTrack::Video:
+    case MediaTrack::Type::kVideo:
       return "video";
   }
-  NOTREACHED();
-  return "INVALID";
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace media

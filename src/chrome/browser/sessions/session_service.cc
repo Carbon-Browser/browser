@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/debug/alias.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -23,13 +23,14 @@
 #include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/buildflags.h"
-#include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/sessions/exit_type_service.h"
 #include "chrome/browser/sessions/session_common_utils.h"
 #include "chrome/browser/sessions/session_data_deleter.h"
@@ -59,8 +60,16 @@
 #include "content/public/browser/session_storage_namespace.h"
 #include "content/public/browser/web_contents.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/kiosk/kiosk_utils.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/crostini/crostini_util.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chrome/browser/lacros/browser_launcher.h"
 #endif
 
 #if BUILDFLAG(IS_MAC)
@@ -160,6 +169,13 @@ bool SessionService::IsRelevantWindowType(
 }
 
 bool SessionService::ShouldRestore(Browser* browser) {
+#if BUILDFLAG(IS_CHROMEOS)
+  // Do not restore browser window in the kiosk session.
+  if (chromeos::IsKioskSession()) {
+    return false;
+  }
+#endif
+
   // ChromeOS and OSX have different ideas of application lifetime than
   // the other platforms.
   // On ChromeOS opening a new window should never start a new session.
@@ -180,9 +196,17 @@ bool SessionService::ShouldRestore(Browser* browser) {
   }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // Restore should trigger for lacros-chrome if handling a restart.
-  if (StartupBrowserCreator::WasRestarted() ||
-      StartupBrowserCreator::IsLaunchingBrowserForLastProfiles()) {
+  // Restore should trigger for lacros-chrome if handling a restart or if
+  // currently processing a full restore.
+  auto* primary_user_profile =
+      g_browser_process->profile_manager()->GetProfileByPath(
+          ProfileManager::GetPrimaryUserProfilePath());
+  if (StartupBrowserCreator::WasRestarted()) {
+    return true;
+  }
+  if (primary_user_profile &&
+      BrowserLauncher::GetForProfile(primary_user_profile)
+          ->is_launching_for_last_opened_profiles()) {
     return true;
   }
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -191,8 +215,9 @@ bool SessionService::ShouldRestore(Browser* browser) {
   // restored.
   SessionStartupPref pref =
       SessionStartupPref::GetStartupPref(profile()->GetPrefs());
-  if (!pref.ShouldRestoreLastSession())
+  if (!pref.ShouldRestoreLastSession()) {
     return false;
+  }
 
   if (!browser)
     return true;
@@ -239,10 +264,11 @@ void SessionService::MoveCurrentSessionToLastSession() {
 
 void SessionService::DeleteLastSession() {
   command_storage_manager()->DeleteLastSession();
+  ++count_delete_last_session_for_testing_;
 }
 
-void SessionService::SetTabGroup(const SessionID& window_id,
-                                 const SessionID& tab_id,
+void SessionService::SetTabGroup(SessionID window_id,
+                                 SessionID tab_id,
                                  absl::optional<tab_groups::TabGroupId> group) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -257,9 +283,10 @@ void SessionService::SetTabGroup(const SessionID& window_id,
 }
 
 void SessionService::SetTabGroupMetadata(
-    const SessionID& window_id,
+    SessionID window_id,
     const tab_groups::TabGroupId& group_id,
-    const tab_groups::TabGroupVisualData* visual_data) {
+    const tab_groups::TabGroupVisualData* visual_data,
+    const absl::optional<std::string> saved_guid) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
@@ -268,21 +295,12 @@ void SessionService::SetTabGroupMetadata(
       base::Contains(window_closing_ids_, window_id))
     return;
 
-  ScheduleCommand(
-      sessions::CreateTabGroupMetadataUpdateCommand(group_id, visual_data));
+  ScheduleCommand(sessions::CreateTabGroupMetadataUpdateCommand(
+      group_id, visual_data, std::move(saved_guid)));
 }
 
-void SessionService::SetPinnedState(const SessionID& window_id,
-                                    const SessionID& tab_id,
-                                    bool is_pinned) {
-  if (!ShouldTrackChangesToWindow(window_id))
-    return;
-
-  ScheduleCommand(sessions::CreatePinnedStateCommand(tab_id, is_pinned));
-}
-
-void SessionService::AddTabExtraData(const SessionID& window_id,
-                                     const SessionID& tab_id,
+void SessionService::AddTabExtraData(SessionID window_id,
+                                     SessionID tab_id,
                                      const char* key,
                                      const std::string data) {
   if (!ShouldTrackChangesToWindow(window_id))
@@ -291,7 +309,7 @@ void SessionService::AddTabExtraData(const SessionID& window_id,
   ScheduleCommand(sessions::CreateAddTabExtraDataCommand(tab_id, key, data));
 }
 
-void SessionService::AddWindowExtraData(const SessionID& window_id,
+void SessionService::AddWindowExtraData(SessionID window_id,
                                         const char* key,
                                         const std::string data) {
   if (!ShouldTrackChangesToWindow(window_id))
@@ -301,8 +319,7 @@ void SessionService::AddWindowExtraData(const SessionID& window_id,
       sessions::CreateAddWindowExtraDataCommand(window_id, key, data));
 }
 
-void SessionService::TabClosed(const SessionID& window_id,
-                               const SessionID& tab_id) {
+void SessionService::TabClosed(SessionID window_id, SessionID tab_id) {
   if (!tab_id.id())
     return;  // Happens when the tab is replaced.
 
@@ -350,7 +367,7 @@ void SessionService::WindowOpened(Browser* browser) {
       browser->session_id(), browser->window()->IsVisibleOnAllWorkspaces());
 }
 
-void SessionService::WindowClosing(const SessionID& window_id) {
+void SessionService::WindowClosing(SessionID window_id) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
@@ -398,7 +415,7 @@ void SessionService::WindowClosing(const SessionID& window_id) {
   }
 }
 
-void SessionService::WindowClosed(const SessionID& window_id) {
+void SessionService::WindowClosed(SessionID window_id) {
   windows_tracking()->erase(window_id);
   last_selected_tab_in_window()->erase(window_id);
 
@@ -418,8 +435,7 @@ void SessionService::WindowClosed(const SessionID& window_id) {
   }
 }
 
-void SessionService::SetWindowType(const SessionID& window_id,
-                                   Browser::Type type) {
+void SessionService::SetWindowType(SessionID window_id, Browser::Type type) {
   sessions::SessionWindow::WindowType window_type =
       WindowTypeForBrowserType(type);
   if (!ShouldRestoreWindowOfType(window_type))
@@ -437,7 +453,7 @@ void SessionService::SetWindowType(const SessionID& window_id,
   ScheduleCommand(CreateSetWindowTypeCommand(window_id, window_type));
 }
 
-void SessionService::SetWindowUserTitle(const SessionID& window_id,
+void SessionService::SetWindowUserTitle(SessionID window_id,
                                         const std::string& user_title) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -463,8 +479,8 @@ void SessionService::OnErrorWritingSessionCommands() {
 }
 
 void SessionService::SetTabUserAgentOverride(
-    const SessionID& window_id,
-    const SessionID& tab_id,
+    SessionID window_id,
+    SessionID tab_id,
     const sessions::SerializedUserAgentOverride& user_agent_override) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -558,7 +574,7 @@ bool SessionService::RestoreIfNecessary(const StartupTabs& startup_tabs,
       browser_creator.LaunchBrowser(*command_line, profile(), base::FilePath(),
                                     chrome::startup::IsProcessStartup::kYes,
                                     chrome::startup::IsFirstRun::kNo,
-                                    std::make_unique<LaunchModeRecorder>());
+                                    std::make_unique<OldLaunchModeRecorder>());
       return true;
     } else {
       // If 'browser' is not null, show the crash bubble in the current browser
@@ -573,7 +589,7 @@ bool SessionService::RestoreIfNecessary(const StartupTabs& startup_tabs,
 }
 
 void SessionService::BuildCommandsForTab(
-    const SessionID& window_id,
+    SessionID window_id,
     WebContents* tab,
     int index_in_window,
     absl::optional<tab_groups::TabGroupId> group,
@@ -586,12 +602,7 @@ void SessionService::BuildCommandsForTab(
 
   sessions::SessionTabHelper* session_tab_helper =
       sessions::SessionTabHelper::FromWebContents(tab);
-  const SessionID& session_id(session_tab_helper->session_id());
-
-  if (is_pinned) {
-    command_storage_manager()->AppendRebuildCommand(
-        sessions::CreatePinnedStateCommand(session_id, true));
-  }
+  SessionID session_id(session_tab_helper->session_id());
 
   const blink::UserAgentOverride& ua_override = tab->GetUserAgentOverride();
 
@@ -676,8 +687,7 @@ bool SessionService::IsOnlyOneTabLeft() const {
   return true;
 }
 
-bool SessionService::HasOpenTrackableBrowsers(
-    const SessionID& window_id) const {
+bool SessionService::HasOpenTrackableBrowsers(SessionID window_id) const {
   if (profile()->AsTestingProfile())
     return has_open_trackable_browser_for_test_;
 

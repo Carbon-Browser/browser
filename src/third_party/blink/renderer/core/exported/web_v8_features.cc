@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,17 +20,6 @@ void WebV8Features::EnableMojoJS(v8::Local<v8::Context> context, bool enable) {
       ExecutionContext::From(script_state),
       ContextFeatureSettings::CreationMode::kCreateIfNotExists)
       ->EnableMojoJS(enable);
-}
-
-// static
-void WebV8Features::EnableSharedArrayBuffer() {
-  static bool shared_array_buffer_enabled = false;
-  if (shared_array_buffer_enabled)
-    return;
-
-  shared_array_buffer_enabled = true;
-  constexpr char kSABFlag[] = "--harmony-sharedarraybuffer";
-  v8::V8::SetFlagsFromString(kSABFlag, sizeof(kSABFlag));
 }
 
 // static

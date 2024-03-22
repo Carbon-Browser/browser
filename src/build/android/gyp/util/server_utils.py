@@ -1,10 +1,11 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import contextlib
 import json
 import os
+import pathlib
 import socket
 
 # Use a unix abstract domain socket:
@@ -44,4 +45,9 @@ def MaybeRunCommand(name, argv, stamp_file, force):
               '$ build/android/fast_local_dev_server.py\n\n') from None
         return False
       raise e
+
+  # Siso needs the stamp file to be created in order for the build step to
+  # complete. If the task fails when the build server runs it, the build server
+  # will delete the stamp file so that it will be run again next build.
+  pathlib.Path(stamp_file).touch()
   return True

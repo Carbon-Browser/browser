@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/android/scoped_java_ref.h"
 #include "components/policy/core/common/configuration_policy_provider.h"
 #include "components/policy/core/common/policy_bundle.h"
+#include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_export.h"
 
 namespace policy {
@@ -46,7 +47,7 @@ class POLICY_EXPORT AndroidCombinedPolicyProvider
   // ConfigurationPolicyProvider:
   bool IsInitializationComplete(PolicyDomain domain) const override;
   bool IsFirstPolicyLoadComplete(PolicyDomain domain) const override;
-  void RefreshPolicies() override;
+  void RefreshPolicies(PolicyFetchReason reason) override;
 
   // For testing
   PolicyConverter* GetPolicyConverterForTesting() {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 // method and report dismissal User Action.
 - (void)reportDismissalUserAction;
 
-// Called when user goes back to SettingsTableViewController. View controllers
+// Called when user goes back from a settings view controller. View controllers
 // must implement this method and report appropriate User Action.
 - (void)reportBackUserAction;
 

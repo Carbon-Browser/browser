@@ -1,14 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/public/test/fakes/crw_fake_web_state_policy_decider.h"
 
-#include <memory>
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import <memory>
 
 namespace web {
 
@@ -31,10 +27,10 @@ FakeDecidePolicyForNavigationResponseInfo::
 }  // namespace web
 
 @implementation CRWFakeWebStatePolicyDecider {
-  // Arguments passed to |shouldAllowRequest:requestInfo:|.
+  // Arguments passed to `shouldAllowRequest:requestInfo:`.
   std::unique_ptr<web::FakeShouldAllowRequestInfo> _shouldAllowRequestInfo;
   // Arguments passed to
-  // |decidePolicyForNavigationResponse:responseInfo:completionHandler:|.
+  // `decidePolicyForNavigationResponse:responseInfo:completionHandler:`.
   std::unique_ptr<web::FakeDecidePolicyForNavigationResponseInfo>
       _decidePolicyForNavigationResponseInfo;
 }

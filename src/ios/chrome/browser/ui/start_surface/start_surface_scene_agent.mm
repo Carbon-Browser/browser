@@ -1,45 +1,47 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/start_surface/start_surface_scene_agent.h"
-#include "base/feature_list.h"
-#include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#import "components/url_param_filter/core/url_param_filterer.h"
+#import "base/feature_list.h"
+#import "base/metrics/histogram_functions.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
 #import "ios/chrome/app/application_delegate/startup_information.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#import "ios/chrome/browser/chrome_url_util.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ntp/new_tab_page_tab_helper.h"
-#import "ios/chrome/browser/ui/main/browser_interface_provider.h"
-#import "ios/chrome/browser/ui/main/scene_controller.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_tab_helper.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_controller.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/url/url_util.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/tab_insertion/model/tab_insertion_browser_agent.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_features.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_recent_tab_browser_agent.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_util.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/web_state_list/tab_insertion_browser_agent.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "url/gurl.h"
 
 namespace {
 // Name of histogram to record the number of excess NTP tabs that are removed.
 const char kExcessNTPTabsRemoved[] = "IOS.NTP.ExcessRemovedTabCount";
 }  // namespace
 
-@interface StartSurfaceSceneAgent ()
+@interface StartSurfaceSceneAgent () <AppStateObserver>
 
 // Caches the previous activation level.
 @property(nonatomic, assign) SceneActivationLevel previousActivationLevel;
+
+// YES if The AppState was not ready before the SceneState reached a valid
+// activation level, so therefore this agent needs to wait for the AppState's
+// initStage to reach a valid stage before checking whether the Start Surface
+// should be shown.
+@property(nonatomic, assign) BOOL waitingForAppStateAfterSceneStateReady;
 
 @end
 
@@ -53,7 +55,32 @@ const char kExcessNTPTabsRemoved[] = "IOS.NTP.ExcessRemovedTabCount";
   return self;
 }
 
+#pragma mark - ObservingSceneAgent
+
+- (void)setSceneState:(SceneState*)sceneState {
+  [super setSceneState:sceneState];
+
+  [self.sceneState.appState addObserver:self];
+}
+
+#pragma mark - AppStateObserver
+
+- (void)appState:(AppState*)appState
+    didTransitionFromInitStage:(InitStage)previousInitStage {
+  if (appState.initStage >= InitStageFirstRun &&
+      self.waitingForAppStateAfterSceneStateReady) {
+    self.waitingForAppStateAfterSceneStateReady = NO;
+    [self showStartSurfaceIfNecessary];
+  }
+}
+
 #pragma mark - SceneStateObserver
+
+- (void)sceneStateDidDisableUI:(SceneState*)sceneState {
+  // Tear down objects tied to the scene state before it is deleted.
+  [self.sceneState.appState removeObserver:self];
+  self.waitingForAppStateAfterSceneStateReady = NO;
+}
 
 - (void)sceneState:(SceneState*)sceneState
     transitionedToActivationLevel:(SceneActivationLevel)level {
@@ -68,23 +95,34 @@ const char kExcessNTPTabsRemoved[] = "IOS.NTP.ExcessRemovedTabCount";
       self.previousActivationLevel > SceneActivationLevelBackground) {
     if (base::FeatureList::IsEnabled(kRemoveExcessNTPs)) {
       // Remove duplicate NTP pages upon background event.
-      [self removeExcessNTPsInBrowser:self.sceneState.interfaceProvider
-                                          .mainInterface.browser];
-      [self removeExcessNTPsInBrowser:self.sceneState.interfaceProvider
-                                          .incognitoInterface.browser];
+      if (self.sceneState.browserProviderInterface.mainBrowserProvider
+              .browser) {
+        [self removeExcessNTPsInBrowser:self.sceneState.browserProviderInterface
+                                            .mainBrowserProvider.browser];
+      }
+      if (self.sceneState.browserProviderInterface.incognitoBrowserProvider
+              .browser) {
+        [self removeExcessNTPsInBrowser:self.sceneState.browserProviderInterface
+                                            .incognitoBrowserProvider.browser];
+      }
     }
   }
   if (level >= SceneActivationLevelForegroundInactive &&
       self.previousActivationLevel < SceneActivationLevelForegroundInactive) {
-    if (IsStartSurfaceSplashStartupEnabled()) {
-      [self logBackgroundDurationMetricForActivationLevel:level];
-      [self showStartSurfaceIfNecessary];
-    }
+    [self logBackgroundDurationMetricForActivationLevel:level];
+    [self showStartSurfaceIfNecessary];
   }
   self.previousActivationLevel = level;
 }
 
 - (void)showStartSurfaceIfNecessary {
+  if (self.sceneState.appState.initStage <= InitStageFirstRun) {
+    // NO if the app is not yet ready to present normal UI that is required by
+    // Start Surface.
+    self.waitingForAppStateAfterSceneStateReady = YES;
+    return;
+  }
+
   if (!ShouldShowStartSurfaceForSceneState(self.sceneState)) {
     return;
   }
@@ -96,27 +134,29 @@ const char kExcessNTPTabsRemoved[] = "IOS.NTP.ExcessRemovedTabCount";
   }
 
   // If there is no active tab, a NTP will be added, and since there is no
-  // recent tab, there is no need to mark `modifytVisibleNTPForStartSurface`.
+  // recent tab.
   // Keep showing the last active NTP tab no matter whether the Start Surface is
   // enabled or not by design.
   // Note that activeWebState could only be nullptr when the Tab grid is active
   // for now.
   web::WebState* activeWebState =
-      self.sceneState.interfaceProvider.mainInterface.browser->GetWebStateList()
+      self.sceneState.browserProviderInterface.mainBrowserProvider.browser
+          ->GetWebStateList()
           ->GetActiveWebState();
-  if (!activeWebState || IsURLNtp(activeWebState->GetVisibleURL())) {
+  if (!activeWebState || IsUrlNtp(activeWebState->GetVisibleURL())) {
     return;
   }
 
   base::RecordAction(base::UserMetricsAction("IOS.StartSurface.Show"));
-  Browser* browser = self.sceneState.interfaceProvider.mainInterface.browser;
+  Browser* browser =
+      self.sceneState.browserProviderInterface.mainBrowserProvider.browser;
   StartSurfaceRecentTabBrowserAgent::FromBrowser(browser)->SaveMostRecentTab();
 
   // Activate the existing NTP tab for the Start surface.
   WebStateList* webStateList = browser->GetWebStateList();
   for (int i = 0; i < webStateList->count(); i++) {
     web::WebState* webState = webStateList->GetWebStateAt(i);
-    if (IsURLNtp(webState->GetVisibleURL())) {
+    if (IsUrlNtp(webState->GetVisibleURL())) {
       NewTabPageTabHelper::FromWebState(webState)->SetShowStartSurface(true);
       webStateList->ActivateWebStateAt(i);
       return;
@@ -126,12 +166,11 @@ const char kExcessNTPTabsRemoved[] = "IOS.NTP.ExcessRemovedTabCount";
   // Create a new NTP since there is no existing one.
   TabInsertionBrowserAgent* insertion_agent =
       TabInsertionBrowserAgent::FromBrowser(browser);
-  web::NavigationManager::WebLoadParams params((GURL(kChromeUINewTabURL)));
-  insertion_agent->InsertWebState(
-      params, nullptr, /*opened_by_dom=*/false,
-      TabInsertion::kPositionAutomatically, /*in_background=*/false,
-      /*inherit_opener=*/false, /*should_show_start_surface=*/true,
-      url_param_filter::FilterResult());
+  web::NavigationManager::WebLoadParams web_load_params(
+      (GURL(kChromeUINewTabURL)));
+  TabInsertion::Params tab_insertion_params;
+  tab_insertion_params.should_show_start_surface = true;
+  insertion_agent->InsertWebState(web_load_params, tab_insertion_params);
 }
 
 // Removes duplicate NTP tabs in `browser`'s WebStateList.
@@ -146,7 +185,7 @@ const char kExcessNTPTabsRemoved[] = "IOS.NTP.ExcessRemovedTabCount";
   BOOL activeWebStateIsEmptyNTP = NO;
   for (int i = 0; i < webStateList->count(); i++) {
     web::WebState* webState = webStateList->GetWebStateAt(i);
-    if (IsURLNtp(webState->GetVisibleURL())) {
+    if (IsUrlNtp(webState->GetVisibleURL())) {
       // Check if there is navigation history for this WebState that is showing
       // the NTP. If there is, then set `keepOneNTP` to NO, indicating that all
       // WebStates in NTPs with no navigation history will get removed.
@@ -183,7 +222,7 @@ const char kExcessNTPTabsRemoved[] = "IOS.NTP.ExcessRemovedTabCount";
   for (NSNumber* index in emptyNtpIndices) {
     web::WebState* webState =
         browser->GetWebStateList()->GetWebStateAt([index intValue]);
-    DCHECK(IsURLNtp(webState->GetVisibleURL()));
+    DCHECK(IsUrlNtp(webState->GetVisibleURL()));
     webStateList->CloseWebStateAt([index intValue],
                                   WebStateList::CLOSE_NO_FLAGS);
   }
@@ -202,18 +241,19 @@ const char kExcessNTPTabsRemoved[] = "IOS.NTP.ExcessRemovedTabCount";
 
 - (void)logBackgroundDurationMetricForActivationLevel:
     (SceneActivationLevel)level {
-  NSInteger timeSinceBackgroundInMinutes =
-      GetTimeSinceMostRecentTabWasOpenForSceneState(self.sceneState) / 60;
-  BOOL isColdStart = (level > SceneActivationLevelBackground &&
-                      self.sceneState.appState.startupInformation.isColdStart);
+  const base::TimeDelta timeSinceBackground =
+      GetTimeSinceMostRecentTabWasOpenForSceneState(self.sceneState);
+  const BOOL isColdStart =
+      (level > SceneActivationLevelBackground &&
+       self.sceneState.appState.startupInformation.isColdStart);
   if (isColdStart) {
     UMA_HISTOGRAM_CUSTOM_COUNTS("IOS.BackgroundTimeBeforeColdStart",
-                                timeSinceBackgroundInMinutes, 1,
-                                60 * 12 /* 12 hours */, 24);
+                                timeSinceBackground.InMinutes(), 1,
+                                base::Hours(12).InMinutes(), 24);
   } else {
     UMA_HISTOGRAM_CUSTOM_COUNTS("IOS.BackgroundTimeBeforeWarmStart",
-                                timeSinceBackgroundInMinutes, 1,
-                                60 * 12 /* 12 hours */, 24);
+                                timeSinceBackground.InMinutes(), 1,
+                                base::Hours(12).InMinutes(), 24);
   }
 }
 

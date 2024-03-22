@@ -1,38 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/history_clusters/core/similar_visit_deduper_cluster_finalizer.h"
 
+#include <unordered_map>
+
 #include "base/ranges/algorithm.h"
 #include "components/history/core/browser/history_types.h"
 #include "components/history_clusters/core/on_device_clustering_util.h"
+#include "components/history_clusters/core/similar_visit.h"
 
 namespace history_clusters {
-
-namespace {
-
-struct SimilarVisit {
-  SimilarVisit() = default;
-  explicit SimilarVisit(const history::ClusterVisit& visit)
-      : title(visit.annotated_visit.url_row.title()),
-        url_for_deduping(visit.url_for_deduping) {}
-  SimilarVisit(const SimilarVisit&) = default;
-  ~SimilarVisit() = default;
-
-  std::u16string title;
-  GURL url_for_deduping;
-
-  struct Comp {
-    bool operator()(const SimilarVisit& lhs, const SimilarVisit& rhs) const {
-      if (lhs.title != rhs.title)
-        return lhs.title < rhs.title;
-      return lhs.url_for_deduping < rhs.url_for_deduping;
-    }
-  };
-};
-
-}  // namespace
 
 SimilarVisitDeduperClusterFinalizer::SimilarVisitDeduperClusterFinalizer() =
     default;
@@ -41,7 +20,8 @@ SimilarVisitDeduperClusterFinalizer::~SimilarVisitDeduperClusterFinalizer() =
 
 void SimilarVisitDeduperClusterFinalizer::FinalizeCluster(
     history::Cluster& cluster) {
-  base::flat_map<SimilarVisit, history::ClusterVisit*, SimilarVisit::Comp>
+  std::unordered_map<SimilarVisit, history::ClusterVisit*, SimilarVisit::Hash,
+                     SimilarVisit::Equals>
       similar_visit_to_canonical_visits;
   // First do a prepass to find the canonical visit for each SimilarVisit key.
   // This simply marks the last visit in `cluster` with any given SimilarVisit

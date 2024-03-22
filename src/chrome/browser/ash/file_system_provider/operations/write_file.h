@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,6 @@
 #define CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_WRITE_FILE_H_
 
 #include <stdint.h>
-
-#include <memory>
 
 #include "base/files/file.h"
 #include "base/memory/ref_counted.h"
@@ -18,25 +16,21 @@
 #include "net/base/io_buffer.h"
 #include "storage/browser/file_system/async_file_util.h"
 
-namespace extensions {
-class EventRouter;
-}  // namespace extensions
-
 namespace ash {
 namespace file_system_provider {
 namespace operations {
 
-// Bridge between fileapi write file and providing extension's write fil
+// Bridge between fileapi write file and providing extension's write file
 // request.
 // Created per request.
 class WriteFile : public Operation {
  public:
-  WriteFile(extensions::EventRouter* event_router,
+  WriteFile(RequestDispatcher* dispatcher,
             const ProvidedFileSystemInfo& file_system_info,
             int file_handle,
             scoped_refptr<net::IOBuffer> buffer,
             int64_t offset,
-            int length,
+            size_t length,
             storage::AsyncFileUtil::StatusCallback callback);
 
   WriteFile(const WriteFile&) = delete;
@@ -47,17 +41,17 @@ class WriteFile : public Operation {
   // Operation overrides.
   bool Execute(int request_id) override;
   void OnSuccess(int request_id,
-                 std::unique_ptr<RequestValue> result,
+                 const RequestValue& result,
                  bool has_more) override;
   void OnError(int request_id,
-               std::unique_ptr<RequestValue> result,
+               const RequestValue& result,
                base::File::Error error) override;
 
  private:
   int file_handle_;
   scoped_refptr<net::IOBuffer> buffer_;
   int64_t offset_;
-  int length_;
+  size_t length_;
   storage::AsyncFileUtil::StatusCallback callback_;
 };
 

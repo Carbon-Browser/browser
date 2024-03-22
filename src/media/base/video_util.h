@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,12 @@
 
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/encoder_status.h"
 #include "media/base/media_export.h"
 #include "media/base/video_types.h"
 #include "third_party/skia/include/core/SkImage.h"
+#include "third_party/skia/include/core/SkYUVAInfo.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -24,6 +25,7 @@ class TimeDelta;
 }
 
 namespace gpu {
+struct Capabilities;
 namespace raster {
 class RasterInterface;
 }  // namespace raster
@@ -156,21 +158,23 @@ MEDIA_EXPORT scoped_refptr<VideoFrame> ConvertToMemoryMappedFrame(
 // media::ConvertAndScaleFrame and put it into a new class
 // media:FrameSizeAndFormatConverter.
 MEDIA_EXPORT scoped_refptr<VideoFrame> ReadbackTextureBackedFrameToMemorySync(
-    const VideoFrame& txt_frame,
+    VideoFrame& txt_frame,
     gpu::raster::RasterInterface* ri,
     GrDirectContext* gr_context,
+    const gpu::Capabilities& caps,
     VideoFramePool* pool = nullptr);
 
 // Synchronously reads a single plane. |src_rect| is relative to the plane,
 // which may be smaller than |frame| due to subsampling.
 MEDIA_EXPORT bool ReadbackTexturePlaneToMemorySync(
-    const VideoFrame& src_frame,
+    VideoFrame& src_frame,
     size_t src_plane,
     gfx::Rect& src_rect,
     uint8_t* dest_pixels,
     size_t dest_stride,
     gpu::raster::RasterInterface* ri,
-    GrDirectContext* gr_context);
+    GrDirectContext* gr_context,
+    const gpu::Capabilities& caps);
 
 // Converts a frame with I420A format into I420 by dropping alpha channel.
 MEDIA_EXPORT scoped_refptr<VideoFrame> WrapAsI420VideoFrame(
@@ -208,6 +212,10 @@ ConvertAndScaleFrame(const VideoFrame& src_frame,
 MEDIA_EXPORT VideoPixelFormat
 VideoPixelFormatFromSkColorType(SkColorType sk_color_type, bool is_opaque);
 
+// Get SkColor suitable type for various formats and planes.
+MEDIA_EXPORT SkColorType SkColorTypeForPlane(VideoPixelFormat format,
+                                             size_t plane);
+
 // Backs a VideoFrame with a SkImage. The created frame takes a ref on the
 // provided SkImage to make this operation zero copy. Only works with CPU
 // backed images.
@@ -217,6 +225,10 @@ MEDIA_EXPORT scoped_refptr<VideoFrame> CreateFromSkImage(
     const gfx::Size& natural_size,
     base::TimeDelta timestamp,
     bool force_opaque = false);
+
+// Utility to convert a media pixel format to SkYUVAInfo.
+MEDIA_EXPORT std::tuple<SkYUVAInfo::PlaneConfig, SkYUVAInfo::Subsampling>
+VideoPixelFormatToSkiaValues(VideoPixelFormat video_format);
 
 }  // namespace media
 

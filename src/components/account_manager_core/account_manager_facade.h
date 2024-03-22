@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "build/chromeos_buildflags.h"
 #include "components/account_manager_core/account.h"
-#include "components/account_manager_core/account_addition_result.h"
+#include "components/account_manager_core/account_upsertion_result.h"
+#include "google_apis/gaia/google_service_auth_error.h"
 
 class OAuth2AccessTokenFetcher;
 class OAuth2AccessTokenConsumer;
@@ -42,6 +43,13 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacade {
     virtual void OnAccountUpserted(const Account& account) = 0;
     // Invoked when an account is removed.
     virtual void OnAccountRemoved(const Account& account) = 0;
+    // Invoked when the error state associated with an account changes.
+    virtual void OnAuthErrorChanged(const AccountKey& account,
+                                    const GoogleServiceAuthError& error) = 0;
+    // Invoked when the account signin dialog is closed on the OS side. Check
+    // `AccountManagerObserver::OnSigninDialogClosed()` Mojo API in
+    // account_manager.mojom for details.
+    virtual void OnSigninDialogClosed();
   };
 
   // The source UI surface used for launching the account addition /
@@ -86,8 +94,14 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacade {
     kChromeSyncPromoAddAccount = 15,
     // Chrome Settings > Turn on Sync.
     kChromeSettingsTurnOnSyncButton = 16,
+    // Launched from ChromeOS Projector App for re-authentication.
+    kChromeOSProjectorAppReauth = 17,
+    // Chrome Menu -> Turn on Sync
+    kChromeMenuTurnOnSync = 18,
+    // Sign-in promo with a new account.
+    kChromeSigninPromoAddAccount = 19,
 
-    kMaxValue = kChromeSettingsTurnOnSyncButton
+    kMaxValue = kChromeSigninPromoAddAccount
   };
 
   AccountManagerFacade();
@@ -122,13 +136,17 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacade {
   // callback. Otherwise `account` will be set to `absl::nullopt`.
   virtual void ShowAddAccountDialog(
       AccountAdditionSource source,
-      base::OnceCallback<void(const AccountAdditionResult& result)>
+      base::OnceCallback<void(const AccountUpsertionResult& result)>
           callback) = 0;
 
   // Launches account reauthentication dialog for provided `email`.
-  virtual void ShowReauthAccountDialog(AccountAdditionSource source,
-                                       const std::string& email,
-                                       base::OnceClosure callback) = 0;
+  // Note: the added/reauthenticated account may not match the account provided
+  // in the `email` field if user decided to edit the email inside the dialog.
+  virtual void ShowReauthAccountDialog(
+      AccountAdditionSource source,
+      const std::string& email,
+      base::OnceCallback<void(const AccountUpsertionResult& result)>
+          callback) = 0;
 
   // Launches OS Settings > Accounts.
   virtual void ShowManageAccountsSettings() = 0;
@@ -139,6 +157,12 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacade {
   virtual std::unique_ptr<OAuth2AccessTokenFetcher> CreateAccessTokenFetcher(
       const AccountKey& account,
       OAuth2AccessTokenConsumer* consumer) = 0;
+
+  // Reports an `error` for `account`.
+  // `account` must be a valid Gaia account known to Account Manager.
+  // Setting the error `state` as `kNone` resets the error state for `account`.
+  virtual void ReportAuthError(const AccountKey& account,
+                               const GoogleServiceAuthError& error) = 0;
 
   // Adds or updates an account programmatically without user interaction.
   // Should only be used in tests.

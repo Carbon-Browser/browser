@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ NSException* ExceptionNamed(NSString* name) {
                                userInfo:nil];
 }
 
-// Helper to keep binning expectations readible.
+// Helper to keep binning expectations readable.
 size_t BinForExceptionNamed(NSString* name) {
   return BinForException(ExceptionNamed(name));
 }
@@ -98,7 +98,7 @@ void ThrowExceptionInRunLoop() {
 // Tests that when the preprocessor is installed, exceptions thrown from
 // a runloop callout are made fatal, so that the stack trace is useful.
 TEST(ExceptionProcessorTest, ThrowExceptionInRunLoop) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(ThrowExceptionInRunLoop(),
                ".*FATAL:exception_processor\\.mm.*"
                "Terminating from Objective-C exception:.*");
@@ -128,7 +128,7 @@ void ThrowAndCatchExceptionInRunLoop() {
 
 // Tests that exceptions can still be caught when the preprocessor is enabled.
 TEST(ExceptionProcessorTest, ThrowAndCatchExceptionInRunLoop) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_EXIT(ThrowAndCatchExceptionInRunLoop(),
               [](int exit_code) -> bool {
                 return WEXITSTATUS(exit_code) == 0;
@@ -154,7 +154,7 @@ void ThrowExceptionFromSelector() {
 }
 
 TEST(ExceptionProcessorTest, ThrowExceptionFromSelector) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(ThrowExceptionFromSelector(),
                ".*FATAL:exception_processor\\.mm.*"
                "Terminating from Objective-C exception:.*");
@@ -189,7 +189,7 @@ void ThrowInNotificationObserver() {
 }
 
 TEST(ExceptionProcessorTest, ThrowInNotificationObserver) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(ThrowInNotificationObserver(),
                ".*FATAL:exception_processor\\.mm.*"
                "Terminating from Objective-C exception:.*");
@@ -210,9 +210,18 @@ void ThrowExceptionInRunLoopWithoutProcessor() {
   exit(1);
 }
 
+// Under LSAN this dies from leaking the run loop instead of how we expect it to
+// die, so the exit code is wrong.
+#if defined(LEAK_SANITIZER)
+#define MAYBE_ThrowExceptionInRunLoopWithoutProcessor \
+  DISABLED_ThrowExceptionInRunLoopWithoutProcessor
+#else
+#define MAYBE_ThrowExceptionInRunLoopWithoutProcessor \
+  ThrowExceptionInRunLoopWithoutProcessor
+#endif
 // Tests basic exception handling when the preprocessor is disabled.
-TEST(ExceptionProcessorTest, ThrowExceptionInRunLoopWithoutProcessor) {
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+TEST(ExceptionProcessorTest, MAYBE_ThrowExceptionInRunLoopWithoutProcessor) {
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_EXIT(ThrowExceptionInRunLoopWithoutProcessor(),
               [](int exit_code) -> bool {
                 return WEXITSTATUS(exit_code) == 0;

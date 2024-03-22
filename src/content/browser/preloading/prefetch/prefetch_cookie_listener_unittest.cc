@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,7 @@ class PrefetchCookieListenerTest : public RenderViewHostTestHarness {
             base::Time::Now() + base::Hours(1), base::Time::Now(),
             /*secure=*/true, /*http_only=*/false,
             net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-            /*same_party=*/false, /*partition_key=*/absl::nullopt, &status));
+            /*partition_key=*/absl::nullopt, &status));
     EXPECT_TRUE(cookie.get());
     EXPECT_TRUE(cookie->IsDomainCookie());
     EXPECT_TRUE(status.IsInclude());

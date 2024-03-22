@@ -1,12 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.feature_guide.notifications;
 
-/**
- * Central class representing feature notification guide.
- */
+/** Central class representing feature notification guide. */
 public abstract class FeatureNotificationGuideService {
     /**
      * Delegate to be provide chrome app layer dependencies. Owned by the {@link

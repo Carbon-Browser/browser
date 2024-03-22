@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,10 +26,6 @@
 #include "services/network/public/mojom/fetch_api.mojom-forward.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
-
-namespace blink {
-struct MobileFriendliness;
-}  // namespace blink
 
 namespace content {
 class NavigationHandle;
@@ -95,8 +91,8 @@ class MetricsWebContentsObserver
   void OnVisibilityChanged(content::Visibility visibility) override;
   void PrimaryMainFrameRenderProcessGone(
       base::TerminationStatus status) override;
-  void RenderViewHostChanged(content::RenderViewHost* old_host,
-                             content::RenderViewHost* new_host) override;
+  void RenderFrameHostChanged(content::RenderFrameHost* old_host,
+                              content::RenderFrameHost* new_host) override;
   void FrameDeleted(int frame_tree_node_id) override;
   void RenderFrameDeleted(content::RenderFrameHost* render_frame_host) override;
   void MediaStartedPlaying(
@@ -117,8 +113,7 @@ class MetricsWebContentsObserver
                          const content::CookieAccessDetails& details) override;
   void OnCookiesAccessed(content::RenderFrameHost* rfh,
                          const content::CookieAccessDetails& details) override;
-  void DidActivatePortal(content::WebContents* predecessor_web_contents,
-                         base::TimeTicks activation_time) override;
+  void DidActivatePreviewedPage(base::TimeTicks activaation_time) override;
 
   void OnStorageAccessed(content::RenderFrameHost* rfh,
                          const GURL& url,
@@ -155,8 +150,9 @@ class MetricsWebContentsObserver
       mojom::FrameRenderDataUpdatePtr render_data,
       mojom::CpuTimingPtr cpu_timing,
       mojom::InputTimingPtr input_timing_delta,
-      const absl::optional<blink::MobileFriendliness>& mobile_friendliness,
-      uint32_t soft_navigation_count);
+      const absl::optional<blink::SubresourceLoadMetrics>&
+          subresource_load_metrics,
+      mojom::SoftNavigationMetricsPtr);
 
   // Informs the observers of the currently committed primary page load that
   // it's likely that prefetch will occur in this WebContents. This should
@@ -167,6 +163,12 @@ class MetricsWebContentsObserver
   // test classes to override.
   virtual void OnV8MemoryChanged(
       const std::vector<MemoryUpdate>& memory_updates);
+
+  // Called when a `SharedStorageWorkletHost` is created for `rfh`.
+  void OnSharedStorageWorkletHostCreated(content::RenderFrameHost* rfh);
+
+  // Returns the time this MetricsWebContentsObserver was created.
+  base::TimeTicks GetCreated();
 
  protected:
   // Protected rather than private so that derived test classes can call
@@ -215,8 +217,9 @@ class MetricsWebContentsObserver
       mojom::FrameRenderDataUpdatePtr render_data,
       mojom::CpuTimingPtr cpu_timing,
       mojom::InputTimingPtr input_timing,
-      const absl::optional<blink::MobileFriendliness>& mobile_friendliness,
-      uint32_t soft_navigation_count) override;
+      const absl::optional<blink::SubresourceLoadMetrics>&
+          subresource_load_metrics,
+      mojom::SoftNavigationMetricsPtr soft_navigation_metrics) override;
 
   void SetUpSharedMemoryForSmoothness(
       base::ReadOnlySharedMemoryRegion shared_memory) override;
@@ -258,9 +261,9 @@ class MetricsWebContentsObserver
                                           base::TimeTicks timestamp,
                                           bool is_certainly_browser_timestamp);
 
-  // Register / Unregister input event callback to given RenderViewHost
-  void RegisterInputEventObserver(content::RenderViewHost* host);
-  void UnregisterInputEventObserver(content::RenderViewHost* host);
+  // Register / Unregister input event callback to given RenderFrameHost
+  void RegisterInputEventObserver(content::RenderFrameHost* host);
+  void UnregisterInputEventObserver(content::RenderFrameHost* host);
 
   // Notify aborted provisional loads that a new navigation occurred. This is
   // used for more consistent attribution tracking for aborted provisional
@@ -297,7 +300,7 @@ class MetricsWebContentsObserver
   bool MaybeActivatePageLoadTracker(
       content::NavigationHandle* navigation_handle);
 
-  // Notify `tracker` about cookie read or write.
+  // Notifies `tracker` about cookie read or write.
   void OnCookiesAccessedImpl(PageLoadTracker& tracker,
                              const content::CookieAccessDetails& details);
 
@@ -357,6 +360,8 @@ class MetricsWebContentsObserver
       page_load_metrics_receivers_;
 
   bool web_contents_will_soon_be_destroyed_ = false;
+
+  base::TimeTicks created_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

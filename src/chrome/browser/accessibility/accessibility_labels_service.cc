@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -200,19 +200,13 @@ void AccessibilityLabelsService::Init() {
           weak_factory_.GetWeakPtr()));
 }
 
-ui::AXMode AccessibilityLabelsService::GetAXMode() {
-  ui::AXMode ax_mode =
-      content::BrowserAccessibilityState::GetInstance()->GetAccessibilityMode();
-
+bool AccessibilityLabelsService::IsEnabled() {
 #if !BUILDFLAG(IS_ANDROID)
-  ax_mode.set_mode(ui::AXMode::kLabelImages,
-                   profile_->GetPrefs()->GetBoolean(
-                       prefs::kAccessibilityImageLabelsEnabled));
+  return profile_->GetPrefs()->GetBoolean(
+      prefs::kAccessibilityImageLabelsEnabled);
 #else
-  ax_mode.set_mode(ui::AXMode::kLabelImages, GetAndroidEnabledStatus());
+  return GetAndroidEnabledStatus();
 #endif
-
-  return ax_mode;
 }
 
 void AccessibilityLabelsService::EnableLabelsServiceOnce() {
@@ -234,14 +228,11 @@ void AccessibilityLabelsService::EnableLabelsServiceOnce() {
   ui::AXActionData action_data;
   action_data.action = ax::mojom::Action::kAnnotatePageImages;
   web_contents->GetPrimaryMainFrame()->ForEachRenderFrameHost(
-      base::BindRepeating(
-          [](const ui::AXActionData& action_data,
-             content::RenderFrameHost* render_frame_host) {
-            if (render_frame_host->IsRenderFrameLive()) {
-              render_frame_host->AccessibilityPerformAction(action_data);
-            }
-          },
-          action_data));
+      [&action_data](content::RenderFrameHost* render_frame_host) {
+        if (render_frame_host->IsRenderFrameLive()) {
+          render_frame_host->AccessibilityPerformAction(action_data);
+        }
+      });
 #endif
 }
 
@@ -294,7 +285,7 @@ void AccessibilityLabelsService::UpdateAccessibilityLabelsHistograms() {
   if (!profile_ || !profile_->GetPrefs())
     return;
 
-  base::UmaHistogramBoolean("Accessibility.ImageLabels",
+  base::UmaHistogramBoolean("Accessibility.ImageLabels2",
                             profile_->GetPrefs()->GetBoolean(
                                 prefs::kAccessibilityImageLabelsEnabled));
 
@@ -358,13 +349,10 @@ void JNI_ImageDescriptionsController_GetImageDescriptionsOnce(
   ui::AXActionData action_data;
   action_data.action = ax::mojom::Action::kAnnotatePageImages;
   web_contents->GetPrimaryMainFrame()->ForEachRenderFrameHost(
-      base::BindRepeating(
-          [](const ui::AXActionData& action_data,
-             content::RenderFrameHost* render_frame_host) {
-            if (render_frame_host->IsRenderFrameLive()) {
-              render_frame_host->AccessibilityPerformAction(action_data);
-            }
-          },
-          action_data));
+      [&action_data](content::RenderFrameHost* render_frame_host) {
+        if (render_frame_host->IsRenderFrameLive()) {
+          render_frame_host->AccessibilityPerformAction(action_data);
+        }
+      });
 }
 #endif

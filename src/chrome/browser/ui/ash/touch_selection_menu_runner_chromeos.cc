@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,13 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/ash/touch_selection_menu_chromeos.h"
 #include "components/session_manager/session_manager_types.h"
 #include "ui/aura/window.h"
-#include "ui/base/layout.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 
@@ -50,15 +49,16 @@ void TouchSelectionMenuRunnerChromeOS::OpenMenuWithTextSelectionAction(
 
   // The menu manages its own lifetime and deletes itself when closed.
   TouchSelectionMenuChromeOS* menu = new TouchSelectionMenuChromeOS(
-      this, client.get(), tracker->Pop(), std::move(top_action));
+      this, client, tracker->Pop(), std::move(top_action));
   ShowMenu(menu, anchor_rect, handle_image_size);
 }
 
 bool TouchSelectionMenuRunnerChromeOS::RequestTextSelection(
-    ui::TouchSelectionMenuClient* client,
+    base::WeakPtr<ui::TouchSelectionMenuClient> client,
     const gfx::Rect& anchor_rect,
     const gfx::Size& handle_image_size,
     aura::Window* context) {
+  DCHECK(client);
   const std::string converted_text =
       base::UTF16ToUTF8(client->GetSelectedText());
   if (converted_text.empty())
@@ -100,13 +100,13 @@ bool TouchSelectionMenuRunnerChromeOS::RequestTextSelection(
           screen->GetDisplayNearestWindow(context).device_scale_factor()),
       base::BindOnce(
           &TouchSelectionMenuRunnerChromeOS::OpenMenuWithTextSelectionAction,
-          weak_ptr_factory_.GetWeakPtr(), client->GetWeakPtr(), anchor_rect,
+          weak_ptr_factory_.GetWeakPtr(), client, anchor_rect,
           handle_image_size, std::move(tracker)));
   return true;
 }
 
 void TouchSelectionMenuRunnerChromeOS::OpenMenu(
-    ui::TouchSelectionMenuClient* client,
+    base::WeakPtr<ui::TouchSelectionMenuClient> client,
     const gfx::Rect& anchor_rect,
     const gfx::Size& handle_image_size,
     aura::Window* context) {
@@ -114,7 +114,7 @@ void TouchSelectionMenuRunnerChromeOS::OpenMenu(
 
   // If there are no commands to show in the menu finish right away. Also if
   // classification is possible delegate creating/showing a new menu.
-  if (!views::TouchSelectionMenuRunnerViews::IsMenuAvailable(client) ||
+  if (!views::TouchSelectionMenuRunnerViews::IsMenuAvailable(client.get()) ||
       RequestTextSelection(client, anchor_rect, handle_image_size, context)) {
     return;
   }

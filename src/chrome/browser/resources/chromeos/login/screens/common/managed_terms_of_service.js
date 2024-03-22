@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,24 @@
  * screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/buttons/oobe_back_button.js';
+import '../../components/buttons/oobe_text_button.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_loading_dialog.js';
+
+import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeAdaptiveDialog} from '../../components/dialogs/oobe_adaptive_dialog.js';
+
 
 // Enum that describes the current state of the Terms Of Service screen
 const ManagedTermsState = {
@@ -23,17 +40,30 @@ const ManagedTermsState = {
  * @implements {MultiStepBehaviorInterface}
  * @implements {OobeI18nBehaviorInterface}
  */
- const ManagedTermsOfServiceBase = Polymer.mixinBehaviors([OobeI18nBehavior,
-  OobeDialogHostBehavior, LoginScreenBehavior, MultiStepBehavior],
-  Polymer.Element);
+const ManagedTermsOfServiceBase = mixinBehaviors(
+    [
+      OobeI18nBehavior,
+      OobeDialogHostBehavior,
+      LoginScreenBehavior,
+      MultiStepBehavior,
+    ],
+    PolymerElement);
 
 /**
  * @typedef {{
- *   termsOfServiceDialog:  OobeAdaptiveDialogElement,
+ *   termsOfServiceDialog:  OobeAdaptiveDialog,
  *   termsOfServiceFrame:  WebView,
  * }}
  */
- ManagedTermsOfServiceBase.$;
+ManagedTermsOfServiceBase.$;
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   manager: string,
+ * }}
+ */
+let ManagedTermsOfServiceScreenData;
 
 /**
  * @polymer
@@ -44,7 +74,9 @@ class ManagedTermsOfService extends ManagedTermsOfServiceBase {
     return 'managed-terms-of-service-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -81,7 +113,7 @@ class ManagedTermsOfService extends ManagedTermsOfServiceBase {
 
   /**
    * Event handler that is invoked just before the frame is shown.
-   * @param {{manager: string}} data contains manager string whose
+   * @param {ManagedTermsOfServiceScreenData} data contains manager string whose
    * Terms of Service are being shown.
    */
   onBeforeShow(data) {
@@ -151,10 +183,8 @@ class ManagedTermsOfService extends ManagedTermsOfServiceBase {
   setTermsOfService(termsOfService) {
     this.$.termsOfServiceFrame.src = 'data:text/html;charset=utf-8,' +
         encodeURIComponent('<style>' +
-                           'body {' +
-                           '  font-family: Roboto, sans-serif;' +
+                           'body {' + this.getServiceLogsFontsStyling() +
                            '  color: RGBA(0,0,0,.87);' +
-                           '  font-size: 14sp;' +
                            '  margin : 0;' +
                            '  padding : 0;' +
                            '  white-space: pre-wrap;' +
@@ -176,6 +206,25 @@ class ManagedTermsOfService extends ManagedTermsOfServiceBase {
     // Mark the loading as complete.
     this.acceptButtonDisabled_ = false;
     this.setUIStep(ManagedTermsState.LOADED);
+  }
+
+  /**
+   * Generates fonts styling for the ToS WebView based on OobeJelly flag.
+   * @return {string}
+   * @private
+   */
+  getServiceLogsFontsStyling() {
+    const isOobeJellyEnabled = loadTimeData.getBoolean('isOobeJellyEnabled');
+    if (!isOobeJellyEnabled) {
+      return '  font-family: Roboto, sans-serif;' +
+          '  font-size: 14sp;';
+    }
+    // Those values correspond to the cros-body-2 token.
+    return (
+        '  font-family: Google Sans Text Regular, Google Sans, Roboto, sans-serif;' +
+        '  font-size: 13px;' +
+        '  font-weight: 400;' +
+        '  line-height: 20px;');
   }
 }
 

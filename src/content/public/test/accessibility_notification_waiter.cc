@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/test/accessibility_notification_waiter.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
@@ -18,6 +18,7 @@
 #include "content/public/browser/browser_accessibility_state.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_plugin_guest_manager.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/test_utils.h"
@@ -81,24 +82,22 @@ void AccessibilityNotificationWaiter::ListenToAllFrames(
     VLOG(1) << "Waiting for AccessibilityEvent " << *event_to_wait_for_;
   WebContentsImpl* web_contents_impl =
       static_cast<WebContentsImpl*>(web_contents);
-  for (FrameTreeNode* node : web_contents_impl->GetPrimaryFrameTree().Nodes())
-    ListenToFrame(node->current_frame_host());
 
+  FrameTree::NodeRange nodes =
+      web_contents_impl->GetPrimaryFrameTree().NodesIncludingInnerTreeNodes();
+  for (FrameTreeNode* node : nodes) {
+    frame_count_++;
+    ListenToFrame(node->current_frame_host());
+  }
   BrowserPluginGuestManager* guest_manager =
       web_contents_impl->GetBrowserContext()->GetGuestManager();
   if (guest_manager) {
-    guest_manager->ForEachGuest(
-        web_contents_impl,
-        base::BindRepeating(
-            &AccessibilityNotificationWaiter::ListenToGuestWebContents,
-            base::Unretained(this)));
+    guest_manager->ForEachGuest(web_contents_impl,
+                                [&](WebContents* web_contents) {
+                                  ListenToAllFrames(web_contents);
+                                  return true;
+                                });
   }
-}
-
-bool AccessibilityNotificationWaiter::ListenToGuestWebContents(
-    WebContents* web_contents) {
-  ListenToAllFrames(web_contents);
-  return true;
 }
 
 void AccessibilityNotificationWaiter::ListenToFrame(
@@ -114,7 +113,14 @@ void AccessibilityNotificationWaiter::ListenToFrame(
   }
 }
 
-bool AccessibilityNotificationWaiter::WaitForNotification() {
+bool AccessibilityNotificationWaiter::WaitForNotification(bool all_frames) {
+  if (all_frames) {
+    notification_count_ = 0;
+  } else {
+    // Pretend we've heard all the notifications but one, so that the first
+    // notification allows us to stop waiting.
+    notification_count_ = frame_count_ - 1;
+  }
   loop_runner_->Run();
 
   bool notification_received = notification_received_;
@@ -164,10 +170,13 @@ void AccessibilityNotificationWaiter::OnAccessibilityEvent(
   if (event_to_wait_for_ == ax::mojom::Event::kNone ||
       event_to_wait_for_ == event_type) {
     event_target_id_ = event_target_id;
-    event_render_frame_host_ = rfhi;
-    notification_received_ = true;
-
-    loop_runner_quit_closure_.Run();
+    event_browser_accessibility_manager_ =
+        rfhi ? rfhi->GetOrCreateBrowserAccessibilityManager() : nullptr;
+    notification_count_++;
+    if (notification_count_ == frame_count_) {
+      notification_received_ = true;
+      loop_runner_quit_closure_.Run();
+    }
   }
 }
 
@@ -193,19 +202,24 @@ void AccessibilityNotificationWaiter::BindOnLocationsChanged(
 }
 
 void AccessibilityNotificationWaiter::OnGeneratedEvent(
-    BrowserAccessibilityDelegate* delegate,
+    RenderFrameHostImpl* render_frame_host,
     ui::AXEventGenerator::Event event,
-    int event_target_id) {
-  DCHECK(event_target_id);
+    ui::AXNodeID event_target_id) {
+  DCHECK(render_frame_host);
+  DCHECK_NE(event_target_id, ui::kInvalidAXNodeID);
 
   if (IsAboutBlank())
     return;
 
   if (generated_event_to_wait_for_ == event) {
     event_target_id_ = event_target_id;
-    event_render_frame_host_ = static_cast<RenderFrameHostImpl*>(delegate);
-    notification_received_ = true;
-    loop_runner_quit_closure_.Run();
+    event_browser_accessibility_manager_ =
+        render_frame_host->GetOrCreateBrowserAccessibilityManager();
+    notification_count_++;
+    if (notification_count_ == frame_count_) {
+      notification_received_ = true;
+      loop_runner_quit_closure_.Run();
+    }
   }
 }
 
@@ -225,7 +239,7 @@ void AccessibilityNotificationWaiter::OnFocusChanged() {
   const BrowserAccessibilityManager* manager =
       web_contents_impl->GetRootBrowserAccessibilityManager();
   if (manager && manager->delegate() && manager->GetFocus()) {
-    OnGeneratedEvent(manager->delegate(),
+    OnGeneratedEvent(manager->delegate()->AccessibilityRenderFrameHost(),
                      ui::AXEventGenerator::Event::FOCUS_CHANGED,
                      manager->GetFocus()->GetId());
   }

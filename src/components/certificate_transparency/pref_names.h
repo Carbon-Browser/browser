@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,6 @@ namespace prefs {
 // in the given pref registry.
 COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY)
 void RegisterPrefs(PrefRegistrySimple* registry);
-
-// The set of hosts (as URLBlocklist-syntax filters) for which Certificate
-// Transparency is required to be present.
-COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY) extern const char kCTRequiredHosts[];
 
 // The set of hosts (as URLBlocklist-syntax filters) for which Certificate
 // Transparency information is allowed to be absent, even if it would

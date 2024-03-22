@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 #include "chromeos/ash/services/assistant/audio_decoder/assistant_audio_decoder.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 AssistantAudioDecoderFactory::AssistantAudioDecoderFactory(
     mojo::PendingReceiver<mojom::AssistantAudioDecoderFactory> receiver)
@@ -25,5 +24,4 @@ void AssistantAudioDecoderFactory::CreateAssistantAudioDecoder(
                               std::move(receiver));
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

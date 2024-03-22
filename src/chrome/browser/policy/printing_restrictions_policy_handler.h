@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -121,7 +121,7 @@ class PrintingPaperSizeDefaultPolicyHandler : public TypeCheckingPolicyHandler {
                            PrefValueMap* prefs) override;
 
  private:
-  bool CheckIntSubkey(const base::Value* dict,
+  bool CheckIntSubkey(const base::Value::Dict& dict,
                       const std::string& key,
                       PolicyErrorMap* errors);
   bool GetValue(const PolicyMap& policies,

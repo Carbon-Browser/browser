@@ -1,58 +1,72 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/lock_screen_apps/lock_screen_profile_creator_impl.h"
 
+#include <initializer_list>
 #include <memory>
+#include <ostream>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/session/arc_session.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "ash/components/arc/session/arc_session_runner.h"
+#include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/location.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/numerics/clamped_math.h"
+#include "base/numerics/safe_conversions.h"
+#include "base/one_shot_event.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_tick_clock.h"
+#include "base/time/time.h"
+#include "base/traits_bag.h"
+#include "base/values.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
-#include "chrome/browser/ash/lock_screen_apps/lock_screen_apps.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
 #include "chrome/browser/ash/note_taking_helper.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/fake_profile_manager.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "components/account_id/account_id.h"
 #include "components/crx_file/id_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
+#include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
+#include "extensions/browser/extension_system.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/switches.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
 
 using ::ash::ProfileHelper;
-using extensions::DictionaryBuilder;
-using extensions::ListBuilder;
 using lock_screen_apps::LockScreenProfileCreator;
 using lock_screen_apps::LockScreenProfileCreatorImpl;
 
@@ -171,10 +185,10 @@ class PendingProfileCreation : public Profile::Delegate {
   }
 
   base::FilePath path_;
-  Profile::Delegate* delegate_ = nullptr;
+  raw_ptr<Profile::Delegate, ExperimentalAsh> delegate_ = nullptr;
   base::OnceClosure wait_quit_closure_;
 
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile, ExperimentalAsh> profile_ = nullptr;
   bool success_ = false;
   bool is_new_profile_ = false;
 };
@@ -225,9 +239,6 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
   ~LockScreenProfileCreatorImplTest() override {}
 
   void SetUp() override {
-    // Need to initialize DBusThreadManager before ArcSessionManager's
-    // constructor calls DBusThreadManager::Get().
-    chromeos::DBusThreadManager::Initialize();
     ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
 
     base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
@@ -263,7 +274,6 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
     TestingBrowserProcess::GetGlobal()->SetProfileManager(nullptr);
 
     ash::ConciergeClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
   UnittestProfileManager* profile_manager() { return profile_manager_; }
@@ -283,30 +293,25 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
 
   // Creates a lock screen enabled note taking app.
   scoped_refptr<const extensions::Extension> CreateTestNoteTakingApp() {
-    std::unique_ptr<base::DictionaryValue> background =
-        DictionaryBuilder()
-            .Set("scripts", ListBuilder().Append("background.js").Build())
-            .Build();
-    std::unique_ptr<base::ListValue> action_handlers =
-        ListBuilder()
-            .Append(DictionaryBuilder()
-                        .Set("action", "new_note")
-                        .Set("enabled_on_lock_screen", true)
-                        .Build())
-            .Build();
+    base::Value::Dict background = base::Value::Dict().Set(
+        "scripts", base::Value::List().Append("background.js"));
+    base::Value::List action_handlers =
+        base::Value::List().Append(base::Value::Dict()
+                                       .Set("action", "new_note")
+                                       .Set("enabled_on_lock_screen", true));
 
-    DictionaryBuilder manifest_builder;
-    manifest_builder.Set("name", "Note taking app")
-        .Set("manifest_version", 2)
-        .Set("version", "1.1")
-        .Set("app", DictionaryBuilder()
-                        .Set("background", std::move(background))
-                        .Build())
-        .Set("permissions", ListBuilder().Append("lockScreen").Build())
-        .Set("action_handlers", std::move(action_handlers));
+    auto manifest_builder =
+        base::Value::Dict()
+            .Set("name", "Note taking app")
+            .Set("manifest_version", 2)
+            .Set("version", "1.1")
+            .Set("app",
+                 base::Value::Dict().Set("background", std::move(background)))
+            .Set("permissions", base::Value::List().Append("lockScreen"))
+            .Set("action_handlers", std::move(action_handlers));
 
     return extensions::ExtensionBuilder()
-        .SetManifest(manifest_builder.Build())
+        .SetManifest(std::move(manifest_builder))
         .SetID(crx_file::id_util::GenerateId("test_app"))
         .Build();
   }
@@ -364,7 +369,7 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
 
     base::FilePath user_profile_path =
         user_data_dir_.GetPath().Append(ProfileHelper::Get()->GetUserProfileDir(
-            ProfileHelper::GetUserIdHashByUserIdForTesting(kPrimaryUser)));
+            user_manager::FakeUserManager::GetFakeUsernameHash(account_id)));
     auto profile = std::make_unique<TestingProfile>(user_profile_path);
     primary_profile_ = profile.get();
     profile_manager_->RegisterTestingProfile(std::move(profile),
@@ -379,9 +384,11 @@ class LockScreenProfileCreatorImplTest : public testing::Test {
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 
-  UnittestProfileManager* profile_manager_;
+  raw_ptr<UnittestProfileManager, DanglingUntriaged | ExperimentalAsh>
+      profile_manager_;
 
-  TestingProfile* primary_profile_ = nullptr;
+  raw_ptr<TestingProfile, DanglingUntriaged | ExperimentalAsh>
+      primary_profile_ = nullptr;
 
   base::SimpleTestTickClock tick_clock_;
 
@@ -435,7 +442,18 @@ TEST_F(LockScreenProfileCreatorImplTest,
       prefs::kForceEphemeralProfiles));
   EXPECT_FALSE(ProfileHelper::Get()->GetUserByProfile(lock_screen_profile));
 
-  // Profile should not be recreated if lock screen note taking gets reenabled.
+  // `AppManagerImpl` uses the original non-OffTheRecord profile to install apps
+  // to the lock screen. Regular web apps and app service should be available,
+  // but not system web apps.
+  EXPECT_TRUE(lock_screen_profile->IsOffTheRecord());
+  EXPECT_TRUE(web_app::WebAppProvider::GetForLocalAppsUnchecked(
+      lock_screen_profile->GetOriginalProfile()));
+  EXPECT_TRUE(apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(
+      lock_screen_profile->GetOriginalProfile()));
+  EXPECT_FALSE(
+      ash::SystemWebAppManager::Get(lock_screen_profile->GetOriginalProfile()));
+
+  // Profile should not be recreated if lock screen note taking gets re-enabled.
   SetAppEnabledOnLockScreen(primary_profile(), test_app.get(), false);
   SetAppEnabledOnLockScreen(primary_profile(), test_app.get(), true);
 
@@ -638,12 +656,6 @@ TEST_F(LockScreenProfileCreatorImplTest, MetricsOnSuccess) {
                   ->WaitForCreationAndOverrideResponse(true));
 
   EXPECT_TRUE(callback_run);
-
-  histogram_tester->ExpectTimeBucketCount(
-      "Apps.LockScreen.AppsProfile.Creation.Duration", base::Milliseconds(20),
-      1);
-  histogram_tester->ExpectUniqueSample(
-      "Apps.LockScreen.AppsProfile.Creation.Success", 1, 1);
 }
 
 TEST_F(LockScreenProfileCreatorImplTest, MetricsOnFailure) {
@@ -673,9 +685,4 @@ TEST_F(LockScreenProfileCreatorImplTest, MetricsOnFailure) {
                   ->WaitForCreationAndOverrideResponse(false));
 
   EXPECT_TRUE(callback_run);
-
-  histogram_tester->ExpectTotalCount(
-      "Apps.LockScreen.AppsProfile.Creation.Duration", 0);
-  histogram_tester->ExpectUniqueSample(
-      "Apps.LockScreen.AppsProfile.Creation.Success", 0, 1);
 }

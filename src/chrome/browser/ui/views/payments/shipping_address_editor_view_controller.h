@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,7 @@ class ShippingAddressEditorViewController : public EditorViewController {
 
   // PaymentRequestSheetController:
   std::u16string GetSheetTitle() override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
  protected:
   int GetPrimaryButtonId() override;
@@ -76,7 +77,7 @@ class ShippingAddressEditorViewController : public EditorViewController {
   class ShippingAddressValidationDelegate : public ValidationDelegate {
    public:
     ShippingAddressValidationDelegate(
-        ShippingAddressEditorViewController* parent,
+        base::WeakPtr<ShippingAddressEditorViewController> controller,
         const EditorField& field);
 
     ShippingAddressValidationDelegate(
@@ -104,8 +105,8 @@ class ShippingAddressEditorViewController : public EditorViewController {
 
     EditorField field_;
 
-    // Raw pointer back to the owner of this class, therefore will not be null.
-    raw_ptr<ShippingAddressEditorViewController> controller_;
+    // Pointer back to the owner of this class, therefore will not be null.
+    base::WeakPtr<ShippingAddressEditorViewController> controller_;
   };
 
   std::u16string GetValueForType(const autofill::AutofillProfile& profile,
@@ -145,7 +146,8 @@ class ShippingAddressEditorViewController : public EditorViewController {
 
   // A temporary profile to keep unsaved data in between relayout (e.g., when
   // the country is changed and fields set may be different).
-  autofill::AutofillProfile temporary_profile_;
+  autofill::AutofillProfile temporary_profile_{
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode};
 
   // List of fields, reset everytime the current country changes.
   std::vector<EditorField> editor_fields_;
@@ -171,8 +173,9 @@ class ShippingAddressEditorViewController : public EditorViewController {
   bool failed_to_load_region_data_;
 
   // Owned by the state combobox, which is owned by this object's base class.
-  raw_ptr<autofill::RegionComboboxModel> region_model_;
+  raw_ptr<autofill::RegionComboboxModel, DanglingUntriaged> region_model_;
 
+  // Must be the last member of a leaf class.
   base::WeakPtrFactory<ShippingAddressEditorViewController> weak_ptr_factory_{
       this};
 };

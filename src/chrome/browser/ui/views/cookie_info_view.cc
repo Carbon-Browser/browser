@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -179,7 +179,7 @@ views::Textfield* CookieInfoView::AddTextfieldRow(views::TableLayout* layout,
       l10n_util::GetStringUTF16(label_message_id)));
   auto* textfield = contents()->AddChildView(
       std::make_unique<GestureScrollableTextfield>(this));
-  textfield->SetAssociatedLabel(label);
+  textfield->SetAccessibleName(label);
   textfield->SetReadOnly(true);
   textfield->SetBorder(views::NullBorder());
 

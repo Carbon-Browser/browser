@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -157,8 +157,7 @@ class InlineSigninHelper : public GaiaAuthConsumer {
   void OnClientOAuthFailure(const GoogleServiceAuthError& error)
       override;
 
-  void OnClientOAuthSuccessAndBrowserOpened(const ClientOAuthResult& result,
-                                            Profile* profile);
+  void OnClientOAuthSuccessAndBrowserOpened(const ClientOAuthResult& result);
 
   // Callback invoked once the user has responded to the signin confirmation UI.
   // If confirmed is false, the signin is aborted.

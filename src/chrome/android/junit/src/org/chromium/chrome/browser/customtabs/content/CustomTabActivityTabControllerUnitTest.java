@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.customtabs.content;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -12,20 +13,19 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Intent;
 import android.os.Bundle;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -37,48 +37,40 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManagerImpl;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObserver;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
+import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.embedder_support.util.ShadowUrlUtilities;
-import org.chromium.content.browser.GestureListenerManagerImpl;
-import org.chromium.content_public.browser.GestureStateListener;
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * Tests for {@link CustomTabActivityTabController}.
- */
+/** Tests for {@link CustomTabActivityTabController}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowUrlUtilities.class})
-@DisableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowUrlUtilities.class})
+@DisableFeatures(ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS)
 public class CustomTabActivityTabControllerUnitTest {
     @Rule
     public final CustomTabActivityContentTestEnvironment env =
             new CustomTabActivityContentTestEnvironment();
 
-    @Rule
-    public Features.JUnitProcessor processor = new Features.JUnitProcessor();
+    @Rule public Features.JUnitProcessor processor = new Features.JUnitProcessor();
 
     private CustomTabActivityTabController mTabController;
 
-    @Mock
-    private Profile mProfile;
-    @Mock
-    private GestureListenerManagerImpl mGestureListenerManagerImpl;
+    @Mock private Profile mProfile;
+    @Mock private PrivacyPreferencesManagerImpl mPrivacyPreferencesManager;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         Profile.setLastUsedProfileForTesting(mProfile);
         mTabController = env.createTabController();
-        GestureListenerManagerImpl.setInstanceForTesting(mGestureListenerManagerImpl);
-    }
-
-    @After
-    public void tearDown() {
-        GestureListenerManagerImpl.setInstanceForTesting(null);
+        PrivacyPreferencesManagerImpl.setInstanceForTesting(mPrivacyPreferencesManager);
     }
 
     @Test
@@ -203,10 +195,13 @@ public class CustomTabActivityTabControllerUnitTest {
     // Some websites replace the tab with a new one.
     @Test
     public void doesNotSetHeaderWhenIncognito() {
-        doAnswer((mock) -> {
-            fail("setClientDataHeaderForNewTab() should not be called for incognito tabs");
-            return null;
-        })
+        doAnswer(
+                        (mock) -> {
+                            fail(
+                                    "setClientDataHeaderForNewTab() should not be called for"
+                                            + " incognito tabs");
+                            return null;
+                        })
                 .when(env.connection)
                 .setClientDataHeaderForNewTab(any(), any());
         env.isIncognito = true;
@@ -217,83 +212,27 @@ public class CustomTabActivityTabControllerUnitTest {
     }
 
     @Test
-    public void doesNotAddListenersForSignalsIfFeatureIsDisabled() {
+    @DisableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
+    public void doesNotSetGreatestScrollPercentageSupplierIfFeatureIsDisabled() {
         env.reachNativeInit(mTabController);
 
-        verify(mGestureListenerManagerImpl, never()).addListener(any(GestureStateListener.class));
-    }
-
-    @Test
-    @Features.EnableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
-    public void addsListenersForSignalsIfFeatureIsEnabled() {
-        env.reachNativeInit(mTabController);
-
-        verify(mGestureListenerManagerImpl).addListener(any(GestureStateListener.class));
-    }
-
-    @Test
-    @Features.EnableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
-    public void removesGestureStateListenerWhenWebContentsWillSwap() {
-        env.reachNativeInit(mTabController);
-
-        ArgumentCaptor<GestureStateListener> gestureStateListenerArgumentCaptor =
-                ArgumentCaptor.forClass(GestureStateListener.class);
-        verify(mGestureListenerManagerImpl)
-                .addListener(gestureStateListenerArgumentCaptor.capture());
-
-        ArgumentCaptor<TabObserver> tabObserverArgumentCaptor =
-                ArgumentCaptor.forClass(TabObserver.class);
-        verify(env.tabProvider.getTab(), atLeastOnce())
-                .addObserver(tabObserverArgumentCaptor.capture());
-
-        for (TabObserver observer : tabObserverArgumentCaptor.getAllValues()) {
-            observer.webContentsWillSwap(env.tabProvider.getTab());
+        ArgumentCaptor<TabObserver> tabObservers = ArgumentCaptor.forClass(TabObserver.class);
+        verify(env.tabObserverRegistrar, atLeastOnce()).registerTabObserver(tabObservers.capture());
+        for (TabObserver observer : tabObservers.getAllValues()) {
+            assertFalse(
+                    "RealtimeEngagementSignalObserver is not attached.",
+                    observer instanceof RealtimeEngagementSignalObserver);
         }
-        verify(mGestureListenerManagerImpl)
-                .removeListener(gestureStateListenerArgumentCaptor.getValue());
     }
 
     @Test
-    @Features.EnableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
-    public void sendsSignalsForScrollStartThenEnd() {
+    @EnableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
+    public void setsTabObserverRegistrarOnEngagementSignalsHandler() {
+        var handler = mock(EngagementSignalsHandler.class);
+        when(env.connection.getEngagementSignalsHandler(eq(env.session))).thenReturn(handler);
+        when(env.connection.isDynamicFeatureEnabled(anyString())).thenReturn(true);
+        when(mPrivacyPreferencesManager.isUsageAndCrashReportingPermitted()).thenReturn(true);
         env.reachNativeInit(mTabController);
-
-        ArgumentCaptor<GestureStateListener> gestureStateListenerArgumentCaptor =
-                ArgumentCaptor.forClass(GestureStateListener.class);
-        verify(mGestureListenerManagerImpl)
-                .addListener(gestureStateListenerArgumentCaptor.capture());
-
-        // Start scrolling down.
-        gestureStateListenerArgumentCaptor.getValue().onScrollStarted(0, 100, false);
-        verify(env.connection).notifyVerticalScrollEvent(eq(env.session), eq(false));
-        // End scrolling at 50%.
-        gestureStateListenerArgumentCaptor.getValue().onScrollEnded(50, 100);
-        // We shouldn't make any more calls.
-        verify(env.connection, times(1)).notifyVerticalScrollEvent(eq(env.session), anyBoolean());
-    }
-
-    @Test
-    @Features.EnableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
-    public void sendsSignalsForScrollStartDirectionChangeThenEnd() {
-        env.reachNativeInit(mTabController);
-
-        ArgumentCaptor<GestureStateListener> gestureStateListenerArgumentCaptor =
-                ArgumentCaptor.forClass(GestureStateListener.class);
-        verify(mGestureListenerManagerImpl)
-                .addListener(gestureStateListenerArgumentCaptor.capture());
-
-        // Start by scrolling down.
-        gestureStateListenerArgumentCaptor.getValue().onScrollStarted(0, 100, false);
-        verify(env.connection).notifyVerticalScrollEvent(eq(env.session), eq(false));
-        // Change direction to up at 10%.
-        gestureStateListenerArgumentCaptor.getValue().onVerticalScrollDirectionChanged(true, .1f);
-        verify(env.connection).notifyVerticalScrollEvent(eq(env.session), eq(true));
-        // Change direction to down at 5%.
-        gestureStateListenerArgumentCaptor.getValue().onVerticalScrollDirectionChanged(false, .05f);
-        verify(env.connection, times(2)).notifyVerticalScrollEvent(eq(env.session), eq(false));
-        // End scrolling at 50%.
-        gestureStateListenerArgumentCaptor.getValue().onScrollEnded(50, 100);
-        // We shouldn't make any more calls.
-        verify(env.connection, times(3)).notifyVerticalScrollEvent(eq(env.session), anyBoolean());
+        verify(handler).setTabObserverRegistrar(env.tabObserverRegistrar);
     }
 }

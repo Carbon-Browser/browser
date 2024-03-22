@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/tablet_mode_observer.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "components/account_id/account_id.h"
@@ -68,9 +69,6 @@ class ASH_EXPORT MultiUserWindowManagerImpl
 
   static MultiUserWindowManagerImpl* Get();
 
-  // Called when the active account change is complete.
-  void OnDidSwitchActiveAccount();
-
   // MultiUserWindowManager:
   void SetWindowOwner(aura::Window* window,
                       const AccountId& account_id) override;
@@ -82,8 +80,6 @@ class ASH_EXPORT MultiUserWindowManagerImpl
   const AccountId& GetUserPresentingWindow(
       const aura::Window* window) const override;
   const AccountId& CurrentAccountId() const override;
-  void AddObserver(MultiUserWindowManagerObserver* observer) override;
-  void RemoveObserver(MultiUserWindowManagerObserver* observer) override;
 
   // SessionObserver:
   void OnActiveUserSessionChanged(const AccountId& account_id) override;
@@ -211,7 +207,7 @@ class ASH_EXPORT MultiUserWindowManagerImpl
   // Returns the time for an animation.
   base::TimeDelta GetAdjustedAnimationTime(base::TimeDelta default_time) const;
 
-  MultiUserWindowManagerDelegate* delegate_;
+  raw_ptr<MultiUserWindowManagerDelegate, ExperimentalAsh> delegate_;
 
   // A lookup to see to which user the given window belongs to, where and if it
   // should get shown.
@@ -233,8 +229,6 @@ class ASH_EXPORT MultiUserWindowManagerImpl
 
   // The animation between users.
   std::unique_ptr<UserSwitchAnimator> animation_;
-
-  base::ObserverList<MultiUserWindowManagerObserver>::Unchecked observers_;
 };
 
 }  // namespace ash

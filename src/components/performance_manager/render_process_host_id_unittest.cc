@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/public/render_process_host_id.h"
 
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace performance_manager {

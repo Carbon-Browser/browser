@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <cstddef>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -79,7 +79,7 @@ void NetworkConditionService::NetworkConditionServiceImpl::
 
 void NetworkConditionService::NetworkConditionServiceImpl::
     RegisterRTTAndThroughputEstimatesObserver() {
-  DCHECK(g_browser_process != nullptr);
+  CHECK(g_browser_process);
   auto* network_quality_tracker = g_browser_process->network_quality_tracker();
   // Simulate the notification once before getting on the official list of
   // observers.

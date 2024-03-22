@@ -1,150 +1,230 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {LocalDataBrowserProxyImpl, SiteDataElement} from 'chrome://settings/lazy_load.js';
-import {MetricsBrowserProxyImpl, PrivacyElementInteractions, Router,routes} from 'chrome://settings/settings.js';
-import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, flushTasks} from 'chrome://webui-test/test_util.js';
+import {ContentSetting, ContentSettingsTypes, SettingsSiteDataElement, SiteSettingsPrefsBrowserProxyImpl} from 'chrome://settings/lazy_load.js';
+import {CrSettingsPrefs, SettingsPrefsElement} from 'chrome://settings/settings.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {isChildVisible} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {TestLocalDataBrowserProxy} from './test_local_data_browser_proxy.js';
-import {TestMetricsBrowserProxy} from './test_metrics_browser_proxy.js';
+import {TestSiteSettingsPrefsBrowserProxy} from './test_site_settings_prefs_browser_proxy.js';
+import {createContentSettingTypeToValuePair, createRawSiteException, createSiteSettingsPrefs} from './test_util.js';
 
 // clang-format on
 
+// Name of the cookie default content setting pref.
+const PREF_NAME = 'generated.cookie_default_content_setting';
+
 suite('SiteDataTest', function() {
-  let siteData: SiteDataElement;
+  let page: SettingsSiteDataElement;
+  let settingsPrefs: SettingsPrefsElement;
+  let siteSettingsBrowserProxy: TestSiteSettingsPrefsBrowserProxy;
 
-  let testBrowserProxy: TestLocalDataBrowserProxy;
-
-  let testMetricsBrowserProxy: TestMetricsBrowserProxy;
+  suiteSetup(function() {
+    settingsPrefs = document.createElement('settings-prefs');
+    return CrSettingsPrefs.initialized;
+  });
 
   setup(function() {
-    Router.getInstance().navigateTo(routes.SITE_SETTINGS);
-    testMetricsBrowserProxy = new TestMetricsBrowserProxy();
-    MetricsBrowserProxyImpl.setInstance(testMetricsBrowserProxy);
-    testBrowserProxy = new TestLocalDataBrowserProxy();
-    LocalDataBrowserProxyImpl.setInstance(testBrowserProxy);
-    siteData = document.createElement('site-data');
-    siteData.filter = '';
+    siteSettingsBrowserProxy = new TestSiteSettingsPrefsBrowserProxy();
+    SiteSettingsPrefsBrowserProxyImpl.setInstance(siteSettingsBrowserProxy);
+
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    page = document.createElement('settings-site-data');
+    page.prefs = settingsPrefs.prefs!;
+    page.set('prefs.' + PREF_NAME + '.value', ContentSetting.ALLOW);
+    document.body.appendChild(page);
+    flush();
   });
 
   teardown(function() {
-    siteData.remove();
+    page.remove();
   });
 
-  test('remove button (trash) calls remove on origin', async function() {
-    const sites = [
-      {site: 'Hello', localData: 'Cookiez!'},
-    ];
-    testBrowserProxy.setCookieList(sites);
-    document.body.appendChild(siteData);
-    Router.getInstance().navigateTo(routes.SITE_SETTINGS_SITE_DATA);
+  function getDefaultBlockDialog() {
+    return page.shadowRoot!.querySelector('#defaultBlockDialog');
+  }
 
-    await eventToPromise('site-data-list-complete', siteData);
+  test('DefaultSettingAllowUpdatesPref', async function() {
+    // Start from a different state than 'allow'.
+    page.$.defaultSessionOnly.click();
+    assertEquals(
+        page.getPref(PREF_NAME + '.value'), ContentSetting.SESSION_ONLY);
+
+    page.$.defaultAllow.click();
+    assertEquals(page.getPref(PREF_NAME + '.value'), ContentSetting.ALLOW);
+  });
+
+  test('DefaultSettingSessionOnlyUpdatesPref', async function() {
+    // Default is 'allow'.
+    assertEquals(page.getPref(PREF_NAME + '.value'), ContentSetting.ALLOW);
+
+    page.$.defaultSessionOnly.click();
+    assertEquals(
+        page.getPref(PREF_NAME + '.value'), ContentSetting.SESSION_ONLY);
+  });
+
+  test('DefaultSettingBlockUpdatesPref', async function() {
+    // Default is 'allow'.
+    assertEquals(page.getPref(PREF_NAME + '.value'), ContentSetting.ALLOW);
+
+    page.$.defaultBlock.click();
     flush();
-    const button =
-        siteData.shadowRoot!.querySelector('site-data-entry')!.shadowRoot!
-            .querySelector<HTMLElement>('.icon-delete-gray');
-    assertTrue(!!button);
-    assertEquals('CR-ICON-BUTTON', button.tagName);
-    button.click();
-    const path = await testBrowserProxy.whenCalled('removeSite');
-    assertEquals('Hello', path);
-    const metric =
-        await testMetricsBrowserProxy.whenCalled('recordSettingsPageHistogram');
-    assertEquals(PrivacyElementInteractions.SITE_DATA_REMOVE_SITE, metric);
-  });
-
-  test('remove button hidden when no search results', async function() {
-    const sites = [
-      {site: 'Hello', localData: 'Cookiez!'},
-      {site: 'World', localData: 'Cookiez!'},
-    ];
-    testBrowserProxy.setCookieList(sites);
-    document.body.appendChild(siteData);
-    Router.getInstance().navigateTo(routes.SITE_SETTINGS_SITE_DATA);
-
-    await eventToPromise('site-data-list-complete', siteData);
-    assertEquals(2, siteData.$.list.items!.length);
-    siteData.filter = 'Hello';
-    await eventToPromise('site-data-list-complete', siteData);
-    assertEquals(1, siteData.$.list.items!.length);
-  });
-
-  test('calls reloadCookies() when created', async function() {
-    Router.getInstance().navigateTo(routes.SITE_SETTINGS_SITE_DATA);
-    document.body.appendChild(siteData);
-    Router.getInstance().navigateTo(routes.COOKIES);
-    await testBrowserProxy.whenCalled('reloadCookies');
-  });
-
-  test('calls reloadCookies() when visited again', async function() {
-    document.body.appendChild(siteData);
-    Router.getInstance().navigateTo(routes.COOKIES);
-    testBrowserProxy.reset();
-    Router.getInstance().navigateTo(routes.SITE_SETTINGS_SITE_DATA);
-    await testBrowserProxy.whenCalled('reloadCookies');
-  });
-
-  test('no call to reloadCookies() on same route navigation', async function() {
-    // Check that providing a search query parameter while navigating and a
-    // search filter to the cookies page does not reload cookies, but instead
-    // updates the list.
-    document.body.appendChild(siteData);
-    Router.getInstance().navigateTo(routes.SITE_SETTINGS_SITE_DATA);
-    await testBrowserProxy.whenCalled('reloadCookies');
-
-    Router.getInstance().navigateTo(routes.SITE_SETTINGS_SITE_DATA);
+    // Changing to block requires confirmation in the dialog to take effect.
+    assertTrue(!!getDefaultBlockDialog());
+    page.shadowRoot!.querySelector<HTMLElement>(
+                        '#defaultBlockDialogConfirm')!.click();
     await flushTasks();
-    assertEquals(1, testBrowserProxy.getCallCount('reloadCookies'));
+
+    assertFalse(!!getDefaultBlockDialog());
+    assertEquals(page.getPref(PREF_NAME + '.value'), ContentSetting.BLOCK);
   });
 
-  test('remove button records interaction metric', async function() {
-    // Check that the remove button correctly records an interaction metric
-    // based on whether the list is filtered or not.
-    document.body.appendChild(siteData);
-    siteData.$.removeShowingSites.click();
+  test('BlockSiteDataFromAllowDontConfirmDialog', async function() {
+    // Default is 'allow'.
+    assertEquals(page.getPref(PREF_NAME + '.value'), ContentSetting.ALLOW);
+
+    page.$.defaultBlock.click();
     flush();
-
-    siteData.shadowRoot!.querySelector<HTMLElement>('.action-button')!.click();
-    let metric =
-        await testMetricsBrowserProxy.whenCalled('recordSettingsPageHistogram');
-    assertEquals(PrivacyElementInteractions.SITE_DATA_REMOVE_ALL, metric);
-    testMetricsBrowserProxy.reset();
-
-    // Add a filter and repeat.
-    siteData.filter = 'Test';
-    siteData.$.removeShowingSites.click();
-    flush();
-
-    siteData.shadowRoot!.querySelector<HTMLElement>('.action-button')!.click();
-    metric =
-        await testMetricsBrowserProxy.whenCalled('recordSettingsPageHistogram');
-    assertEquals(PrivacyElementInteractions.SITE_DATA_REMOVE_FILTERED, metric);
-  });
-
-  test('changes to filter update list', async function() {
-    // Check that updating the page filter correctly calls update display list.
-    document.body.appendChild(siteData);
-    Router.getInstance().navigateTo(routes.COOKIES);
-    flush();
-
-    // Changes to the filter while not on the site data page should not be
-    // responded to.
-    siteData.set('filter', 'Test');
+    assertTrue(!!getDefaultBlockDialog());
+    page.shadowRoot!.querySelector<HTMLElement>(
+                        '#defaultBlockDialogCancel')!.click();
     await flushTasks();
-    assertEquals(0, testBrowserProxy.getCallCount('getDisplayList'));
 
-    Router.getInstance().navigateTo(routes.SITE_SETTINGS_SITE_DATA);
-    let filter = await testBrowserProxy.whenCalled('getDisplayList');
-    assertEquals('Test', filter);
-    testBrowserProxy.reset();
+    assertFalse(!!getDefaultBlockDialog());
+    assertEquals(page.getPref(PREF_NAME + '.value'), ContentSetting.ALLOW);
+    assertEquals(page.$.defaultGroup.selected, ContentSetting.ALLOW);
+  });
 
-    siteData.set('filter', 'Test2');
-    filter = await testBrowserProxy.whenCalled('getDisplayList');
-    assertEquals('Test2', filter);
+  test('BlockSiteDataFromSessionOnlyDontConfirmDialog', async function() {
+    page.$.defaultSessionOnly.click();
+    assertEquals(
+        page.getPref(PREF_NAME + '.value'), ContentSetting.SESSION_ONLY);
+
+    page.$.defaultBlock.click();
+    flush();
+    assertTrue(!!getDefaultBlockDialog());
+    page.shadowRoot!.querySelector<HTMLElement>(
+                        '#defaultBlockDialogCancel')!.click();
+    await flushTasks();
+
+    assertFalse(!!getDefaultBlockDialog());
+    assertEquals(
+        page.getPref(PREF_NAME + '.value'), ContentSetting.SESSION_ONLY);
+    assertEquals(page.$.defaultGroup.selected, ContentSetting.SESSION_ONLY);
+  });
+
+  test('PrefChangesUpdateDefaultSetting', function() {
+    // Default is 'allow'.
+    assertEquals(page.$.defaultGroup.selected, ContentSetting.ALLOW);
+
+    page.set('prefs.' + PREF_NAME + '.value', ContentSetting.SESSION_ONLY);
+    flush();
+    assertEquals(page.$.defaultGroup.selected, ContentSetting.SESSION_ONLY);
+
+    page.set('prefs.' + PREF_NAME + '.value', ContentSetting.BLOCK);
+    flush();
+    assertEquals(page.$.defaultGroup.selected, ContentSetting.BLOCK);
+
+    page.set('prefs.' + PREF_NAME + '.value', ContentSetting.ALLOW);
+    flush();
+    assertEquals(page.$.defaultGroup.selected, ContentSetting.ALLOW);
+  });
+
+  test('ExceptionListsReadOnly', function() {
+    // Check all exception lists are read only when the preference
+    // reports as managed.
+    page.set('prefs.' + PREF_NAME, {
+      value: ContentSetting.ALLOW,
+      type: chrome.settingsPrivate.PrefType.STRING,
+      enforcement: chrome.settingsPrivate.Enforcement.ENFORCED,
+    });
+    let exceptionLists = page.shadowRoot!.querySelectorAll('site-list');
+    assertEquals(exceptionLists.length, 3);
+    for (const list of exceptionLists) {
+      assertTrue(!!list.readOnlyList);
+    }
+
+    // Return preference to unmanaged state and check all exception lists
+    // are no longer read only.
+    page.set('prefs.' + PREF_NAME, {
+      value: ContentSetting.ALLOW,
+      type: chrome.settingsPrivate.PrefType.STRING,
+    });
+    exceptionLists = page.shadowRoot!.querySelectorAll('site-list');
+    assertEquals(exceptionLists.length, 3);
+    for (const list of exceptionLists) {
+      assertFalse(!!list.readOnlyList);
+    }
+  });
+
+  test('ExceptionsSearch', async function() {
+    while (siteSettingsBrowserProxy.getCallCount('getExceptionList') < 3) {
+      await flushTasks();
+    }
+    siteSettingsBrowserProxy.resetResolver('getExceptionList');
+
+    const exceptionPrefs = createSiteSettingsPrefs([], [
+      createContentSettingTypeToValuePair(
+          ContentSettingsTypes.COOKIES,
+          [
+            createRawSiteException('http://foo-allow.com', {
+              embeddingOrigin: '',
+            }),
+            createRawSiteException('http://foo-session.com', {
+              embeddingOrigin: '',
+              setting: ContentSetting.SESSION_ONLY,
+            }),
+            createRawSiteException('http://foo-block.com', {
+              embeddingOrigin: '',
+              setting: ContentSetting.BLOCK,
+            }),
+          ]),
+    ]);
+    page.searchTerm = 'foo';
+    siteSettingsBrowserProxy.setPrefs(exceptionPrefs);
+    while (siteSettingsBrowserProxy.getCallCount('getExceptionList') < 3) {
+      await flushTasks();
+    }
+    flush();
+
+    const exceptionLists = page.shadowRoot!.querySelectorAll('site-list');
+    assertEquals(exceptionLists.length, 3);
+
+    for (const list of exceptionLists) {
+      assertTrue(isChildVisible(list, 'site-list-entry'));
+    }
+
+    page.searchTerm = 'unrelated.com';
+    flush();
+
+    for (const list of exceptionLists) {
+      assertFalse(isChildVisible(list, 'site-list-entry'));
+    }
+  });
+
+  test('ExceptionListsHaveCorrectCookieExceptionType', function() {
+    const allowExceptionsList =
+        page.shadowRoot!.querySelector('#allowExceptionsList');
+    assertTrue(!!allowExceptionsList);
+    assertEquals(
+        'site-data',
+        allowExceptionsList.getAttribute('cookies-exception-type'));
+
+    const sessionOnlyExceptionsList =
+        page.shadowRoot!.querySelector('#sessionOnlyExceptionsList');
+    assertTrue(!!sessionOnlyExceptionsList);
+    assertEquals(
+        'site-data',
+        sessionOnlyExceptionsList.getAttribute('cookies-exception-type'));
+
+    const blockExceptionsList =
+        page.shadowRoot!.querySelector('#blockExceptionsList');
+    assertTrue(!!blockExceptionsList);
+    assertEquals(
+        'combined', blockExceptionsList.getAttribute('cookies-exception-type'));
   });
 });

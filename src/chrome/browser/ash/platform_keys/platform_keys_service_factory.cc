@@ -1,25 +1,28 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/platform_keys/platform_keys_service_factory.h"
 
-#include "base/callback_helpers.h"
+#include <utility>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "base/scoped_observation.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/net/client_cert_store_ash.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/certificate_provider/certificate_provider.h"
 #include "chrome/browser/net/nss_service.h"
 #include "chrome/browser/net/nss_service_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/user_manager/user.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -31,36 +34,22 @@ namespace platform_keys {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to ash.
-using ::chromeos::ClientCertStoreAsh;
-
-// Invoked on the IO thread when a NSSCertDatabase is available, delegates back
-// to origin thread.
-void DidGetCertDbOnIoThread(
-    const scoped_refptr<base::SingleThreadTaskRunner>& origin_task_runner,
-    base::OnceCallback<void(net::NSSCertDatabase*)> callback,
-    net::NSSCertDatabase* cert_db) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
-
-  origin_task_runner->PostTask(FROM_HERE,
-                               base::BindOnce(std::move(callback), cert_db));
-}
-
 // Retrieves the NSSCertDatabase for |context|. Must be called on the IO thread.
 void GetCertDatabaseOnIoThread(
-    const scoped_refptr<base::SingleThreadTaskRunner>& origin_task_runner,
+    scoped_refptr<base::SingleThreadTaskRunner> origin_task_runner,
     PlatformKeysServiceImplDelegate::OnGotNSSCertDatabase callback,
     NssCertDatabaseGetter database_getter) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
 
-  base::RepeatingCallback<void(net::NSSCertDatabase*)> on_got_on_io_thread =
-      base::BindRepeating(&DidGetCertDbOnIoThread, origin_task_runner,
-                          base::Passed(&callback));
-  net::NSSCertDatabase* cert_db =
-      std::move(database_getter).Run(on_got_on_io_thread);
+  auto [on_sync_got, on_async_got] = base::SplitOnceCallback(
+      base::BindPostTask(std::move(origin_task_runner), std::move(callback)));
 
-  if (cert_db)
-    on_got_on_io_thread.Run(cert_db);
+  net::NSSCertDatabase* cert_db =
+      std::move(database_getter).Run(std::move(on_async_got));
+
+  if (cert_db) {
+    std::move(on_sync_got).Run(cert_db);
+  }
 }
 
 class DelegateForUser : public PlatformKeysServiceImplDelegate {
@@ -75,7 +64,8 @@ class DelegateForUser : public PlatformKeysServiceImplDelegate {
     content::GetIOThreadTaskRunner({})->PostTask(
         FROM_HERE,
         base::BindOnce(&GetCertDatabaseOnIoThread,
-                       base::ThreadTaskRunnerHandle::Get(), std::move(callback),
+                       base::SingleThreadTaskRunner::GetCurrentDefault(),
+                       std::move(callback),
                        NssServiceFactory::GetForContext(browser_context_)
                            ->CreateNSSCertDatabaseGetterForIOThread()));
   }
@@ -94,7 +84,7 @@ class DelegateForUser : public PlatformKeysServiceImplDelegate {
   }
 
  private:
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext, ExperimentalAsh> browser_context_;
 };
 
 class DelegateForDevice : public PlatformKeysServiceImplDelegate,
@@ -140,7 +130,8 @@ PlatformKeysService* PlatformKeysServiceFactory::GetForBrowserContext(
 
 // static
 PlatformKeysServiceFactory* PlatformKeysServiceFactory::GetInstance() {
-  return base::Singleton<PlatformKeysServiceFactory>::get();
+  static base::NoDestructor<PlatformKeysServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -171,26 +162,32 @@ void PlatformKeysServiceFactory::SetTestingMode(bool is_testing_mode) {
 }
 
 PlatformKeysServiceFactory::PlatformKeysServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "PlatformKeysService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(NssServiceFactory::GetInstance());
 }
 
 PlatformKeysServiceFactory::~PlatformKeysServiceFactory() = default;
 
-KeyedService* PlatformKeysServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PlatformKeysServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   std::unique_ptr<PlatformKeysServiceImplDelegate> delegate;
   Profile* profile = Profile::FromBrowserContext(context);
-  if (!ProfileHelper::IsRegularProfile(profile)) {
+  if (!ProfileHelper::IsUserProfile(profile)) {
     delegate = std::make_unique<DelegateForDevice>();
   } else {
     delegate = std::make_unique<DelegateForUser>(context);
   }
 
-  PlatformKeysServiceImpl* const platform_keys_service_impl =
-      new PlatformKeysServiceImpl(std::move(delegate));
+  std::unique_ptr<PlatformKeysServiceImpl> platform_keys_service_impl =
+      std::make_unique<PlatformKeysServiceImpl>(std::move(delegate));
   platform_keys_service_impl->SetMapToSoftokenAttrsForTesting(
       map_to_softoken_attrs_for_testing_);
 
@@ -207,11 +204,6 @@ void PlatformKeysServiceFactory::BrowserContextShutdown(
   }
 
   BrowserContextKeyedServiceFactory::BrowserContextShutdown(context);
-}
-
-content::BrowserContext* PlatformKeysServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
 }
 
 }  // namespace platform_keys

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,6 @@ bool StructTraits<media::mojom::AudioProcessingSettingsDataView,
   out_settings->transient_noise_suppression =
       input.transient_noise_suppression();
   out_settings->automatic_gain_control = input.automatic_gain_control();
-  out_settings->experimental_automatic_gain_control =
-      input.experimental_automatic_gain_control();
   out_settings->high_pass_filter = input.high_pass_filter();
   out_settings->multi_channel_capture_processing =
       input.multi_channel_capture_processing();

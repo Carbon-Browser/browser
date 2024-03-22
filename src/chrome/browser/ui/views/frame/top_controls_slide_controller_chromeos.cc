@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "cc/input/browser_controls_state.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search/search.h"
 #include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -17,7 +18,6 @@
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/browser/ui/views/omnibox/omnibox_view_views.h"
 #include "chrome/common/url_constants.h"
-#include "chromeos/ui/base/tablet_state.h"
 #include "components/permissions/permission_request_manager.h"
 #include "content/public/browser/focused_node_details.h"
 #include "content/public/browser/navigation_controller.h"
@@ -33,14 +33,11 @@
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/display.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
 #include "ui/views/controls/native/native_view_host.h"
 
 namespace {
-
-bool IsTabletModeEnabled() {
-  return chromeos::TabletState::Get() &&
-         chromeos::TabletState::Get()->InTabletMode();
-}
 
 bool IsSpokenFeedbackEnabled() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -65,9 +62,10 @@ cc::BrowserControlsState GetBrowserControlsStateConstraints(
     content::WebContents* contents) {
   DCHECK(contents);
 
-  if (!IsTabletModeEnabled() || contents->IsFullscreen() ||
-      contents->IsFocusedElementEditable() || contents->IsBeingDestroyed() ||
-      contents->IsCrashed() || IsSpokenFeedbackEnabled()) {
+  if (!display::Screen::GetScreen()->InTabletMode() ||
+      contents->IsFullscreen() || contents->IsFocusedElementEditable() ||
+      contents->IsBeingDestroyed() || contents->IsCrashed() ||
+      IsSpokenFeedbackEnabled()) {
     return cc::BrowserControlsState::kShown;
   }
 
@@ -211,7 +209,7 @@ class TopControlsSlideTabObserver
                    const GURL& validated_url,
                    int error_code) override {
     if (render_frame_host->IsActive() &&
-        (render_frame_host == web_contents()->GetPrimaryMainFrame())) {
+        render_frame_host->IsInPrimaryMainFrame()) {
       UpdateBrowserControlsStateShown(/*animate=*/true);
     }
   }
@@ -229,7 +227,7 @@ class TopControlsSlideTabObserver
   }
 
   // PermissionRequestManager::Observer:
-  void OnBubbleAdded() override {
+  void OnPromptAdded() override {
     UpdateBrowserControlsStateShown(/*animate=*/true);
   }
 
@@ -599,7 +597,7 @@ void TopControlsSlideControllerChromeOS::UpdateBrowserControlsStateShown(
 
 bool TopControlsSlideControllerChromeOS::CanEnable(
     absl::optional<bool> fullscreen_state) const {
-  return IsTabletModeEnabled() &&
+  return display::Screen::GetScreen()->InTabletMode() &&
          !(fullscreen_state.value_or(browser_view_->IsFullscreen()));
 }
 

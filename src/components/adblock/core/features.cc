@@ -19,7 +19,12 @@
 
 namespace adblock {
 
-const base::Feature kAdblockPlusFeature{"AdblockPlus",
-                                        base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kAdblockPlusFeature,
+             "AdblockPlus",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-}
+BASE_FEATURE(kEyeoMlServiceFeature,
+             "EyeoMlService",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+}  // namespace adblock

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_clock.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -45,21 +46,10 @@ namespace content {
 
 namespace {
 
-// Forcing flushes to disk at the end of a transaction guarantees that the
-// data hit disk, but drastically impacts throughput when the filesystem is
-// busy with background compactions. Not syncing trades off reliability for
-// performance. Note that background compactions which move data from the
-// log to SSTs are always done with reliable writes.
-//
-// Sync writes are necessary on Windows for quota calculations; POSIX
-// calculates file sizes correctly even when not synced to disk.
-#if BUILDFLAG(IS_WIN)
+// As `TransactionLevelDBDatabase` is only used for internal transactions such
+// as DB initialization and via `LevelDBDirectTransaction`, this constant
+// doesn't apply to web API IndexedDB "readwrite" transactions.
 const bool kSyncWrites = true;
-#else
-// TODO(dgrogan): Either remove the #if block or change this back to false.
-// See http://crbug.com/338385.
-const bool kSyncWrites = true;
-#endif
 
 }  // namespace
 
@@ -67,7 +57,7 @@ LevelDBSnapshot::LevelDBSnapshot(TransactionalLevelDBDatabase* db)
     : db_(db->db()), snapshot_(db_->GetSnapshot()) {}
 
 LevelDBSnapshot::~LevelDBSnapshot() {
-  db_->ReleaseSnapshot(snapshot_);
+  db_->ReleaseSnapshot(snapshot_.ExtractAsDangling());
 }
 
 // static
@@ -110,7 +100,6 @@ leveldb::Status TransactionalLevelDBDatabase::Put(const StringPiece& key,
       db()->Put(write_options, leveldb_env::MakeSlice(key),
                 leveldb_env::MakeSlice(*value));
   EvictAllIterators();
-  last_modified_ = clock_->Now();
   return s;
 }
 
@@ -122,7 +111,6 @@ leveldb::Status TransactionalLevelDBDatabase::Remove(const StringPiece& key) {
       db()->Delete(write_options, leveldb_env::MakeSlice(key));
 
   EvictAllIterators();
-  last_modified_ = clock_->Now();
   return s;
 }
 
@@ -155,7 +143,6 @@ leveldb::Status TransactionalLevelDBDatabase::Write(
   UMA_HISTOGRAM_TIMES("WebCore.IndexedDB.LevelDB.WriteTime",
                       base::TimeTicks::Now() - begin_time);
   EvictAllIterators();
-  last_modified_ = clock_->Now();
   return s;
 }
 
@@ -258,7 +245,7 @@ bool TransactionalLevelDBDatabase::OnMemoryDump(
   // Dumps in BACKGROUND mode can only have whitelisted strings (and there are
   // currently none) so return early.
   if (args.level_of_detail ==
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
     return true;
   }
 

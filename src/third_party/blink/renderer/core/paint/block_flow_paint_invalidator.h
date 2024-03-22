@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,10 +19,6 @@ class BlockFlowPaintInvalidator {
   BlockFlowPaintInvalidator(const LayoutBlockFlow& block_flow)
       : block_flow_(block_flow) {}
 
-  void InvalidatePaintForOverhangingFloats() {
-    InvalidatePaintForOverhangingFloatsInternal(kInvalidateDescendants);
-  }
-
   void InvalidateDisplayItemClients(PaintInvalidationReason);
 
  private:
@@ -30,7 +26,6 @@ class BlockFlowPaintInvalidator {
     kDontInvalidateDescendants,
     kInvalidateDescendants
   };
-  void InvalidatePaintForOverhangingFloatsInternal(InvalidateDescendantMode);
 
   const LayoutBlockFlow& block_flow_;
 };

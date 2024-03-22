@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
@@ -175,7 +175,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, InstantiateOnEmptyGraph) {
 
   // Create a process node and validate that it gets a request.
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   // Data should not be available until the measurement is taken.
@@ -200,7 +199,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, InstantiateOnNonEmptyGraph) {
   // Instantiate the decorator with an existing process node and validate that
   // it gets a request.
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   MockV8DetailedMemoryReporter mock_reporter;
@@ -237,9 +235,10 @@ TEST_F(V8DetailedMemoryDecoratorTest, OnlyMeasureRenderers) {
     // Instantiate a non-renderer process node and validate that it causes no
     // bind requests.
     EXPECT_CALL(*this, BindReceiverWithProxyHost(_, _)).Times(0);
-    auto process = CreateNode<ProcessNodeImpl>(
-        static_cast<content::ProcessType>(type),
-        RenderProcessHostProxy::CreateForTesting(kTestProcessID));
+    auto process = type == content::PROCESS_TYPE_BROWSER
+                       ? CreateNode<ProcessNodeImpl>(BrowserProcessNodeTag{})
+                       : CreateNode<ProcessNodeImpl>(
+                             static_cast<content::ProcessType>(type));
 
     task_env().RunUntilIdle();
     Mock::VerifyAndClearExpectations(this);
@@ -251,11 +250,9 @@ TEST_F(V8DetailedMemoryDecoratorTest, OneShot) {
   // them, and a one-shot request that measures only one.
   constexpr RenderProcessHostId kProcessId1 = RenderProcessHostId(0xFAB);
   auto process1 = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kProcessId1));
   constexpr RenderProcessHostId kProcessId2 = RenderProcessHostId(0xBAF);
   auto process2 = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kProcessId2));
 
   // Set the all process request to only send once within the test.
@@ -309,7 +306,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, OneShot) {
 
 TEST_F(V8DetailedMemoryDecoratorTest, OneShotLifetime) {
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   MockV8DetailedMemoryReporter mock_reporter;
@@ -393,7 +389,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, OneShotLifetime) {
 
 TEST_F(V8DetailedMemoryDecoratorTest, OneShotLifetimeAtExit) {
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   // Ensure that resource-owning callbacks are freed when there is no response
@@ -435,7 +430,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, OneShotLifetimeAtExit) {
 
 TEST_F(V8DetailedMemoryDecoratorTest, QueryRateIsLimited) {
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   MockV8DetailedMemoryReporter mock_reporter;
@@ -523,7 +517,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, MultipleProcessesHaveDistinctSchedules) {
   }
 
   auto process1 = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   task_env().FastForwardBy(kMinTimeBetweenRequests / 4);
@@ -538,7 +531,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, MultipleProcessesHaveDistinctSchedules) {
   }
 
   auto process2 = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   task_env().RunUntilIdle();
@@ -583,19 +575,22 @@ TEST_F(V8DetailedMemoryDecoratorTest, MultipleIsolatesInRenderer) {
   MockV8DetailedMemoryReporter reporter;
 
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   // Create a couple of frames with specified IDs.
   auto page = CreateNode<PageNodeImpl>();
 
   blink::LocalFrameToken frame1_id = blink::LocalFrameToken();
-  auto frame1 = CreateNode<FrameNodeImpl>(process.get(), page.get(), nullptr,
-                                          /*render_frame_id=*/1, frame1_id);
+  auto frame1 = CreateNode<FrameNodeImpl>(
+      process.get(), page.get(), /*parent_frame_node=*/nullptr,
+      /*fenced_frame_embedder_frame_node=*/nullptr, /*render_frame_id=*/1,
+      frame1_id);
 
   blink::LocalFrameToken frame2_id = blink::LocalFrameToken();
-  auto frame2 = CreateNode<FrameNodeImpl>(process.get(), page.get(), nullptr,
-                                          /*render_frame_id=*/2, frame2_id);
+  auto frame2 = CreateNode<FrameNodeImpl>(
+      process.get(), page.get(), /*parent_frame_node=*/nullptr,
+      /*fenced_frame_embedder_frame_node=*/nullptr,
+      /*render_frame_id=*/2, frame2_id);
   {
     auto data = NewPerProcessV8MemoryUsage(2);
     AddIsolateMemoryUsage(frame1_id, 1001u, data->isolates[0].get());
@@ -630,7 +625,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, DataIsDistributed) {
   }
 
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   task_env().RunUntilIdle();
@@ -645,12 +639,16 @@ TEST_F(V8DetailedMemoryDecoratorTest, DataIsDistributed) {
   auto page = CreateNode<PageNodeImpl>();
 
   blink::LocalFrameToken frame1_id = blink::LocalFrameToken();
-  auto frame1 = CreateNode<FrameNodeImpl>(process.get(), page.get(), nullptr,
-                                          /*render_frame_id=*/1, frame1_id);
+  auto frame1 = CreateNode<FrameNodeImpl>(
+      process.get(), page.get(), /*parent_frame_node=*/nullptr,
+      /*fenced_frame_embedder_frame_node=*/nullptr,
+      /*render_frame_id=*/1, frame1_id);
 
   blink::LocalFrameToken frame2_id = blink::LocalFrameToken();
-  auto frame2 = CreateNode<FrameNodeImpl>(process.get(), page.get(), nullptr,
-                                          /*render_frame_id=*/2, frame2_id);
+  auto frame2 = CreateNode<FrameNodeImpl>(
+      process.get(), page.get(), /*parent_frame_node=*/nullptr,
+      /*fenced_frame_embedder_frame_node=*/nullptr,
+      /*render_frame_id=*/2, frame2_id);
   {
     auto data = NewPerProcessV8MemoryUsage(1);
     AddIsolateMemoryUsage(frame1_id, 1001u, data->isolates[0].get());
@@ -706,7 +704,6 @@ TEST_P(V8DetailedMemoryDecoratorModeTest, LazyRequests) {
   }
 
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   task_env().FastForwardBy(base::Seconds(1));
@@ -816,7 +813,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, MeasurementRequestsSorted) {
   }
 
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
   EXPECT_FALSE(V8DetailedMemoryProcessData::ForProcessNode(process.get()));
 
@@ -1046,7 +1042,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, MeasurementRequestsWithDelay) {
     ExpectBindAndRespondToQuery(&mock_reporter, std::move(data));
   }
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
   task_env().FastForwardBy(kOneSecond);
   // All the following FastForwardBy calls will place the clock 1 sec after a
@@ -1194,7 +1189,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, MeasurementRequestOutlivesDecorator) {
     ExpectBindAndRespondToQuery(&mock_reporter, std::move(data));
   }
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
   task_env().FastForwardBy(base::Seconds(1));
   ASSERT_EQ(1U, V8DetailedMemoryProcessData::ForProcessNode(process.get())
@@ -1226,7 +1220,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, NotifyObservers) {
   }
 
   auto process1 = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   observer1.ExpectObservationOnProcess(process1.get(), 1U);
@@ -1253,7 +1246,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, NotifyObservers) {
   }
 
   auto process2 = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   observer1.ExpectObservationOnProcess(process2.get(), 2U);
@@ -1311,7 +1303,6 @@ TEST_F(V8DetailedMemoryDecoratorTest, ObserverOutlivesDecorator) {
   }
 
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
   observer.ExpectObservationOnProcess(process.get(), 1U);
 
@@ -1347,11 +1338,9 @@ TEST_F(V8DetailedMemoryDecoratorTest, SingleProcessRequest) {
   // them, and one request that measures only one.
   constexpr RenderProcessHostId kProcessId1 = RenderProcessHostId(0xFAB);
   auto process1 = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kProcessId1));
   constexpr RenderProcessHostId kProcessId2 = RenderProcessHostId(0xBAF);
   auto process2 = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kProcessId2));
 
   // Set the all process request to only send once within the test.
@@ -1455,7 +1444,6 @@ TEST_P(V8DetailedMemoryDecoratorSingleProcessModeTest,
   // Create a single process node so both "all process" and "single process"
   // requests will have a single expectation, which reduces boilerplate.
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   V8DetailedMemoryRequest lazy_request(kMinTimeBetweenRequests,
@@ -1973,20 +1961,21 @@ TEST_F(V8DetailedMemoryDecoratorTest, DedicatedWorkers) {
   MockV8DetailedMemoryReporter reporter;
 
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   // Create a couple of frames with specified IDs.
   auto page = CreateNode<PageNodeImpl>();
 
   blink::LocalFrameToken frame_id = blink::LocalFrameToken();
-  auto frame = CreateNode<FrameNodeImpl>(process.get(), page.get(), nullptr,
-                                         /*render_frame_id=*/1, frame_id);
+  auto frame = CreateNode<FrameNodeImpl>(
+      process.get(), page.get(), /*parent_frame_node=*/nullptr,
+      /*fenced_frame_embedder_frame_node=*/nullptr,
+      /*render_frame_id=*/1, frame_id);
 
   blink::DedicatedWorkerToken worker_id = blink::DedicatedWorkerToken();
   auto worker = CreateNode<WorkerNodeImpl>(
       WorkerNode::WorkerType::kDedicated, process.get(),
-      page->browser_context_id(), worker_id);
+      page->GetBrowserContextID(), worker_id);
 
   worker->AddClientFrame(frame.get());
   {
@@ -2017,15 +2006,16 @@ TEST_F(V8DetailedMemoryDecoratorTest, CanvasMemory) {
   MockV8DetailedMemoryReporter reporter;
 
   auto process = CreateNode<ProcessNodeImpl>(
-      content::PROCESS_TYPE_RENDERER,
       RenderProcessHostProxy::CreateForTesting(kTestProcessID));
 
   // Create a couple of frames with specified IDs.
   auto page = CreateNode<PageNodeImpl>();
 
   blink::LocalFrameToken frame_id = blink::LocalFrameToken();
-  auto frame = CreateNode<FrameNodeImpl>(process.get(), page.get(), nullptr,
-                                         /*render_frame_id=*/1, frame_id);
+  auto frame = CreateNode<FrameNodeImpl>(
+      process.get(), page.get(), /*parent_frame_node=*/nullptr,
+      /*fenced_frame_embedder_frame_node=*/nullptr,
+      /*render_frame_id=*/1, frame_id);
 
   {
     auto data = NewPerProcessV8MemoryUsage(1);

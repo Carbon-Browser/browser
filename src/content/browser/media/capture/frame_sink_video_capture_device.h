@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/check.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
@@ -39,6 +39,8 @@ namespace content {
 
 class MouseCursorOverlayController;
 
+class ContextProviderObserver;
+
 // A virtualized VideoCaptureDevice that captures the displayed contents of a
 // frame sink (see viz::CompositorFrameSink), such as the composited main view
 // of a WebContents instance, producing a stream of video frames.
@@ -55,8 +57,7 @@ class MouseCursorOverlayController;
 // capture, and to notify other components that capture is taking place.
 class CONTENT_EXPORT FrameSinkVideoCaptureDevice
     : public media::VideoCaptureDevice,
-      public viz::mojom::FrameSinkVideoConsumer,
-      public viz::ContextLostObserver {
+      public viz::mojom::FrameSinkVideoConsumer {
  public:
   FrameSinkVideoCaptureDevice();
 
@@ -85,12 +86,14 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   void RequestRefreshFrame() final;
   void MaybeSuspend() final;
   void Resume() final;
-  void Crop(const base::Token& crop_id,
-            uint32_t crop_version,
-            base::OnceCallback<void(media::mojom::CropRequestResult)> callback)
-      override;
+  void ApplySubCaptureTarget(
+      media::mojom::SubCaptureTargetType type,
+      const base::Token& target,
+      uint32_t sub_capture_target_version,
+      base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+          callback) override;
   void StopAndDeAllocate() final;
-  void OnUtilizationReport(media::VideoCaptureFeedback feedback) final;
+  void OnUtilizationReport(media::VideoCaptureFeedback feedback) override;
 
   // FrameSinkVideoConsumer implementation.
   void OnFrameCaptured(
@@ -99,7 +102,7 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
       const gfx::Rect& content_rect,
       mojo::PendingRemote<viz::mojom::FrameSinkVideoConsumerFrameCallbacks>
           callbacks) override;
-  void OnNewCropVersion(uint32_t crop_version) final;
+  void OnNewSubCaptureTargetVersion(uint32_t sub_capture_target_version) final;
   void OnFrameWithEmptyRegionCapture() final;
   void OnStopped() final;
   void OnLog(const std::string& message) final;
@@ -109,7 +112,7 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   // being permanently lost.
   virtual void OnTargetChanged(
       const absl::optional<viz::VideoCaptureTarget>& target,
-      uint32_t crop_version);
+      uint32_t sub_capture_target_version);
   virtual void OnTargetPermanentlyLost();
 
  protected:
@@ -131,9 +134,6 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   virtual void CreateCapturer(
       mojo::PendingReceiver<viz::mojom::FrameSinkVideoCapturer> receiver);
 
-  // viz::ContextLostObserver implementation:
-  void OnContextLost() override;
-
   // Establishes connection to FrameSinkVideoCapturer using the global
   // viz::HostFrameSinkManager.
   static void CreateCapturerViaGlobalManager(
@@ -142,10 +142,9 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
  private:
   using BufferId = decltype(media::VideoCaptureDevice::Client::Buffer::id);
 
-  // Fetches |context_provider_| and starts observing it for context lost
-  // events. When a context provider is set, we will also set
-  // |gpu_capabilities_| and |gpu_capabilities_generation_| - they will be kept
-  // up to date for the lifetime of the device.
+  void AllocateAndStartWithReceiverInternal();
+
+  // Starts observing changes to context provider.
   void ObserveContextProvider();
 
   // Re-creates the |capturer_| if needed. The capturer will be recreated (and
@@ -184,30 +183,39 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   // capturing is going on.
   void RequestWakeLock();
 
+  // Helper to set `gpu_capabilities_` on the appropriate thread. Can be called
+  // from any thread, will hop to the sequence on which the device was created.
+  // This indirection is needed to support cancellation of handed out callbacks.
+  void SetGpuCapabilitiesOnDevice(
+      absl::optional<gpu::Capabilities> capabilities);
+
   // Current capture target. This is cached to resolve a race where
-  // OnTargetChanged() can be called before the |capturer_| is created in
-  // OnCapturerCreated().
+  // `OnTargetChanged()` can be called before the |capturer_| is created in
+  // `OnCapturerCreated()`.
   absl::optional<viz::VideoCaptureTarget> target_;
 
   // The requested format, rate, and other capture constraints.
   media::VideoCaptureParams capture_params_;
 
-  // Set to true when MaybeSuspend() is called, and false when Resume() is
+  // Set to true when `MaybeSuspend()` is called, and false when Resume() is
   // called. This reflects the needs of the downstream client.
   bool suspend_requested_ = false;
 
   // Receives video frames from this capture device, for propagation into the
-  // video capture stack. This is set by AllocateAndStartWithReceiver(), and
-  // cleared by StopAndDeAllocate().
+  // video capture stack. This is set by `AllocateAndStartWithReceiver()`, and
+  // cleared by `StopAndDeAllocate()`.
   std::unique_ptr<media::VideoFrameReceiver> receiver_;
 
   std::unique_ptr<viz::ClientFrameSinkVideoCapturer> capturer_;
 
-  // Context provider that was used to query the GPU capabilities. May be null
-  // if the GPU capabilities were not needed to be known to start the capture.
-  scoped_refptr<viz::ContextProvider> context_provider_;
-  // Capabilities obtained from |context_provider_|.
-  absl::optional<gpu::Capabilities> gpu_capabilities_;
+  // Capabilities obtained from `viz::ContextProvider`.
+  absl::optional<gpu::Capabilities> gpu_capabilities_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+
+  // Instance that is responsible for monitoring for context loss events on the
+  // `viz::ContextProvider`. May be null.
+  std::unique_ptr<ContextProviderObserver, BrowserThread::DeleteOnUIThread>
+      context_provider_observer_ GUARDED_BY_CONTEXT(sequence_checker_);
 
   // A vector that holds the "callbacks" mojo::Remote for each frame while the
   // frame is being processed by VideoFrameReceiver. The index corresponding to
@@ -217,7 +225,7 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
   std::vector<mojo::Remote<viz::mojom::FrameSinkVideoConsumerFrameCallbacks>>
       frame_callbacks_;
 
-  // Set when OnFatalError() is called. This prevents any future
+  // Set when `OnFatalError()` is called. This prevents any future
   // AllocateAndStartWithReceiver() calls from succeeding.
   absl::optional<std::string> fatal_error_message_;
 
@@ -230,14 +238,14 @@ class CONTENT_EXPORT FrameSinkVideoCaptureDevice
       cursor_controller_;
 #endif
 
-  // Whenever the crop-target of a stream changes, the associated crop-version
-  // is incremented. This value is used in frames' metadata so as to allow
-  // other modules (mostly Blink) to see which frames are cropped to the
-  // old/new specified crop-target.
-  // The value 0 is used before any crop-target is assigned. (Note that by
-  // cropping and then uncropping, values other than 0 can also be associated
-  // with an uncropped track.)
-  uint32_t crop_version_ = 0;
+  // Whenever the sub-capture-target of a stream changes, the associated
+  // sub-capture-target-version is incremented. This value is used in frames'
+  // metadata so as to allow other modules (mostly Blink) to see which frames
+  // are cropped/restricted to the old/new specified sub-capture-target.
+  // The value 0 is used before any sub-capture-target is assigned.
+  // (Note that by applying and then removing a sub-capture target,
+  // values other than 0 can also be associated with an uncropped track.)
+  uint32_t sub_capture_target_version_ = 0;
 
   // Prevent display sleeping while content capture is in progress.
   mojo::Remote<device::mojom::WakeLock> wake_lock_;

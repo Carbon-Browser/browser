@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_multi_source_observation.h"
@@ -57,6 +58,10 @@ class BrowserAppInstanceRegistry
   const BrowserWindowInstance* GetBrowserWindowInstanceById(
       base::UnguessableToken id) const;
 
+  // Get a single window by instance ID (Ash or Lacros). Returns a nullptr if
+  // instance identified by |id| does not exist.
+  aura::Window* GetWindowByInstanceId(const base::UnguessableToken& id) const;
+
   // Get all instances of lacros browser window instances.
   std::set<const BrowserWindowInstance*> GetLacrosBrowserWindowInstances()
       const;
@@ -69,11 +74,11 @@ class BrowserAppInstanceRegistry
       return instance;
     }
     instance =
-        FindInstanceIf(ash_instance_tracker_.app_tab_instances_, predicate);
+        FindInstanceIf(ash_instance_tracker_->app_tab_instances_, predicate);
     if (instance) {
       return instance;
     }
-    return FindInstanceIf(ash_instance_tracker_.app_window_instances_,
+    return FindInstanceIf(ash_instance_tracker_->app_window_instances_,
                           predicate);
   }
 
@@ -82,9 +87,9 @@ class BrowserAppInstanceRegistry
       PredicateT predicate) const {
     std::set<const BrowserAppInstance*> result;
     SelectInstances(result, lacros_app_instances_, predicate);
-    SelectInstances(result, ash_instance_tracker_.app_tab_instances_,
+    SelectInstances(result, ash_instance_tracker_->app_tab_instances_,
                     predicate);
-    SelectInstances(result, ash_instance_tracker_.app_window_instances_,
+    SelectInstances(result, ash_instance_tracker_->app_window_instances_,
                     predicate);
     return result;
   }
@@ -97,7 +102,7 @@ class BrowserAppInstanceRegistry
     if (instance) {
       return instance;
     }
-    return FindInstanceIf(ash_instance_tracker_.window_instances_, predicate);
+    return FindInstanceIf(ash_instance_tracker_->window_instances_, predicate);
   }
 
   template <typename PredicateT>
@@ -105,7 +110,8 @@ class BrowserAppInstanceRegistry
       PredicateT predicate) const {
     std::set<const BrowserWindowInstance*> result;
     SelectInstances(result, lacros_window_instances_, predicate);
-    SelectInstances(result, ash_instance_tracker_.window_instances_, predicate);
+    SelectInstances(result, ash_instance_tracker_->window_instances_,
+                    predicate);
     return result;
   }
 
@@ -193,16 +199,15 @@ class BrowserAppInstanceRegistry
                                    aura::Window* window);
   void LacrosWindowInstanceRemoved(apps::BrowserWindowInstanceUpdate update,
                                    aura::Window* window);
-  void LacrosAppInstanceAdded(apps::BrowserAppInstanceUpdate update,
-                              aura::Window* window);
-  void LacrosAppInstanceUpdated(apps::BrowserAppInstanceUpdate update,
-                                aura::Window* window);
+  void LacrosAppInstanceAddedOrUpdated(apps::BrowserAppInstanceUpdate update,
+                                       aura::Window* window);
   void LacrosAppInstanceRemoved(apps::BrowserAppInstanceUpdate update,
                                 aura::Window* window);
 
   void OnControllerDisconnected();
 
-  BrowserAppInstanceTracker& ash_instance_tracker_;
+  const raw_ref<BrowserAppInstanceTracker, ExperimentalAsh>
+      ash_instance_tracker_;
 
   // Lacros app instances.
   BrowserAppInstanceMap<base::UnguessableToken, BrowserAppInstance>

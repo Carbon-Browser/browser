@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMECAST_MEDIA_API_CAST_AUDIO_DEMUXER_H_
 #define CHROMECAST_MEDIA_API_CAST_AUDIO_DEMUXER_H_
 
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "chromecast/media/api/decoder_buffer_base.h"
 #include "chromecast/public/media/decoder_config.h"

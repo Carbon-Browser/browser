@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,16 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/loader/navigation_loader_interceptor.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
 #include "content/browser/navigation_subresource_loader_params.h"
 #include "content/browser/service_worker/service_worker_controllee_request_handler.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/service_worker_client_info.h"
-#include "content/public/common/child_process_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/isolation_info.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
@@ -51,7 +51,8 @@ class CONTENT_EXPORT ServiceWorkerMainResourceLoaderInterceptor final
   // Creates a ServiceWorkerMainResourceLoaderInterceptor for a worker.
   // Returns nullptr if the interceptor could not be created for the URL of the
   // worker.
-  static std::unique_ptr<NavigationLoaderInterceptor> CreateForWorker(
+  static std::unique_ptr<ServiceWorkerMainResourceLoaderInterceptor>
+  CreateForWorker(
       const network::ResourceRequest& resource_request,
       const net::IsolationInfo& isolation_info,
       int process_id,
@@ -80,6 +81,9 @@ class CONTENT_EXPORT ServiceWorkerMainResourceLoaderInterceptor final
   absl::optional<SubresourceLoaderParams> MaybeCreateSubresourceLoaderParams()
       override;
 
+  // MaybeCreateLoaderForResponse() should NOT overridden here, because
+  // `WorkerScriptLoader` assumes so.
+
  private:
   friend class ServiceWorkerMainResourceLoaderInterceptorTest;
 
@@ -102,10 +106,36 @@ class CONTENT_EXPORT ServiceWorkerMainResourceLoaderInterceptor final
 
   // Given as a callback to NavigationURLLoaderImpl.
   void RequestHandlerWrapper(
-      SingleRequestURLLoaderFactory::RequestHandler handler,
+      network::SingleRequestURLLoaderFactory::RequestHandler handler,
       const network::ResourceRequest& resource_request,
       mojo::PendingReceiver<network::mojom::URLLoader> receiver,
       mojo::PendingRemote<network::mojom::URLLoaderClient> client);
+
+  // Attempts to get the |StorageKey|, using a |RenderFrameHostImpl|, which is
+  // obtained from the associated |FrameTreeNode|, if it exists. This allows to
+  // correctly account for extension URLs.
+  absl::optional<blink::StorageKey> GetStorageKeyFromRenderFrameHost(
+      const url::Origin& origin,
+      const base::UnguessableToken* nonce);
+
+  // Attempts to get the |StorageKey| from the Dedicated or Shared WorkerHost,
+  // retrieving the host based on |process_id_| and |worker_token_|. If a
+  // storage key is returned, it will have its origin replaced by |origin|. This
+  // would mean that the origin of the WorkerHost and the origin as used by the
+  // service worker code don't match, however in cases where these wouldn't
+  // match the load will be aborted later anyway.
+  absl::optional<blink::StorageKey> GetStorageKeyFromWorkerHost(
+      const url::Origin& origin);
+
+  absl::optional<blink::StorageKey> GetStorageKeyFromWorkerHost(
+      content::StoragePartition* storage_partition,
+      blink::DedicatedWorkerToken dedicated_worker_token,
+      const url::Origin& origin);
+
+  absl::optional<blink::StorageKey> GetStorageKeyFromWorkerHost(
+      content::StoragePartition* storage_partition,
+      blink::SharedWorkerToken shared_worker_token,
+      const url::Origin& origin);
 
   // For navigations, |handle_| outlives |this|. It's owned by
   // NavigationRequest which outlives NavigationURLLoaderImpl which owns |this|.

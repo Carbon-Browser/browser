@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,8 @@ class ChunkToLayerMapperTest : public testing::Test {
   // if the state is used as a layer state.
   PropertyTreeState LayerState() {
     if (!layer_transform_) {
-      layer_transform_ =
-          CreateTransform(t0(), TransformationMatrix().Translate(123, 456),
-                          gfx::Point3F(1, 2, 3));
+      layer_transform_ = CreateTransform(t0(), MakeTranslationMatrix(123, 456),
+                                         gfx::Point3F(1, 2, 3));
       layer_clip_ =
           CreateClip(c0(), *layer_transform_, FloatRoundedRect(12, 34, 56, 78));
       layer_effect_ = EffectPaintPropertyNode::Create(
@@ -58,7 +57,7 @@ TEST_F(ChunkToLayerMapperTest, OneChunkUsingLayerState) {
   auto chunk = Chunk(LayerState());
   mapper.SwitchToChunk(chunk);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  EXPECT_EQ(SkMatrix::Translate(-10, -20), mapper.Transform());
+  EXPECT_EQ(MakeTranslationMatrix(-10, -20), mapper.Transform());
   EXPECT_EQ(FloatClipRect(), mapper.ClipRect());
   EXPECT_EQ(gfx::Rect(20, 10, 88, 99),
             mapper.MapVisualRect(gfx::Rect(30, 30, 88, 99)));
@@ -72,7 +71,7 @@ TEST_F(ChunkToLayerMapperTest, TwoChunkUsingLayerState) {
 
   mapper.SwitchToChunk(chunk1);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  EXPECT_EQ(SkMatrix::Translate(-10, -20), mapper.Transform());
+  EXPECT_EQ(MakeTranslationMatrix(-10, -20), mapper.Transform());
   EXPECT_EQ(FloatClipRect(), mapper.ClipRect());
   EXPECT_EQ(gfx::Rect(20, 10, 88, 99),
             mapper.MapVisualRect(gfx::Rect(30, 30, 88, 99)));
@@ -80,7 +79,7 @@ TEST_F(ChunkToLayerMapperTest, TwoChunkUsingLayerState) {
 
   mapper.SwitchToChunk(chunk2);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  EXPECT_EQ(SkMatrix::Translate(-10, -20), mapper.Transform());
+  EXPECT_EQ(MakeTranslationMatrix(-10, -20), mapper.Transform());
   EXPECT_EQ(FloatClipRect(), mapper.ClipRect());
   EXPECT_EQ(gfx::Rect(20, 10, 88, 99),
             mapper.MapVisualRect(gfx::Rect(30, 30, 88, 99)));
@@ -89,8 +88,8 @@ TEST_F(ChunkToLayerMapperTest, TwoChunkUsingLayerState) {
 
 TEST_F(ChunkToLayerMapperTest, TwoChunkSameState) {
   ChunkToLayerMapper mapper(LayerState(), gfx::Vector2dF(10, 20));
-  auto transform = CreateTransform(LayerState().Transform(),
-                                   TransformationMatrix().Scale(2));
+  auto transform =
+      CreateTransform(LayerState().Transform(), MakeScaleMatrix(2));
   auto clip = CreateClip(LayerState().Clip(), LayerState().Transform(),
                          FloatRoundedRect(10, 10, 100, 100));
   auto& effect = LayerState().Effect();
@@ -99,8 +98,8 @@ TEST_F(ChunkToLayerMapperTest, TwoChunkSameState) {
 
   mapper.SwitchToChunk(chunk1);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  SkMatrix expected_transform = SkMatrix::Translate(-10, -20);
-  expected_transform.preScale(2, 2);
+  gfx::Transform expected_transform = MakeTranslationMatrix(-10, -20);
+  expected_transform.Scale(2);
   EXPECT_EQ(expected_transform, mapper.Transform());
   EXPECT_EQ(gfx::RectF(0, -10, 100, 100), mapper.ClipRect().Rect());
   EXPECT_TRUE(mapper.ClipRect().IsTight());
@@ -120,8 +119,8 @@ TEST_F(ChunkToLayerMapperTest, TwoChunkSameState) {
 
 TEST_F(ChunkToLayerMapperTest, TwoChunkDifferentState) {
   ChunkToLayerMapper mapper(LayerState(), gfx::Vector2dF(10, 20));
-  auto transform1 = CreateTransform(LayerState().Transform(),
-                                    TransformationMatrix().Scale(2));
+  auto transform1 =
+      CreateTransform(LayerState().Transform(), MakeScaleMatrix(2));
   auto clip1 = CreateClip(LayerState().Clip(), LayerState().Transform(),
                           FloatRoundedRect(10, 10, 100, 100));
   auto& effect = LayerState().Effect();
@@ -134,8 +133,8 @@ TEST_F(ChunkToLayerMapperTest, TwoChunkDifferentState) {
 
   mapper.SwitchToChunk(chunk1);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  SkMatrix expected_transform = SkMatrix::Translate(-10, -20);
-  expected_transform.preScale(2, 2);
+  gfx::Transform expected_transform = MakeTranslationMatrix(-10, -20);
+  expected_transform.Scale(2);
   EXPECT_EQ(expected_transform, mapper.Transform());
   EXPECT_EQ(gfx::RectF(0, -10, 100, 100), mapper.ClipRect().Rect());
   EXPECT_TRUE(mapper.ClipRect().IsTight());
@@ -145,7 +144,7 @@ TEST_F(ChunkToLayerMapperTest, TwoChunkDifferentState) {
 
   mapper.SwitchToChunk(chunk2);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  expected_transform.preTranslate(20, 30);
+  expected_transform.Translate(20, 30);
   EXPECT_EQ(expected_transform, mapper.Transform());
   EXPECT_EQ(gfx::RectF(30, 40, 40, 40), mapper.ClipRect().Rect());
   EXPECT_FALSE(mapper.ClipRect().IsTight());
@@ -162,14 +161,16 @@ TEST_F(ChunkToLayerMapperTest, SlowPath) {
   CompositorFilterOperations filter2;
   filter2.AppendBlurFilter(20);
   auto effect2 = CreateFilterEffect(LayerState().Effect(), std::move(filter2));
-  auto chunk2 = Chunk(PropertyTreeState(LayerState().Transform(),
-                                        LayerState().Clip(), *effect2));
+  auto clip_expander =
+      CreatePixelMovingFilterClipExpander(LayerState().Clip(), *effect2);
+  auto chunk2 = Chunk(
+      PropertyTreeState(LayerState().Transform(), *clip_expander, *effect2));
 
   // Chunk3 has a different effect which inherits from chunk2's effect.
   // Should use the slow path.
   auto effect3 = CreateOpacityEffect(*effect2, 1.f);
-  auto chunk3 = Chunk(PropertyTreeState(LayerState().Transform(),
-                                        LayerState().Clip(), *effect3));
+  auto chunk3 = Chunk(
+      PropertyTreeState(LayerState().Transform(), *clip_expander, *effect3));
 
   // Chunk4 has an opacity filter effect which inherits from the layer's effect.
   // Should use the fast path.
@@ -184,12 +185,12 @@ TEST_F(ChunkToLayerMapperTest, SlowPath) {
 
   mapper.SwitchToChunk(chunk1);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  EXPECT_EQ(SkMatrix::Translate(-10, -20), mapper.Transform());
+  EXPECT_EQ(MakeTranslationMatrix(-10, -20), mapper.Transform());
   EXPECT_EQ(FloatClipRect(), mapper.ClipRect());
 
   mapper.SwitchToChunk(chunk2);
   EXPECT_TRUE(HasFilterThatMovesPixels(mapper));
-  EXPECT_EQ(SkMatrix::Translate(-10, -20), mapper.Transform());
+  EXPECT_EQ(MakeTranslationMatrix(-10, -20), mapper.Transform());
   EXPECT_TRUE(mapper.ClipRect().IsInfinite());
   EXPECT_EQ(gfx::Rect(-40, -50, 208, 219),
             mapper.MapVisualRect(gfx::Rect(30, 30, 88, 99)));
@@ -197,7 +198,7 @@ TEST_F(ChunkToLayerMapperTest, SlowPath) {
 
   mapper.SwitchToChunk(chunk3);
   EXPECT_TRUE(HasFilterThatMovesPixels(mapper));
-  EXPECT_EQ(SkMatrix::Translate(-10, -20), mapper.Transform());
+  EXPECT_EQ(MakeTranslationMatrix(-10, -20), mapper.Transform());
   EXPECT_TRUE(mapper.ClipRect().IsInfinite());
   EXPECT_EQ(gfx::Rect(-40, -50, 208, 219),
             mapper.MapVisualRect(gfx::Rect(30, 30, 88, 99)));
@@ -205,12 +206,12 @@ TEST_F(ChunkToLayerMapperTest, SlowPath) {
 
   mapper.SwitchToChunk(chunk4);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  EXPECT_EQ(SkMatrix::Translate(-10, -20), mapper.Transform());
+  EXPECT_EQ(MakeTranslationMatrix(-10, -20), mapper.Transform());
   EXPECT_EQ(FloatClipRect(), mapper.ClipRect());
 
   mapper.SwitchToChunk(chunk5);
   EXPECT_FALSE(HasFilterThatMovesPixels(mapper));
-  EXPECT_EQ(SkMatrix::Translate(-10, -20), mapper.Transform());
+  EXPECT_EQ(MakeTranslationMatrix(-10, -20), mapper.Transform());
   EXPECT_EQ(FloatClipRect(), mapper.ClipRect());
 }
 

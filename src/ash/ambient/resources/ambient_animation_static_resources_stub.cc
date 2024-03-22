@@ -1,9 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/ambient/resources/ambient_animation_static_resources.h"
 
+#include "ash/ambient/ambient_ui_settings.h"
+#include "ash/webui/personalization_app/mojom/personalization_app.mojom-shared.h"
 #include "base/logging.h"
 
 namespace ash {
@@ -18,10 +20,12 @@ namespace ash {
 
 // static
 std::unique_ptr<AmbientAnimationStaticResources>
-AmbientAnimationStaticResources::Create(AmbientAnimationTheme theme,
+AmbientAnimationStaticResources::Create(AmbientUiSettings ui_settings,
                                         bool serializable) {
-  if (theme == AmbientAnimationTheme::kSlideshow)
+  if (ui_settings.theme() ==
+      personalization_app::mojom::AmbientTheme::kSlideshow) {
     return nullptr;
+  }
 
   LOG(FATAL) << "Ambient animation resources are not available on this build. "
                 "To enable, an internal chrome-branded checkout is required, "

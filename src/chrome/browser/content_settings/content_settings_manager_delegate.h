@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,7 @@ class ContentSettingsManagerDelegate
   scoped_refptr<content_settings::CookieSettings> GetCookieSettings(
       content::BrowserContext* browser_context) override;
   bool AllowStorageAccess(
-      int render_process_id,
-      int render_frame_id,
+      const content::GlobalRenderFrameHostToken& frame_token,
       content_settings::mojom::ContentSettingsManager::StorageType storage_type,
       const GURL& url,
       bool allowed,

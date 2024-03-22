@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_APP_LIST_APP_LIST_EVENT_TARGETER_H_
 #define ASH_APP_LIST_APP_LIST_EVENT_TARGETER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_targeter.h"
 
 namespace ash {
@@ -26,7 +27,7 @@ class AppListEventTargeter : public aura::WindowTargeter {
                                        const ui::LocatedEvent& event) override;
 
  private:
-  AppListViewDelegate* const delegate_;
+  const raw_ptr<AppListViewDelegate, ExperimentalAsh> delegate_;
 };
 
 }  // namespace ash

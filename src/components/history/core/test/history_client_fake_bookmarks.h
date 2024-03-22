@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,11 +38,11 @@ class HistoryClientFakeBookmarks : public HistoryClient {
   // HistoryClient implementation.
   void OnHistoryServiceCreated(HistoryService* history_service) override;
   void Shutdown() override;
-  bool CanAddURL(const GURL& url) override;
+  CanAddURLCallback GetThreadSafeCanAddURLCallback() const override;
   void NotifyProfileError(sql::InitStatus init_status,
                           const std::string& diagnostics) override;
   std::unique_ptr<HistoryBackendClient> CreateBackendClient() override;
-  void UpdateBookmarkLastUsedTime(int64_t bookmark_node_id,
+  void UpdateBookmarkLastUsedTime(const base::Uuid& bookmark_node_guid,
                                   base::Time time) override;
 
  private:

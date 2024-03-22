@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/bind_post_task.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
 #include "base/sequence_checker_impl.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -41,14 +41,14 @@ class SequenceRestrictionChecker {
 
   ~SequenceRestrictionChecker() {
     EXPECT_TRUE(checker_.CalledOnValidSequence());
-    set_on_destroy_ = true;
+    *set_on_destroy_ = true;
   }
 
   void Run() { EXPECT_TRUE(checker_.CalledOnValidSequence()); }
 
  private:
   SequenceCheckerImpl checker_;
-  bool& set_on_destroy_;
+  const raw_ref<bool> set_on_destroy_;
 };
 
 }  // namespace
@@ -57,7 +57,7 @@ class BindPostTaskTest : public testing::Test {
  protected:
   test::SingleThreadTaskEnvironment task_environment_;
   scoped_refptr<SequencedTaskRunner> task_runner_ =
-      SequencedTaskRunnerHandle::Get();
+      SequencedTaskRunner::GetCurrentDefault();
 };
 
 TEST_F(BindPostTaskTest, OnceClosure) {

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,13 @@
 namespace content {
 
 bool OriginCanAccessServiceWorkers(const GURL& url) {
-  if (url.SchemeIsHTTPOrHTTPS() && network::IsUrlPotentiallyTrustworthy(url))
+  if (!url.is_valid()) {
+    return false;
+  }
+
+  if (url.SchemeIsHTTPOrHTTPS() && network::IsUrlPotentiallyTrustworthy(url)) {
     return true;
+  }
 
   if (base::Contains(GetServiceWorkerSchemes(), url.scheme())) {
     return true;

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,9 +38,9 @@
 #include "gin/object_template_builder.h"
 #include "gin/wrappable.h"
 #include "third_party/blink/public/common/page/page_zoom.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url_request.h"
-#include "third_party/blink/public/web/blink.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_script_source.h"
@@ -58,7 +58,8 @@
 
 namespace {
 
-const char kCSSBackgroundImageFormat[] = "-webkit-image-set("
+const char kCSSBackgroundImageFormat[] =
+    "image-set("
     "url(chrome-search://theme/IDR_THEME_NTP_BACKGROUND?%s) 1x, "
     "url(chrome-search://theme/IDR_THEME_NTP_BACKGROUND@2x?%s) 2x)";
 
@@ -73,7 +74,8 @@ const char kCSSBackgroundRepeatX[] = "repeat-x";
 const char kCSSBackgroundRepeatY[] = "repeat-y";
 const char kCSSBackgroundRepeat[] = "repeat";
 
-const char kThemeAttributionFormat[] = "-webkit-image-set("
+const char kThemeAttributionFormat[] =
+    "image-set("
     "url(chrome-search://theme/IDR_THEME_NTP_ATTRIBUTION?%s) 1x, "
     "url(chrome-search://theme/IDR_THEME_NTP_ATTRIBUTION@2x?%s) 2x)";
 
@@ -629,7 +631,7 @@ v8::Local<v8::Value> NewTabPageBindings::GetMostVisitedItemData(
 
 // static
 void SearchBoxExtension::Install(blink::WebLocalFrame* frame) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = frame->MainWorldScriptContext();
   if (context.IsEmpty())

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,28 +41,21 @@ class VIZ_SERVICE_EXPORT OverlayStrategyUnderlay
 
   ~OverlayStrategyUnderlay() override;
 
-  bool Attempt(const SkM44& output_color_matrix,
-               const OverlayProcessorInterface::FilterOperationsMap&
-                   render_pass_backdrop_filters,
-               DisplayResourceProvider* resource_provider,
-               AggregatedRenderPassList* render_pass,
-               SurfaceDamageRectList* surface_damage_rect_list,
-               const PrimaryPlane* primary_plane,
-               OverlayCandidateList* candidate_list,
-               std::vector<gfx::Rect>* content_bounds) override;
-
-  void ProposePrioritized(const SkM44& output_color_matrix,
-                          const OverlayProcessorInterface::FilterOperationsMap&
-                              render_pass_backdrop_filters,
-                          DisplayResourceProvider* resource_provider,
-                          AggregatedRenderPassList* render_pass_list,
-                          SurfaceDamageRectList* surface_damage_rect_list,
-                          const PrimaryPlane* primary_plane,
-                          std::vector<OverlayProposedCandidate>* candidates,
-                          std::vector<gfx::Rect>* content_bounds) override;
-
-  bool AttemptPrioritized(
+  void Propose(
       const SkM44& output_color_matrix,
+      const OverlayProcessorInterface::FilterOperationsMap& render_pass_filters,
+      const OverlayProcessorInterface::FilterOperationsMap&
+          render_pass_backdrop_filters,
+      DisplayResourceProvider* resource_provider,
+      AggregatedRenderPassList* render_pass_list,
+      SurfaceDamageRectList* surface_damage_rect_list,
+      const PrimaryPlane* primary_plane,
+      std::vector<OverlayProposedCandidate>* candidates,
+      std::vector<gfx::Rect>* content_bounds) override;
+
+  bool Attempt(
+      const SkM44& output_color_matrix,
+      const OverlayProcessorInterface::FilterOperationsMap& render_pass_filters,
       const OverlayProcessorInterface::FilterOperationsMap&
           render_pass_backdrop_filters,
       DisplayResourceProvider* resource_provider,

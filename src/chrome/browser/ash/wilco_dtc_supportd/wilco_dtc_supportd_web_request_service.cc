@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/mojo_utils.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_network_context.h"
@@ -57,8 +57,10 @@ std::string GetHttpMethod(
     case chromeos::wilco_dtc_supportd::mojom::
         WilcoDtcSupportdWebRequestHttpMethod::kPatch:
       return "PATCH";
+    case chromeos::wilco_dtc_supportd::mojom::
+        WilcoDtcSupportdWebRequestHttpMethod::kUnmappedEnumField:
+      return "";
   }
-  return "";
 }
 
 // Returns true in case of non-error 2xx HTTP status code.
@@ -201,15 +203,36 @@ void WilcoDtcSupportdWebRequestService::MaybeStartNextRequest() {
       net::DefineNetworkTrafficAnnotation("wilco_dtc_supportd", R"(
           semantics {
             sender: "WilcoDtcSupportd"
-            description: "Perform a web request."
+            description: 
+            "Wilco VM is used by Dell to run Dell SupportAssist product on ChromeOS" 
+              "for managed users only. Dell SupportAssist proactively monitors device health."
+              "Dell binaries are running inside the VM and can perform web requests through"
+              "first-party wilco_dtc_supportd daemon to communicate with a Dell server."
             trigger:
-                "wilco_dtc_supportd performs a web request to their server."
+            "If policy is enabled, globally running Wilco VM performs web requests. No user action "
+                  "required to trigger web request."
             data:
                 "wilco_dtc_supportd's proprietary data."
             destination: OTHER
+            internal {
+              contacts {
+                email: "chromeos-oem-services@google.com"
+              }
+            }
+            user_data {
+                type: IP_ADDRESS
+                type: DEVICE_ID
+            }
+            last_reviewed: "2023-04-13"
           }
           policy {
             cookies_allowed: NO
+            chrome_device_policy {
+              # DeviceWilcoDtcAllowed
+              device_wilco_dtc_allowed {
+                device_wilco_dtc_allowed: false
+              }
+            }
           }
       )");
 

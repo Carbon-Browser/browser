@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -366,8 +364,9 @@ void WebrtcAudioModule::PollFromSource() {
   DCHECK(audio_task_runner_->BelongsToCurrentThread());
 
   base::AutoLock lock(lock_);
-  if (!audio_transport_)
+  if (!audio_transport_) {
     return;
+  }
 
   for (int i = 0; i < kPollInterval.InMilliseconds() / kFrameLengthMs; i++) {
     int64_t elapsed_time_ms = -1;
@@ -379,5 +378,4 @@ void WebrtcAudioModule::PollFromSource() {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

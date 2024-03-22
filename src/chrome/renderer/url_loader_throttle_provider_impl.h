@@ -1,10 +1,6 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-//
-// This source code is a part of eyeo Chromium SDK.
-// Use of this source code is governed by the GPLv3 that can be found in the
-// components/adblock/LICENSE file.
 
 #ifndef CHROME_RENDERER_URL_LOADER_THROTTLE_PROVIDER_IMPL_H_
 #define CHROME_RENDERER_URL_LOADER_THROTTLE_PROVIDER_IMPL_H_
@@ -12,7 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/threading/thread_checker.h"
+#include "base/memory/raw_ptr.h"
+#include "base/sequence_checker.h"
 #include "components/safe_browsing/content/common/safe_browsing.mojom.h"
 #include "extensions/buildflags/buildflags.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -26,8 +23,9 @@
 
 class ChromeContentRendererClient;
 
-// Instances must be constructed on the render thread, and then used and
-// destructed on a single thread, which can be different from the render thread.
+// Instances must be constructed on the render main thread, and then used and
+// destructed on a single sequence, which can be different from the render main
+// thread.
 class URLLoaderThrottleProviderImpl : public blink::URLLoaderThrottleProvider {
  public:
   URLLoaderThrottleProviderImpl(
@@ -43,29 +41,34 @@ class URLLoaderThrottleProviderImpl : public blink::URLLoaderThrottleProvider {
   // blink::URLLoaderThrottleProvider implementation.
   std::unique_ptr<blink::URLLoaderThrottleProvider> Clone() override;
   blink::WebVector<std::unique_ptr<blink::URLLoaderThrottle>> CreateThrottles(
-      int render_frame_id,
+      base::optional_ref<const blink::LocalFrameToken> local_frame_token,
       const blink::WebURLRequest& request) override;
   void SetOnline(bool is_online) override;
 
-  // eyeo Chromium SDK: Changed private to protected to allow
-  // AdblockURLLoaderThrottleProviderImpl to reuse copy ctor.
- protected:
+ private:
   // This copy constructor works in conjunction with Clone(), not intended for
   // general use.
   URLLoaderThrottleProviderImpl(const URLLoaderThrottleProviderImpl& other);
 
   blink::URLLoaderThrottleProviderType type_;
-  ChromeContentRendererClient* const chrome_content_renderer_client_;
+  const raw_ptr<ChromeContentRendererClient, ExperimentalRenderer>
+      chrome_content_renderer_client_;
 
-  mojo::PendingRemote<safe_browsing::mojom::SafeBrowsing> safe_browsing_remote_;
+  mojo::PendingRemote<safe_browsing::mojom::SafeBrowsing>
+      pending_safe_browsing_;
   mojo::Remote<safe_browsing::mojom::SafeBrowsing> safe_browsing_;
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+  mojo::PendingRemote<safe_browsing::mojom::ExtensionWebRequestReporter>
+      pending_extension_web_request_reporter_;
+  mojo::Remote<safe_browsing::mojom::ExtensionWebRequestReporter>
+      extension_web_request_reporter_;
+
   std::unique_ptr<extensions::ExtensionThrottleManager>
       extension_throttle_manager_;
 #endif
 
-  THREAD_CHECKER(thread_checker_);
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 #endif  // CHROME_RENDERER_URL_LOADER_THROTTLE_PROVIDER_IMPL_H_

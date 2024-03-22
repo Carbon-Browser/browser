@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@ namespace webapps {
 struct ShortcutInfo;
 
 struct AddToHomescreenParams {
+  // This enum backs a UMA histogram, so it should be treated as append-only.
   // A Java counterpart will be generated for this enum.
   // GENERATED_JAVA_ENUM_PACKAGE: (
   //  org.chromium.components.webapps)
@@ -25,11 +26,11 @@ struct AddToHomescreenParams {
     NATIVE,
     WEBAPK,
     SHORTCUT,
+    COUNT = SHORTCUT,
   };
 
   AppType app_type;
   SkBitmap primary_icon;
-  bool has_maskable_primary_icon = false;
   std::unique_ptr<ShortcutInfo> shortcut_info;
   WebappInstallSource install_source;
   InstallableStatusCode installable_status;
@@ -38,6 +39,8 @@ struct AddToHomescreenParams {
 
   AddToHomescreenParams();
   ~AddToHomescreenParams();
+
+  bool HasMaskablePrimaryIcon();
 };
 
 }  // namespace webapps

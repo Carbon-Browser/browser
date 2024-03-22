@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,6 +75,10 @@ class ExtensionHostRegistry : public KeyedService {
     virtual void OnExtensionHostRenderProcessGone(
         content::BrowserContext* browser_context,
         ExtensionHost* extension_host) {}
+
+    // Called when `registry` is starting to shut down.
+    virtual void OnExtensionHostRegistryShutdown(
+        ExtensionHostRegistry* registry) {}
   };
 
   ExtensionHostRegistry();
@@ -127,8 +131,15 @@ class ExtensionHostRegistry : public KeyedService {
   ExtensionHost* GetExtensionHostForPrimaryMainFrame(
       content::RenderFrameHost* render_frame_host);
 
+  const std::unordered_set<ExtensionHost*>& extension_hosts() {
+    return extension_hosts_;
+  }
+
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
+
+  // KeyedService:
+  void Shutdown() override;
 
  private:
   // The active set of ExtensionHosts.

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,15 @@
 // $ autoninja -C out/ashdesktop browser_tests
 // $ out/ashdesktop/browser_tests \
 //   --gtest_filter=DemoAshRequiresLacrosTest* \
-//   --lacros-chrome-path=out/ashdesktop/lacros_clang_x64 \
+//   --lacros-chrome-path=out/ashdesktop/lacros_clang_x64/test_lacros_chrome \
 //   --enable-pixel-output-in-tests
 // You should see there are 2 browser instances, one is ash browser,
 // another one is Lacros browser and Lacros is in the front.
+// IMPORTANT: If you're adding new tests in browser_tests target following this
+// example, make sure to add your tests in
+// //testing/buildbot/filters/linux-chromeos.browser_tests.require_lacros.filter
+// so that it can run with the correct argument on linux-chromeos-rel builder
+// with the step name "browser_tests_require_lacros".
 class DemoAshRequiresLacrosTest : public InProcessBrowserTest {
   void SetUpInProcessBrowserTestFixture() override {
     if (ash_starter_.HasLacrosArgument()) {
@@ -40,11 +45,8 @@ class DemoAshRequiresLacrosTest : public InProcessBrowserTest {
 
 IN_PROC_BROWSER_TEST_F(DemoAshRequiresLacrosTest, NewTab) {
   if (ash_starter_.HasLacrosArgument()) {
-    crosapi::BrowserManager::Get()->NewTab(
-        /*should_trigger_session_restore=*/false);
+    crosapi::BrowserManager::Get()->NewTab();
     // Assert Lacros is running.
     ASSERT_TRUE(crosapi::BrowserManager::Get()->IsRunning());
-    // browser() returns an Ash browser instance.
-    ASSERT_FALSE(browser()->profile()->IsOffTheRecord());
   }
 }

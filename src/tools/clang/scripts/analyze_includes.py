@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """This script is used to analyze #include graphs.
@@ -466,7 +466,7 @@ def main():
 
   parser = argparse.ArgumentParser(description='Analyze an #include graph.')
   parser.add_argument('build_log',
-                      type=argparse.FileType('r'),
+                      type=argparse.FileType('r', errors='replace'),
                       help='The build log to analyze (- for stdin).')
   parser.add_argument('--target',
                       help='The target that was built (e.g. chrome).')

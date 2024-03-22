@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,11 @@
 #include "chrome/browser/ui/views/autofill/payments/local_card_migration_dialog_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/animation/ink_drop.h"
 
@@ -29,14 +31,13 @@ LocalCardMigrationIconView::LocalCardMigrationIconView(
     : PageActionIconView(command_updater,
                          IDC_MIGRATE_LOCAL_CREDIT_CARD_FOR_PAGE,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate) {
+                         page_action_icon_delegate,
+                         "LocalCardMigration") {
   SetID(VIEW_ID_MIGRATE_LOCAL_CREDIT_CARD_BUTTON);
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillCreditCardUploadFeedback)) {
-    InstallLoadingIndicator();
-  } else {
-    SetUpForInOutAnimation();
-  }
+  SetUpForInOutAnimation();
+  SetAccessibilityProperties(
+      /*role*/ absl::nullopt,
+      l10n_util::GetStringUTF16(IDS_TOOLTIP_MIGRATE_LOCAL_CARD));
 }
 
 LocalCardMigrationIconView::~LocalCardMigrationIconView() {}
@@ -87,32 +88,16 @@ void LocalCardMigrationIconView::UpdateImpl() {
         // Disable the credit card icon so it does not update if user clicks
         // on it.
         SetEnabled(false);
-        if (base::FeatureList::IsEnabled(
-                features::kAutofillCreditCardUploadFeedback)) {
-          SetIsLoading(/*is_loading=*/true);
-        } else {
-          AnimateIn(IDS_AUTOFILL_LOCAL_CARD_MIGRATION_ANIMATION_LABEL);
-        }
+        AnimateIn(IDS_AUTOFILL_LOCAL_CARD_MIGRATION_ANIMATION_LABEL);
         break;
       }
       case LocalCardMigrationFlowStep::MIGRATION_FINISHED: {
-        if (base::FeatureList::IsEnabled(
-                features::kAutofillCreditCardUploadFeedback)) {
-          SetIsLoading(/*is_loading=*/false);
-        } else {
-          UnpauseAnimation();
-        }
+        UnpauseAnimation();
         SetEnabled(true);
         break;
       }
       case LocalCardMigrationFlowStep::MIGRATION_FAILED: {
-        if (base::FeatureList::IsEnabled(
-                features::kAutofillCreditCardUploadFeedback)) {
-          UpdateIconImage();
-          SetIsLoading(/*is_loading=*/false);
-        } else {
-          UnpauseAnimation();
-        }
+        UnpauseAnimation();
         SetEnabled(true);
         break;
       }
@@ -136,7 +121,9 @@ void LocalCardMigrationIconView::OnExecuting(
     PageActionIconView::ExecuteSource execute_source) {}
 
 const gfx::VectorIcon& LocalCardMigrationIconView::GetVectorIcon() const {
-  return kCreditCardIcon;
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? kCreditCardChromeRefreshIcon
+             : kCreditCardIcon;
 }
 
 const gfx::VectorIcon& LocalCardMigrationIconView::GetVectorIconBadge() const {
@@ -146,15 +133,6 @@ const gfx::VectorIcon& LocalCardMigrationIconView::GetVectorIconBadge() const {
     return vector_icons::kBlockedBadgeIcon;
   }
   return gfx::kNoneIcon;
-}
-
-const char* LocalCardMigrationIconView::GetClassName() const {
-  return "LocalCardMigrationIconView";
-}
-
-std::u16string LocalCardMigrationIconView::GetTextForTooltipAndAccessibleName()
-    const {
-  return l10n_util::GetStringUTF16(IDS_TOOLTIP_MIGRATE_LOCAL_CARD);
 }
 
 ManageMigrationUiController* LocalCardMigrationIconView::GetController() const {
@@ -186,5 +164,8 @@ void LocalCardMigrationIconView::AnimationEnded(
   IconLabelBubbleView::AnimationEnded(animation);
   UpdateIconImage();
 }
+
+BEGIN_METADATA(LocalCardMigrationIconView, PageActionIconView)
+END_METADATA
 
 }  // namespace autofill

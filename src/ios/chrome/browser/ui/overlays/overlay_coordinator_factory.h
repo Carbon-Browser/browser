@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-#include "ios/chrome/browser/overlays/public/overlay_modality.h"
+#include "ios/chrome/browser/overlays/model/public/overlay_modality.h"
 
 class Browser;
 class OverlayRequestCoordinatorDelegate;
@@ -18,12 +18,10 @@ class OverlayRequest;
 // coordinators for a request.
 @interface OverlayRequestCoordinatorFactory : NSObject
 
-// Returns a coordinator factory for `browser` at `modality`.
-+ (instancetype)factoryForBrowser:(Browser*)browser
-                         modality:(OverlayModality)modality;
-
-// OverlayRequestCoordinatorFactory must be fetched using
-// |+factoryForBrowser:modality:`.
+// Designated initializer.
+- (instancetype)initWithBrowser:(Browser*)browser
+                       modality:(OverlayModality)modality
+    NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
 // Returns whether the OverlayRequestCoordinator subclass responsible for

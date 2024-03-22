@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,20 +12,20 @@
 namespace ui {
 
 struct ViewTreeProblemDetails {
-  enum ProblemType {
+  enum class ProblemType {
     // |view_a| (the child view) is not entirely contained within the bounds of
     // |view_b| (the parent view).
-    VIEW_OUTSIDE_PARENT,
+    kViewOutsideParent,
 
     // |view_a| and |view_b|, neither of which is an ancestor of the other,
     // overlap each other, and at least one of |view_a| or |view_b| has
     // localizable text (is an NSControl or NSText).
-    VIEWS_OVERLAP,
+    kViewsOverlap,
   };
 
   ProblemType type;
-  NSView* view_a;
-  NSView* view_b;
+  NSView* __strong view_a;
+  NSView* __strong view_b;
 
   std::string ToString();
 };

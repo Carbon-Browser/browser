@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 
 #include "components/viz/service/display/display_compositor_memory_and_task_controller.h"
+#include "gpu/command_buffer/service/gpu_task_scheduler_helper.h"
 #include "gpu/ipc/common/surface_handle.h"
-#include "gpu/ipc/gpu_task_scheduler_helper.h"
 #include "services/viz/privileged/mojom/compositing/display_private.mojom.h"
 
 namespace viz {
@@ -39,6 +39,9 @@ class OutputSurfaceProvider {
       DisplayCompositorMemoryAndTaskController* gpu_dependency,
       const RendererSettings& renderer_settings,
       const DebugRendererSettings* debug_settings) = 0;
+
+  virtual gpu::SharedImageManager* GetSharedImageManager() = 0;
+  virtual gpu::SyncPointManager* GetSyncPointManager() = 0;
 };
 
 }  // namespace viz

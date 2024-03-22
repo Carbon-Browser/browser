@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -220,7 +220,7 @@ bool GetAsStringVector(const base::Value* value,
   if (!value->is_list())
     return false;
 
-  for (const base::Value& item : value->GetListDeprecated()) {
+  for (const base::Value& item : value->GetList()) {
     if (!item.is_string())
       return false;
 
@@ -347,7 +347,7 @@ bool FilterToComponents(const std::string& filter,
   }
 
   // According to documentation host can't be empty.
-  if (!parsed.host.is_nonempty())
+  if (parsed.host.is_empty())
     return false;
 
   if (parsed.scheme.is_nonempty())

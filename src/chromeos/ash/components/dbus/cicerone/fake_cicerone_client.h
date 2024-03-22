@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
+#include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
 
 namespace ash {
 
@@ -18,11 +19,11 @@ class COMPONENT_EXPORT(CICERONE) FakeCiceroneClient : public CiceroneClient {
  public:
   using LaunchContainerApplicationCallback = base::RepeatingCallback<void(
       const vm_tools::cicerone::LaunchContainerApplicationRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::LaunchContainerApplicationResponse>
-          callback)>;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::LaunchContainerApplicationResponse> callback)>;
   using UninstallPackageOwningFileCallback = base::RepeatingCallback<void(
       const vm_tools::cicerone::UninstallPackageOwningFileRequest&,
-      DBusMethodCallback<
+      chromeos::DBusMethodCallback<
           vm_tools::cicerone::UninstallPackageOwningFileResponse>)>;
 
   // Returns the fake global instance if initialized. May return null.
@@ -52,113 +53,138 @@ class COMPONENT_EXPORT(CICERONE) FakeCiceroneClient : public CiceroneClient {
   bool IsStartLxdProgressSignalConnected() override;
   bool IsFileWatchTriggeredSignalConnected() override;
   bool IsLowDiskSpaceTriggeredSignalConnected() override;
+  bool IsInhibitScreensaverSignalConencted() override;
+  bool IsUninhibitScreensaverSignalConencted() override;
   void LaunchContainerApplication(
       const vm_tools::cicerone::LaunchContainerApplicationRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::LaunchContainerApplicationResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::LaunchContainerApplicationResponse> callback)
+      override;
   void GetContainerAppIcons(
       const vm_tools::cicerone::ContainerAppIconRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ContainerAppIconResponse> callback)
-      override;
+      chromeos::DBusMethodCallback<vm_tools::cicerone::ContainerAppIconResponse>
+          callback) override;
   void GetLinuxPackageInfo(
       const vm_tools::cicerone::LinuxPackageInfoRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::LinuxPackageInfoResponse> callback)
-      override;
+      chromeos::DBusMethodCallback<vm_tools::cicerone::LinuxPackageInfoResponse>
+          callback) override;
   // Fake version of the method that installs an application inside a running
   // Container. |callback| is called after the method call finishes. This does
   // not cause progress events to be fired.
   void InstallLinuxPackage(
       const vm_tools::cicerone::InstallLinuxPackageRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::InstallLinuxPackageResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::InstallLinuxPackageResponse> callback) override;
   // If SetOnUninstallPackageOwningFileCallback has been called, it
   // just triggers that callback. Otherwise, it generates a task to call
   // |callback| with the response from
   // set_uninstall_package_owning_file_response.
   void UninstallPackageOwningFile(
       const vm_tools::cicerone::UninstallPackageOwningFileRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::UninstallPackageOwningFileResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::UninstallPackageOwningFileResponse> callback)
+      override;
   void CreateLxdContainer(
       const vm_tools::cicerone::CreateLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CreateLxdContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CreateLxdContainerResponse> callback) override;
   void DeleteLxdContainer(
       const vm_tools::cicerone::DeleteLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::DeleteLxdContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::DeleteLxdContainerResponse> callback) override;
   void StartLxdContainer(
       const vm_tools::cicerone::StartLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::StartLxdContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::StartLxdContainerResponse> callback) override;
   void StopLxdContainer(
       const vm_tools::cicerone::StopLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::StopLxdContainerResponse> callback)
-      override;
+      chromeos::DBusMethodCallback<vm_tools::cicerone::StopLxdContainerResponse>
+          callback) override;
   void GetLxdContainerUsername(
       const vm_tools::cicerone::GetLxdContainerUsernameRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::GetLxdContainerUsernameResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::GetLxdContainerUsernameResponse> callback)
+      override;
   void SetUpLxdContainerUser(
       const vm_tools::cicerone::SetUpLxdContainerUserRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::SetUpLxdContainerUserResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::SetUpLxdContainerUserResponse> callback) override;
   void ExportLxdContainer(
       const vm_tools::cicerone::ExportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ExportLxdContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ExportLxdContainerResponse> callback) override;
   void ImportLxdContainer(
       const vm_tools::cicerone::ImportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ImportLxdContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ImportLxdContainerResponse> callback) override;
   void CancelExportLxdContainer(
       const vm_tools::cicerone::CancelExportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelExportLxdContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelExportLxdContainerResponse> callback)
+      override;
   void CancelImportLxdContainer(
       const vm_tools::cicerone::CancelImportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelImportLxdContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelImportLxdContainerResponse> callback)
+      override;
   void ApplyAnsiblePlaybook(
       const vm_tools::cicerone::ApplyAnsiblePlaybookRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ApplyAnsiblePlaybookResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ApplyAnsiblePlaybookResponse> callback) override;
   void ConfigureForArcSideload(
       const vm_tools::cicerone::ConfigureForArcSideloadRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ConfigureForArcSideloadResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ConfigureForArcSideloadResponse> callback)
+      override;
   void UpgradeContainer(
       const vm_tools::cicerone::UpgradeContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::UpgradeContainerResponse> callback)
-      override;
+      chromeos::DBusMethodCallback<vm_tools::cicerone::UpgradeContainerResponse>
+          callback) override;
   void CancelUpgradeContainer(
       const vm_tools::cicerone::CancelUpgradeContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelUpgradeContainerResponse>
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelUpgradeContainerResponse> callback)
+      override;
+  void StartLxd(
+      const vm_tools::cicerone::StartLxdRequest& request,
+      chromeos::DBusMethodCallback<vm_tools::cicerone::StartLxdResponse>
           callback) override;
-  void StartLxd(const vm_tools::cicerone::StartLxdRequest& request,
-                DBusMethodCallback<vm_tools::cicerone::StartLxdResponse>
-                    callback) override;
-  void AddFileWatch(const vm_tools::cicerone::AddFileWatchRequest& request,
-                    DBusMethodCallback<vm_tools::cicerone::AddFileWatchResponse>
-                        callback) override;
+  void AddFileWatch(
+      const vm_tools::cicerone::AddFileWatchRequest& request,
+      chromeos::DBusMethodCallback<vm_tools::cicerone::AddFileWatchResponse>
+          callback) override;
   void RemoveFileWatch(
       const vm_tools::cicerone::RemoveFileWatchRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::RemoveFileWatchResponse> callback)
-      override;
+      chromeos::DBusMethodCallback<vm_tools::cicerone::RemoveFileWatchResponse>
+          callback) override;
   void GetVshSession(
       const vm_tools::cicerone::GetVshSessionRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::GetVshSessionResponse> callback)
-      override;
+      chromeos::DBusMethodCallback<vm_tools::cicerone::GetVshSessionResponse>
+          callback) override;
   void AttachUsbToContainer(
       const vm_tools::cicerone::AttachUsbToContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::AttachUsbToContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::AttachUsbToContainerResponse> callback) override;
   void DetachUsbFromContainer(
       const vm_tools::cicerone::DetachUsbFromContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::DetachUsbFromContainerResponse>
-          callback) override;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::DetachUsbFromContainerResponse> callback)
+      override;
   void FileSelected(
       const vm_tools::cicerone::FileSelectedSignal& signal) override;
+  void ListRunningContainers(
+      const vm_tools::cicerone::ListRunningContainersRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ListRunningContainersResponse> callback) override;
+  void GetGarconSessionInfo(
+      const vm_tools::cicerone::GetGarconSessionInfoRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::GetGarconSessionInfoResponse> callback) override;
+  void UpdateContainerDevices(
+      const vm_tools::cicerone::UpdateContainerDevicesRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::UpdateContainerDevicesResponse> callback)
+      override;
   void WaitForServiceToBeAvailable(
       dbus::ObjectProxy::WaitForServiceToBeAvailableCallback callback) override;
 
@@ -361,6 +387,24 @@ class COMPONENT_EXPORT(CICERONE) FakeCiceroneClient : public CiceroneClient {
     detach_usb_from_container_response_ =
         std::move(detach_usb_from_container_response);
   }
+  void set_list_containers_response(
+      vm_tools::cicerone::ListRunningContainersResponse
+          list_container_response) {
+    list_containers_response_ = std::move(list_container_response);
+  }
+  void set_get_garcon_session_info_response(
+      vm_tools::cicerone::GetGarconSessionInfoResponse
+          get_garcon_session_info_response) {
+    get_garcon_session_info_response_ =
+        std::move(get_garcon_session_info_response);
+  }
+
+  void set_update_container_devices_response(
+      vm_tools::cicerone::UpdateContainerDevicesResponse
+          update_container_devices_response) {
+    update_container_devices_response_ =
+        std::move(update_container_devices_response);
+  }
 
   void set_send_container_starting_signal_delay(base::TimeDelta delay) {
     send_container_starting_signal_delay_ = delay;
@@ -389,11 +433,22 @@ class COMPONENT_EXPORT(CICERONE) FakeCiceroneClient : public CiceroneClient {
     send_stop_lxd_container_response_delay_ = delay;
   }
 
+  vm_tools::cicerone::SetUpLxdContainerUserRequest
+  get_setup_lxd_container_user_request() {
+    return setup_lxd_container_user_request_;
+  }
+
   // Returns true if the method has been invoked at least once, false otherwise.
   bool configure_for_arc_sideload_called() {
     return configure_for_arc_sideload_called_;
   }
 
+  int create_lxd_container_count() { return create_lxd_container_count_; }
+  int start_lxd_container_count() { return start_lxd_container_count_; }
+  int setup_lxd_container_user_count() {
+    return setup_lxd_container_user_count_;
+  }
+  int start_lxd_count() { return start_lxd_count_; }
   int add_file_watch_call_count() { return add_file_watch_call_count_; }
   int remove_file_watch_call_count() { return remove_file_watch_call_count_; }
 
@@ -460,11 +515,17 @@ class COMPONENT_EXPORT(CICERONE) FakeCiceroneClient : public CiceroneClient {
   bool is_start_lxd_progress_signal_connected_ = true;
   bool is_file_watch_triggered_signal_connected_ = true;
   bool is_low_disk_space_triggered_signal_connected_ = true;
+  bool is_inhibit_screensaver_signal_connected_ = true;
+  bool is_uninhibit_screensaver_signal_connected_ = true;
 
   std::string last_container_username_;
 
   bool configure_for_arc_sideload_called_ = false;
 
+  int create_lxd_container_count_ = 0;
+  int start_lxd_container_count_ = 0;
+  int setup_lxd_container_user_count_ = 0;
+  int start_lxd_count_ = 0;
   int add_file_watch_call_count_ = 0;
   int remove_file_watch_call_count_ = 0;
 
@@ -522,6 +583,11 @@ class COMPONENT_EXPORT(CICERONE) FakeCiceroneClient : public CiceroneClient {
       attach_usb_to_container_response_;
   vm_tools::cicerone::DetachUsbFromContainerResponse
       detach_usb_from_container_response_;
+  vm_tools::cicerone::ListRunningContainersResponse list_containers_response_;
+  vm_tools::cicerone::GetGarconSessionInfoResponse
+      get_garcon_session_info_response_;
+  vm_tools::cicerone::UpdateContainerDevicesResponse
+      update_container_devices_response_;
 
   base::TimeDelta send_container_starting_signal_delay_;
   base::TimeDelta send_container_started_signal_delay_;
@@ -531,6 +597,9 @@ class COMPONENT_EXPORT(CICERONE) FakeCiceroneClient : public CiceroneClient {
   base::TimeDelta send_set_up_lxd_container_user_response_delay_;
   base::TimeDelta send_start_lxd_container_response_delay_;
   base::TimeDelta send_stop_lxd_container_response_delay_;
+
+  vm_tools::cicerone::SetUpLxdContainerUserRequest
+      setup_lxd_container_user_request_;
 
   vm_tools::cicerone::OsRelease lxd_container_os_release_;
 

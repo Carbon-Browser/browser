@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,7 +72,7 @@ class StorageMonitorWinTest : public testing::Test {
   std::unique_ptr<TestStorageMonitorWin> monitor_;
 
   // Weak pointer; owned by the device notifications class.
-  raw_ptr<TestVolumeMountWatcherWin> volume_mount_watcher_;
+  raw_ptr<TestVolumeMountWatcherWin, DanglingUntriaged> volume_mount_watcher_;
 
   MockRemovableStorageObserver observer_;
 

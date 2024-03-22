@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ class WebViewWebMainParts : public web::WebMainParts {
   // web::WebMainParts implementation.
   void PreCreateMainMessageLoop() override;
   void PreCreateThreads() override;
+  void PostCreateThreads() override;
   void PreMainMessageLoopRun() override;
   void PostMainMessageLoopRun() override;
   void PostDestroyThreads() override;

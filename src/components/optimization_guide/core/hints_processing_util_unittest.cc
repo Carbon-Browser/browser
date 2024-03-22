@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,30 +56,6 @@ TEST(HintsProcessingUtilTest, FindPageHintForSubstringPagePattern) {
 
   EXPECT_EQ(page_hint3, FindPageHintForURL(
                             GURL("https://www.foo.org/bar/three.jpg"), &hint1));
-}
-
-TEST(HintsProcessingUtilTest, ConvertProtoEffectiveConnectionType) {
-  EXPECT_EQ(
-      ConvertProtoEffectiveConnectionType(
-          proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_UNKNOWN),
-      net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_UNKNOWN);
-  EXPECT_EQ(
-      ConvertProtoEffectiveConnectionType(
-          proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_OFFLINE),
-      net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_OFFLINE);
-  EXPECT_EQ(
-      ConvertProtoEffectiveConnectionType(
-          proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_SLOW_2G),
-      net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_SLOW_2G);
-  EXPECT_EQ(ConvertProtoEffectiveConnectionType(
-                proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_2G),
-            net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_2G);
-  EXPECT_EQ(ConvertProtoEffectiveConnectionType(
-                proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_3G),
-            net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_3G);
-  EXPECT_EQ(ConvertProtoEffectiveConnectionType(
-                proto::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_4G),
-            net::EffectiveConnectionType::EFFECTIVE_CONNECTION_TYPE_4G);
 }
 
 TEST(HintsProcessingUtilTest, IsValidURLForURLKeyedHints) {

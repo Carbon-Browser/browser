@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,7 @@ import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Restriction;
-import org.chromium.chrome.R;
-import org.chromium.chrome.browser.MockSafeBrowsingApiHandler;
+import org.chromium.chrome.browser.MockSafetyNetApiHandler;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.infobar.InfoBarContainer;
@@ -63,7 +62,7 @@ import java.util.concurrent.TimeoutException;
 /**
  * End to end tests of SubresourceFilter ad filtering on Android.
  *
- * Since these tests take a while to set up (averaging 12 seconds between activity startup and
+ * <p>Since these tests take a while to set up (averaging 12 seconds between activity startup and
  * ruleset publishing), prefer to limit the number of test cases where possible.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
@@ -72,8 +71,7 @@ public final class SubresourceFilterTest {
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
 
-    @Rule
-    public EmbeddedTestServerRule mTestServerRule = new EmbeddedTestServerRule();
+    @Rule public EmbeddedTestServerRule mTestServerRule = new EmbeddedTestServerRule();
 
     private EmbeddedTestServer mTestServer;
 
@@ -101,10 +99,7 @@ public final class SubresourceFilterTest {
     @Before
     public void setUp() throws Exception {
         mTestServer = mTestServerRule.getServer();
-
-        // Create a new temporary instance to ensure the Class is loaded. Otherwise we will get a
-        // ClassNotFoundException when trying to instantiate during startup.
-        SafeBrowsingApiBridge.setHandler(new MockSafeBrowsingApiHandler());
+        SafeBrowsingApiBridge.setSafetyNetApiHandler(new MockSafetyNetApiHandler());
         mActivityTestRule.startMainActivityOnBlankPage();
 
         // Disallow all jpgs.
@@ -113,7 +108,7 @@ public final class SubresourceFilterTest {
 
     @After
     public void tearDown() {
-        MockSafeBrowsingApiHandler.clearMockResponses();
+        MockSafetyNetApiHandler.clearMockResponses();
     }
 
     @Test
@@ -167,15 +162,20 @@ public final class SubresourceFilterTest {
         CallbackHelper tabCreatedCallback = new CallbackHelper();
         TabModel tabModel = mActivityTestRule.getActivity().getTabModelSelector().getCurrentModel();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> tabModel.addObserver(new TabModelObserver() {
-                    @Override
-                    public void didAddTab(
-                            Tab tab, @TabLaunchType int type, @TabCreationState int creationState) {
-                        if (tab.getUrl().getSpec().equals(LEARN_MORE_PAGE)) {
-                            tabCreatedCallback.notifyCalled();
-                        }
-                    }
-                }));
+                () ->
+                        tabModel.addObserver(
+                                new TabModelObserver() {
+                                    @Override
+                                    public void didAddTab(
+                                            Tab tab,
+                                            @TabLaunchType int type,
+                                            @TabCreationState int creationState,
+                                            boolean markedForSelection) {
+                                        if (tab.getUrl().getSpec().equals(LEARN_MORE_PAGE)) {
+                                            tabCreatedCallback.notifyCalled();
+                                        }
+                                    }
+                                }));
 
         // Check that the infobar is showing.
         List<InfoBar> infoBars = mActivityTestRule.getInfoBars();
@@ -254,8 +254,8 @@ public final class SubresourceFilterTest {
         ModalDialogProperties.Controller dialogController =
                 adsBlockedDialog.get(ModalDialogProperties.CONTROLLER);
         TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> dialogController.onClick(
+                () ->
+                        dialogController.onClick(
                                 adsBlockedDialog, ModalDialogProperties.ButtonType.POSITIVE));
 
         Assert.assertTrue(verifyPageReloadedWithOriginalContent(url));
@@ -280,15 +280,21 @@ public final class SubresourceFilterTest {
 
         CallbackHelper tabCreatedCallback = new CallbackHelper();
         TabModel tabModel = mActivityTestRule.getActivity().getTabModelSelector().getCurrentModel();
-        TestThreadUtils.runOnUiThreadBlocking(() -> tabModel.addObserver(new TabModelObserver() {
-            @Override
-            public void didAddTab(
-                    Tab tab, @TabLaunchType int type, @TabCreationState int creationState) {
-                if (tab.getUrl().getSpec().equals(LEARN_MORE_PAGE)) {
-                    tabCreatedCallback.notifyCalled();
-                }
-            }
-        }));
+        TestThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        tabModel.addObserver(
+                                new TabModelObserver() {
+                                    @Override
+                                    public void didAddTab(
+                                            Tab tab,
+                                            @TabLaunchType int type,
+                                            @TabCreationState int creationState,
+                                            boolean markedForSelection) {
+                                        if (tab.getUrl().getSpec().equals(LEARN_MORE_PAGE)) {
+                                            tabCreatedCallback.notifyCalled();
+                                        }
+                                    }
+                                }));
 
         // Check that the Ads Blocked message is showing and get the active message.
         PropertyModel message = verifyAndGetAdsBlockedMessage();
@@ -297,10 +303,13 @@ public final class SubresourceFilterTest {
 
         // Trigger the Ads Blocked dialog and simulate the "Learn more" link click.
         createAdsBlockedDialog(message);
-        View dialogView = ((TabModalPresenter) mActivityTestRule.getActivity()
-                                   .getModalDialogManager()
-                                   .getCurrentPresenterForTest())
-                                  .getDialogContainerForTest();
+        View dialogView =
+                ((TabModalPresenter)
+                                mActivityTestRule
+                                        .getActivity()
+                                        .getModalDialogManager()
+                                        .getCurrentPresenterForTest())
+                        .getDialogContainerForTest();
         TextView messageView = dialogView.findViewById(R.id.message_paragraph_1);
         Spanned spannedMessage = (Spanned) messageView.getText();
         ClickableSpan[] spans =
@@ -318,27 +327,34 @@ public final class SubresourceFilterTest {
         // Press the back button to go to the original tab where the dialog was shown.
         Espresso.pressBack();
 
-        CriteriaHelper.pollUiThread(() -> {
-            // Verify that the dialog is re-shown on the original tab.
-            return mActivityTestRule.getActivity().getModalDialogManager().getCurrentDialogForTest()
-                    != null;
-        }, "The dialog should be re-shown on navigation to the original tab.");
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    // Verify that the dialog is re-shown on the original tab.
+                    return mActivityTestRule
+                                    .getActivity()
+                                    .getModalDialogManager()
+                                    .getCurrentDialogForTest()
+                            != null;
+                },
+                "The dialog should be re-shown on navigation to the original tab.");
     }
 
     private boolean loadPageWithBlockableContentAndTestIfBlocked(String url, String metadata)
             throws TimeoutException {
-        MockSafeBrowsingApiHandler.addMockResponse(url, metadata);
+        MockSafetyNetApiHandler.addMockResponse(url, metadata);
         mActivityTestRule.loadUrl(url);
         return Boolean.parseBoolean(mActivityTestRule.runJavaScriptCodeInCurrentTab("imgLoaded"));
     }
 
     private PropertyModel verifyAndGetAdsBlockedMessage() throws ExecutionException {
-        MessageDispatcher messageDispatcher = TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> MessageDispatcherProvider.from(
-                                mActivityTestRule.getActivity().getWindowAndroid()));
-        List<MessageStateHandler> messages = MessagesTestHelper.getEnqueuedMessages(
-                messageDispatcher, MessageIdentifier.ADS_BLOCKED);
+        MessageDispatcher messageDispatcher =
+                TestThreadUtils.runOnUiThreadBlocking(
+                        () ->
+                                MessageDispatcherProvider.from(
+                                        mActivityTestRule.getActivity().getWindowAndroid()));
+        List<MessageStateHandler> messages =
+                MessagesTestHelper.getEnqueuedMessages(
+                        messageDispatcher, MessageIdentifier.ADS_BLOCKED);
         return MessagesTestHelper.getCurrentMessage(messages.get(0));
     }
 

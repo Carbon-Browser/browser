@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -117,7 +117,7 @@ class SessionMetricsRecorder {
 
   // Last known disabled playback state. This can change before/after a remoting
   // session as well as during one.
-  bool remote_playback_is_disabled_ = false;
+  absl::optional<bool> remote_playback_is_disabled_;
 
   bool did_record_pixel_rate_support_ = false;
   bool did_record_compatibility_ = false;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class GraphAnalysisUnittest(unittest.TestCase):
                 actions_file.readlines(), enums, platform_supported_actions)
 
             required_coverage_tests = read_unprocessed_coverage_tests_file(
-                coverage_file.readlines(), actions,
+                coverage_file.readlines(), actions, enums,
                 action_base_name_to_default_param)
 
             required_coverage_tests = expand_parameterized_tests(

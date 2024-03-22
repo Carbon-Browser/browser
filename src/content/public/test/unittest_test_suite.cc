@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,14 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/rand_util.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/null_task_runner.h"
 #include "base/test/test_suite.h"
 #include "build/build_config.h"
+#include "components/breadcrumbs/core/breadcrumb_manager.h"
+#include "components/breadcrumbs/core/crash_reporter_breadcrumb_observer.h"
 #include "content/app/mojo/mojo_init.h"
+#include "content/browser/accessibility/browser_accessibility_state_impl.h"
 #include "content/browser/network_service_instance_impl.h"
 #include "content/browser/notification_service_impl.h"
 #include "content/browser/storage_partition_impl.h"
@@ -26,6 +31,7 @@
 #include "content/test/test_blink_web_unit_test_support.h"
 #include "content/test/test_content_browser_client.h"
 #include "content/test/test_content_client.h"
+#include "mojo/core/embedder/embedder.h"
 #include "services/network/test/test_network_connection_tracker.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/web/blink.h"
@@ -35,8 +41,8 @@
 #include "ui/aura/env.h"
 #endif
 
-#if BUILDFLAG(IS_FUCHSIA)
-#include "ui/ozone/public/ozone_switches.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/gfx/linux/gbm_util.h"  // nogncheck
 #endif
 
 namespace content {
@@ -93,6 +99,8 @@ class UnitTestTestSuite::UnitTestEventListener
     // InterfacePtr pointing to it to avoid it getting the connection error
     // later and have other tests use the InterfacePtr that is invalid.
     ResetNetworkServiceForTesting();
+
+    breadcrumbs::BreadcrumbManager::GetInstance().ResetForTesting();
   }
 
  private:
@@ -117,9 +125,12 @@ UnitTestTestSuite::CreateTestContentClients() {
   return clients;
 }
 
+static UnitTestTestSuite* g_test_suite = nullptr;
+
 UnitTestTestSuite::UnitTestTestSuite(
     base::TestSuite* test_suite,
-    base::RepeatingCallback<std::unique_ptr<ContentClients>()> create_clients)
+    base::RepeatingCallback<std::unique_ptr<ContentClients>()> create_clients,
+    absl::optional<mojo::core::Configuration> child_mojo_config)
     : test_suite_(test_suite), create_clients_(create_clients) {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   std::string enabled =
@@ -135,36 +146,37 @@ UnitTestTestSuite::UnitTestTestSuite(
   listeners.Append(CreateTestEventListener());
   listeners.Append(new CheckForLeakedWebUIRegistrations);
 
-  // The ThreadPool created by the test launcher is never destroyed.
-  // Similarly, the FeatureList created here is never destroyed so it
-  // can safely be accessed by the ThreadPool.
-  std::unique_ptr<base::FeatureList> feature_list =
-      std::make_unique<base::FeatureList>();
-  feature_list->InitializeFromCommandLine(enabled, disabled);
-  base::FeatureList::SetInstance(std::move(feature_list));
+  scoped_feature_list_.InitFromCommandLine(enabled, disabled);
 
-  // Do this here even though TestBlinkWebUnitTestSupport calls it since a
-  // multi process unit test won't get to create TestBlinkWebUnitTestSupport.
-  // This is safe to call multiple times.
-  InitializeMojo();
-
-#if BUILDFLAG(IS_FUCHSIA)
-  // Use headless ozone platform on Fuchsia by default.
-  // TODO(crbug.com/865172): Remove this flag.
-  if (!command_line->HasSwitch(switches::kOzonePlatform))
-    command_line->AppendSwitchASCII(switches::kOzonePlatform, "headless");
+#if BUILDFLAG(IS_CHROMEOS)
+  ui::EnsureIntelMediaCompressionEnvVarIsSet();
 #endif
+
+  mojo::core::InitFeatures();
+  if (command_line->HasSwitch(switches::kTestChildProcess)) {
+    // Note that in the main test process, TestBlinkWebUnitTestSupport
+    // initializes Mojo; so we only do this in child processes.
+    mojo::core::Init(child_mojo_config.value_or(mojo::core::Configuration{}));
+  } else {
+    mojo::core::Init(mojo::core::Configuration{.is_broker_process = true});
+  }
 
   DCHECK(test_suite);
   test_host_resolver_ = std::make_unique<TestHostResolver>();
+  browser_accessibility_state_ = BrowserAccessibilityStateImpl::Create();
+  g_test_suite = this;
 }
 
-UnitTestTestSuite::~UnitTestTestSuite() = default;
+UnitTestTestSuite::~UnitTestTestSuite() {
+  CHECK(g_test_suite == this);
+  g_test_suite = nullptr;
+}
 
 int UnitTestTestSuite::Run() {
 #if defined(USE_AURA)
   std::unique_ptr<aura::Env> aura_env = aura::Env::CreateInstance();
 #endif
+  std::unique_ptr<url::ScopedSchemeRegistryForTests> scheme_registry;
 
   // TestEventListeners repeater event propagation is disabled in death test
   // child process so create and set the clients here for it.
@@ -179,7 +191,7 @@ int UnitTestTestSuite::Run() {
 
     // Since Blink initialization ended up using the SchemeRegistry, reset
     // that it was accessed before testSuite::Initialize registers its schemes.
-    new url::ScopedSchemeRegistryForTests();
+    scheme_registry = std::make_unique<url::ScopedSchemeRegistryForTests>();
 
     ui::ResourceBundle::CleanupSharedInstance();
   }
@@ -198,7 +210,29 @@ UnitTestTestSuite::CreateTestEventListener() {
 void UnitTestTestSuite::OnFirstTestStartComplete() {
   // At this point ContentClient and ResourceBundle will be initialized, which
   // this needs.
-  blink_test_support_ = std::make_unique<TestBlinkWebUnitTestSupport>();
+  blink_test_support_ = std::make_unique<TestBlinkWebUnitTestSupport>(
+      TestBlinkWebUnitTestSupport::SchedulerType::kMockScheduler,
+      " --single-threaded");
+
+  // Dummy task runner is initialized because blink::CreateMainThreadIsolate
+  // needs the current task runner handle and TestBlinkWebUnitTestSupport
+  // initialized with kMockScheduler doesn't provide one. There should be no
+  // task posted to this task runner. The message loop is not created before
+  // this initialization because some tests need specific kinds of message
+  // loops, and their types are not known upfront. Some tests also create their
+  // own thread bundles or message loops, and doing the same in
+  // TestBlinkWebUnitTestSupport would introduce a conflict.
+  auto dummy_task_runner = base::MakeRefCounted<base::NullTaskRunner>();
+  auto dummy_task_runner_handle =
+      std::make_unique<base::SingleThreadTaskRunner::CurrentDefaultHandle>(
+          dummy_task_runner);
+  isolate_ = blink::CreateMainThreadIsolate();
+}
+
+v8::Isolate* UnitTestTestSuite::MainThreadIsolateForUnitTestSuite() {
+  CHECK(g_test_suite);
+  CHECK(g_test_suite->blink_test_support_);
+  return g_test_suite->isolate_.get();
 }
 
 }  // namespace content

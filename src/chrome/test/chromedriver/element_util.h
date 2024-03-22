@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,7 @@ std::string GetElementKey();
 
 base::Value CreateElement(const std::string& element_id);
 
-std::unique_ptr<base::DictionaryValue> CreateValueFrom(const WebPoint& point);
-
-Status CheckElement(const std::string& element_id);
+base::Value::Dict CreateValueFrom(const WebPoint& point);
 
 // |root_element_id| could be null when no root element is given.
 Status FindElement(int interval_ms,
@@ -29,7 +27,7 @@ Status FindElement(int interval_ms,
                    const std::string* root_element_id,
                    Session* session,
                    WebView* web_view,
-                   const base::DictionaryValue& params,
+                   const base::Value::Dict& params,
                    std::unique_ptr<base::Value>* value);
 
 Status FindShadowElement(int interval_ms,
@@ -37,7 +35,7 @@ Status FindShadowElement(int interval_ms,
                          const std::string* shadow_root_id,
                          Session* session,
                          WebView* web_view,
-                         const base::DictionaryValue& params,
+                         const base::Value::Dict& params,
                          std::unique_ptr<base::Value>* value);
 
 Status GetActiveElement(Session* session,

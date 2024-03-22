@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,15 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/i18n/case_conversion.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/timer/elapsed_timer.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "components/google/core/common/google_util.h"
@@ -31,12 +32,14 @@
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/autocomplete_provider_listener.h"
 #include "components/omnibox/browser/autocomplete_result.h"
-#include "components/omnibox/browser/base_search_provider.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/omnibox_prefs.h"
+#include "components/omnibox/browser/page_classification_functions.h"
+#include "components/omnibox/browser/zero_suggest_provider.h"
 #include "components/omnibox/common/omnibox_features.h"
-#include "components/search_engines/omnibox_focus_type.h"
+#include "components/search/search.h"
 #include "components/search_engines/template_url_service.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "url/gurl.h"
 
 using metrics::OmniboxInputType;
@@ -48,8 +51,12 @@ namespace {
 std::u16string GetSearchTermsFromURL(const GURL& url,
                                      TemplateURLService* template_url_service) {
   DCHECK(template_url_service);
+  const TemplateURL* default_provider =
+      template_url_service->GetDefaultSearchProvider();
+  DCHECK(default_provider);
+
   std::u16string search_terms;
-  template_url_service->GetDefaultSearchProvider()->ExtractSearchTermsFromURL(
+  default_provider->ExtractSearchTermsFromURL(
       url, template_url_service->search_terms_data(), &search_terms);
   return base::i18n::ToLower(base::CollapseWhitespace(search_terms, false));
 }
@@ -58,39 +65,29 @@ std::u16string GetSearchTermsFromURL(const GURL& url,
 // Invoked early, confirms all the conditions for zero suggestions are met.
 bool AllowLocalHistoryZeroSuggestSuggestions(AutocompleteProviderClient* client,
                                              const AutocompleteInput& input) {
-  // Allow local history query suggestions only when the user is not in an
-  // off-the-record context.
+  // Allow local history zero-suggest only when the user is not in incognito
+  // mode.
   if (client->IsOffTheRecord())
     return false;
 
+  // Allow local history zero-suggest only when the user has set up Google as
+  // their default search engine.
+  if (!search::DefaultSearchProviderIsGoogle(client->GetTemplateURLService())) {
+    return false;
+  }
+
+  if (base::FeatureList::IsEnabled(
+          omnibox::kLocalHistoryZeroSuggestBeyondNTP)) {
+    // Allow local history zero-suggest where remote zero-suggest is eligible.
+    return ZeroSuggestProvider::ResultTypeToRun(input) !=
+           ZeroSuggestProvider::ResultType::kNone;
+  }
+
   // Allow local history query suggestions only when the omnibox is empty and is
   // focused from the NTP.
-  if (input.focus_type() == OmniboxFocusType::DEFAULT ||
-      input.type() != OmniboxInputType::EMPTY ||
-      !BaseSearchProvider::IsNTPPage(input.current_page_classification())) {
-    return false;
-  }
-
-  // Allow local history query suggestions only when the user has set up Google
-  // as their default search engine.
-  TemplateURLService* template_url_service = client->GetTemplateURLService();
-  if (!template_url_service ||
-      !template_url_service->GetDefaultSearchProvider() ||
-      template_url_service->GetDefaultSearchProvider()->GetEngineType(
-          template_url_service->search_terms_data()) != SEARCH_ENGINE_GOOGLE) {
-    return false;
-  }
-
-  return true;
-}
-
-void RecordDBMetrics(const base::TimeTicks db_query_time,
-                     const size_t result_size) {
-  base::UmaHistogramTimes(
-      "Omnibox.LocalHistoryZeroSuggest.SearchTermsExtractionTime",
-      base::TimeTicks::Now() - db_query_time);
-  base::UmaHistogramCounts10000(
-      "Omnibox.LocalHistoryZeroSuggest.SearchTermsExtractedCount", result_size);
+  return input.focus_type() == metrics::OmniboxFocusType::INTERACTION_FOCUS &&
+         input.type() == OmniboxInputType::EMPTY &&
+         omnibox::IsNTPPage(input.current_page_classification());
 }
 
 }  // namespace
@@ -151,7 +148,7 @@ void LocalHistoryZeroSuggestProvider::DeleteMatch(
   // number of suggestions shown and the async nature of this lookup.
   history::QueryOptions opts;
   opts.duplicate_policy = history::QueryOptions::KEEP_ALL_DUPLICATES;
-  opts.begin_time = OmniboxFieldTrial::GetLocalHistoryZeroSuggestAgeThreshold();
+  opts.begin_time = base::Time::Now() - base::Days(90);  // Full history length.
   history_service->QueryHistory(
       base::ASCIIToUTF16(google_search_url), opts,
       base::BindOnce(&LocalHistoryZeroSuggestProvider::OnHistoryQueryResults,
@@ -199,31 +196,18 @@ void LocalHistoryZeroSuggestProvider::QueryURLDatabase(
   }
 
   std::vector<std::unique_ptr<history::KeywordSearchTermVisit>> results;
-  const base::TimeTicks db_query_time = base::TimeTicks::Now();
-  if (base::FeatureList::IsEnabled(omnibox::kLocalHistorySuggestRevamp)) {
-    auto enumerator = url_db->CreateKeywordSearchTermVisitEnumerator(
-        template_url_service->GetDefaultSearchProvider()->id(),
-        OmniboxFieldTrial::GetLocalHistoryZeroSuggestAgeThreshold());
-    if (enumerator) {
-      history::GetAutocompleteSearchTermsFromEnumerator(
-          *enumerator,
-          OmniboxFieldTrial::kZeroSuggestIgnoreDuplicateVisits.Get(),
-          history::SearchTermRankingPolicy::kFrecency, &results);
-    }
-  } else {
-    url_db->GetMostRecentKeywordSearchTerms(
-        template_url_service->GetDefaultSearchProvider()->id(),
-        OmniboxFieldTrial::GetLocalHistoryZeroSuggestAgeThreshold(), &results);
-    const base::Time now = base::Time::Now();
-    std::sort(results.begin(), results.end(),
-              [&](const auto& a, const auto& b) {
-                return history::GetFrecencyScore(a->visit_count,
-                                                 a->last_visit_time, now) >
-                       history::GetFrecencyScore(b->visit_count,
-                                                 b->last_visit_time, now);
-              });
+  const base::ElapsedTimer db_query_timer;
+  auto enumerator = url_db->CreateKeywordSearchTermVisitEnumerator(
+      template_url_service->GetDefaultSearchProvider()->id());
+  if (enumerator) {
+    history::GetAutocompleteSearchTermsFromEnumerator(
+        *enumerator, max_matches_, history::SearchTermRankingPolicy::kFrecency,
+        &results);
   }
-  RecordDBMetrics(db_query_time, results.size());
+  DCHECK_LE(results.size(), max_matches_);
+  base::UmaHistogramTimes(
+      "Omnibox.LocalHistoryZeroSuggest.SearchTermsExtractionTimeV2",
+      db_query_timer.Elapsed());
 
   int relevance =
       OmniboxFieldTrial::kLocalHistoryZeroSuggestRelevanceScore.Get();
@@ -231,16 +215,16 @@ void LocalHistoryZeroSuggestProvider::QueryURLDatabase(
     SearchSuggestionParser::SuggestResult suggestion(
         /*suggestion=*/result->normalized_term,
         AutocompleteMatchType::SEARCH_HISTORY,
+        /*suggest_type=*/omnibox::TYPE_NATIVE_CHROME,
         /*subtypes=*/{}, /*from_keyword=*/false, relevance--,
         /*relevance_from_server=*/false,
         /*input_text=*/base::ASCIIToUTF16(std::string()));
 
-    // Only provide a group ID, as the client does not know the header or the
-    // priority for SuggestionGroupId::kPersonalizedZeroSuggest. The suggestion
-    // group info will either be provided by the server (i.e., on SRP/Web) or
-    // this group ID will be dropped (i.e., on NTP).
+    // If the appropriate header text and section are not provided by the server
+    // the default omnibox::SECTION_PERSONALIZED_ZERO_SUGGEST will be used and
+    // the local history zero-prefix suggestions will be shown without a header.
     suggestion.set_suggestion_group_id(
-        SuggestionGroupId::kPersonalizedZeroSuggest);
+        omnibox::GROUP_PERSONALIZED_ZERO_SUGGEST);
 
     AutocompleteMatch match = BaseSearchProvider::CreateSearchSuggestion(
         this, input, /*in_keyword_mode=*/false, suggestion,
@@ -249,10 +233,7 @@ void LocalHistoryZeroSuggestProvider::QueryURLDatabase(
         TemplateURLRef::NO_SUGGESTIONS_AVAILABLE,
         /*append_extra_query_params_from_command_line*/ true);
     match.deletable = client_->AllowDeletingBrowserHistory();
-
     matches_.push_back(match);
-    if (matches_.size() >= max_matches_)
-      break;
   }
 }
 

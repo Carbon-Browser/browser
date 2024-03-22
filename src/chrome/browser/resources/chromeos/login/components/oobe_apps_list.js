@@ -1,8 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import '//resources/ash/common/cr_scrollable_behavior.js';
+import '//resources/cr_elements/icons.html.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from './behaviors/oobe_i18n_behavior.js';
+
 
 const MAX_IMG_LOADING_TIME_SEC = 7;
 
@@ -11,18 +20,19 @@ const MAX_IMG_LOADING_TIME_SEC = 7;
  * @extends {PolymerElement}
  * @implements {OobeI18nBehaviorInterface}
  */
-const OobeAppsListBase =
-    Polymer.mixinBehaviors([OobeI18nBehavior], Polymer.Element);
+const OobeAppsListBase = mixinBehaviors([OobeI18nBehavior], PolymerElement);
 
 /**
  * @polymer
  */
-/* #export */ class OobeAppsList extends OobeAppsListBase {
+export class OobeAppsList extends OobeAppsListBase {
   static get is() {
     return 'oobe-apps-list';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -101,7 +111,7 @@ const OobeAppsListBase =
    * @private
    */
   getWrappedIcon_(iconUri) {
-    return 'data:text/html;charset=utf-8,' + encodeURIComponent(String.raw`
+    return ('data:text/html;charset=utf-8,' + encodeURIComponent(String.raw`
     <html>
       <style>
         body {
@@ -113,16 +123,7 @@ const OobeAppsListBase =
           user-select: none;
         }
       </style>
-    <body><img id="icon" src="` + iconUri + '"></body></html>');
-  }
-
-  /**
-   * @param {string} title the name of the application.
-   * @return {string} aria label for the expand button.
-   * @private
-   */
-  getExpandButtonAriaLabel_(title) {
-    return this.i18n('recommendAppsDescriptionExpand', title);
+    <body><img id="icon" src="` + iconUri + '"></body></html>'));
   }
 
   /**
@@ -131,7 +132,7 @@ const OobeAppsListBase =
    */
   updateCount_() {
     let appsSelected = 0;
-    this.appList.forEach(app => {
+    this.appList.forEach((app) => {
       appsSelected += app.checked;
     });
     this.appsSelected = appsSelected;
@@ -173,15 +174,6 @@ const OobeAppsListBase =
   }
 
   /**
-   * @param {!Event} e
-   * @private
-   */
-  onExpandClicked_(e) {
-    const appItem = e.currentTarget.parentElement.parentElement;
-    appItem.querySelector('.app-description').classList.toggle('truncated');
-  }
-
-  /**
    * Called when single webview loads app icon.
    * @private
    */
@@ -201,7 +193,7 @@ const OobeAppsListBase =
    */
   getSelectedApps() {
     const packageNames = [];
-    this.appList.forEach(app => {
+    this.appList.forEach((app) => {
       if (app.checked) {
         packageNames.push(app.package_name);
       }

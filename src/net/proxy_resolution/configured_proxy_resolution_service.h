@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread_checker.h"
 #include "net/base/completion_once_callback.h"
@@ -125,7 +124,7 @@ class NET_EXPORT ConfiguredProxyResolutionService
   //   3.  named proxy
   int ResolveProxy(const GURL& url,
                    const std::string& method,
-                   const NetworkIsolationKey& network_isolation_key,
+                   const NetworkAnonymizationKey& network_anonymization_key,
                    ProxyInfo* results,
                    CompletionOnceCallback callback,
                    std::unique_ptr<ProxyResolutionRequest>* request,
@@ -135,7 +134,7 @@ class NET_EXPORT ConfiguredProxyResolutionService
   bool MarkProxiesAsBadUntil(
       const ProxyInfo& results,
       base::TimeDelta retry_delay,
-      const std::vector<ProxyServer>& additional_bad_proxies,
+      const std::vector<ProxyChain>& additional_bad_proxies,
       const NetLogWithSource& net_log) override;
 
   // ProxyResolutionService
@@ -307,11 +306,13 @@ class NET_EXPORT ConfiguredProxyResolutionService
   // Called when proxy resolution has completed (either synchronously or
   // asynchronously). Handles logging the result, and cleaning out
   // bad entries from the results list.
-  int DidFinishResolvingProxy(const GURL& url,
-                              const std::string& method,
-                              ProxyInfo* result,
-                              int result_code,
-                              const NetLogWithSource& net_log);
+  int DidFinishResolvingProxy(
+      const GURL& url,
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const std::string& method,
+      ProxyInfo* result,
+      int result_code,
+      const NetLogWithSource& net_log);
 
   // Start initialization using |fetched_config_|.
   void InitializeUsingLastFetchedConfig();
@@ -404,7 +405,7 @@ class NET_EXPORT ConfiguredProxyResolutionService
 
   THREAD_CHECKER(thread_checker_);
 
-  raw_ptr<ProxyDelegate> proxy_delegate_ = nullptr;
+  raw_ptr<ProxyDelegate, DanglingUntriaged> proxy_delegate_ = nullptr;
 
   // Flag used by |SetReady()| to check if |this| has been deleted by a
   // synchronous callback.

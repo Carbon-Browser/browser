@@ -32,8 +32,7 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 
 #include "base/synchronization/lock.h"
-#include "third_party/blink/public/platform/web_audio_source_provider.h"
-#include "third_party/blink/renderer/platform/audio/audio_bus.h"
+#include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/wtf/uuid.h"
@@ -68,62 +67,38 @@ int MediaStreamComponentImpl::GenerateUniqueId() {
   return ++g_unique_media_stream_component_id;
 }
 
-MediaStreamComponentImpl::MediaStreamComponentImpl(MediaStreamSource* source)
-    : MediaStreamComponentImpl(WTF::CreateCanonicalUUIDString(), source) {}
-
-MediaStreamComponentImpl::MediaStreamComponentImpl(const String& id,
-                                                   MediaStreamSource* source)
-    : source_(source), id_(id), unique_id_(GenerateUniqueId()) {
-  DCHECK(id_.length());
-  DCHECK(source_);
-}
-
 MediaStreamComponentImpl::MediaStreamComponentImpl(
     const String& id,
     MediaStreamSource* source,
     std::unique_ptr<MediaStreamTrackPlatform> platform_track)
-    : MediaStreamComponentImpl(id, source) {
-  // TODO(https://crbug.com/1302689): Change to a DCHECK(platform_track) once
-  // all callers provide a platform_track here, rather than using
-  // SetPlatformTrack().
-  if (platform_track) {
-    CheckSourceAndTrackSameType(source, platform_track.get());
-  }
-  platform_track_ = std::move(platform_track);
+    : source_(source),
+      id_(id),
+      unique_id_(GenerateUniqueId()),
+      platform_track_(std::move(platform_track)) {
+  DCHECK(platform_track_);
+  CheckSourceAndTrackSameType(source, platform_track_.get());
 }
 
 MediaStreamComponentImpl::MediaStreamComponentImpl(
     MediaStreamSource* source,
     std::unique_ptr<MediaStreamTrackPlatform> platform_track)
-    : MediaStreamComponentImpl(source) {
-  // TODO(https://crbug.com/1302689): Change to a DCHECK(platform_track) once
-  // all callers provide a platform_track here, rather than using
-  // SetPlatformTrack().
-  if (platform_track) {
-    CheckSourceAndTrackSameType(source, platform_track.get());
-  }
-  platform_track_ = std::move(platform_track);
-}
+    : MediaStreamComponentImpl(WTF::CreateCanonicalUUIDString(),
+                               source,
+                               std::move(platform_track)) {}
 
-MediaStreamComponentImpl* MediaStreamComponentImpl::Clone(
-    std::unique_ptr<MediaStreamTrackPlatform> cloned_platform_track) const {
+MediaStreamComponentImpl* MediaStreamComponentImpl::Clone() const {
+  const String id = WTF::CreateCanonicalUUIDString();
+  std::unique_ptr<MediaStreamTrackPlatform> cloned_platform_track =
+      platform_track_->CreateFromComponent(this, id);
   auto* cloned_component = MakeGarbageCollected<MediaStreamComponentImpl>(
-      Source(), std::move(cloned_platform_track));
+      id, Source(), std::move(cloned_platform_track));
   cloned_component->SetEnabled(enabled_);
-  cloned_component->SetMuted(muted_);
   cloned_component->SetContentHint(content_hint_);
-  cloned_component->SetConstraints(constraints_);
   return cloned_component;
 }
 
 void MediaStreamComponentImpl::Dispose() {
   platform_track_.reset();
-}
-
-void MediaStreamComponentImpl::AudioSourceProviderImpl::Wrap(
-    WebAudioSourceProvider* provider) {
-  base::AutoLock locker(provide_input_lock_);
-  web_audio_source_provider_ = provider;
 }
 
 void MediaStreamComponentImpl::GetSettings(
@@ -139,6 +114,15 @@ MediaStreamComponentImpl::GetCaptureHandle() {
   return platform_track_->GetCaptureHandle();
 }
 
+void MediaStreamComponentImpl::SetEnabled(bool enabled) {
+  enabled_ = enabled;
+  // TODO(https://crbug.com/1302689): Change to a DCHECK(platform_track) once
+  // the platform_track is always set in the constructor.
+  if (platform_track_) {
+    platform_track_->SetEnabled(enabled_);
+  }
+}
+
 void MediaStreamComponentImpl::SetContentHint(
     WebMediaStreamTrack::ContentHintType hint) {
   switch (hint) {
@@ -146,12 +130,12 @@ void MediaStreamComponentImpl::SetContentHint(
       break;
     case WebMediaStreamTrack::ContentHintType::kAudioSpeech:
     case WebMediaStreamTrack::ContentHintType::kAudioMusic:
-      DCHECK_EQ(MediaStreamSource::kTypeAudio, Source()->GetType());
+      DCHECK_EQ(MediaStreamSource::kTypeAudio, GetSourceType());
       break;
     case WebMediaStreamTrack::ContentHintType::kVideoMotion:
     case WebMediaStreamTrack::ContentHintType::kVideoDetail:
     case WebMediaStreamTrack::ContentHintType::kVideoText:
-      DCHECK_EQ(MediaStreamSource::kTypeVideo, Source()->GetType());
+      DCHECK_EQ(MediaStreamSource::kTypeVideo, GetSourceType());
       break;
   }
   if (hint == content_hint_)
@@ -163,34 +147,29 @@ void MediaStreamComponentImpl::SetContentHint(
     native_track->SetContentHint(ContentHint());
 }
 
-void MediaStreamComponentImpl::AudioSourceProviderImpl::ProvideInput(
-    AudioBus* bus,
-    int frames_to_process) {
-  DCHECK(bus);
-  if (!bus)
-    return;
+void MediaStreamComponentImpl::AddSourceObserver(
+    MediaStreamSource::Observer* observer) {
+  Source()->AddObserver(observer);
+}
 
-  base::AutoTryLock try_locker(provide_input_lock_);
-  if (!try_locker.is_acquired() || !web_audio_source_provider_) {
-    bus->Zero();
-    return;
-  }
+void MediaStreamComponentImpl::AddSink(WebMediaStreamAudioSink* sink) {
+  DCHECK(GetPlatformTrack());
+  GetPlatformTrack()->AddSink(sink);
+}
 
-  // Wrap the AudioBus channel data using WebVector.
-  uint32_t n = bus->NumberOfChannels();
-  if (web_audio_data_.size() != n)
-    web_audio_data_ = WebVector<float*>(static_cast<size_t>(n));
-
-  for (uint32_t i = 0; i < n; ++i)
-    web_audio_data_[i] = bus->Channel(i)->MutableData();
-
-  web_audio_source_provider_->ProvideInput(web_audio_data_, frames_to_process);
+void MediaStreamComponentImpl::AddSink(
+    WebMediaStreamSink* sink,
+    const VideoCaptureDeliverFrameCB& callback,
+    MediaStreamVideoSink::IsSecure is_secure,
+    MediaStreamVideoSink::UsesAlpha uses_alpha) {
+  DCHECK(GetPlatformTrack());
+  GetPlatformTrack()->AddSink(sink, callback, is_secure, uses_alpha);
 }
 
 String MediaStreamComponentImpl::ToString() const {
-  return String::Format(
-      "[id: %s, unique_id: %d, enabled: %s, muted=%s]", Id().Utf8().c_str(),
-      UniqueId(), Enabled() ? "true" : "false", Muted() ? "true" : "false");
+  return String::Format("[id: %s, unique_id: %d, enabled: %s]",
+                        Id().Utf8().c_str(), UniqueId(),
+                        Enabled() ? "true" : "false");
 }
 
 void MediaStreamComponentImpl::Trace(Visitor* visitor) const {

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,27 +8,32 @@
  * passwords, payment methods and addresses.
  */
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import '../prefs/prefs.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 import '../settings_page/settings_animated_pages.js';
 import '../settings_page/settings_subpage.js';
 import '../settings_shared.css.js';
 
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+import {CrLinkRowElement} from 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
+import {OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BaseMixin} from '../base_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
 import {getTemplate} from './autofill_page.html.js';
-import {MultiStorePasswordUiEntry} from './multi_store_password_ui_entry.js';
-import {PasswordCheckMixin} from './password_check_mixin.js';
-import {PasswordManagerImpl} from './password_manager_proxy.js';
+import {PasswordManagerImpl, PasswordManagerPage} from './password_manager_proxy.js';
 
-const SettingsAutofillPageElementBase =
-    PrefsMixin(PasswordCheckMixin(BaseMixin(PolymerElement)));
+const SettingsAutofillPageElementBase = PrefsMixin(BaseMixin(PolymerElement));
+
+export interface SettingsAutofillPageElement {
+  $: {
+    passwordManagerButton: CrLinkRowElement,
+  };
+}
 
 export class SettingsAutofillPageElement extends
     SettingsAutofillPageElementBase {
@@ -42,15 +47,12 @@ export class SettingsAutofillPageElement extends
 
   static get properties() {
     return {
-      passwordFilter_: String,
+      passkeyFilter_: String,
 
       focusConfig_: {
         type: Object,
         value() {
           const map = new Map();
-          if (routes.PASSWORDS) {
-            map.set(routes.PASSWORDS.path, '#passwordManagerButton');
-          }
           if (routes.PAYMENTS) {
             map.set(routes.PAYMENTS.path, '#paymentManagerButton');
           }
@@ -61,33 +63,15 @@ export class SettingsAutofillPageElement extends
           return map;
         },
       },
-
-      passwordManagerSubLabel_: {
-        type: String,
-        computed: 'computePasswordManagerSubLabel_(compromisedPasswordsCount)',
-      },
-
-      enablePasswordViewPage_: {
+      isPlusAddressSettingEnabled_: {
         type: Boolean,
-        value() {
-          return loadTimeData.getBoolean('enablePasswordViewPage');
-        },
-      },
-
-      // The credential is only used to pass the credential from password-view
-      // to settings-subpage
-      credential: {
-        type: Object,
-        value: null,
+        value: () => !!loadTimeData.getString('plusAddressManagementUrl'),
       },
     };
   }
 
-  private passwordFilter_: string;
+  private passkeyFilter_: string;
   private focusConfig_: Map<string, string>;
-  private passwordManagerSubLabel_: string;
-  private enablePasswordViewPage_: string;
-  credential: MultiStorePasswordUiEntry|null;
 
   /**
    * Shows the manage addresses sub page.
@@ -104,19 +88,17 @@ export class SettingsAutofillPageElement extends
   }
 
   /**
-   * Shows a page to manage passwords.
+   * Shows Password Manager page.
    */
   private onPasswordsClick_() {
     PasswordManagerImpl.getInstance().recordPasswordsPageAccessInSettings();
-    Router.getInstance().navigateTo(routes.PASSWORDS);
+    PasswordManagerImpl.getInstance().showPasswordManager(
+        PasswordManagerPage.PASSWORDS);
   }
 
-  /**
-   * @return The sub-title message indicating the result of password check.
-   */
-  private computePasswordManagerSubLabel_(): string {
-    return this.leakedPasswords.length > 0 ? this.compromisedPasswordsCount :
-                                             '';
+  private onPlusAddressClick_() {
+    OpenWindowProxyImpl.getInstance().openUrl(
+        loadTimeData.getString('plusAddressManagementUrl'));
   }
 }
 

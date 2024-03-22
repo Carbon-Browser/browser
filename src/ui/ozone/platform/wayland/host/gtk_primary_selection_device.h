@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,12 +36,12 @@ class GtkPrimarySelectionDevice : public WaylandDataDeviceBase {
   void SetSelectionSource(GtkPrimarySelectionSource* source, uint32_t serial);
 
  private:
-  // gtk_primary_selection_device_listener callbacks
+  // gtk_primary_selection_device_listener callbacks:
   static void OnDataOffer(void* data,
-                          gtk_primary_selection_device* data_device,
+                          gtk_primary_selection_device* selection_device,
                           gtk_primary_selection_offer* offer);
   static void OnSelection(void* data,
-                          gtk_primary_selection_device* data_device,
+                          gtk_primary_selection_device* selection_device,
                           gtk_primary_selection_offer* offer);
 
   // The Wayland object wrapped by this instance.

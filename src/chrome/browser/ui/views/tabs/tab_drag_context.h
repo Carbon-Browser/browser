@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/list_selection_model.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/view.h"
@@ -27,6 +28,8 @@ class TabGroupId;
 
 // A limited subset of TabDragContext for use by non-TabDragController clients.
 class TabDragContextBase : public views::View {
+  METADATA_HEADER(TabDragContextBase, views::View)
+
  public:
   ~TabDragContextBase() override = default;
 
@@ -39,11 +42,11 @@ class TabDragContextBase : public views::View {
 
   // Returns true if this DragContext is in the process of returning tabs to the
   // associated TabContainer.
-  virtual bool IsEndingDrag() const = 0;
+  virtual bool IsAnimatingDragEnd() const = 0;
 
   // Immediately completes any ongoing end drag animations, returning the tabs
   // to the associated TabContainer immediately.
-  virtual void FinishEndingDrag() = 0;
+  virtual void CompleteEndDragAnimations() = 0;
 
   // Returns the width of the region in which dragged tabs are allowed to exist.
   virtual int GetTabDragAreaWidth() const = 0;
@@ -52,11 +55,13 @@ class TabDragContextBase : public views::View {
 // Provides tabstrip functionality specifically for TabDragController, much of
 // which should not otherwise be in TabStrip's public interface.
 class TabDragContext : public TabDragContextBase {
+  METADATA_HEADER(TabDragContext, TabDragContextBase)
+
  public:
   ~TabDragContext() override = default;
 
   virtual Tab* GetTabAt(int index) const = 0;
-  virtual int GetIndexOf(const TabSlotView* view) const = 0;
+  virtual absl::optional<int> GetIndexOf(const TabSlotView* view) const = 0;
   virtual int GetTabCount() const = 0;
   virtual bool IsTabPinned(const Tab* tab) const = 0;
   virtual int GetPinnedTabCount() const = 0;
@@ -70,6 +75,8 @@ class TabDragContext : public TabDragContextBase {
   // Takes ownership of |controller|.
   virtual void OwnDragController(
       std::unique_ptr<TabDragController> controller) = 0;
+
+  virtual views::ScrollView* GetScrollView() = 0;
 
   // Releases ownership of the current TabDragController.
   [[nodiscard]] virtual std::unique_ptr<TabDragController>

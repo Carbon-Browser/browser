@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,9 @@ struct JsCommunication::DocumentStartJavaScript {
 JsCommunication::JsCommunication(content::RenderFrame* render_frame)
     : RenderFrameObserver(render_frame),
       RenderFrameObserverTracker<JsCommunication>(render_frame) {
-  render_frame->GetAssociatedInterfaceRegistry()->AddInterface(
-      base::BindRepeating(&JsCommunication::BindPendingReceiver,
-                          base::Unretained(this)));
+  render_frame->GetAssociatedInterfaceRegistry()
+      ->AddInterface<mojom::JsCommunication>(base::BindRepeating(
+          &JsCommunication::BindPendingReceiver, base::Unretained(this)));
 }
 
 JsCommunication::~JsCommunication() = default;

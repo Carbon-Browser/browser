@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ bool TryCoalesceString(std::vector<base::Value::Dict>* buffer,
   if (!IsTextNode(last_child))
     return false;
   std::string* old_text = last_child.FindString("value");
-  old_text->append(text.data(), text.size());
+  old_text->append(text);
   return true;
 }
 
@@ -91,7 +91,7 @@ LogBuffer::LogBuffer(LogBuffer&& other) noexcept = default;
 LogBuffer& LogBuffer::operator=(LogBuffer&& other) = default;
 LogBuffer::~LogBuffer() = default;
 
-base::Value LogBuffer::RetrieveResult() {
+absl::optional<base::Value::Dict> LogBuffer::RetrieveResult() {
   // The buffer should always start with a fragment.
   DCHECK(buffer_.size() >= 1);
 
@@ -101,15 +101,16 @@ base::Value LogBuffer::RetrieveResult() {
 
   auto* children = buffer_[0].FindList("children");
   if (!children || children->empty())
-    return base::Value();
+    return absl::nullopt;
 
   // If the fragment has a single child, remove it from |children| and return
   // that directly.
   if (children->size() == 1) {
-    return std::move(std::move(*children).back());
+    return absl::optional<base::Value::Dict>(
+        std::move((*children).back().GetDict()));
   }
 
-  return base::Value(std::exchange(buffer_.back(), CreateEmptyFragment()));
+  return std::exchange(buffer_.back(), CreateEmptyFragment());
 }
 
 LogBuffer& operator<<(LogBuffer& buf, Tag&& tag) {
@@ -188,13 +189,12 @@ LogBuffer& operator<<(LogBuffer& buf, LogBuffer&& buffer) {
   if (!buf.active())
     return buf;
 
-  base::Value node_to_add(buffer.RetrieveResult());
-  if (node_to_add.is_none())
+  absl::optional<base::Value::Dict> node_to_add = buffer.RetrieveResult();
+  if (!node_to_add)
     return buf;
 
-  base::Value::Dict* node_to_add_dict = &node_to_add.GetDict();
-  if (IsFragment(*node_to_add_dict)) {
-    auto* children = node_to_add_dict->FindList("children");
+  if (IsFragment(*node_to_add)) {
+    auto* children = node_to_add->FindList("children");
     if (!children)
       return buf;
     for (auto& child : *children) {
@@ -203,7 +203,7 @@ LogBuffer& operator<<(LogBuffer& buf, LogBuffer&& buffer) {
     }
     return buf;
   }
-  AppendChildToLastNode(&buf.buffer_, std::move(*node_to_add_dict));
+  AppendChildToLastNode(&buf.buffer_, std::move(*node_to_add));
   return buf;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,7 @@ class JSONArray;
 class JSONObject;
 class PendingLayer;
 
-class PLATFORM_EXPORT ContentLayerClientImpl : public cc::ContentLayerClient,
-                                               public LayerAsJSONClient {
+class PLATFORM_EXPORT ContentLayerClientImpl : public cc::ContentLayerClient {
   USING_FAST_MALLOC(ContentLayerClientImpl);
 
  public:
@@ -38,10 +37,10 @@ class PLATFORM_EXPORT ContentLayerClientImpl : public cc::ContentLayerClient,
   }
   bool FillsBoundsCompletely() const final { return false; }
 
-  // LayerAsJSONClient implementation
+  // For LayersAsJSON.
   void AppendAdditionalInfoAsJSON(LayerTreeFlags,
                                   const cc::Layer&,
-                                  JSONObject&) const override;
+                                  JSONObject&) const;
 
   cc::Layer& Layer() const { return *cc_picture_layer_.get(); }
 

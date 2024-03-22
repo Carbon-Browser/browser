@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,11 +53,11 @@ class CrostiniThrottle : public KeyedService, public ash::ThrottleService {
     delegate_ = std::move(delegate);
   }
 
+  static void EnsureFactoryBuilt();
+
  private:
   // ash::ThrottleService:
   void ThrottleInstance(bool should_throttle) override;
-  void RecordCpuRestrictionDisabledUMA(const std::string& observer_name,
-                                       base::TimeDelta delta) override {}
 
   std::unique_ptr<Delegate> delegate_;
 };

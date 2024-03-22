@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -187,6 +187,28 @@ mediaApp.AbstractFileList.prototype.filterInPlace = function(filter) {};
 
 
 /**
+ * Represents a box with top-left coordinates and a width and height.
+ * @param {number} left Left.
+ * @param {number} top Top.
+ * @param {number} width Width.
+ * @param {number} height Height.
+ * @struct
+ * @constructor
+ */
+mediaApp.Rect = function(left, top, width, height) {
+  // These fields match rect.js from the closure library.
+  /* @type {number} */
+  this.left = left;
+  /* @type {number} */
+  this.top = top;
+  /* @type {number} */
+  this.width = width;
+  /* @type {number} */
+  this.height = height;
+};
+
+
+/**
  * The delegate which exposes open source privileged WebUi functions to
  * MediaApp.
  * @record
@@ -255,6 +277,12 @@ mediaApp.ClientApiDelegate.prototype.openUrlInBrowserTab = function(url) {};
  * @type {function()|undefined}
  */
 mediaApp.ClientApiDelegate.prototype.reloadMainFrame = function() {};
+/**
+ * Indicates to the WebUI Controller that a trigger for displaying the PDF HaTS
+ * survey has occurred.
+ * @type {function()|undefined}
+ */
+mediaApp.ClientApiDelegate.prototype.maybeTriggerPdfHats = function() {};
 
 /**
  * The client Api for interacting with the media app instance.
@@ -268,6 +296,12 @@ mediaApp.ClientApi = function() {};
  * @return {!Promise<undefined>}
  */
 mediaApp.ClientApi.prototype.loadFiles = function(files) {};
+/**
+ * If a document is currently loaded, scrolls and zooms to the given viewport.
+ * @param {!mediaApp.Rect} viewport
+ * @return {!Promise<undefined>}
+ */
+mediaApp.ClientApi.prototype.setViewport = function(viewport) {};
 /**
  * Sets the delegate through which MediaApp can access open-source privileged
  * WebUI methods.

@@ -1,21 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/ios/ios_util.h"
+#import "base/ios/ios_util.h"
 #import "ios/chrome/browser/ui/autofill/autofill_app_interface.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/app_launch_configuration.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util_mac.h"
 
 using chrome_test_util::ButtonWithAccessibilityLabel;
 using chrome_test_util::ButtonWithAccessibilityLabelId;
@@ -301,8 +297,9 @@ id<GREYMatcher> CardNumberIconView(NSString* icon_type) {
       assertWithMatcher:grey_not(grey_sufficientlyVisible())];
 
   // Clearing the text enables the edit icon.
+  // TODO(crbug.com/1454514): Revert to grey_clearText when fixed in EG.
   [[EarlGrey selectElementWithMatcher:CardNumberTextField()]
-      performAction:grey_clearText()];
+      performAction:grey_replaceText(@"")];
   [[EarlGrey selectElementWithMatcher:CardNumberIconView(kEditIconIdentifier)]
       assertWithMatcher:grey_sufficientlyVisible()];
 }
@@ -311,16 +308,16 @@ id<GREYMatcher> CardNumberIconView(NSString* icon_type) {
 // the fields valid.
 - (void)testAddButtonDisabledTillValidForm {
   [[EarlGrey selectElementWithMatcher:CardNumberTextField()]
-      performAction:grey_typeText(@"4111111111111111")];
+      performAction:grey_replaceText(@"4111111111111111")];
   [[EarlGrey selectElementWithMatcher:MonthOfExpiryTextField()]
-      performAction:grey_typeText(@"12")];
+      performAction:grey_replaceText(@"12")];
   [[EarlGrey selectElementWithMatcher:YearOfExpiryTextField()]
-      performAction:grey_typeText(@"299")];
+      performAction:grey_replaceText(@"299")];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::AddCreditCardButton()]
       assertWithMatcher:grey_allOf(grey_not(grey_enabled()),
                                    grey_sufficientlyVisible(), nil)];
   [[EarlGrey selectElementWithMatcher:YearOfExpiryTextField()]
-      performAction:grey_typeText(@"9")];
+      performAction:grey_replaceText(@"2999")];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::AddCreditCardButton()]
       assertWithMatcher:grey_allOf(grey_enabled(), grey_sufficientlyVisible(),
                                    nil)];

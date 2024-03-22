@@ -1,28 +1,17 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/permissions/bluetooth_chooser_controller.h"
 
-#include <algorithm>
-
 #include "base/check_op.h"
-#include "base/debug/dump_without_crashing.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace permissions {
-
-namespace {
-
-void RecordInteractionWithChooser(bool has_null_handler) {
-  UMA_HISTOGRAM_BOOLEAN("Bluetooth.Web.ChooserInteraction", has_null_handler);
-}
-
-}  // namespace
 
 BluetoothChooserController::BluetoothChooserController(
     content::RenderFrameHost* owner,
@@ -80,16 +69,12 @@ bool BluetoothChooserController::IsPaired(size_t index) const {
 }
 
 std::u16string BluetoothChooserController::GetOption(size_t index) const {
-  // Change these back to DCHECKs once https://crbug.com/1292234 is resolved.
-  if (index >= devices_.size())
-    base::debug::DumpWithoutCrashing();
+  DCHECK_LT(index, devices_.size());
   const std::string& device_id = devices_[index].id;
   const auto& device_name_it = device_id_to_name_map_.find(device_id);
-  if (device_name_it == device_id_to_name_map_.end())
-    base::debug::DumpWithoutCrashing();
+  DCHECK(device_name_it != device_id_to_name_map_.end());
   const auto& it = device_name_counts_.find(device_name_it->second);
-  if (it == device_name_counts_.end())
-    base::debug::DumpWithoutCrashing();
+  DCHECK(it != device_name_counts_.end());
   return it->second == 1
              ? device_name_it->second
              : l10n_util::GetStringFUTF16(
@@ -98,7 +83,6 @@ std::u16string BluetoothChooserController::GetOption(size_t index) const {
 }
 
 void BluetoothChooserController::RefreshOptions() {
-  RecordInteractionWithChooser(event_handler_.is_null());
   if (event_handler_.is_null())
     return;
   ClearAllDevices();
@@ -108,7 +92,6 @@ void BluetoothChooserController::RefreshOptions() {
 void BluetoothChooserController::Select(const std::vector<size_t>& indices) {
   DCHECK_EQ(1u, indices.size());
   size_t index = indices[0];
-  RecordInteractionWithChooser(event_handler_.is_null());
   if (event_handler_.is_null()) {
     return;
   }
@@ -119,7 +102,6 @@ void BluetoothChooserController::Select(const std::vector<size_t>& indices) {
 }
 
 void BluetoothChooserController::Cancel() {
-  RecordInteractionWithChooser(event_handler_.is_null());
   if (event_handler_.is_null())
     return;
   event_handler_.Run(content::BluetoothChooserEvent::CANCELLED, std::string());
@@ -127,7 +109,6 @@ void BluetoothChooserController::Cancel() {
 }
 
 void BluetoothChooserController::Close() {
-  RecordInteractionWithChooser(event_handler_.is_null());
   if (event_handler_.is_null())
     return;
   event_handler_.Run(content::BluetoothChooserEvent::CANCELLED, std::string());
@@ -204,10 +185,7 @@ void BluetoothChooserController::AddOrUpdateDevice(
     }
 
     auto device_it =
-        std::find_if(devices_.begin(), devices_.end(),
-                     [&device_id](const BluetoothDeviceInfo& device) {
-                       return device.id == device_id;
-                     });
+        base::ranges::find(devices_, device_id, &BluetoothDeviceInfo::id);
 
     DCHECK(device_it != devices_.end());
     // When Bluetooth device scanning stops, the |signal_strength_level|
@@ -236,10 +214,7 @@ void BluetoothChooserController::RemoveDevice(const std::string& device_id) {
     return;
 
   auto device_it =
-      std::find_if(devices_.begin(), devices_.end(),
-                   [&device_id](const BluetoothDeviceInfo& device) {
-                     return device.id == device_id;
-                   });
+      base::ranges::find(devices_, device_id, &BluetoothDeviceInfo::id);
 
   if (device_it != devices_.end()) {
     size_t index = device_it - devices_.begin();

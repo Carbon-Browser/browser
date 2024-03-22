@@ -1,9 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {Account, ArcAccountPickerBrowserProxy, ArcAccountPickerBrowserProxyImpl} from 'chrome://chrome-signin/arc_account_picker/arc_account_picker_browser_proxy.js';
-import {TestBrowserProxy} from '../../test_browser_proxy.js';
+import {TestBrowserProxy} from 'chrome://webui-test/chromeos/test_browser_proxy.js';
 
 /**
  * @param {!TestArcAccountPickerBrowserProxy} testBrowserProxy

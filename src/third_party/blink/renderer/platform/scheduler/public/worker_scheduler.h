@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/frame_or_worker_scheduler.h"
 
 namespace blink {
+class VirtualTimeController;
 namespace scheduler {
 
 class WorkerSchedulerProxy;
@@ -60,6 +61,8 @@ class PLATFORM_EXPORT WorkerScheduler : public FrameOrWorkerScheduler {
   // Initializes this on a worker thread. This must not be called twice or more.
   // `delegate` must outlive this.
   virtual void InitializeOnWorkerThread(Delegate* delegate) = 0;
+
+  virtual VirtualTimeController* GetVirtualTimeController() = 0;
 };
 
 }  // namespace scheduler

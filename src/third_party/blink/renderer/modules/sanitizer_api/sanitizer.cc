@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "third_party/blink/renderer/core/dom/dom_implementation.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/node.h"
+#include "third_party/blink/renderer/core/dom/node_cloning_data.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
 #include "third_party/blink/renderer/core/dom/range.h"
 #include "third_party/blink/renderer/core/editing/serializers/serialization.h"
@@ -116,6 +117,7 @@ Element* Sanitizer::sanitizeFor(ScriptState* script_state,
                                  .WithURL(window->Url())
                                  .WithTypeFrom("text/html")
                                  .WithExecutionContext(window)
+                                 .WithAgent(*window->GetAgent())
                                  .CreateDocument();
   Element* element = inert_document->CreateElementForBinding(
       AtomicString(local_name), exception_state);
@@ -193,8 +195,8 @@ DocumentFragment* Sanitizer::PrepareFragment(LocalDOMWindow* window,
                         WebFeature::kSanitizerAPIFromDocument);
       DocumentFragment* fragment =
           input->GetAsDocument()->createDocumentFragment();
-      fragment->CloneChildNodesFrom(*(input->GetAsDocument()->body()),
-                                    CloneChildrenFlag::kClone);
+      NodeCloningData data{CloneOption::kIncludeDescendants};
+      fragment->CloneChildNodesFrom(*(input->GetAsDocument()->body()), data);
       return fragment;
     }
     case V8SanitizerInput::ContentType::kDocumentFragment:

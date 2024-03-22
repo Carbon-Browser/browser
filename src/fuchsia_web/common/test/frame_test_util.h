@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <fuchsia/mem/cpp/fidl.h>
 #include <fuchsia/web/cpp/fidl.h>
 
+#include <optional>
 #include "base/strings/string_piece.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Uses |navigation_controller| to load |url| with |load_url_params|. Returns
 // after the load is completed. Returns true if the load was successful, false
@@ -25,9 +25,9 @@ bool LoadUrlAndExpectResponse(
     base::StringPiece url);
 
 // Executes |script| in the context of |frame|'s top-level document.
-// Returns an un-set |absl::optional<>| on failure.
-absl::optional<base::Value> ExecuteJavaScript(fuchsia::web::Frame* frame,
-                                              base::StringPiece script);
+// Returns an un-set |std::optional<>| on failure.
+std::optional<base::Value> ExecuteJavaScript(fuchsia::web::Frame* frame,
+                                             base::StringPiece script);
 
 // Creates and returns a LoadUrlParams with was_user_activated set to true.
 // This allows user actions to propagate to the frame, allowing features such as

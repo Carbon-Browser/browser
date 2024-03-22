@@ -42,8 +42,8 @@
 
 namespace blink {
 
-static const int kMsecPerMinute = 60 * 1000;
-static const int kMsecPerSecond = 1000;
+static constexpr int kMsecPerMinute = base::Minutes(1).InMilliseconds();
+static constexpr int kMsecPerSecond = base::Seconds(1).InMilliseconds();
 
 String BaseTemporalInputType::BadInputText() const {
   return GetLocale().QueryString(IDS_FORM_VALIDATION_BAD_INPUT_DATETIME);
@@ -87,7 +87,7 @@ void BaseTemporalInputType::SetValueAsDouble(
 }
 
 bool BaseTemporalInputType::TypeMismatchFor(const String& value) const {
-  return !value.IsEmpty() && !ParseToDateComponents(value, nullptr);
+  return !value.empty() && !ParseToDateComponents(value, nullptr);
 }
 
 bool BaseTemporalInputType::TypeMismatch() const {
@@ -124,10 +124,6 @@ Decimal BaseTemporalInputType::DefaultValueForStepUp() const {
       ConvertToLocalTime(base::Time::Now()).InMillisecondsF());
 }
 
-bool BaseTemporalInputType::IsSteppable() const {
-  return true;
-}
-
 Decimal BaseTemporalInputType::ParseToNumber(
     const String& source,
     const Decimal& default_value) const {
@@ -141,7 +137,7 @@ Decimal BaseTemporalInputType::ParseToNumber(
 
 bool BaseTemporalInputType::ParseToDateComponents(const String& source,
                                                   DateComponents* out) const {
-  if (source.IsEmpty())
+  if (source.empty())
     return false;
   DateComponents ignored_result;
   if (!out)
@@ -174,7 +170,8 @@ String BaseTemporalInputType::SerializeWithDate(
     const absl::optional<base::Time>& value) const {
   if (!value)
     return g_empty_string;
-  return Serialize(Decimal::FromDouble(value->ToJsTimeIgnoringNull()));
+  return Serialize(
+      Decimal::FromDouble(value->InMillisecondsFSinceUnixEpochIgnoringNull()));
 }
 
 String BaseTemporalInputType::LocalizeValue(
@@ -184,7 +181,7 @@ String BaseTemporalInputType::LocalizeValue(
     return proposed_value;
 
   String localized = GetElement().GetLocale().FormatDateTime(date);
-  return localized.IsEmpty() ? proposed_value : localized;
+  return localized.empty() ? proposed_value : localized;
 }
 
 String BaseTemporalInputType::VisibleValue() const {
@@ -208,7 +205,7 @@ bool BaseTemporalInputType::ValueMissing(const String& value) const {
   // For text-mode input elements (including dates), the value is missing only
   // if it is mutable.
   // https://html.spec.whatwg.org/multipage/input.html#the-required-attribute
-  return GetElement().IsRequired() && value.IsEmpty() &&
+  return GetElement().IsRequired() && value.empty() &&
          !GetElement().IsDisabledOrReadOnly();
 }
 

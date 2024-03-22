@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,10 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "device/bluetooth/test/fake_device_information_winrt.h"
@@ -133,8 +134,8 @@ class FakeBluetoothLEDeviceWinrt
 
   void SimulateDevicePaired(bool is_paired);
   void SimulatePairingPinCode(std::string pin_code);
-  void SimulatePairingKind(
-      ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind);
+  void SimulateConfirmOnly();
+  void SimulateDisplayPin(std::string_view display_pin);
   absl::optional<BluetoothUUID> GetTargetGattService() const;
   void SimulateGattConnection();
   void SimulateGattConnectionError(

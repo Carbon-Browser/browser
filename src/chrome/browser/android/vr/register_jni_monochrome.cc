@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/vr/register_jni.h"
 
 #include "chrome/browser/android/vr/register_gvr_jni.h"
+#include "device/vr/buildflags/buildflags.h"
 
 namespace vr {
 
@@ -17,9 +18,12 @@ bool RegisterJni(JNIEnv* env) {
   // GEN_JNI.java which is present in the base module, so do not need manual
   // registration. Since GVR has native methods outside of GEN_JNI.java which
   // are not present in the base module, these must be manually registered.
+#if BUILDFLAG(ENABLE_GVR_SERVICES)
   if (!vr::RegisterGvrJni(env)) {
     return false;
   }
+#endif
+
   return true;
 }
 

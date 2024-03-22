@@ -1,9 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/test/test_url_loader_factory.h"
 
+#include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
@@ -137,7 +138,7 @@ TEST_F(TestURLLoaderFactoryTest, Redirects) {
   redirect_info.status_code = 301;
   redirect_info.new_url = GURL("http://example2.test/");
   TestURLLoaderFactory::Redirects redirects;
-  redirects.push_back({redirect_info, mojom::URLResponseHead::New()});
+  redirects.emplace_back(redirect_info, mojom::URLResponseHead::New());
   URLLoaderCompletionStatus status;
   std::string content = "foo";
   factory()->AddResponse(url, mojom::URLResponseHead::New(), content, status,
@@ -271,6 +272,21 @@ TEST_F(TestURLLoaderFactoryTest, SimulateResponse) {
   EXPECT_TRUE(
       mojo::BlockingCopyToString(client()->response_body_release(), &response));
   EXPECT_EQ("hello", response);
+}
+
+TEST_F(TestURLLoaderFactoryTest, SimulateResponseWait) {
+  std::string url = "http://foo/";
+  network::URLLoaderCompletionStatus ok_status(net::OK);
+  mojom::URLResponseHeadPtr response_head =
+      CreateURLResponseHead(net::HTTP_NOT_FOUND);
+  response_head->headers->SetHeader("Foo", "Bar");
+
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindLambdaForTesting([&]() { StartRequest(url); }));
+
+  EXPECT_TRUE(factory()->SimulateResponseForPendingRequest(
+      GURL(url), ok_status, response_head.Clone(), /*content=*/"",
+      TestURLLoaderFactory::ResponseMatchFlags::kWaitForRequest));
 }
 
 TEST_F(TestURLLoaderFactoryTest, SimulateResponseMultipleRequests) {

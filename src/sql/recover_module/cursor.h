@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,12 +63,10 @@ class VirtualCursor {
   // |sqlite_cursor| must have been returned by VirtualTable::SqliteCursor().
   static inline VirtualCursor* FromSqliteCursor(
       sqlite3_vtab_cursor* sqlite_cursor) {
-    static_assert(std::is_standard_layout<VirtualCursor>::value,
-                  "needed for the reinterpret_cast below");
-    static_assert(offsetof(VirtualCursor, sqlite_cursor_) == 0,
-                  "sqlite_cursor_ must be the first member of the class");
-    VirtualCursor* result = reinterpret_cast<VirtualCursor*>(sqlite_cursor);
-    DCHECK_EQ(sqlite_cursor, &result->sqlite_cursor_);
+    VirtualCursor* result = reinterpret_cast<VirtualCursor*>(
+        (reinterpret_cast<char*>(sqlite_cursor) -
+         offsetof(VirtualCursor, sqlite_cursor_)));
+    CHECK_EQ(sqlite_cursor, &result->sqlite_cursor_);
     return result;
   }
 

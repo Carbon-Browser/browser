@@ -1,18 +1,19 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/declarative_net_request/ruleset_manager.h"
 
-#include <algorithm>
 #include <iterator>
+#include <optional>
 #include <tuple>
-
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "components/web_cache/browser/web_cache_manager.h"
@@ -29,7 +30,6 @@
 #include "extensions/browser/extension_util.h"
 #include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 namespace extensions {
@@ -83,7 +83,7 @@ void RulesetManager::AddRuleset(const ExtensionId& extension_id,
 
   bool inserted =
       rulesets_
-          .emplace(extension_id, prefs_->GetInstallTime(extension_id),
+          .emplace(extension_id, prefs_->GetLastUpdateTime(extension_id),
                    std::move(matcher))
           .second;
   DCHECK(inserted) << "AddRuleset called twice in succession for "
@@ -138,11 +138,8 @@ const CompositeMatcher* RulesetManager::GetMatcherForExtension(
   // This is O(n) but it's ok since the number of extensions will be small and
   // we have to maintain the rulesets sorted in decreasing order of installation
   // time.
-  auto iter =
-      std::find_if(rulesets_.begin(), rulesets_.end(),
-                   [&extension_id](const ExtensionRulesetData& ruleset) {
-                     return ruleset.extension_id == extension_id;
-                   });
+  auto iter = base::ranges::find(rulesets_, extension_id,
+                                 &ExtensionRulesetData::extension_id);
 
   // There must be ExtensionRulesetData corresponding to this |extension_id|.
   if (iter == rulesets_.end())
@@ -192,10 +189,8 @@ bool RulesetManager::HasExtraHeadersMatcherForRequest(
                 "Modify this method to ensure HasExtraHeadersMatcherForRequest "
                 "is updated as new actions are added.");
 
-  return std::any_of(
-      actions.begin(), actions.end(), [](const RequestAction& action) {
-        return action.type == RequestAction::Type::MODIFY_HEADERS;
-      });
+  return base::Contains(actions, RequestAction::Type::MODIFY_HEADERS,
+                        &RequestAction::type);
 }
 
 void RulesetManager::OnRenderFrameCreated(content::RenderFrameHost* host) {
@@ -242,7 +237,7 @@ bool RulesetManager::ExtensionRulesetData::operator<(
          std::tie(other.extension_install_time, other.extension_id);
 }
 
-absl::optional<RequestAction> RulesetManager::GetBeforeRequestAction(
+std::optional<RequestAction> RulesetManager::GetBeforeRequestAction(
     const std::vector<RulesetAndPageAccess>& rulesets,
     const WebRequestInfo& request,
     const RequestParams& params) const {
@@ -253,7 +248,7 @@ absl::optional<RequestAction> RulesetManager::GetBeforeRequestAction(
 
   // The priorities of actions between different extensions is different from
   // the priorities of actions within an extension.
-  const auto action_priority = [](const absl::optional<RequestAction>& action) {
+  const auto action_priority = [](const std::optional<RequestAction>& action) {
     if (!action.has_value())
       return 0;
     switch (action->type) {
@@ -272,7 +267,7 @@ absl::optional<RequestAction> RulesetManager::GetBeforeRequestAction(
     }
   };
 
-  absl::optional<RequestAction> action;
+  std::optional<RequestAction> action;
 
   // This iterates in decreasing order of extension installation time. Hence
   // more recently installed extensions get higher priority in choosing the
@@ -377,7 +372,7 @@ std::vector<RequestAction> RulesetManager::EvaluateRequestInternal(
   }
 
   const RequestParams params(request);
-  absl::optional<RequestAction> before_request_action =
+  std::optional<RequestAction> before_request_action =
       GetBeforeRequestAction(rulesets_to_evaluate, request, params);
 
   if (before_request_action) {

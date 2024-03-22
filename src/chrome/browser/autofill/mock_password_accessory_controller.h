@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,6 +40,9 @@ class MockPasswordAccessoryController : public PasswordAccessoryController {
               (override));
   MOCK_METHOD(void, DidNavigateMainFrame, ());
   MOCK_METHOD(void,
+              UpdateCredManReentryUi,
+              (autofill::mojom::FocusedFieldType));
+  MOCK_METHOD(void,
               RegisterFillingSourceObserver,
               (FillingSourceObserver),
               (override));
@@ -51,6 +54,10 @@ class MockPasswordAccessoryController : public PasswordAccessoryController {
               OnFillingTriggered,
               (autofill::FieldGlobalId, const autofill::AccessorySheetField&),
               (override));
+  MOCK_METHOD((void),
+              OnPasskeySelected,
+              (const std::vector<uint8_t>& credential_id),
+              (override));
   MOCK_METHOD(void,
               OnOptionSelected,
               (autofill::AccessoryAction selected_action),
@@ -59,6 +66,13 @@ class MockPasswordAccessoryController : public PasswordAccessoryController {
               OnToggleChanged,
               (autofill::AccessoryAction toggled_action, bool enabled),
               (override));
+
+  base::WeakPtr<PasswordAccessoryController> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<MockPasswordAccessoryController> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_AUTOFILL_MOCK_PASSWORD_ACCESSORY_CONTROLLER_H_

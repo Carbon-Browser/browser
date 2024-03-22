@@ -1,11 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SERVICES_UNZIP_PUBLIC_CPP_UNZIP_H_
 #define COMPONENTS_SERVICES_UNZIP_PUBLIC_CPP_UNZIP_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "components/services/unzip/public/mojom/unzipper.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -52,9 +53,7 @@ void GetExtractedInfo(mojo::PendingRemote<mojom::Unzipper> unzipper,
                       const base::FilePath& zip_file,
                       GetExtractedInfoCallback result_callback);
 
-namespace {
 class UnzipParams;
-}
 
 // Class that wraps the unzip service to manage the lifetime of its
 // mojo conncections to enable cancellation, etc.
@@ -86,7 +85,6 @@ class ZipFileUnpacker : public base::RefCountedThreadSafe<ZipFileUnpacker> {
 
   base::File zip_file_;
   scoped_refptr<UnzipParams> params_;
-  mojo::PendingRemote<filesystem::mojom::Directory> directory_remote_;
   mojo::PendingRemote<unzip::mojom::UnzipFilter> filter_remote_;
   mojo::PendingRemote<unzip::mojom::UnzipListener> listener_remote_;
 };

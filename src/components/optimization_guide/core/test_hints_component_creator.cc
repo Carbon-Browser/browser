@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -124,9 +124,7 @@ void TestHintsComponentCreator::WriteConfigToFile(
   std::string serialized_config;
   ASSERT_TRUE(config.SerializeToString(&serialized_config));
 
-  ASSERT_EQ(static_cast<int32_t>(serialized_config.length()),
-            base::WriteFile(file_path, serialized_config.data(),
-                            serialized_config.length()));
+  ASSERT_TRUE(base::WriteFile(file_path, serialized_config));
 }
 
 optimization_guide::HintsComponentInfo

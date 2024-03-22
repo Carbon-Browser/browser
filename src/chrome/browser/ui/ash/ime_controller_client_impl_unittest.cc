@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,13 @@
 #include <vector>
 
 #include "ash/public/cpp/ime_info.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ui/ash/test_ime_controller.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ime/ash/fake_input_method_delegate.h"
 #include "ui/base/ime/ash/ime_bridge.h"
 #include "ui/base/ime/ash/input_method_descriptor.h"
@@ -49,10 +50,12 @@ class TestInputMethodManager : public MockInputMethodManager {
       std::vector<std::string> languages({"en-US"});
       InputMethodDescriptor ime1("id1", "name1", "indicator1", layout,
                                  languages, true /* is_login_keyboard */,
-                                 GURL(), GURL());
+                                 GURL(), GURL(),
+                                 /*handwriting_language=*/absl::nullopt);
       InputMethodDescriptor ime2("id2", "name2", "indicator2", layout,
                                  languages, false /* is_login_keyboard */,
-                                 GURL(), GURL());
+                                 GURL(), GURL(),
+                                 /*handwriting_language=*/absl::nullopt);
       current_ime_id_ = ime1.id();
       input_methods_ = {ime1, ime2};
     }
@@ -67,10 +70,9 @@ class TestInputMethodManager : public MockInputMethodManager {
       current_ime_id_ = input_method_id;
       last_show_message_ = show_message;
     }
-    std::unique_ptr<std::vector<InputMethodDescriptor>>
+    std::vector<InputMethodDescriptor>
     GetEnabledInputMethodsSortedByLocalizedDisplayNames() const override {
-      return std::make_unique<std::vector<InputMethodDescriptor>>(
-          input_methods_);
+      return input_methods_;
     }
     const InputMethodDescriptor* GetInputMethodFromId(
         const std::string& input_method_id) const override {
@@ -246,7 +248,7 @@ TEST_F(ImeControllerClientImplTest, ShowImeMenuOnShelf) {
 TEST_F(ImeControllerClientImplTest, InputMethodChanged) {
   auto mock_candidate_window =
       std::make_unique<ash::MockIMECandidateWindowHandler>();
-  ui::IMEBridge::Get()->SetCandidateWindowHandler(mock_candidate_window.get());
+  ash::IMEBridge::Get()->SetCandidateWindowHandler(mock_candidate_window.get());
 
   ImeControllerClientImpl client(&input_method_manager_);
   client.Init();

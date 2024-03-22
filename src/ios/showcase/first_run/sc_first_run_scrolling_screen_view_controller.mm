@@ -1,16 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/showcase/first_run/sc_first_run_scrolling_screen_view_controller.h"
 
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 
 @interface SCFirstRunScrollingScreenViewController ()
 
@@ -43,7 +39,7 @@
   self.readMoreString =
       l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SCREEN_READ_MORE);
   self.bannerName = @"Sample-banner";
-  self.isTallBanner = NO;
+  self.bannerSize = BannerImageSizeType::kStandard;
   self.scrollToEndMandatory = YES;
 
   // Add some screen-specific content and its constraints.

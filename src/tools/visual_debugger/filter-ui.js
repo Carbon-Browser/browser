@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 const MDCMenu = mdc.menu.MDCMenu;
 const MDCMenuFoundation = mdc.menu.MDCMenuFoundation;
+const maxZIndex = 999;
 
 class FilterUI extends HTMLElement {
   constructor() {
@@ -40,15 +41,16 @@ class FilterUI extends HTMLElement {
     <div class='row'>
       <div class='label' title='Filter annotation to match.
       For example frame.root.damage' >Annotation </div>
-        <div class='input'>
-          <input placeholder='Substring to match' id='annotation' size=40>
-          <!-- TODO: A fancy drop-down here would be nice. -->
-        </div>
+      <div class='input'>
+        <input list="knownAnnotations" placeholder='Substring to match'
+         id='annotation' size=40>
+        <!-- TODO: A fancy drop-down here would be nice. -->
+      </div>
     </div>
     <div class='row'>
       <div class='label'>File name</div>
       <div class='input'>
-        <input placeholder='Substring to match  (usually empty!)'
+        <input placeholder='Substring to match (usually empty!)'
          id='filename' size=40>
         <!-- TODO: A fancy drop-down here would be nice. -->
       </div>
@@ -104,8 +106,7 @@ class FilterUI extends HTMLElement {
   }
 
   setUpButtons_() {
-    const button = this.querySelector('#saveFilter');
-    button.addEventListener('click', () => {
+    const SaveFilter = () => {
       let input = this.querySelector('#filename');
       const filename = input.value || undefined;
       input = this.querySelector('#functionname');
@@ -123,11 +124,35 @@ class FilterUI extends HTMLElement {
       this.dispatchEvent(new CustomEvent('saveFilter', {
         detail: { selector: { filename, func, anno }, action }
       }));
-    });
+    };
+
+    this.querySelector('#saveFilter').addEventListener('click', SaveFilter);
+    this.querySelector('#filter-container').addEventListener('keypress',
+      (e) => { if (e.key === 'Enter') SaveFilter(); });
   }
 };
 
 window.customElements.define('filter-ui', FilterUI);
+
+// A <datalist> element containing values of previously seen filter annotations.
+let dataListElement = undefined;
+let knownAnnotations = new Set();
+// Called when processing new sources from a frame.
+function notifyUiOfNewSource(source) {
+  if (dataListElement === undefined) {
+    dataListElement = document.createElement("datalist");
+    dataListElement.id = "knownAnnotations";
+    document.body.appendChild(dataListElement);
+  }
+
+  if (!knownAnnotations.has(source.anno)) {
+    let option = document.createElement("option");
+    option.value = source.anno;
+    dataListElement.appendChild(option);
+
+    knownAnnotations.add(source.anno);
+  }
+}
 
 function createFilterChip(filter) {
   const chip = document.createElement('div');
@@ -135,6 +160,7 @@ function createFilterChip(filter) {
   chip.setAttribute("role", "row");
   chip.style.margin = '5px';
   chip.style.borderRadius = '0px';
+  chip.style.zIndex = maxZIndex;
   if (filter.shouldDraw) {
     chip.style.border = filter.drawColor ?
       `2px solid ${filter.drawColor}` : `1px solid black`;
@@ -202,13 +228,15 @@ function createFilterChip(filter) {
 
   chip.querySelector('#filtermenu').addEventListener('click', () => {
     const menu = new MDCMenu(chip.querySelector('#filterchipmenu'));
-    menu.setAnchorMargin({ top: 25 })
+    menu.setAnchorMargin({ top: 25 });
     menu.open = true;
   });
 
   const check = chip.querySelector('input');
+  check.checked = filter.enabled;
   check.addEventListener('change', () => {
     filter.enabled = !!check.checked;
+    locallyStoreFilters();
     Player.instance.refresh();
     Filter.sendStreamFilters();
   });
@@ -220,7 +248,8 @@ function showCreateFilterPopup(anchor) {
   const filterUi = document.createElement('filter-ui');
   filterUi.addEventListener('saveFilter', (event) => {
     if (event.detail.selector && event.detail.action) {
-      const filter = new Filter(event.detail.selector, event.detail.action);
+      const filter =
+        new Filter(true, event.detail.selector, event.detail.action);
       const chip = createFilterChip(filter);
       const list = document.querySelector('#filters');
       list.appendChild(chip);
@@ -231,8 +260,9 @@ function showCreateFilterPopup(anchor) {
   filterUi.style.position = 'absolute';
   filterUi.style.top = (anchor.offsetTop + anchor.offsetHeight) + 'px';
   filterUi.style.left = (anchor.offsetLeft + 20) + 'px';
-  
-  showModal(filterUi);
+  filterUi.style.zIndex = maxZIndex;
+
+  showModal(filterUi, '#annotation');
 }
 
 // Traverses through all the filter chips and enables/disables
@@ -260,9 +290,7 @@ function refreshFilterSet() {
     }
   }
   locallyStoreFilters();
-
   Player.instance.refresh();
-
   Filter.sendStreamFilters();
 }
 
@@ -294,9 +322,9 @@ function moveNext(item) {
   refreshFilterSet();
 }
 
-function createFilterComplete(selector, action, index) {
+function createFilterComplete(enabled, selector, action, index) {
   var newFilter =
-    new Filter(selector, action, index);
+    new Filter(enabled, selector, action, index);
   const newChip = createFilterChip(newFilter);
   const list = document.querySelector('#filters');
   list.appendChild(newChip);
@@ -308,14 +336,16 @@ function createFilterComplete(selector, action, index) {
 function showEditFilterPopup(item) {
   var chip = item.closest(".mdc-chip");
   var index = Array.prototype.indexOf.call(chip.parentNode.children, chip);
+  var filter = Filter.getFilter(index);
 
   const menu = new MDCMenu(chip.querySelector('#filterchipmenu'));
   menu.open = false;
 
   const filterUi = document.createElement('filter-ui');
+  const isEnabled = filter.enabled;
   filterUi.addEventListener('saveFilter', (event) => {
     if (event.detail.selector && event.detail.action) {
-      var newChip = createFilterComplete(event.detail.selector,
+      var newChip = createFilterComplete(isEnabled, event.detail.selector,
         event.detail.action, index);
       chip.replaceWith(newChip);
     }
@@ -323,13 +353,9 @@ function showEditFilterPopup(item) {
   filterUi.style.position = 'absolute';
   filterUi.style.top = (chip.offsetTop + chip.offsetHeight) + 'px';
   filterUi.style.left = (chip.offsetLeft + 20) + 'px';
-  // Copyright 2022 The Chromium Authors. All rights reserved.
-  // Use of this source code is governed by a BSD-style license that can be
-  // found in the LICENSE file.
+  filterUi.style.zIndex = maxZIndex;
 
-  showModal(filterUi);
-
-  var filter = Filter.getFilter(index);
+  showModal(filterUi, '#annotation');
 
   // fill form from filter data
   filterUi.querySelector('#filter-ui-title').innerHTML = "Edit Filter";
@@ -364,6 +390,7 @@ function locallyStoreFilters() {
 // Restores filter instances from local storage.
 function restoreFilters() {
   const retrievedFilterString = localStorage.getItem('filterInstances');
+  console.log(" Filter string=" + retrievedFilterString);
   // Add default filters to the instances list.
   FilterUIDefault.initialize();
 
@@ -380,13 +407,13 @@ function restoreFilters() {
   // Re-create non-default filter chips from local storage.
   // Pre-existing filters are appended behind the default ones.
   retrievedFilterInstances.forEach((instance) =>
-    createFilterComplete(instance.selector_, instance.action_));
+    createFilterComplete(instance.enabled_,
+      instance.selector_, instance.action_));
 }
 
 // Checks if one filter is a duplicate of another.
 // NOTE: Custom equality check needed to avoid marking same style
-// of filters with different enabled states and indices as
-// non-duplicates.
+// of filters with different user states and indices as non-duplicates.
 function isDuplicate(filter1, filter2) {
   if (!filter1 || !filter2) {
     return false;
@@ -400,34 +427,59 @@ function isDuplicate(filter1, filter2) {
   if (filter1.selector_.anno !== filter2.selector_.anno) {
     return false;
   }
-  if (filter1.action_.skipDraw !== filter2.action_.skipDraw) {
-    return false;
-  }
-  if (filter1.action_.color !== filter2.action_.color) {
-    return false;
-  }
-  if (filter1.action_.alpha !== filter2.action_.alpha) {
-    return false;
-  }
+
   return true;
 }
 
 const defaultFilters = [
     {
-      selector_: { filename: "", func: "", anno: "frame.root.quad" },
-      action_: { skipDraw: false, color: '#000000', alpha: "10" }
+      selector_: { filename: "", func: "", anno: "frame.render_pass.meta" },
+      action_: { skipDraw: false },
+      enabled_: false
     },
     {
-      selector_: { filename: "", func: "", anno: "frame.root.damage" },
-      action_: { skipDraw: false, color: '#FF0000', alpha: "20" }
+      selector_: { filename: "", func: "", anno: "frame.render_pass.quad" },
+      action_: { skipDraw: false, color: '#000000', alpha: "10" },
+      enabled_: true
+    },
+    {
+      selector_: { filename: "", func: "", anno: "frame.render_pass.damage" },
+      action_: { skipDraw: false, color: '#FF0000', alpha: "20" },
+      enabled_: true
+    },
+    {
+      selector_: {
+        filename: "",
+        func: "",
+        anno: "frame.render_pass.output_rect",
+      },
+      action_: { skipDraw: false },
+      enabled_: false,
+    },
+    {
+      selector_: { filename: "", func: "", anno: "overlay.selected.rect" },
+      action_: { skipDraw: false, color: '#22FF22', alpha: "20" },
+      enabled_: true
+    },
+    {
+      selector_: { filename: "", func: "", anno: "overlay.outgoing.damage" },
+      action_: { skipDraw: false, color: '#AA00AA', alpha: "20" },
+      enabled_: true
+    },
+    {
+      selector_: { filename: "", func: "", anno: "frame.render_pass.material" },
+      action_: { skipDraw: false },
+      enabled_: false
     }
 ];
+
 
 // Default filters should probably load off disk.
 const FilterUIDefault = {
   initialize() {
     defaultFilters.forEach((instance) =>
-      createFilterComplete(instance.selector_, instance.action_))
+      createFilterComplete(instance.enabled_,
+                 instance.selector_, instance.action_))
   }
 };
 

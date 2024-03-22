@@ -1,11 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_MODULES_MEDIA_WEBMEDIAPLAYER_UTIL_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_MODULES_MEDIA_WEBMEDIAPLAYER_UTIL_H_
 
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "media/base/audio_renderer_sink.h"
 #include "media/base/eme_constants.h"
@@ -25,8 +24,6 @@ class MediaLog;
 
 namespace blink {
 
-class WebLocalFrame;
-
 // Translates a |url| into the appropriate URL scheme.
 BLINK_MODULES_EXPORT media::mojom::MediaURLScheme GetMediaURLScheme(
     const WebURL& url);
@@ -40,7 +37,6 @@ BLINK_MODULES_EXPORT WebMediaPlayer::NetworkState PipelineErrorToNetworkState(
 // Report various metrics to UMA.
 BLINK_MODULES_EXPORT void ReportMetrics(WebMediaPlayer::LoadType load_type,
                                         const WebURL& url,
-                                        const WebLocalFrame& frame,
                                         media::MediaLog* media_log);
 
 // Wraps a WebSetSinkIdCompleteCallback into a

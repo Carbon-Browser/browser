@@ -1,10 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/declarative_net_request/composite_matcher.h"
 
-#include <algorithm>
 #include <functional>
 #include <iterator>
 #include <set>
@@ -13,6 +12,7 @@
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "extensions/browser/api/declarative_net_request/flat/extension_ruleset_generated.h"
@@ -58,7 +58,7 @@ class ScopedGetBeforeRequestActionTimer {
 }  // namespace
 
 ActionInfo::ActionInfo() = default;
-ActionInfo::ActionInfo(absl::optional<RequestAction> action,
+ActionInfo::ActionInfo(std::optional<RequestAction> action,
                        bool notify_request_withheld)
     : action(std::move(action)),
       notify_request_withheld(notify_request_withheld) {}
@@ -77,10 +77,7 @@ CompositeMatcher::CompositeMatcher(MatcherList matchers,
 CompositeMatcher::~CompositeMatcher() = default;
 
 const RulesetMatcher* CompositeMatcher::GetMatcherWithID(RulesetID id) const {
-  auto it = std::find_if(matchers_.begin(), matchers_.end(),
-                         [&id](const std::unique_ptr<RulesetMatcher>& matcher) {
-                           return matcher->id() == id;
-                         });
+  auto it = base::ranges::find(matchers_, id, &RulesetMatcher::id);
   return it == matchers_.end() ? nullptr : it->get();
 }
 
@@ -138,14 +135,14 @@ ActionInfo CompositeMatcher::GetBeforeRequestAction(
            page_access == PermissionsData::PageAccess::kWithheld);
   }
 
-  absl::optional<RequestAction> final_action;
+  std::optional<RequestAction> final_action;
 
   // The priority of the highest priority matching allow or allowAllRequests
-  // rule within this matcher, or absl::nullopt otherwise.
-  absl::optional<uint64_t> max_allow_rule_priority;
+  // rule within this matcher, or std::nullopt otherwise.
+  std::optional<uint64_t> max_allow_rule_priority;
 
   for (const auto& matcher : matchers_) {
-    absl::optional<RequestAction> action =
+    std::optional<RequestAction> action =
         matcher->GetBeforeRequestAction(params);
     if (!action)
       continue;
@@ -175,7 +172,7 @@ ActionInfo CompositeMatcher::GetBeforeRequestAction(
   // `requires_host_permission` is true and `page_access` is withheld or denied.
   bool notify_request_withheld = page_access == PageAccess::kWithheld &&
                                  !final_action->IsAllowOrAllowAllRequests();
-  return ActionInfo(absl::nullopt, notify_request_withheld);
+  return ActionInfo(std::nullopt, notify_request_withheld);
 }
 
 std::vector<RequestAction> CompositeMatcher::GetModifyHeadersActions(
@@ -184,8 +181,8 @@ std::vector<RequestAction> CompositeMatcher::GetModifyHeadersActions(
   DCHECK(params.allow_rule_max_priority.contains(this));
 
   // The priority of the highest priority matching allow or allowAllRequests
-  // rule within this matcher, or absl::nullopt if no such rule exists.
-  absl::optional<uint64_t> max_allow_rule_priority =
+  // rule within this matcher, or std::nullopt if no such rule exists.
+  std::optional<uint64_t> max_allow_rule_priority =
       params.allow_rule_max_priority[this];
 
   for (const auto& matcher : matchers_) {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,10 @@ class COMPONENT_EXPORT(SYSTEM_MEDIA_CONTROLS) SystemMediaControls {
     kStopped,
   };
 
+  // |window| used by Windows OS for web app (dPWA) connections.
   static std::unique_ptr<SystemMediaControls> Create(
-      const std::string& product_name);
+      const std::string& product_name,
+      int window = -1);
 
   virtual ~SystemMediaControls() = default;
 

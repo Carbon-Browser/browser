@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Update the firebase project hosting the Super Size UI."""
@@ -158,7 +158,6 @@ def main():
       project_static_dir = _FirebaseInitProjectDir(project_dir)
       _CopyStaticFiles(project_static_dir,
                        include_debug_wasm=options.deploy_mode == _DEV)
-      _FirebaseLogin()
       _FillInAndCopyTemplates(project_static_dir)
       _FirebaseDeploy(project_dir, deploy_mode=options.deploy_mode)
   else:

@@ -1,43 +1,41 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_COCOA_APPLESCRIPT_ERROR_APPLESCRIPT_H_
 #define CHROME_BROWSER_UI_COCOA_APPLESCRIPT_ERROR_APPLESCRIPT_H_
 
-#import <Cocoa/Cocoa.h>
-
 namespace AppleScript {
 
-enum ErrorCode {
+enum class Error {
   // Error when default profile cannot be obtained.
-  errGetProfile = 1,
+  kGetProfile = 1,
   // Error when bookmark model fails to load.
-  errBookmarkModelLoad,
+  kBookmarkModelLoad,
   // Error when bookmark folder cannot be created.
-  errCreateBookmarkFolder,
+  kCreateBookmarkFolder,
   // Error when bookmark item cannot be created.
-  errCreateBookmarkItem,
+  kCreateBookmarkItem,
   // Error when URL entered is invalid.
-  errInvalidURL,
+  kInvalidURL,
   // Error when printing cannot be initiated.
-  errInitiatePrinting,
+  kInitiatePrinting,
   // Error when invalid tab save type is entered.
-  errInvalidSaveType,
+  kInvalidSaveType,
   // Error when invalid browser mode is entered.
-  errInvalidMode,
+  kInvalidMode,
   // Error when tab index is out of bounds.
-  errInvalidTabIndex,
+  kInvalidTabIndex,
   // Error when mode is set after browser window is created.
-  errSetMode,
+  kSetMode,
   // Error when index of browser window is out of bounds.
-  errWrongIndex,
+  kWrongIndex,
   // Error when JavaScript execution is disabled.
-  errJavaScriptUnsupported
+  kJavaScriptUnsupported
 };
 
 // This function sets an error message to the currently executing command.
-void SetError(ErrorCode errorCode);
+void SetError(Error error_code);
 }
 
 #endif  // CHROME_BROWSER_UI_COCOA_APPLESCRIPT_ERROR_APPLESCRIPT_H_

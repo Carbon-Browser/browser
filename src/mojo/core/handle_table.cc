@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 
 #include <limits>
 
-#include "base/cpu_reduction_experiment.h"
 #include "base/trace_event/memory_dump_manager.h"
 
 namespace mojo {
@@ -51,13 +50,6 @@ bool HandleTable::EntriesAccessor::Add(const MojoHandle handle, Entry entry) {
 
 const scoped_refptr<Dispatcher>* HandleTable::EntriesAccessor::GetDispatcher(
     const MojoHandle handle) {
-  // TODO(crbug.com/1295441): Remove the if-block below.
-  // This intentionally duplicates code in this function a bit, so that this
-  // entire if-block can later be removed cleanly.
-  if (!base::IsRunningCpuReductionExperiment()) {
-    const auto iter = handles_.find(handle);
-    return iter == handles_.end() ? nullptr : &iter->second.dispatcher;
-  }
   if (last_read_handle_ != MOJO_HANDLE_INVALID && last_read_handle_ == handle) {
     return &last_read_dispatcher_;
   }
@@ -137,8 +129,8 @@ bool HandleTable::AddDispatchersFromTransit(
   DCHECK_GE(next_available_handle_, 1u);
 
   // If this insertion would cause handle overflow, we're out of handles.
-  const uint64_t num_handles_available =
-      std::numeric_limits<uint64_t>::max() - next_available_handle_ + 1;
+  const uintptr_t num_handles_available =
+      std::numeric_limits<uintptr_t>::max() - next_available_handle_ + 1;
   if (num_handles_available < dispatchers.size()) {
     return false;
   }

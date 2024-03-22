@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -96,9 +96,9 @@ class SharedMemIPCServer {
     // The size of this channel.
     uint32_t channel_size;
     // The pointer to the actual channel data.
-    raw_ptr<char> channel_buffer;
+    raw_ptr<char, AllowPtrArithmetic | DanglingUntriaged> channel_buffer;
     // The pointer to the base of the shared memory.
-    raw_ptr<char> shared_base;
+    raw_ptr<char, AllowPtrArithmetic | DanglingUntriaged> shared_base;
     // A pointer to this channel's client-side control structure this structure
     // lives in the shared memory.
     raw_ptr<ChannelControl> channel;

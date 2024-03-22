@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,12 @@ import java.lang.annotation.RetentionPolicy;
  * State in which the tab was created. This can be used in metric accounting - e.g. to
  * distinguish reasons for a tab to be restored upon first display.
  */
-@IntDef({TabCreationState.LIVE_IN_FOREGROUND, TabCreationState.LIVE_IN_BACKGROUND,
-        TabCreationState.FROZEN_ON_RESTORE, TabCreationState.FROZEN_FOR_LAZY_LOAD})
+@IntDef({
+    TabCreationState.LIVE_IN_FOREGROUND,
+    TabCreationState.LIVE_IN_BACKGROUND,
+    TabCreationState.FROZEN_ON_RESTORE,
+    TabCreationState.FROZEN_FOR_LAZY_LOAD
+})
 @Retention(RetentionPolicy.SOURCE)
 public @interface TabCreationState {
     int LIVE_IN_FOREGROUND = 0;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,15 +19,6 @@ ExistingBaseSubMenuModel::ExistingBaseSubMenuModel(
       context_contents_(model->GetWebContentsAt(context_index)),
       min_command_id_(min_command_id),
       parent_new_command_id_(parent_new_command_id) {}
-
-const gfx::FontList* ExistingBaseSubMenuModel::GetLabelFontListAt(
-    size_t index) const {
-  if (GetTypeAt(index) == ui::MenuModel::TYPE_TITLE) {
-    return &ui::ResourceBundle::GetSharedInstance().GetFontList(
-        ui::ResourceBundle::BoldFont);
-  }
-  return nullptr;
-}
 
 bool ExistingBaseSubMenuModel::IsCommandIdAlerted(int command_id) const {
   return IsNewCommand(command_id) &&

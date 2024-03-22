@@ -1,10 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/platform/ax_platform_node_win.h"
 
-#include "base/command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/win/scoped_variant.h"
 #include "content/browser/accessibility/accessibility_content_browsertest.h"
@@ -20,7 +19,6 @@
 #include "content/shell/browser/shell.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "ui/accessibility/accessibility_features.h"
-#include "ui/accessibility/accessibility_switches.h"
 #include "ui/accessibility/platform/uia_registrar_win.h"
 
 using base::win::ScopedVariant;
@@ -53,13 +51,6 @@ namespace content {
 
 class AXPlatformNodeWinBrowserTest : public AccessibilityContentBrowserTest {
  protected:
-  void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kEnableAccessibilityAriaVirtualContent);
-
-    ContentBrowserTest::SetUp();
-  }
-
   template <typename T>
   ComPtr<T> QueryInterfaceFromNode(
       BrowserAccessibility* browser_accessibility) {
@@ -181,7 +172,8 @@ class AXPlatformNodeWinBrowserTest : public AccessibilityContentBrowserTest {
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
+  base::test::ScopedFeatureList scoped_feature_list_{
+      features::kEnableAccessibilityAriaVirtualContent};
 };
 
 IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinBrowserTest,
@@ -200,7 +192,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinBrowserTest,
   ASSERT_EQ(ax::mojom::Role::kStaticText, browser_accessibility->GetRole());
 
   BrowserAccessibility* iframe_browser_accessibility =
-      browser_accessibility->manager()->GetRoot();
+      browser_accessibility->manager()->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, iframe_browser_accessibility);
   ASSERT_EQ(ax::mojom::Role::kRootWebArea,
             iframe_browser_accessibility->GetRole());
@@ -224,13 +216,8 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinBrowserTest,
 }
 
 class AXPlatformNodeWinUIABrowserTest : public AXPlatformNodeWinBrowserTest {
- protected:
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    AXPlatformNodeWinBrowserTest::SetUpCommandLine(command_line);
-
-    base::CommandLine::ForCurrentProcess()->AppendSwitch(
-        ::switches::kEnableExperimentalUIAutomation);
-  }
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_{::features::kUiaProvider};
 };
 
 IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinUIABrowserTest,
@@ -264,6 +251,51 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinUIABrowserTest,
 
   UIAGetPropertyValueFlowsFromBrowserTestTemplate(
       FindNode(ax::mojom::Role::kGenericContainer, "b3"), {"a3", "c3"});
+}
+
+IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinUIABrowserTest, UIANamePropertyValue) {
+  LoadInitialAccessibilityTreeFromHtml(std::string(R"HTML(
+      <!DOCTYPE html>
+      <html>
+        <ol>
+          <li>list item 1</li>
+          <li></li>
+          <li>before <div><span>problem</span></div>, after</li>
+          <li>before <a href="https://blah.com">problem</a>, after</li>
+          <li aria-label="from author">from content</li>
+        </ol>
+      </html>
+  )HTML"));
+  BrowserAccessibility* list_node =
+      GetRootAndAssertNonNull()->PlatformGetChild(0);
+  BrowserAccessibility* item_node = list_node->PlatformGetChild(0);
+  ASSERT_NE(nullptr, item_node);
+  EXPECT_UIA_BSTR_EQ(ToBrowserAccessibilityWin(item_node)->GetCOM(),
+                     UIA_NamePropertyId, L"list item 1");
+
+  // Empty string as name should correspond to empty <li>.
+  item_node = list_node->PlatformGetChild(1);
+  ASSERT_NE(nullptr, item_node);
+  EXPECT_UIA_BSTR_EQ(ToBrowserAccessibilityWin(item_node)->GetCOM(),
+                     UIA_NamePropertyId, L"");
+
+  //  <li> with complex structure and text.
+  item_node = list_node->PlatformGetChild(2);
+  ASSERT_NE(nullptr, item_node);
+  EXPECT_UIA_BSTR_EQ(ToBrowserAccessibilityWin(item_node)->GetCOM(),
+                     UIA_NamePropertyId, L"beforeproblem, after");
+
+  // <li> with a link inside
+  item_node = list_node->PlatformGetChild(3);
+  ASSERT_NE(nullptr, item_node);
+  EXPECT_UIA_BSTR_EQ(ToBrowserAccessibilityWin(item_node)->GetCOM(),
+                     UIA_NamePropertyId, L"before problem, after");
+
+  // <li> with name specified by the author rather than by the contents.
+  item_node = list_node->PlatformGetChild(4);
+  ASSERT_NE(nullptr, item_node);
+  EXPECT_UIA_BSTR_EQ(ToBrowserAccessibilityWin(item_node)->GetCOM(),
+                     UIA_NamePropertyId, L"from author");
 }
 
 IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinUIABrowserTest,
@@ -662,7 +694,7 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinBrowserTest,
 
   // Find a node to hit test. Note that this is a really simple page,
   // so synchronous hit testing will work fine.
-  BrowserAccessibility* node = manager->GetRoot();
+  BrowserAccessibility* node = manager->GetBrowserAccessibilityRoot();
   while (node && node->GetRole() != ax::mojom::Role::kButton)
     node = manager->NextInTreeOrder(node);
   DCHECK(node);
@@ -675,7 +707,8 @@ IN_PROC_BROWSER_TEST_F(AXPlatformNodeWinBrowserTest,
   ui::AXPlatformNodeWin* root_platform_node =
       static_cast<ui::AXPlatformNodeWin*>(
           ui::AXPlatformNode::FromNativeViewAccessible(
-              manager->GetRoot()->GetNativeViewAccessible()));
+              manager->GetBrowserAccessibilityRoot()
+                  ->GetNativeViewAccessible()));
 
   // First test that calling accHitTest on the root node returns the button.
   {

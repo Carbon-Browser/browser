@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,13 +45,13 @@ blink::ItemDetails* TypeConverter<blink::ItemDetails*, ItemDetailsPtr>::Convert(
   blink::ItemDetails* output = blink::ItemDetails::Create();
   output->setItemId(input->item_id);
   output->setTitle(input->title);
-  if (!input->description.IsEmpty())
+  if (!input->description.empty())
     output->setDescription(input->description);
   output->setPrice(
       blink::PaymentEventDataConversion::ToPaymentCurrencyAmount(input->price));
-  if (input->subscription_period && !input->subscription_period.IsEmpty())
+  if (input->subscription_period && !input->subscription_period.empty())
     output->setSubscriptionPeriod(input->subscription_period);
-  if (input->free_trial_period && !input->free_trial_period.IsEmpty())
+  if (input->free_trial_period && !input->free_trial_period.empty())
     output->setFreeTrialPeriod(input->free_trial_period);
   if (input->introductory_price) {
     output->setIntroductoryPrice(
@@ -59,7 +59,7 @@ blink::ItemDetails* TypeConverter<blink::ItemDetails*, ItemDetailsPtr>::Convert(
             input->introductory_price));
   }
   if (input->introductory_price_period &&
-      !input->introductory_price_period.IsEmpty()) {
+      !input->introductory_price_period.empty()) {
     output->setIntroductoryPricePeriod(input->introductory_price_period);
   }
   if (input->introductory_price_cycles > 0)
@@ -78,7 +78,9 @@ blink::ItemDetails* TypeConverter<blink::ItemDetails*, ItemDetailsPtr>::Convert(
   WTF::Vector<WTF::String> icon_urls;
   if (input->icon_urls.has_value()) {
     for (const blink::KURL& icon_url : input->icon_urls.value()) {
-      icon_urls.push_back(icon_url.GetString());
+      if (icon_url.IsValid() && !icon_url.IsEmpty()) {
+        icon_urls.push_back(icon_url.GetString());
+      }
     }
   }
   output->setIconURLs(std::move(icon_urls));

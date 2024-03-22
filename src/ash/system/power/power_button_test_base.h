@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/system/power/power_button_controller.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
 
@@ -88,10 +89,12 @@ class PowerButtonTestBase : public AshTestBase {
   // they come too close.
   void AdvanceClockToAvoidIgnoring();
 
-  PowerButtonController* power_button_controller_ = nullptr;  // Not owned.
-  LockStateController* lock_state_controller_ = nullptr;      // Not owned.
-  PowerButtonScreenshotController* screenshot_controller_ =
-      nullptr;  // Not owned.
+  raw_ptr<PowerButtonController, DanglingUntriaged | ExperimentalAsh>
+      power_button_controller_ = nullptr;  // Not owned.
+  raw_ptr<LockStateController, DanglingUntriaged | ExperimentalAsh>
+      lock_state_controller_ = nullptr;  // Not owned.
+  raw_ptr<PowerButtonScreenshotController, DanglingUntriaged | ExperimentalAsh>
+      screenshot_controller_ = nullptr;  // Not owned.
   std::unique_ptr<LockStateControllerTestApi> lock_state_test_api_;
   std::unique_ptr<PowerButtonControllerTestApi> power_button_test_api_;
   base::SimpleTestTickClock tick_clock_;

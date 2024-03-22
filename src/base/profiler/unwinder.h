@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/base_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/profiler/frame.h"
 #include "base/profiler/module_cache.h"
 #include "base/profiler/register_context.h"
@@ -75,7 +76,7 @@ class BASE_EXPORT Unwinder {
   // is greater than the previous value and less than |stack_top|.
   virtual UnwindResult TryUnwind(RegisterContext* thread_context,
                                  uintptr_t stack_top,
-                                 std::vector<Frame>* stack) const = 0;
+                                 std::vector<Frame>* stack) = 0;
 
   Unwinder(const Unwinder&) = delete;
   Unwinder& operator=(const Unwinder&) = delete;
@@ -90,7 +91,7 @@ class BASE_EXPORT Unwinder {
   ModuleCache* module_cache() const { return module_cache_; }
 
  private:
-  ModuleCache* module_cache_ = nullptr;
+  raw_ptr<ModuleCache> module_cache_ = nullptr;
 };
 
 }  // namespace base

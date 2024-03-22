@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/memory_mapped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -21,7 +21,6 @@
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromecast/base/task_runner_impl.h"
 #if defined(ENABLE_VIDEO_WITH_MIXED_AUDIO)
@@ -90,7 +89,7 @@ VideoConfig DefaultVideoConfig() {
 
 base::FilePath GetTestDataFilePath(const std::string& name) {
   base::FilePath file_path;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &file_path));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file_path));
 
   file_path = file_path.Append(FILE_PATH_LITERAL("media"))
                   .Append(FILE_PATH_LITERAL("test"))
@@ -315,7 +314,7 @@ void BufferFeeder::Start() {
   }
   last_pushed_pts_ = std::numeric_limits<int64_t>::min();
   buffers_copy_ = buffers_;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&BufferFeeder::FeedBuffer, base::Unretained(this)));
 }
@@ -433,7 +432,7 @@ void BufferFeeder::OnPushBufferComplete(BufferStatus status) {
   if (feeding_completed_)
     return;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&BufferFeeder::FeedBuffer, base::Unretained(this)));
 }
@@ -754,7 +753,7 @@ void AudioVideoPipelineDeviceTest::Start() {
               current_pts == std::numeric_limits<int64_t>::min());
   last_pts_ = current_pts;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&AudioVideoPipelineDeviceTest::MonitorLoop,
                                 base::Unretained(this)));
 }
@@ -847,7 +846,7 @@ void AudioVideoPipelineDeviceTest::MonitorLoop() {
   // The playback start time will be INT64_MIN until the audio and video are
   // ready for playback, so just defer all the AV sync checks till then.
   if (playback_start_time == INT64_MIN) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&AudioVideoPipelineDeviceTest::MonitorLoop,
                        base::Unretained(this)),
@@ -900,7 +899,7 @@ void AudioVideoPipelineDeviceTest::MonitorLoop() {
               << "ms";
 
     // Wait for pause finish
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&AudioVideoPipelineDeviceTest::OnPauseCompleted,
                        base::Unretained(this)),
@@ -909,7 +908,7 @@ void AudioVideoPipelineDeviceTest::MonitorLoop() {
   }
 
   // Check state again in a little while
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&AudioVideoPipelineDeviceTest::MonitorLoop,
                      base::Unretained(this)),

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,8 +63,6 @@ class MockTouchHandleDrawable : public TouchHandleDrawable {
  private:
   raw_ptr<MockDrawableData> data_;
 };
-
-}  // namespace
 
 class TouchHandleTest : public testing::Test, public TouchHandleClient {
  public:
@@ -679,4 +677,5 @@ TEST_F(TouchHandleTest, ViewportSizeChange) {
   EXPECT_FALSE(drawable().mirror_horizontal);
 }
 
+}  // namespace
 }  // namespace ui

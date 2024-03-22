@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,13 @@
 #ifndef CHROME_BROWSER_EXTENSIONS_API_PLATFORM_KEYS_PLATFORM_KEYS_API_H_
 #define CHROME_BROWSER_EXTENSIONS_API_PLATFORM_KEYS_PLATFORM_KEYS_API_H_
 
+#include <stdint.h>
+
 #include <string>
+#include <vector>
 
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "chromeos/crosapi/mojom/keystore_service.mojom.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/browser/extension_function_histogram_value.h"
@@ -60,8 +63,7 @@ class PlatformKeysInternalGetPublicKeyFunction : public ExtensionFunction {
   ~PlatformKeysInternalGetPublicKeyFunction() override;
   ResponseAction Run() override;
 
-  void OnGetPublicKey(
-      crosapi::mojom::DEPRECATED_GetPublicKeyResultPtr result_ptr);
+  void OnGetPublicKey(crosapi::mojom::GetPublicKeyResultPtr result_ptr);
 
   DECLARE_EXTENSION_FUNCTION("platformKeysInternal.getPublicKey",
                              PLATFORMKEYSINTERNAL_GETPUBLICKEY)
@@ -84,7 +86,7 @@ class PlatformKeysInternalSignFunction : public ExtensionFunction {
 
   // Called when the signature was generated. If an error occurred,
   // |signature| will be empty.
-  void OnSigned(const std::string& signature,
+  void OnSigned(std::vector<uint8_t> signature,
                 absl::optional<crosapi::mojom::KeystoreError> error);
 
   DECLARE_EXTENSION_FUNCTION("platformKeysInternal.sign",

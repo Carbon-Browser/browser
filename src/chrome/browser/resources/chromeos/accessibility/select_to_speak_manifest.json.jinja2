@@ -10,7 +10,7 @@
   "incognito": "split",
 {% endif %}
   "background": {
-    "scripts": ["select_to_speak/selectToSpeakScript.js"]
+    "page": "select_to_speak/background.html"
   },
   "permissions": [
     "accessibilityPrivate",
@@ -24,13 +24,18 @@
     "https://docs.sandbox.google.com/*",
     "clipboard",
     "clipboardRead",
-    "clipboardWrite"
+    "clipboardWrite",
+    "contextMenus"
   ],
+  "icons": {
+      "128": "select_to_speak/sts-icon-128.png",
+      "16": "select_to_speak/sts-icon-16.png",
+      "48": "select_to_speak/sts-icon-48.png"
+  },
   "automation": {
     "desktop": true
   },
   "default_locale": "en",
-  "options_page": "select_to_speak/options.html",
   "content_scripts": [
     {
       "matches": [ "https://docs.google.com/document*",
@@ -39,7 +44,7 @@
       "js": [
         "common/gdocs_script.js"
       ],
-      "run_at": "document_start"    
+      "run_at": "document_start"
     }
   ]
 }

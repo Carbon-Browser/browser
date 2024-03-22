@@ -1,30 +1,26 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <memory>
+#import <memory>
 
-#include "base/mac/foundation_util.h"
-#include "base/run_loop.h"
-#include "base/strings/stringprintf.h"
-#include "base/synchronization/condition_variable.h"
+#import "base/apple/foundation_util.h"
+#import "base/run_loop.h"
+#import "base/strings/stringprintf.h"
+#import "base/synchronization/condition_variable.h"
 #import "base/test/ios/wait_util.h"
-#include "base/threading/thread_restrictions.h"
-#include "base/time/time.h"
+#import "base/threading/thread_restrictions.h"
+#import "base/time/time.h"
 #import "ios/chrome/browser/web/progress_indicator_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
 #import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ios/web/public/test/http_server/html_response_provider.h"
+#import "ios/web/public/test/http_server/html_response_provider.h"
 #import "ios/web/public/test/http_server/http_server.h"
 #import "ios/web/public/test/http_server/http_server_util.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "url/gurl.h"
 
 namespace {
 
@@ -43,12 +39,59 @@ const char kFormURL[] = "http://form";
 // URL string for an infinite pending page.
 const char kInfinitePendingPageURL[] = "http://infinite";
 
-// URL string for a simple page containing |kPageText|.
+// URL string for a simple page containing `kPageText`.
 const char kSimplePageURL[] = "http://simplepage";
 
-// Matcher for progress view.
-id<GREYMatcher> ProgressView() {
-  return grey_kindOfClassName(@"MDCProgressView");
+// ProgressView from primary toolbar.
+id<GREYMatcher> ProgressViewInPrimaryToolbar() {
+  return grey_allOf(grey_ancestor(grey_kindOfClassName(@"PrimaryToolbarView")),
+                    grey_kindOfClassName(@"MDCProgressView"), nil);
+}
+
+// ProgresView from secondary toolbar.
+id<GREYMatcher> ProgressViewInSecondaryToolbar() {
+  return grey_allOf(
+      grey_ancestor(grey_kindOfClassName(@"SecondaryToolbarView")),
+      grey_kindOfClassName(@"MDCProgressView"), nil);
+}
+
+// Matcher for `progressView` that should be visible at `progress`.
+id<GREYMatcher> ProgressViewAtProgress(id<GREYMatcher> progressView,
+                                       CGFloat progress) {
+  return grey_allOf(
+      progressView,
+      [ProgressIndicatorAppInterface progressViewWithProgress:progress], nil);
+}
+
+// Checks that the progress view is visible with `progress` in the toolbar
+// containing the omnibox.
+void CheckProgressViewVisibleWithProgress(CGFloat progress) {
+  id<GREYMatcher> visibleProgressView = ProgressViewInPrimaryToolbar();
+  id<GREYMatcher> hiddenProgressView = ProgressViewInSecondaryToolbar();
+  if ([ChromeEarlGrey isUnfocusedOmniboxAtBottom]) {
+    visibleProgressView = ProgressViewInSecondaryToolbar();
+    hiddenProgressView = ProgressViewInPrimaryToolbar();
+  }
+
+  [[EarlGrey selectElementWithMatcher:ProgressViewAtProgress(
+                                          visibleProgressView, progress)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  if ([ChromeEarlGrey isBottomOmniboxSteadyStateEnabled]) {
+    [[EarlGrey selectElementWithMatcher:hiddenProgressView]
+        assertWithMatcher:grey_notVisible()];
+  }
+}
+
+// Checks that progress view from both toolbars are not visible.
+void CheckProgressViewNotVisible() {
+  [[EarlGrey selectElementWithMatcher:ProgressViewInPrimaryToolbar()]
+      assertWithMatcher:grey_notVisible()];
+
+  if ([ChromeEarlGrey isBottomOmniboxSteadyStateEnabled]) {
+    [[EarlGrey selectElementWithMatcher:ProgressViewInSecondaryToolbar()]
+        assertWithMatcher:grey_notVisible()];
+  }
 }
 
 // Response provider that serves the page which never finishes loading.
@@ -73,12 +116,12 @@ class InfinitePendingResponseProvider : public HtmlResponseProvider {
       condition_variable_.Signal();
     }
 
-    base::test::ios::WaitUntilCondition(
-        ^{
+    const bool success =
+        base::test::ios::WaitUntilConditionOrTimeout(base::Seconds(10), ^{
           base::AutoLock auto_lock(lock_);
           return terminated_.load(std::memory_order_acquire);
-        },
-        false, base::Seconds(10));
+        });
+    GREYAssertTrue(success, @"Timed out trying to Abort()");
   }
 
   // HtmlResponseProvider overrides:
@@ -133,7 +176,7 @@ class InfinitePendingResponseProvider : public HtmlResponseProvider {
 @implementation ProgressIndicatorTestCase
 
 // Returns an HTML string for a form with the submission action set to
-// |submitURL|.
+// `submitURL`.
 - (std::string)formPageHTMLWithFormSubmitURL:(GURL)submitURL {
   return base::StringPrintf(
       "<p>%s</p><form id='%s' method='post' action='%s'>"
@@ -177,9 +220,7 @@ class InfinitePendingResponseProvider : public HtmlResponseProvider {
   [ChromeEarlGrey waitForWebStateContainingText:kPageText];
 
   // Verify progress view visible and halfway progress.
-  [[EarlGrey selectElementWithMatcher:[ProgressIndicatorAppInterface
-                                          progressViewWithProgress:0.5]]
-      assertWithMatcher:grey_sufficientlyVisible()];
+  CheckProgressViewVisibleWithProgress(0.5);
 
   [ChromeEarlGreyUI waitForToolbarVisible:YES];
   infinitePendingProvider->Abort();
@@ -222,9 +263,7 @@ class InfinitePendingResponseProvider : public HtmlResponseProvider {
   [ChromeEarlGrey waitForWebStateContainingText:kPageText];
 
   // Verify progress view visible and halfway progress.
-  [[EarlGrey selectElementWithMatcher:[ProgressIndicatorAppInterface
-                                          progressViewWithProgress:0.5]]
-      assertWithMatcher:grey_sufficientlyVisible()];
+  CheckProgressViewVisibleWithProgress(0.5);
 
   [ChromeEarlGreyUI waitForToolbarVisible:YES];
   infinitePendingProvider->Abort();
@@ -255,8 +294,7 @@ class InfinitePendingResponseProvider : public HtmlResponseProvider {
   [ChromeEarlGrey waitForWebStateContainingText:kPageText];
 
   // Verify progress view is not visible.
-  [[EarlGrey selectElementWithMatcher:ProgressView()]
-      assertWithMatcher:grey_notVisible()];
+  CheckProgressViewNotVisible();
 }
 
 // Tests that the progress indicator disappears after form post attempt with a
@@ -280,8 +318,7 @@ class InfinitePendingResponseProvider : public HtmlResponseProvider {
   [ChromeEarlGrey submitWebStateFormWithID:kFormID];
 
   // Verify progress view is not visible.
-  [[EarlGrey selectElementWithMatcher:grey_kindOfClassName(@"MDCProgressView")]
-      assertWithMatcher:grey_notVisible()];
+  CheckProgressViewNotVisible();
 }
 
 @end

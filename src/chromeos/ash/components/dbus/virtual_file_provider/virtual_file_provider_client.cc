@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/virtual_file_provider/fake_virtual_file_provider_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -58,7 +59,7 @@ class VirtualFileProviderClientImpl : public VirtualFileProviderClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  // DBusClient override.
+  // chromeos::DBusClient override.
   void Init(dbus::Bus* bus) override {
     proxy_ = bus->GetObjectProxy(
         virtual_file_provider::kVirtualFileProviderServiceName,
@@ -100,7 +101,7 @@ class VirtualFileProviderClientImpl : public VirtualFileProviderClient {
     std::move(callback).Run(std::move(fd));
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> proxy_ = nullptr;
 
   base::WeakPtrFactory<VirtualFileProviderClientImpl> weak_ptr_factory_{this};
 };

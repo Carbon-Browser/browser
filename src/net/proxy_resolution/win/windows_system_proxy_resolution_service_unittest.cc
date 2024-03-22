@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/sequence_checker.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/base/network_isolation_key.h"
 #include "net/base/proxy_server.h"
 #include "net/base/proxy_string_util.h"
@@ -43,7 +43,7 @@ class MockRequest : public WindowsSystemProxyResolver::Request {
               const ProxyList& proxy_list,
               WinHttpStatus winhttp_status,
               int windows_error) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&MockRequest::DoCallback, weak_ptr_factory_.GetWeakPtr(),
                        callback_target, proxy_list, winhttp_status,
@@ -129,7 +129,7 @@ class WindowsSystemProxyResolutionServiceTest : public TestWithTaskEnvironment {
     NetLogWithSource log;
     std::unique_ptr<ProxyResolutionRequest> request;
     int result = service()->ResolveProxy(kResourceUrl, std::string(),
-                                         NetworkIsolationKey(), &info,
+                                         NetworkAnonymizationKey(), &info,
                                          callback.callback(), &request, log);
 
     ASSERT_THAT(result, IsError(ERR_IO_PENDING));
@@ -145,7 +145,7 @@ class WindowsSystemProxyResolutionServiceTest : public TestWithTaskEnvironment {
  private:
   std::unique_ptr<WindowsSystemProxyResolutionService>
       proxy_resolution_service_;
-  raw_ptr<MockWindowsSystemProxyResolver> proxy_resolver_;
+  raw_ptr<MockWindowsSystemProxyResolver, DanglingUntriaged> proxy_resolver_;
 };
 
 TEST_F(WindowsSystemProxyResolutionServiceTest, CreateWithNullResolver) {
@@ -168,7 +168,7 @@ TEST_F(WindowsSystemProxyResolutionServiceTest, ResolveProxyFailed) {
   NetLogWithSource log;
   std::unique_ptr<ProxyResolutionRequest> request;
   int result = service()->ResolveProxy(kResourceUrl, std::string(),
-                                       NetworkIsolationKey(), &info,
+                                       NetworkAnonymizationKey(), &info,
                                        callback.callback(), &request, log);
 
   ASSERT_THAT(result, IsError(ERR_IO_PENDING));
@@ -192,7 +192,7 @@ TEST_F(WindowsSystemProxyResolutionServiceTest, ResolveProxyCancelled) {
   NetLogWithSource log;
   std::unique_ptr<ProxyResolutionRequest> request;
   int result = service()->ResolveProxy(kResourceUrl, std::string(),
-                                       NetworkIsolationKey(), &info,
+                                       NetworkAnonymizationKey(), &info,
                                        callback.callback(), &request, log);
 
   ASSERT_THAT(result, IsError(ERR_IO_PENDING));
@@ -234,7 +234,7 @@ TEST_F(WindowsSystemProxyResolutionServiceTest,
   TestCompletionCallback first_callback;
   std::unique_ptr<ProxyResolutionRequest> first_request;
   int result = service()->ResolveProxy(
-      kResourceUrl, std::string(), NetworkIsolationKey(), &first_proxy_info,
+      kResourceUrl, std::string(), NetworkAnonymizationKey(), &first_proxy_info,
       first_callback.callback(), &first_request, log);
   ASSERT_THAT(result, IsError(ERR_IO_PENDING));
   ASSERT_NE(first_request, nullptr);
@@ -243,7 +243,7 @@ TEST_F(WindowsSystemProxyResolutionServiceTest,
   TestCompletionCallback second_callback;
   std::unique_ptr<ProxyResolutionRequest> second_request;
   result = service()->ResolveProxy(
-      kResourceUrl, std::string(), NetworkIsolationKey(), &second_proxy_info,
+      kResourceUrl, std::string(), NetworkAnonymizationKey(), &second_proxy_info,
       second_callback.callback(), &second_request, log);
   ASSERT_THAT(result, IsError(ERR_IO_PENDING));
   ASSERT_NE(second_request, nullptr);
@@ -271,7 +271,7 @@ TEST_F(WindowsSystemProxyResolutionServiceTest,
   TestCompletionCallback first_callback;
   std::unique_ptr<ProxyResolutionRequest> first_request;
   int result = service()->ResolveProxy(
-      kResourceUrl, std::string(), NetworkIsolationKey(), &first_proxy_info,
+      kResourceUrl, std::string(), NetworkAnonymizationKey(), &first_proxy_info,
       first_callback.callback(), &first_request, log);
   ASSERT_THAT(result, IsError(ERR_IO_PENDING));
   ASSERT_NE(first_request, nullptr);
@@ -280,7 +280,7 @@ TEST_F(WindowsSystemProxyResolutionServiceTest,
   TestCompletionCallback second_callback;
   std::unique_ptr<ProxyResolutionRequest> second_request;
   result = service()->ResolveProxy(
-      kResourceUrl, std::string(), NetworkIsolationKey(), &second_proxy_info,
+      kResourceUrl, std::string(), NetworkAnonymizationKey(), &second_proxy_info,
       second_callback.callback(), &second_request, log);
   ASSERT_THAT(result, IsError(ERR_IO_PENDING));
   ASSERT_NE(second_request, nullptr);

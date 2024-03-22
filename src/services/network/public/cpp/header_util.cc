@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "net/base/features.h"
 #include "net/base/mime_sniffer.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_response_headers.h"
+#include "net/http/http_status_code.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "url/gurl.h"
 
@@ -52,6 +52,9 @@ const char* kUnsafeHeaders[] = {
     // Forbidden by the fetch spec.
     net::HttpRequestHeaders::kTransferEncoding,
 
+    // Semantically a response header, so not useful on requests.
+    "Set-Cookie",
+
     // TODO(mmenke): Figure out what to do about the remaining headers:
     // Connection, Cookie, Date, Expect, Referer, Via.
 };
@@ -70,17 +73,11 @@ const struct {
 
 }  // namespace
 
-bool IsRequestHeaderSafe(const base::StringPiece& key,
-                         const base::StringPiece& value) {
+bool IsRequestHeaderSafe(const std::string_view& key,
+                         const std::string_view& value) {
   for (const auto* header : kUnsafeHeaders) {
     if (base::EqualsCaseInsensitiveASCII(header, key))
       return false;
-  }
-
-  // 'Set-Cookie' is semantically a response header, so not useuful on requests.
-  if (base::FeatureList::IsEnabled(net::features::kBlockSetCookieHeader) &&
-      base::EqualsCaseInsensitiveASCII("Set-Cookie", key)) {
-    return false;
   }
 
   for (const auto& header : kUnsafeHeaderValues) {
@@ -121,7 +118,7 @@ mojom::ReferrerPolicy ParseReferrerPolicy(
     return policy;
   }
 
-  std::vector<base::StringPiece> policy_tokens =
+  std::vector<std::string_view> policy_tokens =
       base::SplitStringPiece(referrer_policy_header, ",", base::TRIM_WHITESPACE,
                              base::SPLIT_WANT_NONEMPTY);
 
@@ -188,6 +185,11 @@ bool ShouldSniffContent(const GURL& url,
       net::ShouldSniffMimeType(url, response.mime_type);
 
   return !sniffing_blocked && we_would_like_to_sniff;
+}
+
+bool IsSuccessfulStatus(int status) {
+  // This contains successful 2xx status code.
+  return status >= net::HTTP_OK && status < net::HTTP_MULTIPLE_CHOICES;
 }
 
 }  // namespace network

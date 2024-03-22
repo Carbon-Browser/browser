@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,7 @@ class ActivityFilteringWebSocketHandshakeThrottle
 
   // blink::WebSocketHandshakeThrottle implementation:
   void ThrottleHandshake(const blink::WebURL& url,
+                         const blink::WebSecurityOrigin& creator_origin,
                          blink::WebSocketHandshakeThrottle::OnCompletion
                              completion_callback) override;
 

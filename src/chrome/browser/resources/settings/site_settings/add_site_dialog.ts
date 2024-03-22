@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,23 @@
  * 'add-site-dialog' provides a dialog to add exceptions for a given Content
  * Settings category.
  */
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import '../settings_shared.css.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
 
 import {getTemplate} from './add_site_dialog.html.js';
-import {ContentSetting, ContentSettingsTypes, SITE_EXCEPTION_WILDCARD} from './constants.js';
+import {ContentSetting, CookiesExceptionType, SITE_EXCEPTION_WILDCARD} from './constants.js';
 import {SiteSettingsMixin, SiteSettingsMixinInterface} from './site_settings_mixin.js';
 
 export interface AddSiteDialogElement {
@@ -32,7 +32,6 @@ export interface AddSiteDialogElement {
     dialog: CrDialogElement,
     incognito: CrCheckboxElement,
     site: CrInputElement,
-    thirdParties: CrCheckboxElement,
   };
 }
 
@@ -61,6 +60,18 @@ export class AddSiteDialogElement extends AddSiteDialogElementBase {
       },
 
       /**
+       * Controls what kind of patterns the created cookies exception will have
+       * (based on the CookiesExceptionType):
+       * - THIRD_PARTY: Exception that will have primary pattern as wildcard
+       * (third-party cookie exceptions).
+       * - SITE_DATA: Exception that will have secondary pattern as wildcard
+       * (regular exceptions).
+       * - COMBINED: Support both pattern types and have a checkbox to control
+       * the mode.
+       */
+      cookiesExceptionType: String,
+
+      /**
        * The site to add an exception for.
        */
       site_: String,
@@ -76,6 +87,7 @@ export class AddSiteDialogElement extends AddSiteDialogElementBase {
   hasIncognito: boolean;
   private site_: string;
   private errorMessage_: string;
+  cookiesExceptionType: CookiesExceptionType;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -107,7 +119,7 @@ export class AddSiteDialogElement extends AddSiteDialogElementBase {
         });
   }
 
-  private onCancelTap_() {
+  private onCancelClick_() {
     this.$.dialog.cancel();
   }
 
@@ -120,7 +132,7 @@ export class AddSiteDialogElement extends AddSiteDialogElementBase {
     let primaryPattern = this.site_;
     let secondaryPattern = SITE_EXCEPTION_WILDCARD;
 
-    if (this.$.thirdParties.checked) {
+    if (this.cookiesExceptionType === CookiesExceptionType.THIRD_PARTY) {
       primaryPattern = SITE_EXCEPTION_WILDCARD;
       secondaryPattern = this.site_;
     }
@@ -141,10 +153,6 @@ export class AddSiteDialogElement extends AddSiteDialogElementBase {
     if (!this.hasIncognito) {
       this.$.incognito.checked = false;
     }
-  }
-
-  private shouldHideThirdPartyCookieCheckbox_(): boolean {
-    return this.category !== ContentSettingsTypes.COOKIES;
   }
 }
 

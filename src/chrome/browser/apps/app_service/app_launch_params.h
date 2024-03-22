@@ -1,10 +1,11 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_APPS_APP_SERVICE_APP_LAUNCH_PARAMS_H_
 #define CHROME_BROWSER_APPS_APP_SERVICE_APP_LAUNCH_PARAMS_H_
 
+#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -12,7 +13,6 @@
 #include "base/files/file_path.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/intent.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/display/types/display_constants.h"
@@ -36,6 +36,15 @@ struct AppLaunchParams {
                   const std::vector<base::FilePath>& files,
                   const IntentPtr& intentPtr);
 
+  AppLaunchParams(const std::string& app_id,
+                  LaunchContainer container,
+                  WindowOpenDisposition disposition,
+                  const GURL& override_url,
+                  apps::LaunchSource launch_source,
+                  int64_t display_id,
+                  const std::vector<base::FilePath>& files,
+                  const IntentPtr& intentPtr);
+
   AppLaunchParams(const AppLaunchParams&) = delete;
   AppLaunchParams& operator=(const AppLaunchParams&) = delete;
   AppLaunchParams(AppLaunchParams&&);
@@ -51,6 +60,11 @@ struct AppLaunchParams {
   std::string launch_id;
 
   // The container type to launch the application in.
+  // With the Shortstand project, this value will be overridden on Chrome OS.
+  // When launching a web app, the container will always be
+  // kLaunchContainerWindow.
+  // When launching browser shortcut backed by the web app system, the container
+  // will always be kLaunchContainerTab.
   LaunchContainer container;
 
   // If container is TAB, this field controls how the tab is opened.

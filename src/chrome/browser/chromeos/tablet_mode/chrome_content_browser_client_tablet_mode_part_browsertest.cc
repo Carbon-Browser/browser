@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chrome/test/base/ui_test_utils.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/test/browser_test.h"
@@ -37,11 +38,10 @@ IN_PROC_BROWSER_TEST_F(ChromeContentBrowserClientTabletModePartTest,
 
   // Open the OS settings window.
   auto* settings = chrome::SettingsWindowManager::GetInstance();
+  ui_test_utils::BrowserChangeObserver browser_opened(
+      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
   settings->ShowOSSettings(profile);
-
-  // The above ShowOSSettings() should trigger an asynchronous call to launch
-  // OS Settings SWA. Flush Mojo calls so the browser window is created.
-  ash::FlushSystemWebAppLaunchesForTesting(browser()->profile());
+  browser_opened.Wait();
 
   // The OS settings window still uses the default font sizes.
   Browser* browser = settings->FindBrowserForProfile(profile);

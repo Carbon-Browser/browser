@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,18 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/token.h"
 #include "build/build_config.h"
 #include "media/capture/mojom/video_capture_types.mojom-blink.h"
 #include "media/capture/video_capture_types.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/mojom/mediastream/media_stream.mojom-blink.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_captured_wheel_action.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
@@ -23,22 +26,43 @@
 
 namespace blink {
 
+using mojom::blink::MediaStreamRequestResult;
+using mojom::blink::SendWheelResult;
+
 namespace {
-// TODO(crbug.com/1223353): Remove usage of Thread::Current()->GetTaskRunner()
-// when canvas capture no longer requires a task runner when trying to capture
-// a detached canvas.
-scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunnerFromFrame(
-    LocalFrame* frame) {
-  return frame ? frame->GetTaskRunner(TaskType::kInternalMediaRealTime)
-               : Thread::Current()->GetTaskRunner();
+
+#if !BUILDFLAG(IS_ANDROID)
+void OnSendWheelResult(base::OnceCallback<void(bool, const String&)> callback,
+                       SendWheelResult result) {
+  String error_string;
+  switch (result) {
+    case SendWheelResult::kSuccess:
+      break;
+    case SendWheelResult::kUnknownError:
+      error_string = "Unknown error.";
+      break;
+    case SendWheelResult::kNoPermissionError:
+      error_string = "No permission.";
+      break;
+    case SendWheelResult::kCapturedSurfaceNotFoundError:
+      error_string =
+          "Captured surface not found (likely stopped asynchronously.)";
+      break;
+  }
+
+  std::move(callback).Run(/*success=*/error_string.empty(),
+                          /*error=*/error_string);
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
+
 }  // namespace
 
 MediaStreamVideoCapturerSource::MediaStreamVideoCapturerSource(
+    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
     LocalFrame* frame,
     SourceStoppedCallback stop_callback,
     std::unique_ptr<VideoCapturerSource> source)
-    : MediaStreamVideoSource(GetTaskRunnerFromFrame(frame)),
+    : MediaStreamVideoSource(std::move(main_task_runner)),
       frame_(frame),
       source_(std::move(source)) {
   media::VideoCaptureFormats preferred_formats = source_->GetPreferredFormats();
@@ -48,12 +72,13 @@ MediaStreamVideoCapturerSource::MediaStreamVideoCapturerSource(
 }
 
 MediaStreamVideoCapturerSource::MediaStreamVideoCapturerSource(
+    scoped_refptr<base::SingleThreadTaskRunner> main_task_runner,
     LocalFrame* frame,
     SourceStoppedCallback stop_callback,
     const MediaStreamDevice& device,
     const media::VideoCaptureParams& capture_params,
     DeviceCapturerFactoryCallback device_capturer_factory_callback)
-    : MediaStreamVideoSource(GetTaskRunnerFromFrame(frame)),
+    : MediaStreamVideoSource(std::move(main_task_runner)),
       frame_(frame),
       source_(device_capturer_factory_callback.Run(device.session_id())),
       capture_params_(capture_params),
@@ -74,7 +99,7 @@ void MediaStreamVideoCapturerSource::SetDeviceCapturerFactoryCallbackForTesting(
   device_capturer_factory_callback_ = std::move(testing_factory_callback);
 }
 
-void MediaStreamVideoCapturerSource::SetCanDiscardAlpha(
+void MediaStreamVideoCapturerSource::OnSourceCanDiscardAlpha(
     bool can_discard_alpha) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   source_->SetCanDiscardAlpha(can_discard_alpha);
@@ -83,12 +108,6 @@ void MediaStreamVideoCapturerSource::SetCanDiscardAlpha(
 void MediaStreamVideoCapturerSource::RequestRefreshFrame() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   source_->RequestRefreshFrame();
-}
-
-void MediaStreamVideoCapturerSource::OnFrameDropped(
-    media::VideoCaptureFrameDropReason reason) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  source_->OnFrameDropped(reason);
 }
 
 void MediaStreamVideoCapturerSource::OnLog(const std::string& message) {
@@ -116,17 +135,21 @@ void MediaStreamVideoCapturerSource::OnCapturingLinkSecured(bool is_secure) {
 void MediaStreamVideoCapturerSource::StartSourceImpl(
     VideoCaptureDeliverFrameCB frame_callback,
     EncodedVideoFrameCB encoded_frame_callback,
-    VideoCaptureCropVersionCB crop_version_callback) {
+    VideoCaptureSubCaptureTargetVersionCB sub_capture_target_version_callback,
+    VideoCaptureNotifyFrameDroppedCB frame_dropped_callback) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   state_ = kStarting;
   frame_callback_ = std::move(frame_callback);
-  crop_version_callback_ = std::move(crop_version_callback);
+  sub_capture_target_version_callback_ =
+      std::move(sub_capture_target_version_callback);
+  frame_dropped_callback_ = std::move(frame_dropped_callback);
 
   source_->StartCapture(
-      capture_params_, frame_callback_, crop_version_callback_,
+      capture_params_, frame_callback_, sub_capture_target_version_callback_,
+      frame_dropped_callback_,
       WTF::BindRepeating(&MediaStreamVideoCapturerSource::OnRunStateChanged,
-                         WTF::Unretained(this), capture_params_));
+                         weak_factory_.GetWeakPtr(), capture_params_));
 }
 
 media::VideoCaptureFeedbackCB
@@ -161,21 +184,16 @@ void MediaStreamVideoCapturerSource::RestartSourceImpl(
   new_capture_params.requested_format = new_format;
   state_ = kRestarting;
   source_->StartCapture(
-      new_capture_params, frame_callback_, crop_version_callback_,
+      new_capture_params, frame_callback_, sub_capture_target_version_callback_,
+      frame_dropped_callback_,
       WTF::BindRepeating(&MediaStreamVideoCapturerSource::OnRunStateChanged,
-                         WTF::Unretained(this), new_capture_params));
+                         weak_factory_.GetWeakPtr(), new_capture_params));
 }
 
 absl::optional<media::VideoCaptureFormat>
 MediaStreamVideoCapturerSource::GetCurrentFormat() const {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   return capture_params_.requested_format;
-}
-
-absl::optional<media::VideoCaptureParams>
-MediaStreamVideoCapturerSource::GetCurrentCaptureParams() const {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  return capture_params_;
 }
 
 void MediaStreamVideoCapturerSource::ChangeSourceImpl(
@@ -203,41 +221,74 @@ void MediaStreamVideoCapturerSource::ChangeSourceImpl(
   SetDevice(new_device);
   source_ = device_capturer_factory_callback_.Run(new_device.session_id());
   source_->StartCapture(
-      capture_params_, frame_callback_, crop_version_callback_,
+      capture_params_, frame_callback_, sub_capture_target_version_callback_,
+      frame_dropped_callback_,
       WTF::BindRepeating(&MediaStreamVideoCapturerSource::OnRunStateChanged,
-                         WTF::Unretained(this), capture_params_));
+                         weak_factory_.GetWeakPtr(), capture_params_));
 }
 
 #if !BUILDFLAG(IS_ANDROID)
-void MediaStreamVideoCapturerSource::Crop(
-    const base::Token& crop_id,
-    uint32_t crop_version,
-    base::OnceCallback<void(media::mojom::CropRequestResult)> callback) {
+void MediaStreamVideoCapturerSource::SendWheel(
+    CapturedWheelAction* action,
+    base::OnceCallback<void(bool, const String&)> callback) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  const absl::optional<base::UnguessableToken>& session_id =
+      device().serializable_session_id();
+  if (!session_id.has_value()) {
+    std::move(callback).Run(false, "Missing session ID.");
+    return;
+  }
+
+  // TODO(crbug.com/1466247): Use traits to avoid explicit type translation.
+  GetMediaStreamDispatcherHost()->SendWheel(
+      session_id.value(),
+      blink::mojom::blink::CapturedWheelAction::New(action->x(), action->y(),
+                                                    action->wheelDeltaX(),
+                                                    action->wheelDeltaY()),
+      WTF::BindOnce(&OnSendWheelResult, std::move(callback)));
+}
+
+void MediaStreamVideoCapturerSource::GetZoomLevel(
+    base::OnceCallback<void(absl::optional<int>, const String&)> callback) {
+  // TODO(crbug.com/1466247): Forward to GetMediaStreamDispatcherHost.
+  std::move(callback).Run(false, "Not implemented.");
+}
+
+void MediaStreamVideoCapturerSource::ApplySubCaptureTarget(
+    media::mojom::blink::SubCaptureTargetType type,
+    const base::Token& sub_capture_target,
+    uint32_t sub_capture_target_version,
+    base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+        callback) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   const absl::optional<base::UnguessableToken>& session_id =
       device().serializable_session_id();
   if (!session_id.has_value()) {
-    std::move(callback).Run(media::mojom::CropRequestResult::kErrorGeneric);
+    std::move(callback).Run(
+        media::mojom::ApplySubCaptureTargetResult::kErrorGeneric);
     return;
   }
-  GetMediaStreamDispatcherHost()->Crop(session_id.value(), crop_id,
-                                       crop_version, std::move(callback));
+  GetMediaStreamDispatcherHost()->ApplySubCaptureTarget(
+      session_id.value(), type, sub_capture_target, sub_capture_target_version,
+      std::move(callback));
 }
 
-absl::optional<uint32_t> MediaStreamVideoCapturerSource::GetNextCropVersion() {
+absl::optional<uint32_t>
+MediaStreamVideoCapturerSource::GetNextSubCaptureTargetVersion() {
   if (NumTracks() != 1) {
     return absl::nullopt;
   }
-  return ++current_crop_version_;
+  return ++current_sub_capture_target_version_;
 }
 #endif
 
-uint32_t MediaStreamVideoCapturerSource::GetCropVersion() const {
-  return current_crop_version_;
+uint32_t MediaStreamVideoCapturerSource::GetSubCaptureTargetVersion() const {
+  return current_sub_capture_target_version_;
 }
 
 base::WeakPtr<MediaStreamVideoSource>
-MediaStreamVideoCapturerSource::GetWeakPtr() const {
+MediaStreamVideoCapturerSource::GetWeakPtr() {
   return weak_factory_.GetWeakPtr();
 }
 
@@ -252,14 +303,20 @@ void MediaStreamVideoCapturerSource::OnRunStateChanged(
       if (is_running) {
         state_ = kStarted;
         DCHECK(capture_params_ == new_capture_params);
-        OnStartDone(mojom::blink::MediaStreamRequestResult::OK);
+        OnStartDone(MediaStreamRequestResult::OK);
       } else {
         state_ = kStopped;
-        auto result = (run_state == RunState::kSystemPermissionsError)
-                          ? mojom::blink::MediaStreamRequestResult::
-                                SYSTEM_PERMISSION_DENIED
-                          : mojom::blink::MediaStreamRequestResult::
-                                TRACK_START_FAILURE_VIDEO;
+        MediaStreamRequestResult result;
+        switch (run_state) {
+          case RunState::kSystemPermissionsError:
+            result = MediaStreamRequestResult::SYSTEM_PERMISSION_DENIED;
+            break;
+          case RunState::kCameraBusyError:
+            result = MediaStreamRequestResult::DEVICE_IN_USE;
+            break;
+          default:
+            result = MediaStreamRequestResult::TRACK_START_FAILURE_VIDEO;
+        }
         OnStartDone(result);
       }
       break;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ class HistoryProvider : public AutocompleteProvider {
   AutocompleteProviderClient* client() const { return client_; }
 
  private:
-  raw_ptr<AutocompleteProviderClient> client_;
+  raw_ptr<AutocompleteProviderClient, AcrossTasksDanglingUntriaged> client_;
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_HISTORY_PROVIDER_H_

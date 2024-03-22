@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -221,16 +221,16 @@ bool GpuDataManagerImpl::VulkanRequested() const {
   return private_->VulkanRequested();
 }
 
-void GpuDataManagerImpl::PostCreateThreads() {
-  base::AutoLock auto_lock(lock_);
-  private_->PostCreateThreads();
-}
-
 void GpuDataManagerImpl::TerminateInfoCollectionGpuProcess() {
   base::AutoLock auto_lock(lock_);
   private_->TerminateInfoCollectionGpuProcess();
 }
-#endif
+#endif  // BUILDFLAG(IS_WIN)
+
+void GpuDataManagerImpl::PostCreateThreads() {
+  base::AutoLock auto_lock(lock_);
+  private_->PostCreateThreads();
+}
 
 void GpuDataManagerImpl::UpdateDawnInfo(
     const std::vector<std::string>& dawn_info_list) {
@@ -331,7 +331,7 @@ void GpuDataManagerImpl::ProcessCrashed() {
   private_->ProcessCrashed();
 }
 
-std::unique_ptr<base::ListValue> GpuDataManagerImpl::GetLogMessages() const {
+base::Value::List GpuDataManagerImpl::GetLogMessages() const {
   base::AutoLock auto_lock(lock_);
   return private_->GetLogMessages();
 }
@@ -341,10 +341,10 @@ void GpuDataManagerImpl::HandleGpuSwitch() {
   private_->HandleGpuSwitch();
 }
 
-void GpuDataManagerImpl::BlockDomainFrom3DAPIs(const GURL& url,
-                                               gpu::DomainGuilt guilt) {
+void GpuDataManagerImpl::BlockDomainsFrom3DAPIs(const std::set<GURL>& urls,
+                                                gpu::DomainGuilt guilt) {
   base::AutoLock auto_lock(lock_);
-  private_->BlockDomainFrom3DAPIs(url, guilt);
+  private_->BlockDomainsFrom3DAPIs(urls, guilt);
 }
 
 bool GpuDataManagerImpl::Are3DAPIsBlocked(const GURL& top_origin_url,
@@ -404,6 +404,17 @@ void GpuDataManagerImpl::OnDisplayMetricsChanged(
   base::AutoLock auto_lock(lock_);
   private_->OnDisplayMetricsChanged(display, changed_metrics);
 }
+
+#if BUILDFLAG(IS_LINUX)
+bool GpuDataManagerImpl::IsGpuMemoryBufferNV12Supported() {
+  base::AutoLock auto_lock(lock_);
+  return private_->IsGpuMemoryBufferNV12Supported();
+}
+void GpuDataManagerImpl::SetGpuMemoryBufferNV12Supported(bool supported) {
+  base::AutoLock auto_lock(lock_);
+  private_->SetGpuMemoryBufferNV12Supported(supported);
+}
+#endif  // BUILDFLAG(IS_LINUX)
 
 // static
 void GpuDataManagerImpl::BindReceiver(

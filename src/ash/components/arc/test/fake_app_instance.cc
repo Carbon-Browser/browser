@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,10 @@
 #include <vector>
 
 #include "ash/components/arc/app/arc_playstore_search_request_state.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
@@ -68,19 +68,6 @@ void FakeAppInstance::Init(mojo::PendingRemote<mojom::AppHost> host_remote,
   host_remote_.reset();
   host_remote_.Bind(std::move(host_remote));
   std::move(callback).Run();
-}
-
-void FakeAppInstance::LaunchAppDeprecated(
-    const std::string& package_name,
-    const std::string& activity,
-    const absl::optional<gfx::Rect>& dimension) {
-  LaunchApp(package_name, activity, 0);
-}
-
-void FakeAppInstance::LaunchApp(const std::string& package_name,
-                                const std::string& activity,
-                                int64_t display_id) {
-  launch_requests_.push_back(std::make_unique<Request>(package_name, activity));
 }
 
 void FakeAppInstance::LaunchAppWithWindowInfo(
@@ -203,7 +190,7 @@ arc::mojom::RawIconPngDataPtr FakeAppInstance::GenerateIconResponse(
     }
     case IconResponseType::ICON_RESPONSE_SEND_GOOD: {
       base::FilePath base_path;
-      CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &base_path));
+      CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &base_path));
       base::FilePath icon_file_path =
           base_path.AppendASCII("ash")
               .AppendASCII("components")
@@ -265,7 +252,7 @@ arc::mojom::RawIconPngDataPtr FakeAppInstance::GetFakeIcon(
 
   base::FilePath base_path;
   std::string png_data_as_string;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &base_path));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &base_path));
   base::FilePath icon_file_path = base_path.AppendASCII("ash")
                                       .AppendASCII("components")
                                       .AppendASCII("arc")
@@ -279,12 +266,6 @@ arc::mojom::RawIconPngDataPtr FakeAppInstance::GetFakeIcon(
   arc::mojom::RawIconPngDataPtr icon = arc::mojom::RawIconPngData::New();
   FillRawIconPngData(png_data_as_string, icon.get());
   return icon;
-}
-
-void FakeAppInstance::SetTaskInfo(int32_t task_id,
-                                  const std::string& package_name,
-                                  const std::string& activity) {
-  task_id_to_info_[task_id] = std::make_unique<Request>(package_name, activity);
 }
 
 void FakeAppInstance::SendRefreshPackageList(
@@ -309,35 +290,21 @@ void FakeAppInstance::SendInstallationStarted(const std::string& package_name) {
 }
 
 void FakeAppInstance::SendInstallationFinished(const std::string& package_name,
-                                               bool success) {
+                                               bool success,
+                                               bool is_launchable_app) {
   mojom::InstallationResult result;
   result.package_name = package_name;
   result.success = success;
+  result.is_launchable_app = is_launchable_app;
   app_host_->OnInstallationFinished(
       mojom::InstallationResultPtr(result.Clone()));
-}
-
-void FakeAppInstance::CanHandleResolutionDeprecated(
-    const std::string& package_name,
-    const std::string& activity,
-    const gfx::Rect& dimension,
-    CanHandleResolutionDeprecatedCallback callback) {
-  std::move(callback).Run(true);
 }
 
 void FakeAppInstance::UninstallPackage(const std::string& package_name) {
   app_host_->OnPackageRemoved(package_name);
 }
 
-void FakeAppInstance::GetTaskInfo(int32_t task_id,
-                                  GetTaskInfoCallback callback) {
-  TaskIdToInfo::const_iterator it = task_id_to_info_.find(task_id);
-  if (it == task_id_to_info_.end()) {
-    std::move(callback).Run(std::string(), std::string());
-    return;
-  }
-  std::move(callback).Run(it->second->package_name(), it->second->activity());
-}
+void FakeAppInstance::UpdateAppDetails(const std::string& package_name) {}
 
 void FakeAppInstance::SetTaskActive(int32_t task_id) {}
 
@@ -395,30 +362,30 @@ void FakeAppInstance::GetRecentAndSuggestedAppsFromPlayStore(
               ArcPlayStoreSearchRequestState::PHONESKY_RESULT_INVALID_DATA);
   }
 
-  auto icon = GetFakeIcon(mojom::ScaleFactor::SCALE_FACTOR_100P);
-  const auto& fake_icon_png_data = (!icon || !icon->icon_png_data)
-                                       ? std::vector<uint8_t>()
-                                       : icon->icon_png_data.value();
+  const bool has_price_and_rating = query != "QueryWithoutRatingAndPrice";
+  {
+    auto icon = GetFakeIcon(mojom::ScaleFactor::SCALE_FACTOR_100P);
+    const auto& fake_icon_png_data = (!icon || !icon->icon_png_data)
+                                         ? std::vector<uint8_t>()
+                                         : icon->icon_png_data.value();
+    fake_apps.push_back(mojom::AppDiscoveryResult::New(
+        std::string("LauncherIntentUri"),  // launch_intent_uri
+        std::string("InstallIntentUri"),   // install_intent_uri
+        std::string(query),                // label
+        false,                             // is_instant_app
+        false,                             // is_recent
+        std::string("Publisher"),          // publisher_name
+        has_price_and_rating ? std::string("$7.22")
+                             : std::string(),  // formatted_price
+        has_price_and_rating ? 5 : -1,         // review_score
+        fake_icon_png_data,                    // icon_png_data
+        std::string("com.google.android.gm"),  // package_name
+        std::move(icon)));                     // icon
+  }
 
   const int num_results =
       (state_code == ArcPlayStoreSearchRequestState::SUCCESS) ? max_results
                                                               : max_results / 2;
-  const bool has_price_and_rating = query != "QueryWithoutRatingAndPrice";
-
-  fake_apps.push_back(mojom::AppDiscoveryResult::New(
-      std::string("LauncherIntentUri"),  // launch_intent_uri
-      std::string("InstallIntentUri"),   // install_intent_uri
-      std::string(query),                // label
-      false,                             // is_instant_app
-      false,                             // is_recent
-      std::string("Publisher"),          // publisher_name
-      has_price_and_rating ? std::string("$7.22")
-                           : std::string(),  // formatted_price
-      has_price_and_rating ? 5 : -1,         // review_score
-      fake_icon_png_data,                    // icon_png_data
-      std::string("com.google.android.gm"),  // package_name
-      std::move(icon)));                     // icon
-
   for (int i = 0; i < num_results - 1; ++i) {
     const bool has_icon =
         query != "QueryWithSomeResultsMissingIcon" || i < num_results / 2;
@@ -492,17 +459,6 @@ void FakeAppInstance::StartPaiFlow(StartPaiFlowCallback callback) {
   std::move(callback).Run(pai_state_response_);
 }
 
-void FakeAppInstance::GetAppReinstallCandidates(
-    GetAppReinstallCandidatesCallback callback) {
-  ++get_app_reinstall_callback_count_;
-  std::vector<arc::mojom::AppReinstallCandidatePtr> candidates;
-  for (const auto& candidate : app_reinstall_candidates_)
-    candidates.emplace_back(candidate.Clone());
-
-  std::move(callback).Run(arc::mojom::AppReinstallState::REQUEST_SUCCESS,
-                          std::move(candidates));
-}
-
 void FakeAppInstance::StartFastAppReinstallFlow(
     const std::vector<std::string>& package_names) {
   ++start_fast_app_reinstall_request_count_;
@@ -518,15 +474,18 @@ void FakeAppInstance::IsInstallable(const std::string& package_name,
   std::move(callback).Run(is_installable_);
 }
 
-void FakeAppInstance::LaunchIntentDeprecated(
-    const std::string& intent_uri,
-    const absl::optional<gfx::Rect>& dimension_on_screen) {
-  LaunchIntent(intent_uri, 0);
+void FakeAppInstance::GetAppCategory(const std::string& package_name,
+                                     GetAppCategoryCallback callback) {
+  auto itr = pkg_name_to_app_category_.find(package_name);
+  auto category = mojom::AppCategory::kUndefined;
+
+  if (itr != pkg_name_to_app_category_.end()) category = itr->second;
+  std::move(callback).Run(category);
 }
 
-void FakeAppInstance::LaunchIntent(const std::string& intent_uri,
-                                   int64_t display_id) {
-  launch_intents_.push_back(intent_uri);
+void FakeAppInstance::SetAppLocale(const std::string& package_name,
+                                   const std::string& locale_tag) {
+  selected_locales_[package_name] = locale_tag;
 }
 
 void FakeAppInstance::LaunchIntentWithWindowInfo(
@@ -571,11 +530,16 @@ void FakeAppInstance::GetPackageIcon(const std::string& package_name,
 
 void FakeAppInstance::RemoveCachedIcon(const std::string& icon_resource_id) {}
 
-void FakeAppInstance::SetAppReinstallCandidates(
-    const std::vector<arc::mojom::AppReinstallCandidatePtr>& candidates) {
-  app_reinstall_candidates_.clear();
-  for (const auto& candidate : candidates)
-    app_reinstall_candidates_.emplace_back(candidate.Clone());
+void FakeAppInstance::SendInstallationProgressChanged(
+    const std::string& package_name,
+    float progress) {
+  app_host_->OnInstallationProgressChanged(package_name, progress);
+}
+
+void FakeAppInstance::SendInstallationActiveChanged(
+    const std::string& package_name,
+    bool active) {
+  app_host_->OnInstallationActiveChanged(package_name, active);
 }
 
 }  // namespace arc

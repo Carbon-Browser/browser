@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,12 +11,16 @@ from .extension_blocklist.extension_blocklist import *
 from .extension_forcelist.extension_forcelist import *
 from .extension_allowlist.extension_allowlist import *
 from .force_google_safe_search.force_google_safe_search import *
-from .fullscreen_allowed.fullscreen_allowed import *
+# Disable fullscreenallowed test due to pywinauto infra issue http://b/259118140
+# from .fullscreen_allowed.fullscreen_allowed import *
 from .homepage.homepage import *
+from .mergelist.mergelist import *
 from .password_manager_enabled.password_manager_enabled import *
 from .popups_allowed.popups_allowed import *
+from .precedence.precedence import *
 from .restore_on_startup.restore_on_startup import *
-from .safe_browsing.safe_browsing import *
+# Disable safe_browsing test due to chrome://downloads shadow DOM issue http://b/298889715
+# from .safe_browsing.safe_browsing import *
 from .translate_enabled.translate_enabled import *
 from .url_blocklist.url_blocklist import *
 from .url_allowlist.url_allowlist import *

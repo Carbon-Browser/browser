@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,14 +38,16 @@ const char* kDistilledPagePath = "/distilled_page.html";
 
 void SetUpTestServerWithoutStarting(EmbeddedTestServer* server) {
   FilePath root_dir;
-  PathService::Get(base::DIR_SOURCE_ROOT, &root_dir);
+  PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &root_dir);
 
   server->ServeFilesFromDirectory(
       root_dir.AppendASCII("components/dom_distiller/core/javascript"));
   server->ServeFilesFromDirectory(
       root_dir.AppendASCII("components/test/data/dom_distiller"));
-  server->ServeFilesFromDirectory(root_dir.AppendASCII("third_party/chaijs"));
-  server->ServeFilesFromDirectory(root_dir.AppendASCII("third_party/mocha"));
+  server->ServeFilesFromDirectory(
+      root_dir.AppendASCII("third_party/node/node_modules/chai"));
+  server->ServeFilesFromDirectory(
+      root_dir.AppendASCII("third_party/node/node_modules/mocha"));
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,12 +82,10 @@ class BASE_EXPORT ScopedVmoduleSwitches {
   ~ScopedVmoduleSwitches();
 
  private:
-#if BUILDFLAG(USE_RUNTIME_VLOG)
   // Creates a new instance of |VlogInfo| adding |vmodule_switch|.
   VlogInfo* CreateVlogInfoWithSwitches(const std::string& vmodule_switch);
   raw_ptr<VlogInfo> scoped_vlog_info_ = nullptr;
   raw_ptr<VlogInfo> previous_vlog_info_ = nullptr;
-#endif  // BUILDFLAG(USE_RUNTIME_VLOG)
 };
 }  // namespace logging
 

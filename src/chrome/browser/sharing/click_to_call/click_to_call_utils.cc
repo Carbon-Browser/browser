@@ -1,22 +1,22 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sharing/click_to_call/click_to_call_utils.h"
 
-#include <algorithm>
-#include <cctype>
-
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sharing/click_to_call/phone_number_regex.h"
+#include "chrome/browser/sharing/features.h"
 #include "chrome/browser/sharing/sharing_service.h"
 #include "chrome/browser/sharing/sharing_service_factory.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_context.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "url/url_constants.h"
@@ -39,6 +39,10 @@ bool IsClickToCallEnabled(content::BrowserContext* browser_context) {
   // We don't support sending phone numbers from Android.
   return false;
 #else   // BUILDFLAG(IS_ANDROID)
+  if (!base::FeatureList::IsEnabled(kClickToCall)) {
+    return false;
+  }
+
   // Check Chrome enterprise policy for Click to Call.
   Profile* profile = Profile::FromBrowserContext(browser_context);
   if (profile && !profile->GetPrefs()->GetBoolean(prefs::kClickToCallEnabled))
@@ -68,11 +72,10 @@ absl::optional<std::string> ExtractPhoneNumber(
 std::string GetUnescapedURLContent(const GURL& url) {
   std::string content_string(url.GetContent());
   url::RawCanonOutputT<char16_t> unescaped_content;
-  url::DecodeURLEscapeSequences(content_string.data(), content_string.size(),
+  url::DecodeURLEscapeSequences(content_string,
                                 url::DecodeURLMode::kUTF8OrIsomorphic,
                                 &unescaped_content);
-  return base::UTF16ToUTF8(
-      std::u16string(unescaped_content.data(), unescaped_content.length()));
+  return base::UTF16ToUTF8(unescaped_content.view());
 }
 
 }  // namespace
@@ -91,8 +94,10 @@ absl::optional<std::string> ExtractPhoneNumberForClickToCall(
   if (selection_text.size() > kSelectionTextMaxLength)
     return absl::nullopt;
 
-  int digits = std::count_if(selection_text.begin(), selection_text.end(),
-                             [](char c) { return std::isdigit(c); });
+  // See https://en.cppreference.com/w/cpp/string/byte/isdigit for why this uses
+  // unsigned char.
+  int digits = base::ranges::count_if(
+      selection_text, [](unsigned char c) { return absl::ascii_isdigit(c); });
   if (digits > kSelectionTextMaxDigits)
     return absl::nullopt;
 
@@ -108,7 +113,7 @@ bool IsUrlSafeForClickToCall(const GURL& url) {
   std::string unescaped = GetUnescapedURLContent(url);
   // We don't allow any number that contains any of these characters as they
   // might be used to create USSD codes.
-  return !unescaped.empty() &&
-         std::none_of(unescaped.begin(), unescaped.end(),
-                      [](char c) { return c == '#' || c == '*' || c == '%'; });
+  return !unescaped.empty() && base::ranges::none_of(unescaped, [](char c) {
+    return c == '#' || c == '*' || c == '%';
+  });
 }

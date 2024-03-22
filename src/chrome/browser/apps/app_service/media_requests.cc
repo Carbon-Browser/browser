@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,53 +24,34 @@ MediaRequests::MediaRequests() = default;
 
 MediaRequests::~MediaRequests() = default;
 
-bool MediaRequests::IsNewRequest(const std::string& app_id,
-                                 const content::WebContents* web_contents,
-                                 const content::MediaRequestState state) {
-  if (state != content::MEDIA_REQUEST_STATE_DONE) {
-    return false;
-  }
-
-  DCHECK(web_contents);
-
-  return !HasRequest(app_id, web_contents,
-                     app_id_to_web_contents_for_camera_) &&
-         !HasRequest(app_id, web_contents,
-                     app_id_to_web_contents_for_microphone_);
-}
-
-AccessingRequest MediaRequests::UpdateRequests(
+AccessingRequest MediaRequests::UpdateMicrophoneState(
     const std::string& app_id,
     const content::WebContents* web_contents,
-    blink::mojom::MediaStreamType stream_type,
-    const content::MediaRequestState state) {
-  DCHECK(web_contents);
-
-  absl::optional<bool> accessing_camera;
+    bool is_accessing_microphone) {
   absl::optional<bool> accessing_microphone;
-  if (state == content::MEDIA_REQUEST_STATE_DONE) {
-    if (blink::IsVideoInputMediaType(stream_type)) {
-      accessing_camera = MaybeAddRequest(app_id, web_contents,
-                                         app_id_to_web_contents_for_camera_);
-    }
-    if (blink::IsAudioInputMediaType(stream_type)) {
-      accessing_microphone = MaybeAddRequest(
-          app_id, web_contents, app_id_to_web_contents_for_microphone_);
-    }
+  if (is_accessing_microphone) {
+    accessing_microphone = MaybeAddRequest(
+        app_id, web_contents, app_id_to_web_contents_for_microphone_);
+  } else {
+    accessing_microphone = MaybeRemoveRequest(
+        app_id, web_contents, app_id_to_web_contents_for_microphone_);
   }
+  return AccessingRequest(/*camera=*/absl::nullopt, accessing_microphone);
+}
 
-  if (state == content::MEDIA_REQUEST_STATE_CLOSING) {
-    if (blink::IsVideoInputMediaType(stream_type)) {
-      accessing_camera = MaybeRemoveRequest(app_id, web_contents,
-                                            app_id_to_web_contents_for_camera_);
-    }
-    if (blink::IsAudioInputMediaType(stream_type)) {
-      accessing_microphone = MaybeRemoveRequest(
-          app_id, web_contents, app_id_to_web_contents_for_microphone_);
-    }
+AccessingRequest MediaRequests::UpdateCameraState(
+    const std::string& app_id,
+    const content::WebContents* web_contents,
+    bool is_accessing_camera) {
+  absl::optional<bool> accessing_camera;
+  if (is_accessing_camera) {
+    accessing_camera = MaybeAddRequest(app_id, web_contents,
+                                       app_id_to_web_contents_for_camera_);
+  } else {
+    accessing_camera = MaybeRemoveRequest(app_id, web_contents,
+                                          app_id_to_web_contents_for_camera_);
   }
-
-  return AccessingRequest(accessing_camera, accessing_microphone);
+  return AccessingRequest(accessing_camera, /*microphone=*/absl::nullopt);
 }
 
 AccessingRequest MediaRequests::RemoveRequests(const std::string& app_id) {
@@ -79,56 +60,34 @@ AccessingRequest MediaRequests::RemoveRequests(const std::string& app_id) {
       MaybeRemoveRequest(app_id, app_id_to_web_contents_for_microphone_));
 }
 
-AccessingRequest MediaRequests::OnWebContentsDestroyed(
-    const std::string& app_id,
-    const content::WebContents* web_contents) {
-  return AccessingRequest(
-      MaybeRemoveRequest(app_id, web_contents,
-                         app_id_to_web_contents_for_camera_),
-      MaybeRemoveRequest(app_id, web_contents,
-                         app_id_to_web_contents_for_microphone_));
-}
-
-bool MediaRequests::HasRequest(
-    const std::string& app_id,
-    const content::WebContents* web_contents,
-    const std::map<std::string, std::set<const content::WebContents*>>&
-        app_id_to_web_contents) {
-  auto it = app_id_to_web_contents.find(app_id);
-  if (it != app_id_to_web_contents.end() &&
-      it->second.find(web_contents) != it->second.end()) {
-    return true;
-  }
-  return false;
-}
-
 absl::optional<bool> MediaRequests::MaybeAddRequest(
     const std::string& app_id,
     const content::WebContents* web_contents,
-    std::map<std::string, std::set<const content::WebContents*>>&
-        app_id_to_web_contents) {
+    AppIdToWebContents& app_id_to_web_contents) {
   auto it = app_id_to_web_contents.find(app_id);
-  if (it != app_id_to_web_contents.end() &&
-      it->second.find(web_contents) != it->second.end()) {
+  if (it == app_id_to_web_contents.end()) {
+    app_id_to_web_contents[app_id].insert(web_contents);
+    // New media request for `app_id` and `web_contents`.
+    return true;
+  }
+
+  auto web_contents_it = it->second.find(web_contents);
+  if (web_contents_it == it->second.end()) {
+    it->second.insert(web_contents);
+    // New media request for `web_contents`, but not a new request for `app_id`.
+    // So return nullopt, which means no change for `app_id`.
     return absl::nullopt;
   }
 
-  absl::optional<bool> ret;
-  if (it == app_id_to_web_contents.end()) {
-    ret = true;
-    app_id_to_web_contents[app_id].insert(web_contents);
-  } else {
-    it->second.insert(web_contents);
-  }
-
-  return ret;
+  // Not a new request for `app_id`. So return nullopt, which means no change
+  // for`app_id`.
+  return absl::nullopt;
 }
 
 absl::optional<bool> MediaRequests::MaybeRemoveRequest(
     const std::string& app_id,
     const content::WebContents* web_contents,
-    std::map<std::string, std::set<const content::WebContents*>>&
-        app_id_to_web_contents) {
+    AppIdToWebContents& app_id_to_web_contents) {
   auto it = app_id_to_web_contents.find(app_id);
   if (it == app_id_to_web_contents.end() ||
       it->second.find(web_contents) == it->second.end()) {
@@ -146,8 +105,7 @@ absl::optional<bool> MediaRequests::MaybeRemoveRequest(
 
 absl::optional<bool> MediaRequests::MaybeRemoveRequest(
     const std::string& app_id,
-    std::map<std::string, std::set<const content::WebContents*>>&
-        app_id_to_web_contents) {
+    AppIdToWebContents& app_id_to_web_contents) {
   auto it = app_id_to_web_contents.find(app_id);
   if (it == app_id_to_web_contents.end()) {
     return absl::nullopt;

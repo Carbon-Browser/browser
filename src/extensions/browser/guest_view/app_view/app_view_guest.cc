@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "components/guest_view/browser/guest_view_manager.h"
 #include "content/public/browser/render_process_host.h"
@@ -19,6 +19,7 @@
 #include "extensions/browser/extension_host.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/guest_view/app_view/app_view_constants.h"
+#include "extensions/browser/guest_view/guest_view_feature_util.h"
 #include "extensions/browser/lazy_context_id.h"
 #include "extensions/browser/lazy_context_task_queue.h"
 #include "extensions/browser/process_manager.h"
@@ -41,17 +42,17 @@ namespace {
 
 struct ResponseInfo {
   scoped_refptr<const Extension> guest_extension;
-  base::WeakPtr<AppViewGuest> app_view_guest;
+  std::unique_ptr<GuestViewBase> app_view_guest;
   GuestViewBase::WebContentsCreatedCallback callback;
 
   ResponseInfo(const Extension* guest_extension,
-               const base::WeakPtr<AppViewGuest>& app_view_guest,
+               std::unique_ptr<GuestViewBase> app_view_guest,
                GuestViewBase::WebContentsCreatedCallback callback)
       : guest_extension(guest_extension),
-        app_view_guest(app_view_guest),
+        app_view_guest(std::move(app_view_guest)),
         callback(std::move(callback)) {}
 
-  ~ResponseInfo() {}
+  ~ResponseInfo() = default;
 };
 
 using PendingResponseMap = std::map<int, std::unique_ptr<ResponseInfo>>;
@@ -81,42 +82,48 @@ bool AppViewGuest::CompletePendingRequest(
   }
 
   ResponseInfo* response_info = it->second.get();
-  if (!response_info->app_view_guest ||
-      (response_info->guest_extension->id() != guest_extension_id)) {
-    // The app is trying to communicate with an <appview> not assigned to it, or
-    // the <appview> is already dead "nullptr".
-    bad_message::BadMessageReason reason = !response_info->app_view_guest
-                                               ? bad_message::AVG_NULL_AVG
-                                               : bad_message::AVG_BAD_EXT_ID;
-    bad_message::ReceivedBadMessage(guest_render_process_host, reason);
+  scoped_refptr<const Extension> guest_extension =
+      response_info->guest_extension;
+
+  if (guest_extension->id() != guest_extension_id) {
+    // The app is trying to communicate with an <appview> not assigned to it.
+    bad_message::ReceivedBadMessage(guest_render_process_host,
+                                    bad_message::AVG_BAD_EXT_ID);
     return false;
   }
 
-  response_info->app_view_guest->CompleteCreateWebContents(
-      url, response_info->guest_extension.get(),
-      std::move(response_info->callback));
+  std::unique_ptr<GuestViewBase> app_view_guest =
+      std::move(response_info->app_view_guest);
+  GuestViewBase::WebContentsCreatedCallback callback =
+      std::move(response_info->callback);
+  response_map->erase(it);
 
-  response_map->erase(guest_instance_id);
+  auto* raw_app_view_guest = static_cast<AppViewGuest*>(app_view_guest.get());
+  raw_app_view_guest->CompleteCreateWebContents(url, guest_extension.get(),
+                                                std::move(app_view_guest),
+                                                std::move(callback));
+
   return true;
 }
 
 // static
-GuestViewBase* AppViewGuest::Create(WebContents* owner_web_contents) {
-  return new AppViewGuest(owner_web_contents);
+std::unique_ptr<GuestViewBase> AppViewGuest::Create(
+    content::RenderFrameHost* owner_rfh) {
+  return base::WrapUnique(new AppViewGuest(owner_rfh));
 }
 
-AppViewGuest::AppViewGuest(WebContents* owner_web_contents)
-    : GuestView<AppViewGuest>(owner_web_contents),
-      app_view_guest_delegate_(
-          ExtensionsAPIClient::Get()->CreateAppViewGuestDelegate()) {
+AppViewGuest::AppViewGuest(content::RenderFrameHost* owner_rfh)
+    : GuestView<AppViewGuest>(owner_rfh),
+      app_view_guest_delegate_(base::WrapUnique(
+          ExtensionsAPIClient::Get()->CreateAppViewGuestDelegate())) {
   if (app_view_guest_delegate_) {
-    app_delegate_.reset(
-        app_view_guest_delegate_->CreateAppDelegate(owner_web_contents));
+    app_delegate_ =
+        base::WrapUnique(app_view_guest_delegate_->CreateAppDelegate(
+            owner_rfh->GetBrowserContext()));
   }
 }
 
-AppViewGuest::~AppViewGuest() {
-}
+AppViewGuest::~AppViewGuest() = default;
 
 bool AppViewGuest::HandleContextMenu(
     content::RenderFrameHost& render_frame_host,
@@ -151,7 +158,7 @@ void AppViewGuest::RequestMediaAccessPermission(
 
 bool AppViewGuest::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   if (!app_delegate_) {
     return WebContentsDelegate::CheckMediaAccessPermission(
@@ -166,22 +173,23 @@ bool AppViewGuest::CheckMediaAccessPermission(
       render_frame_host, security_origin, type, guest_extension);
 }
 
-void AppViewGuest::CreateWebContents(const base::Value::Dict& create_params,
+void AppViewGuest::CreateWebContents(std::unique_ptr<GuestViewBase> owned_this,
+                                     const base::Value::Dict& create_params,
                                      WebContentsCreatedCallback callback) {
   const std::string* app_id = create_params.FindString(appview::kAppID);
   if (!app_id) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
   // Verifying that the appId is not the same as the host application.
   if (owner_host() == *app_id) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
 
   const base::Value::Dict* data = create_params.FindDict(appview::kData);
   if (!data) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
 
@@ -193,17 +201,18 @@ void AppViewGuest::CreateWebContents(const base::Value::Dict& create_params,
 
   if (!guest_extension || !guest_extension->is_platform_app() ||
       !embedder_extension || !embedder_extension->is_platform_app()) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
 
   const LazyContextId context_id(browser_context(), guest_extension->id());
   LazyContextTaskQueue* queue = context_id.GetTaskQueue();
   if (queue->ShouldEnqueueTask(browser_context(), guest_extension)) {
-    queue->AddPendingTask(context_id,
-                          base::BindOnce(&AppViewGuest::LaunchAppAndFireEvent,
-                                         weak_ptr_factory_.GetWeakPtr(),
-                                         data->Clone(), std::move(callback)));
+    queue->AddPendingTask(
+        context_id,
+        base::BindOnce(&AppViewGuest::LaunchAppAndFireEvent,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(owned_this),
+                       data->Clone(), std::move(callback)));
     return;
   }
 
@@ -212,7 +221,7 @@ void AppViewGuest::CreateWebContents(const base::Value::Dict& create_params,
       process_manager->GetBackgroundHostForExtension(guest_extension->id());
   DCHECK(host);
   LaunchAppAndFireEvent(
-      data->Clone(), std::move(callback),
+      std::move(owned_this), data->Clone(), std::move(callback),
       std::make_unique<LazyContextTaskQueue::ContextInfo>(host));
 }
 
@@ -222,8 +231,16 @@ void AppViewGuest::DidInitialize(const base::Value::Dict& create_params) {
   if (!url_.is_valid())
     return;
 
-  web_contents()->GetController().LoadURL(
-      url_, content::Referrer(), ui::PAGE_TRANSITION_LINK, std::string());
+  GetController().LoadURL(url_, content::Referrer(), ui::PAGE_TRANSITION_LINK,
+                          std::string());
+}
+
+void AppViewGuest::MaybeRecreateGuestContents(
+    content::RenderFrameHost* outer_contents_frame) {
+  if (AreWebviewMPArchBehaviorsEnabled(browser_context())) {
+    // This situation is not possible for AppView.
+    NOTREACHED();
+  }
 }
 
 const char* AppViewGuest::GetAPINamespace() const {
@@ -237,9 +254,16 @@ int AppViewGuest::GetTaskPrefix() const {
 void AppViewGuest::CompleteCreateWebContents(
     const GURL& url,
     const Extension* guest_extension,
+    std::unique_ptr<GuestViewBase> owned_this,
     WebContentsCreatedCallback callback) {
+  if (!owner_rfh()) {
+    // The owner was destroyed before getting a response to the embedding
+    // request, so we can't proceed with creating a guest.
+    std::move(callback).Run(std::move(owned_this), nullptr);
+    return;
+  }
   if (!url.is_valid()) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
   url_ = url;
@@ -250,12 +274,11 @@ void AppViewGuest::CompleteCreateWebContents(
       content::SiteInstance::CreateForURL(browser_context(),
                                           guest_extension->url()));
   params.guest_delegate = this;
-  // TODO(erikchen): Fix ownership semantics for guest views.
-  // https://crbug.com/832879.
-  std::move(callback).Run(WebContents::Create(params).release());
+  std::move(callback).Run(std::move(owned_this), WebContents::Create(params));
 }
 
 void AppViewGuest::LaunchAppAndFireEvent(
+    std::unique_ptr<GuestViewBase> owned_this,
     base::Value::Dict data,
     WebContentsCreatedCallback callback,
     std::unique_ptr<LazyContextTaskQueue::ContextInfo> context_info) {
@@ -264,7 +287,7 @@ void AppViewGuest::LaunchAppAndFireEvent(
                                     context_info->extension_id,
                                     app_runtime::OnEmbedRequested::kEventName);
   if (!has_event_listener) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
 
@@ -275,14 +298,13 @@ void AppViewGuest::LaunchAppAndFireEvent(
 
   g_pending_response_map.Get().insert(std::make_pair(
       guest_instance_id(),
-      std::make_unique<ResponseInfo>(extension, weak_ptr_factory_.GetWeakPtr(),
+      std::make_unique<ResponseInfo>(extension, std::move(owned_this),
                                      std::move(callback))));
 
-  std::unique_ptr<base::DictionaryValue> embed_request(
-      new base::DictionaryValue());
-  embed_request->SetIntKey(appview::kGuestInstanceID, guest_instance_id());
-  embed_request->SetStringKey(appview::kEmbedderID, owner_host());
-  embed_request->SetKey(appview::kData, base::Value(std::move(data)));
+  base::Value::Dict embed_request;
+  embed_request.Set(appview::kGuestInstanceID, guest_instance_id());
+  embed_request.Set(appview::kEmbedderID, owner_host());
+  embed_request.Set(appview::kData, std::move(data));
   AppRuntimeEventRouter::DispatchOnEmbedRequestedEvent(
       browser_context(), std::move(embed_request), extension);
 }

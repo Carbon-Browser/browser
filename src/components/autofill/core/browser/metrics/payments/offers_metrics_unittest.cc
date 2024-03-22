@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,14 @@ using ::base::BucketsAre;
 
 namespace autofill::autofill_metrics {
 
-class OffersMetricsTest : public metrics::AutofillMetricsBaseTest {
+class OffersMetricsTest : public AutofillMetricsBaseTest, public testing::Test {
  public:
   OffersMetricsTest() = default;
   ~OffersMetricsTest() override = default;
+
+  void SetUp() override { SetUpHelper(); }
+
+  void TearDown() override { TearDownHelper(); }
 };
 
 TEST_F(OffersMetricsTest, LogStoredOfferMetrics) {

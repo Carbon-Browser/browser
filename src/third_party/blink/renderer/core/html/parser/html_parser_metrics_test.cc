@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,22 +37,17 @@ class HTMLMetricsTest : public testing::Test {
   void TearDown() override {}
 
   void LoadHTML(const std::string& html) {
-    frame_test_helpers::LoadHTMLString(helper_.GetWebView()->MainFrameImpl(),
-                                       html,
-                                       url_test_helpers::ToKURL("about:blank"));
+    frame_test_helpers::LoadHTMLString(
+        helper_.GetWebView()->MainFrameImpl(), html,
+        url_test_helpers::ToKURL("https://www.foo.com/"));
   }
 
  protected:
   frame_test_helpers::WebViewHelper helper_;
 };
 
-#if BUILDFLAG(IS_MAC) && defined(ARCH_CPU_ARM64)
 // https://crbug.com/1222653
-#define MAYBE_ReportSingleChunk DISABLED_ReportSingleChunk
-#else
-#define MAYBE_ReportSingleChunk ReportSingleChunk
-#endif
-TEST_F(HTMLMetricsTest, MAYBE_ReportSingleChunk) {
+TEST_F(HTMLMetricsTest, DISABLED_ReportSingleChunk) {
   // Although the tests use a mock clock, the metrics recorder checks if the
   // system has a high resolution clock before recording results. As a result,
   // the tests will fail if the system does not have a high resolution clock.
@@ -66,38 +61,38 @@ TEST_F(HTMLMetricsTest, MAYBE_ReportSingleChunk) {
 
   // Should have one of each metric, except the yield times because with
   // a single chunk they should not report.
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ChunkCount2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeMax2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeMin2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeTotal2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedMax2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedMin2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedAverage2",
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ChunkCount4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeMax4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeMin4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeTotal4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedMax4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedMin4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedAverage4",
                                     1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedTotal2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeMax2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeMin2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeAverage2", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedTotal4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeMax4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeMin4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeAverage4", 1);
 
   // Expect specific values for the chunks and tokens counts
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.ChunkCount2", 1, 1);
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedMax2", 5,
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.ChunkCount4", 1, 1);
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedMax4", 5,
                                       1);
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedMin2", 5,
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedMin4", 5,
                                       1);
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedAverage2",
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedAverage4",
                                       5, 1);
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedTotal2", 5,
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedTotal4", 5,
                                       1);
 
   // Expect that the times have moved from the default and the max and min
   // and total are all the same (within the same bucket)
   std::vector<base::Bucket> parsing_time_max_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeMax2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeMax4");
   std::vector<base::Bucket> parsing_time_min_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeMin2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeMin4");
   std::vector<base::Bucket> parsing_time_total_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeTotal2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeTotal4");
   EXPECT_EQ(parsing_time_max_buckets.size(), 1u);
   EXPECT_EQ(parsing_time_min_buckets.size(), 1u);
   EXPECT_EQ(parsing_time_total_buckets.size(), 1u);
@@ -105,18 +100,12 @@ TEST_F(HTMLMetricsTest, MAYBE_ReportSingleChunk) {
   EXPECT_GT(parsing_time_min_buckets[0].min, 0);
   EXPECT_GT(parsing_time_total_buckets[0].min, 0);
 
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.InputCharacterCount",
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.InputCharacterCount4",
                                       19, 1);
 }
 
-#if BUILDFLAG(IS_MAC) && defined(ARCH_CPU_ARM64)
 // https://crbug.com/1222653
-#define MAYBE_HistogramReportsTwoChunks DISABLED_HistogramReportsTwoChunks
-#else
-#define MAYBE_HistogramReportsTwoChunks HistogramReportsTwoChunks
-#endif
-
-TEST_F(HTMLMetricsTest, MAYBE_HistogramReportsTwoChunks) {
+TEST_F(HTMLMetricsTest, DISABLED_HistogramReportsTwoChunks) {
   // Although the tests use a mock clock, the metrics recorder checks if the
   // system has a high resolution clock before recording results. As a result,
   // the tests will fail if the system does not have a high resolution clock.
@@ -158,37 +147,39 @@ TEST_F(HTMLMetricsTest, MAYBE_HistogramReportsTwoChunks) {
   // LOG(ERROR) << histogram_tester.GetAllHistogramsRecorded();
 
   // Should have one of each metric.
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ChunkCount2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeMax2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeMin2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeTotal2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedMax2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedMin2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedAverage2",
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ChunkCount4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeMax4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeMin4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.ParsingTimeTotal4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedMax4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedMin4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedAverage4",
                                     1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedTotal2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeMax2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeMin2", 1);
-  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeAverage2", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.TokensParsedTotal4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeMax4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeMin4", 1);
+  histogram_tester.ExpectTotalCount("Blink.HTMLParsing.YieldedTimeAverage4", 1);
 
   // Expect specific values for the chunks and tokens counts
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.ChunkCount2", 2, 1);
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedMax2", 196,
+  // TODO(crbug.com/1314493): See if we can get this to parse in two separate
+  // chunks again with the timed budget.
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.ChunkCount4", 1, 1);
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedMax4", 258,
                                       1);
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedMin2", 24,
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedMin4", 268,
                                       1);
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedAverage2",
-                                      113, 1);
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedTotal2",
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedAverage4",
+                                      258, 1);
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.TokensParsedTotal4",
                                       203, 1);
 
   // For parse times, expect that the times have moved from the default.
   std::vector<base::Bucket> parsing_time_max_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeMax2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeMax4");
   std::vector<base::Bucket> parsing_time_min_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeMin2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeMin4");
   std::vector<base::Bucket> parsing_time_total_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeTotal2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.ParsingTimeTotal4");
   EXPECT_EQ(parsing_time_max_buckets.size(), 1u);
   EXPECT_EQ(parsing_time_min_buckets.size(), 1u);
   EXPECT_EQ(parsing_time_total_buckets.size(), 1u);
@@ -199,11 +190,11 @@ TEST_F(HTMLMetricsTest, MAYBE_HistogramReportsTwoChunks) {
   // For yields, the values should be the same because there was only one yield,
   // but due to different histogram sizes we can't directly compare them.
   std::vector<base::Bucket> yield_time_max_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.YieldedTimeMax2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.YieldedTimeMax4");
   std::vector<base::Bucket> yield_time_min_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.YieldedTimeMin2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.YieldedTimeMin4");
   std::vector<base::Bucket> yield_time_average_buckets =
-      histogram_tester.GetAllSamples("Blink.HTMLParsing.YieldedTimeAverage2");
+      histogram_tester.GetAllSamples("Blink.HTMLParsing.YieldedTimeAverage4");
   EXPECT_EQ(yield_time_max_buckets.size(), 1u);
   EXPECT_EQ(yield_time_min_buckets.size(), 1u);
   EXPECT_EQ(yield_time_average_buckets.size(), 1u);
@@ -211,7 +202,7 @@ TEST_F(HTMLMetricsTest, MAYBE_HistogramReportsTwoChunks) {
   EXPECT_GT(yield_time_min_buckets[0].min, 0);
   EXPECT_GT(yield_time_average_buckets[0].min, 0);
 
-  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.InputCharacterCount",
+  histogram_tester.ExpectUniqueSample("Blink.HTMLParsing.InputCharacterCount4",
                                       1447, 1);
 }
 

@@ -1,11 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/sync/password_proto_utils.h"
 
+#include "base/feature_list.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/password_manager/core/browser/password_form.h"
+#include "components/password_manager/core/common/password_manager_features.h"
+#include "components/sync/base/features.h"
 #include "components/sync/protocol/password_specifics.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -19,16 +23,17 @@ using testing::Eq;
 
 constexpr time_t kIssuesCreationTime = 1337;
 
-sync_pb::PasswordSpecificsData_PasswordIssues CreateSpecificsDataIssues(
+sync_pb::PasswordIssues CreatePasswordIssues(
     const std::vector<InsecureType>& issue_types) {
-  sync_pb::PasswordSpecificsData_PasswordIssues remote_issues;
+  sync_pb::PasswordIssues remote_issues;
   for (auto type : issue_types) {
-    sync_pb::PasswordSpecificsData_PasswordIssues_PasswordIssue remote_issue;
-    remote_issue.set_date_first_detection_microseconds(
+    sync_pb::PasswordIssues_PasswordIssue remote_issue;
+    remote_issue.set_date_first_detection_windows_epoch_micros(
         base::Time::FromTimeT(kIssuesCreationTime)
             .ToDeltaSinceWindowsEpoch()
             .InMicroseconds());
     remote_issue.set_is_muted(false);
+    remote_issue.set_trigger_notification_from_backend_on_detection(true);
     switch (type) {
       case InsecureType::kLeaked:
         *remote_issues.mutable_leaked_password_issue() = remote_issue;
@@ -75,11 +80,34 @@ sync_pb::PasswordSpecificsData CreateSpecificsData(
   password_specifics.set_avatar_url(GURL(origin).spec());
   password_specifics.set_federation_url(std::string());
   *password_specifics.mutable_password_issues() =
-      CreateSpecificsDataIssues(issue_types);
-  // The current code always populates notes for outgoing protos even when
-  // non-exists.
-  password_specifics.mutable_notes();
+      CreatePasswordIssues(issue_types);
+  if (base::FeatureList::IsEnabled(syncer::kPasswordNotesWithBackup)) {
+    // The current code always populates notes for outgoing protos even when
+    // non-exists.
+    password_specifics.mutable_notes();
+  }
+  password_specifics.set_sender_email("sender@example.com");
+  password_specifics.set_sender_name("Sender Name");
+  password_specifics.set_date_received_windows_epoch_micros(
+      kIssuesCreationTime);
+  password_specifics.set_sharing_notification_displayed(true);
+  password_specifics.set_sender_profile_image_url(
+      "http://www.sender.com/profile_image");
   return password_specifics;
+}
+
+sync_pb::PasswordSpecificsMetadata CreateSpecificsMetadata(
+    const sync_pb::PasswordSpecificsData& password_specifics_data) {
+  sync_pb::PasswordSpecificsMetadata password_specifics_metadata;
+  password_specifics_metadata.set_url(password_specifics_data.signon_realm());
+  password_specifics_metadata.set_blacklisted(
+      password_specifics_data.blacklisted());
+  password_specifics_metadata.set_date_last_used_windows_epoch_micros(
+      password_specifics_data.date_last_used());
+  *password_specifics_metadata.mutable_password_issues() =
+      password_specifics_data.password_issues();
+  password_specifics_metadata.set_type(password_specifics_data.type());
+  return password_specifics_metadata;
 }
 
 }  // namespace
@@ -176,11 +204,44 @@ TEST(PasswordProtoUtilsTest, ReconcileCachedNotesUsingUnqiueDisplayName) {
 }
 
 TEST(PasswordProtoUtilsTest, ConvertSpecificsToFormAndBack) {
-  sync_pb::PasswordSpecifics specifics;
-  *specifics.mutable_client_only_encrypted_data() =
+  for (bool is_notes_enabled : {false, true}) {
+    base::test::ScopedFeatureList scoped_feature_list;
+    if (is_notes_enabled) {
+      scoped_feature_list.InitAndEnableFeature(
+          syncer::kPasswordNotesWithBackup);
+    } else {
+      scoped_feature_list.InitAndDisableFeature(
+          syncer::kPasswordNotesWithBackup);
+    }
+    sync_pb::PasswordSpecifics specifics;
+    *specifics.mutable_client_only_encrypted_data() = CreateSpecificsData(
+        "http://www.origin.com/", "username_element", "username_value",
+        "password_element", "signon_realm",
+        /*issue_types=*/{});
+    *specifics.mutable_unencrypted_metadata() =
+        CreateSpecificsMetadata(specifics.client_only_encrypted_data());
+
+    EXPECT_THAT(
+        SpecificsFromPassword(
+            PasswordFromSpecifics(specifics.client_only_encrypted_data()),
+            /*base_password_data=*/{})
+            .SerializeAsString(),
+        Eq(specifics.SerializeAsString()));
+  }
+}
+
+TEST(PasswordProtoUtilsTest, CopiesPasswordIssuesToMetadata) {
+  sync_pb::PasswordSpecificsData specifics_data =
       CreateSpecificsData("http://www.origin.com/", "username_element",
                           "username_value", "password_element", "signon_realm",
-                          /*issue_types=*/{});
+                          {InsecureType::kLeaked, InsecureType::kPhished,
+                           InsecureType::kReused, InsecureType::kWeak});
+
+  // Build expected password specfics.
+  sync_pb::PasswordSpecifics specifics;
+  *specifics.mutable_client_only_encrypted_data() = specifics_data;
+  *specifics.mutable_unencrypted_metadata() =
+      CreateSpecificsMetadata(specifics.client_only_encrypted_data());
 
   EXPECT_THAT(SpecificsFromPassword(
                   PasswordFromSpecifics(specifics.client_only_encrypted_data()),

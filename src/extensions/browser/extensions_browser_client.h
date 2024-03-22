@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,20 @@
 #define EXTENSIONS_BROWSER_EXTENSIONS_BROWSER_CLIENT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
-
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/public/browser/bluetooth_chooser.h"
-#include "content/public/browser/storage_partition_config.h"
 #include "extensions/browser/extension_event_histogram_value.h"
 #include "extensions/browser/extension_prefs_observer.h"
 #include "extensions/browser/extensions_browser_api_provider.h"
+#include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/extension_id.h"
 #include "extensions/common/mojom/view_type.mojom.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
@@ -41,6 +41,8 @@ class FilePath;
 namespace content {
 class BrowserContext;
 class RenderFrameHost;
+class SiteInstance;
+class StoragePartitionConfig;
 class WebContents;
 }  // namespace content
 
@@ -66,6 +68,10 @@ class Origin;
 namespace base {
 class CancelableTaskTracker;
 }  // namespace base
+
+namespace media_device_salt {
+class MediaDeviceSaltService;
+}  // namespace media_device_salt
 
 namespace extensions {
 
@@ -122,8 +128,10 @@ class ExtensionsBrowserClient {
   virtual bool AreExtensionsDisabled(const base::CommandLine& command_line,
                                      content::BrowserContext* context) = 0;
 
-  // Returns true if the |context| is known to the embedder.
-  virtual bool IsValidContext(content::BrowserContext* context) = 0;
+  // Returns true if the `context` is known to the embedder.
+  // Note: This is a `void*` to ensure downstream uses do not use the `context`
+  // in case it is *not* valid.
+  virtual bool IsValidContext(void* context) = 0;
 
   // Returns true if the BrowserContexts could be considered equivalent, for
   // example, if one is an off-the-record context owned by the other.
@@ -143,6 +151,42 @@ class ExtensionsBrowserClient {
   // Returns the original "recording" context. This method returns |context| if
   // |context| is not incognito.
   virtual content::BrowserContext* GetOriginalContext(
+      content::BrowserContext* context) = 0;
+
+  // The below methods are modeled off `Profile` and `ProfileSelections` in
+  // //chrome where their implementation filters out Profiles based on their
+  // types (Regular, Guest, System, etc..) and sub-implementation (Original vs
+  // OTR).
+  //
+  // Returns the Original `BrowserContext` based on the input `context`:
+  // - if `context` is Original: returns itself.
+  // - if `context` is OTR: returns the equivalent parent context.
+  // - returns nullptr if the underlying implementation of `context` is of type
+  // System Profile, or of type Guest Profile if `force_guest_profile` is false.
+  virtual content::BrowserContext* GetContextRedirectedToOriginal(
+      content::BrowserContext* context,
+      bool force_guest_profile) = 0;
+  // Returns its own instance of `BrowserContext` based on the input `context`:
+  // - if `context` is Original: returns itself.
+  // - if `context` is OTR: returns nullptr.
+  // - returns nullptr if the underlying implementation of `context` is of type
+  // System Profile, or of type Guest Profile if `force_guest_profile` is false.
+  virtual content::BrowserContext* GetContextOwnInstance(
+      content::BrowserContext* context,
+      bool force_guest_profile) = 0;
+  // Returns the Original `BrowserContext` based on the input `context`:
+  // - if `context` is Original: returns itself.
+  // - if `context` is OTR: returns nullptr.
+  // - returns nullptr if the underlying implementation of `context` is of type
+  // System Profile, or of type Guest Profile if `force_guest_profile` is false.
+  virtual content::BrowserContext* GetContextForOriginalOnly(
+      content::BrowserContext* context,
+      bool force_guest_profile) = 0;
+
+  // Returns whether the `context` has extensions disabled.
+  // An example of an implementation of `BrowserContext` that has extensions
+  // disabled is `Profile` of type System Profile.
+  virtual bool AreExtensionsDisabledForContext(
       content::BrowserContext* context) = 0;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -398,11 +442,6 @@ class ExtensionsBrowserClient {
   virtual bool IsExtensionTelemetryServiceEnabled(
       content::BrowserContext* context) const;
 
-  // Returns true if remote host contacted signal feature is enabled.
-  // TODO(zackhan): This function is for measuring the impacts in finch
-  // experiments, will remove afterwards.
-  virtual bool IsExtensionTelemetryRemoteHostContactedSignalEnabled() const;
-
   // TODO(anunoy): This is a temporary implementation of notifying the
   // extension telemetry service of the tabs.executeScript API invocation
   // while its usefulness is evaluated.
@@ -410,6 +449,13 @@ class ExtensionsBrowserClient {
       content::BrowserContext* context,
       const ExtensionId& extension_id,
       const std::string& code) const;
+
+  // Notifies the extension telemetry service when declarativeNetRequest API
+  // rules are added.
+  virtual void NotifyExtensionApiDeclarativeNetRequest(
+      content::BrowserContext* context,
+      const ExtensionId& extension_id,
+      const std::vector<api::declarative_net_request::Rule>& rules) const;
 
   // TODO(zackhan): This is a temporary implementation of notifying the
   // extension telemetry service when there are web requests initiated from
@@ -445,10 +491,51 @@ class ExtensionsBrowserClient {
       const Extension& extension) const;
 
   // Adds any hosts that should be automatically considered "granted" if
-  // requested, returning a modified permission set.
-  virtual std::unique_ptr<const PermissionSet> AddAdditionalAllowedHosts(
+  // requested to `granted_permissions`.
+  virtual void AddAdditionalAllowedHosts(
       const PermissionSet& desired_permissions,
-      const PermissionSet& granted_permissions) const;
+      PermissionSet* granted_permissions) const;
+
+  virtual void AddAPIActionToActivityLog(
+      content::BrowserContext* browser_context,
+      const ExtensionId& extension_id,
+      const std::string& call_name,
+      base::Value::List args,
+      const std::string& extra);
+  virtual void AddEventToActivityLog(content::BrowserContext* context,
+                                     const ExtensionId& extension_id,
+                                     const std::string& call_name,
+                                     base::Value::List args,
+                                     const std::string& extra);
+  virtual void AddDOMActionToActivityLog(
+      content::BrowserContext* browser_context,
+      const ExtensionId& extension_id,
+      const std::string& call_name,
+      base::Value::List args,
+      const GURL& url,
+      const std::u16string& url_title,
+      int call_type);
+
+  // Invokes |callback| with the StoragePartitionConfig that should be used for
+  // a <webview> or <controlledframe> with the given |partition_name| that is
+  // owned by a frame within |owner_site_instance|.
+  virtual void GetWebViewStoragePartitionConfig(
+      content::BrowserContext* browser_context,
+      content::SiteInstance* owner_site_instance,
+      const std::string& partition_name,
+      bool in_memory,
+      base::OnceCallback<void(std::optional<content::StoragePartitionConfig>)>
+          callback);
+
+  // Creates password reuse detection manager when new extension web contents
+  // are created.
+  virtual void CreatePasswordReuseDetectionManager(
+      content::WebContents* web_contents) const;
+
+  // Returns a service that provides persistent salts for generating media
+  // device IDs. Can be null if the embedder does not support persistent salts.
+  virtual media_device_salt::MediaDeviceSaltService* GetMediaDeviceSaltService(
+      content::BrowserContext* context);
 
  private:
   std::vector<std::unique_ptr<ExtensionsBrowserAPIProvider>> providers_;

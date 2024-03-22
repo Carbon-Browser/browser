@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,15 @@
 
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/test_future.h"
 #include "chromeos/crosapi/mojom/login.mojom.h"
 #include "content/public/test/browser_task_environment.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -52,7 +54,9 @@ class TestCleanupTriggeredObserver
 
   absl::optional<std::string> error_;
   bool should_reset_ = false;
-  mojo::Receiver<crosapi::mojom::LacrosCleanupTriggeredObserver>* receiver_;
+  raw_ptr<mojo::Receiver<crosapi::mojom::LacrosCleanupTriggeredObserver>,
+          DanglingUntriaged | ExperimentalAsh>
+      receiver_;
 };
 
 }  // namespace

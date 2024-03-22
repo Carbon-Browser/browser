@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,21 @@
 #define CHROME_UPDATER_CONFIGURATOR_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/time/time.h"
 #include "components/update_client/configurator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 class PrefService;
 
 namespace base {
 class Version;
+class FilePath;
 }  // namespace base
 
 namespace crx_file {
@@ -39,6 +41,8 @@ class ExternalConstants;
 class PolicyService;
 class UpdaterPrefs;
 
+// This class is free-threaded. Its instance is shared by multiple sequences and
+// it can't be mutated.
 class Configurator : public update_client::Configurator {
  public:
   Configurator(scoped_refptr<UpdaterPrefs> prefs,
@@ -47,10 +51,10 @@ class Configurator : public update_client::Configurator {
   Configurator& operator=(const Configurator&) = delete;
 
   // Overrides for update_client::Configurator.
-  double InitialDelay() const override;
-  int NextCheckDelay() const override;
-  int OnDemandDelay() const override;
-  int UpdateDelay() const override;
+  base::TimeDelta InitialDelay() const override;
+  base::TimeDelta NextCheckDelay() const override;
+  base::TimeDelta OnDemandDelay() const override;
+  base::TimeDelta UpdateDelay() const override;
   std::vector<GURL> UpdateUrl() const override;
   std::vector<GURL> PingUrl() const override;
   std::string GetProdId() const override;
@@ -74,10 +78,14 @@ class Configurator : public update_client::Configurator {
   bool IsPerUserInstall() const override;
   std::unique_ptr<update_client::ProtocolHandlerFactory>
   GetProtocolHandlerFactory() const override;
-  absl::optional<bool> IsMachineExternallyManaged() const override;
+  std::optional<bool> IsMachineExternallyManaged() const override;
   update_client::UpdaterStateProvider GetUpdaterStateProvider() const override;
+  std::optional<base::FilePath> GetCrxCachePath() const override;
 
-  int ServerKeepAliveSeconds() const;
+  virtual GURL CrashUploadURL() const;
+  virtual GURL DeviceManagementURL() const;
+
+  base::TimeDelta ServerKeepAliveTime() const;
   scoped_refptr<PolicyService> GetPolicyService() const;
   crx_file::VerifierFormat GetCrxVerifierFormat() const;
 
@@ -93,6 +101,7 @@ class Configurator : public update_client::Configurator {
   scoped_refptr<update_client::CrxDownloaderFactory> crx_downloader_factory_;
   scoped_refptr<update_client::UnzipperFactory> unzip_factory_;
   scoped_refptr<update_client::PatcherFactory> patch_factory_;
+  const std::optional<bool> is_managed_device_;
 };
 
 }  // namespace updater

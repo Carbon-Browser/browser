@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,18 @@ package org.chromium.chrome.browser.tracing.settings;
 
 import android.os.Bundle;
 
-import androidx.annotation.VisibleForTesting;
 import androidx.preference.PreferenceFragmentCompat;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
 import org.chromium.components.version_info.Channel;
 import org.chromium.components.version_info.VersionConstants;
 import org.chromium.components.version_info.VersionInfo;
 
-/**
- * Settings fragment containing preferences aimed at Chrome and web developers.
- */
+/** Settings fragment containing preferences aimed at Chrome and web developers. */
 public class DeveloperSettings extends PreferenceFragmentCompat {
     private static final String UI_PREF_BETA_STABLE_HINT = "beta_stable_hint";
 
@@ -34,18 +32,18 @@ public class DeveloperSettings extends PreferenceFragmentCompat {
         if (sIsEnabledForTests != null) return sIsEnabledForTests;
 
         if (VersionConstants.CHANNEL <= Channel.DEV) return true;
-        return SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.SETTINGS_DEVELOPER_ENABLED, false);
+        return ChromeSharedPreferences.getInstance()
+                .readBoolean(ChromePreferenceKeys.SETTINGS_DEVELOPER_ENABLED, false);
     }
 
     public static void setDeveloperSettingsEnabled() {
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.SETTINGS_DEVELOPER_ENABLED, true);
+        ChromeSharedPreferences.getInstance()
+                .writeBoolean(ChromePreferenceKeys.SETTINGS_DEVELOPER_ENABLED, true);
     }
 
-    @VisibleForTesting
     public static void setIsEnabledForTests(Boolean isEnabled) {
         sIsEnabledForTests = isEnabled;
+        ResettersForTesting.register(() -> sIsEnabledForTests = null);
     }
 
     @Override

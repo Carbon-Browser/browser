@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,13 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/component_export.h"
-#include "base/mac/scoped_cftyperef.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "device/fido/mac/credential_store.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 
 struct AuthenticatorConfig;
 
@@ -64,10 +61,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdContext {
   // authentication prompt.
   LAContext* authentication_context() const { return context_; }
 
-  // access_control returns a reference to the SecAccessControl object that was
-  // evaluated/authorized in the local user authentication prompt.
-  SecAccessControlRef access_control() const { return access_control_; }
-
  protected:
   TouchIdContext();
 
@@ -83,17 +76,13 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdContext {
 
   void RunCallback(bool success);
 
-  base::scoped_nsobject<LAContext> context_;
-  base::ScopedCFTypeRef<SecAccessControlRef> access_control_{
-      TouchIdCredentialStore::DefaultAccessControl()};
+  LAContext* __strong context_;
   Callback callback_;
   base::WeakPtrFactory<TouchIdContext> weak_ptr_factory_{this};
 
   friend class ScopedTouchIdTestEnvironment;
 };
 
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac
 
 #endif  // DEVICE_FIDO_MAC_TOUCH_ID_CONTEXT_H_

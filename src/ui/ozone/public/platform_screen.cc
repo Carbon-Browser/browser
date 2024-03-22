@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ PlatformScreen::PlatformScreen() = default;
 PlatformScreen::~PlatformScreen() = default;
 
 gfx::AcceleratedWidget PlatformScreen::GetLocalProcessWidgetAtPoint(
-    const gfx::Point& point,
+    const gfx::Point& point_in_dip,
     const std::set<gfx::AcceleratedWidget>& ignore) const {
   NOTIMPLEMENTED_LOG_ONCE();
   return gfx::kNullAcceleratedWidget;
@@ -53,8 +53,6 @@ base::Value::List PlatformScreen::GetGpuExtraInfo(
     const gfx::GpuExtraInfo& gpu_extra_info) {
   return base::Value::List();
 }
-
-void PlatformScreen::SetDeviceScaleFactor(float scale) {}
 
 void PlatformScreen::StorePlatformNameIntoListOfValues(
     base::Value::List& values,

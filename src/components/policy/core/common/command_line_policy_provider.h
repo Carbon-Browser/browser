@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ class POLICY_EXPORT CommandLinePolicyProvider
   ~CommandLinePolicyProvider() override;
 
   // ConfigurationPolicyProvider implementation.
-  void RefreshPolicies() override;
+  void RefreshPolicies(PolicyFetchReason reason) override;
   bool IsFirstPolicyLoadComplete(PolicyDomain domain) const override;
 
  private:

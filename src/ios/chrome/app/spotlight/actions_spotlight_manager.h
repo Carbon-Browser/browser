@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,9 +33,16 @@ BOOL SetStartupParametersForSpotlightAction(
 // Creates an ActionsSpotlightManager.
 + (ActionsSpotlightManager*)actionsSpotlightManager;
 
+- (instancetype)
+    initWithSpotlightInterface:(SpotlightInterface*)spotlightInterface
+         searchableItemFactory:(SearchableItemFactory*)searchableItemFactory;
+
+- (instancetype)init NS_UNAVAILABLE;
+
 // Updates the index with the Spotlight actions if the EnableSpotlightActions
 // experimental flag is set. Otherwise the index is only cleared.
-- (void)indexActions;
+- (void)indexActionsWithIsGoogleDefaultSearchEngine:
+    (BOOL)isGoogleDefaultSearchEngine;
 
 @end
 

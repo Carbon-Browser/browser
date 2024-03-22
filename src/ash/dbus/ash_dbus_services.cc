@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,7 @@ AshDBusServices::AshDBusServices(dbus::Bus* system_bus) {
                               dbus::ObjectPath(chromeos::kDisplayServicePath),
                               CrosDBusService::CreateServiceProviderList(
                                   std::make_unique<DisplayServiceProvider>()));
-  if (base::FeatureList::IsEnabled(
-          chromeos::features::kGesturePropertiesDBusService)) {
+  if (base::FeatureList::IsEnabled(features::kGesturePropertiesDBusService)) {
     gesture_properties_service_ = CrosDBusService::Create(
         system_bus, chromeos::kGesturePropertiesServiceName,
         dbus::ObjectPath(chromeos::kGesturePropertiesServicePath),

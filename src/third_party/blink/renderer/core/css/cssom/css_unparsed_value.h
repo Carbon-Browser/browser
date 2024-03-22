@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,9 +67,11 @@ class CORE_EXPORT CSSUnparsedValue final : public CSSStyleValue {
     CSSStyleValue::Trace(visitor);
   }
 
-  String ToString() const;
+  String ToString() const { return ToStringInternal(/*separate_tokens=*/true); }
 
  private:
+  String ToStringInternal(bool separate_tokens) const;
+
   HeapVector<Member<V8CSSUnparsedSegment>> tokens_;
 
   FRIEND_TEST_ALL_PREFIXES(CSSVariableReferenceValueTest, MixedList);

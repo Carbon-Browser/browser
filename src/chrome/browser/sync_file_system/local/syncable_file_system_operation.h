@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/types/pass_key.h"
 #include "storage/browser/file_system/file_system_operation.h"
@@ -33,6 +32,7 @@ class SyncableFileSystemOperation : public storage::FileSystemOperation {
   // Exposed for std::make_unique. Instances should be obtained from the factory
   // method SyncFileSystemBackend::CreateFileSystemOperation().
   SyncableFileSystemOperation(
+      storage::OperationType type,
       const storage::FileSystemURL& url,
       storage::FileSystemContext* file_system_context,
       std::unique_ptr<storage::FileSystemOperationContext> operation_context,
@@ -71,7 +71,7 @@ class SyncableFileSystemOperation : public storage::FileSystemOperation {
   void FileExists(const storage::FileSystemURL& url,
                   StatusCallback callback) override;
   void GetMetadata(const storage::FileSystemURL& url,
-                   int fields,
+                   GetMetadataFieldSet fields,
                    GetMetadataCallback callback) override;
   void ReadDirectory(const storage::FileSystemURL& url,
                      const ReadDirectoryCallback& callback) override;

@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright (c) 2018 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,13 +17,15 @@ class MockInputApi(object):
 
     def __init__(self):
         self.affected_paths = []
+        self.sys = sys
         self.os_path = os.path
-        self.python_executable = sys.executable
+        self.python_executable = self.python3_executable = sys.executable
         self.subprocess = subprocess
         self.is_windows = sys.platform == 'win32'
         self.environ = os.environ
         self.logging = PrintLogger()
         self.change = MockChange()
+        self.no_diffs = False
 
     def AbsoluteLocalPaths(self):
         return self.affected_paths
@@ -161,6 +163,16 @@ class DontModifyIDLFilesTest(unittest.TestCase):
         mock_input = MockInputApi()
         mock_output = MockOutputApi()
         mock_input.affected_paths = [os.path.join(mock_input.PresubmitLocalPath(), 'other', 'interfaces', 'test.idl')]
+        errors = PRESUBMIT._DontModifyIDLFiles(mock_input, mock_output)
+        self.assertEqual(errors, [])
+
+    def testModifiesTentativeIDL(self):
+        mock_input = MockInputApi()
+        mock_output = MockOutputApi()
+        mock_input.affected_paths = [
+            os.path.join(mock_input.PresubmitLocalPath(), 'wpt', 'interfaces',
+                         'test.tentative.idl')
+        ]
         errors = PRESUBMIT._DontModifyIDLFiles(mock_input, mock_output)
         self.assertEqual(errors, [])
 

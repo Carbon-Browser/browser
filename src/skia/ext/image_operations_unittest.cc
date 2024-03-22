@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -176,10 +176,7 @@ void SaveBitmapToPNG(const SkBitmap& bmp, const char* path) {
   }
 
   const base::FilePath fpath(path);
-  const int num_written =
-      base::WriteFile(fpath, reinterpret_cast<const char*>(&png[0]),
-                           png.size());
-  if (num_written != static_cast<int>(png.size())) {
+  if (!base::WriteFile(fpath, png)) {
     FAIL() << "Failed to write dest \"" << path << '"';
   }
 }

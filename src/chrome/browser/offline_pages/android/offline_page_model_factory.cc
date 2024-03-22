@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/android/build_info.h"
 #include "base/android/path_utils.h"
 #include "base/files/file_path.h"
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
@@ -33,7 +33,8 @@ OfflinePageModelFactory::OfflinePageModelFactory()
 
 // static
 OfflinePageModelFactory* OfflinePageModelFactory::GetInstance() {
-  return base::Singleton<OfflinePageModelFactory>::get();
+  static base::NoDestructor<OfflinePageModelFactory> instance;
+  return instance.get();
 }
 
 // static

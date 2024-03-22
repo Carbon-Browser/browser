@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,22 @@ package org.chromium.components.signin.identitymanager;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.components.signin.base.CoreAccountId;
+import org.chromium.components.signin.base.CoreAccountInfo;
+import org.chromium.components.signin.metrics.SigninAccessPoint;
 import org.chromium.components.signin.metrics.SignoutDelete;
 import org.chromium.components.signin.metrics.SignoutReason;
+
+import java.util.List;
 
 /**
  * IdentityMutator is the write interface of IdentityManager, see identity_mutator.h for more
  * information.
  */
 public class IdentityMutator {
-    private static final String TAG = "IdentityMutator";
-
     // Pointer to native IdentityMutator, not final because of destroy().
     private long mNativeIdentityMutator;
 
@@ -28,9 +31,7 @@ public class IdentityMutator {
         mNativeIdentityMutator = nativeIdentityMutator;
     }
 
-    /**
-     * Called by native IdentityManager upon KeyedService's shutdown
-     */
+    /** Called by native IdentityManager upon KeyedService's shutdown */
     @CalledByNative
     private void destroy() {
         mNativeIdentityMutator = 0;
@@ -44,9 +45,12 @@ public class IdentityMutator {
      *   - the account username is allowed by policy,
      *   - there is not already a primary account set.
      */
-    public boolean setPrimaryAccount(CoreAccountId accountId, @ConsentLevel int consentLevel) {
-        return IdentityMutatorJni.get().setPrimaryAccount(
-                mNativeIdentityMutator, accountId, consentLevel);
+    public @PrimaryAccountError int setPrimaryAccount(
+            CoreAccountId accountId,
+            @ConsentLevel int consentLevel,
+            @SigninAccessPoint int accessPoint) {
+        return IdentityMutatorJni.get()
+                .setPrimaryAccount(mNativeIdentityMutator, accountId, consentLevel, accessPoint);
     }
 
     /**
@@ -55,22 +59,15 @@ public class IdentityMutator {
      */
     public boolean clearPrimaryAccount(
             @SignoutReason int sourceMetric, @SignoutDelete int deleteMetric) {
-        return IdentityMutatorJni.get().clearPrimaryAccount(
-                mNativeIdentityMutator, sourceMetric, deleteMetric);
+        return IdentityMutatorJni.get()
+                .clearPrimaryAccount(mNativeIdentityMutator, sourceMetric, deleteMetric);
     }
 
-    /**
-     * Revokes sync consent for the primary account.
-     *
-     * If the transition from Sync to Signin consent level is not supported for this user, then this
-     * method will also clear the primary account.
-     * TODO(crbug.com/1306031): remove the sentence above once ALLOW_SYNC_OFF_FOR_CHILD_ACCOUNTS is
-     * cleaned up.
-     */
+    /** Revokes sync consent for the primary account. */
     public void revokeSyncConsent(
             @SignoutReason int sourceMetric, @SignoutDelete int deleteMetric) {
-        IdentityMutatorJni.get().revokeSyncConsent(
-                mNativeIdentityMutator, sourceMetric, deleteMetric);
+        IdentityMutatorJni.get()
+                .revokeSyncConsent(mNativeIdentityMutator, sourceMetric, deleteMetric);
     }
 
     /**
@@ -78,19 +75,43 @@ public class IdentityMutator {
      * ProfileOAuth2TokenServiceDelegate::ReloadAllAccountsFromSystemWithPrimaryAccount.
      */
     public void reloadAllAccountsFromSystemWithPrimaryAccount(@Nullable CoreAccountId accountId) {
-        IdentityMutatorJni.get().reloadAllAccountsFromSystemWithPrimaryAccount(
-                mNativeIdentityMutator, accountId);
+        IdentityMutatorJni.get()
+                .reloadAllAccountsFromSystemWithPrimaryAccount(mNativeIdentityMutator, accountId);
+    }
+
+    public void seedAccountsThenReloadAllAccountsWithPrimaryAccount(
+            List<CoreAccountInfo> coreAccountInfos, @Nullable CoreAccountId primaryAccountId) {
+        IdentityMutatorJni.get()
+                .seedAccountsThenReloadAllAccountsWithPrimaryAccount(
+                        mNativeIdentityMutator,
+                        coreAccountInfos.toArray(new CoreAccountInfo[0]),
+                        primaryAccountId);
     }
 
     @NativeMethods
     interface Natives {
-        public boolean setPrimaryAccount(long nativeJniIdentityMutator, CoreAccountId accountId,
-                @ConsentLevel int consentLevel);
-        public boolean clearPrimaryAccount(long nativeJniIdentityMutator,
-                @SignoutReason int sourceMetric, @SignoutDelete int deleteMetric);
-        public void revokeSyncConsent(long nativeJniIdentityMutator,
-                @SignoutReason int sourceMetric, @SignoutDelete int deleteMetric);
+        public @PrimaryAccountError int setPrimaryAccount(
+                long nativeJniIdentityMutator,
+                CoreAccountId accountId,
+                @ConsentLevel int consentLevel,
+                @SigninAccessPoint int accessPoint);
+
+        public boolean clearPrimaryAccount(
+                long nativeJniIdentityMutator,
+                @SignoutReason int sourceMetric,
+                @SignoutDelete int deleteMetric);
+
+        public void revokeSyncConsent(
+                long nativeJniIdentityMutator,
+                @SignoutReason int sourceMetric,
+                @SignoutDelete int deleteMetric);
+
         public void reloadAllAccountsFromSystemWithPrimaryAccount(
                 long nativeJniIdentityMutator, @Nullable CoreAccountId accountId);
+
+        public void seedAccountsThenReloadAllAccountsWithPrimaryAccount(
+                long nativeJniIdentityMutator,
+                CoreAccountInfo[] coreAccountInfos,
+                @Nullable CoreAccountId primaryAccountId);
     }
 }

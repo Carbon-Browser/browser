@@ -1,21 +1,29 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/message_center/message_center_utils.h"
 
+#include "ash/constants/ash_constants.h"
 #include "ash/public/cpp/metrics_util.h"
 #include "ash/public/cpp/vm_camera_mic_constants.h"
 #include "ash/root_window_controller.h"
+#include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
+#include "ash/system/message_center/message_center_constants.h"
+#include "ash/system/message_center/message_center_controller.h"
 #include "ash/system/message_center/notification_grouping_controller.h"
+#include "ash/system/message_center/session_state_notification_blocker.h"
+#include "ash/system/notification_center/notification_center_tray.h"
 #include "ash/system/status_area_widget.h"
-#include "ash/system/unified/unified_system_tray.h"
+#include "base/hash/sha1.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/ranges/algorithm.h"
 #include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/gfx/geometry/vector2d_f.h"
+#include "ui/gfx/image/image_skia_operations.h"
 #include "ui/message_center/message_center.h"
 #include "ui/views/animation/animation_builder.h"
 #include "ui/views/view.h"
@@ -26,69 +34,134 @@ namespace {
 void ReportAnimationSmoothness(const std::string& animation_histogram_name,
                                int smoothness) {
   // Record animation smoothness if `animation_histogram_name` is given.
-  if (!animation_histogram_name.empty())
+  if (!animation_histogram_name.empty()) {
     base::UmaHistogramPercentage(animation_histogram_name, smoothness);
+  }
 }
 
 }  // namespace
 
-namespace ash {
+namespace ash::message_center_utils {
 
-namespace message_center_utils {
+std::string GenerateGroupParentNotificationIdSuffix(
+    message_center::NotifierId notifier_id) {
+  switch (notifier_id.type) {
+    case message_center::NotifierType::WEB_PAGE:
+      return base::SHA1HashString(notifier_id.url.spec() +
+                                  notifier_id.web_app_id.value_or(""));
+    case message_center::NotifierType::ARC_APPLICATION:
+      return base::SHA1HashString(notifier_id.id +
+                                  notifier_id.group_key.value_or(""));
+    case message_center::NotifierType::SYSTEM_COMPONENT:
+      if (notifier_id.id == ash::kPrivacyIndicatorsNotifierId) {
+        return base::SHA1HashString(notifier_id.id);
+      }
+      ABSL_FALLTHROUGH_INTENDED;
+    case message_center::NotifierType::APPLICATION:
+    case message_center::NotifierType::CROSTINI_APPLICATION:
+    case message_center::NotifierType::PHONE_HUB:
+      NOTREACHED_NORETURN();
+  }
+}
 
 bool CompareNotifications(message_center::Notification* n1,
                           message_center::Notification* n2) {
-  if (n1->pinned() && !n2->pinned())
+  if (n1->pinned() && !n2->pinned()) {
     return true;
-  if (!n1->pinned() && n2->pinned())
+  }
+  if (!n1->pinned() && n2->pinned()) {
     return false;
+  }
   return message_center::CompareTimestampSerial()(n1, n2);
 }
 
 std::vector<message_center::Notification*> GetSortedNotificationsWithOwnView() {
-  auto visible_notifications =
-      message_center::MessageCenter::Get()->GetVisibleNotifications();
   std::vector<message_center::Notification*> sorted_notifications;
-  std::copy_if(visible_notifications.begin(), visible_notifications.end(),
-               std::back_inserter(sorted_notifications),
-               [](message_center::Notification* notification) {
-                 return !notification->group_child();
-               });
+  base::ranges::copy_if(
+      message_center::MessageCenter::Get()->GetVisibleNotifications(),
+      std::back_inserter(sorted_notifications),
+      [](message_center::Notification* notification) {
+        return !notification->group_child();
+      });
   std::sort(sorted_notifications.begin(), sorted_notifications.end(),
             CompareNotifications);
   return sorted_notifications;
 }
 
 size_t GetNotificationCount() {
-  size_t count = 0;
-  for (message_center::Notification* notification :
-       message_center::MessageCenter::Get()->GetVisibleNotifications()) {
-    const std::string& notifier = notification->notifier_id().id;
-    // Don't count these notifications since we have `CameraMicTrayItemView` to
-    // show indicators on the systray.
-    if (notifier == kVmCameraMicNotifierId)
-      continue;
+  // We need to ignore the `session_state_notification_blocker` when getting the
+  // notification count on the lock screen. This is because we want the counter
+  // to show the total number of available notifications including notifications
+  // that are hidden by the blocker.
+  const message_center::NotificationBlocker* blocker_to_ignore =
+      Shell::Get()->session_controller()->IsScreenLocked()
+          ? Shell::Get()
+                ->message_center_controller()
+                ->session_state_notification_blocker()
+          : nullptr;
 
-    // Don't count group child notifications since they're contained in a single
-    // parent view.
-    if (notification->group_child())
-      continue;
+  return base::ranges::count_if(
+      message_center::MessageCenter::Get()
+          ->GetVisibleNotificationsWithoutBlocker(blocker_to_ignore),
+      [](auto* notification) {
+        const std::string& notifier = notification->notifier_id().id;
 
-    ++count;
+        // Don't count these notifications since we have
+        // `PrivacyIndicatorsTrayItemView` or `CameraMicTrayItemView` to show
+        // indicators on the systray.
+        if (notifier == kPrivacyIndicatorsNotifierId ||
+            notifier == kVmCameraMicNotifierId) {
+          return false;
+        }
+
+        // The lockscreen notification is used to signify that there are
+        // notifications hidden. It should not effect the number of
+        // notifications.
+        if (notifier == kLockScreenNotifierId) {
+          return false;
+        }
+        // Don't count group child notifications since they're contained in a
+        // single parent view.
+        if (notification->group_child()) {
+          return false;
+        }
+
+        return true;
+      });
+}
+
+bool AreNotificationsHiddenOnLockscreen() {
+  DCHECK(Shell::Get()->session_controller()->IsScreenLocked());
+
+  // Return true if the `session_state_notification_blocker` is hiding any
+  // notifications.
+  auto* message_center = message_center::MessageCenter::Get();
+  if (message_center->GetVisibleNotifications().size() !=
+      message_center
+          ->GetVisibleNotificationsWithoutBlocker(
+              Shell::Get()
+                  ->message_center_controller()
+                  ->session_state_notification_blocker())
+          .size()) {
+    return true;
   }
-  return count;
+
+  return false;
 }
 
 message_center::NotificationViewController*
 GetActiveNotificationViewControllerForDisplay(int64_t display_id) {
   RootWindowController* root_window_controller =
       Shell::GetRootWindowControllerWithDisplayId(display_id);
-  if (!root_window_controller || !root_window_controller->GetStatusAreaWidget())
+  // Can be null in tests.
+  if (!root_window_controller ||
+      !root_window_controller->GetStatusAreaWidget()) {
     return nullptr;
+  }
 
   return root_window_controller->GetStatusAreaWidget()
-      ->unified_system_tray()
-      ->GetNotificationGroupingController()
+      ->notification_center_tray()
+      ->notification_grouping_controller()
       ->GetActiveNotificationViewController();
 }
 
@@ -100,6 +173,25 @@ GetActiveNotificationViewControllerForNotificationView(
       display::Screen::GetScreen()->GetDisplayNearestWindow(window).id();
 
   return GetActiveNotificationViewControllerForDisplay(display_id);
+}
+
+NotificationGroupingController* GetGroupingControllerForNotificationView(
+    views::View* notification_view) {
+  aura::Window* window = notification_view->GetWidget()->GetNativeWindow();
+  auto display_id =
+      display::Screen::GetScreen()->GetDisplayNearestWindow(window).id();
+
+  RootWindowController* root_window_controller =
+      Shell::GetRootWindowControllerWithDisplayId(display_id);
+  // Can be null in tests.
+  if (!root_window_controller ||
+      !root_window_controller->GetStatusAreaWidget()) {
+    return nullptr;
+  }
+
+  return root_window_controller->GetStatusAreaWidget()
+      ->notification_center_tray()
+      ->notification_grouping_controller();
 }
 
 void InitLayerForAnimations(views::View* view) {
@@ -211,6 +303,44 @@ void SlideOutView(views::View* view,
       .SetTransform(view->layer(), transform);
 }
 
-}  // namespace message_center_utils
+std::optional<gfx::ImageSkia> ResizeImageIfExceedSizeLimit(
+    const gfx::ImageSkia& input_image,
+    size_t size_limit_in_byte) {
+  const size_t image_size_in_bytes = input_image.bitmap()->computeByteSize();
+  if (image_size_in_bytes <= size_limit_in_byte) {
+    return std::nullopt;
+  }
 
-}  // namespace ash
+  // Calculate the image size after resize.
+  gfx::SizeF resized_size(input_image.size());
+  const float multiple =
+      image_size_in_bytes / static_cast<float>(size_limit_in_byte);
+  resized_size.Scale(1 / std::sqrt(multiple));
+
+  return gfx::ImageSkiaOperations::CreateResizedImage(
+      input_image, skia::ImageOperations::RESIZE_BEST,
+      gfx::ToFlooredSize(resized_size));
+}
+
+bool IsAshNotificationView(views::View* sender) {
+  auto* message_view = static_cast<message_center::MessageView*>(sender);
+  std::string notification_id = message_view->notification_id();
+
+  message_center::Notification* notification =
+      message_center::MessageCenter::Get()->FindVisibleNotificationById(
+          notification_id);
+
+  return IsAshNotification(notification);
+}
+
+bool IsAshNotification(const message_center::Notification* notification) {
+  if (!notification ||
+      (notification->type() == message_center::NOTIFICATION_TYPE_CUSTOM &&
+       notification->notifier_id().type ==
+           message_center::NotifierType::ARC_APPLICATION)) {
+    return false;
+  }
+  return true;
+}
+
+}  // namespace ash::message_center_utils

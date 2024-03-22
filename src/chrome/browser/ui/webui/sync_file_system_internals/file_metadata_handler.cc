@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <map>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "chrome/browser/apps/platform_apps/api/sync_file_system/sync_file_system_api_helpers.h"
@@ -86,13 +86,12 @@ void FileMetadataHandler::HandleGetExtensions(const base::Value::List& args) {
 
 void FileMetadataHandler::DidGetExtensions(std::string callback_id,
                                            base::Value::List list) {
-  ResolveJavascriptCallback(base::Value(callback_id),
-                            base::Value(std::move(list)));
+  ResolveJavascriptCallback(base::Value(callback_id), list);
 }
 
 void FileMetadataHandler::DidGetFileMetadata(std::string callback_id,
-                                             const base::ListValue& files) {
-  ResolveJavascriptCallback(base::Value(callback_id), files);
+                                             base::Value::List files) {
+  ResolveJavascriptCallback(base::Value(callback_id), std::move(files));
 }
 
 }  // namespace syncfs_internals

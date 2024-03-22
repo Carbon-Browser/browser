@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,25 +8,27 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "content/browser/notifications/blink_notification_service_impl.h"
 #include "content/browser/notifications/platform_notification_context_impl.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_permission_manager.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_browser_context.h"
+#include "content/public/test/test_renderer_host.h"
 #include "content/public/test/test_utils.h"
+#include "content/public/test/web_contents_tester.h"
 #include "content/test/mock_platform_notification_service.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -42,9 +44,10 @@
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration_options.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "ui/gfx/image/image_unittest_util.h"
 
-using ::testing::Return;
 using ::testing::_;
+using ::testing::Return;
 
 namespace content {
 
@@ -57,13 +60,6 @@ const char kBadMessageImproperNotificationImage[] =
     "disabled.";
 const char kBadMessageInvalidNotificationTriggerTimestamp[] =
     "Received an invalid notification trigger timestamp.";
-
-SkBitmap CreateBitmap(int width, int height, SkColor color) {
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(width, height);
-  bitmap.eraseColor(color);
-  return bitmap;
-}
 
 class MockNonPersistentNotificationListener
     : public blink::mojom::NonPersistentNotificationListener {
@@ -126,12 +122,18 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
     // will be initialized long before it is read from so this is fine.
     RunAllTasksUntilIdle();
 
+    contents_ = CreateTestWebContents();
+
+    storage_key_ = blink::StorageKey::CreateFirstParty(
+        url::Origin::Create(GURL(kTestOrigin)));
+
     notification_service_ = std::make_unique<BlinkNotificationServiceImpl>(
         notification_context_.get(), &browser_context_,
         embedded_worker_helper_->context_wrapper(), &render_process_host_,
-        url::Origin::Create(GURL(kTestOrigin)),
+        storage_key_,
         /*document_url=*/GURL(),
-        /*weak_document_ptr=*/WeakDocumentPtr(),
+        contents_.get()->GetPrimaryMainFrame()->GetWeakDocumentPtr(),
+        RenderProcessHost::NotificationServiceCreatorType::kDocument,
         notification_service_remote_.BindNewPipeAndPassReceiver());
 
     // Provide a mock permission manager to the |browser_context_|.
@@ -160,18 +162,17 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
     blink::mojom::ServiceWorkerRegistrationOptions options;
     options.scope = GURL(kTestOrigin);
 
-    blink::StorageKey key(url::Origin::Create(GURL(kTestOrigin)));
-
     {
       base::RunLoop run_loop;
       embedded_worker_helper_->context()->RegisterServiceWorker(
-          GURL(kTestServiceWorkerUrl), key, options,
+          GURL(kTestServiceWorkerUrl), storage_key_, options,
           blink::mojom::FetchClientSettingsObject::New(),
           base::BindOnce(
               &BlinkNotificationServiceImplTest::DidRegisterServiceWorker,
               base::Unretained(this), &service_worker_registration_id,
               run_loop.QuitClosure()),
-          /*requesting_frame_id=*/GlobalRenderFrameHostId());
+          /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+          PolicyContainerPolicies());
       run_loop.Run();
     }
 
@@ -183,7 +184,7 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
     {
       base::RunLoop run_loop;
       embedded_worker_helper_->context()->registry()->FindRegistrationForId(
-          service_worker_registration_id, key,
+          service_worker_registration_id, storage_key_,
           base::BindOnce(&BlinkNotificationServiceImplTest::
                              DidFindServiceWorkerRegistration,
                          base::Unretained(this), service_worker_registration,
@@ -420,6 +421,8 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
 
   BrowserTaskEnvironment task_environment_;  // Must be first member.
 
+  blink::StorageKey storage_key_;
+
   std::unique_ptr<EmbeddedWorkerTestHelper> embedded_worker_helper_;
 
   std::unique_ptr<BlinkNotificationServiceImpl> notification_service_;
@@ -439,6 +442,12 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
   std::vector<std::string> bad_messages_;
 
  private:
+  std::unique_ptr<content::WebContents> CreateTestWebContents() {
+    auto site_instance = content::SiteInstance::Create(&browser_context_);
+    return content::WebContentsTester::CreateTestWebContents(
+        &browser_context_, std::move(site_instance));
+  }
+
   blink::mojom::PermissionStatus permission_callback_result_ =
       blink::mojom::PermissionStatus::ASK;
 
@@ -451,6 +460,10 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
   absl::optional<blink::NotificationResources> get_notification_resources_;
 
   bool read_notification_data_callback_result_ = false;
+
+  RenderViewHostTestEnabler rvh_enabler_;
+
+  std::unique_ptr<WebContents> contents_;
 };
 
 TEST_F(BlinkNotificationServiceImplTest, GetPermissionStatus) {
@@ -522,7 +535,7 @@ TEST_F(BlinkNotificationServiceImplTest,
   SetPermissionStatus(blink::mojom::PermissionStatus::GRANTED);
 
   blink::NotificationResources resources;
-  resources.image = CreateBitmap(200, 100, SK_ColorMAGENTA);
+  resources.image = gfx::test::CreateBitmap(200, 100, SK_ColorMAGENTA);
   DisplayNonPersistentNotification(
       "token", blink::PlatformNotificationData(), resources,
       non_persistent_notification_listener_.GetRemote());
@@ -539,7 +552,7 @@ TEST_F(BlinkNotificationServiceImplTest,
 
   ASSERT_TRUE(bad_messages_.empty());
   blink::NotificationResources resources;
-  resources.image = CreateBitmap(200, 100, SK_ColorMAGENTA);
+  resources.image = gfx::test::CreateBitmap(200, 100, SK_ColorMAGENTA);
   DisplayNonPersistentNotification(
       "token", blink::PlatformNotificationData(), resources,
       non_persistent_notification_listener_.GetRemote());
@@ -555,7 +568,7 @@ TEST_F(BlinkNotificationServiceImplTest,
   RegisterServiceWorker(&registration);
 
   blink::NotificationResources resources;
-  resources.image = CreateBitmap(200, 100, SK_ColorMAGENTA);
+  resources.image = gfx::test::CreateBitmap(200, 100, SK_ColorMAGENTA);
   DisplayPersistentNotificationSync(
       registration->id(), blink::PlatformNotificationData(), resources);
 
@@ -580,7 +593,7 @@ TEST_F(BlinkNotificationServiceImplTest,
 
   ASSERT_TRUE(bad_messages_.empty());
   blink::NotificationResources resources;
-  resources.image = CreateBitmap(200, 100, SK_ColorMAGENTA);
+  resources.image = gfx::test::CreateBitmap(200, 100, SK_ColorMAGENTA);
   DisplayPersistentNotificationSync(
       registration->id(), blink::PlatformNotificationData(), resources);
   EXPECT_EQ(1u, bad_messages_.size());
@@ -833,7 +846,8 @@ TEST_F(BlinkNotificationServiceImplTest, ResourcesStoredForTriggered) {
   scheduled_notification_data.show_trigger_timestamp = timestamp;
 
   blink::NotificationResources resources;
-  resources.notification_icon = CreateBitmap(10, 10, SK_ColorMAGENTA);
+  resources.notification_icon =
+      gfx::test::CreateBitmap(/*size=*/10, SK_ColorMAGENTA);
 
   blink::PlatformNotificationData displayed_notification_data;
   displayed_notification_data.tag = "tagB";

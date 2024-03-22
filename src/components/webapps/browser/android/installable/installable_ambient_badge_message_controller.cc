@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/webapps/browser/android/installable/installable_ambient_badge_message_controller.h"
 
-#include "base/bind.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "components/messages/android/message_dispatcher_bridge.h"
 #include "components/messages/android/throttler/domain_session_throttler.h"
@@ -50,10 +50,10 @@ void InstallableAmbientBadgeMessageController::EnqueueMessage(
       messages::MessageIdentifier::INSTALLABLE_AMBIENT_BADGE,
       base::BindOnce(
           &InstallableAmbientBadgeMessageController::HandleInstallButtonClicked,
-          base::Unretained(this)),
+          weak_factory_.GetWeakPtr()),
       base::BindOnce(
           &InstallableAmbientBadgeMessageController::HandleMessageDismissed,
-          base::Unretained(this)));
+          weak_factory_.GetWeakPtr()));
 
   message_->SetTitle(l10n_util::GetStringFUTF16(
       IDS_AMBIENT_BADGE_INSTALL_ALTERNATIVE, app_name));
@@ -93,7 +93,10 @@ void InstallableAmbientBadgeMessageController::HandleMessageDismissed(
   message_.reset();
   if (dismiss_reason == messages::DismissReason::GESTURE) {
     client_->BadgeDismissed();
+  } else if (dismiss_reason == messages::DismissReason::TIMER) {
+    client_->BadgeIgnored();
   }
+
   if (dismiss_reason != messages::DismissReason::PRIMARY_ACTION) {
     GetThrottler()->AddStrike(save_origin_);
   }

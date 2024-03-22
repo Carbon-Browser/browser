@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 #include "ui/display/manager/managed_display_info.h"
 #include "ui/events/devices/touchscreen_device.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 TouchDeviceManagerTestApi::TouchDeviceManagerTestApi(
     TouchDeviceManager* touch_device_manager)
@@ -53,5 +52,4 @@ void TouchDeviceManagerTestApi::ResetTouchDeviceManager() {
       TouchDeviceManager::PortAssociationMap());
 }
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test

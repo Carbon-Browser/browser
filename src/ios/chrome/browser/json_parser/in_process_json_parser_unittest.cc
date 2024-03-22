@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ios/chrome/browser/json_parser/in_process_json_parser.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
@@ -18,9 +18,10 @@ TEST(InProcessJsonParserTest, TestSuccess) {
       R"json({"key": 1})json",
       base::BindOnce(
           [](base::OnceClosure quit_closure, base::Value value) {
-            ASSERT_TRUE(value.is_dict());
-            ASSERT_TRUE(value.FindIntKey("key"));
-            EXPECT_EQ(1, *value.FindIntKey("key"));
+            auto* dict = value.GetIfDict();
+            ASSERT_TRUE(dict);
+            ASSERT_TRUE(dict->FindInt("key"));
+            EXPECT_EQ(1, *dict->FindInt("key"));
             std::move(quit_closure).Run();
           },
           run_loop.QuitClosure()),

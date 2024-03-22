@@ -1,31 +1,24 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_WM_DESKS_DESK_DRAG_PROXY_H_
 #define ASH_WM_DESKS_DESK_DRAG_PROXY_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/views/widget/unique_widget_ptr.h"
-
-namespace views {
-class View;
-}  // namespace views
-
-namespace aura {
-class Window;
-}  // namespace aura
 
 namespace ash {
 
 class DeskMiniView;
 class DeskPreviewView;
-class DesksBarView;
+class DeskBarViewBase;
 
 // A helper class includes a widget whose content is the preview of the dragged
 // desk.
-// TODO(zxdan): Consider adding a DeskDragController to handle the communication
-// between DeskPreviewView and DesksBarView after M89.
+// TODO(zxdan): Consider adding a `DeskDragController` to handle the
+// communication between `DeskPreviewView` and `DeskBarViewBase` after M89.
 class DeskDragProxy : public ui::ImplicitAnimationObserver {
  public:
   enum class State {
@@ -36,7 +29,7 @@ class DeskDragProxy : public ui::ImplicitAnimationObserver {
     kEnded,         // The drag and drop finished.
   };
 
-  DeskDragProxy(DesksBarView* desks_bar_view,
+  DeskDragProxy(DeskBarViewBase* desk_bar_view,
                 DeskMiniView* drag_view,
                 float init_offset_x);
   DeskDragProxy(const DeskDragProxy&) = delete;
@@ -61,11 +54,11 @@ class DeskDragProxy : public ui::ImplicitAnimationObserver {
   State state() const { return state_; }
 
  private:
-  DesksBarView* desks_bar_view_ = nullptr;
+  raw_ptr<DeskBarViewBase, ExperimentalAsh> desk_bar_view_ = nullptr;
   // The desk's mini view being dragged.
-  DeskMiniView* drag_view_ = nullptr;
+  raw_ptr<DeskMiniView, ExperimentalAsh> drag_view_ = nullptr;
   // The desk preview view generated based on the `drag_view_`.
-  DeskPreviewView* drag_preview_ = nullptr;
+  raw_ptr<DeskPreviewView, ExperimentalAsh> drag_preview_ = nullptr;
   // The size of dragged preview.
   const gfx::Size drag_preview_size_;
   // The y of the dragged preview in screen coordinate.

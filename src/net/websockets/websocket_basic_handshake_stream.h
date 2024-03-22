@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,24 +13,38 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_export.h"
+#include "net/base/request_priority.h"
 #include "net/http/http_basic_state.h"
 #include "net/log/net_log_with_source.h"
 #include "net/websockets/websocket_handshake_stream_base.h"
+#include "net/websockets/websocket_stream.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace net {
 
 class ClientSocketHandle;
+class HttpNetworkSession;
+class HttpRequestHeaders;
 class HttpResponseHeaders;
 class HttpResponseInfo;
+class HttpStream;
 class HttpStreamParser;
+class IOBuffer;
+class IPEndPoint;
+class SSLCertRequestInfo;
+class SSLInfo;
 class WebSocketEndpointLockManager;
-struct WebSocketExtensionParams;
 class WebSocketStreamRequestAPI;
+struct AlternativeService;
+struct HttpRequestInfo;
+struct LoadTimingInfo;
+struct NetErrorDetails;
+struct WebSocketExtensionParams;
 
 class NET_EXPORT_PRIVATE WebSocketBasicHandshakeStream final
     : public WebSocketHandshakeStreamBase {
@@ -51,7 +65,7 @@ class NET_EXPORT_PRIVATE WebSocketBasicHandshakeStream final
 
   ~WebSocketBasicHandshakeStream() override;
 
-  // HttpStreamBase methods
+  // HttpStream methods
   void RegisterRequest(const HttpRequestInfo* request_info) override;
   int InitializeStream(bool can_send_early,
                        RequestPriority priority,
@@ -90,6 +104,8 @@ class NET_EXPORT_PRIVATE WebSocketBasicHandshakeStream final
   // Upgrade() has been called and should be disposed of as soon as possible.
   std::unique_ptr<WebSocketStream> Upgrade() override;
 
+  bool CanReadFromStream() const override;
+
   base::WeakPtr<WebSocketHandshakeStreamBase> GetWeakPtr() override;
 
   // Set the value used for the next Sec-WebSocket-Key header
@@ -125,7 +141,8 @@ class NET_EXPORT_PRIVATE WebSocketBasicHandshakeStream final
 
   // Owned by another object.
   // |connect_delegate| will live during the lifetime of this object.
-  const raw_ptr<WebSocketStream::ConnectDelegate> connect_delegate_;
+  const raw_ptr<WebSocketStream::ConnectDelegate, DanglingUntriaged>
+      connect_delegate_;
 
   // This is stored in SendRequest() for use by ReadResponseHeaders().
   raw_ptr<HttpResponseInfo> http_response_info_ = nullptr;
@@ -153,7 +170,7 @@ class NET_EXPORT_PRIVATE WebSocketBasicHandshakeStream final
   // to avoid including extension-related header files here.
   std::unique_ptr<WebSocketExtensionParams> extension_params_;
 
-  const raw_ptr<WebSocketStreamRequestAPI> stream_request_;
+  const raw_ptr<WebSocketStreamRequestAPI, DanglingUntriaged> stream_request_;
 
   const raw_ptr<WebSocketEndpointLockManager> websocket_endpoint_lock_manager_;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "base/command_line.h"
 #include "base/strings/string_number_conversions.h"
-#include "content/public/common/content_features.h"
+#include "content/common/features.h"
 #include "content/public/common/content_switches.h"
 
 namespace {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 namespace ash {
 
 const char kAccelerometerChannels[][8] = {"accel_x", "accel_y", "accel_z"};
+
+const char kGyroscopeChannels[][10] = {"anglvel_x", "anglvel_y", "anglvel_z"};
 
 // The number of axes for which there are accelerometer readings.
 constexpr uint32_t kNumberOfAxes = 3u;

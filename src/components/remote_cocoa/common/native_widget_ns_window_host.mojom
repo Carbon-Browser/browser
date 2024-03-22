@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -137,6 +137,9 @@ interface NativeWidgetNSWindowHost {
   // Called when the window is miniaturized or deminiaturized.
   OnWindowMiniaturizedChanged(bool miniaturized);
 
+  // Called when the window's zoomed state changes.
+  OnWindowZoomedChanged(bool zoomed);
+
   // Called when the current display or the properties of the current display
   // change.
   OnWindowDisplayChanged(display.mojom.Display display);
@@ -159,6 +162,22 @@ interface NativeWidgetNSWindowHost {
   // Called when the blob of data that represents the NSWindow's restorable
   // state has changed.
   OnWindowStateRestorationDataChanged(array<uint8> data);
+
+  // Called when this widget is reparented to another window.
+  OnWindowParentChanged(uint64 new_parent_id);
+
+  // Called when the toolbar reveal status changes. The toolbar is visible
+  // either because there are outstanding reveal locks or the mouse is
+  // hovering over the upper border of the screen.
+  OnImmersiveFullscreenToolbarRevealChanged(bool is_revealed);
+
+  // Called when the menubar reveal status changes.
+  // `reveal_amount` ranges in [0, 1]. This is the opacity of the menubar
+  // and the browser window traffic lights.
+  OnImmersiveFullscreenMenuBarRevealChanged(float reveal_amount);
+
+  // Returns height of the menubar if the menubar autohides, otherwise 0.
+  OnAutohidingMenuBarHeightChanged(int32 menu_bar_height);
 
   // Accept or cancel the current dialog window (depending on the value of
   // |button|), if a current dialog exists.
@@ -222,6 +241,14 @@ interface NativeWidgetNSWindowHost {
   [Sync]
   ValidateUserInterfaceItem(int32 command) =>
       (ValidateUserInterfaceItemResult result);
+
+  // Returns in |will_execute| whether or not ExecuteCommand() will execute
+  // the chrome command |command| with |window_open_disposition| and
+  // |is_before_first_responder|.
+  [Sync]
+  WillExecuteCommand(int32 command,
+                     ui.mojom.WindowOpenDisposition window_open_disposition,
+                     bool is_before_first_responder) => (bool will_execute);
 
   // Execute the chrome command |command| with |window_open_disposition|. If
   // |is_before_first_responder| then only call ExecuteCommand if the command

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,48 +7,39 @@
 #include <memory>
 
 #include "content/public/browser/web_contents.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
-// `Sec-` prefix makes this a forbidden header and cannot be added by
-// JavaScript.
-// This header tags browser-generated requests resulting from calls to the
-// FedCM API. Its presence can be used for, among other things, CSRF protection
-// on the identity provider's server. This originally omitted "-CSRF" but was
-// made more specific on speculation that we might need other headers later,
-// though it is unclear what they would be for. It can change back later if
-// no such requirements appear.
-// See https://fetch.spec.whatwg.org/#forbidden-header-name
-const char kSecFedCmCsrfHeader[] = "Sec-FedCM-CSRF";
-const char kSecFedCmCsrfHeaderValue[] = "?1";
-
-IdentityRequestAccount::IdentityRequestAccount(
-    const std::string& id,
-    const std::string& email,
-    const std::string& name,
-    const std::string& given_name,
-    const GURL& picture,
-    absl::optional<LoginState> login_state)
-    : id{id},
-      email{email},
-      name{name},
-      given_name{given_name},
-      picture{picture},
-      login_state{login_state} {}
-
-IdentityRequestAccount::IdentityRequestAccount(const IdentityRequestAccount&) =
-    default;
-IdentityRequestAccount::~IdentityRequestAccount() = default;
-
-ClientIdData::ClientIdData(const GURL& terms_of_service_url,
-                           const GURL& privacy_policy_url)
+ClientMetadata::ClientMetadata(const GURL& terms_of_service_url,
+                               const GURL& privacy_policy_url)
     : terms_of_service_url{terms_of_service_url},
       privacy_policy_url(privacy_policy_url) {}
+ClientMetadata::ClientMetadata(const ClientMetadata& other) = default;
+ClientMetadata::~ClientMetadata() = default;
 
 IdentityProviderMetadata::IdentityProviderMetadata() = default;
 IdentityProviderMetadata::~IdentityProviderMetadata() = default;
 IdentityProviderMetadata::IdentityProviderMetadata(
     const IdentityProviderMetadata& other) = default;
+
+IdentityProviderData::IdentityProviderData(
+    const std::string& idp_for_display,
+    const std::vector<IdentityRequestAccount>& accounts,
+    const IdentityProviderMetadata& idp_metadata,
+    const ClientMetadata& client_metadata,
+    const blink::mojom::RpContext& rp_context,
+    bool request_permission)
+    : idp_for_display{idp_for_display},
+      accounts{accounts},
+      idp_metadata{idp_metadata},
+      client_metadata{client_metadata},
+      rp_context(rp_context),
+      request_permission(request_permission) {}
+
+IdentityProviderData::IdentityProviderData(const IdentityProviderData& other) =
+    default;
+IdentityProviderData::~IdentityProviderData() = default;
 
 int IdentityRequestDialogController::GetBrandIconIdealSize() {
   return 0;
@@ -58,16 +49,76 @@ int IdentityRequestDialogController::GetBrandIconMinimumSize() {
   return 0;
 }
 
-void IdentityRequestDialogController::ShowAccountsDialog(
-    content::WebContents* rp_web_contents,
-    const GURL& idp_signin_url,
-    base::span<const IdentityRequestAccount> accounts,
-    const IdentityProviderMetadata& idp_metadata,
-    const ClientIdData& client_id_data,
-    IdentityRequestAccount::SignInMode sign_in_mode,
-    AccountSelectionCallback on_selected,
-    DismissCallback dismiss_callback) {
-  std::move(dismiss_callback).Run(DismissReason::OTHER);
+void IdentityRequestDialogController::SetIsInterceptionEnabled(bool enabled) {
+  is_interception_enabled_ = enabled;
 }
+
+void IdentityRequestDialogController::ShowAccountsDialog(
+    const std::string& top_frame_for_display,
+    const absl::optional<std::string>& iframe_for_display,
+    const std::vector<IdentityProviderData>& identity_provider_data,
+    IdentityRequestAccount::SignInMode sign_in_mode,
+    bool show_auto_reauthn_checkbox,
+    AccountSelectionCallback on_selected,
+    LoginToIdPCallback on_add_account,
+    DismissCallback dismiss_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+  }
+}
+
+void IdentityRequestDialogController::ShowFailureDialog(
+    const std::string& top_frame_for_display,
+    const absl::optional<std::string>& iframe_for_display,
+    const std::string& idp_for_display,
+    const blink::mojom::RpContext& rp_context,
+    const IdentityProviderMetadata& idp_metadata,
+    DismissCallback dismiss_callback,
+    LoginToIdPCallback login_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+  }
+}
+
+void IdentityRequestDialogController::ShowErrorDialog(
+    const std::string& top_frame_for_display,
+    const absl::optional<std::string>& iframe_for_display,
+    const std::string& idp_for_display,
+    const blink::mojom::RpContext& rp_context,
+    const IdentityProviderMetadata& idp_metadata,
+    const absl::optional<IdentityCredentialTokenError>& error,
+    DismissCallback dismiss_callback,
+    MoreDetailsCallback more_details_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+  }
+}
+
+std::string IdentityRequestDialogController::GetTitle() const {
+  return std::string();
+}
+
+absl::optional<std::string> IdentityRequestDialogController::GetSubtitle()
+    const {
+  return absl::nullopt;
+}
+
+void IdentityRequestDialogController::ShowIdpSigninFailureDialog(
+    base::OnceClosure dismiss_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run();
+  }
+}
+
+WebContents* IdentityRequestDialogController::ShowModalDialog(
+    const GURL& url,
+    DismissCallback dismiss_callback) {
+  if (!is_interception_enabled_) {
+    std::move(dismiss_callback).Run(DismissReason::kOther);
+  }
+  return nullptr;
+}
+
+void IdentityRequestDialogController::CloseModalDialog() {}
 
 }  // namespace content

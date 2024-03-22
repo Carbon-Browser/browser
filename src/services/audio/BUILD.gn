@@ -1,20 +1,16 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//media/media_options.gni")
 import("//testing/test.gni")
 
 source_set("audio") {
   sources = [
-    "aecdump_recording_manager.cc",
-    "aecdump_recording_manager.h",
     "audio_manager_power_user.h",
-    "concurrent_stream_metric_reporter.cc",
-    "concurrent_stream_metric_reporter.h",
     "debug_recording.cc",
     "debug_recording.h",
     "delay_buffer.cc",
@@ -30,6 +26,8 @@ source_set("audio") {
     "in_process_audio_manager_accessor.h",
     "input_controller.cc",
     "input_controller.h",
+    "input_glitch_counter.cc",
+    "input_glitch_counter.h",
     "input_stream.cc",
     "input_stream.h",
     "input_sync_writer.cc",
@@ -49,6 +47,8 @@ source_set("audio") {
     "loopback_stream.h",
     "output_controller.cc",
     "output_controller.h",
+    "output_glitch_counter.cc",
+    "output_glitch_counter.h",
     "output_stream.cc",
     "output_stream.h",
     "owning_audio_manager_accessor.cc",
@@ -60,8 +60,6 @@ source_set("audio") {
     "service.h",
     "service_factory.cc",
     "service_factory.h",
-    "service_metrics.cc",
-    "service_metrics.h",
     "snooper_node.cc",
     "snooper_node.h",
     "stream_factory.cc",
@@ -156,24 +154,24 @@ source_set("tests") {
   testonly = true
 
   sources = [
-    "aecdump_recording_manager_unittest.cc",
     "debug_recording_unittest.cc",
     "delay_buffer_unittest.cc",
     "device_listener_output_stream_unittest.cc",
     "device_notifier_unittest.cc",
     "group_coordinator_unittest.cc",
     "input_controller_unittest.cc",
+    "input_glitch_counter_unittest.cc",
     "input_stream_unittest.cc",
     "input_sync_writer_unittest.cc",
     "local_muter_unittest.cc",
     "log_factory_manager_unittest.cc",
     "loopback_stream_unittest.cc",
     "output_controller_unittest.cc",
+    "output_glitch_counter_unittest.cc",
     "output_stream_unittest.cc",
     "public/cpp/input_ipc_unittest.cc",
     "public/cpp/output_device_unittest.cc",
     "realtime_audio_thread_test.cc",
-    "service_metrics_unittest.cc",
     "snooper_node_unittest.cc",
     "sync_reader_unittest.cc",
     "test/audio_system_to_service_adapter_test.cc",
@@ -209,6 +207,7 @@ source_set("tests") {
       "public/cpp/sounds/audio_stream_handler_unittest.cc",
       "public/cpp/sounds/sounds_manager_unittest.cc",
     ]
+    data = [ "//media/test/data/" ]
   }
 
   if (chrome_wide_echo_cancellation_supported) {

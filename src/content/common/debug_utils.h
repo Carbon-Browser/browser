@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,12 +57,11 @@ enum class DebugScenario {
 
   // The RenderFrameHost to be restored from the back/forward cache no longer
   // exists for a navigation that is not marked as being restarted.
-  // See https://crbug.com/1258523.
-  kDebugNoRestoredRFHOnNonRestartedNavigation = 10,
+  // 10: kDebugNoRestoredRFHOnNonRestartedNavigation was removed.
 
   // After making changes, you MUST update the histograms xml by running:
   // "python tools/metrics/histograms/update_debug_scenarios.py"
-  kMaxValue = kDebugNoRestoredRFHOnNonRestartedNavigation,
+  kMaxValue = kDebugBackForwardCacheEntryExistsOnSubframeHistoryNav,
 };
 
 // The tracing categories enabled for debugging navigation scenarios can be

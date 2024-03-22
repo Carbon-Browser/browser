@@ -1,13 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/demo_setup_screen.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
-#include "chrome/browser/ui/webui/chromeos/login/demo_setup_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/demo_setup_screen_handler.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 
 namespace {
@@ -23,9 +23,9 @@ namespace ash {
 // static
 std::string DemoSetupScreen::GetResultString(Result result) {
   switch (result) {
-    case Result::COMPLETED:
+    case Result::kCompleted:
       return "Completed";
-    case Result::CANCELED:
+    case Result::kCanceled:
       return "Canceled";
   }
 }
@@ -50,9 +50,9 @@ void DemoSetupScreen::OnUserAction(const base::Value::List& args) {
   if (action_id == kUserActionStartSetup) {
     StartEnrollment();
   } else if (action_id == kUserActionClose) {
-    exit_callback_.Run(Result::CANCELED);
+    exit_callback_.Run(Result::kCanceled);
   } else if (action_id == kUserActionPowerwash) {
-    SessionManagerClient::Get()->StartDeviceWipe();
+    SessionManagerClient::Get()->StartDeviceWipe(base::DoNothing());
   } else {
     BaseScreen::OnUserAction(args);
   }
@@ -92,7 +92,7 @@ void DemoSetupScreen::OnSetupError(
 }
 
 void DemoSetupScreen::OnSetupSuccess() {
-  exit_callback_.Run(Result::COMPLETED);
+  exit_callback_.Run(Result::kCompleted);
 }
 
 }  // namespace ash

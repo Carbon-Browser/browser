@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,12 +16,13 @@
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_device_data_updater_impl.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager_impl.h"
 #include "chrome/browser/nearby_sharing/proto/device_rpc.pb.h"
-#include "chrome/browser/nearby_sharing/scheduling/fake_nearby_share_scheduler.h"
-#include "chrome/browser/nearby_sharing/scheduling/fake_nearby_share_scheduler_factory.h"
-#include "chrome/browser/nearby_sharing/scheduling/nearby_share_scheduler_factory.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/nearby/common/scheduling/fake_nearby_scheduler.h"
+#include "chromeos/ash/components/nearby/common/scheduling/fake_nearby_scheduler_factory.h"
+#include "chromeos/ash/components/nearby/common/scheduling/nearby_scheduler_factory.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
@@ -105,14 +106,15 @@ class NearbyShareLocalDeviceDataManagerImplTest
 
   void SetUp() override {
     RegisterNearbySharingPrefs(pref_service_.registry());
-    NearbyShareSchedulerFactory::SetFactoryForTesting(&scheduler_factory_);
+    ash::nearby::NearbySchedulerFactory::SetFactoryForTesting(
+        &scheduler_factory_);
     NearbyShareDeviceDataUpdaterImpl::Factory::SetFactoryForTesting(
         &updater_factory_);
     profile_info_provider()->set_given_name(kFakeGivenName);
   }
 
   void TearDown() override {
-    NearbyShareSchedulerFactory::SetFactoryForTesting(nullptr);
+    ash::nearby::NearbySchedulerFactory::SetFactoryForTesting(nullptr);
     NearbyShareDeviceDataUpdaterImpl::Factory::SetFactoryForTesting(nullptr);
   }
 
@@ -224,7 +226,7 @@ class NearbyShareLocalDeviceDataManagerImplTest
   FakeNearbyShareDeviceDataUpdater* updater() {
     return updater_factory_.instances().back();
   }
-  FakeNearbyShareScheduler* device_data_scheduler() {
+  ash::nearby::FakeNearbyScheduler* device_data_scheduler() {
     return scheduler_factory_.pref_name_to_periodic_instance()
         .at(prefs::kNearbySharingSchedulerDownloadDeviceDataPrefName)
         .fake_scheduler;
@@ -240,7 +242,7 @@ class NearbyShareLocalDeviceDataManagerImplTest
               updater_factory_.instances().back()->device_id());
 
     // Verify device data scheduler input parameters.
-    FakeNearbyShareSchedulerFactory::PeriodicInstance
+    ash::nearby::FakeNearbySchedulerFactory::PeriodicInstance
         device_data_scheduler_instance =
             scheduler_factory_.pref_name_to_periodic_instance().at(
                 prefs::kNearbySharingSchedulerDownloadDeviceDataPrefName);
@@ -256,7 +258,7 @@ class NearbyShareLocalDeviceDataManagerImplTest
   sync_preferences::TestingPrefServiceSyncable pref_service_;
   FakeNearbyShareClientFactory http_client_factory_;
   FakeNearbyShareProfileInfoProvider profile_info_provider_;
-  FakeNearbyShareSchedulerFactory scheduler_factory_;
+  ash::nearby::FakeNearbySchedulerFactory scheduler_factory_;
   FakeNearbyShareDeviceDataUpdaterFactory updater_factory_;
   std::unique_ptr<NearbyShareLocalDeviceDataManager> manager_;
 };
@@ -269,7 +271,7 @@ TEST_F(NearbyShareLocalDeviceDataManagerImplTest, DeviceId) {
   std::string id = manager()->GetId();
   EXPECT_EQ(10u, id.size());
   for (const char c : id)
-    EXPECT_TRUE(std::isalnum(c));
+    EXPECT_TRUE(absl::ascii_isalnum(static_cast<unsigned char>(c)));
 
   // The ID is persisted.
   DestroyManager();

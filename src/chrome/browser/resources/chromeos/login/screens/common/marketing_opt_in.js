@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,27 @@
  * opt-in screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/cr_elements/cr_toggle/cr_toggle.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/polymer/v3_0/iron-iconset-svg/iron-iconset-svg.js';
+import '../../components/oobe_cr_lottie.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeBackButton} from '../../components/buttons/oobe_back_button.js';
+import {OobeIconButton} from '../../components/buttons/oobe_icon_button.js';
+import {OobeTextButton} from '../../components/buttons/oobe_text_button.js';
+import {OobeAdaptiveDialog} from '../../components/dialogs/oobe_adaptive_dialog.js';
+import {OOBE_UI_STATE, SCREEN_GAIA_SIGNIN} from '../../components/display_manager_types.js';
+import {OobeA11yOption} from '../../components/oobe_a11y_option.js';
+
 
 /**
  * @constructor
@@ -15,9 +35,8 @@
  * @implements {LoginScreenBehaviorInterface}
  * @implements {MultiStepBehaviorInterface}
  */
-const MarketingScreenElementBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior],
-    Polymer.Element);
+const MarketingScreenElementBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
 
 /**
  * Enum to represent each page in the marketing opt in screen.
@@ -29,25 +48,24 @@ const MarketingOptInStep = {
 };
 
 /**
- * URL of the animation in the light mode.
- * @type {string}
- */
-const ANIMATION_LIGHT_URL = 'animations/all_set_light.json';
-
-/**
- * URL of the animation in the dark mode.
- * @type {string}
- */
-const ANIMATION_DARK_URL = 'animations/all_set_dark.json';
-
-/**
  * @typedef {{
- *   marketingOptInOverviewDialog:  OobeAdaptiveDialogElement,
+ *   marketingOptInOverviewDialog:  OobeAdaptiveDialog,
  *   chromebookUpdatesOption:  CrToggleElement,
  *   a11yNavButtonToggle:  OobeA11yOption,
  * }}
  */
 MarketingScreenElementBase.$;
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   optInVisibility: boolean,
+ *   optInDefaultState: boolean,
+ *   legalFooterVisibility: boolean,
+ *   cloudGamingDevice: boolean,
+ * }}
+ */
+let MarketingScreenData;
 
 /**
  * @polymer
@@ -57,7 +75,9 @@ class MarketingOptIn extends MarketingScreenElementBase {
     return 'marketing-opt-in-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -87,15 +107,6 @@ class MarketingOptIn extends MarketingScreenElementBase {
        * Canada only.
        */
       hasLegalFooter_: {
-        type: Boolean,
-        value: false,
-      },
-
-      /**
-       * Whether the marketing opt-in page is being rendered in dark mode.
-       * @private {boolean}
-       */
-      isDarkModeActive_: {
         type: Boolean,
         value: false,
       },
@@ -143,6 +154,9 @@ class MarketingOptIn extends MarketingScreenElementBase {
     this.$.animation.playing = played;
   }
 
+  /**
+   * @param {MarketingScreenData} data Screen init payload.
+   */
   onBeforeShow(data) {
     this.marketingOptInVisible_ =
         'optInVisibility' in data && data.optInVisibility;
@@ -216,34 +230,6 @@ class MarketingOptIn extends MarketingScreenElementBase {
   getIcon_() {
     return this.isCloudGamingDevice_ ? 'oobe-32:game-controller' :
                                        'oobe-32:checkmark';
-  }
-
-  /**
-   * Returns the src of the illustration.
-   * @private
-   */
-  getImageSource_() {
-    return this.isDarkModeActive_ ? 'images/blazey_dark.svg' :
-                                    'images/blazey_light.svg';
-  }
-
-  /**
-   * Returns the src of the margin for the toggle.
-   * @private
-   */
-  getMarginTop_() {
-    return this.isCloudGamingDevice_ ? 'margin-top: 65px;' :
-                                       'margin-top: 20px;';
-  }
-
-
-
-  /**
-   * Returns the url of the animation asset.
-   * @private
-   */
-  getAnimationUrl_() {
-    return this.isDarkModeActive_ ? ANIMATION_DARK_URL : ANIMATION_LIGHT_URL;
   }
 }
 

@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_CAPTURE_VIDEO_LINUX_V4L2_CAPTURE_DEVICE_IMPL_H_
 #define MEDIA_CAPTURE_VIDEO_LINUX_V4L2_CAPTURE_DEVICE_IMPL_H_
 
+#include <fcntl.h>
 #include <poll.h>
-#include <sys/fcntl.h>
 
 #include "media/capture/capture_export.h"
 #include "media/capture/video/linux/v4l2_capture_device.h"

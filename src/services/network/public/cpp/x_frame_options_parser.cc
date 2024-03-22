@@ -1,11 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/public/cpp/x_frame_options_parser.h"
 
 #include <string>
-#include "base/strings/string_piece.h"
+#include <string_view>
+
 #include "base/strings/string_util.h"
 #include "net/http/http_response_headers.h"
 #include "services/network/public/mojom/x_frame_options.mojom-shared.h"
@@ -24,8 +25,7 @@ mojom::XFrameOptionsValue ParseXFrameOptions(
   while (headers.EnumerateHeader(&iter, "x-frame-options", &value)) {
     mojom::XFrameOptionsValue current = mojom::XFrameOptionsValue::kInvalid;
 
-    base::StringPiece trimmed =
-        base::TrimWhitespaceASCII(value, base::TRIM_ALL);
+    std::string_view trimmed = base::TrimWhitespaceASCII(value, base::TRIM_ALL);
 
     if (base::EqualsCaseInsensitiveASCII(trimmed, "deny"))
       current = mojom::XFrameOptionsValue::kDeny;

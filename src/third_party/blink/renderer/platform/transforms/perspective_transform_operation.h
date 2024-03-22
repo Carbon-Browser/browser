@@ -69,10 +69,9 @@ class PLATFORM_EXPORT PerspectiveTransformOperation final
  private:
   OperationType GetType() const override { return kPerspective; }
 
-  void Apply(TransformationMatrix& transform,
-             const gfx::SizeF&) const override {
+  void Apply(gfx::Transform& transform, const gfx::SizeF&) const override {
     if (Perspective()) {
-      transform.ApplyPerspective(UsedPerspective());
+      transform.ApplyPerspectiveDepth(UsedPerspective());
     }
   }
 

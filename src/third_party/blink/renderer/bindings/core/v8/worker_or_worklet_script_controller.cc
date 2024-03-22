@@ -33,10 +33,13 @@
 #include <memory>
 #include <tuple>
 
+#include "base/debug/crash_logging.h"
+#include "third_party/blink/public/mojom/origin_trial_feature/origin_trial_feature.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/inspector/worker_thread_debugger.h"
+#include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.h"
 #include "third_party/blink/renderer/platform/bindings/extensions_registry.h"
@@ -45,6 +48,8 @@
 #include "third_party/blink/renderer/platform/bindings/wrapper_type_info.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -139,10 +144,42 @@ void WorkerOrWorkletScriptController::Initialize(const KURL& url_for_debugger) {
                                v8::DeserializeInternalFieldsCallback(),
                                microtask_queue);
   }
-  DCHECK(!context.IsEmpty());
+  // TODO(crbug.com/1501387): Remove temporary crash key when crash is fixed.
+  // While this logging involves a lot of string operations, it is only
+  // performed when a crash is certain.
+  StringBuilder ot_feature_string;
+  if (context.IsEmpty()) {
+    ot_feature_string.Append("Interface name: ");
+    if (global_scope_->GetWrapperTypeInfo()) {
+      ot_feature_string.Append(
+          global_scope_->GetWrapperTypeInfo()->interface_name);
+    }
+    ot_feature_string.Append("; OT Features: ");
 
-  script_state_ =
-      MakeGarbageCollected<ScriptState>(context, world_, global_scope_);
+    if (OriginTrialContext* ot_context =
+            global_scope_->GetOriginTrialContext()) {
+      if (std::unique_ptr<Vector<mojom::blink::OriginTrialFeature>>
+              ot_features = ot_context->GetInheritedTrialFeatures()) {
+        for (mojom::blink::OriginTrialFeature& feature : *ot_features) {
+          ot_feature_string.AppendNumber(static_cast<int>(feature));
+          ot_feature_string.Append(',');
+        }
+      } else {
+        ot_feature_string.Append("none");
+      }
+    }
+
+    // Ensure the string fits in the crash key, with space for a null
+    if (ot_feature_string.length() > 255) {
+      ot_feature_string.Resize(255);
+    }
+    SCOPED_CRASH_KEY_STRING256("shared-storage", "context-empty",
+                               ot_feature_string.ReleaseString().Utf8());
+    CHECK(false) << "V8 context is empty";
+  }
+  CHECK(!context.IsEmpty());
+
+  script_state_ = ScriptState::Create(context, world_, global_scope_);
 
   ScriptState::Scope scope(script_state_);
 
@@ -186,7 +223,7 @@ void WorkerOrWorkletScriptController::Initialize(const KURL& url_for_debugger) {
 
   if (global_scope_->IsMainThreadWorkletGlobalScope()) {
     // Set the human readable name for the world.
-    DCHECK(!global_scope_->Name().IsEmpty());
+    DCHECK(!global_scope_->Name().empty());
     world_->SetNonMainWorldHumanReadableName(world_->GetWorldId(),
                                              global_scope_->Name());
   } else {
@@ -197,12 +234,12 @@ void WorkerOrWorkletScriptController::Initialize(const KURL& url_for_debugger) {
                              context);
   }
 
-  if (!disable_eval_pending_.IsEmpty()) {
+  if (!disable_eval_pending_.empty()) {
     DisableEvalInternal(disable_eval_pending_);
     disable_eval_pending_ = String();
   }
 
-  if (!disable_wasm_eval_pending_.IsEmpty()) {
+  if (!disable_wasm_eval_pending_.empty()) {
     SetWasmEvalErrorMessageInternal(disable_wasm_eval_pending_);
     disable_wasm_eval_pending_ = String();
   }
@@ -271,7 +308,7 @@ void WorkerOrWorkletScriptController::PrepareForEvaluation() {
 void WorkerOrWorkletScriptController::DisableEvalInternal(
     const String& error_message) {
   DCHECK(IsContextInitialized());
-  DCHECK(!error_message.IsEmpty());
+  DCHECK(!error_message.empty());
 
   ScriptState::Scope scope(script_state_);
   script_state_->GetContext()->AllowCodeGenerationFromStrings(false);
@@ -282,7 +319,7 @@ void WorkerOrWorkletScriptController::DisableEvalInternal(
 void WorkerOrWorkletScriptController::SetWasmEvalErrorMessageInternal(
     const String& error_message) {
   DCHECK(IsContextInitialized());
-  DCHECK(!error_message.IsEmpty());
+  DCHECK(!error_message.empty());
 
   ScriptState::Scope scope(script_state_);
   script_state_->GetContext()->SetErrorMessageForWasmCodeGeneration(
@@ -300,7 +337,7 @@ bool WorkerOrWorkletScriptController::IsExecutionForbidden() const {
 }
 
 void WorkerOrWorkletScriptController::DisableEval(const String& error_message) {
-  DCHECK(!error_message.IsEmpty());
+  DCHECK(!error_message.empty());
   // Currently, this can be called before or after
   // WorkerOrWorkletScriptController::Initialize() because of messy
   // worker/worklet initialization sequences. Tidy them up after
@@ -316,13 +353,13 @@ void WorkerOrWorkletScriptController::DisableEval(const String& error_message) {
   // WorkerOrWorkletScriptController::Initialize() to be called from
   // WorkerThread::InitializeOnWorkerThread() immediately and synchronously
   // after returning here. Keep the error message until that time.
-  DCHECK(disable_eval_pending_.IsEmpty());
+  DCHECK(disable_eval_pending_.empty());
   disable_eval_pending_ = error_message;
 }
 
 void WorkerOrWorkletScriptController::SetWasmEvalErrorMessage(
     const String& error_message) {
-  DCHECK(!error_message.IsEmpty());
+  DCHECK(!error_message.empty());
   // Currently, this can be called before or after
   // WorkerOrWorkletScriptController::Initialize() because of messy
   // worker/worklet initialization sequences. Tidy them up after
@@ -338,7 +375,7 @@ void WorkerOrWorkletScriptController::SetWasmEvalErrorMessage(
   // WorkerOrWorkletScriptController::Initialize() to be called from
   // WorkerThread::InitializeOnWorkerThread() immediately and synchronously
   // after returning here. Keep the error message until that time.
-  DCHECK(disable_wasm_eval_pending_.IsEmpty());
+  DCHECK(disable_wasm_eval_pending_.empty());
   disable_wasm_eval_pending_ = error_message;
 }
 

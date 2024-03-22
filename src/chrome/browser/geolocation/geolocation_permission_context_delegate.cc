@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/geolocation/geolocation_permission_context_delegate.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/permissions/permission_request_id.h"
 #include "components/permissions/permission_util.h"
@@ -36,8 +36,7 @@ bool GeolocationPermissionContextDelegate::DecidePermission(
     DCHECK_EQ(!!*callback, permission_set);
     if (permission_set) {
       content::RenderFrameHost* const render_frame_host =
-          content::RenderFrameHost::FromID(id.render_process_id(),
-                                           id.render_frame_id());
+          content::RenderFrameHost::FromID(id.global_render_frame_host_id());
       ContentSetting content_setting =
           new_permission ? CONTENT_SETTING_ALLOW : CONTENT_SETTING_BLOCK;
       context->NotifyPermissionSet(
@@ -45,7 +44,8 @@ bool GeolocationPermissionContextDelegate::DecidePermission(
           permissions::PermissionUtil::GetLastCommittedOriginAsURL(
               render_frame_host->GetMainFrame()),
           std::move(*callback),
-          /*persist=*/false, content_setting, /*is_one_time=*/false);
+          /*persist=*/false, content_setting, /*is_one_time=*/false,
+          /*is_final_decision=*/true);
     }
     return true;
   }

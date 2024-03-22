@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_DEFAULT_PROMO_TAILORED_PROMO_UTIL_H_
 #define IOS_CHROME_BROWSER_UI_DEFAULT_PROMO_TAILORED_PROMO_UTIL_H_
 
-#import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
 
 @protocol TailoredPromoConsumer <NSObject>
 

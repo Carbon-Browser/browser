@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,13 @@ class COMPONENT_EXPORT(COLOR) ColorProvider {
   // associated objects are discarded. Mixers should not be added to the
   // provider after this has been called.
   void GenerateColorMap();
+
+  // Returns true if the color_map_ is empty. It's the case for some browser
+  // tests that run in single process mode but access colors that are
+  // initialized on renderer process launch, for example, controls in
+  // NaiveThemeBase and its children classes. Please see more details:
+  // https://crbug.com/1376775.
+  bool IsColorMapEmpty() const;
 
   void SetColorForTesting(ColorId id, SkColor color);
   const ColorMap& color_map_for_testing() { return *color_map_; }

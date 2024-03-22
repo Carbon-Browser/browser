@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/payments/core/native_error_strings.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -41,16 +41,18 @@ class AndroidAppCommunicationStub : public AndroidAppCommunication {
   }
 
   // AndroidAppCommunication implementation.
-  void InvokePaymentApp(const std::string& package_name,
-                        const std::string& activity_name,
-                        const std::map<std::string, std::set<std::string>>&
-                            stringified_method_data,
-                        const GURL& top_level_origin,
-                        const GURL& payment_request_origin,
-                        const std::string& payment_request_id,
-                        const base::UnguessableToken& request_token,
-                        content::WebContents* web_contents,
-                        InvokePaymentAppCallback callback) override {
+  void InvokePaymentApp(
+      const std::string& package_name,
+      const std::string& activity_name,
+      const std::map<std::string, std::set<std::string>>&
+          stringified_method_data,
+      const GURL& top_level_origin,
+      const GURL& payment_request_origin,
+      const std::string& payment_request_id,
+      const base::UnguessableToken& request_token,
+      content::WebContents* web_contents,
+      const absl::optional<base::UnguessableToken>& twa_instance_identifier,
+      InvokePaymentAppCallback callback) override {
     std::move(callback).Run(errors::kUnableToInvokeAndroidPaymentApps,
                             /*is_activity_result_ok=*/false,
                             /*payment_method_identifier=*/"",

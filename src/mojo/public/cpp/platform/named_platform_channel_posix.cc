@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -139,7 +139,7 @@ PlatformChannelEndpoint NamedPlatformChannel::CreateClientEndpoint(
 
   if (HANDLE_EINTR(
           connect(handle.GetFD().get(), storage.addr, storage.addr_len)) < 0) {
-    PLOG(ERROR) << "connect " << options.server_name;
+    VPLOG(1) << "connect " << options.server_name;
     return PlatformChannelEndpoint();
   }
   return PlatformChannelEndpoint(std::move(handle));

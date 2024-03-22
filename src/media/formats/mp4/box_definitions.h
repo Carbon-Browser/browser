@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,13 @@
 #include "media/base/media_log.h"
 #include "media/base/video_codecs.h"
 #include "media/formats/mp4/aac.h"
+#include "media/formats/mp4/ac3.h"
+#include "media/formats/mp4/ac4.h"
 #include "media/formats/mp4/avc.h"
 #include "media/formats/mp4/box_reader.h"
 #include "media/formats/mp4/dts.h"
 #include "media/formats/mp4/dtsx.h"
+#include "media/formats/mp4/eac3.h"
 #include "media/formats/mp4/fourccs.h"
 #include "media/media_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -238,14 +241,18 @@ struct MEDIA_EXPORT AVCDecoderConfigurationRecord : Box {
   uint8_t avc_level;
   uint8_t length_size;
 
-  typedef std::vector<uint8_t> SPS;
-  typedef std::vector<uint8_t> PPS;
+  std::vector<std::vector<uint8_t>> sps_list;
+  std::vector<std::vector<uint8_t>> pps_list;
 
-  std::vector<SPS> sps_list;
-  std::vector<PPS> pps_list;
+  uint8_t chroma_format;
+  uint8_t bit_depth_luma_minus8;
+  uint8_t bit_depth_chroma_minus8;
+
+  std::vector<std::vector<uint8_t>> sps_ext_list;
 
  private:
   bool ParseInternal(BufferReader* reader, MediaLog* media_log);
+  bool ParseREXT(BufferReader* reader, MediaLog* media_log);
 };
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 
@@ -261,7 +268,16 @@ struct MEDIA_EXPORT VPCodecConfigurationRecord : Box {
 struct MEDIA_EXPORT AV1CodecConfigurationRecord : Box {
   DECLARE_BOX_METHODS(AV1CodecConfigurationRecord);
 
-  VideoCodecProfile profile;
+  // Parses AV1CodecConfigurationRecord data encoded in |data|.
+  // Note: This method is intended to parse data outside the MP4StreamParser
+  //       context and therefore the box header is not expected to be present
+  //       in |data|
+  bool Parse(const uint8_t* data, int data_size);
+
+  VideoCodecProfile profile = VIDEO_CODEC_PROFILE_UNKNOWN;
+
+ private:
+  bool ParseInternal(BufferReader* reader, MediaLog* media_log);
 };
 #endif
 
@@ -329,17 +345,22 @@ struct MEDIA_EXPORT VideoSampleEntry : Box {
   PixelAspectRatioBox pixel_aspect;
   ProtectionSchemeInfo sinf;
 
+  VideoDecoderConfig::AlphaMode alpha_mode;
+
   VideoCodec video_codec;
   VideoCodecProfile video_codec_profile;
   VideoCodecLevel video_codec_level;
   VideoColorSpace video_color_space;
 
-  absl::optional<MasteringDisplayColorVolume> mastering_display_color_volume;
-  absl::optional<ContentLightLevelInformation> content_light_level_information;
+  absl::optional<gfx::HDRMetadata> hdr_metadata;
 
   bool IsFormatValid() const;
 
   scoped_refptr<BitstreamConverter> frame_bitstream_converter;
+
+  // Static method for testing.
+  static VideoColorSpace ConvertColorParameterInformationToColorSpace(
+      const ColorParameterInformation& info);
 };
 
 struct MEDIA_EXPORT ElementaryStreamDescriptor : Box {
@@ -381,7 +402,7 @@ struct MEDIA_EXPORT OpusSpecificBox : Box {
   uint32_t sample_rate;
 };
 
-#if BUILDFLAG(USE_PROPRIETARY_CODECS) && BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+#if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
 struct MEDIA_EXPORT DtsSpecificBox : Box {
   DECLARE_BOX_METHODS(DtsSpecificBox);
   DTS dts;
@@ -391,8 +412,26 @@ struct MEDIA_EXPORT DtsUhdSpecificBox : Box {
   DECLARE_BOX_METHODS(DtsUhdSpecificBox);
   DTSX dtsx;
 };
-#endif  // BUILDFLAG(USE_PROPRIETARY_CODECS) &&
-        // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+#endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+
+#if BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO)
+struct MEDIA_EXPORT AC3SpecificBox : Box {
+  DECLARE_BOX_METHODS(AC3SpecificBox);
+  AC3 dac3;
+};
+
+struct MEDIA_EXPORT EC3SpecificBox : Box {
+  DECLARE_BOX_METHODS(EC3SpecificBox);
+  EAC3 dec3;
+};
+#endif  // BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO)
+
+#if BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
+struct MEDIA_EXPORT AC4SpecificBox : Box {
+  DECLARE_BOX_METHODS(AC4SpecificBox);
+  AC4 dac4;
+};
+#endif  // BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
 
 struct MEDIA_EXPORT AudioSampleEntry : Box {
   DECLARE_BOX_METHODS(AudioSampleEntry);
@@ -407,11 +446,17 @@ struct MEDIA_EXPORT AudioSampleEntry : Box {
   ElementaryStreamDescriptor esds;
   FlacSpecificBox dfla;
   OpusSpecificBox dops;
-#if BUILDFLAG(USE_PROPRIETARY_CODECS) && BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+#if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
   DtsSpecificBox ddts;
   DtsUhdSpecificBox udts;
-#endif  // BUILDFLAG(USE_PROPRIETARY_CODECS) &&
-        // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+#endif  // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
+#if BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO)
+  AC3SpecificBox ac3;
+  EC3SpecificBox eac3;
+#endif  // BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO)
+#if BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
+  AC4SpecificBox ac4;
+#endif  // BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
 };
 
 struct MEDIA_EXPORT SampleDescription : Box {

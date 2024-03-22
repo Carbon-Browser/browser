@@ -1,10 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/platform_keys/key_permissions/key_permissions_service_impl.h"
 
+#include <stdint.h>
+
 #include <memory>
+#include <vector>
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
@@ -15,7 +18,7 @@
 #include "chrome/browser/ash/platform_keys/mock_platform_keys_service.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service_test_util.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -64,8 +67,8 @@ class KeyPermissionsServiceImplTest : public ::testing::Test {
     // by default unless specified.
     EXPECT_CALL(*user_token_key_permissions_manager_,
                 IsKeyAllowedForUsage(_, _, _))
-        .WillRepeatedly(base::test::RunOnceCallback<0>(/*allowed=*/false,
-                                                       Status::kSuccess));
+        .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<0>(
+            /*allowed=*/false, Status::kSuccess));
 
     system_token_key_permissions_manager_ =
         std::make_unique<platform_keys::MockKeyPermissionsManager>();
@@ -74,8 +77,8 @@ class KeyPermissionsServiceImplTest : public ::testing::Test {
     // by default unless specified.
     EXPECT_CALL(*system_token_key_permissions_manager_,
                 IsKeyAllowedForUsage(_, _, _))
-        .WillRepeatedly(
-            base::test::RunOnceCallback<0>(/*allowed=*/true, Status::kSuccess));
+        .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<0>(
+            /*allowed=*/true, Status::kSuccess));
 
     platform_keys::KeyPermissionsManagerImpl::
         SetSystemTokenKeyPermissionsManagerForTesting(
@@ -83,27 +86,27 @@ class KeyPermissionsServiceImplTest : public ::testing::Test {
   }
 
  protected:
-  void SetKeyLocations(const std::string& public_key,
+  void SetKeyLocations(const std::vector<uint8_t>& public_key,
                        const std::vector<TokenId>& key_locations) {
     ON_CALL(*platform_keys_service_, GetKeyLocations(public_key, _))
         .WillByDefault(testing::Invoke(
-            [key_locations](const std::string& public_key_spki_der,
+            [key_locations](std::vector<uint8_t> public_key_spki_der,
                             GetKeyLocationsCallback callback) {
               std::move(callback).Run(std::move(key_locations),
                                       Status::kSuccess);
             }));
   }
 
-  bool IsCorporateKey(const std::string& public_key) const {
+  bool IsCorporateKey(std::vector<uint8_t> public_key) const {
     IsCorporateKeyExecutionWaiter is_corporate_key_waiter;
     key_permissions_service_->IsCorporateKey(
-        public_key, is_corporate_key_waiter.GetCallback());
+        std::move(public_key), is_corporate_key_waiter.GetCallback());
     EXPECT_TRUE(is_corporate_key_waiter.Wait());
     EXPECT_EQ(is_corporate_key_waiter.status(), Status::kSuccess);
     return is_corporate_key_waiter.corporate();
   }
 
-  void SetCorporateKey(const std::string& public_key) {
+  void SetCorporateKey(const std::vector<uint8_t>& public_key) {
     EXPECT_CALL(*user_token_key_permissions_manager_,
                 AllowKeyForUsage(_, KeyUsage::kCorporate, public_key))
         .Times(1)
@@ -113,8 +116,10 @@ class KeyPermissionsServiceImplTest : public ::testing::Test {
         .WillOnce(
             base::test::RunOnceCallback<0>(/*allowed=*/true, Status::kSuccess));
     test_util::StatusWaiter set_corporate_key_waiter;
+
     key_permissions_service_->SetCorporateKey(
-        public_key, set_corporate_key_waiter.GetCallback());
+        std::vector<uint8_t>(public_key.begin(), public_key.end()),
+        set_corporate_key_waiter.GetCallback());
     EXPECT_TRUE(set_corporate_key_waiter.Wait());
   }
 
@@ -130,7 +135,7 @@ class KeyPermissionsServiceImplTest : public ::testing::Test {
 };
 
 TEST_F(KeyPermissionsServiceImplTest, SystemTokenKeyIsImplicitlyCorporate) {
-  const std::string kPublicKey = "test_public_key";
+  const std::vector<uint8_t> kPublicKey{1, 2, 3, 4, 5};
 
   SetKeyLocations(kPublicKey, {TokenId::kSystem});
   EXPECT_TRUE(IsCorporateKey(kPublicKey));
@@ -140,7 +145,7 @@ TEST_F(KeyPermissionsServiceImplTest, SystemTokenKeyIsImplicitlyCorporate) {
 }
 
 TEST_F(KeyPermissionsServiceImplTest, CorporateRoundTrip) {
-  const std::string kPublicKey = "test_public_key";
+  const std::vector<uint8_t> kPublicKey{1, 2, 3, 4, 5};
 
   // By default, user-token keys are not corporate.
   SetKeyLocations(kPublicKey, {TokenId::kUser});

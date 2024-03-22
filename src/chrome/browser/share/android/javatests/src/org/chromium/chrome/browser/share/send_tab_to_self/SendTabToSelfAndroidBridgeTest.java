@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.share.send_tab_to_self;
 
-import static org.mockito.Mockito.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.browser.share.send_tab_to_self.TargetDeviceInfo.DeviceType;
+import org.chromium.components.sync_device_info.FormFactor;
 import org.chromium.content_public.browser.WebContents;
 
 import java.util.List;
@@ -31,11 +31,9 @@ import java.util.List;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class SendTabToSelfAndroidBridgeTest {
-    @Rule
-    public JniMocker mocker = new JniMocker();
+    @Rule public JniMocker mocker = new JniMocker();
 
-    @Mock
-    SendTabToSelfAndroidBridge.Natives mNativeMock;
+    @Mock SendTabToSelfAndroidBridge.Natives mNativeMock;
     private Profile mProfile;
     private WebContents mWebContents;
 
@@ -62,10 +60,12 @@ public class SendTabToSelfAndroidBridgeTest {
     @SmallTest
     @SuppressWarnings("unchecked")
     public void testGetAllTargetDeviceInfos() {
-        TargetDeviceInfo[] expected = new TargetDeviceInfo[] {
-                new TargetDeviceInfo("name1", "guid1", DeviceType.CHROMEOS, 123L),
-                new TargetDeviceInfo("name2", "guid2", DeviceType.LINUX, 456L),
-                new TargetDeviceInfo("name3", "guid3", DeviceType.PHONE, 789L)};
+        TargetDeviceInfo[] expected =
+                new TargetDeviceInfo[] {
+                    new TargetDeviceInfo("name1", "guid1", FormFactor.DESKTOP, 123L),
+                    new TargetDeviceInfo("name2", "guid2", FormFactor.DESKTOP, 456L),
+                    new TargetDeviceInfo("name3", "guid3", FormFactor.PHONE, 789L)
+                };
         when(mNativeMock.getAllTargetDeviceInfos(eq(mProfile))).thenReturn(expected);
 
         List<TargetDeviceInfo> actual =

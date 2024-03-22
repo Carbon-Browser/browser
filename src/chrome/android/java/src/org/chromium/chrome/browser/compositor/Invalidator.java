@@ -1,16 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.compositor;
 
-/**
- * The {@link Invalidator} invalidates a client when it is the right time.
- */
+/** The {@link Invalidator} invalidates a client when it is the right time. */
 public class Invalidator {
-    /**
-     * Interface for the host that drives the invalidations.
-     */
+    /** Interface for the host that drives the invalidations. */
     public interface Host {
         /**
          * Requests an invalidation of the view.

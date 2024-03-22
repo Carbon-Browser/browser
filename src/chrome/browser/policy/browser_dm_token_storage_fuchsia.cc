@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,10 @@ bool BrowserDMTokenStorageFuchsia::InitEnrollmentErrorOption() {
   // TODO(crbug.com/1236996)
   NOTIMPLEMENTED_LOG_ONCE();
   return false;
+}
+
+bool BrowserDMTokenStorageFuchsia::CanInitEnrollmentToken() const {
+  return true;
 }
 
 BrowserDMTokenStorage::StoreTask BrowserDMTokenStorageFuchsia::SaveDMTokenTask(

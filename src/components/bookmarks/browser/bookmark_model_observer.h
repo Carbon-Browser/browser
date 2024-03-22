@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 
 #include <stddef.h>
 
+#include "base/observer_list_types.h"
+
 class GURL;
 
 namespace bookmarks {
@@ -17,7 +19,7 @@ class BookmarkModel;
 class BookmarkNode;
 
 // Observer for the BookmarkModel.
-class BookmarkModelObserver {
+class BookmarkModelObserver : public base::CheckedObserver {
  public:
   BookmarkModelObserver(const BookmarkModelObserver&) = delete;
   BookmarkModelObserver& operator=(const BookmarkModelObserver&) = delete;
@@ -37,10 +39,18 @@ class BookmarkModelObserver {
                                  const BookmarkNode* new_parent,
                                  size_t new_index) = 0;
 
-  // Invoked when a node has been added.
+  // Invoked when a node has been added. If the added node has any descendants,
+  // BookmarkModel` will invoke `BookmarkNodeAdded` recursively for all these
+  // descendants.
+  // TODO(crbug.com/1440384): See if this should send only one notification,
+  //                          for consistency with `BookmarkNodeRemoved`.
+  //
+  // `added_by_user` is true when a new bookmark was added by the user and false
+  // when a node is added by sync or duplicated.
   virtual void BookmarkNodeAdded(BookmarkModel* model,
                                  const BookmarkNode* parent,
-                                 size_t index) = 0;
+                                 size_t index,
+                                 bool added_by_user) = 0;
 
   // Invoked prior to removing a node from the model. When a node is removed
   // it's descendants are implicitly removed from the model as
@@ -75,11 +85,13 @@ class BookmarkModelObserver {
       const BookmarkNode* node,
       const std::set<GURL>& no_longer_bookmarked) = 0;
 
-  // Invoked before the title or url of a node is changed.
+  // Invoked before the title or url of a node is changed. Subsequent
+  // BookmarkNodeChanged call guaranteed to contain the same BookmarkNode.
   virtual void OnWillChangeBookmarkNode(BookmarkModel* model,
                                         const BookmarkNode* node) {}
 
-  // Invoked when the title or url of a node changes.
+  // Invoked when the title or url of a node changes. Guaranteed to contain the
+  // same BookmarkNode as the preceding OnWillChangeBookmark Node call.
   virtual void BookmarkNodeChanged(BookmarkModel* model,
                                    const BookmarkNode* node) = 0;
 
@@ -141,7 +153,7 @@ class BookmarkModelObserver {
 
  protected:
   BookmarkModelObserver() = default;
-  virtual ~BookmarkModelObserver() = default;
+  ~BookmarkModelObserver() override = default;
 };
 
 }  // namespace bookmarks

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -314,10 +314,6 @@ function executeDOMChangesOnTabUpdated() {
           'var val = store.getItem("foo"); ' +
           'store.removeItem("foo"); ' +
           'store.clear();';
-
-  // Accesses the HTML5 WebDatabase API from inside a content script.
-  code += 'var db = openDatabase("testdb", "1.0", "test database", ' +
-          '                      1024 * 1024);';
 
   // Accesses the HTML5 Canvas API from inside a content script.
   code += 'var testCanvas = document.createElement("canvas"); ' +

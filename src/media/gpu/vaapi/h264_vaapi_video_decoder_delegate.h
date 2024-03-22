@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define MEDIA_GPU_VAAPI_H264_VAAPI_VIDEO_DECODER_DELEGATE_H_
 
 #include "base/atomic_sequence_num.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "build/chromeos_buildflags.h"
@@ -70,11 +70,10 @@ class H264VaapiVideoDecoderDelegate : public H264Decoder::H264Accelerator,
   Status SetStream(base::span<const uint8_t> stream,
                    const DecryptConfig* decrypt_config) override;
 
+  bool RequiresRefLists() override;
+
  private:
   void FillVAPicture(VAPictureH264* va_pic, scoped_refptr<H264Picture> pic);
-  int FillVARefFramesFromDPB(const H264DPB& dpb,
-                             VAPictureH264* va_pics,
-                             int num_pics);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // We need to hold onto this memory here because it's referenced by the

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,14 @@
 
 #include "ash/ash_export.h"
 #include "ash/login/ui/animated_rounded_image_view.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/gfx/image/canvas_image_source.h"
+#include "ui/views/controls/animated_image_view.h"
 #include "ui/views/view.h"
 
 namespace gfx {
@@ -27,12 +30,14 @@ class ASH_EXPORT AuthIconView : public views::View {
  public:
   METADATA_HEADER(AuthIconView);
 
-  enum class Color {
+  enum class Status {
     kPrimary,
     kDisabled,
     kError,
     kPositive,
   };
+
+  static ui::ColorId GetColorId(AuthIconView::Status status);
 
   AuthIconView();
   AuthIconView(AuthIconView&) = delete;
@@ -40,7 +45,9 @@ class ASH_EXPORT AuthIconView : public views::View {
   ~AuthIconView() override;
 
   // Show a static icon.
-  void SetIcon(const gfx::VectorIcon& icon, Color color = Color::kPrimary);
+  void SetIcon(const gfx::VectorIcon& icon, Status status = Status::kPrimary);
+  // Rasterize the icon.
+  void RasterizeIcon();
 
   // Show a circle icon.
   void SetCircleImage(int size, SkColor color);
@@ -52,6 +59,10 @@ class ASH_EXPORT AuthIconView : public views::View {
   void SetAnimation(int animation_resource_id,
                     base::TimeDelta duration,
                     int num_frames);
+
+  // Play a Lottie animation. The animation will play exactly once, after which
+  // the final frame will be displayed until the icon is changed again.
+  void SetLottieAnimation(std::unique_ptr<lottie::Animation> animation);
 
   // Cause the icon to briefly shake left and right to signify that an error has
   // occurred.
@@ -75,6 +86,8 @@ class ASH_EXPORT AuthIconView : public views::View {
   }
 
   // views::View:
+  void AddedToWidget() override;
+  void OnThemeChanged() override;
   void OnPaint(gfx::Canvas* canvas) override;
   gfx::Size CalculatePreferredSize() const override;
   void OnGestureEvent(ui::GestureEvent* event) override;
@@ -97,7 +110,9 @@ class ASH_EXPORT AuthIconView : public views::View {
 
   base::RepeatingClosure on_tap_or_click_callback_;
 
-  AnimatedRoundedImageView* icon_;
+  raw_ptr<AnimatedRoundedImageView, ExperimentalAsh> icon_;
+  raw_ptr<views::AnimatedImageView, ExperimentalAsh> lottie_animation_view_;
+  ui::ImageModel icon_image_model_;
 
   // Time when the progress animation was enabled.
   base::TimeTicks progress_animation_start_time_;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,10 @@ jboolean JNI_IntentHandler_IsCorsSafelistedHeader(
     JNIEnv* env,
     const JavaParamRef<jstring>& j_header_name,
     const JavaParamRef<jstring>& j_header_value) {
-  std::string header_name(ConvertJavaStringToUTF8(env, j_header_name));
-  std::string header_value(ConvertJavaStringToUTF8(env, j_header_value));
+  std::string header_name(
+      base::android::ConvertJavaStringToUTF8(env, j_header_name));
+  std::string header_value(
+      base::android::ConvertJavaStringToUTF8(env, j_header_value));
 
   return network::cors::IsCorsSafelistedHeader(header_name, header_value);
 }

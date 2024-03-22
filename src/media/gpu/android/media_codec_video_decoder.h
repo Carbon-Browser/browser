@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,6 @@
 #include "base/containers/circular_deque.h"
 #include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
-#include "base/timer/elapsed_timer.h"
-#include "base/timer/timer.h"
 #include "gpu/command_buffer/service/ref_counted_lock.h"
 #include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_preferences.h"
@@ -184,15 +182,10 @@ class MEDIA_GPU_EXPORT MediaCodecVideoDecoder final
   // a new one.
   void FlushCodec();
 
-  // Attempts to queue input and dequeue output from the codec. Calls
-  // StartTimerOrPumpCodec() even if the codec is idle when |force_start_timer|.
-  void PumpCodec(bool force_start_timer);
+  // Attempts to queue input and dequeue output from the codec.
+  void PumpCodec();
   bool QueueInput();
   bool DequeueOutput();
-
-  // Starts |pump_codec_timer_| if it's not started and resets the idle timeout.
-  void StartTimerOrPumpCodec();
-  void StopTimerIfIdle();
 
   // Runs |eos_decode_cb_| if it's valid and |reset_generation| matches
   // |reset_generation_|.
@@ -275,8 +268,6 @@ class MEDIA_GPU_EXPORT MediaCodecVideoDecoder final
   std::vector<uint8_t> csd1_;
 
   std::unique_ptr<CodecWrapper> codec_;
-  base::ElapsedTimer idle_timer_;
-  base::RepeatingTimer pump_codec_timer_;
   raw_ptr<CodecAllocator> codec_allocator_;
 
   // The current target surface that |codec_| should be rendering to. It
@@ -326,8 +317,6 @@ class MEDIA_GPU_EXPORT MediaCodecVideoDecoder final
   // Do we need a hw-secure codec?
   bool requires_secure_codec_ = false;
 
-  bool using_async_api_ = false;
-
   // Should we flush the codec on the next decode, and pretend that it is
   // drained currently?  Note that we'll automatically flush if the codec is
   // drained; this flag indicates that we also elided the drain, so the codec is
@@ -356,6 +345,9 @@ class MEDIA_GPU_EXPORT MediaCodecVideoDecoder final
   // If set, then the next call to `CodecConfig()` will be allowed to retry if
   // it fails to get a codec.  This is to work around b/191966399.
   bool should_retry_codec_allocation_ = false;
+
+  // True if the created codec is software backed.
+  bool is_software_codec_ = false;
 
   base::WeakPtrFactory<MediaCodecVideoDecoder> weak_factory_{this};
   base::WeakPtrFactory<MediaCodecVideoDecoder> codec_allocator_weak_factory_{

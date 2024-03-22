@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android_webview.test.util;
 
-import org.chromium.android_webview.AwFeatureList;
+import org.chromium.android_webview.AwFeatureMap;
 import org.chromium.android_webview.common.AwFeatures;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.content_public.browser.JavascriptInjector;
@@ -32,9 +32,8 @@ public class JavascriptEventObserver {
      * @param name the name of object used in javascript
      */
     public void register(WebContents webContents, String name) {
-        JavascriptInjector
-                .fromWebContents(webContents,
-                        AwFeatureList.isEnabled(AwFeatures.WEBVIEW_JAVA_JS_BRIDGE_MOJO))
+        JavascriptInjector.fromWebContents(
+                        webContents, AwFeatureMap.isEnabled(AwFeatures.WEBVIEW_JAVA_JS_BRIDGE_MOJO))
                 .addPossiblyUnsafeInterface(this, name, null);
     }
 

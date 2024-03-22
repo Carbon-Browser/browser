@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,9 @@ class CORE_EXPORT CSSLengthInterpolationType : public CSSInterpolationType {
                                   StyleResolverState&) const final;
 
  private:
-  float EffectiveZoom(const ComputedStyle&) const;
+  float EffectiveZoom(float effective_zoom) const {
+    return is_zoomed_length_ ? effective_zoom : 1;
+  }
 
   InterpolationValue MaybeConvertNeutral(const InterpolationValue& underlying,
                                          ConversionCheckers&) const final;
@@ -46,6 +48,7 @@ class CORE_EXPORT CSSLengthInterpolationType : public CSSInterpolationType {
                                  const StyleResolverState&) const final;
 
   const Length::ValueRange value_range_;
+  bool is_zoomed_length_;
 };
 
 }  // namespace blink

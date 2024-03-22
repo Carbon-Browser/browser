@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ class MockPasswordProtectionService : public PasswordProtectionService {
 
   MOCK_CONST_METHOD0(GetCurrentContentAreaSize, gfx::Size());
   MOCK_CONST_METHOD0(GetAccountInfo, AccountInfo());
-  MOCK_CONST_METHOD0(IsPrimaryAccountSyncing, bool());
+  MOCK_CONST_METHOD0(IsPrimaryAccountSyncingHistory, bool());
   MOCK_CONST_METHOD0(IsPrimaryAccountSignedIn, bool());
   MOCK_CONST_METHOD1(GetPasswordProtectionWarningTriggerPref,
                      PasswordProtectionTrigger(ReusedPasswordAccountType));

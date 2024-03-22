@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ class MODULES_EXPORT SendStream final : public WritableStream {
     outgoing_stream_->InitWithExistingWritableStream(this, exception_state);
   }
 
-  OutgoingStream* GetOutgoingStream() { return outgoing_stream_; }
+  OutgoingStream* GetOutgoingStream() { return outgoing_stream_.Get(); }
 
   void Trace(Visitor*) const override;
 

@@ -18,7 +18,8 @@
         },
         {
             "files": [
-                "chromedriver"
+                "chromedriver",
+                "LICENSE.chromedriver"
             ],
             "rename_dirs": [
                 {"from_dir": ".", "to_dir": "chromedriver_mac64"}
@@ -33,8 +34,6 @@
                 "icudtl.dat"
             ],
             "dirs": [
-                "blink_deprecated_test_plugin.plugin",
-                "blink_test_plugin.plugin",
                 "Content Shell.app",
                 "resources"
             ],
@@ -64,19 +63,11 @@
         },
         {
             "files": [
-                "chrome/updater/.install"
-            ],
-            "dirs": [
-                "ChromiumUpdater.app",
-                "ChromiumUpdater_test.app",
-                "Updater Packaging"
-            ],
-            "rename_dirs": [
-                {"from_dir": ".", "to_dir": "updater"}
+                "updater.zip"
             ],
             "gcs_bucket": "chromium-browser-snapshots",
-            "gcs_path": "Mac_Arm/{%position%}/updater.zip",
-            "archive_type": "ARCHIVE_TYPE_ZIP"
+            "gcs_path": "Mac_Arm/{%position%}",
+            "archive_type": "ARCHIVE_TYPE_FILES"
         }
     ]
 }

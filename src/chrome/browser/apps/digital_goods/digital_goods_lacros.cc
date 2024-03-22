@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
@@ -20,7 +20,7 @@ namespace apps {
 
 namespace {
 
-absl::optional<std::pair<web_app::AppId, GURL>> GetWebAppIdAndScopeForDocument(
+absl::optional<std::pair<webapps::AppId, GURL>> GetWebAppIdAndScopeForDocument(
     content::RenderFrameHost& render_frame_host) {
   web_app::WebAppProvider* provider = web_app::WebAppProvider::GetForWebApps(
       Profile::FromBrowserContext(render_frame_host.GetBrowserContext()));
@@ -28,8 +28,8 @@ absl::optional<std::pair<web_app::AppId, GURL>> GetWebAppIdAndScopeForDocument(
     return absl::nullopt;
   }
 
-  const web_app::WebAppRegistrar& registrar = provider->registrar();
-  absl::optional<web_app::AppId> app_id = registrar.FindAppWithUrlInScope(
+  const web_app::WebAppRegistrar& registrar = provider->registrar_unsafe();
+  absl::optional<webapps::AppId> app_id = registrar.FindAppWithUrlInScope(
       render_frame_host.GetMainFrame()->GetLastCommittedURL());
   if (!app_id) {
     return absl::nullopt;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
@@ -125,8 +124,8 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, WebUIAndMojoBindings) {
 }
 
 // Verify that reloading a WebUI document or navigating between documents on
-// the same WebUI will result in using the same SiteInstance and will not
-// create a new WebUI instance.
+// the same WebUI will result in using the same SiteInstance, and will reuse
+// the same WebUI instance if the RenderFrameHost is reused.
 IN_PROC_BROWSER_TEST_F(WebUISecurityTest, WebUIReuse) {
   GURL test_url(GetWebUIURL("web-ui/title1.html"));
   EXPECT_TRUE(NavigateToURL(shell(), test_url));
@@ -139,9 +138,11 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, WebUIReuse) {
   // with the ones used after the reload.
   scoped_refptr<SiteInstance> initial_site_instance =
       root->current_frame_host()->GetSiteInstance();
+  RenderFrameHostImplWrapper initial_rfh(root->current_frame_host());
   WebUI* initial_web_ui = root->current_frame_host()->web_ui();
 
-  // Reload the document and check that SiteInstance and WebUI are reused.
+  // Reload the document and check that SiteInstance is reused, and the WebUI is
+  // reused if the RenderFrameHost is reused.
   TestFrameNavigationObserver observer(root);
   shell()->web_contents()->GetController().Reload(ReloadType::NORMAL, false);
   observer.Wait();
@@ -150,16 +151,40 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, WebUIReuse) {
 
   EXPECT_EQ(initial_site_instance,
             root->current_frame_host()->GetSiteInstance());
-  EXPECT_EQ(initial_web_ui, root->current_frame_host()->web_ui());
+  if (ShouldCreateNewHostForAllFrames()) {
+    EXPECT_NE(initial_rfh.get(), root->current_frame_host());
+    // We can't check for WebUI inequality as the same address might be reused
+    // for the new WebUI object, but we can check that the new WebUI points to
+    // the new RFH.
+    EXPECT_EQ(root->current_frame_host(),
+              root->current_frame_host()->web_ui()->GetRenderFrameHost());
+    EXPECT_NE(initial_rfh.get(),
+              root->current_frame_host()->web_ui()->GetRenderFrameHost());
+  } else {
+    EXPECT_EQ(initial_rfh.get(), root->current_frame_host());
+    EXPECT_EQ(initial_web_ui, root->current_frame_host()->web_ui());
+  }
 
   // Navigate to another document on the same WebUI and check that SiteInstance
-  // and WebUI are reused.
+  // is reused, and the WebUI is reused if the RenderFrameHost is reused.
   GURL next_url(GetWebUIURL("web-ui/title2.html"));
   EXPECT_TRUE(NavigateToURL(shell(), next_url));
 
   EXPECT_EQ(initial_site_instance,
             root->current_frame_host()->GetSiteInstance());
-  EXPECT_EQ(initial_web_ui, root->current_frame_host()->web_ui());
+  if (ShouldCreateNewHostForAllFrames()) {
+    EXPECT_NE(initial_rfh.get(), root->current_frame_host());
+    // We can't check for WebUI inequality as the same address might be reused
+    // for the new WebUI object, but we can check that the new WebUI points to
+    // the new RFH.
+    EXPECT_EQ(root->current_frame_host(),
+              root->current_frame_host()->web_ui()->GetRenderFrameHost());
+    EXPECT_NE(initial_rfh.get(),
+              root->current_frame_host()->web_ui()->GetRenderFrameHost());
+  } else {
+    EXPECT_EQ(initial_rfh.get(), root->current_frame_host());
+    EXPECT_EQ(initial_web_ui, root->current_frame_host()->web_ui());
+  }
 }
 
 // Verify that a WebUI can add a subframe for its own WebUI.
@@ -298,6 +323,9 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, WebUIReuseInSubframe) {
       child->current_frame_host()->GetGlobalId();
 
   GURL subframe_same_site_url(GetWebUIURL("web-ui/title2.html"));
+  bool rfh_should_change =
+      child->current_frame_host()
+          ->ShouldChangeRenderFrameHostOnSameSiteNavigation();
   {
     TestFrameNavigationObserver observer(child);
     NavigateFrameToURL(child, subframe_same_site_url);
@@ -307,11 +335,22 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, WebUIReuseInSubframe) {
   }
   EXPECT_EQ(initial_site_instance,
             child->current_frame_host()->GetSiteInstance());
-  if (ShouldCreateNewHostForSameSiteSubframe()) {
-    EXPECT_NE(initial_web_ui, child->current_frame_host()->web_ui());
+  if (rfh_should_change) {
+    // We can't check for WebUI inequality as the same address might be reused
+    // for the new WebUI object, but we can check that the new WebUI points to
+    // the new RFH.
+    EXPECT_EQ(child->current_frame_host(),
+              child->current_frame_host()->web_ui()->GetRenderFrameHost());
+    EXPECT_NE(initial_rfh_id, child->current_frame_host()->GetGlobalId());
+    EXPECT_NE(initial_rfh_id, child->current_frame_host()
+                                  ->web_ui()
+                                  ->GetRenderFrameHost()
+                                  ->GetGlobalId());
   } else {
     EXPECT_EQ(initial_web_ui, child->current_frame_host()->web_ui());
   }
+  GlobalRenderFrameHostId second_rfh_id =
+      child->current_frame_host()->GetGlobalId();
 
   // Navigate the child frame cross-site.
   GURL subframe_cross_site_url(GetWebUIURL("web-ui-subframe/title1.html"));
@@ -326,15 +365,28 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, WebUIReuseInSubframe) {
             child->current_frame_host()->GetSiteInstance());
   EXPECT_NE(root->current_frame_host()->web_ui(),
             child->current_frame_host()->web_ui());
-  EXPECT_NE(initial_web_ui, child->current_frame_host()->web_ui());
+  // We can't check for WebUI inequality as the same address might be reused
+  // for the new WebUI object, but we can check that the new WebUI points to
+  // the new RFH.
+  EXPECT_EQ(child->current_frame_host(),
+            child->current_frame_host()->web_ui()->GetRenderFrameHost());
+  EXPECT_NE(second_rfh_id, child->current_frame_host()->GetGlobalId());
+  EXPECT_NE(second_rfh_id, child->current_frame_host()
+                               ->web_ui()
+                               ->GetRenderFrameHost()
+                               ->GetGlobalId());
 
-  // Capture the new SiteInstance and WebUI of the subframe and navigate it to
-  // another document on the same site.
-  scoped_refptr<SiteInstance> second_site_instance =
+  // Capture the new SiteInstance, WebUI and RFH ID of the subframe and navigate
+  // it to another document on the same site.
+  scoped_refptr<SiteInstance> third_site_instance =
       child->current_frame_host()->GetSiteInstance();
-  WebUI* second_web_ui = child->current_frame_host()->web_ui();
+  WebUI* third_web_ui = child->current_frame_host()->web_ui();
+  GlobalRenderFrameHostId third_rfh_id =
+      child->current_frame_host()->GetGlobalId();
 
   GURL subframe_cross_site_url2(GetWebUIURL("web-ui-subframe/title2.html"));
+  rfh_should_change = child->current_frame_host()
+                          ->ShouldChangeRenderFrameHostOnSameSiteNavigation();
   {
     TestFrameNavigationObserver observer(child);
     NavigateFrameToURL(child, subframe_cross_site_url2);
@@ -342,12 +394,21 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, WebUIReuseInSubframe) {
     EXPECT_TRUE(observer.last_navigation_succeeded());
     EXPECT_EQ(subframe_cross_site_url2, observer.last_committed_url());
   }
-  EXPECT_EQ(second_site_instance,
+  EXPECT_EQ(third_site_instance,
             child->current_frame_host()->GetSiteInstance());
-  if (ShouldCreateNewHostForSameSiteSubframe()) {
-    EXPECT_NE(second_web_ui, child->current_frame_host()->web_ui());
+  if (rfh_should_change) {
+    // We can't check for WebUI inequality as the same address might be reused
+    // for the new WebUI object, but we can check that the new WebUI points to
+    // the new RFH.
+    EXPECT_EQ(child->current_frame_host(),
+              child->current_frame_host()->web_ui()->GetRenderFrameHost());
+    EXPECT_NE(third_rfh_id, child->current_frame_host()->GetGlobalId());
+    EXPECT_NE(third_rfh_id, child->current_frame_host()
+                                ->web_ui()
+                                ->GetRenderFrameHost()
+                                ->GetGlobalId());
   } else {
-    EXPECT_EQ(second_web_ui, child->current_frame_host()->web_ui());
+    EXPECT_EQ(third_web_ui, child->current_frame_host()->web_ui());
   }
 
   // Navigate back to the first document in the subframe, which should bring
@@ -510,47 +571,6 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, DisallowWebRequestToSharedResources) {
                                                      shared_resource_url)));
 }
 
-class WebUISecurityTestWithWebUIReportOnlyTrustedTypesEnabled
-    : public WebUISecurityTest {
- public:
-  WebUISecurityTestWithWebUIReportOnlyTrustedTypesEnabled() {
-    feature_list_.InitAndEnableFeature(features::kWebUIReportOnlyTrustedTypes);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-// Verify Report-Only Trusted Types won't block assignment to a dangerous sink,
-// but logs warning
-IN_PROC_BROWSER_TEST_F(WebUISecurityTestWithWebUIReportOnlyTrustedTypesEnabled,
-                       DoNotBlockSinkAssignmentOnReportOnlyTrustedTypes) {
-  ASSERT_TRUE(embedded_test_server()->Start());
-  GURL test_url(GetWebUIURL("web-ui/title1.html"));
-
-  EXPECT_TRUE(NavigateToURL(shell(), test_url));
-
-  const char kDangerousSinkUse[] =
-      "(() => {"
-      "  try {"
-      "    document.body.innerHTML = 1;"
-      "    throw 'Assignment should have blocked';"
-      "  } catch(e) {"
-      "    return 'Assignment blocked';"
-      "  }"
-      "})();";
-  {
-    WebContentsConsoleObserver console_observer(shell()->web_contents());
-    console_observer.SetPattern(
-        "This document requires 'TrustedHTML' assignment.");
-
-    EXPECT_EQ("Assignment blocked",
-              EvalJs(shell(), kDangerousSinkUse, EXECUTE_SCRIPT_DEFAULT_OPTIONS,
-                     1 /* world_id */));
-    console_observer.Wait();
-  }
-}
-
 namespace {
 class UntrustedSourceWithCorsSupport : public URLDataSource {
  public:
@@ -577,10 +597,8 @@ class UntrustedSourceWithCorsSupport : public URLDataSource {
   void StartDataRequest(const GURL& url,
                         const WebContents::Getter& wc_getter,
                         GotDataCallback callback) override {
-    std::string dummy_html = "<html><body>dummy</body></html>";
-    scoped_refptr<base::RefCountedString> response =
-        base::RefCountedString::TakeString(&dummy_html);
-    std::move(callback).Run(response.get());
+    std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>(
+        std::string("<html><body>dummy</body></html>")));
   }
 
  private:
@@ -684,7 +702,7 @@ IN_PROC_BROWSER_TEST_F(
     WebContentsConsoleObserver console_observer(shell()->web_contents());
     EXPECT_EQ("Failed to fetch",
               PerformFetch(shell(), untrusted_url2, FetchMode::CORS));
-    console_observer.Wait();
+    ASSERT_TRUE(console_observer.Wait());
     EXPECT_EQ(console_observer.GetMessageAt(0),
               base::StringPrintf(
                   "Refused to connect to '%s' because it violates the "
@@ -698,7 +716,7 @@ IN_PROC_BROWSER_TEST_F(
     WebContentsConsoleObserver console_observer(shell()->web_contents());
     EXPECT_EQ("Failed to fetch",
               PerformFetch(shell(), untrusted_url2, FetchMode::NO_CORS));
-    console_observer.Wait();
+    ASSERT_TRUE(console_observer.Wait());
     EXPECT_EQ(console_observer.GetMessageAt(0),
               base::StringPrintf(
                   "Refused to connect to '%s' because it violates the "
@@ -751,7 +769,7 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest,
     WebContentsConsoleObserver console_observer(shell()->web_contents());
     EXPECT_EQ("Failed to fetch",
               PerformFetch(shell(), chrome_url, FetchMode::CORS));
-    console_observer.Wait();
+    ASSERT_TRUE(console_observer.Wait());
     EXPECT_EQ(
         console_observer.GetMessageAt(0),
         base::StringPrintf(
@@ -763,7 +781,7 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest,
     WebContentsConsoleObserver console_observer(shell()->web_contents());
     EXPECT_EQ("Failed to fetch",
               PerformFetch(shell(), chrome_url, FetchMode::NO_CORS));
-    console_observer.Wait();
+    ASSERT_TRUE(console_observer.Wait());
     EXPECT_EQ(
         console_observer.GetMessageAt(0),
         base::StringPrintf(
@@ -839,7 +857,7 @@ IN_PROC_BROWSER_TEST_F(
 
   WebContentsConsoleObserver console_observer(shell()->web_contents());
   EXPECT_EQ("error", PerformXHRRequest(shell(), untrusted_url2));
-  console_observer.Wait();
+  ASSERT_TRUE(console_observer.Wait());
   EXPECT_EQ(console_observer.GetMessageAt(0),
             base::StringPrintf(
                 "Refused to connect to '%s' because it violates the "
@@ -888,7 +906,7 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest,
 
   WebContentsConsoleObserver console_observer(shell()->web_contents());
   EXPECT_EQ("error", PerformXHRRequest(shell(), chrome_url));
-  console_observer.Wait();
+  ASSERT_TRUE(console_observer.Wait());
   EXPECT_EQ(console_observer.GetMessageAt(0),
             base::StringPrintf("Not allowed to load local resource: %s",
                                chrome_url.spec().c_str()));
@@ -917,8 +935,8 @@ IN_PROC_BROWSER_TEST_F(WebUISecurityTest, MAYBE_ReuseRVHWithWebUI) {
   // window.open a new tab.  This will keep the WebUI page's process alive
   // once we navigate away from it.
   ShellAddedObserver new_shell_observer;
-  ASSERT_TRUE(ExecuteScript(shell()->web_contents(),
-                            JsReplace("window.open($1);", webui_url)));
+  ASSERT_TRUE(ExecJs(shell()->web_contents(),
+                     JsReplace("window.open($1);", webui_url)));
   Shell* new_shell = new_shell_observer.GetShell();
   WebContents* new_contents = new_shell->web_contents();
   EXPECT_TRUE(WaitForLoadStop(new_contents));

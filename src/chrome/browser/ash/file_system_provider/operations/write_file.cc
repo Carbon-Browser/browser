@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,14 +16,14 @@ namespace ash {
 namespace file_system_provider {
 namespace operations {
 
-WriteFile::WriteFile(extensions::EventRouter* event_router,
+WriteFile::WriteFile(RequestDispatcher* dispatcher,
                      const ProvidedFileSystemInfo& file_system_info,
                      int file_handle,
                      scoped_refptr<net::IOBuffer> buffer,
                      int64_t offset,
-                     int length,
+                     size_t length,
                      storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       file_handle_(file_handle),
       buffer_(buffer),
       offset_(offset),
@@ -50,9 +50,8 @@ bool WriteFile::Execute(int request_id) {
   // Set the data directly on base::Value() to avoid an extra string copy.
   DCHECK(buffer_.get());
 
-  base::Value options_as_value =
-      base::Value::FromUniquePtrValue(options.ToValue());
-  options_as_value.SetKey(
+  base::Value::Dict options_as_value = options.ToValue();
+  options_as_value.Set(
       "data",
       base::Value(base::as_bytes(base::make_span(buffer_->data(), length_))));
 
@@ -67,7 +66,7 @@ bool WriteFile::Execute(int request_id) {
 }
 
 void WriteFile::OnSuccess(int /* request_id */,
-                          std::unique_ptr<RequestValue> /* result */,
+                          const RequestValue& /* result */,
                           bool /* has_more */) {
   TRACE_EVENT0("file_system_provider", "WriteFile::OnSuccess");
   DCHECK(callback_);
@@ -75,7 +74,7 @@ void WriteFile::OnSuccess(int /* request_id */,
 }
 
 void WriteFile::OnError(int /* request_id */,
-                        std::unique_ptr<RequestValue> /* result */,
+                        const RequestValue& /* result */,
                         base::File::Error error) {
   TRACE_EVENT0("file_system_provider", "WriteFile::OnError");
   DCHECK(callback_);

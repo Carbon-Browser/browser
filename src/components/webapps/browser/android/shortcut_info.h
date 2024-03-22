@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "components/webapps/browser/android/webapp_icon.h"
+#include "components/webapps/common/web_page_metadata.mojom.h"
 #include "services/device/public/mojom/screen_orientation_lock_types.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
@@ -54,9 +56,12 @@ struct ShortcutInfo {
   // Creates a ShortcutInfo struct suitable for adding a shortcut to the home
   // screen.
   static std::unique_ptr<ShortcutInfo> CreateShortcutInfo(
+      const GURL& url,
       const GURL& manifest_url,
       const blink::mojom::Manifest& manifest,
-      const GURL& primary_icon_url);
+      const mojom::WebPageMetadata& web_page_metadata,
+      const GURL& primary_icon_url,
+      bool primary_icon_maskable);
 
   // This enum is used to back a UMA histogram, and must be treated as
   // append-only.
@@ -115,12 +120,18 @@ struct ShortcutInfo {
     // install was requested by another app.
     SOURCE_CHROME_SERVICE = 16,
 
-    SOURCE_COUNT = 17
+    SOURCE_INSTALL_RETRY = 17,
+
+    SOURCE_COUNT = 18
   };
 
   explicit ShortcutInfo(const GURL& shortcut_url);
   ShortcutInfo(const ShortcutInfo& other);
   ~ShortcutInfo();
+
+  // Updates the info based on the given web page metadata.
+  void UpdateFromWebPageMetadata(
+      const mojom::WebPageMetadata& web_page_metadata);
 
   // Updates the info based on the given |manifest|.
   void UpdateFromManifest(const blink::mojom::Manifest& manifest);
@@ -129,15 +140,15 @@ struct ShortcutInfo {
   // later download.
   void UpdateBestSplashIcon(const blink::mojom::Manifest& manifest);
 
+  // Update the display mode based on whether the web app is webapk_compatible.
+  void UpdateDisplayMode(bool webapk_compatible);
+
   // Updates the source of the shortcut.
   void UpdateSource(const Source source);
 
-  // Returns a set of icons including |best_primary_icon_url|,
+  // Returns a vector of icons including |best_primary_icon_url|,
   // |splash_image_url| and |best_shortcut_icon_urls| if they are not empty
-  std::set<GURL> GetWebApkIcons();
-
-  // Generate the formatted id field from web manifest.
-  static GURL GetManifestId(const blink::mojom::Manifest& manifest);
+  std::vector<WebappIcon> GetWebApkIcons();
 
   GURL manifest_url;
   GURL url;
@@ -155,12 +166,15 @@ struct ShortcutInfo {
   absl::optional<SkColor> background_color;
   int ideal_splash_image_size_in_px = 0;
   int minimum_splash_image_size_in_px = 0;
+  GURL best_primary_icon_url;
+  bool is_primary_icon_maskable = false;
   GURL splash_image_url;
   bool is_splash_image_maskable = false;
-  GURL best_primary_icon_url;
   std::vector<std::string> icon_urls;
   std::vector<GURL> screenshot_urls;
   absl::optional<ShareTarget> share_target;
+  absl::optional<SkColor> dark_theme_color;
+  absl::optional<SkColor> dark_background_color;
 
   // Id specified in the manifest.
   GURL manifest_id;

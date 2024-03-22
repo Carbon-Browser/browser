@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,24 @@
 #include "cc/input/scroll_snap_data.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/graphics/compositor_element_id.h"
+#include "third_party/blink/renderer/platform/graphics/paint/clip_paint_property_node.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_property_node.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace blink {
 
+class ClipPaintPropertyNode;
+
 using MainThreadScrollingReasons = uint32_t;
+
+enum class CompositedScrollingPreference : uint8_t {
+  kDefault,
+  kPreferred,
+  kNotPreferred,
+};
 
 // A scroll node contains auxiliary scrolling information which includes how far
 // an area can be scrolled, main thread scrolling reasons, etc. Scroll nodes
@@ -42,8 +52,12 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
   // To make it less verbose and more readable to construct and update a node,
   // a struct with default values is used to represent the state.
   struct PLATFORM_EXPORT State {
+    DISALLOW_NEW();
+
+   public:
     gfx::Rect container_rect;
     gfx::Size contents_size;
+    scoped_refptr<const ClipPaintPropertyNode> overflow_clip_node;
     bool user_scrollable_horizontal = false;
     bool user_scrollable_vertical = false;
 
@@ -56,6 +70,8 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
     bool prevent_viewport_scrolling_from_inner = false;
 
     bool max_scroll_offset_affected_by_page_scale = false;
+    CompositedScrollingPreference composited_scrolling_preference =
+        CompositedScrollingPreference::kDefault;
     MainThreadScrollingReasons main_thread_scrolling_reasons =
         cc::MainThreadScrollingReason::kNotScrollingOnMain;
     // The scrolling element id is stored directly on the scroll node and not
@@ -86,7 +102,9 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
 
   // The empty AnimationState struct is to meet the requirement of
   // ObjectPaintProperties.
-  struct AnimationState {};
+  struct AnimationState {
+    STACK_ALLOCATED();
+  };
   PaintPropertyChangeType Update(const ScrollPaintPropertyNode& parent,
                                  State&& state,
                                  const AnimationState& = AnimationState()) {
@@ -127,6 +145,10 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
     return gfx::Rect(state_.container_rect.origin(), state_.contents_size);
   }
 
+  const ClipPaintPropertyNode* OverflowClipNode() const {
+    return state_.overflow_clip_node.get();
+  }
+
   bool UserScrollableHorizontal() const {
     return state_.user_scrollable_horizontal;
   }
@@ -139,16 +161,14 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
   bool MaxScrollOffsetAffectedByPageScale() const {
     return state_.max_scroll_offset_affected_by_page_scale;
   }
-
-  // Return reason bitfield with values from cc::MainThreadScrollingReason.
-  MainThreadScrollingReasons GetMainThreadScrollingReasons() const {
-    return state_.main_thread_scrolling_reasons;
+  CompositedScrollingPreference GetCompositedScrollingPreference() const {
+    return state_.composited_scrolling_preference;
   }
 
-  // Main thread scrolling reason for the threaded scrolling disabled setting.
-  bool ThreadedScrollingDisabled() const {
-    return state_.main_thread_scrolling_reasons &
-           cc::MainThreadScrollingReason::kThreadedScrollingDisabled;
+  // Note that this doesn't include main-thread scrolling reasons computed
+  // after paint.
+  MainThreadScrollingReasons GetMainThreadScrollingReasons() const {
+    return state_.main_thread_scrolling_reasons;
   }
 
   // Main thread scrolling reason for background attachment fixed descendants.
@@ -168,8 +188,6 @@ class PLATFORM_EXPORT ScrollPaintPropertyNode
       : PaintPropertyNode(parent), state_(std::move(state)) {
     Validate();
   }
-
-  using PaintPropertyNode::SetParent;
 
   void Validate() const {
 #if DCHECK_IS_ON()

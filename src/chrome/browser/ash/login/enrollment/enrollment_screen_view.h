@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <string>
 
-#include "chrome/browser/ash/login/enrollment/enterprise_enrollment_helper.h"
+#include "base/memory/weak_ptr.h"
+#include "chrome/browser/ash/login/enrollment/enrollment_launcher.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
-#include "chromeos/ash/components/dbus/authpolicy/active_directory_info.pb.h"
 
 class GoogleServiceAuthError;
 
@@ -19,7 +19,6 @@ class EnrollmentStatus;
 }  // namespace policy
 
 namespace ash {
-class EnrollmentScreen;
 
 // Interface class for the enterprise enrollment screen view.
 class EnrollmentScreenView {
@@ -28,7 +27,7 @@ class EnrollmentScreenView {
   // something happens on the UI.
   class Controller {
    public:
-    virtual ~Controller() {}
+    virtual ~Controller() = default;
 
     virtual void OnLoginDone(const std::string& user,
                              int license_type,
@@ -36,27 +35,29 @@ class EnrollmentScreenView {
     virtual void OnRetry() = 0;
     virtual void OnCancel() = 0;
     virtual void OnConfirmationClosed() = 0;
-    virtual void OnActiveDirectoryCredsProvided(
-        const std::string& machine_name,
-        const std::string& distinguished_name,
-        int encryption_types,
-        const std::string& username,
-        const std::string& password) = 0;
-
     virtual void OnDeviceAttributeProvided(const std::string& asset_id,
                                            const std::string& location) = 0;
     virtual void OnIdentifierEntered(const std::string& email) = 0;
+    virtual void OnFirstShow() = 0;
+    virtual void OnFrameLoadingCompleted() = 0;
   };
 
-  constexpr static StaticOobeScreenId kScreenId{"enterprise-enrollment"};
+  inline constexpr static StaticOobeScreenId kScreenId{"enterprise-enrollment",
+                                                       "OAuthEnrollmentScreen"};
 
-  virtual ~EnrollmentScreenView() {}
+  virtual ~EnrollmentScreenView() = default;
 
-  enum class FlowType { kEnterprise, kCFM, kEnterpriseLicense };
+  enum class FlowType {
+    kEnterprise,
+    kCFM,
+    kEnterpriseLicense,
+    kEducationLicense,
+    kDeviceEnrollment,
+  };
   enum class GaiaButtonsType {
     kDefault,
-    kEnterprisePreffered,
-    kKioskPreffered
+    kEnterprisePreferred,
+    kKioskPreferred
   };
   enum class UserErrorType { kConsumerDomain, kBusinessDomain };
 
@@ -71,6 +72,8 @@ class EnrollmentScreenView {
   // Sets which flow should GAIA show.
   virtual void SetFlowType(FlowType flow_type) = 0;
 
+  virtual void ShowSkipConfirmationDialog() = 0;
+
   // Sets which buttons should GAIA screen show.
   virtual void SetGaiaButtonsType(GaiaButtonsType buttons_type) = 0;
 
@@ -80,27 +83,20 @@ class EnrollmentScreenView {
   // Hides the contents of the screen.
   virtual void Hide() = 0;
 
-  // Binds |screen| to the view.
-  virtual void Bind(ash::EnrollmentScreen* screen) = 0;
-
-  // Unbinds the screen from the view.
-  virtual void Unbind() = 0;
-
   // Shows the signin screen.
   virtual void ShowSigninScreen() = 0;
 
+  // Reloads the signin screen.
+  virtual void ReloadSigninScreen() = 0;
+
+  // Resets shown enrollment screen.
+  virtual void ResetEnrollmentScreen() = 0;
+
   // Shows error related to user account eligibility.
-  virtual void ShowUserError(UserErrorType error_type,
-                             const std::string& email) = 0;
+  virtual void ShowUserError(const std::string& email) = 0;
 
   // Shows error that enrollment is not allowed during trial run.
   virtual void ShowEnrollmentDuringTrialNotAllowedError() = 0;
-
-  // Shows the Active Directory domain joining screen.
-  virtual void ShowActiveDirectoryScreen(const std::string& domain_join_config,
-                                         const std::string& machine_name,
-                                         const std::string& username,
-                                         authpolicy::ErrorType error) = 0;
 
   // Shows the device attribute prompt screen.
   virtual void ShowAttributePromptScreen(const std::string& asset_id,
@@ -119,20 +115,16 @@ class EnrollmentScreenView {
   virtual void ShowAuthError(const GoogleServiceAuthError& error) = 0;
 
   // Show non-authentication error.
-  virtual void ShowOtherError(EnterpriseEnrollmentHelper::OtherError error) = 0;
+  virtual void ShowOtherError(EnrollmentLauncher::OtherError error) = 0;
 
   // Update the UI to report the `status` of the enrollment procedure.
   virtual void ShowEnrollmentStatus(policy::EnrollmentStatus status) = 0;
 
   virtual void Shutdown() = 0;
+
+  virtual base::WeakPtr<EnrollmentScreenView> AsWeakPtr() = 0;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::EnrollmentScreenView;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_ENROLLMENT_ENROLLMENT_SCREEN_VIEW_H_

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -74,6 +75,11 @@ AXAuraObjWrapper* AXAuraObjCache::GetOrCreate(View* view) {
   // Avoid problems with transient focus events. https://crbug.com/729449
   if (!view->GetWidget())
     return nullptr;
+
+  DCHECK(view_to_id_map_.find(view) != view_to_id_map_.end() ||
+         // This is either a new view or we're erroneously here during ~View.
+         view->life_cycle_state() == View::LifeCycleState::kAlive);
+
   return CreateInternal<AXViewObjWrapper>(view, &view_to_id_map_);
 }
 
@@ -286,8 +292,7 @@ void AXAuraObjCache::OnRootWindowObjCreated(aura::Window* window) {
     GetFocusClient(window)->AddObserver(this);
 
   // Do not allow duplicate entries.
-  if (std::find(root_windows_.begin(), root_windows_.end(), window) ==
-      root_windows_.end()) {
+  if (!base::Contains(root_windows_, window)) {
     root_windows_.push_back(window);
   }
 }

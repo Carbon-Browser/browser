@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,14 +59,14 @@ CFPropertyListRef ValueToProperty(const base::Value& value);
 
 #endif
 
-}  // namespace policy
+std::ostream& operator<<(std::ostream& os, const PolicyBundle& bundle);
+std::ostream& operator<<(std::ostream& os, PolicyScope scope);
+std::ostream& operator<<(std::ostream& os, PolicyLevel level);
+std::ostream& operator<<(std::ostream& os, PolicyDomain domain);
+std::ostream& operator<<(std::ostream& os, const PolicyMap& policies);
+std::ostream& operator<<(std::ostream& os, const PolicyMap::Entry& e);
+std::ostream& operator<<(std::ostream& os, const PolicyNamespace& ns);
 
-std::ostream& operator<<(std::ostream& os, const policy::PolicyBundle& bundle);
-std::ostream& operator<<(std::ostream& os, policy::PolicyScope scope);
-std::ostream& operator<<(std::ostream& os, policy::PolicyLevel level);
-std::ostream& operator<<(std::ostream& os, policy::PolicyDomain domain);
-std::ostream& operator<<(std::ostream& os, const policy::PolicyMap& policies);
-std::ostream& operator<<(std::ostream& os, const policy::PolicyMap::Entry& e);
-std::ostream& operator<<(std::ostream& os, const policy::PolicyNamespace& ns);
+}  // namespace policy
 
 #endif  // COMPONENTS_POLICY_CORE_COMMON_POLICY_TEST_UTILS_H_

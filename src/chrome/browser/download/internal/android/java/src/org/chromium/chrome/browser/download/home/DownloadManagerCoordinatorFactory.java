@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,13 +20,27 @@ public class DownloadManagerCoordinatorFactory {
     private DownloadManagerCoordinatorFactory() {}
 
     /** Builds a {@link DownloadManagerCoordinatorImpl} instance. */
-    public static DownloadManagerCoordinator create(Activity activity,
-            DownloadManagerUiConfig config, Supplier<Boolean> exploreOfflineTabVisibilitySupplier,
-            Callback<Context> settingsLauncher, SnackbarManager snackbarManager,
-            ModalDialogManager modalDialogManager, Tracker tracker, FaviconProvider faviconProvider,
-            OfflineContentProvider provider, DiscardableReferencePool discardableReferencePool) {
-        return new DownloadManagerCoordinatorImpl(activity, config,
-                exploreOfflineTabVisibilitySupplier, settingsLauncher, snackbarManager,
-                modalDialogManager, tracker, faviconProvider, provider, discardableReferencePool);
+    public static DownloadManagerCoordinator create(
+            Activity activity,
+            DownloadManagerUiConfig config,
+            Supplier<Boolean> exploreOfflineTabVisibilitySupplier,
+            Callback<Context> settingsLauncher,
+            SnackbarManager snackbarManager,
+            ModalDialogManager modalDialogManager,
+            Tracker tracker,
+            FaviconProvider faviconProvider,
+            OfflineContentProvider provider,
+            DiscardableReferencePool discardableReferencePool) {
+        return new DownloadManagerCoordinatorImpl(
+                activity,
+                config,
+                exploreOfflineTabVisibilitySupplier,
+                settingsLauncher,
+                snackbarManager,
+                modalDialogManager,
+                tracker,
+                faviconProvider,
+                provider,
+                discardableReferencePool);
     }
 }

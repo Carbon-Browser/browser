@@ -1,16 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/public/cpp/holding_space/holding_space_model.h"
 
-#include <algorithm>
+#include <numeric>
 
+#include "ash/constants/ash_features.h"
+#include "ash/public/cpp/holding_space/holding_space_constants.h"
+#include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/holding_space/holding_space_model_observer.h"
-#include "base/bind.h"
+#include "ash/public/cpp/holding_space/holding_space_section.h"
+#include "ash/public/cpp/holding_space/holding_space_util.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 
 namespace ash {
 
@@ -21,6 +27,8 @@ HoldingSpaceModel::ScopedItemUpdate::~ScopedItemUpdate() {
 
   // Cache computed fields.
   const std::u16string accessible_name = item_->GetAccessibleName();
+  const std::vector<HoldingSpaceItem::InProgressCommand> in_progress_commands =
+      item_->in_progress_commands();
 
   // Update accessible name.
   if (accessible_name_) {
@@ -31,16 +39,15 @@ HoldingSpaceModel::ScopedItemUpdate::~ScopedItemUpdate() {
   }
 
   // Update backing file.
-  if (file_path_ && file_system_url_) {
-    if (item_->SetBackingFile(file_path_.value(), file_system_url_.value()))
+  if (file_) {
+    if (item_->SetBackingFile(file_.value())) {
       updated_fields |= HoldingSpaceModelObserver::UpdatedField::kBackingFile;
+    }
   }
 
-  // Update pause.
-  if (paused_) {
-    if (item_->SetPaused(paused_.value()))
-      updated_fields |= HoldingSpaceModelObserver::UpdatedField::kPaused;
-  }
+  // Update in-progress commands.
+  if (in_progress_commands_)
+    item_->SetInProgressCommands(std::move(*in_progress_commands_));
 
   // Update progress.
   if (progress_) {
@@ -55,8 +62,8 @@ HoldingSpaceModel::ScopedItemUpdate::~ScopedItemUpdate() {
   }
 
   // Update secondary text color.
-  if (secondary_text_color_) {
-    if (item_->SetSecondaryTextColor(secondary_text_color_.value())) {
+  if (secondary_text_color_id_) {
+    if (item_->SetSecondaryTextColorId(secondary_text_color_id_.value())) {
       updated_fields |=
           HoldingSpaceModelObserver::UpdatedField::kSecondaryTextColor;
     }
@@ -76,6 +83,10 @@ HoldingSpaceModel::ScopedItemUpdate::~ScopedItemUpdate() {
   // Calculate changes to computed fields.
   if (accessible_name != item_->GetAccessibleName())
     updated_fields |= HoldingSpaceModelObserver::UpdatedField::kAccessibleName;
+  if (in_progress_commands != item_->in_progress_commands()) {
+    updated_fields |=
+        HoldingSpaceModelObserver::UpdatedField::kInProgressCommands;
+  }
 
   // Notify observers if and only if an update occurred.
   if (updated_fields != 0u) {
@@ -86,29 +97,34 @@ HoldingSpaceModel::ScopedItemUpdate::~ScopedItemUpdate() {
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetAccessibleName(
-    const absl::optional<std::u16string>& accessible_name) {
+    const std::optional<std::u16string>& accessible_name) {
   accessible_name_ = accessible_name;
   return *this;
 }
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetBackingFile(
-    const base::FilePath& file_path,
-    const GURL& file_system_url) {
-  file_path_ = file_path;
-  file_system_url_ = file_system_url;
+    const HoldingSpaceFile& file) {
+  file_ = file;
+  return *this;
+}
+
+HoldingSpaceModel::ScopedItemUpdate&
+HoldingSpaceModel::ScopedItemUpdate::SetInProgressCommands(
+    std::vector<HoldingSpaceItem::InProgressCommand> in_progress_commands) {
+  DCHECK(base::ranges::all_of(
+      in_progress_commands,
+      [](const HoldingSpaceItem::InProgressCommand& in_progress_command) {
+        return holding_space_util::IsInProgressCommand(
+            in_progress_command.command_id);
+      }));
+  in_progress_commands_ = std::move(in_progress_commands);
   return *this;
 }
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetInvalidateImage(bool invalidate_image) {
   invalidate_image_ = invalidate_image;
-  return *this;
-}
-
-HoldingSpaceModel::ScopedItemUpdate&
-HoldingSpaceModel::ScopedItemUpdate::SetPaused(bool paused) {
-  paused_ = paused;
   return *this;
 }
 
@@ -121,21 +137,21 @@ HoldingSpaceModel::ScopedItemUpdate::SetProgress(
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetSecondaryText(
-    const absl::optional<std::u16string>& secondary_text) {
+    const std::optional<std::u16string>& secondary_text) {
   secondary_text_ = secondary_text;
   return *this;
 }
 
 HoldingSpaceModel::ScopedItemUpdate&
-HoldingSpaceModel::ScopedItemUpdate::SetSecondaryTextColor(
-    const absl::optional<cros_styles::ColorName>& secondary_text_color) {
-  secondary_text_color_ = secondary_text_color;
+HoldingSpaceModel::ScopedItemUpdate::SetSecondaryTextColorId(
+    const std::optional<ui::ColorId>& secondary_text_color_id) {
+  secondary_text_color_id_ = secondary_text_color_id;
   return *this;
 }
 
 HoldingSpaceModel::ScopedItemUpdate&
 HoldingSpaceModel::ScopedItemUpdate::SetText(
-    const absl::optional<std::u16string>& text) {
+    const std::optional<std::u16string>& text) {
   text_ = text;
   return *this;
 }
@@ -172,8 +188,25 @@ void HoldingSpaceModel::AddItems(
     item_ptrs.push_back(item.get());
     items_.push_back(std::move(item));
   }
+
   for (auto& observer : observers_)
     observer.OnHoldingSpaceItemsAdded(item_ptrs);
+
+  if (!features::IsHoldingSpacePredictabilityEnabled())
+    return;
+
+  // When the predictability feature flag is enabled, holding space items do
+  // not automatically expire. Instead, a maximum item count for each section
+  // is enforced such that adding new items may result in removing the oldest
+  // items from the same section.
+  RemoveIf(base::BindRepeating(
+      [](std::map<HoldingSpaceSectionId, size_t>& item_counts_per_section_id,
+         const HoldingSpaceItem* item) {
+        const auto* section = GetHoldingSpaceSection(item->type());
+        const auto item_count = ++item_counts_per_section_id[section->id];
+        return section->max_item_count && item_count > *section->max_item_count;
+      },
+      base::OwnedRef(std::map<HoldingSpaceSectionId, size_t>())));
 }
 
 void HoldingSpaceModel::RemoveItem(const std::string& id) {
@@ -188,24 +221,35 @@ void HoldingSpaceModel::RemoveItems(const std::set<std::string>& item_ids) {
       std::cref(item_ids)));
 }
 
+std::unique_ptr<HoldingSpaceItem> HoldingSpaceModel::TakeItem(
+    const std::string& id) {
+  auto items = RemoveIf(base::BindRepeating(
+      [](const std::string& id, const HoldingSpaceItem* item) {
+        return item->id() == id;
+      },
+      std::cref(id)));
+
+  if (items.empty())
+    return nullptr;
+
+  DCHECK_EQ(items.size(), 1u);
+  return std::move(items[0]);
+}
+
 void HoldingSpaceModel::InitializeOrRemoveItem(const std::string& id,
-                                               const GURL& file_system_url) {
-  if (file_system_url.is_empty()) {
+                                               const HoldingSpaceFile& file) {
+  if (file.file_system_url.is_empty()) {
     RemoveItem(id);
     return;
   }
 
-  auto item_it = std::find_if(
-      items_.begin(), items_.end(),
-      [&id](const std::unique_ptr<HoldingSpaceItem>& item) -> bool {
-        return id == item->id();
-      });
+  auto item_it = base::ranges::find(items_, id, &HoldingSpaceItem::id);
   DCHECK(item_it != items_.end());
 
   HoldingSpaceItem* item = item_it->get();
   DCHECK(!item->IsInitialized());
 
-  item->Initialize(file_system_url);
+  item->Initialize(file);
   ++initialized_item_counts_by_type_[item->type()];
 
   for (auto& observer : observers_)
@@ -214,16 +258,13 @@ void HoldingSpaceModel::InitializeOrRemoveItem(const std::string& id,
 
 std::unique_ptr<HoldingSpaceModel::ScopedItemUpdate>
 HoldingSpaceModel::UpdateItem(const std::string& id) {
-  auto item_it =
-      std::find_if(items_.begin(), items_.end(),
-                   [&id](const std::unique_ptr<HoldingSpaceItem>& item) {
-                     return item->id() == id;
-                   });
+  auto item_it = base::ranges::find(items_, id, &HoldingSpaceItem::id);
   DCHECK(item_it != items_.end());
   return base::WrapUnique(new ScopedItemUpdate(this, item_it->get()));
 }
 
-void HoldingSpaceModel::RemoveIf(Predicate predicate) {
+std::vector<std::unique_ptr<HoldingSpaceItem>> HoldingSpaceModel::RemoveIf(
+    Predicate predicate) {
   // Keep removed items around until `observers_` have been notified of removal.
   std::vector<std::unique_ptr<HoldingSpaceItem>> items;
   std::vector<const HoldingSpaceItem*> item_ptrs;
@@ -246,6 +287,8 @@ void HoldingSpaceModel::RemoveIf(Predicate predicate) {
     for (auto& observer : observers_)
       observer.OnHoldingSpaceItemsRemoved(item_ptrs);
   }
+
+  return items;
 }
 
 void HoldingSpaceModel::InvalidateItemImageIf(Predicate predicate) {
@@ -273,11 +316,7 @@ void HoldingSpaceModel::RemoveAll() {
 
 const HoldingSpaceItem* HoldingSpaceModel::GetItem(
     const std::string& id) const {
-  auto item_it = std::find_if(
-      items_.begin(), items_.end(),
-      [&id](const std::unique_ptr<HoldingSpaceItem>& item) -> bool {
-        return item->id() == id;
-      });
+  auto item_it = base::ranges::find(items_, id, &HoldingSpaceItem::id);
 
   if (item_it == items_.end())
     return nullptr;
@@ -287,10 +326,10 @@ const HoldingSpaceItem* HoldingSpaceModel::GetItem(
 const HoldingSpaceItem* HoldingSpaceModel::GetItem(
     HoldingSpaceItem::Type type,
     const base::FilePath& file_path) const {
-  auto item_it = std::find_if(
-      items_.begin(), items_.end(),
+  auto item_it = base::ranges::find_if(
+      items_,
       [&type, &file_path](const std::unique_ptr<HoldingSpaceItem>& item) {
-        return item->type() == type && item->file_path() == file_path;
+        return item->type() == type && item->file().file_path == file_path;
       });
 
   if (item_it == items_.end())

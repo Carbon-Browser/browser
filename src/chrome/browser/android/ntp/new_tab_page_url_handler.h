@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@ namespace android {
 // Rewrites old-style Android NTP URLs and legacy bookmark URLs.
 //  - chrome://newtab              -> chrome-native://newtab
 //  - chrome-native://bookmarks/#  -> chrome-native://bookmarks/folder/
-//  - chrome://history             -> chrome-native://history/
 bool HandleAndroidNativePageURL(GURL* url,
                                 content::BrowserContext* browser_context);
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,6 @@
 #include "gpu/gpu_gles2_export.h"
 
 namespace gpu {
-class GLTextureImageRepresentation;
-class SkiaImageRepresentation;
 struct Mailbox;
 
 // Implementation of SharedImageBacking that renders MediaCodec buffers to a
@@ -45,7 +43,7 @@ class GPU_GLES2_EXPORT VideoImageReaderImageBacking
       delete;
 
   // SharedImageBacking implementation.
-  size_t EstimatedSizeForMemTracking() const override;
+  size_t GetEstimatedSizeForMemoryDump() const override;
 
  protected:
   std::unique_ptr<GLTextureImageRepresentation> ProduceGLTexture(
@@ -56,7 +54,7 @@ class GPU_GLES2_EXPORT VideoImageReaderImageBacking
   ProduceGLTexturePassthrough(SharedImageManager* manager,
                               MemoryTypeTracker* tracker) override;
 
-  std::unique_ptr<SkiaImageRepresentation> ProduceSkia(
+  std::unique_ptr<SkiaGaneshImageRepresentation> ProduceSkiaGanesh(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
       scoped_refptr<SharedContextState> context_state) override;

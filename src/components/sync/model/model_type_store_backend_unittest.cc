@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -222,8 +222,7 @@ TEST_F(ModelTypeStoreBackendTest, RecoverAfterCorruption) {
 
   // Prepare environment that looks corrupt to leveldb.
   // Easiest way to simulate leveldb corruption is to create empty CURRENT file.
-  base::WriteFile(temp_dir.GetPath().Append(FILE_PATH_LITERAL("CURRENT")), "",
-                  0);
+  base::WriteFile(temp_dir.GetPath().Append(FILE_PATH_LITERAL("CURRENT")), "");
 
   scoped_refptr<ModelTypeStoreBackend> backend =
       ModelTypeStoreBackend::CreateUninitialized();

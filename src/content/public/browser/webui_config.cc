@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,10 @@ WebUIConfig::WebUIConfig(base::StringPiece scheme, base::StringPiece host)
 WebUIConfig::~WebUIConfig() = default;
 
 bool WebUIConfig::IsWebUIEnabled(BrowserContext* browser_context) {
+  return true;
+}
+
+bool WebUIConfig::ShouldHandleURL(const GURL& url) {
   return true;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/themes/theme_service_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace chrome_colors {
 
@@ -20,22 +19,30 @@ ChromeColorsService* ChromeColorsFactory::GetForProfile(Profile* profile) {
 
 // static
 ChromeColorsFactory* ChromeColorsFactory::GetInstance() {
-  return base::Singleton<ChromeColorsFactory>::get();
+  static base::NoDestructor<ChromeColorsFactory> instance;
+  return instance.get();
 }
 
 ChromeColorsFactory::ChromeColorsFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ChromeColorsService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ThemeServiceFactory::GetInstance());
   DependsOn(TemplateURLServiceFactory::GetInstance());
 }
 
-ChromeColorsFactory::~ChromeColorsFactory() {}
+ChromeColorsFactory::~ChromeColorsFactory() = default;
 
-KeyedService* ChromeColorsFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ChromeColorsFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ChromeColorsService(Profile::FromBrowserContext(context));
+  return std::make_unique<ChromeColorsService>(
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace chrome_colors

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,37 +6,34 @@
 
 #include <memory>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/test/test_condition_waiter.h"
+#include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/ui/login_display_host_webui.h"
 #include "chrome/browser/ash/login/ui/webui_login_view.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
-#include "chrome/browser/ui/webui/chromeos/login/eula_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/update_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
+#include "chrome/browser/ui/webui/ash/login/update_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "chrome/common/chrome_switches.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/shill/fake_shill_manager_client.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/shill/fake_shill_manager_client.h"
 #include "components/policy/core/common/policy_switches.h"
 #include "components/user_manager/fake_user_manager.h"
 #include "content/public/common/content_switches.h"
@@ -51,7 +48,8 @@ namespace {
 class GaiaPageEventWaiter : public test::TestConditionWaiter {
  public:
   GaiaPageEventWaiter(const std::string& authenticator_id,
-                      const std::string& event) {
+                      const std::string& event)
+      : message_queue_(LoginDisplayHost::default_host()->GetOobeWebContents()) {
     std::string js =
         R"((function() {
               var authenticator = $AuthenticatorId;
@@ -75,12 +73,12 @@ class GaiaPageEventWaiter : public test::TestConditionWaiter {
     wait_called_ = true;
     std::string message;
     do {
-      ASSERT_TRUE(message_queue.WaitForMessage(&message));
+      ASSERT_TRUE(message_queue_.WaitForMessage(&message));
     } while (message != "\"Done\"");
   }
 
  private:
-  content::DOMMessageQueue message_queue;
+  content::DOMMessageQueue message_queue_;
   bool wait_called_ = false;
 };
 
@@ -136,15 +134,15 @@ void OobeBaseTest::SetUpInProcessBrowserTestFixture() {
 }
 
 void OobeBaseTest::SetUpOnMainThread() {
-  ShillManagerClient::Get()->GetTestInterface()->SetupDefaultEnvironment();
+  if (!needs_network_screen_skip_check_) {
+    ShillManagerClient::Get()->GetTestInterface()->SetupDefaultEnvironment();
+  }
 
   host_resolver()->AddRule("*", "127.0.0.1");
 
   test::UserSessionManagerTestApi session_manager_test_api(
       UserSessionManager::GetInstance());
   session_manager_test_api.SetShouldObtainTokenHandleInTests(false);
-
-  LoginDisplayHostWebUI::DisableRestrictiveProxyCheckForTest();
 
   if (ShouldWaitForOobeUI()) {
     MaybeWaitForLoginScreenLoad();
@@ -203,8 +201,9 @@ void OobeBaseTest::WaitForSigninScreen() {
 
   MaybeWaitForLoginScreenLoad();
 }
+
 void OobeBaseTest::CheckJsExceptionErrors(int number) {
-  test::OobeJS().ExpectEQ("cr.ErrorStore.getInstance().length", number);
+  test::OobeJS().ExpectEQ("OobeErrorStore.length", number);
 }
 
 test::JSChecker OobeBaseTest::SigninFrameJS() {
@@ -222,12 +221,6 @@ OobeScreenId OobeBaseTest::GetFirstSigninScreen() {
                                   ->IsDeviceEnterpriseManaged();
   return isEnterpriseManaged ? UserCreationView::kScreenId
                              : GaiaView::kScreenId;
-}
-
-// static
-OobeScreenId OobeBaseTest::GetScreenAfterNetworkScreen() {
-  bool consolidated_enabled = features::IsOobeConsolidatedConsentEnabled();
-  return consolidated_enabled ? UpdateView::kScreenId : EulaView::kScreenId;
 }
 
 void OobeBaseTest::MaybeWaitForLoginScreenLoad() {

@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/mirroring/service/captured_audio_input.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -156,7 +156,7 @@ class CapturedAudioInputTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<media::AudioInputIPC> audio_input_;
   MockDelegate delegate_;
-  raw_ptr<MockStream> stream_ = nullptr;
+  raw_ptr<MockStream, AcrossTasksDanglingUntriaged> stream_ = nullptr;
   mojo::Remote<media::mojom::AudioInputStreamClient> stream_client_;
   base::CancelableSyncSocket socket_;
 };

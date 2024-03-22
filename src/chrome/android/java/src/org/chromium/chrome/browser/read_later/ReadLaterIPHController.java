@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,12 @@ import android.os.Looper;
 import android.view.View;
 
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuHandler;
 import org.chromium.chrome.browser.user_education.IPHCommandBuilder;
 import org.chromium.chrome.browser.user_education.UserEducationHelper;
 import org.chromium.components.feature_engagement.FeatureConstants;
 
-/**
- * Controller to manage when and how we show read later in-product-help messages to users.
- */
+/** Controller to manage when and how we show read later in-product-help messages to users. */
 public class ReadLaterIPHController {
     private final UserEducationHelper mUserEducationHelper;
     private final AppMenuHandler mAppMenuHandler;
@@ -32,27 +29,31 @@ public class ReadLaterIPHController {
      */
     public ReadLaterIPHController(
             Activity activity, View toolbarMenuButton, AppMenuHandler appMenuHandler) {
-        this(activity, toolbarMenuButton, appMenuHandler,
+        this(
+                activity,
+                toolbarMenuButton,
+                appMenuHandler,
                 new UserEducationHelper(activity, new Handler(Looper.getMainLooper())));
     }
 
-    ReadLaterIPHController(Activity activity, View toolbarMenuButton, AppMenuHandler appMenuHandler,
+    ReadLaterIPHController(
+            Activity activity,
+            View toolbarMenuButton,
+            AppMenuHandler appMenuHandler,
             UserEducationHelper userEducationHelper) {
         mToolbarMenuButton = toolbarMenuButton;
         mAppMenuHandler = appMenuHandler;
         mUserEducationHelper = userEducationHelper;
     }
 
-    /**
-     * Attempts to show an IPH text bubble about the read later option in app menu.
-     */
+    /** Attempts to show an IPH text bubble about the read later option in app menu. */
     public void onCopyContextMenuItemClicked() {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.READ_LATER)) return;
         mUserEducationHelper.requestShowIPH(
-                new IPHCommandBuilder(mToolbarMenuButton.getContext().getResources(),
-                        FeatureConstants.READ_LATER_APP_MENU_BOOKMARK_THIS_PAGE_FEATURE,
-                        R.string.reading_list_save_pages_for_later,
-                        R.string.reading_list_save_pages_for_later)
+                new IPHCommandBuilder(
+                                mToolbarMenuButton.getContext().getResources(),
+                                FeatureConstants.READ_LATER_APP_MENU_BOOKMARK_THIS_PAGE_FEATURE,
+                                R.string.reading_list_save_pages_for_later,
+                                R.string.reading_list_save_pages_for_later)
                         .setAnchorView(mToolbarMenuButton)
                         .setOnShowCallback(
                                 () -> turnOnHighlightForMenuItem(R.id.bookmark_this_page_id))
@@ -60,20 +61,18 @@ public class ReadLaterIPHController {
                         .build());
     }
 
-    /**
-     * Attempts to show an IPH text bubble after a cold start.
-     */
+    /** Attempts to show an IPH text bubble after a cold start. */
     public void showColdStartIPH() {
         showReadLaterAppMenuBookmarksIPH();
     }
 
     private void showReadLaterAppMenuBookmarksIPH() {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.READ_LATER)) return;
         mUserEducationHelper.requestShowIPH(
-                new IPHCommandBuilder(mToolbarMenuButton.getContext().getResources(),
-                        FeatureConstants.READ_LATER_APP_MENU_BOOKMARKS_FEATURE,
-                        R.string.reading_list_find_in_bookmarks,
-                        R.string.reading_list_find_in_bookmarks)
+                new IPHCommandBuilder(
+                                mToolbarMenuButton.getContext().getResources(),
+                                FeatureConstants.READ_LATER_APP_MENU_BOOKMARKS_FEATURE,
+                                R.string.reading_list_find_in_bookmarks,
+                                R.string.reading_list_find_in_bookmarks)
                         .setAnchorView(mToolbarMenuButton)
                         .setOnShowCallback(
                                 () -> turnOnHighlightForMenuItem(R.id.all_bookmarks_menu_id))

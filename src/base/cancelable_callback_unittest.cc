@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace base {
@@ -174,12 +173,14 @@ TEST(CancelableCallbackTest, PostTask) {
   CancelableRepeatingClosure cancelable(
       base::BindRepeating(&Increment, base::Unretained(&count)));
 
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, cancelable.callback());
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                        cancelable.callback());
   RunLoop().RunUntilIdle();
 
   EXPECT_EQ(1, count);
 
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, cancelable.callback());
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                        cancelable.callback());
 
   // Cancel before running the tasks.
   cancelable.Cancel();

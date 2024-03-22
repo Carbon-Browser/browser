@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,13 @@
 
 static bool DropRoot();
 
-#define HANDLE_EINTR(x) TEMP_FAILURE_RETRY(x)
+#define HANDLE_EINTR(x) ({ \
+  long eintr_wrapper_result; \
+  do { \
+    eintr_wrapper_result = (x); \
+  } while (eintr_wrapper_result == -1L && errno == EINTR); \
+  eintr_wrapper_result; \
+})
 
 static void FatalError(const char* msg, ...)
     __attribute__((noreturn, format(printf, 1, 2)));

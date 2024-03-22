@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <stdint.h>
 #include <memory>
 
-#include "ash/services/nearby/public/mojom/nearby_connections_types.mojom.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/waitable_event.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_connections_types.mojom.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -21,7 +21,6 @@ namespace base {
 class SequencedTaskRunner;
 }  // namespace base
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -69,11 +68,10 @@ class InputStreamImpl : public InputStream {
   std::unique_ptr<ByteArray> pending_read_buffer_;
   uint32_t pending_read_buffer_pos_ = 0;
   ExceptionOr<ByteArray> exception_or_received_byte_array_;
-  absl::optional<base::WaitableEvent> read_waitable_event_;
+  base::WaitableEvent read_waitable_event_;
 };
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_INPUT_STREAM_IMPL_H_

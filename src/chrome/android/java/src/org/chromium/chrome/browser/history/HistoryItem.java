@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,13 +34,20 @@ public class HistoryItem extends TimedItem {
      * @param nativeTimestamps Microsecond resolution navigation times.
      * @param blockedVisit Whether the visit to this item was blocked when it was attempted.
      */
-    public HistoryItem(GURL url, String domain, String title, long mostRecentJavaTimestamp,
-            long[] nativeTimestamps, boolean blockedVisit) {
+    public HistoryItem(
+            GURL url,
+            String domain,
+            String title,
+            long mostRecentJavaTimestamp,
+            long[] nativeTimestamps,
+            boolean blockedVisit) {
         mUrl = url;
         mDomain = domain;
-        mTitle = blockedVisit ? ContextUtils.getApplicationContext().getString(
-                         R.string.android_history_blocked_site)
-                              : TextUtils.isEmpty(title) ? url.getSpec() : title;
+        mTitle =
+                blockedVisit
+                        ? ContextUtils.getApplicationContext()
+                                .getString(R.string.android_history_blocked_site)
+                        : TextUtils.isEmpty(title) ? url.getSpec() : title;
         mMostRecentJavaTimestamp = mostRecentJavaTimestamp;
         mNativeTimestampList = Arrays.copyOf(nativeTimestamps, nativeTimestamps.length);
         mWasBlockedVisit = blockedVisit;
@@ -103,9 +110,7 @@ public class HistoryItem extends TimedItem {
         }
     }
 
-    /**
-     * Removes this item.
-     */
+    /** Removes this item. */
     public void onItemRemoved() {
         if (mManager != null) {
             mManager.onItemRemoved(this);

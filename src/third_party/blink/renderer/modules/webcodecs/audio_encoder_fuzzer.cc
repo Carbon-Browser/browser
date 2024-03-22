@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "media/mojo/services/mojo_audio_encoder_service.h"
 #include "testing/libfuzzer/proto/lpm_interface.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_decoder_config.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_encoder_init.h"
@@ -62,7 +63,7 @@ class TestInterfaceFactory : public media::mojom::InterfaceFactory {
 
     // Each AudioEncoder instance will try to open a connection to this
     // factory, so we must clean up after each one is destroyed.
-    receiver_.set_disconnect_handler(WTF::Bind(
+    receiver_.set_disconnect_handler(WTF::BindOnce(
         &TestInterfaceFactory::OnConnectionError, base::Unretained(this)));
   }
 
@@ -79,7 +80,7 @@ class TestInterfaceFactory : public media::mojom::InterfaceFactory {
 #elif BUILDFLAG(IS_WIN)
     CHECK(com_initializer_.Succeeded());
     auto platform_audio_encoder = std::make_unique<media::MFAudioEncoder>(
-        base::SequencedTaskRunnerHandle::Get());
+        blink::scheduler::GetSequencedTaskRunnerForTesting());
 #else
 #error "Unknown platform encoder."
 #endif
@@ -156,7 +157,8 @@ DEFINE_TEXT_PROTO_FUZZER(
   }();
 
   // Request a full GC upon returning.
-  auto scoped_gc = MakeScopedGarbageCollectionRequest();
+  auto scoped_gc =
+      MakeScopedGarbageCollectionRequest(test_support.GetIsolate());
 
 #if HAS_AAC_ENCODER
   base::test::ScopedFeatureList platform_aac(media::kPlatformAudioEncoder);
@@ -223,7 +225,8 @@ DEFINE_TEXT_PROTO_FUZZER(
             break;
           }
           case wc_fuzzer::AudioEncoderApiInvocation::kEncode: {
-            AudioData* data = MakeAudioData(invocation.encode().data());
+            AudioData* data =
+                MakeAudioData(script_state, invocation.encode().data());
             if (!data)
               return;
 

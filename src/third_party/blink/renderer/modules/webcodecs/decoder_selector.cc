@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/webcodecs/decoder_selector.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/base/channel_layout.h"
 #include "media/base/demuxer_stream.h"
@@ -30,7 +31,7 @@ class NullDemuxerStream : public media::DemuxerStream {
 
   ~NullDemuxerStream() override = default;
 
-  void Read(ReadCB read_cb) override { NOTREACHED(); }
+  void Read(uint32_t count, ReadCB read_cb) override { NOTREACHED(); }
 
   void Configure(DecoderConfigType config);
 
@@ -107,8 +108,8 @@ void DecoderSelector<StreamType>::SelectDecoder(
   // media::DecoderSelector will call back with a DecoderStatus if selection is
   // in progress when it is destructed.
   impl_.BeginDecoderSelection(
-      WTF::Bind(&DecoderSelector<StreamType>::OnDecoderSelected,
-                weak_factory_.GetWeakPtr(), std::move(select_decoder_cb)),
+      WTF::BindOnce(&DecoderSelector<StreamType>::OnDecoderSelected,
+                    weak_factory_.GetWeakPtr(), std::move(select_decoder_cb)),
       output_cb_);
 }
 
@@ -140,7 +141,7 @@ void DecoderSelector<StreamType>::OnDecoderSelected(
   // (configure() no longer takes a promise).
   impl_.FinalizeDecoderSelection();
 
-  if (decoder_or_error.has_error()) {
+  if (!decoder_or_error.has_value()) {
     std::move(select_decoder_cb).Run(nullptr);
   } else {
     std::move(select_decoder_cb).Run(std::move(decoder_or_error).value());

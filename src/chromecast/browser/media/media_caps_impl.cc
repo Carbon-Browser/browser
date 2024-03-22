@@ -1,11 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/browser/media/media_caps_impl.h"
 
 #include "base/logging.h"
-#include "chromecast/browser/media/supported_codec_finder.h"
 #include "chromecast/media/base/media_caps.h"
 #include "chromecast/public/media/decoder_config.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -33,11 +32,6 @@ MediaCapsImpl::MediaCapsImpl()
       screen_resolution_(0, 0) {}
 
 MediaCapsImpl::~MediaCapsImpl() = default;
-
-void MediaCapsImpl::Initialize() {
-  media::SupportedCodecFinder supported_codec_finder;
-  supported_codec_finder.FindSupportedCodecProfileLevels(this);
-}
 
 void MediaCapsImpl::AddReceiver(
     mojo::PendingReceiver<mojom::MediaCaps> receiver) {

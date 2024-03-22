@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {CapabilitiesResponse, Cdd, DEFAULT_MAX_COPIES, Destination, DestinationOrigin, DestinationStore, ExtensionDestinationInfo, GooglePromotedDestinationId, LocalDestinationInfo, MeasurementSystemUnitType, MediaSizeCapability, MediaSizeOption, NativeInitialSettings, VendorCapabilityValueType} from 'chrome://print/print_preview.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {CapabilitiesResponse, Cdd, ColorOption, DEFAULT_MAX_COPIES, Destination, DestinationOrigin, DestinationStore, DpiOption, DuplexOption, ExtensionDestinationInfo, GooglePromotedDestinationId, LocalDestinationInfo, MeasurementSystemUnitType, MediaSizeCapability, MediaSizeOption, MediaTypeOption, NativeInitialSettings, PageOrientationOption, VendorCapabilityValueType} from 'chrome://print/print_preview.js';
+import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
@@ -50,27 +50,27 @@ export function getCddTemplate(
           option: [
             {type: 'STANDARD_COLOR', is_default: true},
             {type: 'STANDARD_MONOCHROME'},
-          ],
+          ] as ColorOption[],
         },
         dpi: {
           option: [
             {horizontal_dpi: 200, vertical_dpi: 200, is_default: true},
             {horizontal_dpi: 100, vertical_dpi: 100},
-          ],
+          ] as DpiOption[],
         },
         duplex: {
           option: [
             {type: 'NO_DUPLEX', is_default: true},
             {type: 'LONG_EDGE'},
             {type: 'SHORT_EDGE'},
-          ],
+          ] as DuplexOption[],
         },
         page_orientation: {
           option: [
             {type: 'PORTRAIT', is_default: true},
             {type: 'LANDSCAPE'},
             {type: 'AUTO'},
-          ],
+          ] as PageOrientationOption[],
         },
         media_size: {
           option: [
@@ -86,13 +86,48 @@ export function getCddTemplate(
               width_microns: 215900,
               height_microns: 215900,
               custom_display_name: 'CUSTOM_SQUARE',
+              has_borderless_variant: true,
             },
-          ],
+            {
+              name: 'LEGAL',
+              width_microns: 215900,
+              height_microns: 355600,
+              custom_display_name: 'Legal',
+              imageable_area_left_microns: 5000,
+              imageable_area_bottom_microns: 5000,
+              imageable_area_right_microns: 5000,
+              imageable_area_top_microns: 5000,
+              has_borderless_variant: false,
+            },
+            {
+              name: '4x6',
+              width_microns: 101600,
+              height_microns: 152400,
+              custom_display_name: '4 x 6 in',
+              imageable_area_left_microns: 0,
+              imageable_area_bottom_microns: 0,
+              imageable_area_right_microns: 101600,
+              imageable_area_top_microns: 152400,
+            },
+          ] as MediaSizeOption[],
+        },
+        media_type: {
+          option: [
+            {
+              vendor_id: 'stationery',
+              custom_display_name: 'Plain',
+              is_default: true,
+            },
+            {
+              vendor_id: 'photographic',
+              custom_display_name: 'Photo',
+            },
+          ] as MediaTypeOption[],
         },
       },
     },
   };
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   template.capabilities!.printer.pin = {supported: true};
   // </if>
   return template;
@@ -187,7 +222,7 @@ export function getPdfPrinter(): {capabilities: Cdd} {
             {type: 'AUTO', is_default: true},
             {type: 'PORTRAIT'},
             {type: 'LANDSCAPE'},
-          ],
+          ] as PageOrientationOption[],
         },
         color: {option: [{type: 'STANDARD_COLOR', is_default: true}]},
         media_size: {
@@ -223,13 +258,15 @@ export function getDefaultMediaSize(device: CapabilitiesResponse):
  */
 export function getDefaultOrientation(device: CapabilitiesResponse): string {
   const options = device.capabilities!.printer.page_orientation!.option;
-  return assert(options!.find(opt => !!opt.is_default)!.type!);
+  const orientation = options!.find(opt => !!opt.is_default)!.type;
+  assert(orientation);
+  return orientation;
 }
 
-type ExtensionPrinters = {
-  destinations: Destination[],
-  infoLists: ExtensionDestinationInfo[][],
-};
+interface ExtensionPrinters {
+  destinations: Destination[];
+  infoLists: ExtensionDestinationInfo[][];
+}
 
 export function getExtensionDestinations(): ExtensionPrinters {
   const destinations: Destination[] = [];
@@ -276,10 +313,10 @@ export function getExtensionDestinations(): ExtensionPrinters {
 export function getDestinations(localDestinations: LocalDestinationInfo[]):
     Destination[] {
   const destinations: Destination[] = [];
-  // <if expr="not chromeos_ash and not chromeos_lacros">
+  // <if expr="not is_chromeos">
   const origin = DestinationOrigin.LOCAL;
   // </if>
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   const origin = DestinationOrigin.CROS;
   // </if>
   // Five destinations. FooDevice is the system default.
@@ -320,7 +357,7 @@ export function getMediaSizeCapabilityWithCustomNames(): MediaSizeCapability {
         height_microns: 79400,
         custom_display_name: customMediaName,
       },
-    ],
+    ] as MediaSizeOption[],
   };
 }
 
@@ -338,7 +375,7 @@ export function triggerInputEvent(
   return eventToPromise('input-change', parentElement);
 }
 
-const TestListenerElementBase = WebUIListenerMixin(PolymerElement);
+const TestListenerElementBase = WebUiListenerMixin(PolymerElement);
 class TestListenerElement extends TestListenerElementBase {
   static get is() {
     return 'test-listener-element';
@@ -359,10 +396,10 @@ export function createDestinationStore(): DestinationStore {
   const testListenerElement = document.createElement('test-listener-element');
   document.body.appendChild(testListenerElement);
   return new DestinationStore(
-      testListenerElement.addWebUIListener.bind(testListenerElement));
+      testListenerElement.addWebUiListener.bind(testListenerElement));
 }
 
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 /**
  * @return The Google Drive destination.
  */

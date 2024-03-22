@@ -1,13 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/cast/net/pacing/paced_sender.h"
 
 #include "base/big_endian.h"
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace media {
 namespace cast {
@@ -299,8 +301,7 @@ PacketRef PacedSender::PopNextPacket(PacketType* packet_type,
 }
 
 bool PacedSender::IsHighPriority(const PacketKey& packet_key) const {
-  return std::find(priority_ssrcs_.begin(), priority_ssrcs_.end(),
-                   packet_key.ssrc) != priority_ssrcs_.end();
+  return base::Contains(priority_ssrcs_, packet_key.ssrc);
 }
 
 bool PacedSender::empty() const {

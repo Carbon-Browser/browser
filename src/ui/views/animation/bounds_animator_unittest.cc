@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,8 @@
 #include "base/test/icu_test_util.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/animation/slide_animation.h"
 #include "ui/gfx/animation/test_animation_delegate.h"
 #include "ui/views/view.h"
@@ -59,6 +61,8 @@ bool OwnedDelegate::deleted_ = false;
 bool OwnedDelegate::canceled_ = false;
 
 class TestView : public View {
+  METADATA_HEADER(TestView, View)
+
  public:
   TestView() = default;
 
@@ -84,6 +88,9 @@ class TestView : public View {
   int repaint_count_ = 0;
 };
 
+BEGIN_METADATA(TestView)
+END_METADATA
+
 class RTLAnimationTestDelegate : public gfx::AnimationDelegate {
  public:
   RTLAnimationTestDelegate(const gfx::Rect& start,
@@ -108,9 +115,8 @@ class RTLAnimationTestDelegate : public gfx::AnimationDelegate {
     const gfx::Rect start_rect_in_screen = parent->GetMirroredRect(start_);
     const gfx::Rect target_rect_in_screen = parent->GetMirroredRect(target_);
 
-    gfx::RectF current_bounds_in_screen(
-        parent->GetMirroredRect(view_->bounds()));
-    transform.TransformRect(&current_bounds_in_screen);
+    gfx::Rect current_bounds_in_screen =
+        transform.MapRect(parent->GetMirroredRect(view_->bounds()));
 
     // Verify that |view_|'s current bounds in screen are valid.
     EXPECT_GE(current_bounds_in_screen.x(),
@@ -200,9 +206,7 @@ class BoundsAnimatorTest : public testing::Test {
 
  private:
   TestView parent_;
-  // TODO(crbug.com/1298696): views_unittests breaks with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<TestView, DegradeToNoOpWhenMTE> child_;  // Owned by |parent_|.
+  raw_ptr<TestView, DanglingUntriaged> child_;  // Owned by |parent_|.
   std::unique_ptr<BoundsAnimator> animator_;
 };
 

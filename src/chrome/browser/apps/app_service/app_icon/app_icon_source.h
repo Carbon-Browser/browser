@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,8 @@ class AppIconSource : public content::URLDataSource {
   bool ShouldReplaceExistingSource() override;
 
  private:
-  const raw_ptr<Profile> profile_;
+  // TODO(https://crbug.com/1427068): Prevent this pointer from dangling.
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 };
 
 }  // namespace apps

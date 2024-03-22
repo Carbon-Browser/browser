@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #import "ios/chrome/browser/ui/download/download_manager_state.h"
 
 // Consumer for the download manager mediator.
-@protocol DownloadManagerConsumer
+@protocol DownloadManagerConsumer <NSObject>
 
 // Sets name of the file being downloaded.
 - (void)setFileName:(NSString*)fileName;
@@ -28,6 +28,7 @@
 // kDownloadManagerStateNotStarted.
 - (void)setState:(DownloadManagerState)state;
 
+@optional
 // Sets visible state to Install Google Drive button.
 - (void)setInstallDriveButtonVisible:(BOOL)visible animated:(BOOL)animated;
 

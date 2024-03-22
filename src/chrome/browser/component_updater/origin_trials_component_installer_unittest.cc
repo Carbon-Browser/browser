@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,9 +49,9 @@ class OriginTrialsComponentInstallerTest : public PlatformTest {
     policy_ = std::make_unique<ChromeOriginTrialsComponentInstallerPolicy>();
   }
 
-  void LoadUpdates(base::Value manifest) {
-    if (manifest.DictEmpty()) {
-      manifest.SetKey(kManifestOriginTrialsKey, base::Value());
+  void LoadUpdates(base::Value::Dict manifest) {
+    if (manifest.empty()) {
+      manifest.Set(kManifestOriginTrialsKey, base::Value());
     }
     ASSERT_TRUE(policy_->VerifyInstallation(manifest, temp_dir_.GetPath()));
     const base::Version expected_version(kTestUpdateVersion);
@@ -76,7 +76,7 @@ TEST_F(OriginTrialsComponentInstallerTest,
       local_state()->GetString(embedder_support::prefs::kOriginTrialPublicKey));
 
   // Load with empty section in manifest
-  LoadUpdates(base::Value(base::Value::Type::DICTIONARY));
+  LoadUpdates(base::Value::Dict());
 
   EXPECT_FALSE(local_state()->HasPrefPath(
       embedder_support::prefs::kOriginTrialPublicKey));

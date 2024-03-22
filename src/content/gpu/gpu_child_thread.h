@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@
 #include <queue>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/viz/service/gl/gpu_service_impl.h"
@@ -53,7 +54,7 @@ class GpuChildThread : public ChildThreadImpl,
 
   ~GpuChildThread() override;
 
-  void Init(const base::Time& process_start_time);
+  void Init(const base::TimeTicks& process_start_time);
 
  private:
   GpuChildThread(base::RepeatingClosure quit_closure,

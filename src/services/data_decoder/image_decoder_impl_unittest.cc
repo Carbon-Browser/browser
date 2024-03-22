@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,11 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
+#include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "gin/array_buffer.h"
@@ -19,6 +21,7 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/web/blink.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "tools/v8_context_snapshot/buildflags.h"
 #include "ui/gfx/codec/jpeg_codec.h"
 
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
@@ -32,7 +35,7 @@ namespace {
 const int64_t kTestMaxImageSize = 128 * 1024;
 
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
-#if defined(USE_V8_CONTEXT_SNAPSHOT)
+#if BUILDFLAG(USE_V8_CONTEXT_SNAPSHOT)
 constexpr gin::V8SnapshotFileType kSnapshotType =
     gin::V8SnapshotFileType::kWithAdditionalContext;
 #else
@@ -169,6 +172,20 @@ TEST_F(ImageDecoderImplTest, DecodeImageFailed) {
   Request request(decoder());
   request.DecodeImage(jpg, false);
   EXPECT_TRUE(request.bitmap().isNull());
+}
+
+TEST_F(ImageDecoderImplTest, DecodeAnimationFailed) {
+  base::span<const uint8_t> data = base::as_bytes(
+      base::make_span("this ASCII text is *defintely* an animation"));
+
+  std::vector<mojom::AnimationFramePtr> frames;
+  decoder()->DecodeAnimation(
+      data, false, kTestMaxImageSize,
+      base::BindLambdaForTesting(
+          [&frames](std::vector<mojom::AnimationFramePtr> result) {
+            frames = std::move(result);
+          }));
+  EXPECT_EQ(0u, frames.size());
 }
 
 }  // namespace data_decoder

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_graphics_context_3d_provider.h"
 #include "third_party/blink/public/platform/web_url.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
@@ -31,13 +31,25 @@ SharedGpuContext::SharedGpuContext() = default;
 // static
 bool SharedGpuContext::IsGpuCompositingEnabled() {
   SharedGpuContext* this_ptr = GetInstanceForCurrentThread();
-  // The check for gpu compositing enabled implies a context will
-  // desired, so we combine them into a single trip to the main thread.
-  // This also ensures that the compositing mode does not change before
-  // the context is created, so if it does change the context will be lost
-  // and this class will know to check the compositing mode again.
-  bool only_if_gpu_compositing = true;
-  this_ptr->CreateContextProviderIfNeeded(only_if_gpu_compositing);
+  if (IsMainThread()) {
+    // On the main thread we have the opportunity to keep
+    // is_gpu_compositing_disabled_ up to date continuously without locking
+    // up the thread, so we do it. This allows user code to adapt immediately
+    // when there is a fallback to software compositing.
+    this_ptr->is_gpu_compositing_disabled_ =
+        Platform::Current()->IsGpuCompositingDisabled();
+  } else {
+    // The check for gpu compositing enabled implies a context will be
+    // desired, so we combine them into a single trip to the main thread.
+    //
+    // TODO(crbug.com/1486981): It is possible for the value of
+    // this_ptr->is_gpu_compositing_disabled_ to become stale without notice
+    // if the compositor falls back to software compositing after this
+    // initialization. There are currently no known observable bugs caused by
+    // this, but in theory, we'd need a mechanism for propagating changes in
+    // GPU compositing availability to worker threads.
+    this_ptr->CreateContextProviderIfNeeded(/*only_if_gpu_compositing=*/true);
+  }
   return !this_ptr->is_gpu_compositing_disabled_;
 }
 
@@ -51,10 +63,26 @@ SharedGpuContext::ContextProviderWrapper() {
   return this_ptr->context_provider_wrapper_->GetWeakPtr();
 }
 
+gpu::GpuMemoryBufferManager* SharedGpuContext::GetGpuMemoryBufferManager() {
+  SharedGpuContext* this_ptr = GetInstanceForCurrentThread();
+  if (!this_ptr->gpu_memory_buffer_manager_) {
+    this_ptr->CreateContextProviderIfNeeded(/*only_if_gpu_compositing =*/true);
+  }
+  return this_ptr->gpu_memory_buffer_manager_;
+}
+
+void SharedGpuContext::SetGpuMemoryBufferManagerForTesting(
+    gpu::GpuMemoryBufferManager* mgr) {
+  SharedGpuContext* this_ptr = GetInstanceForCurrentThread();
+  DCHECK(!!this_ptr->gpu_memory_buffer_manager_ == !mgr);
+  this_ptr->gpu_memory_buffer_manager_ = mgr;
+}
+
 static void CreateContextProviderOnMainThread(
     bool only_if_gpu_compositing,
     bool* gpu_compositing_disabled,
     std::unique_ptr<WebGraphicsContext3DProviderWrapper>* wrapper,
+    gpu::GpuMemoryBufferManager** gpu_memory_buffer_manager,
     base::WaitableEvent* waitable_event) {
   DCHECK(IsMainThread());
 
@@ -80,6 +108,11 @@ static void CreateContextProviderOnMainThread(
     *wrapper = std::make_unique<WebGraphicsContext3DProviderWrapper>(
         std::move(context_provider));
   }
+
+  // A reference to the GpuMemoryBufferManager can only be obtained on the main
+  // thread, but it is safe to use on other threads.
+  *gpu_memory_buffer_manager = Platform::Current()->GetGpuMemoryBufferManager();
+
   waitable_event->Signal();
 }
 
@@ -104,8 +137,7 @@ void SharedGpuContext::CreateContextProviderIfNeeded(
 
   if (context_provider_factory_) {
     // This path should only be used in unit tests.
-    auto context_provider =
-        context_provider_factory_.Run(&is_gpu_compositing_disabled_);
+    auto context_provider = context_provider_factory_.Run();
     if (context_provider) {
       context_provider_wrapper_ =
           std::make_unique<WebGraphicsContext3DProviderWrapper>(
@@ -117,39 +149,33 @@ void SharedGpuContext::CreateContextProviderIfNeeded(
     if (is_gpu_compositing_disabled_ && only_if_gpu_compositing)
       return;
     std::unique_ptr<blink::WebGraphicsContext3DProvider> context_provider;
-    if (base::FeatureList::IsEnabled(blink::features::kDawn2dCanvas)) {
-      context_provider =
-          Platform::Current()->CreateWebGPUGraphicsContext3DProvider(
-              blink::WebURL());
-      if (context_provider) {
-        context_provider->BindToCurrentThread();
-      }
-    } else {
-      context_provider =
-          Platform::Current()->CreateSharedOffscreenGraphicsContext3DProvider();
-    }
+    context_provider =
+        Platform::Current()->CreateSharedOffscreenGraphicsContext3DProvider();
     if (context_provider) {
       context_provider_wrapper_ =
           std::make_unique<WebGraphicsContext3DProviderWrapper>(
               std::move(context_provider));
     }
+    gpu_memory_buffer_manager_ =
+        Platform::Current()->GetGpuMemoryBufferManager();
   } else {
     // This synchronous round-trip to the main thread is the reason why
     // SharedGpuContext encasulates the context provider: so we only have to do
     // this once per thread.
     base::WaitableEvent waitable_event;
     scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-        Thread::MainThread()->GetTaskRunner();
+        Thread::MainThread()->GetTaskRunner(MainThreadTaskRunnerRestricted());
     PostCrossThreadTask(
         *task_runner, FROM_HERE,
         CrossThreadBindOnce(
             &CreateContextProviderOnMainThread, only_if_gpu_compositing,
             CrossThreadUnretained(&is_gpu_compositing_disabled_),
             CrossThreadUnretained(&context_provider_wrapper_),
+            CrossThreadUnretained(&gpu_memory_buffer_manager_),
             CrossThreadUnretained(&waitable_event)));
     waitable_event.Wait();
     if (context_provider_wrapper_ &&
-        !context_provider_wrapper_->ContextProvider()->BindToCurrentThread())
+        !context_provider_wrapper_->ContextProvider()->BindToCurrentSequence())
       context_provider_wrapper_ = nullptr;
   }
 }
@@ -158,7 +184,9 @@ void SharedGpuContext::CreateContextProviderIfNeeded(
 void SharedGpuContext::SetContextProviderFactoryForTesting(
     ContextProviderFactory factory) {
   SharedGpuContext* this_ptr = GetInstanceForCurrentThread();
-  DCHECK(!this_ptr->context_provider_wrapper_);
+  DCHECK(!this_ptr->context_provider_wrapper_)
+      << this_ptr->context_provider_wrapper_.get();
+
   this_ptr->context_provider_factory_ = std::move(factory);
 }
 

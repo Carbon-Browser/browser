@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,7 @@ class VIEWS_EXPORT BoxLayoutView : public View {
   void ClearFlexForView(const View* view);
 
  private:
-  const raw_ptr<BoxLayout> layout_;
+  const raw_ptr<BoxLayout, AcrossTasksDanglingUntriaged> layout_;
 
   // TODO(tluk): Merge these with the values in BoxLayout after transition to
   // layout views is complete.

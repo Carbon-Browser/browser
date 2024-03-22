@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,7 @@ class TestFocusClient : public client::FocusClient,
   raw_ptr<Window> root_window_;
   raw_ptr<Window> focused_window_ = nullptr;
   base::ScopedObservation<Window, WindowObserver> observation_manager_{this};
-  base::ObserverList<aura::client::FocusChangeObserver>::Unchecked
-      focus_observers_;
+  base::ObserverList<aura::client::FocusChangeObserver> focus_observers_;
 };
 
 }  // namespace test

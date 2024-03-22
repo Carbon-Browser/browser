@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -367,40 +367,6 @@ TEST_F(ImeControllerImplTest, ShowModeIndicator) {
   // size.
   gfx::Rect bounds3 = widget3->GetWindowBoundsInScreen();
   EXPECT_LT(bounds3.bottom(), screen_bounds.bottom());
-}
-
-TEST_F(ImeControllerImplTest, MirroringChanged) {
-  UpdateDisplay("600x500,600x500");
-  // The controller is already an observer of the display_manager
-  ImeControllerImpl* controller = Shell::Get()->ime_controller();
-  TestImeControllerClient client;
-  controller->SetClient(&client);
-
-  display::DisplayManager* display_manager = Shell::Get()->display_manager();
-  display_manager->SetMultiDisplayMode(display::DisplayManager::MIRRORING);
-  display_manager->UpdateDisplays();
-  EXPECT_TRUE(client.is_mirroring_);
-
-  UpdateDisplay("600x500");
-  EXPECT_FALSE(client.is_mirroring_);
-
-  UpdateDisplay("600x500,600x500");
-  EXPECT_TRUE(client.is_mirroring_);
-}
-
-TEST_F(ImeControllerImplTest, MeetMirroringChanged) {
-  ImeControllerImpl* controller = Shell::Get()->ime_controller();
-  TestImeControllerClient client;
-  controller->SetClient(&client);
-
-  EXPECT_FALSE(client.is_casting_);
-
-  Shell::Get()->system_tray_notifier()->NotifyScreenCaptureStart(
-      base::DoNothing(), base::DoNothing(), u"");
-  EXPECT_TRUE(client.is_casting_);
-
-  Shell::Get()->system_tray_notifier()->NotifyScreenCaptureStop();
-  EXPECT_FALSE(client.is_casting_);
 }
 
 }  // namespace

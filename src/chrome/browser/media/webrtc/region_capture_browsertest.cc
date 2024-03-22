@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,6 +33,7 @@
 #include "content/public/test/prerender_test_util.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "third_party/blink/public/common/features.h"
+#include "ui/gl/gl_switches.h"
 
 // TODO(crbug.com/1215089): Enable this test suite on Lacros.
 #if !BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -104,78 +105,64 @@ const char* ToString(Track track) {
 // conveniently expose test controls on it.
 struct TabInfo {
   void StartEmbeddingFrame(const GURL& url) {
-    std::string script_result;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StringPrintf("startEmbeddingFrame('%s');", url.spec().c_str()),
-        &script_result));
-    EXPECT_EQ(script_result, "embedding-done");
+    EXPECT_EQ(content::EvalJs(web_contents->GetPrimaryMainFrame(),
+                              base::StringPrintf("startEmbeddingFrame('%s');",
+                                                 url.spec().c_str())),
+              "embedding-done");
   }
 
   void SetUpMailman(const GURL& url) {
-    std::string script_result;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StringPrintf("setUpMailman('%s');", url.spec().c_str()),
-        &script_result));
-    EXPECT_EQ(script_result, "mailman-ready");
+    EXPECT_EQ(content::EvalJs(web_contents->GetPrimaryMainFrame(),
+                              base::StringPrintf("setUpMailman('%s');",
+                                                 url.spec().c_str())),
+              "mailman-ready");
   }
 
   void StartCapture() {
     // Bring the tab into focus. This avoids getDisplayMedia rejection.
     browser->tab_strip_model()->ActivateTabAt(tab_strip_index);
 
-    std::string script_result;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(), "startCapture();",
-        &script_result));
-    EXPECT_EQ(script_result, "top-level-capture-success");
+    EXPECT_EQ(
+        content::EvalJs(web_contents->GetPrimaryMainFrame(), "startCapture();"),
+        "top-level-capture-success");
   }
 
   void StartCaptureFromEmbeddedFrame() {
     // Bring the tab into focus. This avoids getDisplayMedia rejection.
     browser->tab_strip_model()->ActivateTabAt(tab_strip_index);
 
-    std::string script_result;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(), "startCaptureFromEmbeddedFrame();",
-        &script_result));
-    EXPECT_EQ(script_result, "embedded-capture-success");
+    EXPECT_EQ(content::EvalJs(web_contents->GetPrimaryMainFrame(),
+                              "startCaptureFromEmbeddedFrame();"),
+              "embedded-capture-success");
   }
 
   bool StartSecondCapture(Frame frame) {
     // Bring the tab into focus. This avoids getDisplayMedia rejection.
     browser->tab_strip_model()->ActivateTabAt(tab_strip_index);
 
-    std::string script_result;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StringPrintf("startSecondCapture('%s');", ToString(frame)),
-        &script_result));
-    return script_result ==
+    return content::EvalJs(
+               web_contents->GetPrimaryMainFrame(),
+               base::StringPrintf("startSecondCapture('%s');", ToString(frame)))
+               .ExtractString() ==
            base::StrCat({ToString(frame), "-second-capture-success"});
   }
 
   bool StopCapture(Frame frame, Track track) {
-    std::string script_result;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StringPrintf("stopCapture('%s', '%s');", ToString(frame),
-                           ToString(track)),
-        &script_result));
-    return script_result == base::StrCat({ToString(frame), "-stop-success"});
+    return content::EvalJs(web_contents->GetPrimaryMainFrame(),
+                           base::StringPrintf("stopCapture('%s', '%s');",
+                                              ToString(frame), ToString(track)))
+               .ExtractString() ==
+           base::StrCat({ToString(frame), "-stop-success"});
   }
 
   std::string CropTargetFromElement(Frame frame,
                                     const std::string& element_id = "div") {
     DCHECK_NE(frame, Frame::kNone);
-    std::string script_result = "error-not-modified";
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StrCat({"cropTargetFromElement(\"", ToString(frame),
-                      "\", \"" + element_id + "\");"}),
-        &script_result));
-    return script_result;
+    return content::EvalJs(
+               web_contents->GetPrimaryMainFrame(),
+               base::StrCat({"cropTargetFromElement(\"", ToString(frame),
+                             "\", \"" + element_id + "\");"}))
+        .ExtractString();
   }
 
   // Takes as input either the CropTarget[*], or "undefined" if the test
@@ -186,14 +173,12 @@ struct TabInfo {
   bool CropTo(const std::string& crop_target,
               Frame frame,
               Track track = Track::kOriginal) {
-    std::string script_result = "error-not-modified";
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StringPrintf("cropToByIndex('%s', '%s', '%s');",
-                           crop_target.c_str(), ToString(frame),
-                           ToString(track)),
-        &script_result))
-        << "Failed to crop to: " << crop_target;
+    std::string script_result =
+        content::EvalJs(web_contents->GetPrimaryMainFrame(),
+                        base::StringPrintf("cropToByIndex('%s', '%s', '%s');",
+                                           crop_target.c_str(), ToString(frame),
+                                           ToString(track)))
+            .ExtractString();
 
     if (frame == Frame::kTopLevelDocument) {
       EXPECT_EQ(0u, script_result.rfind("top-level-", 0)) << script_result;
@@ -207,30 +192,30 @@ struct TabInfo {
   }
 
   bool CloneTrack() {
-    std::string script_result = "error-not-modified";
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(), "clone();", &script_result));
+    std::string script_result =
+        content::EvalJs(web_contents->GetPrimaryMainFrame(), "clone();")
+            .ExtractString();
     DCHECK(script_result == "clone-track-success" ||
            script_result == "clone-track-failure");
     return script_result == "clone-track-success";
   }
 
   bool Deallocate(Track track) {
-    std::string script_result = "error-not-modified";
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StringPrintf("deallocate('%s');", ToString(track)),
-        &script_result));
+    std::string script_result =
+        content::EvalJs(
+            web_contents->GetPrimaryMainFrame(),
+            base::StringPrintf("deallocate('%s');", ToString(track)))
+            .ExtractString();
     DCHECK(script_result == "deallocate-failure" ||
            script_result == "deallocate-success");
     return script_result == "deallocate-success";
   }
 
   bool HideElement(const char* element_id) {
-    std::string script_result = "error-not-modified";
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StringPrintf("hideElement('%s');", element_id), &script_result));
+    std::string script_result =
+        content::EvalJs(web_contents->GetPrimaryMainFrame(),
+                        base::StringPrintf("hideElement('%s');", element_id))
+            .ExtractString();
     DCHECK(script_result == "hide-element-failure" ||
            script_result == "hide-element-success");
     return script_result == "hide-element-success";
@@ -238,12 +223,11 @@ struct TabInfo {
 
   bool CreateNewElement(Frame frame, const char* tag, const std::string& id) {
     DCHECK_NE(frame, Frame::kNone);
-    std::string script_result = "error-not-modified";
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        web_contents->GetPrimaryMainFrame(),
-        base::StrCat({"createNewElement(\"", ToString(frame), "\", \"", tag,
-                      "\", \"", id, "\");"}),
-        &script_result));
+    std::string script_result =
+        content::EvalJs(web_contents->GetPrimaryMainFrame(),
+                        base::StrCat({"createNewElement(\"", ToString(frame),
+                                      "\", \"", tag, "\", \"", id, "\");"}))
+            .ExtractString();
 
     if (frame == Frame::kEmbeddedFrame) {
       EXPECT_EQ(0u, script_result.rfind("embedded-", 0)) << script_result;
@@ -258,8 +242,8 @@ struct TabInfo {
     return CreateNewElement(frame, "div", id);
   }
 
-  raw_ptr<Browser> browser;
-  raw_ptr<WebContents> web_contents;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser;
+  raw_ptr<WebContents, AcrossTasksDanglingUntriaged> web_contents;
   int tab_strip_index;
 };
 
@@ -269,10 +253,7 @@ struct TabInfo {
 // detection of JS errors.
 class RegionCaptureBrowserTest : public WebRtcTestBase {
  public:
-  RegionCaptureBrowserTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        blink::features::kRegionCaptureExperimentalSubtypes);
-  }
+  RegionCaptureBrowserTest() = default;
   ~RegionCaptureBrowserTest() override = default;
 
   void SetUpInProcessBrowserTestFixture() override {
@@ -293,6 +274,11 @@ class RegionCaptureBrowserTest : public WebRtcTestBase {
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(
         switches::kEnableExperimentalWebPlatformFeatures);
+    // TODO(https://crbug.com/1424557): Remove this after fixing feature
+    // detection in 0c tab capture path as it'll no longer be needed.
+    if constexpr (!BUILDFLAG(IS_CHROMEOS)) {
+      command_line->AppendSwitch(switches::kUseGpuInTests);
+    }
     command_line_ = command_line;
   }
 
@@ -378,6 +364,53 @@ class RegionCaptureBrowserTest : public WebRtcTestBase {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
+class RegionCaptureBrowserCropTest
+    : public RegionCaptureBrowserTest,
+      public testing::WithParamInterface<const char*> {
+ public:
+  ~RegionCaptureBrowserCropTest() override = default;
+
+  void TestCanCropToElementTag(const char* tag) {
+    TabInfo& tab = tabs_[kMainTab];
+
+    const std::string element_id = base::StrCat({"new_id_", tag});
+    ASSERT_TRUE(
+        tab.CreateNewElement(Frame::kTopLevelDocument, tag, element_id));
+    const std::string crop_target =
+        tab.CropTargetFromElement(Frame::kTopLevelDocument, element_id);
+    ASSERT_THAT(crop_target, IsExpectedCropTarget("0"));
+
+    EXPECT_TRUE(tab.CropTo(crop_target, Frame::kTopLevelDocument));
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(RegionCaptureBrowserCropTestInstantiation,
+                         RegionCaptureBrowserCropTest,
+                         Values("a",
+                                "blockquote",
+                                "body",
+                                "button",
+                                "canvas",
+                                "col",
+                                "div",
+                                "fieldset",
+                                "form",
+                                "h1",
+                                "header",
+                                "hr"
+                                "iframe",
+                                "img",
+                                "input",
+                                "output",
+                                "span",
+                                "svg",
+                                "video"));
+
+IN_PROC_BROWSER_TEST_P(RegionCaptureBrowserCropTest, CanCropTo) {
+  SetUpTest(Frame::kTopLevelDocument, /*self_capture=*/true);
+  TestCanCropToElementTag(GetParam());
+}
+
 IN_PROC_BROWSER_TEST_F(RegionCaptureBrowserTest,
                        CropTargetFromElementReturnsValidIdInMainPage) {
   SetUpTest(Frame::kTopLevelDocument, /*self_capture=*/true);
@@ -462,9 +495,10 @@ IN_PROC_BROWSER_TEST_F(RegionCaptureBrowserTest,
 }
 
 // The Promise resolves when it's guaranteed that no additional frames will
-// be issued with an earlier crop version. That an actual frame be issued
-// at all, let alone with the new crop version, is not actually required,
-// or else these promises could languish unfulfilled indefinitely.
+// be issued with an earlier sub-capture-target version. That an actual frame be
+// issued at all, let alone with the new sub-capture-target version, is not
+// actually required, or else these promises could languish unfulfilled
+// indefinitely.
 IN_PROC_BROWSER_TEST_F(RegionCaptureBrowserTest,
                        CropToOfInvisibleElementResolvesInTimelyFashion) {
   SetUpTest(Frame::kTopLevelDocument, /*self_capture=*/true);
@@ -476,30 +510,6 @@ IN_PROC_BROWSER_TEST_F(RegionCaptureBrowserTest,
       tab.CropTargetFromElement(Frame::kTopLevelDocument, "div");
   ASSERT_THAT(crop_target, IsExpectedCropTarget("0"));
   EXPECT_TRUE(tab.CropTo(crop_target, Frame::kTopLevelDocument));
-}
-
-IN_PROC_BROWSER_TEST_F(RegionCaptureBrowserTest,
-                       CropToWorksForAllHtmlElements) {
-  // NOTE: this list is intentionally non-exhaustive, but represents a wide
-  // variety of element types.
-  static const std::vector<const char*> kElementTags{
-      "a",      "blockquote", "body",  "button", "canvas", "col",
-      "div",    "fieldset",   "form",  "h1",     "header", "hr",
-      "iframe", "img",        "input", "output", "span",   "video"};
-
-  SetUpTest(Frame::kTopLevelDocument, /*self_capture=*/true);
-  TabInfo& tab = tabs_[kMainTab];
-
-  for (size_t i = 0; i < kElementTags.size(); ++i) {
-    const std::string element_id = ("new_id_" + base::NumberToString(i));
-    ASSERT_TRUE(tab.CreateNewElement(Frame::kTopLevelDocument, kElementTags[i],
-                                     element_id));
-    const std::string crop_target =
-        tab.CropTargetFromElement(Frame::kTopLevelDocument, element_id);
-    ASSERT_THAT(crop_target, IsExpectedCropTarget(base::NumberToString(i)));
-
-    EXPECT_TRUE(tab.CropTo(crop_target, Frame::kTopLevelDocument));
-  }
 }
 
 IN_PROC_BROWSER_TEST_F(RegionCaptureBrowserTest, MaxCropIdsInTopLevelDocument) {
@@ -584,8 +594,8 @@ IN_PROC_BROWSER_TEST_F(RegionCaptureBrowserTest,
 // Tests related to behavior when cloning.
 class RegionCaptureClonesBrowserTest : public RegionCaptureBrowserTest {
  public:
-  static const std::string kCropTarget0;
-  static const std::string kCropTarget1;
+  static constexpr char kCropTarget0[] = "0";
+  static constexpr char kCropTarget1[] = "1";
 
   ~RegionCaptureClonesBrowserTest() override = default;
 
@@ -613,9 +623,6 @@ class RegionCaptureClonesBrowserTest : public RegionCaptureBrowserTest {
 
   bool Deallocate(Track track) { return tabs_[kMainTab].Deallocate(track); }
 };
-
-const std::string RegionCaptureClonesBrowserTest::kCropTarget0 = "0";
-const std::string RegionCaptureClonesBrowserTest::kCropTarget1 = "1";
 
 // Sanity cloning 1/2.
 IN_PROC_BROWSER_TEST_F(RegionCaptureClonesBrowserTest,
@@ -698,8 +705,13 @@ IN_PROC_BROWSER_TEST_F(RegionCaptureClonesBrowserTest,
 }
 
 // Original track becomes unblocked for cropping after clone is GCed 1/3.
-IN_PROC_BROWSER_TEST_F(RegionCaptureClonesBrowserTest,
-                       CanCropOriginalTrackAfterCloneIsGarbageCollected) {
+// TODO(crbug.com/1353349)  Re-enable for macOS and ChromeOS after flakes are
+// resolved.
+// TODO(crbug.com/1459313): Also flakes on linux-bfcache-rel, so turning the
+// test off entirely.
+IN_PROC_BROWSER_TEST_F(
+    RegionCaptureClonesBrowserTest,
+    DISABLED_CanCropOriginalTrackAfterCloneIsGarbageCollected) {
   ManualSetUp();
 
   ASSERT_TRUE(CloneTrack());
@@ -711,8 +723,10 @@ IN_PROC_BROWSER_TEST_F(RegionCaptureClonesBrowserTest,
 }
 
 // Original track becomes unblocked for cropping after clone is GCed 2/3.
-IN_PROC_BROWSER_TEST_F(RegionCaptureClonesBrowserTest,
-                       CanRecropOriginalTrackAfterCloneIsGarbageCollected) {
+// TODO(crbug.com/1353349) Re-enable after flakes are resolved.
+IN_PROC_BROWSER_TEST_F(
+    RegionCaptureClonesBrowserTest,
+    DISABLED_CanRecropOriginalTrackAfterCloneIsGarbageCollected) {
   ManualSetUp();
 
   ASSERT_TRUE(CropTo(kCropTarget0, Frame::kTopLevelDocument, Track::kOriginal));
@@ -725,8 +739,10 @@ IN_PROC_BROWSER_TEST_F(RegionCaptureClonesBrowserTest,
 }
 
 // Original track becomes unblocked for cropping after clone is GCed 3/3.
-IN_PROC_BROWSER_TEST_F(RegionCaptureClonesBrowserTest,
-                       CanUncropOriginalTrackAfterCloneIsGarbageCollected) {
+IN_PROC_BROWSER_TEST_F(
+    RegionCaptureClonesBrowserTest,
+    // TODO(crbug.com/1356788): Re-enable this test
+    DISABLED_CanUncropOriginalTrackAfterCloneIsGarbageCollected) {
   ManualSetUp();
 
   ASSERT_TRUE(CropTo(kCropTarget0, Frame::kTopLevelDocument, Track::kOriginal));

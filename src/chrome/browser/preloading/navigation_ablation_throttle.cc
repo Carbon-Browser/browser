@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/preloading/navigation_ablation_throttle.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
@@ -19,8 +19,9 @@
 #include "content/public/browser/web_contents.h"
 
 namespace {
-const base::Feature kNavigationLatencyAblation{
-    "NavigationLatencyAblation", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kNavigationLatencyAblation,
+             "NavigationLatencyAblation",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // The amount of time to stall before resuming loading.
 const base::FeatureParam<base::TimeDelta> kNavigationLatencyAblationDuration{

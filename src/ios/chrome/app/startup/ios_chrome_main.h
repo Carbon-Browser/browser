@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ class TimeTicks;
 }
 
 namespace web {
-class WebMainRunner;
+class WebMain;
 }
 
 // Encapsulates any setup and initialization that is needed by common
@@ -35,7 +35,7 @@ class IOSChromeMain {
 
  private:
   IOSChromeMainDelegate main_delegate_;
-  std::unique_ptr<web::WebMainRunner> web_main_runner_;
+  std::unique_ptr<web::WebMain> web_main_;
 };
 
 #endif  // IOS_CHROME_APP_STARTUP_IOS_CHROME_MAIN_H_

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,20 @@
 
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
 #include "content/browser/devtools/protocol/network.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "net/base/net_errors.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/filter/source_stream.h"
 #include "net/net_buildflags.h"
 #include "services/network/public/mojom/devtools_observer.mojom-forward.h"
+#include "services/network/public/mojom/http_raw_headers.mojom-forward.h"
 #include "services/network/public/mojom/network_context.mojom.h"
-#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom-shared.h"
@@ -71,7 +73,8 @@ class NetworkHandler : public DevToolsDomainHandler,
                  const base::UnguessableToken& devtools_token,
                  DevToolsIOContext* io_context,
                  base::RepeatingClosure update_loader_factories_callback,
-                 bool allow_file_access);
+                 bool allow_file_access,
+                 bool client_is_trusted);
 
   NetworkHandler(const NetworkHandler&) = delete;
   NetworkHandler& operator=(const NetworkHandler&) = delete;
@@ -187,6 +190,9 @@ class NetworkHandler : public DevToolsDomainHandler,
       const String& interception_id,
       std::unique_ptr<GetResponseBodyForInterceptionCallback> callback)
       override;
+  void GetResponseBody(
+      const String& request_id,
+      std::unique_ptr<GetResponseBodyCallback> callback) override;
   void TakeResponseBodyForInterceptionAsStream(
       const String& interception_id,
       std::unique_ptr<TakeResponseBodyForInterceptionAsStreamCallback> callback)
@@ -210,11 +216,17 @@ class NetworkHandler : public DevToolsDomainHandler,
       bool* disable_cache,
       absl::optional<std::vector<net::SourceStream::SourceType>>*
           accepted_stream_types);
-  void PrefetchRequestWillBeSent(const std::string& request_id,
-                                 const network::ResourceRequest& request,
-                                 const GURL& initiator_url,
-                                 Maybe<std::string> frame_token,
-                                 base::TimeTicks timestamp);
+  void PrefetchRequestWillBeSent(
+      const std::string& request_id,
+      const network::ResourceRequest& request,
+      const GURL& initiator_url,
+      Maybe<std::string> frame_token,
+      base::TimeTicks timestamp,
+      absl::optional<
+          std::pair<const GURL&,
+                    const network::mojom::URLResponseHeadDevToolsInfo&>>
+          redirect_info);
+
   void NavigationRequestWillBeSent(const NavigationRequest& nav_request,
                                    base::TimeTicks timestamp);
   void RequestSent(const std::string& request_id,
@@ -236,6 +248,17 @@ class NetworkHandler : public DevToolsDomainHandler,
       const char* resource_type,
       const network::URLLoaderCompletionStatus& completion_status);
 
+  void FetchKeepAliveRequestWillBeSent(
+      const std::string& request_id,
+      const network::ResourceRequest& request,
+      const GURL& initiator_url,
+      Maybe<std::string> frame_token,
+      base::TimeTicks timestamp,
+      absl::optional<
+          std::pair<const GURL&,
+                    const network::mojom::URLResponseHeadDevToolsInfo&>>
+          redirect_info);
+
   void OnSignedExchangeReceived(
       absl::optional<const base::UnguessableToken> devtools_navigation_token,
       const GURL& outer_request_url,
@@ -255,14 +278,16 @@ class NetworkHandler : public DevToolsDomainHandler,
       const net::CookieAccessResultList& request_cookie_list,
       const std::vector<network::mojom::HttpRawHeaderPairPtr>& request_headers,
       const base::TimeTicks timestamp,
-      const network::mojom::ClientSecurityStatePtr& security_state);
+      const network::mojom::ClientSecurityStatePtr& security_state,
+      const network::mojom::OtherPartitionInfoPtr& other_partition_info);
   void OnResponseReceivedExtraInfo(
       const std::string& devtools_request_id,
       const net::CookieAndLineAccessResultList& response_cookie_list,
       const std::vector<network::mojom::HttpRawHeaderPairPtr>& response_headers,
       const absl::optional<std::string>& response_headers_text,
       network::mojom::IPAddressSpace resource_address_space,
-      int32_t http_status_code);
+      int32_t http_status_code,
+      const absl::optional<net::CookiePartitionKey>& cookie_partition_key);
   void OnTrustTokenOperationDone(
       const std::string& devtools_request_id,
       const network::mojom::TrustTokenOperationResult& result);
@@ -301,11 +326,15 @@ class NetworkHandler : public DevToolsDomainHandler,
       network::mojom::PrivateNetworkRequestPolicy policy);
   static protocol::Network::IPAddressSpace BuildIpAddressSpace(
       network::mojom::IPAddressSpace space);
-  static Maybe<protocol::Network::ClientSecurityState>
+  static std::unique_ptr<protocol::Network::ClientSecurityState>
   MaybeBuildClientSecurityState(
       const network::mojom::ClientSecurityStatePtr& state);
   static std::unique_ptr<protocol::Network::CorsErrorStatus>
   BuildCorsErrorStatus(const network::CorsErrorStatus& status);
+
+  void BodyDataReceived(const String& request_id,
+                        const String& body,
+                        bool is_base64_encoded);
 
  private:
   void OnLoadNetworkResourceFinished(DevToolsNetworkResourceLoader* loader,
@@ -327,9 +356,11 @@ class NetworkHandler : public DevToolsDomainHandler,
 
   const base::UnguessableToken devtools_token_;
   DevToolsIOContext* const io_context_;
+  const bool allow_file_access_;
+  const bool client_is_trusted_;
 
   std::unique_ptr<Network::Frontend> frontend_;
-  BrowserContext* browser_context_;
+  raw_ptr<BrowserContext> browser_context_;
   StoragePartition* storage_partition_;
   RenderFrameHostImpl* host_;
   bool enabled_;
@@ -348,7 +379,7 @@ class NetworkHandler : public DevToolsDomainHandler,
       loaders_;
   absl::optional<std::set<net::SourceStream::SourceType>>
       accepted_stream_types_;
-  const bool allow_file_access_;
+  std::unordered_map<String, std::pair<String, bool>> received_body_data_;
   base::WeakPtrFactory<NetworkHandler> weak_factory_{this};
 };
 

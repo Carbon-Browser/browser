@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include <optional>
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
@@ -23,8 +24,10 @@
 #include "build/build_config.h"
 #include "gpu/command_buffer/common/capabilities.h"
 #include "gpu/command_buffer/common/context_result.h"
+#include "gpu/command_buffer/service/isolation_key_provider.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
+#include "gpu/ipc/common/gpu_disk_cache_type.h"
 #include "gpu/ipc/service/command_buffer_stub.h"
 #include "gpu/ipc/service/gpu_ipc_service_export.h"
 #include "gpu/ipc/service/shared_image_stub.h"
@@ -32,6 +35,7 @@
 #include "mojo/public/cpp/bindings/generic_pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/gpu_extra_info.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gl/gl_share_group.h"
 #include "ui/gl/gpu_preference.h"
@@ -44,7 +48,7 @@ namespace gpu {
 class DCOMPTexture;
 class GpuChannelManager;
 class GpuChannelMessageFilter;
-class ImageDecodeAcceleratorStub;
+class GpuMemoryBufferFactory;
 class ImageDecodeAcceleratorWorker;
 class Scheduler;
 class SharedImageStub;
@@ -53,7 +57,8 @@ class SyncPointManager;
 
 // Encapsulates an IPC channel between the GPU process and one renderer
 // process. On the renderer side there's a corresponding GpuChannelHost.
-class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
+class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener,
+                                          public IsolationKeyProvider {
  public:
   GpuChannel(const GpuChannel&) = delete;
   GpuChannel& operator=(const GpuChannel&) = delete;
@@ -70,7 +75,9 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
       int32_t client_id,
       uint64_t client_tracing_id,
       bool is_gpu_host,
-      ImageDecodeAcceleratorWorker* image_decode_accelerator_worker);
+      ImageDecodeAcceleratorWorker* image_decode_accelerator_worker,
+      const gfx::GpuExtraInfo& gpu_extra_info,
+      gpu::GpuMemoryBufferFactory* gpu_memory_buffer_factory);
 
   // Init() sets up the underlying IPC channel.  Use a separate method because
   // we don't want to do that in tests.
@@ -80,17 +87,6 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   void InitForTesting(IPC::Channel* channel);
 
   base::WeakPtr<GpuChannel> AsWeakPtr();
-
-  using CommandBufferMediaBinder =
-      base::RepeatingCallback<void(CommandBufferStub*,
-                                   mojo::GenericPendingAssociatedReceiver)>;
-  void set_command_buffer_media_binder(CommandBufferMediaBinder binder) {
-    command_buffer_media_binder_ = std::move(binder);
-  }
-
-  const CommandBufferMediaBinder& command_buffer_media_binder() const {
-    return command_buffer_media_binder_;
-  }
 
   // Get the GpuChannelManager that owns this channel.
   GpuChannelManager* gpu_channel_manager() const {
@@ -122,6 +118,10 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   bool OnMessageReceived(const IPC::Message& msg) override;
   void OnChannelError() override;
 
+  // gpu::IsolationKeyProvider:
+  void GetIsolationKey(const blink::WebGPUExecutionContextToken& token,
+                       GetIsolationKeyCallback cb) override;
+
   void OnCommandBufferScheduled(CommandBufferStub* stub);
   void OnCommandBufferDescheduled(CommandBufferStub* stub);
 
@@ -129,7 +129,7 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
 
   CommandBufferStub* LookupCommandBuffer(int32_t route_id);
 
-  bool HasActiveWebGLContext() const;
+  bool HasActiveStatefulContext() const;
   void MarkAllContextsLost();
 
   // Called to add a listener for a particular message routing ID.
@@ -139,20 +139,22 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   // Called to remove a listener for a particular message routing ID.
   void RemoveRoute(int32_t route_id);
 
-  void CacheShader(const std::string& key, const std::string& shader);
+  std::optional<gpu::GpuDiskCacheHandle> GetCacheHandleForType(
+      gpu::GpuDiskCacheType type);
+  void RegisterCacheHandle(const gpu::GpuDiskCacheHandle& handle);
+  void CacheBlob(gpu::GpuDiskCacheType type,
+                 const std::string& key,
+                 const std::string& shader);
 
   uint64_t GetMemoryUsage() const;
-
-  scoped_refptr<gl::GLImage> CreateImageForGpuMemoryBuffer(
-      gfx::GpuMemoryBufferHandle handle,
-      const gfx::Size& size,
-      gfx::BufferFormat format,
-      gfx::BufferPlane plane,
-      SurfaceHandle surface_handle);
 
   // Executes a DeferredRequest that was previously received and has now been
   // scheduled by the scheduler.
   void ExecuteDeferredRequest(mojom::DeferredRequestParamsPtr params);
+  void GetGpuMemoryBufferHandleInfo(
+      const gpu::Mailbox& mailbox,
+      mojom::GpuChannel::GetGpuMemoryBufferHandleInfoCallback callback);
+  void PerformImmediateCleanup();
 
   void WaitForTokenInRange(
       int32_t routing_id,
@@ -167,8 +169,6 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
       mojom::GpuChannel::WaitForGetOffsetInRangeCallback callback);
 
   mojom::GpuChannel& GetGpuChannelForTesting();
-
-  ImageDecodeAcceleratorStub* GetImageDecodeAcceleratorStubForTesting() const;
 
 #if BUILDFLAG(IS_ANDROID)
   const CommandBufferStub* GetOneStub() const;
@@ -211,12 +211,11 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
   void DestroyCommandBuffer(int32_t routing_id);
 
 #if BUILDFLAG(IS_FUCHSIA)
-  void RegisterSysmemBufferCollection(const base::UnguessableToken& id,
-                                      mojo::PlatformHandle token,
+  void RegisterSysmemBufferCollection(mojo::PlatformHandle service_handle,
+                                      mojo::PlatformHandle sysmem_token,
                                       gfx::BufferFormat format,
                                       gfx::BufferUsage usage,
                                       bool register_with_image_pipe);
-  void ReleaseSysmemBufferCollection(const base::UnguessableToken& id);
 #endif  // BUILDFLAG(IS_FUCHSIA)
 
  private:
@@ -231,12 +230,14 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
              int32_t client_id,
              uint64_t client_tracing_id,
              bool is_gpu_host,
-             ImageDecodeAcceleratorWorker* image_decode_accelerator_worker);
+             ImageDecodeAcceleratorWorker* image_decode_accelerator_worker,
+             const gfx::GpuExtraInfo& gpu_extra_info,
+             gpu::GpuMemoryBufferFactory* gpu_memory_buffer_factory);
 
   void OnDestroyCommandBuffer(int32_t route_id);
 
   // Message handlers for control messages.
-  bool CreateSharedImageStub();
+  bool CreateSharedImageStub(const gfx::GpuExtraInfo& gpu_extra_info);
 
   std::unique_ptr<IPC::SyncChannel> sync_channel_;  // nullptr in tests.
   raw_ptr<IPC::Sender>
@@ -244,15 +245,14 @@ class GPU_IPC_SERVICE_EXPORT GpuChannel : public IPC::Listener {
 
   base::ProcessId client_pid_ = base::kNullProcessId;
 
-  // An optional binder to handle associated interface requests from the Media
-  // stack, targeting a specific CommandBuffer.
-  CommandBufferMediaBinder command_buffer_media_binder_;
-
   // Map of routing id to command buffer stub.
   base::flat_map<int32_t, std::unique_ptr<CommandBufferStub>> stubs_;
 
   // Map of stream id to scheduler sequence id.
   base::flat_map<int32_t, SequenceId> stream_sequences_;
+
+  // Map of disk cache type to the handle.
+  base::flat_map<gpu::GpuDiskCacheType, gpu::GpuDiskCacheHandle> caches_;
 
   // The lifetime of objects of this class is managed by a GpuChannelManager.
   // The GpuChannelManager destroy all the GpuChannels that they own when they

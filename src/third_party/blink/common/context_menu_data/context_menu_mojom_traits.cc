@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,14 @@
 #include "third_party/blink/public/common/context_menu_data/menu_item_info.h"
 
 namespace mojo {
+
+// static
+bool StructTraits<blink::mojom::FormRendererIdDataView, uint64_t>::Read(
+    blink::mojom::FormRendererIdDataView data,
+    uint64_t* out) {
+  *out = data.id();
+  return true;
+}
 
 // static
 bool StructTraits<blink::mojom::FieldRendererIdDataView, uint64_t>::Read(
@@ -39,10 +47,12 @@ bool StructTraits<blink::mojom::UntrustworthyContextMenuParamsDataView,
       !data.ReadLinkFollowed(&out->link_followed) ||
       !data.ReadCustomItems(&out->custom_items) ||
       !data.ReadSourceType(&out->source_type) ||
-      !data.ReadInputFieldType(&out->input_field_type) ||
       !data.ReadSelectionRect(&out->selection_rect) ||
-      !data.ReadFieldRendererId(&out->field_renderer_id))
+      !data.ReadFormControlType(&out->form_control_type) ||
+      !data.ReadFormRendererId(&out->form_renderer_id) ||
+      !data.ReadFieldRendererId(&out->field_renderer_id)) {
     return false;
+  }
 
   out->x = data.x();
   out->y = data.y();
@@ -56,6 +66,9 @@ bool StructTraits<blink::mojom::UntrustworthyContextMenuParamsDataView,
   out->edit_flags = data.edit_flags();
   out->selection_start_offset = data.selection_start_offset();
   out->opened_from_highlight = data.opened_from_highlight();
+  out->is_content_editable_for_autofill =
+      data.is_content_editable_for_autofill();
+  out->is_password_type_by_heuristics = data.is_password_type_by_heuristics();
   return true;
 }
 

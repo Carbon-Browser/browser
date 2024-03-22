@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,10 @@ namespace updater {
 
 class CachedPolicyInfo;
 
+bool CreateGlobalAccessibleDirectory(const base::FilePath& path);
+bool WriteContentToGlobalReadableFile(const base::FilePath& path,
+                                      const std::string& content_to_write);
+
 // The token service interface defines how to serialize tokens.
 class TokenServiceInterface {
  public:
@@ -30,8 +34,14 @@ class TokenServiceInterface {
   // ID of the device that the tokens target to.
   virtual std::string GetDeviceID() const = 0;
 
+  // Checks if enrollment is mandatory.
+  virtual bool IsEnrollmentMandatory() const = 0;
+
   // Writes |enrollment_token| to storage.
   virtual bool StoreEnrollmentToken(const std::string& enrollment_token) = 0;
+
+  // Deletes |enrollment_token| from storage.
+  virtual bool DeleteEnrollmentToken() = 0;
 
   // Reads the enrollment token from sources as-needed to find one.
   // Returns an empty string if no enrollment token is found.
@@ -54,7 +64,13 @@ class TokenServiceInterface {
 //   3) DM policies.
 class DMStorage : public base::RefCountedThreadSafe<DMStorage> {
  public:
+#if BUILDFLAG(IS_WIN)
   explicit DMStorage(const base::FilePath& policy_cache_root);
+#else
+  DMStorage(const base::FilePath& policy_cache_root,
+            const base::FilePath& enrollment_token_path = {},
+            const base::FilePath& dm_token_path = {});
+#endif
   DMStorage(const base::FilePath& policy_cache_root,
             std::unique_ptr<TokenServiceInterface> token_service);
   DMStorage(const DMStorage&) = delete;
@@ -63,9 +79,19 @@ class DMStorage : public base::RefCountedThreadSafe<DMStorage> {
   // Forwards to token service to get device ID
   std::string GetDeviceID() const { return token_service_->GetDeviceID(); }
 
+  // Forwards to token service to check if enrollment is mandatory.
+  bool IsEnrollmentMandatory() const {
+    return token_service_->IsEnrollmentMandatory();
+  }
+
   // Forwards to token service to save enrollment token.
   bool StoreEnrollmentToken(const std::string& enrollment_token) {
     return token_service_->StoreEnrollmentToken(enrollment_token);
+  }
+
+  // Forwards to token service to delete enrollment token.
+  bool DeleteEnrollmentToken() {
+    return token_service_->DeleteEnrollmentToken();
   }
 
   // Forwards to token service to get enrollment token.
@@ -94,6 +120,9 @@ class DMStorage : public base::RefCountedThreadSafe<DMStorage> {
 
   // Returns true if the device is de-registered.
   bool IsDeviceDeregistered() const;
+
+  // Checks if the caller has permissions to persist the DM policies.
+  bool CanPersistPolicies() const;
 
   // Persists DM policies.
   //
@@ -134,16 +163,23 @@ class DMStorage : public base::RefCountedThreadSafe<DMStorage> {
       ::wireless_android_enterprise_devicemanagement::OmahaSettingsClientProto>
   GetOmahaPolicySettings() const;
 
+  // Returns the folder that caches the downloaded policies.
+  base::FilePath policy_cache_folder() const { return policy_cache_root_; }
+
  private:
   friend class base::RefCountedThreadSafe<DMStorage>;
   ~DMStorage();
 
   const base::FilePath policy_cache_root_;
+  const base::FilePath policy_info_file_;
   std::unique_ptr<TokenServiceInterface> token_service_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };
 
+// Returns the DMStorage under which the Device Management policies are
+// persisted. For Windows, this is `%ProgramFiles(x86)%\{CompanyName}\Policies`.
+// For macOS, this is `/Library/{CompanyName}/{KEYSTONE_NAME}/DeviceManagement`.
 scoped_refptr<DMStorage> GetDefaultDMStorage();
 
 }  // namespace updater

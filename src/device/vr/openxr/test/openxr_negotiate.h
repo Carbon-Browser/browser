@@ -1,15 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_VR_OPENXR_TEST_OPENXR_NEGOTIATE_H_
 #define DEVICE_VR_OPENXR_TEST_OPENXR_NEGOTIATE_H_
 
-#include <d3d11.h>
 #include <unknwn.h>
 
+#include "device/vr/openxr/openxr_platform.h"
 #include "third_party/openxr/src/include/openxr/openxr.h"
-#include "third_party/openxr/src/include/openxr/openxr_platform.h"
 #include "third_party/openxr/src/src/common/loader_interfaces.h"
 
 // This file contains functions that are used by the openxr_loader.dll to call

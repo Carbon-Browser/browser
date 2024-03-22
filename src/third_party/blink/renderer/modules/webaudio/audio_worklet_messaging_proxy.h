@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,7 +78,9 @@ class MODULES_EXPORT AudioWorkletMessagingProxy final
   // Implements ThreadedWorkletMessagingProxy.
   std::unique_ptr<ThreadedWorkletObjectProxy> CreateObjectProxy(
       ThreadedWorkletMessagingProxy*,
-      ParentExecutionContextTaskRunners*) override;
+      ParentExecutionContextTaskRunners*,
+      scoped_refptr<base::SingleThreadTaskRunner>
+          parent_agent_group_task_runner) override;
 
   std::unique_ptr<WorkerThread> CreateWorkerThread() override;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <sstream>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -160,7 +160,7 @@ class SyncSocketClientListener : public IPC::Listener {
   }
 
   raw_ptr<base::SyncSocket> socket_;
-  raw_ptr<IPC::Channel> chan_;
+  raw_ptr<IPC::Channel, DanglingUntriaged> chan_;
 };
 
 using SyncSocketTest = IPCChannelMojoTestBase;

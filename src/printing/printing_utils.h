@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,12 +13,14 @@
 #include "base/containers/span.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "printing/buildflags/buildflags.h"
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 #include "base/strings/string_piece.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
+#include "base/win/win_handle_types.h"
 #include "ui/gfx/geometry/rect.h"
 #endif
 
@@ -46,7 +48,7 @@ std::u16string FormatDocumentTitleWithOwnerAndLength(
     const std::u16string& title,
     size_t length);
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 // Returns the paper size (microns) most common in the locale to the nearest
 // millimeter. Defaults to ISO A4 for an empty or invalid locale.
 COMPONENT_EXPORT(PRINTING_BASE)
@@ -67,6 +69,10 @@ COMPONENT_EXPORT(PRINTING_BASE)
 gfx::Rect GetCenteredPageContentRect(const gfx::Size& paper_size,
                                      const gfx::Size& page_size,
                                      const gfx::Rect& page_content_rect);
+
+// Returns the printable area in device units for `hdc`.
+COMPONENT_EXPORT(PRINTING_BASE)
+gfx::Rect GetPrintableAreaDeviceUnits(HDC hdc);
 #endif
 
 // Helper for tests and DCHECKs to validate that `maybe_pdf_data` suggests a PDF

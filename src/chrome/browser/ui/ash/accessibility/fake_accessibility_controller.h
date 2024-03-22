@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,11 +49,13 @@ class FakeAccessibilityController : ash::AccessibilityController {
   void SetPointScanSpeedDipsPerSecond(
       int point_scan_speed_dips_per_second) override;
   void ToggleDictationFromSource(ash::DictationToggleSource source) override;
+  void EnableOrToggleDictationFromSource(
+      ash::DictationToggleSource source) override;
   void ShowDictationLanguageUpgradedNudge(
       const std::string& dictation_locale,
       const std::string& application_locale) override;
   void HandleAutoclickScrollableBoundsFound(
-      gfx::Rect& bounds_in_screen) override;
+      const gfx::Rect& bounds_in_screen) override;
   std::u16string GetBatteryDescription() const override;
   void SetVirtualKeyboardVisible(bool is_visible) override;
   void PerformAcceleratorAction(
@@ -62,17 +64,20 @@ class FakeAccessibilityController : ash::AccessibilityController {
   bool IsAccessibilityFeatureVisibleInTrayMenu(
       const std::string& path) override;
   void DisableSwitchAccessDisableConfirmationDialogTesting() override;
+  void DisableSwitchAccessEnableNotificationTesting() override;
   void UpdateDictationButtonOnSpeechRecognitionDownloadChanged(
       int download_progress) override;
-  void ShowSpeechRecognitionDownloadNotificationForDictation(
-      bool succeeded,
+  void ShowNotificationForDictation(
+      ash::DictationNotificationType type,
       const std::u16string& display_language) override;
   void UpdateDictationBubble(
       bool visible,
       ash::DictationBubbleIconType icon,
-      const absl::optional<std::u16string>& text,
-      const absl::optional<std::vector<ash::DictationBubbleHintType>>& hints)
+      const std::optional<std::u16string>& text,
+      const std::optional<std::vector<ash::DictationBubbleHintType>>& hints)
       override;
+  void SilenceSpokenFeedback() override;
+  void ShowToast(ash::AccessibilityToastType type) override;
 
  private:
   bool was_client_set_ = false;

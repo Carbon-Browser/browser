@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ import org.junit.runner.RunWith;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
-import org.chromium.chrome.browser.browserservices.verification.VerificationResultStore;
+import org.chromium.chrome.browser.browserservices.verification.ChromeVerificationResultStore;
 import org.chromium.chrome.browser.browsing_data.BrowsingDataBridge.OnClearBrowsingDataListener;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.webapps.TestFetchStorageCallback;
@@ -35,7 +35,7 @@ import java.util.concurrent.TimeoutException;
 /**
  * Integration tests for the native BrowsingDataRemover.
  *
- * BrowsingDataRemover is used to delete data from various data storage backends. However, for
+ * <p>BrowsingDataRemover is used to delete data from various data storage backends. However, for
  * those backends that live in the Java code, it is not possible to test whether deletions were
  * successful in its own unit tests. This test can do so.
  */
@@ -80,33 +80,45 @@ public class BrowsingDataRemoverIntegrationTest {
 
         CallbackHelper dataClearedExcludingDomainHelper = new CallbackHelper();
         // Clear cookies and site data excluding the registrable domain "google.com".
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BrowsingDataBridge.getInstance().clearBrowsingDataExcludingDomains(
-                    new OnClearBrowsingDataListener() {
-                        @Override
-                        public void onBrowsingDataCleared() {
-                            dataClearedExcludingDomainHelper.notifyCalled();
-                        }
-                    },
-                    new int[] {BrowsingDataType.COOKIES}, TimePeriod.ALL_TIME,
-                    new String[] {"google.com"}, new int[] {1}, new String[0], new int[0]);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowsingDataBridge.getInstance()
+                            .clearBrowsingDataExcludingDomains(
+                                    new OnClearBrowsingDataListener() {
+                                        @Override
+                                        public void onBrowsingDataCleared() {
+                                            dataClearedExcludingDomainHelper.notifyCalled();
+                                        }
+                                    },
+                                    new int[] {BrowsingDataType.COOKIES},
+                                    TimePeriod.ALL_TIME,
+                                    new String[] {"google.com"},
+                                    new int[] {1},
+                                    new String[0],
+                                    new int[0]);
+                });
         dataClearedExcludingDomainHelper.waitForFirst();
 
         // The last two webapps should have been unregistered.
-        Assert.assertEquals(new HashSet<String>(Arrays.asList("webapp1")),
+        Assert.assertEquals(
+                new HashSet<String>(Arrays.asList("webapp1")),
                 WebappRegistry.getRegisteredWebappIdsForTesting());
 
         CallbackHelper dataClearedNoUrlFilterHelper = new CallbackHelper();
         // Clear cookies and site data with no url filter.
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BrowsingDataBridge.getInstance().clearBrowsingData(new OnClearBrowsingDataListener() {
-                @Override
-                public void onBrowsingDataCleared() {
-                    dataClearedNoUrlFilterHelper.notifyCalled();
-                }
-            }, new int[] {BrowsingDataType.COOKIES}, TimePeriod.ALL_TIME);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowsingDataBridge.getInstance()
+                            .clearBrowsingData(
+                                    new OnClearBrowsingDataListener() {
+                                        @Override
+                                        public void onBrowsingDataCleared() {
+                                            dataClearedNoUrlFilterHelper.notifyCalled();
+                                        }
+                                    },
+                                    new int[] {BrowsingDataType.COOKIES},
+                                    TimePeriod.ALL_TIME);
+                });
         dataClearedNoUrlFilterHelper.waitForFirst();
 
         // All webapps should have been unregistered.
@@ -122,16 +134,21 @@ public class BrowsingDataRemoverIntegrationTest {
         Set<String> savedLinks = new HashSet<>();
         savedLinks.add(relationship);
 
-        VerificationResultStore mStore = VerificationResultStore.getInstanceForTesting();
+        ChromeVerificationResultStore mStore =
+                ChromeVerificationResultStore.getInstanceForTesting();
 
         mStore.setRelationships(savedLinks);
 
         Assert.assertTrue(mStore.getRelationships().contains(relationship));
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BrowsingDataBridge.getInstance().clearBrowsingData(callbackHelper::notifyCalled,
-                    new int[] {BrowsingDataType.HISTORY}, TimePeriod.ALL_TIME);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowsingDataBridge.getInstance()
+                            .clearBrowsingData(
+                                    callbackHelper::notifyCalled,
+                                    new int[] {BrowsingDataType.HISTORY},
+                                    TimePeriod.ALL_TIME);
+                });
 
         callbackHelper.waitForCallback(0);
         Assert.assertTrue(mStore.getRelationships().isEmpty());

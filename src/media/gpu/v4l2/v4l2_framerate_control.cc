@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/command_line.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/media_switches.h"
 
@@ -63,7 +64,7 @@ bool FrameRateControlPresent(scoped_refptr<media::V4L2Device> device) {
 }  // namespace
 namespace media {
 
-static constexpr int kMovingAverageWindowSize = 32;
+static constexpr unsigned int kMovingAverageWindowSize = 32;
 static constexpr base::TimeDelta kFrameIntervalFor120fps =
     base::Milliseconds(8);
 static constexpr base::TimeDelta kFrameIntervalFor24fps =
@@ -86,13 +87,12 @@ V4L2FrameRateControl::~V4L2FrameRateControl() = default;
 
 void V4L2FrameRateControl::UpdateFrameRate() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if ((frame_duration_moving_average_.count() <
-       frame_duration_moving_average_.depth())) {
+  if (frame_duration_moving_average_.Count() < kMovingAverageWindowSize) {
     return;
   }
 
   const base::TimeDelta frame_duration_avg =
-      frame_duration_moving_average_.Average();
+      frame_duration_moving_average_.Mean();
 
   if (frame_duration_avg > kFrameIntervalFor120fps &&
       frame_duration_avg < kFrameIntervalFor24fps &&
@@ -115,7 +115,7 @@ void V4L2FrameRateControl::UpdateFrameRate() {
       TRACE_EVENT0("media,gpu", "V4L2 VIDIOC_S_PARM call failed");
     }
 
-    VLOG(1) << "Average framerate: " << frame_duration_avg.ToHz();
+    DVLOG(4) << "Average framerate: " << frame_duration_avg.ToHz();
   }
 }
 

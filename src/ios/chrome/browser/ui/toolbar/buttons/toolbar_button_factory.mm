@@ -1,39 +1,32 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_factory.h"
 
-#include "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
+#import "base/ios/ios_util.h"
+#import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_actions_handler.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_visibility_configuration.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_configuration.h"
-#import "ios/chrome/browser/ui/toolbar/buttons/toolbar_new_tab_button.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tab_grid_button.h"
-#import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tools_menu_button.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
-#import "ios/chrome/browser/ui/util/rtl_geometry.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ios/chrome/grit/ios_theme_resources.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_theme_resources.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
 
 // The size of the symbol image.
 const CGFloat kSymbolToolbarPointSize = 24;
-
-// Specific symbols used in the toolbar.
-NSString* const kToolbarArrowBackwardSymbol = @"arrow.backward";
-NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
 
 }  // namespace
 
@@ -51,14 +44,10 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
 #pragma mark - Buttons
 
 - (ToolbarButton*)backButton {
-  UIImage* backImage;
-  backImage = UseSymbols()
-                  ? DefaultSymbolWithPointSize(kToolbarArrowBackwardSymbol,
-                                               kSymbolToolbarPointSize)
-                  : [UIImage imageNamed:@"toolbar_back"];
-  ToolbarButton* backButton = [ToolbarButton
-      toolbarButtonWithImage:[backImage
-                                 imageFlippedForRightToLeftLayoutDirection]];
+  UIImage* backImage =
+      DefaultSymbolWithPointSize(kBackSymbol, kSymbolToolbarPointSize);
+  ToolbarButton* backButton = [[ToolbarButton alloc]
+      initWithImage:[backImage imageFlippedForRightToLeftLayoutDirection]];
   [self configureButton:backButton width:kAdaptiveToolbarButtonWidth];
   backButton.accessibilityLabel = l10n_util::GetNSString(IDS_ACCNAME_BACK);
   [backButton addTarget:self.actionHandler
@@ -71,12 +60,9 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
 // Returns a forward button without visibility mask configured.
 - (ToolbarButton*)forwardButton {
   UIImage* forwardImage =
-      UseSymbols() ? DefaultSymbolWithPointSize(kToolbarArrowForwardSymbol,
-                                                kSymbolToolbarPointSize)
-                   : [UIImage imageNamed:@"toolbar_forward"];
-  ToolbarButton* forwardButton = [ToolbarButton
-      toolbarButtonWithImage:[forwardImage
-                                 imageFlippedForRightToLeftLayoutDirection]];
+      DefaultSymbolWithPointSize(kForwardSymbol, kSymbolToolbarPointSize);
+  ToolbarButton* forwardButton = [[ToolbarButton alloc]
+      initWithImage:[forwardImage imageFlippedForRightToLeftLayoutDirection]];
   [self configureButton:forwardButton width:kAdaptiveToolbarButtonWidth];
   forwardButton.visibilityMask =
       self.visibilityConfiguration.forwardButtonVisibility;
@@ -90,11 +76,9 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
 
 - (ToolbarTabGridButton*)tabGridButton {
   UIImage* tabGridImage =
-      UseSymbols() ? CustomSymbolWithPointSize(kSquareNumberSymbol,
-                                               kSymbolToolbarPointSize)
-                   : tabGridImage = [UIImage imageNamed:@"toolbar_switcher"];
+      CustomSymbolWithPointSize(kSquareNumberSymbol, kSymbolToolbarPointSize);
   ToolbarTabGridButton* tabGridButton =
-      [ToolbarTabGridButton toolbarButtonWithImage:tabGridImage];
+      [[ToolbarTabGridButton alloc] initWithImage:tabGridImage];
   [self configureButton:tabGridButton width:kAdaptiveToolbarButtonWidth];
   SetA11yLabelAndUiAutomationName(tabGridButton, IDS_IOS_TOOLBAR_SHOW_TABS,
                                   kToolbarStackButtonIdentifier);
@@ -109,9 +93,10 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
   return tabGridButton;
 }
 
-- (ToolbarToolsMenuButton*)toolsMenuButton {
-  ToolbarToolsMenuButton* toolsMenuButton =
-      [[ToolbarToolsMenuButton alloc] initWithFrame:CGRectZero];
+- (ToolbarButton*)toolsMenuButton {
+  ToolbarButton* toolsMenuButton = [[ToolbarButton alloc]
+      initWithImage:DefaultSymbolWithPointSize(kMenuSymbol,
+                                               kSymbolToolbarPointSize)];
 
   SetA11yLabelAndUiAutomationName(toolsMenuButton, IDS_IOS_TOOLBAR_SETTINGS,
                                   kToolbarToolsMenuButtonIdentifier);
@@ -129,11 +114,8 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
 
 - (ToolbarButton*)shareButton {
   UIImage* shareImage =
-      UseSymbols()
-          ? DefaultSymbolWithPointSize(kShareSymbol, kSymbolToolbarPointSize)
-          : [UIImage imageNamed:@"toolbar_share"];
-  ToolbarButton* shareButton =
-      [ToolbarButton toolbarButtonWithImage:shareImage];
+      DefaultSymbolWithPointSize(kShareSymbol, kSymbolToolbarPointSize);
+  ToolbarButton* shareButton = [[ToolbarButton alloc] initWithImage:shareImage];
   [self configureButton:shareButton width:kAdaptiveToolbarButtonWidth];
   SetA11yLabelAndUiAutomationName(shareButton, IDS_IOS_TOOLS_MENU_SHARE,
                                   kToolbarShareButtonIdentifier);
@@ -148,12 +130,9 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
 
 - (ToolbarButton*)reloadButton {
   UIImage* reloadImage =
-      UseSymbols() ? CustomSymbolWithPointSize(kArrowClockWiseSymbol,
-                                               kSymbolToolbarPointSize)
-                   : [UIImage imageNamed:@"toolbar_reload"];
-  ToolbarButton* reloadButton = [ToolbarButton
-      toolbarButtonWithImage:[reloadImage
-                                 imageFlippedForRightToLeftLayoutDirection]];
+      CustomSymbolWithPointSize(kArrowClockWiseSymbol, kSymbolToolbarPointSize);
+  ToolbarButton* reloadButton = [[ToolbarButton alloc]
+      initWithImage:[reloadImage imageFlippedForRightToLeftLayoutDirection]];
   [self configureButton:reloadButton width:kAdaptiveToolbarButtonWidth];
   reloadButton.accessibilityLabel =
       l10n_util::GetNSString(IDS_IOS_ACCNAME_RELOAD);
@@ -166,10 +145,9 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
 }
 
 - (ToolbarButton*)stopButton {
-  UIImage* stopImage = UseSymbols() ? DefaultSymbolWithPointSize(
-                                          kXMarkSymbol, kSymbolToolbarPointSize)
-                                    : [UIImage imageNamed:@"toolbar_stop"];
-  ToolbarButton* stopButton = [ToolbarButton toolbarButtonWithImage:stopImage];
+  UIImage* stopImage =
+      DefaultSymbolWithPointSize(kXMarkSymbol, kSymbolToolbarPointSize);
+  ToolbarButton* stopButton = [[ToolbarButton alloc] initWithImage:stopImage];
   [self configureButton:stopButton width:kAdaptiveToolbarButtonWidth];
   stopButton.accessibilityLabel = l10n_util::GetNSString(IDS_IOS_ACCNAME_STOP);
   [stopButton addTarget:self.actionHandler
@@ -180,17 +158,28 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
 }
 
 - (ToolbarButton*)openNewTabButton {
-  UIImage* newTabImage =
-      UseSymbols()
-          ? DefaultSymbolWithPointSize(kPlusSymbol, kSymbolToolbarPointSize)
-          : [UIImage imageNamed:@"toolbar_new_tab_page"];
-  ToolbarNewTabButton* newTabButton =
-      [ToolbarNewTabButton toolbarButtonWithImage:newTabImage];
+  UIImage* image = SymbolWithPalette(
+      CustomSymbolWithPointSize(kPlusCircleFillSymbol, kSymbolToolbarPointSize),
+      @[
+        [UIColor colorNamed:kGrey600Color],
+        [self.toolbarConfiguration locationBarBackgroundColorWithVisibility:1]
+      ]);
+  UIImage* IPHHighlightedImage = SymbolWithPalette(
+      CustomSymbolWithPointSize(kPlusCircleFillSymbol, kSymbolToolbarPointSize),
+      @[
+        // The color of the 'plus'.
+        _toolbarConfiguration.buttonsTintColorIPHHighlighted,
+        // The filling color of the circle.
+        _toolbarConfiguration.buttonsIPHHighlightColor
+      ]);
+  ToolbarButton* newTabButton =
+      [[ToolbarButton alloc] initWithImage:image
+                       IPHHighlightedImage:IPHHighlightedImage];
 
   [newTabButton addTarget:self.actionHandler
-                   action:@selector(searchAction:)
+                   action:@selector(newTabAction:)
          forControlEvents:UIControlEventTouchUpInside];
-  BOOL isIncognito = self.style == INCOGNITO;
+  BOOL isIncognito = self.style == ToolbarStyle::kIncognito;
 
   [self configureButton:newTabButton width:kAdaptiveToolbarButtonWidth];
 
@@ -201,23 +190,32 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
   newTabButton.accessibilityIdentifier = kToolbarNewTabButtonIdentifier;
 
   newTabButton.visibilityMask =
-      self.visibilityConfiguration.searchButtonVisibility;
+      self.visibilityConfiguration.newTabButtonVisibility;
   return newTabButton;
 }
 
 - (UIButton*)cancelButton {
   UIButton* cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
-  cancelButton.titleLabel.font = [UIFont systemFontOfSize:kLocationBarFontSize];
   cancelButton.tintColor = [UIColor colorNamed:kBlueColor];
-  [cancelButton setTitle:l10n_util::GetNSString(IDS_CANCEL)
-                forState:UIControlStateNormal];
   [cancelButton setContentHuggingPriority:UILayoutPriorityRequired
                                   forAxis:UILayoutConstraintAxisHorizontal];
   [cancelButton
       setContentCompressionResistancePriority:UILayoutPriorityRequired
                                       forAxis:UILayoutConstraintAxisHorizontal];
-  cancelButton.contentEdgeInsets = UIEdgeInsetsMake(
+
+  UIButtonConfiguration* buttonConfiguration =
+      [UIButtonConfiguration plainButtonConfiguration];
+  buttonConfiguration.contentInsets = NSDirectionalEdgeInsetsMake(
       0, kCancelButtonHorizontalInset, 0, kCancelButtonHorizontalInset);
+  UIFont* font = [UIFont systemFontOfSize:kLocationBarFontSize];
+  NSDictionary* attributes = @{NSFontAttributeName : font};
+  NSMutableAttributedString* attributedString =
+      [[NSMutableAttributedString alloc]
+          initWithString:l10n_util::GetNSString(IDS_CANCEL)
+              attributes:attributes];
+  buttonConfiguration.attributedTitle = attributedString;
+  cancelButton.configuration = buttonConfiguration;
+
   cancelButton.hidden = YES;
   [cancelButton addTarget:self.actionHandler
                    action:@selector(cancelOmniboxFocusAction)
@@ -243,11 +241,11 @@ NSString* const kToolbarArrowForwardSymbol = @"arrow.forward";
   button.exclusiveTouch = YES;
   button.pointerInteractionEnabled = YES;
   button.pointerStyleProvider =
-      ^UIPointerStyle*(UIButton* button, UIPointerEffect* proposedEffect,
+      ^UIPointerStyle*(UIButton* uiButton, UIPointerEffect* proposedEffect,
                        UIPointerShape* proposedShape) {
     // This gets rid of a thin border on a spotlighted bookmarks button.
     // This is applied to all toolbar buttons for consistency.
-    CGRect rect = CGRectInset(button.frame, 1, 1);
+    CGRect rect = CGRectInset(uiButton.frame, 1, 1);
     UIPointerShape* shape = [UIPointerShape shapeWithRoundedRect:rect];
     return [UIPointerStyle styleWithEffect:proposedEffect shape:shape];
   };

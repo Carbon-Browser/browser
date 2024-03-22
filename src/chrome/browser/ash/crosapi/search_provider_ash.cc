@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 
 namespace crosapi {
@@ -43,18 +43,28 @@ void SearchProviderAsh::RegisterSearchController(
 void SearchProviderAsh::OnSearchResultsReceived(
     mojom::SearchStatus status,
     absl::optional<std::vector<mojom::SearchResultPtr>> results) {
-  const bool result_expected = status == mojom::SearchStatus::kInProgress ||
-                               status == mojom::SearchStatus::kDone;
-  const auto& callback = publisher_receivers_.current_context();
-  if (result_expected && results.has_value() && !callback.is_null()) {
-    callback.Run(std::move(results.value()));
-    return;
+  switch (status) {
+    case mojom::SearchStatus::kError: {
+      LOG(ERROR) << "Search failed.";
+      publisher_receivers_.Remove(publisher_receivers_.current_receiver());
+      return;
+    }
+    case mojom::SearchStatus::kDone: {
+      const auto& callback = publisher_receivers_.current_context();
+      if (results.has_value() && !callback.is_null())
+        callback.Run(std::move(results.value()));
+      return;
+    }
+    case mojom::SearchStatus::kInProgress:
+    case mojom::SearchStatus::kCancelled:
+    case mojom::SearchStatus::kBackendUnavailable: {
+      return;
+    }
   }
+}
 
-  if (status == mojom::SearchStatus::kError) {
-    LOG(ERROR) << "Search failed.";
-    publisher_receivers_.Remove(publisher_receivers_.current_receiver());
-  }
+bool SearchProviderAsh::IsSearchControllerConnected() const {
+  return search_controller_.is_bound() && search_controller_.is_connected();
 }
 
 void SearchProviderAsh::BindPublisher(

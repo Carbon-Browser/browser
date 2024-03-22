@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,18 @@
 
 // Adjusts the speed property of CALayer to 100 to speed up XCUITests.
 + (void)enableFastAnimation;
+
+// Resets the speed property of CALayer back to 1; this should be called when
+// animations are being tested.
++ (void)disableFastAnimation;
+
+// Force the keyboard to be in process until iOS17 typing is fixed.
+// TODO(crbug.com/1454516): Remove this.
++ (void)swizzleKeyboardOOP;
+
+// Calls _terminateWithStatus and exit. This causes UIKit to call
+// applicationWillTerminate, which is a more realistic termination.
++ (void)gracefulTerminate;
 
 @end
 

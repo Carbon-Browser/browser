@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,10 @@ NetworkDetailedNetworkView::Factory::Create(
 void NetworkDetailedNetworkView::Factory::SetFactoryForTesting(
     Factory* test_factory) {
   g_test_factory = test_factory;
+}
+
+int NetworkDetailedNetworkView::GetScrollPosition() {
+  return 0;
 }
 
 }  // namespace ash

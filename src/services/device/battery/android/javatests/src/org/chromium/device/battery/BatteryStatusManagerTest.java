@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ import org.junit.runner.RunWith;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.device.mojom.BatteryStatus;
 
-/**
- * Test suite for BatteryStatusManager.
- */
+/** Test suite for BatteryStatusManager. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class BatteryStatusManagerTest {
     // Values reported in the most recent callback from |mManager|.
@@ -96,8 +94,9 @@ public class BatteryStatusManagerTest {
     }
 
     public void initializeBatteryManager(FakeAndroidBatteryManager managerForTesting) {
-        mManager = BatteryStatusManager.createBatteryStatusManagerForTesting(
-                mCallback, managerForTesting);
+        mManager =
+                BatteryStatusManager.createBatteryStatusManagerForTesting(
+                        mCallback, managerForTesting);
     }
 
     @Test

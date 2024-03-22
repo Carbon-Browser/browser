@@ -1,20 +1,26 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/login/ui/views_utils.h"
 
-#include <algorithm>
 #include <memory>
 
 #include "ash/login/ui/non_accessible_view.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/style/ash_color_provider.h"
+#include "base/ranges/algorithm.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
+#include "ui/gfx/text_constants.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
+#include "ui/views/focus/focus_manager.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/metadata/view_factory_internal.h"
 #include "ui/views/view_targeter_delegate.h"
 #include "ui/views/widget/widget.h"
 
@@ -24,6 +30,8 @@ namespace {
 
 class ContainerView : public NonAccessibleView,
                       public views::ViewTargeterDelegate {
+  METADATA_HEADER(ContainerView, NonAccessibleView)
+
  public:
   ContainerView() {
     SetEventTargeter(std::make_unique<views::ViewTargeter>(this));
@@ -44,9 +52,12 @@ class ContainerView : public NonAccessibleView,
       return child->GetVisible() &&
              child->HitTestRect(gfx::ToEnclosingRect(child_rect));
     };
-    return std::any_of(children.cbegin(), children.cend(), hits_child);
+    return base::ranges::any_of(children, hits_child);
   }
 };
+
+BEGIN_METADATA(ContainerView)
+END_METADATA
 
 }  // namespace
 
@@ -72,8 +83,9 @@ bool ShouldShowLandscape(const views::Widget* widget) {
   // in that case. A new layout will happen when the view is attached to a
   // widget (see LockContentsView::AddedToWidget), which will let us fetch the
   // correct display orientation.
-  if (!widget)
+  if (!widget) {
     return true;
+  }
 
   // Get the orientation for |widget|.
   const display::Display& display =
@@ -95,12 +107,40 @@ bool ShouldShowLandscape(const views::Widget* widget) {
 }
 
 bool HasFocusInAnyChildView(views::View* view) {
-  // Find the topmost ancestor of the focused view, or |view|, whichever comes
-  // first.
-  views::View* search = view->GetFocusManager()->GetFocusedView();
-  while (search && search != view)
-    search = search->parent();
-  return search == view;
+  CHECK(view);
+  views::FocusManager* focus_manager = view->GetFocusManager();
+  CHECK(focus_manager);
+
+  views::View* focused_view = focus_manager->GetFocusedView();
+  if (focused_view) {
+    return view->Contains(focused_view);
+  } else {
+    return false;
+  }
+}
+
+std::unique_ptr<views::Label> CreateUnthemedBubbleLabel(
+    const std::u16string& message,
+    views::View* view_defining_max_width,
+    const gfx::FontList& font_list,
+    int line_height) {
+  auto builder = views::Builder<views::Label>()
+                     .SetText(message)
+                     .SetTextContext(views::style::CONTEXT_DIALOG_BODY_TEXT)
+                     .SetAutoColorReadabilityEnabled(false)
+                     .SetHorizontalAlignment(gfx::ALIGN_LEFT)
+                     .SetSubpixelRenderingEnabled(false)
+                     .SetFontList(font_list)
+                     .SetLineHeight(line_height);
+  if (view_defining_max_width != nullptr) {
+    builder.SetMultiLine(true)
+        .SetAllowCharacterBreak(true)
+        // Make sure to set a maximum label width, otherwise text wrapping will
+        // significantly increase width and layout may not work correctly if
+        // the input string is very long.
+        .SetMaximumWidth(view_defining_max_width->GetPreferredSize().width());
+  }
+  return std::move(builder).Build();
 }
 
 std::unique_ptr<views::Label> CreateBubbleLabel(
@@ -109,29 +149,29 @@ std::unique_ptr<views::Label> CreateBubbleLabel(
     SkColor color,
     const gfx::FontList& font_list,
     int line_height) {
-  auto label = std::make_unique<views::Label>(
-      message, views::style::CONTEXT_DIALOG_BODY_TEXT);
-  label->SetAutoColorReadabilityEnabled(false);
-  label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+  auto label = CreateUnthemedBubbleLabel(message, view_defining_max_width,
+                                         font_list, line_height);
   label->SetEnabledColor(color);
-  label->SetSubpixelRenderingEnabled(false);
-  label->SetFontList(font_list);
-  label->SetLineHeight(line_height);
-  if (view_defining_max_width != nullptr) {
-    label->SetMultiLine(true);
-    label->SetAllowCharacterBreak(true);
-    // Make sure to set a maximum label width, otherwise text wrapping will
-    // significantly increase width and layout may not work correctly if
-    // the input string is very long.
-    label->SetMaximumWidth(view_defining_max_width->GetPreferredSize().width());
-  }
+  return label;
+}
+
+std::unique_ptr<views::Label> CreateThemedBubbleLabel(
+    const std::u16string& message,
+    views::View* view_defining_max_width,
+    ui::ColorId enabled_color_type,
+    const gfx::FontList& font_list,
+    int line_height) {
+  auto label = CreateUnthemedBubbleLabel(message, view_defining_max_width,
+                                         font_list, line_height);
+  label->SetEnabledColorId(enabled_color_type);
   return label;
 }
 
 views::View* GetBubbleContainer(views::View* view) {
   views::View* v = view;
-  while (v->parent() != nullptr)
+  while (v->parent() != nullptr) {
     v = v->parent();
+  }
 
   views::View* root_view = v;
   // An arbitrary id that no other child of root view should use.
@@ -182,7 +222,7 @@ gfx::Point CalculateBubblePositionAfterBeforeStrategy(gfx::Rect anchor,
 
 void ConfigureRectFocusRingCircleInkDrop(views::View* view,
                                          views::FocusRing* focus_ring,
-                                         absl::optional<int> radius) {
+                                         std::optional<int> radius) {
   DCHECK(view);
   DCHECK(focus_ring);
   focus_ring->SetPathGenerator(

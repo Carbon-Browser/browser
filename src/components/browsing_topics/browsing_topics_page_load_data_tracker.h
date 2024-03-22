@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,7 @@ class BrowsingTopicsPageLoadDataTracker
 
   // Called when the document.browsingTopics() API is used in the page.
   void OnBrowsingTopicsApiUsed(const HashedDomain& hashed_context_domain,
+                               const std::string& context_domain,
                                history::HistoryService* history_service);
 
  private:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 '''Builds the Crubit tool.
@@ -15,8 +15,9 @@ import argparse
 import collections
 import hashlib
 import os
-import pipes
+import platform
 import shutil
+import stat
 import string
 import subprocess
 import sys
@@ -29,26 +30,24 @@ sys.path.append(
                  'scripts'))
 
 from update import (CLANG_REVISION, CLANG_SUB_REVISION, LLVM_BUILD_DIR)
-from build import (LLVM_BOOTSTRAP_INSTALL_DIR, MaybeDownloadHostGcc)
+from build import (LLVM_BOOTSTRAP_INSTALL_DIR, DownloadDebianSysroot)
 
-from update_rust import (CHROMIUM_DIR, RUST_REVISION, RUST_SUB_REVISION,
-                         STAGE0_JSON_SHA256, THIRD_PARTY_DIR,
-                         GetPackageVersion)
+from update_rust import (CHROMIUM_DIR, CRUBIT_REVISION, THIRD_PARTY_DIR)
 
-# Trunk on 2022-07-14.
-#
-# The revision specified below should typically be the same as the
-# `crubit_revision` specified in the //DEPS file.  More details and roll
-# instructions can be found in tools/rust/README.md.
-#
-# TODO(https://crbug.com/1329611): Move `CRUBIT_REVISION` to `update_rust.py`
-# (see WIP CL: https://crrev.com/c/3718281).
-CRUBIT_REVISION = 'd9b0ad4c09b46328dcc7a5ec28ce86cca56e0389'
-CRUBIT_SUB_REVISION = 1
-
-THIRD_PARTY_DIR = os.path.join(CHROMIUM_DIR, 'third_party')
+BAZEL_DIR = os.path.join(CHROMIUM_DIR, 'tools', 'bazel')
 CRUBIT_SRC_DIR = os.path.join(THIRD_PARTY_DIR, 'crubit', 'src')
-BAZEL_EXE = os.path.join(CHROMIUM_DIR, 'tools', 'bazel', 'bazel')
+
+
+def BazelExe(build_mac_arm):
+    if sys.platform == 'darwin':
+        if build_mac_arm or platform.machine() == 'arm64':
+            return os.path.join(BAZEL_DIR, 'mac-arm64', 'bazel')
+        else:
+            return os.path.join(BAZEL_DIR, 'mac-amd64', 'bazel')
+    elif sys.platform == 'win32':
+        return os.path.join(BAZEL_DIR, 'windows-amd64', 'bazel.exe')
+    else:
+        return os.path.join(BAZEL_DIR, 'linux-amd64', 'bazel')
 
 
 def RunCommand(command, env=None, cwd=None, fail_hard=True):
@@ -64,7 +63,7 @@ def RunCommand(command, env=None, cwd=None, fail_hard=True):
 
 def CheckoutCrubit(commit, dir):
     """Checkout the Crubit repo at a certain git commit in dir. Any local
-  modifications in dir will be lost."""
+    modifications in dir will be lost."""
 
     print('Checking out crubit repo %s into %s' % (commit, dir))
 
@@ -95,7 +94,7 @@ def CheckoutCrubit(commit, dir):
     sys.exit(1)
 
 
-def BuildCrubit(gcc_toolchain_path):
+def BuildCrubit(build_mac_arm):
     # TODO(https://crbug.com/1337346): Use locally built Rust instead of having
     # Bazel always download the whole Rust toolchain from the internet.
     # TODO(https://crbug.com/1337348): Use crates from chromium/src/third_party/rust.
@@ -123,31 +122,60 @@ def BuildCrubit(gcc_toolchain_path):
         f"--repo_env=CC={clang_path}",
     ]
 
-    # Include and link against the C++ stdlib from the GCC toolchain.
-    gcc_toolchain_flag = (f'--gcc-toolchain={gcc_toolchain_path}'
-                          if gcc_toolchain_path else '')
-    env["BAZEL_CXXOPTS"] = gcc_toolchain_flag
-    env["BAZEL_LINKOPTS"] = gcc_toolchain_flag
-    # TODO(https://crbug.com/1338217): Link C++ stdlib *statically*.
-    # Things tried so far:
-    # - Attempts that result in a sefgault when compiling Rust rlib ...
-    #     1a. env["BAZEL_LINKOPTS"] = f"{gcc_toolchain_flag}:-static"
-    #     1b. extra_args += ["--features=fully_static_link"]
-    #         # Optionally: extra_args += ["--sandbox_debug"]
-    # - Attempts that don't have any effect (`ldd ... rs_bindings_from_cc_impl`
-    #   still shows `libstdc++.so.6 => ...`):
-    #     2. extra_args += ["--dynamic_mode=off"]
+    if sys.platform.startswith('linux'):
+        # Include and link against the C++ stdlib from the sysroot.
+        sysroot = DownloadDebianSysroot('amd64')
+        sysroot_flag = (f'--sysroot={sysroot}' if sysroot else '')
+        env["BAZEL_CXXOPTS"] = sysroot_flag
+        env["BAZEL_LINKOPTS"] = f"{sysroot_flag}:-static-libstdc++"
+        env["BAZEL_LINKLIBS"] = f"-lm"
 
     # Run bazel build ...
-    args = [BAZEL_EXE, "build", "rs_bindings_from_cc:rs_bindings_from_cc_impl"]
+    args = [
+        BazelExe(build_mac_arm), "build",
+        "rs_bindings_from_cc:rs_bindings_from_cc_impl"
+    ]
     RunCommand(args + extra_args, env=env, cwd=CRUBIT_SRC_DIR)
 
 
-def ShutdownBazel():
-    # This needs to use the same arguments as BuildCrubit, because otherwise
-    # we get: WARNING: Running Bazel server needs to be killed, because the
-    # startup options are different.
-    RunCommand([BAZEL_EXE, "shutdown"], cwd=CRUBIT_SRC_DIR)
+def InstallCrubit(install_dir):
+    assert os.path.isdir(install_dir)
+
+    print('Installing crubit binaries to %s' % install_dir)
+
+    BAZEL_BIN_DIR = os.path.join(CRUBIT_SRC_DIR, "bazel-bin")
+    SOURCE_PATH = os.path.join(BAZEL_BIN_DIR, "rs_bindings_from_cc",
+                               "rs_bindings_from_cc_impl")
+    TARGET_PATH = os.path.join(install_dir, "rs_bindings_from_cc")
+    shutil.copyfile(SOURCE_PATH, TARGET_PATH)
+
+    # Change from r-xr-xr-x to rwxrwxr-x, so that future copies will work fine.
+    os.chmod(TARGET_PATH,
+             stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+
+
+def CleanBazel(build_mac_arm):
+    RunCommand([BazelExe(build_mac_arm), "clean", "--expunge"],
+               cwd=CRUBIT_SRC_DIR)
+
+
+def ShutdownBazel(build_mac_arm):
+    RunCommand([BazelExe(build_mac_arm), "shutdown"], cwd=CRUBIT_SRC_DIR)
+
+
+def WritableDir(d):
+    """ Utility function to use as `argparse` `type` to verify that the argument
+    is a writeable dir (and resolve it as an absolute path).  """
+
+    try:
+        real_d = os.path.realpath(d)
+    except Exception as e:
+        raise ArgumentTypeError(f"realpath failed: {e}")
+    if not os.path.isdir(real_d):
+        raise ArgumentTypeError(f"Not a directory: {d}")
+    if not os.access(real_d, os.W_OK):
+        raise ArgumentTypeError(f"Cannot write to: {d}")
+    return real_d
 
 
 def main():
@@ -158,23 +186,42 @@ def main():
                         action='count',
                         help='run subcommands with verbosity')
     parser.add_argument(
+        '--install-to',
+        type=WritableDir,
+        help='skip Crubit git checkout. Useful for trying local changes')
+    parser.add_argument(
+        '--skip-clean',
+        action='store_true',
+        help='skip cleanup. Useful for retrying/rebuilding local changes')
+    parser.add_argument(
         '--skip-checkout',
         action='store_true',
         help='skip Crubit git checkout. Useful for trying local changes')
+    parser.add_argument('--build-mac-arm',
+                        action='store_true',
+                        help='Build arm binaries. Only valid on macOS.')
     args, rest = parser.parse_known_args()
 
-    # Fetch GCC package to build against same libstdc++ as Clang. This function
-    # will only download it if necessary.
-    args.gcc_toolchain = None
-    MaybeDownloadHostGcc(args)
+    if args.build_mac_arm and sys.platform != 'darwin':
+        print('--build-mac-arm only valid on macOS')
+        return 1
+    if args.build_mac_arm and platform.machine() == 'arm64':
+        print('--build-mac-arm only valid on intel to cross-build arm')
+        return 1
 
     if not args.skip_checkout:
         CheckoutCrubit(CRUBIT_REVISION, CRUBIT_SRC_DIR)
 
     try:
-        BuildCrubit(args.gcc_toolchain)
+        if not args.skip_clean:
+            CleanBazel(args.build_mac_arm)
+
+        BuildCrubit(args.build_mac_arm)
+
+        if args.install_to:
+            InstallCrubit(args.install_to)
     finally:
-        ShutdownBazel()
+        ShutdownBazel(args.build_mac_arm)
 
     return 0
 

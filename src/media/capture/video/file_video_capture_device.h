@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,10 +71,9 @@ class CAPTURE_EXPORT FileVideoCaptureDevice : public VideoCaptureDevice {
       VideoCaptureFormat* video_format);
 
   // Crops frame with respect to PTZ settings.
-  std::unique_ptr<uint8_t[]> CropPTZRegion(
-      const uint8_t* frame,
-      size_t frame_buffer_size,
-      VideoPixelFormat* final_pixel_format);
+  std::vector<uint8_t> CropPTZRegion(const uint8_t* frame,
+                                     size_t frame_buffer_size,
+                                     VideoPixelFormat* final_pixel_format);
 
   // Called on the |capture_thread_|.
   void OnAllocateAndStart(const VideoCaptureParams& params,

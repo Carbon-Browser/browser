@@ -1,9 +1,9 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 // clang-format on
 
 /**
@@ -14,33 +14,34 @@ import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
 /**
  * @see chrome/browser/ui/webui/settings/search_engines_handler.cc
  */
-export type SearchEngine = {
-  canBeDefault: boolean,
-  canBeEdited: boolean,
-  canBeRemoved: boolean,
-  canBeActivated: boolean,
-  canBeDeactivated: boolean,
-  default: boolean,
-  displayName: string,
-  extension?: {id: string, name: string, canBeDisabled: boolean, icon: string},
-  iconURL?: string,
-  id: number,
-  isOmniboxExtension: boolean,
-  keyword: string,
-  modelIndex: number,
-  name: string,
-  shouldConfirmDeletion: boolean,
-  url: string,
-  urlLocked: boolean,
-};
+export interface SearchEngine {
+  canBeDefault: boolean;
+  canBeEdited: boolean;
+  canBeRemoved: boolean;
+  canBeActivated: boolean;
+  canBeDeactivated: boolean;
+  default: boolean;
+  displayName: string;
+  extension?: {id: string, name: string, canBeDisabled: boolean, icon: string};
+  iconURL?: string;
+  iconPath: string;
+  id: number;
+  isOmniboxExtension: boolean;
+  keyword: string;
+  modelIndex: number;
+  name: string;
+  shouldConfirmDeletion: boolean;
+  url: string;
+  urlLocked: boolean;
+}
 
-export type SearchEnginesInfo = {
-  defaults: SearchEngine[],
-  actives: SearchEngine[],
-  others: SearchEngine[],
-  extensions: SearchEngine[],
-  [key: string]: SearchEngine[],
-};
+export interface SearchEnginesInfo {
+  defaults: SearchEngine[];
+  actives: SearchEngine[];
+  others: SearchEngine[];
+  extensions: SearchEngine[];
+  [key: string]: SearchEngine[];
+}
 
 /**
  * Contains all recorded interactions on the search engines settings page.
@@ -61,8 +62,28 @@ export enum SearchEnginesInteractions {
   COUNT = 4,
 }
 
+/**
+ * The location from which the search engine choice was made.
+ *
+ * These values are persisted to logs. Entries should not be renumbered and
+ * numeric values should never be reused.
+ *
+ * Must be kept in sync with the ChoiceMadeLocation enum in
+ * search_engine_choice_utils.h
+ */
+export enum ChoiceMadeLocation {
+  // `chrome://settings/search`
+  SEARCH_SETTINGS = 0,
+  // `chrome://settings/searchEngines`
+  SEARCH_ENGINE_SETTINGS = 1,
+  // The search engine choice dialog for existing users or the profile picker
+  // for new users. This value should not be used in settings.
+  CHOICE_SCREEN = 2,
+}
+
 export interface SearchEnginesBrowserProxy {
-  setDefaultSearchEngine(modelIndex: number): void;
+  setDefaultSearchEngine(
+      modelIndex: number, choiceMadeLocation: ChoiceMadeLocation): void;
 
   setIsActiveSearchEngine(modelIndex: number, isActive: boolean): void;
 
@@ -90,8 +111,9 @@ export interface SearchEnginesBrowserProxy {
 
 export class SearchEnginesBrowserProxyImpl implements
     SearchEnginesBrowserProxy {
-  setDefaultSearchEngine(modelIndex: number) {
-    chrome.send('setDefaultSearchEngine', [modelIndex]);
+  setDefaultSearchEngine(
+      modelIndex: number, choiceMadeLocation: ChoiceMadeLocation) {
+    chrome.send('setDefaultSearchEngine', [modelIndex, choiceMadeLocation]);
   }
 
   setIsActiveSearchEngine(modelIndex: number, isActive: boolean) {

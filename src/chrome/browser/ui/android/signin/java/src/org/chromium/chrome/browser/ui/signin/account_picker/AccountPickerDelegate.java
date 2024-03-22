@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@ import org.chromium.components.signin.base.GoogleServiceAuthError;
 /**
  * This interface abstracts the sign-in logic for the account picker bottom sheet. There is one
  * implementation per {@link EntryPoint}.
- * TODO(crbug.com/1219434): Nest this in the coordinator.
  */
 public interface AccountPickerDelegate {
     /** Releases resources used by this class. */

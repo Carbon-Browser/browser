@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,7 @@
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
 #include "chrome/browser/enterprise/connectors/reporting/realtime_reporting_client.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
-#include "extensions/browser/extension_system_provider.h"
-#include "extensions/browser/extensions_browser_client.h"
 
 namespace enterprise_connectors {
 
@@ -23,17 +20,21 @@ RealtimeReportingClient* RealtimeReportingClientFactory::GetForProfile(
 
 // static
 RealtimeReportingClientFactory* RealtimeReportingClientFactory::GetInstance() {
-  return base::Singleton<RealtimeReportingClientFactory>::get();
+  static base::NoDestructor<RealtimeReportingClientFactory> instance;
+  return instance.get();
 }
 
 RealtimeReportingClientFactory::RealtimeReportingClientFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "RealtimeReportingClient",
-          BrowserContextDependencyManager::GetInstance()) {
-  DependsOn(
-      extensions::ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // Guest Profile follows Regular Profile selection mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
-  DependsOn(enterprise_connectors::ConnectorsServiceFactory::GetInstance());
+  DependsOn(ConnectorsServiceFactory::GetInstance());
 }
 
 RealtimeReportingClientFactory::~RealtimeReportingClientFactory() = default;
@@ -41,16 +42,6 @@ RealtimeReportingClientFactory::~RealtimeReportingClientFactory() = default;
 KeyedService* RealtimeReportingClientFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
   return new RealtimeReportingClient(context);
-}
-
-content::BrowserContext* RealtimeReportingClientFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  Profile* profile = Profile::FromBrowserContext(context);
-  if (!profile || profile->IsSystemProfile()) {
-    return nullptr;
-  }
-  return extensions::ExtensionsBrowserClient::Get()->GetOriginalContext(
-      context);
 }
 
 bool RealtimeReportingClientFactory::ServiceIsCreatedWithBrowserContext()

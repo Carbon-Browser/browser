@@ -1,17 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2013 The Chromium Authors. All rights reserved.
-
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file.
+<!--
+Copyright 2013 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- FRE -->
+    <dimen name="fre_image_height">120dp</dimen>
+    <dimen name="fre_button_padding">12dp</dimen>
+    <dimen name="fre_vertical_spacing_small">16dp</dimen>
+
     <!-- Common text sizes -->
     <dimen name="headline_size">22sp</dimen>
+    <dimen name="headline2_size">18sp</dimen>
     <dimen name="text_size_large">16sp</dimen>
     <dimen name="text_size_medium">14sp</dimen>
     <dimen name="text_size_small">12sp</dimen>
 
     <dimen name="headline_size_leading" tools:ignore="UnusedResources">28sp</dimen>
+    <dimen name="headline2_size_leading" tools:ignore="UnusedResources">24sp</dimen>
     <dimen name="text_size_large_leading" tools:ignore="UnusedResources">24sp</dimen>
     <dimen name="text_size_medium_leading" tools:ignore="UnusedResources">20sp</dimen>
     <dimen name="text_size_small_leading" tools:ignore="UnusedResources">16sp</dimen>
@@ -25,11 +32,6 @@
     <item name="default_icon_pressed_alpha" format="float" type="dimen" tools:ignore="UnusedResources">
         0.50
     </item>
-
-    <!-- FRE -->
-    <dimen name="fre_image_height">120dp</dimen>
-    <dimen name="fre_button_padding">12dp</dimen>
-    <dimen name="fre_vertical_spacing_small">16dp</dimen>
 
     <!-- Minimum height/width for a touchable item -->
     <dimen name="min_touch_target_size">48dp</dimen>
@@ -45,12 +47,14 @@
     <dimen name="menu_footer_chip_icon_size">16dp</dimen>
     <dimen name="menu_footer_chip_vertical_inset">8dp</dimen>
 
+    <!-- Custom menu-->
+    <dimen name="menu_negative_software_vertical_offset">0dp</dimen>
+
     <!-- Dropdown default measures -->
     <dimen name="dropdown_item_height">50dp</dimen>
     <dimen name="dropdown_item_divider_height">1px</dimen>
     <dimen name="dropdown_item_label_margin">10dp</dimen>
     <dimen name="dropdown_icon_margin">8dp</dimen>
-    <dimen name="dropdown_vertical_margin">4dp</dimen>
     <dimen name="dropdown_elevation">2dp</dimen>
 
     <!-- Use arbitrary high number so that if the button text spans multiple
@@ -63,6 +67,7 @@
 
     <!-- Divider Dimensions -->
     <dimen name="divider_height">1dp</dimen>
+    <dimen name="list_section_divider_padding">8dp</dimen>
 
     <!-- Drag shadow dimens -->
     <dimen name="drag_shadow_border_corner_radius">8dp</dimen>
@@ -96,4 +101,12 @@
 
     <!-- Arbitrary shadow length for elevation levels -->
     <dimen name="default_shadow_length_elev_2">6dp</dimen>
+
+    <dimen name="default_list_row_padding">16dp</dimen>
+
+    <!-- List menu & item dimensions -->
+    <dimen name="list_menu_width">180dp</dimen>
+    <dimen name="list_menu_item_icon_size">24dp</dimen>
+    <dimen name="list_menu_item_start_icon_end_margin">16dp</dimen>
+    <dimen name="list_menu_item_horizontal_padding">@dimen/default_list_row_padding</dimen>
 </resources>

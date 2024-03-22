@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/memory/ptr_util.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/gfx/geometry/insets.h"
@@ -15,6 +16,7 @@
 #include "ui/shell_dialogs/select_file_policy.h"
 #include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget.h"
+#include "url/gurl.h"
 
 namespace ash {
 
@@ -71,7 +73,8 @@ class FakeFolderSelectionDialog : public ui::SelectFileDialog {
                       int file_type_index,
                       const base::FilePath::StringType& default_extension,
                       gfx::NativeWindow owning_window,
-                      void* params) override {
+                      void* params,
+                      const GURL* caller) override {
     dialog_widget_ = views::UniqueWidgetPtr(std::make_unique<views::Widget>());
     views::Widget::InitParams widget_params(
         views::Widget::InitParams::TYPE_POPUP);
@@ -101,7 +104,9 @@ class FakeFolderSelectionDialog : public ui::SelectFileDialog {
 
 // static
 void FakeFolderSelectionDialogFactory::Start() {
-  ui::SelectFileDialog::SetFactory(new FakeFolderSelectionDialogFactory());
+  ui::SelectFileDialog::SetFactory(
+      // Private constructor.
+      base::WrapUnique(new FakeFolderSelectionDialogFactory()));
 }
 
 // static

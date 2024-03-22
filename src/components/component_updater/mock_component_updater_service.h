@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/version.h"
+#include "components/component_updater/component_installer.h"
 #include "components/component_updater/component_updater_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -31,6 +33,10 @@ class MockComponentUpdateService : public ComponentUpdateService {
   void MaybeThrottle(const std::string& id,
                      base::OnceClosure callback) override {
     DoMaybeThrottle(id, std::move(callback));
+  }
+
+  base::Version GetRegisteredVersion(const std::string& app_id) override {
+    return base::Version(kNullVersion);
   }
 
   MOCK_METHOD1(AddObserver,

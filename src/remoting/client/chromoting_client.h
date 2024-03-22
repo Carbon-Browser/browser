@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
@@ -95,6 +95,7 @@ class ChromotingClient : public SignalStrategy::Listener,
   void DeliverHostMessage(const protocol::ExtensionMessage& message) override;
   void SetVideoLayout(const protocol::VideoLayout& layout) override;
   void SetTransportInfo(const protocol::TransportInfo& transport_info) override;
+  void SetActiveDisplay(const protocol::ActiveDisplay& active_display) override;
 
   // ClipboardStub implementation for receiving clipboard data from host.
   void InjectClipboardEvent(const protocol::ClipboardEvent& event) override;

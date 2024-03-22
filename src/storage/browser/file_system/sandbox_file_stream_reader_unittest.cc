@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -50,16 +51,18 @@ class SandboxFileStreamReaderTest : public FileStreamReaderTest {
 
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         /*is_incognito=*/false, dir_.GetPath(),
-        base::ThreadTaskRunnerHandle::Get(), special_storage_policy_);
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        special_storage_policy_);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 
     file_system_context_ = CreateFileSystemContextForTesting(
         quota_manager_proxy_.get(), dir_.GetPath());
 
     file_system_context_->OpenFileSystem(
         blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
-        /*bucket=*/absl::nullopt, kFileSystemTypeTemporary,
+        /*bucket=*/std::nullopt, kFileSystemTypeTemporary,
         OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
         base::BindOnce([](const FileSystemURL& root_url,
                           const std::string& name, base::File::Error result) {

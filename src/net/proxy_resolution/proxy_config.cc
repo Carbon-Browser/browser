@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,9 @@ namespace {
 // If |proxies| is non-empty, sets it in |dict| under the key |name|.
 void AddProxyListToValue(const char* name,
                          const ProxyList& proxies,
-                         base::Value* dict) {
+                         base::Value::Dict* dict) {
   if (!proxies.IsEmpty())
-    dict->SetKey(name, proxies.ToValue());
+    dict->Set(name, proxies.ToValue());
 }
 
 // Split the |uri_list| on commas and add each entry to |proxy_list| in turn.
@@ -53,7 +53,10 @@ void ProxyConfig::ProxyRules::Apply(const GURL& url, ProxyInfo* result) const {
     return;
   }
 
-  if (bypass_rules.Matches(url, reverse_bypass)) {
+  // If restricted to Network Service's proxy list, the URL has already been
+  // matched by this point.
+  if (bypass_rules.Matches(url, reverse_bypass) &&
+      !restrict_to_network_service_proxy_allow_list) {
     result->UseDirectWithBypassedProxy();
     return;
   }
@@ -160,6 +163,8 @@ bool ProxyConfig::ProxyRules::Equals(const ProxyRules& other) const {
          proxies_for_ftp.Equals(other.proxies_for_ftp) &&
          fallback_proxies.Equals(other.fallback_proxies) &&
          bypass_rules == other.bypass_rules &&
+         restrict_to_network_service_proxy_allow_list ==
+             other.restrict_to_network_service_proxy_allow_list &&
          reverse_bypass == other.reverse_bypass;
 }
 
@@ -232,18 +237,18 @@ void ProxyConfig::ClearAutomaticSettings() {
 }
 
 base::Value ProxyConfig::ToValue() const {
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict dict;
 
   // Output the automatic settings.
   if (auto_detect_)
-    dict.SetBoolKey("auto_detect", auto_detect_);
+    dict.Set("auto_detect", auto_detect_);
   if (has_pac_url()) {
-    dict.SetStringKey("pac_url", pac_url_.possibly_invalid_spec());
+    dict.Set("pac_url", pac_url_.possibly_invalid_spec());
     if (pac_mandatory_)
-      dict.SetBoolKey("pac_mandatory", pac_mandatory_);
+      dict.Set("pac_mandatory", pac_mandatory_);
   }
   if (from_system_) {
-    dict.SetBoolKey("from_system", from_system_);
+    dict.Set("from_system", from_system_);
   }
 
   // Output the manual settings.
@@ -253,12 +258,12 @@ base::Value ProxyConfig::ToValue() const {
         AddProxyListToValue("single_proxy", proxy_rules_.single_proxies, &dict);
         break;
       case ProxyRules::Type::PROXY_LIST_PER_SCHEME: {
-        base::Value dict2(base::Value::Type::DICTIONARY);
+        base::Value::Dict dict2;
         AddProxyListToValue("http", proxy_rules_.proxies_for_http, &dict2);
         AddProxyListToValue("https", proxy_rules_.proxies_for_https, &dict2);
         AddProxyListToValue("ftp", proxy_rules_.proxies_for_ftp, &dict2);
         AddProxyListToValue("fallback", proxy_rules_.fallback_proxies, &dict2);
-        dict.SetKey("proxy_per_scheme", std::move(dict2));
+        dict.Set("proxy_per_scheme", std::move(dict2));
         break;
       }
       default:
@@ -269,18 +274,22 @@ base::Value ProxyConfig::ToValue() const {
     const ProxyBypassRules& bypass = proxy_rules_.bypass_rules;
     if (!bypass.rules().empty()) {
       if (proxy_rules_.reverse_bypass)
-        dict.SetBoolKey("reverse_bypass", true);
+        dict.Set("reverse_bypass", true);
 
-      base::Value list(base::Value::Type::LIST);
+      base::Value::List list;
 
       for (const auto& bypass_rule : bypass.rules())
         list.Append(bypass_rule->ToString());
 
-      dict.SetKey("bypass_list", std::move(list));
+      dict.Set("bypass_list", std::move(list));
     }
   }
 
-  return dict;
+  if (proxy_rules_.restrict_to_network_service_proxy_allow_list) {
+    dict.Set("restrict_to_network_service_proxy_allow_list", true);
+  }
+
+  return base::Value(std::move(dict));
 }
 
 }  // namespace net

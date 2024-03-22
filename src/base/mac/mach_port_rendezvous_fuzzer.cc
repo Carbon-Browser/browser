@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/mac/mach_port_rendezvous.h"
 
+#include "base/apple/mach_logging.h"
 #include "base/logging.h"
-#include "base/mac/mach_logging.h"
 #include "base/synchronization/lock.h"
 #include "testing/libfuzzer/fuzzers/mach/mach_message_converter.h"
 #include "testing/libfuzzer/proto/lpm_interface.h"
@@ -30,7 +30,7 @@ struct MachPortRendezvousFuzzer {
     base::MachPortRendezvousServer::GetInstance()->client_data_.clear();
   }
 
-  base::mac::ScopedMachSendRight server_send_right;
+  base::apple::ScopedMachSendRight server_send_right;
 };
 
 }  // namespace base

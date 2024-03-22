@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ void DraggableRegionsHostImpl::CreateIfAllowed(
   CHECK(render_frame_host);
   auto* web_contents =
       content::WebContents::FromRenderFrameHost(render_frame_host);
-  auto* browser = chrome::FindBrowserWithWebContents(web_contents);
+  auto* browser = chrome::FindBrowserWithTab(web_contents);
 
   // We only want to bind the receiver for PWAs.
   if (!web_app::AppBrowserController::IsWebApp(browser))
@@ -40,7 +40,7 @@ void DraggableRegionsHostImpl::UpdateDraggableRegions(
     std::vector<chrome::mojom::DraggableRegionPtr> draggable_region) {
   auto* web_contents =
       content::WebContents::FromRenderFrameHost(&render_frame_host());
-  auto* browser = chrome::FindBrowserWithWebContents(web_contents);
+  auto* browser = chrome::FindBrowserWithTab(web_contents);
   // When a WebApp browser's WebContents is reparented to a tabbed browser, a
   // draggable regions update may race with the reparenting logic.
   if (!web_app::AppBrowserController::IsWebApp(browser))

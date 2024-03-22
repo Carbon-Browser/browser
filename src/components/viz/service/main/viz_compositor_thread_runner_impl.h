@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "components/viz/service/main/viz_compositor_thread_runner.h"
-#include "services/network/public/mojom/tcp_socket.mojom.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/java_handler_thread.h"
@@ -74,6 +74,8 @@ class VizCompositorThreadRunnerImpl : public VizCompositorThreadRunner {
   std::unique_ptr<ServerSharedBitmapManager> server_shared_bitmap_manager_;
   std::unique_ptr<InProcessGpuMemoryBufferManager> gpu_memory_buffer_manager_;
   std::unique_ptr<OutputSurfaceProvider> output_surface_provider_;
+  // `gmb_video_frame_pool_context_provider_` depends on
+  // `gpu_memory_buffer_manager_`. It must be created last, deleted first.
   std::unique_ptr<GmbVideoFramePoolContextProvider>
       gmb_video_frame_pool_context_provider_;
   std::unique_ptr<FrameSinkManagerImpl> frame_sink_manager_;

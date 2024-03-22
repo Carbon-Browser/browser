@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,9 @@ namespace openscreen_platform {
 
 MessagePortTlsConnection::MessagePortTlsConnection(
     std::unique_ptr<cast_api_bindings::MessagePort> message_port,
-    openscreen::TaskRunner* task_runner)
+    openscreen::TaskRunner& task_runner)
     : message_port_(std::move(message_port)), task_runner_(task_runner) {
   DCHECK(message_port_);
-  DCHECK(task_runner_);
-
   message_port_->SetReceiver(this);
 }
 

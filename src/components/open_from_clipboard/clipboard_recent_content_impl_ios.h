@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,12 @@ extern ContentType const ContentTypeImage;
 // should contain all schemes considered valid. |groupUserDefaults| is the
 // NSUserDefaults used to store information on pasteboard entry expiration. This
 // information will be shared with other applications in the application group.
+// |onlyUseClipboardAsync| holds whether the clipboard should only be access
+// asynchronously.
 - (instancetype)initWithMaxAge:(NSTimeInterval)maxAge
              authorizedSchemes:(NSSet<NSString*>*)authorizedSchemes
                   userDefaults:(NSUserDefaults*)groupUserDefaults
+         onlyUseClipboardAsync:(BOOL)onlyUseClipboardAsync
                       delegate:(id<ClipboardRecentContentDelegate>)delegate
     NS_DESIGNATED_INITIALIZER;
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ FileSystemAccessErrorPtr Ok() {
 }
 
 FileSystemAccessErrorPtr FromFileError(base::File::Error result,
-                                       base::StringPiece message) {
+                                       std::string_view message) {
   if (result == base::File::FILE_OK)
     return Ok();
   return FileSystemAccessError::New(FileSystemAccessStatus::kFileError, result,
@@ -27,7 +27,7 @@ FileSystemAccessErrorPtr FromFileError(base::File::Error result,
 
 blink::mojom::FileSystemAccessErrorPtr FromStatus(
     blink::mojom::FileSystemAccessStatus status,
-    base::StringPiece message) {
+    std::string_view message) {
   return FileSystemAccessError::New(status, base::File::FILE_OK,
                                     std::string(message));
 }

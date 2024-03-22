@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,12 +21,6 @@ package org.chromium.build;
  *  Build configuration. Generated on a per-target basis.
  */
 public class BuildConfig {
-
-#if defined(ENABLE_MULTIDEX)
-    public static MAYBE_FINAL boolean IS_MULTIDEX_ENABLED = true;
-#else
-    public static MAYBE_FINAL boolean IS_MULTIDEX_ENABLED MAYBE_FALSE;
-#endif
 
 #if defined(_ENABLE_ASSERTS)
     public static MAYBE_FINAL boolean ENABLE_ASSERTS = true;
@@ -91,5 +85,11 @@ public class BuildConfig {
     public static MAYBE_FINAL boolean IS_FOR_TEST = true;
 #else
     public static MAYBE_FINAL boolean IS_FOR_TEST MAYBE_FALSE;
+#endif
+
+#if defined(_WRITE_CLANG_PROFILING_DATA)
+    public static MAYBE_FINAL boolean WRITE_CLANG_PROFILING_DATA = true;
+#else
+    public static MAYBE_FINAL boolean WRITE_CLANG_PROFILING_DATA MAYBE_FALSE;
 #endif
 }

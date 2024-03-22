@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,4 +36,28 @@ void CrosapiTtsEngineDelegateAsh::GetVoices(
     tts_ash->GetCrosapiVoices(tts_ash->GetPrimaryProfileBrowserContextId(),
                               out_voices);
   }
+}
+
+void CrosapiTtsEngineDelegateAsh::Speak(content::TtsUtterance* utterance,
+                                        const content::VoiceData& voice) {
+  DCHECK(voice.from_remote_tts_engine);
+  crosapi::CrosapiManager::Get()
+      ->crosapi_ash()
+      ->tts_ash()
+      ->SpeakWithLacrosVoice(utterance, voice);
+}
+
+void CrosapiTtsEngineDelegateAsh::Stop(content::TtsUtterance* utterance) {
+  crosapi::CrosapiManager::Get()->crosapi_ash()->tts_ash()->StopRemoteEngine(
+      utterance);
+}
+
+void CrosapiTtsEngineDelegateAsh::Pause(content::TtsUtterance* utterance) {
+  crosapi::CrosapiManager::Get()->crosapi_ash()->tts_ash()->PauseRemoteEngine(
+      utterance);
+}
+
+void CrosapiTtsEngineDelegateAsh::Resume(content::TtsUtterance* utterance) {
+  crosapi::CrosapiManager::Get()->crosapi_ash()->tts_ash()->ResumeRemoteEngine(
+      utterance);
 }

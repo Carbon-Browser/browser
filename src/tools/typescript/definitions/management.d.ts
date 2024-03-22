@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,8 @@ declare namespace chrome {
       offlineEnabled: boolean;
       optionsUrl: string;
       //icons?: Array<IconInfo>;
-      permissions: Array<string>;
-      hostPermissions: Array<string>;
+      permissions: string[];
+      hostPermissions: string[];
       //installType?: ExtensionInstallType;
       //launchType?: LaunchType;
       //availableLaunchTypes?: Array<LaunchType>;
@@ -38,11 +38,9 @@ declare namespace chrome {
       showConfirmDialog?: boolean;
     }
 
-    export function get(
-        id: string, callback?: (info: ExtensionInfo) => void): void;
-    export function uninstall(
-        id: string, options?: UninstallOptions, callback?: () => void): void;
-    export function setEnabled(
-        id: string, enabled: boolean, callback?: () => void): void;
+    export function get(id: string): Promise<ExtensionInfo>;
+    export function uninstall(id: string, options?: UninstallOptions):
+        Promise<void>;
+    export function setEnabled(id: string, enabled: boolean): Promise<void>;
   }
 }

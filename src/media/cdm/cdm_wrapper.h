@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -174,7 +174,7 @@ class CdmWrapperImpl : public CdmWrapper {
   CdmWrapperImpl(const CdmWrapperImpl&) = delete;
   CdmWrapperImpl& operator=(const CdmWrapperImpl&) = delete;
 
-  ~CdmWrapperImpl() override { cdm_->Destroy(); }
+  ~CdmWrapperImpl() override = default;
 
   int GetInterfaceVersion() override { return CdmInterfaceVersion; }
 
@@ -292,9 +292,14 @@ class CdmWrapperImpl : public CdmWrapper {
   }
 
  private:
-  CdmWrapperImpl(CdmInterface* cdm) : cdm_(cdm) { DCHECK(cdm_); }
+  // Used to clean up a CDM instance owned by a std::unique_ptr.
+  struct CdmDeleter {
+    void operator()(CdmInterface* cdm) const { cdm->Destroy(); }
+  };
 
-  raw_ptr<CdmInterface> cdm_;
+  explicit CdmWrapperImpl(CdmInterface* cdm) : cdm_(cdm) { DCHECK(cdm_); }
+
+  std::unique_ptr<CdmInterface, CdmDeleter> cdm_;
 };
 
 // Specialization for cdm::ContentDecryptionModule_10 methods.

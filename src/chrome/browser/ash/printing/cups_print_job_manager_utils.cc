@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "chrome/browser/ash/printing/cups_print_job.h"
 #include "chrome/browser/chromeos/printing/printer_error_codes.h"
 #include "printing/backend/cups_jobs.h"
+#include "printing/printed_document.h"
 #include "printing/printer_status.h"
 
 namespace ash {
@@ -158,6 +159,14 @@ bool UpdatePrintJob(const ::printing::PrinterStatus& printer_status,
   }
 
   return print_job->state() != old_state || pages_updated;
+}
+
+int CalculatePrintJobTotalPages(const ::printing::PrintedDocument* document) {
+  if (document->settings().copies() == 0) {
+    return document->page_count();
+  }
+
+  return document->page_count() * document->settings().copies();
 }
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,8 @@ bool GeolocationPermissionContextDelegateAndroid::DecidePermission(
     bool user_gesture,
     permissions::BrowserPermissionCallback* callback,
     permissions::GeolocationPermissionContext* context) {
-  content::RenderFrameHost* rfh = content::RenderFrameHost::FromID(
-      id.render_process_id(), id.render_frame_id());
+  content::RenderFrameHost* rfh =
+      content::RenderFrameHost::FromID(id.global_render_frame_host_id());
   DCHECK(rfh);
 
   content::WebContents* web_contents =

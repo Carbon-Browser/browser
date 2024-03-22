@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom.h"
 
 namespace blink {
 
@@ -23,6 +24,133 @@ mojom::PermissionStatus ToPermissionStatus(const std::string& status) {
     return mojom::PermissionStatus::DENIED;
   NOTREACHED();
   return mojom::PermissionStatus::DENIED;
+}
+
+std::string GetPermissionString(PermissionType permission) {
+  switch (permission) {
+    case PermissionType::GEOLOCATION:
+      return "Geolocation";
+    case PermissionType::NOTIFICATIONS:
+      return "Notifications";
+    case PermissionType::MIDI_SYSEX:
+      return "MidiSysEx";
+    case PermissionType::DURABLE_STORAGE:
+      return "DurableStorage";
+    case PermissionType::PROTECTED_MEDIA_IDENTIFIER:
+      return "ProtectedMediaIdentifier";
+    case PermissionType::AUDIO_CAPTURE:
+      return "AudioCapture";
+    case PermissionType::VIDEO_CAPTURE:
+      return "VideoCapture";
+    case PermissionType::MIDI:
+      return "Midi";
+    case PermissionType::BACKGROUND_SYNC:
+      return "BackgroundSync";
+    case PermissionType::SENSORS:
+      return "Sensors";
+    case PermissionType::ACCESSIBILITY_EVENTS:
+      return "AccessibilityEvents";
+    case PermissionType::CLIPBOARD_READ_WRITE:
+      return "ClipboardReadWrite";
+    case PermissionType::CLIPBOARD_SANITIZED_WRITE:
+      return "ClipboardSanitizedWrite";
+    case PermissionType::PAYMENT_HANDLER:
+      return "PaymentHandler";
+    case PermissionType::BACKGROUND_FETCH:
+      return "BackgroundFetch";
+    case PermissionType::IDLE_DETECTION:
+      return "IdleDetection";
+    case PermissionType::PERIODIC_BACKGROUND_SYNC:
+      return "PeriodicBackgroundSync";
+    case PermissionType::WAKE_LOCK_SCREEN:
+      return "WakeLockScreen";
+    case PermissionType::WAKE_LOCK_SYSTEM:
+      return "WakeLockSystem";
+    case PermissionType::NFC:
+      return "NFC";
+    case PermissionType::VR:
+      return "VR";
+    case PermissionType::AR:
+      return "AR";
+    case PermissionType::STORAGE_ACCESS_GRANT:
+      return "StorageAccess";
+    case PermissionType::CAMERA_PAN_TILT_ZOOM:
+      return "CameraPanTiltZoom";
+    case PermissionType::WINDOW_MANAGEMENT:
+      return "WindowPlacement";
+    case PermissionType::LOCAL_FONTS:
+      return "LocalFonts";
+    case PermissionType::DISPLAY_CAPTURE:
+      return "DisplayCapture";
+    case PermissionType::TOP_LEVEL_STORAGE_ACCESS:
+      return "TopLevelStorageAccess";
+    case PermissionType::NUM:
+      NOTREACHED();
+      return std::string();
+  }
+  NOTREACHED();
+  return std::string();
+}
+
+absl::optional<mojom::PermissionsPolicyFeature>
+PermissionTypeToPermissionsPolicyFeature(PermissionType permission) {
+  switch (permission) {
+    case PermissionType::GEOLOCATION:
+      return mojom::PermissionsPolicyFeature::kGeolocation;
+    case PermissionType::MIDI_SYSEX:
+      return mojom::PermissionsPolicyFeature::kMidiFeature;
+    case PermissionType::PROTECTED_MEDIA_IDENTIFIER:
+      return mojom::PermissionsPolicyFeature::kEncryptedMedia;
+    case PermissionType::AUDIO_CAPTURE:
+      return mojom::PermissionsPolicyFeature::kMicrophone;
+    case PermissionType::VIDEO_CAPTURE:
+      return mojom::PermissionsPolicyFeature::kCamera;
+    case PermissionType::MIDI:
+      return mojom::PermissionsPolicyFeature::kMidiFeature;
+    case PermissionType::CLIPBOARD_READ_WRITE:
+      return mojom::PermissionsPolicyFeature::kClipboardRead;
+    case PermissionType::CLIPBOARD_SANITIZED_WRITE:
+      return mojom::PermissionsPolicyFeature::kClipboardWrite;
+    case PermissionType::IDLE_DETECTION:
+      return mojom::PermissionsPolicyFeature::kIdleDetection;
+    case PermissionType::WAKE_LOCK_SCREEN:
+      return mojom::PermissionsPolicyFeature::kScreenWakeLock;
+    case PermissionType::VR:
+      return mojom::PermissionsPolicyFeature::kWebXr;
+    case PermissionType::AR:
+      return mojom::PermissionsPolicyFeature::kWebXr;
+    case PermissionType::STORAGE_ACCESS_GRANT:
+      return mojom::PermissionsPolicyFeature::kStorageAccessAPI;
+    case PermissionType::TOP_LEVEL_STORAGE_ACCESS:
+      return mojom::PermissionsPolicyFeature::kStorageAccessAPI;
+    case PermissionType::WINDOW_MANAGEMENT:
+      return mojom::PermissionsPolicyFeature::kWindowManagement;
+    case PermissionType::LOCAL_FONTS:
+      return mojom::PermissionsPolicyFeature::kLocalFonts;
+    case PermissionType::DISPLAY_CAPTURE:
+      return mojom::PermissionsPolicyFeature::kDisplayCapture;
+
+    case PermissionType::PERIODIC_BACKGROUND_SYNC:
+    case PermissionType::DURABLE_STORAGE:
+    case PermissionType::BACKGROUND_SYNC:
+    // TODO(crbug.com/1384434): decouple this to separated types of sensor,
+    // with a corresponding permission policy.
+    case PermissionType::SENSORS:
+    case PermissionType::ACCESSIBILITY_EVENTS:
+    case PermissionType::PAYMENT_HANDLER:
+    case PermissionType::BACKGROUND_FETCH:
+    case PermissionType::WAKE_LOCK_SYSTEM:
+    case PermissionType::NFC:
+    case PermissionType::CAMERA_PAN_TILT_ZOOM:
+    case PermissionType::NOTIFICATIONS:
+      return absl::nullopt;
+
+    case PermissionType::NUM:
+      NOTREACHED();
+      return absl::nullopt;
+  }
+  NOTREACHED();
+  return absl::nullopt;
 }
 
 const std::vector<PermissionType>& GetAllPermissionTypes() {
@@ -54,14 +182,17 @@ absl::optional<PermissionType> PermissionDescriptorToPermissionType(
       descriptor->extension && descriptor->extension->is_camera_device() &&
           descriptor->extension->get_camera_device()->panTiltZoom,
       descriptor->extension && descriptor->extension->is_clipboard() &&
-          descriptor->extension->get_clipboard()->allowWithoutSanitization);
+          descriptor->extension->get_clipboard()->will_be_sanitized,
+      descriptor->extension && descriptor->extension->is_clipboard() &&
+          descriptor->extension->get_clipboard()->has_user_gesture);
 }
 
 absl::optional<PermissionType> PermissionDescriptorInfoToPermissionType(
     mojom::PermissionName name,
     bool midi_sysex,
     bool camera_ptz,
-    bool clipboard_allow_without_sanitization) {
+    bool clipboard_will_be_sanitized,
+    bool clipboard_has_user_gesture) {
   switch (name) {
     case PermissionName::GEOLOCATION:
       return PermissionType::GEOLOCATION;
@@ -98,13 +229,15 @@ absl::optional<PermissionType> PermissionDescriptorInfoToPermissionType(
       return PermissionType::ACCESSIBILITY_EVENTS;
     case PermissionName::CLIPBOARD_READ:
       return PermissionType::CLIPBOARD_READ_WRITE;
-    case PermissionName::CLIPBOARD_WRITE: {
-      if (clipboard_allow_without_sanitization) {
-        return PermissionType::CLIPBOARD_READ_WRITE;
-      } else {
+    case PermissionName::CLIPBOARD_WRITE:
+      // If the write is both sanitized (i.e. plain text or known-format
+      // images), and a user gesture is present, use CLIPBOARD_SANITIZED_WRITE,
+      // which Chrome grants by default.
+      if (clipboard_will_be_sanitized && clipboard_has_user_gesture) {
         return PermissionType::CLIPBOARD_SANITIZED_WRITE;
+      } else {
+        return PermissionType::CLIPBOARD_READ_WRITE;
       }
-    }
     case PermissionName::PAYMENT_HANDLER:
       return PermissionType::PAYMENT_HANDLER;
     case PermissionName::BACKGROUND_FETCH:
@@ -121,12 +254,14 @@ absl::optional<PermissionType> PermissionDescriptorInfoToPermissionType(
       return PermissionType::NFC;
     case PermissionName::STORAGE_ACCESS:
       return PermissionType::STORAGE_ACCESS_GRANT;
-    case PermissionName::WINDOW_PLACEMENT:
-      return PermissionType::WINDOW_PLACEMENT;
+    case PermissionName::WINDOW_MANAGEMENT:
+      return PermissionType::WINDOW_MANAGEMENT;
     case PermissionName::LOCAL_FONTS:
       return PermissionType::LOCAL_FONTS;
     case PermissionName::DISPLAY_CAPTURE:
       return PermissionType::DISPLAY_CAPTURE;
+    case PermissionName::TOP_LEVEL_STORAGE_ACCESS:
+      return PermissionType::TOP_LEVEL_STORAGE_ACCESS;
 
       NOTREACHED();
       return absl::nullopt;

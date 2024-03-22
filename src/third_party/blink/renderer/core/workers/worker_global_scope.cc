@@ -30,13 +30,13 @@
 #include "base/memory/scoped_refptr.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/metrics/public/cpp/mojo_ukm_recorder.h"
+#include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/browser_interface_broker.mojom-blink.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_url_request.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_void_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
@@ -46,7 +46,7 @@
 #include "third_party/blink/renderer/core/events/error_event.h"
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/execution_context/agent.h"
-#include "third_party/blink/renderer/core/frame/dom_timer_coordinator.h"
+#include "third_party/blink/renderer/core/frame/font_matching_metrics.h"
 #include "third_party/blink/renderer/core/frame/user_activation.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/inspector/console_message_storage.h"
@@ -70,8 +70,7 @@
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
-#include "third_party/blink/renderer/platform/fonts/font_matching_metrics.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object_snapshot.h"
@@ -79,8 +78,11 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher_properties.h"
 #include "third_party/blink/renderer/platform/network/content_security_policy_parsers.h"
+#include "third_party/blink/renderer/platform/scheduler/common/features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/scheduler/public/virtual_time_controller.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
@@ -90,7 +92,7 @@ namespace blink {
 namespace {
 
 void RemoveURLFromMemoryCacheInternal(const KURL& url) {
-  GetMemoryCache()->RemoveURLFromCache(url);
+  MemoryCache::Get()->RemoveURLFromCache(url);
 }
 
 scoped_refptr<SecurityOrigin> CreateSecurityOrigin(
@@ -151,8 +153,6 @@ FontFaceSet* WorkerGlobalScope::fonts() {
 }
 
 WorkerGlobalScope::~WorkerGlobalScope() {
-  if (font_matching_metrics_)
-    font_matching_metrics_->PublishAllMetrics();
   DCHECK(!ScriptController());
   InstanceCounters::DecrementCounter(
       InstanceCounters::kWorkerGlobalScopeCounter);
@@ -183,7 +183,11 @@ scheduler::WorkerScheduler* WorkerGlobalScope::GetScheduler() {
 
 void WorkerGlobalScope::Dispose() {
   DCHECK(IsContextThread());
+  loading_virtual_time_pauser_ = WebScopedVirtualTimePauser();
   closing_ = true;
+  if (font_matching_metrics_) {
+    font_matching_metrics_->PublishAllMetrics();
+  }
   WorkerOrWorkletGlobalScope::Dispose();
 }
 
@@ -264,7 +268,7 @@ void WorkerGlobalScope::ImportScriptsInternal(const Vector<String>& urls) {
   // |this| roughly corresponds to the current settings object.
 
   // Step 3: "If urls is empty, return."
-  if (urls.IsEmpty())
+  if (urls.empty())
     return;
 
   // Step 4: "Parse each value in urls relative to settings object. If any fail,
@@ -331,9 +335,8 @@ void WorkerGlobalScope::ImportScriptsInternal(const Vector<String>& urls) {
     // source text, settings object, response's url, the default classic script
     // fetch options, and muted errors.
     // TODO(crbug.com/1082086): Fix the base URL.
-    SingleCachedMetadataHandler* handler(
-        CreateWorkerScriptCachedMetadataHandler(complete_url,
-                                                std::move(cached_meta_data)));
+    CachedMetadataHandler* handler(CreateWorkerScriptCachedMetadataHandler(
+        complete_url, std::move(cached_meta_data)));
     ClassicScript* script = ClassicScript::Create(
         source_code, ClassicScript::StripFragmentIdentifier(complete_url),
         response_url /* base_url */, ScriptFetchOptions(),
@@ -388,7 +391,7 @@ void WorkerGlobalScope::AddConsoleMessageImpl(ConsoleMessage* console_message,
                                               bool discard_duplicates) {
   DCHECK(IsContextThread());
   ReportingProxy().ReportConsoleMessage(
-      console_message->Source(), console_message->Level(),
+      console_message->GetSource(), console_message->GetLevel(),
       console_message->Message(), console_message->Location());
   GetThread()->GetConsoleMessageStorage()->AddConsoleMessage(
       this, console_message, discard_duplicates);
@@ -403,6 +406,16 @@ void WorkerGlobalScope::AddInspectorIssue(
 void WorkerGlobalScope::AddInspectorIssue(AuditsIssue issue) {
   GetThread()->GetInspectorIssueStorage()->AddInspectorIssue(this,
                                                              std::move(issue));
+}
+
+void WorkerGlobalScope::WillBeginLoading() {
+  loading_virtual_time_pauser_ =
+      GetScheduler()
+          ->GetVirtualTimeController()
+          ->CreateWebScopedVirtualTimePauser(
+              "WorkerStart",
+              WebScopedVirtualTimePauser::VirtualTaskDuration::kInstant);
+  loading_virtual_time_pauser_.PauseVirtualTime();
 }
 
 CoreProbeSink* WorkerGlobalScope::GetProbeSink() {
@@ -430,9 +443,8 @@ void WorkerGlobalScope::EvaluateClassicScript(
     const v8_inspector::V8StackTraceId& stack_id) {
   DCHECK(!IsContextPaused());
 
-  SingleCachedMetadataHandler* handler =
-      CreateWorkerScriptCachedMetadataHandler(script_url,
-                                              std::move(cached_meta_data));
+  CachedMetadataHandler* handler = CreateWorkerScriptCachedMetadataHandler(
+      script_url, std::move(cached_meta_data));
   // Cross-origin workers are disallowed, so use
   // SanitizeScriptErrors::kDoNotSanitize.
   Script* worker_script = ClassicScript::Create(
@@ -490,6 +502,7 @@ void WorkerGlobalScope::RunWorkerScript() {
     debugger->ExternalAsyncTaskStarted(*stack_id_);
 
   ReportingProxy().WillEvaluateScript();
+  loading_virtual_time_pauser_.UnpauseVirtualTime();
 
   // Step 24. If script is a classic script, then run the classic script script.
   // Otherwise, it is a module script; run the module script script. [spec text]
@@ -553,14 +566,20 @@ void WorkerGlobalScope::ReceiveMessage(BlinkTransferableMessage message) {
       WorkerThreadDebugger::From(GetThread()->GetIsolate());
   if (debugger)
     debugger->ExternalAsyncTaskStarted(message.sender_stack_trace_id);
-  UserActivation* user_activation = nullptr;
-  if (message.user_activation) {
-    user_activation = MakeGarbageCollected<UserActivation>(
-        message.user_activation->has_been_active,
-        message.user_activation->was_active);
+
+  if (message.message->CanDeserializeIn(this)) {
+    UserActivation* user_activation = nullptr;
+    if (message.user_activation) {
+      user_activation = MakeGarbageCollected<UserActivation>(
+          message.user_activation->has_been_active,
+          message.user_activation->was_active);
+    }
+    DispatchEvent(*MessageEvent::Create(ports, std::move(message.message),
+                                        user_activation));
+  } else {
+    DispatchEvent(*MessageEvent::CreateError());
   }
-  DispatchEvent(*MessageEvent::Create(ports, std::move(message.message),
-                                      user_activation));
+
   if (debugger)
     debugger->ExternalAsyncTaskFinished(message.sender_stack_trace_id);
 }
@@ -579,22 +598,33 @@ WorkerGlobalScope::WorkerGlobalScope(
               thread->GetIsolate(),
               (creation_params->agent_cluster_id.is_empty()
                    ? base::UnguessableToken::Create()
-                   : creation_params->agent_cluster_id)),
+                   : creation_params->agent_cluster_id),
+              base::FeatureList::IsEnabled(
+                  scheduler::kMicrotaskQueuePerWorkerAgent)
+                  ? v8::MicrotaskQueue::New(thread->GetIsolate(),
+                                            v8::MicrotasksPolicy::kScoped)
+                  : nullptr),
           creation_params->global_scope_name,
           creation_params->parent_devtools_token,
           creation_params->v8_cache_options,
           creation_params->worker_clients,
           std::move(creation_params->content_settings_client),
           std::move(creation_params->web_worker_fetch_context),
-          thread->GetWorkerReportingProxy()),
+          thread->GetWorkerReportingProxy(),
+          creation_params->script_url.ProtocolIsData()),
+      ActiveScriptWrappable<WorkerGlobalScope>({}),
       script_type_(creation_params->script_type),
       user_agent_(creation_params->user_agent),
       ua_metadata_(creation_params->ua_metadata),
       thread_(thread),
+      agent_group_scheduler_compositor_task_runner_(std::move(
+          creation_params->agent_group_scheduler_compositor_task_runner)),
       time_origin_(time_origin),
       font_selector_(MakeGarbageCollected<OffscreenFontSelector>(this)),
       script_eval_state_(ScriptEvalState::kPauseAfterFetch),
-      ukm_source_id_(creation_params->ukm_source_id) {
+      ukm_source_id_(creation_params->ukm_source_id),
+      top_level_frame_security_origin_(
+          std::move(creation_params->top_level_frame_security_origin)) {
   InstanceCounters::IncrementCounter(
       InstanceCounters::kWorkerGlobalScopeCounter);
 
@@ -624,6 +654,15 @@ WorkerGlobalScope::WorkerGlobalScope(
   DCHECK(creation_params->worker_permissions_policy);
   GetSecurityContext().SetPermissionsPolicy(
       std::move(creation_params->worker_permissions_policy));
+
+  // UKM recorder is needed in the Dispose() method but sometimes it is not
+  // initialized by then because of a race problem.
+  // If the Identifiability Study is enabled, we need the UKM recorder in any
+  // case so it should not affect anything if we initialize it here.
+  // TODO(crbug.com/1370978): Check if there is another fix instead of
+  // initializing UKM Recorder here.
+  if (blink::IdentifiabilityStudySettings::Get()->IsActive())
+    UkmRecorder();
 }
 
 void WorkerGlobalScope::ExceptionThrown(ErrorEvent* event) {
@@ -636,8 +675,8 @@ void WorkerGlobalScope::ExceptionThrown(ErrorEvent* event) {
 void WorkerGlobalScope::RemoveURLFromMemoryCache(const KURL& url) {
   // MemoryCache can be accessed only from the main thread.
   PostCrossThreadTask(
-      *Thread::MainThread()->GetTaskRunner(), FROM_HERE,
-      CrossThreadBindOnce(&RemoveURLFromMemoryCacheInternal, url));
+      *Thread::MainThread()->GetTaskRunner(MainThreadTaskRunnerRestricted()),
+      FROM_HERE, CrossThreadBindOnce(&RemoveURLFromMemoryCacheInternal, url));
 }
 
 NOINLINE void WorkerGlobalScope::InitializeURL(const KURL& url) {
@@ -668,14 +707,13 @@ void WorkerGlobalScope::SetWorkerMainScriptLoadingParametersForModules(
 
 void WorkerGlobalScope::queueMicrotask(V8VoidFunction* callback) {
   GetAgent()->event_loop()->EnqueueMicrotask(
-      WTF::Bind(&V8VoidFunction::InvokeAndReportException,
-                WrapPersistent(callback), nullptr));
+      WTF::BindOnce(&V8VoidFunction::InvokeAndReportException,
+                    WrapPersistent(callback), nullptr));
 }
 
 void WorkerGlobalScope::SetWorkerSettings(
     std::unique_ptr<WorkerSettings> worker_settings) {
   worker_settings_ = std::move(worker_settings);
-  worker_settings_->MakeGenericFontFamilySettingsAtomic();
   font_selector_->UpdateGenericFontFamilySettings(
       worker_settings_->GetGenericFontFamilySettings());
 }
@@ -692,10 +730,10 @@ ukm::UkmRecorder* WorkerGlobalScope::UkmRecorder() {
   if (ukm_recorder_)
     return ukm_recorder_.get();
 
-  mojo::PendingRemote<ukm::mojom::UkmRecorderInterface> recorder;
+  mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
   GetBrowserInterfaceBroker().GetInterface(
-      recorder.InitWithNewPipeAndPassReceiver());
-  ukm_recorder_ = std::make_unique<ukm::MojoUkmRecorder>(std::move(recorder));
+      factory.BindNewPipeAndPassReceiver());
+  ukm_recorder_ = ukm::MojoUkmRecorder::Create(*factory);
 
   return ukm_recorder_.get();
 }
@@ -716,11 +754,14 @@ void WorkerGlobalScope::Trace(Visitor* visitor) const {
   Supplementable<WorkerGlobalScope>::Trace(visitor);
 }
 
+bool WorkerGlobalScope::HasPendingActivity() const {
+  return !ExecutionContext::IsContextDestroyed();
+}
+
 FontMatchingMetrics* WorkerGlobalScope::GetFontMatchingMetrics() {
   if (!font_matching_metrics_) {
     font_matching_metrics_ = std::make_unique<FontMatchingMetrics>(
-        UkmRecorder(), UkmSourceID(),
-        GetTaskRunner(TaskType::kInternalDefault));
+        this, GetTaskRunner(TaskType::kInternalDefault));
   }
   return font_matching_metrics_.get();
 }
@@ -732,7 +773,7 @@ CodeCacheHost* WorkerGlobalScope::GetCodeCacheHost() {
     // don't rely on code caching so it's safe to return nullptr here.
     if (!GetBrowserInterfaceBroker().is_bound())
       return nullptr;
-    mojo::Remote<mojom::CodeCacheHost> remote;
+    mojo::Remote<mojom::blink::CodeCacheHost> remote;
     GetBrowserInterfaceBroker().GetInterface(
         remote.BindNewPipeAndPassReceiver());
     code_cache_host_ = std::make_unique<CodeCacheHost>(std::move(remote));

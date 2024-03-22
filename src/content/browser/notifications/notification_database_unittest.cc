@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <stdint.h>
 
 #include "base/files/scoped_temp_dir.h"
-#include "base/guid.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
+#include "base/uuid.h"
 #include "content/public/browser/notification_database_data.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -116,7 +116,9 @@ class NotificationDatabaseTest : public ::testing::Test {
   }
 
   // Generates a random notification ID. The format of the ID is opaque.
-  std::string GenerateNotificationId() { return base::GenerateGUID(); }
+  std::string GenerateNotificationId() {
+    return base::Uuid::GenerateRandomV4().AsLowercaseString();
+  }
 
   NotificationDatabase::UkmCallback callback() { return callback_; }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/check.h"
 #include "content/public/browser/network_service_instance.h"
+#include "content/public/test/content_test_suite_base.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/cert_verifier/public/mojom/cert_verifier_service_factory.mojom.h"
@@ -16,7 +17,10 @@
 
 namespace aggregation_service {
 
-ToolNetworkInitializer::ToolNetworkInitializer() {
+ToolNetworkInitializer::ToolNetworkInitializer()
+    : content::ContentTestSuiteBase(/*argc=*/0, /*argv=*/nullptr) {
+  ContentTestSuiteBase::Initialize();
+
   // Initialize the network state as this tool runs independently from the
   // command line.
   mojo::core::Init();

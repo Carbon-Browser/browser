@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,6 +59,8 @@ class DnsSdRegistry : public DnsSdDelegate {
   // DNS-SD-related discovery functionality.
   virtual void RegisterDnsSdListener(const std::string& service_type);
   virtual void UnregisterDnsSdListener(const std::string& service_type);
+
+  void ResetForTest();
 
  protected:
   // Data class for managing all the resources and information related to a

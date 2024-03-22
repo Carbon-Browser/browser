@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@ package org.chromium.chrome.browser.password_edit_dialog;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.ui.base.WindowAndroid;
 
 /**
@@ -31,11 +32,13 @@ public class PasswordEditDialogBridge implements PasswordEditDialogCoordinator.D
     }
 
     @CalledByNative
-    void show(@NonNull String[] usernames, int selectedUsernameIndex, @NonNull String password,
-            @NonNull String origin, @Nullable String account) {
-        mDialogCoordinator.show(usernames, selectedUsernameIndex, password, origin, account);
+    void showPasswordEditDialog(
+            @NonNull String[] savedUsernames,
+            @NonNull String username,
+            @NonNull String password,
+            @Nullable String account) {
+        mDialogCoordinator.showPasswordEditDialog(savedUsernames, username, password, account);
     }
-
     @CalledByNative
     void dismiss() {
         mDialogCoordinator.dismiss();
@@ -58,6 +61,7 @@ public class PasswordEditDialogBridge implements PasswordEditDialogCoordinator.D
     interface Natives {
         void onDialogAccepted(
                 long nativePasswordEditDialogBridge, String username, String password);
+
         void onDialogDismissed(long nativePasswordEditDialogBridge, boolean dialogAccepted);
     }
 }

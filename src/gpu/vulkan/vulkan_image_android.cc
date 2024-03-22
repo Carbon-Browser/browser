@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,78 @@
 
 #include "base/android/android_hardware_buffer_compat.h"
 #include "base/debug/crash_logging.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "gpu/vulkan/vulkan_device_queue.h"
 #include "gpu/vulkan/vulkan_function_pointers.h"
 
 namespace gpu {
+
+namespace {
+BASE_FEATURE(kLimitVkImageUsageToFormatFeaturesForAHB,
+             "LimitVkImageUsageToFormatFeaturesForAHB",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+bool IsSinglePlaneRGBVulkanAHBFormat(VkFormat format) {
+  switch (format) {
+    // AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    // AHARDWAREBUFFER_FORMAT_R8G8B8_UNORM
+    case VK_FORMAT_R8G8B8_UNORM:
+    // AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM
+    case VK_FORMAT_R5G6B5_UNORM_PACK16:
+    // AHARDWAREBUFFER_FORMAT_R16G16B16A16_FLOAT
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+    // AHARDWAREBUFFER_FORMAT_R10G10B10A2_UNORM
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+      return true;
+    default:
+      return false;
+  }
+}
+
+VkImageUsageFlags AHBUsageToImageUsage(uint64_t ahb_usage) {
+  VkImageUsageFlags usage_flags = 0;
+
+  // Get Vulkan Image usage flag equivalence of AHB usage.
+  if (ahb_usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) {
+    usage_flags |=
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+  }
+  if (ahb_usage & AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT) {
+    usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  }
+
+  // All AHB support these usages when imported into vulkan.
+  usage_flags |=
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  return usage_flags;
+}
+
+VkImageUsageFlags VkFormatFeaturesToImageUsage(VkFormatFeatureFlags features) {
+  VkImageUsageFlags usage_flags = 0;
+
+  if (features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) {
+    usage_flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+
+  if (features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) {
+    usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+  }
+
+  if (features & VK_FORMAT_FEATURE_TRANSFER_SRC_BIT) {
+    usage_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  }
+
+  if (features & VK_FORMAT_FEATURE_TRANSFER_DST_BIT) {
+    usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  }
+
+  return usage_flags;
+}
+
+}  // namespace
 
 bool VulkanImage::InitializeFromGpuMemoryBufferHandle(
     VulkanDeviceQueue* device_queue,
@@ -62,8 +129,10 @@ bool VulkanImage::InitializeFromGpuMemoryBufferHandle(
       .externalFormat = 0,
   };
 
-  // If image has an external format, format must be VK_FORMAT_UNDEFINED.
-  if (ahb_format_props.format == VK_FORMAT_UNDEFINED) {
+  const bool should_use_external_format =
+      !IsSinglePlaneRGBVulkanAHBFormat(ahb_format_props.format);
+
+  if (should_use_external_format) {
     // externalFormat must be 0 or a value returned in the externalFormat member
     // of VkAndroidHardwareBufferFormatPropertiesANDROID by an earlier call to
     // vkGetAndroidHardwareBufferPropertiesANDROID.
@@ -85,29 +154,22 @@ bool VulkanImage::InitializeFromGpuMemoryBufferHandle(
   base::AndroidHardwareBufferCompat::GetInstance().Describe(ahb_handle.get(),
                                                             &ahb_desc);
 
-  // Intended usage of the image.
-  VkImageUsageFlags usage_flags = 0;
   // Get Vulkan Image usage flag equivalence of AHB usage.
-  if (ahb_desc.usage & AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE) {
-    usage_flags = usage_flags | VK_IMAGE_USAGE_SAMPLED_BIT |
-                  VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-  }
-  if (ahb_desc.usage & AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT) {
-    usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-  }
+  VkImageUsageFlags usage_flags = AHBUsageToImageUsage(ahb_desc.usage);
 
-  // TODO(vikassoni) : AHARDWAREBUFFER_USAGE_GPU_CUBE_MAP is supported from API
-  // level 28 which is not part of current android_ndk version in chromium. Add
-  // equivalent VK usage later.
-  if (!usage_flags) {
+  if (!(usage_flags &
+        (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT))) {
     LOG(ERROR) << "No valid usage flags found";
     return false;
   }
 
-  // Skia currently requires all wrapped VkImages to have transfer src and dst
-  // usage. Additionally all AHB support these usages when imported into vulkan.
-  usage_flags |=
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  // If we're using external format, we should limit our usage to supported
+  // format features.
+  if (should_use_external_format &&
+      base::FeatureList::IsEnabled(kLimitVkImageUsageToFormatFeaturesForAHB)) {
+    usage_flags &=
+        VkFormatFeaturesToImageUsage(ahb_format_props.formatFeatures);
+  }
 
   VkImageCreateFlags create_flags = 0;
   if (ahb_desc.usage & AHARDWAREBUFFER_USAGE_PROTECTED_CONTENT) {
@@ -126,16 +188,19 @@ bool VulkanImage::InitializeFromGpuMemoryBufferHandle(
       .size = ahb_props.allocationSize,
       .memoryTypeBits = ahb_props.memoryTypeBits,
   };
-  if (!Initialize(device_queue, size, ahb_format_props.format, usage_flags,
-                  create_flags, VK_IMAGE_TILING_OPTIMAL,
-                  &external_memory_image_info, &ahb_import_info,
-                  &requirements)) {
+
+  if (!InitializeSingleOrJointPlanes(
+          device_queue, gfx::Size(ahb_desc.width, ahb_desc.height),
+          should_use_external_format ? VK_FORMAT_UNDEFINED
+                                     : ahb_format_props.format,
+          usage_flags, create_flags, VK_IMAGE_TILING_OPTIMAL,
+          &external_memory_image_info, &ahb_import_info, &requirements)) {
     return false;
   }
 
   queue_family_index_ = queue_family_index;
 
-  if (ahb_format_props.format == VK_FORMAT_UNDEFINED) {
+  if (should_use_external_format) {
     ycbcr_info_.emplace(VK_FORMAT_UNDEFINED, ahb_format_props.externalFormat,
                         ahb_format_props.suggestedYcbcrModel,
                         ahb_format_props.suggestedYcbcrRange,

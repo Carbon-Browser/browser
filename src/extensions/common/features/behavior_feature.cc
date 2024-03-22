@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,6 @@
 namespace extensions {
 
 namespace behavior_feature {
-
-const char kDoNotSync[] = "do_not_sync";
 
 const char kZoomWithoutBubble[] = "zoom_without_bubble";
 
@@ -21,6 +19,8 @@ const char kAllowSecondaryKioskAppEnabledOnLaunch[] =
     "allow_secondary_kiosk_app_enabled_on_launch";
 
 const char kKeyPermissionsInLoginScreen[] = "key_permissions_in_login_screen";
+
+const char kImprivataExtension[] = "imprivata_extension";
 
 const char kImprivataInSessionExtension[] = "imprivata_in_session_extension";
 

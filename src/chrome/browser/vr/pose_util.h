@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,6 @@ namespace vr {
 
 // Provides the direction the head is looking towards as a 3x1 unit vector.
 VR_BASE_EXPORT gfx::Vector3dF GetForwardVector(const gfx::Transform& head_pose);
-
-// Returns a vector heading upward from the viewer's head.
-VR_BASE_EXPORT gfx::Vector3dF GetUpVector(const gfx::Transform& head_pose);
 
 }  // namespace vr
 

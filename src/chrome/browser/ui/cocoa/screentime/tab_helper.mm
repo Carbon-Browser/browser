@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,10 +74,16 @@ std::unique_ptr<WebpageController> TabHelper::MakeWebpageController() {
   auto callback =
       base::BindRepeating(&TabHelper::OnBlockedChanged, base::Unretained(this));
   std::unique_ptr<WebpageController> controller;
-  if (use_fake)
+  if (@available(macOS 12.1, *)) {
+    if (use_fake) {
+      controller = std::make_unique<FakeWebpageController>(callback);
+    } else {
+      controller = std::make_unique<WebpageControllerImpl>(callback);
+    }
+  } else {
+    DCHECK(use_fake);
     controller = std::make_unique<FakeWebpageController>(callback);
-  else
-    controller = std::make_unique<WebpageControllerImpl>(callback);
+  }
   return controller;
 }
 

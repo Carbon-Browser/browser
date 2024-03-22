@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Updates the DocumentPolicyFeature enum in enums.xml file with
@@ -23,10 +23,10 @@ if __name__ == '__main__':
 
   source_file = 'third_party/blink/public/mojom/permissions_policy/' \
                 'document_policy_feature.mojom'
-  UpdateHistogramEnum(
-      histogram_enum_name='DocumentPolicyFeature',
-      source_enum_path=source_file,
-      start_marker='^enum DocumentPolicyFeature {',
-      end_marker='^};',
-      strip_k_prefix=True,
-      calling_script=os.path.basename(__file__))
+  UpdateHistogramEnum('tools/metrics/histograms/enums.xml',
+                      histogram_enum_name='DocumentPolicyFeature',
+                      source_enum_path=source_file,
+                      start_marker='^enum DocumentPolicyFeature {',
+                      end_marker='^};',
+                      strip_k_prefix=True,
+                      calling_script=os.path.basename(__file__))

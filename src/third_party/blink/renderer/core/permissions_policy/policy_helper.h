@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,10 +61,7 @@ class PolicyParserMessageBuffer {
 
 using FeatureNameMap = HashMap<String, mojom::blink::PermissionsPolicyFeature>;
 
-using DocumentPolicyFeatureSet = HashSet<
-    mojom::blink::DocumentPolicyFeature,
-    DefaultHash<mojom::blink::DocumentPolicyFeature>::Hash,
-    WTF::EnumOrGenericHashTraits<true, mojom::blink::DocumentPolicyFeature>>;
+using DocumentPolicyFeatureSet = HashSet<mojom::blink::DocumentPolicyFeature>;
 
 class FeatureContext;
 

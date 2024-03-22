@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,7 +65,11 @@ class AMPPageLoadMetricsObserver
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override;
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override;
   ObservePolicy OnCommit(content::NavigationHandle* navigation_handle) override;
+  void DidActivatePrerenderedPage(
+      content::NavigationHandle* navigation_handle) override;
   void OnCommitSameDocumentNavigation(
       content::NavigationHandle* navigation_handle) override;
   void OnDidFinishSubFrameNavigation(
@@ -77,8 +81,6 @@ class AMPPageLoadMetricsObserver
   void OnInputTimingUpdate(
       content::RenderFrameHost* subframe_rfh,
       const page_load_metrics::mojom::InputTiming& input_timing_delta) override;
-  void OnMobileFriendlinessUpdate(
-      const blink::MobileFriendliness& mobile_friendliness) override;
   void OnSubFrameRenderDataUpdate(
       content::RenderFrameHost* subframe_rfh,
       const page_load_metrics::mojom::FrameRenderDataUpdate& render_data)
@@ -128,22 +130,18 @@ class AMPPageLoadMetricsObserver
     page_load_metrics::ResponsivenessMetricsNormalization
         responsiveness_metrics_normalization;
 
-    // MobileFriendliness metrics observed in the AMP iframe.
-    blink::MobileFriendliness mobile_friendliness;
-
     // Whether an AMP document was loaded, based on observed
     // LoadingBehaviorFlags for this frame.
     bool amp_document_loaded = false;
   };
 
-  void RecordLoadingBehaviorObserved();
+  void MaybeRecordLoadingBehaviorObserved();
   void RecordNormalizedResponsivenessMetrics(
-      const page_load_metrics::NormalizedResponsivenessMetrics&
-          normalized_responsiveness_metrics,
+      const page_load_metrics::ResponsivenessMetricsNormalization&
+          responsiveness_metrics_normalization,
       ukm::builders::AmpPageLoad& builder);
   void ProcessMainFrameNavigation(content::NavigationHandle* navigation_handle);
   void MaybeRecordAmpDocumentMetrics();
-  void RecordMobileFriendliness(ukm::builders::AmpPageLoad& builder);
 
   // Information about the currently active AMP navigation in the main
   // frame. Will be null if there isn't an active AMP navigation in the main

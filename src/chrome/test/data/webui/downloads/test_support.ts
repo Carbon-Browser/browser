@@ -1,8 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {DangerType, IconLoader, MojomData, PageCallbackRouter, PageHandlerInterface, PageRemote, States} from 'chrome://downloads/downloads.js';
+import {DangerType, IconLoader, MojomData, PageCallbackRouter, PageHandlerInterface, PageRemote, SafeBrowsingState, State} from 'chrome://downloads/downloads.js';
+import {stringToMojoString16, stringToMojoUrl} from 'chrome://resources/js/mojo_type_util.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 export class TestDownloadsProxy {
@@ -22,11 +23,13 @@ export class TestDownloadsProxy {
 
 class FakePageHandler implements PageHandlerInterface {
   private callbackRouterRemote_: PageRemote;
-  private callTracker_: TestBrowserProxy = new TestBrowserProxy(['remove']);
+  private callTracker_: TestBrowserProxy =
+      new TestBrowserProxy(['remove', 'saveDangerousRequiringGesture']);
 
   constructor(callbackRouterRemote: PageRemote) {
     this.callbackRouterRemote_ = callbackRouterRemote;
-    this.callTracker_ = new TestBrowserProxy(['remove']);
+    this.callTracker_ =
+        new TestBrowserProxy(['remove', 'saveDangerousRequiringGesture']);
   }
 
   whenCalled(methodName: string): Promise<void> {
@@ -39,10 +42,13 @@ class FakePageHandler implements PageHandlerInterface {
     this.callTracker_.methodCalled('remove', id);
   }
 
+  saveDangerousRequiringGesture(id: string) {
+    this.callTracker_.methodCalled('saveDangerousRequiringGesture', id);
+  }
+
   getDownloads(_searchTerms: string[]) {}
   openFileRequiringGesture(_id: string) {}
   drag(_id: string) {}
-  saveDangerousRequiringGesture(_id: string) {}
   acceptIncognitoWarning(_id: string) {}
   discardDangerous(_id: string) {}
   retryDownload(_id: string) {}
@@ -55,6 +61,8 @@ class FakePageHandler implements PageHandlerInterface {
   openDownloadsFolderRequiringGesture() {}
   openDuringScanningRequiringGesture(_id: string) {}
   reviewDangerousRequiringGesture(_id: string) {}
+  deepScan(_id: string) {}
+  bypassDeepScanRequiringGesture(_id: string) {}
 }
 
 export class TestIconLoader extends TestBrowserProxy implements IconLoader {
@@ -79,7 +87,7 @@ export function createDownload(config?: Partial<MojomData>): MojomData {
       {
         byExtId: '',
         byExtName: '',
-        dangerType: DangerType.NOT_DANGEROUS,
+        dangerType: DangerType.kNoApplicableDangerType,
         dateString: '',
         fileExternallyRemoved: false,
         fileName: 'download 1',
@@ -88,7 +96,7 @@ export function createDownload(config?: Partial<MojomData>): MojomData {
         hideDate: false,
         id: '123',
         isDangerous: false,
-        isMixedContent: false,
+        isInsecure: false,
         isReviewable: false,
         lastReasonText: '',
         otr: false,
@@ -101,9 +109,12 @@ export function createDownload(config?: Partial<MojomData>): MojomData {
         showInFolderText: '',
         sinceString: 'Today',
         started: Date.now() - 10000,
-        state: States.COMPLETE,
+        state: State.kComplete,
         total: -1,
-        url: 'http://permission.site',
+        url: stringToMojoUrl('http://permission.site'),
+        displayUrl: stringToMojoString16('http://permission.site'),
+        safeBrowsingState: SafeBrowsingState.kStandardProtection,
+        hasSafeBrowsingVerdict: true,
       },
       config || {});
 }

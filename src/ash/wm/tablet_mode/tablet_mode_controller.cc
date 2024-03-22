@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "ash/public/cpp/metrics_util.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/shell_window_ids.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "ash/public/cpp/tablet_mode_observer.h"
 #include "ash/root_window_controller.h"
 #include "ash/shelf/shelf.h"
@@ -27,20 +26,18 @@
 #include "ash/wm/tablet_mode/tablet_mode_window_manager.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/notreached.h"
+#include "base/system/sys_info.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/tick_clock.h"
-#include "chromeos/dbus/power/power_manager_client.h"
-#include "chromeos/system/devicemode.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window_observer.h"
 #include "ui/base/accelerators/accelerator.h"
@@ -51,13 +48,13 @@
 #include "ui/compositor/layer_animator.h"
 #include "ui/display/display.h"
 #include "ui/display/manager/display_manager.h"
+#include "ui/display/screen.h"
 #include "ui/display/tablet_state.h"
 #include "ui/display/util/display_util.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/devices/input_device.h"
 #include "ui/events/event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
-#include "ui/gfx/geometry/vector3d_f.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/cursor_manager.h"
 #include "ui/wm/core/window_util.h"
@@ -149,9 +146,14 @@ TabletModeController::UiMode GetUiMode() {
 
 // Returns true if the device has an active internal display.
 bool HasActiveInternalDisplay() {
-  return display::HasInternalDisplay() &&
-         Shell::Get()->display_manager()->IsActiveDisplayId(
-             display::Display::InternalDisplayId());
+  if (!display::HasInternalDisplay()) {
+    return false;
+  }
+
+  display::DisplayManager* display_manager = Shell::Get()->display_manager();
+  return display_manager->IsActiveDisplayId(
+             display::Display::InternalDisplayId()) ||
+         display_manager->IsInUnifiedMode();
 }
 
 // Returns true if |sequence| has the same properties as the ones we care about
@@ -164,12 +166,14 @@ bool ShouldObserveSequence(ui::LayerAnimationSequence* sequence) {
 
 // Check if there is any external and internal pointing device in
 // |input_devices|.
+template <typename PointingDeviceType>
 void CheckHasPointingDevices(
-    const std::vector<ui::InputDevice>& input_devices,
+    const std::vector<PointingDeviceType>& input_devices,
     BluetoothDevicesObserver* bluetooth_device_observer,
     bool* out_has_external_pointing_device,
     bool* out_has_internal_pointing_device) {
-  for (const ui::InputDevice& input_device : input_devices) {
+  static_assert(std::is_base_of<ui::InputDevice, PointingDeviceType>::value);
+  for (const PointingDeviceType& input_device : input_devices) {
     if (input_device.type == ui::INPUT_DEVICE_INTERNAL) {
       *out_has_internal_pointing_device = true;
     } else if (input_device.type == ui::INPUT_DEVICE_USB ||
@@ -330,42 +334,54 @@ class TabletModeController::DestroyObserver : public aura::WindowObserver {
   aura::Window* window() { return window_; }
 
  private:
-  aura::Window* window_;
+  raw_ptr<aura::Window, ExperimentalAsh> window_;
   base::OnceCallback<void(void)> callback_;
 };
 
-// Used to hide the shelf view while screenshot for tablet mode animation is
-// taken.
-class TabletModeController::ScopedShelfHider {
+// Used to hide the shelf and float containers while screenshot for tablet mode
+// animation is taken.
+class TabletModeController::ScopedContainerHider {
  public:
-  explicit ScopedShelfHider(aura::Window* root_window)
+  explicit ScopedContainerHider(aura::Window* root_window)
       : root_window_(root_window) {
     DCHECK(root_window->IsRootWindow());
-    auto* shelf_container =
-        root_window->GetChildById(kShellWindowId_ShelfContainer);
 
-    phantom_shelf_layer_ = wm::RecreateLayers(shelf_container);
-    ui::Layer* root = phantom_shelf_layer_->root();
-    root_window->layer()->Add(root);
-    root_window->layer()->StackAtTop(root);
+    ui::Layer* screen_animation_container_layer =
+        root_window->GetChildById(kShellWindowId_ScreenAnimationContainer)
+            ->layer();
+    for (int id :
+         {kShellWindowId_FloatContainer, kShellWindowId_ShelfContainer}) {
+      aura::Window* container = root_window->GetChildById(id);
 
-    shelf_container->layer()->SetOpacity(0.0f);
+      std::unique_ptr<ui::LayerTreeOwner> phantom_layer =
+          wm::RecreateLayers(container);
+      ui::Layer* root = phantom_layer->root();
+      root_window->layer()->Add(root);
+      root_window->layer()->StackAbove(root, screen_animation_container_layer);
+      phantom_layers_.push_back(std::move(phantom_layer));
+
+      container->layer()->SetOpacity(0.0f);
+    }
   }
-  ~ScopedShelfHider() {
+  ScopedContainerHider(const ScopedContainerHider&) = delete;
+  ScopedContainerHider& operator=(const ScopedContainerHider&) = delete;
+  ~ScopedContainerHider() {
     // Cancel if the root window is deleted while taking a screenshot.
     if (!base::Contains(Shell::GetAllRootWindows(), root_window_))
       return;
 
-    auto* shelf_container =
-        root_window_->GetChildById(kShellWindowId_ShelfContainer);
-    shelf_container->layer()->SetOpacity(1.0f);
+    for (int id :
+         {kShellWindowId_FloatContainer, kShellWindowId_ShelfContainer}) {
+      root_window_->GetChildById(id)->layer()->SetOpacity(1.0f);
+    }
   }
 
  private:
-  aura::Window* const root_window_;
+  const raw_ptr<aura::Window, ExperimentalAsh> root_window_;
 
-  // The layer that holds the clone of shelf layer while the shelf is hidden.
-  std::unique_ptr<ui::LayerTreeOwner> phantom_shelf_layer_;
+  // The layer that holds the clone of shelf and float layers while the
+  // originals are hidden.
+  std::vector<std::unique_ptr<ui::LayerTreeOwner>> phantom_layers_;
 };
 
 constexpr char TabletModeController::kLidAngleHistogramName[];
@@ -409,8 +425,6 @@ TabletModeController::TabletModeController()
   chromeos::PowerManagerClient* power_manager_client =
       chromeos::PowerManagerClient::Get();
   power_manager_client->AddObserver(this);
-  power_manager_client->GetSwitchStates(base::BindOnce(
-      &TabletModeController::OnGetSwitchStates, weak_factory_.GetWeakPtr()));
 }
 
 TabletModeController::~TabletModeController() {
@@ -446,15 +460,16 @@ void TabletModeController::Shutdown() {
 }
 
 void TabletModeController::AddWindow(aura::Window* window) {
-  if (InTabletMode())
+  if (tablet_mode_window_manager_) {
     tablet_mode_window_manager_->AddWindow(window);
+  }
 }
 
 bool TabletModeController::ShouldAutoHideTitlebars(views::Widget* widget) {
   DCHECK(widget);
-  const bool tablet_mode = InTabletMode();
-  if (!tablet_mode)
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     return false;
+  }
   return widget->IsMaximized() ||
          (WindowState::Get(widget->GetNativeWindow()) &&
           WindowState::Get(widget->GetNativeWindow())->IsSnapped());
@@ -475,8 +490,8 @@ bool TabletModeController::TriggerRecordLidAngleTimerForTesting() {
 void TabletModeController::MaybeObserveBoundsAnimation(aura::Window* window) {
   StopObservingAnimation(/*record_stats=*/false, /*delete_screenshot=*/false);
 
-  if (tablet_state_.state() != display::TabletState::kEnteringTabletMode &&
-      tablet_state_.state() != display::TabletState::kExitingTabletMode) {
+  if (!display::IsTabletStateChanging(
+          display::Screen::GetScreen()->GetTabletState())) {
     return;
   }
 
@@ -533,11 +548,10 @@ void TabletModeController::RemoveObserver(TabletModeObserver* observer) {
 }
 
 bool TabletModeController::InTabletMode() const {
-  return tablet_state_.InTabletMode();
+  return display::Screen::GetScreen()->InTabletMode();
 }
 
-bool TabletModeController::ForceUiTabletModeState(
-    absl::optional<bool> enabled) {
+bool TabletModeController::ForceUiTabletModeState(std::optional<bool> enabled) {
   if (!enabled.has_value()) {
     tablet_mode_behavior_ = kDefault;
     AccelerometerReader::GetInstance()->SetEnabled(true);
@@ -676,6 +690,14 @@ void TabletModeController::OnAccelerometerUpdated(
   StartTrackingTabletUsageMetricsIfApplicable();
 }
 
+void TabletModeController::PowerManagerBecameAvailable(bool available) {
+  if (!available) {
+    return;
+  }
+  chromeos::PowerManagerClient::Get()->GetSwitchStates(base::BindOnce(
+      &TabletModeController::OnGetSwitchStates, weak_factory_.GetWeakPtr()));
+}
+
 void TabletModeController::LidEventReceived(
     chromeos::PowerManagerClient::LidState state,
     base::TimeTicks time) {
@@ -732,12 +754,17 @@ void TabletModeController::SuspendDone(base::TimeDelta sleep_duration) {
     tablet_mode_usage_interval_start_time_ = base::Time::Now();
 
   // Start listening to the input device changes again.
-  if (IsBoardTypeMarkedAsTabletCapable()) {
+  // It might be possible that the suspend request has been cancelled so
+  // `this` was not removed as an observer of the input device changes. See
+  // b/271634754 for details.
+  auto* device_data_manager = ui::DeviceDataManager::GetInstance();
+  if (IsBoardTypeMarkedAsTabletCapable() &&
+      !device_data_manager->HasObserver(this)) {
     bluetooth_devices_observer_ =
         std::make_unique<BluetoothDevicesObserver>(base::BindRepeating(
             &TabletModeController::OnBluetoothAdapterOrDeviceChanged,
             base::Unretained(this)));
-    ui::DeviceDataManager::GetInstance()->AddObserver(this);
+    device_data_manager->AddObserver(this);
     // Call HandlePointingDeviceAddedOrRemoved() to iterate all available input
     // devices just in case we have missed all the notifications from
     // DeviceDataManager and  BluetoothDevicesObserver when SuspendDone() is
@@ -749,11 +776,15 @@ void TabletModeController::SuspendDone(base::TimeDelta sleep_duration) {
 void TabletModeController::OnInputDeviceConfigurationChanged(
     uint8_t input_device_types) {
   if (input_device_types & (ui::InputDeviceEventObserver::kMouse |
-                            ui::InputDeviceEventObserver::kTouchpad)) {
+                            ui::InputDeviceEventObserver::kTouchpad |
+                            ui::InputDeviceEventObserver::kPointingStick)) {
     if (input_device_types & ui::InputDeviceEventObserver::kMouse)
       VLOG(1) << "Mouse device configuration changed.";
     if (input_device_types & ui::InputDeviceEventObserver::kTouchpad)
       VLOG(1) << "Touchpad device configuration changed.";
+    if (input_device_types & ui::InputDeviceEventObserver::kPointingStick)
+      VLOG(1) << "Pointing stick device configuration changed.";
+
     HandlePointingDeviceAddedOrRemoved();
   }
 }
@@ -797,9 +828,10 @@ void TabletModeController::OnLayerAnimationScheduled(
   if (!transition_tracker_) {
     transition_tracker_ =
         animating_layer_->GetCompositor()->RequestNewThroughputTracker();
-    transition_tracker_->Start(metrics_util::ForSmoothness(base::BindRepeating(
-        &ReportTrasitionSmoothness,
-        tablet_state_.state() == display::TabletState::kEnteringTabletMode)));
+    transition_tracker_->Start(metrics_util::ForSmoothness(
+        base::BindRepeating(&ReportTrasitionSmoothness,
+                            display::Screen::GetScreen()->GetTabletState() ==
+                                display::TabletState::kEnteringTabletMode)));
     return;
   }
 
@@ -843,26 +875,30 @@ bool TabletModeController::CanEnterTabletMode() const {
 // TabletModeController, private:
 
 void TabletModeController::SetTabletModeEnabledInternal(bool should_enable) {
-  DCHECK_NE(InTabletMode(), should_enable);
+  DCHECK_NE(display::Screen::GetScreen()->InTabletMode(), should_enable);
 
   // Hide the context menu on entering tablet mode to prevent users from
   // accessing forbidden options. Hide the context menu on exiting tablet mode
   // to match behaviors.
-  for (auto* root_window : Shell::Get()->GetAllRootWindows())
+  for (auto* root_window : Shell::Get()->GetAllRootWindows()) {
     RootWindowController::ForWindow(root_window)->HideContextMenu();
+  }
 
   // Suspend occlusion tracker when entering or exiting tablet mode.
   SuspendOcclusionTracker();
   DeleteScreenshot();
 
   if (should_enable) {
-    Shell::Get()->display_manager()->NotifyDisplayTabletStateChanged(
+    Shell::Get()->display_manager()->SetTabletState(
         display::TabletState::kEnteringTabletMode);
 
     // Take a screenshot if there is a top window that will get animated.
+    // Floated windows will always get animated, and if the only window is a
+    // floated window, we don't take a screenshot since the floated window in
+    // tablet mode does not cover the whole work area.
     // TODO(sammiequon): Handle the case where the top window is not on the
     // primary display.
-    aura::Window* top_window = window_util::GetTopWindow();
+    aura::Window* top_window = window_util::GetTopNonFloatedWindow();
     const bool top_window_on_primary_display =
         top_window &&
         top_window->GetRootWindow() == Shell::GetPrimaryRootWindow();
@@ -873,10 +909,9 @@ void TabletModeController::SetTabletModeEnabledInternal(bool should_enable) {
     // getting fired.
     const bool top_window_animating =
         top_window && top_window->layer()->GetAnimator()->is_animating();
-    // Since with ash::features::kDragToSnapInClamshellMode enabled, we'll keep
-    // overview active after clamshell <-> tablet mode transition if it was
-    // active before transition, do not take screenshot if overview is active
-    // in this case.
+    // We'll keep overview active after clamshell <-> tablet mode transition if
+    // it was active before transition, do not take screenshot if overview is
+    // active in this case.
     const bool overview_remain_active =
         Shell::Get()->overview_controller()->InOverviewSession();
     if (use_screenshot_for_test && top_window_on_primary_display &&
@@ -886,13 +921,14 @@ void TabletModeController::SetTabletModeEnabledInternal(bool should_enable) {
       FinishInitTabletMode();
     }
   } else {
-    Shell::Get()->display_manager()->NotifyDisplayTabletStateChanged(
-        display::TabletState::kExitingTabletMode);
-
     // We may have entered tablet mode, then tried to exit before the screenshot
-    // was taken. In this case |tablet_mode_window_manager_| will be null.
-    if (tablet_mode_window_manager_)
+    // was taken. In this case `tablet_mode_window_manager_` will be null.
+    if (tablet_mode_window_manager_) {
       tablet_mode_window_manager_->SetIgnoreWmEventsForExit();
+    }
+
+    Shell::Get()->display_manager()->SetTabletState(
+        display::TabletState::kExitingTabletMode);
 
     for (auto& observer : tablet_mode_observers_)
       observer.OnTabletModeEnding();
@@ -903,7 +939,7 @@ void TabletModeController::SetTabletModeEnabledInternal(bool should_enable) {
 
     base::RecordAction(base::UserMetricsAction("Touchview_Disabled"));
     RecordTabletModeUsageInterval(TABLET_MODE_INTERVAL_ACTIVE);
-    Shell::Get()->display_manager()->NotifyDisplayTabletStateChanged(
+    Shell::Get()->display_manager()->SetTabletState(
         display::TabletState::kInClamshellMode);
     for (auto& observer : tablet_mode_observers_)
       observer.OnTabletModeEnded();
@@ -927,7 +963,7 @@ void TabletModeController::HandleHingeRotation(
   // accuracy.
   float largest_hinge_acceleration =
       std::max(std::abs(base_reading.x()), std::abs(lid_reading.x()));
-  float smoothing_ratio = base::clamp(
+  float smoothing_ratio = std::clamp(
       (largest_hinge_acceleration - kHingeVerticalSmoothingStart) /
           (kHingeVerticalSmoothingMaximum - kHingeVerticalSmoothingStart),
       0.0f, 1.0f);
@@ -993,7 +1029,7 @@ void TabletModeController::HandleHingeRotation(
 }
 
 void TabletModeController::OnGetSwitchStates(
-    absl::optional<chromeos::PowerManagerClient::SwitchStates> result) {
+    std::optional<chromeos::PowerManagerClient::SwitchStates> result) {
   if (!result.has_value())
     return;
 
@@ -1047,9 +1083,9 @@ void TabletModeController::RecordLidAngle() {
 
 TabletModeController::TabletModeIntervalType
 TabletModeController::CurrentTabletModeIntervalType() {
-  if (InTabletMode())
-    return TABLET_MODE_INTERVAL_ACTIVE;
-  return TABLET_MODE_INTERVAL_INACTIVE;
+  return display::Screen::GetScreen()->InTabletMode()
+             ? TABLET_MODE_INTERVAL_ACTIVE
+             : TABLET_MODE_INTERVAL_INACTIVE;
 }
 
 void TabletModeController::HandlePointingDeviceAddedOrRemoved() {
@@ -1067,6 +1103,12 @@ void TabletModeController::HandlePointingDeviceAddedOrRemoved() {
   if (!has_external_pointing_device || !has_internal_pointing_device) {
     CheckHasPointingDevices(
         ui::DeviceDataManager::GetInstance()->GetTouchpadDevices(),
+        bluetooth_devices_observer_.get(), &has_external_pointing_device,
+        &has_internal_pointing_device);
+  }
+  if (!has_external_pointing_device || !has_internal_pointing_device) {
+    CheckHasPointingDevices(
+        ui::DeviceDataManager::GetInstance()->GetPointingStickDevices(),
         bluetooth_devices_observer_.get(), &has_external_pointing_device,
         &has_internal_pointing_device);
   }
@@ -1115,7 +1157,8 @@ void TabletModeController::UpdateInternalInputDevicesEventBlocker() {
   // setting the brightness to 0.
   const bool should_block_internal_events =
       tablet_mode_behavior_.block_internal_input_device &&
-      (InTabletMode() || is_in_tablet_physical_state_);
+      (display::Screen::GetScreen()->InTabletMode() ||
+       is_in_tablet_physical_state_);
 
   if (should_block_internal_events == AreInternalInputDeviceEventsBlocked()) {
     if (force_notify_events_blocking_changed_) {
@@ -1146,7 +1189,8 @@ void TabletModeController::ResetPauser() {
 }
 
 void TabletModeController::FinishInitTabletMode() {
-  DCHECK_EQ(display::TabletState::kEnteringTabletMode, tablet_state_.state());
+  DCHECK_EQ(display::TabletState::kEnteringTabletMode,
+            display::Screen::GetScreen()->GetTabletState());
 
   for (auto& observer : tablet_mode_observers_)
     observer.OnTabletModeStarting();
@@ -1155,7 +1199,7 @@ void TabletModeController::FinishInitTabletMode() {
 
   base::RecordAction(base::UserMetricsAction("Touchview_Enabled"));
   RecordTabletModeUsageInterval(TABLET_MODE_INTERVAL_INACTIVE);
-  Shell::Get()->display_manager()->NotifyDisplayTabletStateChanged(
+  Shell::Get()->display_manager()->SetTabletState(
       display::TabletState::kInTabletMode);
 
   for (auto& observer : tablet_mode_observers_)
@@ -1168,8 +1212,8 @@ void TabletModeController::FinishInitTabletMode() {
   // no snapped window).
   const auto state =
       SplitViewController::Get(Shell::GetPrimaryRootWindow())->state();
-  if (state == SplitViewController::State::kLeftSnapped ||
-      state == SplitViewController::State::kRightSnapped) {
+  if (state == SplitViewController::State::kPrimarySnapped ||
+      state == SplitViewController::State::kSecondarySnapped) {
     Shell::Get()->overview_controller()->StartOverview(
         OverviewStartAction::kSplitView);
   }
@@ -1188,7 +1232,7 @@ void TabletModeController::DeleteScreenshot() {
   screenshot_taken_callback_.Cancel();
   screenshot_set_callback_.Cancel();
   ResetDestroyObserver();
-  shelf_hider_.reset();
+  container_hider_.reset();
 }
 
 void TabletModeController::ResetDestroyObserver() {
@@ -1208,7 +1252,7 @@ void TabletModeController::TakeScreenshot(aura::Window* top_window) {
   base::OnceClosure callback = screenshot_set_callback_.callback();
 
   aura::Window* root_window = top_window->GetRootWindow();
-  shelf_hider_ = std::make_unique<ScopedShelfHider>(root_window);
+  container_hider_ = std::make_unique<ScopedContainerHider>(root_window);
 
   // Request a screenshot.
   screenshot_taken_callback_.Reset(base::BindOnce(
@@ -1229,7 +1273,7 @@ void TabletModeController::OnLayerCopyed(
       destroy_observer_ ? destroy_observer_->window() : nullptr;
   ResetDestroyObserver();
 
-  shelf_hider_.reset();
+  container_hider_.reset();
 
   // Cancel if the root window is deleted while taking a screenshot.
   if (!base::Contains(Shell::GetAllRootWindows(), root_window))
@@ -1307,14 +1351,25 @@ bool TabletModeController::ShouldUiBeInTabletMode() const {
   if (!tablet_mode_behavior_.observe_pointer_device_events)
     return is_in_tablet_physical_state_;
 
-  if (has_external_pointing_device_)
+  // If this is a tablet capable device, and `OnDeviceListsComplete()` has
+  // not been received yet, then skip further checking and don't enter tablet
+  // mode, since `has_external_pointing_device_` and
+  // `has_internal_pointing_device_` are not accurate yet.
+  if (IsBoardTypeMarkedAsTabletCapable() &&
+      !initial_input_device_set_up_finished_) {
     return false;
+  }
 
-  if (is_in_tablet_physical_state_)
+  if (has_external_pointing_device_) {
+    return false;
+  }
+
+  if (is_in_tablet_physical_state_) {
     return true;
+  }
 
   return !has_internal_pointing_device_ && CanEnterTabletMode() &&
-         HasActiveInternalDisplay() && chromeos::IsRunningAsSystemCompositor();
+         HasActiveInternalDisplay() && base::SysInfo::IsRunningOnChromeOS();
 }
 
 bool TabletModeController::SetIsInTabletPhysicalState(bool new_state) {
@@ -1337,8 +1392,10 @@ bool TabletModeController::SetIsInTabletPhysicalState(bool new_state) {
 
 bool TabletModeController::UpdateUiTabletState() {
   const bool should_be_in_tablet_mode = ShouldUiBeInTabletMode();
-  if (should_be_in_tablet_mode == InTabletMode())
+  if (should_be_in_tablet_mode ==
+      display::Screen::GetScreen()->InTabletMode()) {
     return false;
+  }
 
   SetTabletModeEnabledInternal(should_be_in_tablet_mode);
   Shell::Get()

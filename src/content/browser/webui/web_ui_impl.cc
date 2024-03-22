@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -20,6 +21,7 @@
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/renderer_host/dip_util.h"
 #include "content/browser/renderer_host/frame_tree.h"
+#include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
@@ -39,43 +41,53 @@
 
 namespace content {
 
-const WebUI::TypeID WebUI::kNoWebUI = nullptr;
+namespace {
 
-// static
-std::u16string WebUI::GetJavascriptCall(
-    const std::string& function_name,
-    const std::vector<const base::Value*>& arg_list) {
-  std::u16string result(base::ASCIIToUTF16(function_name));
-  result.push_back('(');
-
-  std::string json;
-  for (size_t i = 0; i < arg_list.size(); ++i) {
-    if (i > 0)
-      result.push_back(',');
-
-    base::JSONWriter::Write(*arg_list[i], &json);
-    result.append(base::UTF8ToUTF16(json));
+template <typename Range>
+std::u16string GetJavascriptCallImpl(base::StringPiece function_name,
+                                     const Range& args) {
+  std::vector<std::u16string> json_args;
+  for (const auto& arg : args) {
+    json_args.push_back(base::UTF8ToUTF16(*base::WriteJson(arg)));
   }
 
+  std::u16string result(base::ASCIIToUTF16(function_name));
+  result.push_back('(');
+  result.append(base::JoinString(json_args, u","));
   result.push_back(')');
   result.push_back(';');
   return result;
 }
 
-WebUIImpl::WebUIImpl(WebContentsImpl* contents, RenderFrameHostImpl* frame_host)
+}  // namespace
+
+const WebUI::TypeID WebUI::kNoWebUI = nullptr;
+
+// static
+std::u16string WebUI::GetJavascriptCall(
+    base::StringPiece function_name,
+    base::span<const base::ValueView> arg_list) {
+  return GetJavascriptCallImpl(function_name, arg_list);
+}
+
+// static
+std::u16string WebUI::GetJavascriptCall(base::StringPiece function_name,
+                                        const base::Value::List& arg_list) {
+  return GetJavascriptCallImpl(function_name, arg_list);
+}
+
+WebUIImpl::WebUIImpl(WebContents* web_contents)
     : bindings_(BINDINGS_POLICY_WEB_UI),
       requestable_schemes_({kChromeUIScheme, url::kFileScheme}),
-      web_contents_(contents),
-      frame_host_(frame_host),
-      web_contents_observer_(new WebUIMainFrameObserver(this, contents)) {
-  DCHECK(contents);
-
-  // Assert that we can only open webui for the active or speculative pages.
-  DCHECK(frame_host->lifecycle_state() ==
-             RenderFrameHostImpl::LifecycleStateImpl::kActive ||
-         frame_host->lifecycle_state() ==
-             RenderFrameHostImpl::LifecycleStateImpl::kSpeculative);
+      web_contents_(web_contents),
+      web_contents_observer_(
+          std::make_unique<WebUIMainFrameObserver>(this, web_contents_)) {
+  DCHECK(web_contents_);
 }
+
+WebUIImpl::WebUIImpl(NavigationRequest* request)
+    : WebUIImpl(
+          WebContents::FromFrameTreeNodeId(request->GetFrameTreeNodeId())) {}
 
 WebUIImpl::~WebUIImpl() {
   // Delete the controller first, since it may also be keeping a pointer to some
@@ -108,12 +120,22 @@ void WebUIImpl::Send(const std::string& message, base::Value::List args) {
 
   if (base::EndsWith(message, "RequiringGesture",
                      base::CompareCase::SENSITIVE) &&
-      !web_contents_->HasRecentInteractiveInputEvent()) {
+      !web_contents_->HasRecentInteraction()) {
     LOG(ERROR) << message << " received without recent user interaction";
     return;
   }
 
   ProcessWebUIMessage(source_url, message, std::move(args));
+}
+
+void WebUIImpl::SetRenderFrameHost(RenderFrameHost* render_frame_host) {
+  frame_host_ =
+      static_cast<RenderFrameHostImpl*>(render_frame_host)->GetWeakPtr();
+  // Assert that we can only open WebUI for the active or speculative pages.
+  DCHECK(frame_host_->lifecycle_state() ==
+             RenderFrameHostImpl::LifecycleStateImpl::kActive ||
+         frame_host_->lifecycle_state() ==
+             RenderFrameHostImpl::LifecycleStateImpl::kSpeculative);
 }
 
 void WebUIImpl::WebUIRenderFrameCreated(RenderFrameHost* render_frame_host) {
@@ -193,6 +215,14 @@ WebUIController* WebUIImpl::GetController() {
   return controller_.get();
 }
 
+RenderFrameHost* WebUIImpl::GetRenderFrameHost() {
+  return frame_host_.get();
+}
+
+bool WebUIImpl::HasRenderFrameHost() const {
+  return !!frame_host_;
+}
+
 void WebUIImpl::SetController(std::unique_ptr<WebUIController> controller) {
   DCHECK(controller);
   controller_ = std::move(controller);
@@ -206,59 +236,16 @@ bool WebUIImpl::CanCallJavascript() {
           frame_host_->GetLastCommittedURL().spec() == url::kAboutBlankURL);
 }
 
-void WebUIImpl::CallJavascriptFunctionUnsafe(const std::string& function_name) {
+void WebUIImpl::CallJavascriptFunctionUnsafe(base::StringPiece function_name) {
   DCHECK(base::IsStringASCII(function_name));
-  std::u16string javascript = base::ASCIIToUTF16(function_name + "();");
+  std::u16string javascript =
+      base::ASCIIToUTF16(base::StrCat({function_name, "();"}));
   ExecuteJavascript(javascript);
 }
 
-void WebUIImpl::CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                             const base::Value& arg) {
-  DCHECK(base::IsStringASCII(function_name));
-  std::vector<const base::Value*> args;
-  args.push_back(&arg);
-  ExecuteJavascript(GetJavascriptCall(function_name, args));
-}
-
-void WebUIImpl::CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                             const base::Value& arg1,
-                                             const base::Value& arg2) {
-  DCHECK(base::IsStringASCII(function_name));
-  std::vector<const base::Value*> args;
-  args.push_back(&arg1);
-  args.push_back(&arg2);
-  ExecuteJavascript(GetJavascriptCall(function_name, args));
-}
-
-void WebUIImpl::CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                             const base::Value& arg1,
-                                             const base::Value& arg2,
-                                             const base::Value& arg3) {
-  DCHECK(base::IsStringASCII(function_name));
-  std::vector<const base::Value*> args;
-  args.push_back(&arg1);
-  args.push_back(&arg2);
-  args.push_back(&arg3);
-  ExecuteJavascript(GetJavascriptCall(function_name, args));
-}
-
-void WebUIImpl::CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                             const base::Value& arg1,
-                                             const base::Value& arg2,
-                                             const base::Value& arg3,
-                                             const base::Value& arg4) {
-  DCHECK(base::IsStringASCII(function_name));
-  std::vector<const base::Value*> args;
-  args.push_back(&arg1);
-  args.push_back(&arg2);
-  args.push_back(&arg3);
-  args.push_back(&arg4);
-  ExecuteJavascript(GetJavascriptCall(function_name, args));
-}
-
 void WebUIImpl::CallJavascriptFunctionUnsafe(
-    const std::string& function_name,
-    const std::vector<const base::Value*>& args) {
+    base::StringPiece function_name,
+    base::span<const base::ValueView> args) {
   DCHECK(base::IsStringASCII(function_name));
   ExecuteJavascript(GetJavascriptCall(function_name, args));
 }
@@ -266,12 +253,6 @@ void WebUIImpl::CallJavascriptFunctionUnsafe(
 void WebUIImpl::RegisterMessageCallback(base::StringPiece message,
                                         MessageCallback callback) {
   message_callbacks_.emplace(message, std::move(callback));
-}
-
-void WebUIImpl::RegisterDeprecatedMessageCallback(
-    base::StringPiece message,
-    const DeprecatedMessageCallback& callback) {
-  deprecated_message_callbacks_.emplace(message, callback);
 }
 
 void WebUIImpl::ProcessWebUIMessage(const GURL& source_url,
@@ -287,18 +268,9 @@ void WebUIImpl::ProcessWebUIMessage(const GURL& source_url,
     return;
   }
 
-  // Look up the deprecated callback for this message.
-  auto deprecated_callback_pair = deprecated_message_callbacks_.find(message);
-  if (deprecated_callback_pair != deprecated_message_callbacks_.end()) {
-    base::Value value(std::move(args));
-    const base::ListValue& list_value = base::Value::AsListValue(value);
-    // Forward this message and content on.
-    deprecated_callback_pair->second.Run(&list_value);
-    return;
-  }
-
-  NOTREACHED() << "Unhandled chrome.send(\"" << message << "\", " << args
-               << "); from " << source_url;
+  DUMP_WILL_BE_NOTREACHED_NORETURN()
+      << "Unhandled chrome.send(\"" << message << "\", " << args << "); from "
+      << source_url;
 }
 
 std::vector<std::unique_ptr<WebUIMessageHandler>>*

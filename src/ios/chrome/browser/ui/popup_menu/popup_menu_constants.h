@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,6 @@
 // Accessibility IDs for the table view in various kinds of popup menus.
 extern NSString* const kPopupMenuToolsMenuTableViewId;
 extern NSString* const kPopupMenuToolsMenuActionListId;
-extern NSString* const kPopupMenuNavigationTableViewId;
-extern NSString* const kPopupMenuTabGridMenuTableViewId;
 
 // Accessibility IDs for the Tools Menu items.
 // Downloads item accessibility Identifier.
@@ -26,12 +24,6 @@ extern NSString* const kToolsMenuNewTabId;
 extern NSString* const kToolsMenuNewWindowId;
 // New incognito Tab item accessibility Identifier.
 extern NSString* const kToolsMenuNewIncognitoTabId;
-// Close all Tabs item accessibility Identifier.
-extern NSString* const kToolsMenuCloseAllTabsId;
-// Close all incognito Tabs item accessibility Identifier.
-extern NSString* const kToolsMenuCloseAllIncognitoTabsId;
-// Close the current tab item accessibility Identifier.
-extern NSString* const kToolsMenuCloseTabId;
 // Follow item accessibility Identifier.
 extern NSString* const kToolsMenuFollowId;
 // Bookmarks item accessibility Identifier.
@@ -68,27 +60,27 @@ extern NSString* const kToolsMenuAddToBookmarks;
 extern NSString* const kToolsMenuEditBookmark;
 // SiteInformation item accessibility Identifier.
 extern NSString* const kToolsMenuSiteInformation;
-// Paste and Go item accessibility Identifier.
-extern NSString* const kToolsMenuPasteAndGo;
-// Voice Search item accessibility Identifier.
-extern NSString* const kToolsMenuVoiceSearch;
-// Search item accessibility Identifier.
-extern NSString* const kToolsMenuSearch;
 // Incognito Search item accessibility Identifier.
 extern NSString* const kToolsMenuIncognitoSearch;
-// QR Code Search item accessibility Identifier.
-extern NSString* const kToolsMenuQRCodeSearch;
-// Copied Image Search item accessibility Identifier.
-extern NSString* const kToolsMenuCopiedImageSearch;
 // Text Zoom item accessibility identifier.
 extern NSString* const kToolsMenuTextZoom;
 // Text Enterprise info item accessibility identifier.
 extern NSString* const kTextMenuEnterpriseInfo;
+// Text Family Link info item accessibility identifier.
+extern NSString* const kTextMenuFamilyLinkInfo;
 // Follow item accessibility Identifier.
 extern NSString* const kToolsMenuFollow;
 // Unfollow item accessibility Identifier.
 extern NSString* const kToolsMenuUnfollow;
 // Clear Browsing Data item accessibility identifier.
 extern NSString* const kToolsMenuClearBrowsingData;
+// Share Chrome accessibility Identifier.
+extern NSString* const kToolsMenuShareChromeId;
+// WhatsNew item accessibility Identifier.
+extern NSString* const kToolsMenuWhatsNewId;
+// Open Price Notifications accessibility Identifier.
+extern NSString* const kToolsMenuPriceNotifications;
+// Edit Actions item accessibility Identifier.
+extern NSString* const kToolsMenuEditActionsId;
 
 #endif  // IOS_CHROME_BROWSER_UI_POPUP_MENU_POPUP_MENU_CONSTANTS_H_

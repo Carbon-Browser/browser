@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -46,7 +46,7 @@ function run(testFunction) {
 /**
  * Checks for existence of a complete VISA credit card.
  */
-function buy() { // eslint-disable-line no-unused-vars
+function buy() {
   const request = createPaymentRequest('visa');
   run(() => {
     return request.canMakePayment();
@@ -56,7 +56,7 @@ function buy() { // eslint-disable-line no-unused-vars
 /**
  * Checks for existence of a complete MasterCard credit card.
  */
-function other_buy() { // eslint-disable-line no-unused-vars, camelcase
+function otherBuy() {
   const request = createPaymentRequest('mastercard');
   run(() => {
     return request.canMakePayment();
@@ -68,7 +68,7 @@ function other_buy() { // eslint-disable-line no-unused-vars, camelcase
  *
  * @param {string} network The credit card network to check.
  */
-function hasEnrolledInstrument(network) { // eslint-disable-line no-unused-vars
+function hasEnrolledInstrument(network) {
   const request = createPaymentRequest(network);
   run(() => {
     return request.hasEnrolledInstrument();

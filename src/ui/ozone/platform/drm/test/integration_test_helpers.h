@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,17 @@
 #include <string>
 #include <utility>
 
+#include "base/files/scoped_file.h"
+
 namespace base {
-class File;
 class FilePath;
 }  // namespace base
 
 namespace ui::test {
 
-using PathAndFile = std::pair<base::FilePath, base::File>;
+using PathAndFd = std::pair<base::FilePath, base::ScopedFD>;
 
-PathAndFile FindDrmDriverOrDie(std::string name);
+PathAndFd FindDrmDriverOrDie(std::string name);
 
 }  // namespace ui::test
 

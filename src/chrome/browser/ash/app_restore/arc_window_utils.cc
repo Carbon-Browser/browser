@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "components/app_restore/features.h"
 #include "components/exo/wm_helper.h"
 #include "components/prefs/pref_service.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/user_manager/user_manager.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/display/display.h"
@@ -56,6 +55,12 @@ bool IsArcGhostWindowEnabled() {
 }
 
 absl::optional<double> GetDisplayScaleFactor(int64_t display_id) {
+  // The `kDefaultDisplayId` should not be a valid parameter. Here replace it to
+  // primary display id to keep it as the same semantics with Android, since the
+  // ARC app window will not be shown on chromium default display (placeholder
+  // display when no display connected).
+  if (display_id == display::kDefaultDisplayId)
+    display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
   display::Display display;
   if (display::Screen::GetScreen()->GetDisplayWithDisplayId(display_id,
                                                             &display)) {
@@ -83,7 +88,7 @@ apps::WindowInfoPtr HandleArcWindowInfo(apps::WindowInfoPtr window_info) {
   // For ARC P, the window bounds in launch parameters should minus caption
   // height.
   int extra_caption_height = 0;
-  if (!arc::IsArcVmEnabled()) {
+  if (arc::GetArcAndroidSdkVersionAsInt() == arc::kArcVersionP) {
     extra_caption_height =
         views::GetCaptionButtonLayoutSize(
             views::CaptionButtonLayoutSize::kNonBrowserCaption)
@@ -98,7 +103,7 @@ bool IsValidThemeColor(uint32_t theme_color) {
   return SkColorGetA(theme_color) == SK_AlphaOPAQUE;
 }
 
-const std::string WindowIdToAppId(int window_id) {
+const std::string WrapSessionAppIdFromWindowId(int window_id) {
   return std::string("org.chromium.arc.session.") +
          base::NumberToString(window_id);
 }

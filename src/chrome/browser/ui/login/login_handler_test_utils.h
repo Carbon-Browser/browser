@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <list>
 
-#include "chrome/browser/chrome_notification_types.h"
+#include "chrome/browser/auth_notification_types.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/notification_observer.h"
 #include "content/public/test/test_utils.h"
@@ -86,25 +86,5 @@ typedef WindowedNavigationObserver<chrome::NOTIFICATION_AUTH_CANCELLED>
 
 typedef WindowedNavigationObserver<chrome::NOTIFICATION_AUTH_SUPPLIED>
     WindowedAuthSuppliedObserver;
-
-// LOAD_STOP observer is special since we want to be able to wait for
-// multiple LOAD_STOP events.
-class WindowedLoadStopObserver
-    : public WindowedNavigationObserver<content::NOTIFICATION_LOAD_STOP> {
- public:
-  WindowedLoadStopObserver(content::NavigationController* controller,
-                           int notification_count);
-
-  WindowedLoadStopObserver(const WindowedLoadStopObserver&) = delete;
-  WindowedLoadStopObserver& operator=(const WindowedLoadStopObserver&) = delete;
-
- protected:
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
-
- private:
-  int remaining_notification_count_;  // Number of notifications remaining.
-};
 
 #endif  // CHROME_BROWSER_UI_LOGIN_LOGIN_HANDLER_TEST_UTILS_H_

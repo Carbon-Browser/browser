@@ -7,10 +7,10 @@ Please see the the [Integration Testing Framework document][integration-testing-
 - Run `chrome/test/webapps/generate_framework_tests_and_coverage.py` and verify nothing is outputted to the console.
 - Build the tests by building the targets `browser_tests` and `sync_integration_tests`
   - (e.g. `autoninja -C out/Release browser_tests sync_integration_tests`)
-- Run the generated tests, using the filter `--gtest_filter=*WebAppIntegration_*`:
+- Run the generated tests, using the filter `--gtest_filter=WebAppIntegration*`:
   - Note: These will take a long time! No need to run them all, this is just so you know how to run them if you need to.
-  - `testing/run_with_dummy_home.py testing/xvfb.py out/Release/browser_tests --gtest_filter=*WebAppIntegration_*`
-  - `testing/run_with_dummy_home.py testing/xvfb.py out/Release/sync_integration_tests --gtest_filter=*WebAppIntegration_*`
+  - `testing/run_with_dummy_home.py testing/xvfb.py out/Release/browser_tests --gtest_filter=WebAppIntegration*`
+  - `testing/run_with_dummy_home.py testing/xvfb.py out/Release/sync_integration_tests --gtest_filter=WebAppIntegration*`
 
 ## 2. Determine what actions are needed for new critical user journeys
 
@@ -33,7 +33,7 @@ The browsertest files are split into two sections, manual tests and script-gener
 
 See the [example browsertest][regular-browsertests] file to see the manual tests at the top, written by the action authors.
 
-For details about how to implement actions, see [Creating Actions in the `WebAppIntegrationTestDriver`][creating-actions]. Implementing or changing actions is usually done in [`WebAppIntegrationTestDriver`](https://source.chromium.org/search?q=WebAppIntegrationTestDriver&ss=chromium). If the action only works with the sync system, then it may have to be implemented in the `TestDelegate` interface and then in the [`TwoClientWebAppsIntegrationTestBase`](https://source.chromium.org/search?q=TwoClientWebAppsIntegrationTestBase&sq=&ss=chromium). The [dPWA team](#contact-the-team) should have informed you if there was anything specific you need to do here.
+For details about how to implement actions, see [Creating Actions in the `WebAppIntegrationTestDriver`][creating-actions]. Implementing or changing actions is usually done in [`WebAppIntegrationTestDriver`](https://source.chromium.org/search?q=WebAppIntegrationTestDriver&ss=chromium). If the action only works with the sync system, then it may have to be implemented in the `TestDelegate` interface and then in the [`WebAppIntegrationTestBase`](https://source.chromium.org/search?q=WebAppIntegrationTestBase&sq=&ss=chromium). The [dPWA team](#contact-the-team) should have informed you if there was anything specific you need to do here.
 
 Before submitting, make sure to also [run the trybots on mac][running-mac-tests], as these are sometimes disabled on the CQ.
 
@@ -70,8 +70,12 @@ chrome/test/webapps/generate_framework_tests_and_coverage.py
 
 The output should:
 1. Generate a coverage report for the change in the [data directory][script-data-dir].
-1. Print new tests that need to be manually copied to the integration browsertest files.
-2. Print out test ids that need to be removed.
+2. Print new tests that need to be manually copied to the integration browsertest files.
+3. Print out test ids that need to be removed.
+
+Note:
+1. The option `--delete-in-place` can be used to remove all tests that aren't disabled by sheriffs.
+2. The option `--add-to-file` can be used to add new tests to existing test files. If the test file does not exist, the expected file names and tests will be printed out to the console. You will have to manually create the file, copy-and-paste the tests to the new file and add the file to the BUILD file.
 
 After you make changes to the integration browsertests, please re-run the above command to verify that all of the changes were performed and no mistakes were made. If all looks right, the script will output nothing to console when run a second time.
 
@@ -83,7 +87,29 @@ After all tests are added, `git cl format` is often required. It's a good idea t
 
 Before submitting, make sure to also [run the trybots on mac][running-mac-tests], as these are sometimes disabled on the CQ.
 
-### 4.3. (optional) Disable failing tests
+### 4.3. Run new tests locally.
+
+It is recommended to run the new tests locally before testing them on trybots.
+
+This command will to generate the gtest_filter for all the new and modified tests.
+
+```bash
+chrome/test/webapps/generate_gtest_filter_for_added_tests.py --diff-strategy <upstream|committed|staged|unstaged>
+```
+This script uses a default diff strategy that includes uncommitted, staged, and committed changes to the UPSTREAM. See the `--diff-strategy` option for more options here.
+
+The output should print out the gtest_filter for any new (or modified) tests in `browser_tests` and `sync_integration_tests`.
+
+The output format will be
+```bash
+browser_tests --gtest_filter=<test_name>
+
+sync_integration_tests --gtest_filter=<test_name>
+```
+
+You can run the tests by adding the path to `browser_tests` or `sync_integration_tests` binaries.
+
+### 4.4. (optional) Disable failing tests
 
 If the "manual" browsertest didn't catch a bug that is now failing for the generated tests and there is no obvious fix for the bug, it is OK to submit the new tests as disabled. To do this:
 1. Try to figure out generally why the generated tests are failing, or what the problem is, and create a bug.

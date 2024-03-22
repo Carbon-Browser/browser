@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_bubble_controller.h"
@@ -32,6 +32,7 @@
 #include "content/public/browser/web_contents.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
+#include "ui/base/window_open_disposition_utils.h"
 #include "ui/events/event.h"
 
 namespace send_tab_to_self {
@@ -62,22 +63,29 @@ void SendTabToSelfBubbleController::HideBubble() {
 void SendTabToSelfBubbleController::ShowBubble(bool show_back_button) {
   show_back_button_ = show_back_button;
   bubble_shown_ = true;
-  Browser* browser = chrome::FindBrowserWithWebContents(&GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(&GetWebContents());
   absl::optional<send_tab_to_self::EntryPointDisplayReason> reason =
       send_tab_to_self::GetEntryPointDisplayReason(&GetWebContents());
   DCHECK(reason);
   switch (*reason) {
     case send_tab_to_self::EntryPointDisplayReason::kOfferFeature:
+      send_tab_to_self::RecordSendingEvent(ShareEntryPoint::kOmniboxIcon,
+                                           SendingEvent::kShowDeviceList);
       send_tab_to_self_bubble_view_ =
           browser->window()->ShowSendTabToSelfDevicePickerBubble(
               &GetWebContents());
       break;
     case send_tab_to_self::EntryPointDisplayReason::kOfferSignIn:
+      send_tab_to_self::RecordSendingEvent(ShareEntryPoint::kOmniboxIcon,
+                                           SendingEvent::kShowSigninPromo);
       send_tab_to_self_bubble_view_ =
           browser->window()->ShowSendTabToSelfPromoBubble(
               &GetWebContents(), /*show_signin_button=*/true);
       break;
     case send_tab_to_self::EntryPointDisplayReason::kInformNoTargetDevice:
+      send_tab_to_self::RecordSendingEvent(
+          ShareEntryPoint::kOmniboxIcon,
+          SendingEvent::kShowNoTargetDeviceMessage);
       send_tab_to_self_bubble_view_ =
           browser->window()->ShowSendTabToSelfPromoBubble(
               &GetWebContents(), /*show_signin_button=*/false);
@@ -119,7 +127,8 @@ void SendTabToSelfBubbleController::OnDeviceSelected(
     const std::string& target_device_guid) {
   // TODO(crbug.com/1288843): This is being recorded for entry points other
   // than the omnibox. Make the entry point a ShowBubble() argument.
-  send_tab_to_self::RecordDeviceClicked(ShareEntryPoint::kOmniboxIcon);
+  send_tab_to_self::RecordSendingEvent(ShareEntryPoint::kOmniboxIcon,
+                                       SendingEvent::kClickItem);
 
   SendTabToSelfModel* model =
       SendTabToSelfSyncServiceFactory::GetForProfile(GetProfile())
@@ -180,7 +189,7 @@ void SendTabToSelfBubbleController::SetInitialSendAnimationShown(bool shown) {
 }
 
 void SendTabToSelfBubbleController::UpdateIcon() {
-  Browser* browser = chrome::FindBrowserWithWebContents(&GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(&GetWebContents());
   // UpdateIcon() can be called during browser teardown.
   if (!browser)
     return;

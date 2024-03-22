@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,37 +6,26 @@
 
 #include <utility>
 
-#include "components/sync/driver/sync_service.h"
-#include "google_apis/gaia/google_service_auth_error.h"
-
 SharingMessageModelTypeController::SharingMessageModelTypeController(
-    syncer::SyncService* sync_service,
     std::unique_ptr<syncer::ModelTypeControllerDelegate>
         delegate_for_full_sync_mode,
     std::unique_ptr<syncer::ModelTypeControllerDelegate>
         delegate_for_transport_mode)
     : syncer::ModelTypeController(syncer::SHARING_MESSAGE,
                                   std::move(delegate_for_full_sync_mode),
-                                  std::move(delegate_for_transport_mode)),
-      sync_service_(sync_service) {
-  sync_service_->AddObserver(this);
-}
+                                  std::move(delegate_for_transport_mode)) {}
 
-SharingMessageModelTypeController::~SharingMessageModelTypeController() {
-  sync_service_->RemoveObserver(this);
-}
+SharingMessageModelTypeController::~SharingMessageModelTypeController() =
+    default;
 
-syncer::DataTypeController::PreconditionState
-SharingMessageModelTypeController::GetPreconditionState() const {
+void SharingMessageModelTypeController::Stop(syncer::SyncStopMetadataFate fate,
+                                             StopCallback callback) {
   DCHECK(CalledOnValidThread());
-  return sync_service_->GetAuthError().IsPersistentError()
-             ? PreconditionState::kMustStopAndClearData
-             : PreconditionState::kPreconditionsMet;
-}
-
-void SharingMessageModelTypeController::OnStateChanged(
-    syncer::SyncService* sync) {
-  DCHECK(CalledOnValidThread());
-  // Most of these calls will be no-ops but SyncService handles that just fine.
-  sync_service_->DataTypePreconditionChanged(type());
+  // Clear sync metadata regardless of incoming fate even when sync gets paused
+  // (e.g. persistent auth error). This is needed because
+  // SharingMessageBridgeImpl uses the processor's IsTrackingMetadata() bit to
+  // determine whether sharing messages can be sent (they can't if sync is
+  // paused).
+  ModelTypeController::Stop(syncer::SyncStopMetadataFate::CLEAR_METADATA,
+                            std::move(callback));
 }

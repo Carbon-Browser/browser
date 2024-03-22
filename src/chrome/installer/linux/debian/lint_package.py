@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -23,9 +23,6 @@ SUPPRESSIONS = [
     'embedded-library',
     # The setuid sandbox is a setuid binary.
     'setuid-binary',
-    # Some nacl binaries are statically linked but don't have "static"
-    # in their name.
-    'statically-linked-binary',
     # Build configurations with is_official_build=false don't compress
     # the packages.
     'uses-no-compression-for-data-tarball',

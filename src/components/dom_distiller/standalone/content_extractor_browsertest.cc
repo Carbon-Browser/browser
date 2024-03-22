@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <unordered_map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/id_map.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -22,7 +22,6 @@
 #include "base/strings/string_split.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/dom_distiller/content/browser/distiller_javascript_utils.h"
 #include "components/dom_distiller/content/browser/distiller_page_web_contents.h"
 #include "components/dom_distiller/core/article_entry.h"
@@ -297,7 +296,7 @@ class ContentExtractionRequest : public ViewRequestDelegate {
   void OnArticleReady(const DistilledArticleProto* article_proto) override {
     article_proto_ = article_proto;
     CHECK(article_proto->pages_size()) << "Failed extracting " << url_;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(finished_callback_));
   }
 
@@ -400,9 +399,7 @@ class ContentExtractor : public ContentBrowserTest {
 
     if (command_line.HasSwitch(kOutputFile)) {
       base::FilePath filename = command_line.GetSwitchValuePath(kOutputFile);
-      ASSERT_EQ(
-          (int)output_data_.size(),
-          base::WriteFile(filename, output_data_.c_str(), output_data_.size()));
+      ASSERT_TRUE(base::WriteFile(filename, output_data_));
     } else {
       VLOG(0) << output_data_;
     }
@@ -412,7 +409,7 @@ class ContentExtractor : public ContentBrowserTest {
     DoArticleOutput();
     requests_.clear();
     service_.reset();
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
   }
 

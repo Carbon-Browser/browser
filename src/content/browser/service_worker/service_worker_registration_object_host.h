@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -145,7 +145,7 @@ class CONTENT_EXPORT ServiceWorkerRegistrationObjectHost
 
   // |container_host_| is valid throughout lifetime of |this| because it owns
   // |this|.
-  raw_ptr<ServiceWorkerContainerHost> container_host_;
+  raw_ptr<ServiceWorkerContainerHost, DanglingUntriaged> container_host_;
   base::WeakPtr<ServiceWorkerContextCore> context_;
   scoped_refptr<ServiceWorkerRegistration> registration_;
 

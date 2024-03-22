@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/forced_extensions/force_installed_tracker.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
@@ -120,7 +120,7 @@ bool ForceInstalledTracker::ProceedIfForcedExtensionsPrefReady() {
          status_ == kWaitingForInstallForcelistPref);
 
   const base::Value::Dict& value =
-      pref_service_->GetValueDict(pref_names::kInstallForceList);
+      pref_service_->GetDict(pref_names::kInstallForceList);
   if (!forced_extensions_pref_ready_ && !value.empty()) {
     forced_extensions_pref_ready_ = true;
     OnForcedExtensionsPrefReady();
@@ -144,16 +144,15 @@ void ForceInstalledTracker::OnForcedExtensionsPrefReady() {
   collector_observation_.Observe(InstallStageTracker::Get(profile_));
 
   const base::Value::Dict& value =
-      pref_service_->GetValueDict(pref_names::kInstallForceList);
+      pref_service_->GetDict(pref_names::kInstallForceList);
 
   // Add each extension to |extensions_|.
   for (auto entry : value) {
     const ExtensionId& extension_id = entry.first;
-    const std::string* update_url = nullptr;
-    if (entry.second.is_dict()) {
-      update_url =
-          entry.second.FindStringKey(ExternalProviderImpl::kExternalUpdateUrl);
-    }
+    const std::string* update_url =
+        entry.second.is_dict() ? entry.second.GetDict().FindString(
+                                     ExternalProviderImpl::kExternalUpdateUrl)
+                               : nullptr;
     bool is_from_store =
         update_url && *update_url == extension_urls::kChromeWebstoreUpdateURL;
 

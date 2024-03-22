@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 class PrefRegistrySimple;
 class PrefService;
 
-namespace chromeos {
+namespace ash {
 
 // Helper class for tests that uses network handler classes. This class
 // handles initialization and shutdown of Shill and Hermes DBus clients and
@@ -36,12 +36,6 @@ class NetworkHandlerTestHelper : public NetworkTestHelperBase {
   bool network_handler_initialized_ = false;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::NetworkHandlerTestHelper;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_HANDLER_TEST_HELPER_H_

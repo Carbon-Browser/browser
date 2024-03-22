@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,11 +46,16 @@ document.getElementById('locktarget1').addEventListener('mousemove',
     }
 });
 
-document.getElementById('locktarget2').addEventListener('mousemove',
-    function (e) {
-  info.innerHTML = 'fail';
-  embedder.postMessage('Pointer was not locked to locktarget1.', '*');
-});
+document.getElementById('locktarget2')
+    .addEventListener('mousemove', function(e) {
+      // The mouse move event can be reached eariler than the pointer unlock
+      // event, but `pointerLockElement` would be null if the pointer is
+      // unlocked. So, we should ignore the mouse move event.
+      if (document.pointerLockElement == null && !first_lock)
+        return;
+      info.innerHTML = 'fail';
+      embedder.postMessage('Pointer was not locked to locktarget1.', '*');
+    });
 
 document.getElementById('button1').addEventListener('click', function (e) {
   console.log('click captured, locking mouse');

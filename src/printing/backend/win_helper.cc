@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <string_view>
 
 #include "base/check_op.h"
 #include "base/containers/fixed_flat_set.h"
@@ -17,8 +18,8 @@
 #include "base/files/file_path.h"
 #include "base/memory/free_deleter.h"
 #include "base/notreached.h"
+#include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -161,6 +162,17 @@ std::wstring GetPrinterDriverPort(const std::string& printer_name) {
   if (result != ERROR_SUCCESS)
     return std::wstring();
   return port_value;
+}
+
+std::string GetDriverVersionString(DWORDLONG version_number) {
+  // A Windows driver version number is four 16-bit unsigned integers
+  // concatenated together as w.x.y.z in a 64 bit unsigned int.
+  // https://learn.microsoft.com/en-us/windows-hardware/drivers/install/inf-driverver-directive
+  return base::StringPrintf(
+      "%u.%u.%u.%u", static_cast<uint16_t>((version_number >> 48) & 0xFFFF),
+      static_cast<uint16_t>((version_number >> 32) & 0xFFFF),
+      static_cast<uint16_t>((version_number >> 16) & 0xFFFF),
+      static_cast<uint16_t>(version_number & 0xFFFF));
 }
 
 }  // namespace
@@ -416,49 +428,51 @@ bool InitBasicPrinterInfo(HANDLE printer, PrinterBasicInfo* printer_info) {
   }
   printer_info->printer_status = info_2.get()->Status;
 
-  std::string driver_info = GetDriverInfo(printer);
-  if (!driver_info.empty())
-    printer_info->options[kDriverInfoTagName] = driver_info;
+  std::vector<std::string> driver_info = GetDriverInfo(printer);
+  if (!driver_info.empty()) {
+    printer_info->options[kDriverInfoTagName] =
+        base::JoinString(driver_info, ";");
+  }
   return true;
 }
 
-std::string GetDriverInfo(HANDLE printer) {
+std::vector<std::string> GetDriverInfo(HANDLE printer) {
   DCHECK(printer);
-  std::string driver_info;
+  std::vector<std::string> driver_info;
 
-  if (!printer)
+  if (!printer) {
     return driver_info;
+  }
 
   DriverInfo6 info_6;
-  if (!info_6.Init(printer))
+  if (!info_6.Init(printer)) {
     return driver_info;
+  }
 
-  std::string info[4];
-  if (info_6.get()->pName)
-    info[0] = base::WideToUTF8(info_6.get()->pName);
+  driver_info.emplace_back(info_6.get()->pName
+                               ? base::WideToUTF8(info_6.get()->pName)
+                               : std::string());
+
+  driver_info.emplace_back(
+      info_6.get()->dwlDriverVersion
+          ? GetDriverVersionString(info_6.get()->dwlDriverVersion)
+          : std::string());
 
   if (info_6.get()->pDriverPath) {
     std::unique_ptr<FileVersionInfo> version_info(
         FileVersionInfo::CreateFileVersionInfo(
             base::FilePath(info_6.get()->pDriverPath)));
     if (version_info.get()) {
-      info[1] = base::UTF16ToUTF8(version_info->file_version());
-      info[2] = base::UTF16ToUTF8(version_info->product_name());
-      info[3] = base::UTF16ToUTF8(version_info->product_version());
+      driver_info.emplace_back(base::UTF16ToUTF8(version_info->file_version()));
+      driver_info.emplace_back(base::UTF16ToUTF8(version_info->product_name()));
     }
   }
 
-  for (size_t i = 0; i < std::size(info); ++i) {
-    std::replace(info[i].begin(), info[i].end(), ';', ',');
-    driver_info.append(info[i]);
-    if (i < std::size(info) - 1)
-      driver_info.append(";");
-  }
   return driver_info;
 }
 
 bool DoesDriverDisplayFileDialogForPrinting(const std::string& printer_name) {
-  static constexpr auto kPortNames = base::MakeFixedFlatSet<base::WStringPiece>(
+  static constexpr auto kPortNames = base::MakeFixedFlatSet<std::wstring_view>(
       {kPrinterDriverPortFile, kPrinterDriverPortPrompt,
        kPrinterDriverPortFax});
   return kPortNames.contains(GetPrinterDriverPort(printer_name));
@@ -560,12 +574,19 @@ std::unique_ptr<DEVMODE, base::FreeDeleter> CreateDevMode(HANDLE printer,
     buffer_size = DocumentProperties(nullptr, printer, device_name_ptr, nullptr,
                                      nullptr, 0);
   }
-  if (buffer_size < static_cast<int>(sizeof(DEVMODE)))
+  // TODO(thestig): Consider limiting `buffer_size` to avoid buggy printer
+  // drivers that return excessively large values.
+  if (buffer_size < static_cast<LONG>(sizeof(DEVMODE)))
     return nullptr;
 
   // Some drivers request buffers with size smaller than dmSize + dmDriverExtra.
-  // crbug.com/421402
-  buffer_size *= 2;
+  // Examples: crbug.com/421402, crbug.com/780016
+  // Pad the `out` buffer so there is plenty of space. Calculate the size using
+  // `base::CheckedNumeric` to avoid a potential integer overflow.
+  base::CheckedNumeric<LONG> safe_buffer_size = buffer_size;
+  safe_buffer_size *= 2;
+  safe_buffer_size += 8192;
+  buffer_size = safe_buffer_size.ValueOrDie();
 
   std::unique_ptr<DEVMODE, base::FreeDeleter> out(
       reinterpret_cast<DEVMODE*>(calloc(buffer_size, 1)));
@@ -600,6 +621,8 @@ std::unique_ptr<DEVMODE, base::FreeDeleter> CreateDevMode(HANDLE printer,
   // recorded in crash dumps.
   // See https://crbug.com/780016 and https://crbug.com/806016 for example
   // crashes.
+  // TODO(crbug.com/780016): Remove this debug code if the CHECK_GE() below
+  // stops failing.
   base::debug::Alias(&size);
   base::debug::Alias(&extra_size);
   base::debug::Alias(&buffer_size);
@@ -643,6 +666,18 @@ std::unique_ptr<DEVMODE, base::FreeDeleter> PromptDevMode(
   int extra_size = out->dmDriverExtra;
   CHECK_GE(buffer_size, size + extra_size);
   return out;
+}
+
+std::string GetDriverVersionStringForTesting(DWORDLONG version_number) {
+  return GetDriverVersionString(version_number);
+}
+
+mojom::ResultCode GetResultCodeFromSystemErrorCode(
+    logging::SystemErrorCode system_code) {
+  if (system_code == ERROR_ACCESS_DENIED) {
+    return mojom::ResultCode::kAccessDenied;
+  }
+  return mojom::ResultCode::kFailed;
 }
 
 }  // namespace printing

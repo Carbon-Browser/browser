@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/hash/hash.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd.mojom.h"
@@ -35,14 +36,14 @@ base::TimeDelta CrosHealthdMetricsProvider::GetTimeout() {
 }
 
 void CrosHealthdMetricsProvider::AsyncInit(base::OnceClosure done_callback) {
-  const std::vector<chromeos::cros_healthd::mojom::ProbeCategoryEnum>
-      categories_to_probe = {chromeos::cros_healthd::mojom::ProbeCategoryEnum::
+  const std::vector<ash::cros_healthd::mojom::ProbeCategoryEnum>
+      categories_to_probe = {ash::cros_healthd::mojom::ProbeCategoryEnum::
                                  kNonRemovableBlockDevices};
   DCHECK(init_callback_.is_null());
   init_callback_ = std::move(done_callback);
   initialized_ = false;
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&CrosHealthdMetricsProvider::OnProbeTimeout,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -69,7 +70,7 @@ void CrosHealthdMetricsProvider::OnProbeTimeout() {
 }
 
 void CrosHealthdMetricsProvider::OnProbeDone(
-    chromeos::cros_healthd::mojom::TelemetryInfoPtr ptr) {
+    ash::cros_healthd::mojom::TelemetryInfoPtr ptr) {
   base::ScopedClosureRunner runner(std::move(init_callback_));
 
   // Invalidate OnProbeTimeout callback.
@@ -90,62 +91,75 @@ void CrosHealthdMetricsProvider::OnProbeDone(
   }
 
   auto tag = block_device_result->which();
-  if (tag == chromeos::cros_healthd::mojom::NonRemovableBlockDeviceResult::Tag::
-                 kError) {
+  if (tag ==
+      ash::cros_healthd::mojom::NonRemovableBlockDeviceResult::Tag::kError) {
     DVLOG(1) << "cros_healthd: Error getting block device info: "
              << block_device_result->get_error()->msg;
     return;
   }
-  DCHECK_EQ(tag, chromeos::cros_healthd::mojom::NonRemovableBlockDeviceResult::
-                     Tag::kBlockDeviceInfo);
+  DCHECK_EQ(tag, ash::cros_healthd::mojom::NonRemovableBlockDeviceResult::Tag::
+                     kBlockDeviceInfo);
 
   for (const auto& storage : block_device_result->get_block_device_info()) {
     SystemProfileProto::Hardware::InternalStorageDevice dev;
-
-    const auto& vendor_id = storage->vendor_id;
-    const auto& product_id = storage->product_id;
-    const auto& revision = storage->revision;
-    const auto& fw_version = storage->firmware_version;
-    const auto& type = storage->type;
-    if (base::StartsWith(type, "block:nvme",
-                         base::CompareCase::INSENSITIVE_ASCII)) {
-      DCHECK(vendor_id->is_nvme_subsystem_vendor());
-      DCHECK(product_id->is_nvme_subsystem_device());
-      DCHECK(revision->is_nvme_pcie_rev());
-      DCHECK(fw_version->is_nvme_firmware_rev());
-      dev.set_type(
-          SystemProfileProto::Hardware::InternalStorageDevice::TYPE_NVME);
-      dev.set_vendor_id(vendor_id->get_nvme_subsystem_vendor());
-      dev.set_product_id(product_id->get_nvme_subsystem_device());
-      dev.set_revision(revision->get_nvme_pcie_rev());
-      dev.set_firmware_version(fw_version->get_nvme_firmware_rev());
-    } else if (base::StartsWith(type, "block:mmc",
-                                base::CompareCase::INSENSITIVE_ASCII)) {
-      DCHECK(vendor_id->is_emmc_oemid());
-      DCHECK(product_id->is_emmc_pnm());
-      DCHECK(revision->is_emmc_prv());
-      DCHECK(fw_version->is_emmc_fwrev());
-      dev.set_type(
-          SystemProfileProto::Hardware::InternalStorageDevice::TYPE_EMMC);
-      dev.set_vendor_id(vendor_id->get_emmc_oemid());
-      dev.set_product_id(product_id->get_emmc_pnm());
-      dev.set_revision(revision->get_emmc_prv());
-      dev.set_firmware_version(fw_version->get_emmc_fwrev());
-    } else {
-      // Skip reporting entries for the unknown types.
+    const auto& device_info = storage->device_info;
+    if (device_info.is_null()) {
+      DVLOG(1)
+          << "cros_healthd: No device info in block device info for storage: "
+          << storage->name;
       continue;
     }
 
+    switch (device_info->which()) {
+      case ash::cros_healthd::mojom::BlockDeviceInfo::Tag::kUnrecognized: {
+        // Skip reporting entries for the unknown types.
+        continue;
+      }
+
+      case ash::cros_healthd::mojom::BlockDeviceInfo::Tag::kNvmeDeviceInfo: {
+        dev.set_type(
+            SystemProfileProto::Hardware::InternalStorageDevice::TYPE_NVME);
+        dev.set_vendor_id(
+            device_info->get_nvme_device_info()->subsystem_vendor);
+        dev.set_product_id(
+            device_info->get_nvme_device_info()->subsystem_device);
+        dev.set_revision(device_info->get_nvme_device_info()->pcie_rev);
+        dev.set_firmware_version(
+            device_info->get_nvme_device_info()->firmware_rev);
+        break;
+      }
+
+      case ash::cros_healthd::mojom::BlockDeviceInfo::Tag::kEmmcDeviceInfo: {
+        dev.set_type(
+            SystemProfileProto::Hardware::InternalStorageDevice::TYPE_EMMC);
+        dev.set_vendor_id(device_info->get_emmc_device_info()->manfid);
+        dev.set_product_id(device_info->get_emmc_device_info()->pnm);
+        dev.set_revision(device_info->get_emmc_device_info()->prv);
+        dev.set_firmware_version(device_info->get_emmc_device_info()->fwrev);
+        break;
+      }
+
+      case ash::cros_healthd::mojom::BlockDeviceInfo::Tag::kUfsDeviceInfo: {
+        dev.set_type(
+            SystemProfileProto::Hardware::InternalStorageDevice::TYPE_UFS);
+        dev.set_vendor_id(device_info->get_ufs_device_info()->jedec_manfid);
+        // UFS does not provide numeric id. Use hashed model name instead.
+        dev.set_product_id(base::PersistentHash(storage->name));
+        dev.set_firmware_version(device_info->get_ufs_device_info()->fwrev);
+        break;
+      }
+    }
+
     switch (storage->purpose) {
-      case chromeos::cros_healthd::mojom::StorageDevicePurpose::kUnknown:
+      case ash::cros_healthd::mojom::StorageDevicePurpose::kUnknown:
         dev.set_purpose(SystemProfileProto::Hardware::InternalStorageDevice::
                             PURPOSE_UNKNOWN);
         break;
-      case chromeos::cros_healthd::mojom::StorageDevicePurpose::kBootDevice:
+      case ash::cros_healthd::mojom::StorageDevicePurpose::kBootDevice:
         dev.set_purpose(
             SystemProfileProto::Hardware::InternalStorageDevice::PURPOSE_BOOT);
         break;
-      case chromeos::cros_healthd::mojom::StorageDevicePurpose::kSwapDevice:
+      case ash::cros_healthd::mojom::StorageDevicePurpose::kSwapDevice:
         dev.set_purpose(
             SystemProfileProto::Hardware::InternalStorageDevice::PURPOSE_SWAP);
         break;
@@ -158,10 +172,10 @@ void CrosHealthdMetricsProvider::OnProbeDone(
   }
 }
 
-chromeos::cros_healthd::mojom::CrosHealthdProbeService*
+ash::cros_healthd::mojom::CrosHealthdProbeService*
 CrosHealthdMetricsProvider::GetService() {
   if (!service_ || !service_.is_connected()) {
-    chromeos::cros_healthd::ServiceConnection::GetInstance()->GetProbeService(
+    ash::cros_healthd::ServiceConnection::GetInstance()->BindProbeService(
         service_.BindNewPipeAndPassReceiver());
     service_.set_disconnect_handler(
         base::BindOnce(&CrosHealthdMetricsProvider::OnDisconnect,

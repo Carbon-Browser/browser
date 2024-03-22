@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <jni.h>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/android/webapk/webapk_info.h"
 
 // Delegate for retrieving installed WebAPKs for display in WebUI.
@@ -39,10 +39,13 @@ class WebApkHandlerDelegate {
       const base::android::JavaParamRef<jstring>& jscope,
       const base::android::JavaParamRef<jstring>& jmanifest_url,
       const base::android::JavaParamRef<jstring>& jmanifest_start_url,
+      const base::android::JavaParamRef<jstring>& jmanifest_id,
       const jint jdisplay_mode,
       const jint jorientation,
       const jlong jtheme_color,
       const jlong jbackground_color,
+      const jlong jdark_theme_color,
+      const jlong jdark_background_color,
       const jlong jlast_update_check_time_ms,
       const jlong jlast_update_completion_time_ms,
       const jboolean jrelax_updates,

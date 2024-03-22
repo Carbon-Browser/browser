@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import org.chromium.base.ContextUtils;
 import org.chromium.base.StrictModeContext;
 import org.chromium.base.ThreadUtils;
 
-/**
- * PlayCore SplitCompat initializer for installing modules in the application context.
- */
+/** PlayCore SplitCompat initializer for installing modules in the application context. */
 class SplitCompatInitializer {
     private static volatile boolean sIsInitialized;
 

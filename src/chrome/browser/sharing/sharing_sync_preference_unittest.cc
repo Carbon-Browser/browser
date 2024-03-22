@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include <memory>
 
-#include "base/guid.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/sharing/fake_device_info.h"
@@ -57,17 +56,17 @@ class SharingSyncPreferenceTest : public testing::Test {
   }
 
   void AddEnabledFeature(int feature) {
-    const base::Value* registration =
-        prefs_.GetDictionary(prefs::kSharingLocalSharingInfo);
-    base::Value enabled_features =
-        registration->FindListKey(kSharingInfoEnabledFeatures)->Clone();
+    const base::Value::Dict& registration =
+        prefs_.GetDict(prefs::kSharingLocalSharingInfo);
+    base::Value::List enabled_features =
+        registration.FindList(kSharingInfoEnabledFeatures)->Clone();
 
     enabled_features.Append(feature);
 
-    DictionaryPrefUpdate local_sharing_info_update(
+    ScopedDictPrefUpdate local_sharing_info_update(
         &prefs_, prefs::kSharingLocalSharingInfo);
-    local_sharing_info_update->SetKey(kSharingInfoEnabledFeatures,
-                                      std::move(enabled_features));
+    local_sharing_info_update->Set(kSharingInfoEnabledFeatures,
+                                   std::move(enabled_features));
   }
 
   sync_preferences::TestingPrefServiceSyncable prefs_;

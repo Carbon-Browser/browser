@@ -1,10 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assertInstanceof} from 'chrome://resources/js/assert.m.js';
-import {Menu} from 'chrome://resources/js/cr/ui/menu.m.js';
-import {MenuItem} from 'chrome://resources/js/cr/ui/menu_item.m.js';
+import {assertInstanceof} from 'chrome://resources/ash/common/assert.js';
+
+import {decorate} from '../../../common/js/cr_ui.js';
+
+import {Menu} from './menu.js';
+import {MenuItem} from './menu_item.js';
 
 /**
  * Menu item with ripple animation.
@@ -13,22 +16,25 @@ export class FilesMenuItem extends MenuItem {
   constructor() {
     super();
 
-    /** @private {boolean} */
+    /** @private @type {boolean} */
     this.animating_ = false;
 
-    /** @private {(boolean|undefined)} */
+    /** @private @type {(boolean|undefined)} */
     this.hidden_ = undefined;
 
-    /** @private {?HTMLElement} */
+    /** @private @type {?HTMLElement} */
     this.label_ = null;
 
-    /** @private {?HTMLElement} */
+    /** @private @type {?HTMLElement} */
     this.iconStart_ = null;
 
-    /** @private {?HTMLElement} */
+    /** @private @type {?HTMLElement} */
+    this.iconManaged_ = null;
+
+    /** @private @type {?HTMLElement} */
     this.iconEnd_ = null;
 
-    /** @private {?HTMLElement} */
+    /** @private @type {?HTMLElement} */
     this.ripple_ = null;
 
     /** @public @type {?chrome.fileManagerPrivate.FileTaskDescriptor} */
@@ -39,15 +45,15 @@ export class FilesMenuItem extends MenuItem {
 
   /**
    * Decorates the element.
-   * @param {!Element} element Element to be decorated.
+   * @param {!HTMLElement} element Element to be decorated.
    * @return {!FilesMenuItem} Decorated element.
+   * @override
    */
   static decorate(element) {
-    element.__proto__ = FilesMenuItem.prototype;
-    element = /** @type {!FilesMenuItem} */ (element);
-    element.decorate();
-    return element;
+    decorate(element, FilesMenuItem);
+    return /** @type {!FilesMenuItem} */ (element);
   }
+
   /**
    * @override
    */
@@ -64,20 +70,26 @@ export class FilesMenuItem extends MenuItem {
           assertInstanceof(document.createElement('div'), HTMLElement);
       this.iconStart_.classList.add('icon', 'start');
 
+      this.iconManaged_ =
+          assertInstanceof(document.createElement('div'), HTMLElement);
+      this.iconManaged_.classList.add('icon', 'managed');
+
       this.iconEnd_ =
           assertInstanceof(document.createElement('div'), HTMLElement);
       this.iconEnd_.classList.add('icon', 'end');
       /**
-       * This is hidden by default because most of the menu items don't require
-       * an end icon, the component which uses end icon should explicitly make
-       * it visible.
+       * This is hidden by default because most of the menu items require
+       * neither the end icon nor the managed icon, so the component that
+       * plans to use either end icon should explicitly make it visible.
        */
       this.setIconEndHidden(true);
+      this.toggleManagedIcon(/*visible=*/ false);
 
       // Override with standard menu item elements.
       this.textContent = '';
       this.appendChild(this.iconStart_);
       this.appendChild(this.label_);
+      this.appendChild(this.iconManaged_);
       this.appendChild(this.iconEnd_);
     }
 
@@ -95,13 +107,22 @@ export class FilesMenuItem extends MenuItem {
    */
   onActivated_(event) {
     // Perform ripple animation if it's activated by keyboard.
+    // @ts-ignore: error TS2339: Property 'originalEvent' does not exist on type
+    // 'Event'.
     if (event.originalEvent instanceof KeyboardEvent) {
+      // @ts-ignore: error TS2339: Property 'simulatedRipple' does not exist on
+      // type 'HTMLElement'.
       this.ripple_.simulatedRipple();
     }
 
     // Perform fade out animation.
+    // @ts-ignore: error TS2345: Argument of type '(arg0?: Object | undefined)
+    // => Element' is not assignable to parameter of type 'new (...arg1: any[])
+    // => any'.
     const menu = assertInstanceof(this.parentNode, Menu);
     // If activation was on a menu-item that hosts a sub-menu, don't animate
+    // @ts-ignore: error TS2339: Property 'getAttribute' does not exist on type
+    // 'EventTarget'.
     const subMenuId = event.target.getAttribute('sub-menu');
     if (subMenuId !== null) {
       if (document.querySelector(subMenuId) !== null) {
@@ -170,20 +191,23 @@ export class FilesMenuItem extends MenuItem {
 
   /**
    * @return {boolean}
+   * @override
    */
   get hidden() {
     if (this.hidden_ !== undefined) {
       return this.hidden_;
     }
 
+
     return Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'hidden')
-        .get.call(this);
+        ?.get?.call(this);
   }
 
   /**
    * Overrides hidden property to block the change of hidden property while
    * menu is animating.
    * @param {boolean} value
+   * @override
    */
   set hidden(value) {
     if (this.animating_) {
@@ -192,20 +216,24 @@ export class FilesMenuItem extends MenuItem {
     }
 
     Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'hidden')
-        .set.call(this, value);
+        ?.set?.call(this, value);
   }
 
   /**
    * @return {string}
+   * @override
    */
   get label() {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.label_.textContent;
   }
 
   /**
    * @param {string} value
+   * @override
    */
   set label(value) {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     this.label_.textContent = value;
   }
 
@@ -213,6 +241,7 @@ export class FilesMenuItem extends MenuItem {
    * @return {string}
    */
   get iconStartImage() {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.iconStart_.style.backgroundImage;
   }
 
@@ -220,6 +249,7 @@ export class FilesMenuItem extends MenuItem {
    * @param {string} value
    */
   set iconStartImage(value) {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     this.iconStart_.setAttribute('style', 'background-image: ' + value);
   }
 
@@ -227,6 +257,7 @@ export class FilesMenuItem extends MenuItem {
    * @return {string}
    */
   get iconStartFileType() {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.iconStart_.getAttribute('file-type-icon');
   }
 
@@ -234,13 +265,40 @@ export class FilesMenuItem extends MenuItem {
    * @param {string} value
    */
   set iconStartFileType(value) {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     this.iconStart_.setAttribute('file-type-icon', value);
+  }
+
+  /**
+   * Sets or removes the `is-managed` attribute.
+   * @param {boolean} isManaged
+   */
+  toggleIsManagedAttribute(isManaged) {
+    this.toggleAttribute('is-managed', isManaged);
+  }
+
+  /**
+   * Sets the `is-default` attribute.
+   */
+  setIsDefaultAttribute() {
+    this.toggleAttribute('is-default', true);
+  }
+
+  /**
+   * Toggles visibility of the `Managed by Policy` icon.
+   * @param {boolean} visible
+   */
+  toggleManagedIcon(visible) {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
+    this.iconManaged_.toggleAttribute('hidden', !visible);
+    this.toggleIsManagedAttribute(visible);
   }
 
   /**
    * @return {string}
    */
   get iconEndImage() {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.iconEnd_.style.backgroundImage;
   }
 
@@ -248,6 +306,7 @@ export class FilesMenuItem extends MenuItem {
    * @param {string} value
    */
   set iconEndImage(value) {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     this.iconEnd_.setAttribute('style', 'background-image: ' + value);
   }
 
@@ -255,6 +314,7 @@ export class FilesMenuItem extends MenuItem {
    * @return {string}
    */
   get iconEndFileType() {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.iconEnd_.getAttribute('file-type-icon');
   }
 
@@ -262,10 +322,12 @@ export class FilesMenuItem extends MenuItem {
    * @param {string} value
    */
   set iconEndFileType(value) {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     this.iconEnd_.setAttribute('file-type-icon', value);
   }
 
   removeIconEndFileType() {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     this.iconEnd_.removeAttribute('file-type-icon');
   }
 
@@ -274,6 +336,7 @@ export class FilesMenuItem extends MenuItem {
    * @param {boolean} isHidden
    */
   setIconEndHidden(isHidden) {
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     this.iconEnd_.toggleAttribute('hidden', isHidden);
   }
 }

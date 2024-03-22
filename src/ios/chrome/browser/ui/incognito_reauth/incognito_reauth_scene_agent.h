@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_INCOGNITO_REAUTH_INCOGNITO_REAUTH_SCENE_AGENT_H_
 #define IOS_CHROME_BROWSER_UI_INCOGNITO_REAUTH_INCOGNITO_REAUTH_SCENE_AGENT_H_
 
-#import "ios/chrome/browser/ui/main/observing_scene_state_agent.h"
+#import "ios/chrome/browser/shared/coordinator/scene/observing_scene_state_agent.h"
 
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_commands.h"
 

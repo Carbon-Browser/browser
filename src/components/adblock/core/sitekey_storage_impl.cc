@@ -118,13 +118,15 @@ bool SitekeyStorageImpl::IsSitekeySignatureValid(
     const std::string& data) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::string signature;
-  if (!base::Base64Decode(signature_b64, &signature)) {
+  if (!base::Base64Decode(signature_b64, &signature,
+                          base::Base64DecodePolicy::kForgiving)) {
     DLOG(WARNING) << "[eyeo] Signature decode failed";
     return false;
   }
 
   std::string public_key;
-  if (!base::Base64Decode(public_key_b64, &public_key)) {
+  if (!base::Base64Decode(public_key_b64, &public_key,
+                          base::Base64DecodePolicy::kForgiving)) {
     DLOG(WARNING) << "[eyeo] Public key decode failed";
     return false;
   }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "components/safe_browsing/content/common/safe_browsing.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -33,7 +34,7 @@ class AwWebSocketHandshakeThrottleProvider final
   std::unique_ptr<blink::WebSocketHandshakeThrottleProvider> Clone(
       scoped_refptr<base::SingleThreadTaskRunner> task_runner) override;
   std::unique_ptr<blink::WebSocketHandshakeThrottle> CreateThrottle(
-      int render_frame_id,
+      base::optional_ref<const blink::LocalFrameToken> local_frame_token,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner) override;
 
  private:

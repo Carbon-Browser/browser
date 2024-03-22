@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,10 +12,6 @@ static_library("content") {
     "android_payment_app.h",
     "android_payment_app_factory.cc",
     "android_payment_app_factory.h",
-    "autofill_payment_app.cc",
-    "autofill_payment_app.h",
-    "autofill_payment_app_factory.cc",
-    "autofill_payment_app_factory.h",
     "can_make_payment_query_factory.cc",
     "can_make_payment_query_factory.h",
     "initialization_task.cc",
@@ -26,8 +22,6 @@ static_library("content") {
     "payment_app_factory.h",
     "payment_app_service.cc",
     "payment_app_service.h",
-    "payment_app_service_factory.cc",
-    "payment_app_service_factory.h",
     "payment_credential.cc",
     "payment_credential.h",
     "payment_credential_factory.cc",
@@ -44,6 +38,8 @@ static_library("content") {
     "payment_request_converter.h",
     "payment_request_spec.cc",
     "payment_request_spec.h",
+    "payment_request_web_contents_manager.cc",
+    "payment_request_web_contents_manager.h",
     "payment_ui_observer.h",
     "payments_userdata_key.cc",
     "payments_userdata_key.h",
@@ -93,8 +89,17 @@ static_library("content") {
     "//url",
   ]
 
+  if (is_chromeos) {
+    sources += [
+      "android_app_communication_helpers.cc",
+      "android_app_communication_helpers.h",
+    ]
+
+    deps += [ "//chromeos/components/payments/mojom" ]
+  }
+
   if (is_chromeos_ash) {
-    sources += [ "android_app_communication_chrome_os.cc" ]
+    sources += [ "android_app_communication_ash.cc" ]
 
     deps += [
       "//ash/components/arc",
@@ -102,7 +107,13 @@ static_library("content") {
     ]
   }
 
-  if (!is_chromeos_ash) {
+  if (is_chromeos_lacros) {
+    sources += [ "android_app_communication_lacros.cc" ]
+
+    deps += [ "//chromeos/lacros" ]
+  }
+
+  if (!is_chromeos) {
     sources += [ "android_app_communication_stub.cc" ]
   }
 
@@ -122,8 +133,6 @@ static_library("content") {
       "payment_request_display_manager.h",
       "payment_request_state.cc",
       "payment_request_state.h",
-      "payment_request_web_contents_manager.cc",
-      "payment_request_web_contents_manager.h",
       "payment_response_helper.cc",
       "payment_response_helper.h",
       "secure_payment_confirmation_controller.cc",
@@ -216,6 +225,10 @@ source_set("unit_tests") {
     "android_app_communication_unittest.cc",
     "android_payment_app_factory_unittest.cc",
     "android_payment_app_unittest.cc",
+    "mock_android_app_communication.cc",
+    "mock_android_app_communication.h",
+    "mock_payment_app_factory_delegate.cc",
+    "mock_payment_app_factory_delegate.h",
     "payment_event_response_util_unittest.cc",
     "payment_method_manifest_table_unittest.cc",
     "secure_payment_confirmation_model_unittest.cc",
@@ -226,21 +239,24 @@ source_set("unit_tests") {
 
   if (!is_android) {
     sources += [
-      "autofill_payment_app_unittest.cc",
       "payment_app_unittest.cc",
       "payment_request_spec_unittest.cc",
       "payment_request_state_unittest.cc",
       "payment_request_web_contents_manager_unittest.cc",
       "payment_response_helper_unittest.cc",
+      "secure_payment_confirmation_app_factory_unittest.cc",
       "secure_payment_confirmation_app_unittest.cc",
       "service_worker_payment_app_unittest.cc",
       "test_content_payment_request_delegate.cc",
       "test_content_payment_request_delegate.h",
+      "test_payment_app.cc",
+      "test_payment_app.h",
     ]
   }
 
   deps = [
     ":content",
+    ":test_support",
     ":utils",
     "//base",
     "//base/test:test_support",
@@ -252,6 +268,7 @@ source_set("unit_tests") {
     "//components/payments/core:test_support",
     "//components/strings:components_strings_grit",
     "//components/webauthn/core/browser",
+    "//components/webauthn/core/browser:test_support",
     "//components/webdata/common",
     "//content/test:test_support",
     "//net:test_support",
@@ -264,8 +281,21 @@ source_set("unit_tests") {
     "//third_party/libaddressinput:test_support",
   ]
 
+  if (is_chromeos) {
+    sources += [
+      "android_app_communication_test_support_chrome_os.cc",
+      "android_app_communication_test_support_chrome_os.h",
+    ]
+    deps += [
+      "//chromeos/components/payments:test_support",
+      "//chromeos/components/payments/mojom",
+    ]
+  } else {
+    sources += [ "android_app_communication_test_support_stub.cc" ]
+  }
+
   if (is_chromeos_ash) {
-    sources += [ "android_app_communication_test_support_chrome_os.cc" ]
+    sources += [ "android_app_communication_test_support_ash.cc" ]
 
     deps += [
       "//ash/components/arc",
@@ -276,7 +306,11 @@ source_set("unit_tests") {
     ]
   }
 
-  if (!is_chromeos_ash) {
-    sources += [ "android_app_communication_test_support_stub.cc" ]
+  if (is_chromeos_lacros) {
+    sources += [ "android_app_communication_test_support_lacros.cc" ]
+    deps += [
+      "//chromeos/lacros",
+      "//chromeos/lacros:test_support",
+    ]
   }
 }

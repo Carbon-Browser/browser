@@ -1,46 +1,55 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/browser_accelerator_configuration.h"
 
 #include "ash/public/cpp/accelerator_configuration.h"
+#include "ash/public/mojom/accelerator_configuration.mojom.h"
 #include "ash/public/mojom/accelerator_keys.mojom.h"
 
 namespace ash {
 
+using ::ash::mojom::AcceleratorConfigResult;
+
 BrowserAcceleratorConfiguration::BrowserAcceleratorConfiguration()
-    : AcceleratorConfiguration(ash::mojom::AcceleratorSource::kBrowser) {}
+    : AcceleratorConfiguration(mojom::AcceleratorSource::kBrowser) {}
 
 BrowserAcceleratorConfiguration::~BrowserAcceleratorConfiguration() = default;
 
-const std::vector<AcceleratorInfo>&
-BrowserAcceleratorConfiguration::GetConfigForAction(
-    AcceleratorAction actionId) {
+const std::vector<ui::Accelerator>&
+BrowserAcceleratorConfiguration::GetAcceleratorsForAction(
+    AcceleratorActionId action_id) {
   // TODO(jimmyxgong): Implement stub.
-  return accelerator_infos_;
+  return accelerators_;
 }
 
 bool BrowserAcceleratorConfiguration::IsMutable() const {
   return false;
 }
 
+bool BrowserAcceleratorConfiguration::IsDeprecated(
+    const ui::Accelerator& accelerator) const {
+  // TODO(longbowei): Implement stub.
+  return false;
+}
+
 AcceleratorConfigResult BrowserAcceleratorConfiguration::AddUserAccelerator(
-    AcceleratorAction action,
+    AcceleratorActionId action_id,
     const ui::Accelerator& accelerator) {
   // TODO(jimmyxgong): Implement stub.
   return AcceleratorConfigResult::kSuccess;
 }
 
 AcceleratorConfigResult BrowserAcceleratorConfiguration::RemoveAccelerator(
-    AcceleratorAction action,
+    AcceleratorActionId action_id,
     const ui::Accelerator& accelerator) {
   // TODO(jimmyxgong): Implement stub.
   return AcceleratorConfigResult::kSuccess;
 }
 
 AcceleratorConfigResult BrowserAcceleratorConfiguration::ReplaceAccelerator(
-    AcceleratorAction action,
+    AcceleratorActionId action_id,
     const ui::Accelerator& old_acc,
     const ui::Accelerator& new_acc) {
   // TODO(jimmyxgong): Implement stub.
@@ -48,7 +57,7 @@ AcceleratorConfigResult BrowserAcceleratorConfiguration::ReplaceAccelerator(
 }
 
 AcceleratorConfigResult BrowserAcceleratorConfiguration::RestoreDefault(
-    AcceleratorAction action) {
+    AcceleratorActionId action_id) {
   // TODO(jimmyxgong): Implement stub.
   return AcceleratorConfigResult::kSuccess;
 }

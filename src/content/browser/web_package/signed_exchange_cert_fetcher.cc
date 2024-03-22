@@ -1,20 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/web_package/signed_exchange_cert_fetcher.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/data_url_loader_factory.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
 #include "content/browser/web_package/signed_exchange_consts.h"
 #include "content/browser/web_package/signed_exchange_devtools_proxy.h"
 #include "content/browser/web_package/signed_exchange_utils.h"
@@ -24,8 +24,10 @@
 #include "net/base/load_flags.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_status_code.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -153,7 +155,7 @@ void SignedExchangeCertFetcher::Start() {
   // URLRequestContext's SharedURLLoaderFactory.
   if (resource_request_->url.SchemeIs(url::kDataScheme)) {
     shared_url_loader_factory_ =
-        base::MakeRefCounted<SingleRequestURLLoaderFactory>(
+        base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
             base::BindOnce(&SignedExchangeCertFetcher::OnDataURLRequest,
                            base::Unretained(this)));
   }
@@ -161,7 +163,8 @@ void SignedExchangeCertFetcher::Start() {
       std::move(shared_url_loader_factory_), std::move(throttles_),
       signed_exchange_utils::MakeRequestID() /* request_id */,
       network::mojom::kURLLoadOptionNone, resource_request_.get(), this,
-      kCertFetcherTrafficAnnotation, base::ThreadTaskRunnerHandle::Get());
+      kCertFetcherTrafficAnnotation,
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 void SignedExchangeCertFetcher::Abort() {
@@ -237,7 +240,8 @@ void SignedExchangeCertFetcher::OnReceiveEarlyHints(
 
 void SignedExchangeCertFetcher::OnReceiveResponse(
     network::mojom::URLResponseHeadPtr head,
-    mojo::ScopedDataPipeConsumerHandle body) {
+    mojo::ScopedDataPipeConsumerHandle body,
+    absl::optional<mojo_base::BigBuffer> cached_metadata) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("loading"),
                "SignedExchangeCertFetcher::OnReceiveResponse");
   if (devtools_proxy_) {
@@ -293,7 +297,7 @@ void SignedExchangeCertFetcher::OnReceiveResponse(
   body_ = std::move(body);
   handle_watcher_ = std::make_unique<mojo::SimpleWatcher>(
       FROM_HERE, mojo::SimpleWatcher::ArmingPolicy::AUTOMATIC,
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
   handle_watcher_->Watch(
       body_.get(), MOJO_HANDLE_SIGNAL_READABLE,
       base::BindRepeating(&SignedExchangeCertFetcher::OnHandleReady,
@@ -317,15 +321,11 @@ void SignedExchangeCertFetcher::OnUploadProgress(
   NOTREACHED();
 }
 
-void SignedExchangeCertFetcher::OnReceiveCachedMetadata(
-    mojo_base::BigBuffer data) {
-  // Cert fetching doesn't use cached metadata.
-  NOTREACHED();
-}
-
 void SignedExchangeCertFetcher::OnTransferSizeUpdated(
     int32_t transfer_size_diff) {
   // Do nothing.
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kSignedExchangeCertFetcher);
 }
 
 void SignedExchangeCertFetcher::OnComplete(

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_resize_observer_callback.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_resize_observer_options.h"
+#include "third_party/blink/renderer/core/core_probes_inl.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/layout/adjust_for_absolute_zoom.h"
-#include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observation.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_controller.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_entry.h"
@@ -35,7 +35,8 @@ ResizeObserver* ResizeObserver::Create(LocalDOMWindow* window,
 
 ResizeObserver::ResizeObserver(V8ResizeObserverCallback* callback,
                                LocalDOMWindow* window)
-    : ExecutionContextClient(window),
+    : ActiveScriptWrappable<ResizeObserver>({}),
+      ExecutionContextClient(window),
       callback_(callback),
       skipped_observations_(false) {
   DCHECK(callback_);
@@ -46,7 +47,8 @@ ResizeObserver::ResizeObserver(V8ResizeObserverCallback* callback,
 }
 
 ResizeObserver::ResizeObserver(Delegate* delegate, LocalDOMWindow* window)
-    : ExecutionContextClient(window),
+    : ActiveScriptWrappable<ResizeObserver>({}),
+      ExecutionContextClient(window),
       delegate_(delegate),
       skipped_observations_(false) {
   DCHECK(delegate_);
@@ -73,7 +75,7 @@ void ResizeObserver::observeInternal(Element* target,
 
   if (observer_map.Contains(this)) {
     auto observation = observer_map.find(this);
-    if ((*observation).value->observedBox() == box_option)
+    if ((*observation).value->ObservedBox() == box_option)
       return;
 
     // Unobserve target if box_option has changed and target already existed. If
@@ -135,7 +137,7 @@ void ResizeObserver::disconnect() {
 }
 
 size_t ResizeObserver::GatherObservations(size_t deeper_than) {
-  DCHECK(active_observations_.IsEmpty());
+  DCHECK(active_observations_.empty());
 
   size_t min_observed_depth = ResizeObserverController::kDepthBottom;
   for (auto& observation : observations_) {
@@ -153,7 +155,7 @@ size_t ResizeObserver::GatherObservations(size_t deeper_than) {
 }
 
 void ResizeObserver::DeliverObservations() {
-  if (active_observations_.IsEmpty())
+  if (active_observations_.empty())
     return;
 
   HeapVector<Member<ResizeObserverEntry>> entries;
@@ -162,8 +164,10 @@ void ResizeObserver::DeliverObservations() {
     // In case that the observer and the target belong to different execution
     // contexts and the target's execution context is already gone, then skip
     // such a target.
-    ExecutionContext* execution_context =
-        observation->Target()->GetExecutionContext();
+    Element* target = observation->Target();
+    if (!target)
+      continue;
+    ExecutionContext* execution_context = target->GetExecutionContext();
     if (!execution_context || execution_context->IsContextDestroyed())
       continue;
 
@@ -183,8 +187,9 @@ void ResizeObserver::DeliverObservations() {
   }
 
   DCHECK(callback_ || delegate_);
-  if (callback_)
+  if (callback_) {
     callback_->InvokeAndReportException(this, entries, this);
+  }
   if (delegate_)
     delegate_->OnResize(entries);
   ClearObservations();
@@ -196,7 +201,7 @@ void ResizeObserver::ClearObservations() {
 }
 
 bool ResizeObserver::HasPendingActivity() const {
-  return !active_observations_.IsEmpty();
+  return !active_observations_.empty();
 }
 
 void ResizeObserver::Trace(Visitor* visitor) const {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define DEVICE_FIDO_FILTER_H_
 
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/component_export.h"
 #include "base/containers/span.h"
-#include "base/strings/string_piece.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
@@ -104,8 +104,8 @@ enum class Action {
 COMPONENT_EXPORT(DEVICE_FIDO)
 Action Evaluate(
     Operation op,
-    base::StringPiece rp_id,
-    absl::optional<base::StringPiece> device,
+    std::string_view rp_id,
+    absl::optional<std::string_view> device,
     absl::optional<std::pair<IDType, base::span<const uint8_t>>> id);
 
 // ScopedFilterForTesting sets the current filter JSON for the duration of its
@@ -116,8 +116,8 @@ class COMPONENT_EXPORT(DEVICE_FIDO) ScopedFilterForTesting {
     kYes,
   };
 
-  explicit ScopedFilterForTesting(base::StringPiece json);
-  ScopedFilterForTesting(base::StringPiece json, PermitInvalidJSON);
+  explicit ScopedFilterForTesting(std::string_view json);
+  ScopedFilterForTesting(std::string_view json, PermitInvalidJSON);
   ~ScopedFilterForTesting();
 
  private:
@@ -126,7 +126,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) ScopedFilterForTesting {
 
 // ParseForTesting returns true iff |json| is a well-formed filter.
 COMPONENT_EXPORT(DEVICE_FIDO)
-bool ParseForTesting(base::StringPiece json);
+bool ParseForTesting(std::string_view json);
 
 }  // namespace fido_filter
 }  // namespace device

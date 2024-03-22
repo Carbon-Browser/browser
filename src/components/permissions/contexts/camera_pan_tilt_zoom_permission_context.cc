@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,25 +55,23 @@ CameraPanTiltZoomPermissionContext::~CameraPanTiltZoomPermissionContext() {
 }
 
 void CameraPanTiltZoomPermissionContext::RequestPermission(
-    const permissions::PermissionRequestID& id,
-    const GURL& requesting_frame_origin,
-    bool user_gesture,
+    PermissionRequestData request_data,
     permissions::BrowserPermissionCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   if (HasAvailableCameraPtzDevices()) {
-    PermissionContextBase::RequestPermission(id, requesting_frame_origin,
-                                             user_gesture, std::move(callback));
+    PermissionContextBase::RequestPermission(std::move(request_data),
+                                             std::move(callback));
     return;
   }
 
   // If there is no camera with PTZ capabilities, let's request a "regular"
   // camera permission instead.
   content::RenderFrameHost* render_frame_host =
-      content::RenderFrameHost::FromID(id.render_process_id(),
-                                       id.render_frame_id());
+      content::RenderFrameHost::FromID(
+          request_data.id.global_render_frame_host_id());
 
-  if (requesting_frame_origin !=
+  if (request_data.requesting_origin !=
       render_frame_host->GetLastCommittedOrigin().GetURL()) {
     std::move(callback).Run(CONTENT_SETTING_BLOCK);
     return;
@@ -81,7 +79,9 @@ void CameraPanTiltZoomPermissionContext::RequestPermission(
   render_frame_host->GetBrowserContext()
       ->GetPermissionController()
       ->RequestPermissionFromCurrentDocument(
-          blink::PermissionType::VIDEO_CAPTURE, render_frame_host, user_gesture,
+          render_frame_host,
+          content::PermissionRequestDescription(
+              blink::PermissionType::VIDEO_CAPTURE, request_data.user_gesture),
           base::BindOnce(&CallbackWrapper, std::move(callback)));
 }
 
@@ -96,10 +96,6 @@ ContentSetting CameraPanTiltZoomPermissionContext::GetPermissionStatusInternal(
   }
   return PermissionContextBase::GetPermissionStatusInternal(
       render_frame_host, requesting_origin, embedding_origin);
-}
-
-bool CameraPanTiltZoomPermissionContext::IsRestrictedToSecureOrigins() const {
-  return true;
 }
 
 void CameraPanTiltZoomPermissionContext::OnContentSettingChanged(

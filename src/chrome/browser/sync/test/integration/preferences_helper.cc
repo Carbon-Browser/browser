@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/test/integration/sync_datatype_helper.h"
@@ -56,12 +56,8 @@ void ClearPref(int index, const char* pref_name) {
 
 void ChangeListPref(int index,
                     const char* pref_name,
-                    const base::ListValue& new_value) {
-  ListPrefUpdate update(GetPrefs(index), pref_name);
-  base::Value* list = update.Get();
-  for (const base::Value& it : new_value.GetListDeprecated()) {
-    list->Append(it.Clone());
-  }
+                    const base::Value::List& new_value) {
+  GetPrefs(index)->SetList(pref_name, new_value.Clone());
 }
 
 bool BooleanPrefMatches(const char* pref_name) {
@@ -112,10 +108,9 @@ bool ClearedPrefMatches(const char* pref_name) {
 }
 
 bool ListPrefMatches(const char* pref_name) {
-  const base::Value::List& reference_value =
-      GetPrefs(0)->GetValueList(pref_name);
+  const base::Value::List& reference_value = GetPrefs(0)->GetList(pref_name);
   for (int i = 1; i < test()->num_clients(); ++i) {
-    if (reference_value != *GetPrefs(i)->GetList(pref_name)) {
+    if (reference_value != GetPrefs(i)->GetList(pref_name)) {
       DVLOG(1) << "List preference " << pref_name << " mismatched in"
                << " profile " << i << ".";
       return false;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,9 @@ class NullExtensionCache : public ExtensionCache {
                     const base::FilePath& file_path,
                     const std::string& version,
                     PutExtensionCallback callback) override;
+  bool OnInstallFailed(const std::string& id,
+                       const std::string& hash,
+                       const CrxInstallError& error) override;
 };
 
 }  // namespace extensions

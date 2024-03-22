@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/media/router/discovery/media_sink_discovery_metrics.h"
 #include "chrome/browser/media/router/providers/wired_display/wired_display_presentation_receiver.h"
@@ -61,16 +61,14 @@ class WiredDisplayMediaRouteProvider : public mojom::MediaRouteProvider,
                    const std::string& sink_id,
                    const std::string& presentation_id,
                    const url::Origin& origin,
-                   int32_t tab_id,
+                   int32_t frame_tree_node_id,
                    base::TimeDelta timeout,
-                   bool off_the_record,
                    CreateRouteCallback callback) override;
   void JoinRoute(const std::string& media_source,
                  const std::string& presentation_id,
                  const url::Origin& origin,
-                 int32_t tab_id,
+                 int32_t frame_tree_node_id,
                  base::TimeDelta timeout,
-                 bool off_the_record,
                  JoinRouteCallback callback) override;
   void TerminateRoute(const std::string& route_id,
                       TerminateRouteCallback callback) override;
@@ -81,11 +79,9 @@ class WiredDisplayMediaRouteProvider : public mojom::MediaRouteProvider,
   void StartObservingMediaSinks(const std::string& media_source) override;
   void StopObservingMediaSinks(const std::string& media_source) override;
   void StartObservingMediaRoutes() override;
-  void StartListeningForRouteMessages(const std::string& route_id) override;
-  void StopListeningForRouteMessages(const std::string& route_id) override;
   void DetachRoute(const std::string& route_id) override;
   void EnableMdnsDiscovery() override;
-  void UpdateMediaSinks(const std::string& media_source) override;
+  void DiscoverSinksNow() override;
   void CreateMediaRouteController(
       const std::string& route_id,
       mojo::PendingReceiver<mojom::MediaController> media_controller,
@@ -94,7 +90,6 @@ class WiredDisplayMediaRouteProvider : public mojom::MediaRouteProvider,
   void GetState(GetStateCallback callback) override;
 
   // display::DisplayObserver:
-  void OnDidProcessDisplayChanges() override;
   void OnDisplayAdded(const display::Display& new_display) override;
   void OnDisplayRemoved(const display::Display& old_display) override;
   void OnDisplayMetricsChanged(const display::Display& display,
@@ -152,6 +147,8 @@ class WiredDisplayMediaRouteProvider : public mojom::MediaRouteProvider,
     mojo::Remote<mojom::MediaStatusObserver> media_status_observer_;
   };
 
+  using Presentations = std::map<std::string, Presentation>;
+
   // Sends the current list of routes to each query in |route_queries_|.
   void NotifyRouteObservers() const;
 
@@ -193,7 +190,7 @@ class WiredDisplayMediaRouteProvider : public mojom::MediaRouteProvider,
   raw_ptr<Profile> profile_;
 
   // Map from presentation IDs to active presentations managed by this provider.
-  std::map<std::string, Presentation> presentations_;
+  Presentations presentations_;
 
   // A set of MediaSource IDs associated with queries for MediaSink updates.
   base::flat_set<std::string> sink_queries_;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/types/strong_alias.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -24,7 +24,7 @@ namespace blink {
 
 class ScriptState;
 class ReadableStream;
-class ReadableStreamDefaultControllerWithScriptScope;
+class ReadableByteStreamController;
 
 // Implementation of the IncomingStream mixin from the standard:
 // https://wicg.github.io/web-transport/#incoming-stream. ReceiveStream and
@@ -56,7 +56,7 @@ class MODULES_EXPORT IncomingStream final
   ReadableStream* Readable() const {
     DVLOG(1) << "IncomingStream::readable() called";
 
-    return readable_;
+    return readable_.Get();
   }
 
   // Called from WebTransport via a WebTransportStream class. May execute
@@ -77,7 +77,7 @@ class MODULES_EXPORT IncomingStream final
   void Trace(Visitor*) const;
 
  private:
-  class UnderlyingSource;
+  class UnderlyingByteSource;
 
   // Called when |data_pipe_| becomes readable, closed or errored.
   void OnHandleReady(MojoResult, const mojo::HandleSignalsState&);
@@ -91,13 +91,17 @@ class MODULES_EXPORT IncomingStream final
   // Reads all the data currently in the pipe and enqueues it. If no data is
   // currently available, triggers the |read_watcher_| and enqueues when data
   // becomes available.
-  void ReadFromPipeAndEnqueue();
+  void ReadFromPipeAndEnqueue(ExceptionState&);
 
-  // Copies a sequence of bytes into an ArrayBuffer and enqueues it.
-  void EnqueueBytes(const void* source, uint32_t byte_length);
+  // Responds current BYOB request or copies a sequence of bytes into an
+  // ArrayBuffer and enqueues it if there is no BYOB request. Returns the size
+  // of bytes responded or copied.
+  uint32_t RespondBYOBRequestOrEnqueueBytes(const void* source,
+                                            uint32_t byte_length,
+                                            ExceptionState&);
 
   // Closes |readable_|, and resets |data_pipe_|.
-  void CloseAbortAndReset();
+  void CloseAbortAndReset(ExceptionState&);
 
   // Errors |readable_|, and resets |data_pipe_|.
   // |exception| will be set as the error on |readable_|.
@@ -123,7 +127,7 @@ class MODULES_EXPORT IncomingStream final
   mojo::SimpleWatcher read_watcher_;
 
   Member<ReadableStream> readable_;
-  Member<ReadableStreamDefaultControllerWithScriptScope> controller_;
+  Member<ReadableByteStreamController> controller_;
 
   State state_ = State::kOpen;
 

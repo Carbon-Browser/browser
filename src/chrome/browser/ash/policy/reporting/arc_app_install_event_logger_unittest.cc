@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,6 @@
 #include <stdint.h>
 
 #include "ash/components/arc/arc_prefs.h"
-#include "ash/components/disks/disk_mount_manager.h"
-#include "ash/components/disks/mock_disk_mount_manager.h"
 #include "base/files/file_path.h"
 #include "base/json/json_writer.h"
 #include "base/time/time.h"
@@ -18,6 +16,8 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
+#include "chromeos/ash/components/disks/mock_disk_mount_manager.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "components/policy/policy_constants.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -144,6 +144,28 @@ class MockAppInstallEventLoggerDelegate
   MOCK_CONST_METHOD1(GetAndroidId_, void(AndroidIdCallback*));
 };
 
+class MockArcAppInstallPolicyDataHelper : public ArcAppInstallPolicyDataHelper {
+ public:
+  MockArcAppInstallPolicyDataHelper() = default;
+
+  MockArcAppInstallPolicyDataHelper(const MockArcAppInstallPolicyDataHelper&) =
+      delete;
+  MockArcAppInstallPolicyDataHelper& operator=(
+      const MockArcAppInstallPolicyDataHelper&) = delete;
+
+  MOCK_METHOD2(AddPolicyData,
+               void(const std::set<std::string>& current_pending,
+                    std::int64_t num_apps_previously_installed));
+
+  MOCK_METHOD(void, CheckForPolicyDataTimeout, ());
+
+  MOCK_METHOD2(UpdatePolicySuccessRate,
+               void(const std::string& package, bool success));
+
+  MOCK_METHOD2(UpdatePolicySuccessRateForPackages,
+               void(const std::set<std::string>& packages, bool success));
+};
+
 void SetPolicy(PolicyMap* map, const char* name, base::Value value) {
   map->Set(name, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
            std::move(value), nullptr);
@@ -221,12 +243,52 @@ class AppInstallEventLoggerTest : public testing::Test {
             })));
   }
 
+  PolicyMap CreatePolicyWithForceInstalls(std::set<std::string> package_names) {
+    PolicyMap policy_map;
+
+    base::Value::Dict arc_policy;
+    base::Value::List list;
+
+    for (std::string package_name : package_names) {
+      base::Value::Dict package;
+      package.Set("installType", "FORCE_INSTALLED");
+      package.Set("packageName", package_name);
+      list.Append(std::move(package));
+    }
+
+    arc_policy.Set("applications", std::move(list));
+    std::string arc_policy_string;
+    base::JSONWriter::Write(arc_policy, &arc_policy_string);
+    SetPolicy(&policy_map, key::kArcEnabled, base::Value(true));
+    SetPolicy(&policy_map, key::kArcPolicy, base::Value(arc_policy_string));
+
+    return policy_map;
+  }
+
+  base::Value CreateComplianceReport(
+      std::set<std::string> noncompliant_packages) {
+    base::Value::List details;
+
+    for (std::string package_name : noncompliant_packages) {
+      base::Value::Dict package;
+      package.Set("nonComplianceReason", 5);
+      package.Set("packageName", package_name);
+      details.Append(std::move(package));
+    }
+
+    base::Value::Dict compliance_report;
+    compliance_report.Set("nonComplianceDetails", std::move(details));
+    return base::Value(std::move(compliance_report));
+  }
+
   content::BrowserTaskEnvironment task_environment_;
-  chromeos::NetworkHandlerTestHelper network_handler_test_helper_;
-  TestingProfile profile_;
+  ash::NetworkHandlerTestHelper network_handler_test_helper_;
   TestingPrefServiceSimple pref_service_;
+  TestingProfile profile_;
 
   MockAppInstallEventLoggerDelegate delegate_;
+
+  MockArcAppInstallPolicyDataHelper policy_data_helper_;
 
   em::AppInstallReportLogEvent event_;
 
@@ -237,10 +299,12 @@ class AppInstallEventLoggerTest : public testing::Test {
 // pending. Clear all data related to app-install event log collection. Verify
 // that the lists are cleared.
 TEST_F(AppInstallEventLoggerTest, Clear) {
-  base::ListValue list;
+  base::Value::List list;
   list.Append("test");
-  profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsRequested, list);
-  profile_.GetPrefs()->Set(arc::prefs::kArcPushInstallAppsPending, list);
+  profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsRequested,
+                               list.Clone());
+  profile_.GetPrefs()->SetList(arc::prefs::kArcPushInstallAppsPending,
+                               list.Clone());
   ArcAppInstallEventLogger::Clear(&profile_);
   EXPECT_TRUE(profile_.GetPrefs()
                   ->FindPreference(arc::prefs::kArcPushInstallAppsRequested)
@@ -400,32 +464,32 @@ TEST_F(AppInstallEventLoggerTest, UpdatePolicy) {
 
   PolicyMap new_policy_map;
 
-  base::DictionaryValue arc_policy;
-  auto list = std::make_unique<base::ListValue>();
+  base::Value::Dict arc_policy;
+  base::Value::List list;
 
   // Test that REQUIRED, PREINSTALLED and FORCE_INSTALLED are markers to include
   // app to the tracking. BLOCKED and AVAILABLE are excluded.
   base::Value::Dict package1;
   package1.Set("installType", "REQUIRED");
   package1.Set("packageName", kPackageName);
-  list->Append(base::Value(std::move(package1)));
+  list.Append(std::move(package1));
   base::Value::Dict package2;
   package2.Set("installType", "PREINSTALLED");
   package2.Set("packageName", kPackageName2);
-  list->Append(base::Value(std::move(package2)));
+  list.Append(std::move(package2));
   base::Value::Dict package3;
   package3.Set("installType", "FORCE_INSTALLED");
   package3.Set("packageName", kPackageName3);
-  list->Append(base::Value(std::move(package3)));
+  list.Append(std::move(package3));
   base::Value::Dict package4;
   package4.Set("installType", "BLOCKED");
   package4.Set("packageName", kPackageName4);
-  list->Append(base::Value(std::move(package4)));
+  list.Append(std::move(package4));
   base::Value::Dict package5;
   package5.Set("installType", "AVAILABLE");
   package5.Set("packageName", kPackageName5);
-  list->Append(base::Value(std::move(package5)));
-  arc_policy.SetList("applications", std::move(list));
+  list.Append(std::move(package5));
+  arc_policy.Set("applications", std::move(list));
 
   std::string arc_policy_string;
   base::JSONWriter::Write(arc_policy, &arc_policy_string);
@@ -459,6 +523,24 @@ TEST_F(AppInstallEventLoggerTest, UpdatePolicy) {
 
   // To avoid extra logging.
   g_browser_process->local_state()->SetBoolean(prefs::kWasRestarted, true);
+}
+
+TEST_F(AppInstallEventLoggerTest, PolicySuccessRate_AddPolicyData) {
+  CreateLogger();
+  logger_->SetStatefulPathForTesting(base::FilePath(kStatefulPath));
+  PolicyMap policy = CreatePolicyWithForceInstalls({kPackageName});
+
+  logger_->OnPolicyUpdated(PolicyNamespace(), /* previous */ PolicyMap(),
+                           policy);
+  ON_CALL(policy_data_helper_, UpdatePolicySuccessRateForPackages);
+  ON_CALL(policy_data_helper_, AddPolicyData);
+}
+
+TEST_F(AppInstallEventLoggerTest, PolicySuccessRate_UpdatePolicySuccessRate) {
+  CreateLogger();
+  logger_->SetStatefulPathForTesting(base::FilePath(kStatefulPath));
+  logger_->UpdatePolicySuccessRate(kPackageName, true);
+  ON_CALL(policy_data_helper_, UpdatePolicySuccessRate);
 }
 
 }  // namespace policy

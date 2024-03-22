@@ -1,8 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.customtabs.dependency_injection;
+
+import dagger.Lazy;
+import dagger.Module;
+import dagger.Provides;
+import dagger.Reusable;
 
 import org.chromium.chrome.browser.browserservices.InstalledWebappDataRegister;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
@@ -12,8 +17,8 @@ import org.chromium.chrome.browser.browserservices.ui.controller.Verifier;
 import org.chromium.chrome.browser.browserservices.ui.controller.trustedwebactivity.TwaVerifier;
 import org.chromium.chrome.browser.browserservices.ui.controller.webapps.AddToHomescreenVerifier;
 import org.chromium.chrome.browser.browserservices.ui.controller.webapps.WebApkVerifier;
-import org.chromium.chrome.browser.browserservices.verification.OriginVerifierFactory;
-import org.chromium.chrome.browser.browserservices.verification.OriginVerifierFactoryImpl;
+import org.chromium.chrome.browser.browserservices.verification.ChromeOriginVerifierFactory;
+import org.chromium.chrome.browser.browserservices.verification.ChromeOriginVerifierFactoryImpl;
 import org.chromium.chrome.browser.customtabs.CustomTabNightModeStateController;
 import org.chromium.chrome.browser.customtabs.DefaultBrowserProviderImpl;
 import org.chromium.chrome.browser.customtabs.content.CustomTabActivityNavigationController;
@@ -25,14 +30,7 @@ import org.chromium.chrome.browser.tabmodel.IncognitoTabHostRegistry;
 import org.chromium.chrome.browser.theme.TopUiThemeColorProvider;
 import org.chromium.chrome.browser.webapps.WebApkPostShareTargetNavigator;
 
-import dagger.Lazy;
-import dagger.Module;
-import dagger.Provides;
-import dagger.Reusable;
-
-/**
- * Module for bindings shared between custom tabs and webapps.
- */
+/** Module for bindings shared between custom tabs and webapps. */
 @Module
 public class BaseCustomTabActivityModule {
     private final BrowserServicesIntentDataProvider mIntentDataProvider;
@@ -40,10 +38,11 @@ public class BaseCustomTabActivityModule {
     private final CustomTabNightModeStateController mNightModeController;
     private final IntentIgnoringCriterion mIntentIgnoringCriterion;
     private final TopUiThemeColorProvider mTopUiThemeColorProvider;
-    private final CustomTabActivityNavigationController
-            .DefaultBrowserProvider mDefaultBrowserProvider;
+    private final CustomTabActivityNavigationController.DefaultBrowserProvider
+            mDefaultBrowserProvider;
 
-    public BaseCustomTabActivityModule(BrowserServicesIntentDataProvider intentDataProvider,
+    public BaseCustomTabActivityModule(
+            BrowserServicesIntentDataProvider intentDataProvider,
             CustomTabNightModeStateController nightModeController,
             IntentIgnoringCriterion intentIgnoringCriterion,
             TopUiThemeColorProvider topUiThemeColorProvider,
@@ -66,25 +65,23 @@ public class BaseCustomTabActivityModule {
             Lazy<DefaultCustomTabIntentHandlingStrategy> defaultHandler,
             Lazy<TwaIntentHandlingStrategy> twaHandler) {
         return (mActivityType == ActivityType.TRUSTED_WEB_ACTIVITY
-                       || mActivityType == ActivityType.WEB_APK)
+                        || mActivityType == ActivityType.WEB_APK)
                 ? twaHandler.get()
                 : defaultHandler.get();
     }
 
     @Provides
-    public Verifier provideVerifier(Lazy<WebApkVerifier> webApkVerifier,
-            Lazy<AddToHomescreenVerifier> addToHomescreenVerifier, Lazy<TwaVerifier> twaVerifier,
+    public Verifier provideVerifier(
+            Lazy<WebApkVerifier> webApkVerifier,
+            Lazy<AddToHomescreenVerifier> addToHomescreenVerifier,
+            Lazy<TwaVerifier> twaVerifier,
             Lazy<EmptyVerifier> emptyVerifier) {
-        switch (mActivityType) {
-            case ActivityType.WEB_APK:
-                return webApkVerifier.get();
-            case ActivityType.WEBAPP:
-                return addToHomescreenVerifier.get();
-            case ActivityType.TRUSTED_WEB_ACTIVITY:
-                return twaVerifier.get();
-            default:
-                return emptyVerifier.get();
-        }
+        return switch (mActivityType) {
+            case ActivityType.WEB_APK -> webApkVerifier.get();
+            case ActivityType.WEBAPP -> addToHomescreenVerifier.get();
+            case ActivityType.TRUSTED_WEB_ACTIVITY -> twaVerifier.get();
+            default -> emptyVerifier.get();
+        };
     }
 
     @Provides
@@ -115,14 +112,14 @@ public class BaseCustomTabActivityModule {
 
     @Provides
     @Reusable
-    public OriginVerifierFactory providesOriginVerifierFactory() {
-        return new OriginVerifierFactoryImpl();
+    public ChromeOriginVerifierFactory providesOriginVerifierFactory() {
+        return new ChromeOriginVerifierFactoryImpl();
     }
 
     @Provides
     @Reusable
     public CustomTabActivityNavigationController.DefaultBrowserProvider
-    provideCustomTabDefaultBrowserProvider() {
+            provideCustomTabDefaultBrowserProvider() {
         return mDefaultBrowserProvider;
     }
 
@@ -132,7 +129,8 @@ public class BaseCustomTabActivityModule {
     }
 
     public interface Factory {
-        BaseCustomTabActivityModule create(BrowserServicesIntentDataProvider intentDataProvider,
+        BaseCustomTabActivityModule create(
+                BrowserServicesIntentDataProvider intentDataProvider,
                 CustomTabNightModeStateController nightModeController,
                 IntentIgnoringCriterion intentIgnoringCriterion,
                 TopUiThemeColorProvider topUiThemeColorProvider,

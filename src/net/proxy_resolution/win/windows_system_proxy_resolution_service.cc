@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,7 @@ WindowsSystemProxyResolutionService::~WindowsSystemProxyResolutionService() {
 int WindowsSystemProxyResolutionService::ResolveProxy(
     const GURL& url,
     const std::string& method,
-    const NetworkIsolationKey& network_isolation_key,
+    const NetworkAnonymizationKey& network_anonymization_key,
     ProxyInfo* results,
     CompletionOnceCallback callback,
     std::unique_ptr<ProxyResolutionRequest>* request,
@@ -114,7 +114,7 @@ void WindowsSystemProxyResolutionService::OnShutdown() {
 bool WindowsSystemProxyResolutionService::MarkProxiesAsBadUntil(
     const ProxyInfo& results,
     base::TimeDelta retry_delay,
-    const std::vector<ProxyServer>& additional_bad_proxies,
+    const std::vector<ProxyChain>& additional_bad_proxies,
     const NetLogWithSource& net_log) {
   // TODO(https://crbug.com/1032820): Implement bad proxy cache. We should be
   // able to share logic with the ConfiguredProxyResolutionService to accomplish

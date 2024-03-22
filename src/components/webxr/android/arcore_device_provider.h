@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 
 #include "components/webxr/android/ar_compositor_delegate_provider.h"
 #include "device/vr/public/cpp/vr_device_provider.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
 
 namespace device {
 
@@ -22,7 +21,8 @@ namespace webxr {
 class ArCoreDeviceProvider : public device::VRDeviceProvider {
  public:
   explicit ArCoreDeviceProvider(
-      webxr::ArCompositorDelegateProvider compositor_delegate_provider);
+      std::unique_ptr<webxr::ArCompositorDelegateProvider>
+          compositor_delegate_provider);
 
   ArCoreDeviceProvider(const ArCoreDeviceProvider&) = delete;
   ArCoreDeviceProvider& operator=(const ArCoreDeviceProvider&) = delete;
@@ -32,7 +32,8 @@ class ArCoreDeviceProvider : public device::VRDeviceProvider {
   bool Initialized() override;
 
  private:
-  webxr::ArCompositorDelegateProvider compositor_delegate_provider_;
+  std::unique_ptr<webxr::ArCompositorDelegateProvider>
+      compositor_delegate_provider_;
 
   std::unique_ptr<device::ArCoreDevice> arcore_device_;
   bool initialized_ = false;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/blink/public/platform/web_media_source.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 
@@ -42,7 +43,8 @@ class PLATFORM_EXPORT WebMediaSourceImpl : public WebMediaSource {
   void UnmarkEndOfStream() override;
 
  private:
-  media::ChunkDemuxer* demuxer_;  // Owned by WebMediaPlayerImpl.
+  raw_ptr<media::ChunkDemuxer, ExperimentalRenderer>
+      demuxer_;  // Owned by WebMediaPlayerImpl.
 };
 
 }  // namespace blink

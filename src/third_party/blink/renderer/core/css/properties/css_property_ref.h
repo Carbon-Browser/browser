@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,14 +56,16 @@ class CORE_EXPORT CSSPropertyRef {
 
   const CSSProperty& GetProperty() const {
     DCHECK(IsValid());
-    if (property_id_ == CSSPropertyID::kVariable)
+    if (property_id_ == CSSPropertyID::kVariable) {
       return custom_property_;
+    }
     return CSSProperty::Get(ResolveCSSPropertyID(property_id_));
   }
 
   const CSSUnresolvedProperty& GetUnresolvedProperty() const {
-    if (IsPropertyAlias(property_id_))
-      return *CSSUnresolvedProperty::GetAliasProperty(property_id_);
+    if (IsPropertyAlias(property_id_)) {
+      return *GetPropertyInternal(property_id_);
+    }
     return GetProperty();
   }
 

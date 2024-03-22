@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,22 +20,27 @@ suite('SitePermissionsBySite', function() {
   const siteGroups: chrome.developerPrivate.SiteGroup[] = [
     {
       etldPlusOne: 'google.ca',
+      numExtensions: 0,
       sites: [
         {
-          siteList: chrome.developerPrivate.UserSiteSet.PERMITTED,
-          site: 'https://images.google.ca',
+          siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+          numExtensions: 0,
+          site: 'images.google.ca',
         },
         {
-          siteList: chrome.developerPrivate.UserSiteSet.RESTRICTED,
-          site: 'http://google.ca',
+          siteSet: chrome.developerPrivate.SiteSet.USER_RESTRICTED,
+          numExtensions: 0,
+          site: 'google.ca',
         },
       ],
     },
     {
       etldPlusOne: 'example.com',
+      numExtensions: 0,
       sites: [{
-        siteList: chrome.developerPrivate.UserSiteSet.PERMITTED,
-        site: 'http://example.com',
+        siteSet: chrome.developerPrivate.SiteSet.USER_PERMITTED,
+        numExtensions: 0,
+        site: 'example.com',
       }],
     },
   ];
@@ -44,7 +49,7 @@ suite('SitePermissionsBySite', function() {
     delegate = new TestService();
     delegate.siteGroups = siteGroups;
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     element = document.createElement('extensions-site-permissions-by-site');
     element.delegate = delegate;
     document.body.appendChild(element);
@@ -86,26 +91,61 @@ suite('SitePermissionsBySite', function() {
     assertEquals(2, sitePermissionGroups.length);
   });
 
-  test('extension and user sites update when event is fired', async function() {
-    await delegate.whenCalled('getUserAndExtensionSitesByEtld');
-    flush();
-    delegate.resetResolver('getUserAndExtensionSitesByEtld');
-    delegate.siteGroups = [{
-      etldPlusOne: 'random.com',
-      sites: [{
-        siteList: chrome.developerPrivate.UserSiteSet.RESTRICTED,
-        site: 'http://www.random.com',
-      }],
-    }];
+  test(
+      'extension and user sites update when userSiteSettingsChanged is fired',
+      async function() {
+        await delegate.whenCalled('getUserAndExtensionSitesByEtld');
+        flush();
+        delegate.resetResolver('getUserAndExtensionSitesByEtld');
+        delegate.siteGroups = [{
+          etldPlusOne: 'random.com',
+          numExtensions: 0,
+          sites: [{
+            siteSet: chrome.developerPrivate.SiteSet.USER_RESTRICTED,
+            numExtensions: 0,
+            site: 'www.random.com',
+          }],
+        }];
 
-    delegate.userSiteSettingsChangedTarget.callListeners(
-        {permittedSites: [], restrictedSites: ['http://www.random.com']});
-    await delegate.whenCalled('getUserAndExtensionSitesByEtld');
-    flush();
+        delegate.userSiteSettingsChangedTarget.callListeners(
+            {permittedSites: [], restrictedSites: ['www.random.com']});
+        await delegate.whenCalled('getUserAndExtensionSitesByEtld');
+        flush();
 
-    const sitePermissionGroups =
-        element.shadowRoot!.querySelectorAll<HTMLElement>(
-            'site-permissions-site-group');
-    assertEquals(1, sitePermissionGroups.length);
-  });
+        const sitePermissionGroups =
+            element.shadowRoot!.querySelectorAll<HTMLElement>(
+                'site-permissions-site-group');
+        assertEquals(1, sitePermissionGroups.length);
+      });
+
+  test(
+      'extension and user sites update when itemStateChanged is fired',
+      async function() {
+        await delegate.whenCalled('getUserAndExtensionSitesByEtld');
+        flush();
+        delegate.resetResolver('getUserAndExtensionSitesByEtld');
+        delegate.siteGroups = [{
+          etldPlusOne: 'random.com',
+          numExtensions: 1,
+          sites: [{
+            siteSet: chrome.developerPrivate.SiteSet.EXTENSION_SPECIFIED,
+            numExtensions: 1,
+            site: 'www.random.com',
+          }],
+        }];
+
+        // Fire a fake event, which should trigger another call to
+        // getUserAndExtensionSitesByEtld.
+        delegate.itemStateChangedTarget.callListeners({
+          event_type: chrome.developerPrivate.EventType.UNINSTALLED,
+          item_id: '',
+        });
+        await delegate.whenCalled('getUserAndExtensionSitesByEtld');
+        flush();
+
+        const sitePermissionGroups =
+            element.shadowRoot!.querySelectorAll<HTMLElement>(
+                'site-permissions-site-group');
+        assertEquals(1, sitePermissionGroups.length);
+      });
 });

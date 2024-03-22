@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,11 @@ import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
 import android.location.LocationManager;
-import android.os.Build;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
@@ -28,30 +28,34 @@ import org.robolectric.shadows.ShadowLocationManager;
 import org.robolectric.shadows.ShadowLog;
 
 import org.chromium.base.ThreadUtils;
+import org.chromium.base.test.BaseRobolectricTestRule;
 import org.chromium.base.test.util.Feature;
 
 import java.util.Arrays;
 import java.util.Collection;
 
-/**
- * Test suite for Java Geolocation.
- */
+/** Test suite for Java Geolocation. */
 @RunWith(ParameterizedRobolectricTestRunner.class)
-@Config(sdk = Build.VERSION_CODES.M, manifest = Config.NONE)
+@Config(manifest = Config.NONE)
 public class LocationProviderTest {
-    static {
-        // Setting robolectric.offline which tells Robolectric to look for runtime dependency
-        // JARs from a local directory and to not download them from Maven.
-        System.setProperty("robolectric.offline", "true");
+    public static enum LocationProviderType {
+        MOCK,
+        ANDROID,
+        GMS_CORE
     }
-
-    public static enum LocationProviderType { MOCK, ANDROID, GMS_CORE }
 
     @Parameters
     public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {{LocationProviderType.MOCK},
-                {LocationProviderType.ANDROID}, {LocationProviderType.GMS_CORE}});
+        return Arrays.asList(
+                new Object[][] {
+                    {LocationProviderType.MOCK},
+                    {LocationProviderType.ANDROID},
+                    {LocationProviderType.GMS_CORE}
+                });
     }
+
+    @Rule(order = -2)
+    public BaseRobolectricTestRule mBaseRule = new BaseRobolectricTestRule();
 
     private LocationManager mLocationManager;
     private ShadowLocationManager mShadowLocationManager;
@@ -71,9 +75,7 @@ public class LocationProviderTest {
         mLocationManager = RuntimeEnvironment.application.getSystemService(LocationManager.class);
     }
 
-    /**
-     * Verify a normal start/stop call pair with the given LocationProvider.
-     */
+    /** Verify a normal start/stop call pair with the given LocationProvider. */
     @Test
     @Feature({"Location"})
     public void testStartStop() {
@@ -86,9 +88,7 @@ public class LocationProviderTest {
         stopLocationProviderAdapter();
     }
 
-    /**
-     * Verify a start/upgrade/stop call sequencewith the given LocationProvider.
-     */
+    /** Verify a start/upgrade/stop call sequencewith the given LocationProvider. */
     @Test
     @Feature({"Location"})
     public void testStartUpgradeStop() {

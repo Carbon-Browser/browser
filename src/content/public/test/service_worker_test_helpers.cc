@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,17 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/time/default_tick_clock.h"
 #include "content/browser/service_worker/service_worker_context_core_observer.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/service_worker_context.h"
 #include "third_party/blink/public/common/notifications/platform_notification_data.h"
+#include "third_party/blink/public/common/service_worker/embedded_worker_status.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
 
@@ -130,7 +132,7 @@ void StopServiceWorkerForScope(ServiceWorkerContext* context,
       static_cast<ServiceWorkerContextWrapper*>(context));
 
   context_wrapper->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(&StopServiceWorkerForRegistration, context_wrapper,
                      std::move(completion_callback_ui)));
 }
@@ -144,9 +146,97 @@ void DispatchServiceWorkerNotificationClick(
       static_cast<ServiceWorkerContextWrapper*>(context));
 
   context_wrapper->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(&DispatchNotificationClickForRegistration,
                      notification_data));
+}
+
+void AdvanceClockAfterRequestTimeout(ServiceWorkerContext* context,
+                                     int64_t service_worker_version_id,
+                                     base::SimpleTestTickClock* tick_clock) {
+  tick_clock->SetNowTicks(base::TimeTicks::Now());
+
+  ServiceWorkerVersion* service_worker_version =
+      static_cast<ServiceWorkerContextWrapper*>(context)->GetLiveVersion(
+          service_worker_version_id);
+  service_worker_version->SetTickClockForTesting(tick_clock);
+
+  base::TimeDelta timeout_beyond_request_timeout =
+      // Timeout for a request to be handled.
+      ServiceWorkerVersion::kRequestTimeout +
+      // A little past that.
+      base::Minutes(1);
+  tick_clock->Advance(timeout_beyond_request_timeout);
+}
+
+void ResetTickClockToDefaultForAllLiveServiceWorkerVersions(
+    ServiceWorkerContext* context) {
+  content::ServiceWorkerContextWrapper* context_wrapper =
+      static_cast<content::ServiceWorkerContextWrapper*>(context);
+  for (const auto& version_info : context_wrapper->GetAllLiveVersionInfo()) {
+    content::ServiceWorkerVersion* version =
+        context_wrapper->GetLiveVersion(version_info.version_id);
+    DCHECK(version);
+    version->SetTickClockForTesting(base::DefaultTickClock::GetInstance());
+  }
+}
+
+bool TriggerTimeoutAndCheckRunningState(ServiceWorkerContext* context,
+                                        int64_t service_worker_version_id) {
+  ServiceWorkerVersion* service_worker_version =
+      static_cast<ServiceWorkerContextWrapper*>(context)->GetLiveVersion(
+          service_worker_version_id);
+  service_worker_version->RunUserTasksForTesting();
+
+  // TODO(b/266799118): Investigate the need to call OnRequestTermination()
+  service_worker_version->OnRequestTermination();
+  return service_worker_version->running_status() ==
+         blink::EmbeddedWorkerStatus::kRunning;
+}
+
+bool CheckServiceWorkerIsRunning(ServiceWorkerContext* context,
+                                 int64_t service_worker_version_id) {
+  ServiceWorkerVersion* service_worker_version =
+      static_cast<ServiceWorkerContextWrapper*>(context)->GetLiveVersion(
+          service_worker_version_id);
+  return service_worker_version && service_worker_version->running_status() ==
+                                       blink::EmbeddedWorkerStatus::kRunning;
+}
+
+bool CheckServiceWorkerIsStarting(ServiceWorkerContext* context,
+                                  int64_t service_worker_version_id) {
+  ServiceWorkerVersion* service_worker_version =
+      static_cast<ServiceWorkerContextWrapper*>(context)->GetLiveVersion(
+          service_worker_version_id);
+  return service_worker_version && service_worker_version->running_status() ==
+                                       blink::EmbeddedWorkerStatus::kStarting;
+}
+
+bool CheckServiceWorkerIsStopping(ServiceWorkerContext* context,
+                                  int64_t service_worker_version_id) {
+  ServiceWorkerVersion* service_worker_version =
+      static_cast<ServiceWorkerContextWrapper*>(context)->GetLiveVersion(
+          service_worker_version_id);
+  return service_worker_version && service_worker_version->running_status() ==
+                                       blink::EmbeddedWorkerStatus::kStopping;
+}
+
+bool CheckServiceWorkerIsStopped(ServiceWorkerContext* context,
+                                 int64_t service_worker_version_id) {
+  ServiceWorkerVersion* service_worker_version =
+      static_cast<ServiceWorkerContextWrapper*>(context)->GetLiveVersion(
+          service_worker_version_id);
+  return !service_worker_version || service_worker_version->running_status() ==
+                                        blink::EmbeddedWorkerStatus::kStopped;
+}
+
+void SetServiceWorkerIdleDelay(ServiceWorkerContext* context,
+                               int64_t service_worker_version_id,
+                               base::TimeDelta delta) {
+  ServiceWorkerVersion* service_worker_version =
+      static_cast<ServiceWorkerContextWrapper*>(context)->GetLiveVersion(
+          service_worker_version_id);
+  service_worker_version->endpoint()->SetIdleDelay(delta);
 }
 
 }  // namespace content

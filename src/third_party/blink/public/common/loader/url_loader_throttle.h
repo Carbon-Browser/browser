@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,6 +56,13 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
     // application-defined reason description.
     virtual void CancelWithError(int error_code,
                                  base::StringPiece custom_reason = "") = 0;
+
+    // Cancels the resource load with the specified error code and an optional,
+    // application-defined reason description with optional extended_reason().
+    virtual void CancelWithExtendedError(int error_code,
+                                         int extended_reason_code,
+                                         base::StringPiece custom_reason = "") {
+    }
 
     // Resumes the deferred resource load. It is a no-op if the resource load is
     // not deferred or has already been canceled.
@@ -129,6 +136,9 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
     // RestartWithURLResetAndFlags() then the URL loader will be restarted
     // using a combined value of all of the |additional_load_flags|.
     virtual void RestartWithURLResetAndFlags(int additional_load_flags);
+
+    // Indicates a restart did occur due to a Critical-CH HTTP Header.
+    virtual void DidRestartForCriticalClientHint() {}
 
    protected:
     virtual ~Delegate();
@@ -209,8 +219,8 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
   // Called prior WillRedirectRequest() to allow throttles to restart the URL
   // load by calling delegate_->RestartWithFlags().
   //
-  // Having this method separate from WillProcessResponse() ensures that
-  // WillProcessResponse() is called at most once per redirect even in the
+  // Having this method separate from WillRedirectRequest() ensures that
+  // WillRedirectRequest() is called at most once per redirect even in the
   // presence of restarts.
   //
   // Note: restarting with the url reset triggers an internal redirect, which
@@ -238,7 +248,7 @@ class BLINK_COMMON_EXPORT URLLoaderThrottle {
  protected:
   URLLoaderThrottle();
 
-  raw_ptr<Delegate> delegate_ = nullptr;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_ = nullptr;
 };
 
 }  // namespace blink

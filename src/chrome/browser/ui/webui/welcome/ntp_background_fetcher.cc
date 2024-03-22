@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,8 +74,8 @@ NtpBackgroundFetcher::~NtpBackgroundFetcher() = default;
 void NtpBackgroundFetcher::OnFetchCompleted(
     std::unique_ptr<std::string> response_body) {
   if (response_body) {
-    std::move(callback_).Run(
-        base::RefCountedString::TakeString(response_body.release()));
+    std::move(callback_).Run(base::MakeRefCounted<base::RefCountedString>(
+        std::move(*response_body)));
   } else {
     std::move(callback_).Run(base::MakeRefCounted<base::RefCountedBytes>());
   }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ class WebSocketEncoder final {
   static std::unique_ptr<WebSocketEncoder> CreateClient(
       const std::string& response_extensions);
 
-  WebSocket::ParseResult DecodeFrame(const base::StringPiece& frame,
+  WebSocket::ParseResult DecodeFrame(base::StringPiece frame,
                                      int* bytes_consumed,
                                      std::string* output);
   void EncodeTextFrame(base::StringPiece frame,
@@ -47,6 +47,9 @@ class WebSocketEncoder final {
   void EncodePongFrame(base::StringPiece frame,
                        int masking_key,
                        std::string* output);
+  void EncodeCloseFrame(base::StringPiece frame,
+                        int masking_key,
+                        std::string* output);
 
   bool deflate_enabled() const { return !!deflater_; }
 

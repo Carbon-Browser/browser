@@ -1,26 +1,26 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/test/embedded_test_server/http_response.h"
 
-#include <algorithm>
 #include <iterator>
 #include <map>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/http/http_status_code.h"
 #include "net/test/embedded_test_server/http_request.h"
 
@@ -86,8 +86,7 @@ base::StringPairs BasicHttpResponse::BuildHeaders() const {
   headers.emplace_back("Content-Length", base::NumberToString(content_.size()));
   headers.emplace_back("Content-Type", content_type_);
 
-  std::copy(custom_headers_.begin(), custom_headers_.end(),
-            std::back_inserter(headers));
+  base::ranges::copy(custom_headers_, std::back_inserter(headers));
 
   return headers;
 }
@@ -105,7 +104,7 @@ DelayedHttpResponse::~DelayedHttpResponse() = default;
 
 void DelayedHttpResponse::SendResponse(
     base::WeakPtr<HttpResponseDelegate> delegate) {
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&HttpResponseDelegate::SendHeadersContentAndFinish,
                      delegate, code(), reason(), BuildHeaders(), content()),

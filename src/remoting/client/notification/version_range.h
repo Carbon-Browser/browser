@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <string>
 
+#include <optional>
 #include "base/version.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace remoting {
 
@@ -41,8 +41,8 @@ class VersionRange final {
   bool ContainsVersion(const std::string& version_string) const;
 
  private:
-  absl::optional<base::Version> min_version_;
-  absl::optional<base::Version> max_version_;
+  std::optional<base::Version> min_version_;
+  std::optional<base::Version> max_version_;
 
   bool is_min_version_inclusive_ = false;
   bool is_max_version_inclusive_ = false;

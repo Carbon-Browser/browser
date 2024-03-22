@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,8 @@ class MessagePortFuchsiaClient : public MessagePortFuchsia {
 
   // MessagePortFuchsia implementation.
   fidl::InterfaceHandle<::fuchsia::web::MessagePort> TakeClientHandle() final {
-    DCHECK(!receiver_);
-    DCHECK(port_.is_bound());
+    CHECK(!receiver_);
+    CHECK(port_.is_bound());
     return port_.Unbind();
   }
 
@@ -41,8 +41,8 @@ class MessagePortFuchsiaClient : public MessagePortFuchsia {
 
   // MessagePort implementation.
   void SetReceiver(cast_api_bindings::MessagePort::Receiver* receiver) final {
-    DCHECK(receiver);
-    DCHECK(!receiver_);
+    CHECK(receiver);
+    CHECK(!receiver_);
     receiver_ = receiver;
     port_.set_error_handler(
         [this](zx_status_t status) { MessagePortFuchsia::OnZxError(status); });
@@ -84,7 +84,8 @@ class MessagePortFuchsiaClient : public MessagePortFuchsia {
 
   // Helpers for reading and writing messages on the |port_|
   void OnMessageReady(fuchsia::web::WebMessage message) {
-    base::WeakPtr<MessagePortFuchsia> weak_this = weak_factory_.GetWeakPtr();
+    base::WeakPtr<MessagePortFuchsia> weak_this =
+        weak_factory_.GetMutableWeakPtr();
     auto status = ExtractAndHandleMessageFromFidl(std::move(message));
     if (!weak_this)
       return;
@@ -100,8 +101,8 @@ class MessagePortFuchsiaClient : public MessagePortFuchsia {
   }
 
   void ReadNextMessage() {
-    DCHECK(receiver_);
-    DCHECK(port_);
+    CHECK(receiver_);
+    CHECK(port_);
 
     port_->ReceiveMessage(
         fit::bind_member(this, &MessagePortFuchsiaClient::OnMessageReady));
@@ -139,8 +140,8 @@ class MessagePortFuchsiaServer : public MessagePortFuchsia,
 
   // MessagePort implementation.
   void SetReceiver(cast_api_bindings::MessagePort::Receiver* receiver) final {
-    DCHECK(receiver);
-    DCHECK(!receiver_);
+    CHECK(receiver);
+    CHECK(!receiver_);
     receiver_ = receiver;
     binding_.set_error_handler(
         [this](zx_status_t status) { MessagePortFuchsia::OnZxError(status); });
@@ -175,7 +176,8 @@ class MessagePortFuchsiaServer : public MessagePortFuchsia,
   // fuchsia::web::MessagePort implementation.
   void PostMessage(fuchsia::web::WebMessage message,
                    PostMessageCallback callback) final {
-    base::WeakPtr<MessagePortFuchsia> weak_this = weak_factory_.GetWeakPtr();
+    base::WeakPtr<MessagePortFuchsia> weak_this =
+        weak_factory_.GetMutableWeakPtr();
     auto status = ExtractAndHandleMessageFromFidl(std::move(message));
     if (!weak_this)
       return;
@@ -231,7 +233,7 @@ std::unique_ptr<MessagePort> MessagePortFuchsia::Create(
 }
 
 MessagePortFuchsia* MessagePortFuchsia::FromMessagePort(MessagePort* port) {
-  DCHECK(port);
+  CHECK(port);
   // This is safe because there is one MessagePort implementation per platform
   // and this is called internally to the implementation.
   return static_cast<MessagePortFuchsia*>(port);
@@ -251,7 +253,7 @@ fuchsia::web::WebMessage MessagePortFuchsia::CreateWebMessage(
       MessagePortFuchsia* port_fuchsia = FromMessagePort(port.get());
       PortType port_type = port_fuchsia->port_type_;
 
-      DCHECK_EQ(expected_port_type, port_type)
+      CHECK_EQ(expected_port_type, port_type)
           << "Only one implementation of MessagePortFuchsia can be transmitted "
              "in the same message.";
       if (expected_port_type != port_type) {
@@ -292,7 +294,7 @@ MessagePortFuchsia::~MessagePortFuchsia() = default;
 absl::optional<fuchsia::web::FrameError>
 MessagePortFuchsia::ExtractAndHandleMessageFromFidl(
     fuchsia::web::WebMessage message) {
-  DCHECK(receiver_);
+  CHECK(receiver_);
   if (!message.has_data()) {
     return fuchsia::web::FrameError::NO_DATA_IN_MESSAGE;
   }
@@ -332,7 +334,7 @@ void MessagePortFuchsia::OnZxError(zx_status_t status) {
 }
 
 void MessagePortFuchsia::ReportPipeError() {
-  DCHECK(receiver_);
+  CHECK(receiver_);
   receiver_->OnPipeError();
 }
 
@@ -344,7 +346,7 @@ bool MessagePortFuchsia::PostMessage(base::StringPiece message) {
 bool MessagePortFuchsia::PostMessageWithTransferables(
     base::StringPiece message,
     std::vector<std::unique_ptr<MessagePort>> ports) {
-  DCHECK(receiver_);
+  CHECK(receiver_);
   message_queue_.emplace_back(CreateWebMessage(message, std::move(ports)));
 
   // Start draining the queue if it was empty beforehand.

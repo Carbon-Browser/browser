@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "chrome/browser/ash/policy/core/device_attributes.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -32,13 +33,15 @@ class FakeDeviceAttributes : public DeviceAttributes {
 
   std::string GetSSOProfile() const override;
 
-  std::string GetRealm() const override;
-
   std::string GetDeviceAssetID() const override;
+
+  std::string GetDeviceSerialNumber() const override;
 
   std::string GetMachineName() const override;
 
   std::string GetDeviceAnnotatedLocation() const override;
+
+  absl::optional<std::string> GetDeviceHostname() const override;
 
   std::string GetDirectoryApiID() const override;
 
@@ -56,14 +59,16 @@ class FakeDeviceAttributes : public DeviceAttributes {
 
   void SetFakeSsoProfile(const std::string& sso_profile);
 
-  void SetFakeRealm(const std::string& realm);
-
   void SetFakeDeviceAssetId(const std::string& device_asset_id);
+
+  void SetFakeDeviceSerialNumber(const std::string& device_serial_number);
 
   void SetFakeMachineName(const std::string& machine_name);
 
-  void SetFakeDeviceAnotatedLocation(
-      const std::string& device_anotated_location);
+  void SetFakeDeviceAnnotatedLocation(
+      const std::string& device_annotated_location);
+
+  void SetFakeDeviceHostname(const absl::optional<std::string> device_hostname);
 
   void SetFakeDirectoryApiId(const std::string& directory_api_id);
 
@@ -78,10 +83,11 @@ class FakeDeviceAttributes : public DeviceAttributes {
   std::string fake_enterprise_enrollment_domain_;
   std::string fake_enterprise_domain_manager_;
   std::string fake_sso_profile_;
-  std::string fake_realm_;
   std::string fake_device_asset_id_;
+  std::string fake_device_serial_number_;
   std::string fake_machine_name_;
-  std::string fake_device_anotated_location_;
+  std::string fake_device_annotated_location_;
+  absl::optional<std::string> fake_device_hostname_;
   std::string fake_directory_api_id_;
   std::string fake_obfuscated_customer_id_;
   std::string fake_customer_logo_url_;

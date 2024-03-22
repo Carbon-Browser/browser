@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_MODULES_MEDIA_AUDIO_AUDIO_DEVICE_FACTORY_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_MODULES_MEDIA_AUDIO_AUDIO_DEVICE_FACTORY_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "media/audio/audio_sink_parameters.h"
 #include "media/audio/audio_source_parameters.h"
@@ -25,6 +25,7 @@ namespace blink {
 
 class AudioRendererMixerManager;
 class AudioRendererSinkCache;
+class WebLocalFrame;
 
 // A factory for creating AudioRendererSinks and AudioCapturerSources. There is
 // a global factory function that can be installed for the purposes of testing
@@ -43,7 +44,7 @@ class BLINK_MODULES_EXPORT AudioDeviceFactory {
   AudioDeviceFactory& operator=(const AudioDeviceFactory&) = delete;
 
   // Maps the source type to the audio latency it requires.
-  static media::AudioLatency::LatencyType GetSourceLatencyType(
+  static media::AudioLatency::Type GetSourceLatencyType(
       WebAudioDeviceSourceType source);
 
   // Creates an AudioRendererSink bound to an AudioOutputDevice.
@@ -65,15 +66,17 @@ class BLINK_MODULES_EXPORT AudioDeviceFactory {
                                  const media::AudioSinkParameters& params);
 
   // A helper to get device info in the absence of AudioOutputDevice.
+  // |device_id| identifies which device we are getting info from.
+  // |frame_token| is used to created a temporary sink to retrieve the info.
   virtual media::OutputDeviceInfo GetOutputDeviceInfo(
       const LocalFrameToken& frame_token,
-      const media::AudioSinkParameters& params);
+      const std::string& device_id);
 
   // Creates an AudioCapturerSource using the currently registered factory.
   // |frame_token| refers to the RenderFrame containing the entity
   // consuming the audio.
   virtual scoped_refptr<media::AudioCapturerSource> NewAudioCapturerSource(
-      const LocalFrameToken& frame_token,
+      WebLocalFrame* web_frame,
       const media::AudioSourceParameters& params);
 
  protected:

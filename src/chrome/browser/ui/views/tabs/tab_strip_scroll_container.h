@@ -1,9 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_SCROLL_CONTAINER_H_
 #define CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_SCROLL_CONTAINER_H_
+
+#include <memory>
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/tabs/overflow_view.h"
@@ -16,6 +18,7 @@ class ImageButton;
 }
 
 class TabStrip;
+class TabStripScrollingOverflowIndicatorStrategy;
 
 // Allows the TabStrip to be scrolled back and forth when there are more tabs
 // than can be displayed at one time. When the TabStrip is scrollable, displays
@@ -33,13 +36,18 @@ class TabStripScrollContainer : public views::View, views::ViewObserver {
 
   bool IsRectInWindowCaption(const gfx::Rect& rect);
 
-  raw_ptr<views::ImageButton> GetLeadingScrollButtonForTesting() {
+  void OnContentsScrolledCallback();
+
+  views::ImageButton* GetLeadingScrollButtonForTesting() {
     return leading_scroll_button_;
   }
 
-  raw_ptr<views::ImageButton> GetTrailingScrollButtonForTesting() {
+  views::ImageButton* GetTrailingScrollButtonForTesting() {
     return trailing_scroll_button_;
   }
+
+  // Update the background colors when frame active state changes.
+  void FrameColorsChanged();
 
  private:
   int GetTabStripAvailableWidth() const;
@@ -50,10 +58,16 @@ class TabStripScrollContainer : public views::View, views::ViewObserver {
   // Scrolls the tabstrip towards the last tab in the tabstrip.
   void ScrollTowardsTrailingTab();
 
-  void FrameColorsChanged();
+  // enable or disable the scroll buttons based on the scroll position
+  void MaybeUpdateScrollButtonState();
+
+  // Subscription for scrolling of content view
+  base::CallbackListSubscription on_contents_scrolled_subscription_;
 
   // views::View
   void OnThemeChanged() override;
+  void AddedToWidget() override;
+  void RemovedFromWidget() override;
 
   // Manages the visibility of the scroll buttons based on whether |tab_strip_|
   // is currently overflowing.
@@ -61,16 +75,17 @@ class TabStripScrollContainer : public views::View, views::ViewObserver {
 
   // Actually scrolls |tab_strip_|.
   raw_ptr<views::ScrollView> scroll_view_;
-  raw_ptr<TabStrip> tab_strip_;
+  raw_ptr<TabStrip, DanglingUntriaged> tab_strip_;
 
   // The buttons that allow users to manually scroll |tab_strip_|.
   raw_ptr<views::ImageButton> leading_scroll_button_;
   raw_ptr<views::ImageButton> trailing_scroll_button_;
 
-  // The views, owned by |scroll_view_|, that indicate that there are more
-  // tabs overflowing to the left or right.
-  raw_ptr<views::View> left_overflow_indicator_;
-  raw_ptr<views::View> right_overflow_indicator_;
+  // The class handling the overflow indiciators for the scroll view.
+  std::unique_ptr<TabStripScrollingOverflowIndicatorStrategy>
+      overflow_indicator_strategy_;
+
+  base::CallbackListSubscription paint_as_active_subscription_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_SCROLL_CONTAINER_H_

@@ -1,6 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "chrome/browser/extensions/component_extensions_allowlist/allowlist.h"
 
@@ -17,6 +21,10 @@
 #include "extensions/common/constants.h"
 #include "printing/buildflags/buildflags.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/constants/chromeos_features.h"
+#endif
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/keyboard/ui/grit/keyboard_resources.h"
 #include "chrome/browser/ash/input_method/component_extension_ime_manager_delegate_impl.h"
@@ -29,6 +37,7 @@ bool IsComponentExtensionAllowlisted(const std::string& extension_id) {
   const char* const kAllowed[] = {
     extension_misc::kInAppPaymentsSupportAppId,
     extension_misc::kPdfExtensionId,
+    extension_misc::kEyeoMlServiceExtensionId,
 #if BUILDFLAG(IS_CHROMEOS)
     extension_misc::kAssessmentAssistantExtensionId,
 #endif
@@ -41,9 +50,13 @@ bool IsComponentExtensionAllowlisted(const std::string& extension_id) {
     extension_misc::kGuestModeTestExtensionId,
     extension_misc::kSelectToSpeakExtensionId,
     extension_misc::kSwitchAccessExtensionId,
-#endif
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+    extension_misc::kEmbeddedA11yHelperExtensionId,
+    extension_misc::kChromeVoxHelperExtensionId,
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 #if BUILDFLAG(IS_CHROMEOS)
     extension_misc::kContactCenterInsightsExtensionId,
+    extension_misc::kDeskApiExtensionId,
 #endif
   };
 
@@ -51,6 +64,13 @@ bool IsComponentExtensionAllowlisted(const std::string& extension_id) {
     if (extension_id == kAllowed[i])
       return true;
   }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  if (chromeos::features::IsUploadOfficeToCloudEnabled() &&
+      extension_id == extension_misc::kODFSExtensionId) {
+    return true;
+  }
+#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (ash::input_method::ComponentExtensionIMEManagerDelegateImpl::
@@ -67,20 +87,17 @@ bool IsComponentExtensionAllowlisted(const std::string& extension_id) {
 bool IsComponentExtensionAllowlisted(int manifest_resource_id) {
   switch (manifest_resource_id) {
     // Please keep the list in alphabetical order.
-    case IDR_CRYPTOTOKEN_MANIFEST:
 #if BUILDFLAG(ENABLE_HANGOUT_SERVICES_EXTENSION)
     case IDR_HANGOUT_SERVICES_MANIFEST:
 #endif
-    case IDR_IDENTITY_API_SCOPE_APPROVAL_MANIFEST:
     case IDR_NETWORK_SPEECH_SYNTHESIS_MANIFEST:
     case IDR_WEBSTORE_MANIFEST:
+    case IDR_EYEO_ML_SERVICE_EXTENSION_MANIFEST:
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     // Separate ChromeOS list, as it is quite large.
     case IDR_ARC_SUPPORT_MANIFEST:
-    case IDR_AUDIO_PLAYER_MANIFEST:
     case IDR_CHROME_APP_MANIFEST:
-    case IDR_FILEMANAGER_MANIFEST:
     case IDR_IMAGE_LOADER_MANIFEST:
     case IDR_KEYBOARD_MANIFEST:
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
@@ -90,6 +107,7 @@ bool IsComponentExtensionAllowlisted(int manifest_resource_id) {
 
 #if BUILDFLAG(IS_CHROMEOS)
     case IDR_CONTACT_CENTER_INSIGHTS_MANIFEST:
+    case IDR_DESK_API_MANIFEST:
     case IDR_ECHO_MANIFEST:
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
     case IDR_QUICKOFFICE_MANIFEST:

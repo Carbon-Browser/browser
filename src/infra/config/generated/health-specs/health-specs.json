@@ -1,0 +1,1444 @@
+{
+  "_default_specs": [
+    {
+      "name": "Unhealthy",
+      "score": 5,
+      "thresholds": {
+        "build_time": {},
+        "fail_rate": {
+          "average": 0.2
+        },
+        "infra_fail_rate": {
+          "average": 0.05
+        },
+        "pending_time": {
+          "p50_mins": 20
+        }
+      }
+    }
+  ],
+  "specs": {
+    "ci": {
+      "Android Release (Nexus 5X)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Android WebView O (dbg)": {
+        "contact_team_email": "woa-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Android WebView P (dbg)": {
+        "contact_team_email": "woa-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Android arm Builder (dbg)": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Android arm64 Builder (dbg)": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Android arm64 Builder All Targets (dbg)": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Android x64 Builder All Targets (dbg)": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Android x86 Builder (dbg)": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Cast Android (dbg)": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Cast Linux": {
+        "contact_team_email": "chrome-linux-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Cast Linux Debug": {
+        "contact_team_email": "chrome-linux-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Linux x64 DEPS Builder": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Linux x64 DEPS Release (Intel UHD 630)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Linux x64 DEPS Release (NVIDIA)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Mac x64 DEPS Builder": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Mac x64 DEPS Release (AMD)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Mac x64 DEPS Release (Intel)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Win10 x64 DEPS Builder": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Win10 x64 DEPS Release (Intel)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Win10 x64 DEPS Release (NVIDIA)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Win10 x86 DEPS Builder": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Win10 x86 DEPS Release (Intel)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Dawn Win10 x86 DEPS Release (NVIDIA)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "GPU Linux Builder": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "GPU Mac Builder": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "GPU Win x64 Builder": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux ASan LSan Builder": {
+        "contact_team_email": "chrome-sanitizer-builder-owners@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux ASan LSan Tests (1)": {
+        "contact_team_email": "chrome-sanitizer-builder-owners@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux Builder": {
+        "contact_team_email": "chrome-linux-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux Builder (Wayland)": {
+        "contact_team_email": "chrome-linux-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux Builder (dbg)": {
+        "contact_team_email": "chrome-linux-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux Release (NVIDIA)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux TSan Builder": {
+        "contact_team_email": "chrome-sanitizer-builder-owners@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux TSan Tests": {
+        "contact_team_email": "chrome-sanitizer-builder-owners@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux Tests": {
+        "contact_team_email": "chrome-linux-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux Tests (Wayland)": {
+        "contact_team_email": "chrome-linux-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Linux Tests (dbg)(1)": {
+        "contact_team_email": "chrome-linux-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac Builder": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac Builder (dbg)": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac Release (Intel)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac Retina Release (AMD)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac10.15 Tests": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac11 Tests": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac12 Tests": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac13 Tests": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Mac13 Tests (dbg)": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Oreo Phone Tester": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Win Builder": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Win Builder (dbg)": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Win x64 Builder": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Win10 Tests x64": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "Win10 x64 Release (NVIDIA)": {
+        "contact_team_email": "chrome-gpu-infra@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-12-x64-rel": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-cronet-arm-dbg": {
+        "contact_team_email": "cronet-team@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-cronet-arm-rel": {
+        "contact_team_email": "cronet-team@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-cronet-mainline-clang-x86-dbg": {
+        "contact_team_email": "cronet-team@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-cronet-x64-dbg": {
+        "contact_team_email": "cronet-team@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-cronet-x86-dbg": {
+        "contact_team_email": "cronet-team@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-cronet-x86-dbg-10-tests": {
+        "contact_team_email": "cronet-team@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-official": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-oreo-x86-rel": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-pie-arm64-dbg": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "android-pie-arm64-rel": {
+        "contact_team_email": "clank-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "chromeos-amd64-generic-dbg": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-amd64-generic-lacros-dbg": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-amd64-generic-rel": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-amd64-generic-rel-gtest": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-amd64-generic-rel-renamed": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-amd64-generic-rel-tast": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-arm-generic-rel": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-arm64-generic-rel": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-jacuzzi-rel": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "chromeos-octopus-rel": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "fuchsia-arm64-cast-receiver-rel": {
+        "contact_team_email": "chrome-fuchsia-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "fuchsia-arm64-rel": {
+        "contact_team_email": "chrome-fuchsia-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "fuchsia-official": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "fuchsia-x64-cast-receiver-rel": {
+        "contact_team_email": "chrome-fuchsia-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "fuchsia-x64-rel": {
+        "contact_team_email": "chrome-fuchsia-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "ios-simulator": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "ios-simulator-full-configs": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "lacros-amd64-generic-rel": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "lacros-amd64-generic-rel-non-skylab": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "lacros-arm-generic-rel": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "lacros-arm-generic-rel-skylab": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "lacros-arm64-generic-rel": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "lacros-arm64-generic-rel-skylab": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "linux-chromeos-dbg": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 150
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "linux-chromeos-rel": {
+        "contact_team_email": "chromeos-sw-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "linux-lacros-builder-rel": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "linux-lacros-dbg": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "linux-lacros-tester-rel": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 60
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "linux-official": {
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "build_time": {
+                "p50_mins": 240
+              },
+              "fail_rate": {
+                "average": 0.2
+              },
+              "infra_fail_rate": {
+                "average": 0.05
+              },
+              "pending_time": {
+                "p50_mins": 20
+              }
+            }
+          }
+        ]
+      },
+      "mac-arm64-rel": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "mac-official": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "mac11-arm64-rel-tests": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "mac12-arm64-rel-tests": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "mac13-arm64-rel-tests": {
+        "contact_team_email": "bling-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "win-official": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      },
+      "win32-official": {
+        "contact_team_email": "chrome-desktop-engprod@google.com",
+        "problem_specs": [
+          {
+            "name": "Unhealthy",
+            "score": 5,
+            "thresholds": {
+              "_default": "_default"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

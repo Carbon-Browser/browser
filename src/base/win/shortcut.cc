@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <objbase.h>
 #include <propkey.h>
-#include <shellapi.h>
 #include <shlobj.h>
 #include <wrl/client.h>
 
+#include "base/files/block_tests_writing_to_special_dirs.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
@@ -73,6 +73,9 @@ bool CreateOrUpdateShortcutLink(const FilePath& shortcut_path,
                                 ShortcutOperation operation) {
   ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
 
+  if (!BlockTestsWritingToSpecialDirs::CanWriteToPath(shortcut_path)) {
+    return false;
+  }
   // Make sure the parent directories exist when creating the shortcut.
   if (operation == ShortcutOperation::kCreateAlways &&
       !base::CreateDirectory(shortcut_path.DirName())) {
@@ -201,7 +204,7 @@ bool CreateOrUpdateShortcutLink(const FilePath& shortcut_path,
     return false;
 
   SHChangeNotify(shortcut_existed ? SHCNE_UPDATEITEM : SHCNE_CREATE,
-                 SHCNF_PATH | SHCNF_FLUSH, shortcut_path.value().c_str(),
+                 SHCNF_PATH | SHCNF_FLUSHNOWAIT, shortcut_path.value().c_str(),
                  nullptr);
 
   return true;
@@ -362,28 +365,6 @@ bool ResolveShortcut(const FilePath& shortcut_path,
   if (args)
     *args = properties.arguments;
   return true;
-}
-
-bool CanPinShortcutToTaskbar() {
-  // "Pin to taskbar" stopped being supported in Windows 10.
-  return GetVersion() < Version::WIN10;
-}
-
-bool PinShortcutToTaskbar(const FilePath& shortcut) {
-  ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
-  DCHECK(CanPinShortcutToTaskbar());
-
-  intptr_t result = reinterpret_cast<intptr_t>(ShellExecute(
-      nullptr, L"taskbarpin", shortcut.value().c_str(), nullptr, nullptr, 0));
-  return result > 32;
-}
-
-bool UnpinShortcutFromTaskbar(const FilePath& shortcut) {
-  ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
-
-  intptr_t result = reinterpret_cast<intptr_t>(ShellExecute(
-      nullptr, L"taskbarunpin", shortcut.value().c_str(), nullptr, nullptr, 0));
-  return result > 32;
 }
 
 }  // namespace win

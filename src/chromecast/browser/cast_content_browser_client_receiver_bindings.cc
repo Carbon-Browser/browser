@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/sequence_local_storage_slot.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chromecast/browser/application_media_info_manager.h"
 #include "chromecast/browser/cast_browser_interface_binders.h"
@@ -38,14 +38,6 @@
 #if !BUILDFLAG(IS_ANDROID)
 #include "chromecast/browser/memory_pressure_controller_impl.h"
 #endif  // !BUILDFLAG(IS_ANDROID)
-
-#if BUILDFLAG(ENABLE_CHROMECAST_EXTENSIONS)
-#include "content/public/browser/browser_task_traits.h"
-#include "content/public/browser/browser_thread.h"
-#include "extensions/browser/event_router.h"
-#include "extensions/browser/guest_view/extensions_guest_view.h"
-#include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
-#endif
 
 namespace chromecast {
 namespace shell {
@@ -85,39 +77,28 @@ void CastContentBrowserClient::ExposeInterfacesToRenderer(
     service_manager::BinderRegistry* registry,
     blink::AssociatedInterfaceRegistry* associated_registry,
     content::RenderProcessHost* render_process_host) {
-  registry->AddInterface(
+  registry->AddInterface<media::mojom::MediaCaps>(
       base::BindRepeating(
           &media::MediaCapsImpl::AddReceiver,
           base::Unretained(cast_browser_main_parts_->media_caps())),
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 
-  registry->AddInterface(
+  registry->AddInterface<metrics::mojom::MetricsHelper>(
       base::BindRepeating(
           &metrics::MetricsHelperImpl::AddReceiver,
           base::Unretained(cast_browser_main_parts_->metrics_helper())),
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_FUCHSIA)
   if (!memory_pressure_controller_) {
     memory_pressure_controller_.reset(new MemoryPressureControllerImpl());
   }
 
-  registry->AddInterface(
+  registry->AddInterface<mojom::MemoryPressureController>(
       base::BindRepeating(&MemoryPressureControllerImpl::AddReceiver,
                           base::Unretained(memory_pressure_controller_.get())),
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_FUCHSIA)
-
-#if BUILDFLAG(ENABLE_CHROMECAST_EXTENSIONS)
-  associated_registry->AddInterface(base::BindRepeating(
-      &extensions::EventRouter::BindForRenderer, render_process_host->GetID()));
-  associated_registry->AddInterface(
-      base::BindRepeating(&extensions::ExtensionsGuestView::CreateForComponents,
-                          render_process_host->GetID()));
-  associated_registry->AddInterface(
-      base::BindRepeating(&extensions::ExtensionsGuestView::CreateForExtensions,
-                          render_process_host->GetID()));
-#endif
 }
 
 void CastContentBrowserClient::BindMediaServiceReceiver(
@@ -179,7 +160,6 @@ void CastContentBrowserClient::CreateMediaService(
       base::BindRepeating(&CastContentBrowserClient::CreateCdmFactory,
                           base::Unretained(this)),
       GetVideoModeSwitcher(), GetVideoResolutionPolicy(),
-      browser_main_parts()->media_connector(),
       base::BindRepeating(&CastContentBrowserClient::IsBufferingEnabled,
                           base::Unretained(this)));
   mojo_media_client->SetVideoGeometrySetterService(
@@ -197,7 +177,8 @@ void CastContentBrowserClient::CreateVideoGeometrySetterServiceOnMediaThread() {
       std::unique_ptr<media::VideoGeometrySetterService,
                       base::OnTaskRunnerDeleter>(
           new media::VideoGeometrySetterService,
-          base::OnTaskRunnerDeleter(base::ThreadTaskRunnerHandle::Get()));
+          base::OnTaskRunnerDeleter(
+              base::SingleThreadTaskRunner::GetCurrentDefault()));
 }
 
 void CastContentBrowserClient::BindVideoGeometrySetterServiceOnMediaThread(

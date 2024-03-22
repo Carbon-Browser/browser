@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,11 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "media/capture/mojom/image_capture_types.h"
 #include "media/capture/video/android/capture_jni_headers/VideoCapture_jni.h"
@@ -64,8 +65,7 @@ PhotoCapabilities::AndroidMeteringMode ToAndroidMeteringMode(
     case mojom::MeteringMode::NONE:
       return PhotoCapabilities::AndroidMeteringMode::NONE;
   }
-  NOTREACHED();
-  return PhotoCapabilities::AndroidMeteringMode::NOT_SET;
+  NOTREACHED_NORETURN();
 }
 
 mojom::FillLightMode ToMojomFillLightMode(
@@ -81,8 +81,7 @@ mojom::FillLightMode ToMojomFillLightMode(
     case PhotoCapabilities::AndroidFillLightMode::NUM_ENTRIES:
       NOTREACHED();
   }
-  NOTREACHED();
-  return mojom::FillLightMode::OFF;
+  NOTREACHED_NORETURN();
 }
 
 PhotoCapabilities::AndroidFillLightMode ToAndroidFillLightMode(
@@ -95,15 +94,14 @@ PhotoCapabilities::AndroidFillLightMode ToAndroidFillLightMode(
     case mojom::FillLightMode::OFF:
       return PhotoCapabilities::AndroidFillLightMode::OFF;
   }
-  NOTREACHED();
-  return PhotoCapabilities::AndroidFillLightMode::NOT_SET;
+  NOTREACHED_NORETURN();
 }
 
 }  // anonymous namespace
 
 VideoCaptureDeviceAndroid::VideoCaptureDeviceAndroid(
     const VideoCaptureDeviceDescriptor& device_descriptor)
-    : main_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       device_descriptor_(device_descriptor) {}
 
 VideoCaptureDeviceAndroid::~VideoCaptureDeviceAndroid() {
@@ -391,11 +389,9 @@ void VideoCaptureDeviceAndroid::OnGetPhotoCapabilitiesReply(
   GetPhotoStateCallback* const cb =
       reinterpret_cast<GetPhotoStateCallback*>(callback_id);
   // Search for the pointer |cb| in the list of |take_photo_callbacks_|.
-  const auto reference_it = std::find_if(
-      get_photo_state_callbacks_.begin(), get_photo_state_callbacks_.end(),
-      [cb](const std::unique_ptr<GetPhotoStateCallback>& callback) {
-        return callback.get() == cb;
-      });
+  const auto reference_it =
+      base::ranges::find(get_photo_state_callbacks_, cb,
+                         &std::unique_ptr<GetPhotoStateCallback>::get);
   if (reference_it == get_photo_state_callbacks_.end()) {
     NOTREACHED() << "|callback_id| not found.";
     return;
@@ -557,11 +553,8 @@ void VideoCaptureDeviceAndroid::OnPhotoTaken(
   TakePhotoCallback* const cb =
       reinterpret_cast<TakePhotoCallback*>(callback_id);
   // Search for the pointer |cb| in the list of |take_photo_callbacks_|.
-  const auto reference_it =
-      std::find_if(take_photo_callbacks_.begin(), take_photo_callbacks_.end(),
-                   [cb](const std::unique_ptr<TakePhotoCallback>& callback) {
-                     return callback.get() == cb;
-                   });
+  const auto reference_it = base::ranges::find(
+      take_photo_callbacks_, cb, &std::unique_ptr<TakePhotoCallback>::get);
   if (reference_it == take_photo_callbacks_.end()) {
     NOTREACHED() << "|callback_id| not found.";
     return;

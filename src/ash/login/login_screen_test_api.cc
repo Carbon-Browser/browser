@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include "ash/login/ui/arrow_button_view.h"
 #include "ash/login/ui/kiosk_app_default_message.h"
-#include "ash/login/ui/lock_contents_view.h"
+#include "ash/login/ui/lock_contents_view_test_api.h"
 #include "ash/login/ui/lock_screen.h"
 #include "ash/login/ui/login_auth_user_view.h"
 #include "ash/login/ui/login_big_user_view.h"
@@ -27,9 +27,10 @@
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_widget.h"
 #include "ash/shell.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
+#include "components/account_id/account_id.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/test/ui_controls.h"
 #include "ui/compositor/layer.h"
@@ -51,8 +52,9 @@ std::unique_ptr<ui::test::EventGenerator> MakeAshEventGenerator() {
 }
 
 LoginShelfView* GetLoginShelfView() {
-  if (!Shell::HasInstance())
+  if (!Shell::HasInstance()) {
     return nullptr;
+  }
 
   return Shelf::ForWindow(Shell::GetPrimaryRootWindow())
       ->shelf_widget()
@@ -61,8 +63,9 @@ LoginShelfView* GetLoginShelfView() {
 
 bool IsLoginShelfViewButtonShown(int button_view_id) {
   LoginShelfView* shelf_view = GetLoginShelfView();
-  if (!shelf_view)
+  if (!shelf_view) {
     return false;
+  }
 
   views::View* button_view = shelf_view->GetViewByID(button_view_id);
 
@@ -71,27 +74,29 @@ bool IsLoginShelfViewButtonShown(int button_view_id) {
 
 views::View* GetShutDownButton() {
   LoginShelfView* shelf_view = GetLoginShelfView();
-  if (!shelf_view)
+  if (!shelf_view) {
     return nullptr;
+  }
 
   return shelf_view->GetViewByID(LoginShelfView::kShutdown);
 }
 
 LoginBigUserView* GetBigUserView(const AccountId& account_id) {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   return lock_contents_test.FindBigUser(account_id);
 }
 
 bool SimulateButtonPressedForTesting(LoginShelfView::ButtonId button_id) {
   LoginShelfView* shelf_view = GetLoginShelfView();
-  if (!shelf_view)
+  if (!shelf_view) {
     return false;
+  }
 
   views::View* button = shelf_view->GetViewByID(button_id);
-  if (!button->GetEnabled())
+  if (!button->GetEnabled()) {
     return false;
+  }
 
   views::test::ButtonTestApi(views::Button::AsButton(button))
       .NotifyClick(ui::MouseEvent(ui::ET_MOUSE_PRESSED, gfx::PointF(),
@@ -121,8 +126,9 @@ class ShelfTestUiUpdateDelegate : public LoginShelfView::TestUiUpdateDelegate {
       delete;
 
   ~ShelfTestUiUpdateDelegate() override {
-    for (PendingCallback& entry : heap_)
+    for (PendingCallback& entry : heap_) {
       std::move(entry.callback).Run();
+    }
   }
 
   // Returns UI update count.
@@ -180,8 +186,9 @@ bool LoginScreenTestApi::IsLockShown() {
 // static
 void LoginScreenTestApi::AddOnLockScreenShownCallback(
     base::OnceClosure on_lock_screen_shown) {
-  if (!LockScreen::HasInstance())
+  if (!LockScreen::HasInstance()) {
     FAIL() << "No lock screen";
+  }
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
   lock_screen_test.AddOnShownCallback(std::move(on_lock_screen_shown));
 }
@@ -210,8 +217,7 @@ bool LoginScreenTestApi::IsAppsButtonShown() {
 // static
 bool LoginScreenTestApi::IsAuthErrorBubbleShown() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   return lock_contents_test.auth_error_bubble()->GetVisible();
 }
 
@@ -248,8 +254,7 @@ bool LoginScreenTestApi::IsOsInstallButtonShown() {
 // static
 bool LoginScreenTestApi::IsUserAddingScreenIndicatorShown() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   views::View* indicator = lock_contents_test.user_adding_screen_indicator();
   return indicator && indicator->GetVisible();
 }
@@ -257,21 +262,20 @@ bool LoginScreenTestApi::IsUserAddingScreenIndicatorShown() {
 // static
 bool LoginScreenTestApi::IsWarningBubbleShown() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   return lock_contents_test.warning_banner_bubble()->GetVisible();
 }
 
 // static
 bool LoginScreenTestApi::IsSystemInfoShown() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   // Check if all views in the hierarchy are visible.
   for (views::View* view = lock_contents_test.system_info(); view != nullptr;
        view = view->parent()) {
-    if (!view->GetVisible())
+    if (!view->GetVisible()) {
       return false;
+    }
   }
   return true;
 }
@@ -279,7 +283,7 @@ bool LoginScreenTestApi::IsSystemInfoShown() {
 // static
 bool LoginScreenTestApi::IsKioskDefaultMessageShown() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi test_api(lock_screen_test.contents_view());
+  LockContentsViewTestApi test_api(lock_screen_test.contents_view());
   return test_api.kiosk_default_message() &&
          test_api.kiosk_default_message()->GetVisible();
 }
@@ -345,8 +349,24 @@ bool LoginScreenTestApi::IsManagedIconShown(const AccountId& account_id) {
     return false;
   }
   LoginUserView::TestApi user_test(big_user_view->GetUserView());
-  auto* enterprise_icon = user_test.enterprise_icon();
-  return enterprise_icon->GetVisible();
+  auto* enterprise_icon_container = user_test.enterprise_icon_container();
+  return enterprise_icon_container->GetVisible();
+}
+
+// static
+bool LoginScreenTestApi::ShowRemoveAccountDialog(const AccountId& account_id) {
+  LoginBigUserView* big_user_view = GetBigUserView(account_id);
+  if (!big_user_view) {
+    ADD_FAILURE() << "Could not find user " << account_id.Serialize();
+    return false;
+  }
+  LoginAuthUserView::TestApi auth_test(big_user_view->auth_user());
+  if (auth_test.remove_account_dialog()) {
+    ADD_FAILURE() << "Dialog already shown for user " << account_id.Serialize();
+    return false;
+  }
+  auth_test.ShowDialog();
+  return true;
 }
 
 // static
@@ -357,11 +377,18 @@ bool LoginScreenTestApi::IsManagedMessageInDialogShown(
     ADD_FAILURE() << "Could not find user " << account_id.Serialize();
     return false;
   }
-  LoginUserView::TestApi user_test(big_user_view->GetUserView());
+  LoginAuthUserView::TestApi auth_test(big_user_view->auth_user());
+  if (!auth_test.remove_account_dialog()) {
+    ADD_FAILURE() << "Could not find dialog for user "
+                  << account_id.Serialize();
+    return false;
+  }
   LoginRemoveAccountDialog::TestApi user_dialog_test(
-      user_test.remove_account_dialog());
-  auto* managed_user_data = user_dialog_test.managed_user_data();
-  return managed_user_data && managed_user_data->GetVisible();
+      auth_test.remove_account_dialog());
+  auto* management_disclosure_label =
+      user_dialog_test.management_disclosure_label();
+  return management_disclosure_label &&
+         management_disclosure_label->GetVisible();
 }
 
 // static
@@ -388,8 +415,9 @@ void LoginScreenTestApi::SubmitPassword(const AccountId& account_id,
   ASSERT_TRUE(big_user_view);
   ASSERT_TRUE(big_user_view->IsAuthEnabled());
   LoginAuthUserView::TestApi auth_test(big_user_view->auth_user());
-  if (check_if_submittable)
+  if (check_if_submittable) {
     ASSERT_TRUE(auth_test.HasAuthMethod(LoginAuthUserView::AUTH_PASSWORD));
+  }
   LoginPasswordView::TestApi password_test(auth_test.password_view());
   ASSERT_EQ(account_id,
             auth_test.user_view()->current_user().basic_user_info.account_id);
@@ -441,13 +469,16 @@ bool LoginScreenTestApi::IsChallengeResponseButtonClickable(
 // static
 void LoginScreenTestApi::ClickChallengeResponseButton(
     const AccountId& account_id) {
-  if (!FocusUser(account_id))
+  if (!FocusUser(account_id)) {
     FAIL() << "Could not focus on user " << account_id.Serialize();
+  }
   LoginBigUserView* big_user_view = GetBigUserView(account_id);
-  if (!big_user_view)
+  if (!big_user_view) {
     FAIL() << "Could not find user " << account_id.Serialize();
-  if (!big_user_view->IsAuthEnabled())
+  }
+  if (!big_user_view->IsAuthEnabled()) {
     FAIL() << "Auth is not enabled for user " << account_id.Serialize();
+  }
   LoginAuthUserView::TestApi auth_test(big_user_view->auth_user());
   if (!auth_test.HasAuthMethod(LoginAuthUserView::AUTH_CHALLENGE_RESPONSE)) {
     FAIL() << "Challenge-response auth is not enabled for user "
@@ -473,6 +504,12 @@ int64_t LoginScreenTestApi::GetUiUpdateCount() {
 bool LoginScreenTestApi::LaunchApp(const std::string& app_id) {
   LoginShelfView* view = GetLoginShelfView();
   return view && view->LaunchAppForTesting(app_id);
+}
+
+// static
+bool LoginScreenTestApi::LaunchApp(const AccountId& account_id) {
+  LoginShelfView* view = GetLoginShelfView();
+  return view && view->LaunchAppForTesting(account_id);
 }
 
 // static
@@ -515,15 +552,16 @@ bool LoginScreenTestApi::PressAccelerator(const ui::Accelerator& accelerator) {
 // static
 bool LoginScreenTestApi::SendAcceleratorNatively(
     const ui::Accelerator& accelerator) {
-  gfx::NativeWindow login_window = nullptr;
+  gfx::NativeWindow login_window = gfx::NativeWindow();
   if (LockScreen::HasInstance()) {
     login_window = LockScreen::Get()->widget()->GetNativeWindow();
   } else {
     login_window =
         LoginScreen::Get()->GetLoginWindowWidget()->GetNativeWindow();
   }
-  if (!login_window)
+  if (!login_window) {
     return false;
+  }
   return ui_controls::SendKeyPress(
       login_window, accelerator.key_code(), accelerator.IsCtrlDown(),
       accelerator.IsShiftDown(), accelerator.IsAltDown(),
@@ -546,8 +584,7 @@ bool LoginScreenTestApi::WaitForUiUpdate(int64_t previous_update_count) {
 
 int LoginScreenTestApi::GetUsersCount() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   return lock_contents_test.users().size();
 }
 
@@ -558,7 +595,7 @@ bool LoginScreenTestApi::FocusKioskDefaultMessage() {
     return false;
   }
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi test_api(lock_screen_test.contents_view());
+  LockContentsViewTestApi test_api(lock_screen_test.contents_view());
   auto event_generator = MakeAshEventGenerator();
   event_generator->MoveMouseTo(
       test_api.kiosk_default_message()->GetBoundsInScreen().CenterPoint());
@@ -581,11 +618,11 @@ bool LoginScreenTestApi::FocusUser(const AccountId& account_id) {
 // static
 bool LoginScreenTestApi::ExpandPublicSessionPod(const AccountId& account_id) {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginBigUserView* big_user_view = GetBigUserView(account_id);
-  if (!big_user_view)
+  if (!big_user_view) {
     return false;
+  }
   LoginPublicAccountUserView::TestApi public_account_test(
       big_user_view->public_account());
   if (!public_account_test.arrow_button()->GetVisible()) {
@@ -602,12 +639,12 @@ bool LoginScreenTestApi::ExpandPublicSessionPod(const AccountId& account_id) {
 // static
 bool LoginScreenTestApi::HidePublicSessionExpandedPod() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView* expanded_view =
       lock_contents_test.expanded_view();
-  if (!expanded_view || !expanded_view->GetVisible())
+  if (!expanded_view || !expanded_view->GetVisible()) {
     return false;
+  }
   expanded_view->Hide();
   return true;
 }
@@ -615,8 +652,7 @@ bool LoginScreenTestApi::HidePublicSessionExpandedPod() {
 // static
 bool LoginScreenTestApi::IsPublicSessionExpanded() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView* expanded_view =
       lock_contents_test.expanded_view();
   return expanded_view && expanded_view->GetVisible();
@@ -625,8 +661,7 @@ bool LoginScreenTestApi::IsPublicSessionExpanded() {
 // static
 bool LoginScreenTestApi::IsExpandedPublicSessionAdvanced() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   return expanded_test.advanced_view()->GetVisible();
@@ -634,8 +669,7 @@ bool LoginScreenTestApi::IsExpandedPublicSessionAdvanced() {
 
 bool LoginScreenTestApi::IsPublicSessionWarningShown() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   return expanded_test.monitoring_warning_icon() &&
@@ -645,8 +679,7 @@ bool LoginScreenTestApi::IsPublicSessionWarningShown() {
 // static
 void LoginScreenTestApi::ClickPublicExpandedAdvancedViewButton() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   views::test::ButtonTestApi(
@@ -658,8 +691,7 @@ void LoginScreenTestApi::ClickPublicExpandedAdvancedViewButton() {
 // static
 void LoginScreenTestApi::ClickPublicExpandedSubmitButton() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   views::test::ButtonTestApi(
@@ -671,8 +703,7 @@ void LoginScreenTestApi::ClickPublicExpandedSubmitButton() {
 // static
 void LoginScreenTestApi::SetPublicSessionLocale(const std::string& locale) {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   ASSERT_TRUE(expanded_test.SelectLanguage(locale));
@@ -681,8 +712,7 @@ void LoginScreenTestApi::SetPublicSessionLocale(const std::string& locale) {
 // static
 void LoginScreenTestApi::SetPublicSessionKeyboard(const std::string& ime_id) {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   ASSERT_TRUE(expanded_test.SelectKeyboard(ime_id))
@@ -707,8 +737,7 @@ std::vector<ash::LocaleItem> LoginScreenTestApi::GetPublicSessionLocales(
 std::vector<ash::LocaleItem>
 LoginScreenTestApi::GetExpandedPublicSessionLocales() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   return expanded_test.GetLocales();
@@ -717,8 +746,7 @@ LoginScreenTestApi::GetExpandedPublicSessionLocales() {
 // static
 std::string LoginScreenTestApi::GetExpandedPublicSessionSelectedLocale() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   return expanded_test.selected_language_item_value();
@@ -727,8 +755,7 @@ std::string LoginScreenTestApi::GetExpandedPublicSessionSelectedLocale() {
 // static
 std::string LoginScreenTestApi::GetExpandedPublicSessionSelectedKeyboard() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginExpandedPublicAccountView::TestApi expanded_test(
       lock_contents_test.expanded_view());
   return expanded_test.selected_keyboard_item_value();
@@ -737,24 +764,21 @@ std::string LoginScreenTestApi::GetExpandedPublicSessionSelectedKeyboard() {
 // static
 AccountId LoginScreenTestApi::GetFocusedUser() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   return lock_contents_test.focused_user();
 }
 
 // static
 bool LoginScreenTestApi::RemoveUser(const AccountId& account_id) {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   return lock_contents_test.RemoveUser(account_id);
 }
 
 // static
 std::string LoginScreenTestApi::GetDisplayedName(const AccountId& account_id) {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   LoginUserView* user_view = lock_contents_test.FindUserView(account_id);
   if (!user_view) {
     ADD_FAILURE() << "Could not find user " << account_id.Serialize();
@@ -785,24 +809,29 @@ std::u16string LoginScreenTestApi::GetManagementDisclosureText(
     ADD_FAILURE() << "Could not find user " << account_id.Serialize();
     return std::u16string();
   }
-  LoginUserView::TestApi user_test(big_user_view->GetUserView());
-  LoginRemoveAccountDialog::TestApi dialog(user_test.remove_account_dialog());
+  LoginAuthUserView::TestApi auth_test(big_user_view->auth_user());
+  if (!auth_test.remove_account_dialog()) {
+    ADD_FAILURE() << "Could not find dialog for user "
+                  << account_id.Serialize();
+    return std::u16string();
+  }
+  LoginRemoveAccountDialog::TestApi dialog(auth_test.remove_account_dialog());
   return dialog.management_disclosure_label()->GetText();
 }
 
 // static
 bool LoginScreenTestApi::IsOobeDialogVisible() {
   LockScreen::TestApi lock_screen_test(LockScreen::Get());
-  LockContentsView::TestApi lock_contents_test(
-      lock_screen_test.contents_view());
+  LockContentsViewTestApi lock_contents_test(lock_screen_test.contents_view());
   return lock_contents_test.IsOobeDialogVisible();
 }
 
 // static
 std::u16string LoginScreenTestApi::GetShutDownButtonLabel() {
   views::View* button = GetShutDownButton();
-  if (!button)
+  if (!button) {
     return std::u16string();
+  }
 
   return static_cast<views::LabelButton*>(button)->GetText();
 }
@@ -810,8 +839,9 @@ std::u16string LoginScreenTestApi::GetShutDownButtonLabel() {
 // static
 gfx::Rect LoginScreenTestApi::GetShutDownButtonTargetBounds() {
   views::View* button = GetShutDownButton();
-  if (!button)
+  if (!button) {
     return gfx::Rect();
+  }
 
   return button->layer()->GetTargetBounds();
 }
@@ -819,8 +849,9 @@ gfx::Rect LoginScreenTestApi::GetShutDownButtonTargetBounds() {
 // static
 gfx::Rect LoginScreenTestApi::GetShutDownButtonMirroredBounds() {
   views::View* button = GetShutDownButton();
-  if (!button)
+  if (!button) {
     return gfx::Rect();
+  }
 
   return button->GetMirroredBounds();
 }
@@ -844,8 +875,9 @@ std::u16string LoginScreenTestApi::GetPinRequestWidgetTitle() {
 
 // static
 void LoginScreenTestApi::SubmitPinRequestWidget(const std::string& pin) {
-  if (!PinRequestWidget::Get())
+  if (!PinRequestWidget::Get()) {
     FAIL() << "No PIN request widget is shown";
+  }
   auto event_generator = MakeAshEventGenerator();
   PinRequestWidget::TestApi pin_widget_test(PinRequestWidget::Get());
   PinRequestView::TestApi pin_test(pin_widget_test.pin_request_view());
@@ -865,8 +897,9 @@ void LoginScreenTestApi::SubmitPinRequestWidget(const std::string& pin) {
 
 // static
 void LoginScreenTestApi::CancelPinRequestWidget() {
-  if (!PinRequestWidget::Get())
+  if (!PinRequestWidget::Get()) {
     FAIL() << "No PIN request widget is shown";
+  }
   auto event_generator = MakeAshEventGenerator();
   PinRequestWidget::TestApi pin_widget_test(PinRequestWidget::Get());
   PinRequestView::TestApi pin_view_test(pin_widget_test.pin_request_view());

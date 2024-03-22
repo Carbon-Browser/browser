@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <string>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/ash/net/system_proxy_manager.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chromeos/ash/components/network/network_event_log.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 
 namespace {
 const char kSystemProxyService[] = "system-proxy-service";
@@ -47,22 +47,24 @@ void SystemProxyHandler::OnSystemProxySettingsPolicyChanged() {
   if (!proxy_settings)
     return;
 
+  const base::Value::Dict& proxy_settings_dict = proxy_settings->GetDict();
   bool system_proxy_enabled =
-      proxy_settings->FindBoolKey(ash::kSystemProxySettingsKeyEnabled)
+      proxy_settings_dict.FindBool(ash::kSystemProxySettingsKeyEnabled)
           .value_or(false);
-  const std::string* username = proxy_settings->FindStringKey(
+  const std::string* username = proxy_settings_dict.FindString(
       ash::kSystemProxySettingsKeySystemServicesUsername);
 
-  const std::string* password = proxy_settings->FindStringKey(
+  const std::string* password = proxy_settings_dict.FindString(
       ash::kSystemProxySettingsKeySystemServicesPassword);
 
-  const base::Value* auth_schemes =
-      proxy_settings->FindListKey(ash::kSystemProxySettingsKeyAuthSchemes);
+  const base::Value::List* auth_schemes =
+      proxy_settings_dict.FindList(ash::kSystemProxySettingsKeyAuthSchemes);
 
   std::vector<std::string> system_services_auth_schemes;
   if (auth_schemes) {
-    for (const auto& auth_scheme : auth_schemes->GetListDeprecated())
+    for (const auto& auth_scheme : *auth_schemes) {
       system_services_auth_schemes.push_back(auth_scheme.GetString());
+    }
   }
 
   std::string system_services_username;

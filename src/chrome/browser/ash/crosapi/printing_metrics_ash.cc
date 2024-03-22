@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/printing_metrics_ash.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "chrome/browser/ash/crosapi/print_job_info_idl_conversions.h"
 #include "chrome/browser/ash/printing/history/print_job_history_service.h"
@@ -29,6 +29,11 @@ PrintingMetricsForProfileAsh::PrintingMetricsForProfileAsh(
 
 PrintingMetricsForProfileAsh::~PrintingMetricsForProfileAsh() = default;
 
+void PrintingMetricsForProfileAsh::DeprecatedGetPrintJobs(
+    DeprecatedGetPrintJobsCallback callback) {
+  NOTIMPLEMENTED();
+}
+
 void PrintingMetricsForProfileAsh::GetPrintJobs(GetPrintJobsCallback callback) {
   ash::PrintJobHistoryServiceFactory::GetForBrowserContext(profile_)
       ->GetPrintJobs(
@@ -40,7 +45,7 @@ void PrintingMetricsForProfileAsh::OnPrintJobFinished(
     const ash::printing::proto::PrintJobInfo& print_job_info) {
   auto dict_value =
       extensions::PrintJobInfoProtoToIdl(print_job_info).ToValue();
-  observer_->OnPrintJobFinished(std::move(*dict_value));
+  observer_->OnPrintJobFinished(base::Value(std::move(dict_value)));
 }
 
 void PrintingMetricsForProfileAsh::OnShutdown() {
@@ -48,6 +53,7 @@ void PrintingMetricsForProfileAsh::OnShutdown() {
   // service since we don't declare any factory dependencies here. Therefore
   // it's safer to reset the observer at this point.
   print_job_history_service_observation_.Reset();
+  profile_ = nullptr;
 }
 
 void PrintingMetricsForProfileAsh::OnPrintJobsRetrieved(
@@ -59,11 +65,11 @@ void PrintingMetricsForProfileAsh::OnPrintJobsRetrieved(
     return;
   }
 
-  std::vector<base::Value> print_job_info_values;
+  base::Value::List print_job_info_values;
   for (const auto& print_job_info : print_job_infos) {
     auto dict_value =
         extensions::PrintJobInfoProtoToIdl(print_job_info).ToValue();
-    print_job_info_values.emplace_back(std::move(*dict_value));
+    print_job_info_values.Append(std::move(dict_value));
   }
 
   std::move(callback).Run(std::move(print_job_info_values));

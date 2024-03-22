@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,9 @@
 #include <utility>
 
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_video_track.h"
+#include "third_party/blink/renderer/modules/mediastream/mock_media_stream_video_source.h"
+#include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_dtmf_sender_handler.h"
@@ -88,8 +91,7 @@ class DummyRTCRtpSenderPlatform : public RTCRtpSenderPlatform {
   void SetParameters(Vector<webrtc::RtpEncodingParameters>,
                      absl::optional<webrtc::DegradationPreference>,
                      RTCVoidRequest*) override {}
-  void GetStats(RTCStatsReportCallback,
-                const Vector<webrtc::NonStandardGroupId>&) override {}
+  void GetStats(RTCStatsReportCallback) override {}
   void SetStreams(const Vector<String>& stream_ids) override {}
 
  private:
@@ -107,17 +109,26 @@ class DummyRTCRtpReceiverPlatform : public RTCRtpReceiverPlatform {
       auto* source = MakeGarbageCollected<MediaStreamSource>(
           String::FromUTF8("remoteAudioId"),
           MediaStreamSource::StreamType::kTypeAudio,
-          String::FromUTF8("remoteAudioName"), true /* remote */);
-      component_ =
-          MakeGarbageCollected<MediaStreamComponentImpl>(source->Id(), source);
+          String::FromUTF8("remoteAudioName"), /*remote=*/true,
+          /*platform_source=*/nullptr);
+      component_ = MakeGarbageCollected<MediaStreamComponentImpl>(
+          source->Id(), source,
+          std::make_unique<MediaStreamAudioTrack>(/*is_local_track=*/false));
     } else {
       DCHECK_EQ(type, MediaStreamSource::StreamType::kTypeVideo);
+      auto platform_source = std::make_unique<MockMediaStreamVideoSource>();
+      auto* platform_source_ptr = platform_source.get();
       auto* source = MakeGarbageCollected<MediaStreamSource>(
           String::FromUTF8("remoteVideoId"),
           MediaStreamSource::StreamType::kTypeVideo,
-          String::FromUTF8("remoteVideoName"), true /* remote */);
-      component_ =
-          MakeGarbageCollected<MediaStreamComponentImpl>(source->Id(), source);
+          String::FromUTF8("remoteVideoName"), /*remote=*/true,
+          std::move(platform_source));
+      component_ = MakeGarbageCollected<MediaStreamComponentImpl>(
+          source->Id(), source,
+          std::make_unique<MediaStreamVideoTrack>(
+              platform_source_ptr,
+              MediaStreamVideoSource::ConstraintsOnceCallback(),
+              /*enabled=*/true));
     }
   }
   DummyRTCRtpReceiverPlatform(const DummyRTCRtpReceiverPlatform& other)
@@ -141,8 +152,7 @@ class DummyRTCRtpReceiverPlatform : public RTCRtpReceiverPlatform {
   Vector<std::unique_ptr<RTCRtpSource>> GetSources() override {
     return Vector<std::unique_ptr<RTCRtpSource>>();
   }
-  void GetStats(RTCStatsReportCallback,
-                const Vector<webrtc::NonStandardGroupId>&) override {}
+  void GetStats(RTCStatsReportCallback) override {}
   std::unique_ptr<webrtc::RtpParameters> GetParameters() const override {
     return nullptr;
   }
@@ -172,7 +182,7 @@ class DummyTransceiverInternal
         receiver_(type),
         direction_(webrtc::RtpTransceiverDirection::kSendRecv) {
     DCHECK(!sender_.Track() ||
-           sender_.Track()->Source()->GetType() ==
+           sender_.Track()->GetSourceType() ==
                static_cast<MediaStreamSource::StreamType>(type));
   }
 
@@ -215,10 +225,6 @@ class MockRTCPeerConnectionHandlerPlatform::DummyRTCRtpTransceiverPlatform
 
   scoped_refptr<DummyTransceiverInternal> internal() const { return internal_; }
 
-  RTCRtpTransceiverPlatformImplementationType ImplementationType()
-      const override {
-    return RTCRtpTransceiverPlatformImplementationType::kFullTransceiver;
-  }
   uintptr_t Id() const override { return internal_->id(); }
   String Mid() const override { return String(); }
   std::unique_ptr<RTCRtpSenderPlatform> Sender() const override {
@@ -242,15 +248,20 @@ class MockRTCPeerConnectionHandlerPlatform::DummyRTCRtpTransceiverPlatform
       const override {
     return absl::nullopt;
   }
-  webrtc::RTCError SetOfferedRtpHeaderExtensions(
+  webrtc::RTCError Stop() override { return webrtc::RTCError::OK(); }
+  webrtc::RTCError SetCodecPreferences(
+      Vector<webrtc::RtpCodecCapability>) override {
+    return webrtc::RTCError::OK();
+  }
+  webrtc::RTCError SetHeaderExtensionsToNegotiate(
       Vector<webrtc::RtpHeaderExtensionCapability> header_extensions) override {
     return webrtc::RTCError(webrtc::RTCErrorType::UNSUPPORTED_OPERATION);
   }
-  Vector<webrtc::RtpHeaderExtensionCapability> HeaderExtensionsNegotiated()
+  Vector<webrtc::RtpHeaderExtensionCapability> GetNegotiatedHeaderExtensions()
       const override {
     return {};
   }
-  Vector<webrtc::RtpHeaderExtensionCapability> HeaderExtensionsToOffer()
+  Vector<webrtc::RtpHeaderExtensionCapability> GetHeaderExtensionsToNegotiate()
       const override {
     return {};
   }
@@ -316,16 +327,14 @@ void MockRTCPeerConnectionHandlerPlatform::RestartIce() {}
 
 void MockRTCPeerConnectionHandlerPlatform::GetStats(RTCStatsRequest*) {}
 
-void MockRTCPeerConnectionHandlerPlatform::GetStats(
-    RTCStatsReportCallback,
-    const Vector<webrtc::NonStandardGroupId>&) {}
+void MockRTCPeerConnectionHandlerPlatform::GetStats(RTCStatsReportCallback) {}
 
 webrtc::RTCErrorOr<std::unique_ptr<RTCRtpTransceiverPlatform>>
 MockRTCPeerConnectionHandlerPlatform::AddTransceiverWithTrack(
     MediaStreamComponent* component,
     const webrtc::RtpTransceiverInit&) {
   transceivers_.push_back(std::make_unique<DummyRTCRtpTransceiverPlatform>(
-      component->Source()->GetType(), component));
+      component->GetSourceType(), component));
   std::unique_ptr<DummyRTCRtpTransceiverPlatform> copy(
       new DummyRTCRtpTransceiverPlatform(*transceivers_.back()));
   return std::unique_ptr<RTCRtpTransceiverPlatform>(std::move(copy));
@@ -349,7 +358,7 @@ MockRTCPeerConnectionHandlerPlatform::AddTrack(
     MediaStreamComponent* component,
     const MediaStreamDescriptorVector&) {
   transceivers_.push_back(std::make_unique<DummyRTCRtpTransceiverPlatform>(
-      component->Source()->GetType(), component));
+      component->GetSourceType(), component));
   std::unique_ptr<DummyRTCRtpTransceiverPlatform> copy(
       new DummyRTCRtpTransceiverPlatform(*transceivers_.back()));
   return std::unique_ptr<RTCRtpTransceiverPlatform>(std::move(copy));
@@ -371,7 +380,7 @@ MockRTCPeerConnectionHandlerPlatform::RemoveTrack(
   return std::unique_ptr<RTCRtpTransceiverPlatform>(std::move(copy));
 }
 
-scoped_refptr<webrtc::DataChannelInterface>
+rtc::scoped_refptr<webrtc::DataChannelInterface>
 MockRTCPeerConnectionHandlerPlatform::CreateDataChannel(
     const String& label,
     const webrtc::DataChannelInit&) {

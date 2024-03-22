@@ -1,16 +1,17 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.m.js';
+import {NativeEventTarget as EventTarget} from 'chrome://resources/ash/common/event_target.js';
 
 import {getPreferences} from '../../common/js/api.js';
-import {AsyncUtil} from '../../common/js/async_util.js';
+import {AsyncQueue, Group} from '../../common/js/async_util.js';
+import {comparePath, isSameEntry} from '../../common/js/entry_utils.js';
 import {FilteredVolumeManager} from '../../common/js/filtered_volume_manager.js';
-import {metrics} from '../../common/js/metrics.js';
-import {util} from '../../common/js/util.js';
-import {VolumeManagerCommon} from '../../common/js/volume_manager_types.js';
-import {xfm} from '../../common/js/xfm.js';
+import {recordSmallCount, recordUserAction} from '../../common/js/metrics.js';
+import {VolumeType} from '../../common/js/volume_manager_types.js';
+import {addFolderShortcut, refreshFolderShortcut, removeFolderShortcut} from '../../state/ducks/folder_shortcuts.js';
+import {getStore} from '../../state/store.js';
 
 /**
  * The drive mount path used in the persisted storage. It must be '/drive'.
@@ -21,8 +22,6 @@ const STORED_DRIVE_MOUNT_PATH = '/drive';
 /**
  * Model for the folder shortcuts. This object is ArrayDataModel-like
  * object with additional methods for the folder shortcut feature.
- * This used to use xfm.storage as backend. Now it's migrated to Chrome
- * preferences.
  *
  * Items are always sorted by URL.
  */
@@ -34,13 +33,15 @@ export class FolderShortcutsDataModel extends EventTarget {
     super();
 
     this.volumeManager_ = volumeManager;
+    // @ts-ignore: error TS7008: Member 'array_' implicitly has an 'any[]' type.
     this.array_ = [];
     this.pendingPaths_ = {};  // Hash map for easier deleting.
     this.unresolvablePaths_ = {};
     this.lastDriveRootURL_ = null;
+    this.store_ = getStore();
 
     // Queue to serialize resolving entries.
-    this.queue_ = new AsyncUtil.Queue();
+    this.queue_ = new AsyncQueue();
     this.queue_.run(
         this.volumeManager_.ensureInitialized.bind(this.volumeManager_));
 
@@ -76,8 +77,8 @@ export class FolderShortcutsDataModel extends EventTarget {
     if (this.lastDriveRootURL_) {
       return;
     }
-    const volumeInfo = this.volumeManager_.getCurrentProfileVolumeInfo(
-        VolumeManagerCommon.VolumeType.DRIVE);
+    const volumeInfo =
+        this.volumeManager_.getCurrentProfileVolumeInfo(VolumeType.DRIVE);
     if (volumeInfo) {
       this.lastDriveRootURL_ = volumeInfo.fileSystem.root.toURL();
     }
@@ -93,35 +94,48 @@ export class FolderShortcutsDataModel extends EventTarget {
       this.pendingPaths_ = {};
       this.unresolvablePaths_ = {};
       list.forEach(function(path) {
+        // @ts-ignore: error TS2683: 'this' implicitly has type 'any' because it
+        // does not have a type annotation.
         this.pendingPaths_[path] = true;
       }, this);
       callback();
     });
 
     this.queue_.run(queueCallback => {
-      const volumeInfo = this.volumeManager_.getCurrentProfileVolumeInfo(
-          VolumeManagerCommon.VolumeType.DRIVE);
+      const volumeInfo =
+          this.volumeManager_.getCurrentProfileVolumeInfo(VolumeType.DRIVE);
       let changed = false;
       const resolvedURLs = {};
       this.rememberLastDriveURL_();  // Required for conversions.
 
+      // @ts-ignore: error TS7006: Parameter 'entry' implicitly has an 'any'
+      // type.
       const onResolveSuccess = (path, entry) => {
         if (path in this.pendingPaths_) {
+          // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+          // because expression of type 'any' can't be used to index type '{}'.
           delete this.pendingPaths_[path];
         }
         if (path in this.unresolvablePaths_) {
           changed = true;
+          // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+          // because expression of type 'any' can't be used to index type '{}'.
           delete this.unresolvablePaths_[path];
         }
         if (!this.exists(entry)) {
           changed = true;
           this.addInternal_(entry);
         }
+        // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+        // because expression of type 'any' can't be used to index type '{}'.
         resolvedURLs[entry.toURL()] = true;
       };
 
+      // @ts-ignore: error TS7006: Parameter 'url' implicitly has an 'any' type.
       const onResolveFailure = (path, url) => {
         if (path in this.pendingPaths_) {
+          // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+          // because expression of type 'any' can't be used to index type '{}'.
           delete this.pendingPaths_[path];
         }
         const existingIndex = this.getIndexByURL_(url);
@@ -135,8 +149,13 @@ export class FolderShortcutsDataModel extends EventTarget {
         if (!volumeInfo ||
             this.volumeManager_.getDriveConnectionState().type !==
                 chrome.fileManagerPrivate.DriveConnectionStateType.ONLINE) {
+          // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+          // because expression of type 'any' can't be used to index type '{}'.
           if (!this.unresolvablePaths_[path]) {
             changed = true;
+            // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+            // because expression of type 'any' can't be used to index type
+            // '{}'.
             this.unresolvablePaths_[path] = true;
           }
         }
@@ -146,10 +165,16 @@ export class FolderShortcutsDataModel extends EventTarget {
       };
 
       // Resolve the items all at once, in parallel.
-      const group = new AsyncUtil.Group();
+      const group = new Group();
       list.forEach(function(path) {
+        // @ts-ignore: error TS7006: Parameter 'callback' implicitly has an
+        // 'any' type.
         group.add(((path, callback) => {
+                    // @ts-ignore: error TS2683: 'this' implicitly has type
+                    // 'any' because it does not have a type annotation.
                     const url = this.lastDriveRootURL_ &&
+                        // @ts-ignore: error TS2683: 'this' implicitly has type
+                        // 'any' because it does not have a type annotation.
                         this.convertStoredPathToUrl_(path);
                     if (url && volumeInfo) {
                       window.webkitResolveLocalFileSystemURL(
@@ -175,6 +200,9 @@ export class FolderShortcutsDataModel extends EventTarget {
         let index = 0;
         while (index < this.length) {
           const entry = this.item(index);
+          // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+          // because expression of type 'string' can't be used to index type
+          // '{}'.
           if (!resolvedURLs[entry.toURL()]) {
             this.removeInternal_(entry);
             changed = true;
@@ -184,6 +212,7 @@ export class FolderShortcutsDataModel extends EventTarget {
         }
         // If something changed, then save.
         if (changed) {
+          this.store_.dispatch(refreshFolderShortcut({entries: this.array_}));
           this.save_();
         }
         queueCallback();
@@ -200,7 +229,7 @@ export class FolderShortcutsDataModel extends EventTarget {
       try {
         const shortcutPaths = await this.getPersistedShortcutPaths_();
         // Record metrics.
-        metrics.recordSmallCount('FolderShortcut.Count', shortcutPaths.length);
+        recordSmallCount('FolderShortcut.Count', shortcutPaths.length);
 
         // Resolve and add the entries to the model.
         this.processEntries_(shortcutPaths);  // Runs within a queue.
@@ -211,27 +240,6 @@ export class FolderShortcutsDataModel extends EventTarget {
   }
 
   /**
-   * Fetches the shortcut paths from the legacy chrome.storage.sync.
-   *
-   * This can be removed after M108, when we expect all users to have migrated
-   * to the SWA/prefs version.
-   *
-   * @return {!Promise<!Array<string>>}
-   * @private
-   */
-  async getPersistedShortcutPathsLegacy_() {
-    const value =
-        await xfm.storage.sync.getAsync(FolderShortcutsDataModel.NAME);
-    if (value) {
-      const shortcutPaths =
-          /** @type {!Array} */ (value[FolderShortcutsDataModel.NAME] || []);
-      return shortcutPaths;
-    }
-
-    return [];
-  }
-
-  /**
    * Fetches the shortcut paths from the persistent storage (preferences) it
    * migrates from the legacy storage.chrome.sync if needed.
    *
@@ -239,23 +247,6 @@ export class FolderShortcutsDataModel extends EventTarget {
    * @private
    */
   async getPersistedShortcutPaths_() {
-    if (!window.isSWA) {
-      // Migration code works for non SWA.
-      const legacyPaths = await this.getPersistedShortcutPathsLegacy_();
-      if (legacyPaths.length) {
-        // Migrate to prefs. The onPreferencesChanged listener will make the
-        // value to be reloaded from prefs.
-        chrome.fileManagerPrivate.setPreferences(
-            {folderShortcuts: legacyPaths});
-
-        // Remove from legacy storage: xfm.storage.sync.
-        const prefs = {};
-        prefs[FolderShortcutsDataModel.NAME] = [];
-        xfm.storage.sync.setAsync(prefs);
-        return legacyPaths;
-      }
-    }
-
     const prefs = await getPreferences();
     if (prefs.folderShortcuts && prefs.folderShortcuts.length) {
       return prefs.folderShortcuts;
@@ -321,7 +312,7 @@ export class FolderShortcutsDataModel extends EventTarget {
   getIndex(value) {
     for (let i = 0; i < this.length; i++) {
       // Same item check: must be exact match.
-      if (util.isSameEntry(this.array_[i], value)) {
+      if (isSameEntry(this.array_[i], value)) {
         return i;
       }
     }
@@ -338,7 +329,7 @@ export class FolderShortcutsDataModel extends EventTarget {
    *     Otherwise, returns 1.
    */
   compare(a, b) {
-    return util.comparePath(a, b);
+    return comparePath(a, b);
   }
 
   /**
@@ -351,7 +342,11 @@ export class FolderShortcutsDataModel extends EventTarget {
    */
   add(value) {
     const result = this.addInternal_(value);
-    metrics.recordUserAction('FolderShortcut.Add');
+    // @ts-ignore: error TS2739: Type 'FileSystemEntry' is missing the following
+    // properties from type 'FileSystemDirectoryEntry': createReader,
+    // getDirectory, getFile, removeRecursively
+    this.store_.dispatch(addFolderShortcut({entry: value}));
+    recordUserAction('FolderShortcut.Add');
     this.save_();
     return result;
   }
@@ -372,7 +367,7 @@ export class FolderShortcutsDataModel extends EventTarget {
     let addedIndex = -1;
     for (let i = 0; i < this.length; i++) {
       // Same item check: must be exact match.
-      if (util.isSameEntry(this.array_[i], value)) {
+      if (isSameEntry(this.array_[i], value)) {
         return i;
       }
 
@@ -402,8 +397,9 @@ export class FolderShortcutsDataModel extends EventTarget {
   remove(value) {
     const result = this.removeInternal_(value);
     if (result !== -1) {
+      this.store_.dispatch(removeFolderShortcut({key: value.toURL()}));
       this.save_();
-      metrics.recordUserAction('FolderShortcut.Remove');
+      recordUserAction('FolderShortcut.Remove');
     }
     return result;
   }
@@ -420,7 +416,7 @@ export class FolderShortcutsDataModel extends EventTarget {
     const oldArray = this.array_.slice(0);  // Shallow copy.
     for (let i = 0; i < this.length; i++) {
       // Same item check: must be exact match.
-      if (util.isSameEntry(this.array_[i], value)) {
+      if (isSameEntry(this.array_[i], value)) {
         this.array_.splice(i, 1);
         removedIndex = i;
         break;
@@ -467,6 +463,9 @@ export class FolderShortcutsDataModel extends EventTarget {
                       .concat(Object.keys(this.unresolvablePaths_));
 
     const prefs = {folderShortcuts: paths};
+    // @ts-ignore: error TS2345: Argument of type '{ folderShortcuts: (string |
+    // null)[]; }' is not assignable to parameter of type
+    // 'Partial<PreferencesChange>'.
     chrome.fileManagerPrivate.setPreferences(prefs);
   }
 
@@ -495,13 +494,18 @@ export class FolderShortcutsDataModel extends EventTarget {
       while (newIndex < newArray.length) {
         // Unchanged item, which exists in both new and old array. But the
         // index may be changed.
-        if (util.isSameEntry(oldArray[oldIndex], newArray[newIndex])) {
+        // @ts-ignore: error TS2345: Argument of type 'FileSystemEntry |
+        // undefined' is not assignable to parameter of type 'FileSystemEntry |
+        // FilesAppEntry'.
+        if (isSameEntry(oldArray[oldIndex], newArray[newIndex])) {
           permutation[oldIndex] = newIndex;
           newIndex++;
           break;
         }
 
         // oldArray[oldIndex] is deleted, which is not in the new array.
+        // @ts-ignore: error TS2345: Argument of type 'FileSystemEntry |
+        // undefined' is not assignable to parameter of type 'FileSystemEntry'.
         if (this.compare(oldArray[oldIndex], newArray[newIndex]) < 0) {
           permutation[oldIndex] = -1;
           break;
@@ -521,7 +525,11 @@ export class FolderShortcutsDataModel extends EventTarget {
    */
   firePermutedEvent_(permutation) {
     const permutedEvent = new Event('permuted');
+    // @ts-ignore: error TS2339: Property 'newLength' does not exist on type
+    // 'Event'.
     permutedEvent.newLength = this.length;
+    // @ts-ignore: error TS2339: Property 'permutation' does not exist on type
+    // 'Event'.
     permutedEvent.permutation = permutation;
     this.dispatchEvent(permutedEvent);
 
@@ -544,6 +552,7 @@ export class FolderShortcutsDataModel extends EventTarget {
         chrome.fileManagerPrivate.DriveConnectionStateType.ONLINE) {
       const path = this.convertUrlToStoredPath_(entry.toURL());
       // TODO(mtomasz): Add support for multi-profile.
+      // @ts-ignore: error TS2538: Type 'null' cannot be used as an index type.
       this.unresolvablePaths_[path] = true;
     }
     this.removeInternal_(entry);
@@ -561,6 +570,8 @@ export class FolderShortcutsDataModel extends EventTarget {
    * @return {?string} URL of the given path.
    * @private
    */
+  // @ts-ignore: error TS6133: 'convertStoredPathToUrl_' is declared but its
+  // value is never read.
   convertStoredPathToUrl_(path) {
     if (path.indexOf(STORED_DRIVE_MOUNT_PATH + '/') !== 0) {
       console.warn(path + ' is neither a drive mount path nor a stored path.');
@@ -581,19 +592,15 @@ export class FolderShortcutsDataModel extends EventTarget {
    */
   convertUrlToStoredPath_(url) {
     // Root URLs contain a trailing slash.
+    // @ts-ignore: error TS2345: Argument of type 'string | null' is not
+    // assignable to parameter of type 'string'.
     if (url.indexOf(this.lastDriveRootURL_) !== 0) {
       console.warn(url + ' is not a drive URL.');
       return null;
     }
 
     return STORED_DRIVE_MOUNT_PATH + '/' +
+        // @ts-ignore: error TS2531: Object is possibly 'null'.
         decodeURIComponent(url.substr(this.lastDriveRootURL_.length));
   }
 }
-
-/**
- * Key name in xfm.storage. The array are stored with this name.
- * @type {string}
- * @const
- */
-FolderShortcutsDataModel.NAME = 'folder-shortcuts-list';

@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_BASE_PREDICTION_KALMAN_FILTER_H_
 #define UI_BASE_PREDICTION_KALMAN_FILTER_H_
+
+#include <stdint.h>
 
 #include "base/component_export.h"
 #include "ui/gfx/geometry/matrix3_f.h"

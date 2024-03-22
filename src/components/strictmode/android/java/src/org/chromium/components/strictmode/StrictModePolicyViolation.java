@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.strictmode;
 
-/** Dummy exception thrown for the custom death penalty. */
+/** Placeholder exception thrown for the custom death penalty. */
 public final class StrictModePolicyViolation extends Error {
     public StrictModePolicyViolation(Violation v) {
         super(v.violationString());

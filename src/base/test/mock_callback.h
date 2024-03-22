@@ -2,7 +2,7 @@
 //     pump.py mock_callback.h.pump
 // DO NOT EDIT BY HAND!!!
 
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,8 @@
 #ifndef BASE_TEST_MOCK_CALLBACK_H_
 #define BASE_TEST_MOCK_CALLBACK_H_
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace base {

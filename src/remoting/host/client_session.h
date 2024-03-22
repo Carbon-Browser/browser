@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,16 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner_helpers.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
+#include "remoting/base/constants.h"
 #include "remoting/host/base/desktop_environment_options.h"
 #include "remoting/host/client_session_control.h"
 #include "remoting/host/client_session_details.h"
@@ -39,11 +41,13 @@
 #include "remoting/protocol/connection_to_client.h"
 #include "remoting/protocol/data_channel_manager.h"
 #include "remoting/protocol/display_size.h"
+#include "remoting/protocol/fractional_input_filter.h"
 #include "remoting/protocol/host_stub.h"
 #include "remoting/protocol/input_event_tracker.h"
 #include "remoting/protocol/input_filter.h"
 #include "remoting/protocol/input_stub.h"
 #include "remoting/protocol/mouse_input_filter.h"
+#include "remoting/protocol/observing_input_filter.h"
 #include "remoting/protocol/pairing_registry.h"
 #include "remoting/protocol/video_stream.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_metadata.h"
@@ -55,6 +59,7 @@
 
 namespace remoting {
 
+class ActiveDisplayMonitor;
 class AudioStream;
 class DesktopEnvironment;
 class DesktopEnvironmentFactory;
@@ -114,14 +119,13 @@ class ClientSession : public protocol::HostStub,
 
   // |event_handler| and |desktop_environment_factory| must outlive |this|.
   // All |HostExtension|s in |extensions| must outlive |this|.
-  ClientSession(
-      EventHandler* event_handler,
-      std::unique_ptr<protocol::ConnectionToClient> connection,
-      DesktopEnvironmentFactory* desktop_environment_factory,
-      const DesktopEnvironmentOptions& desktop_environment_options,
-      const base::TimeDelta& max_duration,
-      scoped_refptr<protocol::PairingRegistry> pairing_registry,
-      const std::vector<HostExtension*>& extensions);
+  ClientSession(EventHandler* event_handler,
+                std::unique_ptr<protocol::ConnectionToClient> connection,
+                DesktopEnvironmentFactory* desktop_environment_factory,
+                const DesktopEnvironmentOptions& desktop_environment_options,
+                const base::TimeDelta& max_duration,
+                scoped_refptr<protocol::PairingRegistry> pairing_registry,
+                const std::vector<HostExtension*>& extensions);
 
   ClientSession(const ClientSession&) = delete;
   ClientSession& operator=(const ClientSession&) = delete;
@@ -144,6 +148,7 @@ class ClientSession : public protocol::HostStub,
       const protocol::SelectDesktopDisplayRequest& select_display) override;
   void ControlPeerConnection(
       const protocol::PeerConnectionParameters& parameters) override;
+  void SetVideoLayout(const protocol::VideoLayout& video_layout) override;
 
   // protocol::ConnectionToClient::EventHandler interface.
   void OnConnectionAuthenticating() override;
@@ -188,6 +193,10 @@ class ClientSession : public protocol::HostStub,
       mojo::PendingReceiver<mojom::WebAuthnProxy> receiver) override;
   void BindRemoteUrlOpener(
       mojo::PendingReceiver<mojom::RemoteUrlOpener> receiver) override;
+#if BUILDFLAG(IS_WIN)
+  void BindSecurityKeyForwarder(
+      mojo::PendingReceiver<mojom::SecurityKeyForwarder> receiver) override;
+#endif
 
   void BindReceiver(
       mojo::PendingReceiver<mojom::ChromotingSessionServices> receiver);
@@ -215,18 +224,6 @@ class ClientSession : public protocol::HostStub,
   void UpdateMouseClampingFilterOffset();
 
  private:
-  // Struct for associating an optional DesktopAndCursorConditionalComposer
-  // with each VideoStream.
-  struct VideoStreamWithComposer {
-    VideoStreamWithComposer();
-    VideoStreamWithComposer(VideoStreamWithComposer&&);
-    VideoStreamWithComposer& operator=(VideoStreamWithComposer&&);
-    ~VideoStreamWithComposer();
-
-    std::unique_ptr<protocol::VideoStream> stream;
-    base::WeakPtr<DesktopAndCursorConditionalComposer> composer;
-  };
-
   // Creates a proxy for sending clipboard events to the client.
   std::unique_ptr<protocol::ClipboardStub> CreateClipboardProxy();
 
@@ -268,10 +265,22 @@ class ClientSession : public protocol::HostStub,
   // display).
   bool IsValidDisplayIndex(webrtc::ScreenId index) const;
 
-#if defined(WEBRTC_USE_GIO)
-  void ExtractAndSetInputInjectorMetadata(
-      webrtc::DesktopCaptureMetadata capture_metadata);
-#endif
+  // Boosts the framerate using |capture_interval| for |boost_duration| based on
+  // the type of input |event| received.
+  void BoostFramerateOnInput(base::TimeDelta capture_interval,
+                             base::TimeDelta boost_duration,
+                             bool& mouse_button_down,
+                             protocol::ObservingInputFilter::Event event);
+
+  // Sends the new active display to the client. Called by ActiveDisplayMonitor
+  // whenever the screen id associated with the active window changes.
+  void OnActiveDisplayChanged(webrtc::ScreenId display);
+
+  // Sets the fallback geometry on `fractional_input_filter_` according to the
+  // current display-layout and selected display index. This is only used for
+  // single-stream mode, when the client provides fractional-coordinates without
+  // any screen_id.
+  void UpdateFractionalFilterFallback();
 
   raw_ptr<EventHandler> event_handler_;
 
@@ -284,17 +293,21 @@ class ClientSession : public protocol::HostStub,
   // The DesktopEnvironment instance for this session.
   std::unique_ptr<DesktopEnvironment> desktop_environment_;
 
-  // Filter used as the final element in the input pipeline.
-  protocol::InputFilter host_input_filter_;
-
   // Tracker used to release pressed keys and buttons when disconnecting.
   protocol::InputEventTracker input_tracker_;
 
   // Filter used to disable remote inputs during local input activity.
   RemoteInputFilter remote_input_filter_;
 
+  // Filter used to convert any fractional coordinates to input-injection
+  // coordinates.
+  protocol::FractionalInputFilter fractional_input_filter_;
+
   // Filter used to clamp mouse events to the current display dimensions.
   protocol::MouseInputFilter mouse_clamping_filter_;
+
+  // Filter used to notify listeners when remote input events are received.
+  protocol::ObservingInputFilter observing_input_filter_;
 
   // Filter used to detect transitions into and out of client-side pointer lock,
   // and to monitor local input to determine whether or not to include the mouse
@@ -327,7 +340,8 @@ class ClientSession : public protocol::HostStub,
   base::OneShotTimer max_duration_timer_;
 
   // Objects responsible for sending video, audio.
-  std::map<webrtc::ScreenId, VideoStreamWithComposer> video_streams_;
+  std::map<webrtc::ScreenId, std::unique_ptr<protocol::VideoStream>>
+      video_streams_;
   std::unique_ptr<protocol::AudioStream> audio_stream_;
 
   // The set of all capabilities supported by the client.
@@ -349,8 +363,8 @@ class ClientSession : public protocol::HostStub,
   DesktopDisplayInfo desktop_display_info_;
 
   // Default DPI values to use if a display reports 0 for DPI.
-  int default_x_dpi_;
-  int default_y_dpi_;
+  int default_x_dpi_ = kDefaultDpi;
+  int default_y_dpi_ = kDefaultDpi;
 
   // The index of the desktop display to show to the user.
   // Default is webrtc::kInvalidScreenScreenId because we need to perform
@@ -386,10 +400,11 @@ class ClientSession : public protocol::HostStub,
   // Set to true after all data channels have been connected.
   bool channels_connected_ = false;
 
-  // Used to store video channel pause & lossless parameters.
+  // Used to store the video channel pause parameter.
   bool pause_video_ = false;
-  bool lossless_video_encode_ = false;
-  bool lossless_video_color_ = false;
+
+  // Used to store the target framerate control parameter.
+  int target_framerate_ = kTargetFrameRate;
 
   // VideoLayout is sent only after the control channel is connected. Until
   // then it's stored in |pending_video_layout_message_|.
@@ -417,6 +432,8 @@ class ClientSession : public protocol::HostStub,
 
   mojo::ReceiverSet<mojom::ChromotingSessionServices>
       session_services_receivers_;
+
+  std::unique_ptr<ActiveDisplayMonitor> active_display_monitor_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

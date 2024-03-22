@@ -1,21 +1,21 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_icons.css.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {KioskApp, KioskAppSettings, KioskBrowserProxy, KioskBrowserProxyImpl} from './kiosk_browser_proxy.js';
@@ -31,7 +31,7 @@ export interface ExtensionsKioskDialogElement {
   };
 }
 
-const ExtensionsKioskDialogElementBase = WebUIListenerMixin(PolymerElement);
+const ExtensionsKioskDialogElementBase = WebUiListenerMixin(PolymerElement);
 
 export class ExtensionsKioskDialogElement extends
     ExtensionsKioskDialogElementBase {
@@ -78,10 +78,10 @@ export class ExtensionsKioskDialogElement extends
         })
         .then(this.setSettings_.bind(this));
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'kiosk-app-settings-changed', this.setSettings_.bind(this));
-    this.addWebUIListener('kiosk-app-updated', this.updateApp_.bind(this));
-    this.addWebUIListener('kiosk-app-error', this.showError_.bind(this));
+    this.addWebUiListener('kiosk-app-updated', this.updateApp_.bind(this));
+    this.addWebUiListener('kiosk-app-error', this.showError_.bind(this));
 
     this.$.dialog.showModal();
   }
@@ -106,7 +106,7 @@ export class ExtensionsKioskDialogElement extends
     return this.errorAppId_ + ' ' + errorMessage;
   }
 
-  private onAddAppTap_() {
+  private onAddAppClick_() {
     assert(this.addAppInput_);
     this.kioskBrowserProxy_.addKioskApp(this.addAppInput_);
     this.addAppInput_ = null;
@@ -116,7 +116,7 @@ export class ExtensionsKioskDialogElement extends
     this.errorAppId_ = null;
   }
 
-  private onAutoLaunchButtonTap_(event: DomRepeatEvent<KioskApp>) {
+  private onAutoLaunchButtonClick_(event: DomRepeatEvent<KioskApp>) {
     const app = event.model.item;
     if (app.autoLaunch) {  // If the app is originally set to
                            // auto-launch.
@@ -136,21 +136,21 @@ export class ExtensionsKioskDialogElement extends
     }
   }
 
-  private onBailoutDialogCancelTap_() {
+  private onBailoutDialogCancelClick_() {
     this.$.bailout.checked = false;
     this.$.confirmDialog.cancel();
   }
 
-  private onBailoutDialogConfirmTap_() {
+  private onBailoutDialogConfirmClick_() {
     this.kioskBrowserProxy_.setDisableBailoutShortcut(true);
     this.$.confirmDialog.close();
   }
 
-  private onDoneTap_() {
+  private onDoneClick_() {
     this.$.dialog.close();
   }
 
-  private onDeleteAppTap_(event: DomRepeatEvent<KioskApp>) {
+  private onDeleteAppClick_(event: DomRepeatEvent<KioskApp>) {
     this.kioskBrowserProxy_.removeKioskApp(event.model.item.id);
   }
 

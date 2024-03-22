@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,7 @@ namespace network {
 
 struct CrossOriginOpenerPolicy;
 
-// Parsing is done following the COOP spec draft:
-// https://gist.github.com/annevk/6f2dd8c79c77123f39797f6bdac43f3e
-// TODO(ahemery): add a fuzzer for the parser, see
-// services/network/content_security_policy_fuzzer.cc for an example.
+// https://html.spec.whatwg.org/multipage/browsers.html#obtain-coop
 COMPONENT_EXPORT(NETWORK_CPP)
 CrossOriginOpenerPolicy ParseCrossOriginOpenerPolicy(
     const net::HttpResponseHeaders& headers);

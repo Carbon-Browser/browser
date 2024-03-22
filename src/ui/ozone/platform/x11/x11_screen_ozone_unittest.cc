@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,7 @@ class X11ScreenOzoneTest : public testing::Test {
   void UpdateDisplayListForTest(std::vector<display::Display> displays) {
     ui::XDisplayManager* manager = screen_->x11_display_manager_.get();
     std::vector<display::Display> old_displays = std::move(manager->displays_);
-    manager->SetDisplayList(std::move(displays));
+    manager->SetDisplayList(std::move(displays), 0);
     manager->change_notifier_.NotifyDisplaysChanged(old_displays,
                                                     manager->displays_);
   }

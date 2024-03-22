@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,14 @@ import android.view.ViewStub;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
+import org.chromium.chrome.browser.tab.TabObscuringHandler;
 import org.chromium.components.browser_ui.widget.ViewResourceFrameLayout;
+import org.chromium.ui.base.ViewUtils;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 import org.chromium.ui.resources.ResourceManager;
@@ -42,9 +43,7 @@ public class StatusIndicatorCoordinator {
          */
         default void onStatusIndicatorColorChanged(@ColorInt int newColor) {}
 
-        /**
-         * Called when the "show" animation of the status indicator completes.
-         */
+        /** Called when the "show" animation of the status indicator completes. */
         default void onStatusIndicatorShowAnimationEnd() {}
     }
 
@@ -66,6 +65,7 @@ public class StatusIndicatorCoordinator {
      * @param resourceManager The {@link ResourceManager} for the status indicator's cc layer.
      * @param browserControlsStateProvider The {@link BrowserControlsStateProvider} to listen to
      *                                     for the changes in controls offsets.
+     * @param tabObscuringHandler Delegate object handling obscuring views.
      * @param statusBarColorWithoutStatusIndicatorSupplier A supplier that will get the status bar
      *                                                     color without taking the status indicator
      *                                                     into account.
@@ -75,16 +75,25 @@ public class StatusIndicatorCoordinator {
      *                                        tab switcher.
      * @param requestRender Runnable to request a render when the cc-layer needs to be updated.
      */
-    public StatusIndicatorCoordinator(Activity activity, ResourceManager resourceManager,
+    public StatusIndicatorCoordinator(
+            Activity activity,
+            ResourceManager resourceManager,
             BrowserControlsStateProvider browserControlsStateProvider,
+            TabObscuringHandler tabObscuringHandler,
             Supplier<Integer> statusBarColorWithoutStatusIndicatorSupplier,
-            Supplier<Boolean> canAnimateNativeBrowserControls, Callback<Runnable> requestRender) {
+            Supplier<Boolean> canAnimateNativeBrowserControls,
+            Callback<Runnable> requestRender) {
         mActivity = activity;
         mResourceManager = resourceManager;
         mRequestRender = requestRender;
+
         mSceneLayer = new StatusIndicatorSceneLayer(browserControlsStateProvider);
-        mMediator = new StatusIndicatorMediator(browserControlsStateProvider,
-                statusBarColorWithoutStatusIndicatorSupplier, canAnimateNativeBrowserControls);
+        mMediator =
+                new StatusIndicatorMediator(
+                        browserControlsStateProvider,
+                        tabObscuringHandler,
+                        statusBarColorWithoutStatusIndicatorSupplier,
+                        canAnimateNativeBrowserControls);
     }
 
     public void destroy() {
@@ -102,8 +111,12 @@ public class StatusIndicatorCoordinator {
      * @param textColor Status text color.
      * @param iconTint Status icon tint.
      */
-    public void show(@NonNull String statusText, Drawable statusIcon, @ColorInt int backgroundColor,
-            @ColorInt int textColor, @ColorInt int iconTint) {
+    public void show(
+            @NonNull String statusText,
+            Drawable statusIcon,
+            @ColorInt int backgroundColor,
+            @ColorInt int textColor,
+            @ColorInt int iconTint) {
         // TODO(crbug.com/1081471): We should make sure #show, #hide, and #updateContent can't be
         // called at the wrong time, or the call is ignored with a way to communicate this to the
         // caller, e.g. returning a boolean.
@@ -127,18 +140,25 @@ public class StatusIndicatorCoordinator {
      * @param iconTint The new icon tint to fit the background.
      * @param animationCompleteCallback The callback that will be run once the animations end.
      */
-    public void updateContent(@NonNull String statusText, Drawable statusIcon,
-            @ColorInt int backgroundColor, @ColorInt int textColor, @ColorInt int iconTint,
+    public void updateContent(
+            @NonNull String statusText,
+            Drawable statusIcon,
+            @ColorInt int backgroundColor,
+            @ColorInt int textColor,
+            @ColorInt int iconTint,
             Runnable animationCompleteCallback) {
         if (!mIsShowing) return;
 
-        mMediator.animateUpdate(statusText, statusIcon, backgroundColor, textColor, iconTint,
+        mMediator.animateUpdate(
+                statusText,
+                statusIcon,
+                backgroundColor,
+                textColor,
+                iconTint,
                 animationCompleteCallback);
     }
 
-    /**
-     * Hide the status indicator with animations.
-     */
+    /** Hide the status indicator with animations. */
     public void hide() {
         if (!mIsShowing) return;
         mIsShowing = false;
@@ -172,20 +192,28 @@ public class StatusIndicatorCoordinator {
         mResourceId = root.getId();
         mSceneLayer.setResourceId(mResourceId);
         mResourceAdapter = root.getResourceAdapter();
-        Callback<Runnable> invalidateCompositorView = callback -> {
-            mResourceAdapter.invalidate(null);
-            mRequestRender.onResult(callback);
-        };
+        Callback<Runnable> invalidateCompositorView =
+                callback -> {
+                    mResourceAdapter.invalidate(null);
+                    mRequestRender.onResult(callback);
+                };
         PropertyModel model =
                 new PropertyModel.Builder(StatusIndicatorProperties.ALL_KEYS)
                         .with(StatusIndicatorProperties.ANDROID_VIEW_VISIBILITY, View.GONE)
                         .with(StatusIndicatorProperties.COMPOSITED_VIEW_VISIBLE, false)
                         .build();
-        PropertyModelChangeProcessor.create(model,
+        PropertyModelChangeProcessor.create(
+                model,
                 new StatusIndicatorViewBinder.ViewHolder(root, mSceneLayer),
                 StatusIndicatorViewBinder::bind);
-        mMediator.initialize(model, this::registerResource, this::unregisterResource,
-                invalidateCompositorView, root::requestLayout);
+        mMediator.initialize(
+                model,
+                this::registerResource,
+                this::unregisterResource,
+                invalidateCompositorView,
+                () -> {
+                    ViewUtils.requestLayout(root, "StatusIndicatorCoordinator.initialize Runnable");
+                });
         root.addOnLayoutChangeListener(mMediator);
         mRemoveOnLayoutChangeListener = () -> root.removeOnLayoutChangeListener(mMediator);
 
@@ -207,7 +235,6 @@ public class StatusIndicatorCoordinator {
         mResourceRegistered = false;
     }
 
-    @VisibleForTesting
     StatusIndicatorMediator getMediatorForTesting() {
         return mMediator;
     }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,9 @@
 
 // Invoked upon starting each test method in a test case.
 - (void)setUp NS_REQUIRES_SUPER;
+
+// Invoked upon end of each test method in a test case.
++ (void)tearDown NS_REQUIRES_SUPER;
 
 // Provides an |AppLaunchConfiguration| for host app used across a TestCase.
 // Subclasses must override this method to change app launching configuration

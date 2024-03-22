@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/i18n/string_compare.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -125,7 +126,7 @@ class ContactRecordComparator {
     return *a < *b ? UCOL_LESS : UCOL_GREATER;
   }
 
-  icu::Collator* collator_;
+  raw_ptr<icu::Collator, ExperimentalAsh> collator_;
 };
 
 }  // namespace

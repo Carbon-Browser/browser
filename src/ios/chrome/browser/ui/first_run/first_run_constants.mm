@@ -1,17 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/first_run/first_run_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace first_run {
-
-NSString* const kUMAMetricsButtonAccessibilityIdentifier =
-    @"UMAMetricsButtonAccessibilityIdentifier";
 
 NSString* const kFirstRunWelcomeScreenAccessibilityIdentifier =
     @"firstRunWelcomeScreenAccessibilityIdentifier";
@@ -25,14 +18,23 @@ NSString* const kFirstRunLegacySignInScreenAccessibilityIdentifier =
 NSString* const kFirstRunSyncScreenAccessibilityIdentifier =
     @"firstRunSyncScreenAccessibilityIdentifier";
 
+NSString* const kSearchEngineChoiceTitleAccessibilityIdentifier =
+    @"SearchEngineChoiceTitleAccessibilityIdentifier";
+
 NSString* const kFirstRunDefaultBrowserScreenAccessibilityIdentifier =
     @"firstRunDefaultBrowserScreenAccessibilityIdentifier";
+
+NSString* const kFirstRunOmniboxPositionChoiceScreenAccessibilityIdentifier =
+    @"firstRunOmniboxPositionChoiceScreenAccessibilityIdentifier";
 
 // URL for the terms of service text.
 NSString* const kTermsOfServiceURL = @"internal://terms-of-service";
 
 // URL for the metric reporting text.
 NSString* const kMetricReportingURL = @"internal://metric-reporting";
+
+NSString* const kLaunchScreenAccessibilityIdentifier =
+    @"launchScreenAccessibilityIdentifier";
 
 NSString* const kEnterpriseLoadingScreenAccessibilityIdentifier =
     @"enterpriseLoadingScreenAccessibilityIdentifier";

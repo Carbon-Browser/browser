@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,9 @@ class CORE_EXPORT SecurityContextInit {
       LocalFrame& frame,
       const ResourceResponse& response,
       const FramePolicy& frame_policy,
-      const absl::optional<ParsedPermissionsPolicy>& isolated_app_policy);
+      const absl::optional<ParsedPermissionsPolicy>& isolated_app_policy,
+      const base::span<const mojom::blink::PermissionsPolicyFeature>
+          effective_enabled_permissions);
   void ApplyDocumentPolicy(
       DocumentPolicy::ParsedDocumentPolicy& document_policy,
       const String& report_only_document_policy_header);

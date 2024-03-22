@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,8 @@ namespace {}
 namespace device {
 
 FakeArCore::FakeArCore()
-    : gl_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+    : gl_thread_task_runner_(
+          base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 FakeArCore::~FakeArCore() = default;
 
@@ -75,7 +76,7 @@ void FakeArCore::SetCameraTexture(uint32_t texture) {
 
 std::vector<float> FakeArCore::TransformDisplayUvCoords(
     const base::span<const float> uvs) const {
-  // Try to match ArCore's transfore values.
+  // Try to match ArCore's transform values.
   //
   // Sample ArCore input: width=1080, height=1795, rotation=0,
   // vecs = (0, 0), (0, 1), (1, 0), (1, 1)
@@ -99,7 +100,9 @@ std::vector<float> FakeArCore::TransformDisplayUvCoords(
   //    uv[4]=(0.0325521, 0)
   //    uv[6]=(0.967448, 0)
   //
-  // TODO(klausw): move this to a unittest.
+  // TODO(https://crbug.com/1382576): This logic is quite complicated,
+  // and the current arcore_device_unittest doesn't really care about
+  // the details.
 
   // SetDisplayGeometry should have been called first.
   DCHECK(frame_size_.width());
@@ -204,12 +207,12 @@ gfx::Transform FakeArCore::GetProjectionMatrix(float near, float far) {
   }
   // Calculate a perspective matrix based on the FOV values.
   gfx::Transform result;
-  result.matrix().setRC(0, 0, 1.f / right_tan);
-  result.matrix().setRC(1, 1, 1.f / up_tan);
-  result.matrix().setRC(2, 2, (near + far) / (near - far));
-  result.matrix().setRC(3, 2, -1.0f);
-  result.matrix().setRC(2, 3, (2.0f * far * near) / (near - far));
-  result.matrix().setRC(3, 3, 0.0f);
+  result.set_rc(0, 0, 1.f / right_tan);
+  result.set_rc(1, 1, 1.f / up_tan);
+  result.set_rc(2, 2, (near + far) / (near - far));
+  result.set_rc(3, 2, -1.0f);
+  result.set_rc(2, 3, (2.0f * far * near) / (near - far));
+  result.set_rc(3, 3, 0.0f);
   return result;
 }
 

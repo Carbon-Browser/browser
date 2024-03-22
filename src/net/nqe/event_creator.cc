@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "net/log/net_log_capture_mode.h"
@@ -19,19 +19,18 @@ namespace net::nqe::internal {
 
 namespace {
 
-base::Value NetworkQualityChangedNetLogParams(
+base::Value::Dict NetworkQualityChangedNetLogParams(
     base::TimeDelta http_rtt,
     base::TimeDelta transport_rtt,
     int32_t downstream_throughput_kbps,
     EffectiveConnectionType effective_connection_type) {
-  base::Value value(base::Value::Type::DICTIONARY);
-  base::Value::Dict& dict = value.GetDict();
-  dict.Set("http_rtt_ms", static_cast<int>(http_rtt.InMilliseconds()));
-  dict.Set("transport_rtt_ms",
-           static_cast<int>(transport_rtt.InMilliseconds()));
-  dict.Set("downstream_throughput_kbps", downstream_throughput_kbps);
-  dict.Set("effective_connection_type",
-           GetNameForEffectiveConnectionType(effective_connection_type));
+  base::Value::Dict value;
+  value.Set("http_rtt_ms", static_cast<int>(http_rtt.InMilliseconds()));
+  value.Set("transport_rtt_ms",
+            static_cast<int>(transport_rtt.InMilliseconds()));
+  value.Set("downstream_throughput_kbps", downstream_throughput_kbps);
+  value.Set("effective_connection_type",
+            GetNameForEffectiveConnectionType(effective_connection_type));
   return value;
 }
 

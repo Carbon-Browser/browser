@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,6 +47,7 @@ function makeUnreached() {
     'constructor',
     'contentWindow',
     'data',
+    'defaultView',
     'dirty',
     'element',
     'elementHeight',
@@ -68,6 +69,7 @@ function makeUnreached() {
     'on',
     'onloadstop',
     'onresize',
+    'ownerDocument',
     'parentNode',
     'partition',
     'pendingAction',
@@ -89,6 +91,7 @@ function makeUnreached() {
   // For objects that don't inherit directly from Object, we'll need to taint
   // existing properties on prototypes earlier in the prototype chain.
   var otherConstructors = [
+    Document,
     Element,
     HTMLElement,
     HTMLIFrameElement,

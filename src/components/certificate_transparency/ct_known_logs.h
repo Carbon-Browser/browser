@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -35,7 +35,9 @@ struct CTLogInfo {
   // The current operator of the log.
   const char* const current_operator;
   // Previous operators (if any) of the log, ordered in chronological order.
-  const PreviousOperatorEntry* previous_operators;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const PreviousOperatorEntry* previous_operators;
   const size_t previous_operators_length;
 };
 

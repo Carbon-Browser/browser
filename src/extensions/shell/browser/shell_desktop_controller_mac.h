@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,8 @@ class ShellDesktopControllerMac : public DesktopController {
 
   // The desktop only supports a single app window.
   // TODO(yoz): Support multiple app windows, as we do in Aura.
-  raw_ptr<AppWindow> app_window_;  // NativeAppWindow::Close() deletes this.
+  raw_ptr<AppWindow, DanglingUntriaged>
+      app_window_;  // NativeAppWindow::Close() deletes this.
 
   display::ScopedNativeScreen screen_;
 };

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,12 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/function_ref.h"
+#include "base/memory/safety_checks.h"
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/k_anonymity_service_delegate.h"
 #include "content/public/browser/zoom_level_delegate.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -63,11 +65,10 @@ namespace perfetto {
 template <typename>
 class TracedProto;
 
-namespace protos {
-namespace pbzero {
+namespace protos::pbzero {
 class ChromeBrowserContext;
-}
-}  // namespace protos
+}  // namespace protos::pbzero
+
 }  // namespace perfetto
 
 namespace content {
@@ -83,14 +84,16 @@ class ClientHintsControllerDelegate;
 class ContentIndexProvider;
 class DownloadManager;
 class DownloadManagerDelegate;
-class FederatedIdentityActiveSessionPermissionContextDelegate;
+class FederatedIdentityPermissionContextDelegate;
 class FederatedIdentityApiPermissionContextDelegate;
-class FederatedIdentitySharingPermissionContextDelegate;
+class FederatedIdentityAutoReauthnPermissionContextDelegate;
 class FileSystemAccessPermissionContext;
+class OriginTrialsControllerDelegate;
 class PermissionController;
 class PermissionControllerDelegate;
 class PlatformNotificationService;
 class PushMessagingService;
+class ReduceAcceptLanguageControllerDelegate;
 class ResourceContext;
 class SSLHostStateDelegate;
 class SharedCorsOriginAccessList;
@@ -103,6 +106,10 @@ class StoragePartitionConfig;
 // It lives on the UI thread. All these methods must only be called on the UI
 // thread.
 class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
+  // Do not remove this macro!
+  // The macro is maintained by the memory safety team.
+  ADVANCED_MEMORY_SAFETY_CHECKS();
+
  public:
   //////////////////////////////////////////////////////////////////////////////
   // The BrowserContext methods below are provided/implemented by the //content
@@ -154,29 +161,32 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   StoragePartition* GetStoragePartitionForUrl(const GURL& url,
                                               bool can_create = true);
 
-  using StoragePartitionCallback =
-      base::RepeatingCallback<void(StoragePartition*)>;
-  void ForEachStoragePartition(StoragePartitionCallback callback);
+  // Synchronously invokes `fn` for each loaded StoragePartition.
+  // Persisted StoragePartitions (not in-memory) are loaded lazily on first
+  // use, at which point a StoragePartition object will be created that's
+  // backed by the on-disk storage. StoragePartitions will not be unloaded for
+  // the remainder of the BrowserContext's lifetime.
+  void ForEachLoadedStoragePartition(
+      base::FunctionRef<void(StoragePartition*)> fn);
 
-  // Disposes the given StoragePartition. Only in-memory storage partition
-  // disposal is supported. Caller needs to be careful that no outstanding
-  // references are left to access the disposed storage partition.
-  void DisposeStoragePartition(StoragePartition* storage_partition);
-
-  // Returns the number of StoragePartitions that exist for `this`
+  // Returns the number of loaded StoragePartitions that exist for `this`
   // BrowserContext.
-  size_t GetStoragePartitionCount();
+  // See |ForEachLoadedStoragePartition| for details about loaded
+  // StoragePartitions.
+  size_t GetLoadedStoragePartitionCount();
 
   // Starts an asynchronous best-effort attempt to delete all on-disk storage
   // related to |partition_domain| and synchronously invokes |done_callback|
-  // once all on-disk storage is deleted.
+  // once all deletable on-disk storage is deleted. |on_gc_required| will be
+  // invoked if |partition_domain| corresponds to any StoragePartitions that
+  // are loaded and can't safely be deleted. In this case the caller should
+  // attempt to delete the StoragePartition again at next browser launch.
   void AsyncObliterateStoragePartition(const std::string& partition_domain,
                                        base::OnceClosure on_gc_required,
                                        base::OnceClosure done_callback);
 
-  // Examines the on-disk storage and removes any entries that are not listed
-  // in the `active_paths`, or in use by current entries in the storage
-  // partition.
+  // Examines all on-disk StoragePartitions and removes any entries that are
+  // not loaded or listed in `active_paths`.
   //
   // The `done` closure is executed on the calling thread when garbage
   // collection is complete.
@@ -292,13 +302,8 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
 
   // Retrieves the InProgressDownloadManager associated with this object if
   // available
-  virtual download::InProgressDownloadManager*
-  RetriveInProgressDownloadManager();
-
-  // Utility function useful for embedders. Only needs to be called if
-  // 1) The embedder needs to use a new salt, and
-  // 2) The embedder saves its salt across restarts.
-  static std::string CreateRandomMediaDeviceIDSalt();
+  virtual std::unique_ptr<download::InProgressDownloadManager>
+  RetrieveInProgressDownloadManager();
 
   using TraceProto = perfetto::protos::pbzero::ChromeBrowserContext;
   // Write a representation of this object into tracing proto.
@@ -374,6 +379,11 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // BrowserContext::GetPermissionController() instead.
   virtual PermissionControllerDelegate* GetPermissionControllerDelegate() = 0;
 
+  // Returns the ReduceAcceptLanguageControllerDelegate associated with that
+  // context if any, nullptr otherwise.
+  virtual ReduceAcceptLanguageControllerDelegate*
+  GetReduceAcceptLanguageControllerDelegate() = 0;
+
   // Returns the ClientHintsControllerDelegate associated with that context if
   // any, nullptr otherwise.
   virtual ClientHintsControllerDelegate* GetClientHintsControllerDelegate() = 0;
@@ -389,10 +399,6 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // Returns the BrowsingDataRemoverDelegate for this context. This will be
   // called once per context. It's valid to return nullptr.
   virtual BrowsingDataRemoverDelegate* GetBrowsingDataRemoverDelegate() = 0;
-
-  // Returns a random salt string that is used for creating media device IDs.
-  // Default implementation uses the BrowserContext's UniqueId.
-  virtual std::string GetMediaDeviceIDSalt();
 
   // Returns the FileSystemAccessPermissionContext associated with this context
   // if any, nullptr otherwise.
@@ -427,15 +433,23 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // enabled in site settings.
   virtual FederatedIdentityApiPermissionContextDelegate*
   GetFederatedIdentityApiPermissionContext();
+  // Gets the permission context for determining whether the FedCM API's auto
+  // re-authentication feature is enabled in site settings.
+  virtual FederatedIdentityAutoReauthnPermissionContextDelegate*
+  GetFederatedIdentityAutoReauthnPermissionContext();
   // Gets the permission context for allowing session management capabilities
   // between an identity provider and a relying party if one exists, or
   // nullptr otherwise.
-  virtual FederatedIdentityActiveSessionPermissionContextDelegate*
-  GetFederatedIdentityActiveSessionPermissionContext();
-  // Gets the permission context for WebID identity token sharing if one
-  // exists, or nullptr otherwise.
-  virtual FederatedIdentitySharingPermissionContextDelegate*
-  GetFederatedIdentitySharingPermissionContext();
+  virtual FederatedIdentityPermissionContextDelegate*
+  GetFederatedIdentityPermissionContext();
+
+  // Gets the KAnonymityServiceDelegate if supported. Returns nullptr if
+  // unavailable.
+  virtual KAnonymityServiceDelegate* GetKAnonymityServiceDelegate();
+
+  // Returns the OriginTrialsControllerDelegate associated with the context if
+  // any, nullptr otherwise.
+  virtual OriginTrialsControllerDelegate* GetOriginTrialsControllerDelegate();
 
  private:
   // Please don't add more fields to BrowserContext.

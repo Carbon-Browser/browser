@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,26 +8,17 @@
 #import <UIKit/UIKit.h>
 #include <stddef.h>
 
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
+#import "base/ios/device_util.h"
 #include "base/system/sys_info.h"
 
 namespace {
-
-// Return a 3 elements array containing the major, minor and bug fix version of
-// the OS.
-const int32_t* OSVersionAsArray() {
-  int32_t* digits = new int32_t[3];
-  base::SysInfo::OperatingSystemVersionNumbers(
-      &digits[0], &digits[1], &digits[2]);
-  return digits;
-}
 
 std::string* g_icudtl_path_override = nullptr;
 
 }  // namespace
 
-namespace base {
-namespace ios {
+namespace base::ios {
 
 bool IsRunningOnIOS12OrLater() {
   static const bool is_running_on_or_later = IsRunningOnOrLater(12, 0, 0);
@@ -49,14 +40,38 @@ bool IsRunningOnIOS15OrLater() {
   return is_running_on_or_later;
 }
 
+bool IsRunningOnIOS16OrLater() {
+  static const bool is_running_on_or_later = IsRunningOnOrLater(16, 0, 0);
+  return is_running_on_or_later;
+}
+
+bool IsRunningOnIOS17OrLater() {
+  static const bool is_running_on_or_later = IsRunningOnOrLater(17, 0, 0);
+  return is_running_on_or_later;
+}
+
 bool IsRunningOnOrLater(int32_t major, int32_t minor, int32_t bug_fix) {
-  static const int32_t* current_version = OSVersionAsArray();
-  int32_t version[] = {major, minor, bug_fix};
-  for (size_t i = 0; i < std::size(version); i++) {
-    if (current_version[i] != version[i])
-      return current_version[i] > version[i];
-  }
-  return true;
+  static const class OSVersion {
+   public:
+    OSVersion() {
+      SysInfo::OperatingSystemVersionNumbers(
+          &current_version_[0], &current_version_[1], &current_version_[2]);
+    }
+
+    bool IsRunningOnOrLater(int32_t version[3]) const {
+      for (size_t i = 0; i < std::size(current_version_); ++i) {
+        if (current_version_[i] != version[i])
+          return current_version_[i] > version[i];
+      }
+      return true;
+    }
+
+   private:
+    int32_t current_version_[3];
+  } kOSVersion;
+
+  int32_t version[3] = {major, minor, bug_fix};
+  return kOSVersion.IsRunningOnOrLater(version);
 }
 
 bool IsInForcedRTL() {
@@ -87,5 +102,11 @@ bool IsApplicationPreWarmed() {
   return [NSProcessInfo.processInfo.environment objectForKey:@"ActivePrewarm"];
 }
 
-}  // namespace ios
-}  // namespace base
+bool HasDynamicIsland() {
+  std::string hardware_model = ::ios::device_util::GetPlatform();
+  static bool is_dynamic_island_model =
+      (hardware_model == "iPhone15,2" || hardware_model == "iPhone15,3");
+  return is_dynamic_island_model;
+}
+
+}  // namespace base::ios

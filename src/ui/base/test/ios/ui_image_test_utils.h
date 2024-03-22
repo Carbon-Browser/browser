@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-namespace ui {
-namespace test {
-namespace uiimage_utils {
+namespace ui::test::uiimage_utils {
 
 // Returns a new UIImage of size |size| with a solid color of |color|. This
 // is the same as calling UIImageWithSizeAndSolidColorAndScale with a scale
@@ -33,8 +31,6 @@ UIImage* UIImageWithSizeAndSolidColorAndScale(CGSize const& size,
 // radar://30188145).
 bool UIImagesAreEqual(UIImage* image_1, UIImage* image_2);
 
-}  // namespace uiimage_utils
-}  // namespace test
-}  // namespace ui
+}  // namespace ui::test::uiimage_utils
 
 #endif  // UI_BASE_TEST_IOS_UI_IMAGE_TEST_UTILS_H_

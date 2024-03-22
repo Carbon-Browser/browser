@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,10 @@ import org.chromium.base.test.util.Restriction;
  *   \@Restriction({UiRestriction.RESTRICTION_TYPE_PHONE})
  * </code>
  */
-
 public final class UiRestriction {
-    /** Specifies the test is only valid on phone form factors. */
+    /** Specifies the test is only valid on phone sized screens. */
     public static final String RESTRICTION_TYPE_PHONE = "Phone";
-    /** Specifies the test is only valid on tablet form factors. */
+
+    /** Specifies the test is only valid on tablet sized screens. */
     public static final String RESTRICTION_TYPE_TABLET = "Tablet";
 }

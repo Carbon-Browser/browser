@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,24 +22,19 @@ void InitializeFieldTrialAndFeatureList() {
   const base::CommandLine& command_line =
       *base::CommandLine::ForCurrentProcess();
 
-  // Initialize statistical testing infrastructure.  We set the entropy
-  // provider to nullptr to disallow non-browser processes from creating
-  // their own one-time randomized trials; they should be created in the
-  // browser process.
+  // Initialize statistical testing infrastructure.
   //
   // This is intentionally leaked since it needs to live for the duration of the
   // process and there's no benefit in cleaning it up at exit.
-  base::FieldTrialList* leaked_field_trial_list =
-      new base::FieldTrialList(nullptr);
+  base::FieldTrialList* leaked_field_trial_list = new base::FieldTrialList();
   ANNOTATE_LEAKING_OBJECT_PTR(leaked_field_trial_list);
   std::ignore = leaked_field_trial_list;
 
   // Ensure any field trials in browser are reflected into the child process.
-  base::FieldTrialList::CreateTrialsFromCommandLine(command_line,
-                                                    kFieldTrialDescriptor);
+  base::FieldTrialList::CreateTrialsInChildProcess(command_line,
+                                                   kFieldTrialDescriptor);
   std::unique_ptr<base::FeatureList> feature_list(new base::FeatureList);
-  base::FieldTrialList::CreateFeaturesFromCommandLine(command_line,
-                                                      feature_list.get());
+  base::FieldTrialList::ApplyFeatureOverridesInChildProcess(feature_list.get());
   // TODO(crbug.com/988603): This may be redundant. The way this is supposed to
   // work is that the parent process's state should be passed via command-line
   // to the child process, such that a feature explicitly enabled or disabled in

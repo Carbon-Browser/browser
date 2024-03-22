@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,9 +73,9 @@ int GetMaximumEligibleBirthYear(const base::Time& now) {
   return exploded_time.year - kEligibleAge - 1;
 }
 
-int GetNoisedBirthYear(const PrefService& pref_service, int raw_birth_year) {
+int GetNoisedBirthYear(const PrefService* local_state, int raw_birth_year) {
   int birth_year_offset =
-      pref_service.GetInteger(kSyncDemographicsBirthYearOffsetPrefName);
+      local_state->GetInteger(kUserDemographicsBirthYearOffsetPrefName);
   return birth_year_offset + raw_birth_year;
 }
 

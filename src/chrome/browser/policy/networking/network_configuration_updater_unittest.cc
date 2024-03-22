@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ namespace policy {
 namespace {
 
 class MockPolicyProvidedCertsObserver
-    : public chromeos::PolicyCertificateProvider::Observer {
+    : public ash::PolicyCertificateProvider::Observer {
  public:
   MockPolicyProvidedCertsObserver() = default;
 
@@ -187,10 +187,6 @@ class NetworkConfigurationUpdaterTest : public testing::Test {
     policy_service_ = std::make_unique<PolicyServiceImpl>(std::move(providers));
   }
 
-  base::Value* GetExpectedFakeGlobalNetworkConfig() {
-    return &fake_global_network_config_;
-  }
-
   void TearDown() override {
     network_configuration_updater_.reset();
     provider_.Shutdown();
@@ -204,7 +200,7 @@ class NetworkConfigurationUpdaterTest : public testing::Test {
     EXPECT_CALL(provider_, IsFirstPolicyLoadComplete(_))
         .WillRepeatedly(Return(true));
     provider_.SetAutoRefresh();
-    provider_.RefreshPolicies();
+    provider_.RefreshPolicies(PolicyFetchReason::kTest);
     base::RunLoop().RunUntilIdle();
   }
 
@@ -230,7 +226,6 @@ class NetworkConfigurationUpdaterTest : public testing::Test {
 
  private:
   base::Value fake_network_configs_;
-  base::DictionaryValue fake_global_network_config_;
 };
 
 TEST_F(NetworkConfigurationUpdaterTest, CaPolicyIsValidatedAndRepaired) {

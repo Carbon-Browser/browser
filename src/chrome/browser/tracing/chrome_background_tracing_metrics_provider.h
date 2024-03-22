@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include "base/memory/raw_ptr.h"
 #include "components/tracing/common/background_tracing_metrics_provider.h"
 
+class ChromeOSSystemProfileProvider;
+
 namespace tracing {
 
 // The background tracing manager will make sure traces are only uploaded on
@@ -16,7 +18,8 @@ namespace tracing {
 class ChromeBackgroundTracingMetricsProvider
     : public BackgroundTracingMetricsProvider {
  public:
-  ChromeBackgroundTracingMetricsProvider();
+  explicit ChromeBackgroundTracingMetricsProvider(
+      ChromeOSSystemProfileProvider* cros_system_profile_provider);
 
   ChromeBackgroundTracingMetricsProvider(
       const ChromeBackgroundTracingMetricsProvider&) = delete;
@@ -26,13 +29,18 @@ class ChromeBackgroundTracingMetricsProvider
   ~ChromeBackgroundTracingMetricsProvider() override;
 
   // metrics::MetricsProvider:
-  void Init() override;
+  void DoInit() override;
   void AsyncInit(base::OnceClosure done_callback) override;
+
+  void RecordCoreSystemProfileMetrics(
+      metrics::SystemProfileProto* system_profile_proto) override;
 
  private:
   // owned by BackgroundTracingMetricsProvider::system_profile_providers_.
   raw_ptr<MetricsProvider> av_metrics_provider_ = nullptr;
   raw_ptr<MetricsProvider> chromeos_metrics_provider_ = nullptr;
+  raw_ptr<ChromeOSSystemProfileProvider> cros_system_profile_provider_ =
+      nullptr;
 };
 
 }  // namespace tracing

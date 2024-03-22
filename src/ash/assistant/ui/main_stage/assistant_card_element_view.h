@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "ash/assistant/ui/main_stage/assistant_ui_element_view.h"
 #include "ash/public/cpp/ash_web_view.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -55,10 +56,10 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantCardElementView
  private:
   void InitLayout();
 
-  AshWebView* contents_view_ = nullptr;
+  raw_ptr<AshWebView, ExperimentalAsh> contents_view_ = nullptr;
 
-  AssistantViewDelegate* const delegate_;
-  const AssistantCardElement* const card_element_;
+  const raw_ptr<AssistantViewDelegate, ExperimentalAsh> delegate_;
+  const raw_ptr<const AssistantCardElement, ExperimentalAsh> card_element_;
 
   // Rect of the focused node in the |contents_view_|.
   gfx::Rect focused_node_rect_;

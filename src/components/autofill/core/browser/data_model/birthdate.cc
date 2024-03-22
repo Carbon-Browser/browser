@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,16 @@
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/autofill/core/browser/autofill_type.h"
+#include "components/autofill/core/browser/field_types.h"
 
 namespace autofill {
-
-using structured_address::VerificationStatus;
 
 bool operator==(const Birthdate& a, const Birthdate& b) {
   return a.day_ == b.day_ && a.month_ == b.month_ && a.year_ == b.year_;
 }
 
 std::u16string Birthdate::GetRawInfo(ServerFieldType type) const {
-  DCHECK_EQ(AutofillType(type).group(), FieldTypeGroup::kBirthdateField);
+  DCHECK_EQ(GroupTypeOfServerFieldType(type), FieldTypeGroup::kBirthdateField);
 
   switch (type) {
     case BIRTHDATE_DAY:
@@ -49,7 +48,7 @@ int Birthdate::GetRawInfoAsInt(ServerFieldType type) const {
 void Birthdate::SetRawInfoWithVerificationStatus(ServerFieldType type,
                                                  const std::u16string& value,
                                                  VerificationStatus status) {
-  DCHECK_EQ(AutofillType(type).group(), FieldTypeGroup::kBirthdateField);
+  DCHECK_EQ(GroupTypeOfServerFieldType(type), FieldTypeGroup::kBirthdateField);
 
   switch (type) {
     case BIRTHDATE_DAY:

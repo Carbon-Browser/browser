@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/core/editing/commands/delete_selection_command.h"
 
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -46,7 +47,8 @@
 #include "third_party/blink/renderer/core/html/html_style_element.h"
 #include "third_party/blink/renderer/core/html/html_table_row_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/layout_table_cell.h"
+#include "third_party/blink/renderer/core/layout/layout_box.h"
+#include "third_party/blink/renderer/core/layout/layout_text.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
@@ -320,8 +322,11 @@ void DeleteSelectionCommand::InitializePositionData(
   // to the selection
   leading_whitespace_ = LeadingCollapsibleWhitespacePosition(
       upstream_start_, selection_to_delete_.Affinity());
-  trailing_whitespace_ = TrailingWhitespacePosition(
-      downstream_end_, kNotConsiderNonCollapsibleWhitespace);
+  trailing_whitespace_ =
+      IsEditablePosition(downstream_end_)
+          ? TrailingWhitespacePosition(downstream_end_,
+                                       kNotConsiderNonCollapsibleWhitespace)
+          : Position();
 
   if (options_.IsSmartDelete()) {
     // skip smart delete if the selection to delete already starts or ends with
@@ -583,7 +588,7 @@ void DeleteSelectionCommand::RemoveCompletelySelectedNodes(
   }
 
   // Update leading, trailing whitespace position.
-  if (!nodes_to_be_removed.IsEmpty()) {
+  if (!nodes_to_be_removed.empty()) {
     leading_whitespace_ = ComputePositionForNodeRemoval(
         leading_whitespace_, *(nodes_to_be_removed[0].Get()));
     trailing_whitespace_ = ComputePositionForNodeRemoval(
@@ -594,9 +599,8 @@ void DeleteSelectionCommand::RemoveCompletelySelectedNodes(
   // Check if place holder is needed before actually removing nodes because
   // this requires document.NeedsLayoutTreeUpdate() returning false.
   if (!need_placeholder_) {
-    need_placeholder_ = std::any_of(
-        nodes_to_be_removed.begin(), nodes_to_be_removed.end(),
-        [&](Node* node) {
+    need_placeholder_ =
+        base::ranges::any_of(nodes_to_be_removed, [&](Node* node) {
           if (node == start_block_) {
             VisiblePosition previous = PreviousPositionOf(
                 VisiblePosition::FirstPositionInNode(*start_block_.Get()));
@@ -881,7 +885,7 @@ void DeleteSelectionCommand::FixupWhitespace(const Position& position) {
   if (IsRenderedCharacter(position))
     return;
   DCHECK(!text_node->GetLayoutObject() ||
-         text_node->GetLayoutObject()->Style()->CollapseWhiteSpace())
+         text_node->GetLayoutObject()->Style()->ShouldCollapseWhiteSpaces())
       << text_node;
   ReplaceTextInNode(text_node, position.ComputeOffsetInContainerNode(), 1,
                     NonBreakingSpaceString());
@@ -1351,7 +1355,7 @@ InputEvent::InputType DeleteSelectionCommand::GetInputType() const {
 // typing.  The Bold typing style shouldn't stick around.  Deletion should
 // preserve a typing style that *it* sets, however.
 bool DeleteSelectionCommand::PreservesTypingStyle() const {
-  return typing_style_;
+  return typing_style_ != nullptr;
 }
 
 void DeleteSelectionCommand::Trace(Visitor* visitor) const {

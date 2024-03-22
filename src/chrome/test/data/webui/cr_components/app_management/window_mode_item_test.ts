@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@ import {App} from 'chrome://resources/cr_components/app_management/app_managemen
 import {BrowserProxy} from 'chrome://resources/cr_components/app_management/browser_proxy.js';
 import {AppManagementWindowModeElement} from 'chrome://resources/cr_components/app_management/window_mode_item.js';
 import {assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks, isVisible} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import {isVisible} from 'chrome://webui-test/test_util.js';
 
 import {createTestApp, TestAppManagementBrowserProxy} from './app_management_test_support.js';
 
@@ -18,7 +19,7 @@ suite('AppManagementWindowModeItemTest', function() {
   let testProxy: TestAppManagementBrowserProxy;
 
   setup(async function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     testProxy = new TestAppManagementBrowserProxy();
     BrowserProxy.setInstance(testProxy);
   });
@@ -34,7 +35,7 @@ suite('AppManagementWindowModeItemTest', function() {
   test(
       'Window Mode Item IS visible when `hideWindowMode` is true',
       async function() {
-        const app = createTestApp();
+        const app = createTestApp('app');
         app.hideWindowMode = false;
 
         await setupWindowModeItem(app);
@@ -45,7 +46,7 @@ suite('AppManagementWindowModeItemTest', function() {
   test(
       'Window Mode Item is NOT visible when `hideWindowMode` is true',
       async function() {
-        const app = createTestApp();
+        const app = createTestApp('app');
         app.hideWindowMode = true;
 
         await setupWindowModeItem(app);

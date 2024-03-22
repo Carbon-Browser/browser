@@ -1,13 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/background_fetch/background_fetch_scheduler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/cxx20_erase.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/string_number_conversions.h"
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
@@ -64,17 +63,16 @@ BackgroundFetchScheduler::BackgroundFetchScheduler(
     BackgroundFetchDataManager* data_manager,
     BackgroundFetchRegistrationNotifier* registration_notifier,
     BackgroundFetchDelegateProxy* delegate_proxy,
-    DevToolsBackgroundServicesContextImpl* devtools_context,
+    DevToolsBackgroundServicesContextImpl& devtools_context,
     scoped_refptr<ServiceWorkerContextWrapper> service_worker_context)
     : data_manager_(data_manager),
       registration_notifier_(registration_notifier),
       delegate_proxy_(delegate_proxy),
-      devtools_context_(devtools_context),
+      devtools_context_(&devtools_context),
       event_dispatcher_(background_fetch_context,
                         std::move(service_worker_context),
                         devtools_context) {
   DCHECK(delegate_proxy_);
-  DCHECK(devtools_context_);
   delegate_proxy_->SetClickEventDispatcher(
       base::BindRepeating(&BackgroundFetchScheduler::DispatchClickEvent,
                           weak_ptr_factory_.GetWeakPtr()));
@@ -369,9 +367,6 @@ void BackgroundFetchScheduler::OnRegistrationCreated(
       {{"Total Requests", base::NumberToString(num_requests)},
        {"Start Paused", start_paused ? "Yes" : "No"}});
 
-  registration_notifier_->NoteTotalRequests(registration_id.unique_id(),
-                                            num_requests);
-
   auto controller = CreateInitializedController(
       registration_id, registration_data, std::move(options), icon,
       /* completed_requests= */ 0, num_requests,
@@ -532,6 +527,7 @@ void BackgroundFetchScheduler::LogBackgroundFetchEventForDevTools(
     const BackgroundFetchRegistrationId& registration_id,
     const BackgroundFetchRequestInfo* request_info,
     std::map<std::string, std::string> metadata) {
+  CHECK(devtools_context_);
   if (!devtools_context_->IsRecording(
           DevToolsBackgroundService::kBackgroundFetch)) {
     return;
@@ -577,13 +573,16 @@ void BackgroundFetchScheduler::LogBackgroundFetchEventForDevTools(
           base::NumberToString(request_info->request_body_size());
   }
 
-  // TODO(https://crbug.com/1199077): Pass `registration_id.storage_key()`
-  // directly once DevToolsBackgroundServicesContextImpl implements StorageKey.
   devtools_context_->LogBackgroundServiceEvent(
       registration_id.service_worker_registration_id(),
-      registration_id.storage_key().origin(),
+      registration_id.storage_key(),
       DevToolsBackgroundService::kBackgroundFetch, std::move(event_name),
       /* instance_id= */ registration_id.developer_id(), metadata);
+}
+
+void BackgroundFetchScheduler::Shutdown() {
+  event_dispatcher_.Shutdown();
+  devtools_context_ = nullptr;
 }
 
 }  // namespace content

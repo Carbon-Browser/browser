@@ -26,49 +26,61 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import gzip
+import functools
+import logging
+import threading
 
-import six
-from six.moves import urllib
+import requests
 
 from blinkpy.common.net.network_transaction import NetworkTransaction
 
+_log = logging.getLogger(__name__)
 
-class Web(object):
-    class _HTTPRedirectHandler2(urllib.request.HTTPRedirectHandler):  # pylint:disable=no-init
-        """A subclass of HTTPRedirectHandler to support 308 Permanent Redirect."""
 
-        def http_error_308(self, req, fp, code, msg, headers):  # pylint:disable=unused-argument
-            # We have to override the code to 301 (Moved Permanently);
-            # otherwise, HTTPRedirectHandler will throw a HTTPError.
-            return self.http_error_301(req, fp, 301, msg, headers)
+class Web:
+    def __init__(self):
+        # Map each thread ID to a per-thread session object so that `Web` is
+        # thread-safe. This should automatically make the rest of the RPC stack
+        # built on `Web` thread-safe.
+        #
+        # Persisting the sessions keeps the underlying connections alive, which
+        # is critical for performance. Too many connections can cause network
+        # throttling. See crbug.com/1394451#c8 for an example.
+        self._sessions = {}
+        # Guard access to the session map.
+        # From https://google.github.io/styleguide/pyguide.html#218-threading:
+        #   > Do not rely on the atomicity of built-in types.
+        self._session_access = threading.Lock()
+
+    @property
+    def session(self) -> requests.Session:
+        thread_id = threading.current_thread().ident
+        with self._session_access:
+            session = self._sessions.get(thread_id)
+            if not session:
+                session = self._sessions[thread_id] = requests.Session()
+            return session
 
     def get_binary(self, url, return_none_on_404=False):
-        def make_request():
-            response = self.request('GET',
-                                    url,
-                                    headers={'Accept-Encoding': 'gzip'})
-            if response.headers.get('Content-Encoding') == 'gzip':
-                # Wrap the HTTP response, which is not fully file-like.
-                # Unfortunately, `six` does not provide `io.BufferedRandom`, so
-                # we need to read the entire payload up-front (may pose a
-                # performance issue).
-                buf = six.BytesIO(response.read())
-                gzip_decoder = gzip.GzipFile(fileobj=buf)
-                return gzip_decoder.read()
-            return response.read()
-
+        make_request = functools.partial(self.request_and_read,
+                                         'GET',
+                                         url,
+                                         headers={'Accept-Encoding': 'gzip'})
         return NetworkTransaction(
             return_none_on_404=return_none_on_404).run(make_request)
 
     def request(self, method, url, data=None, headers=None):
-        opener = urllib.request.build_opener(Web._HTTPRedirectHandler2)
-        request = urllib.request.Request(url=url, data=data)
+        response = self.session.request(method.lower(),
+                                        url,
+                                        data=data,
+                                        headers=headers,
+                                        stream=True)
+        response.raise_for_status()
+        return response
 
-        request.get_method = lambda: method
-
-        if headers:
-            for key, value in headers.items():
-                request.add_header(key, value)
-
-        return opener.open(request)
+    def request_and_read(self, *args, **kwargs):
+        response = self.request(*args, **kwargs)
+        buf = bytearray()
+        for section in response.iter_content(chunk_size=None):
+            buf.extend(section)
+        return buf

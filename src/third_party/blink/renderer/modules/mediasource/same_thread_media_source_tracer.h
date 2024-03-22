@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,9 @@ class SameThreadMediaSourceTracer final : public MediaSourceTracer {
 
   bool IsCrossThreadForDebugging() const override { return false; }
 
-  HTMLMediaElement* GetMediaElement() { return media_element_; }
+  HTMLMediaElement* GetMediaElement() { return media_element_.Get(); }
 
-  MediaSource* GetMediaSource() { return media_source_; }
+  MediaSource* GetMediaSource() { return media_source_.Get(); }
 
  private:
   Member<HTMLMediaElement> media_element_;

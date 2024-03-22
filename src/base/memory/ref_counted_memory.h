@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,9 +41,10 @@ class BASE_EXPORT RefCountedMemory
     return reinterpret_cast<const T*>(front());
   }
 
-  // Alias for front() to make it possible for RefCountedMemory to implicitly
-  // convert to span.
   const unsigned char* data() const { return front(); }
+
+  const unsigned char* begin() const { return data(); }
+  const unsigned char* end() const { return data() + size(); }
 
  protected:
   friend class RefCountedThreadSafe<RefCountedMemory>;
@@ -126,16 +127,10 @@ class BASE_EXPORT RefCountedBytes : public RefCountedMemory {
 class BASE_EXPORT RefCountedString : public RefCountedMemory {
  public:
   RefCountedString();
+  explicit RefCountedString(std::string value);
 
   RefCountedString(const RefCountedString&) = delete;
   RefCountedString& operator=(const RefCountedString&) = delete;
-
-  // Constructs a RefCountedString object by performing a swap. (To non
-  // destructively build a RefCountedString, use the default constructor and
-  // copy into object->data()).
-  static scoped_refptr<RefCountedString> TakeString(std::string* to_destroy);
-
-  static scoped_refptr<RefCountedString> TakeString(std::string&& str);
 
   // RefCountedMemory:
   const unsigned char* front() const override;
@@ -155,15 +150,10 @@ class BASE_EXPORT RefCountedString : public RefCountedMemory {
 class BASE_EXPORT RefCountedString16 : public base::RefCountedMemory {
  public:
   RefCountedString16();
+  explicit RefCountedString16(std::u16string value);
 
   RefCountedString16(const RefCountedString16&) = delete;
   RefCountedString16& operator=(const RefCountedString16&) = delete;
-
-  // Constructs a RefCountedString16 object by performing a swap.
-  static scoped_refptr<RefCountedString16> TakeString(
-      std::u16string* to_destroy);
-
-  static scoped_refptr<RefCountedString16> TakeString(std::u16string&& str);
 
   // RefCountedMemory:
   const unsigned char* front() const override;

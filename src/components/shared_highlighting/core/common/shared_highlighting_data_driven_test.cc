@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #endif
 
 namespace shared_highlighting {
@@ -60,7 +60,7 @@ bool ReadFile(const base::FilePath& file, std::string* content) {
 const base::FilePath GetTestDataDir() {
   static base::NoDestructor<base::FilePath> dir([]() {
     base::FilePath dir;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &dir);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &dir);
     return dir.AppendASCII("components")
         .AppendASCII("test")
         .AppendASCII("data");
@@ -71,7 +71,7 @@ const base::FilePath GetTestDataDir() {
 const base::FilePath GetInputDir() {
   static base::NoDestructor<base::FilePath> dir([]() {
     base::FilePath dir;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &dir);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &dir);
     return dir.AppendASCII("third_party")
         .AppendASCII("text-fragments-polyfill")
         .AppendASCII("src")
@@ -100,7 +100,7 @@ SharedHighlightingDataDrivenTest::GetTestFiles() {
   std::sort(files.begin(), files.end());
 
 #if BUILDFLAG(IS_MAC)
-  base::mac::ClearAmIBundledCache();
+  base::apple::ClearAmIBundledCache();
 #endif  // BUILDFLAG(IS_MAC)
 
   return files;

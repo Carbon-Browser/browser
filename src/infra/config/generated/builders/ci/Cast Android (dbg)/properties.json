@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/Cast Android (dbg)/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "Cast Android (dbg)",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-android-archive",
@@ -27,8 +30,7 @@
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "android",
-                  "enable_reclient"
+                  "android"
                 ],
                 "config": "chromium"
               }
@@ -40,12 +42,12 @@
         {
           "bucket": "ci",
           "builder": "Cast Android (dbg)",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "mirroring_builder_group_and_names": [
         {
-          "builder": "cast_shell_android",
+          "builder": "android-x64-cast",
           "group": "tryserver.chromium.android"
         }
       ]
@@ -54,7 +56,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 500,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

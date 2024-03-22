@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.chrome.browser.browserservices.intents;
 
 import androidx.annotation.Nullable;
 
-/**
- * Provides the set of colors used by BrowserServicesIntentDataProvider.
- */
+/** Provides the set of colors used by BrowserServicesIntentDataProvider. */
 public interface ColorProvider {
     /**
      * @return The color of the bottom bar.

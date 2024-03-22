@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Types for building models of metric description xml files.
@@ -257,7 +257,7 @@ class ChildType(object):
 
 
 class ObjectNodeType(NodeType):
-  """A complex node type that has attributes or other nodes as children.
+  r"""A complex node type that has attributes or other nodes as children.
 
   Unmarshalls nodes to objects.
 
@@ -268,7 +268,7 @@ class ObjectNodeType(NodeType):
         attributes, when serializing objects to XML. The "regex" can be None
         to do no validation, otherwise the attribute must match that pattern.
     text_attribute: An attribute stored in the text content of the node.
-    children: A list of ChildTypes describing the objects children.
+    children: A list of ChildTypes describing the objects' children.
 
   Raises:
     ValueError: Attributes contains duplicate definitions.

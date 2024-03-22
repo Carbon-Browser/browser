@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,15 +13,14 @@
 #include "ash/screen_util.h"
 #include "ash/shell.h"
 #include "ash/wm/system_modal_container_layout_manager.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/window_properties.h"
+#include "ash/wm/window_restore/window_restore_controller.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
 #include "ash/wm/wm_event.h"
-#include "base/cxx17_backports.h"
 #include "base/notreached.h"
 #include "base/numerics/ranges.h"
-#include "chromeos/ui/wm/features.h"
+#include "components/app_restore/window_properties.h"
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_delegate.h"
@@ -46,8 +45,8 @@ int GetSnappedWindowAxisLength(float snap_ratio,
   min_axis_length = std::min(min_axis_length, work_area_axis_length);
   // The primary snap size is proportional to |snap_ratio|.
   if (is_primary_snap) {
-    return base::clamp(static_cast<int>(snap_ratio * work_area_axis_length),
-                       min_axis_length, work_area_axis_length);
+    return std::clamp(static_cast<int>(snap_ratio * work_area_axis_length),
+                      min_axis_length, work_area_axis_length);
   }
 
   // The secondary snap size is proportional to the |snap_ratio|, but
@@ -58,8 +57,8 @@ int GetSnappedWindowAxisLength(float snap_ratio,
   // `WindowPositioningUtilsTest.SnapBoundsWithOddNumberedScreenWidth`.
   const int empty_space_axis_length =
       static_cast<int>((1 - snap_ratio) * work_area_axis_length);
-  return base::clamp(work_area_axis_length - empty_space_axis_length,
-                     min_axis_length, work_area_axis_length);
+  return std::clamp(work_area_axis_length - empty_space_axis_length,
+                    min_axis_length, work_area_axis_length);
 }
 
 // Return true if the window or one of its ancestor returns true from
@@ -119,7 +118,8 @@ gfx::Rect GetSnappedWindowBoundsInParent(aura::Window* window,
 
 gfx::Rect GetDefaultSnappedWindowBoundsInParent(aura::Window* window,
                                                 SnapViewType type) {
-  return GetSnappedWindowBoundsInParent(window, type, kDefaultPositionRatio);
+  return GetSnappedWindowBoundsInParent(window, type,
+                                        chromeos::kDefaultSnapRatio);
 }
 
 gfx::Rect GetSnappedWindowBounds(const gfx::Rect& work_area,
@@ -178,6 +178,15 @@ gfx::Rect GetSnappedWindowBounds(const gfx::Rect& work_area,
       axis_length = preferred_size->width();
     if (!is_horizontal && preferred_size->height() > 0)
       axis_length = preferred_size->height();
+  } else if (window == WindowRestoreController::Get()->to_be_snapped_window()) {
+    // Edit `axis_length` if window restore is currently restoring a snapped
+    // window; take into account the snap percentage saved by the window.
+    app_restore::WindowInfo* window_info =
+        window->GetProperty(app_restore::kWindowInfoKey);
+    if (window_info && window_info->snap_percentage) {
+      const int snap_percentage = *window_info->snap_percentage;
+      axis_length = snap_percentage * work_area_axis_length / 100;
+    }
   }
 
   // Set the size of such side and the window position based on a given snap
@@ -192,11 +201,9 @@ gfx::Rect GetSnappedWindowBounds(const gfx::Rect& work_area,
       snap_bounds.set_x(work_area.right() - axis_length);
       break;
     case SnapPosition::kTop:
-      DCHECK(chromeos::wm::features::IsVerticalSnapEnabled());
       snap_bounds.set_height(axis_length);
       break;
     case SnapPosition::kBottom:
-      DCHECK(chromeos::wm::features::IsVerticalSnapEnabled());
       snap_bounds.set_height(axis_length);
       // Snap to the bottom.
       snap_bounds.set_y(work_area.bottom() - axis_length);
@@ -210,14 +217,10 @@ gfx::Rect GetSnappedWindowBounds(const gfx::Rect& work_area,
 
 chromeos::OrientationType GetSnapDisplayOrientation(
     const display::Display& display) {
-  if (!chromeos::wm::features::IsVerticalSnapEnabled())
-    return chromeos::OrientationType::kLandscapePrimary;
-
   // This function is used by `GetSnappedWindowBounds()` for clamshell mode
   // only. Tablet mode uses a different function
   // `SplitViewController::GetSnappedWindowBoundsInScreen()`.
-  auto* tablet_mode_controller = Shell::Get()->tablet_mode_controller();
-  DCHECK(!tablet_mode_controller || !tablet_mode_controller->InTabletMode());
+  DCHECK(!display::Screen::GetScreen()->InTabletMode());
 
   const display::Display::Rotation& rotation =
       Shell::Get()
@@ -229,15 +232,9 @@ chromeos::OrientationType GetSnapDisplayOrientation(
                                rotation);
 }
 
-void CenterWindow(aura::Window* window) {
-  WMEvent event(WM_EVENT_CENTER);
-  WindowState::Get(window)->OnWMEvent(&event);
-}
-
 void SetBoundsInScreen(aura::Window* window,
                        const gfx::Rect& bounds_in_screen,
                        const display::Display& display) {
-  DCHECK_NE(display::kInvalidDisplayId, display.id());
   // Don't move a window to other root window if:
   // a) the window is a transient window. It moves when its
   //    transient parent moves.
@@ -282,10 +279,14 @@ void SetBoundsInScreen(aura::Window* window,
         gfx::Rect new_bounds = gfx::Rect(origin, bounds_in_screen.size());
         // Set new bounds now so that the container's layout manager can adjust
         // the bounds if necessary.
+        if (window_state)
+          window_state->set_is_moving_to_another_display(true);
         window->SetBounds(new_bounds);
       }
-
       dst_container->AddChild(window);
+
+      if (window_state)
+        window_state->set_is_moving_to_another_display(false);
 
       // Restore focused/active window.
       if (focused && tracker.Contains(focused)) {

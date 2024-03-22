@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,30 +32,22 @@ public interface ArCoreShim {
         int INSTALL_REQUESTED = 1;
     }
 
-    /**
-     * Equivalent of ArCoreApk.checkAvailability.
-     */
+    /** Equivalent of ArCoreApk.checkAvailability. */
     public @ArCoreAvailability int checkAvailability(Context applicationContext);
 
-    /**
-     * Equivalent of ArCoreApk.requestInstall.
-     */
+    /** Equivalent of ArCoreApk.requestInstall. */
     public @InstallStatus int requestInstall(Activity activity, boolean userRequestedInstall)
             throws UnavailableDeviceNotCompatibleException,
-                   UnavailableUserDeclinedInstallationException;
+                    UnavailableUserDeclinedInstallationException;
 
-    /**
-     * Thrown by requestInstall() when device is not compatible with ARCore.
-     */
+    /** Thrown by requestInstall() when device is not compatible with ARCore. */
     public class UnavailableDeviceNotCompatibleException extends Exception {
         public UnavailableDeviceNotCompatibleException(Exception cause) {
             super(cause);
         }
     }
 
-    /**
-     * Thrown by requestInstall() when user declined to install ARCore.
-     */
+    /** Thrown by requestInstall() when user declined to install ARCore. */
     public class UnavailableUserDeclinedInstallationException extends Exception {
         UnavailableUserDeclinedInstallationException(Exception cause) {
             super(cause);

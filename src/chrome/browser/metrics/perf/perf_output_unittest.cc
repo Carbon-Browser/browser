@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 
 #include "base/files/file.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "chromeos/dbus/debug_daemon/fake_debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/metrics_proto/sampled_profile.pb.h"
@@ -59,10 +59,10 @@ const std::vector<std::string> kQuipperArgs{
 
 // This fakes DebugDaemonClient by serving example perf data when the profiling
 // duration elapses.
-class FakeDebugDaemonClient : public chromeos::FakeDebugDaemonClient {
+class FakeDebugDaemonClient : public ash::FakeDebugDaemonClient {
  public:
   FakeDebugDaemonClient()
-      : task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
   FakeDebugDaemonClient(const FakeDebugDaemonClient&) = delete;
   FakeDebugDaemonClient& operator=(const FakeDebugDaemonClient&) = delete;

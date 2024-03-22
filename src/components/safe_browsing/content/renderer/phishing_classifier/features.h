@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -28,6 +28,9 @@
 #include <stddef.h>
 #include <string>
 #include <unordered_map>
+
+#include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 
 namespace safe_browsing {
 
@@ -69,6 +72,10 @@ class FeatureMap {
  private:
   std::unordered_map<std::string, double> features_;
 };
+
+BASE_DECLARE_FEATURE(kClientSideDetectionRetryLimit);
+
+extern const base::FeatureParam<int> kClientSideDetectionRetryLimitTime;
 
 namespace features {
 // Constants for the various feature names that we use.

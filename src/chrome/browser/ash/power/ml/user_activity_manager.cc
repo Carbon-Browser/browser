@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,23 +11,24 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/shell.h"
 #include "ash/wm/mru_window_tracker.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/resource_coordinator/tab_metrics_logger.h"
 #include "chrome/browser/tab_contents/form_interaction_tab_helper.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/constants/devicetype.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
+#include "components/site_engagement/content/site_engagement_service.h"
 #include "ui/aura/client/aura_constants.h"
 
 namespace ash {
@@ -116,6 +117,24 @@ bool ShouldUseLacrosFeatures() {
   }
 
   return false;
+}
+
+int GetRoundedOrInvalidEngagementScore(content::WebContents* contents) {
+  if (!site_engagement::SiteEngagementService::IsEnabled()) {
+    return -1;
+  }
+
+  auto* service = site_engagement::SiteEngagementService::Get(
+      contents->GetBrowserContext());
+  DCHECK(service);
+
+  // Scores range from 0 to 100. Round down to a multiple of 10 to conform to
+  // privacy guidelines.
+  double raw_score = service->GetScore(contents->GetVisibleURL());
+  int rounded_score = static_cast<int>(raw_score / 10) * 10;
+  DCHECK_LE(0, rounded_score);
+  DCHECK_GE(100, rounded_score);
+  return rounded_score;
 }
 
 }  // namespace
@@ -385,6 +404,7 @@ void UserActivityManager::HandleSmartDimDecision(
 }
 
 void UserActivityManager::OnSessionStateChanged() {
+  TRACE_EVENT0("ui", "UserActivityManager::OnSessionStateChanged");
   DCHECK(session_manager_);
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const bool was_locked = screen_is_locked_;
@@ -550,18 +570,10 @@ void UserActivityManager::ExtractFeatures(
 }
 
 TabProperty UserActivityManager::UpdateOpenTabURL() {
-  BrowserList* browser_list = BrowserList::GetInstance();
-  DCHECK(browser_list);
-
   TabProperty property;
 
   // Find the active tab in the visible focused or topmost browser.
-  for (auto browser_iterator =
-           browser_list->begin_browsers_ordered_by_activation();
-       browser_iterator != browser_list->end_browsers_ordered_by_activation();
-       ++browser_iterator) {
-    Browser* browser = *browser_iterator;
-
+  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
     if (!browser->window()->GetNativeWindow()->IsVisible())
       continue;
 
@@ -585,8 +597,7 @@ TabProperty UserActivityManager::UpdateOpenTabURL() {
       // Domain could be empty.
       property.domain = contents->GetLastCommittedURL().host();
       // Engagement score could be -1 if engagement service is disabled.
-      property.engagement_score =
-          TabMetricsLogger::GetSiteEngagementScore(contents);
+      property.engagement_score = GetRoundedOrInvalidEngagementScore(contents);
       property.has_form_entry =
           FormInteractionTabHelper::FromWebContents(contents)
               ->had_form_interaction();

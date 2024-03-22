@@ -1,9 +1,11 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 # See https://chromium.googlesource.com/infra/luci/luci-go/+/HEAD/lucicfg/doc/README.md
 # for information on starlark/lucicfg
+
+load("//lib/chrome_settings.star", "chrome_settings")
 
 luci.project(
     name = "chromium",
@@ -32,6 +34,21 @@ luci.project(
             groups = "project-chromium-admins",
         ),
     ],
+    bindings = [
+        # Roles for LUCI Analysis.
+        luci.binding(
+            roles = "role/analysis.reader",
+            groups = "all",
+        ),
+        luci.binding(
+            roles = "role/analysis.queryUser",
+            groups = "authenticated-users",
+        ),
+        luci.binding(
+            roles = "role/analysis.editor",
+            groups = ["project-chromium-committers", "googlers"],
+        ),
+    ],
 )
 
 luci.logdog(
@@ -40,6 +57,10 @@ luci.logdog(
 
 luci.milo(
     logo = "https://storage.googleapis.com/chrome-infra-public/logo/chromium.svg",
+)
+
+chrome_settings.per_builder_outputs(
+    root_dir = "builders-dev",
 )
 
 # An all-purpose public realm.
@@ -63,5 +84,6 @@ luci.builder.defaults.test_presentation.set(resultdb.test_presentation(grouping_
 exec("//dev/swarming.star")
 
 exec("//recipes.star")
+exec("//gn_args/gn_args.star")
 
 exec("//dev/subprojects/chromium/subproject.star")

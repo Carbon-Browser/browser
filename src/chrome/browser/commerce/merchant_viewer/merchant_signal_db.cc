@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/fixed_flat_map.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/commerce/merchant_viewer/android/jni_headers/MerchantTrustSignalsEventStorage_jni.h"
 #include "chrome/browser/commerce/merchant_viewer/android/jni_headers/MerchantTrustSignalsEvent_jni.h"
 #include "chrome/browser/persisted_state_db/session_proto_db_factory.h"

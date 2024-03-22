@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,6 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/blink/public/mojom/buckets/bucket_manager_host.mojom.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom-shared.h"
-#include "url/origin.h"
 
 namespace storage {
 struct BucketInfo;
@@ -28,30 +27,32 @@ class QuotaManagerProxy;
 namespace content {
 
 class BucketManager;
+class StoragePartitionImpl;
 
-// Implements the Storage Buckets API for a single origin.
+// Implements the Storage Buckets API for a single StorageKey.
 //
 // BucketManager owns all BucketManagerHost instances associated with
-// a StorageParititon. A new instance is created for every origin.
+// a StorageParititon. A new instance is created for every `StorageKey`.
 // Instances are destroyed when all their corresponding mojo connection are
 // closed, or when BucketManager is destroyed.
 class BucketManagerHost : public blink::mojom::BucketManagerHost {
  public:
-  explicit BucketManagerHost(BucketManager* manager, url::Origin origin);
+  explicit BucketManagerHost(BucketManager* manager,
+                             const blink::StorageKey& storage_key);
   ~BucketManagerHost() override;
 
   BucketManagerHost(const BucketManagerHost&) = delete;
   BucketManagerHost& operator=(const BucketManagerHost&) = delete;
 
   // Binds |receiver| to the BucketManagerHost. The |receiver| must belong to
-  // the frame or worker from this host's origin. `permission_decision` is used
-  // to determine permissions for the receiver.
+  // the frame or worker from this host's `StorageKey`. `context` is used to
+  // determine permissions for the receiver.
   void BindReceiver(
       mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver,
-      const BucketContext& context);
+      base::WeakPtr<BucketContext> context);
 
-  // The origin served by this host.
-  const url::Origin& origin() const { return origin_; }
+  // The `StorageKey` served by this host.
+  const blink::StorageKey& storage_key() const { return storage_key_; }
 
   // Returns true if there are no receivers connected to this host.
   //
@@ -63,19 +64,25 @@ class BucketManagerHost : public blink::mojom::BucketManagerHost {
   void OpenBucket(const std::string& name,
                   blink::mojom::BucketPoliciesPtr policy,
                   OpenBucketCallback callback) override;
+  // Gets the bucket with the given name. Doesn't create the bucket if it
+  // doesn't exist.
+  void GetBucketForDevtools(
+      const std::string& name,
+      mojo::PendingReceiver<blink::mojom::BucketHost> receiver) override;
   void Keys(KeysCallback callback) override;
   void DeleteBucket(const std::string& name,
                     DeleteBucketCallback callback) override;
 
-  void RemoveBucketHost(const std::string& name);
+  void RemoveBucketHost(storage::BucketId id);
 
+  StoragePartitionImpl* GetStoragePartition();
   storage::QuotaManagerProxy* GetQuotaManagerProxy();
 
  private:
   // Called when a receiver in the receiver set is disconnected.
   void OnReceiverDisconnect();
 
-  void DidGetBucket(const BucketContext& bucket_context,
+  void DidGetBucket(base::WeakPtr<BucketContext> bucket_context,
                     OpenBucketCallback callback,
                     storage::QuotaErrorOr<storage::BucketInfo> result);
 
@@ -87,21 +94,30 @@ class BucketManagerHost : public blink::mojom::BucketManagerHost {
                        DeleteBucketCallback callback,
                        blink::mojom::QuotaStatusCode status);
 
+  void DidGetBucketForDevtools(
+      base::WeakPtr<BucketContext> bucket_context,
+      mojo::PendingReceiver<blink::mojom::BucketHost> receiver,
+      storage::QuotaErrorOr<storage::BucketInfo> result);
+
   SEQUENCE_CHECKER(sequence_checker_);
 
   // Raw pointer is safe because BucketManager owns this BucketManagerHost, and
   // is therefore guaranteed to outlive it.
   const raw_ptr<BucketManager> manager_;
 
-  // The origin of the frame or worker connected to this BucketManagerHost.
-  const url::Origin origin_;
+  // The `StorageKey` of the frame or worker connected to this
+  // BucketManagerHost.
+  const blink::StorageKey storage_key_;
 
-  // Map of currently open/used buckets for an origin.
-  std::map<std::string, std::unique_ptr<BucketHost>> bucket_map_;
+  // Map of currently open/used buckets. The lifetime matches that of the remote
+  // which means they can outlive the bucket's data.
+  std::map<storage::BucketId, std::unique_ptr<BucketHost>> bucket_map_;
 
-  // Add receivers for frames & workers for `origin_` associated with
+  // Add receivers for frames & workers for `storage_key_` associated with
   // the StoragePartition that owns `manager_`.
-  mojo::ReceiverSet<blink::mojom::BucketManagerHost, BucketContext> receivers_;
+  mojo::ReceiverSet<blink::mojom::BucketManagerHost,
+                    base::WeakPtr<BucketContext>>
+      receivers_;
 
   base::WeakPtrFactory<BucketManagerHost> weak_factory_{this};
 };

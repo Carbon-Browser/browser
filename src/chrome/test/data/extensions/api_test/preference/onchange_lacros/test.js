@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 // feature lives in ash. These tests make use of the crosapi to set the value
 // in ash. Thus, they run as lacros_chrome_browsertests. This test verifies the
 // hehavior of the onChange callback.
-// Run with lacros_chrome_browsertests_run_in_series \
+// Run with lacros_chrome_browsertests \
 //     --gtest_filter=ExtensionPreferenceLacrosBrowserTest.Lacros
 
 // Listen until |event| has fired with the |expected| value.
@@ -20,19 +20,19 @@ function listenUntil(event, expected) {
 var af = chrome.accessibilityFeatures;
 chrome.test.runTests([
   function changeDefault() {
-    listenUntil(af.autoclick.onChange, {
+    listenUntil(af.focusHighlight.onChange, {
       value: false,
       levelOfControl: 'controlled_by_this_extension'
     });
-    af.autoclick.set({
+    af.focusHighlight.set({
       value:false
     }, chrome.test.callbackPass());
   },
   function clearDefault() {
-    listenUntil(af.autoclick.onChange, {
+    listenUntil(af.focusHighlight.onChange, {
       value: false,
       levelOfControl: 'controllable_by_this_extension'
     });
-    af.autoclick.clear({}, chrome.test.callbackPass());
+    af.focusHighlight.clear({}, chrome.test.callbackPass());
   }
 ]);

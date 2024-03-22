@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ void ClientPaintCache::Put(PaintCacheDataType type,
   auto key = std::make_pair(type, id);
   DCHECK(cache_map_.Peek(key) == cache_map_.end());
 
-  pending_entries_->push_back(key);
+  pending_entries_.push_back(key);
   cache_map_.Put(key, size);
   bytes_used_ += size;
 }
@@ -53,7 +53,7 @@ void ClientPaintCache::EraseFromMap(Iterator it) {
 }
 
 void ClientPaintCache::FinalizePendingEntries() {
-  pending_entries_->clear();
+  pending_entries_.clear();
 }
 
 void ClientPaintCache::AbortPendingEntries() {
@@ -62,11 +62,11 @@ void ClientPaintCache::AbortPendingEntries() {
     DCHECK(it != cache_map_.end());
     EraseFromMap(it);
   }
-  pending_entries_->clear();
+  pending_entries_.clear();
 }
 
 void ClientPaintCache::Purge(PurgedData* purged_data) {
-  DCHECK(pending_entries_->empty());
+  DCHECK(pending_entries_.empty());
 
   while (bytes_used_ > max_budget_) {
     auto it = cache_map_.rbegin();
@@ -79,7 +79,7 @@ void ClientPaintCache::Purge(PurgedData* purged_data) {
 }
 
 bool ClientPaintCache::PurgeAll() {
-  DCHECK(pending_entries_->empty());
+  DCHECK(pending_entries_.empty());
 
   bool has_data = !cache_map_.empty();
   cache_map_.Clear();

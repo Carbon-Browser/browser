@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
  */
 
 GEN_INCLUDE([
-  '//chrome/test/data/webui/polymer_browser_test_base.js',
+  '//chrome/test/data/webui/chromeos/polymer_browser_test_base.js',
 ]);
 
 GEN('#include "ash/constants/ash_features.h"');
 GEN('#include "content/public/test/browser_test.h"');
 
-var PolymerSecurityTokenPinTest = class extends Polymer2DeprecatedTest {
+// TODO(https://crbug.com/1033337): js2gtest fixtures require var here.
+// eslint-disable-next-line no-var
+var PolymerSecurityTokenPinTest = class extends PolymerTest {
   /** @override */
   get browsePreload() {
     return 'chrome://oobe/login';
@@ -28,17 +30,17 @@ var PolymerSecurityTokenPinTest = class extends Polymer2DeprecatedTest {
     });
   }
 
-   /** @override */
-   get featureList() {
-    return {disabled: ['ash::features::kEnableOobePolymer3']};
-  }
-
   get extraLibraries() {
-    return super.extraLibraries.concat(['components/oobe_types.js']);
+    return [
+      '//third_party/node/node_modules/mocha/mocha.js',
+      '//chrome/test/data/webui/mocha_adapter.js',
+      'components/oobe_types.js',
+    ];
   }
 };
 
-TEST_F('PolymerSecurityTokenPinTest', 'All', function() {
+// TODO(crbug.com/1347183): Port this test to work with Polymer3.
+TEST_F('PolymerSecurityTokenPinTest', 'DISABLED_All', function() {
   const DEFAULT_PARAMETERS = {
     enableUserInput: true,
     hasError: false,

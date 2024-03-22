@@ -1,18 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.browserservices;
 
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.dependency_injection.ActivityScope;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
 
 import javax.inject.Inject;
 
-/**
- * Records SharedPreferences related to the browserservices module.
- */
+/** Records SharedPreferences related to the browserservices module. */
 @ActivityScope
 public class BrowserServicesStore {
     private final SharedPreferencesManager mManager;

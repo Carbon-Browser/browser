@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@ module cert_verifier.mojom;
 
 import "mojo/public/mojom/base/big_buffer.mojom";
 import "mojo/public/mojom/base/file_path.mojom";
+import "mojo/public/mojom/base/read_only_buffer.mojom";
 import "services/network/public/mojom/cert_verifier_service.mojom";
-
-[EnableIf=is_trial_comparison_cert_verifier_supported]
-import "services/cert_verifier/public/mojom/trial_comparison_cert_verifier.mojom";
+import "services/network/public/mojom/network_param.mojom";
 
 // Parameters to specify how the net::CertVerifier and net::CertVerifyProc
 // objects should be instantiated.
@@ -29,44 +28,9 @@ struct CertVerifierCreationParams {
   [EnableIf=is_chromeos_ash]
   string username_hash;
 
-  // Specifies which cert verifier implementation to use.
-  [EnableIf=is_builtin_cert_verifier_feature_supported]
-  enum CertVerifierImpl {
-    // kDefault - Decided by base::Feature
-    kDefault,
-    // kBuiltin - Use CertVerifyProcBuiltin
-    kBuiltin,
-    // kSystem  - Use the system CertVerifyProc implementation
-    kSystem,
-  };
-
-  [EnableIf=is_builtin_cert_verifier_feature_supported]
-  CertVerifierImpl use_builtin_cert_verifier = kDefault;
-
-  // Specifies which root store to use
-  //
-  // This is a temporary interface until the Chrome Root Store is rolled out
-  // for all platforms; embedders should not use it.
-  // See https://crbug.com/1216547
-  // TODO(hchao, sleevi): remove after full launch of Chrome Root Store
-  [EnableIf=is_chrome_root_store_supported]
-  enum ChromeRootImpl {
-    // kRootDefault - Decided by base::Feature
-    kRootDefault,
-    // kRootChrome  - Use Chrome root store
-    kRootChrome,
-    // kRootSystem  - Use the system root store
-    kRootSystem,
-  };
-
-  [EnableIf=is_chrome_root_store_supported]
-  ChromeRootImpl use_chrome_root_store = kRootDefault;
-
-  // Parameters for the cert verifier comparison trial. This is a temporary
-  // interface and embedders should not use it.
-  // See https://crbug.com/649026
-  [EnableIf=is_trial_comparison_cert_verifier_supported]
-  TrialComparisonCertVerifierParams? trial_comparison_cert_verifier_params;
+  // Initial additional certificates that will be used for certificate
+  // validation.
+  AdditionalCertificates? initial_additional_certificates;
 };
 
 // Serialized copy of the Chrome Root store.
@@ -92,15 +56,33 @@ struct ChromeRootStoreInfo {
 // CertVerifierService's, which have their own underlying CertVerifier's
 // underneath.
 interface CertVerifierServiceFactory {
-  // Gets a new CertVerifierFactory, which //net code can interface with using
+  // Gets a new CertVerifierService, which //net code can interface with using
   // cert_verifier::MojoCertVerifier.
   GetNewCertVerifier(pending_receiver<CertVerifierService> receiver,
+                     pending_receiver<CertVerifierServiceUpdater>? updater,
+                     pending_remote<CertVerifierServiceClient> client,
                      CertVerifierCreationParams? creation_params);
 
+  // Updates the CRLSet used in the verification of certificates. CRLSets that
+  // cannot be parsed using net::CRLSet::Parse will be ignored, as will older
+  // CRLSets (where older is determined by the sequence number). All
+  // CertVerifierServices created by the CertVerifierServiceFactory, including
+  // those created after this call, will use the same CRLSet.
+  // TODO(https://crbug.com/1431347): consider using ReadOnlySharedMemoryRegion
+  // or ReadOnlyFile instead of BigBuffer for this and ChromeRootStore.
+  UpdateCRLSet(mojo_base.mojom.BigBuffer crl_set) => ();
+
   // Updates the ChromeRootStore used by the CertVerifierServiceFactory with a
-  // new version.
+  // new version. The callback will be run once the update has been processed
+  // (regardless if it was updated successfully or the update was ignored.)
   [EnableIf=is_chrome_root_store_supported]
-  UpdateChromeRootStore(ChromeRootStore new_root_store);
+  UpdateChromeRootStore(ChromeRootStore new_root_store) => ();
+
+  // Sets whether verification should use the Chrome Root Store or not. All
+  // CertVerifierServices created by the CertVerifierServiceFactory, including
+  // those created after this call, will use the same setting.
+  [EnableIf=is_chrome_root_store_optional]
+  SetUseChromeRootStore(bool use_crs) => ();
 
   // Returns information about the current Chrome Root Store.
   [EnableIf=is_chrome_root_store_supported]

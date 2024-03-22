@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class NativeMessagingHostListPolicyHandler : public policy::ListPolicyHandler {
   bool CheckListEntry(const base::Value& value) override;
 
   // Sets |prefs| at pref_path() to |filtered_list|.
-  void ApplyList(base::Value filtered_list, PrefValueMap* prefs) override;
+  void ApplyList(base::Value::List filtered_list, PrefValueMap* prefs) override;
 
  private:
   const char* pref_path_;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,20 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
+#include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/ui/views/user_board_view.h"
 #include "chrome/browser/ash/login/users/chrome_user_manager.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "chrome/browser/ui/webui/chromeos/login/l10n_util.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/l10n_util.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
@@ -82,7 +81,8 @@ void ChromeUserSelectionScreen::OnDeviceLocalAccountsChanged() {
 
 void ChromeUserSelectionScreen::CheckForPublicSessionDisplayNameChange(
     policy::DeviceLocalAccountPolicyBroker* broker) {
-  const AccountId& account_id = user_manager::known_user::GetAccountId(
+  user_manager::KnownUser known_user(g_browser_process->local_state());
+  const AccountId account_id = known_user.GetAccountId(
       broker->user_id(), std::string() /* id */, AccountType::UNKNOWN);
   DCHECK(account_id.is_valid());
   const std::string& display_name = broker->GetDisplayName();
@@ -105,7 +105,7 @@ void ChromeUserSelectionScreen::CheckForPublicSessionDisplayNameChange(
   // and `this` are informed of the display name change is undefined. Post a
   // task that will update the UI after the UserManager is guaranteed to have
   // been informed of the change.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&ChromeUserSelectionScreen::SetPublicSessionDisplayName,
                      weak_factory_.GetWeakPtr(), account_id));
@@ -113,7 +113,8 @@ void ChromeUserSelectionScreen::CheckForPublicSessionDisplayNameChange(
 
 void ChromeUserSelectionScreen::CheckForPublicSessionLocalePolicyChange(
     policy::DeviceLocalAccountPolicyBroker* broker) {
-  const AccountId& account_id = user_manager::known_user::GetAccountId(
+  user_manager::KnownUser known_user(g_browser_process->local_state());
+  const AccountId account_id = known_user.GetAccountId(
       broker->user_id(), std::string() /* id */, AccountType::UNKNOWN);
   DCHECK(account_id.is_valid());
   const policy::PolicyMap::Entry* entry =
@@ -123,14 +124,14 @@ void ChromeUserSelectionScreen::CheckForPublicSessionLocalePolicyChange(
   std::vector<std::string> new_recommended_locales;
   if (entry && entry->level == policy::POLICY_LEVEL_RECOMMENDED &&
       entry->value(base::Value::Type::LIST)) {
-    for (const auto& entry :
-         entry->value(base::Value::Type::LIST)->GetListDeprecated()) {
-      if (!entry.is_string()) {
+    for (const auto& locale_entry :
+         entry->value(base::Value::Type::LIST)->GetList()) {
+      if (!locale_entry.is_string()) {
         NOTREACHED();
         new_recommended_locales.clear();
         break;
       }
-      new_recommended_locales.push_back(entry.GetString());
+      new_recommended_locales.push_back(locale_entry.GetString());
     }
   }
 
@@ -149,7 +150,7 @@ void ChromeUserSelectionScreen::CheckForPublicSessionLocalePolicyChange(
 void ChromeUserSelectionScreen::CheckIfFullManagementDisclosureNeeded(
     policy::DeviceLocalAccountPolicyBroker* broker) {
   SetPublicSessionShowFullManagementDisclosure(
-      ChromeUserManager::Get()->IsFullManagementDisclosureNeeded(broker));
+      ash::login::IsFullManagementDisclosureNeeded(broker));
 }
 
 void ChromeUserSelectionScreen::SetPublicSessionDisplayName(
@@ -171,14 +172,14 @@ void ChromeUserSelectionScreen::SetPublicSessionLocales(
 
   // Construct the list of available locales. This list consists of the
   // recommended locales, followed by all others.
-  std::unique_ptr<base::ListValue> available_locales =
+  base::Value::List available_locales =
       GetUILanguageList(&recommended_locales, std::string(),
                         input_method::InputMethodManager::Get());
 
   // Set the initially selected locale to the first recommended locale that is
   // actually available or the current UI locale if none of them are available.
   const std::string default_locale =
-      FindMostRelevantLocale(recommended_locales, *available_locales.get(),
+      FindMostRelevantLocale(recommended_locales, available_locales,
                              g_browser_process->GetApplicationLocale());
 
   // Set a flag to indicate whether the list of recommended locales contains at

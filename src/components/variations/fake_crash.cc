@@ -1,12 +1,12 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/variations/fake_crash.h"
 
-#include "base/bind.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
@@ -15,8 +15,9 @@ namespace {
 // This feature causes a crash report to be created after startup (without
 // actually crashing). This is used for verifying safety measures that help
 // catch features that cause real crashes.
-const base::Feature kVariationsFakeCrashAfterStartup{
-    "VariationsFakeCrashAfterStartup", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kVariationsFakeCrashAfterStartup,
+             "VariationsFakeCrashAfterStartup",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 }  // namespace
 
 namespace variations {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/color_palette.h"
@@ -75,7 +75,6 @@ class VIEWS_EXPORT Link : public Label {
   bool OnKeyPressed(const ui::KeyEvent& event) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
   bool SkipDefaultKeyEventProcessing(const ui::KeyEvent& event) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void OnFocus() override;
   void OnBlur() override;
   void SetFontList(const gfx::FontList& font_list) override;
@@ -105,7 +104,7 @@ class VIEWS_EXPORT Link : public Label {
 
   // Whether the link text should use underline style regardless of enabled or
   // focused state.
-  bool force_underline_ = false;
+  bool force_underline_ = true;
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, Link, Label)

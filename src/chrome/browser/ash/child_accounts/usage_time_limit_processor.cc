@@ -1,21 +1,24 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/child_accounts/usage_time_limit_processor.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 
+#include "base/check_deref.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/ash/child_accounts/time_limit_override.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace ash {
-namespace usage_time_limit {
+namespace ash::usage_time_limit {
 namespace internal {
 namespace {
 
@@ -208,13 +211,13 @@ class UsageTimeLimitProcessor {
   const base::Time current_time_;
 
   // Unowned. The device's timezone.
-  const icu::TimeZone* const time_zone_;
+  const raw_ptr<const icu::TimeZone, ExperimentalAsh> time_zone_;
 
   // Current weekday, extracted from current time.
   internal::Weekday current_weekday_;
 
   // The previous state calculated by this class.
-  const absl::optional<State>& previous_state_;
+  const raw_ref<const absl::optional<State>, ExperimentalAsh> previous_state_;
 
   // The active time window limit. If this is set, it means that the user
   // session should be locked, in other words, there is a time window limit set
@@ -316,21 +319,25 @@ State UsageTimeLimitProcessor::GetState() {
   bool current_state_above_usage_limit =
       state.is_time_usage_limit_enabled && state.remaining_usage <= delta_zero;
   bool previous_state_below_usage_limit =
-      previous_state_ && previous_state_->is_time_usage_limit_enabled &&
-      previous_state_->remaining_usage > delta_zero;
+      previous_state_->has_value() &&
+      (*previous_state_)->is_time_usage_limit_enabled &&
+      (*previous_state_)->remaining_usage > delta_zero;
   bool previous_state_no_usage_limit =
-      previous_state_ && !previous_state_->is_time_usage_limit_enabled;
+      previous_state_->has_value() &&
+      !(*previous_state_)->is_time_usage_limit_enabled;
   bool previous_state_above_usage_limit =
-      previous_state_ && previous_state_->is_time_usage_limit_enabled &&
-      previous_state_->remaining_usage <= delta_zero;
+      previous_state_->has_value() &&
+      (*previous_state_)->is_time_usage_limit_enabled &&
+      (*previous_state_)->remaining_usage <= delta_zero;
   if ((previous_state_below_usage_limit || previous_state_no_usage_limit ||
-       !previous_state_) &&
+       !previous_state_->has_value()) &&
       current_state_above_usage_limit) {
     // Time usage limit just started being enforced.
     state.time_usage_limit_started = usage_timestamp_;
   } else if (previous_state_above_usage_limit) {
     // Time usage limit was already enforced.
-    state.time_usage_limit_started = previous_state_->time_usage_limit_started;
+    state.time_usage_limit_started =
+        (*previous_state_)->time_usage_limit_started;
   }
 
   state.next_state_change_time =
@@ -418,8 +425,9 @@ bool UsageTimeLimitProcessor::IsUsageLimitOverridden(
     return false;
   }
 
-  if (!time_usage_limit_ || !previous_state_)
+  if (!time_usage_limit_ || !previous_state_->has_value()) {
     return false;
+  }
 
   // If there's an override with duration, the usage limit is overridden only
   // if the override is active and duration is not over, since it works
@@ -432,12 +440,12 @@ bool UsageTimeLimitProcessor::IsUsageLimitOverridden(
 
   base::Time last_reset_time = ConvertPolicyTime(LockOverrideResetTime(), 0);
   bool usage_limit_enforced_previously =
-      previous_state_->is_time_usage_limit_enabled &&
-      previous_state_->remaining_usage <= base::Minutes(0);
+      (*previous_state_)->is_time_usage_limit_enabled &&
+      (*previous_state_)->remaining_usage <= base::Minutes(0);
   bool override_created_after_usage_limit_start =
-      !previous_state_->time_usage_limit_started.is_null() &&
+      !(*previous_state_)->time_usage_limit_started.is_null() &&
       time_limit_override_->created_at() >
-          previous_state_->time_usage_limit_started &&
+          (*previous_state_)->time_usage_limit_started &&
       time_limit_override_->created_at() >= last_reset_time;
   return usage_limit_enforced_previously &&
          override_created_after_usage_limit_start;
@@ -670,8 +678,9 @@ bool UsageTimeLimitProcessor::HasActiveOverride() {
 
   // Check if the usage time was increased before the override creation, which
   // invalidates it.
-  if (previous_state_ && previous_state_->is_time_usage_limit_enabled &&
-      previous_state_->remaining_usage <= base::Minutes(0)) {
+  if (previous_state_->has_value() &&
+      (*previous_state_)->is_time_usage_limit_enabled &&
+      (*previous_state_)->remaining_usage <= base::Minutes(0)) {
     if (enabled_time_usage_limit_ &&
         time_limit_override_->created_at() <
             enabled_time_usage_limit_->last_updated) {
@@ -1040,8 +1049,9 @@ Weekday UsageTimeLimitProcessor::GetCurrentWeekday() {
 base::TimeDelta UsageTimeLimitProcessor::GetTimeZoneOffset(base::Time time) {
   int32_t raw_offset, dst_offset;
   UErrorCode status = U_ZERO_ERROR;
-  time_zone_->getOffset(time.ToDoubleT() * base::Time::kMillisecondsPerSecond,
-                        true /* local */, raw_offset, dst_offset, status);
+  time_zone_->getOffset(
+      time.InSecondsFSinceUnixEpoch() * base::Time::kMillisecondsPerSecond,
+      true /* local */, raw_offset, dst_offset, status);
   base::TimeDelta time_zone_offset =
       base::Milliseconds(raw_offset + dst_offset);
   if (U_FAILURE(status)) {
@@ -1053,19 +1063,17 @@ base::TimeDelta UsageTimeLimitProcessor::GetTimeZoneOffset(base::Time time) {
   return time_zone_offset;
 }
 
-}  // namespace
-
 // Transforms the time dictionary sent on the UsageTimeLimit policy to a
 // TimeDelta, that represents the distance from midnight.
-base::TimeDelta ValueToTimeDelta(const base::Value* policy_time) {
-  int hour = policy_time->FindKey(kWindowLimitEntryTimeHour)->GetInt();
-  int minute = policy_time->FindKey(kWindowLimitEntryTimeMinute)->GetInt();
+base::TimeDelta DictToTimeDelta(const base::Value::Dict& policy_time) {
+  int hour = policy_time.FindInt(kWindowLimitEntryTimeHour).value();
+  int minute = policy_time.FindInt(kWindowLimitEntryTimeMinute).value();
   return base::Minutes(hour * 60 + minute);
 }
 
 // Transforms weekday strings into the Weekday enum.
 Weekday GetWeekday(std::string weekday) {
-  std::transform(weekday.begin(), weekday.end(), weekday.begin(), ::tolower);
+  base::ranges::transform(weekday, weekday.begin(), ::tolower);
   for (int i = 0; i < static_cast<int>(Weekday::kCount); i++) {
     if (weekday == kTimeLimitWeekdays[i]) {
       return static_cast<Weekday>(i);
@@ -1075,6 +1083,8 @@ Weekday GetWeekday(std::string weekday) {
   LOG(ERROR) << "Unexpected weekday " << weekday;
   return Weekday::kSunday;
 }
+
+}  // namespace
 
 TimeWindowLimitEntry::TimeWindowLimitEntry() = default;
 
@@ -1095,19 +1105,23 @@ TimeWindowLimitBoundaries TimeWindowLimitEntry::GetLimits(
   return limit;
 }
 
-TimeWindowLimit::TimeWindowLimit(const base::Value& window_limit_dict) {
-  if (!window_limit_dict.FindKey(kWindowLimitEntries))
+TimeWindowLimit::TimeWindowLimit(const base::Value& window_limit_val) {
+  const base::Value::Dict& window_limit_dict = window_limit_val.GetDict();
+  if (!window_limit_dict.contains(kWindowLimitEntries)) {
     return;
+  }
 
-  for (const base::Value& entry_dict :
-       window_limit_dict.FindKey(kWindowLimitEntries)->GetListDeprecated()) {
-    const base::Value* effective_day =
-        entry_dict.FindKey(kWindowLimitEntryEffectiveDay);
-    const base::Value* starts_at =
-        entry_dict.FindKey(kWindowLimitEntryStartsAt);
-    const base::Value* ends_at = entry_dict.FindKey(kWindowLimitEntryEndsAt);
-    const base::Value* last_updated_value =
-        entry_dict.FindKey(kTimeLimitLastUpdatedAt);
+  for (const base::Value& entry_val :
+       CHECK_DEREF(window_limit_dict.FindList(kWindowLimitEntries))) {
+    const base::Value::Dict& entry_dict = entry_val.GetDict();
+    const std::string* effective_day =
+        entry_dict.FindString(kWindowLimitEntryEffectiveDay);
+    const base::Value::Dict* starts_at =
+        entry_dict.FindDict(kWindowLimitEntryStartsAt);
+    const base::Value::Dict* ends_at =
+        entry_dict.FindDict(kWindowLimitEntryEndsAt);
+    const std::string* last_updated_value =
+        entry_dict.FindString(kTimeLimitLastUpdatedAt);
 
     if (!effective_day || !starts_at || !ends_at || !last_updated_value) {
       // Missing information, so this entry will be ignored.
@@ -1115,18 +1129,18 @@ TimeWindowLimit::TimeWindowLimit(const base::Value& window_limit_dict) {
     }
 
     int64_t last_updated;
-    if (!base::StringToInt64(last_updated_value->GetString(), &last_updated)) {
+    if (!base::StringToInt64(*last_updated_value, &last_updated)) {
       // Cannot process entry without a valid last updated.
       continue;
     }
 
     TimeWindowLimitEntry entry;
-    entry.starts_at = ValueToTimeDelta(starts_at);
-    entry.ends_at = ValueToTimeDelta(ends_at);
+    entry.starts_at = DictToTimeDelta(*starts_at);
+    entry.ends_at = DictToTimeDelta(*ends_at);
     entry.last_updated =
         base::Time::UnixEpoch() + base::Milliseconds(last_updated);
 
-    Weekday weekday = GetWeekday(effective_day->GetString());
+    Weekday weekday = GetWeekday(*effective_day);
     // We only support one time_limit_window per day. If more than one is sent
     // we only use the latest updated.
     if (!entries[weekday] ||
@@ -1152,34 +1166,36 @@ bool TimeUsageLimitEntry::operator==(const TimeUsageLimitEntry& rhs) const {
   return usage_quota == rhs.usage_quota && last_updated == rhs.last_updated;
 }
 
-TimeUsageLimit::TimeUsageLimit(const base::Value& usage_limit_dict)
+TimeUsageLimit::TimeUsageLimit(const base::Value::Dict& usage_limit_dict)
     // Default reset time is midnight.
     : resets_at(base::Minutes(0)) {
-  const base::Value* resets_at_value =
-      usage_limit_dict.FindKey(kUsageLimitResetAt);
+  const base::Value::Dict* resets_at_value =
+      usage_limit_dict.FindDict(kUsageLimitResetAt);
   if (resets_at_value) {
-    resets_at = ValueToTimeDelta(resets_at_value);
+    resets_at = DictToTimeDelta(*resets_at_value);
   }
 
   for (const std::string& weekday_key : kTimeLimitWeekdays) {
-    if (!usage_limit_dict.FindKey(weekday_key))
+    const base::Value::Dict* entry_dict =
+        usage_limit_dict.FindDict(weekday_key);
+    if (!entry_dict) {
       continue;
+    }
 
-    const base::Value* entry_dict = usage_limit_dict.FindKey(weekday_key);
-
-    const base::Value* usage_quota = entry_dict->FindKey(kUsageLimitUsageQuota);
-    const base::Value* last_updated_value =
-        entry_dict->FindKey(kTimeLimitLastUpdatedAt);
+    const absl::optional<int> usage_quota =
+        entry_dict->FindInt(kUsageLimitUsageQuota);
+    const std::string* last_updated_value =
+        entry_dict->FindString(kTimeLimitLastUpdatedAt);
 
     int64_t last_updated;
-    if (!base::StringToInt64(last_updated_value->GetString(), &last_updated)) {
+    if (!base::StringToInt64(CHECK_DEREF(last_updated_value), &last_updated)) {
       // Cannot process entry without a valid last updated.
       continue;
     }
 
     Weekday weekday = GetWeekday(weekday_key);
     TimeUsageLimitEntry entry;
-    entry.usage_quota = base::Minutes(usage_quota->GetInt());
+    entry.usage_quota = base::Minutes(usage_quota.value());
     entry.last_updated =
         base::Time::UnixEpoch() + base::Milliseconds(last_updated);
     entries[weekday] = std::move(entry);
@@ -1199,41 +1215,37 @@ TimeUsageLimit& TimeUsageLimit::operator=(TimeUsageLimit&&) = default;
 }  // namespace internal
 
 absl::optional<internal::TimeWindowLimit> TimeWindowLimitFromPolicy(
-    const base::Value& time_limit) {
-  DCHECK(time_limit.is_dict());
+    const base::Value::Dict& time_limit) {
   const base::Value* time_window_limit_value =
-      time_limit.FindKey(internal::kTimeWindowLimit);
+      time_limit.Find(internal::kTimeWindowLimit);
   if (!time_window_limit_value)
     return absl::nullopt;
   return internal::TimeWindowLimit(*time_window_limit_value);
 }
 
 absl::optional<internal::TimeUsageLimit> TimeUsageLimitFromPolicy(
-    const base::Value& time_limit) {
-  DCHECK(time_limit.is_dict());
+    const base::Value::Dict& time_limit) {
   const base::Value* time_usage_limit_value =
-      time_limit.FindKey(internal::kTimeUsageLimit);
+      time_limit.Find(internal::kTimeUsageLimit);
   if (!time_usage_limit_value)
     return absl::nullopt;
-  return internal::TimeUsageLimit(*time_usage_limit_value);
+  return internal::TimeUsageLimit(time_usage_limit_value->GetDict());
 }
 
 absl::optional<TimeLimitOverride> OverrideFromPolicy(
-    const base::Value& time_limit) {
-  DCHECK(time_limit.is_dict());
-  const base::Value* override_value =
-      time_limit.FindKey(TimeLimitOverride::kOverridesDictKey);
+    const base::Value::Dict& time_limit) {
+  const base::Value::List* override_value =
+      time_limit.FindList(TimeLimitOverride::kOverridesDictKey);
   return TimeLimitOverride::MostRecentFromList(override_value);
 }
 
-State GetState(const base::Value& time_limit,
-               const base::Value* local_override,
+State GetState(const base::Value::Dict& time_limit,
+               const base::Value::Dict* local_override,
                const base::TimeDelta& used_time,
                const base::Time& usage_timestamp,
                const base::Time& current_time,
                const icu::TimeZone* const time_zone,
                const absl::optional<State>& previous_state) {
-  DCHECK(time_limit.is_dict());
   absl::optional<internal::TimeWindowLimit> time_window_limit =
       TimeWindowLimitFromPolicy(time_limit);
   absl::optional<internal::TimeUsageLimit> time_usage_limit =
@@ -1251,11 +1263,10 @@ State GetState(const base::Value& time_limit,
       .GetState();
 }
 
-base::Time GetExpectedResetTime(const base::Value& time_limit,
-                                const base::Value* local_override,
+base::Time GetExpectedResetTime(const base::Value::Dict& time_limit,
+                                const base::Value::Dict* local_override,
                                 const base::Time current_time,
                                 const icu::TimeZone* const time_zone) {
-  DCHECK(time_limit.is_dict());
   absl::optional<internal::TimeWindowLimit> time_window_limit =
       TimeWindowLimitFromPolicy(time_limit);
   absl::optional<internal::TimeUsageLimit> time_usage_limit =
@@ -1273,12 +1284,11 @@ base::Time GetExpectedResetTime(const base::Value& time_limit,
 }
 
 absl::optional<base::TimeDelta> GetRemainingTimeUsage(
-    const base::Value& time_limit,
-    const base::Value* local_override,
+    const base::Value::Dict& time_limit,
+    const base::Value::Dict* local_override,
     const base::Time current_time,
     const base::TimeDelta& used_time,
     const icu::TimeZone* const time_zone) {
-  DCHECK(time_limit.is_dict());
   absl::optional<internal::TimeWindowLimit> time_window_limit =
       TimeWindowLimitFromPolicy(time_limit);
   absl::optional<internal::TimeUsageLimit> time_usage_limit =
@@ -1295,16 +1305,13 @@ absl::optional<base::TimeDelta> GetRemainingTimeUsage(
       .GetRemainingTimeUsage();
 }
 
-base::TimeDelta GetTimeUsageLimitResetTime(const base::Value& time_limit) {
-  DCHECK(time_limit.is_dict());
+base::TimeDelta GetTimeUsageLimitResetTime(
+    const base::Value::Dict& time_limit) {
   return internal::GetUsageLimitResetTime(TimeUsageLimitFromPolicy(time_limit));
 }
 
-std::set<PolicyType> UpdatedPolicyTypes(const base::Value& old_policy,
-                                        const base::Value& new_policy) {
-  DCHECK(old_policy.is_dict());
-  DCHECK(new_policy.is_dict());
-
+std::set<PolicyType> UpdatedPolicyTypes(const base::Value::Dict& old_policy,
+                                        const base::Value::Dict& new_policy) {
   std::set<PolicyType> updated_policies;
   if (TimeUsageLimitFromPolicy(old_policy) !=
       TimeUsageLimitFromPolicy(new_policy)) {
@@ -1328,8 +1335,7 @@ std::set<PolicyType> UpdatedPolicyTypes(const base::Value& old_policy,
 }
 
 std::set<PolicyType> GetEnabledTimeLimitPolicies(
-    const base::Value& time_limit_prefs) {
-  DCHECK(time_limit_prefs.is_dict());
+    const base::Value::Dict& time_limit_prefs) {
   std::set<PolicyType> enabled_policies;
 
   absl::optional<internal::TimeWindowLimit> time_window_limit =
@@ -1356,5 +1362,4 @@ std::set<PolicyType> GetEnabledTimeLimitPolicies(
   return enabled_policies;
 }
 
-}  // namespace usage_time_limit
-}  // namespace ash
+}  // namespace ash::usage_time_limit

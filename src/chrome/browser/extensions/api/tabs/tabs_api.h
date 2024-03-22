@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/values.h"
 #include "chrome/browser/extensions/chrome_extension_function_details.h"
 #include "chrome/common/extensions/api/tabs.h"
 #include "components/translate/core/browser/translate_driver.h"
@@ -142,13 +143,10 @@ class TabsUpdateFunction : public ExtensionFunction {
                  std::string* error);
   ResponseValue GetResult();
 
-  raw_ptr<content::WebContents> web_contents_;
+  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
 
  private:
   ResponseAction Run() override;
-  void OnExecuteCodeFinished(const std::string& error,
-                             const GURL& on_url,
-                             const base::ListValue& script_result);
 
   DECLARE_EXTENSION_FUNCTION("tabs.update", TABS_UPDATE)
 };
@@ -157,8 +155,8 @@ class TabsMoveFunction : public ExtensionFunction {
   ResponseAction Run() override;
   bool MoveTab(int tab_id,
                int* new_index,
-               base::ListValue* tab_values,
-               int* window_id,
+               base::Value::List& tab_values,
+               const absl::optional<int>& window_id,
                std::string* error);
   DECLARE_EXTENSION_FUNCTION("tabs.move", TABS_MOVE)
 };

@@ -1,24 +1,23 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ENTERPRISE_CONNECTORS_ANALYSIS_CONTENT_ANALYSIS_DOWNLOADS_DELEGATE_H_
 #define CHROME_BROWSER_ENTERPRISE_CONNECTORS_ANALYSIS_CONTENT_ANALYSIS_DOWNLOADS_DELEGATE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/enterprise/connectors/analysis/content_analysis_delegate_base.h"
-
-namespace download {
-class DownloadItem;
-}
+#include "components/download/public/common/download_item.h"
 
 namespace enterprise_connectors {
 
 // A ContentAnalysisDelegateBase implementation meant to be used to display the
 // ContentAnalysisDialog for a download that triggered a block or a warning, and
 // for which a custom message must be shown to the user.
-class ContentAnalysisDownloadsDelegate : public ContentAnalysisDelegateBase {
+class ContentAnalysisDownloadsDelegate
+    : public ContentAnalysisDelegateBase,
+      public download::DownloadItem::Observer {
  public:
   ContentAnalysisDownloadsDelegate(
       const std::u16string& filename,
@@ -47,6 +46,9 @@ class ContentAnalysisDownloadsDelegate : public ContentAnalysisDelegateBase {
   std::u16string GetBypassJustificationLabel() const override;
 
   absl::optional<std::u16string> OverrideCancelButtonText() const override;
+
+  // download::DownloadItem::Observer:
+  void OnDownloadDestroyed(download::DownloadItem* download) override;
 
  private:
   // Resets |open_file_callback_| and |discard_file_callback_|, ensuring actions

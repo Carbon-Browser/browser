@@ -1,11 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/device/bluetooth/le/remote_characteristic_impl.h"
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromecast/base/bind_to_task_runner.h"
 #include "chromecast/device/bluetooth/le/gatt_client_manager_impl.h"
 #include "chromecast/device/bluetooth/le/remote_descriptor_impl.h"
@@ -121,7 +123,7 @@ RemoteCharacteristicImpl::CreateDescriptorMap() {
   }
 
   if (fake_cccd_) {
-    DCHECK(ret.find(RemoteDescriptor::kCccdUuid) == ret.end());
+    DCHECK(!base::Contains(ret, RemoteDescriptor::kCccdUuid));
     ret[fake_cccd_->uuid] = new RemoteDescriptorImpl(
         device_, gatt_client_manager_, fake_cccd_.get(), io_task_runner_);
   }

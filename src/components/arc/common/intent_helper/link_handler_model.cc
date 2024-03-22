@@ -1,12 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/arc/common/intent_helper/link_handler_model.h"
 
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
@@ -28,25 +29,25 @@ namespace {
 constexpr int kMaxValueLen = 2048;
 
 bool GetQueryValue(const GURL& url,
-                   const std::string& key_to_find,
+                   std::string_view key_to_find,
                    std::u16string* out) {
-  const std::string str(url.query());
+  const std::string_view str = url.query_piece();
 
   url::Component query(0, str.length());
   url::Component key;
   url::Component value;
 
-  while (url::ExtractQueryKeyValue(str.c_str(), &query, &key, &value)) {
-    if (!value.is_nonempty())
+  while (url::ExtractQueryKeyValue(str.data(), &query, &key, &value)) {
+    if (value.is_empty())
       continue;
     if (str.substr(key.begin, key.len) == key_to_find) {
       if (value.len >= kMaxValueLen)
         return false;
       url::RawCanonOutputW<kMaxValueLen> output;
-      url::DecodeURLEscapeSequences(str.c_str() + value.begin, value.len,
+      url::DecodeURLEscapeSequences(str.substr(value.begin, value.len),
                                     url::DecodeURLMode::kUTF8OrIsomorphic,
                                     &output);
-      *out = std::u16string(output.data(), output.length());
+      *out = std::u16string(output.view());
       return true;
     }
   }
@@ -184,8 +185,8 @@ GURL LinkHandlerModel::RewriteUrlFromQueryIfAvailable(const GURL& url) {
   static const char kPathToFind[] = "/url";
   static const char kKeyToFind[] = "url";
 
-  if (!google_util::IsGoogleHostname(url.host_piece(),
-                                     google_util::DISALLOW_SUBDOMAIN)) {
+  if (!google_util::IsGoogleDomainUrl(url, google_util::DISALLOW_SUBDOMAIN,
+                                      google_util::ALLOW_NON_STANDARD_PORTS)) {
     return url;
   }
   if (!url.has_path() || url.path() != kPathToFind)

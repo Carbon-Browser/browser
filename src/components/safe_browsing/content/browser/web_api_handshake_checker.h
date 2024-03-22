@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "url/gurl.h"
@@ -47,13 +47,13 @@ class WebApiHandshakeChecker {
   void Check(const GURL& url, CheckCallback callback);
 
  private:
-  // Performs checks on the IO thread by using SafeBrowsingUrlCheckerImpl, which
-  // must live on the IO thread.
-  class CheckerOnIO;
+  // Performs checks on the SB thread by using SafeBrowsingUrlCheckerImpl, which
+  // must live on the SB thread.
+  class CheckerOnSB;
 
-  void OnCompleteCheck(bool slow_check, bool proceed, bool showed_interstitial);
+  void OnCompleteCheck(bool proceed);
 
-  std::unique_ptr<CheckerOnIO> io_checker_;
+  std::unique_ptr<CheckerOnSB> sb_checker_;
   CheckCallback check_callback_;
 
   base::WeakPtrFactory<WebApiHandshakeChecker> weak_factory_{this};

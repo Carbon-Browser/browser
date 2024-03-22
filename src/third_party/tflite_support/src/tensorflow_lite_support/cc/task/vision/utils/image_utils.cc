@@ -23,11 +23,11 @@ limitations under the License.
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 
-#include "absl/status/status.h"       // from @com_google_absl
-#include "absl/strings/match.h"       // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
+#include "absl/strings/match.h"  // from @com_google_absl
 #include "absl/strings/str_format.h"  // from @com_google_absl
-#include "stb_image.h"                // from @stblib
-#include "stb_image_write.h"          // from @stblib
+#include "stb_image.h"  // from @stblib
+#include "stb_image_write.h"  // from @stblib
 #include "tensorflow_lite_support/cc/port/status_macros.h"
 #include "tensorflow_lite_support/cc/port/statusor.h"
 #include "tensorflow_lite_support/cc/task/vision/utils/frame_buffer_common_utils.h"
@@ -38,11 +38,9 @@ namespace vision {
 
 using ::tflite::support::StatusOr;
 
-StatusOr<ImageData> DecodeImageFromFile(const std::string& file_name) {
-  ImageData image_data;
-  image_data.pixel_data = stbi_load(file_name.c_str(), &image_data.width,
-                                    &image_data.height, &image_data.channels,
-                                    /*desired_channels=*/0);
+namespace {
+
+absl::Status CheckImageData(const ImageData& image_data) {
   if (image_data.pixel_data == nullptr) {
     return absl::InternalError(absl::StrFormat(
         "An error occurred while decoding image: %s", stbi_failure_reason()));
@@ -55,6 +53,27 @@ StatusOr<ImageData> DecodeImageFromFile(const std::string& file_name) {
                         "(RGBA) channels, found %d",
                         image_data.channels));
   }
+  return absl::OkStatus();
+}
+
+}  // namespace
+
+StatusOr<ImageData> DecodeImageFromFile(const std::string& file_name) {
+  ImageData image_data;
+  image_data.pixel_data = stbi_load(file_name.c_str(), &image_data.width,
+                                    &image_data.height, &image_data.channels,
+                                    /*desired_channels=*/0);
+  TFLITE_RETURN_IF_ERROR(CheckImageData(image_data));
+  return image_data;
+}
+
+tflite::support::StatusOr<ImageData> DecodeImageFromBuffer(
+    unsigned char const* buffer, int len) {
+  ImageData image_data;
+  image_data.pixel_data = stbi_load_from_memory(
+      buffer, len, &image_data.width, &image_data.height, &image_data.channels,
+      /*desired_channels=*/0);
+  TFLITE_RETURN_IF_ERROR(CheckImageData(image_data));
   return image_data;
 }
 
@@ -88,9 +107,7 @@ absl::Status EncodeImageToPngFile(const ImageData& image_data,
   return absl::OkStatus();
 }
 
-void ImageDataFree(ImageData* image) {
-  stbi_image_free(image->pixel_data);
-}
+void ImageDataFree(ImageData* image) { stbi_image_free(image->pixel_data); }
 
 tflite::support::StatusOr<std::unique_ptr<FrameBuffer>>
 CreateFrameBufferFromImageData(const ImageData& image) {

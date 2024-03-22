@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,10 @@ TEST_F(DrawingRecorderTest, Nothing) {
   }
   EXPECT_THAT(GetPaintController().GetDisplayItemList(),
               ElementsAre(IsSameId(client.Id(), kForegroundType)));
-  EXPECT_FALSE(
+  EXPECT_TRUE(
       To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[0])
-          .GetPaintRecord());
+          .GetPaintRecord()
+          .empty());
 }
 
 TEST_F(DrawingRecorderTest, Rect) {

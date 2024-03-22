@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -788,18 +788,18 @@ TEST(X509UtilTest, SignatureVerifierInitWithCertificate) {
   }
 }
 
-TEST(X509UtilTest, HasSHA1Signature) {
+TEST(X509UtilTest, HasRsaPkcs1Sha1Signature) {
   base::FilePath certs_dir = GetTestCertsDirectory();
 
   scoped_refptr<X509Certificate> sha1_leaf =
       ImportCertFromFile(certs_dir, "sha1_leaf.pem");
   ASSERT_TRUE(sha1_leaf);
-  EXPECT_TRUE(HasSHA1Signature(sha1_leaf->cert_buffer()));
+  EXPECT_TRUE(HasRsaPkcs1Sha1Signature(sha1_leaf->cert_buffer()));
 
   scoped_refptr<X509Certificate> ok_cert =
       ImportCertFromFile(certs_dir, "ok_cert.pem");
   ASSERT_TRUE(ok_cert);
-  EXPECT_FALSE(HasSHA1Signature(ok_cert->cert_buffer()));
+  EXPECT_FALSE(HasRsaPkcs1Sha1Signature(ok_cert->cert_buffer()));
 }
 
 }  // namespace net::x509_util

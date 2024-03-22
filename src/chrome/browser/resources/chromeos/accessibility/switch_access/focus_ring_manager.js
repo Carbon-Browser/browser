@@ -1,40 +1,33 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {RectUtil} from '../common/rect_util.js';
 
 import {MenuManager} from './menu_manager.js';
-import {SAChildNode, SARootNode} from './nodes/switch_access_node.js';
+import {SAChildNode, SANode, SARootNode} from './nodes/switch_access_node.js';
 import {SwitchAccess} from './switch_access.js';
-import {SAConstants} from './switch_access_constants.js';
+import {ErrorType, Mode} from './switch_access_constants.js';
 
-/**
- * Class to handle focus rings.
- */
+const FocusRingInfo = chrome.accessibilityPrivate.FocusRingInfo;
+const FocusType = chrome.accessibilityPrivate.FocusType;
+
+
+/** Class to handle focus rings. */
 export class FocusRingManager {
   /** @private */
   constructor() {
     /**
      * A map of all the focus rings.
-     * @private {!Map<SAConstants.Focus.ID,
-     *     chrome.accessibilityPrivate.FocusRingInfo>}
+     * @private {!Object<RingId, FocusRingInfo>}
      */
-    this.rings_ = this.createMap_();
+    this.rings_ = this.createRings_();
 
-    /** @private {!Map<SAConstants.Focus.ID, SAChildNode>} */
-    this.ringNodesForTesting_ = new Map([
-      [SAConstants.Focus.ID.PRIMARY, null],
-      [SAConstants.Focus.ID.PREVIEW, null],
-    ]);
-
-    /**
-     * Regex pattern to verify valid colors. Checks that the first character
-     * is '#', followed by 3, 4, 6, or 8 valid hex characters, and no other
-     * characters (ignoring case).
-     * @private
-     */
-    this.colorPattern_ = /^#([0-9A-F]{3,4}|[0-9A-F]{6}|[0-9A-F]{8})$/i;
+    /** @private {!Object<RingId, ?SANode>} */
+    this.ringNodesForTesting_ = {
+      [RingId.PRIMARY]: null,
+      [RingId.PREVIEW]: null,
+    };
   }
 
   static get instance() {
@@ -49,48 +42,29 @@ export class FocusRingManager {
    * @param {!string} color
    */
   static setColor(color) {
-    const manager = FocusRingManager.instance;
-
-    if (manager.colorPattern_.test(color) !== true) {
+    if (!COLOR_PATTERN.test(color)) {
       console.error(SwitchAccess.error(
-          SAConstants.ErrorType.INVALID_COLOR,
+          ErrorType.INVALID_COLOR,
           'Problem setting focus ring color: ' + color + ' is not' +
               'a valid CSS color string.'));
       return;
     }
-    manager.rings_.forEach(ring => ring.color = color);
+    FocusRingManager.instance.setColorValidated_(color);
   }
 
   /**
-   * Sets the primary and preview focus rings based on the current primary and
-   *     group nodes used for navigation.
+   * Sets the primary and preview focus rings based on the provided node.
    * @param {!SAChildNode} node
    */
   static setFocusedNode(node) {
-    const manager = FocusRingManager.instance;
-
     if (node.ignoreWhenComputingUnionOfBoundingBoxes()) {
-      // Nodes of this type, e.g. the back button node, handles setting its own
-      // focus, as it has special requirements (a round focus ring that has no
-      // gap with the edges of the view).
-      manager.rings_.get(SAConstants.Focus.ID.PRIMARY).rects = [];
-      // Clear the dashed ring between transitions, as the animation is
-      // distracting.
-      manager.rings_.get(SAConstants.Focus.ID.PREVIEW).rects = [];
-      manager.updateFocusRings_(node, null);
-
-      // The dashed focus ring should not be shown around the menu when exiting.
-      if (!MenuManager.isMenuOpen()) {
-        manager.rings_.get(SAConstants.Focus.ID.PREVIEW).rects =
-            [node.group.location];
-        manager.updateFocusRings_(node, null);
-      }
+      FocusRingManager.instance.setFocusedNodeIgnorePrimary_(node);
       return;
     }
 
     if (!node.location) {
       throw SwitchAccess.error(
-          SAConstants.ErrorType.MISSING_LOCATION,
+          ErrorType.MISSING_LOCATION,
           'Cannot set focus rings if node location is undefined',
           true /* shouldRecover */);
     }
@@ -99,38 +73,16 @@ export class FocusRingManager {
     // focus.
     if (node.isGroup()) {
       const firstChild = node.asRootNode().firstChild;
-
-      // Clear the dashed ring between transitions, as the animation is
-      // distracting.
-      manager.rings_.get(SAConstants.Focus.ID.PREVIEW).rects = [];
-
-      let focusRect = node.location;
-      const childRect = firstChild ? firstChild.location : null;
-      if (childRect) {
-        // If the current element is not specialized in location handling, e.g.
-        // the back button, the focus rect should expand to contain the child
-        // rect.
-        focusRect = RectUtil.expandToFitWithPadding(
-            SAConstants.Focus.GROUP_BUFFER, focusRect, childRect);
-        manager.rings_.get(SAConstants.Focus.ID.PREVIEW).rects = [childRect];
-      }
-      manager.rings_.get(SAConstants.Focus.ID.PRIMARY).rects = [focusRect];
-      manager.updateFocusRings_(node, firstChild);
+      FocusRingManager.instance.setFocusedNodeGroup_(node, firstChild);
       return;
     }
 
-    manager.rings_.get(SAConstants.Focus.ID.PRIMARY).rects = [node.location];
-    manager.rings_.get(SAConstants.Focus.ID.PREVIEW).rects = [];
-    manager.updateFocusRings_(node, null);
+    FocusRingManager.instance.setFocusedNodeLeaf_(node);
   }
 
   /** Clears all focus rings. */
   static clearAll() {
-    const manager = FocusRingManager.instance;
-    manager.rings_.forEach(ring => {
-      ring.rects = [];
-    });
-    manager.updateFocusRings_(null, null);
+    FocusRingManager.instance.clearAll_();
   }
 
   /**
@@ -138,70 +90,209 @@ export class FocusRingManager {
    * are updated. It will be called with two arguments: the node for
    * the primary ring, and the node for the preview ring. Either may
    * be null.
-   * @param {function(SAChildNode, SAChildNode)} observer
+   * @param {function(?SANode, ?SANode)} observer
    */
   static setObserver(observer) {
     FocusRingManager.instance.observer_ = observer;
   }
 
+  // ======== Private methods ========
+
+  /** @private */
+  clearAll_() {
+    this.forEachRing_(ring => ring.rects = []);
+    this.updateNodesForTesting_(null, null);
+    this.updateFocusRings_();
+  }
+
   /**
    * Creates the map of focus rings.
-   * @return {!Map<SAConstants.Focus.ID,
-   * chrome.accessibilityPrivate.FocusRingInfo>}
+   * @return {!Object<RingId, FocusRingInfo>}
    * @private
    */
-  createMap_() {
+  createRings_() {
     const primaryRing = {
-      id: SAConstants.Focus.ID.PRIMARY,
+      id: RingId.PRIMARY,
       rects: [],
-      type: chrome.accessibilityPrivate.FocusType.SOLID,
-      color: SAConstants.Focus.PRIMARY_COLOR,
-      secondaryColor: SAConstants.Focus.OUTER_COLOR,
+      type: FocusType.SOLID,
+      color: PRIMARY_COLOR,
+      secondaryColor: OUTER_COLOR,
     };
 
     const previewRing = {
-      id: SAConstants.Focus.ID.PREVIEW,
+      id: RingId.PREVIEW,
       rects: [],
-      type: chrome.accessibilityPrivate.FocusType.DASHED,
-      color: SAConstants.Focus.PREVIEW_COLOR,
-      secondaryColor: SAConstants.Focus.OUTER_COLOR,
+      type: FocusType.DASHED,
+      color: PREVIEW_COLOR,
+      secondaryColor: OUTER_COLOR,
     };
 
-    return new Map([
-      [SAConstants.Focus.ID.PRIMARY, primaryRing],
-      [SAConstants.Focus.ID.PREVIEW, previewRing],
-    ]);
+    return {
+      [RingId.PRIMARY]: primaryRing,
+      [RingId.PREVIEW]: previewRing,
+    };
   }
 
+  /**
+   * Calls a function for each focus ring.
+   * @param {!function(!FocusRingInfo)} callback
+   * @private
+   */
+  forEachRing_(callback) {
+    Object.values(this.rings_).forEach(ring => callback(ring));
+  }
+
+  /**
+   * Sets the focus ring color. Assumes the color has already been validated.
+   * @param {!string} color
+   * @private
+   */
+  setColorValidated_(color) {
+    this.forEachRing_(ring => ring.color = color);
+  }
+
+  /**
+   * Sets the primary focus ring to |node|, and the preview focus ring to
+   * |firstChild|.
+   * @param {!SAChildNode} group
+   * @param {!SAChildNode} firstChild
+   * @private
+   */
+  setFocusedNodeGroup_(group, firstChild) {
+    // Clear the dashed ring between transitions, as the animation is
+    // distracting.
+    this.rings_[RingId.PREVIEW].rects = [];
+
+    let focusRect = group.location;
+    const childRect = firstChild ? firstChild.location : null;
+    if (childRect) {
+      // If the current element is not specialized in location handling, e.g.
+      // the back button, the focus rect should expand to contain the child
+      // rect.
+      focusRect =
+          RectUtil.expandToFitWithPadding(GROUP_BUFFER, focusRect, childRect);
+      this.rings_[RingId.PREVIEW].rects = [childRect];
+    }
+    this.rings_[RingId.PRIMARY].rects = [focusRect];
+    this.updateNodesForTesting_(group, firstChild);
+    this.updateFocusRings_();
+  }
+
+  /**
+   * Clears the primary focus ring and sets the preview focus ring based on the
+   *     provided node.
+   * @param {!SAChildNode} node
+   * @private
+   */
+  setFocusedNodeIgnorePrimary_(node) {
+    // Nodes of this type, e.g. the back button node, handles setting its own
+    // focus, as it has special requirements (a round focus ring that has no
+    // gap with the edges of the view).
+    this.rings_[RingId.PRIMARY].rects = [];
+    // Clear the dashed ring between transitions, as the animation is
+    // distracting.
+    this.rings_[RingId.PREVIEW].rects = [];
+    this.updateFocusRings_();
+
+    // Show the preview focus ring unless the menu is open (it has a custom exit
+    // button).
+    if (!MenuManager.isMenuOpen()) {
+      this.rings_[RingId.PREVIEW].rects = [node.group.location];
+    }
+    this.updateNodesForTesting_(node, node.group);
+    this.updateFocusRings_();
+  }
+
+  /**
+   * Sets the primary focus to |node| and clears the secondary focus.
+   * @param {!SAChildNode} node
+   * @private
+   */
+  setFocusedNodeLeaf_(node) {
+    this.rings_[RingId.PRIMARY].rects = [node.location];
+    this.rings_[RingId.PREVIEW].rects = [];
+    this.updateNodesForTesting_(node, null);
+    this.updateFocusRings_();
+  }
 
   /**
    * Updates all focus rings to reflect new location, color, style, or other
    * changes. Enables observers to monitor what's focused.
-   * @param {SAChildNode} primaryRingNode
-   * @param {SAChildNode} previewRingNode
    * @private
    */
-  updateFocusRings_(primaryRingNode, previewRingNode) {
-    if (SwitchAccess.mode === SAConstants.Mode.POINT_SCAN &&
-        !MenuManager.isMenuOpen()) {
+  updateFocusRings_() {
+    if (SwitchAccess.mode === Mode.POINT_SCAN && !MenuManager.isMenuOpen()) {
       return;
     }
 
-    const focusRings = [];
-    this.rings_.forEach(ring => focusRings.push(ring));
-    chrome.accessibilityPrivate.setFocusRings(focusRings);
+    const focusRings = Object.values(this.rings_);
+    chrome.accessibilityPrivate.setFocusRings(
+        focusRings,
+        chrome.accessibilityPrivate.AssistiveTechnologyType.SWITCH_ACCESS);
+  }
 
+  /**
+   * Saves the primary/preview focus for testing.
+   * @param {?SANode} primary
+   * @param {?SANode} preview
+   * @private
+   */
+  updateNodesForTesting_(primary, preview) {
     // Keep track of the nodes associated with each focus ring for testing
     // purposes, since focus ring locations are not guaranteed to exactly match
     // node locations.
-    this.ringNodesForTesting_.set(
-        SAConstants.Focus.ID.PRIMARY, primaryRingNode);
-    this.ringNodesForTesting_.set(
-        SAConstants.Focus.ID.PREVIEW, previewRingNode);
+    this.ringNodesForTesting_[RingId.PRIMARY] = primary;
+    this.ringNodesForTesting_[RingId.PREVIEW] = preview;
 
     const observer = FocusRingManager.instance.observer_;
     if (observer) {
-      observer(primaryRingNode, previewRingNode);
+      observer(primary, preview);
     }
   }
 }
+
+/**
+ * Regex pattern to verify valid colors. Checks that the first character
+ * is '#', followed by 3, 4, 6, or 8 valid hex characters, and no other
+ * characters (ignoring case).
+ * @const {RegExp}
+ */
+const COLOR_PATTERN = /^#([0-9A-F]{3,4}|[0-9A-F]{6}|[0-9A-F]{8})$/i;
+
+/**
+ * The buffer (in dip) between a child's focus ring and its parent's focus
+ * ring.
+ * @const {number}
+ */
+const GROUP_BUFFER = 2;
+
+/**
+ * The focus ring IDs used by Switch Access.
+ * Exported for testing.
+ * @enum {string}
+ */
+export const RingId = {
+  // The ID for the ring showing the user's current focus.
+  PRIMARY: 'primary',
+  // The ID for the ring showing a preview of the next focus, if the user
+  // selects the current element.
+  PREVIEW: 'preview',
+};
+
+/**
+ * The secondary color for both rings.
+ * @const {string|undefined}
+ */
+const OUTER_COLOR = '#174EA6';  // Google Blue 900
+
+/**
+ * The inner color of the preview focus ring
+ * @const {string}
+ */
+const PREVIEW_COLOR = '#8AB4F880';  // Google Blue 300, 50% opacity
+
+/**
+ * The inner color of the primary focus ring.
+ * @const {string}
+ */
+const PRIMARY_COLOR = '#8AB4F8';  // Google Blue 300

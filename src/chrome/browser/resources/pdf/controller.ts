@@ -1,45 +1,44 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.m.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 
-import {NamedDestinationMessageData, SaveRequestType} from './constants.js';
+import {NamedDestinationMessageData, Rect, SaveRequestType} from './constants.js';
 import {PdfPluginElement} from './internal_plugin.js';
 import {PinchPhase, Viewport} from './viewport.js';
 
-export type MessageData = {
-  type: string,
-  messageId?: string,
-};
+export interface MessageData {
+  type: string;
+  messageId?: string;
+}
 
-export type SaveAttachmentMessageData = {
-  type: string,
-  dataToSave: ArrayBuffer,
-  messageId: string,
-};
+export interface SaveAttachmentMessageData {
+  type: string;
+  dataToSave: ArrayBuffer;
+  messageId: string;
+}
 
-type SaveDataMessageData = {
-  dataToSave: ArrayBuffer,
-  token: string,
-  fileName: string,
-};
+interface SaveDataMessageData {
+  dataToSave: ArrayBuffer;
+  token: string;
+  fileName: string;
+}
 
-export type PrintPreviewParams = {
-  type: string,
-  url: string,
-  grayscale: boolean,
-  modifiable: boolean,
-  pageNumbers: number[],
-};
+export interface PrintPreviewParams {
+  type: string;
+  url: string;
+  grayscale: boolean;
+  modifiable: boolean;
+  pageNumbers: number[];
+}
 
-type ThumbnailMessageData = {
-  imageData: ArrayBuffer,
-  width: number,
-  height: number,
-};
+interface ThumbnailMessageData {
+  imageData: ArrayBuffer;
+  width: number;
+  height: number;
+}
 
 /**
  * Creates a cryptographically secure pseudorandom 128-bit token.
@@ -82,7 +81,7 @@ export interface ContentController {
     fileName: string,
     dataToSave: ArrayBuffer,
     editModeForTesting?: boolean,
-  }>;
+  }|null>;
 
   /**
    * Requests that the attachment at a certain index be saved.
@@ -323,6 +322,13 @@ export class PluginController implements ContentController {
     this.postMessage_({type: 'loadPreviewPage', url: url, index: index});
   }
 
+  getPageBoundingBox(page: number): Promise<Rect> {
+    return this.postMessageWithReply_({
+      type: 'getPageBoundingBox',
+      page,
+    });
+  }
+
   getPasswordComplete(password: string) {
     this.postMessage_({type: 'getPasswordComplete', password: password});
   }
@@ -348,7 +354,7 @@ export class PluginController implements ContentController {
 
   save(requestType: SaveRequestType) {
     const resolver =
-        new PromiseResolver<{fileName: string, dataToSave: ArrayBuffer}>();
+        new PromiseResolver<{fileName: string, dataToSave: ArrayBuffer}|null>();
     const newToken = createToken();
     this.pendingTokens_.set(newToken, resolver);
     this.postMessage_({

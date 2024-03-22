@@ -1,11 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/device_identity/chromeos/device_oauth2_token_store_chromeos.h"
 
-#include "ash/components/cryptohome/system_salt_getter.h"
-#include "ash/components/tpm/stub_install_attributes.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/bind.h"
@@ -13,20 +11,22 @@
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
-#include "chrome/browser/device_identity/chromeos/device_oauth2_token_store_chromeos.h"
+#include "chrome/browser/ash/settings/token_encryptor.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/cryptohome/system_salt_getter.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_cryptohome_misc_client.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
 #include "components/ownership/mock_owner_key_util.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using base::test::TestFuture;
-
 namespace {
+
+using ::base::test::TestFuture;
 
 // Helper class for tests to wait until the store's init procedure is completed.
 class DeviceOAuth2TokenStoreInitWaiter : public TestFuture<bool, bool> {
@@ -49,7 +49,7 @@ class DeviceOAuth2TokenStoreChromeOSTest : public testing::Test {
     ash::FakeCryptohomeMiscClient::Get()->set_system_salt(
         ash::FakeCryptohomeMiscClient::GetStubSystemSalt());
 
-    chromeos::SystemSaltGetter::Initialize();
+    ash::SystemSaltGetter::Initialize();
 
     scoped_refptr<ownership::MockOwnerKeyUtil> owner_key_util_(
         new ownership::MockOwnerKeyUtil());
@@ -62,12 +62,18 @@ class DeviceOAuth2TokenStoreChromeOSTest : public testing::Test {
   void TearDown() override {
     base::ThreadPoolInstance::Get()->FlushForTesting();
     ash::DeviceSettingsService::Get()->UnsetSessionManager();
-    chromeos::SystemSaltGetter::Shutdown();
+    ash::SystemSaltGetter::Shutdown();
     ash::CryptohomeMiscClient::Shutdown();
   }
 
+  std::string GetStubSaltAsString() {
+    std::vector<uint8_t> bytes =
+        ash::FakeCryptohomeMiscClient::GetStubSystemSalt();
+    return std::string(bytes.begin(), bytes.end());
+  }
+
   void SetUpDefaultValues() {
-    SetDeviceRefreshTokenInLocalState("device_refresh_token_4_test");
+    StoreV2TokenInLocalState("device_refresh_token_4_test");
     SetRobotAccountId("service_acct@g.com");
   }
 
@@ -104,10 +110,19 @@ class DeviceOAuth2TokenStoreChromeOSTest : public testing::Test {
     content::RunAllTasksUntilIdle();
   }
 
-  void SetDeviceRefreshTokenInLocalState(const std::string& refresh_token) {
+  void StoreV1TokenInLocalState(const std::string& token) {
+    ash::CryptohomeTokenEncryptor encryptor(GetStubSaltAsString());
     scoped_testing_local_state_.Get()->SetUserPref(
-        prefs::kDeviceRobotAnyApiRefreshToken,
-        std::make_unique<base::Value>(refresh_token));
+        prefs::kDeviceRobotAnyApiRefreshTokenV1,
+        std::make_unique<base::Value>(
+            encryptor.WeakEncryptWithSystemSalt(token)));
+  }
+
+  void StoreV2TokenInLocalState(const std::string& token) {
+    ash::CryptohomeTokenEncryptor encryptor(GetStubSaltAsString());
+    scoped_testing_local_state_.Get()->SetUserPref(
+        prefs::kDeviceRobotAnyApiRefreshTokenV2,
+        std::make_unique<base::Value>(encryptor.EncryptWithSystemSalt(token)));
   }
 
   content::BrowserTaskEnvironment task_environment_;
@@ -144,6 +159,37 @@ TEST_F(DeviceOAuth2TokenStoreChromeOSTest, InitSuccessful) {
   EXPECT_TRUE(init_waiter.HasInitBeenCalled());
   EXPECT_TRUE(init_waiter.GetInitResult());
   EXPECT_TRUE(init_waiter.GetValidationRequired());
+}
+
+TEST_F(DeviceOAuth2TokenStoreChromeOSTest, LoadV1Token) {
+  chromeos::DeviceOAuth2TokenStoreChromeOS store(
+      scoped_testing_local_state_.Get());
+
+  StoreV1TokenInLocalState("test-token");
+  InitStore(&store);
+
+  EXPECT_EQ("test-token", store.GetRefreshToken());
+}
+
+TEST_F(DeviceOAuth2TokenStoreChromeOSTest, LoadV2Token) {
+  chromeos::DeviceOAuth2TokenStoreChromeOS store(
+      scoped_testing_local_state_.Get());
+
+  StoreV2TokenInLocalState("test-token");
+  InitStore(&store);
+
+  EXPECT_EQ("test-token", store.GetRefreshToken());
+}
+
+TEST_F(DeviceOAuth2TokenStoreChromeOSTest, LoadPrefersV2Token) {
+  chromeos::DeviceOAuth2TokenStoreChromeOS store(
+      scoped_testing_local_state_.Get());
+
+  StoreV1TokenInLocalState("test-token-v1");
+  StoreV2TokenInLocalState("test-token-v2");
+  InitStore(&store);
+
+  EXPECT_EQ("test-token-v2", store.GetRefreshToken());
 }
 
 TEST_F(DeviceOAuth2TokenStoreChromeOSTest, SaveToken) {

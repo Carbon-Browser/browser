@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PUBLIC_PLATFORM_MENU_UTILS_H_
 #define UI_OZONE_PUBLIC_PLATFORM_MENU_UTILS_H_
+
+#include <stdint.h>
 
 #include <string>
 
@@ -12,7 +14,7 @@
 
 namespace ui {
 
-enum class DomCode;
+enum class DomCode : uint32_t;
 
 // Platform-specific functions related to menus.
 class COMPONENT_EXPORT(OZONE_BASE) PlatformMenuUtils {

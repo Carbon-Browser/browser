@@ -1,12 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/login/login_handler.h"
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/blocked_content/popunder_preventer.h"
 #include "chrome/browser/ui/browser_dialogs.h"
@@ -20,14 +20,10 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/dialog_delegate.h"
 
-namespace chrome {
-
 namespace {
 
-// This class simply forwards the authentication from the LoginView (on
-// the UI thread) to the net::URLRequest (on the I/O thread).
-// This class uses ref counting to ensure that it lives until all InvokeLaters
-// have been called.
+// This class prompts the user for credentials and returns the result to
+// `auth_required_callback`.
 class LoginHandlerViews : public LoginHandler {
  public:
   LoginHandlerViews(const net::AuthChallengeInfo& auth_info,
@@ -173,12 +169,11 @@ class LoginHandlerViews : public LoginHandler {
 
 }  // namespace
 
-std::unique_ptr<LoginHandler> CreateLoginHandlerViews(
+// static
+std::unique_ptr<LoginHandler> LoginHandler::Create(
     const net::AuthChallengeInfo& auth_info,
     content::WebContents* web_contents,
     LoginAuthRequiredCallback auth_required_callback) {
   return std::make_unique<LoginHandlerViews>(auth_info, web_contents,
                                              std::move(auth_required_callback));
 }
-
-}  // namespace chrome

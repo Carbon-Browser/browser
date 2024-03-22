@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/renderer_host/media/aec_dump_manager_impl.h"
 
 #include "base/files/file.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/thread_pool.h"
 #include "content/browser/webrtc/webrtc_internals.h"
@@ -89,9 +90,9 @@ void AecDumpManagerImpl::StartDump(int id, base::File file) {
   auto it = agents_.find(id);
   if (it == agents_.end()) {
     // Post the file close to avoid blocking the current thread.
-    base::ThreadPool::PostTask(
-        FROM_HERE, {base::TaskPriority::LOWEST, base::MayBlock()},
-        base::BindOnce([](base::File) {}, std::move(file)));
+    base::ThreadPool::PostTask(FROM_HERE,
+                               {base::TaskPriority::LOWEST, base::MayBlock()},
+                               base::DoNothingWithBoundArgs(std::move(file)));
     return;
   }
 

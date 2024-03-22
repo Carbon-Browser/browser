@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,7 @@ class FakeNetInstance : public mojom::NetInstance {
 
   void ConfigureAndroidVpn() override;
 
+  // TODO(b/308365031): Rename mojo ActiveNetworksChanged to HostNetworksChanged
   void ActiveNetworksChanged(
       std::vector<mojom::NetworkConfigurationPtr> network) override;
 
@@ -42,6 +43,8 @@ class FakeNetInstance : public mojom::NetInstance {
   void PingTest(const std::string& transport_name,
                 const std::string& ip_address,
                 PingTestCallback callback) override;
+
+  void SetUpFlag(mojom::Flag flag, bool value) override;
 
   void set_http_test_result(mojom::ArcHttpTestResult http_test_result) {
     http_test_result_ = http_test_result;

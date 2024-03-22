@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,9 +53,8 @@ TypeConverter<HandwritingStrokePtr, blink::HandwritingStroke*>::Convert(
     return nullptr;
   }
   auto output = handwriting::mojom::blink::HandwritingStroke::New();
-  for (const auto& point : input->getPoints()) {
-    output->points.push_back(mojo::ConvertTo<HandwritingPointPtr>(point.Get()));
-  }
+  output->points =
+      mojo::ConvertTo<Vector<HandwritingPointPtr>>(input->getPoints());
   return output;
 }
 

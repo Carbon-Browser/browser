@@ -1,17 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/infobars/coordinators/infobar_coordinator.h"
 #import "ios/chrome/browser/ui/infobars/coordinators/infobar_coordinator+subclassing.h"
 
-#include "base/mac/foundation_util.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#import "ios/chrome/browser/main/browser.h"
+#import "base/apple/foundation_util.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/timer/timer.h"
+#import "ios/chrome/browser/shared/coordinator/layout_guide/layout_guide_util.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/util/layout_guide_names.h"
+#import "ios/chrome/browser/shared/ui/util/util_swift.h"
 #import "ios/chrome/browser/ui/fullscreen/animated_scoped_fullscreen_disabler.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_controller.h"
-#import "ios/chrome/browser/ui/fullscreen/fullscreen_features.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_accessibility_util.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_presentation_state.h"
 #import "ios/chrome/browser/ui/infobars/coordinators/infobar_coordinator_implementation.h"
@@ -21,12 +25,6 @@
 #import "ios/chrome/browser/ui/infobars/presentation/infobar_banner_transition_driver.h"
 #import "ios/chrome/browser/ui/infobars/presentation/infobar_modal_positioner.h"
 #import "ios/chrome/browser/ui/infobars/presentation/infobar_modal_transition_driver.h"
-#import "ios/chrome/browser/ui/util/named_guide.h"
-#import "ios/chrome/browser/ui/util/ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface InfobarCoordinator () <InfobarCoordinatorImplementation,
                                   InfobarBannerPositioner,
@@ -50,13 +48,14 @@
 @property(nonatomic, assign, readwrite) BOOL bannerWasPresented;
 // YES if the banner is in the process of being dismissed.
 @property(nonatomic, assign) BOOL bannerIsBeingDismissed;
-// Completion block used to dismiss the banner after a set period of time. This
-// needs to be created by dispatch_block_create() since it may get cancelled.
-@property(nonatomic, copy) dispatch_block_t dismissBannerBlock;
 
 @end
 
-@implementation InfobarCoordinator
+@implementation InfobarCoordinator {
+  // Timer used to schedule the auto-dismiss of the banner.
+  base::OneShotTimer _autoDismissBannerTimer;
+}
+
 // Synthesize since readonly property from superclass is changed to readwrite.
 @synthesize baseViewController = _baseViewController;
 // Synthesize since readonly property from superclass is changed to readwrite.
@@ -78,6 +77,8 @@
 #pragma mark - Public Methods.
 
 - (void)stop {
+  // Cancel any scheduled automatic dismissal block.
+  _autoDismissBannerTimer.Stop();
   _animatedFullscreenDisabler = nullptr;
   _badgeDelegate = nil;
   _infobarDelegate = nil;
@@ -110,7 +111,8 @@
   if ([self.bannerViewController
           conformsToProtocol:@protocol(InfobarBannerInteractable)]) {
     UIViewController<InfobarBannerInteractable>* interactableBanner =
-        base::mac::ObjCCastStrict<UIViewController<InfobarBannerInteractable>>(
+        base::apple::ObjCCastStrict<
+            UIViewController<InfobarBannerInteractable>>(
             self.bannerViewController);
     interactableBanner.interactionDelegate = self.bannerTransitionDriver;
   }
@@ -140,23 +142,16 @@
 
   // Dismisses the presented banner after a certain number of seconds.
   if (!UIAccessibilityIsVoiceOverRunning() && self.shouldUseDefaultDismissal) {
-    NSTimeInterval timeInterval =
+    const base::TimeDelta timeDelta =
         self.highPriorityPresentation
-            ? kInfobarBannerLongPresentationDurationInSeconds
-            : kInfobarBannerDefaultPresentationDurationInSeconds;
-    dispatch_time_t popTime =
-        dispatch_time(DISPATCH_TIME_NOW, timeInterval * NSEC_PER_SEC);
-    if (self.dismissBannerBlock) {
-      // TODO:(crbug.com/1021805): Write unittest to cover this situation.
-      dispatch_block_cancel(self.dismissBannerBlock);
-    }
+            ? kInfobarBannerLongPresentationDuration
+            : kInfobarBannerDefaultPresentationDuration;
+    // Calling base::OneShotTimer::Start() will cancel any previously scheduled
+    // timer, so there is no need to call base::OneShotTimer::Stop() first.
     __weak InfobarCoordinator* weakSelf = self;
-    self.dismissBannerBlock =
-        dispatch_block_create(DISPATCH_BLOCK_ASSIGN_CURRENT, ^{
-          [weakSelf dismissInfobarBannerIfReady];
-          weakSelf.dismissBannerBlock = nil;
-        });
-    dispatch_after(popTime, dispatch_get_main_queue(), self.dismissBannerBlock);
+    _autoDismissBannerTimer.Start(FROM_HERE, timeDelta, base::BindOnce(^{
+                                    [weakSelf dismissInfobarBannerIfReady];
+                                  }));
   }
 }
 
@@ -234,13 +229,24 @@
 #pragma mark InfobarBannerPositioner
 
 - (CGFloat)bannerYPosition {
-  NamedGuide* omniboxGuide =
-      [NamedGuide guideWithName:kOmniboxGuide
-                           view:self.baseViewController.view];
-  UIView* omniboxView = omniboxGuide.owningView;
-  CGRect omniboxFrame = [omniboxView convertRect:omniboxGuide.layoutFrame
-                                          toView:omniboxView.window];
-  return CGRectGetMaxY(omniboxFrame);
+  LayoutGuideCenter* layoutGuideCenter =
+      LayoutGuideCenterForBrowser(self.browser);
+  UIView* topOmnibox =
+      [layoutGuideCenter referencedViewUnderName:kTopOmniboxGuide];
+  CGRect omniboxFrame = [topOmnibox convertRect:topOmnibox.bounds toView:nil];
+  CGFloat omniboxMaxY = CGRectGetMaxY(omniboxFrame);
+
+  // Use the top toolbar's layout guide when the omnibox is at the bottom.
+  if (IsBottomOmniboxSteadyStateEnabled() && topOmnibox.hidden) {
+    UIView* topToolbar =
+        [layoutGuideCenter referencedViewUnderName:kPrimaryToolbarGuide];
+    CGRect topToolbarFrame = [topToolbar convertRect:topToolbar.bounds
+                                              toView:nil];
+    CGFloat topToolbarMaxY =
+        CGRectGetMaxY(topToolbarFrame) + kInfobarTopPaddingBottomOmnibox;
+    return topToolbarMaxY;
+  }
+  return omniboxMaxY;
 }
 
 - (UIView*)bannerView {

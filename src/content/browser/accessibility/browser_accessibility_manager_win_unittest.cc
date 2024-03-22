@@ -1,14 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/command_line.h"
 #include "base/memory/raw_ptr.h"
+#include "base/test/scoped_feature_list.h"
 #include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/accessibility/test_browser_accessibility_delegate.h"
+#include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/accessibility/accessibility_switches.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/platform/ax_fragment_root_delegate_win.h"
 #include "ui/accessibility/platform/ax_fragment_root_win.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
@@ -24,7 +25,8 @@ class TestFragmentRootDelegate : public ui::AXFragmentRootDelegateWin {
   ~TestFragmentRootDelegate() = default;
 
   gfx::NativeViewAccessible GetChildOfAXFragmentRoot() override {
-    return browser_accessibility_manager_->GetRoot()->GetNativeViewAccessible();
+    return browser_accessibility_manager_->GetBrowserAccessibilityRoot()
+        ->GetNativeViewAccessible();
   }
 
   gfx::NativeViewAccessible GetParentOfAXFragmentRoot() override {
@@ -53,6 +55,10 @@ class BrowserAccessibilityManagerWinTest : public testing::Test {
 
  private:
   void SetUp() override;
+
+  // This is needed to prevent a DCHECK failure when OnAccessibilityApiUsage
+  // is called in BrowserAccessibility::GetRole.
+  content::BrowserTaskEnvironment task_environment_;
 };
 
 void BrowserAccessibilityManagerWinTest::SetUp() {
@@ -61,8 +67,7 @@ void BrowserAccessibilityManagerWinTest::SetUp() {
 }
 
 TEST_F(BrowserAccessibilityManagerWinTest, DynamicallyAddedIFrame) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      ::switches::kEnableExperimentalUIAutomation);
+  base::test::ScopedFeatureList scoped_feature_list(::features::kUiaProvider);
 
   ui::AXNodeData root;
   root.id = 1;
@@ -73,13 +78,15 @@ TEST_F(BrowserAccessibilityManagerWinTest, DynamicallyAddedIFrame) {
 
   std::unique_ptr<BrowserAccessibilityManager> root_manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root), test_browser_accessibility_delegate_.get()));
+          MakeAXTreeUpdateForTesting(root),
+          test_browser_accessibility_delegate_.get()));
 
   TestFragmentRootDelegate test_fragment_root_delegate(root_manager.get());
 
   ui::AXPlatformNode* root_document_root_node =
       ui::AXPlatformNode::FromNativeViewAccessible(
-          root_manager->GetRoot()->GetNativeViewAccessible());
+          root_manager->GetBrowserAccessibilityRoot()
+              ->GetNativeViewAccessible());
 
   std::unique_ptr<ui::AXPlatformNodeDelegate> fragment_root =
       std::make_unique<ui::AXFragmentRootWin>(gfx::kMockAcceleratedWidget,
@@ -97,7 +104,7 @@ TEST_F(BrowserAccessibilityManagerWinTest, DynamicallyAddedIFrame) {
   iframe_delegate->accelerated_widget_ = gfx::kMockAcceleratedWidget;
 
   std::unique_ptr<BrowserAccessibilityManager> iframe_manager(
-      BrowserAccessibilityManager::Create(MakeAXTreeUpdate(root),
+      BrowserAccessibilityManager::Create(MakeAXTreeUpdateForTesting(root),
                                           iframe_delegate.get()));
 
   // The new frame is not a root frame, so the fragment root's lone child should
@@ -108,19 +115,20 @@ TEST_F(BrowserAccessibilityManagerWinTest, DynamicallyAddedIFrame) {
 }
 
 TEST_F(BrowserAccessibilityManagerWinTest, ChildTree) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      ::switches::kEnableExperimentalUIAutomation);
+  base::test::ScopedFeatureList scoped_feature_list(::features::kUiaProvider);
 
   ui::AXNodeData child_tree_root;
   child_tree_root.id = 1;
   child_tree_root.role = ax::mojom::Role::kRootWebArea;
-  ui::AXTreeUpdate child_tree_update = MakeAXTreeUpdate(child_tree_root);
+  ui::AXTreeUpdate child_tree_update =
+      MakeAXTreeUpdateForTesting(child_tree_root);
 
   ui::AXNodeData parent_tree_root;
   parent_tree_root.id = 1;
   parent_tree_root.role = ax::mojom::Role::kRootWebArea;
   parent_tree_root.AddChildTreeId(child_tree_update.tree_data.tree_id);
-  ui::AXTreeUpdate parent_tree_update = MakeAXTreeUpdate(parent_tree_root);
+  ui::AXTreeUpdate parent_tree_update =
+      MakeAXTreeUpdateForTesting(parent_tree_root);
 
   child_tree_update.tree_data.parent_tree_id =
       parent_tree_update.tree_data.tree_id;
@@ -136,7 +144,8 @@ TEST_F(BrowserAccessibilityManagerWinTest, ChildTree) {
 
   ui::AXPlatformNode* root_document_root_node =
       ui::AXPlatformNode::FromNativeViewAccessible(
-          parent_manager->GetRoot()->GetNativeViewAccessible());
+          parent_manager->GetBrowserAccessibilityRoot()
+              ->GetNativeViewAccessible());
 
   std::unique_ptr<ui::AXPlatformNodeDelegate> fragment_root =
       std::make_unique<ui::AXFragmentRootWin>(gfx::kMockAcceleratedWidget,

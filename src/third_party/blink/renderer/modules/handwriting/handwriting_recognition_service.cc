@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -129,8 +129,8 @@ ScriptPromise HandwritingRecognitionService::CreateHandwritingRecognizer(
     return ScriptPromise();
   }
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
 
   auto mojo_model_constraint =
@@ -142,8 +142,8 @@ ScriptPromise HandwritingRecognitionService::CreateHandwritingRecognizer(
 
   remote_service_->CreateHandwritingRecognizer(
       std::move(mojo_model_constraint),
-      WTF::Bind(OnCreateHandwritingRecognizer, WrapPersistent(script_state),
-                WrapPersistent(resolver)));
+      WTF::BindOnce(OnCreateHandwritingRecognizer, WrapPersistent(script_state),
+                    WrapPersistent(resolver)));
 
   return promise;
 }
@@ -166,15 +166,15 @@ ScriptPromise HandwritingRecognitionService::QueryHandwritingRecognizer(
     return ScriptPromise();
   }
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
 
   remote_service_->QueryHandwritingRecognizer(
       mojo::ConvertTo<handwriting::mojom::blink::HandwritingModelConstraintPtr>(
           constraint),
-      WTF::Bind(&OnQueryHandwritingRecognizer, WrapPersistent(script_state),
-                WrapPersistent(resolver)));
+      WTF::BindOnce(&OnQueryHandwritingRecognizer, WrapPersistent(script_state),
+                    WrapPersistent(resolver)));
 
   return promise;
 }

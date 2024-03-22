@@ -1,29 +1,29 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/account_manager_core/chromeos/account_manager.h"
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/hash/sha1.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "components/account_manager_core/account.h"
 #include "components/account_manager_core/chromeos/tokens.pb.h"
@@ -115,6 +115,13 @@ internal::AccountType ToProtoAccountType(
   }
 }
 
+// Returns a Base16 encoded SHA1 digest of `data`.
+std::string Sha1Digest(const std::string& data) {
+  const base::SHA1Digest hash =
+      base::SHA1HashSpan(base::as_bytes(base::make_span(data)));
+  return base::HexEncode(hash);
+}
+
 }  // namespace
 
 // static
@@ -150,7 +157,7 @@ class AccountManager::GaiaTokenRevocationRequest : public GaiaAuthConsumer {
     // We cannot call |AccountManager::DeletePendingTokenRevocationRequest|
     // directly because it will immediately start deleting |this|, before the
     // method has had a chance to return.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&AccountManager::DeletePendingTokenRevocationRequest,
                        account_manager_, this));
@@ -256,7 +263,7 @@ class AccountManager::AccessTokenFetcher : public OAuth2AccessTokenFetcher {
   }
 
   const ::account_manager::AccountKey account_key_;
-  const raw_ptr<AccountManager> account_manager_;
+  const raw_ptr<AccountManager, DanglingUntriaged> account_manager_;
   const raw_ptr<OAuth2AccessTokenConsumer> consumer_;
 
   bool are_token_requests_allowed_ = false;
@@ -363,8 +370,8 @@ void AccountManager::Initialize(
 
   if (!IsEphemeralMode()) {
     DCHECK(task_runner_);
-    PostTaskAndReplyWithResult(
-        task_runner_.get(), FROM_HERE,
+    task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&AccountManager::LoadAccountsFromDisk, tokens_file_path),
         base::BindOnce(
             &AccountManager::InsertAccountsAndRunInitializationCallbacks,
@@ -641,7 +648,7 @@ void AccountManager::PersistAccountsAsync() {
 
   // Schedule (immediately) a non-blocking write.
   DCHECK(writer_);
-  writer_->WriteNow(std::make_unique<std::string>(GetSerializedAccounts()));
+  writer_->WriteNow(GetSerializedAccounts());
 }
 
 std::string AccountManager::GetSerializedAccounts() {
@@ -775,6 +782,30 @@ void AccountManager::CheckDummyGaiaTokenForAllAccounts(
   std::move(callback).Run(accounts_list);
 }
 
+void AccountManager::GetTokenHash(
+    const ::account_manager::AccountKey& account_key,
+    base::OnceCallback<void(const std::string&)> callback) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_NE(init_state_, InitializationState::kNotStarted);
+
+  if (init_state_ != InitializationState::kInitialized) {
+    base::OnceClosure closure = base::BindOnce(
+        &AccountManager::GetTokenHash, weak_factory_.GetWeakPtr(), account_key,
+        std::move(callback));
+    RunOnInitialization(std::move(closure));
+    return;
+  }
+
+  DCHECK_EQ(init_state_, InitializationState::kInitialized);
+  auto it = accounts_.find(account_key);
+  if (it == accounts_.end()) {
+    std::move(callback).Run(std::string());
+    return;
+  }
+
+  std::move(callback).Run(Sha1Digest(it->second.token));
+}
+
 void AccountManager::MaybeRevokeTokenOnServer(
     const ::account_manager::AccountKey& account_key,
     const std::string& old_token) {
@@ -797,12 +828,9 @@ void AccountManager::DeletePendingTokenRevocationRequest(
     GaiaTokenRevocationRequest* request) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  auto it = std::find_if(
-      pending_token_revocation_requests_.begin(),
-      pending_token_revocation_requests_.end(),
-      [&request](
-          const std::unique_ptr<GaiaTokenRevocationRequest>& pending_request)
-          -> bool { return pending_request.get() == request; });
+  auto it =
+      base::ranges::find(pending_token_revocation_requests_, request,
+                         &std::unique_ptr<GaiaTokenRevocationRequest>::get);
 
   if (it != pending_token_revocation_requests_.end()) {
     pending_token_revocation_requests_.erase(it);
@@ -833,6 +861,10 @@ AccountManager::GetUrlLoaderFactory() {
   DCHECK_EQ(init_state_, InitializationState::kInitialized);
 
   return url_loader_factory_;
+}
+
+base::WeakPtr<AccountManager> AccountManager::GetWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 }  // namespace account_manager

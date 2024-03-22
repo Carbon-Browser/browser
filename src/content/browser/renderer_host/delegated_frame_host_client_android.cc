@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,11 @@ void DelegatedFrameHostClientAndroid::WasEvicted() {
 
 void DelegatedFrameHostClientAndroid::OnSurfaceIdChanged() {
   render_widget_host_view_->OnSurfaceIdChanged();
+}
+
+std::vector<viz::SurfaceId>
+DelegatedFrameHostClientAndroid::CollectSurfaceIdsForEviction() const {
+  return render_widget_host_view_->host()->CollectSurfaceIdsForEviction();
 }
 
 }  // namespace content

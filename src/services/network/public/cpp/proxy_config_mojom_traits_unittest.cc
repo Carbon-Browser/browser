@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #include "services/network/public/cpp/proxy_config_with_annotation_mojom_traits.h"
 
 #include "mojo/public/cpp/test_support/test_utils.h"
+#include "net/base/proxy_chain.h"
+#include "net/base/proxy_string_util.h"
 #include "net/proxy_resolution/proxy_bypass_rules.h"
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
@@ -55,6 +57,18 @@ TEST(ProxyConfigTraitsTest, CustomPacURL) {
       TRAFFIC_ANNOTATION_FOR_TESTS);
 
   EXPECT_TRUE(TestProxyConfigRoundTrip(proxy_config));
+}
+
+TEST(ProxyConfigTraitsTest, MultiProxy) {
+  net::ProxyConfig proxy_config;
+  proxy_config.proxy_rules().type =
+      net::ProxyConfig::ProxyRules::Type::PROXY_LIST;
+  proxy_config.proxy_rules().single_proxies.AddProxyChain(net::ProxyChain(
+      {ProxyUriToProxyServer("foo:333", net::ProxyServer::SCHEME_HTTPS),
+       ProxyUriToProxyServer("foo:444", net::ProxyServer::SCHEME_HTTPS)}));
+  net::ProxyConfigWithAnnotation annotated_config(proxy_config,
+                                                  TRAFFIC_ANNOTATION_FOR_TESTS);
+  EXPECT_TRUE(TestProxyConfigRoundTrip(annotated_config));
 }
 
 TEST(ProxyConfigTraitsTest, ProxyRules) {

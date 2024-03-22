@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Common argument parsing-related code for unexpected pass finders."""
@@ -37,11 +37,12 @@ def AddCommonArguments(parser: argparse.ArgumentParser) -> None:
                       default=False,
                       help='Automatically remove any expectations that are '
                       'determined to be stale from the expectation file.')
-  parser.add_argument('--modify-semi-stale-expectations',
+  parser.add_argument('--narrow-semi-stale-expectation-scope',
                       action='store_true',
                       default=False,
-                      help='If any semi-stale expectations are found, prompt '
-                      'the user about the modification of each one.')
+                      help='Automatically modify or split semi-stale '
+                      'expectations so they only apply to configurations that '
+                      'actually need them.')
   parser.add_argument('-v',
                       '--verbose',
                       action='count',
@@ -69,6 +70,27 @@ def AddCommonArguments(parser: argparse.ArgumentParser) -> None:
                             'from being removed before a sufficient amount of '
                             'data has been generated with the expectation '
                             'active. Set to a negative value to disable.'))
+  parser.add_argument('--result-output-file',
+                      help=('Output file to store the generated results. If '
+                            'not specified, will use a temporary file.'))
+  parser.add_argument('--bug-output-file',
+                      help=('Output file to store "Bug:"/"Fixed:" text '
+                            'intended for use in CL descriptions. If not '
+                            'specified, will be printed to the terminal '
+                            'instead.'))
+  parser.add_argument('--jobs',
+                      '-j',
+                      type=int,
+                      help=('How many parallel jobs to run. By default, runs '
+                            'all work in parallel.'))
+  parser.add_argument('--disable-batching',
+                      dest='use_batching',
+                      action='store_false',
+                      default=True,
+                      help=('Disables the use of batching when running '
+                            'queries. Batching allows for more queries to be '
+                            'run in parallel, but increases query overhead by '
+                            'a variable amount.'))
   internal_group = parser.add_mutually_exclusive_group()
   internal_group.add_argument('--include-internal-builders',
                               action='store_true',

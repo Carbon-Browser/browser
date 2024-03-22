@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,10 @@
 
 #include "ash/test/ash_test_base.h"
 #include "components/exo/test/exo_test_helper.h"
+
+namespace ash {
+class TestShellDelegate;
+}
 
 namespace viz {
 class SurfaceManager;
@@ -39,6 +43,8 @@ class ExoTestBase : public ash::AshTestBase {
   // ash::AshTestBase:
   void SetUp() override;
   void TearDown() override;
+
+  void SetUp(std::unique_ptr<ash::TestShellDelegate> shell_delegate);
 
   viz::SurfaceManager* GetSurfaceManager();
 

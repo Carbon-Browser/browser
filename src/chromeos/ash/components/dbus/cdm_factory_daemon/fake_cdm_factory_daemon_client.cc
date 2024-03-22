@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 
 namespace ash {
 
@@ -23,7 +22,7 @@ void FakeCdmFactoryDaemonClient::BootstrapMojoConnection(
 }
 
 void FakeCdmFactoryDaemonClient::WaitForServiceToBeAvailable(
-    WaitForServiceToBeAvailableCallback callback) {
+    chromeos::WaitForServiceToBeAvailableCallback callback) {
   std::move(callback).Run(true);
 }
 

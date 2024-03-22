@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_constants.h"
+#include "chrome/browser/media/router/media_router_feature.h"
+#include "chrome/browser/profiles/profile.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_prefs/user_prefs.h"
@@ -20,8 +22,22 @@
 
 namespace features {
 // Enables remembering of access code cast devices.
-const base::Feature kAccessCodeCastRememberDevices{
-    "AccessCodeCastRememberDevices", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kAccessCodeCastRememberDevices,
+             "AccessCodeCastRememberDevices",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Provide a tab switching UI bar while casting (mirroring) when AccessCodeCast
+// is enabled.
+BASE_FEATURE(kAccessCodeCastTabSwitchingUI,
+             "AccessCodeCastTabSwitchingUI",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Provide functionality to freeze the casting session when AccessCodeCast is
+// enabled.
+BASE_FEATURE(kAccessCodeCastFreezeUI,
+             "AccessCodeCastFreezeUI",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 }  // namespace features
 
 namespace media_router {
@@ -37,29 +53,30 @@ void RegisterAccessCodeProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterDictionaryPref(prefs::kAccessCodeCastDeviceAdditionTime);
 }
 
-bool GetAccessCodeCastEnabledPref(PrefService* pref_service) {
-  return pref_service->GetBoolean(prefs::kAccessCodeCastEnabled);
+bool GetAccessCodeCastEnabledPref(Profile* profile) {
+  return profile->GetPrefs()->GetBoolean(prefs::kAccessCodeCastEnabled) &&
+         MediaRouterEnabled(profile);
 }
 
-base::TimeDelta GetAccessCodeDeviceDurationPref(PrefService* pref_service) {
-  if (!GetAccessCodeCastEnabledPref(pref_service) ||
+base::TimeDelta GetAccessCodeDeviceDurationPref(Profile* profile) {
+  if (!GetAccessCodeCastEnabledPref(profile) ||
       !base::FeatureList::IsEnabled(features::kAccessCodeCastRememberDevices)) {
     return base::Seconds(0);
   }
 
-  // Check to see if the command line was used to set the value.
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (IsCommandLineSwitchSupported() &&
-      command_line->HasSwitch(switches::kAccessCodeCastDeviceDurationSwitch)) {
-    int value;
-    base::StringToInt(command_line->GetSwitchValueASCII(
-                          switches::kAccessCodeCastDeviceDurationSwitch),
-                      &value);
-    return base::Seconds(value);
-  }
   // Return the value set by the policy pref.
   return base::Seconds(
-      pref_service->GetInteger(prefs::kAccessCodeCastDeviceDuration));
+      profile->GetPrefs()->GetInteger(prefs::kAccessCodeCastDeviceDuration));
+}
+
+bool IsAccessCodeCastTabSwitchingUiEnabled(Profile* profile) {
+  return profile && GetAccessCodeCastEnabledPref(profile) &&
+         base::FeatureList::IsEnabled(features::kAccessCodeCastTabSwitchingUI);
+}
+
+bool IsAccessCodeCastFreezeUiEnabled(Profile* profile) {
+  return profile && GetAccessCodeCastEnabledPref(profile) &&
+         base::FeatureList::IsEnabled(features::kAccessCodeCastFreezeUI);
 }
 
 #endif  // !BUILDFLAG(IS_ANDROID)

@@ -1,24 +1,26 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/policy/arc_policy_handler.h"
+
 #include <string>
+#include <string_view>
 
 #include "base/check.h"
 #include "base/json/json_reader.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_bridge.h"
+#include "chrome/browser/ash/arc/policy/arc_policy_util.h"
 #include "chrome/browser/ash/arc/policy/managed_configuration_variables.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
 #include "components/policy/policy_constants.h"
 #include "components/strings/grit/components_strings.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/re2/src/re2/re2.h"
-#include "third_party/re2/src/re2/stringpiece.h"
 
 namespace arc {
 
@@ -38,7 +40,7 @@ absl::optional<base::StringPiece> FindUnknownVariable(
   const re2::RE2 regex(unknown_variable_capture);
   DCHECK(regex.ok()) << "Error compiling regex: " << regex.error();
 
-  re2::StringPiece capture;
+  std::string_view capture;
   const bool found_unknown_variable =
       re2::RE2::PartialMatch(input, regex, &capture) &&
       capture.data() != nullptr;
@@ -46,7 +48,7 @@ absl::optional<base::StringPiece> FindUnknownVariable(
   if (!found_unknown_variable)
     return absl::nullopt;
 
-  return base::StringPiece(capture.data(), capture.length());
+  return capture;
 }
 
 // Add warning messages in |arc_policy| for invalid variables in
@@ -103,7 +105,7 @@ void ArcPolicyHandler::PrepareForDisplaying(policy::PolicyMap* policies) const {
   const base::Value::Dict& arc_policy = json->GetDict();
 
   const base::Value::List* apps =
-      arc_policy.FindList(ArcPolicyBridge::kApplications);
+      arc_policy.FindList(policy_util::kArcPolicyKeyApplications);
   if (!apps)
     return;
 

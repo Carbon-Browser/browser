@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -20,11 +20,12 @@ def GetChromiumSrcDir():
 def GetDefaultBuildDir():
   return GetChromiumSrcDir()
 
-def StartServer(port, build_dir):
+def StartServer(*, port, build_dir, device, os_version):
   cwt_chromedriver_path = os.path.join(os.path.dirname(__file__),
                                        'run_cwt_chromedriver.py')
   subprocess.Popen(cwt_chromedriver_path + ' --asan-build --build-dir ' +
-                   build_dir + ' --port ' + port + ' >/dev/null 2>&1 &',
+                   build_dir + ' --port ' + port + ' --device "' + device + '"'
+                   ' --os ' + os_version + ' >/dev/null 2>&1 &',
                    shell=True)
   time.sleep(15)
 
@@ -45,7 +46,7 @@ def StartServer(port, build_dir):
       else:
         time.sleep(1)
 
-def IsCurrentVersion(version, revision, build_dir):
+def IsCurrentVersion(*, version, build_dir):
   plist_path = os.path.join(build_dir, 'ios_cwt_chromedriver_tests.app',
                             'Info.plist')
   version_command = 'defaults read ' + plist_path + ' CFBundleVersion'
@@ -53,16 +54,7 @@ def IsCurrentVersion(version, revision, build_dir):
                                      capture_output=True)
   current_version = completed_process.stdout.decode('utf-8').strip()
 
-  if version != current_version:
-    return False
-
-  revision_command = 'defaults read ' + plist_path + ' SCMRevision'
-  completed_process = subprocess.run(revision_command, shell=True,
-                                     capture_output=True)
-  full_revision = completed_process.stdout.decode('utf-8').strip()
-  current_revision = re.search('.*{#(.+?)}', full_revision).group(1)
-
-  return current_revision == revision
+  return version == current_version
 
 def KillServer():
   # Gather all running run_cwt_chromedriver.py and xcodebuild instances. There
@@ -87,7 +79,7 @@ def KillServer():
   for proc in xcodebuild_procs:
     proc.kill()
 
-def EnsureServerStarted(port, build_dir):
+def EnsureServerStarted(*, port, build_dir, device, os_version):
   # Check if the server is already running. If not, launch the server and wait
   # for it to be ready. If the server is running but its version doesn't match
   # the current build, kill the running server and relaunch.
@@ -97,14 +89,15 @@ def EnsureServerStarted(port, build_dir):
     response = requests.get(server_url + '/session/chrome_versionInfo')
     assert response.status_code == 200
     chrome_version = response.json()['value']['browserVersion']
-    chrome_revision = response.json()['value']['chrome_revisionNumber']
-    if IsCurrentVersion(chrome_version, chrome_revision, build_dir):
+    if IsCurrentVersion(version=chrome_version, build_dir=build_dir):
       return True
     else:
       KillServer()
-      return StartServer(port, build_dir)
+      return StartServer(port=port, build_dir=build_dir, device=device,
+                         os_version=os_version)
   except requests.exceptions.ConnectionError:
-    return StartServer(port, build_dir)
+    return StartServer(port=port, build_dir=build_dir, device=device,
+                       os_version=os_version)
 
 parser=argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -112,10 +105,13 @@ parser.add_argument('--port', default='9999',
     help='The port to listen on for WebDriver commands')
 parser.add_argument('--build-dir', default=GetDefaultBuildDir(),
     help='Chrome build directory')
+parser.add_argument('--os', required=True, help='iOS version')
+parser.add_argument('--device', required=True, help='Device type')
 parser.add_argument('filename', help='Input test file')
 args = parser.parse_args()
 
-server_started = EnsureServerStarted(args.port, args.build_dir)
+server_started = EnsureServerStarted(port=args.port, build_dir=args.build_dir,
+                                     device=args.device, os_version=args.os)
 assert server_started
 
 # Construct a file:/// URL for the input test file.

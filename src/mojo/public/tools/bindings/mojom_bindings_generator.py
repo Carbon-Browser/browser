@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -51,6 +51,7 @@ import crbug_1001171
 
 _BUILTIN_GENERATORS = {
     "c++": "mojom_cpp_generator",
+    "webui_js_bridge": "mojom_webui_js_bridge_generator",
     "javascript": "mojom_js_generator",
     "java": "mojom_java_generator",
     "mojolpm": "mojom_mojolpm_generator",
@@ -60,6 +61,7 @@ _BUILTIN_GENERATORS = {
 _BUILTIN_CHECKS = {
     "attributes": "mojom_attributes_check",
     "definitions": "mojom_definitions_check",
+    "features": "mojom_interface_feature_check",
     "restrictions": "mojom_restrictions_check",
 }
 
@@ -103,7 +105,7 @@ def MakeImportStackMessage(imported_filename_stack):
                     zip(imported_filename_stack[1:], imported_filename_stack)]))
 
 
-class RelativePath(object):
+class RelativePath:
   """Represents a path relative to the source tree or generated output dir."""
 
   def __init__(self, path, source_root, output_dir):
@@ -163,7 +165,7 @@ def ReadFileContents(filename):
     return f.read()
 
 
-class MojomProcessor(object):
+class MojomProcessor:
   """Takes parsed mojom modules and generates language bindings from them.
 
   Attributes:
@@ -221,7 +223,6 @@ class MojomProcessor(object):
             module, args.output_dir, typemap=self._typemap.get(language, {}),
             variant=args.variant, bytecode_path=args.bytecode_path,
             for_blink=args.for_blink,
-            js_bindings_mode=args.js_bindings_mode,
             js_generate_struct_deserializers=\
                     args.js_generate_struct_deserializers,
             export_attribute=args.export_attribute,
@@ -317,7 +318,7 @@ def main():
                                "--checks",
                                dest="checks_string",
                                metavar="CHECKS",
-                               default="attributes,definitions,restrictions",
+                               default=",".join(_BUILTIN_CHECKS.keys()),
                                help="comma-separated list of checks")
   generate_parser.add_argument(
       "--gen_dir", dest="gen_directories", action="append", metavar="directory",
@@ -341,11 +342,6 @@ def main():
   generate_parser.add_argument("--for_blink", action="store_true",
                                help="Use WTF types as generated types for mojo "
                                "string/array/map.")
-  generate_parser.add_argument(
-      "--js_bindings_mode", choices=["new", "old"], default="old",
-      help="This option only affects the JavaScript bindings. The value could "
-      "be \"new\" to generate new-style lite JS bindings in addition to the "
-      "old, or \"old\" to only generate old bindings.")
   generate_parser.add_argument(
       "--js_generate_struct_deserializers", action="store_true",
       help="Generate javascript deserialize methods for structs in "
@@ -420,6 +416,10 @@ def main():
 
 if __name__ == "__main__":
   with crbug_1001171.DumpStateOnLookupError():
+    ret = main()
     # Exit without running GC, which can save multiple seconds due to the large
-    # number of object created.
-    os._exit(main())
+    # number of object created. But flush is necessary as os._exit doesn't do
+    # that.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(ret)

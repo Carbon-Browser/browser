@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,8 +78,6 @@ enum class WakeUpResolution { kLow, kHigh };
 
 // Represents a time at which a task wants to run.
 struct WakeUp {
-  static constexpr TimeDelta kDefaultLeeway = PendingTask::kDefaultLeeway;
-
   // is_null() for immediate wake up.
   TimeTicks time;
   // These are meaningless if is_immediate().
@@ -153,9 +151,11 @@ struct BASE_EXPORT Task : public PendingTask {
   // invalidation or through |delayed_task_handle_delegate_|.
   bool IsCanceled() const;
 
-  // Indicates that this task will be executed. Used to invalidate
-  // |delayed_task_handle_delegate_|, if any, just before task execution.
-  void WillRunTask();
+  // Must be invoked before running the task. Returns true if the task must run
+  // (any delayed task handle will have been invalidated by this method), false
+  // if it mustn't run (e.g. delayed task handle was invalidated prior to
+  // calling this method).
+  bool WillRunTask();
 
  private:
   // `enqueue_order_` is the primary component used to order tasks (see

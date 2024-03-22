@@ -1,23 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
-#include "components/content_settings/core/common/content_settings.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/time/time.h"
+#import "components/content_settings/core/common/content_settings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
-#include "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
+#import "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "net/test/embedded_test_server/http_request.h"
-#include "net/test/embedded_test_server/http_response.h"
-#include "net/test/embedded_test_server/request_handler_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "net/test/embedded_test_server/http_request.h"
+#import "net/test/embedded_test_server/http_response.h"
+#import "net/test/embedded_test_server/request_handler_util.h"
 
 using chrome_test_util::OmniboxText;
 
@@ -37,7 +34,7 @@ const char kWindow2Closed[] = "window2.closed: true";
 const char kWriteReloadPath[] = "/writeReload.html";
 const char kSlowPath[] = "/slow.html";
 const char kSlowPathContent[] = "Slow Page";
-int kSlowPathDelay = 3;
+constexpr base::TimeDelta kSlowPathDelay = base::Seconds(3);
 
 // net::EmbeddedTestServer handler for kWriteReloadPath.
 std::unique_ptr<net::test_server::HttpResponse> ReloadHandler(
@@ -57,8 +54,7 @@ std::unique_ptr<net::test_server::HttpResponse> ReloadHandler(
 std::unique_ptr<net::test_server::HttpResponse> SlowResponseHandler(
     const net::test_server::HttpRequest& request) {
   auto slow_http_response =
-      std::make_unique<net::test_server::DelayedHttpResponse>(
-          base::Seconds(kSlowPathDelay));
+      std::make_unique<net::test_server::DelayedHttpResponse>(kSlowPathDelay);
   slow_http_response->set_content_type("text/html");
   slow_http_response->set_content(kSlowPathContent);
   return std::move(slow_http_response);

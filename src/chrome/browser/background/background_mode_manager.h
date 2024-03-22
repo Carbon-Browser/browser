@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 #include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -412,7 +413,8 @@ class BackgroundModeManager : public BrowserListObserver,
 
   // Reference to the ProfileAttributesStorage. It is used to update the
   // background app status of profiles when they open/close background apps.
-  raw_ptr<ProfileAttributesStorage> profile_storage_;
+  raw_ptr<ProfileAttributesStorage, AcrossTasksDanglingUntriaged>
+      profile_storage_;
 
   // Registrars for managing our change observers.
   base::CallbackListSubscription on_app_terminating_subscription_;
@@ -429,14 +431,14 @@ class BackgroundModeManager : public BrowserListObserver,
 
   // Reference to our status tray. If null, the platform doesn't support status
   // icons.
-  raw_ptr<StatusTray> status_tray_ = nullptr;
+  raw_ptr<StatusTray, DanglingUntriaged> status_tray_ = nullptr;
 
   // Reference to our status icon (if any) - owned by the StatusTray.
-  raw_ptr<StatusIcon> status_icon_ = nullptr;
+  raw_ptr<StatusIcon, DanglingUntriaged> status_icon_ = nullptr;
 
   // Reference to our status icon's context menu (if any) - owned by the
   // status_icon_.
-  raw_ptr<StatusIconMenuModel> context_menu_ = nullptr;
+  raw_ptr<StatusIconMenuModel, DanglingUntriaged> context_menu_ = nullptr;
 
   // Set to true when we are running in background mode. Allows us to track our
   // current background state so we can take the appropriate action when the

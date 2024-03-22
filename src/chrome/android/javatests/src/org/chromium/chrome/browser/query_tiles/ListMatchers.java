@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,9 @@ class ListMatchers {
     /**
      * Validates that a particular Android {@link View]} properly represents a list of {@link
      * ImageTile}s.
+     *
      * @param listMatcher The matcher to find the Android {@link View} representing the tile list.
-     * @param expected    The expected list of {@link ImageTile}s.
+     * @param expected The expected list of {@link ImageTile}s.
      */
     public static <T extends ImageTile> void matchList(
             Matcher<View> listMatcher, List<T> expected) {
@@ -44,8 +45,7 @@ class ListMatchers {
 
     /**
      * @param count The expected number of items in the {@link RecyclerView}.
-     * @return      The {@link Matcher} instance to validate the right size of the {@link
-     *         RecyclerView}.
+     * @return The {@link Matcher} instance to validate the right size of the {@link RecyclerView}.
      */
     public static Matcher<View> withItemCount(int count) {
         return new BoundedMatcher<View, RecyclerView>(RecyclerView.class) {
@@ -64,7 +64,7 @@ class ListMatchers {
 
     /**
      * @return The {@link Matcher} instance to validate that the {@link RecyclerView} is scrolled to
-     *         the front.
+     *     the front.
      */
     public static Matcher<View> isScrolledToFront() {
         return new BoundedMatcher<View, RecyclerView>(RecyclerView.class) {

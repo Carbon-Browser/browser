@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,18 +23,6 @@ SurfaceRange::SurfaceRange(const SurfaceId& surface_id)
 SurfaceRange::SurfaceRange(const SurfaceRange& other) = default;
 
 SurfaceRange& SurfaceRange::operator=(const SurfaceRange& other) = default;
-
-bool SurfaceRange::operator==(const SurfaceRange& other) const {
-  return start_ == other.start() && end_ == other.end();
-}
-
-bool SurfaceRange::operator!=(const SurfaceRange& other) const {
-  return !(*this == other);
-}
-
-bool SurfaceRange::operator<(const SurfaceRange& other) const {
-  return std::tie(end_, start_) < std::tie(other.end(), other.start());
-}
 
 bool SurfaceRange::IsInRangeExclusive(const SurfaceId& surface_id) const {
   if (!start_)
@@ -73,8 +61,15 @@ bool SurfaceRange::IsValid() const {
   if (!start_->is_valid())
     return false;
 
+  // The start/end SurfaceIds can have a different FrameSinkId or embed token
+  // for cross SiteInstanceGroup navigations.
   if (end_.frame_sink_id() != start_->frame_sink_id())
     return true;
+
+  if (end_.local_surface_id().embed_token() !=
+      start_->local_surface_id().embed_token()) {
+    return true;
+  }
 
   return end_.local_surface_id().IsSameOrNewerThan(start_->local_surface_id());
 }

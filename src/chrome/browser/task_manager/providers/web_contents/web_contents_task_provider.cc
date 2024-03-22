@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
@@ -124,8 +124,25 @@ WebContentsTaskProvider::WebContentsEntry::~WebContentsEntry() {
 
 void WebContentsTaskProvider::WebContentsEntry::CreateAllTasks() {
   DCHECK(web_contents()->GetPrimaryMainFrame());
-  web_contents()->ForEachRenderFrameHost(base::BindRepeating(
-      &WebContentsEntry::CreateTaskForFrame, base::Unretained(this)));
+  web_contents()->ForEachRenderFrameHost(
+      [this](content::RenderFrameHost* render_frame_host) {
+        const auto state = render_frame_host->GetLifecycleState();
+        // `WebContents::ForEachRenderFrameHost` does not iterate over
+        // speculative or pending commit RFHs.
+        //
+        // TODO(https://crbug.com/1429070): Move this CHECK into
+        // `WebContents::ForEachRenderFrameHost`.
+        CHECK_NE(state, RenderFrameHost::LifecycleState::kPendingCommit);
+        // TODO(https://crbug.com/1429070):
+        // `WebContents::ForEachRenderFrameHost` should explicitly exclude
+        // `kPendingDeletion`, just like `kSpeculative` and `kPendingCommit`.
+        if (state == RenderFrameHost::LifecycleState::kPendingDeletion) {
+          // A `kPendingDeletion` RFH will soon be destroyed. The task manager
+          // does not need to create a task for such a RFH.
+          return;
+        }
+        CreateTaskForFrame(render_frame_host);
+      });
 }
 
 void WebContentsTaskProvider::WebContentsEntry::ClearAllTasks(
@@ -259,23 +276,25 @@ void WebContentsTaskProvider::WebContentsEntry::DidFinishNavigation(
   // navigation, since neither |RenderFrameDeleted| nor |RenderFrameHostChanged|
   // is fired to delete the existing task, we do not recreate them.
   //
-  // TODO(crbug.com/1183630): DidFinishNavigation is not called when we create
-  // initial empty documents, and as a result, we will not create new tasks for
-  // these empty documents if they are in a different process from their
-  // embedder/opener (eg: an empty fenced frame or a blank tab created by
+  // TODO(https://crbug.com/1183639): DidFinishNavigation is not called when we
+  // create initial empty documents, and as a result, we will not create new
+  // tasks for these empty documents if they are in a different process from
+  // their embedder/opener (eg: an empty fenced frame or a blank tab created by
   // window.open('', '_blank', 'noopener')). Ideally, we would call
   // CreateTaskForFrame inside RenderFrameCreated instead (which is called for
   // initial documents), but CreateTaskForFrame uses RFH::GetLifecycleState,
   // which cannot currently be called inside RenderFrameCreated (due to a DCHECK
   // which doesn't allow the method to be called when the state is
   // 'kSpeculative').
-  auto* rfh = navigation_handle->GetRenderFrameHost();
-  auto* site_instance = rfh->GetSiteInstance();
-  auto it = site_instance_infos_.find(site_instance);
-  if (!navigation_handle->IsSameDocument() &&
-      (it == site_instance_infos_.end() ||
-       it->second.frames.find(rfh) == it->second.frames.end())) {
-    CreateTaskForFrame(rfh);
+  {
+    auto* rfh = navigation_handle->GetRenderFrameHost();
+    auto* site_instance = rfh->GetSiteInstance();
+    auto it = site_instance_infos_.find(site_instance);
+    if (!navigation_handle->IsSameDocument() &&
+        (it == site_instance_infos_.end() ||
+         it->second.frames.find(rfh) == it->second.frames.end())) {
+      CreateTaskForFrame(rfh);
+    }
   }
 
   // Update.
@@ -331,7 +350,8 @@ void WebContentsTaskProvider::WebContentsEntry::CreateTaskForFrame(
     case RenderFrameHost::LifecycleState::kActive:
       break;
     default:
-      NOTREACHED();
+      NOTREACHED() << "Illegal RFH state for TaskManager: "
+                   << static_cast<int>(rfh_state);
       break;
   }
 
@@ -361,8 +381,7 @@ void WebContentsTaskProvider::WebContentsEntry::CreateTaskForFrame(
   }
 
   bool site_instance_exists = site_instance_infos_.count(site_instance) != 0;
-  auto* primary_main_rfh = web_contents()->GetPrimaryMainFrame();
-  bool is_primary_main_frame = (render_frame_host == primary_main_rfh);
+  bool is_primary_main_frame = render_frame_host->IsInPrimaryMainFrame();
   bool site_instance_is_main =
       (site_instance == primary_main_frame_site_instance_);
 
@@ -373,7 +392,8 @@ void WebContentsTaskProvider::WebContentsEntry::CreateTaskForFrame(
   // represented by a SubframeTask.
   if (!site_instance_exists ||
       (is_primary_main_frame && !site_instance_is_main)) {
-    auto* primary_main_frame_task = GetTaskForFrame(primary_main_rfh);
+    auto* primary_main_frame_task =
+        GetTaskForFrame(web_contents()->GetPrimaryMainFrame());
     if (rfh_state == RenderFrameHost::LifecycleState::kInBackForwardCache) {
       // Use RFH::GetMainFrame instead web_contents()->GetPrimaryMainFrame()
       // because the BFCached frames are not the currently active main frame.
@@ -453,7 +473,7 @@ void WebContentsTaskProvider::WebContentsEntry::ClearTaskForFrame(
   // asynchronously after the main frame is deleted.
 
   bool only_bfcache_or_prerender_rfhs = true;
-  for (auto& [site_instance, site_instance_info] : site_instance_infos_) {
+  for (auto& [ignore, site_instance_info] : site_instance_infos_) {
     for (auto* rfh : site_instance_info.frames) {
       const auto state = rfh->GetLifecycleState();
       if (state != RenderFrameHost::LifecycleState::kInBackForwardCache &&
@@ -470,15 +490,12 @@ void WebContentsTaskProvider::WebContentsEntry::ClearTaskForFrame(
 
 void WebContentsTaskProvider::WebContentsEntry::ClearTasksForDescendantsOf(
     RenderFrameHost* ancestor) {
-  ancestor->ForEachRenderFrameHost(base::BindRepeating(
-      [](WebContentsTaskProvider::WebContentsEntry* provider,
-         content::RenderFrameHost* ancestor,
-         content::RenderFrameHost* render_frame_host) {
+  ancestor->ForEachRenderFrameHost(
+      [this, ancestor](content::RenderFrameHost* render_frame_host) {
         if (render_frame_host == ancestor)
           return;
-        provider->ClearTaskForFrame(render_frame_host);
-      },
-      this, ancestor));
+        ClearTaskForFrame(render_frame_host);
+      });
 }
 
 ////////////////////////////////////////////////////////////////////////////////

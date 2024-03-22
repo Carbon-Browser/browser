@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,13 +9,5 @@ imageset("chrome_icon") {
     "chrome_icon.imageset/Contents.json",
     "chrome_icon.imageset/chrome_icon@2x.png",
     "chrome_icon.imageset/chrome_icon@3x.png",
-  ]
-}
-
-imageset("default_browser_world") {
-  sources = [
-    "default_browser_world.imageset/Contents.json",
-    "default_browser_world.imageset/default_browser_world@2x.png",
-    "default_browser_world.imageset/default_browser_world@3x.png",
   ]
 }

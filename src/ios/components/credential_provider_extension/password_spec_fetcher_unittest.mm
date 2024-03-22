@@ -1,20 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/credential_provider_extension/password_spec_fetcher.h"
 
-#include "base/base64.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/base64.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/autofill/core/browser/proto/password_requirements.pb.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/test/test_timeouts.h"
+#import "components/autofill/core/browser/proto/password_requirements.pb.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
 
 using autofill::PasswordRequirementsSpec_CharacterClass;
 using autofill::PasswordRequirementsSpec;
@@ -41,7 +38,6 @@ TEST_F(PasswordSpecFetcherTest, DomainSuggestionProtoIsParsed) {
 
   EXPECT_TRUE(suggestions.has_password_requirements());
   EXPECT_TRUE(suggestions.password_requirements().has_lower_case());
-  EXPECT_TRUE(suggestions.password_requirements().has_lower_case());
   EXPECT_EQ(suggestions.password_requirements().lower_case().min(), 0u);
   EXPECT_EQ(suggestions.password_requirements().lower_case().max(), 0u);
   EXPECT_FALSE(suggestions.password_requirements().has_upper_case());
@@ -66,7 +62,8 @@ TEST_F(PasswordSpecFetcherTest, DefaultSpecInvalidFetch) {
     block_ran = true;
   }];
 
-  base::test::ios::WaitUntilCondition(^{
-    return block_ran;
-  });
+  EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      TestTimeouts::action_timeout(), ^{
+        return block_ran;
+      }));
 }

@@ -33,7 +33,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_BINDINGS_V8_BINDING_H_
 
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
-#include "third_party/blink/renderer/platform/bindings/string_resource.h"
+#include "third_party/blink/renderer/platform/bindings/to_blink_string.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/bindings/v8_value_cache.h"
 #include "third_party/blink/renderer/platform/bindings/wrapper_type_info.h"
@@ -188,35 +188,51 @@ void V8SetReturnValue(const CallbackInfo& info,
 // Convert v8::String to a WTF::String. If the V8 string is not already
 // an external string then it is transformed into an external string at this
 // point to avoid repeated conversions.
-inline String ToCoreString(v8::Local<v8::String> value) {
-  return ToBlinkString<String>(value, kExternalize);
+inline String ToCoreString(v8::Isolate* isolate, v8::Local<v8::String> value) {
+  return ToBlinkString<String>(isolate, value, kExternalize);
 }
 
-inline String ToCoreStringWithNullCheck(v8::Local<v8::String> value) {
+inline String ToCoreStringWithNullCheck(v8::Isolate* isolate,
+                                        v8::Local<v8::String> value) {
   if (value.IsEmpty() || value->IsNull())
     return String();
-  return ToCoreString(value);
+  return ToCoreString(isolate, value);
 }
 
 inline String ToCoreStringWithUndefinedOrNullCheck(
+    v8::Isolate* isolate,
     v8::Local<v8::String> value) {
   if (value.IsEmpty())
     return String();
-  return ToCoreString(value);
+  return ToCoreString(isolate, value);
 }
 
-inline AtomicString ToCoreAtomicString(v8::Local<v8::String> value) {
-  return ToBlinkString<AtomicString>(value, kExternalize);
+inline AtomicString ToCoreAtomicString(v8::Isolate* isolate,
+                                       v8::Local<v8::String> value) {
+  return ToBlinkString<AtomicString>(isolate, value, kExternalize);
+}
+
+inline AtomicString ToCoreAtomicString(v8::Isolate* isolate,
+                                       v8::Local<v8::Name> value) {
+  DCHECK(!value.IsEmpty());
+  // TODO(crbug.com/1476064): Support converting `value` when it is a symbol
+  // instead of a string.
+  if (!value->IsString()) {
+    return AtomicString();
+  }
+  return ToBlinkString<AtomicString>(isolate, value.As<v8::String>(),
+                                     kExternalize);
 }
 
 // This method will return a null String if the v8::Value does not contain a
 // v8::String.  It will not call ToString() on the v8::Value. If you want
 // ToString() to be called, please use the TONATIVE_FOR_V8STRINGRESOURCE_*()
 // macros instead.
-inline String ToCoreStringWithUndefinedOrNullCheck(v8::Local<v8::Value> value) {
+inline String ToCoreStringWithUndefinedOrNullCheck(v8::Isolate* isolate,
+                                                   v8::Local<v8::Value> value) {
   if (value.IsEmpty() || !value->IsString())
     return String();
-  return ToCoreString(value.As<v8::String>());
+  return ToCoreString(isolate, value.As<v8::String>());
 }
 
 // Convert a string to a V8 string.
@@ -353,7 +369,7 @@ enum class NamedPropertyDeleterResult {
 // Gets the url of the currently executing script. Returns empty string, if no
 // script is executing (e.g. during parsing of a meta tag in markup), or the
 // script context is otherwise unavailable.
-PLATFORM_EXPORT String GetCurrentScriptUrl();
+PLATFORM_EXPORT String GetCurrentScriptUrl(v8::Isolate* isolate);
 
 // Gets the urls of the scripts at the top of the currently executing stack.
 // If available, returns up to |unique_url_count| urls, filtering out duplicate
@@ -363,6 +379,7 @@ PLATFORM_EXPORT String GetCurrentScriptUrl();
 // To minimize the cost of walking the stack, only the top frames (currently 10)
 // are examined, regardless of the value of |unique_url_count|.
 PLATFORM_EXPORT Vector<String> GetScriptUrlsFromCurrentStack(
+    v8::Isolate* isolate,
     wtf_size_t unique_url_count);
 
 namespace bindings {

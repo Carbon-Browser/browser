@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,10 @@
 
 class Browser;
 class GURL;
-class Profile;
+
+namespace content {
+class WebContents;
+}
 
 namespace extensions {
 
@@ -28,10 +31,13 @@ class ExtensionViewHostFactory {
   static std::unique_ptr<ExtensionViewHost> CreatePopupHost(const GURL& url,
                                                             Browser* browser);
 
-  // Some dialogs may not be associated with a particular browser window and
-  // hence only require a |profile|.
-  static std::unique_ptr<ExtensionViewHost> CreateDialogHost(const GURL& url,
-                                                             Profile* profile);
+  // Creates a new ExtensionHost with its associated view, grouping it in the
+  // appropriate SiteInstance (and therefore process) based on the URL and
+  // profile.
+  static std::unique_ptr<ExtensionViewHost> CreateSidePanelHost(
+      const GURL& url,
+      Browser* browser,
+      content::WebContents* web_contents);
 };
 
 }  // namespace extensions

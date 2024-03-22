@@ -1,14 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/nearby_sharing/nearby_connection_impl.h"
 
-#include "chrome/browser/nearby_sharing/nearby_connections_manager.h"
+#include "chrome/browser/nearby_sharing/public/cpp/nearby_connections_manager.h"
 #include "crypto/random.h"
 
 NearbyConnectionImpl::NearbyConnectionImpl(
-    NearbyConnectionsManager* nearby_connections_manager,
+    base::WeakPtr<NearbyConnectionsManager> nearby_connections_manager,
     const std::string& endpoint_id)
     : nearby_connections_manager_(nearby_connections_manager),
       endpoint_id_(endpoint_id) {}

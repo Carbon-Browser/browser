@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,40 @@
 #include "base/callback_list.h"
 #include "chrome/browser/sync/session_sync_service_factory.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
+#include "components/sessions/core/session_id.h"
 #include "components/sync_sessions/session_sync_service.h"
 #include "content/public/test/test_web_ui.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace browser_sync {
 
-namespace {
+class MockOpenTabsUIDelegate : public sync_sessions::OpenTabsUIDelegate {
+ public:
+  MockOpenTabsUIDelegate() = default;
+
+  MOCK_METHOD1(
+      GetAllForeignSessions,
+      bool(std::vector<const sync_sessions::SyncedSession*>* sessions));
+
+  MOCK_METHOD3(GetForeignTab,
+               bool(const std::string& tag,
+                    const SessionID tab_id,
+                    const sessions::SessionTab** tab));
+
+  MOCK_METHOD1(DeleteForeignSession, void(const std::string& tag));
+
+  MOCK_METHOD1(
+      GetForeignSession,
+      std::vector<const sessions::SessionWindow*>(const std::string& tag));
+
+  MOCK_METHOD2(GetForeignSessionTabs,
+               bool(const std::string& tag,
+                    std::vector<const sessions::SessionTab*>* tabs));
+
+  MOCK_METHOD1(GetLocalSession,
+               bool(const sync_sessions::SyncedSession** local_session));
+};
 
 // Partial SessionSyncService that can fake behavior for
 // SubscribeToForeignSessionsChanged() including the notification to
@@ -28,8 +55,8 @@ class FakeSessionSyncService : public sync_sessions::SessionSyncService {
   // SessionSyncService overrides.
   syncer::GlobalIdMapper* GetGlobalIdMapper() const override { return nullptr; }
 
-  sync_sessions::OpenTabsUIDelegate* GetOpenTabsUIDelegate() override {
-    return nullptr;
+  MockOpenTabsUIDelegate* GetOpenTabsUIDelegate() override {
+    return &mock_open_tabs_ui_delegate_;
   }
 
   base::CallbackListSubscription SubscribeToForeignSessionsChanged(
@@ -42,11 +69,9 @@ class FakeSessionSyncService : public sync_sessions::SessionSyncService {
     return nullptr;
   }
 
-  void ProxyTabsStateChanged(syncer::DataTypeController::State state) override {
-  }
-
  private:
   base::RepeatingClosureList subscriber_list_;
+  MockOpenTabsUIDelegate mock_open_tabs_ui_delegate_;
 };
 
 class ForeignSessionHandlerTest : public ChromeRenderViewHostTestHarness {
@@ -129,6 +154,31 @@ TEST_F(ForeignSessionHandlerTest,
   EXPECT_EQ(0U, web_ui()->call_data().size());
 }
 
-}  // namespace
+TEST_F(ForeignSessionHandlerTest, HandleOpenForeignSessionAllTabs) {
+  EXPECT_CALL(*session_sync_service()->GetOpenTabsUIDelegate(),
+              GetForeignSession("my_session_tag"))
+      .Times(testing::AtLeast(1));
+
+  base::Value::List list_args;
+  list_args.Append("my_session_tag");
+  handler()->HandleOpenForeignSessionAllTabs(list_args);
+}
+
+TEST_F(ForeignSessionHandlerTest, HandleOpenForeignSessionTab) {
+  EXPECT_CALL(*session_sync_service()->GetOpenTabsUIDelegate(),
+              GetForeignTab("my_session_tag",
+                            SessionID::FromSerializedValue(456), testing::_))
+      .Times(testing::AtLeast(1));
+
+  base::Value::List list_args;
+  list_args.Append("my_session_tag");
+  list_args.Append("456");
+  list_args.Append(1.0);
+  list_args.Append(false);
+  list_args.Append(false);
+  list_args.Append(false);
+  list_args.Append(false);
+  handler()->HandleOpenForeignSessionTab(list_args);
+}
 
 }  // namespace browser_sync

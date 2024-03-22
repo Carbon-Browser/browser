@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,10 @@
 #include "ui/events/keycodes/dom/keycode_converter.h"
 #include "ui/events/keycodes/keyboard_code_conversion.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "base/mac/mac_util.h"
+#endif
+
 namespace content {
 
 using ui::AXPropertyFilter;
@@ -26,13 +30,24 @@ using ui::AXTreeFormatter;
 #if BUILDFLAG(IS_MAC)
 
 constexpr const char kMacAction[]{"mac/action"};
+constexpr const char kMacAttributedString[]{"mac/attributed-string"};
 constexpr const char kMacAttributes[]{"mac/attributes"};
+constexpr const char kMacDescription[]{"mac/description"};
 constexpr const char kMacSelection[]{"mac/selection"};
 constexpr const char kMacTextMarker[]{"mac/textmarker"};
 constexpr const char kMacMethods[]{"mac/methods"};
 constexpr const char kMacParameterizedAttributes[]{
     "mac/parameterized-attributes"};
-constexpr const char kRegression[]{"mac/regression"};
+
+#endif
+
+#if BUILDFLAG(IS_WIN)
+
+constexpr const char kIAccessible[]{"win/ia2/iaccessible"};
+constexpr const char kIAccessible2[]{"win/ia2/iaccessible2"};
+constexpr const char kIAccessibleTable[]{"win/ia2/iaccessibletable"};
+constexpr const char kIAccessibleTextSelectionContainer[]{
+    "win/ia2/iaccessibletextselectioncontainer"};
 
 #endif
 
@@ -60,12 +75,6 @@ class DumpAccessibilityScriptTest : public DumpAccessibilityTestBase {
       delete;
 
  protected:
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    // Enable MathMLCore for some MathML tests.
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        switches::kEnableBlinkFeatures, "MathMLCore");
-  }
-
   std::vector<ui::AXPropertyFilter> DefaultFilters() const override {
     return {};
   }
@@ -77,10 +86,10 @@ class DumpAccessibilityScriptTest : public DumpAccessibilityTestBase {
     property_filters->push_back(AXPropertyFilter(filter, type));
   }
 
-  std::vector<std::string> Dump() override {
+  std::vector<std::string> Dump(ui::AXMode mode) override {
     std::vector<std::string> dump;
     std::unique_ptr<AXTreeFormatter> formatter(CreateFormatter());
-    BrowserAccessibility* root = GetManager()->GetRoot();
+    BrowserAccessibility* root = GetManager()->GetBrowserAccessibilityRoot();
 
     size_t start_index = 0;
     size_t length = scenario_.script_instructions.size();
@@ -114,8 +123,9 @@ class DumpAccessibilityScriptTest : public DumpAccessibilityTestBase {
         auto pair = CaptureEvents(
             base::BindOnce(&DumpAccessibilityScriptTest::EvaluateScript,
                            base::Unretained(this), formatter.get(), root,
-                           scenario_.script_instructions, start_index, index));
-        actual_contents = pair.first.GetString();
+                           scenario_.script_instructions, start_index, index),
+            ui::kAXModeComplete);
+        actual_contents = pair.first.ExtractString();
         for (auto event : pair.second) {
           if (base::StartsWith(event, wait_for)) {
             actual_contents += event + '\n';
@@ -151,14 +161,15 @@ class DumpAccessibilityScriptTest : public DumpAccessibilityTestBase {
     return dump;
   }
 
-  base::Value EvaluateScript(
+  EvalJsResult EvaluateScript(
       AXTreeFormatter* formatter,
       BrowserAccessibility* root,
       const std::vector<AXScriptInstruction>& instructions,
       size_t start_index,
       size_t end_index) {
-    return base::Value(
-        formatter->EvaluateScript(root, instructions, start_index, end_index));
+    return EvalJsResult(/*value=*/base::Value(formatter->EvaluateScript(
+                            root, instructions, start_index, end_index)),
+                        /*error=*/"");
   }
 
   RenderWidgetHost* GetWidgetHost() {
@@ -169,11 +180,13 @@ class DumpAccessibilityScriptTest : public DumpAccessibilityTestBase {
   }
 };
 
+typedef std::pair<ui::AXApiType::Type, bool> TestParamType;
+
 // Parameterize the tests so that each test-pass is run independently.
 struct TestPassToString {
   std::string operator()(
-      const ::testing::TestParamInfo<ui::AXApiType::Type>& i) const {
-    return std::string(i.param);
+      const ::testing::TestParamInfo<TestParamType>& i) const {
+    return std::string(i.param.first) + (i.param.second ? "1" : "0");
   }
 };
 
@@ -183,10 +196,12 @@ struct TestPassToString {
 
 #if BUILDFLAG(IS_MAC)
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         DumpAccessibilityScriptTest,
-                         ::testing::Values(ui::AXApiType::kMac),
-                         TestPassToString());
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    DumpAccessibilityScriptTest,
+    ::testing::Values(TestParamType(ui::AXApiType::kMac, true),
+                      TestParamType(ui::AXApiType::kMac, false)),
+    TestPassToString());
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXAccessKey) {
   RunTypedTest<kMacAttributes>("ax-access-key.html");
@@ -288,8 +303,23 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXHasPopup) {
   RunTypedTest<kMacAttributes>("ax-has-popup.html");
 }
 
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXHelp) {
+  RunTypedTest<kMacAttributes>("ax-help.html");
+}
+
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXHighestEditableAncestor) {
   RunTypedTest<kMacAttributes>("ax-highest-editable-ancestor.html");
+}
+
+// TODO(crbug.com/1480429): Flaky
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_AXInsertionPointLineNumber DISABLED_AXInsertionPointLineNumber
+#else
+#define MAYBE_AXInsertionPointLineNumber AXInsertionPointLineNumber
+#endif
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
+                       MAYBE_AXInsertionPointLineNumber) {
+  RunTypedTest<kMacAttributes>("ax-insertion-point-line-number.html");
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXInvalid) {
@@ -368,16 +398,20 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXPressButton) {
   RunTypedTest<kMacAction>("ax-press-button.html");
 }
 
-IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXSelected) {
-  RunTypedTest<kMacAttributes>("ax-selected.html");
-}
-
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXRequired) {
   RunTypedTest<kMacAttributes>("ax-required.html");
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXRows) {
   RunTypedTest<kMacAttributes>("ax-rows.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXSelected) {
+  RunTypedTest<kMacAttributes>("ax-selected.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXSelectedChildren) {
+  RunTypedTest<kMacAttributes>("ax-selected-children.html");
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXSelectedRows) {
@@ -404,8 +438,58 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXVisited) {
   RunTypedTest<kMacAttributes>("ax-visited.html");
 }
 
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AttributedStringDeletion) {
+  RunTypedTest<kMacAttributedString>("deletion.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AttributedStringInsertion) {
+  RunTypedTest<kMacAttributedString>("insertion.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AttributedStringMark) {
+  RunTypedTest<kMacAttributedString>("mark.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
+                       AttributedStringNestedAnnotation) {
+  RunTypedTest<kMacAttributedString>(
+      "nested-suggestion-insertion-deletion.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
+                       AttributedStringSuggestion) {
+  RunTypedTest<kMacAttributedString>("suggestion.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AttributedStringBold) {
+  RunTypedTest<kMacAttributedString>("bold.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AttributedStringItalic) {
+  RunTypedTest<kMacAttributedString>("italic.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
+                       AttributedStringStrikethrough) {
+  RunTypedTest<kMacAttributedString>("strikethrough.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AttributedStringUnderline) {
+  RunTypedTest<kMacAttributedString>("underline.html");
+}
+
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, ChromeAXNodeId) {
   RunTypedTest<kMacAttributes>("chrome-ax-node-id.html");
+}
+
+// Before macOS 11 aria-description must be exposed in AXHelp, and since macOS
+// 11, it should only be exposed in AXCustomContent.
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AriaDescription) {
+  if (base::mac::MacOSMajorVersion() >= 11) {
+    RunTypedTest<kMacDescription>("aria-description-in-axcustomcontent.html");
+  } else {
+    RunTypedTest<kMacDescription>("aria-description-in-axhelp.html");
+  }
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, SelectAllTextarea) {
@@ -450,6 +534,11 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
                        AccessibilityColumnHeaderUIElements) {
   RunTypedTest<kMacMethods>("accessibility-column-header-ui-elements.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
+                       AccessibilityCustomContent) {
+  RunTypedTest<kMacMethods>("accessibility-custom-content.html");
 }
 
 IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AccessibilityIsIgnored) {
@@ -521,10 +610,48 @@ IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXStringForRange) {
   RunTypedTest<kMacParameterizedAttributes>("ax-string-for-range.html");
 }
 
-// Regression tests
+#endif
 
-IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, AXSelectedChildren) {
-  RunTypedTest<kRegression>("ax-selected-children.html");
+#if BUILDFLAG(IS_WIN)
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    DumpAccessibilityScriptTest,
+    ::testing::Values(TestParamType(ui::AXApiType::kWinIA2, true),
+                      TestParamType(ui::AXApiType::kWinIA2, false)),
+    TestPassToString());
+
+// IAccessible
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, IAccessibleRole) {
+  RunTypedTest<kIAccessible>(L"iaccessible-role.html");
+}
+
+// IAccessible2
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest, IAccessible2Role) {
+  RunTypedTest<kIAccessible2>(L"iaccessible2-role.html");
+}
+
+// IAccessibleTable
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
+                       IAccessibleTableSelectedColumns) {
+  RunTypedTest<kIAccessibleTable>(L"iaccessibletable-selected-columns.html");
+}
+
+// IAccessibleTextSelectionContainer
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
+                       IAccessibleTextSelectionContainerSelections) {
+  RunTypedTest<kIAccessibleTextSelectionContainer>(
+      L"iaccessibletextselectioncontainer-selections.html");
+}
+
+IN_PROC_BROWSER_TEST_P(DumpAccessibilityScriptTest,
+                       IAccessibleTextSelectionContainerSetSelections) {
+  RunTypedTest<kIAccessibleTextSelectionContainer>(
+      L"iaccessibletextselectioncontainer-set-selections.html");
 }
 
 #endif

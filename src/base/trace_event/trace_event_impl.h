@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <string>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/process/process_handle.h"
 #include "base/strings/string_util.h"
 #include "base/threading/platform_thread.h"
@@ -139,10 +139,6 @@ class BASE_EXPORT TraceEvent {
                ? arg_value(index).as_convertable
                : nullptr;
   }
-
-#if BUILDFLAG(IS_ANDROID)
-  void SendToATrace();
-#endif
 
  private:
   void InitArgs(TraceArguments* args);

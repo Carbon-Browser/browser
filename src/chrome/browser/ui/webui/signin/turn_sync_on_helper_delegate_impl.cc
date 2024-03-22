@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/signin/turn_sync_on_helper_delegate_impl.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/notreached.h"
@@ -15,7 +15,7 @@
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/new_tab_page/chrome_colors/selected_colors_info.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
-#include "chrome/browser/profiles/profile_attributes_storage.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/signin/signin_util.h"
@@ -24,14 +24,17 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/signin/profile_colors_util.h"
+#include "chrome/browser/ui/profiles/profile_colors_util.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/webui/signin/enterprise_profile_welcome_ui.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service_factory.h"
 #include "chrome/browser/ui/webui/signin/signin_email_confirmation_dialog.h"
 #include "chrome/browser/ui/webui/signin/signin_ui_error.h"
+#include "chrome/common/channel_info.h"
 #include "chrome/common/url_constants.h"
+#include "components/policy/core/browser/signin/profile_separation_policies.h"
 #include "components/policy/core/browser/signin/user_cloud_signin_restriction_policy_fetcher.h"
+#include "components/policy/core/common/policy_utils.h"
+#include "components/signin/public/base/signin_pref_names.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -184,24 +187,22 @@ void TurnSyncOnHelperDelegateImpl::OnBrowserRemoved(Browser* browser) {
 void TurnSyncOnHelperDelegateImpl::OnProfileSigninRestrictionsFetched(
     const AccountInfo& account_info,
     signin::SigninChoiceCallback callback,
-    const std::string& signin_restriction) {
+    const policy::ProfileSeparationPolicies& profile_separation_policies) {
   if (!browser_) {
     std::move(callback).Run(signin::SIGNIN_CHOICE_CANCEL);
     return;
   }
-  ProfileAttributesEntry* entry =
-      g_browser_process->profile_manager()
-          ->GetProfileAttributesStorage()
-          .GetProfileAttributesWithPath(browser_->profile()->GetPath());
   auto profile_creation_required_by_policy =
-      signin_util::ProfileSeparationEnforcedByPolicy(browser_->profile(),
-                                                     signin_restriction);
+      signin_util::IsProfileSeparationEnforcedByProfile(browser_->profile(),
+                                                        account_info.email) ||
+      signin_util::IsProfileSeparationEnforcedByPolicies(
+          profile_separation_policies);
   bool show_link_data_option = signin_util::
       ProfileSeparationAllowsKeepingUnmanagedBrowsingDataInManagedProfile(
-          browser_->profile(), signin_restriction);
+          browser_->profile(), profile_separation_policies);
   browser_->signin_view_controller()->ShowModalEnterpriseConfirmationDialog(
       account_info, profile_creation_required_by_policy, show_link_data_option,
-      GenerateNewProfileColor(entry).color,
+
       base::BindOnce(
           [](signin::SigninChoiceCallback callback, Browser* browser,
              signin::SigninChoice choice) {
@@ -229,18 +230,23 @@ void TurnSyncOnHelperDelegateImpl::OnProfileCheckComplete(
             base::BindOnce(&TurnSyncOnHelperDelegateImpl::
                                OnProfileSigninRestrictionsFetched,
                            weak_ptr_factory_.GetWeakPtr(), account_info,
-                           std::move(callback)));
+                           std::move(callback)),
+            policy::utils::IsPolicyTestingEnabled(
+                browser_->profile()->GetPrefs(), chrome::GetChannel())
+                ? browser_->profile()
+                      ->GetPrefs()
+                      ->GetDefaultPrefValue(
+                          prefs::
+                              kUserCloudSigninPolicyResponseFromPolicyTestPage)
+                      ->GetString()
+                : std::string());
     return;
   }
 #endif
   DCHECK(!prompt_for_new_profile);
-  ProfileAttributesEntry* entry =
-      g_browser_process->profile_manager()
-          ->GetProfileAttributesStorage()
-          .GetProfileAttributesWithPath(browser_->profile()->GetPath());
   browser_->signin_view_controller()->ShowModalEnterpriseConfirmationDialog(
       account_info, /*profile_creation_required_by_policy=*/false,
-      /*show_link_data_option=*/false, GenerateNewProfileColor(entry).color,
+      /*show_link_data_option=*/false,
       base::BindOnce(
           [](signin::SigninChoiceCallback callback, Browser* browser,
              signin::SigninChoice choice) {

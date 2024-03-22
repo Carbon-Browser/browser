@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/webrtc.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "chrome/services/sharing/nearby/test_support/mock_webrtc_dependencies.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -12,7 +13,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "unicode/locid.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 namespace {
@@ -63,7 +63,7 @@ class WebRtcMediumTest : public ::testing::Test {
                        mdns_responder_factory_,
                        ice_config_fetcher_,
                        messenger_,
-                       base::ThreadTaskRunnerHandle::Get()) {}
+                       base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
   ~WebRtcMediumTest() override {
     // Let libjingle threads finish.
@@ -77,27 +77,27 @@ class WebRtcMediumTest : public ::testing::Test {
     return mojo_impl_;
   }
 
-  connections::LocationHint GetCountryCodeLocationHint(
+  location::nearby::connections::LocationHint GetCountryCodeLocationHint(
       const std::string& country_code) {
-    auto location_hint = connections::LocationHint();
+    auto location_hint = location::nearby::connections::LocationHint();
     location_hint.set_location(country_code);
     location_hint.set_format(
-        connections::LocationStandard_Format_ISO_3166_1_ALPHA_2);
+        location::nearby::connections::LocationStandard_Format_ISO_3166_1_ALPHA_2);
     return location_hint;
   }
 
-  connections::LocationHint GetCallingCodeLocationHint(
+  location::nearby::connections::LocationHint GetCallingCodeLocationHint(
       const std::string& calling_code) {
-    auto location_hint = connections::LocationHint();
+    auto location_hint = location::nearby::connections::LocationHint();
     location_hint.set_location(calling_code);
-    location_hint.set_format(connections::LocationStandard_Format_E164_CALLING);
+    location_hint.set_format(location::nearby::connections::LocationStandard_Format_E164_CALLING);
     return location_hint;
   }
 
-  connections::LocationHint GetUnknownLocationHint() {
-    auto location_hint = connections::LocationHint();
+  location::nearby::connections::LocationHint GetUnknownLocationHint() {
+    auto location_hint = location::nearby::connections::LocationHint();
     location_hint.set_location("");
-    location_hint.set_format(connections::LocationStandard_Format_UNKNOWN);
+    location_hint.set_format(location::nearby::connections::LocationStandard_Format_UNKNOWN);
     return location_hint;
   }
 
@@ -106,7 +106,7 @@ class WebRtcMediumTest : public ::testing::Test {
   testing::NiceMock<sharing::MockWebRtcDependencies> mojo_impl_;
 
   mojo::SharedRemote<network::mojom::P2PSocketManager> socket_manager_;
-  mojo::SharedRemote<location::nearby::connections::mojom::MdnsResponderFactory>
+  mojo::SharedRemote<sharing::mojom::MdnsResponderFactory>
       mdns_responder_factory_;
   mojo::SharedRemote<sharing::mojom::IceConfigFetcher> ice_config_fetcher_;
   mojo::SharedRemote<sharing::mojom::WebRtcSignalingMessenger> messenger_;
@@ -379,4 +379,3 @@ TEST_F(WebRtcMediumTest, GetMessengerAndStartReceivingMessagesTwice) {
 }  // namespace
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,8 @@ class AllPasswordsBottomSheetViewImpl : public AllPasswordsBottomSheetView {
   void OnCredentialSelected(
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& username,
-      const base::android::JavaParamRef<jstring>& password);
+      const base::android::JavaParamRef<jstring>& password,
+      jboolean requests_to_fill_password);
 
   // Called from Java bridge when user dismisses the BottomSheet.
   // Redirects the call to the controller.

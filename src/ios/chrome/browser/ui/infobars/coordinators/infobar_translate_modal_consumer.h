@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,18 @@
 
 #import <Foundation/Foundation.h>
 
-namespace {
 // Pref keys passed through setupModalViewControllerWithPrefs:.
-NSString* kSourceLanguagePrefKey = @"sourceLanguage";
-NSString* kTargetLanguagePrefKey = @"targetLanguage";
-NSString* kEnableTranslateButtonPrefKey = @"enableTranslateButton";
-NSString* kUpdateLanguageBeforeTranslatePrefKey =
-    @"updateLanguageBeforeTranslate";
-NSString* kEnableAndDisplayShowOriginalButtonPrefKey =
-    @"enableAndDisplayShowOriginalButton";
-NSString* kShouldAlwaysTranslatePrefKey = @"shouldAlwaysTranslate";
-NSString* kDisplayNeverTranslateLanguagePrefKey =
-    @"displayNeverTranslateLanguage";
-NSString* kIsTranslatableLanguagePrefKey = @"isTranslatableLanguage";
-NSString* kDisplayNeverTranslateSiteButtonPrefKey =
-    @"displayNeverTranslateSite";
-NSString* kIsSiteOnNeverPromptListPrefKey = @"isSiteBlacklisted";
-}
+extern NSString* const kSourceLanguagePrefKey;
+extern NSString* const kSourceLanguageIsUnknownPrefKey;
+extern NSString* const kTargetLanguagePrefKey;
+extern NSString* const kEnableTranslateButtonPrefKey;
+extern NSString* const kUpdateLanguageBeforeTranslatePrefKey;
+extern NSString* const kEnableAndDisplayShowOriginalButtonPrefKey;
+extern NSString* const kShouldAlwaysTranslatePrefKey;
+extern NSString* const kDisplayNeverTranslateLanguagePrefKey;
+extern NSString* const kIsTranslatableLanguagePrefKey;
+extern NSString* const kDisplayNeverTranslateSiteButtonPrefKey;
+extern NSString* const kIsSiteOnNeverPromptListPrefKey;
 
 // Protocol consumer used to push information to the Infobar Translate Modal UI
 // for it to properly configure itself.

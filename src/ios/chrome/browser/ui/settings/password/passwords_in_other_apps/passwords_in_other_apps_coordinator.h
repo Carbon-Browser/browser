@@ -1,18 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORDS_IN_OTHER_APPS_PASSWORDS_IN_OTHER_APPS_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORDS_IN_OTHER_APPS_PASSWORDS_IN_OTHER_APPS_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/passwords_in_other_apps_view_controller.h"
+#import "ios/chrome/browser/ui/settings/password/reauthentication/password_manager_reauthentication_delegate.h"
 
 class Browser;
 @class PasswordsInOtherAppsCoordinator;
 
 // Delegate for PasswordsInOtherAppsCoordinator.
-@protocol PasswordsInOtherAppsCoordinatorDelegate
+@protocol PasswordsInOtherAppsCoordinatorDelegate <
+    PasswordManagerReauthenticationDelegate>
 
 // Called when the view controller is removed from navigation controller.
 - (void)passwordsInOtherAppsCoordinatorDidRemove:

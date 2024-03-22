@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,13 +36,6 @@ void IdentifiabilityAddRTCRtpCapabilitiesToBuilder(
       if (codec->hasSdpFmtpLine()) {
         builder.AddToken(
             IdentifiabilitySensitiveStringToken(codec->sdpFmtpLine()));
-      } else {
-        builder.AddToken(IdentifiableToken());
-      }
-      if (codec->hasScalabilityModes()) {
-        for (const auto& mode : codec->scalabilityModes()) {
-          builder.AddToken(IdentifiabilitySensitiveStringToken(mode));
-        }
       } else {
         builder.AddToken(IdentifiableToken());
       }

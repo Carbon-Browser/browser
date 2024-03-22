@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,24 @@
 
 #include <memory>
 
-#include "ash/components/drivefs/drivefs_host.h"
-#include "ash/components/drivefs/fake_drivefs.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "chromeos/ash/components/drivefs/drivefs_host.h"
+#include "chromeos/ash/components/drivefs/fake_drivefs.h"
+#include "components/account_id/account_id.h"
 
 class Profile;
 
 namespace drive {
 
 bool SetUpUserDataDirectoryForDriveFsTest();
+bool SetUpUserDataDirectoryForDriveFsTest(const AccountId& account_id);
 
 class FakeDriveFsHelper {
  public:
   static const char kPredefinedProfileSalt[];
+  static const char kDefaultUserEmail[];
+  static const char kDefaultGaiaId[];
 
   FakeDriveFsHelper(Profile* profile, const base::FilePath& mount_path);
 

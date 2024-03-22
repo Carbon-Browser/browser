@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class MockSSLHostStateDelegate : public SSLHostStateDelegate {
   void AllowCert(const std::string& host,
                  const net::X509Certificate& cert,
                  int error,
-                 WebContents* web_contents) override;
+                 StoragePartition* storage_partition) override;
 
   void Clear(
       base::RepeatingCallback<bool(const std::string&)> host_filter) override;
@@ -28,7 +28,7 @@ class MockSSLHostStateDelegate : public SSLHostStateDelegate {
   CertJudgment QueryPolicy(const std::string& host,
                            const net::X509Certificate& cert,
                            int error,
-                           WebContents* web_contents) override;
+                           StoragePartition* storage_partition) override;
 
   void HostRanInsecureContent(const std::string& host,
                               int child_id,
@@ -39,20 +39,29 @@ class MockSSLHostStateDelegate : public SSLHostStateDelegate {
                                  InsecureContentType content_type) override;
 
   void AllowHttpForHost(const std::string& host,
-                        WebContents* web_contents) override;
-
+                        StoragePartition* storage_partition) override;
   bool IsHttpAllowedForHost(const std::string& host,
-                            WebContents* web_contents) override;
+                            StoragePartition* storage_partition) override;
+
+  void SetHttpsEnforcementForHost(const std::string& host,
+                                  bool enforce,
+                                  StoragePartition* storage_partition) override;
+  bool IsHttpsEnforcedForUrl(const GURL& url,
+                             StoragePartition* storage_partition) override;
 
   void RevokeUserAllowExceptions(const std::string& host) override;
 
   bool HasAllowException(const std::string& host,
-                         WebContents* web_contents) override;
+                         StoragePartition* storage_partition) override;
+
+  bool HasAllowExceptionForAnyHost(
+      StoragePartition* storage_partition) override;
 
  private:
   std::set<std::string> exceptions_;
   std::set<std::string> hosts_ran_insecure_content_;
   std::set<std::string> allow_http_hosts_;
+  std::set<std::string> enforce_https_hosts_;
 };
 
 }  // namespace content

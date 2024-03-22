@@ -1,22 +1,24 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <map>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/ppapi/ppapi_test.h"
 #include "chrome/test/ppapi/ppapi_test_select_file_dialog_factory.h"
+#include "components/prefs/pref_service.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/services/quarantine/test_support.h"
 #include "content/public/browser/global_routing_id.h"
@@ -149,9 +151,7 @@ IN_PROC_BROWSER_TEST_F(PPAPIFileChooserTest, FileChooser_Open_Success) {
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
 
   base::FilePath existing_filename = temp_dir.GetPath().AppendASCII("foo");
-  ASSERT_EQ(
-      static_cast<int>(sizeof(kContents) - 1),
-      base::WriteFile(existing_filename, kContents, sizeof(kContents) - 1));
+  ASSERT_TRUE(base::WriteFile(existing_filename, kContents));
 
   PPAPITestSelectFileDialogFactory::SelectedFileInfoList file_info_list;
   file_info_list.push_back(
@@ -334,9 +334,7 @@ IN_PROC_BROWSER_TEST_F(PPAPIFileChooserTestWithSBService,
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
 
   base::FilePath existing_filename = temp_dir.GetPath().AppendASCII("foo");
-  ASSERT_EQ(
-      static_cast<int>(sizeof(kContents) - 1),
-      base::WriteFile(existing_filename, kContents, sizeof(kContents) - 1));
+  ASSERT_TRUE(base::WriteFile(existing_filename, kContents));
 
   safe_browsing_test_configuration_.default_result =
       safe_browsing::DownloadCheckResult::DANGEROUS;

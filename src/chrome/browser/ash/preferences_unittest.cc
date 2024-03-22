@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,13 @@
 #include "ash/constants/ash_features.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/to_vector.h"
 #include "chrome/browser/ash/input_method/input_method_configuration.h"
-#include "chrome/browser/ash/input_method/mock_input_method_manager_impl.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/common/chrome_constants.h"
@@ -23,39 +25,38 @@
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_member.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/model/sync_change.h"
 #include "components/sync/model/sync_data.h"
-#include "components/sync/model/sync_error_factory.h"
 #include "components/sync/model/syncable_service.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/preference_specifics.pb.h"
-#include "components/sync/test/model/fake_sync_change_processor.h"
-#include "components/sync/test/model/sync_error_factory_mock.h"
+#include "components/sync/test/fake_sync_change_processor.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest-param-test.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ime/ash/extension_ime_util.h"
 #include "ui/base/ime/ash/mock_component_extension_ime_manager_delegate.h"
+#include "ui/base/ime/ash/mock_input_method_manager_impl.h"
 #include "url/gurl.h"
 
 namespace ash {
 namespace {
 
-const char kIdentityIMEID[] =
+constexpr char kIdentityIMEID[] =
     "_ext_ime_iafoklpfplgfnoimmaejoeondnjnlcfpIdentityIME";
-const char kToUpperIMEID[] =
+constexpr char kToUpperIMEID[] =
     "_ext_ime_iafoklpfplgfnoimmaejoeondnjnlcfpToUpperIME";
-const char kAPIArgumentIMEID[] =
+constexpr char kAPIArgumentIMEID[] =
     "_ext_ime_iafoklpfplgfnoimmaejoeondnjnlcfpAPIArgumentIME";
-const char kUnknownIMEID[] =
+constexpr char kUnknownIMEID[] =
     "_ext_ime_iafoklpfplgfnoimmaejoeondnjnlcfpUnknownIME";
 
 syncer::SyncData
@@ -101,13 +102,13 @@ class MyMockInputMethodManager : public MockInputMethodManagerImpl {
       *result = *input_method_extensions_;
     }
 
-    void AddInputMethodExtension(
-        const std::string& id,
-        const InputMethodDescriptors& descriptors,
-        ui::IMEEngineHandlerInterface* instance) override {
+    void AddInputMethodExtension(const std::string& id,
+                                 const InputMethodDescriptors& descriptors,
+                                 TextInputMethod* instance) override {
       InputMethodDescriptor descriptor(
           id, std::string(), std::string(), std::string(),
-          std::vector<std::string>(), false, GURL(), GURL());
+          std::vector<std::string>(), false, GURL(), GURL(),
+          /*handwriting_language=*/absl::nullopt);
       input_method_extensions_->push_back(descriptor);
     }
 
@@ -115,7 +116,7 @@ class MyMockInputMethodManager : public MockInputMethodManagerImpl {
     ~State() override {}
 
    private:
-    MyMockInputMethodManager* const manager_;
+    const raw_ptr<MyMockInputMethodManager, ExperimentalAsh> manager_;
     std::unique_ptr<InputMethodDescriptors> input_method_extensions_;
   };
 
@@ -131,8 +132,8 @@ class MyMockInputMethodManager : public MockInputMethodManagerImpl {
   std::string last_input_method_id_;
 
  private:
-  StringPrefMember* previous_;
-  StringPrefMember* current_;
+  raw_ptr<StringPrefMember, ExperimentalAsh> previous_;
+  raw_ptr<StringPrefMember, ExperimentalAsh> current_;
 };
 
 }  // anonymous namespace
@@ -154,7 +155,7 @@ class PreferencesTest : public testing::Test {
 
     user_manager_ = new FakeChromeUserManager();
     user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        base::WrapUnique(user_manager_));
+        base::WrapUnique(user_manager_.get()));
 
     const char test_user_email[] = "test_user@example.com";
     const AccountId test_account_id(AccountId::FromUserEmail(test_user_email));
@@ -180,7 +181,6 @@ class PreferencesTest : public testing::Test {
         &previous_input_method_, &current_input_method_);
     input_method::InitializeForTesting(mock_manager_);
 
-    chromeos::DBusThreadManager::Initialize();
     fake_update_engine_client_ = UpdateEngineClient::InitializeFakeForTest();
 
     prefs_ = std::make_unique<Preferences>(mock_manager_);
@@ -190,7 +190,6 @@ class PreferencesTest : public testing::Test {
     // `prefs_` accesses UpdateEngineClient in its destructor.
     prefs_.reset();
     UpdateEngineClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
 
     input_method::Shutdown();
     // UserSessionManager doesn't listen to profile destruction, so make sure
@@ -215,12 +214,16 @@ class PreferencesTest : public testing::Test {
   base::test::ScopedFeatureList feature_list_;
 
   // Not owned.
-  FakeChromeUserManager* user_manager_;
-  const user_manager::User* test_user_;
-  TestingProfile* test_profile_;
-  sync_preferences::TestingPrefServiceSyncable* pref_service_;
-  input_method::MyMockInputMethodManager* mock_manager_;
-  FakeUpdateEngineClient* fake_update_engine_client_;
+  raw_ptr<FakeChromeUserManager, ExperimentalAsh> user_manager_;
+  raw_ptr<const user_manager::User, ExperimentalAsh> test_user_;
+  raw_ptr<TestingProfile, ExperimentalAsh> test_profile_;
+  raw_ptr<sync_preferences::TestingPrefServiceSyncable, ExperimentalAsh>
+      pref_service_;
+  raw_ptr<input_method::MyMockInputMethodManager,
+          DanglingUntriaged | ExperimentalAsh>
+      mock_manager_;
+  raw_ptr<FakeUpdateEngineClient, DanglingUntriaged | ExperimentalAsh>
+      fake_update_engine_client_;
 };
 
 TEST_F(PreferencesTest, TestUpdatePrefOnBrowserScreenDetails) {
@@ -423,11 +426,12 @@ class InputMethodPreferencesTest : public PreferencesTest {
 
   // Translates engine IDs in a CSV string to input method IDs.
   std::string ToInputMethodIds(const std::string& value) {
-    std::vector<std::string> tokens = base::SplitString(
-        value, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-    std::transform(tokens.begin(), tokens.end(), tokens.begin(),
-                   &extension_ime_util::GetInputMethodIDByEngineID);
-    return base::JoinString(tokens, ",");
+    return base::JoinString(
+        base::test::ToVector(
+            base::SplitString(value, ",", base::TRIM_WHITESPACE,
+                              base::SPLIT_WANT_ALL),
+            &extension_ime_util::GetInputMethodIDByEngineID),
+        ",");
   }
 
   // Simulates the initial sync of preferences.
@@ -435,11 +439,9 @@ class InputMethodPreferencesTest : public PreferencesTest {
       const syncer::SyncDataList& sync_data_list) {
     syncer::SyncableService* sync =
         pref_service_->GetSyncableService(syncer::OS_PREFERENCES);
-    sync->MergeDataAndStartSyncing(syncer::OS_PREFERENCES, sync_data_list,
-                                   std::unique_ptr<syncer::SyncChangeProcessor>(
-                                       new syncer::FakeSyncChangeProcessor),
-                                   std::unique_ptr<syncer::SyncErrorFactory>(
-                                       new syncer::SyncErrorFactoryMock));
+    sync->MergeDataAndStartSyncing(
+        syncer::OS_PREFERENCES, sync_data_list,
+        std::make_unique<syncer::FakeSyncChangeProcessor>());
     content::RunAllTasksUntilIdle();
     return sync;
   }

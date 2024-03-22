@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,7 @@
 
 namespace gl {
 
-GLShareGroup::GLShareGroup()
-#if BUILDFLAG(IS_APPLE)
-    : renderer_id_(-1)
-#endif
-{
-}
+GLShareGroup::GLShareGroup() = default;
 
 void GLShareGroup::AddContext(GLContext* context) {
   contexts_.insert(context);
@@ -49,16 +44,6 @@ void GLShareGroup::SetSharedContext(GLContext* context) {
   DCHECK(contexts_.find(context) != contexts_.end());
   shared_context_ = context;
 }
-
-#if BUILDFLAG(IS_APPLE)
-void GLShareGroup::SetRendererID(int renderer_id) {
-  renderer_id_ = renderer_id;
-}
-
-int GLShareGroup::GetRendererID() {
-  return renderer_id_;
-}
-#endif
 
 GLShareGroup::~GLShareGroup() {
 }

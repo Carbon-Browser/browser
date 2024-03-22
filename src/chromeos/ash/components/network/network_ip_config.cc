@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "base/notreached.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 #define ENUM_CASE(x) case x: return std::string(#x)
@@ -50,4 +50,4 @@ std::string NetworkIPConfig::ToString() const {
       + " name_servers: " + name_servers;
 }
 
-}  // namespace chromeos
+}  // namespace ash

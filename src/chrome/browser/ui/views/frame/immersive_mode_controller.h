@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class ImmersiveRevealedLock {
 // the top-of-window views are hidden until the mouse hits the top of the
 // screen. The tab strip is optionally painted with miniature "tab indicator"
 // rectangles.
-// Currently, immersive mode is only available for Chrome OS.
+// Currently, immersive mode is only available for Chrome OS and macOS.
 class ImmersiveModeController {
  public:
   enum AnimateReveal {
@@ -121,6 +121,15 @@ class ImmersiveModeController {
   virtual void OnWidgetActivationChanged(views::Widget* widget,
                                          bool active) = 0;
 
+  // Returns the minimum y-offset for the web contents. Used on Mac to prevent
+  // find results from hiding under the top chrome when the find bar is in use.
+  virtual int GetMinimumContentOffset() const = 0;
+
+  // Returns an offset to add to the vertical origin of the infobar while
+  // laying out the browser view. Used on Mac to ensure the infobar stays
+  // visible when revealing topchrome.
+  virtual int GetExtraInfobarOffset() const = 0;
+
   virtual void AddObserver(Observer* observer);
   virtual void RemoveObserver(Observer* observer);
 
@@ -128,10 +137,13 @@ class ImmersiveModeController {
   base::ObserverList<Observer>::Unchecked observers_;
 };
 
+class BrowserView;
+
 namespace chrome {
 
 // Implemented in immersive_mode_controller_factory.cc.
-std::unique_ptr<ImmersiveModeController> CreateImmersiveModeController();
+std::unique_ptr<ImmersiveModeController> CreateImmersiveModeController(
+    const BrowserView* browser_view);
 
 }  // namespace chrome
 

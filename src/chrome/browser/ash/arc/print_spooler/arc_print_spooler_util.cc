@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ base::FilePath SavePrintDocument(mojo::ScopedHandle scoped_handle) {
   int bytes;
   while ((bytes = src_file.ReadAtCurrentPos(buf, sizeof(buf))) > 0) {
     if (!temp.WriteAtCurrentPosAndCheck(
-            base::as_bytes(base::make_span(buf, bytes)))) {
+            base::as_bytes(base::make_span(buf, static_cast<size_t>(bytes))))) {
       PLOG(ERROR) << "Error while saving PDF to disk.";
       return base::FilePath();
     }

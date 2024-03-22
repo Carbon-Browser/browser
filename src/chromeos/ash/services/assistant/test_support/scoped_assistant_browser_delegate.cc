@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,7 @@
 
 #include "ash/public/cpp/new_window_delegate.h"
 
-namespace chromeos {
-namespace assistant {
-
-namespace {
-
-}  // namespace
+namespace ash::assistant {
 
 ScopedAssistantBrowserDelegate::ScopedAssistantBrowserDelegate() = default;
 
@@ -36,9 +31,9 @@ void ScopedAssistantBrowserDelegate::RequestMediaControllerManager(
 }
 
 void ScopedAssistantBrowserDelegate::OpenUrl(GURL url) {
-  ash::NewWindowDelegate::GetPrimary()->OpenUrl(
-      url, ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction);
+  NewWindowDelegate::GetPrimary()->OpenUrl(
+      url, NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      NewWindowDelegate::Disposition::kNewForegroundTab);
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

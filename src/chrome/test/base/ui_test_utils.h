@@ -1,12 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_TEST_BASE_UI_TEST_UTILS_H_
 #define CHROME_TEST_BASE_UI_TEST_UTILS_H_
 
-#include <map>
-#include <queue>
 #include <set>
 #include <string>
 #include <vector>
@@ -19,7 +17,6 @@
 #include "components/history/core/browser/history_service.h"
 #include "content/public/browser/notification_details.h"
 #include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "content/public/browser/notification_source.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -61,7 +58,7 @@ namespace ui_test_utils {
 //    Navigation
 enum BrowserTestWaitFlags {
   // Don't wait for anything.
-  BROWSER_TEST_NONE = 0,
+  BROWSER_TEST_NO_WAIT = 0,
   // Wait for a new browser.
   BROWSER_TEST_WAIT_FOR_BROWSER = 1 << 0,
   // Wait for a new tab.
@@ -209,65 +206,148 @@ void GetCookies(const GURL& url,
                 int* value_size,
                 std::string* value);
 
-// Similar to WindowedNotificationObserver but also provides a way of retrieving
-// the details associated with the notification.
-// Note that in order to use that class the details class should be copiable,
-// which is the case with most notifications.
-template <class U>
-class WindowedNotificationObserverWithDetails
-    : public content::WindowedNotificationObserver {
+// Utility class to watch all existing and added tabs, until some interesting
+// thing has happened.  Subclasses get to decide what they consider to be
+// interesting.  In practice, usage is like this:
+//
+// - Subclass `AllTabsObserver`
+// - Override `ProcessOneWebContents()` to check for the interesting thing.
+// - Optionally return a `WebContentsObserver` that will watch for the
+//   interesting thing for this WebContents.
+// - Eventually call `ConditionMet()` to indicate that the interesting thing has
+//   happened, and no further waiting is needed.
+//
+// Users of this class just call `Wait()` at most once.
+class AllTabsObserver : public TabStripModelObserver,
+                        public BrowserListObserver {
  public:
-  WindowedNotificationObserverWithDetails(
-      int notification_type,
-      const content::NotificationSource& source)
-      : content::WindowedNotificationObserver(notification_type, source) {}
-  WindowedNotificationObserverWithDetails(
-      const WindowedNotificationObserverWithDetails&) = delete;
-  WindowedNotificationObserverWithDetails& operator=(
-      const WindowedNotificationObserverWithDetails&) = delete;
+  AllTabsObserver(const AllTabsObserver&) = delete;
+  AllTabsObserver& operator=(const AllTabsObserver&) = delete;
 
-  // Fills |details| with the details of the notification received for |source|.
-  bool GetDetailsFor(uintptr_t source, U* details) {
-    typename std::map<uintptr_t, U>::const_iterator iter =
-        details_.find(source);
-    if (iter == details_.end())
-      return false;
-    *details = iter->second;
-    return true;
-  }
+  ~AllTabsObserver() override;
 
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override {
-    const U* details_ptr = content::Details<U>(details).ptr();
-    if (details_ptr)
-      details_[source.map_key()] = *details_ptr;
-    content::WindowedNotificationObserver::Observe(type, source, details);
-  }
+  // Waits until whatever interesting thing we're waiting for has happened.
+  // Will return immediately if it's already happened.
+  void Wait();
+
+ protected:
+  AllTabsObserver();
+
+  // Will be called for every tab's WebContents, including ones that exist when
+  // this class is constructed and any that are created afterwards until
+  // destruction or until `ConditionMet()` is called.
+  //
+  // This may choose not to return an observer if there's no need to watch this
+  // contents.  It may also call `ConditionMet()` before returning, presumably
+  // because the new contents already matches whatever condition our subclass is
+  // checking for.  In that case, it will presumably not bother to return an
+  // observer for the new contents.
+  //
+  // These will be deleted before `this` is deleted, so it's okay to have the
+  // observers hold raw_ptrs back to `this`.
+  virtual std::unique_ptr<base::CheckedObserver> ProcessOneContents(
+      content::WebContents* web_contents) = 0;
+
+  // Add all tabs from all browsers.  Must be called by the subclass ctor.
+  void AddAllBrowsers();
+
+  // Called by our subclass to let us know that whatever it's trying to wait for
+  // has happened.  May be called at any time, including during a call to
+  // `CreateObserverIfNeeded()`.  May be called more than once, though
+  // calls will be ignored.
+  void ConditionMet();
 
  private:
-  std::map<uintptr_t, U> details_;
+  // Record for every tab we're watching.
+  struct TabNavigationMapEntry {
+    TabNavigationMapEntry();
+    ~TabNavigationMapEntry();
+
+    // Provided by the subclass to do whatever it does.
+    std::unique_ptr<base::CheckedObserver> subclass_observer;
+    // Provided by us to clean up properly.
+    std::unique_ptr<base::CheckedObserver> destruction_observer;
+  };
+  using TabNavigationMap =
+      std::map<const content::WebContents*, TabNavigationMapEntry>;
+
+  // Add all tabs from `browser`, and start watching for changes.
+  void AddBrowser(const Browser* browser);
+
+  // TabStripModelObserver:
+  void OnTabStripModelChanged(
+      TabStripModel* tab_strip_model,
+      const TabStripModelChange& change,
+      const TabStripSelectionChange& selection) override;
+
+  // BrowserListObserver
+  void OnBrowserAdded(Browser* browser) override;
+
+  // Called for every WebContents.  Notifies the subclass, and sets up observers
+  // if needed.
+  void AddWebContents(content::WebContents* web_contents);
+
+  // Called by our destruction observers.
+  void OnWebContentsDestroyed(content::WebContents* web_contents);
+
+  // Map of how many times each tab has navigated since |this| was created.
+  TabNavigationMap tab_navigation_map_;
+
+  // True if WaitForNavigations has been called, until
+  // |num_navigations_to_wait_for_| have been observed.
+  bool condition_met_ = false;
+
+  // Flag to make sure that subclasses call `AddAllBrowsers()`.
+  bool added_all_browsers_ = false;
+
+  std::unique_ptr<base::RunLoop> run_loop_;
 };
 
 // Notification observer which waits for navigation events and blocks until
 // a specific URL is loaded. The URL must be an exact match.
-class UrlLoadObserver : public content::WindowedNotificationObserver {
+class UrlLoadObserver : public AllTabsObserver {
  public:
-  // Register to listen for notifications of the given type from either a
-  // specific source, or from all sources if |source| is
-  // NotificationService::AllSources().
-  UrlLoadObserver(const GURL& url, const content::NotificationSource& source);
-  UrlLoadObserver(const UrlLoadObserver&) = delete;
-  UrlLoadObserver& operator=(const UrlLoadObserver&) = delete;
+  // `url` is the URL to look for.
+  explicit UrlLoadObserver(const GURL& url);
+
+  // Temporary constructor while callsites are updated.  `unused_source` must be
+  // `AllSources()`.  Do not use this for new code -- use the one-argument
+  // constructor instead.
+  UrlLoadObserver(const GURL& url,
+                  const content::NotificationSource& unused_source);
   ~UrlLoadObserver() override;
 
-  // content::NotificationObserver:
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
+  // Returns the WebContents which navigated to `url`.
+  content::WebContents* web_contents() const { return web_contents_; }
+
+ protected:
+  // Helper class to watch for DidStopLoading on one WebContents and relay it to
+  // the UrlLoadObserver that created us.
+  class LoadStopObserver : public content::WebContentsObserver {
+   public:
+    LoadStopObserver(UrlLoadObserver* owner,
+                     content::WebContents* web_contents);
+    ~LoadStopObserver() override;
+
+    // WebContentsObserver
+    void DidStopLoading() override;
+
+   private:
+    raw_ptr<UrlLoadObserver> owner_ = nullptr;
+  };
+
+  // AllTabsObserver
+  std::unique_ptr<base::CheckedObserver> ProcessOneContents(
+      content::WebContents* web_contents) override;
+
+  // Called by `LoadStopObserver` when a WebContents DidStopLoading().
+  void OnDidStopLoading(content::WebContents* web_contents);
 
  private:
+  friend class LoadStopObserver;
+
   GURL url_;
+  raw_ptr<content::WebContents> web_contents_ = nullptr;
 };
 
 // A helper that will wait until a tab is added to a specific Browser.
@@ -278,7 +358,7 @@ class TabAddedWaiter : public TabStripModelObserver {
   TabAddedWaiter& operator=(const TabAddedWaiter&) = delete;
   ~TabAddedWaiter() override = default;
 
-  void Wait();
+  content::WebContents* Wait();
 
   // TabStripModelObserver:
   void OnTabStripModelChanged(
@@ -288,6 +368,8 @@ class TabAddedWaiter : public TabStripModelObserver {
 
  private:
   base::RunLoop run_loop_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
 };
 
 // Similar to TabAddedWaiter, but will observe tabs added to all Browser
@@ -315,7 +397,8 @@ class AllBrowserTabAddedWaiter : public TabStripModelObserver,
   base::RunLoop run_loop_;
 
   // The last tab that was added.
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
 };
 
 // Enumerates all history contents on the backend thread. Returns them in
@@ -355,11 +438,34 @@ class BrowserChangeObserver : public BrowserListObserver {
   void OnBrowserRemoved(Browser* browser) override;
 
  private:
-  // TODO(crbug.com/1298696): browser_tests (pixel_browser_tests)
-  // breaks with MTECheckedPtr enabled. Triage.
-  raw_ptr<Browser, DegradeToNoOpWhenMTE> browser_;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser_;
   ChangeType type_;
   base::RunLoop run_loop_;
+};
+
+// Encapsulates waiting for the browser window to change state. This is
+// needed for example on Chrome desktop linux, where window state change is done
+// asynchronously as an event received from a different process.
+class CheckWaiter {
+ public:
+  CheckWaiter(base::RepeatingCallback<bool()> callback,
+              bool expected,
+              const base::TimeDelta& timeout);
+  CheckWaiter(const CheckWaiter&) = delete;
+  CheckWaiter& operator=(const CheckWaiter&) = delete;
+  ~CheckWaiter();
+
+  // Blocks until the browser window becomes maximized.
+  void Wait();
+
+ private:
+  bool Check();
+
+  base::RepeatingCallback<bool()> callback_;
+  bool expected_;
+  const base::TimeTicks timeout_;
+  // The waiter's RunLoop quit closure.
+  base::RepeatingClosure quit_;
 };
 
 }  // namespace ui_test_utils

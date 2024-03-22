@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,6 @@
 #include "third_party/blink/renderer/modules/sensor/sensor_inspector_agent.h"
 
 namespace blink {
-
-using protocol::Response;
 
 DeviceOrientationInspectorAgent::~DeviceOrientationInspectorAgent() = default;
 
@@ -37,10 +35,10 @@ DeviceOrientationController& DeviceOrientationInspectorAgent::Controller() {
       *inspected_frames_->Root()->DomWindow());
 }
 
-Response DeviceOrientationInspectorAgent::setDeviceOrientationOverride(
-    double alpha,
-    double beta,
-    double gamma) {
+protocol::Response
+DeviceOrientationInspectorAgent::setDeviceOrientationOverride(double alpha,
+                                                              double beta,
+                                                              double gamma) {
   enabled_.Set(true);
   alpha_.Set(alpha);
   beta_.Set(beta);
@@ -48,19 +46,20 @@ Response DeviceOrientationInspectorAgent::setDeviceOrientationOverride(
   Controller().SetOverride(
       DeviceOrientationData::Create(alpha, beta, gamma, false));
   sensor_agent_->SetOrientationSensorOverride(alpha, beta, gamma);
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response DeviceOrientationInspectorAgent::clearDeviceOrientationOverride() {
+protocol::Response
+DeviceOrientationInspectorAgent::clearDeviceOrientationOverride() {
   return disable();
 }
 
-Response DeviceOrientationInspectorAgent::disable() {
+protocol::Response DeviceOrientationInspectorAgent::disable() {
   agent_state_.ClearAllFields();
   if (!inspected_frames_->Root()->DomWindow()->IsContextDestroyed())
     Controller().ClearOverride();
   sensor_agent_->Disable();
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
 void DeviceOrientationInspectorAgent::Restore() {

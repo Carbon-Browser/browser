@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,9 +77,9 @@ enum class NotificationCatalogName {
   kFirmwareUpdate = 62,
   kPeripheralBattery = 63,
   kBluetoothPairingRequest = 64,
-  kBluetoothPairedDevice = 65,
+  // [Deprecated] kBluetoothPairedDevice = 65,
   kCellularSetup = 66,
-  kScreenSecurity = 67,
+  // [Deprecated] kScreenSecurity = 67,
   kWifiToggle = 68,
   kUSBPeripheralInvalidDpCable = 69,
   kUSBPeripheralInvalidUSB4ValidTBTCable = 70,
@@ -163,7 +163,72 @@ enum class NotificationCatalogName {
   kTailoredSecurityDisabled = 148,
   kTailoredSecurityEnabled = 149,
   kTailoredSecurityPromotion = 150,
-  kMaxValue = kTailoredSecurityPromotion
+  kArcLowDiskSpacePreStop = 151,
+  kArcLowDiskSpacePostStop = 152,
+  kMultiCapture = 153,
+  kPrivacyHubCamera = 154,
+  // [Deprecated] kPrivacyHubHWCameraSwitchOffSWCameraSwitchOn = 155,
+  kEcheAppNetworkSetting = 156,
+  kPrivacyHubMicAndCamera = 157,
+  kArcVmDataMigration = 158,
+  kWebHid = 159,
+  kDoNotDisturb = 160,
+  kDictationAllDlcsDownloaded = 161,
+  kDictationNoDlcsDownloaded = 162,
+  kDicationOnlyPumpkinDownloaded = 163,
+  kDictationOnlySodaDownloaded = 164,
+  kIPHGoogleOneOffer = 165,
+  kLockScreen = 166,
+  kWebAppSettings = 167,
+  kEOLIncentive = 168,
+  kHotspot = 169,
+  kGeolocationSwitch = 170,
+  kMultiCaptureOnLogin = 171,
+  kFloatingWorkspace = 172,
+  kScalableIphNotification = 173,
+  kUpdateNotification = 174,
+  kSubAppsUninstall = 175,
+  kNetworkCarrierUnlock = 176,
+  kCoralFeature = 177,
+  kInputDeviceSettings = 178,
+  kMaxValue = kInputDeviceSettings
+};
+
+// A living catalog that registers system nudges.
+// Current values should not be renumbered or removed. Please keep in sync with
+// "NudgeCatalogName" in tools/metrics/histograms/metadata/ash/enums.xml.
+// To deprecate comment out the entry.
+// Please call `SystemNudgeController::MaybeRecordNudgeAction()` (old nudges) or
+// `AnchoredNudgeManager::Get()->MaybeRecordNudgeAction()` when the nudge's
+// suggested action is performed by the user, if applicable.
+enum class NudgeCatalogName {
+  kTestCatalogName = 0,
+  kDictation = 1,
+  // [Deprecated] kMultipaste = 2,
+  // [Deprecated] kDarkLightMode = 3,
+  kAutozoom = 4,
+  // [Deprecated] kAdaptiveCharging = 5,
+  kPhoneHub = 6,
+  kClipboardHistoryZeroState = 7,
+  kClipboardHistoryOnboarding = 8,
+  kDisableDiacritics = 9,
+  kClipboardHistoryDuplicateCopy = 10,
+  kVideoConferenceTraySpeakOnMuteDetected = 11,
+  kVideoConferenceTrayMicrophoneUseWhileHWDisabled = 12,
+  kVideoConferenceTrayMicrophoneUseWhileSWDisabled = 13,
+  kVideoConferenceTrayCameraUseWhileHWDisabled = 14,
+  kVideoConferenceTrayCameraUseWhileSWDisabled = 15,
+  kVideoConferenceTraySpeakOnMuteOptIn = 16,
+  // [Deprecated] kVideoConferenceTraySpeakOnMuteOptInConfirmation = 17,
+  kScalableIphBubble = 18,
+  kVideoConferenceTrayCameraMicrophoneUseWhileDisabled = 19,
+  kMultitaskMenuClamshell = 20,
+  kMultitaskMenuTablet = 21,
+  kCaptureModeEducationShortcutNudge = 22,
+  kCaptureModeEducationShortcutTutorial = 23,
+  kCaptureModeEducationQuickSettingsNudge = 24,
+  kGameDashboardControlsNudge = 25,
+  kMaxValue = kGameDashboardControlsNudge
 };
 
 // A living catalog that registers toasts.
@@ -186,7 +251,7 @@ enum class ToastCatalogName {
   kEncourageUnlock = 12,
   kNetworkAutoConnect = 13,
   kAssistantLoading = 14,
-  kToastManagerUnittest = 15,
+  kTestCatalogName = 15,
   kMaximumDeskLaunchTemplate = 16,
   kEnterOverviewGesture = 17,
   kExitOverviewGesture = 18,
@@ -207,10 +272,20 @@ enum class ToastCatalogName {
   kDeskTemplateTooLarge = 33,
   kUndoCloseAll = 34,
   kEcheAppToast = 35,
-  kDeprecateAssistantStylus = 36,
+  // [Deprecated] kDeprecateAssistantStylus = 36,
   kEcheTrayCopyPasteNotImplemented = 37,
   kEcheTrayTabletModeNotSupported = 38,
-  kMaxValue = kEcheTrayTabletModeNotSupported,
+  kNotificationCenterTrayNoNotifications = 39,
+  // [Deprecated] kCopyToClipboardAction = 40,
+  // [Deprecated] kVideoConferenceTraySpeakOnMuteDetected = 41,
+  kCopyGifToClipboardAction = 42,
+  // [Deprecated] kVideoConferenceTrayUseWhileDisabled = 43,
+  kBatterySaverDisabled = 44,
+  kDictationNoFocusedTextField = 45,
+  kBatterySaverEnabled = 46,
+  kDictationMicMuted = 47,
+  kVideoConferenceTraySpeakOnMuteOptInConfirmation = 48,
+  kMaxValue = kVideoConferenceTraySpeakOnMuteOptInConfirmation
 };
 
 }  // namespace ash

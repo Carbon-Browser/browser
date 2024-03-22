@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/i18n/case_conversion.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/browser/accessibility/browser_accessibility.h"
@@ -46,7 +47,7 @@ OneShotAccessibilityTreeSearch::OneShotAccessibilityTreeSearch(
       onscreen_only_(false),
       did_search_(false) {}
 
-OneShotAccessibilityTreeSearch::~OneShotAccessibilityTreeSearch() {}
+OneShotAccessibilityTreeSearch::~OneShotAccessibilityTreeSearch() = default;
 
 void OneShotAccessibilityTreeSearch::SetStartNode(
     BrowserAccessibility* start_node) {
@@ -182,7 +183,7 @@ void OneShotAccessibilityTreeSearch::SearchByWalkingTree() {
       // This needs to be handled carefully. If not, there is a chance of
       // getting into infinite loop.
       if (can_wrap_to_last_element_ && !stop_node &&
-          node->manager()->GetRoot() == node) {
+          node->manager()->GetBrowserAccessibilityRoot() == node) {
         stop_node = node;
       }
       node = tree_->PreviousInTreeOrder(node, can_wrap_to_last_element_);
@@ -217,7 +218,7 @@ bool OneShotAccessibilityTreeSearch::Matches(BrowserAccessibility* node) {
     bool found_text_match = false;
     for (auto node_string : node_strings) {
       std::u16string node_string_lower = base::i18n::ToLower(node_string);
-      if (node_string_lower.find(search_text_lower) != std::u16string::npos) {
+      if (base::Contains(node_string_lower, search_text_lower)) {
         found_text_match = true;
         break;
       }
@@ -267,7 +268,7 @@ bool AccessibilityComboboxPredicate(BrowserAccessibility* start,
   return (node->GetRole() == ax::mojom::Role::kComboBoxGrouping ||
           node->GetRole() == ax::mojom::Role::kComboBoxMenuButton ||
           node->GetRole() == ax::mojom::Role::kTextFieldWithComboBox ||
-          node->GetRole() == ax::mojom::Role::kPopUpButton);
+          node->GetRole() == ax::mojom::Role::kComboBoxSelect);
 }
 
 bool AccessibilityControlPredicate(BrowserAccessibility* start,
@@ -355,7 +356,7 @@ bool AccessibilityHeadingSameLevelPredicate(BrowserAccessibility* start,
 
 bool AccessibilityFramePredicate(BrowserAccessibility* start,
                                  BrowserAccessibility* node) {
-  if (node->IsWebAreaForPresentationalIframe())
+  if (node->IsRootWebAreaForPresentationalIframe())
     return false;
   if (!node->PlatformGetParent())
     return false;
@@ -370,6 +371,9 @@ bool AccessibilityLandmarkPredicate(BrowserAccessibility* start,
     case ax::mojom::Role::kBanner:
     case ax::mojom::Role::kComplementary:
     case ax::mojom::Role::kContentInfo:
+    case ax::mojom::Role::kFooter:
+    case ax::mojom::Role::kForm:
+    case ax::mojom::Role::kHeader:
     case ax::mojom::Role::kMain:
     case ax::mojom::Role::kNavigation:
     case ax::mojom::Role::kRegion:
@@ -411,6 +415,14 @@ bool AccessibilityMediaPredicate(BrowserAccessibility* start,
   const std::string& tag =
       node->GetStringAttribute(ax::mojom::StringAttribute::kHtmlTag);
   return tag == "audio" || tag == "video";
+}
+
+bool AccessibilityParagraphPredicate(BrowserAccessibility* start,
+                                     BrowserAccessibility* node) {
+  // Since paragraphs can contain other nodes, we exclude ancestors of the start
+  // node from the search
+  return node->GetRole() == ax::mojom::Role::kParagraph &&
+         !start->IsDescendantOf(node);
 }
 
 bool AccessibilityRadioButtonPredicate(BrowserAccessibility* start,

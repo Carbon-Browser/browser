@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,24 @@
  * editing or creating a credit card entry.
  */
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/cr_elements/md_select_css.m.js';
+import 'chrome://resources/cr_components/settings_prefs/prefs.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/md_select.css.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 import '../i18n_setup.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {loadTimeData} from '../i18n_setup.js';
 
 import {getTemplate} from './credit_card_edit_dialog.html.js';
 
@@ -40,6 +43,7 @@ declare global {
 export interface SettingsCreditCardEditDialogElement {
   $: {
     cancelButton: CrButtonElement,
+    cvcInput: CrInputElement,
     dialog: CrDialogElement,
     expiredError: HTMLElement,
     month: HTMLSelectElement,
@@ -65,6 +69,11 @@ export class SettingsCreditCardEditDialogElement extends
 
   static get properties() {
     return {
+      /**
+       * User preferences state.
+       */
+      prefs: Object,
+
       /**
        * The credit card being edited.
        */
@@ -100,6 +109,10 @@ export class SettingsCreditCardEditDialogElement extends
       /** The list of years to show in the dropdown. */
       yearList_: Array,
 
+      name_: String,
+      cardNumber_: String,
+      cvc_: String,
+      nickname_: String,
       expirationYear_: String,
       expirationMonth_: String,
 
@@ -115,17 +128,33 @@ export class SettingsCreditCardEditDialogElement extends
         reflectToAttribute: true,
         observer: 'onExpiredChanged_',
       },
+
+      /**
+       * Checks if CVC storage is available based on the feature flag.
+       */
+      cvcStorageAvailable_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('cvcStorageAvailable');
+        },
+      },
     };
   }
 
+  prefs: {[key: string]: any};
   creditCard: chrome.autofillPrivate.CreditCardEntry;
   private title_: string;
   private monthList_: string[];
   private yearList_: string[];
+  private name_?: string;
+  private cardNumber_: string;
+  private nickname_?: string;
   private expirationYear_?: string;
   private expirationMonth_?: string;
   private nicknameInvalid_: boolean;
   private expired_: boolean;
+  private cvc_?: string;
+  private cvcStorageAvailable_: boolean;
 
   /**
    * @return True iff the provided expiration date is passed.
@@ -179,6 +208,10 @@ export class SettingsCreditCardEditDialogElement extends
     microTask.run(() => {
       this.expirationYear_ = selectedYear.toString();
       this.expirationMonth_ = this.creditCard.expirationMonth;
+      this.cvc_ = this.creditCard.cvc;
+      this.name_ = this.creditCard.name;
+      this.cardNumber_ = this.creditCard.cardNumber || '';
+      this.nickname_ = this.creditCard.nickname;
       this.$.dialog.showModal();
     });
   }
@@ -191,20 +224,25 @@ export class SettingsCreditCardEditDialogElement extends
   /**
    * Handler for tapping the 'cancel' button. Should just dismiss the dialog.
    */
-  private onCancelButtonTap_() {
+  private onCancelButtonClick_() {
     this.$.dialog.cancel();
   }
 
   /**
    * Handler for tapping the save button.
    */
-  private onSaveButtonTap_() {
+  private onSaveButtonClick_() {
     if (!this.saveEnabled_()) {
       return;
     }
 
     this.creditCard.expirationYear = this.expirationYear_;
     this.creditCard.expirationMonth = this.expirationMonth_;
+    this.creditCard.name = this.name_;
+    this.creditCard.cardNumber = this.cardNumber_;
+    this.creditCard.nickname = this.nickname_;
+    // Take the user entered CVC input as-is. This is due to PCI compliance.
+    this.creditCard.cvc = this.cvc_;
     this.trimCreditCard_();
     this.dispatchEvent(new CustomEvent(
         'save-credit-card',
@@ -222,12 +260,11 @@ export class SettingsCreditCardEditDialogElement extends
 
   private saveEnabled_() {
     // The save button is enabled if:
-    // There is and name or number for the card
+    // There is a name or number for the card
     // and the expiration date is valid
     // and the nickname is valid if present.
-    return ((this.creditCard.name && this.creditCard.name.trim()) ||
-            (this.creditCard.cardNumber &&
-             this.creditCard.cardNumber.trim())) &&
+    return ((this.name_ && this.name_.trim()) ||
+            (this.cardNumber_ && this.cardNumber_.trim())) &&
         !this.expired_ && !this.nicknameInvalid_;
   }
 
@@ -258,8 +295,7 @@ export class SettingsCreditCardEditDialogElement extends
    * the save button when invalid.
    */
   private validateNickname_() {
-    this.nicknameInvalid_ =
-        NICKNAME_INVALID_REGEX.test(this.creditCard.nickname!);
+    this.nicknameInvalid_ = NICKNAME_INVALID_REGEX.test(this.nickname_!);
   }
 
   /**
@@ -291,6 +327,35 @@ export class SettingsCreditCardEditDialogElement extends
     if (this.creditCard.nickname) {
       this.creditCard.nickname = this.creditCard.nickname.trim();
     }
+  }
+
+  private isCardAmex_(): boolean {
+    return !!this.cardNumber_ && this.cardNumber_.length >= 2 &&
+        !!this.cardNumber_.match('^(34|37)');
+  }
+
+  private getCvcImageTooltip_(): string {
+    // An icon is shown to the user to help them look for their CVC.
+    // The location differs for AmEx and non-AmEx cards, so we have to get
+    // the first two digits of the card number for AmEx cards before we can
+    // update the icon.
+    return this.i18n(
+        this.isCardAmex_() ? 'creditCardCvcAmexImageTitle' :
+                             'creditCardCvcImageTitle');
+  }
+
+  private getCvcImageSource_(): string {
+    // An icon is shown to the user to help them look for their CVC.
+    // The location differs for AmEx and non-AmEx cards, so we have to get
+    // the first two digits of the card number for AmEx cards before we can
+    // update the icon.
+    return this.isCardAmex_() ? 'chrome://settings/images/cvc_amex.svg' :
+                                'chrome://settings/images/cvc.svg';
+  }
+
+  private checkIfCvcStorageIsAvailable_(cvcStorageToggleEnabled: boolean):
+      boolean {
+    return this.cvcStorageAvailable_ && cvcStorageToggleEnabled;
   }
 }
 

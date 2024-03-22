@@ -1,18 +1,15 @@
 #!/usr/bin/env vpython3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 import unittest
 
 import binary_sizes
-
-from common import DIR_SOURCE_ROOT
 
 
 _EXAMPLE_BLOBS = """

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,11 +22,17 @@ using extensions::mojom::APIPermissionID;
 // ChromePermissionMessageProvider::GetPermissionMessages as well.
 constexpr APIPermissionInfo::InitInfo kPermissionsToRegister[] = {
     // Telemetry System Extension permissions.
+    {APIPermissionID::kChromeOSAttachedDeviceInfo, "os.attached_device_info"},
+    {APIPermissionID::kChromeOSBluetoothPeripheralsInfo,
+     "os.bluetooth_peripherals_info"},
     {APIPermissionID::kChromeOSDiagnostics, "os.diagnostics"},
+    {APIPermissionID::kChromeOSEvents, "os.events"},
+    {APIPermissionID::kChromeOSManagementAudio, "os.management.audio"},
     {APIPermissionID::kChromeOSTelemetry, "os.telemetry"},
     {APIPermissionID::kChromeOSTelemetrySerialNumber,
      "os.telemetry.serial_number"},
-};
+    {APIPermissionID::kChromeOSTelemetryNetworkInformation,
+     "os.telemetry.network_info"}};
 
 }  // namespace
 

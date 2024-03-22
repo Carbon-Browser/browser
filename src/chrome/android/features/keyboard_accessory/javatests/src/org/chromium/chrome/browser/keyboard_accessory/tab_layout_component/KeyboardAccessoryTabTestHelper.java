@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,16 @@ import android.view.View;
 
 import org.hamcrest.Matcher;
 
-/**
- * Helpers in this class simplify interactions with the Keyboard Accessory Tab Layout.
- */
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
+
+/** Helpers in this class simplify interactions with the Keyboard Accessory Tab Layout. */
 public class KeyboardAccessoryTabTestHelper {
     private KeyboardAccessoryTabTestHelper() {}
 
     public static Matcher<View> isKeyboardAccessoryTabLayout() {
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)) {
+            return isAssignableFrom(KeyboardAccessoryButtonGroupView.class);
+        }
         return isAssignableFrom(KeyboardAccessoryTabLayoutView.class);
     }
 }

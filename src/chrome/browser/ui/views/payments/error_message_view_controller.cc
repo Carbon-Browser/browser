@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,6 +91,25 @@ void ErrorMessageViewController::FillContentView(views::View* content_view) {
       views::BoxLayout::CrossAxisAlignment::kStart);
   content_view->SetLayoutManager(std::move(layout));
   content_view->AddChildView(std::make_unique<PaymentsErrorLabel>());
+}
+
+bool ErrorMessageViewController::GetSheetId(DialogViewID* sheet_id) {
+  *sheet_id = DialogViewID::ERROR_SHEET;
+  return true;
+}
+
+bool ErrorMessageViewController::ShouldAccelerateEnterKey() {
+  return true;
+}
+
+bool ErrorMessageViewController::CanContentViewBeScrollable() {
+  // The error message is a single line of text that doesn't need a scroll view.
+  return false;
+}
+
+base::WeakPtr<PaymentRequestSheetController>
+ErrorMessageViewController::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 }  // namespace payments

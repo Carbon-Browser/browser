@@ -1,17 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/process_metrics.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/perf_log.h"
 #include "base/test/task_environment.h"
 #include "base/timer/timer.h"
@@ -66,7 +67,7 @@ base::TimeDelta GetFrameTime(size_t frames_per_second) {
 
 class PerfCpuLogger {
  public:
-  explicit PerfCpuLogger(base::StringPiece test_name)
+  explicit PerfCpuLogger(std::string_view test_name)
       : test_name_(test_name),
         process_metrics_(base::ProcessMetrics::CreateCurrentProcessMetrics()) {
     // Query the CPU usage once to start the recording interval.
@@ -236,12 +237,14 @@ class ChannelSteadyPingPongTest : public IPCChannelMojoTestBase {
           base::WaitableEvent::InitialState::NOT_SIGNALED);
       channel_proxy = IPC::SyncChannel::Create(
           TakeHandle().release(), IPC::Channel::MODE_SERVER, &listener,
-          GetIOThreadTaskRunner(), base::ThreadTaskRunnerHandle::Get(), false,
+          GetIOThreadTaskRunner(),
+          base::SingleThreadTaskRunner::GetCurrentDefault(), false,
           shutdown_event.get());
     } else {
       channel_proxy = IPC::ChannelProxy::Create(
           TakeHandle().release(), IPC::Channel::MODE_SERVER, &listener,
-          GetIOThreadTaskRunner(), base::ThreadTaskRunnerHandle::Get());
+          GetIOThreadTaskRunner(),
+          base::SingleThreadTaskRunner::GetCurrentDefault());
     }
     listener.Init(channel_proxy.get());
 

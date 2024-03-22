@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,8 @@ class MEDIA_EXPORT FileDataSource : public DataSource {
   [[nodiscard]] bool GetSize(int64_t* size_out) override;
   bool IsStreaming() override;
   void SetBitrate(int bitrate) override;
+  bool PassedTimingAllowOriginCheck() final;
+  bool WouldTaintOrigin() final;
 
   // Unit test helpers. Recreate the object if you want the default behaviour.
   void force_read_errors_for_testing() { force_read_errors_ = true; }

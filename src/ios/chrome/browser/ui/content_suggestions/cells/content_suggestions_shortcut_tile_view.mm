@@ -1,19 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_shortcut_tile_view.h"
 
-#import <MaterialComponents/MaterialTypography.h>
-
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_action_item.h"
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/common/ui/util/dynamic_type_util.h"
 
 namespace {
 
@@ -27,7 +23,8 @@ const CGFloat kIconSize = 56;
 @synthesize countLabel = _countLabel;
 
 - (instancetype)initWithFrame:(CGRect)frame {
-  self = [super initWithFrame:frame placeholder:NO];
+  self = [super initWithFrame:frame
+                     tileType:ContentSuggestionsTileType::kShortcuts];
   if (self) {
     _iconView = [[UIImageView alloc] initWithFrame:self.bounds];
     _iconView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -49,34 +46,35 @@ const CGFloat kIconSize = 56;
   self = [self initWithFrame:CGRectZero];
   if (self) {
     self.accessibilityCustomActions = nil;
-    self.titleLabel.text = config.title;
     self.isAccessibilityElement = YES;
-    self.accessibilityTraits = config.accessibilityTraits;
-    self.accessibilityLabel = config.accessibilityLabel.length
-                                  ? config.accessibilityLabel
-                                  : config.title;
-    // The accessibilityUserInputLabel should just be the title, with nothing
-    // extra from the accessibilityLabel.
-    self.accessibilityUserInputLabels = @[ config.title ];
-    _iconView.image =
-        UseSymbols()
-            ? SymbolForCollectionShortcutType(config.collectionShortcutType)
-            : ImageForCollectionShortcutType(config.collectionShortcutType);
     _iconView.contentMode = UIViewContentModeCenter;
 
-    _countContainer.hidden = !config.count;
-    _countLabel.text = [@(config.count) stringValue];
-    _config = config;
+    [self updateConfiguration:config];
   }
   return self;
 }
 
-- (void)updateCount:(NSInteger)count {
-  self.countContainer.hidden = count == 0;
-  if (count > 0) {
-    self.countLabel.text = [@(count) stringValue];
+- (void)updateConfiguration:(ContentSuggestionsMostVisitedActionItem*)config {
+  _config = config;
+  self.titleLabel.text = config.title;
+  if (IsMagicStackEnabled()) {
+    // When in the Magic Stack, a smaller preferred font is desired.
+    self.titleLabel.font = [self titleLabelFont];
   }
-  self.config.count = count;
+  self.accessibilityTraits = config.accessibilityTraits;
+  self.accessibilityLabel = config.accessibilityLabel.length
+                                ? config.accessibilityLabel
+                                : config.title;
+  // The accessibilityUserInputLabel should just be the title, with nothing
+  // extra from the accessibilityLabel.
+  self.accessibilityUserInputLabels = @[ config.title ];
+  self.iconView.image =
+      SymbolForCollectionShortcutType(config.collectionShortcutType);
+  self.countContainer.hidden = config.count == 0;
+  if (config.count > 0) {
+    self.countLabel.text = [@(config.count) stringValue];
+  }
+  self.alpha = config.disabled ? 0.3 : 1.0;
 }
 
 - (UILabel*)countLabel {
@@ -120,6 +118,26 @@ const CGFloat kIconSize = 56;
     AddSameCenterConstraints(_countLabel, _countContainer);
   }
   return _countLabel;
+}
+
+#pragma mark - UIView
+
+- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
+  [super traitCollectionDidChange:previousTraitCollection];
+  if (IsMagicStackEnabled() &&
+      previousTraitCollection.preferredContentSizeCategory !=
+          self.traitCollection.preferredContentSizeCategory) {
+    self.titleLabel.font = [self titleLabelFont];
+  }
+}
+
+#pragma mark - Private
+
+- (UIFont*)titleLabelFont {
+  return PreferredFontForTextStyleWithMaxCategory(
+      UIFontTextStyleCaption2,
+      self.traitCollection.preferredContentSizeCategory,
+      UIContentSizeCategoryAccessibilityLarge);
 }
 
 @end

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -130,6 +130,8 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessDragDropBrowserTest, DropFile) {
 
   // Drop the test file.
   DropData drop_data;
+  drop_data.operation = ui::mojom::DragOperation::kCopy;
+  drop_data.document_is_handling_drag = true;
   drop_data.filenames.emplace_back(
       ui::FileInfo(test_file_path, test_file_path.BaseName()));
   render_widget_host_impl->FilterDropData(&drop_data);
@@ -216,6 +218,8 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessDragDropBrowserTest, DropDirectory) {
 
   // Drop the test file.
   DropData drop_data;
+  drop_data.operation = ui::mojom::DragOperation::kCopy;
+  drop_data.document_is_handling_drag = true;
   drop_data.filenames.emplace_back(
       ui::FileInfo(test_dir_path, test_dir_path.BaseName()));
   render_widget_host_impl->FilterDropData(&drop_data);

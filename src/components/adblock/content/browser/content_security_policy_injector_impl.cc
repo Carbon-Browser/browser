@@ -17,32 +17,41 @@
 
 #include "components/adblock/content/browser/content_security_policy_injector_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/sequence_checker.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
-#include "components/adblock/core/subscription/subscription_collection.h"
+#include "components/adblock/core/subscription/subscription_service.h"
 #include "content/public/browser/network_service_instance.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
 namespace adblock {
 namespace {
 
-std::string GetCspInjection(
-    const std::unique_ptr<SubscriptionCollection> subscription_collection,
+std::set<std::string_view> GetCspInjections(
+    const SubscriptionService::Snapshot subscription_collections,
     const GURL request_url,
     const std::vector<GURL> frame_hierarchy_chain) {
   TRACE_EVENT1("eyeo", "GetCspInjection", "url", request_url.spec());
-  const auto injection = subscription_collection->GetCspInjection(
-      request_url, frame_hierarchy_chain);
-  if (!injection.empty()) {
-    VLOG(1) << "[eyeo] Will attempt to inject CSP header \"" << injection
-            << "\" for " << request_url;
+  std::set<std::string_view> injections;
+  for (const auto& collection : subscription_collections) {
+    const auto injection =
+        collection->GetCspInjections(request_url, frame_hierarchy_chain);
+    injections.insert(injection.begin(), injection.end());
   }
-  return std::string(injection.data(), injection.size());
+  if (!injections.empty()) {
+    VLOG(1) << "[eyeo] Will attempt to inject CSP header/s "
+            << " for " << request_url;
+    DVLOG(2) << "[eyeo] CSP headers for " << request_url << ":";
+    for (const auto& filter : injections) {
+      DVLOG(2) << "[eyeo] " << filter;
+    }
+  }
+  return injections;
 }
+
 }  // namespace
 
 ContentSecurityPolicyInjectorImpl::ContentSecurityPolicyInjectorImpl(
@@ -61,28 +70,18 @@ void ContentSecurityPolicyInjectorImpl::
         const scoped_refptr<net::HttpResponseHeaders>& headers,
         InsertContentSecurityPolicyHeadersCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!subscription_service_->IsInitialized()) {
-    subscription_service_->RunWhenInitialized(
-        base::BindOnce(&ContentSecurityPolicyInjectorImpl::
-                           InsertContentSecurityPolicyHeadersIfApplicable,
-                       weak_ptr_factory.GetWeakPtr(), request_url,
-                       render_frame_host_id, headers, std::move(callback)));
-    return;
-  }
-
   content::RenderFrameHost* host =
-      frame_hierarchy_builder_->FindRenderFrameHost(
-          render_frame_host_id.child_id, render_frame_host_id.frame_routing_id);
+      frame_hierarchy_builder_->FindRenderFrameHost(render_frame_host_id);
   if (host) {
     // GetCspInjection might take a while, let it run in the background.
     base::ThreadPool::PostTaskAndReplyWithResult(
         FROM_HERE, {},
-        base::BindOnce(&GetCspInjection,
+        base::BindOnce(&GetCspInjections,
                        subscription_service_->GetCurrentSnapshot(), request_url,
                        frame_hierarchy_builder_->BuildFrameHierarchy(host)),
         base::BindOnce(
-            &ContentSecurityPolicyInjectorImpl::OnCspInjectionSearchFinished,
-            weak_ptr_factory.GetWeakPtr(), request_url, headers,
+            &ContentSecurityPolicyInjectorImpl::OnCspInjectionsSearchFinished,
+            weak_ptr_factory.GetWeakPtr(), request_url, std::move(headers),
             std::move(callback)));
   } else {
     // This request is likely dead, since there's no associated RenderFrameHost.
@@ -92,15 +91,17 @@ void ContentSecurityPolicyInjectorImpl::
   }
 }
 
-void ContentSecurityPolicyInjectorImpl::OnCspInjectionSearchFinished(
-    const GURL& request_url,
-    const scoped_refptr<net::HttpResponseHeaders>& headers,
+void ContentSecurityPolicyInjectorImpl::OnCspInjectionsSearchFinished(
+    const GURL request_url,
+    const scoped_refptr<net::HttpResponseHeaders> headers,
     InsertContentSecurityPolicyHeadersCallback callback,
-    std::string csp_injection) {
+    std::set<std::string_view> csp_injections) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!csp_injection.empty()) {
-    // Set the CSP header according to |csp_injection|.
-    headers->SetHeader("Content-Security-Policy", csp_injection);
+  if (!csp_injections.empty()) {
+    for (const auto& c_i : csp_injections) {
+      // Set the CSP header according to |csp_injection|.
+      headers->AddHeader("Content-Security-Policy", c_i);
+    }
     // We need to ensure parsed headers match raw headers. Send the updated
     // raw headers to NetworkService for parsing.
     content::GetNetworkService()->ParseHeaders(

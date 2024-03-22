@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_IME_MODE_INDICATOR_OBSERVER_H_
 #define ASH_IME_MODE_INDICATOR_OBSERVER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/views/widget/widget_observer.h"
 
 namespace ash {
@@ -30,7 +31,7 @@ class ModeIndicatorObserver : public views::WidgetObserver {
   void OnWidgetDestroying(views::Widget* widget) override;
 
  private:
-  views::Widget* active_widget_;
+  raw_ptr<views::Widget, ExperimentalAsh> active_widget_;
 };
 
 }  // namespace ash

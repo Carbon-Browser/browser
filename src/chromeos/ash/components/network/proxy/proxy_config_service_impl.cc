@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "chromeos/ash/components/network/network_profile.h"
 #include "chromeos/ash/components/network/network_profile_handler.h"
@@ -26,7 +27,7 @@
 #include "components/proxy_config/proxy_prefs.h"
 #include "components/user_manager/user_manager.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -77,17 +78,12 @@ ProxyConfigServiceImpl::ProxyConfigServiceImpl(
     // Register for changes to the default network.
     NetworkStateHandler* state_handler =
         NetworkHandler::Get()->network_state_handler();
-    state_handler->AddObserver(this, FROM_HERE);
+    network_state_handler_observer_.Observe(state_handler);
     DefaultNetworkChanged(state_handler->DefaultNetwork());
   }
 }
 
-ProxyConfigServiceImpl::~ProxyConfigServiceImpl() {
-  if (NetworkHandler::IsInitialized()) {
-    NetworkHandler::Get()->network_state_handler()->RemoveObserver(this,
-                                                                   FROM_HERE);
-  }
-}
+ProxyConfigServiceImpl::~ProxyConfigServiceImpl() = default;
 
 void ProxyConfigServiceImpl::OnProxyConfigChanged(
     ProxyPrefs::ConfigState config_state,
@@ -122,8 +118,7 @@ void ProxyConfigServiceImpl::DefaultNetworkChanged(
 void ProxyConfigServiceImpl::OnShuttingDown() {
   // Ownership of this class is complicated. Stop observing NetworkStateHandler
   // when the class shuts down.
-  NetworkHandler::Get()->network_state_handler()->RemoveObserver(this,
-                                                                 FROM_HERE);
+  network_state_handler_observer_.Reset();
 }
 
 // static
@@ -191,7 +186,8 @@ ProxyConfigServiceImpl::GetActiveProxyConfigDictionary(
     const PrefService::Preference* const pref =
         profile_prefs->FindPreference(::proxy_config::prefs::kProxy);
     DCHECK(pref->GetValue() && pref->GetValue()->is_dict());
-    return std::make_unique<ProxyConfigDictionary>(pref->GetValue()->Clone());
+    return std::make_unique<ProxyConfigDictionary>(
+        pref->GetValue()->GetDict().Clone());
   }
 
   const NetworkState* network =
@@ -281,4 +277,4 @@ void ProxyConfigServiceImpl::DetermineEffectiveConfigFromDefaultNetwork() {
   }
 }
 
-}  // namespace chromeos
+}  // namespace ash

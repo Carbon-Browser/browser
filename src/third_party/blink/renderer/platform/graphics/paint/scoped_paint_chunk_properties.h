@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,6 @@ class ScopedPaintChunkProperties {
         previous_properties_(paint_controller.CurrentPaintChunkProperties()) {
     PaintChunk::Id id(client.Id(), type);
     paint_controller_.UpdateCurrentPaintChunkProperties(id, client, properties);
-    paint_controller_.RecordDebugInfo(client);
   }
 
   // Use new transform state, and keep the current other properties.

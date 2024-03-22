@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include "base/observer_list.h"
 #include "chrome/browser/ui/webauthn/authenticator_request_sheet_model.h"
-#include "ui/gfx/vector_icon_types.h"
 
 namespace autofill {
 
@@ -34,14 +33,11 @@ class WebauthnDialogModel : public AuthenticatorRequestSheetModel {
 
   // AuthenticatorRequestSheetModel:
   bool IsActivityIndicatorVisible() const override;
-  bool IsBackButtonVisible() const override;
   bool IsCancelButtonVisible() const override;
   std::u16string GetCancelButtonLabel() const override;
   bool IsAcceptButtonVisible() const override;
   bool IsAcceptButtonEnabled() const override;
   std::u16string GetAcceptButtonLabel() const override;
-  const gfx::VectorIcon& GetStepIllustration(
-      ImageColorScheme color_scheme) const override;
   std::u16string GetStepTitle() const override;
   std::u16string GetStepDescription() const override;
   // Event handling is handed over to the controller.
@@ -50,6 +46,8 @@ class WebauthnDialogModel : public AuthenticatorRequestSheetModel {
   void OnCancel() override {}
 
  private:
+  void SetIllustrationsFromState();
+
   WebauthnDialogState state_;
 
   base::ObserverList<WebauthnDialogModelObserver> observers_;

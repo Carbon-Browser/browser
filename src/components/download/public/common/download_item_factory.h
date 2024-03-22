@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -64,8 +64,7 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemFactory {
       bool opened,
       base::Time last_access_time,
       bool transient,
-      const std::vector<DownloadItem::ReceivedSlice>& received_slices,
-      const download::DownloadItemRerouteInfo& reroute_info) = 0;
+      const std::vector<DownloadItem::ReceivedSlice>& received_slices) = 0;
 
   virtual DownloadItemImpl* CreateActiveItem(
       DownloadItemImplDelegate* delegate,

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,10 +27,11 @@ public class MockPaymentUiServiceBuilder {
                 .when(mPaymentUiService)
                 .buildPaymentRequestUI(
                         Mockito.anyBoolean(), Mockito.any(), Mockito.any(), Mockito.any());
-        Mockito.doAnswer((args) -> {
-                   mPaymentApps.addAll(args.getArgument(0));
-                   return null;
-               })
+        Mockito.doAnswer(
+                        (args) -> {
+                            mPaymentApps.addAll(args.getArgument(0));
+                            return null;
+                        })
                 .when(mPaymentUiService)
                 .setPaymentApps(Mockito.any());
         Mockito.doAnswer((args) -> mPaymentApps.size() > 0)

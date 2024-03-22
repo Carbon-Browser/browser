@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "base/containers/flat_set.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 // Fake StubCellularNetworksProvider implementation which allows clients to
 // specify ICCIDs of stub networks to be created.
@@ -58,6 +58,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) FakeStubCellularNetworksProvider
   base::flat_set<std::string> managed_iccids_;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_FAKE_STUB_CELLULAR_NETWORKS_PROVIDER_H_

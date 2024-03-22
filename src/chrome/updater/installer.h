@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 #define CHROME_UPDATER_INSTALLER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/version.h"
@@ -19,7 +20,10 @@
 #include "chrome/updater/updater_scope.h"
 #include "components/crx_file/crx_verifier.h"
 #include "components/update_client/update_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+namespace base {
+class TimeDelta;
+}
 
 namespace updater {
 
@@ -27,6 +31,7 @@ struct AppInfo {
   AppInfo(const UpdaterScope scope,
           const std::string& app_id,
           const std::string& ap,
+          const std::string& brand,
           const base::Version& app_version,
           const base::FilePath& ecp);
   AppInfo(const AppInfo&);
@@ -36,6 +41,7 @@ struct AppInfo {
   UpdaterScope scope;
   std::string app_id;
   std::string ap;
+  std::string brand;
   base::Version version;
   base::FilePath ecp;
 };
@@ -51,8 +57,21 @@ AppInstallerResult RunApplicationInstaller(
     const AppInfo& app_info,
     const base::FilePath& installer_path,
     const std::string& install_args,
-    const absl::optional<base::FilePath>& server_install_data,
+    const std::optional<base::FilePath>& server_install_data,
+    bool usage_stats_enabled,
+    const base::TimeDelta& timeout,
     InstallProgressCallback progress_callback);
+
+// Retrieves the value of `keyname` from `path` (a plist, on macOS). If the
+// file does not exist, or the key does not exist, or the key or path are
+// empty, or the platform does not support this functionality (Windows, Linux),
+// `default_value` is returned.
+std::string LookupString(const base::FilePath& path,
+                         const std::string& keyname,
+                         const std::string& default_value);
+base::Version LookupVersion(const base::FilePath& path,
+                            const std::string& keyname,
+                            const base::Version& default_value);
 
 // Manages the install of one application. Some of the functions of this
 // class are blocking and can't be invoked on the main sequence.
@@ -71,6 +90,7 @@ AppInstallerResult RunApplicationInstaller(
 class Installer final : public update_client::CrxInstaller {
  public:
   Installer(const std::string& app_id,
+            const std::string& client_install_data,
             const std::string& install_data_index,
             const std::string& target_channel,
             const std::string& target_version_prefix,
@@ -92,7 +112,8 @@ class Installer final : public update_client::CrxInstaller {
   // callback from update_client::Install or from update_client::Update. This
   // ensure that prefs has been updated with the most recent values, including
   // |pv| and |fingerprint|.
-  update_client::CrxComponent MakeCrxComponent();
+  void MakeCrxComponent(
+      base::OnceCallback<void(update_client::CrxComponent)> callback);
 
  private:
   ~Installer() override;
@@ -115,22 +136,20 @@ class Installer final : public update_client::CrxInstaller {
   // Runs the installer code with sync primitives to allow the code to
   // create processes and wait for them to exit.
   void InstallWithSyncPrimitives(const base::FilePath& unpack_path,
-                                 const std::string& public_key,
                                  std::unique_ptr<InstallParams> install_params,
                                  ProgressCallback progress_callback,
                                  Callback callback);
 
-  // Deletes recursively the install paths not matching the |pv_| version.
-  void DeleteOlderInstallPaths();
-
-  // Returns an install directory matching the |pv_| version.
-  absl::optional<base::FilePath> GetCurrentInstallDir() const;
+  void MakeCrxComponentFromAppInfo(
+      base::OnceCallback<void(update_client::CrxComponent)> callback,
+      const AppInfo& app_info);
 
   SEQUENCE_CHECKER(sequence_checker_);
 
   UpdaterScope updater_scope_;
 
   const std::string app_id_;
+  const std::string client_install_data_;
   const std::string install_data_index_;
   const bool rollback_allowed_;
   const std::string target_channel_;
@@ -139,12 +158,11 @@ class Installer final : public update_client::CrxInstaller {
   const UpdateService::PolicySameVersionUpdate policy_same_version_update_;
   scoped_refptr<PersistedData> persisted_data_;
   const crx_file::VerifierFormat crx_verifier_format_;
+  const bool usage_stats_enabled_;
 
-  // These members are not updated when the installer succeeds.
-  base::Version pv_;
-  std::string ap_;
-  base::FilePath checker_path_;
-  std::string fingerprint_;
+  // AppInfo is set only after MakeCrxComponent is called, and is not updated
+  // when the installer succeeds.
+  AppInfo app_info_;
 };
 
 }  // namespace updater

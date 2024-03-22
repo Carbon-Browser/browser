@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,6 +40,8 @@ class TestFileUtils : public FileUtilsWrapper {
   void SetRemainingDiskSpaceSize(int remaining_disk_space);
 
   void SetNextDeleteFileRecursivelyResult(absl::optional<bool> delete_result);
+
+  TestFileUtils* AsTestFileUtils() override;
 
  private:
   ~TestFileUtils() override;

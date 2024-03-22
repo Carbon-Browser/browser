@@ -1,17 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/test/render_view_test.h"
 #include "content/renderer/media/renderer_webmediaplayer_delegate.h"
 #include "content/renderer/render_process.h"
@@ -127,7 +126,7 @@ TEST_F(RendererWebMediaPlayerDelegateTest, PlaySuspendsLowEndIdleDelegates) {
   // Calling play on the first player should suspend the other idle player.
   EXPECT_CALL(observer_2_, OnIdleTimeout());
   delegate_manager_->DidMediaMetadataChange(
-      delegate_id_1, true, true, media::MediaContentType::Persistent);
+      delegate_id_1, true, true, media::MediaContentType::kPersistent);
   delegate_manager_->DidPlay(delegate_id_1);
   delegate_manager_->SetIdle(delegate_id_1, false);
   tick_clock_.Advance(base::Microseconds(1));

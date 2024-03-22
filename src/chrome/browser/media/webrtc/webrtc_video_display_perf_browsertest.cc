@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <algorithm>
+#include <string>
 #include <tuple>
 
 #include "base/json/json_reader.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/trace_event_analyzer.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/webrtc/webrtc_browsertest_base.h"
 #include "chrome/browser/media/webrtc/webrtc_browsertest_common.h"
@@ -127,36 +129,36 @@ std::vector<double> ParseGoogMaxDecodeFromWebrtcInternalsTab(
     const std::string& webrtc_internals_stats_json) {
   std::vector<double> goog_decode_ms;
 
-  std::unique_ptr<base::Value> parsed_json =
-      base::JSONReader::ReadDeprecated(webrtc_internals_stats_json);
-  base::DictionaryValue* dictionary = nullptr;
-  if (!parsed_json.get() || !parsed_json->GetAsDictionary(&dictionary))
+  absl::optional<base::Value> parsed_json =
+      base::JSONReader::Read(webrtc_internals_stats_json);
+  if (!parsed_json || !parsed_json->is_dict())
     return goog_decode_ms;
-  std::ignore = parsed_json.release();
+  const base::Value::Dict& dictionary = parsed_json->GetDict();
 
   // |dictionary| should have exactly two entries, one per ssrc.
-  if (!dictionary || dictionary->DictSize() != 2u)
+  if (dictionary.size() != 2u)
     return goog_decode_ms;
 
   // Only a given |dictionary| entry will have a "stats" entry that has a key
   // that ends with "recv-googMaxDecodeMs" inside (it will start with the ssrc
   // id, but we don't care about that). Then collect the string of "values" out
   // of that key and convert those into the |goog_decode_ms| vector of doubles.
-  for (auto dictionary_entry : dictionary->DictItems()) {
-    for (auto ssrc_entry : dictionary_entry.second.DictItems()) {
+  for (auto dictionary_entry : dictionary) {
+    for (auto ssrc_entry : dictionary_entry.second.GetDict()) {
       if (ssrc_entry.first != "stats")
         continue;
 
-      for (auto stat_entry : ssrc_entry.second.DictItems()) {
+      for (auto stat_entry : ssrc_entry.second.GetDict()) {
         if (!base::EndsWith(stat_entry.first, "recv-googMaxDecodeMs",
                             base::CompareCase::SENSITIVE)) {
           continue;
         }
-        base::Value* values_entry = stat_entry.second.FindKey({"values"});
-        if (!values_entry)
+        const std::string* values_entry =
+            stat_entry.second.GetDict().FindString("values");
+        if (!values_entry) {
           continue;
-        base::StringTokenizer values_tokenizer(values_entry->GetString(),
-                                               "[,]");
+        }
+        base::StringTokenizer values_tokenizer(*values_entry, "[,]");
         while (values_tokenizer.GetNext()) {
           if (values_tokenizer.token_is_delim())
             continue;
@@ -217,9 +219,9 @@ class WebRtcVideoDisplayPerfBrowserTest
     // connection(s) are up.
     content::WebContents* webrtc_internals_tab =
         OpenWebrtcInternalsTab(browser());
-    EXPECT_TRUE(content::ExecuteScript(
-        webrtc_internals_tab,
-        "currentGetStatsMethod = OPTION_GETSTATS_LEGACY"));
+    EXPECT_TRUE(
+        content::ExecJs(webrtc_internals_tab,
+                        "currentGetStatsMethod = OPTION_GETSTATS_LEGACY"));
 
     content::WebContents* left_tab =
         OpenPageAndGetUserMediaInNewTabWithConstraints(
@@ -263,9 +265,7 @@ class WebRtcVideoDisplayPerfBrowserTest
     test::SleepInJavascript(left_tab, 5000);
 
     const std::string webrtc_internals_stats_json = ExecuteJavascript(
-        "window.domAutomationController.send("
-        "    JSON.stringify(peerConnectionDataStore));",
-        webrtc_internals_tab);
+        "JSON.stringify(peerConnectionDataStore);", webrtc_internals_tab);
     webrtc_decode_latencies_ =
         ParseGoogMaxDecodeFromWebrtcInternalsTab(webrtc_internals_stats_json);
     chrome::CloseWebContents(browser(), webrtc_internals_tab, false);

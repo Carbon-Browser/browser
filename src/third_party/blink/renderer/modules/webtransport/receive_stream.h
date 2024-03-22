@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class MODULES_EXPORT ReceiveStream final : public ReadableStream {
     incoming_stream_->InitWithExistingReadableStream(this, exception_state);
   }
 
-  IncomingStream* GetIncomingStream() { return incoming_stream_; }
+  IncomingStream* GetIncomingStream() { return incoming_stream_.Get(); }
 
   void Trace(Visitor*) const override;
 

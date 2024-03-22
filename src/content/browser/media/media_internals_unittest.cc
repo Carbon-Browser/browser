@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "build/build_config.h"
 #include "content/browser/media/session/media_session_impl.h"
 #include "content/public/browser/media_session_service.h"
@@ -57,27 +58,25 @@ class MediaInternalsTestBase {
     std::string utf8_update = base::UTF16ToUTF8(update);
     const std::string::size_type first_brace = utf8_update.find('{');
     const std::string::size_type last_brace = utf8_update.rfind('}');
-    std::unique_ptr<base::Value> output_value =
-        base::JSONReader::ReadDeprecated(
-            utf8_update.substr(first_brace, last_brace - first_brace + 1));
-    CHECK(output_value);
+    absl::optional<base::Value> output_value = base::JSONReader::Read(
+        utf8_update.substr(first_brace, last_brace - first_brace + 1));
+    ASSERT_TRUE(output_value);
+    ASSERT_TRUE(output_value->is_dict());
 
-    base::DictionaryValue* output_dict = nullptr;
-    CHECK(output_value->GetAsDictionary(&output_dict));
-    update_data_.MergeDictionary(output_dict);
+    update_data_.Merge(std::move(*output_value).TakeDict());
   }
 
   void ExpectInt(const std::string& key, int expected_value) const {
-    absl::optional<int> actual_value = update_data_.FindIntKey(key);
+    absl::optional<int> actual_value = update_data_.FindInt(key);
     ASSERT_TRUE(actual_value);
     EXPECT_EQ(expected_value, *actual_value);
   }
 
   void ExpectString(const std::string& key,
                     const std::string& expected_value) const {
-    std::string actual_value;
-    ASSERT_TRUE(update_data_.GetString(key, &actual_value));
-    EXPECT_EQ(expected_value, actual_value);
+    const std::string* actual_value = update_data_.FindString(key);
+    ASSERT_TRUE(actual_value);
+    EXPECT_EQ(expected_value, *actual_value);
   }
 
   void ExpectStatus(const std::string& expected_value) const {
@@ -85,24 +84,22 @@ class MediaInternalsTestBase {
   }
 
   void ExpectListOfStrings(const std::string& key,
-                           const base::ListValue& expected_list) const {
-    const base::ListValue* actual_list;
-    ASSERT_TRUE(update_data_.GetList(key, &actual_list));
-    const size_t expected_size = expected_list.GetListDeprecated().size();
-    const size_t actual_size = actual_list->GetListDeprecated().size();
+                           const base::Value::List& expected_list) const {
+    const base::Value::List* actual_list = update_data_.FindList(key);
+    ASSERT_TRUE(actual_list);
+    const size_t expected_size = expected_list.size();
+    const size_t actual_size = actual_list->size();
     ASSERT_EQ(expected_size, actual_size);
     for (size_t i = 0; i < expected_size; ++i) {
-      const std::string* expected_value =
-          expected_list.GetListDeprecated()[i].GetIfString();
-      const std::string* actual_value =
-          actual_list->GetListDeprecated()[i].GetIfString();
+      const std::string* expected_value = expected_list[i].GetIfString();
+      const std::string* actual_value = (*actual_list)[i].GetIfString();
       ASSERT_TRUE(expected_value);
       ASSERT_TRUE(actual_value);
       EXPECT_EQ(*expected_value, *actual_value);
     }
   }
 
-  base::DictionaryValue update_data_;
+  base::Value::Dict update_data_;
 
   content::MediaInternals* media_internals() const {
     return content::MediaInternals::GetInstance();
@@ -197,7 +194,7 @@ TEST_F(MediaInternalsVideoCaptureDeviceTest,
   ExpectString("id", "dummy");
 #endif
   ExpectString("name", "dummy");
-  base::ListValue expected_list;
+  base::Value::List expected_list;
   expected_list.Append(media::VideoCaptureFormat::ToString(format_hd));
   ExpectListOfStrings("formats", expected_list);
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -231,6 +228,7 @@ class MediaInternalsAudioLogTest
   }
 
  protected:
+  const content::BrowserTaskEnvironment task_environment_;
   MediaInternals::UpdateCallback update_cb_;
   const media::AudioParameters test_params_;
   const media::AudioLogFactory::AudioComponent test_component_;
@@ -239,13 +237,12 @@ class MediaInternalsAudioLogTest
  private:
   static media::AudioParameters MakeAudioParams() {
     media::AudioParameters params(media::AudioParameters::AUDIO_PCM_LINEAR,
-                                  media::CHANNEL_LAYOUT_MONO, 48000, 128);
+                                  media::ChannelLayoutConfig::Mono(), 48000,
+                                  128);
     params.set_effects(media::AudioParameters::ECHO_CANCELLER |
                        media::AudioParameters::DUCKING);
     return params;
   }
-
-  const content::BrowserTaskEnvironment task_environment_;
 };
 
 TEST_P(MediaInternalsAudioLogTest, AudioLogCreateStartStopErrorClose) {
@@ -260,7 +257,7 @@ TEST_P(MediaInternalsAudioLogTest, AudioLogCreateStartStopErrorClose) {
   ExpectString("effects", "ECHO_CANCELLER | DUCKING");
   ExpectString("device_id", kTestDeviceID);
   ExpectInt("component_id", kTestComponentID);
-  ExpectInt("component_type", test_component_);
+  ExpectInt("component_type", base::to_underlying(test_component_));
   ExpectStatus("created");
 
   // Verify OnStarted().
@@ -275,8 +272,7 @@ TEST_P(MediaInternalsAudioLogTest, AudioLogCreateStartStopErrorClose) {
 
   // Verify OnError().
   const char kErrorKey[] = "error_occurred";
-  std::string no_value;
-  ASSERT_FALSE(update_data_.GetString(kErrorKey, &no_value));
+  ASSERT_FALSE(update_data_.FindString(kErrorKey));
   audio_log_->OnError();
   base::RunLoop().RunUntilIdle();
   ExpectString(kErrorKey, "true");
@@ -300,9 +296,10 @@ TEST_P(MediaInternalsAudioLogTest, AudioLogCreateClose) {
 INSTANTIATE_TEST_SUITE_P(
     MediaInternalsAudioLogTest,
     MediaInternalsAudioLogTest,
-    testing::Values(media::AudioLogFactory::AUDIO_INPUT_CONTROLLER,
-                    media::AudioLogFactory::AUDIO_OUTPUT_CONTROLLER,
-                    media::AudioLogFactory::AUDIO_OUTPUT_STREAM));
+    testing::Values(
+        media::AudioLogFactory::AudioComponent::kAudioInputController,
+        media::AudioLogFactory::AudioComponent::kAudioOuputController,
+        media::AudioLogFactory::AudioComponent::kAudioOutputStream));
 
 // TODO(https://crbug.com/873320): AudioFocusManager is not available on
 // Android.
@@ -354,11 +351,11 @@ class MediaInternalsAudioFocusTest : public RenderViewHostTestHarness,
   base::Value GetSessionsFromValueAndReset() {
     base::AutoLock auto_lock(lock_);
 
-    base::Value session =
-        update_data_.FindKeyOfType("sessions", base::Value::Type::LIST)
-            ->Clone();
+    const base::Value::List* session_list = update_data_.FindList("sessions");
+    EXPECT_TRUE(session_list);
+    base::Value session(session_list->Clone());
 
-    update_data_.DictClear();
+    update_data_.clear();
     run_loop_ = std::make_unique<base::RunLoop>();
     call_count_ = 0;
 
@@ -368,7 +365,7 @@ class MediaInternalsAudioFocusTest : public RenderViewHostTestHarness,
   void Reset() {
     base::AutoLock auto_lock(lock_);
 
-    update_data_.DictClear();
+    update_data_.clear();
     run_loop_ = std::make_unique<base::RunLoop>();
     call_count_ = 0;
   }
@@ -382,7 +379,7 @@ class MediaInternalsAudioFocusTest : public RenderViewHostTestHarness,
 
     {
       base::AutoLock auto_lock(lock_);
-      if (!update_data_.DictEmpty() && call_count_ == wanted_call_count_)
+      if (!update_data_.empty() && call_count_ == wanted_call_count_)
         return;
     }
 
@@ -424,18 +421,18 @@ TEST_F(MediaInternalsAudioFocusTest, AudioFocusStateIsUpdated) {
   WaitForCallbackCount(1);
 
   // Get the |request_id| for the top session.
-  std::string request_id1 = GetRequestIdForTopFocusRequest();
+  const std::string request_id1 = GetRequestIdForTopFocusRequest();
 
   // Check JSON is what we expect.
   {
     base::Value found_sessions = GetSessionsFromValueAndReset();
-    EXPECT_EQ(1u, found_sessions.GetListDeprecated().size());
+    EXPECT_EQ(1u, found_sessions.GetList().size());
 
-    const base::Value& session = found_sessions.GetListDeprecated()[0];
-    EXPECT_EQ(base::Value(request_id1), *session.FindKey("id"));
-    EXPECT_TRUE(session.FindKeyOfType("name", base::Value::Type::STRING));
-    EXPECT_TRUE(session.FindKeyOfType("owner", base::Value::Type::STRING));
-    EXPECT_TRUE(session.FindKeyOfType("state", base::Value::Type::STRING));
+    const base::Value::Dict& session = found_sessions.GetList()[0].GetDict();
+    EXPECT_EQ(request_id1, *session.FindString("id"));
+    EXPECT_NE(session.FindString("name"), nullptr);
+    EXPECT_NE(session.FindString("owner"), nullptr);
+    EXPECT_NE(session.FindString("state"), nullptr);
   }
 
   // Create another media session.
@@ -453,19 +450,19 @@ TEST_F(MediaInternalsAudioFocusTest, AudioFocusStateIsUpdated) {
   // Check JSON is what we expect.
   {
     base::Value found_sessions = GetSessionsFromValueAndReset();
-    EXPECT_EQ(2u, found_sessions.GetListDeprecated().size());
+    EXPECT_EQ(2u, found_sessions.GetList().size());
 
-    const base::Value& session1 = found_sessions.GetListDeprecated()[0];
-    EXPECT_EQ(base::Value(request_id2), *session1.FindKey("id"));
-    EXPECT_TRUE(session1.FindKeyOfType("name", base::Value::Type::STRING));
-    EXPECT_TRUE(session1.FindKeyOfType("owner", base::Value::Type::STRING));
-    EXPECT_TRUE(session1.FindKeyOfType("state", base::Value::Type::STRING));
+    const base::Value::Dict& session1 = found_sessions.GetList()[0].GetDict();
+    EXPECT_EQ(request_id2, *session1.FindString("id"));
+    EXPECT_NE(session1.FindString("name"), nullptr);
+    EXPECT_NE(session1.FindString("owner"), nullptr);
+    EXPECT_NE(session1.FindString("state"), nullptr);
 
-    const base::Value& session2 = found_sessions.GetListDeprecated()[1];
-    EXPECT_EQ(base::Value(request_id1), *session2.FindKey("id"));
-    EXPECT_TRUE(session2.FindKeyOfType("name", base::Value::Type::STRING));
-    EXPECT_TRUE(session2.FindKeyOfType("owner", base::Value::Type::STRING));
-    EXPECT_TRUE(session2.FindKeyOfType("state", base::Value::Type::STRING));
+    const base::Value::Dict& session2 = found_sessions.GetList()[1].GetDict();
+    EXPECT_EQ(request_id1, *session2.FindString("id"));
+    EXPECT_NE(session2.FindString("name"), nullptr);
+    EXPECT_NE(session2.FindString("owner"), nullptr);
+    EXPECT_NE(session2.FindString("state"), nullptr);
   }
 
   // Abandon audio focus.
@@ -475,13 +472,13 @@ TEST_F(MediaInternalsAudioFocusTest, AudioFocusStateIsUpdated) {
   // Check JSON is what we expect.
   {
     base::Value found_sessions = GetSessionsFromValueAndReset();
-    EXPECT_EQ(1u, found_sessions.GetListDeprecated().size());
+    EXPECT_EQ(1u, found_sessions.GetList().size());
 
-    const base::Value& session = found_sessions.GetListDeprecated()[0];
-    EXPECT_EQ(base::Value(request_id1), *session.FindKey("id"));
-    EXPECT_TRUE(session.FindKeyOfType("name", base::Value::Type::STRING));
-    EXPECT_TRUE(session.FindKeyOfType("owner", base::Value::Type::STRING));
-    EXPECT_TRUE(session.FindKeyOfType("state", base::Value::Type::STRING));
+    const base::Value::Dict& session = found_sessions.GetList()[0].GetDict();
+    EXPECT_EQ(request_id1, *session.FindString("id"));
+    EXPECT_NE(session.FindString("name"), nullptr);
+    EXPECT_NE(session.FindString("owner"), nullptr);
+    EXPECT_NE(session.FindString("state"), nullptr);
   }
 
   // Abandon audio focus.
@@ -495,7 +492,7 @@ TEST_F(MediaInternalsAudioFocusTest, AudioFocusStateIsUpdated) {
   // Check JSON is what we expect.
   {
     base::Value found_sessions = GetSessionsFromValueAndReset();
-    EXPECT_EQ(0u, found_sessions.GetListDeprecated().size());
+    EXPECT_EQ(0u, found_sessions.GetList().size());
   }
 }
 

@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import '../module_header.js';
 import 'chrome://resources/cr_elements/cr_auto_img/cr_auto_img.js';
-import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
+import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
 
-import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
+import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
 import {DomIf, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {I18nMixin, loadTimeData} from '../../i18n_setup.js';
@@ -263,6 +263,4 @@ async function createPhotosElement(): Promise<PhotosModuleElement|null> {
 }
 
 export const photosDescriptor: ModuleDescriptor = new ModuleDescriptor(
-    /*id=*/ 'photos',
-    /*name=*/ loadTimeData.getString('modulesPhotosSentence'),
-    createPhotosElement);
+    /*id=*/ 'photos', createPhotosElement);

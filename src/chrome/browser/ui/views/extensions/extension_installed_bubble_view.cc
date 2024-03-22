@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "extensions/common/extension.h"
@@ -174,7 +174,7 @@ ExtensionInstalledBubbleView::ExtensionInstalledBubbleView(
     SetFootnoteView(CreateSigninPromoView(browser->profile(), this));
 #endif
   }
-  SetIcon(model_->MakeIconOfSize(kMaxIconSize));
+  SetIcon(ui::ImageModel::FromImageSkia(model_->MakeIconOfSize(kMaxIconSize)));
   SetShowIcon(true);
   SetShowCloseButton(true);
 

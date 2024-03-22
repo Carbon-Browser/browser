@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,10 @@ class BASE_EXPORT ProfileBuilder {
       TimeTicks period_start,
       TimeTicks period_end,
       const MetadataRecorder::Item& item) {}
+
+  // Adds the specified metadata |item| to |CallstackProfile::profile_metadata|.
+  // |CallstackProfile::profile_metadata| stores metadata global to the profile.
+  virtual void AddProfileMetadata(const MetadataRecorder::Item& item) {}
 
   // Records a new set of frames. Invoked when sampling a sample completes.
   virtual void OnSampleCompleted(std::vector<Frame> frames,

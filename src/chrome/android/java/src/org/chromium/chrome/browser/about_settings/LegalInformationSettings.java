@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import androidx.preference.PreferenceFragmentCompat;
 import org.chromium.chrome.R;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
 
-/**
- * Fragment to display legal information about Chrome.
- */
+/** Fragment to display legal information about Chrome. */
 public class LegalInformationSettings extends PreferenceFragmentCompat {
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String s) {

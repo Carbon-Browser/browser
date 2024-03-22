@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,9 @@ class ProcessInternalsUI : public WebUIController {
   // WebUIController overrides:
   void WebUIRenderFrameCreated(RenderFrameHost* render_frame_host) override;
 
-  void BindProcessInternalsHandler(
-      mojo::PendingReceiver<::mojom::ProcessInternalsHandler> receiver,
-      RenderFrameHost* render_frame_host);
+  void BindInterface(
+      RenderFrameHost* render_frame_host,
+      mojo::PendingReceiver<::mojom::ProcessInternalsHandler> receiver);
 
  private:
   std::unique_ptr<::mojom::ProcessInternalsHandler> ui_handler_;

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,13 @@ void ClientControlledShellSurfaceDelegate::OnStateChanged(
       shell_surface_->SetMaximized();
       break;
     case chromeos::WindowStateType::kFullscreen:
-      shell_surface_->SetFullscreen(true);
+      shell_surface_->SetFullscreen(true, display::kInvalidDisplayId);
+      break;
+    case chromeos::WindowStateType::kPinned:
+      shell_surface_->SetPinned(chromeos::WindowPinType::kPinned);
+      break;
+    case chromeos::WindowStateType::kTrustedPinned:
+      shell_surface_->SetPinned(chromeos::WindowPinType::kTrustedPinned);
       break;
     default:
       NOTIMPLEMENTED();
@@ -98,9 +104,9 @@ void ClientControlledShellSurfaceDelegate::OnBoundsChanged(
            requested_state == chromeos::WindowStateType::kSecondarySnapped);
 
     if (requested_state == chromeos::WindowStateType::kPrimarySnapped)
-      shell_surface_->SetSnappedToPrimary();
+      shell_surface_->SetSnapPrimary(chromeos::kDefaultSnapRatio);
     else
-      shell_surface_->SetSnappedToSecondary();
+      shell_surface_->SetSnapSecondary(chromeos::kDefaultSnapRatio);
   }
 
   Commit();
@@ -121,7 +127,7 @@ void ClientControlledShellSurfaceDelegate::Commit() {
 // ExoTestHelper, public:
 
 ExoTestHelper::ExoTestHelper() {
-  ash::WindowPositioner::DisableAutoPositioning(true);
+  ash::window_positioner::DisableAutoPositioning(true);
 }
 
 ExoTestHelper::~ExoTestHelper() {}

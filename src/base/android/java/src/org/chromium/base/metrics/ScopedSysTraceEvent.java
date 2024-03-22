@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,7 @@ public class ScopedSysTraceEvent implements AutoCloseable {
         return new ScopedSysTraceEvent(name);
     }
 
-    /**
-     * Constructor used to support the "try with resource" construct.
-     */
+    /** Constructor used to support the "try with resource" construct. */
     private ScopedSysTraceEvent(String name) {
         Trace.beginSection(name);
     }

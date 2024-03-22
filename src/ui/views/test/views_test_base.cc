@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
@@ -19,6 +19,7 @@
 #include "ui/gl/test/gl_surface_test_support.h"
 #include "ui/views/buildflags.h"
 #include "ui/views/test/test_platform_native_widget.h"
+#include "ui/views/view_test_api.h"
 
 #if defined(USE_AURA)
 #include "ui/views/widget/native_widget_aura.h"
@@ -29,7 +30,7 @@
 #include "ui/views/widget/native_widget_mac.h"
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/platform_gl_egl_utility.h"
 #endif
@@ -39,7 +40,7 @@ namespace views {
 namespace {
 
 bool DoesVisualHaveAlphaForTest() {
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   const auto* const egl_utility =
       ui::OzonePlatform::GetInstance()->GetPlatformGLEGLUtility();
   return egl_utility ? egl_utility->X11DoesVisualHaveAlphaForTest() : false;
@@ -122,8 +123,13 @@ Widget::InitParams ViewsTestBase::CreateParams(Widget::InitParams::Type type) {
 
 std::unique_ptr<Widget> ViewsTestBase::CreateTestWidget(
     Widget::InitParams::Type type) {
+  return CreateTestWidget(CreateParamsForTestWidget(type));
+}
+
+std::unique_ptr<Widget> ViewsTestBase::CreateTestWidget(
+    Widget::InitParams params) {
   std::unique_ptr<Widget> widget = AllocateTestWidget();
-  widget->Init(CreateParamsForTestWidget(type));
+  widget->Init(std::move(params));
   return widget;
 }
 
@@ -134,6 +140,12 @@ bool ViewsTestBase::HasCompositingManager() const {
 void ViewsTestBase::SimulateNativeDestroy(Widget* widget) {
   test_helper_->SimulateNativeDestroy(widget);
 }
+
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+void ViewsTestBase::SimulateDesktopNativeDestroy(Widget* widget) {
+  test_helper_->SimulateDesktopNativeDestroy(widget);
+}
+#endif
 
 #if !BUILDFLAG(IS_MAC)
 int ViewsTestBase::GetSystemReservedHeightAtTopOfScreen() {
@@ -174,8 +186,7 @@ NativeWidget* ViewsTestBase::CreateNativeWidgetForTest(
   return new test::TestPlatformNativeWidget<NativeWidgetAura>(delegate, true,
                                                               nullptr);
 #else
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 #endif
 }
 
@@ -189,11 +200,6 @@ Widget::InitParams ViewsTestBase::CreateParamsForTestWidget(
   params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.bounds = gfx::Rect(0, 0, 400, 400);
   return params;
-}
-
-void ViewsTestBaseWithNativeWidgetType::SetUp() {
-  set_native_widget_type(GetParam());
-  ViewsTestBase::SetUp();
 }
 
 void ViewsTestWithDesktopNativeWidget::SetUp() {

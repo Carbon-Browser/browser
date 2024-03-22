@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://connectivity-diagnostics/strings.m.js';
-import 'chrome://resources/cr_components/chromeos/network_health/routine_group.js';
+import 'chrome://resources/ash/common/network_health/routine_group.js';
 
-import {Icons, Routine} from 'chrome://resources/cr_components/chromeos/network_health/network_diagnostics_types.js';
+import {Icons, Routine} from 'chrome://resources/ash/common/network_health/network_diagnostics_types.js';
 import {RoutineVerdict} from 'chrome://resources/mojo/chromeos/services/network_health/public/mojom/network_diagnostics.mojom-webui.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../../chai_assert.js';
+import {assertEquals, assertFalse, assertTrue} from '../../../chromeos/chai_assert.js';
 
 import {createResult, getIconFromSrc} from './network_health_test_utils.js';
 
@@ -49,7 +49,7 @@ suite('RoutineGroupTest', function routineGroupTest() {
   let routineGroup = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
     routineGroup = /** @type {!RoutineGroupElement} */ (
         document.createElement('routine-group'));
     routineGroup.name = 'Group';

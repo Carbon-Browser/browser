@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,10 @@ class InstallableAmbientBadgeClient {
   // Called to inform the client that the badge was dismissed.
   virtual void BadgeDismissed() = 0;
 
-  virtual ~InstallableAmbientBadgeClient() {}
+  // Called to inform the client that the badge was ignored.
+  virtual void BadgeIgnored() = 0;
+
+  virtual ~InstallableAmbientBadgeClient() = default;
 };
 
 }  // namespace webapps

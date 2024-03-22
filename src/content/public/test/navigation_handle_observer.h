@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CONTENT_PUBLIC_TEST_NAVIGATION_HANDLE_OBSERVER_H_
 
 #include <cstdint>
+
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "content/public/browser/navigation_handle_timing.h"
@@ -17,6 +18,7 @@
 #include "net/dns/public/resolve_error_info.h"
 #include "net/http/http_response_headers.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
+#include "third_party/blink/public/mojom/navigation/renderer_content_settings.mojom.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -61,6 +63,9 @@ class NavigationHandleObserver : public WebContentsObserver {
   }
   ReloadType reload_type() { return reload_type_; }
   std::string GetNormalizedResponseHeader(const std::string& key) const;
+  blink::mojom::RendererContentSettingsPtr& content_settings() {
+    return content_settings_;
+  }
 
  private:
   // A reference to the NavigationHandle so this class will track only
@@ -87,6 +92,7 @@ class NavigationHandleObserver : public WebContentsObserver {
   NavigationHandleTiming navigation_handle_timing_;
   ReloadType reload_type_ = ReloadType::NONE;
   scoped_refptr<const net::HttpResponseHeaders> response_headers_;
+  blink::mojom::RendererContentSettingsPtr content_settings_;
 };
 
 }  // namespace content

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ namespace gcm {
 class GCM_EXPORT GCMUnregistrationRequestHandler :
     public UnregistrationRequest::CustomRequestHandler {
  public:
-  GCMUnregistrationRequestHandler(const std::string& app_id);
+  explicit GCMUnregistrationRequestHandler(const std::string& app_id);
 
   GCMUnregistrationRequestHandler(const GCMUnregistrationRequestHandler&) =
       delete;
@@ -27,7 +27,6 @@ class GCM_EXPORT GCMUnregistrationRequestHandler :
   void BuildRequestBody(std::string* body) override;
   UnregistrationRequest::Status ParseResponse(
       const std::string& response) override;
-  void ReportUMAs(UnregistrationRequest::Status status) override;
 
  private:
   std::string app_id_;

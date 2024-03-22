@@ -1,26 +1,28 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_TREE_FORMATTER_MAC_H_
 #define UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_TREE_FORMATTER_MAC_H_
 
+#include "base/component_export.h"
 #include "ui/accessibility/platform/inspect/ax_call_statement_invoker_mac.h"
 #include "ui/accessibility/platform/inspect/ax_tree_formatter_base.h"
 
 namespace ui {
 
-class AX_EXPORT AXTreeFormatterMac : public AXTreeFormatterBase {
+class COMPONENT_EXPORT(AX_PLATFORM) AXTreeFormatterMac
+    : public AXTreeFormatterBase {
  public:
   AXTreeFormatterMac();
   ~AXTreeFormatterMac() override;
 
   // AXTreeFormatter
-  base::Value BuildTree(AXPlatformNodeDelegate* root) const override;
-  base::Value BuildTreeForSelector(
+  base::Value::Dict BuildTree(AXPlatformNodeDelegate* root) const override;
+  base::Value::Dict BuildTreeForSelector(
       const AXTreeSelector& selector) const override;
 
-  base::Value BuildNode(AXPlatformNodeDelegate* node) const override;
+  base::Value::Dict BuildNode(AXPlatformNodeDelegate* node) const override;
 
   std::string EvaluateScript(const AXTreeSelector& selector,
                              const AXInspectScenario& scenario) const override;
@@ -36,25 +38,25 @@ class AX_EXPORT AXTreeFormatterMac : public AXTreeFormatterBase {
       size_t end_index) const;
 
   // AXTreeFormatterMac
-  base::Value BuildNode(const id node) const;
+  base::Value::Dict BuildNode(const id node) const;
 
  protected:
   void AddDefaultFilters(
       std::vector<AXPropertyFilter>* property_filters) override;
 
  private:
-  base::Value BuildTree(const id root) const;
-  base::Value BuildTreeForAXUIElement(AXUIElementRef node) const;
+  base::Value::Dict BuildTree(const id root) const;
+  base::Value::Dict BuildTreeForAXUIElement(AXUIElementRef node) const;
 
-  void RecursiveBuildTree(const id node,
+  void RecursiveBuildTree(const AXElementWrapper& ax_element,
                           const NSRect& root_rect,
                           const AXTreeIndexerMac* indexer,
-                          base::Value* dict) const;
+                          base::Value::Dict* dict) const;
 
-  void AddProperties(const id node,
+  void AddProperties(const AXElementWrapper& ax_element,
                      const NSRect& root_rect,
                      const AXTreeIndexerMac* indexer,
-                     base::Value* dict) const;
+                     base::Value::Dict* dict) const;
 
   // Invokes an attribute by a property node.
   AXOptionalNSObject InvokeAttributeFor(
@@ -62,11 +64,11 @@ class AX_EXPORT AXTreeFormatterMac : public AXTreeFormatterBase {
       const AXPropertyNode& property_node,
       const AXTreeIndexerMac* indexer) const;
 
-  base::Value PopulateLocalPosition(const id node,
-                                    const NSRect& root_rect) const;
+  base::Value::Dict PopulateLocalPosition(const AXElementWrapper& ax_element,
+                                          const NSRect& root_rect) const;
 
   std::string ProcessTreeForOutput(
-      const base::DictionaryValue& node) const override;
+      const base::Value::Dict& node) const override;
 };
 
 }  // namespace ui

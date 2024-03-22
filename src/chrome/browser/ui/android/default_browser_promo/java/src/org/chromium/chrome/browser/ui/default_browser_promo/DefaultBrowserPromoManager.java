@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,16 @@ public class DefaultBrowserPromoManager {
     void promoByRoleManager() {
         RoleManager roleManager = (RoleManager) mActivity.getSystemService(Context.ROLE_SERVICE);
 
+        DefaultBrowserPromoMetrics.recordRoleManagerShow(mCurrentState);
+
         Intent intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER);
-        mWindowAndroid.showCancelableIntent(intent, (resultCode, data) -> {}, null);
+        mWindowAndroid.showCancelableIntent(
+                intent,
+                (resultCode, data) -> {
+                    DefaultBrowserPromoMetrics.recordOutcome(
+                            mCurrentState,
+                            DefaultBrowserPromoDeps.getInstance().getCurrentDefaultBrowserState());
+                },
+                null);
     }
 }

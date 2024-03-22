@@ -1,16 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/translate/core/browser/translate_ui_delegate.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "components/language/core/browser/language_prefs.h"
 
 #include "components/infobars/core/infobar.h"
 #include "components/language/core/browser/language_model.h"
@@ -239,31 +238,6 @@ TEST_F(TranslateUIDelegateTest, ShouldShowNeverTranslateShortcut) {
   EXPECT_FALSE(delegate_->ShouldShowNeverTranslateShortcut());
 }
 
-TEST_F(TranslateUIDelegateTest, LanguageCodes) {
-  // Test language codes.
-  EXPECT_EQ("ar", delegate_->GetSourceLanguageCode());
-  EXPECT_EQ("fr", delegate_->GetTargetLanguageCode());
-
-  // Test language indices.
-  const size_t ar_index = delegate_->GetSourceLanguageIndex();
-  EXPECT_EQ("ar", delegate_->GetLanguageCodeAt(ar_index));
-  const size_t fr_index = delegate_->GetTargetLanguageIndex();
-  EXPECT_EQ("fr", delegate_->GetLanguageCodeAt(fr_index));
-
-  // Test updating source / target codes.
-  delegate_->UpdateSourceLanguage("es");
-  EXPECT_EQ("es", delegate_->GetSourceLanguageCode());
-  delegate_->UpdateTargetLanguage("de");
-  EXPECT_EQ("de", delegate_->GetTargetLanguageCode());
-
-  // Test updating source / target indices. Note that this also returns
-  // the delegate to the starting state.
-  delegate_->UpdateSourceLanguageIndex(ar_index);
-  EXPECT_EQ("ar", delegate_->GetSourceLanguageCode());
-  delegate_->UpdateTargetLanguageIndex(fr_index);
-  EXPECT_EQ("fr", delegate_->GetTargetLanguageCode());
-}
-
 TEST_F(TranslateUIDelegateTest, ContentLanguagesWhenPrefChangeObserverEnabled) {
   testContentLanguages(/*disableObservers=*/false);
 }
@@ -289,6 +263,44 @@ TEST_F(TranslateUIDelegateTest, ContentLanguagesWhenDisabled) {
 
   delegate->GetContentLanguagesCodes(&actual_codes);
   EXPECT_TRUE(actual_codes.empty());
+}
+
+TEST_F(TranslateUIDelegateTest, UpdateSourceLanguageTranslateEvent) {
+  // Test source language and corresponding TranslateEvent field.
+  EXPECT_EQ(
+      "ar",
+      delegate_->translate_ui_languages_manager()->GetSourceLanguageCode());
+  EXPECT_FALSE(
+      manager_->mutable_translate_event()->has_modified_source_language());
+
+  // Test that updating with current language does not update TranslateEvent.
+  delegate_->UpdateAndRecordSourceLanguage("ar");
+  EXPECT_FALSE(
+      manager_->mutable_translate_event()->has_modified_source_language());
+
+  // Test that updating with different language does update TranslateEvent.
+  delegate_->UpdateAndRecordSourceLanguage("es");
+  EXPECT_TRUE(
+      manager_->mutable_translate_event()->has_modified_source_language());
+}
+
+TEST_F(TranslateUIDelegateTest, UpdateTargetLanguageTranslateEvent) {
+  // Test target language and corresponding TranslateEvent field.
+  EXPECT_EQ(
+      "fr",
+      delegate_->translate_ui_languages_manager()->GetTargetLanguageCode());
+  EXPECT_FALSE(
+      manager_->mutable_translate_event()->has_modified_target_language());
+
+  // Test that updating with current language does not update TranslateEvent.
+  delegate_->UpdateAndRecordTargetLanguage("fr");
+  EXPECT_FALSE(
+      manager_->mutable_translate_event()->has_modified_target_language());
+
+  // Test that updating with different language does update TranslateEvent.
+  delegate_->UpdateAndRecordTargetLanguage("es");
+  EXPECT_TRUE(
+      manager_->mutable_translate_event()->has_modified_target_language());
 }
 
 }  // namespace

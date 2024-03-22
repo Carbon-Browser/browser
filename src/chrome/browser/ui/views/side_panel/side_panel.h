@@ -1,19 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_SIDE_PANEL_SIDE_PANEL_H_
 #define CHROME_BROWSER_UI_VIEWS_SIDE_PANEL_SIDE_PANEL_H_
 
+#include <memory>
+
 #include "base/memory/raw_ptr.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "ui/base/metadata/metadata_header_macros.h"
-#include "ui/views/view.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
+#include "ui/views/accessible_pane_view.h"
+#include "ui/views/controls/resize_area_delegate.h"
 #include "ui/views/view_observer.h"
 
 class BrowserView;
 
-class SidePanel : public views::View, public views::ViewObserver {
+class SidePanel : public views::AccessiblePaneView,
+                  public views::ViewObserver,
+                  public views::ResizeAreaDelegate {
  public:
   // Determines the side from which the side panel will appear.
   // LTR / RTL conversions are handled in
@@ -30,9 +36,30 @@ class SidePanel : public views::View, public views::ViewObserver {
   ~SidePanel() override;
 
   void SetPanelWidth(int width);
+  void SetBackgroundRadii(const gfx::RoundedCornersF& radii);
   void SetHorizontalAlignment(HorizontalAlignment alignment);
   HorizontalAlignment GetHorizontalAlignment();
   bool IsRightAligned();
+  gfx::Size GetMinimumSize() const override;
+
+  // Add a header view that gets painted over the side panel border. The top
+  // border area grows to accommodate the additional height of the header,
+  // pushing the other side panel content down.
+  void AddHeaderView(std::unique_ptr<views::View> view);
+
+  // Gets the upper bound of the content area size if the side panel is shown
+  // right now. If the side panel is not showing, returns the minimum width
+  // and browser view height minus the padding insets. The actual content
+  // size will be smaller than the returned result when the side panel header
+  // is shown, for example.
+  gfx::Size GetContentSizeUpperBound() const;
+
+  // views::ResizeAreaDelegate:
+  void OnResize(int resize_amount, bool done_resizing) override;
+
+  // Log UMA data for the side panel resize feature. Will only log if the side
+  // panel has been resized since metrics were last logged.
+  void RecordMetricsIfResized();
 
  private:
   void UpdateVisibility();
@@ -46,6 +73,19 @@ class SidePanel : public views::View, public views::ViewObserver {
 
   const raw_ptr<View> border_view_;
   const raw_ptr<BrowserView> browser_view_;
+  const raw_ptr<View> resize_area_;
+
+  raw_ptr<views::View> header_view_ = nullptr;
+
+  // -1 if a side panel resize is not in progress, otherwise the width of the
+  // side panel when the current resize was initiated.
+  int starting_width_on_resize_ = -1;
+
+  // Should be true if the side panel was resized since metrics were last
+  // logged.
+  bool did_resize_ = false;
+
+  gfx::RoundedCornersF background_radii_;
 
   // Keeps track of the side the side panel will appear on (left or right).
   HorizontalAlignment horizontal_alignment_;

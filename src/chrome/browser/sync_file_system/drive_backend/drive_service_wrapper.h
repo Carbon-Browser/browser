@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,10 @@ namespace drive_backend {
 // pointer.  Each method wraps corresponding name method of
 // DriveServiceInterface.  See comments in drive_service_interface.h
 // for details.
-class DriveServiceWrapper : public base::SupportsWeakPtr<DriveServiceWrapper> {
+class DriveServiceWrapper {
  public:
   explicit DriveServiceWrapper(drive::DriveServiceInterface* drive_service);
+  ~DriveServiceWrapper();
 
   DriveServiceWrapper(const DriveServiceWrapper&) = delete;
   DriveServiceWrapper& operator=(const DriveServiceWrapper&) = delete;
@@ -79,9 +80,14 @@ class DriveServiceWrapper : public base::SupportsWeakPtr<DriveServiceWrapper> {
                      const std::string& directory_resource_id,
                      google_apis::FileListCallback callback);
 
+  base::WeakPtr<DriveServiceWrapper> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
   raw_ptr<drive::DriveServiceInterface> drive_service_;
   SEQUENCE_CHECKER(sequence_checker_);
+  base::WeakPtrFactory<DriveServiceWrapper> weak_ptr_factory_{this};
 };
 
 }  // namespace drive_backend

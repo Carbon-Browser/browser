@@ -46,6 +46,9 @@ class StorageArea final : public ScriptWrappable,
 
  public:
   enum class StorageType { kLocalStorage, kSessionStorage };
+  static const char kAccessDataMessage[];
+  static const char kAccessDeniedMessage[];
+  static const char kAccessSandboxedMessage[];
 
   static StorageArea* Create(LocalDOMWindow*,
                              scoped_refptr<CachedStorageArea>,
@@ -90,7 +93,7 @@ class StorageArea final : public ScriptWrappable,
       const char* name,
       WebScopedVirtualTimePauser::VirtualTaskDuration duration) override;
 
-  const LocalDOMWindow* GetDOMWindow() override;
+  LocalDOMWindow* GetDOMWindow() override;
 
  private:
   void RecordModificationInMetrics();

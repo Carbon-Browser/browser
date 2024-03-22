@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,13 +61,13 @@ class VIZ_SERVICE_EXPORT SoftwareRenderer : public DirectRenderer {
   void BindFramebufferToTexture(
       const AggregatedRenderPassId render_pass_id) override;
   void SetScissorTestRect(const gfx::Rect& scissor_rect) override;
-  void PrepareSurfaceForPass(SurfaceInitializationMode initialization_mode,
-                             const gfx::Rect& render_pass_scissor) override;
+  void BeginDrawingRenderPass(
+      bool needs_clear,
+      const gfx::Rect& render_pass_update_rect) override;
   void DoDrawQuad(const DrawQuad* quad, const gfx::QuadF* draw_region) override;
   void BeginDrawingFrame() override;
   void FinishDrawingFrame() override;
   bool FlippedFramebuffer() const override;
-  void EnsureScissorTestEnabled() override;
   void EnsureScissorTestDisabled() override;
   void CopyDrawnRenderPass(const copy_output::RenderPassGeometry& geometry,
                            std::unique_ptr<CopyOutputRequest> request) override;
@@ -123,8 +123,8 @@ class VIZ_SERVICE_EXPORT SoftwareRenderer : public DirectRenderer {
   gfx::Rect scissor_rect_;
 
   raw_ptr<SoftwareOutputDevice> output_device_;
-  raw_ptr<SkCanvas> root_canvas_ = nullptr;
-  raw_ptr<SkCanvas> current_canvas_ = nullptr;
+  raw_ptr<SkCanvas, DanglingUntriaged> root_canvas_ = nullptr;
+  raw_ptr<SkCanvas, DanglingUntriaged> current_canvas_ = nullptr;
   SkPaint current_paint_;
   SkSamplingOptions current_sampling_;
   std::unique_ptr<SkCanvas> current_framebuffer_canvas_;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -168,6 +168,7 @@ void WaylandKeyboardDelegate::OnKeyRepeatSettingsChanged(
     wl_keyboard_send_repeat_info(keyboard_resource_,
                                  GetWaylandRepeatRate(enabled, interval),
                                  static_cast<int32_t>(delay.InMilliseconds()));
+    wl_client_flush(client());
   }
 }
 

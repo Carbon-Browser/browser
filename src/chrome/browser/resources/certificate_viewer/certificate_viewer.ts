@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,27 +9,28 @@ import 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
 
 import {CrTreeElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
 import {CrTreeItemElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {isMac, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
-type TreeInfo = {
-  payload?: object,
-  children?: TreeInfo[], label: string,
-};
+interface TreeInfo {
+  payload?: object;
+  children?: TreeInfo[];
+  label: string;
+}
 
-type CertificateInfo = {
-  general: {[key: string]: string},
-  hierarchy: TreeInfo[],
-  isError: boolean,
-};
+interface CertificateInfo {
+  general: {[key: string]: string};
+  hierarchy: TreeInfo[];
+  isError: boolean;
+}
 
-type TreeItemDetail = {
+export interface TreeItemDetail {
   payload: {
     val?: string,
     index?: number,
-  },
-  children: {[key: string|number]: CrTreeItemElement},
-};
+  };
+  children: {[key: string|number]: CrTreeItemElement};
+}
 
 /**
  * Initialize the certificate viewer dialog by wiring up the close button,
@@ -78,8 +79,6 @@ function initialize() {
 
   const exportButton = document.querySelector<HTMLElement>('#export');
   assert(exportButton);
-  // Export button is disabled on mac, see https://crbug.com/1340536
-  exportButton.hidden = isMac;
   exportButton.onclick = exportCertificate;
 }
 

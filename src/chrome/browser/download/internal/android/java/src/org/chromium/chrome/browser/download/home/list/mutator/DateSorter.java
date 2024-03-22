@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,17 +49,15 @@ public class DateSorter implements ListConsumer {
         OfflineItem lhs = ((ListItem.OfflineItemListItem) listItem1).item;
         OfflineItem rhs = ((ListItem.OfflineItemListItem) listItem2).item;
 
-        int comparison = ListUtils.compareItemBySchedule(lhs, rhs);
-        if (comparison != 0) return comparison;
-
-        comparison = compareItemByJustNowProvider(lhs, rhs);
+        int comparison = compareItemByJustNowProvider(lhs, rhs);
         if (comparison != 0) return comparison;
 
         comparison = ListUtils.compareItemByDate(lhs, rhs);
         if (comparison != 0) return comparison;
 
-        comparison = ListUtils.compareFilterTypesTo(
-                Filters.fromOfflineItem(lhs), Filters.fromOfflineItem(rhs));
+        comparison =
+                ListUtils.compareFilterTypesTo(
+                        Filters.fromOfflineItem(lhs), Filters.fromOfflineItem(rhs));
         if (comparison != 0) return comparison;
 
         comparison = ListUtils.compareItemByTimestamp(lhs, rhs);

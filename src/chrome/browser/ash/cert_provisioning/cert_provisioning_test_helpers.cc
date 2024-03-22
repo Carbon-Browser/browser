@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "base/test/gmock_callback_support.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "net/test/cert_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -16,8 +15,13 @@ using base::test::RunOnceCallback;
 using testing::_;
 using testing::Invoke;
 
-namespace ash {
-namespace cert_provisioning {
+namespace ash::cert_provisioning {
+
+namespace {
+std::vector<uint8_t> StrToBytes(const std::string& val) {
+  return std::vector<uint8_t>(val.begin(), val.end());
+}
+}  // namespace
 
 //================ CertificateHelperForTesting =================================
 
@@ -75,14 +79,20 @@ scoped_refptr<net::X509Certificate> CertificateHelperForTesting::AddCert(
   cert_builder.SetValidity(not_valid_before, not_valid_after);
   auto cert = cert_builder.GetX509Certificate();
 
+  absl::optional<std::vector<uint8_t>> attribute;
+  if (cert_profile_id.has_value()) {
+    attribute = StrToBytes(cert_profile_id.value());
+  }
+
   EXPECT_CALL(
       *platform_keys_service_,
       GetAttributeForKey(
           GetPlatformKeysTokenId(cert_scope),
-          chromeos::platform_keys::GetSubjectPublicKeyInfo(cert),
+          chromeos::platform_keys::GetSubjectPublicKeyInfoBlob(cert),
           chromeos::platform_keys::KeyAttributeType::kCertificateProvisioningId,
           _))
-      .WillRepeatedly(RunOnceCallback<3>(cert_profile_id, status));
+      .WillRepeatedly(
+          base::test::RunOnceCallbackRepeatedly<3>(attribute, status));
 
   cert_list_.push_back(cert);
   return cert;
@@ -142,11 +152,8 @@ void ProfileHelperForTesting::Init(bool user_is_affiliated) {
 
   auto test_account =
       AccountId::FromUserEmailGaiaId(kTestUserEmail, kTestUserGaiaId);
-  user_ = fake_user_manager_.AddUserWithAffiliation(test_account,
-                                                    user_is_affiliated);
-
-  ProfileHelper::Get()->SetUserToProfileMappingForTesting(
-      fake_user_manager_.GetPrimaryUser(), testing_profile_);
+  user_ = fake_user_manager_->AddUserWithAffiliation(test_account,
+                                                     user_is_affiliated);
 }
 
 Profile* ProfileHelperForTesting::GetProfile() const {
@@ -157,5 +164,4 @@ user_manager::User* ProfileHelperForTesting::GetUser() const {
   return user_;
 }
 
-}  // namespace cert_provisioning
-}  // namespace ash
+}  // namespace ash::cert_provisioning

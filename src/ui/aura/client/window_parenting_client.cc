@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,13 +40,15 @@ WindowParentingClient* GetWindowParentingClient(Window* window) {
 
 void ParentWindowWithContext(Window* window,
                              Window* context,
-                             const gfx::Rect& screen_bounds) {
+                             const gfx::Rect& screen_bounds,
+                             const int64_t display_id) {
   DCHECK(context);
 
   // |context| must be attached to a hierarchy with a WindowParentingClient.
   WindowParentingClient* client = GetWindowParentingClient(context);
   DCHECK(client);
-  Window* default_parent = client->GetDefaultParent(window, screen_bounds);
+  Window* default_parent =
+      client->GetDefaultParent(window, screen_bounds, display_id);
   default_parent->AddChild(window);
 }
 

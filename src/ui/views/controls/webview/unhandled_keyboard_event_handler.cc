@@ -1,11 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/controls/webview/unhandled_keyboard_event_handler.h"
 
-#include "content/public/browser/native_web_keyboard_event.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "ui/content_accelerators/accelerator_util.h"
+#include "ui/gfx/native_widget_types.h"
 #include "ui/views/focus/focus_manager.h"
 
 namespace views {
@@ -17,10 +18,8 @@ UnhandledKeyboardEventHandler::~UnhandledKeyboardEventHandler() = default;
 bool UnhandledKeyboardEventHandler::HandleKeyboardEvent(
     const content::NativeWebKeyboardEvent& event,
     FocusManager* focus_manager) {
-  if (!focus_manager) {
-    NOTREACHED();
-    return false;
-  }
+  CHECK(focus_manager);
+
   // Previous calls to TranslateMessage can generate Char events as well as
   // RawKeyDown events, even if the latter triggered an accelerator.  In these
   // cases, we discard the Char events.
@@ -51,8 +50,9 @@ bool UnhandledKeyboardEventHandler::HandleKeyboardEvent(
     ignore_next_char_event_ = false;
   }
 
-  if (event.os_event)
+  if (event.os_event) {
     return HandleNativeKeyboardEvent(event, focus_manager);
+  }
 
   return false;
 }

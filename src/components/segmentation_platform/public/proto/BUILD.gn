@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,12 +10,23 @@ if (is_android) {
 
 proto_library("proto") {
   proto_in_dir = "//"
-  sources = [ "segmentation_platform.proto" ]
+  sources = [
+    "aggregation.proto",
+    "model_metadata.proto",
+    "output_config.proto",
+    "prediction_result.proto",
+    "segmentation_platform.proto",
+    "types.proto",
+  ]
 }
 
 if (is_android) {
   proto_java_library("segmentation_platform_proto_java") {
     proto_path = "//"
-    sources = [ "segmentation_platform.proto" ]
+    sources = [
+      "output_config.proto",
+      "prediction_result.proto",
+      "segmentation_platform.proto",
+    ]
   }
 }

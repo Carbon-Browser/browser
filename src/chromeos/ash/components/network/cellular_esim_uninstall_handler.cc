@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/hermes/dbus-constants.h"
 
-namespace chromeos {
+namespace ash {
 
 // static
 const base::TimeDelta CellularESimUninstallHandler::kNetworkListWaitTimeout =
@@ -60,7 +60,7 @@ void CellularESimUninstallHandler::Init(
   network_connection_handler_ = network_connection_handler;
   network_state_handler_ = network_state_handler;
 
-  network_state_handler_observer_.Observe(network_state_handler_);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 }
 
 void CellularESimUninstallHandler::UninstallESim(
@@ -134,6 +134,8 @@ void CellularESimUninstallHandler::CompleteCurrentRequest(
   NET_LOG(EVENT) << "Completed uninstall request for "
                  << *uninstall_requests_.front() << ". Success = " << success;
   std::move(uninstall_requests_.front()->callback).Run(success);
+  last_service_count_removal_for_testing_ =
+      uninstall_requests_.front()->removed_service_paths.size();
   uninstall_requests_.pop_front();
 
   TransitionToUninstallState(UninstallState::kIdle);
@@ -340,8 +342,13 @@ void CellularESimUninstallHandler::OnUninstallProfile(
   }
 
   if (managed_cellular_pref_handler_) {
-    for (const auto& iccid : removed_iccids)
-      managed_cellular_pref_handler_->RemovePairWithIccid(iccid);
+    for (const auto& iccid : removed_iccids) {
+      if (ash::features::IsSmdsSupportEuiccUploadEnabled()) {
+        managed_cellular_pref_handler_->RemoveESimMetadata(iccid);
+      } else {
+        managed_cellular_pref_handler_->RemovePairWithIccid(iccid);
+      }
+    }
   }
   TransitionToUninstallState(UninstallState::kRemovingShillService);
   AttemptRemoveShillService();
@@ -380,13 +387,17 @@ void CellularESimUninstallHandler::AttemptRemoveShillService() {
   network_configuration_handler_->RemoveConfiguration(
       network->path(), absl::nullopt,
       base::BindOnce(&CellularESimUninstallHandler::OnRemoveServiceSuccess,
-                     weak_ptr_factory_.GetWeakPtr()),
+                     weak_ptr_factory_.GetWeakPtr(), network->path()),
       base::BindOnce(&CellularESimUninstallHandler::OnRemoveServiceFailure,
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
-void CellularESimUninstallHandler::OnRemoveServiceSuccess() {
+void CellularESimUninstallHandler::OnRemoveServiceSuccess(
+    const std::string& removed_service_path) {
   DCHECK_EQ(state_, UninstallState::kRemovingShillService);
+  uninstall_requests_.front()->removed_service_paths.insert(
+      removed_service_path);
+
   if (uninstall_requests_.front()->reset_euicc) {
     // Wait for next network list update before removing the next shill service.
     TransitionToUninstallState(UninstallState::kWaitingForNetworkListUpdate);
@@ -409,6 +420,7 @@ void CellularESimUninstallHandler::OnRemoveServiceFailure(
 }
 
 void CellularESimUninstallHandler::OnNetworkListWaitTimeout() {
+  DCHECK_EQ(state_, UninstallState::kWaitingForNetworkListUpdate);
   NET_LOG(ERROR)
       << "Timedout waiting for network list update after removing service.";
   TransitionToUninstallState(UninstallState::kRemovingShillService);
@@ -471,6 +483,21 @@ const NetworkState* CellularESimUninstallHandler::GetNextResetServiceToRemove()
     if (network->IsNonShillCellularNetwork()) {
       continue;
     }
+
+    // b/249825186: When the success callback of
+    // NetworkConfigurationHandler::RemoveConfiguration() is called on eSIM
+    // cellular shill service(s), the service may be still be exposed as it
+    // is still in the process of guaranteed destruction. Chrome relies on Shill
+    // pushing an update to the kServiceCompleteList property, which it should
+    // eventually, but removing a profile entry is a disk operation so it won't
+    // be instantaneous. Successful
+    // NetworkConfigurationHandler::RemoveConfiguration() calls to these
+    // services should be ignored, as these loadable profile entries no
+    // longer exist.
+    if (uninstall_requests_.front()->removed_service_paths.contains(
+            network->path())) {
+      continue;
+    }
     if (network->eid() == eid)
       return network;
   }
@@ -525,4 +552,4 @@ std::ostream& operator<<(
   return stream;
 }
 
-}  // namespace chromeos
+}  // namespace ash

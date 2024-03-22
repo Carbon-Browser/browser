@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/components/arc/mojom/kiosk.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -51,13 +52,16 @@ class ArcKioskBridge : public KeyedService,
   void OnMaintenanceSessionCreated(int32_t session_id) override;
   void OnMaintenanceSessionFinished(int32_t session_id, bool success) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   // |delegate| should be alive while the ArcKioskBridge instance is alive.
   ArcKioskBridge(ArcBridgeService* bridge_service, Delegate* delegate);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService, ExperimentalAsh>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
-  Delegate* const delegate_;
+  const raw_ptr<Delegate, ExperimentalAsh> delegate_;
 
   // Tracks current maintenance session id.
   int32_t session_id_ = -1;

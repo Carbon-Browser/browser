@@ -1,15 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/icon_coalescer.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gfx/geometry/size.h"
+#include "ui/gfx/image/image_skia_rep.h"
 
 class AppsIconCoalescerTest : public testing::Test {
  protected:
@@ -43,8 +45,7 @@ class AppsIconCoalescerTest : public testing::Test {
 
    private:
     std::unique_ptr<Releaser> LoadIconFromIconKey(
-        apps::AppType app_type,
-        const std::string& app_id,
+        const std::string& id,
         const apps::IconKey& icon_key,
         apps::IconType icon_type,
         int32_t size_hint_in_dip,
@@ -55,7 +56,7 @@ class AppsIconCoalescerTest : public testing::Test {
         num_load_calls_complete_++;
         std::move(callback).Run(NewIconValuePtr());
       } else {
-        pending_callbacks_.insert(std::make_pair(app_id, std::move(callback)));
+        pending_callbacks_.insert(std::make_pair(id, std::move(callback)));
       }
       num_pending_releases_++;
       return std::make_unique<IconLoader::Releaser>(

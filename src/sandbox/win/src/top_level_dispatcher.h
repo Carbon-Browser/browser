@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,12 +40,10 @@ class TopLevelDispatcher : public Dispatcher {
 
   raw_ptr<PolicyBase> policy_;
   std::unique_ptr<Dispatcher> filesystem_dispatcher_;
-  std::unique_ptr<Dispatcher> named_pipe_dispatcher_;
   std::unique_ptr<Dispatcher> thread_process_dispatcher_;
   std::unique_ptr<Dispatcher> handle_dispatcher_;
   std::unique_ptr<Dispatcher> process_mitigations_win32k_dispatcher_;
   std::unique_ptr<Dispatcher> signed_dispatcher_;
-  std::unique_ptr<Dispatcher> socket_dispatcher_;
   Dispatcher* ipc_targets_[kMaxIpcTag];
 };
 

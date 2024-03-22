@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <lib/fidl/cpp/interface_handle.h>
 #include <lib/fidl/cpp/interface_request.h>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 #include "third_party/blink/public/common/messaging/web_message_port.h"
 
 // Creates a connected MessagePort from a FIDL MessagePort request and
@@ -38,7 +38,7 @@ enum class TransferableHostType {
 };
 
 // Converts a BlinkMessage to a fuchsia::web::WebMessage.
-absl::optional<fuchsia::web::WebMessage> FidlWebMessageFromBlink(
+std::optional<fuchsia::web::WebMessage> FidlWebMessageFromBlink(
     blink::WebMessagePort::Message blink_message,
     TransferableHostType port_type);
 

@@ -1,31 +1,27 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <memory>
-#include <string>
+#import <memory>
+#import <string>
 
-#include "base/bind.h"
-#include "base/run_loop.h"
+#import "base/functional/bind.h"
+#import "base/run_loop.h"
 #import "base/test/ios/wait_util.h"
-#include "ios/web/grit/ios_web_resources.h"
+#import "ios/web/grit/ios_web_resources.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/test/navigation_test_util.h"
 #import "ios/web/public/test/web_test_with_web_state.h"
 #import "ios/web/public/test/web_view_content_test_util.h"
 #import "ios/web/public/test/web_view_interaction_test_util.h"
-#include "ios/web/public/webui/web_ui_ios_controller.h"
-#include "ios/web/public/webui/web_ui_ios_controller_factory.h"
-#include "ios/web/public/webui/web_ui_ios_data_source.h"
-#include "ios/web/test/grit/test_resources.h"
-#include "ios/web/test/test_url_constants.h"
+#import "ios/web/public/webui/web_ui_ios_controller.h"
+#import "ios/web/public/webui/web_ui_ios_controller_factory.h"
+#import "ios/web/public/webui/web_ui_ios_data_source.h"
+#import "ios/web/test/grit/test_resources.h"
+#import "ios/web/test/test_url_constants.h"
 #import "ios/web/web_state/web_state_impl.h"
-#include "url/gurl.h"
-#include "url/scheme_host_port.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "url/gurl.h"
+#import "url/scheme_host_port.h"
 
 using base::test::ios::kWaitForPageLoadTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -48,7 +44,7 @@ const char kWebUIPageText[] = "WebUI page";
 // Controller for test WebUI.
 class TestUI : public WebUIIOSController {
  public:
-  // Constructs controller from |web_ui| and |ui_handler| which will communicate
+  // Constructs controller from `web_ui` and `ui_handler` which will communicate
   // with test WebUI page.
   TestUI(WebUIIOS* web_ui, const std::string& host, int resource_id)
       : WebUIIOSController(web_ui, host) {
@@ -127,9 +123,9 @@ class WebUITest : public WebTestWithWebState {
 };
 
 // Tests that a web UI page is loaded and that the WebState correctly reports
-// |WebStateImpl::HasWebUI|.
+// `WebStateImpl::HasWebUI`.
 TEST_F(WebUITest, LoadWebUIPage) {
-  ASSERT_TRUE(static_cast<WebStateImpl*>(web_state())->HasWebUI());
+  ASSERT_TRUE(WebStateImpl::FromWebState(web_state())->HasWebUI());
 
   EXPECT_TRUE(WaitForWebViewContainingText(web_state(), kWebUIPageText));
 }
@@ -147,7 +143,7 @@ TEST_F(WebUITest, LoadWebUIPageLoadViaLinkClick) {
     return !web_state()->IsLoading() && url.spec() == BaseUrl();
   }));
 
-  ASSERT_TRUE(static_cast<WebStateImpl*>(web_state())->HasWebUI());
+  ASSERT_TRUE(WebStateImpl::FromWebState(web_state())->HasWebUI());
 }
 
 }  // namespace web

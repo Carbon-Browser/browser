@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/controls/webview/unhandled_keyboard_event_handler.h"
 
-#include "content/public/browser/native_web_keyboard_event.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "ui/events/event.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/platform_utils.h"
@@ -17,7 +17,7 @@ bool UnhandledKeyboardEventHandler::HandleNativeKeyboardEvent(
     const content::NativeWebKeyboardEvent& event,
     FocusManager* focus_manager) {
   auto& key_event = *event.os_event->AsKeyEvent();
-  if (!event.skip_in_browser) {
+  if (!event.skip_if_unhandled) {
     // Try to re-send via FocusManager.
     // Note: FocusManager::OnKeyEvent returns true iff the given event
     // needs to continue to propagated. So, negate the condition to calculate

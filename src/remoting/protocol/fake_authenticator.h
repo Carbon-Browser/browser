@@ -1,17 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef REMOTING_PROTOCOL_FAKE_AUTHENTICATOR_H_
 #define REMOTING_PROTOCOL_FAKE_AUTHENTICATOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/protocol/authenticator.h"
 #include "remoting/protocol/channel_authenticator.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class FakeChannelAuthenticator : public ChannelAuthenticator {
  public:
@@ -51,11 +50,7 @@ class FakeAuthenticator : public Authenticator {
     CLIENT,
   };
 
-  enum Action {
-    ACCEPT,
-    REJECT,
-    REJECT_CHANNEL
-  };
+  enum Action { ACCEPT, REJECT, REJECT_CHANNEL };
 
   struct Config {
     Config();
@@ -147,7 +142,6 @@ class FakeHostAuthenticatorFactory : public AuthenticatorFactory {
   const FakeAuthenticator::Config config_;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_FAKE_AUTHENTICATOR_H_

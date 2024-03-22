@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/one_shot_event.h"
@@ -48,7 +48,6 @@ using extensions::ExtensionRegistry;
 using extensions::ExtensionSet;
 using extensions::PermissionSet;
 using extensions::UnloadedExtensionReason;
-using extensions::UpdatedExtensionPermissionsInfo;
 using extensions::mojom::APIPermissionID;
 
 class ExtensionNameComparator {
@@ -363,22 +362,26 @@ void BackgroundApplicationListModel::OnBackgroundContentsServiceDestroying() {
 }
 
 void BackgroundApplicationListModel::OnExtensionPermissionsUpdated(
-    const extensions::UpdatedExtensionPermissionsInfo& info) {
-  if (info.permissions.HasAPIPermission(APIPermissionID::kBackground) ||
+    const extensions::Extension& extension,
+    const extensions::PermissionSet& permissions,
+    extensions::PermissionsManager::UpdateReason reason) {
+  if (permissions.HasAPIPermission(APIPermissionID::kBackground) ||
       (base::FeatureList::IsEnabled(features::kOnConnectNative) &&
-       info.permissions.HasAPIPermission(
-           APIPermissionID::kTransientBackground))) {
-    switch (info.reason) {
-      case UpdatedExtensionPermissionsInfo::ADDED:
-      case UpdatedExtensionPermissionsInfo::REMOVED:
+       permissions.HasAPIPermission(APIPermissionID::kTransientBackground))) {
+    switch (reason) {
+      case extensions::PermissionsManager::UpdateReason::kAdded:
+      case extensions::PermissionsManager::UpdateReason::kRemoved:
         Update();
-        if (IsBackgroundApp(*info.extension, profile_)) {
-          AssociateApplicationData(info.extension);
+        if (IsBackgroundApp(extension, profile_)) {
+          AssociateApplicationData(&extension);
         } else {
-          DissociateApplicationData(info.extension);
+          DissociateApplicationData(&extension);
         }
         break;
-      default:
+      case extensions::PermissionsManager::UpdateReason::kPolicy:
+        // Policy changes are only used for host permissions, so the
+        // "background"
+        // permission would never be present in  permissions .
         NOTREACHED();
     }
   }

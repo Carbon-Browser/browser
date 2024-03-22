@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/aom/accessible_node.h"
 
+#include "base/ranges/algorithm.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/aom/accessible_node_list.h"
 #include "third_party/blink/renderer/core/dom/element.h"
@@ -25,13 +26,17 @@ QualifiedName GetCorrespondingARIAAttribute(AOMStringProperty property) {
   switch (property) {
     case AOMStringProperty::kAutocomplete:
       return html_names::kAriaAutocompleteAttr;
+    case AOMStringProperty::kAriaBrailleLabel:
+      return html_names::kAriaBraillelabelAttr;
+    case AOMStringProperty::kAriaBrailleRoleDescription:
+      return html_names::kAriaBrailleroledescriptionAttr;
     case AOMStringProperty::kChecked:
       return html_names::kAriaCheckedAttr;
     case AOMStringProperty::kCurrent:
       return html_names::kAriaCurrentAttr;
     case AOMStringProperty::kDescription:
       return html_names::kAriaDescriptionAttr;
-    case AOMStringProperty::kHasPopUp:
+    case AOMStringProperty::kHasPopup:
       return html_names::kAriaHaspopupAttr;
     case AOMStringProperty::kInvalid:
       return html_names::kAriaInvalidAttr;
@@ -69,8 +74,6 @@ QualifiedName GetCorrespondingARIAAttribute(AOMRelationProperty property) {
   switch (property) {
     case AOMRelationProperty::kActiveDescendant:
       return html_names::kAriaActivedescendantAttr;
-    case AOMRelationProperty::kErrorMessage:
-      return html_names::kAriaErrormessageAttr;
   }
 
   NOTREACHED();
@@ -85,6 +88,8 @@ QualifiedName GetCorrespondingARIAAttribute(AOMRelationListProperty property) {
       return html_names::kAriaDetailsAttr;
     case AOMRelationListProperty::kControls:
       return html_names::kAriaControlsAttr;
+    case AOMRelationListProperty::kErrorMessage:
+      return html_names::kAriaErrormessageAttr;
     case AOMRelationListProperty::kFlowTo:
       return html_names::kAriaFlowtoAttr;
     case AOMRelationListProperty::kLabeledBy:
@@ -198,10 +203,14 @@ AccessibleNode* AccessibleNode::Create(Document& document) {
 }
 
 Document* AccessibleNode::GetDocument() const {
-  if (document_)
-    return document_;
-  if (element_)
+  if (document_) {
+    DCHECK(!element_);
+    return document_.Get();
+  }
+  if (element_) {
+    DCHECK(!document_);
     return &element_->GetDocument();
+  }
 
   return nullptr;
 }
@@ -225,7 +234,7 @@ AccessibleNode* AccessibleNode::GetProperty(Element* element,
   if (AccessibleNode* accessible_node = element->ExistingAccessibleNode()) {
     for (const auto& item : accessible_node->relation_properties_) {
       if (item.first == property && item.second)
-        return item.second;
+        return item.second.Get();
     }
   }
 
@@ -242,7 +251,7 @@ AccessibleNodeList* AccessibleNode::GetProperty(
   if (AccessibleNode* accessible_node = element->ExistingAccessibleNode()) {
     for (const auto& item : accessible_node->relation_list_properties_) {
       if (item.first == property && item.second)
-        return item.second;
+        return item.second.Get();
     }
   }
 
@@ -312,7 +321,7 @@ absl::optional<float> AccessibleNode::GetProperty(Element* element,
 }
 
 bool AccessibleNode::IsUndefinedAttrValue(const AtomicString& value) {
-  return value.IsEmpty() || EqualIgnoringASCIICase(value, "undefined");
+  return value.empty() || EqualIgnoringASCIICase(value, "undefined");
 }
 
 // static
@@ -353,13 +362,28 @@ const AtomicString& AccessibleNode::GetPropertyOrARIAAttribute(
 }
 
 // static
-Element* AccessibleNode::GetPropertyOrARIAAttribute(
+const AtomicString& AccessibleNode::GetPropertyOrARIAAttributeValue(
     Element* element,
     AOMRelationProperty property) {
   if (!element)
-    return nullptr;
+    return g_null_atom;
   QualifiedName attribute = GetCorrespondingARIAAttribute(property);
-  AtomicString value = GetElementOrInternalsARIAAttribute(*element, attribute);
+  const AtomicString& value =
+      GetElementOrInternalsARIAAttribute(*element, attribute);
+  if (IsUndefinedAttrValue(value)) {
+    return g_null_atom;  // Attribute not set or explicitly undefined.
+  }
+
+  return value;
+}
+
+Element* AccessibleNode::GetPropertyOrARIAAttribute(
+    Element* element,
+    AOMRelationProperty property) {
+  auto& value = GetPropertyOrARIAAttributeValue(element, property);
+  if (value == g_null_atom) {
+    return nullptr;
+  }
   return element->GetTreeScope().getElementById(value);
 }
 
@@ -373,17 +397,17 @@ bool AccessibleNode::GetPropertyOrARIAAttribute(
   QualifiedName attribute = GetCorrespondingARIAAttribute(property);
   String value =
       GetElementOrInternalsARIAAttribute(*element, attribute).GetString();
-  if (value.IsEmpty() && property == AOMRelationListProperty::kLabeledBy) {
+  if (value.empty() && property == AOMRelationListProperty::kLabeledBy) {
     value = GetElementOrInternalsARIAAttribute(*element,
                                                html_names::kAriaLabeledbyAttr)
                 .GetString();
   }
-  if (value.IsEmpty())
+  if (value.empty())
     return false;
 
   Vector<String> ids;
   value.Split(' ', ids);
-  if (ids.IsEmpty())
+  if (ids.empty())
     return false;
 
   TreeScope& scope = element->GetTreeScope();
@@ -517,6 +541,26 @@ void AccessibleNode::setBusy(absl::optional<bool> value) {
   NotifyAttributeChanged(html_names::kAriaBusyAttr);
 }
 
+AtomicString AccessibleNode::brailleLabel() const {
+  return GetProperty(AOMStringProperty::kAriaBrailleLabel);
+}
+
+void AccessibleNode::setBrailleLabel(const AtomicString& braille_label) {
+  SetStringProperty(AOMStringProperty::kAriaBrailleLabel, braille_label);
+  NotifyAttributeChanged(html_names::kAriaBraillelabelAttr);
+}
+
+AtomicString AccessibleNode::brailleRoleDescription() const {
+  return GetProperty(AOMStringProperty::kAriaBrailleRoleDescription);
+}
+
+void AccessibleNode::setBrailleRoleDescription(
+    const AtomicString& braille_role_description) {
+  SetStringProperty(AOMStringProperty::kAriaBrailleRoleDescription,
+                    braille_role_description);
+  NotifyAttributeChanged(html_names::kAriaBrailleroledescriptionAttr);
+}
+
 AtomicString AccessibleNode::checked() const {
   return GetProperty(AOMStringProperty::kChecked);
 }
@@ -607,12 +651,13 @@ void AccessibleNode::setDisabled(absl::optional<bool> value) {
   NotifyAttributeChanged(html_names::kAriaDisabledAttr);
 }
 
-AccessibleNode* AccessibleNode::errorMessage() const {
-  return GetProperty(element_, AOMRelationProperty::kErrorMessage);
+AccessibleNodeList* AccessibleNode::errorMessage() const {
+  return GetProperty(element_, AOMRelationListProperty::kErrorMessage);
 }
 
-void AccessibleNode::setErrorMessage(AccessibleNode* error_message) {
-  SetRelationProperty(AOMRelationProperty::kErrorMessage, error_message);
+void AccessibleNode::setErrorMessage(AccessibleNodeList* error_messages) {
+  SetRelationListProperty(AOMRelationListProperty::kErrorMessage,
+                          error_messages);
   NotifyAttributeChanged(html_names::kAriaErrormessageAttr);
 }
 
@@ -634,12 +679,12 @@ void AccessibleNode::setFlowTo(AccessibleNodeList* flow_to) {
   NotifyAttributeChanged(html_names::kAriaFlowtoAttr);
 }
 
-AtomicString AccessibleNode::hasPopUp() const {
-  return GetProperty(AOMStringProperty::kHasPopUp);
+AtomicString AccessibleNode::hasPopup() const {
+  return GetProperty(AOMStringProperty::kHasPopup);
 }
 
-void AccessibleNode::setHasPopUp(const AtomicString& has_popup) {
-  SetStringProperty(AOMStringProperty::kHasPopUp, has_popup);
+void AccessibleNode::setHasPopup(const AtomicString& has_popup) {
+  SetStringProperty(AOMStringProperty::kHasPopup, has_popup);
   NotifyAttributeChanged(html_names::kAriaHaspopupAttr);
 }
 
@@ -948,6 +993,12 @@ void AccessibleNode::appendChild(AccessibleNode* child,
     return;
   }
   child->document_ = GetAncestorDocument();
+  if (!child->document_) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidAccessError,
+        "AccessibleNode must have an ancestor that is attached to a document.");
+    return;
+  }
   child->parent_ = this;
 
   if (!GetExecutionContext()) {
@@ -994,10 +1045,8 @@ void AccessibleNode::removeChild(AccessibleNode* old_child,
         "Node to remove is not a child of this node.");
     return;
   }
-  auto* ix = std::find_if(children_.begin(), children_.end(),
-                          [old_child](const Member<AccessibleNode> child) {
-                            return child.Get() == old_child;
-                          });
+  auto* ix =
+      base::ranges::find(children_, old_child, &Member<AccessibleNode>::Get);
   if (ix == children_.end()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidAccessError,
@@ -1019,7 +1068,7 @@ bool AccessibleNode::IsStringTokenProperty(AOMStringProperty property) {
     case AOMStringProperty::kAutocomplete:
     case AOMStringProperty::kChecked:
     case AOMStringProperty::kCurrent:
-    case AOMStringProperty::kHasPopUp:
+    case AOMStringProperty::kHasPopup:
     case AOMStringProperty::kInvalid:
     case AOMStringProperty::kLive:
     case AOMStringProperty::kOrientation:
@@ -1027,6 +1076,8 @@ bool AccessibleNode::IsStringTokenProperty(AOMStringProperty property) {
     case AOMStringProperty::kRelevant:
     case AOMStringProperty::kSort:
       return true;
+    case AOMStringProperty::kAriaBrailleLabel:
+    case AOMStringProperty::kAriaBrailleRoleDescription:
     case AOMStringProperty::kDescription:
     case AOMStringProperty::kKeyShortcuts:
     case AOMStringProperty::kLabel:
@@ -1163,8 +1214,6 @@ void AccessibleNode::NotifyAttributeChanged(
     return;
   }
 
-  // By definition, any attribute on an AccessibleNode is interesting to
-  // AXObjectCache, so no need to check return value.
   cache->HandleAttributeChanged(attribute, element_);
 }
 
@@ -1182,7 +1231,8 @@ void AccessibleNode::Trace(Visitor* visitor) const {
   visitor->Trace(relation_list_properties_);
   visitor->Trace(children_);
   visitor->Trace(parent_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
+  ElementRareDataField::Trace(visitor);
 }
 
 }  // namespace blink

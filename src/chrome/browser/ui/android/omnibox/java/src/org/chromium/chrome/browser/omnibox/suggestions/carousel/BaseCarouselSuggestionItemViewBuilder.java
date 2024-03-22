@@ -1,17 +1,22 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.omnibox.suggestions.carousel;
 
+import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.IntDef;
 
+import org.chromium.chrome.browser.omnibox.OmniboxFeatures;
 import org.chromium.chrome.browser.omnibox.R;
 import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
+import org.chromium.chrome.browser.omnibox.suggestions.querytiles.QueryTileView;
+import org.chromium.chrome.browser.omnibox.suggestions.querytiles.QueryTileViewBinder;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.components.browser_ui.widget.tile.TileView;
 import org.chromium.components.browser_ui.widget.tile.TileViewBinder;
@@ -22,20 +27,22 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /**
- * ViewBuilder for the Carousel suggestion.
- * Its sole responsibility is to inflate appropriate view layouts for supplied view type.
+ * ViewBuilder for the Carousel suggestion. Its sole responsibility is to inflate appropriate view
+ * layouts for supplied view type.
  */
 public class BaseCarouselSuggestionItemViewBuilder {
     /**
-     * ViewType defines a list of Views that are understood by the Carousel.
-     * Views below can be used by any instance of the carousel, guaranteeing that each instance
-     * will look like every other.
+     * ViewType defines a list of Views that are understood by the Carousel. Views below can be used
+     * by any instance of the carousel, guaranteeing that each instance will look like every other.
      */
     @IntDef({ViewType.TILE_VIEW})
     @Retention(RetentionPolicy.SOURCE)
     public @interface ViewType {
         /** Carousel item is a TileView instance. */
         public int TILE_VIEW = 0;
+
+        /** Carousel item is a QueryTile instance. */
+        public int QUERY_TILE = 1;
     }
 
     /**
@@ -46,8 +53,14 @@ public class BaseCarouselSuggestionItemViewBuilder {
      */
     public static BaseCarouselSuggestionView createView(ViewGroup parent) {
         SimpleRecyclerViewAdapter adapter = new SimpleRecyclerViewAdapter(new ModelList());
-        adapter.registerType(ViewType.TILE_VIEW,
-                BaseCarouselSuggestionItemViewBuilder::createTileView, TileViewBinder::bind);
+        adapter.registerType(
+                ViewType.TILE_VIEW,
+                BaseCarouselSuggestionItemViewBuilder::createTileView,
+                TileViewBinder::bind);
+        adapter.registerType(
+                ViewType.QUERY_TILE,
+                BaseCarouselSuggestionItemViewBuilder::createQueryTile,
+                QueryTileViewBinder::bind);
         return new BaseCarouselSuggestionView(parent.getContext(), adapter);
     }
 
@@ -58,14 +71,44 @@ public class BaseCarouselSuggestionItemViewBuilder {
      * @return A TileView element for the individual URL suggestion.
      */
     private static TileView createTileView(ViewGroup parent) {
-        TileView tile = (TileView) LayoutInflater.from(parent.getContext())
+        Context context = parent.getContext();
+        TileView tile =
+                (TileView)
+                        LayoutInflater.from(context)
                                 .inflate(R.layout.suggestions_tile_view, parent, false);
         tile.setClickable(true);
+        applyViewBackground(tile);
 
-        Drawable background =
-                OmniboxResourceProvider.resolveAttributeToDrawable(parent.getContext(),
-                        BrandedColorScheme.LIGHT_BRANDED_THEME, R.attr.selectableItemBackground);
-        tile.setBackgroundDrawable(background);
+        // Update the background color of the solid circle around the icon (typically a favicon).
+        if (OmniboxFeatures.shouldShowModernizeVisualUpdate(context)) {
+            Drawable modernizedBackground =
+                    OmniboxResourceProvider.getDrawable(
+                            context, R.drawable.tile_view_icon_background_modern_updated);
+            View iconBackground = tile.findViewById(R.id.tile_view_icon_background);
+            iconBackground.setBackground(modernizedBackground);
+        }
         return tile;
+    }
+
+    /**
+     * Create a QueryTile element.
+     *
+     * @param parent ViewGroup that will host the QueryTile.
+     * @return A View element hosting QueryTile.
+     */
+    private static QueryTileView createQueryTile(ViewGroup parent) {
+        var tile = new QueryTileView(parent.getContext());
+        applyViewBackground(tile);
+        return tile;
+    }
+
+    private static void applyViewBackground(View view) {
+        view.setFocusable(true);
+        Drawable background =
+                OmniboxResourceProvider.resolveAttributeToDrawable(
+                        view.getContext(),
+                        BrandedColorScheme.APP_DEFAULT,
+                        R.attr.selectableItemBackground);
+        view.setBackground(background);
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Utilities for testing IME (input method editor).
- */
+/** Utilities for testing IME (input method editor). */
 public class ImeTestUtils {
     private static final long MAX_WAIT_TIME_MILLIS = 5000;
 

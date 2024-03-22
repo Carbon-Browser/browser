@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,14 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_item.h"
+
+// Possible warning states of a SettingsCheckItem.
+enum class WarningState {
+  kSafe,     // Everything is good, no warning to show (green icon).
+  kWarning,  // There is a warning, but it's not high priority (yellow icon).
+  kSevereWarning,  // There is a high priority warning (red icon).
+};
 
 // SettingsCheckItem is a model class that uses SettingsCheckCell.
 @interface SettingsCheckItem : TableViewItem
@@ -21,10 +28,16 @@
 // The image to display on the leading side of `text` (optional). If this image
 // should be tinted to match the text color (e.g. in dark mode), the provided
 // image should have rendering mode UIImageRenderingModeAlwaysTemplate.
-@property(nonatomic, strong) UIImage* leadingImage;
+@property(nonatomic, strong) UIImage* leadingIcon;
 
 // Tint color for `leadingImage`.
-@property(nonatomic, copy) UIColor* leadingImageTintColor;
+@property(nonatomic, copy) UIColor* leadingIconTintColor;
+
+// The background color of the icon.
+@property(nonatomic, strong) UIColor* leadingIconBackgroundColor;
+
+// The corner radius of the UIImage view.
+@property(nonatomic, assign) CGFloat leadingIconCornerRadius;
 
 // The image to display on the trailing side of `text` (required). If this image
 // should be tinted to match the text color (e.g. in dark mode), the provided
@@ -48,6 +61,9 @@
 // Disabled cell are automatically drawn with dimmed text and without
 // `trailingImage` or `activityIndicator`.
 @property(nonatomic, assign, getter=isEnabled) BOOL enabled;
+
+// The WarningState of the item.
+@property(nonatomic, assign) WarningState warningState;
 
 @end
 

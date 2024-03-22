@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,11 +19,9 @@
 #include <memory>
 #include <string>
 
-#include "ash/components/disks/disk_mount_manager.h"
-#include "base/compiler_specific.h"
 #include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "components/storage_monitor/storage_monitor.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -58,8 +56,8 @@ class StorageMonitorCros : public StorageMonitor,
                              const ash::disks::Disk& disk) override;
   void OnMountEvent(
       ash::disks::DiskMountManager::MountEvent event,
-      chromeos::MountError error_code,
-      const ash::disks::DiskMountManager::MountPointInfo& mount_info) override;
+      ash::MountError error_code,
+      const ash::disks::DiskMountManager::MountPoint& mount_info) override;
 
   // StorageMonitor implementation.
   bool GetStorageInfoForPath(const base::FilePath& path,
@@ -80,7 +78,7 @@ class StorageMonitorCros : public StorageMonitor,
   // device attach notification. |has_dcim| is true if the attached device has
   // a DCIM folder.
   void AddMountedPath(
-      const ash::disks::DiskMountManager::MountPointInfo& mount_info,
+      const ash::disks::DiskMountManager::MountPoint& mount_info,
       bool has_dcim);
 
   // Adds the mount point in |disk| to |mount_map_| and send a device

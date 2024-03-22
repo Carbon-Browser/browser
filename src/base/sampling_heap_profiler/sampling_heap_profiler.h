@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/threading/thread_id_name_manager.h"
-#include "build/build_config.h"
 
 namespace heap_profiling {
 class HeapProfilerControllerTest;
@@ -42,13 +41,13 @@ class BASE_EXPORT SamplingHeapProfiler
     // Total size attributed to the sample.
     size_t total;
     // Type of the allocator.
-    PoissonAllocationSampler::AllocatorType allocator;
+    base::allocator::dispatcher::AllocationSubsystem allocator;
     // Context as provided by the allocation hook.
     const char* context = nullptr;
     // Name of the thread that made the sampled allocation.
     const char* thread_name = nullptr;
     // Call stack of PC addresses responsible for the allocation.
-    std::vector<void*> stack;
+    std::vector<const void*> stack;
 
     // Public for testing.
     Sample(size_t size, size_t total, uint32_t ordinal);
@@ -58,6 +57,17 @@ class BASE_EXPORT SamplingHeapProfiler
 
 
     uint32_t ordinal;
+  };
+
+  // On Android this is logged to UMA - keep in sync AndroidStackUnwinder in
+  // enums.xml.
+  enum class StackUnwinder {
+    DEPRECATED_kNotChecked,
+    kDefault,
+    DEPRECATED_kCFIBacktrace,
+    kUnavailable,
+    kFramePointers,
+    kMaxValue = kFramePointers,
   };
 
   // Starts collecting allocation samples. Returns the current profile_id.
@@ -90,7 +100,9 @@ class BASE_EXPORT SamplingHeapProfiler
   // Captures up to |max_entries| stack frames using the buffer pointed by
   // |frames|. Puts the number of captured frames into the |count| output
   // parameters. Returns the pointer to the topmost frame.
-  void** CaptureStackTrace(void** frames, size_t max_entries, size_t* count);
+  const void** CaptureStackTrace(const void** frames,
+                                 size_t max_entries,
+                                 size_t* count);
 
   static void Init();
   static SamplingHeapProfiler* Get();
@@ -109,7 +121,7 @@ class BASE_EXPORT SamplingHeapProfiler
   void SampleAdded(void* address,
                    size_t size,
                    size_t total,
-                   PoissonAllocationSampler::AllocatorType type,
+                   base::allocator::dispatcher::AllocationSubsystem type,
                    const char* context) override;
   void SampleRemoved(void* address) override;
 
@@ -144,10 +156,8 @@ class BASE_EXPORT SamplingHeapProfiler
   // Whether it should record thread names.
   std::atomic<bool> record_thread_names_{false};
 
-#if BUILDFLAG(IS_ANDROID)
-  // Whether to use CFI unwinder or default unwinder.
-  std::atomic<bool> use_default_unwinder_{false};
-#endif
+  // Which unwinder to use.
+  std::atomic<StackUnwinder> unwinder_{StackUnwinder::kDefault};
 
   friend class heap_profiling::HeapProfilerControllerTest;
   friend class NoDestructor<SamplingHeapProfiler>;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,17 @@
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
+#include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/sharing/fake_device_info.h"
 #include "chrome/browser/sharing/sharing_app.h"
 #include "chrome/browser/sharing/sharing_metrics.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
-#include "chrome/browser/ui/views/hover_button.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/url_formatter/elide_url.h"
-#include "components/vector_icons/vector_icons.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -72,7 +72,7 @@ class SharingDialogViewTest : public TestWithBrowserView {
   std::vector<SharingApp> CreateApps(int count) {
     std::vector<SharingApp> apps;
     for (int i = 0; i < count; ++i) {
-      apps.emplace_back(&vector_icons::kOpenInNewIcon, gfx::Image(),
+      apps.emplace_back(&kOpenInNewIcon, gfx::Image(),
                         base::UTF8ToUTF16("app" + base::NumberToString(i)),
                         "app_id_" + base::NumberToString(i));
     }
@@ -122,8 +122,8 @@ class SharingDialogViewTest : public TestWithBrowserView {
   testing::MockFunction<void(const SharingApp&)> app_callback_;
 
  private:
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
-  raw_ptr<SharingDialogView> dialog_ = nullptr;
+  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
+  raw_ptr<SharingDialogView, DanglingUntriaged> dialog_ = nullptr;
 };
 
 TEST_F(SharingDialogViewTest, PopulateDialogView) {
@@ -149,8 +149,7 @@ TEST_F(SharingDialogViewTest, DevicePressed) {
 }
 
 TEST_F(SharingDialogViewTest, AppPressed) {
-  SharingApp app(&vector_icons::kOpenInNewIcon, gfx::Image(), u"app0",
-                 std::string());
+  SharingApp app(&kOpenInNewIcon, gfx::Image(), u"app0", std::string());
   EXPECT_CALL(app_callback_, Call(AppEquals(&app)));
 
   auto dialog_data = CreateDialogData(/*devices=*/3, /*apps=*/2);

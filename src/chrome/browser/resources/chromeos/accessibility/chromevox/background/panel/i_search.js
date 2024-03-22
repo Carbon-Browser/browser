@@ -1,10 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
  * @fileoverview The logic behind incremental search.
  */
+import {AutomationPredicate} from '../../../common/automation_predicate.js';
+import {AutomationUtil} from '../../../common/automation_util.js';
+import {constants} from '../../../common/constants.js';
 import {Cursor} from '../../../common/cursors/cursor.js';
 
 import {ISearchHandler} from './i_search_handler.js';
@@ -46,7 +49,7 @@ export class ISearch {
    */
   search(searchStr, dir, opt_nextObject) {
     clearTimeout(this.callbackId_);
-    const step = function() {
+    const step = () => {
       searchStr = searchStr.toLocaleLowerCase();
       const node = this.cursor.node;
       let result = node;
@@ -72,7 +75,7 @@ export class ISearch {
       }
     };
 
-    this.callbackId_ = setTimeout(step.bind(this), 0);
+    this.callbackId_ = setTimeout(() => step(), 0);
   }
 
   clear() {

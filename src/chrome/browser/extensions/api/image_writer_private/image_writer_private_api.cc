@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/api/image_writer_private/error_constants.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation_manager.h"
@@ -81,16 +81,16 @@ ImageWriterPrivateWriteFromUrlFunction::Run() {
     return RespondNow(Error(image_writer::error::kDeviceWriteError));
   }
 #endif
-  std::unique_ptr<image_writer_api::WriteFromUrl::Params> params(
-      image_writer_api::WriteFromUrl::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<image_writer_api::WriteFromUrl::Params> params =
+      image_writer_api::WriteFromUrl::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   GURL url(params->image_url);
   if (!url.is_valid())
     return RespondNow(Error(image_writer::error::kUrlInvalid));
 
   std::string hash;
-  if (params->options.get() && params->options->image_hash.get()) {
+  if (params->options && params->options->image_hash) {
     hash = *params->options->image_hash;
   }
 
@@ -199,9 +199,9 @@ ImageWriterPrivateDestroyPartitionsFunction::Run() {
   }
 #endif
 
-  std::unique_ptr<image_writer_api::DestroyPartitions::Params> params(
-      image_writer_api::DestroyPartitions::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<image_writer_api::DestroyPartitions::Params> params =
+      image_writer_api::DestroyPartitions::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   image_writer::ImageWriterControllerLacros::Get(browser_context())

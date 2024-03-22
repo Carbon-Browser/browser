@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -170,3 +170,23 @@ TEST_F(IsClientInSampleTest, UsesPostFREFixFeatureWhenPrefSet) {
   }
 }
 #endif  // BUILDFLAG(IS_ANDROID)
+
+#if BUILDFLAG(IS_WIN)
+TEST_F(IsClientInSampleTest, IsClientInSampleCrashTest) {
+  {
+    base::test::ScopedFeatureList feature_list;
+    feature_list.InitAndEnableFeature(
+        metrics::internal::kMetricsReportingFeature);
+    EXPECT_TRUE(ChromeMetricsServicesManagerClient::IsClientInSampleForCrash());
+  }
+
+  {
+    base::test::ScopedFeatureList feature_list;
+    feature_list.InitAndEnableFeatureWithParameters(
+        metrics::internal::kMetricsReportingFeature,
+        {{"disable_crashes", "true"}});
+    EXPECT_FALSE(
+        ChromeMetricsServicesManagerClient::IsClientInSampleForCrash());
+  }
+}
+#endif  // BUILDFLAG(IS_WIN)

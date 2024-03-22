@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ash/constants/ash_features.h"
@@ -23,11 +24,9 @@
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/prefs/pref_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
-namespace ash {
-namespace personalization_app {
+namespace ash::personalization_app {
 
 namespace {
 
@@ -40,16 +39,13 @@ bool CompareSearchResults(const mojom::SearchResultPtr& a,
 }  // namespace
 
 SearchHandler::SearchHandler(
-    ::chromeos::local_search_service::LocalSearchServiceProxy&
-        local_search_service_proxy,
+    local_search_service::LocalSearchServiceProxy& local_search_service_proxy,
     PrefService* pref_service,
     std::unique_ptr<EnterprisePolicyDelegate> enterprise_policy_delegate)
     : search_tag_registry_(std::make_unique<SearchTagRegistry>(
           local_search_service_proxy,
           pref_service,
           std::move(enterprise_policy_delegate))) {
-  DCHECK(ash::features::IsPersonalizationHubEnabled())
-      << "Personalization search requires personalization hub feature";
   local_search_service_proxy.GetIndex(
       local_search_service::IndexId::kPersonalization,
       local_search_service::Backend::kLinearMap,
@@ -58,6 +54,9 @@ SearchHandler::SearchHandler(
 
   search_tag_registry_observer_.Observe(search_tag_registry_.get());
 }
+
+// For testing purposes only.
+SearchHandler::SearchHandler() = default;
 
 SearchHandler::~SearchHandler() = default;
 
@@ -92,11 +91,10 @@ void SearchHandler::OnRegistryUpdated() {
 void SearchHandler::OnLocalSearchDone(
     SearchCallback callback,
     uint32_t max_num_results,
-    ::chromeos::local_search_service::ResponseStatus response_status,
-    const absl::optional<std::vector<::chromeos::local_search_service::Result>>&
+    local_search_service::ResponseStatus response_status,
+    const std::optional<std::vector<local_search_service::Result>>&
         local_search_service_results) {
-  if (response_status !=
-      ::chromeos::local_search_service::ResponseStatus::kSuccess) {
+  if (response_status != local_search_service::ResponseStatus::kSuccess) {
     LOG(ERROR) << "Cannot search; LocalSearchService returned "
                << static_cast<int>(response_status)
                << ". Returning empty results array.";
@@ -124,7 +122,7 @@ void SearchHandler::OnLocalSearchDone(
 
     search_results.push_back(mojom::SearchResult::New(
         /*id=*/search_concept->id,
-        /*text=*/l10n_util::GetStringUTF16(matching_content_id),
+        /*text=*/SearchTagRegistry::MessageIdToString(matching_content_id),
         /*relative_url=*/search_concept->relative_url,
         /*relevance_score=*/local_result.score));
   }
@@ -140,5 +138,4 @@ void SearchHandler::OnLocalSearchDone(
   std::move(callback).Run(std::move(search_results));
 }
 
-}  // namespace personalization_app
-}  // namespace ash
+}  // namespace ash::personalization_app

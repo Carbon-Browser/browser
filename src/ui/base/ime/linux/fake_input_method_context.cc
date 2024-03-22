@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,27 +21,20 @@ bool FakeInputMethodContext::IsPeekKeyEvent(const ui::KeyEvent& key_event) {
 
 void FakeInputMethodContext::Reset() {}
 
-void FakeInputMethodContext::UpdateFocus(bool has_client,
-                                         TextInputType old_type,
-                                         TextInputType new_type) {}
+void FakeInputMethodContext::UpdateFocus(
+    bool has_client,
+    TextInputType old_type,
+    const TextInputClientAttributes& new_client_attributes,
+    TextInputClient::FocusReason reason) {}
 
 void FakeInputMethodContext::SetCursorLocation(const gfx::Rect& rect) {}
 
 void FakeInputMethodContext::SetSurroundingText(
     const std::u16string& text,
-    const gfx::Range& selection_range) {}
-
-void FakeInputMethodContext::SetContentType(TextInputType type,
-                                            TextInputMode mode,
-                                            uint32_t flags,
-                                            bool should_do_learning) {}
-
-void FakeInputMethodContext::SetGrammarFragmentAtCursor(
-    const ui::GrammarFragment& fragment) {}
-
-void FakeInputMethodContext::SetAutocorrectInfo(
-    const gfx::Range& autocorrect_range,
-    const gfx::Rect& autocorrect_bounds) {}
+    const gfx::Range& text_range,
+    const gfx::Range& selection_range,
+    const absl::optional<GrammarFragment>& fragment,
+    const absl::optional<AutocorrectInfo>& autocorrect) {}
 
 VirtualKeyboardController*
 FakeInputMethodContext::GetVirtualKeyboardController() {

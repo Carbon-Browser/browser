@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/virtualkeyboard/virtual_keyboard.h"
 
+#include "base/trace_event/trace_event.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/renderer/core/css/document_style_environment_variables.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
@@ -12,6 +13,7 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/navigator.h"
+#include "third_party/blink/renderer/core/frame/viewport_data.h"
 #include "third_party/blink/renderer/core/geometry/dom_rect.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
@@ -52,11 +54,23 @@ const AtomicString& VirtualKeyboard::InterfaceName() const {
 VirtualKeyboard::~VirtualKeyboard() = default;
 
 bool VirtualKeyboard::overlaysContent() const {
-  return overlays_content_;
+  LocalDOMWindow* window = GetSupplementable()->DomWindow();
+  if (!window)
+    return false;
+
+  DCHECK(window->GetFrame());
+
+  if (!window->GetFrame()->IsOutermostMainFrame())
+    return false;
+
+  return window->GetFrame()
+      ->GetDocument()
+      ->GetViewportData()
+      .GetVirtualKeyboardOverlaysContent();
 }
 
 DOMRect* VirtualKeyboard::boundingRect() const {
-  return bounding_rect_;
+  return bounding_rect_.Get();
 }
 
 void VirtualKeyboard::setOverlaysContent(bool overlays_content) {
@@ -64,12 +78,13 @@ void VirtualKeyboard::setOverlaysContent(bool overlays_content) {
   if (!window)
     return;
 
+  DCHECK(window->GetFrame());
+
   if (window->GetFrame()->IsOutermostMainFrame()) {
-    if (overlays_content != overlays_content_) {
-      auto& local_frame_host = window->GetFrame()->GetLocalFrameHostRemote();
-      local_frame_host.SetVirtualKeyboardOverlayPolicy(overlays_content);
-      overlays_content_ = overlays_content;
-    }
+    window->GetFrame()
+        ->GetDocument()
+        ->GetViewportData()
+        .SetVirtualKeyboardOverlaysContent(overlays_content);
   } else {
     GetExecutionContext()->AddConsoleMessage(
         MakeGarbageCollected<ConsoleMessage>(
@@ -78,10 +93,15 @@ void VirtualKeyboard::setOverlaysContent(bool overlays_content) {
             "Setting overlaysContent is only supported from "
             "the top level browsing context"));
   }
+  if (GetExecutionContext()) {
+    UseCounter::Count(GetExecutionContext(),
+                      WebFeature::kVirtualKeyboardOverlayPolicy);
+  }
 }
 
 void VirtualKeyboard::VirtualKeyboardOverlayChanged(
     const gfx::Rect& keyboard_rect) {
+  TRACE_EVENT0("vk", "VirtualKeyboard::VirtualKeyboardOverlayChanged");
   LocalDOMWindow* window = GetSupplementable()->DomWindow();
   if (!window)
     return;
@@ -106,6 +126,7 @@ void VirtualKeyboard::VirtualKeyboardOverlayChanged(
 }
 
 void VirtualKeyboard::show() {
+  TRACE_EVENT0("vk", "VirtualKeyboard::show");
   LocalDOMWindow* window = GetSupplementable()->DomWindow();
   if (!window)
     return;
@@ -124,6 +145,7 @@ void VirtualKeyboard::show() {
 }
 
 void VirtualKeyboard::hide() {
+  TRACE_EVENT0("vk", "VirtualKeyboard::hide");
   LocalDOMWindow* window = GetSupplementable()->DomWindow();
   if (!window)
     return;
@@ -134,7 +156,7 @@ void VirtualKeyboard::hide() {
 
 void VirtualKeyboard::Trace(Visitor* visitor) const {
   visitor->Trace(bounding_rect_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   Supplement<Navigator>::Trace(visitor);
 }
 

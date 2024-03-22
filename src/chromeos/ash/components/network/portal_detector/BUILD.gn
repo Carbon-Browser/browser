@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,8 +8,8 @@ assert(is_chromeos_ash, "Non-ChromeOS builds cannot depend on //chromeos/ash")
 
 source_set("portal_detector") {
   configs += [ "//chromeos/ash/components/network:network_config" ]
+  public_deps = [ "//base" ]
   deps = [
-    "//base",
     "//chromeos/ash/components/network",
     "//components/device_event_log",
     "//net",
@@ -17,8 +17,6 @@ source_set("portal_detector") {
   sources = [
     "network_portal_detector.cc",
     "network_portal_detector.h",
-    "network_portal_detector_strategy.cc",
-    "network_portal_detector_strategy.h",
     "network_portal_detector_stub.cc",
     "network_portal_detector_stub.h",
   ]
@@ -26,10 +24,8 @@ source_set("portal_detector") {
 
 source_set("test_support") {
   testonly = true
-  deps = [
-    ":portal_detector",
-    "//testing/gmock",
-  ]
+  public_deps = [ ":portal_detector" ]
+  deps = [ "//testing/gmock" ]
   sources = [
     "mock_network_portal_detector.cc",
     "mock_network_portal_detector.h",

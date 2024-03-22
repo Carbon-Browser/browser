@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 
 #include <tuple>
 
-#include "ash/components/arc/arc_features.h"
 #include "ash/components/arc/compat_mode/metrics.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/events/base_event_utils.h"
 
@@ -109,19 +108,7 @@ ui::EventDispatchDetails TouchModeMouseRewriter::RewriteEvent(
 
   const ui::MouseEvent& mouse_event = *event.AsMouseEvent();
   if (mouse_event.IsRightMouseButton() || mouse_event.IsLeftMouseButton()) {
-    if (!base::FeatureList::IsEnabled(arc::kRightClickLongPress)) {
-      if (mouse_event.IsRightMouseButton()) {
-        RecordRightClickConversionResultHistogram(
-            RightClickConversionResultHistogramResult::kDisabled);
-      }
-      return SendEvent(continuation, &event);
-    }
-
     if (!in_resize_locked) {
-      if (mouse_event.IsRightMouseButton()) {
-        RecordRightClickConversionResultHistogram(
-            RightClickConversionResultHistogramResult::kNotConverted);
-      }
       return SendEvent(continuation, &event);
     }
 
@@ -147,13 +134,17 @@ void TouchModeMouseRewriter::SendScrollEvent(
     const Continuation continuation) {
   if (scroll_timeout_.is_zero())
     return;
-  const int step =
+  const int y_step =
       scroll_y_offset_ * (kSmoothScrollEventInterval / scroll_timeout_);
+  const int x_step =
+      scroll_x_offset_ * (kSmoothScrollEventInterval / scroll_timeout_);
   ui::ScrollEvent scroll_event(ui::ET_SCROLL, original_event.location_f(),
                                original_event.root_location_f(),
-                               ui::EventTimeForNow(), 0, 0, step, 0, step, 1);
+                               ui::EventTimeForNow(), 0, x_step, y_step, x_step,
+                               y_step, 1);
   std::ignore = SendEvent(continuation, &scroll_event);
-  scroll_y_offset_ -= step;
+  scroll_y_offset_ -= y_step;
+  scroll_x_offset_ -= x_step;
   scroll_timeout_ -= kSmoothScrollEventInterval;
   if (scroll_timeout_.is_zero()) {
     ui::ScrollEvent fling_start_event(ui::ET_SCROLL_FLING_START,
@@ -162,7 +153,7 @@ void TouchModeMouseRewriter::SendScrollEvent(
                                       ui::EventTimeForNow(), 0, 0, 0, 0, 0, 0);
     std::ignore = SendEvent(continuation, &fling_start_event);
   } else {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&TouchModeMouseRewriter::SendScrollEvent,
                        weak_ptr_factory_.GetWeakPtr(), original_event,
@@ -176,12 +167,13 @@ ui::EventDispatchDetails TouchModeMouseRewriter::RewriteMouseWheelEvent(
     const Continuation continuation) {
   const bool started = !scroll_timeout_.is_zero();
   scroll_y_offset_ += kWheelToSmoothScrollScale * event.y_offset();
+  scroll_x_offset_ += kWheelToSmoothScrollScale * event.x_offset();
   scroll_timeout_ = kSmoothScrollTimeout;
-  if (started) {
+  if (!started) {
     ui::ScrollEvent fling_cancel_event(
         ui::ET_SCROLL_FLING_CANCEL, event.location_f(), event.root_location_f(),
         event.time_stamp(), 0, 0, 0, 0, 0, 0);
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TouchModeMouseRewriter::SendScrollEvent,
                        weak_ptr_factory_.GetWeakPtr(), event, continuation));
@@ -204,14 +196,11 @@ ui::EventDispatchDetails TouchModeMouseRewriter::RewriteMouseClickEvent(
     }
     // Schedule the release event after |kLongPressInterval|.
     release_event_scheduled_ = true;
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&TouchModeMouseRewriter::SendReleaseEvent,
                        weak_ptr_factory_.GetWeakPtr(), event, continuation),
         kLongPressInterval);
-
-    RecordRightClickConversionResultHistogram(
-        RightClickConversionResultHistogramResult::kConverted);
 
     // Send the press event now.
     ui::MouseEvent press_event(

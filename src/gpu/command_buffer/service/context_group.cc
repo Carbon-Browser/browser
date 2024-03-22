@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,7 +76,6 @@ ContextGroup::ContextGroup(
     FramebufferCompletenessCache* framebuffer_completeness_cache,
     const scoped_refptr<FeatureInfo>& feature_info,
     bool bind_generates_resource,
-    gpu::ImageFactory* image_factory,
     gl::ProgressReporter* progress_reporter,
     const GpuFeatureInfo& gpu_feature_info,
     ServiceDiscardableManager* discardable_manager,
@@ -118,7 +117,6 @@ ContextGroup::ContextGroup(
       uniform_buffer_offset_alignment_(1u),
       program_cache_(nullptr),
       feature_info_(feature_info),
-      image_factory_(image_factory),
       use_passthrough_cmd_decoder_(false),
       passthrough_resources_(new PassthroughResources),
       passthrough_discardable_manager_(passthrough_discardable_manager),

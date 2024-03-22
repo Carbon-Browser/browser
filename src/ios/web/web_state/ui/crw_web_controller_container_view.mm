@@ -1,20 +1,16 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/web_state/ui/crw_web_controller_container_view.h"
 
-#include "base/check.h"
-#include "base/notreached.h"
+#import "base/check.h"
+#import "base/notreached.h"
 #import "ios/web/common/crw_content_view.h"
 #import "ios/web/common/crw_viewport_adjustment_container.h"
 #import "ios/web/common/crw_web_view_content_view.h"
-#include "ios/web/common/features.h"
+#import "ios/web/common/features.h"
 #import "ios/web/web_state/ui/crw_web_view_proxy_impl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface CRWWebControllerContainerView () <CRWViewportAdjustmentContainer>
 
@@ -28,6 +24,7 @@
 @end
 
 @implementation CRWWebControllerContainerView
+
 @synthesize webViewContentView = _webViewContentView;
 @synthesize delegate = _delegate;
 
@@ -55,7 +52,7 @@
 }
 
 - (void)dealloc {
-  self.contentViewProxy.contentView = nil;
+  [self.contentViewProxy clearContentViewAndAddPlaceholder:NO];
 }
 
 #pragma mark Accessors
@@ -85,6 +82,20 @@
 
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
   [super traitCollectionDidChange:previousTraitCollection];
+  if ((self.traitCollection.verticalSizeClass !=
+       previousTraitCollection.verticalSizeClass) ||
+      (self.traitCollection.horizontalSizeClass !=
+       previousTraitCollection.horizontalSizeClass) ||
+      self.traitCollection.preferredContentSizeCategory !=
+          previousTraitCollection.preferredContentSizeCategory) {
+    // Reset zoom scale when the window is resized (portrait to landscape,
+    // landscape to portrait or multi-window resizing), or if text size is
+    // modified as websites can adjust to the preferred content size (using
+    // font: -apple-system-body;). It avoids being in a different zoomed
+    // position from where the user initially zoomed.
+    UIScrollView* scrollView = self.contentViewProxy.contentView.scrollView;
+    scrollView.zoomScale = scrollView.minimumZoomScale;
+  }
   if (previousTraitCollection.preferredContentSizeCategory !=
       self.traitCollection.preferredContentSizeCategory) {
     // In case the preferred content size changes, the layout is dirty.
@@ -95,7 +106,7 @@
 - (void)layoutSubviews {
   [super layoutSubviews];
 
-  // webViewContentView layout.  |-setNeedsLayout| is called in case any webview
+  // webViewContentView layout.  `-setNeedsLayout` is called in case any webview
   // layout updates need to occur despite the bounds size staying constant.
   self.webViewContentView.frame = self.bounds;
   [self.webViewContentView setNeedsLayout];
@@ -117,7 +128,7 @@
   if (!self.webViewContentView)
     return;
 
-  // If there's a containerWindow or |webViewContentView| is inactive, put it
+  // If there's a containerWindow or `webViewContentView` is inactive, put it
   // back where it belongs.
   if (containerWindow ||
       ![_delegate shouldKeepRenderProcessAliveForContainerView:self]) {
@@ -130,15 +141,15 @@
     return;
   }
 
-  // There's no window and |webViewContentView| is active, stash it.
+  // There's no window and `webViewContentView` is active, stash it.
   [_delegate containerView:self storeWebViewInWindow:self.webViewContentView];
 }
 
 #pragma mark Content Setters
 
-- (void)resetContent {
+- (void)resetContentForShutdown:(BOOL)shutdown {
   self.webViewContentView = nil;
-  self.contentViewProxy.contentView = nil;
+  [self.contentViewProxy clearContentViewAndAddPlaceholder:!shutdown];
 }
 
 - (void)displayWebViewContentView:(CRWWebViewContentView*)webViewContentView {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -106,7 +106,8 @@ TEST_F(ArcClipboardBridgeTest, GetClipContent_PlainText) {
 TEST_F(ArcClipboardBridgeTest, GetClipContent_Html) {
   {
     ui::ScopedClipboardWriter writer(ui::ClipboardBuffer::kCopyPaste);
-    writer.WriteHTML(kSampleHtml16, std::string());
+    writer.WriteHTML(kSampleHtml16, std::string(),
+                     ui::ClipboardContentType::kSanitized);
   }
 
   mojom::ClipDataPtr expected_clip_data =

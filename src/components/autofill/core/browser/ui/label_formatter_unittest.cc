@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,12 @@ namespace autofill {
 namespace {
 
 TEST(LabelFormatterTest, CreateWithMissingFieldTypes) {
-  const std::vector<AutofillProfile*> profiles{};
-  EXPECT_EQ(LabelFormatter::Create(profiles, "en-US", NAME_FIRST,
-                                   std::vector<ServerFieldType>()),
-            nullptr);
+  const std::vector<const AutofillProfile*> profiles{};
+  EXPECT_EQ(LabelFormatter::Create(profiles, "en-US", NAME_FIRST, {}), nullptr);
 }
 
 TEST(LabelFormatterTest, CreateWithUnsupportedFieldTypes) {
-  const std::vector<AutofillProfile*> profiles{};
+  const std::vector<const AutofillProfile*> profiles{};
   EXPECT_EQ(
       LabelFormatter::Create(profiles, "en-US", USERNAME, {USERNAME, PASSWORD}),
       nullptr);

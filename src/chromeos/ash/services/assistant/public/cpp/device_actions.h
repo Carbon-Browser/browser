@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list_types.h"
+#include "base/scoped_observation_traits.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 // Subscribes to App list events.
 class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AppListEventSubscriber
@@ -25,7 +25,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AppListEventSubscriber
       const std::vector<AndroidAppInfo>& apps_info) = 0;
 };
 
-// Main interface for |chromeos::assistant::Service| to execute device related
+// Main interface for |ash::assistant::Service| to execute device related
 // actions.
 class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) DeviceActions {
  public:
@@ -78,7 +78,30 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) DeviceActions {
       AppListEventSubscriber* subscriber) = 0;
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
+
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
+namespace chromeos::assistant {
+using ::ash::assistant::AppListEventSubscriber;
+using ::ash::assistant::DeviceActions;
+}  // namespace chromeos::assistant
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<ash::assistant::DeviceActions,
+                               ash::assistant::AppListEventSubscriber> {
+  static void AddObserver(ash::assistant::DeviceActions* source,
+                          ash::assistant::AppListEventSubscriber* observer) {
+    source->AddAndFireAppListEventSubscriber(observer);
+  }
+  static void RemoveObserver(ash::assistant::DeviceActions* source,
+                             ash::assistant::AppListEventSubscriber* observer) {
+    source->RemoveAppListEventSubscriber(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_PUBLIC_CPP_DEVICE_ACTIONS_H_

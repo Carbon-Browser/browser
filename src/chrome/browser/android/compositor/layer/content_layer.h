@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
-namespace cc {
+namespace cc::slim {
 class Layer;
 }
 
@@ -40,17 +40,19 @@ class ContentLayer : public Layer {
                      bool should_clip,
                      const gfx::Rect& clip);
 
-  scoped_refptr<cc::Layer> layer() override;
+  scoped_refptr<cc::slim::Layer> layer() override;
 
   gfx::Size ComputeSize(int id) const;
 
  protected:
   explicit ContentLayer(TabContentManager* tab_content_manager);
   ~ContentLayer() override;
+
+ private:
   // This is an intermediate shim layer whose children are
   // both the static and content layers (or either, or none, depending on which
   // is available).
-  scoped_refptr<cc::Layer> layer_;
+  scoped_refptr<cc::slim::Layer> layer_;
   raw_ptr<TabContentManager> tab_content_manager_;
 };
 

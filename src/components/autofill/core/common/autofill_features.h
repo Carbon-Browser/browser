@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,205 +14,212 @@
 namespace autofill::features {
 
 // All features in alphabetical order.
-COMPONENT_EXPORT(AUTOFILL) extern const base::Feature kAutofillAcrossIframes;
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillAcrossIframesIos);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillAddressProfileSavePrompt;
+BASE_DECLARE_FEATURE(
+    kAutofillAddressProfileSavePromptAddressVerificationSupport);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillGivePrecedenceToNumericQuantities);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillAddressProfileSavePromptNicknameSupport);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillAllowDuplicateFormSubmissions);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillAssociateForms);
+COMPONENT_EXPORT(AUTOFILL)
+extern const base::FeatureParam<base::TimeDelta> kAutofillAssociateFormsTTL;
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillInferCountryCallingCode);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillConsiderPhoneNumberSeparatorsValidLabels);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillContentEditables);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillDefaultToCityAndNumber);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillDeferSubmissionClassificationAfterAjax);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillDontPreserveAutofillState);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableSelectList);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForBetweenStreets);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForAdminLevel2);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForAddressOverflow);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForAddressOverflowAndLandmark);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForBetweenStreetsOrLandmark);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForLandmark);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableParsingOfStreetLocation);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableRationalizationEngineForMX);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillPredictionsForAutocompleteUnrecognized);
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<bool>
-    kAutofillAutoBlockSaveAddressProfilePrompt;
+    kAutofillImportFromAutocompleteUnrecognized;
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<int>
-    kAutofillAutoBlockSaveAddressProfilePromptExpirationDays;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<int>
-    kAutofillAutoBlockSaveAddressProfilePromptStrikeLimit;
+BASE_DECLARE_FEATURE(kAutofillFallbackForAutocompleteUnrecognized);
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<bool>
-    kAutofillAutoBlockUpdateAddressProfilePrompt;
+    kAutofillFallForAutocompleteUnrecognizedOnAllAddressField;
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillDisableFilling);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillDisableAddressImport);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillDisableShadowHeuristics);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableBirthdateParsing);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableDependentLocalityParsing);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableDevtoolsIssues);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableExpirationDateImprovements);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableImportWhenMultiplePhoneNumbers);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableParsingEmptyPhoneNumberLabels);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableRankingFormulaAddressProfiles);
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<int>
-    kAutofillAutoBlockUpdateAddressProfilePromptExpirationDays;
+    kAutofillRankingFormulaAddressProfilesUsageHalfLife;
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillEnableRankingFormulaCreditCards);
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<int>
-    kAutofillAutoBlockUpdateAddressProfilePromptStrikeLimit;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature
-    kAutofillAddressProfileSavePromptAddressVerificationSupport;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillAddressProfileSavePromptNicknameSupport;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillAllowDuplicateFormSubmissions;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillAllowNonHttpActivation;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillInferCountryCallingCode;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillComplementCountryCodeOnImport;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillConsiderPhoneNumberSeparatorsValidLabels;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillConsiderPlaceholderForParsing;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillConsiderVariationCountryCodeForPhoneNumbers;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableWithinFencedFrame;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillCreateDataForTest;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillFillAndImportFromMoreFields;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillFillCreditCardAsPerFormatString;
-COMPONENT_EXPORT(AUTOFILL) extern const base::Feature kAutofillDisableFilling;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillDisableAddressImport;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillDisableShadowHeuristics;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableAccountWalletStorage;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableAugmentedPhoneCountryCode;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableBirthdateParsing;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableCompatibilitySupportForBirthdates;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableDependentLocalityParsing;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableExtendedAddressFormats;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableImportWhenMultiplePhoneNumbers;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableMultiStepImports;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<bool> kAutofillEnableMultiStepImportComplements;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<base::TimeDelta>
-    kAutofillMultiStepImportCandidateTTL;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableParsingEmptyPhoneNumberLabels;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableRankingFormula;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<int> kAutofillRankingFormulaUsageHalfLife;
+    kAutofillRankingFormulaCreditCardsUsageHalfLife;
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<int> kAutofillRankingFormulaVirtualCardBoost;
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<int>
     kAutofillRankingFormulaVirtualCardBoostHalfLife;
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableSupportForApartmentNumbers;
+BASE_DECLARE_FEATURE(kAutofillEnableEmailHeuristicOnlyAddressForms);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableLabelPrecedenceForTurkishAddresses;
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForApartmentNumbers);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableNameSurenameParsing;
+BASE_DECLARE_FEATURE(kAutofillEnableLabelPrecedenceForTurkishAddresses);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableProfileDeduplication;
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForParsingWithSharedLabels);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableSupportForParsingWithSharedLabels;
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForHonorificPrefixes);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableSupportForMoreStructureInNames;
+BASE_DECLARE_FEATURE(kAutofillEnableZipOnlyAddressForms);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableSupportForMoreStructureInAddresses;
+BASE_DECLARE_FEATURE(kAutofillExtractAllDatalists);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableSupportForMergingSubsetNames;
+BASE_DECLARE_FEATURE(kAutofillEnableSupportForPhoneNumberTrunkTypes);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableSupportForHonorificPrefixes;
+BASE_DECLARE_FEATURE(kAutofillDetectRemovedFormControls);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillExtractAllDatalists;
+BASE_DECLARE_FEATURE(kAutofillReplaceCachedWebElementsByRendererIds);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableSupportForPhoneNumberTrunkTypes;
+BASE_DECLARE_FEATURE(kAutofillUseAddressRewriterInProfileSubsetComparison);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillRefillModifiedCreditCardExpirationDates;
+BASE_DECLARE_FEATURE(kAutofillUseI18nAddressModel);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillTypeSpecificPopupWidth;
+BASE_DECLARE_FEATURE(kAutofillUndo);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillFixFillableFieldTypes;
+BASE_DECLARE_FEATURE(kAutofillConvergeToExtremeLengthStreetAddress);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillIgnoreEarlyClicksOnPopup;
+extern const base::FeatureParam<bool> kAutofillConvergeToLonger;
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<base::TimeDelta>
-    kAutofillIgnoreEarlyClicksOnPopupDuration;
+BASE_DECLARE_FEATURE(
+    kAutofillStreetNameOrHouseNumberPrecedenceOverAutocomplete);
+// Records the values of HtmlFieldType that the server or heuristic predictions
+// will be able to override when the feature
+// `kAutofillStreetNameOrHouseNumberPrecedenceOverAutocomplete` is enabled.
+enum class PrecedenceOverAutocompleteScope {
+  kNone = 0,
+  kAddressLine1And2 = 1,
+  kRecognized = 2,
+  kSpecified = 3,
+  kMaxValue = kSpecified
+};
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillIgnoreUnmappableAutocompleteValues;
+extern const base::FeatureParam<PrecedenceOverAutocompleteScope>
+    kAutofillHeuristicPrecedenceScopeOverAutocomplete;
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillHighlightOnlyChangedValuesInPreviewMode;
+extern const base::FeatureParam<PrecedenceOverAutocompleteScope>
+    kAutofillServerPrecedenceScopeOverAutocomplete;
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillServerTypeTakesPrecedence;
+BASE_DECLARE_FEATURE(kAutofillIgnoreUnmappableAutocompleteValues);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillKeyboardAccessory;
+BASE_DECLARE_FEATURE(kAutofillLocalHeuristicsOverrides);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillLabelAffixRemoval;
+BASE_DECLARE_FEATURE(kAutofillHighlightOnlyChangedValuesInPreviewMode);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillLabelAffixRemoval);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillModelPredictions);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillCenterAlignedSuggestions;
+extern const base::FeatureParam<bool> kAutofillModelPredictionsAreActive;
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillPageLanguageDetection);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillParseAsync);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<int>
-    kAutofillMaximumPixelsToMoveSuggestionopupToCenter;
+BASE_DECLARE_FEATURE(kAutofillParseNameAsAutocompleteType);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<int>
-    kAutofillMaxiumWidthPercentageToMoveSuggestionPopupToCenter;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillPageLanguageDetection;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillParseAsync;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillParsingPatternProvider;
+BASE_DECLARE_FEATURE(kAutofillParsingPatternProvider);
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<std::string>
     kAutofillParsingPatternActiveSource;
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillPreventOverridingPrefilledValues;
+BASE_DECLARE_FEATURE(kAutofillAlwaysParsePlaceholders);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillProbableFormSubmissionInBrowser;
+BASE_DECLARE_FEATURE(kAutofillPopupDisablePaintChecks);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillProfileImportFromUnfocusableFields;
+BASE_DECLARE_FEATURE(kAutofillPopupDoesNotOverlapWithContextMenu);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillRationalizeStreetAddressAndAddressLine;
+BASE_DECLARE_FEATURE(kAutofillPopupExtensionCursorSuppression);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillRemoveInvalidPhoneNumberOnImport;
+BASE_DECLARE_FEATURE(kAutofillPopupMultiWindowCursorSuppression);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillRemoveInaccessibleProfileValues;
+BASE_DECLARE_FEATURE(kAutofillPopupUseLatencyInformationForAcceptThreshold);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<bool>
-    kAutofillRemoveInaccessibleProfileValuesOnStartup;
+BASE_DECLARE_FEATURE(kAutofillPreferLabelsInSomeCountries);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillRetrieveOverallPredictionsFromCache;
-COMPONENT_EXPORT(AUTOFILL) extern const base::Feature kAutofillSaveAndFillVPA;
+BASE_DECLARE_FEATURE(kAutofillPreventOverridingPrefilledValues);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillSectionUponRedundantNameInfo;
+BASE_DECLARE_FEATURE(kAutofillProbableFormSubmissionInBrowser);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillServerBehaviors;
+BASE_DECLARE_FEATURE(kAutofillRemoveInaccessibleProfileValuesOnStartup);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillServerBehaviors);
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<int> kAutofillServerBehaviorsParam;
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillSharedAutofill);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillServerCommunication;
+BASE_DECLARE_FEATURE(kAutofillStructuredFieldsDisableAddressLines);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillSharedAutofill;
+BASE_DECLARE_FEATURE(kAutofillShowAutocompleteDeleteButton);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::FeatureParam<bool> kAutofillSharedAutofillRelaxedParam;
+BASE_DECLARE_FEATURE(kAutofillGranularFillingAvailable);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillShowManualFallbackInContextMenu;
+BASE_DECLARE_FEATURE(kAutofillForUnclassifiedFieldsAvailable);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillShowTypePredictions;
+BASE_DECLARE_FEATURE(kAutofillTestFormWithDevtools);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillSilentProfileUpdateForInsufficientImport;
+BASE_DECLARE_FEATURE(kAutofillSilentProfileUpdateForInsufficientImport);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillSkipComparingInferredLabels;
+BASE_DECLARE_FEATURE(kAutofillTextAreaChangeEvents);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillTokenPrefixMatching;
-COMPONENT_EXPORT(AUTOFILL) extern const base::Feature kAutofillUploadThrottling;
+BASE_DECLARE_FEATURE(kAutofillTrackProfileTokenQuality);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillUseAlternativeStateNameMap;
+BASE_DECLARE_FEATURE(kAutofillUseImprovedLabelDisambiguation);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillUseImprovedLabelDisambiguation;
+BASE_DECLARE_FEATURE(kAutofillUseNewSectioningMethod);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillUseNewSectioningMethod;
+BASE_DECLARE_FEATURE(kAutofillUseParameterizedSectioning);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillUseConsistentPopupSettingsIcons;
+BASE_DECLARE_FEATURE(kAutofillUseTypedCreditCardNumber);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillVisualImprovementsForSuggestionUi;
-
+extern const base::FeatureParam<bool> kAutofillSectioningModeIgnoreAutocomplete;
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillEnableAblationStudy;
+extern const base::FeatureParam<bool> kAutofillSectioningModeCreateGaps;
+COMPONENT_EXPORT(AUTOFILL)
+extern const base::FeatureParam<bool> kAutofillSectioningModeExpand;
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillEnableAblationStudy);
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<bool>
     kAutofillAblationStudyEnabledForAddressesParam;
@@ -222,25 +229,41 @@ extern const base::FeatureParam<bool>
 COMPONENT_EXPORT(AUTOFILL)
 extern const base::FeatureParam<int>
     kAutofillAblationStudyAblationWeightPerMilleParam;
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillVoteForSelectOptionValues);
+COMPONENT_EXPORT(AUTOFILL)
+extern const base::FeatureParam<int>
+    kAutofillMoreProminentPopupMaxOffsetToCenterParam;
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillMoreProminentPopup);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillLogUKMEventsWithSampleRate);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillUseUpdatedRequiredFieldsForAddressImport);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillVirtualCardsOnTouchToFillAndroid);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillAndroidDisableSuggestionsOnJSFocus);
 
 #if BUILDFLAG(IS_ANDROID)
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillKeyboardAccessory);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillManualFallbackAndroid;
+BASE_DECLARE_FEATURE(kAutofillTouchToFillForCreditCardsAndroid);
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillRefreshStyleAndroid;
-COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillTouchToFillForCreditCardsAndroid;
+BASE_DECLARE_FEATURE(kAutofillVirtualViewStructureAndroid);
 #endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 COMPONENT_EXPORT(AUTOFILL)
-extern const base::Feature kAutofillUseMobileLabelDisambiguation;
+BASE_DECLARE_FEATURE(kAutofillUseMobileLabelDisambiguation);
 COMPONENT_EXPORT(AUTOFILL)
 extern const char kAutofillUseMobileLabelDisambiguationParameterName[];
 COMPONENT_EXPORT(AUTOFILL)
 extern const char kAutofillUseMobileLabelDisambiguationParameterShowOne[];
 COMPONENT_EXPORT(AUTOFILL)
 extern const char kAutofillUseMobileLabelDisambiguationParameterShowAll[];
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(
+    kAutofillSuggestionsForAutocompleteUnrecognizedFieldsOnMobile);
 #endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 
 #if BUILDFLAG(IS_APPLE)
@@ -250,10 +273,36 @@ COMPONENT_EXPORT(AUTOFILL)
 bool IsMacViewsAutofillPopupExperimentEnabled();
 #endif  // BUILDFLAG(IS_APPLE)
 
-#if BUILDFLAG(IS_ANDROID)
+// The features in this namespace contains are not meant to be rolled out. They
+// are are only intended for manual testing purposes.
+namespace test {
+
 COMPONENT_EXPORT(AUTOFILL)
-bool IsAutofillManualFallbackEnabled();
-#endif  // BUILDFLAG(IS_ANDROID)
+BASE_DECLARE_FEATURE(kAutofillAllowNonHttpActivation);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillCapturedSiteTestsMetricsScraper);
+COMPONENT_EXPORT(AUTOFILL)
+extern const base::FeatureParam<std::string>
+    kAutofillCapturedSiteTestsMetricsScraperOutputDir;
+COMPONENT_EXPORT(AUTOFILL)
+extern const base::FeatureParam<std::string>
+    kAutofillCapturedSiteTestsMetricsScraperHistogramRegex;
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillDisableProfileUpdates);
+COMPONENT_EXPORT(AUTOFILL)
+BASE_DECLARE_FEATURE(kAutofillDisableSilentProfileUpdates);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillLogToTerminal);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillOverridePredictions);
+COMPONENT_EXPORT(AUTOFILL)
+extern const base::FeatureParam<std::string>
+    kAutofillOverridePredictionsSpecification;
+COMPONENT_EXPORT(AUTOFILL)
+extern const base::FeatureParam<std::string>
+    kAutofillOverridePredictionsForAlternativeFormSignaturesSpecification;
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillServerCommunication);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillShowTypePredictions);
+COMPONENT_EXPORT(AUTOFILL) BASE_DECLARE_FEATURE(kAutofillUploadThrottling);
+
+}  // namespace test
 
 }  // namespace autofill::features
 

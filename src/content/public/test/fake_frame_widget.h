@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,13 +36,12 @@ class FakeFrameWidget : public blink::mojom::FrameWidget {
   absl::optional<bool> GetActive() const;
 
  private:
-  void DragTargetDragEnter(
-      blink::mojom::DragDataPtr drag_data,
-      const gfx::PointF& point_in_viewport,
-      const gfx::PointF& screen_point,
-      blink::DragOperationsMask operations_allowed,
-      uint32_t key_modifiers,
-      base::OnceCallback<void(ui::mojom::DragOperation)> callback) override {}
+  void DragTargetDragEnter(blink::mojom::DragDataPtr drag_data,
+                           const gfx::PointF& point_in_viewport,
+                           const gfx::PointF& screen_point,
+                           blink::DragOperationsMask operations_allowed,
+                           uint32_t key_modifiers,
+                           DragTargetDragEnterCallback callback) override {}
   void DragTargetDragOver(const gfx::PointF& point_in_viewport,
                           const gfx::PointF& screen_point,
                           blink::DragOperationsMask operations_allowed,

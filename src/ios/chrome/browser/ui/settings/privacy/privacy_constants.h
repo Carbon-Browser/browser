@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,9 @@
 
 // The accessibility identifier of the Privacy setting table view.
 extern NSString* const kPrivacyTableViewId;
+
+// The accessibility identifier of the Privacy Lockdown Mode cell.
+extern NSString* const kPrivacyLockdownModeCellId;
 
 // The accessibility identifier of the Privacy Safe Browsing setting table view.
 extern NSString* const kPrivacySafeBrowsingTableViewId;

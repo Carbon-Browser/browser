@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,14 +21,6 @@ class MockPaletteToolDelegate : public PaletteTool::Delegate {
   MOCK_METHOD(void, HidePalette, (), (override));
   MOCK_METHOD(void, HidePaletteImmediately, (), (override));
   MOCK_METHOD(aura::Window*, GetWindow, (), (override));
-  MOCK_METHOD(void,
-              RecordPaletteOptionsUsage,
-              (PaletteTrayOptions option, PaletteInvocationMethod method),
-              (override));
-  MOCK_METHOD(void,
-              RecordPaletteModeCancellation,
-              (PaletteModeCancelType type),
-              (override));
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,16 +20,18 @@
 #include "base/strings/string_piece.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/thread_annotations.h"
 #include "base/threading/thread_checker.h"
 #include "net/base/address_family.h"
+#include "net/base/address_list.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/net_errors.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/dns/host_resolver.h"
 #include "net/dns/host_resolver_proc.h"
-#include "net/dns/host_resolver_results.h"
 #include "net/dns/public/dns_query_type.h"
+#include "net/dns/public/host_resolver_results.h"
 #include "net/dns/public/host_resolver_source.h"
 #include "net/dns/public/mdns_listener_update_type.h"
 #include "net/dns/public/secure_dns_policy.h"
@@ -48,15 +50,10 @@ class HostCache;
 class IPEndPoint;
 class URLRequestContext;
 
-// Fills `*addrlist` with a socket address for `host_list` which should be a
+// Fills `ip_endpoints` with a socket address for `host_list` which should be a
 // comma-separated list of IPv4 or IPv6 literal(s) without enclosing brackets.
-// If `dns_aliases` is non-empty, its first entry is considered the DNS
-// canonical name (i.e. address record name) for the host, and the alias
-// chain is listed in reverse order through to the last entry, the query name.
-// Returns OK on success, ERR_UNEXPECTED otherwise.
 int ParseAddressList(base::StringPiece host_list,
-                     const std::vector<std::string>& dns_aliases,
-                     AddressList* addrlist);
+                     std::vector<net::IPEndPoint>* ip_endpoints);
 
 // In most cases, it is important that unit tests avoid relying on making actual
 // DNS queries since the resulting tests can be flaky, especially if the network
@@ -78,7 +75,7 @@ int ParseAddressList(base::StringPiece host_list,
 // For more advanced matching, the first parameter may be replaced with a
 // MockHostResolverBase::RuleResolver::RuleKey. For more advanced responses, the
 // second parameter may be replaced with a
-// MockHostResolverBase::RuleResolver::RuleResult.
+// MockHostResolverBase::RuleResolver::RuleResultOrError.
 //
 // MockHostResolvers may optionally be created with a default result:
 //
@@ -139,14 +136,29 @@ class MockHostResolverBase
       absl::optional<HostResolverSource> query_source;
     };
 
+    struct RuleResult {
+      RuleResult();
+      explicit RuleResult(
+          std::vector<HostResolverEndpointResult> endpoints,
+          std::set<std::string> aliases = std::set<std::string>());
+
+      ~RuleResult();
+
+      RuleResult(const RuleResult&);
+      RuleResult& operator=(const RuleResult&);
+      RuleResult(RuleResult&&);
+      RuleResult& operator=(RuleResult&&);
+
+      std::vector<HostResolverEndpointResult> endpoints;
+      std::set<std::string> aliases;
+    };
+
     using ErrorResult = Error;
-    using RuleResult = absl::variant<AddressList,
-                                     std::vector<HostResolverEndpointResult>,
-                                     ErrorResult>;
+    using RuleResultOrError = absl::variant<RuleResult, ErrorResult>;
 
     // If `default_result` is nullopt, every resolve must match an added rule.
     explicit RuleResolver(
-        absl::optional<RuleResult> default_result = absl::nullopt);
+        absl::optional<RuleResultOrError> default_result = absl::nullopt);
     ~RuleResolver();
 
     RuleResolver(const RuleResolver&);
@@ -154,19 +166,21 @@ class MockHostResolverBase
     RuleResolver(RuleResolver&&);
     RuleResolver& operator=(RuleResolver&&);
 
-    const RuleResult& Resolve(const Host& request_endpoint,
-                              DnsQueryTypeSet request_types,
-                              HostResolverSource request_source) const;
+    const RuleResultOrError& Resolve(const Host& request_endpoint,
+                                     DnsQueryTypeSet request_types,
+                                     HostResolverSource request_source) const;
 
     void ClearRules();
 
-    static RuleResult GetLocalhostResult();
+    static RuleResultOrError GetLocalhostResult();
 
-    void AddRule(RuleKey key, RuleResult result);
+    void AddRule(RuleKey key, RuleResultOrError result);
     void AddRule(RuleKey key, base::StringPiece ip_literal);
-    void AddRule(base::StringPiece hostname_pattern, RuleResult result);
+
+    void AddRule(base::StringPiece hostname_pattern, RuleResultOrError result);
     void AddRule(base::StringPiece hostname_pattern,
                  base::StringPiece ip_literal);
+
     void AddRule(base::StringPiece hostname_pattern, Error error);
 
     // Legacy rule creation. Only for compatibility with tests written for use
@@ -189,8 +203,8 @@ class MockHostResolverBase
                           std::vector<std::string> dns_aliases = {});
 
    private:
-    std::map<RuleKey, RuleResult> rules_;
-    absl::optional<RuleResult> default_result_;
+    std::map<RuleKey, RuleResultOrError> rules_;
+    absl::optional<RuleResultOrError> default_result_;
   };
 
   using RequestMap = std::map<size_t, RequestImpl*>;
@@ -265,12 +279,12 @@ class MockHostResolverBase
   void OnShutdown() override;
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       url::SchemeHostPort host,
-      NetworkIsolationKey network_isolation_key,
+      NetworkAnonymizationKey network_anonymization_key,
       NetLogWithSource net_log,
       absl::optional<ResolveHostParameters> optional_parameters) override;
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       const HostPortPair& host,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const NetLogWithSource& net_log,
       const absl::optional<ResolveHostParameters>& optional_parameters)
       override;
@@ -284,8 +298,12 @@ class MockHostResolverBase
   // Preloads the cache with what would currently be the result of a request
   // with the given parameters. Returns the net error of the cached result.
   int LoadIntoCache(
+      absl::variant<url::SchemeHostPort, HostPortPair> endpoint,
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const absl::optional<ResolveHostParameters>& optional_parameters);
+  int LoadIntoCache(
       const Host& endpoint,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const absl::optional<ResolveHostParameters>& optional_parameters);
 
   // Returns true if there are pending requests that can be resolved by invoking
@@ -317,8 +335,8 @@ class MockHostResolverBase
   // Returns the priority of the request with the given id.
   RequestPriority request_priority(size_t id);
 
-  // Returns NetworkIsolationKey of the request with the given id.
-  const NetworkIsolationKey& request_network_isolation_key(size_t id);
+  // Returns NetworkAnonymizationKey of the request with the given id.
+  const NetworkAnonymizationKey& request_network_anonymization_key(size_t id);
 
   // Like ResolveNow, but doesn't take an ID. DCHECKs if there's more than one
   // pending request.
@@ -343,11 +361,11 @@ class MockHostResolverBase
     return last_request_priority_;
   }
 
-  // Returns the NetworkIsolationKey passed in to the last call to Resolve() (or
-  // absl::nullopt if Resolve() hasn't been called yet).
-  const absl::optional<NetworkIsolationKey>&
-  last_request_network_isolation_key() {
-    return last_request_network_isolation_key_;
+  // Returns the NetworkAnonymizationKey passed in to the last call to Resolve()
+  // (or absl::nullopt if Resolve() hasn't been called yet).
+  const absl::optional<NetworkAnonymizationKey>&
+  last_request_network_anonymization_key() {
+    return last_request_network_anonymization_key_;
   }
 
   // Returns the SecureDnsPolicy of the last call to Resolve() (or
@@ -401,20 +419,22 @@ class MockHostResolverBase
   // DNS_CACHE_MISS if failed.
   int ResolveFromIPLiteralOrCache(
       const Host& endpoint,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       DnsQueryType dns_query_type,
       HostResolverFlags flags,
       HostResolverSource source,
       HostResolver::ResolveHostParameters::CacheUsage cache_usage,
-      AddressList* addresses,
-      absl::optional<HostCache::EntryStaleness>* stale_info);
+      std::vector<HostResolverEndpointResult>* out_endpoints,
+      std::set<std::string>* out_aliases,
+      absl::optional<HostCache::EntryStaleness>* out_stale_info);
   int DoSynchronousResolution(RequestImpl& request);
 
   void AddListener(MdnsListenerImpl* listener);
   void RemoveCancelledListener(MdnsListenerImpl* listener);
 
   RequestPriority last_request_priority_ = DEFAULT_PRIORITY;
-  absl::optional<NetworkIsolationKey> last_request_network_isolation_key_;
+  absl::optional<NetworkAnonymizationKey>
+      last_request_network_anonymization_key_;
   SecureDnsPolicy last_secure_dns_policy_ = SecureDnsPolicy::kAllow;
   bool synchronous_mode_ = false;
   bool ondemand_mode_ = false;
@@ -437,8 +457,8 @@ class MockHostResolverBase
 
 class MockHostResolver : public MockHostResolverBase {
  public:
-  explicit MockHostResolver(
-      absl::optional<RuleResolver::RuleResult> default_result = absl::nullopt)
+  explicit MockHostResolver(absl::optional<RuleResolver::RuleResultOrError>
+                                default_result = absl::nullopt)
       : MockHostResolverBase(/*use_caching=*/false,
                              /*cache_invalidation_num=*/0,
                              RuleResolver(std::move(default_result))) {}
@@ -457,7 +477,8 @@ class MockCachingHostResolver : public MockHostResolverBase {
   // scenarios.
   explicit MockCachingHostResolver(
       int cache_invalidation_num = 0,
-      absl::optional<RuleResolver::RuleResult> default_result = absl::nullopt)
+      absl::optional<RuleResolver::RuleResultOrError> default_result =
+          absl::nullopt)
       : MockHostResolverBase(/*use_caching=*/true,
                              cache_invalidation_num,
                              RuleResolver(std::move(default_result))) {}
@@ -615,12 +636,21 @@ class RuleBasedHostResolverProc : public HostResolverProc {
 
   RuleList GetRules();
 
+  // Returns the number of calls to Resolve() where |host| matched
+  // |host_pattern|.
+  size_t NumResolvesForHostPattern(base::StringPiece host_pattern);
+
  private:
   ~RuleBasedHostResolverProc() override;
 
   void AddRuleInternal(const Rule& rule);
 
-  RuleList rules_;
+  RuleList rules_ GUARDED_BY(rule_lock_);
+
+  // Tracks the number of calls to Resolve() where |host| matches a rule's host
+  // pattern.
+  std::map<base::StringPiece, size_t> num_resolves_per_host_pattern_
+      GUARDED_BY(rule_lock_);
 
   // Must be obtained before writing to or reading from |rules_|.
   base::Lock rule_lock_;
@@ -660,12 +690,12 @@ class HangingHostResolver : public HostResolver {
   void OnShutdown() override;
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       url::SchemeHostPort host,
-      NetworkIsolationKey network_isolation_key,
+      NetworkAnonymizationKey network_anonymization_key,
       NetLogWithSource net_log,
       absl::optional<ResolveHostParameters> optional_parameters) override;
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       const HostPortPair& host,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const NetLogWithSource& net_log,
       const absl::optional<ResolveHostParameters>& optional_parameters)
       override;
@@ -681,8 +711,8 @@ class HangingHostResolver : public HostResolver {
   // Return the corresponding values passed to the most recent call to
   // CreateRequest()
   const HostPortPair& last_host() const { return last_host_; }
-  const NetworkIsolationKey& last_network_isolation_key() const {
-    return last_network_isolation_key_;
+  const NetworkAnonymizationKey& last_network_anonymization_key() const {
+    return last_network_anonymization_key_;
   }
 
   const scoped_refptr<const State> state() const { return state_; }
@@ -692,7 +722,7 @@ class HangingHostResolver : public HostResolver {
   class ProbeRequestImpl;
 
   HostPortPair last_host_;
-  NetworkIsolationKey last_network_isolation_key_;
+  NetworkAnonymizationKey last_network_anonymization_key_;
 
   scoped_refptr<State> state_;
   bool shutting_down_ = false;

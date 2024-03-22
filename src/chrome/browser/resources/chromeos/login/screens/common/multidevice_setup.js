@@ -1,20 +1,45 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
  * @fileoverview MultiDevice setup screen for login/OOBE.
  */
+import '//resources/ash/common/multidevice_setup/mojo_api.js';
+import '//resources/ash/common/multidevice_setup/multidevice_setup_shared.css.js';
+import '//resources/ash/common/multidevice_setup/multidevice_setup.js';
+import '../../components/buttons/oobe_next_button.js';
+import '../../components/buttons/oobe_text_button.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/throbber_notice.js';
 
-/* #js_imports_placeholder */
+import {assert} from '//resources/ash/common/assert.js';
+import {MultiDeviceSetupDelegate} from '//resources/ash/common/multidevice_setup/multidevice_setup_delegate.js';
+import {WebUIListenerBehavior} from '//resources/ash/common/web_ui_listener_behavior.js';
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+// TODO(b/268480781) - Remove chrome scheme.
+import {PrivilegedHostDeviceSetter, PrivilegedHostDeviceSetterRemote} from 'chrome://resources/mojo/chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom-webui.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+
+// OOBE screen that wraps MultiDevice setup flow when displayed during the
+// user's onboarding on this Chromebook. Note that this flow is slightly
+// different from the post-OOBE flow ( `c/b/r/chromeos/multidevice_setup/` )
+// in 3 ways:
+//  (1) During onboarding, the user has just entered their password, so we
+//      do not prompt the user to enter a password before continuing.
+//  (2) During onboarding, once the user selects a host device, we continue to
+//      the next OOBE/login task; in the post-OOBE mode, there is a "success"
+//      screen.
+//  (3) During onboarding, buttons are styled with custom OOBE buttons.
 
 /** @implements {MultiDeviceSetupDelegate} */
 class MultiDeviceSetupScreenDelegate {
 
   constructor() {
     /**
-     * @private {?ash.multideviceSetup.mojom.
-     *               PrivilegedHostDeviceSetterRemote}
+     * @private {?PrivilegedHostDeviceSetterRemote}
      */
     this.remote_ = null;
   }
@@ -31,8 +56,7 @@ class MultiDeviceSetupScreenDelegate {
     assert(!opt_authToken);
 
     if (!this.remote_) {
-      this.remote_ =
-          ash.multideviceSetup.mojom.PrivilegedHostDeviceSetter.getRemote();
+      this.remote_ = PrivilegedHostDeviceSetter.getRemote();
     }
 
     return /** @type {!Promise<{success: boolean}>} */ (
@@ -54,12 +78,11 @@ class MultiDeviceSetupScreenDelegate {
  * @constructor
  * @extends {PolymerElement}
  * @implements {LoginScreenBehaviorInterface}
- * @implements {MultiStepBehaviorInterface}
  * @implements {OobeI18nBehaviorInterface}
  */
- const MultiDeviceSetupScreenBase = Polymer.mixinBehaviors(
-  [OobeI18nBehavior, LoginScreenBehavior, WebUIListenerBehavior],
-  Polymer.Element);
+const MultiDeviceSetupScreenBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, WebUIListenerBehavior],
+    PolymerElement);
 
 /**
  * @polymer
@@ -69,7 +92,9 @@ class MultiDeviceSetupScreen extends MultiDeviceSetupScreenBase {
     return 'multidevice-setup-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {

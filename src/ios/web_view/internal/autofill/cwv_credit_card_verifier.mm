@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,12 @@
 
 #include "base/strings/sys_string_conversions.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
+#import "components/autofill/core/browser/payments/card_unmask_challenge_option.h"
 #include "components/autofill/core/browser/ui/payments/card_unmask_prompt_controller_impl.h"
+#import "components/autofill/core/browser/ui/payments/card_unmask_prompt_options.h"
 #include "components/autofill/core/browser/ui/payments/card_unmask_prompt_view.h"
 #import "ios/web_view/internal/autofill/cwv_credit_card_internal.h"
 #include "ui/base/resource/resource_bundle.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 NSErrorDomain const CWVCreditCardVerifierErrorDomain =
     @"org.chromium.chromewebview.CreditCardVerifierErrorDomain";
@@ -116,7 +114,8 @@ class WebViewCardUnmaskPromptView : public autofill::CardUnmaskPromptView {
         base::BindOnce(^autofill::CardUnmaskPromptView*() {
           return [weakSelf createUnmaskingView];
         }),
-        creditCard, reason, delegate);
+        creditCard, autofill::CardUnmaskPromptOptions(std::nullopt, reason),
+        delegate);
   }
   return self;
 }

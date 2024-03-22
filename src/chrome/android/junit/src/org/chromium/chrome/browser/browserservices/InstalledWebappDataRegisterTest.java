@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,7 @@ import org.chromium.components.embedder_support.util.Origin;
 
 import java.util.Set;
 
-/**
- * Tests for {@link InstalledWebappDataRegister}.
- */
+/** Tests for {@link InstalledWebappDataRegister}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class InstalledWebappDataRegisterTest {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,10 +70,14 @@ class UserNotesTabHelperTest : public ChromeRenderViewHostTestHarness {
   void SetUp() override {
     scoped_feature_list_.InitAndEnableFeature(user_notes::kUserNotes);
 
-    UserNoteServiceFactory::SetServiceForTesting(
-        std::make_unique<MockUserNoteService>());
+    UserNoteServiceFactory::SetServiceForTesting(&mock_user_note_service_);
 
     ChromeRenderViewHostTestHarness::SetUp();
+  }
+
+  void TearDown() override {
+    ChromeRenderViewHostTestHarness::TearDown();
+    UserNoteServiceFactory::SetServiceForTesting(nullptr);
   }
 
   void AttachTabHelper(std::unique_ptr<UserNotesTabHelper> tab_helper) {
@@ -98,6 +102,7 @@ class UserNotesTabHelperTest : public ChromeRenderViewHostTestHarness {
   }
 
   base::test::ScopedFeatureList scoped_feature_list_;
+  MockUserNoteService mock_user_note_service_;
 };
 
 // Tests that by the time `UserNotesTabHelper::DidFinishNavigation` is called,

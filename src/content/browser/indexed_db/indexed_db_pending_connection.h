@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,35 +7,39 @@
 
 #include <stdint.h>
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "content/browser/indexed_db/indexed_db_callbacks.h"
 #include "content/browser/indexed_db/indexed_db_data_loss_info.h"
-#include "content/browser/indexed_db/indexed_db_database_callbacks.h"
 #include "content/common/content_export.h"
+#include "mojo/public/cpp/bindings/pending_associated_receiver.h"
+#include "third_party/blink/public/mojom/indexeddb/indexeddb.mojom-forward.h"
 
 namespace content {
 
-class IndexedDBCallbacks;
 class IndexedDBDatabaseCallbacks;
+class IndexedDBFactoryClient;
+class IndexedDBTransaction;
 
+// This struct holds data relevant to opening a new connection/database while
+// IndexedDBConnectionCoordinator manages queued operations.
 struct CONTENT_EXPORT IndexedDBPendingConnection {
   IndexedDBPendingConnection(
-      scoped_refptr<IndexedDBCallbacks> callbacks,
-      scoped_refptr<IndexedDBDatabaseCallbacks> database_callbacks,
+      std::unique_ptr<IndexedDBFactoryClient> factory_client,
+      std::unique_ptr<IndexedDBDatabaseCallbacks> database_callbacks,
       int64_t transaction_id,
       int64_t version,
-      base::OnceCallback<void(base::WeakPtr<IndexedDBTransaction>)>
-          create_transaction_callback);
+      mojo::PendingAssociatedReceiver<blink::mojom::IDBTransaction>
+          pending_mojo_receiver);
   ~IndexedDBPendingConnection();
-  scoped_refptr<IndexedDBCallbacks> callbacks;
-  scoped_refptr<IndexedDBDatabaseCallbacks> database_callbacks;
+
+  std::unique_ptr<IndexedDBFactoryClient> factory_client;
+  std::unique_ptr<IndexedDBDatabaseCallbacks> database_callbacks;
   int64_t transaction_id;
   int64_t version;
   IndexedDBDataLossInfo data_loss_info;
-  base::OnceCallback<void(base::WeakPtr<IndexedDBTransaction>)>
-      create_transaction_callback;
+  // The versionchange operation, if any.
   base::WeakPtr<IndexedDBTransaction> transaction;
+  mojo::PendingAssociatedReceiver<blink::mojom::IDBTransaction>
+      pending_mojo_receiver;
   bool was_cold_open = false;
 };
 

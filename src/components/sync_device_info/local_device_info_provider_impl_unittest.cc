@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "components/sync/base/sync_util.h"
 #include "components/sync/protocol/device_info_specifics.pb.h"
 #include "components/sync/protocol/sync_enums.pb.h"
+#include "components/sync_device_info/device_info.h"
 #include "components/sync_device_info/device_info_sync_client.h"
 #include "components/version_info/version_string.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -53,7 +54,7 @@ class MockDeviceInfoSyncClient : public DeviceInfoSyncClient {
               GetLocalSharingInfo,
               (),
               (const override));
-  MOCK_METHOD(absl::optional<DeviceInfo::PhoneAsASecurityKeyInfo>,
+  MOCK_METHOD(DeviceInfo::PhoneAsASecurityKeyInfo::StatusOrInfo,
               GetPhoneAsASecurityKeyInfo,
               (),
               (const override));
@@ -254,7 +255,7 @@ TEST_F(LocalDeviceInfoProviderImplTest, ShouldPopulateInterestedDataTypes) {
   ASSERT_THAT(provider_->GetLocalDeviceInfo(), NotNull());
   EXPECT_TRUE(provider_->GetLocalDeviceInfo()->interested_data_types().Empty());
 
-  const ModelTypeSet kTypes = ModelTypeSet(BOOKMARKS);
+  const ModelTypeSet kTypes = {BOOKMARKS};
   EXPECT_CALL(device_info_sync_client_, GetInterestedDataTypes())
       .WillRepeatedly(Return(kTypes));
 
@@ -263,14 +264,15 @@ TEST_F(LocalDeviceInfoProviderImplTest, ShouldPopulateInterestedDataTypes) {
 
 TEST_F(LocalDeviceInfoProviderImplTest, ShouldKeepStoredInvalidationFields) {
   const std::string kFCMRegistrationToken = "fcm_token";
-  const ModelTypeSet kInterestedDataTypes(BOOKMARKS);
+  const ModelTypeSet kInterestedDataTypes = {BOOKMARKS};
 
   DeviceInfo::PhoneAsASecurityKeyInfo paask_info =
       SamplePhoneAsASecurityKeyInfo();
   auto device_info_restored_from_store = std::make_unique<DeviceInfo>(
       kLocalDeviceGuid, "name", "chrome_version", "user_agent",
-      sync_pb::SyncEnums_DeviceType_TYPE_LINUX, "device_id", "manufacturer",
-      "model", "full_hardware_class", base::Time(), base::Days(1),
+      sync_pb::SyncEnums_DeviceType_TYPE_LINUX, DeviceInfo::OsType::kLinux,
+      DeviceInfo::FormFactor::kDesktop, "device_id", "manufacturer", "model",
+      "full_hardware_class", base::Time(), base::Days(1),
       /*send_tab_to_self_receiving_enabled=*/true,
       /*sharing_info=*/absl::nullopt, paask_info, kFCMRegistrationToken,
       kInterestedDataTypes);
@@ -284,22 +286,29 @@ TEST_F(LocalDeviceInfoProviderImplTest, ShouldKeepStoredInvalidationFields) {
                         std::move(device_info_restored_from_store));
 
   EXPECT_CALL(device_info_sync_client_, GetFCMRegistrationToken())
-      .WillOnce(Return(absl::nullopt));
+      .WillRepeatedly(Return(absl::nullopt));
   EXPECT_CALL(device_info_sync_client_, GetInterestedDataTypes())
-      .WillOnce(Return(absl::nullopt));
+      .WillRepeatedly(Return(absl::nullopt));
   EXPECT_CALL(device_info_sync_client_, GetPhoneAsASecurityKeyInfo())
-      .WillOnce(Return(absl::nullopt));
+      .WillOnce(Return(DeviceInfo::PhoneAsASecurityKeyInfo::NotReady()));
 
   const DeviceInfo* local_device_info = provider_->GetLocalDeviceInfo();
   EXPECT_EQ(local_device_info->interested_data_types(), kInterestedDataTypes);
   EXPECT_EQ(local_device_info->fcm_registration_token(), kFCMRegistrationToken);
   EXPECT_TRUE(
       local_device_info->paask_info()->NonRotatingFieldsEqual(paask_info));
+
+  // `GetPhoneAsASecurityKeyInfo` can erase the field too.
+  EXPECT_CALL(device_info_sync_client_, GetPhoneAsASecurityKeyInfo())
+      .WillOnce(Return(DeviceInfo::PhoneAsASecurityKeyInfo::NoSupport()));
+
+  const DeviceInfo* local_device_info2 = provider_->GetLocalDeviceInfo();
+  EXPECT_FALSE(local_device_info2->paask_info().has_value());
 }
 
 TEST_F(LocalDeviceInfoProviderImplTest, PhoneAsASecurityKeyInfo) {
   ON_CALL(device_info_sync_client_, GetPhoneAsASecurityKeyInfo())
-      .WillByDefault(Return(absl::nullopt));
+      .WillByDefault(Return(DeviceInfo::PhoneAsASecurityKeyInfo::NoSupport()));
 
   InitializeProvider();
 

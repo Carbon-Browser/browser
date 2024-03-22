@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 #include "dbus/mock_bus.h"
 #include "dbus/mock_object_proxy.h"
 #include "dbus/object_path.h"
@@ -110,7 +112,7 @@ class InstallAttributesClientTest : public testing::Test {
     EXPECT_CALL(*proxy_.get(), DoCallMethod(_, _, _))
         .WillRepeatedly(
             Invoke(this, &InstallAttributesClientTest::OnCallMethod));
-    EXPECT_CALL(*proxy_.get(), CallMethodAndBlockWithErrorDetails(_, _, _))
+    EXPECT_CALL(*proxy_.get(), CallMethodAndBlock(_, _))
         .WillRepeatedly(
             Invoke(this, &InstallAttributesClientTest::OnBlockingCallMethod));
 
@@ -132,7 +134,7 @@ class InstallAttributesClientTest : public testing::Test {
   scoped_refptr<dbus::MockObjectProxy> proxy_;
 
   // Convenience pointer to the global instance.
-  InstallAttributesClient* client_;
+  raw_ptr<InstallAttributesClient, DanglingUntriaged | ExperimentalAsh> client_;
 
   // The expected replies to the respective D-Bus calls.
   ::user_data_auth::InstallAttributesGetReply
@@ -147,6 +149,8 @@ class InstallAttributesClientTest : public testing::Test {
       expected_remove_firmware_management_parameters_reply_;
   ::user_data_auth::SetFirmwareManagementParametersReply
       expected_set_firmware_management_parameters_reply_;
+  ::user_data_auth::GetFirmwareManagementParametersReply
+      expected_get_firmware_management_parameters_reply_;
 
   // The expected replies to the respective blocking D-Bus calls.
   ::user_data_auth::InstallAttributesGetReply
@@ -180,9 +184,6 @@ class InstallAttributesClientTest : public testing::Test {
                ::user_data_auth::kInstallAttributesGet) {
       writer.AppendProtoAsArrayOfBytes(expected_install_attributes_get_reply_);
     } else if (method_call->GetMember() ==
-               ::user_data_auth::kInstallAttributesSet) {
-      writer.AppendProtoAsArrayOfBytes(expected_install_attributes_set_reply_);
-    } else if (method_call->GetMember() ==
                ::user_data_auth::kInstallAttributesFinalize) {
       writer.AppendProtoAsArrayOfBytes(
           expected_install_attributes_finalize_reply_);
@@ -198,6 +199,10 @@ class InstallAttributesClientTest : public testing::Test {
                ::user_data_auth::kSetFirmwareManagementParameters) {
       writer.AppendProtoAsArrayOfBytes(
           expected_set_firmware_management_parameters_reply_);
+    } else if (method_call->GetMember() ==
+               ::user_data_auth::kGetFirmwareManagementParameters) {
+      writer.AppendProtoAsArrayOfBytes(
+          expected_get_firmware_management_parameters_reply_);
     } else {
       ASSERT_FALSE(true) << "Unrecognized member: " << method_call->GetMember();
     }
@@ -206,11 +211,9 @@ class InstallAttributesClientTest : public testing::Test {
                                   std::move(response)));
   }
 
-  // Handles blocking call to |proxy_|'s `CallMethodAndBlockWithErrorDetails`.
-  std::unique_ptr<dbus::Response> OnBlockingCallMethod(
-      dbus::MethodCall* method_call,
-      int timeout_ms,
-      dbus::ScopedDBusError* error) {
+  // Handles blocking call to |proxy_|'s `CallMethodAndBlock`.
+  base::expected<std::unique_ptr<dbus::Response>, dbus::Error>
+  OnBlockingCallMethod(dbus::MethodCall* method_call, int timeout_ms) {
     std::unique_ptr<dbus::Response> response(dbus::Response::CreateEmpty());
     dbus::MessageWriter writer(response.get());
     if (shall_message_parsing_fail_) {
@@ -240,7 +243,7 @@ class InstallAttributesClientTest : public testing::Test {
       LOG(FATAL) << "Unrecognized member: " << method_call->GetMember();
       return nullptr;
     }
-    return response;
+    return base::ok(std::move(response));
   }
 };
 
@@ -266,19 +269,6 @@ TEST_F(InstallAttributesClientTest, InstallAttributesGetInvalidProtobuf) {
                                 CreateCopyCallback(&result_reply));
   base::RunLoop().RunUntilIdle();
   ASSERT_EQ(result_reply, absl::nullopt);
-}
-
-TEST_F(InstallAttributesClientTest, InstallAttributesSet) {
-  expected_install_attributes_set_reply_.set_error(
-      user_data_auth::CryptohomeErrorCode::CRYPTOHOME_ERROR_TPM_DEFEND_LOCK);
-  absl::optional<::user_data_auth::InstallAttributesSetReply> result_reply;
-
-  client_->InstallAttributesSet(::user_data_auth::InstallAttributesSetRequest(),
-                                CreateCopyCallback(&result_reply));
-  base::RunLoop().RunUntilIdle();
-  ASSERT_NE(result_reply, absl::nullopt);
-  EXPECT_TRUE(ProtobufEquals(result_reply.value(),
-                             expected_install_attributes_set_reply_));
 }
 
 TEST_F(InstallAttributesClientTest, InstallAttributesFinalize) {
@@ -340,6 +330,22 @@ TEST_F(InstallAttributesClientTest, SetFirmwareManagementParameters) {
   EXPECT_TRUE(
       ProtobufEquals(result_reply.value(),
                      expected_set_firmware_management_parameters_reply_));
+}
+
+TEST_F(InstallAttributesClientTest, GetFirmwareManagementParameters) {
+  expected_set_firmware_management_parameters_reply_.set_error(
+      user_data_auth::CryptohomeErrorCode::CRYPTOHOME_ERROR_TPM_DEFEND_LOCK);
+  absl::optional<::user_data_auth::GetFirmwareManagementParametersReply>
+      result_reply;
+
+  client_->GetFirmwareManagementParameters(
+      ::user_data_auth::GetFirmwareManagementParametersRequest(),
+      CreateCopyCallback(&result_reply));
+  base::RunLoop().RunUntilIdle();
+  ASSERT_NE(result_reply, absl::nullopt);
+  EXPECT_TRUE(
+      ProtobufEquals(result_reply.value(),
+                     expected_get_firmware_management_parameters_reply_));
 }
 
 TEST_F(InstallAttributesClientTest, BlockingInstallAttributesGet) {

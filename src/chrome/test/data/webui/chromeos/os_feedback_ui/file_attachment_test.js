@@ -1,28 +1,35 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/mojo/mojo/public/mojom/base/big_buffer.mojom-lite.js';
-import 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-lite.js';
+import 'chrome://os-feedback/strings.m.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
+import {FakeFeedbackServiceProvider} from 'chrome://os-feedback/fake_feedback_service_provider.js';
 import {FileAttachmentElement} from 'chrome://os-feedback/file_attachment.js';
-import {mojoString16ToString} from 'chrome://resources/ash/common/mojo_utils.js';
-import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
+import {setFeedbackServiceProviderForTesting} from 'chrome://os-feedback/mojo_interface_provider.js';
+import {FeedbackAppPreSubmitAction} from 'chrome://os-feedback/os_feedback_ui.mojom-webui.js';
+import {assertArrayEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertArrayEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {eventToPromise, flushTasks, isVisible} from '../../test_util.js';
+import {eventToPromise, isVisible} from '../test_util.js';
 
 /** @type {string} */
 const fakeImageUrl = 'chrome://os_feedback/app_icon_48.png';
 
 const MAX_ATTACH_FILE_SIZE = 10 * 1024 * 1024;
 
-export function fileAttachmentTestSuite() {
+suite('fileAttachmentTestSuite', () => {
   /** @type {?FileAttachmentElement} */
   let page = null;
 
+  /** @type {?FakeFeedbackServiceProvider} */
+  let feedbackServiceProvider;
+
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
+    feedbackServiceProvider = new FakeFeedbackServiceProvider();
+    setFeedbackServiceProviderForTesting(feedbackServiceProvider);
   });
 
   teardown(() => {
@@ -59,6 +66,17 @@ export function fileAttachmentTestSuite() {
     return element.textContent.trim();
   }
 
+  /**
+   * @param {number} callCounts
+   * @param {FeedbackAppPreSubmitAction} action
+   * @private
+   */
+  function verifyRecordPreSubmitActionCallCount(callCounts, action) {
+    assertEquals(
+        callCounts,
+        feedbackServiceProvider.getRecordPreSubmitActionCallCount(action));
+  }
+
   // Test the page is loaded with expected HTML elements.
   test('elementLoaded', async () => {
     await initializePage();
@@ -67,7 +85,7 @@ export function fileAttachmentTestSuite() {
     // Verify the i18n string is added.
     assertTrue(page.i18nExists('addFileLabel'));
     // Verify the replace file label is in the page.
-    assertEquals('Replace', getElementContent('#replaceFileLabel'));
+    assertEquals('Replace file', getElementContent('#replaceFileButton'));
     // The addFileContainer should be visible when no file is selected.
     assertTrue(isVisible(getElement('#addFileContainer')));
     // The replaceFileContainer should be invisible when no file is selected.
@@ -76,7 +94,8 @@ export function fileAttachmentTestSuite() {
     assertTrue(!!getElement('#fileTooBigErrorMessage'));
   });
 
-  // Test that when the add file label is clicked, the file dialog is opened.
+  // Test that when the add file label is clicked, the file dialog is opened and
+  // the file input value will be reset to empty.
   test('canOpenFileDialogByClickAddFileLabel', async () => {
     await initializePage();
     // Verify the add file label is in the page.
@@ -86,6 +105,21 @@ export function fileAttachmentTestSuite() {
     const fileDialog =
         /**@type {!HTMLInputElement} */ (getElement('#selectFileDialog'));
     assertTrue(!!fileDialog);
+
+    // Create a new fake File object
+    const fakeFile = new File(
+        ['This is a fake file!'], 'fakeFile.txt',
+        /** @type {FilePropertyBag} */ ({
+          type: 'text/plain',
+          size: MAX_ATTACH_FILE_SIZE + 1,
+          lastModified: new Date(),
+        }));
+    // Set the selected file manually to simulate a file has been selected.
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(fakeFile);
+    fileDialog.files = dataTransfer.files;
+    // Verify that the file input has a value.
+    assertEquals('C:\\fakepath\\fakeFile.txt', fileDialog.value);
 
     const fileDialogClickPromise = eventToPromise('click', fileDialog);
     let fileDialogClicked = false;
@@ -97,15 +131,17 @@ export function fileAttachmentTestSuite() {
 
     await fileDialogClickPromise;
     assertTrue(fileDialogClicked);
+    // Verify that the file input value has been reset to empty.
+    assertEquals('', fileDialog.value);
   });
 
   // Test that when the replace file label is clicked, the file dialog is
   // opened.
-  test('canOpenFileDialogByClickReplaceFileLabel', async () => {
+  test('canOpenFileDialogByClickReplaceFileButton', async () => {
     await initializePage();
     // Verify the add file label is in the page.
-    const replaceFileLabel = getElement('#replaceFileLabel');
-    assertTrue(!!replaceFileLabel);
+    const replaceFileButton = getElement('#replaceFileButton');
+    assertTrue(!!replaceFileButton);
     /**@type {!HTMLInputElement} */
     const fileDialog =
         /**@type {!HTMLInputElement} */ (getElement('#selectFileDialog'));
@@ -117,7 +153,7 @@ export function fileAttachmentTestSuite() {
       fileDialogClicked = true;
     });
 
-    replaceFileLabel.click();
+    replaceFileButton.click();
 
     await fileDialogClickPromise;
     assertTrue(fileDialogClicked);
@@ -144,11 +180,21 @@ export function fileAttachmentTestSuite() {
     assertEquals('fake.zip', getElementContent('#selectedFileName'));
     // The select file checkbox is checked automatically when a file is
     // selected.
-    assertTrue(getElement('#selectFileCheckbox').checked);
+    const selectFileCheckbox = getElement('#selectFileCheckbox');
+    assertTrue(selectFileCheckbox.checked);
+    assertEquals('Attach file', selectFileCheckbox.ariaDescription);
+
     // The addFileContainer should be invisible.
     assertFalse(isVisible(getElement('#addFileContainer')));
     // The replaceFileContainer should be visible.
     assertTrue(isVisible(getElement('#replaceFileContainer')));
+    // The aria label of the replace file button is set.
+    assertEquals('Replace file', getElement('#replaceFileButton').ariaLabel);
+    // Verify the i18n string is added.
+    assertTrue(page.i18nExists('replaceFileLabel'));
+    // Verify the image container is not visible for non-image files.
+    const selectedImageButton = getElement('#selectedImageButton');
+    assertFalse(isVisible(selectedImageButton));
   });
 
   // Test that when there is not a file selected, getAttachedFile returns null.
@@ -277,18 +323,21 @@ export function fileAttachmentTestSuite() {
     const imageUrl = getElement('#selectedFileImage').src;
     assertTrue(imageUrl.length > 0);
     // There should be a preview image.
-    page.selectedImageUrl_ = imageUrl;
+    page.selectedImageUrl = imageUrl;
     const selectedImage = getElement('#selectedFileImage');
     assertTrue(!!selectedImage.src);
     assertEquals(imageUrl, selectedImage.src);
-    assertEquals(
-        'Preview fake.png', getElement('#selectedImageButton').ariaLabel);
+    const selectedImageButton = getElement('#selectedImageButton');
+    assertEquals('Preview fake.png', selectedImageButton.ariaLabel);
+    // Verify the image container is visible for image files.
+    assertTrue(isVisible(selectedImageButton));
   });
 
-  // Test that clicking the image will open preview dialog and set the
-  // focus on the close dialog icon button.
+  /** Test that clicking the image will open preview dialog. */
   test('selectedImagePreviewDialog', async () => {
     await initializePage();
+    verifyRecordPreSubmitActionCallCount(
+        0, FeedbackAppPreSubmitAction.kViewedImage);
     const fakeData = [12, 11, 99];
 
     /** @type {!File} */
@@ -302,7 +351,7 @@ export function fileAttachmentTestSuite() {
     });
 
     page.setSelectedFileForTesting(fakeImageFile);
-    page.selectedImageUrl_ = fakeImageUrl;
+    page.selectedImageUrl = fakeImageUrl;
     assertEquals(fakeImageUrl, getElement('#selectedFileImage').src);
 
     const closeDialogButton = getElement('#closeDialogButton');
@@ -316,20 +365,13 @@ export function fileAttachmentTestSuite() {
     imageButton.click();
     await imageClickPromise;
 
+    verifyRecordPreSubmitActionCallCount(
+        1, FeedbackAppPreSubmitAction.kViewedImage);
+
     // The preview dialog's title should be set properly.
     assertEquals('fake.png', getElementContent('#modalDialogTitleText'));
 
     // The preview dialog's close icon button is visible now.
     assertTrue(isVisible(closeDialogButton));
-    // The preview dialog's close icon button is focused.
-    assertEquals(closeDialogButton, getDeepActiveElement());
-
-    // Press enter should close the preview dialog.
-    closeDialogButton.dispatchEvent(
-        new KeyboardEvent('keydown', {key: 'Enter'}));
-    await flushTasks();
-
-    // The preview dialog's close icon button is not visible now.
-    assertFalse(isVisible(closeDialogButton));
   });
-}
+});

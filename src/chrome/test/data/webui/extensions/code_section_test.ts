@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,35 +6,23 @@
 import 'chrome://extensions/extensions.js';
 
 import {ExtensionsCodeSectionElement} from 'chrome://extensions/extensions.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible} from 'chrome://webui-test/test_util.js';
 
-const extension_code_section_tests = {
-  suiteName: 'ExtensionCodeSectionTest',
-  TestNames: {
-    Layout: 'layout',
-    LongSource: 'long source',
-  },
-};
-
-Object.assign(
-    window, {extension_code_section_tests: extension_code_section_tests});
-
-suite(extension_code_section_tests.suiteName, function() {
+suite('ExtensionCodeSectionTest', function() {
   let codeSection: ExtensionsCodeSectionElement;
 
   const couldNotDisplayCode: string = 'No code here';
 
   // Initialize an extension item before each test.
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     codeSection = document.createElement('extensions-code-section');
     codeSection.couldNotDisplayCode = couldNotDisplayCode;
     document.body.appendChild(codeSection);
   });
 
-  test(assert(extension_code_section_tests.TestNames.Layout), function() {
+  test('Layout', function() {
     const code: chrome.developerPrivate.RequestFileSourceResponse = {
       beforeHighlight: 'this part before the highlight\nAnd this too\n',
       highlight: 'highlight this part\n',
@@ -70,7 +58,7 @@ suite(extension_code_section_tests.suiteName, function() {
                 '#line-numbers span')!.textContent!.trim());
   });
 
-  test(assert(extension_code_section_tests.TestNames.LongSource), function() {
+  test('LongSource', function() {
     let lineNums;
 
     function setCodeContent(beforeLineCount: number, afterLineCount: number):

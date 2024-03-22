@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <algorithm>
 #include <map>
 #include <memory>
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -66,12 +66,9 @@ blink::Manifest::ImageResource CreateIcon(const std::string& src,
 
 bool ContainsHeader(const base::flat_map<std::string, std::string>& headers,
                     const std::string& target) {
-  return headers.cend() !=
-         std::find_if(headers.cbegin(), headers.cend(),
-                      [target](const auto& pair) -> bool {
-                        return base::EqualsCaseInsensitiveASCII(pair.first,
-                                                                target);
-                      });
+  return base::ranges::any_of(headers, [target](const auto& pair) {
+    return base::EqualsCaseInsensitiveASCII(pair.first, target);
+  });
 }
 
 std::vector<blink::mojom::FetchAPIRequestPtr> CloneRequestVector(
@@ -301,7 +298,7 @@ class BackgroundFetchServiceTest
             embedded_worker_test_helper()->context_wrapper()));
     context_->data_manager_->AddObserver(this);
     embedded_worker_test_helper()->context_wrapper()->AddObserver(this);
-    devtools_context()->AddObserver(this);
+    devtools_context().AddObserver(this);
 
     web_contents_ = base::WrapUnique(WebContentsTester::CreateTestWebContents(
         WebContents::CreateParams(browser_context())));
@@ -328,7 +325,7 @@ class BackgroundFetchServiceTest
 
     service_.reset();
 
-    devtools_context()->RemoveObserver(this);
+    devtools_context().RemoveObserver(this);
     embedded_worker_test_helper()->context_wrapper()->RemoveObserver(this);
     context_->data_manager_->RemoveObserver(this);
     context_ = nullptr;
@@ -1120,8 +1117,8 @@ TEST_F(BackgroundFetchServiceTest, GetDeveloperIds) {
   // the service worker registration is correct.
   {
     ScopedCustomBackgroundFetchService scoped_bogus_url_service(
-        this, blink::StorageKey(
-                  url::Origin::Create(GURL("https://www.bogus-origin.com"))));
+        this, blink::StorageKey::CreateFromStringForTesting(
+                  "https://www.bogus-origin.com"));
     blink::mojom::BackgroundFetchError error;
     std::vector<std::string> developer_ids;
 
@@ -1246,7 +1243,7 @@ TEST_F(BackgroundFetchServiceTest, JobsInitializedOnBrowserRestart) {
 TEST_F(BackgroundFetchServiceTest,
        DevToolsContextReceivesBackgroundFetchEvents) {
   // Allow the DevTools Context to log Background Fetch events.
-  devtools_context()->StartRecording(devtools::proto::BACKGROUND_FETCH);
+  devtools_context().StartRecording(devtools::proto::BACKGROUND_FETCH);
 
   // Start a fetch and wait for it to complete.
   auto* worker =

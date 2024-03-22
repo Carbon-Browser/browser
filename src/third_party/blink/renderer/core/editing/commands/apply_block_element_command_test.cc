@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,11 @@ TEST_F(ApplyBlockElementCommandTest, selectionCrossingOverBody) {
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kTest);
   Selection().SetSelection(
       SelectionInDOMTree::Builder()
-          .SetBaseAndExtent(
-              Position(GetDocument().documentElement(), 1),
-              Position(GetDocument().getElementById("va")->firstChild(), 2))
+          .SetBaseAndExtent(Position(GetDocument().documentElement(), 1),
+                            Position(GetDocument()
+                                         .getElementById(AtomicString("va"))
+                                         ->firstChild(),
+                                     2))
           .Build(),
       SetSelectionOptions());
 
@@ -70,7 +72,8 @@ TEST_F(ApplyBlockElementCommandTest, visibilityChangeDuringCommand) {
   UpdateAllLifecyclePhasesForTest();
   Selection().SetSelection(
       SelectionInDOMTree::Builder()
-          .Collapse(Position(GetDocument().QuerySelector("li"), 0))
+          .Collapse(
+              Position(GetDocument().QuerySelector(AtomicString("li")), 0))
           .Build(),
       SetSelectionOptions());
 
@@ -91,8 +94,8 @@ TEST_F(ApplyBlockElementCommandTest, IndentHeadingIntoBlockquote) {
       "<h6><button><table></table></button></h6>"
       "<object></object>"
       "</div>");
-  Element* button = GetDocument().QuerySelector("button");
-  Element* object = GetDocument().QuerySelector("object");
+  Element* button = GetDocument().QuerySelector(AtomicString("button"));
+  Element* object = GetDocument().QuerySelector(AtomicString("object"));
   Selection().SetSelection(SelectionInDOMTree::Builder()
                                .Collapse(Position(button, 0))
                                .Extend(Position(object, 0))
@@ -230,7 +233,7 @@ TEST_F(ApplyBlockElementCommandTest, IndentSVGWithTable) {
       "<blockquote style=\"margin: 0 0 0 40px; border: none; padding: 0px;\">"
       "<svg><foreignObject><table>| </table></foreignObject></svg>"
       "</blockquote>"
-      "<svg><foreignObject>x</foreignObject></svg>",
+      "<svg><foreignObject> x</foreignObject></svg>",
       GetSelectionTextFromBody());
 }
 
@@ -356,4 +359,21 @@ TEST_F(ApplyBlockElementCommandTest, IndentOutdentLinesWithJunkCrash) {
       "</div>",
       GetSelectionTextFromBody());
 }
+
+// http://crbug.com/1264470
+TEST_F(ApplyBlockElementCommandTest, SplitTextNodeWithJustNewline) {
+  InsertStyleElement("b {-webkit-text-security: square;}");
+  Selection().SetSelection(SetSelectionTextToBody("<pre contenteditable>"
+                                                  "<b>|<p>X</p>\n</b>"
+                                                  "</pre>"),
+                           SetSelectionOptions());
+
+  auto* const format_block = MakeGarbageCollected<FormatBlockCommand>(
+      GetDocument(), html_names::kDivTag);
+
+  ASSERT_TRUE(format_block->Apply());
+  EXPECT_EQ("<pre contenteditable><b><div>|X</div>\n</b></pre>",
+            GetSelectionTextFromBody());
+}
+
 }  // namespace blink

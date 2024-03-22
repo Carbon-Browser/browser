@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <stdint.h>
 #include <vector>
 
-#include "ash/services/nearby/public/mojom/nearby_connections_types.mojom-forward.h"
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_connections_types.mojom-forward.h"
 
 // This class manages async File IO for Nearby Share file payloads. Opening and
 // releasing files need to run on a MayBlock task runner.
@@ -27,7 +27,7 @@ class NearbyFileHandler {
     base::File input_file;
     base::File output_file;
   };
-  using PayloadPtr = location::nearby::connections::mojom::PayloadPtr;
+  using PayloadPtr = nearby::connections::mojom::PayloadPtr;
   using OpenFilesCallback = base::OnceCallback<void(std::vector<FileInfo>)>;
   using CreateFileCallback = base::OnceCallback<void(CreateFileResult)>;
   using GetUniquePathCallback = base::OnceCallback<void(base::FilePath)>;

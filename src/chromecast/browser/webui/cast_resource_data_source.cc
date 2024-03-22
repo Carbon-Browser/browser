@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/browser/webui/cast_resource_data_source.h"
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "chromecast/base/cast_constants.h"
 #include "net/base/mime_util.h"
@@ -42,7 +42,9 @@ void CastResourceDataSource::StartDataRequest(
                                 base::BindOnce(&GotData, std::move(callback)));
 }
 
-std::string CastResourceDataSource::GetMimeType(const std::string& path) {
+std::string CastResourceDataSource::GetMimeType(const GURL& url) {
+  const std::string path = content::URLDataSource::URLToRequestPath(url);
+
   if (!for_webui_) {
     std::string mime_type;
     base::FilePath::StringType file_ext =

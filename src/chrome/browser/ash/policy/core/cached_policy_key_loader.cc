@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,14 @@
 
 #include <utility>
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
 
 namespace policy {
@@ -152,8 +151,8 @@ std::string CachedPolicyKeyLoader::LoadPolicyKey(const base::FilePath& path) {
 void CachedPolicyKeyLoader::TriggerLoadPolicyKey() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&CachedPolicyKeyLoader::LoadPolicyKey,
                      cached_policy_key_path_),
       base::BindOnce(&CachedPolicyKeyLoader::OnPolicyKeyLoaded,

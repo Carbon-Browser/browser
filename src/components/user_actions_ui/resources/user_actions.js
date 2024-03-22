@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
  * callbacks from the C++ code saying that a new user action was seen.
  */
 
-import {addWebUIListener} from 'chrome://resources/js/cr.m.js';
-import {$} from 'chrome://resources/js/util.m.js';
+import {addWebUiListener} from 'chrome://resources/js/cr.js';
+import {$} from 'chrome://resources/js/util.js';
 
 /**
  * Appends a row to the output table listing the user action observed
@@ -33,7 +33,7 @@ function observeUserAction(userAction) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  addWebUIListener('user-action', observeUserAction);
+  addWebUiListener('user-action', observeUserAction);
   // <if expr="not is_ios">
   chrome.send('pageLoaded');
   // </if>

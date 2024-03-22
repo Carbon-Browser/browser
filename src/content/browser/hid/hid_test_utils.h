@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,8 @@ class MockHidDelegate : public HidDelegate {
 
   void AddObserver(BrowserContext* browser_context,
                    Observer* observer) override;
-  void RemoveObserver(Observer* observer) override;
+  void RemoveObserver(BrowserContext* browser_context,
+                      Observer* observer) override;
 
   // MockHidDelegate does not register to receive device connection events. Use
   // these methods to broadcast device connections to all delegate observers.
@@ -47,6 +48,7 @@ class MockHidDelegate : public HidDelegate {
   void OnDeviceRemoved(const device::mojom::HidDeviceInfo& device);
   void OnDeviceChanged(const device::mojom::HidDeviceInfo& device);
   void OnPermissionRevoked(const url::Origin& origin);
+  void OnHidManagerConnectionError();
 
   MOCK_METHOD0(RunChooserInternal,
                std::vector<device::mojom::HidDeviceInfoPtr>());
@@ -72,9 +74,18 @@ class MockHidDelegate : public HidDelegate {
                     const url::Origin& origin));
   MOCK_METHOD1(IsServiceWorkerAllowedForOrigin,
                bool(const url::Origin& origin));
+  MOCK_METHOD2(IncrementConnectionCount,
+               void(BrowserContext*, const url::Origin&));
+  MOCK_METHOD2(DecrementConnectionCount,
+               void(BrowserContext*, const url::Origin&));
+
+  const base::ObserverList<Observer>& observer_list() { return observer_list_; }
+
+  void SetAssertBrowserContext(bool assert_browser_context);
 
  private:
   base::ObserverList<Observer> observer_list_;
+  bool assert_browser_context_ = false;
 };
 
 // Test implementation of ContentBrowserClient for HID tests. The test client

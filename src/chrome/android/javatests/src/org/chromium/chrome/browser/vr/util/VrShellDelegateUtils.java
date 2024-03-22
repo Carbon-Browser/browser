@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,7 @@ import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Class containing utility functions for interacting with VrShellDelegate
- * during tests.
- */
+/** Class containing utility functions for interacting with VrShellDelegate during tests. */
 public class VrShellDelegateUtils {
     /**
      * Retrieves the current VrShellDelegate instance from the UI thread. This is necessary in case
@@ -25,7 +22,9 @@ public class VrShellDelegateUtils {
         final AtomicReference<TestVrShellDelegate> delegate =
                 new AtomicReference<TestVrShellDelegate>();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { delegate.set(TestVrShellDelegate.getInstance()); });
+                () -> {
+                    delegate.set(TestVrShellDelegate.getInstance());
+                });
         return delegate.get();
     }
 }

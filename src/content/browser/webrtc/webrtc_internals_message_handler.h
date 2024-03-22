@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define CONTENT_BROWSER_WEBRTC_WEBRTC_INTERNALS_MESSAGE_HANDLER_H_
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/values.h"
 #include "content/browser/webrtc/webrtc_internals_ui_observer.h"
 #include "content/common/content_export.h"
@@ -48,6 +47,7 @@ class CONTENT_EXPORT WebRTCInternalsMessageHandler
   // Javascript message handler.
   void OnGetStandardStats(const base::Value::List& list);
   void OnGetLegacyStats(const base::Value::List& list);
+  void OnGetCurrentState(const base::Value::List& list);
   void OnSetAudioDebugRecordingsEnabled(bool enable,
                                         const base::Value::List& list);
   void OnSetEventLogRecordingsEnabled(bool enable,

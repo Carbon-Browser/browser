@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/containers/contains.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "net/log/net_log_values.h"
@@ -48,7 +49,7 @@ void NetLog::ThreadSafeCaptureModeObserver::
                                          const NetLogSource& source,
                                          NetLogEventPhase phase,
                                          base::TimeTicks time,
-                                         base::Value&& params) {
+                                         base::Value::Dict params) {
   DCHECK(net_log_);
   net_log_->AddEntryAtTimeWithMaterializedParams(type, source, phase, time,
                                                  std::move(params));
@@ -66,7 +67,7 @@ NetLog::NetLog(base::PassKey<NetLogWithSource>) {}
 void NetLog::AddEntry(NetLogEventType type,
                       const NetLogSource& source,
                       NetLogEventPhase phase) {
-  AddEntry(type, source, phase, [] { return base::Value(); });
+  AddEntry(type, source, phase, [] { return base::Value::Dict(); });
 }
 
 void NetLog::AddGlobalEntry(NetLogEventType type) {
@@ -104,7 +105,7 @@ void NetLog::RemoveObserver(NetLog::ThreadSafeObserver* observer) {
 
   DCHECK_EQ(this, observer->net_log_);
 
-  auto it = std::find(observers_.begin(), observers_.end(), observer);
+  auto it = base::ranges::find(observers_, observer);
   DCHECK(it != observers_.end());
   observers_.erase(it);
 
@@ -132,8 +133,7 @@ void NetLog::RemoveCaptureModeObserver(
   DCHECK_EQ(this, observer->net_log_);
   DCHECK(HasCaptureModeObserver(observer));
 
-  auto it = std::find(capture_mode_observers_.begin(),
-                      capture_mode_observers_.end(), observer);
+  auto it = base::ranges::find(capture_mode_observers_, observer);
   DCHECK(it != capture_mode_observers_.end());
   capture_mode_observers_.erase(it);
 
@@ -258,7 +258,7 @@ void NetLog::AddEntryInternal(NetLogEventType type,
 void NetLog::AddEntryWithMaterializedParams(NetLogEventType type,
                                             const NetLogSource& source,
                                             NetLogEventPhase phase,
-                                            base::Value&& params) {
+                                            base::Value::Dict params) {
   AddEntryAtTimeWithMaterializedParams(
       type, source, phase, base::TimeTicks::Now(), std::move(params));
 }
@@ -267,7 +267,7 @@ void NetLog::AddEntryAtTimeWithMaterializedParams(NetLogEventType type,
                                                   const NetLogSource& source,
                                                   NetLogEventPhase phase,
                                                   base::TimeTicks time,
-                                                  base::Value&& params) {
+                                                  base::Value::Dict params) {
   NetLogEntry entry(type, source, phase, time, std::move(params));
 
   // Notify all of the log observers, regardless of capture mode.

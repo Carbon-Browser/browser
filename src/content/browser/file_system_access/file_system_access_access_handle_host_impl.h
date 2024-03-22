@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "content/browser/file_system_access/file_system_access_capacity_allocation_host_impl.h"
 #include "content/browser/file_system_access/file_system_access_file_delegate_host_impl.h"
 #include "content/browser/file_system_access/file_system_access_manager_impl.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_access_handle_host.mojom.h"
 #include "third_party/blink/public/mojom/file_system_access/file_system_access_file_delegate_host.mojom.h"
 
@@ -25,13 +27,13 @@ namespace content {
 class FileSystemAccessAccessHandleHostImpl
     : public blink::mojom::FileSystemAccessAccessHandleHost {
  public:
-  // Creates an AccessHandleHost that acts as an exclusive write lock on the
-  // file. AccessHandleHosts should only be created via the
+  // Creates an AccessHandleHost that has a lock on the file.
+  // AccessHandleHosts should only be created via the
   // FileSystemAccessManagerImpl.
   FileSystemAccessAccessHandleHostImpl(
       FileSystemAccessManagerImpl* manager,
       const storage::FileSystemURL& url,
-      scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
+      scoped_refptr<FileSystemAccessLockManager::LockHandle> lock,
       base::PassKey<FileSystemAccessManagerImpl> pass_key,
       mojo::PendingReceiver<blink::mojom::FileSystemAccessAccessHandleHost>
           receiver,
@@ -67,10 +69,7 @@ class FileSystemAccessAccessHandleHostImpl
   void OnDisconnect();
 
   // The FileSystemAccessManagerImpl that owns this instance.
-  const raw_ptr<FileSystemAccessManagerImpl> manager_;
-
-  // Exclusive write lock on the file. It is released on destruction.
-  scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock_;
+  const raw_ptr<FileSystemAccessManagerImpl> manager_ = nullptr;
 
   mojo::Receiver<blink::mojom::FileSystemAccessAccessHandleHost> receiver_;
 
@@ -107,6 +106,12 @@ class FileSystemAccessAccessHandleHostImpl
   // will run when `this` is destroyed, which errs on the side of not running
   // the callback too early, before the file is actually closed.
   base::ScopedClosureRunner on_close_callback_;
+
+  // Lock on the file. It is released on destruction. This member must be
+  // declared after `close_callback_` to ensure that the lock is released before
+  // the FileSystemSyncAccessHandle.close() method returns. See
+  // https://github.com/whatwg/fs/issues/83.
+  scoped_refptr<FileSystemAccessLockManager::LockHandle> lock_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

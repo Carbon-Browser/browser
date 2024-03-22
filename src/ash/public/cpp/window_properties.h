@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string>
 
+#include "ash/public/cpp/arc_game_controls_flag.h"
 #include "ash/public/cpp/arc_resize_lock_type.h"
 #include "ash/public/cpp/ash_public_export.h"
 #include "ui/base/class_property.h"
@@ -15,7 +16,6 @@
 class SkRegion;
 
 namespace aura {
-class Window;
 template <typename T>
 using WindowProperty = ui::ClassProperty<T>;
 }  // namespace aura
@@ -26,6 +26,7 @@ enum class WindowStateType;
 
 namespace gfx {
 class Rect;
+class Size;
 }
 
 namespace ash {
@@ -40,6 +41,10 @@ enum class ResizeShadowType;
 // A property key to store the app ID for the window's associated app.
 ASH_PUBLIC_EXPORT extern const aura::WindowProperty<std::string*>* const
     kAppIDKey;
+
+// A property key to store the ARC Game Controls status.
+ASH_PUBLIC_EXPORT extern const aura::WindowProperty<ArcGameControlsFlag>* const
+    kArcGameControlsFlagsKey;
 
 // A property key to store the ARC package name for a window's associated
 // ARC app.
@@ -178,16 +183,17 @@ ASH_PUBLIC_EXPORT extern const aura::WindowProperty<ResizeShadowType>* const
 ASH_PUBLIC_EXPORT extern const aura::WindowProperty<SkRegion*>* const
     kSystemGestureExclusionKey;
 
-// A property key to store the address of the source window that the drag
-// originated from if the window is currently in tab-dragging process.
-ASH_PUBLIC_EXPORT extern const aura::WindowProperty<aura::Window*>* const
-    kTabDraggingSourceWindowKey;
-
 // A property key to indicate whether ash should perform auto management of
 // window positions; when you open a second browser, ash will move the two to
 // minimize overlap.
 ASH_PUBLIC_EXPORT extern const aura::WindowProperty<bool>* const
     kWindowPositionManagedTypeKey;
+
+// A property key to indicate whether the cursor should stay visible when a key
+// is pressed. ChromeOS normally hides the cursor when a key is pressed but this
+// results in undesirable interaction with games.
+ASH_PUBLIC_EXPORT extern const aura::WindowProperty<bool>* const
+    kShowCursorOnKeypress;
 
 // A property key to indicate pip window state.
 ASH_PUBLIC_EXPORT extern const aura::WindowProperty<bool>* const

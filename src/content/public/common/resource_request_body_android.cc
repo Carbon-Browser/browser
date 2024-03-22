@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "base/android/jni_array.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/ref_counted.h"
-#include "content/public/android/content_jni_headers/ResourceRequestBody_jni.h"
+#include "content/public/android/content_main_dex_jni/ResourceRequestBody_jni.h"
 #include "services/network/public/cpp/resource_request_body.h"
 #include "third_party/blink/public/common/page_state/page_state_serialization.h"
 

@@ -1,8 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/shelf/swipe_home_to_overview_controller.h"
+
+#include <algorithm>
+#include <optional>
 
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/constants/ash_features.h"
@@ -15,12 +18,10 @@
 #include "ash/shell.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_session.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/default_tick_clock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/compositor/layer_animation_element.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/display.h"
@@ -106,8 +107,6 @@ void SwipeHomeToOverviewController::Drag(const gfx::PointF& location_in_screen,
         display.bounds().y() +
         display.bounds().height() * kHomeScalingThresholdDisplayHeightRatio;
     state_ = State::kTrackingDrag;
-    home_screen_blur_disabler_ =
-        Shell::Get()->app_list_controller()->DisableHomeScreenBackgroundBlur();
   } else {
     if (location_in_screen.y() <= overview_transition_threshold_y_ &&
         std::abs(scroll_x) + std::abs(scroll_y) <= kMovementVelocityThreshold) {
@@ -130,17 +129,17 @@ void SwipeHomeToOverviewController::Drag(const gfx::PointF& location_in_screen,
 
   const float progress = gfx::Tween::CalculateValue(
       gfx::Tween::FAST_OUT_SLOW_IN,
-      base::clamp(1.f - distance / target_distance, 0.0f, 1.0f));
+      std::clamp(1.f - distance / target_distance, 0.0f, 1.0f));
 
   float scale = gfx::Tween::FloatValueBetween(progress, 1.0f, kTargetHomeScale);
   Shell::Get()->app_list_controller()->UpdateScaleAndOpacityForHomeLauncher(
-      scale, 1.0f /*opacity*/, absl::nullopt /*animation_info*/,
+      scale, 1.0f /*opacity*/, std::nullopt /*animation_info*/,
       base::NullCallback());
 }
 
 void SwipeHomeToOverviewController::EndDrag(
     const gfx::PointF& location_in_screen,
-    absl::optional<float> velocity_y) {
+    std::optional<float> velocity_y) {
   if (state_ != State::kTrackingDrag) {
     state_ = State::kFinished;
     return;
@@ -196,11 +195,6 @@ void SwipeHomeToOverviewController::FinalizeDragAndShowOverview() {
   // that the overview is starting.
   Shell::Get()->overview_controller()->StartOverview(
       OverviewStartAction::kExitHomeLauncher);
-
-  // No need to keep blur disabled for the drag - note that blur might remain
-  // disabled at this point due to the started overview transition (which
-  // triggers home screen scale animation).
-  home_screen_blur_disabler_.reset();
 }
 
 void SwipeHomeToOverviewController::FinalizeDragAndStayOnHomeScreen(
@@ -209,8 +203,14 @@ void SwipeHomeToOverviewController::FinalizeDragAndStayOnHomeScreen(
   overview_transition_threshold_y_ = 0;
   state_ = State::kFinished;
 
+  // App list controller may get destroyed before shelf during shutdown.
+  auto* const app_list_controller = Shell::Get()->app_list_controller();
+  if (!app_list_controller) {
+    return;
+  }
+
   if (go_back) {
-    Shell::Get()->app_list_controller()->Back();
+    app_list_controller->Back();
     UMA_HISTOGRAM_ENUMERATION(kEnterOverviewHistogramName,
                               EnterOverviewFromHomeLauncher::kBack);
   } else {
@@ -221,13 +221,9 @@ void SwipeHomeToOverviewController::FinalizeDragAndStayOnHomeScreen(
   // Make sure the home launcher scale and opacity return to the initial state.
   // Note that this is needed even if the gesture ended up in a fling, as early
   // gesture handling might have updated the launcher scale.
-  Shell::Get()->app_list_controller()->UpdateScaleAndOpacityForHomeLauncher(
-      1.0f /*scale*/, 1.0f /*opacity*/, absl::nullopt /*animation_info*/,
+  app_list_controller->UpdateScaleAndOpacityForHomeLauncher(
+      1.0f /*scale*/, 1.0f /*opacity*/, std::nullopt /*animation_info*/,
       base::BindRepeating(&UpdateHomeAnimationForGestureCancel, go_back));
-
-  // No need to keep blur disabled for the drag - note that blur might remain
-  // disabled at this point due to the started home screen scale animation.
-  home_screen_blur_disabler_.reset();
 }
 
 }  // namespace ash

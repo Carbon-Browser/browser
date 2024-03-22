@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,6 +73,10 @@ class ApplicationContext {
   // Creates state tied to application threads. It is expected this will be
   // called from web::WebMainParts::PreCreateThreads.
   void PreCreateThreads();
+
+  // Called after the browser threads are created. It is expected this will be
+  // called from web::WebMainParts::PostCreateThreads.
+  void PostCreateThreads();
 
   // Saves application context state if |local_state_| exists. This should be
   // called during shutdown to save application state.

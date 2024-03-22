@@ -1,28 +1,24 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #import "ios/chrome/common/ui/reauthentication/reauthentication_module.h"
 
 #import <LocalAuthentication/LocalAuthentication.h>
 
-#include "base/check.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/check.h"
 
 constexpr char kPasscodeArticleURL[] = "https://support.apple.com/HT204060";
 
 @interface ReauthenticationModule () <SuccessfulReauthTimeAccessor>
 
 // Date kept to decide if last auth can be reused when
-// |lastSuccessfulReauthTime| is |self|.
+// `lastSuccessfulReauthTime` is `self`.
 @property(nonatomic, strong) NSDate* lastSuccessfulReauthTime;
 
 @end
 
 @implementation ReauthenticationModule {
-  // Block that creates a new |LAContext| object everytime one is required,
+  // Block that creates a new `LAContext` object everytime one is required,
   // meant to make testing with a mock object possible.
   LAContext* (^_createLAContext)(void);
 
@@ -48,6 +44,14 @@ constexpr char kPasscodeArticleURL[] = "https://support.apple.com/HT204060";
     _successfulReauthTimeAccessor = successfulReauthTimeAccessor;
   }
   return self;
+}
+
+- (BOOL)canAttemptReauthWithBiometrics {
+  LAContext* context = _createLAContext();
+  // The authentication method is Touch ID or Face ID.
+  return
+      [context canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
+                           error:nil];
 }
 
 - (BOOL)canAttemptReauth {

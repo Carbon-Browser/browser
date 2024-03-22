@@ -3,16 +3,17 @@
 
 <base-page equal-panes>
   <div slot="left-pane">
-    <h1>[[i18n('calibrationFailedTitleText')]]</h1>
+    <h1 tabindex="-1">[[i18n('calibrationFailedTitleText')]]</h1>
     <div class="instructions">
       [[i18n('calibrationFailedInstructionsText')]]
     </div>
   </div>
   <div slot="right-pane">
     <div class="scroll-container">
-      <div class="component-grid calibration">
+      <div id="componentList" class="component-grid calibration">
         <template is="dom-repeat" items="{{componentCheckboxes_}}" as="component">
           <calibration-component-chip id="[[component.id]]"
+            unique-id="[[component.uniqueId]]"
             checked="{{component.checked}}"
             failed="[[component.failed]]"
             component-name="[[component.name]]"

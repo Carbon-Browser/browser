@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ v8::Local<v8::Module> ModuleTestBase::CompileModule(
   ModuleScriptCreationParams params(
       /*source_url=*/url, /*base_url=*/url,
       ScriptSourceLocationType::kExternalFile, ModuleType::kJavaScript,
-      ParkableString(source.Impl()), nullptr);
+      ParkableString(source.Impl()), nullptr,
+      network::mojom::ReferrerPolicy::kDefault);
   return ModuleRecord::Compile(script_state, params, ScriptFetchOptions(),
                                TextPosition::MinimumPosition(),
                                exception_state);
@@ -83,7 +84,8 @@ v8::Local<v8::Value> ModuleTestBase::GetResult(ScriptState* script_state,
           MakeGarbageCollected<ScriptFunction>(
               script_state, MakeGarbageCollected<ExpectNotReached>()));
 
-  v8::MicrotasksScope::PerformCheckpoint(script_state->GetIsolate());
+  script_state->GetContext()->GetMicrotaskQueue()->PerformCheckpoint(
+      script_state->GetIsolate());
 
   return resolve_function->GetResult();
 }
@@ -106,7 +108,8 @@ v8::Local<v8::Value> ModuleTestBase::GetException(
           script_state, MakeGarbageCollected<ExpectNotReached>()),
       MakeGarbageCollected<ScriptFunction>(script_state, reject_function));
 
-  v8::MicrotasksScope::PerformCheckpoint(script_state->GetIsolate());
+  script_state->GetContext()->GetMicrotaskQueue()->PerformCheckpoint(
+      script_state->GetIsolate());
 
   return reject_function->GetResult();
 }

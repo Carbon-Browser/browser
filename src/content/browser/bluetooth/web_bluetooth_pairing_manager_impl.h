@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,9 @@ class CONTENT_EXPORT WebBluetoothPairingManagerImpl
   // The maximum number of Bluetooth pairing attempts during a single
   // read/write operation.
   static constexpr int kMaxPairAttempts = 10;
+
+  // Passkey/Pin has to be exact 6 digits
+  static constexpr int kPairingPinSize = 6;
 
   explicit WebBluetoothPairingManagerImpl(
       WebBluetoothPairingManagerDelegate* pairing_manager_delegate);
@@ -76,6 +79,10 @@ class CONTENT_EXPORT WebBluetoothPairingManagerImpl
                            PairConfirmPromptSuccess);
   FRIEND_TEST_ALL_PREFIXES(BluetoothPairingManagerTest,
                            PairConfirmPromptCancelled);
+  FRIEND_TEST_ALL_PREFIXES(BluetoothPairingManagerTest,
+                           PairConfirmPinPromptSuccess);
+  FRIEND_TEST_ALL_PREFIXES(BluetoothPairingManagerTest,
+                           PairConfirmPinPromptCancelled);
 
   // Pair the Bluetooth device identified by |device_id|. |num_pair_attempts|
   // represents the number of pairing attempts for the specified device which

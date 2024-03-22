@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,8 +72,11 @@ void NotificationManager::Close(bool by_user) {
   OnNotificationResult(CONTINUE);
 }
 
-void NotificationManager::OnAppImageUpdated(const std::string& id,
-                                            const gfx::ImageSkia& image) {
+void NotificationManager::OnAppImageUpdated(
+    const std::string& id,
+    const gfx::ImageSkia& image,
+    bool is_placeholder_icon,
+    const absl::optional<gfx::ImageSkia>& badge_image) {
   extension_icon_ = ui::ImageModel::FromImageSkia(image);
   ShowNotification();
 }

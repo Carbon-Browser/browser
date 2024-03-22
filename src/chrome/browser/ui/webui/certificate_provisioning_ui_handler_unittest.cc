@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,13 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/values_test_util.h"
+#include "base/values.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/crosapi/mojom/cert_provisioning.mojom.h"
@@ -31,8 +32,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
-namespace chromeos {
-namespace cert_provisioning {
+namespace chromeos::cert_provisioning {
 
 namespace {
 
@@ -89,12 +89,13 @@ constexpr char kUserCertProfileName[] = "User Certificate Profile 1";
 void FormatDictRecurse(base::Value* value,
                        const std::vector<std::string>& messages) {
   if (value->is_dict()) {
-    for (const auto child : value->DictItems())
+    for (const auto child : value->GetDict()) {
       FormatDictRecurse(&child.second, messages);
+    }
     return;
   }
   if (value->is_list()) {
-    for (base::Value& child : value->GetListDeprecated())
+    for (base::Value& child : value->GetList())
       FormatDictRecurse(&child, messages);
     return;
   }
@@ -122,7 +123,7 @@ base::Value FormatJsonDict(const base::StringPiece input,
 // |profile_id|.
 base::Value GetByProfileId(const base::Value& all_processes,
                            const std::string& profile_id) {
-  for (const base::Value& process : all_processes.GetListDeprecated()) {
+  for (const base::Value& process : all_processes.GetList()) {
     if (profile_id == *process.GetDict().FindString("certProfileId"))
       return process.Clone();
   }
@@ -147,8 +148,13 @@ class FakeMojoCertProvisioning : public crosapi::mojom::CertProvisioning {
 
   void UpdateOneProcess(const std::string& cert_profile_id) override {}
 
+  void ResetOneProcess(const std::string& cert_profile_id) override {
+    reset_one_process_calls_.push_back(cert_profile_id);
+  }
+
   mojo::Remote<crosapi::mojom::CertProvisioningObserver> observer_;
   std::vector<crosapi::mojom::CertProvisioningProcessStatusPtr> status_;
+  std::vector<std::string> reset_one_process_calls_;
 };
 
 class CertificateProvisioningUiHandlerTest : public ::testing::Test {
@@ -172,7 +178,7 @@ class CertificateProvisioningUiHandlerTest : public ::testing::Test {
 
   // Use in ASSERT_NO_FATAL_FAILURE.
   void ExtractCertProvisioningProcesses(
-      std::vector<base::Value>& args,
+      base::Value::List& args,
       base::Value* out_all_processes,
       std::vector<std::string>* out_profile_ids) {
     ASSERT_EQ(1U, args.size());
@@ -183,7 +189,7 @@ class CertificateProvisioningUiHandlerTest : public ::testing::Test {
     if (!out_profile_ids)
       return;
     out_profile_ids->clear();
-    for (const base::Value& process : out_all_processes->GetListDeprecated()) {
+    for (const base::Value& process : out_all_processes->GetList()) {
       const std::string* profile_id =
           process.GetDict().FindString("certProfileId");
       ASSERT_TRUE(profile_id);
@@ -198,9 +204,9 @@ class CertificateProvisioningUiHandlerTest : public ::testing::Test {
     content::TestWebUIListenerObserver result_waiter(
         &web_ui_, "certificate-provisioning-processes-changed");
 
-    base::ListValue args;
+    base::Value::List args;
     web_ui_.HandleReceivedMessage("refreshCertificateProvisioningProcessses",
-                                  &args);
+                                  args);
 
     result_waiter.Wait();
     ASSERT_NO_FATAL_FAILURE(ExtractCertProvisioningProcesses(
@@ -227,7 +233,7 @@ TEST_F(CertificateProvisioningUiHandlerTest, NoProcesses) {
   base::Value all_processes;
   ASSERT_NO_FATAL_FAILURE(RefreshCertProvisioningProcesses(
       &all_processes, /*out_profile_ids=*/nullptr));
-  EXPECT_TRUE(all_processes.GetListDeprecated().empty());
+  EXPECT_TRUE(all_processes.GetList().empty());
 }
 
 TEST_F(CertificateProvisioningUiHandlerTest, HasOneProcess) {
@@ -418,7 +424,15 @@ TEST_F(CertificateProvisioningUiHandlerTest, Updates) {
   EXPECT_EQ(all_processes, all_processes_2);
 }
 
+TEST_F(CertificateProvisioningUiHandlerTest, ResetsWhenSupported) {
+  const std::string kCertProvisioningProcessId = "test";
+  base::Value::List args;
+  args.Append(kCertProvisioningProcessId);
+  web_ui_.HandleReceivedMessage("triggerCertificateProvisioningProcessReset",
+                                args);
+  EXPECT_THAT(mojo_cert_provisioning_.reset_one_process_calls_,
+              ElementsAre(kCertProvisioningProcessId));
+}
 }  // namespace
 
-}  // namespace cert_provisioning
-}  // namespace chromeos
+}  // namespace chromeos::cert_provisioning

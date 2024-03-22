@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/image_annotation/public/cpp/image_processor.h"
 
-#include "base/bind.h"
-#include "base/task/task_runner_util.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "services/image_annotation/image_annotation_metrics.h"
 #include "third_party/skia/include/core/SkCanvas.h"
@@ -91,11 +91,11 @@ mojo::PendingRemote<mojom::ImageProcessor> ImageProcessor::GetPendingRemote() {
 }
 
 void ImageProcessor::GetJpgImageData(GetJpgImageDataCallback callback) {
-  DCHECK(base::SequencedTaskRunnerHandle::IsSet());
+  DCHECK(base::SequencedTaskRunner::HasCurrentDefault());
 
   background_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&ScaleAndEncodeImage,
-                                base::SequencedTaskRunnerHandle::Get(),
+                                base::SequencedTaskRunner::GetCurrentDefault(),
                                 std::move(callback), get_pixels_.Run(),
                                 kMaxPixels, kJpgQuality));
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ class TaskManagerView : public TableViewDelegate,
 
   // task_manager::TableViewDelegate:
   bool IsColumnVisible(int column_id) const override;
-  void SetColumnVisibility(int column_id, bool new_visibility) override;
+  bool SetColumnVisibility(int column_id, bool new_visibility) override;
   bool IsTableSorted() const override;
   TableSortDescriptor GetSortDescriptor() const override;
   void SetSortDescriptor(const TableSortDescriptor& descriptor) override;
@@ -85,12 +85,12 @@ class TaskManagerView : public TableViewDelegate,
   void ExecuteCommand(int id, int event_flags) override;
   void MenuClosed(ui::SimpleMenuModel* source) override;
 
+  static TaskManagerView* GetInstanceForTests();
+
  private:
   friend class TaskManagerViewTest;
 
   TaskManagerView();
-
-  static TaskManagerView* GetInstanceForTests();
 
   // Creates the child controls.
   void Init();
@@ -115,8 +115,8 @@ class TaskManagerView : public TableViewDelegate,
   // We need to own the text of the menu, the Windows API does not copy it.
   std::u16string always_on_top_menu_text_;
 
-  raw_ptr<views::TableView> tab_table_;
-  raw_ptr<views::View> tab_table_parent_;
+  raw_ptr<views::TableView, DanglingUntriaged> tab_table_;
+  raw_ptr<views::View, DanglingUntriaged> tab_table_parent_;
 
   // all possible columns, not necessarily visible
   std::vector<ui::TableColumn> columns_;

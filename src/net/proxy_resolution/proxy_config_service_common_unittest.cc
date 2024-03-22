@@ -1,4 +1,4 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,9 @@ void MatchesProxyServerHelper(const char* failure_message,
     return;
   }
 
-  ProxyServer actual_proxy = actual_proxies.Get();
+  ASSERT_EQ(1u, actual_proxies.First().length());
+  ProxyServer actual_proxy =
+      actual_proxies.First().GetProxyServer(/*chain_index=*/0);
   std::string actual_proxy_string;
   if (actual_proxy.is_valid())
     actual_proxy_string = ProxyServerToProxyUri(actual_proxy);

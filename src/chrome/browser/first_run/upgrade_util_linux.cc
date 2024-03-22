@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ double GetLastModifiedTimeOfExe() {
                  << exe_file_path.value();
     return saved_last_modified_time_of_exe;
   }
-  return exe_file_info.last_modified.ToDoubleT();
+  return exe_file_info.last_modified.InSecondsFSinceUnixEpoch();
 }
 
 }  // namespace upgrade_util

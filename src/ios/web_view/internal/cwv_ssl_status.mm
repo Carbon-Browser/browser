@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,6 @@
 #import "ios/web_view/internal/cwv_x509_certificate_internal.h"
 #include "net/base/net_errors.h"
 #include "net/cert/cert_status_flags.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 CWVSecurityStyle CWVSecurityStyleFromWebSecurityStyle(

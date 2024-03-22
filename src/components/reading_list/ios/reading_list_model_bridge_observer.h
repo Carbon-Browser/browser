@@ -1,5 +1,4 @@
-
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +15,10 @@
 @required
 
 - (void)readingListModelLoaded:(const ReadingListModel*)model;
-- (void)readingListModelDidApplyChanges:(const ReadingListModel*)model;
 
 @optional
+- (void)readingListModelDidApplyChanges:(const ReadingListModel*)model;
+
 - (void)readingListModel:(const ReadingListModel*)model
          willRemoveEntry:(const GURL&)url;
 
@@ -40,6 +40,8 @@
 
 - (void)readingListModel:(const ReadingListModel*)model
          willUpdateEntry:(const GURL&)url;
+- (void)readingListModel:(const ReadingListModel*)model
+          didUpdateEntry:(const GURL&)url;
 
 @end
 
@@ -76,6 +78,8 @@ class ReadingListModelBridge : public ReadingListModelObserver {
   void ReadingListDidApplyChanges(ReadingListModel* model) override;
   void ReadingListWillUpdateEntry(const ReadingListModel* model,
                                   const GURL& url) override;
+  void ReadingListDidUpdateEntry(const ReadingListModel* model,
+                                 const GURL& url) override;
 
   __unsafe_unretained id<ReadingListModelBridgeObserver> observer_;
 

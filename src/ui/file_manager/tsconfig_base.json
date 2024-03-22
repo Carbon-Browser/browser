@@ -1,8 +1,11 @@
 {
   "extends": "../../tools/typescript/tsconfig_base.json",
   "compilerOptions": {
-    "allowJs": true,
+    "checkJs": true,
+    "lib": ["dom", "ES2015.Generator", "ES2015.Iterable", "ESNext", "dom.iterable"],
+
     "importsNotUsedAsValues": "preserve",
+    "ignoreDeprecations": "5.0",
     "typeRoots": [
       "../../third_party/node/node_modules/@types"
     ],
@@ -10,6 +13,10 @@
       "trusted-types",
       "filesystem",
       "filewriter"
-    ]
+    ],
+    "experimentalDecorators": true,
+    "noEmitHelpers": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": false
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 
 namespace display {
 
-struct GammaRampRGBEntry;
+class GammaCurve;
 struct DisplayConfigurationParams;
 
 namespace test {
@@ -40,6 +40,10 @@ std::string GetSetHDCPStateAction(int64_t display_id,
                                   HDCPState state,
                                   ContentProtectionMethod protection_method);
 
+// Returns a string describing a TestNativeDisplayDelegate::SetHdcpKeyProp()
+// call.
+std::string GetSetHdcpKeyPropAction(int64_t display_id, bool success);
+
 // Returns a string describing a TestNativeDisplayDelegate::SetColorMatrix()
 // call.
 std::string SetColorMatrixAction(int64_t display_id,
@@ -47,12 +51,11 @@ std::string SetColorMatrixAction(int64_t display_id,
 
 // Returns a string describing a TestNativeDisplayDelegate::SetGammaCorrection()
 // call.
-std::string SetGammaCorrectionAction(
-    int64_t display_id,
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut);
+std::string SetGammaCorrectionAction(int64_t display_id,
+                                     const display::GammaCurve& degamma,
+                                     const display::GammaCurve& gamma);
 
-// Returns a string describing a TestNativedisplaydelegate::SetPrivacyScreen()
+// Returns a string describing a TestNativeDisplayDelegate::SetPrivacyScreen()
 // call.
 std::string SetPrivacyScreenAction(int64_t display_id, bool enabled);
 
@@ -63,6 +66,7 @@ std::string SetPrivacyScreenAction(int64_t display_id, bool enabled);
 std::string JoinActions(const char* action, ...);
 
 }  // namespace test
+
 }  // namespace display
 
 #endif  // UI_DISPLAY_MANAGER_TEST_ACTION_LOGGER_UTIL_H_

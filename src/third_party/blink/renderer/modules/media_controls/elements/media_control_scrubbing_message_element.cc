@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,30 +30,30 @@ void MediaControlScrubbingMessageElement::PopulateChildren() {
   // This stylesheet element will contain rules that are specific to the
   // scrubbing message. The shadow DOM protects these rules from bleeding
   // across to the parent DOM.
-  auto* style = MakeGarbageCollected<HTMLStyleElement>(GetDocument(),
-                                                       CreateElementFlags());
+  auto* style = MakeGarbageCollected<HTMLStyleElement>(GetDocument());
   style->setTextContent(
       MediaControlsResourceLoader::GetScrubbingMessageStyleSheet());
   shadow_root->ParserAppendChild(style);
 
-  HTMLDivElement* arrow_left_div1 =
-      MediaControlElementsHelper::CreateDivWithId("arrow-left1", shadow_root);
-  HTMLDivElement* arrow_left_div2 =
-      MediaControlElementsHelper::CreateDivWithId("arrow-left2", shadow_root);
-  HTMLDivElement* message_div =
-      MediaControlElementsHelper::CreateDivWithId("message", shadow_root);
+  HTMLDivElement* arrow_left_div1 = MediaControlElementsHelper::CreateDivWithId(
+      AtomicString("arrow-left1"), shadow_root);
+  HTMLDivElement* arrow_left_div2 = MediaControlElementsHelper::CreateDivWithId(
+      AtomicString("arrow-left2"), shadow_root);
+  HTMLDivElement* message_div = MediaControlElementsHelper::CreateDivWithId(
+      AtomicString("message"), shadow_root);
   HTMLDivElement* arrow_right_div1 =
-      MediaControlElementsHelper::CreateDivWithId("arrow-right1", shadow_root);
+      MediaControlElementsHelper::CreateDivWithId(AtomicString("arrow-right1"),
+                                                  shadow_root);
   HTMLDivElement* arrow_right_div2 =
-      MediaControlElementsHelper::CreateDivWithId("arrow-right2", shadow_root);
+      MediaControlElementsHelper::CreateDivWithId(AtomicString("arrow-right2"),
+                                                  shadow_root);
 
   arrow_left_div1->setInnerHTML(
       MediaControlsResourceLoader::GetArrowLeftSVGImage());
   arrow_left_div2->setInnerHTML(
       MediaControlsResourceLoader::GetArrowLeftSVGImage());
   message_div->setInnerText(
-      MediaElement().GetLocale().QueryString(IDS_MEDIA_SCRUBBING_MESSAGE_TEXT),
-      ASSERT_NO_EXCEPTION);
+      MediaElement().GetLocale().QueryString(IDS_MEDIA_SCRUBBING_MESSAGE_TEXT));
   arrow_right_div1->setInnerHTML(
       MediaControlsResourceLoader::GetArrowRightSVGImage());
   arrow_right_div2->setInnerHTML(

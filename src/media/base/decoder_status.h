@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,6 @@ struct DecoderStatusTraits {
     kMediaFoundationNotAvailable = 207,
   };
   static constexpr StatusGroupType Group() { return "DecoderStatus"; }
-  static constexpr Codes DefaultEnumValue() { return Codes::kOk; }
 };
 
 using DecoderStatus = TypedStatus<DecoderStatusTraits>;
@@ -54,10 +53,6 @@ using DecoderStatus = TypedStatus<DecoderStatusTraits>;
 // owns the class it's guaranteed to be unique.
 class MEDIA_EXPORT ScopedDecodeTrace {
  public:
-  // Returns true if tracing is enabled for the media category. If false,
-  // clients should avoid creating ScopedDecodeTrace objects.
-  static bool IsEnabled();
-
   // Begins an asynchronous trace with the given name and properties. Providing
   // the DecoderBuffer itself yields the most information in the trace.
   ScopedDecodeTrace(const char* trace_name, const DecoderBuffer& buffer);

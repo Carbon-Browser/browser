@@ -1,10 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/segmentation_platform/internal/ukm_data_manager_impl.h"
 
+#include "base/check_is_test.h"
 #include "base/check_op.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/segmentation_platform/internal/database/ukm_database_impl.h"
 #include "components/segmentation_platform/internal/signals/ukm_config.h"
 #include "components/segmentation_platform/internal/signals/ukm_observer.h"
@@ -31,6 +33,9 @@ UkmDataManagerImpl::~UkmDataManagerImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_check_);
   DCHECK_EQ(ref_count_, 0);
 
+  if (ukm_observer_) {
+    ukm_observer_->set_ukm_data_manager(nullptr);
+  }
   url_signal_handler_.reset();
   ukm_database_.reset();
 }
@@ -42,8 +47,9 @@ void UkmDataManagerImpl::InitializeForTesting(
 }
 
 void UkmDataManagerImpl::Initialize(const base::FilePath& database_path,
+                                    bool in_memory,
                                     UkmObserver* ukm_observer) {
-  InitiailizeImpl(std::make_unique<UkmDatabaseImpl>(database_path),
+  InitiailizeImpl(std::make_unique<UkmDatabaseImpl>(database_path, in_memory),
                   ukm_observer);
 }
 
@@ -64,7 +70,7 @@ void UkmDataManagerImpl::InitiailizeImpl(
 
   GetOrCreateUrlHandler();
 
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&UkmDataManagerImpl::RunCleanupTask,
                      weak_factory_.GetWeakPtr()),
@@ -88,11 +94,21 @@ UrlSignalHandler* UkmDataManagerImpl::GetOrCreateUrlHandler() {
 
 void UkmDataManagerImpl::StartObservingUkm(const UkmConfig& ukm_config) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_check_);
+  // TODO(b/290821132): Remove this check.
+  if (!ukm_observer_) {
+    CHECK_IS_TEST();
+    return;
+  }
   ukm_observer_->StartObserving(ukm_config);
 }
 
 void UkmDataManagerImpl::PauseOrResumeObservation(bool pause) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_check_);
+  // TODO(b/290821132): Remove this check.
+  if (!ukm_observer_) {
+    CHECK_IS_TEST();
+    return;
+  }
   ukm_observer_->PauseOrResumeObservation(pause);
 }
 
@@ -100,6 +116,10 @@ UkmDatabase* UkmDataManagerImpl::GetUkmDatabase() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_check_);
   DCHECK(ukm_database_);
   return ukm_database_.get();
+}
+
+bool UkmDataManagerImpl::HasUkmDatabase() {
+  return ukm_database_ ? true : false;
 }
 
 void UkmDataManagerImpl::OnEntryAdded(ukm::mojom::UkmEntryPtr entry) {
@@ -129,7 +149,7 @@ void UkmDataManagerImpl::RunCleanupTask() {
 
   // Consider waiting for the above task to finish successfully before posting
   // the next one.
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&UkmDataManagerImpl::RunCleanupTask,
                      weak_factory_.GetWeakPtr()),

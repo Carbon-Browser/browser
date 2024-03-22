@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,7 @@ String AccessibilityMediaElement::TextAlternative(
     return String();
 
   if (IsUnplayable()) {
-    HTMLMediaElement* element =
-        static_cast<HTMLMediaElement*>(layout_object_->GetNode());
+    auto* element = To<HTMLMediaElement>(layout_object_->GetNode());
     return element->GetLocale().QueryString(IDS_MEDIA_PLAYBACK_ERROR);
   }
   return AXLayoutObject::TextAlternative(
@@ -47,11 +46,6 @@ String AccessibilityMediaElement::TextAlternative(
 
 bool AccessibilityMediaElement::CanHaveChildren() const {
   return true;
-}
-
-bool AccessibilityMediaElement::ComputeAccessibilityIsIgnored(
-    IgnoredReasons* ignored_reasons) const {
-  return false;
 }
 
 AXRestriction AccessibilityMediaElement::Restriction() const {
@@ -64,8 +58,7 @@ AXRestriction AccessibilityMediaElement::Restriction() const {
 bool AccessibilityMediaElement::IsUnplayable() const {
   if (IsDetached())
     return true;
-  HTMLMediaElement* element =
-      static_cast<HTMLMediaElement*>(layout_object_->GetNode());
+  auto* element = To<HTMLMediaElement>(layout_object_->GetNode());
   HTMLMediaElement::NetworkState network_state = element->getNetworkState();
   return (element->error() ||
           network_state == HTMLMediaElement::kNetworkEmpty ||

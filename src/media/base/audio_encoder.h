@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "media/base/audio_bus.h"
@@ -61,6 +61,21 @@ struct MEDIA_EXPORT EncodedAudioBuffer {
 // Defines an interface for audio encoders.
 class MEDIA_EXPORT AudioEncoder {
  public:
+  struct MEDIA_EXPORT OpusOptions {
+    base::TimeDelta frame_duration;
+    unsigned int complexity;
+    unsigned int packet_loss_perc;
+    bool use_in_band_fec;
+    bool use_dtx;
+  };
+
+  enum class AacOutputFormat { AAC, ADTS };
+  struct MEDIA_EXPORT AacOptions {
+    AacOutputFormat format;
+  };
+
+  enum class BitrateMode { kVariable, kConstant };
+
   struct MEDIA_EXPORT Options {
     Options();
     Options(const Options&);
@@ -73,6 +88,11 @@ class MEDIA_EXPORT AudioEncoder {
     int channels;
 
     int sample_rate;
+
+    absl::optional<BitrateMode> bitrate_mode;
+
+    absl::optional<OpusOptions> opus;
+    absl::optional<AacOptions> aac;
   };
 
   // A sequence of codec specific bytes, commonly known as extradata.
@@ -122,7 +142,20 @@ class MEDIA_EXPORT AudioEncoder {
   // produced via |output_cb| and calls |done_cb| after that.
   virtual void Flush(EncoderStatusCB done_cb) = 0;
 
+  // Normally AudioEncoder implementations aren't supposed to call OutputCB and
+  // EncoderStatusCB directly from inside any of AudioEncoder's methods.
+  // This method tells AudioEncoder that all callbacks can be called directly
+  // from within its methods. It saves extra thread hops if it's known that
+  // all callbacks already point to a task runner different from
+  // the current one.
+  virtual void DisablePostedCallbacks();
+
  protected:
+  OutputCB BindCallbackToCurrentLoopIfNeeded(OutputCB&& callback);
+  EncoderStatusCB BindCallbackToCurrentLoopIfNeeded(EncoderStatusCB&& callback);
+
+  bool post_callbacks_ = true;
+
   Options options_;
 
   OutputCB output_cb_;

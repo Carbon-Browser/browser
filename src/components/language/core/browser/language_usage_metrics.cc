@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,16 +44,6 @@ void LanguageUsageMetrics::RecordPageLanguages(
       base::UmaHistogramSparse("LanguageUsage.MostFrequentPageLanguages",
                                language_code);
     }
-  }
-}
-
-// static
-void LanguageUsageMetrics::RecordApplicationLanguage(
-    base::StringPiece application_locale) {
-  const int language_code = ToLanguageCodeHash(application_locale);
-  if (language_code != 0) {
-    base::UmaHistogramSparse("LanguageUsage.ApplicationLanguage",
-                             language_code);
   }
 }
 

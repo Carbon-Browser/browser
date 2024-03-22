@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/android/jni_string.h"
 #include "components/policy/android/jni_headers/CombinedPolicyProvider_jni.h"
 #include "components/policy/core/common/android/policy_converter.h"
+#include "components/policy/core/common/policy_logger.h"
 
 using base::android::AttachCurrentThread;
 using base::android::JavaParamRef;
@@ -40,7 +41,7 @@ AndroidCombinedPolicyProvider::~AndroidCombinedPolicyProvider() {
   java_combined_policy_provider_.Reset();
 }
 
-void AndroidCombinedPolicyProvider::RefreshPolicies() {
+void AndroidCombinedPolicyProvider::RefreshPolicies(PolicyFetchReason reason) {
   JNIEnv* env = AttachCurrentThread();
   Java_CombinedPolicyProvider_refreshPolicies(env,
                                               java_combined_policy_provider_);
@@ -56,6 +57,8 @@ void AndroidCombinedPolicyProvider::FlushPolicies(
 // static
 void AndroidCombinedPolicyProvider::SetShouldWaitForPolicy(
     bool should_wait_for_policy) {
+  VLOG_POLICY(2, POLICY_PROCESSING)
+      << "SetShouldWaitForPolicy: " << should_wait_for_policy;
   g_wait_for_policies = should_wait_for_policy;
 }
 

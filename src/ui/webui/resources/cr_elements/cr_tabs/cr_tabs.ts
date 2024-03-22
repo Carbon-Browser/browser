@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,8 @@
  *   - no horizontal scrolling, it is assumed that tabs always fit in the
  *     available space
  */
-import '../hidden_style_css.m.js';
-import '../shared_vars_css.m.js';
+import '../cr_hidden_style.css.js';
+import '../cr_shared_vars.css.js';
 
 import {DomRepeatEvent, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -75,7 +75,6 @@ export class CrTabsElement extends PolymerElement {
 
     this.setAttribute('role', 'tablist');
     this.addEventListener('keydown', this.onKeyDown_.bind(this));
-    this.addEventListener('mousedown', this.onMouseDown_);
   }
 
   private getAriaSelected_(index: number): string {
@@ -126,12 +125,7 @@ export class CrTabsElement extends PolymerElement {
     this.updateIndicator_(newIndicator, newTabRect, leftmostEdge, fullWidth);
   }
 
-  private onMouseDown_() {
-    this.classList.remove('keyboard-focus');
-  }
-
   private onKeyDown_(e: KeyboardEvent) {
-    this.classList.add('keyboard-focus');
     const count = this.tabNames.length;
     let newSelection;
     if (e.key === 'Home') {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
+#include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_service.h"
 #include "components/policy/core/common/policy_bundle.h"
 #include "components/policy/core/common/policy_map.h"
@@ -81,11 +83,13 @@ bool CloudPolicyManager::IsFirstPolicyLoadComplete(PolicyDomain domain) const {
   return store()->first_policies_loaded();
 }
 
-void CloudPolicyManager::RefreshPolicies() {
+void CloudPolicyManager::RefreshPolicies(PolicyFetchReason reason) {
   if (service()) {
     waiting_for_policy_refresh_ = true;
-    service()->RefreshPolicy(base::BindOnce(
-        &CloudPolicyManager::OnRefreshComplete, base::Unretained(this)));
+    service()->RefreshPolicy(
+        base::BindOnce(&CloudPolicyManager::OnRefreshComplete,
+                       base::Unretained(this)),
+        reason);
   } else {
     OnRefreshComplete(false);
   }
@@ -111,11 +115,11 @@ void CloudPolicyManager::OnComponentCloudPolicyUpdated() {
 void CloudPolicyManager::CheckAndPublishPolicy() {
   if (IsInitializationComplete(POLICY_DOMAIN_CHROME) &&
       !waiting_for_policy_refresh_) {
-    std::unique_ptr<PolicyBundle> bundle(new PolicyBundle);
+    PolicyBundle bundle;
     GetChromePolicy(
-        &bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())));
+        &bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())));
     if (component_policy_service_)
-      bundle->MergeFrom(component_policy_service_->policy());
+      bundle.MergeFrom(component_policy_service_->policy());
     UpdatePolicy(std::move(bundle));
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <set>
 #include <string>
 
-#include "base/allocator/partition_allocator/partition_alloc.h"
-#include "base/allocator/partition_allocator/partition_root.h"
-#include "base/callback_helpers.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_root.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/page_size.h"
 #include "base/strings/string_number_conversions.h"
@@ -51,15 +51,7 @@ constexpr size_t kLoopIterations = kSamplingFrequency * 4;
 constexpr int kSuccess = 0;
 constexpr int kFailure = 1;
 
-constexpr partition_alloc::PartitionOptions kAllocatorOptions = {
-    partition_alloc::PartitionOptions::AlignedAlloc::kDisallowed,
-    partition_alloc::PartitionOptions::ThreadCache::kDisabled,
-    partition_alloc::PartitionOptions::Quarantine::kDisallowed,
-    partition_alloc::PartitionOptions::Cookie::kAllowed,
-    partition_alloc::PartitionOptions::BackupRefPtr::kDisabled,
-    partition_alloc::PartitionOptions::BackupRefPtrZapping::kDisabled,
-    partition_alloc::PartitionOptions::UseConfigurablePool::kNo,
-};
+constexpr partition_alloc::PartitionOptions kAllocatorOptions = {};
 
 static void HandleOOM(size_t unused_size) {
   LOG(FATAL) << "Out of memory.";
@@ -70,9 +62,10 @@ class SamplingPartitionAllocShimsTest : public base::MultiProcessTest {
   static void multiprocessTestSetup() {
     crash_reporter::InitializeCrashKeys();
     partition_alloc::PartitionAllocGlobalInit(HandleOOM);
-    InstallPartitionAllocHooks(
-        AllocatorState::kMaxMetadata, AllocatorState::kMaxMetadata,
-        AllocatorState::kMaxSlots, kSamplingFrequency, base::DoNothing());
+    InstallPartitionAllocHooks(AllocatorState::kMaxMetadata,
+                               AllocatorState::kMaxMetadata,
+                               AllocatorState::kMaxRequestedSlots,
+                               kSamplingFrequency, base::DoNothing());
   }
 
  protected:
@@ -141,7 +134,8 @@ MULTIPROCESS_TEST_MAIN_WITH_SETUP(
   allocator.init(kAllocatorOptions);
 
   std::set<void*> type1, type2;
-  for (size_t i = 0; i < kLoopIterations * AllocatorState::kMaxSlots; i++) {
+  for (size_t i = 0; i < kLoopIterations * AllocatorState::kMaxRequestedSlots;
+       i++) {
     void* ptr1 = allocator.root()->Alloc(1, kFakeType);
     void* ptr2 = allocator.root()->Alloc(1, kFakeType2);
 

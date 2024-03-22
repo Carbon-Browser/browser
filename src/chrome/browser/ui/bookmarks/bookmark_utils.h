@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,6 +105,12 @@ enum class BookmarkFolderIconType {
 };
 ui::ImageModel GetBookmarkFolderIcon(BookmarkFolderIconType icon_type,
                                      absl::variant<ui::ColorId, SkColor> color);
+
+// returns the vector image used for bookmarks folder.
+gfx::ImageSkia GetBookmarkFolderImageFromVectorIcon(
+    BookmarkFolderIconType icon_type,
+    absl::variant<ui::ColorId, SkColor> color,
+    ui::ColorProvider* color_provider);
 #endif
 
 }  // namespace chrome

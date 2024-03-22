@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,17 +11,15 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/policy/core/browser/url_blocklist_policy_handler.h"
@@ -97,7 +95,7 @@ const base::Value::List* GetPrefList(PrefService* pref_service,
   DCHECK(!pref_path->empty());
 
   return pref_service->HasPrefPath(*pref_path)
-             ? &pref_service->GetValueList(*pref_path)
+             ? &pref_service->GetList(*pref_path)
              : nullptr;
 }
 
@@ -223,7 +221,7 @@ URLBlocklistManager::URLBlocklistManager(
 
   // This class assumes that it is created on the same thread that
   // |pref_service_| lives on.
-  ui_task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  ui_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
   background_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
       {base::TaskPriority::BEST_EFFORT});
 
@@ -270,8 +268,8 @@ void URLBlocklistManager::Update() {
       GetPrefList(pref_service_, blocklist_pref_path_);
   const base::Value::List* allow =
       GetPrefList(pref_service_, allowlist_pref_path_);
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           &BuildBlocklist,
           base::Owned(block

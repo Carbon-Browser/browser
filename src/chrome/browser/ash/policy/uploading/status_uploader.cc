@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,17 @@
 #include <string>
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/syslog_logging.h"
 #include "base/system/sys_info.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
-#include "chrome/browser/ash/policy/status_collector/device_status_collector.h"
-#include "chrome/browser/ash/policy/status_collector/legacy_device_status_collector.h"
-#include "chrome/browser/ash/policy/status_collector/managed_session_service.h"
 #include "chrome/browser/ash/policy/status_collector/status_collector.h"
 #include "chrome/browser/browser_process.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 #include "content/public/browser/browser_thread.h"
@@ -62,11 +58,6 @@ StatusUploader::StatusUploader(
       ash::CrosSettings::Get()->AddSettingsObserver(
           ash::kReportUploadFrequency,
           base::BindRepeating(&StatusUploader::RefreshUploadFrequency,
-                              base::Unretained(this)));
-  granular_reporting_subscription_ =
-      ash::CrosSettings::Get()->AddSettingsObserver(
-          ash::kEnableDeviceGranularReporting,
-          base::BindRepeating(&StatusUploader::UpdateStatusCollector,
                               base::Unretained(this)));
 
   // Update the upload frequency from settings.
@@ -109,41 +100,6 @@ bool StatusUploader::ScheduleNextStatusUpload(bool immediately) {
       base::BindOnce(&StatusUploader::UploadStatus, base::Unretained(this)));
   task_runner_->PostDelayedTask(FROM_HERE, upload_callback_.callback(), delay);
   return true;
-}
-
-void StatusUploader::UpdateStatusCollector() {
-  if (user_manager::UserManager::Get()->GetActiveUser()->IsChild()) {
-    return;
-  }
-
-  ash::CrosSettings* settings = ash::CrosSettings::Get();
-  if (ash::CrosSettingsProvider::TRUSTED !=
-      settings->PrepareTrustedValues(
-          base::BindOnce(&StatusUploader::UpdateStatusCollector,
-                         weak_factory_.GetWeakPtr()))) {
-    return;
-  }
-
-  bool granular_reporting_enabled;
-  if (!settings->GetBoolean(ash::kEnableDeviceGranularReporting,
-                            &granular_reporting_enabled)) {
-    granular_reporting_enabled = true;
-  }
-  PrefService* local_state = g_browser_process->local_state();
-
-  if (granular_reporting_enabled) {
-    SYSLOG(INFO) << "Enabling granular reporting controls";
-    if (!managed_session_service_) {
-      managed_session_service_ = std::make_unique<ManagedSessionService>();
-    }
-    collector_ = std::make_unique<DeviceStatusCollector>(
-        local_state, chromeos::system::StatisticsProvider::GetInstance(),
-        managed_session_service_.get());
-  } else {
-    SYSLOG(INFO) << "Disabling granular reporting controls";
-    collector_ = std::make_unique<LegacyDeviceStatusCollector>(
-        local_state, chromeos::system::StatisticsProvider::GetInstance());
-  }
 }
 
 void StatusUploader::RefreshUploadFrequency() {
@@ -246,15 +202,6 @@ void StatusUploader::OnStatusReceived(StatusCollectorParams callback_params) {
     ScheduleNextStatusUpload();
     return;
   }
-  if (!client_->is_registered()) {
-    // This can happen when the DM Token is missing (crbug.com/705607).
-    VLOG(1) << "Skipping status upload because the client is not registered";
-    // Reset the timer to avoid log spamming.
-    last_upload_ = base::Time::NowFromSystemTime();
-    status_upload_in_progress_ = false;
-    ScheduleNextStatusUpload();
-    return;
-  }
 
   SYSLOG(INFO) << "Starting status upload: has_device_status = "
                << has_device_status;
@@ -266,23 +213,26 @@ void StatusUploader::OnStatusReceived(StatusCollectorParams callback_params) {
                                              weak_factory_.GetWeakPtr()));
 }
 
-void StatusUploader::OnUploadCompleted(bool success) {
+void StatusUploader::OnUploadCompleted(CloudPolicyClient::Result result) {
   // Set the last upload time, regardless of whether the upload was successful
   // or not (we don't change the time of the next upload based on whether this
   // upload succeeded or not - if a status upload fails, we just skip it and
   // wait until it's time to try again.
-  if (success) {
-    SYSLOG(INFO) << "Status upload successful";
-  } else {
-    SYSLOG(ERROR) << "Error uploading status: " << client_->status();
-  }
   last_upload_ = base::Time::NowFromSystemTime();
   status_upload_in_progress_ = false;
 
-  // If the upload was successful, tell the collector so it can clear its cache
-  // of pending items.
-  if (success)
+  if (result.IsClientNotRegisteredError()) {
+    // This can happen when the DM Token is missing (crbug.com/705607).
+    VLOG(1) << "Skipping status upload because the client is not registered";
+  } else if (result.IsSuccess()) {
+    SYSLOG(INFO) << "Status upload successful";
+    // Tell the collector so it can clear its cache of pending items.
     collector_->OnSubmittedSuccessfully();
+  } else if (result.IsDMServerError()) {
+    SYSLOG(ERROR) << "Error uploading status: " << result.GetDMServerError();
+  } else {
+    NOTREACHED();
+  }
 
   ScheduleNextStatusUpload();
 }

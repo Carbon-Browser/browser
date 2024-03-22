@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,7 +90,7 @@ class GPU_GLES2_EXPORT GLES2QueryManager : public QueryManager {
   // Safely resets the disjoint value if no queries are active.
   void SafelyResetDisjointValue();
 
-  raw_ptr<GLES2Decoder> decoder_;
+  raw_ptr<GLES2Decoder, DanglingUntriaged> decoder_;
 
   bool use_arb_occlusion_query2_for_occlusion_query_boolean_;
   bool use_arb_occlusion_query_for_occlusion_query_boolean_;

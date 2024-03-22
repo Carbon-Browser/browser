@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
@@ -16,7 +17,6 @@
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
 #include "components/omnibox/browser/fake_autocomplete_provider.h"
-#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/test_scheme_classifier.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -42,8 +42,8 @@ class MockTitledUrlNode : public bookmarks::TitledUrlNode {
   std::vector<base::StringPiece16> GetTitledUrlNodeAncestorTitles()
       const override {
     std::vector<base::StringPiece16> ancestors;
-    std::transform(
-        ancestors_.begin(), ancestors_.end(), std::back_inserter(ancestors),
+    base::ranges::transform(
+        ancestors_, std::back_inserter(ancestors),
         [](auto& ancestor) { return base::StringPiece16(ancestor); });
     return ancestors;
   }
@@ -66,14 +66,24 @@ std::string ACMatchClassificationsAsString(
   return position_string;
 }
 
+// Use a test fixture to ensure that any scoped settings that are set during the
+// test are cleared after the test is terminated.
+class TitledUrlMatchUtilsTest : public testing::Test {
+ protected:
+  void TearDown() override {
+    RichAutocompletionParams::ClearParamsForTesting();
+  }
+};
+
 }  // namespace
 
-TEST(TitledUrlMatchUtilsTest, TitledUrlMatchToAutocompleteMatch) {
+TEST_F(TitledUrlMatchUtilsTest, TitledUrlMatchToAutocompleteMatch) {
   std::u16string input_text(u"goo");
   std::u16string match_title(u"Google Search");
   GURL match_url("https://www.google.com/");
   AutocompleteMatchType::Type type = AutocompleteMatchType::BOOKMARK_TITLE;
   int relevance = 123;
+  int bookmark_count = 3;
 
   MockTitledUrlNode node(match_title, match_url);
   bookmarks::TitledUrlMatch titled_url_match;
@@ -89,15 +99,16 @@ TEST(TitledUrlMatchUtilsTest, TitledUrlMatchToAutocompleteMatch) {
   const std::u16string fixed_up_input(input_text);
 
   AutocompleteMatch autocomplete_match = TitledUrlMatchToAutocompleteMatch(
-      titled_url_match, type, relevance, provider.get(), classifier, input,
-      fixed_up_input);
+      titled_url_match, type, relevance, bookmark_count, provider.get(),
+      classifier, input, fixed_up_input);
 
   ACMatchClassifications expected_contents_class = {
       {0, ACMatchClassification::URL | ACMatchClassification::MATCH},
       {3, ACMatchClassification::URL},
   };
   ACMatchClassifications expected_description_class = {
-      {0, ACMatchClassification::MATCH}, {3, ACMatchClassification::NONE},
+      {0, ACMatchClassification::MATCH},
+      {3, ACMatchClassification::NONE},
   };
   std::u16string expected_inline_autocompletion(u"gle.com");
 
@@ -106,16 +117,14 @@ TEST(TitledUrlMatchUtilsTest, TitledUrlMatchToAutocompleteMatch) {
   EXPECT_EQ(relevance, autocomplete_match.relevance);
   EXPECT_EQ(match_url, autocomplete_match.destination_url);
   EXPECT_EQ(u"google.com", autocomplete_match.contents);
-  EXPECT_TRUE(std::equal(expected_contents_class.begin(),
-                         expected_contents_class.end(),
-                         autocomplete_match.contents_class.begin()))
+  EXPECT_TRUE(base::ranges::equal(expected_contents_class,
+                                  autocomplete_match.contents_class))
       << "EXPECTED: " << ACMatchClassificationsAsString(expected_contents_class)
       << "ACTUAL:   "
       << ACMatchClassificationsAsString(autocomplete_match.contents_class);
   EXPECT_EQ(match_title, autocomplete_match.description);
-  EXPECT_TRUE(std::equal(expected_description_class.begin(),
-                         expected_description_class.end(),
-                         autocomplete_match.description_class.begin()));
+  EXPECT_TRUE(base::ranges::equal(expected_description_class,
+                                  autocomplete_match.description_class));
   EXPECT_EQ(u"https://www.google.com", autocomplete_match.fill_into_edit);
   EXPECT_TRUE(autocomplete_match.allowed_to_be_default_match);
   EXPECT_EQ(expected_inline_autocompletion,
@@ -130,6 +139,7 @@ AutocompleteMatch BuildTestAutocompleteMatch(
   std::u16string match_title(u"The Facebook");
   AutocompleteMatchType::Type type = AutocompleteMatchType::BOOKMARK_TITLE;
   int relevance = 123;
+  int bookmark_count = 3;
 
   MockTitledUrlNode node(match_title, match_url);
   bookmarks::TitledUrlMatch titled_url_match;
@@ -146,11 +156,11 @@ AutocompleteMatch BuildTestAutocompleteMatch(
   const std::u16string fixed_up_input(input_text);
 
   return TitledUrlMatchToAutocompleteMatch(titled_url_match, type, relevance,
-                                           provider.get(), classifier, input,
-                                           fixed_up_input);
+                                           bookmark_count, provider.get(),
+                                           classifier, input, fixed_up_input);
 }
 
-TEST(TitledUrlMatchUtilsTest, DoTrimHttpScheme) {
+TEST_F(TitledUrlMatchUtilsTest, DoTrimHttpScheme) {
   GURL match_url("http://www.facebook.com/");
   AutocompleteMatch autocomplete_match =
       BuildTestAutocompleteMatch("face", match_url, {{11, 15}});
@@ -163,16 +173,19 @@ TEST(TitledUrlMatchUtilsTest, DoTrimHttpScheme) {
 
   EXPECT_EQ(match_url, autocomplete_match.destination_url);
   EXPECT_EQ(expected_contents, autocomplete_match.contents);
-  EXPECT_TRUE(std::equal(expected_contents_class.begin(),
-                         expected_contents_class.end(),
-                         autocomplete_match.contents_class.begin()))
+  EXPECT_TRUE(base::ranges::equal(expected_contents_class,
+                                  autocomplete_match.contents_class))
       << "EXPECTED: " << ACMatchClassificationsAsString(expected_contents_class)
       << "ACTUAL:   "
       << ACMatchClassificationsAsString(autocomplete_match.contents_class);
   EXPECT_TRUE(autocomplete_match.allowed_to_be_default_match);
 }
 
-TEST(TitledUrlMatchUtilsTest, DontTrimHttpSchemeIfInputHasScheme) {
+TEST_F(TitledUrlMatchUtilsTest, DontTrimHttpSchemeIfInputHasScheme) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature({omnibox::kRichAutocompletion});
+  RichAutocompletionParams::ClearParamsForTesting();
+
   GURL match_url("http://www.facebook.com/");
   AutocompleteMatch autocomplete_match =
       BuildTestAutocompleteMatch("http://face", match_url, {{11, 15}});
@@ -185,16 +198,15 @@ TEST(TitledUrlMatchUtilsTest, DontTrimHttpSchemeIfInputHasScheme) {
 
   EXPECT_EQ(match_url, autocomplete_match.destination_url);
   EXPECT_EQ(expected_contents, autocomplete_match.contents);
-  EXPECT_TRUE(std::equal(expected_contents_class.begin(),
-                         expected_contents_class.end(),
-                         autocomplete_match.contents_class.begin()))
+  EXPECT_TRUE(base::ranges::equal(expected_contents_class,
+                                  autocomplete_match.contents_class))
       << "EXPECTED: " << ACMatchClassificationsAsString(expected_contents_class)
       << "ACTUAL:   "
       << ACMatchClassificationsAsString(autocomplete_match.contents_class);
   EXPECT_FALSE(autocomplete_match.allowed_to_be_default_match);
 }
 
-TEST(TitledUrlMatchUtilsTest, DoTrimHttpsScheme) {
+TEST_F(TitledUrlMatchUtilsTest, DoTrimHttpsScheme) {
   GURL match_url("https://www.facebook.com/");
   AutocompleteMatch autocomplete_match =
       BuildTestAutocompleteMatch("face", match_url, {{12, 16}});
@@ -207,16 +219,19 @@ TEST(TitledUrlMatchUtilsTest, DoTrimHttpsScheme) {
 
   EXPECT_EQ(match_url, autocomplete_match.destination_url);
   EXPECT_EQ(expected_contents, autocomplete_match.contents);
-  EXPECT_TRUE(std::equal(expected_contents_class.begin(),
-                         expected_contents_class.end(),
-                         autocomplete_match.contents_class.begin()))
+  EXPECT_TRUE(base::ranges::equal(expected_contents_class,
+                                  autocomplete_match.contents_class))
       << "EXPECTED: " << ACMatchClassificationsAsString(expected_contents_class)
       << "ACTUAL:   "
       << ACMatchClassificationsAsString(autocomplete_match.contents_class);
   EXPECT_TRUE(autocomplete_match.allowed_to_be_default_match);
 }
 
-TEST(TitledUrlMatchUtilsTest, DontTrimHttpsSchemeIfInputHasScheme) {
+TEST_F(TitledUrlMatchUtilsTest, DontTrimHttpsSchemeIfInputHasScheme) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature({omnibox::kRichAutocompletion});
+  RichAutocompletionParams::ClearParamsForTesting();
+
   GURL match_url("https://www.facebook.com/");
   AutocompleteMatch autocomplete_match =
       BuildTestAutocompleteMatch("https://face", match_url, {{12, 16}});
@@ -229,29 +244,30 @@ TEST(TitledUrlMatchUtilsTest, DontTrimHttpsSchemeIfInputHasScheme) {
 
   EXPECT_EQ(match_url, autocomplete_match.destination_url);
   EXPECT_EQ(expected_contents, autocomplete_match.contents);
-  EXPECT_TRUE(std::equal(expected_contents_class.begin(),
-                         expected_contents_class.end(),
-                         autocomplete_match.contents_class.begin()))
+  EXPECT_TRUE(base::ranges::equal(expected_contents_class,
+                                  autocomplete_match.contents_class))
       << "EXPECTED: " << ACMatchClassificationsAsString(expected_contents_class)
       << "ACTUAL:   "
       << ACMatchClassificationsAsString(autocomplete_match.contents_class);
   EXPECT_FALSE(autocomplete_match.allowed_to_be_default_match);
 }
 
-TEST(TitledUrlMatchUtilsTest, EmptyInlineAutocompletion) {
-  // The search term matches the title but not the URL. Since there is no URL
-  // match, the inline autocompletion string will be empty.
+TEST_F(TitledUrlMatchUtilsTest, EmptyInlineAutocompletion) {
+  // Since there is no URL prefix match, the inline autocompletion string will
+  // be empty.
   std::u16string input_text(u"goo");
   std::u16string match_title(u"Email by Google");
-  GURL match_url("http://www.gmail.com/");
+  GURL match_url("http://www.gmail.com/google");
   AutocompleteMatchType::Type type = AutocompleteMatchType::BOOKMARK_TITLE;
   int relevance = 123;
+  int bookmark_count = 3;
 
   MockTitledUrlNode node(match_title, match_url);
   bookmarks::TitledUrlMatch titled_url_match;
   titled_url_match.node = &node;
   titled_url_match.title_match_positions = {{9, 12}};
-  titled_url_match.url_match_positions = {};
+  titled_url_match.url_match_positions = {{21, 24}};
+  titled_url_match.has_ancestor_match = false;
 
   scoped_refptr<FakeAutocompleteProvider> provider =
       new FakeAutocompleteProvider(AutocompleteProvider::Type::TYPE_BOOKMARK);
@@ -261,12 +277,16 @@ TEST(TitledUrlMatchUtilsTest, EmptyInlineAutocompletion) {
   const std::u16string fixed_up_input(input_text);
 
   AutocompleteMatch autocomplete_match = TitledUrlMatchToAutocompleteMatch(
-      titled_url_match, type, relevance, provider.get(), classifier, input,
-      fixed_up_input);
+      titled_url_match, type, relevance, bookmark_count, provider.get(),
+      classifier, input, fixed_up_input);
 
+  // 'goo' in 'gmail.com/google'
   ACMatchClassifications expected_contents_class = {
       {0, ACMatchClassification::URL},
+      {10, ACMatchClassification::URL | ACMatchClassification::MATCH},
+      {13, ACMatchClassification::URL},
   };
+  // 'goo' in 'Email by Google'
   ACMatchClassifications expected_description_class = {
       {0, ACMatchClassification::NONE},
       {9, ACMatchClassification::MATCH},
@@ -277,23 +297,21 @@ TEST(TitledUrlMatchUtilsTest, EmptyInlineAutocompletion) {
   EXPECT_EQ(type, autocomplete_match.type);
   EXPECT_EQ(relevance, autocomplete_match.relevance);
   EXPECT_EQ(match_url, autocomplete_match.destination_url);
-  EXPECT_EQ(u"gmail.com", autocomplete_match.contents);
-  EXPECT_TRUE(std::equal(expected_contents_class.begin(),
-                         expected_contents_class.end(),
-                         autocomplete_match.contents_class.begin()))
+  EXPECT_EQ(u"gmail.com/google", autocomplete_match.contents);
+  EXPECT_TRUE(base::ranges::equal(expected_contents_class,
+                                  autocomplete_match.contents_class))
       << "EXPECTED: " << ACMatchClassificationsAsString(expected_contents_class)
       << "ACTUAL:   "
       << ACMatchClassificationsAsString(autocomplete_match.contents_class);
   EXPECT_EQ(match_title, autocomplete_match.description);
-  EXPECT_TRUE(std::equal(expected_description_class.begin(),
-                         expected_description_class.end(),
-                         autocomplete_match.description_class.begin()));
-  EXPECT_EQ(u"www.gmail.com", autocomplete_match.fill_into_edit);
+  EXPECT_TRUE(base::ranges::equal(expected_description_class,
+                                  autocomplete_match.description_class));
+  EXPECT_EQ(u"www.gmail.com/google", autocomplete_match.fill_into_edit);
   EXPECT_FALSE(autocomplete_match.allowed_to_be_default_match);
   EXPECT_TRUE(autocomplete_match.inline_autocompletion.empty());
 }
 
-TEST(TitledUrlMatchUtilsTest, PathsInContentsAndDescription) {
+TEST_F(TitledUrlMatchUtilsTest, PathsInContentsAndDescription) {
   scoped_refptr<FakeAutocompleteProvider> provider =
       new FakeAutocompleteProvider(AutocompleteProvider::Type::TYPE_BOOKMARK);
   TestSchemeClassifier classifier;
@@ -319,76 +337,16 @@ TEST(TitledUrlMatchUtilsTest, PathsInContentsAndDescription) {
                             classifier);
     AutocompleteMatch autocomplete_match = TitledUrlMatchToAutocompleteMatch(
         titled_url_match, AutocompleteMatchType::BOOKMARK_TITLE, 1,
-        provider.get(), classifier, input, std::u16string());
+        /*bookmark_count=*/3, provider.get(), classifier, input,
+        std::u16string());
     EXPECT_EQ(base::UTF16ToUTF8(autocomplete_match.contents),
               expected_contents);
     EXPECT_EQ(base::UTF16ToUTF8(autocomplete_match.description),
               expected_description);
   };
 
-  // Invokes |test()| with the 4 combinations of |has_url_match| true|false x
-  // |has_ancestor_match| true|false.
-  auto test_with_and_without_url_and_ancestor_matches =
-      [&](std::string title, std::string url, std::string expected_contents,
-          std::string expected_description) {
-        for (bool has_url_match : {false, true}) {
-          for (bool has_ancestor_match : {false, true}) {
-            test(title, url, has_url_match, has_ancestor_match,
-                 expected_contents, expected_description);
-          }
-        }
-      };
-
-  {
-    SCOPED_TRACE("Feature disabled");
-    test_with_and_without_url_and_ancestor_matches("title", "https://url.com",
-                                                   "url.com", "title");
-  }
-  {
-    SCOPED_TRACE("Feature enabled");
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndEnableFeature(omnibox::kBookmarkPaths);
-    test_with_and_without_url_and_ancestor_matches("title", "https://url.com",
-                                                   "url.com", "title");
-  }
-  {
-    SCOPED_TRACE("Feature enabled, kBookmarkPathsUiReplaceTitle");
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndEnableFeatureWithParameters(
-        omnibox::kBookmarkPaths,
-        {{OmniboxFieldTrial::kBookmarkPathsUiReplaceTitle.name, "true"}});
-    test_with_and_without_url_and_ancestor_matches(
-        "title", "https://url.com", "url.com", "grandparent/parent/title");
-  }
-  {
-    SCOPED_TRACE("Feature enabled, kBookmarkPathsUiReplaceUrl");
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndEnableFeatureWithParameters(
-        omnibox::kBookmarkPaths,
-        {{OmniboxFieldTrial::kBookmarkPathsUiReplaceUrl.name, "true"}});
-    test_with_and_without_url_and_ancestor_matches(
-        "title", "https://url.com", "grandparent/parent", "title");
-  }
-  {
-    SCOPED_TRACE("Feature enabled, kBookmarkPathsUiAppendAfterTitle");
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndEnableFeatureWithParameters(
-        omnibox::kBookmarkPaths,
-        {{OmniboxFieldTrial::kBookmarkPathsUiAppendAfterTitle.name, "true"}});
-    test_with_and_without_url_and_ancestor_matches(
-        "title", "https://url.com", "url.com", "title : grandparent/parent");
-  }
-  {
-    SCOPED_TRACE("Feature enabled, kBookmarkPathsUiDynamicReplaceUrl");
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndEnableFeatureWithParameters(
-        omnibox::kBookmarkPaths,
-        {{OmniboxFieldTrial::kBookmarkPathsUiDynamicReplaceUrl.name, "true"}});
-    test("title", "https://url.com", false, false, "grandparent/parent",
-         "title");
-    test("title", "https://url.com", true, false, "url.com", "title");
-    test("title", "https://url.com", false, true, "grandparent/parent",
-         "title");
-    test("title", "https://url.com", true, true, "grandparent/parent", "title");
-  }
+  test("title", "https://url.com", false, false, "grandparent/parent", "title");
+  test("title", "https://url.com", true, false, "url.com", "title");
+  test("title", "https://url.com", false, true, "grandparent/parent", "title");
+  test("title", "https://url.com", true, true, "grandparent/parent", "title");
 }

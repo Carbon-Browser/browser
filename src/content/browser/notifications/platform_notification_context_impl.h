@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
@@ -22,6 +22,7 @@
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/platform_notification_context.h"
+#include "content/public/browser/render_process_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/notifications/notification_service.mojom.h"
@@ -36,10 +37,6 @@ namespace blink {
 class StorageKey;
 }  // namespace blink
 
-namespace url {
-class Origin;
-}
-
 namespace content {
 
 class BlinkNotificationServiceImpl;
@@ -48,6 +45,7 @@ struct NotificationDatabaseData;
 class PlatformNotificationServiceProxy;
 class RenderProcessHost;
 class ServiceWorkerContextWrapper;
+class WeakDocumentPtr;
 
 // Implementation of the Web Notification storage context. The public methods
 // defined in this interface must only be called on the UI thread.
@@ -75,12 +73,16 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
   void Shutdown();
 
   // Creates a BlinkNotificationServiceImpl that is owned by this context.
-  // |document_url| is empty when originating from a worker.
+  // The `document_url` will be empty if the service is created by a worker.
+  // The `weak_document_ptr` points to the document if it's the creator of the
+  // notification service, or the worker's ancestor document if the notification
+  // service is created by a dedicated worker, or is `nullptr` otherwise.
   void CreateService(
       RenderProcessHost* render_process_host,
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       const GURL& document_url,
       const WeakDocumentPtr& weak_document_ptr,
+      const RenderProcessHost::NotificationServiceCreatorType creator_type,
       mojo::PendingReceiver<blink::mojom::NotificationService> receiver);
 
   // Removes |service| from the list of owned services, for example because the
@@ -209,10 +211,11 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
       std::set<std::string>* close_notification_ids,
       const NotificationDatabaseData& data);
 
-  // Tries to get a list of displayed notification ids if the platform supports
-  // synchronizing them. Calls |callback| with the result after initializing the
-  // database on the |task_runner_| thread.
-  void TryGetDisplayedNotifications(InitializeGetDisplayedCallback callback);
+  // Tries to get a list of displayed notification ids for `origin` if the
+  // platform supports synchronizing them. Calls `callback` with the result
+  // after initializing the database on the `task_runner_` thread.
+  void TryGetDisplayedNotifications(const GURL& origin,
+                                    InitializeGetDisplayedCallback callback);
 
   // Called after getting a list of |displayed_notifications| on the UI thread.
   // Calls |callback| after initializing the database on the |task_runner_|
@@ -333,7 +336,7 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
       const scoped_refptr<base::SequencedTaskRunner>& task_runner);
 
   base::FilePath path_;
-  raw_ptr<BrowserContext> browser_context_;
+  raw_ptr<BrowserContext, AcrossTasksDanglingUntriaged> browser_context_;
 
   scoped_refptr<ServiceWorkerContextWrapper> service_worker_context_;
 

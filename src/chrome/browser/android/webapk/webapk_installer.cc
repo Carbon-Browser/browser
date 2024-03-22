@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,11 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/path_utils.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_number_conversions.h"
@@ -26,7 +26,6 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/timer/elapsed_timer.h"
@@ -136,29 +135,27 @@ void WebApkInstaller::InstallAsync(content::BrowserContext* context,
                                    content::WebContents* web_contents,
                                    const webapps::ShortcutInfo& shortcut_info,
                                    const SkBitmap& primary_icon,
-                                   bool is_primary_icon_maskable,
                                    FinishCallback finish_callback) {
   // The installer will delete itself when it is done.
   WebApkInstaller* installer = new WebApkInstaller(context);
   installer->InstallAsync(web_contents, shortcut_info, primary_icon,
-                          is_primary_icon_maskable, std::move(finish_callback));
+                          std::move(finish_callback));
 }
 
 // static
-void WebApkInstaller::InstallForServiceAsync(
+void WebApkInstaller::InstallWithProtoAsync(
     content::BrowserContext* context,
     std::unique_ptr<std::string> serialized_webapk,
     const std::u16string& short_name,
     webapps::ShortcutInfo::Source source,
     const SkBitmap& primary_icon,
-    bool is_primary_icon_maskable,
     GURL& manifest_url,
     FinishCallback finish_callback) {
   // The installer will delete itself when it is done.
   WebApkInstaller* installer = new WebApkInstaller(context);
-  installer->InstallForServiceAsync(
-      std::move(serialized_webapk), short_name, source, primary_icon,
-      is_primary_icon_maskable, manifest_url, std::move(finish_callback));
+  installer->InstallWithProtoAsync(std::move(serialized_webapk), short_name,
+                                   source, primary_icon, manifest_url,
+                                   std::move(finish_callback));
 }
 
 // static
@@ -176,25 +173,23 @@ void WebApkInstaller::InstallAsyncForTesting(
     content::WebContents* web_contents,
     const webapps::ShortcutInfo& shortcut_info,
     const SkBitmap& primary_icon,
-    bool is_primary_icon_maskable,
     FinishCallback callback) {
   installer->InstallAsync(web_contents, shortcut_info, primary_icon,
-                          is_primary_icon_maskable, std::move(callback));
+                          std::move(callback));
 }
 
 // static
-void WebApkInstaller::InstallForServiceAsyncForTesting(
+void WebApkInstaller::InstallWithProtoAsyncForTesting(
     WebApkInstaller* installer,
     std::unique_ptr<std::string> serialized_webapk,
     const std::u16string& short_name,
     webapps::ShortcutInfo::Source source,
     const SkBitmap& primary_icon,
-    bool is_primary_icon_maskable,
     GURL& manifest_url,
     FinishCallback callback) {
-  installer->InstallForServiceAsync(
-      std::move(serialized_webapk), short_name, source, primary_icon,
-      is_primary_icon_maskable, manifest_url, std::move(callback));
+  installer->InstallWithProtoAsync(std::move(serialized_webapk), short_name,
+                                   source, primary_icon, manifest_url,
+                                   std::move(callback));
 }
 
 // static
@@ -209,10 +204,7 @@ void WebApkInstaller::SetTimeoutMs(int timeout_ms) {
   webapk_server_timeout_ms_ = timeout_ms;
 }
 
-void WebApkInstaller::OnInstallFinished(
-    JNIEnv* env,
-    const base::android::JavaParamRef<jobject>& obj,
-    jint result) {
+void WebApkInstaller::OnInstallFinished(JNIEnv* env, jint result) {
   OnResult(static_cast<webapps::WebApkInstallResult>(result));
 }
 
@@ -222,7 +214,6 @@ void WebApkInstaller::StoreUpdateRequestToFile(
     const webapps::ShortcutInfo& shortcut_info,
     const GURL& app_key,
     const std::string& primary_icon_data,
-    bool is_primary_icon_maskable,
     const std::string& splash_icon_data,
     const std::string& package_name,
     const std::string& version,
@@ -232,14 +223,14 @@ void WebApkInstaller::StoreUpdateRequestToFile(
     bool is_app_identity_update_supported,
     std::vector<webapps::WebApkUpdateReason> update_reasons,
     base::OnceCallback<void(bool)> callback) {
-  base::PostTaskAndReplyWithResult(
-      GetBackgroundTaskRunner().get(), FROM_HERE,
-      base::BindOnce(
-          &webapps::StoreUpdateRequestToFileInBackground, update_request_path,
-          shortcut_info, app_key, primary_icon_data, is_primary_icon_maskable,
-          splash_icon_data, package_name, version,
-          std::move(icon_url_to_murmur2_hash), is_manifest_stale,
-          is_app_identity_update_supported, std::move(update_reasons)),
+  GetBackgroundTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(&webapps::StoreUpdateRequestToFileInBackground,
+                     update_request_path, shortcut_info, app_key,
+                     primary_icon_data, splash_icon_data, package_name, version,
+                     std::move(icon_url_to_murmur2_hash), is_manifest_stale,
+                     is_app_identity_update_supported,
+                     std::move(update_reasons)),
       std::move(callback));
 }
 
@@ -271,7 +262,10 @@ void WebApkInstaller::InstallOrUpdateWebApk(const std::string& package_name,
 
 void WebApkInstaller::OnResult(webapps::WebApkInstallResult result) {
   weak_ptr_factory_.InvalidateWeakPtrs();
-  std::move(finish_callback_).Run(result, relax_updates_, webapk_package_);
+
+  std::move(finish_callback_)
+      .Run(result, std::move(serialized_webapk_), relax_updates_,
+           webapk_package_);
 
   if (task_type_ == WebApkInstaller::INSTALL) {
     if (result == webapps::WebApkInstallResult::SUCCESS) {
@@ -314,7 +308,6 @@ void WebApkInstaller::CreateJavaRef() {
 void WebApkInstaller::InstallAsync(content::WebContents* web_contents,
                                    const webapps::ShortcutInfo& shortcut_info,
                                    const SkBitmap& primary_icon,
-                                   bool is_primary_icon_maskable,
                                    FinishCallback finish_callback) {
   DCHECK(!install_from_webapk_service_);
   install_duration_timer_ = std::make_unique<base::ElapsedTimer>();
@@ -323,7 +316,6 @@ void WebApkInstaller::InstallAsync(content::WebContents* web_contents,
   install_shortcut_info_ =
       std::make_unique<webapps::ShortcutInfo>(shortcut_info);
   install_primary_icon_ = primary_icon;
-  is_primary_icon_maskable_ = is_primary_icon_maskable;
   short_name_ = shortcut_info.short_name;
   finish_callback_ = std::move(finish_callback);
   source_ = install_shortcut_info_->source;
@@ -338,12 +330,11 @@ void WebApkInstaller::InstallAsync(content::WebContents* web_contents,
   CheckFreeSpace();
 }
 
-void WebApkInstaller::InstallForServiceAsync(
+void WebApkInstaller::InstallWithProtoAsync(
     std::unique_ptr<std::string> serialized_webapk,
     const std::u16string& short_name,
     webapps::ShortcutInfo::Source source,
     const SkBitmap& primary_icon,
-    bool is_primary_icon_maskable,
     GURL& manifest_url,
     FinishCallback finish_callback) {
   install_duration_timer_ = std::make_unique<base::ElapsedTimer>();
@@ -352,7 +343,6 @@ void WebApkInstaller::InstallForServiceAsync(
   short_name_ = short_name;
   manifest_url_ = manifest_url;
   install_primary_icon_ = primary_icon;
-  is_primary_icon_maskable_ = is_primary_icon_maskable;
   source_ = source;
   serialized_webapk_ = std::move(serialized_webapk);
   finish_callback_ = std::move(finish_callback);
@@ -377,10 +367,7 @@ void WebApkInstaller::CheckFreeSpace() {
   Java_WebApkInstaller_checkFreeSpace(env, java_ref_);
 }
 
-void WebApkInstaller::OnGotSpaceStatus(
-    JNIEnv* env,
-    const base::android::JavaParamRef<jobject>& obj,
-    jint status) {
+void WebApkInstaller::OnGotSpaceStatus(JNIEnv* env, jint status) {
   SpaceStatus space_status = static_cast<SpaceStatus>(status);
   if (space_status == SpaceStatus::NOT_ENOUGH_SPACE) {
     OnResult(webapps::WebApkInstallResult::NOT_ENOUGH_SPACE);
@@ -408,9 +395,8 @@ void WebApkInstaller::UpdateAsync(const base::FilePath& update_request_path,
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      GetBackgroundTaskRunner().get(), FROM_HERE,
-      base::BindOnce(&ReadFileInBackground, update_request_path),
+  GetBackgroundTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&ReadFileInBackground, update_request_path),
       base::BindOnce(&WebApkInstaller::OnReadUpdateRequest,
                      weak_ptr_factory_.GetWeakPtr()));
 }
@@ -471,7 +457,7 @@ void WebApkInstaller::OnReadUpdateRequest(
         }
         )");
 
-  SendRequest(traffic_annotation_update_request, std::move(update_request));
+  SendRequest(traffic_annotation_update_request, *update_request);
 }
 
 void WebApkInstaller::OnURLLoaderComplete(
@@ -573,8 +559,7 @@ void WebApkInstaller::OnHaveSufficientSpaceForInstall() {
         }
         )");
 
-    SendRequest(traffic_annotation_install_from_service,
-                std::move(serialized_webapk_));
+    SendRequest(traffic_annotation_install_from_service, *serialized_webapk_);
     return;
   }
 
@@ -587,7 +572,8 @@ void WebApkInstaller::OnHaveSufficientSpaceForInstall() {
   // We redownload the icon in order to take the Murmur2 hash. The redownload
   // should be fast because the icon should be in the HTTP cache.
 
-  std::set<GURL> icons = install_shortcut_info_->GetWebApkIcons();
+  std::vector<webapps::WebappIcon> icons =
+      install_shortcut_info_->GetWebApkIcons();
   webapps::WebApkIconHasher::DownloadAndComputeMurmur2Hash(
       GetURLLoaderFactory(browser_context_), web_contents_,
       url::Origin::Create(install_shortcut_info_->url), icons,
@@ -605,6 +591,22 @@ void WebApkInstaller::OnGotIconMurmur2Hashes(
 
   DCHECK(!install_from_webapk_service_);
   DCHECK(install_shortcut_info_);
+
+  // Using empty string for |primary_icon_data| and |splash_icon_data| here
+  // because in WebApk installs, we are using the icon data from |hashes|.
+  webapps::BuildProto(
+      *install_shortcut_info_, install_shortcut_info_->manifest_id,
+      std::string() /* primary_icon_data */,
+      std::string() /* splash_icon_data */, "" /* package_name */,
+      "" /* version */, std::move(*hashes), false /* is_manifest_stale */,
+      false /* is_app_identity_update_supported */,
+      base::BindOnce(&WebApkInstaller::OnInstallProtoBuilt,
+                     weak_ptr_factory_.GetWeakPtr()));
+}
+
+void WebApkInstaller::OnInstallProtoBuilt(
+    std::unique_ptr<std::string> serialized_proto) {
+  serialized_webapk_ = std::move(serialized_proto);
 
   net::NetworkTrafficAnnotationTag traffic_annotation_install_from_chrome =
       net::DefineNetworkTrafficAnnotation("webapk_create", R"(
@@ -650,22 +652,12 @@ void WebApkInstaller::OnGotIconMurmur2Hashes(
         }
         )");
 
-  // Using empty string for |primary_icon_data| and |splash_icon_data| here
-  // because in WebApk installs, we are using the icon data from |hashes|.
-  webapps::BuildProto(
-      *install_shortcut_info_, install_shortcut_info_->manifest_id,
-      std::string() /* primary_icon_data */, is_primary_icon_maskable_,
-      std::string() /* splash_icon_data */, "" /* package_name */,
-      "" /* version */, std::move(*hashes), false /* is_manifest_stale */,
-      false /* is_app_identity_update_supported */,
-      base::BindOnce(&WebApkInstaller::SendRequest,
-                     weak_ptr_factory_.GetWeakPtr(),
-                     traffic_annotation_install_from_chrome));
+  SendRequest(traffic_annotation_install_from_chrome, *serialized_webapk_);
 }
 
 void WebApkInstaller::SendRequest(
     const net::NetworkTrafficAnnotationTag& traffic_annotation,
-    std::unique_ptr<std::string> serialized_proto) {
+    const std::string& serialized_proto) {
   DCHECK(server_url_.is_valid());
 
   timer_.Start(
@@ -680,7 +672,7 @@ void WebApkInstaller::SendRequest(
   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   loader_ =
       network::SimpleURLLoader::Create(std::move(request), traffic_annotation);
-  loader_->AttachStringForUpload(*serialized_proto, kProtoMimeType);
+  loader_->AttachStringForUpload(serialized_proto, kProtoMimeType);
   loader_->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
       GetURLLoaderFactory(browser_context_),
       base::BindOnce(&WebApkInstaller::OnURLLoaderComplete,

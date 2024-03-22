@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/browser/gpu/gpu_process_host.h"
 #include "content/public/browser/gpu_data_manager.h"
 #include "services/viz/privileged/mojom/gl/gpu_service.mojom.h"
@@ -41,7 +40,7 @@ constexpr int kMemoryHistogramBucketCount = 100;
 constexpr const char* GetUsageName(PeakGpuMemoryTracker::Usage usage) {
   switch (usage) {
     case PeakGpuMemoryTracker::Usage::CHANGE_TAB:
-      return "ChangeTab";
+      return "ChangeTab2";
     case PeakGpuMemoryTracker::Usage::PAGE_LOAD:
       return "PageLoad";
     case PeakGpuMemoryTracker::Usage::SCROLL:
@@ -126,11 +125,13 @@ uint32_t PeakGpuMemoryTrackerImpl::next_sequence_number_ = 0;
 PeakGpuMemoryTrackerImpl::PeakGpuMemoryTrackerImpl(
     PeakGpuMemoryTracker::Usage usage)
     : usage_(usage) {
+  // TODO(thiabaud): Do this call inline, since this happens on the UI thread.
+  //
   // Actually performs request to GPU service to begin memory tracking for
   // |sequence_number_|. This will normally be created from the UI thread, so
   // repost to the IO thread.
-  GpuProcessHost::CallOnIO(
-      GPU_PROCESS_KIND_SANDBOXED, /* force_create=*/false,
+  GpuProcessHost::CallOnUI(
+      FROM_HERE, GPU_PROCESS_KIND_SANDBOXED, /* force_create=*/false,
       base::BindOnce(
           [](uint32_t sequence_num, GpuProcessHost* host) {
             // There may be no host nor service available. This may occur during
@@ -149,8 +150,9 @@ PeakGpuMemoryTrackerImpl::~PeakGpuMemoryTrackerImpl() {
   if (canceled_)
     return;
 
-  GpuProcessHost::CallOnIO(
-      GPU_PROCESS_KIND_SANDBOXED, /* force_create=*/false,
+  // TODO(thiabaud): Do this call inline, since this happens on the UI thread.
+  GpuProcessHost::CallOnUI(
+      FROM_HERE, GPU_PROCESS_KIND_SANDBOXED, /* force_create=*/false,
       base::BindOnce(
           [](uint32_t sequence_num, PeakGpuMemoryTracker::Usage usage,
              base::OnceClosure testing_callback, GpuProcessHost* host) {
@@ -174,8 +176,11 @@ PeakGpuMemoryTrackerImpl::~PeakGpuMemoryTrackerImpl() {
 
 void PeakGpuMemoryTrackerImpl::Cancel() {
   canceled_ = true;
+  // TODO(thiabaud): Do this call inline, since this happens on the UI thread.
+  //
   // Notify the GpuProcessHost that we are done observing this sequence.
-  GpuProcessHost::CallOnIO(GPU_PROCESS_KIND_SANDBOXED, /* force_create=*/false,
+  GpuProcessHost::CallOnUI(FROM_HERE, GPU_PROCESS_KIND_SANDBOXED,
+                           /* force_create=*/false,
                            base::BindOnce(
                                [](uint32_t sequence_num, GpuProcessHost* host) {
                                  if (!host)

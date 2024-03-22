@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -216,8 +216,8 @@ export class DocumentCornerOverlay {
   /**
    * Detaches from previous attached camera.
    */
-  async detach(): Promise<void> {
-    await this.stop();
+  detach(): void {
+    this.stop();
     this.deviceId = null;
   }
 
@@ -236,7 +236,10 @@ export class DocumentCornerOverlay {
             this.onNoCornerDetected();
             return;
           }
-          this.maybeUpdatePointOfInterest(corners);
+          // Updating POI shouldn't block showing the new document corner
+          // indicators, and multiple updates to POI can be called at the same
+          // time (the new one will override the old one).
+          void this.maybeUpdatePointOfInterest(corners);
           const rect = this.cornerContainer.getBoundingClientRect();
           function toOverlaySpace(pt: Point) {
             return new Point(rect.width * pt.x, rect.height * pt.y);
@@ -248,7 +251,7 @@ export class DocumentCornerOverlay {
     this.setNoDocumentTimer();
   }
 
-  async stop(): Promise<void> {
+  stop(): void {
     if (this.observer === null) {
       return;
     }

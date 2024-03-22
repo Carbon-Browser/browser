@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,10 @@
 #include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
-#include "third_party/skia/include/core/SkPromiseImageTexture.h"
+#include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/gpu/GrBackendSemaphore.h"
+#include "third_party/skia/include/gpu/ganesh/SkImageGanesh.h"
+#include "third_party/skia/include/private/chromium/GrPromiseImageTexture.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace gpu {
@@ -41,7 +43,7 @@ std::vector<uint8_t> ReadPixels(
   EXPECT_EQ(size.height(), backend_texture.height());
 
   // Create an Sk Image from GrBackendTexture.
-  auto sk_image = SkImage::MakeFromTexture(
+  auto sk_image = SkImages::BorrowTextureFrom(
       context_state->gr_context(), promise_texture->backendTexture(),
       kTopLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, kOpaque_SkAlphaType,
       nullptr);

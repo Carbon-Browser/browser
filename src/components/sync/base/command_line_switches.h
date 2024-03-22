@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,9 +37,6 @@ inline constexpr char kSyncShortInitialRetryOverride[] =
 // sure that it's what you want.
 inline constexpr char kSyncShortNudgeDelayForTest[] =
     "sync-short-nudge-delay-for-test";
-
-// Specifies the vault server used for trusted vault passphrase.
-inline constexpr char kTrustedVaultServiceURL[] = "trusted-vault-service-url";
 
 // Returns whether sync is allowed to run based on command-line switches.
 // Profile::IsSyncAllowed() is probably a better signal than this function.

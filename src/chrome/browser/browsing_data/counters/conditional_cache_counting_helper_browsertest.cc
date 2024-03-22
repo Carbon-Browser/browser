@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "build/build_config.h"
@@ -106,7 +106,7 @@ class ConditionalCacheCountingHelperBrowserTest : public InProcessBrowserTest {
               ->GetDefaultStoragePartition()
               ->GetURLLoaderFactoryForBrowserProcess()
               .get(),
-          simple_loader_helper.GetCallback());
+          simple_loader_helper.GetCallbackDeprecated());
       simple_loader_helper.WaitForCallback();
     }
   }

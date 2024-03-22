@@ -18,16 +18,12 @@
 #include "components/adblock/core/subscription/ongoing_subscription_request_impl.h"
 
 #include <memory>
+#include <string_view>
 
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "components/adblock/core/common/adblock_prefs.h"
-#include "components/adblock/core/common/allowed_connection_type.h"
-#include "components/prefs/testing_pref_service.h"
-#include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "net/base/mock_network_change_notifier.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -45,16 +41,12 @@ class AdblockOngoingSubscriptionRequestImplTest
     : public testing::TestWithParam<OngoingSubscriptionRequest::Method> {
  public:
   void SetUp() final {
-    prefs::RegisterProfilePrefs(pref_service_.registry());
-    pref_service_.SetString(
-        prefs::kAdblockAllowedConnectionType,
-        AllowedConnectionTypeToString(AllowedConnectionType::kAny));
-    pref_service_.SetBoolean(prefs::kEnableAdblock, true);
+    SetOnline();
     ongoing_request_ = std::make_unique<OngoingSubscriptionRequestImpl>(
-        &pref_service_, &kRetryBackoffPolicy, test_shared_url_loader_factory_);
+        &kRetryBackoffPolicy, test_shared_url_loader_factory_);
   }
 
-  base::StringPiece MethodAsString(OngoingSubscriptionRequest::Method method) {
+  std::string_view MethodAsString(OngoingSubscriptionRequest::Method method) {
     return method == OngoingSubscriptionRequest::Method::GET
                ? net::HttpRequestHeaders::kGetMethod
                : net::HttpRequestHeaders::kHeadMethod;
@@ -69,14 +61,14 @@ class AdblockOngoingSubscriptionRequestImplTest
 
   void VerifyRequestSent() { VerifyRequestSent(GetParam()); }
 
-  void DisallowDownloadsOnMobileData() {
-    // The network state changes to mobile data, while the policy changes to
-    // allow downloads only on WiFi.
-    pref_service_.SetString(
-        prefs::kAdblockAllowedConnectionType,
-        AllowedConnectionTypeToString(AllowedConnectionType::kWiFi));
+  void SetOffline() {
     network_change_notifier_->SetConnectionTypeAndNotifyObservers(
-        net::NetworkChangeNotifier::CONNECTION_5G);
+        net::NetworkChangeNotifier::CONNECTION_NONE);
+  }
+
+  void SetOnline() {
+    network_change_notifier_->SetConnectionTypeAndNotifyObservers(
+        net::NetworkChangeNotifier::CONNECTION_WIFI);
   }
 
   base::test::TaskEnvironment task_environment_{
@@ -88,7 +80,6 @@ class AdblockOngoingSubscriptionRequestImplTest
       test_shared_url_loader_factory_{
           base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
               &test_url_loader_factory_)};
-  sync_preferences::TestingPrefServiceSyncable pref_service_;
   const GURL kUrl{"https://url.com/filter"};
   const net::BackoffEntry::Policy kRetryBackoffPolicy = {
       0,      // Number of initial errors to ignore.
@@ -102,66 +93,9 @@ class AdblockOngoingSubscriptionRequestImplTest
   std::unique_ptr<OngoingSubscriptionRequestImpl> ongoing_request_;
 };
 
-TEST_F(AdblockOngoingSubscriptionRequestImplTest,
-       RequestDeferredUntilWiFiAvailable) {
-  // When downloads are allowed only on WiFi, they will not start while on
-  // mobile data.
-  DisallowDownloadsOnMobileData();
-  base::MockCallback<OngoingSubscriptionRequest::ResponseCallback>
-      response_callback;
-  ongoing_request_->Start(kUrl, OngoingSubscriptionRequest::Method::GET,
-                          response_callback.Get());
-
-  // Download did not start yet.
-  EXPECT_EQ(test_url_loader_factory_.NumPending(), 0);
-
-  // Network state changes to WiFi:
-  network_change_notifier_->SetConnectionTypeAndNotifyObservers(
-      net::NetworkChangeNotifier::CONNECTION_WIFI);
-
-  // Download started.
-  VerifyRequestSent(OngoingSubscriptionRequest::Method::GET);
-}
-
-TEST_F(AdblockOngoingSubscriptionRequestImplTest,
-       RequestNotDeferredWhenHeadRequest) {
-  // When downloads are allowed only on WiFi, they will not start while on
-  // mobile data.
-  DisallowDownloadsOnMobileData();
-  base::MockCallback<OngoingSubscriptionRequest::ResponseCallback>
-      response_callback;
-  ongoing_request_->Start(kUrl, OngoingSubscriptionRequest::Method::HEAD,
-                          response_callback.Get());
-  // Download started.
-  VerifyRequestSent(OngoingSubscriptionRequest::Method::HEAD);
-}
-
-TEST_F(AdblockOngoingSubscriptionRequestImplTest,
-       RequestDeferredUntilSettingChanged) {
-  // When downloads are allowed only on WiFi, they will not start while on
-  // mobile data.
-  DisallowDownloadsOnMobileData();
-  base::MockCallback<OngoingSubscriptionRequest::ResponseCallback>
-      response_callback;
-  ongoing_request_->Start(kUrl, OngoingSubscriptionRequest::Method::GET,
-                          response_callback.Get());
-
-  // Download did not start yet.
-  EXPECT_EQ(test_url_loader_factory_.NumPending(), 0);
-
-  // Setting changes to allow downloads on 5G:
-  pref_service_.SetString(
-      prefs::kAdblockAllowedConnectionType,
-      AllowedConnectionTypeToString(AllowedConnectionType::kAny));
-
-  // Download started.
-  VerifyRequestSent(OngoingSubscriptionRequest::Method::GET);
-}
-
 TEST_P(AdblockOngoingSubscriptionRequestImplTest,
-       RequestDeferredUntilAdblockingEnabled) {
-  // Initially, adblocking is disabled globally.
-  pref_service_.SetBoolean(prefs::kEnableAdblock, false);
+       RequestDeferredUntilConnectionAvailable) {
+  SetOffline();
   base::MockCallback<OngoingSubscriptionRequest::ResponseCallback>
       response_callback;
   ongoing_request_->Start(kUrl, GetParam(), response_callback.Get());
@@ -169,10 +103,29 @@ TEST_P(AdblockOngoingSubscriptionRequestImplTest,
   // Download did not start yet.
   EXPECT_EQ(test_url_loader_factory_.NumPending(), 0);
 
-  // Adblocking gets enabled globally.
-  pref_service_.SetBoolean(prefs::kEnableAdblock, true);
+  SetOnline();
 
-  // Download started.
+  // Request started.
+  VerifyRequestSent();
+}
+
+TEST_P(AdblockOngoingSubscriptionRequestImplTest,
+       RequestConnectionAvailableTriggersDownloadsOnlyAfterStart) {
+  SetOffline();
+  base::MockCallback<OngoingSubscriptionRequest::ResponseCallback>
+      response_callback;
+
+  // Download did not start yet.
+  EXPECT_EQ(test_url_loader_factory_.NumPending(), 0);
+
+  SetOnline();
+
+  // Download did not start yet.
+  EXPECT_EQ(test_url_loader_factory_.NumPending(), 0);
+
+  ongoing_request_->Start(kUrl, GetParam(), response_callback.Get());
+
+  // Request started.
   VerifyRequestSent();
 }
 
@@ -329,26 +282,6 @@ TEST_P(AdblockOngoingSubscriptionRequestImplTest, RedirectCallStartsDownload) {
             MethodAsString(GetParam()));
 }
 
-TEST_F(AdblockOngoingSubscriptionRequestImplTest,
-       RequestCancelledWhileDownloadsDisallowed) {
-  DisallowDownloadsOnMobileData();
-  ongoing_request_->Start(kUrl, OngoingSubscriptionRequest::Method::GET,
-                          base::DoNothing());
-
-  // Request was not sent because policy forbids downloads in current state.
-  ASSERT_EQ(test_url_loader_factory_.NumPending(), 0);
-
-  // We now cancel the download by destroying ongoing_request_.
-  ongoing_request_.reset();
-
-  // Network state changes back to allow downloads.
-  network_change_notifier_->SetConnectionTypeAndNotifyObservers(
-      net::NetworkChangeNotifier::CONNECTION_WIFI);
-
-  // A retry request was not sent, as the request is cancelled.
-  ASSERT_EQ(test_url_loader_factory_.NumPending(), 0);
-}
-
 TEST_P(AdblockOngoingSubscriptionRequestImplTest,
        RequestCancelledAfterStarting) {
   base::MockCallback<OngoingSubscriptionRequest::ResponseCallback>
@@ -367,89 +300,6 @@ TEST_P(AdblockOngoingSubscriptionRequestImplTest,
   test_url_loader_factory_.SimulateResponseForPendingRequest(kUrl.spec(),
                                                              "content");
   task_environment_.RunUntilIdle();
-}
-
-TEST_F(AdblockOngoingSubscriptionRequestImplTest,
-       RequestStoppedAndStartedDuringNetworkStateChange) {
-  base::MockCallback<OngoingSubscriptionRequest::ResponseCallback>
-      response_callback;
-  ongoing_request_->Start(kUrl, OngoingSubscriptionRequest::Method::GET,
-                          response_callback.Get());
-
-  ASSERT_EQ(test_url_loader_factory_.NumPending(), 1);
-
-  EXPECT_CALL(response_callback, Run(testing::_, testing::_, testing::_))
-      .WillRepeatedly([&](const GURL&, base::FilePath downloaded_file,
-                          scoped_refptr<net::HttpResponseHeaders> headers) {
-        ongoing_request_->Retry();
-      });
-
-  test_url_loader_factory_.SimulateResponseForPendingRequest(kUrl.spec(),
-                                                             "content");
-  task_environment_.RunUntilIdle();
-  // A retry attempt task has been posted.
-  EXPECT_EQ(task_environment_.GetPendingMainThreadTaskCount(), 1u);
-  // The delay matches the retry policy
-  EXPECT_EQ(task_environment_.NextMainThreadPendingTaskDelay().InMilliseconds(),
-            kRetryBackoffPolicy.initial_delay_ms);
-
-  // The network state changes so that the current policy doesn't allow
-  // downloads.
-  DisallowDownloadsOnMobileData();
-
-  // Fast-forward time until the retry task was scheduled to execute.
-  task_environment_.FastForwardBy(
-      task_environment_.NextMainThreadPendingTaskDelay());
-
-  // A retry request was not sent, as the request is now disallowed.
-  ASSERT_EQ(test_url_loader_factory_.NumPending(), 0);
-
-  // Network state changes back to allow downloads.
-  network_change_notifier_->SetConnectionTypeAndNotifyObservers(
-      net::NetworkChangeNotifier::CONNECTION_WIFI);
-
-  // Request was started.
-  VerifyRequestSent(OngoingSubscriptionRequest::Method::GET);
-}
-
-TEST_P(AdblockOngoingSubscriptionRequestImplTest,
-       RequestStoppedAndStartedWhenAdblockingPrefToggled) {
-  base::MockCallback<OngoingSubscriptionRequest::ResponseCallback>
-      response_callback;
-  ongoing_request_->Start(kUrl, GetParam(), response_callback.Get());
-
-  ASSERT_EQ(test_url_loader_factory_.NumPending(), 1);
-
-  EXPECT_CALL(response_callback, Run(testing::_, testing::_, testing::_))
-      .WillRepeatedly([&](const GURL&, base::FilePath downloaded_file,
-                          scoped_refptr<net::HttpResponseHeaders> headers) {
-        ongoing_request_->Retry();
-      });
-
-  test_url_loader_factory_.SimulateResponseForPendingRequest(kUrl.spec(),
-                                                             "content");
-  task_environment_.RunUntilIdle();
-  // A retry attempt task has been posted.
-  EXPECT_EQ(task_environment_.GetPendingMainThreadTaskCount(), 1u);
-  // The delay matches the retry policy
-  EXPECT_EQ(task_environment_.NextMainThreadPendingTaskDelay().InMilliseconds(),
-            kRetryBackoffPolicy.initial_delay_ms);
-
-  // Adblocking is disabled globally.
-  pref_service_.SetBoolean(prefs::kEnableAdblock, false);
-
-  // Fast-forward time until the retry task was scheduled to execute.
-  task_environment_.FastForwardBy(
-      task_environment_.NextMainThreadPendingTaskDelay());
-
-  // A retry request was not sent, as the request is now disallowed.
-  ASSERT_EQ(test_url_loader_factory_.NumPending(), 0);
-
-  // Adblocking is enabled globally.
-  pref_service_.SetBoolean(prefs::kEnableAdblock, true);
-
-  // Request was started.
-  VerifyRequestSent();
 }
 
 TEST_F(AdblockOngoingSubscriptionRequestImplTest,

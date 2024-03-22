@@ -1,5 +1,5 @@
-#!/usr/bin/env vpython
-# Copyright 2019 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -130,6 +130,31 @@ class CompileDbTest(unittest.TestCase):
         [{
             'command': r'clang -g -O3 test.cc'
         }])
+
+  def testRewrapperRemoved(self):
+    sys.platform = 'linux2'
+    input_db = [{
+        'command':
+        r'./buildtools/reclient/rewrapper ./bin/clang++ -O3 test.cc',
+    }]
+    self.assertEquals(compile_db.ProcessCompileDatabase(input_db, []),
+                      [{
+                          'command': r'./bin/clang++ -O3 test.cc'
+                      }])
+
+  def testRewrapperArgsRemoved(self):
+    sys.platform = 'linux2'
+    input_db = [{
+        'command':
+        r'./buildtools/reclient/rewrapper'
+        r' -cfg=./buildtools/reclient_cfgs/.../rewrapper_linux.cfg'
+        r' -exec_root=/chromium/src/'
+        r' ./bin/clang++ -O3 test.cc',
+    }]
+    self.assertEquals(compile_db.ProcessCompileDatabase(input_db, []),
+                      [{
+                          'command': r'./bin/clang++ -O3 test.cc'
+                      }])
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/websockets/websocket_frame.h"
 
@@ -41,7 +41,7 @@ class WebSocket final {
   void Accept(const HttpServerRequestInfo& request,
               const net::NetworkTrafficAnnotationTag traffic_annotation);
   ParseResult Read(std::string* message);
-  void Send(base::StringPiece message,
+  void Send(std::string_view message,
             net::WebSocketFrameHeader::OpCodeEnum op_code,
             const net::NetworkTrafficAnnotationTag traffic_annotation);
 

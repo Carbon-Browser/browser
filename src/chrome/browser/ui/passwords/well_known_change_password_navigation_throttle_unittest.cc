@@ -1,7 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/ui/passwords/well_known_change_password_navigation_throttle.h"
+
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
@@ -13,7 +15,6 @@
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/test_renderer_host.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
@@ -26,7 +27,7 @@ struct NavigationThrottleOptions {
   GURL url;
   raw_ptr<content::RenderFrameHost> rfh = nullptr;
   ui::PageTransition page_transition = ui::PAGE_TRANSITION_FROM_API;
-  absl::optional<url::Origin> initiator_origin;
+  std::optional<url::Origin> initiator_origin;
 };
 
 }  // namespace
@@ -58,7 +59,7 @@ class WellKnownChangePasswordNavigationThrottleTest
  private:
   variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
-  raw_ptr<content::RenderFrameHost> subframe_ = nullptr;
+  raw_ptr<content::RenderFrameHost, DanglingUntriaged> subframe_ = nullptr;
 };
 
 TEST_F(WellKnownChangePasswordNavigationThrottleTest,

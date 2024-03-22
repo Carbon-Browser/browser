@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/test/scoped_feature_list.h"
@@ -46,6 +46,8 @@ class TestProducerClient : public ProducerClient {
   void FlushPacketIfPossible();
 
   perfetto::protos::pbzero::TracePacket* NewTracePacket();
+
+  void FinishTracePacket();
 
   size_t GetFinalizedPacketCount();
 
@@ -93,6 +95,7 @@ class TestProducerClient : public ProducerClient {
       trace_packet_;
   protozero::ScatteredStreamWriterNullDelegate delegate_;
   protozero::ScatteredStreamWriter stream_;
+  size_t trace_packet_written_start_ = 0;
   std::unique_ptr<base::tracing::PerfettoTaskRunner> main_thread_task_runner_;
   bool log_only_main_thread_;
 };
@@ -104,6 +107,7 @@ class TestTraceWriter : public perfetto::TraceWriter {
   explicit TestTraceWriter(TestProducerClient* producer_client);
 
   perfetto::TraceWriter::TracePacketHandle NewTracePacket() override;
+  void FinishTracePacket() override;
   void Flush(std::function<void()> callback = {}) override {}
   perfetto::WriterID writer_id() const override;
   uint64_t written() const override;
@@ -112,7 +116,7 @@ class TestTraceWriter : public perfetto::TraceWriter {
   TestTraceWriter& operator=(TestTraceWriter&&) = delete;
 
  private:
-  raw_ptr<TestProducerClient> producer_client_;
+  raw_ptr<TestProducerClient, AcrossTasksDanglingUntriaged> producer_client_;
 };
 
 // Wrapper class around TestProducerClient useful for testing a trace data

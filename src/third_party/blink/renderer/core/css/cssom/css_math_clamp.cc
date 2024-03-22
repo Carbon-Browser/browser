@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,8 +57,9 @@ absl::optional<CSSNumericSumValue> CSSMathClamp::SumValue() const {
   for (const auto& value : {lower_, value_, upper_}) {
     const auto child_sum = value->SumValue();
     if (!child_sum.has_value() || child_sum->terms.size() != 1 ||
-        child_sum->terms[0].units != lower->terms[0].units)
+        child_sum->terms[0].units != lower->terms[0].units) {
       return absl::nullopt;
+    }
   }
 
   auto value = value_->SumValue();
@@ -88,7 +89,7 @@ void CSSMathClamp::BuildCSSText(Nested,
 
 CSSMathExpressionNode* CSSMathClamp::ToCalcExpressionNode() const {
   CSSMathExpressionOperation::Operands operands;
-  operands.ReserveCapacity(3u);
+  operands.reserve(3u);
   for (const auto& value : {lower_, value_, upper_}) {
     CSSMathExpressionNode* operand = value->ToCalcExpressionNode();
     if (!operand) {

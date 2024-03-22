@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -152,6 +152,11 @@ enum class EditingCommandType {
   kYank = 137,
   kYankAndSelect = 138,
   kAlignCenter = 139,
+
+  // This command is for internal use only; the current use case is pasting GIF
+  // images selected from emoji picker on ChromeOS (the GIF URLs are from
+  // tenor.com).
+  kPasteFromImageURL = 140,
 
   // Add new commands immediately above this line.
   kNumberOfCommandTypes,

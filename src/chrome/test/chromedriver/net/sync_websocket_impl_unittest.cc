@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_type.h"
@@ -92,14 +92,13 @@ TEST_F(SyncWebSocketImplTest, DetermineRecipient) {
             sock.ReceiveNextMessage(&message, long_timeout()));
 
   // Getting message id and method
-  base::DictionaryValue* message_dict;
   absl::optional<base::Value> message_value = base::JSONReader::Read(message);
   ASSERT_TRUE(message_value.has_value());
-  ASSERT_TRUE(message_value->GetAsDictionary(&message_dict));
-  std::string method;
-  ASSERT_TRUE(message_dict->GetString("method", &method));
-  ASSERT_EQ(method, "Page.enable");
-  int id = message_dict->FindIntKey("id").value_or(-1);
+  base::Value::Dict* message_dict = message_value->GetIfDict();
+  ASSERT_TRUE(message_dict);
+  const std::string* method = message_dict->FindString("method");
+  ASSERT_EQ(*method, "Page.enable");
+  int id = message_dict->FindInt("id").value_or(-1);
   ASSERT_EQ(id, 1);
 }
 

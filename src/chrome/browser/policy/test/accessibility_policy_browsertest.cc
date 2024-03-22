@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -353,14 +353,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityPolicyTest, CursorHighlightEnabled) {
   EXPECT_FALSE(accessibility_manager->IsCursorHighlightEnabled());
 }
 
-// https://crbug.com/1225510
-#if BUILDFLAG(IS_CHROMEOS)
-#define MAYBE_CaretHighlightEnabled DISABLED_CaretHighlightEnabled
-#else
-#define MAYBE_CaretHighlightEnabled CaretHighlightEnabled
-#endif
-
-IN_PROC_BROWSER_TEST_F(AccessibilityPolicyTest, MAYBE_CaretHighlightEnabled) {
+IN_PROC_BROWSER_TEST_F(AccessibilityPolicyTest, CaretHighlightEnabled) {
   // Verifies that the caret highlight accessibility feature can be controlled
   // through policy.
   AccessibilityManager* accessibility_manager = AccessibilityManager::Get();
@@ -468,6 +461,42 @@ IN_PROC_BROWSER_TEST_F(AccessibilityPolicyTest, AutoclickEnabled) {
 
   // Verify that no confirmation dialog has been shown.
   EXPECT_FALSE(accessibility_manager->IsDisableAutoclickDialogVisibleForTest());
+}
+
+IN_PROC_BROWSER_TEST_F(AccessibilityPolicyTest, ColorCorrectionEnabled) {
+  // Verifies that the color correction accessibility feature can be controlled
+  // through policy.
+  AccessibilityManager* accessibility_manager = AccessibilityManager::Get();
+
+  accessibility_manager->SetColorCorrectionEnabled(false);
+  // Verify that color correction is initially disabled.
+  EXPECT_FALSE(accessibility_manager->IsColorCorrectionEnabled());
+
+  // Manually enable color correction.
+  accessibility_manager->SetColorCorrectionEnabled(true);
+  EXPECT_TRUE(accessibility_manager->IsColorCorrectionEnabled());
+
+  // Verify that policy overrides the manual setting.
+  PolicyMap policies;
+  policies.Set(key::kColorCorrectionEnabled, POLICY_LEVEL_MANDATORY,
+               POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(false),
+               nullptr);
+  UpdateProviderPolicy(policies);
+  EXPECT_FALSE(accessibility_manager->IsColorCorrectionEnabled());
+
+  // Verify that color correction cannot be enabled manually anymore.
+  accessibility_manager->SetColorCorrectionEnabled(true);
+  EXPECT_FALSE(accessibility_manager->IsColorCorrectionEnabled());
+
+  policies.Set(key::kColorCorrectionEnabled, POLICY_LEVEL_MANDATORY,
+               POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(true),
+               nullptr);
+  UpdateProviderPolicy(policies);
+  EXPECT_TRUE(accessibility_manager->IsColorCorrectionEnabled());
+
+  // Verify that color correction cannot be disabled manually anymore.
+  accessibility_manager->SetColorCorrectionEnabled(false);
+  EXPECT_TRUE(accessibility_manager->IsColorCorrectionEnabled());
 }
 
 }  // namespace policy

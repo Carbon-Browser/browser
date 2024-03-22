@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_WEBSOCKET_INTERCEPTOR_H_
 #define SERVICES_NETWORK_WEBSOCKET_INTERCEPTOR_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/unguessable_token.h"
 #include "services/network/throttling/scoped_throttling_token.h"
 #include "services/network/throttling/throttling_network_interceptor.h"

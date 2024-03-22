@@ -1,12 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_credit_card.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation ManualFillCreditCard
 
@@ -47,10 +43,10 @@
   ManualFillCreditCard* otherObject = (ManualFillCreditCard*)object;
   // Guid and number matches or not, there's no need to care about the other
   // fields. 'Number' differenciate between the same card obfuscated or not.
-  if (![otherObject.GUID isEqual:self.GUID]) {
+  if (![otherObject.GUID isEqualToString:self.GUID]) {
     return NO;
   }
-  if (![otherObject.number isEqual:self.number]) {
+  if (![otherObject.number isEqualToString:self.number]) {
     return NO;
   }
   return YES;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,16 @@
 
 #include <stddef.h>
 
-#include <memory>
 #include <utility>
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/values.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -91,9 +89,9 @@ void RecordUMAHelper(DeclarativeAPIFunctionType type) {
                             kDeclarativeApiFunctionCallTypeMax);
 }
 
-void ConvertBinaryDictionaryValuesToBase64(base::Value& dict);
+void ConvertBinaryDictValuesToBase64(base::Value::Dict& dict);
 
-// Encodes |binary| as base64 and returns a new StringValue populated with the
+// Encodes |binary| as base64 and returns a new string value populated with the
 // encoded string.
 base::Value ConvertBinaryToBase64(const base::Value& binary) {
   std::string binary_data(binary.GetBlob().begin(), binary.GetBlob().end());
@@ -102,9 +100,9 @@ base::Value ConvertBinaryToBase64(const base::Value& binary) {
   return base::Value(std::move(data64));
 }
 
-// Parses through |args| replacing any BinaryValues with base64 encoded
-// StringValues. Recurses over any nested ListValues, and calls
-// ConvertBinaryDictionaryValuesToBase64 for any nested DictionaryValues.
+// Parses through |args| replacing any binary values with base64 encoded
+// string values. Recurses over any nested List values, and calls
+// ConvertBinaryDictValuesToBase64 for any nested Dict values.
 void ConvertBinaryListElementsToBase64(base::Value::List& args) {
   for (auto& value : args) {
     if (value.is_blob()) {
@@ -112,32 +110,32 @@ void ConvertBinaryListElementsToBase64(base::Value::List& args) {
     } else if (value.is_list() && !value.GetList().empty()) {
       ConvertBinaryListElementsToBase64(value.GetList());
     } else if (value.is_dict()) {
-      ConvertBinaryDictionaryValuesToBase64(value);
+      ConvertBinaryDictValuesToBase64(value.GetDict());
     }
   }
 }
 
 // Parses through |dict| replacing any BinaryValues with base64 encoded
-// StringValues. Recurses over any nested DictionaryValues, and calls
-// ConvertBinaryListElementsToBase64 for any nested ListValues.
-void ConvertBinaryDictionaryValuesToBase64(base::Value& dict) {
-  for (auto it : dict.DictItems()) {
+// string values. Recurses over any nested Dict values, and calls
+// ConvertBinaryListElementsToBase64 for any nested List values.
+void ConvertBinaryDictValuesToBase64(base::Value::Dict& dict) {
+  for (auto it : dict) {
     auto& value = it.second;
     if (value.is_blob()) {
       value = ConvertBinaryToBase64(value);
     } else if (value.is_list() && !value.GetList().empty()) {
       ConvertBinaryListElementsToBase64(value.GetList());
     } else if (value.is_dict()) {
-      ConvertBinaryDictionaryValuesToBase64(value);
+      ConvertBinaryDictValuesToBase64(value.GetDict());
     }
   }
 }
 
 }  // namespace
 
-RulesFunction::RulesFunction() {}
+RulesFunction::RulesFunction() = default;
 
-RulesFunction::~RulesFunction() {}
+RulesFunction::~RulesFunction() = default;
 
 ExtensionFunction::ResponseAction RulesFunction::Run() {
   EXTENSION_FUNCTION_VALIDATE(CreateParams());
@@ -208,7 +206,7 @@ EventsEventAddRulesFunction::~EventsEventAddRulesFunction() = default;
 bool EventsEventAddRulesFunction::CreateParams() {
   ConvertBinaryListElementsToBase64(mutable_args());
   params_ = AddRules::Params::Create(args());
-  return params_ != nullptr;
+  return params_.has_value();
 }
 
 ExtensionFunction::ResponseValue
@@ -222,8 +220,8 @@ EventsEventAddRulesFunction::RunAsyncOnCorrectThread() {
   base::Value::List rules_value;
   rules_value.reserve(rules_out.size());
   for (const auto* rule : rules_out)
-    rules_value.Append(base::Value::FromUniquePtrValue(rule->ToValue()));
-  return OneArgument(base::Value(std::move(rules_value)));
+    rules_value.Append(rule->ToValue());
+  return WithArguments(std::move(rules_value));
 }
 
 void EventsEventAddRulesFunction::RecordUMA(
@@ -252,13 +250,13 @@ EventsEventRemoveRulesFunction::~EventsEventRemoveRulesFunction() = default;
 
 bool EventsEventRemoveRulesFunction::CreateParams() {
   params_ = RemoveRules::Params::Create(args());
-  return params_ != nullptr;
+  return params_.has_value();
 }
 
 ExtensionFunction::ResponseValue
 EventsEventRemoveRulesFunction::RunAsyncOnCorrectThread() {
   std::string error;
-  if (params_->rule_identifiers.get()) {
+  if (params_->rule_identifiers) {
     error = rules_registry_->RemoveRules(extension_id(),
                                          *params_->rule_identifiers);
   } else {
@@ -294,13 +292,13 @@ EventsEventGetRulesFunction::~EventsEventGetRulesFunction() = default;
 
 bool EventsEventGetRulesFunction::CreateParams() {
   params_ = GetRules::Params::Create(args());
-  return params_ != nullptr;
+  return params_.has_value();
 }
 
 ExtensionFunction::ResponseValue
 EventsEventGetRulesFunction::RunAsyncOnCorrectThread() {
   std::vector<const Rule*> rules;
-  if (params_->rule_identifiers.get()) {
+  if (params_->rule_identifiers) {
     rules_registry_->GetRules(extension_id(), *params_->rule_identifiers,
                               &rules);
   } else {
@@ -310,8 +308,8 @@ EventsEventGetRulesFunction::RunAsyncOnCorrectThread() {
   base::Value::List rules_value;
   rules_value.reserve(rules.size());
   for (const auto* rule : rules)
-    rules_value.Append(base::Value::FromUniquePtrValue(rule->ToValue()));
-  return OneArgument(base::Value(std::move(rules_value)));
+    rules_value.Append(rule->ToValue());
+  return WithArguments(std::move(rules_value));
 }
 
 void EventsEventGetRulesFunction::RecordUMA(

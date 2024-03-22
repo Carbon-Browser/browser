@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,20 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "dbus/message.h"
 #include "dbus/mock_bus.h"
 #include "dbus/mock_object_proxy.h"
 #include "dbus/object_path.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 using ::testing::_;
@@ -144,16 +147,25 @@ class RmadClientTest : public testing::Test {
     EmitSignal(&signal);
   }
 
-  // Passes a provisioning progress signal to |client_|.
+  // Passes a power cable state signal to |client_|.
   void EmitPowerCableStateSignal(bool plugged_in) {
     dbus::Signal signal(rmad::kRmadInterfaceName, rmad::kPowerCableStateSignal);
     dbus::MessageWriter(&signal).AppendBool(plugged_in);
     EmitSignal(&signal);
   }
 
+  // Passes an external disk signal to |client_|.
+  void EmitExternalDiskStateSignal(bool detected) {
+    dbus::Signal signal(rmad::kRmadInterfaceName,
+                        rmad::kExternalDiskDetectedSignal);
+    dbus::MessageWriter(&signal).AppendBool(detected);
+    EmitSignal(&signal);
+  }
+
   // Passes a provisioning progress signal to |client_|.
   void EmitProvisioningProgressSignal(rmad::ProvisionStatus::Status status,
-                                      double progress) {
+                                      double progress,
+                                      rmad::ProvisionStatus::Error error) {
     dbus::Signal signal(rmad::kRmadInterfaceName,
                         rmad::kProvisioningProgressSignal);
     dbus::MessageWriter writer(&signal);
@@ -161,6 +173,7 @@ class RmadClientTest : public testing::Test {
     writer.OpenStruct(&struct_writer);
     struct_writer.AppendInt32(static_cast<int32_t>(status));
     struct_writer.AppendDouble(progress);
+    struct_writer.AppendInt32(static_cast<int32_t>(error));
     writer.CloseContainer(&struct_writer);
     EmitSignal(&signal);
   }
@@ -181,7 +194,8 @@ class RmadClientTest : public testing::Test {
 
   // Passes a finalization status signal to |client_|.
   void EmitFinalizationProgressSignal(rmad::FinalizeStatus::Status status,
-                                      double progress) {
+                                      double progress,
+                                      rmad::FinalizeStatus::Error error) {
     dbus::Signal signal(rmad::kRmadInterfaceName,
                         rmad::kFinalizeProgressSignal);
     dbus::MessageWriter writer(&signal);
@@ -189,6 +203,7 @@ class RmadClientTest : public testing::Test {
     writer.OpenStruct(&struct_writer);
     struct_writer.AppendInt32(static_cast<int32_t>(status));
     struct_writer.AppendDouble(progress);
+    struct_writer.AppendInt32(static_cast<int32_t>(error));
     writer.CloseContainer(&struct_writer);
     EmitSignal(&signal);
   }
@@ -206,10 +221,12 @@ class RmadClientTest : public testing::Test {
   // |client_|.
   std::map<std::string, dbus::ObjectProxy::SignalCallback> signal_callbacks_;
 
-  RmadClient* client_ = nullptr;  // Unowned convenience pointer.
+  raw_ptr<RmadClient, DanglingUntriaged | ExperimentalAsh> client_ =
+      nullptr;  // Unowned convenience pointer.
   // A message loop to emulate asynchronous behavior.
   base::test::SingleThreadTaskEnvironment task_environment_;
-  dbus::Response* response_ = nullptr;
+  raw_ptr<dbus::Response, DanglingUntriaged | ExperimentalAsh> response_ =
+      nullptr;
   // Mock D-Bus objects for |client_| to interact with.
   scoped_refptr<dbus::MockBus> mock_bus_;
   scoped_refptr<dbus::MockObjectProxy> mock_proxy_;
@@ -267,6 +284,8 @@ class TestObserver : public RmadClient::Observer {
   }
   int num_power_cable_state() const { return num_power_cable_state_; }
   bool last_power_cable_state() const { return last_power_cable_state_; }
+  int num_external_disk_state() const { return num_external_disk_state_; }
+  bool last_external_disk_state() const { return last_external_disk_state_; }
   int num_hardware_verification_result() const {
     return num_hardware_verification_result_;
   }
@@ -324,6 +343,12 @@ class TestObserver : public RmadClient::Observer {
     last_power_cable_state_ = plugged_in;
   }
 
+  // Called when power cable is plugged in or removed.
+  void ExternalDiskState(bool detected) override {
+    num_external_disk_state_++;
+    last_external_disk_state_ = detected;
+  }
+
   // Called when hardware verification completes.
   void HardwareVerificationResult(
       const rmad::HardwareVerificationResult& result) override {
@@ -344,7 +369,7 @@ class TestObserver : public RmadClient::Observer {
   }
 
  private:
-  RmadClient* client_;  // Not owned.
+  raw_ptr<RmadClient, ExperimentalAsh> client_;  // Not owned.
   int num_error_ = 0;
   rmad::RmadErrorCode last_error_ = rmad::RmadErrorCode::RMAD_ERROR_NOT_SET;
   int num_calibration_progress_ = 0;
@@ -358,6 +383,8 @@ class TestObserver : public RmadClient::Observer {
   bool last_hardware_write_protection_state_ = true;
   int num_power_cable_state_ = 0;
   bool last_power_cable_state_ = true;
+  int num_external_disk_state_ = 0;
+  bool last_external_disk_state_ = true;
   int num_hardware_verification_result_ = 0;
   rmad::HardwareVerificationResult last_hardware_verification_result_;
   int num_finalization_progress_ = 0;
@@ -693,13 +720,14 @@ TEST_F(RmadClientTest, SaveLog) {
       .WillOnce(Invoke(this, &RmadClientTest::OnCallDbusMethod));
 
   base::RunLoop run_loop;
-  client_->SaveLog(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::SaveLogReply> response) {
-        EXPECT_TRUE(response.has_value());
-        EXPECT_EQ(response->save_path(), expected_save_path);
-        EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
-        run_loop.Quit();
-      }));
+  client_->SaveLog("Diagnostics log text",
+                   base::BindLambdaForTesting(
+                       [&](absl::optional<rmad::SaveLogReply> response) {
+                         EXPECT_TRUE(response.has_value());
+                         EXPECT_EQ(response->save_path(), expected_save_path);
+                         EXPECT_EQ(response->error(), rmad::RMAD_ERROR_OK);
+                         run_loop.Quit();
+                       }));
   run_loop.RunUntilIdle();
 }
 
@@ -711,11 +739,12 @@ TEST_F(RmadClientTest, SaveLog_NullResponse) {
       .WillOnce(Invoke(this, &RmadClientTest::OnCallDbusMethod));
 
   base::RunLoop run_loop;
-  client_->SaveLog(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::SaveLogReply> response) {
-        EXPECT_FALSE(response.has_value());
-        run_loop.Quit();
-      }));
+  client_->SaveLog("Diagnostics log text",
+                   base::BindLambdaForTesting(
+                       [&](absl::optional<rmad::SaveLogReply> response) {
+                         EXPECT_FALSE(response.has_value());
+                         run_loop.Quit();
+                       }));
   run_loop.RunUntilIdle();
 }
 
@@ -729,11 +758,12 @@ TEST_F(RmadClientTest, SaveLog_EmptyResponse) {
       .WillOnce(Invoke(this, &RmadClientTest::OnCallDbusMethod));
 
   base::RunLoop run_loop;
-  client_->SaveLog(base::BindLambdaForTesting(
-      [&](absl::optional<rmad::SaveLogReply> response) {
-        EXPECT_FALSE(response.has_value());
-        run_loop.Quit();
-      }));
+  client_->SaveLog("Diagnostics log text",
+                   base::BindLambdaForTesting(
+                       [&](absl::optional<rmad::SaveLogReply> response) {
+                         EXPECT_FALSE(response.has_value());
+                         run_loop.Quit();
+                       }));
   run_loop.RunUntilIdle();
 }
 
@@ -814,6 +844,82 @@ TEST_F(RmadClientTest, RecordBrowserActionMetric_EmptyResponse) {
   run_loop.RunUntilIdle();
 }
 
+TEST_F(RmadClientTest, ExtractExternalDiagnosticsApp) {
+  std::unique_ptr<dbus::Response> response = dbus::Response::CreateEmpty();
+  rmad::ExtractExternalDiagnosticsAppReply expected_proto;
+  expected_proto.set_error(rmad::RMAD_ERROR_OK);
+  expected_proto.set_diagnostics_app_swbn_path("swbn_path");
+  expected_proto.set_diagnostics_app_crx_path("crx_path");
+  ASSERT_TRUE(dbus::MessageWriter(response.get())
+                  .AppendProtoAsArrayOfBytes(expected_proto));
+
+  response_ = response.get();
+  EXPECT_CALL(
+      *mock_proxy_.get(),
+      DoCallMethod(HasMember(rmad::kExtractExternalDiagnosticsAppMethod),
+                   dbus::ObjectProxy::TIMEOUT_USE_DEFAULT, _))
+      .WillOnce(Invoke(this, &RmadClientTest::OnCallDbusMethod));
+
+  base::test::TestFuture<
+      absl::optional<rmad::ExtractExternalDiagnosticsAppReply>>
+      future;
+  client_->ExtractExternalDiagnosticsApp(future.GetCallback());
+  EXPECT_TRUE(future.Get().has_value());
+  EXPECT_EQ(future.Get()->error(), expected_proto.error());
+  EXPECT_EQ(future.Get()->diagnostics_app_swbn_path(),
+            expected_proto.diagnostics_app_swbn_path());
+  EXPECT_EQ(future.Get()->diagnostics_app_crx_path(),
+            expected_proto.diagnostics_app_crx_path());
+}
+
+TEST_F(RmadClientTest, InstallExtractedDiagnosticsApp) {
+  std::unique_ptr<dbus::Response> response = dbus::Response::CreateEmpty();
+  rmad::InstallExtractedDiagnosticsAppReply expected_proto;
+  expected_proto.set_error(rmad::RMAD_ERROR_OK);
+  ASSERT_TRUE(dbus::MessageWriter(response.get())
+                  .AppendProtoAsArrayOfBytes(expected_proto));
+
+  response_ = response.get();
+  EXPECT_CALL(
+      *mock_proxy_.get(),
+      DoCallMethod(HasMember(rmad::kInstallExtractedDiagnosticsAppMethod),
+                   dbus::ObjectProxy::TIMEOUT_USE_DEFAULT, _))
+      .WillOnce(Invoke(this, &RmadClientTest::OnCallDbusMethod));
+
+  base::test::TestFuture<
+      absl::optional<rmad::InstallExtractedDiagnosticsAppReply>>
+      future;
+  client_->InstallExtractedDiagnosticsApp(future.GetCallback());
+  EXPECT_TRUE(future.Get().has_value());
+  EXPECT_EQ(future.Get()->error(), expected_proto.error());
+}
+
+TEST_F(RmadClientTest, GetInstalledDiagnosticsApp) {
+  std::unique_ptr<dbus::Response> response = dbus::Response::CreateEmpty();
+  rmad::GetInstalledDiagnosticsAppReply expected_proto;
+  expected_proto.set_error(rmad::RMAD_ERROR_OK);
+  expected_proto.set_diagnostics_app_swbn_path("swbn_path");
+  expected_proto.set_diagnostics_app_crx_path("crx_path");
+  ASSERT_TRUE(dbus::MessageWriter(response.get())
+                  .AppendProtoAsArrayOfBytes(expected_proto));
+
+  response_ = response.get();
+  EXPECT_CALL(*mock_proxy_.get(),
+              DoCallMethod(HasMember(rmad::kGetInstalledDiagnosticsAppMethod),
+                           dbus::ObjectProxy::TIMEOUT_USE_DEFAULT, _))
+      .WillOnce(Invoke(this, &RmadClientTest::OnCallDbusMethod));
+
+  base::test::TestFuture<absl::optional<rmad::GetInstalledDiagnosticsAppReply>>
+      future;
+  client_->GetInstalledDiagnosticsApp(future.GetCallback());
+  EXPECT_TRUE(future.Get().has_value());
+  EXPECT_EQ(future.Get()->error(), expected_proto.error());
+  EXPECT_EQ(future.Get()->diagnostics_app_swbn_path(),
+            expected_proto.diagnostics_app_swbn_path());
+  EXPECT_EQ(future.Get()->diagnostics_app_crx_path(),
+            expected_proto.diagnostics_app_crx_path());
+}
+
 // Tests that synchronous observers are notified about errors that occur outside
 // of state transitions.
 TEST_F(RmadClientTest, Error) {
@@ -867,11 +973,29 @@ TEST_F(RmadClientTest, ProvisioningProgress) {
   TestObserver observer_1(client_);
 
   EmitProvisioningProgressSignal(
-      rmad::ProvisionStatus::RMAD_PROVISION_STATUS_IN_PROGRESS, 0.25);
+      rmad::ProvisionStatus::RMAD_PROVISION_STATUS_IN_PROGRESS, 0.25,
+      rmad::ProvisionStatus::RMAD_PROVISION_ERROR_UNKNOWN);
   EXPECT_EQ(observer_1.num_provisioning_progress(), 1);
   EXPECT_EQ(observer_1.last_provisioning_status().status(),
             rmad::ProvisionStatus::RMAD_PROVISION_STATUS_IN_PROGRESS);
   EXPECT_EQ(observer_1.last_provisioning_status().progress(), 0.25);
+  EXPECT_EQ(observer_1.last_provisioning_status().error(),
+            rmad::ProvisionStatus::RMAD_PROVISION_ERROR_UNKNOWN);
+}
+
+// Tests that synchronous observers are notified about provisioning errors.
+TEST_F(RmadClientTest, ProvisioningErrors) {
+  TestObserver observer_1(client_);
+
+  EmitProvisioningProgressSignal(
+      rmad::ProvisionStatus::RMAD_PROVISION_STATUS_FAILED_BLOCKING, 0.25,
+      rmad::ProvisionStatus::RMAD_PROVISION_ERROR_CR50);
+  EXPECT_EQ(observer_1.num_provisioning_progress(), 1);
+  EXPECT_EQ(observer_1.last_provisioning_status().status(),
+            rmad::ProvisionStatus::RMAD_PROVISION_STATUS_FAILED_BLOCKING);
+  EXPECT_EQ(observer_1.last_provisioning_status().progress(), 0.25);
+  EXPECT_EQ(observer_1.last_provisioning_status().error(),
+            rmad::ProvisionStatus::RMAD_PROVISION_ERROR_CR50);
 }
 
 // Tests that synchronous observers are notified about provisioning progress.
@@ -887,7 +1011,7 @@ TEST_F(RmadClientTest, HardwareWriteProtectionState) {
   EXPECT_TRUE(observer_1.last_hardware_write_protection_state());
 }
 
-// Tests that synchronous observers are notified about provisioning progress.
+// Tests that synchronous observers are notified about power cable state.
 TEST_F(RmadClientTest, PowerCableState) {
   TestObserver observer_1(client_);
 
@@ -898,6 +1022,19 @@ TEST_F(RmadClientTest, PowerCableState) {
   EmitPowerCableStateSignal(true);
   EXPECT_EQ(observer_1.num_power_cable_state(), 2);
   EXPECT_TRUE(observer_1.last_power_cable_state());
+}
+
+// Tests that synchronous observers are notified about external disk state.
+TEST_F(RmadClientTest, ExternalDiskState) {
+  TestObserver observer_1(client_);
+
+  EmitExternalDiskStateSignal(false);
+  EXPECT_EQ(observer_1.num_external_disk_state(), 1);
+  EXPECT_FALSE(observer_1.last_external_disk_state());
+
+  EmitExternalDiskStateSignal(true);
+  EXPECT_EQ(observer_1.num_external_disk_state(), 2);
+  EXPECT_TRUE(observer_1.last_external_disk_state());
 }
 
 // Tests that synchronous observers are notified about hardware verification
@@ -917,24 +1054,40 @@ TEST_F(RmadClientTest, HardwareVerificationResult) {
   EXPECT_EQ(observer_1.last_hardware_verification_result().error_str(), "ok");
 }
 
-// Tests that synchronous observers are notified about hardware verification
-// status.
+// Tests that synchronous observers are notified about finalization status.
 TEST_F(RmadClientTest, FinalizationProgress) {
   TestObserver observer_1(client_);
 
   EmitFinalizationProgressSignal(
-      rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_IN_PROGRESS, 0.5);
+      rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_IN_PROGRESS, 0.5,
+      rmad::FinalizeStatus::RMAD_FINALIZE_ERROR_UNKNOWN);
   EXPECT_EQ(observer_1.num_finalization_progress(), 1);
   EXPECT_EQ(observer_1.last_finalization_progress().status(),
             rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_IN_PROGRESS);
   EXPECT_EQ(observer_1.last_finalization_progress().progress(), 0.5);
 
   EmitFinalizationProgressSignal(
-      rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_COMPLETE, 1.0);
+      rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_COMPLETE, 1.0,
+      rmad::FinalizeStatus::RMAD_FINALIZE_ERROR_UNKNOWN);
   EXPECT_EQ(observer_1.num_finalization_progress(), 2);
   EXPECT_EQ(observer_1.last_finalization_progress().status(),
             rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_COMPLETE);
   EXPECT_EQ(observer_1.last_finalization_progress().progress(), 1.0);
+}
+
+// Tests that synchronous observers are notified about finalization errors.
+TEST_F(RmadClientTest, FinalizationErrors) {
+  TestObserver observer_1(client_);
+
+  EmitFinalizationProgressSignal(
+      rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_FAILED_BLOCKING, 0.5,
+      rmad::FinalizeStatus::RMAD_FINALIZE_ERROR_CR50);
+  EXPECT_EQ(observer_1.num_finalization_progress(), 1);
+  EXPECT_EQ(observer_1.last_finalization_progress().status(),
+            rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_FAILED_BLOCKING);
+  EXPECT_EQ(observer_1.last_finalization_progress().progress(), 0.5);
+  EXPECT_EQ(observer_1.last_finalization_progress().error(),
+            rmad::FinalizeStatus::RMAD_FINALIZE_ERROR_CR50);
 }
 
 TEST_F(RmadClientTest, RoFirmwareUpdateProgress) {

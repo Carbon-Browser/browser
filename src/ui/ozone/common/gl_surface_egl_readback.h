@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ namespace ui {
 // there is no FBO implementation for Ozone.
 class GLSurfaceEglReadback : public gl::PbufferGLSurfaceEGL {
  public:
-  GLSurfaceEglReadback();
+  explicit GLSurfaceEglReadback(gl::GLDisplayEGL* display);
 
   GLSurfaceEglReadback(const GLSurfaceEglReadback&) = delete;
   GLSurfaceEglReadback& operator=(const GLSurfaceEglReadback&) = delete;
@@ -32,8 +32,8 @@ class GLSurfaceEglReadback : public gl::PbufferGLSurfaceEGL {
               float scale_factor,
               const gfx::ColorSpace& color_space,
               bool has_alpha) override;
-  bool IsOffscreen() override;
-  gfx::SwapResult SwapBuffers(PresentationCallback callback) override;
+  gfx::SwapResult SwapBuffers(PresentationCallback callback,
+                              gfx::FrameData data) override;
   gfx::SurfaceOrigin GetOrigin() const override;
 
   // TODO(kylechar): Implement SupportsPostSubBuffer() and PostSubBuffer().

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 #include <stddef.h>
 
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -83,24 +85,23 @@ class CandidateViewTest : public views::ViewsTestBase {
 
   size_t GetHighlightedCount() const {
     const auto& children = container_->children();
-    return std::count_if(
-        children.cbegin(), children.cend(),
-        [](const views::View* v) { return !!v->background(); });
+    return base::ranges::count_if(
+        children, [](const views::View* v) { return !!v->background(); });
   }
 
   int GetHighlightedIndex() const {
     const auto& children = container_->children();
-    const auto it =
-        std::find_if(children.cbegin(), children.cend(),
-                     [](const views::View* v) { return !!v->background(); });
+    const auto it = base::ranges::find_if(
+        children, [](const views::View* v) { return !!v->background(); });
     return (it == children.cend()) ? -1 : std::distance(children.cbegin(), it);
   }
 
   ui::test::EventGenerator* event_generator() { return event_generator_.get(); }
 
  private:
-  views::Widget* widget_ = nullptr;
-  views::View* container_ = nullptr;
+  raw_ptr<views::Widget, DanglingUntriaged | ExperimentalAsh> widget_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged | ExperimentalAsh> container_ =
+      nullptr;
   std::unique_ptr<ui::test::EventGenerator> event_generator_;
 };
 

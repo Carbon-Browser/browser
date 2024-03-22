@@ -24,20 +24,47 @@ from minio import Minio
 from urllib.parse import urlparse
 from urllib3.exceptions import ReadTimeoutError
 
+access_key = os.environ.get("MINIO_ACCESS_KEY")
+secret_key = os.environ.get("MINIO_SECRET_KEY")
+minio_host = urlparse(os.environ.get("MINIO_HOST")).netloc
+minio_client = Minio(minio_host, access_key, secret_key)
+
+def download_test_reports_from_bucket(bucket, minio_dir, download_dir=None):
+    if not download_dir:
+        download_dir = args.download_dir
+    if not os.path.isdir(download_dir):
+        os.makedirs(download_dir, exist_ok=False)
+    for item in [ "unit_tests_failed.txt", "components_unittests_failed.txt", "browser_tests_failed.txt" ]:
+        try:
+            minio_client.fget_object(bucket,minio_dir+item,f"{download_dir}/{minio_dir+item}")
+        except ReadTimeoutError:
+            # Retry once
+            print(f"Retrying downloading {minio_dir+item} from minio")
+            minio_client.fget_object(bucket,minio_dir+item,f"{download_dir}/{minio_dir+item}")
+
+def download_all_files_from_bucket(bucket, minio_object, download_dir=None):
+    if not download_dir:
+        download_dir = args.download_dir
+    if not os.path.isdir(download_dir):
+        os.makedirs(download_dir, exist_ok=False)
+    for item in minio_client.list_objects(bucket, prefix=minio_object):
+        try:
+            minio_client.fget_object(bucket,item.object_name,f"{download_dir}/{item.object_name}")
+        except ReadTimeoutError:
+            # Retry once
+            print(f"Retrying downloading {item.object_name} from minio")
+            minio_client.fget_object(bucket,item.object_name,f"{download_dir}/{item.object_name}")
+
+
 def download_files_from_minio(bucket, minio_object, download_dir=None):
     if not download_dir:
         download_dir = args.download_dir
     if not os.path.isdir(download_dir):
         os.makedirs(download_dir, exist_ok=False)
 
-    access_key = os.environ.get("MINIO_ACCESS_KEY")
-    secret_key = os.environ.get("MINIO_SECRET_KEY")
-    minio_host = urlparse(os.environ.get("MINIO_HOST")).netloc
-    minio_client = Minio(minio_host, access_key, secret_key)
     output_file = f"{download_dir}/{minio_object}"
     if os.path.exists(output_file):
         raise FileExistsError(f'{output_file} already exists!')
-
 
     try:
         minio_client.fget_object(
@@ -56,13 +83,22 @@ def download_files_from_minio(bucket, minio_object, download_dir=None):
 
 def main(args):
 
-    download_files_from_minio(args.minio_bucket, args.minio_object)
+    if args.download_all_files_from_bucket:
+        download_all_files_from_bucket(args.minio_bucket, args.minio_object)
+    else:
+        download_files_from_minio(args.minio_bucket, args.minio_object)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    parser.add_argument(
+        "--download-all-files-from-bucket",
+        action='store_true',
+        help="(int) Download all files from a bucket",
     )
 
     parser.add_argument(

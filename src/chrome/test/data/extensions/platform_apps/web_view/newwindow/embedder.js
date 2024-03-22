@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,9 @@ embedder.setUp_ = function(config) {
   embedder.guestWithLinkURL = embedder.baseGuestURL +
       '/extensions/platform_apps/web_view/newwindow' +
       '/guest_with_link.html';
+  embedder.guestOpenOnLoadURL = embedder.baseGuestURL +
+      '/extensions/platform_apps/web_view/newwindow' +
+      '/guest_opener_open_on_load.html';
 };
 
 /** @private */
@@ -609,15 +612,16 @@ function testNewWindowAndUpdateOpener() {
 
     var newwebview = document.createElement('webview');
     document.querySelector('#webview-tag-container').appendChild(newwebview);
+    newwebview.addEventListener('loadstop', () => {
+      // Exit after the opened window loads. The rest of the test is
+      // implemented on the C++ side.
+      embedder.test.succeed();
+    });
     try {
       e.window.attach(newwebview);
     } catch (e) {
       embedder.test.fail();
     }
-
-    // Exit after the first opened window is attached.  The rest of the test is
-    // implemented on the C++ side.
-    embedder.test.succeed();
   };
   webview.addEventListener('newwindow', onNewWindow);
 
@@ -651,6 +655,24 @@ function testNewWindowDeferredAttachmentIndefinitely() {
   embedder.setUpNewWindowRequest_(webview, 'guest.html', '', testName);
 }
 
+// This is not a test in and of itself, but a means of creating a webview that
+// is left in an unattached state while its opener webview is also in an
+// unattached state, so that the C++ side can test it in that state.
+function testDestroyOpenerBeforeAttachment() {
+  embedder.test.succeed();
+
+  let webview = new WebView();
+  webview.src = embedder.guestOpenOnLoadURL;
+  document.body.appendChild(webview);
+
+  // By spinning forever here, we prevent `webview` from completing the
+  // attachment process. But since the guest is still created and it calls
+  // window.open, we have a situation where two unattached webviews have an
+  // opener relationship. The C++ side will test that we can shutdown safely in
+  // this case.
+  while (true) {}
+}
+
 embedder.test.testList = {
   'testNewWindowAttachAfterOpenerDestroyed':
       testNewWindowAttachAfterOpenerDestroyed,
@@ -674,7 +696,9 @@ embedder.test.testList = {
       testNewWindowWebViewNameTakesPrecedence,
   'testNewWindowAndUpdateOpener': testNewWindowAndUpdateOpener,
   'testNewWindowDeferredAttachmentIndefinitely':
-      testNewWindowDeferredAttachmentIndefinitely
+      testNewWindowDeferredAttachmentIndefinitely,
+  'testDestroyOpenerBeforeAttachment':
+      testDestroyOpenerBeforeAttachment
 };
 
 onload = function() {

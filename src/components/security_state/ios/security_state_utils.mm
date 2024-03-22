@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,7 +72,8 @@ MaliciousContentStatus GetMaliciousContentStatus(
     case safe_browsing::SB_THREAT_TYPE_SUSPICIOUS_SITE:
     case safe_browsing::SB_THREAT_TYPE_APK_DOWNLOAD:
     case safe_browsing::SB_THREAT_TYPE_HIGH_CONFIDENCE_ALLOWLIST:
-    case safe_browsing::SB_THREAT_TYPE_ACCURACY_TIPS:
+    case safe_browsing::SB_THREAT_TYPE_MANAGED_POLICY_WARN:
+    case safe_browsing::SB_THREAT_TYPE_MANAGED_POLICY_BLOCK:
       // These threat types are not currently associated with
       // interstitials, and thus resources with these threat types are
       // not ever whitelisted or pending whitelisting.

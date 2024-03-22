@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_ARC_ENTERPRISE_ARC_ENTERPRISE_REPORTING_SERVICE_H_
 
 #include "ash/components/arc/mojom/enterprise_reporting.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -40,15 +41,17 @@ class ArcEnterpriseReportingService
   ~ArcEnterpriseReportingService() override;
 
   // mojom::EnterpriseReportingHost overrides:
-  void ReportManagementState(mojom::ManagementState state) override;
   void ReportCloudDpcOperationTime(int64_t time_ms,
                                    mojom::TimedCloudDpcOp op,
                                    bool success) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   THREAD_CHECKER(thread_checker_);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService, ExperimentalAsh>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   base::WeakPtrFactory<ArcEnterpriseReportingService> weak_ptr_factory_{this};
 };

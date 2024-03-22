@@ -22,11 +22,10 @@ run with --no-sandbox, but there's an extra Linux bot that enables the sandbox
 (but disables LeakSanitizer).
 
 The trybots running Chromium tests on Linux and macOS are:
-- linux\_asan (everything except browser\_tests and content\_browsertests)
-- linux\_browser\_asan (browser\_tests and content\_browsertests),
-- mac\_asan (many tests including browser\_tests and content\_browsertests)
-- linux\_chromeos\_asan (the chromeos=1 build running on a Linux machine, many
-tests including browser\_tests and content\_browsertests).
+- linux\_chromium\_asan\_rel\_ng
+- mac\_chromium\_asan\_rel\_ng
+- linux\_chromium\_chromeos\_asan\_rel\_ng (the chromeos=1 build running on a
+Linux machine)
 
 ## Pre-built Chrome binaries
 
@@ -37,7 +36,10 @@ specific releases by specifying a prefix like
 [linux-debug/asan-linux-debug-83](https://commondatastorage.googleapis.com/chromium-browser-asan/index.html?prefix=linux-debug/asan-linux-debug-83).
 This is useful for finding a build for a specific revision, since filenames are of
 the form `asan-<platform>-<buildtype>-<revision>` (but not every revision has an
-archived ASan build).
+archived ASan build). The
+[get_asan_chrome](https://source.chromium.org/chromium/chromium/src/+/main:tools/get_asan_chrome/get_asan_chrome.py)
+helper script is a handy way to download builds; its --help flag provides
+usage instructions.
 
 ## Build tests with ASan
 
@@ -209,7 +211,7 @@ If the above step fails or to run stuff without Chromium testing script (ex.
 ContentShell.apk, or any third party apk or binary), device setup is needed:
 ```shell
 tools/android/asan/third_party/asan_device_setup.sh \
-    --lib third_party/android_ndk/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/*/lib/linux
+    --lib third_party/android_toolchain/ndk/toolchains/llvm/prebuilt/linux-x86_64/lib64/clang/*/lib/linux
 # wait a few seconds for the device to reload
 ```
 It only needs to be run once per device. It is safe to run it multiple times.

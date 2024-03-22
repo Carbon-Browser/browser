@@ -1,20 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_SESSIONS_APP_SESSION_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_SESSIONS_APP_SESSION_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "chrome/browser/sessions/app_session_service.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
 class Profile;
 
 // Singleton that owns all AppSessionServices and associates them with
 // Profiles. Listens for the Profile's destruction notification and cleans up
 // the associated SessionService.
-class AppSessionServiceFactory : public BrowserContextKeyedServiceFactory {
+class AppSessionServiceFactory : public ProfileKeyedServiceFactory {
  public:
   // Returns the session service for |profile|. This may return NULL. If this
   // profile supports a session service (it isn't incognito), and the session
@@ -56,13 +56,13 @@ class AppSessionServiceFactory : public BrowserContextKeyedServiceFactory {
   static AppSessionServiceFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<AppSessionServiceFactory>;
+  friend base::NoDestructor<AppSessionServiceFactory>;
 
   AppSessionServiceFactory();
   ~AppSessionServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   bool ServiceIsNULLWhileTesting() const override;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -121,18 +121,22 @@ bool CookieDeletionInfo::Matches(const CanonicalCookie& cookie,
     return false;
   }
 
-  if (!domains_and_ips_to_delete.empty() &&
-      !DomainMatchesDomains(cookie, domains_and_ips_to_delete)) {
+  if (domains_and_ips_to_delete.has_value() &&
+      !DomainMatchesDomains(cookie, *domains_and_ips_to_delete)) {
     return false;
   }
 
-  if (!domains_and_ips_to_ignore.empty() &&
-      DomainMatchesDomains(cookie, domains_and_ips_to_ignore)) {
+  if (domains_and_ips_to_ignore.has_value() &&
+      DomainMatchesDomains(cookie, *domains_and_ips_to_ignore)) {
     return false;
   }
 
   if (cookie.IsPartitioned() &&
       !cookie_partition_key_collection.Contains(*cookie.PartitionKey())) {
+    return false;
+  }
+
+  if (partitioned_state_only && !cookie.IsPartitioned()) {
     return false;
   }
 

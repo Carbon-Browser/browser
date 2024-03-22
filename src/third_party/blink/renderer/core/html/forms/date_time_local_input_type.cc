@@ -51,10 +51,6 @@ void DateTimeLocalInputType::CountUsage() {
   CountUsageIfVisible(WebFeature::kInputTypeDateTimeLocal);
 }
 
-const AtomicString& DateTimeLocalInputType::FormControlType() const {
-  return input_type_names::kDatetimeLocal;
-}
-
 double DateTimeLocalInputType::ValueAsDate() const {
   // valueAsDate doesn't work for the datetime-local type according to the
   // standard.
@@ -107,11 +103,11 @@ String DateTimeLocalInputType::LocalizeValue(
                                        ? Locale::kFormatTypeMedium
                                        : Locale::kFormatTypeShort;
   String localized = GetElement().GetLocale().FormatDateTime(date, format_type);
-  return localized.IsEmpty() ? proposed_value : localized;
+  return localized.empty() ? proposed_value : localized;
 }
 
 void DateTimeLocalInputType::WarnIfValueIsInvalid(const String& value) const {
-  if (value && value != GetElement().SanitizeValue(value))
+  if (!value.empty() && GetElement().SanitizeValue(value).empty())
     AddWarningToConsole(
         "The specified value %s does not conform to the required format.  The "
         "format is \"yyyy-MM-ddThh:mm\" followed by optional \":ss\" or "

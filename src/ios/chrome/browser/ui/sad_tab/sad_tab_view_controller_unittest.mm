@@ -1,19 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/sad_tab/sad_tab_view_controller.h"
 
-#include "components/strings/grit/components_strings.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
+#import "components/strings/grit/components_strings.h"
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-#include "third_party/ocmock/gtest_support.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "third_party/ocmock/gtest_support.h"
+#import "ui/base/l10n/l10n_util.h"
 
 // Test fixture for testing SadTabViewController class.
 class SadTabViewControllerTest : public PlatformTest {
@@ -35,9 +31,8 @@ TEST_F(SadTabViewControllerTest, FirstFailureInNonIncognitoText) {
               view_controller_.messageTextView.text);
 
   ASSERT_TRUE(view_controller_.actionButton);
-  EXPECT_NSEQ(
-      l10n_util::GetNSString(IDS_SAD_TAB_RELOAD_LABEL).uppercaseString,
-      [view_controller_.actionButton titleForState:UIControlStateNormal]);
+  EXPECT_NSEQ(l10n_util::GetNSString(IDS_SAD_TAB_RELOAD_LABEL).uppercaseString,
+              view_controller_.actionButton.configuration.title);
 }
 
 // Tests Sad Tab message and button title for first failure in incognito
@@ -52,9 +47,8 @@ TEST_F(SadTabViewControllerTest, FirstFailureInIncognitoText) {
               view_controller_.messageTextView.text);
 
   ASSERT_TRUE(view_controller_.actionButton);
-  EXPECT_NSEQ(
-      l10n_util::GetNSString(IDS_SAD_TAB_RELOAD_LABEL).uppercaseString,
-      [view_controller_.actionButton titleForState:UIControlStateNormal]);
+  EXPECT_NSEQ(l10n_util::GetNSString(IDS_SAD_TAB_RELOAD_LABEL).uppercaseString,
+              view_controller_.actionButton.configuration.title);
 }
 
 // Tests Sad Tab message and button title for repeated failure in non-incognito
@@ -79,7 +73,7 @@ TEST_F(SadTabViewControllerTest, RepeatedFailureInNonIncognitoText) {
   ASSERT_TRUE(view_controller_.actionButton);
   EXPECT_NSEQ(
       l10n_util::GetNSString(IDS_SAD_TAB_SEND_FEEDBACK_LABEL).uppercaseString,
-      [view_controller_.actionButton titleForState:UIControlStateNormal]);
+      view_controller_.actionButton.configuration.title);
 }
 
 // Tests Sad Tab message and button title for repeated failure in incognito
@@ -102,7 +96,7 @@ TEST_F(SadTabViewControllerTest, RepeatedFailureInIncognitoText) {
   ASSERT_TRUE(view_controller_.actionButton);
   EXPECT_NSEQ(
       l10n_util::GetNSString(IDS_SAD_TAB_SEND_FEEDBACK_LABEL).uppercaseString,
-      [view_controller_.actionButton titleForState:UIControlStateNormal]);
+      view_controller_.actionButton.configuration.title);
 }
 
 // Tests action button tap for first failure.

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,9 +29,7 @@ import android.graphics.Shader;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.PorterDuff;
 
-/**
- * A drawable for the tab switcher icon.
- */
+/** A drawable for the tab switcher icon. */
 public class TabSwitcherDrawable extends TintedDrawable {
     private final float mSingleDigitTextSize;
     private final float mDoubleDigitTextSize;
@@ -53,8 +51,9 @@ public class TabSwitcherDrawable extends TintedDrawable {
      */
     public static TabSwitcherDrawable createTabSwitcherDrawable(
             Context context, @BrandedColorScheme int brandedColorScheme) {
-        Bitmap icon = BitmapFactory.decodeResource(
-                context.getResources(), R.drawable.btn_tabswitcher_modern);
+        Bitmap icon =
+                BitmapFactory.decodeResource(
+                        context.getResources(), R.drawable.btn_tabswitcher_modern);
         return new TabSwitcherDrawable(context, brandedColorScheme, icon);
     }
 
@@ -107,8 +106,10 @@ public class TabSwitcherDrawable extends TintedDrawable {
             mTextPaint.getTextBounds(textString, 0, textString.length(), mTextBounds);
 
             int textX = drawableBounds.width() / 2;
-            int textY = drawableBounds.height() / 2 + (mTextBounds.bottom - mTextBounds.top) / 2
-                    - mTextBounds.bottom;
+            int textY =
+                    drawableBounds.height() / 2
+                            + (mTextBounds.bottom - mTextBounds.top) / 2
+                            - mTextBounds.bottom;
 
             canvas.drawText(textString, textX, textY, mTextPaint);
         }
@@ -153,6 +154,6 @@ public class TabSwitcherDrawable extends TintedDrawable {
     @Override
     public void setTint(ColorStateList tint) {
         // super.setTint(tint);
-        if (mTextPaint != null) mTextPaint.setColor(getColorForState());
+        // if (mTextPaint != null) mTextPaint.setColor(getColorForState());
     }
 }

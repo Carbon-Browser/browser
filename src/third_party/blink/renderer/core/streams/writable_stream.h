@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -107,7 +107,9 @@ class CORE_EXPORT WritableStream : public ScriptWrappable {
 
   // Inherited methods used internally.
 
-  static bool IsLocked(const WritableStream* stream) { return stream->writer_; }
+  static bool IsLocked(const WritableStream* stream) {
+    return stream->writer_ != nullptr;
+  }
 
   void Serialize(ScriptState*, MessagePort*, ExceptionState&);
 
@@ -196,7 +198,7 @@ class CORE_EXPORT WritableStream : public ScriptWrappable {
   bool HasBackpressure() const { return has_backpressure_; }
 
   const StreamPromiseResolver* InFlightWriteRequest() const {
-    return in_flight_write_request_;
+    return in_flight_write_request_.Get();
   }
 
   bool IsClosingOrClosed() const {
@@ -206,13 +208,13 @@ class CORE_EXPORT WritableStream : public ScriptWrappable {
   v8::Local<v8::Value> GetStoredError(v8::Isolate*) const;
 
   WritableStreamDefaultController* Controller() {
-    return writable_stream_controller_;
+    return writable_stream_controller_.Get();
   }
   const WritableStreamDefaultController* Controller() const {
-    return writable_stream_controller_;
+    return writable_stream_controller_.Get();
   }
 
-  const WritableStreamDefaultWriter* Writer() const { return writer_; }
+  const WritableStreamDefaultWriter* Writer() const { return writer_.Get(); }
 
   void SetCloseRequest(StreamPromiseResolver*);
   void SetController(WritableStreamDefaultController*);

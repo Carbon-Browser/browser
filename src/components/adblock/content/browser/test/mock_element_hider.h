@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/adblock/content/browser/element_hider.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "url/gurl.h"

@@ -1,4 +1,4 @@
-<!-- Copyright 2020 The Chromium Authors. All rights reserved.
+<!-- Copyright 2020 The Chromium Authors
      Use of this source code is governed by a BSD-style license that can be
      found in the LICENSE file. -->
 
@@ -18,10 +18,12 @@
 <script>
 import {PagePathName, UrlProcessor, URL_PARAM_KEYS} from '../url_processor.js';
 
+import TargetGraphIcon from '../assets/target_graph_icon.png';
 import PackageGraphIcon from '../assets/package_graph_icon.png';
 import ClassGraphIcon from '../assets/class_graph_icon.png';
 
 const GRAPH_NAME_TO_ICON = {
+  [PagePathName.TARGET]: TargetGraphIcon,
   [PagePathName.PACKAGE]: PackageGraphIcon,
   [PagePathName.CLASS]: ClassGraphIcon,
 };

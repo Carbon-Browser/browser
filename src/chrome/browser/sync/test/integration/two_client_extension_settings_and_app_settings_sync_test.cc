@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,12 @@
 #include "chrome/browser/sync/test/integration/extensions_helper.h"
 #include "chrome/browser/sync/test/integration/sync_datatype_helper.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
+#include "components/sync/base/features.h"
+#include "components/sync/service/sync_service_impl.h"
 #include "content/public/test/browser_test.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_features.h"
-#include "chrome/browser/sync/test/integration/sync_settings_categorization_sync_test.h"
 #endif
 
 namespace {
@@ -73,6 +74,22 @@ class TwoClientExtensionSettingsAndAppSettingsSyncTest
 
   bool UseVerifier() override {
     // TODO(crbug.com/1137735): rewrite tests to not use verifier.
+    return true;
+  }
+
+  bool SetupClients() override {
+    if (!SyncTest::SetupClients()) {
+      return false;
+    }
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    // Apps sync is controlled by a dedicated preference on Lacros,
+    // corresponding to the Apps toggle in OS Sync settings.
+    // Enable the Apps toggle for both clients.
+    if (base::FeatureList::IsEnabled(syncer::kSyncChromeOSAppsToggleSharing)) {
+      GetSyncService(0)->GetUserSettings()->SetAppsSyncEnabledByOs(true);
+      GetSyncService(1)->GetUserSettings()->SetAppsSyncEnabledByOs(true);
+    }
+#endif
     return true;
   }
 };
@@ -238,13 +255,11 @@ IN_PROC_BROWSER_TEST_F(TwoClientExtensionSettingsAndAppSettingsSyncTest,
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-// Tests for SyncSettingsCategorization, which uses a different
-// ModelTypeController for syncer::APP_SETTINGS.
-class TwoClientAppSettingsOsSyncTest
-    : public SyncSettingsCategorizationSyncTest {
+// Tests for ChromeOS-Ash, which uses a different ModelTypeController for
+// syncer::APP_SETTINGS.
+class TwoClientAppSettingsOsSyncTest : public SyncTest {
  public:
-  TwoClientAppSettingsOsSyncTest()
-      : SyncSettingsCategorizationSyncTest(TWO_CLIENT) {}
+  TwoClientAppSettingsOsSyncTest() : SyncTest(TWO_CLIENT) {}
   ~TwoClientAppSettingsOsSyncTest() override = default;
 
   bool UseVerifier() override {
@@ -255,7 +270,6 @@ class TwoClientAppSettingsOsSyncTest
 
 IN_PROC_BROWSER_TEST_F(TwoClientAppSettingsOsSyncTest,
                        AppsStartWithSameSettings) {
-  ASSERT_TRUE(chromeos::features::IsSyncSettingsCategorizationEnabled());
   ASSERT_TRUE(SetupClients());
   ASSERT_PRED3(StartWithSameSettingsTest, InstallHostedAppForAllProfiles(0),
                InstallHostedAppForAllProfiles(1),
@@ -264,7 +278,6 @@ IN_PROC_BROWSER_TEST_F(TwoClientAppSettingsOsSyncTest,
 
 IN_PROC_BROWSER_TEST_F(TwoClientAppSettingsOsSyncTest,
                        AppsStartWithDifferentSettings) {
-  ASSERT_TRUE(chromeos::features::IsSyncSettingsCategorizationEnabled());
   ASSERT_TRUE(SetupClients());
   ASSERT_PRED3(
       StartWithDifferentSettingsTest, InstallHostedAppForAllProfiles(0),

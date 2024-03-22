@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
@@ -190,7 +190,7 @@ class ServiceWorkerFileUploadTest : public testing::WithParamInterface<bool>,
     absl::optional<base::Value> parsed_result = base::test::ParseJson(result);
     ASSERT_TRUE(parsed_result);
     ASSERT_TRUE(parsed_result->is_dict());
-    out_result = std::move(parsed_result->GetDict());
+    out_result = std::move(*parsed_result).TakeDict();
   }
 
   // Helper for tests where the service worker falls back to network.
@@ -322,7 +322,7 @@ class ServiceWorkerFileUploadTest : public testing::WithParamInterface<bool>,
     base::ReplaceFirstSubstringAfterOffset(&expectation, 0, "@SIZE@",
                                            base::NumberToString(kFileSize));
     absl::optional<base::Value> result = base::test::ParseJson(expectation);
-    return std::move(result->GetDict());
+    return std::move(*result).TakeDict();
   }
 
  private:
@@ -418,8 +418,9 @@ IN_PROC_BROWSER_TEST_P(ServiceWorkerFileUploadTest, MAYBE_Subresource) {
 
 // Tests a subresource request where the filename is non-ascii. Regression test
 // for https://crbug.com/1017184.
-// Flaky on Android; see https://crbug.com/1320972.
-#if BUILDFLAG(IS_ANDROID)
+// Flaky on Android; see https://crbug.com/1335344.
+// Fail on Mac; see https://crbug.com/1320972.
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
 #define MAYBE_Subresource_NonAsciiFilename DISABLED_Subresource_NonAsciiFilename
 #else
 #define MAYBE_Subresource_NonAsciiFilename Subresource_NonAsciiFilename

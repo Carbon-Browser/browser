@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "ash/constants/app_types.h"
 #include "ash/public/cpp/window_properties.h"
-#include "chrome/browser/ash/crostini/crostini_terminal.h"
+#include "chrome/browser/ash/guest_os/guest_os_terminal.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 
@@ -19,8 +19,9 @@ bool CrostiniActiveWindowThrottleObserver::ProcessWindowActivation(
     ActivationReason reason,
     aura::Window* gained_active,
     aura::Window* lost_active) {
-  if (!gained_active)
+  if (!gained_active) {
     return false;
+  }
 
   // Return true if the gained_active window is a Crostini app.
   if (gained_active->GetProperty(aura::client::kAppType) ==
@@ -37,7 +38,7 @@ bool CrostiniActiveWindowThrottleObserver::ProcessWindowActivation(
   // Return true if the ID is the terminal app's. Note that the terminal app is
   // a Chrome app although it provides a Crostini shell.
   const std::string* app_id = gained_active->GetProperty(ash::kAppIDKey);
-  return app_id && *app_id == crostini::kTerminalSystemAppId;
+  return app_id && *app_id == guest_os::kTerminalSystemAppId;
 }
 
 }  // namespace crostini

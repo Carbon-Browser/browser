@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/simple_thread.h"
@@ -116,7 +116,10 @@ class TaskGraphRunnerTest : public TaskGraphRunnerTestBase,
     for (int i = 0; i < kNamespaceCount; ++i)
       namespace_token_[i] = task_graph_runner_->GenerateNamespaceToken();
   }
-  void TearDown() override { delegate_.StopTaskGraphRunner(); }
+  void TearDown() override {
+    delegate_.StopTaskGraphRunner();
+    SetTaskGraphRunner(nullptr);
+  }
 
  private:
   TaskRunnerTestDelegate delegate_;

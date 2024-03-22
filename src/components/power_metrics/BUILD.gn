@@ -1,21 +1,22 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 static_library("power_metrics") {
   sources = [
-    "sampling_event_source.cc",
-    "sampling_event_source.h",
-    "timer_sampling_event_source.cc",
-    "timer_sampling_event_source.h",
+    "energy_metrics_provider.cc",
+    "energy_metrics_provider.h",
+  ]
+
+  deps = [
+    "//base",
+    "//third_party/abseil-cpp:absl",
   ]
 
   if (is_mac) {
     sources += [
       "energy_impact_mac.h",
       "energy_impact_mac.mm",
-      "iopm_power_source_sampling_event_source.cc",
-      "iopm_power_source_sampling_event_source.h",
       "m1_sensors_internal_types_mac.h",
       "m1_sensors_mac.h",
       "m1_sensors_mac.mm",
@@ -30,18 +31,39 @@ static_library("power_metrics") {
     ]
   }
 
-  deps = [ "//base" ]
+  if (is_win) {
+    sources += [
+      "energy_metrics_provider_win.cc",
+      "energy_metrics_provider_win.h",
+    ]
+
+    libs = [ "Setupapi.lib" ]
+    ldflags = [ "/DELAYLOAD:setupapi.dll" ]
+  }
+
+  if (is_linux || is_chromeos) {
+    sources += [
+      "energy_metrics_provider_linux.cc",
+      "energy_metrics_provider_linux.h",
+    ]
+  }
+
+  if (is_win || is_linux || is_chromeos) {
+    sources += [
+      "system_power_monitor.cc",
+      "system_power_monitor.h",
+    ]
+  }
 }
 
 source_set("unit_tests") {
   testonly = true
 
-  sources = [ "timer_sampling_event_source_unittest.cc" ]
+  sources = [ "energy_metrics_provider_unittest.cc" ]
 
   deps = [
     ":power_metrics",
     "//base",
-    "//base/test:test_support",
     "//testing/gtest",
   ]
 
@@ -52,5 +74,11 @@ source_set("unit_tests") {
     ]
 
     data = [ "test/data/" ]
+  }
+
+  if (is_win || is_linux || is_chromeos) {
+    sources += [ "system_power_monitor_unittest.cc" ]
+
+    deps += [ "//base/test:test_support" ]
   }
 }

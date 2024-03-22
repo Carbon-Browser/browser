@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,25 +6,21 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/check_op.h"
+#import "base/check_op.h"
 #import "base/ios/ns_error_util.h"
-#include "base/notreached.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/values.h"
-#include "components/error_page/common/error.h"
-#include "components/error_page/common/localized_error.h"
-#include "components/grit/components_resources.h"
-#include "ios/chrome/browser/application_context.h"
+#import "base/notreached.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/values.h"
+#import "components/error_page/common/error.h"
+#import "components/error_page/common/localized_error.h"
+#import "components/grit/components_resources.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
 #import "ios/net/protocol_handler_util.h"
-#include "net/base/net_errors.h"
-#include "ui/base/resource/resource_bundle.h"
-#include "ui/base/resource/resource_scale_factor.h"
-#include "ui/base/webui/jstemplate_builder.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/base/net_errors.h"
+#import "ui/base/resource/resource_bundle.h"
+#import "ui/base/resource/resource_scale_factor.h"
+#import "ui/base/webui/web_ui_util.h"
+#import "url/gurl.h"
 
 NSString* GetErrorPage(const GURL& url,
                        NSError* error,
@@ -57,7 +53,8 @@ NSString* GetErrorPage(const GURL& url,
           /*auto_fetch_feature_enabled=*/false,
           /*is_kiosk_mode=*/false,
           GetApplicationContext()->GetApplicationLocale(),
-          /*is_blocked_by_extension=*/false);
+          /*is_blocked_by_extension=*/false,
+          /*error_page_params=*/nullptr);
 
   ui::ResourceScaleFactor scale_factor =
       ui::ResourceBundle::GetSharedInstance().GetMaxResourceScaleFactor();
@@ -70,6 +67,6 @@ NSString* GetErrorPage(const GURL& url,
 
   if (template_html.empty())
     NOTREACHED() << "unable to load template. ID: " << IDR_NET_ERROR_HTML;
-  return base::SysUTF8ToNSString(webui::GetTemplatesHtml(
-      template_html, page_state.strings, /*template_id=*/"t"));
+  return base::SysUTF8ToNSString(
+      webui::GetLocalizedHtml(template_html, page_state.strings));
 }

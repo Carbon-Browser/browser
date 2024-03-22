@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,8 @@ class BarcodeDetectionImplBarhopperTest
       base::FilePath::StringPieceType filename) {
     // Load image data from test directory.
     base::FilePath image_path;
-    EXPECT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &image_path));
+    EXPECT_TRUE(
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &image_path));
     image_path = image_path.Append(FILE_PATH_LITERAL("services"))
                      .Append(FILE_PATH_LITERAL("test"))
                      .Append(FILE_PATH_LITERAL("data"))

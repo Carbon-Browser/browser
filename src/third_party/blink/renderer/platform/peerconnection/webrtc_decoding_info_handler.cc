@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@
 
 namespace blink {
 WebrtcDecodingInfoHandler* WebrtcDecodingInfoHandler::Instance() {
-  DEFINE_STATIC_LOCAL(WebrtcDecodingInfoHandler, instance, ());
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(WebrtcDecodingInfoHandler, instance, ());
   return &instance;
 }
 
@@ -30,8 +30,8 @@ WebrtcDecodingInfoHandler::WebrtcDecodingInfoHandler()
     : WebrtcDecodingInfoHandler(
           blink::CreateWebrtcVideoDecoderFactory(
               Platform::Current()->GetGpuFactories(),
-              Platform::Current()->GetMediaDecoderFactory(),
-              Platform::Current()->MediaThreadTaskRunner(),
+              {},
+              {},
               Platform::Current()->GetRenderingColorSpace(),
               base::DoNothing()),
           blink::CreateWebrtcAudioDecoderFactory()) {}

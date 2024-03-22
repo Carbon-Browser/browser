@@ -1,16 +1,21 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/components/arc/compat_mode/overlay_dialog.h"
 
 #include "ash/components/arc/compat_mode/style/arc_color_provider.h"
-#include "base/bind.h"
+#include "ash/style/ash_color_id.h"
+#include "base/functional/bind.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/exo/shell_surface_base.h"
 #include "components/exo/shell_surface_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
+#include "ui/views/view.h"
 
 namespace arc {
 
@@ -31,6 +36,18 @@ void OverlayDialog::Show(aura::Window* base_window,
   exo::ShellSurfaceBase::OverlayParams params(std::move(dialog));
   params.translucent = true;
   params.overlaps_frame = false;
+
+  if (chromeos::features::IsRoundedWindowsEnabled()) {
+    auto window_radii = shell_surface_base->window_corners_radii();
+    if (window_radii) {
+      // The OverlayDialog covers the content area of the arc window. To match
+      // the rounded corners of the window, we need to round the bottom two
+      // corners of the overlay as well.
+      params.corners_radii = gfx::RoundedCornersF(
+          0, 0, window_radii->lower_right(), window_radii->lower_left());
+    }
+  }
+
   shell_surface_base->AddOverlay(std::move(params));
 }
 
@@ -48,6 +65,12 @@ void OverlayDialog::AddedToWidget() {
   view_ax.OverrideIsIgnored(true);
 }
 
+void OverlayDialog::OnThemeChanged() {
+  views::View::OnThemeChanged();
+  SetBackground(
+      views::CreateThemedSolidBackground(ash::kColorAshShieldAndBase60));
+}
+
 OverlayDialog::OverlayDialog(base::OnceClosure on_destroying,
                              std::unique_ptr<views::View> dialog_view)
     : has_dialog_view_(dialog_view),
@@ -63,8 +86,6 @@ OverlayDialog::OverlayDialog(base::OnceClosure on_destroying,
 
     AddChildView(std::move(dialog_view));
   }
-  const SkColor kScrimColor = GetShieldLayerColor(ShieldLayerType::kShield60);
-  SetBackground(views::CreateSolidBackground(kScrimColor));
 }
 
 BEGIN_METADATA(OverlayDialog, views::FlexLayoutView)

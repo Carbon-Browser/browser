@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/paint/raster_invalidation_tracking.h"
+
+#include <algorithm>
 
 #include "base/logging.h"
 #include "cc/layers/layer.h"
@@ -80,7 +82,7 @@ static bool CompareRasterInvalidationInfo(const RasterInvalidationInfo& a,
 }
 
 void RasterInvalidationTracking::AsJSON(JSONObject* json, bool detailed) const {
-  if (!invalidations_.IsEmpty()) {
+  if (!invalidations_.empty()) {
     // Sort to make the output more readable and easier to see the differences
     // by a human.
     auto sorted = invalidations_;
@@ -106,18 +108,19 @@ void RasterInvalidationTracking::AsJSON(JSONObject* json, bool detailed) const {
     json->SetArray("invalidations", std::move(invalidations_json));
   }
 
-  if (!under_invalidations_.IsEmpty()) {
+  if (!under_invalidations_.empty()) {
     auto under_invalidations_json = std::make_unique<JSONArray>();
     for (auto& under_invalidation : under_invalidations_) {
       auto under_invalidation_json = std::make_unique<JSONObject>();
       under_invalidation_json->SetDouble("x", under_invalidation.x);
       under_invalidation_json->SetDouble("y", under_invalidation.y);
+      // TODO(https://crbug.com/1351544): This should use SkColor4f.
       under_invalidation_json->SetString(
-          "oldPixel",
-          Color(under_invalidation.old_pixel).NameForLayoutTreeAsText());
+          "oldPixel", Color::FromSkColor(under_invalidation.old_pixel)
+                          .NameForLayoutTreeAsText());
       under_invalidation_json->SetString(
-          "newPixel",
-          Color(under_invalidation.new_pixel).NameForLayoutTreeAsText());
+          "newPixel", Color::FromSkColor(under_invalidation.new_pixel)
+                          .NameForLayoutTreeAsText());
       under_invalidations_json->PushObject(std::move(under_invalidation_json));
     }
     json->SetArray("underInvalidations", std::move(under_invalidations_json));
@@ -154,13 +157,13 @@ static bool PixelsDiffer(SkColor p1, SkColor p2) {
 
 void RasterInvalidationTracking::CheckUnderInvalidations(
     const String& layer_debug_name,
-    sk_sp<PaintRecord> new_record,
+    PaintRecord new_record,
     const gfx::Rect& new_interest_rect) {
   auto old_interest_rect = last_interest_rect_;
   cc::Region invalidation_region;
   if (!g_simulate_raster_under_invalidations)
     invalidation_region = invalidation_region_since_last_paint_;
-  auto old_record = std::move(last_painted_record_);
+  absl::optional<PaintRecord> old_record = std::move(last_painted_record_);
 
   last_painted_record_ = new_record;
   last_interest_rect_ = new_interest_rect;
@@ -181,7 +184,7 @@ void RasterInvalidationTracking::CheckUnderInvalidations(
     SkiaPaintCanvas canvas(old_bitmap);
     canvas.clear(SkColors::kTransparent);
     canvas.translate(-rect.x(), -rect.y());
-    canvas.drawPicture(std::move(old_record));
+    canvas.drawPicture(std::move(*old_record));
   }
 
   SkBitmap new_bitmap;
@@ -238,10 +241,9 @@ void RasterInvalidationTracking::CheckUnderInvalidations(
     return;
 
   PaintRecorder recorder;
-  recorder.beginRecording(gfx::RectToSkRect(rect));
+  recorder.beginRecording();
   auto* canvas = recorder.getRecordingCanvas();
-  if (under_invalidation_record_)
-    canvas->drawPicture(std::move(under_invalidation_record_));
+  canvas->drawPicture(std::move(under_invalidation_record_));
   canvas->drawImage(cc::PaintImage::CreateFromBitmap(std::move(new_bitmap)),
                     rect.x(), rect.y());
   under_invalidation_record_ = recorder.finishRecordingAsPicture();

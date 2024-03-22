@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
@@ -32,8 +32,7 @@ class FakeChromeUserRemovalManager : public FakeChromeUserManager {
       delete;
 
   void RemoveUser(const AccountId& account_id,
-                  user_manager::UserRemovalReason reason,
-                  user_manager::RemoveUserDelegate* delegate) override {
+                  user_manager::UserRemovalReason reason) override {
     RemoveUserFromList(account_id);
   }
 };

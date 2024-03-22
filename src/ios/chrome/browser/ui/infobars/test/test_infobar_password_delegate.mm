@@ -1,23 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/infobars/test/test_infobar_password_delegate.h"
 
-#include "base/strings/sys_string_conversions.h"
-#include "components/infobars/core/infobar.h"
-#include "components/password_manager/core/browser/credential_manager_password_form_manager.h"
-#include "components/password_manager/core/browser/fake_form_fetcher.h"
-#include "components/password_manager/core/browser/password_form.h"
-#include "components/password_manager/core/browser/password_form_manager_for_ui.h"
-#include "components/password_manager/core/browser/stub_form_saver.h"
-#include "components/password_manager/core/browser/stub_password_manager_client.h"
-#include "ios/chrome/browser/infobars/infobar_utils.h"
-#include "testing/gmock/include/gmock/gmock.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/strings/sys_string_conversions.h"
+#import "components/infobars/core/infobar.h"
+#import "components/password_manager/core/browser/credential_manager_password_form_manager.h"
+#import "components/password_manager/core/browser/fake_form_fetcher.h"
+#import "components/password_manager/core/browser/password_form.h"
+#import "components/password_manager/core/browser/password_form_manager_for_ui.h"
+#import "components/password_manager/core/browser/password_manager_metrics_util.h"
+#import "components/password_manager/core/browser/stub_form_saver.h"
+#import "components/password_manager/core/browser/stub_password_manager_client.h"
+#import "ios/chrome/browser/infobars/infobar_utils.h"
+#import "testing/gmock/include/gmock/gmock.h"
 
 using password_manager::PasswordForm;
 using base::ASCIIToUTF16;
@@ -83,10 +80,13 @@ CreateFormManager() {
 
 TestInfobarPasswordDelegate::TestInfobarPasswordDelegate(
     NSString* infobar_message)
-    : IOSChromeSavePasswordInfoBarDelegate(@"foobar@gmail.com",
-                                           false,
-                                           false,
-                                           CreateFormManager()),
+    : IOSChromeSavePasswordInfoBarDelegate(
+          "foobar@gmail.com",
+          false,
+          password_manager::features_util::PasswordAccountStorageUserState::
+              kSyncUser,
+          CreateFormManager(),
+          nullptr),
       infobar_message_(infobar_message) {}
 
 bool TestInfobarPasswordDelegate::Create(

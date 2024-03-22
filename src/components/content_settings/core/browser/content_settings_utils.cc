@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,11 @@
 #include "base/strings/string_split.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "components/content_settings/core/browser/content_settings_registry.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
+#include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_utils.h"
+#include "components/content_settings/core/common/features.h"
 
 namespace {
 
@@ -43,11 +46,13 @@ static_assert(std::size(kContentSettingsStringMapping) ==
 // belong between ALLOW and ASK. DEFAULT should never be used and is therefore
 // not part of this array.
 const ContentSetting kContentSettingOrder[] = {
+    // clang-format off
     CONTENT_SETTING_ALLOW,
     CONTENT_SETTING_SESSION_ONLY,
     CONTENT_SETTING_DETECT_IMPORTANT_CONTENT,
     CONTENT_SETTING_ASK,
     CONTENT_SETTING_BLOCK
+    // clang-format on
 };
 
 static_assert(std::size(kContentSettingOrder) ==
@@ -82,15 +87,14 @@ bool ContentSettingFromString(const std::string& name,
 std::string CreatePatternString(
     const ContentSettingsPattern& item_pattern,
     const ContentSettingsPattern& top_level_frame_pattern) {
-  return item_pattern.ToString()
-         + std::string(kPatternSeparator)
-         + top_level_frame_pattern.ToString();
+  return item_pattern.ToString() + std::string(kPatternSeparator) +
+         top_level_frame_pattern.ToString();
 }
 
 PatternPair ParsePatternString(const std::string& pattern_str) {
-  std::vector<std::string> pattern_str_list = base::SplitString(
-      pattern_str, std::string(1, kPatternSeparator[0]),
-      base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+  std::vector<std::string> pattern_str_list =
+      base::SplitString(pattern_str, std::string(1, kPatternSeparator[0]),
+                        base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
 
   // If the |pattern_str| is an empty string then the |pattern_string_list|
   // contains a single empty string. In this case the empty string will be
@@ -105,10 +109,8 @@ PatternPair ParsePatternString(const std::string& pattern_str) {
     }
   }
 
-  if (pattern_str_list.size() > 2 ||
-      pattern_str_list.size() == 0) {
-    return PatternPair(ContentSettingsPattern(),
-                       ContentSettingsPattern());
+  if (pattern_str_list.size() > 2 || pattern_str_list.size() == 0) {
+    return PatternPair(ContentSettingsPattern(), ContentSettingsPattern());
   }
 
   PatternPair pattern_pair;
@@ -120,10 +122,9 @@ PatternPair ParsePatternString(const std::string& pattern_str) {
 void GetRendererContentSettingRules(const HostContentSettingsMap* map,
                                     RendererContentSettingRules* rules) {
 #if !BUILDFLAG(IS_ANDROID)
-  map->GetSettingsForOneType(ContentSettingsType::IMAGES,
-                             &(rules->image_rules));
-  map->GetSettingsForOneType(ContentSettingsType::MIXEDSCRIPT,
-                             &(rules->mixed_content_rules));
+  rules->image_rules = map->GetSettingsForOneType(ContentSettingsType::IMAGES);
+  rules->mixed_content_rules =
+      map->GetSettingsForOneType(ContentSettingsType::MIXEDSCRIPT);
   // Auto dark web content settings is available only for Android, so ALLOW rule
   // is added for all origins.
   rules->auto_dark_content_rules.push_back(ContentSettingPatternSource(
@@ -143,13 +144,13 @@ void GetRendererContentSettingRules(const HostContentSettingsMap* map,
       ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
       ContentSettingToValue(CONTENT_SETTING_BLOCK), std::string(),
       map->IsOffTheRecord()));
-  map->GetSettingsForOneType(ContentSettingsType::AUTO_DARK_WEB_CONTENT,
-                             &(rules->auto_dark_content_rules));
+  rules->auto_dark_content_rules =
+      map->GetSettingsForOneType(ContentSettingsType::AUTO_DARK_WEB_CONTENT);
 #endif
-  map->GetSettingsForOneType(ContentSettingsType::JAVASCRIPT,
-                             &(rules->script_rules));
-  map->GetSettingsForOneType(ContentSettingsType::POPUPS,
-                             &(rules->popup_redirect_rules));
+  rules->script_rules =
+      map->GetSettingsForOneType(ContentSettingsType::JAVASCRIPT);
+  rules->popup_redirect_rules =
+      map->GetSettingsForOneType(ContentSettingsType::POPUPS);
 }
 
 bool IsMorePermissive(ContentSetting a, ContentSetting b) {
@@ -169,14 +170,72 @@ bool IsMorePermissive(ContentSetting a, ContentSetting b) {
 // as they are only bounded by time and can persist through multiple browser
 // sessions.
 bool IsConstraintPersistent(const ContentSettingConstraints& constraints) {
-  return constraints.session_model == SessionModel::Durable;
+  return constraints.session_model() == SessionModel::Durable;
 }
 
-// Convenience helper to calculate the expiration time of a constraint given a
-// desired |duration|
-base::Time GetConstraintExpiration(const base::TimeDelta duration) {
-  DCHECK(!duration.is_zero());
-  return base::Time::Now() + duration;
+bool CanTrackLastVisit(ContentSettingsType type) {
+  // Last visit is not tracked for notification permission as it shouldn't be
+  // auto-revoked.
+  if (type == ContentSettingsType::NOTIFICATIONS)
+    return false;
+
+  // Protocol handler don't actually use their content setting and don't have
+  // a valid "initial default" value.
+  if (type == ContentSettingsType::PROTOCOL_HANDLERS)
+    return false;
+
+  auto* info =
+      content_settings::ContentSettingsRegistry::GetInstance()->Get(type);
+  return info && info->GetInitialDefaultSetting() == CONTENT_SETTING_ASK;
+}
+
+base::Time GetCoarseVisitedTime(base::Time time) {
+  return base::Time::FromDeltaSinceWindowsEpoch(
+      time.ToDeltaSinceWindowsEpoch().FloorToMultiple(
+          GetCoarseVisitedTimePrecision()));
+}
+
+base::TimeDelta GetCoarseVisitedTimePrecision() {
+  if (features::kSafetyCheckUnusedSitePermissionsNoDelay.Get() ||
+      features::kSafetyCheckUnusedSitePermissionsWithDelay.Get()) {
+    return base::Days(0);
+  }
+  return base::Days(7);
+}
+
+bool CanBeAutoRevoked(ContentSettingsType type,
+                      ContentSetting setting,
+                      bool is_one_time) {
+  // The Permissions module in Safety check will revoke permissions after
+  // a finite amount of time.
+  // We're only interested in expiring permissions that:
+  // 1. Are ALLOWed.
+  // 2. Fall back to ASK.
+  // 3. Are not already a one-time grant.
+  if (setting != CONTENT_SETTING_ALLOW) {
+    return false;
+  }
+
+  if (!CanTrackLastVisit(type)) {
+    return false;
+  }
+
+  if (is_one_time) {
+    return false;
+  }
+
+  return true;
+}
+
+bool IsGrantedByRelatedWebsiteSets(ContentSettingsType type,
+                                   const RuleMetaData& metadata) {
+  switch (type) {
+    case ContentSettingsType::STORAGE_ACCESS:
+    case ContentSettingsType::TOP_LEVEL_STORAGE_ACCESS:
+      return metadata.session_model() == SessionModel::NonRestorableUserSession;
+    default:
+      return false;
+  }
 }
 
 }  // namespace content_settings

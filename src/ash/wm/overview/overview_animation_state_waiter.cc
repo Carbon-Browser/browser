@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,11 @@ OverviewAnimationStateWaiter::OverviewAnimationStateWaiter(
     OverviewAnimationState expected_state,
     DoneCallback callback)
     : expected_state_(expected_state), callback_(std::move(callback)) {
-  Shell::Get()->overview_controller()->AddObserver(this);
+  OverviewController::Get()->AddObserver(this);
 }
 
 OverviewAnimationStateWaiter::~OverviewAnimationStateWaiter() {
-  Shell::Get()->overview_controller()->RemoveObserver(this);
+  OverviewController::Get()->RemoveObserver(this);
 }
 
 void OverviewAnimationStateWaiter::Cancel() {

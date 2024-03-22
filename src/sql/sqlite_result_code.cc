@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <ostream>  // Needed to compile NOTREACHED() with operator <<.
 #include <set>
+#include <string>
 #include <utility>
 
 #include "base/check_op.h"
@@ -161,7 +162,8 @@ constexpr SqliteResultCodeMappingEntry kResultCodeMapping[] = {
     {SQLITE_BUSY_TIMEOUT,
      static_cast<int>(SqliteLoggedResultCode::kUnusedChrome)},
 #ifdef SQLITE_ENABLE_SETLK_TIMEOUT
-#error "This code assumes that Chrome does not use
+#error "This code assumes that Chrome does not use blocking Posix advisory \
+file lock requests"
 #endif
 
     {SQLITE_READONLY_ROLLBACK,
@@ -396,7 +398,7 @@ SqliteLoggedResultCode ToSqliteLoggedResultCode(int sqlite_result_code) {
   return logged_code;
 }
 
-void UmaHistogramSqliteResult(const char* histogram_name,
+void UmaHistogramSqliteResult(const std::string& histogram_name,
                               int sqlite_result_code) {
   auto logged_code = ToSqliteLoggedResultCode(sqlite_result_code);
   base::UmaHistogramEnumeration(histogram_name, logged_code);

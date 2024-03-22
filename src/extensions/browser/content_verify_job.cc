@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
@@ -77,10 +77,7 @@ ContentVerifyJob::ContentVerifyJob(const ExtensionId& extension_id,
       failure_callback_(std::move(failure_callback)),
       failed_(false) {}
 
-ContentVerifyJob::~ContentVerifyJob() {
-  UMA_HISTOGRAM_COUNTS_1M("ExtensionContentVerifyJob.TimeSpentUS",
-                          time_spent_.InMicroseconds());
-}
+ContentVerifyJob::~ContentVerifyJob() = default;
 
 void ContentVerifyJob::Start(ContentVerifier* verifier) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
@@ -204,7 +201,7 @@ bool ContentVerifyJob::FinishBlock() {
 
   int block = current_block_++;
 
-  const std::string* expected_hash = NULL;
+  const std::string* expected_hash = nullptr;
   if (!hash_reader_->GetHashForBlock(block, &expected_hash) ||
       *expected_hash != final) {
     return false;

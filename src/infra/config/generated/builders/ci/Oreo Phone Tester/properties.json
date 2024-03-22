@@ -7,7 +7,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Android arm64 Builder (dbg)",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-android-archive",
@@ -18,7 +18,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks"
+                  "download_xr_test_apks"
                 ],
                 "build_config": "Debug",
                 "config": "android",
@@ -27,8 +27,7 @@
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "android",
-                  "enable_reclient"
+                  "android"
                 ],
                 "config": "chromium"
               }
@@ -38,7 +37,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Oreo Phone Tester",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-android-archive",
@@ -49,7 +48,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks"
+                  "download_xr_test_apks"
                 ],
                 "build_config": "Debug",
                 "config": "android",
@@ -65,7 +64,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "Android arm64 Builder (dbg)",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           }
@@ -75,7 +74,7 @@
         {
           "bucket": "ci",
           "builder": "Oreo Phone Tester",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "mirroring_builder_group_and_names": [

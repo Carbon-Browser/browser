@@ -1,19 +1,20 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/navigation_interception/intercept_navigation_throttle.h"
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/public/browser/navigation_handle.h"
 #include "url/gurl.h"
 
 namespace navigation_interception {
 
 // Note: this feature is a no-op on non-Android platforms.
-const base::Feature InterceptNavigationThrottle::kAsyncCheck{
-    "AsyncNavigationIntercept", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kAsyncCheck,
+             "AsyncNavigationIntercept",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 InterceptNavigationThrottle::InterceptNavigationThrottle(
     content::NavigationHandle* navigation_handle,
@@ -21,7 +22,7 @@ InterceptNavigationThrottle::InterceptNavigationThrottle(
     SynchronyMode async_mode)
     : content::NavigationThrottle(navigation_handle),
       should_ignore_callback_(should_ignore_callback),
-      ui_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      ui_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       mode_(async_mode) {}
 
 InterceptNavigationThrottle::~InterceptNavigationThrottle() = default;

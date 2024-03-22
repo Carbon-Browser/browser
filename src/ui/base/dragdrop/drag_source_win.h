@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 
 namespace ui {
 
@@ -57,15 +56,13 @@ class DragSourceWin
   void set_data(const OSExchangeData* data) { data_ = data; }
 
  protected:
-  virtual void OnDragSourceCancel() {}
   virtual void OnDragSourceDrop();
-  virtual void OnDragSourceMove() {}
 
  private:
   // Set to true if we want to cancel the drag operation.
-  bool cancel_drag_;
+  bool cancel_drag_ = false;
 
-  raw_ptr<const OSExchangeData> data_;
+  raw_ptr<const OSExchangeData> data_ = nullptr;
 };
 
 }  // namespace ui

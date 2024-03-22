@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -60,27 +60,4 @@ buildflag_header("sandbox_buildflags") {
     "USE_SECCOMP_BPF=$use_seccomp_bpf",
     "DISABLE_SECCOMP_SSBD=$disable_seccomp_ssbd",
   ]
-}
-
-# This target must be here and not in win/ otherwise it would require a full
-# parse of win/BUILD.gn which fails on non-Windows platforms.
-#
-# Although the code is Windows-based, the fuzzer is designed to work on Linux,
-# so do not disable this fuzzer on non-Windows platforms.
-fuzzer_test("sandbox_ipc_fuzzer") {
-  sources = [
-    "win/fuzzer/fuzzer_types.h",
-    "win/fuzzer/sandbox_ipc_fuzzer.cc",
-    "win/src/crosscall_server.cc",
-    "win/src/ipc_args.cc",
-  ]
-  if (!is_win) {
-    defines = [ "SANDBOX_FUZZ_TARGET" ]
-  }
-  deps = [
-    ":sandbox",
-    "//base",
-  ]
-  dict = "ipc.dict"
-  libfuzzer_options = [ "max_len=1024" ]
 }

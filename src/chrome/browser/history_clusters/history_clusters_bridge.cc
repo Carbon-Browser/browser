@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -121,9 +121,9 @@ void HistoryClustersBridge::ClustersQueryDone(
       std::vector<ScopedJavaLocalRef<jobject>> duplicated_visit_urls;
       for (const auto& duplicate : visit.duplicate_visits) {
         duplicated_visit_timestamps.push_back(
-            duplicate.annotated_visit.visit_row.visit_time.ToInternalValue());
-        duplicated_visit_urls.push_back(url::GURLAndroid::FromNativeGURL(
-            env, duplicate.annotated_visit.url_row.url()));
+            duplicate.visit_time.ToInternalValue());
+        duplicated_visit_urls.push_back(
+            url::GURLAndroid::FromNativeGURL(env, duplicate.url));
       }
 
       const ScopedJavaLocalRef<jobject>& j_cluster_visit =
@@ -171,7 +171,7 @@ void HistoryClustersBridge::ClustersQueryDone(
             base::android::ConvertUTF16ToJavaString(env, raw_label),
             base::android::ToJavaIntArray(env, label_match_starts),
             base::android::ToJavaIntArray(env, label_match_ends),
-            visit_time.ToJavaTime(),
+            visit_time.InMillisecondsSinceUnixEpoch(),
             base::android::ToJavaArrayOfStrings(env, cluster.related_searches));
     j_clusters.push_back(j_cluster);
   }

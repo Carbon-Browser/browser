@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,14 +52,16 @@ proto::MediaSize RequestedMediaToProto(
 proto::PrintJobInfo_PrintJobSource PrintJobSourceToProto(
     ::printing::PrintJob::Source source) {
   switch (source) {
-    case ::printing::PrintJob::Source::PRINT_PREVIEW:
+    case ::printing::PrintJob::Source::kPrintPreview:
       return proto::PrintJobInfo_PrintJobSource_PRINT_PREVIEW;
-    case ::printing::PrintJob::Source::ARC:
+    case ::printing::PrintJob::Source::kArc:
       return proto::PrintJobInfo_PrintJobSource_ARC;
-    case ::printing::PrintJob::Source::EXTENSION:
+    case ::printing::PrintJob::Source::kExtension:
       return proto::PrintJobInfo_PrintJobSource_EXTENSION;
-    case ::printing::PrintJob::Source::PRINT_PREVIEW_INCOGNITO:
+    case ::printing::PrintJob::Source::kPrintPreviewIncognito:
       return proto::PrintJobInfo_PrintJobSource_PRINT_PREVIEW_INCOGNITO;
+    case ::printing::PrintJob::Source::kIsolatedWebApp:
+      return proto::PrintJobInfo_PrintJobSource_ISOLATED_WEB_APP;
     default:
       NOTREACHED();
   }
@@ -123,6 +125,8 @@ proto::PrintJobInfo_PrinterErrorCode PrinterErrorCodeToProto(
       return proto::PrintJobInfo_PrinterErrorCode_UNKNOWN_ERROR;
     case PrinterErrorCode::CLIENT_UNAUTHORIZED:
       return proto::PrintJobInfo_PrinterErrorCode_CLIENT_UNAUTHORIZED;
+    case PrinterErrorCode::EXPIRED_CERTIFICATE:
+      return proto::PrintJobInfo_PrinterErrorCode_EXPIRED_CERTIFICATE;
     default:
       // Be sure to update the above case statements whenever a new printer
       // error is introduced.
@@ -134,7 +138,7 @@ proto::PrintJobInfo_PrinterErrorCode PrinterErrorCodeToProto(
 // Helper method to convert base::Time to the number of milliseconds past the
 // Unix epoch. Loses precision beyond milliseconds.
 int64_t TimeToMillisecondsPastUnixEpoch(const base::Time& time) {
-  return static_cast<int64_t>(time.ToJsTime());
+  return static_cast<int64_t>(time.InMillisecondsFSinceUnixEpoch());
 }
 
 proto::Printer PrinterToProto(const chromeos::Printer& printer) {

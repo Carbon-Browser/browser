@@ -1,18 +1,20 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/passwords/manage_passwords_state.h"
 
-#include <algorithm>
 #include <utility>
 
+#include "base/ranges/algorithm.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
 #include "components/password_manager/core/browser/browser_save_password_progress_logger.h"
 #include "components/password_manager/core/browser/password_form_manager_for_ui.h"
 #include "components/password_manager/core/browser/password_manager.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
+#include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
+#include "components/password_manager/core/common/password_manager_ui.h"
 
 using password_manager::PasswordForm;
 using password_manager::PasswordFormManagerForUI;
@@ -42,11 +44,10 @@ void AppendDeepCopyVector(const std::vector<const PasswordForm*>& forms,
 // Returns true if the form was found and updated.
 bool UpdateFormInVector(const PasswordForm& updated_form,
                         std::vector<std::unique_ptr<PasswordForm>>* forms) {
-  auto it =
-      std::find_if(forms->begin(), forms->end(),
-                   [&updated_form](const std::unique_ptr<PasswordForm>& form) {
-                     return ArePasswordFormUniqueKeysEqual(*form, updated_form);
-                   });
+  auto it = base::ranges::find_if(
+      *forms, [&updated_form](const std::unique_ptr<PasswordForm>& form) {
+        return ArePasswordFormUniqueKeysEqual(*form, updated_form);
+      });
   if (it != forms->end()) {
     **it = updated_form;
     return true;
@@ -58,9 +59,8 @@ bool UpdateFormInVector(const PasswordForm& updated_form,
 // Returns true iff the form was deleted.
 bool RemoveFormFromVector(const PasswordForm& form_to_delete,
                           std::vector<std::unique_ptr<PasswordForm>>* forms) {
-  auto it = std::find_if(
-      forms->begin(), forms->end(),
-      [&form_to_delete](const std::unique_ptr<PasswordForm>& form) {
+  auto it = base::ranges::find_if(
+      *forms, [&form_to_delete](const std::unique_ptr<PasswordForm>& form) {
         return ArePasswordFormUniqueKeysEqual(*form, form_to_delete);
       });
   if (it != forms->end()) {
@@ -132,7 +132,43 @@ void ManagePasswordsState::OnAutomaticPasswordSave(
   AppendDeepCopyVector(form_manager_->GetFederatedMatches(),
                        &local_credentials_forms_);
   origin_ = url::Origin::Create(form_manager_->GetURL());
-  SetState(password_manager::ui::CONFIRMATION_STATE);
+  SetState(password_manager::ui::SAVE_CONFIRMATION_STATE);
+}
+
+void ManagePasswordsState::OnSubmittedGeneratedPassword(
+    password_manager::ui::State state,
+    std::unique_ptr<password_manager::PasswordFormManagerForUI> form_manager) {
+  CHECK(state == password_manager::ui::SAVE_CONFIRMATION_STATE ||
+        state == password_manager::ui::UPDATE_CONFIRMATION_STATE ||
+        state == password_manager::ui::GENERATED_PASSWORD_CONFIRMATION_STATE);
+  if (form_manager) {
+    ClearData();
+    form_manager_ = std::move(form_manager);
+  }
+
+  local_credentials_forms_ =
+      DeepCopyNonPSLVector(form_manager_->GetBestMatches());
+  AppendDeepCopyVector(form_manager_->GetFederatedMatches(),
+                       &local_credentials_forms_);
+
+  // In the confirmation state, a list of saved passwords is displayed, and that
+  // list should contain the just added one. This step should be skipped when
+  // pending password is already present in the `local_credentials_forms_`. That
+  // can happen when this is a confirmation of a password update done via
+  // CredentialManager.
+  auto it = base::ranges::find_if(
+      local_credentials_forms_,
+      [this](const std::unique_ptr<PasswordForm>& form) {
+        return ArePasswordFormUniqueKeysEqual(
+            *form, form_manager_->GetPendingCredentials());
+      });
+  if (it == local_credentials_forms_.end()) {
+    local_credentials_forms_.push_back(
+        std::make_unique<PasswordForm>(form_manager_->GetPendingCredentials()));
+  }
+
+  origin_ = url::Origin::Create(form_manager_->GetURL());
+  SetState(state);
 }
 
 void ManagePasswordsState::OnPasswordAutofilled(
@@ -178,12 +214,22 @@ void ManagePasswordsState::OnPasswordMovable(
   SetState(password_manager::ui::CAN_MOVE_PASSWORD_TO_ACCOUNT_STATE);
 }
 
+void ManagePasswordsState::OnKeychainError() {
+  ClearData();
+  SetState(password_manager::ui::KEYCHAIN_ERROR_STATE);
+}
+
 void ManagePasswordsState::TransitionToState(
     password_manager::ui::State state) {
-  DCHECK_NE(password_manager::ui::INACTIVE_STATE, state_);
-  DCHECK(state == password_manager::ui::MANAGE_STATE ||
-         state == password_manager::ui::PASSWORD_UPDATED_SAFE_STATE ||
-         state == password_manager::ui::PASSWORD_UPDATED_MORE_TO_FIX)
+  CHECK_NE(password_manager::ui::INACTIVE_STATE, state_);
+  CHECK(state == password_manager::ui::MANAGE_STATE ||
+        state == password_manager::ui::PASSWORD_UPDATED_SAFE_STATE ||
+        state == password_manager::ui::PASSWORD_UPDATED_MORE_TO_FIX ||
+        state ==
+            password_manager::ui::BIOMETRIC_AUTHENTICATION_FOR_FILLING_STATE ||
+        state ==
+            password_manager::ui::BIOMETRIC_AUTHENTICATION_CONFIRMATION_STATE ||
+        state == password_manager::ui::NOTIFY_RECEIVED_SHARED_CREDENTIALS)
       << state_;
   if (state_ == password_manager::ui::CREDENTIAL_REQUEST_STATE) {
     if (!credentials_callback_.is_null()) {

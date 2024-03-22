@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,19 +10,14 @@
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/shill/shill_property_changed_observer.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_util.h"
-#include "chromeos/dbus/shill/shill_property_changed_observer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-// TODO(https://crbug.com/1164001): remove when GeolocationHandler move to ash.
 namespace ash {
-class SimpleGeolocationWirelessTest;
-}  // namespace ash
 
-namespace chromeos {
-
-// This class provices Shill Wifi Access Point and Cell Tower data. It
+// This class provides Shill Wifi Access Point and Cell Tower data. It
 // currently relies on polling because that is the usage model in
 // content::WifiDataProvider. This class requests data asynchronously,
 // returning the most recent available data. A typical usage pattern,
@@ -66,14 +61,14 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) GeolocationHandler
  private:
   friend class NetworkHandler;
   friend class GeolocationHandlerTest;
-  friend class ash::SimpleGeolocationWirelessTest;
+  friend class SimpleGeolocationWirelessTest;
 
   GeolocationHandler();
 
   void Init();
 
   // ShillManagerClient callback
-  void ManagerPropertiesCallback(absl::optional<base::Value> properties);
+  void ManagerPropertiesCallback(absl::optional<base::Value::Dict> properties);
 
   // Called from OnPropertyChanged or ManagerPropertiesCallback.
   void HandlePropertyChanged(const std::string& key, const base::Value& value);
@@ -83,15 +78,15 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) GeolocationHandler
   void RequestGeolocationObjects();
 
   // Callback for receiving Geolocation data.
-  void GeolocationCallback(absl::optional<base::Value> properties);
+  void GeolocationCallback(absl::optional<base::Value::Dict> properties);
 
-  bool cellular_enabled_;
-  bool wifi_enabled_;
+  bool cellular_enabled_ = false;
+  bool wifi_enabled_ = false;
 
-  void AddCellTowerFromDict(const base::Value& entry);
-  void AddAccessPointFromDict(const base::Value& entry);
+  void AddCellTowerFromDict(const base::Value::Dict& entry);
+  void AddAccessPointFromDict(const base::Value::Dict& entry);
 
-  // Cached netork information and update time
+  // Cached network information and update time
   WifiAccessPointVector wifi_access_points_;
   CellTowerVector cell_towers_;
   base::Time geolocation_received_time_;
@@ -100,11 +95,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) GeolocationHandler
   base::WeakPtrFactory<GeolocationHandler> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when move to ash.
-namespace ash {
-using ::chromeos::GeolocationHandler;
 }  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_GEOLOCATION_HANDLER_H_

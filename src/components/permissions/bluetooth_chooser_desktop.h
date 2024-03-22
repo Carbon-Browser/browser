@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PERMISSIONS_BLUETOOTH_CHOOSER_DESKTOP_H_
 #define COMPONENTS_PERMISSIONS_BLUETOOTH_CHOOSER_DESKTOP_H_
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/bluetooth_chooser.h"
 

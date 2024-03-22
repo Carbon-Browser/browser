@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@
 #include <wrl/implements.h>
 
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "device/bluetooth/test/fake_device_information_pairing_winrt.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -35,6 +36,11 @@ class FakeDeviceInformationCustomPairingWinrt
   FakeDeviceInformationCustomPairingWinrt(
       Microsoft::WRL::ComPtr<FakeDeviceInformationPairingWinrt> pairing,
       ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind);
+
+  FakeDeviceInformationCustomPairingWinrt(
+      Microsoft::WRL::ComPtr<FakeDeviceInformationPairingWinrt> pairing,
+      ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind,
+      std::string_view display_pin);
 
   FakeDeviceInformationCustomPairingWinrt(
       const FakeDeviceInformationCustomPairingWinrt&) = delete;
@@ -81,7 +87,9 @@ class FakeDeviceInformationCustomPairingWinrt
 
   ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind() const {
     return pairing_kind_;
-  };
+  }
+
+  const std::string& pin() const { return display_pin_; }
 
   void SetConfirmed() { confirmed_ = true; }
 
@@ -90,8 +98,11 @@ class FakeDeviceInformationCustomPairingWinrt
   const absl::optional<std::string> pin_;
   std::string accepted_pin_;
   bool confirmed_ = false;
+
   ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind_ =
       ABI::Windows::Devices::Enumeration::DevicePairingKinds_ProvidePin;
+
+  std::string display_pin_;
 
   base::OnceCallback<void(
       Microsoft::WRL::ComPtr<

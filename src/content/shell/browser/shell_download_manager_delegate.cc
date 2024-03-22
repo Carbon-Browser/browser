@@ -1,9 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/shell/browser/shell_download_manager_delegate.h"
 
+#include <algorithm>
 #include <string>
 
 #include "build/build_config.h"
@@ -13,16 +14,14 @@
 #include <commdlg.h>
 #endif
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
-#include "build/build_config.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -78,7 +77,7 @@ bool ShellDownloadManagerDelegate::DetermineDownloadTarget(
         download->GetForcedFilePath(),
         download::DownloadItem::TARGET_DISPOSITION_OVERWRITE,
         download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-        download::DownloadItem::MixedContentStatus::UNKNOWN,
+        download::DownloadItem::InsecureDownloadStatus::UNKNOWN,
         download->GetForcedFilePath(), base::FilePath(),
         std::string() /*mime_type*/, download::DOWNLOAD_INTERRUPT_REASON_NONE);
     return true;
@@ -144,7 +143,7 @@ void ShellDownloadManagerDelegate::OnDownloadPathGenerated(
     std::move(callback).Run(
         suggested_path, download::DownloadItem::TARGET_DISPOSITION_OVERWRITE,
         download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-        download::DownloadItem::MixedContentStatus::UNKNOWN,
+        download::DownloadItem::InsecureDownloadStatus::UNKNOWN,
         suggested_path.AddExtension(FILE_PATH_LITERAL(".crdownload")),
         base::FilePath(), std::string() /*mime_type*/,
         download::DOWNLOAD_INTERRUPT_REASON_NONE);
@@ -194,12 +193,12 @@ void ShellDownloadManagerDelegate::ChooseDownloadPath(
   NOTIMPLEMENTED();
 #endif
 
-  std::move(callback).Run(result,
-                          download::DownloadItem::TARGET_DISPOSITION_PROMPT,
-                          download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-                          download::DownloadItem::MixedContentStatus::UNKNOWN,
-                          result, base::FilePath(), std::string() /*mime_type*/,
-                          download::DOWNLOAD_INTERRUPT_REASON_NONE);
+  std::move(callback).Run(
+      result, download::DownloadItem::TARGET_DISPOSITION_PROMPT,
+      download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
+      download::DownloadItem::InsecureDownloadStatus::UNKNOWN, result,
+      base::FilePath(), std::string() /*mime_type*/,
+      download::DOWNLOAD_INTERRUPT_REASON_NONE);
 }
 
 void ShellDownloadManagerDelegate::SetDownloadBehaviorForTesting(

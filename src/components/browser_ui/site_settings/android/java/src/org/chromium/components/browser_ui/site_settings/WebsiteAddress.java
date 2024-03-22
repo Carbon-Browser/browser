@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@ import org.chromium.components.url_formatter.SchemeDisplay;
 import org.chromium.components.url_formatter.UrlFormatter;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * A pattern that matches a certain set of URLs used in content settings rules. The pattern can be
@@ -27,9 +28,10 @@ public class WebsiteAddress implements Comparable<WebsiteAddress>, Serializable 
     private final String mScheme;
     private final String mHost;
     private final boolean mOmitProtocolAndPort;
+    private String mDomainAndRegistry;
 
     private static final String SCHEME_SUFFIX = "://";
-    private static final String ANY_SUBDOMAIN_PATTERN = "[*.]";
+    static final String ANY_SUBDOMAIN_PATTERN = "[*.]";
 
     /**
      * Creates a new WebsiteAddress from |originOrHostOrPattern|.
@@ -46,22 +48,33 @@ public class WebsiteAddress implements Comparable<WebsiteAddress>, Serializable 
         }
 
         // Pattern
-        if (originOrHostOrPattern.startsWith(ANY_SUBDOMAIN_PATTERN)) {
-            String origin = null;
+        if (originOrHostOrPattern.contains(ANY_SUBDOMAIN_PATTERN)) {
             String scheme = null;
-            String host = originOrHostOrPattern.substring(ANY_SUBDOMAIN_PATTERN.length());
+            String origin = null;
             boolean omitProtocolAndPort = true;
+            int idx = originOrHostOrPattern.indexOf(ANY_SUBDOMAIN_PATTERN);
+            String host = originOrHostOrPattern.substring(idx + ANY_SUBDOMAIN_PATTERN.length());
+            if (idx != 0) {
+                scheme = originOrHostOrPattern.substring(0, idx);
+                origin = scheme + host;
+                omitProtocolAndPort = false;
+            }
             return new WebsiteAddress(
                     originOrHostOrPattern, origin, scheme, host, omitProtocolAndPort);
         }
 
         // Origin
-        if (originOrHostOrPattern.indexOf(SCHEME_SUFFIX) != -1) {
+        if (originOrHostOrPattern.contains(SCHEME_SUFFIX)) {
             Uri uri = Uri.parse(originOrHostOrPattern);
             String origin = trimTrailingBackslash(originOrHostOrPattern);
-            boolean omitProtocolAndPort = UrlConstants.HTTP_SCHEME.equals(uri.getScheme())
-                    && (uri.getPort() == -1 || uri.getPort() == 80);
-            return new WebsiteAddress(originOrHostOrPattern, origin, uri.getScheme(), uri.getHost(),
+            boolean omitProtocolAndPort =
+                    UrlConstants.HTTP_SCHEME.equals(uri.getScheme())
+                            && (uri.getPort() == -1 || uri.getPort() == 80);
+            return new WebsiteAddress(
+                    originOrHostOrPattern,
+                    origin,
+                    uri.getScheme(),
+                    uri.getHost(),
                     omitProtocolAndPort);
         }
 
@@ -73,7 +86,11 @@ public class WebsiteAddress implements Comparable<WebsiteAddress>, Serializable 
                 originOrHostOrPattern, origin, scheme, originOrHostOrPattern, omitProtocolAndPort);
     }
 
-    private WebsiteAddress(String originOrHostPattern, String origin, String scheme, String host,
+    private WebsiteAddress(
+            String originOrHostPattern,
+            String origin,
+            String scheme,
+            String host,
             boolean omitProtocolAndPort) {
         mOriginOrHostPattern = originOrHostPattern;
         mOrigin = origin;
@@ -95,31 +112,50 @@ public class WebsiteAddress implements Comparable<WebsiteAddress>, Serializable 
         return mHost;
     }
 
+    public boolean getIsAnySubdomainPattern() {
+        return mOriginOrHostPattern.startsWith(ANY_SUBDOMAIN_PATTERN);
+    }
+
     public String getTitle() {
         if (mOrigin == null) return mHost;
-        return UrlFormatter.formatUrlForSecurityDisplay(mOrigin,
+        return UrlFormatter.formatUrlForSecurityDisplay(
+                mOrigin.contains(ANY_SUBDOMAIN_PATTERN)
+                        ? mOrigin.replace(ANY_SUBDOMAIN_PATTERN, "")
+                        : mOrigin,
                 mOmitProtocolAndPort ? SchemeDisplay.OMIT_HTTP_AND_HTTPS : SchemeDisplay.SHOW);
     }
 
-    /**
-     * Returns true if {@code url} matches this WebsiteAddress's origin or host pattern.
-     */
+    /** Returns true if {@code url} matches this WebsiteAddress's origin or host pattern. */
     public boolean matches(String url) {
-        return WebsitePreferenceBridgeJni.get().urlMatchesContentSettingsPattern(
-                url, mOriginOrHostPattern);
+        return WebsitePreferenceBridgeJni.get()
+                .urlMatchesContentSettingsPattern(url, mOriginOrHostPattern);
     }
 
-    private String getDomainAndRegistry() {
-        if (mOrigin != null) return UrlUtilities.getDomainAndRegistry(mOrigin, false);
-        // getDomainAndRegistry works better having a protocol prefix.
-        return UrlUtilities.getDomainAndRegistry(UrlConstants.HTTP_URL_PREFIX + mHost, false);
+    /**
+     * @return Domain and registry if those are defined; origin/host otherwise (for things like IP
+     *.        addresses and "localhost") with the scheme omitted.
+     */
+    public String getDomainAndRegistry() {
+        if (mDomainAndRegistry == null) {
+            // getDomainAndRegistry works better having a protocol prefix.
+            mDomainAndRegistry =
+                    UrlUtilities.getDomainAndRegistry(
+                            (mOrigin != null) ? mOrigin : UrlConstants.HTTP_URL_PREFIX + mHost,
+                            false);
+            if (mDomainAndRegistry == null || mDomainAndRegistry.isEmpty()) {
+                mDomainAndRegistry = mHost;
+            }
+        }
+        return mDomainAndRegistry;
     }
 
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof WebsiteAddress) {
             WebsiteAddress other = (WebsiteAddress) obj;
-            return compareTo(other) == 0;
+            return Objects.equals(mOrigin, other.mOrigin)
+                    && Objects.equals(mScheme, other.mScheme)
+                    && Objects.equals(mHost, other.mHost);
         }
         return false;
     }
@@ -171,8 +207,9 @@ public class WebsiteAddress implements Comparable<WebsiteAddress>, Serializable 
             mAddress = mHost;
         }
         int endIndex = mAddress.indexOf(getDomainAndRegistry());
-        return --endIndex > startIndex ? mAddress.substring(startIndex, endIndex).split("\\.")
-                                       : new String[0];
+        return --endIndex > startIndex
+                ? mAddress.substring(startIndex, endIndex).split("\\.")
+                : new String[0];
     }
 
     private static String trimTrailingBackslash(String origin) {

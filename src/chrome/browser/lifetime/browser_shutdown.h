@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,10 @@ enum class ShutdownType {
   kEndSession = 3,
   // Exit without onbeforeunload or in-progress download prompts.
   kSilentExit = 4,
-  kMaxValue = kSilentExit
+  // The browser process is exiting but not by a user action. These exit paths
+  // can happen with early exit paths where the browser main is not executed.
+  kOtherExit = 5,
+  kMaxValue = kOtherExit
 };
 
 void RegisterPrefs(PrefRegistrySimple* registry);
@@ -85,6 +88,9 @@ ShutdownType GetShutdownType();
 // Returns true if the session should be restarted.
 bool ShutdownPreThreadsStop();
 
+// Records the shutdown retrics.
+void RecordShutdownMetrics();
+
 // Records the shutdown related prefs, and returns true if the browser should be
 // restarted on exit.
 bool RecordShutdownInfoPrefs();
@@ -93,9 +99,6 @@ bool RecordShutdownInfoPrefs();
 // main thread have been stopped.  This includes deleting g_browser_process.
 void ShutdownPostThreadsStop(RestartMode restart_mode);
 #endif
-
-// Called at startup to create a histogram from our previous shutdown time.
-void ReadLastShutdownInfo();
 
 // There are various situations where the browser process should continue to
 // run after the last browser window has closed - the Mac always continues
@@ -121,6 +124,9 @@ bool IsTryingToQuit();
 // Allows setting a fake shutdown type for testing purposes.
 base::AutoReset<ShutdownType> SetShutdownTypeForTesting(
     ShutdownType shutdown_type);
+
+// Allows resetting the shutdown globals for testing purposes.
+void ResetShutdownGlobalsForTesting();
 
 }  // namespace browser_shutdown
 

@@ -1,10 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/webrtc/webrtc_browsertest_common.h"
 
 #include "base/files/file_util.h"
+#include "base/functional/callback_forward.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -124,14 +125,15 @@ bool HasYuvAndY4mFile(const base::FilePath::CharType* reference_file) {
 
 bool SleepInJavascript(content::WebContents* tab_contents, int timeout_msec) {
   const std::string javascript = base::StringPrintf(
-      "setTimeout(function() {"
-      "  window.domAutomationController.send('sleep-ok');"
-      "}, %d)", timeout_msec);
+      "new Promise(resolve => {"
+      "  setTimeout(function() {"
+      "    resolve('sleep-ok');"
+      "  }, %d);"
+      "});",
+      timeout_msec);
 
-  std::string result;
-  bool ok = content::ExecuteScriptAndExtractString(
-      tab_contents, javascript, &result);
-  return ok && result == "sleep-ok";
+  return content::EvalJs(tab_contents, javascript).ExtractString() ==
+         "sleep-ok";
 }
 
 bool PollingWaitUntil(const std::string& javascript,
@@ -150,11 +152,7 @@ bool PollingWaitUntil(const std::string& javascript,
   std::string result;
 
   while (base::Time::Now() - start_time < timeout) {
-    if (!content::ExecuteScriptAndExtractString(tab_contents, javascript,
-                                                &result)) {
-      LOG(ERROR) << "Failed to execute javascript " << javascript;
-      return false;
-    }
+    result = content::EvalJs(tab_contents, javascript).ExtractString();
 
     if (evaluates_to == result) {
       return true;
@@ -174,6 +172,24 @@ bool PollingWaitUntil(const std::string& javascript,
       << "Timed out while waiting for " << javascript
       << " to evaluate to " << evaluates_to << "; last result was '" << result
       << "'";
+  return false;
+}
+
+bool PollingWaitUntilClosureEvaluatesTrue(
+    base::RepeatingCallback<bool()> closure,
+    content::WebContents* tab_contents,
+    base::TimeDelta poll_interval) {
+  base::Time start_time = base::Time::Now();
+  base::TimeDelta timeout = TestTimeouts::action_max_timeout();
+  while (base::Time::Now() - start_time < timeout) {
+    if (closure.Run())
+      return true;
+    // Sleep a bit here to keep this loop from spinlocking too badly.
+    if (!SleepInJavascript(tab_contents, poll_interval.InMilliseconds())) {
+      LOG(ERROR) << "Failed to sleep.";
+    }
+  }
+  LOG(ERROR) << "Timed out while waiting for closure to evaluate true";
   return false;
 }
 

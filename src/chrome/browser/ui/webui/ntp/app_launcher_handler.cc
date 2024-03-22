@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,11 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
@@ -29,7 +29,6 @@
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/crx_installer.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_ui_util.h"
@@ -47,19 +46,15 @@
 #include "chrome/browser/ui/extensions/extension_enable_flow.h"
 #include "chrome/browser/ui/tab_dialogs.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/web_applications/web_app_dialog_manager.h"
-#include "chrome/browser/ui/web_applications/web_app_ui_manager_impl.h"
 #include "chrome/browser/ui/webui/extensions/extension_basic_info.h"
 #include "chrome/browser/ui/webui/extensions/extension_icon_source.h"
 #include "chrome/browser/ui/webui/ntp/new_tab_ui.h"
-#include "chrome/browser/web_applications/commands/install_from_info_command.h"
-#include "chrome/browser/web_applications/commands/run_on_os_login_command.h"
 #include "chrome/browser/web_applications/extension_status_utils.h"
 #include "chrome/browser/web_applications/extensions/bookmark_app_util.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
+#include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "chrome/browser/web_applications/web_app.h"
-#include "chrome/browser/web_applications/web_app_command_manager.h"
-#include "chrome/browser/web_applications/web_app_icon_manager.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_install_finalizer.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
@@ -67,6 +62,7 @@
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
+#include "chrome/browser/web_applications/web_app_ui_manager.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_features.h"
@@ -85,7 +81,6 @@
 #include "components/webapps/browser/install_result_code.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "components/webapps/browser/uninstall_result_code.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/web_ui.h"
 #include "extensions/browser/app_sorting.h"
 #include "extensions/browser/extension_prefs.h"
@@ -140,8 +135,6 @@ const char kPackagedAppKey[] = "packagedApp";
 const int kWebAppIconLargeNonDefault = 128;
 const int kWebAppIconSmallNonDefault = 16;
 
-// These Run on OS Login mode strings need to be in sync with
-// chrome/browser/resources/ntp4/apps_page.js:RUN_ON_OS_LOGIN_MODE enum.
 const char kRunOnOsLoginModeNotRun[] = "run_on_os_login_mode_not_run";
 const char kRunOnOsLoginModeWindowed[] = "run_on_os_login_mode_windowed";
 
@@ -152,7 +145,7 @@ bool IsYoutubeExtension(const std::string& extension_id) {
   return extension_id == extension_misc::kYoutubeAppId;
 }
 
-void GetWebAppBasicInfo(const web_app::AppId& app_id,
+void GetWebAppBasicInfo(const webapps::AppId& app_id,
                         const web_app::WebAppRegistrar& app_registrar,
                         base::Value::Dict* info) {
   info->Set(kInfoIdKey, app_id);
@@ -165,11 +158,12 @@ void GetWebAppBasicInfo(const web_app::AppId& app_id,
   info->Set(kPackagedAppKey, false);
 }
 
-bool HasMatchingOrGreaterThanIcon(const SortedSizesPx& downloaded_icon_sizes,
-                                  int pixels) {
+bool HasMatchingOrGreaterThanIcon(
+    const web_app::SortedSizesPx& downloaded_icon_sizes,
+    int pixels) {
   if (downloaded_icon_sizes.empty())
     return false;
-  SquareSizePx largest = *downloaded_icon_sizes.rbegin();
+  web_app::SquareSizePx largest = *downloaded_icon_sizes.rbegin();
   return largest >= pixels;
 }
 
@@ -202,10 +196,7 @@ AppLauncherHandler::~AppLauncherHandler() {
 }
 
 base::Value::Dict AppLauncherHandler::CreateWebAppInfo(
-    const web_app::AppId& app_id) {
-  // The items which are to be in the returned Value::Dict are also described in
-  // chrome/browser/resources/ntp4/page_list_view.js in @typedef for AppInfo.
-  // Please update it whenever you add or remove any keys here.
+    const webapps::AppId& app_id) {
   base::Value::Dict dict;
 
   // Communicate the kiosk flag so the apps page can disable showing the
@@ -213,7 +204,7 @@ base::Value::Dict AppLauncherHandler::CreateWebAppInfo(
   dict.Set("kioskMode", base::CommandLine::ForCurrentProcess()->HasSwitch(
                             switches::kKioskMode));
 
-  auto& registrar = web_app_provider_->registrar();
+  auto& registrar = web_app_provider_->registrar_unsafe();
 
   std::u16string name = base::UTF8ToUTF16(registrar.GetAppShortName(app_id));
   NewTabUI::SetUrlTitleAndDirection(&dict, name,
@@ -222,9 +213,7 @@ base::Value::Dict AppLauncherHandler::CreateWebAppInfo(
 
   GetWebAppBasicInfo(app_id, registrar, &dict);
 
-  dict.Set(
-      "mayDisable",
-      web_app_provider_->install_finalizer().CanUserUninstallWebApp(app_id));
+  dict.Set("mayDisable", registrar.CanUserUninstallWebApp(app_id));
   bool is_locally_installed = registrar.IsLocallyInstalled(app_id);
   dict.Set("mayChangeLaunchType", is_locally_installed);
 
@@ -312,9 +301,6 @@ base::Value::Dict AppLauncherHandler::CreateWebAppInfo(
 
 base::Value::Dict AppLauncherHandler::CreateExtensionInfo(
     const Extension* extension) {
-  // The items which are to be written into the returned dict are also
-  // described in chrome/browser/resources/ntp4/page_list_view.js in @typedef
-  // for AppInfo. Please update it whenever you add or remove any keys here.
   base::Value::Dict dict;
 
   // Communicate the kiosk flag so the apps page can disable showing the
@@ -367,7 +353,9 @@ base::Value::Dict AppLauncherHandler::CreateExtensionInfo(
            !extension->is_platform_app() && is_locally_installed);
 
   // Any locally installed app can have shortcuts created.
-  dict.Set("mayCreateShortcuts", is_locally_installed);
+  dict.Set(
+      "mayCreateShortcuts",
+      is_locally_installed && extension->id() != extensions::kWebStoreAppId);
   dict.Set("isLocallyInstalled", is_locally_installed);
 
   auto icon_size = extension_misc::EXTENSION_ICON_LARGE;
@@ -504,13 +492,14 @@ void AppLauncherHandler::RegisterMessages() {
 }
 
 void AppLauncherHandler::OnAppsReordered(
+    content::BrowserContext* context,
     const absl::optional<std::string>& extension_id) {
   if (ignore_changes_ || !has_loaded_apps_)
     return;
 
   if (extension_id) {
     base::Value::Dict app_info;
-    if (web_app_provider_->registrar().IsInstalled(*extension_id)) {
+    if (web_app_provider_->registrar_unsafe().IsInstalled(*extension_id)) {
       app_info = CreateWebAppInfo(*extension_id);
     } else {
       const Extension* extension =
@@ -523,8 +512,7 @@ void AppLauncherHandler::OnAppsReordered(
 
       app_info = CreateExtensionInfo(extension);
     }
-    web_ui()->CallJavascriptFunctionUnsafe("ntp.appMoved",
-                                           base::Value(std::move(app_info)));
+    web_ui()->CallJavascriptFunctionUnsafe("ntp.appMoved", std::move(app_info));
   } else {
     HandleGetApps(base::Value::List());
   }
@@ -537,9 +525,9 @@ void AppLauncherHandler::OnExtensionLoaded(
     return;
 
   visible_apps_.insert(extension->id());
-  web_ui()->CallJavascriptFunctionUnsafe(
-      "ntp.appAdded", base::Value(GetExtensionInfo(extension)),
-      /*highlight=*/base::Value(false));
+  web_ui()->CallJavascriptFunctionUnsafe("ntp.appAdded",
+                                         GetExtensionInfo(extension),
+                                         /*highlight=*/base::Value(false));
 }
 
 void AppLauncherHandler::OnExtensionUnloaded(
@@ -556,7 +544,7 @@ void AppLauncherHandler::OnExtensionUninstalled(
   ExtensionRemoved(extension, /*is_uninstall=*/true);
 }
 
-void AppLauncherHandler::OnWebAppInstalled(const web_app::AppId& app_id) {
+void AppLauncherHandler::OnWebAppInstalled(const webapps::AppId& app_id) {
   if (attempting_web_app_install_page_ordinal_.has_value()) {
     AppSorting* sorting =
         ExtensionSystem::Get(Profile::FromWebUI(web_ui()))->app_sorting();
@@ -567,32 +555,34 @@ void AppLauncherHandler::OnWebAppInstalled(const web_app::AppId& app_id) {
   visible_apps_.insert(app_id);
   base::Value highlight(attempting_web_app_install_page_ordinal_.has_value());
   attempting_web_app_install_page_ordinal_ = absl::nullopt;
-  web_ui()->CallJavascriptFunctionUnsafe(
-      "ntp.appAdded", base::Value(CreateWebAppInfo(app_id)), highlight);
+  web_ui()->CallJavascriptFunctionUnsafe("ntp.appAdded",
+                                         CreateWebAppInfo(app_id), highlight);
 }
 
-void AppLauncherHandler::OnWebAppInstallTimeChanged(
-    const web_app::AppId& app_id,
+void AppLauncherHandler::OnWebAppFirstInstallTimeChanged(
+    const webapps::AppId& app_id,
     const base::Time& time) {
   // Use the appAdded to update the app icon's color to no longer be
   // greyscale.
   web_ui()->CallJavascriptFunctionUnsafe("ntp.appAdded",
-                                         base::Value(CreateWebAppInfo(app_id)));
+                                         CreateWebAppInfo(app_id));
 }
 
 void AppLauncherHandler::OnWebAppWillBeUninstalled(
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   base::Value::Dict app_info;
   // Since `isUninstall` is true below, the only item needed in the app_info
   // dictionary is the id.
   app_info.Set(kInfoIdKey, app_id);
   web_ui()->CallJavascriptFunctionUnsafe(
-      "ntp.appRemoved", base::Value(std::move(app_info)),
+      "ntp.appRemoved", std::move(app_info),
       /*isUninstall=*/base::Value(true),
       base::Value(!extension_id_prompting_.empty()));
 }
 
-void AppLauncherHandler::OnWebAppUninstalled(const web_app::AppId& app_id) {
+void AppLauncherHandler::OnWebAppUninstalled(
+    const webapps::AppId& app_id,
+    webapps::WebappUninstallSource uninstall_source) {
   // This can be redundant in most cases, however it is not uncommon for the
   // chrome://apps page to be loaded, or reloaded, during the uninstallation of
   // an app. In this state, the app is still in the registry, but the
@@ -603,13 +593,13 @@ void AppLauncherHandler::OnWebAppUninstalled(const web_app::AppId& app_id) {
   // dictionary is the id.
   app_info.Set(kInfoIdKey, app_id);
   web_ui()->CallJavascriptFunctionUnsafe(
-      "ntp.appRemoved", base::Value(std::move(app_info)),
+      "ntp.appRemoved", std::move(app_info),
       /*isUninstall=*/base::Value(true),
       base::Value(!extension_id_prompting_.empty()));
 }
 
 void AppLauncherHandler::OnWebAppRunOnOsLoginModeChanged(
-    const web_app::AppId& app_id,
+    const webapps::AppId& app_id,
     web_app::RunOnOsLoginMode run_on_os_login_mode) {
   CallJavascriptFunction("ntp.appAdded", base::Value(CreateWebAppInfo(app_id)));
 }
@@ -636,9 +626,9 @@ void AppLauncherHandler::FillAppDictionary(base::Value::Dict* dictionary) {
   Profile* profile = Profile::FromWebUI(web_ui());
   PrefService* prefs = profile->GetPrefs();
 
-  std::set<web_app::AppId> web_app_ids;
-  web_app::WebAppRegistrar& registrar = web_app_provider_->registrar();
-  for (const web_app::AppId& web_app_id : registrar.GetAppIds()) {
+  std::set<webapps::AppId> web_app_ids;
+  web_app::WebAppRegistrar& registrar = web_app_provider_->registrar_unsafe();
+  for (const webapps::AppId& web_app_id : registrar.GetAppIds()) {
     // The Youtube app is harded to be a 'bookmark app', however it is not, it
     // is a platform app.
     // TODO(crbug.com/1065748): Remove this hack once the youtube app is fixed.
@@ -668,12 +658,12 @@ void AppLauncherHandler::FillAppDictionary(base::Value::Dict* dictionary) {
                                          deprecated_app_ids_.size()));
 
   const base::Value::List& app_page_names =
-      prefs->GetValueList(prefs::kNtpAppPageNames);
+      prefs->GetList(prefs::kNtpAppPageNames);
   if (!app_page_names.size()) {
-    ListPrefUpdate update(prefs, prefs::kNtpAppPageNames);
-    base::Value* list = update.Get();
-    list->Append(l10n_util::GetStringUTF16(IDS_APP_DEFAULT_PAGE_NAME));
-    dictionary->Set("appPageNames", list->Clone());
+    ScopedListPrefUpdate update(prefs, prefs::kNtpAppPageNames);
+    base::Value::List& list = update.Get();
+    list.Append(l10n_util::GetStringUTF16(IDS_APP_DEFAULT_PAGE_NAME));
+    dictionary->Set("appPageNames", list.Clone());
   } else {
     dictionary->Set("appPageNames", app_page_names.Clone());
   }
@@ -725,7 +715,7 @@ void AppLauncherHandler::HandleGetApps(const base::Value::List& args) {
 
   FillAppDictionary(&dictionary);
   web_ui()->CallJavascriptFunctionUnsafe("ntp.getAppsCallback",
-                                         base::Value(std::move(dictionary)));
+                                         std::move(dictionary));
 
   // First time we get here we set up the observer so that we can tell update
   // the apps as they change.
@@ -742,7 +732,7 @@ void AppLauncherHandler::HandleGetApps(const base::Value::List& args) {
     ExtensionRegistry::Get(profile)->AddObserver(this);
     install_tracker_observation_.Observe(
         extensions::InstallTracker::Get(profile));
-    web_apps_observation_.Observe(&web_app_provider_->registrar());
+    web_apps_observation_.Observe(&web_app_provider_->registrar_unsafe());
     install_manager_observation_.Observe(&web_app_provider_->install_manager());
 
     WebContents* web_contents = web_ui()->GetWebContents();
@@ -765,14 +755,20 @@ void AppLauncherHandler::HandleGetApps(const base::Value::List& args) {
                                    kForceInstallDialogQueryString, &app_id)) {
       if (extensions::IsExtensionUnsupportedDeprecatedApp(profile, app_id) &&
           extensions::IsExtensionForceInstalled(profile, app_id, nullptr)) {
-        TabDialogs::FromWebContents(web_contents)
-            ->ShowForceInstalledDeprecatedAppsDialog(
-                app_id, web_contents,
-                base::BindOnce(
-                    &AppLauncherHandler::LaunchApp,
-                    weak_ptr_factory_.GetWeakPtr(), app_id,
-                    extension_misc::AppLaunchBucket::APP_LAUNCH_CMD_LINE_APP,
-                    "", WindowOpenDisposition::CURRENT_TAB, true));
+        if (extensions::IsPreinstalledAppId(app_id)) {
+          TabDialogs::FromWebContents(web_contents)
+              ->ShowForceInstalledPreinstalledDeprecatedAppDialog(app_id,
+                                                                  web_contents);
+        } else {
+          TabDialogs::FromWebContents(web_contents)
+              ->ShowForceInstalledDeprecatedAppsDialog(
+                  app_id, web_contents,
+                  base::BindOnce(
+                      &AppLauncherHandler::LaunchApp,
+                      weak_ptr_factory_.GetWeakPtr(), app_id,
+                      extension_misc::AppLaunchBucket::APP_LAUNCH_CMD_LINE_APP,
+                      "", WindowOpenDisposition::CURRENT_TAB, true));
+        }
       }
     }
   }
@@ -818,6 +814,11 @@ void AppLauncherHandler::LaunchApp(
                              weak_ptr_factory_.GetWeakPtr(), extension_id,
                              launch_bucket, source_value, disposition, true));
       return;
+    } else if (extensions::IsPreinstalledAppId(extension_id)) {
+      TabDialogs::FromWebContents(web_ui()->GetWebContents())
+          ->ShowForceInstalledPreinstalledDeprecatedAppDialog(
+              extension_id, web_ui()->GetWebContents());
+      return;
     } else {
       TabDialogs::FromWebContents(web_ui()->GetWebContents())
           ->ShowForceInstalledDeprecatedAppsDialog(
@@ -833,7 +834,7 @@ void AppLauncherHandler::LaunchApp(
   GURL full_launch_url;
   apps::LaunchContainer launch_container;
 
-  web_app::WebAppRegistrar& registrar = web_app_provider_->registrar();
+  web_app::WebAppRegistrar& registrar = web_app_provider_->registrar_unsafe();
   if (registrar.IsInstalled(extension_id) &&
       !IsYoutubeExtension(extension_id)) {
     type = extensions::Manifest::Type::TYPE_HOSTED_APP;
@@ -881,15 +882,20 @@ void AppLauncherHandler::LaunchApp(
     params.override_url = override_url;
     apps::AppServiceProxyFactory::GetForProfile(profile)
         ->BrowserAppLauncher()
-        ->LaunchAppWithParams(std::move(params));
+        ->LaunchAppWithParams(std::move(params), base::DoNothing());
   } else {
     // To give a more "launchy" experience when using the NTP launcher, we close
-    // it automatically.
-    Browser* browser =
-        chrome::FindBrowserWithWebContents(web_ui()->GetWebContents());
+    // it automatically. However, if the chrome://apps page is the LAST page in
+    // the browser window, then we don't close it.
+    Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
+    base::WeakPtr<Browser> browser_ptr;
     WebContents* old_contents = nullptr;
-    if (browser)
+    base::WeakPtr<WebContents> old_contents_ptr;
+    if (browser) {
+      browser_ptr = browser->AsWeakPtr();
       old_contents = browser->tab_strip_model()->GetActiveWebContents();
+      old_contents_ptr = old_contents->GetWeakPtr();
+    }
 
     apps::AppLaunchParams params(
         extension_id, launch_container,
@@ -897,16 +903,26 @@ void AppLauncherHandler::LaunchApp(
                      : WindowOpenDisposition::NEW_FOREGROUND_TAB,
         apps::LaunchSource::kFromNewTabPage);
     params.override_url = override_url;
-    WebContents* new_contents =
-        apps::AppServiceProxyFactory::GetForProfile(profile)
-            ->BrowserAppLauncher()
-            ->LaunchAppWithParams(std::move(params));
-
-    // This will also destroy the handler, so do not perform any actions after.
-    if (new_contents != old_contents && browser &&
-        browser->tab_strip_model()->count() > 1) {
-      chrome::CloseWebContents(browser, old_contents, true);
-    }
+    apps::AppServiceProxyFactory::GetForProfile(profile)
+        ->BrowserAppLauncher()
+        ->LaunchAppWithParams(
+            std::move(params),
+            base::BindOnce(
+                [](base::WeakPtr<Browser> apps_page_browser,
+                   base::WeakPtr<WebContents> old_contents,
+                   content::WebContents* new_web_contents) {
+                  if (!apps_page_browser || !old_contents)
+                    return;
+                  if (new_web_contents != old_contents.get() &&
+                      apps_page_browser->tab_strip_model()->count() > 1) {
+                    // This will also destroy the handler, so do not perform
+                    // any actions after.
+                    chrome::CloseWebContents(apps_page_browser.get(),
+                                             old_contents.get(),
+                                             /*add_to_history=*/true);
+                  }
+                },
+                browser_ptr, old_contents_ptr));
   }
 }
 
@@ -916,19 +932,19 @@ void AppLauncherHandler::HandleSetLaunchType(const base::Value::List& args) {
   extensions::LaunchType launch_type =
       static_cast<extensions::LaunchType>(static_cast<int>(launch_type_double));
 
-  if (web_app_provider_->registrar().IsInstalled(app_id)) {
+  if (web_app_provider_->registrar_unsafe().IsInstalled(app_id)) {
     // Don't update the page; it already knows about the launch type change.
     base::AutoReset<bool> auto_reset(&ignore_changes_, true);
-    web_app::UserDisplayMode user_display_mode =
-        web_app::UserDisplayMode::kBrowser;
+    web_app::mojom::UserDisplayMode user_display_mode =
+        web_app::mojom::UserDisplayMode::kBrowser;
     switch (launch_type) {
       case extensions::LAUNCH_TYPE_FULLSCREEN:
       case extensions::LAUNCH_TYPE_WINDOW:
-        user_display_mode = web_app::UserDisplayMode::kStandalone;
+        user_display_mode = web_app::mojom::UserDisplayMode::kStandalone;
         break;
       case extensions::LAUNCH_TYPE_PINNED:
       case extensions::LAUNCH_TYPE_REGULAR:
-        user_display_mode = web_app::UserDisplayMode::kBrowser;
+        user_display_mode = web_app::mojom::UserDisplayMode::kBrowser;
         break;
       case extensions::LAUNCH_TYPE_INVALID:
       case extensions::NUM_LAUNCH_TYPES:
@@ -936,7 +952,7 @@ void AppLauncherHandler::HandleSetLaunchType(const base::Value::List& args) {
         break;
     }
 
-    web_app_provider_->sync_bridge().SetAppUserDisplayMode(
+    web_app_provider_->sync_bridge_unsafe().SetAppUserDisplayMode(
         app_id, user_display_mode, /*is_user_action=*/true);
     return;
   }
@@ -958,11 +974,11 @@ void AppLauncherHandler::HandleSetLaunchType(const base::Value::List& args) {
 void AppLauncherHandler::HandleUninstallApp(const base::Value::List& args) {
   const std::string& extension_id = args[0].GetString();
 
-  if (web_app_provider_->registrar().IsInstalled(extension_id) &&
+  if (web_app_provider_->registrar_unsafe().IsInstalled(extension_id) &&
       !IsYoutubeExtension(extension_id)) {
     if (!extension_id_prompting_.empty())
       return;  // Only one prompt at a time.
-    if (!web_app_provider_->install_finalizer().CanUserUninstallWebApp(
+    if (!web_app_provider_->registrar_unsafe().CanUserUninstallWebApp(
             extension_id)) {
       LOG(ERROR) << "Attempt to uninstall a webapp that is non-usermanagable "
                  << "was made. App id : " << extension_id;
@@ -984,27 +1000,23 @@ void AppLauncherHandler::HandleUninstallApp(const base::Value::List& args) {
           weak_ptr_factory_.GetWeakPtr());
 
       base::AutoReset<bool> auto_reset(&ignore_changes_, true);
-      web_app_provider_->install_finalizer().UninstallWebApp(
+      web_app_provider_->scheduler().UninstallWebApp(
           extension_id_prompting_, webapps::WebappUninstallSource::kAppsPage,
           std::move(uninstall_success_callback));
     } else {
       auto uninstall_success_callback = base::BindOnce(
           [](base::WeakPtr<AppLauncherHandler> app_launcher_handler,
-             bool success) {
+             webapps::UninstallResultCode code) {
             if (app_launcher_handler) {
               app_launcher_handler->CleanupAfterUninstall();
             }
           },
           weak_ptr_factory_.GetWeakPtr());
 
-      Browser* browser =
-          chrome::FindBrowserWithWebContents(web_ui()->GetWebContents());
-      web_app::WebAppUiManagerImpl::Get(web_app_provider_)
-          ->dialog_manager()
-          .UninstallWebApp(extension_id_prompting_,
-                           webapps::WebappUninstallSource::kAppsPage,
-                           browser->window(),
-                           std::move(uninstall_success_callback));
+      Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
+      web_app_provider_->ui_manager().PresentUserUninstallDialog(
+          extension_id_prompting_, webapps::WebappUninstallSource::kAppsPage,
+          browser->window(), std::move(uninstall_success_callback));
     }
     return;
   }
@@ -1046,10 +1058,9 @@ void AppLauncherHandler::HandleCreateAppShortcut(
     base::OnceClosure done,
     const base::Value::List& args) {
   const std::string& app_id = args[0].GetString();
-  if (web_app_provider_->registrar().IsInstalled(app_id) &&
+  if (web_app_provider_->registrar_unsafe().IsInstalled(app_id) &&
       !IsYoutubeExtension(app_id)) {
-    Browser* browser =
-        chrome::FindBrowserWithWebContents(web_ui()->GetWebContents());
+    Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
     chrome::ShowCreateChromeAppShortcutsDialog(
         browser->window()->GetNativeWindow(), browser->profile(), app_id,
         base::BindOnce(
@@ -1070,42 +1081,29 @@ void AppLauncherHandler::HandleCreateAppShortcut(
   if (!extension)
     return;
 
-  Browser* browser =
-      chrome::FindBrowserWithWebContents(web_ui()->GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
   chrome::ShowCreateChromeAppShortcutsDialog(
       browser->window()->GetNativeWindow(), browser->profile(), extension,
-      base::BindOnce(
-          [](base::OnceClosure done, bool success) {
-            base::UmaHistogramBoolean(
-                "Apps.AppInfoDialog.CreateExtensionShortcutSuccess", success);
-            std::move(done).Run();
-          },
-          std::move(done)));
+      base::IgnoreArgs<bool>(std::move(done)));
 }
 
 void AppLauncherHandler::HandleInstallAppLocally(
     const base::Value::List& args) {
   const std::string& app_id = args[0].GetString();
 
-  if (!web_app_provider_->registrar().IsInstalled(app_id))
-    return;
-
-  InstallOsHooks(app_id);
-
-  web_app_provider_->sync_bridge().SetAppIsLocallyInstalled(app_id, true);
-  web_app_provider_->sync_bridge().SetAppInstallTime(app_id, base::Time::Now());
+  web_app_provider_->scheduler().InstallAppLocally(app_id, base::DoNothing());
 }
 
 void AppLauncherHandler::HandleShowAppInfo(const base::Value::List& args) {
   const std::string& extension_id = args[0].GetString();
 
-  if (web_app_provider_->registrar().IsInstalled(extension_id) &&
+  if (web_app_provider_->registrar_unsafe().IsInstalled(extension_id) &&
       !IsYoutubeExtension(extension_id)) {
     // This assumes the AppLauncherHandler is only used by chrome://apps page.
     // It needs to be updated if it's also used by other surfaces.
     chrome::ShowWebAppSettings(
-        chrome::FindBrowserWithWebContents(web_ui()->GetWebContents()),
-        extension_id, web_app::AppSettingsPageEntryPoint::kChromeAppsPage);
+        chrome::FindBrowserWithTab(web_ui()->GetWebContents()), extension_id,
+        web_app::AppSettingsPageEntryPoint::kChromeAppsPage);
     return;
   }
 
@@ -1169,12 +1167,12 @@ void AppLauncherHandler::HandleSaveAppPageName(const base::Value::List& args) {
 
   base::AutoReset<bool> auto_reset(&ignore_changes_, true);
   PrefService* prefs = Profile::FromWebUI(web_ui())->GetPrefs();
-  ListPrefUpdate update(prefs, prefs::kNtpAppPageNames);
-  base::Value* list = update.Get();
-  if (page_index < list->GetListDeprecated().size()) {
-    list->GetListDeprecated()[page_index] = base::Value(name);
+  ScopedListPrefUpdate update(prefs, prefs::kNtpAppPageNames);
+  base::Value::List& list = update.Get();
+  if (page_index < list.size()) {
+    list[page_index] = base::Value(name);
   } else {
-    list->Append(name);
+    list.Append(name);
   }
 }
 
@@ -1243,11 +1241,8 @@ void AppLauncherHandler::HandleRunOnOsLogin(const base::Value::List& args) {
     return;
   }
 
-  web_app_provider_->command_manager().ScheduleCommand(
-      web_app::RunOnOsLoginCommand::CreateForSetLoginMode(
-          &web_app_provider_->registrar(),
-          &web_app_provider_->os_integration_manager(),
-          &web_app_provider_->sync_bridge(), app_id, mode, base::DoNothing()));
+  web_app_provider_->scheduler().SetRunOnOsLoginMode(app_id, mode,
+                                                     base::DoNothing());
 }
 
 void AppLauncherHandler::HandleLaunchDeprecatedAppDialog(
@@ -1260,7 +1255,7 @@ void AppLauncherHandler::HandleLaunchDeprecatedAppDialog(
 void AppLauncherHandler::OnFaviconForAppInstallFromLink(
     std::unique_ptr<AppInstallInfo> install_info,
     const favicon_base::FaviconImageResult& image_result) {
-  auto web_app = std::make_unique<WebAppInstallInfo>();
+  auto web_app = std::make_unique<web_app::WebAppInstallInfo>();
   web_app->title = install_info->title;
   web_app->start_url = install_info->app_url;
 
@@ -1273,12 +1268,8 @@ void AppLauncherHandler::OnFaviconForAppInstallFromLink(
 
   web_app::OnceInstallCallback install_complete_callback = base::BindOnce(
       [](base::WeakPtr<AppLauncherHandler> app_launcher_handler,
-         const web_app::AppId& app_id,
+         const webapps::AppId& app_id,
          webapps::InstallResultCode install_result) {
-        // Note: this installation path only happens when the user drags a
-        // link to chrome://apps, hence the specific metric name.
-        base::UmaHistogramEnumeration("Apps.Launcher.InstallAppFromLinkResult",
-                                      install_result);
         if (!app_launcher_handler)
           return;
         if (install_result != webapps::InstallResultCode::kSuccessNewInstall) {
@@ -1293,19 +1284,18 @@ void AppLauncherHandler::OnFaviconForAppInstallFromLink(
   install_params.add_to_quick_launch_bar = false;
   install_params.add_to_applications_menu = true;
 
-  web_app_provider_->command_manager().ScheduleCommand(
-      std::make_unique<web_app::InstallFromInfoCommand>(
-          std::move(web_app), &web_app_provider_->install_finalizer(),
-          /*overwrite_existing_manifest_fields=*/false,
-          webapps::WebappInstallSource::SYNC,
-          std::move(install_complete_callback), install_params));
+  web_app_provider_->scheduler().InstallFromInfoWithParams(
+      std::move(web_app),
+      /*overwrite_existing_manifest_fields=*/false,
+      webapps::WebappInstallSource::SYNC, std::move(install_complete_callback),
+      install_params);
 }
 
 void AppLauncherHandler::OnExtensionPreferenceChanged() {
   base::Value::Dict dictionary;
   FillAppDictionary(&dictionary);
   web_ui()->CallJavascriptFunctionUnsafe("ntp.appsPrefChangeCallback",
-                                         base::Value(std::move(dictionary)));
+                                         std::move(dictionary));
 }
 
 void AppLauncherHandler::CleanupAfterUninstall() {
@@ -1316,7 +1306,8 @@ void AppLauncherHandler::PromptToEnableApp(const std::string& extension_id) {
   if (!extension_id_prompting_.empty())
     return;  // Only one prompt at a time.
 
-  if (web_app_provider_->registrar().IsInstalled(extension_id_prompting_)) {
+  if (web_app_provider_->registrar_unsafe().IsInstalled(
+          extension_id_prompting_)) {
     NOTIMPLEMENTED();
     return;
   }
@@ -1325,18 +1316,6 @@ void AppLauncherHandler::PromptToEnableApp(const std::string& extension_id) {
   extension_enable_flow_ = std::make_unique<ExtensionEnableFlow>(
       Profile::FromWebUI(web_ui()), extension_id, this);
   extension_enable_flow_->StartForWebContents(web_ui()->GetWebContents());
-}
-
-void AppLauncherHandler::OnOsHooksInstalled(
-    const web_app::AppId& app_id,
-    const web_app::OsHooksErrors os_hooks_errors) {
-  // TODO(dmurph): Once installation takes the OsHooksErrors bitfield, then
-  // use that to compare with the results, and record if they all were
-  // successful, instead of just shortcuts.
-  bool error = os_hooks_errors[web_app::OsHookType::kShortcuts];
-  base::UmaHistogramBoolean("Apps.Launcher.InstallLocallyShortcutsCreated",
-                            !error);
-  web_app_provider_->install_manager().NotifyWebAppInstalledWithOsHooks(app_id);
 }
 
 void AppLauncherHandler::OnExtensionUninstallDialogClosed(
@@ -1362,7 +1341,8 @@ void AppLauncherHandler::ExtensionEnableFlowFinished() {
 void AppLauncherHandler::ExtensionEnableFlowAborted(bool user_initiated) {
   DCHECK_EQ(extension_id_prompting_, extension_enable_flow_->extension_id());
 
-  if (web_app_provider_->registrar().IsInstalled(extension_id_prompting_)) {
+  if (web_app_provider_->registrar_unsafe().IsInstalled(
+          extension_id_prompting_)) {
     NOTIMPLEMENTED();
     return;
   }
@@ -1373,8 +1353,7 @@ void AppLauncherHandler::ExtensionEnableFlowAborted(bool user_initiated) {
 
 extensions::ExtensionUninstallDialog*
 AppLauncherHandler::CreateExtensionUninstallDialog() {
-  Browser* browser =
-      chrome::FindBrowserWithWebContents(web_ui()->GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
   extension_uninstall_dialog_ = extensions::ExtensionUninstallDialog::Create(
       extension_service_->profile(), browser->window()->GetNativeWindow(),
       this);
@@ -1394,8 +1373,8 @@ void AppLauncherHandler::ExtensionRemoved(const Extension* extension,
   base::Value::Dict app_info(GetExtensionInfo(extension));
 
   web_ui()->CallJavascriptFunctionUnsafe(
-      "ntp.appRemoved", base::Value(std::move(app_info)),
-      base::Value(is_uninstall), base::Value(!extension_id_prompting_.empty()));
+      "ntp.appRemoved", std::move(app_info), base::Value(is_uninstall),
+      base::Value(!extension_id_prompting_.empty()));
 }
 
 bool AppLauncherHandler::ShouldShow(const Extension* extension) {
@@ -1404,38 +1383,4 @@ bool AppLauncherHandler::ShouldShow(const Extension* extension) {
 
   Profile* profile = Profile::FromWebUI(web_ui());
   return extensions::ui_util::ShouldDisplayInNewTabPage(extension, profile);
-}
-
-void AppLauncherHandler::InstallOsHooks(const web_app::AppId& app_id) {
-  web_app::InstallOsHooksOptions options;
-  options.add_to_desktop = true;
-  options.add_to_quick_launch_bar = false;
-  options.os_hooks[web_app::OsHookType::kShortcuts] = true;
-  options.os_hooks[web_app::OsHookType::kShortcutsMenu] = true;
-  options.os_hooks[web_app::OsHookType::kFileHandlers] = true;
-  options.os_hooks[web_app::OsHookType::kProtocolHandlers] = true;
-  options.os_hooks[web_app::OsHookType::kRunOnOsLogin] =
-      web_app_provider_->registrar().GetAppRunOnOsLoginMode(app_id).value ==
-      web_app::RunOnOsLoginMode::kWindowed;
-
-  // Installed WebApp here is user uninstallable app, but it needs to
-  // check user uninstall-ability if there are apps with different source types.
-  // WebApp::CanUserUninstallApp will handles it.
-  const web_app::WebApp* web_app =
-      web_app_provider_->registrar().GetAppById(app_id);
-  options.os_hooks[web_app::OsHookType::kUninstallationViaOsSettings] =
-      web_app->CanUserUninstallWebApp();
-
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || \
-    (BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS_LACROS))
-  options.os_hooks[web_app::OsHookType::kUrlHandlers] = true;
-#else
-  options.os_hooks[web_app::OsHookType::kUrlHandlers] = false;
-#endif
-
-  web_app_provider_->os_integration_manager().InstallOsHooks(
-      app_id,
-      base::BindOnce(&AppLauncherHandler::OnOsHooksInstalled,
-                     weak_ptr_factory_.GetWeakPtr(), app_id),
-      /*web_app_info=*/nullptr, std::move(options));
 }

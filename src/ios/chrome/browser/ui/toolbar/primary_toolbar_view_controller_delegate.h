@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,9 @@
 - (void)viewControllerTraitCollectionDidChange:
     (UITraitCollection*)previousTraitCollection;
 
-// Exits fullscreen.
-- (void)exitFullscreen;
+// Called when the user requires to close the toolbar (typically with the ESC/⎋
+// keyboard shortcut).
+- (void)close;
 
 @end
 

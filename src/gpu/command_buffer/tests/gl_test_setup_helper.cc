@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "gpu/command_buffer/tests/gl_test_utils.h"
 #include "ui/gl/init/gl_factory.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -33,7 +33,7 @@ void GLTestSetupHelper::OnTestStart(const testing::TestInfo& test_info) {
   task_environment_ = std::make_unique<base::test::TaskEnvironment>(
       base::test::TaskEnvironment::MainThreadType::UI);
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   // Make Ozone run in single-process mode.
   ui::OzonePlatform::InitParams params;
   params.single_process = true;
@@ -42,7 +42,7 @@ void GLTestSetupHelper::OnTestStart(const testing::TestInfo& test_info) {
   // initialized the UI thread.
   ui::OzonePlatform::InitializeForUI(params);
   ui::OzonePlatform::InitializeForGPU(params);
-#endif  // defined(USE_OZONE)
+#endif  // BUILDFLAG(IS_OZONE)
 
   display_ = gpu::GLTestHelper::InitializeGLDefault();
   ::gles2::Initialize();
@@ -55,6 +55,7 @@ void GLTestSetupHelper::OnTestEnd(const testing::TestInfo& test_info) {
   viz::TestGpuServiceHolder::ResetInstance();
   gl::init::ShutdownGL(display_, /*due_to_fallback=*/false);
   task_environment_ = nullptr;
+  ::gles2::Terminate();
 }
 
 }  // namespace gpu

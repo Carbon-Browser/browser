@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/apps/app_info_dialog/app_info_footer_panel.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
@@ -105,8 +105,8 @@ void AppInfoFooterPanel::UpdatePinButtons(bool focus_visible_button) {
     unpin_from_shelf_button_->SetVisible(was_pinned);
 
     if (focus_visible_button) {
-      views::View* button_to_focus =
-          was_pinned ? unpin_from_shelf_button_ : pin_to_shelf_button_;
+      views::View* button_to_focus = was_pinned ? unpin_from_shelf_button_.get()
+                                                : pin_to_shelf_button_.get();
       button_to_focus->RequestFocus();
     }
   }

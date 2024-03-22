@@ -14,32 +14,27 @@ limitations under the License.
 ==============================================================================*/
 
 // Demostration the usage of UniversalSentenceEncoderQA.
-#include "absl/flags/flag.h"         // from @com_google_absl
-#include "absl/flags/parse.h"        // from @com_google_absl
-#include "absl/status/status.h"      // from @com_google_absl
+#include "absl/flags/flag.h"  // from @com_google_absl
+#include "absl/flags/parse.h"  // from @com_google_absl
+#include "absl/status/status.h"  // from @com_google_absl
 #include "absl/strings/str_split.h"  // from @com_google_absl
 #include "tensorflow_lite_support/cc/task/text/universal_sentence_encoder_qa.h"
-#include "tensorflow_lite_support/examples/task/text/desktop/universal_sentence_encoder_qa_op_resolver.h"
+#include "tensorflow_lite_support/cc/task/text/utils/text_op_resolver.h"
 
 namespace {
-using tflite::task::text::CreateQACustomOpResolver;
+using tflite::task::text::CreateTextOpResolver;
 using tflite::task::text::RetrievalInput;
 using tflite::task::text::RetrievalOptions;
 using tflite::task::text::RetrievalOutput;
 using tflite::task::text::UniversalSentenceEncoderQA;
 }  // namespace
 
-ABSL_FLAG(std::string,
-          model_path,
-          "",
+ABSL_FLAG(std::string, model_path, "",
           "Absolute path to the '.tflite' UniversalSentenceEncoderQA model.");
-ABSL_FLAG(std::string,
-          question,
-          "How are you feeling today?",
+ABSL_FLAG(std::string, question, "How are you feeling today?",
           "Question to ask.");
 ABSL_FLAG(
-    std::string,
-    answers,
+    std::string, answers,
     "I'm not feeling very well.:Paris is the capital of France.:He looks good.",
     "Candidate answers seperated by `:`.");
 
@@ -63,7 +58,7 @@ int main(int argc, char** argv) {
   options.mutable_base_options()->mutable_model_file()->set_file_name(
       absl::GetFlag(FLAGS_model_path));
   auto status = UniversalSentenceEncoderQA::CreateFromOption(
-      options, CreateQACustomOpResolver());
+      options, CreateTextOpResolver());
   if (!status.ok()) {
     std::cerr << "Retrieve failed: " << status.status().message() << std::endl;
     return 1;

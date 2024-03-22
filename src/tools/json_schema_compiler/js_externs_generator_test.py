@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,7 +13,7 @@ import unittest
 
 # The contents of a fake idl file.
 fake_idl = """
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,6 +78,7 @@ namespace fakeApi {
     // |callback| : The callback which will most assuredly in all cases be
     // called; that is, of course, iff such a callback was provided and is
     // not at all null.
+    [doesNotSupportPromises="Multi-parameter callback"]
     static void bazGreek(optional BazGreekCallback callback);
 
     [deprecated="Use a new method."] static DOMString returnString();
@@ -115,7 +116,7 @@ namespace fakeApi {
 """
 
 # The output we expect from our fake idl file.
-fake_idl_expected = """// Copyright %s The Chromium Authors. All rights reserved.
+fake_idl_expected = """// Copyright %s The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -126,7 +127,10 @@ fake_idl_expected = """// Copyright %s The Chromium Authors. All rights reserved
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: fakeApi */
+/**
+ * @fileoverview Externs generated from namespace: fakeApi
+ * @externs
+ */
 
 /** @const */
 chrome.fakeApi = {};
@@ -290,7 +294,7 @@ chrome.fakeApi.onTrapDetected;""" % datetime.now().year
 # A subset of fake_idl. The key difference is that the namespace is private,
 # which means that @see links shouldn't be generated.
 fake_private_idl = """
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -314,7 +318,7 @@ namespace fakeApiPrivate {
 };
 """
 
-fake_private_idl_expected = """// Copyright %s The Chromium Authors. All rights reserved.
+fake_private_idl_expected = """// Copyright %s The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -325,7 +329,10 @@ fake_private_idl_expected = """// Copyright %s The Chromium Authors. All rights 
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: fakeApiPrivate */
+/**
+ * @fileoverview Externs generated from namespace: fakeApiPrivate
+ * @externs
+ */
 
 /** @const */
 chrome.fakeApiPrivate = {};
@@ -353,7 +360,7 @@ chrome.fakeApiPrivate.Bar;
  */
 chrome.fakeApiPrivate.onTrapDetected;""" % datetime.now().year
 
-fake_json = """// Copyright 2014 The Chromium Authors. All rights reserved.
+fake_json = """// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -462,7 +469,7 @@ fake_json = """// Copyright 2014 The Chromium Authors. All rights reserved.
   }
 ]"""
 
-fake_json_expected = """// Copyright %s The Chromium Authors. All rights reserved.
+fake_json_expected = """// Copyright %s The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -473,7 +480,10 @@ fake_json_expected = """// Copyright %s The Chromium Authors. All rights reserve
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: fakeJson */
+/**
+ * @fileoverview Externs generated from namespace: fakeJson
+ * @externs
+ */
 
 /** @const */
 chrome.fakeJson = {};

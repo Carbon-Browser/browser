@@ -1,15 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_WEB_FONT_SIZE_FONT_SIZE_TAB_HELPER_H_
 #define IOS_CHROME_BROWSER_WEB_FONT_SIZE_FONT_SIZE_TAB_HELPER_H_
 
+#include <optional>
 #include <string>
 
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #include "ios/web/public/web_state_observer.h"
 #import "ios/web/public/web_state_user_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefService;
 
@@ -28,10 +29,11 @@ enum Zoom {
 };
 
 // Adjusts font size of web page by mapping
-// |UIApplication.sharedApplication.preferredContentSizeCategory| to a scaling
+// `UIApplication.sharedApplication.preferredContentSizeCategory` to a scaling
 // percentage and setting it to "-webkit-font-size-adjust" style on <body> when
 // the page is successfully loaded or system font size changes.
-class FontSizeTabHelper : public web::WebStateObserver,
+class FontSizeTabHelper : public web::WebFramesManager::Observer,
+                          public web::WebStateObserver,
                           public web::WebStateUserData<FontSizeTabHelper> {
  public:
   FontSizeTabHelper(const FontSizeTabHelper&) = delete;
@@ -63,7 +65,7 @@ class FontSizeTabHelper : public web::WebStateObserver,
   // Text zoom is currently only supported on HTML pages.
   bool CurrentPageSupportsTextZoom() const;
 
-  // Remove any stored zoom levels from the provided |PrefService|.
+  // Remove any stored zoom levels from `pref_service`.
   static void ClearUserZoomPrefs(PrefService* pref_service);
 
   static void RegisterBrowserStatePrefs(
@@ -91,7 +93,7 @@ class FontSizeTabHelper : public web::WebStateObserver,
 
   // Returns the new multiplier after zooming in the given direction. Returns
   // nullopt if it is impossible to zoom in the given direction;
-  absl::optional<double> NewMultiplierAfterZoom(Zoom zoom) const;
+  std::optional<double> NewMultiplierAfterZoom(Zoom zoom) const;
   // Returns the current user zoom multiplier (i.e. not counting any additional
   // zoom due to the system accessibility settings).
   double GetCurrentUserZoomMultiplier() const;
@@ -108,19 +110,19 @@ class FontSizeTabHelper : public web::WebStateObserver,
   void WebStateDestroyed(web::WebState* web_state) override;
   void DidFinishNavigation(web::WebState* web_state,
                            web::NavigationContext* context) override;
-  void WebFrameDidBecomeAvailable(web::WebState* web_state,
-                                  web::WebFrame* web_frame) override;
 
-  // Observer id returned by registering at NSNotificationCenter.
-  id content_size_did_change_observer_ = nil;
+  // web::WebFramesManager::Observer
+  void WebFrameBecameAvailable(web::WebFramesManager* web_frames_manager,
+                               web::WebFrame* web_frame) override;
 
   // WebState this tab helper is attached to.
   web::WebState* web_state_ = nullptr;
-
   // Whether the Text Zoom UI is active
   bool text_zoom_ui_active_ = false;
 
   WEB_STATE_USER_DATA_KEY_DECL();
+
+  base::WeakPtrFactory<FontSizeTabHelper> weak_factory_;
 };
 
 #endif  // IOS_CHROME_BROWSER_WEB_FONT_SIZE_FONT_SIZE_TAB_HELPER_H_

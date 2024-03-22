@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_HUD_DISPLAY_HUD_HEADER_VIEW_H_
 #define ASH_HUD_DISPLAY_HUD_HEADER_VIEW_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -28,7 +29,7 @@ class HUDHeaderView : public views::View {
   HUDTabStrip* tab_strip() { return tab_strip_; }
 
  private:
-  HUDTabStrip* tab_strip_ = nullptr;  // not owned
+  raw_ptr<HUDTabStrip, ExperimentalAsh> tab_strip_ = nullptr;  // not owned
 };
 
 }  // namespace hud_display

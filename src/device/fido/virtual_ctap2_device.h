@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 #include "device/fido/ctap_make_credential_request.h"
 #include "device/fido/fido_constants.h"
 #include "device/fido/fido_types.h"
+#include "device/fido/large_blob.h"
 #include "device/fido/virtual_fido_device.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -70,7 +71,15 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualCtap2Device
     uint8_t bio_enrollment_samples_required = 4;
     bool cred_protect_support = false;
     bool hmac_secret_support = false;
+    bool prf_support = false;
     bool large_blob_support = false;
+    // large_blob_extension_support indicates support for the single-extension
+    // form of largeBlob. This form is implemented by hybrid authenticators and
+    // is mutually exclusive with `large_blob_support`. If this value is
+    // present then the extension will be implement, but if it's present with
+    // the value false then the authenticator will report that makeCredential
+    // didn't enable a large blob.
+    absl::optional<bool> large_blob_extension_support;
     // Support for setting a min PIN length and forcing pin change.
     bool min_pin_length_support = false;
     // min_pin_length_extension_support, if true, enables support for the
@@ -78,17 +87,24 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualCtap2Device
     // https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-minpinlength-extension
     bool min_pin_length_extension_support = false;
     bool always_uv = false;
+    // always_uv_for_up_false applies the alwaysUv logic for getAssertion, even
+    // when up=false. This does't seem correct, per CTAP 2.2, but some
+    // authenticators do it.
+    bool always_uv_for_up_false = false;
     // The space available to store a large blob. In real authenticators this
     // may change depending on the number of resident credentials. We treat this
     // as a fixed size area for the large blob.
-    size_t available_large_blob_storage = 1024;
+    size_t available_large_blob_storage = kMinLargeBlobSize;
     bool cred_blob_support = false;
+    // none_attestation causes a "none" attestation statement to be returned
+    // from makeCredential calls.
+    bool none_attestation = false;
     // include_transports_in_attestation_certificate controls whether a
     // transports extension will be included in the attestation certificate
     // returned from a makeCredential operation.
     bool include_transports_in_attestation_certificate = true;
     // transports_in_get_info, if not empty, contains the transports that will
-    // be reported via getInfo.
+    // be reported via getInfo. Otherwise no transports will be reported.
     std::vector<FidoTransportProtocol> transports_in_get_info;
 
     IncludeCredential include_credential_in_assertion_response =
@@ -162,6 +178,11 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualCtap2Device
     // reject_all_extensions causes the authenticator to return a CTAP error if
     // a makeCredential or getAssertion request carries any extension.
     bool reject_all_extensions = false;
+
+    // Some authenticators will return CTAP2_ERR_NO_CREDENTIALS when enumerating
+    // RPs if there are no credentials present. Setting this to `true` emulates
+    // that behaviour.
+    bool return_err_no_credentials_on_empty_rp_enumeration = false;
 
     // advertised_algorithms is the contents of the algorithms field in the
     // getInfo. If empty then no such field is reported. The virtual

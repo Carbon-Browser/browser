@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,6 +50,17 @@ export class LibLouis {
     this.loadOrReload_(opt_loadCallback);
   }
 
+  /**
+   * Convenience method to wait for the constructor to resolve its callback.
+   * @param {string} wasmPath Path to .wasm file for the module.
+   * @param {string=} opt_tablesDir Path to tables directory.
+   * @return {!Promise<LibLouis>}
+   */
+  static async create(wasmPath, opt_tablesDir) {
+    return new Promise(
+        resolve => new LibLouis(wasmPath, opt_tablesDir, resolve));
+  }
+
   isLoaded() {
     return this.isLoaded_;
   }
@@ -59,21 +70,24 @@ export class LibLouis {
    * This object must be attached to a document when requesting a translator.
    * @param {string} tableNames Comma separated list of braille table names for
    *     liblouis.
-   * @param {function(LibLouis.Translator)} callback
-   *     Callback which will receive the translator, or {@code null} on failure.
+   * @return {!Promise<LibLouis.Translator>} the translator, or {@code null}
+   *     on failure.
    */
-  getTranslator(tableNames, callback) {
-    if (!this.isLoaded_) {
-      // TODO: save last callback.
-      return;
-    }
-    this.rpc_('CheckTable', {'table_names': tableNames}, reply => {
-      if (reply['success']) {
-        const translator = new LibLouis.Translator(this, tableNames);
-        callback(translator);
-      } else {
-        callback(null /* translator */);
+  async getTranslator(tableNames) {
+    return new Promise(resolve => {
+      if (!this.isLoaded_) {
+        // TODO: save last callback.
+        resolve(null /* translator */);
+        return;
       }
+      this.rpc_('CheckTable', {'table_names': tableNames}, reply => {
+        if (reply['success']) {
+          const translator = new LibLouis.Translator(this, tableNames);
+          resolve(translator);
+        } else {
+          resolve(null /* translator */);
+        }
+      });
     });
   }
 
@@ -95,7 +109,7 @@ export class LibLouis {
     message['command'] = command;
     const json = JSON.stringify(message);
     if (LibLouis.DEBUG) {
-      window.console.debug('RPC -> ' + json);
+      globalThis.console.debug('RPC -> ' + json);
     }
     this.worker_.postMessage(json);
     this.pendingRpcCallbacks_[messageId] = callback;
@@ -113,7 +127,7 @@ export class LibLouis {
    * @private
    */
   onInstanceError_(e) {
-    window.console.error('Error in liblouis ' + e.message);
+    globalThis.console.error('Error in liblouis ' + e.message);
     this.loadOrReload_();
   }
 
@@ -124,20 +138,20 @@ export class LibLouis {
    */
   onInstanceMessage_(e) {
     if (LibLouis.DEBUG) {
-      window.console.debug('RPC <- ' + e.data);
+      globalThis.console.debug('RPC <- ' + e.data);
     }
     const message = /** @type {!Object} */ (JSON.parse(e.data));
     const messageId = message['in_reply_to'];
-    if (!goog.isDef(messageId)) {
-      window.console.warn(
+    if (messageId === undefined) {
+      globalThis.console.warn(
           'liblouis Web Assembly module sent message with no ID', message);
       return;
     }
-    if (goog.isDef(message['error'])) {
-      window.console.error('liblouis Web Assembly error', message['error']);
+    if (message['error'] !== undefined) {
+      globalThis.console.error('liblouis Web Assembly error', message['error']);
     }
     const callback = this.pendingRpcCallbacks_[messageId];
-    if (goog.isDef(callback)) {
+    if (callback !== undefined) {
       delete this.pendingRpcCallbacks_[messageId];
       callback(message);
     }
@@ -234,10 +248,10 @@ LibLouis.Translator = class {
       let brailleToText = null;
       if (reply['success'] && goog.isString(reply['cells'])) {
         cells = LibLouis.Translator.decodeHexString_(reply['cells']);
-        if (goog.isDef(reply['text_to_braille'])) {
+        if (reply['text_to_braille'] !== undefined) {
           textToBraille = reply['text_to_braille'];
         }
-        if (goog.isDef(reply['braille_to_text'])) {
+        if (reply['braille_to_text'] !== undefined) {
           brailleToText = reply['braille_to_text'];
         }
       } else if (text.length > 0) {

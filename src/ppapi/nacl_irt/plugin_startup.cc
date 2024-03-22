@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ppapi/nacl_irt/plugin_startup.h"
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/file_descriptor_posix.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/synchronization/waitable_event.h"

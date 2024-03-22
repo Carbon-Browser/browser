@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "chrome/browser/safe_browsing/services_delegate.h"
+#include "components/safe_browsing/core/browser/db/hash_prefix_map.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 
 namespace safe_browsing {
@@ -45,10 +46,10 @@ class ServicesDelegateDesktop : public ServicesDelegate {
   void AddDownloadManager(content::DownloadManager* download_manager) override;
   DownloadProtectionService* GetDownloadService() override;
 
-  void StartOnIOThread(
+  void StartOnSBThread(
       scoped_refptr<network::SharedURLLoaderFactory> browser_url_loader_factory,
       const V4ProtocolConfig& v4_config) override;
-  void StopOnIOThread(bool shutdown) override;
+  void StopOnSBThread(bool shutdown) override;
 
   void OnProfileWillBeDestroyed(Profile* profile) override;
 
@@ -63,6 +64,8 @@ class ServicesDelegateDesktop : public ServicesDelegate {
   scoped_refptr<SafeBrowsingDatabaseManager> CreateDatabaseManager();
   DownloadProtectionService* CreateDownloadProtectionService();
   IncidentReportingService* CreateIncidentReportingService();
+
+  static void UpdateSyntheticFieldTrial(HashPrefixMap::MigrateResult result);
 
   std::unique_ptr<DownloadProtectionService> download_service_;
   std::unique_ptr<IncidentReportingService> incident_service_;

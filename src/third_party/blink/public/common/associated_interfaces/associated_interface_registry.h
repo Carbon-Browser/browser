@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <map>
 #include <string>
+#include <type_traits>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
@@ -58,7 +59,8 @@ class BLINK_COMMON_EXPORT AssociatedInterfaceRegistry {
       base::RepeatingCallback<void(mojo::PendingAssociatedReceiver<Interface>)>;
 
   template <typename Interface>
-  void AddInterface(const ReceiverBinder<Interface>& binder) {
+  void AddInterface(
+      const std::common_type_t<ReceiverBinder<Interface>&> binder) {
     AddInterface(
         Interface::Name_,
         base::BindRepeating(&BindInterfaceReceiver<Interface>, binder));

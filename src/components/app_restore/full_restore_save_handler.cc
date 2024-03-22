@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/app_restore/full_restore_save_handler.h"
 
 #include "ash/constants/app_types.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -148,12 +148,25 @@ void FullRestoreSaveHandler::OnWindowInitialized(aura::Window* window) {
             app_restore::GetAppIdFromAppName(*browser_app_name);
         auto it =
             profile_path_to_app_registry_cache_.find(active_profile_path_);
-        if (it != profile_path_to_app_registry_cache_.end() && it->second &&
-            it->second->GetAppType(app_id) == apps::AppType::kUnknown) {
-          // If the app doesn't exist in AppRegistryCache, this window is an
-          // extension window, and we don't need to save the launch info for the
-          // extension.
-          return;
+        if (it != profile_path_to_app_registry_cache_.end() && it->second) {
+          if (it->second->GetAppType(app_id) == apps::AppType::kUnknown) {
+            // If the app doesn't exist in AppRegistryCache, this window is an
+            // extension window, and we don't need to save the launch info for
+            // the extension.
+            return;
+          }
+          if (it->second->GetAppType(app_id) == apps::AppType::kWeb ||
+              it->second->GetAppType(app_id) == apps::AppType::kSystemWeb) {
+            // Use the correct app_id instead of the chrome app id for system
+            // web apps. SWAs have app type `kSystemWeb` with Lacros or `kWeb`
+            // otherwise.
+            it->second->ForOneApp(app_id, [&app_launch_info, app_id](
+                                              const apps::AppUpdate& update) {
+              if (update.InstallReason() == apps::InstallReason::kSystem) {
+                app_launch_info->app_id = app_id;
+              }
+            });
+          }
         }
       }
     }
@@ -324,6 +337,16 @@ void FullRestoreSaveHandler::SaveWindowInfo(
     return;
 
   ModifyWindowInfo(window_id, window_info);
+}
+
+void FullRestoreSaveHandler::SaveRemovingDeskGuid(
+    const base::Uuid& removing_desk_guid) {
+  profile_path_to_restore_data_[active_profile_path_].set_removing_desk_guid(
+      removing_desk_guid);
+
+  pending_save_profile_paths_.insert(active_profile_path_);
+
+  MaybeStartSaveTimer(active_profile_path_);
 }
 
 void FullRestoreSaveHandler::OnLacrosChromeAppWindowAdded(
@@ -524,6 +547,12 @@ std::string FullRestoreSaveHandler::GetAppId(aura::Window* window) {
     return iter != window_id_to_app_restore_info_.end() ? iter->second.second
                                                         : std::string();
   }
+}
+
+int FullRestoreSaveHandler::GetLacrosChromeAppWindowId(
+    aura::Window* window) const {
+  DCHECK(lacros_save_handler_);
+  return lacros_save_handler_->GetLacrosChromeAppWindowId(window);
 }
 
 std::unique_ptr<app_restore::AppLaunchInfo>

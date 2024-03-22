@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,7 +66,9 @@ class MEDIA_EXPORT MediaFoundationCdm final : public ContentDecryptionModule,
   using StoreClientTokenCB =
       base::RepeatingCallback<void(const std::vector<uint8_t>&)>;
 
-  using CdmEventCB = base::RepeatingCallback<void(CdmEvent)>;
+  // Callback to notify the CDM of an event, with an optional HRESULT associated
+  // with that event (e.g. errors).
+  using CdmEventCB = base::RepeatingCallback<void(CdmEvent, HRESULT hresult)>;
 
   // Constructs `MediaFoundationCdm`. Note that `Initialize()` must be called
   // before calling any other methods.
@@ -133,7 +135,7 @@ class MEDIA_EXPORT MediaFoundationCdm final : public ContentDecryptionModule,
   void OnHardwareContextReset();
 
   // Called when CdmEvent happens.
-  void OnCdmEvent(CdmEvent event);
+  void OnCdmEvent(CdmEvent event, HRESULT hresult);
 
   // Called when IsTypeSupported() result is available.
   void OnIsTypeSupportedResult(std::unique_ptr<KeyStatusCdmPromise> promise,

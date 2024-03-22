@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,6 @@
 
 namespace blink {
 
-class GPUColorDict;
-class GPUProgrammableStage;
 class GPUImageCopyTexture;
 class GPUImageDataLayout;
 class V8UnionGPUAutoLayoutModeOrGPUPipelineLayout;
@@ -30,21 +28,26 @@ class V8UnionGPUAutoLayoutModeOrGPUPipelineLayout;
 // These conversions are used multiple times and are declared here. Conversions
 // used only once, for example for object construction, are defined
 // individually.
-WGPUColor AsDawnColor(const Vector<double>&);
-WGPUColor AsDawnType(const GPUColorDict*);
-WGPUColor AsDawnType(const V8GPUColor* webgpu_color);
-WGPUExtent3D AsDawnType(const V8GPUExtent3D* webgpu_extent);
-WGPUOrigin3D AsDawnType(const V8GPUOrigin3D* webgpu_extent);
-WGPUImageCopyTexture AsDawnType(const GPUImageCopyTexture* webgpu_view);
 WGPUTextureFormat AsDawnType(SkColorType color_type);
 WGPUPipelineLayout AsDawnType(
     V8UnionGPUAutoLayoutModeOrGPUPipelineLayout* webgpu_layout);
 
+// Conversion for convenience types that are dict|sequence<Number> and other
+// types that recursively use them. A return value of false means that the
+// conversion failed and a TypeError was recorded in the ExceptionState.
+bool ConvertToDawn(const V8GPUColor* in, WGPUColor* out, ExceptionState&);
+bool ConvertToDawn(const V8GPUExtent3D* in,
+                   WGPUExtent3D* out,
+                   GPUDevice* device,
+                   ExceptionState&);
+bool ConvertToDawn(const V8GPUOrigin3D* in, WGPUOrigin3D* out, ExceptionState&);
+bool ConvertToDawn(const V8GPUOrigin2D* in, WGPUOrigin2D* out, ExceptionState&);
+bool ConvertToDawn(const GPUImageCopyTexture* in,
+                   WGPUImageCopyTexture* out,
+                   ExceptionState&);
+
 const char* ValidateTextureDataLayout(const GPUImageDataLayout* webgpu_layout,
                                       WGPUTextureDataLayout* layout);
-using OwnedProgrammableStageDescriptor =
-    std::tuple<WGPUProgrammableStageDescriptor, std::unique_ptr<char[]>>;
-OwnedProgrammableStageDescriptor AsDawnType(const GPUProgrammableStage*);
 
 // WebGPU objects are converted to Dawn objects by getting the opaque handle
 // which can be passed to Dawn.
@@ -77,6 +80,26 @@ std::unique_ptr<TypeOfDawnType<WebGPUType>[]> AsDawnType(
     }
   }
   return dawn_objects;
+}
+template <typename WebGPUType, typename DawnType>
+bool ConvertToDawn(const HeapVector<Member<WebGPUType>>& in,
+                   std::unique_ptr<DawnType[]>* out,
+                   ExceptionState& exception_state) {
+  wtf_size_t count = in.size();
+  // TODO(enga): Pass in temporary memory or an allocator so we don't make a
+  // separate memory allocation here.
+  *out = std::make_unique<DawnType[]>(count);
+  for (wtf_size_t i = 0; i < count; ++i) {
+    if (in[i]) {
+      if (!ConvertToDawn(in[i].Get(), &(*out)[i], exception_state)) {
+        return false;
+      }
+    } else {
+      // Construct a default object if it is null
+      (*out)[i] = {};
+    }
+  }
+  return true;
 }
 
 template <typename DawnEnum, typename WebGPUEnum>

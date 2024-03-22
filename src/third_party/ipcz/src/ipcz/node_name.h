@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "ipcz/ipcz.h"
@@ -45,6 +46,11 @@ class IPCZ_ALIGN(8) NodeName {
   bool operator<(const NodeName& rhs) const {
     return std::tie(high_, low_) < std::tie(rhs.high_, rhs.low_);
   }
+
+  // Convenient store-release and load-acquire operations for dealing with
+  // NodeNames in shared memory.
+  void StoreRelease(const NodeName& name);
+  NodeName LoadAcquire();
 
   // Support for absl::Hash.
   template <typename H>

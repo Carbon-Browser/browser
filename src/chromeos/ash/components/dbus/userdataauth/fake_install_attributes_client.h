@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,11 @@
 
 #include "chromeos/ash/components/dbus/userdataauth/install_attributes_client.h"
 
+#include <cstdint>
+
 #include "base/component_export.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -33,9 +36,6 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) FakeInstallAttributesClient
   void InstallAttributesGet(
       const ::user_data_auth::InstallAttributesGetRequest& request,
       InstallAttributesGetCallback callback) override;
-  void InstallAttributesSet(
-      const ::user_data_auth::InstallAttributesSetRequest& request,
-      InstallAttributesSetCallback callback) override;
   void InstallAttributesFinalize(
       const ::user_data_auth::InstallAttributesFinalizeRequest& request,
       InstallAttributesFinalizeCallback callback) override;
@@ -49,6 +49,9 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) FakeInstallAttributesClient
   void SetFirmwareManagementParameters(
       const ::user_data_auth::SetFirmwareManagementParametersRequest& request,
       SetFirmwareManagementParametersCallback callback) override;
+  void GetFirmwareManagementParameters(
+      const ::user_data_auth::GetFirmwareManagementParametersRequest& request,
+      GetFirmwareManagementParametersCallback callback) override;
   absl::optional<::user_data_auth::InstallAttributesGetReply>
   BlockingInstallAttributesGet(
       const ::user_data_auth::InstallAttributesGetRequest& request) override;
@@ -84,13 +87,17 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) FakeInstallAttributesClient
  private:
   // Helper that returns the protobuf reply.
   template <typename ReplyType>
-  void ReturnProtobufMethodCallback(const ReplyType& reply,
-                                    DBusMethodCallback<ReplyType> callback);
+  void ReturnProtobufMethodCallback(
+      const ReplyType& reply,
+      chromeos::DBusMethodCallback<ReplyType> callback);
 
   // Loads install attributes from the stub file.
   bool LoadInstallAttributes();
 
   // FWMP related:
+
+  // Firmware management parameters.
+  absl::optional<uint32_t> fwmp_flags_;
 
   // Number of times RemoveFirmwareManagementParameters() is called.
   int remove_firmware_management_parameters_from_tpm_call_count_ = 0;
@@ -115,7 +122,7 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) FakeInstallAttributesClient
 
   // The list of callbacks passed to WaitForServiceToBeAvailable when the
   // service wasn't available.
-  std::vector<WaitForServiceToBeAvailableCallback>
+  std::vector<chromeos::WaitForServiceToBeAvailableCallback>
       pending_wait_for_service_to_be_available_callbacks_;
 };
 

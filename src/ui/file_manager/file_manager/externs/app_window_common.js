@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,34 +20,24 @@ Window.prototype.appInitialURL;
 Window.prototype.reload = function() {};
 
 /**
- *
- * Created by HTML imports polyfill.
- * @type {!Object}
- */
-Window.prototype.HTMLImports;
-
-/**
- * @type {function(function())}
- */
-Window.prototype.HTMLImports.whenReady;
-
-/**
- * True if in test: set by the background.js page.
+ * True if in test: set by ash/webui/file_manager/resources/init_globals.js.
  *
  * @type {boolean}
  */
 Window.prototype.IN_TEST;
 
 /**
- * Set true in some unit tests.
+ * The function below is added by tslib_shim.ts to the global namespace.
  *
- * @type {boolean}
+ * @param {*} decorators
+ * @param {*} target
+ * @param {string=} key
+ * @param {*=} desc
  */
-Window.prototype.UNIT_TEST;
+const __decorate = function(decorators, target, key, desc) {};
 
 /**
- * True if files app is running in a SWA container.
- *
+ * Set this to true to log action data in the console for debugging purpose.
  * @type {boolean}
  */
-Window.prototype.isSWA;
+Window.prototype.DEBUG_STORE;

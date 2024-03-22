@@ -1,22 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/favicon/core/favicon_handler.h"
 
-#include <algorithm>
 #include <cmath>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "components/favicon/core/core_favicon_service.h"
 #include "components/favicon_base/favicon_util.h"
@@ -31,16 +30,6 @@ namespace {
 
 const int kLargestIconSize = 192;
 
-// Return true if |bitmap_result| is expired.
-bool IsExpired(const favicon_base::FaviconRawBitmapResult& bitmap_result) {
-  return bitmap_result.expired;
-}
-
-// Return true if |bitmap_result| is valid.
-bool IsValid(const favicon_base::FaviconRawBitmapResult& bitmap_result) {
-  return bitmap_result.is_valid();
-}
-
 // Returns true if |bitmap_results| is non-empty and:
 // - At least one of the bitmaps in |bitmap_results| is expired
 // OR
@@ -53,10 +42,10 @@ bool HasExpiredOrIncompleteResult(
     return false;
 
   // Check if at least one of the bitmaps is expired.
-  auto it =
-      std::find_if(bitmap_results.begin(), bitmap_results.end(), IsExpired);
-  if (it != bitmap_results.end())
+  if (base::ranges::any_of(bitmap_results,
+                           &favicon_base::FaviconRawBitmapResult::expired)) {
     return true;
+  }
 
   // Any favicon size is good if the desired size is 0.
   if (desired_size_in_dip == 0)
@@ -86,8 +75,8 @@ bool HasExpiredOrIncompleteResult(
 // Returns true if at least one of |bitmap_results| is valid.
 bool HasValidResult(
     const std::vector<favicon_base::FaviconRawBitmapResult>& bitmap_results) {
-  return std::find_if(bitmap_results.begin(), bitmap_results.end(), IsValid) !=
-         bitmap_results.end();
+  return base::ranges::any_of(bitmap_results,
+                              &favicon_base::FaviconRawBitmapResult::is_valid);
 }
 
 std::vector<int> GetDesiredPixelSizes(
@@ -114,6 +103,15 @@ bool FaviconURLEquals(const FaviconURL& lhs, const FaviconURL& rhs) {
          lhs.icon_sizes == rhs.icon_sizes;
 }
 
+// Returns true if `icon_sizes` has the "any" size keyword specified. The 'any'
+// value is represented as the size 0x0 (e.g `gfx::Size()` or the predicate
+// `gfx::Size::IsZero()`). "0x0" (or generally, a 0 dimension) is considered an
+// invalid size by the 'sizes' parser (see for example `WebIconSizesParser` in
+// Blink).
+bool HasAnySize(const std::vector<gfx::Size>& icon_sizes) {
+  return base::ranges::any_of(icon_sizes, &gfx::Size::IsZero);
+}
+
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +126,11 @@ FaviconHandler::FaviconCandidate::FromFaviconURL(
   candidate.icon_url = favicon_url.icon_url;
   candidate.icon_type = favicon_url.icon_type;
 
-  if (!favicon_url.icon_sizes.empty()) {
+  if (HasAnySize(favicon_url.icon_sizes)) {
+    // For candidates which has the keyword "any" as part of their size
+    // information, assign a score of 1.
+    candidate.score = 1.0f;
+  } else if (!favicon_url.icon_sizes.empty()) {
     // For candidates with explicit size information, the score is computed
     // based on similarity with |desired_pixel_sizes|.
     SelectFaviconFrameIndices(favicon_url.icon_sizes, desired_pixel_sizes,
@@ -334,10 +336,8 @@ void FaviconHandler::OnUpdateCandidates(
   // |candidates| or |manifest_url| could have been modified via Javascript. If
   // neither changed, ignore the call.
   if (candidates_received_ && manifest_url_ == manifest_url &&
-      (non_manifest_original_candidates_.size() == candidates.size() &&
-       std::equal(candidates.begin(), candidates.end(),
-                  non_manifest_original_candidates_.begin(),
-                  &FaviconURLEquals))) {
+      base::ranges::equal(candidates, non_manifest_original_candidates_,
+                          &FaviconURLEquals)) {
     return;
   }
 
@@ -517,6 +517,8 @@ void FaviconHandler::OnDidDownloadFavicon(
       if (service_)
         service_->UnableToDownloadFavicon(image_url);
     } else if (http_status_code != 0) {
+      // `http_status_code` might be HTTP_OK here, but this is still
+      // considered an error since `bitmaps` is empty.
       error_other_than_404_found_ = true;
     }
   } else {

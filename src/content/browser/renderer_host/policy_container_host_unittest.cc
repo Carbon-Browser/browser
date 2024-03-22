@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ struct SameSizeAsPolicyContainerPolicies {
   network::CrossOriginOpenerPolicy cross_origin_opener_policy;
   network::CrossOriginEmbedderPolicy cross_origin_embedder_policy;
   network::mojom::WebSandboxFlags sandbox_flags;
-  bool is_anonymous;
+  bool is_credentialless;
+  bool can_navigate_top_without_user_gesture;
 };
 
 }  // namespace
@@ -68,11 +69,14 @@ TEST(PolicyContainerPoliciesTest, CloneIsEqual) {
   coep.reporting_endpoint = "endpoint 1";
   coep.report_only_reporting_endpoint = "endpoint 2";
 
-  PolicyContainerPolicies policies(network::mojom::ReferrerPolicy::kAlways,
-                                   network::mojom::IPAddressSpace::kUnknown,
-                                   /*is_web_secure_context=*/true,
-                                   std::move(csps), coop, coep, sandbox_flags,
-                                   /*is_anonymous=*/true);
+  PolicyContainerPolicies policies(
+      network::mojom::ReferrerPolicy::kAlways,
+      network::mojom::IPAddressSpace::kUnknown,
+      /*is_web_secure_context=*/true, std::move(csps), coop, coep,
+      sandbox_flags,
+      /*is_credentialless=*/true,
+      /*can_navigate_top_without_user_gesture=*/true,
+      /*allow_cross_origin_isolation=*/false);
 
   EXPECT_THAT(policies.Clone(), Eq(ByRef(policies)));
 }

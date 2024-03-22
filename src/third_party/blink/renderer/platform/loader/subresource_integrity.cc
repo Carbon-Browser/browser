@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,14 +85,12 @@ bool SubresourceIntegrity::CheckSubresourceIntegrity(
     size_t size,
     const KURL& resource_url,
     ReportInfo& report_info) {
-  if (integrity_metadata.IsEmpty())
+  if (integrity_metadata.empty())
     return true;
 
   IntegrityMetadataSet metadata_set;
-  IntegrityParseResult integrity_parse_result = ParseIntegrityAttribute(
-      integrity_metadata, features, metadata_set, &report_info);
-  if (integrity_parse_result != kIntegrityParseValidResult)
-    return true;
+  ParseIntegrityAttribute(integrity_metadata, features, metadata_set,
+                          &report_info);
   return CheckSubresourceIntegrityImpl(metadata_set, content, size,
                                        resource_url, report_info);
 }
@@ -179,8 +177,8 @@ IntegrityAlgorithm SubresourceIntegrity::FindBestAlgorithm(
                 "of the integrity algorithms.");
 
   // metadata_set is non-empty, so we are guaranteed to always have a result.
-  // This is effectively an implemenation of std::max_element (C++17).
-  DCHECK(!metadata_set.IsEmpty());
+  // This is effectively an implementation of std::max_element (C++17).
+  DCHECK(!metadata_set.empty());
   auto iter = metadata_set.begin();
   IntegrityAlgorithm max_algorithm = iter->second;
   ++iter;
@@ -282,31 +280,27 @@ bool SubresourceIntegrity::ParseDigest(const UChar*& position,
   return true;
 }
 
-SubresourceIntegrity::IntegrityParseResult
-SubresourceIntegrity::ParseIntegrityAttribute(
+void SubresourceIntegrity::ParseIntegrityAttribute(
     const WTF::String& attribute,
     IntegrityFeatures features,
     IntegrityMetadataSet& metadata_set) {
   return ParseIntegrityAttribute(attribute, features, metadata_set, nullptr);
 }
 
-SubresourceIntegrity::IntegrityParseResult
-SubresourceIntegrity::ParseIntegrityAttribute(
+void SubresourceIntegrity::ParseIntegrityAttribute(
     const WTF::String& attribute,
     IntegrityFeatures features,
     IntegrityMetadataSet& metadata_set,
     ReportInfo* report_info) {
   // We expect a "clean" metadata_set, since metadata_set should only be filled
   // once.
-  DCHECK(metadata_set.IsEmpty());
+  DCHECK(metadata_set.empty());
 
   Vector<UChar> characters;
   attribute.StripWhiteSpace().AppendTo(characters);
   const UChar* position = characters.data();
   const UChar* end = characters.end();
   const UChar* current_integrity_end;
-
-  bool error = false;
 
   // The integrity attribute takes the form:
   //    *WSP hash-with-options *( 1*WSP hash-with-options ) *WSP / *WSP
@@ -343,7 +337,6 @@ SubresourceIntegrity::ParseIntegrityAttribute(
     }
 
     if (parse_result == kAlgorithmUnparsable) {
-      error = true;
       SkipUntil<UChar, IsASCIISpace>(position, end);
       if (report_info) {
         report_info->AddConsoleErrorMessage(
@@ -361,7 +354,6 @@ SubresourceIntegrity::ParseIntegrityAttribute(
     DCHECK_EQ(parse_result, kAlgorithmValid);
 
     if (!ParseDigest(position, current_integrity_end, digest)) {
-      error = true;
       SkipUntil<UChar, IsASCIISpace>(position, end);
       if (report_info) {
         report_info->AddConsoleErrorMessage(
@@ -391,10 +383,6 @@ SubresourceIntegrity::ParseIntegrityAttribute(
     IntegrityMetadata integrity_metadata(digest, algorithm);
     metadata_set.insert(integrity_metadata.ToPair());
   }
-  if (metadata_set.size() == 0 && error)
-    return kIntegrityParseNoValidResult;
-
-  return kIntegrityParseValidResult;
 }
 
 }  // namespace blink

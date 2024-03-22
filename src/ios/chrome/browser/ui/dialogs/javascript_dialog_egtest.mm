@@ -1,37 +1,33 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/ios/ios_util.h"
-#include "base/strings/stringprintf.h"
+#import "base/functional/bind.h"
+#import "base/ios/ios_util.h"
+#import "base/strings/stringprintf.h"
 #import "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/strings/grit/components_strings.h"
-#include "components/url_formatter/elide_url.h"
-#import "ios/chrome/browser/ui/dialogs/dialog_constants.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "components/strings/grit/components_strings.h"
+#import "components/url_formatter/elide_url.h"
+#import "ios/chrome/browser/overlays/model/public/web_content_area/alert_constants.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
-#include "ios/testing/earl_grey/disabled_test_macros.h"
+#import "ios/testing/earl_grey/disabled_test_macros.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/testing/earl_grey/matchers.h"
-#include "ios/web/public/test/element_selector.h"
-#include "net/test/embedded_test_server/http_request.h"
-#include "net/test/embedded_test_server/http_response.h"
-#include "net/test/embedded_test_server/request_handler_util.h"
-#include "ui/base/l10n/l10n_util.h"
-#include "ui/base/l10n/l10n_util_mac.h"
+#import "ios/web/public/test/element_selector.h"
+#import "net/test/embedded_test_server/http_request.h"
+#import "net/test/embedded_test_server/http_response.h"
+#import "net/test/embedded_test_server/request_handler_util.h"
+#import "ui/base/l10n/l10n_util.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using chrome_test_util::ButtonWithAccessibilityLabel;
 using chrome_test_util::OKButton;
@@ -229,7 +225,7 @@ void TypeInPrompt(NSString* input) {
       grey_accessibilityID(kJavaScriptDialogTextFieldAccessibilityIdentifier),
       nil);
   [[EarlGrey selectElementWithMatcher:text_field_matcher]
-      performAction:grey_typeText(input)];
+      performAction:grey_replaceText(input)];
 }
 
 void TapCancel() {
@@ -366,12 +362,6 @@ void TapSuppressDialogsButton() {
 // Tests that a prompt dialog is shown, and that the completion block is called
 // with the correct value when the OK buton is tapped.
 - (void)testShowJavaScriptPromptOK {
-  // TODO(crbug.com/753098): Re-enable this test on iPad once grey_typeText
-  // works.
-  if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iPad.");
-  }
-
   // Load the prompt test page and tap on the link.
   const GURL kURL = self.testServer->GetURL(kPromptURLPath);
   [ChromeEarlGrey loadURL:kURL];
@@ -396,12 +386,6 @@ void TapSuppressDialogsButton() {
 // Tests that a prompt dialog is shown, and that the completion block is called
 // with the correct value when the Cancel buton is tapped.
 - (void)testShowJavaScriptPromptCancelled {
-  // TODO(crbug.com/753098): Re-enable this test on iPad once grey_typeText
-  // works.
-  if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_DISABLED(@"Test disabled on iPad.");
-  }
-
   // Load the prompt test page and tap on the link.
   const GURL kURL = self.testServer->GetURL(kPromptURLPath);
   [ChromeEarlGrey loadURL:kURL];

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,11 +44,11 @@ void DeviceSensorEventPump::HandleSensorProviderError() {
 }
 
 void DeviceSensorEventPump::SetSensorProviderForTesting(
-    mojo::PendingRemote<device::mojom::blink::SensorProvider> sensor_provider) {
+    mojo::PendingRemote<mojom::blink::WebSensorProvider> sensor_provider) {
   sensor_provider_.Bind(std::move(sensor_provider), task_runner_);
   sensor_provider_.set_disconnect_handler(
-      WTF::Bind(&DeviceSensorEventPump::HandleSensorProviderError,
-                WrapWeakPersistent(this)));
+      WTF::BindOnce(&DeviceSensorEventPump::HandleSensorProviderError,
+                    WrapWeakPersistent(this)));
 }
 
 DeviceSensorEventPump::PumpState
@@ -64,7 +64,6 @@ void DeviceSensorEventPump::Trace(Visitor* visitor) const {
 DeviceSensorEventPump::DeviceSensorEventPump(LocalFrame& frame)
     : sensor_provider_(frame.DomWindow()),
       task_runner_(frame.GetTaskRunner(TaskType::kSensor)),
-      state_(PumpState::kStopped),
       timer_(frame.GetTaskRunner(TaskType::kSensor),
              this,
              &DeviceSensorEventPump::FireEvent) {}

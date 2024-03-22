@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@ package org.chromium.chromoting;
 
 import android.content.Context;
 import android.os.SystemClock;
-import android.support.test.InstrumentationRegistry;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
@@ -61,8 +61,22 @@ public class SwipePinchDetectorTest {
      */
     private void injectEvent(int action) {
         final long eventTime = SystemClock.uptimeMillis();
-        MotionEvent event = MotionEvent.obtain(eventTime, eventTime, action, 2, mPointers,
-                mCurrentPositions, 0, 0, 1, 1, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0);
+        MotionEvent event =
+                MotionEvent.obtain(
+                        eventTime,
+                        eventTime,
+                        action,
+                        2,
+                        mPointers,
+                        mCurrentPositions,
+                        0,
+                        0,
+                        1,
+                        1,
+                        0,
+                        0,
+                        InputDevice.SOURCE_TOUCHSCREEN,
+                        0);
         mDetector.onTouchEvent(event);
     }
 

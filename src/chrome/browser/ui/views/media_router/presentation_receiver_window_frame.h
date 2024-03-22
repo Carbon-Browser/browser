@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,11 +43,10 @@ class PresentationReceiverWindowFrame final : public views::Widget {
 
  private:
   const ui::ThemeProvider* GetThemeProvider() const final;
-  ui::ColorProviderManager::ThemeInitializerSupplier* GetCustomTheme()
-      const final;
+  ui::ColorProviderKey::ThemeInitializerSupplier* GetCustomTheme() const final;
 
   // The profile from which we get the theme.
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_MEDIA_ROUTER_PRESENTATION_RECEIVER_WINDOW_FRAME_H_

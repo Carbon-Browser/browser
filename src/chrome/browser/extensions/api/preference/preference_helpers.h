@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <string>
 
+#include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "extensions/browser/extension_event_histogram_value.h"
-#include "extensions/browser/extension_prefs_scope.h"
 #include "extensions/common/mojom/api_permission_id.mojom-shared.h"
 #include "extensions/common/permissions/permission_set.h"
 
@@ -21,22 +21,8 @@
 class PrefService;
 class Profile;
 
-namespace base {
-class ListValue;
-}
-
 namespace extensions {
 namespace preference_helpers {
-
-constexpr char kNotControllable[] = "not_controllable";
-constexpr char kControlledByOtherExtensions[] =
-    "controlled_by_other_extensions";
-constexpr char kControllableByThisExtension[] =
-    "controllable_by_this_extension";
-constexpr char kControlledByThisExtension[] = "controlled_by_this_extension";
-
-bool StringToScope(const std::string& s,
-                   extensions::ExtensionPrefsScope* scope);
 
 // Returns a string constant (defined in the API) indicating the level of
 // control this extension has over the specified preference.
@@ -63,7 +49,7 @@ void DispatchEventToExtensionsWithAshControlState(
     Profile* profile,
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    base::ListValue* args,
+    base::Value::List args,
     mojom::APIPermissionID permission,
     bool incognito,
     const std::string& browser_pref,
@@ -74,11 +60,11 @@ void DispatchEventToExtensionsWithAshControlState(
 // |permission|. |args| is passed as arguments to the event listener.  A
 // key-value for the level of control the extension has over |browser_pref| is
 // injected into the first item of |args|, which must be of type
-// DictionaryValue.
+// dictionary.
 void DispatchEventToExtensions(Profile* profile,
                                events::HistogramValue histogram_value,
                                const std::string& event_name,
-                               base::ListValue* args,
+                               base::Value::List args,
                                mojom::APIPermissionID permission,
                                bool incognito,
                                const std::string& browser_pref);

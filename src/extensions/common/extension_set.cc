@@ -1,9 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/common/extension_set.h"
 
+#include "base/containers/contains.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/url_pattern_set.h"
 #include "url/gurl.h"
@@ -28,7 +29,7 @@ ExtensionId ExtensionSet::GetExtensionIdByURL(const GURL& url) {
   return ExtensionId();
 }
 
-ExtensionSet::const_iterator::const_iterator() {}
+ExtensionSet::const_iterator::const_iterator() = default;
 
 ExtensionSet::const_iterator::const_iterator(const const_iterator& other)
     : it_(other.it_) {
@@ -38,24 +39,18 @@ ExtensionSet::const_iterator::const_iterator(ExtensionMap::const_iterator it)
     : it_(it) {
 }
 
-ExtensionSet::const_iterator::~const_iterator() {}
+ExtensionSet::const_iterator::~const_iterator() = default;
 
-ExtensionSet::ExtensionSet() {
-}
+ExtensionSet::ExtensionSet() = default;
 
-ExtensionSet::~ExtensionSet() {
-}
+ExtensionSet::~ExtensionSet() = default;
 
-size_t ExtensionSet::size() const {
-  return extensions_.size();
-}
+ExtensionSet::ExtensionSet(ExtensionSet&&) = default;
 
-bool ExtensionSet::is_empty() const {
-  return extensions_.empty();
-}
+ExtensionSet& ExtensionSet::operator=(ExtensionSet&&) noexcept = default;
 
 bool ExtensionSet::Contains(const ExtensionId& extension_id) const {
-  return extensions_.find(extension_id) != extensions_.end();
+  return base::Contains(extensions_, extension_id);
 }
 
 bool ExtensionSet::Insert(const scoped_refptr<const Extension>& extension) {
@@ -112,7 +107,7 @@ const Extension* ExtensionSet::GetExtensionOrAppByURL(const GURL& url,
 
 const Extension* ExtensionSet::GetAppByURL(const GURL& url) const {
   const Extension* extension = GetExtensionOrAppByURL(url);
-  return (extension && extension->is_app()) ? extension : NULL;
+  return (extension && extension->is_app()) ? extension : nullptr;
 }
 
 const Extension* ExtensionSet::GetHostedAppByURL(const GURL& url) const {
@@ -121,7 +116,7 @@ const Extension* ExtensionSet::GetHostedAppByURL(const GURL& url) const {
       return iter->second.get();
   }
 
-  return NULL;
+  return nullptr;
 }
 
 const Extension* ExtensionSet::GetHostedAppByOverlappingWebExtent(
@@ -131,7 +126,7 @@ const Extension* ExtensionSet::GetHostedAppByOverlappingWebExtent(
       return iter->second.get();
   }
 
-  return NULL;
+  return nullptr;
 }
 
 bool ExtensionSet::InSameExtent(const GURL& old_url,

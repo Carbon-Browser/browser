@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,8 +62,7 @@ struct StructTraits<url::mojom::OriginDataView,
   }
   static mojo::OptionalAsPointer<const base::UnguessableToken> nonce_if_opaque(
       const scoped_refptr<const ::blink::SecurityOrigin>& origin) {
-    return mojo::MakeOptionalAsPointer(
-        UrlOriginAdapter::nonce_if_opaque(origin));
+    return mojo::OptionalAsPointer(UrlOriginAdapter::nonce_if_opaque(origin));
   }
   static bool Read(url::mojom::OriginDataView data,
                    scoped_refptr<const ::blink::SecurityOrigin>* out) {

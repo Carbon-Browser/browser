@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 
 #include "base/base64.h"
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
@@ -19,6 +21,11 @@
 #include "components/variations/variations_associated_data.h"
 #include "components/variations/variations_client.h"
 #include "components/variations/variations_features.h"
+
+// TODO: remove this feature flag after milestone 110.
+BASE_FEATURE(kSendLowEntropySourceVariationIDInAnyContext,
+             "SendLowEntropySourceVariationIDInAnyContext",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace variations {
 namespace {
@@ -47,8 +54,8 @@ bool VariationsHeaderKey::operator<(const VariationsHeaderKey& other) const {
 // implemented depends on the request type.
 // There are three cases:
 // 1. Subresources request in renderer, it is implemented by
-// WebURLLoaderImpl::Context::Start() by adding a VariationsURLLoaderThrottle
-// to a content::URLLoaderThrottle vector.
+// URLLoader::Context::Start() by adding a VariationsURLLoaderThrottle to a
+// content::URLLoaderThrottle vector.
 // 2. Navigations/Downloads request in browser, it is implemented in
 // ChromeContentBrowserClient::CreateURLLoaderThrottles() which calls
 // CreateContentBrowserURLLoaderThrottles which also adds a
@@ -122,6 +129,11 @@ std::string VariationsIdsProvider::GetGoogleAppVariationsString() {
   return GetVariationsString({GOOGLE_APP});
 }
 
+std::string VariationsIdsProvider::GetTriggerVariationsString() {
+  return GetVariationsString({GOOGLE_WEB_PROPERTIES_TRIGGER_ANY_CONTEXT,
+                              GOOGLE_WEB_PROPERTIES_TRIGGER_FIRST_PARTY});
+}
+
 std::string VariationsIdsProvider::GetVariationsString() {
   return GetVariationsString(
       {GOOGLE_WEB_PROPERTIES_ANY_CONTEXT, GOOGLE_WEB_PROPERTIES_FIRST_PARTY});
@@ -191,6 +203,26 @@ bool VariationsIdsProvider::ForceDisableVariationIds(
                                   &force_disabled_ids_set_)) {
     return false;
   }
+
+  // When disabling a variation ID through the command line, ensure it is
+  // disabled in every contexts.
+  static_assert(
+      ID_COLLECTION_COUNT == 6,
+      "If you add a new collection key, make sure it can be disabled here.");
+  std::set<VariationIDEntry> additional_disabled_ids;
+  for (const auto& entry : force_disabled_ids_set_) {
+    if (entry.second == GOOGLE_WEB_PROPERTIES_ANY_CONTEXT) {
+      additional_disabled_ids.insert(
+          VariationIDEntry(entry.first, GOOGLE_WEB_PROPERTIES_SIGNED_IN));
+      additional_disabled_ids.insert(
+          VariationIDEntry(entry.first, GOOGLE_WEB_PROPERTIES_FIRST_PARTY));
+    } else if (entry.second == GOOGLE_WEB_PROPERTIES_TRIGGER_ANY_CONTEXT) {
+      additional_disabled_ids.insert(VariationIDEntry(
+          entry.first, GOOGLE_WEB_PROPERTIES_TRIGGER_FIRST_PARTY));
+    }
+  }
+  force_disabled_ids_set_.merge(additional_disabled_ids);
+
   if (variation_ids_cache_initialized_) {
     // Update the cached variation ids header value after cache initialization,
     // otherwise the change won't be in the cache.
@@ -244,16 +276,18 @@ void VariationsIdsProvider::DestroyInstanceForTesting() {
 }
 
 void VariationsIdsProvider::OnFieldTrialGroupFinalized(
-    const std::string& trial_name,
+    const base::FieldTrial& trial,
     const std::string& group_name) {
   base::AutoLock scoped_lock(lock_);
   const size_t old_size = variation_ids_set_.size();
-  CacheVariationsId(trial_name, group_name);
+  CacheVariationsId(trial.trial_name(), group_name);
   if (variation_ids_set_.size() != old_size)
     UpdateVariationIDsHeaderValue();
 }
 
 void VariationsIdsProvider::OnSyntheticTrialsChanged(
+    const std::vector<SyntheticTrialGroup>& trials_updated,
+    const std::vector<SyntheticTrialGroup>& trials_removed,
     const std::vector<SyntheticTrialGroup>& groups) {
   base::AutoLock scoped_lock(lock_);
 
@@ -285,19 +319,17 @@ void VariationsIdsProvider::InitVariationIDsCacheIfNeeded() {
   if (variation_ids_cache_initialized_)
     return;
 
-  // Query the kRestrictGoogleWebVisibility feature to activate the
-  // associated field trial, if any, so that querying it in
-  // OnFieldTrialGroupFinalized() does not result in deadlock.
-  //
-  // Note: Must be done before the AddObserver() call below.
-  base::FeatureList::IsEnabled(internal::kRestrictGoogleWebVisibility);
-
   // Register for additional cache updates. This is done before initializing the
   // cache to avoid a race that could cause registered FieldTrials to be missed.
   bool success = base::FieldTrialList::AddObserver(this);
   DCHECK(success);
 
   base::FieldTrial::ActiveGroups initial_groups;
+  // These field trial group IDs may be sent to Google servers for web-visible
+  // studies.
+  // Low anonymity trials cannot be web-visible (enforced server-side), but as
+  // an additional safeguard we do not include them in the list of field trials
+  // we fetch here.
   base::FieldTrialList::GetActiveFieldTrialGroups(&initial_groups);
 
   for (const auto& entry : initial_groups) {
@@ -363,21 +395,15 @@ std::string VariationsIdsProvider::GenerateBase64EncodedProto(
   for (const VariationIDEntry& entry : all_variation_ids_set) {
     switch (entry.second) {
       case GOOGLE_WEB_PROPERTIES_SIGNED_IN:
-        if (is_signed_in)
+        if (is_signed_in) {
           proto.add_variation_id(entry.first);
+        }
         break;
       case GOOGLE_WEB_PROPERTIES_ANY_CONTEXT:
         proto.add_variation_id(entry.first);
         break;
       case GOOGLE_WEB_PROPERTIES_FIRST_PARTY:
-        if (base::FeatureList::IsEnabled(
-                internal::kRestrictGoogleWebVisibility)) {
-          if (is_first_party_context)
-            proto.add_variation_id(entry.first);
-        } else {
-          // When the feature is not enabled, treat VariationIDs associated with
-          // GOOGLE_WEB_PROPERTIES_FIRST_PARTY in the same way as those
-          // associated with GOOGLE_WEB_PROPERTIES_ANY_CONTEXT.
+        if (is_first_party_context) {
           proto.add_variation_id(entry.first);
         }
         break;
@@ -385,14 +411,7 @@ std::string VariationsIdsProvider::GenerateBase64EncodedProto(
         proto.add_trigger_variation_id(entry.first);
         break;
       case GOOGLE_WEB_PROPERTIES_TRIGGER_FIRST_PARTY:
-        if (base::FeatureList::IsEnabled(
-                internal::kRestrictGoogleWebVisibility)) {
-          if (is_first_party_context)
-            proto.add_trigger_variation_id(entry.first);
-        } else {
-          // When the feature is not enabled, treat VariationIDs associated with
-          // GOOGLE_WEB_PROPERTIES_TRIGGER_FIRST_PARTY in the same way as those
-          // associated with GOOGLE_WEB_PROPERTIES_TRIGGER_ANY_CONTEXT.
+        if (is_first_party_context) {
           proto.add_trigger_variation_id(entry.first);
         }
         break;
@@ -415,10 +434,10 @@ std::string VariationsIdsProvider::GenerateBase64EncodedProto(
   // This is the bottleneck for the creation of the header, so validate the size
   // here. Force a hard maximum on the ID count in case the Variations server
   // returns too many IDs and DOSs receiving servers with large requests.
-  DCHECK_LE(total_id_count, 50U);
+  DCHECK_LE(total_id_count, 75U);
   UMA_HISTOGRAM_COUNTS_100("Variations.Headers.ExperimentCount",
                            total_id_count);
-  if (total_id_count > 75)
+  if (total_id_count > 100)
     return std::string();
 
   std::string serialized;
@@ -517,13 +536,18 @@ VariationsIdsProvider::GetAllVariationIds() {
   // The entropy source value is used for retrospective A/A tests to validate
   // that there's no existing bias between two randomized groups of clients for
   // a later A/B study.
-  if (low_entropy_source_value_) {
+  base::UmaHistogramBoolean("Variations.Headers.HasLowEntropySourceValue",
+                            low_entropy_source_value_.has_value());
+  if (low_entropy_source_value_.has_value()) {
     int source_value = low_entropy_source_value_.value() +
                        kLowEntropySourceVariationIdRangeMin;
     DCHECK_GE(source_value, kLowEntropySourceVariationIdRangeMin);
     DCHECK_LE(source_value, kLowEntropySourceVariationIdRangeMax);
-    all_variation_ids_set.insert(
-        VariationIDEntry(source_value, GOOGLE_WEB_PROPERTIES_FIRST_PARTY));
+    auto context = base::FeatureList::IsEnabled(
+                       kSendLowEntropySourceVariationIDInAnyContext)
+                       ? GOOGLE_WEB_PROPERTIES_ANY_CONTEXT
+                       : GOOGLE_WEB_PROPERTIES_FIRST_PARTY;
+    all_variation_ids_set.insert(VariationIDEntry(source_value, context));
   }
 
   return all_variation_ids_set;

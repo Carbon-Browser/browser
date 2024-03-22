@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,6 +60,20 @@ class SideSearchContentsThrottle : public content::NavigationThrottle {
 };
 
 }  // namespace
+
+void SideSearchSideContentsHelper::DidOpenRequestedURL(
+    content::WebContents* new_contents,
+    content::RenderFrameHost* source_render_frame_host,
+    const GURL& url,
+    const content::Referrer& referrer,
+    WindowOpenDisposition disposition,
+    ui::PageTransition transition,
+    bool started_from_context_menu,
+    bool renderer_initiated) {
+  DCHECK(delegate_);
+  delegate_->CarryOverSideSearchStateToNewTab(web_contents()->GetVisibleURL(),
+                                              new_contents);
+}
 
 bool SideSearchSideContentsHelper::Delegate::HandleKeyboardEvent(
     content::WebContents* source,
@@ -156,9 +170,6 @@ void SideSearchSideContentsHelper::LoadURL(const GURL& url) {
 #endif  // !BUILDFLAG(IS_CHROMEOS)
 
   web_contents()->GetController().LoadURLWithParams(load_url_params);
-
-  MaybeRecordMetricsPerJourney();
-  has_loaded_url_ = true;
 }
 
 content::WebContents* SideSearchSideContentsHelper::GetTabWebContents() {
@@ -182,15 +193,11 @@ SideSearchSideContentsHelper::SideSearchSideContentsHelper(
 }
 
 void SideSearchSideContentsHelper::MaybeRecordMetricsPerJourney() {
-  // Do not record metrics if url has not loaded.
-  if (!has_loaded_url_)
-    return;
-
   RecordNavigationCommittedWithinSideSearchCountPerJourney(
-      navigation_within_side_search_count_);
-  RecordRedirectionToTabCountPerJourney(redirection_to_tab_count_);
-  navigation_within_side_search_count_ = 0;
-  redirection_to_tab_count_ = 0;
+      is_created_from_menu_option_, navigation_within_side_search_count_,
+      auto_triggered_);
+  RecordRedirectionToTabCountPerJourney(
+      is_created_from_menu_option_, redirection_to_tab_count_, auto_triggered_);
 }
 
 SideSearchConfig* SideSearchSideContentsHelper::GetConfig() {

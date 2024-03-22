@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@ struct StackAllocatedType {
   STACK_ALLOCATED();
 };
 
-static_assert(!WTF::IsStackAllocatedType<Empty>::value,
+static_assert(!WTF::IsStackAllocatedType<Empty>,
               "Failed to detect STACK_ALLOCATED macro.");
-static_assert(WTF::IsStackAllocatedType<StackAllocatedType>::value,
+static_assert(WTF::IsStackAllocatedType<StackAllocatedType>,
               "Failed to detect STACK_ALLOCATED macro.");
 
 }  // namespace

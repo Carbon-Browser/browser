@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,17 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/net_log/chrome_net_log.h"
@@ -110,8 +109,8 @@ void NetExportFileWriter::Initialize() {
 
   NotifyStateObserversAsync();
 
-  base::PostTaskAndReplyWithResult(
-      file_task_runner_.get(), FROM_HERE,
+  file_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&SetUpDefaultLogPath, default_log_base_dir_getter_),
       base::BindOnce(&NetExportFileWriter::SetStateAfterSetUpDefaultLogPath,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -147,8 +146,8 @@ void NetExportFileWriter::StartNetLog(
   net_log_exporter_.set_disconnect_handler(base::BindOnce(
       &NetExportFileWriter::OnConnectionError, base::Unretained(this)));
 
-  base::PostTaskAndReplyWithResult(
-      file_task_runner_.get(), FROM_HERE,
+  file_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&NetExportFileWriter::CreateOutputFile, log_path_),
       base::BindOnce(&NetExportFileWriter::StartNetLogAfterCreateFile,
                      weak_ptr_factory_.GetWeakPtr(), capture_mode,
@@ -226,12 +225,11 @@ void NetExportFileWriter::OnConnectionError() {
   ResetExporterThenSetStateNotLogging();
 }
 
-std::unique_ptr<base::DictionaryValue> NetExportFileWriter::GetState() const {
+base::Value::Dict NetExportFileWriter::GetState() const {
   DCHECK(thread_checker_.CalledOnValidThread());
 
-  auto dict = std::make_unique<base::DictionaryValue>();
-
-  dict->SetStringKey("file", base::UTF16ToUTF8(log_path_.LossyDisplayName()));
+  base::Value::Dict dict;
+  dict.Set("file", base::UTF16ToUTF8(log_path_.LossyDisplayName()));
 
   base::StringPiece state_string;
   switch (state_) {
@@ -254,11 +252,11 @@ std::unique_ptr<base::DictionaryValue> NetExportFileWriter::GetState() const {
       state_string = "STOPPING_LOG";
       break;
   }
-  dict->SetStringKey("state", state_string);
+  dict.Set("state", state_string);
 
-  dict->SetBoolKey("logExists", log_exists_);
-  dict->SetBoolKey("logCaptureModeKnown", log_capture_mode_known_);
-  dict->SetStringKey("captureMode", CaptureModeToString(log_capture_mode_));
+  dict.Set("logExists", log_exists_);
+  dict.Set("logCaptureModeKnown", log_capture_mode_known_);
+  dict.Set("captureMode", CaptureModeToString(log_capture_mode_));
 
   return dict;
 }
@@ -267,7 +265,7 @@ void NetExportFileWriter::GetFilePathToCompletedLog(
     FilePathCallback path_callback) const {
   DCHECK(thread_checker_.CalledOnValidThread());
   if (!(log_exists_ && state_ == STATE_NOT_LOGGING)) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(path_callback), base::FilePath()));
     return;
   }
@@ -275,9 +273,9 @@ void NetExportFileWriter::GetFilePathToCompletedLog(
   DCHECK(file_task_runner_);
   DCHECK(!log_path_.empty());
 
-  base::PostTaskAndReplyWithResult(file_task_runner_.get(), FROM_HERE,
-                                   base::BindOnce(&GetPathIfExists, log_path_),
-                                   std::move(path_callback));
+  file_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&GetPathIfExists, log_path_),
+      std::move(path_callback));
 }
 
 std::string NetExportFileWriter::CaptureModeToString(
@@ -311,15 +309,15 @@ void NetExportFileWriter::SetDefaultLogBaseDirectoryGetterForTest(
 
 void NetExportFileWriter::NotifyStateObservers() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  std::unique_ptr<base::DictionaryValue> state = GetState();
+  base::Value::Dict state = GetState();
   for (StateObserver& observer : state_observer_list_) {
-    observer.OnNewState(*state);
+    observer.OnNewState(state);
   }
 }
 
 void NetExportFileWriter::NotifyStateObserversAsync() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&NetExportFileWriter::NotifyStateObservers,
                                 weak_ptr_factory_.GetWeakPtr()));
 }

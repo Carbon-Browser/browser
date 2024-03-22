@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,29 +61,28 @@ class AudioContextManagerTest : public content::ContentBrowserTest {
     Waiter waiter(shell()->web_contents());
     testing::NiceMock<content::MockWebContentsObserver> mock_observer(
         shell()->web_contents());
+    EXPECT_CALL(mock_observer, AudioContextPlaybackStarted(testing::_))
+        .Times(1);
+    EXPECT_CALL(mock_observer, AudioContextPlaybackStopped(testing::_))
+        .Times(1);
 
     // Set gain to 1 to start audible audio and verify we got the
     // playback started message.
     ASSERT_TRUE(ExecJs(shell()->web_contents(), "gain.gain.value = 1;"));
-    EXPECT_CALL(mock_observer, AudioContextPlaybackStarted(testing::_))
-        .Times(1);
-    EXPECT_CALL(mock_observer, AudioContextPlaybackStopped(testing::_))
-        .Times(0);
     waiter.Wait();
 
     // Set gain to 0 to stop audible audio and verify we got the
     // playback stopped message.
     ASSERT_TRUE(ExecJs(shell()->web_contents(), "gain.gain.value = 0;"));
-    EXPECT_CALL(mock_observer, AudioContextPlaybackStarted(testing::_))
-        .Times(0);
-    EXPECT_CALL(mock_observer, AudioContextPlaybackStopped(testing::_))
-        .Times(1);
     waiter.Wait();
   }
 };
 
-// Flaky on Linux: https://crbug.com/1047163
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+// Flaky on Linux: crbug.com/941219
+// Flaky on Mac: crbug.com/941219
+// Flaky on Fuchsia: crbug.com/941219
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC) || \
+    BUILDFLAG(IS_FUCHSIA)
 #define MAYBE_AudioContextPlaybackRecorded DISABLED_AudioContextPlaybackRecorded
 #else
 #define MAYBE_AudioContextPlaybackRecorded AudioContextPlaybackRecorded
@@ -95,8 +94,12 @@ IN_PROC_BROWSER_TEST_F(AudioContextManagerTest,
   PlayPause();
 }
 
-// Flaky on Linux: https://crbug.com/941219
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+// Flaky on Linux: crbug.com/941219
+// Flaky on Android: crbug.com/941219
+// Flaky on Mac: crbug.com/941219
+// Flaky on Fuchsia: crbug.com/941219
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(IS_MAC) || BUILDFLAG(IS_FUCHSIA)
 #define MAYBE_AudioContextPlaybackTimeUkm DISABLED_AudioContextPlaybackTimeUkm
 #else
 #define MAYBE_AudioContextPlaybackTimeUkm AudioContextPlaybackTimeUkm

@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2015 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file.
+<!--
+Copyright 2015 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
 
-     This source code is a part of eyeo Chromium SDK.
-     Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.-->
-
+This source code is a part of eyeo Chromium SDK.
+Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.
+-->
 
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -15,11 +16,12 @@
         android:key="features_section"
         android:order="0"
         android:title="@string/prefs_section_features"/>
+
     <Preference
-        android:fragment="org.chromium.components.adblock.settings.AdblockSettingsFragment"
+        android:fragment="org.chromium.chrome.browser.adblock.settings.AdblockSettingsFragment"
         android:key="adblock"
         android:order="1"
-        android:title="@string/ad_block_settings_title" />
+        android:title="@string/adblock_settings_title" />
 
     <org.chromium.chrome.browser.sync.settings.SyncPromoPreference
         android:key="sync_promo"
@@ -48,10 +50,11 @@
     <PreferenceCategory
         android:key="basics_section"
         android:order="7"
-        android:title="@string/prefs_section_general"/>
+        android:title="@string/prefs_section_basics"/>
     <androidx.preference.CheckBoxPreference
         android:key="background_video_playback"
         android:order="8"
+        android:defaultValue="true"
         android:title="@string/enable_background_play"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:key="make_default_browser"
@@ -77,7 +80,7 @@
         android:order="13"
         android:title="@string/prefs_notifications"/>
     <Preference
-        android:fragment="org.chromium.chrome.browser.toolbar.adaptive.settings.AdaptiveToolbarPreferenceFragment"
+        android:fragment="org.chromium.chrome.browser.toolbar.adaptive.settings.AdaptiveToolbarSettingsFragment"
         android:key="toolbar_shortcut"
         android:order="14"
         android:title="@string/toolbar_shortcut"/>
@@ -100,7 +103,7 @@
     <PreferenceCategory
         android:key="advanced_section"
         android:order="18"
-        android:title="@string/prefs_section_display"/>
+        android:title="@string/prefs_section_advanced"/>
     <Preference
         android:fragment="org.chromium.chrome.browser.homepage.settings.HomepageSettings"
         android:key="homepage"
@@ -113,13 +116,13 @@
         android:title="@string/show_news_preference"/>
     <androidx.preference.CheckBoxPreference
         android:key="disable_carbon_button"
-        android:order="22"
+        android:order="21"
         android:defaultValue="true"
         android:title="@string/use_legacy_toolbar"/>
     <Preference
         android:fragment="org.chromium.components.browser_ui.accessibility.AccessibilitySettings"
         android:key="accessibility"
-        android:order="23"
+        android:order="22"
         android:title="@string/prefs_accessibility"/>
     <Preference
         android:fragment="org.chromium.chrome.browser.language.settings.LanguageSettings"
@@ -139,7 +142,7 @@
         android:fragment="org.chromium.chrome.browser.password_manager.settings.PasswordSettings"
         android:key="passwords"
         android:order="27"
-        android:title="@string/password_settings_title"/>
+        android:title="@string/password_manager_settings_title"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:fragment="org.chromium.chrome.browser.autofill.settings.AutofillPaymentMethodsFragment"
         android:key="autofill_payment_methods"
@@ -150,18 +153,21 @@
         android:key="autofill_addresses"
         android:order="29"
         android:title="@string/autofill_addresses_settings_title"/>
+    <org.chromium.components.browser_ui.settings.ChromeBasePreference
+        android:fragment="org.chromium.chrome.browser.autofill.options.AutofillOptionsFragment"
+        android:key="autofill_options"
+        android:order="30"
+        android:title="@string/autofill_options_title" />
+
     <PreferenceCategory
         android:key="support_section"
-        android:order="30"
+        android:order="31"
         android:title="@string/prefs_section_support"/>
     <Preference
         android:key="support_pref"
-        android:order="31"
-        android:title="@string/support_pref" />
-    <PreferenceCategory
-        android:key="prefs_about"
         android:order="32"
-        android:title="@string/prefs_section_about"/>
+        android:title="@string/support_pref" />
+
     <Preference
         android:fragment="org.chromium.chrome.browser.about_settings.AboutChromeSettings"
         android:key="about_chrome"

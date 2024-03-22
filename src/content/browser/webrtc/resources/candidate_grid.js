@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
  * @param {Element} peerConnectionElement
  */
 
-import {$} from 'chrome://resources/js/util.m.js';
+import {$} from 'chrome://resources/js/util.js';
 /**
  * A helper function for appending a child element to |parent|.
  * Copied from webrtc_internals.js
@@ -53,6 +53,7 @@ export function createIceCandidateGrid(peerConnectionElement) {
   appendChildWithText(tableHeader, 'th',
       'STUN requests received / responses sent');
   appendChildWithText(tableHeader, 'th', 'RTT');
+  appendChildWithText(tableHeader, 'th', 'Last data sent / received');
   appendChildWithText(tableHeader, 'th', 'Last update');
 
   peerConnectionElement.appendChild(container);
@@ -71,7 +72,7 @@ function findOrCreateGridRow(peerConnectionElementId, statId, type) {
   if (!row) {
     row = document.createElement('tr');
     row.id = elementId;
-    for (let i = 0; i < 11; i++) {
+    for (let i = 0; i < 12; i++) {
       row.appendChild(document.createElement('td'));
     }
     $('grid-' + peerConnectionElementId).appendChild(row);
@@ -102,16 +103,21 @@ function appendRow(peerConnectionElement, active, candidatePair, stats) {
       '0x' + parseInt(candidatePair.priority, 10).toString(16);
   pairRow.children[6].innerText =
       candidatePair.bytesSent + ' / ' + candidatePair.bytesReceived;
-  pairRow.children[7].innerText =
-    (parseInt(candidatePair.requestsSent, 10) +
-      parseInt(candidatePair.consentRequestsSent, 10)) + ' / ' +
+  pairRow.children[7].innerText = candidatePair.requestsSent + ' / ' +
     candidatePair.responsesReceived;
   pairRow.children[8].innerText = candidatePair.requestsReceived + ' / ' +
     candidatePair.responsesSent;
   pairRow.children[9].innerText =
     candidatePair.currentRoundTripTime !== undefined ?
         candidatePair.currentRoundTripTime + 's' : '';
-  pairRow.children[10].innerText = (new Date()).toLocaleTimeString();
+  if (candidatePair.lastPacketSentTimestamp) {
+    pairRow.children[10].innerText =
+      (new Date(candidatePair.lastPacketSentTimestamp))
+        .toLocaleTimeString() + ' / ' +
+      (new Date(candidatePair.lastPacketReceivedTimestamp))
+        .toLocaleTimeString();
+  }
+  pairRow.children[11].innerText = (new Date()).toLocaleTimeString();
 
   // Local candidate.
   const localRow = findOrCreateGridRow(peerConnectionElement.id,
@@ -124,19 +130,37 @@ function appendRow(peerConnectionElement, active, candidatePair, stats) {
     if (stat == 'candidateType' && localCandidate.relayProtocol) {
       localRow.children[index].innerText = localCandidate[stat] +
           '(' + localCandidate.relayProtocol + ')';
+      if (localCandidate.url) {
+        localRow.children[index].innerText += '\n' + localCandidate.url;
+      }
     } else if (stat === 'priority') {
-      localRow.children[index].innerText = '0x' +
-          parseInt(localCandidate[stat], 10).toString(16);
+      const priority = parseInt(localCandidate[stat], 10) & 0xFFFFFFFF;
+      localRow.children[index].innerText = '0x' + priority.toString(16) +
+          // RFC 5245 - 4.1.2.1.
+          // priority = (2^24)*(type preference) +
+          //            (2^8)*(local preference) +
+          //            (2^0)*(256 - component ID)
+          '\n' + (priority >> 24) +
+          ' | ' + ((priority >> 8) & 0xFFFF) +
+          ' | ' + (priority & 0xFF);
+
     } else {
       localRow.children[index].innerText = localCandidate[stat];
     }
   });
-  // Network type is only for the local candidate
-  // so put it into the pair row above the address.
+  // Network type is only for the local candidate so put it into the pair
+  // row above the address. Also highlight VPN adapters.
   pairRow.children[2].innerText = localCandidate.networkType;
+  if (localCandidate['vpn*'] === true) {
+    pairRow.children[2].innerText += ' (VPN)';
+  }
   // protocol must always be the same for the pair
   // so put it into the pair row above the candidate type.
+  // Add tcpType for local candidates.
   pairRow.children[4].innerText = localCandidate.protocol;
+  if (localCandidate.tcpType) {
+    pairRow.children[4].innerText += ' ' + localCandidate.tcpType;
+  }
 
   // Remote candidate.
   const remoteRow = findOrCreateGridRow(peerConnectionElement.id,

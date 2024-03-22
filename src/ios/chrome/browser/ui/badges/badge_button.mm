@@ -1,20 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/badges/badge_button.h"
 
-#include <ostream>
+#import <ostream>
 
 #import "base/notreached.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/badges/badge_constants.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/pointer_interaction_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Duration of button animations, in seconds.
@@ -108,9 +104,6 @@ const CGFloat kButtonCircularCornerRadiusDivisor = 2.0;
     case kBadgeTypeTranslate:
       return accepted ? kBadgeButtonTranslateAcceptedAccessibilityIdentifier
                       : kBadgeButtonTranslateAccessibilityIdentifier;
-    case kBadgeTypeAddToReadingList:
-      return accepted ? kBadgeButtonReadingListAcceptedAccessibilityIdentifier
-                      : kBadgeButtonReadingListAccessibilityIdentifier;
     case kBadgeTypePermissionsCamera:
       return accepted
                  ? kBadgeButtonPermissionsCameraAcceptedAccessibilityIdentifier
@@ -119,6 +112,10 @@ const CGFloat kButtonCircularCornerRadiusDivisor = 2.0;
       return accepted
                  ? kBadgeButtonPermissionsMicrophoneAcceptedAccessibilityIdentifier
                  : kBadgeButtonPermissionsMicrophoneAccessibilityIdentifier;
+    case kBadgeTypeParcelTracking:
+      return accepted
+                 ? kBadgeButtonParcelTrackingAcceptedAccessibilityIdentifier
+                 : kBadgeButtonParcelTrackingAccessibilityIdentifier;
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,10 +49,6 @@ SessionID BrowserSyncedWindowDelegate::GetSessionId() const {
 
 int BrowserSyncedWindowDelegate::GetTabCount() const {
   return browser_->tab_strip_model()->count();
-}
-
-int BrowserSyncedWindowDelegate::GetActiveIndex() const {
-  return browser_->tab_strip_model()->active_index();
 }
 
 bool BrowserSyncedWindowDelegate::IsTypeNormal() const {

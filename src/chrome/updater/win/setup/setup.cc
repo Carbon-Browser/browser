@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,66 +7,32 @@
 #include <shlobj.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/path_service.h"
-#include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/version.h"
 #include "base/win/scoped_com_initializer.h"
-#include "base/win/win_util.h"
 #include "chrome/installer/util/self_cleaning_temp_dir.h"
 #include "chrome/installer/util/work_item_list.h"
-#include "chrome/updater/app/server/win/updater_idl.h"
-#include "chrome/updater/app/server/win/updater_internal_idl.h"
-#include "chrome/updater/app/server/win/updater_legacy_idl.h"
 #include "chrome/updater/constants.h"
 #include "chrome/updater/updater_branding.h"
 #include "chrome/updater/updater_scope.h"
 #include "chrome/updater/updater_version.h"
-#include "chrome/updater/util.h"
+#include "chrome/updater/util/util.h"
+#include "chrome/updater/util/win_util.h"
 #include "chrome/updater/win/setup/setup_util.h"
-#include "chrome/updater/win/task_scheduler.h"
 #include "chrome/updater/win/win_constants.h"
-#include "chrome/updater/win/win_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace updater {
 namespace {
-
-// Adds work items to register the per-user internal COM Server with Windows.
-void AddComServerWorkItems(const base::FilePath& com_server_path,
-                           WorkItemList* list) {
-  DCHECK(list);
-  if (com_server_path.empty()) {
-    LOG(DFATAL) << "com_server_path is invalid.";
-    return;
-  }
-
-  for (const auto& clsid : GetSideBySideServers(UpdaterScope::kUser)) {
-    AddInstallServerWorkItems(HKEY_CURRENT_USER, clsid, com_server_path, true,
-                              list);
-  }
-}
-
-// Adds work items to register the COM Interfaces with Windows.
-void AddComInterfacesWorkItems(HKEY root,
-                               const base::FilePath& typelib_path,
-                               WorkItemList* list) {
-  DCHECK(list);
-
-  for (const auto& iid : GetSideBySideInterfaces()) {
-    AddInstallComInterfaceWorkItems(root, typelib_path, iid, list);
-  }
-}
 
 // Returns a list of base file names which the setup copies to the install
 // directory. The source of these files is either the unpacked metainstaller
@@ -82,9 +48,9 @@ std::vector<base::FilePath> GetSetupFiles(const base::FilePath& source_dir) {
       source_dir, false, base::FileEnumerator::FileType::FILES,
       FILE_PATH_LITERAL("*"), base::FileEnumerator::FolderSearchPolicy::ALL,
       base::FileEnumerator::ErrorPolicy::STOP_ENUMERATION);
-  for (base::FilePath file = it.Next(); !file.empty(); file = it.Next()) {
+  it.ForEach([&result](const base::FilePath& file) {
     result.push_back(file.BaseName());
-  }
+  });
   if (it.GetError() != base::File::Error::FILE_OK) {
     VLOG(2) << __func__ << " could not enumerate files : " << it.GetError();
     return {};
@@ -94,20 +60,9 @@ std::vector<base::FilePath> GetSetupFiles(const base::FilePath& source_dir) {
 
 }  // namespace
 
-// TODO(crbug.com/1069976): use specific return values for different code paths.
 int Setup(UpdaterScope scope) {
   VLOG(1) << __func__ << ", scope: " << scope;
-  DCHECK(scope == UpdaterScope::kUser || ::IsUserAnAdmin());
-  HKEY key;
-  switch (scope) {
-    case UpdaterScope::kSystem:
-      key = HKEY_LOCAL_MACHINE;
-      break;
-    case UpdaterScope::kUser:
-      key = HKEY_CURRENT_USER;
-      break;
-  }
-
+  CHECK(!IsSystemInstall(scope) || ::IsUserAnAdmin());
   auto scoped_com_initializer =
       std::make_unique<base::win::ScopedCOMInitializer>(
           base::win::ScopedCOMInitializer::kMTA);
@@ -115,31 +70,36 @@ int Setup(UpdaterScope scope) {
   base::FilePath temp_dir;
   if (!base::GetTempDir(&temp_dir)) {
     LOG(ERROR) << "GetTempDir failed.";
-    return -1;
+    return kErrorCreatingTempDir;
   }
-  const absl::optional<base::FilePath> versioned_dir =
-      GetVersionedDataDirectory(scope);
+  const std::optional<base::FilePath> versioned_dir =
+      GetVersionedInstallDirectory(scope);
   if (!versioned_dir) {
-    LOG(ERROR) << "GetVersionedDataDirectory failed.";
-    return -1;
+    LOG(ERROR) << "GetVersionedInstallDirectory failed.";
+    return kErrorNoVersionedDirectory;
   }
+
+  // Stop any processes that may be running under the versioned path before
+  // installation.
+  StopProcessesUnderPath(*versioned_dir, base::Seconds(15));
+
   base::FilePath exe_path;
   if (!base::PathService::Get(base::FILE_EXE, &exe_path)) {
     LOG(ERROR) << "PathService failed.";
-    return -1;
+    return kErrorPathServiceFailed;
   }
 
   installer::SelfCleaningTempDir backup_dir;
   if (!backup_dir.Initialize(temp_dir, L"updater-backup")) {
     LOG(ERROR) << "Failed to initialize the backup dir.";
-    return -1;
+    return kErrorInitializingBackupDir;
   }
 
   const auto source_dir = exe_path.DirName();
   const auto setup_files = GetSetupFiles(source_dir);
   if (setup_files.empty()) {
     LOG(ERROR) << "No files to set up.";
-    return -1;
+    return kErrorFailedToGetSetupFiles;
   }
 
   // All source files are installed in a flat directory structure inside the
@@ -152,6 +112,7 @@ int Setup(UpdaterScope scope) {
                                       WorkItem::ALWAYS);
   }
 
+  const HKEY key = UpdaterScopeToHKeyRoot(scope);
   for (const auto& key_path :
        {GetRegistryKeyClientsUpdater(), GetRegistryKeyClientStateUpdater()}) {
     install_list->AddCreateRegKeyWorkItem(key, key_path, KEY_WOW64_32KEY);
@@ -165,11 +126,9 @@ int Setup(UpdaterScope scope) {
 
   const base::FilePath updater_exe = GetExecutableRelativePath();
 
-  AddComInterfacesWorkItems(key, versioned_dir->Append(updater_exe),
-                            install_list.get());
   switch (scope) {
     case UpdaterScope::kUser:
-      AddComServerWorkItems(versioned_dir->Append(updater_exe),
+      AddComServerWorkItems(versioned_dir->Append(updater_exe), true,
                             install_list.get());
       break;
     case UpdaterScope::kSystem:
@@ -181,28 +140,31 @@ int Setup(UpdaterScope scope) {
   base::CommandLine run_updater_wake_command(
       versioned_dir->Append(updater_exe));
   run_updater_wake_command.AppendSwitch(kWakeSwitch);
-  if (scope == UpdaterScope::kSystem)
+  if (IsSystemInstall(scope)) {
     run_updater_wake_command.AppendSwitch(kSystemSwitch);
+  }
   run_updater_wake_command.AppendSwitch(kEnableLoggingSwitch);
   run_updater_wake_command.AppendSwitchASCII(kLoggingModuleSwitch,
                                              kLoggingModuleSwitchValue);
 
-  if (scope == UpdaterScope::kUser) {
+  if (!IsSystemInstall(scope)) {
     RegisterUserRunAtStartup(GetTaskNamePrefix(scope), run_updater_wake_command,
                              install_list.get());
   }
 
-  if (!install_list->Do() ||
-      !RegisterWakeTask(run_updater_wake_command, scope)) {
+  install_list->AddWorkItem(
+      new RegisterWakeTaskWorkItem(run_updater_wake_command, scope));
+
+  if (!install_list->Do()) {
     LOG(ERROR) << "Install failed, rolling back...";
     install_list->Rollback();
-    UnregisterWakeTask(scope);
     LOG(ERROR) << "Rollback complete.";
-    return -1;
+    return kErrorFailedToRunInstallList;
   }
 
   VLOG(1) << "Setup succeeded.";
-  return 0;
+
+  return kErrorOk;
 }
 
 }  // namespace updater

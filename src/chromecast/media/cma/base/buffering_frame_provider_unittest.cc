@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromecast/media/cma/test/frame_generator_for_test.h"
 #include "chromecast/media/cma/test/mock_frame_consumer.h"
@@ -132,7 +131,7 @@ TEST_F(BufferingFrameProviderTest, FastProviderSlowConsumer) {
                                   std::size(consumer_delayed_pattern)));
 
   base::test::SingleThreadTaskEnvironment task_environment;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BufferingFrameProviderTest::Start,
                                 base::Unretained(this)));
   base::RunLoop().Run();
@@ -152,7 +151,7 @@ TEST_F(BufferingFrameProviderTest, SlowProviderFastConsumer) {
                                   std::size(consumer_delayed_pattern)));
 
   base::test::SingleThreadTaskEnvironment task_environment;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BufferingFrameProviderTest::Start,
                                 base::Unretained(this)));
   base::RunLoop().Run();
@@ -179,7 +178,7 @@ TEST_F(BufferingFrameProviderTest, SlowFastProducerConsumer) {
                                   std::size(consumer_delayed_pattern)));
 
   base::test::SingleThreadTaskEnvironment task_environment;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BufferingFrameProviderTest::Start,
                                 base::Unretained(this)));
   base::RunLoop().Run();

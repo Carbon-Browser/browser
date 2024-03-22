@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,8 @@ void TestLoginScreenModel::SetFingerprintState(const AccountId& account_id,
 void TestLoginScreenModel::NotifyFingerprintAuthResult(
     const AccountId& account_id,
     bool successful) {}
+void TestLoginScreenModel::ResetFingerprintUIState(
+    const AccountId& account_id) {}
 void TestLoginScreenModel::SetSmartLockState(const AccountId& account_id,
                                              ash::SmartLockState state) {}
 void TestLoginScreenModel::NotifySmartLockAuthResult(
@@ -29,6 +31,9 @@ void TestLoginScreenModel::EnableAuthForUser(const AccountId& account_id) {}
 void TestLoginScreenModel::DisableAuthForUser(
     const AccountId& account_id,
     const ash::AuthDisabledData& auth_disabled_data) {}
+void TestLoginScreenModel::AuthenticationStageChange(
+    ash::AuthenticationStage auth_state) {}
+
 void TestLoginScreenModel::SetTpmLockedState(const AccountId& user,
                                              bool is_locked,
                                              base::TimeDelta time_left) {}
@@ -37,9 +42,6 @@ void TestLoginScreenModel::SetTapToUnlockEnabledForUser(
     bool enabled) {}
 void TestLoginScreenModel::ForceOnlineSignInForUser(
     const AccountId& account_id) {}
-void TestLoginScreenModel::ShowEasyUnlockIcon(
-    const AccountId& account_id,
-    const ash::EasyUnlockIconInfo& icon_info) {}
 void TestLoginScreenModel::SetChallengeResponseAuthEnabledForUser(
     const AccountId& user,
     bool enabled) {}

@@ -1,19 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.payments;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.payments.mojom.PaymentDetails;
 import org.chromium.payments.mojom.PaymentValidationErrors;
 
 import java.nio.ByteBuffer;
 
-/**
- * Static class to represent a JNI interface to a C++ validation library.
- */
+/** Static class to represent a JNI interface to a C++ validation library. */
 @JNINamespace("payments")
 public class PaymentValidator {
     public static boolean validatePaymentDetails(PaymentDetails details) {
@@ -33,6 +32,8 @@ public class PaymentValidator {
     @NativeMethods
     interface Natives {
         boolean validatePaymentDetailsAndroid(ByteBuffer buffer);
+
         boolean validatePaymentValidationErrorsAndroid(ByteBuffer buffer);
     }
-};
+}
+;

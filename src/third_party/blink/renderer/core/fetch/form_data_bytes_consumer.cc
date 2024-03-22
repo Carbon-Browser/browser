@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/fetch/blob_bytes_consumer.h"
+#include "third_party/blink/renderer/core/fileapi/file_backed_blob_factory_dispatcher.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer_view.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
@@ -198,8 +199,8 @@ class DataPipeAndDataBytesConsumer final : public BytesConsumer {
 
         data_pipe_getter->Read(
             std::move(pipe_producer_handle),
-            WTF::Bind(&DataPipeAndDataBytesConsumer::DataPipeGetterCallback,
-                      WrapWeakPersistent(this)));
+            WTF::BindOnce(&DataPipeAndDataBytesConsumer::DataPipeGetterCallback,
+                          WrapWeakPersistent(this)));
         DataPipeBytesConsumer::CompletionNotifier* completion_notifier =
             nullptr;
         data_pipe_consumer_ = MakeGarbageCollected<DataPipeBytesConsumer>(
@@ -416,9 +417,14 @@ class ComplexFormDataBytesConsumer final : public BytesConsumer {
               return;
             }
           }
-          blob_data->AppendFile(element.filename_, element.file_start_,
-                                file_length,
-                                element.expected_file_modification_time_);
+          blob_data->AppendBlob(
+              BlobDataHandle::CreateForFile(
+                  FileBackedBlobFactoryDispatcher::GetFileBackedBlobFactory(
+                      execution_context),
+                  element.filename_, element.file_start_, file_length,
+                  element.expected_file_modification_time_,
+                  /*content_type=*/""),
+              0, file_length);
           break;
         }
         case FormDataElement::kEncodedBlob:

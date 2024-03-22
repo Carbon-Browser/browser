@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,8 @@
 #include "ash/constants/app_types.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/session/test_session_controller_client.h"
+#include "ash/system/privacy_hub/sensor_disabled_notification_delegate.h"
+#include "ash/test/pixel/ash_pixel_test_init_params.h"
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/overview/overview_types.h"
 #include "base/compiler_specific.h"
@@ -26,6 +28,7 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/aura/client/window_types.h"
 #include "ui/aura/env.h"
+#include "ui/compositor/test/test_context_factories.h"
 #include "ui/display/display.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/test/event_generator.h"
@@ -68,8 +71,9 @@ namespace ash {
 
 class AmbientAshTestHelper;
 class AppListTestHelper;
+class AshPixelDiffer;
 class AshTestHelper;
-class AshTestUiStabilizer;
+class NotificationCenterTray;
 class Shelf;
 class TestAppListClient;
 class TestShellDelegate;
@@ -106,6 +110,9 @@ class AshTestBase : public testing::Test {
   void SetUp(std::unique_ptr<TestShellDelegate> delegate);
   void TearDown() override;
 
+  // Returns the notification center tray on the primary display.
+  static NotificationCenterTray* GetPrimaryNotificationCenterTray();
+
   // Returns the Shelf for the primary display.
   static Shelf* GetPrimaryShelf();
 
@@ -117,6 +124,8 @@ class AshTestBase : public testing::Test {
 
   // Update the display configuration as given in |display_specs|.
   // See ash::DisplayManagerTestApi::UpdateDisplay for more details.
+  // Note: To properly specify the radii of display's panel upon startup, set it
+  // via specifying the command line switch `ash-host-window-bounds`.
   void UpdateDisplay(const std::string& display_specs);
 
   // Returns a root Window. Usually this is the active root Window, but that
@@ -184,9 +193,13 @@ class AshTestBase : public testing::Test {
   // Attach |window| to the current shell's root window.
   void ParentWindowInPrimaryRootWindow(aura::Window* window);
 
-  // Prepares for the pixel diff test. NOTE: this function should be called
-  // before `SetUp()`.
-  void PrepareForPixelDiffTest();
+  // Returns the raw pointer carried by `pixel_differ_`.
+  AshPixelDiffer* GetPixelDiffer();
+
+  // Stabilizes the variable UI components (such as the battery view). It should
+  // be called after the active user changes since some UI components are
+  // associated with the active account.
+  void StabilizeUIForPixelTest();
 
   // Returns the EventGenerator that uses screen coordinates and works
   // across multiple displays. It creates a new generator if it
@@ -224,6 +237,21 @@ class AshTestBase : public testing::Test {
   bool ExitOverview(
       OverviewEnterExitType type = OverviewEnterExitType::kNormal);
 
+  // Sets shelf animation duration for all displays.
+  void SetShelfAnimationDuration(base::TimeDelta duration);
+
+  // Waits for shelf animation in all displays.
+  void WaitForShelfAnimation();
+
+  // Execute a list of tasks during a drag and drop sequence in the apps grid.
+  // This method should be called after the drag is initiated by long pressing
+  // over an app but before actually moving the pointer to drag the item. When
+  // the drag and drop sequence is not handled by DragDropController, the list
+  // of tasks is just run sequentially outside the loop
+  void MaybeRunDragAndDropSequenceForAppList(
+      std::list<base::OnceClosure>* tasks,
+      bool is_touch);
+
  protected:
   enum UserSessionBlockReason {
     FIRST_BLOCK_REASON,
@@ -239,13 +267,35 @@ class AshTestBase : public testing::Test {
   // Returns the rotation currently active for the internal display.
   static display::Display::Rotation GetCurrentInternalDisplayRotation();
 
+  // Creates init params to set up a pixel test. If the test is not pixel
+  // related, returns `std::nullopt`. This function should be overridden by ash
+  // pixel tests.
+  virtual std::optional<pixel_test::InitParams> CreatePixelTestInitParams()
+      const;
+
   void set_start_session(bool start_session) { start_session_ = start_session; }
+
+  void set_create_global_cras_audio_handler(
+      bool create_global_cras_audio_handler) {
+    create_global_cras_audio_handler_ = create_global_cras_audio_handler;
+  }
+
+  void set_create_quick_pair_mediator(bool create_quick_pair_mediator) {
+    create_quick_pair_mediator_ = create_quick_pair_mediator;
+  }
 
   base::test::TaskEnvironment* task_environment() {
     return task_environment_.get();
   }
   TestingPrefServiceSimple* local_state() { return &local_state_; }
   AshTestHelper* ash_test_helper() { return ash_test_helper_.get(); }
+
+  // Returns nullptr before SetUp() is called.
+  ui::InProcessContextFactory* GetContextFactory() {
+    return test_context_factories_
+               ? test_context_factories_->GetContextFactory()
+               : nullptr;
+  }
 
   void SetUserPref(const std::string& user_email,
                    const std::string& path,
@@ -327,11 +377,23 @@ class AshTestBase : public testing::Test {
  private:
   void CreateWindowTreeIfNecessary();
 
+  // Prepares for pixel tests by enabling related flags and building
+  // `ash_test_helper_`.
+  void PrepareForPixelDiffTest();
+
   bool setup_called_ = false;
   bool teardown_called_ = false;
 
   // SetUp() doesn't activate session if this is set to false.
   bool start_session_ = true;
+
+  // `SetUp()` doesn't create a global `CrasAudioHandler` instance if this is
+  // set to false.
+  bool create_global_cras_audio_handler_ = true;
+
+  // `SetUp()` doesn't create a global `QuickPairMediator` instance if this is
+  // set to false.
+  bool create_quick_pair_mediator_ = true;
 
   // |task_environment_| is initialized-once at construction time but
   // subclasses may elect to provide their own.
@@ -340,13 +402,19 @@ class AshTestBase : public testing::Test {
   // A pref service used for local state.
   TestingPrefServiceSimple local_state_;
 
+  // A helper class to take screen shots then compare with benchmarks. Set by
+  // `PrepareForPixelDiffTest()`.
+  std::unique_ptr<AshPixelDiffer> pixel_differ_;
+
+  std::unique_ptr<ui::TestContextFactories> test_context_factories_;
+
   // Must be constructed after |task_environment_|.
   std::unique_ptr<AshTestHelper> ash_test_helper_;
 
   std::unique_ptr<ui::test::EventGenerator> event_generator_;
 
-  // Used only for pixel tests. Set by `PrepareForPixelDiffTest()`.
-  std::unique_ptr<AshTestUiStabilizer> ui_stabilizer_;
+  std::unique_ptr<ScopedSensorDisabledNotificationDelegateForTest>
+      scoped_disabled_notification_delegate_;
 };
 
 class NoSessionAshTestBase : public AshTestBase {

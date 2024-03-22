@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "ash/system/palette/palette_tool.h"
 #include "ash/system/palette/palette_tool_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -65,9 +65,6 @@ class PaletteToolManagerTest : public ::testing::Test,
     NOTREACHED();
     return nullptr;
   }
-  void RecordPaletteOptionsUsage(PaletteTrayOptions option,
-                                 PaletteInvocationMethod method) override {}
-  void RecordPaletteModeCancellation(PaletteModeCancelType type) override {}
 
   // PaletteTool::Delegate:
   void EnableTool(PaletteToolId tool_id) override {}

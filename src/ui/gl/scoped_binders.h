@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define UI_GL_SCOPED_BINDERS_H_
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "ui/gl/gl_export.h"
 
 namespace gl {
@@ -111,7 +112,9 @@ class GL_EXPORT ScopedVertexAttribArray {
   int type_;
   int normalized_;
   int stride_;
-  void* pointer_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION void* pointer_;
 };
 
 class GL_EXPORT ScopedBufferBinder {

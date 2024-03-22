@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,15 +14,15 @@ namespace blink {
 InterpolationValue SVGAngleInterpolationType::MaybeConvertNeutral(
     const InterpolationValue&,
     ConversionCheckers&) const {
-  return InterpolationValue(std::make_unique<InterpolableNumber>(0));
+  return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(0));
 }
 
 InterpolationValue SVGAngleInterpolationType::MaybeConvertSVGValue(
     const SVGPropertyBase& svg_value) const {
   if (!To<SVGAngle>(svg_value).IsNumeric())
     return nullptr;
-  return InterpolationValue(
-      std::make_unique<InterpolableNumber>(To<SVGAngle>(svg_value).Value()));
+  return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(
+      To<SVGAngle>(svg_value).Value()));
 }
 
 SVGPropertyBase* SVGAngleInterpolationType::AppliedSVGValue(

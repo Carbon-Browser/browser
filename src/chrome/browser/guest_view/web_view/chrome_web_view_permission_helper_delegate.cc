@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "chrome/common/buildflags.h"
 #include "content/public/browser/browser_context.h"
@@ -40,11 +40,8 @@ void CallbackWrapper(base::OnceCallback<void(bool)> callback,
 void ChromeWebViewPermissionHelperDelegate::BindPluginAuthHost(
     mojo::PendingAssociatedReceiver<chrome::mojom::PluginAuthHost> receiver,
     content::RenderFrameHost* rfh) {
-  auto* web_contents = content::WebContents::FromRenderFrameHost(rfh);
-  if (!web_contents)
-    return;
   auto* permission_helper =
-      extensions::WebViewPermissionHelper::FromWebContents(web_contents);
+      extensions::WebViewPermissionHelper::FromRenderFrameHost(rfh);
   if (!permission_helper)
     return;
   WebViewPermissionHelperDelegate* delegate = permission_helper->delegate();
@@ -79,11 +76,11 @@ void ChromeWebViewPermissionHelperDelegate::BlockedUnauthorizedPlugin(
   const char kPluginName[] = "name";
   const char kPluginIdentifier[] = "identifier";
 
-  base::DictionaryValue info;
-  info.SetStringKey(kPluginName, name);
-  info.SetStringKey(kPluginIdentifier, identifier);
+  base::Value::Dict info;
+  info.Set(kPluginName, name);
+  info.Set(kPluginIdentifier, identifier);
   web_view_permission_helper()->RequestPermission(
-      WEB_VIEW_PERMISSION_TYPE_LOAD_PLUGIN, info,
+      WEB_VIEW_PERMISSION_TYPE_LOAD_PLUGIN, std::move(info),
       base::BindOnce(
           &ChromeWebViewPermissionHelperDelegate::OnPermissionResponse,
           weak_factory_.GetWeakPtr(), identifier),
@@ -109,10 +106,10 @@ void ChromeWebViewPermissionHelperDelegate::CanDownload(
     const GURL& url,
     const std::string& request_method,
     base::OnceCallback<void(bool)> callback) {
-  base::DictionaryValue request_info;
-  request_info.SetStringKey(guest_view::kUrl, url.spec());
+  base::Value::Dict request_info;
+  request_info.Set(guest_view::kUrl, url.spec());
   web_view_permission_helper()->RequestPermission(
-      WEB_VIEW_PERMISSION_TYPE_DOWNLOAD, request_info,
+      WEB_VIEW_PERMISSION_TYPE_DOWNLOAD, std::move(request_info),
       base::BindOnce(
           &ChromeWebViewPermissionHelperDelegate::OnDownloadPermissionResponse,
           weak_factory_.GetWeakPtr(), std::move(callback)),
@@ -130,18 +127,17 @@ void ChromeWebViewPermissionHelperDelegate::RequestPointerLockPermission(
     bool user_gesture,
     bool last_unlocked_by_target,
     base::OnceCallback<void(bool)> callback) {
-  base::DictionaryValue request_info;
-  request_info.SetBoolKey(guest_view::kUserGesture, user_gesture);
-  request_info.SetBoolKey(webview::kLastUnlockedBySelf,
-                          last_unlocked_by_target);
-  request_info.SetStringKey(guest_view::kUrl, web_view_permission_helper()
-                                                  ->web_view_guest()
-                                                  ->web_contents()
-                                                  ->GetLastCommittedURL()
-                                                  .spec());
+  base::Value::Dict request_info;
+  request_info.Set(guest_view::kUserGesture, user_gesture);
+  request_info.Set(webview::kLastUnlockedBySelf, last_unlocked_by_target);
+  request_info.Set(guest_view::kUrl, web_view_permission_helper()
+                                         ->web_view_guest()
+                                         ->web_contents()
+                                         ->GetLastCommittedURL()
+                                         .spec());
 
   web_view_permission_helper()->RequestPermission(
-      WEB_VIEW_PERMISSION_TYPE_POINTER_LOCK, request_info,
+      WEB_VIEW_PERMISSION_TYPE_POINTER_LOCK, std::move(request_info),
       base::BindOnce(&ChromeWebViewPermissionHelperDelegate::
                          OnPointerLockPermissionResponse,
                      weak_factory_.GetWeakPtr(), std::move(callback)),
@@ -159,9 +155,9 @@ void ChromeWebViewPermissionHelperDelegate::RequestGeolocationPermission(
     const GURL& requesting_frame,
     bool user_gesture,
     base::OnceCallback<void(bool)> callback) {
-  base::DictionaryValue request_info;
-  request_info.SetStringKey(guest_view::kUrl, requesting_frame.spec());
-  request_info.SetBoolKey(guest_view::kUserGesture, user_gesture);
+  base::Value::Dict request_info;
+  request_info.Set(guest_view::kUrl, requesting_frame.spec());
+  request_info.Set(guest_view::kUserGesture, user_gesture);
 
   // It is safe to hold an unretained pointer to
   // ChromeWebViewPermissionHelperDelegate because this callback is called from
@@ -172,7 +168,7 @@ void ChromeWebViewPermissionHelperDelegate::RequestGeolocationPermission(
                      weak_factory_.GetWeakPtr(), user_gesture,
                      base::BindOnce(&CallbackWrapper, std::move(callback)));
   web_view_permission_helper()->RequestPermission(
-      WEB_VIEW_PERMISSION_TYPE_GEOLOCATION, request_info,
+      WEB_VIEW_PERMISSION_TYPE_GEOLOCATION, std::move(request_info),
       std::move(permission_callback), false /* allowed_by_default */);
 }
 
@@ -192,19 +188,20 @@ void ChromeWebViewPermissionHelperDelegate::OnGeolocationPermissionResponse(
       ->browser_context()
       ->GetPermissionController()
       ->RequestPermissionFromCurrentDocument(
-          blink::PermissionType::GEOLOCATION,
-          web_view_guest()->embedder_web_contents()->GetPrimaryMainFrame(),
-          user_gesture, std::move(callback));
+          web_view_guest()->embedder_rfh(),
+          content::PermissionRequestDescription(
+              blink::PermissionType::GEOLOCATION, user_gesture),
+          std::move(callback));
 }
 
 void ChromeWebViewPermissionHelperDelegate::RequestFileSystemPermission(
     const GURL& url,
     bool allowed_by_default,
     base::OnceCallback<void(bool)> callback) {
-  base::DictionaryValue request_info;
-  request_info.SetStringKey(guest_view::kUrl, url.spec());
+  base::Value::Dict request_info;
+  request_info.Set(guest_view::kUrl, url.spec());
   web_view_permission_helper()->RequestPermission(
-      WEB_VIEW_PERMISSION_TYPE_FILESYSTEM, request_info,
+      WEB_VIEW_PERMISSION_TYPE_FILESYSTEM, std::move(request_info),
       base::BindOnce(&ChromeWebViewPermissionHelperDelegate::
                          OnFileSystemPermissionResponse,
                      weak_factory_.GetWeakPtr(), std::move(callback)),

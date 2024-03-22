@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,6 +102,11 @@ class AndroidAppCommunicationTestSupport {
 
   // Returns the browser context to use.
   virtual content::BrowserContext* context() = 0;
+
+  // Returns the expected error string when the communication cannot connected
+  // to the instance. For Lacros, this string will be different to specify that
+  // the connection is failed at the Lacros to Ash connection.
+  virtual std::string GetNoInstanceExpectedErrorString() = 0;
 
  protected:
   AndroidAppCommunicationTestSupport() = default;

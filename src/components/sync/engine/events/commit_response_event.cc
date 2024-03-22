@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/engine/events/commit_response_event.h"
 
+#include "base/values.h"
 #include "components/sync/protocol/proto_value_conversions.h"
 
 namespace syncer {
@@ -32,9 +33,12 @@ std::string CommitResponseEvent::GetDetails() const {
   return "Result: " + result_.ToString();
 }
 
-std::unique_ptr<base::DictionaryValue> CommitResponseEvent::GetProtoMessage(
+base::Value::Dict CommitResponseEvent::GetProtoMessage(
     bool include_specifics) const {
-  return ClientToServerResponseToValue(response_, include_specifics);
+  return ClientToServerResponseToValue(
+             response_, {.include_specifics = include_specifics,
+                         .include_full_get_update_triggers = false})
+      .TakeDict();
 }
 
 }  // namespace syncer

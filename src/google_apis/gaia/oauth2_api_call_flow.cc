@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/escape.h"
 #include "base/strings/stringprintf.h"
+#include "google_apis/credentials_mode.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "net/base/load_flags.h"
@@ -98,7 +99,8 @@ std::unique_ptr<network::SimpleURLLoader> OAuth2ApiCallFlow::CreateURLLoader(
   auto request = std::make_unique<network::ResourceRequest>();
   request->url = CreateApiCallUrl();
   request->method = request_type;
-  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  request->credentials_mode =
+      google_apis::GetOmitCredentialsModeForGaiaRequests();
   request->headers = CreateApiCallHeaders();
   request->headers.SetHeader("Authorization",
                              MakeAuthorizationValue(access_token));

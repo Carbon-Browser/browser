@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/net/dns_probe_runner.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
@@ -39,7 +39,7 @@ class SecureDnsHandler : public SettingsPageUIHandler {
   // as a dictionary with the following keys: "name" (the text to display in the
   // UI), "value" (the DoH template for this provider), and "policy" (the URL of
   // the provider's privacy policy).
-  base::Value GetSecureDnsResolverList();
+  base::Value::List GetSecureDnsResolverList();
 
   void SetNetworkContextForTesting(
       network::mojom::NetworkContext* network_context);
@@ -60,9 +60,6 @@ class SecureDnsHandler : public SettingsPageUIHandler {
 
   // Returns whether or not a test query succeeds with the provided config.
   void HandleProbeConfig(const base::Value::List& args);
-
-  // Records metrics on the user-initiated dropdown selection event.
-  void HandleRecordUserDropdownInteraction(const base::Value::List& args);
 
   // Retrieves the current host resolver configuration, computes the
   // corresponding UI representation, and sends it to javascript.

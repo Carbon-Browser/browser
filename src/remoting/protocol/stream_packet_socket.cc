@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/stream_packet_socket.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/webrtc/net_address_utils.h"
 #include "net/base/address_list.h"
 #include "net/base/io_buffer.h"
@@ -14,8 +14,7 @@
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "remoting/protocol/stun_tcp_packet_processor.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -311,9 +310,9 @@ void StreamPacketSocket::DoWrite() {
     if (packet.data->BytesConsumed() == 0) {
       // Only apply packet options when we are about to send the head of the
       // packet.
-      packet_processor_->ApplyPacketOptions(
-          reinterpret_cast<uint8_t*>(packet.data->data()), packet.data->size(),
-          packet.options.packet_time_params);
+      packet_processor_->ApplyPacketOptions(packet.data->bytes(),
+                                            packet.data->size(),
+                                            packet.options.packet_time_params);
     }
     int result = socket_->Write(
         packet.data.get(), packet.data->BytesRemaining(),
@@ -401,8 +400,9 @@ bool StreamPacketSocket::HandleReadResult(int result) {
     auto packet = packet_processor_->Unpack(
         head + pos, read_buffer_->offset() - pos, &bytes_consumed);
     if (packet) {
-      SignalReadPacket(this, packet->data(), packet->size(), GetRemoteAddress(),
-                       rtc::TimeMicros());
+      NotifyPacketReceived(rtc::ReceivedPacket(
+          rtc::MakeArrayView(packet->bytes(), packet->size()),
+          GetRemoteAddress(), webrtc::Timestamp::Micros(rtc::TimeMicros())));
     }
     if (!bytes_consumed) {
       break;
@@ -445,5 +445,4 @@ void StreamPacketSocket::CloseWithNetError(int net_error) {
   SignalClose(this, error_);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

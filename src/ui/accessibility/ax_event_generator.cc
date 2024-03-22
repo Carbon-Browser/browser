@@ -1,15 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/ax_event_generator.h"
 
-#include <algorithm>
-
 #include "base/containers/contains.h"
+#include "base/no_destructor.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_event.h"
-#include "ui/accessibility/ax_live_region_tracker.h"
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_role_properties.h"
 
@@ -202,10 +200,8 @@ void swap(AXEventGenerator::Iterator& lhs, AXEventGenerator::Iterator& rhs) {
 AXEventGenerator::AXEventGenerator() = default;
 
 AXEventGenerator::AXEventGenerator(AXTree* tree) : tree_(tree) {
-  if (tree_) {
+  if (tree)  // Can be null in unit tests.
     tree_event_observation_.Observe(tree_.get());
-    live_region_tracker_ = std::make_unique<AXLiveRegionTracker>(*tree_);
-  }
 }
 
 AXEventGenerator::~AXEventGenerator() = default;
@@ -214,13 +210,10 @@ void AXEventGenerator::SetTree(AXTree* new_tree) {
   if (tree_) {
     DCHECK(tree_event_observation_.IsObservingSource(tree_.get()));
     tree_event_observation_.Reset();
-    live_region_tracker_.reset();
   }
   tree_ = new_tree;
-  if (tree_) {
+  if (tree_)
     tree_event_observation_.Observe(tree_.get());
-    live_region_tracker_ = std::make_unique<AXLiveRegionTracker>(*tree_);
-  }
 }
 
 void AXEventGenerator::ReleaseTree() {
@@ -286,9 +279,11 @@ void AXEventGenerator::AddEvent(AXNode* node, AXEventGenerator::Event event) {
                       tree_->event_data()->event_intents);
 }
 
-void AXEventGenerator::OnIgnoredWillChange(AXTree* tree,
-                                           AXNode* node,
-                                           bool is_ignored_new_value) {
+void AXEventGenerator::OnIgnoredWillChange(
+    AXTree* tree,
+    AXNode* node,
+    bool is_ignored_new_value,
+    bool is_changing_unignored_parents_children) {
   // If the node had been ignored and invisible before it changes to unignored,
   // then we should not fire `EVENT::PARENT_CHANGED` on its children because
   // they were previously unknown to ATs as they were in a hidden subtree.
@@ -388,13 +383,17 @@ void AXEventGenerator::OnStateChanged(AXTree* tree,
   DCHECK_NE(state, ax::mojom::State::kIgnored)
       << "The ignored state should be handled in "
          "`AXEventGenerator::OnIgnoredChanged` and not in this method.";
+  if (node->IsIgnored())
+    return;
   AddEvent(node, Event::STATE_CHANGED);
   AddEvent(node, Event::WIN_IACCESSIBLE_STATE_CHANGED);
 
   switch (state) {
     case ax::mojom::State::kExpanded:
-      AddEvent(node, new_value ? Event::EXPANDED : Event::COLLAPSED);
-
+      if (node->data().HasState(ax::mojom::State::kCollapsed) ||
+          node->data().HasState(ax::mojom::State::kExpanded)) {
+        AddEvent(node, new_value ? Event::EXPANDED : Event::COLLAPSED);
+      }
       if (IsTableRow(node->GetRole()) ||
           node->GetRole() == ax::mojom::Role::kTreeItem) {
         AXNode* container = node;
@@ -412,6 +411,13 @@ void AXEventGenerator::OnStateChanged(AXTree* tree,
       break;
     case ax::mojom::State::kRequired:
       AddEvent(node, Event::REQUIRED_STATE_CHANGED);
+      break;
+    case ax::mojom::State::kAutofillAvailable:
+      AddEvent(node, Event::AUTOFILL_AVAILABILITY_CHANGED);
+      break;
+    case ax::mojom::State::kHorizontal:
+    case ax::mojom::State::kVertical:
+      AddEvent(node, Event::ORIENTATION_CHANGED);
       break;
     default:
       break;
@@ -486,7 +492,7 @@ void AXEventGenerator::OnStringAttributeChanged(AXTree* tree,
       // If it's in a live region, fire live region events.
       if (node->HasStringAttribute(
               ax::mojom::StringAttribute::kContainerLiveStatus)) {
-        FireLiveRegionEvents(node);
+        FireLiveRegionEvents(node, /* is_removal */ false);
       }
 
       FireValueInTextFieldChangedEventIfNecessary(tree, node);
@@ -532,7 +538,7 @@ void AXEventGenerator::OnIntAttributeChanged(AXTree* tree,
     case ax::mojom::IntAttribute::kAriaCurrentState:
       AddEvent(node, Event::ARIA_CURRENT_CHANGED);
       break;
-    case ax::mojom::IntAttribute::kDropeffect:
+    case ax::mojom::IntAttribute::kDropeffectDeprecated:
       AddEvent(node, Event::DROPEFFECT_CHANGED);
       break;
     case ax::mojom::IntAttribute::kHasPopup:
@@ -663,7 +669,7 @@ void AXEventGenerator::OnBoolAttributeChanged(AXTree* tree,
       if (!new_value)
         AddEvent(node, Event::LAYOUT_INVALIDATED);
       break;
-    case ax::mojom::BoolAttribute::kGrabbed:
+    case ax::mojom::BoolAttribute::kGrabbedDeprecated:
       AddEvent(node, Event::GRABBED_CHANGED);
       break;
     case ax::mojom::BoolAttribute::kLiveAtomic:
@@ -770,24 +776,19 @@ void AXEventGenerator::OnTreeDataChanged(AXTree* tree,
       // fields, an event should still fire on the field where the selection
       // ends.
       if (AXNode* text_field = selection_focus->GetTextFieldAncestor())
-        AddEvent(text_field, Event::SELECTION_IN_TEXT_FIELD_CHANGED);
+        AddEvent(text_field, Event::TEXT_SELECTION_CHANGED);
     }
   }
 }
 
-void AXEventGenerator::OnNodeWillBeDeleted(AXTree* tree, AXNode* node) {
-  DCHECK_EQ(tree_, tree);
-  live_region_tracker_->OnNodeWillBeDeleted(*node);
-  FireValueInTextFieldChangedEventIfNecessary(tree, node);
-}
-
 void AXEventGenerator::OnSubtreeWillBeDeleted(AXTree* tree, AXNode* node) {
   DCHECK_EQ(tree_, tree);
+  FireValueInTextFieldChangedEventIfNecessary(tree, node);
+  FireLiveRegionEvents(node, /* removal */ true);
 }
 
 void AXEventGenerator::OnNodeWillBeReparented(AXTree* tree, AXNode* node) {
   DCHECK_EQ(tree_, tree);
-  tree_events_.erase(node->id());
 }
 
 void AXEventGenerator::OnSubtreeWillBeReparented(AXTree* tree, AXNode* node) {
@@ -806,6 +807,15 @@ void AXEventGenerator::OnNodeReparented(AXTree* tree, AXNode* node) {
 
 void AXEventGenerator::OnNodeCreated(AXTree* tree, AXNode* node) {
   DCHECK_EQ(tree_, tree);
+  // Note: now that AXEventGenerator is part of AXTreeManager, this is being
+  // called before BrowserAccessibilityManager::OnNodeCreated() is called,
+  // where things used to be the other way around. That means that the new
+  // node is in the tree's map, but not BAM's map yet, which means certain
+  // calls, such as IsLeaf() may trigger a DCHECK because they call GetFromID(),
+  // which checks to make sure that the id maps are in sync.
+  // TODO(accesibility) Use a single id map so that issues like this go away.
+  // Or for now, just have this call BAM::OnNodeCreated() directly to enforce
+  // the order.
   FireValueInTextFieldChangedEventIfNecessary(tree, node);
 }
 
@@ -819,14 +829,6 @@ void AXEventGenerator::OnAtomicUpdateFinished(
   for (const auto& change : changes) {
     DCHECK(change.node);
 
-    if ((change.type == NODE_CREATED || change.type == SUBTREE_CREATED ||
-         change.type == NODE_REPARENTED || change.type == SUBTREE_REPARENTED)) {
-      if (change.node->HasStringAttribute(
-              ax::mojom::StringAttribute::kContainerLiveStatus)) {
-        live_region_tracker_->UpdateCachedLiveRootForNode(*change.node);
-      }
-    }
-
     if (change.type == SUBTREE_CREATED) {
       AddEvent(change.node, Event::SUBTREE_CREATED);
     } else if (change.type != NODE_CREATED) {
@@ -834,32 +836,23 @@ void AXEventGenerator::OnAtomicUpdateFinished(
       continue;
     }
 
+    if (change.node->GetBoolAttribute(ax::mojom::BoolAttribute::kSelected) &&
+        (change.type == SUBTREE_CREATED || change.type == NODE_CREATED)) {
+      OnBoolAttributeChanged(tree, change.node,
+                             ax::mojom::BoolAttribute::kSelected,
+                             /*new_value*/ true);
+    }
+
     if (IsAlert(change.node->GetRole()))
       AddEvent(change.node, Event::ALERT);
     else if (change.node->data().IsActiveLiveRegionRoot())
       AddEvent(change.node, Event::LIVE_REGION_CREATED);
     else if (change.node->data().IsContainedInActiveLiveRegion())
-      FireLiveRegionEvents(change.node);
+      FireLiveRegionEvents(change.node, /* is_removal */ false);
   }
 
   FireActiveDescendantEvents();
   nodes_to_suppress_parent_changed_on_.clear();
-
-  // If we queued any live region change events during node deletion, add them
-  // here. It's necessary to wait to add these events, because an update might
-  // destroy and recreate live region roots after OnNodeWillBeDeleted is called.
-  // TODO(mrobinson): Consider designing AXEventGenerator to have a more
-  // resilient way to queue up events for nodes that might be destroyed and
-  // recreated in a single update.
-  for (auto& id : live_region_tracker_->live_region_roots_with_changes()) {
-    // If node is null, the live region root with a change was deleted during
-    // the course of this update and we should not trigger an event.
-    if (AXNode* node = tree_->GetFromId(id)) {
-      AddEvent(node, Event::LIVE_REGION_CHANGED);
-    }
-  }
-
-  live_region_tracker_->OnAtomicUpdateFinished();
 
   PostprocessEvents();
 }
@@ -870,21 +863,42 @@ void AXEventGenerator::AddEventsForTesting(
   tree_events_[node.id()] = events;
 }
 
-void AXEventGenerator::FireLiveRegionEvents(AXNode* node) {
-  AXNode* live_root = live_region_tracker_->GetLiveRootIfNotBusy(*node);
+bool AXEventGenerator::IsRemovalRelevantInLiveRegion(AXNode* node) {
+  std::string aria_relevant = node->GetStringAttribute(
+      ax::mojom::StringAttribute::kContainerLiveRelevant);
+  if (aria_relevant.empty())
+    return false;
+  std::vector<std::string> tokens = base::SplitString(
+      aria_relevant, " ", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+  return std::any_of(tokens.begin(), tokens.end(), [](std::string token) {
+    return token == "all" || token == "removals";
+  });
+}
 
-  // Note that |live_root| might be nullptr if a live region was just added,
-  // or if it has aria-busy="true".
-  if (!live_root)
+void AXEventGenerator::FireLiveRegionEvents(AXNode* node, bool is_removal) {
+  AXNode* live_root = node;
+  std::string container_live = node->GetStringAttribute(
+      ax::mojom::StringAttribute::kContainerLiveStatus);
+  // Return early if not in a live region.
+  if (container_live.empty() || container_live == "off")
     return;
 
-  // Fire LIVE_REGION_NODE_CHANGED on each node that changed.
-  if (!node->GetStringAttribute(ax::mojom::StringAttribute::kName).empty()) {
-    AddEvent(node, Event::LIVE_REGION_NODE_CHANGED);
-  }
+  if (is_removal && !IsRemovalRelevantInLiveRegion(node))
+    return;
 
-  // Fire LIVE_REGION_CHANGED on the root of the live region.
-  AddEvent(live_root, Event::LIVE_REGION_CHANGED);
+  while (live_root &&
+         live_root->GetStringAttribute(
+             ax::mojom::StringAttribute::kLiveStatus) != container_live)
+    live_root = live_root->parent();
+
+  if (live_root &&
+      !live_root->GetBoolAttribute(ax::mojom::BoolAttribute::kBusy)) {
+    // Fire LIVE_REGION_NODE_CHANGED on each node that changed.
+    if (!node->GetStringAttribute(ax::mojom::StringAttribute::kName).empty())
+      AddEvent(node, Event::LIVE_REGION_NODE_CHANGED);
+    // Fire LIVE_REGION_NODE_CHANGED on the root of the live region.
+    AddEvent(live_root, Event::LIVE_REGION_CHANGED);
+  }
 }
 
 void AXEventGenerator::FireActiveDescendantEvents() {
@@ -907,12 +921,26 @@ void AXEventGenerator::FireActiveDescendantEvents() {
   active_descendant_changed_.clear();
 }
 
+bool CanContributeToValueOfTextfield(AXNode* target_node) {
+  // TODO(accessibility) Changes to inline text boxes should be redundant with
+  // changes in their parent static text containers. We should probably return
+  // false for those in order to save on performance.
+
+  // Text and line breaks contribute.
+  if (ui::IsText(target_node->GetRole()))
+    return true;
+
+  // Non-text leaf nodes contribute, e.g. images.
+  if (target_node->GetChildCount() == 0)
+    return true;
+
+  return false;
+}
+
 void AXEventGenerator::FireValueInTextFieldChangedEventIfNecessary(
     AXTree* tree,
     AXNode* target_node) {
-  // Text is only found on leaf nodes, so the text in a text field would change
-  // if any of the leaf nodes in it have changed their names.
-  if (!target_node->IsLeaf())
+  if (!CanContributeToValueOfTextfield(target_node))
     return;
 
   AXNode* text_field_ancestor = target_node->GetTextFieldAncestor();
@@ -933,8 +961,7 @@ void AXEventGenerator::FireRelationSourceEvents(AXTree* tree,
     if (sources_it == target_to_sources.end())
       return;
 
-    auto sources = sources_it->second;
-    std::for_each(sources.begin(), sources.end(), [&](AXNodeID source_id) {
+    base::ranges::for_each(sources_it->second, [&](AXNodeID source_id) {
       AXNode* source_node = tree->GetFromId(source_id);
 
       if (!source_node || source_nodes.count(source_node) > 0)
@@ -948,18 +975,15 @@ void AXEventGenerator::FireRelationSourceEvents(AXTree* tree,
     });
   };
 
-  std::for_each(tree->int_reverse_relations().begin(),
-                tree->int_reverse_relations().end(), callback);
-  std::for_each(
-      tree->intlist_reverse_relations().begin(),
-      tree->intlist_reverse_relations().end(), [&](auto& entry) {
-        // Explicitly exclude relationships for which an additional event on the
-        // source node would cause extra noise. For example, kRadioGroupIds
-        // forms relations among all radio buttons and serves little value for
-        // AT to get events on the previous radio button in the group.
-        if (entry.first != ax::mojom::IntListAttribute::kRadioGroupIds)
-          callback(entry);
-      });
+  base::ranges::for_each(tree->int_reverse_relations(), callback);
+  base::ranges::for_each(tree->intlist_reverse_relations(), [&](auto& entry) {
+    // Explicitly exclude relationships for which an additional event on the
+    // source node would cause extra noise. For example, kRadioGroupIds
+    // forms relations among all radio buttons and serves little value for
+    // AT to get events on the previous radio button in the group.
+    if (entry.first != ax::mojom::IntListAttribute::kRadioGroupIds)
+      callback(entry);
+  });
 }
 
 void AXEventGenerator::TrimEventsDueToAncestorIgnoredChanged(
@@ -1204,6 +1228,8 @@ std::ostream& operator<<(std::ostream& os, AXEventGenerator::Event event) {
 
 const char* ToString(AXEventGenerator::Event event) {
   switch (event) {
+    case AXEventGenerator::Event::NONE:
+      return "none";
     case AXEventGenerator::Event::ACCESS_KEY_CHANGED:
       return "accessKeyChanged";
     case AXEventGenerator::Event::ACTIVE_DESCENDANT_CHANGED:
@@ -1218,6 +1244,8 @@ const char* ToString(AXEventGenerator::Event event) {
       return "atomicChanged";
     case AXEventGenerator::Event::AUTO_COMPLETE_CHANGED:
       return "autoCompleteChanged";
+    case AXEventGenerator::Event::AUTOFILL_AVAILABILITY_CHANGED:
+      return "autofillAvailabilityChanged";
     case AXEventGenerator::Event::BUSY_CHANGED:
       return "busyChanged";
     case AXEventGenerator::Event::CARET_BOUNDS_CHANGED:
@@ -1302,6 +1330,8 @@ const char* ToString(AXEventGenerator::Event event) {
       return "nameChanged";
     case AXEventGenerator::Event::OBJECT_ATTRIBUTE_CHANGED:
       return "objectAttributeChanged";
+    case AXEventGenerator::Event::ORIENTATION_CHANGED:
+      return "orientationChanged";
     case AXEventGenerator::Event::OTHER_ATTRIBUTE_CHANGED:
       return "otherAttributeChanged";
     case AXEventGenerator::Event::PARENT_CHANGED:
@@ -1340,8 +1370,8 @@ const char* ToString(AXEventGenerator::Event event) {
       return "selectedChildrenChanged";
     case AXEventGenerator::Event::SELECTED_VALUE_CHANGED:
       return "selectedValueChanged";
-    case AXEventGenerator::Event::SELECTION_IN_TEXT_FIELD_CHANGED:
-      return "selectionInTextFieldChanged";
+    case AXEventGenerator::Event::TEXT_SELECTION_CHANGED:
+      return "textSelectionChanged";
     case AXEventGenerator::Event::SET_SIZE_CHANGED:
       return "setSizeChanged";
     case AXEventGenerator::Event::SORT_CHANGED:
@@ -1357,6 +1387,42 @@ const char* ToString(AXEventGenerator::Event event) {
     case AXEventGenerator::Event::WIN_IACCESSIBLE_STATE_CHANGED:
       return "winIaccessibleStateChanged";
   }
+}
+
+// Convert from the string representation of an Event enum
+// into the enum value. The first time this is called, builds up a map.
+// Relies on the existence of ToString(enum).
+bool MaybeParseGeneratedEvent(const char* attribute,
+                              AXEventGenerator::Event* result) {
+  static base::NoDestructor<std::map<std::string, AXEventGenerator::Event>>
+      attr_map;
+  if (attr_map->empty()) {
+    (*attr_map)[""] = AXEventGenerator::Event::NONE;
+    for (int i = static_cast<int>(AXEventGenerator::Event::NONE);
+         i <= static_cast<int>(AXEventGenerator::Event::MAX_VALUE); i++) {
+      auto attr = static_cast<AXEventGenerator::Event>(i);
+      std::string str = ToString(attr);
+      if (!base::Contains(*attr_map, str))
+        (*attr_map)[str] = attr;
+    }
+  }
+  auto iter = attr_map->find(attribute);
+  if (iter != attr_map->end()) {
+    *result = iter->second;
+    return true;
+  }
+
+  return false;
+}
+
+AXEventGenerator::Event ParseGeneratedEvent(const char* attribute) {
+  AXEventGenerator::Event event;
+  if (MaybeParseGeneratedEvent(attribute, &event))
+    return event;
+
+  LOG(ERROR) << "Could not parse: " << attribute;
+  NOTREACHED();
+  return AXEventGenerator::Event::NONE;
 }
 
 }  // namespace ui

@@ -1,20 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/check_op.h"
 
-// check_op.h is a widely included header and its size has significant impact on
-// build time. Try not to raise this limit unless absolutely necessary. See
-// https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
-#ifndef NACL_TC_REV
-#pragma clang max_tokens_here 390000
-#endif
-
 #include <string.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <sstream>
+
+#include "base/logging.h"
 
 namespace logging {
 
@@ -68,6 +64,16 @@ char* CheckOpValueStr(const std::string& v) {
   return strdup(v.c_str());
 }
 
+char* CheckOpValueStr(std::string_view v) {
+  // Ideally this would be `strndup`, but `strndup` is not portable.
+  char* ret = static_cast<char*>(malloc(v.size() + 1));
+  if (ret) {
+    std::copy(v.begin(), v.end(), ret);
+    ret[v.size()] = 0;
+  }
+  return ret;
+}
+
 char* CheckOpValueStr(double v) {
   char buf[50];
   snprintf(buf, sizeof(buf), "%.6lf", v);
@@ -81,12 +87,15 @@ char* StreamValToStr(const void* v,
   return strdup(ss.str().c_str());
 }
 
-CheckOpResult::CheckOpResult(const char* expr_str, char* v1_str, char* v2_str) {
-  std::ostringstream ss;
-  ss << expr_str << " (" << v1_str << " vs. " << v2_str << ")";
-  message_ = strdup(ss.str().c_str());
+char* CreateCheckOpLogMessageString(const char* expr_str,
+                                    char* v1_str,
+                                    char* v2_str) {
+  std::stringstream ss;
+  ss << "Check failed: " << expr_str << " (" << v1_str << " vs. " << v2_str
+     << ")";
   free(v1_str);
   free(v2_str);
+  return strdup(ss.str().c_str());
 }
 
 }  // namespace logging

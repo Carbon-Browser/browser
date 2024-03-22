@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -65,7 +65,7 @@ embed {
 </style>
 <div id="sizer"></div>
 <embed type="application/x-google-chrome-pdf" src="$1" original-url="$2"
-    background-color="$4" javascript="$5"$6>
+    background-color="$4" javascript="$5"$6$7>
 <script type="module">
 $3
 </script>
@@ -82,7 +82,8 @@ $3
        stream_info.injected_script ? *stream_info.injected_script : "",
        base::NumberToString(stream_info.background_color),
        stream_info.allow_javascript ? "allow" : "block",
-       stream_info.full_frame ? " full-frame" : ""},
+       stream_info.full_frame ? " full-frame" : "",
+       stream_info.use_skia ? " use-skia" : ""},
       /*offsets=*/nullptr);
 }
 
@@ -110,7 +111,8 @@ void PluginResponseWriter::Start(base::OnceClosure done_callback) {
     return;
   }
 
-  client_->OnReceiveResponse(std::move(response), std::move(consumer));
+  client_->OnReceiveResponse(std::move(response), std::move(consumer),
+                             absl::nullopt);
 
   producer_ = std::make_unique<mojo::DataPipeProducer>(std::move(producer));
 

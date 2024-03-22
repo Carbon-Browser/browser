@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,7 @@ import org.chromium.chrome.browser.gesturenav.NavigationHandler.GestureAction;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 
-/**
- * This class responsible for pushing updates to gesture navigation view.
- */
+/** This class responsible for pushing updates to gesture navigation view. */
 class GestureNavigationViewBinder {
     /**
      * view binder that associates a view with a model.

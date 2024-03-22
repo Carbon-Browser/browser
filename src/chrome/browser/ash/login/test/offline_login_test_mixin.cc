@@ -1,12 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/test/offline_login_test_mixin.h"
 
-#include "ash/components/login/auth/public/user_context.h"
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
@@ -18,9 +15,13 @@
 #include "chrome/browser/ash/settings/device_settings_provider.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/ui/webui/chromeos/login/error_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/error_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/offline_login_screen_handler.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "content/public/test/test_utils.h"
 
 namespace ash {
@@ -59,10 +60,6 @@ OfflineLoginTestMixin::OfflineLoginTestMixin(
 
 OfflineLoginTestMixin::~OfflineLoginTestMixin() = default;
 
-void OfflineLoginTestMixin::SetUpOnMainThread() {
-  LoginDisplayHostWebUI::DisableRestrictiveProxyCheckForTest();
-}
-
 void OfflineLoginTestMixin::TearDownOnMainThread() {
   GoOnline();
 }
@@ -76,9 +73,8 @@ void OfflineLoginTestMixin::PrepareOfflineLogin() {
 }
 
 void OfflineLoginTestMixin::GoOffline() {
-  network_state_test_helper_ =
-      std::make_unique<chromeos::NetworkStateTestHelper>(
-          false /*use_default_devices_and_services*/);
+  network_state_test_helper_ = std::make_unique<NetworkStateTestHelper>(
+      false /*use_default_devices_and_services*/);
   network_state_test_helper_->ClearServices();
   // Notify NetworkStateInformer explicitly
   if (LoginDisplayHost::default_host() &&

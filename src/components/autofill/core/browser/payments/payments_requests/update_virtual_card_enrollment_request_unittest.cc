@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <tuple>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/autofill/core/browser/payments/payments_requests/update_virtual_card_enrollment_request.h"
@@ -28,7 +28,8 @@ class UpdateVirtualCardEnrollmentRequestTest
   ~UpdateVirtualCardEnrollmentRequestTest() override = default;
 
   void SetUp() override {
-    PaymentsClient::UpdateVirtualCardEnrollmentRequestDetails request_details;
+    PaymentsNetworkInterface::UpdateVirtualCardEnrollmentRequestDetails
+        request_details;
     request_details.virtual_card_enrollment_request_type =
         std::get<0>(GetParam());
     request_details.virtual_card_enrollment_source = std::get<1>(GetParam());
@@ -80,12 +81,12 @@ TEST_P(UpdateVirtualCardEnrollmentRequestTest, GetRequestContent) {
       case VirtualCardEnrollmentSource::kDownstream:
       case VirtualCardEnrollmentSource::kSettingsPage:
         billable_service_number =
-            base::NumberToString(kUnmaskCardBillableServiceNumber);
+            base::NumberToString(kUnmaskPaymentMethodBillableServiceNumber);
         channel_type = "CHROME_DOWNSTREAM";
         break;
       case VirtualCardEnrollmentSource::kUpstream:
         billable_service_number =
-            base::NumberToString(kUploadCardBillableServiceNumber);
+            base::NumberToString(kUploadPaymentMethodBillableServiceNumber);
         channel_type = "CHROME_UPSTREAM";
         break;
       default:
@@ -114,7 +115,8 @@ TEST_P(UpdateVirtualCardEnrollmentRequestTest, GetRequestContent) {
     EXPECT_TRUE(GetRequest()->GetRequestContent().find("instrument_id") !=
                 std::string::npos);
     EXPECT_TRUE(GetRequest()->GetRequestContent().find(base::NumberToString(
-                    kUnmaskCardBillableServiceNumber)) != std::string::npos);
+                    kUnmaskPaymentMethodBillableServiceNumber)) !=
+                std::string::npos);
   }
 }
 
@@ -123,7 +125,7 @@ TEST_P(UpdateVirtualCardEnrollmentRequestTest, ParseResponse) {
     absl::optional<base::Value> response =
         base::JSONReader::Read("{ \"enroll_result\": \"ENROLL_SUCCESS\" }");
     ASSERT_TRUE(response.has_value());
-    GetRequest()->ParseResponse(response.value());
+    GetRequest()->ParseResponse(response->GetDict());
 
     EXPECT_TRUE(GetRequest()->IsResponseComplete());
     return;
@@ -135,7 +137,7 @@ TEST_P(UpdateVirtualCardEnrollmentRequestTest, ParseResponse) {
   if (std::get<1>(GetParam()) == VirtualCardEnrollmentSource::kSettingsPage) {
     absl::optional<base::Value> response = base::JSONReader::Read("{}");
     ASSERT_TRUE(response.has_value());
-    GetRequest()->ParseResponse(response.value());
+    GetRequest()->ParseResponse(response->GetDict());
 
     EXPECT_TRUE(GetRequest()->IsResponseComplete());
   }

@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,3 +13,10 @@ def builder_url(bucket, builder, project = None):
         builder,
     )
     return url
+
+def linkify_builder(bucket, builder, project = None):
+    """Returns an HTML link to a builder compatible with Milo-descriptions."""
+    return "<a href=\"{}\">{}</a>".format(
+        builder_url(bucket, builder, project),
+        builder,
+    )

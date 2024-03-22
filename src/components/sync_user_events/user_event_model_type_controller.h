@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "components/sync/driver/model_type_controller.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "components/sync/service/model_type_controller.h"
+#include "components/sync/service/sync_service_observer.h"
 
 namespace syncer {
 
@@ -22,7 +22,8 @@ class UserEventModelTypeController : public syncer::ModelTypeController,
   // |sync_service| must not be null and must outlive this object.
   UserEventModelTypeController(
       SyncService* sync_service,
-      std::unique_ptr<ModelTypeControllerDelegate> delegate_for_full_sync_mode);
+      std::unique_ptr<ModelTypeControllerDelegate> delegate_for_full_sync_mode,
+      std::unique_ptr<ModelTypeControllerDelegate> delegate_for_transport_mode);
 
   UserEventModelTypeController(const UserEventModelTypeController&) = delete;
   UserEventModelTypeController& operator=(const UserEventModelTypeController&) =
@@ -31,14 +32,14 @@ class UserEventModelTypeController : public syncer::ModelTypeController,
   ~UserEventModelTypeController() override;
 
   // syncer::DataTypeController implementation.
-  void Stop(ShutdownReason shutdown_reason, StopCallback callback) override;
+  void Stop(SyncStopMetadataFate fate, StopCallback callback) override;
   PreconditionState GetPreconditionState() const override;
 
   // syncer::SyncServiceObserver implementation.
   void OnStateChanged(syncer::SyncService* sync) override;
 
  private:
-  raw_ptr<SyncService> sync_service_;
+  const raw_ptr<SyncService> sync_service_;
 };
 
 }  // namespace syncer

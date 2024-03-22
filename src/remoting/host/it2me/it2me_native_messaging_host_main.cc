@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,18 +30,18 @@
 #include "remoting/host/resources.h"
 #include "remoting/host/usage_stats_consent.h"
 
-#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && defined(REMOTING_USE_X11)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if defined(REMOTING_USE_X11)
 #include <gtk/gtk.h>
-
 #include "base/linux_util.h"
+#include "remoting/host/linux/wayland_utils.h"
 #include "ui/events/platform/x11/x11_event_source.h"
 #include "ui/gfx/x/xlib_support.h"
-#endif  // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) &&
-        // defined(REMOTING_USE_X11)
+#endif  // defined(REMOTING_USE_X11)
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) &&
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/mac_util.h"
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #include "remoting/host/desktop_capturer_checker.h"
 #include "remoting/host/mac/permission_utils.h"
 #endif  // BUILDFLAG(IS_APPLE)
@@ -78,9 +78,11 @@ bool CurrentProcessHasUiAccess() {
 // runs the task executor until It2MeNativeMessagingHost signals shutdown.
 int It2MeNativeMessagingHostMain(int argc, char** argv) {
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && defined(REMOTING_USE_X11)
-  // Initialize Xlib for multi-threaded use, allowing non-Chromium code to
-  // use X11 safely (such as the WebRTC capturer, GTK ...)
-  x11::InitXlib();
+  if (!IsRunningWayland()) {
+    // Initialize Xlib for multi-threaded use, allowing non-Chromium code to
+    // use X11 safely (such as the WebRTC capturer, GTK ...)
+    x11::InitXlib();
+  }
 #endif  // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) &&
         // defined(REMOTING_USE_X11)
 
@@ -94,7 +96,7 @@ int It2MeNativeMessagingHostMain(int argc, char** argv) {
 
 #if BUILDFLAG(IS_APPLE)
   // Needed so we don't leak objects when threads are created.
-  base::mac::ScopedNSAutoreleasePool pool;
+  base::apple::ScopedNSAutoreleasePool pool;
 #endif  // BUILDFLAG(IS_APPLE)
 
 #if defined(REMOTING_ENABLE_BREAKPAD)
@@ -226,9 +228,7 @@ int It2MeNativeMessagingHostMain(int argc, char** argv) {
     // heuristic that might not be 100% reliable, but it is critically
     // important to add the host bundle to the list of apps under
     // Security & Privacy -> Screen Recording.
-    if (base::mac::IsAtLeastOS10_15()) {
-      DesktopCapturerChecker().TriggerSingleCapture();
-    }
+    DesktopCapturerChecker().TriggerSingleCapture();
     return mac::CanRecordScreen() ? EXIT_SUCCESS : EXIT_FAILURE;
   }
 #endif  // BUILDFLAG(IS_APPLE)
@@ -258,14 +258,18 @@ int It2MeNativeMessagingHostMain(int argc, char** argv) {
                                           context->management_service());
 
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && defined(REMOTING_USE_X11)
-  // Create an X11EventSource on all UI threads, so the global X11 connection
-  // (x11::Connection::Get()) can dispatch X events.
-  auto event_source =
-      std::make_unique<ui::X11EventSource>(x11::Connection::Get());
-  auto input_task_runner = context->input_task_runner();
-  input_task_runner->PostTask(FROM_HERE, base::BindOnce([]() {
-                                new ui::X11EventSource(x11::Connection::Get());
-                              }));
+  scoped_refptr<AutoThreadTaskRunner> input_task_runner;
+  if (!IsRunningWayland()) {
+    // Create an X11EventSource on all UI threads, so the global X11 connection
+    // (x11::Connection::Get()) can dispatch X events.
+    auto event_source =
+        std::make_unique<ui::X11EventSource>(x11::Connection::Get());
+    input_task_runner = context->input_task_runner();
+    input_task_runner->PostTask(
+        FROM_HERE, base::BindOnce([]() {
+          new ui::X11EventSource(x11::Connection::Get());
+        }));
+  }
 #endif  // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) &&
         // defined(REMOTING_USE_X11)
 
@@ -281,9 +285,11 @@ int It2MeNativeMessagingHostMain(int argc, char** argv) {
   run_loop.Run();
 
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && defined(REMOTING_USE_X11)
-  input_task_runner->PostTask(FROM_HERE, base::BindOnce([]() {
-                                delete ui::X11EventSource::GetInstance();
-                              }));
+  if (!IsRunningWayland()) {
+    input_task_runner->PostTask(FROM_HERE, base::BindOnce([]() {
+                                  delete ui::X11EventSource::GetInstance();
+                                }));
+  }
 #endif  // (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) &&
         // defined(REMOTING_USE_X11)
 

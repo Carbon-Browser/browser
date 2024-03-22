@@ -25,6 +25,7 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_client.h"
@@ -77,7 +78,6 @@ class PLATFORM_EXPORT RawResource final : public Resource {
               const ResourceLoaderOptions&);
 
   // Resource implementation
-  MatchStatus CanReuse(const FetchParameters&) const override;
   bool WillFollowRedirect(const ResourceRequest&,
                           const ResourceResponse&) override;
 

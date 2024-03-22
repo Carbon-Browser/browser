@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/system_indicator/system_indicator_manager.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "extensions/browser/extension_system_provider.h"
 #include "extensions/browser/extensions_browser_client.h"
 
@@ -22,26 +21,33 @@ SystemIndicatorManager* SystemIndicatorManagerFactory::GetForContext(
 
 // static
 SystemIndicatorManagerFactory* SystemIndicatorManagerFactory::GetInstance() {
-  return base::Singleton<SystemIndicatorManagerFactory>::get();
+  static base::NoDestructor<SystemIndicatorManagerFactory> instance;
+  return instance.get();
 }
 
 SystemIndicatorManagerFactory::SystemIndicatorManagerFactory()
-    : BrowserContextKeyedServiceFactory(
-        "SystemIndicatorManager",
-        BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory(
+          "SystemIndicatorManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
 }
 
-SystemIndicatorManagerFactory::~SystemIndicatorManagerFactory() {}
+SystemIndicatorManagerFactory::~SystemIndicatorManagerFactory() = default;
 
-KeyedService* SystemIndicatorManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SystemIndicatorManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
   StatusTray* status_tray = g_browser_process->status_tray();
   if (status_tray == NULL)
     return NULL;
 
-  return new SystemIndicatorManager(static_cast<Profile*>(profile),
-                                    status_tray);
+  return std::make_unique<SystemIndicatorManager>(
+      static_cast<Profile*>(profile), status_tray);
 }
 
 bool SystemIndicatorManagerFactory::ServiceIsCreatedWithBrowserContext() const {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,13 @@ void AutocompleteControllerMetrics::OnStart() {
   last_default_change_time_ = start_time_;
 }
 
-void AutocompleteControllerMetrics::OnUpdateResult(
+void AutocompleteControllerMetrics::OnNotifyChanged(
     std::vector<AutocompleteResult::MatchDedupComparator> last_result,
     std::vector<AutocompleteResult::MatchDedupComparator> new_result) {
+  // Only log metrics for async requests.
+  if (controller_->input().omit_asynchronous_matches())
+    return;
+
   // If results are empty then the omnibox is likely closed, and clearing old
   // results won't be user visible. E.g., this occurs when opening a new tab
   // while the popup was open.
@@ -41,21 +45,18 @@ void AutocompleteControllerMetrics::OnUpdateResult(
     // Log changed or removed matches. Don't log for matches appended to the
     // bottom since that's less disruptive.
     if (i >= new_result.size() || last_result[i] != new_result[i]) {
-      LogSuggestionChangedMetrics(i);
+      LogSuggestionChangeIndexMetrics(i);
       any_match_changed_or_removed = true;
     }
   }
-  LogAnySuggestionChangedMetrics(any_match_changed_or_removed);
+  LogSuggestionChangeInAnyPositionMetrics(any_match_changed_or_removed);
 
   // Log suggestion finalization times.
+  // This handles logging as soon as the final update occurs, while `OnStop()`
+  // handles the case where the final update never occurs because of
+  // interruptions.
 
-  // Only log suggestion finalization metrics for async requests. This handles
-  // logging as soon as the final update occurs, while `OnStop()` handles the
-  // case where the final update never occurs because of interruptions.
-  // TODO(manukh): Consider adding this filter to the above metrics as well.
-  if (controller_.input().omit_asynchronous_matches())
-    return;
-  // E.g., suggestion deletion can call `OnUpdateResult()` after the controller
+  // E.g., suggestion deletion can call `OnNotifyChanged()` after the controller
   // is done and finalization metrics have been logged. They shouldn't be
   // re-logged.
   if (logged_finalization_metrics_)
@@ -80,6 +81,13 @@ void AutocompleteControllerMetrics::OnUpdateResult(
 
 void AutocompleteControllerMetrics::OnProviderUpdate(
     const AutocompleteProvider& provider) const {
+  // Only log metrics for async requests. This will likely never happen, since
+  // `OnProviderUpdate()` is only called by async providers (but not necessarily
+  // async'ly, see the comments in
+  // `AutocompleteController::OnProviderUpdate()`).
+  if (controller_->input().omit_asynchronous_matches())
+    return;
+
   // Some async providers may produce multiple updates. Only log the final async
   // update.
   if (provider.done())
@@ -87,15 +95,19 @@ void AutocompleteControllerMetrics::OnProviderUpdate(
 }
 
 void AutocompleteControllerMetrics::OnStop() {
+  // Only log metrics for async requests.
+  if (controller_->input().omit_asynchronous_matches())
+    return;
+
   // Done providers should already be logged by `OnProviderUpdate()`.
-  for (const auto& provider : controller_.providers()) {
+  for (const auto& provider : controller_->providers()) {
     if (!provider->done()) {
-      DCHECK(!controller_.done() || controller_.in_start());
+      DCHECK(!controller_->done() || !controller_->sync_pass_done());
       LogProviderTimeMetrics(*provider);
     }
   }
 
-  // If the controller is done, `OnUpdateResult()` should have already logged
+  // If the controller is done, `OnNotifyChanged()` should have already logged
   // finalization metrics. This case, i.e. `OnStop()` invoked even though the
   // controller is done, is possible because 1) `OnStart()` calls `OnStop()`
   // and 2) `AutocompleteController::stop_timer_` may fire after the controller
@@ -106,7 +118,7 @@ void AutocompleteControllerMetrics::OnStop() {
 }
 
 bool AutocompleteControllerMetrics::ControllerIdle() {
-  return controller_.done() && controller_.expire_timer_done();
+  return controller_->done() && controller_->expire_timer_done();
 }
 
 void AutocompleteControllerMetrics::LogSuggestionFinalizationMetrics() {
@@ -133,7 +145,7 @@ void AutocompleteControllerMetrics::LogAsyncAutocompletionTimeMetrics(
     const std::string& name,
     bool completed,
     const base::TimeTicks end_time) const {
-  const auto name_prefix = "Omnibox.AsyncAutocompletionTime." + name;
+  const auto name_prefix = "Omnibox.AsyncAutocompletionTime2." + name;
   const auto elapsed_time = end_time - start_time_;
   // These metrics are logged up to about 40 times per omnibox keystroke. But
   // use UMA functions as the names are dynamic.
@@ -144,30 +156,29 @@ void AutocompleteControllerMetrics::LogAsyncAutocompletionTimeMetrics(
     base::UmaHistogramTimes(name_prefix + ".Interrupted", elapsed_time);
 }
 
-void AutocompleteControllerMetrics::LogSuggestionChangedMetrics(
+void AutocompleteControllerMetrics::LogSuggestionChangeIndexMetrics(
     size_t change_index) const {
+  std::string name = "Omnibox.MatchStability2.MatchChangeIndex";
+  size_t max = AutocompleteResult::kMaxAutocompletePositionValue;
   // These metrics are logged up to about 50 times per omnibox keystroke, so use
   // UMA macros for efficiency.
-  if (controller_.in_start()) {
-    UMA_HISTOGRAM_EXACT_LINEAR(
-        "Omnibox.CrossInputMatchStability.MatchChange", change_index,
-        AutocompleteResult::kMaxAutocompletePositionValue);
+  if (!controller_->sync_pass_done()) {
+    UMA_HISTOGRAM_EXACT_LINEAR(name + ".CrossInput", change_index, max);
   } else {
-    UMA_HISTOGRAM_EXACT_LINEAR(
-        "Omnibox.MatchStability.AsyncMatchChange2", change_index,
-        AutocompleteResult::kMaxAutocompletePositionValue);
+    UMA_HISTOGRAM_EXACT_LINEAR(name + ".Async", change_index, max);
   }
+  UMA_HISTOGRAM_EXACT_LINEAR(name, change_index, max);
 }
 
-void AutocompleteControllerMetrics::LogAnySuggestionChangedMetrics(
+void AutocompleteControllerMetrics::LogSuggestionChangeInAnyPositionMetrics(
     bool changed) const {
-  // These metrics are logged up to about 5 times per omnibox keystroke, so use
-  // UMA macros for efficiency.
-  if (controller_.in_start()) {
-    UMA_HISTOGRAM_BOOLEAN(
-        "Omnibox.CrossInputMatchStability.MatchChangedInAnyPosition", changed);
+  std::string name = "Omnibox.MatchStability2.MatchChangeInAnyPosition";
+  // These metrics are logged up to about 5 times per omnibox keystroke, so
+  // use UMA macros for efficiency.
+  if (!controller_->sync_pass_done()) {
+    UMA_HISTOGRAM_BOOLEAN(name + ".CrossInput", changed);
   } else {
-    UMA_HISTOGRAM_BOOLEAN(
-        "Omnibox.MatchStability.AsyncMatchChangedInAnyPosition", changed);
+    UMA_HISTOGRAM_BOOLEAN(name + ".Async", changed);
   }
+  UMA_HISTOGRAM_BOOLEAN(name, changed);
 }

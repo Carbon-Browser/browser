@@ -1,18 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/reporting/metrics/metric_rate_controller.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "components/reporting/metrics/reporting_settings.h"
 
 namespace reporting {
 
 // static
-const base::Feature MetricRateController::kEnableTelemetryTestingRates{
-    "EnableTelemetryTestingRates", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnableTelemetryTestingRates,
+             "EnableTelemetryTestingRates",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 MetricRateController::MetricRateController(
     base::RepeatingClosure task,

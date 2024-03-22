@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/check_op.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
-#include "extensions/browser/api/web_request/web_request_info.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "url/gurl.h"
 
@@ -97,6 +96,11 @@ WebRequestResourceType ToWebRequestResourceType(
     case network::mojom::RequestDestination::kAudioWorklet:
     case network::mojom::RequestDestination::kManifest:
     case network::mojom::RequestDestination::kPaintWorklet:
+    case network::mojom::RequestDestination::kWebIdentity:
+    // The compression dictionary has not been exposed to extensions yet.
+    // We could do so if the need arises.
+    case network::mojom::RequestDestination::kDictionary:
+    case network::mojom::RequestDestination::kSpeculationRules:
       return WebRequestResourceType::OTHER;
   }
   NOTREACHED();

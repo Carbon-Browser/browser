@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -166,59 +166,6 @@ TEST_F(AcceleratorManagerTest, Process) {
     manager_.UnregisterAll(&target);
   }
 }
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-// TODO(crbug.com/1179893): Remove once the feature is enabled permanently.
-TEST_F(AcceleratorManagerTest, NewMappingWithImprovedShortcutsDisabled) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures(
-      /*enabled_features=*/{features::kNewShortcutMapping},
-      /*disabled_features=*/{::features::kImprovedKeyboardShortcuts});
-
-  // Test new mapping with a ASCII punctuation shortcut that doesn't involve
-  // shift.
-  TestAcceleratorTarget target;
-  {
-    // ']' + ctrl
-    const Accelerator accelerator(VKEY_OEM_6, EF_CONTROL_DOWN);
-    manager_.Register({accelerator}, AcceleratorManager::kNormalPriority,
-                      &target);
-    KeyEvent event(ui::ET_KEY_PRESSED, ui::VKEY_1, ui::DomCode::NONE,
-                   ui::EF_CONTROL_DOWN, ui::DomKey::Constant<']'>::Character,
-                   base::TimeTicks());
-    const Accelerator trigger(event);
-    EXPECT_TRUE(manager_.IsRegistered(trigger));
-    EXPECT_TRUE(manager_.Process(trigger));
-  }
-
-  // Test new mapping with a ASCII punctuation shortcut that involves shift.
-  {
-    // ']' + ctrl + shift, which produces '}' on US layout.
-    const Accelerator accelerator(VKEY_OEM_6, EF_CONTROL_DOWN | EF_SHIFT_DOWN);
-    manager_.Register({accelerator}, AcceleratorManager::kNormalPriority,
-                      &target);
-    KeyEvent event(ui::ET_KEY_PRESSED, ui::VKEY_1, ui::DomCode::NONE,
-                   ui::EF_CONTROL_DOWN, ui::DomKey::Constant<'}'>::Character,
-                   base::TimeTicks());
-    const Accelerator trigger(event);
-    EXPECT_TRUE(manager_.IsRegistered(trigger));
-    EXPECT_TRUE(manager_.Process(trigger));
-  }
-}
-
-// TODO(crbug.com/1179893): Remove once the feature is enabled permanently.
-TEST_F(AcceleratorManagerTest, NewMappingSuperseded) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(features::kNewShortcutMapping);
-
-  // When kImprovedKeyboardShortcuts is enabled, it takes precedence
-  // over kNewShortcutMapping. Remove this test when kImprovedShortcutMapping
-  // is made permanent.
-  EXPECT_TRUE(::features::IsImprovedKeyboardShortcutsEnabled());
-  EXPECT_FALSE(::features::IsNewShortcutMappingEnabled());
-}
-
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS)
 

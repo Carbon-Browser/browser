@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -110,6 +110,7 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   virtual void SetSize(const gfx::Size& size) = 0;
   virtual void StackAbove(aura::Window* window) = 0;
   virtual void StackAtTop() = 0;
+  virtual bool IsStackedAbove(aura::Window* window) = 0;
   virtual void CenterWindow(const gfx::Size& size) = 0;
   virtual void GetWindowPlacement(gfx::Rect* bounds,
                                   ui::WindowShowState* show_state) const = 0;
@@ -124,9 +125,12 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   // window reverts to rectangular.
   virtual void SetShape(std::unique_ptr<Widget::ShapeRects> native_shape) = 0;
 
+  virtual void SetParent(gfx::AcceleratedWidget parent) = 0;
+
   virtual void Activate() = 0;
   virtual void Deactivate() = 0;
   virtual bool IsActive() const = 0;
+  virtual void PaintAsActiveChanged();
   virtual void Maximize() = 0;
   virtual void Minimize() = 0;
   virtual void Restore() = 0;
@@ -164,12 +168,19 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   virtual bool ShouldWindowContentsBeTransparent() const = 0;
   virtual void FrameTypeChanged() = 0;
 
-  virtual void SetFullscreen(bool fullscreen) = 0;
+  // Set the fullscreen state. `target_display_id` indicates the display where
+  // the window should be shown fullscreen; display::kInvalidDisplayId indicates
+  // that no display was specified, so the current display may be used.
+  virtual void SetFullscreen(bool fullscreen, int64_t target_display_id) = 0;
+  // Returns true if the window is in fullscreen on any display.
   virtual bool IsFullscreen() const = 0;
 
   virtual void SetOpacity(float opacity) = 0;
 
-  virtual void SetAspectRatio(const gfx::SizeF& aspect_ratio) = 0;
+  // See NativeWidgetPrivate::SetAspectRatio for more information about what
+  // `excluded_margin` does.
+  virtual void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                              const gfx::Size& excluded_margin) = 0;
 
   virtual void SetWindowIcons(const gfx::ImageSkia& window_icon,
                               const gfx::ImageSkia& app_icon) = 0;

@@ -1,9 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_WEB_WEB_PERFORMANCE_METRICS_WEB_PERFORMANCE_METRICS_JAVA_SCRIPT_FEATURE_H_
 #define IOS_CHROME_BROWSER_WEB_WEB_PERFORMANCE_METRICS_WEB_PERFORMANCE_METRICS_JAVA_SCRIPT_FEATURE_H_
+
+#include <optional>
 
 #include "ios/web/public/js_messaging/java_script_feature.h"
 
@@ -19,7 +21,7 @@ class WebPerformanceMetricsJavaScriptFeature : public web::JavaScriptFeature {
   static WebPerformanceMetricsJavaScriptFeature* GetInstance();
 
   // JavaScriptFeature:
-  absl::optional<std::string> GetScriptMessageHandlerName() const override;
+  std::optional<std::string> GetScriptMessageHandlerName() const override;
   void ScriptMessageReceived(web::WebState* web_state,
                              const web::ScriptMessage& message) override;
 

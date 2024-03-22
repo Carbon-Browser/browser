@@ -1,9 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_SHAPING_HARFBUZZ_FONT_DATA_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_SHAPING_HARFBUZZ_FONT_DATA_H_
+
+#include <hb-cplusplus.hh>
 
 #include "base/check_op.h"
 #include "third_party/blink/renderer/platform/fonts/font_platform_data.h"
@@ -17,18 +19,14 @@ namespace blink {
 
 const unsigned kInvalidFallbackMetricsValue = static_cast<unsigned>(-1);
 
-// The HarfBuzzFontData struct carries thread specific user-pointer data for
+// The HarfBuzzFontData struct carries user-pointer data for
 // |hb_font_t| callback functions/operations. It contains metrics and OpenType
 // layout information related to a font scaled to a particular size.
-struct HarfBuzzFontData final
-    : public RefCountedWillBeThreadSafeForParallelTextShaping<
-          HarfBuzzFontData> {
+struct HarfBuzzFontData final {
   USING_FAST_MALLOC(HarfBuzzFontData);
 
  public:
-  static scoped_refptr<HarfBuzzFontData> Create(hb_font_t* hb_font) {
-    return base::AdoptRef(new HarfBuzzFontData(hb_font));
-  }
+  HarfBuzzFontData() : vertical_data_(nullptr), range_set_(nullptr) {}
 
   HarfBuzzFontData(const HarfBuzzFontData&) = delete;
   HarfBuzzFontData& operator=(const HarfBuzzFontData&) = delete;
@@ -83,7 +81,7 @@ struct HarfBuzzFontData final
     return vertical_data_;
   }
 
-  HbScoped<hb_font_t> unscaled_font_;
+  hb::unique_ptr<hb_font_t> unscaled_font_;
   SkFont font_;
 
   // Capture these scaled fallback metrics from FontPlatformData so that a
@@ -101,9 +99,6 @@ struct HarfBuzzFontData final
 
   scoped_refptr<OpenTypeVerticalData> vertical_data_;
   scoped_refptr<UnicodeRangeSet> range_set_;
-
- private:
-  explicit HarfBuzzFontData(hb_font_t* hb_font) : unscaled_font_(hb_font) {}
 };
 
 }  // namespace blink

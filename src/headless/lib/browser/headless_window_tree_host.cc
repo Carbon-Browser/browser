@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,7 @@ void HeadlessWindowTreeHost::SetBoundsInPixels(const gfx::Rect& bounds) {
   bool size_changed = bounds_.size() != bounds.size();
   bounds_ = bounds;
   if (origin_changed)
-    OnHostMovedInPixels(bounds.origin());
+    OnHostMovedInPixels();
   if (size_changed)
     OnHostResizedInPixels(bounds.size());
 }
@@ -79,7 +79,7 @@ void HeadlessWindowTreeHost::SetCapture() {}
 void HeadlessWindowTreeHost::ReleaseCapture() {}
 
 bool HeadlessWindowTreeHost::CaptureSystemKeyEventsImpl(
-    absl::optional<base::flat_set<ui::DomCode>> codes) {
+    std::optional<base::flat_set<ui::DomCode>> codes) {
   return false;
 }
 
@@ -101,5 +101,13 @@ void HeadlessWindowTreeHost::MoveCursorToScreenLocationInPixels(
     const gfx::Point& location) {}
 
 void HeadlessWindowTreeHost::OnCursorVisibilityChangedNative(bool show) {}
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+std::string HeadlessWindowTreeHost::GetUniqueId() const {
+  // Headless does not have a unique ID
+  NOTIMPLEMENTED_LOG_ONCE();
+  return std::string();
+}
+#endif
 
 }  // namespace headless

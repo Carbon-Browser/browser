@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.share;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.UnownedUserDataKey;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.UnownedUserDataSupplier;
@@ -32,5 +33,6 @@ public class ShareDelegateSupplier extends UnownedUserDataSupplier<ShareDelegate
 
     static void setInstanceForTesting(ShareDelegateSupplier instanceForTesting) {
         sInstanceForTesting = instanceForTesting;
+        ResettersForTesting.register(() -> sInstanceForTesting = null);
     }
 }

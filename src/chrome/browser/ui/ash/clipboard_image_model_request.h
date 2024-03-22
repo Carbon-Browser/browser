@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/unguessable_token.h"
@@ -69,7 +70,9 @@ class ClipboardImageModelRequest : public content::WebContentsDelegate,
 
   struct TestParams {
     TestParams() = delete;
-    TestParams(RequestStopCallback callback, bool enforce_auto_resize);
+    explicit TestParams(
+        RequestStopCallback callback,
+        const absl::optional<bool>& enforce_auto_resize = absl::nullopt);
     TestParams(const TestParams&) = delete;
     TestParams& operator=(const TestParams&) = delete;
     ~TestParams();
@@ -79,9 +82,10 @@ class ClipboardImageModelRequest : public content::WebContentsDelegate,
     // in auto resize mode.
     RequestStopCallback callback;
 
-    // If true, the image model request must render in auto resize mode;
-    // otherwise, auto resize mode is disabled.
-    bool enforce_auto_resize = false;
+    // When set, `enforce_auto_resize` specifies whether the image model request
+    // should be rendered in auto resize mode. If `enforce_auto_resize` is
+    // true (or false), auto resize mode is always enabled (or disabled).
+    absl::optional<bool> enforce_auto_resize;
   };
 
   // Places `html_markup` on the clipboard and restores the original clipboard
@@ -175,7 +179,7 @@ class ClipboardImageModelRequest : public content::WebContentsDelegate,
   std::unique_ptr<views::Widget> const widget_;
 
   // Contents view of |widget_|. Owned by |widget_|.
-  views::WebView* const web_view_;
+  const raw_ptr<views::WebView, ExperimentalAsh> web_view_;
 
   // Unique identifier for this request run. Empty when there are no running
   // requests.

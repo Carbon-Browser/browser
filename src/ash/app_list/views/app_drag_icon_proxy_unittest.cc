@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,28 +28,27 @@ class AppDragIconProxyTest : public AshTestBase {
   ~AppDragIconProxyTest() override = default;
 
   gfx::Rect GetTargetAppDragIconImageBounds(AppDragIconProxy* drag_icon_proxy) {
-    gfx::RectF layer_target_position(
-        drag_icon_proxy->GetImageLayerForTesting()->GetTargetBounds());
-    drag_icon_proxy->GetImageLayerForTesting()
-        ->GetTargetTransform()
-        .TransformRect(&layer_target_position);
+    gfx::Rect layer_target_position =
+        drag_icon_proxy->GetImageLayerForTesting()
+            ->GetTargetTransform()
+            .MapRect(
+                drag_icon_proxy->GetImageLayerForTesting()->GetTargetBounds());
     gfx::Rect widget_target_bounds =
         drag_icon_proxy->GetWidgetForTesting()->GetLayer()->GetTargetBounds();
-    layer_target_position.set_origin(
-        gfx::PointF(layer_target_position.x() + widget_target_bounds.x(),
-                    layer_target_position.y() + widget_target_bounds.y()));
-    return gfx::ToNearestRect(layer_target_position);
+    layer_target_position.Offset(widget_target_bounds.OffsetFromOrigin());
+    return layer_target_position;
   }
 };
 
 TEST_F(AppDragIconProxyTest, UpdatingLocationRespectsIconOffset) {
+  const gfx::Size image_size = gfx::Size(50, 50);
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
-      ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
+      ash::image_util::CreateEmptyImage(image_size),
       /*pointer_location_in_screen=*/gfx::Point(100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/1.0f,
-      /*use_blurred_background=*/false);
+      /*is_folder_icon=*/false, /*shadow_size=*/image_size);
 
   EXPECT_EQ(gfx::Rect(gfx::Point(65, 155), gfx::Size(50, 50)),
             drag_icon_proxy->GetBoundsInScreen());
@@ -69,14 +68,14 @@ TEST_F(AppDragIconProxyTest, UpdatingLocationRespectsIconOffset) {
 
 TEST_F(AppDragIconProxyTest, SecondaryDisplay) {
   UpdateDisplay("1000x800,1000x800");
-
+  const gfx::Size image_size = gfx::Size(50, 50);
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetRootWindowForDisplayId(GetSecondaryDisplay().id()),
       ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
       /*pointer_location_in_screen=*/gfx::Point(1100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/1.0f,
-      /*use_blurred_background=*/false);
+      /*is_folder_icon=*/false, /*shadow_size=*/image_size);
 
   EXPECT_EQ(gfx::Rect(gfx::Point(1065, 155), gfx::Size(50, 50)),
             drag_icon_proxy->GetBoundsInScreen());
@@ -95,13 +94,14 @@ TEST_F(AppDragIconProxyTest, SecondaryDisplay) {
 }
 
 TEST_F(AppDragIconProxyTest, ScaledBounds) {
+  const gfx::Size image_size = gfx::Size(50, 50);
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
-      ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
+      ash::image_util::CreateEmptyImage(image_size),
       /*pointer_location_in_screen=*/gfx::Point(200, 400),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/2.0f,
-      /*use_blurred_background=*/false);
+      /*is_folder_icon=*/false, /*shadow_size=*/image_size);
 
   EXPECT_EQ(gfx::Rect(gfx::Point(140, 330), gfx::Size(100, 100)),
             drag_icon_proxy->GetBoundsInScreen());
@@ -112,48 +112,51 @@ TEST_F(AppDragIconProxyTest, ScaledBounds) {
 }
 
 TEST_F(AppDragIconProxyTest, BlurSetsRoundedCorners) {
+  const gfx::Size image_size = gfx::Size(50, 50);
+  // Create a folder icon proxy because only folder icons have background blur.
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
-      ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
+      ash::image_util::CreateEmptyImage(image_size),
       /*pointer_location_in_screen=*/gfx::Point(100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/1.0f,
-      /*use_blurred_background=*/true);
+      /*is_folder_icon=*/true, /*shadow_size=*/image_size);
 
   // The background should be circular.
   EXPECT_EQ(gfx::RoundedCornersF(25.0f).ToString(),
-            drag_icon_proxy->GetImageLayerForTesting()
+            drag_icon_proxy->GetBlurredLayerForTesting()
                 ->rounded_corner_radii()
                 .ToString());
   EXPECT_EQ(30.0f,
-            drag_icon_proxy->GetImageLayerForTesting()->background_blur());
+            drag_icon_proxy->GetBlurredLayerForTesting()->background_blur());
 
   // Test that background corner radii are scaled with the image.
   drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
-      ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
+      ash::image_util::CreateEmptyImage(image_size),
       /*pointer_location_in_screen=*/gfx::Point(100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/2.0f,
-      /*use_blurred_background=*/true);
+      /*is_folder_icon=*/true, /*shadow_size=*/image_size);
 
   // The background should be circular.
   EXPECT_EQ(gfx::RoundedCornersF(50.0f).ToString(),
-            drag_icon_proxy->GetImageLayerForTesting()
+            drag_icon_proxy->GetBlurredLayerForTesting()
                 ->rounded_corner_radii()
                 .ToString());
   EXPECT_EQ(30.0f,
-            drag_icon_proxy->GetImageLayerForTesting()->background_blur());
+            drag_icon_proxy->GetBlurredLayerForTesting()->background_blur());
 }
 
 TEST_F(AppDragIconProxyTest, AnimateBoundsForClosure) {
+  const gfx::Size image_size = gfx::Size(50, 50);
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
-      ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
+      ash::image_util::CreateEmptyImage(image_size),
       /*pointer_location_in_screen=*/gfx::Point(100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/1.0f,
-      /*use_blurred_background=*/false);
+      /*is_folder_icon=*/false, /*shadow_size=*/image_size);
   EXPECT_EQ(gfx::Rect(gfx::Point(65, 155), gfx::Size(50, 50)),
             drag_icon_proxy->GetBoundsInScreen());
 
@@ -182,13 +185,14 @@ TEST_F(AppDragIconProxyTest, AnimateBoundsForClosure) {
 }
 
 TEST_F(AppDragIconProxyTest, CloseAnimationCallbackCalledWithZeroAnimation) {
+  const gfx::Size image_size = gfx::Size(50, 50);
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
       ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
       /*pointer_location_in_screen=*/gfx::Point(100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/1.0f,
-      /*use_blurred_background=*/false);
+      /*is_folder_icon=*/false, /*shadow_size=*/image_size);
   EXPECT_EQ(gfx::Rect(gfx::Point(65, 155), gfx::Size(50, 50)),
             drag_icon_proxy->GetBoundsInScreen());
 
@@ -214,13 +218,14 @@ TEST_F(AppDragIconProxyTest, CloseAnimationCallbackCalledWithZeroAnimation) {
 // another layer animation is in progress.
 TEST_F(AppDragIconProxyTest,
        CloseAnimationInterruptsAnotherLayerTransformAnimation) {
+  const gfx::Size image_size = gfx::Size(50, 50);
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
-      ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
+      ash::image_util::CreateEmptyImage(image_size),
       /*pointer_location_in_screen=*/gfx::Point(100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/1.0f,
-      /*use_blurred_background=*/false);
+      /*is_folder_icon=*/false, /*shadow_size=*/image_size);
   EXPECT_EQ(gfx::Rect(gfx::Point(65, 155), gfx::Size(50, 50)),
             drag_icon_proxy->GetBoundsInScreen());
 
@@ -271,13 +276,14 @@ TEST_F(AppDragIconProxyTest,
 // Verifies that "close" animation completion callback gets called if the proxy
 // is reset during the animation.
 TEST_F(AppDragIconProxyTest, ProxyResetDuringCloseAnimation) {
+  const gfx::Size image_size = gfx::Size(50, 50);
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
-      ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
+      ash::image_util::CreateEmptyImage(image_size),
       /*pointer_location_in_screen=*/gfx::Point(100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/1.0f,
-      /*use_blurred_background=*/false);
+      /*is_folder_icon=*/false, /*shadow_size=*/image_size);
   EXPECT_EQ(gfx::Rect(gfx::Point(65, 155), gfx::Size(50, 50)),
             drag_icon_proxy->GetBoundsInScreen());
 
@@ -299,13 +305,14 @@ TEST_F(AppDragIconProxyTest, ProxyResetDuringCloseAnimation) {
 // Tests that calls to `UpdatePosition()` are ignored if
 // `AnimateToBoundsAndCloseWidget()` has been called.
 TEST_F(AppDragIconProxyTest, UpdatePositionDuringCloseIsNoOp) {
+  const gfx::Size image_size = gfx::Size(50, 50);
   auto drag_icon_proxy = std::make_unique<AppDragIconProxy>(
       Shell::GetPrimaryRootWindow(),
-      ash::image_util::CreateEmptyImage(gfx::Size(50, 50)),
+      ash::image_util::CreateEmptyImage(image_size),
       /*pointer_location_in_screen=*/gfx::Point(100, 200),
       /*pointer_offset_from_center=*/gfx::Vector2d(10, 20),
       /*scale_factor=*/1.0f,
-      /*use_blurred_background=*/false);
+      /*is_folder_icon=*/false, /*shadow_size=*/image_size);
   EXPECT_EQ(gfx::Rect(gfx::Point(65, 155), gfx::Size(50, 50)),
             drag_icon_proxy->GetBoundsInScreen());
 

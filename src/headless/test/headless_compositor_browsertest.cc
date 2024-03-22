@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,6 @@ class HeadlessCompositorBrowserTest : public HeadlessProtocolBrowserTest {
         // https://goo.gle/chrome-headless-rendering.
         cc::switches::kDisableThreadedAnimation,
         cc::switches::kDisableCheckerImaging,
-        blink::switches::kDisableThreadedScrolling,
 
         // Ensure that image animations don't resync their animation timestamps
         // when looping back around.
@@ -155,6 +154,9 @@ HEADLESS_COMPOSITOR_TEST(RendererFrameLoadEvents,
 HEADLESS_COMPOSITOR_TEST(RendererCssUrlFilter,
                          "sanity/renderer-css-url-filter.js")
 HEADLESS_COMPOSITOR_TEST(RendererCanvas, "sanity/renderer-canvas.js")
+HEADLESS_COMPOSITOR_TEST(ScreenshotWebp, "sanity/screenshot-webp.js")
+HEADLESS_COMPOSITOR_TEST(ScreenshotOptimizeForSpeed,
+                         "sanity/screenshot-optimize-for-speed.js")
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 // Flaky on at least Linux and Windows: crbug.com/1294751.
@@ -170,5 +172,7 @@ HEADLESS_COMPOSITOR_TEST(ScreenshotDeviceScaleFactor,
                          "emulation/screenshot-device-scale-factor.js")
 HEADLESS_COMPOSITOR_TEST(VirtualTimeIntersectionObserverWithViewport,
                          "emulation/intersection-observer-with-viewport.js")
+HEADLESS_COMPOSITOR_TEST(VeryLargeViewportCrash,
+                         "emulation/very-large-viewport-crash.js")
 
 }  // namespace headless

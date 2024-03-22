@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/scoped_multi_source_observation.h"
 #include "components/language/ios/browser/ios_language_detection_tab_helper.h"
 #include "components/translate/translate_internals/translate_internals_handler.h"
-#import "ios/chrome/browser/web_state_list/web_state_list_observer.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer.h"
 #include "ios/web/public/webui/web_ui_ios_message_handler.h"
 
 namespace web {
@@ -36,11 +36,10 @@ class IOSTranslateInternalsHandler
   // translate::TranslateInternalsHandler.
   translate::TranslateClient* GetTranslateClient() override;
   variations::VariationsService* GetVariationsService() override;
-  void RegisterMessageCallback(const std::string& message,
+  void RegisterMessageCallback(base::StringPiece message,
                                MessageCallback callback) override;
-  void CallJavascriptFunction(
-      const std::string& function_name,
-      const std::vector<const base::Value*>& args) override;
+  void CallJavascriptFunction(base::StringPiece function_name,
+                              base::span<const base::ValueView> args) override;
 
   // web::WebUIIOSMessageHandler.
   void RegisterMessages() override;
@@ -69,17 +68,9 @@ class IOSTranslateInternalsHandler
 
    private:
     // WebStateListObserver:
-    void WebStateInsertedAt(WebStateList* web_state_list,
-                            web::WebState* web_state,
-                            int index,
-                            bool activating) override;
-    void WebStateReplacedAt(WebStateList* web_state_list,
-                            web::WebState* old_web_state,
-                            web::WebState* new_web_state,
-                            int index) override;
-    void WebStateDetachedAt(WebStateList* web_state_list,
-                            web::WebState* web_state,
-                            int index) override;
+    void WebStateListDidChange(WebStateList* web_state_list,
+                               const WebStateListChange& change,
+                               const WebStateListStatus& status) override;
 
     IOSTranslateInternalsHandler* handler_;
   };

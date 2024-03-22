@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.browser_ui.settings.ChromeSwitchPreference;
+import org.chromium.components.browser_ui.settings.CustomDividerFragment;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
 
 /**
@@ -19,8 +20,8 @@ import org.chromium.components.browser_ui.settings.SettingsUtils;
  * allows a user to control whether or not the feature is on, and whether or not it is allowed to
  * run on mobile data or requires a Wi-Fi connection.
  */
-public class ImageDescriptionsSettings
-        extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener {
+public class ImageDescriptionsSettings extends PreferenceFragmentCompat
+        implements Preference.OnPreferenceChangeListener, CustomDividerFragment {
     public static final String IMAGE_DESCRIPTIONS = "image_descriptions_switch";
     public static final String IMAGE_DESCRIPTIONS_DATA_POLICY = "image_descriptions_data_policy";
 
@@ -37,7 +38,11 @@ public class ImageDescriptionsSettings
         super.onActivityCreated(savedInstanceState);
 
         getActivity().setTitle(R.string.image_descriptions_settings_title);
-        setDivider(null);
+    }
+
+    @Override
+    public boolean hasDivider() {
+        return false;
     }
 
     @Override
@@ -56,8 +61,8 @@ public class ImageDescriptionsSettings
         mGetImageDescriptionsSwitch.setChecked(mIsEnabled);
 
         mRadioButtonGroupAccessibilityPreference =
-                (RadioButtonGroupAccessibilityPreference) findPreference(
-                        IMAGE_DESCRIPTIONS_DATA_POLICY);
+                (RadioButtonGroupAccessibilityPreference)
+                        findPreference(IMAGE_DESCRIPTIONS_DATA_POLICY);
         mRadioButtonGroupAccessibilityPreference.setOnPreferenceChangeListener(this);
         mRadioButtonGroupAccessibilityPreference.setEnabled(mIsEnabled);
         mRadioButtonGroupAccessibilityPreference.initialize(mOnlyOnWifi);

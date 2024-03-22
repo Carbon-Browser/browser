@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_COLLECTION_SUPPORT_HEAP_VECTOR_H_
 
 #include <initializer_list>
+
 #include "third_party/blink/renderer/platform/heap/forward.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/heap_allocator_impl.h"
@@ -20,58 +21,87 @@ class HeapVector final : public GarbageCollected<HeapVector<T, inlineCapacity>>,
                          public Vector<T, inlineCapacity, HeapAllocator> {
   DISALLOW_NEW();
 
+  using BaseVector = Vector<T, inlineCapacity, HeapAllocator>;
+
  public:
-  HeapVector() = default;
+  HeapVector() { CheckType(); }
 
-  explicit HeapVector(wtf_size_t size)
-      : Vector<T, inlineCapacity, HeapAllocator>(size) {
-    CheckType();
-  }
+  explicit HeapVector(wtf_size_t size) : BaseVector(size) { CheckType(); }
 
-  HeapVector(wtf_size_t size, const T& val)
-      : Vector<T, inlineCapacity, HeapAllocator>(size, val) {
+  HeapVector(wtf_size_t size, const T& val) : BaseVector(size, val) {
     CheckType();
   }
 
   template <wtf_size_t otherCapacity>
   HeapVector(const HeapVector<T, otherCapacity>& other)  // NOLINT
-      : Vector<T, inlineCapacity, HeapAllocator>(other) {
+      : BaseVector(other) {
     CheckType();
   }
 
   HeapVector(const HeapVector& other)
-      : Vector<T, inlineCapacity, HeapAllocator>(other) {
+      : BaseVector(static_cast<const BaseVector&>(other)) {
+    CheckType();
+  }
+
+  template <
+      typename Proj,
+      typename = std::enable_if_t<
+          std::is_invocable_v<Proj, typename BaseVector::const_reference>>>
+  HeapVector(const HeapVector& other, Proj proj)
+      : BaseVector(static_cast<const BaseVector&>(other), std::move(proj)) {
+    CheckType();
+  }
+
+  template <
+      typename U,
+      wtf_size_t otherSize,
+      typename Proj,
+      typename = std::enable_if_t<
+          std::is_invocable_v<Proj, typename BaseVector::const_reference>>>
+  HeapVector(const HeapVector<U, otherSize>& other, Proj proj)
+      : BaseVector(static_cast<const BaseVector&>(other), std::move(proj)) {
+    CheckType();
+  }
+
+  template <typename Collection,
+            typename =
+                typename std::enable_if<std::is_class<Collection>::value>::type>
+  explicit HeapVector(const Collection& other) : BaseVector(other) {
     CheckType();
   }
 
   HeapVector& operator=(const HeapVector& other) {
+    BaseVector::operator=(other);
+    return *this;
+  }
+
+  template <typename Collection>
+  HeapVector& operator=(const Collection& other) {
     Vector<T, inlineCapacity, HeapAllocator>::operator=(other);
     return *this;
   }
 
   HeapVector(HeapVector&& other) noexcept
-      : Vector<T, inlineCapacity, HeapAllocator>(std::move(other)) {
+      : BaseVector(static_cast<BaseVector&&>(std::move(other))) {
     CheckType();
   }
 
   HeapVector& operator=(HeapVector&& other) noexcept {
-    Vector<T, inlineCapacity, HeapAllocator>::operator=(std::move(other));
+    BaseVector::operator=(std::move(other));
     return *this;
   }
 
   HeapVector(std::initializer_list<T> elements)
-      : Vector<T, inlineCapacity, HeapAllocator>(std::move(elements)) {
+      : BaseVector(std::move(elements)) {
     CheckType();
   }
 
   HeapVector& operator=(std::initializer_list<T> elements) {
-    Vector<T, inlineCapacity, HeapAllocator>::operator=(std::move(elements));
+    BaseVector::operator=(std::move(elements));
     return *this;
   }
 
-  void Trace(Visitor* visitor) const {
-    Vector<T, inlineCapacity, HeapAllocator>::Trace(visitor);
-  }
+  void Trace(Visitor* visitor) const { BaseVector::Trace(visitor); }
 
  private:
   template <typename U>
@@ -95,16 +125,19 @@ class HeapVector final : public GarbageCollected<HeapVector<T, inlineCapacity>>,
     static_assert(
         std::is_trivially_destructible<HeapVector>::value || inlineCapacity,
         "HeapVector must be trivially destructible.");
-    static_assert(WTF::IsTraceable<T>::value,
-                  "For vectors without traceable elements, use Vector<> "
-                  "instead of HeapVector<>.");
     static_assert(!WTF::IsWeak<T>::value,
                   "Weak types are not allowed in HeapVector.");
     static_assert(
         !WTF::IsGarbageCollectedType<T>::value || IsHeapVector<T>::value,
         "GCed types should not be inlined in a HeapVector.");
-    static_assert(WTF::IsTraceableInCollectionTrait<VectorTraits<T>>::value,
-                  "Type must be traceable in collection");
+    static_assert(!WTF::IsPointerToGced<T>::value,
+                  "Don't use raw pointers or reference to garbage collected "
+                  "types in HeapVector. Use Member<> instead.");
+
+    // HeapVector may hold non-traceable types. This is useful for vectors held
+    // by garbage collected objects such that the vectors' backing stores are
+    // accounted as memory held by the GC. HeapVectors of non-traceable types
+    // should only be used as fields of garbage collected objects.
   }
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,15 @@ void* UserDataKey() {
 }  // namespace
 
 // static
+bool UserPrefs::IsInitialized(base::SupportsUserData* context) {
+  CHECK(context);
+  return context->GetUserData(UserDataKey()) != nullptr;
+}
+
+// static
 PrefService* UserPrefs::Get(base::SupportsUserData* context) {
   DCHECK(context);
-  DCHECK(context->GetUserData(UserDataKey()));
+  DCHECK(IsInitialized(context));
   return static_cast<UserPrefs*>(
       context->GetUserData(UserDataKey()))->prefs_;
 }

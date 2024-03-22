@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,7 @@ class BrowserContext;
 }  // namespace content
 
 // Defines the browser-side hunspell dictionary and provides access to it.
-class SpellcheckHunspellDictionary
-    : public SpellcheckDictionary,
-      public base::SupportsWeakPtr<SpellcheckHunspellDictionary> {
+class SpellcheckHunspellDictionary : public SpellcheckDictionary {
  public:
   // Interface to implement for observers of the Hunspell dictionary.
   class Observer {
@@ -89,6 +87,11 @@ class SpellcheckHunspellDictionary
 
   // Whether dictionary download failed.
   bool IsDownloadFailure();
+
+  // Get a WeakPtr to the instance.
+  base::WeakPtr<SpellcheckHunspellDictionary> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
   // Tests use this method to set a custom URL for downloading dictionaries.
   static void SetDownloadURLForTesting(const GURL url);

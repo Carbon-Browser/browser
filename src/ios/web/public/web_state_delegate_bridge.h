@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,11 @@
 @protocol CRWWebStateDelegate <NSObject>
 @optional
 
-// Called when |webState| wants to open a new window. |url| is the URL of
-// the new window; |opener_url| is the URL of the page which requested a
-// window to be open; |initiated_by_user| is true if action was caused by the
-// user. |webState| will not open a window if this method returns nil. This
-// method can not return |webState|.
+// Called when `webState` wants to open a new window. `url` is the URL of
+// the new window; `opener_url` is the URL of the page which requested a
+// window to be open; `initiated_by_user` is true if action was caused by the
+// user. `webState` will not open a window if this method returns nil. This
+// method can not return `webState`.
 - (web::WebState*)webState:(web::WebState*)webState
     createNewWebStateForURL:(const GURL&)URL
                   openerURL:(const GURL&)openerURL
@@ -35,7 +35,7 @@
 - (web::WebState*)webState:(web::WebState*)webState
          openURLWithParams:(const web::WebState::OpenURLParams&)params;
 
-// Requests the repost form confirmation dialog. Clients must call |handler|
+// Requests the repost form confirmation dialog. Clients must call `handler`
 // with YES to allow repost and with NO to cancel the repost. If this method is
 // not implemented then WebState will repost the form.
 - (void)webState:(web::WebState*)webState
@@ -46,10 +46,18 @@
 - (web::JavaScriptDialogPresenter*)javaScriptDialogPresenterForWebState:
     (web::WebState*)webState;
 
+// Called when the media permission is requested and to acquire the decision
+// handler needed to process the user's decision to grant, deny media
+// permissions or show the default prompt that asks for permissions.
+- (void)webState:(web::WebState*)webState
+    handlePermissions:(NSArray<NSNumber*>*)permissions
+      decisionHandler:(web::WebStatePermissionDecisionHandler)decisionHandler
+    API_AVAILABLE(ios(15.0));
+
 // Called when a request receives an authentication challenge specified by
-// |protectionSpace|, and is unable to respond using cached credentials.
-// Clients must call |handler| even if they want to cancel authentication
-// (in which case |username| or |password| should be nil).
+// `protectionSpace`, and is unable to respond using cached credentials.
+// Clients must call `handler` even if they want to cancel authentication
+// (in which case `username` or `password` should be nil).
 - (void)webState:(web::WebState*)webState
     didRequestHTTPAuthForProtectionSpace:(NSURLProtectionSpace*)protectionSpace
                       proposedCredential:(NSURLCredential*)proposedCredential
@@ -60,7 +68,7 @@
 - (UIView*)webViewContainerForWebState:(web::WebState*)webState;
 
 // Called when the context menu is triggered and now it is required to provide a
-// UIContextMenuConfiguration to |completion_handler| to generate the context
+// UIContextMenuConfiguration to `completion_handler` to generate the context
 // menu.
 - (void)webState:(web::WebState*)webState
     contextMenuConfigurationForParams:(const web::ContextMenuParams&)params
@@ -99,9 +107,15 @@ class WebStateDelegateBridge : public web::WebStateDelegate {
                                 const WebState::OpenURLParams&) override;
   void ShowRepostFormWarningDialog(
       WebState* source,
+      FormWarningType warning_type,
       base::OnceCallback<void(bool)> callback) override;
   JavaScriptDialogPresenter* GetJavaScriptDialogPresenter(
       WebState* source) override;
+  void HandlePermissionsDecisionRequest(
+      WebState* source,
+      NSArray<NSNumber*>* permissions,
+      WebStatePermissionDecisionHandler handler)
+      API_AVAILABLE(ios(15.0)) override;
   void OnAuthRequired(WebState* source,
                       NSURLProtectionSpace* protection_space,
                       NSURLCredential* proposed_credential,

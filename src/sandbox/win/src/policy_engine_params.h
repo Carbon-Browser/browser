@@ -1,4 +1,4 @@
-// Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+// Copyright 2006-2008 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "sandbox/win/src/internal_types.h"
 #include "sandbox/win/src/nt_internals.h"
 #include "sandbox/win/src/sandbox_nt_util.h"
@@ -102,11 +103,13 @@ class ParameterSet {
   // it works with pointer while the former works only with references.
   template <typename T>
   T Void2TypePointerCopy() const {
-    return *(reinterpret_cast<const T*>(address_));
+    return *(reinterpret_cast<const T*>(address_.get()));
   }
 
+  // Note - we fuzz this via a fake type in sandbox_policy_rule_fuzzer.cc which
+  // should reflect the layout of these members.
   ArgType real_type_;
-  const void* address_;
+  raw_ptr<const void> address_;
 };
 
 // To safely infer the type, we use a set of template specializations

@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/permissions_policy/dom_feature_policy.h"
 
+#include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -121,8 +122,16 @@ Vector<String> DOMFeaturePolicy::getAllowlistForFeature(
         return Vector<String>({"*"});
     }
     Vector<String> result;
-    for (const auto& origin : allowed_origins) {
-      result.push_back(WTF::String::FromUTF8(origin.Serialize()));
+    result.reserve(
+        static_cast<wtf_size_t>(allowed_origins.size()) +
+        static_cast<wtf_size_t>(allowlist.SelfIfMatches().has_value()));
+    if (allowlist.SelfIfMatches()) {
+      result.push_back(
+          WTF::String::FromUTF8(allowlist.SelfIfMatches()->Serialize()));
+    }
+    for (const auto& origin_with_possible_wildcards : allowed_origins) {
+      result.push_back(
+          WTF::String::FromUTF8(origin_with_possible_wildcards.Serialize()));
     }
     return result;
   }

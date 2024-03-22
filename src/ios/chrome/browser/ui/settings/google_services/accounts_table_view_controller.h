@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,11 @@ class Browser;
 
 // ApplicationCommands handler.
 @property(nonatomic, weak) id<ApplicationCommands> applicationCommandsHandler;
+
+// If YES, AccountsTableViewController should not dismiss itself only for a
+// sign-out reason. The parent coordinator is responsible to dismiss this
+// coordinator when a sign-out happens.
+@property(nonatomic, assign) BOOL signoutDismissalByParentCoordinator;
 
 // `browser` must not be nil.
 // If `closeSettingsOnAddAccount` is YES, then this account table view

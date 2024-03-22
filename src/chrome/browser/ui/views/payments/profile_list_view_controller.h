@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -96,11 +96,15 @@ class ProfileListViewController : public PaymentRequestSheetController {
   bool ShouldShowPrimaryButton() override;
   ButtonCallback GetSecondaryButtonCallback() override;
   void FillContentView(views::View* content_view) override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
  private:
+  void OnCreateNewProfileButtonClicked(const ui::Event& event);
+
   std::unique_ptr<views::Button> CreateRow(autofill::AutofillProfile* profile);
   PaymentRequestItemList list_;
 
+  // Must be the last member of a leaf class.
   base::WeakPtrFactory<ProfileListViewController> weak_ptr_factory_{this};
 };
 

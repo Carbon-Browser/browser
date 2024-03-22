@@ -1,8 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/contextualsearch/native_contextual_search_context.h"
+
+#include <string>
 
 #include "base/android/jni_string.h"
 #include "chrome/android/chrome_jni_headers/ContextualSearchContext_jni.h"
@@ -13,14 +15,6 @@
 NativeContextualSearchContext::NativeContextualSearchContext(JNIEnv* env,
                                                              jobject obj) {
   java_object_.Reset(env, obj);
-}
-
-NativeContextualSearchContext::NativeContextualSearchContext(
-    const std::string& home_country,
-    const GURL& page_url,
-    const std::string& encoding)
-    : ContextualSearchContext(home_country, page_url, encoding) {
-  java_object_ = nullptr;
 }
 
 NativeContextualSearchContext::~NativeContextualSearchContext() = default;
@@ -38,7 +32,7 @@ NativeContextualSearchContext::FromJavaContextualSearchContext(
           Java_ContextualSearchContext_getNativePointer(
               base::android::AttachCurrentThread(),
               j_contextual_search_context));
-  return contextual_search_context->GetWeakPtr();
+  return base::AsWeakPtr(contextual_search_context);
 }
 
 void NativeContextualSearchContext::SetResolveProperties(
@@ -50,21 +44,6 @@ void NativeContextualSearchContext::SetResolveProperties(
       base::android::ConvertJavaStringToUTF8(env, j_home_country);
   ContextualSearchContext::SetResolveProperties(home_country,
                                                 j_may_send_base_page_url);
-}
-
-void NativeContextualSearchContext::SetSurroundingsAndSelection(
-    JNIEnv* env,
-    jobject obj,
-    const base::android::JavaParamRef<jstring>& j_surrounding_text,
-    jint j_selection_start,
-    jint j_selection_end) {
-  std::u16string surrounding_text =
-      base::android::ConvertJavaStringToUTF16(env, j_surrounding_text);
-  DCHECK(j_selection_start >= 0);
-  DCHECK(j_selection_end <= static_cast<int>(surrounding_text.length()));
-  DCHECK(j_selection_start <= j_selection_end);
-  ContextualSearchContext::SetSelectionSurroundings(
-      j_selection_start, j_selection_end, surrounding_text);
 }
 
 void NativeContextualSearchContext::AdjustSelection(JNIEnv* env,
@@ -109,13 +88,6 @@ void NativeContextualSearchContext::SetTranslationLanguages(
       base::android::ConvertJavaStringToUTF8(env, j_fluent_languages);
   ContextualSearchContext::SetTranslationLanguages(
       detected_language, target_language, fluent_languages);
-}
-
-// Boilerplate.
-
-base::WeakPtr<NativeContextualSearchContext>
-NativeContextualSearchContext::GetWeakPtr() {
-  return weak_factory_.GetWeakPtr();
 }
 
 // Java wrapper boilerplate

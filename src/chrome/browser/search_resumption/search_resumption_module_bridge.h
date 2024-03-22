@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/search/start_suggest_service.h"
@@ -36,7 +37,7 @@ class SearchResumptionModuleBridge {
   ~SearchResumptionModuleBridge();
   void OnSuggestionsReceived(std::vector<QuerySuggestion> suggestions);
 
-  StartSuggestService* start_suggest_service_;
+  raw_ptr<StartSuggestService> start_suggest_service_;
   base::android::ScopedJavaGlobalRef<jobject> java_object_;
 
   const base::WeakPtrFactory<SearchResumptionModuleBridge> weak_ptr_factory_{

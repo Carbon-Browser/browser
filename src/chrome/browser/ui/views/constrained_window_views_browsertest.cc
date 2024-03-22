@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,9 @@ class TestDialog : public views::DialogDelegateView {
   TestDialog() {
     SetFocusBehavior(FocusBehavior::ALWAYS);
     SetModalType(ui::MODAL_TYPE_CHILD);
+    // Dialogs that take focus must have a name and role to pass accessibility
+    // checks.
+    GetViewAccessibility().OverrideRole(ax::mojom::Role::kDialog);
     GetViewAccessibility().OverrideName("Test dialog");
   }
 
@@ -142,7 +145,8 @@ IN_PROC_BROWSER_TEST_F(ConstrainedWindowViewTest, TabCloseTest) {
 // Tests that the tab-modal window is hidden when an other tab is selected and
 // shown when its tab is selected again.
 // Flaky on ASAN builds (https://crbug.com/997634)
-#if defined(ADDRESS_SANITIZER)
+// Flaky on Mac (https://crbug.com/1385896)
+#if defined(ADDRESS_SANITIZER) || BUILDFLAG(IS_MAC)
 #define MAYBE_TabSwitchTest DISABLED_TabSwitchTest
 #else
 #define MAYBE_TabSwitchTest TabSwitchTest

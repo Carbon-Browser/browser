@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,4 +23,4 @@ class SubSurfaceObserver : public base::CheckedObserver {
 
 }  // namespace exo
 
-#endif  // COMPONENTS_EXO_SURFACE_OBSERVER_H_
+#endif  // COMPONENTS_EXO_SUB_SURFACE_OBSERVER_H_

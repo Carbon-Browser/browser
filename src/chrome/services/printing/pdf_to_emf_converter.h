@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include "base/memory/read_only_shared_memory_region.h"
 #include "chrome/services/printing/public/mojom/pdf_to_emf_converter.mojom.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "printing/pdf_render_settings.h"
 
 namespace printing {
@@ -26,7 +25,9 @@ class PdfToEmfConverter : public mojom::PdfToEmfConverter {
 
  private:
   // mojom::PdfToEmfConverter implementation.
-  void ConvertPage(uint32_t page_number, ConvertPageCallback callback) override;
+  void ConvertPage(uint32_t page_index, ConvertPageCallback callback) override;
+  void SetWebContentsURL(const GURL& url) override;
+  void SetUseSkiaRendererPolicy(bool use_skia) override;
 
   void SetPrintMode();
   void LoadPdf(base::ReadOnlySharedMemoryRegion pdf_region);

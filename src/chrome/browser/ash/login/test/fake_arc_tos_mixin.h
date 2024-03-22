@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_TEST_FAKE_ARC_TOS_MIXIN_H_
 #define CHROME_BROWSER_ASH_LOGIN_TEST_FAKE_ARC_TOS_MIXIN_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 
 namespace net {
@@ -33,17 +34,13 @@ class FakeArcTosMixin : public InProcessBrowserTestMixin {
 
   const std::string& GetArcTosContent() { return kArcTosContent; }
   const std::string& GetPrivacyPolicyContent() { return kPrivacyPolicyContent; }
-  void set_serve_tos_with_privacy_policy_footer(bool serve_with_footer) {
-    serve_tos_with_privacy_policy_footer_ = serve_with_footer;
-  }
 
  private:
   std::unique_ptr<HttpResponse> HandleRequest(const HttpRequest& request);
   std::string TestServerBaseUrl();
   const std::string kArcTosContent = "ARC TOS for test.";
   const std::string kPrivacyPolicyContent = "ARC Privacy Policy for test.";
-  net::EmbeddedTestServer* test_server_;
-  bool serve_tos_with_privacy_policy_footer_ = true;
+  raw_ptr<net::EmbeddedTestServer, ExperimentalAsh> test_server_;
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,13 @@
 
 #include "base/feature_list.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "services/network/public/cpp/resource_request.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
@@ -23,21 +27,22 @@
 #include "third_party/blink/public/platform/interface_registry.h"
 #include "third_party/blink/public/platform/modules/service_worker/web_service_worker_error.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
+#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
-#include "third_party/blink/public/platform/web_url_loader_client.h"
-#include "third_party/blink/public/platform/web_url_loader_factory.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
+#include "third_party/blink/public/platform/web_policy_container.h"
 #include "third_party/blink/public/platform/web_url_request_extra_data.h"
 #include "third_party/blink/public/platform/web_url_response.h"
 #include "third_party/blink/public/web/modules/service_worker/web_service_worker_context_client.h"
 #include "third_party/blink/public/web/modules/service_worker/web_service_worker_context_proxy.h"
 #include "third_party/blink/public/web/web_embedded_worker_start_data.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_error.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/url_loader_client.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/url_loader_factory.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/scheduler/test/fake_task_runner.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 #include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
 
 namespace blink {
@@ -45,49 +50,51 @@ namespace {
 
 const char* kNotFoundScriptURL = "https://www.example.com/sw-404.js";
 
-// A fake WebURLLoader which is used for off-main-thread script fetch tests.
-class FakeWebURLLoader final : public WebURLLoader {
+// A fake URLLoader which is used for off-main-thread script fetch tests.
+class FakeURLLoader final : public URLLoader {
  public:
-  FakeWebURLLoader() = default;
-  ~FakeWebURLLoader() override = default;
+  FakeURLLoader() = default;
+  ~FakeURLLoader() override = default;
 
-  void LoadSynchronously(
-      std::unique_ptr<network::ResourceRequest> request,
-      scoped_refptr<WebURLRequestExtraData> url_request_extra_data,
-      bool pass_response_pipe_to_client,
-      bool no_mime_sniffing,
-      base::TimeDelta timeout_interval,
-      WebURLLoaderClient*,
-      WebURLResponse&,
-      absl::optional<WebURLError>&,
-      WebData&,
-      int64_t& encoded_data_length,
-      int64_t& encoded_body_length,
-      WebBlobInfo& downloaded_blob,
-      std::unique_ptr<blink::ResourceLoadInfoNotifierWrapper>
-          resource_load_info_notifier_wrapper) override {
+  void LoadSynchronously(std::unique_ptr<network::ResourceRequest> request,
+                         scoped_refptr<const SecurityOrigin> top_frame_origin,
+                         bool download_to_blob,
+                         bool no_mime_sniffing,
+                         base::TimeDelta timeout_interval,
+                         URLLoaderClient*,
+                         WebURLResponse&,
+                         absl::optional<WebURLError>&,
+                         scoped_refptr<SharedBuffer>&,
+                         int64_t& encoded_data_length,
+                         uint64_t& encoded_body_length,
+                         scoped_refptr<BlobDataHandle>& downloaded_blob,
+                         std::unique_ptr<blink::ResourceLoadInfoNotifierWrapper>
+                             resource_load_info_notifier_wrapper) override {
     NOTREACHED();
   }
 
   void LoadAsynchronously(
       std::unique_ptr<network::ResourceRequest> request,
-      scoped_refptr<WebURLRequestExtraData> url_request_extra_data,
+      scoped_refptr<const SecurityOrigin> top_frame_origin,
       bool no_mime_sniffing,
       std::unique_ptr<blink::ResourceLoadInfoNotifierWrapper>
           resource_load_info_notifier_wrapper,
-      WebURLLoaderClient* client) override {
+      CodeCacheHost* code_cache_host,
+      URLLoaderClient* client) override {
     if (request->url.spec() == kNotFoundScriptURL) {
       WebURLResponse response;
       response.SetMimeType("text/javascript");
       response.SetHttpStatusCode(404);
-      client->DidReceiveResponse(response);
+      client->DidReceiveResponse(response,
+                                 /*body=*/mojo::ScopedDataPipeConsumerHandle(),
+                                 /*cached_metadata=*/absl::nullopt);
       client->DidFinishLoading(base::TimeTicks(), 0, 0, 0, false);
       return;
     }
     // Don't handle other requests intentionally to emulate ongoing load.
   }
 
-  void Freeze(WebLoaderFreezeMode) override {}
+  void Freeze(LoaderFreezeMode) override {}
   void DidChangePriority(WebURLRequest::Priority, int) override {}
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunnerForBodyLoader()
       override {
@@ -95,17 +102,17 @@ class FakeWebURLLoader final : public WebURLLoader {
   }
 };
 
-// A fake WebURLLoaderFactory which is used for off-main-thread script fetch
-// tests.
-class FakeWebURLLoaderFactory final : public WebURLLoaderFactory {
+// A fake URLLoaderFactory which is used for off-main-thread script fetch tests.
+class FakeURLLoaderFactory final : public URLLoaderFactory {
  public:
-  std::unique_ptr<WebURLLoader> CreateURLLoader(
+  std::unique_ptr<URLLoader> CreateURLLoader(
       const WebURLRequest&,
-      std::unique_ptr<scheduler::WebResourceLoadingTaskRunnerHandle>,
-      std::unique_ptr<scheduler::WebResourceLoadingTaskRunnerHandle>,
-      CrossVariantMojoRemote<blink::mojom::KeepAliveHandleInterfaceBase>,
-      WebBackForwardCacheLoaderHelper) override {
-    return std::make_unique<FakeWebURLLoader>();
+      scoped_refptr<base::SingleThreadTaskRunner>,
+      scoped_refptr<base::SingleThreadTaskRunner>,
+      mojo::PendingRemote<mojom::blink::KeepAliveHandle>,
+      BackForwardCacheLoaderHelper*,
+      Vector<std::unique_ptr<URLLoaderThrottle>> throttles) override {
+    return std::make_unique<FakeURLLoader>();
   }
 };
 
@@ -116,15 +123,20 @@ class FakeWebServiceWorkerFetchContext final
  public:
   void SetTerminateSyncLoadEvent(base::WaitableEvent*) override {}
   void InitializeOnWorkerThread(AcceptLanguagesWatcher*) override {}
-  WebURLLoaderFactory* GetURLLoaderFactory() override {
-    return &fake_web_url_loader_factory_;
+  URLLoaderFactory* GetURLLoaderFactory() override {
+    return &fake_url_loader_factory_;
   }
-  std::unique_ptr<WebURLLoaderFactory> WrapURLLoaderFactory(
+  std::unique_ptr<URLLoaderFactory> WrapURLLoaderFactory(
       CrossVariantMojoRemote<network::mojom::URLLoaderFactoryInterfaceBase>
           url_loader_factory) override {
     return nullptr;
   }
   void WillSendRequest(WebURLRequest&) override {}
+  WebVector<std::unique_ptr<URLLoaderThrottle>> CreateThrottles(
+      const WebURLRequest& request) override {
+    return {};
+  }
+
   mojom::ControllerServiceWorkerMode GetControllerServiceWorkerMode()
       const override {
     return mojom::ControllerServiceWorkerMode::kNoController;
@@ -139,7 +151,7 @@ class FakeWebServiceWorkerFetchContext final
   void SetIsOfflineMode(bool is_offline_mode) override {}
 
  private:
-  FakeWebURLLoaderFactory fake_web_url_loader_factory_;
+  FakeURLLoaderFactory fake_url_loader_factory_;
 };
 
 class FakeBrowserInterfaceBroker final
@@ -191,12 +203,26 @@ class MockServiceWorkerContextClient final
     mojo::PendingAssociatedRemote<mojom::blink::ServiceWorkerObject>
         service_worker_object;
 
+    mojo::PendingAssociatedRemote<mojom::blink::AssociatedInterfaceProvider>
+        associated_interfaces_remote_from_browser;
+    auto associated_interfaces_recevier_from_browser =
+        associated_interfaces_remote_from_browser
+            .InitWithNewEndpointAndPassReceiver();
+
+    mojo::PendingAssociatedRemote<mojom::blink::AssociatedInterfaceProvider>
+        associated_interfaces_remote_to_browser;
+    auto associated_interfaces_recevier_to_browser =
+        associated_interfaces_remote_to_browser
+            .InitWithNewEndpointAndPassReceiver();
+
     // Simulates calling blink.mojom.ServiceWorker.InitializeGlobalScope() to
     // unblock the service worker script evaluation.
     mojo::Remote<mojom::blink::ServiceWorker> service_worker;
     proxy->BindServiceWorker(service_worker.BindNewPipeAndPassReceiver());
     service_worker->InitializeGlobalScope(
         std::move(host_remote),
+        std::move(associated_interfaces_remote_from_browser),
+        std::move(associated_interfaces_recevier_to_browser),
         mojom::blink::ServiceWorkerRegistrationObjectInfo::New(
             2 /* registration_id */, KURL("https://example.com"),
             mojom::blink::ServiceWorkerUpdateViaCache::kImports,
@@ -210,10 +236,13 @@ class MockServiceWorkerContextClient final
             service_worker_object.InitWithNewEndpointAndPassReceiver()),
         mojom::blink::FetchHandlerExistence::EXISTS,
         /*reporting_observer_receiver=*/mojo::NullReceiver(),
-        /*ancestor_frame_type=*/mojom::blink::AncestorFrameType::kNormalFrame);
+        /*ancestor_frame_type=*/mojom::blink::AncestorFrameType::kNormalFrame,
+        blink::BlinkStorageKey());
 
     // To make the other side callable.
     host_receiver.EnableUnassociatedUsage();
+    associated_interfaces_recevier_from_browser.EnableUnassociatedUsage();
+    associated_interfaces_remote_to_browser.EnableUnassociatedUsage();
     registration_object_host_receiver.EnableUnassociatedUsage();
     service_worker_object_host_receiver.EnableUnassociatedUsage();
   }
@@ -287,6 +316,7 @@ class WebEmbeddedWorkerImplTest : public testing::Test {
     start_data->script_type = mojom::blink::ScriptType::kClassic;
     start_data->wait_for_debugger_mode =
         WebEmbeddedWorkerStartData::kDontWaitForDebugger;
+    start_data->policy_container = std::make_unique<WebPolicyContainer>();
     return start_data;
   }
 
@@ -317,7 +347,7 @@ TEST_F(WebEmbeddedWorkerImplTest, TerminateSoonAfterStart) {
       /*cache_storage_remote=*/mojo::NullRemote(),
       browser_interface_broker.BindNewPipeAndPassRemote(),
       InterfaceRegistry::GetEmptyInterfaceRegistry(),
-      Thread::Current()->GetTaskRunner());
+      scheduler::GetSingleThreadTaskRunnerForTesting());
   testing::Mock::VerifyAndClearExpectations(mock_client_.get());
 
   // Terminate the worker immediately after start.
@@ -337,7 +367,7 @@ TEST_F(WebEmbeddedWorkerImplTest, TerminateWhileWaitingForDebugger) {
       /*cache_storage_remote=*/mojo::NullRemote(),
       browser_interface_broker.BindNewPipeAndPassRemote(),
       InterfaceRegistry::GetEmptyInterfaceRegistry(),
-      Thread::Current()->GetTaskRunner());
+      scheduler::GetSingleThreadTaskRunnerForTesting());
   testing::Mock::VerifyAndClearExpectations(mock_client_.get());
 
   // Terminate the worker while waiting for the debugger.
@@ -360,7 +390,7 @@ TEST_F(WebEmbeddedWorkerImplTest, ScriptNotFound) {
       /*cache_storage_remote=*/mojo::NullRemote(),
       browser_interface_broker.BindNewPipeAndPassRemote(),
       InterfaceRegistry::GetEmptyInterfaceRegistry(),
-      Thread::Current()->GetTaskRunner());
+      scheduler::GetSingleThreadTaskRunnerForTesting());
   testing::Mock::VerifyAndClearExpectations(mock_client_.get());
 
   mock_client_->WaitUntilFailedToLoadClassicScript();

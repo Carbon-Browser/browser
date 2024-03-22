@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "base/check_op.h"
-#include "base/debug/activity_tracker.h"
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/synchronization/condition_variable.h"
@@ -57,7 +56,7 @@ void WaitableEvent::Reset() {
   kernel_->signaled_ = false;
 }
 
-void WaitableEvent::Signal() {
+void WaitableEvent::SignalImpl() {
   base::AutoLock locked(kernel_->lock_);
 
   if (kernel_->signaled_)
@@ -154,26 +153,7 @@ class SyncWaiter : public WaitableEvent::Waiter {
   base::ConditionVariable cv_;
 };
 
-void WaitableEvent::Wait() {
-  bool result = TimedWait(TimeDelta::Max());
-  DCHECK(result) << "TimedWait() should never fail with infinite timeout";
-}
-
-bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
-  if (wait_delta <= TimeDelta())
-    return IsSignaled();
-
-  // Record the event that this thread is blocking upon (for hang diagnosis) and
-  // consider it blocked for scheduling purposes. Ignore this for non-blocking
-  // WaitableEvents.
-  absl::optional<debug::ScopedEventWaitActivity> event_activity;
-  absl::optional<internal::ScopedBlockingCallWithBaseSyncPrimitives>
-      scoped_blocking_call;
-  if (waiting_is_blocking_) {
-    event_activity.emplace(this);
-    scoped_blocking_call.emplace(FROM_HERE, BlockingType::MAY_BLOCK);
-  }
-
+bool WaitableEvent::TimedWaitImpl(TimeDelta wait_delta) {
   kernel_->lock_.Acquire();
   if (kernel_->signaled_) {
     if (!kernel_->manual_reset_) {
@@ -187,8 +167,9 @@ bool WaitableEvent::TimedWait(const TimeDelta& wait_delta) {
   }
 
   SyncWaiter sw;
-  if (!waiting_is_blocking_)
+  if (only_used_while_idle_) {
     sw.cv()->declare_only_used_while_idle();
+  }
   sw.lock()->Acquire();
 
   Enqueue(&sw);
@@ -253,9 +234,6 @@ size_t WaitableEvent::WaitMany(WaitableEvent** raw_waitables,
   DCHECK(count) << "Cannot wait on no events";
   internal::ScopedBlockingCallWithBaseSyncPrimitives scoped_blocking_call(
       FROM_HERE, BlockingType::MAY_BLOCK);
-  // Record an event (the first) that this thread is blocking upon.
-  debug::ScopedEventWaitActivity event_activity(raw_waitables[0]);
-
   // We need to acquire the locks in a globally consistent order. Thus we sort
   // the array of waitables by address. We actually sort a pairs so that we can
   // map back to the original index values later.

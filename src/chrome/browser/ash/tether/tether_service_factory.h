@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ASH_TETHER_TETHER_SERVICE_FACTORY_H_
 
 #include "chrome/browser/ash/tether/tether_service.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
 class BrowserContext;
@@ -14,14 +14,14 @@ class BrowserContext;
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 namespace ash {
 namespace tether {
 
 // Singleton factory that builds and owns all TetherServices.
-class TetherServiceFactory : public BrowserContextKeyedServiceFactory {
+class TetherServiceFactory : public ProfileKeyedServiceFactory {
  public:
   static TetherServiceFactory* GetInstance();
 
@@ -32,13 +32,13 @@ class TetherServiceFactory : public BrowserContextKeyedServiceFactory {
   TetherServiceFactory& operator=(const TetherServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<TetherServiceFactory>;
+  friend base::NoDestructor<TetherServiceFactory>;
 
   TetherServiceFactory();
   ~TetherServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   void RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable* registry) override;

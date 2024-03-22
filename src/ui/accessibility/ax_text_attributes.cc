@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,6 +73,13 @@ bool AXTextAttributes::IsUnset() const {
          font_weight == kUnsetValue && text_style == kUnsetValue &&
          underline_style == kUnsetValue && font_family.length() == 0 &&
          marker_types.size() == 0 && highlight_types.size() == 0;
+}
+
+bool AXTextAttributes::HasTextStyle(
+    ax::mojom::TextStyle text_style_enum) const {
+  return text_style != kUnsetValue &&
+         (static_cast<uint32_t>(text_style) &
+          (1U << static_cast<uint32_t>(text_style_enum))) != 0;
 }
 
 }  // namespace ui

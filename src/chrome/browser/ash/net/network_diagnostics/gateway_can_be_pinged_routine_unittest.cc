@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/net/network_diagnostics/gateway_can_be_pinged_routine.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_test_helper.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/debug_daemon/fake_debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
@@ -15,7 +15,6 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 // Fake ICMP output. For more details, see:
@@ -63,7 +62,7 @@ const char kFakeNoReplyICMPOutput[] = R"(
 
 // This fakes a DebugDaemonClient by serving fake ICMP results when the
 // DebugDaemonClient calls TestICMP().
-class FakeDebugDaemonClient : public chromeos::FakeDebugDaemonClient {
+class FakeDebugDaemonClient : public ash::FakeDebugDaemonClient {
  public:
   FakeDebugDaemonClient() = default;
 
@@ -141,7 +140,7 @@ TEST_F(GatewayCanBePingedRoutineTest, TestSingleActiveNetwork) {
 
 TEST_F(GatewayCanBePingedRoutineTest, TestNoActiveNetworks) {
   SetUpRoutine(kFakeValidICMPOutput);
-  SetUpWiFi(shill::kStateOffline);
+  SetUpWiFi(shill::kStateIdle);
   std::vector<mojom::GatewayCanBePingedProblem> expected_problems = {
       mojom::GatewayCanBePingedProblem::kUnreachableGateway};
   base::RunLoop run_loop;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,7 +65,7 @@ void DeleteNodePowerBookmarkMeta(bookmarks::BookmarkModel* model,
 // tested against the text search query. Output is put into \nodes\. Bookmarks
 // that are returned will match all of the other query fields that are set. For
 // example: if |folder| and |type| are set, all returned bookmarks will be a
-// descendant of |folder| and have a power bookmark typr of |type|.
+// descendant of |folder| and have a power bookmark type of |type|.
 void GetBookmarksMatchingProperties(
     bookmarks::BookmarkModel* model,
     const PowerBookmarkQueryFields& query,

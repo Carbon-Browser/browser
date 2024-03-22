@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
+#include "base/task/sequence_manager/sequence_manager.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 
@@ -147,14 +148,13 @@ class BrowserTaskEnvironment : public base::test::TaskEnvironment {
   // TaskEnvironment and optionally request a real IO thread. Unlike
   // TaskEnvironment the default MainThreadType for
   // BrowserTaskEnvironment is MainThreadType::UI.
-  template <
-      typename... TaskEnvironmentTraits,
-      class CheckArgumentsAreValid = std::enable_if_t<
-          base::trait_helpers::AreValidTraits<ValidTraits,
-                                              TaskEnvironmentTraits...>::value>>
+  template <typename... TaskEnvironmentTraits>
+    requires base::trait_helpers::AreValidTraits<ValidTraits,
+                                                 TaskEnvironmentTraits...>
   NOINLINE explicit BrowserTaskEnvironment(TaskEnvironmentTraits... traits)
       : BrowserTaskEnvironment(
-            base::test::TaskEnvironment(
+            CreateTaskEnvironmentWithPriorities(
+                CreateBrowserTaskPrioritySettings(),
                 SubclassCreatesDefaultTaskRunner{},
                 base::trait_helpers::GetEnum<MainThreadType,
                                              MainThreadType::UI>(traits...),
@@ -174,6 +174,9 @@ class BrowserTaskEnvironment : public base::test::TaskEnvironment {
   ~BrowserTaskEnvironment() override;
 
  private:
+  static base::sequence_manager::SequenceManager::PrioritySettings
+  CreateBrowserTaskPrioritySettings();
+
   // The template constructor has to be in the header but it delegates to this
   // constructor to initialize all other members out-of-line.
   BrowserTaskEnvironment(base::test::TaskEnvironment&& scoped_task_environment,

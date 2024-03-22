@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/platform/ax_fragment_root_win.h"
 
-#include "base/containers/flat_map.h"
+#include <unordered_map>
+
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "ui/accessibility/platform/ax_fragment_root_delegate_win.h"
@@ -32,7 +33,7 @@ class AXFragmentRootPlatformNodeWin : public AXPlatformNodeWin,
     CComObject<AXFragmentRootPlatformNodeWin>* instance = nullptr;
     HRESULT hr =
         CComObject<AXFragmentRootPlatformNodeWin>::CreateInstance(&instance);
-    DCHECK(SUCCEEDED(hr));
+    CHECK(SUCCEEDED(hr));
     instance->Init(delegate);
     instance->AddRef();
     return instance;
@@ -251,7 +252,7 @@ class AXFragmentRootMapWin {
   }
 
  private:
-  base::flat_map<gfx::AcceleratedWidget, AXFragmentRootWin*> map_;
+  std::unordered_map<gfx::AcceleratedWidget, AXFragmentRootWin*> map_;
 };
 
 AXFragmentRootWin::AXFragmentRootWin(gfx::AcceleratedWidget widget,
@@ -301,7 +302,7 @@ size_t AXFragmentRootWin::GetChildCount() const {
   return delegate_->GetChildOfAXFragmentRoot() ? 1 : 0;
 }
 
-gfx::NativeViewAccessible AXFragmentRootWin::ChildAtIndex(size_t index) {
+gfx::NativeViewAccessible AXFragmentRootWin::ChildAtIndex(size_t index) const {
   if (index == 0) {
     return delegate_->GetChildOfAXFragmentRoot();
   }
@@ -309,7 +310,7 @@ gfx::NativeViewAccessible AXFragmentRootWin::ChildAtIndex(size_t index) {
   return nullptr;
 }
 
-gfx::NativeViewAccessible AXFragmentRootWin::GetNextSibling() {
+gfx::NativeViewAccessible AXFragmentRootWin::GetNextSibling() const {
   size_t child_index = GetIndexInParentOfChild();
   AXPlatformNodeDelegate* parent = GetParentNodeDelegate();
   if (parent && (child_index + 1) < parent->GetChildCount())
@@ -318,7 +319,7 @@ gfx::NativeViewAccessible AXFragmentRootWin::GetNextSibling() {
   return nullptr;
 }
 
-gfx::NativeViewAccessible AXFragmentRootWin::GetPreviousSibling() {
+gfx::NativeViewAccessible AXFragmentRootWin::GetPreviousSibling() const {
   size_t child_index = GetIndexInParentOfChild();
   if (child_index > 0)
     return GetParentNodeDelegate()->ChildAtIndex(child_index - 1);

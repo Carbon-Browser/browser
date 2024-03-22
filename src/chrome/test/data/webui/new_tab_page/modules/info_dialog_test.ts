@@ -1,8 +1,6 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-import 'chrome://webui-test/mojo_webui_test_support.js';
 
 import {InfoDialogElement} from 'chrome://new-tab-page/lazy_load.js';
 import {assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
@@ -11,7 +9,7 @@ suite('NewTabPageModulesInfoDialogTest', () => {
   let infoDialog: InfoDialogElement;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     infoDialog = new InfoDialogElement();
     document.body.appendChild(infoDialog);
   });

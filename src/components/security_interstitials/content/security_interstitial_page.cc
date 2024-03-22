@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "ui/base/webui/jstemplate_builder.h"
 #include "ui/base/webui/web_ui_util.h"
 
 namespace security_interstitials {
@@ -77,7 +76,7 @@ std::string SecurityInterstitialPage::GetHTMLContents() {
           GetHTMLTemplateId());
 
   webui::AppendWebUiCssTextDefaults(&html);
-  return webui::GetI18nTemplateHtml(html, load_time_data);
+  return webui::GetLocalizedHtml(html, load_time_data);
 }
 
 SecurityInterstitialControllerClient* SecurityInterstitialPage::controller()

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "build/build_config.h"
 #include "ui/display/display.h"
 #include "ui/display/display_util.h"
+#include "ui/display/tablet_state.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -142,6 +143,18 @@ base::Value::List Screen::GetGpuExtraInfo(
   return base::Value::List();
 }
 
+#if BUILDFLAG(IS_CHROMEOS)
+TabletState Screen::GetTabletState() const {
+  return TabletState::kInClamshellMode;
+}
+
+bool Screen::InTabletMode() const {
+  TabletState state = GetTabletState();
+  return state == TabletState::kInTabletMode ||
+         state == TabletState::kEnteringTabletMode;
+}
+#endif
+
 void Screen::SetScopedDisplayForNewWindows(int64_t display_id) {
   if (display_id == scoped_display_id_for_new_windows_)
     return;
@@ -210,47 +223,25 @@ ScreenInfos Screen::GetScreenInfosNearestDisplay(int64_t nearest_id) const {
   return result;
 }
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_APPLE)
 
 ScopedNativeScreen::ScopedNativeScreen(const base::Location& location) {
-  MaybeInit(location);
-}
-
-ScopedNativeScreen::ScopedNativeScreen(bool call_maybe_init,
-                                       const base::Location& location) {
-  if (call_maybe_init)
-    MaybeInit(location);
-}
-
-ScopedNativeScreen::~ScopedNativeScreen() {
-  Shutdown();
-}
-
-void ScopedNativeScreen::MaybeInit(const base::Location& location) {
-  maybe_init_called_ = true;
   if (!Screen::HasScreen()) {
 #if BUILDFLAG(IS_IOS)
     Screen::GetScreen();
 #else
-    screen_ = base::WrapUnique(CreateScreen());
-    // ScreenOzone and DesktopScreenWin sets the instance by itself.
-    if (Screen::GetScreen() != screen_.get())
-      Screen::SetScreenInstance(screen_.get(), location);
+    screen_ = base::WrapUnique(CreateNativeScreen());
+    Screen::SetScreenInstance(screen_.get(), location);
 #endif
   }
 }
 
-void ScopedNativeScreen::Shutdown() {
-  DCHECK(maybe_init_called_);
+ScopedNativeScreen::~ScopedNativeScreen() {
   if (screen_) {
     DCHECK_EQ(screen_.get(), Screen::GetScreen());
     Screen::SetScreenInstance(nullptr);
     screen_.reset();
   }
-}
-
-Screen* ScopedNativeScreen::CreateScreen() {
-  return CreateNativeScreen();
 }
 
 #endif

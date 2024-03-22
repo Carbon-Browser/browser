@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,13 +29,21 @@ enum class IncognitoModePrefs {
   kForced,
 };
 
-// Returns true if IncognitoModeAvailability policy is set by enterprise.
+// Returns true if IncognitoModeAvailability policy is set by enterprise or
+// custodian.
 bool IsIncognitoPolicyApplied(PrefService* pref_service);
 
-// Returns true if incognito mode is disabled by enterprise policy.
+// Returns true if incognito mode is disabled by policy.
 bool IsIncognitoModeDisabled(PrefService* pref_service);
 
-// Returns true if incognito mode is forced by enterprise policy.
+// Returns true if incognito mode is forced by policy.
 bool IsIncognitoModeForced(PrefService* pref_service);
+
+// Returns whether the browser is managed based on the presence of policy data
+// in the App Configuration from the platform.
+bool IsApplicationManagedByPlatform();
+
+// Returns true if adding a new tab item is allowed by policy.
+bool IsAddNewTabAllowedByPolicy(PrefService* prefs, bool is_incognito);
 
 #endif  // IOS_CHROME_BROWSER_POLICY_POLICY_UTIL_H_

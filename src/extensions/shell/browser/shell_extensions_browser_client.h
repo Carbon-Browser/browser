@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class ShellExtensionsBrowserClient : public ExtensionsBrowserClient {
   bool IsShuttingDown() override;
   bool AreExtensionsDisabled(const base::CommandLine& command_line,
                              content::BrowserContext* context) override;
-  bool IsValidContext(content::BrowserContext* context) override;
+  bool IsValidContext(void* context) override;
   bool IsSameContext(content::BrowserContext* first,
                      content::BrowserContext* second) override;
   bool HasOffTheRecordContext(content::BrowserContext* context) override;
@@ -49,6 +49,19 @@ class ShellExtensionsBrowserClient : public ExtensionsBrowserClient {
       content::BrowserContext* context) override;
   content::BrowserContext* GetOriginalContext(
       content::BrowserContext* context) override;
+
+  content::BrowserContext* GetContextRedirectedToOriginal(
+      content::BrowserContext* context,
+      bool force_guest_profile) override;
+  content::BrowserContext* GetContextOwnInstance(
+      content::BrowserContext* context,
+      bool force_guest_profile) override;
+  content::BrowserContext* GetContextForOriginalOnly(
+      content::BrowserContext* context,
+      bool force_guest_profile) override;
+  bool AreExtensionsDisabledForContext(
+      content::BrowserContext* context) override;
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::string GetUserIdHashFromContext(
       content::BrowserContext* context) override;
@@ -132,11 +145,12 @@ class ShellExtensionsBrowserClient : public ExtensionsBrowserClient {
  private:
   // The single BrowserContext for app_shell. Not owned. Must be initialized
   // when ready by calling InitWithBrowserContext().
-  raw_ptr<content::BrowserContext> browser_context_ = nullptr;
+  raw_ptr<content::BrowserContext, DanglingUntriaged> browser_context_ =
+      nullptr;
 
   // The PrefService for |browser_context_|. Not owned. Must be initialized when
   // ready by calling InitWithBrowserContext().
-  raw_ptr<PrefService> pref_service_ = nullptr;
+  raw_ptr<PrefService, DanglingUntriaged> pref_service_ = nullptr;
 
   // Support for extension APIs.
   std::unique_ptr<ExtensionsAPIClient> api_client_;

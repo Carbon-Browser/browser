@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ gfx::Size GetMaximumWebVrSize(gvr::GvrApi* gvr_api) {
   // get the same size, the recommended render_width is per eye
   // and the client will use the sum of the left and right width.
   //
-  // TODO(klausw,crbug.com/699350): should we round the recommended
+  // TODO(https://crbug.com/699350): should we round the recommended
   // size to a multiple of 2^N pixels to be friendlier to the GPU? The
   // exact size doesn't matter, and it might be more efficient.
   webvr_size.set_width(webvr_size.width() & ~1);
@@ -73,9 +73,7 @@ device::mojom::XRViewPtr CreateView(
     gvr::Mat4f eye_mat = gvr_api->GetEyeFromHeadMatrix(eye);
     gfx::Transform eye_from_head;
     device::gvr_utils::GvrMatToTransform(eye_mat, &eye_from_head);
-    gfx::Transform head_from_eye;
-    bool is_invertible = eye_from_head.GetInverse(&head_from_eye);
-    DCHECK(is_invertible);
+    gfx::Transform head_from_eye = eye_from_head.GetCheckedInverse();
 
     view->mojo_from_view = mojo_from_head * head_from_eye;
   }
@@ -89,10 +87,10 @@ namespace device {
 namespace gvr_utils {
 
 void GvrMatToTransform(const gvr::Mat4f& in, gfx::Transform* out) {
-  *out = gfx::Transform(in.m[0][0], in.m[0][1], in.m[0][2], in.m[0][3],
-                        in.m[1][0], in.m[1][1], in.m[1][2], in.m[1][3],
-                        in.m[2][0], in.m[2][1], in.m[2][2], in.m[2][3],
-                        in.m[3][0], in.m[3][1], in.m[3][2], in.m[3][3]);
+  *out = gfx::Transform::RowMajor(
+      in.m[0][0], in.m[0][1], in.m[0][2], in.m[0][3], in.m[1][0], in.m[1][1],
+      in.m[1][2], in.m[1][3], in.m[2][0], in.m[2][1], in.m[2][2], in.m[2][3],
+      in.m[3][0], in.m[3][1], in.m[3][2], in.m[3][3]);
 }
 
 std::vector<device::mojom::XRViewPtr> CreateViews(

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/input_method/candidate_window_controller.h"
 #include "chrome/browser/ash/input_method/ui/candidate_window_view.h"
@@ -64,8 +65,9 @@ class CandidateWindowControllerImpl
   void OnWidgetClosing(views::Widget* widget) override;
 
   // IMECandidateWindowHandlerInterface implementation.
-  void SetCursorBounds(const gfx::Rect& cursor_bounds,
-                       const gfx::Rect& composition_head) override;
+  void SetCursorAndCompositionBounds(
+      const gfx::Rect& cursor_bounds,
+      const gfx::Rect& composition_bounds) override;
   gfx::Rect GetCursorBounds() const override;
   void HideLookupTable() override;
   void UpdateLookupTable(const ui::CandidateWindow& candidate_window) override;
@@ -77,15 +79,16 @@ class CandidateWindowControllerImpl
   void InitCandidateWindowView();
 
   // The candidate window view.
-  ui::ime::CandidateWindowView* candidate_window_view_ = nullptr;
+  raw_ptr<ui::ime::CandidateWindowView, ExperimentalAsh>
+      candidate_window_view_ = nullptr;
 
   // This is the outer frame of the infolist window view. Owned by the widget.
-  ui::ime::InfolistWindow* infolist_window_ = nullptr;
+  raw_ptr<ui::ime::InfolistWindow, ExperimentalAsh> infolist_window_ = nullptr;
 
   bool is_focused_ = false;
 
   gfx::Rect cursor_bounds_;
-  gfx::Rect composition_head_;
+  gfx::Rect composition_bounds_;
 
   // The infolist entries and its focused index which currently shown in
   // Infolist window.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,13 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 
 namespace jingle_xmpp {
 class XmlElement;
 }  // namespace jingle_xmpp
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class Authenticator;
 class ChannelAuthenticator;
@@ -63,7 +62,7 @@ class Authenticator {
     PROCESSING_MESSAGE,
   };
 
-  enum RejectionReason {
+  enum class RejectionReason {
     // The account credentials were not valid (i.e. incorrect PIN).
     INVALID_CREDENTIALS,
 
@@ -86,6 +85,10 @@ class Authenticator {
     // The client is not authorized to connect to this device based on their
     // current location due to a policy defined by the third party auth service.
     LOCATION_AUTHZ_POLICY_CHECK_FAILED,
+
+    // The remote user is not authorized to access this machine. This is a
+    // generic authz error and is not related to third-party auth.
+    UNAUTHORIZED_ACCOUNT,
   };
 
   // Callback used for layered Authenticator implementations, particularly
@@ -100,7 +103,8 @@ class Authenticator {
   static bool IsAuthenticatorMessage(const jingle_xmpp::XmlElement* message);
 
   // Creates an empty Authenticator message, owned by the caller.
-  static std::unique_ptr<jingle_xmpp::XmlElement> CreateEmptyAuthenticatorMessage();
+  static std::unique_ptr<jingle_xmpp::XmlElement>
+  CreateEmptyAuthenticatorMessage();
 
   // Finds Authenticator message among child elements of |message|, or
   // returns nullptr otherwise.
@@ -161,7 +165,6 @@ class AuthenticatorFactory {
       const std::string& remote_jid) = 0;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_AUTHENTICATOR_H_

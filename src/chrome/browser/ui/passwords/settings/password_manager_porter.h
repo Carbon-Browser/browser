@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,28 +9,25 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "chrome/browser/ui/passwords/settings/password_manager_porter_interface.h"
 #include "components/password_manager/core/browser/import/password_importer.h"
-#include "components/password_manager/core/browser/ui/export_progress_status.h"
+#include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 
-namespace content {
-class WebContents;
-}
-
 namespace password_manager {
-class SavedPasswordsPresenter;
 class PasswordManagerExporter;
+struct PasswordExportInfo;
 }  // namespace password_manager
 
 class Profile;
 
 // Handles the exporting of passwords to a file, and the importing of such a
 // file to the Password Manager.
-class PasswordManagerPorter : public ui::SelectFileDialog::Listener {
+class PasswordManagerPorter : public PasswordManagerPorterInterface,
+                              public ui::SelectFileDialog::Listener {
  public:
-  using ProgressCallback =
-      base::RepeatingCallback<void(password_manager::ExportProgressStatus,
-                                   const std::string&)>;
+  using ExportProgressCallback = base::RepeatingCallback<void(
+      const password_manager::PasswordExportInfo&)>;
 
   // |profile| for which credentials to be importerd.
   // |presenter| provides the credentials which can be exported.
@@ -38,18 +35,23 @@ class PasswordManagerPorter : public ui::SelectFileDialog::Listener {
   // of exporting.
   PasswordManagerPorter(Profile* profile,
                         password_manager::SavedPasswordsPresenter* presenter,
-                        ProgressCallback on_export_progress_callback);
+                        ExportProgressCallback on_export_progress_callback);
 
   PasswordManagerPorter(const PasswordManagerPorter&) = delete;
   PasswordManagerPorter& operator=(const PasswordManagerPorter&) = delete;
 
   ~PasswordManagerPorter() override;
 
-  // Triggers passwords export flow for the given |web_contents|.
-  bool Export(content::WebContents* web_contents);
-
-  void CancelExport();
-  password_manager::ExportProgressStatus GetExportProgressStatus();
+  // PasswordManagerPorterInterface:
+  bool Export(base::WeakPtr<content::WebContents> web_contents) override;
+  void CancelExport() override;
+  password_manager::ExportProgressStatus GetExportProgressStatus() override;
+  void Import(content::WebContents* web_contents,
+              password_manager::PasswordForm::Store to_store,
+              ImportResultsCallback results_callback) override;
+  void ContinueImport(const std::vector<int>& selected_ids,
+                      ImportResultsCallback results_callback) override;
+  void ResetImporter(bool delete_file) override;
 
   // The next export will use |exporter|, instead of creating a new instance.
   void SetExporterForTesting(
@@ -59,9 +61,6 @@ class PasswordManagerPorter : public ui::SelectFileDialog::Listener {
   void SetImporterForTesting(
       std::unique_ptr<password_manager::PasswordImporter> importer);
 
-  // Triggers passwords import flow for the given |web_contents|.
-  void Import(content::WebContents* web_contents);
-
  private:
   enum Type {
     PASSWORD_IMPORT,
@@ -70,7 +69,8 @@ class PasswordManagerPorter : public ui::SelectFileDialog::Listener {
 
   // Display the file-picker dialogue for either importing or exporting
   // passwords.
-  void PresentFileSelector(content::WebContents* web_contents, Type type);
+  void PresentFileSelector(base::WeakPtr<content::WebContents> web_contents,
+                           Type type);
 
   // Callback from the file selector dialogue when a file has been picked (for
   // either import or export).
@@ -84,6 +84,10 @@ class PasswordManagerPorter : public ui::SelectFileDialog::Listener {
 
   void ExportPasswordsToPath(const base::FilePath& path);
 
+  void ImportDone();
+
+  void ExportDone();
+
   std::unique_ptr<password_manager::PasswordManagerExporter> exporter_;
   std::unique_ptr<password_manager::PasswordImporter> importer_;
   scoped_refptr<ui::SelectFileDialog> select_file_dialog_;
@@ -92,8 +96,15 @@ class PasswordManagerPorter : public ui::SelectFileDialog::Listener {
   // We store |presenter_| and
   // |on_export_progress_callback_| to use them to create a new
   // PasswordManagerExporter instance for each export.
-  raw_ptr<password_manager::SavedPasswordsPresenter> presenter_;
-  ProgressCallback on_export_progress_callback_;
+  const raw_ptr<password_manager::SavedPasswordsPresenter> presenter_;
+  ExportProgressCallback on_export_progress_callback_;
+
+  // |import_results_callback_|, |to_store_| are stored in the porter
+  // while the file is being selected.
+  ImportResultsCallback import_results_callback_;
+  password_manager::PasswordForm::Store to_store_;
+
+  base::WeakPtrFactory<PasswordManagerPorter> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_PASSWORDS_SETTINGS_PASSWORD_MANAGER_PORTER_H_

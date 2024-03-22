@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,6 @@ class SyncedWindowDelegate {
 
   // see Browser::tab_count
   virtual int GetTabCount() const = 0;
-
-  // see Browser::active_index
-  virtual int GetActiveIndex() const = 0;
 
   // see Browser::is_type_normal
   virtual bool IsTypeNormal() const = 0;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,17 @@
 namespace base {
 
 // static
-bool Process::CanBackgroundProcesses() {
+bool Process::CanSetPriority() {
   return false;
 }
 
-bool Process::IsProcessBackgrounded() const {
-  // See SetProcessBackgrounded().
+Process::Priority Process::GetPriority() const {
+  // See SetPriority().
   DCHECK(IsValid());
-  return false;
+  return Priority::kUserBlocking;
 }
 
-bool Process::SetProcessBackgrounded(bool value) {
+bool Process::SetPriority(Priority priority) {
   // Not implemented for POSIX systems other than Linux and Mac. With POSIX, if
   // we were to lower the process priority we wouldn't be able to raise it back
   // to its initial priority.

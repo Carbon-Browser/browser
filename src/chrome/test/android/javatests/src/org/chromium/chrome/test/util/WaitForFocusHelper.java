@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,9 @@ public class WaitForFocusHelper implements View.OnFocusChangeListener {
             int callCount = listener.getOnFocusCallbackHelper().getCallCount();
             TestThreadUtils.runOnUiThreadBlocking(() -> view.requestFocus());
             if (!view.hasFocus()) {
-                listener.getOnFocusCallbackHelper().waitForCallback(
-                        MessageFormat.format(WAITING_FOR_FOCUS_TEMPLATE, view), callCount);
+                listener.getOnFocusCallbackHelper()
+                        .waitForCallback(
+                                MessageFormat.format(WAITING_FOR_FOCUS_TEMPLATE, view), callCount);
             }
         } catch (Exception e) {
             e.printStackTrace();

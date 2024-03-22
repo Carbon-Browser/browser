@@ -1,17 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/form_fetcher_impl.h"
 
-#include <algorithm>
 #include <iterator>
 #include <memory>
 #include <utility>
 
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/notreached.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "components/autofill/core/common/save_password_progress_logger.h"
 #include "components/password_manager/core/browser/browser_save_password_progress_logger.h"
@@ -20,10 +21,11 @@
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
-#include "components/password_manager/core/browser/psl_matching_helper.h"
-#include "components/password_manager/core/browser/smart_bubble_stats_store.h"
-#include "components/password_manager/core/browser/statistics_table.h"
+#include "components/password_manager/core/browser/password_store/interactions_stats.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/password_store_util.h"
+#include "components/password_manager/core/browser/password_store/psl_matching_helper.h"
+#include "components/password_manager/core/browser/password_store/smart_bubble_stats_store.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 
 using Logger = autofill::SavePasswordProgressLogger;
@@ -33,14 +35,23 @@ namespace password_manager {
 
 namespace {
 
+std::vector<std::unique_ptr<PasswordForm>> ConvertToUniquePtr(
+    std::vector<PasswordForm> forms) {
+  std::vector<std::unique_ptr<PasswordForm>> result;
+  result.reserve(forms.size());
+  for (auto& form : forms) {
+    result.push_back(std::make_unique<PasswordForm>(std::move(form)));
+  }
+  return result;
+}
+
 // Create a vector of const PasswordForm from a vector of
 // unique_ptr<PasswordForm> by applying get() item-wise.
 std::vector<const PasswordForm*> MakeWeakCopies(
     const std::vector<std::unique_ptr<PasswordForm>>& owning) {
   std::vector<const PasswordForm*> result(owning.size());
-  std::transform(
-      owning.begin(), owning.end(), result.begin(),
-      [](const std::unique_ptr<PasswordForm>& ptr) { return ptr.get(); });
+  base::ranges::transform(owning, result.begin(),
+                          &std::unique_ptr<PasswordForm>::get);
   return result;
 }
 
@@ -49,17 +60,17 @@ std::vector<const PasswordForm*> MakeWeakCopies(
 std::vector<std::unique_ptr<PasswordForm>> MakeCopies(
     const std::vector<std::unique_ptr<PasswordForm>>& source) {
   std::vector<std::unique_ptr<PasswordForm>> result(source.size());
-  std::transform(source.begin(), source.end(), result.begin(),
-                 [](const std::unique_ptr<PasswordForm>& ptr) {
-                   return std::make_unique<PasswordForm>(*ptr);
-                 });
+  base::ranges::transform(source, result.begin(),
+                          [](const std::unique_ptr<PasswordForm>& ptr) {
+                            return std::make_unique<PasswordForm>(*ptr);
+                          });
   return result;
 }
 
 }  // namespace
 
 FormFetcherImpl::FormFetcherImpl(PasswordFormDigest form_digest,
-                                 const PasswordManagerClient* client,
+                                 PasswordManagerClient* client,
                                  bool should_migrate_http_passwords)
     : form_digest_(std::move(form_digest)),
       client_(client),
@@ -171,7 +182,7 @@ bool FormFetcherImpl::IsBlocklisted() const {
   return is_blocklisted_in_profile_store_;
 }
 
-bool FormFetcherImpl::IsMovingBlocked(const autofill::GaiaIdHash& destination,
+bool FormFetcherImpl::IsMovingBlocked(const signin::GaiaIdHash& destination,
                                       const std::u16string& username) const {
   for (const std::vector<std::unique_ptr<PasswordForm>>* matches_vector :
        {&federated_, &non_federated_}) {
@@ -206,7 +217,10 @@ const std::vector<const PasswordForm*>& FormFetcherImpl::GetBestMatches()
 }
 
 const PasswordForm* FormFetcherImpl::GetPreferredMatch() const {
-  return preferred_match_;
+  if (best_matches_.empty()) {
+    return nullptr;
+  }
+  return *best_matches_.begin();
 }
 
 std::unique_ptr<FormFetcher> FormFetcherImpl::Clone() {
@@ -226,15 +240,25 @@ std::unique_ptr<FormFetcher> FormFetcherImpl::Clone() {
   result->is_blocklisted_in_profile_store_ = is_blocklisted_in_profile_store_;
   password_manager_util::FindBestMatches(
       MakeWeakCopies(result->non_federated_), form_digest_.scheme,
-      &result->non_federated_same_scheme_, &result->best_matches_,
-      &result->preferred_match_);
+      &result->non_federated_same_scheme_, &result->best_matches_);
 
   result->interactions_stats_ = interactions_stats_;
   result->insecure_credentials_ = MakeCopies(insecure_credentials_);
   result->state_ = state_;
   result->need_to_refetch_ = need_to_refetch_;
+  result->profile_store_backend_error_ = profile_store_backend_error_;
 
   return result;
+}
+
+std::optional<PasswordStoreBackendError>
+FormFetcherImpl::GetProfileStoreBackendError() const {
+  return profile_store_backend_error_;
+}
+
+std::optional<PasswordStoreBackendError>
+FormFetcherImpl::GetAccountStoreBackendError() const {
+  return account_store_backend_error_;
 }
 
 void FormFetcherImpl::FindMatchesAndNotifyConsumers(
@@ -244,7 +268,7 @@ void FormFetcherImpl::FindMatchesAndNotifyConsumers(
 
   password_manager_util::FindBestMatches(
       MakeWeakCopies(non_federated_), form_digest_.scheme,
-      &non_federated_same_scheme_, &best_matches_, &preferred_match_);
+      &non_federated_same_scheme_, &best_matches_);
 
   state_ = State::NOT_WAITING;
   for (auto& consumer : consumers_)
@@ -292,6 +316,31 @@ void FormFetcherImpl::OnGetPasswordStoreResults(
 void FormFetcherImpl::OnGetPasswordStoreResultsFrom(
     PasswordStoreInterface* store,
     std::vector<std::unique_ptr<PasswordForm>> results) {
+  NOTIMPLEMENTED();
+}
+
+void FormFetcherImpl::OnGetPasswordStoreResultsOrErrorFrom(
+    PasswordStoreInterface* store,
+    LoginsResultOrError results_or_error) {
+  // TODO(https://crbug.com/1365324): Handle errors coming from the account
+  // store.
+  if (store == client_->GetProfilePasswordStore()) {
+    profile_store_backend_error_.reset();
+    if (absl::holds_alternative<PasswordStoreBackendError>(results_or_error)) {
+      profile_store_backend_error_ =
+          absl::get<PasswordStoreBackendError>(results_or_error);
+    }
+  } else if (store == client_->GetAccountPasswordStore()) {
+    account_store_backend_error_.reset();
+    if (absl::holds_alternative<PasswordStoreBackendError>(results_or_error)) {
+      account_store_backend_error_ =
+          absl::get<PasswordStoreBackendError>(results_or_error);
+    }
+  }
+
+  std::vector<PasswordForm> results =
+      GetLoginsOrEmptyListOnFailure(std::move(results_or_error));
+
   DCHECK_EQ(State::WAITING, state_);
   DCHECK_GT(wait_counter_, 0);
 
@@ -304,7 +353,7 @@ void FormFetcherImpl::OnGetPasswordStoreResultsFrom(
     return;
   }
 
-  AggregatePasswordStoreResults(std::move(results));
+  AggregatePasswordStoreResults(ConvertToUniquePtr(std::move(results)));
 }
 
 void FormFetcherImpl::AggregatePasswordStoreResults(

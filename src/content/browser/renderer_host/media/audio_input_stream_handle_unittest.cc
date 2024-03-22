@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/run_loop.h"
 #include "base/sync_socket.h"
@@ -134,7 +135,10 @@ class AudioInputStreamHandleTest : public Test {
   mojo::Receiver<blink::mojom::RendererAudioInputStreamFactoryClient>
       client_receiver_;
   StrictMock<MockDeleter> deleter_;
-  media::AudioInputDelegate::EventHandler* event_handler_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION media::AudioInputDelegate::EventHandler* event_handler_ =
+      nullptr;
   std::unique_ptr<AudioInputStreamHandle> handle_;
 
   base::ReadOnlySharedMemoryRegion shared_memory_region_;

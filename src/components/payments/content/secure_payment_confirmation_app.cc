@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,7 @@
 #include "device/fido/fido_transport_protocol.h"
 #include "device/fido/fido_types.h"
 #include "device/fido/public_key_credential_descriptor.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/webauthn/authenticator.mojom.h"
 #include "url/url_constants.h"
 
@@ -88,6 +89,10 @@ void SecurePaymentConfirmationApp::InvokePaymentApp(
                          : base::Minutes(kDefaultTimeoutMinutes);
   options->user_verification = device::UserVerificationRequirement::kRequired;
   std::vector<device::PublicKeyCredentialDescriptor> credentials;
+  options->extensions =
+      !request_->extensions
+          ? blink::mojom::AuthenticationExtensionsClientInputs::New()
+          : request_->extensions.Clone();
 
   if (base::FeatureList::IsEnabled(features::kSecurePaymentConfirmationDebug)) {
     options->user_verification =
@@ -122,12 +127,6 @@ void SecurePaymentConfirmationApp::InvokePaymentApp(
 
 bool SecurePaymentConfirmationApp::IsCompleteForPayment() const {
   return true;
-}
-
-uint32_t SecurePaymentConfirmationApp::GetCompletenessScore() const {
-  // This value is used for sorting multiple apps, but this app always appears
-  // on its own.
-  return 0;
 }
 
 bool SecurePaymentConfirmationApp::CanPreselect() const {
@@ -170,9 +169,7 @@ const SkBitmap* SecurePaymentConfirmationApp::icon_bitmap() const {
 }
 
 bool SecurePaymentConfirmationApp::IsValidForModifier(
-    const std::string& method,
-    bool supported_networks_specified,
-    const std::set<std::string>& supported_networks) const {
+    const std::string& method) const {
   bool is_valid = false;
   IsValidForPaymentMethodIdentifier(method, &is_valid);
   return is_valid;
@@ -219,6 +216,15 @@ void SecurePaymentConfirmationApp::AbortPaymentApp(
 mojom::PaymentResponsePtr
 SecurePaymentConfirmationApp::SetAppSpecificResponseFields(
     mojom::PaymentResponsePtr response) const {
+  if (base::FeatureList::IsEnabled(
+          blink::features::kSecurePaymentConfirmationExtensions)) {
+    response->get_assertion_authenticator_response =
+        blink::mojom::GetAssertionAuthenticatorResponse::New(
+            response_->info.Clone(), response_->authenticator_attachment,
+            response_->signature, response_->user_handle,
+            response_->extensions.Clone());
+    return response;
+  }
   response->secure_payment_confirmation =
       mojom::SecurePaymentConfirmationResponse::New(
           response_->info.Clone(), response_->signature,

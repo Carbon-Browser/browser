@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import org.chromium.mojo.system.Core.HandleSignalsState;
 
 import java.io.Closeable;
 
-/**
- * A generic mojo handle.
- */
+/** A generic mojo handle. */
 public interface Handle extends Closeable {
 
     /**
@@ -35,9 +33,7 @@ public interface Handle extends Closeable {
      */
     public boolean isValid();
 
-    /**
-     * Converts this handle into an {@link UntypedHandle}, invalidating this handle.
-     */
+    /** Converts this handle into an {@link UntypedHandle}, invalidating this handle. */
     public UntypedHandle toUntypedHandle();
 
     /**

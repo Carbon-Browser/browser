@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,8 @@ class TrayBubbleView;
 // Widgets they make.
 class ASH_EXPORT TrayBubbleBase : public views::WidgetObserver {
  public:
-  TrayBubbleBase();
-  ~TrayBubbleBase() override;
+  TrayBubbleBase() = default;
+  ~TrayBubbleBase() override = default;
 
   // Returns the tray button instance.
   virtual TrayBackgroundView* GetTray() const = 0;
@@ -34,9 +34,6 @@ class ASH_EXPORT TrayBubbleBase : public views::WidgetObserver {
 
   // Returns the widget of the bubble.
   virtual views::Widget* GetBubbleWidget() const = 0;
-
-  // views::WidgetObserver overrides:
-  void OnWidgetVisibilityChanged(views::Widget* widget, bool visible) override;
 };
 
 }  // namespace ash

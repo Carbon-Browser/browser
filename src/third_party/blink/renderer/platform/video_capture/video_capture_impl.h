@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include <stdint.h>
 #include <map>
 
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/unsafe_shared_memory_pool.h"
 #include "base/memory/weak_ptr.h"
@@ -24,6 +26,7 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/common/media/video_capture.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 
 namespace base {
@@ -42,7 +45,7 @@ namespace blink {
 
 class BrowserInterfaceBrokerProxy;
 
-extern const PLATFORM_EXPORT base::Feature kTimeoutHangingVideoCaptureStarts;
+PLATFORM_EXPORT BASE_DECLARE_FEATURE(kTimeoutHangingVideoCaptureStarts);
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
@@ -76,14 +79,18 @@ class PLATFORM_EXPORT VideoCaptureImpl
   // used later to stop receiving video frames.
   // |state_update_cb| will be called when state changes.
   // |deliver_frame_cb| will be called when a frame is ready.
-  // |crop_version_cb| will be called when it is guaranteed that all
-  // subsequent frames |deliver_frame_cb| is called for, have a crop version
+  // |sub_capture_target_version_cb| will be called when it is guaranteed that
+  // all subsequent frames |deliver_frame_cb| is called for, have a crop version
   // that is equal-to-or-greater-than the given crop version.
+  // |frame_dropped_cb| will be called when a frame was dropped prior to
+  // delivery (i.e. |deliver_frame_cb| was not called for this frame).
   void StartCapture(int client_id,
                     const media::VideoCaptureParams& params,
                     const VideoCaptureStateUpdateCB& state_update_cb,
                     const VideoCaptureDeliverFrameCB& deliver_frame_cb,
-                    const VideoCaptureCropVersionCB& crop_version_cb);
+                    const VideoCaptureSubCaptureTargetVersionCB&
+                        sub_capture_target_version_cb,
+                    const VideoCaptureNotifyFrameDroppedCB& frame_dropped_cb);
 
   // Stop capturing. |client_id| is the identifier used to call StartCapture.
   void StopCapture(int client_id);
@@ -103,7 +110,6 @@ class PLATFORM_EXPORT VideoCaptureImpl
   // |callback| will be invoked with the results.
   void GetDeviceFormatsInUse(VideoCaptureDeviceFormatsCallback callback);
 
-  void OnFrameDropped(media::VideoCaptureFrameDropReason reason);
   void OnLog(const String& message);
 
   const media::VideoCaptureSessionId& session_id() const { return session_id_; }
@@ -121,11 +127,11 @@ class PLATFORM_EXPORT VideoCaptureImpl
   void OnNewBuffer(
       int32_t buffer_id,
       media::mojom::blink::VideoBufferHandlePtr buffer_handle) override;
-  void OnBufferReady(
-      media::mojom::blink::ReadyBufferPtr buffer,
-      Vector<media::mojom::blink::ReadyBufferPtr> scaled_buffers) override;
+  void OnBufferReady(media::mojom::blink::ReadyBufferPtr buffer) override;
   void OnBufferDestroyed(int32_t buffer_id) override;
-  void OnNewCropVersion(uint32_t crop_version) override;
+  void OnFrameDropped(media::VideoCaptureFrameDropReason reason) override;
+  void OnNewSubCaptureTargetVersion(
+      uint32_t sub_capture_target_version) override;
 
   void ProcessFeedback(const media::VideoCaptureFeedback& feedback);
 
@@ -169,37 +175,35 @@ class PLATFORM_EXPORT VideoCaptureImpl
 
    private:
     // Set by constructor.
-    VideoCaptureImpl& video_capture_impl_;
+    const raw_ref<VideoCaptureImpl, ExperimentalRenderer> video_capture_impl_;
     int32_t buffer_id_;
     media::mojom::blink::VideoFrameInfoPtr frame_info_;
     // Set by Initialize().
     scoped_refptr<BufferContext> buffer_context_;
     scoped_refptr<media::VideoFrame> frame_;
     std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer_;
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
+    bool is_webgpu_compatible_ = false;
+#endif
   };
 
   // Contains information about a video capture client, including capture
   // parameters callbacks to the client.
   struct ClientInfo;
-  using ClientInfoMap = std::map<int, ClientInfo>;
+  using ClientInfoMap ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)") =
+      std::map<int, ClientInfo>;
 
   using BufferFinishedCallback = base::OnceClosure;
 
-  static void BindVideoFramesOnMediaThread(
+  static void BindVideoFrameOnMediaThread(
       media::GpuVideoAcceleratorFactories* gpu_factories,
       std::unique_ptr<VideoFrameBufferPreparer> frame_preparer,
-      std::vector<std::unique_ptr<VideoFrameBufferPreparer>>
-          scaled_frame_preparers,
-      base::OnceCallback<
-          void(std::unique_ptr<VideoFrameBufferPreparer>,
-               std::vector<std::unique_ptr<VideoFrameBufferPreparer>>)>
+      base::OnceCallback<void(std::unique_ptr<VideoFrameBufferPreparer>)>
           on_frame_ready_callback,
       base::OnceCallback<void()> on_gpu_context_lost);
   void OnVideoFrameReady(
       base::TimeTicks reference_time,
-      std::unique_ptr<VideoFrameBufferPreparer> frame_preparer,
-      std::vector<std::unique_ptr<VideoFrameBufferPreparer>>
-          scaled_frame_preparers);
+      std::unique_ptr<VideoFrameBufferPreparer> frame_preparer);
 
   void OnAllClientsFinishedConsumingFrame(
       int buffer_id,
@@ -231,7 +235,7 @@ class PLATFORM_EXPORT VideoCaptureImpl
 
   void OnStartTimedout();
 
-  void RecordStartOutcomeUMA(VideoCaptureStartOutcome outcome);
+  void RecordStartOutcomeUMA(media::VideoCaptureError error_code);
 
   // Callback for when GPU context lost is detected. The method fetches the new
   // GPU factories handle on |main_task_runner_| and sets |gpu_factories_| to
@@ -260,13 +264,15 @@ class PLATFORM_EXPORT VideoCaptureImpl
   mojo::PendingRemote<media::mojom::blink::VideoCaptureHost>
       pending_video_capture_host_;
   mojo::Remote<media::mojom::blink::VideoCaptureHost> video_capture_host_;
-  media::mojom::blink::VideoCaptureHost* video_capture_host_for_testing_;
+  raw_ptr<media::mojom::blink::VideoCaptureHost, ExperimentalRenderer>
+      video_capture_host_for_testing_;
 
   mojo::Receiver<media::mojom::blink::VideoCaptureObserver> observer_receiver_{
       this};
 
   // Buffers available for sending to the client.
-  using ClientBufferMap = std::map<int32_t, scoped_refptr<BufferContext>>;
+  using ClientBufferMap ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)") =
+      std::map<int32_t, scoped_refptr<BufferContext>>;
   ClientBufferMap client_buffers_;
 
   ClientInfoMap clients_;
@@ -279,15 +285,16 @@ class PLATFORM_EXPORT VideoCaptureImpl
   base::TimeTicks first_frame_ref_time_;
 
   VideoCaptureState state_;
-  bool start_timedout_ = false;
   bool start_outcome_reported_ = false;
 
   int num_first_frame_logs_ = 0;
 
   // Methods of |gpu_factories_| need to run on |media_task_runner_|.
-  media::GpuVideoAcceleratorFactories* gpu_factories_ = nullptr;
+  raw_ptr<media::GpuVideoAcceleratorFactories, ExperimentalRenderer>
+      gpu_factories_ = nullptr;
   scoped_refptr<base::SequencedTaskRunner> media_task_runner_;
   scoped_refptr<base::SequencedTaskRunner> main_task_runner_;
+  bool gmb_not_supported_ = false;
 
   std::unique_ptr<gpu::GpuMemoryBufferSupport> gpu_memory_buffer_support_;
 

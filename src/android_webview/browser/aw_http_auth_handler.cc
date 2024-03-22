@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 
 #include <utility>
 
+#include <optional>
 #include "android_webview/browser/aw_contents.h"
 #include "android_webview/browser_jni_headers/AwHttpAuthHandler_jni.h"
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "net/base/auth.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using base::android::ConvertJavaStringToUTF16;
 using base::android::JavaParamRef;
@@ -62,7 +62,7 @@ void AwHttpAuthHandler::Proceed(JNIEnv* env,
 void AwHttpAuthHandler::Cancel(JNIEnv* env, const JavaParamRef<jobject>& obj) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (callback_) {
-    std::move(callback_).Run(absl::nullopt);
+    std::move(callback_).Run(std::nullopt);
   }
 }
 
@@ -71,14 +71,14 @@ void AwHttpAuthHandler::Start() {
 
   // The WebContents may have been destroyed during the PostTask.
   if (!web_contents_) {
-    std::move(callback_).Run(absl::nullopt);
+    std::move(callback_).Run(std::nullopt);
     return;
   }
 
   AwContents* aw_contents = AwContents::FromWebContents(web_contents_.get());
   if (!aw_contents->OnReceivedHttpAuthRequest(http_auth_handler_, host_,
                                               realm_)) {
-    std::move(callback_).Run(absl::nullopt);
+    std::move(callback_).Run(std::nullopt);
   }
 }
 

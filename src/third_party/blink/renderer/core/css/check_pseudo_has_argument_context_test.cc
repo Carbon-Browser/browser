@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,16 @@
 #include "third_party/blink/renderer/core/css/parser/css_parser_context.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/html/html_document.h"
+#include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 
 namespace blink {
 
 class CheckPseudoHasArgumentContextTest : public PageTestBase {
  protected:
-  const int kMax = std::numeric_limits<int>::max();
+  const int kDepthMax = CheckPseudoHasArgumentContext::kInfiniteDepth;
+  const int kAdjacentMax =
+      CheckPseudoHasArgumentContext::kInfiniteAdjacentDistance;
 
   void TestArgumentContext(
       const String& selector_text,
@@ -24,10 +27,10 @@ class CheckPseudoHasArgumentContextTest : public PageTestBase {
       int expected_adjacent_distance_limit,
       int expected_depth_limit,
       CheckPseudoHasArgumentTraversalScope expected_traversal_scope) const {
-    CSSSelectorList selector_list =
+    CSSSelectorList* selector_list =
         css_test_helpers::ParseSelectorList(selector_text);
     CheckPseudoHasArgumentContext context(
-        selector_list.First()->SelectorList()->First());
+        selector_list->First()->SelectorList()->First());
 
     EXPECT_EQ(expected_leftmost_relation, context.LeftmostRelation())
         << "Failed : " << selector_text;
@@ -48,7 +51,7 @@ class CheckPseudoHasArgumentContextTest : public PageTestBase {
                                           const char* has_anchor_element_id,
                                           const char* selector_text) const {
     Element* has_anchor_element =
-        document->getElementById(has_anchor_element_id);
+        document->getElementById(AtomicString(has_anchor_element_id));
     if (!has_anchor_element) {
       ADD_FAILURE() << "Failed : test iterator on #" << has_anchor_element_id
                     << " (Cannot find element)";
@@ -56,17 +59,17 @@ class CheckPseudoHasArgumentContextTest : public PageTestBase {
     }
 
     unsigned i = 0;
-    CSSSelectorList selector_list =
+    CSSSelectorList* selector_list =
         css_test_helpers::ParseSelectorList(selector_text);
     CheckPseudoHasArgumentContext argument_context(
-        selector_list.First()->SelectorList()->First());
+        selector_list->First()->SelectorList()->First());
     for (CheckPseudoHasArgumentTraversalIterator iterator(*has_anchor_element,
                                                           argument_context);
          !iterator.AtEnd(); ++iterator, ++i) {
       AtomicString current_element_id =
           iterator.CurrentElement()
               ? iterator.CurrentElement()->GetIdAttribute()
-              : "nullptr";
+              : g_null_atom;
       int current_depth = iterator.CurrentDepth();
       ADD_FAILURE() << "Iteration failed : exceeded expected iteration"
                     << " (selector: " << selector_text
@@ -77,6 +80,18 @@ class CheckPseudoHasArgumentContextTest : public PageTestBase {
     }
   }
 
+  CheckPseudoHasArgumentTraversalType GetTraversalType(
+      const char* selector_text) const {
+    CSSSelectorList* selector_list =
+        css_test_helpers::ParseSelectorList(selector_text);
+
+    EXPECT_EQ(selector_list->First()->GetPseudoType(), CSSSelector::kPseudoHas);
+
+    CheckPseudoHasArgumentContext context(
+        selector_list->First()->SelectorList()->First());
+    return context.TraversalType();
+  }
+
   template <unsigned length>
   void TestTraversalIteratorSteps(
       Document* document,
@@ -84,7 +99,7 @@ class CheckPseudoHasArgumentContextTest : public PageTestBase {
       const char* selector_text,
       const ExpectedTraversalStep (&expected_traversal_steps)[length]) const {
     Element* has_anchor_element =
-        document->getElementById(has_anchor_element_id);
+        document->getElementById(AtomicString(has_anchor_element_id));
     if (!has_anchor_element) {
       ADD_FAILURE() << "Failed : test iterator on #" << has_anchor_element_id
                     << " (Cannot find element)";
@@ -93,17 +108,17 @@ class CheckPseudoHasArgumentContextTest : public PageTestBase {
     EXPECT_EQ(has_anchor_element->GetIdAttribute(), has_anchor_element_id);
 
     unsigned i = 0;
-    CSSSelectorList selector_list =
+    CSSSelectorList* selector_list =
         css_test_helpers::ParseSelectorList(selector_text);
     CheckPseudoHasArgumentContext argument_context(
-        selector_list.First()->SelectorList()->First());
+        selector_list->First()->SelectorList()->First());
     for (CheckPseudoHasArgumentTraversalIterator iterator(*has_anchor_element,
                                                           argument_context);
          !iterator.AtEnd(); ++iterator, ++i) {
       AtomicString current_element_id =
           iterator.CurrentElement()
               ? iterator.CurrentElement()->GetIdAttribute()
-              : "nullptr";
+              : g_null_atom;
       int current_depth = iterator.CurrentDepth();
       if (i >= length) {
         ADD_FAILURE() << "Iteration failed : exceeded expected iteration"
@@ -132,9 +147,9 @@ class CheckPseudoHasArgumentContextTest : public PageTestBase {
                     << ", has_anchor_element: #" << has_anchor_element_id
                     << ", index: " << i << ", expected_element: "
                     << expected_traversal_steps[i].element_id << ")";
-      EXPECT_NE(
-          document->getElementById(expected_traversal_steps[i].element_id),
-          nullptr);
+      EXPECT_NE(document->getElementById(
+                    AtomicString(expected_traversal_steps[i].element_id)),
+                nullptr);
     }
   }
 };
@@ -142,28 +157,28 @@ class CheckPseudoHasArgumentContextTest : public PageTestBase {
 TEST_F(CheckPseudoHasArgumentContextTest, TestArgumentMatchContext) {
   TestArgumentContext(":has(.a)", CSSSelector::kRelativeDescendant,
                       /* expected_adjacent_distance_limit */ 0,
-                      /* expected_depth_limit */ kMax, kSubtree);
+                      /* expected_depth_limit */ kDepthMax, kSubtree);
   TestArgumentContext(":has(.a ~ .b)", CSSSelector::kRelativeDescendant,
                       /* expected_adjacent_distance_limit */ 0,
-                      /* expected_depth_limit */ kMax, kSubtree);
+                      /* expected_depth_limit */ kDepthMax, kSubtree);
   TestArgumentContext(":has(.a ~ .b > .c)", CSSSelector::kRelativeDescendant,
                       /* expected_adjacent_distance_limit */ 0,
-                      /* expected_depth_limit */ kMax, kSubtree);
+                      /* expected_depth_limit */ kDepthMax, kSubtree);
   TestArgumentContext(":has(.a > .b)", CSSSelector::kRelativeDescendant,
                       /* expected_adjacent_distance_limit */ 0,
-                      /* expected_depth_limit */ kMax, kSubtree);
+                      /* expected_depth_limit */ kDepthMax, kSubtree);
   TestArgumentContext(":has(.a + .b)", CSSSelector::kRelativeDescendant,
                       /* expected_adjacent_distance_limit */ 0,
-                      /* expected_depth_limit */ kMax, kSubtree);
+                      /* expected_depth_limit */ kDepthMax, kSubtree);
   TestArgumentContext(":has(> .a .b)", CSSSelector::kRelativeChild,
                       /* expected_adjacent_distance_limit */ 0,
-                      /* expected_depth_limit */ kMax, kSubtree);
+                      /* expected_depth_limit */ kDepthMax, kSubtree);
   TestArgumentContext(":has(> .a ~ .b .c)", CSSSelector::kRelativeChild,
                       /* expected_adjacent_distance_limit */ 0,
-                      /* expected_depth_limit */ kMax, kSubtree);
+                      /* expected_depth_limit */ kDepthMax, kSubtree);
   TestArgumentContext(":has(> .a + .b .c)", CSSSelector::kRelativeChild,
                       /* expected_adjacent_distance_limit */ 0,
-                      /* expected_depth_limit */ kMax, kSubtree);
+                      /* expected_depth_limit */ kDepthMax, kSubtree);
   TestArgumentContext(":has(> .a)", CSSSelector::kRelativeChild,
                       /* expected_adjacent_distance_limit */ 0,
                       /* expected_depth_limit */ 1, kFixedDepthDescendants);
@@ -180,83 +195,85 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestArgumentMatchContext) {
                       /* expected_adjacent_distance_limit */ 0,
                       /* expected_depth_limit */ 2, kFixedDepthDescendants);
   TestArgumentContext(":has(~ .a .b)", CSSSelector::kRelativeIndirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
-                      /* expected_depth_limit */ kMax, kAllNextSiblingSubtrees);
-  TestArgumentContext(":has(~ .a + .b > .c ~ .d .e)",
-                      CSSSelector::kRelativeIndirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
-                      /* expected_depth_limit */ kMax, kAllNextSiblingSubtrees);
+                      /* expected_adjacent_distance_limit */ kAdjacentMax,
+                      /* expected_depth_limit */ kDepthMax,
+                      kAllNextSiblingSubtrees);
+  TestArgumentContext(
+      ":has(~ .a + .b > .c ~ .d .e)", CSSSelector::kRelativeIndirectAdjacent,
+      /* expected_adjacent_distance_limit */ kAdjacentMax,
+      /* expected_depth_limit */ kDepthMax, kAllNextSiblingSubtrees);
   TestArgumentContext(":has(~ .a)", CSSSelector::kRelativeIndirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
+                      /* expected_adjacent_distance_limit */ kAdjacentMax,
                       /* expected_depth_limit */ 0, kAllNextSiblings);
   TestArgumentContext(":has(~ .a ~ .b)", CSSSelector::kRelativeIndirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
+                      /* expected_adjacent_distance_limit */ kAdjacentMax,
                       /* expected_depth_limit */ 0, kAllNextSiblings);
   TestArgumentContext(":has(~ .a + .b)", CSSSelector::kRelativeIndirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
+                      /* expected_adjacent_distance_limit */ kAdjacentMax,
                       /* expected_depth_limit */ 0, kAllNextSiblings);
   TestArgumentContext(":has(~ .a + .b ~ .c)",
                       CSSSelector::kRelativeIndirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
+                      /* expected_adjacent_distance_limit */ kAdjacentMax,
                       /* expected_depth_limit */ 0, kAllNextSiblings);
   TestArgumentContext(":has(~ .a > .b)", CSSSelector::kRelativeIndirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
+                      /* expected_adjacent_distance_limit */ kAdjacentMax,
                       /* expected_depth_limit */ 1,
                       kAllNextSiblingsFixedDepthDescendants);
   TestArgumentContext(
       ":has(~ .a + .b > .c ~ .d > .e)", CSSSelector::kRelativeIndirectAdjacent,
-      /* expected_adjacent_distance_limit */ kMax,
+      /* expected_adjacent_distance_limit */ kAdjacentMax,
       /* expected_depth_limit */ 2, kAllNextSiblingsFixedDepthDescendants);
-  TestArgumentContext(":has(+ .a ~ .b .c)",
-                      CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
-                      /* expected_depth_limit */ kMax, kAllNextSiblingSubtrees);
-  TestArgumentContext(":has(+ .a ~ .b > .c + .d .e)",
-                      CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
-                      /* expected_depth_limit */ kMax, kAllNextSiblingSubtrees);
+  TestArgumentContext(
+      ":has(+ .a ~ .b .c)", CSSSelector::kRelativeDirectAdjacent,
+      /* expected_adjacent_distance_limit */ kAdjacentMax,
+      /* expected_depth_limit */ kDepthMax, kAllNextSiblingSubtrees);
+  TestArgumentContext(
+      ":has(+ .a ~ .b > .c + .d .e)", CSSSelector::kRelativeDirectAdjacent,
+      /* expected_adjacent_distance_limit */ kAdjacentMax,
+      /* expected_depth_limit */ kDepthMax, kAllNextSiblingSubtrees);
   TestArgumentContext(":has(+ .a ~ .b)", CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
+                      /* expected_adjacent_distance_limit */ kAdjacentMax,
                       /* expected_depth_limit */ 0, kAllNextSiblings);
   TestArgumentContext(":has(+ .a + .b ~ .c)",
                       CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ kMax,
+                      /* expected_adjacent_distance_limit */ kAdjacentMax,
                       /* expected_depth_limit */ 0, kAllNextSiblings);
   TestArgumentContext(
       ":has(+ .a ~ .b > .c)", CSSSelector::kRelativeDirectAdjacent,
-      /* expected_adjacent_distance_limit */ kMax,
+      /* expected_adjacent_distance_limit */ kAdjacentMax,
       /* expected_depth_limit */ 1, kAllNextSiblingsFixedDepthDescendants);
   TestArgumentContext(
       ":has(+ .a ~ .b > .c + .d > .e)", CSSSelector::kRelativeDirectAdjacent,
-      /* expected_adjacent_distance_limit */ kMax,
+      /* expected_adjacent_distance_limit */ kAdjacentMax,
       /* expected_depth_limit */ 2, kAllNextSiblingsFixedDepthDescendants);
   TestArgumentContext(":has(+ .a .b)", CSSSelector::kRelativeDirectAdjacent,
                       /* expected_adjacent_distance_limit */ 1,
-                      /* expected_depth_limit */ kMax, kOneNextSiblingSubtree);
-  TestArgumentContext(":has(+ .a > .b .c)",
-                      CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ 1,
-                      /* expected_depth_limit */ kMax, kOneNextSiblingSubtree);
-  TestArgumentContext(":has(+ .a .b > .c)",
-                      CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ 1,
-                      /* expected_depth_limit */ kMax, kOneNextSiblingSubtree);
-  TestArgumentContext(":has(+ .a .b ~ .c)",
-                      CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ 1,
-                      /* expected_depth_limit */ kMax, kOneNextSiblingSubtree);
-  TestArgumentContext(":has(+ .a + .b .c)",
-                      CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ 2,
-                      /* expected_depth_limit */ kMax, kOneNextSiblingSubtree);
-  TestArgumentContext(":has(+ .a > .b + .c .d)",
-                      CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ 1,
-                      /* expected_depth_limit */ kMax, kOneNextSiblingSubtree);
-  TestArgumentContext(":has(+ .a + .b > .c .d)",
-                      CSSSelector::kRelativeDirectAdjacent,
-                      /* expected_adjacent_distance_limit */ 2,
-                      /* expected_depth_limit */ kMax, kOneNextSiblingSubtree);
+                      /* expected_depth_limit */ kDepthMax,
+                      kOneNextSiblingSubtree);
+  TestArgumentContext(
+      ":has(+ .a > .b .c)", CSSSelector::kRelativeDirectAdjacent,
+      /* expected_adjacent_distance_limit */ 1,
+      /* expected_depth_limit */ kDepthMax, kOneNextSiblingSubtree);
+  TestArgumentContext(
+      ":has(+ .a .b > .c)", CSSSelector::kRelativeDirectAdjacent,
+      /* expected_adjacent_distance_limit */ 1,
+      /* expected_depth_limit */ kDepthMax, kOneNextSiblingSubtree);
+  TestArgumentContext(
+      ":has(+ .a .b ~ .c)", CSSSelector::kRelativeDirectAdjacent,
+      /* expected_adjacent_distance_limit */ 1,
+      /* expected_depth_limit */ kDepthMax, kOneNextSiblingSubtree);
+  TestArgumentContext(
+      ":has(+ .a + .b .c)", CSSSelector::kRelativeDirectAdjacent,
+      /* expected_adjacent_distance_limit */ 2,
+      /* expected_depth_limit */ kDepthMax, kOneNextSiblingSubtree);
+  TestArgumentContext(
+      ":has(+ .a > .b + .c .d)", CSSSelector::kRelativeDirectAdjacent,
+      /* expected_adjacent_distance_limit */ 1,
+      /* expected_depth_limit */ kDepthMax, kOneNextSiblingSubtree);
+  TestArgumentContext(
+      ":has(+ .a + .b > .c .d)", CSSSelector::kRelativeDirectAdjacent,
+      /* expected_adjacent_distance_limit */ 2,
+      /* expected_depth_limit */ kDepthMax, kOneNextSiblingSubtree);
   TestArgumentContext(":has(+ .a)", CSSSelector::kRelativeDirectAdjacent,
                       /* expected_adjacent_distance_limit */ 1,
                       /* expected_depth_limit */ 0, kOneNextSibling);
@@ -281,10 +298,128 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestArgumentMatchContext) {
       /* expected_depth_limit */ 2, kOneNextSiblingFixedDepthDescendants);
 }
 
+TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalType) {
+  CheckPseudoHasArgumentTraversalType traversal_type;
+
+  // traversal scope: kSubtree
+  // adjacent distance: 0
+  // depth: Max
+  traversal_type = GetTraversalType(":has(.a)");
+  EXPECT_EQ(traversal_type, 0x00003fffu);
+  EXPECT_EQ(GetTraversalType(":has(.a ~ .b)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(.a ~ .b > .c)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(.a > .b)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(.a + .b)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(> .a .b)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(> .a ~ .b .c)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(> .a + .b .c)"), traversal_type);
+
+  // traversal scope: kAllNextSiblings
+  // adjacent distance: Max
+  // depth: 0
+  traversal_type = GetTraversalType(":has(~ .a)");
+  EXPECT_EQ(traversal_type, 0x1fffc000u);
+  EXPECT_EQ(GetTraversalType(":has(~ .a ~ .b)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(~ .a + .b)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(~ .a + .b ~ .c)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(+ .a ~ .b)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(+ .a + .b ~ .c)"), traversal_type);
+
+  // traversal scope: kOneNextSiblingSubtree
+  // adjacent distance: 1
+  // depth: Max
+  traversal_type = GetTraversalType(":has(+ .a .b)");
+  EXPECT_EQ(traversal_type, 0x20007fffu);
+  EXPECT_EQ(GetTraversalType(":has(+ .a > .b .c)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(+ .a .b > .c)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(+ .a .b ~ .c)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(+ .a > .b + .c .d)"), traversal_type);
+
+  // traversal scope: kOneNextSiblingSubtree
+  // adjacent distance: 2
+  // depth: Max
+  traversal_type = GetTraversalType(":has(+ .a + .b .c)");
+  EXPECT_EQ(traversal_type, 0x2000bfffu);
+  EXPECT_EQ(GetTraversalType(":has(+ .a + .b > .c .d)"), traversal_type);
+
+  // traversal scope: kAllNextSiblingSubtrees
+  // adjacent distance: Max
+  // depth: Max
+  traversal_type = GetTraversalType(":has(~ .a .b)");
+  EXPECT_EQ(traversal_type, 0x3fffffffu);
+  EXPECT_EQ(GetTraversalType(":has(~ .a + .b > .c ~ .d .e)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(+ .a ~ .b .c)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(+ .a ~ .b > .c + .d .e)"), traversal_type);
+
+  // traversal scope: kOneNextSibling
+  // adjacent distance: 1
+  // depth: 0
+  traversal_type = GetTraversalType(":has(+ .a)");
+  EXPECT_EQ(traversal_type, 0x40004000u);
+
+  // traversal scope: kOneNextSibling
+  // adjacent distance: 2
+  // depth: 0
+  traversal_type = GetTraversalType(":has(+ .a + .b)");
+  EXPECT_EQ(traversal_type, 0x40008000u);
+
+  // traversal scope: kOneNextSibling
+  // adjacent distance: 3
+  // depth: 0
+  traversal_type = GetTraversalType(":has(+ .a + .b + .c)");
+  EXPECT_EQ(traversal_type, 0x4000c000u);
+
+  // traversal scope: kFixedDepthDescendants
+  // adjacent distance: 0
+  // depth: 1
+  traversal_type = GetTraversalType(":has(> .a)");
+  EXPECT_EQ(traversal_type, 0x50000001u);
+  EXPECT_EQ(GetTraversalType(":has(> .a + .b)"), traversal_type);
+  EXPECT_EQ(GetTraversalType(":has(> .a ~ .b)"), traversal_type);
+
+  // traversal scope: kFixedDepthDescendants
+  // adjacent distance: 0
+  // depth: 2
+  traversal_type = GetTraversalType(":has(> .a > .b)");
+  EXPECT_EQ(traversal_type, 0x50000002u);
+  EXPECT_EQ(GetTraversalType(":has(> .a ~ .b > .c)"), traversal_type);
+
+  // traversal scope: kOneNextSiblingFixedDepthDescendants
+  // adjacent distance: 1
+  // depth: 1
+  traversal_type = GetTraversalType(":has(+ .a > .b)");
+  EXPECT_EQ(traversal_type, 0x60004001u);
+  EXPECT_EQ(GetTraversalType(":has(+ .a > .b ~ .c)"), traversal_type);
+
+  // traversal scope: kOneNextSiblingFixedDepthDescendants
+  // adjacent distance: 2
+  // depth: 2
+  traversal_type = GetTraversalType(":has(+ .a + .b > .c ~ .d > .e)");
+  EXPECT_EQ(traversal_type, 0x60008002u);
+  EXPECT_EQ(GetTraversalType(":has(+ .a + .b > .c ~ .d > .e ~ .f)"),
+            traversal_type);
+
+  // traversal scope: kAllNextSiblingsFixedDepthDescendants
+  // adjacent distance: Max
+  // depth: 1
+  traversal_type = GetTraversalType(":has(~ .a > .b)");
+  EXPECT_EQ(traversal_type, 0x7fffc001u);
+  EXPECT_EQ(GetTraversalType(":has(+ .a ~ .b > .c)"), traversal_type);
+
+  // traversal scope: kAllNextSiblingsFixedDepthDescendants
+  // adjacent distance: Max
+  // depth: 2
+  traversal_type = GetTraversalType(":has(~ .a > .b > .c)");
+  EXPECT_EQ(traversal_type, 0x7fffc002u);
+  EXPECT_EQ(GetTraversalType(":has(+ .a ~ .b > .c + .d > .e)"), traversal_type);
+}
+
 TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase1) {
   // CheckPseudoHasArgumentTraversalScope::kSubtree
 
-  auto* document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   document->write(R"HTML(
     <!DOCTYPE html>
     <main id=main>
@@ -340,7 +475,9 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase1) {
 TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase2) {
   // CheckPseudoHasArgumentTraversalScope::kAllNextSiblings
 
-  auto* document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   document->write(R"HTML(
     <!DOCTYPE html>
     <main id=main>
@@ -373,7 +510,9 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase2) {
 TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase3) {
   // CheckPseudoHasArgumentTraversalScope::kOneNextSiblingSubtree
 
-  auto* document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   document->write(R"HTML(
     <!DOCTYPE html>
     <main id=main>
@@ -439,7 +578,9 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase3) {
 TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase4) {
   // CheckPseudoHasArgumentTraversalScope::kAllNextSiblingSubtrees
 
-  auto* document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   document->write(R"HTML(
     <!DOCTYPE html>
     <main id=main>
@@ -493,7 +634,9 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase4) {
 TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase5) {
   // CheckPseudoHasArgumentTraversalScope::kOneNextSibling
 
-  auto* document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   document->write(R"HTML(
     <!DOCTYPE html>
     <main id=main>
@@ -529,7 +672,9 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase5) {
 TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase6) {
   // CheckPseudoHasArgumentTraversalScope::kFixedDepthDescendants
 
-  auto* document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   document->write(R"HTML(
     <!DOCTYPE html>
     <main id=main>
@@ -582,7 +727,9 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase6) {
 TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase7) {
   // CheckPseudoHasArgumentTraversalScope::kOneNextSiblingFixedDepthDescendants
 
-  auto* document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   document->write(R"HTML(
     <!DOCTYPE html>
     <main id=main>
@@ -648,7 +795,9 @@ TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase7) {
 TEST_F(CheckPseudoHasArgumentContextTest, TestTraversalIteratorCase8) {
   // CheckPseudoHasArgumentTraversalScope::kAllNextSiblingsFixedDepthDescendants
 
-  auto* document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   document->write(R"HTML(
     <!DOCTYPE html>
     <main id=main>

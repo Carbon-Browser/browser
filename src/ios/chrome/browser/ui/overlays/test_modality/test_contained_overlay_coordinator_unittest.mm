@@ -1,21 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/overlays/test_modality/test_contained_overlay_coordinator.h"
 
-#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#include "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/test_modality/test_contained_overlay_request_config.h"
-#include "ios/chrome/browser/ui/overlays/test/fake_overlay_request_coordinator_delegate.h"
-#include "ios/chrome/test/scoped_key_window.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/test_modality/test_contained_overlay_request_config.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/ui/overlays/test/fake_overlay_request_coordinator_delegate.h"
+#import "ios/chrome/test/scoped_key_window.h"
+#import "ios/web/public/test/web_task_environment.h"
+#import "testing/platform_test.h"
 
 // Test fixture for TestContainedOverlayCoordinator.
 class TestContainedOverlayCoordinatorTest : public PlatformTest {
@@ -32,6 +28,8 @@ class TestContainedOverlayCoordinatorTest : public PlatformTest {
                           delegate:&delegate_];
     scoped_window_.Get().rootViewController = root_view_controller_;
   }
+
+  ~TestContainedOverlayCoordinatorTest() override { [coordinator_ stop]; }
 
  protected:
   web::WebTaskEnvironment task_environment_;

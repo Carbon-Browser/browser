@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/version.h"
 #include "components/variations/proto/study.pb.h"
+#include "components/variations/seed_response.h"
 #include "components/version_info/channel.h"
-#include "components/version_info/version_info.h"
 
 namespace network {
 class SharedURLLoaderFactory;
@@ -20,6 +20,8 @@ class SharedURLLoaderFactory;
 namespace network_time {
 class NetworkTimeTracker;
 }
+
+class PrefService;
 
 namespace variations {
 
@@ -50,6 +52,13 @@ class VariationsServiceClient {
   // Returns the current form factor of the device.
   virtual Study::FormFactor GetCurrentFormFactor();
 
+  // If a native variations service that directly fetches the seed from the
+  // server is implemented, returns the SeedResponse from the native variations
+  // seed store, and removes the seed from the native storage given that we can
+  // assume that the returned seed would be stored into Chrome Prefs. Otherwise,
+  // returns nullptr.
+  virtual std::unique_ptr<SeedResponse> TakeSeedFromNativeVariationsSeedStore();
+
   // Returns whether the client is enterprise.
   // TODO(manukh): crbug.com/1003025. This is inconsistent with UMA which
   // analyzes brand_code to determine if the client is an enterprise user:
@@ -63,6 +72,13 @@ class VariationsServiceClient {
   // well. But this could be confusing and could prevent using UMA filters on a
   // non finch-filtered study to analyze the finch-filtered launch potential.
   virtual bool IsEnterprise() = 0;
+
+  // Removes stored Google Groups variations information for deleted profiles.
+  // Must be called at startup, prior to the variations Google Groups being
+  // read.
+  // This is a no-op on platforms that do not support multiple profiles.
+  virtual void RemoveGoogleGroupsFromPrefsForDeletedProfiles(
+      PrefService* local_state) = 0;
 
  private:
   // Gets the channel of the embedder. But all variations callers should use

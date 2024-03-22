@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,12 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -75,12 +76,9 @@ const char kTestParam2[] = "param2";
 const char kTestParam3[] = "param:/3";
 const char kTestParamValue[] = "value";
 
-const base::Feature kTestFeature1{"FeatureName1",
-                                  base::FEATURE_ENABLED_BY_DEFAULT};
-const base::Feature kTestFeature2{"FeatureName2",
-                                  base::FEATURE_ENABLED_BY_DEFAULT};
-const base::Feature kTestFeature3{"FeatureName3",
-                                  base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kTestFeature1, "FeatureName1", base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kTestFeature2, "FeatureName2", base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kTestFeature3, "FeatureName3", base::FEATURE_DISABLED_BY_DEFAULT);
 
 const FeatureEntry::FeatureParam kTestVariationOther1[] = {
     {kTestParam1, kTestParamValue}};
@@ -245,40 +243,48 @@ TEST_F(FlagsStateTest, AddTwoFlagsRemoveOne) {
   flags_state_->SetFeatureEntryEnabled(&flags_storage_, kFlags1, true);
   flags_state_->SetFeatureEntryEnabled(&flags_storage_, kFlags2, true);
 
-  const base::Value* entries_list = prefs_.GetList(prefs::kAboutFlagsEntries);
-  ASSERT_TRUE(entries_list != nullptr);
+  {
+    const base::Value::List& entries_list =
+        prefs_.GetList(prefs::kAboutFlagsEntries);
+    ASSERT_EQ(2u, entries_list.size());
 
-  ASSERT_EQ(2u, entries_list->GetListDeprecated().size());
+    std::string s0 = entries_list[0].GetString();
+    std::string s1 = entries_list[1].GetString();
 
-  std::string s0 = entries_list->GetListDeprecated()[0].GetString();
-  std::string s1 = entries_list->GetListDeprecated()[1].GetString();
-
-  EXPECT_TRUE(s0 == kFlags1 || s1 == kFlags1);
-  EXPECT_TRUE(s0 == kFlags2 || s1 == kFlags2);
+    EXPECT_TRUE(s0 == kFlags1 || s1 == kFlags1);
+    EXPECT_TRUE(s0 == kFlags2 || s1 == kFlags2);
+  }
 
   // Remove one entry, check the other's still around.
   flags_state_->SetFeatureEntryEnabled(&flags_storage_, kFlags2, false);
 
-  entries_list = prefs_.GetList(prefs::kAboutFlagsEntries);
-  ASSERT_TRUE(entries_list != nullptr);
-  ASSERT_EQ(1u, entries_list->GetListDeprecated().size());
-  s0 = entries_list->GetListDeprecated()[0].GetString();
-  EXPECT_TRUE(s0 == kFlags1);
+  {
+    const base::Value::List& entries_list =
+        prefs_.GetList(prefs::kAboutFlagsEntries);
+    ASSERT_EQ(1u, entries_list.size());
+    std::string s0 = entries_list[0].GetString();
+    EXPECT_TRUE(s0 == kFlags1);
+  }
 }
 
 TEST_F(FlagsStateTest, AddTwoFlagsRemoveBoth) {
   // Add two entries, check the pref exists.
   flags_state_->SetFeatureEntryEnabled(&flags_storage_, kFlags1, true);
   flags_state_->SetFeatureEntryEnabled(&flags_storage_, kFlags2, true);
-  const base::Value* entries_list = prefs_.GetList(prefs::kAboutFlagsEntries);
-  ASSERT_TRUE(entries_list != nullptr);
+  {
+    const base::Value::List& entries_list =
+        prefs_.GetList(prefs::kAboutFlagsEntries);
+    ASSERT_EQ(2u, entries_list.size());
+  }
 
   // Remove both, the pref should have been removed completely.
   flags_state_->SetFeatureEntryEnabled(&flags_storage_, kFlags1, false);
   flags_state_->SetFeatureEntryEnabled(&flags_storage_, kFlags2, false);
-  entries_list = prefs_.GetList(prefs::kAboutFlagsEntries);
-  EXPECT_TRUE(entries_list == nullptr ||
-              entries_list->GetListDeprecated().size() == 0);
+  {
+    const base::Value::List& entries_list =
+        prefs_.GetList(prefs::kAboutFlagsEntries);
+    EXPECT_TRUE(entries_list.empty());
+  }
 }
 
 TEST_F(FlagsStateTest, CombineOriginListValues) {
@@ -361,7 +367,7 @@ TEST_F(FlagsStateTest, RegisterAllFeatureVariationParameters) {
   flags_state_->RegisterAllFeatureVariationParameters(&flags_storage_,
                                                       feature_list.get());
   // No value should be associated.
-  EXPECT_EQ("", variations::GetVariationParamValue(kTestTrial, kTestParam1));
+  EXPECT_EQ("", base::GetFieldTrialParamValue(kTestTrial, kTestParam1));
   // The trial should not be created.
   base::FieldTrial* trial = base::FieldTrialList::Find(kTestTrial);
   EXPECT_EQ(nullptr, trial);
@@ -373,7 +379,7 @@ TEST_F(FlagsStateTest, RegisterAllFeatureVariationParameters) {
   flags_state_->RegisterAllFeatureVariationParameters(&flags_storage_,
                                                       feature_list.get());
   // No value should be associated as this is the default option.
-  EXPECT_EQ("", variations::GetVariationParamValue(kTestTrial, kTestParam1));
+  EXPECT_EQ("", base::GetFieldTrialParamValue(kTestTrial, kTestParam1));
 
   // The trial should be created.
   trial = base::FieldTrialList::Find(kTestTrial);
@@ -387,7 +393,7 @@ TEST_F(FlagsStateTest, RegisterAllFeatureVariationParameters) {
   flags_state_->RegisterAllFeatureVariationParameters(&flags_storage_,
                                                       feature_list.get());
   // Associating for the second time should not change the value.
-  EXPECT_EQ("", variations::GetVariationParamValue(kTestTrial, kTestParam1));
+  EXPECT_EQ("", base::GetFieldTrialParamValue(kTestTrial, kTestParam1));
 }
 
 TEST_F(FlagsStateTest, RegisterAllFeatureVariationParametersNonDefault) {
@@ -401,17 +407,17 @@ TEST_F(FlagsStateTest, RegisterAllFeatureVariationParametersNonDefault) {
                                                       feature_list.get());
 
   // Set the feature_list as the main instance so that
-  // variations::GetVariationParamValueByFeature below works.
+  // base::GetFieldTrialParamValueByFeature below works.
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitWithFeatureList(std::move(feature_list));
 
   // The param should have the value predefined in this variation.
   EXPECT_EQ(kTestParamValue,
-            variations::GetVariationParamValue(kTestTrial, kTestParam1));
+            base::GetFieldTrialParamValue(kTestTrial, kTestParam1));
 
   // The value should be associated also via the name of the feature.
-  EXPECT_EQ(kTestParamValue, variations::GetVariationParamValueByFeature(
-                                 kTestFeature1, kTestParam1));
+  EXPECT_EQ(kTestParamValue,
+            base::GetFieldTrialParamValueByFeature(kTestFeature1, kTestParam1));
 }
 
 TEST_F(FlagsStateTest, RegisterAllFeatureVariationParametersWithDefaultTrials) {
@@ -428,21 +434,21 @@ TEST_F(FlagsStateTest, RegisterAllFeatureVariationParametersWithDefaultTrials) {
                                                       feature_list.get());
 
   // Set the feature_list as the main instance so that
-  // variations::GetVariationParamValueByFeature below works.
+  // base::GetFieldTrialParamValueByFeature below works.
   base::test::ScopedFeatureList scoped_feature_list;
   scoped_feature_list.InitWithFeatureList(std::move(feature_list));
 
   // The params should have the values predefined in these variations
   // (accessible via the names of the features).
-  EXPECT_EQ(kTestParamValue, variations::GetVariationParamValueByFeature(
-                                 kTestFeature1, kTestParam1));
-  EXPECT_EQ(kTestParamValue, variations::GetVariationParamValueByFeature(
-                                 kTestFeature2, kTestParam2));
+  EXPECT_EQ(kTestParamValue,
+            base::GetFieldTrialParamValueByFeature(kTestFeature1, kTestParam1));
+  EXPECT_EQ(kTestParamValue,
+            base::GetFieldTrialParamValueByFeature(kTestFeature2, kTestParam2));
   // The params are registered in the same trial.
   EXPECT_EQ(kTestParamValue,
-            variations::GetVariationParamValue(kTestTrial, kTestParam1));
+            base::GetFieldTrialParamValue(kTestTrial, kTestParam1));
   EXPECT_EQ(kTestParamValue,
-            variations::GetVariationParamValue(kTestTrial, kTestParam2));
+            base::GetFieldTrialParamValue(kTestTrial, kTestParam2));
 }
 
 base::CommandLine::StringType CreateSwitch(const std::string& value) {
@@ -577,12 +583,12 @@ TEST_F(FlagsStateTest, PersistAndPrune) {
   EXPECT_FALSE(command_line.HasSwitch(kSwitch3));
 
   // FeatureEntry 3 should show still be persisted in preferences though.
-  const base::Value* entries_list = prefs_.GetList(prefs::kAboutFlagsEntries);
-  ASSERT_TRUE(entries_list);
-  EXPECT_EQ(2U, entries_list->GetListDeprecated().size());
-  std::string s0 = entries_list->GetListDeprecated()[0].GetString();
+  const base::Value::List& entries_list =
+      prefs_.GetList(prefs::kAboutFlagsEntries);
+  EXPECT_EQ(2U, entries_list.size());
+  std::string s0 = entries_list[0].GetString();
   EXPECT_EQ(kFlags1, s0);
-  std::string s1 = entries_list->GetListDeprecated()[1].GetString();
+  std::string s1 = entries_list[1].GetString();
   EXPECT_EQ(kFlags3, s1);
 }
 
@@ -629,12 +635,12 @@ TEST_F(FlagsStateTest, CheckValues) {
 #endif
 
   // And it should persist.
-  const base::Value* entries_list = prefs_.GetList(prefs::kAboutFlagsEntries);
-  ASSERT_TRUE(entries_list);
-  EXPECT_EQ(2U, entries_list->GetListDeprecated().size());
-  std::string s0 = entries_list->GetListDeprecated()[0].GetString();
+  const base::Value::List& entries_list =
+      prefs_.GetList(prefs::kAboutFlagsEntries);
+  EXPECT_EQ(2U, entries_list.size());
+  std::string s0 = entries_list[0].GetString();
   EXPECT_EQ(kFlags1, s0);
-  std::string s1 = entries_list->GetListDeprecated()[1].GetString();
+  std::string s1 = entries_list[1].GetString();
   EXPECT_EQ(kFlags2, s1);
 }
 

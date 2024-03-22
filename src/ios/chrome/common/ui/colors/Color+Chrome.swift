@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,21 @@ extension Color {
   /// The primary text color.
   public static var textPrimary: Color {
     return Color(kTextPrimaryColor)
+  }
+
+  /// The secondary text color.
+  public static var textSecondary: Color {
+    return Color(kTextSecondaryColor)
+  }
+
+  /// The tertiary text color.
+  public static var textTertiary: Color {
+    return Color(kTextTertiaryColor)
+  }
+
+  /// The quaternary text color.
+  public static var textQuaternary: Color {
+    return Color(kTextQuaternaryColor)
   }
 
   /// The tertiary background color
@@ -71,9 +86,24 @@ extension Color {
     return Color(kBlueColor)
   }
 
+  /// The blue halo color.
+  public static var blueHalo: Color {
+    return Color(kBlueHaloColor)
+  }
+
   /// The blue500 color.
   public static var blue500: Color {
     return Color(kBlue500Color)
+  }
+
+  /// The blue600 color.
+  public static var blue600: Color {
+    return Color(kBlue600Color)
+  }
+
+  /// The red500 color.
+  public static var red500: Color {
+    return Color(kRed500Color)
   }
 
   /// The table row view highlight color.

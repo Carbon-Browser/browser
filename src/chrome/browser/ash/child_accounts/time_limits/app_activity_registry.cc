@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -419,13 +419,12 @@ AppActivityRegistry::GenerateAppActivityReport(
     return AppActivityReportInterface::ReportParams{timestamp, false};
   }
 
-  const base::Value* value =
+  const base::Value::List& list =
       pref_service_->GetList(prefs::kPerAppTimeLimitsAppActivities);
-  DCHECK(value);
 
   const std::vector<PersistedAppInfo> applications_info =
       PersistedAppInfo::PersistedAppInfosFromList(
-          value,
+          list,
           /* include_app_activity_array */ true);
 
   const base::Time timestamp = base::Time::Now();
@@ -451,13 +450,15 @@ AppActivityRegistry::GenerateAppActivityReport(
           app_service_wrapper_->GetAppServiceId(app_id));
     }
     app_activity->set_app_state(AppStateForReporting(entry.app_state()));
-    app_activity->set_populated_at(timestamp.ToJavaTime());
+    app_activity->set_populated_at(timestamp.InMillisecondsSinceUnixEpoch());
 
     for (const auto& active_time : active_times) {
       enterprise_management::TimePeriod* time_period =
           app_activity->add_active_time_periods();
-      time_period->set_start_timestamp(active_time.active_from().ToJavaTime());
-      time_period->set_end_timestamp(active_time.active_to().ToJavaTime());
+      time_period->set_start_timestamp(
+          active_time.active_from().InMillisecondsSinceUnixEpoch());
+      time_period->set_end_timestamp(
+          active_time.active_to().InMillisecondsSinceUnixEpoch());
     }
     anything_reported = true;
   }
@@ -557,16 +558,20 @@ bool AppActivityRegistry::SetAppLimit(
   }
 
   for (auto& entry : activity_registry_) {
-    const AppId& app_id = entry.first;
-    AppDetails& details = entry.second;
-    if (ContributesToWebTimeLimit(app_id, GetAppState(app_id)))
-      details.limit = app_limit;
+    const AppId& app_id_for_entry = entry.first;
+    AppDetails& details_for_entry = entry.second;
+    if (ContributesToWebTimeLimit(app_id_for_entry,
+                                  GetAppState(app_id_for_entry))) {
+      details_for_entry.limit = app_limit;
+    }
   }
 
   for (auto& entry : activity_registry_) {
-    const AppId& app_id = entry.first;
-    if (ContributesToWebTimeLimit(app_id, GetAppState(app_id)))
-      AppLimitUpdated(app_id);
+    const AppId& app_id_for_entry = entry.first;
+    if (ContributesToWebTimeLimit(app_id_for_entry,
+                                  GetAppState(app_id_for_entry))) {
+      AppLimitUpdated(app_id_for_entry);
+    }
   }
 
   return updated;
@@ -627,33 +632,34 @@ void AppActivityRegistry::OnTimeLimitAllowlistChanged(
 
 void AppActivityRegistry::SaveAppActivity() {
   {
-    ListPrefUpdate update(pref_service_, prefs::kPerAppTimeLimitsAppActivities);
-    base::Value* list_value = update.Get();
+    ScopedListPrefUpdate update(pref_service_,
+                                prefs::kPerAppTimeLimitsAppActivities);
+    base::Value::List& list = update.Get();
 
     const base::Time now = base::Time::Now();
 
-    base::Value::ListView list_view = list_value->GetListDeprecated();
-    for (base::Value& entry : list_view) {
-      absl::optional<AppId> app_id = policy::AppIdFromAppInfoDict(entry);
+    for (base::Value& entry : list) {
+      absl::optional<AppId> app_id =
+          policy::AppIdFromAppInfoDict(entry.GetIfDict());
       DCHECK(app_id.has_value());
 
       if (!base::Contains(activity_registry_, app_id.value())) {
         absl::optional<AppState> state =
-            PersistedAppInfo::GetAppStateFromDict(&entry);
+            PersistedAppInfo::GetAppStateFromDict(entry.GetIfDict());
         DCHECK(state.has_value() && state.value() == AppState::kUninstalled);
         continue;
       }
 
       const PersistedAppInfo info =
           GetPersistedAppInfoForApp(app_id.value(), now);
-      info.UpdateAppActivityPreference(&entry, /* replace */ false);
+      info.UpdateAppActivityPreference(entry.GetDict(), /* replace */ false);
     }
 
     for (const AppId& app_id : newly_installed_apps_) {
       const PersistedAppInfo info = GetPersistedAppInfoForApp(app_id, now);
-      base::Value value(base::Value::Type::DICTIONARY);
-      info.UpdateAppActivityPreference(&value, /* replace */ false);
-      list_value->Append(std::move(value));
+      base::Value::Dict value;
+      info.UpdateAppActivityPreference(value, /* replace */ false);
+      list.Append(std::move(value));
     }
     newly_installed_apps_.clear();
   }
@@ -698,19 +704,18 @@ void AppActivityRegistry::OnResetTimeReached(base::Time timestamp) {
 }
 
 void AppActivityRegistry::CleanRegistry(base::Time timestamp) {
-  ListPrefUpdate update(pref_service_, prefs::kPerAppTimeLimitsAppActivities);
+  ScopedListPrefUpdate update(pref_service_,
+                              prefs::kPerAppTimeLimitsAppActivities);
 
-  base::Value* list_value = update.Get();
-
-  base::Value::List& list = list_value->GetList();
+  base::Value::List& list = update.Get();
 
   for (size_t index = 0; index < list.size();) {
     base::Value& entry = list[index];
     absl::optional<PersistedAppInfo> info =
-        PersistedAppInfo::PersistedAppInfoFromDict(&entry, true);
+        PersistedAppInfo::PersistedAppInfoFromDict(entry.GetIfDict(), true);
     DCHECK(info.has_value());
     info->RemoveActiveTimeEarlierThan(timestamp);
-    info->UpdateAppActivityPreference(&entry, /* replace */ true);
+    info->UpdateAppActivityPreference(entry.GetDict(), /* replace */ true);
 
     if (info->ShouldRemoveApp()) {
       // Remove entry in |activity_registry_| if it is present.
@@ -831,14 +836,15 @@ void AppActivityRegistry::SetAppInactive(const AppId& app_id,
   if (ContributesToWebTimeLimit(app_id, GetAppState(app_id))) {
     base::TimeDelta active_time = details.activity.RunningActiveTime();
     for (auto& app_info : activity_registry_) {
-      const AppId& app_id = app_info.first;
-      if (!ContributesToWebTimeLimit(app_id, GetAppState(app_id))) {
+      const AppId& app_id_for_info = app_info.first;
+      if (!ContributesToWebTimeLimit(app_id_for_info,
+                                     GetAppState(app_id_for_info))) {
         continue;
       }
 
-      AppDetails& details = app_info.second;
-      if (!details.activity.is_active())
-        details.activity.set_running_active_time(active_time);
+      AppDetails& details_for_info = app_info.second;
+      if (!details_for_info.activity.is_active())
+        details_for_info.activity.set_running_active_time(active_time);
     }
   }
 }
@@ -1068,13 +1074,12 @@ void AppActivityRegistry::InitializeRegistryFromPref() {
 }
 
 void AppActivityRegistry::InitializeAppActivities() {
-  const base::Value* value =
+  const base::Value::List& list =
       pref_service_->GetList(prefs::kPerAppTimeLimitsAppActivities);
-  DCHECK(value);
 
   const std::vector<PersistedAppInfo> applications_info =
       PersistedAppInfo::PersistedAppInfosFromList(
-          value,
+          list,
           /* include_app_activity_array */ false);
 
   for (const auto& app_info : applications_info) {

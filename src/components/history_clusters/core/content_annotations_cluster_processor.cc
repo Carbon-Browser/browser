@@ -1,168 +1,295 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/history_clusters/core/content_annotations_cluster_processor.h"
 
+#include <math.h>
+
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "base/strings/utf_string_conversions.h"
+#include "base/metrics/histogram_functions.h"
 #include "components/history_clusters/core/config.h"
-#include "components/history_clusters/core/on_device_clustering_features.h"
+#include "components/history_clusters/core/on_device_clustering_util.h"
+#include "components/optimization_guide/core/entity_metadata.h"
 
 namespace history_clusters {
 
 namespace {
 
-// Populates |entities_bows| and |categories_bows| from cluster index to the set
-// of unique entities and categories, respectively, from each visit, a
-// bag-of-words for each cluster.
-void CreateBoWsForClusters(
-    const std::vector<history::Cluster>& clusters,
-    base::flat_map<int, base::flat_set<std::u16string>>* entities_bows,
-    base::flat_map<int, base::flat_set<std::u16string>>* categories_bows) {
-  // Create the BoWs for each cluster from the individual clusters.
-  for (size_t cluster_idx = 0; cluster_idx < clusters.size(); cluster_idx++) {
-    auto& cluster = clusters.at(cluster_idx);
-    base::flat_set<std::u16string> entity_bag_of_words;
-    base::flat_set<std::u16string> category_bag_of_words;
-    for (const auto& visit : cluster.visits) {
-      for (const auto& entity : visit.annotated_visit.content_annotations
-                                    .model_annotations.entities) {
-        entity_bag_of_words.insert(base::UTF8ToUTF16(entity.id));
-      }
-      for (const auto& category : visit.annotated_visit.content_annotations
-                                      .model_annotations.categories) {
-        category_bag_of_words.insert(base::UTF8ToUTF16(category.id));
-      }
-    }
-    entities_bows->insert({cluster_idx, entity_bag_of_words});
-    categories_bows->insert({cluster_idx, category_bag_of_words});
+float CalculateMagnitude(const base::flat_map<std::string, float>& cluster) {
+  float magnitude = 0.0;
+  for (const auto& token : cluster) {
+    magnitude += token.second * token.second;
   }
+  return sqrt(magnitude);
 }
 
-// Return the Jaccard Similarity between two sets of
-// strings.
-float CalculateJaccardSimilarity(
-    const base::flat_set<std::u16string>& cluster1,
-    const base::flat_set<std::u16string>& cluster2) {
-  // If both clusters are empty, we don't know if they're the same so just say
-  // they're completely different.
-  if (cluster1.empty() && cluster2.empty())
+// Returns the cosine similarity between two occurrence maps.
+float CalculateCosineSimiliarity(
+    const base::flat_map<std::string, float>& cluster1,
+    const base::flat_map<std::string, float>& cluster2) {
+  // If either cluster is empty, just say that they are different.
+  if (cluster1.empty() || cluster2.empty())
     return 0.0;
 
-  base::flat_set<std::u16string> cluster_union;
-  int intersection_size = 0;
+  base::flat_set<std::string> all_words;
   for (const auto& token : cluster1) {
-    if (cluster2.find(token) != cluster2.end()) {
-      intersection_size++;
-    }
-    cluster_union.insert(token);
+    all_words.insert(token.first);
   }
-  cluster_union.insert(cluster2.begin(), cluster2.end());
-
-  return cluster_union.empty()
-             ? 0.0
-             : intersection_size / (1.0 * cluster_union.size());
-}
-
-// Calculates the similarity of two clusters using an intersection similarity.
-// Returns 1 if the clusters share more than a threshold number of tokens in
-// common and 0 otherwise.
-float CalculateIntersectionSimilarity(
-    const base::flat_set<std::u16string>& cluster1,
-    const base::flat_set<std::u16string>& cluster2) {
-  // If both clusters are empty, we don't know if they're the same so just say
-  // they're completely different.
-  if (cluster1.empty() && cluster2.empty())
-    return 0.0;
-
-  int intersection_size = 0;
-  for (const auto& token : cluster1) {
-    if (cluster2.find(token) != cluster2.end()) {
-      intersection_size++;
-    }
+  for (const auto& token : cluster2) {
+    all_words.insert(token.first);
   }
-  return intersection_size >= GetConfig().cluster_interaction_threshold ? 1.0
-                                                                        : 0.0;
+
+  float dot_product = 0.0;
+  for (const auto& word : all_words) {
+    float cluster1_value = cluster1.contains(word) ? cluster1.at(word) : 0.0;
+    float cluster2_value = cluster2.contains(word) ? cluster2.at(word) : 0.0;
+    dot_product += cluster1_value * cluster2_value;
+  }
+  float mag_cluster1 = CalculateMagnitude(cluster1);
+  float mag_cluster2 = CalculateMagnitude(cluster2);
+
+  return dot_product / (mag_cluster1 * mag_cluster2);
 }
 
 // Returns the similarity score based on the configured similarity metric.
-float CalculateSimilarityScore(const base::flat_set<std::u16string>& cluster1,
-                               const base::flat_set<std::u16string>& cluster2) {
-  if (GetConfig().content_cluster_on_intersection_similarity)
-    return CalculateIntersectionSimilarity(cluster1, cluster2);
-  return CalculateJaccardSimilarity(cluster1, cluster2);
+float CalculateSimilarityScore(
+    const base::flat_map<std::string, float>& cluster1,
+    const base::flat_map<std::string, float>& cluster2) {
+  // TODO(b/244505276): Add more similarity metrics here if we can find one that
+  // makes more sense than cosine similarity.
+  return CalculateCosineSimiliarity(cluster1, cluster2);
 }
 
-// Returns whether two clusters should be merged together based on their
-// |entity_similarity| and |category_similarity|. Both |entity_similarity| and
-// |category_similarity| are expected to be between 0 and 1, inclusive.
-bool ShouldMergeClusters(float entity_similarity, float category_similarity) {
-  float max_score = GetConfig().content_clustering_entity_similarity_weight +
-                    GetConfig().content_clustering_category_similarity_weight;
-  if (max_score == 0)
-    return 0.0;
-
-  float cluster_similarity_score =
-      (GetConfig().content_clustering_entity_similarity_weight *
-           entity_similarity +
-       GetConfig().content_clustering_category_similarity_weight *
-           category_similarity) /
-      max_score;
-  float normalized_similarity_score =
-      cluster_similarity_score >
-      GetConfig().content_clustering_similarity_threshold;
-  DCHECK(normalized_similarity_score >= 0 && normalized_similarity_score <= 1);
-  return normalized_similarity_score;
-}
-
-}  // namespace
-
-ContentAnnotationsClusterProcessor::ContentAnnotationsClusterProcessor() =
-    default;
-ContentAnnotationsClusterProcessor::~ContentAnnotationsClusterProcessor() =
-    default;
-
-std::vector<history::Cluster>
-ContentAnnotationsClusterProcessor::ProcessClusters(
-    const std::vector<history::Cluster>& clusters) {
-  base::flat_map<int, base::flat_set<std::u16string>>
-      cluster_idx_to_entity_bows;
-  base::flat_map<int, base::flat_set<std::u16string>>
-      cluster_idx_to_category_bows;
-  CreateBoWsForClusters(clusters, &cluster_idx_to_entity_bows,
-                        &cluster_idx_to_category_bows);
-
-  // Now cluster on the entries in each BoW between clusters.
-  std::vector<history::Cluster> aggregated_clusters;
-  base::flat_set<int> merged_cluster_indices;
-  for (size_t i = 0; i < clusters.size(); i++) {
-    if (merged_cluster_indices.find(i) != merged_cluster_indices.end()) {
+// Merges based on the following algorithm:
+// For each cluster in clusters:
+//   For each other cluster in clusters:
+//     If similar, merge into first cluster.
+void MergeIntoPreviousClusters(
+    std::vector<history::Cluster>* clusters,
+    std::vector<base::flat_map<std::string, float>>& occurrence_maps) {
+  for (size_t i = 0; i < clusters->size(); i++) {
+    if (clusters->at(i).visits.empty()) {
       continue;
     }
     // Greedily combine clusters by checking if this cluster is similar to any
     // other unmerged clusters.
-    history::Cluster aggregated_cluster = clusters[i];
-    for (size_t j = i + 1; j < clusters.size(); j++) {
-      if (merged_cluster_indices.find(j) != merged_cluster_indices.end()) {
+    for (size_t j = i + 1; j < clusters->size(); j++) {
+      if (clusters->at(j).visits.empty()) {
         continue;
       }
-      float entity_similarity = CalculateSimilarityScore(
-          cluster_idx_to_entity_bows[i], cluster_idx_to_entity_bows[j]);
-      float category_similarity = CalculateSimilarityScore(
-          cluster_idx_to_category_bows[i], cluster_idx_to_category_bows[j]);
-      if (ShouldMergeClusters(entity_similarity, category_similarity)) {
+      float entity_similarity =
+          CalculateSimilarityScore(occurrence_maps[i], occurrence_maps[j]);
+      if (entity_similarity >=
+          GetConfig().content_clustering_similarity_threshold) {
         // Add the visits to the aggregated cluster.
-        merged_cluster_indices.insert(j);
-        aggregated_cluster.visits.insert(aggregated_cluster.visits.end(),
-                                         clusters[j].visits.begin(),
-                                         clusters[j].visits.end());
+        AppendClusterVisits(clusters->at(i), clusters->at(j));
       }
     }
-    aggregated_clusters.push_back(std::move(aggregated_cluster));
   }
-  return aggregated_clusters;
+}
+
+// Performs a pairwise merge of similar clusters in `clusters` based on
+// `occurrence_maps`. In each iteration of the calculation, it will find the
+// closest match for each cluster based on the similarity of the occurrence maps
+// for each non-empty cluster in `clusters` and merge clusters that have a
+// reciprocal match. It will run until the merge converges (an iteration has no
+// matches) or the max number of iterations have been run.
+void PairwiseMergeSimilarClusters(
+    std::vector<history::Cluster>* clusters,
+    std::vector<base::flat_map<std::string, float>>& occurrence_maps) {
+  int num_iterations = 0;
+  base::flat_set<size_t> no_matches;
+  bool found_match_in_iteration = false;
+
+  do {
+    num_iterations++;
+    found_match_in_iteration = false;
+
+    base::flat_map<size_t, size_t> best_matches;
+    base::flat_map<size_t, float> best_matches_scores;
+
+    for (size_t i = 0; i < clusters->size(); i++) {
+      if (no_matches.contains(i)) {
+        // Skip if it did not have a match in a previous iteration.
+        continue;
+      }
+      if (clusters->at(i).visits.empty()) {
+        // Skip if cluster has already been merged.
+        continue;
+      }
+
+      for (size_t j = i + 1; j < clusters->size(); j++) {
+        if (no_matches.contains(j)) {
+          // Skip if it did not have a match in a previous iteration.
+          continue;
+        }
+        if (clusters->at(j).visits.empty()) {
+          // Skip if cluster has already been merged.
+          continue;
+        }
+
+        float entity_similarity =
+            CalculateSimilarityScore(occurrence_maps[i], occurrence_maps[j]);
+        if (entity_similarity >=
+            GetConfig().content_clustering_similarity_threshold) {
+          found_match_in_iteration = true;
+
+          // Update best match for i, if applicable.
+          if (!best_matches_scores.contains(i) ||
+              entity_similarity > best_matches_scores[i]) {
+            best_matches[i] = j;
+            best_matches_scores[i] = entity_similarity;
+          }
+
+          // Update best match for j, if applicable.
+          if (!best_matches_scores.contains(j) ||
+              entity_similarity > best_matches_scores[j]) {
+            best_matches[j] = i;
+            best_matches_scores[j] = entity_similarity;
+          }
+        }
+      }
+
+      if (!best_matches.contains(i)) {
+        // Did not find a match for `i` during this iteration. Keep track of it
+        // so future processing of `i` is not performed.
+        no_matches.insert(i);
+      }
+    }
+
+    // Process potential matches.
+    for (const auto& match : best_matches) {
+      DCHECK(clusters->size() > match.first && clusters->size() > match.second);
+
+      if (clusters->at(match.first).visits.empty()) {
+        // Skip cluster match that has already been processed.
+        continue;
+      }
+
+      // See if it is a reciprocal match.
+      if (best_matches.contains(match.second) &&
+          best_matches[match.second] == match.first) {
+        // Merge cluster visits from second cluster into first.
+        AppendClusterVisits(clusters->at(match.first),
+                            clusters->at(match.second));
+
+        // Merge occurrence mappings from second cluster into first.
+        for (const auto& entity_and_occurrence :
+             occurrence_maps[match.second]) {
+          occurrence_maps[match.first][entity_and_occurrence.first] +=
+              entity_and_occurrence.second;
+        }
+        occurrence_maps[match.second].clear();
+      }
+    }
+  } while (found_match_in_iteration &&
+           num_iterations < GetConfig().max_pairwise_merge_iterations);
+
+  base::UmaHistogramCounts100(
+      "History.Clusters.Backend.ContentClustering.PairwiseMergeNumIterations",
+      num_iterations);
+}
+
+// Merges similar clusters in `clusters` based on the `occurrence_maps`. It is
+// expected that `clusters` and `occurrence_maps` have the same number of
+// entries and that the ith entry in `occurence_maps` is the occurrence map for
+// the ith entry in `clusters`.
+void MergeSimilarClusters(
+    std::vector<history::Cluster>* clusters,
+    std::vector<base::flat_map<std::string, float>>& occurrence_maps) {
+  DCHECK_EQ(clusters->size(), occurrence_maps.size());
+
+  if (GetConfig().use_pairwise_merge) {
+    PairwiseMergeSimilarClusters(clusters, occurrence_maps);
+  } else {
+    MergeIntoPreviousClusters(clusters, occurrence_maps);
+  }
+
+  RemoveEmptyClusters(clusters);
+}
+
+}  // namespace
+
+ContentAnnotationsClusterProcessor::ContentAnnotationsClusterProcessor(
+    base::flat_map<std::string, optimization_guide::EntityMetadata>*
+        entity_id_to_entity_metadata_map)
+    : entity_id_to_entity_metadata_map_(*entity_id_to_entity_metadata_map) {}
+ContentAnnotationsClusterProcessor::~ContentAnnotationsClusterProcessor() =
+    default;
+
+void ContentAnnotationsClusterProcessor::ProcessClusters(
+    std::vector<history::Cluster>* clusters) {
+  DCHECK(clusters);
+
+  if (clusters->empty()) {
+    return;
+  }
+
+  base::UmaHistogramCounts1000(
+      "History.Clusters.Backend.ContentClustering.NumClustersBeforeMerge",
+      clusters->size());
+
+  std::vector<base::flat_map<std::string, float>> occurrence_maps(
+      clusters->size());
+  for (size_t i = 0; i < clusters->size(); i++) {
+    occurrence_maps[i] = CreateOccurrenceMapForCluster(clusters->at(i));
+  }
+
+  MergeSimilarClusters(clusters, occurrence_maps);
+
+  base::UmaHistogramCounts1000(
+      "History.Clusters.Backend.ContentClustering.NumClustersAfterMerge",
+      clusters->size());
+}
+
+base::flat_map<std::string, float>
+ContentAnnotationsClusterProcessor::CreateOccurrenceMapForCluster(
+    const history::Cluster& cluster) {
+  base::flat_map<std::string, float> occurrence_map;
+  for (const auto& visit : cluster.visits) {
+    if (GetConfig().content_clustering_search_visits_only &&
+        visit.annotated_visit.content_annotations.search_terms.empty()) {
+      continue;
+    }
+
+    for (const auto& entity :
+         visit.annotated_visit.content_annotations.model_annotations.entities) {
+      auto entity_metadata_it =
+          entity_id_to_entity_metadata_map_->find(entity.id);
+      if (entity_metadata_it == entity_id_to_entity_metadata_map_->end()) {
+        continue;
+      }
+      auto& entity_metadata = entity_metadata_it->second;
+
+      // Check whether the entity has any collections.
+      if (GetConfig()
+              .exclude_entities_that_have_no_collections_from_content_clustering &&
+          entity_metadata.collections.empty()) {
+        continue;
+      }
+
+      // Check whether any of the tagged collections are part of the collection
+      // blocklist.
+      if (!GetConfig().collections_to_block_from_content_clustering.empty()) {
+        bool has_blocklisted_collection = false;
+        for (const auto& collection : entity_metadata.collections) {
+          if (GetConfig().collections_to_block_from_content_clustering.contains(
+                  collection)) {
+            has_blocklisted_collection = true;
+            break;
+          }
+        }
+        if (has_blocklisted_collection) {
+          continue;
+        }
+      }
+
+      occurrence_map[entity.id] += 1.0;
+    }
+  }
+  return occurrence_map;
 }
 
 }  // namespace history_clusters

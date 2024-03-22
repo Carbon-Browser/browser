@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/csspaint/nativepaint/background_color_paint_definition.h"
 
+#include "base/memory/scoped_refptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_cssnumericvalue_double.h"
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
 #include "third_party/blink/renderer/core/animation/element_animations.h"
@@ -13,22 +15,61 @@
 #include "third_party/blink/renderer/core/animation/keyframe_effect_model.h"
 #include "third_party/blink/renderer/core/animation/string_keyframe.h"
 #include "third_party/blink/renderer/core/animation/timing.h"
+#include "third_party/blink/renderer/core/css/background_color_paint_image_generator.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
-#include "third_party/blink/renderer/core/testing/page_test_base.h"
+#include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/graphics/bitmap_image.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/platform_paint_worklet_layer_painter.h"
 
 namespace blink {
 
-class BackgroundColorPaintDefinitionTest : public PageTestBase {
+class FakeBackgroundColorPaintImageGenerator
+    : public BackgroundColorPaintImageGenerator {
+ public:
+  FakeBackgroundColorPaintImageGenerator() = default;
+
+  scoped_refptr<Image> Paint(const gfx::SizeF& container_size,
+                             const Node* node,
+                             const Vector<Color>& animated_colors,
+                             const Vector<double>& offsets,
+                             const absl::optional<double>& progress) override {
+    return BitmapImage::Create();
+  }
+
+  bool GetBGColorPaintWorkletParams(Node* node,
+                                    Vector<Color>* animated_colors,
+                                    Vector<double>* offsets,
+                                    absl::optional<double>* progress) override {
+    return BackgroundColorPaintDefinition::GetBGColorPaintWorkletParams(
+        node, animated_colors, offsets, progress);
+  }
+
+  Animation* GetAnimationIfCompositable(const Element* element) override {
+    return BackgroundColorPaintDefinition::GetAnimationIfCompositable(element);
+  }
+
+  void Shutdown() override {}
+};
+
+class BackgroundColorPaintDefinitionTest : public RenderingTest {
  public:
   BackgroundColorPaintDefinitionTest() = default;
   ~BackgroundColorPaintDefinitionTest() override = default;
+
+  void SetUp() override {
+    EnableCompositing();
+    RenderingTest::SetUp();
+    FakeBackgroundColorPaintImageGenerator* generator =
+        MakeGarbageCollected<FakeBackgroundColorPaintImageGenerator>();
+    GetDocument().GetFrame()->SetBackgroundColorPaintImageGeneratorForTesting(
+        generator);
+  }
 
   void RunPaintForTest(const Vector<Color>& animated_colors,
                        const Vector<double>& offsets,
@@ -37,6 +78,9 @@ class BackgroundColorPaintDefinitionTest : public PageTestBase {
     BackgroundColorPaintDefinition definition;
     definition.PaintForTest(animated_colors, offsets, property_values);
   }
+
+ private:
+  Persistent<FakeBackgroundColorPaintImageGenerator> paint_image_generator_;
 };
 
 // Test the case where there is a background-color animation with two simple
@@ -90,8 +134,127 @@ TEST_F(BackgroundColorPaintDefinitionTest, SimpleBGColorAnimationNotFallback) {
       ElementAnimations::CompositedPaintStatus::kNeedsRepaintOrNoAnimation);
 
   UpdateAllLifecyclePhasesForTest();
-  // Cannot composite without a compositor thread.
   EXPECT_EQ(element->GetElementAnimations()->CompositedBackgroundColorStatus(),
+            ElementAnimations::CompositedPaintStatus::kComposited);
+}
+
+TEST_F(BackgroundColorPaintDefinitionTest, FallbackWithPixelMovingFilter) {
+  ScopedCompositeBGColorAnimationForTest composite_bgcolor_animation(true);
+  SetBodyInnerHTML(R"HTML(
+    <div id="grandparent">
+      <div id="parent">
+        <div id ="target" style="width: 100px; height: 100px">
+        </div>
+      </div>
+    </div>
+  )HTML");
+  UpdateAllLifecyclePhasesForTest();
+
+  auto* settings = GetDocument().GetSettings();
+  EXPECT_TRUE(settings->GetAcceleratedCompositingEnabled());
+
+  Timing timing;
+  timing.iteration_duration = ANIMATION_TIME_DELTA_FROM_SECONDS(30);
+
+  CSSPropertyID property_id = CSSPropertyID::kBackgroundColor;
+  Persistent<StringKeyframe> start_keyframe =
+      MakeGarbageCollected<StringKeyframe>();
+  start_keyframe->SetCSSPropertyValue(
+      property_id, "red", SecureContextMode::kInsecureContext, nullptr);
+  Persistent<StringKeyframe> end_keyframe =
+      MakeGarbageCollected<StringKeyframe>();
+  end_keyframe->SetCSSPropertyValue(
+      property_id, "green", SecureContextMode::kInsecureContext, nullptr);
+
+  StringKeyframeVector keyframes;
+  keyframes.push_back(start_keyframe);
+  keyframes.push_back(end_keyframe);
+
+  auto* model = MakeGarbageCollected<StringKeyframeEffectModel>(keyframes);
+  model->SetComposite(EffectModel::kCompositeReplace);
+
+  Element* element = GetElementById("target");
+  NonThrowableExceptionState exception_state;
+  DocumentTimeline* timeline =
+      MakeGarbageCollected<DocumentTimeline>(&GetDocument());
+  Animation* animation = Animation::Create(
+      MakeGarbageCollected<KeyframeEffect>(element, model, timing), timeline,
+      exception_state);
+  UpdateAllLifecyclePhasesForTest();
+  animation->play();
+
+  EXPECT_EQ(BackgroundColorPaintDefinition::GetAnimationIfCompositable(element),
+            animation);
+
+  element->SetNeedsAnimationStyleRecalc();
+  GetDocument().UpdateStyleAndLayoutTree();
+  EXPECT_TRUE(element->ComputedStyleRef().HasCurrentBackgroundColorAnimation());
+  ElementAnimations* element_animations = element->GetElementAnimations();
+  EXPECT_TRUE(element_animations);
+  EXPECT_EQ(
+      element_animations->CompositedBackgroundColorStatus(),
+      ElementAnimations::CompositedPaintStatus::kNeedsRepaintOrNoAnimation);
+
+  // Run paint.
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(element_animations->CompositedBackgroundColorStatus(),
+            ElementAnimations::CompositedPaintStatus::kComposited);
+
+  Element* parent = GetElementById("parent");
+  CSSStyleDeclaration* inline_style = parent->style();
+
+  // The contrast filter is compatible with compositing the background color
+  // as it does not affect the damage rect.
+  inline_style->setProperty(
+      parent->GetExecutionContext(),
+      CSSPropertyName(CSSPropertyID::kFilter).ToAtomicString(),
+      "contrast(200%)", "", ASSERT_NO_EXCEPTION);
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(BackgroundColorPaintDefinition::GetAnimationIfCompositable(element),
+            animation);
+  element_animations = element->GetElementAnimations();
+  EXPECT_EQ(element_animations->CompositedBackgroundColorStatus(),
+            ElementAnimations::CompositedPaintStatus::kComposited);
+
+  // The blur filter is incompatible with compositing the background color since
+  // the damage rect must expand to accommodate the filter.
+  inline_style->setProperty(
+      parent->GetExecutionContext(),
+      CSSPropertyName(CSSPropertyID::kFilter).ToAtomicString(), "blur(5px)", "",
+      ASSERT_NO_EXCEPTION);
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(BackgroundColorPaintDefinition::GetAnimationIfCompositable(element),
+            nullptr);
+  element_animations = element->GetElementAnimations();
+  EXPECT_EQ(element_animations->CompositedBackgroundColorStatus(),
+            ElementAnimations::CompositedPaintStatus::kNotComposited);
+
+  // Reset.
+  inline_style->setProperty(
+      parent->GetExecutionContext(),
+      CSSPropertyName(CSSPropertyID::kFilter).ToAtomicString(), "none", "",
+      ASSERT_NO_EXCEPTION);
+  animation->cancel();
+  animation->play();
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(BackgroundColorPaintDefinition::GetAnimationIfCompositable(element),
+            animation);
+  element_animations = element->GetElementAnimations();
+  EXPECT_EQ(element_animations->CompositedBackgroundColorStatus(),
+            ElementAnimations::CompositedPaintStatus::kComposited);
+
+  // Add blur to grandparent.
+  Element* grandparent = GetElementById("grandparent");
+  inline_style = grandparent->style();
+  inline_style->setProperty(
+      parent->GetExecutionContext(),
+      CSSPropertyName(CSSPropertyID::kFilter).ToAtomicString(), "blur(5px)", "",
+      ASSERT_NO_EXCEPTION);
+  UpdateAllLifecyclePhasesForTest();
+  EXPECT_EQ(BackgroundColorPaintDefinition::GetAnimationIfCompositable(element),
+            nullptr);
+  element_animations = element->GetElementAnimations();
+  EXPECT_EQ(element_animations->CompositedBackgroundColorStatus(),
             ElementAnimations::CompositedPaintStatus::kNotComposited);
 }
 
@@ -158,8 +321,8 @@ TEST_F(BackgroundColorPaintDefinitionTest, NoBGColorAnimationFallback) {
   absl::optional<double> progress;
   EXPECT_FALSE(BackgroundColorPaintDefinition::GetBGColorPaintWorkletParams(
       element, &animated_colors, &offsets, &progress));
-  EXPECT_TRUE(animated_colors.IsEmpty());
-  EXPECT_TRUE(offsets.IsEmpty());
+  EXPECT_TRUE(animated_colors.empty());
+  EXPECT_TRUE(offsets.empty());
 }
 
 // Test the case where the composite mode is not replace.
@@ -297,9 +460,10 @@ TEST_F(BackgroundColorPaintDefinitionTest,
   auto* model1 = MakeGarbageCollected<StringKeyframeEffectModel>(keyframes);
 
   Element* element = GetElementById("target");
-  scoped_refptr<ComputedStyle> style =
-      GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                    StyleRecalcContext());
+  StyleRecalcContext style_recalc_context;
+  style_recalc_context.old_style = element->GetComputedStyle();
+  const ComputedStyle* style = GetDocument().GetStyleResolver().ResolveStyle(
+      element, style_recalc_context);
   EXPECT_FALSE(style->HasCurrentBackgroundColorAnimation());
 
   NonThrowableExceptionState exception_state;
@@ -312,12 +476,10 @@ TEST_F(BackgroundColorPaintDefinitionTest,
   ASSERT_TRUE(element->GetElementAnimations());
   EXPECT_EQ(element->GetElementAnimations()->Animations().size(), 1u);
   style = GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                        StyleRecalcContext());
+                                                        style_recalc_context);
   // Previously no background-color animation, now it has. This should trigger
   // a repaint, see ComputedStyle::UpdatePropertySpecificDifferences().
   EXPECT_TRUE(style->HasCurrentBackgroundColorAnimation());
-  style->ResetHasCurrentBackgroundColorAnimation();
-  style->ResetCompositablePaintAnimationChanged();
 
   start_keyframe->SetCSSPropertyValue(
       property_id, "blue", SecureContextMode::kInsecureContext, nullptr);
@@ -336,7 +498,7 @@ TEST_F(BackgroundColorPaintDefinitionTest,
   ASSERT_TRUE(element->GetElementAnimations());
   EXPECT_EQ(element->GetElementAnimations()->Animations().size(), 2u);
   style = GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                        StyleRecalcContext());
+                                                        style_recalc_context);
   EXPECT_TRUE(style->HasCurrentBackgroundColorAnimation());
   // CompositablePaintAnimationChanged() being true will trigger a repaint. See
   // ComputedStyle::UpdatePropertySpecificDifferences().
@@ -372,9 +534,10 @@ TEST_F(BackgroundColorPaintDefinitionTest, TriggerRepaintChangedKeyframe) {
   auto* model = MakeGarbageCollected<StringKeyframeEffectModel>(keyframes);
 
   Element* element = GetElementById("target");
-  scoped_refptr<ComputedStyle> style =
-      GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                    StyleRecalcContext());
+  StyleRecalcContext style_recalc_context;
+  style_recalc_context.old_style = element->GetComputedStyle();
+  const ComputedStyle* style = GetDocument().GetStyleResolver().ResolveStyle(
+      element, style_recalc_context);
   EXPECT_FALSE(style->HasCurrentBackgroundColorAnimation());
 
   NonThrowableExceptionState exception_state;
@@ -387,12 +550,10 @@ TEST_F(BackgroundColorPaintDefinitionTest, TriggerRepaintChangedKeyframe) {
   ASSERT_TRUE(element->GetElementAnimations());
   EXPECT_EQ(element->GetElementAnimations()->Animations().size(), 1u);
   style = GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                        StyleRecalcContext());
+                                                        style_recalc_context);
   // Previously no background-color animation, now it has. This should trigger
   // a repaint, see ComputedStyle::UpdatePropertySpecificDifferences().
   EXPECT_TRUE(style->HasCurrentBackgroundColorAnimation());
-  style->ResetHasCurrentBackgroundColorAnimation();
-  style->ResetCompositablePaintAnimationChanged();
 
   start_keyframe->SetCSSPropertyValue(
       property_id, "red", SecureContextMode::kInsecureContext, nullptr);
@@ -406,7 +567,7 @@ TEST_F(BackgroundColorPaintDefinitionTest, TriggerRepaintChangedKeyframe) {
   ASSERT_TRUE(element->GetElementAnimations());
   EXPECT_EQ(element->GetElementAnimations()->Animations().size(), 1u);
   style = GetDocument().GetStyleResolver().ResolveStyle(element,
-                                                        StyleRecalcContext());
+                                                        style_recalc_context);
   EXPECT_TRUE(style->HasCurrentBackgroundColorAnimation());
   // CompositablePaintAnimationChanged() being true will trigger a repaint. See
   // ComputedStyle::UpdatePropertySpecificDifferences().

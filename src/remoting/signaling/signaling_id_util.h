@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,6 +33,9 @@ std::string GetCanonicalEmail(const std::string& email);
 bool SplitSignalingIdResource(const std::string& full_id,
                               std::string* email,
                               std::string* resource);
+
+// Returns whether |signaling_id| represents a valid FTL signaling ID.
+bool IsValidFtlSignalingId(const std::string& signaling_id);
 
 }  // namespace remoting
 

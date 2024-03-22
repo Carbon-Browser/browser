@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,8 @@ DownloadInternalsUI::DownloadInternalsUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
   // chrome://download-internals source.
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(chrome::kChromeUIDownloadInternalsHost);
+      content::WebUIDataSource::CreateAndAdd(
+          Profile::FromWebUI(web_ui), chrome::kChromeUIDownloadInternalsHost);
   html_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
       "script-src chrome://resources 'self' 'unsafe-eval';");
@@ -34,10 +35,6 @@ DownloadInternalsUI::DownloadInternalsUI(content::WebUI* web_ui)
       kDownloadInternalsResources, kDownloadInternalsResourcesSize));
   html_source->AddResourcePath("",
                                IDR_DOWNLOAD_INTERNALS_DOWNLOAD_INTERNALS_HTML);
-
-  Profile* profile = Profile::FromWebUI(web_ui);
-
-  content::WebUIDataSource::Add(profile, html_source);
 
   web_ui->AddMessageHandler(
       std::make_unique<

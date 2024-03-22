@@ -1,16 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/print_compositor/print_compositor_impl.h"
 
-#include <algorithm>
 #include <tuple>
 #include <utility>
 
 #include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/memory/discardable_memory.h"
+#include "base/ranges/algorithm.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -21,6 +21,7 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/system/platform_handle.h"
 #include "printing/common/metafile_utils.h"
+#include "skia/ext/font_utils.h"
 #include "third_party/blink/public/platform/web_image_generator.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkDocument.h"
@@ -38,6 +39,9 @@
 #include "third_party/blink/public/platform/platform.h"
 #endif
 
+using MojoDiscardableSharedMemoryManager =
+    discardable_memory::mojom::DiscardableSharedMemoryManager;
+
 namespace printing {
 
 PrintCompositorImpl::PrintCompositorImpl(
@@ -45,8 +49,19 @@ PrintCompositorImpl::PrintCompositorImpl(
     bool initialize_environment,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
     : io_task_runner_(std::move(io_task_runner)) {
-  if (receiver)
+  if (receiver) {
     receiver_.Bind(std::move(receiver));
+
+    mojo::PendingRemote<MojoDiscardableSharedMemoryManager> manager_remote;
+    content::ChildThread::Get()->BindHostReceiver(
+        manager_remote.InitWithNewPipeAndPassReceiver());
+    DCHECK(io_task_runner_);
+    discardable_shared_memory_manager_ = base::MakeRefCounted<
+        discardable_memory::ClientDiscardableSharedMemoryManager>(
+        std::move(manager_remote), io_task_runner_);
+    base::DiscardableMemoryAllocator::SetInstance(
+        discardable_shared_memory_manager_.get());
+  }
 
   if (!initialize_environment)
     return;
@@ -73,7 +88,7 @@ PrintCompositorImpl::PrintCompositorImpl(
   // This doesn't do comprehensive tests to make sure fonts can work properly.
   // It is just a quick and simple check to catch things like improper sandbox
   // policy setup.
-  DCHECK(SkFontMgr::RefDefault()->countFamilies());
+  DCHECK(skia::DefaultFontMgr()->countFamilies());
 #endif
 }
 
@@ -81,19 +96,6 @@ PrintCompositorImpl::~PrintCompositorImpl() {
 #if BUILDFLAG(IS_WIN)
   content::UninitializeDWriteFontProxy();
 #endif
-}
-
-void PrintCompositorImpl::SetDiscardableSharedMemoryManager(
-    mojo::PendingRemote<
-        discardable_memory::mojom::DiscardableSharedMemoryManager> manager) {
-  // Set up discardable memory manager.
-  mojo::PendingRemote<discardable_memory::mojom::DiscardableSharedMemoryManager>
-      manager_remote(std::move(manager));
-  discardable_shared_memory_manager_ = base::MakeRefCounted<
-      discardable_memory::ClientDiscardableSharedMemoryManager>(
-      std::move(manager_remote), io_task_runner_);
-  base::DiscardableMemoryAllocator::SetInstance(
-      discardable_shared_memory_manager_.get());
 }
 
 void PrintCompositorImpl::NotifyUnavailableSubframe(uint64_t frame_guid) {
@@ -146,12 +148,10 @@ void PrintCompositorImpl::AddSubframeContent(
   UpdateRequestsWithSubframeInfo(frame_guid, pending_subframes);
 }
 
-#if BUILDFLAG(ENABLE_TAGGED_PDF)
 void PrintCompositorImpl::SetAccessibilityTree(
     const ui::AXTreeUpdate& accessibility_tree) {
   accessibility_tree_ = accessibility_tree;
 }
-#endif
 
 void PrintCompositorImpl::CompositePageToPdf(
     uint64_t frame_guid,
@@ -193,6 +193,7 @@ void PrintCompositorImpl::CompleteDocumentToPdf(
 
   if (!docinfo_->doc) {
     docinfo_->doc = MakePdfDocument(creator_, accessibility_tree_,
+                                    GeneratePdfDocumentOutline::kNone,
                                     &docinfo_->compositor_stream);
   }
 
@@ -221,8 +222,8 @@ void PrintCompositorImpl::UpdateRequestsWithSubframeInfo(
     // update with this frame's pending list.
     auto& pending_list = request->pending_subframes;
     if (pending_list.erase(frame_guid)) {
-      std::copy(pending_subframes.begin(), pending_subframes.end(),
-                std::inserter(pending_list, pending_list.end()));
+      base::ranges::copy(pending_subframes,
+                         std::inserter(pending_list, pending_list.end()));
     }
 
     // If the request still has pending frames, or isn't at the front of the
@@ -354,9 +355,13 @@ mojom::PrintCompositor::Status PrintCompositorImpl::CompositeToPdf(
     return mojom::PrintCompositor::Status::kContentFormatError;
   }
 
+  // Create PDF document providing accessibility data early if concurrent
+  // document composition is not in effect, i.e. when handling
+  // CompositeDocumentToPdf() call.
   SkDynamicMemoryWStream wstream;
-  sk_sp<SkDocument> doc =
-      MakePdfDocument(creator_, ui::AXTreeUpdate(), &wstream);
+  sk_sp<SkDocument> doc = MakePdfDocument(
+      creator_, docinfo_ ? ui::AXTreeUpdate() : accessibility_tree_,
+      GeneratePdfDocumentOutline::kNone, &wstream);
 
   for (const auto& page : pages) {
     TRACE_EVENT0("print", "PrintCompositorImpl::CompositeToPdf draw page");
@@ -367,6 +372,7 @@ mojom::PrintCompositor::Status PrintCompositorImpl::CompositeToPdf(
       // Create document PDF if needed.
       if (!docinfo_->doc) {
         docinfo_->doc = MakePdfDocument(creator_, accessibility_tree_,
+                                        GeneratePdfDocumentOutline::kNone,
                                         &docinfo_->compositor_stream);
       }
 

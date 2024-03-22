@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ void AccessibleNodeList::RemoveOwner(AOMRelationListProperty property,
 
 AccessibleNode* AccessibleNodeList::item(unsigned offset) const {
   if (offset < nodes_.size())
-    return nodes_[offset];
+    return nodes_[offset].Get();
   return nullptr;
 }
 

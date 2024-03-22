@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import org.chromium.components.infobars.InfoBarUiItem;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * Allow tests to register for animation finished notifications.
- */
+/** Allow tests to register for animation finished notifications. */
 public class InfoBarTestAnimationListener implements InfoBarAnimationListener {
     private final CallbackHelper mAddAnimationFinished;
     private final CallbackHelper mSwapAnimationFinished;
@@ -30,7 +28,7 @@ public class InfoBarTestAnimationListener implements InfoBarAnimationListener {
 
     @Override
     public void notifyAnimationFinished(int animationType) {
-        switch(animationType) {
+        switch (animationType) {
             case InfoBarAnimationListener.ANIMATION_TYPE_SHOW:
                 mAddAnimationFinished.notifyCalled();
                 break;

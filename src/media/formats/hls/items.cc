@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ ParseStatus::Or<GetNextLineItemResult> GetNextLineItem(
     SourceLineIterator* src) {
   while (true) {
     auto result = src->Next();
-    if (result.has_error()) {
+    if (!result.has_value()) {
       // Forward error to caller
       return std::move(result).error();
     }

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ash/arc/arc_support_host.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "components/signin/public/identity_manager/access_token_fetcher.h"
 #include "content/public/common/url_constants.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"

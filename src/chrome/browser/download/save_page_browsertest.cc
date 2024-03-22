@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -21,6 +22,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/repeating_test_future.h"
 #include "base/test/test_file_util.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
@@ -51,8 +53,6 @@
 #include "components/security_state/core/security_state.h"
 #include "components/services/quarantine/test_support.h"
 #include "content/public/browser/download_manager.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
@@ -69,6 +69,10 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/shell_dialogs/fake_select_file_dialog.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/dbus/dlp/dlp_client.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 using content::BrowserContext;
 using content::BrowserThread;
 using content::DownloadManager;
@@ -76,6 +80,7 @@ using content::RenderFrameHost;
 using content::RenderProcessHost;
 using content::WebContents;
 using download::DownloadItem;
+using testing::_;
 using testing::ContainsRegex;
 using testing::HasSubstr;
 using ui::FakeSelectFileDialog;
@@ -99,8 +104,8 @@ std::string ReadFileAndCollapseWhitespace(const base::FilePath& file_path) {
 // the SavePageAs logic.
 std::string WriteSavedFromPath(const std::string& file_contents,
                                const GURL& url) {
-  return base::StringPrintf(file_contents.c_str(), url.spec().length(),
-                            url.spec().c_str());
+  return base::StringPrintfNonConstexpr(
+      file_contents.c_str(), url.spec().length(), url.spec().c_str());
 }
 
 // Waits for an item record in the downloads database to match |filter|. See
@@ -968,7 +973,7 @@ IN_PROC_BROWSER_TEST_F(SavePageBrowserTest, SaveUnauthorizedResource) {
 
   // Refer to the test file from the test page.
   GURL file_url = net::FilePathToFileURL(file_path);
-  ASSERT_TRUE(ExecuteScript(
+  ASSERT_TRUE(ExecJs(
       browser()->tab_strip_model()->GetWebContentsAt(0),
       base::StringPrintf("document.getElementById('resource1').src = '%s';",
                          file_url.spec().data())));
@@ -1162,10 +1167,9 @@ IN_PROC_BROWSER_TEST_F(SavePageSitePerProcessBrowserTest,
   // Kill one of renderer processes (this is the essence of this test).
   WebContents* web_contents = GetCurrentTab(browser());
   bool did_kill_a_process = false;
-  web_contents->GetPrimaryMainFrame()->ForEachRenderFrameHost(
-      base::BindRepeating(
-          [](WebContents* web_contents, bool* did_kill_a_process,
-             RenderFrameHost* frame) {
+  web_contents->GetPrimaryMainFrame()
+      ->ForEachRenderFrameHostWithAction(
+          [web_contents, &did_kill_a_process](RenderFrameHost* frame) {
             if (frame->GetLastCommittedURL().host() == "bar.com") {
               RenderProcessHost* process_to_kill = frame->GetProcess();
               EXPECT_NE(
@@ -1175,12 +1179,11 @@ IN_PROC_BROWSER_TEST_F(SavePageSitePerProcessBrowserTest,
 
               EXPECT_TRUE(process_to_kill->FastShutdownIfPossible());
               EXPECT_FALSE(process_to_kill->IsInitializedAndNotDead());
-              *did_kill_a_process = true;
+              did_kill_a_process = true;
               return content::RenderFrameHost::FrameIterationAction::kStop;
             }
             return content::RenderFrameHost::FrameIterationAction::kContinue;
-          },
-          web_contents, &did_kill_a_process));
+          });
   EXPECT_TRUE(did_kill_a_process);
 
   // Main verification is that we don't hang and time out when saving.
@@ -1247,7 +1250,9 @@ class SavePageOriginalVsSavedComparisonTest
     if (GetParam() == content::SAVE_PAGE_TYPE_AS_MHTML) {
       std::set<url::Origin> origins;
       GetCurrentTab(browser())->GetPrimaryMainFrame()->ForEachRenderFrameHost(
-          base::BindRepeating(&CheckFrameForMHTML, base::Unretained(&origins)));
+          [&origins](content::RenderFrameHost* host) {
+            CheckFrameForMHTML(host, origins);
+          });
       int unique_origins = origins.size();
       EXPECT_EQ(expected_number_of_frames_in_saved_page, unique_origins)
           << "All origins should be unique";
@@ -1331,12 +1336,9 @@ class SavePageOriginalVsSavedComparisonTest
         DLOG(INFO) << "Verifying that a.htm frame has fully loaded...";
         std::vector<std::string> frame_names;
         GetCurrentTab(browser())->GetPrimaryMainFrame()->ForEachRenderFrameHost(
-            base::BindRepeating(
-                [](std::vector<std::string>* frame_names,
-                   content::RenderFrameHost* frame) {
-                  frame_names->push_back(frame->GetFrameName());
-                },
-                &frame_names));
+            [&frame_names](content::RenderFrameHost* frame) {
+              frame_names.push_back(frame->GetFrameName());
+            });
 
         EXPECT_THAT(frame_names, testing::Contains("Frame name of a.htm"));
       }
@@ -1361,11 +1363,11 @@ class SavePageOriginalVsSavedComparisonTest
     }
   }
 
-  static void CheckFrameForMHTML(std::set<url::Origin>* origins,
-                                 content::RenderFrameHost* host) {
+  static void CheckFrameForMHTML(content::RenderFrameHost* host,
+                                 std::set<url::Origin>& origins) {
     // See RFC n°2557, section-8.3: "Use of the Content-ID header and CID URLs".
     const char kContentIdScheme[] = "cid";
-    origins->insert(host->GetLastCommittedOrigin());
+    origins.insert(host->GetLastCommittedOrigin());
     EXPECT_TRUE(host->GetLastCommittedOrigin().opaque());
     if (!host->GetParent())
       EXPECT_TRUE(host->GetLastCommittedURL().SchemeIsFile());
@@ -1705,5 +1707,65 @@ IN_PROC_BROWSER_TEST_F(SavePageBrowserTest, SaveCompleteHTMLBlocked) {
       dir.AppendASCII("1.css"),
   });
 }
+
+#if BUILDFLAG(IS_CHROMEOS)
+
+IN_PROC_BROWSER_TEST_F(SavePageBrowserTest, SaveHTMLWithDlp) {
+  base::FilePath full_file_name, dir;
+  GURL url;
+
+  chromeos::DlpClient::Shutdown();
+  chromeos::DlpClient::InitializeFake();
+  base::test::RepeatingTestFuture<
+      dlp::AddFilesRequest, base::OnceCallback<void(dlp::AddFilesResponse)>>
+      add_file_cb;
+  chromeos::DlpClient::Get()->GetTestInterface()->SetAddFilesMock(
+      add_file_cb.GetCallback());
+
+  url = NavigateToMockURL("a");
+
+  SaveCurrentTab(url, content::SAVE_PAGE_TYPE_AS_COMPLETE_HTML, "a", 1, &dir,
+                 &full_file_name);
+
+  ASSERT_FALSE(HasFailure());
+
+  auto request = std::get<0>(add_file_cb.Take());
+  EXPECT_EQ(1, request.add_file_requests().size());
+  EXPECT_EQ(full_file_name.value(), request.add_file_requests(0).file_path());
+
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  EXPECT_TRUE(base::PathExists(full_file_name));
+  EXPECT_FALSE(base::PathExists(dir));
+}
+
+IN_PROC_BROWSER_TEST_F(SavePageBrowserTest, SaveMHTMLWithDlp) {
+  base::FilePath full_file_name, dir;
+  GURL url;
+
+  chromeos::DlpClient::Shutdown();
+  chromeos::DlpClient::InitializeFake();
+  base::test::RepeatingTestFuture<
+      dlp::AddFilesRequest, base::OnceCallback<void(dlp::AddFilesResponse)>>
+      add_file_cb;
+  chromeos::DlpClient::Get()->GetTestInterface()->SetAddFilesMock(
+      add_file_cb.GetCallback());
+
+  url = NavigateToMockURL("a");
+
+  SaveCurrentTab(url, content::SAVE_PAGE_TYPE_AS_MHTML, "a", -1, &dir,
+                 &full_file_name);
+
+  ASSERT_FALSE(HasFailure());
+
+  auto request = std::get<0>(add_file_cb.Take());
+  EXPECT_EQ(1, request.add_file_requests().size());
+  EXPECT_EQ(full_file_name.value(), request.add_file_requests(0).file_path());
+
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  EXPECT_TRUE(base::PathExists(full_file_name));
+  EXPECT_FALSE(base::PathExists(dir));
+}
+
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace

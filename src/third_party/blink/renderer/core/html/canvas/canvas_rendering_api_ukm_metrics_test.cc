@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,10 +24,10 @@ class CanvasRenderingAPIUkmMetricsTest : public PageTestBase {
 
   void SetUp() override {
     PageTestBase::SetUp();
-    InstallTestUkmRecorder();
     GetDocument().documentElement()->setInnerHTML(
         "<body><canvas id='c'></canvas></body>");
-    canvas_element_ = To<HTMLCanvasElement>(GetDocument().getElementById("c"));
+    canvas_element_ =
+        To<HTMLCanvasElement>(GetDocument().getElementById(AtomicString("c")));
     UpdateAllLifecyclePhasesForTest();
   }
 
@@ -36,7 +36,7 @@ class CanvasRenderingAPIUkmMetricsTest : public PageTestBase {
     CanvasContextCreationAttributesCore attributes;
     canvas_element_->GetCanvasRenderingContext(context_type, attributes);
 
-    auto entries = test_ukm_recorder_->GetEntriesByName(
+    auto entries = recorder_.GetEntriesByName(
         ukm::builders::ClientRenderingAPI::kEntryName);
     EXPECT_EQ(1ul, entries.size());
     auto* entry = entries[0];
@@ -46,14 +46,7 @@ class CanvasRenderingAPIUkmMetricsTest : public PageTestBase {
   }
 
  private:
-  void InstallTestUkmRecorder() {
-    DCHECK(!test_ukm_recorder_);  // Should be initialized only once.
-    auto temp_recorder = std::make_unique<ukm::TestUkmRecorder>();
-    test_ukm_recorder_ = temp_recorder.get();
-    GetDocument().ukm_recorder_ = std::move(temp_recorder);
-  }
-
-  ukm::TestUkmRecorder* test_ukm_recorder_ = nullptr;
+  ukm::TestAutoSetUkmRecorder recorder_;
   Persistent<HTMLCanvasElement> canvas_element_;
 };
 

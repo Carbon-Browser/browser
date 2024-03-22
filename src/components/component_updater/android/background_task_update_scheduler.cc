@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/component_updater/android/background_task_update_scheduler.h"
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/component_updater/android/background_task_update_scheduler_jni_headers/UpdateScheduler_jni.h"
 
 namespace component_updater {
@@ -18,13 +19,7 @@ const base::TimeDelta kOnStartTaskDelay = base::Seconds(2);
 
 }  // namespace
 
-// static
-bool BackgroundTaskUpdateScheduler::IsAvailable() {
-  return Java_UpdateScheduler_isAvailable(base::android::AttachCurrentThread());
-}
-
 BackgroundTaskUpdateScheduler::BackgroundTaskUpdateScheduler() {
-  DCHECK(IsAvailable());
   JNIEnv* env = base::android::AttachCurrentThread();
   j_update_scheduler_.Reset(Java_UpdateScheduler_getInstance(env));
   Java_UpdateScheduler_setNativeScheduler(env, j_update_scheduler_,
@@ -56,7 +51,7 @@ void BackgroundTaskUpdateScheduler::OnStartTask(
     const base::android::JavaParamRef<jobject>& obj) {
   // Component registration is async. Add some delay to give some time for the
   // registration.
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&BackgroundTaskUpdateScheduler::OnStartTaskDelayed,
                      weak_ptr_factory_.GetWeakPtr()),

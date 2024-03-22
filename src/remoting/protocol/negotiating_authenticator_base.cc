@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <sstream>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_split.h"
 #include "remoting/base/constants.h"
 #include "remoting/base/name_value_map.h"
@@ -18,8 +18,7 @@
 #include "remoting/protocol/channel_authenticator.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -46,8 +45,8 @@ const NameMapElement<NegotiatingAuthenticatorBase::Method>
 
 }  // namespace
 
-const jingle_xmpp::StaticQName NegotiatingAuthenticatorBase::kMethodAttributeQName = {
-    "", "method"};
+const jingle_xmpp::StaticQName
+    NegotiatingAuthenticatorBase::kMethodAttributeQName = {"", "method"};
 const jingle_xmpp::StaticQName
     NegotiatingAuthenticatorBase::kSupportedMethodsAttributeQName = {
         "", "supported-methods"};
@@ -55,8 +54,8 @@ const char NegotiatingAuthenticatorBase::kSupportedMethodsSeparator = ',';
 
 const jingle_xmpp::StaticQName NegotiatingAuthenticatorBase::kPairingInfoTag = {
     kChromotingXmlNamespace, "pairing-info"};
-const jingle_xmpp::StaticQName NegotiatingAuthenticatorBase::kClientIdAttribute = {
-    "", "client-id"};
+const jingle_xmpp::StaticQName
+    NegotiatingAuthenticatorBase::kClientIdAttribute = {"", "client-id"};
 
 NegotiatingAuthenticatorBase::NegotiatingAuthenticatorBase(
     Authenticator::State initial_state)
@@ -75,8 +74,8 @@ bool NegotiatingAuthenticatorBase::started() const {
   return current_authenticator_->started();
 }
 
-Authenticator::RejectionReason
-NegotiatingAuthenticatorBase::rejection_reason() const {
+Authenticator::RejectionReason NegotiatingAuthenticatorBase::rejection_reason()
+    const {
   return rejection_reason_;
 }
 
@@ -84,8 +83,9 @@ NegotiatingAuthenticatorBase::rejection_reason() const {
 NegotiatingAuthenticatorBase::Method
 NegotiatingAuthenticatorBase::ParseMethodString(const std::string& value) {
   Method result;
-  if (!NameToValue(kAuthenticationMethodStrings, value, &result))
+  if (!NameToValue(kAuthenticationMethodStrings, value, &result)) {
     return Method::INVALID;
+  }
   return result;
 }
 
@@ -126,8 +126,9 @@ void NegotiatingAuthenticatorBase::UpdateState(
   DCHECK(state_ == MESSAGE_READY || state_ == ACCEPTED || state_ == REJECTED)
       << "State: " << state_;
 
-  if (state_ == REJECTED)
+  if (state_ == REJECTED) {
     rejection_reason_ = current_authenticator_->rejection_reason();
+  }
 
   std::move(resume_callback).Run();
 }
@@ -165,5 +166,4 @@ NegotiatingAuthenticatorBase::CreateChannelAuthenticator() const {
   return current_authenticator_->CreateChannelAuthenticator();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

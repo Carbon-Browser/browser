@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/extensions/chrome_extension_web_contents_observer.h"
 #include "chrome/browser/favicon/favicon_utils.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu.h"
-#include "chrome/browser/ui/pdf/chrome_pdf_web_contents_helper_client.h"
 #include "components/guest_view/browser/guest_view_event.h"
 #include "components/renderer_context_menu/context_menu_delegate.h"
 #include "content/public/browser/render_process_host.h"
@@ -23,6 +21,24 @@
 using guest_view::GuestViewEvent;
 
 namespace extensions {
+
+namespace {
+
+// Returns the top level items (ignoring submenus) as a base::Value::List.
+base::Value::List MenuModelToValue(const ui::SimpleMenuModel& menu_model) {
+  base::Value::List items;
+  for (size_t i = 0; i < menu_model.GetItemCount(); ++i) {
+    base::Value::Dict item_value;
+    // TODO(lazyboy): We need to expose some kind of enum equivalent of
+    // |command_id| instead of plain integers.
+    item_value.Set(webview::kMenuItemCommandId, menu_model.GetCommandIdAt(i));
+    item_value.Set(webview::kMenuItemLabel, menu_model.GetLabelAt(i));
+    items.Append(std::move(item_value));
+  }
+  return items;
+}
+
+}  // namespace
 
 ChromeWebViewGuestDelegate::ChromeWebViewGuestDelegate(
     WebViewGuest* web_view_guest)
@@ -64,29 +80,13 @@ bool ChromeWebViewGuestDelegate::HandleContextMenu(
 
   // Pass it to embedder.
   int request_id = ++pending_context_menu_request_id_;
-  std::unique_ptr<base::DictionaryValue> args(new base::DictionaryValue());
-  std::unique_ptr<base::ListValue> items =
-      MenuModelToValue(pending_menu_->menu_model());
-  args->Set(webview::kContextMenuItems, std::move(items));
-  args->SetIntKey(webview::kRequestId, request_id);
+  base::Value::Dict args;
+  args.Set(webview::kContextMenuItems,
+           MenuModelToValue(pending_menu_->menu_model()));
+  args.Set(webview::kRequestId, request_id);
   web_view_guest()->DispatchEventToView(std::make_unique<GuestViewEvent>(
       webview::kEventContextMenuShow, std::move(args)));
   return true;
-}
-
-// static
-std::unique_ptr<base::ListValue> ChromeWebViewGuestDelegate::MenuModelToValue(
-    const ui::SimpleMenuModel& menu_model) {
-  std::unique_ptr<base::ListValue> items(new base::ListValue());
-  for (size_t i = 0; i < menu_model.GetItemCount(); ++i) {
-    base::Value::Dict item_value;
-    // TODO(lazyboy): We need to expose some kind of enum equivalent of
-    // |command_id| instead of plain integers.
-    item_value.Set(webview::kMenuItemCommandId, menu_model.GetCommandIdAt(i));
-    item_value.Set(webview::kMenuItemLabel, menu_model.GetLabelAt(i));
-    items->GetList().Append(std::move(item_value));
-  }
-  return items;
 }
 
 void ChromeWebViewGuestDelegate::OnShowContextMenu(int request_id) {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,32 @@ import androidx.annotation.GuardedBy;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Keeps track of values returned for cached flags and field trial parameters.
- */
-class ValuesReturned {
-    @GuardedBy("boolValues")
-    public final Map<String, Boolean> boolValues = new HashMap<>();
-    @GuardedBy("stringValues")
-    public final Map<String, String> stringValues = new HashMap<>();
-    @GuardedBy("intValues")
-    public final Map<String, Integer> intValues = new HashMap<>();
-    @GuardedBy("doubleValues")
-    public final Map<String, Double> doubleValues = new HashMap<>();
+/** Keeps track of values returned for cached flags and field trial parameters. */
+abstract class ValuesReturned {
+    @GuardedBy("sBoolValues")
+    static final Map<String, Boolean> sBoolValues = new HashMap<>();
+
+    @GuardedBy("sStringValues")
+    static final Map<String, String> sStringValues = new HashMap<>();
+
+    @GuardedBy("sIntValues")
+    static final Map<String, Integer> sIntValues = new HashMap<>();
+
+    @GuardedBy("sDoubleValues")
+    static final Map<String, Double> sDoubleValues = new HashMap<>();
+
+    static void clearForTesting() {
+        synchronized (sBoolValues) {
+            sBoolValues.clear();
+        }
+        synchronized (sStringValues) {
+            sStringValues.clear();
+        }
+        synchronized (sIntValues) {
+            sIntValues.clear();
+        }
+        synchronized (sDoubleValues) {
+            sDoubleValues.clear();
+        }
+    }
 }

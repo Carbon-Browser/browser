@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,10 +34,9 @@ class DlpContentManagerLacros : public DlpContentManager,
   static DlpContentManagerLacros* Get();
 
   // DlpContentManager overrides:
-  void CheckScreenShareRestriction(
-      const content::DesktopMediaID& media_id,
-      const std::u16string& application_title,
-      OnDlpRestrictionCheckedCallback callback) override;
+  void CheckScreenShareRestriction(const content::DesktopMediaID& media_id,
+                                   const std::u16string& application_title,
+                                   WarningCallback callback) override;
   void OnScreenShareStarted(
       const std::string& label,
       std::vector<content::DesktopMediaID> screen_share_ids,

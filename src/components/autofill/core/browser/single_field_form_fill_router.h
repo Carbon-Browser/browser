@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,26 @@
 
 #include "base/memory/weak_ptr.h"
 #include "components/autofill/core/browser/autocomplete_history_manager.h"
+#include "components/autofill/core/browser/iban_manager.h"
 #include "components/autofill/core/browser/merchant_promo_code_manager.h"
 #include "components/autofill/core/browser/single_field_form_filler.h"
 #include "components/autofill/core/common/form_data.h"
 
 namespace autofill {
 
+class AutofillClient;
 class FormStructure;
 class MerchantPromoCodeManager;
 struct SuggestionsContext;
 
 // Owned by AutofillClient, and is one per tab. Routes single field form filling
-// requests, such as choosing whether to direct them to Autocomplete or merchant
-// promo code filling functionality.
+// requests, such as choosing whether to direct them to Autocomplete, merchant
+// promo codes or IBAN.
 class SingleFieldFormFillRouter : public SingleFieldFormFiller {
  public:
   explicit SingleFieldFormFillRouter(
       AutocompleteHistoryManager* autocomplete_history_manager,
+      IbanManager* iban_manager,
       MerchantPromoCodeManager* merchant_promo_code_manager);
   ~SingleFieldFormFillRouter() override;
   SingleFieldFormFillRouter(const SingleFieldFormFillRouter&) = delete;
@@ -42,28 +45,27 @@ class SingleFieldFormFillRouter : public SingleFieldFormFiller {
                                 bool is_autocomplete_enabled);
 
   // SingleFieldFormFiller overrides:
-  void OnGetSingleFieldSuggestions(
-      int query_id,
-      bool is_autocomplete_enabled,
-      bool autoselect_first_suggestion,
-      const std::u16string& name,
-      const std::u16string& prefix,
-      const std::string& form_control_type,
-      base::WeakPtr<SingleFieldFormFiller::SuggestionsHandler> handler,
+  [[nodiscard]] bool OnGetSingleFieldSuggestions(
+      AutofillSuggestionTriggerSource trigger_source,
+      const FormFieldData& field,
+      const AutofillClient& client,
+      OnSuggestionsReturnedCallback on_suggestions_returned,
       const SuggestionsContext& context) override;
   void OnWillSubmitFormWithFields(const std::vector<FormFieldData>& fields,
                                   bool is_autocomplete_enabled) override;
-  void CancelPendingQueries(
-      const SingleFieldFormFiller::SuggestionsHandler* handler) override;
+  void CancelPendingQueries() override;
   void OnRemoveCurrentSingleFieldSuggestion(const std::u16string& field_name,
                                             const std::u16string& value,
-                                            int frontend_id) override;
+                                            PopupItemId popup_item_id) override;
   void OnSingleFieldSuggestionSelected(const std::u16string& value,
-                                       int frontend_id) override;
+                                       PopupItemId popup_item_id) override;
 
  private:
   // Handles autocompleting single fields.
   base::WeakPtr<AutocompleteHistoryManager> autocomplete_history_manager_;
+
+  // Handles autofilling IBAN fields (can be null for unsupported platforms).
+  base::WeakPtr<IbanManager> iban_manager_;
 
   // Handles autofilling merchant promo code fields (can be null for unsupported
   // platforms).

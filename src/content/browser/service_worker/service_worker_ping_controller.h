@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ class CONTENT_EXPORT ServiceWorkerPingController final {
   void ClearLastPingTime();
 
   enum class PingState { kNotPinging, kPinging, kPingTimedOut };
-  raw_ptr<ServiceWorkerVersion> version_;  // Owns |this|.
+  raw_ptr<ServiceWorkerVersion, DanglingUntriaged> version_;  // Owns |this|.
   // The time the most recent ping was sent.
   base::TimeTicks last_ping_time_;
   PingState ping_state_ = PingState::kNotPinging;

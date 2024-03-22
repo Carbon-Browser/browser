@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,12 +88,11 @@ class HoldingSpaceServicePrintToPdfIntegrationBrowserTest
     pdf_printer_handler_->SetPdfSavedClosureForTesting(run_loop.QuitClosure());
     pdf_printer_handler_->SetPrintToPdfPathForTesting(file_path);
 
-    std::string data;
-    pdf_printer_handler_->StartPrint(job_title,
-                                     /*settings=*/base::Value::Dict(),
-                                     base::RefCountedString::TakeString(&data),
-                                     /*callback=*/base::DoNothing());
-
+    pdf_printer_handler_->StartPrint(
+        job_title,
+        /*settings=*/base::Value::Dict(),
+        base::MakeRefCounted<base::RefCountedString>(std::string()),
+        /*callback=*/base::DoNothing());
     run_loop.Run();
   }
 
@@ -120,13 +119,11 @@ class HoldingSpaceServicePrintToPdfIntegrationBrowserTest
   Browser* GetBrowserForPdfPrinterHandler() {
     if (!UseIncognitoBrowser())
       return browser();
-    if (!incognito_browser_)
-      incognito_browser_ = CreateIncognitoBrowser(browser()->profile());
-    return incognito_browser_;
+
+    return CreateIncognitoBrowser(browser()->profile());
   }
 
   std::unique_ptr<printing::PdfPrinterHandler> pdf_printer_handler_;
-  raw_ptr<Browser> incognito_browser_ = nullptr;
 };
 
 INSTANTIATE_TEST_SUITE_P(All,

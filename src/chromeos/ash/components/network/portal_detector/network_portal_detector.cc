@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
 
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "components/device_event_log/device_event_log.h"
 
 namespace ash {

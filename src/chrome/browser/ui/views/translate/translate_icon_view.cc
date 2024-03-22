@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,27 +10,31 @@
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ui/browser_command_controller.h"
 #include "chrome/browser/ui/browser_commands.h"
-#include "chrome/browser/ui/translate/translate_bubble_ui_action_logger.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/translate/translate_bubble_controller.h"
 #include "chrome/browser/ui/views/translate/translate_bubble_view.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/translate/core/browser/language_state.h"
 #include "components/translate/core/browser/translate_manager.h"
 #include "components/translate/core/browser/translate_metrics_logger.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/ui_base_features.h"
 
 TranslateIconView::TranslateIconView(
     CommandUpdater* command_updater,
     IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
     PageActionIconView::Delegate* page_action_icon_delegate)
     : PageActionIconView(command_updater,
-                         IDC_TRANSLATE_PAGE,
+                         IDC_SHOW_TRANSLATE,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate) {
+                         page_action_icon_delegate,
+                         "Translate") {
   SetID(VIEW_ID_TRANSLATE_BUTTON);
+  SetAccessibilityProperties(/*role*/ absl::nullopt,
+                             l10n_util::GetStringUTF16(IDS_TOOLTIP_TRANSLATE));
 }
 
 TranslateIconView::~TranslateIconView() = default;
@@ -83,8 +87,11 @@ void TranslateIconView::UpdateImpl() {
       ->GetActiveTranslateMetricsLogger()
       ->LogOmniboxIconChange(enabled);
 
-  // Enable Translate page command or disable icon.
-  enabled &= SetCommandEnabled(enabled);
+  if (!features::IsChromeRefresh2023()) {
+    // Enable Translate page command or disable icon.
+    enabled &= SetCommandEnabled(enabled);
+  }
+
   SetVisible(enabled);
   if (!enabled && TranslateBubbleController::FromWebContents(GetWebContents()))
     TranslateBubbleController::FromWebContents(GetWebContents())->CloseBubble();
@@ -94,11 +101,9 @@ void TranslateIconView::OnExecuting(
     PageActionIconView::ExecuteSource execute_source) {}
 
 const gfx::VectorIcon& TranslateIconView::GetVectorIcon() const {
-  return kTranslateIcon;
-}
-
-std::u16string TranslateIconView::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringUTF16(IDS_TOOLTIP_TRANSLATE);
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? kTranslateChromeRefreshIcon
+             : kTranslateIcon;
 }
 
 BEGIN_METADATA(TranslateIconView, PageActionIconView)

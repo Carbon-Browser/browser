@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -18,9 +18,9 @@ FakeWilcoDtcSupportdClient::~FakeWilcoDtcSupportdClient() = default;
 void FakeWilcoDtcSupportdClient::Init(dbus::Bus* bus) {}
 
 void FakeWilcoDtcSupportdClient::WaitForServiceToBeAvailable(
-    WaitForServiceToBeAvailableCallback callback) {
+    chromeos::WaitForServiceToBeAvailableCallback callback) {
   if (wait_for_service_to_be_available_result_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   *wait_for_service_to_be_available_result_
                                   /* service_is_available */));
@@ -32,9 +32,9 @@ void FakeWilcoDtcSupportdClient::WaitForServiceToBeAvailable(
 
 void FakeWilcoDtcSupportdClient::BootstrapMojoConnection(
     base::ScopedFD fd,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   if (bootstrap_mojo_connection_result_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback),
                        *bootstrap_mojo_connection_result_ /* result */));
@@ -55,7 +55,7 @@ void FakeWilcoDtcSupportdClient::SetWaitForServiceToBeAvailableResult(
       wait_for_service_to_be_available_result;
   if (!wait_for_service_to_be_available_result_)
     return;
-  std::vector<WaitForServiceToBeAvailableCallback> callbacks;
+  std::vector<chromeos::WaitForServiceToBeAvailableCallback> callbacks;
   callbacks.swap(pending_wait_for_service_to_be_available_callbacks_);
   for (auto& callback : callbacks)
     std::move(callback).Run(*wait_for_service_to_be_available_result_);
@@ -71,7 +71,7 @@ void FakeWilcoDtcSupportdClient::SetBootstrapMojoConnectionResult(
   bootstrap_mojo_connection_result_ = bootstrap_mojo_connection_result;
   if (!bootstrap_mojo_connection_result_)
     return;
-  std::vector<VoidDBusMethodCallback> callbacks;
+  std::vector<chromeos::VoidDBusMethodCallback> callbacks;
   callbacks.swap(pending_bootstrap_mojo_connection_callbacks_);
   for (auto& callback : callbacks)
     std::move(callback).Run(*bootstrap_mojo_connection_result_);

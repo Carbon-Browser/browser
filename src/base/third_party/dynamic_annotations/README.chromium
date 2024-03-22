@@ -2,6 +2,8 @@ Name: dynamic annotations
 URL: http://code.google.com/p/data-race-test/wiki/DynamicAnnotations
 Version: 4384
 License: BSD
+License File: LICENSE
+Shipped: yes
 
 ATTENTION: please avoid using these annotations in Chromium code.
 They were mainly intended to instruct the Valgrind-based version of
@@ -22,3 +24,5 @@ The files are covered under BSD license as described within the files.
 Local modifications:
 * made lineno an unsigned short (for -Wconstant-conversion warning fixes)
 * remove two superfluous semicolons for -Wextra-semi
+* changed various size parameters to a size_t to match the underlying runtime
+  and avoid conflicts with absl's dynamic_annotations.h.

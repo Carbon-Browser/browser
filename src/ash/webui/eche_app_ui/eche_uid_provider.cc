@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <openssl/base64.h>
 #include <cstring>
 
-#include "ash/components/multidevice/logging/logging.h"
 #include "base/check.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "components/prefs/pref_service.h"
 #include "crypto/random.h"
 
@@ -37,7 +37,7 @@ void EcheUidProvider::GetUid(
   if (pref_seed.empty()) {
     GenerateKeyPair(public_key, private_key);
   } else {
-    absl::optional<std::vector<uint8_t>> result =
+    std::optional<std::vector<uint8_t>> result =
         ConvertStringToBinary(pref_seed, kSeedSizeInByte);
     if (!result) {
       PA_LOG(WARNING) << "Invalid encoded string, regenerate the keypair.";
@@ -62,7 +62,7 @@ void EcheUidProvider::GenerateKeyPair(
       ConvertBinaryToString(base::make_span(private_key, kSeedSizeInByte)));
 }
 
-absl::optional<std::vector<uint8_t>> EcheUidProvider::ConvertStringToBinary(
+std::optional<std::vector<uint8_t>> EcheUidProvider::ConvertStringToBinary(
     base::StringPiece str,
     size_t expected_len) {
   std::vector<uint8_t> decoded_data(str.size());
@@ -71,11 +71,11 @@ absl::optional<std::vector<uint8_t>> EcheUidProvider::ConvertStringToBinary(
           decoded_data.data(), &decoded_data_len, decoded_data.size(),
           reinterpret_cast<const uint8_t*>(str.data()), str.size())) {
     PA_LOG(ERROR) << "Attempting to decode string failed.";
-    return absl::nullopt;
+    return std::nullopt;
   }
   if (decoded_data_len != expected_len) {
     PA_LOG(ERROR) << "Expected length is not match.";
-    return absl::nullopt;
+    return std::nullopt;
   }
   decoded_data.resize(decoded_data_len);
   return decoded_data;

@@ -2,6 +2,7 @@ include_rules = [
   "+components/browser_ui/bottomsheet/android",
   "+components/browser_ui/test/android",
   "+components/externalauth/android",
+  "+components/browser_ui/device_lock/android",
 ]
 
 specific_include_rules = {
@@ -9,7 +10,7 @@ specific_include_rules = {
   : [
   "+content/public/android/java/src/org/chromium/content_public/browser/LoadUrlParams.java"
   ],
-  "SigninPromoController.java": [
-  "+chrome/android/features/start_surface/public/java/src/org/chromium/chrome/features/start_surface/StartSurfaceConfiguration.java"
+  "SyncPromoController.java": [
+  "+chrome/android/features/start_surface/java/src/org/chromium/chrome/features/start_surface/StartSurfaceConfiguration.java"
   ],
 }

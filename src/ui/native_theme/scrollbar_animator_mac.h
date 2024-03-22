@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_NATIVE_THEME_SCROLLBAR_ANIMATOR_MAC_H_
 #define UI_NATIVE_THEME_SCROLLBAR_ANIMATOR_MAC_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -128,4 +128,4 @@ class NATIVE_THEME_EXPORT OverlayScrollbarAnimatorMac {
 
 }  // namespace ui
 
-#endif  // UI_NATIVE_THEME_OVERLAY_SCROLLBAR_ANIMATOR_MAC_H_
+#endif  // UI_NATIVE_THEME_SCROLLBAR_ANIMATOR_MAC_H_

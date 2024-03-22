@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class GPUUncapturedErrorEvent : public Event {
   void Trace(Visitor*) const override;
 
   // gpu_uncaptured_error_event.idl
-  const GPUError* error() const;
+  GPUError* error();
 
  private:
   Member<GPUError> error_;

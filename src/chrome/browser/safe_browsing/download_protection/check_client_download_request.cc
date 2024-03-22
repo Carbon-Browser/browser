@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -17,6 +17,7 @@
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/download/download_item_warning_data.h"
 #include "chrome/browser/extensions/api/safe_browsing_private/safe_browsing_private_event_router.h"
 #include "chrome/browser/extensions/api/safe_browsing_private/safe_browsing_private_event_router_factory.h"
 #include "chrome/browser/policy/dm_token_utils.h"
@@ -65,8 +66,10 @@ void MaybeOverrideScanResult(DownloadCheckResultReason reason,
     case DownloadCheckResult::UNKNOWN:
     case DownloadCheckResult::SENSITIVE_CONTENT_WARNING:
     case DownloadCheckResult::DEEP_SCANNED_SAFE:
+    case DownloadCheckResult::DEEP_SCANNED_FAILED:
     case DownloadCheckResult::SAFE:
     case DownloadCheckResult::PROMPT_FOR_SCANNING:
+    case DownloadCheckResult::PROMPT_FOR_LOCAL_PASSWORD_SCANNING:
     case DownloadCheckResult::POTENTIALLY_UNWANTED:
     case DownloadCheckResult::UNCOMMON:
       if (reason == REASON_DOWNLOAD_DANGEROUS)
@@ -87,6 +90,7 @@ void MaybeOverrideScanResult(DownloadCheckResultReason reason,
     // indicate the scan is not done, that the file is blocked for another
     // reason, or that the file is allowed by policy.
     case DownloadCheckResult::ASYNC_SCANNING:
+    case DownloadCheckResult::ASYNC_LOCAL_PASSWORD_SCANNING:
     case DownloadCheckResult::BLOCKED_PASSWORD_PROTECTED:
     case DownloadCheckResult::BLOCKED_TOO_LARGE:
     case DownloadCheckResult::SENSITIVE_CONTENT_BLOCK:
@@ -109,7 +113,8 @@ CheckClientDownloadRequest::CheckClientDownloadRequest(
     CheckDownloadRepeatingCallback callback,
     DownloadProtectionService* service,
     scoped_refptr<SafeBrowsingDatabaseManager> database_manager,
-    scoped_refptr<BinaryFeatureExtractor> binary_feature_extractor)
+    scoped_refptr<BinaryFeatureExtractor> binary_feature_extractor,
+    base::optional_ref<const std::string> password)
     : CheckClientDownloadRequestBase(
           item->GetURL(),
           item->GetTargetFilePath(),
@@ -118,8 +123,10 @@ CheckClientDownloadRequest::CheckClientDownloadRequest(
           service,
           std::move(database_manager),
           DownloadRequestMaker::CreateFromDownloadItem(binary_feature_extractor,
-                                                       item)),
+                                                       item,
+                                                       password)),
       item_(item),
+      password_(password.CopyAsOptional()),
       callback_(callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   item_->AddObserver(this);
@@ -140,12 +147,16 @@ void CheckClientDownloadRequest::OnDownloadUpdated(
           download::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING &&
       (download->GetState() == download::DownloadItem::COMPLETE ||
        download->GetState() == download::DownloadItem::CANCELLED)) {
-    RecordDeepScanMetrics(
-        /*access_point=*/DeepScanAccessPoint::DOWNLOAD,
-        /*duration=*/base::TimeTicks::Now() - upload_start_time_,
-        /*total_size=*/item_->GetTotalBytes(),
-        /*result=*/"BypassedByUser",
-        /*failure=*/true);
+    auto settings = DeepScanningRequest::ShouldUploadBinary(item_);
+    if (settings.has_value()) {
+      RecordDeepScanMetrics(
+          settings->cloud_or_local_settings.is_cloud_analysis(),
+          /*access_point=*/DeepScanAccessPoint::DOWNLOAD,
+          /*duration=*/base::TimeTicks::Now() - upload_start_time_,
+          /*total_size=*/item_->GetTotalBytes(),
+          /*result=*/"BypassedByUser",
+          /*failure=*/true);
+    }
   }
 }
 
@@ -192,6 +203,10 @@ bool CheckClientDownloadRequest::IsSupportedDownload(
   return IsSupportedDownload(*item_, item_->GetTargetFilePath(), reason);
 }
 
+download::DownloadItem* CheckClientDownloadRequest::item() const {
+  return item_;
+}
+
 content::BrowserContext* CheckClientDownloadRequest::GetBrowserContext() const {
   return content::DownloadItemUtils::GetBrowserContext(item_);
 }
@@ -214,10 +229,13 @@ void CheckClientDownloadRequest::NotifySendRequest(
       request->referrer_chain().size());
 }
 
-void CheckClientDownloadRequest::SetDownloadPingToken(
-    const std::string& token) {
+void CheckClientDownloadRequest::SetDownloadProtectionData(
+    const std::string& token,
+    const ClientDownloadResponse::Verdict& verdict,
+    const ClientDownloadResponse::TailoredVerdict& tailored_verdict) {
   DCHECK(!token.empty());
-  DownloadProtectionService::SetDownloadPingToken(item_, token);
+  DownloadProtectionService::SetDownloadProtectionData(item_, token, verdict,
+                                                       tailored_verdict);
 }
 
 void CheckClientDownloadRequest::MaybeStorePingsForDownload(
@@ -227,6 +245,10 @@ void CheckClientDownloadRequest::MaybeStorePingsForDownload(
     const std::string& response_body) {
   DownloadFeedbackService::MaybeStorePingsForDownload(
       result, upload_requested, item_, request_data, response_body);
+}
+
+void CheckClientDownloadRequest::LogDeepScanningPrompt() const {
+  LogDeepScanEvent(item_, DeepScanEvent::kPromptShown);
 }
 
 absl::optional<enterprise_connectors::AnalysisSettings>
@@ -274,11 +296,11 @@ void CheckClientDownloadRequest::UploadBinary(
     service()->UploadForDeepScanning(
         item_, base::BindRepeating(&MaybeOverrideScanResult, reason, callback_),
         DeepScanningRequest::DeepScanTrigger::TRIGGER_POLICY, result,
-        std::move(settings));
+        std::move(settings), /*password=*/absl::nullopt);
   } else {
     service()->UploadForDeepScanning(
         item_, callback_, DeepScanningRequest::DeepScanTrigger::TRIGGER_POLICY,
-        result, std::move(settings));
+        result, std::move(settings), /*password=*/absl::nullopt);
   }
 }
 
@@ -316,13 +338,68 @@ bool CheckClientDownloadRequest::ShouldPromptForDeepScanning(
     return false;
 
   Profile* profile = Profile::FromBrowserContext(GetBrowserContext());
-  if (profile && IsEnhancedProtectionEnabled(*profile->GetPrefs()))
-    return true;
+  if (!profile) {
+    return false;
+  }
 
-  if (IsUnderAdvancedProtection(profile))
+  if (!AreDeepScansAllowedByPolicy(*profile->GetPrefs())) {
+    return false;
+  }
+
+  if (IsUnderAdvancedProtection(profile) ||
+      IsEnhancedProtectionEnabled(*profile->GetPrefs())) {
     return true;
+  }
 
   return false;
+}
+
+bool CheckClientDownloadRequest::ShouldPromptForLocalDecryption(
+    bool server_requests_prompt) const {
+  if (!server_requests_prompt) {
+    return false;
+  }
+
+  if (!DownloadItemWarningData::IsEncryptedArchive(item_)) {
+    return false;
+  }
+
+  Profile* profile = Profile::FromBrowserContext(GetBrowserContext());
+  if (!profile) {
+    return false;
+  }
+
+  // While this isn't a "deep" scan, enterprise customers may have similar
+  // reactions to it, so we use the same policy to control it.
+  if (!AreDeepScansAllowedByPolicy(*profile->GetPrefs())) {
+    return false;
+  }
+
+  if (GetSafeBrowsingState(*profile->GetPrefs()) !=
+      SafeBrowsingState::STANDARD_PROTECTION) {
+    return false;
+  }
+
+  // Too large archive extraction would fail immediately, so don't prompt in
+  // this case.
+  if (static_cast<size_t>(item_->GetTotalBytes()) >=
+      FileTypePolicies::GetInstance()->GetMaxFileSizeToAnalyze(
+          item_->GetTargetFilePath())) {
+    return false;
+  }
+
+  return base::FeatureList::IsEnabled(kEncryptedArchivesMetadata);
+}
+
+bool CheckClientDownloadRequest::ShouldPromptForIncorrectPassword() const {
+  return password_.has_value() &&
+         DownloadItemWarningData::HasShownLocalDecryptionPrompt(item_) &&
+         DownloadItemWarningData::HasIncorrectPassword(item_);
+}
+
+bool CheckClientDownloadRequest::ShouldShowScanFailure() const {
+  return DownloadItemWarningData::HasShownLocalDecryptionPrompt(item_) &&
+         !DownloadItemWarningData::IsFullyExtractedArchive(item_);
 }
 
 bool CheckClientDownloadRequest::IsAllowlistedByPolicy() const {

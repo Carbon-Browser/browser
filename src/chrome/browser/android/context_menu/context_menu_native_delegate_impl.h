@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,8 +57,10 @@ class ContextMenuNativeDelegateImpl {
           chrome_render_frame_ptr,
       const base::android::JavaRef<jobject>& jcallback,
       const std::vector<uint8_t>& thumbnail_data,
-      const gfx::Size& max_dimen_px,
-      const std::string& image_extension)>;
+      const gfx::Size& original_size,
+      const gfx::Size& downscaled_size,
+      const std::string& image_extension,
+      const std::vector<lens::mojom::LatencyLogPtr>)>;
 
  private:
   void RetrieveImageInternal(

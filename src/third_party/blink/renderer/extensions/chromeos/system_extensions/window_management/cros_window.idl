@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // WindowState reflects which of the mutually exclusive states of maximized,
 // minimized, or fullscreen that the CrosWindow is in.
-enum WindowState {
+enum CrosWindowState {
   "normal",     // The window is at the default size or user-selected size.
   "fullscreen", // The window is running as a full screen application.
   "maximized",  // The window fills the screen on which it is displayed not
@@ -29,7 +29,7 @@ interface CrosWindow {
 
   readonly attribute DOMString title;
   readonly attribute DOMString appId;
-  readonly attribute WindowState windowState;
+  readonly attribute CrosWindowState windowState;
   readonly attribute boolean isFocused;
   readonly attribute CrosWindowVisibilityState visibilityState;
 
@@ -74,6 +74,11 @@ interface CrosWindow {
   // Sets window state to minimized. Promise resolves when window starts
   // minimizing. Promise rejects with an error if the window can't be minimized.
   [CallWith=ScriptState] Promise<void> minimize();
+
+  // Sets the window state from the current state to `normal`. As an example, if
+  // the current state is minimized, `restore()` will change the window's state
+  // to `normal`. If the state is already `kNormal` the state won't change.
+  [CallWith=ScriptState] Promise<void> restore();
 
   // Allocates focus to the CrosWindow identified by id and brings to front.
   [CallWith=ScriptState] Promise<void> focus();

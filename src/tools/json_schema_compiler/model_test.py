@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -260,6 +260,14 @@ class ModelTest(unittest.TestCase):
     self.assertTrue(self.nodoc.nodoc, 'Namespace should also be marked nodoc')
     nodoc_ValidType = self.nodoc.types['ValidType']
     self.assertFalse(nodoc_ValidType.nodoc)
+
+  def testInvalidNamespacePlatform(self):
+    invalid_namespace_platform = CachedLoad('test/invalid_empty_enum_key.json')
+    with self.assertRaises(ValueError) as context:
+      self.model.AddNamespace(invalid_namespace_platform[0],
+                              'path/to/invalid_empty_enum_key.json')
+    self.assertIn('Enum value cannot be an empty string',
+                  str(context.exception))
 
 if __name__ == '__main__':
   unittest.main()

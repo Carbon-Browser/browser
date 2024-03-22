@@ -1,14 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_CROSTINI_CROSTINI_FORCE_CLOSE_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_CROSTINI_CROSTINI_FORCE_CLOSE_VIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/base/metadata/metadata_header_macros.h"
-#include "ui/base/ui_base_types.h"
-#include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 
@@ -17,6 +15,18 @@
 namespace views {
 class Widget;
 }
+
+namespace crostini {
+
+// Shows the Crostini force-close dialog. If |app_name| is nonempty, the dialog
+// will include the window's name as text. Returns a handle to that dialog, so
+// that we can add observers to the dialog itself.
+views::Widget* ShowCrostiniForceCloseDialog(
+    const std::string& app_name,
+    views::Widget* closable_widget,
+    base::OnceClosure force_close_callback);
+
+}  // namespace crostini
 
 // Displays a dialog that allows the user to force close an associated widget
 // via CloseNow().

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,8 @@ DummyTextInputClient::DummyTextInputClient(TextInputType text_input_type,
                                            TextInputMode text_input_mode)
     : text_input_type_(text_input_type),
       text_input_mode_(text_input_mode),
-      insert_char_count_(0) {}
+      insert_char_count_(0),
+      autocorrect_enabled_(true) {}
 
 DummyTextInputClient::~DummyTextInputClient() {
 }
@@ -33,8 +34,8 @@ void DummyTextInputClient::SetCompositionText(
   composition_history_.push_back(composition);
 }
 
-uint32_t DummyTextInputClient::ConfirmCompositionText(bool keep_selection) {
-  return UINT32_MAX;
+size_t DummyTextInputClient::ConfirmCompositionText(bool keep_selection) {
+  return std::numeric_limits<size_t>::max();
 }
 
 void DummyTextInputClient::ClearCompositionText() {
@@ -82,7 +83,7 @@ gfx::Rect DummyTextInputClient::GetSelectionBoundingBox() const {
 }
 
 bool DummyTextInputClient::GetCompositionCharacterBounds(
-    uint32_t index,
+    size_t index,
     gfx::Rect* rect) const {
   return false;
 }
@@ -176,8 +177,10 @@ gfx::Rect DummyTextInputClient::GetAutocorrectCharacterBounds() const {
 
 bool DummyTextInputClient::SetAutocorrectRange(
     const gfx::Range& range) {
-  autocorrect_range_ = range;
-  return true;
+  if (autocorrect_enabled_) {
+    autocorrect_range_ = range;
+  }
+  return autocorrect_enabled_;
 }
 
 absl::optional<GrammarFragment>

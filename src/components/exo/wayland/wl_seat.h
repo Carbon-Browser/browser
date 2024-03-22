@@ -1,13 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_EXO_WAYLAND_WL_SEAT_H_
 #define COMPONENTS_EXO_WAYLAND_WL_SEAT_H_
 
+#include <wayland-server-protocol-core.h>
+
 #include <stdint.h>
 
-struct wl_client;
+#include "base/memory/raw_ptr.h"
 
 namespace exo {
 class Seat;
@@ -15,7 +17,7 @@ class Seat;
 namespace wayland {
 class SerialTracker;
 
-constexpr uint32_t kWlSeatVersion = 6;
+constexpr uint32_t kWlSeatVersion = WL_TOUCH_SHAPE_SINCE_VERSION;
 
 struct WaylandSeat {
   WaylandSeat(Seat* seat, SerialTracker* serial_tracker)
@@ -24,10 +26,10 @@ struct WaylandSeat {
   WaylandSeat& operator=(const WaylandSeat&) = delete;
 
   // Owned by Display, which always outlives wl_seat.
-  Seat* const seat;
+  const raw_ptr<Seat, ExperimentalAsh> seat;
 
   // Owned by Server, which always outlives wl_seat.
-  SerialTracker* const serial_tracker;
+  const raw_ptr<SerialTracker, ExperimentalAsh> serial_tracker;
 };
 
 void bind_seat(wl_client* client, void* data, uint32_t version, uint32_t id);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,15 +45,15 @@ class ImageListPropertyFunctions {
   }
 
   static void SetImageList(const CSSProperty& property,
-                           ComputedStyle& style,
+                           ComputedStyleBuilder& builder,
                            const StyleImageList* image_list) {
     FillLayer* fill_layer = nullptr;
     switch (property.PropertyID()) {
       case CSSPropertyID::kBackgroundImage:
-        fill_layer = &style.AccessBackgroundLayers();
+        fill_layer = &builder.AccessBackgroundLayers();
         break;
       case CSSPropertyID::kWebkitMaskImage:
-        fill_layer = &style.AccessMaskLayers();
+        fill_layer = &builder.AccessMaskLayers();
         break;
       default:
         NOTREACHED();

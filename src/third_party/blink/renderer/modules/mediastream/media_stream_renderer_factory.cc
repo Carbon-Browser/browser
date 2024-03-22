@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -58,7 +60,7 @@ scoped_refptr<WebMediaStreamVideoRenderer>
 MediaStreamRendererFactory::GetVideoRenderer(
     const WebMediaStream& web_stream,
     const WebMediaStreamVideoRenderer::RepaintCB& repaint_cb,
-    scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+    scoped_refptr<base::SequencedTaskRunner> video_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> main_render_task_runner) {
   DCHECK(!web_stream.IsNull());
 
@@ -67,14 +69,14 @@ MediaStreamRendererFactory::GetVideoRenderer(
 
   MediaStreamDescriptor& descriptor = *web_stream;
   auto video_components = descriptor.VideoComponents();
-  if (video_components.IsEmpty() ||
+  if (video_components.empty() ||
       !MediaStreamVideoTrack::GetTrack(
           WebMediaStreamTrack(video_components[0].Get()))) {
     return nullptr;
   }
 
   return new MediaStreamVideoRendererSink(video_components[0].Get(), repaint_cb,
-                                          std::move(io_task_runner),
+                                          std::move(video_task_runner),
                                           std::move(main_render_task_runner));
 }
 
@@ -91,13 +93,13 @@ MediaStreamRendererFactory::GetAudioRenderer(
 
   MediaStreamDescriptor& descriptor = *web_stream;
   auto audio_components = descriptor.AudioComponents();
-  if (audio_components.IsEmpty()) {
+  if (audio_components.empty()) {
     // The stream contains no audio tracks. Log error message if the stream
     // contains no video tracks either. Without this extra check, video-only
     // streams would generate error messages at this stage and we want to
     // avoid that.
     auto video_tracks = descriptor.VideoComponents();
-    if (video_tracks.IsEmpty()) {
+    if (video_tracks.empty()) {
       SendLogMessage(String::Format(
           "%s => (ERROR: no audio tracks in media stream)", __func__));
     }
@@ -134,7 +136,6 @@ MediaStreamRendererFactory::GetAudioRenderer(
         audio_track->is_local_track() ? "local" : "remote"));
 
     return new TrackAudioRenderer(audio_components[0].Get(), *frame,
-                                  /*session_id=*/base::UnguessableToken(),
                                   String(device_id),
                                   std::move(on_render_error_callback));
   }
@@ -172,7 +173,7 @@ MediaStreamRendererFactory::GetAudioRenderer(
     renderer = new WebRtcAudioRenderer(
         PeerConnectionDependencyFactory::From(*frame->DomWindow())
             .GetWebRtcSignalingTaskRunner(),
-        web_stream, web_frame,
+        web_stream, *web_frame,
 
         GetSessionIdForWebRtcAudioRenderer(*frame->DomWindow()),
         String(device_id), std::move(on_render_error_callback));

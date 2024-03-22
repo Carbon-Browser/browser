@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -121,6 +121,7 @@ TEST_F(GraphAndPerformanceManagerRegisteredTest, GraphAndPMRegistered) {
   // Create a stand-alone graph that is bound to this sequence so we can test
   // both the PM and a graph on the same sequence.
   std::unique_ptr<GraphImpl> graph(new GraphImpl());
+  graph->SetUp();
 
   PerformanceManagerRegistryImpl* registry =
       PerformanceManagerRegistryImpl::GetInstance();

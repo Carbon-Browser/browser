@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,23 +9,21 @@
 
 #include "components/keyed_service/core/keyed_service.h"
 #include "ios/chrome/browser/discover_feed/discover_feed_observer.h"
+#include "ios/chrome/browser/discover_feed/discover_feed_refresher.h"
 #include "ios/chrome/browser/discover_feed/discover_feed_view_controller_configuration.h"
 #include "ios/chrome/browser/discover_feed/feed_constants.h"
 #include "ios/chrome/browser/discover_feed/feed_model_configuration.h"
-#import "ios/chrome/browser/procedural_block_types.h"
 
 @class FeedMetricsRecorder;
 
 // A browser-context keyed service that is used to keep the Discover Feed data
 // up to date.
-class DiscoverFeedService : public KeyedService {
+class DiscoverFeedService : public DiscoverFeedRefresher, public KeyedService {
  public:
   DiscoverFeedService();
   ~DiscoverFeedService() override;
 
   // Creates models for all enabled feed types.
-  // TODO(crbug.com/1277974): Remove this in favor of initializing feed models
-  // separately.
   virtual void CreateFeedModels() = 0;
 
   // Creates a single feed model based on the given model configuration.
@@ -54,41 +52,22 @@ class DiscoverFeedService : public KeyedService {
   virtual UIViewController* NewFollowingFeedViewControllerWithConfiguration(
       DiscoverFeedViewControllerConfiguration* configuration) = 0;
 
-  // Removes the Discover |feed_view_controller|. It should be called whenever
-  // |feed_view_controller| will no longer be used.
+  // Removes the Discover `feed_view_controller`. It should be called whenever
+  // `feed_view_controller` will no longer be used.
   virtual void RemoveFeedViewController(
       UIViewController* feed_view_controller) = 0;
 
   // Updates the feed's theme to match the user's theme (light/dark).
   virtual void UpdateTheme() = 0;
 
-  // Refreshes the Discover Feed if needed. The provider decides if a refresh is
-  // needed or not.
-  virtual void RefreshFeedIfNeeded() = 0;
-
-  // Refreshes the Discover Feed. Once the Feed model is refreshed it will
-  // update all ViewControllers returned by NewFeedViewController.
-  virtual void RefreshFeed() = 0;
-
-  // Performs a background refresh for the feed. `completion` is called
-  // after success, failure, or timeout. The BOOL argument indicates whether the
-  // refresh was successful or a failure.
-  virtual void PerformBackgroundRefreshes(
-      ProceduralBlockWithBool completion) = 0;
-
-  // Stops the background refresh task and cleans up any temporary objects. This
-  // is called by the OS when the task is taking too long.
-  virtual void HandleBackgroundRefreshTaskExpiration() = 0;
-
-  // The earliest datetime at which the next background refresh should be
-  // scheduled.
-  virtual NSDate* GetEarliestBackgroundRefreshBeginDate() = 0;
-
   // Returns whether the Following feed model has unseen content.
   virtual BOOL GetFollowingFeedHasUnseenContent() = 0;
 
   // Informs the service that the Following content has been seen.
   virtual void SetFollowingFeedContentSeen() = 0;
+
+  // Informs the service that Browsing History data was cleread by the user.
+  virtual void BrowsingHistoryCleared();
 
   // Methods to register or remove observers.
   void AddObserver(DiscoverFeedObserver* observer);

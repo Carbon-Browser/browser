@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/values.h"
@@ -48,12 +48,12 @@ class PrinterHandler {
       base::OnceCallback<void(base::Value::Dict capability)>;
   using PrintCallback = base::OnceCallback<void(const base::Value& error)>;
   using GetPrinterInfoCallback =
-      base::OnceCallback<void(const base::DictionaryValue& printer_info)>;
+      base::OnceCallback<void(const base::Value::Dict& printer_info)>;
 #if BUILDFLAG(IS_CHROMEOS)
   using GetEulaUrlCallback =
       base::OnceCallback<void(const std::string& license)>;
-  using PrinterStatusRequestCallback =
-      base::OnceCallback<void(const base::Value& cups_printer_status)>;
+  using PrinterStatusRequestCallback = base::OnceCallback<void(
+      absl::optional<base::Value::Dict> cups_printer_status)>;
 #endif
 
   // Creates an instance of a PrinterHandler for extension printers.

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,9 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/work_area_insets.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/display/scoped_display_for_new_windows.h"
 #include "ui/gfx/geometry/insets.h"
@@ -88,7 +89,7 @@ class PipPositionerDisplayTest : public AshTestBase,
 
  private:
   std::unique_ptr<display::ScopedDisplayForNewWindows> scoped_display_;
-  aura::Window* root_window_;
+  raw_ptr<aura::Window, DanglingUntriaged | ExperimentalAsh> root_window_;
 };
 
 TEST_P(PipPositionerDisplayTest, PipAdjustPositionForDragClampsToMovementArea) {
@@ -99,24 +100,26 @@ TEST_P(PipPositionerDisplayTest, PipAdjustPositionForDragClampsToMovementArea) {
   // Adjust near top edge outside movement area.
   EXPECT_EQ(ConvertToScreen(gfx::Rect(100, 8, 100, 100)),
             PipPositioner::GetBoundsForDrag(
-                display, ConvertToScreen(gfx::Rect(100, -50, 100, 100))));
+                display, ConvertToScreen(gfx::Rect(100, -50, 100, 100)),
+                gfx::Transform()));
 
   // Adjust near bottom edge outside movement area.
-  EXPECT_EQ(
-      ConvertToScreen(gfx::Rect(100, bottom - 108, 100, 100)),
-      PipPositioner::GetBoundsForDrag(
-          display, ConvertToScreen(gfx::Rect(100, bottom + 50, 100, 100))));
+  EXPECT_EQ(ConvertToScreen(gfx::Rect(100, bottom - 108, 100, 100)),
+            PipPositioner::GetBoundsForDrag(
+                display, ConvertToScreen(gfx::Rect(100, bottom + 50, 100, 100)),
+                gfx::Transform()));
 
   // Adjust near left edge outside movement area.
   EXPECT_EQ(ConvertToScreen(gfx::Rect(8, 100, 100, 100)),
             PipPositioner::GetBoundsForDrag(
-                display, ConvertToScreen(gfx::Rect(-50, 100, 100, 100))));
+                display, ConvertToScreen(gfx::Rect(-50, 100, 100, 100)),
+                gfx::Transform()));
 
   // Adjust near right edge outside movement area.
-  EXPECT_EQ(
-      ConvertToScreen(gfx::Rect(right - 108, 100, 100, 100)),
-      PipPositioner::GetBoundsForDrag(
-          display, ConvertToScreen(gfx::Rect(right + 50, 100, 100, 100))));
+  EXPECT_EQ(ConvertToScreen(gfx::Rect(right - 108, 100, 100, 100)),
+            PipPositioner::GetBoundsForDrag(
+                display, ConvertToScreen(gfx::Rect(right + 50, 100, 100, 100)),
+                gfx::Transform()));
 }
 
 TEST_P(PipPositionerDisplayTest,

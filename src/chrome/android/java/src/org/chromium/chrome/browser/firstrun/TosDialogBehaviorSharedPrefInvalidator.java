@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,8 +44,12 @@ public class TosDialogBehaviorSharedPrefInvalidator {
                 FirstRunAppRestrictionInfo.takeMaybeInitialized();
         OneshotSupplierImpl<PolicyService> policyServiceSupplier = new OneshotSupplierImpl<>();
         policyServiceSupplier.set(PolicyServiceFactory.getGlobalPolicyService());
-        SkipTosDialogPolicyListener policyListener = new SkipTosDialogPolicyListener(
-                appRestrictionInfo, policyServiceSupplier, EnterpriseInfo.getInstance(), null);
+        SkipTosDialogPolicyListener policyListener =
+                new SkipTosDialogPolicyListener(
+                        appRestrictionInfo,
+                        policyServiceSupplier,
+                        EnterpriseInfo.getInstance(),
+                        null);
 
         new TosDialogBehaviorSharedPrefInvalidator(policyListener, appRestrictionInfo);
     }

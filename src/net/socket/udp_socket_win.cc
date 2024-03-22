@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -249,6 +249,16 @@ UDPSocketWin::UDPSocketWin(DatagramSocket::BindType bind_type,
   net_log_.BeginEventReferencingSource(NetLogEventType::SOCKET_ALIVE, source);
 }
 
+UDPSocketWin::UDPSocketWin(DatagramSocket::BindType bind_type,
+                           NetLogWithSource source_net_log)
+    : socket_(INVALID_SOCKET),
+      socket_options_(SOCKET_OPTION_MULTICAST_LOOP),
+      net_log_(source_net_log) {
+  EnsureWinsockInit();
+  net_log_.BeginEventReferencingSource(NetLogEventType::SOCKET_ALIVE,
+                                       net_log_.source());
+}
+
 UDPSocketWin::~UDPSocketWin() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   Close();
@@ -263,19 +273,40 @@ int UDPSocketWin::Open(AddressFamily address_family) {
   if (owned_socket_count.empty())
     return ERR_INSUFFICIENT_RESOURCES;
 
+  owned_socket_count_ = std::move(owned_socket_count);
   addr_family_ = ConvertAddressFamily(address_family);
   socket_ = CreatePlatformSocket(addr_family_, SOCK_DGRAM, IPPROTO_UDP);
-  if (socket_ == INVALID_SOCKET)
+  if (socket_ == INVALID_SOCKET) {
+    owned_socket_count_.Reset();
     return MapSystemError(WSAGetLastError());
+  }
+  ConfigureOpenedSocket();
+  return OK;
+}
+
+int UDPSocketWin::AdoptOpenedSocket(AddressFamily address_family,
+                                    SOCKET socket) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  auto owned_socket_count = TryAcquireGlobalUDPSocketCount();
+  if (owned_socket_count.empty()) {
+    return ERR_INSUFFICIENT_RESOURCES;
+  }
+
+  owned_socket_count_ = std::move(owned_socket_count);
+  addr_family_ = ConvertAddressFamily(address_family);
+  socket_ = socket;
+  ConfigureOpenedSocket();
+  return OK;
+}
+
+void UDPSocketWin::ConfigureOpenedSocket() {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (!use_non_blocking_io_) {
     core_ = base::MakeRefCounted<Core>(this);
   } else {
     read_write_event_.Set(WSACreateEvent());
     WSAEventSelect(socket_, read_write_event_.Get(), FD_READ | FD_WRITE);
   }
-
-  owned_socket_count_ = std::move(owned_socket_count);
-  return OK;
 }
 
 void UDPSocketWin::Close() {
@@ -356,8 +387,8 @@ int UDPSocketWin::GetLocalAddress(IPEndPoint* address) const {
       return ERR_ADDRESS_INVALID;
     local_address_ = std::move(local_address);
     net_log_.AddEvent(NetLogEventType::UDP_LOCAL_ADDRESS, [&] {
-      return CreateNetLogUDPConnectParams(
-          *local_address_, NetworkChangeNotifier::kInvalidNetworkHandle);
+      return CreateNetLogUDPConnectParams(*local_address_,
+                                          handles::kInvalidNetworkHandle);
     });
   }
 
@@ -440,8 +471,8 @@ int UDPSocketWin::SendToOrWrite(IOBuffer* buf,
 int UDPSocketWin::Connect(const IPEndPoint& address) {
   DCHECK_NE(socket_, INVALID_SOCKET);
   net_log_.BeginEvent(NetLogEventType::UDP_CONNECT, [&] {
-    return CreateNetLogUDPConnectParams(
-        address, NetworkChangeNotifier::kInvalidNetworkHandle);
+    return CreateNetLogUDPConnectParams(address,
+                                        handles::kInvalidNetworkHandle);
   });
   int rv = SetMulticastOptions();
   if (rv != OK)
@@ -457,11 +488,8 @@ int UDPSocketWin::InternalConnect(const IPEndPoint& address) {
   DCHECK(!remote_address_.get());
 
   // Always do a random bind.
-  //
   // Ignore failures, which may happen if the socket was already bound.
-  // Microsoft's documentation claims this is a uint16, but experimentally, this
-  // fails if passed a 16-bit value.
-  std::uint32_t randomize_port_value = 1;
+  DWORD randomize_port_value = 1;
   setsockopt(socket_, SOL_SOCKET, SO_RANDOMIZE_PORT,
              reinterpret_cast<const char*>(&randomize_port_value),
              sizeof(randomize_port_value));
@@ -499,7 +527,7 @@ int UDPSocketWin::Bind(const IPEndPoint& address) {
   return rv;
 }
 
-int UDPSocketWin::BindToNetwork(NetworkChangeNotifier::NetworkHandle network) {
+int UDPSocketWin::BindToNetwork(handles::NetworkHandle network) {
   NOTIMPLEMENTED();
   return ERR_NOT_IMPLEMENTED;
 }
@@ -558,6 +586,23 @@ int UDPSocketWin::SetDoNotFragment() {
   DWORD val = 1;
   int rv = setsockopt(socket_, IPPROTO_IP, IP_DONTFRAGMENT,
                       reinterpret_cast<const char*>(&val), sizeof(val));
+  return rv == 0 ? OK : MapSystemError(WSAGetLastError());
+}
+
+int UDPSocketWin::SetRecvEcn() {
+  DCHECK_NE(socket_, INVALID_SOCKET);
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  int rv;
+  unsigned int ecn = 1;
+  if (addr_family_ == AF_INET6) {
+    rv = setsockopt(socket_, IPPROTO_IPV6, IPV6_RECVTCLASS,
+                    reinterpret_cast<const char*>(&ecn), sizeof(ecn));
+  } else {
+    DCHECK_EQ(addr_family_, AF_INET);
+    rv = setsockopt(socket_, IPPROTO_IP, IP_RECVTOS,
+                    reinterpret_cast<const char*>(&ecn), sizeof(ecn));
+  }
   return rv == 0 ? OK : MapSystemError(WSAGetLastError());
 }
 
@@ -1167,6 +1212,14 @@ int UDPSocketWin::SetDiffServCodePoint(DiffServCodePoint dscp) {
   return OK;
 }
 
+int UDPSocketWin::SetIPv6Only(bool ipv6_only) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  if (is_connected()) {
+    return ERR_SOCKET_IS_CONNECTED;
+  }
+  return net::SetIPv6Only(socket_, ipv6_only);
+}
+
 void UDPSocketWin::DetachFromThread() {
   DETACH_FROM_THREAD(thread_checker_);
 }
@@ -1182,37 +1235,6 @@ void UDPSocketWin::ApplySocketTag(const SocketTag& tag) {
   CHECK(tag == SocketTag());
 }
 
-void UDPSocketWin::SetWriteAsyncEnabled(bool enabled) {}
-bool UDPSocketWin::WriteAsyncEnabled() {
-  return false;
-}
-void UDPSocketWin::SetMaxPacketSize(size_t max_packet_size) {}
-void UDPSocketWin::SetWriteMultiCoreEnabled(bool enabled) {}
-void UDPSocketWin::SetSendmmsgEnabled(bool enabled) {}
-void UDPSocketWin::SetWriteBatchingActive(bool active) {}
-
-int UDPSocketWin::WriteAsync(
-    DatagramBuffers buffers,
-    CompletionOnceCallback callback,
-    const NetworkTrafficAnnotationTag& traffic_annotation) {
-  NOTIMPLEMENTED();
-  return ERR_NOT_IMPLEMENTED;
-}
-
-int UDPSocketWin::WriteAsync(
-    const char* buffer,
-    size_t buf_len,
-    CompletionOnceCallback callback,
-    const NetworkTrafficAnnotationTag& traffic_annotation) {
-  NOTIMPLEMENTED();
-  return ERR_NOT_IMPLEMENTED;
-}
-
-DatagramBuffers UDPSocketWin::GetUnwrittenBuffers() {
-  DatagramBuffers result;
-  NOTIMPLEMENTED();
-  return result;
-}
 DscpManager::DscpManager(QwaveApi* api, SOCKET socket)
     : api_(api), socket_(socket) {
   RequestHandle();

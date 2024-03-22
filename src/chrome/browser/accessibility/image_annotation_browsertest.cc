@@ -1,13 +1,13 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <map>
 
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/test/scoped_feature_list.h"
@@ -40,6 +40,7 @@
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_enum_util.h"
 #include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_tree.h"
 #include "url/gurl.h"
 
@@ -231,10 +232,9 @@ class ImageAnnotationBrowserTest : public InProcessBrowserTest {
  protected:
   void SetUp() override {
     scoped_feature_list_.InitWithFeatures(
-        std::vector<base::Feature>{
-            features::kEnableAccessibilityExposeHTMLElement,
-            features::kAugmentExistingImageLabels},
-        std::vector<base::Feature>{});
+        {features::kEnableAccessibilityExposeHTMLElement,
+         features::kAugmentExistingImageLabels},
+        {});
     InProcessBrowserTest::SetUp();
   }
 
@@ -538,8 +538,14 @@ IN_PROC_BROWSER_TEST_F(ImageAnnotationBrowserTest,
       "Appears to say: red.png Annotation. Appears to be: red.png 'fr' Label");
 }
 
+// TODO(crbug.com/1476383): Fix flakiness on ChromeOS
+#if BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_DoesntAnnotateInternalPages DISABLED_DoesntAnnotateInternalPages
+#else
+#define MAYBE_DoesntAnnotateInternalPages DoesntAnnotateInternalPages
+#endif
 IN_PROC_BROWSER_TEST_F(ImageAnnotationBrowserTest,
-                       DoesntAnnotateInternalPages) {
+                       MAYBE_DoesntAnnotateInternalPages) {
   FakeAnnotator::SetReturnLabelResults(true);
   ASSERT_TRUE(
       ui_test_utils::NavigateToURL(browser(), GURL("chrome://version")));
@@ -559,7 +565,7 @@ IN_PROC_BROWSER_TEST_F(ImageAnnotationBrowserTest,
       "\";"
       "var outer = document.getElementById('outer');"
       "outer.insertBefore(image, outer.childNodes[0]);";
-  EXPECT_TRUE(content::ExecuteScript(web_contents, javascript));
+  EXPECT_TRUE(content::ExecJs(web_contents, javascript));
 
   ui::AXTreeUpdate snapshot =
       content::GetAccessibilityTreeSnapshot(web_contents);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,28 +39,20 @@ import org.chromium.chrome.browser.browserservices.ui.controller.CurrentPageVeri
 import org.chromium.chrome.browser.browserservices.ui.controller.CurrentPageVerifier.VerificationStatus;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 
-/**
- * Tests for {@link TrustedWebActivityDisclosureController}.
- */
+/** Tests for {@link TrustedWebActivityDisclosureController}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class TrustedWebActivityDisclosureControllerTest {
     private static final String CLIENT_PACKAGE = "com.example.twaclient";
     private static final String SCOPE = "https://www.example.com";
 
-    @Mock
-    public BrowserServicesStore mStore;
-    @Mock
-    public ActivityLifecycleDispatcher mLifecycleDispatcher;
-    @Mock
-    public CurrentPageVerifier mCurrentPageVerifier;
-    @Mock
-    public TrustedWebActivityUmaRecorder mRecorder;
-    @Mock
-    public ClientPackageNameProvider mClientPackageNameProvider;
+    @Mock public BrowserServicesStore mStore;
+    @Mock public ActivityLifecycleDispatcher mLifecycleDispatcher;
+    @Mock public CurrentPageVerifier mCurrentPageVerifier;
+    @Mock public TrustedWebActivityUmaRecorder mRecorder;
+    @Mock public ClientPackageNameProvider mClientPackageNameProvider;
 
-    @Captor
-    public ArgumentCaptor<Runnable> mVerificationObserverCaptor;
+    @Captor public ArgumentCaptor<Runnable> mVerificationObserverCaptor;
 
     public TrustedWebActivityModel mModel = new TrustedWebActivityModel();
     private TrustedWebActivityDisclosureController mController;
@@ -75,8 +67,14 @@ public class TrustedWebActivityDisclosureControllerTest {
                 .addVerificationObserver(mVerificationObserverCaptor.capture());
         doReturn(false).when(mStore).hasUserAcceptedTwaDisclosureForPackage(anyString());
 
-        mController = new TrustedWebActivityDisclosureController(mStore, mModel,
-                mLifecycleDispatcher, mCurrentPageVerifier, mRecorder, mClientPackageNameProvider);
+        mController =
+                new TrustedWebActivityDisclosureController(
+                        mStore,
+                        mModel,
+                        mLifecycleDispatcher,
+                        mCurrentPageVerifier,
+                        mRecorder,
+                        mClientPackageNameProvider);
     }
 
     @Test
@@ -169,11 +167,11 @@ public class TrustedWebActivityDisclosureControllerTest {
     }
 
     private void enterVerifiedOrigin() {
-        setVerificationState(new VerificationState(SCOPE, VerificationStatus.SUCCESS));
+        setVerificationState(new VerificationState(SCOPE, SCOPE, VerificationStatus.SUCCESS));
     }
 
     private void exitVerifiedOrigin() {
-        setVerificationState(new VerificationState(SCOPE, VerificationStatus.FAILURE));
+        setVerificationState(new VerificationState(SCOPE, SCOPE, VerificationStatus.FAILURE));
     }
 
     private void setVerificationState(VerificationState state) {

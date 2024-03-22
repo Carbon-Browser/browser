@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,8 @@ TEST(DocumentPaintDefinitionTest, NativeInvalidationProperties) {
 TEST(DocumentPaintDefinitionTest, CustomInvalidationProperties) {
   Vector<CSSPropertyID> native_invalidation_properties;
   Vector<AtomicString> custom_invalidation_properties = {
-      "--my-property",
-      "--another-property",
+      AtomicString("--my-property"),
+      AtomicString("--another-property"),
   };
   Vector<CSSSyntaxDefinition> input_argument_types;
 

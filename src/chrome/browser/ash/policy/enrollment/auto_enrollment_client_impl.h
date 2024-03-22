@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,28 +9,27 @@
 #include <string>
 
 #include "base/memory/scoped_refptr.h"
-#include "base/scoped_observation.h"
 #include "chrome/browser/ash/policy/enrollment/auto_enrollment_client.h"
-#include "services/network/public/cpp/network_connection_tracker.h"
 
 class PrefRegistrySimple;
 class PrefService;
 
 namespace network {
 class SharedURLLoaderFactory;
-}
+}  // namespace network
+
+namespace policy::psm {
+class RlweDmserverClient;
+}  // namespace policy::psm
 
 namespace policy {
 
 class DeviceManagementService;
-class PsmRlweDmserverClient;
 
 // Interacts with the device management service and determines whether this
 // machine should automatically enter the Enterprise Enrollment screen during
 // OOBE.
-class AutoEnrollmentClientImpl final
-    : public AutoEnrollmentClient,
-      public network::NetworkConnectionTracker::NetworkConnectionObserver {
+class AutoEnrollmentClientImpl final : public AutoEnrollmentClient {
  public:
   class FactoryImpl : public Factory {
    public:
@@ -57,9 +56,7 @@ class AutoEnrollmentClientImpl final
         scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
         const std::string& device_serial_number,
         const std::string& device_brand_code,
-        int power_initial,
-        int power_limit,
-        std::unique_ptr<PsmRlweDmserverClient> psm_rlwe_dmserver_client)
+        std::unique_ptr<psm::RlweDmserverClient> psm_rlwe_dmserver_client)
         override;
   };
 
@@ -74,9 +71,6 @@ class AutoEnrollmentClientImpl final
   // policy::AutoEnrollmentClient:
   void Start() override;
   void Retry() override;
-
-  // network::NetworkConnectionTracker::NetworkConnectionObserver:
-  void OnConnectionChanged(network::mojom::ConnectionType type) override;
 
  private:
   // Base class to handle server state availability requests.
@@ -182,13 +176,6 @@ class AutoEnrollmentClientImpl final
 
   State state_ = State::kIdle;
 
-  base::ScopedObservation<
-      network::NetworkConnectionTracker,
-      network::NetworkConnectionTracker::NetworkConnectionObserver,
-      &network::NetworkConnectionTracker::AddNetworkConnectionObserver,
-      &network::NetworkConnectionTracker::RemoveNetworkConnectionObserver>
-      network_connection_observer_{this};
-
   // Callback to invoke when the protocol generates a relevant event. This can
   // be either successful completion or an error that requires external action.
   ProgressCallback progress_callback_;
@@ -196,7 +183,7 @@ class AutoEnrollmentClientImpl final
   // Sends server state availability request and parses response. Reports
   // results.
   std::unique_ptr<ServerStateAvailabilityRequester>
-      server_state_avalability_requester_;
+      server_state_availability_requester_;
 
   // Sends server state retrieval request and parses response. Reports results.
   std::unique_ptr<ServerStateRetriever> server_state_retriever_;

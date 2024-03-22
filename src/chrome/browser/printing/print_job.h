@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,28 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "content/public/browser/global_routing_id.h"
 #include "printing/print_settings.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
+#include <string>
+
 #include "chromeos/crosapi/mojom/local_printer.mojom.h"
+#endif
+
+#if BUILDFLAG(IS_WIN)
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#endif
+
+#if BUILDFLAG(IS_WIN)
+class GURL;
 #endif
 
 namespace base {
@@ -53,7 +64,9 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
    public:
     virtual void OnDocDone(int job_id, PrintedDocument* document) {}
     virtual void OnJobDone() {}
+    virtual void OnCanceling() {}
     virtual void OnFailed() {}
+    virtual void OnDestruction() {}
   };
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -85,7 +98,8 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
       scoped_refptr<base::RefCountedMemory> print_data,
       const gfx::Size& page_size,
       const gfx::Rect& content_area,
-      const gfx::Point& physical_offsets);
+      const gfx::Point& physical_offsets,
+      const GURL& url);
 
   // Overwrites the PDF page mapping to fill in values of -1 for all indices
   // that are not selected. This is needed when the user opens the system
@@ -120,6 +134,13 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
   // since Cancel() calls Stop(). See WARNING above for Stop().
   virtual void Cancel();
 
+#if BUILDFLAG(ENABLE_PRINT_CONTENT_ANALYSIS)
+  // Cleanup a printing job after content analysis denies printing.  Performs
+  // any extra cleanup for this particular case that can't be safely done from
+  // within Cancel().
+  void CleanupAfterContentAnalysisDenial();
+#endif
+
   // Synchronously wait for the job to finish. It is mainly useful when the
   // process is about to be shut down and we're waiting for the spooler to eat
   // our data.
@@ -144,14 +165,14 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
 
   // Returns the ID of the source.
   const std::string& source_id() const;
-#endif  // BUILDFLAG(IS_CHROMEOS)
-
-  // Posts the given task to be run.
-  bool PostTask(const base::Location& from_here, base::OnceClosure task);
 
   const base::ObserverList<Observer>& GetObserversForTesting() {
     return observers_;
   }
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  // Posts the given task to be run.
+  bool PostTask(const base::Location& from_here, base::OnceClosure task);
 
   // Adds and removes observers for `PrintJob` events. The order in
   // which notifications are sent to observers is undefined. Observers must be
@@ -169,12 +190,18 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
   // testing contexts.
   PrintJob();
 
-  // The functions below are used for tests only.
-  void set_job_pending(bool pending);
+  void set_job_pending_for_testing(bool pending);
 
   // Updates `document_` to a new instance. Protected so that tests can access
   // it.
   void UpdatePrintedDocument(scoped_refptr<PrintedDocument> new_document);
+
+#if BUILDFLAG(IS_WIN)
+  // Virtual to support testing.
+  virtual void OnPdfPageConverted(uint32_t page_index,
+                                  float scale_factor,
+                                  std::unique_ptr<MetafilePlayer> metafile);
+#endif
 
  private:
 #if BUILDFLAG(IS_WIN)
@@ -202,22 +229,22 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
   virtual void StartPdfToEmfConversion(
       scoped_refptr<base::RefCountedMemory> bytes,
       const gfx::Size& page_size,
-      const gfx::Rect& content_area);
+      const gfx::Rect& content_area,
+      const GURL& url);
 
   virtual void StartPdfToPostScriptConversion(
       scoped_refptr<base::RefCountedMemory> bytes,
       const gfx::Rect& content_area,
       const gfx::Point& physical_offsets,
-      bool ps_level2);
+      bool ps_level2,
+      const GURL& url);
 
   virtual void StartPdfToTextConversion(
       scoped_refptr<base::RefCountedMemory> bytes,
-      const gfx::Size& page_size);
+      const gfx::Size& page_size,
+      const GURL& url);
 
   void OnPdfConversionStarted(uint32_t page_count);
-  void OnPdfPageConverted(uint32_t page_number,
-                          float scale_factor,
-                          std::unique_ptr<MetafilePlayer> metafile);
 
   // Helper method to do the work for ResetPageMapping(). Split for unit tests.
   static std::vector<uint32_t> GetFullPageMapping(
@@ -232,9 +259,11 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
   // worker thread per print job.
   std::unique_ptr<PrintJobWorker> worker_;
 
+  content::GlobalRenderFrameHostId rfh_id_;
+
   // The global PrintJobManager. May be null in testing contexts
   // only. Otherwise guaranteed to outlive this object.
-  raw_ptr<PrintJobManager> print_job_manager_ = nullptr;
+  raw_ptr<PrintJobManager, DanglingUntriaged> print_job_manager_ = nullptr;
 
   // The printed document.
   scoped_refptr<PrintedDocument> document_;
@@ -250,6 +279,7 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
   class PdfConversionState;
   std::unique_ptr<PdfConversionState> pdf_conversion_state_;
   std::vector<uint32_t> pdf_page_mapping_;
+  absl::optional<bool> use_skia_;
 #endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -257,7 +287,7 @@ class PrintJob : public base::RefCountedThreadSafe<PrintJob> {
   Source source_;
 
   // ID of the source.
-  // This should be blank if the source is PRINT_PREVIEW or ARC.
+  // This should be blank if the source is kPrintPreview or kArc.
   std::string source_id_;
 #endif  // BUILDFLAG(IS_CHROMEOS)
 

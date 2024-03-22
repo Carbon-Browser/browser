@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -112,6 +112,16 @@ SignedExchangePageLoadMetricsObserver::OnFencedFramesStart(
 }
 
 page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+SignedExchangePageLoadMetricsObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  // This observer focuses on evaluating the performance gain of the Signed
+  // Exchanges, and we'd exclude prerendered cases to measure the pure benefit
+  // coming from the Signed Exchanges adoption.
+  return STOP_OBSERVING;
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
 SignedExchangePageLoadMetricsObserver::OnCommit(
     content::NavigationHandle* navigation_handle) {
   if (navigation_handle->IsSignedExchangeInnerResponse()) {
@@ -198,23 +208,23 @@ void SignedExchangePageLoadMetricsObserver::OnFirstInputInPage(
   }
 
   // Copied from the UmaPageLoadMetricsObserver implementation.
-  UMA_HISTOGRAM_CUSTOM_TIMES(
+  base::UmaHistogramCustomTimes(
       internal::kHistogramSignedExchangeFirstInputDelay,
       timing.interactive_timing->first_input_delay.value(),
       base::Milliseconds(1), base::Seconds(60), 50);
   if (was_cached_) {
-    UMA_HISTOGRAM_CUSTOM_TIMES(
+    base::UmaHistogramCustomTimes(
         internal::kHistogramCachedSignedExchangeFirstInputDelay,
         timing.interactive_timing->first_input_delay.value(),
         base::Milliseconds(1), base::Seconds(60), 50);
   } else {
-    UMA_HISTOGRAM_CUSTOM_TIMES(
+    base::UmaHistogramCustomTimes(
         internal::kHistogramNotCachedSignedExchangeFirstInputDelay,
         timing.interactive_timing->first_input_delay.value(),
         base::Milliseconds(1), base::Seconds(60), 50);
   }
   if (had_prefetched_alt_sxg_) {
-    UMA_HISTOGRAM_CUSTOM_TIMES(
+    base::UmaHistogramCustomTimes(
         internal::kHistogramAltSubSxgSignedExchangeFirstInputDelay,
         timing.interactive_timing->first_input_delay.value(),
         base::Milliseconds(1), base::Seconds(60), 50);

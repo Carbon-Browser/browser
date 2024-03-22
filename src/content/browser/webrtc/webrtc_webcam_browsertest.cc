@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,8 +81,7 @@ IN_PROC_BROWSER_TEST_F(UsingRealWebcam_WebRtcWebcamBrowserTest,
   }
 
   std::string result =
-      EvalJs(shell(), "getUserMediaAndReturnVideoDimensions({video: true})",
-             EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+      EvalJs(shell(), "getUserMediaAndReturnVideoDimensions({video: true})")
           .ExtractString();
 
   if (result == "640x480" || result == "480x640") {

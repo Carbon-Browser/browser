@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,8 @@ TEST(StyleElementTest, CreateSheetUsesCache) {
   document.documentElement()->setInnerHTML(
       "<style id=style>a { top: 0; }</style>");
 
-  auto& style_element = To<HTMLStyleElement>(*document.getElementById("style"));
+  auto& style_element =
+      To<HTMLStyleElement>(*document.getElementById(AtomicString("style")));
   StyleSheetContents* sheet = style_element.sheet()->Contents();
 
   Comment* comment = document.createComment("hello!");

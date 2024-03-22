@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,15 @@ NavigationHandleProxy::NavigationHandleProxy(
     : cpp_navigation_handle_(cpp_navigation_handle) {
   JNIEnv* env = AttachCurrentThread();
 
-  java_navigation_handle_ = Java_NavigationHandle_Constructor(
-      env, reinterpret_cast<jlong>(this),
+  java_navigation_handle_ = Java_NavigationHandle_Constructor(env);
+}
+
+void NavigationHandleProxy::DidStart() {
+  JNIEnv* env = AttachCurrentThread();
+
+  // Set all these methods on the Java side over JNI with a new JNI method.
+  Java_NavigationHandle_initialize(
+      env, java_navigation_handle_, reinterpret_cast<jlong>(this),
       url::GURLAndroid::FromNativeGURL(env, cpp_navigation_handle_->GetURL()),
       url::GURLAndroid::FromNativeGURL(
           env, cpp_navigation_handle_->GetReferrer().url),
@@ -34,7 +41,7 @@ NavigationHandleProxy::NavigationHandleProxy(
       cpp_navigation_handle_->IsSameDocument(),
       cpp_navigation_handle_->IsRendererInitiated(),
       cpp_navigation_handle_->GetInitiatorOrigin()
-          ? cpp_navigation_handle_->GetInitiatorOrigin()->CreateJavaObject()
+          ? cpp_navigation_handle_->GetInitiatorOrigin()->ToJavaObject()
           : nullptr,
       cpp_navigation_handle_->GetPageTransition(),
       cpp_navigation_handle_->IsPost(),
@@ -69,12 +76,9 @@ void NavigationHandleProxy::DidFinish() {
   if (is_primary_main_frame_fragment_navigation &&
       cpp_navigation_handle_->HasCommitted()) {
     // See http://crbug.com/251330 for why it's determined this way.
-    GURL::Replacements replacements;
-    replacements.ClearRef();
     bool urls_same_ignoring_fragment =
-        cpp_navigation_handle_->GetURL().ReplaceComponents(replacements) ==
-        cpp_navigation_handle_->GetPreviousPrimaryMainFrameURL()
-            .ReplaceComponents(replacements);
+        cpp_navigation_handle_->GetURL().EqualsIgnoringRef(
+            cpp_navigation_handle_->GetPreviousPrimaryMainFrameURL());
     is_primary_main_frame_fragment_navigation = urls_same_ignoring_fragment;
   }
 
@@ -102,22 +106,6 @@ void NavigationHandleProxy::DidFinish() {
 NavigationHandleProxy::~NavigationHandleProxy() {
   JNIEnv* env = AttachCurrentThread();
   Java_NavigationHandle_release(env, java_navigation_handle_);
-}
-
-// Called from Java.
-void NavigationHandleProxy::SetRequestHeader(
-    JNIEnv* env,
-    const JavaParamRef<jstring>& name,
-    const JavaParamRef<jstring>& value) {
-  cpp_navigation_handle_->SetRequestHeader(ConvertJavaStringToUTF8(name),
-                                           ConvertJavaStringToUTF8(value));
-}
-
-// Called from Java.
-void NavigationHandleProxy::RemoveRequestHeader(
-    JNIEnv* env,
-    const JavaParamRef<jstring>& name) {
-  cpp_navigation_handle_->RemoveRequestHeader(ConvertJavaStringToUTF8(name));
 }
 
 }  // namespace content

@@ -1,16 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_WEBUI_ECHE_APP_UI_ECHE_CONNECTION_SCHEDULER_IMPL_H_
 #define ASH_WEBUI_ECHE_APP_UI_ECHE_CONNECTION_SCHEDULER_IMPL_H_
 
-#include "ash/services/secure_channel/public/cpp/client/connection_manager.h"
 #include "ash/webui/eche_app_ui/eche_connection_scheduler.h"
 #include "ash/webui/eche_app_ui/feature_status.h"
 #include "ash/webui/eche_app_ui/feature_status_provider.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "chromeos/ash/services/secure_channel/public/cpp/client/connection_manager.h"
 #include "net/base/backoff_entry.h"
 
 namespace ash {
@@ -51,8 +52,9 @@ class EcheConnectionSchedulerImpl
   base::TimeDelta GetCurrentBackoffDelayTimeForTesting();
   int GetBackoffFailureCountForTesting();
 
-  secure_channel::ConnectionManager* connection_manager_;
-  FeatureStatusProvider* feature_status_provider_;
+  raw_ptr<secure_channel::ConnectionManager, ExperimentalAsh>
+      connection_manager_;
+  raw_ptr<FeatureStatusProvider, ExperimentalAsh> feature_status_provider_;
   // Provides us the backoff timers for RequestConnection().
   net::BackoffEntry retry_backoff_;
   FeatureStatus current_feature_status_;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "components/web_modal/web_contents_modal_dialog_host.h"
 #include "components/web_modal/web_contents_modal_dialog_manager_delegate.h"
@@ -62,7 +63,7 @@ class ArcCustomTabModalDialogHost
 
  protected:
   std::unique_ptr<arc::CustomTab> custom_tab_;
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents, ExperimentalAsh> web_contents_;
 
  private:
   base::ObserverList<web_modal::ModalDialogHostObserver>::Unchecked

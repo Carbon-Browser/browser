@@ -1,18 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.url;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.MainDex;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
-/**
- * A java wrapper for Parsed, GURL's internal parsed URI representation.
- */
-@MainDex
+/** A java wrapper for Parsed, GURL's internal parsed URI representation. */
 @JNINamespace("url")
 /* package */ class Parsed {
     /* package */ final int mSchemeBegin;
@@ -39,10 +35,25 @@ import org.chromium.base.annotations.NativeMethods;
     }
 
     @CalledByNative
-    private Parsed(int schemeBegin, int schemeLength, int usernameBegin, int usernameLength,
-            int passwordBegin, int passwordLength, int hostBegin, int hostLength, int portBegin,
-            int portLength, int pathBegin, int pathLength, int queryBegin, int queryLength,
-            int refBegin, int refLength, boolean potentiallyDanglingMarkup, Parsed innerUrl) {
+    private Parsed(
+            int schemeBegin,
+            int schemeLength,
+            int usernameBegin,
+            int usernameLength,
+            int passwordBegin,
+            int passwordLength,
+            int hostBegin,
+            int hostLength,
+            int portBegin,
+            int portLength,
+            int pathBegin,
+            int pathLength,
+            int queryBegin,
+            int queryLength,
+            int refBegin,
+            int refLength,
+            boolean potentiallyDanglingMarkup,
+            Parsed innerUrl) {
         mSchemeBegin = schemeBegin;
         mSchemeLength = schemeLength;
         mUsernameBegin = usernameBegin;
@@ -68,10 +79,26 @@ import org.chromium.base.annotations.NativeMethods;
         if (mInnerUrl != null) {
             inner = mInnerUrl.toNativeParsed();
         }
-        return ParsedJni.get().createNative(mSchemeBegin, mSchemeLength, mUsernameBegin,
-                mUsernameLength, mPasswordBegin, mPasswordLength, mHostBegin, mHostLength,
-                mPortBegin, mPortLength, mPathBegin, mPathLength, mQueryBegin, mQueryLength,
-                mRefBegin, mRefLength, mPotentiallyDanglingMarkup, inner);
+        return ParsedJni.get()
+                .createNative(
+                        mSchemeBegin,
+                        mSchemeLength,
+                        mUsernameBegin,
+                        mUsernameLength,
+                        mPasswordBegin,
+                        mPasswordLength,
+                        mHostBegin,
+                        mHostLength,
+                        mPortBegin,
+                        mPortLength,
+                        mPathBegin,
+                        mPathLength,
+                        mQueryBegin,
+                        mQueryLength,
+                        mRefBegin,
+                        mRefLength,
+                        mPotentiallyDanglingMarkup,
+                        inner);
     }
 
     /* package */ String serialize() {
@@ -122,20 +149,48 @@ import org.chromium.base.annotations.NativeMethods;
         if (Boolean.parseBoolean(tokens[startIndex++])) {
             innerParsed = Parsed.deserialize(tokens, startIndex);
         }
-        return new Parsed(schemeBegin, schemeLength, usernameBegin, usernameLength, passwordBegin,
-                passwordLength, hostBegin, hostLength, portBegin, portLength, pathBegin, pathLength,
-                queryBegin, queryLength, refBegin, refLength, potentiallyDanglingMarkup,
+        return new Parsed(
+                schemeBegin,
+                schemeLength,
+                usernameBegin,
+                usernameLength,
+                passwordBegin,
+                passwordLength,
+                hostBegin,
+                hostLength,
+                portBegin,
+                portLength,
+                pathBegin,
+                pathLength,
+                queryBegin,
+                queryLength,
+                refBegin,
+                refLength,
+                potentiallyDanglingMarkup,
                 innerParsed);
     }
 
     @NativeMethods
     interface Natives {
-        /**
-         * Create and return the pointer to a native Parsed.
-         */
-        long createNative(int schemeBegin, int schemeLength, int usernameBegin, int usernameLength,
-                int passwordBegin, int passwordLength, int hostBegin, int hostLength, int portBegin,
-                int portLength, int pathBegin, int pathLength, int queryBegin, int queryLength,
-                int refBegin, int refLength, boolean potentiallyDanglingMarkup, long innerUrl);
+        /** Create and return the pointer to a native Parsed. */
+        long createNative(
+                int schemeBegin,
+                int schemeLength,
+                int usernameBegin,
+                int usernameLength,
+                int passwordBegin,
+                int passwordLength,
+                int hostBegin,
+                int hostLength,
+                int portBegin,
+                int portLength,
+                int pathBegin,
+                int pathLength,
+                int queryBegin,
+                int queryLength,
+                int refBegin,
+                int refLength,
+                boolean potentiallyDanglingMarkup,
+                long innerUrl);
     }
 }

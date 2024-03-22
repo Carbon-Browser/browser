@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 
@@ -19,8 +19,8 @@ BufferingFileStreamWriter::BufferingFileStreamWriter(
     int intermediate_buffer_length)
     : file_stream_writer_(std::move(file_stream_writer)),
       intermediate_buffer_length_(intermediate_buffer_length),
-      intermediate_buffer_(
-          base::MakeRefCounted<net::IOBuffer>(intermediate_buffer_length_)),
+      intermediate_buffer_(base::MakeRefCounted<net::IOBufferWithSize>(
+          intermediate_buffer_length_)),
       buffered_bytes_(0) {}
 
 BufferingFileStreamWriter::~BufferingFileStreamWriter() {
@@ -77,12 +77,13 @@ int BufferingFileStreamWriter::Cancel(net::CompletionOnceCallback callback) {
   return file_stream_writer_->Cancel(std::move(callback));
 }
 
-int BufferingFileStreamWriter::Flush(net::CompletionOnceCallback callback) {
+int BufferingFileStreamWriter::Flush(storage::FlushMode flush_mode,
+                                     net::CompletionOnceCallback callback) {
   // Flush all the buffered bytes first, then invoke Flush() on the inner file
   // stream writer.
   FlushIntermediateBuffer(base::BindOnce(
       &BufferingFileStreamWriter::OnFlushIntermediateBufferForFlushCompleted,
-      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+      weak_ptr_factory_.GetWeakPtr(), std::move(callback), flush_mode));
   return net::ERR_IO_PENDING;
 }
 
@@ -165,13 +166,15 @@ void BufferingFileStreamWriter::
 
 void BufferingFileStreamWriter::OnFlushIntermediateBufferForFlushCompleted(
     net::CompletionOnceCallback callback,
+    storage::FlushMode flush_mode,
     int result) {
   if (result < 0) {
     std::move(callback).Run(result);
     return;
   }
 
-  const int flush_result = file_stream_writer_->Flush(std::move(callback));
+  const int flush_result =
+      file_stream_writer_->Flush(flush_mode, std::move(callback));
   DCHECK_EQ(net::ERR_IO_PENDING, flush_result);
 }
 

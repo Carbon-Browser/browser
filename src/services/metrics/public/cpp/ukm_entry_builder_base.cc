@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,8 +41,8 @@ void UkmEntryBuilderBase::Record(UkmRecorder* recorder) {
     entry_.reset();
 }
 
-mojom::UkmEntryPtr UkmEntryBuilderBase::TakeEntry() {
-  return std::move(entry_);
+mojom::UkmEntryPtr UkmEntryBuilderBase::GetEntryForTesting() {
+  return entry_.Clone();
 }
 
 }  // namespace internal

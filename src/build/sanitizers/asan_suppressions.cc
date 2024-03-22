@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,13 @@
 //   // http://crbug.com/178677
 //   "interceptor_via_lib:libsqlite3.so\n"
 char kASanDefaultSuppressions[] =
+    // https://crbug.com/1471542 false positive odr violations from Rust code.
+    "odr_violation:^core::\n"
+    "odr_violation:^object::\n"
+    "odr_violation:^std::io::\n"
+    "odr_violation:^std::panicking::\n"
+    "odr_violation:^read_fonts::tables::\n"
+    "odr_violation:^std_detect::detect::cache::\n"
 
     // End of suppressions.
     // PLEASE READ ABOVE BEFORE ADDING NEW SUPPRESSIONS.

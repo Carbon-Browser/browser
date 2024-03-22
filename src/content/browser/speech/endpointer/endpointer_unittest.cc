@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
 
 #include "base/memory/raw_ptr.h"
-#include "content/browser/speech/audio_buffer.h"
+#include "components/speech/audio_buffer.h"
 #include "content/browser/speech/endpointer/endpointer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 

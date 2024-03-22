@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,9 @@ constexpr int kParametersAlignment = 16;
 struct MEDIA_SHMEM_EXPORT ALIGNAS(kParametersAlignment)
     AudioInputBufferParameters {
   double volume;
-  int64_t capture_time_us;  // base::TimeTicks in microseconds.
+  int64_t capture_time_us;     // base::TimeTicks in microseconds.
+  int64_t glitch_duration_us;  // base::TimeDelta in microseconds.
+  uint32_t glitch_count;
   uint32_t size;
   uint32_t id;
   bool key_pressed;
@@ -49,7 +51,8 @@ struct MEDIA_SHMEM_EXPORT ALIGNAS(kParametersAlignment)
     AudioOutputBufferParameters {
   int64_t delay_us;            // base::TimeDelta in microseconds.
   int64_t delay_timestamp_us;  // base::TimeTicks in microseconds.
-  uint32_t frames_skipped;
+  int64_t glitch_duration_us;  // base::TimeDelta in microseconds.
+  uint32_t glitch_count;
   uint32_t bitstream_data_size;
   uint32_t bitstream_frames;
 };
@@ -112,23 +115,61 @@ ComputeAudioOutputBufferSize(const AudioParameters& parameters);
 MEDIA_SHMEM_EXPORT uint32_t ComputeAudioOutputBufferSize(int channels,
                                                          int frames);
 
+// Channel count and ChannelLayout pair, with helper methods to enforce safe
+// construction.
+class MEDIA_SHMEM_EXPORT ChannelLayoutConfig {
+ public:
+  ChannelLayoutConfig(const ChannelLayoutConfig& other);
+  ChannelLayoutConfig& operator=(const ChannelLayoutConfig& other);
+  ChannelLayoutConfig();
+  ChannelLayoutConfig(ChannelLayout channel_layout, int channels);
+  ~ChannelLayoutConfig();
+
+  template <ChannelLayout layout>
+  static ChannelLayoutConfig FromLayout() {
+    return ChannelLayoutConfig(layout, ChannelLayoutToChannelCount(layout));
+  }
+
+  static ChannelLayoutConfig Mono();
+
+  static ChannelLayoutConfig Stereo();
+
+  static ChannelLayoutConfig Guess(int channels);
+
+  ChannelLayout channel_layout() const { return channel_layout_; }
+
+  int channels() const { return channels_; }
+
+ private:
+  ChannelLayout channel_layout_;  // Order of surround sound channels.
+  int channels_;                  // Number of channels.
+};
+
+// For |CHANNEL_LAYOUT_DISCRETE|, we have to explicitly set the number of
+// channels, so we need to use the normal constructor.
+template <>
+ChannelLayoutConfig ChannelLayoutConfig::FromLayout<CHANNEL_LAYOUT_DISCRETE>() =
+    delete;
+
 class MEDIA_SHMEM_EXPORT AudioParameters {
  public:
   // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.media
   // GENERATED_JAVA_CLASS_NAME_OVERRIDE: AudioEncodingFormat
   // GENERATED_JAVA_PREFIX_TO_STRIP: AUDIO_
   enum Format {
-    AUDIO_FAKE = 0x00,                // Creates a fake AudioOutputStream object
-    AUDIO_PCM_LINEAR = 0x01,          // PCM is 'raw' amplitude samples.
-    AUDIO_PCM_LOW_LATENCY = 0x02,     // Linear PCM, low latency requested.
-    AUDIO_BITSTREAM_AC3 = 0x04,       // Compressed AC3 bitstream.
-    AUDIO_BITSTREAM_EAC3 = 0x08,      // Compressed E-AC3 bitstream.
-    AUDIO_BITSTREAM_DTS = 0x10,       // Compressed DTS bitstream.
-    AUDIO_BITSTREAM_DTS_HD = 0x20,    // Compressed DTS-HD bitstream.
-    AUDIO_BITSTREAM_DTSX_P2 = 0x40,   // Compressed DTS-HD bitstream.
-    AUDIO_BITSTREAM_IEC61937 = 0x80,  // Compressed IEC61937 bitstream.
+    AUDIO_FAKE = 0x000,               // Creates a fake AudioOutputStream object
+    AUDIO_PCM_LINEAR = 0x001,         // PCM is 'raw' amplitude samples.
+    AUDIO_PCM_LOW_LATENCY = 0x002,    // Linear PCM, low latency requested.
+    AUDIO_BITSTREAM_AC3 = 0x004,      // Compressed AC3 bitstream.
+    AUDIO_BITSTREAM_EAC3 = 0x008,     // Compressed E-AC3 bitstream.
+    AUDIO_BITSTREAM_DTS = 0x010,      // Compressed DTS bitstream.
+    AUDIO_BITSTREAM_DTS_HD = 0x020,   // Compressed DTS-HD bitstream.
+    AUDIO_BITSTREAM_DTSX_P2 = 0x040,  // Compressed DTSX Profile 2 bitstream.
+    AUDIO_BITSTREAM_IEC61937 = 0x080,  // Compressed IEC61937 bitstream.
+    AUDIO_BITSTREAM_DTS_HD_MA =
+        0x100,  // Compressed DTS-HD Master Audio bitstream.
     AUDIO_FORMAT_LAST =
-        AUDIO_BITSTREAM_IEC61937,  // Only used for validation of format.
+        AUDIO_BITSTREAM_DTS_HD_MA,  // Only used for validation of format.
   };
 
   enum {
@@ -162,21 +203,43 @@ class MEDIA_SHMEM_EXPORT AudioParameters {
     ALLOW_DSP_ECHO_CANCELLER = 1 << 9,
     ALLOW_DSP_NOISE_SUPPRESSION = 1 << 10,
     ALLOW_DSP_AUTOMATIC_GAIN_CONTROL = 1 << 11,
+
+    FUCHSIA_RENDER_USAGE_BACKGROUND = 1 << 12,
+    FUCHSIA_RENDER_USAGE_MEDIA = 1 << 13,
+    FUCHSIA_RENDER_USAGE_INTERRUPTION = 1 << 14,
+    FUCHSIA_RENDER_USAGE_SYSTEM_AGENT = 1 << 15,
+    FUCHSIA_RENDER_USAGE_COMMUNICATION = 1 << 16,
+
+    IGNORE_UI_GAINS = 1 << 17,
+
+    VOICE_ISOLATION_SUPPORTED = 1 << 18,  // Set when system voice isolation is
+                                          // supported.
+    CLIENT_CONTROLLED_VOICE_ISOLATION =
+        1 << 19,                // Set when client forces to
+                                // enable/disable the platform voice
+                                // isolation effects. False indicates
+                                // to use platform default state.
+    VOICE_ISOLATION = 1 << 20,  // Enable/Disable platform voice isolation.
+                                // Only meaningful when
+                                // CLIENT_CONTROLLED_VOICE_ISOLATION is set.
   };
 
   struct HardwareCapabilities {
     HardwareCapabilities(int min_frames_per_buffer, int max_frames_per_buffer)
         : min_frames_per_buffer(min_frames_per_buffer),
           max_frames_per_buffer(max_frames_per_buffer),
-          bitstream_formats(0) {}
-    explicit HardwareCapabilities(int bitstream_formats)
+          bitstream_formats(0),
+          require_encapsulation(false) {}
+    HardwareCapabilities(int bitstream_formats, bool require_encapsulation)
         : min_frames_per_buffer(0),
           max_frames_per_buffer(0),
-          bitstream_formats(bitstream_formats) {}
+          bitstream_formats(bitstream_formats),
+          require_encapsulation(require_encapsulation) {}
     HardwareCapabilities()
         : min_frames_per_buffer(0),
           max_frames_per_buffer(0),
-          bitstream_formats(0) {}
+          bitstream_formats(0),
+          require_encapsulation(false) {}
 
     // Minimum and maximum buffer sizes supported by the audio hardware. Opening
     // a device with frames_per_buffer set to a value between min and max should
@@ -185,16 +248,22 @@ class MEDIA_SHMEM_EXPORT AudioParameters {
     // Either value can be 0 and means that the min or max is not known.
     int min_frames_per_buffer;
     int max_frames_per_buffer;
+    // Bitstream formats (OR'ed) supported by audio hardware.
     int bitstream_formats;
+    // Bitstream will need to be encapsulated in IEC61937 to be
+    // passed through to the audio hardware.
+    bool require_encapsulation;
   };
 
   AudioParameters();
+
   AudioParameters(Format format,
-                  ChannelLayout channel_layout,
+                  ChannelLayoutConfig channel_layout_config,
                   int sample_rate,
                   int frames_per_buffer);
+
   AudioParameters(Format format,
-                  ChannelLayout channel_layout,
+                  ChannelLayoutConfig channel_layout_config,
                   int sample_rate,
                   int frames_per_buffer,
                   const HardwareCapabilities& hardware_capabilities);
@@ -203,7 +272,7 @@ class MEDIA_SHMEM_EXPORT AudioParameters {
 
   // Re-initializes all members except for |hardware_capabilities_|.
   void Reset(Format format,
-             ChannelLayout channel_layout,
+             ChannelLayoutConfig channel_layout_config,
              int sample_rate,
              int frames_per_buffer);
 
@@ -240,21 +309,22 @@ class MEDIA_SHMEM_EXPORT AudioParameters {
 
   bool IsFormatSupportedByHardware(Format format) const;
 
+  bool RequireEncapsulation() const;
+
   void set_format(Format format) { format_ = format; }
   Format format() const { return format_; }
 
-  // A setter for channel_layout_ is intentionally excluded.
-  ChannelLayout channel_layout() const { return channel_layout_; }
+  void SetChannelLayoutConfig(ChannelLayout layout, int channels);
 
-  // The number of channels is usually computed from channel_layout_. Setting
-  // this explicitly is only required with CHANNEL_LAYOUT_DISCRETE.
-  void set_channels_for_discrete(int channels) {
-    DCHECK(channel_layout_ == CHANNEL_LAYOUT_DISCRETE ||
-           channel_layout_ == CHANNEL_LAYOUT_5_1_4_DOWNMIX ||
-           channels == ChannelLayoutToChannelCount(channel_layout_));
-    channels_ = channels;
+  const ChannelLayoutConfig& channel_layout_config() const {
+    return channel_layout_config_;
   }
-  int channels() const { return channels_; }
+
+  ChannelLayout channel_layout() const {
+    return channel_layout_config_.channel_layout();
+  }
+
+  int channels() const { return channel_layout_config_.channels(); }
 
   void set_sample_rate(int sample_rate) { sample_rate_ = sample_rate; }
   int sample_rate() const { return sample_rate_; }
@@ -281,10 +351,10 @@ class MEDIA_SHMEM_EXPORT AudioParameters {
   }
   const std::vector<Point>& mic_positions() const { return mic_positions_; }
 
-  void set_latency_tag(AudioLatency::LatencyType latency_tag) {
+  void set_latency_tag(AudioLatency::Type latency_tag) {
     latency_tag_ = latency_tag;
   }
-  AudioLatency::LatencyType latency_tag() const { return latency_tag_; }
+  AudioLatency::Type latency_tag() const { return latency_tag_; }
 
   AudioParameters(const AudioParameters&);
   AudioParameters& operator=(const AudioParameters&);
@@ -293,13 +363,12 @@ class MEDIA_SHMEM_EXPORT AudioParameters {
   static AudioParameters UnavailableDeviceParams();
 
  private:
-  Format format_;                 // Format of the stream.
-  ChannelLayout channel_layout_;  // Order of surround sound channels.
-  int channels_;                  // Number of channels. Value set based on
-                                  // |channel_layout|.
-  int sample_rate_;               // Sampling frequency/rate.
-  int frames_per_buffer_;         // Number of frames in a buffer.
-  int effects_;                   // Bitmask using PlatformEffectsMask.
+  Format format_;                              // Format of the stream.
+  ChannelLayoutConfig channel_layout_config_;  // The channel layout and the
+                                               // number of channels.
+  int sample_rate_;                            // Sampling frequency/rate.
+  int frames_per_buffer_;                      // Number of frames in a buffer.
+  int effects_;  // Bitmask using PlatformEffectsMask.
 
   // Microphone positions using Cartesian coordinates:
   // x: the horizontal dimension, with positive to the right from the camera's
@@ -316,7 +385,7 @@ class MEDIA_SHMEM_EXPORT AudioParameters {
 
   // Optional tag to pass latency info from renderer to browser. Set to
   // AudioLatency::LATENCY_COUNT by default, which means "not specified".
-  AudioLatency::LatencyType latency_tag_;
+  AudioLatency::Type latency_tag_;
 
   // Audio hardware specific parameters, these are treated as read-only and
   // changing them has no effect.

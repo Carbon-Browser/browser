@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,8 @@ class CONTENT_EXPORT SerialDelegate {
     virtual void OnPortRemoved(const device::mojom::SerialPortInfo& port) = 0;
     virtual void OnPortManagerConnectionError() = 0;
 
-    // Event forwarded from permissions::ChooserContextBase::PermissionObserver:
+    // Event forwarded from
+    // permissions::ObjectPermissionContextBase::PermissionObserver:
     virtual void OnPermissionRevoked(const url::Origin& origin) = 0;
   };
 
@@ -44,6 +45,7 @@ class CONTENT_EXPORT SerialDelegate {
   virtual std::unique_ptr<SerialChooser> RunChooser(
       RenderFrameHost* frame,
       std::vector<blink::mojom::SerialPortFilterPtr> filters,
+      std::vector<device::BluetoothUUID> allowed_bluetooth_service_class_ids,
       SerialChooser::Callback callback) = 0;
 
   // Returns whether |frame| has permission to request access to a port.

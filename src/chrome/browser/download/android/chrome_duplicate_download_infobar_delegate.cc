@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "base/android/path_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "chrome/browser/download/android/download_controller.h"
 #include "chrome/browser/download/android/download_dialog_utils.h"
@@ -54,8 +54,6 @@ ChromeDuplicateDownloadInfoBarDelegate::ChromeDuplicateDownloadInfoBarDelegate(
       file_path_(file_path),
       file_selected_callback_(std::move(file_selected_callback)) {
   download_item_->AddObserver(this);
-  DuplicateDownloadInfoBar::RecordDuplicateDownloadInfobarEvent(
-      false, DuplicateDownloadInfobarEvent::kShown);
 }
 
 infobars::InfoBarDelegate::InfoBarIdentifier
@@ -64,8 +62,6 @@ ChromeDuplicateDownloadInfoBarDelegate::GetIdentifier() const {
 }
 
 bool ChromeDuplicateDownloadInfoBarDelegate::Accept() {
-  DuplicateDownloadInfoBar::RecordDuplicateDownloadInfobarEvent(
-      false, DuplicateDownloadInfobarEvent::kAccepted);
   if (!download_item_) {
     return true;
   }
@@ -85,14 +81,11 @@ bool ChromeDuplicateDownloadInfoBarDelegate::Accept() {
 }
 
 bool ChromeDuplicateDownloadInfoBarDelegate::Cancel() {
-  DuplicateDownloadInfoBar::RecordDuplicateDownloadInfobarEvent(
-      false, DuplicateDownloadInfobarEvent::kCanceled);
   if (!download_item_)
     return true;
 
   std::move(file_selected_callback_)
-      .Run(DownloadConfirmationResult::CANCELED, base::FilePath(),
-           absl::nullopt /*download_schedule*/);
+      .Run(DownloadConfirmationResult::CANCELED, base::FilePath());
   return true;
 }
 
@@ -101,8 +94,6 @@ std::string ChromeDuplicateDownloadInfoBarDelegate::GetFilePath() const {
 }
 
 void ChromeDuplicateDownloadInfoBarDelegate::InfoBarDismissed() {
-  DuplicateDownloadInfoBar::RecordDuplicateDownloadInfobarEvent(
-      false, DuplicateDownloadInfobarEvent::kDismissed);
   Cancel();
 }
 

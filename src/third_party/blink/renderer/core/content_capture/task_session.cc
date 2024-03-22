@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,14 +20,10 @@ bool IsConstantStreamingEnabled() {
 
 }  // namespace
 
-TaskSession::DocumentSession::DocumentSession(const Document& document,
-                                              SentNodeCountCallback& callback)
-    : document_(&document), callback_(callback) {}
+TaskSession::DocumentSession::DocumentSession(const Document& document)
+    : document_(&document) {}
 
-TaskSession::DocumentSession::~DocumentSession() {
-  if (callback_.has_value())
-    callback_.value().Run(total_sent_nodes_);
-}
+TaskSession::DocumentSession::~DocumentSession() = default;
 
 bool TaskSession::DocumentSession::AddDetachedNode(const Node& node) {
   // Only notify the detachment of visible node which shall be in |sent_nodes|
@@ -47,7 +43,7 @@ WebVector<int64_t> TaskSession::DocumentSession::MoveDetachedNodes() {
 }
 
 ContentHolder* TaskSession::DocumentSession::GetNextUnsentNode() {
-  while (!captured_content_.IsEmpty()) {
+  while (!captured_content_.empty()) {
     auto node = captured_content_.begin()->key;
     const gfx::Rect rect = captured_content_.Take(node);
     if (node && node->GetLayoutObject() && !sent_nodes_.Contains(node)) {
@@ -60,7 +56,7 @@ ContentHolder* TaskSession::DocumentSession::GetNextUnsentNode() {
 }
 
 ContentHolder* TaskSession::DocumentSession::GetNextChangedNode() {
-  while (!changed_content_.IsEmpty()) {
+  while (!changed_content_.empty()) {
     auto node = changed_content_.begin()->key;
     const gfx::Rect rect = changed_content_.Take(node);
     if (node.Get() && node->GetLayoutObject()) {
@@ -131,7 +127,7 @@ void TaskSession::DocumentSession::Trace(Visitor* visitor) const {
 void TaskSession::DocumentSession::Reset() {
   changed_content_.clear();
   captured_content_.clear();
-  detached_nodes_.Clear();
+  detached_nodes_.clear();
   sent_nodes_.clear();
   visible_sent_nodes_.clear();
   changed_nodes_.clear();
@@ -143,7 +139,7 @@ TaskSession::DocumentSession* TaskSession::GetNextUnsentDocumentSession() {
   for (auto& doc : to_document_session_.Values()) {
     if (!doc->HasUnsentData())
       continue;
-    return doc;
+    return doc.Get();
   }
   has_unsent_data_ = false;
   return nullptr;
@@ -152,7 +148,7 @@ TaskSession::DocumentSession* TaskSession::GetNextUnsentDocumentSession() {
 void TaskSession::SetCapturedContent(
     const Vector<cc::NodeInfo>& captured_content) {
   DCHECK(!HasUnsentData());
-  DCHECK(!captured_content.IsEmpty());
+  DCHECK(!captured_content.empty());
   GroupCapturedContentByDocument(captured_content);
   has_unsent_data_ = true;
 }
@@ -187,7 +183,7 @@ TaskSession::DocumentSession& TaskSession::EnsureDocumentSession(
     const Document& doc) {
   DocumentSession* doc_session = GetDocumentSession(doc);
   if (!doc_session) {
-    doc_session = MakeGarbageCollected<DocumentSession>(doc, callback_);
+    doc_session = MakeGarbageCollected<DocumentSession>(doc);
     to_document_session_.insert(&doc, doc_session);
   }
   return *doc_session;
@@ -198,15 +194,11 @@ TaskSession::DocumentSession* TaskSession::GetDocumentSession(
   auto it = to_document_session_.find(&document);
   if (it == to_document_session_.end())
     return nullptr;
-  return it->value;
+  return it->value.Get();
 }
 
 void TaskSession::Trace(Visitor* visitor) const {
   visitor->Trace(to_document_session_);
-}
-
-void TaskSession::ClearDocumentSessionsForTesting() {
-  to_document_session_.clear();
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "net/dns/dns_response.h"
 #include "net/dns/dns_test_util.h"
@@ -128,7 +128,7 @@ class RecordRemovalMock {
 class MDnsCacheTest : public ::testing::Test {
  public:
   MDnsCacheTest()
-      : default_time_(base::Time::FromDoubleT(1234.0)) {}
+      : default_time_(base::Time::FromSecondsSinceUnixEpoch(1234.0)) {}
   ~MDnsCacheTest() override = default;
 
  protected:

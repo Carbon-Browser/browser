@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -150,13 +151,13 @@ class ScreenTimeController
   // SystemClockClient::Observer:
   void SystemClockUpdated() override;
 
-  content::BrowserContext* context_;
-  PrefService* pref_service_;
+  raw_ptr<content::BrowserContext, ExperimentalAsh> context_;
+  raw_ptr<PrefService, ExperimentalAsh> pref_service_;
 
   base::ObserverList<Observer> observers_;
 
   // Points to the base::DefaultClock by default.
-  const base::Clock* clock_;
+  raw_ptr<const base::Clock, ExperimentalAsh> clock_;
 
   // Timer scheduled for when the next lock screen state change event is
   // expected to happen, e.g. when bedtime is over or the usage limit ends.
@@ -170,7 +171,7 @@ class ScreenTimeController
 
   // Contains the last time limit policy processed by this class. Used to
   // generate notifications when the policy changes.
-  base::Value last_policy_{base::Value::Type::DICTIONARY};
+  base::Value::Dict last_policy_;
 
   // Used to set up timers when a time limit is approaching.
   TimeLimitNotifier time_limit_notifier_;

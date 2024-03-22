@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -154,9 +154,6 @@ class NET_EXPORT_PRIVATE EntryImpl
   // Set the access times for this entry. This method provides support for
   // the upgrade tool.
   void SetTimes(base::Time last_used, base::Time last_modified);
-
-  // Generates a histogram for the time spent working on this operation.
-  void ReportIOTime(Operation op, const base::TimeTicks& start);
 
   // Logs a begin event and enables logging for the EntryImpl.  Will also cause
   // an end event to be logged on destruction.  The EntryImpl must have its key

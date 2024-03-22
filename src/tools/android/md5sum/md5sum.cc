@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,6 +40,7 @@ bool MD5Sum(const std::string& path, std::string* digest_string) {
   while ((len = fread(buf.get(), 1, kBufferSize, fd)) > 0)
     base::MD5Update(&ctx, base::StringPiece(buf.get(), len));
   if (ferror(fd)) {
+    fclose(fd);
     std::cerr << "Error reading file " << path << std::endl;
     return false;
   }

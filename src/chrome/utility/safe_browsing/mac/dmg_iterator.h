@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class DMGIterator {
   DMGIterator(const DMGIterator&) = delete;
   DMGIterator& operator=(const DMGIterator&) = delete;
 
-  ~DMGIterator();
+  virtual ~DMGIterator();
 
   // Opens the DMG file for iteration. This must be called before any other
   // method. If this returns false, it is illegal to call any other methods

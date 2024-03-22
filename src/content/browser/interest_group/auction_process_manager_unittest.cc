@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
@@ -18,15 +18,16 @@
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
+#include "content/common/features.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/browser/site_isolation_mode.h"
 #include "content/public/browser/site_isolation_policy.h"
 #include "content/public/common/content_client.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_browser_context.h"
+#include "content/services/auction_worklet/public/mojom/auction_shared_storage_host.mojom.h"
 #include "content/services/auction_worklet/public/mojom/auction_worklet_service.mojom.h"
 #include "content/services/auction_worklet/public/mojom/bidder_worklet.mojom.h"
 #include "content/services/auction_worklet/public/mojom/seller_worklet.mojom.h"
@@ -61,13 +62,20 @@ class TestAuctionProcessManager
   void LoadBidderWorklet(
       mojo::PendingReceiver<auction_worklet::mojom::BidderWorklet>
           bidder_worklet_receiver,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionSharedStorageHost>
+          shared_storage_host_remote,
       bool pause_for_debugger_on_start,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
           pending_url_loader_factory,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          auction_network_events_handler,
       const GURL& script_source_url,
       const absl::optional<GURL>& bidding_wasm_helper_url,
       const absl::optional<GURL>& trusted_bidding_signals_url,
+      const std::string& trusted_bidding_signals_slot_size_param,
       const url::Origin& top_window_origin,
+      auction_worklet::mojom::AuctionWorkletPermissionsPolicyStatePtr
+          permissions_policy_state,
       bool has_experiment_nonce,
       uint16_t experiment_nonce) override {
     NOTREACHED();
@@ -76,11 +84,17 @@ class TestAuctionProcessManager
   void LoadSellerWorklet(
       mojo::PendingReceiver<auction_worklet::mojom::SellerWorklet>
           seller_worklet,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionSharedStorageHost>
+          shared_storage_host_remote,
       bool should_pause_on_start,
       mojo::PendingRemote<network::mojom::URLLoaderFactory> url_loader_factory,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          auction_network_events_handler,
       const GURL& script_source_url,
       const absl::optional<GURL>& trusted_scoring_signals_url,
       const url::Origin& top_window_origin,
+      auction_worklet::mojom::AuctionWorkletPermissionsPolicyStatePtr
+          permissions_policy_state,
       bool has_experiment_nonce,
       uint16_t experiment_nonce) override {
     NOTREACHED();

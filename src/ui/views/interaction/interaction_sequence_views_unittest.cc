@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
@@ -176,10 +176,10 @@ class InteractionSequenceViewsTest : public ViewsTestBase {
   }
 
   std::unique_ptr<Widget> widget_;
-  raw_ptr<View> contents_ = nullptr;
-  raw_ptr<Widget> bubble_widget_ = nullptr;
-  raw_ptr<LabelButton> label_button_ = nullptr;
-  raw_ptr<LabelButton> no_id_view_ = nullptr;
+  raw_ptr<View, DanglingUntriaged> contents_ = nullptr;
+  raw_ptr<Widget, DanglingUntriaged> bubble_widget_ = nullptr;
+  raw_ptr<LabelButton, DanglingUntriaged> label_button_ = nullptr;
+  raw_ptr<LabelButton, DanglingUntriaged> no_id_view_ = nullptr;
   std::unique_ptr<ui::SimpleMenuModel> menu_model_;
   std::unique_ptr<MenuRunner> menu_runner_;
   ui::SafeElementReference menu_element_;
@@ -538,7 +538,8 @@ TEST_F(InteractionSequenceViewsTest, TransitionToMenuAndActivateMenuItem) {
     ui::test::InteractionTestUtil test_util;
     test_util.AddSimulator(
         std::make_unique<test::InteractionTestUtilSimulatorViews>());
-    test_util.SelectMenuItem(menu_element_.get());
+    EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+              test_util.SelectMenuItem(menu_element_.get()));
   });
 }
 

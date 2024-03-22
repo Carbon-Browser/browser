@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
@@ -16,10 +16,6 @@
 #import "ios/web_view/internal/sync/cwv_trusted_vault_observer_internal.h"
 #import "ios/web_view/public/cwv_identity.h"
 #import "ios/web_view/public/cwv_trusted_vault_provider.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -145,10 +141,17 @@ void WebViewTrustedVaultClient::AddTrustedRecoveryMethod(
   NOTREACHED();
 }
 
-void WebViewTrustedVaultClient::ClearDataForAccount(
+void WebViewTrustedVaultClient::ClearLocalDataForAccount(
     const CoreAccountInfo& account_info) {
-  // TODO(crbug.com/1273080): decide whether this logic needs to be implemented
-  // on iOS.
+  id<CWVTrustedVaultProvider> provider = CWVSyncController.trustedVaultProvider;
+  if (!provider) {
+    DLOG(ERROR) << "Please set CWVSyncController.trustedVaultProvider to "
+                   "enable trusted vault.";
+    return;
+  }
+
+  [provider clearLocalDataForForIdentity:CWVIdentityFromCoreAccountInfo(
+                                             account_info)];
 }
 
 }  // namespace ios_web_view

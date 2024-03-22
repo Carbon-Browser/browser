@@ -1,20 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_UPDATER_EXTENSION_DOWNLOADER_DELEGATE_H_
 #define EXTENSIONS_BROWSER_UPDATER_EXTENSION_DOWNLOADER_DELEGATE_H_
 
+#include <optional>
 #include <set>
 #include <string>
-
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "extensions/browser/crx_file_info.h"
 #include "extensions/browser/updater/extension_downloader_types.h"
 #include "extensions/browser/updater/safe_manifest_parser.h"
 #include "extensions/common/extension_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -49,6 +48,8 @@ class ExtensionDownloaderDelegate {
     // There was an update for this extension but the download of the crx
     // failed.
     CRX_FETCH_FAILED,
+
+    kMaxValue = CRX_FETCH_FAILED,
   };
 
   // Passed as an argument to OnExtensionDownloadStageChanged() to detail how
@@ -167,7 +168,7 @@ class ExtensionDownloaderDelegate {
                                                  int failure_count);
     FailureData(const int net_error_code, const int fetch_attempts);
     FailureData(const int net_error_code,
-                const absl::optional<int> response,
+                const std::optional<int> response,
                 const int fetch_attempts);
     explicit FailureData(ManifestInvalidError manifest_invalid_error);
     FailureData(ManifestInvalidError manifest_invalid_error,
@@ -176,23 +177,23 @@ class ExtensionDownloaderDelegate {
     ~FailureData();
 
     // Network error code in case of CRX_FETCH_FAILED or MANIFEST_FETCH_FAILED.
-    const absl::optional<int> network_error_code;
+    const std::optional<int> network_error_code;
     // Response code in case of CRX_FETCH_FAILED or MANIFEST_FETCH_FAILED.
-    const absl::optional<int> response_code;
+    const std::optional<int> response_code;
     // Number of fetch attempts made in case of CRX_FETCH_FAILED or
     // MANIFEST_FETCH_FAILED.
-    const absl::optional<int> fetch_tries;
+    const std::optional<int> fetch_tries;
     // Type of error occurred when fetched manifest was invalid. This includes
     // errors occurred while parsing the update manifest and the errors in the
     // internal details of the parsed manifest.
-    const absl::optional<ManifestInvalidError> manifest_invalid_error;
+    const std::optional<ManifestInvalidError> manifest_invalid_error;
     // Info field in the update manifest returned by the server. Currently it is
     // only set when no update is available and install fails with the error
     // CRX_FETCH_URL_EMPTY.
-    const absl::optional<std::string> additional_info;
+    const std::optional<std::string> additional_info;
     // Type of app status error returned by update server on fetching the update
     // manifest.
-    const absl::optional<std::string> app_status_error;
+    const std::optional<std::string> app_status_error;
   };
 
   // A callback that is called to indicate if ExtensionDownloader should ignore
@@ -216,6 +217,12 @@ class ExtensionDownloaderDelegate {
   // of downloading.
   virtual void OnExtensionDownloadStageChanged(const ExtensionId& id,
                                                Stage stage);
+
+  // Invoked when an update is found for an extension, but before any attempt
+  // to download it is made.
+  virtual void OnExtensionUpdateFound(const ExtensionId& id,
+                                      const std::set<int>& request_ids,
+                                      const base::Version& version);
 
   // Invoked once during downloading, after fetching and parsing update
   // manifest, |cache_status| contains information about what have we found in

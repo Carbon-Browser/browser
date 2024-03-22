@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,7 @@ TSAN_TEST(FilterOperationResolverThreadedTest, SimpleDropShadow) {
     ASSERT_EQ(fo.size(), 1ul);
     EXPECT_EQ(*fo.at(0),
               *MakeGarbageCollected<DropShadowFilterOperation>(
-                  ShadowData(gfx::PointF(10, 5), 1, 0, ShadowStyle::kNormal,
+                  ShadowData(gfx::Vector2dF(10, 5), 1, 0, ShadowStyle::kNormal,
                              StyleColor(Color::kBlack))));
   });
 }

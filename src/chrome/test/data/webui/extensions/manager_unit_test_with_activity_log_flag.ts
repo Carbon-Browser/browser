@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,29 +11,19 @@
 import 'chrome://extensions/extensions.js';
 
 import {ExtensionsManagerElement, navigation, Page, Service} from 'chrome://extensions/extensions.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 import {TestService} from './test_service.js';
 import {createExtensionInfo} from './test_util.js';
 
-const extension_manager_unit_tests = {
-  suiteName: 'ExtensionManagerUnitTest',
-  TestNames: {
-    UpdateFromActivityLog: 'update from activity log',
-  },
-};
-
-Object.assign(window, {extension_manager_unit_tests});
-
-suite(extension_manager_unit_tests.suiteName, function() {
+suite('ExtensionManagerUnitTest', function() {
   let manager: ExtensionsManagerElement;
   let service: TestService;
 
   const testActivities = {activities: []};
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     service = new TestService();
     Service.setInstance(service);
@@ -60,37 +50,35 @@ suite(extension_manager_unit_tests.suiteName, function() {
     });
   }
 
-  test(
-      assert(extension_manager_unit_tests.TestNames.UpdateFromActivityLog),
-      function() {
-        service.testActivities = testActivities;
+  test('UpdateFromActivityLog', function() {
+    service.testActivities = testActivities;
 
-        const extension = createExtensionInfo();
-        simulateExtensionInstall(extension);
-        const secondExtension = createExtensionInfo({
-          id: 'b'.repeat(32),
-        });
-        simulateExtensionInstall(secondExtension);
+    const extension = createExtensionInfo();
+    simulateExtensionInstall(extension);
+    const secondExtension = createExtensionInfo({
+      id: 'b'.repeat(32),
+    });
+    simulateExtensionInstall(secondExtension);
 
-        assertTrue(manager.showActivityLog);
-        navigation.navigateTo({
-          page: Page.ACTIVITY_LOG,
-          extensionId: extension.id,
-        });
+    assertTrue(manager.showActivityLog);
+    navigation.navigateTo({
+      page: Page.ACTIVITY_LOG,
+      extensionId: extension.id,
+    });
 
-        const activityLog =
-            manager.shadowRoot!.querySelector('extensions-activity-log');
-        assertTrue(!!activityLog);  // View should now be present.
-        assertEquals(extension.id, activityLog.extensionInfo.id);
+    const activityLog =
+        manager.shadowRoot!.querySelector('extensions-activity-log');
+    assertTrue(!!activityLog);  // View should now be present.
+    assertEquals(extension.id, activityLog.extensionInfo.id);
 
-        // Test that updates to different extensions does not change which
-        // extension the activity log points to. Regression test for
-        // https://crbug.com/924373.
-        service.itemStateChangedTarget.callListeners({
-          event_type: chrome.developerPrivate.EventType.PREFS_CHANGED,
-          extensionInfo: secondExtension,
-        });
+    // Test that updates to different extensions does not change which
+    // extension the activity log points to. Regression test for
+    // https://crbug.com/924373.
+    service.itemStateChangedTarget.callListeners({
+      event_type: chrome.developerPrivate.EventType.PREFS_CHANGED,
+      extensionInfo: secondExtension,
+    });
 
-        assertEquals(extension.id, activityLog.extensionInfo.id);
-      });
+    assertEquals(extension.id, activityLog.extensionInfo.id);
+  });
 });

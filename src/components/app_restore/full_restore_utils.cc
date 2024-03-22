@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,8 +62,6 @@ void OnLacrosChromeAppWindowAdded(const std::string& app_id,
   if (!full_restore::features::IsFullRestoreForLacrosEnabled())
     return;
 
-  FullRestoreReadHandler::GetInstance()->OnLacrosChromeAppWindowAdded(
-      app_id, window_id);
   FullRestoreSaveHandler::GetInstance()->OnLacrosChromeAppWindowAdded(
       app_id, window_id);
 }
@@ -73,10 +71,17 @@ void OnLacrosChromeAppWindowRemoved(const std::string& app_id,
   if (!full_restore::features::IsFullRestoreForLacrosEnabled())
     return;
 
-  FullRestoreReadHandler::GetInstance()->OnLacrosChromeAppWindowRemoved(
-      app_id, window_id);
   FullRestoreSaveHandler::GetInstance()->OnLacrosChromeAppWindowRemoved(
       app_id, window_id);
+}
+
+void SaveRemovingDeskGuid(const base::Uuid& removing_desk_guid) {
+  FullRestoreSaveHandler::GetInstance()->SaveRemovingDeskGuid(
+      removing_desk_guid);
+}
+
+void ResetRemovingDeskGuid() {
+  FullRestoreSaveHandler::GetInstance()->SaveRemovingDeskGuid(base::Uuid());
 }
 
 }  // namespace full_restore

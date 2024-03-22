@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,12 +31,10 @@ struct NET_EXPORT NetLogSource {
   // Adds the source to a dictionary containing event parameters,
   // using the name "source_dependency".
   void AddToEventParameters(base::Value::Dict& event_params) const;
-  // Legacy version of above method. Should be removed once no longer used.
-  void AddToEventParameters(base::Value* event_params) const;
 
   // Returns a dictionary with a single entry named "source_dependency" that
   // describes |this|.
-  base::Value ToEventParameters() const;
+  base::Value::Dict ToEventParameters() const;
 
   NetLogSourceType type;
   uint32_t id;

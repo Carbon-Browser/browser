@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -123,7 +123,7 @@ class IOSAppConfigWriter(xml_formatted_writer.XMLFormattedWriter):
           self.AddText(value, v)
         value = None
       else:
-        self.AddText(value, policy['default'])
+        self.AddText(value, str(policy['default']))
 
   def _WritePolicyConstraint(self, parent, policy):
     attrs = {'nullable': 'true'}

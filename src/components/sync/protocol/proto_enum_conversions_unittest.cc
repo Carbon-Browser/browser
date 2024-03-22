@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,13 @@ TEST(ProtoEnumConversionsTest, GetAppListItemTypeString) {
   TestEnumStringsNonEmpty(sync_pb::AppListSpecifics::AppListItemType);
 }
 
+TEST(ProtoEnumConversionsTest, GetSegmentationPlatformTypeTypeString) {
+  TestEnumStringsNonEmpty(
+      sync_pb::SegmentationSpecifics::DeviceMetadata::PlatformType);
+}
+
 TEST(ProtoEnumConversionsTest, GetBrowserTypeString) {
-  TestEnumStringsNonEmpty(sync_pb::SessionWindow::BrowserType);
+  TestEnumStringsNonEmpty(sync_pb::SyncEnums::BrowserType);
 }
 
 TEST(ProtoEnumConversionsTest, GetPageTransitionString) {
@@ -89,6 +94,35 @@ TEST(ProtoEnumConversionsTest, GetActionString) {
 
 TEST(ProtoEnumConversionsTest, GetConsentStatusString) {
   TestEnumStringsNonEmpty(sync_pb::UserConsentTypes::ConsentStatus);
+}
+
+TEST(ProtoEnumConversionsTest, GetVirtualCardEnrollmentTypeString) {
+  TestEnumStringsNonEmpty(
+      sync_pb::WalletMaskedCreditCard::VirtualCardEnrollmentType);
+}
+
+TEST(ProtoEnumConversionsTest, GetSavedTabGroupColorString) {
+  TestEnumStringsNonEmpty(sync_pb::SavedTabGroup::SavedTabGroupColor);
+}
+
+TEST(ProtoEnumConversionsTest, GetIssuerString) {
+  TestEnumStringsNonEmpty(sync_pb::CardIssuer::Issuer);
+}
+
+TEST(ProtoEnumConversionsTest, GetPowerBookmakrPowerTypeString) {
+  TestEnumStringsNonEmpty(sync_pb::PowerBookmarkSpecifics::PowerType);
+}
+
+TEST(ProtoEnumConversionsTest, GetNoteTargetTypeString) {
+  TestEnumStringsNonEmpty(sync_pb::NoteEntity::TargetType);
+}
+
+TEST(ProtoEnumConversionsTest, GetInitialSyncStateString) {
+  TestEnumStringsNonEmpty(sync_pb::ModelTypeState::InitialSyncState);
+}
+
+TEST(ProtoEnumConversionsTest, GetCategoryBenefitTypeString) {
+  TestEnumStringsNonEmpty(sync_pb::CardBenefit::CategoryBenefitType);
 }
 
 }  // namespace

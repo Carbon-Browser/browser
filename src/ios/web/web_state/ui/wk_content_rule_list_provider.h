@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_WEB_STATE_UI_WK_CONTENT_RULE_LIST_PROVIDER_H_
 #define IOS_WEB_WEB_STATE_UI_WK_CONTENT_RULE_LIST_PROVIDER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #import "ios/web/web_state/ui/wk_web_view_configuration_provider_observer.h"
 
@@ -18,7 +18,7 @@ namespace web {
 // rules.
 class WKContentRuleListProvider {
  public:
-  explicit WKContentRuleListProvider();
+  explicit WKContentRuleListProvider(bool mixed_content_autoupgrade_enabled);
   ~WKContentRuleListProvider();
 
   // Sets the WKUserContentController that this provider will install its rules
@@ -28,7 +28,7 @@ class WKContentRuleListProvider {
 
   // Updates and re-installs the Content Blocker rules using any new state.
   // This may be asynchronous if a rule list hasn't been compiled yet, so
-  // |callback| will be called after the mode is set. It will be called with
+  // `callback` will be called after the mode is set. It will be called with
   // true if the update is successful and false otherwise (most likely because
   // rules were updated again before the first set of rules was fully
   // installed).
@@ -48,6 +48,7 @@ class WKContentRuleListProvider {
 
   __weak WKUserContentController* user_content_controller_;
   WKContentRuleList* block_local_rule_list_;
+  WKContentRuleList* mixed_content_autoupgrade_rule_list_;
 
   base::OnceCallback<void(bool)> update_callback_;
 

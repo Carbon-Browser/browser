@@ -1,9 +1,9 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback.h"
 #include "components/nacl/browser/test_nacl_browser_delegate.h"
+#include "base/functional/callback.h"
 
 TestNaClBrowserDelegate::TestNaClBrowserDelegate() {}
 

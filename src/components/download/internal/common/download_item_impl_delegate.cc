@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/download/public/common/download_item_impl_delegate.h"
 
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/callback_helpers.h"
 #include "build/build_config.h"
 #include "components/download/public/common/auto_resumption_handler.h"
 #include "components/download/public/common/download_danger_type.h"
@@ -37,8 +37,8 @@ void DownloadItemImplDelegate::DetermineDownloadTarget(
   std::move(callback).Run(
       target_path, DownloadItem::TARGET_DISPOSITION_OVERWRITE,
       DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-      DownloadItem::MixedContentStatus::UNKNOWN, target_path, base::FilePath(),
-      std::string(), DOWNLOAD_INTERRUPT_REASON_NONE);
+      DownloadItem::InsecureDownloadStatus::UNKNOWN, target_path,
+      base::FilePath(), std::string(), DOWNLOAD_INTERRUPT_REASON_NONE);
 }
 
 bool DownloadItemImplDelegate::ShouldCompleteDownload(
@@ -109,12 +109,6 @@ void DownloadItemImplDelegate::BindWakeLockProvider(
 QuarantineConnectionCallback
 DownloadItemImplDelegate::GetQuarantineConnectionCallback() {
   return base::NullCallback();
-}
-
-std::unique_ptr<DownloadItemRenameHandler>
-DownloadItemImplDelegate::GetRenameHandlerForDownload(
-    DownloadItemImpl* download_item) {
-  return nullptr;
 }
 
 }  // namespace download

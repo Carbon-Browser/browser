@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -27,11 +27,11 @@
 #include "content/browser/renderer_host/page_lifecycle_state_manager.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_owner_delegate.h"
+#include "content/browser/site_instance_group.h"
 #include "content/browser/site_instance_impl.h"
 #include "content/common/content_export.h"
 #include "content/common/render_message_filter.mojom.h"
 #include "content/public/browser/global_routing_id.h"
-#include "content/public/browser/notification_observer.h"
 #include "content/public/browser/render_process_host_observer.h"
 #include "content/public/browser/render_view_host.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -57,7 +57,6 @@ namespace content {
 
 class AgentSchedulingGroupHost;
 class RenderProcessHost;
-class TimeoutMonitor;
 
 // A callback which will be called immediately before EnterBackForwardCache
 // starts.
@@ -68,6 +67,10 @@ using WillEnterBackForwardCacheCallbackForTesting =
 // RendererPreferences information to the renderer.
 using WillSendRendererPreferencesCallbackForTesting =
     base::RepeatingCallback<void(const blink::RendererPreferences&)>;
+
+// A callback which will be called immediately before sending the WebPreferences
+// information to the renderer.
+using WillSendWebPreferencesCallbackForTesting = base::RepeatingClosure;
 
 // This implements the RenderViewHost interface that is exposed to
 // embedders of content, and adds things only visible to content.
@@ -98,8 +101,6 @@ class CONTENT_EXPORT RenderViewHostImpl
       public IPC::Listener,
       public base::RefCounted<RenderViewHostImpl> {
  public:
-  static constexpr int kUnloadTimeoutInMSec = 500;
-
   // Convenience function, just like RenderViewHost::FromID.
   static RenderViewHostImpl* FromID(int process_id, int routing_id);
 
@@ -124,9 +125,9 @@ class CONTENT_EXPORT RenderViewHostImpl
       RenderViewHostDelegate* delegate,
       int32_t routing_id,
       int32_t main_frame_routing_id,
-      bool swapped_out,
       bool has_initialized_audio_host,
-      scoped_refptr<BrowsingContextState> main_browsing_context_state);
+      scoped_refptr<BrowsingContextState> main_browsing_context_state,
+      CreateRenderViewHostCase create_case);
 
   RenderViewHostImpl(const RenderViewHostImpl&) = delete;
   RenderViewHostImpl& operator=(const RenderViewHostImpl&) = delete;
@@ -149,16 +150,16 @@ class CONTENT_EXPORT RenderViewHostImpl
   // GpuSwitchingObserver implementation.
   void OnGpuSwitched(gl::GpuPreference active_gpu_heuristic) override;
 
-  // Set up the RenderView child process. Virtual because it is overridden by
-  // TestRenderViewHost.
-  // |opener_route_id| parameter indicates which RenderView created this
+  // Set up the `blink::WebView` child process. Virtual because it is overridden
+  // by TestRenderViewHost.
+  // `opener_route_id` parameter indicates which `blink::WebView` created this
   //   (MSG_ROUTING_NONE if none).
-  // |window_was_opened_by_another_window| is true if this top-level frame was
-  // created by another window, as opposed to independently created (through
-  // the browser UI, etc). This is true even when the window is opened with
-  // "noopener", and even if the opener has been closed since.
-  // |proxy_route_id| is only used when creating a RenderView in an inactive
-  //   state.
+  // `window_was_opened_by_another_window` is true if this top-level frame was
+  //   created by another window, as opposed to independently created (through
+  //   the browser UI, etc). This is true even when the window is opened with
+  //   "noopener", and even if the opener has been closed since.
+  // `proxy_route_id` is only used when creating a `blink::WebView` in an
+  //   inactive state.
   virtual bool CreateRenderView(
       const absl::optional<blink::FrameToken>& opener_frame_token,
       int proxy_route_id,
@@ -166,21 +167,30 @@ class CONTENT_EXPORT RenderViewHostImpl
 
   RenderViewHostDelegate* GetDelegate();
 
+  bool is_speculative() { return is_speculative_; }
+  void set_is_speculative(bool is_speculative) {
+    is_speculative_ = is_speculative;
+  }
+  void set_is_registered_with_frame_tree(bool is_registered) {
+    registered_with_frame_tree_ = is_registered;
+  }
+
+  FrameTree::RenderViewHostMapId rvh_map_id() const {
+    return render_view_host_map_id_;
+  }
+
+  base::WeakPtr<RenderViewHostImpl> GetWeakPtr();
+
   // Tracks whether this RenderViewHost is in an active state (rather than
   // pending unload or unloaded), according to its main frame
   // RenderFrameHost.
   bool is_active() const { return main_frame_routing_id_ != MSG_ROUTING_NONE; }
 
-  // TODO(creis): Remove as part of http://crbug.com/418265.
-  bool is_waiting_for_page_close_completion() const {
-    return is_waiting_for_page_close_completion_;
-  }
-
-  // Returns true if the RenderView is active and has not crashed.
+  // Returns true if the `blink::WebView` is active and has not crashed.
   bool IsRenderViewLive() const;
 
-  // Called when the RenderView in the renderer process has been created, at
-  // which point IsRenderViewLive() becomes true, and the mojo connections to
+  // Called when the `blink::WebView` in the renderer process has been created,
+  // at which point IsRenderViewLive() becomes true, and the mojo connections to
   // the renderer process for this view now exist.
   void RenderViewCreated(RenderFrameHostImpl* local_main_frame);
 
@@ -190,15 +200,15 @@ class CONTENT_EXPORT RenderViewHostImpl
   // blink::Page's main blink::Frame is remote).
   RenderFrameHostImpl* GetMainRenderFrameHost();
 
-  // // RenderViewHost is associated with a given SiteInstanceGroup and as
+  // RenderViewHost is associated with a given SiteInstanceGroup and as
   // BrowsingContextState in non-legacy BrowsingContextState mode is tied to a
   // given BrowsingInstance, so the main BrowsingContextState stays the same
   // during the entire lifetime of a RenderViewHost: cross-SiteInstanceGroup
   // same-BrowsingInstance navigations might change the representation of the
-  // main frame in a given RenderView from RenderFrame to RenderFrameProxy and
-  // back, while cross-BrowsingInstances result in creating a new unrelated
-  // RenderViewHost. This is not true in the legacy BCS mode, so there the
-  // |main_browsing_context_state_| is null.
+  // main frame in a given `blink::WebView` from RenderFrame to
+  // `blink::RemoteFrame` and back, while cross-BrowsingInstances result in
+  // creating a new unrelated RenderViewHost. This is not true in the legacy BCS
+  // mode, so there the `main_browsing_context_state_` is null.
   const absl::optional<base::SafeRef<BrowsingContextState>>&
   main_browsing_context_state() const {
     return main_browsing_context_state_;
@@ -212,26 +222,11 @@ class CONTENT_EXPORT RenderViewHostImpl
   // specified point/rect.
   void AnimateDoubleTapZoom(const gfx::Point& point, const gfx::Rect& rect);
 
-  // Tells the renderer process to run the page's unload handler.
-  // A completion callback is invoked by the renderer when the handler
-  // execution completes.
-  void ClosePage();
-
-  // Close the page ignoring whether it has unload events registers.
-  // This is called after the beforeunload and unload events have fired
-  // and the user has agreed to continue with closing the page.
-  void ClosePageIgnoringUnloadEvents();
-
   // Requests a page-scale animation based on the specified rect.
   void ZoomToFindInPageRect(const gfx::Rect& rect_to_zoom);
 
   // Tells the renderer view to focus the first (last if reverse is true) node.
   void SetInitialFocus(bool reverse);
-
-  bool SuddenTerminationAllowed();
-  void set_sudden_termination_allowed(bool enabled) {
-    sudden_termination_allowed_ = enabled;
-  }
 
   // Send RenderViewReady to observers once the process is launched, but not
   // re-entrantly.
@@ -263,11 +258,8 @@ class CONTENT_EXPORT RenderViewHostImpl
   // length) and the timestamp corresponding to the start of the back-forward
   // cached navigation, which would be communicated to the page to allow it to
   // record the latency of this navigation.
-  // TODO(https://crbug.com/1234634): Remove
-  // restoring_main_frame_from_back_forward_cache.
   void LeaveBackForwardCache(
-      blink::mojom::PageRestoreParamsPtr page_restore_params,
-      bool restoring_main_frame_from_back_forward_cache);
+      blink::mojom::PageRestoreParamsPtr page_restore_params);
 
   bool is_in_back_forward_cache() const { return is_in_back_forward_cache_; }
 
@@ -299,6 +291,9 @@ class CONTENT_EXPORT RenderViewHostImpl
   void SetWillSendRendererPreferencesCallbackForTesting(
       const WillSendRendererPreferencesCallbackForTesting& callback);
 
+  void SetWillSendWebPreferencesCallbackForTesting(
+      const WillSendWebPreferencesCallbackForTesting& callback);
+
   void BindPageBroadcast(
       mojo::PendingAssociatedRemote<blink::mojom::PageBroadcast>
           page_broadcast);
@@ -324,6 +319,18 @@ class CONTENT_EXPORT RenderViewHostImpl
   // class to FrameTree/FrameTreeNode.
   FrameTree* frame_tree() const { return frame_tree_; }
   void SetFrameTree(FrameTree& frame_tree);
+
+  // Mark this RenderViewHost as not available for reuse. This will remove
+  // it from being registered with the associated FrameTree.
+  void DisallowReuse();
+
+  base::SafeRef<RenderViewHostImpl> GetSafeRef();
+
+  mojom::ViewWidgetType ViewWidgetType();
+
+  SiteInstanceGroup* site_instance_group() const {
+    return &*site_instance_group_;
+  }
 
   // NOTE: Do not add functions that just send an IPC message that are called in
   // one or two places. Have the caller send the IPC message directly (unless
@@ -366,8 +373,6 @@ class CONTENT_EXPORT RenderViewHostImpl
   friend class PageLifecycleStateManagerBrowserTest;
   FRIEND_TEST_ALL_PREFIXES(RenderViewHostTest, BasicRenderFrameHost);
   FRIEND_TEST_ALL_PREFIXES(RenderViewHostTest, RoutingIdSane);
-  FRIEND_TEST_ALL_PREFIXES(RenderFrameHostManagerTest,
-                           CloseWithPendingWhileUnresponsive);
 
   // IPC::Listener implementation.
   bool OnMessageReceived(const IPC::Message& msg) override;
@@ -375,21 +380,10 @@ class CONTENT_EXPORT RenderViewHostImpl
 
   void RenderViewReady();
 
-  // Called by |close_timeout_| when the page closing timeout fires.
-  void ClosePageTimeout();
-
-  void OnPageClosed();
-
-  // TODO(creis): Move to a private namespace on RenderFrameHostImpl.
-  // Delay to wait on closing the WebContents for a beforeunload/unload handler
-  // to fire.
-  static constexpr base::TimeDelta kUnloadTimeout =
-      base::Milliseconds(kUnloadTimeoutInMSec);
-
   // The RenderWidgetHost.
   const std::unique_ptr<RenderWidgetHostImpl> render_widget_host_;
 
-  // Our delegate, which wants to know about changes in the RenderView.
+  // Our delegate, which wants to know about changes in the `blink::WebView`.
   raw_ptr<RenderViewHostDelegate> delegate_;
 
   // ID to use when registering/unregistering this object with its FrameTree.
@@ -399,6 +393,10 @@ class CONTENT_EXPORT RenderViewHostImpl
   // field.
   FrameTree::RenderViewHostMapId render_view_host_map_id_;
 
+  // The SiteInstanceGroup this RenderViewHostImpl belongs to.
+  // TODO(https://crbug.com/1420333) Turn this into base::SafeRef
+  base::WeakPtr<SiteInstanceGroup> site_instance_group_;
+
   // Provides information for selecting the session storage namespace for this
   // view.
   const StoragePartitionConfig storage_partition_config_;
@@ -406,28 +404,14 @@ class CONTENT_EXPORT RenderViewHostImpl
   // Routing ID for this RenderViewHost.
   const int routing_id_;
 
-  // Whether the renderer-side RenderView is created. Becomes false when the
-  // renderer crashes.
+  // Whether the renderer-side `blink::WebView` is created. Becomes false when
+  // the renderer crashes.
   bool renderer_view_created_ = false;
 
   // Routing ID for the main frame's RenderFrameHost.
   int main_frame_routing_id_;
 
-  // Set to true when waiting for a blink.mojom.LocalMainFrame.ClosePage()
-  // to complete.
-  //
-  // TODO(creis): Move to RenderFrameHost and RenderWidgetHost.
-  // See http://crbug.com/418265.
-  bool is_waiting_for_page_close_completion_ = false;
-
-  // True if the render view can be shut down suddenly.
-  bool sudden_termination_allowed_ = false;
-
-  // The timeout monitor that runs from when the page close is started in
-  // ClosePage() until either the render process ACKs the close with an IPC to
-  // OnClosePageACK(), or until the timeout triggers and the page is forcibly
-  // closed.
-  std::unique_ptr<TimeoutMonitor> close_timeout_;
+  absl::optional<mojom::ViewWidgetType> view_widget_type_;
 
   // This monitors input changes so they can be reflected to the interaction MQ.
   std::unique_ptr<InputDeviceChangeObserver> input_device_change_observer_;
@@ -446,6 +430,9 @@ class CONTENT_EXPORT RenderViewHostImpl
   WillSendRendererPreferencesCallbackForTesting
       will_send_renderer_preferences_callback_for_testing_;
 
+  WillSendWebPreferencesCallbackForTesting
+      will_send_web_preferences_callback_for_testing_;
+
   mojo::AssociatedRemote<blink::mojom::PageBroadcast> page_broadcast_;
 
   raw_ptr<FrameTree> frame_tree_;
@@ -453,6 +440,14 @@ class CONTENT_EXPORT RenderViewHostImpl
   // See main_browsing_context_state() for more details.
   absl::optional<base::SafeRef<BrowsingContextState>>
       main_browsing_context_state_;
+
+  bool registered_with_frame_tree_ = false;
+
+  // Whether the RenderViewHost is a speculative RenderViewHost or not.
+  // Currently this is never set, as the feature is not implemented yet.
+  // TODO(https://crbug.com/1336305): Actually set this value for speculative
+  // RenderViewHosts.
+  bool is_speculative_ = false;
 
   base::WeakPtrFactory<RenderViewHostImpl> weak_factory_{this};
 };

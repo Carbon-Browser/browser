@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
@@ -30,10 +30,11 @@
 #include "components/component_updater/component_installer.h"
 #include "components/component_updater/component_updater_paths.h"
 #include "content/public/browser/browser_thread.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
-constexpr base::FilePath::CharType kAppProvisioningBinaryPbFileName[] =
+constexpr base::FilePath::CharType kAppWithLocaleBinaryPbFileName[] =
     FILE_PATH_LITERAL("app_data.textproto");
 
 // The SHA256 of the SubjectPublicKeyInfo used to sign the extension.
@@ -45,20 +46,32 @@ constexpr uint8_t kAppProvisioningPublicKeySHA256[32] = {
 
 constexpr char kAppProvisioningManifestName[] = "App Provisioning";
 
-std::string LoadAppMetadataFromDisk(const base::FilePath& pb_path) {
-  if (pb_path.empty())
-    return "";
-
-  VLOG(1) << "Reading Download App Metadata from file: " << pb_path.value();
-  std::string binary_pb;
-  if (!base::ReadFileToString(pb_path, &binary_pb)) {
-    // ComponentReady will only be called when there is some installation of the
-    // component ready, so it would be correct to consider this an error.
-    VLOG(1) << "Failed reading from " << pb_path.value();
-    return "";
+absl::optional<apps::ComponentFileContents> LoadAppMetadataFromDisk(
+    const base::FilePath& app_with_locale_pb_path) {
+  if (app_with_locale_pb_path.empty()) {
+    return absl::nullopt;
   }
 
-  return binary_pb;
+  VLOG(1) << "Reading Download App Metadata from file: "
+          << app_with_locale_pb_path.value();
+  std::string app_with_locale_binary_pb;
+  if (!base::ReadFileToString(app_with_locale_pb_path,
+                              &app_with_locale_binary_pb)) {
+    VLOG(1) << "Failed reading from " << app_with_locale_pb_path.value();
+    return absl::nullopt;
+  }
+
+  return apps::ComponentFileContents{app_with_locale_binary_pb};
+}
+
+void UpdateAppMetadataOnUI(
+    const base::FilePath& install_dir,
+    const absl::optional<apps::ComponentFileContents>& component_files) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  if (component_files.has_value()) {
+    apps::AppProvisioningDataManager::Get()->PopulateFromDynamicUpdate(
+        component_files.value(), install_dir);
+  }
 }
 
 }  // namespace
@@ -67,11 +80,11 @@ namespace component_updater {
 
 // Called during startup and installation before ComponentReady().
 bool AppProvisioningComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // No need to actually validate the proto here, since we'll do the checking
   // in `PopulateFromDynamicUpdate()`.
-  return base::PathExists(GetInstalledPath(install_dir));
+  return base::PathExists(GetAppWithLocaleInstalledPath(install_dir));
 }
 
 bool AppProvisioningComponentInstallerPolicy::
@@ -86,7 +99,7 @@ bool AppProvisioningComponentInstallerPolicy::RequiresNetworkEncryption()
 
 update_client::CrxInstaller::Result
 AppProvisioningComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -96,16 +109,14 @@ void AppProvisioningComponentInstallerPolicy::OnCustomUninstall() {}
 void AppProvisioningComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   VLOG(1) << "Component ready, version " << version.GetString() << " in "
           << install_dir.value();
-
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
-      base::BindOnce(&LoadAppMetadataFromDisk, GetInstalledPath(install_dir)),
-      base::BindOnce(
-          &AppProvisioningComponentInstallerPolicy::UpdateAppMetadataOnUI,
-          base::Unretained(this), install_dir));
+      base::BindOnce(&LoadAppMetadataFromDisk,
+                     GetAppWithLocaleInstalledPath(install_dir)),
+      base::BindOnce(&UpdateAppMetadataOnUI, install_dir));
 }
 
 base::FilePath AppProvisioningComponentInstallerPolicy::GetRelativeInstallDir()
@@ -128,26 +139,14 @@ AppProvisioningComponentInstallerPolicy::GetInstallerAttributes() const {
   return update_client::InstallerAttributes();
 }
 
-base::FilePath AppProvisioningComponentInstallerPolicy::GetInstalledPath(
+base::FilePath
+AppProvisioningComponentInstallerPolicy::GetAppWithLocaleInstalledPath(
     const base::FilePath& base) {
-  return base.Append(kAppProvisioningBinaryPbFileName);
-}
-
-void AppProvisioningComponentInstallerPolicy::UpdateAppMetadataOnUI(
-    const base::FilePath& install_dir,
-    const std::string& binary_pb) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  if (!binary_pb.empty()) {
-    apps::AppProvisioningDataManager::Get()->PopulateFromDynamicUpdate(
-        binary_pb, install_dir);
-  }
+  return base.Append(kAppWithLocaleBinaryPbFileName);
 }
 
 void RegisterAppProvisioningComponent(component_updater::ComponentUpdateService* cus) {
-  // If either of these flags are enabled, register the component. Otherwise,
-  // don't.
-  if (base::FeatureList::IsEnabled(features::kAppProvisioningStatic) ||
-      chromeos::features::IsCloudGamingDeviceEnabled()) {
+  if (chromeos::features::IsCloudGamingDeviceEnabled()) {
     VLOG(1) << "Registering App Provisioning component.";
     auto installer = base::MakeRefCounted<ComponentInstaller>(
         std::make_unique<AppProvisioningComponentInstallerPolicy>());

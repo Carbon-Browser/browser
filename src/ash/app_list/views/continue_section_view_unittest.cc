@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/app_list/views/continue_section_view.h"
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -27,20 +28,19 @@
 #include "ash/app_list/views/search_box_view.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
-#include "ash/public/cpp/app_list/app_list_features.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/test/layer_animation_stopped_waiter.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/compositor/test/layer_animation_stopped_waiter.h"
+#include "ui/display/screen.h"
 #include "ui/events/event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/views/animation/ink_drop.h"
@@ -78,7 +78,7 @@ void WaitForAllChildrenAnimationsToComplete(views::View* view) {
     bool found_animation = false;
     for (views::View* child : view->children()) {
       if (child->layer() && child->layer()->GetAnimator()->is_animating()) {
-        LayerAnimationStoppedWaiter waiter;
+        ui::LayerAnimationStoppedWaiter waiter;
         waiter.Wait(child->layer());
         found_animation = true;
         break;
@@ -94,10 +94,7 @@ class ContinueSectionViewTestBase : public AshTestBase {
  public:
   explicit ContinueSectionViewTestBase(bool tablet_mode)
       : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME),
-        tablet_mode_(tablet_mode) {
-    scoped_feature_list_.InitWithFeatures(
-        {features::kLauncherAppSort, features::kProductivityLauncher}, {});
-  }
+        tablet_mode_(tablet_mode) {}
   ~ContinueSectionViewTestBase() override = default;
 
   void TearDown() override {
@@ -135,8 +132,9 @@ class ContinueSectionViewTestBase : public AshTestBase {
   }
 
   ContinueSectionView* GetContinueSectionView() {
-    if (Shell::Get()->tablet_mode_controller()->InTabletMode())
+    if (display::Screen::GetScreen()->InTabletMode()) {
       return GetAppListTestHelper()->GetFullscreenContinueSectionView();
+    }
     return GetAppListTestHelper()->GetBubbleContinueSectionView();
   }
 
@@ -145,14 +143,16 @@ class ContinueSectionViewTestBase : public AshTestBase {
   }
 
   views::View* GetRecentAppsView() {
-    if (Shell::Get()->tablet_mode_controller()->InTabletMode())
+    if (display::Screen::GetScreen()->InTabletMode()) {
       return GetAppListTestHelper()->GetFullscreenRecentAppsView();
+    }
     return GetAppListTestHelper()->GetBubbleRecentAppsView();
   }
 
   views::View* GetAppsGridView() {
-    if (Shell::Get()->tablet_mode_controller()->InTabletMode())
+    if (display::Screen::GetScreen()->InTabletMode()) {
       return GetAppListTestHelper()->GetRootPagedAppsGridView();
+    }
     return GetAppListTestHelper()->GetScrollableAppsGridView();
   }
 
@@ -195,8 +195,9 @@ class ContinueSectionViewTestBase : public AshTestBase {
   }
 
   SearchBoxView* GetSearchBoxView() {
-    if (Shell::Get()->tablet_mode_controller()->InTabletMode())
+    if (display::Screen::GetScreen()->InTabletMode()) {
       return GetAppListTestHelper()->GetSearchBoxView();
+    }
     return GetAppListTestHelper()->GetBubbleSearchBoxView();
   }
 
@@ -226,11 +227,13 @@ class ContinueSectionViewTestBase : public AshTestBase {
     if (tablet_mode_param()) {
       // Convert to tablet mode to show fullscren launcher.
       Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
-      Shell::Get()->app_list_controller()->ShowAppList();
+      Shell::Get()->app_list_controller()->ShowAppList(
+          AppListShowSource::kSearchKey);
       test_api_ = std::make_unique<test::AppsGridViewTestApi>(
           GetAppListTestHelper()->GetRootPagedAppsGridView());
     } else {
-      Shell::Get()->app_list_controller()->ShowAppList();
+      Shell::Get()->app_list_controller()->ShowAppList(
+          AppListShowSource::kSearchKey);
       test_api_ = std::make_unique<test::AppsGridViewTestApi>(
           GetAppListTestHelper()->GetScrollableAppsGridView());
     }
@@ -266,15 +269,13 @@ class ContinueSectionViewTestBase : public AshTestBase {
   }
 
   gfx::RectF GetTargetLayerBounds(views::View* view) {
-    gfx::RectF bounds(view->layer()->GetTargetBounds());
-    view->layer()->GetTargetTransform().TransformRect(&bounds);
-    return bounds;
+    return view->layer()->GetTargetTransform().MapRect(
+        gfx::RectF(view->layer()->GetTargetBounds()));
   }
 
   gfx::RectF GetCurrentLayerBounds(views::View* view) {
-    gfx::RectF bounds(view->layer()->bounds());
-    view->layer()->transform().TransformRect(&bounds);
-    return bounds;
+    return view->layer()->transform().MapRect(
+        gfx::RectF(view->layer()->bounds()));
   }
 
   std::vector<gfx::RectF> GetCurrentLayerBoundsForAllTaskViews() {
@@ -304,9 +305,8 @@ class ContinueSectionViewTestBase : public AshTestBase {
  private:
   bool tablet_mode_ = false;
 
-  absl::optional<ui::ScopedAnimationDurationScaleMode> animation_duration_;
+  std::optional<ui::ScopedAnimationDurationScaleMode> animation_duration_;
   std::unique_ptr<test::AppsGridViewTestApi> test_api_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 class ContinueSectionViewTest : public ContinueSectionViewTestBase,
@@ -347,7 +347,7 @@ class ContinueSectionViewWithReorderNudgeTest
   }
 
   AppListToastContainerView* GetToastContainerView() {
-    if (!Shell::Get()->tablet_mode_controller()->InTabletMode()) {
+    if (!display::Screen::GetScreen()->InTabletMode()) {
       return GetAppListTestHelper()
           ->GetBubbleAppsPage()
           ->toast_container_for_test();
@@ -387,6 +387,22 @@ TEST_P(ContinueSectionViewTest, VerifyAddedViewsOrder) {
   EXPECT_EQ(GetResultViewAt(0)->result()->id(), "id1");
   EXPECT_EQ(GetResultViewAt(1)->result()->id(), "id2");
   EXPECT_EQ(GetResultViewAt(2)->result()->id(), "id3");
+}
+
+// Tests that the continue section view will be visible once we have a admin
+// template.
+TEST_P(ContinueSectionViewTest, ShowContinueSectionWhenAdminTemplateAvailable) {
+  base::test::ScopedFeatureList scoped_list;
+  scoped_list.InitAndEnableFeature(features::kAppLaunchAutomation);
+
+  AddSearchResult("id", AppListSearchResultType::kDesksAdminTemplate);
+
+  EnsureLauncherShown();
+  VerifyResultViewsUpdated();
+
+  ContinueSectionView* view = GetContinueSectionView();
+  ASSERT_EQ(view->GetTasksSuggestionsCount(), 1u);
+  EXPECT_TRUE(GetContinueSectionView()->GetVisible());
 }
 
 TEST_P(ContinueSectionViewTest, ShowsHelpAppResults) {
@@ -869,6 +885,8 @@ TEST_P(ContinueSectionViewTest, UpdateAppsOnModelChange) {
   // accordingly.
   auto model_override = std::make_unique<test::AppListTestModel>();
   auto search_model_override = std::make_unique<SearchModel>();
+  auto quick_app_access_model_override =
+      std::make_unique<QuickAppAccessModel>();
 
   AddSearchResultToModel("id21", AppListSearchResultType::kZeroStateFile,
                          search_model_override.get(), "Fake Title");
@@ -878,7 +896,8 @@ TEST_P(ContinueSectionViewTest, UpdateAppsOnModelChange) {
                          search_model_override.get(), "Fake Title");
 
   Shell::Get()->app_list_controller()->SetActiveModel(
-      /*profile_id=*/1, model_override.get(), search_model_override.get());
+      /*profile_id=*/1, model_override.get(), search_model_override.get(),
+      quick_app_access_model_override.get());
   GetContinueSectionView()->GetWidget()->LayoutRootViewIfNecessary();
 
   EXPECT_EQ(std::vector<std::string>({"id21", "id22", "id23"}), GetResultIds());
@@ -1203,13 +1222,8 @@ TEST_P(ContinueSectionViewWithReorderNudgeTest, TimeDismissPrivacyNotice) {
             AppListToastType::kReorderNudge);
 }
 
-// TODO(crbug.com/1317428): Switch to ContinueSectionViewWithReorderNudgeTest
-// when this feature works in tablet mode.
-TEST_F(ContinueSectionViewClamshellModeTest,
+TEST_P(ContinueSectionViewWithReorderNudgeTest,
        HidingContinueSectionHidesPrivacyNotice) {
-  base::test::ScopedFeatureList feature_list(
-      features::kLauncherHideContinueSection);
-
   AddSearchResult("id1", AppListSearchResultType::kZeroStateFile);
   AddSearchResult("id2", AppListSearchResultType::kZeroStateDrive);
   AddSearchResult("id3", AppListSearchResultType::kZeroStateDrive);
@@ -2104,7 +2118,7 @@ TEST_F(ContinueSectionViewClamshellModeTest, AnimatesOutAfterRemovingResults) {
   EXPECT_EQ(0.0f, privacy_notice->layer()->GetTargetOpacity());
   EXPECT_TRUE(privacy_notice->layer()->GetAnimator()->is_animating());
 
-  LayerAnimationStoppedWaiter waiter;
+  ui::LayerAnimationStoppedWaiter waiter;
   waiter.Wait(privacy_notice->layer());
 
   VerifyResultViewsUpdated();
@@ -2132,7 +2146,7 @@ TEST_P(ContinueSectionViewTest, AnimatesPrivacyNoticeAccept) {
   EXPECT_EQ(0.0f, privacy_notice->layer()->GetTargetOpacity());
   EXPECT_TRUE(privacy_notice->layer()->GetAnimator()->is_animating());
 
-  LayerAnimationStoppedWaiter waiter;
+  ui::LayerAnimationStoppedWaiter waiter;
   waiter.Wait(privacy_notice->layer());
 
   ContinueTaskContainerView* container_view =
@@ -2169,7 +2183,7 @@ TEST_F(ContinueSectionViewClamshellModeTest,
   EXPECT_EQ(0.0f, privacy_notice->layer()->GetTargetOpacity());
   EXPECT_TRUE(privacy_notice->layer()->GetAnimator()->is_animating());
 
-  LayerAnimationStoppedWaiter waiter;
+  ui::LayerAnimationStoppedWaiter waiter;
   waiter.Wait(privacy_notice->layer());
 
   WaitForAllChildrenAnimationsToComplete(
@@ -2177,6 +2191,25 @@ TEST_F(ContinueSectionViewClamshellModeTest,
   EXPECT_FALSE(IsPrivacyNoticeVisible());
 
   EXPECT_FALSE(GetContinueSectionView()->GetVisible());
+}
+
+// Regression test for https://crbug.com/1357434.
+TEST_F(ContinueSectionViewClamshellModeTest,
+       CloseLauncherWhileAnimatingPrivacyToastDoesNotCrash) {
+  ResetPrivacyNoticePref();
+  InitializeForAnimationTest(/*result_count=*/3);
+  ASSERT_TRUE(IsPrivacyNoticeVisible());
+
+  AppListToastView* privacy_toast =
+      GetContinueSectionView()->GetPrivacyNoticeForTest();
+  ASSERT_TRUE(privacy_toast);
+
+  // Tap on the "OK" button to start the toast dismiss animation.
+  GestureTapOn(privacy_toast->toast_button());
+  EXPECT_TRUE(privacy_toast->layer()->GetAnimator()->is_animating());
+
+  HideLauncher();
+  // No crash.
 }
 
 }  // namespace

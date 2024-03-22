@@ -210,7 +210,7 @@ void ServiceWorkerContainer::Trace(Visitor* visitor) const {
   visitor->Trace(dom_content_loaded_observer_);
   visitor->Trace(service_worker_registration_objects_);
   visitor->Trace(service_worker_objects_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   Supplement<LocalDOMWindow>::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
@@ -347,7 +347,7 @@ ScriptPromise ServiceWorkerContainer::registerServiceWorker(
   if (GetExecutionContext()->IsWindow()) {
     Document* document = To<LocalDOMWindow>(GetExecutionContext())->document();
     if (document->IsPrerendering()) {
-      document->AddPostPrerenderingActivationStep(WTF::Bind(
+      document->AddPostPrerenderingActivationStep(WTF::BindOnce(
           &ServiceWorkerContainer::RegisterServiceWorkerInternal,
           WrapWeakPersistent(this), scope_url, script_url,
           std::move(script_type), update_via_cache,
@@ -495,8 +495,8 @@ ScriptPromise ServiceWorkerContainer::ready(ScriptState* caller_state,
     ready_ = CreateReadyProperty();
     if (provider_) {
       provider_->GetRegistrationForReady(
-          WTF::Bind(&ServiceWorkerContainer::OnGetRegistrationForReady,
-                    WrapPersistent(this)));
+          WTF::BindOnce(&ServiceWorkerContainer::OnGetRegistrationForReady,
+                        WrapPersistent(this)));
     }
   }
 
@@ -615,7 +615,7 @@ ServiceWorker* ServiceWorkerContainer::GetOrCreateServiceWorker(
 
   auto it = service_worker_objects_.find(info.version_id);
   if (it != service_worker_objects_.end())
-    return it->value;
+    return it->value.Get();
 
   const int64_t version_id = info.version_id;
   ServiceWorker* worker = ServiceWorker::Create(
@@ -636,7 +636,7 @@ ServiceWorkerContainer::CreateReadyProperty() {
 void ServiceWorkerContainer::EnableClientMessageQueue() {
   dom_content_loaded_observer_ = nullptr;
   if (is_client_message_queue_enabled_) {
-    DCHECK(queued_messages_.IsEmpty());
+    DCHECK(queued_messages_.empty());
     return;
   }
   is_client_message_queue_enabled_ = true;
@@ -673,17 +673,16 @@ void ServiceWorkerContainer::DispatchMessageEvent(
     }
   }
   if (!event) {
-    if (!msg.locked_agent_cluster_id ||
-        GetExecutionContext()->IsSameAgentCluster(
-            *msg.locked_agent_cluster_id)) {
-      event = MessageEvent::Create(
-          ports, std::move(msg.message),
-          GetExecutionContext()->GetSecurityOrigin()->ToString(),
-          String() /* lastEventId */, service_worker);
+    auto* context = GetExecutionContext();
+    if ((!msg.locked_to_sender_agent_cluster ||
+         context->IsSameAgentCluster(msg.sender_agent_cluster_id)) &&
+        msg.message->CanDeserializeIn(context)) {
+      event = MessageEvent::Create(ports, std::move(msg.message),
+                                   context->GetSecurityOrigin()->ToString(),
+                                   String() /* lastEventId */, service_worker);
     } else {
       event = MessageEvent::CreateError(
-          GetExecutionContext()->GetSecurityOrigin()->ToString(),
-          service_worker);
+          context->GetSecurityOrigin()->ToString(), service_worker);
     }
   }
   // Schedule the event to be dispatched on the correct task source:

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "components/bookmarks/browser/titled_url_match.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
+#include "components/query_parser/snippet.h"
 
 class AutocompleteInput;
 class AutocompleteProvider;
@@ -26,10 +27,15 @@ AutocompleteMatch TitledUrlMatchToAutocompleteMatch(
     const TitledUrlMatch& match,
     AutocompleteMatchType::Type type,
     int relevance,
+    int bookmark_count,
     AutocompleteProvider* provider,
     const AutocompleteSchemeClassifier& scheme_classifier,
     const AutocompleteInput& input,
     const std::u16string& fixed_up_input_text);
+
+// Computes the total length of matched strings in the bookmark title.
+int GetTotalTitleMatchLength(
+    const query_parser::Snippet::MatchPositions& title_match_positions);
 
 }  // namespace bookmarks
 

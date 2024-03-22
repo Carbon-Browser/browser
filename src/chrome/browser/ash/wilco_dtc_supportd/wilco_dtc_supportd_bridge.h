@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/files/scoped_file.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_notification_controller.h"
@@ -118,13 +119,11 @@ class WilcoDtcSupportdBridge final
   void HandleEvent(chromeos::wilco_dtc_supportd::mojom::WilcoDtcSupportdEvent
                        event) override;
   void GetCrosHealthdDiagnosticsService(
-      mojo::PendingReceiver<
-          chromeos::cros_healthd::mojom::CrosHealthdDiagnosticsService> service)
-      override;
+      mojo::PendingReceiver<cros_healthd::mojom::CrosHealthdDiagnosticsService>
+          service) override;
   void GetCrosHealthdProbeService(
-      mojo::PendingReceiver<
-          chromeos::cros_healthd::mojom::CrosHealthdProbeService> service)
-      override;
+      mojo::PendingReceiver<cros_healthd::mojom::CrosHealthdProbeService>
+          service) override;
 
   std::unique_ptr<Delegate> delegate_;
 
@@ -154,7 +153,8 @@ class WilcoDtcSupportdBridge final
   // The Wilco DTC configuration data blob, passed from the device policy, is
   // stored and owned by |WilcoDtcSupportdManager|.
   // nullptr if there is no available configuration data for the Wilco DTC.
-  const std::string* configuration_data_ = nullptr;
+  raw_ptr<const std::string, DanglingUntriaged | ExperimentalAsh>
+      configuration_data_ = nullptr;
 
   // These weak pointer factories must be the last members:
 

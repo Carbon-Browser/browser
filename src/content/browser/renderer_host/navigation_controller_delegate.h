@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,8 @@ class NavigationControllerDelegate {
  public:
   virtual ~NavigationControllerDelegate() {}
 
-  // TODO(https://crbug.com/1224294): Remove duplicates of WebContents methods.
-  virtual void NotifyNavigationStateChanged(InvalidateTypes changed_flags) = 0;
+  virtual void NotifyNavigationStateChangedFromController(
+      InvalidateTypes changed_flags) = 0;
 
   // Methods from WebContentsImpl that NavigationControllerImpl needs to
   // call. NavigationControllerImpl cannot call them directly because

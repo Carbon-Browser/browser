@@ -1,12 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_FIDO_CROS_CREDENTIAL_STORE_H_
 #define DEVICE_FIDO_CROS_CREDENTIAL_STORE_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "device/fido/platform_credential_store.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"

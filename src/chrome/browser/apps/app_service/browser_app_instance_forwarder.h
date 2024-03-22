@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_APPS_APP_SERVICE_BROWSER_APP_INSTANCE_FORWARDER_H_
 #define CHROME_BROWSER_APPS_APP_SERVICE_BROWSER_APP_INSTANCE_FORWARDER_H_
 
+#include "base/memory/raw_ref.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/apps/app_service/browser_app_instance_observer.h"
 #include "chrome/browser/apps/app_service/browser_app_instance_tracker.h"
@@ -50,9 +51,10 @@ class BrowserAppInstanceForwarder
   void ActivateTabInstance(const base::UnguessableToken& instance_id) override;
 
  private:
-  mojo::Remote<crosapi::mojom::BrowserAppInstanceRegistry>& registry_;
+  const raw_ref<mojo::Remote<crosapi::mojom::BrowserAppInstanceRegistry>>
+      registry_;
 
-  BrowserAppInstanceTracker& tracker_;
+  const raw_ref<BrowserAppInstanceTracker> tracker_;
 
   base::ScopedObservation<BrowserAppInstanceTracker, BrowserAppInstanceObserver>
       tracker_observation_{this};

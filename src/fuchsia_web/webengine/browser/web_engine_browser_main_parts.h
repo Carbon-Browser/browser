@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "build/chromecast_buildflags.h"
 #include "content/public/browser/browser_main_parts.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"
 #include "fuchsia_web/webengine/browser/web_engine_browser_context.h"
@@ -21,17 +22,19 @@ namespace base {
 class FuchsiaIntlProfileWatcher;
 }
 
-namespace display {
-class ScopedNativeScreen;
+namespace aura {
+class ScreenOzone;
 }
 
 namespace content {
 class ContentBrowserClient;
 }
 
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
 namespace fuchsia_legacymetrics {
 class LegacyMetricsClient;
 }
+#endif
 
 namespace media {
 class FuchsiaCdmManager;
@@ -88,7 +91,6 @@ class WEB_ENGINE_EXPORT WebEngineBrowserMainParts
   }
 
   // content::BrowserMainParts overrides.
-  int PreEarlyInitialization() override;
   void PostEarlyInitialization() override;
   int PreMainMessageLoopRun() override;
   void WillRunMainMessageLoop(
@@ -120,7 +122,7 @@ class WEB_ENGINE_EXPORT WebEngineBrowserMainParts
 
   content::ContentBrowserClient* const browser_client_;
 
-  std::unique_ptr<display::ScopedNativeScreen> screen_;
+  std::unique_ptr<aura::ScreenOzone> screen_;
 
   // Used to publish diagnostics including the active Contexts and FrameHosts.
   std::unique_ptr<sys::ComponentInspector> component_inspector_;
@@ -135,8 +137,12 @@ class WEB_ENGINE_EXPORT WebEngineBrowserMainParts
       frame_host_bindings_;
 
   std::unique_ptr<WebEngineDevToolsController> devtools_controller_;
+
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
   std::unique_ptr<fuchsia_legacymetrics::LegacyMetricsClient>
       legacy_metrics_client_;
+#endif
+
   std::unique_ptr<media::FuchsiaCdmManager> cdm_manager_;
 
   // Used to respond to changes to the system's current locale.

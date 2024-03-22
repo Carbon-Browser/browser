@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -66,8 +66,7 @@ class MAYBE_RenderFrameAudioInputStreamFactoryTest
                        &log_factory_),
         audio_system_(media::AudioSystemImpl::CreateInstance()),
         media_stream_manager_(
-            std::make_unique<MediaStreamManager>(audio_system_.get(),
-                                                 GetUIThreadTaskRunner({}))) {}
+            std::make_unique<MediaStreamManager>(audio_system_.get())) {}
 
   ~MAYBE_RenderFrameAudioInputStreamFactoryTest() override {}
 

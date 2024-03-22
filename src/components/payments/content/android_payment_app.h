@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,8 @@ class AndroidPaymentApp : public PaymentApp {
       const std::string& payment_request_id,
       std::unique_ptr<AndroidAppDescription> description,
       base::WeakPtr<AndroidAppCommunication> communication,
-      content::GlobalRenderFrameHostId frame_routing_id);
+      content::GlobalRenderFrameHostId frame_routing_id,
+      const absl::optional<base::UnguessableToken>& twa_instance_identifier);
   ~AndroidPaymentApp() override;
 
   AndroidPaymentApp(const AndroidPaymentApp& other) = delete;
@@ -52,7 +53,6 @@ class AndroidPaymentApp : public PaymentApp {
   // PaymentApp implementation.
   void InvokePaymentApp(base::WeakPtr<Delegate> delegate) override;
   bool IsCompleteForPayment() const override;
-  uint32_t GetCompletenessScore() const override;
   bool CanPreselect() const override;
   std::u16string GetMissingInfoLabel() const override;
   bool HasEnrolledInstrument() const override;
@@ -62,10 +62,7 @@ class AndroidPaymentApp : public PaymentApp {
   std::u16string GetLabel() const override;
   std::u16string GetSublabel() const override;
   const SkBitmap* icon_bitmap() const override;
-  bool IsValidForModifier(
-      const std::string& method,
-      bool supported_networks_specified,
-      const std::set<std::string>& supported_networks) const override;
+  bool IsValidForModifier(const std::string& method) const override;
   base::WeakPtr<PaymentApp> AsWeakPtr() override;
   bool HandlesShippingAddress() const override;
   bool HandlesPayerName() const override;
@@ -100,6 +97,11 @@ class AndroidPaymentApp : public PaymentApp {
   // True when InvokePaymentApp() has been called but no response has been
   // received yet.
   bool payment_app_open_;
+  // Token used to uniquely identify a particular TWA instance that invoked
+  // the payment request. This is used to map the TWA instance in
+  // Lacros (the Chrome OS browser) and browser window that hosts the TWA
+  // instance in Ash (the Chrome OS system UI).
+  absl::optional<base::UnguessableToken> twa_instance_identifier_;
 
   base::WeakPtrFactory<AndroidPaymentApp> weak_ptr_factory_{this};
 };

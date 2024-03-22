@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 #include "ui/compositor/compositor_export.h"
 #include "ui/gfx/animation/keyframe/animation_curve.h"
 #include "ui/gfx/animation/tween.h"
+#include "ui/gfx/geometry/decomposed_transform.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/transform_operations.h"
-#include "ui/gfx/geometry/transform_util.h"
 
 namespace ui {
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,14 +33,15 @@
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/prefs/pref_service.h"
 #include "components/search_engines/default_search_manager.h"
-#include "components/search_engines/omnibox_focus_type.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_starter_pack_data.h"
 #include "components/url_formatter/url_fixer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
+#include "ui/base/page_transition_types.h"
 
 using base::ASCIIToUTF16;
 using base::Time;
@@ -289,10 +290,6 @@ bool HistoryURLProviderTest::SetUpImpl(bool create_history_db) {
   client_->set_history_service(
       history::CreateHistoryService(history_dir_.GetPath(), create_history_db));
   client_->set_bookmark_model(bookmarks::TestBookmarkClient::CreateModel());
-  client_->set_in_memory_url_index(std::make_unique<InMemoryURLIndex>(
-      client_->GetBookmarkModel(), client_->GetHistoryService(), nullptr,
-      history_dir_.GetPath(), SchemeSet()));
-  client_->GetInMemoryURLIndex()->Init();
   client_->set_template_url_service(
       std::make_unique<TemplateURLService>(nullptr, 0));
   if (!client_->GetHistoryService())
@@ -347,10 +344,7 @@ void HistoryURLProviderTest::RunTest(
   matches_ = autocomplete_->matches();
   if (sort_matches_) {
     TemplateURLService* service = client_->GetTemplateURLService();
-    for (auto i = matches_.begin(); i != matches_.end(); ++i) {
-      i->ComputeStrippedDestinationURL(input, service);
-    }
-    AutocompleteResult::DeduplicateMatches(&matches_);
+    AutocompleteResult::DeduplicateMatches(&matches_, input, service);
     std::sort(matches_.begin(), matches_.end(),
               &AutocompleteMatch::MoreRelevant);
   }
@@ -569,8 +563,8 @@ TEST_F(HistoryURLProviderTest, CullRedirects) {
   redirects_to_a.push_back(GURL(test_cases[2].url));
   redirects_to_a.push_back(GURL(test_cases[0].url));
   client_->GetHistoryService()->AddPage(
-      GURL(test_cases[0].url), Time::Now(), nullptr, 0, GURL(), redirects_to_a,
-      ui::PAGE_TRANSITION_TYPED, history::SOURCE_BROWSED, true, false);
+      GURL(test_cases[0].url), Time::Now(), 0, 0, GURL(), redirects_to_a,
+      ui::PAGE_TRANSITION_TYPED, history::SOURCE_BROWSED, true);
 
   // Because all the results are part of a redirect chain with other results,
   // all but the first one (A) should be culled. We should get the default
@@ -668,9 +662,9 @@ TEST_F(HistoryURLProviderTest, WhatYouTyped_Exact_URLPreservesUsernameAndPasswor
 
 // Test that file: URLs are handled appropriately on each platform.
 // url_formatter has per-platform logic for Windows vs POSIX, and
-// AutocompleteInput has special casing for iOS.
+// AutocompleteInput has special casing for iOS and Android.
 TEST_F(HistoryURLProviderTest, Files) {
-#if BUILDFLAG(IS_IOS)
+#if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
   // On iOS, check that file URIs are treated like queries.
   AutocompleteInput ios_input_1(
       u"file:///foo", std::u16string::npos, std::string(),
@@ -681,7 +675,7 @@ TEST_F(HistoryURLProviderTest, Files) {
   EXPECT_EQ(matches_.size(), 0u);
 #endif  // BUILDFLAG(IS_IOS)
 
-#if !BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
   // For everything but iOS, fixing up "file:" should result in an inline
   // autocomplete offset of just after "file:", not just after "file://".
   const std::u16string input_1(u"file:");
@@ -691,7 +685,7 @@ TEST_F(HistoryURLProviderTest, Files) {
   EXPECT_EQ(u"///C:/foo.txt", matches_.front().inline_autocompletion);
 #endif  // !BUILDFLAG(IS_IOS)
 
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
   // url_formatter::SegmentURLInternal does URL fixup differently depending on
   // platform. On all POSIX systems including iOS, /foo --> file:///foo.
   const std::u16string input_2(u"/foo");
@@ -699,7 +693,7 @@ TEST_F(HistoryURLProviderTest, Files) {
   ASSERT_NO_FATAL_FAILURE(
       RunTest(input_2, std::string(), false, fixup_2, std::size(fixup_2)));
   EXPECT_TRUE(matches_[0].destination_url.SchemeIsFile());
-#elif BUILDFLAG(IS_IOS)
+#elif BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
   // However, AutocompleteInput ignores the URL fixup on iOS because it
   // treates iOS like a query.
   AutocompleteInput ios_input_2(u"/foo", std::u16string::npos, std::string(),
@@ -1020,7 +1014,7 @@ TEST_F(HistoryURLProviderTest, CrashDueToFixup) {
 TEST_F(HistoryURLProviderTest, DoesNotProvideMatchesOnFocus) {
   AutocompleteInput input(u"foo", metrics::OmniboxEventProto::OTHER,
                           TestSchemeClassifier());
-  input.set_focus_type(OmniboxFocusType::ON_FOCUS);
+  input.set_focus_type(metrics::OmniboxFocusType::INTERACTION_FOCUS);
   autocomplete_->Start(input, false);
   EXPECT_TRUE(autocomplete_->matches().empty());
 }
@@ -1171,14 +1165,14 @@ TEST_F(HistoryURLProviderTest, SuggestExactInput) {
       "mailto://a@b.com", {0, npos, npos}, 0 },
     { "http://a%20b/x%20y", false,
       "http://a%20b/x y", {0, npos, npos}, 0 },
-#if !BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
     // file: URIs are treated like queries on iOS and need to be excluded from
     // this test, which assumes that all the inputs have canonical URLs.
     { "file:///x%20y/a%20b", true,
       "file:///x y/a b", {0, npos, npos}, 0 },
     { "file://x%20y/a%20b", true,
       "file://x%20y/a b", {0, npos, npos}, 0 },
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
     { "view-source:x%20y/a%20b", true,
      "view-source:x%20y/a b", {0, npos, npos}, 0 },
     { "view-source:http://x%20y/a%20b", false,
@@ -1362,7 +1356,7 @@ std::unique_ptr<HistoryURLProviderParams> BuildHistoryURLProviderParams(
   history_match.url_info.set_url(GURL(url_text));
   history_match.match_in_scheme = match_in_scheme;
   auto params = std::make_unique<HistoryURLProviderParams>(
-      input, input, true, AutocompleteMatch(), nullptr, nullptr, true);
+      input, input, true, AutocompleteMatch(), nullptr, nullptr, true, nullptr);
   params->matches.push_back(history_match);
 
   return params;
@@ -1417,9 +1411,6 @@ TEST_F(HistoryURLProviderTest, DoTrimHttpsScheme) {
 // In this mode, suggestions should be provided for only the user input after
 // the keyword, i.e. "@history google" should only match "google".
 TEST_F(HistoryURLProviderTest, KeywordModeExtractUserInput) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(omnibox::kSiteSearchStarterPack);
-
   // Populate template URL with starter pack entries
   std::vector<std::unique_ptr<TemplateURLData>> turls =
       TemplateURLStarterPackData::GetStarterPackEngines();
@@ -1474,6 +1465,12 @@ TEST_F(HistoryURLProviderTest, KeywordModeExtractUserInput) {
   ASSERT_GT(matches_.size(), 0u);
   EXPECT_EQ(GURL("http://www.google.com/"), matches_[0].destination_url);
   EXPECT_TRUE(matches_[0].from_keyword);
+
+  // Ensure keyword and transition are set properly to keep user in keyword
+  // mode.
+  EXPECT_EQ(matches_[0].keyword, u"@history");
+  EXPECT_TRUE(PageTransitionCoreTypeIs(matches_[0].transition,
+                                       ui::PAGE_TRANSITION_KEYWORD));
 }
 
 TEST_F(HistoryURLProviderTest, MaxMatches) {
@@ -1498,4 +1495,29 @@ TEST_F(HistoryURLProviderTest, MaxMatches) {
   matches_ = autocomplete_->matches();
   EXPECT_EQ(matches_.size(),
             autocomplete_->provider_max_matches_in_keyword_mode());
+}
+
+TEST_F(HistoryURLProviderTest, HistoryMatchToACMatchWithScoringSignals) {
+  const std::string input_text = "abc";
+  AutocompleteInput input(ASCIIToUTF16(input_text),
+                          metrics::OmniboxEventProto::OTHER,
+                          TestSchemeClassifier());
+  history::HistoryMatch history_match;
+  history_match.url_info.set_url(GURL("https://abc.com"));
+  history_match.url_info.set_typed_count(3);
+  history_match.url_info.set_visit_count(5);
+  history_match.match_in_scheme = false;
+  auto params = std::make_unique<HistoryURLProviderParams>(
+      input, input, true, AutocompleteMatch(), nullptr, nullptr, true, nullptr);
+  params->matches.push_back(history_match);
+
+  AutocompleteMatch match =
+      autocomplete_->HistoryMatchToACMatch(*params, 0, /*relevance=*/1,
+                                           /*populate_scoring_signals=*/true);
+  EXPECT_EQ(match.scoring_signals->typed_count(), 3);
+  EXPECT_EQ(match.scoring_signals->visit_count(), 5);
+  EXPECT_TRUE(match.scoring_signals->allowed_to_be_default_match());
+  EXPECT_TRUE(match.scoring_signals->is_host_only());
+  EXPECT_EQ(match.scoring_signals->length_of_url(), 16);
+  EXPECT_TRUE(match.scoring_signals->has_non_scheme_www_match());
 }

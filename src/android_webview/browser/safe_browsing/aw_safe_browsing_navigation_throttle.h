@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@ namespace android_webview {
 // BrowserURLLoaderThrottle and RendererURLLoaderThrottles and related code.
 // Those cause the navigation to fail which invokes this throttle to show the
 // interstitial.
+// Lifetime: Temporary
 class AwSafeBrowsingNavigationThrottle : public content::NavigationThrottle {
  public:
   static std::unique_ptr<AwSafeBrowsingNavigationThrottle>

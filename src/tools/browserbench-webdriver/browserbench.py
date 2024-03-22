@@ -1,7 +1,8 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+from enum import Enum
 from optparse import OptionParser
 from selenium import webdriver
 
@@ -16,8 +17,18 @@ import traceback
 
 DEFAULT_STP_DRIVER_PATH = '/Applications/Safari Technology Preview.app/Contents/MacOS/safaridriver'
 
+WS_DISPLAY_LIST_PATH = '/Library/Preferences/com.apple.windowserver.displays.plist'
+
 # Maximum number of times the benchmark will be run before giving up.
 MAX_ATTEMPTS = 6
+
+
+class Channel(Enum):
+  UNKNOWN = 1
+  CANARY = 2
+  DEV = 3
+  BETA = 4
+  STABLE = 5
 
 
 class BrowserBench(object):
@@ -29,19 +40,44 @@ class BrowserBench(object):
     self._output = None
     self._githash = None
     self._browser = None
+    self._driver = None
+    self._is_120 = BrowserBench._IsDisplayRefreshRate120()
+    self._channel = Channel.UNKNOWN
 
   @staticmethod
-  def _CreateChromeDriver(optargs):
+  def _IsDisplayRefreshRate120():
+    # The current refresh rate is stored in
+    # /Library/Preferences/com.apple.windowserver.displays.plist . If it has the
+    # string Hz = 120 then display is at 120. This likely isn't right if there
+    # are multiple displays, but it's good enough for the lab where we only
+    # have devices with a single display.
+    try:
+      windowserver_output = subprocess.run(["defaults", "read",
+                                            WS_DISPLAY_LIST_PATH],
+                                           capture_output=True)
+      return windowserver_output.stdout.decode('utf-8').find('Hz = 120') != -1
+    except Exception as e:
+      logging.warning('Determining refresh rated generated exception, '
+                      'assuming 60hz and continuing', exc_info=True)
+      return False
+
+
+  @staticmethod
+  def _CreateChromeDriver(optargs, channel):
     options = webdriver.ChromeOptions()
-    options.add_argument('enable-benchmarking')
+    args = ['enable-benchmarking' , 'no-first-run']
     if optargs.arguments:
       for arg in optargs.arguments.split(','):
-        options.add_argument(arg)
-    else:
-      # If no arguments were given, enable field trial config and no first run.
-      # These ensure a consistent set of flags.
-      options.add_argument('--no-first-run')
-      options.add_argument('--enable-field-trial-config')
+        args.append(arg)
+
+    if channel != Channel.STABLE:
+      args.append('--enable-field-trial-config')
+      logging.info('Using field trial config for non-stable channel')
+
+    for arg in args:
+      options.add_argument(arg)
+
+    logging.info(f'Chrome arguments {args}')
 
     if optargs.chrome_path:
       options.binary_location = optargs.chrome_path
@@ -67,10 +103,34 @@ class BrowserBench(object):
         params['executable_path'] = DEFAULT_STP_DRIVER_PATH
     return webdriver.Safari(**params)
 
+  def _GetBrowserVersion(self, optargs):
+    '''
+    Returns the version of the browser.
+    '''
+    if optargs.browser == 'safari' or optargs.browser == 'stp':
+      return BrowserBench._GetSafariVersion(optargs)
+    # Selenium provides the full version for chrome.
+    return self._driver.capabilities['browserVersion']
+
   @staticmethod
-  def _CreateDriver(optargs):
+  def _GetSafariVersion(optargs):
+    # selenium does not report the build id of stp (e.g. 149), so this uses safaridriver,
+    # which is able to report the version.
+    safaridriver_executable = 'safaridriver'
+    if optargs.executable:
+      safaridriver_executable = optargs.executable
+    if optargs.browser == 'stp' and not optargs.executable:
+      safaridriver_executable = DEFAULT_STP_DRIVER_PATH
+    results = subprocess.run([safaridriver_executable, '--version'],
+                             capture_output=True).stdout.decode('utf-8')
+    start_index = results.find('Safari')
+    version = results[start_index:] if start_index != -1 else results
+    return version.strip()
+
+  @staticmethod
+  def _CreateDriver(optargs, channel):
     if optargs.browser == 'chrome':
-      return BrowserBench._CreateChromeDriver(optargs)
+      return BrowserBench._CreateChromeDriver(optargs, channel)
     elif optargs.browser == 'safari' or optargs.browser == 'stp':
       for i in range(0, 10):
         try:
@@ -108,14 +168,14 @@ class BrowserBench(object):
     logging.warning('Not handling kill of chrome, if this is hit and test '
                     'fails, implement it')
 
-  def _CreateDriverAndRun(self, optargs):
+  def _CreateDriverAndRun(self, optargs, channel):
     logging.info('Creating Driver')
-    driver = BrowserBench._CreateDriver(optargs)
-    if not driver:
+    self._driver = BrowserBench._CreateDriver(optargs, channel)
+    if not self._driver:
       raise Exception('failed to create driver')
-    driver.set_window_size(900, 780)
+    self._driver.set_window_size(900, 780)
     logging.info('About to run test')
-    return self.RunAndExtractMeasurements(driver, optargs)
+    return self.RunAndExtractMeasurements(self._driver, optargs)
 
   def _ConvertMeasurementsToSkiaFormat(self, measurements):
     '''
@@ -127,6 +187,8 @@ class BrowserBench(object):
         'sub-test': the sub test. For the final score, this is not present.
         'value': the type of measurement: 'score', 'max'...
       'measurement': the measured value.
+    The format for this is documented at
+    https://skia.googlesource.com/buildbot/+/refs/heads/main/perf/FORMAT.md
     '''
     all_results = []
     for suite, results in measurements.items():
@@ -145,7 +207,7 @@ class BrowserBench(object):
         all_results.append(converted_result)
     return all_results
 
-  def _ProduceOutput(self, measurements, extra_key_values):
+  def _ProduceOutput(self, measurements, extra_key_values, optargs):
     '''
     extra_key_values is a dictionary of arbitrary key/value pairs added to the
     results.
@@ -157,8 +219,16 @@ class BrowserBench(object):
             'test': self._name,
             'version': self._version,
             'browser': self._browser,
+            'Refresh Rate': '120' if self._is_120 else '60',
         },
-        'results': self._ConvertMeasurementsToSkiaFormat(measurements)
+        'results': self._ConvertMeasurementsToSkiaFormat(measurements),
+        'links': {
+            # Links is used for metadata that is not interpreted by skia. Skia
+            # expects key value pairs with the value a link. As there is no a
+            # good place to link the version to, about:blank is used.
+            self._GetBrowserVersion(optargs):
+            'about:blank',
+        }
     }
     data['key'].update(extra_key_values)
     print(json.dumps(data, sort_keys=True, indent=2, separators=(',', ': ')))
@@ -230,6 +300,17 @@ class BrowserBench(object):
       assert len(pairs) % 2 == 0
       for i in range(0, len(pairs), 2):
         extra_key_values[pairs[i]] = pairs[i + 1]
+    if 'channel' in extra_key_values:
+      if extra_key_values['channel'].lower() == 'canary':
+        self._channel = Channel.CANARY
+      elif extra_key_values['channel'].lower() == 'dev':
+        self._channel = Channel.DEV
+      elif extra_key_values['channel'].lower() == 'beta':
+        self._channel = Channel.BETA
+      elif extra_key_values['channel'].lower() == 'stable':
+        self._channel = Channel.STABLE
+      else:
+          logging.warning('Unknown channel')
 
     self.UpdateParseArgs(optargs)
 
@@ -241,7 +322,7 @@ class BrowserBench(object):
     while not measurements and run_count < MAX_ATTEMPTS:
       run_count += 1
       try:
-        measurements = self._CreateDriverAndRun(optargs)
+        measurements = self._CreateDriverAndRun(optargs, self._channel)
         break
       except Exception as e:
         if run_count < MAX_ATTEMPTS:
@@ -258,7 +339,7 @@ class BrowserBench(object):
       BrowserBench._KillBrowser(optargs)
 
     logging.info('Test completed')
-    self._ProduceOutput(measurements, extra_key_values)
+    self._ProduceOutput(measurements, extra_key_values, optargs)
     if caffeinate_process:
       caffeinate_process.kill()
 

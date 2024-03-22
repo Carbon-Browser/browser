@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,11 @@ constexpr char kEnterOverviewHistogramName[] = "Ash.SwipeHomeToOverviewGesture";
 // window from shelf.
 constexpr char kHandleDragWindowFromShelfHistogramName[] =
     "Ash.WindowDragFromShelfResult";
+
+// The name of the histogram which records when the user deliberately hides the
+// desk button in the shelf.
+constexpr char kDeskButtonHiddenHistogramName[] =
+    "Ash.Desks.DeskButton.HiddenByUser";
 
 // Types of gestures supported by the in-app hotseat. These values are persisted
 // to logs. Entries should not be renumbered and numeric values should never be

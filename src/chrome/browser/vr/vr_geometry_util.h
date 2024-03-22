@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,6 @@
 namespace gfx {
 class RectF;
 class Size;
-class SizeF;
-class Transform;
 }  // namespace gfx
 
 namespace vr {
@@ -20,12 +18,6 @@ namespace vr {
 VR_BASE_EXPORT gfx::Rect CalculatePixelSpaceRect(
     const gfx::Size& texture_size,
     const gfx::RectF& texture_rect);
-
-// Returns the normalized size of the element projected into screen space.
-// If (1, 1) the element fills the entire buffer.
-VR_BASE_EXPORT gfx::SizeF CalculateScreenSize(const gfx::Transform& proj_matrix,
-                                              float distance,
-                                              const gfx::SizeF& size);
 
 }  // namespace vr
 

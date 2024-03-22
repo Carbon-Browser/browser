@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,11 +32,23 @@ enum class UIMediaSinkState {
   UNAVAILABLE
 };
 
+struct FreezeInfo {
+  // Whether the route supports freeze / unfreeze.
+  bool can_freeze = false;
+
+  // The current freeze state of the route.
+  bool is_frozen = false;
+};
+
 struct UIMediaSink {
  public:
   explicit UIMediaSink(mojom::MediaRouteProviderId provider);
   UIMediaSink(const UIMediaSink& other);
   ~UIMediaSink();
+
+  // Gets the status text that should be shown in the UI based on `status_text`,
+  // `state`, and `issue`.
+  std::u16string GetStatusTextForDisplay() const;
 
   // The unique ID for the media sink.
   std::string id;
@@ -73,6 +85,9 @@ struct UIMediaSink {
   // Set of Cast Modes (e.g. presentation, desktop mirroring) supported by the
   // sink.
   CastModeSet cast_modes;
+
+  // The current information related to freeze.
+  FreezeInfo freeze_info;
 };
 
 }  // namespace media_router

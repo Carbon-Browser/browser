@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
+#include "content/browser/media/cdm_storage_manager.h"
 #include "content/browser/media/media_license_storage_host.h"
 #include "media/cdm/cdm_type.h"
 #include "media/mojo/mojom/cdm_storage.mojom.h"
@@ -19,7 +19,6 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "storage/browser/quota/quota_manager.h"
 #include "storage/common/file_system/file_system_types.h"
-#include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace content {
 
@@ -36,9 +35,10 @@ const int64_t kMaxFileSizeBytes = 512 * 1024;
 // Maximum length of a file name.
 const size_t kFileNameMaxLength = 256;
 
-const char kReadTimeUmaName[] = "Media.EME.CdmFileIO.TimeTo.ReadFile";
-const char kWriteTimeUmaName[] = "Media.EME.CdmFileIO.TimeTo.WriteFile";
-const char kDeleteTimeUmaName[] = "Media.EME.CdmFileIO.TimeTo.DeleteFile";
+// UMA suffices for CDM File IO operations.
+const char kReadFile[] = "ReadFile";
+const char kWriteFile[] = "WriteFile";
+const char kDeleteFile[] = "DeleteFile";
 
 }  // namespace
 
@@ -77,6 +77,25 @@ CdmFileImpl::CdmFileImpl(
       &CdmFileImpl::OnReceiverDisconnect, weak_factory_.GetWeakPtr()));
 }
 
+CdmFileImpl::CdmFileImpl(
+    CdmStorageManager* manager,
+    const blink::StorageKey& storage_key,
+    const media::CdmType& cdm_type,
+    const std::string& file_name,
+    mojo::PendingAssociatedReceiver<media::mojom::CdmFile> pending_receiver)
+    : file_name_(file_name),
+      cdm_type_(cdm_type),
+      storage_key_(storage_key),
+      cdm_storage_manager_(manager) {
+  DVLOG(3) << __func__ << " " << file_name_;
+  DCHECK(IsValidName(file_name_));
+  DCHECK(cdm_storage_manager_);
+
+  receiver_.Bind(std::move(pending_receiver));
+  receiver_.set_disconnect_handler(base::BindOnce(
+      &CdmFileImpl::OnReceiverDisconnect, weak_factory_.GetWeakPtr()));
+}
+
 CdmFileImpl::~CdmFileImpl() {
   DVLOG(3) << __func__ << " " << file_name_;
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -91,7 +110,7 @@ CdmFileImpl::~CdmFileImpl() {
 void CdmFileImpl::Read(ReadCallback callback) {
   DVLOG(3) << __func__ << " file: " << file_name_;
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(host_);
+  DCHECK(host_ || cdm_storage_manager_);
 
   // Only 1 Read() or Write() is allowed at any time.
   if (read_callback_ || write_callback_) {
@@ -103,9 +122,15 @@ void CdmFileImpl::Read(ReadCallback callback) {
   read_callback_ = std::move(callback);
   start_time_ = base::TimeTicks::Now();
 
-  host_->ReadFile(
-      cdm_type_, file_name_,
-      base::BindOnce(&CdmFileImpl::DidRead, weak_factory_.GetWeakPtr()));
+  if (host_) {
+    host_->ReadFile(
+        cdm_type_, file_name_,
+        base::BindOnce(&CdmFileImpl::DidRead, weak_factory_.GetWeakPtr()));
+  } else {
+    cdm_storage_manager_->ReadFile(
+        storage_key_, cdm_type_, file_name_,
+        base::BindOnce(&CdmFileImpl::DidRead, weak_factory_.GetWeakPtr()));
+  }
 }
 
 void CdmFileImpl::DidRead(absl::optional<std::vector<uint8_t>> data) {
@@ -113,16 +138,17 @@ void CdmFileImpl::DidRead(absl::optional<std::vector<uint8_t>> data) {
            << ", success: " << (data.has_value() ? "yes" : "no");
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(read_callback_);
-  DCHECK(host_);
+  DCHECK(host_ || cdm_storage_manager_);
 
-  if (!data.has_value()) {
+  bool success = data.has_value();
+  ReportFileOperationUMA(success, kReadFile);
+
+  if (!success) {
     // Unable to read the contents of the file.
     std::move(read_callback_).Run(Status::kFailure, {});
     return;
   }
 
-  // Only report reading time for successful reads.
-  ReportFileOperationTimeUMA(kReadTimeUmaName);
   std::move(read_callback_).Run(Status::kSuccess, std::move(data.value()));
 }
 
@@ -130,7 +156,7 @@ void CdmFileImpl::Write(const std::vector<uint8_t>& data,
                         WriteCallback callback) {
   DVLOG(3) << __func__ << " file: " << file_name_ << ", size: " << data.size();
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(host_);
+  DCHECK(host_ || cdm_storage_manager_);
 
   // Only 1 Read() or Write() is allowed at any time.
   if (read_callback_ || write_callback_) {
@@ -158,34 +184,56 @@ void CdmFileImpl::Write(const std::vector<uint8_t>& data,
     return;
   }
 
-  host_->WriteFile(
-      cdm_type_, file_name_, data,
-      base::BindOnce(&CdmFileImpl::DidWrite, weak_factory_.GetWeakPtr()));
+  if (host_) {
+    host_->WriteFile(
+        cdm_type_, file_name_, data,
+        base::BindOnce(&CdmFileImpl::DidWrite, weak_factory_.GetWeakPtr()));
+  } else {
+    cdm_storage_manager_->WriteFile(
+        storage_key_, cdm_type_, file_name_, data,
+        base::BindOnce(&CdmFileImpl::DidWrite, weak_factory_.GetWeakPtr()));
+  }
 }
 
-void CdmFileImpl::ReportFileOperationTimeUMA(const std::string& uma_name) {
+void CdmFileImpl::ReportFileOperationUMA(bool success,
+                                         const std::string& operation) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(host_);
+  DCHECK(host_ || cdm_storage_manager_);
 
-  static const char kIncognito[] = ".Incognito";
-  static const char kNormal[] = ".Normal";
+  // Strings for UMA names.
+  static const char kUmaPrefix[] = "Media.EME.CdmFileIO";
+  static const char kTimeTo[] = "TimeTo";
 
-  bool is_incognito = host_->in_memory();
+  const bool in_memory =
+      (host_) ? host_->in_memory() : cdm_storage_manager_->in_memory();
+  const std::string mode_suffix = in_memory ? "Incognito" : "Normal";
 
-  // This records the time taken to the base histogram as well as splitting it
-  // out by incognito or normal mode.
-  auto time_taken = base::TimeTicks::Now() - start_time_;
-  base::UmaHistogramTimes(uma_name, time_taken);
-  base::UmaHistogramTimes(
-      base::StrCat({uma_name, is_incognito ? kIncognito : kNormal}),
-      time_taken);
+  // Records the result to the base histogram as well as splitting it out by
+  // incognito or normal mode.
+  auto result_uma_name = base::JoinString({kUmaPrefix, operation}, ".");
+  base::UmaHistogramBoolean(result_uma_name, success);
+  base::UmaHistogramBoolean(
+      base::JoinString({result_uma_name, mode_suffix}, "."), success);
+
+  // Records the time taken to the base histogram as well as splitting it out by
+  // incognito or normal mode. Only reported for successful operation.
+  if (success) {
+    auto time_taken = base::TimeTicks::Now() - start_time_;
+    auto time_taken_uma_name =
+        base::JoinString({kUmaPrefix, kTimeTo, operation}, ".");
+    base::UmaHistogramTimes(time_taken_uma_name, time_taken);
+    base::UmaHistogramTimes(
+        base::JoinString({time_taken_uma_name, mode_suffix}, "."), time_taken);
+  }
 }
 
 void CdmFileImpl::DidWrite(bool success) {
   DVLOG(3) << __func__ << " file: " << file_name_;
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(write_callback_);
-  DCHECK(host_);
+  DCHECK(host_ || cdm_storage_manager_);
+
+  ReportFileOperationUMA(success, kWriteFile);
 
   if (!success) {
     DLOG(WARNING) << "Unable to write to file " << file_name_;
@@ -193,8 +241,6 @@ void CdmFileImpl::DidWrite(bool success) {
     return;
   }
 
-  // Only report writing time for successful writes.
-  ReportFileOperationTimeUMA(kWriteTimeUmaName);
   std::move(write_callback_).Run(Status::kSuccess);
 }
 
@@ -202,20 +248,29 @@ void CdmFileImpl::DeleteFile() {
   DVLOG(3) << __func__;
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(write_callback_);
-  DCHECK(host_);
+  DCHECK(host_ || cdm_storage_manager_);
 
   DVLOG(3) << "Deleting " << file_name_;
 
-  host_->DeleteFile(
-      cdm_type_, file_name_,
-      base::BindOnce(&CdmFileImpl::DidDeleteFile, weak_factory_.GetWeakPtr()));
+  if (host_) {
+    host_->DeleteFile(cdm_type_, file_name_,
+                      base::BindOnce(&CdmFileImpl::DidDeleteFile,
+                                     weak_factory_.GetWeakPtr()));
+  } else {
+    cdm_storage_manager_->DeleteFile(
+        storage_key_, cdm_type_, file_name_,
+        base::BindOnce(&CdmFileImpl::DidDeleteFile,
+                       weak_factory_.GetWeakPtr()));
+  }
 }
 
 void CdmFileImpl::DidDeleteFile(bool success) {
   DVLOG(3) << __func__ << " file: " << file_name_;
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(write_callback_);
-  DCHECK(host_);
+  DCHECK(host_ || cdm_storage_manager_);
+
+  ReportFileOperationUMA(success, kDeleteFile);
 
   if (!success) {
     DLOG(WARNING) << "Unable to delete file " << file_name_;
@@ -223,18 +278,21 @@ void CdmFileImpl::DidDeleteFile(bool success) {
     return;
   }
 
-  // Only report writing time for successful deletions.
-  ReportFileOperationTimeUMA(kDeleteTimeUmaName);
   std::move(write_callback_).Run(Status::kSuccess);
 }
 
 void CdmFileImpl::OnReceiverDisconnect() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(host_);
+  DCHECK(host_ || cdm_storage_manager_);
 
   // May delete `this`.
-  host_->OnFileReceiverDisconnect(file_name_, cdm_type_,
-                                  base::PassKey<CdmFileImpl>());
+  if (host_) {
+    host_->OnFileReceiverDisconnect(file_name_, cdm_type_,
+                                    base::PassKey<CdmFileImpl>());
+  } else {
+    cdm_storage_manager_->OnFileReceiverDisconnect(
+        file_name_, cdm_type_, storage_key_, base::PassKey<CdmFileImpl>());
+  }
 }
 
 }  // namespace content

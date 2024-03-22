@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,17 @@ COMPONENT_EXPORT(UI_BASE) extern const char kShowMacOverlayBorders[];
 COMPONENT_EXPORT(UI_BASE) extern const char kEnableResourcesFileSharing[];
 #endif
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+COMPONENT_EXPORT(UI_BASE) extern const char kSystemFontFamily[];
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+COMPONENT_EXPORT(UI_BASE) extern const char kUiToolkitFlag[];
+#endif
+
 COMPONENT_EXPORT(UI_BASE) extern const char kDisableCompositedAntialiasing[];
-COMPONENT_EXPORT(UI_BASE) extern const char kDisableDwmComposition[];
 COMPONENT_EXPORT(UI_BASE) extern const char kDisableTouchDragDrop[];
+COMPONENT_EXPORT(UI_BASE) extern const char kDRMVirtualConnectorIsExternal[];
 COMPONENT_EXPORT(UI_BASE) extern const char kEnableTouchDragDrop[];
 COMPONENT_EXPORT(UI_BASE) extern const char kForceCaptionStyle[];
 COMPONENT_EXPORT(UI_BASE) extern const char kForceDarkMode[];

@@ -1,33 +1,35 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/input_overlay/ui/educational_view.h"
 
 #include "ash/components/arc/compat_mode/style/arc_color_provider.h"
+#include "ash/constants/ash_features.h"
 #include "ash/login/ui/views_utils.h"
-#include "ash/public/cpp/style/color_provider.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/public/cpp/style/dark_light_mode_controller.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/pill_button.h"
 #include "ash/style/style_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/arc/input_overlay/display_overlay_controller.h"
 #include "chrome/grit/component_extension_resources.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/chromeos/styles/cros_styles.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/color/color_id.h"
-#include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/text_constants.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
+#include "ui/views/controls/image_view.h"
 #include "ui/views/layout/flex_layout.h"
 
-namespace arc {
-namespace input_overlay {
+namespace arc::input_overlay {
 
 namespace {
 // Full view size.
@@ -66,9 +68,6 @@ constexpr int kBorderRowPortrait3 = 24;
 constexpr int kBorderRowPortrait4 = 28;
 constexpr int kBorderSidesPortrait = 32;
 
-// Banner size.
-constexpr int kBannerHeightPortrait = 125;
-
 // About focus ring.
 // Gap between focus ring outer edge to label.
 constexpr float kHaloInset = -4;
@@ -97,14 +96,22 @@ int GetBorderSides(bool portrait_mode) {
 }
 
 int GetDialogWidth(int parent_width) {
-  if (parent_width < kDialogWidthMax + 2 * kDialogMarginMin)
+  if (parent_width < kDialogWidthMax + 2 * kDialogMarginMin) {
     return std::max(kDialogWidthMin, parent_width - 2 * kDialogMarginMin);
+  }
 
   return kDialogWidthMax;
 }
 
 int GetTitleFontSize(bool portrait_mode) {
   return portrait_mode ? kTitleFontSizePortrait : kTitleFontSizeLandscape;
+}
+
+void SetBanner(views::ImageView& image) {
+  image.SetImage(ui::ResourceBundle::GetSharedInstance().GetImageSkiaNamed(
+      ash::DarkLightModeController::Get()->IsDarkModeEnabled()
+          ? IDS_ARC_INPUT_OVERLAY_ONBOARDING_ILLUSTRATION_DARK_JSON
+          : IDS_ARC_INPUT_OVERLAY_ONBOARDING_ILLUSTRATION_LIGHT_JSON));
 }
 
 }  // namespace
@@ -131,6 +138,12 @@ EducationalView::EducationalView(
 
 EducationalView::~EducationalView() {}
 
+void EducationalView::OnThemeChanged() {
+  views::View::OnThemeChanged();
+  DCHECK(banner_);
+  SetBanner(*banner_);
+}
+
 void EducationalView::Init(const gfx::Size& parent_size) {
   DCHECK(display_overlay_controller_);
 
@@ -138,63 +151,53 @@ void EducationalView::Init(const gfx::Size& parent_size) {
       ->SetOrientation(views::LayoutOrientation::kVertical)
       .SetMainAxisAlignment(views::LayoutAlignment::kCenter)
       .SetCrossAxisAlignment(views::LayoutAlignment::kCenter);
-  SetBackground(views::CreateRoundedRectBackground(
-      GetDialogBackgroundBaseColor(), kDialogCornerRadius));
+  SetBackground(views::CreateThemedRoundedRectBackground(
+      ash::kColorAshDialogBackgroundColor, kDialogCornerRadius));
 
+  bool is_dark = ash::DarkLightModeController::Get()->IsDarkModeEnabled();
   const int parent_width = parent_size.width();
   {
     // UI's banner.
-    const gfx::ImageSkia* skia_banner =
-        ui::ResourceBundle::GetSharedInstance().GetImageSkiaNamed(
-            IsDarkModeEnabled()
-                ? IDS_ARC_INPUT_OVERLAY_ONBOARDING_ILLUSTRATION_DARK
-                : IDS_ARC_INPUT_OVERLAY_ONBOARDING_ILLUSTRATION);
-    CHECK(skia_banner);
+    auto banner = std::make_unique<views::ImageView>();
+    SetBanner(*banner);
 
-    // Resize to a smaller banner iff in portrait mode.
-    gfx::ImageSkia resized_banner;
     if (portrait_mode_) {
-      // TODO(djacobo): Confirm scale factor, for now 70% looks fine.
-      resized_banner = gfx::ImageSkiaOperations::CreateResizedImage(
-          *skia_banner, skia::ImageOperations::RESIZE_BEST,
-          gfx::Size(GetDialogWidth(parent_width) * 0.7,
-                    kBannerHeightPortrait * 0.7));
+      // Resize the banner image size proportionally.
+      auto size = banner->CalculatePreferredSize();
+      int width =
+          GetDialogWidth(parent_width) - GetBorderSides(portrait_mode_) * 2;
+      float ratio = 1.0 * width / size.width();
+      banner->SetImageSize(gfx::Size(width, size.height() * ratio));
     }
-    auto banner =
-        std::make_unique<views::ImageView>(ui::ImageModel::FromImageSkia(
-            portrait_mode_ ? resized_banner : *skia_banner));
-    banner->SetProperty(views::kMarginsKey,
-                        gfx::Insets::TLBR(GetBorderRow4(portrait_mode_),
-                                          GetBorderRow4(portrait_mode_),
-                                          GetBorderRow1(portrait_mode_),
-                                          GetBorderRow4(portrait_mode_)));
-    AddChildView(std::move(banner));
+    banner_ = AddChildView(std::move(banner));
   }
   {
-    // |Game controls [Alpha]| title tag.
+    // `Game controls [Alpha]` title tag.
     auto container_view = std::make_unique<views::View>();
     container_view->SetLayoutManager(std::make_unique<views::FlexLayout>())
         ->SetOrientation(views::LayoutOrientation::kHorizontal)
         .SetMainAxisAlignment(views::LayoutAlignment::kCenter)
         .SetCrossAxisAlignment(views::LayoutAlignment::kCenter);
     // Game controls.
-    container_view->AddChildView(ash::login_views_utils::CreateBubbleLabel(
-        l10n_util::GetStringUTF16(IDS_INPUT_OVERLAY_GAME_CONTROLS_ALPHA),
-        /*view_defining_max_width=*/nullptr,
-        /*color=*/
-        GetContentLayerColor(
-            ash::AshColorProvider::ContentLayerType::kTextColorPrimary),
-        /*font_list=*/
-        gfx::FontList({ash::login_views_utils::kGoogleSansFont},
-                      gfx::Font::FontStyle::NORMAL,
-                      GetTitleFontSize(portrait_mode_),
-                      gfx::Font::Weight::MEDIUM)));
+    container_view->AddChildView(
+        ash::login_views_utils::CreateThemedBubbleLabel(
+            l10n_util::GetStringUTF16(IDS_INPUT_OVERLAY_GAME_CONTROLS_ALPHA),
+            /*view_defining_max_width=*/nullptr,
+            /*enabled_color_type=*/
+            is_dark ? cros_tokens::kTextColorPrimary
+                    : cros_tokens::kTextColorPrimaryLight,
+            /*font_list=*/
+            gfx::FontList({ash::login_views_utils::kGoogleSansFont},
+                          gfx::Font::FontStyle::NORMAL,
+                          GetTitleFontSize(portrait_mode_),
+                          gfx::Font::Weight::MEDIUM)));
 
-    auto* alpha_label =
-        container_view->AddChildView(ash::login_views_utils::CreateBubbleLabel(
+    auto* alpha_label = container_view->AddChildView(
+        ash::login_views_utils::CreateThemedBubbleLabel(
             l10n_util::GetStringUTF16(IDS_INPUT_OVERLAY_RELEASE_ALPHA),
-            /*view_defining_max_width=*/nullptr, /*color=*/
-            arc::GetCrOSColor(cros_styles::ColorName::kTextColorSelection),
+            /*view_defining_max_width=*/nullptr,
+            /*enabled_color_type=*/
+            cros_tokens::kCrosSysPrimary,
             /*font_list=*/
             gfx::FontList({ash::login_views_utils::kGoogleSansFont},
                           gfx::Font::FontStyle::NORMAL, kAlphaFontSize,
@@ -203,9 +206,8 @@ void EducationalView::Init(const gfx::Size& parent_size) {
     alpha_label->SetPreferredSize(gfx::Size(
         alpha_label->GetPreferredSize().width() + 2 * kAlphaSidePadding,
         kAlphaHeight));
-    alpha_label->SetBackground(views::CreateRoundedRectBackground(
-        arc::GetCrOSColor(cros_styles::ColorName::kHighlightColor),
-        kAlphaCornerRadius));
+    alpha_label->SetBackground(views::CreateThemedRoundedRectBackground(
+        cros_tokens::kCrosSysHighlightShape, kAlphaCornerRadius));
     alpha_label->SetProperty(views::kMarginsKey,
                              gfx::Insets::TLBR(0, kAlphaLeftMargin, 0, 0));
     container_view->SetProperty(
@@ -217,13 +219,13 @@ void EducationalView::Init(const gfx::Size& parent_size) {
   {
     // Feature's description text.
     auto* description_label =
-        AddChildView(ash::login_views_utils::CreateBubbleLabel(
+        AddChildView(ash::login_views_utils::CreateThemedBubbleLabel(
             l10n_util::GetStringUTF16(
                 IDS_INPUT_OVERLAY_EDUCATIONAL_DESCRIPTION_ALPHA),
             /*view_defining_max_width=*/nullptr,
-            /*color=*/
-            GetContentLayerColor(
-                ash::AshColorProvider::ContentLayerType::kTextColorSecondary),
+            /*enabled_color_type=*/
+            is_dark ? cros_tokens::kTextColorPrimary
+                    : cros_tokens::kTextColorPrimaryLight,
             /*font_list=*/
             gfx::FontList({ash::login_views_utils::kGoogleSansFont},
                           gfx::Font::FontStyle::NORMAL, kDescriptionFontSize,
@@ -241,12 +243,12 @@ void EducationalView::Init(const gfx::Size& parent_size) {
     description_label->SetSize(gfx::Size());
   }
   {
-    // Edit/add |Got it| button to exit UI.
+    // Edit/add `Got it` button to exit UI.
     accept_button_ = AddChildView(std::make_unique<ash::PillButton>(
         base::BindRepeating(&EducationalView::OnAcceptedPressed,
                             base::Unretained(this)),
         l10n_util::GetStringUTF16(IDS_INPUT_OVERLAY_EDUCATIONAL_ACCEPT_BUTTON),
-        ash::PillButton::Type::kIconless,
+        ash::PillButton::Type::kDefaultWithoutIcon,
         /*icon=*/nullptr));
     accept_button_->SetButtonTextColor(cros_styles::ResolveColor(
         cros_styles::ColorName::kButtonLabelColorPrimary, IsDarkModeEnabled()));
@@ -279,5 +281,7 @@ void EducationalView::OnAcceptedPressed() {
   display_overlay_controller_->OnEducationalViewDismissed();
 }
 
-}  // namespace input_overlay
-}  // namespace arc
+BEGIN_METADATA(EducationalView)
+END_METADATA
+
+}  // namespace arc::input_overlay

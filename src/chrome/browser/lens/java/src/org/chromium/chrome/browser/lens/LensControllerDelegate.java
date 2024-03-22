@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,8 +54,13 @@ public class LensControllerDelegate {
             LensQueryParams lensQueryParams, Callback<ChipRenderParams> chipRenderParamsCallback) {}
 
     /** @see {@link LensController#getShareWithGoogleLensIntent()} */
-    public Intent getShareWithGoogleLensIntent(Uri imageUri, boolean isIncognito, String srcUrl,
-            String titleOrAltText, String pageUrl, @Nullable String lensIntentType) {
+    public Intent getShareWithGoogleLensIntent(
+            Uri imageUri,
+            boolean isIncognito,
+            String srcUrl,
+            String titleOrAltText,
+            String pageUrl,
+            @Nullable String lensIntentType) {
         return null;
     }
 

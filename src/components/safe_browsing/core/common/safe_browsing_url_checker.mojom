@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,5 +33,6 @@ interface UrlCheckNotifier {
   // |proceed| indicates whether it is okay to proceed with loading the URL.
   // |showed_interstitial| indicates whether the SafeBrowsing interstitial page
   // has been shown to the user.
-  OnCompleteCheck(bool proceed, bool showed_interstitial);
+  OnCompleteCheck(bool proceed,
+                  bool showed_interstitial);
 };

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class GURL;
 class Profile;
 class ScopedKeepAlive;
 
-// BrowserSerivce's Lacros implementation.
+// BrowserService's Lacros implementation.
 // This handles the requests from ash-chrome.
 class BrowserServiceLacros : public crosapi::mojom::BrowserService,
                              public BrowserListObserver {
@@ -33,25 +33,33 @@ class BrowserServiceLacros : public crosapi::mojom::BrowserService,
   // crosapi::mojom::BrowserService:
   void REMOVED_0(REMOVED_0Callback callback) override;
   void REMOVED_2(crosapi::mojom::BrowserInitParamsPtr) override;
+  void REMOVED_7(bool should_trigger_session_restore,
+                 base::OnceClosure callback) override;
   void REMOVED_16(base::flat_map<policy::PolicyNamespace, std::vector<uint8_t>>
                       policy) override;
   void NewWindow(bool incognito,
                  bool should_trigger_session_restore,
+                 int64_t target_display_id,
+                 absl::optional<uint64_t> profile_id,
                  NewWindowCallback callback) override;
   void NewFullscreenWindow(const GURL& url,
+                           int64_t target_display_id,
                            NewFullscreenWindowCallback callback) override;
-  void NewGuestWindow(NewGuestWindowCallback callback) override;
+  void NewGuestWindow(int64_t target_display_id,
+                      NewGuestWindowCallback callback) override;
   void NewWindowForDetachingTab(
       const std::u16string& tab_id,
       const std::u16string& group_id,
       NewWindowForDetachingTabCallback callback) override;
-  void NewTab(bool should_trigger_session_restore,
-              NewTabCallback callback) override;
+  void NewTab(NewTabCallback callback) override;
+  void Launch(int64_t target_display_id,
+              absl::optional<uint64_t> profile_id,
+              LaunchCallback callback) override;
   void OpenUrl(const GURL& url,
                crosapi::mojom::OpenUrlParamsPtr params,
                OpenUrlCallback callback) override;
   void RestoreTab(RestoreTabCallback callback) override;
-  void HandleTabScrubbing(float x_offset) override;
+  void HandleTabScrubbing(float x_offset, bool is_fling_scroll_event) override;
   void GetFeedbackData(GetFeedbackDataCallback callback) override;
   void GetHistograms(GetHistogramsCallback callback) override;
   void GetActiveTabUrl(GetActiveTabUrlCallback callback) override;
@@ -59,6 +67,7 @@ class BrowserServiceLacros : public crosapi::mojom::BrowserService,
   void NotifyPolicyFetchAttempt() override;
   void UpdateKeepAlive(bool enabled) override;
   void OpenForFullRestore(bool skip_crash_restore) override;
+  void OpenProfileManager() override;
 
  private:
   struct PendingOpenUrl;
@@ -79,9 +88,11 @@ class BrowserServiceLacros : public crosapi::mojom::BrowserService,
   // profile-less function, after loading the profile.
   void NewWindowWithProfile(bool incognito,
                             bool should_trigger_session_restore,
+                            int64_t target_display_id,
                             NewWindowCallback callback,
                             Profile* profile);
   void NewFullscreenWindowWithProfile(const GURL& url,
+                                      int64_t target_display_id,
                                       NewFullscreenWindowCallback callback,
                                       Profile* profile);
   void NewWindowForDetachingTabWithProfile(
@@ -89,9 +100,11 @@ class BrowserServiceLacros : public crosapi::mojom::BrowserService,
       const std::u16string& group_id,
       NewWindowForDetachingTabCallback callback,
       Profile* profile);
-  void NewTabWithProfile(bool should_trigger_session_restore,
-                         NewTabCallback callback,
-                         Profile* profile);
+  void LaunchOrNewTabWithProfile(bool should_trigger_session_restore,
+                                 int64_t target_display_id,
+                                 NewTabCallback callback,
+                                 bool is_new_tab,
+                                 Profile* profile);
   void OpenUrlWithProfile(const GURL& url,
                           crosapi::mojom::OpenUrlParamsPtr params,
                           OpenUrlCallback callback,

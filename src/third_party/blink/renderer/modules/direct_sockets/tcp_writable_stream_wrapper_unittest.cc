@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/direct_sockets/tcp_writable_stream_wrapper.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/mock_callback.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_tester.h"
@@ -30,11 +31,7 @@ using ::testing::StrictMock;
 class StreamCreator : public GarbageCollected<StreamCreator> {
  public:
   StreamCreator() = default;
-  ~StreamCreator() {
-    // Let the TCPWritableStreamWrapper object respond to the closure if it
-    // needs to.
-    test::RunPendingTasks();
-  }
+  ~StreamCreator() = default;
 
   // The default value of |capacity| means some sensible value selected by mojo.
   TCPWritableStreamWrapper* Create(const V8TestingScope& scope,
@@ -55,7 +52,7 @@ class StreamCreator : public GarbageCollected<StreamCreator> {
     auto* script_state = scope.GetScriptState();
     stream_wrapper_ = MakeGarbageCollected<TCPWritableStreamWrapper>(
         script_state, base::DoNothing(), std::move(data_pipe_producer));
-    return stream_wrapper_;
+    return stream_wrapper_.Get();
   }
 
   void ResetPipe() { data_pipe_consumer_.reset(); }
@@ -94,16 +91,29 @@ class StreamCreator : public GarbageCollected<StreamCreator> {
   Member<TCPWritableStreamWrapper> stream_wrapper_;
 };
 
+class ScopedStreamCreator {
+ public:
+  explicit ScopedStreamCreator(StreamCreator* stream_creator)
+      : stream_creator_(stream_creator) {}
+
+  ~ScopedStreamCreator() { stream_creator_->ResetPipe(); }
+
+  StreamCreator* operator->() const { return stream_creator_; }
+
+ private:
+  Persistent<StreamCreator> stream_creator_;
+};
+
 TEST(TCPWritableStreamWrapperTest, Create) {
   V8TestingScope scope;
-  auto* stream_creator = MakeGarbageCollected<StreamCreator>();
+  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
   auto* tcp_writable_stream_wrapper = stream_creator->Create(scope);
   EXPECT_TRUE(tcp_writable_stream_wrapper->Writable());
 }
 
 TEST(TCPWritableStreamWrapperTest, WriteArrayBuffer) {
   V8TestingScope scope;
-  auto* stream_creator = MakeGarbageCollected<StreamCreator>();
+  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
   auto* tcp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -121,7 +131,7 @@ TEST(TCPWritableStreamWrapperTest, WriteArrayBuffer) {
 
 TEST(TCPWritableStreamWrapperTest, WriteArrayBufferView) {
   V8TestingScope scope;
-  auto* stream_creator = MakeGarbageCollected<StreamCreator>();
+  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
   auto* tcp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -140,12 +150,12 @@ TEST(TCPWritableStreamWrapperTest, WriteArrayBufferView) {
 }
 
 bool IsAllNulls(base::span<const uint8_t> data) {
-  return std::all_of(data.begin(), data.end(), [](uint8_t c) { return !c; });
+  return base::ranges::all_of(data, [](uint8_t c) { return !c; });
 }
 
 TEST(TCPWritableStreamWrapperTest, AsyncWrite) {
   V8TestingScope scope;
-  auto* stream_creator = MakeGarbageCollected<StreamCreator>();
+  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
   // Set a large pipe capacity, so any platform-specific excess is dwarfed in
   // size.
   constexpr uint32_t kPipeCapacity = 512u * 1024u;
@@ -168,7 +178,7 @@ TEST(TCPWritableStreamWrapperTest, AsyncWrite) {
   test::RunPendingTasks();
 
   // Let microtasks run just in case write() returns prematurely.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   ASSERT_FALSE(tester.IsFulfilled());
 
   // Read the first part of the data.
@@ -203,7 +213,7 @@ TEST(TCPWritableStreamWrapperTest, AsyncWrite) {
 // Writing immediately followed by closing should not lose data.
 TEST(TCPWritableStreamWrapperTest, WriteThenClose) {
   V8TestingScope scope;
-  auto* stream_creator = MakeGarbageCollected<StreamCreator>();
+  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
   auto* tcp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -221,7 +231,7 @@ TEST(TCPWritableStreamWrapperTest, WriteThenClose) {
 
   // Make sure that write() and close() both run before the event loop is
   // serviced.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   write_tester.WaitUntilSettled();
   ASSERT_TRUE(write_tester.IsFulfilled());
@@ -233,7 +243,7 @@ TEST(TCPWritableStreamWrapperTest, WriteThenClose) {
 
 TEST(TCPWritableStreamWrapperTest, DISABLED_TriggerHasAborted) {
   V8TestingScope scope;
-  auto* stream_creator = MakeGarbageCollected<StreamCreator>();
+  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
   auto* tcp_writable_stream_wrapper = stream_creator->Create(scope);
 
   auto* script_state = scope.GetScriptState();
@@ -263,7 +273,7 @@ INSTANTIATE_TEST_SUITE_P(/**/,
 
 TEST_P(TCPWritableStreamWrapperCloseTestWithMaybePendingWrite, TriggerClose) {
   V8TestingScope scope;
-  auto* stream_creator = MakeGarbageCollected<StreamCreator>();
+  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
   auto* tcp_writable_stream_wrapper = stream_creator->Create(scope);
 
   bool pending_write = GetParam();
@@ -299,7 +309,7 @@ TEST_P(TCPWritableStreamWrapperCloseTestWithMaybePendingWrite, TriggerClose) {
 TEST_P(TCPWritableStreamWrapperCloseTestWithMaybePendingWrite,
        TriggerCloseInReverseOrder) {
   V8TestingScope scope;
-  auto* stream_creator = MakeGarbageCollected<StreamCreator>();
+  ScopedStreamCreator stream_creator(MakeGarbageCollected<StreamCreator>());
   auto* tcp_writable_stream_wrapper = stream_creator->Create(scope);
 
   bool pending_write = GetParam();

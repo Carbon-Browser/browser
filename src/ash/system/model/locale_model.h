@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,6 +48,9 @@ class LocaleModel {
   }
 
  private:
+  // Adds a fake locale with a label like "German - Deutsch".
+  void AddFakeLocale(const std::string& locale);
+
   std::vector<LocaleInfo> locale_list_;
 
   std::string current_locale_iso_code_;

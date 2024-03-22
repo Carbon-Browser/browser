@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/message_formatter.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/extensions/extension_install_prompt.h"
 #include "chrome/browser/extensions/extension_install_prompt_show_params.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -23,10 +24,10 @@
 #include "chrome/browser/ui/views/extensions/expandable_container_view.h"
 #include "chrome/browser/ui/views/extensions/extension_permissions_view.h"
 #include "chrome/common/buildflags.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
+#include "components/supervised_user/core/common/buildflags.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/page_navigator.h"
 #include "extensions/common/constants.h"
@@ -107,7 +108,7 @@ class RatingsView : public views::View {
               IDS_EXTENSION_PROMPT_RATING_ACCESSIBLE_TEXT),
           rating_, rating_count_);
     }
-    node_data->SetName(accessible_text);
+    node_data->SetNameChecked(accessible_text);
   }
 
  private:
@@ -123,7 +124,7 @@ END_METADATA
 class RatingStar : public views::ImageView {
  public:
   METADATA_HEADER(RatingStar);
-  explicit RatingStar(const gfx::ImageSkia& image) { SetImage(image); }
+  explicit RatingStar(const ui::ImageModel& image) { SetImage(image); }
   RatingStar(const RatingStar&) = delete;
   RatingStar& operator=(const RatingStar&) = delete;
   ~RatingStar() override = default;
@@ -159,7 +160,8 @@ END_METADATA
 
 void AddResourceIcon(const gfx::ImageSkia* skia_image, void* data) {
   views::View* parent = static_cast<views::View*>(data);
-  parent->AddChildView(new RatingStar(*skia_image));
+  parent->AddChildView(
+      new RatingStar(ui::ImageModel::FromImageSkia(*skia_image)));
 }
 
 void ShowExtensionInstallDialogImpl(
@@ -232,6 +234,7 @@ void AddPermissions(ExtensionInstallPrompt::Prompt* prompt,
 class ExtensionInstallDialogView::ExtensionJustificationView
     : public views::View {
  public:
+  METADATA_HEADER(ExtensionJustificationView);
   explicit ExtensionJustificationView(TextfieldController* controller) {
     SetLayoutManager(std::make_unique<views::BoxLayout>(
         views::BoxLayout::Orientation::kVertical, gfx::Insets(),
@@ -312,6 +315,11 @@ class ExtensionInstallDialogView::ExtensionJustificationView
   raw_ptr<views::Label> justification_text_length_;
 };
 
+BEGIN_METADATA(ExtensionInstallDialogView,
+               ExtensionJustificationView,
+               views::View)
+END_METADATA
+
 ExtensionInstallDialogView::ExtensionInstallDialogView(
     std::unique_ptr<ExtensionInstallPromptShowParams> show_params,
     ExtensionInstallPrompt::DoneCallback done_callback,
@@ -323,7 +331,7 @@ ExtensionInstallDialogView::ExtensionInstallDialogView(
       title_(prompt_->GetDialogTitle()),
       scroll_view_(nullptr),
       install_button_enabled_(false),
-      withhold_permissions_checkbox_(nullptr) {
+      grant_permissions_checkbox_(nullptr) {
   DCHECK(prompt_->extension());
 
   extensions::ExtensionRegistry* extension_registry =
@@ -365,10 +373,10 @@ ExtensionInstallDialogView::ExtensionInstallDialogView(
     store_link->SetCallback(base::BindRepeating(
         &ExtensionInstallDialogView::LinkClicked, base::Unretained(this)));
     SetExtraView(std::move(store_link));
-  } else if (prompt_->ShouldDisplayWithholdingUI()) {
-    withhold_permissions_checkbox_ =
-        SetExtraView(std::make_unique<views::Checkbox>(
-            l10n_util::GetStringUTF16(IDS_EXTENSION_WITHHOLD_PERMISSIONS)));
+  } else if (prompt_->ShouldWithheldPermissionsOnDialogAccept()) {
+    grant_permissions_checkbox_ = SetExtraView(
+        std::make_unique<views::Checkbox>(l10n_util::GetStringUTF16(
+            IDS_EXTENSION_PROMPT_GRANT_PERMISSIONS_CHECKBOX)));
   }
 
   SetButtonLabel(ui::DIALOG_BUTTON_OK, prompt_->GetAcceptButtonLabel());
@@ -376,9 +384,6 @@ ExtensionInstallDialogView::ExtensionInstallDialogView(
   set_close_on_deactivate(false);
   SetShowCloseButton(false);
   CreateContents();
-
-  UMA_HISTOGRAM_ENUMERATION("Extensions.InstallPrompt.Type2", prompt_->type(),
-                            ExtensionInstallPrompt::NUM_PROMPT_TYPES);
 }
 
 ExtensionInstallDialogView::~ExtensionInstallDialogView() {
@@ -416,8 +421,11 @@ void ExtensionInstallDialogView::ResizeWidget() {
 
 void ExtensionInstallDialogView::VisibilityChanged(views::View* starting_from,
                                                    bool is_visible) {
-  if (is_visible) {
-    DCHECK(!install_result_timer_);
+  // VisibilityChanged() might spuriously fire more than once on some platforms,
+  // for example, when Widget::Show() and Widget::Activate() are called
+  // sequentially. Timers should be started only at the first notification of
+  // visibility change.
+  if (is_visible && !install_result_timer_) {
     install_result_timer_ = base::ElapsedTimer();
 
     if (!install_button_enabled_) {
@@ -459,7 +467,7 @@ void ExtensionInstallDialogView::AddedToWidget() {
   gfx::Size size(image->width(), image->height());
   size.SetToMin(gfx::Size(icon_size, icon_size));
   icon->SetImageSize(size);
-  icon->SetImage(*image);
+  icon->SetImage(ui::ImageModel::FromImageSkia(*image));
 
   layout->AddRows(1, views::TableLayout::kFixedSize);
   title_container->AddChildView(std::move(icon));
@@ -516,7 +524,6 @@ void ExtensionInstallDialogView::OnDialogCanceled() {
   // being uninstalled).
   extension_registry_observation_.Reset();
 
-  UpdateInstallResultHistogram(false);
   UpdateEnterpriseCloudExtensionRequestDialogActionHistogram(false);
   prompt_->OnDialogCanceled();
   std::move(done_callback_)
@@ -534,19 +541,19 @@ void ExtensionInstallDialogView::OnDialogAccepted() {
 
   bool expect_justification =
       prompt_->type() ==
-          ExtensionInstallPrompt::PromptType::EXTENSION_REQUEST_PROMPT &&
-      base::FeatureList::IsEnabled(features::kExtensionWorkflowJustification);
+      ExtensionInstallPrompt::PromptType::EXTENSION_REQUEST_PROMPT;
   DCHECK(expect_justification == !!justification_view_);
 
-  UpdateInstallResultHistogram(true);
   UpdateEnterpriseCloudExtensionRequestDialogActionHistogram(true);
   prompt_->OnDialogAccepted();
-  // If the prompt had a checkbox element and it was checked we send that along
-  // as the result, otherwise we just send a normal accepted result.
+
+  // Permissions are withheld at installation when the prompt specifies it and
+  // `grant_permissions_checkbox_` wasn't selected.
   auto result =
-      withhold_permissions_checkbox_ &&
-              withhold_permissions_checkbox_->GetChecked()
-          ? ExtensionInstallPrompt::Result::ACCEPTED_AND_OPTION_CHECKED
+      (prompt_->ShouldWithheldPermissionsOnDialogAccept() &&
+       grant_permissions_checkbox_ &&
+       !grant_permissions_checkbox_->GetChecked())
+          ? ExtensionInstallPrompt::Result::ACCEPTED_WITH_WITHHELD_PERMISSIONS
           : ExtensionInstallPrompt::Result::ACCEPTED;
 
   std::move(done_callback_)
@@ -641,42 +648,13 @@ void ExtensionInstallDialogView::CreateContents() {
       provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL)));
 
   std::vector<ExtensionInfoSection> sections;
-  if (prompt_->ShouldShowPermissions()) {
-    bool has_permissions = prompt_->GetPermissionCount() > 0;
-    if (has_permissions) {
-      AddPermissions(prompt_.get(), sections, content_width);
-    } else {
-      sections.push_back(
-          {l10n_util::GetStringUTF16(IDS_EXTENSION_NO_SPECIAL_PERMISSIONS),
-           nullptr});
-    }
+  if (prompt_->GetPermissionCount() > 0) {
+    AddPermissions(prompt_.get(), sections, content_width);
   }
 
-  if (prompt_->GetRetainedFileCount()) {
-    std::vector<std::u16string> details;
-    for (size_t i = 0; i < prompt_->GetRetainedFileCount(); ++i) {
-      details.push_back(prompt_->GetRetainedFile(i));
-    }
-    sections.push_back(
-        {prompt_->GetRetainedFilesHeading(),
-         std::make_unique<ExpandableContainerView>(details, content_width)});
-  }
-
-  if (prompt_->GetRetainedDeviceCount()) {
-    std::vector<std::u16string> details;
-    for (size_t i = 0; i < prompt_->GetRetainedDeviceCount(); ++i) {
-      details.push_back(prompt_->GetRetainedDeviceMessageString(i));
-    }
-    sections.push_back(
-        {prompt_->GetRetainedDevicesHeading(),
-         std::make_unique<ExpandableContainerView>(details, content_width)});
-  }
-
-  const bool is_justification_field_enabled =
-      prompt_->type() ==
-          ExtensionInstallPrompt::PromptType::EXTENSION_REQUEST_PROMPT &&
-      base::FeatureList::IsEnabled(features::kExtensionWorkflowJustification);
-  if (sections.empty() && !is_justification_field_enabled) {
+  if (sections.empty() &&
+      prompt_->type() !=
+          ExtensionInstallPrompt::PromptType::EXTENSION_REQUEST_PROMPT) {
     // Use a smaller margin between the title area and buttons, since there
     // isn't any content.
     set_margins(
@@ -704,7 +682,8 @@ void ExtensionInstallDialogView::CreateContents() {
   // Add separate section for user justification. This section isn't added to
   // the |sections| vector since it is later referenced to extract the textfield
   // string.
-  if (is_justification_field_enabled) {
+  if (prompt_->type() ==
+      ExtensionInstallPrompt::PromptType::EXTENSION_REQUEST_PROMPT) {
     justification_view_ =
         extension_info_and_justification_container->AddChildView(
             std::make_unique<ExtensionJustificationView>(this));
@@ -742,22 +721,6 @@ void ExtensionInstallDialogView::ContentsChanged(
 void ExtensionInstallDialogView::EnableInstallButton() {
   install_button_enabled_ = true;
   DialogModelChanged();
-}
-
-void ExtensionInstallDialogView::UpdateInstallResultHistogram(bool accepted)
-    const {
-  // Only update histograms if |install_result_timer_| was initialized in
-  // |VisibilityChanged|.
-  if (prompt_->type() == ExtensionInstallPrompt::INSTALL_PROMPT &&
-      install_result_timer_) {
-    if (accepted) {
-      UmaHistogramMediumTimes("Extensions.InstallPrompt.TimeToInstall",
-                              install_result_timer_->Elapsed());
-    } else {
-      UmaHistogramMediumTimes("Extensions.InstallPrompt.TimeToCancel",
-                              install_result_timer_->Elapsed());
-    }
-  }
 }
 
 void ExtensionInstallDialogView::

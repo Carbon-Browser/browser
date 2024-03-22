@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define COMPONENTS_EXO_WAYLAND_ZWP_TEXT_INPUT_MANAGER_H_
 
 #include <stdint.h>
+
+#include "base/memory/raw_ptr.h"
 
 struct wl_client;
 
@@ -23,10 +25,10 @@ struct WaylandTextInputManager {
   WaylandTextInputManager& operator=(const WaylandTextInputManager&) = delete;
 
   // Owned by Seat, which also always outlives zwp_text_input_manager.
-  const XkbTracker* const xkb_tracker;
+  const raw_ptr<const XkbTracker, ExperimentalAsh> xkb_tracker;
 
   // Owned by Server, which always outlives zwp_text_input_manager.
-  SerialTracker* const serial_tracker;
+  const raw_ptr<SerialTracker, ExperimentalAsh> serial_tracker;
 };
 
 struct WaylandTextInputExtension {};

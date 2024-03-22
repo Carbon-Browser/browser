@@ -1,13 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_address_mediator.h"
 
-#include <vector>
-
-#include "base/metrics/user_metrics.h"
-#include "components/autofill/core/browser/data_model/autofill_profile.h"
+#import "base/metrics/user_metrics.h"
+#import "components/autofill/core/browser/data_model/autofill_profile.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_model.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/address_consumer.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/address_list_delegate.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_action_cell.h"
@@ -15,15 +16,8 @@
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_address.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_address_cell.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_content_injector.h"
-#import "ios/chrome/browser/ui/list_model/list_model.h"
-#import "ios/chrome/browser/ui/table_view/table_view_model.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace manual_fill {
 NSString* const ManageAddressAccessibilityIdentifier =
@@ -92,7 +86,7 @@ NSString* const ManageAddressAccessibilityIdentifier =
   NSString* manageAddressesTitle =
       l10n_util::GetNSString(IDS_IOS_MANUAL_FALLBACK_MANAGE_ADDRESSES);
   __weak __typeof(self) weakSelf = self;
-  auto manageAddressesItem = [[ManualFillActionItem alloc]
+  ManualFillActionItem* manageAddressesItem = [[ManualFillActionItem alloc]
       initWithTitle:manageAddressesTitle
              action:^{
                base::RecordAction(base::UserMetricsAction(

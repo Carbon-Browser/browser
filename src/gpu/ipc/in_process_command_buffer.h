@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,38 +13,38 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include <optional>
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "gpu/command_buffer/client/gpu_control.h"
 #include "gpu/command_buffer/common/command_buffer.h"
 #include "gpu/command_buffer/common/context_result.h"
 #include "gpu/command_buffer/service/command_buffer_service.h"
+#include "gpu/command_buffer/service/command_buffer_task_executor.h"
 #include "gpu/command_buffer/service/context_group.h"
 #include "gpu/command_buffer/service/decoder_client.h"
 #include "gpu/command_buffer/service/decoder_context.h"
+#include "gpu/command_buffer/service/display_compositor_memory_and_task_controller_on_gpu.h"
+#include "gpu/command_buffer/service/gpu_task_scheduler_helper.h"
 #include "gpu/command_buffer/service/gr_cache_controller.h"
 #include "gpu/command_buffer/service/program_cache.h"
 #include "gpu/command_buffer/service/service_discardable_manager.h"
 #include "gpu/command_buffer/service/service_transfer_cache.h"
+#include "gpu/command_buffer/service/shared_image_interface_in_process.h"
 #include "gpu/config/gpu_feature_info.h"
 #include "gpu/config/gpu_preferences.h"
-#include "gpu/ipc/command_buffer_task_executor.h"
 #include "gpu/ipc/common/surface_handle.h"
-#include "gpu/ipc/display_compositor_memory_and_task_controller_on_gpu.h"
 #include "gpu/ipc/gl_in_process_context_export.h"
-#include "gpu/ipc/gpu_task_scheduler_helper.h"
 #include "gpu/ipc/service/context_url.h"
-#include "gpu/ipc/service/display_context.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gl/gl_surface.h"
@@ -65,10 +65,8 @@ class GpuTaskSchedulerHelper;
 
 namespace gpu {
 class SharedContextState;
-class GpuProcessActivityFlags;
-class ImageFactory;
+class GpuProcessShmCount;
 class SharedImageInterface;
-class SharedImageInterfaceInProcess;
 class SyncPointClientState;
 struct ContextCreationAttribs;
 
@@ -102,10 +100,9 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
 
   gpu::ContextResult Initialize(
       const ContextCreationAttribs& attribs,
-      ImageFactory* image_factory,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner,
       gpu::raster::GrShaderCache* gr_shader_cache,
-      GpuProcessActivityFlags* activity_flags);
+      GpuProcessShmCount* use_shader_cache_shm_count);
 
   // CommandBuffer implementation (called on client thread):
   State GetLastState() override;
@@ -119,6 +116,7 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
   scoped_refptr<Buffer> CreateTransferBuffer(
       uint32_t size,
       int32_t* id,
+      uint32_t alignment = 0,
       TransferBufferAllocationOption option =
           TransferBufferAllocationOption::kLoseContextOnOOM) override;
   void DestroyTransferBuffer(int32_t id) override;
@@ -128,7 +126,9 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
   void SetGpuControlClient(GpuControlClient*) override;
   // GetCapabilities() can be called on any thread.
   const Capabilities& GetCapabilities() const override;
+  const GLCapabilities& GetGLCapabilities() const override;
   void SignalQuery(uint32_t query_id, base::OnceClosure callback) override;
+  void CancelAllQueries() override;
   void CreateGpuFence(uint32_t gpu_fence_id, ClientGpuFence source) override;
   void GetGpuFence(uint32_t gpu_fence_id,
                    base::OnceCallback<void(std::unique_ptr<gfx::GpuFence>)>
@@ -151,7 +151,9 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
 
   // DecoderClient implementation (called on gpu thread):
   void OnConsoleMessage(int32_t id, const std::string& message) override;
-  void CacheShader(const std::string& key, const std::string& shader) override;
+  void CacheBlob(gpu::GpuDiskCacheType type,
+                 const std::string& key,
+                 const std::string& shader) override;
   void OnFenceSyncRelease(uint64_t release) override;
   void OnDescheduleUntilFinished() override;
   void OnRescheduleAfterFinished() override;
@@ -175,38 +177,24 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
 
   gpu::SharedImageInterface* GetSharedImageInterface() const;
 
-  // This is wrapper for VizSharedImageInterface implementation that is only
-  // used in InProcessCommandBuffer.
-  class SharedImageInterfaceHelper {
-   public:
-    explicit SharedImageInterfaceHelper(InProcessCommandBuffer* command_buffer);
-    ~SharedImageInterfaceHelper() = default;
-
-    void SetError();
-    void WrapTaskWithGpuCheck(base::OnceClosure task);
-
-   private:
-    raw_ptr<InProcessCommandBuffer> command_buffer_;
-  };
-
  private:
   struct InitializeOnGpuThreadParams {
-    const ContextCreationAttribs& attribs;
-    Capabilities* capabilities;  // Ouptut.
-    ImageFactory* image_factory;
-    gpu::raster::GrShaderCache* gr_shader_cache;
-    GpuProcessActivityFlags* activity_flags;
+    const raw_ref<const ContextCreationAttribs> attribs;
+    raw_ptr<Capabilities> capabilities;       // Output.
+    raw_ptr<GLCapabilities> gl_capabilities;  // Output.
+    raw_ptr<gpu::raster::GrShaderCache> gr_shader_cache;
+    raw_ptr<GpuProcessShmCount> use_shader_cache_shm_count;
 
     InitializeOnGpuThreadParams(const ContextCreationAttribs& attribs,
                                 Capabilities* capabilities,
-                                ImageFactory* image_factory,
+                                GLCapabilities* gl_capabilities,
                                 gpu::raster::GrShaderCache* gr_shader_cache,
-                                GpuProcessActivityFlags* activity_flags)
+                                GpuProcessShmCount* use_shader_cache_shm_count)
         : attribs(attribs),
           capabilities(capabilities),
-          image_factory(image_factory),
+          gl_capabilities(gl_capabilities),
           gr_shader_cache(gr_shader_cache),
-          activity_flags(activity_flags) {}
+          use_shader_cache_shm_count(use_shader_cache_shm_count) {}
   };
 
   // Initialize() and Destroy() are called on the client thread, but post tasks
@@ -227,7 +215,8 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
 
   bool MakeCurrent();
 
-  absl::optional<gles2::ProgramCache::ScopedCacheUse> CreateCacheUse();
+  void CreateCacheUse(
+      std::optional<gles2::ProgramCache::ScopedCacheUse>& cache_use);
 
   // Client callbacks are posted back to |origin_task_runner_|, or run
   // synchronously if there's no task runner or message loop.
@@ -247,6 +236,7 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
   void SignalSyncTokenOnGpuThread(const SyncToken& sync_token,
                                   base::OnceClosure callback);
   void SignalQueryOnGpuThread(unsigned query_id, base::OnceClosure callback);
+  void CancelAllQueriesOnGpuThread();
 
   void RegisterTransferBufferOnGpuThread(int32_t id,
                                          scoped_refptr<Buffer> buffer);
@@ -273,19 +263,17 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
 
   void HandleReturnDataOnOriginThread(std::vector<uint8_t> data);
 
+  const CommandBufferId command_buffer_id_;
   const ContextUrl active_url_;
 
   // Members accessed on the gpu thread (possibly with the exception of
   // creation):
-  std::unique_ptr<DisplayCompositorMemoryAndTaskControllerOnGpu>
-      gpu_dependency_;
   bool use_virtualized_gl_context_ = false;
   raw_ptr<raster::GrShaderCache> gr_shader_cache_ = nullptr;
   scoped_refptr<base::SingleThreadTaskRunner> origin_task_runner_;
   std::unique_ptr<CommandBufferService> command_buffer_;
   std::unique_ptr<DecoderContext> decoder_;
   scoped_refptr<gl::GLContext> context_;
-  scoped_refptr<gl::GLSurface> surface_;
   scoped_refptr<SyncPointClientState> sync_point_client_state_;
 
   // Used to throttle PerformDelayedWorkOnGpuThread.
@@ -302,6 +290,7 @@ class GL_IN_PROCESS_CONTEXT_EXPORT InProcessCommandBuffer
   base::Lock last_state_lock_;
   int32_t last_put_offset_ = -1;
   Capabilities capabilities_;
+  GLCapabilities gl_capabilities_;
   uint64_t next_fence_sync_release_ = 1;
   std::vector<SyncToken> next_flush_sync_token_fences_;
   // Sequence checker for client sequence used for initialization, destruction,

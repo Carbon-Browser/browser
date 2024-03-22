@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,9 @@ class PrefRegistrySyncable;
 namespace content_settings {
 
 // PolicyProvider that provides managed content-settings.
+//
+// PartitionKey is ignored by this provider because the content settings should
+// apply across partitions.
 class PolicyProvider : public ObservableProvider {
  public:
   explicit PolicyProvider(PrefService* prefs);
@@ -35,16 +38,21 @@ class PolicyProvider : public ObservableProvider {
   // ProviderInterface implementations.
   std::unique_ptr<RuleIterator> GetRuleIterator(
       ContentSettingsType content_type,
-      bool incognito) const override;
+      bool incognito,
+      const PartitionKey& partition_key =
+          PartitionKey::WipGetDefault()) const override;
 
-  bool SetWebsiteSetting(
-      const ContentSettingsPattern& primary_pattern,
-      const ContentSettingsPattern& secondary_pattern,
-      ContentSettingsType content_type,
-      base::Value&& value,
-      const ContentSettingConstraints& constraint = {}) override;
+  bool SetWebsiteSetting(const ContentSettingsPattern& primary_pattern,
+                         const ContentSettingsPattern& secondary_pattern,
+                         ContentSettingsType content_type,
+                         base::Value&& value,
+                         const ContentSettingConstraints& constraint = {},
+                         const PartitionKey& partition_key =
+                             PartitionKey::WipGetDefault()) override;
 
-  void ClearAllContentSettingsRules(ContentSettingsType content_type) override;
+  void ClearAllContentSettingsRules(ContentSettingsType content_type,
+                                    const PartitionKey& partition_key =
+                                        PartitionKey::WipGetDefault()) override;
 
   void ShutdownOnUIThread() override;
 
@@ -64,10 +72,11 @@ class PolicyProvider : public ObservableProvider {
 
   void ReadManagedContentSettings(bool overwrite);
 
-  void GetContentSettingsFromPreferences(OriginIdentifierValueMap* rules);
+  void GetContentSettingsFromPreferences()
+      EXCLUSIVE_LOCKS_REQUIRED(value_map_.GetLock());
 
-  void GetAutoSelectCertificateSettingsFromPreferences(
-      OriginIdentifierValueMap* value_map);
+  void GetAutoSelectCertificateSettingsFromPreferences()
+      EXCLUSIVE_LOCKS_REQUIRED(value_map_.GetLock());
 
   void ReadManagedContentSettingsTypes(ContentSettingsType content_type);
 
@@ -76,10 +85,6 @@ class PolicyProvider : public ObservableProvider {
   raw_ptr<PrefService> prefs_;
 
   PrefChangeRegistrar pref_change_registrar_;
-
-  // Used around accesses to the |value_map_| object to guarantee
-  // thread safety.
-  mutable base::Lock lock_;
 };
 
 }  // namespace content_settings

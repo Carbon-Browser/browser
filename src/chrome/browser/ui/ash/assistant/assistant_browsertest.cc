@@ -1,31 +1,30 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/components/audio/cras_audio_handler.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/test/app_list_test_api.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_run_loop_timeout.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/ash/assistant/assistant_test_mixin.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chromeos/ash/components/assistant/test_support/expect_utils.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/assistant/public/cpp/switches.h"
 #include "chromeos/ash/services/assistant/service.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "content/public/test/browser_test.h"
+#include "sandbox/policy/switches.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
+
 namespace {
 
-using ::ash::CrasAudioHandler;
+using test::ExpectResult;
 
 // Please remember to set auth token when running in |kProxy| mode.
 constexpr auto kMode = FakeS3Mode::kReplay;
@@ -51,25 +50,30 @@ inline constexpr char kDlcLoadStatusHistogram[] =
 
 }  // namespace
 
-using ::ash::assistant::test::ExpectResult;
-
-class AssistantBrowserTest : public MixinBasedInProcessBrowserTest {
+// All tests are disabled because LibAssistant V2 binary does not run on Linux
+// bot. To run the tests on gLinux, please add
+// `--gtest_also_run_disabled_tests`.
+class DISABLED_AssistantBrowserTest : public MixinBasedInProcessBrowserTest,
+                                      public testing::WithParamInterface<bool> {
  public:
-  AssistantBrowserTest() {
-    // TODO(b/190633242): enable sandbox in browser tests.
-    feature_list_.InitAndDisableFeature(
-        chromeos::assistant::features::kEnableLibAssistantSandbox);
-
+  DISABLED_AssistantBrowserTest() {
     // Do not log to file in test. Otherwise multiple tests may create/delete
     // the log file at the same time. See http://crbug.com/1307868.
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kDisableLibAssistantLogfile);
+
+    // In browser tests, the fake_s3_server uses gRPC framework, which is not
+    // allowed in the sandbox by default. Instead of enabling and setting up the
+    // gRPC policy, we do not enable sandbox in the tests.
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        sandbox::policy::switches::kNoSandbox);
   }
 
-  AssistantBrowserTest(const AssistantBrowserTest&) = delete;
-  AssistantBrowserTest& operator=(const AssistantBrowserTest&) = delete;
+  DISABLED_AssistantBrowserTest(const DISABLED_AssistantBrowserTest&) = delete;
+  DISABLED_AssistantBrowserTest& operator=(
+      const DISABLED_AssistantBrowserTest&) = delete;
 
-  ~AssistantBrowserTest() override = default;
+  ~DISABLED_AssistantBrowserTest() override = default;
 
   AssistantTestMixin* tester() { return &tester_; }
 
@@ -77,12 +81,9 @@ class AssistantBrowserTest : public MixinBasedInProcessBrowserTest {
     if (!tester()->IsVisible())
       tester()->PressAssistantKey();
 
-    // Make sure that the app list bubble finished showing when productivity
-    // launcher is enabled.
-    if (ash::features::IsProductivityLauncherEnabled()) {
-      ash::AppListTestApi().WaitForBubbleWindow(
-          /*wait_for_opening_animation=*/false);
-    }
+    // Make sure that the app list bubble finished showing.
+    AppListTestApi().WaitForBubbleWindow(
+        /*wait_for_opening_animation=*/false);
   }
 
   void CloseAssistantUi() {
@@ -146,32 +147,29 @@ class AssistantBrowserTest : public MixinBasedInProcessBrowserTest {
   base::HistogramTester* histogram_tester() { return &histogram_tester_; }
 
  private:
-  base::test::ScopedFeatureList feature_list_;
   base::HistogramTester histogram_tester_;
   AssistantTestMixin tester_{&mixin_host_, this, embedded_test_server(), kMode,
                              kVersion};
 };
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest,
                        ShouldOpenAssistantUiWhenPressingAssistantKey) {
   tester()->StartAssistantAndWaitForReady();
 
   tester()->PressAssistantKey();
 
-  // Make sure that the app list bubble finished showing when productivity
-  // launcher is enabled (the app list view gets created asynchronously for
-  // productivity launcher).
-  if (ash::features::IsProductivityLauncherEnabled()) {
-    ash::AppListTestApi().WaitForBubbleWindow(
-        /*wait_for_opening_animation=*/false);
-  }
+  // Make sure that the app list bubble finished showing (the app list view gets
+  // created asynchronously).
+  AppListTestApi().WaitForBubbleWindow(
+      /*wait_for_opening_animation=*/false);
 
   EXPECT_TRUE(tester()->IsVisible());
   histogram_tester()->ExpectTotalCount(kDlcInstallResultHistogram, 1);
   histogram_tester()->ExpectTotalCount(kDlcLoadStatusHistogram, 1);
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldDisplayTextResponse) {
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest,
+                       ShouldDisplayTextResponse) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -186,7 +184,7 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldDisplayTextResponse) {
   });
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest,
                        ShouldDisplayTextResponseWithTwoContiniousQueries) {
   tester()->StartAssistantAndWaitForReady();
 
@@ -203,7 +201,8 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
   });
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldDisplayCardResponse) {
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest,
+                       ShouldDisplayCardResponse) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -214,7 +213,7 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldDisplayCardResponse) {
   tester()->ExpectCardResponse("Mount Everest");
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldTurnUpVolume) {
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest, ShouldTurnUpVolume) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -236,7 +235,7 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldTurnUpVolume) {
                          cras));
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldTurnDownVolume) {
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest, ShouldTurnDownVolume) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -258,7 +257,7 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldTurnDownVolume) {
                          cras));
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldTurnUpBrightness) {
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest, ShouldTurnUpBrightness) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -272,7 +271,8 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldTurnUpBrightness) {
   ExpectBrightnessUp();
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldTurnDownBrightness) {
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest,
+                       ShouldTurnDownBrightness) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -286,7 +286,7 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest, ShouldTurnDownBrightness) {
   ExpectBrightnessDown();
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest,
                        ShouldPuntWhenChangingUnsupportedSetting) {
   tester()->StartAssistantAndWaitForReady();
 
@@ -300,8 +300,8 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
 }
 
 // TODO(crbug.com/1112278): Disabled because it's flaky.
-IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
-                       DISABLED_ShouldShowSingleErrorOnNetworkDown) {
+IN_PROC_BROWSER_TEST_F(DISABLED_AssistantBrowserTest,
+                       ShouldShowSingleErrorOnNetworkDown) {
   tester()->StartAssistantAndWaitForReady();
 
   ShowAssistantUi();
@@ -326,5 +326,4 @@ IN_PROC_BROWSER_TEST_F(AssistantBrowserTest,
   CloseAssistantUi();
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ package nearbyshare.proto;
 
 option optimize_for = LITE_RUNTIME;
 
-import "rpc_resources.proto";
+import "chrome/browser/nearby_sharing/proto/rpc_resources.proto";
 
 // Request to list public certificate objects.
 message ListPublicCertificatesRequest {

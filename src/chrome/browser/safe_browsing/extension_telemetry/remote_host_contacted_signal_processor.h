@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,17 @@
 
 #include "base/containers/flat_map.h"
 #include "chrome/browser/safe_browsing/extension_telemetry/extension_signal_processor.h"
+#include "chrome/browser/safe_browsing/extension_telemetry/remote_host_contacted_signal.h"
+#include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "url/gurl.h"
 
 namespace safe_browsing {
 
 class ExtensionSignal;
 class ExtensionTelemetryReportRequest_SignalInfo;
+
+using RemoteHostInfo = ExtensionTelemetryReportRequest::SignalInfo::
+    RemoteHostContactedInfo::RemoteHostInfo;
 
 // A class that processes CRX web request signal/trigger data to generate
 // telemetry reports.
@@ -30,18 +35,19 @@ class RemoteHostContactedSignalProcessor : public ExtensionSignalProcessor {
       const RemoteHostContactedSignalProcessor&) = delete;
 
   // ExtensionSignalProcessor:
-  void ProcessSignal(std::unique_ptr<ExtensionSignal> signal) override;
+  void ProcessSignal(const ExtensionSignal& signal) override;
   std::unique_ptr<ExtensionTelemetryReportRequest_SignalInfo>
   GetSignalInfoForReport(const extensions::ExtensionId& extension_id) override;
   bool HasDataToReportForTest() const override;
 
  protected:
-  // Maps remote hosts url to contact count.
-  using RemoteHostURLs = base::flat_map<std::string, uint32_t>;
-  // Maps extension id to (remote host url, contact count).
-  using RemoteHostURLsPerExtension =
-      base::flat_map<extensions::ExtensionId, RemoteHostURLs>;
-  RemoteHostURLsPerExtension remote_host_url_store_;
+  // Used to store unique remote host contacted signals in a map where the key
+  // is a concatenated string of the signal fields.
+  using RemoteHostsContacted = base::flat_map<std::string, RemoteHostInfo>;
+  // Maps extension id to remote hosts contacted store entry.
+  using RemoteHostsContactedPerExtension =
+      base::flat_map<extensions::ExtensionId, RemoteHostsContacted>;
+  RemoteHostsContactedPerExtension remote_host_contacted_store_;
 };
 
 }  // namespace safe_browsing

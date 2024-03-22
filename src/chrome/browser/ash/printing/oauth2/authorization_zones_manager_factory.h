@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ASH_PRINTING_OAUTH2_AUTHORIZATION_ZONES_MANAGER_FACTORY_H_
 
 #include "base/no_destructor.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
 class BrowserContext;
@@ -18,8 +18,7 @@ namespace oauth2 {
 
 class AuthorizationZonesManager;
 
-class AuthorizationZonesManagerFactory
-    : public BrowserContextKeyedServiceFactory {
+class AuthorizationZonesManagerFactory : public ProfileKeyedServiceFactory {
  public:
   static AuthorizationZonesManagerFactory* GetInstance();
   static AuthorizationZonesManager* GetForBrowserContext(
@@ -37,9 +36,7 @@ class AuthorizationZonesManagerFactory
   ~AuthorizationZonesManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

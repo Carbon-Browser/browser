@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_APP_LIST_APP_LIST_PRESENTER_EVENT_FILTER_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/events/event_handler.h"
 
 namespace ui {
@@ -19,7 +20,7 @@ class AppListPresenterImpl;
 class AppListView;
 
 // Listens for mouse clicks and taps outside the app list to close the UI when
-// necessary. Used by the peeking/fullscreen launcher.
+// necessary. Used by the fullscreen launcher
 class ASH_EXPORT AppListPresenterEventFilter : public ui::EventHandler {
  public:
   AppListPresenterEventFilter(AppListControllerImpl* controller,
@@ -38,9 +39,9 @@ class ASH_EXPORT AppListPresenterEventFilter : public ui::EventHandler {
  private:
   void ProcessLocatedEvent(ui::LocatedEvent* event);
 
-  AppListControllerImpl* const controller_;
-  AppListPresenterImpl* const presenter_;
-  AppListView* const view_;
+  const raw_ptr<AppListControllerImpl, ExperimentalAsh> controller_;
+  const raw_ptr<AppListPresenterImpl, ExperimentalAsh> presenter_;
+  const raw_ptr<AppListView, ExperimentalAsh> view_;
 };
 
 }  // namespace ash

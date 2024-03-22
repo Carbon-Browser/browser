@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,8 +108,8 @@ TEST_P(HTMLPlugInElementTest, RemovePlugin) {
   GetDocument().body()->setInnerHTML(
       String::Format(kDivWithPlugin, container_type, container_type));
 
-  auto* plugin =
-      To<HTMLPlugInElement>(GetDocument().getElementById("test_plugin"));
+  auto* plugin = To<HTMLPlugInElement>(
+      GetDocument().getElementById(AtomicString("test_plugin")));
   ASSERT_TRUE(plugin);
   EXPECT_EQ(container_type, plugin->tagName().LowerASCII());
 
@@ -125,7 +125,7 @@ TEST_P(HTMLPlugInElementTest, RemovePlugin) {
   ASSERT_TRUE(GetFrameView().Plugins().Contains(owned_plugin));
 
   plugin->parentNode()->removeChild(plugin);
-  EXPECT_FALSE(GetDocument().HasElementWithId("test_plugin"));
+  EXPECT_FALSE(GetDocument().HasElementWithId(AtomicString("test_plugin")));
 
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(0u, GetFrameView().Plugins().size());

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/version_info/channel.h"
 
 namespace enterprise_management {
@@ -39,9 +39,6 @@ class BrowserReportGeneratorIOS : public BrowserReportGenerator::Delegate {
   bool IsExtendedStableChannel() override;
   void GenerateBuildStateInfo(
       enterprise_management::BrowserReport* report) override;
-  void GeneratePluginsIfNeeded(
-      ReportCallback callback,
-      std::unique_ptr<enterprise_management::BrowserReport> report) override;
 };
 
 }  // namespace enterprise_reporting

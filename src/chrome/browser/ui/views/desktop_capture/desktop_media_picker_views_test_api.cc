@@ -1,14 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_picker_views_test_api.h"
 
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_list_controller.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_list_view.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_picker_views.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_tab_list.h"
-
 #include "ui/events/base_event_utils.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/tabbed_pane/tabbed_pane.h"
@@ -40,11 +40,18 @@ void DesktopMediaPickerViewsTestApi::FocusSourceAtIndex(size_t index,
 
 bool DesktopMediaPickerViewsTestApi::AudioSupported(
     DesktopMediaList::Type type) const {
-  return DesktopMediaPickerDialogView::AudioSupported(type);
+  return picker_->dialog_->AudioSupported(type);
 }
 
-void DesktopMediaPickerViewsTestApi::FocusAudioCheckbox() {
-  picker_->dialog_->audio_share_checkbox_->RequestFocus();
+void DesktopMediaPickerViewsTestApi::FocusAudioShareControl() {
+  if (base::FeatureList::IsEnabled(kDisplayMediaPickerRedesign)) {
+    const int index = picker_->dialog_->GetSelectedTabIndex();
+    CHECK_GE(index, 0);
+    CHECK_LT(static_cast<size_t>(index), picker_->dialog_->categories_.size());
+    picker_->dialog_->categories_[index].pane->RequestFocus();
+  } else {
+    picker_->dialog_->audio_share_checkbox_->RequestFocus();
+  }
 }
 
 void DesktopMediaPickerViewsTestApi::PressMouseOnSourceAtIndex(
@@ -94,15 +101,19 @@ void DesktopMediaPickerViewsTestApi::DoubleTapSourceAtIndex(size_t index) {
 void DesktopMediaPickerViewsTestApi::SelectTabForSourceType(
     DesktopMediaList::Type source_type) {
   const auto& categories = picker_->dialog_->categories_;
-  const auto i = std::find_if(categories.cbegin(), categories.cend(),
-                              [source_type](const auto& category) {
-                                return category.type == source_type;
-                              });
+  const auto i = base::ranges::find(
+      categories, source_type,
+      &DesktopMediaPickerDialogView::DisplaySurfaceCategory::type);
   DCHECK(i != categories.cend());
   if (picker_->dialog_->tabbed_pane_) {
     picker_->dialog_->tabbed_pane_->SelectTabAt(
         std::distance(categories.cbegin(), i));
   }
+}
+
+DesktopMediaList::Type
+DesktopMediaPickerViewsTestApi::GetSelectedSourceListType() const {
+  return picker_->dialog_->GetSelectedSourceListType();
 }
 
 absl::optional<int> DesktopMediaPickerViewsTestApi::GetSelectedSourceId()
@@ -125,8 +136,45 @@ views::View* DesktopMediaPickerViewsTestApi::GetSelectedListView() {
   return picker_->dialog_->GetSelectedController()->view_;
 }
 
-views::Checkbox* DesktopMediaPickerViewsTestApi::GetAudioShareCheckbox() {
-  return picker_->dialog_->audio_share_checkbox_;
+DesktopMediaListController*
+DesktopMediaPickerViewsTestApi::GetSelectedController() {
+  return picker_->dialog_->GetSelectedController();
+}
+
+bool DesktopMediaPickerViewsTestApi::HasAudioShareControl() const {
+  if (base::FeatureList::IsEnabled(kDisplayMediaPickerRedesign)) {
+    const int index = picker_->dialog_->GetSelectedTabIndex();
+    CHECK_GE(index, 0);
+    CHECK_LT(static_cast<size_t>(index), picker_->dialog_->categories_.size());
+    return picker_->dialog_->categories_[index].pane &&
+           picker_->dialog_->categories_[index].pane->AudioOffered();
+  } else {
+    return picker_->dialog_->audio_share_checkbox_;
+  }
+}
+
+void DesktopMediaPickerViewsTestApi::SetAudioSharingApprovedByUser(bool allow) {
+  if (base::FeatureList::IsEnabled(kDisplayMediaPickerRedesign)) {
+    const int index = picker_->dialog_->GetSelectedTabIndex();
+    CHECK_GE(index, 0);
+    CHECK_LT(static_cast<size_t>(index), picker_->dialog_->categories_.size());
+    picker_->dialog_->categories_[index].pane->SetAudioSharingApprovedByUser(
+        allow);
+  } else {
+    picker_->dialog_->audio_share_checkbox_->SetChecked(allow);
+  }
+}
+
+bool DesktopMediaPickerViewsTestApi::IsAudioSharingApprovedByUser() const {
+  if (base::FeatureList::IsEnabled(kDisplayMediaPickerRedesign)) {
+    return picker_->dialog_->IsAudioSharingApprovedByUser();
+  } else {
+    return picker_->dialog_->audio_share_checkbox_->GetChecked();
+  }
+}
+
+views::MdTextButton* DesktopMediaPickerViewsTestApi::GetReselectButton() {
+  return picker_->dialog_->reselect_button_;
 }
 
 const views::View* DesktopMediaPickerViewsTestApi::GetSourceAtIndex(
@@ -147,13 +195,13 @@ views::View* DesktopMediaPickerViewsTestApi::GetSourceAtIndex(size_t index) {
 const views::TableView* DesktopMediaPickerViewsTestApi::GetTableView() const {
   views::View* list = picker_->dialog_->GetSelectedController()->view_;
   return IsDesktopMediaTabList(list)
-             ? static_cast<DesktopMediaTabList*>(list)->list_.get()
+             ? static_cast<DesktopMediaTabList*>(list)->table_.get()
              : nullptr;
 }
 
 views::TableView* DesktopMediaPickerViewsTestApi::GetTableView() {
   views::View* list = picker_->dialog_->GetSelectedController()->view_;
   return IsDesktopMediaTabList(list)
-             ? static_cast<DesktopMediaTabList*>(list)->list_.get()
+             ? static_cast<DesktopMediaTabList*>(list)->table_.get()
              : nullptr;
 }

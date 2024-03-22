@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include "ash/capture_mode/capture_mode_session.h"
 #include "ash/capture_mode/capture_mode_util.h"
 #include "ash/public/cpp/shell_window_ids.h"
-#include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
+#include "ash/style/dark_light_mode_controller_impl.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "ui/aura/window.h"
 #include "ui/gfx/geometry/transform.h"
@@ -65,7 +65,8 @@ UserNudgeController::UserNudgeController(CaptureModeSession* session,
   // Rings are created initially with 0 opacity. Calling SetVisible() will
   // animate them towards their correct state.
   const SkColor ring_color =
-      AshColorProvider::Get()->GetInkDropBaseColorAndOpacity().first;
+      DarkLightModeControllerImpl::Get()->IsDarkModeEnabled() ? SK_ColorWHITE
+                                                              : SK_ColorBLACK;
   base_ring_.SetColor(ring_color);
   base_ring_.SetFillsBoundsOpaquely(false);
   base_ring_.SetOpacity(0);
@@ -139,7 +140,7 @@ void UserNudgeController::SetVisible(bool visible) {
   // animation.
   builder
       .OnEnded(base::BindOnce(&UserNudgeController::PerformNudgeAnimations,
-                              base::Unretained(this)))
+                              weak_ptr_factory_.GetWeakPtr()))
       .Once()
       .SetDuration(kDelayToShowNudge)
       .SetOpacity(&base_ring_, kBaseRingOpacity, gfx::Tween::FAST_OUT_SLOW_IN);
@@ -215,7 +216,7 @@ void UserNudgeController::PerformViewScaleAnimation() {
 void UserNudgeController::OnBaseRingAnimationEnded() {
   timer_.Start(FROM_HERE, kDelayToRepeatNudge,
                base::BindOnce(&UserNudgeController::PerformNudgeAnimations,
-                              base::Unretained(this)));
+                              weak_ptr_factory_.GetWeakPtr()));
 }
 
 aura::Window* UserNudgeController::GetParentWindow() const {

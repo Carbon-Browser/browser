@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <sstream>
 
+#include "base/memory/raw_ref.h"
 #include "base/strings/string_piece.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -35,19 +36,19 @@ class TestCrashKeyImplementation : public CrashKeyImplementation {
   }
 
   void Set(CrashKeyString* crash_key, base::StringPiece value) override {
-    ASSERT_TRUE(data_.emplace(crash_key->name, value).second);
+    ASSERT_TRUE(data_->emplace(crash_key->name, value).second);
   }
 
   void Clear(CrashKeyString* crash_key) override {
-    ASSERT_EQ(1u, data_.erase(crash_key->name));
+    ASSERT_EQ(1u, data_->erase(crash_key->name));
   }
 
   void OutputCrashKeysToStream(std::ostream& out) override {
-    out << "Got " << data_.size() << " crash keys.";
+    out << "Got " << data_->size() << " crash keys.";
   }
 
  private:
-  std::map<std::string, std::string>& data_;
+  const raw_ref<std::map<std::string, std::string>> data_;
 };
 
 }  // namespace

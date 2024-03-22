@@ -1,10 +1,9 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/metrics/metrics_state_manager.h"
 
-#include <ctype.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -12,9 +11,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -29,9 +28,9 @@
 #include "components/metrics/test/test_enabled_state_provider.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/variations/pref_names.h"
-#include "components/version_info/channel.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 
 namespace metrics {
 namespace {
@@ -45,7 +44,7 @@ void VerifyClientId(const std::string& client_id) {
     if (i == 8 || i == 13 || i == 18 || i == 23)
       EXPECT_EQ('-', current);
     else
-      EXPECT_TRUE(isxdigit(current));
+      EXPECT_TRUE(absl::ascii_isxdigit(static_cast<unsigned char>(current)));
   }
 }
 
@@ -82,8 +81,7 @@ class MetricsStateManagerTest : public testing::Test {
     std::unique_ptr<MetricsStateManager> state_manager =
         MetricsStateManager::Create(
             &prefs_, enabled_state_provider_.get(), std::wstring(),
-            base::FilePath(), StartupVisibility::kUnknown,
-            version_info::Channel::UNKNOWN,
+            base::FilePath(), StartupVisibility::kUnknown, {},
             base::BindRepeating(
                 &MetricsStateManagerTest::MockStoreClientInfoBackup,
                 base::Unretained(this)),
@@ -195,7 +193,7 @@ TEST_F(MetricsStateManagerTest, EntropySourceUsed_Low) {
   prefs_.SetInt64(prefs::kInstallDate, base::Time::Now().ToTimeT());
 
   std::unique_ptr<MetricsStateManager> state_manager(CreateStateManager());
-  state_manager->CreateDefaultEntropyProvider();
+  state_manager->CreateEntropyProviders();
   EXPECT_EQ(state_manager->entropy_source_returned(),
             MetricsStateManager::ENTROPY_SOURCE_LOW);
   EXPECT_EQ(state_manager->initial_client_id_for_testing(), "");
@@ -204,7 +202,7 @@ TEST_F(MetricsStateManagerTest, EntropySourceUsed_Low) {
 TEST_F(MetricsStateManagerTest, EntropySourceUsed_High) {
   EnableMetricsReporting();
   std::unique_ptr<MetricsStateManager> state_manager(CreateStateManager());
-  state_manager->CreateDefaultEntropyProvider();
+  state_manager->CreateEntropyProviders();
   EXPECT_EQ(state_manager->entropy_source_returned(),
             MetricsStateManager::ENTROPY_SOURCE_HIGH);
   EXPECT_EQ(state_manager->initial_client_id_for_testing(),
@@ -337,7 +335,7 @@ TEST_F(MetricsStateManagerTest, ProvisionalClientId_PromotedToClientId) {
   int low_entropy_source = state_manager->GetLowEntropySource();
   // The default entropy provider should be the high entropy one since we a
   // the provisional client ID.
-  state_manager->CreateDefaultEntropyProvider();
+  state_manager->CreateEntropyProviders();
   EXPECT_EQ(state_manager->entropy_source_returned(),
             MetricsStateManager::ENTROPY_SOURCE_HIGH);
 
@@ -376,7 +374,7 @@ TEST_F(MetricsStateManagerTest, ProvisionalClientId_PersistedAcrossFirstRuns) {
         prefs_.FindPreference(prefs::kMetricsClientID)->IsDefaultValue());
     // The default entropy provider should be the high entropy one since we a
     // the provisional client ID.
-    state_manager->CreateDefaultEntropyProvider();
+    state_manager->CreateEntropyProviders();
     EXPECT_EQ(state_manager->entropy_source_returned(),
               MetricsStateManager::ENTROPY_SOURCE_HIGH);
   }
@@ -392,7 +390,7 @@ TEST_F(MetricsStateManagerTest, ProvisionalClientId_PersistedAcrossFirstRuns) {
     EXPECT_TRUE(prefs_.FindPreference(prefs::kMetricsClientID));
     // The default entropy provider should be the high entropy one since we a
     // the provisional client ID.
-    state_manager->CreateDefaultEntropyProvider();
+    state_manager->CreateEntropyProviders();
     EXPECT_EQ(state_manager->entropy_source_returned(),
               MetricsStateManager::ENTROPY_SOURCE_HIGH);
   }

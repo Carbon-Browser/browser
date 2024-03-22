@@ -50,7 +50,7 @@ from setuptools.dist import Distribution
 # This version string is semver compatible, but incompatible with pip.
 # For pip, we will remove all '-' characters from this string, and use the
 # result for pip.
-_VERSION = '0.4.0'
+_VERSION = '0.4.4'
 
 SETUP_PACKAGES = [
     'pybind11 >= 2.6.0',
@@ -59,11 +59,11 @@ SETUP_PACKAGES = [
 REQUIRED_PACKAGES = [
     'absl-py >= 0.7.0',
     'numpy >= 1.20.0',
-    # TODO(b/187981032): remove the constraint for 2.0 once the incompatibile
-    # issue is resolved.
-    'flatbuffers >= 1.12, <2',
-    # The Protobuf version needs to be the same as the one in WORKSPACE.
-    'protobuf >= 3.18.0',
+    'flatbuffers >= 2.0',
+    # The Protobuf version needs to be newer than the one in WORKSPACE.
+    # Protobuf v4 introduced breaking changes making it incompatible with
+    # pb2 files compiled with earlier versions of protobuf used in this project.
+    'protobuf >= 3.18.0, <4',
     'sounddevice >= 0.4.4',
 ] + SETUP_PACKAGES
 

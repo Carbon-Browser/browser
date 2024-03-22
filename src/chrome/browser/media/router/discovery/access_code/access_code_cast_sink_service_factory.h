@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/lazy_instance.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace base {
-template <typename Type>
-struct DefaultSingletonTraits;
+template <typename T>
+class NoDestructor;
 }
 
 class Profile;
@@ -22,8 +22,7 @@ class AccessCodeCastSinkService;
 
 // A factory that lazily returns an AccessCodeCastSinkService
 // implementation for a given BrowserContext.
-class AccessCodeCastSinkServiceFactory
-    : public BrowserContextKeyedServiceFactory {
+class AccessCodeCastSinkServiceFactory : public ProfileKeyedServiceFactory {
  public:
   AccessCodeCastSinkServiceFactory(const AccessCodeCastSinkServiceFactory&) =
       delete;
@@ -35,13 +34,13 @@ class AccessCodeCastSinkServiceFactory
   static AccessCodeCastSinkServiceFactory* GetInstance();
 
  protected:
-  friend struct base::DefaultSingletonTraits<AccessCodeCastSinkServiceFactory>;
+  friend base::NoDestructor<AccessCodeCastSinkServiceFactory>;
 
   AccessCodeCastSinkServiceFactory();
   ~AccessCodeCastSinkServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -201,9 +201,7 @@ H264VaapiVideoEncoderDelegate::H264VaapiVideoEncoderDelegate(
     base::RepeatingClosure error_cb)
     : VaapiVideoEncoderDelegate(std::move(vaapi_wrapper), error_cb) {}
 
-H264VaapiVideoEncoderDelegate::~H264VaapiVideoEncoderDelegate() {
-  // H264VaapiVideoEncoderDelegate can be destroyed on any thread.
-}
+H264VaapiVideoEncoderDelegate::~H264VaapiVideoEncoderDelegate() = default;
 
 bool H264VaapiVideoEncoderDelegate::Initialize(
     const VideoEncodeAccelerator::Config& config,
@@ -238,9 +236,11 @@ bool H264VaapiVideoEncoderDelegate::Initialize(
     return false;
   }
   constexpr int kH264MacroblockSizeInPixels = 16;
-  coded_size_ = gfx::Size(
-      base::bits::AlignUp(visible_size_.width(), kH264MacroblockSizeInPixels),
-      base::bits::AlignUp(visible_size_.height(), kH264MacroblockSizeInPixels));
+  coded_size_ =
+      gfx::Size(base::bits::AlignUpDeprecatedDoNotUse(
+                    visible_size_.width(), kH264MacroblockSizeInPixels),
+                base::bits::AlignUpDeprecatedDoNotUse(
+                    visible_size_.height(), kH264MacroblockSizeInPixels));
   mb_width_ = coded_size_.width() / kH264MacroblockSizeInPixels;
   mb_height_ = coded_size_.height() / kH264MacroblockSizeInPixels;
 
@@ -500,8 +500,7 @@ void H264VaapiVideoEncoderDelegate::UpdateSPS() {
       current_sps_.profile_idc = H264SPS::kProfileIDCHigh;
       break;
     default:
-      NOTREACHED();
-      return;
+      NOTREACHED_NORETURN();
   }
 
   H264SPS::GetLevelConfigFromProfileLevel(profile_, level_,
@@ -570,11 +569,14 @@ void H264VaapiVideoEncoderDelegate::UpdateSPS() {
        (kCPBSizeScale + H264SPS::kCPBSizeScaleConstantTerm)) -
       1;
   switch (curr_params_.bitrate_allocation.GetMode()) {
-    case (Bitrate::Mode::kConstant):
+    case Bitrate::Mode::kConstant:
       current_sps_.cbr_flag[0] = true;
       break;
-    case (Bitrate::Mode::kVariable):
+    case Bitrate::Mode::kVariable:
       current_sps_.cbr_flag[0] = false;
+      break;
+    case Bitrate::Mode::kExternal:
+      NOTREACHED();
       break;
   }
   current_sps_.initial_cpb_removal_delay_length_minus_1 =

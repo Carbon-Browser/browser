@@ -1,13 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/web/java_script_console/java_script_console_feature.h"
 
-#include <memory>
+#import <memory>
+#import <optional>
 
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/web/java_script_console/java_script_console_feature_delegate.h"
 #import "ios/chrome/browser/web/java_script_console/java_script_console_feature_factory.h"
 #import "ios/chrome/browser/web/java_script_console/java_script_console_message.h"
@@ -16,15 +17,10 @@
 #import "ios/web/public/test/scoped_testing_web_client.h"
 #import "ios/web/public/test/web_state_test_util.h"
 #import "ios/web/public/test/web_task_environment.h"
-#include "ios/web/public/test/web_view_interaction_test_util.h"
+#import "ios/web/public/test/web_view_interaction_test_util.h"
 #import "ios/web/public/web_state.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
 
 namespace {
 
@@ -64,13 +60,13 @@ class FakeJavaScriptConsoleFeatureDelegate
       web::WebState* web_state,
       web::WebFrame* sender_frame,
       const JavaScriptConsoleMessage& message) override {
-    last_received_message_ = absl::optional<JavaScriptConsoleMessage>(
+    last_received_message_ = std::optional<JavaScriptConsoleMessage>(
         JavaScriptConsoleMessage(message));
     last_received_web_frame_ = sender_frame;
     last_received_web_state_ = web_state;
   }
 
-  absl::optional<JavaScriptConsoleMessage> last_received_message_;
+  std::optional<JavaScriptConsoleMessage> last_received_message_;
   web::WebFrame* last_received_web_frame_ = nullptr;
   web::WebState* last_received_web_state_ = nullptr;
 };
@@ -136,10 +132,10 @@ class JavaScriptConsoleFeatureTest : public PlatformTest {
 
   web::WebFrame* GetWebFrameForIframe() {
     web::WebFrame* main_frame =
-        web_state()->GetWebFramesManager()->GetMainWebFrame();
+        web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame();
     web::WebFrame* iframe = nullptr;
     for (web::WebFrame* web_frame :
-         web_state()->GetWebFramesManager()->GetAllWebFrames()) {
+         web_state()->GetPageWorldWebFramesManager()->GetAllWebFrames()) {
       if (web_frame != main_frame) {
         iframe = web_frame;
         break;
@@ -167,7 +163,7 @@ TEST_F(JavaScriptConsoleFeatureTest, DebugMessageReceivedMainFrame) {
 
   EXPECT_EQ(web_state(), delegate_.last_received_web_state());
   web::WebFrame* web_frame =
-      web_state()->GetWebFramesManager()->GetMainWebFrame();
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame();
   EXPECT_EQ(web_frame, delegate_.last_received_web_frame());
   EXPECT_EQ(kTestHostName, delegate_.last_received_message_url());
   EXPECT_NSEQ(@"debug", delegate_.last_received_message_level());
@@ -183,7 +179,7 @@ TEST_F(JavaScriptConsoleFeatureTest, ErrorMessageReceivedMainFrame) {
 
   EXPECT_EQ(web_state(), delegate_.last_received_web_state());
   web::WebFrame* web_frame =
-      web_state()->GetWebFramesManager()->GetMainWebFrame();
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame();
   EXPECT_EQ(web_frame, delegate_.last_received_web_frame());
   EXPECT_EQ(kTestHostName, delegate_.last_received_message_url());
   EXPECT_NSEQ(@"error", delegate_.last_received_message_level());
@@ -199,7 +195,7 @@ TEST_F(JavaScriptConsoleFeatureTest, InfoMessageReceivedMainFrame) {
 
   EXPECT_EQ(web_state(), delegate_.last_received_web_state());
   web::WebFrame* web_frame =
-      web_state()->GetWebFramesManager()->GetMainWebFrame();
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame();
   EXPECT_EQ(web_frame, delegate_.last_received_web_frame());
   EXPECT_EQ(kTestHostName, delegate_.last_received_message_url());
   EXPECT_NSEQ(@"info", delegate_.last_received_message_level());
@@ -215,7 +211,7 @@ TEST_F(JavaScriptConsoleFeatureTest, LogMessageReceivedMainFrame) {
 
   EXPECT_EQ(web_state(), delegate_.last_received_web_state());
   web::WebFrame* web_frame =
-      web_state()->GetWebFramesManager()->GetMainWebFrame();
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame();
   EXPECT_EQ(web_frame, delegate_.last_received_web_frame());
   EXPECT_EQ(kTestHostName, delegate_.last_received_message_url());
   EXPECT_NSEQ(@"log", delegate_.last_received_message_level());
@@ -231,7 +227,7 @@ TEST_F(JavaScriptConsoleFeatureTest, WarnMessageReceivedMainFrame) {
 
   EXPECT_EQ(web_state(), delegate_.last_received_web_state());
   web::WebFrame* web_frame =
-      web_state()->GetWebFramesManager()->GetMainWebFrame();
+      web_state()->GetPageWorldWebFramesManager()->GetMainWebFrame();
   EXPECT_EQ(web_frame, delegate_.last_received_web_frame());
   EXPECT_EQ(kTestHostName, delegate_.last_received_message_url());
   EXPECT_NSEQ(@"warn", delegate_.last_received_message_level());

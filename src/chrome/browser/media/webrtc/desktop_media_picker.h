@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/media_stream_request.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -33,6 +32,17 @@ class DesktopMediaPicker {
   using DoneCallback = base::OnceCallback<void(content::DesktopMediaID id)>;
 
   struct Params {
+    // Possible sources of the request.
+    enum class RequestSource {
+      kUnknown,
+      kCast,
+      kExtension,
+      kGetDisplayMedia,
+      kScreenshotDataCollector,
+      kArcScreenCapture,
+    };
+
+    explicit Params(RequestSource request_source);
     Params();
     Params(const Params&);
     Params& operator=(const Params&);
@@ -42,9 +52,9 @@ class DesktopMediaPicker {
     raw_ptr<content::WebContents> web_contents = nullptr;
     // The context whose root window is used for dialog placement, cannot be
     // null for Aura.
-    gfx::NativeWindow context = nullptr;
+    gfx::NativeWindow context = gfx::NativeWindow();
     // Parent window the dialog is relative to, only used on Mac.
-    gfx::NativeWindow parent = nullptr;
+    gfx::NativeWindow parent = gfx::NativeWindow();
     // The modality used for showing the dialog.
     ui::ModalType modality = ui::ModalType::MODAL_TYPE_CHILD;
     // The name used in the dialog for what is requesting the picker to be
@@ -65,6 +75,9 @@ class DesktopMediaPicker {
     // it sets them all to |checked|. This is used by Chromecasting.
     // It is mutually exclusive with |exclude_system_audio|.
     bool force_audio_checkboxes_to_default_checked = false;
+    // Indicates that, if audio ends up being captured, then local playback
+    // over the user's local speakers should be suppressed.
+    bool suppress_local_audio_playback = false;
     // This flag controls the behvior in the case where the picker is invoked to
     // select a screen and there is only one screen available.  If true, the
     // dialog is bypassed entirely and the screen is automatically selected.
@@ -76,13 +89,21 @@ class DesktopMediaPicker {
     // policies that may restrict the available choices, and a suitable warning
     // should be shown to the user.
     bool restricted_by_policy = false;
+    // Indicate which display surface should be most prominently offered in the
+    // picker.
+    blink::mojom::PreferredDisplaySurface preferred_display_surface =
+        blink::mojom::PreferredDisplaySurface::NO_PREFERENCE;
+    // Indicates the source of the request. This is useful for UMA that
+    // track the result of the picker, because the behavior with the
+    // Extension API is different, and could therefore lead to mismeasurement.
+    RequestSource request_source = RequestSource::kUnknown;
   };
 
   // Creates a picker dialog/confirmation box depending on the value of
   // |request|. If no request is available the default picker, namely
   // DesktopMediaPickerViews is used.
   static std::unique_ptr<DesktopMediaPicker> Create(
-      const content::MediaStreamRequest* request = nullptr);
+      const content::MediaStreamRequest* request);
 
   DesktopMediaPicker() = default;
 

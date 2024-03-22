@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/notreached.h"
 #include "base/values.h"
+#include "chromeos/components/quick_answers/quick_answers_model.h"
 #include "chromeos/components/quick_answers/search_result_parsers/definition_result_parser.h"
 #include "chromeos/components/quick_answers/search_result_parsers/kp_entity_result_parser.h"
 #include "chromeos/components/quick_answers/search_result_parsers/unit_conversion_result_parser.h"
@@ -15,21 +16,35 @@ namespace {
 using base::Value;
 }  // namespace
 
-const Value* ResultParser::GetFirstListElement(const Value& value,
-                                               const std::string& path) {
-  const Value* entries = value.FindListPath(path);
+std::unique_ptr<StructuredResult> ResultParser::ParseInStructuredResult(
+    const base::Value::Dict& result) {
+  return nullptr;
+}
+
+bool ResultParser::PopulateQuickAnswer(
+    const StructuredResult& structured_result,
+    QuickAnswer* quick_answer) {
+  return false;
+}
+
+bool ResultParser::SupportsNewInterface() const {
+  return false;
+}
+
+const Value::Dict* ResultParser::GetFirstListElement(const Value::Dict& dict,
+                                                     const std::string& path) {
+  const Value::List* entries = dict.FindListByDottedPath(path);
 
   if (!entries) {
     // No list found.
     return nullptr;
   }
 
-  auto list = entries->GetListDeprecated();
-  if (list.empty()) {
+  if (entries->empty()) {
     // No valid dictionary entries found.
     return nullptr;
   }
-  return &list[0];
+  return &(*entries)[0].GetDict();
 }
 
 // static

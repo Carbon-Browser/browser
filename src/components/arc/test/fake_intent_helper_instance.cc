@@ -1,16 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/arc/test/fake_intent_helper_instance.h"
 
-#include <algorithm>
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace arc {
 
@@ -54,10 +54,6 @@ FakeIntentHelperInstance::~FakeIntentHelperInstance() {}
 
 void FakeIntentHelperInstance::AddPreferredPackage(
     const std::string& package_name) {}
-
-void FakeIntentHelperInstance::AddPreferredApp(const std::string& package_name,
-                                               IntentFilter intent_filter,
-                                               mojom::IntentInfoPtr intent) {}
 
 void FakeIntentHelperInstance::SetVerifiedLinks(
     const std::vector<std::string>& package_names,
@@ -108,7 +104,7 @@ void FakeIntentHelperInstance::RequestIntentHandlerList(
     }
   }
   // Post the reply to run asynchronously to match the real implementation.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(handlers)));
 }
 
@@ -117,7 +113,7 @@ void FakeIntentHelperInstance::RequestUrlHandlerList(
     RequestUrlHandlerListCallback callback) {
   std::vector<mojom::IntentHandlerInfoPtr> handlers;
   // Post the reply to run asynchronously to match the real implementation.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(handlers)));
 }
 
@@ -147,12 +143,22 @@ std::vector<FakeIntentHelperInstance::Broadcast>
 FakeIntentHelperInstance::GetBroadcastsForAction(
     const std::string& action) const {
   std::vector<Broadcast> result;
-  std::copy_if(broadcasts_.begin(), broadcasts_.end(),
-               std::back_inserter(result),
-               [action](const Broadcast& b) { return b.action == action; });
+  base::ranges::copy_if(
+      broadcasts_, std::back_inserter(result),
+      [&action](const Broadcast& b) { return b.action == action; });
   return result;
 }
 
 void FakeIntentHelperInstance::RequestDomainVerificationStatusUpdate() {}
+
+void FakeIntentHelperInstance::SetCaptionStyle(
+    arc::mojom::CaptionStylePtr caption_style) {
+  caption_style_ = std::move(caption_style);
+}
+
+void FakeIntentHelperInstance::EnableAccessibilityFeatures(
+    arc::mojom::AccessibilityFeaturesPtr accessibility_features) {
+  accessibility_features_ = std::move(accessibility_features);
+}
 
 }  // namespace arc

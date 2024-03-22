@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace ash {
 void ResolveTransferToken(
     mojo::PendingRemote<blink::mojom::FileSystemAccessTransferToken> token,
     content::WebContents* web_contents,
-    base::OnceCallback<void(absl::optional<storage::FileSystemURL>)> callback) {
+    base::OnceCallback<void(std::optional<storage::FileSystemURL>)> callback) {
   web_contents->GetBrowserContext()
       ->GetStoragePartition(web_contents->GetSiteInstance())
       ->GetFileSystemAccessEntryFactory()

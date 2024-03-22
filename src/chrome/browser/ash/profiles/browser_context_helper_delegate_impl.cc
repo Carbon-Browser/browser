@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,13 @@ BrowserContextHelperDelegateImpl::DeprecatedGetBrowserContext(
   if (!profile_manager)
     return nullptr;
   return profile_manager->GetProfile(path);
+}
+
+content::BrowserContext*
+BrowserContextHelperDelegateImpl::GetOrCreatePrimaryOTRBrowserContext(
+    content::BrowserContext* browser_context) {
+  Profile* profile = Profile::FromBrowserContext(browser_context);
+  return profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
 }
 
 const base::FilePath* BrowserContextHelperDelegateImpl::GetUserDataDir() {

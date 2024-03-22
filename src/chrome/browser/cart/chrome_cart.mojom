@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,8 @@ enum ConsentStatus {
 interface CartHandler {
   // Returns the merchant carts in chrome cart.
   GetMerchantCarts() => (array<MerchantCart> carts);
+  // Returns whether the ChromeCart feature is enabled.
+  GetCartFeatureEnabled() => (bool enabled);
   // Temporarily hide the cart module.
   HideCartModule();
   // Restores the cart module that has been temporarily hidden.

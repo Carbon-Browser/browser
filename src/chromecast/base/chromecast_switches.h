@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -106,13 +106,12 @@ extern const char kForceUpdateRemoteUrl[];
 
 extern const char kSysInfoFilePath[];
 
-// Extension switches.
-extern const char kExtensionsDir[];
-
 // Switches for Cast browser decoupling.
 extern const char kDeferFeatureList[];
 extern const char kUseCastBrowserPrefConfig[];
 extern const char kInProcessBroker[];
+
+extern const char kCastMojoBrokerPath[];
 
 }  // namespace switches
 

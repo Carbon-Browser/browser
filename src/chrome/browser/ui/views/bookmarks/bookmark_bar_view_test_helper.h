@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class BookmarkBarViewTestHelper {
   }
 
  private:
-  raw_ptr<BookmarkBarView> bbv_;
+  raw_ptr<BookmarkBarView, AcrossTasksDanglingUntriaged> bbv_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_BAR_VIEW_TEST_HELPER_H_

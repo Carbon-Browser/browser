@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,7 @@
 #include "ui/aura/window.h"
 #endif
 
-namespace views {
-namespace test {
+namespace views::test {
 
 // A simple event observer that records the number of events.
 class TestEventObserver : public ui::EventObserver {
@@ -56,7 +55,7 @@ class EventMonitorTest : public WidgetTest {
     generator_->set_target(ui::test::EventGenerator::Target::APPLICATION);
   }
   void TearDown() override {
-    widget_->CloseNow();
+    widget_.ExtractAsDangling()->CloseNow();
     WidgetTest::TearDown();
   }
 
@@ -180,5 +179,4 @@ TEST_F(EventMonitorTest, TwoMonitors) {
   EXPECT_TRUE(deleter->DidDelete());
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

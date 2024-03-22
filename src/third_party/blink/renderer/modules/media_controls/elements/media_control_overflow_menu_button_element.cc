@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ MediaControlOverflowMenuButtonElement::MediaControlOverflowMenuButtonElement(
   setAttribute(html_names::kTitleAttr,
                WTF::AtomicString(
                    GetLocale().QueryString(IDS_AX_MEDIA_OVERFLOW_BUTTON_HELP)));
-  setAttribute(html_names::kAriaHaspopupAttr, "menu");
+  setAttribute(html_names::kAriaHaspopupAttr, AtomicString("menu"));
   SetShadowPseudoId(AtomicString("-internal-media-controls-overflow-button"));
   SetIsWanted(false);
 }

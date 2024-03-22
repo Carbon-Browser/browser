@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_SPEECH_TTS_LACROS_H_
 #define CHROME_BROWSER_SPEECH_TTS_LACROS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -15,7 +16,8 @@
 
 namespace content {
 class BrowserContext;
-}
+class TtsUtterance;
+}  // namespace content
 
 // Implements content::TtsPlatform.
 // Creates TtsClientLacros when user profile is loaded, and handles TTS
@@ -31,10 +33,7 @@ class TtsPlatformImplLacros : public content::TtsPlatform,
   // TtsPlatform :
   bool PlatformImplSupported() override;
   bool PlatformImplInitialized() override;
-  void GetVoicesForBrowserContext(
-      content::BrowserContext* browser_context,
-      const GURL& source_url,
-      std::vector<content::VoiceData>* out_voices) override;
+  content::ExternalPlatformDelegate* GetExternalPlatformDelegate() override;
 
   // Unimplemented.
   void LoadBuiltInTtsEngine(content::BrowserContext* browser_context) override {
@@ -68,6 +67,9 @@ class TtsPlatformImplLacros : public content::TtsPlatform,
   // ProfileManagerObserver:
   void OnProfileAdded(Profile* profile) override;
   void OnProfileManagerDestroying() override;
+
+  raw_ptr<content::ExternalPlatformDelegate> external_platform_delegate_ =
+      nullptr;
 
   base::ScopedObservation<ProfileManager, ProfileManagerObserver>
       profile_manager_observation_{this};

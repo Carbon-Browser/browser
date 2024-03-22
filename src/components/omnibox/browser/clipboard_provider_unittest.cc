@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,18 +18,24 @@
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/autocomplete_provider_listener.h"
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/test_scheme_classifier.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/open_from_clipboard/fake_clipboard_recent_content.h"
-#include "components/search_engines/omnibox_focus_type.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_service_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
+#include "third_party/omnibox_proto/groups.pb.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_unittest_util.h"
 #include "url/gurl.h"
+
+#if !BUILDFLAG(IS_IOS)
+#include "ui/base/clipboard/test/test_clipboard.h"  // nogncheck
+#endif
 
 namespace {
 
@@ -105,7 +111,8 @@ class ClipboardProviderTest : public testing::Test,
            !clipboard_content_.HasRecentImageFromClipboard();
   }
 
-  AutocompleteInput CreateAutocompleteInput(OmniboxFocusType focus_type) {
+  AutocompleteInput CreateAutocompleteInput(
+      metrics::OmniboxFocusType focus_type) {
     AutocompleteInput input(std::u16string(), metrics::OmniboxEventProto::OTHER,
                             classifier_);
     input.set_current_url(GURL(kCurrentURL));
@@ -138,7 +145,9 @@ void ClipboardProviderTest::OnProviderUpdate(
 }
 
 TEST_F(ClipboardProviderTest, NotFromOmniboxFocus) {
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::DEFAULT), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_DEFAULT),
+      false);
   EXPECT_TRUE(provider_->matches().empty());
 }
 
@@ -147,7 +156,9 @@ TEST_F(ClipboardProviderTest, EmptyClipboard) {
       /*initializers=*/nullptr, /*count=*/0);
   client_->set_template_url_service(std::move(template_url_service));
   ClearClipboard();
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   EXPECT_TRUE(provider_->matches().empty());
 }
 
@@ -161,14 +172,18 @@ TEST_F(ClipboardProviderTest, ClipboardIsCurrentURL) {
       /*initializers=*/nullptr, /*count=*/0);
   client_->set_template_url_service(std::move(template_url_service));
   SetClipboardUrl(GURL(kCurrentURL));
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   EXPECT_TRUE(provider_->matches().empty());
 }
 
 TEST_F(ClipboardProviderTest, HasMultipleMatches) {
   EXPECT_CALL(*client_.get(), GetSchemeClassifier())
       .WillOnce(testing::ReturnRef(classifier_));
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   ASSERT_GE(provider_->matches().size(), 1U);
   EXPECT_EQ(GURL(kClipboardURL), provider_->matches().back().destination_url);
 }
@@ -177,7 +192,9 @@ TEST_F(ClipboardProviderTest, MatchesUrl) {
   SetClipboardUrl(GURL(kClipboardURL));
   EXPECT_CALL(*client_.get(), GetSchemeClassifier())
       .WillOnce(testing::ReturnRef(classifier_));
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   ASSERT_GE(provider_->matches().size(), 1U);
   EXPECT_EQ(GURL(kClipboardURL), provider_->matches().back().destination_url);
   EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_URL,
@@ -189,7 +206,9 @@ TEST_F(ClipboardProviderTest, MatchesText) {
       /*initializers=*/nullptr, /*count=*/0);
   client_->set_template_url_service(std::move(template_url_service));
   SetClipboardText(kClipboardText);
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   ASSERT_GE(provider_->matches().size(), 1U);
   EXPECT_EQ(kClipboardText, provider_->matches().back().contents);
   EXPECT_EQ(kClipboardText, provider_->matches().back().fill_into_edit);
@@ -221,7 +240,9 @@ TEST_F(ClipboardProviderTest, DeleteMatch) {
       /*initializers=*/nullptr, /*count=*/0);
   client_->set_template_url_service(std::move(template_url_service));
   SetClipboardText(kClipboardText);
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   ASSERT_EQ(provider_->matches().size(), 1U);
 
   provider_->DeleteMatch(provider_->matches().back());
@@ -231,14 +252,15 @@ TEST_F(ClipboardProviderTest, DeleteMatch) {
 
 TEST_F(ClipboardProviderTest, CreateBlankURLMatchOnStart) {
   base::test::ScopedFeatureList feature_list;
-  base::Feature feature = omnibox::kClipboardSuggestionContentHidden;
-  feature_list.InitAndEnableFeature(feature);
+  feature_list.InitAndEnableFeature(omnibox::kClipboardSuggestionContentHidden);
 
   SetClipboardUrl(GURL(kClipboardURL));
   auto template_url_service = std::make_unique<TemplateURLService>(
       /*initializers=*/nullptr, /*count=*/0);
   client_->set_template_url_service(std::move(template_url_service));
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   ASSERT_GE(provider_->matches().size(), 1U);
   EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_URL,
             provider_->matches().back().type);
@@ -249,14 +271,15 @@ TEST_F(ClipboardProviderTest, CreateBlankURLMatchOnStart) {
 
 TEST_F(ClipboardProviderTest, CreateBlankTextMatchOnStart) {
   base::test::ScopedFeatureList feature_list;
-  base::Feature feature = omnibox::kClipboardSuggestionContentHidden;
-  feature_list.InitAndEnableFeature(feature);
+  feature_list.InitAndEnableFeature(omnibox::kClipboardSuggestionContentHidden);
 
   auto template_url_service = std::make_unique<TemplateURLService>(
       /*initializers=*/nullptr, /*count=*/0);
   client_->set_template_url_service(std::move(template_url_service));
   SetClipboardText(kClipboardText);
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   ASSERT_GE(provider_->matches().size(), 1U);
   EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_TEXT,
             provider_->matches().back().type);
@@ -268,8 +291,7 @@ TEST_F(ClipboardProviderTest, CreateBlankTextMatchOnStart) {
 
 TEST_F(ClipboardProviderTest, CreateBlankImageMatchOnStart) {
   base::test::ScopedFeatureList feature_list;
-  base::Feature feature = omnibox::kClipboardSuggestionContentHidden;
-  feature_list.InitAndEnableFeature(feature);
+  feature_list.InitAndEnableFeature(omnibox::kClipboardSuggestionContentHidden);
 
   auto template_url_service =
       std::make_unique<TemplateURLService>(/*initializers=*/nullptr,
@@ -278,7 +300,9 @@ TEST_F(ClipboardProviderTest, CreateBlankImageMatchOnStart) {
 
   gfx::Image test_image = gfx::test::CreateImage(/*width=*/10, /*height=*/10);
   SetClipboardImage(test_image);
-  provider_->Start(CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS), false);
+  provider_->Start(
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS),
+      false);
   ASSERT_GE(provider_->matches().size(), 1U);
   EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_IMAGE,
             provider_->matches().back().type);
@@ -287,8 +311,7 @@ TEST_F(ClipboardProviderTest, CreateBlankImageMatchOnStart) {
 
 TEST_F(ClipboardProviderTest, SkipImageMatchGivenWantAsynchronousMatchesFalse) {
   base::test::ScopedFeatureList feature_list;
-  base::Feature feature = omnibox::kClipboardSuggestionContentHidden;
-  feature_list.InitAndEnableFeature(feature);
+  feature_list.InitAndEnableFeature(omnibox::kClipboardSuggestionContentHidden);
 
   auto template_url_service =
       std::make_unique<TemplateURLService>(/*initializers=*/nullptr,
@@ -300,7 +323,8 @@ TEST_F(ClipboardProviderTest, SkipImageMatchGivenWantAsynchronousMatchesFalse) {
   // When `input.omit_asynchronous_matches` is set to true, the clipboard
   // provider should skip any asynchronous logic associated with creating an
   // image match.
-  AutocompleteInput input = CreateAutocompleteInput(OmniboxFocusType::ON_FOCUS);
+  AutocompleteInput input =
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS);
   input.set_omit_asynchronous_matches(true);
   provider_->Start(input, false);
   ASSERT_TRUE(provider_->done());
@@ -350,3 +374,119 @@ TEST_F(ClipboardProviderTest, CreateImageMatchWithContent) {
   EXPECT_FALSE(match.post_content->second.empty());
   EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_IMAGE, match.type);
 }
+
+#if BUILDFLAG(IS_ANDROID)
+TEST_F(ClipboardProviderTest,
+       Android_DontMergedWithPZPSGroupOnNTPWithFeatureDisabled) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      omnibox::kOmniboxModernizeVisualUpdate,
+      {{OmniboxFieldTrial::kOmniboxModernizeVisualUpdateMergeClipboardOnNTP
+            .name,
+        "false"}});
+
+  SetClipboardText(kClipboardText);
+  auto template_url_service = std::make_unique<TemplateURLService>(
+      /*initializers=*/nullptr, /*count=*/0);
+  client_->set_template_url_service(std::move(template_url_service));
+
+  AutocompleteInput input(std::u16string(), metrics::OmniboxEventProto::NTP,
+                          classifier_);
+  input.set_focus_type(metrics::OmniboxFocusType::INTERACTION_FOCUS);
+
+  provider_->Start(input, false);
+
+  // Expect the clipboard entry, but not the content. Content is not directly
+  // available on mobile devices - the user needs to explicitly ask to reveal
+  // the content.
+  ASSERT_EQ(provider_->matches().size(), 1U);
+  const auto& match = provider_->matches().back();
+  EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_TEXT, match.type);
+  EXPECT_EQ(omnibox::GROUP_MOBILE_CLIPBOARD, match.suggestion_group_id);
+}
+
+TEST_F(ClipboardProviderTest, Android_MergedWithPZPSGroupOnNTP) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      omnibox::kOmniboxModernizeVisualUpdate,
+      {{OmniboxFieldTrial::kOmniboxModernizeVisualUpdateMergeClipboardOnNTP
+            .name,
+        "true"}});
+
+  SetClipboardText(kClipboardText);
+  auto template_url_service = std::make_unique<TemplateURLService>(
+      /*initializers=*/nullptr, /*count=*/0);
+  client_->set_template_url_service(std::move(template_url_service));
+
+  AutocompleteInput input(std::u16string(), metrics::OmniboxEventProto::NTP,
+                          classifier_);
+  input.set_focus_type(metrics::OmniboxFocusType::INTERACTION_FOCUS);
+
+  provider_->Start(input, false);
+
+  // Expect the clipboard entry, but not the content. Content is not directly
+  // available on mobile devices - the user needs to explicitly ask to reveal
+  // the content.
+  ASSERT_EQ(provider_->matches().size(), 1U);
+  const auto& match = provider_->matches().back();
+  EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_TEXT, match.type);
+  EXPECT_EQ(omnibox::GROUP_PERSONALIZED_ZERO_SUGGEST,
+            match.suggestion_group_id);
+}
+
+TEST_F(ClipboardProviderTest, Android_StandaloneSuggestionOnSearchActivity) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      omnibox::kOmniboxModernizeVisualUpdate,
+      {{OmniboxFieldTrial::kOmniboxModernizeVisualUpdateMergeClipboardOnNTP
+            .name,
+        "true"}});
+
+  SetClipboardText(kClipboardText);
+  auto template_url_service = std::make_unique<TemplateURLService>(
+      /*initializers=*/nullptr, /*count=*/0);
+  client_->set_template_url_service(std::move(template_url_service));
+
+  AutocompleteInput input(std::u16string(),
+                          metrics::OmniboxEventProto::ANDROID_SHORTCUTS_WIDGET,
+                          classifier_);
+  input.set_focus_type(metrics::OmniboxFocusType::INTERACTION_FOCUS);
+
+  provider_->Start(input, false);
+
+  // Expect the clipboard entry, but not the content. Content is not directly
+  // available on mobile devices - the user needs to explicitly ask to reveal
+  // the content.
+  ASSERT_EQ(provider_->matches().size(), 1U);
+  const auto& match = provider_->matches().back();
+  EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_TEXT, match.type);
+  EXPECT_EQ(omnibox::GROUP_MOBILE_CLIPBOARD, match.suggestion_group_id);
+}
+
+TEST_F(ClipboardProviderTest, Android_StandaloneSuggestionInNonNTPContext) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      omnibox::kOmniboxModernizeVisualUpdate,
+      {{OmniboxFieldTrial::kOmniboxModernizeVisualUpdateMergeClipboardOnNTP
+            .name,
+        "true"}});
+
+  SetClipboardText(kClipboardText);
+  auto template_url_service = std::make_unique<TemplateURLService>(
+      /*initializers=*/nullptr, /*count=*/0);
+  client_->set_template_url_service(std::move(template_url_service));
+
+  AutocompleteInput input =
+      CreateAutocompleteInput(metrics::OmniboxFocusType::INTERACTION_FOCUS);
+
+  provider_->Start(input, false);
+
+  // Expect the clipboard entry, but not the content. Content is not directly
+  // available on mobile devices - the user needs to explicitly ask to reveal
+  // the content.
+  ASSERT_EQ(provider_->matches().size(), 1U);
+  const auto& match = provider_->matches().back();
+  EXPECT_EQ(AutocompleteMatchType::CLIPBOARD_TEXT, match.type);
+  EXPECT_EQ(omnibox::GROUP_MOBILE_CLIPBOARD, match.suggestion_group_id);
+}
+#endif

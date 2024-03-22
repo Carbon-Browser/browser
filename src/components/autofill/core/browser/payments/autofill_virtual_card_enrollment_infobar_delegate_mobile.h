@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,6 +60,10 @@ class AutofillVirtualCardEnrollmentInfoBarDelegateMobile
   // Called when a link in the legal message text was clicked.
   virtual void OnInfobarLinkClicked(GURL url,
                                     VirtualCardEnrollmentLinkType link_type);
+
+  // Returns the "source" of the virtual card number enrollment flow, e.g.,
+  // "upstream", "downstream", "settings".
+  VirtualCardEnrollmentBubbleSource GetVirtualCardEnrollmentBubbleSource();
 
   // ConfirmInfoBarDelegate:
   infobars::InfoBarDelegate::InfoBarIdentifier GetIdentifier() const override;

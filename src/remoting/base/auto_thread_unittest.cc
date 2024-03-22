@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/base/auto_thread.h"
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
@@ -27,16 +27,14 @@ void SetFlagTask(bool* success) {
   *success = true;
 }
 
-void PostSetFlagTask(
-    scoped_refptr<base::TaskRunner> task_runner,
-    bool* success) {
+void PostSetFlagTask(scoped_refptr<base::TaskRunner> task_runner,
+                     bool* success) {
   task_runner->PostTask(FROM_HERE, base::BindOnce(&SetFlagTask, success));
 }
 
 #if BUILDFLAG(IS_WIN)
 void CheckComAptTypeTask(APTTYPE* apt_type_out, HRESULT* hresult) {
-  typedef HRESULT (WINAPI * CoGetApartmentTypeFunc)
-      (APTTYPE*, APTTYPEQUALIFIER*);
+  typedef HRESULT(WINAPI * CoGetApartmentTypeFunc)(APTTYPE*, APTTYPEQUALIFIER*);
 
   // Dynamic link to the API so the same test binary can run on older systems.
   base::ScopedNativeLibrary com_library(base::FilePath(L"ole32.dll"));

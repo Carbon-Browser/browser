@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include <tuple>
 
 #include "base/check.h"
+#include "base/containers/contains.h"
 #include "base/dcheck_is_on.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
@@ -39,6 +40,7 @@
 #include "base/threading/scoped_blocking_call.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
+#include "base/tracing/protos/chrome_track_event.pbzero.h"
 #include "base/types/pass_key.h"
 #include "build/build_config.h"
 #include "sql/database_memory_dump_provider.h"
@@ -252,7 +254,7 @@ void Database::StatementRef::Close(bool forced) {
     // allowing disk access.
     // TODO(paivanof@gmail.com): This should move to the beginning
     // of the function. http://crbug.com/136655.
-    absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+    std::optional<base::ScopedBlockingCall> scoped_blocking_call;
     InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
     // `stmt_` references memory loaned from the sqlite3 library. Stop
@@ -277,6 +279,27 @@ void Database::StatementRef::Close(bool forced) {
 static_assert(DatabaseOptions::kDefaultPageSize == SQLITE_DEFAULT_PAGE_SIZE,
               "DatabaseOptions::kDefaultPageSize must match the value "
               "configured into SQLite");
+
+DatabaseDiagnostics::DatabaseDiagnostics() = default;
+DatabaseDiagnostics::~DatabaseDiagnostics() = default;
+
+void DatabaseDiagnostics::WriteIntoTrace(
+    perfetto::TracedProto<TraceProto> context) const {
+  context->set_reported_sqlite_error_code(reported_sqlite_error_code);
+  context->set_error_code(error_code);
+  context->set_last_errno(last_errno);
+  context->set_sql_statement(sql_statement);
+  context->set_version(version);
+  for (const auto& sql : schema_sql_rows) {
+    context->add_schema_sql_rows(sql);
+  }
+  for (const auto& name : schema_other_row_names) {
+    context->add_schema_other_row_names(name);
+  }
+  context->set_has_valid_header(has_valid_header);
+  context->set_has_valid_schema(has_valid_schema);
+  context->set_error_message(error_message);
+}
 
 // DatabaseOptions::explicit_locking needs to be set to false for historical
 // reasons.
@@ -357,14 +380,14 @@ void Database::CloseInternal(bool forced) {
     statement_ref->Close(forced);
   open_statements_.clear();
 
-  if (db_) {
+  if (is_open()) {
     // Call to InitScopedBlockingCall() cannot go at the beginning of the
     // function because Close() must be called from destructor to clean
     // statement_cache_, it won't cause any disk access and it most probably
     // will happen on thread not allowing disk access.
     // TODO(paivanof@gmail.com): This should move to the beginning
     // of the function. http://crbug.com/136655.
-    absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+    std::optional<base::ScopedBlockingCall> scoped_blocking_call;
     InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
     // Resetting acquires a lock to ensure no dump is happening on the database
@@ -391,9 +414,16 @@ void Database::CloseInternal(bool forced) {
   }
 }
 
+bool Database::is_open() const {
+  bool is_closed_due_to_poisoning =
+      poisoned_ && base::FeatureList::IsEnabled(
+                       sql::features::kConsiderPoisonedDatabasesClosed);
+  return static_cast<bool>(db_) && !is_closed_due_to_poisoning;
+}
+
 void Database::Close() {
   TRACE_EVENT0("sql", "Database::Close");
-  // If the database was already closed by RazeAndClose(), then no
+  // If the database was already closed by RazeAndPoison(), then no
   // need to close again.  Clear the |poisoned_| bit so that incorrect
   // API calls are caught.
   if (poisoned_) {
@@ -413,7 +443,10 @@ void Database::Preload() {
     return;
   }
 
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  CHECK(!options_.exclusive_database_file_lock)
+      << "Cannot preload an exclusively locked database.";
+
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
   // Maximum number of bytes that will be prefetched from the database.
@@ -524,7 +557,8 @@ base::FilePath Database::DbPath() const {
 }
 
 std::string Database::CollectErrorInfo(int sqlite_error_code,
-                                       Statement* stmt) const {
+                                       Statement* stmt,
+                                       DatabaseDiagnostics* diagnostics) const {
   TRACE_EVENT0("sql", "Database::CollectErrorInfo");
 
   DCHECK_NE(sqlite_error_code, SQLITE_OK)
@@ -540,8 +574,13 @@ std::string Database::CollectErrorInfo(int sqlite_error_code,
   std::string debug_info;
 
   // The error message from the failed operation.
-  base::StringAppendF(&debug_info, "db error: %d/%s\n", GetErrorCode(),
+  int error_code = GetErrorCode();
+  base::StringAppendF(&debug_info, "db error: %d/%s\n", error_code,
                       GetErrorMessage());
+  if (diagnostics) {
+    diagnostics->error_code = error_code;
+    diagnostics->error_message = GetErrorMessage();
+  }
 
   // TODO(shess): |error| and |GetErrorCode()| should always be the same, but
   // reading code does not entirely convince me.  Remove if they turn out to be
@@ -552,9 +591,17 @@ std::string Database::CollectErrorInfo(int sqlite_error_code,
 // System error information.  Interpretation of Windows errors is different
 // from posix.
 #if BUILDFLAG(IS_WIN)
-  base::StringAppendF(&debug_info, "LastError: %d\n", GetLastErrno());
+  int last_errno = GetLastErrno();
+  base::StringAppendF(&debug_info, "LastError: %d\n", last_errno);
+  if (diagnostics) {
+    diagnostics->last_errno = last_errno;
+  }
 #elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
-  base::StringAppendF(&debug_info, "errno: %d\n", GetLastErrno());
+  int last_errno = GetLastErrno();
+  base::StringAppendF(&debug_info, "errno: %d\n", last_errno);
+  if (diagnostics) {
+    diagnostics->last_errno = last_errno;
+  }
 #else
   NOTREACHED();  // Add appropriate log info.
 #endif
@@ -562,6 +609,9 @@ std::string Database::CollectErrorInfo(int sqlite_error_code,
   if (stmt) {
     std::string sql_string = stmt->GetSQLStatement();
     base::StringAppendF(&debug_info, "statement: %s\n", sql_string.c_str());
+    if (diagnostics) {
+      diagnostics->sql_statement = sql_string;
+    }
   } else {
     base::StringAppendF(&debug_info, "statement: NULL\n");
   }
@@ -580,8 +630,11 @@ std::string Database::CollectErrorInfo(int sqlite_error_code,
     if (rc == SQLITE_OK) {
       rc = sqlite3_step(sqlite_statement);
       if (rc == SQLITE_ROW) {
-        base::StringAppendF(&debug_info, "version: %d\n",
-                            sqlite3_column_int(sqlite_statement, 0));
+        int version = sqlite3_column_int(sqlite_statement, 0);
+        base::StringAppendF(&debug_info, "version: %d\n", version);
+        if (diagnostics) {
+          diagnostics->version = version;
+        }
       } else if (rc == SQLITE_DONE) {
         debug_info += "version: none\n";
       } else {
@@ -592,28 +645,53 @@ std::string Database::CollectErrorInfo(int sqlite_error_code,
       base::StringAppendF(&debug_info, "version: prepare error %d\n", rc);
     }
 
+    // Get all the SQL from sqlite_schema.
     debug_info += "schema:\n";
-
-    // sqlite_schema has columns:
-    //   type - "index" or "table".
-    //   name - name of created element.
-    //   tbl_name - name of element, or target table in case of index.
-    //   rootpage - root page of the element in database file.
-    //   sql - SQL to create the element.
-    // In general, the |sql| column is sufficient to derive the other columns.
-    // |rootpage| is not interesting for debugging, without the contents of the
-    // database.  The COALESCE is because certain automatic elements will have a
-    // |name| but no |sql|,
     static constexpr char kSchemaSql[] =
-        "SELECT COALESCE(sql,name) FROM sqlite_schema";
+        "SELECT sql FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY ROWID";
     rc = sqlite3_prepare_v3(db_, kSchemaSql, sizeof(kSchemaSql),
                             SQLITE_PREPARE_NO_VTAB, &sqlite_statement,
                             /* pzTail= */ nullptr);
     if (rc == SQLITE_OK) {
       while ((rc = sqlite3_step(sqlite_statement)) == SQLITE_ROW) {
-        base::StringAppendF(&debug_info, "%s\n",
-                            sqlite3_column_text(sqlite_statement, 0));
+        std::string text;
+        base::StringAppendF(&text, "%s",
+                            reinterpret_cast<const char*>(
+                                sqlite3_column_text(sqlite_statement, 0)));
+        debug_info += text + "\n";
+        if (diagnostics) {
+          diagnostics->schema_sql_rows.push_back(text);
+        }
       }
+
+      if (rc != SQLITE_DONE)
+        base::StringAppendF(&debug_info, "error %d\n", rc);
+      sqlite3_finalize(sqlite_statement);
+    } else {
+      base::StringAppendF(&debug_info, "prepare error %d\n", rc);
+    }
+
+    // Automatically generated indices have a NULL 'sql' column. For those rows,
+    // we log the name column instead.
+    debug_info += "schema rows with only name:\n";
+    static constexpr char kSchemaOtherRowNamesSql[] =
+        "SELECT name FROM sqlite_schema WHERE sql IS NULL ORDER BY ROWID";
+    rc = sqlite3_prepare_v3(db_, kSchemaOtherRowNamesSql,
+                            sizeof(kSchemaOtherRowNamesSql),
+                            SQLITE_PREPARE_NO_VTAB, &sqlite_statement,
+                            /* pzTail= */ nullptr);
+    if (rc == SQLITE_OK) {
+      while ((rc = sqlite3_step(sqlite_statement)) == SQLITE_ROW) {
+        std::string text;
+        base::StringAppendF(&text, "%s",
+                            reinterpret_cast<const char*>(
+                                sqlite3_column_text(sqlite_statement, 0)));
+        debug_info += text + "\n";
+        if (diagnostics) {
+          diagnostics->schema_other_row_names.push_back(text);
+        }
+      }
+
       if (rc != SQLITE_DONE)
         base::StringAppendF(&debug_info, "error %d\n", rc);
       sqlite3_finalize(sqlite_statement);
@@ -716,7 +794,7 @@ bool Database::SetMmapAltStatus(int64_t status) {
 size_t Database::ComputeMmapSizeForOpen() {
   TRACE_EVENT0("sql", "Database::ComputeMmapSizeForOpen");
 
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
   // How much to map if no errors are found.  50MB encompasses the 99th
@@ -896,7 +974,7 @@ void Database::TrimMemory() {
 bool Database::Raze() {
   TRACE_EVENT0("sql", "Database::Raze");
 
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
   if (!db_) {
@@ -914,8 +992,6 @@ bool Database::Raze() {
       .exclusive_locking = true,
       .page_size = options_.page_size,
       .cache_size = 0,
-      .enable_foreign_keys_discouraged =
-          options_.enable_foreign_keys_discouraged,
       .enable_views_discouraged = options_.enable_views_discouraged,
       .enable_virtual_tables_discouraged =
           options_.enable_virtual_tables_discouraged,
@@ -1027,8 +1103,8 @@ bool Database::Raze() {
   return CheckpointDatabase();
 }
 
-bool Database::RazeAndClose() {
-  TRACE_EVENT0("sql", "Database::RazeAndClose");
+bool Database::RazeAndPoison() {
+  TRACE_EVENT0("sql", "Database::RazeAndPoison");
 
   if (!db_) {
     DCHECK(poisoned_) << "Cannot raze null db";
@@ -1216,7 +1292,7 @@ bool Database::AttachDatabase(const base::FilePath& other_db_path,
   DCHECK(ValidAttachmentPoint(attachment_point));
 
   Statement statement(GetUniqueStatement("ATTACH ? AS ?"));
-#if OS_WIN
+#if BUILDFLAG(IS_WIN)
   statement.BindString16(0, base::AsStringPiece16(other_db_path.value()));
 #else
   statement.BindString(0, other_db_path.value());
@@ -1248,7 +1324,7 @@ SqliteResultCode Database::ExecuteAndReturnResultCode(const char* sql) {
     return SqliteResultCode::kError;
   }
 
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
   SqliteResultCode sqlite_result_code = SqliteResultCode::kOk;
@@ -1366,7 +1442,7 @@ bool Database::ExecuteScriptForTesting(const char* sql_script) {
     return false;
   }
 
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
   while (*sql_script) {
@@ -1449,7 +1525,7 @@ scoped_refptr<Database::StatementRef> Database::GetStatementImpl(
   if (!db_)
     return base::MakeRefCounted<StatementRef>(nullptr, nullptr, poisoned_);
 
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
 #if DCHECK_IS_ON()
@@ -1536,7 +1612,7 @@ std::string Database::GetSchema() {
 bool Database::IsSQLValid(const char* sql) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
   if (!db_) {
     DCHECK(poisoned_) << "Illegal use of Database without a db";
@@ -1608,6 +1684,11 @@ bool Database::DoesSchemaItemExist(base::StringPiece name,
 bool Database::DoesColumnExist(const char* table_name,
                                const char* column_name) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (!db_) {
+    DCHECK(poisoned_) << "Illegal use of Database without a db";
+    return false;
+  }
 
   // sqlite3_table_column_metadata uses out-params to return column definition
   // details, such as the column type and whether it allows NULL values. These
@@ -1721,22 +1802,20 @@ bool Database::OpenInternal(const std::string& db_file_path,
         << "Database file path conflicts with SQLite magic identifier";
   }
 
-  if (db_) {
+  if (is_open()) {
     DLOG(DCHECK) << "sql::Database is already open.";
     return false;
   }
 
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
   EnsureSqliteInitialized();
 
   // If |poisoned_| is set, it means an error handler called
-  // RazeAndClose().  Until regular Close() is called, the caller
+  // RazeAndPoison().  Until regular Close() is called, the caller
   // should be treating the database as open, but is_open() currently
   // only considers the sqlite3 handle's state.
-  // TODO(shess): Revise is_open() to consider poisoned_, and review
-  // to see if any non-testing code even depends on it.
   DCHECK(!poisoned_) << "sql::Database is already open.";
   poisoned_ = false;
 
@@ -1755,9 +1834,37 @@ bool Database::OpenInternal(const std::string& db_file_path,
   // https://www.sqlite.org/rescode.html for details.
   int open_flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE |
                    SQLITE_OPEN_EXRESCODE | SQLITE_OPEN_PRIVATECACHE;
+  std::string uri_file_path = db_file_path;
+  if (options_.exclusive_database_file_lock) {
+#if BUILDFLAG(IS_WIN)
+    if (mode == OpenMode::kNone || mode == OpenMode::kRetryOnPoision) {
+      // Do not allow query injection.
+      if (base::Contains(db_file_path, '?')) {
+        return false;
+      }
+      open_flags |= SQLITE_OPEN_URI;
+      uri_file_path = base::StrCat({"file:", db_file_path, "?exclusive=true"});
+    }
+#else
+    NOTREACHED_NORETURN()
+        << "exclusive_database_file_lock is only supported on Windows.";
+#endif  // BUILDFLAG(IS_WIN)
+  }
+
   auto sqlite_result_code = ToSqliteResultCode(
-      sqlite3_open_v2(db_file_path.c_str(), &db_, open_flags, vfs_name));
+      sqlite3_open_v2(uri_file_path.c_str(), &db_, open_flags, vfs_name));
   if (sqlite_result_code != SqliteResultCode::kOk) {
+    // sqlite3_open_v2() will usually create a database connection handle, even
+    // if an error occurs (see https://www.sqlite.org/c3ref/open.html).
+    // Therefore, we'll clear `db_` immediately - particularly before triggering
+    // an error callback which may check whether a database connection exists.
+    if (db_) {
+      // Deallocate resources allocated during the failed open.
+      // See https://www.sqlite.org/c3ref/close.html.
+      sqlite3_close(db_);
+      db_ = nullptr;
+    }
+
     OnSqliteError(ToSqliteErrorCode(sqlite_result_code), nullptr,
                   "-- sqlite3_open_v2()");
     bool was_poisoned = poisoned_;
@@ -1942,9 +2049,8 @@ void Database::ConfigureSqliteDatabaseObject() {
   DCHECK_EQ(sqlite_result_code, SqliteResultCode::kOk)
       << "sqlite3_db_config(SQLITE_DBCONFIG_DQS_DML) should not fail";
 
-  sqlite_result_code = ToSqliteResultCode(sqlite3_db_config(
-      db_, SQLITE_DBCONFIG_ENABLE_FKEY,
-      options_.enable_foreign_keys_discouraged ? 1 : 0, nullptr));
+  sqlite_result_code = ToSqliteResultCode(
+      sqlite3_db_config(db_, SQLITE_DBCONFIG_ENABLE_FKEY, 0, nullptr));
   DCHECK_EQ(sqlite_result_code, SqliteResultCode::kOk)
       << "sqlite3_db_config(SQLITE_DBCONFIG_ENABLE_FKEY) should not fail";
 
@@ -2049,7 +2155,8 @@ void Database::OnSqliteError(SqliteErrorCode sqlite_error_code,
 }
 
 std::string Database::GetDiagnosticInfo(int sqlite_error_code,
-                                        Statement* statement) {
+                                        Statement* statement,
+                                        DatabaseDiagnostics* diagnostics) {
   DCHECK_NE(sqlite_error_code, SQLITE_OK)
       << __func__ << " received non-error result code";
   DCHECK_NE(sqlite_error_code, SQLITE_DONE)
@@ -2061,21 +2168,25 @@ std::string Database::GetDiagnosticInfo(int sqlite_error_code,
   ErrorCallback original_callback = std::move(error_callback_);
   error_callback_.Reset();
 
+  if (diagnostics) {
+    diagnostics->reported_sqlite_error_code = sqlite_error_code;
+  }
+
   // Trim extended error codes.
   const int primary_error_code = sqlite_error_code & 0xff;
 
   // CollectCorruptionInfo() is implemented in terms of sql::Database,
   // TODO(shess): Rewrite IntegrityCheckHelper() in terms of raw SQLite.
-  std::string result = (primary_error_code == SQLITE_CORRUPT)
-                           ? CollectCorruptionInfo()
-                           : CollectErrorInfo(sqlite_error_code, statement);
+  std::string result =
+      (primary_error_code == SQLITE_CORRUPT)
+          ? CollectCorruptionInfo()
+          : CollectErrorInfo(sqlite_error_code, statement, diagnostics);
 
   // The following queries must be executed after CollectErrorInfo() above, so
   // if they result in their own errors, they don't interfere with
   // CollectErrorInfo().
   const bool has_valid_header = Execute("PRAGMA auto_vacuum");
-  const bool select_sqlite_schema_result =
-      Execute("SELECT COUNT(*) FROM sqlite_schema");
+  const bool has_valid_schema = Execute("SELECT COUNT(*) FROM sqlite_schema");
 
   // Restore the original error callback.
   error_callback_ = std::move(original_callback);
@@ -2083,7 +2194,11 @@ std::string Database::GetDiagnosticInfo(int sqlite_error_code,
   base::StringAppendF(&result, "Has valid header: %s\n",
                       (has_valid_header ? "Yes" : "No"));
   base::StringAppendF(&result, "Has valid schema: %s\n",
-                      (select_sqlite_schema_result ? "Yes" : "No"));
+                      (has_valid_schema ? "Yes" : "No"));
+  if (diagnostics) {
+    diagnostics->has_valid_header = has_valid_header;
+    diagnostics->has_valid_schema = has_valid_schema;
+  }
 
   return result;
 }
@@ -2178,7 +2293,7 @@ bool Database::UseWALMode() const {
 
 bool Database::CheckpointDatabase() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  absl::optional<base::ScopedBlockingCall> scoped_blocking_call;
+  std::optional<base::ScopedBlockingCall> scoped_blocking_call;
   InitScopedBlockingCall(FROM_HERE, &scoped_blocking_call);
 
   auto sqlite_result_code = ToSqliteResultCode(sqlite3_wal_checkpoint_v2(

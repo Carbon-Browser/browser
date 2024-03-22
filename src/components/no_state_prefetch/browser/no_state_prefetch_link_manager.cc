@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_contents.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_handle.h"
@@ -89,17 +90,16 @@ NoStatePrefetchLinkManager::~NoStatePrefetchLinkManager() {
 absl::optional<int> NoStatePrefetchLinkManager::OnStartLinkTrigger(
     int launcher_render_process_id,
     int launcher_render_view_id,
+    int launcher_render_frame_id,
     blink::mojom::PrerenderAttributesPtr attributes,
     const url::Origin& initiator_origin) {
 // TODO(crbug.com/722453): Use a dedicated build flag for GuestView.
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_FUCHSIA)
-  content::RenderViewHost* rvh = content::RenderViewHost::FromID(
-      launcher_render_process_id, launcher_render_view_id);
-  content::WebContents* web_contents =
-      rvh ? content::WebContents::FromRenderViewHost(rvh) : nullptr;
+  content::RenderFrameHost* rfh = content::RenderFrameHost::FromID(
+      launcher_render_process_id, launcher_render_frame_id);
   // Guests inside <webview> do not support cross-process navigation and so we
   // do not allow guests to prerender content.
-  if (guest_view::GuestViewBase::IsGuest(web_contents))
+  if (guest_view::GuestViewBase::IsGuest(rfh))
     return absl::nullopt;
 #endif
 
@@ -174,11 +174,10 @@ bool NoStatePrefetchLinkManager::TriggerIsRunningForTesting(
 }
 
 size_t NoStatePrefetchLinkManager::CountRunningTriggers() const {
-  return std::count_if(triggers_.begin(), triggers_.end(),
-                       [](const std::unique_ptr<LinkTrigger>& trigger) {
-                         return trigger->handle &&
-                                trigger->handle->IsPrefetching();
-                       });
+  return base::ranges::count_if(
+      triggers_, [](const std::unique_ptr<LinkTrigger>& trigger) {
+        return trigger->handle && trigger->handle->IsPrefetching();
+      });
 }
 
 void NoStatePrefetchLinkManager::StartLinkTriggers() {

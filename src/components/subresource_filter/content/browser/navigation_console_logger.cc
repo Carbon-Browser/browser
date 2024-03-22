@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ void NavigationConsoleLogger::DidFinishNavigation(
   if (handle != handle_)
     return;
 
-  // The main frame navigation has finished.
+  // The root frame navigation has finished.
   if (handle->HasCommitted() && !handle->IsErrorPage()) {
     for (const auto& message : commit_messages_) {
       handle->GetRenderFrameHost()->AddMessageToConsole(message.first,

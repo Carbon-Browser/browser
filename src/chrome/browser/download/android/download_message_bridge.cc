@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,6 +48,20 @@ void DownloadMessageBridge::ShowIncognitoDownloadMessage(
   validator_.AddJavaCallback(callback_id);
   Java_DownloadMessageBridge_showIncognitoDownloadMessage(env, java_object_,
                                                           callback_id);
+}
+
+void DownloadMessageBridge::ShowUnsupportedDownloadMessage(
+    content::WebContents* web_contents) {
+  DCHECK(web_contents);
+  JNIEnv* env = base::android::AttachCurrentThread();
+  ui::WindowAndroid* window_android = web_contents->GetTopLevelNativeWindow();
+
+  if (!window_android) {
+    return;
+  }
+
+  Java_DownloadMessageBridge_showUnsupportedDownloadMessage(
+      env, java_object_, window_android->GetJavaObject());
 }
 
 void DownloadMessageBridge::OnConfirmed(JNIEnv* env,

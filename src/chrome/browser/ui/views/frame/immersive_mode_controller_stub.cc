@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@ void ImmersiveModeControllerStub::Init(BrowserView* browser_view) {
 }
 
 void ImmersiveModeControllerStub::SetEnabled(bool enabled) {
-  NOTREACHED();
+  NOTREACHED_NORETURN();
 }
 
 bool ImmersiveModeControllerStub::IsEnabled() const {
@@ -46,3 +46,11 @@ bool ImmersiveModeControllerStub::ShouldStayImmersiveAfterExitingFullscreen() {
 void ImmersiveModeControllerStub::OnWidgetActivationChanged(
     views::Widget* widget,
     bool active) {}
+
+int ImmersiveModeControllerStub::GetMinimumContentOffset() const {
+  return 0;
+}
+
+int ImmersiveModeControllerStub::GetExtraInfobarOffset() const {
+  return 0;
+}

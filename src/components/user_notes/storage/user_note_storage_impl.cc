@@ -1,12 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/user_notes/storage/user_note_storage_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include <unordered_set>
+#include <vector>
+
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -39,7 +42,7 @@ void UserNoteStorageImpl::RemoveObserver(Observer* observer) {
 }
 
 void UserNoteStorageImpl::GetNoteMetadataForUrls(
-    const std::vector<GURL>& urls,
+    const UserNoteStorage::UrlSet& urls,
     base::OnceCallback<void(UserNoteMetadataSnapshot)> callback) {
   database_.AsyncCall(&UserNoteDatabase::GetNoteMetadataForUrls)
       .WithArgs(std::move(urls))
@@ -47,7 +50,7 @@ void UserNoteStorageImpl::GetNoteMetadataForUrls(
 }
 
 void UserNoteStorageImpl::GetNotesById(
-    const std::vector<base::UnguessableToken>& ids,
+    const UserNoteStorage::IdSet& ids,
     base::OnceCallback<void(std::vector<std::unique_ptr<UserNote>>)> callback) {
   database_.AsyncCall(&UserNoteDatabase::GetNotesById)
       .WithArgs(std::move(ids))
@@ -57,8 +60,13 @@ void UserNoteStorageImpl::GetNotesById(
 void UserNoteStorageImpl::UpdateNote(const UserNote* model,
                                      std::u16string note_body_text,
                                      bool is_creation) {
+  // The note model must be cloned to avoid use-after-free issues in the
+  // background sequence. A weak pointer cannot be used because UserNote's weak
+  // pointer factory is already bound to the main thread. Passing the note by
+  // value also isn't possible because AsyncCall needs the move constructor,
+  // which has been deleted in UserNote by the weak pointer factory.
   database_.AsyncCall(&UserNoteDatabase::UpdateNote)
-      .WithArgs(model, note_body_text, is_creation)
+      .WithArgs(UserNote::Clone(model), note_body_text, is_creation)
       .Then(base::BindOnce(&UserNoteStorageImpl::OnNotesChanged,
                            weak_factory_.GetWeakPtr()));
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,10 +47,10 @@ class LockWindowState : public WindowState::State {
   void UpdateWindow(WindowState* window_state,
                     chromeos::WindowStateType new_state_type);
 
-  // Depending on the capabilities of the window we either return
-  // |WindowStateType::kMaximized| or |WindowStateType::kNormal|.
-  chromeos::WindowStateType GetMaximizedOrCenteredWindowType(
-      WindowState* window_state);
+  // Used in locked screen to get window state type depends on whether the
+  // window is maximizable.
+  chromeos::WindowStateType GetWindowTypeOnMaximizable(
+      WindowState* window_state) const;
 
   // Returns boudns to be used for the provided window.
   gfx::Rect GetWindowBounds(aura::Window* window);

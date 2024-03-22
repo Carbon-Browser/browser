@@ -1,15 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sharing/sharing_utils.h"
 
-#include "base/feature_list.h"
-#include "chrome/browser/sharing/features.h"
 #include "chrome/browser/sharing/proto/sharing_message.pb.h"
 #include "chrome/browser/sharing/sharing_constants.h"
-#include "components/sync/driver/sync_service.h"
 #include "components/sync/protocol/sync_enums.pb.h"
+#include "components/sync/service/sync_service.h"
 #include "components/sync_device_info/device_info.h"
 
 namespace {
@@ -37,8 +35,7 @@ bool CanSendViaVapid(syncer::SyncService* sync_service) {
 }
 
 bool CanSendViaSenderID(syncer::SyncService* sync_service) {
-  return base::FeatureList::IsEnabled(kSharingSendViaSync) &&
-         sync_service->GetActiveDataTypes().Has(syncer::SHARING_MESSAGE);
+  return sync_service->GetActiveDataTypes().Has(syncer::SHARING_MESSAGE);
 }
 
 bool IsSyncEnabledForSharing(syncer::SyncService* sync_service) {
@@ -109,22 +106,22 @@ absl::optional<chrome_browser_sharing::FCMChannelConfiguration> GetFCMChannel(
 }
 
 SharingDevicePlatform GetDevicePlatform(const syncer::DeviceInfo& device_info) {
-  switch (device_info.device_type()) {
-    case sync_pb::SyncEnums::DeviceType::SyncEnums_DeviceType_TYPE_CROS:
+  switch (device_info.os_type()) {
+    case syncer::DeviceInfo::OsType::kChromeOsLacros:
+    case syncer::DeviceInfo::OsType::kChromeOsAsh:
       return SharingDevicePlatform::kChromeOS;
-    case sync_pb::SyncEnums::DeviceType::SyncEnums_DeviceType_TYPE_LINUX:
+    case syncer::DeviceInfo::OsType::kLinux:
       return SharingDevicePlatform::kLinux;
-    case sync_pb::SyncEnums::DeviceType::SyncEnums_DeviceType_TYPE_MAC:
+    case syncer::DeviceInfo::OsType::kMac:
       return SharingDevicePlatform::kMac;
-    case sync_pb::SyncEnums::DeviceType::SyncEnums_DeviceType_TYPE_WIN:
+    case syncer::DeviceInfo::OsType::kWindows:
       return SharingDevicePlatform::kWindows;
-    case sync_pb::SyncEnums_DeviceType_TYPE_PHONE:
-    case sync_pb::SyncEnums_DeviceType_TYPE_TABLET:
-      if (device_info.manufacturer_name() == "Apple Inc.")
-        return SharingDevicePlatform::kIOS;
+    case syncer::DeviceInfo::OsType::kAndroid:
       return SharingDevicePlatform::kAndroid;
-    case sync_pb::SyncEnums::DeviceType::SyncEnums_DeviceType_TYPE_UNSET:
-    case sync_pb::SyncEnums::DeviceType::SyncEnums_DeviceType_TYPE_OTHER:
+    case syncer::DeviceInfo::OsType::kIOS:
+      return SharingDevicePlatform::kIOS;
+    case syncer::DeviceInfo::OsType::kUnknown:
+    case syncer::DeviceInfo::OsType::kFuchsia:
       return SharingDevicePlatform::kUnknown;
   }
 }

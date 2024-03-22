@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,25 +6,21 @@
 
 #import <UIKit/UIKit.h>
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/test/task_environment.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_view_controller.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_view_controller_presentation_delegate.h"
 #import "ios/chrome/test/scoped_key_window.h"
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity.h"
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity_service.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 class IdentityChooserCoordinatorTest : public PlatformTest {
  public:
@@ -35,9 +31,11 @@ class IdentityChooserCoordinatorTest : public PlatformTest {
     [scoped_key_window_.Get() setRootViewController:view_controller_];
   }
 
-  void AddIdentity(FakeChromeIdentity* identity) {
-    ios::FakeChromeIdentityService::GetInstanceFromChromeProvider()
-        ->AddIdentity(identity);
+  void AddIdentity(FakeSystemIdentity* identity) {
+    FakeSystemIdentityManager* system_identity_manager =
+        FakeSystemIdentityManager::FromSystemIdentityManager(
+            GetApplicationContext()->GetSystemIdentityManager());
+    system_identity_manager->AddIdentity(identity);
   }
 
   id<IdentityChooserViewControllerPresentationDelegate>
@@ -68,8 +66,8 @@ class IdentityChooserCoordinatorTest : public PlatformTest {
 
 TEST_F(IdentityChooserCoordinatorTest, testValidIdentity) {
   // Set up a fake identity on device.
-  FakeChromeIdentity* identity =
-      [FakeChromeIdentity identityWithEmail:@"janedoe@gmail.com"
+  FakeSystemIdentity* identity =
+      [FakeSystemIdentity identityWithEmail:@"janedoe@gmail.com"
                                      gaiaID:@"1"
                                        name:@"Jane Doe"];
   AddIdentity(identity);
@@ -78,7 +76,7 @@ TEST_F(IdentityChooserCoordinatorTest, testValidIdentity) {
   EXPECT_TRUE([view_controller_.presentedViewController
       isKindOfClass:[IdentityChooserViewController class]]);
   IdentityChooserViewController* presented_view_controller =
-      base::mac::ObjCCastStrict<IdentityChooserViewController>(
+      base::apple::ObjCCastStrict<IdentityChooserViewController>(
           view_controller_.presentedViewController);
 
   // User selects a valid account.
@@ -94,7 +92,7 @@ TEST_F(IdentityChooserCoordinatorTest, testIdentityInvalidatedDuringSelection) {
   EXPECT_TRUE([view_controller_.presentedViewController
       isKindOfClass:[IdentityChooserViewController class]]);
   IdentityChooserViewController* presented_view_controller =
-      base::mac::ObjCCastStrict<IdentityChooserViewController>(
+      base::apple::ObjCCastStrict<IdentityChooserViewController>(
           view_controller_.presentedViewController);
 
   // User selects an account that has been invalidated.

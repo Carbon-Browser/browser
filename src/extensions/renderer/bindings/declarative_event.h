@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "gin/wrappable.h"
 #include "v8/include/v8.h"
 
@@ -52,9 +53,9 @@ class DeclarativeEvent final : public gin::Wrappable<DeclarativeEvent> {
 
   std::string event_name_;
 
-  APITypeReferenceMap* type_refs_;
+  raw_ptr<APITypeReferenceMap, ExperimentalRenderer> type_refs_;
 
-  APIRequestHandler* request_handler_;
+  raw_ptr<APIRequestHandler, DanglingUntriaged> request_handler_;
 
   const int webview_instance_id_;
 };

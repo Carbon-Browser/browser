@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,22 +22,31 @@
 #include "chrome/common/chrome_switches.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/persistent_histograms.h"
+#include "components/signin/public/base/signin_buildflags.h"
 #include "components/version_info/version_info.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
 #include "base/android/bundle_utils.h"
 #include "base/task/thread_pool/environment_config.h"
-#include "chrome/browser/android/signin/fre_mobile_identity_consistency_field_trial.h"
-#include "chrome/browser/chrome_browser_field_trials_mobile.h"
-#include "chrome/browser/flags/android/cached_feature_flags.h"
+#include "chrome/browser/android/flags/chrome_cached_flags.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/common/chrome_features.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/services/multidevice_setup/public/cpp/first_run_field_trial.h"
-#include "chrome/browser/ash/login/consolidated_consent_field_trial.h"
+#include "chrome/common/channel_info.h"
+#include "chromeos/ash/services/multidevice_setup/public/cpp/first_run_field_trial.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+// GN doesn't understand conditional includes, so we need nogncheck here.
+// See crbug.com/1125897.
+#include "chromeos/startup/startup.h"  // nogncheck
+#endif
+
+#if BUILDFLAG(ENABLE_SEARCH_ENGINE_CHOICE)
+#include "chrome/browser/search_engine_choice/search_engine_choice_client_side_trial.h"
 #endif
 
 ChromeBrowserFieldTrials::ChromeBrowserFieldTrials(PrefService* local_state)
@@ -45,26 +54,36 @@ ChromeBrowserFieldTrials::ChromeBrowserFieldTrials(PrefService* local_state)
   DCHECK(local_state_);
 }
 
-ChromeBrowserFieldTrials::~ChromeBrowserFieldTrials() {
-}
+ChromeBrowserFieldTrials::~ChromeBrowserFieldTrials() = default;
 
-void ChromeBrowserFieldTrials::SetUpFieldTrials() {
-  // Field trials that are shared by all platforms.
-  InstantiateDynamicTrials();
-
-#if BUILDFLAG(IS_ANDROID)
-  chrome::SetupMobileFieldTrials();
+void ChromeBrowserFieldTrials::OnVariationsSetupComplete() {
+#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Persistent histograms must be enabled ASAP, but depends on Features.
+  // For non-Fuchsia platforms, it is enabled earlier on, and is not controlled
+  // by variations.
+  // See //chrome/app/chrome_main_delegate.cc.
+  bool histogram_init_and_cleanup = true;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // For Lacros, when prelaunching at login screen, we want to postpone the
+  // initialization and cleanup of persistent histograms to when the user has
+  // logged in and the cryptohome is accessible.
+  histogram_init_and_cleanup &= chromeos::IsLaunchedWithPostLoginParams();
 #endif
+  base::FilePath metrics_dir;
+  if (histogram_init_and_cleanup) {
+    if (base::PathService::Get(chrome::DIR_USER_DATA, &metrics_dir)) {
+      InstantiatePersistentHistogramsWithFeaturesAndCleanup(metrics_dir);
+    } else {
+      NOTREACHED();
+    }
+  }
+#endif  // BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_CHROMEOS_LACROS)
 }
 
-void ChromeBrowserFieldTrials::SetUpFeatureControllingFieldTrials(
+void ChromeBrowserFieldTrials::SetUpClientSideFieldTrials(
     bool has_seed,
-    const base::FieldTrial::EntropyProvider* low_entropy_provider,
+    const variations::EntropyProviders& entropy_providers,
     base::FeatureList* feature_list) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::consolidated_consent_field_trial::Create(feature_list, local_state_);
-#endif
-
   // Only create the fallback trials if there isn't already a variations seed
   // being applied. This should occur during first run when first-run variations
   // isn't supported. It's assumed that, if there is a seed, then it either
@@ -73,12 +92,18 @@ void ChromeBrowserFieldTrials::SetUpFeatureControllingFieldTrials(
   // created even if no variations seed was applied. This allows testing the
   // fallback code by intentionally omitting the sampling trial from a
   // variations seed.
-  metrics::CreateFallbackSamplingTrialsIfNeeded(feature_list);
-  metrics::CreateFallbackUkmSamplingTrialIfNeeded(feature_list);
+  metrics::CreateFallbackSamplingTrialsIfNeeded(
+      entropy_providers.default_entropy(), feature_list);
+  metrics::CreateFallbackUkmSamplingTrialIfNeeded(
+      entropy_providers.default_entropy(), feature_list);
   if (!has_seed) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     ash::multidevice_setup::CreateFirstRunFieldTrial(feature_list);
 #endif
+#if BUILDFLAG(ENABLE_SEARCH_ENGINE_CHOICE)
+    SearchEngineChoiceClientSideTrial::SetUpIfNeeded(
+        entropy_providers.default_entropy(), feature_list, local_state_);
+#endif  // BUILDFLAG(ENABLE_SEARCH_ENGINE_CHOICE)
   }
 }
 
@@ -132,38 +157,8 @@ void ChromeBrowserFieldTrials::RegisterSyntheticTrials() {
     ChromeMetricsServiceAccessor::RegisterSyntheticFieldTrial(
         kBackgroundThreadPoolTrial, group_name);
   }
-
-  {
-    // MobileIdentityConsistencyFRESynthetic field trial.
-    static constexpr char kFREMobileIdentityConsistencyTrial[] =
-        "FREMobileIdentityConsistencySynthetic";
-    const std::string group =
-        fre_mobile_identity_consistency_field_trial::GetFREFieldTrialGroup();
-    ChromeMetricsServiceAccessor::RegisterSyntheticFieldTrial(
-        kFREMobileIdentityConsistencyTrial, group);
-
-    if (fre_mobile_identity_consistency_field_trial::IsFREFieldTrialEnabled()) {
-      // MobileIdentityConsistencyFREVariationsSynthetic field trial.
-      // This trial experiments with different title and subtitle variation in
-      // the FRE UI. This is a follow up experiment to
-      // MobileIdentityConsistencyFRESynthetic and thus is only used for the
-      // enabled population of MobileIdentityConsistencyFRESynthetic.
-      static constexpr char kFREMobileIdentityConsistencyVariationsTrial[] =
-          "FREMobileIdentityConsistencyVariationsSynthetic";
-      const std::string variation_group =
-          fre_mobile_identity_consistency_field_trial::
-              GetFREVariationsFieldTrialGroup();
-      ChromeMetricsServiceAccessor::RegisterSyntheticFieldTrial(
-          kFREMobileIdentityConsistencyVariationsTrial, variation_group);
-    }
-  }
 #endif  // BUILDFLAG(IS_ANDROID)
-}
-
-void ChromeBrowserFieldTrials::InstantiateDynamicTrials() {
-  // Persistent histograms must be enabled as soon as possible.
-  base::FilePath metrics_dir;
-  if (base::PathService::Get(chrome::DIR_USER_DATA, &metrics_dir)) {
-    InstantiatePersistentHistograms(metrics_dir);
-  }
+#if BUILDFLAG(ENABLE_SEARCH_ENGINE_CHOICE)
+  SearchEngineChoiceClientSideTrial::RegisterSyntheticTrials();
+#endif  // BUILDFLAG(ENABLE_SEARCH_ENGINE_CHOICE)
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ public class InvalidSyntaxTest {
 
         // The javalang Python module doesn't support method references for array types:
         // https://github.com/c2nes/javalang/blob/566963547575e93d305871d9cb26ce47ff1a036e/javalang/test/test_java_8_syntax.py#L198-L204
-        values = Arrays.stream(STRING_ARRAY_2D).map(String[] ::clone).toArray(String[][] ::new);
+        values = Arrays.stream(STRING_ARRAY_2D).map(String[]::clone).toArray(String[][]::new);
 
         Assert.assertEquals(STRING_ARRAY_2D, values);
     }

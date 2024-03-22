@@ -1,8 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/* #js_imports_placeholder */
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../../components/oobe_cr_lottie.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+import '../../components/buttons/oobe_back_button.js';
+import '../../components/buttons/oobe_next_button.js';
+import '../../components/buttons/oobe_text_button.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+
 
 /**
  * Enum to represent each page in the gesture navigation screen.
@@ -16,21 +30,34 @@ const GesturePage = {
 };
 
 /**
+ * Available user actions.
+ * @enum {string}
+ */
+const UserAction = {
+  SKIP: 'skip',
+  EXIT: 'exit',
+  PAGE_CHANGE: 'gesture-page-change',
+};
+
+
+/**
  * @constructor
  * @extends {PolymerElement}
  * @implements {LoginScreenBehaviorInterface}
  * @implements {MultiStepBehaviorInterface}
  */
-const GestureScreenElementBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior],
-    Polymer.Element);
+const GestureScreenElementBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
 
 class GestureNavigation extends GestureScreenElementBase {
   static get is() {
     return 'gesture-navigation-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
+
 
   static get properties() {
     return {};
@@ -58,6 +85,14 @@ class GestureNavigation extends GestureScreenElementBase {
   }
 
   /**
+   * This is the 'on-tap' event handler for the skip button.
+   * @private
+   */
+  onSkip_() {
+    this.userActed(UserAction.SKIP);
+  }
+
+  /**
    * This is the 'on-tap' event handler for the 'next' or 'get started' button.
    * @private
    */
@@ -77,7 +112,7 @@ class GestureNavigation extends GestureScreenElementBase {
         // report exit. Keep the currentPage_ value so the UI does not get
         // updated until the next screen is shown.
         this.setPlayCurrentScreenAnimation(false);
-        this.userActed('exit');
+        this.userActed(UserAction.EXIT);
         break;
     }
   }
@@ -109,7 +144,7 @@ class GestureNavigation extends GestureScreenElementBase {
   setCurrentPage_(newPage) {
     this.setPlayCurrentScreenAnimation(false);
     this.setUIStep(newPage);
-    chrome.send('handleGesturePageChange', [newPage]);
+    this.userActed([UserAction.PAGE_CHANGE, newPage]);
     this.setPlayCurrentScreenAnimation(true);
   }
 
@@ -119,7 +154,7 @@ class GestureNavigation extends GestureScreenElementBase {
    * @private
    */
   setPlayCurrentScreenAnimation(enabled) {
-    var animation = this.$[this.uiStep].querySelector('.gesture-animation');
+    const animation = this.$[this.uiStep].querySelector('.gesture-animation');
     if (animation) {
       animation.playing = enabled;
     }

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,17 @@ unsigned InternalsWebAudio::audioHandlerCount(Internals& internals) {
       InstanceCounters::CounterValue(InstanceCounters::kAudioHandlerCounter));
 #endif
   return InstanceCounters::CounterValue(InstanceCounters::kAudioHandlerCounter);
+}
+
+unsigned InternalsWebAudio::audioWorkletProcessorCount(Internals& internals) {
+#if DEBUG_AUDIONODE_REFERENCES
+  fprintf(
+      stderr, "InternalsWebAudio::audioWorkletProcessorCount = %u\n",
+      InstanceCounters::CounterValue(
+          InstanceCounters::kAudioWorkletProcessorCounter));
+#endif
+  return InstanceCounters::CounterValue(
+      InstanceCounters::kAudioWorkletProcessorCounter);
 }
 
 }  // namespace blink

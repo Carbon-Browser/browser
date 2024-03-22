@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include "chrome/browser/nearby_sharing/common/nearby_share_enums.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_features.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_prefs.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
 #include "chromeos/constants/chromeos_features.h"
+#include "components/cross_device/logging/logging.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 
@@ -92,19 +92,28 @@ DataUsage NearbyShareSettings::GetDataUsage() const {
 }
 
 Visibility NearbyShareSettings::GetVisibility() const {
-  return static_cast<Visibility>(
-      pref_service_->GetInteger(prefs::kNearbySharingBackgroundVisibilityName));
+  int visibility_int =
+      pref_service_->GetInteger(prefs::kNearbySharingBackgroundVisibilityName);
+
+  // If Visibility is set to kYourDevices and Self Share is toggled from enabled
+  // to disabled, `visibility_int` will have a greater enum value than
+  // `Visibility::kMaxValue`, causing UB. In this case, the visibility is set to
+  // kNoOne instead.
+  if (visibility_int > static_cast<int>(Visibility::kMaxValue)) {
+    pref_service_->SetInteger(prefs::kNearbySharingBackgroundVisibilityName,
+                              static_cast<int>(Visibility::kNoOne));
+    return Visibility::kNoOne;
+  } else {
+    return static_cast<Visibility>(visibility_int);
+  }
 }
 
 const std::vector<std::string> NearbyShareSettings::GetAllowedContacts() const {
   std::vector<std::string> allowed_contacts;
-  const base::Value* list =
+  const base::Value::List& list =
       pref_service_->GetList(prefs::kNearbySharingAllowedContactsPrefName);
-  if (list) {
-    base::Value::ConstListView view = list->GetListDeprecated();
-    for (const auto& value : view) {
-      allowed_contacts.push_back(value.GetString());
-    }
+  for (const auto& value : list) {
+    allowed_contacts.push_back(value.GetString());
   }
   return allowed_contacts;
 }
@@ -143,8 +152,9 @@ void NearbyShareSettings::SetEnabled(bool enabled) {
   DCHECK(!enabled || IsOnboardingComplete());
   pref_service_->SetBoolean(prefs::kNearbySharingEnabledPrefName, enabled);
   if (enabled && GetVisibility() == Visibility::kUnknown) {
-    NS_LOG(ERROR) << "Nearby Share enabled with visibility unset. Setting "
-                     "visibility to kNoOne.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Nearby Share enabled with visibility unset. Setting "
+           "visibility to kNoOne.";
     SetVisibility(Visibility::kNoOne);
   }
 }
@@ -216,11 +226,12 @@ void NearbyShareSettings::GetAllowedContacts(
 
 void NearbyShareSettings::SetAllowedContacts(
     const std::vector<std::string>& allowed_contacts) {
-  base::ListValue list;
+  base::Value::List list;
   for (const auto& id : allowed_contacts) {
     list.Append(id);
   }
-  pref_service_->Set(prefs::kNearbySharingAllowedContactsPrefName, list);
+  pref_service_->SetList(prefs::kNearbySharingAllowedContactsPrefName,
+                         std::move(list));
 }
 
 void NearbyShareSettings::Bind(
@@ -246,10 +257,7 @@ void NearbyShareSettings::OnEnabledPrefChanged() {
     remote->OnEnabledChanged(enabled);
   }
 
-  if (base::FeatureList::IsEnabled(
-          features::kNearbySharingBackgroundScanning)) {
-    ProcessFastInitiationNotificationParentPrefChanged(enabled);
-  }
+  ProcessFastInitiationNotificationParentPrefChanged(enabled);
 }
 
 void NearbyShareSettings::OnFastInitiationNotificationStatePrefChanged() {

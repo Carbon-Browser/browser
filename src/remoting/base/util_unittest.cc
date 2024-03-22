@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ TEST(ReplaceLfByCrLfTest, Basic) {
   EXPECT_EQ("\r\nab\r\ncd", ReplaceLfByCrLf("\nab\ncd"));
   EXPECT_EQ("\r\nab\r\ncd\r\n", ReplaceLfByCrLf("\nab\ncd\n"));
   EXPECT_EQ("\r\n\r\nab\r\n\r\ncd\r\n\r\n",
-      ReplaceLfByCrLf("\n\nab\n\ncd\n\n"));
+            ReplaceLfByCrLf("\n\nab\n\ncd\n\n"));
 }
 
 TEST(ReplaceLfByCrLfTest, Speed) {
@@ -53,7 +53,7 @@ TEST(ReplaceCrLfByLfTest, Basic) {
   EXPECT_EQ("\nab\ncd", ReplaceCrLfByLf("\r\nab\r\ncd"));
   EXPECT_EQ("\nab\ncd\n", ReplaceCrLfByLf("\r\nab\r\ncd\n"));
   EXPECT_EQ("\n\nab\n\ncd\n\n",
-      ReplaceCrLfByLf("\r\n\r\nab\r\n\r\ncd\r\n\r\n"));
+            ReplaceCrLfByLf("\r\n\r\nab\r\n\r\ncd\r\n\r\n"));
   EXPECT_EQ("\rab\rcd\r", ReplaceCrLfByLf("\rab\rcd\r"));
 }
 

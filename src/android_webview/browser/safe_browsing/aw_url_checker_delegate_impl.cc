@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,10 @@
 #include "android_webview/browser/safe_browsing/aw_safe_browsing_allowlist_manager.h"
 #include "android_webview/browser/safe_browsing/aw_safe_browsing_ui_manager.h"
 #include "android_webview/browser_jni_headers/AwSafeBrowsingConfigHelper_jni.h"
+#include "android_webview/browser_jni_headers/AwSafeBrowsingSafeModeAction_jni.h"
 #include "base/android/jni_android.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
 #include "components/safe_browsing/core/common/features.h"
@@ -111,19 +112,27 @@ void AwUrlCheckerDelegateImpl::SetPolicyAllowlistDomains(
 bool AwUrlCheckerDelegateImpl::ShouldSkipRequestCheck(
     const GURL& original_url,
     int frame_tree_node_id,
-    int render_process_id,
-    int render_frame_id,
+    int child_id,
+    base::optional_ref<const base::UnguessableToken> render_frame_token,
     bool originated_from_service_worker) {
-  const content::GlobalRenderFrameHostId rfh_id(render_process_id,
-                                                render_frame_id);
+  JNIEnv* env = base::android::AttachCurrentThread();
+  if (Java_AwSafeBrowsingSafeModeAction_isSafeBrowsingDisabled(env)) {
+    return true;
+  }
 
   std::unique_ptr<AwContentsIoThreadClient> client;
   if (originated_from_service_worker) {
-    client = AwContentsIoThreadClient::GetServiceWorkerIoThreadClient();
-  } else if (!rfh_id) {
+    if (!Java_AwSafeBrowsingConfigHelper_getSafeBrowsingEnabledByManifest(
+            env)) {
+      // Skip the check if safe browsing is disabled in the app's manifest.
+      return true;
+    }
+  } else if (!render_frame_token.has_value()) {
     client = AwContentsIoThreadClient::FromID(frame_tree_node_id);
   } else {
-    client = AwContentsIoThreadClient::FromID(rfh_id);
+    client =
+        AwContentsIoThreadClient::FromToken(content::GlobalRenderFrameHostToken(
+            child_id, blink::LocalFrameToken(render_frame_token.value())));
   }
 
   // If Safe Browsing is disabled by the app, skip the check. Default to
@@ -145,8 +154,16 @@ bool AwUrlCheckerDelegateImpl::ShouldSkipRequestCheck(
   if (is_hardcoded_url)
     return false;
 
+  // Proceed with the request iff GMS is present, enabled, accessible to
+  // WebView and has minimum version to support safe browsing
+  if (base::FeatureList::IsEnabled(safe_browsing::kHashPrefixRealTimeLookups)) {
+    bool can_use_gms = Java_AwSafeBrowsingConfigHelper_canUseGms(env);
+    if (!can_use_gms) {
+      return true;
+    }
+  }
+
   // For other requests, follow user consent.
-  JNIEnv* env = base::android::AttachCurrentThread();
   bool safe_browsing_user_consent =
       Java_AwSafeBrowsingConfigHelper_getSafeBrowsingUserOptIn(env);
   return !safe_browsing_user_consent;
@@ -296,6 +313,19 @@ void AwUrlCheckerDelegateImpl::StartDisplayingDefaultBlockingPage(
   content::GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(resource.callback, false /* proceed */,
                                 false /* showed_interstitial */));
+}
+
+void AwUrlCheckerDelegateImpl::CheckLookupMechanismExperimentEligibility(
+    const security_interstitials::UnsafeResource& resource,
+    base::OnceCallback<void(bool)> callback,
+    scoped_refptr<base::SequencedTaskRunner> callback_task_runner) {
+  NOTREACHED();
+}
+void AwUrlCheckerDelegateImpl::CheckExperimentEligibilityAndStartBlockingPage(
+    const security_interstitials::UnsafeResource& resource,
+    base::OnceCallback<void(bool)> callback,
+    scoped_refptr<base::SequencedTaskRunner> callback_task_runner) {
+  NOTREACHED();
 }
 
 }  // namespace android_webview

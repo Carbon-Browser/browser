@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,12 @@ namespace file_system_provider {
 namespace operations {
 
 CreateDirectory::CreateDirectory(
-    extensions::EventRouter* event_router,
+    RequestDispatcher* dispatcher,
     const ProvidedFileSystemInfo& file_system_info,
     const base::FilePath& directory_path,
     bool recursive,
     storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       directory_path_(directory_path),
       recursive_(recursive),
       callback_(std::move(callback)) {}
@@ -49,14 +49,14 @@ bool CreateDirectory::Execute(int request_id) {
 }
 
 void CreateDirectory::OnSuccess(int /* request_id */,
-                                std::unique_ptr<RequestValue> /* result */,
+                                const RequestValue& /* result */,
                                 bool has_more) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
 void CreateDirectory::OnError(int /* request_id */,
-                              std::unique_ptr<RequestValue> /* result */,
+                              const RequestValue& /* result */,
                               base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);

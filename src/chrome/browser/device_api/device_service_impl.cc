@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/device_api/device_service_impl.h"
 
 #include <memory>
 
+#include "base/check_deref.h"
 #include "base/containers/contains.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
@@ -39,7 +40,7 @@ namespace {
 bool CanAccessDeviceAttributes(const PrefService* prefs,
                                const url::Origin& origin) {
   const base::Value::List& prefs_list =
-      prefs->GetValueList(prefs::kDeviceAttributesAllowedForOrigins);
+      prefs->GetList(prefs::kDeviceAttributesAllowedForOrigins);
 
   return base::Contains(prefs_list, origin, [](const auto& entry) {
     return url::Origin::Create(GURL(entry.GetString()));
@@ -69,10 +70,11 @@ bool IsEqualToKioskOrigin(const url::Origin& origin) {
 bool IsForceInstalledOrigin(const PrefService* prefs,
                             const url::Origin& origin) {
   const base::Value::List& prefs_list =
-      prefs->GetValueList(prefs::kWebAppInstallForceList);
+      prefs->GetList(prefs::kWebAppInstallForceList);
 
   return base::Contains(prefs_list, origin, [](const auto& entry) {
-    std::string entry_url = entry.FindKey(web_app::kUrlKey)->GetString();
+    std::string entry_url =
+        CHECK_DEREF(entry.GetDict().FindString(web_app::kUrlKey));
     return url::Origin::Create(GURL(entry_url));
   });
 }
@@ -99,14 +101,10 @@ bool IsAffiliatedUser() {
 
 bool IsTrustedContext(content::RenderFrameHost& host,
                       const url::Origin& origin) {
-  // TODO(anqing): This feature flag is turned on by default for origin trial.
-  // The flag will be removed when permission policies are ready.
-  if (!base::FeatureList::IsEnabled(features::kEnableRestrictedWebApis))
-    return false;
-
   // Do not create the service for the incognito mode.
-  if (GetProfile(host)->IsIncognitoProfile())
+  if (GetProfile(host)->IsIncognitoProfile()) {
     return false;
+  }
 
   if (chrome::IsRunningInAppMode()) {
     return IsEqualToKioskOrigin(origin);

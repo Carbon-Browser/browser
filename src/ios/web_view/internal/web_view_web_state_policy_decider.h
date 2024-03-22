@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,15 @@ class WebState;
 namespace ios_web_view {
 
 // An implementation of web::WebStatePolicyDecider which delegates to:
+// DEPRECATED:
 //   [web_view.navigationDelegate webView:shouldStartLoadWithRequest:]
 //   [web_view.navigationDelegate webView:shouldContinueLoadWithResponse:]
+//
+// RECOMMENDED:
+//   [web_view.navigationDelegate
+//   webView:decidePolicyForNavigationAction:decisionHandler:]
+//   [web_view.navigationDelegate
+//   webView:decidePolicyForNavigationResponse:decisionHandler:]
 class WebViewWebStatePolicyDecider : public web::WebStatePolicyDecider {
  public:
   WebViewWebStatePolicyDecider(web::WebState* web_state, CWVWebView* web_view);

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -39,6 +39,7 @@ table ClientSideModel {
   tflite_model_input_width: int (deprecated);
   tflite_model_input_height: int (deprecated);
   tflite_metadata:safe_browsing.flat.TfLiteModelMetadata;
+  img_embedding_metadata:safe_browsing.flat.TfLiteModelMetadata;
   dom_model_version:int;
 }
 
@@ -70,6 +71,7 @@ namespace safe_browsing.flat.TfLiteModelMetadata_;
 table Threshold {
   label:string;
   threshold:float;
+  esb_threshold:float;
 }
 
 namespace safe_browsing.flat;

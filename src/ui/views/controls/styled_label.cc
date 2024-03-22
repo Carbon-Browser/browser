@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,18 +13,23 @@
 #include "base/i18n/rtl.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/font_list.h"
+#include "ui/gfx/text_constants.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/gfx/text_utils.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/link.h"
 #include "ui/views/controls/link_fragment.h"
+#include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/view_class_properties.h"
+#include "ui/views/view_utils.h"
 
 namespace views {
 
@@ -76,7 +81,11 @@ struct StyledLabel::LayoutViews {
   std::vector<std::unique_ptr<View>> owned_views;
 };
 
-StyledLabel::StyledLabel() = default;
+StyledLabel::StyledLabel() {
+  SetAccessibilityProperties(text_context_ == style::CONTEXT_DIALOG_TITLE
+                                 ? ax::mojom::Role::kTitleBar
+                                 : ax::mojom::Role::kStaticText);
+}
 
 StyledLabel::~StyledLabel() = default;
 
@@ -89,17 +98,19 @@ void StyledLabel::SetText(std::u16string text) {
   // text elider tries to do so internally. There's no obvious reason to
   // preserve trailing whitespace anyway.
   base::TrimWhitespace(std::move(text), base::TRIM_TRAILING, &text);
-  if (text_ == text)
+  if (text_ == text) {
     return;
+  }
 
   text_ = text;
+  SetAccessibleName(text_);
   style_ranges_.clear();
   RemoveOrDeleteAllChildViews();
   OnPropertyChanged(&text_, kPropertyEffectsPreferredSizeChanged);
 }
 
 gfx::FontList StyledLabel::GetFontList(const RangeStyleInfo& style_info) const {
-  return style_info.custom_font.value_or(style::GetFont(
+  return style_info.custom_font.value_or(TypographyProvider::Get().GetFont(
       text_context_, style_info.text_style.value_or(default_text_style_)));
 }
 
@@ -111,7 +122,7 @@ void StyledLabel::AddStyleRange(const gfx::Range& range,
 
   // Insert the new range in sorted order.
   StyleRanges new_range;
-  new_range.push_front(StyleRange(range, style_info));
+  new_range.emplace_front(range, style_info);
   style_ranges_.merge(new_range);
 
   PreferredSizeChanged();
@@ -128,10 +139,14 @@ int StyledLabel::GetTextContext() const {
 }
 
 void StyledLabel::SetTextContext(int text_context) {
-  if (text_context_ == text_context)
+  if (text_context_ == text_context) {
     return;
+  }
 
   text_context_ = text_context;
+  SetAccessibleRole(text_context_ == style::CONTEXT_DIALOG_TITLE
+                        ? ax::mojom::Role::kTitleBar
+                        : ax::mojom::Role::kStaticText);
   OnPropertyChanged(&text_context_, kPropertyEffectsPreferredSizeChanged);
 }
 
@@ -140,39 +155,56 @@ int StyledLabel::GetDefaultTextStyle() const {
 }
 
 void StyledLabel::SetDefaultTextStyle(int text_style) {
-  if (default_text_style_ == text_style)
+  if (default_text_style_ == text_style) {
     return;
+  }
 
   default_text_style_ = text_style;
   OnPropertyChanged(&default_text_style_, kPropertyEffectsPreferredSizeChanged);
 }
 
+absl::optional<ui::ColorId> StyledLabel::GetDefaultEnabledColorId() const {
+  return default_enabled_color_id_;
+}
+
+void StyledLabel::SetDefaultEnabledColorId(
+    absl::optional<ui::ColorId> enabled_color_id) {
+  if (default_enabled_color_id_ == enabled_color_id) {
+    return;
+  }
+
+  default_enabled_color_id_ = enabled_color_id;
+  OnPropertyChanged(&default_enabled_color_id_, kPropertyEffectsPaint);
+}
+
 int StyledLabel::GetLineHeight() const {
-  return line_height_.value_or(
-      style::GetLineHeight(text_context_, default_text_style_));
+  return line_height_.value_or(TypographyProvider::Get().GetLineHeight(
+      text_context_, default_text_style_));
 }
 
 void StyledLabel::SetLineHeight(int line_height) {
-  if (line_height_ == line_height)
+  if (line_height_ == line_height) {
     return;
+  }
 
   line_height_ = line_height;
   OnPropertyChanged(&line_height_, kPropertyEffectsPreferredSizeChanged);
 }
 
-absl::optional<SkColor> StyledLabel::GetDisplayedOnBackgroundColor() const {
+StyledLabel::ColorVariant StyledLabel::GetDisplayedOnBackgroundColor() const {
   return displayed_on_background_color_;
 }
 
-void StyledLabel::SetDisplayedOnBackgroundColor(
-    const absl::optional<SkColor>& color) {
-  if (displayed_on_background_color_ == color)
+void StyledLabel::SetDisplayedOnBackgroundColor(ColorVariant color) {
+  if (color == displayed_on_background_color_) {
     return;
+  }
 
   displayed_on_background_color_ = color;
 
-  if (GetWidget())
+  if (GetWidget()) {
     UpdateLabelBackgroundColor();
+  }
 
   OnPropertyChanged(&displayed_on_background_color_, kPropertyEffectsPaint);
 }
@@ -182,8 +214,9 @@ bool StyledLabel::GetAutoColorReadabilityEnabled() const {
 }
 
 void StyledLabel::SetAutoColorReadabilityEnabled(bool auto_color_readability) {
-  if (auto_color_readability_enabled_ == auto_color_readability)
+  if (auto_color_readability_enabled_ == auto_color_readability) {
     return;
+  }
 
   auto_color_readability_enabled_ = auto_color_readability;
   OnPropertyChanged(&auto_color_readability_enabled_, kPropertyEffectsPaint);
@@ -194,8 +227,9 @@ bool StyledLabel::GetSubpixelRenderingEnabled() const {
 }
 
 void StyledLabel::SetSubpixelRenderingEnabled(bool subpixel_rendering_enabled) {
-  if (subpixel_rendering_enabled_ == subpixel_rendering_enabled)
+  if (subpixel_rendering_enabled_ == subpixel_rendering_enabled) {
     return;
+  }
 
   subpixel_rendering_enabled_ = subpixel_rendering_enabled;
   OnPropertyChanged(&subpixel_rendering_enabled_, kPropertyEffectsPaint);
@@ -213,13 +247,6 @@ void StyledLabel::SizeToFit(int fixed_width) {
   gfx::Size size = layout_size_info_.total_size;
   size.set_width(std::max(size.width(), fixed_width));
   SetSize(size);
-}
-
-void StyledLabel::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = (text_context_ == style::CONTEXT_DIALOG_TITLE)
-                        ? ax::mojom::Role::kTitleBar
-                        : ax::mojom::Role::kStaticText;
-  node_data->SetName(GetText());
 }
 
 gfx::Size StyledLabel::CalculatePreferredSize() const {
@@ -261,11 +288,8 @@ void StyledLabel::Layout() {
         // Transfer ownership for any views in layout_views_->owned_views or
         // custom_views_.  The actual pointer is the same in both arms below.
         if (view->GetProperty(kStyledLabelCustomViewKey)) {
-          auto custom_view =
-              std::find_if(custom_views_.begin(), custom_views_.end(),
-                           [view](const auto& current_custom_view) {
-                             return current_custom_view.get() == view;
-                           });
+          auto custom_view = base::ranges::find(custom_views_, view,
+                                                &std::unique_ptr<View>::get);
           DCHECK(custom_view != custom_views_.end());
           AddChildView(std::move(*custom_view));
           custom_views_.erase(custom_view);
@@ -307,18 +331,14 @@ void StyledLabel::PreferredSizeChanged() {
   View::PreferredSizeChanged();
 }
 
-void StyledLabel::OnThemeChanged() {
-  View::OnThemeChanged();
-  UpdateLabelBackgroundColor();
-}
-
 // TODO(wutao): support gfx::ALIGN_TO_HEAD alignment.
 void StyledLabel::SetHorizontalAlignment(gfx::HorizontalAlignment alignment) {
   DCHECK_NE(gfx::ALIGN_TO_HEAD, alignment);
   alignment = gfx::MaybeFlipForRTL(alignment);
 
-  if (horizontal_alignment_ == alignment)
+  if (horizontal_alignment_ == alignment) {
     return;
+  }
   horizontal_alignment_ = alignment;
   PreferredSizeChanged();
 }
@@ -334,18 +354,20 @@ void StyledLabel::ClickFirstLinkForTesting() {
 }
 
 views::Link* StyledLabel::GetFirstLinkForTesting() {
-  const auto it = base::ranges::find(children(), LinkFragment::kViewClassName,
-                                     &View::GetClassName);
-  DCHECK(it != children().cend());
-  return static_cast<views::Link*>(*it);
+  const auto it = base::ranges::find_if(children(), &IsViewClass<LinkFragment>);
+  return (it == children().cend()) ? nullptr : static_cast<views::Link*>(*it);
 }
 
 int StyledLabel::StartX(int excess_space) const {
   int x = GetInsets().left();
-  if (horizontal_alignment_ == gfx::ALIGN_LEFT)
+  // If the element should be aligned to the leading side (left in LTR, or right
+  // in RTL), position it at the leading side Insets (left).
+  if (horizontal_alignment_ ==
+      (base::i18n::IsRTL() ? gfx::ALIGN_RIGHT : gfx::ALIGN_LEFT)) {
     return x;
-  return x + ((horizontal_alignment_ == gfx::ALIGN_CENTER) ? (excess_space / 2)
-                                                           : excess_space);
+  }
+  return x + (horizontal_alignment_ == gfx::ALIGN_CENTER ? (excess_space / 2)
+                                                         : excess_space);
 }
 
 void StyledLabel::CalculateLayout(int width) const {
@@ -393,8 +415,9 @@ void StyledLabel::CalculateLayout(int width) const {
       }
 
       gfx::Range range = gfx::Range::InvalidRange();
-      if (current_range != style_ranges_.end())
+      if (current_range != style_ranges_.end()) {
         range = current_range->range;
+      }
 
       const size_t position = text_.size() - remaining_string.size();
       std::vector<std::u16string> substrings;
@@ -512,8 +535,9 @@ void StyledLabel::CalculateLayout(int width) const {
           std::max(line_size.height(), child_size.height()));
 
       views.push_back(child_view);
-      if (label)
+      if (label) {
         layout_views_->owned_views.push_back(std::move(label));
+      }
 
       remaining_string = remaining_string.substr(chunk.size());
 
@@ -573,29 +597,46 @@ std::unique_ptr<Label> StyledLabel::CreateLabel(
         style_info.text_style.value_or(default_text_style_));
   }
 
-  if (style_info.override_color)
+  if (style_info.override_color_id) {
+    result->SetEnabledColorId(style_info.override_color_id.value());
+  } else if (style_info.override_color) {
     result->SetEnabledColor(style_info.override_color.value());
-  if (!style_info.tooltip.empty())
+  } else if (default_enabled_color_id_) {
+    result->SetEnabledColorId(default_enabled_color_id_);
+  }
+  if (!style_info.tooltip.empty()) {
     result->SetTooltipText(style_info.tooltip);
+  }
   if (!style_info.accessible_name.empty())
     result->SetAccessibleName(style_info.accessible_name);
-  if (displayed_on_background_color_)
-    result->SetBackgroundColor(displayed_on_background_color_.value());
+  if (absl::holds_alternative<SkColor>(displayed_on_background_color_)) {
+    result->SetBackgroundColor(
+        absl::get<SkColor>(displayed_on_background_color_));
+  } else if (absl::holds_alternative<ui::ColorId>(
+                 displayed_on_background_color_)) {
+    result->SetBackgroundColorId(
+        absl::get<ui::ColorId>(displayed_on_background_color_));
+  }
   result->SetAutoColorReadabilityEnabled(auto_color_readability_enabled_);
   result->SetSubpixelRenderingEnabled(subpixel_rendering_enabled_);
   return result;
 }
 
 void StyledLabel::UpdateLabelBackgroundColor() {
-  SkColor new_color = displayed_on_background_color_.value_or(
-      GetColorProvider()->GetColor(ui::kColorDialogBackground));
   for (View* child : children()) {
     if (!child->GetProperty(kStyledLabelCustomViewKey)) {
       // TODO(kylixrd): Should updating the label background color even be
       // allowed if there are custom views?
-      DCHECK((child->GetClassName() == Label::kViewClassName) ||
-             (child->GetClassName() == LinkFragment::kViewClassName));
-      static_cast<Label*>(child)->SetBackgroundColor(new_color);
+      DCHECK(IsViewClass<Label>(child) || IsViewClass<LinkFragment>(child));
+      static_cast<Label*>(child)->SetBackgroundColorId(
+          absl::holds_alternative<ui::ColorId>(displayed_on_background_color_)
+              ? absl::optional<ui::ColorId>(
+                    absl::get<ui::ColorId>(displayed_on_background_color_))
+              : absl::nullopt);
+      if (absl::holds_alternative<SkColor>(displayed_on_background_color_)) {
+        static_cast<Label*>(child)->SetBackgroundColor(
+            absl::get<SkColor>(displayed_on_background_color_));
+      }
     }
   }
 }
@@ -614,7 +655,8 @@ ADD_PROPERTY_METADATA(int, TextContext)
 ADD_PROPERTY_METADATA(int, DefaultTextStyle)
 ADD_PROPERTY_METADATA(int, LineHeight)
 ADD_PROPERTY_METADATA(bool, AutoColorReadabilityEnabled)
-ADD_PROPERTY_METADATA(absl::optional<SkColor>, DisplayedOnBackgroundColor)
+ADD_PROPERTY_METADATA(StyledLabel::ColorVariant, DisplayedOnBackgroundColor)
+ADD_PROPERTY_METADATA(absl::optional<ui::ColorId>, DefaultEnabledColorId)
 END_METADATA
 
 }  // namespace views

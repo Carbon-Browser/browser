@@ -19,7 +19,7 @@ To create this simple dialog, you would need to add the following files:
 `login_bubble_dialog_example.h`
 
 ``` cpp
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ class LoginBubbleDialogView : public views::BubbleDialogDelegateView {
 `login_bubble_dialog_example.cc`
 
 ``` cpp
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -264,7 +264,7 @@ class LoginBubbleDialogView : public views::BubbleDialogDelegateView {
 
 
 ``` cpp
-#include "base/bind.h"
+#include "base/functional/bind.h"
 ...
 // static
 void LoginBubbleDialogView::Show(View* anchor_view,
@@ -379,7 +379,7 @@ The final code should resemble the following:
 
 
 ```
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -430,7 +430,7 @@ class LoginBubbleDialogView : public BubbleDialogDelegateView,
 
 
 ```
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -439,7 +439,7 @@ class LoginBubbleDialogView : public BubbleDialogDelegateView,
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/label.h"

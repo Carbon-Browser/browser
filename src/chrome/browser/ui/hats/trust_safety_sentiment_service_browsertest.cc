@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/hats/hats_service_factory.h"
 #include "chrome/browser/ui/hats/mock_hats_service.h"
-#include "chrome/browser/ui/hats/trust_safety_sentiment_service.h"
 #include "chrome/browser/ui/hats/trust_safety_sentiment_service_factory.h"
 #include "chrome/browser/ui/page_info/page_info_dialog.h"
 #include "chrome/browser/ui/views/page_info/page_info_bubble_view.h"
@@ -39,6 +38,12 @@ class TrustSafetySentimentServiceBrowserTest : public InProcessBrowserTest {
         {{"trusted-surface-probability", "1.0"}});
   }
 
+  // TODO(crbug.com/1491942): This fails with the field trial testing config.
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    InProcessBrowserTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitch("disable-field-trial-config");
+  }
+
   void SetUpOnMainThread() override {
     mock_hats_service_ = static_cast<MockHatsService*>(
         HatsServiceFactory::GetInstance()->SetTestingFactoryAndUse(
@@ -49,6 +54,8 @@ class TrustSafetySentimentServiceBrowserTest : public InProcessBrowserTest {
     EXPECT_CALL(*mock_hats_service_, CanShowAnySurvey(_))
         .WillRepeatedly(testing::Return(true));
   }
+
+  void TearDownOnMainThread() override { mock_hats_service_ = nullptr; }
 
   void OpenPageInfo() {
     ShowPageInfoDialog(browser()->tab_strip_model()->GetActiveWebContents(),
@@ -71,7 +78,8 @@ class TrustSafetySentimentServiceBrowserTest : public InProcessBrowserTest {
     auto* bubble = static_cast<PageInfoBubbleView*>(
         PageInfoBubbleView::GetPageInfoBubbleForTesting());
     bubble->presenter_for_testing()->OnSitePermissionChanged(
-        permission.type, permission.setting, permission.is_one_time);
+        permission.type, permission.setting, permission.requesting_origin,
+        permission.is_one_time);
   }
 
   void OpenEnoughNewTabs() {
@@ -87,7 +95,7 @@ class TrustSafetySentimentServiceBrowserTest : public InProcessBrowserTest {
 
  protected:
   base::test::ScopedFeatureList feature_list_;
-  raw_ptr<MockHatsService> mock_hats_service_;
+  raw_ptr<MockHatsService> mock_hats_service_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(TrustSafetySentimentServiceBrowserTest,

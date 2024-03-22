@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,12 @@
 #include <unordered_set>
 
 #include "ash/ash_export.h"
-#include "ash/components/phonehub/camera_roll_manager.h"
-#include "ash/components/phonehub/feature_status_provider.h"
-#include "ash/components/phonehub/notification_manager.h"
-#include "ash/components/phonehub/tether_controller.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/camera_roll_manager.h"
+#include "chromeos/ash/components/phonehub/feature_status_provider.h"
+#include "chromeos/ash/components/phonehub/notification_manager.h"
+#include "chromeos/ash/components/phonehub/tether_controller.h"
 
 namespace message_center {
 class MessageView;
@@ -135,12 +136,14 @@ class ASH_EXPORT PhoneHubNotificationController
       const message_center::Notification& notification,
       bool shown_in_popup);
 
-  phonehub::NotificationInteractionHandler* notification_interaction_handler_ =
+  raw_ptr<phonehub::NotificationInteractionHandler, ExperimentalAsh>
+      notification_interaction_handler_ = nullptr;
+  raw_ptr<phonehub::NotificationManager, ExperimentalAsh> manager_ = nullptr;
+  raw_ptr<phonehub::TetherController, ExperimentalAsh> tether_controller_ =
       nullptr;
-  phonehub::NotificationManager* manager_ = nullptr;
-  phonehub::TetherController* tether_controller_ = nullptr;
-  phonehub::CameraRollManager* camera_roll_manager_ = nullptr;
-  phonehub::PhoneModel* phone_model_ = nullptr;
+  raw_ptr<phonehub::CameraRollManager, ExperimentalAsh> camera_roll_manager_ =
+      nullptr;
+  raw_ptr<phonehub::PhoneModel, ExperimentalAsh> phone_model_ = nullptr;
   std::unordered_map<int64_t, std::unique_ptr<NotificationDelegate>>
       notification_map_;
 

@@ -1,18 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/printing/print_management/printing_manager_factory.h"
 
+#include <memory>
+
+#include "ash/webui/print_management/print_management_ui.h"
 #include "chrome/browser/ash/printing/cups_print_job_manager_factory.h"
 #include "chrome/browser/ash/printing/history/print_job_history_service_factory.h"
+#include "chrome/browser/ash/printing/print_management/print_management_delegate_impl.h"
 #include "chrome/browser/ash/printing/print_management/printing_manager.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/history/history_service_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 
 namespace ash {
@@ -28,13 +29,22 @@ PrintingManager* PrintingManagerFactory::GetForProfile(Profile* profile) {
 
 // static
 PrintingManagerFactory* PrintingManagerFactory::GetInstance() {
-  return base::Singleton<PrintingManagerFactory>::get();
+  static base::NoDestructor<PrintingManagerFactory> instance;
+  return instance.get();
 }
 
 PrintingManagerFactory::PrintingManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "PrintingManager",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // Guest Profile follows Regular Profile selection mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              // We do not want an instance of PrintingManager on the lock
+              // screen. The result is multiple print job notifications.
+              // https://crbug.com/1011532
+              .WithAshInternals(ProfileSelection::kNone)
+              .Build()) {
   DependsOn(PrintJobHistoryServiceFactory::GetInstance());
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(CupsPrintJobManagerFactory::GetInstance());
@@ -43,17 +53,10 @@ PrintingManagerFactory::PrintingManagerFactory()
 PrintingManagerFactory::~PrintingManagerFactory() = default;
 
 // static
-KeyedService* PrintingManagerFactory::BuildInstanceFor(
+std::unique_ptr<KeyedService> PrintingManagerFactory::BuildInstanceFor(
     content::BrowserContext* context) {
   Profile* profile = Profile::FromBrowserContext(context);
-
-  // We do not want an instance of PrintingManager on the lock screen. The
-  // result is multiple print job notifications. https://crbug.com/1011532
-  if (!ProfileHelper::IsRegularProfile(profile)) {
-    return nullptr;
-  }
-
-  return new PrintingManager(
+  return std::make_unique<PrintingManager>(
       PrintJobHistoryServiceFactory::GetForBrowserContext(context),
       HistoryServiceFactory::GetForProfile(profile,
                                            ServiceAccessType::EXPLICIT_ACCESS),
@@ -61,14 +64,34 @@ KeyedService* PrintingManagerFactory::BuildInstanceFor(
       profile->GetPrefs());
 }
 
-KeyedService* PrintingManagerFactory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
-  return BuildInstanceFor(static_cast<Profile*>(context));
+// static
+void PrintingManagerFactory::MaybeBindPrintManagementForWebUI(
+    Profile* profile,
+    mojo::PendingReceiver<
+        chromeos::printing::printing_manager::mojom::PrintingMetadataProvider>
+        receiver) {
+  PrintingManager* handler = GetForProfile(profile);
+  if (handler) {
+    handler->BindInterface(std::move(receiver));
+  }
 }
 
-content::BrowserContext* PrintingManagerFactory::GetBrowserContextToUse(
+// static
+std::unique_ptr<content::WebUIController>
+PrintingManagerFactory::CreatePrintManagementUIController(
+    content::WebUI* web_ui,
+    const GURL& url) {
+  return std::make_unique<printing_manager::PrintManagementUI>(
+      web_ui,
+      base::BindRepeating(&MaybeBindPrintManagementForWebUI,
+                          Profile::FromWebUI(web_ui)),
+      std::make_unique<ash::print_management::PrintManagementDelegateImpl>());
+}
+
+std::unique_ptr<KeyedService>
+PrintingManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return BuildInstanceFor(context);
 }
 
 void PrintingManagerFactory::RegisterProfilePrefs(

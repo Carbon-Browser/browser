@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,11 @@
 #include <string>
 
 #include "base/memory/ref_counted.h"
+#include "base/values.h"
 #include "components/sync/model/syncable_service.h"
 #include "components/value_store/value_store_factory.h"
 #include "extensions/browser/api/storage/settings_observer.h"
 #include "extensions/browser/api/storage/settings_storage_quota_enforcer.h"
-
-namespace syncer {
-class SyncErrorFactory;
-}
 
 namespace value_store {
 class ValueStoreFactory;
@@ -57,8 +54,7 @@ class SyncStorageBackend : public syncer::SyncableService {
   absl::optional<syncer::ModelError> MergeDataAndStartSyncing(
       syncer::ModelType type,
       const syncer::SyncDataList& initial_sync_data,
-      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor,
-      std::unique_ptr<syncer::SyncErrorFactory> sync_error_factory) override;
+      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) override;
   absl::optional<syncer::ModelError> ProcessSyncChanges(
       const base::Location& from_here,
       const syncer::SyncChangeList& change_list) override;
@@ -69,7 +65,7 @@ class SyncStorageBackend : public syncer::SyncableService {
   // initializing sync with some initial data if sync enabled.
   SyncableSettingsStorage* GetOrCreateStorageWithSyncData(
       const std::string& extension_id,
-      std::unique_ptr<base::DictionaryValue> sync_data) const;
+      base::Value::Dict sync_data) const;
 
   // Creates a new SettingsSyncProcessor for an extension.
   std::unique_ptr<SettingsSyncProcessor> CreateSettingsSyncProcessor(
@@ -95,9 +91,6 @@ class SyncStorageBackend : public syncer::SyncableService {
 
   // Current sync processor, if any.
   std::unique_ptr<syncer::SyncChangeProcessor> sync_processor_;
-
-  // Current sync error handler if any.
-  std::unique_ptr<syncer::SyncErrorFactory> sync_error_factory_;
 
   syncer::SyncableService::StartSyncFlare flare_;
 };

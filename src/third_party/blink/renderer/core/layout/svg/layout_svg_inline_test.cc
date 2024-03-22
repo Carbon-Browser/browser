@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,22 @@ TEST_F(LayoutSVGInlineTest, IsChildAllowed) {
   auto* a = GetLayoutObjectByElementId("anchor");
   // The second <textPath> is not added.
   EXPECT_FALSE(a->SlowFirstChild());
+}
+
+TEST_F(LayoutSVGInlineTest, LocalToAncestorPoint) {
+  SetBodyInnerHTML(R"HTML(
+<style>body { margin:0; }</style>
+<div style="height:3px"></div>
+<svg width="200" height="100">
+<text>
+<tspan id="container">abc<a id="target">foo</a></tspan>
+</text>
+</svg>)HTML");
+  LayoutObject* target = GetLayoutObjectByElementId("target");
+  LayoutSVGInline* container =
+      To<LayoutSVGInline>(GetLayoutObjectByElementId("container"));
+  EXPECT_NE(target->LocalToAbsolutePoint(PhysicalOffset()),
+            target->LocalToAncestorPoint(PhysicalOffset(), container));
 }
 
 }  // namespace blink

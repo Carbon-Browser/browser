@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,14 +54,9 @@ class PLATFORM_EXPORT DisplayItemClient : public GarbageCollectedMixin {
   // cached display items without calling this method.
   // See PaintController::ClientCacheIsValid() for more details.
   void Invalidate(
-      PaintInvalidationReason reason = PaintInvalidationReason::kFull) const {
-    // If a full invalidation reason is already set, do not overwrite it with
-    // a new reason.
-    if (IsFullPaintInvalidationReason(GetPaintInvalidationReason()) &&
-        // However, kUncacheable overwrites any other reason.
-        reason != PaintInvalidationReason::kUncacheable)
-      return;
-    paint_invalidation_reason_ = static_cast<uint8_t>(reason);
+      PaintInvalidationReason reason = PaintInvalidationReason::kLayout) const {
+    if (reason > GetPaintInvalidationReason())
+      paint_invalidation_reason_ = static_cast<uint8_t>(reason);
   }
 
   PaintInvalidationReason GetPaintInvalidationReason() const {

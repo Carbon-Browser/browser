@@ -1,10 +1,9 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/command_line_private/command_line_private_api.h"
 
-#include <memory>
 #include <string>
 
 #include "base/command_line.h"
@@ -22,8 +21,8 @@ namespace extensions {
 namespace command_line_private = api::command_line_private;
 
 ExtensionFunction::ResponseAction CommandLinePrivateHasSwitchFunction::Run() {
-  std::unique_ptr<command_line_private::HasSwitch::Params> params(
-      command_line_private::HasSwitch::Params::Create(args()));
+  absl::optional<command_line_private::HasSwitch::Params> params =
+      command_line_private::HasSwitch::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   if (params->name.empty())

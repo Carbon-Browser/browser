@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
  * a subpage with lots of other settings on Chrome OS.
  */
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import '../controls/settings_toggle_button.js';
+import '/shared/settings/controls/settings_toggle_button.js';
 import '../settings_page/settings_animated_pages.js';
 import '../settings_shared.css.js';
-// <if expr="not is_macosx and not chromeos_ash">
+// clang-format off
+// <if expr="not is_macosx and not is_chromeos">
 import './captions_subpage.js';
 import '../settings_page/settings_subpage.js';
 // </if>
@@ -20,29 +21,52 @@ import '../settings_page/settings_subpage.js';
 // <if expr="is_win or is_macosx">
 import './live_caption_section.js';
 
+import {CaptionsBrowserProxyImpl} from '/shared/settings/a11y_page/captions_browser_proxy.js';
 // </if>
-
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+// clang-format on
+import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BaseMixin} from '../base_mixin.js';
-import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
+import {AccessibilityBrowserProxy, AccessibilityBrowserProxyImpl} from './a11y_browser_proxy.js';
 import {getTemplate} from './a11y_page.html.js';
-// <if expr="is_win or is_macosx">
-import {CaptionsBrowserProxyImpl} from './captions_browser_proxy.js';
+
+// clang-format off
+// <if expr="not is_chromeos">
+import {LanguageHelper, LanguagesModel} from '../languages_page/languages_types.js';
 
 // </if>
+// clang-format on
 
-const SettingsA11YPageElementBase =
-    WebUIListenerMixin(BaseMixin(PolymerElement));
+// TODO(crbug.com/1442928): Encapsulate all PDF OCR toggle logic to a dedicated
+// pdf-ocr-toggle-button element.
+// <if expr="is_win or is_linux or is_macosx">
+/**
+ * Numerical values should not be changed because they must stay in sync with
+ * screen_ai::ScreenAIInstallState::State defined in screen_ai_install_state.h.
+ */
+export enum ScreenAiInstallStatus {
+  NOT_DOWNLOADED = 0,
+  DOWNLOADING = 1,
+  FAILED = 2,
+  DOWNLOADED = 3,
+  READY = 4,
+}
+// </if>
 
-class SettingsA11YPageElement extends SettingsA11YPageElementBase {
+const SettingsA11yPageElementBase =
+    PrefsMixin(WebUiListenerMixin(I18nMixin(BaseMixin(PolymerElement))));
+
+export class SettingsA11yPageElement extends SettingsA11yPageElementBase {
   static get is() {
-    return 'settings-a11y-page';
+    return 'settings-a11y-page' as const;
   }
 
   static get template() {
@@ -67,7 +91,18 @@ class SettingsA11YPageElement extends SettingsA11YPageElementBase {
         notify: true,
       },
 
-      // <if expr="not chromeos_ash">
+      // <if expr="not is_chromeos">
+      /**
+       * Read-only reference to the languages model provided by the
+       * 'settings-languages' instance.
+       */
+      languages: {
+        type: Object,
+        notify: true,
+      },
+
+      languageHelper: Object,
+
       enableLiveCaption_: {
         type: Boolean,
         value: function() {
@@ -88,12 +123,34 @@ class SettingsA11YPageElement extends SettingsA11YPageElementBase {
       // </if>
 
       /**
-       * Whether to show accessibility labels settings.
+       * Indicate whether a screen reader is enabled. Also, determine whether
+       * to show accessibility labels settings.
        */
-      showAccessibilityLabelsSetting_: {
+      hasScreenReader_: {
         type: Boolean,
         value: false,
       },
+
+      // <if expr="is_win or is_linux or is_macosx">
+      /**
+       * `pdfOcrProgress_` stores the downloading progress in percentage of
+       * the ScreenAI library, which ranges from 0.0 to 100.0.
+       */
+      pdfOcrProgress_: Number,
+
+      /**
+       * `pdfOcrStatus_` stores the ScreenAI library install state.
+       */
+      pdfOcrStatus_: Number,
+
+      /**
+       * Whether to show pdf ocr settings.
+       */
+      showPdfOcrToggle_: {
+        type: Boolean,
+        computed: 'computeShowPdfOcrToggle_(hasScreenReader_)',
+      },
+      // </if>
 
       focusConfig_: {
         type: Object,
@@ -124,34 +181,67 @@ class SettingsA11YPageElement extends SettingsA11YPageElementBase {
           return opensExternally;
         },
       },
+
+      /**
+       * Whether to show the overscroll history navigation setting.
+       */
+      showOverscrollHistoryNavigationToggle_: {
+        type: Boolean,
+        value: function() {
+          let showOverscroll = false;
+          // <if expr="is_win or is_linux or is_macosx">
+          showOverscroll = loadTimeData.getBoolean(
+              'overscrollHistoryNavigationSettingEnabled');
+          // </if>
+          return showOverscroll;
+        },
+      },
     };
   }
 
-  // <if expr="not chromeos_ash">
+  private accessibilityBrowserProxy: AccessibilityBrowserProxy =
+      AccessibilityBrowserProxyImpl.getInstance();
+
+  // <if expr="not is_chromeos">
+  languages: LanguagesModel;
+  languageHelper: LanguageHelper;
+
   private enableLiveCaption_: boolean;
   private showFocusHighlightOption_: boolean;
   // </if>
 
-  private showAccessibilityLabelsSetting_: boolean;
   private captionSettingsOpensExternally_: boolean;
+  private hasScreenReader_: boolean;
+  private showOverscrollHistoryNavigationToggle_: boolean;
+
+  // <if expr="is_win or is_linux or is_macosx">
+  private pdfOcrProgress_: number;
+  private pdfOcrStatus_: ScreenAiInstallStatus;
+  private showPdfOcrToggle_: boolean;
+  // </if>
 
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
-        'screen-reader-state-changed',
-        (hasScreenReader: boolean) =>
-            this.onScreenReaderStateChanged_(hasScreenReader));
+    this.addWebUiListener(
+        'screen-reader-state-changed', (hasScreenReader: boolean) => {
+          this.hasScreenReader_ = hasScreenReader;
+        });
+    // <if expr="is_win or is_linux or is_macosx">
+    if (loadTimeData.getBoolean('pdfOcrEnabled')) {
+      this.addWebUiListener(
+          'pdf-ocr-state-changed', (pdfOcrState: ScreenAiInstallStatus) => {
+            this.pdfOcrStatus_ = pdfOcrState;
+          });
+      this.addWebUiListener(
+          'pdf-ocr-downloading-progress-changed', (progress: number) => {
+            this.pdfOcrProgress_ = progress;
+          });
+    }
+    // </if>
 
     // Enables javascript and gets the screen reader state.
     chrome.send('a11yPageReady');
-  }
-
-  /**
-   * @param hasScreenReader Whether a screen reader is enabled.
-   */
-  private onScreenReaderStateChanged_(hasScreenReader: boolean) {
-    this.showAccessibilityLabelsSetting_ = hasScreenReader;
   }
 
   private onA11yCaretBrowsingChange_(event: Event) {
@@ -172,7 +262,37 @@ class SettingsA11YPageElement extends SettingsA11YPageElementBase {
     }
   }
 
-  // <if expr="not chromeos_ash">
+  // <if expr="is_win or is_linux or is_macosx">
+  private getPdfOcrToggleSublabel_(): string {
+    switch (this.pdfOcrStatus_) {
+      case ScreenAiInstallStatus.DOWNLOADING:
+        return this.pdfOcrProgress_ > 0 && this.pdfOcrProgress_ < 100 ?
+            this.i18n('pdfOcrDownloadProgressLabel', this.pdfOcrProgress_) :
+            this.i18n('pdfOcrDownloadingLabel');
+      case ScreenAiInstallStatus.FAILED:
+        return this.i18n('pdfOcrDownloadErrorLabel');
+      case ScreenAiInstallStatus.DOWNLOADED:
+        return this.i18n('pdfOcrDownloadCompleteLabel');
+      case ScreenAiInstallStatus.READY:  // fallthrough
+      case ScreenAiInstallStatus.NOT_DOWNLOADED:
+        // No subtitle update, so show a generic subtitle describing PDF OCR.
+        return this.i18n('pdfOcrSubtitle');
+    }
+  }
+
+  /**
+   * Return whether to show a PDF OCR toggle button based on:
+   *    1. A PDF OCR feature flag is enabled.
+   *    2. Whether a screen reader is enabled.
+   * Note: on ChromeOS, the PDF OCR toggle is shown on a different settings
+   * page; i.e. Settings > Accessibility > Text-to-Speech.
+   */
+  private computeShowPdfOcrToggle_(): boolean {
+    return loadTimeData.getBoolean('pdfOcrEnabled') && this.hasScreenReader_;
+  }
+  // </if>
+
+  // <if expr="not is_chromeos">
   private onFocusHighlightChange_(event: Event) {
     chrome.metricsPrivate.recordBoolean(
         'Accessibility.FocusHighlight.ToggleEnabled',
@@ -180,9 +300,9 @@ class SettingsA11YPageElement extends SettingsA11YPageElementBase {
   }
   // </if>
 
-  // <if expr="chromeos_ash">
-  private onManageSystemAccessibilityFeaturesTap_() {
-    window.location.href = 'chrome://os-settings/manageAccessibility';
+  // <if expr="is_chromeos">
+  private onManageSystemAccessibilityFeaturesClick_() {
+    window.location.href = 'chrome://os-settings/osAccessibility';
   }
   // </if>
 
@@ -201,6 +321,26 @@ class SettingsA11YPageElement extends SettingsA11YPageElementBase {
       Router.getInstance().navigateTo(routes.CAPTIONS);
     }
   }
+
+  // <if expr="is_win or is_linux">
+  private onOverscrollHistoryNavigationChange_(event: Event) {
+    const enabled = (event.target as SettingsToggleButtonElement).checked;
+    this.accessibilityBrowserProxy.recordOverscrollHistoryNavigationChanged(
+        enabled);
+  }
+  // </if>
+
+  // <if expr="is_macosx">
+  private onMacTrackpadGesturesLinkClick_() {
+    this.accessibilityBrowserProxy.openTrackpadGesturesSettings();
+  }
+  // </if>
 }
 
-customElements.define(SettingsA11YPageElement.is, SettingsA11YPageElement);
+declare global {
+  interface HTMLElementTagNameMap {
+    [SettingsA11yPageElement.is]: SettingsA11yPageElement;
+  }
+}
+
+customElements.define(SettingsA11yPageElement.is, SettingsA11yPageElement);

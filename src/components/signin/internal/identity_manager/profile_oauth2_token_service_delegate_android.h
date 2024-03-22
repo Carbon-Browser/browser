@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/signin/internal/identity_manager/account_tracker_service.h"
 #include "components/signin/internal/identity_manager/profile_oauth2_token_service.h"
@@ -55,6 +55,12 @@ class ProfileOAuth2TokenServiceDelegateAndroid
                        bool is_syncing) override;
 
   void ReloadAllAccountsFromSystemWithPrimaryAccount(
+      const absl::optional<CoreAccountId>& primary_account_id) override;
+
+  // Seeds the accounts with |core_account_infos| then resumes the reload of
+  // accounts once the account seeding is complete.
+  void SeedAccountsThenReloadAllAccountsWithPrimaryAccount(
+      const std::vector<CoreAccountInfo>& core_account_infos,
       const absl::optional<CoreAccountId>& primary_account_id) override;
 
   // Resumes the reload of accounts once the account seeding is complete.

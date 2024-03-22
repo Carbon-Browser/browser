@@ -47,13 +47,13 @@ class ScopedSVGTransformState {
                           const LayoutObject& object) {
     DCHECK(object.IsSVGChild());
 
-    const auto* fragment = paint_info.FragmentToPaint(object);
-    if (!fragment)
-      return;
+    const auto* fragment = &object.FirstFragment();
     const auto* properties = fragment->PaintProperties();
     if (!properties)
       return;
 
+    // TODO(https://crbug.com/1278452): Also consider Translate, Rotate,
+    // Scale, and Offset.
     if (const auto* transform_node = properties->Transform()) {
       transform_property_scope_.emplace(
           paint_info.context.GetPaintController(), *transform_node, object,

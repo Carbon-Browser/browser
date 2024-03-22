@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,7 +59,8 @@ class WebViewTranslateService {
   friend class base::NoDestructor<WebViewTranslateService>;
 
   // Listener which manages when translate requests can occur.
-  TranslateRequestsAllowedListener translate_requests_allowed_listener_;
+  std::unique_ptr<TranslateRequestsAllowedListener>
+      translate_requests_allowed_listener_;
 };
 
 }  // namespace ios_web_view

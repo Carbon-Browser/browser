@@ -1,16 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/web_state/ui/wk_content_rule_list_util.h"
 
-#include "base/check.h"
-#include "base/strings/sys_string_conversions.h"
-#include "ios/web/public/web_client.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/check.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/web/public/web_client.h"
 
 namespace web {
 
@@ -58,6 +54,31 @@ NSString* CreateLocalBlockingJsonRuleList() {
       dataWithJSONObject:@[ local_block, allow_crbug_block ]
                  options:NSJSONWritingPrettyPrinted
                    error:nil];
+  NSString* json_string = [[NSString alloc] initWithData:json_data
+                                                encoding:NSUTF8StringEncoding];
+  return json_string;
+}
+
+NSString* CreateMixedContentAutoUpgradeJsonRuleList() {
+  NSMutableDictionary* mixed_content_autoupgrade = [@{
+    @"trigger" : [@{
+      @"url-filter" : @"http://.*",
+      @"if-top-url" : [@[ @"https://.*" ] mutableCopy],
+      @"resource-type" : @[
+        // Only upgrade image and media (i.e. audio and video) per
+        // https://www.w3.org/TR/mixed-content/#upgrade-algorithm
+        @"image", @"media"
+      ],
+    } mutableCopy],
+    @"action" : @{
+      @"type" : @"make-https",
+    },
+  } mutableCopy];
+
+  NSData* json_data =
+      [NSJSONSerialization dataWithJSONObject:@[ mixed_content_autoupgrade ]
+                                      options:NSJSONWritingPrettyPrinted
+                                        error:nil];
   NSString* json_string = [[NSString alloc] initWithData:json_data
                                                 encoding:NSUTF8StringEncoding];
   return json_string;

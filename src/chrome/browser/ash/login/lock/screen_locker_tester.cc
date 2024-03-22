@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,16 @@
 #include <cstdint>
 #include <string>
 
-#include "ash/components/login/auth/auth_status_consumer.h"
-#include "ash/components/login/auth/fake_extended_authenticator.h"
-#include "ash/components/login/auth/public/key.h"
-#include "ash/components/login/auth/public/user_context.h"
-#include "ash/components/login/auth/stub_authenticator.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
-#include "chrome/browser/chrome_notification_types.h"
+#include "chromeos/ash/components/login/auth/auth_status_consumer.h"
+#include "chromeos/ash/components/login/auth/public/key.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "chromeos/ash/components/login/auth/stub_authenticator.h"
 #include "components/session_manager/session_manager_types.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -96,16 +93,20 @@ void ScreenLockerTester::OnSessionStateChanged() {
 }
 
 void ScreenLockerTester::Lock() {
-  base::RunLoop run_loop;
-  on_lock_callback_ = run_loop.QuitClosure();
-
   ScreenLocker::Show();
-  if (!IsLocked())
+  WaitForLock();
+  base::RunLoop().RunUntilIdle();
+}
+
+void ScreenLockerTester::WaitForLock() {
+  if (!IsLocked()) {
+    base::RunLoop run_loop;
+    on_lock_callback_ = run_loop.QuitClosure();
     run_loop.Run();
+  }
   ASSERT_TRUE(IsLocked());
   ASSERT_EQ(session_manager::SessionState::LOCKED,
             session_manager::SessionManager::Get()->session_state());
-  base::RunLoop().RunUntilIdle();
 }
 
 void ScreenLockerTester::WaitForUnlock() {
@@ -126,9 +127,9 @@ void ScreenLockerTester::SetUnlockPassword(const AccountId& account_id,
   user_context.SetKey(Key(password));
 
   auto* locker = ScreenLocker::default_screen_locker();
+  CHECK(locker);
   locker->SetAuthenticatorsForTesting(
-      base::MakeRefCounted<StubAuthenticator>(locker, user_context),
-      base::MakeRefCounted<FakeExtendedAuthenticator>(locker, user_context));
+      base::MakeRefCounted<StubAuthenticator>(locker, user_context));
 }
 
 bool ScreenLockerTester::IsLocked() {

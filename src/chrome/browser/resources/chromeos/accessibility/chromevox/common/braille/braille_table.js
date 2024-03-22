@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ BrailleTable.COMMON_DEFS_FILENAME_ = 'cvox-common.cti';
 BrailleTable.getAll = function(callback) {
   const needsDisambiguation = new Map();
   function preprocess(tables) {
-    tables.forEach(function(table) {
+    tables.forEach(table => {
       // Append the common definitions to all table filenames.
       table.fileNames += (',' + BrailleTable.COMMON_DEFS_FILENAME_);
 
@@ -95,10 +95,7 @@ BrailleTable.getAll = function(callback) {
  * @return {BrailleTable.Table} The found table, or null if not found.
  */
 BrailleTable.forId = function(tables, id) {
-  return tables.filter(function(table) {
-    return table.id === id;
-  })[0] ||
-      null;
+  return tables.filter(table => table.id === id)[0] || null;
 };
 
 
@@ -120,8 +117,8 @@ BrailleTable.getUncontracted = function(tables, table) {
       return candidate;
     }
     if (current.locale === candidate.locale &&
-        current.dots === candidate.dots && goog.isDef(current.grade) &&
-        goog.isDef(candidate.grade) && candidate.grade < current.grade) {
+        current.dots === candidate.dots && (current.grade !== undefined) &&
+        (candidate.grade !== undefined) && candidate.grade < current.grade) {
       return candidate;
     }
     return current;

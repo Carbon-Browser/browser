@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,14 @@
 #include "base/memory/weak_ptr.h"
 #include "ui/gfx/native_widget_types.h"
 
-class NativeWindowTracker;
 class Profile;
 
 namespace content {
 class WebContents;
+}
+
+namespace views {
+class NativeWindowTracker;
 }
 
 // Parameters to show an install prompt dialog. The parameters control:
@@ -54,12 +57,12 @@ class ExtensionInstallPromptShowParams {
   bool WasParentDestroyed();
 
  private:
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
 
   base::WeakPtr<content::WebContents> parent_web_contents_;
 
   gfx::NativeWindow parent_window_;
-  std::unique_ptr<NativeWindowTracker> native_window_tracker_;
+  std::unique_ptr<views::NativeWindowTracker> native_window_tracker_;
 };
 
 #endif  // CHROME_BROWSER_EXTENSIONS_EXTENSION_INSTALL_PROMPT_SHOW_PARAMS_H_

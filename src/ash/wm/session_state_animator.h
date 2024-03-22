@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define ASH_WM_SESSION_STATE_ANIMATOR_H_
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 
 namespace ash {
@@ -144,6 +144,8 @@ class ASH_EXPORT SessionStateAnimator {
     // called.
     virtual void OnAnimationAborted();
 
+    bool sequence_ended() const { return sequence_ended_; }
+
    private:
     // Destroys this and calls the callback if the contained animations
     // completed successfully.
@@ -193,8 +195,6 @@ class ASH_EXPORT SessionStateAnimator {
   // for more details.
   virtual AnimationSequence* BeginAnimationSequence(
       AnimationCallback callback) = 0;
-
-  virtual void AbortAllAnimations(int container_mask) = 0;
 
   // Returns true if the wallpaper is hidden.
   virtual bool IsWallpaperHidden() const = 0;

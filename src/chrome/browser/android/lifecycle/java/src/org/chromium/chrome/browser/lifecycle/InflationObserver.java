@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ public interface InflationObserver extends LifecycleObserver {
      * Overriding onPostInflationStartup() is preferred.
      * TODO(https://crbug.com/1092421): Removes this state.
      */
-    default void onInflationComplete(){};
+    default void onInflationComplete() {}
 
     /**
      * Called immediately after the view hierarchy is inflated.

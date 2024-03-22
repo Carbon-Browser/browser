@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,19 +12,21 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/stl_util.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/models/combobox_model.h"
 #include "ui/base/ui_base_paths.h"
 #include "ui/color/color_id.h"
 #include "ui/views/background.h"
-#include "ui/views/controls/combobox/combobox.h"
 #include "ui/views/controls/label.h"
+#include "ui/views/controls/tabbed_pane/tabbed_pane.h"
+#include "ui/views/controls/tabbed_pane/tabbed_pane_listener.h"
 #include "ui/views/examples/create_examples.h"
 #include "ui/views/examples/grit/views_examples_resources.h"
 #include "ui/views/layout/box_layout.h"
@@ -32,8 +34,7 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 const char kExamplesWidgetName[] = "ExamplesWidget";
 static const char kEnableExamples[] = "enable-examples";
@@ -70,11 +71,10 @@ ExampleVector GetExamplesToShow(ExampleVector examples) {
 
     // Transform list of examples to just the list of names.
     StringVector example_names;
-    std::transform(
-        examples.begin(), examples.end(), std::back_inserter(example_names),
-        [](const auto& example) { return example->example_title(); });
+    base::ranges::transform(examples, std::back_inserter(example_names),
+                            &ExampleBase::example_title);
 
-    std::sort(enabled.begin(), enabled.end());
+    base::ranges::sort(enabled);
 
     // Get an intersection of list of titles between the full list and the list
     // from the command-line.
@@ -85,8 +85,7 @@ ExampleVector GetExamplesToShow(ExampleVector examples) {
     // from the list.
     if (!valid_examples.empty()) {
       base::EraseIf(examples, [valid_examples](auto& example) {
-        return std::find(valid_examples.begin(), valid_examples.end(),
-                         example->example_title()) == valid_examples.end();
+        return !base::Contains(valid_examples, example->example_title());
       });
     }
   } else if (command_line->HasSwitch(kEnableExamples)) {
@@ -100,76 +99,34 @@ ExampleVector GetExamplesToShow(ExampleVector examples) {
     std::cout << "You may want to specify the example(s) you want to run:"
               << titles;
   }
-
-  for (auto& example : examples)
-    example->CreateExampleView(example->example_view());
   return examples;
 }
 
 }  // namespace
 
-// Model for the examples that are being added via AddExample().
-class ComboboxModelExampleList : public ui::ComboboxModel {
- public:
-  ComboboxModelExampleList() = default;
-
-  ComboboxModelExampleList(const ComboboxModelExampleList&) = delete;
-  ComboboxModelExampleList& operator=(const ComboboxModelExampleList&) = delete;
-
-  ~ComboboxModelExampleList() override = default;
-
-  void SetExamples(ExampleVector examples) {
-    example_list_ = std::move(examples);
-  }
-
-  // ui::ComboboxModel:
-  size_t GetItemCount() const override { return example_list_.size(); }
-  std::u16string GetItemAt(size_t index) const override {
-    return base::UTF8ToUTF16(example_list_[index]->example_title());
-  }
-
-  View* GetItemViewAt(size_t index) {
-    return example_list_[index]->example_view();
-  }
-
- private:
-  ExampleVector example_list_;
-};
-
-class ExamplesWindowContents : public WidgetDelegateView {
+class ExamplesWindowContents : public WidgetDelegateView,
+                               public TabbedPaneListener {
  public:
   ExamplesWindowContents(base::OnceClosure on_close, ExampleVector examples)
       : on_close_(std::move(on_close)) {
     SetHasWindowSizeControls(true);
-
-    auto combobox_model = std::make_unique<ComboboxModelExampleList>();
-    combobox_model_ = combobox_model.get();
-    combobox_model_->SetExamples(std::move(examples));
-    auto combobox = std::make_unique<Combobox>(std::move(combobox_model));
-
-    instance_ = this;
-    combobox->SetCallback(base::BindRepeating(
-        &ExamplesWindowContents::ComboboxChanged, base::Unretained(this)));
-    combobox->SetAccessibleName(
-        l10n_util::GetStringUTF16(IDS_EXAMPLES_COMBOBOX_AX_LABEL));
-
     SetBackground(CreateThemedSolidBackground(ui::kColorDialogBackground));
 
     auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
-        BoxLayout::Orientation::kVertical, gfx::Insets(5)));
+        BoxLayout::Orientation::kVertical, gfx::Insets(0)));
 
-    combobox_ = AddChildView(std::move(combobox));
+    auto tabbed_pane =
+        std::make_unique<TabbedPane>(TabbedPane::Orientation::kVertical,
+                                     TabbedPane::TabStripStyle::kBorder, true);
 
-    auto item_count = combobox_model_->GetItemCount();
-    if (item_count > 0) {
-      combobox_->SetVisible(item_count > 1);
-      example_shown_ = AddChildView(std::make_unique<View>());
-      example_shown_->SetLayoutManager(std::make_unique<FillLayout>());
-      example_shown_->AddChildView(combobox_model_->GetItemViewAt(0));
-      layout->SetFlexForView(example_shown_, 1);
-    }
+    tabbed_pane_ = AddChildView(std::move(tabbed_pane));
+    layout->SetFlexForView(tabbed_pane_, 1);
+    CreateSidePanel(std::move(examples));
 
     status_label_ = AddChildView(std::make_unique<Label>());
+    status_label_->SetVisible(false);
+    tabbed_pane_->set_listener(this);
+    instance_ = this;
   }
 
   ExamplesWindowContents(const ExamplesWindowContents&) = delete;
@@ -180,7 +137,10 @@ class ExamplesWindowContents : public WidgetDelegateView {
   // Sets the status area (at the bottom of the window) to |status|.
   void SetStatus(const std::string& status) {
     status_label_->SetText(base::UTF8ToUTF16(status));
+    status_label_->SetVisible(!status.empty());
   }
+
+  void TabSelectedAt(int index) override { status_label_->SetVisible(false); }
 
   static ExamplesWindowContents* instance() { return instance_; }
 
@@ -194,32 +154,31 @@ class ExamplesWindowContents : public WidgetDelegateView {
   }
   gfx::Size CalculatePreferredSize() const override {
     gfx::Size size(800, 300);
-    for (size_t i = 0; i < combobox_model_->GetItemCount(); i++) {
-      size.set_height(
-          std::max(size.height(),
-                   combobox_model_->GetItemViewAt(i)->GetHeightForWidth(800)));
+    for (size_t i = 0; i < tabbed_pane_->GetTabCount(); i++) {
+      size.set_height(std::max(
+          size.height(),
+          tabbed_pane_->GetTabAt(i)->contents()->GetHeightForWidth(800)));
     }
     return size;
   }
   gfx::Size GetMinimumSize() const override { return gfx::Size(50, 50); }
 
-  void ComboboxChanged() {
-    size_t index = combobox_->GetSelectedIndex().value();
-    DCHECK_LT(index, combobox_model_->GetItemCount());
-    example_shown_->RemoveAllChildViewsWithoutDeleting();
-    example_shown_->AddChildView(combobox_model_->GetItemViewAt(index));
-    example_shown_->RequestFocus();
-    SetStatus(std::string());
-    InvalidateLayout();
+  void CreateSidePanel(ExampleVector examples) {
+    for (auto& example : examples) {
+      auto tab_contents = std::make_unique<View>();
+      example->CreateExampleView(tab_contents.get());
+      example->SetContainer(
+          tabbed_pane_->AddTab(base::UTF8ToUTF16(example->example_title()),
+                               std::move(tab_contents)));
+    }
+    examples_ = std::move(examples);
   }
 
   static ExamplesWindowContents* instance_;
-  raw_ptr<View> example_shown_ = nullptr;
   raw_ptr<Label> status_label_ = nullptr;
   base::OnceClosure on_close_;
-  raw_ptr<Combobox> combobox_ = nullptr;
-  // Owned by |combobox_|.
-  raw_ptr<ComboboxModelExampleList> combobox_model_ = nullptr;
+  raw_ptr<TabbedPane> tabbed_pane_ = nullptr;
+  ExampleVector examples_;
 };
 
 // static
@@ -254,5 +213,4 @@ void LogStatus(const std::string& string) {
     ExamplesWindowContents::instance()->SetStatus(string);
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

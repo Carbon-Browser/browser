@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,6 @@
 
 #import "ios/components/security_interstitials/safe_browsing/fake_safe_browsing_service.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 FakeSafeBrowsingClient::FakeSafeBrowsingClient()
     : safe_browsing_service_(base::MakeRefCounted<FakeSafeBrowsingService>()) {}
@@ -27,6 +23,15 @@ SafeBrowsingService* FakeSafeBrowsingClient::GetSafeBrowsingService() {
 safe_browsing::RealTimeUrlLookupService*
 FakeSafeBrowsingClient::GetRealTimeUrlLookupService() {
   return lookup_service_;
+}
+
+safe_browsing::HashRealTimeService*
+FakeSafeBrowsingClient::GetHashRealTimeService() {
+  return nullptr;
+}
+
+variations::VariationsService* FakeSafeBrowsingClient::GetVariationsService() {
+  return nullptr;
 }
 
 bool FakeSafeBrowsingClient::ShouldBlockUnsafeResource(

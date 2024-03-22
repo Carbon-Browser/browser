@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "ui/events/base_event_utils.h"
@@ -52,7 +53,8 @@ class KeyAccessibilityEnablerTest : public AshTestBase,
   void OnAccessibilityStatusChanged() override { run_loop_->Quit(); }
 
   std::unique_ptr<base::RunLoop> run_loop_;
-  KeyAccessibilityEnabler* key_accessibility_enabler_;
+  raw_ptr<KeyAccessibilityEnabler, DanglingUntriaged | ExperimentalAsh>
+      key_accessibility_enabler_;
   base::SimpleTestTickClock clock_;
 };
 

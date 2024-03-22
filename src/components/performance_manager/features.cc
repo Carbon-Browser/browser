@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,57 +7,215 @@
 
 #include "components/performance_manager/public/features.h"
 
+#include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 
 namespace performance_manager::features {
 
-const base::Feature kRunOnMainThread{"RunOnMainThread",
-                                     base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kRunOnMainThread,
+             "RunPerformanceManagerOnMainThread",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kRunOnDedicatedThreadPoolThread,
+             "RunOnDedicatedThreadPoolThread",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 #if !BUILDFLAG(IS_ANDROID)
-const base::Feature kUrgentDiscardingFromPerformanceManager {
-  "UrgentDiscardingFromPerformanceManager",
-// Ash Chrome uses memory pressure evaluator instead of performance manager to
-// discard tabs.
-#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_LINUX)
-      base::FEATURE_DISABLED_BY_DEFAULT
-#else
-      base::FEATURE_ENABLED_BY_DEFAULT
-#endif
+BASE_FEATURE(kBackgroundTabLoadingFromPerformanceManager,
+             "BackgroundTabLoadingFromPerformanceManager",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPerformanceControlsPerformanceSurvey,
+             "PerformanceControlsPerformanceSurvey",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPerformanceControlsBatteryPerformanceSurvey,
+             "PerformanceControlsBatteryPerformanceSurvey",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPerformanceControlsHighEfficiencyOptOutSurvey,
+             "PerformanceControlsHighEfficiencyOptOutSurvey",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPerformanceControlsBatterySaverOptOutSurvey,
+             "PerformanceControlsBatterySaverOptOutSurvey",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+const base::FeatureParam<base::TimeDelta>
+    kPerformanceControlsBatterySurveyLookback{
+        &kPerformanceControlsBatteryPerformanceSurvey, "battery_lookback",
+        base::Days(8)};
+
+BASE_FEATURE(kHighEfficiencyMultistateMode,
+             "HighEfficiencyMultistateMode",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+const base::FeatureParam<bool> kHighEfficiencyShowRecommendedBadge{
+    &kHighEfficiencyMultistateMode, "show_recommended_badge", false};
+
+BASE_FEATURE(kDiscardedTabTreatment,
+             "DiscardedTabTreatment",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kMemoryUsageInHovercards,
+             "MemoryUsageInHovercards",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kDiscardExceptionsImprovements,
+             "DiscardExceptionsImprovements",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kMemorySavingsReportingImprovements,
+             "MemorySavingsReportingImprovements",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+const base::FeatureParam<base::TimeDelta> kExpandedHighEfficiencyChipFrequency{
+    &kMemorySavingsReportingImprovements,
+    "expanded_high_efficiency_chip_frequency", base::Days(1)};
+
+const base::FeatureParam<int> kExpandedHighEfficiencyChipThresholdBytes{
+    &kMemorySavingsReportingImprovements,
+    "expanded_high_efficiency_chip_threshold_bytes", 197 * 1024 * 1024};
+
+const base::FeatureParam<base::TimeDelta>
+    kExpandedHighEfficiencyChipDiscardedDuration{
+        &kMemorySavingsReportingImprovements,
+        "expanded_high_efficiency_chip_discarded_duration", base::Hours(3)};
+
+const base::FeatureParam<int> kHighEfficiencyChartPmf25PercentileBytes{
+    &kMemorySavingsReportingImprovements,
+    "high_efficiency_chart_pmf_25_percentile_bytes", 62 * 1024 * 1024};
+const base::FeatureParam<int> kHighEfficiencyChartPmf50PercentileBytes{
+    &kMemorySavingsReportingImprovements,
+    "high_efficiency_chart_pmf_50_percentile_bytes", 112 * 1024 * 1024};
+const base::FeatureParam<int> kHighEfficiencyChartPmf75PercentileBytes{
+    &kMemorySavingsReportingImprovements,
+    "high_efficiency_chart_pmf_75_percentile_bytes", 197 * 1024 * 1024};
+const base::FeatureParam<int> kHighEfficiencyChartPmf99PercentileBytes{
+    &kMemorySavingsReportingImprovements,
+    "high_efficiency_chart_pmf_99_percentile_bytes", 800 * 1024 * 1024};
+
+const base::FeatureParam<double> kDiscardedTabTreatmentOpacity{
+    &kDiscardedTabTreatment, "discard_tab_treatment_opacity", 0.8};
+
+const base::FeatureParam<int> kDiscardedTabTreatmentOption{
+    &kDiscardedTabTreatment, "discard_tab_treatment_option",
+    static_cast<int>(DiscardTabTreatmentOptions::kFadeSmallFaviconWithRing)};
+
+const base::FeatureParam<int> kMemoryUsageInHovercardsHighThresholdBytes{
+    &kMemoryUsageInHovercards,
+    "memory_usage_in_hovercards_high_threshold_bytes", 800 * 1024 * 1024};
+
+// Mapping of enum value to parameter string for "memory_update_trigger" param.
+constexpr base::FeatureParam<MemoryUsageInHovercardsUpdateTrigger>::Option
+    kMemoryUsageInHovercardsUpdateTriggerOptions[] = {
+        {MemoryUsageInHovercardsUpdateTrigger::kBackground, "background"},
+        {MemoryUsageInHovercardsUpdateTrigger::kNavigation, "navigation"},
 };
 
-UrgentDiscardingParams::UrgentDiscardingParams() = default;
-UrgentDiscardingParams::UrgentDiscardingParams(
-    const UrgentDiscardingParams& rhs) = default;
-UrgentDiscardingParams::~UrgentDiscardingParams() = default;
+const base::FeatureParam<MemoryUsageInHovercardsUpdateTrigger>
+    kMemoryUsageInHovercardsUpdateTrigger{
+        &kMemoryUsageInHovercards, "memory_update_trigger",
+        MemoryUsageInHovercardsUpdateTrigger::kNavigation,
+        &kMemoryUsageInHovercardsUpdateTriggerOptions};
 
-constexpr base::FeatureParam<int> UrgentDiscardingParams::kDiscardStrategy;
+BASE_FEATURE(kPerformanceControlsSidePanel,
+             "PerformanceControlsSidePanel",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// static
-UrgentDiscardingParams UrgentDiscardingParams::GetParams() {
-  UrgentDiscardingParams params = {};
-  params.discard_strategy_ = static_cast<DiscardStrategy>(
-      UrgentDiscardingParams::kDiscardStrategy.Get());
-  return params;
-}
+BASE_FEATURE(kPerformanceCPUIntervention,
+             "PerformanceCPUIntervention",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kBackgroundTabLoadingFromPerformanceManager{
-    "BackgroundTabLoadingFromPerformanceManager",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+const base::FeatureParam<base::TimeDelta> kCPUTimeOverThreshold{
+    &kPerformanceCPUIntervention, "cpu_time_over_threshold", base::Seconds(60)};
 
-const base::Feature kHighEfficiencyModeAvailable{
-    "HighEfficiencyModeAvailable", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::FeatureParam<int> kCPUSystemPercentThreshold{
+    &kPerformanceCPUIntervention, "cpu_system_percent_threshold", 90};
+const base::FeatureParam<int> kCPUChromePercentThreshold{
+    &kPerformanceCPUIntervention, "cpu_chrome_percent_threshold", 20};
 
-const base::Feature kBatterySaverModeAvailable{
-    "BatterySaverModeAvailable", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kPerformanceMemoryIntervention,
+             "PerformanceMemoryIntervention",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::FeatureParam<base::TimeDelta> kHighEfficiencyModeTimeBeforeDiscard{
-    &kHighEfficiencyModeAvailable, "time_before_discard", base::Minutes(5)};
+const base::FeatureParam<base::TimeDelta> kMemoryTimeOverThreshold{
+    &kPerformanceMemoryIntervention, "memory_time_over_threshold",
+    base::Seconds(60)};
+
+const base::FeatureParam<int> kMemoryFreePercentThreshold{
+    &kPerformanceMemoryIntervention, "memory_free_percent_threshold", 10};
+const base::FeatureParam<int> kMemoryFreeBytesThreshold{
+    &kPerformanceMemoryIntervention, "memory_free_bytes_threshold",
+    1024 * 1024 * 1024};
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+BASE_FEATURE(kAshUrgentDiscardingFromPerformanceManager,
+             "AshUrgentDiscardingFromPerformanceManager",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
 #endif
 
-const base::Feature kBFCachePerformanceManagerPolicy{
-    "BFCachePerformanceManagerPolicy", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kPMProcessPriorityPolicy,
+             "PMProcessPriorityPolicy",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+const base::FeatureParam<bool> kDownvoteAdFrames{&kPMProcessPriorityPolicy,
+                                                 "downvote_ad_frames", false};
+
+BASE_FEATURE(kProbabilisticProactiveDiscarding,
+             "ProbabilisticProactiveDiscarding",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+const base::FeatureParam<int> kProactiveDiscardingTargetFalsePositivePercent{
+    &kProbabilisticProactiveDiscarding,
+    "proactive_discarding_target_false_positive_percent", 35};
+
+const base::FeatureParam<base::TimeDelta> kProactiveDiscardingSamplingInterval{
+    &kProbabilisticProactiveDiscarding,
+    "proactive_discarding_sampling_interval", base::Minutes(10)};
+
+const base::FeatureParam<bool> kProactiveDiscardingSimulationMode{
+    &kProbabilisticProactiveDiscarding, "proactive_discarding_simulation_mode",
+    true};
+
+BASE_FEATURE(kModalMemorySaver,
+             "ModalMemorySaver",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+const base::FeatureParam<int> kModalMemorySaverMode{
+    &kModalMemorySaver,
+    "modal_memory_saver_mode",
+    0,
+};
+
+BASE_FEATURE(kBFCachePerformanceManagerPolicy,
+             "BFCachePerformanceManagerPolicy",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kUrgentPageDiscarding,
+             "UrgentPageDiscarding",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kPageTimelineMonitor,
+             "PageTimelineMonitor",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+const base::FeatureParam<base::TimeDelta> kPageTimelineStateIntervalTime{
+    &kPageTimelineMonitor, "time_between_collect_slice", base::Minutes(5)};
+
+const base::FeatureParam<bool> kUseResourceAttributionCPUMonitor{
+    &kPageTimelineMonitor, "use_resource_attribution_cpu_monitor", false};
+
+BASE_FEATURE(kCPUInterventionEvaluationLogging,
+             "CPUInterventionEvaluationLogging",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+const base::FeatureParam<base::TimeDelta> kDelayBeforeLogging{
+    &kCPUInterventionEvaluationLogging, "delay_before_logging",
+    base::Seconds(60)};
+
+const base::FeatureParam<int> kThresholdChromeCPUPercent{
+    &kCPUInterventionEvaluationLogging, "threshold_chrome_cpu_percent", 25};
 
 }  // namespace performance_manager::features

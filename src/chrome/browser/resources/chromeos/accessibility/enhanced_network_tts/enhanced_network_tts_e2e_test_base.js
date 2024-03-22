@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,17 +31,6 @@ EnhancedNetworkTE2ETestBase = class extends E2ETestBase {
   }
 
   /** @override */
-  testGenCppIncludes() {
-    super.testGenCppIncludes();
-    GEN(`
-#include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "chrome/browser/ash/accessibility/accessibility_manager.h"
-    `);
-  }
-
-  /** @override */
   testGenPreamble() {
     // TODO(leileilei@google.com): Figure out a better way to test Enhanced
     // Network TTS. Currently, loads Select-to-Speak for quick testing purpose.
@@ -58,9 +47,11 @@ EnhancedNetworkTE2ETestBase = class extends E2ETestBase {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'EnhancedNetworkTts', '/enhanced_network_tts/enhanced_network_tts.js');
-    await importModule(
-        'enhancedNetworkTts', '/enhanced_network_tts/background.js');
+    await Promise.all([
+      importModule(
+          'EnhancedNetworkTts',
+          '/enhanced_network_tts/enhanced_network_tts.js'),
+      importModule('enhancedNetworkTts', '/enhanced_network_tts/background.js'),
+    ]);
   }
 };

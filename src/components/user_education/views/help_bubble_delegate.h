@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,6 @@ class HelpBubbleDelegate {
   // typography system.
   virtual int GetTitleTextContext() const = 0;
   virtual int GetBodyTextContext() const = 0;
-  virtual int GetButtonTextContext() const = 0;
 
   // These methods return color codes that will be handled by the app's theming
   // system.
@@ -50,4 +49,4 @@ class HelpBubbleDelegate {
 
 }  // namespace user_education
 
-#endif  // COMPONENTS_USER_EDUCATION_VIEWS_HELP_BUBBLE_FACTORY_DELEGATE_H_
+#endif  // COMPONENTS_USER_EDUCATION_VIEWS_HELP_BUBBLE_DELEGATE_H_

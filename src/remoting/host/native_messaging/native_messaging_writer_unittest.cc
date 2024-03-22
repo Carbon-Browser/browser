@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/json/json_reader.h"
+#include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "remoting/host/setup/test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -38,8 +39,9 @@ void NativeMessagingWriterTest::SetUp() {
 }
 
 TEST_F(NativeMessagingWriterTest, GoodMessage) {
-  base::DictionaryValue message;
-  message.SetInteger("foo", 42);
+  base::Value::Dict dict;
+  dict.Set("foo", 42);
+  base::Value message(std::move(dict));
   EXPECT_TRUE(writer_->WriteMessage(message));
 
   // Read from the pipe and verify the content.
@@ -51,9 +53,8 @@ TEST_F(NativeMessagingWriterTest, GoodMessage) {
   EXPECT_EQ(static_cast<int>(length), read);
 
   // |content| should now contain serialized |message|.
-  std::unique_ptr<base::Value> written_message =
-      base::JSONReader::ReadDeprecated(content);
-  EXPECT_EQ(message, *written_message);
+  base::Value::Dict written_message = base::test::ParseJsonDict(content);
+  EXPECT_EQ(message, written_message);
 
   // Nothing more should have been written. Close the write-end of the pipe,
   // and verify the read end immediately hits EOF.
@@ -64,9 +65,10 @@ TEST_F(NativeMessagingWriterTest, GoodMessage) {
 }
 
 TEST_F(NativeMessagingWriterTest, SecondMessage) {
-  base::DictionaryValue message1;
-  base::DictionaryValue message2;
-  message2.SetInteger("foo", 42);
+  base::Value message1(base::Value::Dict{});
+  base::Value::Dict dict2;
+  dict2.Set("foo", 42);
+  base::Value message2(std::move(dict2));
   EXPECT_TRUE(writer_->WriteMessage(message1));
   EXPECT_TRUE(writer_->WriteMessage(message2));
   writer_.reset(nullptr);
@@ -84,16 +86,15 @@ TEST_F(NativeMessagingWriterTest, SecondMessage) {
   }
 
   // |content| should now contain serialized |message2|.
-  std::unique_ptr<base::Value> written_message2 =
-      base::JSONReader::ReadDeprecated(content);
-  EXPECT_EQ(message2, *written_message2);
+  base::Value::Dict written_message2 = base::test::ParseJsonDict(content);
+  EXPECT_EQ(message2, written_message2);
 }
 
 TEST_F(NativeMessagingWriterTest, FailedWrite) {
   // Close the read end so that writing fails immediately.
   read_file_.Close();
 
-  base::DictionaryValue message;
+  base::Value message(base::Value::Dict{});
   EXPECT_FALSE(writer_->WriteMessage(message));
 }
 

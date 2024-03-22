@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "components/security_interstitials/core/unsafe_resource.h"
+#include "content/public/browser/navigation_handle.h"
 
 class GURL;
 
@@ -27,6 +28,8 @@ class HistoryService;
 }  // namespace history
 
 namespace safe_browsing {
+
+typedef unsigned ThreatSeverity;
 
 class BaseBlockingPage;
 
@@ -55,6 +58,12 @@ class BaseUIManager : public base::RefCountedThreadSafe<BaseUIManager> {
       content::BrowserContext* browser_context,
       std::unique_ptr<ClientSafeBrowsingReportRequest> report);
 
+  // This is a no-op in the base class, but should be overridden to have threat
+  // details included as part of a user's response to a HaTS survey.
+  virtual void AttachThreatDetailsAndLaunchSurvey(
+      content::BrowserContext* browser_context,
+      std::unique_ptr<ClientSafeBrowsingReportRequest> report);
+
   // Updates the allowlist URL set for |web_contents|. Called on the UI thread.
   void AddToAllowlistUrlSet(const GURL& allowlist_url,
                             content::WebContents* web_contents,
@@ -66,7 +75,15 @@ class BaseUIManager : public base::RefCountedThreadSafe<BaseUIManager> {
   // to the server. Can only be called on UI thread. Will only upload a hit
   // report if the user has enabled SBER and is not currently in incognito mode.
   virtual void MaybeReportSafeBrowsingHit(
-      const safe_browsing::HitReport& hit_report,
+      std::unique_ptr<safe_browsing::HitReport> hit_report,
+      content::WebContents* web_contents);
+
+  // This is a no-op in the base class, but should be overridden to send report
+  // about unsafe contents (malware, phishing, unsafe download URL) to the
+  // server. Can only be called on UI thread and only sent for
+  // extended_reporting users who are not in incognito mode.
+  virtual void MaybeSendClientSafeBrowsingWarningShownReport(
+      std::unique_ptr<ClientSafeBrowsingReportRequest> report,
       content::WebContents* web_contents);
 
   // A convenience wrapper method for IsUrlAllowlistedOrPendingForWebContents.
@@ -129,6 +146,12 @@ class BaseUIManager : public base::RefCountedThreadSafe<BaseUIManager> {
       GURL url,
       security_interstitials::UnsafeResource* resource);
 
+  // Goes over the |handle->RedirectChain| and returns the severest threat.
+  // The lowest value is 0, which represents the most severe type.
+  ThreatSeverity GetSeverestThreatForNavigation(
+      content::NavigationHandle* handle,
+      security_interstitials::UnsafeResource& severest_resource);
+
  protected:
   friend class ChromePasswordProtectionService;
   virtual ~BaseUIManager();
@@ -150,6 +173,11 @@ class BaseUIManager : public base::RefCountedThreadSafe<BaseUIManager> {
   // BaseUIManager does not send SafeBrowsingHitReport. Subclasses should
   // implement the reporting logic themselves if needed.
   virtual void CreateAndSendHitReport(const UnsafeResource& resource);
+
+  // BaseUIManager does not send ClientSafeBrowsingReport. Subclasses should
+  // implement the reporting logic themselves if needed.
+  virtual void CreateAndSendClientSafeBrowsingWarningShownReport(
+      const UnsafeResource& resource);
 
  private:
   friend class base::RefCountedThreadSafe<BaseUIManager>;

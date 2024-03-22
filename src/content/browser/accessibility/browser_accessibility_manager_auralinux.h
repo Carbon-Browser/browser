@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,22 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/raw_ptr.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/common/content_export.h"
+#include "ui/accessibility/ax_node_id_forward.h"
 
 namespace content {
+
 class BrowserAccessibilityAuraLinux;
+class WebAXPlatformTreeManagerDelegate;
 
 // Manages a tree of BrowserAccessibilityAuraLinux objects.
 class CONTENT_EXPORT BrowserAccessibilityManagerAuraLinux
     : public BrowserAccessibilityManager {
  public:
-  BrowserAccessibilityManagerAuraLinux(const ui::AXTreeUpdate& initial_tree,
-                                       BrowserAccessibilityDelegate* delegate);
+  BrowserAccessibilityManagerAuraLinux(
+      const ui::AXTreeUpdate& initial_tree,
+      WebAXPlatformTreeManagerDelegate* delegate);
 
   BrowserAccessibilityManagerAuraLinux(
       const BrowserAccessibilityManagerAuraLinux&) = delete;
@@ -30,17 +33,19 @@ class CONTENT_EXPORT BrowserAccessibilityManagerAuraLinux
   ~BrowserAccessibilityManagerAuraLinux() override;
 
   static ui::AXTreeUpdate GetEmptyDocument();
-  static BrowserAccessibility* FindCommonAncestor(
-      BrowserAccessibility* object1,
-      BrowserAccessibility* object2);
 
-  // Implementation of BrowserAccessibilityManager methods.
-  void FireFocusEvent(BrowserAccessibility* node) override;
+  void SetPrimaryWebContentsForWindow(ui::AXNodeID node_id);
+  ui::AXNodeID GetPrimaryWebContentsForWindow() const;
+
+  // AXTreeManager overrides.
+  void FireFocusEvent(ui::AXNode* node) override;
+
+  // BrowserAccessibilityManager overrides.
   void FireBlinkEvent(ax::mojom::Event event_type,
                       BrowserAccessibility* node,
                       int action_request_id) override;
   void FireGeneratedEvent(ui::AXEventGenerator::Event event_type,
-                          BrowserAccessibility* node) override;
+                          const ui::AXNode* node) override;
 
   void FireSelectedEvent(BrowserAccessibility* node);
   void FireEnabledChangedEvent(BrowserAccessibility* node);
@@ -69,9 +74,12 @@ class CONTENT_EXPORT BrowserAccessibilityManagerAuraLinux
   FRIEND_TEST_ALL_PREFIXES(BrowserAccessibilityManagerAuraLinuxTest,
                            TestEmitChildrenChanged);
   // AXTreeObserver methods.
-  void OnNodeDataWillChange(ui::AXTree* tree,
-                            const ui::AXNodeData& old_node_data,
-                            const ui::AXNodeData& new_node_data) override;
+  void OnNodeDeleted(ui::AXTree* tree, int32_t node_id) override;
+  void OnIgnoredWillChange(
+      ui::AXTree* tree,
+      ui::AXNode* node,
+      bool is_ignored_new_value,
+      bool is_changing_unignored_parents_children) override;
   void OnSubtreeWillBeDeleted(ui::AXTree* tree, ui::AXNode* node) override;
   void OnAtomicUpdateFinished(
       ui::AXTree* tree,
@@ -82,10 +90,10 @@ class CONTENT_EXPORT BrowserAccessibilityManagerAuraLinux
   bool CanEmitChildrenChanged(BrowserAccessibility* node) const;
   void FireEvent(BrowserAccessibility* node, ax::mojom::Event event);
 
-  raw_ptr<AtkObject> parent_object_;
-
   // Give BrowserAccessibilityManager::Create access to our constructor.
   friend class BrowserAccessibilityManager;
+
+  ui::AXNodeID primary_web_contents_for_window_id_ = ui::kInvalidAXNodeID;
 };
 
 }  // namespace content

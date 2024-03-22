@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,18 +15,18 @@ namespace media {
 enum class MediaContentType {
   // Type indicating that a player is persistent, which needs to take audio
   // focus to play.
-  Persistent,
+  kPersistent,
   // Type indicating that a player only plays a transient sound.
-  Transient,
+  kTransient,
   // Type indicating that a player is a Pepper instance. MediaSession may duck
   // the player instead of pausing it.
-  Pepper,
+  kPepper,
   // Type indicating that a player cannot be controlled. MediaSession will take
   // audio focus when the player joins but will not let it respond to audio
   // focus changes.
-  OneShot,
+  kOneShot,
   // The maximum number of media content types.
-  Max = OneShot,
+  kMax = kOneShot,
 };
 
 // Utility function for deciding the MediaContentType of a player based on its

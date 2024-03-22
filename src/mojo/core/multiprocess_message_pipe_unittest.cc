@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,18 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/strings/string_split.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
+#include "mojo/core/embedder/embedder.h"
 #include "mojo/core/handle_signals_state.h"
 #include "mojo/core/test/mojo_test_base.h"
 #include "mojo/core/test/test_utils.h"
@@ -122,6 +124,19 @@ class MultiprocessMessagePipeTestWithPeerSupport
   void SetUp() override {
     test::MojoTestBase::SetUp();
     set_launch_type(GetParam());
+
+    const bool is_peer_launch =
+        GetParam() == test::MojoTestBase::LaunchType::PEER;
+#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_IOS)
+    const bool is_named_peer_launch = false;
+#else
+    const bool is_named_peer_launch =
+        GetParam() == test::MojoTestBase::LaunchType::NAMED_PEER;
+#endif
+    if (is_peer_launch || is_named_peer_launch) {
+      GTEST_SKIP() << "Skipping peer connection tests because mojo-ipcz does "
+                   << "not yet implement isolated connections.";
+    }
   }
 };
 
@@ -391,6 +406,7 @@ TEST_F(MultiprocessMessagePipeTest, SharedBufferPassing) {
               WaitForSignals(h, MOJO_HANDLE_SIGNAL_READABLE, &hss));
     ASSERT_FALSE(hss.satisfied_signals & MOJO_HANDLE_SIGNAL_READABLE);
     ASSERT_FALSE(hss.satisfiable_signals & MOJO_HANDLE_SIGNAL_READABLE);
+    EXPECT_EQ(MOJO_RESULT_OK, MojoClose(shared_buffer));
   });
 }
 
@@ -600,6 +616,7 @@ TEST_P(MultiprocessMessagePipeTestWithPeerSupport, MessagePipeTwoPassing) {
              MOJO_RESULT_OK);
     read_buffer.resize(read_buffer_size);
     CHECK_EQ(read_buffer, std::string("world"));
+    MojoClose(mp1);
   });
 }
 
@@ -765,6 +782,7 @@ DEFINE_TEST_CLIENT_WITH_PIPE(EchoServiceClient,
       break;
     WriteMessage(p, message);
   }
+  CloseHandle(p);
   return 0;
 }
 
@@ -908,6 +926,7 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(PingPongPipeClient,
   WriteMessage(p1, "bye");
   MojoClose(p1);
   EXPECT_EQ("quit", ReadMessage(h));
+  MojoClose(h);
 }
 
 TEST_P(MultiprocessMessagePipeTestWithPeerSupport, PingPongPipe) {
@@ -923,13 +942,13 @@ TEST_P(MultiprocessMessagePipeTestWithPeerSupport, PingPongPipe) {
       WriteMessageWithHandles(h, "", &p1, 1);
     }
     ReadMessageWithHandles(h, &p0, 1);
+    EXPECT_EQ("bye", ReadMessage(p0));
     WriteMessage(h, "quit");
   });
 
-  EXPECT_EQ("bye", ReadMessage(p0));
-
   // We should still be able to observe peer closure from the other end.
   EXPECT_EQ(MOJO_RESULT_OK, WaitForSignals(p0, MOJO_HANDLE_SIGNAL_PEER_CLOSED));
+  MojoClose(p0);
 }
 
 // Parses commands from the parent pipe and does whatever it's asked to do.
@@ -1116,6 +1135,8 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceivePipeWithClosedPeer,
   MojoHandle p;
   EXPECT_EQ("foo", ReadMessageWithHandles(h, &p, 1));
   EXPECT_EQ(MOJO_RESULT_OK, WaitForSignals(p, MOJO_HANDLE_SIGNAL_PEER_CLOSED));
+  MojoClose(p);
+  MojoClose(h);
 }
 
 TEST_P(MultiprocessMessagePipeTestWithPeerSupport, SendPipeThenClosePeer) {
@@ -1148,6 +1169,8 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(SendOtherChildPipeWithClosedPeer,
 
   // Wait for quit.
   EXPECT_EQ("quit", ReadMessage(h));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(application_proxy));
 }
 
 DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceivePipeWithClosedPeerFromOtherChild,
@@ -1168,6 +1191,7 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceivePipeWithClosedPeerFromOtherChild,
 
   EXPECT_EQ(MOJO_RESULT_OK, MojoClose(service_client));
   EXPECT_EQ(MOJO_RESULT_OK, MojoClose(application_client));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
 #if BUILDFLAG(IS_ANDROID)
@@ -1212,6 +1236,9 @@ TEST_P(MultiprocessMessagePipeTestWithPeerSupport, SendClosePeerSend) {
 
   // We should be able to detect peer closure on |a|.
   EXPECT_EQ(MOJO_RESULT_OK, WaitForSignals(a, MOJO_HANDLE_SIGNAL_PEER_CLOSED));
+  MojoClose(a);
+  MojoClose(c);
+  MojoClose(d);
 }
 
 DEFINE_TEST_CLIENT_TEST_WITH_PIPE(WriteCloseSendPeerClient,
@@ -1237,6 +1264,9 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(WriteCloseSendPeerClient,
   WriteMessageWithHandles(h, "bar", &pipe[1], 1);
 
   EXPECT_EQ("quit", ReadMessage(h));
+  MojoClose(h);
+  MojoClose(c);
+  MojoClose(d);
 }
 
 TEST_P(MultiprocessMessagePipeTestWithPeerSupport, WriteCloseSendPeer) {
@@ -1259,6 +1289,7 @@ TEST_P(MultiprocessMessagePipeTestWithPeerSupport, WriteCloseSendPeer) {
               WaitForSignals(p, MOJO_HANDLE_SIGNAL_PEER_CLOSED));
 
     WriteMessage(h, "quit");
+    MojoClose(p);
   });
 }
 
@@ -1279,7 +1310,7 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(MessagePipeStatusChangeInTransitClient,
   {
     base::RunLoop run_loop;
     SimpleWatcher watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
     watcher.Watch(Handle(handles[1]), MOJO_HANDLE_SIGNAL_PEER_CLOSED,
                   base::BindRepeating(
                       [](base::RunLoop* loop, MojoResult result) {
@@ -1307,6 +1338,7 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(MessagePipeStatusChangeInTransitClient,
 
   for (size_t i = 0; i < 4; ++i)
     CloseHandle(handles[i]);
+  CloseHandle(parent);
 }
 
 TEST_P(MultiprocessMessagePipeTestWithPeerSupport,
@@ -1316,8 +1348,10 @@ TEST_P(MultiprocessMessagePipeTestWithPeerSupport,
   // always be able to read the message received on that pipe.
   RunTestClient("SpotaneouslyDyingProcess", [&](MojoHandle child) {
     MojoHandle receiver;
+    VerifyEcho(child, "!");
     EXPECT_EQ("receiver", ReadMessageWithHandles(child, &receiver, 1));
     EXPECT_EQ("ok", ReadMessage(receiver));
+    EXPECT_EQ(MOJO_RESULT_OK, MojoClose(receiver));
   });
 }
 
@@ -1328,14 +1362,20 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(SpotaneouslyDyingProcess,
   MojoHandle receiver;
   CreateMessagePipe(&sender, &receiver);
 
+  VerifyEcho(parent, "!");
   WriteMessageWithHandles(parent, "receiver", &receiver, 1);
 
-  // Wait for the pipe to actually appear as remote. Before this happens, it's
-  // possible for message transmission to be deferred to the IO thread, and
-  // sudden termination might preempt that work.
-  WaitForSignals(sender, MOJO_HANDLE_SIGNAL_PEER_REMOTE);
+  if (!IsMojoIpczEnabled()) {
+    // Wait for the pipe to actually appear as remote. Before this happens, it's
+    // possible for message transmission to be deferred to the IO thread, and
+    // sudden termination might preempt that work. Note that this is unnecessary
+    // (and PEER_REMOTE signals are unsupported anyway) with MojoIpcz.
+    WaitForSignals(sender, MOJO_HANDLE_SIGNAL_PEER_REMOTE);
+  }
 
   WriteMessage(sender, "ok");
+  MojoClose(sender);
+  MojoClose(parent);
 
   // Here process termination is imminent. If the bug reappears this test will
   // fail flakily.
@@ -1373,7 +1413,7 @@ INSTANTIATE_TEST_SUITE_P(
                     test::MojoTestBase::LaunchType::CHILD_WITHOUT_CAPABILITIES,
                     test::MojoTestBase::LaunchType::PEER,
                     test::MojoTestBase::LaunchType::ASYNC
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
                     // Fuchsia has no named pipe support.
                     ,
                     test::MojoTestBase::LaunchType::NAMED_CHILD,

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,8 @@ class ExceptionState;
 MODULES_EXPORT CanvasImageSource* ToCanvasImageSource(
     const V8CanvasImageSource* value,
     ExceptionState& exception_state);
+
+bool WouldTaintCanvasOrigin(CanvasImageSource* image_source);
 
 }  // namespace blink
 

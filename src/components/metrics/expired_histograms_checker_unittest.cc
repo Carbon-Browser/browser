@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,8 @@ namespace metrics {
 
 TEST(ExpiredHistogramsCheckerTests, BasicTest) {
   uint32_t expired_hashes[] = {1, 2, 3};
-  size_t size = 3;
   std::string allowlist_str = "";
-  ExpiredHistogramsChecker checker(expired_hashes, size, allowlist_str);
+  ExpiredHistogramsChecker checker(expired_hashes, allowlist_str);
 
   EXPECT_TRUE(checker.ShouldRecord(0));
   EXPECT_FALSE(checker.ShouldRecord(3));
@@ -27,9 +26,8 @@ TEST(ExpiredHistogramsCheckerTests, AllowlistTest) {
 
   uint32_t expired_hashes[] = {base::HashMetricNameAs32Bits(hist1),
                                base::HashMetricNameAs32Bits(hist2)};
-  size_t size = 2;
   std::string allowlist_str = hist2 + "," + hist4;
-  ExpiredHistogramsChecker checker(expired_hashes, size, allowlist_str);
+  ExpiredHistogramsChecker checker(expired_hashes, allowlist_str);
 
   EXPECT_FALSE(checker.ShouldRecord(base::HashMetricNameAs32Bits(hist1)));
   EXPECT_TRUE(checker.ShouldRecord(base::HashMetricNameAs32Bits(hist2)));

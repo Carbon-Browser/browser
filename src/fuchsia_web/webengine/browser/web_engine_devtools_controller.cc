@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <lib/sys/cpp/component_context.h>
 #include <vector>
 
+#include <optional>
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
 #include "base/fuchsia/process_context.h"
@@ -18,12 +19,10 @@
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_socket_factory.h"
 #include "content/public/common/content_switches.h"
-#include "fuchsia_web/webengine/fidl/chromium/internal/cpp/fidl.h"
 #include "fuchsia_web/webengine/switches.h"
 #include "net/base/net_errors.h"
 #include "net/base/port_util.h"
 #include "net/socket/tcp_server_socket.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -45,7 +44,8 @@ class DevToolsSocketFactory : public content::DevToolsSocketFactory {
     const int kTcpListenBackLog = 5;
     auto socket =
         std::make_unique<net::TCPServerSocket>(nullptr, net::NetLogSource());
-    int error = socket->Listen(ip_end_point_, kTcpListenBackLog);
+    int error = socket->Listen(ip_end_point_, kTcpListenBackLog,
+                               /*ipv6_only=*/std::nullopt);
     if (error != net::OK) {
       LOG(WARNING) << "Failed to start the HTTP debugger service. "
                    << net::ErrorToString(error);
@@ -186,7 +186,7 @@ class UserModeController : public WebEngineDevToolsController {
   bool is_remote_debugging_started_ = false;
 
   // Currently active DevTools port. Set to 0 on service startup error.
-  absl::optional<uint16_t> devtools_port_;
+  std::optional<uint16_t> devtools_port_;
 
   // Set of Frames' content::WebContents which are remotely debuggable.
   base::flat_set<content::WebContents*> debuggable_contents_;
@@ -199,7 +199,7 @@ class UserModeController : public WebEngineDevToolsController {
 // the first Frame finishes loading its main document, so that the
 // DevToolsPerContextListeners can start interacting with it immediately.
 class DebugModeController : public WebEngineDevToolsController,
-                            public chromium::internal::DevToolsConnector {
+                            public fuchsia::web::Debug {
  public:
   DebugModeController()
       : DebugModeController(
@@ -217,8 +217,10 @@ class DebugModeController : public WebEngineDevToolsController,
     return !user_debugging;
   }
   void OnFrameLoaded(content::WebContents* contents) override {
-    frame_loaded_ = true;
-    MaybeSendRemoteDebuggingCallbacks();
+    if (!frame_loaded_) {
+      frame_loaded_ = true;
+      MaybeSendRemoteDebuggingCallbacks();
+    }
   }
   void OnFrameDestroyed(content::WebContents* contents) override {}
   content::DevToolsAgentHost::List RemoteDebuggingTargets() override {
@@ -231,8 +233,7 @@ class DebugModeController : public WebEngineDevToolsController,
  protected:
   explicit DebugModeController(net::IPEndPoint ip_endpoint)
       : ip_endpoint_(std::move(ip_endpoint)),
-        connector_binding_(base::ComponentContextForProcess()->outgoing().get(),
-                           this) {
+        binding_(base::ComponentContextForProcess()->outgoing().get(), this) {
     // Immediately start the service.
     StartRemoteDebuggingServer(
         base::BindOnce(&DebugModeController::OnDevToolsPortChanged,
@@ -246,31 +247,39 @@ class DebugModeController : public WebEngineDevToolsController,
   }
 
   // Currently active DevTools port. Set to 0 on service startup error.
-  absl::optional<uint16_t> devtools_port_;
+  std::optional<uint16_t> devtools_port_;
 
  private:
-  // chromium::internal::DevToolsConnector implementation.
-  void ConnectPerContextListener(
-      fuchsia::web::DevToolsPerContextListenerHandle listener_handle) override {
-    fuchsia::web::DevToolsPerContextListenerPtr listener;
-    listener.Bind(std::move(listener_handle));
+  // fuchsia::web::Debug implementation.
+  void EnableDevTools(
+      fidl::InterfaceHandle<fuchsia::web::DevToolsListener> listener_handle,
+      EnableDevToolsCallback callback) override {
+    // Each web-instance has a single DevTools "context", so create a new
+    // per-context channel, and pass it to |listener| immediately.
+    fuchsia::web::DevToolsPerContextListenerPtr context_listener;
+    auto listener = listener_handle.Bind();
+    listener->OnContextDevToolsAvailable(context_listener.NewRequest());
+
+    // Notify the per-context listener immediately, if the port is ready.
     if (frame_loaded_ && devtools_port_)
-      listener->OnHttpPortOpen(devtools_port_.value());
-    devtools_listeners_.AddInterfacePtr(std::move(listener));
+      context_listener->OnHttpPortOpen(devtools_port_.value());
+
+    devtools_listeners_.AddInterfacePtr(std::move(context_listener));
   }
 
   void MaybeSendRemoteDebuggingCallbacks() {
     if (!frame_loaded_ || !devtools_port_)
       return;
 
-    // If |devtools_port_| is valid then notify all listeners, otherwise
-    // disconnect them.
+    // If |devtools_port_| is zero then DevTools failed to initialize, and
+    // all listener connections should be closed to indicate failure.
     if (devtools_port_.value() == 0) {
       devtools_listeners_.CloseAll();
-    } else {
-      for (const auto& listener : devtools_listeners_.ptrs()) {
-        listener->get()->OnHttpPortOpen(devtools_port_.value());
-      }
+      return;
+    }
+
+    for (const auto& listener : devtools_listeners_.ptrs()) {
+      listener->get()->OnHttpPortOpen(devtools_port_.value());
     }
   }
 
@@ -281,8 +290,7 @@ class DebugModeController : public WebEngineDevToolsController,
   fidl::InterfacePtrSet<fuchsia::web::DevToolsPerContextListener>
       devtools_listeners_;
 
-  const base::ScopedServiceBinding<chromium::internal::DevToolsConnector>
-      connector_binding_;
+  const base::ScopedServiceBinding<fuchsia::web::Debug> binding_;
 };
 
 // "Mixed-mode" is used when both user and debug remote debugging are active at
@@ -327,7 +335,7 @@ class MixedModeController : public DebugModeController {
 std::unique_ptr<WebEngineDevToolsController>
 WebEngineDevToolsController::CreateFromCommandLine(
     const base::CommandLine& command_line) {
-  absl::optional<uint16_t> devtools_port;
+  std::optional<uint16_t> devtools_port;
   if (command_line.HasSwitch(switches::kRemoteDebuggingPort)) {
     // Set up DevTools to listen on all network routes on the command-line
     // provided port.

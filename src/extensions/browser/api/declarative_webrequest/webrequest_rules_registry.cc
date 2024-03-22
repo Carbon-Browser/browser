@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/declarative_webrequest/webrequest_condition.h"
 #include "extensions/browser/api/declarative_webrequest/webrequest_constants.h"
@@ -130,9 +130,9 @@ WebRequestRulesRegistry::CreateDeltas(PermissionHelper* permission_helper,
 
     std::list<extension_web_request_api_helpers::EventResponseDelta>
         rule_result;
-    WebRequestAction::ApplyInfo apply_info = {permission_helper, request_data,
-                                              crosses_incognito, &rule_result,
-                                              &ignore_tags[extension_id]};
+    WebRequestAction::ApplyInfo apply_info = {
+        permission_helper, raw_ref(request_data), crosses_incognito,
+        &rule_result, &ignore_tags[extension_id]};
     rule->Apply(&apply_info);
     result.splice(result.begin(), std::move(rule_result));
 
@@ -283,11 +283,11 @@ bool WebRequestRulesRegistry::IsEmpty() const {
   return true;
 }
 
-WebRequestRulesRegistry::~WebRequestRulesRegistry() {}
+WebRequestRulesRegistry::~WebRequestRulesRegistry() = default;
 
 base::Time WebRequestRulesRegistry::GetExtensionInstallationTime(
     const std::string& extension_id) const {
-  return ExtensionPrefs::Get(browser_context_)->GetInstallTime(extension_id);
+  return ExtensionPrefs::Get(browser_context_)->GetLastUpdateTime(extension_id);
 }
 
 void WebRequestRulesRegistry::ClearCacheOnNavigation() {

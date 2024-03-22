@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -305,7 +305,7 @@ TEST_F(DWriteFontProxyUnitTest, LoadingFontFamily) {
   UINT32 font_count = family->GetFontCount();
   EXPECT_LT(0u, font_count);
   EXPECT_EQ(3u, fake_collection_->MessageCount());
-  EXPECT_EQ(FakeFontCollection::MessageType::kGetFontFiles,
+  EXPECT_EQ(FakeFontCollection::MessageType::kGetFontFileHandles,
             fake_collection_->GetMessageType(2));
   mswr::ComPtr<IDWriteFont> font;
   hr = family->GetFirstMatchingFont(DWRITE_FONT_WEIGHT_NORMAL,

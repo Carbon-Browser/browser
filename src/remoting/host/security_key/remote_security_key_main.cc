@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,14 +13,17 @@
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/core/embedder/scoped_ipc_support.h"
+#include "remoting/base/breakpad.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/base/host_exit_codes.h"
+#include "remoting/host/chromoting_host_services_client.h"
 #include "remoting/host/security_key/security_key_ipc_client.h"
 #include "remoting/host/security_key/security_key_message_handler.h"
+#include "remoting/host/usage_stats_consent.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
@@ -31,12 +34,11 @@
 namespace remoting {
 
 int StartRemoteSecurityKey() {
-#if BUILDFLAG(IS_WIN)
-  if (!AddProcessAccessRightForWellKnownSid(
-          WinLocalServiceSid, PROCESS_QUERY_LIMITED_INFORMATION)) {
+  if (!ChromotingHostServicesClient::Initialize()) {
     return kInitializationFailed;
   }
 
+#if BUILDFLAG(IS_WIN)
   // GetStdHandle() returns pseudo-handles for stdin and stdout even if
   // the hosting executable specifies "Windows" subsystem. However the returned
   // handles are invalid in that case unless standard input and output are
@@ -64,7 +66,7 @@ int StartRemoteSecurityKey() {
 
   mojo::core::Init();
   mojo::core::ScopedIPCSupport ipc_support(
-      base::ThreadTaskRunnerHandle::Get(),
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
       mojo::core::ScopedIPCSupport::ShutdownPolicy::FAST);
 
   base::RunLoop run_loop;
@@ -87,6 +89,12 @@ int RemoteSecurityKeyMain(int argc, char** argv) {
 
   base::CommandLine::Init(argc, argv);
   remoting::InitHostLogging();
+
+#if defined(REMOTING_ENABLE_BREAKPAD)
+  if (IsUsageStatsAllowed()) {
+    InitializeCrashReporting();
+  }
+#endif  // defined(REMOTING_ENABLE_BREAKPAD)
 
   return StartRemoteSecurityKey();
 }

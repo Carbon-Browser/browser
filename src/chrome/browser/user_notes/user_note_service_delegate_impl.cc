@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ Browser* GetBrowserFromRenderFrameHost(const content::RenderFrameHost* rfh) {
     return nullptr;
   }
 
-  return chrome::FindBrowserWithWebContents(web_contents);
+  return chrome::FindBrowserWithTab(web_contents);
 }
 
 }  // namespace

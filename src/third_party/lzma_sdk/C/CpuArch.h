@@ -1,5 +1,5 @@
 /* CpuArch.h -- CPU specific code
-2021-07-13 : Igor Pavlov : Public domain */
+2022-07-15 : Igor Pavlov : Public domain */
 
 #ifndef __CPU_ARCH_H
 #define __CPU_ARCH_H
@@ -123,12 +123,15 @@ MY_CPU_64BIT means that processor can work with 64-bit registers.
 #endif
 
 
-#if  defined(__sparc64__)
-  #define MY_CPU_NAME "sparc64"
-  #define MY_CPU_64BIT
-#elif defined(__sparc__)
-  #define MY_CPU_NAME "sparc"
-  /* #define MY_CPU_32BIT */
+#if  defined(__riscv) \
+  || defined(__riscv__)
+  #if __riscv_xlen == 32
+    #define MY_CPU_NAME "riscv32"
+  #elif __riscv_xlen == 64
+    #define MY_CPU_NAME "riscv64"
+  #else
+    #define MY_CPU_NAME "riscv"
+  #endif
 #endif
 
 
@@ -250,6 +253,12 @@ MY_CPU_64BIT means that processor can work with 64-bit registers.
 
 
 
+// Disable MY_CPU_LE_UNALIGN. Although the underlying ISA may be able to load
+// unaligned words, doing so via pointer casts is undefined behavior in C and
+// C++, under both strict aliasing and because it is invalid to construct
+// unaligned pointers. Instead, load the bytes generically and leave optimizing
+// this to the compiler.
+#if 0
 #ifdef MY_CPU_LE
   #if defined(MY_CPU_X86_OR_AMD64) \
       || defined(MY_CPU_ARM64)
@@ -260,6 +269,7 @@ MY_CPU_64BIT means that processor can work with 64-bit registers.
        So we can't use unaligned 64-bit operations. */
     #define MY_CPU_LE_UNALIGN
   #endif
+#endif
 #endif
 
 

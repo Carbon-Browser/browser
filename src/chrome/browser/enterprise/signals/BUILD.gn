@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,8 +13,10 @@ source_set("utils") {
   ]
 
   deps = [
+    "//chrome/browser/enterprise/identifiers",
     "//chrome/common:constants",
     "//components/component_updater",
+    "//components/enterprise/browser/identifiers",
     "//components/policy/content",
     "//components/policy/core/browser",
     "//components/policy/core/common",

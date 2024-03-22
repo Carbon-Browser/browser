@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,9 @@ class MockSideContentsDelegate : public SideSearchSideContentsHelper::Delegate {
   }
   void SidePanelProcessGone() override {}
   content::WebContents* GetTabWebContents() override { return nullptr; }
+  void CarryOverSideSearchStateToNewTab(
+      const GURL& search_url,
+      content::WebContents* new_web_contents) override {}
 
   const GURL& tab_contents_url() const { return tab_contents_url_; }
 
@@ -64,8 +67,7 @@ namespace test {
 class SideSearchSideContentsHelperTest : public ::testing::Test {
  public:
   void SetUp() override {
-    scoped_feature_list_.InitWithFeatures(
-        {features::kSideSearch, features::kSideSearchDSESupport}, {});
+    scoped_feature_list_.InitWithFeatures({features::kSideSearch}, {});
     side_contents_ =
         content::WebContentsTester::CreateTestWebContents(&profile_, nullptr);
     SideSearchSideContentsHelper::CreateForWebContents(side_contents());
@@ -115,6 +117,8 @@ class SideSearchSideContentsHelperTest : public ::testing::Test {
     return SideSearchSideContentsHelper::FromWebContents(side_contents());
   }
 
+  void ResetSideContents() { side_contents_.reset(); }
+
   base::HistogramTester histogram_tester_;
 
  private:
@@ -141,12 +145,123 @@ TEST_F(SideSearchSideContentsHelperTest,
 TEST_F(SideSearchSideContentsHelperTest,
        RedirectionConfigNavigatesTabContents) {
   LoadURL(kNonMatchUrl);
-  EXPECT_TRUE(!GetLastCommittedSideContentsEntry() ||
-              GetLastCommittedSideContentsEntry()->IsInitialEntry());
+  EXPECT_TRUE(GetLastCommittedSideContentsEntry()->IsInitialEntry());
   EXPECT_TRUE(delegate().last_search_url().is_empty());
   EXPECT_EQ(GURL(kNonMatchUrl), delegate().tab_contents_url());
   histogram_tester_.ExpectUniqueSample(
       "SideSearch.Navigation", SideSearchNavigationType::kRedirectionToTab, 1);
+}
+
+TEST_F(SideSearchSideContentsHelperTest, EmitsPerJourneyMetrics) {
+  // Ensure redirected navigations correctly log navigations
+  LoadURL(kNonMatchUrl);
+  EXPECT_TRUE(GetLastCommittedSideContentsEntry()->IsInitialEntry());
+  EXPECT_TRUE(delegate().last_search_url().is_empty());
+  EXPECT_EQ(GURL(kNonMatchUrl), delegate().tab_contents_url());
+
+  // Metrics should not be emitted until the side contents is destroyed.
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.RedirectionToTabCountPerJourney2", 1, 0);
+
+  // A matching navigation will be allowed to proceed
+  LoadURL(kSearchMatchUrl);
+  EXPECT_EQ(GURL(kSearchMatchUrl),
+            GetLastCommittedSideContentsEntry()->GetURL());
+  EXPECT_EQ(GURL(kSearchMatchUrl), delegate().last_search_url());
+  EXPECT_FALSE(delegate().tab_contents_url().is_empty());
+
+  // Metrics should not be emitted until the side contents is destroyed.
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.NavigationCommittedWithinSideSearchCountPerJourney2", 1, 0);
+
+  ResetSideContents();
+  // Deleting the side contents should emit the search journey metris.
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.RedirectionToTabCountPerJourney2", 1, 1);
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.NavigationCommittedWithinSideSearchCountPerJourney2", 1, 1);
+}
+
+TEST_F(SideSearchSideContentsHelperTest, EmitsPerJourneyMetricsAutotriggered) {
+  // Set the auto-triggered flag to true.
+  helper()->set_auto_triggered(true);
+
+  // Ensure redirected navigations correctly log navigations
+  LoadURL(kNonMatchUrl);
+  EXPECT_TRUE(GetLastCommittedSideContentsEntry()->IsInitialEntry());
+  EXPECT_TRUE(delegate().last_search_url().is_empty());
+  EXPECT_EQ(GURL(kNonMatchUrl), delegate().tab_contents_url());
+
+  // Metrics should not be emitted until the side contents is destroyed.
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.RedirectionToTabCountPerJourney2", 1, 0);
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.AutoTrigger.RedirectionToTabCountPerJourney2", 1, 0);
+
+  // A matching navigation will be allowed to proceed
+  LoadURL(kSearchMatchUrl);
+  EXPECT_EQ(GURL(kSearchMatchUrl),
+            GetLastCommittedSideContentsEntry()->GetURL());
+  EXPECT_EQ(GURL(kSearchMatchUrl), delegate().last_search_url());
+  EXPECT_FALSE(delegate().tab_contents_url().is_empty());
+
+  // Metrics should not be emitted until the side contents is destroyed.
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.NavigationCommittedWithinSideSearchCountPerJourney2", 1, 0);
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.AutoTrigger."
+      "NavigationCommittedWithinSideSearchCountPerJourney2",
+      1, 0);
+
+  ResetSideContents();
+  // Deleting the side contents should emit the search journey metris.
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.RedirectionToTabCountPerJourney2", 1, 1);
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.AutoTrigger.RedirectionToTabCountPerJourney", 1, 1);
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.NavigationCommittedWithinSideSearchCountPerJourney2", 1, 1);
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.AutoTrigger."
+      "NavigationCommittedWithinSideSearchCountPerJourney",
+      1, 1);
+}
+
+TEST_F(SideSearchSideContentsHelperTest, EmitsPerJourneyMetricsFromMenuOption) {
+  // Set helper created from menu option.
+  helper()->set_is_created_from_menu_option(true);
+
+  // Ensure redirected navigations correctly log navigations
+  LoadURL(kNonMatchUrl);
+  EXPECT_TRUE(GetLastCommittedSideContentsEntry()->IsInitialEntry());
+  EXPECT_TRUE(delegate().last_search_url().is_empty());
+  EXPECT_EQ(GURL(kNonMatchUrl), delegate().tab_contents_url());
+
+  // Metrics should not be emitted until the side contents is destroyed.
+  histogram_tester_.ExpectTotalCount(
+      "SideSearch.RedirectionToTabCountPerJourneyFromMenuOption", 0);
+
+  // A matching navigation will be allowed to proceed
+  LoadURL(kSearchMatchUrl);
+  EXPECT_EQ(GURL(kSearchMatchUrl),
+            GetLastCommittedSideContentsEntry()->GetURL());
+  EXPECT_EQ(GURL(kSearchMatchUrl), delegate().last_search_url());
+  EXPECT_FALSE(delegate().tab_contents_url().is_empty());
+
+  // Metrics should not be emitted until the side contents is destroyed.
+  histogram_tester_.ExpectTotalCount(
+      "SideSearch."
+      "NavigationCommittedWithinSideSearchCountPerJourneyFromMenuOption",
+      0);
+
+  ResetSideContents();
+  // Deleting the side contents should emit the search journey metris.
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch.RedirectionToTabCountPerJourneyFromMenuOption", 1, 1);
+  histogram_tester_.ExpectUniqueSample(
+      "SideSearch."
+      "NavigationCommittedWithinSideSearchCountPerJourneyFromMenuOption",
+      1, 1);
 }
 
 }  // namespace test

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,6 +66,7 @@ class VIEWS_EXPORT InkDropImpl : public InkDrop,
 
   // InkDrop:
   void HostSizeChanged(const gfx::Size& new_size) override;
+  void HostViewThemeChanged() override;
   void HostTransformChanged(const gfx::Transform& new_transform) override;
   InkDropState GetTargetInkDropState() const override;
   void AnimateToState(InkDropState ink_drop_state) override;
@@ -262,6 +263,9 @@ class VIEWS_EXPORT InkDropImpl : public InkDrop,
   // transitions are not triggered during HighlightStatae::Exit() calls on debug
   // builds.
   void ExitHighlightState();
+
+  // Recreate the ripple and highlight.
+  void RecreateRippleAndHighlight();
 
   // The host of the ink drop. Used to create the ripples and highlights, and to
   // add/remove the root layer to/from it.

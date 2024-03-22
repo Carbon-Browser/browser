@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,9 @@ var MockInputMethodPrivate = {
    */
   setCurrentInputMethod(inputMethodId, callback) {
     MockInputMethodPrivate.currentInputMethod_ = inputMethodId;
-    callback && callback();
+    if (callback) {
+      callback();
+    }
   },
 
   // Methods for testing. //

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,8 @@ public class MockComponentsProviderService extends Service {
                     for (CharSequence filePath : filePaths) {
                         File file = new File(filePath.toString());
                         try {
-                            resultMap.put(file.getName(),
+                            resultMap.put(
+                                    file.getName(),
                                     ParcelFileDescriptor.open(
                                             file, ParcelFileDescriptor.MODE_READ_ONLY));
                         } catch (FileNotFoundException exception) {

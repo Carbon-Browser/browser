@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/debug/crash_logging.h"
+#include "base/process/current_process.h"
 #include "base/trace_event/trace_log.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
@@ -23,9 +24,10 @@ UtilityServiceFactory::~UtilityServiceFactory() = default;
 void UtilityServiceFactory::RunService(
     const std::string& service_name,
     mojo::ScopedMessagePipeHandle service_pipe) {
-  auto* trace_log = base::trace_event::TraceLog::GetInstance();
-  if (trace_log->IsProcessNameEmpty())
-    trace_log->set_process_name("Service: " + service_name);
+  if (base::CurrentProcess::GetInstance().IsProcessNameEmpty()) {
+    base::CurrentProcess::GetInstance().SetProcessType(
+        GetCurrentProcessType(service_name));
+  }
 
   static auto* const service_name_crash_key =
       base::debug::AllocateCrashKeyString("service-name",

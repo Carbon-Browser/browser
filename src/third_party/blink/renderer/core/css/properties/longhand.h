@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 
 #include "third_party/blink/renderer/core/css/css_initial_value.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
-#include "third_party/blink/renderer/core/css/scoped_css_value.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
@@ -32,23 +31,22 @@ class Longhand : public CSSProperty {
   }
   virtual void ApplyInitial(StyleResolverState&) const { NOTREACHED(); }
   virtual void ApplyInherit(StyleResolverState&) const { NOTREACHED(); }
-  // Properties which take tree-scoped references should override this method to
-  // handle the TreeScope during application.
-  virtual void ApplyValue(StyleResolverState& state,
-                          const ScopedCSSValue& scoped_value) const {
-    ApplyValue(state, scoped_value.GetCSSValue());
-  }
-  virtual void ApplyValue(StyleResolverState&, const CSSValue&) const {
+  virtual void ApplyValue(StyleResolverState&,
+                          const CSSValue&,
+                          ValueMode) const {
     NOTREACHED();
   }
   void ApplyUnset(StyleResolverState& state) const {
-    if (state.IsInheritedForUnset(*this))
+    if (state.IsInheritedForUnset(*this)) {
       ApplyInherit(state);
-    else
+    } else {
       ApplyInitial(state);
+    }
   }
-  virtual const blink::Color ColorIncludingFallback(bool, const ComputedStyle&)
-      const {
+  virtual const blink::Color ColorIncludingFallback(
+      bool,
+      const ComputedStyle&,
+      bool* is_current_color = nullptr) const {
     NOTREACHED();
     return Color();
   }

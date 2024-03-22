@@ -1,20 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.autofill;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
 
-/**
-* JNI call glue for AutofillExternalDelagate C++ and Java objects.
-*/
+import org.chromium.base.ResettersForTesting;
+
+/** JNI call glue for AutofillExternalDelagate C++ and Java objects. */
 @JNINamespace("autofill")
 public class AutofillLogger {
-    /**
-     * An entry to be sent to Logger.
-     */
+    /** An entry to be sent to Logger. */
     public static class LogEntry {
         private final String mAutofilledValue;
         private final String mProfileFullName;
@@ -50,6 +48,7 @@ public class AutofillLogger {
 
     public static void setLoggerForTesting(Logger logger) {
         sLoggerForTest = logger;
+        ResettersForTesting.register(() -> sLoggerForTest = null);
     }
 
     @CalledByNative

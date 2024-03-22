@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -334,8 +334,8 @@ const ParseTestCase DocumentPolicyParserTest::kCases[] = {
         },
         /* messages */
         {{mojom::blink::ConsoleMessageLevel::kWarning,
-          "Parameter for feature f-double should be Double, not "
-          "Boolean."}},
+          "Parameter for feature f-double should be double, not "
+          "boolean."}},
     },
     {
         "ParsePolicyWithWrongTypeOfParamExpectedBooleanTypeButGet"
@@ -348,8 +348,8 @@ const ParseTestCase DocumentPolicyParserTest::kCases[] = {
         },
         /* messages */
         {{mojom::blink::ConsoleMessageLevel::kWarning,
-          "Parameter for feature f-bool should be Boolean, not "
-          "Decimal."}},
+          "Parameter for feature f-bool should be boolean, not "
+          "decimal."}},
     },
     {
         "FeatureValueItemShouldNotBeEmpty",

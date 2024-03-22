@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,6 @@ const char kTranslateTranslationType[] = "Translate.Translation.Type";
 const char kTranslateUiInteractionEvent[] = "Translate.UiInteraction.Event";
 
 // Page-load frequency UMA histograms.
-const char kTranslatePageLoadAutofillAssistantDeferredTriggerDecision[] =
-    "Translate.PageLoad.AutofillAssistantDeferredTriggerDecision";
 const char kTranslatePageLoadFinalSourceLanguage[] =
     "Translate.PageLoad.FinalSourceLanguage";
 const char kTranslatePageLoadFinalState[] = "Translate.PageLoad.FinalState";
@@ -237,10 +235,6 @@ void TranslateMetricsLoggerImpl::RecordPageLoadUmaMetrics(
     base::UmaHistogramEnumeration(kTranslatePageLoadHrefTriggerDecision,
                                   trigger_decision_);
   }
-  base::UmaHistogramBoolean(
-      kTranslatePageLoadAutofillAssistantDeferredTriggerDecision,
-      autofill_assistant_deferred_trigger_decision_);
-
   base::UmaHistogramEnumeration(
       kTranslatePageLoadInitialState,
       ConvertToTranslateState(initial_state_is_translated,
@@ -327,10 +321,6 @@ void TranslateMetricsLoggerImpl::LogTriggerDecision(
   }
 }
 
-void TranslateMetricsLoggerImpl::LogAutofillAssistantDeferredTriggerDecision() {
-  autofill_assistant_deferred_trigger_decision_ = true;
-}
-
 void TranslateMetricsLoggerImpl::LogInitialState() {
   // Sets the initial state to the current state.
   initial_state_is_translated_ = current_state_is_translated_;
@@ -369,7 +359,7 @@ void TranslateMetricsLoggerImpl::LogTranslationStarted(
 
 void TranslateMetricsLoggerImpl::LogTranslationFinished(
     bool was_successful,
-    TranslateErrors::Type error_type) {
+    TranslateErrors error_type) {
   // Note that a translation can fail (i.e. was_successful is false) and have an
   // error type of NONE in some cases. One case where this happens is when a
   // translation is interrupted midway through.
@@ -552,8 +542,16 @@ TranslateMetricsLoggerImpl::ConvertTranslationTypeToRevertedTranslationStatus(
       translation_type == TranslationType::kManualContextMenuReTranslation)
     return TranslationStatus::kRevertedManualContextMenuTranslation;
   if (translation_type == TranslationType::kAutomaticTranslationByPref ||
-      translation_type == TranslationType::kAutomaticTranslationByLink)
+      translation_type == TranslationType::kAutomaticTranslationByLink) {
     return TranslationStatus::kRevertedAutomaticTranslation;
+  }
+  if (translation_type ==
+      TranslationType::kAutomaticTranslationToPredefinedTarget) {
+    return TranslationStatus::kRevertedAutomaticTranslationToPredefinedTarget;
+  }
+  if (translation_type == TranslationType::kAutomaticTranslationByHref) {
+    return TranslationStatus::kRevertedAutomaticTranslationByHref;
+  }
   return TranslationStatus::kUninitialized;
 }
 
@@ -583,6 +581,23 @@ TranslateMetricsLoggerImpl::ConvertTranslationTypeToFailedTranslationStatus(
     else
       return TranslationStatus::kFailedWithNoErrorAutomaticTranslation;
   }
+  if (translation_type ==
+      TranslationType::kAutomaticTranslationToPredefinedTarget) {
+    if (was_translation_error) {
+      return TranslationStatus::
+          kFailedWithErrorAutomaticTranslationToPredefinedTarget;
+    } else {
+      return TranslationStatus::
+          kFailedWithNoErrorAutomaticTranslationToPredefinedTarget;
+    }
+  }
+  if (translation_type == TranslationType::kAutomaticTranslationByHref) {
+    if (was_translation_error) {
+      return TranslationStatus::kFailedWithErrorAutomaticTranslationByHref;
+    } else {
+      return TranslationStatus::kFailedWithNoErrorAutomaticTranslationByHref;
+    }
+  }
   return TranslationStatus::kUninitialized;
 }
 
@@ -603,6 +618,14 @@ TranslateMetricsLoggerImpl::ConvertTranslationTypeToSuccessfulTranslationStatus(
     return TranslationStatus::kSuccessFromAutomaticTranslationByPref;
   if (translation_type == TranslationType::kAutomaticTranslationByLink)
     return TranslationStatus::kSuccessFromAutomaticTranslationByLink;
+  if (translation_type ==
+      TranslationType::kAutomaticTranslationToPredefinedTarget) {
+    return TranslationStatus::
+        kSuccessFromAutomaticTranslationToPredefinedTarget;
+  }
+  if (translation_type == TranslationType::kAutomaticTranslationByHref) {
+    return TranslationStatus::kSuccessFromAutomaticTranslationByHref;
+  }
   return TranslationStatus::kUninitialized;
 }
 

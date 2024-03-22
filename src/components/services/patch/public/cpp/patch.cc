@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/update_client/component_patcher_operation.h"  // nogncheck
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -57,6 +57,8 @@ void PatchDone(scoped_refptr<PatchParams> params, int result) {
 
 }  // namespace
 
+// TODO(crbug.com/1349158): Remove this function once PatchFilePuffPatch is
+// implemented as this becomes obsolete.
 void Patch(mojo::PendingRemote<mojom::FilePatcher> file_patcher,
            const std::string& operation,
            const base::FilePath& input_path,
@@ -75,15 +77,15 @@ void Patch(mojo::PendingRemote<mojom::FilePatcher> file_patcher,
 
   if (!input_file.IsValid() || !patch_file.IsValid() ||
       !output_file.IsValid()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), /*result=*/-1));
     return;
   }
 
   // In order to share |callback| between the connection error handler and the
   // FilePatcher calls, we have to use a context object.
-  scoped_refptr<PatchParams> patch_params =
-      new PatchParams(std::move(file_patcher), std::move(callback));
+  scoped_refptr<PatchParams> patch_params = base::MakeRefCounted<PatchParams>(
+      std::move(file_patcher), std::move(callback));
 
   patch_params->file_patcher().set_disconnect_handler(
       base::BindOnce(&PatchDone, patch_params, /*result=*/-1));
@@ -99,6 +101,23 @@ void Patch(mojo::PendingRemote<mojom::FilePatcher> file_patcher,
   } else {
     NOTREACHED();
   }
+}
+
+void PuffPatch(mojo::PendingRemote<mojom::FilePatcher> file_patcher,
+               base::File input_file,
+               base::File patch_file,
+               base::File output_file,
+               PatchCallback callback) {
+  // Use a context object to share callback.
+  scoped_refptr<PatchParams> patch_params = base::MakeRefCounted<PatchParams>(
+      std::move(file_patcher), std::move(callback));
+
+  patch_params->file_patcher().set_disconnect_handler(
+      base::BindOnce(&PatchDone, patch_params, /*result=*/-1));
+
+  patch_params->file_patcher()->PatchFilePuffPatch(
+      std::move(input_file), std::move(patch_file), std::move(output_file),
+      base::BindOnce(&PatchDone, patch_params));
 }
 
 }  // namespace patch

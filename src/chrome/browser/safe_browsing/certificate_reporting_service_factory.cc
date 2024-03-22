@@ -1,17 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/certificate_reporting_service_factory.h"
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/time/default_clock.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/certificate_reporting_service.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
@@ -32,7 +31,8 @@ const size_t kMaxReportCountInQueue = 5;
 // static
 CertificateReportingServiceFactory*
 CertificateReportingServiceFactory::GetInstance() {
-  return base::Singleton<CertificateReportingServiceFactory>::get();
+  static base::NoDestructor<CertificateReportingServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -76,9 +76,14 @@ void CertificateReportingServiceFactory::SetURLLoaderFactoryForTesting(
 }
 
 CertificateReportingServiceFactory::CertificateReportingServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "cert_reporting::Factory",
-          BrowserContextDependencyManager::GetInstance()),
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()),
       server_public_key_(nullptr),
       server_public_key_version_(0),
       clock_(base::DefaultClock::GetInstance()),
@@ -86,7 +91,8 @@ CertificateReportingServiceFactory::CertificateReportingServiceFactory()
       max_queued_report_count_(kMaxReportCountInQueue),
       service_reset_callback_(base::DoNothing()) {}
 
-CertificateReportingServiceFactory::~CertificateReportingServiceFactory() {}
+CertificateReportingServiceFactory::~CertificateReportingServiceFactory() =
+    default;
 
 KeyedService* CertificateReportingServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* browser_context) const {
@@ -107,10 +113,4 @@ KeyedService* CertificateReportingServiceFactory::BuildServiceInstanceFor(
       safe_browsing_service, url_loader_factory, static_cast<Profile*>(profile),
       server_public_key_, server_public_key_version_, max_queued_report_count_,
       queued_report_ttl_, clock_, service_reset_callback_);
-}
-
-content::BrowserContext*
-CertificateReportingServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return context;
 }

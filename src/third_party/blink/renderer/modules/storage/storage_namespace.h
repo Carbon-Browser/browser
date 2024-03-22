@@ -26,6 +26,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_STORAGE_STORAGE_NAMESPACE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_STORAGE_STORAGE_NAMESPACE_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/blink/public/common/dom_storage/session_storage_namespace_id.h"
 #include "third_party/blink/public/mojom/dom_storage/dom_storage.mojom-blink-forward.h"
@@ -60,6 +62,11 @@ class MODULES_EXPORT StorageNamespace final
     : public GarbageCollected<StorageNamespace>,
       public Supplement<Page> {
  public:
+  // `kStandard` is access for a given context's storage, while
+  // `kStorageAccessAPI` indicates a desire to load the first-party storage from
+  // a third-party context. For more see:
+  // third_party/blink/renderer/modules/storage_access/README.md
+  enum class StorageContext { kStandard, kStorageAccessAPI };
   static const char kSupplementName[];
 
   static void ProvideSessionStorageNamespaceTo(
@@ -72,15 +79,16 @@ class MODULES_EXPORT StorageNamespace final
   // Creates a namespace for LocalStorage.
   StorageNamespace(StorageController*);
   // Creates a namespace for SessionStorage.
-  StorageNamespace(StorageController*, const String& namespace_id);
+  StorageNamespace(Page& page, StorageController*, const String& namespace_id);
 
-  // |storage_area| is ignored here if a cached namespace already exists.
+  // `storage_area` is ignored here if a cached namespace already exists.
   scoped_refptr<CachedStorageArea> GetCachedArea(
-      const LocalDOMWindow* local_dom_window,
-      mojo::PendingRemote<mojom::blink::StorageArea> storage_area = {});
+      LocalDOMWindow* local_dom_window,
+      mojo::PendingRemote<mojom::blink::StorageArea> storage_area = {},
+      StorageContext context = StorageContext::kStandard);
 
   scoped_refptr<CachedStorageArea> CreateCachedAreaForPrerender(
-      const LocalDOMWindow* local_dom_window,
+      LocalDOMWindow* local_dom_window,
       mojo::PendingRemote<mojom::blink::StorageArea> storage_area = {});
 
   void EvictSessionStorageCachedData();
@@ -94,7 +102,7 @@ class MODULES_EXPORT StorageNamespace final
   // Removes any CachedStorageAreas that aren't referenced by any source.
   void CleanUpUnusedAreas();
 
-  bool IsSessionStorage() const { return !namespace_id_.IsEmpty(); }
+  bool IsSessionStorage() const { return !namespace_id_.empty(); }
 
   void AddInspectorStorageAgent(InspectorDOMStorageAgent* agent);
   void RemoveInspectorStorageAgent(InspectorDOMStorageAgent* agent);
@@ -125,15 +133,16 @@ class MODULES_EXPORT StorageNamespace final
   HeapHashSet<WeakMember<InspectorDOMStorageAgent>> inspector_agents_;
 
   // Lives globally.
-  StorageController* controller_;
+  raw_ptr<StorageController, ExperimentalRenderer> controller_;
   String namespace_id_;
+  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   // `StorageNamespace` is a per-Page object and doesn't have any
   // `ExecutionContext`.
   HeapMojoRemote<mojom::blink::SessionStorageNamespace> namespace_{nullptr};
   // TODO(https://crbug.com/1212808) Migrate hash map and function.
   HashMap<std::unique_ptr<const BlinkStorageKey>,
           scoped_refptr<CachedStorageArea>,
-          BlinkStorageKeyHash>
+          BlinkStorageKeyHashTraits>
       cached_areas_;
 };
 

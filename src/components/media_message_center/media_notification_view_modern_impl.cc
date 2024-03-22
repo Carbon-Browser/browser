@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/media_message_center/media_notification_view_modern_impl.h"
+
+#include <utility>
 
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_macros.h"
@@ -16,7 +18,6 @@
 #include "components/media_message_center/media_notification_util.h"
 #include "components/media_message_center/media_notification_volume_slider_view.h"
 #include "components/media_message_center/notification_theme.h"
-#include "components/media_message_center/vector_icons/vector_icons.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
@@ -82,101 +83,15 @@ constexpr gfx::Size kVolumeSliderSize = {50, 20};
 constexpr gfx::Size kMuteButtonSize = {20, 20};
 constexpr int kMuteButtonIconSize = 16;
 
-void RecordMetadataHistogram(
-    MediaNotificationViewModernImpl::Metadata metadata) {
-  UMA_HISTOGRAM_ENUMERATION(
-      MediaNotificationViewModernImpl::kMetadataHistogramName, metadata);
-}
-
-const gfx::VectorIcon* GetVectorIconForMediaAction(MediaSessionAction action) {
-  switch (action) {
-    case MediaSessionAction::kPreviousTrack:
-      return &kMediaPreviousTrackIcon;
-    case MediaSessionAction::kSeekBackward:
-      return &kMediaSeekBackwardIcon;
-    case MediaSessionAction::kPlay:
-      return &kPlayArrowIcon;
-    case MediaSessionAction::kPause:
-      return &kPauseIcon;
-    case MediaSessionAction::kSeekForward:
-      return &kMediaSeekForwardIcon;
-    case MediaSessionAction::kNextTrack:
-      return &kMediaNextTrackIcon;
-    case MediaSessionAction::kEnterPictureInPicture:
-      return &kMediaEnterPipIcon;
-    case MediaSessionAction::kExitPictureInPicture:
-      return &kMediaExitPipIcon;
-    case MediaSessionAction::kStop:
-    case MediaSessionAction::kSkipAd:
-    case MediaSessionAction::kSeekTo:
-    case MediaSessionAction::kScrubTo:
-    case MediaSessionAction::kSwitchAudioDevice:
-    case MediaSessionAction::kToggleMicrophone:
-    case MediaSessionAction::kToggleCamera:
-    case MediaSessionAction::kHangUp:
-    case MediaSessionAction::kRaise:
-    case MediaSessionAction::kSetMute:
-      NOTREACHED();
-      break;
-  }
-
-  return nullptr;
-}
-
-const std::u16string GetAccessibleNameForMediaAction(
-    MediaSessionAction action) {
-  switch (action) {
-    case MediaSessionAction::kPreviousTrack:
-      return l10n_util::GetStringUTF16(
-          IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACTION_PREVIOUS_TRACK);
-    case MediaSessionAction::kSeekBackward:
-      return l10n_util::GetStringUTF16(
-          IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACTION_SEEK_BACKWARD);
-    case MediaSessionAction::kPlay:
-      return l10n_util::GetStringUTF16(
-          IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACTION_PLAY);
-    case MediaSessionAction::kPause:
-      return l10n_util::GetStringUTF16(
-          IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACTION_PAUSE);
-    case MediaSessionAction::kSeekForward:
-      return l10n_util::GetStringUTF16(
-          IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACTION_SEEK_FORWARD);
-    case MediaSessionAction::kNextTrack:
-      return l10n_util::GetStringUTF16(
-          IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACTION_NEXT_TRACK);
-    case MediaSessionAction::kEnterPictureInPicture:
-      return l10n_util::GetStringUTF16(
-          IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACTION_ENTER_PIP);
-    case MediaSessionAction::kExitPictureInPicture:
-      return l10n_util::GetStringUTF16(
-          IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACTION_EXIT_PIP);
-    case MediaSessionAction::kStop:
-    case MediaSessionAction::kSkipAd:
-    case MediaSessionAction::kSeekTo:
-    case MediaSessionAction::kScrubTo:
-    case MediaSessionAction::kSwitchAudioDevice:
-    case MediaSessionAction::kToggleMicrophone:
-    case MediaSessionAction::kToggleCamera:
-    case MediaSessionAction::kHangUp:
-    case MediaSessionAction::kRaise:
-    case MediaSessionAction::kSetMute:
-      NOTREACHED();
-      break;
-  }
-
-  return std::u16string();
-}
-
 class MediaButton : public views::ImageButton {
  public:
+  METADATA_HEADER(MediaButton);
   MediaButton(PressedCallback callback, int icon_size, gfx::Size button_size)
-      : ImageButton(callback), icon_size_(icon_size) {
+      : ImageButton(std::move(callback)), icon_size_(icon_size) {
     SetHasInkDropActionOnClick(true);
     views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(),
                                                   button_size.height() / 2);
     views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-    views::InkDrop::Get(this)->SetBaseColorCallback(base::BindRepeating(
-        &MediaButton::GetForegroundColor, base::Unretained(this)));
     SetImageHorizontalAlignment(ImageButton::ALIGN_CENTER);
     SetImageVerticalAlignment(ImageButton::ALIGN_MIDDLE);
     SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
@@ -192,6 +107,7 @@ class MediaButton : public views::ImageButton {
     views::SetImageFromVectorIconWithColor(
         this, *GetVectorIconForMediaAction(GetActionFromButtonTag(*this)),
         icon_size_, foreground_color_, foreground_disabled_color_);
+    views::InkDrop::Get(this)->SetBaseColor(foreground_color_);
 
     SchedulePaint();
   }
@@ -209,22 +125,15 @@ class MediaButton : public views::ImageButton {
   }
 
  private:
-  SkColor GetForegroundColor() { return foreground_color_; }
-
   SkColor foreground_color_ = gfx::kPlaceholderColor;
   SkColor foreground_disabled_color_ = gfx::kPlaceholderColor;
   int icon_size_;
 };
 
+BEGIN_METADATA(MediaButton, views::ImageButton)
+END_METADATA
+
 }  // anonymous namespace
-
-// static
-const char MediaNotificationViewModernImpl::kArtworkHistogramName[] =
-    "Media.Notification.ArtworkPresent";
-
-// static
-const char MediaNotificationViewModernImpl::kMetadataHistogramName[] =
-    "Media.Notification.MetadataPresent";
 
 MediaNotificationViewModernImpl::MediaNotificationViewModernImpl(
     MediaNotificationContainer* container,
@@ -427,7 +336,7 @@ MediaNotificationViewModernImpl::MediaNotificationViewModernImpl(
     util_buttons_layout->set_cross_axis_alignment(
         views::BoxLayout::CrossAxisAlignment::kStretch);
 
-    if (item_->SourceType() != SourceType::kCast) {
+    if (item_->GetSourceType() != SourceType::kCast) {
       // The picture-in-picture button appears directly under the media
       // labels.
       auto picture_in_picture_button = std::make_unique<MediaButton>(
@@ -447,7 +356,7 @@ MediaNotificationViewModernImpl::MediaNotificationViewModernImpl(
       util_buttons_layout->SetFlexForView(footer_view, 1);
     }
 
-    if (item_->SourceType() == SourceType::kCast) {
+    if (item_->GetSourceType() == SourceType::kCast) {
       auto volume_slider = std::make_unique<MediaNotificationVolumeSliderView>(
           base::BindRepeating(&MediaNotificationViewModernImpl::SetVolume,
                               base::Unretained(this)));
@@ -499,8 +408,9 @@ void MediaNotificationViewModernImpl::GetAccessibleNodeData(
       l10n_util::GetStringUTF8(
           IDS_MEDIA_MESSAGE_CENTER_MEDIA_NOTIFICATION_ACCESSIBLE_NAME));
 
-  if (!accessible_name_.empty())
-    node_data->SetName(accessible_name_);
+  if (!GetAccessibleName().empty()) {
+    node_data->SetNameChecked(GetAccessibleName());
+  }
 }
 
 void MediaNotificationViewModernImpl::UpdateWithMediaSessionInfo(
@@ -536,9 +446,12 @@ void MediaNotificationViewModernImpl::UpdateWithMediaSessionInfo(
 void MediaNotificationViewModernImpl::UpdateWithMediaMetadata(
     const media_session::MediaMetadata& metadata) {
   title_label_->SetText(metadata.title);
+  subtitle_label_->SetElideBehavior(gfx::ELIDE_HEAD);
   subtitle_label_->SetText(metadata.source_title);
 
-  accessible_name_ = GetAccessibleNameFromMetadata(metadata);
+  // Stores the text to be read by screen readers describing the notification.
+  // Contains the title, artist and album separated by hyphens.
+  SetAccessibleName(GetAccessibleNameFromMetadata(metadata));
 
   // The title label should only be a11y-focusable when there is text to be
   // read.
@@ -546,7 +459,6 @@ void MediaNotificationViewModernImpl::UpdateWithMediaMetadata(
     title_label_->SetFocusBehavior(FocusBehavior::NEVER);
   } else {
     title_label_->SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
-    RecordMetadataHistogram(Metadata::kTitle);
   }
 
   // The subtitle label should only be a11y-focusable when there is text to be
@@ -555,10 +467,7 @@ void MediaNotificationViewModernImpl::UpdateWithMediaMetadata(
     subtitle_label_->SetFocusBehavior(FocusBehavior::NEVER);
   } else {
     subtitle_label_->SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
-    RecordMetadataHistogram(Metadata::kSource);
   }
-
-  RecordMetadataHistogram(Metadata::kCount);
 
   container_->OnMediaSessionMetadataChanged(metadata);
 
@@ -588,7 +497,6 @@ void MediaNotificationViewModernImpl::UpdateWithMediaArtwork(
     const gfx::ImageSkia& image) {
   GetMediaNotificationBackground()->UpdateArtwork(image);
 
-  UMA_HISTOGRAM_BOOLEAN(kArtworkHistogramName, !image.isNull());
   artwork_->SetImage(image);
   artwork_->SetPreferredSize(kArtworkSize);
 
@@ -616,12 +524,6 @@ void MediaNotificationViewModernImpl::OnThemeChanged() {
   UpdateForegroundColor();
 }
 
-void MediaNotificationViewModernImpl::UpdateDeviceSelectorAvailability(
-    bool availability) {
-  GetMediaNotificationBackground()->UpdateDeviceSelectorAvailability(
-      availability);
-}
-
 void MediaNotificationViewModernImpl::UpdateWithMuteStatus(bool mute) {
   if (mute_button_) {
     mute_button_->SetToggled(mute);
@@ -641,6 +543,11 @@ void MediaNotificationViewModernImpl::UpdateWithMuteStatus(bool mute) {
 void MediaNotificationViewModernImpl::UpdateWithVolume(float volume) {
   if (volume_slider_)
     volume_slider_->SetVolume(volume);
+}
+
+void MediaNotificationViewModernImpl::UpdateDeviceSelectorVisibility(
+    bool visible) {
+  GetMediaNotificationBackground()->UpdateDeviceSelectorVisibility(visible);
 }
 
 void MediaNotificationViewModernImpl::UpdateActionButtonsVisibility() {

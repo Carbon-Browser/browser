@@ -1,12 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.net.connectivitydetector;
 
-/**
- * Stub of ConnectivityDetector.Delegate for testing purpose.
- */
+/** Stub of ConnectivityDetector.Delegate for testing purpose. */
 public class ConnectivityDetectorDelegateStub implements ConnectivityDetector.Delegate {
     private @ConnectivityDetector.ConnectionState int mConnectionStateFromSystem;
     private boolean mSkipHttpProbes;

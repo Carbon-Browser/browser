@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,10 +39,10 @@ class CertPolicy {
   // For a certificate to be allowed, it must not have any *additional* errors
   // from when it was allowed.
   // This function returns either ALLOWED or UNKNOWN, but never DENIED.
-  Judgment Check(net::X509Certificate* cert, net::CertStatus error) const;
+  Judgment Check(const net::X509Certificate* cert, net::CertStatus error) const;
 
-  // Causes the policy to allow this certificate for a given |error|.
-  void Allow(net::X509Certificate* cert, net::CertStatus error);
+  // Causes the policy to allow this certificate for a given `error`.
+  void Allow(const net::X509Certificate* cert, net::CertStatus error);
 
  private:
   // The set of fingerprints of allowed certificates.

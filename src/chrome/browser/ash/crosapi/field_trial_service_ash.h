@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,10 +28,14 @@ class FieldTrialServiceAsh : public mojom::FieldTrialService,
       mojo::PendingRemote<mojom::FieldTrialObserver> observer) override;
 
   // FieldTrialList::Observer:
-  void OnFieldTrialGroupFinalized(const std::string& trial_name,
+  void OnFieldTrialGroupFinalized(const base::FieldTrial& trial,
                                   const std::string& group_name) override;
 
  private:
+  void FieldTrialActivated(const std::string& trial_name,
+                           const std::string& group_name,
+                           bool is_overridden);
+
   // Support any number of connections.
   mojo::ReceiverSet<mojom::FieldTrialService> receivers_;
 

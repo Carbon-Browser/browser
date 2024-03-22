@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,12 @@
 #include <unordered_map>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 namespace disk_cache {
 
@@ -68,7 +67,7 @@ void BackendCleanupTracker::AddPostCleanupCallback(base::OnceClosure cb) {
 }
 
 void BackendCleanupTracker::AddPostCleanupCallbackImpl(base::OnceClosure cb) {
-  post_cleanup_cbs_.emplace_back(base::SequencedTaskRunnerHandle::Get(),
+  post_cleanup_cbs_.emplace_back(base::SequencedTaskRunner::GetCurrentDefault(),
                                  std::move(cb));
 }
 

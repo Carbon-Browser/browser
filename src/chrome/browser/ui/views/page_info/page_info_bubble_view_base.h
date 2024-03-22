@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,6 @@ class PageInfoBubbleViewBase : public views::BubbleDialogDelegateView,
     BUBBLE_INTERNAL_PAGE,
     // Custom bubble for displaying safety tips.
     BUBBLE_SAFETY_TIP,
-    // Custom bubble for displaying accuracy tips.
-    BUBBLE_ACCURACY_TIP,
   };
 
   PageInfoBubbleViewBase(const PageInfoBubbleViewBase&) = delete;

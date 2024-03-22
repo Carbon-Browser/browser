@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ namespace base {
 
 // Native unwinder implementation for platforms that have frame pointers:
 //  * iOS, ARM64 and X86_64,
-//  * macOS 10.14+.
+//  * macOS
 //  * ChromeOS X86_64
 class BASE_EXPORT
 #if BUILDFLAG(IS_APPLE)
@@ -36,7 +36,7 @@ API_AVAILABLE(ios(12))
   bool CanUnwindFrom(const Frame& current_frame) const override;
   UnwindResult TryUnwind(RegisterContext* thread_context,
                          uintptr_t stack_top,
-                         std::vector<Frame>* stack) const override;
+                         std::vector<Frame>* stack) override;
 };
 
 }  // namespace base

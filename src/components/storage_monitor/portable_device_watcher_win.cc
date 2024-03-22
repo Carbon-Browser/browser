@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -13,9 +13,9 @@
 #include <portabledevice.h>
 #include <wrl/client.h>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -585,8 +585,8 @@ void PortableDeviceWatcherWin::EnumerateAttachedDevices() {
   DCHECK(media_task_runner_);
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   Devices* devices = new Devices;
-  base::PostTaskAndReplyWithResult(
-      media_task_runner_.get(), FROM_HERE,
+  media_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&EnumerateAttachedDevicesOnBlockingThread, devices),
       base::BindOnce(&PortableDeviceWatcherWin::OnDidEnumerateAttachedDevices,
                      weak_ptr_factory_.GetWeakPtr(), base::Owned(devices)));
@@ -609,8 +609,8 @@ void PortableDeviceWatcherWin::HandleDeviceAttachEvent(
   DCHECK(media_task_runner_);
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DeviceDetails* device_details = new DeviceDetails;
-  base::PostTaskAndReplyWithResult(
-      media_task_runner_.get(), FROM_HERE,
+  media_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&HandleDeviceAttachedEventOnBlockingThread, pnp_device_id,
                      device_details),
       base::BindOnce(&PortableDeviceWatcherWin::OnDidHandleDeviceAttachEvent,

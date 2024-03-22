@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include "chrome/browser/ui/webui/webui_load_timer.h"
 #include "components/prefs/pref_member.h"
 #include "content/public/browser/web_ui_controller.h"
-#include "ui/base/layout.h"
+#include "content/public/browser/webui_config.h"
+#include "ui/base/resource/resource_scale_factor.h"
 
 namespace base {
 class RefCountedMemory;
@@ -19,6 +20,17 @@ class PrefRegistrySyncable;
 }
 
 namespace extensions {
+
+class ExtensionsUIConfig : public content::WebUIConfig {
+ public:
+  ExtensionsUIConfig();
+  ~ExtensionsUIConfig() override;
+
+  // content::WebUIConfig:
+  std::unique_ptr<content::WebUIController> CreateWebUIController(
+      content::WebUI* web_ui,
+      const GURL& url) override;
+};
 
 class ExtensionsUI : public content::WebUIController {
  public:

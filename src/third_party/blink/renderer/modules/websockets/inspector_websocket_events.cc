@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ void InspectorWebSocketCreateEvent::Data(perfetto::TracedValue context,
   }
   if (!protocol.IsNull())
     dict.Add("webSocketProtocol", protocol);
-  SetCallStack(dict);
+  SetCallStack(execution_context->GetIsolate(), dict);
 }
 
 void InspectorWebSocketEvent::Data(perfetto::TracedValue context,
@@ -54,7 +54,7 @@ void InspectorWebSocketEvent::Data(perfetto::TracedValue context,
     NOTREACHED()
         << "WebSocket is available only in Window and WorkerGlobalScope";
   }
-  SetCallStack(dict);
+  SetCallStack(execution_context->GetIsolate(), dict);
 }
 
 }  // namespace blink

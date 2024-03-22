@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_role_properties.h"
@@ -27,6 +29,8 @@
 #include "ui/accessibility/platform/ax_unique_id.h"
 #include "ui/base/layout.h"
 #include "ui/events/event_utils.h"
+#include "ui/views/accessibility/atomic_view_ax_tree_manager.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/accessibility/view_accessibility_utils.h"
 #include "ui/views/controls/native/native_view_host.h"
 #include "ui/views/view.h"
@@ -112,7 +116,8 @@ void PostFlushEventQueueTaskIfNecessary() {
   if (!g_is_queueing_events) {
     g_is_queueing_events = true;
     base::OnceCallback<void()> cb = base::BindOnce(&FlushQueue);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(cb));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                                std::move(cb));
   }
 }
 
@@ -154,7 +159,9 @@ ViewAXPlatformNodeDelegate::~ViewAXPlatformNodeDelegate() {
       ax_platform_node_->GetNativeViewAccessible()) {
     ui::AXPlatformNode::SetPopupFocusOverride(nullptr);
   }
-  ax_platform_node_->Destroy();
+  // Call ExtractAsDangling() first to clear the underlying pointer and return
+  // another raw_ptr instance that is allowed to dangle.
+  ax_platform_node_.ExtractAsDangling()->Destroy();
 }
 
 bool ViewAXPlatformNodeDelegate::IsAccessibilityFocusable() const {
@@ -218,6 +225,17 @@ gfx::NativeViewAccessible ViewAXPlatformNodeDelegate::GetNativeObject() const {
 void ViewAXPlatformNodeDelegate::NotifyAccessibilityEvent(
     ax::mojom::Event event_type) {
   DCHECK(ax_platform_node_);
+  Widget* const widget = view()->GetWidget();
+  if (!widget || widget->IsClosed()) {
+    return;
+  }
+  if (event_type == ax::mojom::Event::kAlert) {
+    // Do not queue alert events for later. They must be dealt with
+    // before the window potentially closes, and they can be fired
+    // out of order relative to other events.
+    ax_platform_node_->NotifyAccessibilityEvent(event_type);
+    return;
+  }
   if (accessibility_events_callback_)
     accessibility_events_callback_.Run(this, event_type);
   if (g_is_queueing_events) {
@@ -268,12 +286,25 @@ void ViewAXPlatformNodeDelegate::NotifyAccessibilityEvent(
 }
 
 #if BUILDFLAG(IS_MAC)
-void ViewAXPlatformNodeDelegate::AnnounceText(const std::u16string& text) {
-  ax_platform_node_->AnnounceText(text);
+void ViewAXPlatformNodeDelegate::AnnounceTextAs(
+    const std::u16string& text,
+    ui::AXPlatformNode::AnnouncementType announcement_type) {
+  ax_platform_node_->AnnounceTextAs(text, announcement_type);
 }
 #endif  // BUILDFLAG(IS_MAC)
 
 const ui::AXNodeData& ViewAXPlatformNodeDelegate::GetData() const {
+  // Clear computed node so AXNode::GetInnerText() value won't be stale.
+  if (atomic_view_ax_tree_manager_) {
+    // We can't call `GetRoot()->ClearComputedNodeData()` from here since
+    // `AtomicViewAXTreeManager::GetRoot` calls this function
+    // (`ViewAXplatformNodeDelegate::GetData`), which leads to an infinite loop.
+    //
+    // TODO(1468416): This code is temporary until the ViewsAX project is
+    // completed.
+    atomic_view_ax_tree_manager_->ClearComputedRootData();
+  }
+
   // Clear the data, then populate it.
   data_ = ui::AXNodeData();
   GetAccessibleNodeData(&data_);
@@ -297,6 +328,12 @@ const ui::AXNodeData& ViewAXPlatformNodeDelegate::GetData() const {
   // solution that works for ChromeVox, too, and move it to ViewAccessibility.
   if (IsViewUnfocusableDescendantOfFocusableAncestor(view()))
     data_.AddState(ax::mojom::State::kIgnored);
+
+#if BUILDFLAG(IS_WIN)
+  if (view()->GetViewAccessibility().needs_ax_tree_manager()) {
+    view()->GetViewAccessibility().EnsureAtomicViewAXTreeManager();
+  }
+#endif  // BUILDFLAG(IS_WIN)
 
   return data_;
 }
@@ -358,7 +395,7 @@ size_t ViewAXPlatformNodeDelegate::GetChildCount() const {
 }
 
 gfx::NativeViewAccessible ViewAXPlatformNodeDelegate::ChildAtIndex(
-    size_t index) {
+    size_t index) const {
   DCHECK_LT(index, GetChildCount())
       << "|index| should be less than the unignored child count.";
   if (IsLeaf())
@@ -380,8 +417,8 @@ gfx::NativeViewAccessible ViewAXPlatformNodeDelegate::ChildAtIndex(
       }
     }
 
-    NOTREACHED() << "|index| should be less than the unignored child count.";
-    return nullptr;
+    NOTREACHED_NORETURN()
+        << "|index| should be less than the unignored child count.";
   }
 
   // Our widget might have child widgets. If this is a root view, include those
@@ -419,49 +456,49 @@ gfx::NativeViewAccessible ViewAXPlatformNodeDelegate::ChildAtIndex(
     }
   }
 
-  if (index < child_widgets_result.child_widgets.size())
-    return child_widgets[index]->GetRootView()->GetNativeViewAccessible();
-
-  NOTREACHED() << "|index| should be less than the unignored child count.";
-  return nullptr;
+  CHECK_LT(index, child_widgets_result.child_widgets.size())
+      << "|index| should be less than the unignored child count.";
+  return child_widgets[index]->GetRootView()->GetNativeViewAccessible();
 }
 
 bool ViewAXPlatformNodeDelegate::HasModalDialog() const {
   return GetChildWidgets().is_tab_modal_showing;
 }
 
+std::wstring ViewAXPlatformNodeDelegate::ComputeListItemNameFromContent()
+    const {
+  DCHECK_EQ(GetData().role, ax::mojom::Role::kListItem);
+
+  std::string str = "";
+  // The list item name will result in the concatenation of its children's
+  // accessible names, excluding the list item marker.
+  // TODO(accessibility): We're aware the accessible name might be computed
+  // incorrectly if there's a complex structure. Things might be missing for
+  // descendants of descendants.
+  for (size_t i = 0; i < GetChildCount(); ++i) {
+    auto* child = ui::AXPlatformNode::FromNativeViewAccessible(ChildAtIndex(i));
+    if (GetData().role != ax::mojom::Role::kListMarker) {
+      str += child->GetDelegate()->GetName();
+    }
+  }
+
+  return base::UTF8ToWide(str);
+}
+
 bool ViewAXPlatformNodeDelegate::IsChildOfLeaf() const {
-  return AXPlatformNodeDelegateBase::IsChildOfLeaf();
+  return AXPlatformNodeDelegate::IsChildOfLeaf();
 }
 
 ui::AXNodePosition::AXPositionInstance
 ViewAXPlatformNodeDelegate::CreateTextPositionAt(
     int offset,
     ax::mojom::TextAffinity affinity) const {
-  // Support text navigation only on text fields for now. Primarily this is to
-  // support navigating the address bar.
-  if (!IsDescendantOfAtomicTextField())
+  if (!atomic_view_ax_tree_manager_) {
     return ui::AXNodePosition::CreateNullPosition();
-
-  if (!dummy_tree_manager_) {
-    ui::AXTreeUpdate initial_state;
-    initial_state.root_id = GetData().id;
-    initial_state.nodes = {GetData()};
-    initial_state.has_tree_data = true;
-    initial_state.tree_data.tree_id = ui::AXTreeID::CreateNewAXTreeID();
-    auto dummy_tree = std::make_unique<ui::AXTree>(initial_state);
-    dummy_tree_manager_ =
-        std::make_unique<ui::TestAXTreeManager>(std::move(dummy_tree));
-  } else {
-    DCHECK(dummy_tree_manager_->GetTree());
-    ui::AXTreeUpdate update;
-    update.nodes = {GetData()};
-    const_cast<ui::AXTree*>(dummy_tree_manager_->GetTree())
-        ->Unserialize(update);
   }
 
-  return ui::AXNodePosition::CreatePosition(
-      *dummy_tree_manager_->GetRootAsAXNode(), offset, affinity);
+  return ui::AXNodePosition::CreateTextPosition(
+      *atomic_view_ax_tree_manager_->GetRoot(), offset, affinity);
 }
 
 gfx::NativeViewAccessible ViewAXPlatformNodeDelegate::GetNSWindow() {
@@ -506,7 +543,7 @@ gfx::NativeViewAccessible ViewAXPlatformNodeDelegate::GetParent() const {
 }
 
 bool ViewAXPlatformNodeDelegate::IsLeaf() const {
-  return ViewAccessibility::IsLeaf() || AXPlatformNodeDelegateBase::IsLeaf();
+  return ViewAccessibility::IsLeaf() || AXPlatformNodeDelegate::IsLeaf();
 }
 
 bool ViewAXPlatformNodeDelegate::IsInvisibleOrIgnored() const {
@@ -611,8 +648,8 @@ gfx::NativeViewAccessible ViewAXPlatformNodeDelegate::HitTestSync(
     v->ConvertPointToTarget(v, child, &point_in_child_coords);
     return child->HitTestPoint(point_in_child_coords);
   };
-  const auto i = std::find_if(v->children().rbegin(), v->children().rend(),
-                              is_point_in_child);
+  const auto i =
+      base::ranges::find_if(base::Reversed(v->children()), is_point_in_child);
   // If it's not inside any of our children, it's inside this view.
   return (i == v->children().rend()) ? GetNativeViewAccessible()
                                      : (*i)->GetNativeViewAccessible();
@@ -711,11 +748,9 @@ const ui::AXUniqueId& ViewAXPlatformNodeDelegate::GetUniqueId() const {
   return ViewAccessibility::GetUniqueId();
 }
 
-absl::optional<bool>
-ViewAXPlatformNodeDelegate::GetTableHasColumnOrRowHeaderNode() const {
-  if (!GetAncestorTableView())
-    return false;
-  return !GetAncestorTableView()->visible_columns().empty();
+AtomicViewAXTreeManager*
+ViewAXPlatformNodeDelegate::GetAtomicViewAXTreeManagerForTesting() const {
+  return atomic_view_ax_tree_manager_.get();
 }
 
 std::vector<int32_t> ViewAXPlatformNodeDelegate::GetColHeaderNodeIds() const {
@@ -735,10 +770,10 @@ std::vector<int32_t> ViewAXPlatformNodeDelegate::GetColHeaderNodeIds() const {
 std::vector<int32_t> ViewAXPlatformNodeDelegate::GetColHeaderNodeIds(
     int col_index) const {
   std::vector<int32_t> columns = GetColHeaderNodeIds();
-  if (columns.size() <= static_cast<size_t>(col_index)) {
+  if (static_cast<size_t>(col_index) >= columns.size()) {
     return {};
   }
-  return {columns[col_index]};
+  return {columns[static_cast<size_t>(col_index)]};
 }
 
 absl::optional<int32_t> ViewAXPlatformNodeDelegate::GetCellId(
@@ -747,8 +782,8 @@ absl::optional<int32_t> ViewAXPlatformNodeDelegate::GetCellId(
   if (virtual_children().empty() || !GetAncestorTableView())
     return absl::nullopt;
 
-  AXVirtualView* ax_cell =
-      GetAncestorTableView()->GetVirtualAccessibilityCell(row_index, col_index);
+  AXVirtualView* ax_cell = GetAncestorTableView()->GetVirtualAccessibilityCell(
+      static_cast<size_t>(row_index), static_cast<size_t>(col_index));
   if (!ax_cell)
     return absl::nullopt;
 
@@ -792,8 +827,7 @@ absl::optional<int> ViewAXPlatformNodeDelegate::GetPosInSet() const {
   if (views_in_group.empty())
     return absl::nullopt;
   // Check this is in views_in_group; it may be removed if it is ignored.
-  auto found_view =
-      std::find(views_in_group.begin(), views_in_group.end(), view());
+  auto found_view = base::ranges::find(views_in_group, view());
   if (found_view == views_in_group.end())
     return absl::nullopt;
 
@@ -814,8 +848,7 @@ absl::optional<int> ViewAXPlatformNodeDelegate::GetSetSize() const {
   if (views_in_group.empty())
     return absl::nullopt;
   // Check this is in views_in_group; it may be removed if it is ignored.
-  auto found_view =
-      std::find(views_in_group.begin(), views_in_group.end(), view());
+  auto found_view = base::ranges::find(views_in_group, view());
   if (found_view == views_in_group.end())
     return absl::nullopt;
 
@@ -847,6 +880,14 @@ void ViewAXPlatformNodeDelegate::GetViewsInGroupForSet(
       views_in_group->end());
 }
 
+bool ViewAXPlatformNodeDelegate::TableHasColumnOrRowHeaderNodeForTesting()
+    const {
+  if (!GetAncestorTableView()) {
+    return false;
+  }
+  return !GetAncestorTableView()->visible_columns().empty();
+}
+
 ViewAXPlatformNodeDelegate::ChildWidgetsResult
 ViewAXPlatformNodeDelegate::GetChildWidgets() const {
   // This method is used to create a parent / child relationship between the
@@ -863,9 +904,8 @@ ViewAXPlatformNodeDelegate::GetChildWidgets() const {
   Widget::GetAllOwnedWidgets(widget->GetNativeView(), &owned_widgets);
 
   std::vector<Widget*> visible_widgets;
-  std::copy_if(owned_widgets.cbegin(), owned_widgets.cend(),
-               std::back_inserter(visible_widgets),
-               [](const Widget* child) { return child->IsVisible(); });
+  base::ranges::copy_if(owned_widgets, std::back_inserter(visible_widgets),
+                        &Widget::IsVisible);
 
   // Focused child widgets should take the place of the web page they cover in
   // the accessibility tree.
@@ -876,8 +916,7 @@ ViewAXPlatformNodeDelegate::GetChildWidgets() const {
     return ViewAccessibilityUtils::IsFocusedChildWidget(child_widget,
                                                         focused_view);
   };
-  const auto i = std::find_if(visible_widgets.cbegin(), visible_widgets.cend(),
-                              is_focused_child);
+  const auto i = base::ranges::find_if(visible_widgets, is_focused_child);
   // In order to support the "read title (NVDAKey+T)" and "read window
   // (NVDAKey+B)" commands in the NVDA screen reader, hide the rest of the UI
   // from the accessibility tree when a modal dialog is showing.

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/ranges/algorithm.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/task_type.h"
@@ -75,9 +76,9 @@ class StreamCreator {
     mock_client_ = MakeGarbageCollected<StrictMock<MockClient>>();
     auto* outgoing_stream = MakeGarbageCollected<OutgoingStream>(
         script_state, mock_client_, std::move(data_pipe_producer));
-    ExceptionState exception_state(scope.GetIsolate(),
-                                   ExceptionState::kConstructionContext,
-                                   "OutgoingStream");
+    ExceptionState exception_state(
+        scope.GetIsolate(), ExceptionContextType::kConstructorOperationInvoke,
+        "OutgoingStream");
     outgoing_stream->Init(exception_state);
     CHECK(!exception_state.HadException());
     return outgoing_stream;
@@ -168,7 +169,7 @@ TEST(OutgoingStreamTest, WriteArrayBufferView) {
 }
 
 bool IsAllNulls(base::span<const uint8_t> data) {
-  return std::all_of(data.begin(), data.end(), [](uint8_t c) { return !c; });
+  return base::ranges::all_of(data, [](uint8_t c) { return !c; });
 }
 
 TEST(OutgoingStreamTest, AsyncWrite) {
@@ -195,7 +196,7 @@ TEST(OutgoingStreamTest, AsyncWrite) {
   test::RunPendingTasks();
 
   // Let microtasks run just in case write() returns prematurely.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_FALSE(tester.IsFulfilled());
 
   // Read the first part of the data.
@@ -247,8 +248,9 @@ TEST(OutgoingStreamTest, WriteThenClose) {
     // This needs to happen asynchronously.
     scope.GetExecutionContext()
         ->GetTaskRunner(TaskType::kNetworking)
-        ->PostTask(FROM_HERE, WTF::Bind(&OutgoingStream::OnOutgoingStreamClosed,
-                                        WrapWeakPersistent(outgoing_stream)));
+        ->PostTask(FROM_HERE,
+                   WTF::BindOnce(&OutgoingStream::OnOutgoingStreamClosed,
+                                 WrapWeakPersistent(outgoing_stream)));
   });
 
   ScriptPromise close_promise =
@@ -258,7 +260,7 @@ TEST(OutgoingStreamTest, WriteThenClose) {
 
   // Make sure that write() and close() both run before the event loop is
   // serviced.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   write_tester.WaitUntilSettled();
   EXPECT_TRUE(write_tester.IsFulfilled());
@@ -288,7 +290,7 @@ TEST(OutgoingStreamTest, DataPipeClosed) {
   closed_tester.WaitUntilSettled();
   EXPECT_TRUE(closed_tester.IsRejected());
 
-  DOMException* closed_exception = V8DOMException::ToImplWithTypeCheck(
+  DOMException* closed_exception = V8DOMException::ToWrappable(
       scope.GetIsolate(), closed_tester.Value().V8Value());
   ASSERT_TRUE(closed_exception);
   EXPECT_EQ(closed_exception->name(), "NetworkError");
@@ -304,7 +306,7 @@ TEST(OutgoingStreamTest, DataPipeClosed) {
 
   EXPECT_TRUE(write_tester.IsRejected());
 
-  DOMException* write_exception = V8DOMException::ToImplWithTypeCheck(
+  DOMException* write_exception = V8DOMException::ToWrappable(
       scope.GetIsolate(), write_tester.Value().V8Value());
   ASSERT_TRUE(write_exception);
   EXPECT_EQ(write_exception->name(), "NetworkError");
@@ -343,7 +345,7 @@ TEST(OutgoingStreamTest, DataPipeClosedDuringAsyncWrite) {
 
   EXPECT_TRUE(write_tester.IsRejected());
 
-  DOMException* write_exception = V8DOMException::ToImplWithTypeCheck(
+  DOMException* write_exception = V8DOMException::ToWrappable(
       scope.GetIsolate(), write_tester.Value().V8Value());
   ASSERT_TRUE(write_exception);
   EXPECT_EQ(write_exception->name(), "NetworkError");
@@ -354,7 +356,7 @@ TEST(OutgoingStreamTest, DataPipeClosedDuringAsyncWrite) {
 
   EXPECT_TRUE(closed_tester.IsRejected());
 
-  DOMException* closed_exception = V8DOMException::ToImplWithTypeCheck(
+  DOMException* closed_exception = V8DOMException::ToWrappable(
       scope.GetIsolate(), write_tester.Value().V8Value());
   ASSERT_TRUE(closed_exception);
   EXPECT_EQ(closed_exception->name(), "NetworkError");
@@ -440,7 +442,7 @@ TEST(OutgoingStreamTest, CloseAndConnectionError) {
 
   // Run microtasks to ensure that the underlying sink's close function is
   // called immediately.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
 
   writer->close(script_state, ASSERT_NO_EXCEPTION);
   outgoing_stream->Error(ScriptValue(isolate, v8::Undefined(isolate)));

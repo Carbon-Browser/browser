@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_service.h"
@@ -79,8 +79,8 @@ void ThemeHandler::SendThemeChanged() {
   bool has_custom_bg = ThemeService::GetThemeProviderForProfile(GetProfile())
                            .HasCustomImage(IDR_THEME_NTP_BACKGROUND);
   // TODO(dbeam): why does this need to be a dictionary?
-  base::DictionaryValue dictionary;
-  dictionary.SetBoolKey("hasCustomBackground", has_custom_bg);
+  base::Value::Dict dictionary;
+  dictionary.Set("hasCustomBackground", has_custom_bg);
   FireWebUIListener("theme-changed", dictionary);
 }
 

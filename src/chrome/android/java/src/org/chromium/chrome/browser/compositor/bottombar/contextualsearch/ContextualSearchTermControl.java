@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@ import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+
+import androidx.annotation.Px;
 
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanel;
@@ -26,9 +28,7 @@ import org.chromium.ui.resources.dynamics.DynamicResourceLoader;
  * <p>This is used as a dynamic resource within the {@link ContextualSearchBarControl}.
  */
 public class ContextualSearchTermControl extends OverlayPanelTextViewInflater {
-    /**
-     * The search term View.
-     */
+    /** The search term View. */
     private TextView mSearchTerm;
 
     /**
@@ -37,12 +37,19 @@ public class ContextualSearchTermControl extends OverlayPanelTextViewInflater {
      * @param container         The container View used to inflate the View.
      * @param resourceLoader    The resource loader that will handle the snapshot capturing.
      */
-    public ContextualSearchTermControl(OverlayPanel panel,
-                                          Context context,
-                                          ViewGroup container,
-                                          DynamicResourceLoader resourceLoader) {
-        super(panel, R.layout.contextual_search_term_view, R.id.contextual_search_term_view,
-                context, container, resourceLoader, R.dimen.contextual_search_end_padding,
+    public ContextualSearchTermControl(
+            OverlayPanel panel,
+            Context context,
+            ViewGroup container,
+            DynamicResourceLoader resourceLoader) {
+        super(
+                panel,
+                R.layout.contextual_search_term_view,
+                R.id.contextual_search_term_view,
+                context,
+                container,
+                resourceLoader,
+                R.dimen.contextual_search_end_padding,
                 R.dimen.contextual_search_padded_button_width);
     }
 
@@ -58,9 +65,15 @@ public class ContextualSearchTermControl extends OverlayPanelTextViewInflater {
         invalidate();
     }
 
-    //========================================================================================
+    /** Returns the search term's TextView height. */
+    @Px
+    int getTextViewHeight() {
+        return mSearchTerm == null ? 0 : mSearchTerm.getHeight();
+    }
+
+    // ========================================================================================
     // OverlayPanelInflater overrides
-    //========================================================================================
+    // ========================================================================================
 
     @Override
     protected void onFinishInflate() {
@@ -70,9 +83,9 @@ public class ContextualSearchTermControl extends OverlayPanelTextViewInflater {
         mSearchTerm = (TextView) view.findViewById(R.id.contextual_search_term);
     }
 
-    //========================================================================================
+    // ========================================================================================
     // OverlayPanelTextViewInflater overrides
-    //========================================================================================
+    // ========================================================================================
 
     @Override
     protected TextView getTextView() {

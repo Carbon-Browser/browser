@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -155,14 +155,14 @@ def GetObjDumpPath():
 def GetDisassembleObjDumpPath(arch):
   path = None
   if arch == 'arm':
-    path = FromToolsSrcRoot('third_party', 'android_ndk', 'toolchains',
-                            'arm-linux-androideabi-4.9', 'prebuilt',
-                            'linux-x86_64', 'bin',
+    path = FromToolsSrcRoot('third_party', 'android_toolchain', 'ndk',
+                            'toolchains', 'arm-linux-androideabi-4.9',
+                            'prebuilt', 'linux-x86_64', 'bin',
                             'arm-linux-androideabi-objdump')
   elif arch == 'arm64':
-    path = FromToolsSrcRoot('third_party', 'android_ndk', 'toolchains',
-                            'aarch64-linux-android-4.9', 'prebuilt',
-                            'linux-x86_64', 'bin',
+    path = FromToolsSrcRoot('third_party', 'android_toolchain', 'ndk',
+                            'toolchains', 'aarch64-linux-android-4.9',
+                            'prebuilt', 'linux-x86_64', 'bin',
                             'aarch64-linux-android-objdump')
   if path and os.path.exists(path):
     return path
@@ -182,9 +182,8 @@ def GetStripPath():
 
 
 def GetApkAnalyzerPath():
-  default_path = FromToolsSrcRoot('third_party', 'android_sdk', 'public',
-                                  'cmdline-tools', 'latest', 'bin',
-                                  'apkanalyzer')
+  default_path = FromToolsSrcRoot('third_party', 'android_build_tools',
+                                  'apkanalyzer', 'apkanalyzer')
   return os.environ.get('SUPERSIZE_APK_ANALYZER', default_path)
 
 
@@ -196,6 +195,10 @@ def GetAapt2Path():
 
 def GetJavaHome():
   return FromToolsSrcRoot('third_party', 'jdk', 'current')
+
+
+def GetJavaExec():
+  return os.path.join(GetJavaHome(), 'bin', 'java')
 
 
 def GetDefaultJsonConfigPath():

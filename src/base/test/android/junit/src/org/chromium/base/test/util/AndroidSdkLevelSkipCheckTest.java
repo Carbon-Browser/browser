@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,7 +105,8 @@ public class AndroidSdkLevelSkipCheckTest {
                 sSkipCheck.shouldSkip(new FrameworkMethod(testClass.getMethod(methodName))),
                 equalTo(shouldSkip));
         TestRunnerTestRule.TestLog runListener = mTestRunnerTestRule.runTest(testClass);
-        Assert.assertThat(Description.createTestDescription(testClass, methodName),
+        Assert.assertThat(
+                Description.createTestDescription(testClass, methodName),
                 isIn(shouldSkip ? runListener.skippedTests : runListener.runTests));
     }
 

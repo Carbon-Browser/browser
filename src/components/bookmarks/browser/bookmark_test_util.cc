@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,15 +23,15 @@ void PrintTo(const BookmarkNode& node, std::ostream* os) {
   switch (node.type()) {
     case BookmarkNode::URL:
       *os << "bookmark URL " << node.url() << " title \"" << node.GetTitle()
-          << "\" GUID " << node.guid() << " icon ";
+          << "\" UUID " << node.uuid() << " icon ";
       if (node.icon_url())
         *os << *node.icon_url();
       else
         *os << "null";
       break;
     case BookmarkNode::FOLDER:
-      *os << "bookmark folder with title \"" << node.GetTitle() << "\" GUID "
-          << node.guid();
+      *os << "bookmark folder with title \"" << node.GetTitle() << "\" UUID "
+          << node.uuid();
       break;
     case BookmarkNode::BOOKMARK_BAR:
       *os << "BOOKMARK_BAR folder";

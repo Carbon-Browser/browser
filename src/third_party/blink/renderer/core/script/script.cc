@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,7 @@ void Script::RunScriptOnScriptState(
     V8ScriptRunner::RethrowErrorsOption rethrow_errors) {
   if (!script_state)
     return;
+
   v8::HandleScope scope(script_state->GetIsolate());
   std::ignore = RunScriptOnScriptStateAndReturnValue(
       script_state, execute_script_policy, std::move(rethrow_errors));

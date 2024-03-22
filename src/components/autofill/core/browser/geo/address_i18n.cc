@@ -1,16 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/autofill/core/browser/geo/address_i18n.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
+#include "components/autofill/core/browser/field_types.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_data.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_metadata.h"
 
@@ -39,7 +40,7 @@ std::unique_ptr<AddressData> CreateAddressData(
   address_data->organization =
       base::UTF16ToUTF8(get_info.Run(AutofillType(COMPANY_NAME)));
   address_data->region_code = base::UTF16ToUTF8(
-      get_info.Run(AutofillType(HTML_TYPE_COUNTRY_CODE, HTML_MODE_NONE)));
+      get_info.Run(AutofillType(HtmlFieldType::kCountryCode)));
   address_data->administrative_area =
       base::UTF16ToUTF8(get_info.Run(AutofillType(ADDRESS_HOME_STATE)));
   address_data->locality =

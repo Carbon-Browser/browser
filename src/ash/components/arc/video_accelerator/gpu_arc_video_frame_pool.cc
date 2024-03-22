@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 
 #include "ash/components/arc/video_accelerator/arc_video_accelerator_util.h"
 #include "ash/components/arc/video_accelerator/protected_buffer_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "media/base/decoder_status.h"
@@ -30,11 +32,11 @@ namespace {
 // Helper thunk called when all references to a video frame have been dropped.
 // The thunk reschedules the OnFrameReleased callback on the correct task runner
 // as frames can be destroyed on any thread. Note that the WeakPtr is wrapped in
-// an absl::optional, as a WeakPtr should only be dereferenced on the thread it
+// an std::optional, as a WeakPtr should only be dereferenced on the thread it
 // was created on. If we don't wrap the WeakPtr the task runner will dereference
 // the WeakPtr before calling this function causing an assert.
 void OnFrameReleasedThunk(
-    absl::optional<base::WeakPtr<GpuArcVideoFramePool>> weak_this,
+    std::optional<base::WeakPtr<GpuArcVideoFramePool>> weak_this,
     base::SequencedTaskRunner* task_runner,
     scoped_refptr<media::VideoFrame> origin_frame) {
   DCHECK(weak_this);
@@ -71,7 +73,7 @@ GpuArcVideoFramePool::GpuArcVideoFramePool(
 
   weak_this_ = weak_this_factory_.GetWeakPtr();
 
-  client_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  client_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   vda_video_frame_pool_ = std::make_unique<media::VdaVideoFramePool>(
       weak_this_, client_task_runner_);
 }
@@ -229,14 +231,14 @@ void GpuArcVideoFramePool::RequestFrames(
   request_frames_cb_.Run();
 }
 
-absl::optional<int32_t> GpuArcVideoFramePool::GetVideoFrameId(
+std::optional<int32_t> GpuArcVideoFramePool::GetVideoFrameId(
     const media::VideoFrame* video_frame) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto it = buffer_id_to_video_frame_id_.find(
       video_frame->GetGpuMemoryBuffer()->GetId());
   return it != buffer_id_to_video_frame_id_.end()
-             ? absl::optional<int32_t>(it->second)
-             : absl::nullopt;
+             ? std::optional<int32_t>(it->second)
+             : std::nullopt;
 }
 
 void GpuArcVideoFramePool::OnFrameReleased(

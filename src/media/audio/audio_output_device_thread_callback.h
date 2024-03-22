@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/time/time.h"
+#include "media/audio/audio_device_stats_reporter.h"
 #include "media/audio/audio_device_thread.h"
 #include "media/base/audio_renderer_sink.h"
 
@@ -51,7 +52,8 @@ class MEDIA_EXPORT AudioOutputDeviceThreadCallback
  private:
   base::UnsafeSharedMemoryRegion shared_memory_region_;
   base::WritableSharedMemoryMapping shared_memory_mapping_;
-  raw_ptr<media::AudioRendererSink::RenderCallback> render_callback_;
+  raw_ptr<media::AudioRendererSink::RenderCallback, DanglingUntriaged>
+      render_callback_;
   std::unique_ptr<media::AudioBus> output_bus_;
   uint64_t callback_num_ = 0;
 
@@ -62,6 +64,8 @@ class MEDIA_EXPORT AudioOutputDeviceThreadCallback
 
   // If set, used to record the startup duration UMA stat.
   absl::optional<base::TimeTicks> first_play_start_time_;
+
+  AudioDeviceStatsReporter stats_reporter_;
 };
 
 }  // namespace media

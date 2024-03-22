@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,24 @@
 #include "third_party/blink/renderer/core/paint/paint_auto_dark_mode.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context_state_saver.h"
+#include "third_party/blink/renderer/platform/graphics/paint/paint_shader.h"
 
 namespace blink {
 
 void AppliedDecorationPainter::Paint(const cc::PaintFlags* flags) {
+  ETextDecorationStyle decoration_style = decoration_info_.DecorationStyle();
+
   context_.SetStrokeStyle(decoration_info_.StrokeStyle());
   context_.SetStrokeColor(decoration_info_.LineColor());
 
   AutoDarkMode auto_dark_mode(
       PaintAutoDarkMode(decoration_info_.TargetStyle(),
                         DarkModeFilter::ElementRole::kForeground));
-  switch (decoration_info_.DecorationStyle()) {
+
+  // TODO(crbug.com/1346281) make other decoration styles work with PaintFlags
+  switch (decoration_style) {
     case ETextDecorationStyle::kWavy:
-      StrokeWavyTextDecoration(flags);
+      PaintWavyTextDecoration();
       break;
     case ETextDecorationStyle::kDotted:
     case ETextDecorationStyle::kDashed:
@@ -38,8 +43,7 @@ void AppliedDecorationPainter::Paint(const cc::PaintFlags* flags) {
   }
 }
 
-void AppliedDecorationPainter::StrokeWavyTextDecoration(
-    const cc::PaintFlags* flags) {
+void AppliedDecorationPainter::PaintWavyTextDecoration() {
   // We need this because of the clipping we're doing below, as we paint both
   // overlines and underlines here. That clip would hide the overlines, when
   // painting the underlines.
@@ -49,16 +53,21 @@ void AppliedDecorationPainter::StrokeWavyTextDecoration(
 
   // The wavy line is larger than the line, as we add whole waves before and
   // after the line in TextDecorationInfo::PrepareWavyStrokePath().
-  context_.Clip(decoration_info_.Bounds());
+  gfx::PointF origin = decoration_info_.Bounds().origin();
 
-  absl::optional<Path> path = decoration_info_.StrokePath();
   AutoDarkMode auto_dark_mode(
       PaintAutoDarkMode(decoration_info_.TargetStyle(),
                         DarkModeFilter::ElementRole::kForeground));
-  if (flags)
-    context_.DrawPath(path->GetSkPath(), *flags, auto_dark_mode);
-  else
-    context_.StrokePath(path.value(), auto_dark_mode);
+  cc::PaintFlags flags;
+
+  flags.setAntiAlias(true);
+  flags.setShader(PaintShader::MakePaintRecord(
+      decoration_info_.WavyTileRecord(),
+      gfx::RectFToSkRect(decoration_info_.WavyTileRect()), SkTileMode::kRepeat,
+      SkTileMode::kDecal, nullptr));
+  context_.Translate(origin.x(), origin.y());
+  context_.DrawRect(gfx::RectFToSkRect(decoration_info_.WavyPaintRect()), flags,
+                    auto_dark_mode);
 }
 
 }  // namespace blink

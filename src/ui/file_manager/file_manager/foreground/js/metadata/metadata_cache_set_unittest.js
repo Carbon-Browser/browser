@@ -1,150 +1,202 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-import {MetadataCacheSet, MetadataCacheSetStorageForObject} from './metadata_cache_set.js';
+import {MetadataCacheSet} from './metadata_cache_set.js';
 
-/** @const {!Entry} */
+/** @const @type {!Entry} */
 const entryA = /** @type {!Entry} */ ({
   toURL: function() {
     return 'filesystem://A';
   },
 });
 
-/** @const {!Entry} */
+/** @const @type {!Entry} */
 const entryB = /** @type {!Entry} */ ({
   toURL: function() {
     return 'filesystem://B';
   },
 });
 
+/** @const @type {!Array<string>} */
+const propertyNames = ['thumbnailUrl'];
+
 export function testMetadataCacheSetBasic() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
-  const loadRequested = set.createRequests([entryA, entryB], ['property']);
-  assertEquals(2, loadRequested.length);
-  assertEquals(entryA, loadRequested[0].entry);
-  assertEquals(1, loadRequested[0].names.length);
-  assertEquals('property', loadRequested[0].names[0]);
-  assertEquals(entryB, loadRequested[1].entry);
-  assertEquals(1, loadRequested[1].names.length);
-  assertEquals('property', loadRequested[1].names[0]);
+  const set = new MetadataCacheSet();
+  const loadRequested = set.createRequests([entryA, entryB], propertyNames);
+  assertDeepEquals(
+      [
+        {entry: entryA, names: propertyNames},
+        {entry: entryB, names: propertyNames},
+      ],
+      loadRequested);
 
   set.startRequests(1, loadRequested);
   assertTrue(set.storeProperties(
-      1, [entryA, entryB], [{property: 'valueA'}, {property: 'valueB'}], []));
+      // @ts-ignore: error TS2740: Type '{ thumbnailUrl: string; }' is missing
+      // the following properties from type 'MetadataItem': size,
+      // modificationTime, modificationTimeError, modificationByMeTime, and 51
+      // more.
+      1, [entryA, entryB], [{thumbnailUrl: 'valueA'}, {thumbnailUrl: 'valueB'}],
+      []));
 
-  const results = set.get([entryA, entryB], ['property']);
+  const results = set.get([entryA, entryB], propertyNames);
   assertEquals(2, results.length);
-  assertEquals('valueA', results[0].property);
-  assertEquals('valueB', results[1].property);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals('valueA', results[0].thumbnailUrl);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals('valueB', results[1].thumbnailUrl);
 }
 
 export function testMetadataCacheSetStorePartial() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
-  set.startRequests(1, set.createRequests([entryA, entryB], ['property']));
+  const set = new MetadataCacheSet();
+  set.startRequests(1, set.createRequests([entryA, entryB], propertyNames));
 
-  assertTrue(set.storeProperties(1, [entryA], [{property: 'valueA'}], []));
-  let results = set.get([entryA, entryB], ['property']);
+  // @ts-ignore: error TS2740: Type '{ thumbnailUrl: string; }' is missing the
+  // following properties from type 'MetadataItem': size, modificationTime,
+  // modificationTimeError, modificationByMeTime, and 51 more.
+  assertTrue(set.storeProperties(1, [entryA], [{thumbnailUrl: 'valueA'}], []));
+  let results = set.get([entryA, entryB], propertyNames);
   assertEquals(2, results.length);
-  assertEquals('valueA', results[0].property);
-  assertEquals(null, results[1].property);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals('valueA', results[0].thumbnailUrl);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals(null, results[1].thumbnailUrl);
 
-  assertTrue(set.storeProperties(1, [entryB], [{property: 'valueB'}], []));
-  results = set.get([entryA, entryB], ['property']);
+  // @ts-ignore: error TS2740: Type '{ thumbnailUrl: string; }' is missing the
+  // following properties from type 'MetadataItem': size, modificationTime,
+  // modificationTimeError, modificationByMeTime, and 51 more.
+  assertTrue(set.storeProperties(1, [entryB], [{thumbnailUrl: 'valueB'}], []));
+  results = set.get([entryA, entryB], propertyNames);
   assertEquals(2, results.length);
-  assertEquals('valueA', results[0].property);
-  assertEquals('valueB', results[1].property);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals('valueA', results[0].thumbnailUrl);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals('valueB', results[1].thumbnailUrl);
 }
 
 export function testMetadataCacheSetCachePartial() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
-  set.startRequests(1, set.createRequests([entryA], ['property']));
-  set.storeProperties(1, [entryA], [{property: 'valueA'}], []);
+  const set = new MetadataCacheSet();
+  set.startRequests(1, set.createRequests([entryA], propertyNames));
+  // @ts-ignore: error TS2740: Type '{ thumbnailUrl: string; }' is missing the
+  // following properties from type 'MetadataItem': size, modificationTime,
+  // modificationTimeError, modificationByMeTime, and 51 more.
+  set.storeProperties(1, [entryA], [{thumbnailUrl: 'valueA'}], []);
 
   // entryA has already been cached.
-  const loadRequested = set.createRequests([entryA, entryB], ['property']);
+  const loadRequested = set.createRequests([entryA, entryB], propertyNames);
   assertEquals(1, loadRequested.length);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
   assertEquals(entryB, loadRequested[0].entry);
-  assertEquals(1, loadRequested[0].names.length);
-  assertEquals('property', loadRequested[0].names[0]);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertDeepEquals(propertyNames, loadRequested[0].names);
 }
 
 export function testMetadataCacheSetInvalidatePartial() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
-  set.startRequests(1, set.createRequests([entryA, entryB], ['property']));
+  const set = new MetadataCacheSet();
+  set.startRequests(1, set.createRequests([entryA, entryB], propertyNames));
   set.invalidate(2, [entryA]);
 
   assertTrue(set.storeProperties(
-      1, [entryA, entryB], [{property: 'valueA'}, {property: 'valueB'}], []));
+      // @ts-ignore: error TS2740: Type '{ thumbnailUrl: string; }' is missing
+      // the following properties from type 'MetadataItem': size,
+      // modificationTime, modificationTimeError, modificationByMeTime, and 51
+      // more.
+      1, [entryA, entryB], [{thumbnailUrl: 'valueA'}, {thumbnailUrl: 'valueB'}],
+      []));
 
-  const results = set.get([entryA, entryB], ['property']);
+  const results = set.get([entryA, entryB], propertyNames);
   assertEquals(2, results.length);
-  assertEquals(null, results[0].property);
-  assertEquals('valueB', results[1].property);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals(null, results[0].thumbnailUrl);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals('valueB', results[1].thumbnailUrl);
 
-  const loadRequested = set.createRequests([entryA, entryB], ['property']);
-  assertEquals(1, loadRequested.length);
-  assertEquals(entryA, loadRequested[0].entry);
-  assertEquals(1, loadRequested[0].names.length);
-  assertEquals('property', loadRequested[0].names[0]);
+  const loadRequested = set.createRequests([entryA, entryB], propertyNames);
+  assertDeepEquals([{entry: entryA, names: propertyNames}], loadRequested);
 }
 
 export function testMetadataCacheSetCreateSnapshot() {
-  const setA = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
-  setA.startRequests(1, setA.createRequests([entryA, entryB], ['property']));
+  const setA = new MetadataCacheSet();
+  setA.startRequests(1, setA.createRequests([entryA, entryB], propertyNames));
   const setB = setA.createSnapshot([entryA]);
   setA.storeProperties(
-      1, [entryA, entryB], [{property: 'valueA'}, {property: 'valueB'}], []);
-  let results = setB.get([entryA, entryB], ['property']);
+      // @ts-ignore: error TS2740: Type '{ thumbnailUrl: string; }' is missing
+      // the following properties from type 'MetadataItem': size,
+      // modificationTime, modificationTimeError, modificationByMeTime, and 51
+      // more.
+      1, [entryA, entryB], [{thumbnailUrl: 'valueA'}, {thumbnailUrl: 'valueB'}],
+      []);
+  let results = setB.get([entryA, entryB], propertyNames);
   assertEquals(2, results.length);
-  assertEquals(null, results[0].property);
-  assertEquals(undefined, results[1].property);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals(null, results[0].thumbnailUrl);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals(undefined, results[1].thumbnailUrl);
 
   setB.storeProperties(
-      1, [entryA, entryB], [{property: 'valueA'}, {property: 'valueB'}], []);
-  results = setB.get([entryA, entryB], ['property']);
+      // @ts-ignore: error TS2740: Type '{ thumbnailUrl: string; }' is missing
+      // the following properties from type 'MetadataItem': size,
+      // modificationTime, modificationTimeError, modificationByMeTime, and 51
+      // more.
+      1, [entryA, entryB], [{thumbnailUrl: 'valueA'}, {thumbnailUrl: 'valueB'}],
+      []);
+  results = setB.get([entryA, entryB], propertyNames);
   assertEquals(2, results.length);
-  assertEquals('valueA', results[0].property);
-  assertEquals(undefined, results[1].property);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals('valueA', results[0].thumbnailUrl);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals(undefined, results[1].thumbnailUrl);
 
   setA.invalidate(2, [entryA, entryB]);
-  results = setB.get([entryA, entryB], ['property']);
+  results = setB.get([entryA, entryB], propertyNames);
   assertEquals(2, results.length);
-  assertEquals('valueA', results[0].property);
-  assertEquals(undefined, results[1].property);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals('valueA', results[0].thumbnailUrl);
+  // @ts-ignore: error TS2532: Object is possibly 'undefined'.
+  assertEquals(undefined, results[1].thumbnailUrl);
 }
 
 export function testMetadataCacheSetHasFreshCache() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
-  assertFalse(set.hasFreshCache([entryA, entryB], ['property']));
+  const set = new MetadataCacheSet();
+  assertFalse(set.hasFreshCache([entryA, entryB], propertyNames));
 
-  set.startRequests(1, set.createRequests([entryA, entryB], ['property']));
+  set.startRequests(1, set.createRequests([entryA, entryB], propertyNames));
   set.storeProperties(
-      1, [entryA, entryB], [{property: 'valueA'}, {property: 'valueB'}], []);
-  assertTrue(set.hasFreshCache([entryA, entryB], ['property']));
+      // @ts-ignore: error TS2740: Type '{ thumbnailUrl: string; }' is missing
+      // the following properties from type 'MetadataItem': size,
+      // modificationTime, modificationTimeError, modificationByMeTime, and 51
+      // more.
+      1, [entryA, entryB], [{thumbnailUrl: 'valueA'}, {thumbnailUrl: 'valueB'}],
+      []);
+  assertTrue(set.hasFreshCache([entryA, entryB], propertyNames));
 
   set.invalidate(2, [entryB]);
-  assertFalse(set.hasFreshCache([entryA, entryB], ['property']));
+  assertFalse(set.hasFreshCache([entryA, entryB], propertyNames));
 
-  assertTrue(set.hasFreshCache([entryA], ['property']));
+  assertTrue(set.hasFreshCache([entryA], propertyNames));
 }
 
 export function testMetadataCacheSetHasFreshCacheWithEmptyNames() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
+  const set = new MetadataCacheSet();
   assertTrue(set.hasFreshCache([entryA, entryB], []));
 }
 
 export function testMetadataCacheSetClear() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
+  const set = new MetadataCacheSet();
   set.startRequests(1, set.createRequests([entryA], ['propertyA']));
+  // @ts-ignore: error TS2322: Type '{ propertyA: string; }' is not assignable
+  // to type 'MetadataItem'.
   set.storeProperties(1, [entryA], [{propertyA: 'value'}], []);
   assertTrue(set.hasFreshCache([entryA], ['propertyA']));
 
   set.startRequests(1, set.createRequests([entryA], ['propertyB']));
   set.clear([entryA.toURL()]);
-  // PropertyB should not be stored because it is requsted before clear.
+  // PropertyB should not be stored because it is requested before clear.
+  // @ts-ignore: error TS2322: Type '{ propertyB: string; }' is not assignable
+  // to type 'MetadataItem'.
   set.storeProperties(1, [entryA], [{propertyB: 'value'}], []);
 
   assertFalse(set.hasFreshCache([entryA], ['propertyA']));
@@ -152,24 +204,33 @@ export function testMetadataCacheSetClear() {
 }
 
 export function testMetadataCacheSetUpdateEvent() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
+  const set = new MetadataCacheSet();
   let event = null;
   set.addEventListener('update', inEvent => {
     event = inEvent;
   });
   set.startRequests(1, set.createRequests([entryA], ['propertyA']));
+  // @ts-ignore: error TS2322: Type '{ propertyA: string; }' is not assignable
+  // to type 'MetadataItem'.
   set.storeProperties(1, [entryA], [{propertyA: 'value'}], []);
+  // @ts-ignore: error TS18047: 'event' is possibly 'null'.
   assertEquals(1, event.entries.length);
+  // @ts-ignore: error TS18047: 'event' is possibly 'null'.
   assertEquals(entryA, event.entries[0]);
+  // @ts-ignore: error TS18047: 'event' is possibly 'null'.
   assertTrue(event.entriesMap.has(entryA.toURL()));
+  // @ts-ignore: error TS18047: 'event' is possibly 'null'.
   assertFalse(event.entriesMap.has(entryB.toURL()));
+  // @ts-ignore: error TS18047: 'event' is possibly 'null'.
   assertFalse(event.names.has('propertyA'));
 }
 
 export function testMetadataCacheSetClearAll() {
-  const set = new MetadataCacheSet(new MetadataCacheSetStorageForObject({}));
+  const set = new MetadataCacheSet();
   set.startRequests(1, set.createRequests([entryA, entryB], ['propertyA']));
   set.storeProperties(
+      // @ts-ignore: error TS2322: Type '{ propertyA: string; }' is not
+      // assignable to type 'MetadataItem'.
       1, [entryA, entryB], [{propertyA: 'value'}, {propertyA: 'value'}], []);
 
   assertTrue(set.hasFreshCache([entryA, entryB], ['propertyA']));

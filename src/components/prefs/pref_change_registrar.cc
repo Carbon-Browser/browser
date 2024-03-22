@@ -1,11 +1,13 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/prefs/pref_change_registrar.h"
 
-#include "base/bind.h"
+#include <ostream>
+
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "components/prefs/pref_service.h"
 

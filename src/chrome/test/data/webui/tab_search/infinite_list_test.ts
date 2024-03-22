@@ -1,14 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
-
 import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {InfiniteList, TabData, TabItemType, TabSearchItem, TitleItem} from 'chrome://tab-search.top-chrome/tab_search.js';
-
 import {assertEquals, assertGT, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/test_util.js';
+import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
 import {generateSampleTabsFromSiteNames, sampleSiteNames} from './tab_search_test_data.js';
 import {assertTabItemAndNeighborsInViewBounds, disableAnimationBehavior} from './tab_search_test_helper.js';
@@ -35,7 +32,7 @@ class TestApp extends PolymerElement {
       </template>
       <template data-type="TabData" data-selectable>
         <tab-search-item id="[[item.tab.tabId]]"
-            style="display: flex;height: 56px" data="[[item]]" tabindex="0"
+            style="display: flex;height: 48px" data="[[item]]" tabindex="0"
             role="option">
         </tab-search-item>
       </template>
@@ -53,7 +50,7 @@ suite('InfiniteListTest', () => {
 
   async function setupTest(sampleData: Array<TabData|TitleItem>) {
     const testApp = document.createElement('test-app');
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     document.body.appendChild(testApp);
 
     infiniteList = testApp.shadowRoot!.querySelector('infinite-list')!;
@@ -83,13 +80,22 @@ suite('InfiniteListTest', () => {
 
     assertEquals(0, infiniteList.scrollTop);
 
+    const paddingBottomStyle =
+        getComputedStyle(infiniteList).getPropertyValue('padding-bottom');
+    assertTrue(paddingBottomStyle.endsWith('px'));
+
+    const paddingBottom = Number.parseInt(
+        paddingBottomStyle.substring(0, paddingBottomStyle.length - 2), 10);
+
     const itemHeightStyle =
         getComputedStyle(document.head).getPropertyValue('--mwb-item-height');
     assertTrue(itemHeightStyle.endsWith('px'));
 
     const tabItemHeight = Number.parseInt(
         itemHeightStyle.substring(0, itemHeightStyle.length - 2), 10);
-    assertEquals(tabItemHeight * tabItems.length, infiniteList.scrollHeight);
+    assertEquals(
+        tabItemHeight * tabItems.length + paddingBottom,
+        infiniteList.scrollHeight);
   });
 
   test('ListUpdates', async () => {

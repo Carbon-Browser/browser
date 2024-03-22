@@ -1,36 +1,22 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_EXTENSIONS_API_DOCUMENT_SCAN_DOCUMENT_SCAN_API_H_
 #define CHROME_BROWSER_EXTENSIONS_API_DOCUMENT_SCAN_DOCUMENT_SCAN_API_H_
 
-#include <memory>
-#include <string>
-#include <vector>
-
-#include "base/memory/raw_ptr.h"
 #include "chrome/common/extensions/api/document_scan.h"
-#include "chromeos/crosapi/mojom/document_scan.mojom-forward.h"
 #include "extensions/browser/extension_function.h"
+#include "extensions/browser/extension_function_histogram_value.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-
-namespace crosapi::mojom {
-class DocumentScan;
-}  // namespace crosapi::mojom
 
 namespace extensions {
 
-namespace api {
-
 class DocumentScanScanFunction : public ExtensionFunction {
  public:
-  DECLARE_EXTENSION_FUNCTION("documentScan.scan", DOCUMENT_SCAN_SCAN)
   DocumentScanScanFunction();
   DocumentScanScanFunction(const DocumentScanScanFunction&) = delete;
   DocumentScanScanFunction& operator=(const DocumentScanScanFunction&) = delete;
-
-  void SetMojoInterfaceForTesting(crosapi::mojom::DocumentScan* document_scan);
 
  protected:
   ~DocumentScanScanFunction() override;
@@ -39,21 +25,72 @@ class DocumentScanScanFunction : public ExtensionFunction {
   ResponseAction Run() override;
 
  private:
-  void MaybeInitializeMojoInterface();
-  void OnNamesReceived(const std::vector<std::string>& scanner_names);
-  void OnScanCompleted(crosapi::mojom::ScanFailureMode failure_mode,
-                       const absl::optional<std::string>& scan_data);
-
-  std::unique_ptr<document_scan::Scan::Params> params_;
-
-  // Used to transmit mojo interface method calls to ash chrome.
-  // Null if the interface is unavailable.
-  // The pointer is constant - if Ash crashes and the mojo connection is lost,
-  // Lacros will automatically be restarted.
-  raw_ptr<crosapi::mojom::DocumentScan> document_scan_ = nullptr;
+  void OnScanCompleted(
+      absl::optional<api::document_scan::ScanResults> scan_result,
+      absl::optional<std::string> error);
+  DECLARE_EXTENSION_FUNCTION("documentScan.scan", DOCUMENTSCAN_SCAN)
 };
 
-}  // namespace api
+class DocumentScanGetScannerListFunction : public ExtensionFunction {
+ public:
+  DocumentScanGetScannerListFunction();
+  DocumentScanGetScannerListFunction(
+      const DocumentScanGetScannerListFunction&) = delete;
+  DocumentScanGetScannerListFunction& operator=(
+      const DocumentScanGetScannerListFunction&) = delete;
+
+ protected:
+  ~DocumentScanGetScannerListFunction() override;
+
+  // ExtensionFunction:
+  ResponseAction Run() override;
+
+ private:
+  void OnScannerListReceived(
+      api::document_scan::GetScannerListResponse response);
+  DECLARE_EXTENSION_FUNCTION("documentScan.getScannerList",
+                             DOCUMENTSCAN_GETSCANNERLIST)
+};
+
+class DocumentScanOpenScannerFunction : public ExtensionFunction {
+ public:
+  DocumentScanOpenScannerFunction();
+  DocumentScanOpenScannerFunction(const DocumentScanOpenScannerFunction&) =
+      delete;
+  DocumentScanOpenScannerFunction& operator=(
+      const DocumentScanOpenScannerFunction&) = delete;
+
+ protected:
+  ~DocumentScanOpenScannerFunction() override;
+
+  // ExtensionFunction:
+  ResponseAction Run() override;
+
+ private:
+  void OnResponseReceived(api::document_scan::OpenScannerResponse response);
+  DECLARE_EXTENSION_FUNCTION("documentScan.openScanner",
+                             DOCUMENTSCAN_OPENSCANNER)
+};
+
+class DocumentScanCloseScannerFunction : public ExtensionFunction {
+ public:
+  DocumentScanCloseScannerFunction();
+  DocumentScanCloseScannerFunction(const DocumentScanCloseScannerFunction&) =
+      delete;
+  DocumentScanCloseScannerFunction& operator=(
+      const DocumentScanCloseScannerFunction&) = delete;
+
+ protected:
+  ~DocumentScanCloseScannerFunction() override;
+
+  // ExtensionFunction:
+  ResponseAction Run() override;
+
+ private:
+  void OnResponseReceived(api::document_scan::CloseScannerResponse response);
+  DECLARE_EXTENSION_FUNCTION("documentScan.closeScanner",
+                             DOCUMENTSCAN_CLOSESCANNER)
+};
 
 }  // namespace extensions
 

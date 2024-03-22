@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ bool TrackedPreferenceHelper::IsPersonal() const {
 
 void TrackedPreferenceHelper::ReportValidationResult(
     ValueState value_state,
-    base::StringPiece validation_type_suffix) const {
+    std::string_view validation_type_suffix) const {
   const char* histogram_name = nullptr;
   switch (value_state) {
     case ValueState::UNCHANGED:

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,9 +35,9 @@ class InstantUnitTestBase : public BrowserWithTestWindowTest {
   // search_terms_replacement_key.
   void SetUserSelectedDefaultSearchProvider(const std::string& base_url);
 
-  raw_ptr<InstantService> instant_service_;
-  raw_ptr<TemplateURLService> template_url_service_;
-  raw_ptr<base::SimpleTestClock> clock_;
+  raw_ptr<InstantService, DanglingUntriaged> instant_service_;
+  raw_ptr<TemplateURLService, DanglingUntriaged> template_url_service_;
+  raw_ptr<base::SimpleTestClock, DanglingUntriaged> clock_;
 
  private:
   // BrowserWithTestWindowTest override:

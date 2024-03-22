@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,8 +48,9 @@ class CORE_EXPORT CSSMathInvert : public CSSMathValue {
   }
 
   bool Equals(const CSSNumericValue& other) const final {
-    if (other.GetType() != kNegateType)
+    if (other.GetType() != kNegateType) {
       return false;
+    }
 
     // We can safely cast here as we know 'other' has the same type as us.
     const auto& other_invert = static_cast<const CSSMathInvert&>(other);

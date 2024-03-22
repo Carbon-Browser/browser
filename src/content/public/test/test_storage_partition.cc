@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,21 +15,28 @@ namespace content {
 TestStoragePartition::TestStoragePartition() {}
 TestStoragePartition::~TestStoragePartition() {}
 
-base::FilePath TestStoragePartition::GetPath() {
+const StoragePartitionConfig& TestStoragePartition::GetConfig() const {
+  return config_;
+}
+
+const base::FilePath& TestStoragePartition::GetPath() const {
   return file_path_;
 }
 
 network::mojom::NetworkContext* TestStoragePartition::GetNetworkContext() {
   return network_context_;
 }
+cert_verifier::mojom::CertVerifierServiceUpdater*
+TestStoragePartition::GetCertVerifierServiceUpdater() {
+  return nullptr;
+}
 
-scoped_refptr<network::SharedURLLoaderFactory>
-TestStoragePartition::GetURLLoaderFactoryForBrowserProcess() {
+storage::SharedStorageManager* TestStoragePartition::GetSharedStorageManager() {
   return nullptr;
 }
 
 scoped_refptr<network::SharedURLLoaderFactory>
-TestStoragePartition::GetURLLoaderFactoryForBrowserProcessWithCORBEnabled() {
+TestStoragePartition::GetURLLoaderFactoryForBrowserProcess() {
   return nullptr;
 }
 
@@ -138,6 +145,20 @@ InterestGroupManager* TestStoragePartition::GetInterestGroupManager() {
   return nullptr;
 }
 
+AttributionDataModel* TestStoragePartition::GetAttributionDataModel() {
+  return nullptr;
+}
+
+PrivateAggregationDataModel*
+TestStoragePartition::GetPrivateAggregationDataModel() {
+  return nullptr;
+}
+
+CookieDeprecationLabelManager*
+TestStoragePartition::GetCookieDeprecationLabelManager() {
+  return nullptr;
+}
+
 BrowsingTopicsSiteDataManager*
 TestStoragePartition::GetBrowsingTopicsSiteDataManager() {
   return browsing_topics_site_data_manager_;
@@ -150,10 +171,6 @@ TestStoragePartition::GetDevToolsBackgroundServicesContext() {
 
 ContentIndexContext* TestStoragePartition::GetContentIndexContext() {
   return content_index_context_;
-}
-
-NativeIOContext* TestStoragePartition::GetNativeIOContext() {
-  return native_io_context_;
 }
 
 leveldb_proto::ProtoDatabaseProvider*
@@ -187,6 +204,11 @@ void TestStoragePartition::ClearDataForOrigin(
     const GURL& storage_origin,
     base::OnceClosure callback) {}
 
+void TestStoragePartition::ClearDataForBuckets(
+    const blink::StorageKey& storage_key,
+    const std::set<std::string>& buckets,
+    base::OnceClosure callback) {}
+
 void TestStoragePartition::ClearData(uint32_t remove_mask,
                                      uint32_t quota_storage_remove_mask,
                                      const blink::StorageKey& storage_key,
@@ -197,7 +219,8 @@ void TestStoragePartition::ClearData(uint32_t remove_mask,
 void TestStoragePartition::ClearData(
     uint32_t remove_mask,
     uint32_t quota_storage_remove_mask,
-    StorageKeyPolicyMatcherFunction storage_key_matcher,
+    BrowsingDataFilterBuilder* filter_builder,
+    StorageKeyPolicyMatcherFunction storage_key_policy_matcher,
     network::mojom::CookieDeletionFilterPtr cookie_deletion_filter,
     bool perform_storage_cleanup,
     const base::Time begin,
@@ -228,12 +251,9 @@ int TestStoragePartition::GetDataRemovalObserverCount() {
 
 void TestStoragePartition::ClearBluetoothAllowedDevicesMapForTesting() {}
 
-void TestStoragePartition::ResetAttributionManagerForTesting(
-    base::OnceCallback<void(bool)> callback) {
-  std::move(callback).Run(/*success=*/true);
-}
-
 void TestStoragePartition::FlushNetworkInterfaceForTesting() {}
+
+void TestStoragePartition::FlushCertVerifierInterfaceForTesting() {}
 
 void TestStoragePartition::WaitForDeletionTasksForTesting() {}
 

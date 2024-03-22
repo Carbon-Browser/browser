@@ -1,20 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/extensions/settings_overridden_params_providers.h"
 
 #include "base/strings/utf_string_conversions.h"
+#include "base/values.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_base.h"
 #include "chrome/browser/extensions/extension_web_ui.h"
 #include "chrome/browser/extensions/extension_web_ui_override_registrar.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/search_test_utils.h"
 #include "components/search_engines/template_url_service.h"
 #include "extensions/common/extension_builder.h"
-#include "extensions/common/value_builder.h"
 
 class SettingsOverriddenParamsProvidersUnitTest
     : public extensions::ExtensionServiceTestBase {
@@ -43,14 +44,13 @@ class SettingsOverriddenParamsProvidersUnitTest
   // Adds a new extension that overrides the NTP.
   const extensions::Extension* AddExtensionControllingNewTab(
       const char* name = "ntp override") {
-    base::Value chrome_url_overrides = base::Value::FromUniquePtrValue(
-        extensions::DictionaryBuilder().Set("newtab", "newtab.html").Build());
+    base::Value::Dict chrome_url_overrides =
+        base::Value::Dict().Set("newtab", "newtab.html");
     scoped_refptr<const extensions::Extension> extension =
         extensions::ExtensionBuilder(name)
             .SetLocation(extensions::mojom::ManifestLocation::kInternal)
-            .SetManifestKey(
-                "chrome_url_overrides",
-                base::Value::ToUniquePtrValue(std::move(chrome_url_overrides)))
+            .SetManifestKey("chrome_url_overrides",
+                            std::move(chrome_url_overrides))
             .Build();
 
     service()->AddExtension(extension.get());

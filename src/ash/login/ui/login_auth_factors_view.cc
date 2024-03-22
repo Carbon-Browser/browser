@@ -1,8 +1,6 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include <algorithm>
 
 #include "ash/login/ui/login_auth_factors_view.h"
 
@@ -15,11 +13,18 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
+#include "ui/base/resource/resource_bundle.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_sequence.h"
 #include "ui/compositor/layer_animator.h"
@@ -42,8 +47,7 @@ constexpr int kSpacingBetweenIconsAndLabelDp = 8;
 constexpr int kIconTopSpacingDp = 10;
 constexpr int kArrowButtonSizeDp = 32;
 constexpr base::TimeDelta kErrorTimeout = base::Seconds(3);
-constexpr base::TimeDelta kCheckmarkAnimationDuration = base::Milliseconds(450);
-constexpr int kCheckmarkAnimationNumFrames = 13;
+constexpr float kCheckmarkAnimationPlaybackSpeed = 2.25;
 
 // The values of this enum should be nearly the same as the values of
 // AuthFactorState, except instead of kErrorTemporary and kErrorPermanent, we
@@ -93,8 +97,9 @@ PrioritizedAuthFactorViewState GetPrioritizedAuthFactorViewState(
     case AuthFactorState::kUnavailable:
       return PrioritizedAuthFactorViewState::kUnavailable;
     case AuthFactorState::kErrorPermanent:
-      if (auth_factor.has_permanent_error_display_timed_out())
+      if (auth_factor.has_permanent_error_display_timed_out()) {
         return PrioritizedAuthFactorViewState::kErrorBackground;
+      }
 
       return PrioritizedAuthFactorViewState::kErrorForeground;
     case AuthFactorState::kAvailable:
@@ -117,8 +122,9 @@ PrioritizedAuthFactorViewState GetPrioritizedAuthFactorViewState(
 // state determines the behavior of LoginAuthFactorsView.
 AuthFactorModel* GetHighestPriorityAuthFactor(
     const std::vector<std::unique_ptr<AuthFactorModel>>& auth_factors) {
-  if (auth_factors.empty())
+  if (auth_factors.empty()) {
     return nullptr;
+  }
 
   // PrioritizedAuthFactorViewState enum values are assigned so that the
   // highest numerical value corresponds to the highest priority.
@@ -131,6 +137,32 @@ AuthFactorModel* GetHighestPriorityAuthFactor(
   auto& max = *std::max_element(auth_factors.begin(), auth_factors.end(),
                                 compare_by_priority);
   return max.get();
+}
+
+std::unique_ptr<lottie::Animation> GetCheckmarkAnimation(
+    ui::ColorProvider* color_provider) {
+  std::optional<std::vector<uint8_t>> lottie_data =
+      ui::ResourceBundle::GetSharedInstance().GetLottieData(
+          IDR_LOGIN_ARROW_CHECKMARK_ANIMATION);
+  CHECK(lottie_data.has_value());
+
+  cc::SkottieColorMap color_map = cc::SkottieColorMap{
+      cc::SkottieMapColor("cros.sys.illo.color2",
+                          color_provider->GetColor(AuthIconView::GetColorId(
+                              AuthIconView::Status::kPositive))),
+      cc::SkottieMapColor("cros.sys.app_base_shaded",
+                          color_provider->GetColor(AuthIconView::GetColorId(
+                              AuthIconView::Status::kPrimary))),
+  };
+
+  std::unique_ptr<lottie::Animation> animation =
+      std::make_unique<lottie::Animation>(
+          cc::SkottieWrapper::CreateSerializable(lottie_data.value()),
+          std::move(color_map));
+
+  animation->SetPlaybackSpeed(kCheckmarkAnimationPlaybackSpeed);
+
+  return animation;
 }
 
 }  // namespace
@@ -217,9 +249,9 @@ LoginAuthFactorsView::LoginAuthFactorsView(
   arrow_nudge_animation_ =
       arrow_icon_container_->AddChildView(std::make_unique<AuthIconView>());
   arrow_nudge_animation_->SetCircleImage(
-      kArrowButtonSizeDp / 2, AshColorProvider::Get()->GetControlsLayerColor(
-                                  AshColorProvider::ControlsLayerType::
-                                      kHairlineBorderColor));
+      kArrowButtonSizeDp / 2,
+      AshColorProvider::Get()->GetControlsLayerColor(
+          AshColorProvider::ControlsLayerType::kHairlineBorderColor));
 
   arrow_nudge_animation_->set_on_tap_or_click_callback(base::BindRepeating(
       &LoginAuthFactorsView::RelayArrowButtonPressed, base::Unretained(this)));
@@ -229,8 +261,6 @@ LoginAuthFactorsView::LoginAuthFactorsView(
   // TODO(crbug.com/1233614): Rename kLockScreenFingerprintSuccessIcon once the
   // feature flag is removed and FingerprintView no longer needs this.
   checkmark_icon_ = AddChildView(std::make_unique<AuthIconView>());
-  checkmark_icon_->SetIcon(kLockScreenFingerprintSuccessIcon,
-                           AuthIconView::Color::kPositive);
   checkmark_icon_->SetVisible(false);
 
   label_wrapper_ =
@@ -238,6 +268,9 @@ LoginAuthFactorsView::LoginAuthFactorsView(
   label_wrapper_->SetProperty(
       views::kMarginsKey,
       gfx::Insets::TLBR(kSpacingBetweenIconsAndLabelDp, 0, 0, 0));
+  if (chromeos::features::IsJellyEnabled()) {
+    label_wrapper_->label()->SetEnabledColorId(cros_tokens::kCrosSysOnSurface);
+  }
 }
 
 LoginAuthFactorsView::~LoginAuthFactorsView() = default;
@@ -257,8 +290,9 @@ void LoginAuthFactorsView::AddAuthFactor(
 }
 
 void LoginAuthFactorsView::SetCanUsePin(bool can_use_pin) {
-  if (can_use_pin == AuthFactorModel::can_use_pin())
+  if (can_use_pin == AuthFactorModel::can_use_pin()) {
     return;
+  }
 
   AuthFactorModel::set_can_use_pin(can_use_pin);
   UpdateState();
@@ -344,8 +378,9 @@ void LoginAuthFactorsView::UpdateState() {
       // the error for a period of time.
 
       // Do not replace the current error if an error is already showing.
-      if (error_timer_.IsRunning())
+      if (error_timer_.IsRunning()) {
         return;
+      }
 
       error_timer_.Start(FROM_HERE, kErrorTimeout,
                          base::BindOnce(&LoginAuthFactorsView::OnErrorTimeout,
@@ -366,10 +401,10 @@ void LoginAuthFactorsView::UpdateState() {
       // their password.
       ShowReadyAndDisabledAuthFactors();
 
-      num_factors_in_error_background_state = std::count_if(
-          auth_factors_.begin(), auth_factors_.end(), [](const auto& factor) {
-            return GetPrioritizedAuthFactorViewState(*factor) ==
-                   PrioritizedAuthFactorViewState::kErrorBackground;
+      num_factors_in_error_background_state = base::ranges::count(
+          auth_factors_, PrioritizedAuthFactorViewState::kErrorBackground,
+          [](const auto& factor) {
+            return GetPrioritizedAuthFactorViewState(*factor);
           });
 
       if (num_factors_in_error_background_state == 1) {
@@ -419,19 +454,15 @@ void LoginAuthFactorsView::ShowReadyAndDisabledAuthFactors() {
 void LoginAuthFactorsView::ShowCheckmark() {
   const bool arrow_button_was_visible = arrow_button_->GetVisible();
   auth_factor_icon_row_->SetVisible(false);
-  checkmark_icon_->SetVisible(true);
   SetArrowVisibility(false);
   if (arrow_button_was_visible) {
-    const auto& resource =
-        DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
-            ? IDR_LOGIN_ARROW_CHECKMARK_SPINNER_DARKMODE
-            : IDR_LOGIN_ARROW_CHECKMARK_SPINNER_LIGHTMODE;
-    checkmark_icon_->SetAnimation(resource, kCheckmarkAnimationDuration,
-                                  kCheckmarkAnimationNumFrames);
+    checkmark_icon_->SetLottieAnimation(
+        GetCheckmarkAnimation(GetColorProvider()));
   } else {
     checkmark_icon_->SetIcon(kLockScreenFingerprintSuccessIcon,
-                             AuthIconView::Color::kPositive);
+                             AuthIconView::Status::kPositive);
   }
+  checkmark_icon_->SetVisible(true);
 }
 
 int LoginAuthFactorsView::GetReadyLabelId() const {
@@ -452,8 +483,9 @@ int LoginAuthFactorsView::GetReadyLabelId() const {
     return GetDefaultLabelId();
   }
 
-  if (ready_factor_count == 1u)
+  if (ready_factor_count == 1u) {
     return ready_factor->GetLabelId();
+  }
 
   // Multiple auth factors are ready.
   switch (ready_factors) {
@@ -570,5 +602,8 @@ void LoginAuthFactorsView::UpdateShouldHidePasswordField(
   on_auth_factor_is_hiding_password_changed_callback_.Run(
       should_hide_password_field);
 }
+
+BEGIN_METADATA(LoginAuthFactorsView)
+END_METADATA
 
 }  // namespace ash

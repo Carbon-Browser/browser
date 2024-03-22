@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,10 @@
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: accessibilityPrivate */
+/**
+ * @fileoverview Externs generated from namespace: accessibilityPrivate
+ * @externs
+ */
 
 /** @const */
 chrome.accessibilityPrivate = {};
@@ -235,6 +238,18 @@ chrome.accessibilityPrivate.FocusRingStackingOrder = {
 };
 
 /**
+ * @enum {string}
+ */
+chrome.accessibilityPrivate.AssistiveTechnologyType = {
+  CHROME_VOX: 'chromeVox',
+  SELECT_TO_SPEAK: 'selectToSpeak',
+  SWITCH_ACCESS: 'switchAccess',
+  AUTO_CLICK: 'autoClick',
+  MAGNIFIER: 'magnifier',
+  DICTATION: 'dictation',
+};
+
+/**
  * @typedef {{
  *   rects: !Array<!chrome.accessibilityPrivate.ScreenRect>,
  *   type: !chrome.accessibilityPrivate.FocusType,
@@ -259,9 +274,10 @@ chrome.accessibilityPrivate.AcceleratorAction = {
  * @enum {string}
  */
 chrome.accessibilityPrivate.AccessibilityFeature = {
-  ENHANCED_NETWORK_VOICES: 'enhancedNetworkVoices',
   GOOGLE_TTS_LANGUAGE_PACKS: 'googleTtsLanguagePacks',
-  DICTATION_PUMPKIN_PARSING: 'dictationPumpkinParsing',
+  DICTATION_CONTEXT_CHECKING: 'dictationContextChecking',
+  FACE_GAZE: 'faceGaze',
+  GOOGLE_TTS_HIGH_QUALITY_VOICES: 'googleTtsHighQualityVoices',
 };
 
 /**
@@ -324,6 +340,81 @@ chrome.accessibilityPrivate.DictationBubbleHintType = {
 chrome.accessibilityPrivate.DictationBubbleProperties;
 
 /**
+ * @enum {string}
+ */
+chrome.accessibilityPrivate.ToastType = {
+  DICTATION_NO_FOCUSED_TEXT_FIELD: 'dictationNoFocusedTextField',
+  DICTATION_MIC_MUTED: 'dictationMicMuted',
+};
+
+/**
+ * @enum {string}
+ */
+chrome.accessibilityPrivate.DlcType = {
+  TTS_BN_BD: 'ttsBnBd',
+  TTS_CS_CZ: 'ttsCsCz',
+  TTS_DA_DK: 'ttsDaDk',
+  TTS_DE_DE: 'ttsDeDe',
+  TTS_EL_GR: 'ttsElGr',
+  TTS_EN_AU: 'ttsEnAu',
+  TTS_EN_GB: 'ttsEnGb',
+  TTS_EN_US: 'ttsEnUs',
+  TTS_ES_ES: 'ttsEsEs',
+  TTS_ES_US: 'ttsEsUs',
+  TTS_FI_FI: 'ttsFiFi',
+  TTS_FIL_PH: 'ttsFilPh',
+  TTS_FR_FR: 'ttsFrFr',
+  TTS_HI_IN: 'ttsHiIn',
+  TTS_HU_HU: 'ttsHuHu',
+  TTS_ID_ID: 'ttsIdId',
+  TTS_IT_IT: 'ttsItIt',
+  TTS_JA_JP: 'ttsJaJp',
+  TTS_KM_KH: 'ttsKmKh',
+  TTS_KO_KR: 'ttsKoKr',
+  TTS_NB_NO: 'ttsNbNo',
+  TTS_NE_NP: 'ttsNeNp',
+  TTS_NL_NL: 'ttsNlNl',
+  TTS_PL_PL: 'ttsPlPl',
+  TTS_PT_BR: 'ttsPtBr',
+  TTS_PT_PT: 'ttsPtPt',
+  TTS_SI_LK: 'ttsSiLk',
+  TTS_SK_SK: 'ttsSkSk',
+  TTS_SV_SE: 'ttsSvSe',
+  TTS_TH_TH: 'ttsThTh',
+  TTS_TR_TR: 'ttsTrTr',
+  TTS_UK_UA: 'ttsUkUa',
+  TTS_VI_VN: 'ttsViVn',
+  TTS_YUE_HK: 'ttsYueHk',
+};
+
+/**
+ * @enum {string}
+ */
+chrome.accessibilityPrivate.TtsVariant = {
+  LITE: 'lite',
+  STANDARD: 'standard',
+};
+
+/**
+ * @typedef {{
+ *   js_pumpkin_tagger_bin_js: ArrayBuffer,
+ *   tagger_wasm_main_js: ArrayBuffer,
+ *   tagger_wasm_main_wasm: ArrayBuffer,
+ *   en_us_action_config_binarypb: ArrayBuffer,
+ *   en_us_pumpkin_config_binarypb: ArrayBuffer,
+ *   fr_fr_action_config_binarypb: ArrayBuffer,
+ *   fr_fr_pumpkin_config_binarypb: ArrayBuffer,
+ *   it_it_action_config_binarypb: ArrayBuffer,
+ *   it_it_pumpkin_config_binarypb: ArrayBuffer,
+ *   de_de_action_config_binarypb: ArrayBuffer,
+ *   de_de_pumpkin_config_binarypb: ArrayBuffer,
+ *   es_es_action_config_binarypb: ArrayBuffer,
+ *   es_es_pumpkin_config_binarypb: ArrayBuffer
+ * }}
+ */
+chrome.accessibilityPrivate.PumpkinData;
+
+/**
  * Property to indicate whether event source should default to touch.
  * @type {number}
  */
@@ -347,8 +438,8 @@ chrome.accessibilityPrivate.getBatteryDescription = function(callback) {};
 
 /**
  * Called to request an install of the Pumpkin semantic parser for Dictation.
- * @param {function(boolean): void} callback Runs when Pumpkin download
- *     finishes.
+ * @param {function(!chrome.accessibilityPrivate.PumpkinData): void} callback
+ *     Runs when Pumpkin download finishes.
  */
 chrome.accessibilityPrivate.installPumpkinForDictation = function(callback) {};
 
@@ -364,8 +455,10 @@ chrome.accessibilityPrivate.setNativeAccessibilityEnabled = function(enabled) {}
  * Sets the given accessibility focus rings for this extension.
  * @param {!Array<!chrome.accessibilityPrivate.FocusRingInfo>} focusRings Array
  *     of focus rings to draw.
+ * @param {!chrome.accessibilityPrivate.AssistiveTechnologyType} atType
+ *     Associates these focus rings with this feature type.
  */
-chrome.accessibilityPrivate.setFocusRings = function(focusRings) {};
+chrome.accessibilityPrivate.setFocusRings = function(focusRings, atType) {};
 
 /**
  * Sets the bounds of the accessibility highlight.
@@ -391,9 +484,9 @@ chrome.accessibilityPrivate.setKeyboardListener = function(enabled, capture) {};
 
 /**
  * Darkens or undarkens the screen.
- * @param {boolean} enabled True to darken screen; false to undarken screen.
+ * @param {boolean} darken True to darken screen; false to undarken screen.
  */
-chrome.accessibilityPrivate.darkenScreen = function(enabled) {};
+chrome.accessibilityPrivate.darkenScreen = function(darken) {};
 
 /**
  * When enabled, forwards key events to the Switch Access extension
@@ -433,8 +526,11 @@ chrome.accessibilityPrivate.setNativeChromeVoxArcSupportForCurrentApp = function
  * Sends a fabricated key event.
  * @param {!chrome.accessibilityPrivate.SyntheticKeyboardEvent} keyEvent The
  *     event to send.
+ * @param {boolean=} useRewriters If true, uses rewriters for the key event;
+ *     only allowed if used from Dictation. Otherwise indicates that rewriters
+ *     should be skipped.
  */
-chrome.accessibilityPrivate.sendSyntheticKeyEvent = function(keyEvent) {};
+chrome.accessibilityPrivate.sendSyntheticKeyEvent = function(keyEvent, useRewriters) {};
 
 /**
  * Enables or disables mouse events in accessibility extensions
@@ -442,6 +538,13 @@ chrome.accessibilityPrivate.sendSyntheticKeyEvent = function(keyEvent) {};
  *     receive mouse events.
  */
 chrome.accessibilityPrivate.enableMouseEvents = function(enabled) {};
+
+/**
+ * Sets the cursor position on the screen in absolute screen coordinates.
+ * @param {!chrome.accessibilityPrivate.ScreenPoint} point The screen point at
+ *     which to put the cursor.
+ */
+chrome.accessibilityPrivate.setCursorPosition = function(point) {};
 
 /**
  * Sends a fabricated mouse event.
@@ -456,6 +559,13 @@ chrome.accessibilityPrivate.sendSyntheticMouseEvent = function(mouseEvent) {};
  * @param {!chrome.accessibilityPrivate.SelectToSpeakState} state
  */
 chrome.accessibilityPrivate.setSelectToSpeakState = function(state) {};
+
+/**
+ * Called by the Select-to-Speak extension to request a clipboard copy in the
+ * active Lacros Google Docs tab for the copy-paste fallback.
+ * @param {string} url URL of the Google Docs tab.
+ */
+chrome.accessibilityPrivate.clipboardCopyInActiveLacrosGoogleDoc = function(url) {};
 
 /**
  * Called by the Accessibility Common extension when
@@ -533,10 +643,12 @@ chrome.accessibilityPrivate.updateSelectToSpeakPanel = function(show, anchor, is
  * @param {string} title The title of the confirmation dialog.
  * @param {string} description The description to show within the confirmation
  *     dialog.
+ * @param {?string|undefined} cancelName The human-readable name of the cancel
+ *     button.
  * @param {function(boolean): void} callback Called when the dialog is confirmed
  *     or cancelled.
  */
-chrome.accessibilityPrivate.showConfirmationDialog = function(title, description, callback) {};
+chrome.accessibilityPrivate.showConfirmationDialog = function(title, description, cancelName, callback) {};
 
 /**
  * Gets the DOM key string for the given key code, taking into account the
@@ -555,6 +667,43 @@ chrome.accessibilityPrivate.getLocalizedDomKeyStringForKeyCode = function(keyCod
  *     Properties for the updated Dictation bubble UI.
  */
 chrome.accessibilityPrivate.updateDictationBubble = function(properties) {};
+
+/**
+ * Cancels the current and queued speech from ChromeVox.
+ */
+chrome.accessibilityPrivate.silenceSpokenFeedback = function() {};
+
+/**
+ * Returns the contents of a DLC.
+ * @param {!chrome.accessibilityPrivate.DlcType} dlc The DLC of interest.
+ * @param {function(ArrayBuffer): void} callback A callback that is run when the
+ *     contents are returned.
+ */
+chrome.accessibilityPrivate.getDlcContents = function(dlc, callback) {};
+
+/**
+ * Returns the contents of a TTS DLC.
+ * @param {!chrome.accessibilityPrivate.DlcType} dlc The DLC of interest.
+ * @param {!chrome.accessibilityPrivate.TtsVariant} variant The TTS voice
+ *     variant.
+ * @param {function(ArrayBuffer): void} callback A callback that is run when the
+ *     contents are returned.
+ */
+chrome.accessibilityPrivate.getTtsDlcContents = function(dlc, variant, callback) {};
+
+/**
+ * Gets whether new browser windows and tabs should be in Lacros browser.
+ * @param {function(boolean): void} callback A callback that is run when the
+ *     result is returned.
+ */
+chrome.accessibilityPrivate.isLacrosPrimary = function(callback) {};
+
+/**
+ * Displays an accessibility-related toast.
+ * @param {!chrome.accessibilityPrivate.ToastType} type The type of toast to
+ *     show.
+ */
+chrome.accessibilityPrivate.showToast = function(type) {};
 
 /**
  * Fired whenever ChromeVox should output introduction.
@@ -584,11 +733,31 @@ chrome.accessibilityPrivate.onTwoFingerTouchStart;
 chrome.accessibilityPrivate.onTwoFingerTouchStop;
 
 /**
+ * Fired when the Select to Speak context menu is clicked from outside the
+ * context of the Select to Speak extension.
+ * @type {!ChromeEvent}
+ */
+chrome.accessibilityPrivate.onSelectToSpeakContextMenuClicked;
+
+/**
  * Fired when Chrome OS wants to change the Select-to-Speak state, between
  * selecting with the mouse, speaking, and inactive.
  * @type {!ChromeEvent}
  */
 chrome.accessibilityPrivate.onSelectToSpeakStateChangeRequested;
+
+/**
+ * Fired when Chrome OS wants to send an updated list of keys currently pressed
+ * to Select to Speak.
+ * @type {!ChromeEvent}
+ */
+chrome.accessibilityPrivate.onSelectToSpeakKeysPressedChanged;
+
+/**
+ * Fired when Chrome OS wants to send a mouse event Select to Speak.
+ * @type {!ChromeEvent}
+ */
+chrome.accessibilityPrivate.onSelectToSpeakMouseChanged;
 
 /**
  * Fired when an action is performed in the Select-to-speak panel.

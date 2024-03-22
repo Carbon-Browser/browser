@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,22 +108,7 @@ std::string VideoDecoderConfig::AsHumanReadableString() const {
     << ", color space: " << color_space_info().ToGfxColorSpace().ToString();
 
   if (hdr_metadata().has_value()) {
-    s << std::setprecision(4) << ", luminance range: "
-      << hdr_metadata()->color_volume_metadata.luminance_min << "-"
-      << hdr_metadata()->color_volume_metadata.luminance_max
-      << ", primaries: r("
-      << hdr_metadata()->color_volume_metadata.primary_r.x() << ","
-      << hdr_metadata()->color_volume_metadata.primary_r.y() << ") g("
-      << hdr_metadata()->color_volume_metadata.primary_g.x() << ","
-      << hdr_metadata()->color_volume_metadata.primary_g.y() << ") b("
-      << hdr_metadata()->color_volume_metadata.primary_b.x() << ","
-      << hdr_metadata()->color_volume_metadata.primary_b.y() << ") wp("
-      << hdr_metadata()->color_volume_metadata.white_point.x() << ","
-      << hdr_metadata()->color_volume_metadata.white_point.y()
-      << "), max_content_light_level="
-      << hdr_metadata()->max_content_light_level
-      << ", max_frame_average_light_level="
-      << hdr_metadata()->max_frame_average_light_level;
+    s << ", hdr metadata: " << hdr_metadata()->ToString();
   }
 
   return s.str();

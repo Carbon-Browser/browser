@@ -1,35 +1,39 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/ui/settings/password/password_settings_app_interface.h"
+#import "ios/chrome/browser/ui/settings/password/password_settings_app_interface.h"
 
 #import <MaterialComponents/MaterialSnackbar.h>
 
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
+#import "base/apple/foundation_util.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/keyed_service/core/service_access_type.h"
-#include "components/password_manager/core/browser/password_form.h"
-#include "components/password_manager/core/browser/password_store_consumer.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
-#include "components/password_manager/core/common/password_manager_pref_names.h"
-#include "components/prefs/pref_service.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/passwords/ios_chrome_password_store_factory.h"
+#import "components/keyed_service/core/service_access_type.h"
+#import "components/password_manager/core/browser/password_form.h"
+#import "components/password_manager/core/browser/password_store/password_store_consumer.h"
+#import "components/password_manager/core/browser/password_store/password_store_interface.h"
+#import "components/password_manager/core/common/password_manager_features.h"
+#import "components/password_manager/core/common/password_manager_pref_names.h"
+#import "components/password_manager/ios/fake_bulk_leak_check_service.h"
+#import "components/prefs/pref_service.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_bulk_leak_check_service_factory.h"
+#import "ios/chrome/browser/passwords/model/ios_chrome_profile_password_store_factory.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
+#import "ios/chrome/test/app/mock_reauthentication_module.h"
 #import "ios/chrome/test/app/password_test_util.h"
-#include "url/gurl.h"
-#include "url/origin.h"
+#import "ios/public/provider/chrome/browser/passcode_settings/passcode_settings_api.h"
+#import "url/gurl.h"
+#import "url/origin.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
+using chrome_test_util::
+    SetUpAndReturnMockReauthenticationModuleForPasswordManager;
+using password_manager::FakeBulkLeakCheckService;
 using password_manager::PasswordForm;
-using chrome_test_util::SetUpAndReturnMockReauthenticationModule;
-using chrome_test_util::SetUpAndReturnMockReauthenticationModuleForExport;
 
 namespace {
 
@@ -39,7 +43,7 @@ scoped_refptr<password_manager::PasswordStoreInterface> GetPasswordStore() {
   // This test does not deal with Incognito, and should not run in Incognito
   // context. Therefore IMPLICIT_ACCESS is used to let the test fail if in
   // Incognito context.
-  return IOSChromePasswordStoreFactory::GetForBrowserState(
+  return IOSChromeProfilePasswordStoreFactory::GetForBrowserState(
       chrome_test_util::GetOriginalBrowserState(),
       ServiceAccessType::IMPLICIT_ACCESS);
 }
@@ -59,9 +63,10 @@ class FakeStoreConsumer : public password_manager::PasswordStoreConsumer {
     results_.clear();
     ResetObtained();
     GetPasswordStore()->GetAllLogins(weak_ptr_factory_.GetWeakPtr());
-    bool responded = base::test::ios::WaitUntilConditionOrTimeout(2.0, ^bool {
-      return !AreObtainedReset();
-    });
+    bool responded =
+        base::test::ios::WaitUntilConditionOrTimeout(base::Seconds(2), ^bool {
+          return !AreObtainedReset();
+        });
     if (responded) {
       AppendObtainedToResults();
     }
@@ -146,24 +151,43 @@ bool ClearPasswordStore() {
 
 @implementation PasswordSettingsAppInterface
 
-static MockReauthenticationModule* _mockReauthenticationModule;
+static std::unique_ptr<ScopedPasswordSettingsReauthModuleOverride>
+    _scopedReauthOverride;
 
-+ (void)setUpMockReauthenticationModule {
-  _mockReauthenticationModule = SetUpAndReturnMockReauthenticationModule();
+// Helper for accessing the scoped override's module.
++ (MockReauthenticationModule*)mockModule {
+  DCHECK(_scopedReauthOverride);
+
+  return base::apple::ObjCCastStrict<MockReauthenticationModule>(
+      _scopedReauthOverride->module);
 }
 
-+ (void)setUpMockReauthenticationModuleForExport {
-  _mockReauthenticationModule =
-      SetUpAndReturnMockReauthenticationModuleForExport();
++ (void)setUpMockReauthenticationModule {
+  _scopedReauthOverride =
+      SetUpAndReturnMockReauthenticationModuleForPasswordManager();
+}
+
++ (void)removeMockReauthenticationModule {
+  _scopedReauthOverride = nullptr;
 }
 
 + (void)mockReauthenticationModuleExpectedResult:
     (ReauthenticationResult)expectedResult {
-  _mockReauthenticationModule.expectedResult = expectedResult;
+  [self mockModule].expectedResult = expectedResult;
 }
 
 + (void)mockReauthenticationModuleCanAttempt:(BOOL)canAttempt {
-  _mockReauthenticationModule.canAttempt = canAttempt;
+  DCHECK(_scopedReauthOverride);
+
+  [self mockModule].canAttempt = canAttempt;
+}
+
++ (void)mockReauthenticationModuleShouldReturnSynchronously:(BOOL)returnSync {
+  [self mockModule].shouldReturnSynchronously = returnSync;
+}
+
++ (void)mockReauthenticationModuleReturnMockedResult {
+  [[self mockModule] returnMockedReauthenticationResult];
 }
 
 + (void)dismissSnackBar {
@@ -178,26 +202,56 @@ static MockReauthenticationModule* _mockReauthenticationModule;
 }
 
 + (BOOL)saveExamplePassword:(NSString*)password
-                   userName:(NSString*)userName
+                   username:(NSString*)username
                      origin:(NSString*)origin {
   PasswordForm example;
-  example.username_value = base::SysNSStringToUTF16(userName);
+  example.username_value = base::SysNSStringToUTF16(username);
   example.password_value = base::SysNSStringToUTF16(password);
   example.url = GURL(base::SysNSStringToUTF16(origin));
   example.signon_realm = example.url.spec();
   return SaveToPasswordStore(example);
 }
 
-+ (BOOL)saveInsecurePassword:(NSString*)password
-                    userName:(NSString*)userName
-                      origin:(NSString*)origin {
++ (BOOL)saveExampleNote:(NSString*)note
+               password:(NSString*)password
+               username:(NSString*)username
+                 origin:(NSString*)origin {
   PasswordForm example;
-  example.username_value = base::SysNSStringToUTF16(userName);
+  example.username_value = base::SysNSStringToUTF16(username);
+  example.password_value = base::SysNSStringToUTF16(password);
+  example.url = GURL(base::SysNSStringToUTF16(origin));
+  example.signon_realm = example.url.spec();
+  example.notes = {password_manager::PasswordNote(
+      base::SysNSStringToUTF16(note), base::Time::Now())};
+  return SaveToPasswordStore(example);
+}
+
++ (BOOL)saveCompromisedPassword:(NSString*)password
+                       username:(NSString*)username
+                         origin:(NSString*)origin {
+  PasswordForm example;
+  example.username_value = base::SysNSStringToUTF16(username);
   example.password_value = base::SysNSStringToUTF16(password);
   example.url = GURL(base::SysNSStringToUTF16(origin));
   example.signon_realm = example.url.spec();
   example.password_issues.insert({password_manager::InsecureType::kLeaked,
                                   password_manager::InsecurityMetadata()});
+  return SaveToPasswordStore(example);
+}
+
++ (BOOL)saveMutedCompromisedPassword:(NSString*)password
+                            username:(NSString*)userName
+                              origin:(NSString*)origin {
+  PasswordForm example;
+  example.username_value = base::SysNSStringToUTF16(userName);
+  example.password_value = base::SysNSStringToUTF16(password);
+  example.url = GURL(base::SysNSStringToUTF16(origin));
+  example.signon_realm = example.url.spec();
+  example.password_issues.insert(
+      {password_manager::InsecureType::kLeaked,
+       password_manager::InsecurityMetadata(
+           base::Time::Now(), password_manager::IsMuted(true),
+           password_manager::TriggerBackendNotification(false))});
   return SaveToPasswordStore(example);
 }
 
@@ -210,10 +264,10 @@ static MockReauthenticationModule* _mockReauthenticationModule;
 }
 
 + (BOOL)saveExampleFederatedOrigin:(NSString*)federatedOrigin
-                          userName:(NSString*)userName
+                          username:(NSString*)username
                             origin:(NSString*)origin {
   PasswordForm federated;
-  federated.username_value = base::SysNSStringToUTF16(userName);
+  federated.username_value = base::SysNSStringToUTF16(username);
   federated.url = GURL(base::SysNSStringToUTF16(origin));
   federated.signon_realm = federated.url.spec();
   federated.federation_origin =
@@ -238,6 +292,19 @@ static MockReauthenticationModule* _mockReauthenticationModule;
       chrome_test_util::GetOriginalBrowserState();
   return browserState->GetPrefs()->GetBoolean(
       password_manager::prefs::kCredentialsEnableService);
+}
+
++ (void)setFakeBulkLeakCheckBufferedState:
+    (password_manager::BulkLeakCheckServiceInterface::State)state {
+  FakeBulkLeakCheckService* fakeBulkLeakCheckService =
+      static_cast<FakeBulkLeakCheckService*>(
+          IOSChromeBulkLeakCheckServiceFactory::GetForBrowserState(
+              chrome_test_util::GetOriginalBrowserState()));
+  fakeBulkLeakCheckService->SetBufferedState(state);
+}
+
++ (BOOL)isPasscodeSettingsAvailable {
+  return ios::provider::SupportsPasscodeSettings();
 }
 
 @end

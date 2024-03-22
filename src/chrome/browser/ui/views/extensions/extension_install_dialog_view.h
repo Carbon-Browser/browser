@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
-#include "ui/views/controls/button/button.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/textfield/textfield_controller.h"
 #include "ui/views/view.h"
@@ -93,9 +92,6 @@ class ExtensionInstallDialogView : public views::BubbleDialogDelegateView,
   // Enables the install button and updates the dialog buttons.
   void EnableInstallButton();
 
-  // Updates the histogram that holds installation accepted/aborted data.
-  void UpdateInstallResultHistogram(bool accepted) const;
-
   // Updates the histogram that holds cloud extension request accepted/aborted
   // decision made by user on the specific prompt dialog.
   void UpdateEnterpriseCloudExtensionRequestDialogActionHistogram(
@@ -130,8 +126,10 @@ class ExtensionInstallDialogView : public views::BubbleDialogDelegateView,
   // entered text length is larger than the defined limit.
   bool request_button_enabled_ = true;
 
-  // Checkbox used to indicate if permissions should be withheld on install.
-  raw_ptr<views::Checkbox> withhold_permissions_checkbox_;
+  // Checkbox used to indicate if host permissions should be granted on install.
+  // Should only be present when permissions are withheld on installation by
+  // default.
+  raw_ptr<views::Checkbox> grant_permissions_checkbox_;
 
   // The justification text field view where users enter their justification for
   // requesting an extension.

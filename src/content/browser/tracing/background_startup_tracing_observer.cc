@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/tracing/background_startup_tracing_observer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "components/tracing/common/trace_startup_config.h"
 #include "content/browser/tracing/background_tracing_rule.h"
@@ -14,7 +14,7 @@
 namespace content {
 namespace {
 
-const char kStartupTracingConfig[] = "startup-config";
+const char kStartupTracingRuleId[] = "org.chromium.background_tracing.startup";
 
 class PreferenceManagerImpl
     : public BackgroundStartupTracingObserver::PreferenceManager {
@@ -45,8 +45,7 @@ const BackgroundTracingRule*
 BackgroundStartupTracingObserver::FindStartupRuleInConfig(
     const BackgroundTracingConfigImpl& config) {
   for (const auto& rule : config.rules()) {
-    if (rule->category_preset() ==
-        BackgroundTracingConfigImpl::CategoryPreset::BENCHMARK_STARTUP) {
+    if (rule->rule_id() == kStartupTracingRuleId) {
       return rule.get();
     }
   }
@@ -58,30 +57,6 @@ BackgroundStartupTracingObserver::BackgroundStartupTracingObserver()
       preferences_(new PreferenceManagerImpl) {}
 
 BackgroundStartupTracingObserver::~BackgroundStartupTracingObserver() {}
-
-void BackgroundStartupTracingObserver::OnScenarioActivated(
-    const BackgroundTracingConfigImpl* config) {
-  if (!enabled_in_current_session_)
-    return;
-  const BackgroundTracingRule* startup_rule = FindStartupRuleInConfig(*config);
-  DCHECK(startup_rule);
-
-  // Post task to avoid reentrancy.
-  content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(
-          &BackgroundTracingManagerImpl::OnRuleTriggered,
-          base::Unretained(&BackgroundTracingManagerImpl::GetInstance()),
-          base::Unretained(startup_rule),
-          BackgroundTracingManager::StartedFinalizingCallback()));
-}
-
-void BackgroundStartupTracingObserver::OnScenarioAborted() {
-  enabled_in_current_session_ = false;
-}
-
-void BackgroundStartupTracingObserver::OnTracingEnabled(
-    BackgroundTracingConfigImpl::CategoryPreset preset) {}
 
 void BackgroundStartupTracingObserver::SetPreferenceManagerForTesting(
     std::unique_ptr<PreferenceManager> preferences) {
@@ -119,22 +94,18 @@ BackgroundStartupTracingObserver::IncludeStartupConfigIfNeeded(
   if (!enabled_in_current_session_ || startup_rule)
     return config;
 
-  base::Value rules_dict(base::Value::Type::DICTIONARY);
-  rules_dict.SetStringKey("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED");
-  rules_dict.SetStringKey("trigger_name", kStartupTracingConfig);
-  rules_dict.SetIntKey("trigger_delay", 30);
-  rules_dict.SetStringKey("category", "BENCHMARK_STARTUP");
+  auto rules_dict = base::Value::Dict()
+                        .Set("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED")
+                        .Set("trigger_name", kStartupTracingTriggerName)
+                        .Set("trigger_delay", 30)
+                        .Set("rule_id", kStartupTracingRuleId);
 
   if (config) {
-    config->AddReactiveRule(
-        rules_dict,
-        BackgroundTracingConfigImpl::CategoryPreset::BENCHMARK_STARTUP);
+    config->AddReactiveRule(rules_dict);
   } else {
-    base::Value dict(base::Value::Type::DICTIONARY);
-    base::Value rules_list(base::Value::Type::LIST);
-    rules_list.Append(std::move(rules_dict));
-    dict.SetKey("configs", std::move(rules_list));
-    config = BackgroundTracingConfigImpl::ReactiveFromDict(dict);
+    config =
+        BackgroundTracingConfigImpl::ReactiveFromDict(base::Value::Dict().Set(
+            "configs", base::Value::List().Append(std::move(rules_dict))));
   }
   DCHECK(FindStartupRuleInConfig(*config));
   return config;

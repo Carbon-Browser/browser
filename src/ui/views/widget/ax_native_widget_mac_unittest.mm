@@ -1,9 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
+#import <Accessibility/Accessibility.h>
 #import <Cocoa/Cocoa.h>
 
 #include "base/mac/mac_util.h"
@@ -14,6 +15,8 @@
 #include "ui/accessibility/ax_node_data.h"
 #import "ui/accessibility/platform/ax_platform_node_mac.h"
 #include "ui/base/ime/text_input_type.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/combobox_model.h"
 #import "ui/gfx/mac/coordinate_conversion.h"
 #include "ui/views/controls/button/label_button.h"
@@ -47,6 +50,8 @@ bool AXObjectHandlesSelector(id<NSAccessibility> ax_obj, SEL action) {
 }
 
 class FlexibleRoleTestView : public View {
+  METADATA_HEADER(FlexibleRoleTestView, View)
+
  public:
   explicit FlexibleRoleTestView(ax::mojom::Role role) : role_(role) {}
 
@@ -80,7 +85,12 @@ class FlexibleRoleTestView : public View {
   bool mouse_was_pressed_ = false;
 };
 
+BEGIN_METADATA(FlexibleRoleTestView)
+END_METADATA
+
 class TestLabelButton : public LabelButton {
+  METADATA_HEADER(TestLabelButton, LabelButton)
+
  public:
   TestLabelButton() {
     // Make sure the label doesn't cover the hit test co-ordinates.
@@ -92,6 +102,9 @@ class TestLabelButton : public LabelButton {
 
   using LabelButton::label;
 };
+
+BEGIN_METADATA(TestLabelButton)
+END_METADATA
 
 class TestWidgetDelegate : public test::TestDesktopWidgetDelegate {
  public:
@@ -163,9 +176,8 @@ class AXNativeWidgetMacTest : public test::WidgetTest {
 // on a retained accessibility object after the source view is deleted.
 TEST_F(AXNativeWidgetMacTest, Lifetime) {
   Textfield* view = AddChildTextfield(widget()->GetContentsView()->size());
-  base::scoped_nsobject<NSObject> ax_node(view->GetNativeViewAccessible(),
-                                          base::scoped_policy::RETAIN);
-  id<NSAccessibility> ax_obj = ToNSAccessibility(ax_node.get());
+  NSObject* ax_node = view->GetNativeViewAccessible();
+  id<NSAccessibility> ax_obj = ToNSAccessibility(ax_node);
 
   EXPECT_TRUE(AXObjectHandlesSelector(ax_obj, @selector(accessibilityValue)));
   EXPECT_NSEQ(kTestStringValue, ax_obj.accessibilityValue);
@@ -189,12 +201,11 @@ TEST_F(AXNativeWidgetMacTest, Lifetime) {
   // The only usually available array attribute is AXChildren, so go up a level
   // to the Widget to test that a bit. The default implementation just gets the
   // attribute normally and returns its size (if it's an array).
-  base::scoped_nsprotocol<id<NSAccessibility>> ax_parent(
-      ax_obj.accessibilityParent, base::scoped_policy::RETAIN);
+  id<NSAccessibility> ax_parent = ax_obj.accessibilityParent;
 
   // There are two children: a NativeFrameView and the TextField.
-  EXPECT_EQ(2u, ax_parent.get().accessibilityChildren.count);
-  EXPECT_EQ(ax_node.get(), ax_parent.get().accessibilityChildren[1]);
+  EXPECT_EQ(2u, ax_parent.accessibilityChildren.count);
+  EXPECT_EQ(ax_node, ax_parent.accessibilityChildren[1]);
 
   // If it is not an array, the default implementation throws an exception, so
   // it's impossible to test these methods further on |ax_node|, apart from the
@@ -229,7 +240,7 @@ TEST_F(AXNativeWidgetMacTest, Lifetime) {
 
   // The Widget is currently still around, but the TextField should be gone,
   // leaving just the NativeFrameView.
-  EXPECT_EQ(1u, ax_parent.get().accessibilityChildren.count);
+  EXPECT_EQ(1u, ax_parent.accessibilityChildren.count);
 }
 
 // Check that potentially keyboard-focusable elements are always leaf nodes.
@@ -329,14 +340,39 @@ TEST_F(AXNativeWidgetMacTest, PositionAttribute) {
   EXPECT_NSEQ(widget_origin, A11yElementAtMidpoint().accessibilityFrame.origin);
 }
 
-// Test for NSAccessibilityHelpAttribute.
-TEST_F(AXNativeWidgetMacTest, HelpAttribute) {
+// Test for surfacing information in TooltipText.
+TEST_F(AXNativeWidgetMacTest, TooltipText) {
   Label* label = new Label(base::SysNSStringToUTF16(kTestStringValue));
   label->SetSize(GetWidgetBounds().size());
-  EXPECT_NSEQ(@"", A11yElementAtMidpoint().accessibilityHelp);
+  EXPECT_NSEQ(nil, A11yElementAtMidpoint().accessibilityHelp);
   label->SetTooltipText(base::SysNSStringToUTF16(kTestPlaceholderText));
   widget()->GetContentsView()->AddChildView(label);
-  EXPECT_NSEQ(kTestPlaceholderText, A11yElementAtMidpoint().accessibilityHelp);
+
+  // The tooltip is exposed in accessibilityHelp only before macOS 11. After,
+  // it is accessibilityCustomContent. This is because the DescriptionFrom
+  // for the ToolTip string has been been set to kAriaDescription, and
+  // `aria-description` is exposed in AXCustomContent.
+  id<NSAccessibility> element = A11yElementAtMidpoint();
+
+  if (@available(macOS 11.0, *)) {
+    NSString* description = nil;
+    ASSERT_TRUE(
+        [element conformsToProtocol:@protocol(AXCustomContentProvider)]);
+    auto element_with_content =
+        static_cast<id<AXCustomContentProvider>>(element);
+    for (AXCustomContent* content in element_with_content
+             .accessibilityCustomContent) {
+      if ([content.label isEqualToString:@"description"]) {
+        // There should be only one AXCustomContent with the label
+        // "description".
+        EXPECT_EQ(description, nil);
+        description = content.value;
+      }
+    }
+    EXPECT_NSEQ(kTestPlaceholderText, description);
+  } else {
+    EXPECT_NSEQ(kTestPlaceholderText, element.accessibilityHelp);
+  }
 }
 
 // Test view properties that should report the native NSWindow, and test
@@ -377,13 +413,24 @@ TEST_F(AXNativeWidgetMacTest, TextfieldGenericAttributes) {
   textfield->RequestFocus();
   EXPECT_EQ(YES, ax_obj.isAccessibilityFocused);
 
-  // NSAccessibilityTitleAttribute.
-  EXPECT_NSEQ(NSAccessibilityTextFieldRole, ax_obj.accessibilityRole);
-  EXPECT_NSEQ(kTestTitle, ax_obj.accessibilityTitle);
+  // NSAccessibilityTitleAttribute, NSAccessibilityLabelAttribute.
+  // https://developer.apple.com/documentation/appkit/nsaccessibilityprotocol
+  // * accessibilityTitle() returns the title of the accessibility element,
+  //   for example a button's visible text.
+  // * accessibilityLabel() returns a short description of the accessibility
+  //   element.
+  // Textfield::SetAssociatedLabel() is what should be used if the textfield
+  // has a visible label. Because AddChildTextfield() uses SetAccessibleName()
+  // to set the accessible name to a flat string, the title should be exposed
+  // via accessibilityLabel() instead of accessibilityTitle();
+  EXPECT_NSEQ(@"", ax_obj.accessibilityTitle);
+  EXPECT_NSEQ(kTestTitle, ax_obj.accessibilityLabel);
   EXPECT_NSEQ(kTestStringValue, ax_obj.accessibilityValue);
 
+  // NSAccessibilityRoleAttribute,
   // NSAccessibilitySubroleAttribute and
   // NSAccessibilityRoleDescriptionAttribute.
+  EXPECT_NSEQ(NSAccessibilityTextFieldRole, ax_obj.accessibilityRole);
   EXPECT_NSEQ(nil, ax_obj.accessibilitySubrole);
   NSString* role_description =
       NSAccessibilityRoleDescription(NSAccessibilityTextFieldRole, nil);
@@ -442,6 +489,7 @@ TEST_F(AXNativeWidgetMacTest, TextfieldEditableAttributes) {
   EXPECT_EQ(textfield->GetSelectedText(),
             base::SysNSStringToUTF16(ax_node.accessibilitySelectedText));
   EXPECT_EQ(forward_range, gfx::Range(ax_node.accessibilitySelectedTextRange));
+  EXPECT_EQ(0, ax_node.accessibilityInsertionPointLineNumber);
 
   const gfx::Range reversed_range(6, 2);
   textfield->SetSelectedRange(reversed_range);
@@ -649,8 +697,8 @@ TEST_F(AXNativeWidgetMacTest, ProtectedTextfields) {
   EXPECT_TRUE(ax_node);
 
   // Create a native Cocoa NSSecureTextField to compare against.
-  base::scoped_nsobject<NSSecureTextField> cocoa_secure_textfield(
-      [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)]);
+  NSSecureTextField* cocoa_secure_textfield =
+      [[NSSecureTextField alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)];
 
   const SEL expected_supported_selectors[] = {
     @selector(accessibilityValue),
@@ -664,7 +712,7 @@ TEST_F(AXNativeWidgetMacTest, ProtectedTextfields) {
 
   for (auto* sel : expected_supported_selectors) {
     EXPECT_TRUE(AXObjectHandlesSelector(ax_node, sel));
-    EXPECT_TRUE(AXObjectHandlesSelector(cocoa_secure_textfield.get(), sel));
+    EXPECT_TRUE(AXObjectHandlesSelector(cocoa_secure_textfield, sel));
   }
 
   // TODO(https://crbug.com/939965): This should assert the same behavior of
@@ -689,6 +737,7 @@ TEST_F(AXNativeWidgetMacTest, ProtectedTextfields) {
   EXPECT_NSEQ(@"", ax_node.accessibilitySelectedText);
   EXPECT_NSEQ(NSMakeRange(kTestStringLength, 0),
               ax_node.accessibilitySelectedTextRange);
+  EXPECT_EQ(0, ax_node.accessibilityInsertionPointLineNumber);
 
   EXPECT_EQ(kTestStringLength, ax_node.accessibilityNumberOfCharacters);
   EXPECT_NSEQ(NSMakeRange(0, kTestStringLength),
@@ -705,6 +754,7 @@ TEST_F(AXNativeWidgetMacTest, ProtectedTextfields) {
   EXPECT_EQ(u"12ab", textfield->GetText());
   EXPECT_NSEQ(@"••••", ax_node.accessibilityValue);
   EXPECT_EQ(4, ax_node.accessibilityNumberOfCharacters);
+  EXPECT_EQ(0, ax_node.accessibilityInsertionPointLineNumber);
 }
 
 // Test text-specific attributes of Labels.

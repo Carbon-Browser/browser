@@ -1,19 +1,25 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NAVIGATION_PREDICTOR_ANCHOR_ELEMENT_PRELOADER_H_
 #define CHROME_BROWSER_NAVIGATION_PREDICTOR_ANCHOR_ELEMENT_PRELOADER_H_
 
+#include "base/memory/raw_ref.h"
+#include "content/public/browser/anchor_element_preconnect_delegate.h"
 #include "content/public/browser/document_service.h"
 #include "content/public/browser/preloading.h"
-#include "third_party/blink/public/mojom/loader/anchor_element_interaction_host.mojom.h"
 #include "url/scheme_host_port.h"
 
 extern const char kPreloadingAnchorElementPreloaderPreloadingTriggered[];
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
+
+// If you change this, please follow the process in
+// go/preloading-dashboard-updates to update the mapping reflected in
+// dashboard, or if you are not a Googler, please file an FYI bug on
+// https://crbug.new with component Internals>Preload.
 enum class AnchorElementPreloaderType {
   kUnspecified = 0,
   kPreconnect = 1,
@@ -23,13 +29,13 @@ enum class AnchorElementPreloaderType {
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
 enum class AnchorPreloadingFailureReason {
-  // Numbering starts from `kPreloadingFailureReasonCommonEnd` defined in
+  // Numbering starts from `kPreloadingFailureReasonContentEnd` defined in
   // //content/public/preloading.h . Advance numbering by +1 when adding a new
   // element.
 
   // The number of allowed anchor element preloading attempts has been exceeded.
   kLimitExceeded = static_cast<int>(
-      content::PreloadingFailureReason::kPreloadingFailureReasonCommonEnd),
+      content::PreloadingFailureReason::kPreloadingFailureReasonContentEnd),
 };
 
 // Helper function to convert AnchorPreloadingFailureReason to
@@ -37,28 +43,29 @@ enum class AnchorPreloadingFailureReason {
 content::PreloadingFailureReason ToFailureReason(
     AnchorPreloadingFailureReason reason);
 
-class AnchorElementPreloader
-    : content::DocumentService<blink::mojom::AnchorElementInteractionHost> {
+class AnchorElementPreloader : public content::AnchorElementPreconnectDelegate {
  public:
+  explicit AnchorElementPreloader(content::RenderFrameHost& render_frame_host);
   ~AnchorElementPreloader() override;
 
-  static void Create(
-      content::RenderFrameHost* render_frame_host,
-      mojo::PendingReceiver<blink::mojom::AnchorElementInteractionHost>
-          receiver);
+  // Disallows copy and move operations.
+  AnchorElementPreloader(const AnchorElementPreloader&) = delete;
+  AnchorElementPreloader& operator=(const AnchorElementPreloader&) = delete;
 
- private:
-  AnchorElementPreloader(
-      content::RenderFrameHost& render_frame_host,
-      mojo::PendingReceiver<blink::mojom::AnchorElementInteractionHost>
-          receiver);
+  AnchorElementPreloader(AnchorElementPreloader&&) = delete;
+  AnchorElementPreloader& operator=(AnchorElementPreloader&&) = delete;
 
   // Preconnects to the given URL `target`.
-  void OnPointerDown(const GURL& target) override;
+  void MaybePreconnect(const GURL& target) override;
 
+ private:
   void RecordUmaPreloadedTriggered(AnchorElementPreloaderType);
 
   void RecordUkmPreloadType(AnchorElementPreloaderType);
+
+  // content::PreloadingDecider, which inherits content::DocumentUserData, owns
+  // `this`, so `this` can access `render_frame_host_` safely.
+  const raw_ref<content::RenderFrameHost> render_frame_host_;
 
   std::set<url::SchemeHostPort> preconnected_targets_;
 };

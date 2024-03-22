@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/translate/chrome_translate_client.h"
 #include "chrome/browser/ui/translate/translate_bubble_model.h"
 
 namespace translate {
 class TranslateUIDelegate;
+class TranslateUILanguagesManager;
 }
 
 // The standard implementation of TranslateBubbleModel.
@@ -34,7 +36,7 @@ class TranslateBubbleModelImpl : public TranslateBubbleModel {
   // TranslateBubbleModel methods.
   TranslateBubbleModel::ViewState GetViewState() const override;
   void SetViewState(TranslateBubbleModel::ViewState view_state) override;
-  void ShowError(translate::TranslateErrors::Type error_type) override;
+  void ShowError(translate::TranslateErrors error_type) override;
   int GetNumberOfSourceLanguages() const override;
   int GetNumberOfTargetLanguages() const override;
   std::u16string GetSourceLanguageNameAt(int index) const override;
@@ -63,6 +65,7 @@ class TranslateBubbleModelImpl : public TranslateBubbleModel {
 
  private:
   std::unique_ptr<translate::TranslateUIDelegate> ui_delegate_;
+  raw_ptr<translate::TranslateUILanguagesManager> ui_languages_manager_;
   ViewState current_view_state_;
 
   bool translation_declined_;

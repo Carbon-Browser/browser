@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,8 @@
 
 // Messages for handling Java objects injected into JavaScript -----------------
 
-IPC_ENUM_TRAITS_MAX_VALUE(content::GinJavaBridgeError,
-                          content::kGinJavaBridgeErrorLast)
+IPC_ENUM_TRAITS_MAX_VALUE(content::mojom::GinJavaBridgeError,
+                          content::mojom::GinJavaBridgeError::kMaxValue)
 
 // Sent from browser to renderer to add a Java object with the given name.
 // Object IDs are generated on the browser side.
@@ -38,7 +38,7 @@ IPC_MESSAGE_ROUTED1(GinJavaBridgeMsg_RemoveNamedObject,
 // objects is enabled on the browser side.
 IPC_SYNC_MESSAGE_ROUTED1_1(GinJavaBridgeHostMsg_GetMethods,
                            int32_t /* object_id */,
-                           std::set<std::string> /* returned_method_names */)
+                           std::vector<std::string> /* returned_method_names */)
 
 // Sent from renderer to browser to find out, if an object has a method with
 // the given name.
@@ -48,7 +48,7 @@ IPC_SYNC_MESSAGE_ROUTED2_1(GinJavaBridgeHostMsg_HasMethod,
                            bool /* result */)
 
 // Sent from renderer to browser to invoke a method. Method arguments
-// are chained into |arguments| list. base::ListValue is used for |result| as
+// are chained into |arguments| list. base::Value::List is used for |result| as
 // a container to work around immutability of base::Value.
 // Empty result list indicates that an error has happened on the Java side
 // (either bridge-induced error or an unhandled Java exception) and an exception
@@ -59,9 +59,9 @@ IPC_SYNC_MESSAGE_ROUTED2_1(GinJavaBridgeHostMsg_HasMethod,
 IPC_SYNC_MESSAGE_ROUTED3_2(GinJavaBridgeHostMsg_InvokeMethod,
                            int32_t /* object_id */,
                            std::string /* method_name */,
-                           base::ListValue /* arguments */,
-                           base::ListValue /* result */,
-                           content::GinJavaBridgeError /* error_code */)
+                           base::Value::List /* arguments */,
+                           base::Value::List /* result */,
+                           content::mojom::GinJavaBridgeError /* error_code */)
 
 // Sent from renderer to browser in two cases:
 //

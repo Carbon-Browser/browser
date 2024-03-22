@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,11 @@ import android.view.Display;
 import com.google.vr.cardboard.DisplaySynchronizer;
 import com.google.vr.ndk.base.GvrApi;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
 import org.chromium.base.ContextUtils;
 import org.chromium.base.StrictModeContext;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
 import org.chromium.ui.display.DisplayAndroidManager;
 
 /**
@@ -35,13 +36,14 @@ public class NonPresentingGvrContext {
         Display display = DisplayAndroidManager.getDefaultDisplayForContext(context);
 
         try (StrictModeContext ignored = StrictModeContext.allowDiskReads()) {
-            mDisplaySynchronizer = new DisplaySynchronizer(context, display) {
-                @Override
-                public void onConfigurationChanged() {
-                    super.onConfigurationChanged();
-                    onDisplayConfigurationChanged();
-                }
-            };
+            mDisplaySynchronizer =
+                    new DisplaySynchronizer(context, display) {
+                        @Override
+                        public void onConfigurationChanged() {
+                            super.onConfigurationChanged();
+                            onDisplayConfigurationChanged();
+                        }
+                    };
         }
 
         // Creating the GvrApi can sometimes create the Daydream config file.

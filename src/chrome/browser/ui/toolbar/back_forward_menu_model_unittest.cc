@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "build/build_config.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -33,20 +32,13 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/models/image_model.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/gfx/image/image_unittest_util.h"
 
 using base::ASCIIToUTF16;
 using content::NavigationSimulator;
 using content::WebContentsTester;
 
 namespace {
-
-// Creates a bitmap of the specified color.
-SkBitmap CreateBitmap(SkColor color) {
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(16, 16);
-  bitmap.eraseColor(color);
-  return bitmap;
-}
 
 class FaviconDelegate : public ui::MenuModelDelegate {
  public:
@@ -113,12 +105,7 @@ class BackFwdMenuModelTest : public ChromeRenderViewHostTestHarness {
 
 class BackFwdMenuModelIncognitoTest : public ChromeRenderViewHostTestHarness {
  public:
-  BackFwdMenuModelIncognitoTest() {
-    // Enable kUpdateHistoryEntryPointsInIncognito feature flag to change menu
-    // content.
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kUpdateHistoryEntryPointsInIncognito);
-  }
+  BackFwdMenuModelIncognitoTest() = default;
 
   void LoadURLAndUpdateState(const char* url, const std::u16string& title) {
     NavigateAndCommit(GURL(url));
@@ -476,9 +463,9 @@ TEST_F(BackFwdMenuModelTest, ChapterStops) {
   EXPECT_EQ(32u, back_model->GetIndexOfNextChapterStop(31, true));
   EXPECT_FALSE(back_model->GetIndexOfNextChapterStop(32, true).has_value());
 
-  if (content::BackForwardCache::IsSameSiteBackForwardCacheFeatureEnabled()) {
+  if (content::BackForwardCache::IsBackForwardCacheFeatureEnabled()) {
     // The case below currently fails on the linux-bfcache-rel bot with
-    // same-site bfcache enabled, so return early.
+    // back/forward cache enabled, so return early.
     // TODO(https://crbug.com/1232883): re-enable this test.
     return;
   }
@@ -548,7 +535,7 @@ TEST_F(BackFwdMenuModelTest, FaviconLoadTest) {
   back_model.set_test_web_contents(web_contents());
   back_model.SetMenuModelDelegate(&favicon_delegate);
 
-  SkBitmap new_icon_bitmap(CreateBitmap(SK_ColorRED));
+  SkBitmap new_icon_bitmap(gfx::test::CreateBitmap(/*size=*/16, SK_ColorRED));
 
   GURL url1 = GURL("http://www.a.com/1");
   GURL url2 = GURL("http://www.a.com/2");

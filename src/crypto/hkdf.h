@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,17 @@
 #include <stddef.h>
 
 #include <string>
+#include <string_view>
 
 #include "base/containers/span.h"
-#include "base/strings/string_piece.h"
 #include "crypto/crypto_export.h"
 
 namespace crypto {
 
 CRYPTO_EXPORT
-std::string HkdfSha256(base::StringPiece secret,
-                       base::StringPiece salt,
-                       base::StringPiece info,
+std::string HkdfSha256(std::string_view secret,
+                       std::string_view salt,
+                       std::string_view info,
                        size_t derived_key_size);
 
 CRYPTO_EXPORT

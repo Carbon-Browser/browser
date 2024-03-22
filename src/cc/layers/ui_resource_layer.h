@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,8 @@ class CC_EXPORT UIResourceLayer : public Layer {
 
   // Sets the resource. If they don't exist already, the shared UI resource and
   // ID are generated and cached in a map in the associated UIResourceManager.
-  // Currently, this resource will never be released by the UIResourceManager.
+  // This resource will be released when all references of SkPixelRefs outside
+  // the associated UIResourceManager's map are dropped
   void SetBitmap(const SkBitmap& skbitmap);
 
   // An alternative way of setting the resource where an ID is used directly. If

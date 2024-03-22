@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,23 +6,26 @@
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <functional>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/check.h"
+#include "base/check_op.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
+#include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
+#include "components/update_client/activity_data_service.h"
 #include "components/update_client/component.h"
 #include "components/update_client/configurator.h"
 #include "components/update_client/persisted_data.h"
@@ -77,7 +80,7 @@ class UpdateCheckerImpl : public UpdateChecker {
                          int error,
                          int retry_after_sec);
 
-  base::ThreadChecker thread_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 
   const scoped_refptr<Configurator> config_;
   raw_ptr<PersistedData> metadata_ = nullptr;
@@ -90,14 +93,14 @@ UpdateCheckerImpl::UpdateCheckerImpl(scoped_refptr<Configurator> config,
     : config_(config), metadata_(metadata) {}
 
 UpdateCheckerImpl::~UpdateCheckerImpl() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 void UpdateCheckerImpl::CheckForUpdates(
     scoped_refptr<UpdateContext> context,
     const base::flat_map<std::string, std::string>& additional_attributes,
     UpdateCheckCallback update_check_callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   update_check_callback_ = std::move(update_check_callback);
 
@@ -141,7 +144,7 @@ void UpdateCheckerImpl::CheckForUpdatesHelper(
     const base::flat_map<std::string, std::string>& additional_attributes,
     const UpdaterStateAttributes& updater_state_attributes,
     const std::set<std::string>& active_ids) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (urls.empty()) {
     UpdateCheckFailed(ErrorCategory::kUpdateCheck,
@@ -153,24 +156,24 @@ void UpdateCheckerImpl::CheckForUpdatesHelper(
   // Components in this update check are either all foreground, or all
   // background since this member is inherited from the component's update
   // context. Pick the state of the first component to use in the update check.
-  DCHECK(!context->components.empty());
+  CHECK(!context->components.empty());
   const bool is_foreground =
       context->components.cbegin()->second->is_foreground();
-  DCHECK(
-      std::all_of(context->components.cbegin(), context->components.cend(),
-                  [is_foreground](IdToComponentPtrMap::const_reference& elem) {
-                    return is_foreground == elem.second->is_foreground();
-                  }));
+  CHECK(base::ranges::all_of(
+      context->components,
+      [is_foreground](IdToComponentPtrMap::const_reference& elem) {
+        return is_foreground == elem.second->is_foreground();
+      }));
 
   std::vector<std::string> sent_ids;
 
   std::vector<protocol_request::App> apps;
   for (const auto& app_id : context->components_to_check_for_updates) {
-    DCHECK_EQ(1u, context->components.count(app_id));
+    CHECK_EQ(1u, context->components.count(app_id));
     const auto& component = context->components.at(app_id);
-    DCHECK_EQ(component->id(), app_id);
+    CHECK_EQ(component->id(), app_id);
     const auto& crx_component = component->crx_component();
-    DCHECK(crx_component);
+    CHECK(crx_component);
 
     if (crx_component->requires_network_encryption &&
         !url.SchemeIsCryptographic()) {
@@ -187,11 +190,11 @@ void UpdateCheckerImpl::CheckForUpdatesHelper(
 
     apps.push_back(MakeProtocolApp(
         app_id, crx_component->version, crx_component->ap, crx_component->brand,
-        config_->GetLang(), install_source, crx_component->install_location,
-        crx_component->fingerprint, crx_component->installer_attributes,
-        metadata_->GetCohort(app_id), metadata_->GetCohortName(app_id),
-        metadata_->GetCohortHint(app_id), crx_component->channel,
-        crx_component->disabled_reasons,
+        config_->GetLang(), metadata_->GetInstallDate(app_id), install_source,
+        crx_component->install_location, crx_component->fingerprint,
+        crx_component->installer_attributes, metadata_->GetCohort(app_id),
+        metadata_->GetCohortHint(app_id), metadata_->GetCohortName(app_id),
+        crx_component->channel, crx_component->disabled_reasons,
         MakeProtocolUpdateCheck(!crx_component->updates_enabled,
                                 crx_component->target_version_prefix,
                                 crx_component->rollback_allowed,
@@ -249,7 +252,7 @@ void UpdateCheckerImpl::OnRequestSenderComplete(
     int error,
     const std::string& response,
     int retry_after_sec) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (error) {
     VLOG(1) << "RequestSender failed " << error;
@@ -270,7 +273,7 @@ void UpdateCheckerImpl::OnRequestSenderComplete(
     return;
   }
 
-  DCHECK_EQ(0, error);
+  CHECK_EQ(0, error);
   UpdateCheckSucceeded(context, parser->results(), retry_after_sec);
 }
 
@@ -278,7 +281,7 @@ void UpdateCheckerImpl::UpdateCheckSucceeded(
     scoped_refptr<UpdateContext> context,
     const ProtocolParser::Results& results,
     int retry_after_sec) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const int daynum = results.daystart_elapsed_days;
   for (const auto& result : results.list) {
@@ -304,16 +307,17 @@ void UpdateCheckerImpl::UpdateCheckSucceeded(
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(reply));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(reply));
 }
 
 void UpdateCheckerImpl::UpdateCheckFailed(ErrorCategory error_category,
                                           int error,
                                           int retry_after_sec) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  DCHECK_NE(0, error);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK_NE(0, error);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(update_check_callback_), absl::nullopt,
                      error_category, error, retry_after_sec));

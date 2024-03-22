@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -118,6 +118,13 @@ class PartnerBookmarksReader {
       favicon_base::GoogleFaviconServerRequestStatus status);
   void OnFaviconFetched(const base::android::JavaRef<jobject>& j_callback,
                         FaviconFetchResult result);
+  // Putting in class in order to set the friend class access for
+  // base::ScopedAllowBaseSyncPrimitives.
+  static void PrepareAndSetFavicon(jbyte* icon_bytes,
+                                   int icon_len,
+                                   bookmarks::BookmarkNode* node,
+                                   Profile* profile,
+                                   favicon_base::IconType icon_type);
 
   raw_ptr<PartnerBookmarksShim> partner_bookmarks_shim_;
   raw_ptr<Profile> profile_;

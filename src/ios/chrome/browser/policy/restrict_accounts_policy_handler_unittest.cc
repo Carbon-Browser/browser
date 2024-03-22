@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,19 +42,19 @@ class RestrictAccountsPolicyHandlerTest
 
   // Returns a List of valid patterns.
   base::Value ValidPatterns() {
-    base::Value value(base::Value::Type::LIST);
+    base::Value::List value;
     value.Append("*@example.com");
     value.Append("user@managedchrome.com");
-    return value;
+    return base::Value(std::move(value));
   }
 
   // Returns a List of invalid patterns.
   base::Value InvalidPatterns() {
-    base::Value value(base::Value::Type::LIST);
+    base::Value::List value;
     value.Append("*@example.com");
     value.Append("invalidPattern\\");
     value.Append("user@managedchrome.com");
-    return value;
+    return base::Value(std::move(value));
   }
 };
 
@@ -72,7 +72,7 @@ TEST_F(RestrictAccountsPolicyHandlerTest, ApplyPolicySettings) {
       store_->GetValue(prefs::kRestrictAccountsToPatterns, &pref_value));
   ASSERT_TRUE(pref_value);
 
-  absl::optional<base::Value> expected = ValidPatterns();
+  std::optional<base::Value> expected = ValidPatterns();
   EXPECT_EQ(expected, *pref_value);
 }
 
@@ -91,7 +91,7 @@ TEST_F(RestrictAccountsPolicyHandlerTest, ApplyInvalidPolicySettings) {
   ASSERT_TRUE(pref_value);
 
   // The setting is not filtering the invalid patterns out.
-  absl::optional<base::Value> expected = InvalidPatterns();
+  std::optional<base::Value> expected = InvalidPatterns();
   EXPECT_EQ(expected, *pref_value);
 }
 

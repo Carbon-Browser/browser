@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/new_tab_page_third_party/new_tab_page_third_party_handler.h"
 
+#include "base/feature_list.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/themes/theme_service.h"
@@ -14,6 +15,7 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/prefs/pref_service.h"
+#include "components/search/ntp_features.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/color_utils.h"
@@ -60,7 +62,6 @@ void NewTabPageThirdPartyHandler::NotifyAboutTheme() {
       color_provider.GetColor(kColorNewTabPageMostVisitedTileBackground);
   most_visited->use_white_tile_icon =
       color_utils::IsDark(most_visited->background_color);
-  most_visited->use_title_pill = false;
   theme->text_color = color_provider.GetColor(kColorNewTabPageText);
   most_visited->is_dark = !color_utils::IsDark(theme->text_color);
   theme->color_background = color_utils::SkColorToRgbaString(GetThemeColor(
@@ -73,7 +74,6 @@ void NewTabPageThirdPartyHandler::NotifyAboutTheme() {
     theme->has_custom_background =
         theme_provider->HasCustomImage(IDR_THEME_NTP_BACKGROUND);
     theme->id = profile_->GetPrefs()->GetString(prefs::kCurrentThemeID);
-    most_visited->use_title_pill = true;
   }
   theme->most_visited = std::move(most_visited);
   page_->SetTheme(std::move(theme));

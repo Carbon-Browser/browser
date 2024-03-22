@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/memory/raw_ptr.h"
 #include "content/browser/media/session/audio_focus_delegate.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "content/browser/media/session/media_session_impl.h"

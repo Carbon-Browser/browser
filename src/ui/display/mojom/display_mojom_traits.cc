@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -123,6 +123,10 @@ bool StructTraits<display::mojom::DisplayDataView, display::Display>::Read(
   if (!data.ReadSizeInPixels(&out->size_in_pixels_))
     return false;
 
+  if (!data.ReadNativeOrigin(&out->native_origin_)) {
+    return false;
+  }
+
   if (!data.ReadWorkArea(&out->work_area_))
     return false;
 
@@ -140,9 +144,13 @@ bool StructTraits<display::mojom::DisplayDataView, display::Display>::Read(
   if (!data.ReadMaximumCursorSize(&out->maximum_cursor_size_))
     return false;
 
-  if (!data.ReadColorSpaces(&out->color_spaces_))
-    return false;
+  gfx::DisplayColorSpaces color_spaces = out->GetColorSpaces();
 
+  if (!data.ReadColorSpaces(&color_spaces)) {
+    return false;
+  }
+
+  out->SetColorSpaces(color_spaces);
   out->set_color_depth(data.color_depth());
   out->set_depth_per_component(data.depth_per_component());
   out->set_is_monochrome(data.is_monochrome());

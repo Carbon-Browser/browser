@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,21 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
-#include "base/stl_util.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "cc/paint/paint_flags.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/views/chrome_widget_sublevel.h"
 #include "components/url_formatter/elide_url.h"
 #include "components/url_formatter/url_formatter.h"
 #include "third_party/skia/include/core/SkPath.h"
@@ -45,6 +46,8 @@
 #include "ui/views/controls/scrollbar/scroll_bar_views.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
+#include "ui/views/views_features.h"
 #include "ui/views/widget/root_view.h"
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
@@ -85,8 +88,8 @@ constexpr auto kMaxExpansionStepDuration = base::Milliseconds(150);
 constexpr auto kDestroyPopupDelay = base::Seconds(10);
 
 const gfx::FontList& GetFont() {
-  return views::style::GetFont(views::style::CONTEXT_LABEL,
-                               views::style::STYLE_PRIMARY);
+  return views::TypographyProvider::Get().GetFont(views::style::CONTEXT_LABEL,
+                                                  views::style::STYLE_PRIMARY);
 }
 
 }  // namespace
@@ -218,7 +221,9 @@ class StatusBubbleViews::StatusView : public views::View {
   raw_ptr<StatusBubbleViews> status_bubble_;
 
   // The currently-displayed text.
-  views::Label* text_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION views::Label* text_;
 
   // A timer used to delay destruction of the popup widget. This is meant to
   // balance the performance tradeoffs of rapid creation/destruction and the
@@ -586,7 +591,7 @@ StatusBubbleViews::StatusViewAnimation::StatusViewAnimation(
 StatusBubbleViews::StatusViewAnimation::~StatusViewAnimation() {
   // Remove ourself as a delegate so that we don't get notified when
   // animations end as a result of destruction.
-  set_delegate(NULL);
+  set_delegate(nullptr);
 }
 
 float StatusBubbleViews::StatusViewAnimation::GetCurrentOpacity() {
@@ -694,7 +699,7 @@ const int StatusBubbleViews::kShadowThickness = 1;
 
 StatusBubbleViews::StatusBubbleViews(views::View* base_view)
     : base_view_(base_view),
-      task_runner_(base::ThreadTaskRunnerHandle::Get().get()) {}
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault().get()) {}
 
 StatusBubbleViews::~StatusBubbleViews() {
   DestroyPopup();
@@ -738,7 +743,11 @@ void StatusBubbleViews::InitPopup() {
 #if !BUILDFLAG(IS_MAC)
     // Stack the popup above the base widget and below higher z-order windows.
     // This is unnecessary and even detrimental on Mac, see CreateBubbleWidget.
-    popup_->StackAboveWidget(frame);
+    if (base::FeatureList::IsEnabled(views::features::kWidgetLayering)) {
+      popup_->SetZOrderSublevel(ChromeWidgetSublevel::kSublevelHoverable);
+    } else {
+      popup_->StackAboveWidget(frame);
+    }
 #endif
     RepositionPopup();
   }
@@ -784,7 +793,11 @@ void StatusBubbleViews::SetBounds(int x, int y, int w, int h) {
   position_.SetPoint(base_view_->GetMirroredXWithWidthInView(x, w), y);
   size_.SetSize(w, h);
   RepositionPopup();
-  if (popup_.get() && contains_mouse_)
+
+  // Initializing the `popup_` views::Widget can trigger a window manager work
+  // area change that calls into this function while `view_` is still null, so
+  // check both `popup_` and `view_`.
+  if (popup_.get() && view_ && contains_mouse_)
     AvoidMouse(last_mouse_moved_location_);
 }
 
@@ -793,11 +806,6 @@ int StatusBubbleViews::GetWidthForURL(const std::u16string& url_string) {
   int elided_url_width = gfx::GetStringWidth(url_string, GetFont());
   // Add proper paddings
   return elided_url_width + (kShadowThickness + kTextHorizPadding) * 2 + 1;
-}
-
-void StatusBubbleViews::OnThemeChanged() {
-  if (popup_)
-    popup_->ThemeChanged();
 }
 
 void StatusBubbleViews::SetStatus(const std::u16string& status_text) {

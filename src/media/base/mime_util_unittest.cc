@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,7 @@
 #include "base/android/build_info.h"
 #endif
 
-namespace media {
-namespace internal {
+namespace media::internal {
 
 #if BUILDFLAG(USE_PROPRIETARY_CODECS)
 // TODO(https://crbug.com/1117275): Remove conditioning of kUsePropCodecs when
@@ -123,7 +122,11 @@ static MimeUtil::PlatformInfo VaryAllFields() {
 // This is to validate MimeUtil::IsCodecSupportedOnPlatform(), which is used
 // only on Android platform.
 static bool HasDolbyVisionSupport() {
+#if BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
+  return true;
+#else
   return false;
+#endif
 }
 
 static bool HasEac3Support() {
@@ -132,6 +135,10 @@ static bool HasEac3Support() {
 #else
   return false;
 #endif
+}
+
+static bool HasAc4Support() {
+  return false;
 }
 
 TEST(MimeUtilTest, CommonMediaMimeType) {
@@ -149,8 +156,8 @@ TEST(MimeUtilTest, CommonMediaMimeType) {
 
   EXPECT_EQ(kHlsSupported, IsSupportedMediaMimeType("application/x-mpegurl"));
   EXPECT_EQ(kHlsSupported, IsSupportedMediaMimeType("Application/X-MPEGURL"));
-  EXPECT_EQ(kHlsSupported, IsSupportedMediaMimeType(
-      "application/vnd.apple.mpegurl"));
+  EXPECT_EQ(kHlsSupported,
+            IsSupportedMediaMimeType("application/vnd.apple.mpegurl"));
   EXPECT_EQ(kHlsSupported, IsSupportedMediaMimeType("audio/mpegurl"));
   EXPECT_EQ(kHlsSupported, IsSupportedMediaMimeType("audio/x-mpegurl"));
   EXPECT_TRUE(IsSupportedMediaMimeType("audio/mp4"));
@@ -165,11 +172,10 @@ TEST(MimeUtilTest, CommonMediaMimeType) {
   EXPECT_TRUE(IsSupportedMediaMimeType("audio/aac"));
   EXPECT_TRUE(IsSupportedMediaMimeType("video/3gpp"));
 
-#if BUILDFLAG(ENABLE_MSE_MPEG2TS_STREAM_PARSER)
-  EXPECT_TRUE(IsSupportedMediaMimeType("video/mp2t"));
-#else
+  // Always an unsupported mime type, even when the parsers are compiled in
+  // MediaSource handles reporting support separately in order to not taint
+  // the src= support response.
   EXPECT_FALSE(IsSupportedMediaMimeType("video/mp2t"));
-#endif  // BUILDFLAG(ENABLE_MSE_MPEG2TS_STREAM_PARSER)
 
 #else
   EXPECT_FALSE(IsSupportedMediaMimeType("audio/x-m4a"));
@@ -211,18 +217,18 @@ TEST(MimeUtilTest, SplitAndStripCodecs) {
       {",", 2, {"", ""}, {"", ""}},
   };
 
-  for (size_t i = 0; i < std::size(tests); ++i) {
+  for (const auto& test : tests) {
     std::vector<std::string> codecs_out;
 
-    SplitCodecs(tests[i].original, &codecs_out);
-    ASSERT_EQ(tests[i].expected_size, codecs_out.size());
-    for (size_t j = 0; j < tests[i].expected_size; ++j)
-      EXPECT_EQ(tests[i].split_results[j], codecs_out[j]);
+    SplitCodecs(test.original, &codecs_out);
+    ASSERT_EQ(test.expected_size, codecs_out.size());
+    for (size_t j = 0; j < test.expected_size; ++j)
+      EXPECT_EQ(test.split_results[j], codecs_out[j]);
 
     StripCodecs(&codecs_out);
-    ASSERT_EQ(tests[i].expected_size, codecs_out.size());
-    for (size_t j = 0; j < tests[i].expected_size; ++j)
-      EXPECT_EQ(tests[i].strip_results[j], codecs_out[j]);
+    ASSERT_EQ(test.expected_size, codecs_out.size());
+    for (size_t j = 0; j < test.expected_size; ++j)
+      EXPECT_EQ(test.strip_results[j], codecs_out[j]);
   }
 }
 
@@ -504,22 +510,28 @@ TEST(MimeUtilTest, ParseVideoCodecString_SimpleCodecsHaveProfiles) {
   EXPECT_EQ(0, out_level);
   EXPECT_EQ(VideoColorSpace::REC709(), out_colorspace);
 
-// Valid Theora string.
-#if BUILDFLAG(IS_ANDROID)
-  // Theora not supported on Android.
-  EXPECT_FALSE(ParseVideoCodecString("video/ogg", "theora", &out_is_ambiguous,
-                                     &out_codec, &out_profile, &out_level,
-                                     &out_colorspace));
+  const bool kHaveTheoraCodec =
+#if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
+      base::FeatureList::IsEnabled(kTheoraVideoCodec);
 #else
-  EXPECT_TRUE(ParseVideoCodecString("video/ogg", "theora", &out_is_ambiguous,
-                                    &out_codec, &out_profile, &out_level,
-                                    &out_colorspace));
-  EXPECT_FALSE(out_is_ambiguous);
-  EXPECT_EQ(VideoCodec::kTheora, out_codec);
-  EXPECT_EQ(THEORAPROFILE_ANY, out_profile);
-  EXPECT_EQ(0, out_level);
-  EXPECT_EQ(VideoColorSpace::REC709(), out_colorspace);
+      false;
 #endif
+
+  // Valid Theora string.
+  if (kHaveTheoraCodec) {
+    EXPECT_TRUE(ParseVideoCodecString("video/ogg", "theora", &out_is_ambiguous,
+                                      &out_codec, &out_profile, &out_level,
+                                      &out_colorspace));
+    EXPECT_FALSE(out_is_ambiguous);
+    EXPECT_EQ(VideoCodec::kTheora, out_codec);
+    EXPECT_EQ(THEORAPROFILE_ANY, out_profile);
+    EXPECT_EQ(0, out_level);
+    EXPECT_EQ(VideoColorSpace::REC709(), out_colorspace);
+  } else {
+    EXPECT_FALSE(ParseVideoCodecString("video/ogg", "theora", &out_is_ambiguous,
+                                       &out_codec, &out_profile, &out_level,
+                                       &out_colorspace));
+  }
 }
 
 TEST(IsCodecSupportedOnAndroidTest, EncryptedCodecBehavior) {
@@ -590,7 +602,12 @@ TEST(IsCodecSupportedOnAndroidTest, EncryptedCodecBehavior) {
 
           case MimeUtil::DTS:
           case MimeUtil::DTSXP2:
+          case MimeUtil::DTSE:
             EXPECT_EQ(BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO), result);
+            break;
+
+          case MimeUtil::AC4:
+            EXPECT_EQ(HasAc4Support(), result);
             break;
         }
       });
@@ -656,7 +673,12 @@ TEST(IsCodecSupportedOnAndroidTest, ClearCodecBehavior) {
 
           case MimeUtil::DTS:
           case MimeUtil::DTSXP2:
+          case MimeUtil::DTSE:
             EXPECT_EQ(BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO), result);
+            break;
+
+          case MimeUtil::AC4:
+            EXPECT_EQ(HasAc4Support(), result);
             break;
         }
       });
@@ -726,5 +748,4 @@ TEST(IsCodecSupportedOnAndroidTest, AndroidHLSAAC) {
   // platform support).
 }
 
-}  // namespace internal
-}  // namespace media
+}  // namespace media::internal

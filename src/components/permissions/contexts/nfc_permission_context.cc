@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,18 +31,14 @@ ContentSetting NfcPermissionContext::GetPermissionStatusInternal(
 #endif
 
 void NfcPermissionContext::DecidePermission(
-    const PermissionRequestID& id,
-    const GURL& requesting_origin,
-    const GURL& embedding_origin,
-    bool user_gesture,
+    PermissionRequestData request_data,
     BrowserPermissionCallback callback) {
-  if (!user_gesture) {
+  if (!request_data.user_gesture) {
     std::move(callback).Run(CONTENT_SETTING_BLOCK);
     return;
   }
-  permissions::PermissionContextBase::DecidePermission(
-      id, requesting_origin, embedding_origin, user_gesture,
-      std::move(callback));
+  permissions::PermissionContextBase::DecidePermission(std::move(request_data),
+                                                       std::move(callback));
 }
 
 void NfcPermissionContext::UpdateTabContext(const PermissionRequestID& id,
@@ -50,7 +46,7 @@ void NfcPermissionContext::UpdateTabContext(const PermissionRequestID& id,
                                             bool allowed) {
   auto* content_settings =
       content_settings::PageSpecificContentSettings::GetForFrame(
-          id.render_process_id(), id.render_frame_id());
+          id.global_render_frame_host_id());
   if (!content_settings)
     return;
 
@@ -58,10 +54,6 @@ void NfcPermissionContext::UpdateTabContext(const PermissionRequestID& id,
     content_settings->OnContentAllowed(ContentSettingsType::NFC);
   else
     content_settings->OnContentBlocked(ContentSettingsType::NFC);
-}
-
-bool NfcPermissionContext::IsRestrictedToSecureOrigins() const {
-  return true;
 }
 
 }  // namespace permissions

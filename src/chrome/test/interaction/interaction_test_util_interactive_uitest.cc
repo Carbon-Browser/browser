@@ -1,29 +1,43 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/interaction/interaction_test_util.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "build/build_config.h"
 #include "chrome/browser/ui/tabs/tab_menu_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/tabs/tab.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chrome/test/interaction/interaction_test_util_browser.h"
 #include "content/public/test/browser_test.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/interaction/expect_call_in_scope.h"
 #include "ui/base/interaction/interaction_sequence.h"
 #include "ui/views/interaction/element_tracker_views.h"
+#include "ui/views/interaction/interaction_test_util_views.h"
+
+#if BUILDFLAG(IS_MAC)
+#include "ui/base/interaction/interaction_test_util_mac.h"
+#endif
 
 // This allows us to test features of InteractionTestUtil that only work in a
 // single-process production environment - specifically, ensuring it works with
 // context menus, which are native menus on Mac.
 class InteractionTestUtilInteractiveUitest : public InProcessBrowserTest {
  public:
-  InteractionTestUtilInteractiveUitest() = default;
+  InteractionTestUtilInteractiveUitest() {
+    test_util_.AddSimulator(
+        std::make_unique<views::test::InteractionTestUtilSimulatorViews>());
+#if BUILDFLAG(IS_MAC)
+    test_util_.AddSimulator(
+        std::make_unique<ui::test::InteractionTestUtilSimulatorMac>());
+#endif
+  }
+
   ~InteractionTestUtilInteractiveUitest() override = default;
 
  protected:
@@ -34,6 +48,8 @@ class InteractionTestUtilInteractiveUitest : public InProcessBrowserTest {
   ui::ElementContext GetContext() {
     return browser()->window()->GetElementContext();
   }
+
+  ui::test::InteractionTestUtil test_util_;
 };
 
 // We only use InputType::kDefault (the default) when testing context menus
@@ -66,7 +82,7 @@ IN_PROC_BROWSER_TEST_F(InteractionTestUtilInteractiveUitest,
         // Have to defer opening because this call is blocking on Mac;
         // subsequent steps will be called from within the run loop of the
         // context menu.
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, std::move(open_context_menu));
 #else
         // Conversely, on other platforms, this is already an async call and
@@ -77,9 +93,9 @@ IN_PROC_BROWSER_TEST_F(InteractionTestUtilInteractiveUitest,
       });
 
   auto click_menu_item =
-      base::BindOnce([](ui::InteractionSequence*, ui::TrackedElement* element) {
-        auto util = CreateInteractionTestUtil();
-        util->SelectMenuItem(element);
+      base::BindLambdaForTesting([&](ui::TrackedElement* element) {
+        ASSERT_EQ(ui::test::ActionResult::kSucceeded,
+                  test_util_.SelectMenuItem(element));
       });
 
   auto sequence =

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,6 @@ namespace vr {
 struct VR_BASE_EXPORT UiInitialState {
   UiInitialState();
   UiInitialState(const UiInitialState& other);
-  bool in_web_vr = false;
-  bool browsing_disabled = false;
-  bool has_or_can_request_record_audio_permission = true;
-  bool assets_supported = false;
-  bool supports_selection = true;
-  bool needs_keyboard_update = false;
-  bool is_standalone_vr_device = false;
-  bool create_tabs_view = false;
   bool gvr_input_support = false;
 };
 

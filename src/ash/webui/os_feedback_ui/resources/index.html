@@ -1,4 +1,4 @@
-<!-- Copyright 2021 The Chromium Authors. All rights reserved.
+<!-- Copyright 2021 The Chromium Authors
      Use of this source code is governed by a BSD-style license that can be
      found in the LICENSE file. -->
 <!doctype html>
@@ -9,6 +9,12 @@
   <style>
     html {
       background-color: var(--cros-bg-color);
+      height: 100%;
+      overflow: hidden;
+    }
+
+    html:has(body.jelly-enabled) {
+      background-color: var(--cros-sys-app_base_shaded);
     }
 
     body {
@@ -16,7 +22,7 @@
     }
 
     body {
-      margin: 0 40px 0;
+      margin: 0;
     }
   </style>
   <link rel="stylesheet" href="chrome://resources/chromeos/colors/cros_styles.css">

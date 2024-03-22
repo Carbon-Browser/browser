@@ -1,13 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ios/chrome/browser/net/ios_chrome_url_request_context_getter.h"
 
-#include "base/bind.h"
-#include "base/compiler_specific.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state_io_data.h"
-#include "ios/chrome/browser/ios_chrome_io_thread.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
+#include "ios/chrome/browser/browser_state/model/chrome_browser_state_io_data.h"
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
 #include "net/cookies/cookie_store.h"

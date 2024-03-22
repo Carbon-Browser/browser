@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/gpu/peak_gpu_memory_tracker_impl.h"
 
-#include "base/bind.h"
 #include "base/clang_profiling_buildflags.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -59,10 +59,14 @@ class TestGpuService : public viz::mojom::GpuService {
   void EstablishGpuChannel(int32_t client_id,
                            uint64_t client_tracing_id,
                            bool is_gpu_host,
-                           bool cache_shaders_on_disk,
                            EstablishGpuChannelCallback callback) override {}
   void SetChannelClientPid(int32_t client_id,
                            base::ProcessId client_pid) override {}
+  void SetChannelDiskCacheHandle(
+      int32_t client_id,
+      const gpu::GpuDiskCacheHandle& handle) override {}
+  void OnDiskCacheHandleDestoyed(
+      const gpu::GpuDiskCacheHandle& handle) override {}
   void CloseChannel(int32_t client_id) override {}
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
@@ -95,9 +99,21 @@ class TestGpuService : public viz::mojom::GpuService {
   void UnregisterDCOMPSurfaceHandle(
       const base::UnguessableToken& token) override {}
 #endif
+
+  void BindClientGmbInterface(
+      mojo::PendingReceiver<gpu::mojom::ClientGmbInterface> receiver,
+      int client_id) override {}
+
   void CreateVideoEncodeAcceleratorProvider(
       mojo::PendingReceiver<media::mojom::VideoEncodeAcceleratorProvider>
           receiver) override {}
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  void BindWebNNContextProvider(
+      mojo::PendingReceiver<webnn::mojom::WebNNContextProvider> receiver,
+      int32_t client_id) override {}
+#endif  // !BUILDFLAG(IS_CHROMEOS)
+
   void CreateGpuMemoryBuffer(gfx::GpuMemoryBufferId id,
                              const gfx::Size& size,
                              gfx::BufferFormat format,
@@ -106,8 +122,7 @@ class TestGpuService : public viz::mojom::GpuService {
                              gpu::SurfaceHandle surface_handle,
                              CreateGpuMemoryBufferCallback callback) override {}
   void DestroyGpuMemoryBuffer(gfx::GpuMemoryBufferId id,
-                              int client_id,
-                              const gpu::SyncToken& sync_token) override {}
+                              int client_id) override {}
   void CopyGpuMemoryBuffer(::gfx::GpuMemoryBufferHandle buffer_handle,
                            ::base::UnsafeSharedMemoryRegion shared_memory,
                            CopyGpuMemoryBufferCallback callback) override {}
@@ -116,9 +131,9 @@ class TestGpuService : public viz::mojom::GpuService {
 #if BUILDFLAG(IS_WIN)
   void RequestDXGIInfo(RequestDXGIInfoCallback callback) override {}
 #endif
-  void LoadedShader(int32_t client_id,
-                    const std::string& key,
-                    const std::string& data) override {}
+  void LoadedBlob(const gpu::GpuDiskCacheHandle& handle,
+                  const std::string& key,
+                  const std::string& data) override {}
   void WakeUpGpu() override {}
   void GpuSwitched(gl::GpuPreference active_gpu_heuristic) override {}
   void DisplayAdded() override {}
@@ -132,7 +147,7 @@ class TestGpuService : public viz::mojom::GpuService {
   void OnMemoryPressure(
       base::MemoryPressureListener::MemoryPressureLevel level) override {}
 #endif
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   void BeginCATransaction() override {}
   void CommitCATransaction(CommitCATransactionCallback callback) override {}
 #endif
@@ -140,7 +155,8 @@ class TestGpuService : public viz::mojom::GpuService {
   void WriteClangProfilingProfile(
       WriteClangProfilingProfileCallback callback) override {}
 #endif
-  void GetDawnInfo(GetDawnInfoCallback callback) override {}
+  void GetDawnInfo(bool collect_metrics,
+                   GetDawnInfoCallback callback) override {}
 
   void Crash() override {}
   void Hang() override {}

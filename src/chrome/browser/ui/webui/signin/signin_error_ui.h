@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class SigninErrorUI : public SigninWebDialogUI {
 
  private:
   void InitializeMessageHandlerForProfilePicker();
-  void Initialize(Browser* browser, bool is_system_profile);
+  void Initialize(Browser* browser, bool from_profile_picker);
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_SIGNIN_SIGNIN_ERROR_UI_H_

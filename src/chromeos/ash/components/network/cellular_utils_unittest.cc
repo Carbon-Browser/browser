@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,21 +43,21 @@ class CellularUtilsTest : public testing::Test {
 
 TEST_F(CellularUtilsTest, GetCurrentEuiccPath) {
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(ash::features::kCellularUseSecondEuicc);
+  feature_list.InitAndEnableFeature(features::kCellularUseSecondEuicc);
   HermesManagerClient::Get()->GetTestInterface()->ClearEuiccs();
-  EXPECT_FALSE(GetCurrentEuiccPath());
+  EXPECT_FALSE(cellular_utils::GetCurrentEuiccPath());
   // Verify that use-second-euicc flag should be ignored when Hermes only
   // exposes only one Euicc.
   HermesManagerClient::Get()->GetTestInterface()->AddEuicc(
       dbus::ObjectPath(kTestEuiccPath), kTestEid, /*is_active=*/true,
       /*physical_slot=*/0);
-  EXPECT_EQ(kTestEuiccPath, GetCurrentEuiccPath()->value());
+  EXPECT_EQ(kTestEuiccPath, cellular_utils::GetCurrentEuiccPath()->value());
   // Verify that use-second-euicc flag should take effect when Hermes exposes
   // two Euicc(s).
   HermesManagerClient::Get()->GetTestInterface()->AddEuicc(
       dbus::ObjectPath(kTestEuiccPath2), kTestEid2, /*is_active=*/false,
       /*physical_slot=*/1);
-  EXPECT_EQ(kTestEuiccPath2, GetCurrentEuiccPath()->value());
+  EXPECT_EQ(kTestEuiccPath2, cellular_utils::GetCurrentEuiccPath()->value());
 }
 
 }  // namespace ash

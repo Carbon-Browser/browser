@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,9 @@
  */
 
 import {FakeEntry, FilesAppDirEntry, FilesAppEntry} from '../../externs/files_app_entry_interfaces.js';
-import {VolumeInfo} from '../../externs/volume_info.js';
 
 import {vmTypeToIconName} from './icon_util.js';
-import {VolumeManagerCommon} from './volume_manager_types.js';
+import {getVolumeTypeFromRootType, RootType, VolumeType} from './volume_manager_types.js';
 
 /**
  * A reader compatible with DirectoryEntry.createReader (from Web Standards)
@@ -47,14 +46,13 @@ export class StaticReader {
   /**
    * Reads array of entries via |success| callback.
    *
-   * @param {function(!Array<!Entry|!FilesAppEntry>)} success: A callback that
+   * @param {function(!Array<!Entry>):void} success: A callback that
    *     will be called multiple times with the entries, last call will be
    *     called with an empty array indicating that no more entries available.
-   * @param {function(!FileError)=} error: A callback that's never
+   * @param {function(!FileError)=} _error: A callback that's never
    *     called, it's here to match the signature from the Web Standards.
-   * @override
    */
-  readEntries(success, error) {
+  readEntries(success, _error) {
     const entries = this.entries_;
     // readEntries is suppose to return empty result when there are no more
     // files to return, so we clear the entries_ attribute for next call.
@@ -77,23 +75,24 @@ export class CombinedReaders {
    */
   constructor(readers) {
     /**
-     * @private {!Array<!DirectoryReader>} Reversed readers so the readEntries
-     *     can just use pop() to get the next
+     * @private @type {!Array<!DirectoryReader>} Reversed readers so the
+     *     readEntries can just use pop() to get the next
      */
     this.readers_ = readers.reverse();
 
-    /** @private {!DirectoryReader} */
+    /** @private @type {!DirectoryReader} */
+    // @ts-ignore: error TS2322: Type 'DirectoryReader | undefined' is not
+    // assignable to type 'DirectoryReader'.
     this.currentReader_ = readers.pop();
   }
 
   /**
-   * @param {function(!Array<!Entry|!FilesAppEntry>)} success returning entries
+   * @param {function(!Array<!Entry>):void} success returning entries
    *     of all readers, it's called with empty Array when there is no more
    *     entries to return.
    * @param {function(!FileError)=} error called when error happens when reading
    *    from readers.
    * for this implementation.
-   * @override
    */
   readEntries(success, error) {
     if (!this.currentReader_) {
@@ -113,9 +112,14 @@ export class CombinedReaders {
           return;
         }
         // Move to next reader and start consuming it.
+        // @ts-ignore: error TS2322: Type 'DirectoryReader | undefined' is not
+        // assignable to type 'DirectoryReader'.
         this.currentReader_ = this.readers_.pop();
         this.readEntries(success, error);
       }
+      // @ts-ignore: error TS2345: Argument of type '((arg0: FileError) => any)
+      // | undefined' is not assignable to parameter of type 'ErrorCallback |
+      // undefined'.
     }, error);
   }
 }
@@ -132,27 +136,28 @@ export class EntryList {
   /**
    * @param {string} label: Label to be used when displaying to user, it should
    *    already translated.
-   * @param {VolumeManagerCommon.RootType} rootType root type.
+   * @param {RootType} rootType root type.
    * @param {string} devicePath Device path
    */
   constructor(label, rootType, devicePath = '') {
     /**
-     * @private {string} label: Label to be used when displaying to user, it
+     * @private @type {string} label: Label to be used when displaying to user,
+     *     it
      *      should be already translated.
      */
     this.label_ = label;
 
-    /** @private {VolumeManagerCommon.RootType} rootType root type. */
+    /** @private @type {RootType} rootType root type. */
     this.rootType_ = rootType;
 
     /**
-     * @private {string} devicePath Path belonging to the external media
+     * @private @type {string} devicePath Path belonging to the external media
      * device. Partitions on the same external drive have the same device path.
      */
     this.devicePath_ = devicePath;
 
     /**
-     * @private {!Array<!Entry|!FilesAppEntry>} children entries of
+     * @private @type {!Array<!Entry|!FilesAppEntry>} children entries of
      * this EntryList instance.
      */
     this.children_ = [];
@@ -161,6 +166,18 @@ export class EntryList {
     this.isFile = false;
     this.type_name = 'EntryList';
     this.fullPath = '/';
+
+    /**
+     * @type {?FileSystem}
+     */
+    this.filesystem = null;
+
+    /**
+     * @public @type {boolean} EntryList can be a placeholder of a real volume
+     * (e.g. MyFiles or DriveFakeRootEntryList), it can be disabled if the
+     * corresponding volume type is disabled.
+     */
+    this.disabled = false;
   }
 
   /**
@@ -184,20 +201,25 @@ export class EntryList {
     return this.label_;
   }
 
-  /** @override */
+  get devicePath() {
+    return this.devicePath_;
+  }
+
   get isNativeType() {
     return false;
   }
 
-  /** @override */
-  getMetadata(success, error) {
+  /**
+   * @param {function({modificationTime: Date, size: number}): void} success
+   * @param {function(FileError)=} _error
+   */
+  getMetadata(success, _error) {
     // Defaults modificationTime to current time just to have a valid value.
-    setTimeout(() => success({modificationTime: new Date()}));
+    setTimeout(() => success({modificationTime: new Date(), size: 0}));
   }
 
   /**
    * @return {string} used to compare entries.
-   * @override
    */
   toURL() {
     // There may be multiple entry lists. Append the device path to return
@@ -209,16 +231,12 @@ export class EntryList {
   }
 
   /**
-   * @param {function(Entry)|function(FilesAppEntry)} success callback, it
-   * returns itself since EntryList is intended to be used as root node and the
-   * Web Standard says to do so.
-   * @param {function(Entry)|function(FilesAppEntry)} error callback, not used
-   * for this implementation.
-   *
-   * @override
+   * @param {(function((DirectoryEntry|FilesAppDirEntry)):void)=} success
+   * @param {function(Error)=} _error callback.
    */
-  getParent(success, error) {
-    setTimeout(success, 0, this);
+  getParent(success, _error) {
+    const self = /** @type {!FilesAppDirEntry} */ (this);
+    setTimeout(() => success && success(self), 0, this);
   }
 
   /**
@@ -229,8 +247,8 @@ export class EntryList {
   addEntry(entry) {
     this.children_.push(entry);
     // Only VolumeEntry can have prefix set because it sets on VolumeInfo,
-    // which is then used on LocationInfo/BreadcrumbController.
-    if (entry.type_name == 'VolumeEntry') {
+    // which is then used on LocationInfo/PathComponent.
+    if (/** @type{FilesAppEntry} */ (entry).type_name == 'VolumeEntry') {
       const volumeEntry = /** @type {VolumeEntry} */ (entry);
       volumeEntry.setPrefix(this);
     }
@@ -241,26 +259,33 @@ export class EntryList {
    * DirectoryEntry.createReader (from Web Standards) that reads the children of
    * this EntryList instance.
    * This method is defined on DirectoryEntry.
-   * @override
    */
   createReader() {
     return new StaticReader(this.children_);
   }
 
   /**
-   * @param {!VolumeInfo} volumeInfo that's desired to be removed.
+   * @param {!import('../../externs/volume_info.js').VolumeInfo} volumeInfo
+   *     that's desired to be removed.
    * This method is specific to VolumeEntry/EntryList instance.
+   * Note: we compare the volumeId instead of the whole volumeInfo reference
+   * because the same volume could be mounted multiple times and every time a
+   * new volumeInfo is created.
    * @return {number} index of entry on this EntryList or -1 if not found.
    */
   findIndexByVolumeInfo(volumeInfo) {
-    return this.children_.findIndex(childEntry => {
-      return /** @type {VolumeEntry} */ (childEntry).volumeInfo === volumeInfo;
-    });
+    return this.children_.findIndex(
+        childEntry =>
+            /** @type {VolumeEntry} */ (childEntry).volumeInfo ?
+            /** @type {VolumeEntry} */ (childEntry).volumeInfo.volumeId ===
+                volumeInfo.volumeId :
+            false,
+    );
   }
 
   /**
    * Removes the first volume with the given type.
-   * @param {!VolumeManagerCommon.VolumeType} volumeType desired type.
+   * @param {!VolumeType} volumeType desired type.
    * This method is specific to VolumeEntry/EntryList instance.
    * @return {boolean} if entry was removed.
    */
@@ -278,12 +303,22 @@ export class EntryList {
 
   /**
    * Removes all entries that match the rootType.
-   * @param {!VolumeManagerCommon.RootType} rootType to be removed.
+   * @param {!RootType} rootType to be removed.
    * This method is specific to VolumeEntry/EntryList instance.
    */
   removeAllByRootType(rootType) {
-    this.children_ =
-        this.children_.filter(entry => entry.rootType !== rootType);
+    this.children_ = this.children_.filter(
+        entry => /** @type{FilesAppEntry} */ (entry).rootType !== rootType);
+  }
+
+  /**
+   * Removes all entries that match the volumeType.
+   * @param {!VolumeType} volumeType to be removed.
+   * This method is specific to VolumeEntry/EntryList instance.
+   */
+  removeAllByVolumeType(volumeType) {
+    this.children_ = this.children_.filter(
+        entry => /** @type {VolumeEntry} */ (entry).volumeType !== volumeType);
   }
 
   /**
@@ -302,10 +337,76 @@ export class EntryList {
     return false;
   }
 
-  /** @override */
   getNativeEntry() {
     return null;
   }
+
+  /**
+   * EntryList can be a placeholder for the real volume (e.g. MyFiles or
+   * DriveFakeRootEntryList), if so this field will be the volume type of the
+   * volume it represents.
+   * @return {VolumeType|null}
+   */
+  get volumeType() {
+    switch (this.rootType) {
+      case RootType.MY_FILES:
+        return VolumeType.DOWNLOADS;
+      case RootType.DRIVE_FAKE_ROOT:
+        return VolumeType.DRIVE;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * @param {!DirectoryEntry|!FilesAppDirEntry} newParent
+   * @param {string=} newName
+   * @param {(function(Entry)|function(FilesAppEntry))=} success
+   * @param {function(FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  copyTo(newParent, newName, success, error) {}
+
+  /**
+   * @param {!DirectoryEntry|!FilesAppDirEntry} newParent
+   * @param {string} newName
+   * @param {(function(Entry)|function(FilesAppEntry))=} success
+   * @param {function(FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  moveTo(newParent, newName, success, error) {}
+
+  /**
+   * @param {function(Entry):void|function(FilesAppEntry):void} success
+   * @param {function(FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  remove(success, error) {}
+
+  /**
+   * @param {string} path
+   * @param {!FileSystemFlags=} options
+   * @param {(function(!FileEntry)|function(!FilesAppEntry))=} success
+   * @param {function(!FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  getFile(path, options, success, error) {}
+
+  /**
+   * @param {string} path
+   * @param {!FileSystemFlags=} options
+   * @param {(function(!DirectoryEntry)|function(!FilesAppDirEntry))=} success
+   * @param {function(!FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  getDirectory(path, options, success, error) {}
+
+  /**
+   * @param {function():void} success
+   * @param {function(!Error)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  removeRecursively(success, error) {}
 }
 
 /**
@@ -321,18 +422,20 @@ export class EntryList {
  */
 export class VolumeEntry {
   /**
-   * @param {!VolumeInfo} volumeInfo: VolumeInfo for this entry.
+   * @param {!import('../../externs/volume_info.js').VolumeInfo} volumeInfo:
+   *     VolumeInfo for this entry.
    */
   constructor(volumeInfo) {
     /**
-     * @private {!VolumeInfo} holds a reference to VolumeInfo to delegate some
+     * @private @type {!import('../../externs/volume_info.js').VolumeInfo} holds
+     *     a reference to VolumeInfo to delegate some
      * method calls to it.
      */
     this.volumeInfo_ = volumeInfo;
 
     /**
-     * @private{!Array<!Entry|!FilesAppEntry>} additional entries that will be
-     * displayed together with this Volume's entries.
+     * @private @type{!Array<!Entry|!FilesAppEntry>} additional entries that
+     *     will be displayed together with this Volume's entries.
      */
     this.children_ = [];
 
@@ -345,16 +448,27 @@ export class VolumeEntry {
     }
     this.type_name = 'VolumeEntry';
 
-    // TODO(lucmult): consider deriving this from volumeInfo.
+    // TODO(b/271485133): consider deriving this from volumeInfo. Setting
+    // rootType here breaks some integration tests, e.g.
+    // saveAsDlpRestrictedAndroid.
+    /** @type {?RootType} */
     this.rootType = null;
+
+    this.disabled_ = false;
   }
 
   /**
-   * @return {!VolumeInfo} for this entry. This method is only valid for
+   * @return {!import('../../externs/volume_info.js').VolumeInfo} for this
+   *     entry. This method is only valid for
    * VolumeEntry instances.
    */
   get volumeInfo() {
     return this.volumeInfo_;
+  }
+
+  /** @return {!VolumeType} */
+  get volumeType() {
+    return this.volumeInfo_.volumeType;
   }
 
   /**
@@ -378,7 +492,6 @@ export class VolumeEntry {
   /**
    * @return {string} Full path for this volume.
    * This method is defined on Entry.
-   * @override.
    */
   get fullPath() {
     return this.rootEntry_ ? this.rootEntry_.fullPath : '';
@@ -394,26 +507,44 @@ export class VolumeEntry {
   }
 
   /**
+   * @return {boolean} if this entry is disabled. This method is only valid for
+   * VolumeEntry instances.
+   */
+  get disabled() {
+    return this.disabled_;
+  }
+
+  /**
+   * Sets the disabled property. This method is only valid for
+   * VolumeEntry instances.
+   * @param {boolean} disabled
+   */
+  set disabled(disabled) {
+    this.disabled_ = disabled;
+  }
+
+  /**
    * @see https://github.com/google/closure-compiler/blob/mastexterns/browser/fileapi.js
    * @param {string} path Entry fullPath.
    * @param {!FileSystemFlags=} options
-   * @param {function(!DirectoryEntry)=} success
-   * @param {function(!FileError)=} error
+   * @param {function(!DirectoryEntry):void=} success
+   * @param {function(!FileError):void=} error
    */
   getDirectory(path, options, success, error) {
     if (!this.rootEntry_) {
       error && setTimeout(error, 0, new Error('root entry not resolved yet.'));
       return;
     }
-    return this.rootEntry_.getDirectory(path, options, success, error);
+    // @ts-ignore: error TS2769: No overload matches this call.
+    this.rootEntry_.getDirectory(path, options, success, error);
   }
 
   /**
    * @see https://github.com/google/closure-compiler/blob/mastexterns/browser/fileapi.js
    * @param {string} path
    * @param {!FileSystemFlags=} options
-   * @param {function(!FileEntry)=} success
-   * @param {function(!FileError)=} error
+   * @param {function(!FileEntry):void=} success
+   * @param {function(!FileError):void=} error
    * @return {undefined}
    */
   getFile(path, options, success, error) {
@@ -421,12 +552,12 @@ export class VolumeEntry {
       error && setTimeout(error, 0, new Error('root entry not resolved yet.'));
       return;
     }
-    return this.rootEntry_.getFile(path, options, success, error);
+    // @ts-ignore: error TS2769: No overload matches this call.
+    this.rootEntry_.getFile(path, options, success, error);
   }
 
   /**
    * @return {string} Name for this volume.
-   * @override.
    */
   get name() {
     return this.volumeInfo_.label;
@@ -434,7 +565,6 @@ export class VolumeEntry {
 
   /**
    * @return {string}
-   * @override
    */
   toURL() {
     return this.rootEntry_ ? this.rootEntry_.toURL() : '';
@@ -445,41 +575,42 @@ export class VolumeEntry {
    * @return {string}
    */
   get iconName() {
-    if (this.volumeInfo_.volumeType ==
-        VolumeManagerCommon.VolumeType.GUEST_OS) {
+    if (this.volumeInfo_.volumeType == VolumeType.GUEST_OS) {
       return vmTypeToIconName(this.volumeInfo_.vmType);
     }
-    if (this.volumeInfo_.volumeType ==
-        VolumeManagerCommon.VolumeType.DOWNLOADS) {
-      return /** @type {string} */ (VolumeManagerCommon.VolumeType.MY_FILES);
+    if (this.volumeInfo_.volumeType == VolumeType.DOWNLOADS) {
+      return /** @type {string} */ (VolumeType.MY_FILES);
     }
     return /** @type {string} */ (this.volumeInfo_.volumeType);
   }
 
   /**
-   * @param {function(Entry)|function(FilesAppEntry)} success callback, it
-   * returns itself since EntryList is intended to be used as root node and the
-   * Web Standard says to do so.
-   * @param {function(Entry)|function(FilesAppEntry)} error callback, not used
-   * for this implementation.
-   *
-   * @override
+   * @param {function((DirectoryEntry|FilesAppDirEntry)):void=} success
+   *     callback, it returns itself since EntryList is intended to be used as
+   * root node and the Web Standard says to do so.
+   * @param {function(Error)=} _error callback, not used for this
+   *     implementation.
    */
-  getParent(success, error) {
-    setTimeout(success, 0, this);
+  getParent(success, _error) {
+    const self = /** @type {!FilesAppDirEntry} */ (this);
+    setTimeout(() => success && success(self), 0, this);
   }
 
-  /** @override */
+  /**
+   * @param {function({modificationTime: Date, size: number}): void} success
+   * @param {function(FileError)=} error
+   */
   getMetadata(success, error) {
+    // @ts-ignore: error TS2345: Argument of type '((arg0: FileError) => any) |
+    // undefined' is not assignable to parameter of type 'ErrorCallback |
+    // undefined'.
     this.rootEntry_.getMetadata(success, error);
   }
 
-  /** @override */
   get isNativeType() {
     return true;
   }
 
-  /** @override */
   getNativeEntry() {
     return this.rootEntry_;
   }
@@ -488,7 +619,6 @@ export class VolumeEntry {
    * @return {!DirectoryReader} Returns a reader from root entry, which is
    * compatible with DirectoryEntry.createReader (from Web Standards).
    * This method is defined on DirectoryEntry.
-   * @override
    */
   createReader() {
     const readers = [];
@@ -520,27 +650,35 @@ export class VolumeEntry {
   addEntry(entry) {
     this.children_.push(entry);
     // Only VolumeEntry can have prefix set because it sets on VolumeInfo,
-    // which is then used on LocationInfo/BreadcrumbController.
-    if (entry.type_name == 'VolumeEntry') {
+    // which is then used on LocationInfo/PathComponent.
+    if (/** @type {!FilesAppEntry} */ (entry).type_name == 'VolumeEntry') {
       const volumeEntry = /** @type {VolumeEntry} */ (entry);
       volumeEntry.setPrefix(this);
     }
   }
 
   /**
-   * @param {!VolumeInfo} volumeInfo that's desired to be removed.
+   * @param {!import('../../externs/volume_info.js').VolumeInfo} volumeInfo
+   *     that's desired to be removed.
    * This method is specific to VolumeEntry/EntryList instance.
+   * Note: we compare the volumeId instead of the whole volumeInfo reference
+   * because the same volume could be mounted multiple times and every time a
+   * new volumeInfo is created.
    * @return {number} index of entry within VolumeEntry or -1 if not found.
    */
   findIndexByVolumeInfo(volumeInfo) {
     return this.children_.findIndex(
         childEntry =>
-            /** @type {VolumeEntry} */ (childEntry).volumeInfo === volumeInfo);
+            /** @type {VolumeEntry} */ (childEntry).volumeInfo ?
+            /** @type {VolumeEntry} */ (childEntry).volumeInfo.volumeId ===
+                volumeInfo.volumeId :
+            false,
+    );
   }
 
   /**
    * Removes the first volume with the given type.
-   * @param {!VolumeManagerCommon.VolumeType} volumeType desired type.
+   * @param {!VolumeType} volumeType desired type.
    * This method is specific to VolumeEntry/EntryList instance.
    * @return {boolean} if entry was removed.
    */
@@ -558,12 +696,22 @@ export class VolumeEntry {
 
   /**
    * Removes all entries that match the rootType.
-   * @param {!VolumeManagerCommon.RootType} rootType to be removed.
+   * @param {!RootType} rootType to be removed.
    * This method is specific to VolumeEntry/EntryList instance.
    */
   removeAllByRootType(rootType) {
-    this.children_ =
-        this.children_.filter(entry => entry.rootType !== rootType);
+    this.children_ = this.children_.filter(
+        entry => /** @type {!FilesAppEntry} */ (entry).rootType !== rootType);
+  }
+
+  /**
+   * Removes all entries that match the volumeType.
+   * @param {!VolumeType} volumeType to be removed.
+   * This method is specific to VolumeEntry/EntryList instance.
+   */
+  removeAllByVolumeType(volumeType) {
+    this.children_ = this.children_.filter(
+        entry => /** @type {VolumeEntry} */ (entry).volumeType !== volumeType);
   }
 
   /**
@@ -581,6 +729,38 @@ export class VolumeEntry {
     }
     return false;
   }
+
+  /**
+   * @param {!DirectoryEntry|!FilesAppDirEntry} newParent
+   * @param {string=} newName
+   * @param {(function(Entry)|function(FilesAppEntry))=} success
+   * @param {function(FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  copyTo(newParent, newName, success, error) {}
+
+  /**
+   * @param {!DirectoryEntry|!FilesAppDirEntry} newParent
+   * @param {string} newName
+   * @param {(function(!Entry)|function(!FilesAppEntry))=} success
+   * @param {function(!FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  moveTo(newParent, newName, success, error) {}
+
+  /**
+   * @param {function(!Entry):void|function(!FilesAppEntry):void} success
+   * @param {function(!FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  remove(success, error) {}
+
+  /**
+   * @param {function():void} success
+   * @param {function(!Error)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  removeRecursively(success, error) {}
 }
 
 /**
@@ -592,70 +772,84 @@ export class VolumeEntry {
 export class FakeEntryImpl {
   /**
    * @param {string} label Translated text to be displayed to user.
-   * @param {!VolumeManagerCommon.RootType} rootType Root type of this entry.
+   * @param {!RootType} rootType Root type of this entry.
    * @param {chrome.fileManagerPrivate.SourceRestriction=} opt_sourceRestriction
    *    used on Recents to filter the source of recent files/directories.
-   * @param {chrome.fileManagerPrivate.RecentFileType=} opt_recentFileType
+   * @param {chrome.fileManagerPrivate.FileCategory=} opt_fileCategory
    *    used on Recents to filter recent files by their file types.
    */
-  constructor(label, rootType, opt_sourceRestriction, opt_recentFileType) {
+  constructor(label, rootType, opt_sourceRestriction, opt_fileCategory) {
     /**
-     * @public {string} label: Label to be used when displaying to user, it
-     *      should be already translated.
+     * @public @type {string} label: Label to be used when displaying to user,
+     * it should be already translated.
      */
     this.label = label;
 
-    /** @public {string} Name for this volume. */
+    /** @public @type {string} Name for this volume. */
     this.name = label;
 
-    /** @public {!VolumeManagerCommon.RootType} */
+    /** @public @type {!RootType} */
     this.rootType = rootType;
 
-    /** @public {boolean} true FakeEntry are always directory-like. */
+    /** @public @type {boolean} true FakeEntry are always directory-like. */
     this.isDirectory = true;
 
-    /** @public {boolean} false FakeEntry are always directory-like. */
+    /** @public @type {boolean} false FakeEntry are always directory-like. */
     this.isFile = false;
 
     /**
-     * @public {chrome.fileManagerPrivate.SourceRestriction|undefined} It's used
-     * to communicate restrictions about sources to
+     * @public @type {boolean} false FakeEntry can be disabled if it represents
+     * the placeholder of the real volume.
+     */
+    this.disabled = false;
+
+    /**
+     * @public @type {chrome.fileManagerPrivate.SourceRestriction|undefined}
+     * It's used to communicate restrictions about sources to
      * chrome.fileManagerPrivate.getRecentFiles API.
      */
     this.sourceRestriction = opt_sourceRestriction;
 
     /**
-     * @public {chrome.fileManagerPrivate.RecentFileType|undefined} It's used to
-     * communicate file-type filter to chrome.fileManagerPrivate.getRecentFiles
-     * API.
+     * @public @type {chrome.fileManagerPrivate.FileCategory|undefined} It's
+     * used to communicate file-type filter to
+     * chrome.fileManagerPrivate.getRecentFiles API.
      */
-    this.recentFileType = opt_recentFileType;
+    this.fileCategory = opt_fileCategory;
 
     /**
-     * @public {string} the class name for this class. It's workaround for the
-     * fact that an instance created on foreground page and sent to background
-     * page can't be checked with "instanceof".
+     * @public @type {string} the class name for this class. It's workaround for
+     * the fact that an instance created on foreground page and sent to
+     * background page can't be checked with "instanceof".
      */
     this.type_name = 'FakeEntry';
 
     this.fullPath = '/';
+
+    /**
+     * @type {?FileSystem}
+     */
+    this.filesystem = null;
   }
 
   /**
    * FakeEntry is used as root, so doesn't have a parent and should return
    * itself.
-   *
-   *  @override
+   * @param {(function((DirectoryEntry|FilesAppDirEntry)):void)=} success
+   *     callback, it returns itself since EntryList is intended to be used as
+   * root node and the Web Standard says to do so.
+   * @param {function(Error)=} _error callback, not used for this
+   *     implementation.
    */
-  getParent(success, error) {
-    setTimeout(success, 0, this);
+  getParent(success, _error) {
+    const self = /** @type {!FilesAppDirEntry} */ (this);
+    setTimeout(() => success && success(self), 0, this);
   }
 
-  /** @override */
   toURL() {
     let url = 'fake-entry://' + this.rootType;
-    if (this.recentFileType) {
-      url += '/' + this.recentFileType;
+    if (this.fileCategory) {
+      url += '/' + this.fileCategory;
     }
     return url;
   }
@@ -674,34 +868,27 @@ export class FakeEntryImpl {
    * @return {string}
    */
   get iconName() {
-    // Recent roots use "recent-file-type" to customize the icon.
-    // TODO(lucmult): Change the CSS to use only root-type-icon and fix the test
-    // selectors.
-    if (this.rootType === VolumeManagerCommon.RootType.RECENT_AUDIO ||
-        this.rootType === VolumeManagerCommon.RootType.RECENT_IMAGES ||
-        this.rootType === VolumeManagerCommon.RootType.RECENT_VIDEOS) {
-      return /** @type {string}  */ (VolumeManagerCommon.RootType.RECENT);
-    }
     // When Drive volume isn't available yet, the FakeEntry should show the
     // "drive" icon.
-    if (this.rootType === VolumeManagerCommon.RootType.DRIVE_FAKE_ROOT) {
-      return /** @type {string}  */ (VolumeManagerCommon.RootType.DRIVE);
+    if (this.rootType === RootType.DRIVE_FAKE_ROOT) {
+      return /** @type {string}  */ (RootType.DRIVE);
     }
 
     return /** @type{string} */ (this.rootType);
   }
 
-  /** @override */
-  getMetadata(success, error) {
-    setTimeout(() => success({}));
+  /**
+   * @param {function({modificationTime: Date, size: number}): void} success
+   * @param {function(FileError)=} _error
+   */
+  getMetadata(success, _error) {
+    setTimeout(() => success({modificationTime: new Date(), size: 0}));
   }
 
-  /** @override */
   get isNativeType() {
     return false;
   }
 
-  /** @override */
   getNativeEntry() {
     return null;
   }
@@ -709,11 +896,75 @@ export class FakeEntryImpl {
   /**
    * @return {!DirectoryReader} Returns a reader compatible with
    * DirectoryEntry.createReader (from Web Standards) that reads 0 entries.
-   * @override
    */
   createReader() {
     return new StaticReader([]);
   }
+
+  /**
+   * FakeEntry can be a placeholder for the real volume, if so this field will
+   * be the volume type of the volume it represents.
+   * @return {VolumeType|null}
+   */
+  get volumeType() {
+    // Recent rootType has no corresponding volume type, and it will throw error
+    // in the below getVolumeTypeFromRootType() call, we need to return null
+    // here.
+    if (this.rootType === RootType.RECENT) {
+      return null;
+    }
+    return getVolumeTypeFromRootType(this.rootType);
+  }
+
+  /**
+   * @param {!DirectoryEntry|!FilesAppDirEntry} newParent
+   * @param {string=} newName
+   * @param {(function(Entry)|function(FilesAppEntry))=} success
+   * @param {function(FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  copyTo(newParent, newName, success, error) {}
+
+  /**
+   * @param {!DirectoryEntry|!FilesAppDirEntry} newParent
+   * @param {string} newName
+   * @param {(function(Entry)|function(FilesAppEntry))=} success
+   * @param {function(FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  moveTo(newParent, newName, success, error) {}
+
+  /**
+   * @param {function(Entry):void|function(FilesAppEntry):void} success
+   * @param {function(FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  remove(success, error) {}
+
+  /**
+   * @param {string} path
+   * @param {!FileSystemFlags=} options
+   * @param {(function(!FileEntry)|function(!FilesAppEntry))=} success
+   * @param {function(!FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  getFile(path, options, success, error) {}
+
+  /**
+   * @param {string} path
+   * @param {!FileSystemFlags=} options
+   * @param {(function(!DirectoryEntry)|function(!FilesAppDirEntry))=} success
+   * @param {function(!FileError)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  getDirectory(path, options, success, error) {}
+
+  /**
+   * @param {function():void} success
+   * @param {function(!Error)=} error
+   */
+  // @ts-ignore: error TS6133: 'error' is declared but its value is never read.
+  removeRecursively(success, error) {}
 }
 
 /**
@@ -730,17 +981,17 @@ export class GuestOsPlaceholder extends FakeEntryImpl {
    *     VM
    */
   constructor(label, guest_id, vm_type) {
-    super(label, VolumeManagerCommon.RootType.GUEST_OS, undefined, undefined);
+    super(label, RootType.GUEST_OS, undefined, undefined);
 
     /**
-     * @public {number} The id of this guest
+     * @public @type {number} The id of this guest
      */
     this.guest_id = guest_id;
 
     /**
-     * @public {string} the class name for this class. It's workaround for the
-     * fact that an instance created on foreground page and sent to background
-     * page can't be checked with "instanceof".
+     * @public @type {string} the class name for this class. It's workaround for
+     * the fact that an instance created on foreground page and sent to
+     * background page can't be checked with "instanceof".
      */
     this.type_name = 'GuestOsPlaceholder';
 
@@ -748,9 +999,9 @@ export class GuestOsPlaceholder extends FakeEntryImpl {
   }
 
   /**
-   * @override
    * String used to determine the icon.
    * @return {string}
+   * @override
    */
   get iconName() {
     return vmTypeToIconName(this.vm_type);
@@ -759,5 +1010,13 @@ export class GuestOsPlaceholder extends FakeEntryImpl {
   /** @override */
   toURL() {
     return `fake-entry://guest-os/${this.guest_id}`;
+  }
+
+  /** @override */
+  get volumeType() {
+    if (this.vm_type === chrome.fileManagerPrivate.VmType.ARCVM) {
+      return VolumeType.ANDROID_FILES;
+    }
+    return VolumeType.GUEST_OS;
   }
 }

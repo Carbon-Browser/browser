@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
 #include "cc/animation/animation.h"
 #include "cc/animation/animation_events.h"
@@ -196,7 +197,7 @@ void TestHostClient::RegisterElementId(ElementId element_id,
   ElementIdToTestLayer& layers_in_tree = list_type == ElementListType::ACTIVE
                                              ? layers_in_active_tree_
                                              : layers_in_pending_tree_;
-  DCHECK(layers_in_tree.find(element_id) == layers_in_tree.end());
+  DCHECK(!base::Contains(layers_in_tree, element_id));
   layers_in_tree[element_id] = TestLayer::Create();
 }
 
@@ -412,11 +413,11 @@ void TestAnimationDelegate::NotifyAnimationTakeover(
 }
 
 void TestAnimationDelegate::NotifyLocalTimeUpdated(
-    absl::optional<base::TimeDelta> local_time) {}
+    std::optional<base::TimeDelta> local_time) {}
 
 AnimationTimelinesTest::AnimationTimelinesTest()
-    : client_(ThreadInstance::MAIN),
-      client_impl_(ThreadInstance::IMPL),
+    : client_(ThreadInstance::kMain),
+      client_impl_(ThreadInstance::kImpl),
       host_(nullptr),
       host_impl_(nullptr),
       timeline_id_(AnimationIdProvider::NextTimelineId()),
@@ -512,7 +513,7 @@ void AnimationTimelinesTest::TickAnimationsTransferEvents(
 KeyframeEffect* AnimationTimelinesTest::GetKeyframeEffectForElementId(
     ElementId element_id) {
   const scoped_refptr<const ElementAnimations> element_animations =
-      host_->GetElementAnimationsForElementId(element_id);
+      host_->GetElementAnimationsForElementIdForTesting(element_id);
   return element_animations
              ? element_animations->FirstKeyframeEffectForTesting()
              : nullptr;
@@ -521,7 +522,7 @@ KeyframeEffect* AnimationTimelinesTest::GetKeyframeEffectForElementId(
 KeyframeEffect* AnimationTimelinesTest::GetImplKeyframeEffectForLayerId(
     ElementId element_id) {
   const scoped_refptr<const ElementAnimations> element_animations =
-      host_impl_->GetElementAnimationsForElementId(element_id);
+      host_impl_->GetElementAnimationsForElementIdForTesting(element_id);
   return element_animations
              ? element_animations->FirstKeyframeEffectForTesting()
              : nullptr;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,8 +61,8 @@ void RecordCpuRestrictionVMResult(CpuRestrictionVmResult result) {
 // instance is being unthrottled.
 // This function can only be called when the instance is being unthrottled.
 UnthrottlingReason GetUnthrottlingReason(
-    const std::vector<std::unique_ptr<chromeos::ThrottleObserver>>& observers) {
-  std::vector<chromeos::ThrottleObserver*> active_observers;
+    const std::vector<std::unique_ptr<ash::ThrottleObserver>>& observers) {
+  std::vector<ash::ThrottleObserver*> active_observers;
 
   // Check which observer(s) are active.
   for (const auto& observer : observers) {
@@ -246,6 +246,8 @@ class ArcInstanceThrottleFactory
 
   ArcInstanceThrottleFactory() {
     DependsOn(ArcBootPhaseMonitorBridgeFactory::GetInstance());
+    DependsOn(ArcMetricsServiceFactory::GetInstance());
+    DependsOn(ArcAppLaunchNotifierFactory::GetInstance());
   }
   ~ArcInstanceThrottleFactory() override = default;
 };
@@ -296,18 +298,23 @@ ArcInstanceThrottle::ArcInstanceThrottle(content::BrowserContext* context,
   AddObserver(std::make_unique<ArcPowerThrottleObserver>());
   AddObserver(std::make_unique<ArcProvisioningThrottleObserver>());
   AddObserver(std::make_unique<ArcSwitchThrottleObserver>());
-  // This one is controlled by chromeos::ArcPowerControlHandler.
+  // This one is controlled by ash::ArcPowerControlHandler.
   AddObserver(std::make_unique<ash::ThrottleObserver>(
       kChromeArcPowerControlPageObserver));
 
   StartObservers();
   DCHECK(bridge_);
   bridge_->power()->AddObserver(this);
+
+  ArcMetricsService::GetForBrowserContext(context)->AddBootTypeObserver(this);
 }
 
 ArcInstanceThrottle::~ArcInstanceThrottle() = default;
 
 void ArcInstanceThrottle::Shutdown() {
+  ArcMetricsService::GetForBrowserContext(context())->RemoveBootTypeObserver(
+      this);
+
   bridge_->power()->RemoveObserver(this);
 
   StopObservers();
@@ -315,6 +322,25 @@ void ArcInstanceThrottle::Shutdown() {
 
 void ArcInstanceThrottle::OnConnectionReady() {
   NotifyCpuRestriction(ToCpuRestriction(should_throttle()));
+}
+
+void ArcInstanceThrottle::OnBootTypeRetrieved(mojom::BootType boot_type) {
+  switch (boot_type) {
+    case mojom::BootType::UNKNOWN:
+      break;
+    case mojom::BootType::FIRST_BOOT:
+    case mojom::BootType::FIRST_BOOT_AFTER_UPDATE:
+      // ARCVM vCPUs tend to be very busy on those boots. Allow Chrome to use
+      // the enforcing quota mode to cap the VM's CPU usage.
+      return;
+    case mojom::BootType::REGULAR_BOOT:
+      // On the other hand, regular boot does not usually consume that much vCPU
+      // time. Disable quota enforcement now to prevent unnecessary ANRs from
+      // happening.
+      never_enforce_quota_ = true;
+      return;
+  }
+  NOTREACHED();
 }
 
 void ArcInstanceThrottle::ThrottleInstance(bool should_throttle) {
@@ -368,7 +394,7 @@ void ArcInstanceThrottle::ThrottleInstance(bool should_throttle) {
                               CpuRestrictionState::CPU_RESTRICTION_BACKGROUND);
 
   if (arc_has_booted && !never_enforce_quota_ && is_throttling) {
-    // TODO(yusukes): Do not use quota when Android VPN is in use.
+    // TODO(khmel): Do not use quota when Android VPN is in use.
     use_quota = true;
     DVLOG(2) << "Enforcing cfs_quota";
   }
@@ -392,9 +418,14 @@ void ArcInstanceThrottle::NotifyCpuRestriction(
 }
 
 ArcBootPhaseThrottleObserver* ArcInstanceThrottle::GetBootObserver() {
-  chromeos::ThrottleObserver* observer =
+  ash::ThrottleObserver* observer =
       GetObserverByName(kArcBootPhaseThrottleObserverName);
   return static_cast<ArcBootPhaseThrottleObserver*>(observer);
+}
+
+// static
+void ArcInstanceThrottle::EnsureFactoryBuilt() {
+  ArcInstanceThrottleFactory::GetInstance();
 }
 
 }  // namespace arc

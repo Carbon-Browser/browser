@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """The WebAssembly benchmark of PSPDFKit
@@ -12,7 +12,7 @@ import page_sets
 from benchmarks import press
 
 
-@benchmark.Info(emails=['ahaas@chromium.org'],
+@benchmark.Info(emails=['ahaas@chromium.org', 'vahl@chromium.org'],
                 component='Blink>JavaScript>WebAssembly')
 class WasmPsPdfKit(press._PressBenchmark):  # pylint: disable=protected-access
   @classmethod

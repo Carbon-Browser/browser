@@ -1,52 +1,42 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/policy/signin_policy_scene_agent.h"
 
-#import "components/prefs/ios/pref_observer_bridge.h"
-#import "components/prefs/pref_change_registrar.h"
-#import "components/prefs/pref_service.h"
 #import "components/signin/public/base/signin_metrics.h"
-#import "components/signin/public/base/signin_pref_names.h"
 #import "components/signin/public/identity_manager/identity_manager.h"
 #import "components/signin/public/identity_manager/objc/identity_manager_observer_bridge.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
 #import "ios/chrome/app/application_delegate/app_state_observer.h"
-#import "ios/chrome/browser/application_context.h"
 #import "ios/chrome/browser/policy/policy_util.h"
 #import "ios/chrome/browser/policy/policy_watcher_browser_agent.h"
 #import "ios/chrome/browser/policy/policy_watcher_browser_agent_observer_bridge.h"
-#import "ios/chrome/browser/pref_names.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
-#import "ios/chrome/browser/ui/authentication/enterprise/enterprise_utils.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_controller.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_ui_provider.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/policy_change_commands.h"
+#import "ios/chrome/browser/shared/public/commands/show_signin_command.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/authentication_service_observer_bridge.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_utils.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/policy_change_commands.h"
-#import "ios/chrome/browser/ui/commands/show_signin_command.h"
-#import "ios/chrome/browser/ui/main/browser_interface_provider.h"
-#import "ios/chrome/browser/ui/main/scene_controller.h"
-#import "ios/chrome/browser/ui/main/scene_ui_provider.h"
 #import "ios/chrome/browser/ui/scoped_ui_blocker/scoped_ui_blocker.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @interface SigninPolicySceneAgent () <AppStateObserver,
-                                      PrefObserverDelegate,
+                                      AuthenticationServiceObserving,
                                       IdentityManagerObserverBridgeDelegate> {
-  // Pref observer to track changes to prefs.
-  std::unique_ptr<PrefObserverBridge> _prefsObserverBridge;
-  // Registrar for pref change notifications.
-  std::unique_ptr<PrefChangeRegistrar> _prefChangeRegistrar;
   // Observes changes in identity to make sure that the sign-in state matches
   // the BrowserSignin policy.
   std::unique_ptr<signin::IdentityManagerObserverBridge>
       _identityObserverBridge;
+  std::unique_ptr<AuthenticationServiceObserverBridge>
+      _authenticationServiceObserverBridge;
 }
 
 // Handler of application commands.
@@ -101,7 +91,8 @@
 
 - (void)sceneStateDidEnableUI:(SceneState*)sceneState {
   // Setup objects that need the browser UI objects before being set.
-  self.mainBrowser = self.sceneState.interfaceProvider.mainInterface.browser;
+  self.mainBrowser =
+      self.sceneState.browserProviderInterface.mainBrowserProvider.browser;
   [self setupObservers];
 }
 
@@ -137,13 +128,9 @@
   [self handleSigninPromptsIfUIAvailable];
 }
 
-#pragma mark - PrefObserverDelegate
+#pragma mark - AuthenticationServiceObserving
 
-// TODO(crbug.com/1244632): Use the Authentication Service sign-in status API
-// instead of this when available.
-- (void)onPreferenceChanged:(const std::string&)preferenceName {
-  // Reconsider showing the sign-in prompts when the value of the sign-in
-  // policy changes.
+- (void)onServiceStatusChanged {
   [self handleSigninPromptsIfUIAvailable];
 }
 
@@ -161,39 +148,40 @@
 - (void)setupObservers {
   DCHECK(self.mainBrowser);
 
-  // Set observer for policy changes.
-  PrefService* prefService = GetApplicationContext()->GetLocalState();
-  _prefChangeRegistrar = std::make_unique<PrefChangeRegistrar>();
-  _prefChangeRegistrar->Init(prefService);
-  _prefsObserverBridge = std::make_unique<PrefObserverBridge>(self);
-  _prefsObserverBridge->ObserveChangesForPreference(prefs::kBrowserSigninPolicy,
-                                                    _prefChangeRegistrar.get());
+  ChromeBrowserState* browserState = self.mainBrowser->GetBrowserState();
+  // Set observer for service status changes.
+  AuthenticationService* authService =
+      AuthenticationServiceFactory::GetForBrowserState(browserState);
+  _authenticationServiceObserverBridge =
+      std::make_unique<AuthenticationServiceObserverBridge>(authService, self);
 
   // Set observer for primary account changes.
   signin::IdentityManager* identityManager =
-      IdentityManagerFactory::GetForBrowserState(
-          self.mainBrowser->GetBrowserState());
+      IdentityManagerFactory::GetForBrowserState(browserState);
   _identityObserverBridge =
       std::make_unique<signin::IdentityManagerObserverBridge>(identityManager,
                                                               self);
 }
 
 - (void)tearDownObservers {
-  _prefChangeRegistrar.reset();
-  _prefsObserverBridge.reset();
+  _authenticationServiceObserverBridge.reset();
   _identityObserverBridge.reset();
 }
 
 - (BOOL)isForcedSignInRequiredByPolicy {
   DCHECK(self.mainBrowser);
-
-  if (!IsForceSignInEnabled()) {
-    return NO;
-  }
-
   AuthenticationService* authService =
       AuthenticationServiceFactory::GetForBrowserState(
           self.mainBrowser->GetBrowserState());
+  switch (authService->GetServiceStatus()) {
+    case AuthenticationService::ServiceStatus::SigninAllowed:
+    case AuthenticationService::ServiceStatus::SigninDisabledByInternal:
+    case AuthenticationService::ServiceStatus::SigninDisabledByUser:
+    case AuthenticationService::ServiceStatus::SigninDisabledByPolicy:
+      return NO;
+    case AuthenticationService::ServiceStatus::SigninForcedByPolicy:
+      break;
+  }
   // Skip prompting to sign-in when there is already a primary account
   // signed in.
   return !authService->HasPrimaryIdentity(signin::ConsentLevel::kSignin);
@@ -247,7 +235,7 @@
 // Shows the forced sign-in prompt using the application command.
 - (void)showForcedSigninPrompt {
   ShowSigninCommand* command = [[ShowSigninCommand alloc]
-      initWithOperation:AuthenticationOperationForcedSigninAndSync
+      initWithOperation:AuthenticationOperation::kForcedSigninAndSync
                identity:nil
             accessPoint:signin_metrics::AccessPoint::ACCESS_POINT_FORCED_SIGNIN
             promoAction:signin_metrics::PromoAction::

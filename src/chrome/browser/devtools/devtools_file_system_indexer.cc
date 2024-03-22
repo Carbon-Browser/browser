@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,19 @@
 #include <memory>
 #include <set>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
+#include "base/ranges/algorithm.h"
 #include "base/sequence_checker.h"
 #include "base/stl_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 
 #include "content/public/browser/browser_thread.h"
 
@@ -216,9 +217,8 @@ vector<FilePath> Index::Search(const string& query) {
   for (; it != trigrams.end(); ++it) {
     Trigram trigram = *it;
     if (first) {
-      std::copy(index_[trigram].begin(),
-                index_[trigram].end(),
-                std::inserter(file_ids, file_ids.begin()));
+      base::ranges::copy(index_[trigram],
+                         std::inserter(file_ids, file_ids.begin()));
       first = false;
       continue;
     }

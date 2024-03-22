@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,6 @@
 #include <vector>
 
 #include "base/component_export.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/cellular_esim_profile.h"
 #include "chromeos/ash/components/network/device_state.h"
 
 namespace dbus {
@@ -17,6 +15,21 @@ class ObjectPath;
 }  // namespace dbus
 
 namespace ash {
+
+class CellularESimProfile;
+struct NetworkProfile;
+class NetworkProfileHandler;
+
+namespace cellular_utils {
+
+// The activation code for the GSM Association SM-DS server.
+COMPONENT_EXPORT(CHROMEOS_NETWORK) extern const char kSmdsGsma[];
+// The activation code for the Stork SM-DS server.
+COMPONENT_EXPORT(CHROMEOS_NETWORK) extern const char kSmdsStork[];
+// The activation code for the Android production SM-DS server.
+COMPONENT_EXPORT(CHROMEOS_NETWORK) extern const char kSmdsAndroidProduction[];
+// The activation code for the Android staging SM-DS server.
+COMPONENT_EXPORT(CHROMEOS_NETWORK) extern const char kSmdsAndroidStaging[];
 
 // Generates a list of CellularESimProfile objects for all Hermes esim profile
 // objects available through its dbus clients. Note that this function returns
@@ -45,21 +58,22 @@ std::string GenerateStubCellularServicePath(const std::string& iccid);
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
 bool IsStubCellularServicePath(const std::string& service_path);
 
+// Returns the cellular profile.
+COMPONENT_EXPORT(CHROMEOS_NETWORK)
+const NetworkProfile* GetCellularProfile(
+    const NetworkProfileHandler* network_profile_handler);
+
 // Returns the path to the Euicc that is currently used for all eSIM operations
 // in OS Settings and System UI.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
 absl::optional<dbus::ObjectPath> GetCurrentEuiccPath();
 
-}  // namespace ash
+// Returns the activation codes that should be used to scan for profiles that
+// are available for installation.
+COMPONENT_EXPORT(CHROMEOS_NETWORK)
+std::vector<std::string> GetSmdsActivationCodes();
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::GenerateProfilesFromHermes;
-using ::ash::GenerateStubCellularServicePath;
-using ::ash::GetCurrentEuiccPath;
-using ::ash::GetSimSlotInfosWithUpdatedEid;
-using ::ash::IsSimPrimary;
-using ::ash::IsStubCellularServicePath;
-}  // namespace chromeos
+}  // namespace cellular_utils
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_UTILS_H_

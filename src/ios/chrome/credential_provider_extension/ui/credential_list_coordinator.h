@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #import <Foundation/Foundation.h>
 
 @class ASCredentialServiceIdentifier;
-@class ASCredentialProviderExtensionContext;
+@protocol CredentialResponseHandler;
 @protocol CredentialStore;
 @class ReauthenticationHandler;
 @class UIViewController;
@@ -17,15 +17,16 @@
 @interface CredentialListCoordinator : NSObject
 
 // Default initializer. When the coordinator is started it will present on
-// |baseViewController|. |serviceIdentifiers| will be used to prioritize data,
+// `baseViewController`. `serviceIdentifiers` will be used to prioritize data,
 // can be nil.
 - (instancetype)
     initWithBaseViewController:(UIViewController*)baseViewController
                credentialStore:(id<CredentialStore>)credentialStore
-                       context:(ASCredentialProviderExtensionContext*)context
             serviceIdentifiers:
                 (NSArray<ASCredentialServiceIdentifier*>*)serviceIdentifiers
        reauthenticationHandler:(ReauthenticationHandler*)reauthenticationHandler
+     credentialResponseHandler:
+         (id<CredentialResponseHandler>)credentialResponseHandler
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;

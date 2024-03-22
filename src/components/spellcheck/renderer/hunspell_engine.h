@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/spellcheck/common/spellcheck_common.h"
 #include "components/spellcheck/renderer/spelling_engine.h"
@@ -59,7 +60,8 @@ class HunspellEngine : public SpellingEngine {
   // This flag is true if we have requested dictionary.
   bool dictionary_requested_;
 
-  service_manager::LocalInterfaceProvider* embedder_provider_;
+  raw_ptr<service_manager::LocalInterfaceProvider, ExperimentalRenderer>
+      embedder_provider_;
 };
 
 #endif  // COMPONENTS_SPELLCHECK_RENDERER_HUNSPELL_ENGINE_H_

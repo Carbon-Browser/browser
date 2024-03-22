@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 
 #include "base/cancelable_callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "chrome/browser/android/vr/android_vsync_helper.h"
 #include "chrome/browser/android/vr/gvr_graphics_delegate.h"
@@ -61,7 +60,6 @@ class GvrSchedulerDelegate : public BaseSchedulerDelegate,
                        SchedulerUiInterface* ui,
                        gvr::GvrApi* gvr_api,
                        GvrGraphicsDelegate* graphics,
-                       bool start_in_webxr_mode,
                        bool cardboard_gamepad,
                        size_t sliding_time_size);
 
@@ -77,8 +75,6 @@ class GvrSchedulerDelegate : public BaseSchedulerDelegate,
   void AddInputSourceState(device::mojom::XRInputSourceStatePtr state) override;
   void OnPause() override;
   void OnResume() override;
-  void SetWebXrMode(bool enabled) override;
-  void SetShowingVrDialog(bool showing) override;
   void SubmitDrawnFrame(FrameType frame_type,
                         const gfx::Transform& head_pose) override;
   void SetBrowserRenderer(
@@ -150,9 +146,6 @@ class GvrSchedulerDelegate : public BaseSchedulerDelegate,
       mojo::PendingAssociatedReceiver<
           device::mojom::XREnvironmentIntegrationProvider> environment_provider)
       override;
-  void SetInputSourceButtonListener(
-      mojo::PendingAssociatedRemote<device::mojom::XRInputSourceButtonListener>)
-      override;
 
   // XRPresentationProvider
   void SubmitFrameMissing(int16_t frame_index, const gpu::SyncToken&) override;
@@ -189,7 +182,6 @@ class GvrSchedulerDelegate : public BaseSchedulerDelegate,
   raw_ptr<SchedulerBrowserRendererInterface> browser_renderer_ = nullptr;
 
   device::WebXrPresentationState webxr_;
-  bool showing_vr_dialog_ = false;
   bool cardboard_gamepad_ = false;
 
   // WebXR supports multiple render paths, the choice is selected at runtime

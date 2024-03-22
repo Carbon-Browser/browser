@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@ import {Intent} from '../intent.js';
 import * as metrics from '../metrics.js';
 import {FileAccessEntry} from '../models/file_system_access_entry.js';
 import {VideoSaver} from '../models/video_saver.js';
+import {ChromeHelper} from '../mojo/chrome_helper.js';
 import {PerfLogger} from '../perf.js';
 import {scaleImage} from '../thumbnailer.js';
 import {Resolution} from '../type.js';
@@ -58,6 +59,7 @@ export class CameraIntent extends Camera {
             return VideoSaver.createForIntent(intent, outputVideoRotation);
           },
           finishSaveVideo: async (video) => {
+            assert(video instanceof VideoSaver);
             this.videoResultFile = await video.endWrite();
           },
           saveGif: () => {
@@ -75,6 +77,7 @@ export class CameraIntent extends Camera {
           new review.Option(
               {
                 label: I18nString.CONFIRM_REVIEW_BUTTON,
+                icon: 'camera_intent_result_confirm.svg',
                 templateId: 'review-intent-button-template',
                 primary: true,
               },
@@ -82,11 +85,13 @@ export class CameraIntent extends Camera {
           new review.Option(
               {
                 label: I18nString.CANCEL_REVIEW_BUTTON,
+                icon: 'camera_intent_result_cancel.svg',
                 templateId: 'review-intent-button-template',
               },
               {exitValue: false}),
         ],
-      }));
+      })) ??
+          false;
       metrics.sendCaptureEvent({
         facing: this.getFacing(),
         ...metricArgs,
@@ -120,13 +125,16 @@ export class CameraIntent extends Camera {
     const {blob, resolution} = await pendingPhotoResult;
     await this.review.setReviewPhoto(blob);
     await this.reviewIntentResult({resolution});
+    ChromeHelper.getInstance().maybeTriggerSurvey();
   }
 
   override async onVideoCaptureDone(videoResult: VideoResult): Promise<void> {
     await super.onVideoCaptureDone(videoResult);
     assert(this.videoResultFile !== null);
-    await this.review.setReviewVideo(this.videoResultFile);
+    const cleanup = await this.review.setReviewVideo(this.videoResultFile);
     await this.reviewIntentResult(
         {resolution: videoResult.resolution, duration: videoResult.duration});
+    cleanup();
+    ChromeHelper.getInstance().maybeTriggerSurvey();
   }
 }

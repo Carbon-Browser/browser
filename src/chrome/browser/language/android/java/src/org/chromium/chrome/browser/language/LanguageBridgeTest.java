@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,14 +18,14 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 
-/**
- * Tests for {@link LanguageBridge} which gets language lists from native
- */
+import java.util.ArrayList;
+import java.util.Arrays;
+
+/** Tests for {@link LanguageBridge} which gets language lists from native */
 @RunWith(BaseRobolectricTestRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class LanguageBridgeTest {
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
     private FakeLanguageBridgeJni mFakeLanguageBridge;
 
@@ -40,23 +40,42 @@ public class LanguageBridgeTest {
     @Test
     @SmallTest
     public void testIsTopULPBaseLanguage() {
-        String[] ulpLanguages = {"pt-BR", "en-US"};
-        mFakeLanguageBridge.setULPLanguages(ulpLanguages);
+        mFakeLanguageBridge.setULPLanguages(Arrays.asList("pt-BR", "en-US"));
 
-        Assert.assertEquals(LanguageBridge.isTopULPBaseLanguage("pt"),
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("pt"),
                 AppLanguagePromoDialog.TopULPMatchType.YES);
-        Assert.assertEquals(LanguageBridge.isTopULPBaseLanguage("pt-PT"),
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("pt-PT"),
                 AppLanguagePromoDialog.TopULPMatchType.YES);
-        Assert.assertEquals(LanguageBridge.isTopULPBaseLanguage("pt-BR"),
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("pt-BR"),
                 AppLanguagePromoDialog.TopULPMatchType.YES);
-        Assert.assertEquals(LanguageBridge.isTopULPBaseLanguage("en"),
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("en"),
                 AppLanguagePromoDialog.TopULPMatchType.NO);
-        Assert.assertEquals(LanguageBridge.isTopULPBaseLanguage("en-US"),
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("en-US"),
                 AppLanguagePromoDialog.TopULPMatchType.NO);
 
-        String[] emptyULPLanguages = {};
-        mFakeLanguageBridge.setULPLanguages(emptyULPLanguages);
-        Assert.assertEquals(LanguageBridge.isTopULPBaseLanguage("en-US"),
+        mFakeLanguageBridge.setULPLanguages(Arrays.asList("no", "en-US"));
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("nb"),
+                AppLanguagePromoDialog.TopULPMatchType.YES);
+
+        mFakeLanguageBridge.setULPLanguages(Arrays.asList("nn-NO", "en-US"));
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("nb"),
+                AppLanguagePromoDialog.TopULPMatchType.YES);
+
+        mFakeLanguageBridge.setULPLanguages(Arrays.asList("tl-PH", "en-US"));
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("fil"),
+                AppLanguagePromoDialog.TopULPMatchType.YES);
+
+        mFakeLanguageBridge.setULPLanguages(new ArrayList<>());
+        Assert.assertEquals(
+                LanguageBridge.isTopULPBaseLanguage("en-US"),
                 AppLanguagePromoDialog.TopULPMatchType.EMPTY);
     }
 }

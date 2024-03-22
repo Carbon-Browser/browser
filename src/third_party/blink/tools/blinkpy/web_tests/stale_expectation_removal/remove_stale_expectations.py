@@ -1,8 +1,9 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import argparse
+import datetime
 import sys
 
 assert sys.version_info[0] == 3
@@ -18,7 +19,7 @@ from unexpected_passes_common import expectations as common_expectations
 from unexpected_passes_common import result_output
 
 
-def ParseArgs():
+def ParseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=(
         'Script for finding cases of stale expectations that can be '
         'removed/modified.'))
@@ -28,7 +29,7 @@ def ParseArgs():
     return args
 
 
-def main():
+def main() -> int:
     args = ParseArgs()
     # Set any custom data types.
     common_data_types.SetExpectationImplementation(
@@ -42,15 +43,19 @@ def main():
         args.include_internal_builders)
     common_builders.RegisterInstance(builders_instance)
     expectations_instance = expectations.WebTestExpectations()
+    common_expectations.RegisterInstance(expectations_instance)
 
     test_expectation_map = expectations_instance.CreateTestExpectationMap(
         expectations_instance.GetExpectationFilepaths(), None,
-        args.expectation_grace_period)
+        datetime.timedelta(days=args.expectation_grace_period))
     ci_builders = builders_instance.GetCiBuilders()
 
-    querier = queries.WebTestBigQueryQuerier(None, args.project,
+    querier = queries.WebTestBigQueryQuerier(None,
+                                             args.project,
                                              args.num_samples,
-                                             args.large_query_mode)
+                                             args.large_query_mode,
+                                             args.jobs,
+                                             use_batching=args.use_batching)
     # Unmatched results are mainly useful for script maintainers, as they don't
     # provide any additional information for the purposes of finding
     # unexpectedly passing tests or unused expectations.
@@ -62,8 +67,14 @@ def main():
                                               try_builders))
     unused_expectations = test_expectation_map.FilterOutUnusedExpectations()
     stale, semi_stale, active = test_expectation_map.SplitByStaleness()
-    result_output.OutputResults(stale, semi_stale, active, unmatched,
-                                unused_expectations, args.output_format)
+    if args.result_output_file:
+        with open(args.result_output_file, 'w') as outfile:
+            result_output.OutputResults(stale, semi_stale, active, unmatched,
+                                        unused_expectations,
+                                        args.output_format, outfile)
+    else:
+        result_output.OutputResults(stale, semi_stale, active, unmatched,
+                                    unused_expectations, args.output_format)
 
     affected_urls = set()
     stale_message = ''
@@ -84,18 +95,23 @@ def main():
                 'Unused expectations removed from %s. Stale comments, etc. '
                 'may still need to be removed.\n' % expectation_file)
 
-    if args.modify_semi_stale_expectations:
-        affected_urls |= expectations_instance.ModifySemiStaleExpectations(
+    if args.narrow_semi_stale_expectation_scope:
+        affected_urls |= expectations_instance.NarrowSemiStaleExpectationScope(
             semi_stale)
-        stale_message += ('Semi-stale expectations modified in expectation '
+        stale_message += ('Semi-stale expectations narrowed in expectation '
                           'files. Stale comments, etc. may still need to be '
-                          'removed.\n')
+                          'removed.')
 
     if stale_message:
         print(stale_message)
     if affected_urls:
         orphaned_urls = expectations_instance.FindOrphanedBugs(affected_urls)
-        result_output.OutputAffectedUrls(affected_urls, orphaned_urls)
+        if args.bug_output_file:
+            with open(args.bug_output_file, 'w') as bug_outfile:
+                result_output.OutputAffectedUrls(affected_urls, orphaned_urls,
+                                                 bug_outfile)
+        else:
+            result_output.OutputAffectedUrls(affected_urls, orphaned_urls)
 
     return 0
 

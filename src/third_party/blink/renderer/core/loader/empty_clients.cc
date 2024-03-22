@@ -29,6 +29,7 @@
 
 #include <memory>
 #include "cc/layers/layer.h"
+#include "cc/trees/layer_tree_host.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
@@ -75,6 +76,16 @@ DateTimeChooser* EmptyChromeClient::OpenDateTimeChooser(
   return nullptr;
 }
 
+std::unique_ptr<cc::ScopedPauseRendering> EmptyChromeClient::PauseRendering(
+    LocalFrame&) {
+  return nullptr;
+}
+
+absl::optional<int> EmptyChromeClient::GetMaxRenderBufferBounds(
+    LocalFrame& frame) const {
+  return absl::nullopt;
+}
+
 void EmptyChromeClient::OpenTextDataListChooser(HTMLInputElement&) {}
 
 void EmptyChromeClient::OpenFileChooser(LocalFrame*,
@@ -95,12 +106,14 @@ bool EmptyChromeClient::StartDeferringCommits(LocalFrame& main_frame,
 
 void EmptyLocalFrameClient::BeginNavigation(
     const ResourceRequest&,
+    const KURL& requestor_base_url,
     mojom::RequestContextFrameType,
     LocalDOMWindow*,
     DocumentLoader*,
     WebNavigationType,
     NavigationPolicy,
     WebFrameLoadType,
+    mojom::blink::ForceHistoryPush,
     bool,
     // TODO(crbug.com/1315802): Refactor _unfencedTop handling.
     bool,
@@ -113,7 +126,9 @@ void EmptyLocalFrameClient::BeginNavigation(
     const absl::optional<Impression>&,
     const LocalFrameToken* initiator_frame_token,
     std::unique_ptr<SourceLocation>,
-    mojo::PendingRemote<mojom::blink::PolicyContainerHostKeepAliveHandle>) {}
+    mojo::PendingRemote<mojom::blink::PolicyContainerHostKeepAliveHandle>,
+    bool is_container_initiated,
+    bool is_fullscreen_requested) {}
 
 void EmptyLocalFrameClient::DispatchWillSendSubmitEvent(HTMLFormElement*) {}
 
@@ -122,21 +137,9 @@ LocalFrame* EmptyLocalFrameClient::CreateFrame(const AtomicString&,
   return nullptr;
 }
 
-std::pair<RemoteFrame*, PortalToken> EmptyLocalFrameClient::CreatePortal(
-    HTMLPortalElement*,
-    mojo::PendingAssociatedReceiver<mojom::blink::Portal>,
-    mojo::PendingAssociatedRemote<mojom::blink::PortalClient>) {
-  return std::pair<RemoteFrame*, PortalToken>(nullptr, PortalToken());
-}
-
-RemoteFrame* EmptyLocalFrameClient::AdoptPortal(HTMLPortalElement*) {
-  return nullptr;
-}
-
 RemoteFrame* EmptyLocalFrameClient::CreateFencedFrame(
     HTMLFencedFrameElement*,
-    mojo::PendingAssociatedReceiver<mojom::blink::FencedFrameOwnerHost>,
-    mojom::blink::FencedFrameMode) {
+    mojo::PendingAssociatedReceiver<mojom::blink::FencedFrameOwnerHost>) {
   return nullptr;
 }
 

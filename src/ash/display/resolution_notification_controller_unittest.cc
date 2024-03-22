@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/screen_layout_observer.h"
 #include "ash/test/ash_test_base.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -105,20 +105,23 @@ class ResolutionNotificationControllerTest
       float new_refresh_rate,
       bool old_is_native,
       bool new_is_native,
-      mojom::DisplayConfigSource source = mojom::DisplayConfigSource::kUser) {
-    const display::ManagedDisplayInfo& info =
-        display_manager()->GetDisplayInfo(display.id());
-    display::ManagedDisplayMode old_mode(info.size_in_pixel(),
-                                         info.refresh_rate(),
-                                         false /* interlaced */, old_is_native);
-    display::ManagedDisplayMode new_mode(
-        new_resolution, new_refresh_rate, old_mode.is_interlaced(),
-        new_is_native, old_mode.device_scale_factor());
+      crosapi::mojom::DisplayConfigSource source =
+          crosapi::mojom::DisplayConfigSource::kUser) {
+    {
+      const display::ManagedDisplayInfo& info =
+          display_manager()->GetDisplayInfo(display.id());
+      display::ManagedDisplayMode old_mode(
+          info.size_in_pixel(), info.refresh_rate(), false /* interlaced */,
+          old_is_native);
+      display::ManagedDisplayMode new_mode(
+          new_resolution, new_refresh_rate, old_mode.is_interlaced(),
+          new_is_native, old_mode.device_scale_factor());
 
-    EXPECT_TRUE(controller()->PrepareNotificationAndSetDisplayMode(
-        display.id(), old_mode, new_mode, source,
-        base::BindOnce(&ResolutionNotificationControllerTest::OnAccepted,
-                       base::Unretained(this))));
+      EXPECT_TRUE(controller()->PrepareNotificationAndSetDisplayMode(
+          display.id(), old_mode, new_mode, source,
+          base::BindOnce(&ResolutionNotificationControllerTest::OnAccepted,
+                         base::Unretained(this))));
+    }
 
     // OnConfigurationChanged event won't be emitted in the test environment,
     // so invoke UpdateDisplay() to emit that event explicitly.
@@ -145,7 +148,8 @@ class ResolutionNotificationControllerTest
       float refresh_rate,
       bool old_is_native,
       bool new_is_native,
-      mojom::DisplayConfigSource source = mojom::DisplayConfigSource::kUser) {
+      crosapi::mojom::DisplayConfigSource source =
+          crosapi::mojom::DisplayConfigSource::kUser) {
     SetDisplayResolutionAndNotifyWithResolution(
         display, new_resolution, new_resolution, refresh_rate, old_is_native,
         new_is_native, source);
@@ -238,7 +242,7 @@ TEST_P(ResolutionNotificationControllerTest, ForcedByPolicy) {
   SetDisplayResolutionAndNotify(display_manager_test.GetSecondaryDisplay(),
                                 gfx::Size(300, 200), 60, /*old_is_native=*/true,
                                 /*new_is_native=*/false,
-                                mojom::DisplayConfigSource::kPolicy);
+                                crosapi::mojom::DisplayConfigSource::kPolicy);
   EXPECT_FALSE(IsNotificationVisible());
   display::ManagedDisplayMode mode;
   EXPECT_TRUE(display_manager()->GetSelectedModeForDisplayId(id2, &mode));

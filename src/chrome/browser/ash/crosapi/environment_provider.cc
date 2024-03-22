@@ -1,10 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/environment_provider.h"
 
-#include "ash/components/tpm/install_attributes.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
 #include "base/system/sys_info.h"
@@ -12,9 +11,10 @@
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/web_applications/preinstalled_web_app_config_utils.h"
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/components/mgs/managed_guest_session_utils.h"
 #include "chromeos/crosapi/mojom/crosapi.mojom.h"
 #include "chromeos/crosapi/mojom/policy_namespace.mojom.h"
 #include "components/account_id/account_id.h"
@@ -39,7 +39,7 @@ mojom::SessionType EnvironmentProvider::GetSessionType() {
   if (profile->IsGuestSession()) {
     return mojom::SessionType::kGuestSession;
   }
-  if (profiles::IsPublicSession()) {
+  if (chromeos::IsManagedGuestSession()) {
     return mojom::SessionType::kPublicSession;
   }
   if (user->GetType() == user_manager::USER_TYPE_WEB_KIOSK_APP) {
@@ -67,8 +67,6 @@ mojom::DeviceMode EnvironmentProvider::GetDeviceMode() {
       return mojom::DeviceMode::kConsumer;
     case policy::DEVICE_MODE_ENTERPRISE:
       return mojom::DeviceMode::kEnterprise;
-    case policy::DEVICE_MODE_ENTERPRISE_AD:
-      return mojom::DeviceMode::kEnterpriseActiveDirectory;
     case policy::DEPRECATED_DEVICE_MODE_LEGACY_RETAIL_MODE:
       return mojom::DeviceMode::kLegacyRetailMode;
     case policy::DEVICE_MODE_CONSUMER_KIOSK_AUTOLAUNCH:
@@ -103,7 +101,7 @@ mojom::DefaultPathsPtr EnvironmentProvider::GetDefaultPaths() {
       default_paths->drivefs = integration_service->GetMountPointPath();
     }
     default_paths->android_files =
-        base::FilePath(file_manager::util::kAndroidFilesPath);
+        base::FilePath(file_manager::util::GetAndroidFilesPath());
     default_paths->linux_files =
         file_manager::util::GetCrostiniMountDirectory(profile);
     base::FilePath ash_resources;
@@ -125,7 +123,7 @@ mojom::DefaultPathsPtr EnvironmentProvider::GetDefaultPaths() {
   // CrosDisksClient already has a convention for its removable media directory
   // when running on Linux workstations.
   default_paths->removable_media =
-      chromeos::CrosDisksClient::GetRemovableDiskMountPoint();
+      ash::CrosDisksClient::GetRemovableDiskMountPoint();
 
   // Ash expects to find shared files in the share cache.
   default_paths->share_cache =
@@ -137,20 +135,6 @@ mojom::DefaultPathsPtr EnvironmentProvider::GetDefaultPaths() {
       web_app::GetPreinstalledWebAppExtraConfigDirFromCommandLine(profile);
 
   return default_paths;
-}
-
-std::string EnvironmentProvider::GetDeviceAccountGaiaId() {
-  const user_manager::User* const user =
-      user_manager::UserManager::Get()->GetPrimaryUser();
-  if (!user)
-    return std::string();
-
-  const AccountId& account_id = user->GetAccountId();
-  if (account_id.GetAccountType() != AccountType::GOOGLE)
-    return std::string();
-
-  DCHECK(!account_id.GetGaiaId().empty());
-  return account_id.GetGaiaId();
 }
 
 absl::optional<account_manager::Account>

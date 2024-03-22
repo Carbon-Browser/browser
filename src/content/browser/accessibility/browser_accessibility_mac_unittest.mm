@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -104,9 +104,9 @@ class BrowserAccessibilityMacTest : public ui::CocoaTest {
     child2.role = ax::mojom::Role::kHeading;
 
     manager_ = std::make_unique<BrowserAccessibilityManagerMac>(
-        MakeAXTreeUpdate(root_, child1, child2), nullptr);
-    accessibility_.reset(
-        [manager_->GetRoot()->GetNativeViewAccessible() retain]);
+        MakeAXTreeUpdateForTesting(root_, child1, child2), nullptr);
+    accessibility_ =
+        manager_->GetBrowserAccessibilityRoot()->GetNativeViewAccessible();
   }
 
   void SetRootValue(std::string value) {
@@ -120,7 +120,7 @@ class BrowserAccessibilityMacTest : public ui::CocoaTest {
   }
 
   ui::AXNodeData root_;
-  base::scoped_nsobject<BrowserAccessibilityCocoa> accessibility_;
+  BrowserAccessibilityCocoa* __strong accessibility_;
   std::unique_ptr<BrowserAccessibilityManager> manager_;
 
   const content::BrowserTaskEnvironment task_environment_;
@@ -155,23 +155,18 @@ TEST_F(BrowserAccessibilityMacTest, BasicAttributeTest) {
 }
 
 TEST_F(BrowserAccessibilityMacTest, RetainedDetachedObjectsReturnNil) {
-  // Get the first child.
-  BrowserAccessibilityCocoa* retainedFirstChild =
+  // Get the first child. Hold it in a precise lifetime variable. This simulates
+  // what the system might do with an accessibility object.
+  BrowserAccessibilityCocoa* __attribute__((objc_precise_lifetime))
+  retainedFirstChild =
       [accessibility_ accessibilityHitTest:NSMakePoint(50, 50)];
   EXPECT_NSEQ(@"Child1", retainedFirstChild.accessibilityLabel);
-
-  // Retain it. This simulates what the system might do with an
-  // accessibility object.
-  [retainedFirstChild retain];
 
   // Rebuild the accessibility tree, which should detach |retainedFirstChild|.
   RebuildAccessibilityTree();
 
   // Now any attributes we query should return nil.
   EXPECT_NSEQ(nil, retainedFirstChild.accessibilityLabel);
-
-  // Don't leak memory in the test.
-  [retainedFirstChild release];
 }
 
 TEST_F(BrowserAccessibilityMacTest, TestComputeTextEdit) {
@@ -179,8 +174,9 @@ TEST_F(BrowserAccessibilityMacTest, TestComputeTextEdit) {
   root_.id = 1;
   root_.role = ax::mojom::Role::kTextField;
   manager_ = std::make_unique<BrowserAccessibilityManagerMac>(
-      MakeAXTreeUpdate(root_), nullptr);
-  accessibility_.reset([manager_->GetRoot()->GetNativeViewAccessible() retain]);
+      MakeAXTreeUpdateForTesting(root_), nullptr);
+  accessibility_ =
+      manager_->GetBrowserAccessibilityRoot()->GetNativeViewAccessible();
 
   // Insertion but no deletion.
 
@@ -264,10 +260,10 @@ TEST_F(BrowserAccessibilityMacTest, TableAPIs) {
 
   manager_ =
       std::make_unique<BrowserAccessibilityManagerMac>(initial_state, nullptr);
-  base::scoped_nsobject<BrowserAccessibilityCocoa> ax_table_(
-      [manager_->GetRoot()->GetNativeViewAccessible() retain]);
-  id children = [ax_table_ children];
-  EXPECT_EQ(5U, [children count]);
+  BrowserAccessibilityCocoa* ax_table =
+      manager_->GetBrowserAccessibilityRoot()->GetNativeViewAccessible();
+  NSArray* children = ax_table.children;
+  EXPECT_EQ(5U, children.count);
 
   EXPECT_NSEQ(@"AXRow", [children[0] role]);
   EXPECT_EQ(2U, [[children[0] children] count]);
@@ -319,8 +315,8 @@ TEST_F(BrowserAccessibilityMacTest, TableColumnsAndDescendants) {
   manager_ =
       std::make_unique<BrowserAccessibilityManagerMac>(initial_state, nullptr);
 
-  BrowserAccessibilityMac* root =
-      static_cast<BrowserAccessibilityMac*>(manager_->GetRoot());
+  BrowserAccessibilityMac* root = static_cast<BrowserAccessibilityMac*>(
+      manager_->GetBrowserAccessibilityRoot());
 
   // This triggers computation of the extra Mac table cells. 2 rows, 2 extra
   // columns, and 1 extra column header. This used to crash.

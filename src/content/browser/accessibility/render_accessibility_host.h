@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,11 +52,12 @@ class RenderAccessibilityHost : public blink::mojom::RenderAccessibilityHost {
   ~RenderAccessibilityHost() override;
 
   void HandleAXEvents(blink::mojom::AXUpdatesAndEventsPtr updates_and_events,
-                      int32_t reset_token,
+                      uint32_t reset_token,
                       HandleAXEventsCallback callback) override;
 
   void HandleAXLocationChanges(
-      std::vector<blink::mojom::LocationChangesPtr> changes) override;
+      std::vector<blink::mojom::LocationChangesPtr> changes,
+      uint32_t reset_token) override;
 
  private:
   base::WeakPtr<RenderFrameHostImpl> render_frame_host_impl_;

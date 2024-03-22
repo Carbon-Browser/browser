@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,21 @@
 #include <certt.h>  // for (SECCertUsageEnum) certUsageAnyCA
 #include <pk11pub.h>
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
 #include "base/time/clock.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/network/certificate_helper.h"
 #include "chromeos/ash/components/network/client_cert_util.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
@@ -30,7 +30,6 @@
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/onc/onc_certificate_pattern.h"
 #include "chromeos/components/onc/variable_expander.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "components/onc/onc_constants.h"
 #include "crypto/scoped_nss_types.h"
 #include "dbus/object_path.h"
@@ -41,7 +40,7 @@
 #include "third_party/cros_system_api/constants/pkcs11_custom_attributes.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -397,8 +396,8 @@ std::vector<NetworkAndMatchingCert> FindCertificateMatches(
                 ::onc::ONC_SOURCE_DEVICE_POLICY
             ? &device_wide_client_cert_and_issuers
             : &all_client_cert_and_issuers;
-    auto cert_it = std::find_if(
-        client_certs->begin(), client_certs->end(),
+    auto cert_it = base::ranges::find_if(
+        *client_certs,
         MatchCertWithCertConfig(network_and_cert_config.cert_config));
     if (cert_it == client_certs->end()) {
       VLOG(1) << "Couldn't find a matching client cert for network "
@@ -457,7 +456,7 @@ void ClientCertResolver::Init(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(network_state_handler);
   network_state_handler_ = network_state_handler;
-  network_state_handler_observer_.Observe(network_state_handler_);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 
   DCHECK(managed_network_config_handler);
   managed_network_config_handler_ = managed_network_config_handler;
@@ -485,7 +484,7 @@ bool ClientCertResolver::IsAnyResolveTaskRunning() const {
 bool ClientCertResolver::ResolveClientCertificateSync(
     const client_cert::ConfigType client_cert_type,
     const client_cert::ClientCertConfig& client_cert_config,
-    base::Value* shill_properties) {
+    base::Value::Dict* shill_properties) {
   if (!ShouldResolveCert(client_cert_config))
     return false;
 
@@ -506,14 +505,12 @@ bool ClientCertResolver::ResolveClientCertificateSync(
 
   // Search for a certificate matching the pattern, reference or
   // ProvisioningProfileId.
-  std::vector<CertAndIssuer>::iterator cert_it = std::find_if(
-      client_cert_and_issuers.begin(), client_cert_and_issuers.end(),
-      MatchCertWithCertConfig(client_cert_config));
+  std::vector<CertAndIssuer>::iterator cert_it = base::ranges::find_if(
+      client_cert_and_issuers, MatchCertWithCertConfig(client_cert_config));
 
   if (cert_it == client_cert_and_issuers.end()) {
     VLOG(1) << "Couldn't find a matching client cert";
-    client_cert::SetEmptyShillProperties(client_cert_type,
-                                         shill_properties->GetDict());
+    client_cert::SetEmptyShillProperties(client_cert_type, *shill_properties);
     return false;
   }
 
@@ -527,7 +524,7 @@ bool ClientCertResolver::ResolveClientCertificateSync(
     return false;
   }
   client_cert::SetShillProperties(client_cert_type, slot_id, pkcs11_id,
-                                  shill_properties->GetDict());
+                                  *shill_properties);
   return true;
 }
 
@@ -644,7 +641,7 @@ void ClientCertResolver::ResolveNetworks(
 
     ::onc::ONCSource onc_source = ::onc::ONC_SOURCE_NONE;
     std::string userhash;
-    const base::Value* policy =
+    const base::Value::Dict* policy =
         managed_network_config_handler_->FindPolicyByGuidAndProfile(
             network->guid(), network->profile_path(),
             ManagedNetworkConfigurationHandler::PolicyType::kOriginal,
@@ -660,7 +657,7 @@ void ClientCertResolver::ResolveNetworks(
 
     VLOG(2) << "Inspecting network " << network->path();
     client_cert::ClientCertConfig cert_config;
-    OncToClientCertConfig(onc_source, policy->GetDict(), &cert_config);
+    OncToClientCertConfig(onc_source, *policy, &cert_config);
 
     // Skip networks that don't have a ClientCertPattern or ClientCertRef.
     if (!ShouldResolveCert(cert_config))
@@ -769,4 +766,4 @@ base::Time ClientCertResolver::Now() const {
   return base::Time::Now();
 }
 
-}  // namespace chromeos
+}  // namespace ash

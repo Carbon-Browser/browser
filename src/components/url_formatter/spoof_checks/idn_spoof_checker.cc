@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 #include "third_party/icu/source/i18n/unicode/regex.h"
 #include "third_party/icu/source/i18n/unicode/translit.h"
 #include "third_party/icu/source/i18n/unicode/uspoof.h"
+#include "url/url_features.h"
 
 namespace url_formatter {
 
@@ -48,8 +49,9 @@ class TopDomainPreloadDecoder : public net::extras::PreloadDecoder {
       return false;
 
     TopDomainEntry top_domain;
-    if (!reader->Next(&top_domain.is_top_500))
+    if (!reader->Next(&top_domain.is_top_bucket)) {
       return false;
+    }
     uint32_t skeletontype_value;
     if (!reader->Read(kSkeletonTypeBitLength, &skeletontype_value))
       return false;
@@ -149,6 +151,12 @@ IDNSpoofChecker::HuffmanTrieParams g_trie_params{
     kTopDomainsHuffmanTree, sizeof(kTopDomainsHuffmanTree), kTopDomainsTrie,
     kTopDomainsTrieBits, kTopDomainsRootPosition};
 
+// Allow these common words that are whole script confusables. They aren't
+// confusable with any words in Latin scripts.
+const char16_t* kAllowedWholeScriptConfusableWords[] = {
+    u"секс",  u"как",   u"коса",    u"курс",    u"парк",
+    u"такий", u"укроп", u"сахарок", u"покраска"};
+
 }  // namespace
 
 IDNSpoofChecker::WholeScriptConfusable::WholeScriptConfusable(
@@ -222,7 +230,7 @@ IDNSpoofChecker::IDNSpoofChecker() {
        {"am"}},
       {// Cyrillic
        "[[:Cyrl:]]",
-       "[аысԁеԍһіюјӏорԗԛѕԝхуъьҽпгѵѡ]",
+       "[аысԁеԍһіюкјӏорԗԛѕԝхуъьҽпгѵѡ]",
        // TLDs containing most of the Cyrillic domains.
        {"bg", "by", "kz", "pyc", "ru", "su", "ua", "uz"}},
       {// Ethiopic (Ge'ez). Variants of these characters such as ሁ and ሡ could
@@ -375,18 +383,27 @@ IDNSpoofChecker::Result IDNSpoofChecker::SafeToDisplayAsUnicode(
   // chosen. On the other hand, 'fu<sharp-s>' typed or copy and pasted
   // as Unicode would be canonicalized to 'fuss' by GURL and is displayed as
   // such. See http://crbug.com/595263 .
-  if (deviation_characters_.containsSome(label_string))
+  if (!url::IsUsingIDNA2008NonTransitional() &&
+      deviation_characters_.containsSome(label_string)) {
     return Result::kDeviationCharacters;
+  }
 
-  // Disallow Icelandic confusables for domains outside Iceland's ccTLD (.is).
+  // Disallow Icelandic confusables for domains outside Icelandic and Faroese
+  // ccTLD (.is, .fo). Faroese keyboard layout doesn't contain letter ⟨þ⟩, but
+  // we don't separate it here to avoid technical complexity, and because
+  // Faroese speakers are more likely to notice spoofs containing ⟨þ⟩ than other
+  // language speakers.
   if (label_string.length() > 1 && top_level_domain != "is" &&
-      icelandic_characters_.containsSome(label_string))
+      top_level_domain != "fo" &&
+      icelandic_characters_.containsSome(label_string)) {
     return Result::kTLDSpecificCharacters;
+  }
 
   // Disallow Latin Schwa (U+0259) for domains outside Azerbaijan's ccTLD (.az).
   if (label_string.length() > 1 && top_level_domain != "az" &&
-      label_string.indexOf("ə") != -1)
+      label_string.indexOf("ə") != -1) {
     return Result::kTLDSpecificCharacters;
+  }
 
   // Disallow middle dot (U+00B7) when unsafe.
   if (HasUnsafeMiddleDot(label_string, top_level_domain)) {
@@ -414,7 +431,8 @@ IDNSpoofChecker::Result IDNSpoofChecker::SafeToDisplayAsUnicode(
     for (auto const& script : wholescriptconfusables_) {
       if (IsLabelWholeScriptConfusableForScript(*script, label_string) &&
           !IsWholeScriptConfusableAllowedForTLD(*script, top_level_domain,
-                                                top_level_domain_unicode)) {
+                                                top_level_domain_unicode) &&
+          !base::Contains(kAllowedWholeScriptConfusableWords, label)) {
         return Result::kWholeScriptConfusable;
       }
     }
@@ -611,6 +629,23 @@ std::u16string IDNSpoofChecker::MaybeRemoveDiacritics(
              : hostname;
 }
 
+IDNA2008DeviationCharacter IDNSpoofChecker::GetDeviationCharacter(
+    base::StringPiece16 hostname) const {
+  if (hostname.find(u"\u00df") != base::StringPiece16::npos) {
+    return IDNA2008DeviationCharacter::kEszett;
+  }
+  if (hostname.find(u"\u03c2") != base::StringPiece16::npos) {
+    return IDNA2008DeviationCharacter::kGreekFinalSigma;
+  }
+  if (hostname.find(u"\u200d") != base::StringPiece16::npos) {
+    return IDNA2008DeviationCharacter::kZeroWidthJoiner;
+  }
+  if (hostname.find(u"\u200c") != base::StringPiece16::npos) {
+    return IDNA2008DeviationCharacter::kZeroWidthNonJoiner;
+  }
+  return IDNA2008DeviationCharacter::kNone;
+}
+
 void IDNSpoofChecker::SetAllowedUnicodeSet(UErrorCode* status) {
   if (U_FAILURE(*status))
     return;
@@ -692,6 +727,15 @@ void IDNSpoofChecker::SetAllowedUnicodeSet(UErrorCode* status) {
   allowed_set.remove(0x1F00u, 0x1FFFu);  // Greek Extended
   allowed_set.remove(0xA640u, 0xA69Fu);  // Cyrillic Extended-B
   allowed_set.remove(0xA720u, 0xA7FFu);  // Latin Extended-D
+
+#if U_ICU_VERSION_MAJOR_NUM < 72
+  // Unicode 15 changes ZWJ and ZWNJ from allowed to restricted. Restrict them
+  // in lower versions too. This only relevant in Non-Transitional Mode as
+  // Transitional Mode maps these characters out.
+  // TODO(crbug.com/1386204): Remove these after ICU 72 is rolled out.
+  allowed_set.remove(0x200Cu);  // Zero Width Non-Joiner
+  allowed_set.remove(0x200Du);  // Zero Width Joiner
+#endif
 
   uspoof_setAllowedUnicodeSet(checker_, &allowed_set, status);
 }

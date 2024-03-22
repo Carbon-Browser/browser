@@ -1,14 +1,14 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/guid.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_restrictions.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/sessions/session_service.h"
@@ -18,8 +18,8 @@
 #include "chrome/browser/sync/test/integration/sync_service_impl_harness.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
-#include "components/sync/test/fake_server/fake_server_verifier.h"
-#include "components/sync/test/fake_server/sessions_hierarchy.h"
+#include "components/sync/test/fake_server_verifier.h"
+#include "components/sync/test/sessions_hierarchy.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -57,11 +57,11 @@ class TwoClientSessionsSyncTest : public SyncTest {
   }
 };
 
-static const char* kURL1 = "data:text/html,<html><title>Test</title></html>";
-static const char* kURL2 = "data:text/html,<html><title>Test2</title></html>";
-static const char* kURL3 = "data:text/html,<html><title>Test3</title></html>";
-static const char* kURL4 = "data:text/html,<html><title>Test4</title></html>";
-static const char* kURLTemplate =
+constexpr char kURL1[] = "data:text/html,<html><title>Test</title></html>";
+constexpr char kURL2[] = "data:text/html,<html><title>Test2</title></html>";
+constexpr char kURL3[] = "data:text/html,<html><title>Test3</title></html>";
+constexpr char kURL4[] = "data:text/html,<html><title>Test4</title></html>";
+constexpr char kURLTemplate[] =
     "data:text/html,<html><title>Test%s</title></html>";
 
 // TODO(zea): Test each individual session command we care about separately.
@@ -75,8 +75,8 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest,
 
   // Open tab and access a url on client 0
   ScopedWindowMap client0_windows;
-  std::string url =
-      base::StringPrintf(kURLTemplate, base::GenerateGUID().c_str());
+  std::string url = base::StringPrintf(
+      kURLTemplate, base::Uuid::GenerateRandomV4().AsLowercaseString().c_str());
 
   ASSERT_TRUE(OpenTab(0, GURL(url)));
   EXPECT_TRUE(WaitForForeignSessionsToSync(0, 1));
@@ -109,8 +109,9 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, E2E_ENABLED(AllChanged)) {
   // Open tabs on all clients and retain window information.
   for (int i = 0; i < num_clients(); ++i) {
     ScopedWindowMap windows;
-    std::string url =
-        base::StringPrintf(kURLTemplate, base::GenerateGUID().c_str());
+    std::string url = base::StringPrintf(
+        kURLTemplate,
+        base::Uuid::GenerateRandomV4().AsLowercaseString().c_str());
     ASSERT_TRUE(OpenTab(i, GURL(url)));
   }
 
@@ -158,18 +159,12 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, DeleteIdleSession) {
   ASSERT_TRUE(GetSessionData(1, &sessions1));
 
   // Client 1 now deletes client 0's tabs. This frees the memory of sessions1.
-  DeleteForeignSession(1, sessions1[0]->session_tag);
+  DeleteForeignSession(1, sessions1[0]->GetSessionTag());
   ASSERT_TRUE(GetClient(1)->AwaitMutualSyncCycleCompletion(GetClient(0)));
   EXPECT_FALSE(GetSessionData(1, &sessions1));
 }
 
-// TODO(crbug.com/1340790): Flaky on MSAN, deflake and re-enable the test.
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_DeleteActiveSession DISABLED_DeleteActiveSession
-#else
-#define MAYBE_DeleteActiveSession DeleteActiveSession
-#endif
-IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, MAYBE_DeleteActiveSession) {
+IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, DeleteActiveSession) {
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
 
   ASSERT_TRUE(CheckInitialState(0));
@@ -184,7 +179,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsSyncTest, MAYBE_DeleteActiveSession) {
   ASSERT_EQ(1U, sessions1.size());
 
   // Client 1 now deletes client 0's tabs. This frees the memory of sessions1.
-  DeleteForeignSession(1, sessions1[0]->session_tag);
+  DeleteForeignSession(1, sessions1[0]->GetSessionTag());
   ASSERT_TRUE(GetClient(1)->AwaitMutualSyncCycleCompletion(GetClient(0)));
   ASSERT_FALSE(GetSessionData(1, &sessions1));
 
@@ -265,64 +260,5 @@ IN_PROC_BROWSER_TEST_F(TwoClientSessionsWithoutDestroyProfileSyncTest,
   EXPECT_TRUE(
       WaitForForeignSessionsToSync(/*local_index=*/0, /*non_local_index=*/1));
 }
-
-#if !BUILDFLAG(IS_CHROMEOS)
-class TwoClientSessionsWithDestroyProfileSyncTest
-    : public TwoClientSessionsSyncTest {
- public:
-  TwoClientSessionsWithDestroyProfileSyncTest() {
-    features_.InitAndEnableFeature(features::kDestroyProfileOnBrowserClose);
-  }
-
- private:
-  base::test::ScopedFeatureList features_;
-};
-
-IN_PROC_BROWSER_TEST_F(TwoClientSessionsWithDestroyProfileSyncTest,
-                       ShouldNotSyncLastClosedTab) {
-  ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
-
-  ASSERT_TRUE(CheckInitialState(0));
-  ASSERT_TRUE(CheckInitialState(1));
-
-  ASSERT_TRUE(OpenMultipleTabs(0, {GURL(kURL1), GURL(kURL2)}));
-
-  ASSERT_TRUE(
-      WaitForForeignSessionsToSync(/*local_index=*/0, /*non_local_index=*/1));
-
-  // Close all tabs and wait for syncing.
-  CloseTab(/*browser_index=*/0, /*tab_index=*/0);
-  ASSERT_TRUE(
-      WaitForForeignSessionsToSync(/*local_index=*/0, /*non_local_index=*/1));
-
-  ScopedWindowMap local_map_before_closing;
-  ASSERT_TRUE(GetLocalWindows(/*browser_index=*/0, &local_map_before_closing));
-
-  {
-    // Closing the last tab results in profile destruction and hence may require
-    // running blocking tasks which are normally disallowed during tests.
-    // TODO(crbug.com/1334091): remove once it's clear why it results in
-    // blocking tasks.
-    base::ScopedAllowUnresponsiveTasksForTesting scoped_allow_sync_primitives;
-    CloseTab(/*browser_index=*/0, /*tab_index=*/0);
-
-    // TODO(crbug.com/1039234): When DestroyProfileOnBrowserClose is enabled,
-    // the last CloseTab() triggers Profile deletion (and SyncService deletion).
-    // This means the last tab close never gets synced. We should fix this
-    // regression eventually. Once that's done, merge this test with the
-    // WithoutDestroyProfile version.
-    base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::action_timeout());
-    run_loop.Run();
-  }
-
-  SyncedSessionVector sessions;
-  ASSERT_TRUE(GetSessionData(/*browser_index=*/1, &sessions));
-  ASSERT_EQ(1u, sessions.size());
-  ASSERT_TRUE(
-      WindowsMatch(local_map_before_closing, sessions.front()->windows));
-}
-#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace

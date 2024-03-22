@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 
 namespace gfx {
 class Canvas;
+class RoundedCornersF;
 }
 
 namespace ui {
@@ -83,12 +84,32 @@ VIEWS_EXPORT std::unique_ptr<Background> CreateRoundedRectBackground(
     float radius,
     int for_border_thickness = 0);
 
+// Same as above except each corner radius can be different and customized.
+VIEWS_EXPORT std::unique_ptr<Background> CreateRoundedRectBackground(
+    SkColor color,
+    const gfx::RoundedCornersF& radii,
+    int for_border_thickness = 0);
+
 // Same as above except it uses the color specified by the views's ColorProvider
 // and the given color identifier.
 VIEWS_EXPORT std::unique_ptr<Background> CreateThemedRoundedRectBackground(
     ui::ColorId color_id,
     float radius,
     int for_border_thickness = 0);
+
+// Same as above except its top corner radius and bottom corner radius can be
+// different and customized.
+VIEWS_EXPORT std::unique_ptr<Background> CreateThemedRoundedRectBackground(
+    ui::ColorId color_id,
+    float top_radius,
+    float bottom_radius,
+    int for_border_thickness);
+
+// Same as above except each corner radius can be different and customized.
+VIEWS_EXPORT std::unique_ptr<Background> CreateThemedRoundedRectBackground(
+    ui::ColorId color_id,
+    const gfx::RoundedCornersF& radii,
+    int for_border_thickness);
 
 // Creates a background that fills the canvas in the color specified by the
 // view's ColorProvider and the given color identifier.

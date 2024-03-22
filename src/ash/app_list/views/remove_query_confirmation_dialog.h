@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/widget/widget_delegate.h"
 
 namespace views {
@@ -42,7 +43,6 @@ class RemoveQueryConfirmationDialog : public views::WidgetDelegateView {
   // views::View:
   const char* GetClassName() const override;
   gfx::Size CalculatePreferredSize() const override;
-  void OnThemeChanged() override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   views::Button* cancel_button_for_test() { return cancel_button_; }
@@ -52,10 +52,13 @@ class RemoveQueryConfirmationDialog : public views::WidgetDelegateView {
   RemovalConfirmationCallback confirm_callback_;
   std::unique_ptr<ViewShadow> view_shadow_;
 
-  views::Label* title_ = nullptr;
-  views::Label* body_ = nullptr;
-  views::Button* cancel_button_ = nullptr;
-  views::Button* accept_button_ = nullptr;
+  // Whether Jelly style feature is enabled.
+  bool is_jellyroll_enabled_ = false;
+
+  raw_ptr<views::Label, ExperimentalAsh> title_ = nullptr;
+  raw_ptr<views::Label, ExperimentalAsh> body_ = nullptr;
+  raw_ptr<views::Button, ExperimentalAsh> cancel_button_ = nullptr;
+  raw_ptr<views::Button, ExperimentalAsh> accept_button_ = nullptr;
 };
 
 }  // namespace ash

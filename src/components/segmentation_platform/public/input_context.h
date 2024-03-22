@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,13 @@
 #define COMPONENTS_SEGMENTATION_PLATFORM_PUBLIC_INPUT_CONTEXT_H_
 
 #include "base/containers/flat_map.h"
-#include "base/memory/scoped_refptr.h"
-#include "base/memory/weak_ptr.h"
-#include "components/segmentation_platform/public/trigger_context.h"
+#include "base/memory/ref_counted.h"
 #include "components/segmentation_platform/public/types/processed_value.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+
+namespace base {
+class Value;
+}
 
 namespace segmentation_platform {
 
@@ -18,21 +21,29 @@ namespace segmentation_platform {
 struct InputContext : base::RefCounted<InputContext> {
  public:
   InputContext();
-  explicit InputContext(const TriggerContext& trigger_context);
 
-  InputContext(InputContext&) = delete;
-  InputContext& operator=(InputContext&) = delete;
+  InputContext(const InputContext&) = delete;
+  InputContext& operator=(const InputContext&) = delete;
 
   // A list of params that can be used as input either directly to the model, or
   // to SQL queries, or custom input delegates. The exact mechanism and
   // semantics is still under construction.
   base::flat_map<std::string, processing::ProcessedValue> metadata_args;
 
+  // Returns the arg value from `metadata_args`.
+  absl::optional<processing::ProcessedValue> GetMetadataArgument(
+      base::StringPiece arg_name) const;
+
+  base::Value ToDebugValue() const;
+
  private:
-  friend class RefCounted<InputContext>;
+  friend class base::RefCounted<InputContext>;
 
   ~InputContext();
 };
+
+// For logging and debug purposes.
+std::ostream& operator<<(std::ostream& out, const InputContext& value);
 
 }  // namespace segmentation_platform
 

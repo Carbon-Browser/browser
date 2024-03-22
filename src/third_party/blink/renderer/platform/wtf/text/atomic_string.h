@@ -36,23 +36,16 @@
 #include "third_party/blink/renderer/platform/wtf/wtf_export.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 
-namespace WTF {
+#ifdef __OBJC__
+#include "base/apple/bridging.h"
+#endif
 
-struct AtomicStringHash;
+namespace WTF {
 
 // An AtomicString instance represents a string, and multiple AtomicString
 // instances can share their string storage if the strings are
 // identical. Comparing two AtomicString instances is much faster than comparing
 // two String instances because we just check string storage identity.
-//
-// AtomicString instances are not thread-safe. An AtomicString instance created
-// in a thread must be used only in the creator thread.  If multiple threads
-// access a single AtomicString instance, we have race condition of a reference
-// count in StringImpl, and would hit a runtime CHECK in
-// AtomicStringTable::remove().
-//
-// Exception: g_null_atom and g_empty_atom, are shared in multiple threads, and
-// are never stored in AtomicStringTable.
 class WTF_EXPORT AtomicString {
   USING_FAST_MALLOC(AtomicString);
 
@@ -61,7 +54,7 @@ class WTF_EXPORT AtomicString {
   static void Init();
 
   AtomicString() = default;
-  AtomicString(const LChar* chars)
+  explicit AtomicString(const LChar* chars)
       : AtomicString(chars,
                      chars ? strlen(reinterpret_cast<const char*>(chars)) : 0) {
   }
@@ -72,14 +65,14 @@ class WTF_EXPORT AtomicString {
   AtomicString(const LChar* chars, size_t length);
 #endif  // defined(ARCH_CPU_64_BITS)
 
-  AtomicString(const char* chars)
+  explicit AtomicString(const char* chars)
       : AtomicString(reinterpret_cast<const LChar*>(chars)) {}
   AtomicString(const LChar* chars, unsigned length);
   AtomicString(
       const UChar* chars,
       unsigned length,
       AtomicStringUCharEncoding encoding = AtomicStringUCharEncoding::kUnknown);
-  AtomicString(const UChar* chars);
+  explicit AtomicString(const UChar* chars);
 
   // Constructing an AtomicString from a String / StringImpl can be expensive if
   // the StringImpl is not already atomic.
@@ -158,9 +151,6 @@ class WTF_EXPORT AtomicString {
       TextCaseSensitivity case_sensitivity = kTextCaseSensitive) const {
     return string_.StartsWith(prefix, case_sensitivity);
   }
-  bool StartsWithIgnoringCase(const StringView& prefix) const {
-    return string_.StartsWithIgnoringCase(prefix);
-  }
   bool StartsWithIgnoringASCIICase(const StringView& prefix) const {
     return string_.StartsWithIgnoringASCIICase(prefix);
   }
@@ -197,10 +187,11 @@ class WTF_EXPORT AtomicString {
   static AtomicString Number(double, unsigned precision = 6);
 
   bool IsNull() const { return string_.IsNull(); }
-  bool IsEmpty() const { return string_.IsEmpty(); }
+  bool empty() const { return string_.empty(); }
+  unsigned Hash() const { return string_.Impl()->ExistingHash(); }
 
 #ifdef __OBJC__
-  AtomicString(NSString* s) : string_(Add((CFStringRef)s)) {}
+  AtomicString(NSString* s) : string_(Add(base::apple::NSToCFPtrCast(s))) {}
   operator NSString*() const { return string_; }
 #endif
   // AtomicString::fromUTF8 will return a null string if
@@ -244,7 +235,7 @@ class WTF_EXPORT AtomicString {
   }
   static scoped_refptr<StringImpl> AddSlowCase(scoped_refptr<StringImpl>&&);
   static scoped_refptr<StringImpl> AddSlowCase(StringImpl*);
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   static scoped_refptr<StringImpl> Add(CFStringRef);
 #endif
 };
@@ -294,13 +285,11 @@ WTF_EXPORT extern const AtomicString& g_xlink_atom;
 WTF_EXPORT extern const AtomicString& g_http_atom;
 WTF_EXPORT extern const AtomicString& g_https_atom;
 
-// AtomicStringHash is the default hash for AtomicString
 template <typename T>
-struct DefaultHash;
+struct HashTraits;
+// Defined in atomic_string_hash.h.
 template <>
-struct DefaultHash<AtomicString> {
-  typedef AtomicStringHash Hash;
-};
+struct HashTraits<AtomicString>;
 
 // Pretty printer for gtest and base/logging.*.  It prepends and appends
 // double-quotes, and escapes characters other than ASCII printables.

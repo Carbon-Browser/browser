@@ -1,12 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_APP_LIST_VIEWS_APP_LIST_PAGE_H_
 #define ASH_APP_LIST_VIEWS_APP_LIST_PAGE_H_
 
-#include "ash/app_list/model/app_list_model.h"
 #include "ash/ash_export.h"
+#include "ash/public/cpp/app_list/app_list_types.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -14,6 +16,8 @@ namespace ash {
 class ContentsView;
 
 class ASH_EXPORT AppListPage : public views::View {
+  METADATA_HEADER(AppListPage, views::View)
+
  public:
   AppListPage();
 
@@ -58,12 +62,8 @@ class ASH_EXPORT AppListPage : public views::View {
   // well.
   // |state| - The current app list state.
   // |search_box_opacity| - The current search box opacity.
-  // |restore_opacity| - Whether the page opacity should be restored, e.g. when
-  //     the app list drag ends. Note that |search_box_opacity| will be 1.0f if
-  //     |restore_opacity| is true.
   virtual void UpdatePageOpacityForState(AppListState state,
-                                         float search_box_opacity,
-                                         bool restore_opacity) = 0;
+                                         float search_box_opacity) = 0;
 
   // Updates the page bounds to match the provided app list state.
   // The default implementation sets the bounds returned by
@@ -94,50 +94,13 @@ class ASH_EXPORT AppListPage : public views::View {
   // Returns the last focusable view in this page.
   views::View* GetLastFocusableView();
 
-  // Called when the app list view state changes to |target_view_state| to
-  // animate the app list page opacity.
-  // |current_progress| - the current app list transition progress.
-  // |animator| - callback that when run starts the opacity animation.
-  using OpacityAnimator =
-      base::RepeatingCallback<void(views::View* view, bool target_visibility)>;
-  virtual void AnimateOpacity(float current_progress,
-                              AppListViewState target_view_state,
-                              const OpacityAnimator& animator);
-
-  // Called when the app list view state changes to |target_view_state| to
-  // animate the app list page vertical offset from the app list view top.
-  // |animator| - The callback that runs the transform animation to update the
-  // page's vertical position.
-  // |default_offset| - the default transform offset that can be passed to
-  //     |animator| to follow the search box position animation.
-  using TransformAnimator =
-      base::RepeatingCallback<void(float offset, ui::Layer* layer)>;
-  virtual void AnimateYPosition(AppListViewState target_view_state,
-                                const TransformAnimator& animator,
-                                float default_offset);
-
-  // Returns the area above the contents view, given the desired size of this
-  // page, in the contents view's coordinate space.
-  gfx::Rect GetAboveContentsOffscreenBounds(const gfx::Size& size) const;
-
-  // Returns the area below the contents view, given the desired size of this
-  // page, in the contents view's coordinate space.
-  gfx::Rect GetBelowContentsOffscreenBounds(const gfx::Size& size) const;
-
-  // Returns the entire bounds of the contents view, in the contents view's
-  // coordinate space.
-  gfx::Rect GetFullContentsBounds() const;
-
   // Returns the default bounds of pages inside the contents view, in the
   // contents view's coordinate space. This is the area of the contents view
   // below the search box.
   gfx::Rect GetDefaultContentsBounds() const;
 
-  // views::View:
-  const char* GetClassName() const override;
-
  private:
-  ContentsView* contents_view_;
+  raw_ptr<ContentsView, ExperimentalAsh> contents_view_;
 };
 
 }  // namespace ash

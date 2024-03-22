@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/user_metrics.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
@@ -27,7 +27,7 @@
 #include "chrome/browser/ui/views/frame/tab_strip_region_view.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
-#include "chrome/browser/ui/views/touch_uma/touch_uma.h"
+#include "chrome/common/chrome_features.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "content/public/browser/browser_thread.h"
@@ -38,6 +38,7 @@
 #include "ppapi/buildflags/buildflags.h"
 #include "third_party/blink/public/common/mime_util/mime_util.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
+#include "ui/base/clipboard/clipboard_constants.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/drop_target_event.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
@@ -45,6 +46,7 @@
 #include "ui/base/hit_test.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_provider.h"
+#include "ui/compositor/layer_tree_owner.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/gfx/scoped_canvas.h"
 #include "ui/views/view.h"
@@ -75,7 +77,7 @@ std::string FindURLMimeType(const GURL& url) {
 }
 
 void OnFindURLMimeType(const GURL& url,
-                       int process_id,
+                       content::BrowserContext* browser_context,
                        FileSupportedCallback callback,
                        const std::string& mime_type) {
   // Check whether the mime type, if given, is known to be supported or whether
@@ -86,9 +88,9 @@ void OnFindURLMimeType(const GURL& url,
 
 #if BUILDFLAG(ENABLE_PLUGINS)
   content::WebPluginInfo plugin;
-  result = result ||
-           content::PluginService::GetInstance()->GetPluginInfo(
-               process_id, url, mime_type, false, nullptr, &plugin, nullptr);
+  result = result || content::PluginService::GetInstance()->GetPluginInfo(
+                         browser_context, url, mime_type, false, nullptr,
+                         &plugin, nullptr);
 #endif
 
   std::move(callback).Run(url, result);
@@ -155,11 +157,16 @@ bool BrowserRootView::CanDrop(const ui::OSExchangeData& data) {
   if (!tabstrip()->GetVisible() && !toolbar()->GetVisible())
     return false;
 
-  // Return false and let TabStripRegionView forward drag events to TabStrip.
-  // This is necessary because we don't want to return true if
-  // tabstrip()->WantsToReceiveAllDragEvents() is true but the mouse is not over
-  // the tab strip region, and we don't know the current mouse location.
-  if (tabstrip()->WantsToReceiveAllDragEvents())
+  // If this is for a fallback window dragging session, return false and let
+  // TabStripRegionView forward drag events to TabDragController. This is
+  // necessary because we don't want to return true if the custom MIME type is
+  // there but the mouse is not over the tab strip region, and we don't know the
+  // current mouse location.
+  // TODO(crbug.com/1307594): This is a smoking gun code smell;
+  // TabStripRegionView and Toolbar have different affordances, so they should
+  // separately override the drag&drop methods.
+  if (data.HasCustomFormat(
+          ui::ClipboardFormatType::GetType(ui::kMimeTypeWindowDrag)))
     return false;
 
   // If there is a URL, we'll allow the drop.
@@ -185,11 +192,11 @@ void BrowserRootView::OnDragEntered(const ui::DropTargetEvent& event) {
         return;
       }
 
-      content::RenderFrameHost* rfh = web_contents->GetPrimaryMainFrame();
       base::ThreadPool::PostTaskAndReplyWithResult(
           FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
           base::BindOnce(&FindURLMimeType, url),
-          base::BindOnce(&OnFindURLMimeType, url, rfh->GetProcess()->GetID(),
+          base::BindOnce(&OnFindURLMimeType, url,
+                         browser_view_->browser()->profile(),
                          base::BindOnce(&BrowserRootView::OnFileSupported,
                                         weak_ptr_factory_.GetWeakPtr())));
     }
@@ -308,6 +315,10 @@ void BrowserRootView::OnMouseExited(const ui::MouseEvent& event) {
   RootView::OnMouseExited(event);
 }
 
+gfx::Size BrowserRootView::CalculatePreferredSize() const {
+  return browser_view_->GetRestoredBounds().size();
+}
+
 void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
   views::internal::RootView::PaintChildren(paint_info);
 
@@ -335,12 +346,17 @@ void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
     const int width = std::round(toolbar_bounds.width() * scale);
 
     gfx::ScopedCanvas scoped_canvas(canvas);
-    int active_tab_index = tabstrip()->GetActiveIndex();
-    if (active_tab_index != TabStripModel::kNoTab) {
-      Tab* active_tab = tabstrip()->tab_at(active_tab_index);
+    const absl::optional<int> active_tab_index = tabstrip()->GetActiveIndex();
+    if (active_tab_index.has_value()) {
+      Tab* active_tab = tabstrip()->tab_at(active_tab_index.value());
       if (active_tab && active_tab->GetVisible()) {
         gfx::RectF bounds(active_tab->GetMirroredBounds());
-        ConvertRectToTarget(tabstrip(), this, &bounds);
+        // The root of the views tree that hosts tabstrip is BrowserRootView.
+        // Except in Mac Immersive Fullscreen where the tabstrip is hosted in
+        // `overlay_widget` or `tab_overlay_widget`, each have their own root
+        // view.
+        ConvertRectToTarget(tabstrip(), tabstrip()->GetWidget()->GetRootView(),
+                            &bounds);
         canvas->ClipRect(bounds, SkClipOp::kDifference);
       }
     }
@@ -350,7 +366,7 @@ void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
     DCHECK(widget);
     const SkColor toolbar_top_separator_color =
         widget->GetColorProvider()->GetColor(
-            tabstrip()->ShouldPaintAsActiveFrame()
+            GetWidget()->ShouldPaintAsActive()
                 ? kColorToolbarTopSeparatorFrameActive
                 : kColorToolbarTopSeparatorFrameInactive);
 
@@ -360,19 +376,6 @@ void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
     flags.setAntiAlias(true);
     canvas->DrawRect(gfx::RectF(x, bottom - scale, width, scale), flags);
   }
-}
-
-void BrowserRootView::OnEventProcessingStarted(ui::Event* event) {
-  if (event->IsGestureEvent()) {
-    ui::GestureEvent* gesture_event = event->AsGestureEvent();
-    if (gesture_event->type() == ui::ET_GESTURE_TAP &&
-        gesture_event->location().y() <= 0 &&
-        gesture_event->location().x() <= browser_view_->GetBounds().width()) {
-      TouchUMA::RecordGestureAction(TouchUMA::kGestureRootViewTopTap);
-    }
-  }
-
-  RootView::OnEventProcessingStarted(event);
 }
 
 BrowserRootView::DropTarget* BrowserRootView::GetDropTarget(
@@ -439,7 +442,8 @@ bool BrowserRootView::GetPasteAndGoURL(const ui::OSExchangeData& data,
 void BrowserRootView::NavigateToDropUrl(
     std::unique_ptr<DropInfo> drop_info,
     const ui::DropTargetEvent& event,
-    ui::mojom::DragOperation& output_drag_op) {
+    ui::mojom::DragOperation& output_drag_op,
+    std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner) {
   DCHECK(drop_info);
 
   Browser* const browser = browser_view_->browser();

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,18 +102,22 @@ class ExtensionIconImageTest : public ExtensionsTest,
     std::string error;
     JSONFileValueDeserializer deserializer(
         test_file.AppendASCII("manifest.json"));
-    std::unique_ptr<base::DictionaryValue> valid_value =
-        base::DictionaryValue::From(
-            deserializer.Deserialize(&error_code, &error));
+    std::unique_ptr<base::Value> valid_value =
+        deserializer.Deserialize(&error_code, &error);
     EXPECT_EQ(0, error_code) << error;
     if (error_code != 0)
       return nullptr;
 
-    EXPECT_TRUE(valid_value.get());
+    EXPECT_TRUE(valid_value);
     if (!valid_value)
       return nullptr;
 
-    return Extension::Create(test_file, location, *valid_value,
+    const base::Value::Dict* valid_dict = valid_value->GetIfDict();
+    EXPECT_TRUE(valid_dict);
+    if (!valid_dict)
+      return nullptr;
+
+    return Extension::Create(test_file, location, *valid_dict,
                              Extension::NO_FLAGS, &error);
   }
 
@@ -136,11 +140,8 @@ class ExtensionIconImageTest : public ExtensionsTest,
 }  // namespace
 
 TEST_F(ExtensionIconImageTest, Basic) {
-  std::vector<ui::ResourceScaleFactor> supported_factors;
-  supported_factors.push_back(ui::k100Percent);
-  supported_factors.push_back(ui::k200Percent);
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_supported(
-      supported_factors);
+      {ui::k100Percent, ui::k200Percent});
   scoped_refptr<Extension> extension(CreateExtension(
       "extension_icon_image", ManifestLocation::kInvalidLocation));
   ASSERT_TRUE(extension.get() != nullptr);
@@ -211,11 +212,8 @@ TEST_F(ExtensionIconImageTest, Basic) {
 // There is no resource with either exact or bigger size, but there is a smaller
 // resource.
 TEST_F(ExtensionIconImageTest, FallbackToSmallerWhenNoBigger) {
-  std::vector<ui::ResourceScaleFactor> supported_factors;
-  supported_factors.push_back(ui::k100Percent);
-  supported_factors.push_back(ui::k200Percent);
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_supported(
-      supported_factors);
+      {ui::k100Percent, ui::k200Percent});
   scoped_refptr<Extension> extension(CreateExtension(
       "extension_icon_image", ManifestLocation::kInvalidLocation));
   ASSERT_TRUE(extension.get() != nullptr);

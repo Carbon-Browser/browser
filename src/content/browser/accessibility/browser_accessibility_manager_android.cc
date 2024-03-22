@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,35 +6,38 @@
 
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "base/i18n/char_iterator.h"
 #include "content/browser/accessibility/browser_accessibility_android.h"
+#include "content/browser/accessibility/web_ax_platform_tree_manager_delegate.h"
 #include "content/browser/accessibility/web_contents_accessibility_android.h"
 #include "third_party/blink/public/mojom/render_accessibility.mojom.h"
+#include "ui/accessibility/ax_event_generator.h"
 #include "ui/accessibility/ax_role_properties.h"
+#include "ui/accessibility/ax_selection.h"
 
 namespace content {
 
 // static
 BrowserAccessibilityManager* BrowserAccessibilityManager::Create(
     const ui::AXTreeUpdate& initial_tree,
-    BrowserAccessibilityDelegate* delegate) {
+    WebAXPlatformTreeManagerDelegate* delegate) {
   if (!delegate)
     return new BrowserAccessibilityManagerAndroid(initial_tree, nullptr,
                                                   nullptr);
 
-  WebContentsAccessibilityAndroid* wcax =
-      static_cast<WebContentsAccessibilityAndroid*>(
-          delegate->AccessibilityGetWebContentsAccessibility());
+  WebContentsAccessibilityAndroid* wcax = nullptr;
+  if (delegate->AccessibilityIsRootFrame()) {
+    wcax = static_cast<WebContentsAccessibilityAndroid*>(
+        delegate->AccessibilityGetWebContentsAccessibility());
+  }
   return new BrowserAccessibilityManagerAndroid(
-      initial_tree,
-      wcax && delegate->AccessibilityIsMainFrame() ? wcax->GetWeakPtr()
-                                                   : nullptr,
-      delegate);
+      initial_tree, wcax ? wcax->GetWeakPtr() : nullptr, delegate);
 }
 
 // static
 BrowserAccessibilityManager* BrowserAccessibilityManager::Create(
-    BrowserAccessibilityDelegate* delegate) {
+    WebAXPlatformTreeManagerDelegate* delegate) {
   return BrowserAccessibilityManager::Create(
       BrowserAccessibilityManagerAndroid::GetEmptyDocument(), delegate);
 }
@@ -47,16 +50,12 @@ BrowserAccessibilityManager::ToBrowserAccessibilityManagerAndroid() {
 BrowserAccessibilityManagerAndroid::BrowserAccessibilityManagerAndroid(
     const ui::AXTreeUpdate& initial_tree,
     base::WeakPtr<WebContentsAccessibilityAndroid> web_contents_accessibility,
-    BrowserAccessibilityDelegate* delegate)
+    WebAXPlatformTreeManagerDelegate* delegate)
     : BrowserAccessibilityManager(delegate),
       web_contents_accessibility_(std::move(web_contents_accessibility)),
       prune_tree_for_screen_reader_(true) {
-  // The Java layer handles the root scroll offset and image descriptions.
+  // The Java layer handles the root scroll offset.
   use_root_scroll_offsets_when_computing_bounds_ = false;
-  if (web_contents_accessibility_) {
-    allow_image_descriptions_ =
-        web_contents_accessibility_.get()->should_allow_image_descriptions();
-  }
 
   Initialize(initial_tree);
 }
@@ -67,7 +66,7 @@ BrowserAccessibilityManagerAndroid::~BrowserAccessibilityManagerAndroid() =
 // static
 ui::AXTreeUpdate BrowserAccessibilityManagerAndroid::GetEmptyDocument() {
   ui::AXNodeData empty_document;
-  empty_document.id = 0;
+  empty_document.id = 1;
   empty_document.role = ax::mojom::Role::kRootWebArea;
   empty_document.SetRestriction(ax::mojom::Restriction::kReadOnly);
   ui::AXTreeUpdate update;
@@ -76,30 +75,51 @@ ui::AXTreeUpdate BrowserAccessibilityManagerAndroid::GetEmptyDocument() {
   return update;
 }
 
-bool BrowserAccessibilityManagerAndroid::ShouldRespectDisplayedPasswordText() {
-  WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
-  return wcax ? wcax->ShouldRespectDisplayedPasswordText() : false;
+void BrowserAccessibilityManagerAndroid::ResetWebContentsAccessibility() {
+  web_contents_accessibility_.reset();
 }
 
-bool BrowserAccessibilityManagerAndroid::ShouldExposePasswordText() {
+bool BrowserAccessibilityManagerAndroid::ShouldAllowImageDescriptions() {
   WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
-  return wcax ? wcax->ShouldExposePasswordText() : false;
+  return (wcax && wcax->should_allow_image_descriptions()) ||
+         allow_image_descriptions_for_testing_;
 }
 
 BrowserAccessibility* BrowserAccessibilityManagerAndroid::GetFocus() const {
-  BrowserAccessibility* focus = BrowserAccessibilityManager::GetFocus();
-  if (focus && !focus->IsAtomicTextField())
-    return GetActiveDescendant(focus);
-  return focus;
+  // On Android, don't follow active descendant when focus is in a textfield,
+  // otherwise editable comboboxes such as the search field on google.com do
+  // not work with Talkback. See crbug.com/761501.
+  // TODO(accessibility) How does Talkback then read the active item?
+  // This fix came in crrev.com/c/647339 but said that a more comprehensive fix
+  // was landing in in crrev.com/c/642056, so is this override still necessary?
+  ui::AXNodeID focus_id = GetTreeData().focus_id;
+  BrowserAccessibility* focus = GetFromID(focus_id);
+  if (focus && focus->IsAtomicTextField())
+    return focus;
+
+  return BrowserAccessibilityManager::GetFocus();
 }
 
-BrowserAccessibility* BrowserAccessibilityManagerAndroid::RetargetForEvents(
-    BrowserAccessibility* node,
+ui::AXNode* BrowserAccessibilityManagerAndroid::RetargetForEvents(
+    ui::AXNode* node,
     RetargetEventType type) const {
+  // TODO(crbug.com/1350627): Node should not be null. But this seems to be
+  // happening in the wild for reasons not yet determined. Because the only
+  // consequence of node being null is that we'll fail to fire an event on a
+  // non-existent object, the style guide's suggestion of using a CHECK
+  // temporarily seems a bit strong. Nonetheless we should get to the bottom of
+  // this. So we are temporarily using NOTREACHED in the hopes that ClusterFuzz
+  // will lead to a reliably-reproducible test case.
+  if (!node) {
+    NOTREACHED();
+    return nullptr;
+  }
+
   // Sometimes we get events on nodes in our internal accessibility tree
   // that aren't exposed on Android. Get |updated| to point to the lowest
   // ancestor that is exposed.
-  BrowserAccessibility* updated = node->PlatformGetLowestPlatformAncestor();
+  BrowserAccessibility* wrapper = GetFromAXNode(node);
+  BrowserAccessibility* updated = wrapper->PlatformGetLowestPlatformAncestor();
   DCHECK(updated);
 
   switch (type) {
@@ -109,7 +129,7 @@ BrowserAccessibility* BrowserAccessibilityManagerAndroid::RetargetForEvents(
       // character with a dot after a short pause. On Android we don't want to
       // fire an event for those changes, but we do want to make sure our
       // internal state is correct, so we call OnDataChanged() and then return.
-      if (updated->IsPasswordField() && node != updated) {
+      if (updated->IsPasswordField() && wrapper != updated) {
         updated->OnDataChanged();
         return nullptr;
       }
@@ -140,12 +160,11 @@ BrowserAccessibility* BrowserAccessibilityManagerAndroid::RetargetForEvents(
       NOTREACHED();
       break;
   }
-  return updated;
+  return updated ? updated->node() : nullptr;
 }
 
-void BrowserAccessibilityManagerAndroid::FireFocusEvent(
-    BrowserAccessibility* node) {
-  BrowserAccessibilityManager::FireFocusEvent(node);
+void BrowserAccessibilityManagerAndroid::FireFocusEvent(ui::AXNode* node) {
+  ui::AXTreeManager::FireFocusEvent(node);
   WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
   if (!wcax)
     return;
@@ -153,14 +172,14 @@ void BrowserAccessibilityManagerAndroid::FireFocusEvent(
   // When focusing a node on Android, we want to ensure that we clear the
   // Java-side cache for the previously focused node as well.
   if (BrowserAccessibility* last_focused_node =
-          BrowserAccessibilityManager::GetLastFocusedNode()) {
+          GetFromAXNode(GetLastFocusedNode())) {
     BrowserAccessibilityAndroid* android_last_focused_node =
         static_cast<BrowserAccessibilityAndroid*>(last_focused_node);
     wcax->ClearNodeInfoCacheForGivenId(android_last_focused_node->unique_id());
   }
 
   BrowserAccessibilityAndroid* android_node =
-      static_cast<BrowserAccessibilityAndroid*>(node);
+      static_cast<BrowserAccessibilityAndroid*>(GetFromAXNode(node));
   wcax->HandleFocusChanged(android_node->unique_id());
 }
 
@@ -208,14 +227,20 @@ void BrowserAccessibilityManagerAndroid::FireBlinkEvent(
 
 void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
     ui::AXEventGenerator::Event event_type,
-    BrowserAccessibility* node) {
+    const ui::AXNode* node) {
   BrowserAccessibilityManager::FireGeneratedEvent(event_type, node);
   WebContentsAccessibilityAndroid* wcax = GetWebContentsAXFromRootManager();
   if (!wcax)
     return;
 
+  BrowserAccessibility* wrapper = GetFromAXNode(node);
+  DCHECK(wrapper);
   BrowserAccessibilityAndroid* android_node =
-      static_cast<BrowserAccessibilityAndroid*>(node);
+      static_cast<BrowserAccessibilityAndroid*>(wrapper);
+
+  if (event_type == ui::AXEventGenerator::Event::CHILDREN_CHANGED) {
+    BrowserAccessibilityAndroid::ResetLeafCache();
+  }
 
   // Always send AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED to notify
   // the Android system that the accessibility hierarchy rooted at this
@@ -303,17 +328,19 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
       // leaf node might not be a text field. For example, in the unusual case
       // when the text field is inside a button, the leaf node is the button not
       // the text field.
-      if (android_node->IsTextField() && GetFocus() == node)
+      if (android_node->IsTextField() && GetFocus() == wrapper)
         wcax->HandleEditableTextChanged(android_node->unique_id());
       break;
 
     // Currently unused events on this platform.
+    case ui::AXEventGenerator::Event::NONE:
     case ui::AXEventGenerator::Event::ACCESS_KEY_CHANGED:
     case ui::AXEventGenerator::Event::ACTIVE_DESCENDANT_CHANGED:
     case ui::AXEventGenerator::Event::ARIA_CURRENT_CHANGED:
     case ui::AXEventGenerator::Event::ATK_TEXT_OBJECT_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::ATOMIC_CHANGED:
     case ui::AXEventGenerator::Event::AUTO_COMPLETE_CHANGED:
+    case ui::AXEventGenerator::Event::AUTOFILL_AVAILABILITY_CHANGED:
     case ui::AXEventGenerator::Event::BUSY_CHANGED:
     case ui::AXEventGenerator::Event::CARET_BOUNDS_CHANGED:
     case ui::AXEventGenerator::Event::CHECKED_STATE_DESCRIPTION_CHANGED:
@@ -351,6 +378,7 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::MULTILINE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::MULTISELECTABLE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::OBJECT_ATTRIBUTE_CHANGED:
+    case ui::AXEventGenerator::Event::ORIENTATION_CHANGED:
     case ui::AXEventGenerator::Event::OTHER_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::PARENT_CHANGED:
     case ui::AXEventGenerator::Event::PLACEHOLDER_CHANGED:
@@ -367,11 +395,11 @@ void BrowserAccessibilityManagerAndroid::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::SELECTED_CHANGED:
     case ui::AXEventGenerator::Event::SELECTED_CHILDREN_CHANGED:
     case ui::AXEventGenerator::Event::SELECTED_VALUE_CHANGED:
-    case ui::AXEventGenerator::Event::SELECTION_IN_TEXT_FIELD_CHANGED:
     case ui::AXEventGenerator::Event::SET_SIZE_CHANGED:
     case ui::AXEventGenerator::Event::SORT_CHANGED:
     case ui::AXEventGenerator::Event::STATE_CHANGED:
     case ui::AXEventGenerator::Event::TEXT_ATTRIBUTE_CHANGED:
+    case ui::AXEventGenerator::Event::TEXT_SELECTION_CHANGED:
     case ui::AXEventGenerator::Event::WIN_IACCESSIBLE_STATE_CHANGED:
       break;
   }
@@ -495,8 +523,9 @@ void BrowserAccessibilityManagerAndroid::ClearNodeInfoCacheForGivenId(
     return;
 
   // We do not need to clear a node more than once per atomic update.
-  if (nodes_already_cleared_.find(unique_id) != nodes_already_cleared_.end())
+  if (base::Contains(nodes_already_cleared_, unique_id)) {
     return;
+  }
 
   nodes_already_cleared_.emplace(unique_id);
   wcax->ClearNodeInfoCacheForGivenId(unique_id);
@@ -555,54 +584,30 @@ void BrowserAccessibilityManagerAndroid::OnAtomicUpdateFinished(
   // Reset content changed events counter every time we finish an atomic update.
   wcax->ResetContentChangedEventsCounter();
 
-  // Clear set of nodes cleared from the cache after atomic update.
+  // Clear unordered_set of nodes cleared from the cache after atomic update.
   nodes_already_cleared_.clear();
 
+  // When the root changes, send the new root id and a navigate signal to Java.
   if (root_changed) {
-    wcax->HandleNavigate();
+    auto* root_manager = static_cast<BrowserAccessibilityManagerAndroid*>(
+        GetManagerForRootFrame());
+    DCHECK(root_manager);
+
+    auto* root = static_cast<BrowserAccessibilityAndroid*>(
+        root_manager->GetBrowserAccessibilityRoot());
+    DCHECK(root);
+
+    wcax->HandleNavigate(root->unique_id());
   }
 
   // Update the maximum number of nodes in the cache after each atomic update.
   wcax->UpdateMaxNodesInCache();
 }
 
-void BrowserAccessibilityManagerAndroid::OnNodeCreated(ui::AXTree* tree,
-                                                       ui::AXNode* node) {
-  BrowserAccessibilityManager::OnNodeCreated(tree, node);
-  if (node->data().GetBoolAttribute(
-          ax::mojom::BoolAttribute::kTouchPassthrough)) {
-    auto* root =
-        static_cast<BrowserAccessibilityManagerAndroid*>(GetRootManager());
-    if (root)
-      root->EnableTouchPassthrough();
-    else
-      EnableTouchPassthrough();
-  }
-}
-
-void BrowserAccessibilityManagerAndroid::OnBoolAttributeChanged(
-    ui::AXTree* tree,
-    ui::AXNode* node,
-    ax::mojom::BoolAttribute attr,
-    bool new_value) {
-  BrowserAccessibilityManager::OnBoolAttributeChanged(tree, node, attr,
-                                                      new_value);
-  if (new_value && attr == ax::mojom::BoolAttribute::kTouchPassthrough) {
-    // TODO(accessibility): there's a tiny chance we could get this
-    // called on an iframe before it's attached to the root manager.
-    // If this ever becomes an issue in practice, make this more robust.
-    auto* root =
-        static_cast<BrowserAccessibilityManagerAndroid*>(GetRootManager());
-    if (root)
-      root->EnableTouchPassthrough();
-    else
-      EnableTouchPassthrough();
-  }
-}
-
 WebContentsAccessibilityAndroid*
 BrowserAccessibilityManagerAndroid::GetWebContentsAXFromRootManager() {
-  BrowserAccessibility* parent_node = GetParentNodeFromParentTree();
+  BrowserAccessibility* parent_node =
+      GetParentNodeFromParentTreeAsBrowserAccessibility();
   if (!parent_node)
     return web_contents_accessibility_.get();
 

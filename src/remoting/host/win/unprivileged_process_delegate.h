@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,23 +11,25 @@
 
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/win/scoped_handle.h"
 #include "ipc/ipc_listener.h"
+#include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/generic_pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
+#include "remoting/host/mojom/desktop_session.mojom.h"
 #include "remoting/host/win/worker_process_launcher.h"
 
 namespace base {
 class CommandLine;
 class SingleThreadTaskRunner;
-} // namespace base
+}  // namespace base
 
 namespace IPC {
 class ChannelProxy;
 class Message;
-} // namespace IPC
+}  // namespace IPC
 
 namespace remoting {
 
@@ -48,10 +50,10 @@ class UnprivilegedProcessDelegate : public IPC::Listener,
 
   // WorkerProcessLauncher::Delegate implementation.
   void LaunchProcess(WorkerProcessLauncher* event_handler) override;
-  void Send(IPC::Message* message) override;
   void GetRemoteAssociatedInterface(
       mojo::GenericPendingAssociatedReceiver receiver) override;
   void CloseChannel() override;
+  void CrashProcess(const base::Location& location) override;
   void KillProcess() override;
 
  private:
@@ -80,6 +82,8 @@ class UnprivilegedProcessDelegate : public IPC::Listener,
 
   // The handle of the worker process, if launched.
   base::win::ScopedHandle worker_process_;
+
+  mojo::AssociatedRemote<mojom::WorkerProcessControl> worker_process_control_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

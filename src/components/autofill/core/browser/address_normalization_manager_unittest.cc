@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "components/autofill/core/browser/test_address_normalizer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -38,7 +38,8 @@ class AddressNormalizationManagerTest : public testing::Test {
 TEST_F(AddressNormalizationManagerTest, SynchronousResult) {
   Initialize("en-US");
 
-  AutofillProfile profile_to_normalize;
+  AutofillProfile profile_to_normalize(
+      i18n_model_definition::kLegacyHierarchyCountryCode);
   manager_->NormalizeAddressUntilFinalized(&profile_to_normalize);
 
   EXPECT_FALSE(completion_callback_called_);
@@ -50,7 +51,8 @@ TEST_F(AddressNormalizationManagerTest, AsynchronousResult) {
   Initialize("en-US");
   address_normalizer_.DelayNormalization();
 
-  AutofillProfile profile_to_normalize;
+  AutofillProfile profile_to_normalize(
+      i18n_model_definition::kLegacyHierarchyCountryCode);
   manager_->NormalizeAddressUntilFinalized(&profile_to_normalize);
 
   EXPECT_FALSE(completion_callback_called_);

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 const AutomationNode = chrome.automation.AutomationNode;
 const AutomationEvent = chrome.automation.AutomationEvent;
+const EventType = chrome.automation.EventType;
 
 export const AutomationObjectConstructorInstaller = {
   /**
@@ -24,16 +25,14 @@ export const AutomationObjectConstructorInstaller = {
       chrome.automation.AutomationNode =
           /** @type {function (new:AutomationNode)} */ (node.constructor);
       node.addEventListener(
-          chrome.automation.EventType.CHILDREN_CHANGED,
-          function installAutomationEvent(e) {
+          EventType.CHILDREN_CHANGED, function installAutomationEvent(e) {
             chrome.automation.AutomationEvent =
                 /** @type {function (new:AutomationEvent)} */ (e.constructor);
             node.removeEventListener(
                 chrome.automation.EventType.CHILDREN_CHANGED,
                 installAutomationEvent, true);
             resolve();
-          },
-          true);
+          }, true);
     });
   },
 };

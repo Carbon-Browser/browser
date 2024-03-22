@@ -15,8 +15,8 @@
 
     .indented-description {
       color: var(--shimless-instructions-text-color);
+      margin-top: 8px;
       padding: 0; /* specify all to override */
-      padding-inline-start: 60px;
       width: 512px;
     }
 
@@ -32,6 +32,7 @@
 
     .small-icon {
       height: 20px;
+      min-width: 20px;
       padding-inline-end: 8px;
       width: 20px;
     }
@@ -60,6 +61,7 @@
       line-height: var(--shimless-title-line-height);
       margin-bottom: var(--title-bottom-margin);
       margin-top: 0;
+      outline: none;
     }
 
     .instructions {
@@ -117,7 +119,10 @@
 
     cr-radio-button {
       --cr-radio-button-size: 20px;
-      padding-bottom: 8px;
+      align-items: start;
+      font-size: var(--shimless-instructions-font-size);
+      line-height: 20px;
+      padding-bottom: 0;
       padding-inline-start: 20px;
       padding-top: var(--radio-button-top-padding);
     }
@@ -145,6 +150,11 @@
       width: 100%;
     }
 
+    /**
+     * NOTE: If you change the number of columns, don't forget to update the
+     * NUM_COLUMNS constant in the keyboard navigation code. Otherwise the down
+     * and up arrows won't work as expected.
+     */
     .component-grid.repair {
       grid-template-columns: auto auto;
     }
@@ -188,13 +198,6 @@
 
     .illustration {
       width: 320px;
-    }
-
-    .input-wrapper {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      justify-content: center;
     }
 
     .scroll-container {

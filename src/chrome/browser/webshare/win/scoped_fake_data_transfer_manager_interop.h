@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,6 @@ class FakeDataTransferManagerInterop;
 // for the Share contract.
 class ScopedFakeDataTransferManagerInterop {
  public:
-  static bool IsSupportedEnvironment();
-
   ScopedFakeDataTransferManagerInterop();
   ScopedFakeDataTransferManagerInterop(
       const ScopedFakeDataTransferManagerInterop&) = delete;

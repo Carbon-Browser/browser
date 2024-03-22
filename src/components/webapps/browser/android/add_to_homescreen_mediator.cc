@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "components/webapps/browser/android/app_banner_manager_android.h"
 #include "components/webapps/browser/android/webapps_jni_headers/AddToHomescreenMediator_jni.h"
 #include "components/webapps/browser/banners/app_banner_metrics.h"
-#include "components/webapps/browser/banners/app_banner_settings_helper.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
 #include "components/webapps/browser/webapps_client.h"
 #include "content/public/browser/web_contents.h"
@@ -80,15 +79,14 @@ void AddToHomescreenMediator::StartForAppBanner(
   }
   // In this code path (show A2HS dialog from app banner), a maskable primary
   // icon isn't padded yet. We'll need to pad it here.
-  SetIcon(params_->primary_icon,
-          params_->has_maskable_primary_icon /*need_to_add_padding*/);
+  SetIcon(params_->primary_icon);
 }
 
 void AddToHomescreenMediator::StartForAppMenu(
     JNIEnv* env,
     const JavaParamRef<jobject>& java_web_contents,
-    int title_id) {
-  title_id_ = title_id;
+    int app_menu_type) {
+  app_menu_type_ = app_menu_type;
   content::WebContents* web_contents =
       content::WebContents::FromJavaWebContents(java_web_contents);
   data_fetcher_ = std::make_unique<AddToHomescreenDataFetcher>(
@@ -140,15 +138,13 @@ void AddToHomescreenMediator::Destroy(JNIEnv* env) {
 
 AddToHomescreenMediator::~AddToHomescreenMediator() = default;
 
-void AddToHomescreenMediator::SetIcon(const SkBitmap& display_icon,
-                                      bool need_to_add_padding) {
+void AddToHomescreenMediator::SetIcon(const SkBitmap& display_icon) {
   JNIEnv* env = base::android::AttachCurrentThread();
   DCHECK(!display_icon.drawsNothing());
   base::android::ScopedJavaLocalRef<jobject> java_bitmap =
       gfx::ConvertToJavaBitmap(display_icon);
   Java_AddToHomescreenMediator_setIcon(env, java_ref_, java_bitmap,
-                                       params_->has_maskable_primary_icon,
-                                       need_to_add_padding);
+                                       params_->HasMaskablePrimaryIcon());
 }
 
 void AddToHomescreenMediator::SetWebAppInfo(const std::u16string& user_title,
@@ -176,35 +172,23 @@ void AddToHomescreenMediator::OnUserTitleAvailable(
 void AddToHomescreenMediator::OnDataAvailable(
     const ShortcutInfo& info,
     const SkBitmap& display_icon,
+    AddToHomescreenParams::AppType app_type,
     const InstallableStatusCode status_code) {
   params_ = std::make_unique<AddToHomescreenParams>();
-  params_->app_type = info.source == ShortcutInfo::SOURCE_ADD_TO_HOMESCREEN_PWA
-                          ? AddToHomescreenParams::AppType::WEBAPK
-                          : AddToHomescreenParams::AppType::SHORTCUT;
+  params_->app_type = app_type;
   params_->shortcut_info = std::make_unique<ShortcutInfo>(info);
   params_->primary_icon = data_fetcher_->primary_icon();
-  params_->has_maskable_primary_icon =
-      data_fetcher_->has_maskable_primary_icon();
   params_->install_source = InstallableMetrics::GetInstallSource(
       data_fetcher_->web_contents(), InstallTrigger::MENU);
   params_->installable_status = status_code;
 
-  // AddToHomescreenMediator::OnDataAvailable() is called in the code path
-  // to show A2HS dialog from app menu. In this code path, display_icon is
-  // already correctly padded if it's maskable.
-  SetIcon(display_icon, false /*need_to_add_padding*/);
+  SetIcon(display_icon);
 
   // Log what was shown in the App menu and what action was taken here.
   bool is_webapk = params_->app_type == AddToHomescreenParams::AppType::WEBAPK;
   auto entry = AppTypeToMenuEntry::kAppTypeFinalEntry;
 
-  DCHECK_NE(-1, title_id_);
-  switch (title_id_) {
-    case AppBannerSettingsHelper::APP_MENU_OPTION_UNKNOWN: {
-      entry = is_webapk ? AppTypeToMenuEntry::kUnknownMenuEntryForWebApp
-                        : AppTypeToMenuEntry::kUnknownMenuEntryForShortcut;
-      break;
-    }
+  switch (app_menu_type_) {
     case AppBannerSettingsHelper::APP_MENU_OPTION_ADD_TO_HOMESCREEN: {
       entry = is_webapk ? AppTypeToMenuEntry::kAddToHomeScreenShownForWebApp
                         : AppTypeToMenuEntry::kAddToHomeScreenShownForShortcut;
@@ -215,6 +199,8 @@ void AddToHomescreenMediator::OnDataAvailable(
                         : AppTypeToMenuEntry::kInstallShownForShortcut;
       break;
     }
+    default:
+      NOTREACHED();
   }
   UMA_HISTOGRAM_ENUMERATION("Webapp.AddToHomescreenMediator.AppTypeToMenuEntry",
                             entry, AppTypeToMenuEntry::kAppTypeFinalEntry);
@@ -234,24 +220,13 @@ void AddToHomescreenMediator::RecordEventForAppMenu(
     return;
   }
 
-  switch (event) {
-    case AddToHomescreenInstaller::Event::INSTALL_STARTED:
-      AppBannerSettingsHelper::RecordBannerEvent(
-          web_contents, web_contents->GetVisibleURL(),
-          a2hs_params.shortcut_info->url.spec(),
-          AppBannerSettingsHelper::APP_BANNER_EVENT_DID_ADD_TO_HOMESCREEN,
-          base::Time::Now());
-      break;
-    case AddToHomescreenInstaller::Event::INSTALL_REQUEST_FINISHED: {
-      AppBannerManager* app_banner_manager =
-          AppBannerManager::FromWebContents(web_contents);
-      // Fire the appinstalled event and do install time logging.
-      if (app_banner_manager)
-        app_banner_manager->OnInstall(a2hs_params.shortcut_info->display);
-      break;
+  if (event == AddToHomescreenInstaller::Event::INSTALL_REQUEST_FINISHED) {
+    AppBannerManager* app_banner_manager =
+        AppBannerManager::FromWebContents(web_contents);
+    // Fire the appinstalled event and do install time logging.
+    if (app_banner_manager) {
+      app_banner_manager->OnInstall(a2hs_params.shortcut_info->display);
     }
-    default:
-      break;
   }
 }
 

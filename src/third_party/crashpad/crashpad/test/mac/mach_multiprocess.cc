@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@
 #include <string>
 #include <tuple>
 
+#include "base/apple/scoped_mach_port.h"
 #include "base/auto_reset.h"
-#include "base/mac/scoped_mach_port.h"
 #include "gtest/gtest.h"
 #include "test/errors.h"
 #include "test/mac/mach_errors.h"
@@ -64,9 +64,9 @@ struct MachMultiprocessInfo {
   }
 
   std::string service_name;
-  base::mac::ScopedMachReceiveRight local_port;
-  base::mac::ScopedMachSendRight remote_port;
-  base::mac::ScopedMachSendRight child_task;  // valid only in parent
+  base::apple::ScopedMachReceiveRight local_port;
+  base::apple::ScopedMachSendRight remote_port;
+  base::apple::ScopedMachSendRight child_task;  // valid only in parent
 };
 
 }  // namespace internal

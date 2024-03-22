@@ -1,8 +1,8 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.m.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
 export class Page {
   pageName: string;
@@ -14,12 +14,12 @@ export class Page {
 
   showPage() {
     this.visible = true;
-    $(this.pageName).hidden = false;
+    getRequiredElement(this.pageName).hidden = false;
   }
 
   hidePage() {
     this.visible = false;
-    $(this.pageName).hidden = true;
+    getRequiredElement(this.pageName).hidden = true;
   }
 }
 

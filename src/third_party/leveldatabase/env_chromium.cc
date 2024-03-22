@@ -7,17 +7,19 @@
 #include <atomic>
 #include <iterator>
 #include <limits>
+#include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_error_or.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/process/process_metrics.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -31,12 +33,12 @@
 #include "base/trace_event/memory_dump_provider.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
+#include "base/types/expected_macros.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/services/storage/public/cpp/filesystem/filesystem_proxy.h"
 #include "third_party/leveldatabase/chromium_logger.h"
 #include "third_party/leveldatabase/leveldb_chrome.h"
-#include "third_party/leveldatabase/port/port_chromium.h"
 #include "third_party/leveldatabase/src/include/leveldb/options.h"
 #include "third_party/re2/src/re2/re2.h"
 
@@ -70,6 +72,11 @@ static const FilePath::CharType kLevelDBTestDirectoryPrefix[] =
 // This name should not be changed or users involved in a crash might not be
 // able to recover data.
 static const char kDatabaseNameSuffixForRebuildDB[] = "__tmp_for_rebuild";
+
+DBFactoryMethod& GetDBFactoryOverride() {
+  static base::NoDestructor<DBFactoryMethod> instance;
+  return *instance;
+}
 
 class ChromiumFileLock : public FileLock {
  public:
@@ -222,13 +229,12 @@ class ChromiumEvictableRandomAccessFile : public leveldb::RandomAccessFile {
     leveldb::Cache::Handle* handle = file_cache_->Lookup(cache_key_);
     if (!handle) {
       int flags = base::File::FLAG_READ | base::File::FLAG_OPEN;
-      FileErrorOr<base::File> result = filesystem_->OpenFile(filepath_, flags);
-      if (result.is_error()) {
-        return MakeIOError(filepath_.AsUTF8Unsafe(), "Could not perform read",
-                           kRandomAccessFileRead);
-      }
-      handle = file_cache_->Insert(cache_key_,
-                                   new base::File(std::move(result.value())),
+      ASSIGN_OR_RETURN(
+          base::File file, filesystem_->OpenFile(filepath_, flags), [&](auto) {
+            return MakeIOError(filepath_.AsUTF8Unsafe(),
+                               "Could not perform read", kRandomAccessFileRead);
+          });
+      handle = file_cache_->Insert(cache_key_, new base::File(std::move(file)),
                                    sizeof(base::File), &RemoveFile);
     }
     base::File* file = static_cast<base::File*>(file_cache_->Value(handle));
@@ -308,10 +314,12 @@ ChromiumWritableFile::ChromiumWritableFile(const std::string& fname,
 #endif
       file_type_(kOther) {
   FilePath path = FilePath::FromUTF8Unsafe(fname);
-  if (path.BaseName().AsUTF8Unsafe().find("MANIFEST") == 0)
+  if (path.BaseName().AsUTF8Unsafe().find("MANIFEST") == 0) {
     file_type_ = kManifest;
-  else if (path.MatchesExtension(table_extension))
+  } else if (base::EqualsCaseInsensitiveASCII(path.Extension().c_str(),
+                                              table_extension)) {
     file_type_ = kTable;
+  }
   parent_dir_ = FilePath::FromUTF8Unsafe(fname).DirName().AsUTF8Unsafe();
 }
 
@@ -321,7 +329,7 @@ Status ChromiumWritableFile::SyncParent() {
   FilePath path = FilePath::FromUTF8Unsafe(parent_dir_);
   FileErrorOr<base::File> result = filesystem_->OpenFile(
       path, base::File::FLAG_OPEN | base::File::FLAG_READ);
-  if (result.is_error()) {
+  if (!result.has_value()) {
     return MakeIOError(parent_dir_, "Unable to open directory", kSyncParent,
                        result.error());
   }
@@ -471,7 +479,7 @@ Options::Options() {
   // memory buffer which won't be written until it hits the maximum size
   // (leveldb::Options::write_buffer_size - 4MB by default). The downside here
   // is that databases opens take longer as the open is blocked on compaction.
-  reuse_logs = !base::SysInfo::IsLowEndDevice();
+  reuse_logs = !base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled();
 #endif
   // By default use a single shared block cache to conserve memory. The owner of
   // this object can create their own, or set to NULL to have leveldb create a
@@ -539,23 +547,18 @@ Status MakeIOError(Slice filename,
                    const std::string& message,
                    MethodID method,
                    base::File::Error error) {
-  DCHECK_LT(error, 0);
-  char buf[512];
-  base::snprintf(buf, sizeof(buf), "%s (ChromeMethodBFE: %d::%s::%d)",
-           message.c_str(), method, MethodIDToString(method), -error);
   // TOOD(crbug.com/760362): Map base::File::FILE_ERROR_NOT_FOUND to
   //                         Status::NotFound, after fixing LevelDB to handle
   //                         the NotFound correctly.
-  return Status::IOError(filename, buf);
-}
-
-Status MakeIOError(Slice filename,
-                   const std::string& message,
-                   MethodID method) {
-  char buf[512];
-  base::snprintf(buf, sizeof(buf), "%s (ChromeMethodOnly: %d::%s)",
-                 message.c_str(), method, MethodIDToString(method));
-  return Status::IOError(filename, buf);
+  return Status::IOError(
+      filename,
+      base::StrCat(
+          {message, " (ChromeMethod",
+           error == base::File::FILE_OK ? "Only" : "BFE", ": ",
+           base::NumberToString(method), "::", MethodIDToString(method),
+           error == base::File::FILE_OK ? std::string()
+                                        : "::" + base::NumberToString(-error),
+           ")"}));
 }
 
 ErrorParsingResult ParseMethodAndError(const leveldb::Status& status,
@@ -779,13 +782,13 @@ void ChromiumEnv::RemoveBackupFiles(const FilePath& dir) {
       "LevelDBEnv.DeleteTableBackupFile",
       base::Histogram::kUmaTargetedHistogramFlag);
 
-  FileErrorOr<std::vector<base::FilePath>> result =
+  ASSIGN_OR_RETURN(
+      std::vector<base::FilePath> result,
       filesystem_->GetDirectoryEntries(
-          dir, storage::FilesystemProxy::DirectoryEntryType::kFilesOnly);
-  if (result.is_error())
-    return;
+          dir, storage::FilesystemProxy::DirectoryEntryType::kFilesOnly),
+      [](auto) {});
 
-  for (const auto& path : result.value()) {
+  for (const auto& path : result) {
     if (path.Extension() == FILE_PATH_LITERAL(".bak"))
       histogram->AddBoolean(filesystem_->DeleteFile(path));
   }
@@ -802,18 +805,17 @@ Status ChromiumEnv::GetChildren(const std::string& dir,
   FilePath dir_path = FilePath::FromUTF8Unsafe(dir);
   RemoveBackupFiles(dir_path);
 
-  FileErrorOr<std::vector<FilePath>> entries_result =
+  ASSIGN_OR_RETURN(
+      std::vector<FilePath> entries,
       filesystem_->GetDirectoryEntries(
           dir_path,
-          storage::FilesystemProxy::DirectoryEntryType::kFilesAndDirectories);
-  if (entries_result.is_error()) {
-    return MakeIOError(dir, "Could not open/read directory", kGetChildren,
-                       entries_result.error());
-  }
+          storage::FilesystemProxy::DirectoryEntryType::kFilesAndDirectories),
+      MakeIOError, dir, "Could not open/read directory", kGetChildren);
 
   result->clear();
-  for (const auto& entry : entries_result.value())
+  for (const auto& entry : entries) {
     result->push_back(entry.BaseName().AsUTF8Unsafe());
+  }
 
   return Status::OK();
 }
@@ -889,12 +891,11 @@ Status ChromiumEnv::LockFile(const std::string& fname, FileLock** lock) {
   Status result;
   const base::FilePath path = base::FilePath::FromUTF8Unsafe(fname);
   Retrier retrier;
-  FileErrorOr<std::unique_ptr<storage::FilesystemProxy::FileLock>> lock_result =
-      base::File::Error::FILE_ERROR_FAILED;
+  FileErrorOr<std::unique_ptr<storage::FilesystemProxy::FileLock>> lock_result;
   do {
     lock_result = filesystem_->LockFile(path);
-  } while (lock_result.is_error() && retrier.ShouldKeepTrying());
-  if (lock_result.is_error()) {
+  } while (!lock_result.has_value() && retrier.ShouldKeepTrying());
+  if (!lock_result.has_value()) {
     return MakeIOError(fname, FileErrorString(lock_result.error()), kLockFile,
                        lock_result.error());
   }
@@ -933,54 +934,49 @@ Status ChromiumEnv::GetTestDirectory(std::string* path) {
 
 Status ChromiumEnv::NewLogger(const std::string& fname,
                               leveldb::Logger** result) {
+  *result = nullptr;
   FilePath path = FilePath::FromUTF8Unsafe(fname);
-  FileErrorOr<base::File> open_result = filesystem_->OpenFile(
-      path, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
-  if (open_result.is_error()) {
-    *result = nullptr;
-    return MakeIOError(fname, "Unable to create log file", kNewLogger,
-                       open_result.error());
-  } else {
-    *result = new leveldb::ChromiumLogger(std::move(open_result.value()));
-    return Status::OK();
-  }
+  ASSIGN_OR_RETURN(base::File open_result,
+                   filesystem_->OpenFile(path, base::File::FLAG_CREATE_ALWAYS |
+                                                   base::File::FLAG_WRITE),
+                   MakeIOError, fname, "Unable to create log file", kNewLogger);
+  *result = new leveldb::ChromiumLogger(std::move(open_result));
+  return Status::OK();
 }
 
 Status ChromiumEnv::NewSequentialFile(const std::string& fname,
                                       leveldb::SequentialFile** result) {
+  *result = nullptr;
   FilePath path = FilePath::FromUTF8Unsafe(fname);
-  FileErrorOr<base::File> open_result = filesystem_->OpenFile(
-      path, base::File::FLAG_OPEN | base::File::FLAG_READ);
-  if (open_result.is_error()) {
-    *result = nullptr;
-    return MakeIOError(fname, "Unable to create sequential file",
-                       kNewSequentialFile, open_result.error());
-  } else {
-    *result = new ChromiumSequentialFile(fname, std::move(open_result.value()));
-    return Status::OK();
-  }
+  ASSIGN_OR_RETURN(base::File open_result,
+                   filesystem_->OpenFile(
+                       path, base::File::FLAG_OPEN | base::File::FLAG_READ),
+                   MakeIOError, fname, "Unable to create sequential file",
+                   kNewSequentialFile);
+  *result = new ChromiumSequentialFile(fname, std::move(open_result));
+  return Status::OK();
 }
 
 Status ChromiumEnv::NewRandomAccessFile(const std::string& fname,
                                         leveldb::RandomAccessFile** result) {
-  base::FilePath file_path = FilePath::FromUTF8Unsafe(fname);
-  FileErrorOr<base::File> open_result = filesystem_->OpenFile(
-      file_path, base::File::FLAG_READ | base::File::FLAG_OPEN);
-  if (!open_result.is_error()) {
-    base::File file = std::move(open_result.value());
-    if (file_cache_) {
-      *result = new ChromiumEvictableRandomAccessFile(
-          std::move(file_path), std::move(file), filesystem_.get(),
-          file_cache_.get());
-    } else {
-      *result =
-          new ChromiumRandomAccessFile(std::move(file_path), std::move(file));
-    }
-    return Status::OK();
-  }
   *result = nullptr;
-  return MakeIOError(fname, FileErrorString(open_result.error()),
-                     kNewRandomAccessFile, open_result.error());
+  base::FilePath file_path = FilePath::FromUTF8Unsafe(fname);
+  ASSIGN_OR_RETURN(base::File file,
+                   filesystem_->OpenFile(file_path, base::File::FLAG_READ |
+                                                        base::File::FLAG_OPEN),
+                   [&](base::File::Error error) {
+                     return MakeIOError(fname, FileErrorString(error),
+                                        kNewRandomAccessFile, error);
+                   });
+  if (file_cache_) {
+    *result = new ChromiumEvictableRandomAccessFile(
+        std::move(file_path), std::move(file), filesystem_.get(),
+        file_cache_.get());
+  } else {
+    *result =
+        new ChromiumRandomAccessFile(std::move(file_path), std::move(file));
+  }
+  return Status::OK();
 }
 
 Status ChromiumEnv::NewWritableFile(const std::string& fname,
@@ -988,7 +984,7 @@ Status ChromiumEnv::NewWritableFile(const std::string& fname,
   FilePath path = FilePath::FromUTF8Unsafe(fname);
   FileErrorOr<base::File> open_result = filesystem_->OpenFile(
       path, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
-  if (open_result.is_error()) {
+  if (!open_result.has_value()) {
     *result = nullptr;
     return MakeIOError(fname, "Unable to create writable file",
                        kNewWritableFile, open_result.error());
@@ -1000,15 +996,14 @@ Status ChromiumEnv::NewWritableFile(const std::string& fname,
 
 Status ChromiumEnv::NewAppendableFile(const std::string& fname,
                                       leveldb::WritableFile** result) {
+  *result = nullptr;
   FilePath path = FilePath::FromUTF8Unsafe(fname);
-  FileErrorOr<base::File> open_result = filesystem_->OpenFile(
-      path, base::File::FLAG_OPEN_ALWAYS | base::File::FLAG_APPEND);
-  if (open_result.is_error()) {
-    *result = nullptr;
-    return MakeIOError(fname, "Unable to create appendable file",
-                       kNewAppendableFile, open_result.error());
-  }
-  *result = new ChromiumWritableFile(fname, std::move(open_result.value()),
+  ASSIGN_OR_RETURN(base::File open_result,
+                   filesystem_->OpenFile(path, base::File::FLAG_OPEN_ALWAYS |
+                                                   base::File::FLAG_APPEND),
+                   MakeIOError, fname, "Unable to create appendable file",
+                   kNewAppendableFile);
+  *result = new ChromiumWritableFile(fname, std::move(open_result),
                                      filesystem_.get());
   return Status::OK();
 }
@@ -1111,7 +1106,6 @@ class DBTracker::TrackedDBImpl : public base::LinkNode<TrackedDBImpl>,
 
   ~TrackedDBImpl() override {
     tracker_->DatabaseDestroyed(this, shared_read_cache_use_);
-    leveldb::port::ScopedAllowWait scoped_allow_wait;
     db_.reset();
   }
 
@@ -1290,7 +1284,7 @@ void DBTracker::MemoryDumpProvider::DumpVisitor(ProcessMemoryDump* pmd,
                      total_usage - cache_usage + cache_usage_pss);
 
   if (pmd->dump_args().level_of_detail !=
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
     db_dump->AddString("name", "", db->name());
   }
 }
@@ -1380,6 +1374,10 @@ void DBTracker::DatabaseDestroyed(TrackedDBImpl* database,
 leveldb::Status OpenDB(const leveldb_env::Options& options,
                        const std::string& name,
                        std::unique_ptr<leveldb::DB>* dbptr) {
+  if (!GetDBFactoryOverride().is_null()) {
+    return GetDBFactoryOverride().Run(options, name, dbptr);
+  }
+
   // For UMA logging purposes we need the block cache to be created outside of
   // leveldb so that the size can be logged and it can be pruned.
   DCHECK(options.block_cache != nullptr);
@@ -1423,6 +1421,10 @@ leveldb::Status OpenDB(const leveldb_env::Options& options,
   if (s.ok())
     dbptr->reset(tracked_db);
   return s;
+}
+
+void SetDBFactoryForTesting(DBFactoryMethod factory) {
+  GetDBFactoryOverride() = factory;
 }
 
 leveldb::Status RewriteDB(const leveldb_env::Options& options,

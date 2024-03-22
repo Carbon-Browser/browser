@@ -1,10 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/immersive_mode_controller_chromeos.h"
 
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/ui/ash/window_pin_util.h"
@@ -100,7 +101,8 @@ class ImmersiveModeControllerChromeosTest : public TestWithBrowserView {
 
  private:
   // Not owned.
-  ImmersiveModeController* controller_;
+  raw_ptr<ImmersiveModeController, DanglingUntriaged | ExperimentalAsh>
+      controller_;
 
   std::unique_ptr<ImmersiveRevealedLock> revealed_lock_;
 };

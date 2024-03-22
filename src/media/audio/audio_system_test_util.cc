@@ -1,19 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/audio/audio_system_test_util.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 
 namespace media {
-
-bool operator==(const AudioDeviceDescription& lhs,
-                const AudioDeviceDescription& rhs) {
-  return lhs.device_name == rhs.device_name && lhs.unique_id == rhs.unique_id &&
-         lhs.group_id == rhs.group_id;
-}
 
 AudioSystem::OnAudioParamsCallback
 AudioSystemCallbackExpectations::GetAudioParamsCallback(

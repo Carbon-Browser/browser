@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,7 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class FeedPlaceholderLayoutTest {
-    @Mock
-    AnimatorSet mAnimatorSet;
+    @Mock AnimatorSet mAnimatorSet;
 
     private class TestFeedPlaceholderLayout extends FeedPlaceholderLayout {
         // FeedPlaceholderLayout regards itself as visible if both isShown() and

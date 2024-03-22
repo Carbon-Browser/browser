@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_FEED_FEED_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_FEED_FEED_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "base/strings/string_piece_forward.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "base/strings/string_piece.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
 class BrowserContext;
@@ -23,7 +23,7 @@ class FeedService;
 
 // Factory to create one FeedService per browser context. Callers need to
 // watch out for nullptr when incognito, as the feed should not be used then.
-class FeedServiceFactory : public BrowserContextKeyedServiceFactory {
+class FeedServiceFactory : public ProfileKeyedServiceFactory {
  public:
   FeedServiceFactory(const FeedServiceFactory&) = delete;
   FeedServiceFactory& operator=(const FeedServiceFactory&) = delete;
@@ -32,15 +32,13 @@ class FeedServiceFactory : public BrowserContextKeyedServiceFactory {
   static FeedServiceFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<FeedServiceFactory>;
+  friend base::NoDestructor<FeedServiceFactory>;
 
   FeedServiceFactory();
   ~FeedServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsNULLWhileTesting() const override;
 };

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,8 +72,7 @@ void ExecuteUIDebugCommand(int id, const Browser* browser) {
         PrintViewHierarchy(view, /* verbose= */ true);
       break;
     default:
-      NOTREACHED() << "Unimplemented UI Debug command: " << id;
-      break;
+      NOTREACHED_NORETURN() << "Unimplemented UI Debug command: " << id;
   }
 }
 

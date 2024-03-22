@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,7 +84,7 @@ TEST_F(UniqueWidgetPtrTest, TestMoveAssign) {
     unique_widget_ptr = std::move(unique_widget_ptr2);
     EXPECT_EQ(unique_widget_ptr->GetContentsView(),
               widget()->GetContentsView());
-    EXPECT_FALSE(unique_widget_ptr2);
+    EXPECT_FALSE(unique_widget_ptr2);  // NOLINT
     unique_widget_ptr.reset();
     EXPECT_FALSE(unique_widget_ptr);
   }
@@ -101,7 +101,7 @@ TEST_F(UniqueWidgetPtrTest, TestMoveConstruct) {
     UniqueWidgetPtr unique_widget_ptr = std::move(unique_widget_ptr2);
     EXPECT_EQ(unique_widget_ptr->GetContentsView(),
               widget()->GetContentsView());
-    EXPECT_FALSE(unique_widget_ptr2);
+    EXPECT_FALSE(unique_widget_ptr2);  // NOLINT
     unique_widget_ptr.reset();
     EXPECT_FALSE(unique_widget_ptr);
   }

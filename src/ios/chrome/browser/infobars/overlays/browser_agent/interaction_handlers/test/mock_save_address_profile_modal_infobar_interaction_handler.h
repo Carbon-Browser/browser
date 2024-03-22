@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "testing/gmock/include/gmock/gmock.h"
 
+class AutofillProfile;
 class InfoBarIOS;
 
 // Mock version of SaveAddressProfileInfobarModalInteractionHandler for use in
@@ -17,11 +18,14 @@ class MockSaveAddressProfileInfobarModalInteractionHandler
     : public SaveAddressProfileInfobarModalInteractionHandler {
  public:
   MockSaveAddressProfileInfobarModalInteractionHandler();
-  ~MockSaveAddressProfileInfobarModalInteractionHandler();
+  ~MockSaveAddressProfileInfobarModalInteractionHandler() override;
 
   MOCK_METHOD2(SaveEditedProfile,
                void(InfoBarIOS* infobar, NSDictionary* profileData));
+  MOCK_METHOD2(SaveEditedProfile,
+               void(InfoBarIOS* infobar, autofill::AutofillProfile* profile));
   MOCK_METHOD2(CancelModal, void(InfoBarIOS* infobar, BOOL fromEditView));
+  MOCK_METHOD1(NoThanksWasPressed, void(InfoBarIOS* infobar));
 };
 
 #endif  // IOS_CHROME_BROWSER_INFOBARS_OVERLAYS_BROWSER_AGENT_INTERACTION_HANDLERS_TEST_MOCK_SAVE_ADDRESS_PROFILE_MODAL_INFOBAR_INTERACTION_HANDLER_H_

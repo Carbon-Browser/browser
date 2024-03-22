@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager_impl.h"
 #include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class NearbyShareClientFactory;
@@ -56,9 +57,11 @@ class FakeNearbyShareLocalDeviceDataManager
 
    private:
     std::vector<FakeNearbyShareLocalDeviceDataManager*> instances_;
-    PrefService* latest_pref_service_ = nullptr;
-    NearbyShareClientFactory* latest_http_client_factory_ = nullptr;
-    NearbyShareProfileInfoProvider* latest_profile_info_provider_ = nullptr;
+    raw_ptr<PrefService, ExperimentalAsh> latest_pref_service_ = nullptr;
+    raw_ptr<NearbyShareClientFactory, DanglingUntriaged | ExperimentalAsh>
+        latest_http_client_factory_ = nullptr;
+    raw_ptr<NearbyShareProfileInfoProvider, DanglingUntriaged | ExperimentalAsh>
+        latest_profile_info_provider_ = nullptr;
   };
 
   struct UploadContactsCall {

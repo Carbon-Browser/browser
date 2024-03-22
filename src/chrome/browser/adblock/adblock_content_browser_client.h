@@ -18,11 +18,12 @@
 #ifndef CHROME_BROWSER_ADBLOCK_ADBLOCK_CONTENT_BROWSER_CLIENT_H_
 #define CHROME_BROWSER_ADBLOCK_ADBLOCK_CONTENT_BROWSER_CLIENT_H_
 
+#include "build/buildflag.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 
-namespace adblock::mojom {
+namespace adblock {
 enum class FilterMatchResult;
-}  // namespace adblock::mojom
+}  // namespace adblock
 
 /**
  * @brief Intercepts network and UI events to inject ad-filtering.
@@ -36,19 +37,13 @@ class AdblockContentBrowserClient : public ChromeContentBrowserClient {
   AdblockContentBrowserClient();
   ~AdblockContentBrowserClient() override;
 
-  bool CanCreateWindow(content::RenderFrameHost* opener,
-                       const GURL& opener_url,
-                       const GURL& opener_top_level_frame_url,
-                       const url::Origin& source_origin,
-                       content::mojom::WindowContainerType container_type,
-                       const GURL& target_url,
-                       const content::Referrer& referrer,
-                       const std::string& frame_name,
-                       WindowOpenDisposition disposition,
-                       const blink::mojom::WindowFeatures& features,
-                       bool user_gesture,
-                       bool opener_suppressed,
-                       bool* no_javascript_access) override;
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  // Enable ad filtering also for requests initiated by extensions.
+  // This allows implementing extension-driven browser tests.
+  // In production code, requests from extensions are not blocked.
+  static void ForceAdblockProxyForTesting();
+#endif
+
   bool WillInterceptWebSocket(content::RenderFrameHost* frame) override;
   void CreateWebSocket(
       content::RenderFrameHost* frame,
@@ -58,10 +53,7 @@ class AdblockContentBrowserClient : public ChromeContentBrowserClient {
       const absl::optional<std::string>& user_agent,
       mojo::PendingRemote<network::mojom::WebSocketHandshakeClient>
           handshake_client) override;
-  void ExposeInterfacesToRenderer(
-      service_manager::BinderRegistry* registry,
-      blink::AssociatedInterfaceRegistry* associated_registry,
-      content::RenderProcessHost* render_process_host) override;
+
   bool WillCreateURLLoaderFactory(
       content::BrowserContext* browser_context,
       content::RenderFrameHost* frame,
@@ -75,20 +67,34 @@ class AdblockContentBrowserClient : public ChromeContentBrowserClient {
           header_client,
       bool* bypass_redirect_checks,
       bool* disable_secure_dns,
-      network::mojom::URLLoaderFactoryOverridePtr* factory_override) override;
+      network::mojom::URLLoaderFactoryOverridePtr* factory_override,
+      scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner)
+      override;
 
  private:
+  void CreateWebSocketInternal(
+      content::GlobalRenderFrameHostId render_frame_host_id,
+      WebSocketFactory factory,
+      const GURL& url,
+      const net::SiteForCookies& site_for_cookies,
+      const absl::optional<std::string>& user_agent,
+      mojo::PendingRemote<network::mojom::WebSocketHandshakeClient>
+          handshake_client);
   void OnWebSocketFilterCheckCompleted(
-      content::RenderFrameHost* frame,
+      content::GlobalRenderFrameHostId render_frame_host_id,
       ChromeContentBrowserClient::WebSocketFactory factory,
       const GURL& url,
       const net::SiteForCookies& site_for_cookies,
       const absl::optional<std::string>& user_agent,
       mojo::PendingRemote<network::mojom::WebSocketHandshakeClient>
           handshake_client,
-      adblock::mojom::FilterMatchResult result);
+      adblock::FilterMatchResult result);
 
   base::WeakPtrFactory<AdblockContentBrowserClient> weak_factory_{this};
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  static bool force_adblock_proxy_for_testing_;
+#endif
 };
 
 #endif  // CHROME_BROWSER_ADBLOCK_ADBLOCK_CONTENT_BROWSER_CLIENT_H_

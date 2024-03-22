@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/task/task_executor.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "content/browser/scheduler/browser_io_thread_delegate.h"
 #include "content/browser/scheduler/browser_ui_thread_scheduler.h"
@@ -20,8 +21,7 @@
 // The BrowserTaskExecutor's job is to map base::TaskTraits to actual task
 // queues for the browser process.
 //
-// We actually have three TaskExecutors:
-// * BrowserTaskExecutor registered for BrowserTaskTraitsExtension.
+// We actually have two TaskExecutors:
 // * BrowserTaskExecutor::UIThreadExecutor registered with UI thread TLS.
 // * BrowserTaskExecutor::IOThreadExecutor registered with IO thread TLS.
 //
@@ -31,32 +31,10 @@ namespace content {
 class BrowserTaskExecutorTest;
 class BrowserProcessIOThread;
 
-class CONTENT_EXPORT BaseBrowserTaskExecutor : public base::TaskExecutor {
+class CONTENT_EXPORT BaseBrowserTaskExecutor {
  public:
   BaseBrowserTaskExecutor();
-  ~BaseBrowserTaskExecutor() override;
-
-  // base::TaskExecutor implementation.
-  bool PostDelayedTask(const base::Location& from_here,
-                       const base::TaskTraits& traits,
-                       base::OnceClosure task,
-                       base::TimeDelta delay) override;
-
-  scoped_refptr<base::TaskRunner> CreateTaskRunner(
-      const base::TaskTraits& traits) override;
-
-  scoped_refptr<base::SequencedTaskRunner> CreateSequencedTaskRunner(
-      const base::TaskTraits& traits) override;
-
-  scoped_refptr<base::SingleThreadTaskRunner> CreateSingleThreadTaskRunner(
-      const base::TaskTraits& traits,
-      base::SingleThreadTaskRunnerThreadMode thread_mode) override;
-
-#if BUILDFLAG(IS_WIN)
-  scoped_refptr<base::SingleThreadTaskRunner> CreateCOMSTATaskRunner(
-      const base::TaskTraits& traits,
-      base::SingleThreadTaskRunnerThreadMode thread_mode) override;
-#endif  // BUILDFLAG(IS_WIN)
+  virtual ~BaseBrowserTaskExecutor();
 
   // Returns the task runner for |traits| under |identifier|. Note: during the
   // migration away from task traits extension, |traits| may also contain a
@@ -65,14 +43,14 @@ class CONTENT_EXPORT BaseBrowserTaskExecutor : public base::TaskExecutor {
   // |traits|) -- ref. crbug.com/1026641.
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(
       BrowserThread::ID identifier,
-      const base::TaskTraits& traits) const;
+      const BrowserTaskTraits& traits) const;
 
   // Helper to match a QueueType from TaskTraits.
   // TODO(1026641): Take BrowserTaskTraits as a parameter when getting off the
   // need to support base::TaskTraits currently passed to this class in its role
   // as a base::TaskExecutor.
-  static content::BrowserTaskQueues::QueueType GetQueueType(
-      const base::TaskTraits& traits);
+  static BrowserTaskQueues::QueueType GetQueueType(
+      const BrowserTaskTraits& traits);
 
  protected:
   scoped_refptr<BrowserUIThreadScheduler::Handle> browser_ui_thread_handle_;
@@ -104,20 +82,22 @@ class CONTENT_EXPORT BrowserTaskExecutor : public BaseBrowserTaskExecutor {
   //
   // Browser task queues will initially be disabled, that is tasks posted to
   // them will not run. But the default task runner of the thread (the one you
-  // get via ThreadTaskRunnerHandle::Get()) will be active. This is the same
-  // task runner you get by calling BrowserProcessIOThread::task_runner(). The
-  // queues can be initialized by calling InitializeIOThread which is done
-  // during Chromium starup in BrowserMainLoop::CreateThreads.
+  // get via SingleThreadTaskRunner::GetCurrentDefault()) will be active. This
+  // is the same task runner you get by calling
+  // BrowserProcessIOThread::task_runner(). The queues can be initialized by
+  // calling InitializeIOThread which is done during Chromium startup in
+  // BrowserMainLoop::CreateThreads.
   //
   // Early on during Chromium startup we initialize the ServiceManager and it
   // needs to run tasks immediately. The ServiceManager itself does not know
   // about the IO thread (it does not use the browser task traits), it only uses
   // the task runner provided to it during initialization and possibly
-  // ThreadTaskRunnerHandle::Get() from tasks it posts. But we currently run it
-  // on the IO thread so we need the default task runner to be active for its
-  // tasks to run. Note that since tasks posted via the browser task traits will
-  // not run they won't be able to access the default task runner either, so for
-  // those tasks the default task queue is also "disabled".
+  // SingleThreadTaskRunner::GetCurrentDefault() from tasks it posts. But we
+  // currently run it on the IO thread so we need the default task runner to be
+  // active for its tasks to run. Note that since tasks posted via the browser
+  // task traits will not run they won't be able to access the default task
+  // runner either, so for those tasks the default task queue is also
+  // "disabled".
   //
   // Attention: This method can only be called once (as there must be only one
   // IO thread).
@@ -144,14 +124,10 @@ class CONTENT_EXPORT BrowserTaskExecutor : public BaseBrowserTaskExecutor {
   static scoped_refptr<base::SingleThreadTaskRunner> GetIOThreadTaskRunner(
       const BrowserTaskTraits& traits);
 
-  // As Create but with the user provided objects. Must call
-  // BindToUIThreadForTesting before tasks can be run on the UI thread.
+  // As Create but with the user provided objects.
   static void CreateForTesting(
       std::unique_ptr<BrowserUIThreadScheduler> browser_ui_thread_scheduler,
       std::unique_ptr<BrowserIOThreadDelegate> browser_io_thread_delegate);
-
-  // Completes ui-thread set up. Must be called on the UI thread.
-  static void BindToUIThreadForTesting();
 
   // This must be called after the FeatureList has been initialized in order
   // for scheduling experiments to function.
@@ -211,7 +187,6 @@ class CONTENT_EXPORT BrowserTaskExecutor : public BaseBrowserTaskExecutor {
 
    private:
     std::unique_ptr<BrowserUIThreadScheduler> browser_ui_thread_scheduler_;
-    bool bound_to_thread_ = false;
   };
 
   // Constructed on UI thread and later registered with IO thread TLS. This

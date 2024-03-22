@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -120,7 +120,8 @@ class ChromeFeatureListCreator {
   std::string actual_locale_;
 
   // This is owned by |metrics_services_manager_| but we need to expose it.
-  raw_ptr<ChromeMetricsServicesManagerClient> metrics_services_manager_client_;
+  raw_ptr<ChromeMetricsServicesManagerClient, AcrossTasksDanglingUntriaged>
+      metrics_services_manager_client_;
 
   std::unique_ptr<metrics_services_manager::MetricsServicesManager>
       metrics_services_manager_;

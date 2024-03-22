@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,7 @@ class MODULES_EXPORT GamepadStateCompareResult {
                       Gamepad* new_gamepad,
                       size_t gamepad_index,
                       bool compare_all);
+  bool CompareTouches(Gamepad* old_gamepad, Gamepad* new_gamepad);
 
   bool any_change_ = false;
   std::bitset<device::Gamepads::kItemsLengthCap> gamepad_connected_;

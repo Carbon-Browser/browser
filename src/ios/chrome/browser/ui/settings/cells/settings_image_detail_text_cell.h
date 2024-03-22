@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_item.h"
 
 // Cell representation for SettingsImageDetailTextItem.
 //  +--------------------------------------------------+
@@ -26,6 +26,9 @@
 
 // Cell subtitle.
 @property(nonatomic, readonly, strong) UILabel* detailTextLabel;
+
+// Sets the image view's alpha.
+- (void)setImageViewAlpha:(CGFloat)alpha;
 
 // Sets the image view's tint color.
 - (void)setImageViewTintColor:(UIColor*)color;

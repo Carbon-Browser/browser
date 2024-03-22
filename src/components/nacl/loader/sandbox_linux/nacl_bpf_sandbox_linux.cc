@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,11 +18,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "components/nacl/common/nacl_switches.h"
 #include "sandbox/linux/bpf_dsl/bpf_dsl.h"

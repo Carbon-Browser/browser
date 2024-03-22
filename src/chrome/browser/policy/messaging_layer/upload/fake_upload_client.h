@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@ class FakeUploadClient : public UploadClient {
 
   Status EnqueueUpload(
       bool need_encryption_key,
+      int config_file_version,
       std::vector<EncryptedRecord> records,
       ScopedReservation scoped_reservation,
       ReportSuccessfulUploadCallback report_upload_success_cb,

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/base64.h"
+#include "base/memory/raw_ref.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "cc/base/math_util.h"
@@ -22,7 +23,7 @@
 #include "gin/object_template_builder.h"
 #include "skia/ext/benchmarking_canvas.h"
 #include "skia/ext/legacy_display_globals.h"
-#include "third_party/blink/public/web/blink.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/web/web_array_buffer.h"
 #include "third_party/blink/public/web/web_array_buffer_converter.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -102,10 +103,10 @@ class PicturePlaybackController : public SkPicture::AbortCallback {
                             size_t count)
       : canvas_(canvas), playback_count_(count) {}
 
-  bool abort() override { return canvas_.CommandCount() > playback_count_; }
+  bool abort() override { return canvas_->CommandCount() > playback_count_; }
 
  private:
-  const skia::BenchmarkingCanvas& canvas_;
+  const raw_ref<const skia::BenchmarkingCanvas, ExperimentalRenderer> canvas_;
   size_t playback_count_;
 };
 
@@ -115,7 +116,7 @@ gin::WrapperInfo SkiaBenchmarking::kWrapperInfo = {gin::kEmbedderNativeGin};
 
 // static
 void SkiaBenchmarking::Install(blink::WebLocalFrame* frame) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = frame->MainWorldScriptContext();
   if (context.IsEmpty())
@@ -233,7 +234,7 @@ void SkiaBenchmarking::Rasterize(gin::Arguments* args) {
                    .Set("width", snapped_clip.width())
                    .Set("height", snapped_clip.height())
                    .Set("data", blink::WebArrayBufferConverter::ToV8Value(
-                                    &buffer, context->Global(), isolate))
+                                    &buffer, isolate))
                    .Build());
 }
 

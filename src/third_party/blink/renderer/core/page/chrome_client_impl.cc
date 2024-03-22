@@ -56,6 +56,7 @@
 #include "third_party/blink/public/web/web_popup_menu_info.h"
 #include "third_party/blink/public/web/web_settings.h"
 #include "third_party/blink/public/web/web_view_client.h"
+#include "third_party/blink/public/web/web_window_features.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node.h"
@@ -178,13 +179,13 @@ ChromeClientImpl::ChromeClientImpl(WebViewImpl* web_view)
 }
 
 ChromeClientImpl::~ChromeClientImpl() {
-  DCHECK(file_chooser_queue_.IsEmpty());
+  DCHECK(file_chooser_queue_.empty());
 }
 
 void ChromeClientImpl::Trace(Visitor* visitor) const {
   visitor->Trace(popup_opening_observers_);
   visitor->Trace(external_date_time_chooser_);
-  visitor->Trace(deferred_commit_observers_);
+  visitor->Trace(commit_observers_);
   ChromeClient::Trace(visitor);
 }
 
@@ -212,11 +213,15 @@ void ChromeClientImpl::SetWindowRect(const gfx::Rect& requested_rect,
   // and to avoid exposing other screen details to frames without permission.
   // TODO(crbug.com/897300): Use permission state for better sync estimates or
   // store unadjusted pending window rects if that will not break many sites.
-  const bool request_unadjusted_rect =
-      RuntimeEnabledFeatures::WindowPlacementEnabled(frame.DomWindow());
-  web_view_->MainFrameViewWidget()->SetWindowRect(
-      request_unadjusted_rect ? rect_adjusted_for_minimum : adjusted_rect,
-      adjusted_rect);
+  web_view_->MainFrameViewWidget()->SetWindowRect(rect_adjusted_for_minimum,
+                                                  adjusted_rect);
+}
+
+void ChromeClientImpl::SetResizable(bool resizable, LocalFrame& frame) {
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+  DCHECK(web_view_);
+  web_view_->SetResizable(resizable);
+#endif
 }
 
 gfx::Rect ChromeClientImpl::RootWindowRect(LocalFrame& frame) {
@@ -267,10 +272,11 @@ void ChromeClientImpl::StartDragging(LocalFrame* frame,
                                      const WebDragData& drag_data,
                                      DragOperationsMask mask,
                                      const SkBitmap& drag_image,
-                                     const gfx::Point& drag_image_offset) {
+                                     const gfx::Vector2d& cursor_offset,
+                                     const gfx::Rect& drag_obj_rect) {
   WebLocalFrameImpl* web_frame = WebLocalFrameImpl::FromFrame(frame);
-  web_frame->LocalRootFrameWidget()->StartDragging(drag_data, mask, drag_image,
-                                                   drag_image_offset);
+  web_frame->LocalRootFrameWidget()->StartDragging(
+      frame, drag_data, mask, drag_image, cursor_offset, drag_obj_rect);
 }
 
 bool ChromeClientImpl::AcceptsLoadDrops() const {
@@ -286,22 +292,23 @@ Page* ChromeClientImpl::CreateWindowDelegate(
     network::mojom::blink::WebSandboxFlags sandbox_flags,
     const SessionStorageNamespaceId& session_storage_namespace_id,
     bool& consumed_user_gesture) {
-  DCHECK(web_view_);
-  if (!web_view_->Client())
+  if (!frame->GetPage() || frame->GetPage()->Paused())
     return nullptr;
 
-  if (!frame->GetPage() || frame->GetPage()->Paused())
+  WebLocalFrameImpl* web_frame = WebLocalFrameImpl::FromFrame(frame);
+  if (!web_frame)
     return nullptr;
 
   NotifyPopupOpeningObservers();
   const AtomicString& frame_name =
       !EqualIgnoringASCIICase(name, "_blank") ? name : g_empty_atom;
-  WebViewImpl* new_view = To<WebViewImpl>(web_view_->Client()->CreateView(
-      WebLocalFrameImpl::FromFrame(frame),
-      WrappedResourceRequest(r.GetResourceRequest()), features, frame_name,
-      static_cast<WebNavigationPolicy>(r.GetNavigationPolicy()), sandbox_flags,
-      session_storage_namespace_id, consumed_user_gesture, r.Impression(),
-      r.GetPictureInPictureWindowOptions()));
+  WebViewImpl* new_view =
+      static_cast<WebViewImpl*>(web_frame->Client()->CreateNewWindow(
+          WrappedResourceRequest(r.GetResourceRequest()), features, frame_name,
+          static_cast<WebNavigationPolicy>(r.GetNavigationPolicy()),
+          sandbox_flags, session_storage_namespace_id, consumed_user_gesture,
+          r.Impression(), r.GetPictureInPictureWindowOptions(),
+          r.GetRequestorBaseURL()));
   if (!new_view)
     return nullptr;
   return new_view->GetPage();
@@ -322,15 +329,14 @@ void ChromeClientImpl::DidOverscroll(
       velocity_in_viewport);
 }
 
-void ChromeClientImpl::InjectGestureScrollEvent(
+void ChromeClientImpl::InjectScrollbarGestureScroll(
     LocalFrame& local_frame,
-    WebGestureDevice device,
     const gfx::Vector2dF& delta,
     ui::ScrollGranularity granularity,
     CompositorElementId scrollable_area_element_id,
     WebInputEvent::Type injected_type) {
-  local_frame.GetWidgetForLocalRoot()->InjectGestureScrollEvent(
-      device, delta, granularity, scrollable_area_element_id, injected_type);
+  local_frame.GetWidgetForLocalRoot()->InjectScrollbarGestureScroll(
+      delta, granularity, scrollable_area_element_id, injected_type);
 }
 
 void ChromeClientImpl::FinishScrollFocusedEditableIntoView(
@@ -354,11 +360,12 @@ void ChromeClientImpl::SetOverscrollBehavior(
 void ChromeClientImpl::Show(LocalFrame& frame,
                             LocalFrame& opener_frame,
                             NavigationPolicy navigation_policy,
-                            const gfx::Rect& initial_rect,
                             bool user_gesture) {
   DCHECK(web_view_);
+  const WebWindowFeatures& features = frame.GetPage()->GetWindowFeatures();
+  gfx::Rect bounds(features.x, features.y, features.width, features.height);
   const gfx::Rect rect_adjusted_for_minimum =
-      AdjustWindowRectForMinimum(initial_rect);
+      AdjustWindowRectForMinimum(bounds);
   const gfx::Rect adjusted_rect =
       AdjustWindowRectForDisplay(rect_adjusted_for_minimum, frame);
   // Request the unadjusted rect if the browser may honor cross-screen bounds.
@@ -367,12 +374,8 @@ void ChromeClientImpl::Show(LocalFrame& frame,
   // and to avoid exposing other screen details to frames without permission.
   // TODO(crbug.com/897300): Use permission state for better sync estimates or
   // store unadjusted pending window rects if that will not break many sites.
-  const bool request_unadjusted_rect =
-      RuntimeEnabledFeatures::WindowPlacementEnabled(opener_frame.DomWindow());
-  web_view_->Show(
-      opener_frame.GetLocalFrameToken(), navigation_policy,
-      request_unadjusted_rect ? rect_adjusted_for_minimum : adjusted_rect,
-      adjusted_rect, user_gesture);
+  web_view_->Show(opener_frame.GetLocalFrameToken(), navigation_policy,
+                  rect_adjusted_for_minimum, adjusted_rect, user_gesture);
 }
 
 bool ChromeClientImpl::ShouldReportDetailedMessageForSourceAndSeverity(
@@ -433,9 +436,9 @@ void ChromeClientImpl::SetBeforeUnloadConfirmPanelResultForTesting(
   before_unload_confirm_panel_result_for_testing_ = result;
 }
 
-void ChromeClientImpl::CloseWindowSoon() {
+void ChromeClientImpl::CloseWindow() {
   DCHECK(web_view_);
-  web_view_->CloseWindowSoon();
+  web_view_->CloseWindow();
 }
 
 bool ChromeClientImpl::OpenJavaScriptAlertDelegate(LocalFrame* frame,
@@ -512,16 +515,32 @@ void ChromeClientImpl::ScheduleAnimation(const LocalFrameView* frame_view,
   }
 }
 
-gfx::Rect ChromeClientImpl::ViewportToScreen(
-    const gfx::Rect& rect_in_viewport,
+gfx::Rect ChromeClientImpl::LocalRootToScreenDIPs(
+    const gfx::Rect& rect_in_local_root,
     const LocalFrameView* frame_view) const {
   LocalFrame& frame = frame_view->GetFrame();
 
-  gfx::Rect screen_rect =
-      frame.GetWidgetForLocalRoot()->BlinkSpaceToEnclosedDIPs(rect_in_viewport);
-  gfx::Rect view_rect = frame.GetWidgetForLocalRoot()->ViewRect();
+  WebFrameWidgetImpl* widget =
+      WebLocalFrameImpl::FromFrame(frame)->LocalRootFrameWidget();
 
+  gfx::Rect rect_in_widget;
+  if (widget->ForTopMostMainFrame()) {
+    rect_in_widget = frame.GetPage()->GetVisualViewport().RootFrameToViewport(
+        rect_in_local_root);
+  } else {
+    // TODO(bokan): This method needs to account for the visual viewport
+    // transform when in a non-top-most local frame root. Unfortunately, the
+    // widget's ViewRect doesn't include the visual viewport so this cannot be
+    // done from here yet. See: https://crbug.com/928825,
+    // https://crbug.com/840944.
+    rect_in_widget = rect_in_local_root;
+  }
+
+  gfx::Rect view_rect = widget->ViewRect();
+
+  gfx::Rect screen_rect = widget->BlinkSpaceToEnclosedDIPs(rect_in_widget);
   screen_rect.Offset(view_rect.x(), view_rect.y());
+
   return screen_rect;
 }
 
@@ -536,7 +555,10 @@ float ChromeClientImpl::WindowToViewportScalar(LocalFrame* frame,
     return scalar_value;
   }
 
-  return frame->GetWidgetForLocalRoot()->DIPsToBlinkSpace(scalar_value);
+  if (auto* widget = frame->GetWidgetForLocalRoot()) {
+    return widget->DIPsToBlinkSpace(scalar_value);
+  }
+  return scalar_value;
 }
 
 const display::ScreenInfo& ChromeClientImpl::GetScreenInfo(
@@ -614,8 +636,7 @@ void ChromeClientImpl::ShowMouseOverURL(const HitTestResult& result) {
   // scrollbar and an element in the case of overlay scrollbars.
   if (!result.GetScrollbar()) {
     // Find out if the mouse is over a link, and if so, let our UI know...
-    if (result.IsLiveLink() &&
-        !result.AbsoluteLinkURL().GetString().IsEmpty()) {
+    if (result.IsLiveLink() && !result.AbsoluteLinkURL().GetString().empty()) {
       url = result.AbsoluteLinkURL();
     } else if (result.InnerNode() &&
                (IsA<HTMLObjectElement>(*result.InnerNode()) ||
@@ -638,7 +659,7 @@ void ChromeClientImpl::UpdateTooltipUnderCursor(LocalFrame& frame,
                                                 TextDirection dir) {
   WebFrameWidgetImpl* widget =
       WebLocalFrameImpl::FromFrame(frame)->LocalRootFrameWidget();
-  if (!tooltip_text.IsEmpty()) {
+  if (!tooltip_text.empty()) {
     widget->UpdateTooltipUnderCursor(tooltip_text, dir);
     did_request_non_empty_tool_tip_ = true;
   } else if (did_request_non_empty_tool_tip_) {
@@ -690,16 +711,12 @@ ColorChooser* ChromeClientImpl::OpenColorChooser(
   NotifyPopupOpeningObservers();
   ColorChooserUIController* controller = nullptr;
 
-  // TODO(crbug.com/779126): add support for the chooser in immersive mode.
-  if (frame->GetDocument()->GetSettings()->GetImmersiveModeEnabled())
-    return nullptr;
-
   if (RuntimeEnabledFeatures::PagePopupEnabled()) {
     controller = MakeGarbageCollected<ColorChooserPopupUIController>(
         frame, this, chooser_client);
   } else {
-#if !BUILDFLAG(IS_ANDROID)
-    NOTREACHED() << "Page popups should be enabled on all but Android";
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+    NOTREACHED() << "Page popups should be enabled on all but Android or iOS";
 #endif
     controller =
         MakeGarbageCollected<ColorChooserUIController>(frame, chooser_client);
@@ -712,13 +729,6 @@ DateTimeChooser* ChromeClientImpl::OpenDateTimeChooser(
     LocalFrame* frame,
     DateTimeChooserClient* picker_client,
     const DateTimeChooserParameters& parameters) {
-  // TODO(crbug.com/779126): add support for the chooser in immersive mode.
-  if (picker_client->OwnerElement()
-          .GetDocument()
-          .GetSettings()
-          ->GetImmersiveModeEnabled())
-    return nullptr;
-
   NotifyPopupOpeningObservers();
   if (RuntimeEnabledFeatures::InputMultipleFieldsUIEnabled()) {
     return MakeGarbageCollected<DateTimeChooserImpl>(frame, picker_client,
@@ -733,12 +743,12 @@ DateTimeChooser* ChromeClientImpl::OpenDateTimeChooser(
   external_date_time_chooser_ =
       MakeGarbageCollected<ExternalDateTimeChooser>(picker_client);
   external_date_time_chooser_->OpenDateTimeChooser(frame, parameters);
-  return external_date_time_chooser_;
+  return external_date_time_chooser_.Get();
 }
 
 ExternalDateTimeChooser*
 ChromeClientImpl::GetExternalDateTimeChooserForTesting() {
-  return external_date_time_chooser_;
+  return external_date_time_chooser_.Get();
 }
 
 void ChromeClientImpl::OpenFileChooser(
@@ -769,14 +779,14 @@ void ChromeClientImpl::OpenFileChooser(
 }
 
 void ChromeClientImpl::DidCompleteFileChooser(FileChooser& chooser) {
-  if (!file_chooser_queue_.IsEmpty() &&
+  if (!file_chooser_queue_.empty() &&
       file_chooser_queue_.front().get() != &chooser) {
     // This function is called even if |chooser| wasn't stored in
     // file_chooser_queue_.
     return;
   }
   file_chooser_queue_.EraseAt(0);
-  if (file_chooser_queue_.IsEmpty())
+  if (file_chooser_queue_.empty())
     return;
   FileChooser* next_chooser = file_chooser_queue_.front().get();
   if (next_chooser->OpenFileChooser(*this))
@@ -865,6 +875,10 @@ void ChromeClientImpl::AttachRootLayer(scoped_refptr<cc::Layer> root_layer,
 
 cc::AnimationHost* ChromeClientImpl::GetCompositorAnimationHost(
     LocalFrame& local_frame) const {
+  WebLocalFrameImpl* web_frame = WebLocalFrameImpl::FromFrame(local_frame);
+  if (!web_frame || web_frame->IsProvisional()) {
+    return nullptr;
+  }
   FrameWidget* widget = local_frame.GetWidgetForLocalRoot();
   DCHECK(widget);
   return widget->AnimationHost();
@@ -913,8 +927,22 @@ bool ChromeClientImpl::HasOpenedPopup() const {
 PopupMenu* ChromeClientImpl::OpenPopupMenu(LocalFrame& frame,
                                            HTMLSelectElement& select) {
   NotifyPopupOpeningObservers();
-  if (WebViewImpl::UseExternalPopupMenus())
+
+  bool use_external_popup_menus = WebViewImpl::UseExternalPopupMenus();
+#if BUILDFLAG(IS_MAC)
+  // There is a bug that is causing popup menus in PWA windows on macOS to
+  // sometimes not appear if using external popup menus. Until that bug is
+  // fixed, use internal menus if this is a PWA window on mac.
+  // TODO(https://crbug.com/1488347): Remove this workaround when the bug
+  // is fixed.
+  if (frame.GetSettings() && !frame.GetSettings()->GetWebAppScope().empty()) {
+    use_external_popup_menus = false;
+  }
+#endif
+
+  if (use_external_popup_menus) {
     return MakeGarbageCollected<ExternalPopupMenu>(frame, select);
+  }
 
   DCHECK(RuntimeEnabledFeatures::PagePopupEnabled());
   return MakeGarbageCollected<InternalPopupMenu>(this, select);
@@ -1045,35 +1073,44 @@ void ChromeClientImpl::BeginLifecycleUpdates(LocalFrame& main_frame) {
   web_view_->StopDeferringMainFrameUpdate();
 }
 
-void ChromeClientImpl::RegisterForDeferredCommitObservation(
-    DeferredCommitObserver* observer) {
-  deferred_commit_observers_.insert(observer);
+void ChromeClientImpl::RegisterForCommitObservation(CommitObserver* observer) {
+  commit_observers_.insert(observer);
 }
 
-void ChromeClientImpl::UnregisterFromDeferredCommitObservation(
-    DeferredCommitObserver* observer) {
-  deferred_commit_observers_.erase(observer);
+void ChromeClientImpl::UnregisterFromCommitObservation(
+    CommitObserver* observer) {
+  commit_observers_.erase(observer);
 }
 
-void ChromeClientImpl::OnDeferCommitsChanged(
-    bool defer_status,
-    cc::PaintHoldingReason reason,
-    absl::optional<cc::PaintHoldingCommitTrigger> trigger) {
-  DCHECK(defer_status || trigger);
+void ChromeClientImpl::WillCommitCompositorFrame() {
   // Make a copy since callbacks may modify the set as we're iterating it.
-  auto observers = deferred_commit_observers_;
-  for (auto& observer : observers) {
-    if (defer_status)
-      observer->WillStartDeferringCommits(reason);
-    else
-      observer->WillStopDeferringCommits(*trigger);
-  }
+  auto observers = commit_observers_;
+  for (auto& observer : observers)
+    observer->WillCommitCompositorFrame();
+}
+
+std::unique_ptr<cc::ScopedPauseRendering> ChromeClientImpl::PauseRendering(
+    LocalFrame& frame) {
+  // If |frame| corresponds to an iframe this implies a transition in an iframe
+  // will pause rendering for the all ancestor frames (including the main frame)
+  // hosted in this process.
+  DCHECK(frame.IsLocalRoot());
+  return WebLocalFrameImpl::FromFrame(frame)
+      ->FrameWidgetImpl()
+      ->PauseRendering();
+}
+
+absl::optional<int> ChromeClientImpl::GetMaxRenderBufferBounds(
+    LocalFrame& frame) const {
+  return WebLocalFrameImpl::FromFrame(frame)
+      ->LocalRootFrameWidget()
+      ->GetMaxRenderBufferBounds();
 }
 
 bool ChromeClientImpl::StartDeferringCommits(LocalFrame& main_frame,
                                              base::TimeDelta timeout,
                                              cc::PaintHoldingReason reason) {
-  DCHECK(main_frame.IsMainFrame());
+  DCHECK(main_frame.IsLocalRoot());
   return WebLocalFrameImpl::FromFrame(main_frame)
       ->FrameWidgetImpl()
       ->StartDeferringCommits(timeout, reason);
@@ -1082,7 +1119,7 @@ bool ChromeClientImpl::StartDeferringCommits(LocalFrame& main_frame,
 void ChromeClientImpl::StopDeferringCommits(
     LocalFrame& main_frame,
     cc::PaintHoldingCommitTrigger trigger) {
-  DCHECK(main_frame.IsMainFrame());
+  DCHECK(main_frame.IsLocalRoot());
   WebLocalFrameImpl::FromFrame(main_frame)
       ->FrameWidgetImpl()
       ->StopDeferringCommits(trigger);
@@ -1156,9 +1193,14 @@ void ChromeClientImpl::SetPanAction(LocalFrame* frame,
   widget->SetPanAction(pan_action);
 }
 
-void ChromeClientImpl::DidAssociateFormControlsAfterLoad(LocalFrame* frame) {
-  if (auto* fill_client = AutofillClientFromFrame(frame))
-    fill_client->DidAssociateFormControlsDynamically();
+void ChromeClientImpl::DidChangeFormRelatedElementDynamically(
+    LocalFrame* frame,
+    HTMLElement* element,
+    WebFormRelatedChangeType form_related_change) {
+  if (auto* fill_client = AutofillClientFromFrame(frame)) {
+    fill_client->DidChangeFormRelatedElementDynamically(element,
+                                                        form_related_change);
+  }
 }
 
 void ChromeClientImpl::ShowVirtualKeyboardOnElementFocus(LocalFrame& frame) {
@@ -1233,11 +1275,13 @@ void ChromeClientImpl::DidChangeSelectionInSelectControl(
     fill_client->SelectControlDidChange(WebFormControlElement(&element));
 }
 
-void ChromeClientImpl::SelectFieldOptionsChanged(
+void ChromeClientImpl::SelectOrSelectListFieldOptionsChanged(
     HTMLFormControlElement& element) {
   Document& doc = element.GetDocument();
-  if (auto* fill_client = AutofillClientFromFrame(doc.GetFrame()))
-    fill_client->SelectFieldOptionsChanged(WebFormControlElement(&element));
+  if (auto* fill_client = AutofillClientFromFrame(doc.GetFrame())) {
+    fill_client->SelectOrSelectListFieldOptionsChanged(
+        WebFormControlElement(&element));
+  }
 }
 
 void ChromeClientImpl::AjaxSucceeded(LocalFrame* frame) {
@@ -1255,7 +1299,7 @@ void ChromeClientImpl::JavaScriptChangedAutofilledValue(
   }
 }
 
-TransformationMatrix ChromeClientImpl::GetDeviceEmulationTransform() const {
+gfx::Transform ChromeClientImpl::GetDeviceEmulationTransform() const {
   DCHECK(web_view_);
   return web_view_->GetDeviceEmulationTransform();
 }
@@ -1335,6 +1379,11 @@ void ChromeClientImpl::PasswordFieldReset(HTMLInputElement& element) {
           AutofillClientFromFrame(element.GetDocument().GetFrame())) {
     fill_client->PasswordFieldReset(WebInputElement(&element));
   }
+}
+
+float ChromeClientImpl::ZoomFactorForViewportLayout() {
+  DCHECK(web_view_);
+  return web_view_->ZoomFactorForViewportLayout();
 }
 
 gfx::Rect ChromeClientImpl::AdjustWindowRectForMinimum(

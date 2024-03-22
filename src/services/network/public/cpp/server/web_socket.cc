@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,7 @@
 #include "services/network/public/cpp/server/http_server_response_info.h"
 #include "services/network/public/cpp/server/web_socket_encoder.h"
 
-namespace network {
-
-namespace server {
+namespace network::server {
 
 namespace {
 
@@ -119,7 +117,7 @@ WebSocket::ParseResult WebSocket::Read(std::string* message) {
     return FRAME_ERROR;
   }
   const std::string& read_buf = connection_->read_buf();
-  base::StringPiece frame(read_buf);
+  std::string_view frame(read_buf);
   int bytes_consumed = 0;
   const ParseResult result =
       encoder_->DecodeFrame(frame, &bytes_consumed, message);
@@ -136,7 +134,7 @@ WebSocket::ParseResult WebSocket::Read(std::string* message) {
 }
 
 void WebSocket::Send(
-    base::StringPiece message,
+    std::string_view message,
     net::WebSocketFrameHeader::OpCodeEnum op_code,
     const net::NetworkTrafficAnnotationTag traffic_annotation) {
   if (closed_)
@@ -173,6 +171,4 @@ void WebSocket::SendErrorResponse(
   server_->Send500(connection_->id(), message, traffic_annotation);
 }
 
-}  // namespace server
-
-}  // namespace network
+}  // namespace network::server

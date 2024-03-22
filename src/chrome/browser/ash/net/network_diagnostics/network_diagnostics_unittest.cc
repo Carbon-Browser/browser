@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/test/bind.h"
+#include "base/values.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_test_helper.h"
-#include "chromeos/dbus/debug_daemon/fake_debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "chromeos/services/network_health/public/mojom/network_diagnostics.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -20,7 +21,6 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 // The IP v4 config path specified here must match the IP v4 config path
@@ -33,7 +33,7 @@ const std::vector<std::string> kWellFormedDnsServers = {
 
 // This fakes a DebugDaemonClient by serving fake ICMP results when the
 // DebugDaemonClient calls TestICMP().
-class TestDebugDaemonClient : public chromeos::FakeDebugDaemonClient {
+class TestDebugDaemonClient : public FakeDebugDaemonClient {
  public:
   TestDebugDaemonClient() = default;
   TestDebugDaemonClient(const TestDebugDaemonClient&) = delete;
@@ -83,7 +83,7 @@ class NetworkDiagnosticsTest : public NetworkDiagnosticsTestHelper {
     // Set up properties for the WiFi service.
     SetUpWiFi(shill::kStateOnline);
     SetServiceProperty(wifi_path(), shill::kSecurityClassProperty,
-                       base::Value(shill::kSecurityPsk));
+                       base::Value(shill::kSecurityClassPsk));
 
     base::RunLoop().RunUntilIdle();
   }
@@ -97,21 +97,21 @@ class NetworkDiagnosticsTest : public NetworkDiagnosticsTestHelper {
   void SetUpNameServers(const std::vector<std::string>& name_servers) {
     DCHECK(!wifi_path().empty());
     // Set up the name servers
-    base::ListValue dns_servers;
+    base::Value::List dns_servers;
     for (const std::string& name_server : name_servers) {
       dns_servers.Append(name_server);
     }
 
     // Set up the IP v4 config
-    base::DictionaryValue ip_config_v4_properties;
-    ip_config_v4_properties.SetKey(shill::kNameServersProperty,
-                                   base::Value(dns_servers.Clone()));
+    auto ip_config_v4_properties = base::Value::Dict().Set(
+        shill::kNameServersProperty, std::move(dns_servers));
     helper()->ip_config_test()->AddIPConfig(kIPv4ConfigPath,
-                                            ip_config_v4_properties);
+                                            ip_config_v4_properties.Clone());
     std::string wifi_device_path =
         helper()->device_test()->GetDevicePathForType(shill::kTypeWifi);
     helper()->device_test()->SetDeviceProperty(
-        wifi_device_path, shill::kIPConfigsProperty, ip_config_v4_properties,
+        wifi_device_path, shill::kIPConfigsProperty,
+        base::Value(std::move(ip_config_v4_properties)),
         /*notify_changed=*/true);
     SetServiceProperty(wifi_path(), shill::kIPConfigProperty,
                        base::Value(kIPv4ConfigPath));

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,31 @@
  * @fileoverview guest tos screen implementation.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
+import '//resources/cr_elements/cr_toggle/cr_toggle.js';
+import '//resources/js/action_link.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/dialogs/oobe_loading_dialog.js';
+import '../../components/dialogs/oobe_modal_dialog.js';
+
+import {html, mixinBehaviors, Polymer, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeBackButton} from '../../components/buttons/oobe_back_button.js';
+import {OobeNextButton} from '../../components/buttons/oobe_next_button.js';
+import {OobeTextButton} from '../../components/buttons/oobe_text_button.js';
+import {OobeAdaptiveDialog} from '../../components/dialogs/oobe_adaptive_dialog.js';
+import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
+import {ContentType, WebViewHelper} from '../../components/web_view_helper.js';
+import {WebViewLoader} from '../../components/web_view_loader.js';
+
 
 // Enum that describes the current state of the Guest ToS screen
 const GuestTosScreenState = {
@@ -35,9 +59,17 @@ const GUEST_TOS_ONLINE_LOAD_TIMEOUT_IN_MS = 10000;
  * @implements {OobeI18nBehaviorInterface}
  * @implements {MultiStepBehaviorInterface}
  */
-const GuestTosScreenElementBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, MultiStepBehavior, LoginScreenBehavior],
-    Polymer.Element);
+const GuestTosScreenElementBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   googleEulaUrl: string,
+ *   crosEulaUrl: string,
+ * }}
+ */
+let GuestTosScreenData;
 
 /**
  * @polymer
@@ -47,7 +79,9 @@ class GuestTos extends GuestTosScreenElementBase {
     return 'guest-tos-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -56,11 +90,6 @@ class GuestTos extends GuestTosScreenElementBase {
         value: true,
       },
     };
-  }
-
-  constructor() {
-    super();
-    this.usageChecked = true;
   }
 
   /** @override */
@@ -80,6 +109,9 @@ class GuestTos extends GuestTosScreenElementBase {
     this.updateLocalizedContent();
   }
 
+  /**
+   * @param {GuestTosScreenData} data Screen init payload.
+   */
   onBeforeShow(data) {
     const googleEulaUrl = data['googleEulaUrl'];
     const crosEulaUrl = data['crosEulaUrl'];
@@ -110,7 +142,7 @@ class GuestTos extends GuestTosScreenElementBase {
   loadEulaWebview_(webview, online_tos_url, clear_anchors) {
     const loadFailureCallback = () => {
       WebViewHelper.loadUrlContentToWebView(
-          webview, GUEST_TOS_EULA_TERMS_URL, WebViewHelper.ContentType.HTML);
+          webview, GUEST_TOS_EULA_TERMS_URL, ContentType.HTML);
     };
 
     const tosLoader = new WebViewLoader(
@@ -131,7 +163,8 @@ class GuestTos extends GuestTosScreenElementBase {
     crosEulaLink.setAttribute('is', 'action-link');
     crosEulaLink.classList.add('oobe-local-link');
 
-    return terms.innerHTML;
+    return sanitizeInnerHtml(
+        terms.innerHTML, {tags: ['a'], attrs: ['id', 'is', 'class']});
   }
 
   getUsageLearnMoreText_(locale) {
@@ -161,7 +194,7 @@ class GuestTos extends GuestTosScreenElementBase {
   }
 
   onAcceptClick_() {
-    chrome.send('GuestToSAccept', [this.usageChecked]);
+    this.userActed(['guest-tos-accept', this.usageChecked]);
   }
 
   onBackClick_() {

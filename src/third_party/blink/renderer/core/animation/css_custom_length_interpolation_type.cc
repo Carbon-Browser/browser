@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,11 +19,11 @@ InterpolationValue CSSCustomLengthInterpolationType::MaybeConvertValue(
     const CSSValue& value,
     const StyleResolverState*,
     ConversionCheckers&) const {
-  std::unique_ptr<InterpolableLength> maybe_length =
+  InterpolableLength* maybe_length =
       InterpolableLength::MaybeConvertCSSValue(value);
   if (!maybe_length || maybe_length->HasPercentage())
     return nullptr;
-  return InterpolationValue(std::move(maybe_length));
+  return InterpolationValue(maybe_length);
 }
 
 const CSSValue* CSSCustomLengthInterpolationType::CreateCSSValue(

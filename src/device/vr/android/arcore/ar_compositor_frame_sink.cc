@@ -1,13 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/vr/android/arcore/ar_compositor_frame_sink.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
+#include "components/viz/common/features.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "components/viz/common/quads/surface_draw_quad.h"
 #include "components/viz/common/quads/texture_draw_quad.h"
@@ -292,7 +294,18 @@ void ArCompositorFrameSink::ReclaimResources(
 
 void ArCompositorFrameSink::OnBeginFrame(
     const viz::BeginFrameArgs& args,
-    const viz::FrameTimingDetailsMap& timing_details) {
+    const viz::FrameTimingDetailsMap& timing_details,
+    bool frame_ack,
+    std::vector<viz::ReturnedResource> resources) {
+  // TODO(crbug.com/1401032): Determine why the timing of this Ack leads to
+  // frame production stopping in tests.
+  if (features::IsOnBeginFrameAcksEnabled()) {
+    if (frame_ack) {
+      DidReceiveCompositorFrameAck(std::move(resources));
+    } else if (!resources.empty()) {
+      ReclaimResources(std::move(resources));
+    }
+  }
   on_begin_frame_.Run(args, timing_details);
 }
 
@@ -375,7 +388,8 @@ viz::CompositorFrame ArCompositorFrameSink::CreateFrame(WebXrFrame* xr_frame,
           /*quad_layer_rect=*/output_rect,
           /*visible_layer_rect=*/output_rect, gfx::MaskFilterInfo(),
           /*clip_rect=*/absl::nullopt, /*are_contents_opaque=*/false,
-          /*opacity=*/1.f, SkBlendMode::kSrcOver, /*sorting_context_id=*/0);
+          /*opacity=*/1.f, SkBlendMode::kSrcOver, /*sorting_context_id=*/0,
+          /*layer_id=*/0u, /*fast_rounded_corner=*/false);
 
       viz::SurfaceDrawQuad* dom_quad =
           render_pass->CreateAndAppendDrawQuad<viz::SurfaceDrawQuad>();
@@ -404,7 +418,8 @@ viz::CompositorFrame ArCompositorFrameSink::CreateFrame(WebXrFrame* xr_frame,
         /*quad_layer_rect=*/output_rect,
         /*visible_layer_rect=*/output_rect, gfx::MaskFilterInfo(),
         /*clip_rect=*/absl::nullopt, /*are_contents_opaque=*/false,
-        /*opacity=*/1.f, SkBlendMode::kSrcOver, /*sorting_context_id=*/0);
+        /*opacity=*/1.f, SkBlendMode::kSrcOver, /*sorting_context_id=*/0,
+        /*layer_id=*/0u, /*fast_rounded_corner=*/false);
 
     viz::TextureDrawQuad* xr_content_quad =
         render_pass->CreateAndAppendDrawQuad<viz::TextureDrawQuad>();
@@ -421,11 +436,13 @@ viz::CompositorFrame ArCompositorFrameSink::CreateFrame(WebXrFrame* xr_frame,
         /*nearest_neighbor=*/false,
         /*secure_output_only=*/false, gfx::ProtectedVideoType::kClear);
 
-    auto renderer_resource = viz::TransferableResource::MakeGL(
+    auto renderer_resource = viz::TransferableResource::MakeGpu(
         renderer_buffer->mailbox_holder.mailbox,
-        /*filter=*/GL_LINEAR, renderer_buffer->mailbox_holder.texture_target,
+        renderer_buffer->mailbox_holder.texture_target,
         renderer_buffer->mailbox_holder.sync_token, renderer_buffer->size,
-        /*is_overlay_candidate=*/false);
+        viz::SinglePlaneFormat::kRGBA_8888,
+        /*is_overlay_candidate=*/false,
+        viz::TransferableResource::ResourceSource::kAR);
 
     renderer_resource.id = renderer_buffer->id;
     id_to_frame_map_[renderer_buffer->id] = xr_frame;
@@ -443,7 +460,8 @@ viz::CompositorFrame ArCompositorFrameSink::CreateFrame(WebXrFrame* xr_frame,
       /*quad_layer_rect=*/output_rect,
       /*visible_layer_rect=*/output_rect, gfx::MaskFilterInfo(),
       /*clip_rect=*/absl::nullopt, /*are_contents_opaque=*/true,
-      /*opacity=*/1.f, SkBlendMode::kSrcOver, /*sorting_context_id=*/0);
+      /*opacity=*/1.f, SkBlendMode::kSrcOver, /*sorting_context_id=*/0,
+      /*layer_id=*/0u, /*fast_rounded_corner=*/false);
 
   viz::TextureDrawQuad* camera_quad =
       render_pass->CreateAndAppendDrawQuad<viz::TextureDrawQuad>();
@@ -462,11 +480,13 @@ viz::CompositorFrame ArCompositorFrameSink::CreateFrame(WebXrFrame* xr_frame,
                       gfx::ProtectedVideoType::kClear);
 
   // Additionally append to the resource_list
-  auto camera_resource = viz::TransferableResource::MakeGL(
+  auto camera_resource = viz::TransferableResource::MakeGpu(
       camera_buffer->mailbox_holder.mailbox,
-      /*filter=*/GL_LINEAR, camera_buffer->mailbox_holder.texture_target,
+      camera_buffer->mailbox_holder.texture_target,
       camera_buffer->mailbox_holder.sync_token, camera_buffer->size,
-      /*is_overlay_candidate=*/false);
+      viz::SinglePlaneFormat::kRGBA_8888,
+      /*is_overlay_candidate=*/false,
+      viz::TransferableResource::ResourceSource::kAR);
 
   camera_resource.id = camera_buffer->id;
   id_to_frame_map_[camera_buffer->id] = xr_frame;

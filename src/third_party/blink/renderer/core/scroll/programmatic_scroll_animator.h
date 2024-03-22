@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ class ProgrammaticScrollAnimator : public ScrollAnimatorCompositorCoordinator {
   void CancelAnimation() override;
   void TakeOverCompositorAnimation() override {}
   ScrollableArea* GetScrollableArea() const override {
-    return scrollable_area_;
+    return scrollable_area_.Get();
   }
   void TickAnimation(base::TimeTicks monotonic_time) override;
   void UpdateCompositorAnimations() override;

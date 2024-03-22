@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,7 @@ MojomKeyStatus EnumTraits<MojomKeyStatus, NativeKeyStatus>::ToMojom(
     case NativeKeyStatus::RELEASED:
       return MojomKeyStatus::RELEASED;
   }
-  NOTREACHED();
-  return MojomKeyStatus::INTERNAL_ERROR;
+  NOTREACHED_NORETURN();
 }
 
 // static
@@ -61,8 +60,7 @@ bool EnumTraits<MojomKeyStatus, NativeKeyStatus>::FromMojom(
       *out = NativeKeyStatus::RELEASED;
       return true;
   }
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 // static

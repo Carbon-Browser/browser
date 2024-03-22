@@ -1,20 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_query_manager.h"
 
-#include "base/callback_helpers.h"
-#include "base/check_op.h"
-#include "ios/components/security_interstitials/safe_browsing/safe_browsing_client.h"
-#include "ios/components/security_interstitials/safe_browsing/safe_browsing_service.h"
-#include "ios/web/public/thread/web_task_traits.h"
-#include "ios/web/public/thread/web_thread.h"
-#include "services/network/public/mojom/fetch_api.mojom.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/check_op.h"
+#import "base/functional/callback_helpers.h"
+#import "components/safe_browsing/core/common/features.h"
+#import "ios/components/security_interstitials/safe_browsing/safe_browsing_client.h"
+#import "ios/components/security_interstitials/safe_browsing/safe_browsing_service.h"
+#import "ios/web/public/thread/web_task_traits.h"
+#import "ios/web/public/thread/web_thread.h"
+#import "services/network/public/mojom/fetch_api.mojom.h"
 
 using security_interstitials::UnsafeResource;
 
@@ -30,17 +27,6 @@ size_t CreateQueryID() {
 
 #pragma mark - SafeBrowsingQueryManager
 
-// static
-void SafeBrowsingQueryManager::CreateForWebState(web::WebState* web_state,
-                                                 SafeBrowsingClient* client) {
-  if (FromWebState(web_state))
-    return;
-
-  web_state->SetUserData(
-      UserDataKey(),
-      std::make_unique<SafeBrowsingQueryManager>(web_state, client));
-}
-
 SafeBrowsingQueryManager::SafeBrowsingQueryManager(web::WebState* web_state,
                                                    SafeBrowsingClient* client)
     : web_state_(web_state),
@@ -54,8 +40,10 @@ SafeBrowsingQueryManager::~SafeBrowsingQueryManager() {
     observer.SafeBrowsingQueryManagerDestroyed(this);
   }
 
-  web::GetIOThreadTaskRunner({})->DeleteSoon(FROM_HERE,
-                                             url_checker_client_.release());
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    web::GetIOThreadTaskRunner({})->DeleteSoon(FROM_HERE,
+                                               url_checker_client_.release());
+  }
 }
 
 void SafeBrowsingQueryManager::AddObserver(Observer* observer) {
@@ -79,14 +67,22 @@ void SafeBrowsingQueryManager::StartQuery(const Query& query) {
   std::unique_ptr<safe_browsing::SafeBrowsingUrlCheckerImpl> url_checker =
       safe_browsing_service->CreateUrlChecker(request_destination, web_state_,
                                               client_);
-  base::OnceCallback<void(bool proceed, bool show_error_page)> callback =
-      base::BindOnce(&SafeBrowsingQueryManager::UrlCheckFinished,
-                     weak_factory_.GetWeakPtr(), query);
-  web::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(&UrlCheckerClient::CheckUrl,
-                     url_checker_client_->AsWeakPtr(), std::move(url_checker),
-                     query.url, query.http_method, std::move(callback)));
+  base::OnceCallback<void(
+      bool proceed, bool show_error_page,
+      safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
+          performed_check)>
+      callback = base::BindOnce(&SafeBrowsingQueryManager::UrlCheckFinished,
+                                weak_factory_.GetWeakPtr(), query);
+  if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    url_checker_client_->CheckUrl(std::move(url_checker), query.url,
+                                  query.http_method, std::move(callback));
+  } else {
+    web::GetIOThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(&UrlCheckerClient::CheckUrl,
+                       url_checker_client_->AsWeakPtr(), std::move(url_checker),
+                       query.url, query.http_method, std::move(callback)));
+  }
 }
 
 void SafeBrowsingQueryManager::StoreUnsafeResource(
@@ -98,7 +94,7 @@ void SafeBrowsingQueryManager::StoreUnsafeResource(
   // that when there are repeated pending queries (e.g., when a page has
   // multiple iframes with the same URL), it is not possible to determine
   // which of these queries will receive a response first. As a result,
-  // |resource| must be stored with every corresponding query, not just the
+  // `resource` must be stored with every corresponding query, not just the
   // first.
   for (auto& pair : results_) {
     if (pair.first.url == resource.url &&
@@ -110,9 +106,11 @@ void SafeBrowsingQueryManager::StoreUnsafeResource(
 
 #pragma mark Private
 
-void SafeBrowsingQueryManager::UrlCheckFinished(const Query query,
-                                                bool proceed,
-                                                bool show_error_page) {
+void SafeBrowsingQueryManager::UrlCheckFinished(
+    const Query query,
+    bool proceed,
+    bool show_error_page,
+    safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check) {
   auto query_result_pair = results_.find(query);
   DCHECK(query_result_pair != results_.end());
 
@@ -125,11 +123,11 @@ void SafeBrowsingQueryManager::UrlCheckFinished(const Query query,
   // execution of its completion block.
   DCHECK(!show_error_page || result.resource);
 
-  // Notify observers of the completed URL check. |this| might get destroyed
+  // Notify observers of the completed URL check. `this` might get destroyed
   // when an observer is notified.
   auto weak_this = weak_factory_.GetWeakPtr();
   for (auto& observer : observers_) {
-    observer.SafeBrowsingQueryFinished(this, query, result);
+    observer.SafeBrowsingQueryFinished(this, query, result, performed_check);
     if (!weak_this)
       return;
   }
@@ -176,15 +174,24 @@ SafeBrowsingQueryManager::Result::~Result() = default;
 SafeBrowsingQueryManager::UrlCheckerClient::UrlCheckerClient() = default;
 
 SafeBrowsingQueryManager::UrlCheckerClient::~UrlCheckerClient() {
-  DCHECK_CURRENTLY_ON(web::WebThread::IO);
+  DCHECK_CURRENTLY_ON(
+      base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+          ? web::WebThread::UI
+          : web::WebThread::IO);
 }
 
 void SafeBrowsingQueryManager::UrlCheckerClient::CheckUrl(
     std::unique_ptr<safe_browsing::SafeBrowsingUrlCheckerImpl> url_checker,
     const GURL& url,
     const std::string& method,
-    base::OnceCallback<void(bool proceed, bool show_error_page)> callback) {
-  DCHECK_CURRENTLY_ON(web::WebThread::IO);
+    base::OnceCallback<void(bool proceed,
+                            bool show_error_page,
+                            safe_browsing::SafeBrowsingUrlCheckerImpl::
+                                PerformedCheck performed_check)> callback) {
+  DCHECK_CURRENTLY_ON(
+      base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+          ? web::WebThread::UI
+          : web::WebThread::IO);
   safe_browsing::SafeBrowsingUrlCheckerImpl* url_checker_ptr =
       url_checker.get();
   active_url_checkers_[std::move(url_checker)] = std::move(callback);
@@ -198,8 +205,12 @@ void SafeBrowsingQueryManager::UrlCheckerClient::OnCheckUrlResult(
     safe_browsing::SafeBrowsingUrlCheckerImpl::NativeUrlCheckNotifier*
         slow_check_notifier,
     bool proceed,
-    bool showed_interstitial) {
-  DCHECK_CURRENTLY_ON(web::WebThread::IO);
+    bool showed_interstitial,
+    safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check) {
+  DCHECK_CURRENTLY_ON(
+      base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+          ? web::WebThread::UI
+          : web::WebThread::IO);
   DCHECK(url_checker);
   if (slow_check_notifier) {
     *slow_check_notifier = base::BindOnce(&UrlCheckerClient::OnCheckComplete,
@@ -207,20 +218,27 @@ void SafeBrowsingQueryManager::UrlCheckerClient::OnCheckUrlResult(
     return;
   }
 
-  OnCheckComplete(url_checker, proceed, showed_interstitial);
+  OnCheckComplete(url_checker, proceed, showed_interstitial, performed_check);
 }
 
 void SafeBrowsingQueryManager::UrlCheckerClient::OnCheckComplete(
     safe_browsing::SafeBrowsingUrlCheckerImpl* url_checker,
     bool proceed,
-    bool showed_interstitial) {
-  DCHECK_CURRENTLY_ON(web::WebThread::IO);
+    bool showed_interstitial,
+    safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck performed_check) {
+  DCHECK_CURRENTLY_ON(
+      base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+          ? web::WebThread::UI
+          : web::WebThread::IO);
   DCHECK(url_checker);
 
   auto it = active_url_checkers_.find(url_checker);
+  // TODO(crbug.com/1057253): consider removing this PostTask once
+  // kSafeBrowsingOnUIThread launches, if all the callers are ok with the
+  // callback being run synchronously sometimes.
   web::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(std::move(it->second), proceed, showed_interstitial));
+      FROM_HERE, base::BindOnce(std::move(it->second), proceed,
+                                showed_interstitial, performed_check));
 
   active_url_checkers_.erase(it);
 }

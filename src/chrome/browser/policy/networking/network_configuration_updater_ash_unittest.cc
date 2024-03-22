@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
@@ -25,12 +26,12 @@
 #include "chromeos/ash/components/network/mock_managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/onc/onc_certificate_importer.h"
 #include "chromeos/ash/components/network/policy_certificate_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "chromeos/components/onc/certificate_scope.h"
 #include "chromeos/components/onc/onc_parsed_certificates.h"
 #include "chromeos/components/onc/onc_test_utils.h"
 #include "chromeos/components/onc/onc_utils.h"
-#include "chromeos/system/fake_statistics_provider.h"
-#include "chromeos/system/statistics_provider.h"
 #include "components/account_id/account_id.h"
 #include "components/onc/onc_constants.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
@@ -88,7 +89,7 @@ class FakeUser : public user_manager::User {
 };
 
 class MockPolicyProvidedCertsObserver
-    : public chromeos::PolicyCertificateProvider::Observer {
+    : public ash::PolicyCertificateProvider::Observer {
  public:
   MockPolicyProvidedCertsObserver() = default;
 
@@ -100,7 +101,7 @@ class MockPolicyProvidedCertsObserver
   MOCK_METHOD0(OnPolicyProvidedCertsChanged, void());
 };
 
-class FakeNetworkDeviceHandler : public chromeos::FakeNetworkDeviceHandler {
+class FakeNetworkDeviceHandler : public ash::FakeNetworkDeviceHandler {
  public:
   FakeNetworkDeviceHandler() = default;
 
@@ -258,7 +259,8 @@ const char kFakeONC[] = R"(
       "Type": "UnencryptedConfiguration"
     })";
 
-std::string ValueToString(const base::Value& value) {
+template <typename T>
+std::string ValueToString(const T& value) {
   std::stringstream str;
   str << value;
   return str.str();
@@ -268,18 +270,17 @@ std::string ValueToString(const base::Value& value) {
 // certificates contained in |toplevel_onc|. Appends the selected certificate
 // into |out_parsed_client_certificates|.
 void SelectSingleClientCertificateFromOnc(
-    base::Value* toplevel_onc,
+    base::Value::Dict& toplevel_onc,
     size_t client_certificate_index,
     std::vector<chromeos::onc::OncParsedCertificates::ClientCertificate>*
         out_parsed_client_certificates) {
-  base::Value* certs =
-      toplevel_onc->FindKey(onc::toplevel_config::kCertificates);
+  const base::Value::List* certs =
+      toplevel_onc.FindList(onc::toplevel_config::kCertificates);
   ASSERT_TRUE(certs);
-  ASSERT_TRUE(certs->is_list());
-  ASSERT_TRUE(certs->GetList().size() > client_certificate_index);
+  ASSERT_TRUE(certs->size() > client_certificate_index);
 
-  base::ListValue selected_certs;
-  selected_certs.Append(certs->GetList()[client_certificate_index].Clone());
+  base::Value::List selected_certs;
+  selected_certs.Append((*certs)[client_certificate_index].Clone());
 
   chromeos::onc::OncParsedCertificates parsed_selected_certs(selected_certs);
   ASSERT_FALSE(parsed_selected_certs.has_error());
@@ -288,7 +289,10 @@ void SelectSingleClientCertificateFromOnc(
       parsed_selected_certs.client_certificates().front());
 }
 
-// Matcher to match base::Value.
+// Matcher to match `base::Value` with a compatible type (string, `base::Value`,
+// `base::Value::Dict`, `base::Value::List` etc.). See the `==` operator
+// overrides in `base/values.h` and the definition of `ValueToString()` for
+// the restrictions on allowed types for `value`.
 MATCHER_P(IsEqualTo,
           value,
           std::string(negation ? "isn't" : "is") + " equal to " +
@@ -297,11 +301,11 @@ MATCHER_P(IsEqualTo,
 }
 
 MATCHER(IsListEmpty, std::string(negation ? "isn't" : "is") + " empty.") {
-  return arg.GetList().empty();
+  return arg.empty();
 }
 
 MATCHER(IsDictEmpty, std::string(negation ? "isn't" : "is") + " empty.") {
-  return arg.DictEmpty();
+  return arg.empty();
 }
 
 ACTION_P(SetCertificateList, list) {
@@ -314,14 +318,14 @@ ACTION_P(SetCertificateList, list) {
 
 class NetworkConfigurationUpdaterAshTest : public testing::Test {
  protected:
-  NetworkConfigurationUpdaterAshTest() : certificate_importer_(NULL) {}
+  NetworkConfigurationUpdaterAshTest() : certificate_importer_(nullptr) {}
 
   void SetUp() override {
     ash::UserSessionManager::GetInstance()->set_start_session_type_for_testing(
         ash::UserSessionManager::StartSessionType::kPrimary);
 
     fake_statistics_provider_.SetMachineStatistic(
-        chromeos::system::kSerialNumberKeyForTest, kFakeSerialNumber);
+        ash::system::kSerialNumberKeyForTest, kFakeSerialNumber);
 
     EXPECT_CALL(provider_, IsInitializationComplete(_))
         .WillRepeatedly(Return(false));
@@ -332,16 +336,17 @@ class NetworkConfigurationUpdaterAshTest : public testing::Test {
     providers.push_back(&provider_);
     policy_service_ = std::make_unique<PolicyServiceImpl>(std::move(providers));
 
-    base::Value fake_toplevel_onc =
+    absl::optional<base::Value::Dict> fake_toplevel_onc =
         chromeos::onc::ReadDictionaryFromJson(kFakeONC);
+    ASSERT_TRUE(fake_toplevel_onc.has_value());
 
-    base::Value* global_config = fake_toplevel_onc.FindDictKey(
+    base::Value::Dict* global_config = fake_toplevel_onc->FindDict(
         onc::toplevel_config::kGlobalNetworkConfiguration);
-    fake_global_network_config_.MergeDictionary(global_config);
+    fake_global_network_config_.Merge(global_config->Clone());
 
-    base::Value* certs =
-        fake_toplevel_onc.FindKey(onc::toplevel_config::kCertificates);
-    ASSERT_TRUE(certs->is_list());
+    base::Value::List* certs =
+        fake_toplevel_onc->FindList(onc::toplevel_config::kCertificates);
+    ASSERT_TRUE(certs);
 
     fake_certificates_ =
         std::make_unique<chromeos::onc::OncParsedCertificates>(*certs);
@@ -353,16 +358,20 @@ class NetworkConfigurationUpdaterAshTest : public testing::Test {
         .Times(AnyNumber());
   }
 
-  base::Value* GetExpectedFakeNetworkConfigs(::onc::ONCSource source) {
-    base::Value fake_toplevel_onc =
+  base::Value::List* GetExpectedFakeNetworkConfigs(::onc::ONCSource source) {
+    absl::optional<base::Value::Dict> fake_toplevel_onc =
         chromeos::onc::ReadDictionaryFromJson(kFakeONC);
+    if (!fake_toplevel_onc.has_value()) {
+      return nullptr;
+    }
     fake_network_configs_ =
-        fake_toplevel_onc.FindKey(onc::toplevel_config::kNetworkConfigurations)
+        fake_toplevel_onc
+            ->FindList(onc::toplevel_config::kNetworkConfigurations)
             ->Clone();
     return &fake_network_configs_;
   }
 
-  base::Value* GetExpectedFakeGlobalNetworkConfig() {
+  base::Value::Dict* GetExpectedFakeGlobalNetworkConfig() {
     return &fake_global_network_config_;
   }
 
@@ -379,7 +388,7 @@ class NetworkConfigurationUpdaterAshTest : public testing::Test {
     EXPECT_CALL(provider_, IsFirstPolicyLoadComplete(_))
         .WillRepeatedly(Return(true));
     provider_.SetAutoRefresh();
-    provider_.RefreshPolicies();
+    provider_.RefreshPolicies(PolicyFetchReason::kTest);
     base::RunLoop().RunUntilIdle();
   }
 
@@ -420,19 +429,20 @@ class NetworkConfigurationUpdaterAshTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
 
   std::unique_ptr<chromeos::onc::OncParsedCertificates> fake_certificates_;
-  StrictMock<chromeos::MockManagedNetworkConfigurationHandler>
+  StrictMock<ash::MockManagedNetworkConfigurationHandler>
       network_config_handler_;
   FakeNetworkDeviceHandler network_device_handler_;
   ash::ScopedStubInstallAttributes scoped_stub_install_attributes_;
   ash::ScopedTestDeviceSettingsService scoped_device_settings_service_;
   ash::ScopedTestingCrosSettings scoped_testing_cros_settings_;
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
+  ash::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
 
   // Ownership of client_certificate_importer_owned_ is passed to the
   // NetworkConfigurationUpdater. When that happens, |certificate_importer_|
   // continues to point to that instance but
   // |client_certificate_importer_owned_| is released.
-  FakeCertificateImporter* certificate_importer_;
+  raw_ptr<FakeCertificateImporter, DanglingUntriaged | ExperimentalAsh>
+      certificate_importer_;
   std::unique_ptr<ash::onc::CertificateImporter>
       client_certificate_importer_owned_;
 
@@ -445,8 +455,8 @@ class NetworkConfigurationUpdaterAshTest : public testing::Test {
   std::unique_ptr<NetworkConfigurationUpdater> network_configuration_updater_;
 
  private:
-  base::Value fake_network_configs_;
-  base::Value fake_global_network_config_{base::Value::Type::DICTIONARY};
+  base::Value::List fake_network_configs_;
+  base::Value::Dict fake_global_network_config_;
   ash::ScopedFakeSessionManagerClient scoped_session_manager_client_;
 };
 
@@ -500,15 +510,16 @@ TEST_F(NetworkConfigurationUpdaterAshTest,
 }
 
 TEST_F(NetworkConfigurationUpdaterAshTest, PolicyIsValidatedAndRepaired) {
-  base::Value onc_repaired = chromeos::onc::test_utils::ReadTestDictionaryValue(
-      "repaired_toplevel_partially_invalid.onc");
+  base::Value::Dict onc_repaired =
+      chromeos::onc::test_utils::ReadTestDictionary(
+          "repaired_toplevel_partially_invalid.onc");
 
-  base::Value* network_configs_repaired =
-      onc_repaired.FindListKey(onc::toplevel_config::kNetworkConfigurations);
+  base::Value::List* network_configs_repaired =
+      onc_repaired.FindList(onc::toplevel_config::kNetworkConfigurations);
   ASSERT_TRUE(network_configs_repaired);
 
-  base::Value* global_config_repaired = onc_repaired.FindDictKey(
-      onc::toplevel_config::kGlobalNetworkConfiguration);
+  base::Value::Dict* global_config_repaired =
+      onc_repaired.FindDict(onc::toplevel_config::kGlobalNetworkConfiguration);
   ASSERT_TRUE(global_config_repaired);
 
   std::string onc_policy =
@@ -527,7 +538,7 @@ TEST_F(NetworkConfigurationUpdaterAshTest, PolicyIsValidatedAndRepaired) {
   std::vector<chromeos::onc::OncParsedCertificates::ClientCertificate>
       expected_client_certificates;
   ASSERT_NO_FATAL_FAILURE(SelectSingleClientCertificateFromOnc(
-      &onc_repaired, 1 /* client_certificate_index */,
+      onc_repaired, 1 /* client_certificate_index */,
       &expected_client_certificates));
   certificate_importer_->SetExpectedONCClientCertificates(
       expected_client_certificates);

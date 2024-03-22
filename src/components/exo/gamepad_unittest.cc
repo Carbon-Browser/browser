@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,8 +84,7 @@ class GamepadTest : public testing::Test {
   void SetUp() override {
     testing::Test::SetUp();
     // Allow test to signal to gamepad that it can vibrate.
-    scoped_feature_list_.InitAndEnableFeature(
-        chromeos::features::kGamepadVibration);
+    scoped_feature_list_.InitAndEnableFeature(ash::features::kGamepadVibration);
     gamepad_->OnGamepadFocused();
   }
 

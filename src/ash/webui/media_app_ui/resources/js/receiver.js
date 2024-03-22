@@ -1,11 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './sandboxed_load_time_data.js';
 
-import {assertCast, MessagePipe} from './message_pipe.m.js';
+import {COLOR_PROVIDER_CHANGED, ColorChangeUpdater} from '//resources/cr_components/color_change_listener/colors_css_updater.js';
+
+import {assertCast, MessagePipe} from './message_pipe.js';
 import {EditInPhotosMessage, FileContext, IsFileArcWritableMessage, IsFileArcWritableResponse, IsFileBrowserWritableMessage, IsFileBrowserWritableResponse, LoadFilesMessage, Message, OpenAllowedFileMessage, OpenAllowedFileResponse, OpenFilesWithPickerMessage, OverwriteFileMessage, OverwriteViaFilePickerResponse, RenameFileResponse, RenameResult, RequestSaveFileMessage, RequestSaveFileResponse, SaveAsMessage, SaveAsResponse} from './message_types.js';
+import {ocrCallbackRouter} from './mojo_api_bootstrap_untrusted.js';
 import {loadPiex} from './piex_module_loader.js';
 
 /** A pipe through which we can send messages to the parent frame. */
@@ -317,6 +320,20 @@ parentMessagePipe.registerHandler(Message.LOAD_EXTRA_FILES, async (message) => {
 // parent frame (privileged context).
 parentMessagePipe.sendMessage(Message.IFRAME_READY);
 
+ocrCallbackRouter.setViewport.addListener(
+    (viewportBox) => {
+      const app = getApp();
+      if (app) {
+        app.setViewport(/** @type {!mediaApp.Rect} */ ({
+          left: viewportBox.x,
+          top: viewportBox.y,
+          width: viewportBox.width,
+          height: viewportBox.height,
+        }));
+      }
+    },
+);
+
 /**
  * A delegate which exposes privileged WebUI functionality to the media
  * app.
@@ -381,6 +398,9 @@ const DELEGATE = {
   reloadMainFrame() {
     parentMessagePipe.sendMessage(Message.RELOAD_MAIN_FRAME);
   },
+  maybeTriggerPdfHats() {
+    parentMessagePipe.sendMessage(Message.MAYBE_TRIGGER_PDF_HATS);
+  },
   // TODO(b/219631600): Implement openUrlInBrowserTab() for LacrOS if needed.
 };
 
@@ -433,6 +453,13 @@ function mutationCallback(mutationsList, observer) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  // Start listening to color change events. These events get picked up by logic
+  // in ts_helpers.ts on the google3 side.
+  /** @suppress {checkTypes} */
+  (function() {
+    ColorChangeUpdater.forDocument().start();
+  })();
+
   const app = getApp();
   if (app) {
     initializeApp(app);
@@ -459,6 +486,19 @@ window['chooseFileSystemEntries'] = null;
 window['showOpenFilePicker'] = null;
 window['showSaveFilePicker'] = null;
 window['showDirectoryPicker'] = null;
+
+// Expose functions to bind to color change events to window so they can be
+// automatically picked up by installColors(). See ts_helpers.ts in google3.
+window['addColorChangeListener'] =
+    /** @suppress {checkTypes} */ function(listener) {
+      ColorChangeUpdater.forDocument().eventTarget.addEventListener(
+          COLOR_PROVIDER_CHANGED, listener);
+    };
+window['removeColorChangeListener'] =
+    /** @suppress {checkTypes} */ function(listener) {
+      ColorChangeUpdater.forDocument().eventTarget.removeEventListener(
+          COLOR_PROVIDER_CHANGED, listener);
+    };
 
 export const TEST_ONLY = {
   RenameResult,

@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PAYMENTS_CONTENT_PAYMENT_EVENT_RESPONSE_UTIL_H_
 #define COMPONENTS_PAYMENTS_CONTENT_PAYMENT_EVENT_RESPONSE_UTIL_H_
 
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "third_party/blink/public/mojom/payments/payment_app.mojom.h"
 
 namespace payments {

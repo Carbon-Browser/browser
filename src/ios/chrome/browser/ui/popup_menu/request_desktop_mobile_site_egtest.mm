@@ -1,30 +1,28 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/strings/sys_string_conversions.h"
+#import "base/containers/contains.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/strings/grit/components_strings.h"
-#include "components/version_info/version_info.h"
+#import "base/time/time.h"
+#import "components/strings/grit/components_strings.h"
+#import "components/version_info/version_info.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_constants.h"
 #import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ios/web/common/features.h"
-#include "ios/web/common/user_agent.h"
-#include "ios/web/public/test/http_server/data_response_provider.h"
+#import "ios/web/common/features.h"
+#import "ios/web/common/user_agent.h"
+#import "ios/web/public/test/http_server/data_response_provider.h"
 #import "ios/web/public/test/http_server/http_server.h"
-#include "ios/web/public/test/http_server/http_server_util.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/test/http_server/http_server_util.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
 
@@ -49,7 +47,7 @@ const char kJavaScriptReload[] =
 
 // Custom timeout used when waiting for a web state after requesting desktop
 // or mobile mode.
-const NSTimeInterval kWaitForUserAgentChangeTimeout = 15.0;
+constexpr base::TimeDelta kWaitForUserAgentChangeTimeout = base::Seconds(15);
 
 // Returns the correct matcher for the collection view containing the Request
 // Desktop/Mobile button given the current overflow menu.
@@ -102,7 +100,7 @@ class UserAgentResponseProvider : public web::DataResponseProvider {
     }
 
     std::string purge_additions = "";
-    if (request.url.path().find(kPurgeURL) != std::string::npos) {
+    if (base::Contains(request.url.path(), kPurgeURL)) {
       purge_additions = kJavaScriptReload;
     }
 
@@ -129,12 +127,6 @@ class UserAgentResponseProvider : public web::DataResponseProvider {
 @end
 
 @implementation RequestDesktopMobileSiteTestCase
-
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  config.features_enabled.push_back(kAddSettingForDefaultPageMode);
-  return config;
-}
 
 #pragma mark - Helper
 
@@ -201,8 +193,8 @@ class UserAgentResponseProvider : public web::DataResponseProvider {
   [ChromeEarlGrey waitForWebStateContainingText:kDesktopSiteLabel
                                         timeout:kWaitForUserAgentChangeTimeout];
 
-  // Close all tabs and undo, trigerring a restoration.
-  [ChromeEarlGrey triggerRestoreViaTabGridRemoveAllUndo];
+  // Restart the app to trigger a reload.
+  [self triggerRestoreByRestartingApplication];
 
   // Verify that desktop user agent propagates.
   [ChromeEarlGreyUI openToolsMenu];
@@ -286,8 +278,8 @@ class UserAgentResponseProvider : public web::DataResponseProvider {
   [[EarlGrey selectElementWithMatcher:chrome_test_util::FakeOmnibox()]
       assertWithMatcher:grey_sufficientlyVisible()];
 
-  // Go back to NTP to restore the session from there.
-  [ChromeEarlGrey triggerRestoreViaTabGridRemoveAllUndo];
+  // Restart the app to trigger a reload.
+  [self triggerRestoreByRestartingApplication];
 
   // Make sure that the NTP is displayed.
   [[EarlGrey selectElementWithMatcher:chrome_test_util::FakeOmnibox()]

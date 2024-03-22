@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
@@ -146,7 +147,7 @@ class MediaNotificationViewModernImplTest : public views::ViewsTestBase {
   MediaNotificationViewModernImpl* view() const { return view_; }
 
   const std::u16string& accessible_name() const {
-    return view()->accessible_name_;
+    return view()->GetAccessibleName();
   }
 
   test::MockMediaNotificationItem& item() { return item_; }
@@ -168,9 +169,9 @@ class MediaNotificationViewModernImplTest : public views::ViewsTestBase {
   std::vector<views::Button*> media_control_buttons() const {
     std::vector<views::Button*> buttons;
     auto children = view()->media_controls_container_->children();
-    std::transform(
-        children.begin(), children.end(), std::back_inserter(buttons),
-        [](views::View* child) { return views::Button::AsButton(child); });
+    base::ranges::transform(
+        children, std::back_inserter(buttons),
+        [](auto* view) { return views::Button::AsButton(view); });
     buttons.push_back(views::Button::AsButton(picture_in_picture_button()));
     return buttons;
   }
@@ -179,10 +180,8 @@ class MediaNotificationViewModernImplTest : public views::ViewsTestBase {
 
   views::Button* GetButtonForAction(MediaSessionAction action) const {
     auto buttons = media_control_buttons();
-    const auto i = std::find_if(
-        buttons.begin(), buttons.end(), [action](const views::Button* button) {
-          return button->tag() == static_cast<int>(action);
-        });
+    const auto i = base::ranges::find(buttons, static_cast<int>(action),
+                                      &views::Button::tag);
     return (i == buttons.end()) ? nullptr : *i;
   }
 
@@ -208,20 +207,6 @@ class MediaNotificationViewModernImplTest : public views::ViewsTestBase {
   void SimulateTab() {
     ui::KeyEvent pressed_tab(ui::ET_KEY_PRESSED, ui::VKEY_TAB, ui::EF_NONE);
     view()->GetFocusManager()->OnKeyEvent(pressed_tab);
-  }
-
-  void ExpectHistogramArtworkRecorded(bool present, int count) {
-    histogram_tester_.ExpectBucketCount(
-        MediaNotificationViewModernImpl::kArtworkHistogramName,
-        static_cast<base::HistogramBase::Sample>(present), count);
-  }
-
-  void ExpectHistogramMetadataRecorded(
-      MediaNotificationViewModernImpl::Metadata metadata,
-      int count) {
-    histogram_tester_.ExpectBucketCount(
-        MediaNotificationViewModernImpl::kMetadataHistogramName,
-        static_cast<base::HistogramBase::Sample>(metadata), count);
   }
 
  private:
@@ -470,13 +455,6 @@ TEST_F(MediaNotificationViewModernImplTest, MetadataIsDisplayed) {
 TEST_F(MediaNotificationViewModernImplTest, UpdateMetadata_FromObserver) {
   EnableAllActions();
 
-  ExpectHistogramMetadataRecorded(
-      MediaNotificationViewModernImpl::Metadata::kTitle, 1);
-  ExpectHistogramMetadataRecorded(
-      MediaNotificationViewModernImpl::Metadata::kSource, 1);
-  ExpectHistogramMetadataRecorded(
-      MediaNotificationViewModernImpl::Metadata::kCount, 1);
-
   media_session::MediaMetadata metadata;
   metadata.title = u"title2";
   metadata.source_title = u"source title2";
@@ -494,13 +472,6 @@ TEST_F(MediaNotificationViewModernImplTest, UpdateMetadata_FromObserver) {
   EXPECT_EQ(metadata.source_title, subtitle_label()->GetText());
 
   EXPECT_EQ(u"title2 - artist2 - album", accessible_name());
-
-  ExpectHistogramMetadataRecorded(
-      MediaNotificationViewModernImpl::Metadata::kTitle, 2);
-  ExpectHistogramMetadataRecorded(
-      MediaNotificationViewModernImpl::Metadata::kSource, 2);
-  ExpectHistogramMetadataRecorded(
-      MediaNotificationViewModernImpl::Metadata::kCount, 2);
 }
 
 TEST_F(MediaNotificationViewModernImplTest, ActionButtonsHiddenByDefault) {
@@ -537,8 +508,6 @@ TEST_F(MediaNotificationViewModernImplTest, UpdateArtworkFromItem) {
 
   view()->UpdateWithMediaArtwork(gfx::ImageSkia::CreateFrom1xBitmap(image));
 
-  ExpectHistogramArtworkRecorded(true, 1);
-
   // The size of the labels container should not change when there is artwork.
   EXPECT_EQ(labels_container_width, title_label()->parent()->width());
 
@@ -554,8 +523,6 @@ TEST_F(MediaNotificationViewModernImplTest, UpdateArtworkFromItem) {
 
   view()->UpdateWithMediaArtwork(
       gfx::ImageSkia::CreateFrom1xBitmap(SkBitmap()));
-
-  ExpectHistogramArtworkRecorded(false, 1);
 
   // Ensure the labels container goes back to the original width now that we
   // do not have any artwork.
@@ -588,7 +555,7 @@ class MediaNotificationViewModernImplCastTest
     : public MediaNotificationViewModernImplTest {
  public:
   void SetUp() override {
-    EXPECT_CALL(item(), SourceType())
+    EXPECT_CALL(item(), GetSourceType())
         .WillRepeatedly(Return(media_message_center::SourceType::kCast));
     MediaNotificationViewModernImplTest::SetUp();
   }

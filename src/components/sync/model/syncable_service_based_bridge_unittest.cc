@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "components/sync/base/client_tag_hash.h"
@@ -18,12 +19,11 @@
 #include "components/sync/model/conflict_resolution.h"
 #include "components/sync/model/model_error.h"
 #include "components/sync/model/sync_change.h"
-#include "components/sync/model/sync_error_factory.h"
 #include "components/sync/model/syncable_service.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
-#include "components/sync/test/engine/mock_model_type_worker.h"
-#include "components/sync/test/model/mock_model_type_change_processor.h"
-#include "components/sync/test/model/model_type_store_test_util.h"
+#include "components/sync/test/mock_model_type_change_processor.h"
+#include "components/sync/test/mock_model_type_worker.h"
+#include "components/sync/test/model_type_store_test_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -40,6 +40,8 @@ using testing::Pair;
 using testing::Return;
 
 const ModelType kModelType = PREFERENCES;
+const base::StringPiece kSyncableServiceStartTimeHistogramName =
+    "Sync.SyncableServiceStartTime.PREFERENCE";
 
 sync_pb::EntitySpecifics GetTestSpecifics(const std::string& name = "name") {
   sync_pb::EntitySpecifics specifics;
@@ -54,7 +56,7 @@ MATCHER_P(SyncDataMatches, name, "") {
 }
 
 MATCHER_P2(SyncChangeMatches, change_type, name, "") {
-  return arg.IsValid() && change_type == arg.change_type() &&
+  return arg.change_type() == change_type &&
          arg.sync_data().GetDataType() == kModelType &&
          arg.sync_data().GetSpecifics().preference().name() == name;
 }
@@ -70,8 +72,7 @@ class MockSyncableService : public SyncableService {
               MergeDataAndStartSyncing,
               (ModelType type,
                const SyncDataList& initial_sync_data,
-               std::unique_ptr<SyncChangeProcessor> sync_processor,
-               std::unique_ptr<SyncErrorFactory> sync_error_factory),
+               std::unique_ptr<SyncChangeProcessor> sync_processor),
               (override));
   MOCK_METHOD(void, StopSyncing, (ModelType type), (override));
   MOCK_METHOD(absl::optional<ModelError>,
@@ -98,8 +99,7 @@ class SyncableServiceBasedBridgeTest : public ::testing::Test {
     ON_CALL(syncable_service_, MergeDataAndStartSyncing)
         .WillByDefault(
             [&](ModelType type, const SyncDataList& initial_sync_data,
-                std::unique_ptr<SyncChangeProcessor> sync_processor,
-                std::unique_ptr<SyncErrorFactory> sync_error_factory) {
+                std::unique_ptr<SyncChangeProcessor> sync_processor) {
               start_syncing_sync_processor_ = std::move(sync_processor);
               return absl::nullopt;
             });
@@ -129,7 +129,8 @@ class SyncableServiceBasedBridgeTest : public ::testing::Test {
     syncer::DataTypeActivationRequest request;
     request.error_handler = mock_error_handler_.Get();
     request.cache_guid = "TestCacheGuid";
-    request.authenticated_account_id = CoreAccountId("SomeAccountId");
+    request.authenticated_account_id =
+        CoreAccountId::FromGaiaId("SomeAccountId");
     return request;
   }
 
@@ -144,6 +145,11 @@ class SyncableServiceBasedBridgeTest : public ::testing::Test {
               loop.Quit();
             }));
     loop.Run();
+
+    // ClientTagBasedModelTypeProcessor requires connecting before other
+    // interactions with the worker happen.
+    DCHECK(worker_);
+    real_processor_->ConnectSync(worker_->MakeForwardingCommitQueue());
   }
 
   std::map<std::string, std::unique_ptr<EntityData>> GetAllData() {
@@ -194,9 +200,8 @@ TEST_F(SyncableServiceBasedBridgeTest,
 
   // Once the initial data is fetched from the server,
   // MergeDataAndStartSyncing() should be exercised.
-  EXPECT_CALL(
-      syncable_service_,
-      MergeDataAndStartSyncing(kModelType, IsEmpty(), NotNull(), NotNull()));
+  EXPECT_CALL(syncable_service_,
+              MergeDataAndStartSyncing(kModelType, IsEmpty(), NotNull()));
   worker_->UpdateFromServer();
   EXPECT_THAT(GetAllData(), IsEmpty());
 }
@@ -208,10 +213,10 @@ TEST_F(SyncableServiceBasedBridgeTest,
 
   // Once the initial data is fetched from the server,
   // MergeDataAndStartSyncing() should be exercised.
-  EXPECT_CALL(syncable_service_,
-              MergeDataAndStartSyncing(kModelType,
-                                       ElementsAre(SyncDataMatches("name1")),
-                                       NotNull(), NotNull()));
+  EXPECT_CALL(
+      syncable_service_,
+      MergeDataAndStartSyncing(
+          kModelType, ElementsAre(SyncDataMatches("name1")), NotNull()));
   worker_->UpdateFromServer(kClientTagHash, GetTestSpecifics("name1"));
   EXPECT_THAT(GetAllData(), ElementsAre(Pair(kClientTagHash.value(), _)));
 }
@@ -337,10 +342,10 @@ TEST_F(SyncableServiceBasedBridgeTest,
   ShutdownBridge();
   InitializeBridge();
 
-  EXPECT_CALL(syncable_service_,
-              MergeDataAndStartSyncing(kModelType,
-                                       ElementsAre(SyncDataMatches("name1")),
-                                       NotNull(), NotNull()));
+  EXPECT_CALL(
+      syncable_service_,
+      MergeDataAndStartSyncing(
+          kModelType, ElementsAre(SyncDataMatches("name1")), NotNull()));
   StartSyncing();
 }
 
@@ -353,9 +358,8 @@ TEST_F(SyncableServiceBasedBridgeTest, ShouldSupportDisableReenableSequence) {
 
   EXPECT_CALL(syncable_service_, MergeDataAndStartSyncing).Times(0);
   StartSyncing();
-  EXPECT_CALL(
-      syncable_service_,
-      MergeDataAndStartSyncing(kModelType, IsEmpty(), NotNull(), NotNull()));
+  EXPECT_CALL(syncable_service_,
+              MergeDataAndStartSyncing(kModelType, IsEmpty(), NotNull()));
   worker_->UpdateFromServer();
 }
 
@@ -363,8 +367,7 @@ TEST_F(SyncableServiceBasedBridgeTest,
        ShouldPropagateLocalEntitiesDuringMerge) {
   ON_CALL(syncable_service_, MergeDataAndStartSyncing)
       .WillByDefault([&](ModelType type, const SyncDataList& initial_sync_data,
-                         std::unique_ptr<SyncChangeProcessor> sync_processor,
-                         std::unique_ptr<SyncErrorFactory> sync_error_factory) {
+                         std::unique_ptr<SyncChangeProcessor> sync_processor) {
         SyncChangeList change_list;
         change_list.emplace_back(
             FROM_HERE, SyncChange::ACTION_ADD,
@@ -645,6 +648,87 @@ TEST_F(SyncableServiceBasedBridgeTest,
 
   EXPECT_THAT(bridge_->ResolveConflict("storagekey1", remote_data),
               Eq(ConflictResolution::kUseRemote));
+}
+
+TEST_F(SyncableServiceBasedBridgeTest, ShouldMeasureSyncableServiceStartTime) {
+  // The following writes data into store for the next run.
+  InitializeBridge();
+  StartSyncing();
+  worker_->UpdateFromServer(kClientTagHash, GetTestSpecifics("name1"));
+  // Mimic restart.
+  ShutdownBridge();
+
+  base::RunLoop loop;
+  ON_CALL(syncable_service_, WaitUntilReadyToSync)
+      .WillByDefault(Invoke([&](base::OnceClosure done) {
+        std::move(done).Run();
+        loop.Quit();
+      }));
+
+  base::HistogramTester histogram_tester;
+  EXPECT_CALL(syncable_service_, MergeDataAndStartSyncing);
+  // Initial data is loaded from the store.
+  InitializeBridge();
+  loop.Run();
+  histogram_tester.ExpectTotalCount(kSyncableServiceStartTimeHistogramName, 1);
+}
+
+// This also covers the case where the user opts in for sync later.
+TEST_F(SyncableServiceBasedBridgeTest,
+       ShouldNotMeasureSyncableServiceStartTimeIfNoInitialData) {
+  base::HistogramTester histogram_tester;
+  // No initial data.
+  EXPECT_CALL(syncable_service_, MergeDataAndStartSyncing).Times(0);
+  InitializeBridge();
+  StartSyncing();
+  histogram_tester.ExpectTotalCount(kSyncableServiceStartTimeHistogramName, 0);
+
+  EXPECT_CALL(syncable_service_, MergeDataAndStartSyncing);
+  // Initial merge happens on response from server.
+  worker_->UpdateFromServer(kClientTagHash, GetTestSpecifics("name1"));
+  histogram_tester.ExpectTotalCount(kSyncableServiceStartTimeHistogramName, 0);
+}
+
+TEST_F(SyncableServiceBasedBridgeTest,
+       ShouldNotMeasureSyncableServiceStartTimeOnSyncRestart) {
+  // The following writes data into store for the next run.
+  InitializeBridge();
+  StartSyncing();
+  worker_->UpdateFromServer(kClientTagHash, GetTestSpecifics("name1"));
+  // Mimic restart, which shouldn't start syncing until OnSyncStarting() is
+  // received (exercised in StartSyncing()).
+  ShutdownBridge();
+
+  EXPECT_CALL(syncable_service_, MergeDataAndStartSyncing);
+  // Initial data is loaded from the store.
+  InitializeBridge();
+  StartSyncing();
+
+  base::HistogramTester histogram_tester;
+  // Mimic sync restart.
+  real_processor_->OnSyncStopping(CLEAR_METADATA);
+  StartSyncing();
+
+  EXPECT_CALL(syncable_service_, MergeDataAndStartSyncing);
+  worker_->UpdateFromServer(kClientTagHash, GetTestSpecifics("name1"));
+  // This case shouldn't be logged into the metric.
+  histogram_tester.ExpectTotalCount(kSyncableServiceStartTimeHistogramName, 0);
+}
+
+TEST_F(SyncableServiceBasedBridgeTest,
+       ShouldNotMeasureSyncableServiceStartTimeOnError) {
+  base::HistogramTester histogram_tester;
+  InitializeBridge();
+  StartSyncing();
+  histogram_tester.ExpectTotalCount(kSyncableServiceStartTimeHistogramName, 0);
+
+  // Instrument MergeDataAndStartSyncing() to return an error.
+  EXPECT_CALL(syncable_service_, MergeDataAndStartSyncing)
+      .WillOnce(Return(ModelError(FROM_HERE, "Test error")));
+  EXPECT_CALL(mock_error_handler_, Run);
+
+  worker_->UpdateFromServer(kClientTagHash, GetTestSpecifics("name1"));
+  histogram_tester.ExpectTotalCount(kSyncableServiceStartTimeHistogramName, 0);
 }
 
 }  // namespace

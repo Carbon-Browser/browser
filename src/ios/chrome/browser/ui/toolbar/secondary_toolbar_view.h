@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,17 @@
 // View for the secondary part of the adaptive toolbar. It is the part
 // containing the controls displayed only on specific size classes.
 @interface SecondaryToolbarView : UIView<AdaptiveToolbarView>
+
+// StackView containing the navigation buttons from `ToolbarButtons`.
+@property(nonatomic, strong, readonly) UIStackView* buttonStackView;
+// Separator below the location bar. Used when collapsed above the keyboard.
+@property(nonatomic, strong, readonly) UIView* bottomSeparator;
+
+// Constraint for the top of the location bar.
+@property(nonatomic, strong) NSLayoutConstraint* locationBarTopConstraint;
+// Constraint for the bottom of the location bar. Used to move the location bar
+// above the keyboard.
+@property(nonatomic, strong) NSLayoutConstraint* locationBarKeyboardConstraint;
 
 // Initialize this View with the button `factory`.
 - (instancetype)initWithButtonFactory:(ToolbarButtonFactory*)factory

@@ -1,10 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/win/conflicts/inspection_results_cache.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -13,6 +12,7 @@
 #include "base/files/important_file_writer.h"
 #include "base/hash/md5.h"
 #include "base/pickle.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 
@@ -169,8 +169,7 @@ ReadCacheResult DeserializeInspectionResultsCache(
   base::MD5Digest md5_digest;
   base::MD5Sum(pickle.payload(), pickle.payload_size() - sizeof(md5_digest),
                &md5_digest);
-  if (!std::equal(std::begin(read_md5_digest->a), std::end(read_md5_digest->a),
-                  std::begin(md5_digest.a), std::end(md5_digest.a)))
+  if (!base::ranges::equal(read_md5_digest->a, md5_digest.a))
     return ReadCacheResult::kFailInvalidMD5;
 
   return ReadCacheResult::kSuccess;
@@ -209,9 +208,6 @@ ReadCacheResult ReadInspectionResultsCache(
     const base::FilePath& file_path,
     uint32_t min_time_stamp,
     InspectionResultsCache* inspection_results_cache) {
-  if (!base::FeatureList::IsEnabled(kInspectionResultsCache))
-    return ReadCacheResult::kSuccess;
-
   std::string contents;
   if (!ReadFileToString(file_path, &contents))
     return ReadCacheResult::kFailReadFile;
@@ -231,15 +227,11 @@ ReadCacheResult ReadInspectionResultsCache(
 bool WriteInspectionResultsCache(
     const base::FilePath& file_path,
     const InspectionResultsCache& inspection_results_cache) {
-  if (!base::FeatureList::IsEnabled(kInspectionResultsCache))
-    return true;
-
   base::Pickle pickle =
       SerializeInspectionResultsCache(inspection_results_cache);
 
   // TODO(1022041): Investigate if using WriteFileAtomically() in a
   // CONTINUE_ON_SHUTDOWN sequence can cause too many corrupted caches.
   return base::ImportantFileWriter::WriteFileAtomically(
-      file_path, base::StringPiece(static_cast<const char*>(pickle.data()),
-                                   pickle.size()));
+      file_path, base::StringPiece(pickle.data_as_char(), pickle.size()));
 }

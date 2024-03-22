@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,10 @@
 // broadcaster.
 @property(nonatomic, strong) ChromeBroadcaster* broadcaster;
 // The broadcasted UI state observed by this object.
-@property(nonatomic, readonly) CGFloat collapsedHeight;
-@property(nonatomic, readonly) CGFloat expandedHeight;
-@property(nonatomic, readonly) CGFloat bottomToolbarHeight;
+@property(nonatomic, readonly) CGFloat collapsedTopToolbarHeight;
+@property(nonatomic, readonly) CGFloat expandedTopToolbarHeight;
+@property(nonatomic, readonly) CGFloat expandedBottomToolbarHeight;
+@property(nonatomic, readonly) CGFloat collapsedBottomToolbarHeight;
 
 @end
 #endif  // IOS_CHROME_BROWSER_UI_TOOLBAR_TEST_TEST_TOOLBAR_UI_OBSERVER_H_

@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@ namespace cmds {
 #define GPU_DAWN_RETURN_DATA_ALIGNMENT (8)
 struct alignas(GPU_DAWN_RETURN_DATA_ALIGNMENT) DawnReturnDataHeader {
   DawnReturnDataType return_data_type;
+  uint64_t trace_id;
 };
 
 static_assert(

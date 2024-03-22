@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/test/values_test_util.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_with_install.h"
+#include "chrome/browser/profiles/profile.h"
 #include "components/value_store/value_store_factory_impl.h"
 #include "extensions/browser/api/storage/storage_api.h"
 #include "extensions/browser/api/storage/storage_frontend.h"
@@ -49,7 +50,7 @@ class SessionStorageApiUnittest : public ExtensionServiceTestWithInstall {
 
   // Returns the session storage of the given extension with the associated
   // profile.
-  std::unique_ptr<base::Value> GetStorage(
+  absl::optional<base::Value> GetStorage(
       scoped_refptr<const Extension> extension);
 
   // ExtensionServiceTestBase:
@@ -71,7 +72,7 @@ void SessionStorageApiUnittest::RunFunction(
       profile()));
 }
 
-std::unique_ptr<base::Value> SessionStorageApiUnittest::GetStorage(
+absl::optional<base::Value> SessionStorageApiUnittest::GetStorage(
     scoped_refptr<const Extension> extension) {
   scoped_refptr<ExtensionFunction> function =
       base::MakeRefCounted<StorageStorageAreaGetFunction>();

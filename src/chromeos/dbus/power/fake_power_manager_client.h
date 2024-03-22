@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/tick_clock.h"
@@ -58,11 +59,17 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   int num_wake_notification_calls() const {
     return num_wake_notification_calls_;
   }
+  int num_increase_keyboard_brightness_calls() const {
+    return num_increase_keyboard_brightness_calls_;
+  }
   int num_pending_suspend_readiness_callbacks() const {
     return num_pending_suspend_readiness_callbacks_;
   }
   double screen_brightness_percent() const {
     return screen_brightness_percent_.value();
+  }
+  double keyboard_brightness_percent() const {
+    return keyboard_brightness_percent_.value();
   }
   bool is_projecting() const { return is_projecting_; }
   bool have_video_activity_report() const {
@@ -81,10 +88,6 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   }
   void set_user_activity_callback(base::RepeatingClosure callback) {
     user_activity_callback_ = std::move(callback);
-  }
-  void set_peripheral_battery_refresh_level(const std::string& address,
-                                            int level) {
-    peripheral_battery_refresh_levels_[address] = level;
   }
   void set_restart_callback(base::OnceClosure callback) {
     restart_callback_ = std::move(callback);
@@ -105,9 +108,9 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   void IncreaseKeyboardBrightness() override;
   void GetKeyboardBrightnessPercent(
       DBusMethodCallback<double> callback) override;
-  void SetKeyboardBacklightToggledOff(bool toggled_off) override;
-  void GetKeyboardBacklightToggledOff(
-      DBusMethodCallback<bool> callback) override;
+  void SetKeyboardBrightness(
+      const power_manager::SetBacklightBrightnessRequest& request) override;
+  void ToggleKeyboardBacklight() override;
   const absl::optional<power_manager::PowerSupplyProperties>& GetLastStatus()
       override;
   void RequestStatusUpdate() override;
@@ -126,6 +129,11 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   void SetPowerSource(const std::string& id) override;
   void SetBacklightsForcedOff(bool forced_off) override;
   void GetBacklightsForcedOff(DBusMethodCallback<bool> callback) override;
+  void GetBatterySaverModeState(
+      DBusMethodCallback<power_manager::BatterySaverModeState> callback)
+      override;
+  void SetBatterySaverModeState(
+      const power_manager::SetBatterySaverModeStateRequest& request) override;
   void GetSwitchStates(DBusMethodCallback<SwitchStates> callback) override;
   void GetInactivityDelays(
       DBusMethodCallback<power_manager::PowerManagementPolicy::Delays> callback)
@@ -133,7 +141,6 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   void BlockSuspend(const base::UnguessableToken& token,
                     const std::string& debug_info) override;
   void UnblockSuspend(const base::UnguessableToken& token) override;
-  bool SupportsAmbientColor() override;
   void CreateArcTimers(
       const std::string& tag,
       std::vector<std::pair<clockid_t, base::ScopedFD>> arc_timer_requests,
@@ -144,15 +151,23 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   void DeleteArcTimers(const std::string& tag,
                        VoidDBusMethodCallback callback) override;
   base::TimeDelta GetDarkSuspendDelayTimeout() override;
-  void RefreshBluetoothBattery(const std::string& address) override;
   void SetExternalDisplayALSBrightness(bool enabled) override;
   void GetExternalDisplayALSBrightness(
       DBusMethodCallback<bool> callback) override;
   void ChargeNowForAdaptiveCharging() override;
+  void GetChargeHistoryForAdaptiveCharging(
+      DBusMethodCallback<power_manager::ChargeHistoryState> callback) override;
+
+  // Sets availability. If `availability` is present, notifies observers.
+  void SetServiceAvailability(absl::optional<bool> availability);
 
   // Pops the first report from |video_activity_reports_|, returning whether the
   // activity was fullscreen or not. There must be at least one report.
   bool PopVideoActivityReport();
+
+  // Emulates the power manager announcing that battery saver mode has changed.
+  void SendBatterySaverModeStateChanged(
+      const power_manager::BatterySaverModeState& proto);
 
   // Emulates the power manager announcing that the system is starting or
   // completing a suspend attempt.
@@ -184,7 +199,7 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
 
   // Updates |props_| and notifies observers of its changes.
   void UpdatePowerProperties(
-      const power_manager::PowerSupplyProperties& power_props);
+      absl::optional<power_manager::PowerSupplyProperties> power_props);
 
   // The PowerAPI requests system wake lock asynchronously. Test can run a
   // RunLoop and set the quit closure by this function to make sure the wake
@@ -196,6 +211,10 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   // Returns whether the screen brightness change was applied - this will
   // return false if there are no pending brightness changes.
   bool ApplyPendingScreenBrightnessChange();
+
+  // Set |charge_history_|
+  void SetChargeHistoryForAdaptiveCharging(
+      const power_manager::ChargeHistoryState& charge_history);
 
   // Returns time ticks from boot including time ticks spent during sleeping.
   base::TimeTicks GetCurrentBootTime();
@@ -209,10 +228,6 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
 
   void set_keyboard_brightness_percent(const absl::optional<double>& percent) {
     keyboard_brightness_percent_ = percent;
-  }
-
-  void set_supports_ambient_color(bool supports_ambient_color) {
-    supports_ambient_color_ = supports_ambient_color;
   }
 
   // Sets |tick_clock| to |tick_clock_|.
@@ -233,6 +248,8 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
 
   base::ObserverList<Observer>::Unchecked observers_;
 
+  absl::optional<bool> service_availability_ = true;
+
   // Last policy passed to SetPolicy().
   power_manager::PowerManagementPolicy policy_;
 
@@ -246,6 +263,7 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   int num_set_is_projecting_calls_ = 0;
   int num_set_backlights_forced_off_calls_ = 0;
   int num_wake_notification_calls_ = 0;
+  int num_increase_keyboard_brightness_calls_ = 0;
 
   // Number of pending suspend readiness callbacks.
   int num_pending_suspend_readiness_callbacks_ = 0;
@@ -270,6 +288,9 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   // SetBacklightsForcedOff().
   bool backlights_forced_off_ = false;
 
+  // Last battery saver mode state set in SetBatterySaverModeState().
+  bool battery_saver_mode_enabled_ = false;
+
   // Whether screen brightness changes in SetBacklightsForcedOff() should be
   // enqueued.
   // If not set, SetBacklightsForcedOff() will update current screen
@@ -279,10 +300,6 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   // |pending_screen_brightness_changes_|, and will have to be applied
   // explicitly by calling ApplyPendingScreenBrightnessChange().
   bool enqueue_brightness_changes_on_backlights_forced_off_ = false;
-
-  // Whether the device has an ambient color sensor. Can be set via
-  // SetSupportsAmbientColor().
-  bool supports_ambient_color_ = false;
 
   // Pending screen brightness changes caused by SetBacklightsForcedOff().
   // ApplyPendingScreenBrightnessChange() applies the first pending change.
@@ -326,15 +343,15 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
   base::RepeatingClosure user_activity_callback_;
 
   // Clock to use to calculate time ticks. Used for ArcTimer related APIs.
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock, ExperimentalAsh> tick_clock_;
 
   // If set then |StartArcTimer| returns failure.
   bool simulate_start_arc_timer_failure_ = false;
 
-  // Used in RefreshBluetoothBattery.
-  base::flat_map<std::string, int> peripheral_battery_refresh_levels_;
-
   bool external_display_als_brightness_enabled_ = false;
+
+  // Charge history returned by GetChargeHistoryForAdaptiveCharging()
+  power_manager::ChargeHistoryState charge_history_;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
@@ -342,10 +359,5 @@ class COMPONENT_EXPORT(DBUS_POWER) FakePowerManagerClient
 };
 
 }  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-using ::chromeos::FakePowerManagerClient;
-}
 
 #endif  // CHROMEOS_DBUS_POWER_FAKE_POWER_MANAGER_CLIENT_H_

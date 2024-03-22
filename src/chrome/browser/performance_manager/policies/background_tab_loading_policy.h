@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,10 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
                                    public PageNode::ObserverDefaultImpl,
                                    public SystemNode::ObserverDefaultImpl {
  public:
-  BackgroundTabLoadingPolicy();
+  // `all_restored_tabs_loaded_callback` is invoked when all tabs passed to
+  // ScheduleLoadForRestoredTabs() are loaded.
+  explicit BackgroundTabLoadingPolicy(
+      base::RepeatingClosure all_restored_tabs_loaded_callback);
   ~BackgroundTabLoadingPolicy() override;
   BackgroundTabLoadingPolicy(const BackgroundTabLoadingPolicy& other) = delete;
   BackgroundTabLoadingPolicy& operator=(const BackgroundTabLoadingPolicy&) =
@@ -85,7 +88,8 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
   // Holds a handful of data about a tab which is used to prioritize it during
   // session restore.
   struct PageNodeToLoadData {
-    explicit PageNodeToLoadData(PageNode* page_node);
+    explicit PageNodeToLoadData(PageNode* page_node,
+                                bool has_notification_permission);
     PageNodeToLoadData(const PageNodeToLoadData&) = delete;
     ~PageNodeToLoadData();
     PageNodeToLoadData& operator=(const PageNodeToLoadData&) = delete;
@@ -94,20 +98,24 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
     raw_ptr<const PageNode> page_node;
 
     // A higher value here means the tab has higher priority for restoring.
-    float score = 0.0f;
+    absl::optional<float> score;
 
-    // Indicates whether or not the tab communicates with the user even when it
-    // is in the background (tab title changes, favicons, etc).
-    // It is initialized to nullopt and set asynchronously to the proper value.
-    absl::optional<bool> used_in_bg;
+    // Whether the tab has the notification permission.
+    const bool has_notification_permission;
+
+    // Whether the tab updates its title or favicon when backgrounded.
+    // Initialized to nullopt and set asynchronously with the proper value from
+    // the sites database.
+    absl::optional<bool> updates_title_or_favicon_in_bg;
   };
 
   // Comparator used to sort PageNodeToLoadData.
   struct ScoredTabComparator;
 
   // NodeDataDescriber implementation:
-  base::Value DescribePageNodeData(const PageNode* node) const override;
-  base::Value DescribeSystemNodeData(const SystemNode* node) const override;
+  base::Value::Dict DescribePageNodeData(const PageNode* node) const override;
+  base::Value::Dict DescribeSystemNodeData(
+      const SystemNode* node) const override;
 
   // SystemNodeObserver:
   void OnMemoryPressure(
@@ -167,9 +175,31 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
   // Compute the amount of free memory on the system.
   size_t GetFreePhysicalMemoryMib() const;
 
-  // Helper function for a vector of PageNodeToLoadData.
-  void ErasePageNodeToLoadData(const PageNode* page_node);
+  // If `page_node` is in the set of page nodes to load, removes it and returns
+  // true.
+  bool ErasePageNodeToLoadData(const PageNode* page_node);
+
+  // Returns the `PageNodeToLoadData` for `page_node` if it exists, nullptr
+  // otherwise.
   PageNodeToLoadData* FindPageNodeToLoadData(const PageNode* page_node);
+
+  // Returns true if there are restored tabs that must be loaded by this policy
+  // and aren't fully loaded yet.
+  bool HasRestoredTabsToLoad() const;
+
+  // Updates `has_restored_tabs_to_load_` to match `HasRestoredTabsToLoad()` and
+  // invokes `all_restored_tabs_loaded_callback_` if needed.
+  void UpdateHasRestoredTabsToLoad();
+
+  // The callback to invoke when all restored tabs are loaded.
+  const base::RepeatingClosure all_restored_tabs_loaded_callback_;
+
+  // Whether there are restored tabs that that must be loaded by this policy and
+  // aren't fully loaded yet.
+  //
+  // Set to true when ScheduleLoadForRestoredTabs() is invoked. Set to false
+  // when HasRestoredTabsToLoad() becomes false.
+  bool has_restored_tabs_to_load_ = false;
 
   // The mechanism used to load the pages.
   std::unique_ptr<performance_manager::mechanism::PageLoader> page_loader_;
@@ -183,8 +213,9 @@ class BackgroundTabLoadingPolicy : public GraphOwned,
   // will be received from |OnIsLoadingChanged|.
   std::vector<const PageNode*> page_nodes_load_initiated_;
 
-  // The set of PageNodes that are currently loading.
-  std::vector<const PageNode*> page_nodes_loading_;
+  // PageNodes that are currently loading, mapped to a boolean indicating
+  // whether this policy was responsible for scheduling the load.
+  std::map<const PageNode*, bool> page_nodes_loading_;
 
   // The number of simultaneous tab loads that are permitted by policy. This
   // is computed based on the number of cores on the machine.

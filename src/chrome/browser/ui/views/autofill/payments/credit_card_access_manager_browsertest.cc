@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,11 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/content/browser/content_autofill_driver_factory.h"
+#include "components/autofill/content/browser/test_autofill_manager_injector.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/browser_autofill_manager.h"
 #include "components/autofill/core/browser/payments/credit_card_access_manager.h"
+#include "components/autofill/core/browser/test_autofill_manager_waiter.h"
 #include "components/autofill/core/browser/test_browser_autofill_manager.h"
 #include "content/public/test/browser_test.h"
 
@@ -24,6 +27,21 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
   ~CreditCardAccessManagerBrowserTest() override = default;
 
  protected:
+  class TestAutofillManager : public BrowserAutofillManager {
+   public:
+    TestAutofillManager(ContentAutofillDriver* driver, AutofillClient* client)
+        : BrowserAutofillManager(driver, client, "en-US") {}
+
+    testing::AssertionResult WaitForFormsSeen(int min_num_awaited_calls) {
+      return forms_seen_waiter_.Wait(min_num_awaited_calls);
+    }
+
+   private:
+    TestAutofillManagerWaiter forms_seen_waiter_{
+        *this,
+        {AutofillManagerEvent::kFormsSeen}};
+  };
+
   void SetUpOnMainThread() override {
     ASSERT_TRUE(embedded_test_server()->InitializeAndListen());
     embedded_test_server()->ServeFilesFromSourceDirectory(
@@ -35,13 +53,26 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
     WaitForPersonalDataManagerToBeLoaded(browser()->profile());
   }
 
-  CreditCardAccessManager* GetCreditCardAccessManager() {
-    content::WebContents* web_contents =
-        browser()->tab_strip_model()->GetActiveWebContents();
+  TestAutofillManager* GetAutofillManager() {
+    return autofill_manager_injector_[web_contents()];
+  }
+
+  content::WebContents* web_contents() {
+    return browser()->tab_strip_model()->GetActiveWebContents();
+  }
+
+  void NavigateToAndWaitForForm(const GURL& url) {
+    ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+    ASSERT_TRUE(GetAutofillManager()->WaitForFormsSeen(1));
+  }
+
+  CreditCardAccessManager& GetCreditCardAccessManager() {
     ContentAutofillDriver* autofill_driver =
-        ContentAutofillDriverFactory::FromWebContents(web_contents)
-            ->DriverForFrame(web_contents->GetPrimaryMainFrame());
-    return autofill_driver->autofill_manager()->GetCreditCardAccessManager();
+        ContentAutofillDriverFactory::FromWebContents(web_contents())
+            ->DriverForFrame(web_contents()->GetPrimaryMainFrame());
+    return static_cast<BrowserAutofillManager&>(
+               autofill_driver->GetAutofillManager())
+        .GetCreditCardAccessManager();
   }
 
   CreditCard SaveServerCard(std::string card_number) {
@@ -50,11 +81,15 @@ class CreditCardAccessManagerBrowserTest : public InProcessBrowserTest {
                             "12", test::NextYear().c_str(), "1");
     server_card.set_guid("00000000-0000-0000-0000-" +
                          card_number.substr(0, 12));
-    server_card.set_record_type(CreditCard::FULL_SERVER_CARD);
+    server_card.set_record_type(CreditCard::RecordType::kFullServerCard);
     server_card.set_server_id("full_id_" + card_number);
     AddTestServerCreditCard(browser()->profile(), server_card);
     return server_card;
   }
+
+ private:
+  test::AutofillBrowserTestEnvironment autofill_test_environment_;
+  TestAutofillManagerInjector<TestAutofillManager> autofill_manager_injector_;
 };
 
 IN_PROC_BROWSER_TEST_F(CreditCardAccessManagerBrowserTest,
@@ -63,15 +98,14 @@ IN_PROC_BROWSER_TEST_F(CreditCardAccessManagerBrowserTest,
 
   // CreditCardAccessManager is completely recreated on page navigation, so to
   // ensure we're not using stale pointers, always re-fetch it on use.
-  EXPECT_TRUE(GetCreditCardAccessManager()->UnmaskedCardCacheIsEmpty());
-  GetCreditCardAccessManager()->CacheUnmaskedCardInfo(card, u"123");
-  EXPECT_FALSE(GetCreditCardAccessManager()->UnmaskedCardCacheIsEmpty());
+  EXPECT_TRUE(GetCreditCardAccessManager().UnmaskedCardCacheIsEmpty());
+  GetCreditCardAccessManager().CacheUnmaskedCardInfo(card, u"123");
+  EXPECT_FALSE(GetCreditCardAccessManager().UnmaskedCardCacheIsEmpty());
 
   // Cache should reset upon navigation.
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser(),
-      embedded_test_server()->GetURL("/credit_card_upload_form_cc.html")));
-  EXPECT_TRUE(GetCreditCardAccessManager()->UnmaskedCardCacheIsEmpty());
+  NavigateToAndWaitForForm(
+      embedded_test_server()->GetURL("/credit_card_upload_form_cc.html"));
+  EXPECT_TRUE(GetCreditCardAccessManager().UnmaskedCardCacheIsEmpty());
 }
 
 }  // namespace autofill

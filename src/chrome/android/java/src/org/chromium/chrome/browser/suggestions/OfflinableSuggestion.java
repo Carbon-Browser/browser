@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import androidx.annotation.Nullable;
 
 import org.chromium.url.GURL;
 
-/**
- * Exposes the data of a suggestion that can be saved offline.
- */
+/** Exposes the data of a suggestion that can be saved offline. */
 public interface OfflinableSuggestion {
     /** @return The URL of this suggestion. */
     GURL getUrl();

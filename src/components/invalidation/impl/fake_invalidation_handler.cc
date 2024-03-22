@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,17 +15,18 @@ InvalidatorState FakeInvalidationHandler::GetInvalidatorState() const {
   return state_;
 }
 
-const TopicInvalidationMap& FakeInvalidationHandler::GetLastInvalidationMap()
-    const {
-  return last_invalidation_map_;
+const std::map<Topic, Invalidation>&
+FakeInvalidationHandler::GetReceivedInvalidations() const {
+  return received_invalidations_;
+}
+
+void FakeInvalidationHandler::ClearReceivedInvalidations() {
+  invalidation_count_ = 0;
+  received_invalidations_.clear();
 }
 
 int FakeInvalidationHandler::GetInvalidationCount() const {
   return invalidation_count_;
-}
-
-const std::string& FakeInvalidationHandler::GetInvalidatorClientId() const {
-  return client_id_;
 }
 
 void FakeInvalidationHandler::OnInvalidatorStateChange(InvalidatorState state) {
@@ -33,8 +34,8 @@ void FakeInvalidationHandler::OnInvalidatorStateChange(InvalidatorState state) {
 }
 
 void FakeInvalidationHandler::OnIncomingInvalidation(
-    const TopicInvalidationMap& invalidation_map) {
-  last_invalidation_map_ = invalidation_map;
+    const Invalidation& invalidation) {
+  received_invalidations_.emplace(invalidation.topic(), invalidation);
   ++invalidation_count_;
 }
 
@@ -44,11 +45,6 @@ std::string FakeInvalidationHandler::GetOwnerName() const {
 
 bool FakeInvalidationHandler::IsPublicTopic(const Topic& topic) const {
   return topic == "PREFERENCE";
-}
-
-void FakeInvalidationHandler::OnInvalidatorClientIdChange(
-    const std::string& client_id) {
-  client_id_ = client_id;
 }
 
 }  // namespace invalidation

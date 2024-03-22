@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,9 @@ class SaveUpdateAddressProfileBubbleController;
 class UpdateAddressProfileView : public AutofillBubbleBase,
                                  public LocationBarBubbleDelegateView {
  public:
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kTopViewId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kEditButtonViewId);
+
   UpdateAddressProfileView(
       views::View* anchor_view,
       content::WebContents* web_contents,

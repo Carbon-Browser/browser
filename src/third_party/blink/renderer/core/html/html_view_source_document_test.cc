@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -514,6 +514,63 @@ TEST_F(HTMLViewSourceDocumentTest, UnfinishedScript) {
       "class=\"html-tag\">&lt;script&gt;</span>foobar in "
       "script</td></tr><tr><td class=\"line-number\" value=\"2\"></td><td "
       "class=\"line-content\">  <span "
+      "class=\"html-end-of-file\"></span></td></tr></tbody></table></body></"
+      "html>");
+}
+
+TEST_F(HTMLViewSourceDocumentTest, Linebreak) {
+  LoadMainResource("<html>\nR\n\rN\n\nNR\n\n\rRN\n\r\n</html>");
+  EXPECT_EQ(
+      GetDocument().documentElement()->outerHTML(),
+      "<html><head><meta name=\"color-scheme\" content=\"light dark\"></head>"
+      "<body><div class=\"line-gutter-backdrop\"></div>"
+      "<form autocomplete=\"off\"><label class=\"line-wrap-control\">"
+      "<input type=\"checkbox\"></label></form>"
+      "<table><tbody>"
+      "<tr><td class=\"line-number\" value=\"1\"></td>"
+      "<td class=\"line-content\">"
+      "<span class=\"html-tag\">&lt;html&gt;</span></td></tr>"
+      "<tr><td class=\"line-number\" value=\"2\"></td>"
+      "<td class=\"line-content\">R</td></tr>"  // \r -> 1 linebreak
+      "<tr><td class=\"line-number\" value=\"3\"></td>"
+      "<td class=\"line-content\"><br></td></tr>"
+      "<tr><td class=\"line-number\" value=\"4\"></td>"
+      "<td class=\"line-content\">N</td></tr>"  // \n -> 1 linebraek
+      "<tr><td class=\"line-number\" value=\"5\"></td>"
+      "<td class=\"line-content\"><br></td></tr><tr>"
+      "<td class=\"line-number\" value=\"6\"></td>"
+      "<td class=\"line-content\">NR</td></tr>"  // \n\r -> 2 linebreaks
+      "<tr><td class=\"line-number\" value=\"7\"></td>"
+      "<td class=\"line-content\"><br></td></tr>"
+      "<tr><td class=\"line-number\" value=\"8\"></td>"
+      "<td class=\"line-content\"><br></td></tr>"
+      "<tr><td class=\"line-number\" value=\"9\"></td>"
+      "<td class=\"line-content\">RN</td></tr>"  // \r\n -> 1 linebreak
+      "<tr><td class=\"line-number\" value=\"10\"></td>"
+      "<td class=\"line-content\"><br></td></tr>"
+      "<tr><td class=\"line-number\" value=\"11\"></td>"
+      "<td class=\"line-content\">"
+      "<span class=\"html-tag\">&lt;/html&gt;</span>"
+      "<span class=\"html-end-of-file\"></span>"
+      "</td></tr></tbody></table></body></html>");
+}
+
+TEST_F(HTMLViewSourceDocumentTest, DOMParts) {
+  LoadMainResource(
+      R"HTML(<div parseparts>{{#}}foo{{/}}<span {{}}>bar</span></div>)HTML");
+  EXPECT_EQ(
+      GetDocument().documentElement()->outerHTML(),
+      "<html><head><meta name=\"color-scheme\" content=\"light "
+      "dark\"></head><body><div class=\"line-gutter-backdrop\"></div><form "
+      "autocomplete=\"off\"><label class=\"line-wrap-control\"><input "
+      "type=\"checkbox\"></label></form><table><tbody><tr><td "
+      "class=\"line-number\" value=\"1\"></td><td class=\"line-content\"><span "
+      "class=\"html-tag\">&lt;div <span "
+      "class=\"html-attribute-name\">parseparts</span>&gt;</span>{{#}}foo{{/"
+      "}}<span class=\"html-tag\">&lt;span <span "
+      "class=\"html-attribute-name\">{{}}</span>&gt;</span>bar<span "
+      "class=\"html-tag\">&lt;/span&gt;</span><span "
+      "class=\"html-tag\">&lt;/div&gt;</span><span "
       "class=\"html-end-of-file\"></span></td></tr></tbody></table></body></"
       "html>");
 }

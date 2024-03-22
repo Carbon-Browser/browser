@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,23 @@
 #include "build/build_config.h"
 #include "third_party/blink/public/resources/grit/blink_resources.h"
 #include "third_party/blink/renderer/platform/data_resource_helper.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
 Vector<char> ChooserResourceLoader::GetSuggestionPickerStyleSheet() {
 #if !BUILDFLAG(IS_ANDROID)
   return UncompressResourceAsBinary(IDR_SUGGESTION_PICKER_CSS);
+#else
+  NOTREACHED();
+  return Vector<char>();
+#endif
+}
+
+Vector<char> ChooserResourceLoader::GetSuggestionPickerDarkModeStyleSheet() {
+  CHECK(RuntimeEnabledFeatures::SuggestionPickerDarkModeSupportEnabled());
+#if !BUILDFLAG(IS_ANDROID)
+  return UncompressResourceAsBinary(IDR_SUGGESTION_PICKER_DARK_CSS);
 #else
   NOTREACHED();
   return Vector<char>();

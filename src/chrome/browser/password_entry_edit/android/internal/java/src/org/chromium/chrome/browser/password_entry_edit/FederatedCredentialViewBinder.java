@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,10 @@ import org.chromium.ui.modelutil.PropertyModel;
  * in {@link FederatedCredentialFragmentView}.
  */
 public class FederatedCredentialViewBinder {
-    static void bindFederatedCredentialView(PropertyModel model,
-            FederatedCredentialFragmentView fragmentView, PropertyKey propertyKey) {
+    static void bindFederatedCredentialView(
+            PropertyModel model,
+            FederatedCredentialFragmentView fragmentView,
+            PropertyKey propertyKey) {
         if (propertyKey == UI_ACTION_HANDLER) {
             fragmentView.setUiActionHandler(model.get(UI_ACTION_HANDLER));
         } else if (propertyKey == URL_OR_APP) {

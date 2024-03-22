@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -172,7 +172,7 @@ ComponentUpdaterPolicyTest::MakeComponentRegistration(
   return component_updater::ComponentRegistration(
       "jebgalgnebhfojomionfpkfelancnnkf", {}, jebg_hash, base::Version("0.9"),
       {}, {}, nullptr, base::MakeRefCounted<MockInstaller>(), true,
-      supports_group_policy_enable_component_updates);
+      supports_group_policy_enable_component_updates, true);
 }
 
 void ComponentUpdaterPolicyTest::UpdateComponent(

@@ -1,10 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/input_method/ui/colors.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 
 namespace ui {
@@ -14,8 +13,7 @@ bool IsDarkModeEnabled() {
   auto* dark_light_mode_controller = ash::DarkLightModeControllerImpl::Get();
   if (!dark_light_mode_controller)
     return false;
-  return (ash::features::IsDarkLightModeEnabled() &&
-          dark_light_mode_controller->IsDarkModeEnabled());
+  return dark_light_mode_controller->IsDarkModeEnabled();
 }
 
 SkColor ResolveSemanticColor(const cros_styles::ColorName& color_name) {

@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Contains utility methods that can be used by python tests on Windows."""
@@ -44,12 +44,23 @@ def shutdown_chrome():
 
 
 def getElementFromShadowRoot(driver, element, selector):
+  """Gets a first matched WebElement from ShadowRoot."""
   if element is None:
     return None
   else:
     return driver.execute_script(
         "return arguments[0].shadowRoot.querySelector(arguments[1])", element,
         selector)
+
+
+def getElementsFromShadowRoot(driver, element, selector):
+  """Gets a list of matched WebElements from ShadowRoot. """
+  if element is None:
+    return None
+  else:
+    return driver.execute_script(
+        "return arguments[0].shadowRoot.querySelectorAll(arguments[1])",
+        element, selector)
 
 
 def create_chrome_webdriver(chrome_options=None, incognito=False, prefs=None):

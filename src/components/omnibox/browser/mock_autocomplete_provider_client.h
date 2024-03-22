@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,19 +11,28 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "components/history/core/browser/top_sites.h"
 #include "components/omnibox/browser/actions/omnibox_pedal_provider.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/autocomplete_scheme_classifier.h"
 #include "components/omnibox/browser/document_suggestions_service.h"
+#include "components/omnibox/browser/keyword_extensions_delegate.h"
 #include "components/omnibox/browser/mock_tab_matcher.h"
 #include "components/omnibox/browser/remote_suggestions_service.h"
+#include "components/omnibox/browser/shortcuts_backend.h"
+#include "components/omnibox/browser/zero_suggest_cache_service.h"
 #include "components/search_engines/template_url_service.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
+class AutocompleteScoringModelService;
+class OnDeviceTailModelService;
+class OmniboxTriggeredFeatureService;
+
 struct AutocompleteMatch;
+struct ProviderStateService;
 
 class MockAutocompleteProviderClient
     : public testing::NiceMock<AutocompleteProviderClient> {
@@ -50,7 +59,8 @@ class MockAutocompleteProviderClient
   }
   scoped_refptr<history::TopSites> GetTopSites() override { return nullptr; }
 
-  MOCK_METHOD0(GetBookmarkModel, bookmarks::BookmarkModel*());
+  MOCK_METHOD0(GetLocalOrSyncableBookmarkModel, bookmarks::BookmarkModel*());
+  MOCK_METHOD0(GetAccountBookmarkModel, bookmarks::BookmarkModel*());
   MOCK_METHOD0(GetInMemoryDatabase, history::URLDatabase*());
   MOCK_METHOD0(GetInMemoryURLIndex, InMemoryURLIndex*());
 
@@ -64,9 +74,11 @@ class MockAutocompleteProviderClient
       bool create_if_necessary) const override {
     return remote_suggestions_service_.get();
   }
-  DocumentSuggestionsService* GetDocumentSuggestionsService(
-      bool create_if_necessary) const override {
-    return document_suggestions_service_.get();
+  ZeroSuggestCacheService* GetZeroSuggestCacheService() override {
+    return zero_suggest_cache_service_.get();
+  }
+  const ZeroSuggestCacheService* GetZeroSuggestCacheService() const override {
+    return zero_suggest_cache_service_.get();
   }
   OmniboxPedalProvider* GetPedalProvider() const override {
     return pedal_provider_.get();
@@ -100,11 +112,26 @@ class MockAutocompleteProviderClient
     return identity_manager_;
   }
 
+  AutocompleteScoringModelService* GetAutocompleteScoringModelService()
+      const override {
+    return nullptr;
+  }
+
+  OnDeviceTailModelService* GetOnDeviceTailModelService() const override {
+    return nullptr;
+  }
+
+  ProviderStateService* GetProviderStateService() const override {
+    return provider_state_service_.get();
+  }
+
   MOCK_CONST_METHOD0(GetAcceptLanguages, std::string());
   MOCK_CONST_METHOD0(GetEmbedderRepresentationOfAboutScheme, std::string());
   MOCK_METHOD0(GetBuiltinURLs, std::vector<std::u16string>());
   MOCK_METHOD0(GetBuiltinsToProvideAsUserTypes, std::vector<std::u16string>());
   MOCK_CONST_METHOD0(IsOffTheRecord, bool());
+  MOCK_CONST_METHOD0(IsIncognitoProfile, bool());
+  MOCK_CONST_METHOD0(IsGuestSession, bool());
   MOCK_CONST_METHOD0(SearchSuggestEnabled, bool());
   MOCK_CONST_METHOD0(IsPersonalizedUrlDataCollectionActive, bool());
   MOCK_CONST_METHOD0(IsAuthenticated, bool());
@@ -150,11 +177,13 @@ class MockAutocompleteProviderClient
   scoped_refptr<network::SharedURLLoaderFactory> shared_factory_;
 
   std::unique_ptr<TemplateURLService> template_url_service_;
-  std::unique_ptr<RemoteSuggestionsService> remote_suggestions_service_;
   std::unique_ptr<DocumentSuggestionsService> document_suggestions_service_;
+  std::unique_ptr<RemoteSuggestionsService> remote_suggestions_service_;
+  std::unique_ptr<ZeroSuggestCacheService> zero_suggest_cache_service_;
   std::unique_ptr<OmniboxPedalProvider> pedal_provider_;
   std::unique_ptr<OmniboxTriggeredFeatureService>
       omnibox_triggered_feature_service_;
+  std::unique_ptr<ProviderStateService> provider_state_service_;
   MockTabMatcher tab_matcher_;
   raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;  // Not owned.
 };

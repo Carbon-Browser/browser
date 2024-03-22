@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,18 +12,17 @@ struct AutocompleteMatch;
 @protocol OmniboxCommands;
 @class OmniboxPedalData;
 
-// A class to add pedal data to a given autocomplete match object
+/// A class to add pedal data to a given autocomplete match object
 @interface OmniboxPedalAnnotator : NSObject
 
-// The endpoint that handles Actions and Pedals commands.
+/// The endpoint that handles Actions and Pedals commands.
 @property(nonatomic, weak) id<ApplicationCommands> pedalsEndpoint;
 
-// The endpoint that handles Omnibox commands.
+/// The endpoint that handles Omnibox commands.
 @property(nonatomic, weak) id<OmniboxCommands> omniboxCommandHandler;
 
-// Creates a new pedal for the provided match.
-- (OmniboxPedalData*)pedalForMatch:(const AutocompleteMatch&)match
-                         incognito:(BOOL)incognito;
+/// Creates a new pedal for the provided match.
+- (OmniboxPedalData*)pedalForMatch:(const AutocompleteMatch&)match;
 
 @end
 

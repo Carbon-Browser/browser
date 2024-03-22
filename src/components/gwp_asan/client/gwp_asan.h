@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stddef.h>  // for size_t
 #include "components/gwp_asan/client/export.h"
+#include "components/gwp_asan/common/lightweight_detector_state.h"
 
 namespace gwp_asan {
 
@@ -32,7 +33,8 @@ GWP_ASAN_EXPORT void EnableForMalloc(bool boost_sampling,
                                      const char* process_type);
 GWP_ASAN_EXPORT void EnableForPartitionAlloc(bool boost_sampling,
                                              const char* process_type);
-
+GWP_ASAN_EXPORT void MaybeEnableLightweightDetector(bool boost_sampling,
+                                                    const char* process_type);
 }  // namespace gwp_asan
 
 #endif  // COMPONENTS_GWP_ASAN_CLIENT_GWP_ASAN_H_

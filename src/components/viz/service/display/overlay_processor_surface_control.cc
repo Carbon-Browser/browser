@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 
 #include <memory>
 
+#include "base/android/build_info.h"
 #include "cc/base/math_util.h"
 #include "components/viz/common/features.h"
 #include "components/viz/service/display/overlay_strategy_underlay.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/android/android_surface_control_compat.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/overlay_transform_utils.h"
@@ -32,9 +34,18 @@ gfx::RectF ClipFromOrigin(gfx::RectF input) {
 
 }  // namespace
 
-OverlayProcessorSurfaceControl::OverlayProcessorSurfaceControl()
-    : OverlayProcessorUsingStrategy(),
-      use_real_color_space_(features::UseRealVideoColorSpaceForDisplay()) {
+OverlayProcessorSurfaceControl::OverlayProcessorSurfaceControl() {
+  // Android webview never sets |frame_sequence_number_| for the overlay
+  // processor. Android Chrome does set this variable because it does call draw.
+  // However, it also may not update this variable when displaying an overlay.
+  // Therefore, our damage tracking for overlays is incorrect and we must ignore
+  // the thresholding of prioritization.
+
+  // TODO(crbug.com/1358093): We should take issue into account when trying to
+  // find a replacement for number-of-scanouts.
+  prioritization_config_.changing_threshold = false;
+  prioritization_config_.damage_rate_threshold = false;
+
   strategies_.push_back(std::make_unique<OverlayStrategyUnderlay>(
       this, OverlayStrategyUnderlay::OpaqueMode::AllowTransparentCandidates));
 }
@@ -55,20 +66,20 @@ void OverlayProcessorSurfaceControl::CheckOverlaySupportImpl(
   DCHECK(!candidates->empty());
 
   for (auto& candidate : *candidates) {
-    // If we're going to use real color space from media codec, we should check
-    // if it's supported.
-    if (use_real_color_space_) {
-      if (!gfx::SurfaceControl::SupportsColorSpace(candidate.color_space)) {
-        candidate.overlay_handled = false;
-        return;
-      }
-    } else {
-      candidate.color_space = gfx::ColorSpace::CreateSRGB();
-      candidate.hdr_metadata.reset();
+    if (auto override_color_space = GetOverrideColorSpace()) {
+      candidate.color_space = override_color_space.value();
+      candidate.hdr_metadata = gfx::HDRMetadata();
+    }
+
+    // Check if the ColorSpace is supported
+    if (!gfx::SurfaceControl::SupportsColorSpace(candidate.color_space)) {
+      candidate.overlay_handled = false;
+      return;
     }
 
     // Check if screen rotation matches.
-    if (candidate.transform != display_transform_) {
+    if (absl::get<gfx::OverlayTransform>(candidate.transform) !=
+        display_transform_) {
       candidate.overlay_handled = false;
       return;
     }
@@ -91,8 +102,8 @@ void OverlayProcessorSurfaceControl::CheckOverlaySupportImpl(
     const gfx::Transform display_inverse = gfx::OverlayTransformToTransform(
         gfx::InvertOverlayTransform(display_transform_),
         gfx::SizeF(viewport_size_));
-    display_inverse.TransformRect(&orig_display_rect);
-    display_inverse.TransformRect(&display_rect);
+    orig_display_rect = display_inverse.MapRect(orig_display_rect);
+    display_rect = display_inverse.MapRect(display_rect);
 
     candidate.unclipped_display_rect = orig_display_rect;
     candidate.unclipped_uv_rect = candidate.uv_rect;
@@ -122,7 +133,7 @@ void OverlayProcessorSurfaceControl::AdjustOutputSurfaceOverlay(
   const gfx::Transform display_inverse = gfx::OverlayTransformToTransform(
       gfx::InvertOverlayTransform(display_transform_),
       gfx::SizeF(viewport_size_));
-  display_inverse.TransformRect(&plane.display_rect);
+  plane.display_rect = display_inverse.MapRect(plane.display_rect);
   plane.display_rect = gfx::RectF(gfx::ToEnclosingRect(plane.display_rect));
 
   // Call the base class implementation.
@@ -144,9 +155,7 @@ gfx::Rect OverlayProcessorSurfaceControl::GetOverlayDamageRectForOutputSurface(
                                                 viewport_size_.width());
   auto transform = gfx::OverlayTransformToTransform(
       display_transform_, gfx::SizeF(viewport_size_pre_display_transform));
-  gfx::RectF transformed_rect(candidate.display_rect);
-  transform.TransformRect(&transformed_rect);
-  return gfx::ToEnclosedRect(transformed_rect);
+  return transform.MapRect(gfx::ToEnclosingRect(candidate.display_rect));
 }
 
 void OverlayProcessorSurfaceControl::SetDisplayTransformHint(
@@ -157,6 +166,21 @@ void OverlayProcessorSurfaceControl::SetDisplayTransformHint(
 void OverlayProcessorSurfaceControl::SetViewportSize(
     const gfx::Size& viewport_size) {
   viewport_size_ = viewport_size;
+}
+
+absl::optional<gfx::ColorSpace>
+OverlayProcessorSurfaceControl::GetOverrideColorSpace() {
+  // Historically, android media was hardcoding color space to srgb and it
+  // wasn't possible to overlay with arbitrary colorspace on pre-S devices, so
+  // we keep old behaviour there.
+  static bool is_older_than_s =
+      base::android::BuildInfo::GetInstance()->sdk_int() <
+      base::android::SdkVersion::SDK_VERSION_S;
+  if (is_older_than_s) {
+    return gfx::ColorSpace::CreateSRGB();
+  }
+
+  return absl::nullopt;
 }
 
 }  // namespace viz

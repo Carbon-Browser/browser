@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,13 +28,14 @@ class TestViewsDelegateWithContext : public ChromeTestViewsDelegate<> {
   void OnBeforeWidgetInit(
       views::Widget::InitParams* params,
       views::internal::NativeWidgetDelegate* delegate) override {
-    if (!params->context)
+    if (!params->context) {
       params->context = context_;
+    }
     ChromeTestViewsDelegate::OnBeforeWidgetInit(params, delegate);
   }
 
  private:
-  gfx::NativeWindow context_ = nullptr;
+  gfx::NativeWindow context_ = gfx::NativeWindow();
 };
 
 }  // namespace

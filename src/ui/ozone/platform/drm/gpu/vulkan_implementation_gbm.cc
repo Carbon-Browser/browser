@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,9 @@
 
 namespace ui {
 
-VulkanImplementationGbm::VulkanImplementationGbm() {}
+VulkanImplementationGbm::VulkanImplementationGbm() = default;
 
-VulkanImplementationGbm::~VulkanImplementationGbm() {}
+VulkanImplementationGbm::~VulkanImplementationGbm() = default;
 
 bool VulkanImplementationGbm::InitializeVulkanInstance(bool using_surface) {
   DLOG_IF(ERROR, using_surface) << "VK_KHR_surface is not supported.";
@@ -130,32 +130,13 @@ std::unique_ptr<gfx::GpuFence> VulkanImplementationGbm::ExportVkFenceToGpuFence(
   }
 
   gfx::GpuFenceHandle gpu_fence_handle;
-  gpu_fence_handle.owned_fd = base::ScopedFD(fence_fd);
+  gpu_fence_handle.Adopt(base::ScopedFD(fence_fd));
   return std::make_unique<gfx::GpuFence>(std::move(gpu_fence_handle));
 }
 
-VkSemaphore VulkanImplementationGbm::CreateExternalSemaphore(
-    VkDevice vk_device) {
-  return gpu::CreateExternalVkSemaphore(
-      vk_device, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT);
-}
-
-VkSemaphore VulkanImplementationGbm::ImportSemaphoreHandle(
-    VkDevice vk_device,
-    gpu::SemaphoreHandle sync_handle) {
-  return gpu::ImportVkSemaphoreHandle(vk_device, std::move(sync_handle));
-}
-
-gpu::SemaphoreHandle VulkanImplementationGbm::GetSemaphoreHandle(
-    VkDevice vk_device,
-    VkSemaphore vk_semaphore) {
-  return gpu::GetVkSemaphoreHandle(
-      vk_device, vk_semaphore, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT);
-}
-
-VkExternalMemoryHandleTypeFlagBits
-VulkanImplementationGbm::GetExternalImageHandleType() {
-  return VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+VkExternalSemaphoreHandleTypeFlagBits
+VulkanImplementationGbm::GetExternalSemaphoreHandleType() {
+  return VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
 }
 
 bool VulkanImplementationGbm::CanImportGpuMemoryBuffer(
@@ -174,7 +155,8 @@ VulkanImplementationGbm::CreateImageFromGpuMemoryHandle(
     gpu::VulkanDeviceQueue* device_queue,
     gfx::GpuMemoryBufferHandle gmb_handle,
     gfx::Size size,
-    VkFormat vk_format) {
+    VkFormat vk_format,
+    const gfx::ColorSpace& color_space) {
   constexpr auto kUsage =
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;

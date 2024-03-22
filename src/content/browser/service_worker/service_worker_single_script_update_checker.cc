@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/loader/browser_initiated_resource_request.h"
 #include "content/browser/service_worker/service_worker_cache_writer.h"
@@ -26,6 +27,7 @@
 #include "net/cookies/site_for_cookies.h"
 #include "net/http/http_response_info.h"
 #include "services/network/public/cpp/net_adapters.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -91,7 +93,8 @@ constexpr net::NetworkTrafficAnnotationTag kUpdateCheckTrafficAnnotation =
 class ServiceWorkerSingleScriptUpdateChecker::WrappedIOBuffer
     : public net::WrappedIOBuffer {
  public:
-  WrappedIOBuffer(const char* data) : net::WrappedIOBuffer(data) {}
+  WrappedIOBuffer(const char* data, size_t size)
+      : net::WrappedIOBuffer(data, size) {}
 
  private:
   ~WrappedIOBuffer() override = default;
@@ -117,6 +120,8 @@ ServiceWorkerSingleScriptUpdateChecker::ServiceWorkerSingleScriptUpdateChecker(
     mojo::Remote<storage::mojom::ServiceWorkerResourceReader> copy_reader,
     mojo::Remote<storage::mojom::ServiceWorkerResourceWriter> writer,
     int64_t writer_resource_id,
+    ScriptChecksumUpdateOption script_checksum_update_option,
+    const blink::StorageKey& storage_key,
     ResultCallback callback)
     : script_url_(script_url),
       is_main_script_(is_main_script),
@@ -124,9 +129,10 @@ ServiceWorkerSingleScriptUpdateChecker::ServiceWorkerSingleScriptUpdateChecker(
       force_bypass_cache_(force_bypass_cache),
       update_via_cache_(update_via_cache),
       time_since_last_check_(time_since_last_check),
+      script_checksum_update_option_(script_checksum_update_option),
       network_watcher_(FROM_HERE,
                        mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                       base::SequencedTaskRunnerHandle::Get()),
+                       base::SequencedTaskRunner::GetCurrentDefault()),
       callback_(std::move(callback)) {
   DCHECK(browser_context);
 
@@ -139,8 +145,8 @@ ServiceWorkerSingleScriptUpdateChecker::ServiceWorkerSingleScriptUpdateChecker(
 
   network::ResourceRequest resource_request =
       service_worker_loader_helpers::CreateRequestForServiceWorkerScript(
-          script_url, url::Origin::Create(main_script_url), is_main_script_,
-          worker_script_type, *fetch_client_settings_object, *browser_context);
+          script_url, storage_key, is_main_script_, worker_script_type,
+          *fetch_client_settings_object, *browser_context);
 
   uint32_t options = network::mojom::kURLLoadOptionNone;
   if (is_main_script_) {
@@ -161,10 +167,22 @@ ServiceWorkerSingleScriptUpdateChecker::ServiceWorkerSingleScriptUpdateChecker(
     resource_request.load_flags |= net::LOAD_VALIDATE_CACHE;
   }
 
+  ServiceWorkerCacheWriter::ChecksumUpdateTiming checksum_update_timing;
+  switch (script_checksum_update_option_) {
+    case ScriptChecksumUpdateOption::kForceUpdate:
+      checksum_update_timing =
+          ServiceWorkerCacheWriter::ChecksumUpdateTiming::kAlways;
+      break;
+    case ScriptChecksumUpdateOption::kDefault:
+      checksum_update_timing =
+          ServiceWorkerCacheWriter::ChecksumUpdateTiming::kCacheMismatch;
+      break;
+  }
+
   cache_writer_ = ServiceWorkerCacheWriter::CreateForComparison(
       std::move(compare_reader), std::move(copy_reader), std::move(writer),
-      writer_resource_id,
-      /*pause_when_not_identical=*/true);
+      writer_resource_id, /*pause_when_not_identical=*/true,
+      checksum_update_timing);
 
   // Service worker update checking doesn't have a relevant frame and tab, so
   // that `web_contents_getter` returns nullptr and the frame id is set to
@@ -182,7 +200,8 @@ ServiceWorkerSingleScriptUpdateChecker::ServiceWorkerSingleScriptUpdateChecker(
       network::SharedURLLoaderFactory::Create(loader_factory->Clone()),
       std::move(throttles), GlobalRequestID::MakeBrowserInitiated().request_id,
       options, &resource_request, network_client_remote_.get(),
-      kUpdateCheckTrafficAnnotation, base::ThreadTaskRunnerHandle::Get());
+      kUpdateCheckTrafficAnnotation,
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   DCHECK_EQ(network_loader_state_,
             ServiceWorkerUpdatedScriptLoader::LoaderState::kNotStarted);
   network_loader_state_ =
@@ -199,7 +218,8 @@ void ServiceWorkerSingleScriptUpdateChecker::OnReceiveEarlyHints(
 
 void ServiceWorkerSingleScriptUpdateChecker::OnReceiveResponse(
     network::mojom::URLResponseHeadPtr response_head,
-    mojo::ScopedDataPipeConsumerHandle consumer) {
+    mojo::ScopedDataPipeConsumerHandle consumer,
+    absl::optional<mojo_base::BigBuffer> cached_metadata) {
   TRACE_EVENT_WITH_FLOW0(
       "ServiceWorker",
       "ServiceWorkerSingleScriptUpdateChecker::OnReceiveResponse", this,
@@ -233,12 +253,21 @@ void ServiceWorkerSingleScriptUpdateChecker::OnReceiveResponse(
            network::URLLoaderCompletionStatus(net::ERR_INSECURE_RESPONSE));
       return;
     }
-    // TODO(arthursonzogni): Ensure CrossOriginEmbedderPolicy to be available
-    // here, not matter the URLLoader used to load it.
-    cross_origin_embedder_policy_ =
-        response_head->parsed_headers
-            ? response_head->parsed_headers->cross_origin_embedder_policy
-            : network::CrossOriginEmbedderPolicy();
+
+    if (!GetContentClient()
+             ->browser()
+             ->ShouldServiceWorkerInheritPolicyContainerFromCreator(
+                 script_url_)) {
+      policy_container_host_ = base::MakeRefCounted<PolicyContainerHost>(
+          // TODO(https://crbug.com/1366920): Ensure parsed headers are
+          // available
+          response_head->parsed_headers
+              // This does not parse the referrer policy, which will be
+              // updated in ServiceWorkerGlobalScope::Initialize
+              ? PolicyContainerPolicies(script_url_, response_head.get(),
+                                        nullptr)
+              : PolicyContainerPolicies());
+    }
   }
 
   network_accessed_ = response_head->network_accessed;
@@ -281,11 +310,12 @@ void ServiceWorkerSingleScriptUpdateChecker::OnUploadProgress(
   NOTREACHED();
 }
 
-void ServiceWorkerSingleScriptUpdateChecker::OnReceiveCachedMetadata(
-    mojo_base::BigBuffer data) {}
-
 void ServiceWorkerSingleScriptUpdateChecker::OnTransferSizeUpdated(
-    int32_t transfer_size_diff) {}
+    int32_t transfer_size_diff) {
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::
+          kServiceWorkerSingleScriptUpdateChecker);
+}
 
 void ServiceWorkerSingleScriptUpdateChecker::OnComplete(
     const network::URLLoaderCompletionStatus& status) {
@@ -484,9 +514,10 @@ void ServiceWorkerSingleScriptUpdateChecker::OnNetworkDataAvailable(
             ServiceWorkerUpdatedScriptLoader::WriterState::kCompleted);
   DCHECK(network_consumer_.is_valid());
   scoped_refptr<network::MojoToNetPendingBuffer> pending_buffer;
-  uint32_t bytes_available = 0;
   MojoResult result = network::MojoToNetPendingBuffer::BeginRead(
-      &network_consumer_, &pending_buffer, &bytes_available);
+      &network_consumer_, &pending_buffer);
+
+  const uint32_t bytes_available = pending_buffer ? pending_buffer->size() : 0;
   TRACE_EVENT_WITH_FLOW2(
       "ServiceWorker",
       "ServiceWorkerSingleScriptUpdateChecker::OnNetworkDataAvailable", this,
@@ -530,7 +561,8 @@ void ServiceWorkerSingleScriptUpdateChecker::CompareData(
 
   DCHECK(pending_buffer || bytes_to_compare == 0);
   auto buffer = base::MakeRefCounted<WrappedIOBuffer>(
-      pending_buffer ? pending_buffer->buffer() : nullptr);
+      pending_buffer ? pending_buffer->buffer() : nullptr,
+      pending_buffer ? pending_buffer->size() : 0);
 
   // Compare the network data and the stored data.
   net::Error error = cache_writer_->MaybeWriteData(
@@ -618,7 +650,8 @@ void ServiceWorkerSingleScriptUpdateChecker::Fail(
   Finish(Result::kFailed,
          /*paused_state=*/nullptr,
          std::make_unique<FailureInfo>(status, error_message,
-                                       std::move(network_status)));
+                                       std::move(network_status)),
+         /*sha256_checksum=*/absl::nullopt);
 }
 
 void ServiceWorkerSingleScriptUpdateChecker::Succeed(
@@ -627,20 +660,43 @@ void ServiceWorkerSingleScriptUpdateChecker::Succeed(
   TRACE_EVENT_WITH_FLOW1(
       "ServiceWorker", "ServiceWorkerSingleScriptUpdateChecker::Succeed", this,
       TRACE_EVENT_FLAG_FLOW_IN, "result", ResultToString(result));
-
   DCHECK_NE(result, Result::kFailed);
-  Finish(result, std::move(paused_state), /*failure_info=*/nullptr);
+
+  // Get calculated sha256 checksum when below conditions are both satisfied:
+  // 1: |script_checksum_update_option_| is kForceUpdate.
+  // 2: |result| is kIdentical.
+  //
+  // When the result is kDifferent, |cache_writer_| doesn't scan all the data
+  // and it can be pausing. In this case, the finalized checksum is still not
+  // available here, and that will be handled in
+  // ServiceWorkerUpdatedScriptLoader.
+  absl::optional<std::string> sha256_checksum;
+  if (script_checksum_update_option_ ==
+          ScriptChecksumUpdateOption::kForceUpdate &&
+      result == Result::kIdentical) {
+    DCHECK(cache_writer_);
+    DCHECK_EQ(cache_writer_->checksum_update_timing(),
+              ServiceWorkerCacheWriter::ChecksumUpdateTiming::kAlways);
+    sha256_checksum = cache_writer_->GetSha256Checksum();
+  }
+
+  Finish(result, std::move(paused_state), /*failure_info=*/nullptr,
+         sha256_checksum);
 }
 
 void ServiceWorkerSingleScriptUpdateChecker::Finish(
     Result result,
     std::unique_ptr<PausedState> paused_state,
-    std::unique_ptr<FailureInfo> failure_info) {
+    std::unique_ptr<FailureInfo> failure_info,
+    const absl::optional<std::string>& sha256_checksum) {
   network_watcher_.Cancel();
   if (Result::kDifferent == result) {
     DCHECK(paused_state);
+    // When the result if kDifferent, the checksum will be handled by
+    // ServiceWorkerUpdatedScriptLoader.
     std::move(callback_).Run(script_url_, result, nullptr,
-                             std::move(paused_state));
+                             std::move(paused_state),
+                             /*sha256_checksum=*/absl::nullopt);
     return;
   }
 
@@ -648,7 +704,7 @@ void ServiceWorkerSingleScriptUpdateChecker::Finish(
   network_client_receiver_.reset();
   network_consumer_.reset();
   std::move(callback_).Run(script_url_, result, std::move(failure_info),
-                           nullptr);
+                           nullptr, sha256_checksum);
 }
 
 ServiceWorkerSingleScriptUpdateChecker::PausedState::PausedState(

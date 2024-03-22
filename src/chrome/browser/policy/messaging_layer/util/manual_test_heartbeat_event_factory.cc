@@ -1,29 +1,35 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/policy/messaging_layer/util/manual_test_heartbeat_event_factory.h"
 
 #include "chrome/browser/policy/messaging_layer/util/manual_test_heartbeat_event.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace reporting {
 
 ManualTestHeartbeatEventFactory*
 ManualTestHeartbeatEventFactory::GetInstance() {
-  return base::Singleton<ManualTestHeartbeatEventFactory>::get();
+  static base::NoDestructor<ManualTestHeartbeatEventFactory> instance;
+  return instance.get();
 }
 
 ManualTestHeartbeatEventFactory::ManualTestHeartbeatEventFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ManualTestHeartbeatEvent",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 ManualTestHeartbeatEventFactory::~ManualTestHeartbeatEventFactory() = default;
 
-KeyedService* ManualTestHeartbeatEventFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ManualTestHeartbeatEventFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ManualTestHeartbeatEvent();
+  return std::make_unique<ManualTestHeartbeatEvent>();
 }
 
 bool ManualTestHeartbeatEventFactory::ServiceIsCreatedWithBrowserContext()

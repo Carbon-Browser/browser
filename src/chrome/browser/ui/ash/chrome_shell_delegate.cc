@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,30 @@
 #include <memory>
 #include <utility>
 
+#include "ash/accelerators/accelerator_prefs_delegate.h"
 #include "ash/constants/app_types.h"
 #include "ash/constants/ash_features.h"
+#include "ash/constants/ash_switches.h"
+#include "ash/game_dashboard/game_dashboard_delegate.h"
+#include "ash/public/cpp/app_types_util.h"
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/new_window_delegate.h"
-#include "ash/services/multidevice_setup/multidevice_setup_service.h"
-#include "base/bind.h"
+#include "ash/public/cpp/system_sounds_delegate.h"
+#include "ash/shell_delegate.h"
+#include "ash/wm/window_state.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "cc/input/touch_action.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/assistant/assistant_util.h"
+#include "chrome/browser/ash/crosapi/crosapi_ash.h"
+#include "chrome/browser/ash/crosapi/crosapi_manager.h"
+#include "chrome/browser/ash/crosapi/desk_profiles_ash.h"
+#include "chrome/browser/ash/crosapi/fullscreen_controller_ash.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/multidevice_setup/multidevice_setup_service_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -30,18 +40,26 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/sessions/session_restore.h"
+#include "chrome/browser/ui/ash/api/tasks/chrome_tasks_delegate.h"
 #include "chrome/browser/ui/ash/back_gesture_contextual_nudge_delegate.h"
 #include "chrome/browser/ui/ash/capture_mode/chrome_capture_mode_delegate.h"
+#include "chrome/browser/ui/ash/chrome_accelerator_prefs_delegate.h"
 #include "chrome/browser/ui/ash/chrome_accessibility_delegate.h"
-#include "chrome/browser/ui/ash/desks/chrome_desks_templates_delegate.h"
+#include "chrome/browser/ui/ash/clipboard_history_controller_delegate_impl.h"
+#include "chrome/browser/ui/ash/desks/chrome_saved_desk_delegate.h"
+#include "chrome/browser/ui/ash/game_dashboard/chrome_game_dashboard_delegate.h"
+#include "chrome/browser/ui/ash/global_media_controls/media_notification_provider_impl.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_ui.h"
 #include "chrome/browser/ui/ash/session_util.h"
+#include "chrome/browser/ui/ash/system_sounds_delegate_impl.h"
+#include "chrome/browser/ui/ash/user_education/chrome_user_education_delegate.h"
 #include "chrome/browser/ui/ash/window_pin_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_command_controller.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/scoped_tabbed_browser_displayer.h"
 #include "chrome/browser/ui/views/chrome_browser_main_extra_parts_views.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -51,9 +69,15 @@
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_switches.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "chromeos/ash/services/multidevice_setup/multidevice_setup_service.h"
 #include "components/ui_devtools/devtools_server.h"
 #include "components/user_manager/user_manager.h"
+#include "components/version_info/channel.h"
+#include "components/version_info/version_info.h"
+#include "content/public/browser/chromeos/multi_capture_service.h"
 #include "content/public/browser/device_service.h"
+#include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/media_session_service.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -92,6 +116,20 @@ content::WebContents* GetActiveWebContentsForNativeBrowserWindow(
   return tab_strip_model ? tab_strip_model->GetActiveWebContents() : nullptr;
 }
 
+chrome::FeedbackSource ToChromeFeedbackSource(
+    ash::ShellDelegate::FeedbackSource source) {
+  switch (source) {
+    case ash::ShellDelegate::FeedbackSource::kFocusMode:
+      return chrome::FeedbackSource::kFeedbackSourceFocusMode;
+    case ash::ShellDelegate::FeedbackSource::kGameDashboard:
+      return chrome::FeedbackSource::kFeedbackSourceGameDashboard;
+    case ash::ShellDelegate::FeedbackSource::kWindowLayoutMenu:
+      return chrome::FeedbackSource::kFeedbackSourceWindowLayoutMenu;
+  }
+  NOTREACHED_NORETURN()
+      << "Unable to retrieve FeedbackSource due to unknown source type.";
+}
+
 }  // namespace
 
 ChromeShellDelegate::ChromeShellDelegate() = default;
@@ -109,6 +147,21 @@ ChromeShellDelegate::CreateCaptureModeDelegate() const {
   return std::make_unique<ChromeCaptureModeDelegate>();
 }
 
+std::unique_ptr<ash::ClipboardHistoryControllerDelegate>
+ChromeShellDelegate::CreateClipboardHistoryControllerDelegate() const {
+  return std::make_unique<ClipboardHistoryControllerDelegateImpl>();
+}
+
+std::unique_ptr<ash::GameDashboardDelegate>
+ChromeShellDelegate::CreateGameDashboardDelegate() const {
+  return std::make_unique<ChromeGameDashboardDelegate>();
+}
+
+std::unique_ptr<ash::AcceleratorPrefsDelegate>
+ChromeShellDelegate::CreateAcceleratorPrefsDelegate() const {
+  return std::make_unique<ChromeAcceleratorPrefsDelegate>();
+}
+
 ash::AccessibilityDelegate* ChromeShellDelegate::CreateAccessibilityDelegate() {
   return new ChromeAccessibilityDelegate;
 }
@@ -119,15 +172,36 @@ ChromeShellDelegate::CreateBackGestureContextualNudgeDelegate(
   return std::make_unique<BackGestureContextualNudgeDelegate>(controller);
 }
 
+std::unique_ptr<ash::MediaNotificationProvider>
+ChromeShellDelegate::CreateMediaNotificationProvider() {
+  return std::make_unique<ash::MediaNotificationProviderImpl>(
+      GetMediaSessionService());
+}
+
 std::unique_ptr<ash::NearbyShareDelegate>
 ChromeShellDelegate::CreateNearbyShareDelegate(
     ash::NearbyShareController* controller) const {
   return std::make_unique<NearbyShareDelegateImpl>(controller);
 }
 
-std::unique_ptr<ash::DesksTemplatesDelegate>
-ChromeShellDelegate::CreateDesksTemplatesDelegate() const {
-  return std::make_unique<ChromeDesksTemplatesDelegate>();
+std::unique_ptr<ash::SavedDeskDelegate>
+ChromeShellDelegate::CreateSavedDeskDelegate() const {
+  return std::make_unique<ChromeSavedDeskDelegate>();
+}
+
+std::unique_ptr<ash::SystemSoundsDelegate>
+ChromeShellDelegate::CreateSystemSoundsDelegate() const {
+  return std::make_unique<SystemSoundsDelegateImpl>();
+}
+
+std::unique_ptr<ash::api::TasksDelegate>
+ChromeShellDelegate::CreateTasksDelegate() const {
+  return std::make_unique<ash::api::ChromeTasksDelegate>();
+}
+
+std::unique_ptr<ash::UserEducationDelegate>
+ChromeShellDelegate::CreateUserEducationDelegate() const {
+  return std::make_unique<ChromeUserEducationDelegate>();
 }
 
 scoped_refptr<network::SharedURLLoaderFactory>
@@ -138,7 +212,8 @@ ChromeShellDelegate::GetGeolocationUrlLoaderFactory() const {
 void ChromeShellDelegate::OpenKeyboardShortcutHelpPage() const {
   ash::NewWindowDelegate::GetPrimary()->OpenUrl(
       GURL(kKeyboardShortcutHelpPageUrl),
-      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction);
+      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      ash::NewWindowDelegate::Disposition::kNewForegroundTab);
 }
 
 bool ChromeShellDelegate::CanGoBack(gfx::NativeWindow window) const {
@@ -184,18 +259,11 @@ bool ChromeShellDelegate::ShouldWaitForTouchPressAck(gfx::NativeWindow window) {
 }
 
 bool ChromeShellDelegate::IsTabDrag(const ui::OSExchangeData& drop_data) {
-  DCHECK(ash::features::IsWebUITabStripTabDragIntegrationEnabled());
   return tab_strip_ui::IsDraggedTab(drop_data);
 }
 
 int ChromeShellDelegate::GetBrowserWebUITabStripHeight() {
-  DCHECK(ash::features::IsWebUITabStripTabDragIntegrationEnabled());
   return TabStripUILayout::GetContainerHeight();
-}
-
-void ChromeShellDelegate::BindBluetoothSystemFactory(
-    mojo::PendingReceiver<device::mojom::BluetoothSystemFactory> receiver) {
-  content::GetDeviceService().BindBluetoothSystemFactory(std::move(receiver));
 }
 
 void ChromeShellDelegate::BindFingerprint(
@@ -213,17 +281,36 @@ void ChromeShellDelegate::BindMultiDeviceSetup(
     service->BindMultiDeviceSetup(std::move(receiver));
 }
 
+void ChromeShellDelegate::BindMultiCaptureService(
+    mojo::PendingReceiver<video_capture::mojom::MultiCaptureService> receiver) {
+  content::GetMultiCaptureService().BindMultiCaptureService(
+      std::move(receiver));
+}
+
 media_session::MediaSessionService*
 ChromeShellDelegate::GetMediaSessionService() {
   return &content::GetMediaSessionService();
 }
 
 bool ChromeShellDelegate::IsSessionRestoreInProgress() const {
-  Profile* profile = ProfileManager::GetActiveUserProfile();
-  return SessionRestore::IsRestoring(profile);
+  // Must be called with an active user.
+  const user_manager::User* active_user =
+      user_manager::UserManager::Get()->GetActiveUser();
+  CHECK(active_user);
+
+  // User profile is not yet loaded. Consider loading user profile is part of
+  // session restore.
+  if (!active_user->is_profile_created()) {
+    return true;
+  }
+
+  return SessionRestore::IsRestoring(Profile::FromBrowserContext(
+      ash::BrowserContextHelper::Get()->GetBrowserContextByUser(active_user)));
 }
 
-void ChromeShellDelegate::SetUpEnvironmentForLockedFullscreen(bool locked) {
+void ChromeShellDelegate::SetUpEnvironmentForLockedFullscreen(
+    const ash::WindowState& window_state) {
+  bool locked = window_state.IsPinned();
   // Reset the clipboard and kill dev tools when entering or exiting locked
   // fullscreen (security concerns).
   ui::Clipboard::GetForCurrentThread()->Clear(ui::ClipboardBuffer::kCopyPaste);
@@ -244,7 +331,8 @@ void ChromeShellDelegate::SetUpEnvironmentForLockedFullscreen(bool locked) {
   // Disable ARC while in the locked fullscreen mode.
   arc::ArcSessionManager* const arc_session_manager =
       arc::ArcSessionManager::Get();
-  if (arc_session_manager && arc::IsArcAllowedForProfile(profile)) {
+  if (!ash::IsArcWindow(window_state.window()) && arc_session_manager &&
+      arc::IsArcAllowedForProfile(profile)) {
     if (locked) {
       // Disable ARC, preserve data.
       arc_session_manager->RequestDisable();
@@ -256,7 +344,7 @@ void ChromeShellDelegate::SetUpEnvironmentForLockedFullscreen(bool locked) {
   }
 
   if (assistant::IsAssistantAllowedForProfile(profile) ==
-      chromeos::assistant::AssistantAllowedState::ALLOWED) {
+      ash::assistant::AssistantAllowedState::ALLOWED) {
     ash::AssistantState::Get()->NotifyLockedFullScreenStateChanged(locked);
   }
 }
@@ -301,10 +389,18 @@ base::FilePath ChromeShellDelegate::GetPrimaryUserDownloadsFolder() const {
   return base::FilePath();
 }
 
-void ChromeShellDelegate::OpenFeedbackPageForPersistentDesksBar() {
+void ChromeShellDelegate::OpenFeedbackDialog(
+    ShellDelegate::FeedbackSource source,
+    const std::string& description_template) {
   chrome::OpenFeedbackDialog(/*browser=*/nullptr,
-                             chrome::kFeedbackSourceBentoBar,
-                             /*description_template=*/"#BentoBar\n\n");
+                             ToChromeFeedbackSource(source),
+                             description_template);
+}
+
+void ChromeShellDelegate::OpenProfileManager() {
+  if (crosapi::BrowserManager::Get()->IsRunning()) {
+    crosapi::BrowserManager::Get()->OpenProfileManager();
+  }
 }
 
 // static
@@ -339,6 +435,11 @@ const GURL& ChromeShellDelegate::GetLastCommittedURLForWindowIfAny(
 }
 
 version_info::Channel ChromeShellDelegate::GetChannel() {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ash::switches::kForceShowReleaseTrack)) {
+    // Simulate a non-stable channel so the release track UI is visible.
+    return version_info::Channel::BETA;
+  }
   return chrome::GetChannel();
 }
 
@@ -351,4 +452,20 @@ void ChromeShellDelegate::ForceSkipWarningUserOnClose(
       browser_view->browser()->set_force_skip_warning_user_on_close(true);
     }
   }
+}
+
+std::string ChromeShellDelegate::GetVersionString() {
+  return std::string(version_info::GetVersionNumber());
+}
+
+void ChromeShellDelegate::ShouldExitFullscreenBeforeLock(
+    ChromeShellDelegate::ShouldExitFullscreenCallback callback) {
+  crosapi::CrosapiManager::Get()
+      ->crosapi_ash()
+      ->fullscreen_controller_ash()
+      ->ShouldExitFullscreenBeforeLock(std::move(callback));
+}
+
+ash::DeskProfilesDelegate* ChromeShellDelegate::GetDeskProfilesDelegate() {
+  return crosapi::CrosapiManager::Get()->crosapi_ash()->desk_profiles_ash();
 }

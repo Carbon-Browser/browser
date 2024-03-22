@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <set>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -48,7 +48,7 @@ TraceEvent& TraceEvent::operator=(TraceEvent&& rhs) = default;
 
 bool TraceEvent::SetFromJSON(const base::Value* event_value) {
   if (!event_value->is_dict()) {
-    LOG(ERROR) << "Value must be Type::DICTIONARY";
+    LOG(ERROR) << "Value must be Type::DICT";
     return false;
   }
 
@@ -67,12 +67,12 @@ bool TraceEvent::SetFromJSON(const base::Value* event_value) {
                      phase == TRACE_EVENT_PHASE_ASYNC_STEP_INTO ||
                      phase == TRACE_EVENT_PHASE_ASYNC_STEP_PAST ||
                      phase == TRACE_EVENT_PHASE_MEMORY_DUMP ||
-                     phase == TRACE_EVENT_PHASE_ENTER_CONTEXT ||
-                     phase == TRACE_EVENT_PHASE_LEAVE_CONTEXT ||
                      phase == TRACE_EVENT_PHASE_CREATE_OBJECT ||
                      phase == TRACE_EVENT_PHASE_DELETE_OBJECT ||
                      phase == TRACE_EVENT_PHASE_SNAPSHOT_OBJECT ||
-                     phase == TRACE_EVENT_PHASE_ASYNC_END);
+                     phase == TRACE_EVENT_PHASE_ASYNC_END ||
+                     phase == TRACE_EVENT_PHASE_NESTABLE_ASYNC_BEGIN ||
+                     phase == TRACE_EVENT_PHASE_NESTABLE_ASYNC_END);
 
   if (require_origin) {
     absl::optional<int> maybe_process_id = event_dict.FindInt("pid");
@@ -841,13 +841,14 @@ void TraceAnalyzer::AssociateBeginEndEvents() {
 void TraceAnalyzer::AssociateAsyncBeginEndEvents(bool match_pid) {
   using trace_analyzer::Query;
 
-  Query begin(
-      Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_BEGIN) ||
-      Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_STEP_INTO) ||
-      Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_STEP_PAST));
+  Query begin(Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_BEGIN) ||
+              Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_STEP_INTO) ||
+              Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_STEP_PAST) ||
+              Query::EventPhaseIs(TRACE_EVENT_PHASE_NESTABLE_ASYNC_BEGIN));
   Query end(Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_END) ||
             Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_STEP_INTO) ||
-            Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_STEP_PAST));
+            Query::EventPhaseIs(TRACE_EVENT_PHASE_ASYNC_STEP_PAST) ||
+            Query::EventPhaseIs(TRACE_EVENT_PHASE_NESTABLE_ASYNC_END));
   Query match(Query::EventCategory() == Query::OtherCategory() &&
               Query::EventId() == Query::OtherId());
 

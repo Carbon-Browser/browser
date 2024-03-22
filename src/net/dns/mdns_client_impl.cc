@@ -1,30 +1,35 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/dns/mdns_client_impl.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <utility>
+#include <vector>
 
-#include "base/bind.h"
+#include "base/containers/fixed_flat_set.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "net/base/net_errors.h"
 #include "net/base/rand_callback.h"
-#include "net/dns/dns_util.h"
+#include "net/dns/dns_names_util.h"
 #include "net/dns/public/dns_protocol.h"
 #include "net/dns/public/util.h"
 #include "net/dns/record_rdata.h"
 #include "net/socket/datagram_socket.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // TODO(gene): Remove this temporary method of disabling NSEC support once it
 // becomes clear whether this feature should be
@@ -41,6 +46,39 @@ namespace {
 // the original TTL.
 const double kListenerRefreshRatio1 = 0.85;
 const double kListenerRefreshRatio2 = 0.95;
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class mdnsQueryType {
+  kInitial = 0,  // Initial mDNS query sent.
+  kRefresh = 1,  // Refresh mDNS query sent.
+  kMaxValue = kRefresh,
+};
+
+void RecordQueryMetric(mdnsQueryType query_type, std::string_view host) {
+  constexpr auto kPrintScanServices = base::MakeFixedFlatSet<std::string_view>({
+      "_ipps._tcp.local",
+      "_ipp._tcp.local",
+      "_pdl-datastream._tcp.local",
+      "_printer._tcp.local",
+      "_print._sub._ipps._tcp.local",
+      "_print._sub._ipp._tcp.local",
+      "_scanner._tcp.local",
+      "_uscans._tcp.local",
+      "_uscan._tcp.local",
+  });
+
+  if (host.ends_with("_googlecast._tcp.local")) {
+    base::UmaHistogramEnumeration("Network.Mdns.Googlecast", query_type);
+  } else if (base::ranges::any_of(kPrintScanServices,
+                                  [&host](std::string_view service) {
+                                    return host.ends_with(service);
+                                  })) {
+    base::UmaHistogramEnumeration("Network.Mdns.PrintScan", query_type);
+  } else {
+    base::UmaHistogramEnumeration("Network.Mdns.Other", query_type);
+  }
+}
 
 }  // namespace
 
@@ -179,7 +217,7 @@ void MDnsConnection::PostOnError(SocketHandler* loop, int rv) {
   }
   VLOG(1) << "Socket error. id=" << id << ", error=" << rv;
   // Post to allow deletion of this object by delegate.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&MDnsConnection::OnError,
                                 weak_ptr_factory_.GetWeakPtr(), rv));
 }
@@ -218,11 +256,12 @@ int MDnsClientImpl::Core::Init(MDnsSocketFactory* socket_factory) {
 }
 
 bool MDnsClientImpl::Core::SendQuery(uint16_t rrtype, const std::string& name) {
-  std::string name_dns;
-  if (!DNSDomainFromUnrestrictedDot(name, &name_dns))
+  absl::optional<std::vector<uint8_t>> name_dns =
+      dns_names_util::DottedNameToNetwork(name);
+  if (!name_dns.has_value())
     return false;
 
-  DnsQuery query(0, name_dns, rrtype);
+  DnsQuery query(0, name_dns.value(), rrtype);
   query.set_flags(0);  // Remove the RD flag from the query. It is unneeded.
 
   connection_->Send(query.io_buffer(), query.io_buffer()->size());
@@ -307,12 +346,12 @@ void MDnsClientImpl::Core::NotifyNsecRecord(const RecordParsed* record) {
 
   cache_.FindDnsRecords(0, record->name(), &records_to_remove, clock_->Now());
 
-  for (const auto* record : records_to_remove) {
-    if (record->type() == dns_protocol::kTypeNSEC)
+  for (const auto* record_to_remove : records_to_remove) {
+    if (record_to_remove->type() == dns_protocol::kTypeNSEC)
       continue;
-    if (!rdata->GetBit(record->type())) {
+    if (!rdata->GetBit(record_to_remove->type())) {
       std::unique_ptr<const RecordParsed> record_removed =
-          cache_.RemoveRecord(record);
+          cache_.RemoveRecord(record_to_remove);
       DCHECK(record_removed);
       OnRecordRemoved(record_removed.get());
     }
@@ -382,7 +421,7 @@ void MDnsClientImpl::Core::RemoveListener(MDnsListenerImpl* listener) {
   if (observer_list_iterator->second->empty()) {
     // Schedule the actual removal for later in case the listener removal
     // happens while iterating over the observer list.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&MDnsClientImpl::Core::CleanupObserverList,
                                   AsWeakPtr(), key));
   }
@@ -605,14 +644,15 @@ void MDnsListenerImpl::ScheduleNextRefresh() {
       base::Milliseconds(static_cast<int>(base::Time::kMillisecondsPerSecond *
                                           kListenerRefreshRatio2 * ttl_));
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, next_refresh_.callback(), next_refresh1 - clock_->Now());
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, next_refresh_.callback(), next_refresh2 - clock_->Now());
 }
 
 void MDnsListenerImpl::DoRefresh() {
+  RecordQueryMetric(mdnsQueryType::kRefresh, name_);
   client_->core()->SendQuery(rrtype_, name_);
 }
 
@@ -744,12 +784,13 @@ bool MDnsTransactionImpl::QueryAndListen() {
     return false;
 
   DCHECK(client_->core());
+  RecordQueryMetric(mdnsQueryType::kInitial, name_);
   if (!client_->core()->SendQuery(rrtype_, name_))
     return false;
 
   timeout_.Reset(
       base::BindOnce(&MDnsTransactionImpl::SignalTransactionOver, AsWeakPtr()));
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, timeout_.callback(), kTransactionTimeout);
 
   return true;

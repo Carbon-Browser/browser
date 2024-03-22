@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,6 @@ package org.chromium.chrome.features.start_surface;
 
 import android.animation.Animator;
 import android.content.Context;
-import android.view.ViewGroup;
-
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.TraceEvent;
 import org.chromium.chrome.browser.compositor.layouts.Layout;
@@ -17,14 +14,12 @@ import org.chromium.chrome.browser.compositor.layouts.LayoutUpdateHost;
 import org.chromium.chrome.browser.layouts.EventFilter;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.layouts.scene_layer.SceneLayer;
-import org.chromium.chrome.features.tasks.TasksSurface;
+import org.chromium.chrome.browser.tab.TabSelectionType;
+import org.chromium.chrome.browser.tabmodel.TabModelUtils;
+import org.chromium.chrome.features.tasks.TasksView;
 
-/**
- * A {@link Layout} that shows Start Surface home view.
- */
+/** A {@link Layout} that shows Start Surface home view. */
 public class StartSurfaceHomeLayout extends Layout {
-    private static final String TAG = "SSHomeLayout";
-
     private static final String TRACE_SHOW_START_SURFACE =
             "StartSurfaceHomeLayout.Show.StartSurface";
     private static final String TRACE_HIDE_START_SURFACE =
@@ -34,12 +29,12 @@ public class StartSurfaceHomeLayout extends Layout {
     private static final String TRACE_DONE_HIDING_START_SURFACE =
             "StartSurfaceHomeLayout.DoneHiding";
 
-    private final SceneLayer mSceneLayer;
     private final StartSurface mStartSurface;
 
     private boolean mIsShown;
     private boolean mIsInitialized;
     private Animator mBackgroundTabAnimation;
+    private SceneLayer mSceneLayer;
 
     /**
      * The {@link Layout} is not usable until sizeChanged is called. This is convenient this way so
@@ -49,19 +44,28 @@ public class StartSurfaceHomeLayout extends Layout {
      * @param updateHost The parent {@link LayoutUpdateHost}.
      * @param renderHost The parent {@link LayoutRenderHost}.
      */
-    public StartSurfaceHomeLayout(Context context, LayoutUpdateHost updateHost,
-            LayoutRenderHost renderHost, StartSurface startSurface) {
+    public StartSurfaceHomeLayout(
+            Context context,
+            LayoutUpdateHost updateHost,
+            LayoutRenderHost renderHost,
+            StartSurface startSurface) {
         super(context, updateHost, renderHost);
-        mSceneLayer = new SceneLayer();
         mStartSurface = startSurface;
+        mStartSurface.setOnTabSelectingListener(this::onTabSelecting);
     }
 
     @Override
     public void onFinishNativeInitialization() {
         if (mIsInitialized) return;
-
         mIsInitialized = true;
+        ensureSceneLayerCreated();
         mStartSurface.initWithNative();
+    }
+
+    @Override
+    protected void updateLayout(long time, long dt) {
+        ensureSceneLayerCreated();
+        super.updateLayout(time, dt);
     }
 
     @Override
@@ -71,17 +75,24 @@ public class StartSurfaceHomeLayout extends Layout {
     public void show(long time, boolean animate) {
         try (TraceEvent e = TraceEvent.scoped(TRACE_SHOW_START_SURFACE)) {
             super.show(time, animate);
-            // TODO(crbug.com/1315676): Call StartSurface#show here.
+
+            // Lazy initialization if needed.
+            mStartSurface.initialize();
+            mStartSurface.show(animate);
+
             mIsShown = true;
+            doneShowing();
         }
     }
 
     @Override
-    public void startHiding(int nextTabId, boolean hintAtTabSelection) {
+    public void startHiding() {
         try (TraceEvent e = TraceEvent.scoped(TRACE_HIDE_START_SURFACE)) {
-            super.startHiding(nextTabId, hintAtTabSelection);
-            // TODO(crbug.com/1315676): Call StartSurface#hide here.
+            StartSurfaceUserData.getInstance().setUnusedTabRestoredAtStartup(false);
+            super.startHiding();
             mIsShown = false;
+            mStartSurface.hide(false);
+            doneHiding();
         }
     }
 
@@ -115,25 +126,36 @@ public class StartSurfaceHomeLayout extends Layout {
     }
 
     @Override
-    public void onTabCreated(long time, int id, int index, int sourceId, boolean newIsIncognito,
-            boolean background, float originX, float originY) {
+    public void onTabCreated(
+            long time,
+            int id,
+            int index,
+            int sourceId,
+            boolean newIsIncognito,
+            boolean background,
+            float originX,
+            float originY) {
         super.onTabCreated(time, id, index, sourceId, newIsIncognito, background, originX, originY);
         if (!background || newIsIncognito || !mIsShown) {
             return;
         }
-        TasksSurface primaryTasksSurface = mStartSurface.getPrimaryTasksSurface();
-        assert primaryTasksSurface != null;
+        TasksView startSurfaceView = mStartSurface.getPrimarySurfaceView();
+        assert startSurfaceView != null;
 
         if (mBackgroundTabAnimation != null && mBackgroundTabAnimation.isStarted()) {
             mBackgroundTabAnimation.end();
         }
+        float dpToPx = getContext().getResources().getDisplayMetrics().density;
         mBackgroundTabAnimation =
-                BackgroundTabAnimation.create(this, (ViewGroup) primaryTasksSurface.getView(),
-                        originX, originY, getOrientation() == Orientation.PORTRAIT);
+                BackgroundTabAnimation.create(
+                        this,
+                        startSurfaceView,
+                        originX * dpToPx,
+                        originY * dpToPx,
+                        getOrientation() == Orientation.PORTRAIT);
         mBackgroundTabAnimation.start();
     }
 
-    @VisibleForTesting
     public StartSurface getStartSurfaceForTesting() {
         return mStartSurface;
     }
@@ -141,5 +163,15 @@ public class StartSurfaceHomeLayout extends Layout {
     @Override
     public int getLayoutType() {
         return LayoutType.START_SURFACE;
+    }
+
+    private void ensureSceneLayerCreated() {
+        if (mSceneLayer != null) return;
+        mSceneLayer = new SceneLayer();
+    }
+
+    private void onTabSelecting(int tabId) {
+        TabModelUtils.selectTabById(mTabModelSelector, tabId, TabSelectionType.FROM_USER, false);
+        startHiding();
     }
 }

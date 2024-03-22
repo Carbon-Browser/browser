@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,22 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/containers/queue.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
+#include "components/viz/common/features.h"
+#include "components/viz/common/performance_hint_utils.h"
 #include "components/viz/common/surfaces/subtree_capture_id.h"
 #include "components/viz/common/surfaces/video_capture_target.h"
 #include "components/viz/service/display/shared_bitmap_manager.h"
@@ -25,7 +31,6 @@
 #include "components/viz/service/frame_sinks/frame_sink_bundle_impl.h"
 #include "components/viz/service/frame_sinks/video_capture/capturable_frame_sink.h"
 #include "components/viz/service/frame_sinks/video_capture/frame_sink_video_capturer_impl.h"
-#include "components/viz/service/performance_hint/utils.h"
 #include "components/viz/service/surfaces/pending_copy_output_request.h"
 #include "components/viz/service/surfaces/surface.h"
 
@@ -174,8 +179,12 @@ void FrameSinkManagerImpl::SetFrameSinkDebugLabel(
     const FrameSinkId& frame_sink_id,
     const std::string& debug_label) {
   auto it = frame_sink_data_.find(frame_sink_id);
-  if (it != frame_sink_data_.end())
+  if (it != frame_sink_data_.end()) {
     it->second.debug_label = debug_label;
+    if (frame_counter_) {
+      frame_counter_->SetFrameSinkDebugLabel(frame_sink_id, debug_label);
+    }
+  }
 }
 
 void FrameSinkManagerImpl::CreateRootCompositorFrameSink(
@@ -282,7 +291,7 @@ void FrameSinkManagerImpl::UnregisterFrameSinkHierarchy(
   }
 
   auto iter = frame_sink_source_map_.find(parent_frame_sink_id);
-  DCHECK(iter != frame_sink_source_map_.end());
+  CHECK(iter != frame_sink_source_map_.end());
 
   // Remove |child_frame_sink_id| from parents list of children.
   auto& mapping = iter->second;
@@ -334,26 +343,72 @@ void FrameSinkManagerImpl::EvictSurfaces(
     auto it = support_map_.find(surface_id.frame_sink_id());
     if (it == support_map_.end())
       continue;
-    it->second->EvictSurface(surface_id.local_surface_id());
-    if (!it->second->is_root())
-      continue;
-    auto root_it = root_sink_map_.find(surface_id.frame_sink_id());
-    if (root_it != root_sink_map_.end())
-      root_it->second->DidEvictSurface(surface_id);
+
+    bool should_evict = true;
+    if (it->second->is_root()) {
+      auto root_it = root_sink_map_.find(surface_id.frame_sink_id());
+      if (root_it != root_sink_map_.end()) {
+        should_evict = root_it->second->WillEvictSurface(surface_id);
+      }
+    }
+
+    if (should_evict) {
+      it->second->EvictSurface(surface_id.local_surface_id());
+    }
   }
+
+  // Trigger garbage collection immediately, otherwise the surface may not be
+  // evicted for a long time (e.g. not before a frame is produced).
+  if (base::FeatureList::IsEnabled(features::kEagerSurfaceGarbageCollection))
+    surface_manager_.GarbageCollectSurfaces();
 }
 
 void FrameSinkManagerImpl::RequestCopyOfOutput(
     const SurfaceId& surface_id,
-    std::unique_ptr<CopyOutputRequest> request) {
+    std::unique_ptr<CopyOutputRequest> request,
+    bool capture_exact_surface_id) {
   TRACE_EVENT0("viz", "FrameSinkManagerImpl::RequestCopyOfOutput");
+  PendingCopyOutputRequest pending_request(
+      surface_id.local_surface_id(), SubtreeCaptureId(), std::move(request),
+      capture_exact_surface_id);
+  // The exact request can be picked up by the targeted surface right away,
+  // instead of being queued up in the `CompositorFrameSinkSupport`. In some
+  // cases (e.g., a request issued against the old surface after the old
+  // renderer tearing down the frame sink) when the request arrives the frame
+  // sink is already unregistered, but the targeted surface is still kept alive.
+  if (capture_exact_surface_id) {
+    auto* exact_surface = surface_manager_.GetSurfaceForId(surface_id);
+    if (exact_surface) {
+      exact_surface->RequestCopyOfOutput(std::move(pending_request));
+
+      BeginFrameAck ack;
+      ack.has_damage = true;
+      surface_manager_.SurfaceModified(
+          surface_id, ack, SurfaceObserver::HandleInteraction::kNoChange);
+      return;
+    }
+  }
+
+  // For the exact request yet to have a surface, or the non-exact request,
+  // queue them up in the matching `CompositorFrameSinkSupport`.
   auto it = support_map_.find(surface_id.frame_sink_id());
   if (it == support_map_.end()) {
-    // |request| will send an empty result when it goes out of scope.
+    if (capture_exact_surface_id) {
+      // It is extremely rare for the browser to issue a copy request against
+      // its embedded `SurfaceId` before the surface exists (submitting a
+      // request before the GPU draws anything) or before the frame sink exists
+      // (submitting a request before the renderer loads the document). We don't
+      // want to crash the GPU in either cases. The ERROR log shows up in
+      // "chrome://gpu".
+      LOG(ERROR) << "The browser issued an exact CopyOutputRequest for "
+                 << surface_id
+                 << " but there is no such surface or a frame sink.";
+    }
+    // `pending_request` will send an empty result when it goes out of scope.
     return;
   }
-  it->second->RequestCopyOfOutput(PendingCopyOutputRequest{
-      surface_id.local_surface_id(), SubtreeCaptureId(), std::move(request)});
+
+  it->second->RequestCopyOfOutput(std::move(pending_request));
 }
 
 void FrameSinkManagerImpl::DestroyFrameSinkBundle(const FrameSinkBundleId& id) {
@@ -420,6 +475,12 @@ void FrameSinkManagerImpl::RegisterCompositorFrameSinkSupport(
   if (global_throttle_interval_) {
     UpdateThrottlingRecursively(frame_sink_id,
                                 global_throttle_interval_.value());
+  }
+
+  if (frame_counter_) {
+    frame_counter_->AddFrameSink(frame_sink_id, support->frame_sink_type(),
+                                 support->is_root(),
+                                 GetFrameSinkDebugLabel(frame_sink_id));
   }
 }
 
@@ -520,7 +581,7 @@ CapturableFrameSink* FrameSinkManagerImpl::FindCapturableFrameSink(
   // Search the known CompositorFrameSinkSupport objects for region capture
   // bounds matching the crop ID specified by |target| (if one was set), and
   // return the corresponding frame sink.
-  if (absl::holds_alternative<RegionCaptureCropId>(target.sub_target)) {
+  if (IsRegionCapture(target.sub_target)) {
     const auto crop_id = absl::get<RegionCaptureCropId>(target.sub_target);
     for (const auto& id_and_sink : support_map_) {
       const RegionCaptureBounds& bounds =
@@ -670,10 +731,9 @@ void FrameSinkManagerImpl::DiscardPendingCopyOfOutputRequests(
   for (queue.push(root_sink); !queue.empty(); queue.pop()) {
     auto& frame_sink_id = queue.front();
     auto support = support_map_.find(frame_sink_id);
-    // The returned copy requests are destroyed upon going out of scope, which
-    // invokes the pending callbacks.
-    if (support != support_map_.end())
-      support->second->TakeCopyOutputRequests(LocalSurfaceId::MaxSequenceId());
+    if (support != support_map_.end()) {
+      support->second->ClearAllPendingCopyOutputRequests();
+    }
     for (auto child : GetChildrenByParent(frame_sink_id))
       queue.push(child);
   }
@@ -692,10 +752,32 @@ void FrameSinkManagerImpl::OnCaptureStopped(const FrameSinkId& id) {
   UpdateThrottling();
 }
 
-bool FrameSinkManagerImpl::VerifySandboxedThreadIds(
-    base::flat_set<base::PlatformThreadId> thread_ids) {
-  return CheckThreadIdsDoNotBelongToProcessIds(
-      {host_process_id_, base::GetCurrentProcId()}, std::move(thread_ids));
+void FrameSinkManagerImpl::VerifySandboxedThreadIds(
+    const base::flat_set<base::PlatformThreadId>& thread_ids,
+    base::OnceCallback<void(bool)> verification_callback) {
+#if BUILDFLAG(IS_ANDROID)
+  if (!base::FeatureList::IsEnabled(
+          ::features::kEnableADPFAsyncThreadsVerification)) {
+    // Do a sync check for both GPU and Browser from the GPU process, and
+    // invoke the callback immediately.
+    std::move(verification_callback)
+        .Run(CheckThreadIdsDoNotBelongToProcessIds(
+            {host_process_id_, base::GetCurrentProcId()}, thread_ids));
+    return;
+  }
+
+  if (!CheckThreadIdsDoNotBelongToCurrentProcess(thread_ids)) {
+    // At least one thread belongs to the GPU process, verification failed.
+    std::move(verification_callback).Run(false);
+    return;
+  }
+  // GPU check passed, now do an async check for the Browser process.
+  std::vector<int32_t> tids(thread_ids.begin(), thread_ids.end());
+  client_->VerifyThreadIdsDoNotBelongToHost(tids,
+                                            std::move(verification_callback));
+#else
+  std::move(verification_callback).Run(false);
+#endif
 }
 
 void FrameSinkManagerImpl::CacheBackBuffer(
@@ -786,6 +868,66 @@ void FrameSinkManagerImpl::UpdateThrottling() {
 
 void FrameSinkManagerImpl::ClearThrottling(const FrameSinkId& id) {
   UpdateThrottlingRecursively(id, base::TimeDelta());
+}
+
+void FrameSinkManagerImpl::CacheSurfaceAnimationManager(
+    NavigationID navigation_id,
+    std::unique_ptr<SurfaceAnimationManager> manager) {
+  if (navigation_to_animation_manager_.contains(navigation_id)) {
+    LOG(ERROR)
+        << "SurfaceAnimationManager already exists for |navigation_id| : "
+        << navigation_id;
+    return;
+  }
+
+  navigation_to_animation_manager_[navigation_id] = std::move(manager);
+}
+
+std::unique_ptr<SurfaceAnimationManager>
+FrameSinkManagerImpl::TakeSurfaceAnimationManager(NavigationID navigation_id) {
+  auto it = navigation_to_animation_manager_.find(navigation_id);
+  if (it == navigation_to_animation_manager_.end()) {
+    LOG(ERROR) << "SurfaceAnimationManager missing for |navigation_id| : "
+               << navigation_id;
+    return nullptr;
+  }
+
+  auto manager = std::move(it->second);
+  navigation_to_animation_manager_.erase(it);
+  return manager;
+}
+
+void FrameSinkManagerImpl::ClearSurfaceAnimationManager(
+    NavigationID navigation_id) {
+  navigation_to_animation_manager_.erase(navigation_id);
+}
+
+void FrameSinkManagerImpl::StartFrameCountingForTest(
+    base::TimeTicks start_time,
+    base::TimeDelta bucket_size) {
+  DCHECK(!frame_counter_.has_value());
+  frame_counter_.emplace(start_time, bucket_size);
+
+  for (auto& [sink_id, support] : support_map_) {
+    DCHECK_EQ(sink_id, support->frame_sink_id());
+    frame_counter_->AddFrameSink(sink_id, support->frame_sink_type(),
+                                 support->is_root(),
+                                 GetFrameSinkDebugLabel(sink_id));
+  }
+}
+
+void FrameSinkManagerImpl::StopFrameCountingForTest(
+    StopFrameCountingForTestCallback callback) {
+  // Returns empty data if `frame_counter_` has no value. This could happen
+  // when gpu-process is restarted in middle of test and test scripts still
+  // calls this at the end.
+  if (!frame_counter_.has_value()) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
+  std::move(callback).Run(frame_counter_->TakeData());
+  frame_counter_.reset();
 }
 
 }  // namespace viz

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 
 #include <string>
 
-#include "ash/services/ime/public/cpp/suggestions.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/input_method/input_method_engine.h"
 #include "chrome/browser/ash/input_method/suggester.h"
 #include "chrome/browser/ash/input_method/suggestion_enums.h"
 #include "chrome/browser/ash/input_method/suggestion_handler_interface.h"
 #include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
+#include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
@@ -34,16 +35,16 @@ class EmojiSuggester : public Suggester {
   void OnFocus(int context_id) override;
   void OnBlur() override;
   void OnExternalSuggestionsUpdated(
-      const std::vector<ime::TextSuggestion>& suggestions) override;
+      const std::vector<ime::AssistiveSuggestion>& suggestions,
+      const absl::optional<ime::SuggestionsTextContext>& context) override;
   SuggestionStatus HandleKeyEvent(const ui::KeyEvent& event) override;
   bool TrySuggestWithSurroundingText(const std::u16string& text,
-                                     int cursor_pos,
-                                     int anchor_pos) override;
+                                     gfx::Range selection_range) override;
   bool AcceptSuggestion(size_t index) override;
   void DismissSuggestion() override;
   AssistiveType GetProposeActionType() override;
   bool HasSuggestions() override;
-  std::vector<ime::TextSuggestion> GetSuggestions() override;
+  std::vector<ime::AssistiveSuggestion> GetSuggestions() override;
 
   bool ShouldShowSuggestion(const std::u16string& text);
 
@@ -62,15 +63,9 @@ class EmojiSuggester : public Suggester {
   void SetButtonHighlighted(const ui::ime::AssistiveWindowButton& button,
                             bool highlighted);
 
-  int GetPrefValue(const std::string& pref_name);
-
-  // Increment int value for the given pref_name by 1 every time the function is
-  // called. The function has no effect after the int value becomes equal to the
-  // max_value.
-  void IncrementPrefValueTilCapped(const std::string& pref_name, int max_value);
-
-  SuggestionHandlerInterface* const suggestion_handler_;
-  Profile* profile_;
+  const raw_ptr<SuggestionHandlerInterface, DanglingUntriaged | ExperimentalAsh>
+      suggestion_handler_;
+  raw_ptr<Profile, DanglingUntriaged | ExperimentalAsh> profile_;
 
   // ID of the focused text field, nullopt if none is focused.
   absl::optional<int> focused_context_id_;

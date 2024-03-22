@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ime/ash/extension_ime_util.h"
 
 namespace arc {
@@ -38,7 +39,8 @@ class FakeDelegate : public ArcInputMethodState::Delegate {
   InputMethodDescriptor BuildInputMethodDescriptor(
       const mojom::ImeInfoPtr& info) const override {
     return InputMethodDescriptor(info->ime_id, "", "", {}, {}, false, GURL(),
-                                 GURL());
+                                 GURL(),
+                                 /*handwriting_language=*/absl::nullopt);
   }
   bool allowed = false;
 };
@@ -106,26 +108,6 @@ TEST(ArcInputMethodState, AllowDisallowInputMethods) {
   delegate.allowed = false;
   EXPECT_EQ(1u, state.GetAvailableInputMethods().size());
   EXPECT_EQ("ime_a", state.GetAvailableInputMethods()[0].id());
-}
-
-TEST(ArcInputMethodState, Histogram) {
-  base::HistogramTester histogram_tester;
-  constexpr char kHistogramName[] = "Arc.ImeCount";
-
-  FakeDelegate delegate;
-
-  ArcInputMethodState state(&delegate);
-  std::vector<mojom::ImeInfoPtr> imes;
-  imes.push_back(GenerateImeInfo("ime_a", true, true));
-  imes.push_back(GenerateImeInfo("ime_b", true, false));
-  state.InitializeWithImeInfo("ime_id", imes);
-
-  histogram_tester.ExpectTotalCount(kHistogramName, 1);
-  histogram_tester.ExpectUniqueSample(kHistogramName, imes.size(), 1);
-
-  imes.clear();
-  state.InitializeWithImeInfo("ime_id", imes);
-  histogram_tester.ExpectTotalCount(kHistogramName, 2);
 }
 
 }  // namespace arc

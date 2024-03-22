@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "components/update_client/update_client.h"
 
 namespace base {
@@ -19,7 +19,6 @@ class SequencedTaskRunner;
 
 namespace update_client {
 
-// TODO(sorin): consider reducing the number of the installer mocks.
 // A TestInstaller is an installer that does nothing for installation except
 // increment a counter.
 class TestInstaller : public CrxInstaller {

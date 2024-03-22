@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define UI_BASE_TEST_SKIA_GOLD_MATCHING_ALGORITHM_H_
 
 #include <string>
+
+#include "build/chromeos_buildflags.h"
 
 namespace base {
 class CommandLine;
@@ -15,8 +17,7 @@ namespace ui {
 namespace test {
 
 // Describes what algorithm to use to match golden images.
-// There are three algorithms (exact, fuzzy, sobel), and the latter two have
-// adjustable parameters:
+// Fuzzy and Sobel algorithms have adjustable parameters:
 //
 // Fuzzy has the max number of different pixels, the max per-channel delta sum
 // (i.e. how much a pixel can differ by and still be considered the same), and
@@ -46,7 +47,6 @@ class SkiaGoldMatchingAlgorithm {
   // Append the algorithm parameter to |cmd|.
   virtual void AppendAlgorithmToCmdline(base::CommandLine& cmd) const;
 
- protected:
   // The algorithm name for commandline.
   virtual std::string GetCommandLineSwitchName() const = 0;
 };
@@ -95,6 +95,26 @@ class SobelSkiaGoldMatchingAlgorithm : public FuzzySkiaGoldMatchingAlgorithm {
  private:
   int edge_threshold_{0};
 };
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+
+// With this algorithm, an image is regarded to match a golden image if:
+// 1. it is an exact matching, and
+// 2. the matched golden image is the only image in its group.
+// This algorithm is used in Ash pixel testing to facilitate the gold image
+// revision update.
+class PositiveIfOnlyImageAlgorithm : public SkiaGoldMatchingAlgorithm {
+ public:
+  PositiveIfOnlyImageAlgorithm();
+  ~PositiveIfOnlyImageAlgorithm() override;
+
+ private:
+  // SkiaGoldMatchingAlgorithm:
+  void AppendAlgorithmToCmdline(base::CommandLine& cmd) const override;
+  std::string GetCommandLineSwitchName() const override;
+};
+
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace test
 }  // namespace ui

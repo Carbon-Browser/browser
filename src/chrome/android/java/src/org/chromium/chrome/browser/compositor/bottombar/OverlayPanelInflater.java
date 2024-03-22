@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,10 @@ import android.view.ViewGroup;
 import org.chromium.ui.resources.dynamics.DynamicResourceLoader;
 import org.chromium.ui.resources.dynamics.ViewResourceInflater;
 
-/**
- * A helper class for inflating Overlay Panel Views.
- */
+/** A helper class for inflating Overlay Panel Views. */
 public abstract class OverlayPanelInflater extends ViewResourceInflater {
 
-    /**
-     * The panel used to get information about the panel layout.
-     */
+    /** The panel used to get information about the panel layout. */
     protected OverlayPanel mOverlayPanel;
 
     /**
@@ -36,12 +32,13 @@ public abstract class OverlayPanelInflater extends ViewResourceInflater {
      * @param container         The container View used to inflate the View.
      * @param resourceLoader    The resource loader that will handle the snapshot capturing.
      */
-    public OverlayPanelInflater(OverlayPanel panel,
-                                    int layoutId,
-                                    int viewId,
-                                    Context context,
-                                    ViewGroup container,
-                                    DynamicResourceLoader resourceLoader) {
+    public OverlayPanelInflater(
+            OverlayPanel panel,
+            int layoutId,
+            int viewId,
+            Context context,
+            ViewGroup container,
+            DynamicResourceLoader resourceLoader) {
         super(layoutId, viewId, context, container, resourceLoader);
 
         mOverlayPanel = panel;

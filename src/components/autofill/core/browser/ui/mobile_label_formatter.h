@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,11 +34,11 @@ namespace autofill {
 // Non street address examples: London, 02113, CA, Rio Comprido, and Germany
 class MobileLabelFormatter : public LabelFormatter {
  public:
-  MobileLabelFormatter(const std::vector<AutofillProfile*>& profiles,
+  MobileLabelFormatter(const std::vector<const AutofillProfile*>& profiles,
                        const std::string& app_locale,
                        ServerFieldType focused_field_type,
                        uint32_t groups,
-                       const std::vector<ServerFieldType>& field_types);
+                       const ServerFieldTypeSet& field_types);
 
   ~MobileLabelFormatter() override;
 

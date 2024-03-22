@@ -1,5 +1,4 @@
-
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -204,9 +203,16 @@ bool LeafPayloadReader::Initialize(int64_t payload_size, int payload_offset) {
   return true;
 }
 
+bool LeafPayloadReader::IsInitialized() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return page_id_ != DatabasePageReader::kInvalidPageId;
+}
+
 bool LeafPayloadReader::ReadPayload(int64_t offset,
                                     int64_t size,
                                     uint8_t* buffer) {
+  DCHECK(IsInitialized())
+      << "Initialize() not called, or last call did not succeed";
   DCHECK_GE(offset, 0);
   DCHECK_LT(offset, payload_size_);
   DCHECK_GT(size, 0);
@@ -250,6 +256,11 @@ bool LeafPayloadReader::ReadPayload(int64_t offset,
 
   // The read is entirely in overflow pages.
   DCHECK_GE(offset, inline_payload_size_);
+  if (max_overflow_payload_size_ <= 0) {
+    // `max_overflow_payload_size_` should have been set in Initialize() if it's
+    // to be used here. See https://crbug.com/1417151.
+    return false;
+  }
   while (size > 0) {
     const int overflow_page_index =
         (offset - inline_payload_size_) / max_overflow_payload_size_;
@@ -287,7 +298,7 @@ bool LeafPayloadReader::ReadPayload(int64_t offset,
 
 const uint8_t* LeafPayloadReader::ReadInlinePayload() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(page_id_ != DatabasePageReader::kInvalidPageId)
+  DCHECK(IsInitialized())
       << "Initialize() not called, or last call did not succeed";
 
   if (db_reader_->ReadPage(page_id_) != SQLITE_OK)

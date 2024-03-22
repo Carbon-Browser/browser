@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@
 
 #include "base/base_export.h"
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/message_loop/message_pump.h"
 #include "base/profiler/sample_metadata.h"
 #include "base/run_loop.h"
+#include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/associated_thread_id.h"
-#include "base/task/sequence_manager/lazy_now.h"
 #include "base/task/sequence_manager/tasks.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
@@ -64,10 +65,10 @@ class BASE_EXPORT ThreadController {
     kApplicationTask = 5,
     kIdleWork = 6,
     kNested = 7,
+    kLastPhase = kNested,
     // Reported as a kWorkItem but doesn't clear state relevant to the ongoing
     // work item as it isn't finished (will resume after nesting).
-    kWorkItemSuspendedOnNested = 8,
-    kMaxValue = kNested
+    kWorkItemSuspendedOnNested,
   };
 
   explicit ThreadController(const TickClock* time_source);
@@ -81,8 +82,7 @@ class BASE_EXPORT ThreadController {
   // Notifies that |pending_task| is about to be enqueued. Needed for tracing
   // purposes. The impl may use this opportunity add metadata to |pending_task|
   // before it is moved into the queue.
-  virtual void WillQueueTask(PendingTask* pending_task,
-                             const char* task_queue_name) = 0;
+  virtual void WillQueueTask(PendingTask* pending_task) = 0;
 
   // Notify the controller that its associated sequence has immediate work
   // to run. Shortly after this is called, the thread associated with this
@@ -108,10 +108,6 @@ class BASE_EXPORT ThreadController {
   // a Schedule*Work() call is made.
   // Must be called before the first call to Schedule*Work().
   virtual void SetSequencedTaskSource(SequencedTaskSource*) = 0;
-
-  // Requests desired timer precision from the OS.
-  // Has no effect on some platforms.
-  virtual void SetTimerSlack(TimerSlack timer_slack) = 0;
 
   // Completes delayed initialization of unbound ThreadControllers.
   // BindToCurrentThread(MessageLoopBase*) or BindToCurrentThread(MessagePump*)
@@ -145,6 +141,10 @@ class BASE_EXPORT ThreadController {
   virtual void DetachFromMessagePump() = 0;
 #endif
 
+  // Initializes the state of all the thread controller features. Must be
+  // invoked after FeatureList initialization.
+  static void InitializeFeatures();
+
   // Enables TimeKeeper metrics. `thread_name` will be used as a suffix.
   void EnableMessagePumpTimeKeeperMetrics(const char* thread_name);
 
@@ -157,7 +157,7 @@ class BASE_EXPORT ThreadController {
   virtual void PrioritizeYieldingToNative(base::TimeTicks prioritize_until) = 0;
 
   // Sets the SingleThreadTaskRunner that will be returned by
-  // ThreadTaskRunnerHandle::Get on the thread controlled by this
+  // SingleThreadTaskRunner::GetCurrentDefault on the thread controlled by this
   // ThreadController.
   virtual void SetDefaultTaskRunner(scoped_refptr<SingleThreadTaskRunner>) = 0;
 
@@ -186,21 +186,18 @@ class BASE_EXPORT ThreadController {
   // switching MainThreadOnly to thread annotations and annotating all
   // thread-affine ThreadController methods. Without that, this lone annotation
   // would result in an inconsistent set of DCHECKs...
-  //
-  // TODO(crbug.com/1298696): foo_unittests breaks with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<const TickClock, DegradeToNoOpWhenMTE> time_source_;  // Not owned.
+  raw_ptr<const TickClock> time_source_;  // Not owned.
 
   // Tracks the state of each run-level (main and nested ones) in its associated
   // ThreadController. It does so using two high-level principles:
   //  1) #work-in-work-implies-nested :
   //     If the |state_| is kRunningWorkItem and another work item starts
   //     (OnWorkStarted()), it implies this inner-work-item is running from a
-  //     nested loop and another RunLevel is pushed onto |run_levels_|.
-  //  2) #done-work-while-not-running-implies-done-nested
-  //     If the current work item completes (OnWorkEnded()) and |state_| is not
-  //     kRunningWorkItem, the top RunLevel was an (already exited) nested loop
-  //     and will be popped off |run_levels_|.
+  //  2) #done-work-at-lower-runlevel-implies-done-nested
+  //     WorkItems are required to pass in the nesting depth at which they were
+  //     created in OnWorkEnded(). Then, if |rundepth| is lower than the current
+  //     RunDepth(), we know the top RunLevel was an (already exited) nested
+  //     loop and will be popped off |run_levels_|.
   // We need this logic because native nested loops can run from any work item
   // without a RunLoop being involved, see
   // ThreadControllerWithMessagePumpTest.ThreadControllerActive* tests for
@@ -228,12 +225,12 @@ class BASE_EXPORT ThreadController {
   //          current RunLevel.
   //  B) When work item (A) exits its nested loop and completes, respectively:
   //     i) The loop was invisible so no RunLevel was created for it and
-  //        #done-work-while-not-running-implies-done-nested doesn't trigger so
+  //        #done-work-at-lower-runlevel-implies-done-nested doesn't trigger so
   //        it balances out.
-  //     ii) Instrumented work did run in which case |state_| is
-  //         kInBetweenWorkItems or kIdle. When the work item in which (A) runs
-  //         completes, #done-work-while-not-running-implies-done-nested
-  //         triggers and everything balances out.
+  //     ii) Instrumented work did run, and so RunLevels() increased. However,
+  //         since instrumented work (the work which called the nested loop)
+  //         keeps track of its own run depth, on its exit, we know to pop the
+  //         RunLevel corresponding to the nested work.
   //     iii) Nested instrumented work was visible but didn't appear nested,
   //          state is now back to kInBetweenWorkItems or kIdle as before (A).
   class BASE_EXPORT RunLevelTracker {
@@ -257,17 +254,21 @@ class BASE_EXPORT ThreadController {
     void OnRunLoopEnded();
     void OnWorkStarted(LazyNow& lazy_now);
     void OnApplicationTaskSelected(TimeTicks queue_time, LazyNow& lazy_now);
-    void OnWorkEnded(LazyNow& lazy_now);
+    void OnWorkEnded(LazyNow& lazy_now, int run_level_depth);
     void OnIdle(LazyNow& lazy_now);
 
     size_t num_run_levels() const {
-      DCHECK_CALLED_ON_VALID_THREAD(outer_.associated_thread_->thread_checker);
+      DCHECK_CALLED_ON_VALID_THREAD(outer_->associated_thread_->thread_checker);
       return run_levels_.size();
     }
 
+    // Emits a perfetto::Flow (wakeup.flow) event associated with this
+    // RunLevelTracker.
+    void RecordScheduleWork();
+
     void EnableTimeKeeperMetrics(const char* thread_name);
 
-    // Observers changes of state sent as trace-events so they can be tested.
+    // Observes changes of state sent as trace-events so they can be tested.
     class TraceObserverForTesting {
      public:
       virtual ~TraceObserverForTesting() = default;
@@ -281,6 +282,12 @@ class BASE_EXPORT ThreadController {
         TraceObserverForTesting* trace_observer_for_testing);
 
    private:
+#if BUILDFLAG(ENABLE_BASE_TRACING)
+    using TerminatingFlowLambda =
+        std::invoke_result<decltype(perfetto::TerminatingFlow::FromPointer),
+                           void*>::type;
+#endif
+
     // Keeps track of the time spent in various Phases (ignores idle), reports
     // via UMA to the corresponding phase every time one reaches >= 100ms of
     // cumulative time, resulting in a metric of relative time spent in each
@@ -334,7 +341,7 @@ class BASE_EXPORT ThreadController {
       static const char* PhaseToEventName(Phase phase);
 
       // Cumulative time deltas for each phase, reported and reset when >=100ms.
-      std::array<TimeDelta, Phase::kMaxValue + 1> deltas_ = {};
+      std::array<TimeDelta, Phase::kLastPhase + 1> deltas_ = {};
       // Set at the start of the first work item out-of-idle. Consumed from the
       // first application task found in that work cycle
       // (in OnApplicationTaskSelected).
@@ -350,14 +357,14 @@ class BASE_EXPORT ThreadController {
       bool current_work_item_is_native_ = true;
 
       // non-null when recording is enabled.
-      HistogramBase* histogram_ = nullptr;
+      raw_ptr<HistogramBase> histogram_ = nullptr;
 #if BUILDFLAG(ENABLE_BASE_TRACING)
       absl::optional<perfetto::Track> perfetto_track_;
 
       // True if tracing was enabled during the last pass of RecordTimeInPhase.
-      bool was_tracing_enabled_;
+      bool was_tracing_enabled_ = false;
 #endif
-      const RunLevelTracker& outer_;
+      const raw_ref<const RunLevelTracker> outer_;
     } time_keeper_{*this};
 
     class RunLevel {
@@ -365,7 +372,12 @@ class BASE_EXPORT ThreadController {
       RunLevel(State initial_state,
                bool is_nested,
                TimeKeeper& time_keeper,
-               LazyNow& lazy_now);
+               LazyNow& lazy_now
+#if BUILDFLAG(ENABLE_BASE_TRACING)
+               ,
+               TerminatingFlowLambda& terminating_flow_lambda
+#endif
+      );
       ~RunLevel();
 
       // Move-constructible for STL compat. Flags `other.was_moved_` so it noops
@@ -374,7 +386,7 @@ class BASE_EXPORT ThreadController {
       RunLevel(RunLevel&& other);
       RunLevel& operator=(RunLevel&&) = delete;
 
-      void UpdateState(State new_state, LazyNow& lazy_now);
+      void UpdateState(State new_state);
 
       State state() const { return state_; }
 
@@ -388,12 +400,17 @@ class BASE_EXPORT ThreadController {
       State state_ = kIdle;
       bool is_nested_;
 
+      bool ShouldRecordSampleMetadata();
+
       const raw_ref<TimeKeeper> time_keeper_;
       // Must be set shortly before ~RunLevel.
-      LazyNow* exit_lazy_now_ = nullptr;
+      raw_ptr<LazyNow> exit_lazy_now_ = nullptr;
 
       SampleMetadata thread_controller_sample_metadata_;
       size_t thread_controller_active_id_ = 0;
+#if BUILDFLAG(ENABLE_BASE_TRACING)
+      const raw_ref<TerminatingFlowLambda> terminating_wakeup_flow_lambda_;
+#endif
 
       // Toggles to true when used as RunLevel&& input to construct another
       // RunLevel. This RunLevel's destructor will then no-op.
@@ -412,10 +429,15 @@ class BASE_EXPORT ThreadController {
       TruePostMove was_moved_;
     };
 
-    [[maybe_unused]] const ThreadController& outer_;
+    [[maybe_unused]] const raw_ref<const ThreadController> outer_;
+
+#if BUILDFLAG(ENABLE_BASE_TRACING)
+    TerminatingFlowLambda terminating_wakeup_lambda_{
+        perfetto::TerminatingFlow::FromPointer(this)};
+#endif
 
     std::stack<RunLevel, std::vector<RunLevel>> run_levels_
-        GUARDED_BY_CONTEXT(outer_.associated_thread_->thread_checker);
+        GUARDED_BY_CONTEXT(outer_->associated_thread_->thread_checker);
 
     static TraceObserverForTesting* trace_observer_for_testing_;
   } run_level_tracker_{*this};

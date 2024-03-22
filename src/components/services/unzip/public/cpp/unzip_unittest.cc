@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ namespace {
 
 base::FilePath GetArchivePath(const base::StringPiece archive_name) {
   base::FilePath path;
-  EXPECT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &path));
+  EXPECT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path));
   return path.AppendASCII("components")
       .AppendASCII("test")
       .AppendASCII("data")
@@ -330,6 +330,12 @@ TEST_F(UnzipTest, ExtractEncrypted) {
   // Check: 5 files should have been extracted.
   bool some_files_empty = false;
   EXPECT_EQ(5, CountFiles(unzip_dir_, &some_files_empty));
+}
+
+TEST_F(UnzipTest, DetectAESArchive) {
+  mojom::Info result =
+      DoGetExtractedInfo(GetArchivePath("DifferentEncryptions.zip"));
+  EXPECT_TRUE(result.uses_aes_encryption);
 }
 
 }  // namespace

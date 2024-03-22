@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -482,10 +482,6 @@ void IMM32Manager::ConvertInputModeToImmFlags(TextInputMode input_mode,
                                               DWORD* new_conversion_mode) {
   *open = FALSE;
   *new_conversion_mode = initial_conversion_mode;
-}
-
-bool IMM32Manager::IsImm32ImeActive() {
-  return ::ImmGetIMEFileName(::GetKeyboardLayout(0), nullptr, 0) > 0;
 }
 
 }  // namespace ui

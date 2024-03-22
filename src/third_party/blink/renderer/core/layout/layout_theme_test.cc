@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
@@ -48,7 +49,7 @@ TEST_F(LayoutThemeTest, ChangeFocusRingColor) {
   EXPECT_NE(nullptr, span);
   EXPECT_NE(nullptr, span->GetLayoutObject());
 
-  Color custom_color = MakeRGB(123, 145, 167);
+  Color custom_color = Color::FromRGB(123, 145, 167);
 
   // Checking unfocused style.
   EXPECT_EQ(EBorderStyle::kNone, OutlineStyle(span));
@@ -88,7 +89,7 @@ TEST_F(LayoutThemeTest, SystemColorWithColorScheme) {
     <div id="dark"></div>
   )HTML");
 
-  Element* dark_element = GetDocument().getElementById("dark");
+  Element* dark_element = GetDocument().getElementById(AtomicString("dark"));
   ASSERT_TRUE(dark_element);
 
   const ComputedStyle* style = dark_element->GetComputedStyle();
@@ -132,6 +133,25 @@ TEST_F(LayoutThemeTest, SetSelectionColors) {
   EXPECT_EQ(Color::kWhite,
             LayoutTheme::GetTheme().ActiveSelectionForegroundColor(
                 mojom::blink::ColorScheme::kLight));
+}
+
+TEST_F(LayoutThemeTest, SetSelectionColorsNoInvalidation) {
+  LayoutTheme::GetTheme().SetSelectionColors(Color::kWhite, Color::kWhite,
+                                             Color::kWhite, Color::kWhite);
+
+  SetHtmlInnerHTML("<body>");
+  EXPECT_EQ(GetDocument().documentElement()->GetStyleChangeType(),
+            StyleChangeType::kNoStyleChange);
+  EXPECT_EQ(Color::kWhite,
+            LayoutTheme::GetTheme().ActiveSelectionForegroundColor(
+                mojom::blink::ColorScheme::kLight));
+
+  // Setting selection colors to the same values should not cause style
+  // recalculation.
+  LayoutTheme::GetTheme().SetSelectionColors(Color::kWhite, Color::kWhite,
+                                             Color::kWhite, Color::kWhite);
+  EXPECT_EQ(GetDocument().documentElement()->GetStyleChangeType(),
+            StyleChangeType::kNoStyleChange);
 }
 #endif  // !BUILDFLAG(IS_MAC)
 

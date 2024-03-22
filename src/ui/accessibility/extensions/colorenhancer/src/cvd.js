@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,10 +28,10 @@ class CVD {
    */
   static cssContent_ = `
 html[cvd="0"] {
-  -webkit-filter: url('#cvd_extension_0');
+  filter: url('#cvd_extension_0');
 }
 html[cvd="1"] {
-  -webkit-filter: url('#cvd_extension_1');
+  filter: url('#cvd_extension_1');
 }
 `;
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ const char* MessageSourceToString(mojom::ConsoleMessageSource source) {
 std::unique_ptr<TracedValue> MessageTracedValue(ConsoleMessage* message) {
   auto value = std::make_unique<TracedValue>();
   value->SetString("content", message->Message());
-  if (!message->Location()->Url().IsEmpty()) {
+  if (!message->Location()->Url().empty()) {
     value->SetString("url", message->Location()->Url());
   }
   return value;
@@ -61,10 +61,10 @@ void TraceConsoleMessageEvent(ConsoleMessage* message) {
   // Change in this function requires adjustment of Catapult/Telemetry metric
   // tracing/tracing/metrics/console_error_metric.html.
   // See https://crbug.com/880432
-  if (message->Level() == mojom::ConsoleMessageLevel::kError) {
+  if (message->GetLevel() == ConsoleMessage::Level::kError) {
     TRACE_EVENT_INSTANT2("blink.console", "ConsoleMessage::Error",
                          TRACE_EVENT_SCOPE_THREAD, "source",
-                         MessageSourceToString(message->Source()), "message",
+                         MessageSourceToString(message->GetSource()), "message",
                          MessageTracedValue(message));
   }
 }

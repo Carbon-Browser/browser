@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "base/win/scoped_com_initializer.h"
@@ -70,7 +70,7 @@ class MEDIA_EXPORT MediaFoundationCdmFactory final : public CdmFactory {
                        IsTypeSupportedResultCB is_type_supported_result_cb);
 
   void StoreClientToken(const std::vector<uint8_t>& client_token);
-  void OnCdmEvent(CdmEvent event);
+  void OnCdmEvent(CdmEvent event, HRESULT hresult);
 
   // Creates `mf_cdm` based on the input parameters. Same as
   // CreateMediaFoundationCdm() but returns the HRESULT in out parameter so we

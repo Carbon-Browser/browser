@@ -1,30 +1,39 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/authentication/authentication_flow.h"
-#include "base/strings/sys_string_conversions.h"
 
-#include "base/check_op.h"
+#import "base/check_op.h"
+#import "base/feature_list.cc"
 #import "base/ios/block_types.h"
-#include "base/notreached.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/main/browser.h"
-#include "ios/chrome/browser/policy/cloud/user_policy_switch.h"
-#include "ios/chrome/browser/signin/authentication_service.h"
-#include "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
-#include "ios/chrome/browser/signin/constants.h"
+#import "base/metrics/user_metrics.h"
+#import "base/notreached.h"
+#import "base/strings/sys_string_conversions.h"
+#import "components/bookmarks/common/bookmark_features.h"
+#import "components/reading_list/features/reading_list_switches.h"
+#import "components/sync/base/features.h"
+#import "components/sync/service/sync_service.h"
+#import "components/sync/service/sync_user_settings.h"
+#import "ios/chrome/browser/flags/ios_chrome_flag_descriptions.h"
+#import "ios/chrome/browser/policy/browser_policy_connector_ios.h"
+#import "ios/chrome/browser/policy/cloud/user_policy_switch.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/capabilities_types.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/signin/model/constants.h"
+#import "ios/chrome/browser/signin/model/system_identity.h"
+#import "ios/chrome/browser/signin/model/system_identity_manager.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/authentication_flow_performer.h"
-#include "ios/chrome/grit/ios_strings.h"
-#import "ios/public/provider/chrome/browser/signin/chrome_identity.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/signin/signin_error_api.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 using signin_ui::CompletionCallback;
 
@@ -49,12 +58,22 @@ enum AuthenticationState {
   DONE
 };
 
+// Returns yes if the browser has machine level policies.
+bool HasMachineLevelPolicies() {
+  BrowserPolicyConnectorIOS* policy_connector =
+      GetApplicationContext()->GetBrowserPolicyConnector();
+  return policy_connector && policy_connector->HasMachineLevelPolicies();
+}
+
 }  // namespace
 
 @interface AuthenticationFlow ()
 
 // Whether this flow is curently handling an error.
 @property(nonatomic, assign) BOOL handlingError;
+
+// The action to perform following account sign-in.
+@property(nonatomic, assign) PostSignInAction postSignInAction;
 
 // Indicates how to handle existing data when the signed in account is being
 // switched. Possible values:
@@ -72,10 +91,6 @@ enum AuthenticationState {
 // `_signInCompletion` when finished.
 - (void)continueSignin;
 
-// Handles authentication related errors or continues sign-in if the
-// authentication was successful.
-- (void)handlePostAuthenticationFlow:(BOOL)success;
-
 // Runs `_signInCompletion` asynchronously with `success` argument.
 - (void)completeSignInWithSuccess:(BOOL)success;
 
@@ -88,7 +103,6 @@ enum AuthenticationState {
 @end
 
 @implementation AuthenticationFlow {
-  PostSignInAction _postSignInAction;
   UIViewController* _presentingViewController;
   CompletionCallback _signInCompletion;
   AuthenticationFlowPerformer* _performer;
@@ -97,23 +111,29 @@ enum AuthenticationState {
   AuthenticationState _state;
   BOOL _didSignIn;
   BOOL _failedOrCancelled;
-  BOOL _shouldSignIn;
   BOOL _shouldSignOut;
+  BOOL _alreadySignedInWithTheSameAccount;
   // YES if the signed in account is a managed account and the sign-in flow
   // includes sync.
   BOOL _shouldShowManagedConfirmation;
-  BOOL _shouldCommitSync;
   // YES if user policies have to be fetched.
   BOOL _shouldFetchUserPolicy;
+  // YES if user is opted into bookmark and reading list account storage.
+  BOOL _shouldShowSigninSnackbar;
 
   Browser* _browser;
-  ChromeIdentity* _identityToSignIn;
+  id<SystemIdentity> _identityToSignIn;
+  signin_metrics::AccessPoint _accessPoint;
   NSString* _identityToSignInHostedDomain;
 
   // Token to have access to user policies from dmserver.
   NSString* _dmToken;
   // ID of the client that is registered for user policy.
   NSString* _clientID;
+  // List of IDs that represents the domain of the user. The list will be used
+  // to compare with a similiar list from device mangement to understand whether
+  // user and device are managed by the same domain.
+  NSArray<NSString*>* _userAffiliationIDs;
 
   // This AuthenticationFlow keeps a reference to `self` while a sign-in flow is
   // is in progress to ensure it outlives any attempt to destroy it in
@@ -123,11 +143,13 @@ enum AuthenticationState {
 
 @synthesize handlingError = _handlingError;
 @synthesize dispatcher = _dispatcher;
+@synthesize identity = _identityToSignIn;
 
 #pragma mark - Public methods
 
 - (instancetype)initWithBrowser:(Browser*)browser
-                       identity:(ChromeIdentity*)identity
+                       identity:(id<SystemIdentity>)identity
+                    accessPoint:(signin_metrics::AccessPoint)accessPoint
                postSignInAction:(PostSignInAction)postSignInAction
        presentingViewController:(UIViewController*)presentingViewController {
   if ((self = [super init])) {
@@ -136,6 +158,7 @@ enum AuthenticationState {
     DCHECK(identity);
     _browser = browser;
     _identityToSignIn = identity;
+    _accessPoint = accessPoint;
     _localDataClearingStrategy = SHOULD_CLEAR_DATA_USER_CHOICE;
     _postSignInAction = postSignInAction;
     _presentingViewController = presentingViewController;
@@ -154,21 +177,33 @@ enum AuthenticationState {
   if (!_performer) {
     _performer = [[AuthenticationFlowPerformer alloc] initWithDelegate:self];
   }
-  [self continueSignin];
+  // Make sure -[AuthenticationFlow startSignInWithCompletion:] doesn't call
+  // the completion block synchronously.
+  // Related to http://crbug.com/1246480.
+  __weak __typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weakSelf continueSignin];
+  });
 }
 
-- (void)cancelAndDismissAnimated:(BOOL)animated {
-  if (_state == DONE)
+- (void)interruptWithAction:(SigninCoordinatorInterrupt)action {
+  if (_state == DONE) {
     return;
+  }
+  __weak __typeof(self) weakSelf = self;
+  [_performer interruptWithAction:action
+                       completion:^() {
+                         [weakSelf performerInterrupted];
+                       }];
+}
 
-  [_performer cancelAndDismissAnimated:animated];
+- (void)performerInterrupted {
   if (_state != DONE) {
     // The performer might not have been able to continue the flow if it was
     // waiting for a callback (e.g. waiting for AccountReconcilor). In this
     // case, we force the flow to finish synchronously.
     [self cancelFlow];
   }
-
   DCHECK_EQ(DONE, _state);
 }
 
@@ -177,7 +212,7 @@ enum AuthenticationState {
   _presentingViewController = presentingViewController;
 }
 
-#pragma mark State machine management
+#pragma mark - State machine management
 
 - (AuthenticationState)nextStateFailedOrCancelled {
   DCHECK(_failedOrCancelled);
@@ -213,36 +248,36 @@ enum AuthenticationState {
     case BEGIN:
       return CHECK_SIGNIN_STEPS;
     case CHECK_SIGNIN_STEPS:
-      if (_shouldSignIn)
-        return FETCH_MANAGED_STATUS;
-      else
-        return CHECK_MERGE_CASE;
+      return FETCH_MANAGED_STATUS;
     case FETCH_MANAGED_STATUS:
       return CHECK_MERGE_CASE;
     case CHECK_MERGE_CASE:
       // If the user enabled Sync, expect the data clearing strategy to be set.
-      DCHECK(_postSignInAction == POST_SIGNIN_ACTION_NONE ||
-             (_postSignInAction == POST_SIGNIN_ACTION_COMMIT_SYNC &&
-              self.localDataClearingStrategy != SHOULD_CLEAR_DATA_USER_CHOICE));
+      switch (self.postSignInAction) {
+        case PostSignInAction::kNone:
+        case PostSignInAction::kShowSnackbar:
+          // `localDataClearingStrategy` is not required.
+          break;
+        case PostSignInAction::kCommitSync:
+          DCHECK_NE(SHOULD_CLEAR_DATA_USER_CHOICE,
+                    self.localDataClearingStrategy);
+          break;
+      }
       if (_shouldShowManagedConfirmation)
         return SHOW_MANAGED_CONFIRMATION;
       else if (_shouldSignOut)
         return SIGN_OUT_IF_NEEDED;
       else if (self.localDataClearingStrategy == SHOULD_CLEAR_DATA_CLEAR_DATA)
         return CLEAR_DATA;
-      else if (_shouldSignIn)
-        return SIGN_IN;
       else
-        return COMPLETE_WITH_SUCCESS;
+        return SIGN_IN;
     case SHOW_MANAGED_CONFIRMATION:
       if (_shouldSignOut)
         return SIGN_OUT_IF_NEEDED;
       else if (self.localDataClearingStrategy == SHOULD_CLEAR_DATA_CLEAR_DATA)
         return CLEAR_DATA;
-      else if (_shouldSignIn)
-        return SIGN_IN;
       else
-        return COMPLETE_WITH_SUCCESS;
+        return SIGN_IN;
     case SIGN_OUT_IF_NEEDED:
       return self.localDataClearingStrategy == SHOULD_CLEAR_DATA_CLEAR_DATA
                  ? CLEAR_DATA
@@ -250,13 +285,23 @@ enum AuthenticationState {
     case CLEAR_DATA:
       return SIGN_IN;
     case SIGN_IN:
-      if (_shouldCommitSync)
-        return COMMIT_SYNC;
-      else
-        return COMPLETE_WITH_SUCCESS;
+      switch (self.postSignInAction) {
+        case PostSignInAction::kCommitSync:
+          return COMMIT_SYNC;
+        case PostSignInAction::kShowSnackbar:
+          _shouldShowSigninSnackbar = YES;
+          [[fallthrough]];
+        case PostSignInAction::kNone:
+          if (_shouldFetchUserPolicy) {
+            return REGISTER_FOR_USER_POLICY;
+          } else {
+            return COMPLETE_WITH_SUCCESS;
+          }
+      }
     case COMMIT_SYNC:
-      if (policy::IsUserPolicyEnabled() && _shouldFetchUserPolicy)
+      if (_shouldFetchUserPolicy) {
         return REGISTER_FOR_USER_POLICY;
+      }
       return COMPLETE_WITH_SUCCESS;
     case REGISTER_FOR_USER_POLICY:
       if (!_dmToken.length || !_clientID.length) {
@@ -277,7 +322,7 @@ enum AuthenticationState {
 }
 
 - (void)continueSignin {
-  ChromeBrowserState* browserState = _browser->GetBrowserState();
+  ChromeBrowserState* browserState = [self originalBrowserState];
   if (self.handlingError) {
     // The flow should not continue while the error is being handled, e.g. while
     // the user is being informed of an issue.
@@ -299,30 +344,39 @@ enum AuthenticationState {
                          forIdentity:_identityToSignIn];
       return;
 
-    case CHECK_MERGE_CASE:
+    case CHECK_MERGE_CASE: {
       DCHECK_EQ(SHOULD_CLEAR_DATA_USER_CHOICE, self.localDataClearingStrategy);
-      if (_postSignInAction == POST_SIGNIN_ACTION_COMMIT_SYNC) {
-        if (([_performer shouldHandleMergeCaseForIdentity:_identityToSignIn
-                                             browserState:browserState])) {
-          [_performer promptMergeCaseForIdentity:_identityToSignIn
-                                         browser:_browser
-                                  viewController:_presentingViewController];
-          return;
-        } else {
-          // If the user is not prompted to choose a data clearing strategy,
-          // Chrome defaults to merging the account data.
-          self.localDataClearingStrategy = SHOULD_CLEAR_DATA_MERGE_DATA;
-        }
+      // Do not perform a custom data clearing strategy for supervised users
+      // with the experiment `syncer::kReplaceSyncPromosWithSignInPromos`.
+      if (base::FeatureList::IsEnabled(
+              syncer::kReplaceSyncPromosWithSignInPromos)) {
+        [self checkPostSigninAction];
+        return;
       }
-      [self continueSignin];
+      __weak AuthenticationFlow* weakSelf = self;
+      GetApplicationContext()
+          ->GetSystemIdentityManager()
+          ->IsSubjectToParentalControls(
+              _identityToSignIn,
+              base::BindOnce(^(SystemIdentityCapabilityResult result) {
+                if (result == SystemIdentityCapabilityResult::kTrue) {
+                  [weakSelf checkMergeCaseForSupervisedAccounts];
+                  return;
+                }
+                [weakSelf checkPostSigninAction];
+              }));
       return;
+    }
 
-    case SHOW_MANAGED_CONFIRMATION:
+    case SHOW_MANAGED_CONFIRMATION: {
+      BOOL syncConsent = self.postSignInAction == PostSignInAction::kCommitSync;
       [_performer
           showManagedConfirmationForHostedDomain:_identityToSignInHostedDomain
                                   viewController:_presentingViewController
-                                         browser:_browser];
+                                         browser:_browser
+                                     syncConsent:syncConsent];
       return;
+    }
 
     case SIGN_OUT_IF_NEEDED:
       [_performer signOutBrowserState:browserState];
@@ -337,7 +391,7 @@ enum AuthenticationState {
       return;
 
     case COMMIT_SYNC:
-      [_performer commitSyncForBrowserState:browserState];
+      // TODO(crbug.com/1254359): This step should grant sync consent.
       [self continueSignin];
       return;
 
@@ -350,6 +404,7 @@ enum AuthenticationState {
       [_performer fetchUserPolicy:browserState
                       withDmToken:_dmToken
                          clientID:_clientID
+               userAffiliationIDs:_userAffiliationIDs
                          identity:_identityToSignIn];
       return;
 
@@ -360,9 +415,6 @@ enum AuthenticationState {
     case COMPLETE_WITH_FAILURE:
       if (_didSignIn) {
         [_performer signOutImmediatelyFromBrowserState:browserState];
-        // Enabling/disabling sync does not take effect in the sync backend
-        // until committing changes.
-        [_performer commitSyncForBrowserState:browserState];
       }
       [self completeSignInWithSuccess:NO];
       return;
@@ -382,40 +434,69 @@ enum AuthenticationState {
   NOTREACHED();
 }
 
+- (void)checkPostSigninAction {
+  switch (self.postSignInAction) {
+    case PostSignInAction::kCommitSync:
+      [self checkMergeCaseForIdentityToSignIn];
+      break;
+    case PostSignInAction::kShowSnackbar:
+    case PostSignInAction::kNone:
+      [self continueSignin];
+      break;
+  }
+}
+
+// Checks if data should be merged or cleared when `_identityToSignIn`
+// is subject to parental controls and then continues sign-in.
+- (void)checkMergeCaseForSupervisedAccounts {
+  // Always clear the data for supervised accounts if the account
+  // is not already signed in.
+  self.localDataClearingStrategy = _alreadySignedInWithTheSameAccount
+                                       ? SHOULD_CLEAR_DATA_MERGE_DATA
+                                       : SHOULD_CLEAR_DATA_CLEAR_DATA;
+  [self continueSignin];
+}
+
+// Checks if data should be merged or cleared for `_identityToSignIn`.
+- (void)checkMergeCaseForIdentityToSignIn {
+  if (([_performer shouldHandleMergeCaseForIdentity:_identityToSignIn
+                                  browserStatePrefs:[self originalBrowserState]
+                                                        ->GetPrefs()])) {
+    [_performer promptMergeCaseForIdentity:_identityToSignIn
+                                   browser:_browser
+                            viewController:_presentingViewController];
+  } else {
+    // If the user is not prompted to choose a data clearing strategy,
+    // Chrome defaults to merging the account data.
+    self.localDataClearingStrategy = SHOULD_CLEAR_DATA_MERGE_DATA;
+    [self continueSignin];
+  }
+}
+
 - (void)checkSigninSteps {
-  ChromeIdentity* currentIdentity =
+  id<SystemIdentity> currentIdentity =
       AuthenticationServiceFactory::GetForBrowserState(
-          _browser->GetBrowserState())
+          [self originalBrowserState])
           ->GetPrimaryIdentity(signin::ConsentLevel::kSignin);
   if (currentIdentity && ![currentIdentity isEqual:_identityToSignIn]) {
     // If the identity to sign-in is different than the current identity,
     // sign-out is required.
     _shouldSignOut = YES;
   }
-  _shouldSignIn = YES;
-  _shouldCommitSync = _postSignInAction == POST_SIGNIN_ACTION_COMMIT_SYNC;
+  _alreadySignedInWithTheSameAccount =
+      [currentIdentity isEqual:_identityToSignIn];
 }
 
-- (void)signInIdentity:(ChromeIdentity*)identity {
-  ChromeBrowserState* browserState = _browser->GetBrowserState();
+- (void)signInIdentity:(id<SystemIdentity>)identity {
+  ChromeBrowserState* browserState = [self originalBrowserState];
   ChromeAccountManagerService* accountManagerService =
       ChromeAccountManagerServiceFactory::GetForBrowserState(browserState);
 
   if (accountManagerService->IsValidIdentity(identity)) {
-    __weak AuthenticationFlow* weakSelf = self;
     [_performer signInIdentity:identity
+                 atAccessPoint:self.accessPoint
               withHostedDomain:_identityToSignInHostedDomain
-                toBrowserState:browserState
-                    completion:^(BOOL success) {
-                      [weakSelf handlePostAuthenticationFlow:success];
-                    }];
-  } else {
-    [self handlePostAuthenticationFlow:NO];
-  }
-}
-
-- (void)handlePostAuthenticationFlow:(BOOL)success {
-  if (success) {
+                toBrowserState:browserState];
     _didSignIn = YES;
     [self continueSignin];
   } else {
@@ -427,23 +508,27 @@ enum AuthenticationState {
 
 - (void)completeSignInWithSuccess:(BOOL)success {
   DCHECK(_signInCompletion)
-      << "|completeSignInWithSuccess| should not be called twice.";
+      << "`completeSignInWithSuccess` should not be called twice.";
   if (success) {
     bool isManagedAccount = _identityToSignInHostedDomain.length > 0;
     signin_metrics::RecordSigninAccountType(signin::ConsentLevel::kSignin,
                                             isManagedAccount);
-    if (_shouldCommitSync)
+    // TODO(crbug.com/1462858): Turn sync on was deprecated. Remove this branch
+    // after phase 2 on iOS is launched. See ConsentLevel::kSync documentation
+    // for details.
+    if (self.postSignInAction == PostSignInAction::kCommitSync) {
       signin_metrics::RecordSigninAccountType(signin::ConsentLevel::kSync,
                                               isManagedAccount);
+    }
   }
   if (_signInCompletion) {
-    // Make sure the completion callback is always called after
-    // -[AuthenticationFlow startSignInWithCompletion:] returns.
     CompletionCallback signInCompletion = _signInCompletion;
     _signInCompletion = nil;
-    dispatch_async(dispatch_get_main_queue(), ^{
-      signInCompletion(success);
-    });
+    signInCompletion(success);
+  }
+  if (_shouldShowSigninSnackbar) {
+    [_performer showSnackbarWithSignInIdentity:_identityToSignIn
+                                       browser:_browser];
   }
   [self continueSignin];
 }
@@ -506,10 +591,9 @@ enum AuthenticationState {
 - (void)didFetchManagedStatus:(NSString*)hostedDomain {
   DCHECK_EQ(FETCH_MANAGED_STATUS, _state);
   _shouldShowManagedConfirmation =
-      [hostedDomain length] > 0 &&
-      (_postSignInAction == POST_SIGNIN_ACTION_COMMIT_SYNC);
+      [self shouldShowManagedConfirmationForHostedDomain:hostedDomain];
   _identityToSignInHostedDomain = hostedDomain;
-  _shouldFetchUserPolicy = YES;
+  _shouldFetchUserPolicy = [self shouldFetchUserPolicy];
   [self continueSignin];
 }
 
@@ -535,11 +619,14 @@ enum AuthenticationState {
 }
 
 - (void)didRegisterForUserPolicyWithDMToken:(NSString*)dmToken
-                                   clientID:(NSString*)clientID {
+                                   clientID:(NSString*)clientID
+                         userAffiliationIDs:
+                             (NSArray<NSString*>*)userAffiliationIDs {
   DCHECK_EQ(REGISTER_FOR_USER_POLICY, _state);
 
   _dmToken = dmToken;
   _clientID = clientID;
+  _userAffiliationIDs = userAffiliationIDs;
   [self continueSignin];
 }
 
@@ -574,6 +661,48 @@ enum AuthenticationState {
                                             completion();
                                           }
                                         }];
+}
+
+#pragma mark - Private methods
+
+// The original chrome browser state used for services that don't exist in
+// incognito mode.
+- (ChromeBrowserState*)originalBrowserState {
+  return _browser->GetBrowserState()->GetOriginalChromeBrowserState();
+}
+
+// Returns YES if the managed confirmation dialog should be shown for the
+// hosted domain.
+- (BOOL)shouldShowManagedConfirmationForHostedDomain:(NSString*)hostedDomain {
+  if ([hostedDomain length] == 0) {
+    // No hosted domain, don't show the dialog as there is no host.
+    return NO;
+  }
+
+  if (HasMachineLevelPolicies()) {
+    // Don't show the dialog if the browser has already machine level policies
+    // as the user already knows that their browser is managed.
+    return NO;
+  }
+
+  if (self.postSignInAction == PostSignInAction::kCommitSync) {
+    // Show the dialog if there is a hosted domain and Sync consent.
+    return YES;
+  }
+
+  // Show the dialog if User Policy and sign-in only features enabled.
+  return policy::IsAnyUserPolicyFeatureEnabled() &&
+         base::FeatureList::IsEnabled(
+             syncer::kReplaceSyncPromosWithSignInPromos);
+}
+
+// Returns YES if should fetch user policy.
+- (BOOL)shouldFetchUserPolicy {
+  if (self.postSignInAction == PostSignInAction::kCommitSync) {
+    return policy::IsUserPolicyEnabledForSigninOrSyncConsentLevel();
+  } else {
+    return policy::IsAnyUserPolicyFeatureEnabled();
+  }
 }
 
 #pragma mark - Used for testing

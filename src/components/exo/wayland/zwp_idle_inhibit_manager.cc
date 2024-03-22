@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "components/exo/wayland/server_util.h"
@@ -58,7 +59,7 @@ const struct zwp_idle_inhibitor_v1_interface
 class IdleInhibitManager {
  public:
   IdleInhibitManager()
-      : ui_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      : ui_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
         blocking_task_runner_(base::ThreadPool::CreateSingleThreadTaskRunner(
             {base::MayBlock(), base::TaskPriority::BEST_EFFORT})) {}
 

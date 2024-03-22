@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,6 +85,9 @@ class AudioSinkAndroid {
   virtual MediaPipelineBackendAndroid::AudioTrackTimestamp
   GetAudioTrackTimestamp() = 0;
 
+  // Returns the streaming start threshold of the current audio track.
+  virtual int GetStartThresholdInFrames() = 0;
+
   // Getters
   virtual int input_samples_per_second() const = 0;
   virtual bool primary() const = 0;
@@ -109,17 +112,19 @@ class ManagedAudioSink {
   // Resets the sink_ object by removing it from the manager and deleting it.
   void Reset();
 
-  // Resets the sink_ object to a new AudioSinkAndroid* instance and adds it to
+  // Creates a new sink_ object of AudioSinkAndroid* instance and adds it to
   // the manager. If a valid instance existed on entry it is removed from the
   // manager and deleted before creating the new one.
-  void Reset(Delegate* delegate,
-             int num_channels,
-             int samples_per_second,
-             int audio_track_session_id,
-             bool primary,
-             bool use_hw_av_sync,
-             const std::string& device_id,
-             AudioContentType content_type);
+  // Returns true on success; false otherwise.
+  bool Create(Delegate* delegate,
+              int num_channels,
+              int samples_per_second,
+              int audio_track_session_id,
+              bool primary,
+              bool is_apk_audio,
+              bool use_hw_av_sync,
+              const std::string& device_id,
+              AudioContentType content_type) ABSL_MUST_USE_RESULT;
 
   AudioSinkAndroid* operator->() const { return sink_; }
   operator AudioSinkAndroid*() const { return sink_; }

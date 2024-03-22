@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,19 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/strings/stringprintf.h"
-#include "base/test/metrics/histogram_tester.h"
+#import "base/strings/stringprintf.h"
+#import "base/test/metrics/histogram_tester.h"
+#import "base/test/scoped_feature_list.h"
+#import "components/password_manager/core/browser/manage_passwords_referrer.h"
 #import "ios/chrome/app/app_startup_parameters.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/chrome/common/app_group/app_group_constants.h"
-#include "ios/components/webui/web_ui_url_constants.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/app/startup/app_launch_metrics.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/common/app_group/app_group_constants.h"
+#import "ios/components/webui/web_ui_url_constants.h"
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
+#import "url/gurl.h"
 
 namespace {
 void CheckLaunchSourceForURL(first_run::ExternalLaunch expectedSource,
@@ -316,7 +316,7 @@ TEST_F(AppStartupParametersTest, ParseSearchWidgetKit) {
 
   EXPECT_EQ(params.externalURL.spec(), expected_url_string);
   EXPECT_EQ(params.postOpeningAction, FOCUS_OMNIBOX);
-  EXPECT_FALSE(params.launchInIncognito);
+  EXPECT_NE(params.applicationMode, ApplicationModeForTabOpening::INCOGNITO);
   histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 1, 1);
 }
 
@@ -335,7 +335,7 @@ TEST_F(AppStartupParametersTest, ParseQuickActionsWidgetKitSearch) {
 
   EXPECT_EQ(params.externalURL.spec(), expected_url_string);
   EXPECT_EQ(params.postOpeningAction, FOCUS_OMNIBOX);
-  EXPECT_FALSE(params.launchInIncognito);
+  EXPECT_NE(params.applicationMode, ApplicationModeForTabOpening::INCOGNITO);
   histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 2, 1);
 }
 
@@ -354,7 +354,7 @@ TEST_F(AppStartupParametersTest, ParseQuickActionsWidgetKitIncognito) {
 
   EXPECT_EQ(params.externalURL.spec(), expected_url_string);
   EXPECT_EQ(params.postOpeningAction, FOCUS_OMNIBOX);
-  EXPECT_TRUE(params.launchInIncognito);
+  EXPECT_EQ(params.applicationMode, ApplicationModeForTabOpening::INCOGNITO);
   histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 3, 1);
 }
 
@@ -394,6 +394,65 @@ TEST_F(AppStartupParametersTest, ParseQuickActionsWidgetKitQRReader) {
   histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 5, 1);
 }
 
+// Tests that quick actions widget Lens url is parsed correctly, and the
+// right metric is recorded.
+TEST_F(AppStartupParametersTest, ParseQuickActionsWidgetKitLens) {
+  base::HistogramTester histogram_tester;
+  NSURL* url =
+      [NSURL URLWithString:@"chromewidgetkit://quick-actions-widget/lens"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_TRUE(params.externalURL.is_empty());
+  EXPECT_EQ(params.postOpeningAction, START_LENS_FROM_HOME_SCREEN_WIDGET);
+  histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 10, 1);
+}
+
+// Tests that shortcuts action search is parsed correctly, and the
+// right metric is recorded.
+TEST_F(AppStartupParametersTest, ParseShortcutWidgetSearch) {
+  base::HistogramTester histogram_tester;
+  NSURL* url =
+      [NSURL URLWithString:@"chromewidgetkit://shortcuts-widget/search"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params.externalURL, kChromeUINewTabURL);
+  EXPECT_EQ(params.postOpeningAction, FOCUS_OMNIBOX);
+  histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 11, 1);
+}
+
+// Tests that shortcuts action open is parsed correctly, and the
+// right metric is recorded.
+TEST_F(AppStartupParametersTest, ParseShortcutWidgetOpen) {
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL URLWithString:@"chromewidgetkit://shortcuts-widget/"
+                                    @"open?url=https://www.example.org"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params.externalURL, "https://www.example.org/");
+  EXPECT_EQ(params.postOpeningAction, NO_ACTION);
+  histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 12, 1);
+}
+
+// Tests that shortcuts action open with invalid URL is parsed correctly, and
+// no metric is recorded.
+TEST_F(AppStartupParametersTest, ParseShortcutWidgetOpenInvalid) {
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL
+      URLWithString:@"chromewidgetkit://shortcuts-widget/open?url=not_a_url"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params, nil);
+  histogram_tester.ExpectTotalCount("IOS.WidgetKit.Action", 0);
+}
+
 // Tests that dino widget game url is parsed correctly, and the right metric is
 // recorded.
 TEST_F(AppStartupParametersTest, ParseDinoWidgetKit) {
@@ -408,6 +467,264 @@ TEST_F(AppStartupParametersTest, ParseDinoWidgetKit) {
 
   EXPECT_EQ(params.externalURL, expected_url);
   histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 0, 1);
+}
+
+// Tests that the lockscreen launcher widget search url is handled correctly.
+TEST_F(AppStartupParametersTest, ParseLockscreenLauncherSearch) {
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL
+      URLWithString:@"chromewidgetkit://lockscreen-launcher-widget/search"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  std::string expected_url_string =
+      base::StringPrintf("%s://%s/", kChromeUIScheme, kChromeUINewTabHost);
+
+  EXPECT_EQ(params.externalURL.spec(), expected_url_string);
+  EXPECT_EQ(params.postOpeningAction, FOCUS_OMNIBOX);
+  EXPECT_NE(params.applicationMode, ApplicationModeForTabOpening::INCOGNITO);
+  histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 6, 1);
+}
+
+// Tests that the lockscreen launcher widget incognito url is handled correctly.
+TEST_F(AppStartupParametersTest, ParseLockscreenLauncherIncognito) {
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL
+      URLWithString:@"chromewidgetkit://lockscreen-launcher-widget/incognito"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  std::string expected_url_string =
+      base::StringPrintf("%s://%s/", kChromeUIScheme, kChromeUINewTabHost);
+
+  EXPECT_EQ(params.externalURL.spec(), expected_url_string);
+  EXPECT_EQ(params.postOpeningAction, FOCUS_OMNIBOX);
+  EXPECT_EQ(params.applicationMode, ApplicationModeForTabOpening::INCOGNITO);
+  histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 7, 1);
+}
+
+// Tests that the lockscreen launcher widget voice search url is
+// handled correctly.
+TEST_F(AppStartupParametersTest, ParseLockscreenLauncherVoiceSearch) {
+  base::HistogramTester histogram_tester;
+  NSURL* url =
+      [NSURL URLWithString:
+                 @"chromewidgetkit://lockscreen-launcher-widget/voicesearch"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  std::string expected_url_string =
+      base::StringPrintf("%s://%s/", kChromeUIScheme, kChromeUINewTabHost);
+
+  EXPECT_EQ(params.externalURL.spec(), expected_url_string);
+  EXPECT_EQ(params.postOpeningAction, START_VOICE_SEARCH);
+  histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 8, 1);
+}
+
+// Tests that the lockscreen launcher widget game url is handled correctly.
+TEST_F(AppStartupParametersTest, ParseLockscreenLauncherGame) {
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL
+      URLWithString:@"chromewidgetkit://lockscreen-launcher-widget/game"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  GURL expected_url =
+      GURL(base::StringPrintf("%s://%s", kChromeUIScheme, kChromeUIDinoHost));
+
+  EXPECT_EQ(params.externalURL, expected_url);
+  histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 9, 1);
+}
+
+// Tests that search passwords widget url is parsed correctly, and the right
+// metric is recorded.
+TEST_F(AppStartupParametersTest, ParseSearchPasswordsWidgetKit) {
+  base::HistogramTester histogram_tester;
+  NSURL* url =
+      [NSURL URLWithString:
+                 @"chromewidgetkit://search-passwords-widget/search-passwords"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_TRUE(params.externalURL.is_empty());
+  EXPECT_EQ(params.postOpeningAction, SEARCH_PASSWORDS);
+  EXPECT_NE(params.applicationMode, ApplicationModeForTabOpening::INCOGNITO);
+  histogram_tester.ExpectUniqueSample("IOS.WidgetKit.Action", 13, 1);
+  histogram_tester.ExpectBucketCount(
+      "PasswordManager.ManagePasswordsReferrer",
+      password_manager::ManagePasswordsReferrer::kSearchPasswordsWidget, 1);
+}
+
+// Tests that the external action scheme is not handled when the flag is
+// disabled.
+TEST_F(AppStartupParametersTest, ExternalActionSchemeHandlingDisabled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled=*/{}, /*disabled=*/{kIOSExternalActionURLs});
+
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL
+      URLWithString:@"googlechromes://ChromeExternalAction/OpenNTP?test=1"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_NE(params, nil);
+  histogram_tester.ExpectBucketCount("IOS.LaunchSource",
+                                     AppLaunchSource::EXTERNAL_ACTION, 0);
+}
+
+// Tests that the external action scheme is handled correctly with the "OpenNTP"
+// action.
+TEST_F(AppStartupParametersTest, ExternalActionSchemeOpenNTP) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled=*/{kIOSExternalActionURLs}, /*disabled=*/{});
+
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL
+      URLWithString:@"googlechromes://ChromeExternalAction/OpenNTP?test=2"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params.externalURL, GURL("chrome://newtab/"));
+  histogram_tester.ExpectBucketCount("IOS.LaunchSource",
+                                     AppLaunchSource::EXTERNAL_ACTION, 1);
+  histogram_tester.ExpectBucketCount("IOS.ExternalAction",
+                                     /*ACTION_OPEN_NTP*/ 1, 1);
+}
+
+// Tests that the external action scheme is handled correctly with the
+// "DefaultBrowserSettings" action.
+TEST_F(AppStartupParametersTest, ExternalActionSchemeDefaultBrowserSettings) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled=*/{kIOSExternalActionURLs}, /*disabled=*/{});
+
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL
+      URLWithString:
+          @"googlechrome://ChromeExternalAction/DefaultBrowserSettings?test=3"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params.postOpeningAction, EXTERNAL_ACTION_SHOW_BROWSER_SETTINGS);
+  EXPECT_TRUE(params.externalURL.is_empty());
+  histogram_tester.ExpectBucketCount("IOS.LaunchSource",
+                                     AppLaunchSource::EXTERNAL_ACTION, 1);
+  histogram_tester.ExpectBucketCount("IOS.ExternalAction",
+                                     /*ACTION_DEFAULT_BROWSER_SETTINGS*/ 2, 1);
+}
+
+// Tests that the external action scheme is handled with a Chromium-flavored
+// URL.
+TEST_F(AppStartupParametersTest, ExternalActionSchemeChromiumURLHandled) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled=*/{kIOSExternalActionURLs}, /*disabled=*/{});
+
+  base::HistogramTester histogram_tester;
+  NSURL* url =
+      [NSURL URLWithString:@"chromium://ChromeExternalAction/OpenNTP?test=4"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params.externalURL, GURL("chrome://newtab/"));
+  histogram_tester.ExpectBucketCount("IOS.LaunchSource",
+                                     AppLaunchSource::EXTERNAL_ACTION, 1);
+  histogram_tester.ExpectBucketCount("IOS.ExternalAction",
+                                     /*ACTION_OPEN_NTP*/ 1, 1);
+}
+
+// Tests that the external action scheme does nothing when passed an invalid
+// action.
+TEST_F(AppStartupParametersTest, ExternalActionSchemeInvalidAction) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled=*/{kIOSExternalActionURLs}, /*disabled=*/{});
+
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL
+      URLWithString:@"googlechromes://ChromeExternalAction/invalid?test=5"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params, nil);
+  histogram_tester.ExpectBucketCount("IOS.LaunchSource",
+                                     AppLaunchSource::EXTERNAL_ACTION, 1);
+  histogram_tester.ExpectBucketCount("IOS.ExternalAction", /*ACTION_INVALID*/ 0,
+                                     1);
+}
+
+// Tests that the external action scheme does nothing when passed an invalid
+// action (long path).
+TEST_F(AppStartupParametersTest, ExternalActionSchemeInvalidActionLongPath) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled=*/{kIOSExternalActionURLs}, /*disabled=*/{});
+
+  base::HistogramTester histogram_tester;
+  NSURL* url =
+      [NSURL URLWithString:
+                 @"googlechromes://ChromeExternalAction/long/path/test?test=5"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params, nil);
+  histogram_tester.ExpectBucketCount("IOS.LaunchSource",
+                                     AppLaunchSource::EXTERNAL_ACTION, 1);
+  histogram_tester.ExpectBucketCount("IOS.ExternalAction", /*ACTION_INVALID*/ 0,
+                                     1);
+}
+
+// Tests that the external action scheme does nothing when passed an invalid
+// action (no action passed).
+TEST_F(AppStartupParametersTest, ExternalActionSchemeInvalidActionNoAction) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled=*/{kIOSExternalActionURLs}, /*disabled=*/{});
+
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL URLWithString:@"googlechromes://ChromeExternalAction/"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params, nil);
+  histogram_tester.ExpectBucketCount("IOS.LaunchSource",
+                                     AppLaunchSource::EXTERNAL_ACTION, 1);
+  histogram_tester.ExpectBucketCount("IOS.ExternalAction", /*ACTION_INVALID*/ 0,
+                                     1);
+}
+
+// Tests that the external action scheme does nothing when passed an invalid
+// action (no path passed).
+TEST_F(AppStartupParametersTest, ExternalActionSchemeInvalidActionNoPath) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitWithFeatures(
+      /*enabled=*/{kIOSExternalActionURLs}, /*disabled=*/{});
+
+  base::HistogramTester histogram_tester;
+  NSURL* url = [NSURL URLWithString:@"googlechrome://ChromeExternalAction"];
+  ChromeAppStartupParameters* params =
+      [ChromeAppStartupParameters newChromeAppStartupParametersWithURL:url
+                                                 fromSourceApplication:nil];
+
+  EXPECT_EQ(params, nil);
+  histogram_tester.ExpectBucketCount("IOS.LaunchSource",
+                                     AppLaunchSource::EXTERNAL_ACTION, 1);
+  histogram_tester.ExpectBucketCount("IOS.ExternalAction", /*ACTION_INVALID*/ 0,
+                                     1);
 }
 
 }  // namespace

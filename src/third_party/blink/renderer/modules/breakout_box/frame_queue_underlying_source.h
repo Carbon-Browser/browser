@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,21 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_BREAKOUT_BOX_FRAME_QUEUE_UNDERLYING_SOURCE_H_
 
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/video_frame.h"
 #include "third_party/blink/renderer/core/streams/underlying_source_base.h"
 #include "third_party/blink/renderer/modules/breakout_box/frame_queue.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
 template <typename NativeFrameType>
-class FrameQueueUnderlyingSource
-    : public UnderlyingSourceBase,
-      public ActiveScriptWrappable<
-          FrameQueueUnderlyingSource<NativeFrameType>> {
+class FrameQueueUnderlyingSource : public UnderlyingSourceBase {
  public:
   using TransferFramesCB = CrossThreadFunction<void(NativeFrameType)>;
 
@@ -40,12 +39,11 @@ class FrameQueueUnderlyingSource
       delete;
 
   // UnderlyingSourceBase
-  ScriptPromise pull(ScriptState*) override;
-  ScriptPromise Start(ScriptState*) override;
-  ScriptPromise Cancel(ScriptState*, ScriptValue reason) override;
-
-  // ScriptWrappable interface
-  bool HasPendingActivity() const final;
+  ScriptPromise Pull(ScriptState*, ExceptionState&) override;
+  ScriptPromise Start(ScriptState*, ExceptionState&) override;
+  ScriptPromise Cancel(ScriptState*,
+                       ScriptValue reason,
+                       ExceptionState&) override;
 
   // ExecutionLifecycleObserver
   void ContextDestroyed() override;
@@ -86,7 +84,13 @@ class FrameQueueUnderlyingSource
   // QueueFrame(). |transferred_source| will pull frames from the same circular
   // queue. Must be called on |realm_task_runner_|.
   void TransferSource(
-      FrameQueueUnderlyingSource<NativeFrameType>* transferred_source);
+      CrossThreadPersistent<FrameQueueUnderlyingSource<NativeFrameType>>
+          transferred_source);
+
+  // Due to a potential race condition between |transferred_source_|'s heap
+  // being destroyed and the Close() method being called, we need to explicitly
+  // clear |transferred_source_| when its context is being destroyed.
+  void ClearTransferredSource();
 
  protected:
   bool MustUseMonitor() const;
@@ -101,7 +105,7 @@ class FrameQueueUnderlyingSource
 
   base::Lock& GetMonitorLock();
 
-  void MaybeMonitorPopFrameId(int frame_id);
+  void MaybeMonitorPopFrameId(media::VideoFrame::ID frame_id);
   void MonitorPopFrameLocked(const NativeFrameType& media_frame)
       EXCLUSIVE_LOCKS_REQUIRED(GetMonitorLock());
   void MonitorPushFrameLocked(const NativeFrameType& media_frame)
@@ -115,6 +119,8 @@ class FrameQueueUnderlyingSource
   // Creates a JS frame (VideoFrame or AudioData) backed by |media_frame|.
   // Must be called on |realm_task_runner_|.
   ScriptWrappable* MakeBlinkFrame(NativeFrameType media_frame);
+
+  void EnqueueBlinkFrame(ScriptWrappable* blink_frame) const;
 
   bool is_closed_ = false;
 

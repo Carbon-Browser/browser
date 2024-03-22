@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/file_util/safe_document_analyzer.h"
 
 #include "build/build_config.h"
-#include "chrome/common/safe_browsing/document_analyzer.h"
 #include "chrome/common/safe_browsing/document_analyzer_results.h"
+#include "chrome/utility/safe_browsing/document_analyzer.h"
 
 SafeDocumentAnalyzer::SafeDocumentAnalyzer() = default;
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -16,10 +16,22 @@ namespace safe_browsing {
 // What service classified this threat as unsafe.
 enum class ThreatSource {
   UNKNOWN,
-  LOCAL_PVER4,            // From V4LocalDatabaseManager, protocol v4
-  REMOTE,                 // From RemoteSafeBrowsingDatabaseManager
-  CLIENT_SIDE_DETECTION,  // From ClientSideDetectionHost
-  REAL_TIME_CHECK,        // From RealTimeUrlLookupService
+  // From V4LocalDatabaseManager, protocol v4. Desktop only.
+  LOCAL_PVER4,
+  // From GmsCore SafetyNet API. Android only.
+  REMOTE,
+  // From ClientSideDetectionHost.
+  CLIENT_SIDE_DETECTION,
+  // From RealTimeUrlLookupService. Not including fallback to protocol v4.
+  URL_REAL_TIME_CHECK,
+  // From HashRealTimeService. Desktop only. Not including fallback to
+  // protocol v4.
+  NATIVE_PVER5_REAL_TIME,
+  // From GmsCore SafeBrowsing API. Android only. Including fallback to protocol
+  // v4 (through either SafeBrowsing API or SafetyNet API).
+  ANDROID_SAFEBROWSING_REAL_TIME,
+  // From GmsCore SafeBrowsing API. Android only. Protocol v4 only.
+  ANDROID_SAFEBROWSING,
 };
 
 // Data to report about the contents of a particular threat (malware, phishing,

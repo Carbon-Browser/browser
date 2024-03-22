@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,7 @@ import java.lang.ref.WeakReference;
  * implementation should be hidden in ui/base. No implementation should be made outside of ui/base.
  */
 public interface IntentRequestTracker {
-    /**
-     * A delegate of this class's intent sending.
-     */
+    /** A delegate of this class's intent sending. */
     interface Delegate {
         /**
          * Starts an activity for the provided intent.

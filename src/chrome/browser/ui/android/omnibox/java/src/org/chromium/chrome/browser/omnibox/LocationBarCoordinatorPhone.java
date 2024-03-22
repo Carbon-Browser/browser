@@ -1,22 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.omnibox;
 
 import android.animation.Animator;
-import android.animation.ObjectAnimator;
 import android.view.View;
 import android.widget.FrameLayout;
 
 import org.chromium.chrome.browser.omnibox.status.StatusCoordinator;
-import org.chromium.ui.interpolators.BakedBezierInterpolator;
 
 import java.util.List;
 
-/**
- * A supplement to {@link LocationBarCoordinator} with methods specific to smaller devices.
- */
+/** A supplement to {@link LocationBarCoordinator} with methods specific to smaller devices. */
 public class LocationBarCoordinatorPhone implements LocationBarCoordinator.SubCoordinator {
     private LocationBarPhone mLocationBarPhone;
     private StatusCoordinator mStatusCoordinator;
@@ -39,35 +35,20 @@ public class LocationBarCoordinatorPhone implements LocationBarCoordinator.SubCo
      * icon.
      */
     public int getOffsetOfFirstVisibleFocusedView() {
-        int visibleWidth = 0;
-        for (int i = 0; i < mLocationBarPhone.getChildCount(); i++) {
-            View child = mLocationBarPhone.getChildAt(i);
-            if (child == mLocationBarPhone.getFirstVisibleFocusedView()) break;
-            if (child.getVisibility() == View.GONE) continue;
-            visibleWidth += child.getMeasuredWidth();
-        }
-        return visibleWidth;
+        return mLocationBarPhone.getOffsetOfFirstVisibleFocusedView();
     }
 
     /**
-     * Populates fade animators of status icon for location bar focus change animation.
+     * Populates fade animator of status icon for location bar focus change animation.
      *
      * @param animators The target list to add animators to.
      * @param startDelayMs Start delay of fade animation in milliseconds.
      * @param durationMs Duration of fade animation in milliseconds.
      * @param targetAlpha Target alpha value.
      */
-    public void populateFadeAnimations(
+    public void populateFadeAnimation(
             List<Animator> animators, long startDelayMs, long durationMs, float targetAlpha) {
-        for (int i = 0; i < mLocationBarPhone.getChildCount(); i++) {
-            View child = mLocationBarPhone.getChildAt(i);
-            if (child == mLocationBarPhone.getFirstVisibleFocusedView()) break;
-            Animator animator = ObjectAnimator.ofFloat(child, View.ALPHA, targetAlpha);
-            animator.setStartDelay(startDelayMs);
-            animator.setDuration(durationMs);
-            animator.setInterpolator(BakedBezierInterpolator.TRANSFORM_CURVE);
-            animators.add(animator);
-        }
+        mStatusCoordinator.populateFadeAnimation(animators, startDelayMs, durationMs, targetAlpha);
     }
 
     /**
@@ -175,8 +156,7 @@ public class LocationBarCoordinatorPhone implements LocationBarCoordinator.SubCo
     }
 
     /**
-     * Returns true if this view has focus itself, or is the ancestor of the view that has
-     * focus.
+     * Returns true if this view has focus itself, or is the ancestor of the view that has focus.
      *
      * <p>TODO(1133482): Hide this View interaction if possible.
      *

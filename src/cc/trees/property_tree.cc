@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,11 @@
 
 #include "base/check_op.h"
 #include "base/memory/ptr_util.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/traced_value.h"
+#include "cc/base/features.h"
 #include "cc/trees/clip_node.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "cc/trees/effect_node.h"
@@ -28,8 +30,33 @@
 #include "ui/gfx/geometry/point_conversions.h"
 #include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
+#include "ui/gfx/geometry/vector2d_f.h"
 
 namespace cc {
+
+void AnimationUpdateOnMissingPropertyNodeUMALog(bool missing_property_node) {
+  UMA_HISTOGRAM_BOOLEAN(
+      "Compositing.Renderer.AnimationUpdateOnMissingPropertyNode",
+      missing_property_node);
+}
+
+AnchorPositionScrollersData::AnchorPositionScrollersData() = default;
+AnchorPositionScrollersData::~AnchorPositionScrollersData() = default;
+AnchorPositionScrollersData::AnchorPositionScrollersData(
+    const AnchorPositionScrollersData&) = default;
+
+bool AnchorPositionScrollersData::operator==(
+    const AnchorPositionScrollersData& other) const {
+  return accumulated_scroll_origin == other.accumulated_scroll_origin &&
+         scroll_container_ids == other.scroll_container_ids &&
+         needs_scroll_adjustment_in_x == other.needs_scroll_adjustment_in_x &&
+         needs_scroll_adjustment_in_y == other.needs_scroll_adjustment_in_y;
+}
+
+bool AnchorPositionScrollersData::operator!=(
+    const AnchorPositionScrollersData& other) const {
+  return !operator==(other);
+}
 
 template <typename T>
 PropertyTree<T>::PropertyTree(PropertyTrees* property_trees)
@@ -58,7 +85,6 @@ PropertyTree<T>& PropertyTree<T>::operator=(const PropertyTree<T>&) = default;
 TransformTree::TransformTree(PropertyTrees* property_trees)
     : PropertyTree<TransformNode>(property_trees),
       page_scale_factor_(1.f),
-      fixed_elements_dont_overscroll_(false),
       device_scale_factor_(1.f),
       device_transform_scale_factor_(1.f) {
   cached_data_.push_back(TransformCachedNodeData());
@@ -128,13 +154,13 @@ void TransformTree::clear() {
   PropertyTree<TransformNode>::clear();
 
   page_scale_factor_ = 1.f;
-  fixed_elements_dont_overscroll_ = false;
   device_scale_factor_ = 1.f;
   device_transform_scale_factor_ = 1.f;
   nodes_affected_by_outer_viewport_bounds_delta_.clear();
   cached_data_.clear();
   cached_data_.push_back(TransformCachedNodeData());
   sticky_position_data_.clear();
+  anchor_position_scrollers_data_.clear();
 
 #if DCHECK_IS_ON()
   DCHECK(TransformTree() == *this);
@@ -150,11 +176,13 @@ void TransformTree::set_needs_update(bool needs_update) {
 bool TransformTree::OnTransformAnimated(ElementId element_id,
                                         const gfx::Transform& transform) {
   TransformNode* node = FindNodeFromElementId(element_id);
-  DCHECK(node);
   // TODO(crbug.com/1307498): Remove this when we no longer animate
   // non-existent nodes.
-  if (!node)
+  if (!node) {
+    AnimationUpdateOnMissingPropertyNodeUMALog(true);
     return false;
+  }
+  AnimationUpdateOnMissingPropertyNodeUMALog(false);
   if (node->local == transform)
     return false;
   node->local = transform;
@@ -181,7 +209,8 @@ void TransformTree::UpdateTransforms(
   DCHECK(parent_node);
   // TODO(flackr): Only dirty when scroll offset changes.
   if (node->sticky_position_constraint_id >= 0 ||
-      node->needs_local_transform_update || ShouldUndoOverscroll(node)) {
+      node->anchor_position_scrollers_data_id >= 0 ||
+      node->needs_local_transform_update || node->should_undo_overscroll) {
     UpdateLocalTransform(node, viewport_property_ids);
   } else {
     UndoSnapping(node);
@@ -223,9 +252,9 @@ void TransformTree::CombineTransformsBetween(int source_id,
   // A's from_screen will not produce the correct result.
   if (!dest ||
       (dest->ancestors_are_invertible && dest->node_and_ancestors_are_flat)) {
-    transform->ConcatTransform(ToScreen(current->id));
+    transform->PostConcat(ToScreen(current->id));
     if (dest)
-      transform->ConcatTransform(FromScreen(dest->id));
+      transform->PostConcat(FromScreen(dest->id));
     return;
   }
 
@@ -273,11 +302,11 @@ void TransformTree::CombineTransformsBetween(int source_id,
     size_t index = source_to_destination_size - 1 - i;
     const TransformNode* node = Node(source_to_destination[index]);
     if (node->flattens_inherited_transform)
-      combined_transform.FlattenTo2d();
-    combined_transform.PreconcatTransform(node->to_parent);
+      combined_transform.Flatten();
+    combined_transform.PreConcat(node->to_parent);
   }
 
-  transform->ConcatTransform(combined_transform);
+  transform->PostConcat(combined_transform);
 }
 
 bool TransformTree::CombineInversesBetween(int source_id,
@@ -291,9 +320,9 @@ bool TransformTree::CombineInversesBetween(int source_id,
   // involved.
   if (current->ancestors_are_invertible &&
       current->node_and_ancestors_are_flat) {
-    transform->PreconcatTransform(FromScreen(current->id));
+    transform->PreConcat(FromScreen(current->id));
     if (dest)
-      transform->PreconcatTransform(ToScreen(dest->id));
+      transform->PreConcat(ToScreen(dest->id));
     return true;
   }
 
@@ -306,7 +335,7 @@ bool TransformTree::CombineInversesBetween(int source_id,
   CombineTransformsBetween(dest_id, source_id, &dest_to_source);
   gfx::Transform source_to_dest;
   bool all_are_invertible = dest_to_source.GetInverse(&source_to_dest);
-  transform->PreconcatTransform(source_to_dest);
+  transform->PreConcat(source_to_dest);
   return all_are_invertible;
 }
 
@@ -320,20 +349,11 @@ gfx::Vector2dF TransformTree::StickyPositionOffset(TransformNode* node) {
   const ScrollNode* scroll_node =
       property_trees()->scroll_tree().Node(sticky_data->scroll_ancestor);
   const TransformNode* transform_node = Node(scroll_node->transform_id);
-  const auto& scroll_offset = transform_node->scroll_offset;
-  // TODO(crbug.com/1206694): Understand why these values are not exactly equal
-  // and which one we should be using here.
-#if DCHECK_IS_ON()
-  {
-    const auto& scroll_offset_delta =
-        property_trees()->scroll_tree().current_scroll_offset(
-            scroll_node->element_id) -
-        scroll_offset;
-    DCHECK_LE(std::abs(scroll_offset_delta.x()), 0.5);
-    DCHECK_LE(std::abs(scroll_offset_delta.y()), 0.5);
-  }
-#endif
-  gfx::PointF scroll_position(scroll_offset.x(), scroll_offset.y());
+  DCHECK(transform_node);
+  // We need the scroll offset from the transform tree, not the scroll tree.
+  // Tracking the scroll tree here would make sticky elements run "ahead" of a
+  // main-repainted scroll.
+  gfx::PointF scroll_position = transform_node->scroll_offset;
   if (transform_node->scrolls) {
     // The scroll position does not include snapping which shifts the scroll
     // offset to align to a pixel boundary, we need to manually include it here.
@@ -455,22 +475,74 @@ gfx::Vector2dF TransformTree::StickyPositionOffset(TransformNode* node) {
   return gfx::ToRoundedVector2d(sticky_offset);
 }
 
-bool TransformTree::ShouldUndoOverscroll(const TransformNode* node) const {
-  return fixed_elements_dont_overscroll_ && node && node->is_fixed_to_viewport;
+AnchorPositionScrollersData& TransformTree::EnsureAnchorPositionScrollersData(
+    int node_id) {
+  TransformNode* node = Node(node_id);
+  if (node->anchor_position_scrollers_data_id == -1) {
+    node->anchor_position_scrollers_data_id =
+        anchor_position_scrollers_data_.size();
+    anchor_position_scrollers_data_.push_back(AnchorPositionScrollersData());
+  }
+  return anchor_position_scrollers_data_
+      [node->anchor_position_scrollers_data_id];
 }
 
-void TransformTree::UpdateFixedNodeTransformAndClip(
+const AnchorPositionScrollersData*
+TransformTree::GetAnchorPositionScrollersData(int node_id) const {
+  const TransformNode* node = Node(node_id);
+  if (node->anchor_position_scrollers_data_id == -1) {
+    return nullptr;
+  }
+  return &anchor_position_scrollers_data_
+      [node->anchor_position_scrollers_data_id];
+}
+
+gfx::Vector2dF TransformTree::AnchorPositionScrollOffset(TransformNode* node) {
+  const AnchorPositionScrollersData* data =
+      GetAnchorPositionScrollersData(node->id);
+  if (!data)
+    return gfx::Vector2dF();
+  gfx::Vector2dF accumulated_scroll_offset(0, 0);
+  for (ElementId scroller_id : data->scroll_container_ids) {
+    const ScrollNode* scroll_node =
+        property_trees()->scroll_tree().FindNodeFromElementId(scroller_id);
+    if (!scroll_node) {
+      continue;
+    }
+    const TransformNode* transform_node = Node(scroll_node->transform_id);
+    // We don't ever expect that an anchor node or any of its scrolling
+    // containers should have an invalid transform_id.
+    DCHECK(scroll_node->transform_id != kInvalidPropertyNodeId);
+    accumulated_scroll_offset +=
+        transform_node->scroll_offset.OffsetFromOrigin();
+  }
+  gfx::Vector2dF result =
+      data->accumulated_scroll_origin - accumulated_scroll_offset;
+  if (!data->needs_scroll_adjustment_in_x) {
+    result.set_x(0);
+  }
+  if (!data->needs_scroll_adjustment_in_y) {
+    result.set_y(0);
+  }
+  return result;
+}
+
+void TransformTree::UndoOverscroll(
     const TransformNode* node,
-    gfx::Vector2dF& fixed_position_adjustment,
+    gfx::Vector2dF& position_adjustment,
     const ViewportPropertyIds* viewport_property_ids) {
+  DCHECK(node->should_undo_overscroll);
+
   const int transform_id =
       viewport_property_ids
           ? viewport_property_ids->overscroll_elasticity_transform
           : kInvalidPropertyNodeId;
+  if (transform_id == kInvalidPropertyNodeId)
+    return;
+
   const int clip_id = viewport_property_ids ? viewport_property_ids->outer_clip
                                             : kInvalidPropertyNodeId;
-  if (!ShouldUndoOverscroll(node) || transform_id == kInvalidPropertyNodeId ||
-      clip_id == kInvalidPropertyNodeId)
+  if (clip_id == kInvalidPropertyNodeId)
     return;
 
   const TransformNode* overscroll_node = Node(transform_id);
@@ -479,7 +551,7 @@ void TransformTree::UpdateFixedNodeTransformAndClip(
   if (overscroll_offset.IsZero())
     return;
 
-  fixed_position_adjustment +=
+  position_adjustment +=
       gfx::ScaleVector2d(overscroll_offset, 1.f / page_scale_factor());
 
   ClipTree& clip_tree = property_trees()->clip_tree_mutable();
@@ -488,12 +560,10 @@ void TransformTree::UpdateFixedNodeTransformAndClip(
 
   // Inflate the clip rect based on the overscroll direction.
   gfx::OutsetsF outsets;
-  fixed_position_adjustment.x() < 0
-      ? outsets.set_left(-fixed_position_adjustment.x())
-      : outsets.set_right(fixed_position_adjustment.x());
-  fixed_position_adjustment.y() < 0
-      ? outsets.set_top(-fixed_position_adjustment.y())
-      : outsets.set_bottom(fixed_position_adjustment.y());
+  position_adjustment.x() < 0 ? outsets.set_left(-position_adjustment.x())
+                              : outsets.set_right(position_adjustment.x());
+  position_adjustment.y() < 0 ? outsets.set_top(-position_adjustment.y())
+                              : outsets.set_bottom(position_adjustment.y());
   clip_node->clip.Outset(outsets);
   clip_tree.set_needs_update(true);
 }
@@ -506,18 +576,22 @@ void TransformTree::UpdateLocalTransform(
                         node->post_translation.y() + node->origin.y(),
                         node->origin.z());
 
-  gfx::Vector2dF fixed_position_adjustment;
+  gfx::Vector2dF position_adjustment;
   if (node->moved_by_outer_viewport_bounds_delta_y) {
-    fixed_position_adjustment.set_y(
+    position_adjustment.set_y(
         property_trees()->outer_viewport_container_bounds_delta().y());
   }
-
-  UpdateFixedNodeTransformAndClip(node, fixed_position_adjustment,
-                                  viewport_property_ids);
-  transform.Translate(fixed_position_adjustment -
+  if (node->should_undo_overscroll)
+    UndoOverscroll(node, position_adjustment, viewport_property_ids);
+  transform.Translate(position_adjustment -
                       node->scroll_offset.OffsetFromOrigin());
   transform.Translate(StickyPositionOffset(node));
-  transform.PreconcatTransform(node->local);
+  if (node->anchor_position_scrollers_data_id >= 0) {
+    transform.Translate(AnchorPositionScrollOffset(node));
+    // Make sure the damage rect is tracked.
+    node->transform_changed = true;
+  }
+  transform.PreConcat(node->local);
   transform.Translate3d(gfx::Point3F() - node->origin);
 
   node->set_to_parent(transform);
@@ -529,8 +603,8 @@ void TransformTree::UpdateScreenSpaceTransform(TransformNode* node,
   DCHECK(parent_node);
   gfx::Transform to_screen_space_transform = ToScreen(parent_node->id);
   if (node->flattens_inherited_transform)
-    to_screen_space_transform.FlattenTo2d();
-  to_screen_space_transform.PreconcatTransform(node->to_parent);
+    to_screen_space_transform.Flatten();
+  to_screen_space_transform.PreConcat(node->to_parent);
   node->ancestors_are_invertible = parent_node->ancestors_are_invertible;
   node->node_and_ancestors_are_flat =
       parent_node->node_and_ancestors_are_flat && node->to_parent.IsFlat();
@@ -556,6 +630,7 @@ void TransformTree::UndoSnapping(TransformNode* node) {
   // We need to undo it and use the un-snapped transform to compute current
   // target and screen space transforms.
   node->to_parent.Translate(-node->snap_amount.x(), -node->snap_amount.y());
+  node->snap_amount = gfx::Vector2dF();
 }
 
 void TransformTree::UpdateSnapping(TransformNode* node) {
@@ -575,7 +650,7 @@ void TransformTree::UpdateSnapping(TransformNode* node) {
   // X = ST^-1 * ST'. We cache ST and ST^-1 to make this more efficient.
   DCHECK_LT(node->id, static_cast<int>(cached_data_.size()));
   gfx::Transform& to_screen = cached_data_[node->id].to_screen;
-  to_screen.RoundTranslationComponents();
+  to_screen.Round2dTranslationComponents();
   gfx::Transform& from_screen = cached_data_[node->id].from_screen;
   gfx::Transform delta = from_screen;
   delta *= to_screen;
@@ -589,11 +664,11 @@ void TransformTree::UpdateSnapping(TransformNode* node) {
   if (translation.IsZero())
     return;
 
-  from_screen.matrix().postTranslate(-translation.x(), -translation.y(), 0);
-  node->to_parent.Translate(translation.x(), translation.y());
+  from_screen.PostTranslate(-translation);
+  node->to_parent.Translate(translation);
   // Avoid accumulation of errors in to_parent.
   if (node->to_parent.IsApproximatelyIdentityOrIntegerTranslation(kTolerance))
-    node->to_parent.RoundTranslationComponents();
+    node->to_parent.RoundToIdentityOrIntegerTranslation();
 }
 
 void TransformTree::UpdateTransformChanged(TransformNode* node,
@@ -657,16 +732,14 @@ void TransformTree::SetRootScaleAndTransform(
 
   gfx::Transform root_to_screen;
   root_to_screen.Scale(screen_space_scale.x(), screen_space_scale.y());
-  gfx::Transform root_from_screen;
-  bool invertible = root_to_screen.GetInverse(&root_from_screen);
-  DCHECK(invertible);
+  gfx::Transform root_from_screen = root_to_screen.GetCheckedInverse();
   if (root_to_screen != ToScreen(kRootPropertyNodeId)) {
     SetToScreen(kRootPropertyNodeId, root_to_screen);
     SetFromScreen(kRootPropertyNodeId, root_from_screen);
     set_needs_update(true);
   }
 
-  transform.ConcatTransform(root_from_screen);
+  transform.PostConcat(root_from_screen);
   TransformNode* contents_root_node = Node(kContentsRootPropertyNodeId);
   if (contents_root_node->local != transform) {
     contents_root_node->local = transform;
@@ -718,8 +791,6 @@ void TransformTree::SetToScreen(int node_id, const gfx::Transform& transform) {
 bool TransformTree::operator==(const TransformTree& other) const {
   return PropertyTree::operator==(other) &&
          page_scale_factor_ == other.page_scale_factor() &&
-         fixed_elements_dont_overscroll_ ==
-             other.fixed_elements_dont_overscroll() &&
          device_scale_factor_ == other.device_scale_factor() &&
          device_transform_scale_factor_ ==
              other.device_transform_scale_factor() &&
@@ -860,7 +931,7 @@ void EffectTree::UpdateOnlyDrawsVisibleContent(EffectNode* node,
                                                EffectNode* parent_node) {
   node->only_draws_visible_content =
       !node->has_copy_request && !node->subtree_capture_id.is_valid() &&
-      !node->shared_element_resource_id.IsValid();
+      !node->view_transition_element_resource_id.IsValid();
   if (parent_node)
     node->only_draws_visible_content &= parent_node->only_draws_visible_content;
   if (!node->backdrop_filters.IsEmpty()) {
@@ -897,11 +968,13 @@ void EffectTree::UpdateSurfaceContentsScale(EffectNode* effect_node) {
 
 bool EffectTree::OnOpacityAnimated(ElementId id, float opacity) {
   EffectNode* node = FindNodeFromElementId(id);
-  DCHECK(node);
   // TODO(crbug.com/1307498): Remove this when we no longer animate
   // non-existent nodes.
-  if (!node)
+  if (!node) {
+    AnimationUpdateOnMissingPropertyNodeUMALog(true);
     return false;
+  }
+  AnimationUpdateOnMissingPropertyNodeUMALog(false);
   if (node->opacity == opacity)
     return false;
   node->opacity = opacity;
@@ -914,11 +987,13 @@ bool EffectTree::OnOpacityAnimated(ElementId id, float opacity) {
 bool EffectTree::OnFilterAnimated(ElementId id,
                                   const FilterOperations& filters) {
   EffectNode* node = FindNodeFromElementId(id);
-  DCHECK(node);
   // TODO(crbug.com/1307498): Remove this when we no longer animate
   // non-existent nodes.
-  if (!node)
+  if (!node) {
+    AnimationUpdateOnMissingPropertyNodeUMALog(true);
     return false;
+  }
+  AnimationUpdateOnMissingPropertyNodeUMALog(false);
   if (node->filters == filters)
     return false;
   node->filters = filters;
@@ -932,11 +1007,13 @@ bool EffectTree::OnBackdropFilterAnimated(
     ElementId id,
     const FilterOperations& backdrop_filters) {
   EffectNode* node = FindNodeFromElementId(id);
-  DCHECK(node);
   // TODO(crbug.com/1307498): Remove this when we no longer animate
   // non-existent nodes.
-  if (!node)
+  if (!node) {
+    AnimationUpdateOnMissingPropertyNodeUMALog(true);
     return false;
+  }
+  AnimationUpdateOnMissingPropertyNodeUMALog(false);
   if (node->backdrop_filters == backdrop_filters)
     return false;
   node->backdrop_filters = backdrop_filters;
@@ -964,7 +1041,7 @@ void EffectTree::UpdateEffects(int id) {
 
 void EffectTree::UpdateClosestAncestorSharedElement(EffectNode* node,
                                                     EffectNode* parent_node) {
-  if (node->shared_element_resource_id.IsValid()) {
+  if (node->view_transition_element_resource_id.IsValid()) {
     node->closest_ancestor_with_shared_element_id = node->id;
   } else if (parent_node) {
     node->closest_ancestor_with_shared_element_id =
@@ -1017,8 +1094,8 @@ void EffectTree::TakeCopyRequestsAndTransformToSurface(
     // ratios are provided integer coordinates, the basis vector determines the
     // precision w.r.t. the fractional part of the Transform's scale factors.
     constexpr gfx::Vector2d kContentVector(1024, 1024);
-    gfx::RectF surface_rect(0, 0, kContentVector.x(), kContentVector.y());
-    transform.TransformRect(&surface_rect);
+    gfx::RectF surface_rect = transform.MapRect(
+        gfx::RectF(0, 0, kContentVector.x(), kContentVector.y()));
 
     for (auto it = range.first; it != range.second; ++it) {
       viz::CopyOutputRequest* const request = it->second.get();
@@ -1178,13 +1255,12 @@ bool EffectTree::CreateOrReuseRenderSurfaces(
     LayerTreeImpl* layer_tree_impl) {
   // Make a list of {stable id, node id} pairs for nodes that are supposed to
   // have surfaces.
-  std::vector<std::pair<uint64_t, int>> stable_id_node_id_list;
+  std::vector<std::pair<ElementId, int>> stable_id_node_id_list;
   for (int id = kContentsRootPropertyNodeId; id < static_cast<int>(size());
        ++id) {
     EffectNode* node = Node(id);
     if (node->HasRenderSurface()) {
-      stable_id_node_id_list.push_back(
-          std::make_pair(node->stable_id, node->id));
+      stable_id_node_id_list.emplace_back(node->element_id, node->id);
     }
   }
 
@@ -1212,7 +1288,7 @@ bool EffectTree::CreateOrReuseRenderSurfaces(
 
     render_surfaces_changed = true;
 
-    if ((*surfaces_list_it)->id() > id_list_it->first) {
+    if (id_list_it->first < (*surfaces_list_it)->id()) {
       int new_node_id = id_list_it->second;
       render_surfaces_[new_node_id] = std::make_unique<RenderSurfaceImpl>(
           layer_tree_impl, id_list_it->first);
@@ -1317,9 +1393,7 @@ bool EffectTree::operator==(const EffectTree& other) const {
 #endif
 
 ScrollTree::ScrollTree(PropertyTrees* property_trees)
-    : PropertyTree<ScrollNode>(property_trees),
-      currently_scrolling_node_id_(kInvalidPropertyNodeId),
-      scroll_offset_map_(ScrollTree::ScrollOffsetMap()) {}
+    : PropertyTree<ScrollNode>(property_trees) {}
 
 ScrollTree::~ScrollTree() = default;
 
@@ -1358,12 +1432,21 @@ void ScrollTree::CopyCompleteTreeState(const ScrollTree& other) {
 }
 #endif  // DCHECK_IS_ON()
 
-bool ScrollTree::IsComposited(const ScrollNode& node) const {
-  return node.is_composited;
+bool ScrollTree::CanRealizeScrollsOnCompositor(const ScrollNode& node) const {
+  return GetMainThreadRepaintReasons(node) ==
+         MainThreadScrollingReason::kNotScrollingOnMain;
 }
 
-bool ScrollTree::CanRealizeScrollsOnCompositor(const ScrollNode& node) const {
-  return node.is_composited && !node.main_thread_scrolling_reasons;
+uint32_t ScrollTree::GetMainThreadRepaintReasons(const ScrollNode& node) const {
+  uint32_t reasons = node.main_thread_scrolling_reasons;
+  if (!reasons && !node.is_composited) {
+    // `reasons` can contain kPopupNoThreadedInput which is not a repaint
+    // reason, but the flag should be set only when there is no threaded input
+    // handler and this function should not be called.
+    CHECK(MainThreadScrollingReason::AreRepaintReasons(reasons));
+    return MainThreadScrollingReason::kNoScrollingLayer;
+  }
+  return reasons;
 }
 
 void ScrollTree::clear() {
@@ -1486,29 +1569,25 @@ gfx::Transform ScrollTree::ScreenSpaceTransform(int scroll_node_id) const {
   const TransformTree& transform_tree = property_trees()->transform_tree();
   const TransformNode* transform_node =
       transform_tree.Node(scroll_node->transform_id);
-  gfx::Transform screen_space_transform(
-      1, 0, 0, 1, scroll_node->offset_to_transform_parent.x(),
+  gfx::Transform screen_space_transform = gfx::Transform::MakeTranslation(
+      scroll_node->offset_to_transform_parent.x(),
       scroll_node->offset_to_transform_parent.y());
-  screen_space_transform.ConcatTransform(
+  screen_space_transform.PostConcat(
       transform_tree.ToScreen(transform_node->id));
   if (scroll_node->should_flatten)
-    screen_space_transform.FlattenTo2d();
+    screen_space_transform.Flatten();
   return screen_space_transform;
 }
 
-SyncedScrollOffset* ScrollTree::GetOrCreateSyncedScrollOffset(ElementId id) {
+SyncedScrollOffset* ScrollTree::GetSyncedScrollOffset(ElementId id) {
   DCHECK(!property_trees()->is_main_thread());
-  if (synced_scroll_offset_map_.find(id) == synced_scroll_offset_map_.end()) {
-    synced_scroll_offset_map_[id] = new SyncedScrollOffset;
-  }
-  return synced_scroll_offset_map_[id].get();
+  auto it = synced_scroll_offset_map_.find(id);
+  return it != synced_scroll_offset_map_.end() ? it->second.get() : nullptr;
 }
 
 const SyncedScrollOffset* ScrollTree::GetSyncedScrollOffset(
     ElementId id) const {
-  DCHECK(!property_trees()->is_main_thread());
-  auto it = synced_scroll_offset_map_.find(id);
-  return it != synced_scroll_offset_map_.end() ? it->second.get() : nullptr;
+  return const_cast<ScrollTree*>(this)->GetSyncedScrollOffset(id);
 }
 
 gfx::Vector2dF ScrollTree::ClampScrollToMaxScrollOffset(
@@ -1532,19 +1611,29 @@ const gfx::PointF ScrollTree::current_scroll_offset(ElementId id) const {
   return gfx::PointF();
 }
 
-const gfx::PointF ScrollTree::GetPixelSnappedScrollOffset(
-    int scroll_node_id) const {
-  const ScrollNode* scroll_node = Node(scroll_node_id);
-  DCHECK(scroll_node);
-  gfx::PointF offset = current_scroll_offset(scroll_node->element_id);
+gfx::PointF ScrollTree::GetScrollOffsetForScrollTimeline(
+    const ScrollNode& scroll_node) const {
+  gfx::PointF offset = current_scroll_offset(scroll_node.element_id);
+  if (!property_trees()->is_main_thread() &&
+      !CanRealizeScrollsOnCompositor(scroll_node)) {
+    // Ignore impl-thread scroll delta if the scroll can't be realized on
+    // compositor because the main thread is the source of truth in the case.
+    if (const SyncedScrollOffset* synced_offset =
+            GetSyncedScrollOffset(scroll_node.element_id)) {
+      offset = property_trees()->is_active() ? synced_offset->ActiveBase()
+                                             : synced_offset->PendingBase();
+    }
+  }
 
   const TransformNode* transform_node =
-      property_trees()->transform_tree().Node(scroll_node->transform_id);
-  DCHECK(offset == transform_node->scroll_offset)
-      << "Transform node scroll offset does not match the actual offset, this "
-         "means the snapped_amount calculation will be incorrect";
+      property_trees()->transform_tree().Node(scroll_node.transform_id);
 
-  if (transform_node->scrolls) {
+  // TODO(crbug.com/1418689): current_scroll_offset can disagree with
+  // transform_node->scroll_offset if the delta on a main frame update is
+  // simply rounding of the scroll position and not using fractional scroll
+  // deltas (see needs_scroll_update in PushScrollUpdatesFromMainThread).
+
+  if (transform_node && transform_node->scrolls) {
     // If necessary perform a update for this node to ensure snap amount is
     // accurate. This method is used by scroll timeline, so it is possible for
     // it to get called before transform tree has gone through a full update
@@ -1560,7 +1649,7 @@ const gfx::PointF ScrollTree::GetPixelSnappedScrollOffset(
     // TODO(crbug.com/1076878): Remove the clamping when scroll timeline effects
     // always match the snapping.
     offset = ClampScrollOffsetToLimits(offset - transform_node->snap_amount,
-                                       *scroll_node);
+                                       scroll_node);
   }
 
   return offset;
@@ -1568,13 +1657,14 @@ const gfx::PointF ScrollTree::GetPixelSnappedScrollOffset(
 
 gfx::Vector2dF ScrollTree::PullDeltaForMainThread(
     SyncedScrollOffset* scroll_offset,
-    bool use_fractional_deltas) {
+    bool use_fractional_deltas,
+    bool next_bmf) {
   DCHECK(property_trees()->is_active());
 
   // Once this setting is enabled, all the complicated rounding logic below can
   // go away.
   if (use_fractional_deltas)
-    return scroll_offset->PullDeltaForMainThread();
+    return scroll_offset->PullDeltaForMainThread(next_bmf);
 
   // TODO(flackr): We should pass the fractional scroll deltas when Blink fully
   // supports fractional scrolls. crbug.com/414283.
@@ -1590,7 +1680,7 @@ gfx::Vector2dF ScrollTree::PullDeltaForMainThread(
   gfx::Vector2dF diff_active_base =
       active_base - gfx::PointF(gfx::ToRoundedPoint(active_base));
   scroll_offset->SetCurrent(rounded_offset + diff_active_base);
-  gfx::Vector2dF delta = scroll_offset->PullDeltaForMainThread();
+  gfx::Vector2dF delta = scroll_offset->PullDeltaForMainThread(next_bmf);
   scroll_offset->SetCurrent(current_offset);
   return delta;
 }
@@ -1599,17 +1689,30 @@ void ScrollTree::CollectScrollDeltas(
     CompositorCommitData* commit_data,
     ElementId inner_viewport_scroll_element_id,
     bool use_fractional_deltas,
-    const base::flat_map<ElementId, TargetSnapAreaElementIds>&
-        snapped_elements) {
+    const base::flat_map<ElementId, TargetSnapAreaElementIds>& snapped_elements,
+    const MutatorHost* main_thread_mutator_host) {
   DCHECK(!property_trees()->is_main_thread());
   TRACE_EVENT0("cc", "ScrollTree::CollectScrollDeltas");
   for (auto map_entry : synced_scroll_offset_map_) {
-    gfx::Vector2dF scroll_delta =
-        PullDeltaForMainThread(map_entry.second.get(), use_fractional_deltas);
+    // The presence of a non-null mutator_host indicates that there is a
+    // ready-to-commit main frame, hence we are pipelining this main frame.
+    bool pipeline = main_thread_mutator_host;
+    gfx::Vector2dF scroll_delta;
+    // If the ready-to-commit main frame is going to clobber the scroll offset
+    // in the active tree, then we shouldn't send a delta down to the main
+    // thread.
+    bool clobber =
+        main_thread_mutator_host &&
+        main_thread_mutator_host->ScrollOffsetAnimationWasInterrupted(
+            map_entry.first);
+    if (!clobber) {
+      scroll_delta = PullDeltaForMainThread(map_entry.second.get(),
+                                            use_fractional_deltas, pipeline);
+    }
 
     ElementId id = map_entry.first;
 
-    absl::optional<TargetSnapAreaElementIds> snap_target_ids;
+    std::optional<TargetSnapAreaElementIds> snap_target_ids;
     if (snapped_elements.contains(id))
       snap_target_ids = snapped_elements.at(id);
 
@@ -1636,7 +1739,8 @@ void ScrollTree::CollectScrollDeltas(
 
 void ScrollTree::CollectScrollDeltasForTesting(bool use_fractional_deltas) {
   for (auto map_entry : synced_scroll_offset_map_) {
-    PullDeltaForMainThread(map_entry.second.get(), use_fractional_deltas);
+    PullDeltaForMainThread(map_entry.second.get(), use_fractional_deltas,
+                           /* next_bmf */ false);
   }
 }
 
@@ -1653,16 +1757,26 @@ void ScrollTree::PushScrollUpdatesFromMainThread(
   for (auto map_entry = synced_scroll_offset_map_.begin();
        map_entry != synced_scroll_offset_map_.end();) {
     ElementId id = map_entry->first;
-    if (main_scroll_offset_map.find(id) == main_scroll_offset_map.end())
+    if (main_scroll_offset_map.find(id) == main_scroll_offset_map.end()) {
+      // This SyncedScrollOffset might still be used to send a delta from the
+      // active tree to the main thread, so we need to clear out the delta that
+      // was sent to the main thread for this commit.
+      map_entry->second->PushMainToPending(map_entry->second->Current(true));
       map_entry = synced_scroll_offset_map_.erase(map_entry);
-    else
+    } else {
       map_entry++;
+    }
   }
 
   for (auto map_entry : main_scroll_offset_map) {
     ElementId id = map_entry.first;
-    SyncedScrollOffset* synced_scroll_offset =
-        GetOrCreateSyncedScrollOffset(id);
+    // In non-test code, this should be the only code path that creates a new
+    // SyncedScrollOffset.
+    SyncedScrollOffset* synced_scroll_offset = GetSyncedScrollOffset(id);
+    if (!synced_scroll_offset) {
+      synced_scroll_offset = new SyncedScrollOffset();
+      synced_scroll_offset_map_[id] = synced_scroll_offset;
+    }
 
     // If the value on the main thread differs from the value on the pending
     // tree after state sync, we need to update the scroll state on the newly
@@ -1712,10 +1826,12 @@ void ScrollTree::PushScrollUpdatesFromPendingTree(
   }
 }
 
-void ScrollTree::ApplySentScrollDeltasFromAbortedCommit() {
+void ScrollTree::ApplySentScrollDeltasFromAbortedCommit(
+    bool next_bmf,
+    bool main_frame_applied_deltas) {
   DCHECK(property_trees()->is_active());
   for (auto& map_entry : synced_scroll_offset_map_)
-    map_entry.second->AbortCommit();
+    map_entry.second->AbortCommit(next_bmf, main_frame_applied_deltas);
 }
 
 void ScrollTree::SetBaseScrollOffset(ElementId id,
@@ -1725,10 +1841,8 @@ void ScrollTree::SetBaseScrollOffset(ElementId id,
     return;
   }
 
-  // Scroll offset updates on the impl thread should only be for layers which
-  // were created on the main thread. But this method is called when we build
-  // PropertyTrees on the impl thread from LayerTreeImpl.
-  GetOrCreateSyncedScrollOffset(id)->PushMainToPending(scroll_offset);
+  DCHECK(GetSyncedScrollOffset(id));
+  GetSyncedScrollOffset(id)->PushMainToPending(scroll_offset);
 }
 
 bool ScrollTree::SetScrollOffset(ElementId id,
@@ -1743,16 +1857,29 @@ bool ScrollTree::SetScrollOffset(ElementId id,
     return true;
   }
 
-  if (property_trees()->is_active())
-    return GetOrCreateSyncedScrollOffset(id)->SetCurrent(scroll_offset);
+  if (property_trees()->is_active()) {
+    DCHECK(GetSyncedScrollOffset(id));
+    return GetSyncedScrollOffset(id)->SetCurrent(scroll_offset);
+  }
 
   return false;
+}
+
+SyncedScrollOffset* ScrollTree::GetOrCreateSyncedScrollOffsetForTesting(
+    ElementId id) {
+  auto it = synced_scroll_offset_map_.find(id);
+  if (it == synced_scroll_offset_map_.end()) {
+    it = synced_scroll_offset_map_.try_emplace(id, new SyncedScrollOffset())
+             .first;
+  }
+  return it->second.get();
 }
 
 bool ScrollTree::UpdateScrollOffsetBaseForTesting(ElementId id,
                                                   const gfx::PointF& offset) {
   DCHECK(!property_trees()->is_main_thread());
-  SyncedScrollOffset* synced_scroll_offset = GetOrCreateSyncedScrollOffset(id);
+  SyncedScrollOffset* synced_scroll_offset =
+      GetOrCreateSyncedScrollOffsetForTesting(id);  // IN-TEST
   bool changed = synced_scroll_offset->PushMainToPending(offset);
   if (property_trees()->is_active())
     changed |= synced_scroll_offset->PushPendingToActive();
@@ -1761,8 +1888,10 @@ bool ScrollTree::UpdateScrollOffsetBaseForTesting(ElementId id,
 
 bool ScrollTree::SetScrollOffsetDeltaForTesting(ElementId id,
                                                 const gfx::Vector2dF& delta) {
-  return GetOrCreateSyncedScrollOffset(id)->SetCurrent(
-      GetOrCreateSyncedScrollOffset(id)->ActiveBase() + delta);
+  auto* synced_scroll_offset =
+      GetOrCreateSyncedScrollOffsetForTesting(id);  // IN-TEST
+  return synced_scroll_offset->SetCurrent(synced_scroll_offset->ActiveBase() +
+                                          delta);
 }
 
 const gfx::PointF ScrollTree::GetScrollOffsetBaseForTesting(
@@ -1790,6 +1919,8 @@ const gfx::Vector2dF ScrollTree::GetScrollOffsetDeltaForTesting(
 gfx::Vector2dF ScrollTree::ScrollBy(const ScrollNode& scroll_node,
                                     const gfx::Vector2dF& scroll,
                                     LayerTreeImpl* layer_tree_impl) {
+  TRACE_EVENT_BEGIN("input", "ScrollTree::ScrollBy", "scroll", scroll,
+                    "scroll_node_id", scroll_node.id);
   gfx::Vector2dF adjusted_scroll(scroll);
   if (!scroll_node.user_scrollable_horizontal)
     adjusted_scroll.set_x(0);
@@ -1801,6 +1932,9 @@ gfx::Vector2dF ScrollTree::ScrollBy(const ScrollNode& scroll_node,
       ClampScrollOffsetToLimits(old_offset + adjusted_scroll, scroll_node);
   if (SetScrollOffset(scroll_node.element_id, new_offset))
     layer_tree_impl->DidUpdateScrollOffset(scroll_node.element_id);
+
+  TRACE_EVENT_END("input", /* ScrollTree::ScrollBy */
+                  "old_offset", old_offset, "new_offset", new_offset);
 
   // Return the amount of scroll delta we could not consume for this node.
   return old_offset + scroll - new_offset;
@@ -1822,7 +1956,7 @@ void ScrollTree::SetScrollCallbacks(base::WeakPtr<ScrollCallbacks> callbacks) {
 void ScrollTree::NotifyDidCompositorScroll(
     ElementId scroll_element_id,
     const gfx::PointF& scroll_offset,
-    const absl::optional<TargetSnapAreaElementIds>& snap_target_ids) {
+    const std::optional<TargetSnapAreaElementIds>& snap_target_ids) {
   DCHECK(property_trees()->is_main_thread());
   if (callbacks_) {
     callbacks_->DidCompositorScroll(scroll_element_id, scroll_offset,
@@ -1831,7 +1965,7 @@ void ScrollTree::NotifyDidCompositorScroll(
 }
 
 void ScrollTree::NotifyDidChangeScrollbarsHidden(ElementId scroll_element_id,
-                                                 bool hidden) {
+                                                 bool hidden) const {
   DCHECK(property_trees()->is_main_thread());
   if (callbacks_)
     callbacks_->DidChangeScrollbarsHidden(scroll_element_id, hidden);
@@ -2328,14 +2462,14 @@ DrawTransformData& PropertyTrees::FetchDrawTransformsDataFromCache(
 ClipRectData* PropertyTrees::FetchClipRectFromCache(int clip_id,
                                                     int target_id) {
   ClipNode* clip_node = clip_tree_mutable().Node(clip_id);
-  for (size_t i = 0; i < clip_node->cached_clip_rects->size(); ++i) {
+  for (size_t i = 0; i < clip_node->cached_clip_rects.size(); ++i) {
     auto& data = clip_node->cached_clip_rects[i];
     if (data.target_id == target_id || data.target_id == kInvalidPropertyNodeId)
       return &data;
   }
-  clip_node->cached_clip_rects->emplace_back();
-  clip_node->cached_clip_rects->back().target_id = kInvalidPropertyNodeId;
-  return &clip_node->cached_clip_rects->back();
+  clip_node->cached_clip_rects.emplace_back();
+  clip_node->cached_clip_rects.back().target_id = kInvalidPropertyNodeId;
+  return &clip_node->cached_clip_rects.back();
 }
 
 bool PropertyTrees::HasElement(ElementId element_id) const {
@@ -2372,9 +2506,8 @@ DrawTransforms& PropertyTrees::GetDrawTransforms(int transform_id,
   } else if (transform_id > dest_id) {
     transform_tree().CombineTransformsBetween(transform_id, dest_id,
                                               &target_space_transform);
-    target_space_transform.matrix().postScale(
-        effect_node->surface_contents_scale.x(),
-        effect_node->surface_contents_scale.y(), 1.f);
+    target_space_transform.PostScale(effect_node->surface_contents_scale.x(),
+                                     effect_node->surface_contents_scale.y());
     data.transforms.to_valid = true;
     data.transforms.from_valid = false;
     data.transforms.might_be_invertible = true;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,29 +11,28 @@
 namespace blink {
 
 InterpolableGridTrackRepeater::InterpolableGridTrackRepeater(
-    std::unique_ptr<InterpolableList> values,
+    InterpolableList* values,
     const NGGridTrackRepeater& repeater)
     : values_(std::move(values)), repeater_(repeater) {
   DCHECK(values_);
 }
 
 // static
-std::unique_ptr<InterpolableGridTrackRepeater>
-InterpolableGridTrackRepeater::Create(
+InterpolableGridTrackRepeater* InterpolableGridTrackRepeater::Create(
     const NGGridTrackRepeater& repeater,
-    const Vector<GridTrackSize, 1>& repeater_track_sizes) {
+    const Vector<GridTrackSize, 1>& repeater_track_sizes,
+    float zoom) {
   DCHECK_EQ(repeater_track_sizes.size(), repeater.repeat_size);
 
-  std::unique_ptr<InterpolableList> values =
-      std::make_unique<InterpolableList>(repeater_track_sizes.size());
+  InterpolableList* values =
+      MakeGarbageCollected<InterpolableList>(repeater_track_sizes.size());
   for (wtf_size_t i = 0; i < repeater_track_sizes.size(); ++i) {
-    std::unique_ptr<InterpolableGridTrackSize> result =
-        InterpolableGridTrackSize::Create(repeater_track_sizes[i]);
+    InterpolableGridTrackSize* result =
+        InterpolableGridTrackSize::Create(repeater_track_sizes[i], zoom);
     DCHECK(result);
     values->Set(i, std::move(result));
   }
-  return std::make_unique<InterpolableGridTrackRepeater>(std::move(values),
-                                                         repeater);
+  return MakeGarbageCollected<InterpolableGridTrackRepeater>(values, repeater);
 }
 
 Vector<GridTrackSize, 1> InterpolableGridTrackRepeater::CreateTrackSizes(
@@ -52,16 +51,15 @@ Vector<GridTrackSize, 1> InterpolableGridTrackRepeater::CreateTrackSizes(
 }
 
 InterpolableGridTrackRepeater* InterpolableGridTrackRepeater::RawClone() const {
-  std::unique_ptr<InterpolableList> values(
-      DynamicTo<InterpolableList>(values_->Clone().release()));
-  return new InterpolableGridTrackRepeater(std::move(values), repeater_);
+  InterpolableList* values(DynamicTo<InterpolableList>(values_->Clone()));
+  return MakeGarbageCollected<InterpolableGridTrackRepeater>(values, repeater_);
 }
 
 InterpolableGridTrackRepeater* InterpolableGridTrackRepeater::RawCloneAndZero()
     const {
-  std::unique_ptr<InterpolableList> values(
-      DynamicTo<InterpolableList>(values_->CloneAndZero().release()));
-  return new InterpolableGridTrackRepeater(std::move(values), repeater_);
+  InterpolableList* values(
+      DynamicTo<InterpolableList>(values_->CloneAndZero()));
+  return MakeGarbageCollected<InterpolableGridTrackRepeater>(values, repeater_);
 }
 
 bool InterpolableGridTrackRepeater::Equals(

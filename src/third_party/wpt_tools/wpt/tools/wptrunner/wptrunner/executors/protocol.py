@@ -32,7 +32,7 @@ class Protocol:
     :param Browser browser: The Browser using this protocol"""
     __metaclass__ = ABCMeta
 
-    implements = []  # type: ClassVar[List[Type[ProtocolPart]]]
+    implements: ClassVar[List[Type["ProtocolPart"]]] = []
 
     def __init__(self, executor, browser):
         self.executor = executor
@@ -70,9 +70,10 @@ class Protocol:
             msg = "Post-connection steps failed"
             self.after_connect()
         except Exception:
-            if msg is not None:
-                self.logger.warning(msg)
-            self.logger.warning(traceback.format_exc())
+            message = "Protocol.setup caught an exception:\n"
+            message += f"{msg}\n" if msg is not None else ""
+            message += traceback.format_exc()
+            self.logger.warning(message)
             raise
 
     @abstractmethod
@@ -98,7 +99,7 @@ class ProtocolPart:
     :param Protocol parent: The parent protocol"""
     __metaclass__ = ABCMeta
 
-    name = None  # type: ClassVar[str]
+    name: ClassVar[str]
 
     def __init__(self, parent):
         self.parent = parent
@@ -299,6 +300,27 @@ class ClickProtocolPart(ProtocolPart):
         pass
 
 
+
+class AccessibilityProtocolPart(ProtocolPart):
+    """Protocol part for accessibility introspection"""
+    __metaclass__ = ABCMeta
+
+    name = "accessibility"
+
+    @abstractmethod
+    def get_computed_label(self, element):
+        """Return the computed accessibility label for a specific element.
+
+        :param element: A protocol-specific handle to an element."""
+        pass
+
+    def get_computed_role(self, element):
+        """Return the computed accessibility role for a specific element.
+
+        :param element: A protocol-specific handle to an element."""
+        pass
+
+
 class CookiesProtocolPart(ProtocolPart):
     """Protocol part for managing cookies"""
     __metaclass__ = ABCMeta
@@ -308,6 +330,18 @@ class CookiesProtocolPart(ProtocolPart):
     @abstractmethod
     def delete_all_cookies(self):
         """Delete all cookies."""
+        pass
+
+    @abstractmethod
+    def get_all_cookies(self):
+        """Get all cookies."""
+        pass
+
+    @abstractmethod
+    def get_named_cookie(self, name):
+        """Get named cookie.
+
+        :param name: The name of the cookie to get."""
         pass
 
 
@@ -362,12 +396,11 @@ class SetPermissionProtocolPart(ProtocolPart):
     name = "set_permission"
 
     @abstractmethod
-    def set_permission(self, descriptor, state, one_realm=False):
+    def set_permission(self, descriptor, state):
         """Set permission state.
 
         :param descriptor: A PermissionDescriptor object.
-        :param state: The state to set the permission to.
-        :param one_realm: Whether to set the permission for only one realm."""
+        :param state: The state to set the permission to."""
         pass
 
 
@@ -584,6 +617,57 @@ class SPCTransactionsProtocolPart(ProtocolPart):
         pass
 
 
+class FedCMProtocolPart(ProtocolPart):
+    """Protocol part for Federated Credential Management"""
+    __metaclass__ = ABCMeta
+
+    name = "fedcm"
+
+    @abstractmethod
+    def cancel_fedcm_dialog(self):
+        """Cancel the FedCM dialog"""
+        pass
+
+    @abstractmethod
+    def confirm_idp_login(self):
+        """Confirm IDP login"""
+        pass
+
+    @abstractmethod
+    def select_fedcm_account(self, account_index):
+        """Select a FedCM account
+
+        :param int account_index: The index of the account to select"""
+        pass
+
+    @abstractmethod
+    def get_fedcm_account_list(self):
+        """Get the FedCM account list"""
+        pass
+
+    @abstractmethod
+    def get_fedcm_dialog_title(self):
+        """Get the FedCM dialog title"""
+        pass
+
+    @abstractmethod
+    def get_fedcm_dialog_type(self):
+        """Get the FedCM dialog type"""
+        pass
+
+    @abstractmethod
+    def set_fedcm_delay_enabled(self, enabled):
+        """Sets the FedCM delay as enabled or disabled
+
+        :param bool enabled: The delay to set"""
+        pass
+
+    @abstractmethod
+    def reset_fedcm_cooldown(self):
+        """Set the FedCM cooldown"""
+        pass
+
+
 class PrintProtocolPart(ProtocolPart):
     """Protocol part for rendering to a PDF."""
     __metaclass__ = ABCMeta
@@ -676,3 +760,26 @@ class WdspecProtocol(ConnectionlessProtocol):
         conn.request("HEAD", "/invalid")
         res = conn.getresponse()
         return res.status == 404
+
+
+class VirtualSensorProtocolPart(ProtocolPart):
+    """Protocol part for Sensors"""
+    __metaclass__ = ABCMeta
+
+    name = "virtual_sensor"
+
+    @abstractmethod
+    def create_virtual_sensor(self, sensor_type, sensor_params):
+        pass
+
+    @abstractmethod
+    def update_virtual_sensor(self, sensor_type, reading):
+        pass
+
+    @abstractmethod
+    def remove_virtual_sensor(self, sensor_type):
+        pass
+
+    @abstractmethod
+    def get_virtual_sensor_information(self, sensor_type):
+        pass

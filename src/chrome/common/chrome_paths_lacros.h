@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,10 @@ void SetLacrosDefaultPathsFromInitParams(
 // in case drive is disabled in Ash. `SetDriveFsMountPointPath()` is triggered
 // in case drive availability in Ash is changed.
 void SetDriveFsMountPointPath(const base::FilePath& drivefs);
+
+// Sets `result` to the the DriveFS mount point path, which is passed in by Ash
+// and continually updated as it changes in Ash. The mount point path does not
+// contain the trailing '/root'; this is the 'MyDrive' directory specifically.
 // Returns false if Drive is not enabled in Ash.
 bool GetDriveFsMountPointPath(base::FilePath* result);
 

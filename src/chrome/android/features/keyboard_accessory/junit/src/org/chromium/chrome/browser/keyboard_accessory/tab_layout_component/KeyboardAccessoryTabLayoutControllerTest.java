@@ -1,13 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory.tab_layout_component;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
-import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -29,7 +30,6 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.metrics.UmaRecorderHolder;
 import org.chromium.base.task.test.CustomShadowAsyncTask;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.ui.modelutil.ListObservable;
@@ -37,24 +37,21 @@ import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyObservable.PropertyObserver;
 
-/**
- * Controller tests for the keyboard accessory tab layout component.
- */
+/** Controller tests for the keyboard accessory tab layout component. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {CustomShadowAsyncTask.class})
-@Features.EnableFeatures(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
+@Config(
+        manifest = Config.NONE,
+        shadows = {CustomShadowAsyncTask.class})
 public class KeyboardAccessoryTabLayoutControllerTest {
-    @Rule
-    public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
+    @Rule public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
+
+    @Mock private PropertyObserver<PropertyKey> mMockPropertyObserver;
+    @Mock private ListObservable.ListObserver<Void> mMockTabListObserver;
 
     @Mock
-    private PropertyObserver<PropertyKey> mMockPropertyObserver;
-    @Mock
-    private ListObservable.ListObserver<Void> mMockTabListObserver;
-    @Mock
     private KeyboardAccessoryTabLayoutCoordinator.AccessoryTabObserver mMockAccessoryTabObserver;
-    @Mock
-    private KeyboardAccessoryTabLayoutView mMockView;
+
+    @Mock private KeyboardAccessoryTabLayoutView mMockView;
 
     private final KeyboardAccessoryData.Tab mTestTab =
             new KeyboardAccessoryData.Tab("Passwords", null, null, 0, 0, null);

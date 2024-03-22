@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,11 @@ class MediaItemUIObserver : public base::CheckedObserver {
 
   // Called when the item UI is about to be deleted.
   virtual void OnMediaItemUIDestroyed(const std::string& id) {}
+
+  // Called when the start casting button is clicked on the quick settings media
+  // view to request showing device list using device selector view in the quick
+  // settings media detailed view.
+  virtual void OnMediaItemUIShowDevices(const std::string& id) {}
 
  protected:
   ~MediaItemUIObserver() override = default;

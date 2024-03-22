@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_CDM_FACTORY_DAEMON_FAKE_CDM_FACTORY_DAEMON_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_CDM_FACTORY_DAEMON_FAKE_CDM_FACTORY_DAEMON_CLIENT_H_
 
-#include "base/callback_forward.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback_forward.h"
 #include "chromeos/ash/components/dbus/cdm_factory_daemon/cdm_factory_daemon_client.h"
 #include "dbus/object_proxy.h"
 
@@ -29,7 +29,7 @@ class FakeCdmFactoryDaemonClient : public CdmFactoryDaemonClient {
       base::ScopedFD fd,
       base::OnceCallback<void(bool success)> callback) override;
   void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) override;
+      chromeos::WaitForServiceToBeAvailableCallback callback) override;
 };
 
 }  // namespace ash

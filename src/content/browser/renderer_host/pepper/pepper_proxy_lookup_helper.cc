@@ -1,15 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/renderer_host/pepper/pepper_proxy_lookup_helper.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -28,7 +27,7 @@ class PepperProxyLookupHelper::UIThreadHelper
                  LookUpProxyForURLCallback look_up_proxy_for_url_callback,
                  LookUpCompleteCallback look_up_complete_callback)
       : look_up_complete_callback_(std::move(look_up_complete_callback)),
-        callback_task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+        callback_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
     GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE,
         base::BindOnce(&UIThreadHelper::StartLookup, base::Unretained(this),

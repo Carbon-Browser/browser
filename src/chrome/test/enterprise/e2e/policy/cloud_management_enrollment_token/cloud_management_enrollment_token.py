@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -41,9 +41,8 @@ class CloudManagementEnrollmentTokenTest(ChromeEnterpriseTestCase):
 
     local_dir = os.path.dirname(os.path.abspath(__file__))
 
-    output = self.RunWebDriverTest(
-        self.win_config['client'],
-        os.path.join(local_dir, 'cloud_enrollment_webdriver.py'))
+    output = self.RunWebDriverTest(self.win_config['client'],
+                                   os.path.join(local_dir, '../cbcm_enroll.py'))
     # Verify CBCM status legend
     self.assertIn('Machine policies', output)
     self.assertIn('CLIENT2016', output)

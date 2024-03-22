@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
+#include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/anchor_element_metrics_sender.h"
 #include "third_party/blink/renderer/core/html/html_anchor_element.h"
@@ -128,7 +129,7 @@ bool IsUrlIncrementedByOne(const HTMLAnchorElement& anchor_element) {
 // overflows.
 gfx::Rect AbsoluteElementBoundingBoxRect(const LayoutObject& layout_object) {
   Vector<PhysicalRect> rects = layout_object.OutlineRects(
-      nullptr, PhysicalOffset(), NGOutlineType::kIncludeBlockVisualOverflow);
+      nullptr, PhysicalOffset(), OutlineType::kIncludeBlockInkOverflow);
   return ToEnclosingRect(layout_object.LocalToAbsoluteRect(UnionRect(rects)));
 }
 
@@ -154,7 +155,7 @@ Document* GetRootDocument(const HTMLAnchorElement& anchor) {
 // destroyed and a new one is created with the same address. We don't mind this
 // issue as the anchor ID is only used for metric collection.
 uint32_t AnchorElementId(const HTMLAnchorElement& element) {
-  return WTF::PtrHash<const HTMLAnchorElement>::GetHash(&element);
+  return WTF::GetHash(&element);
 }
 
 mojom::blink::AnchorElementMetricsPtr CreateAnchorElementMetrics(

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,8 @@ class WebBundleMemoryQuotaConsumer;
 
 class COMPONENT_EXPORT(NETWORK_SERVICE) WebBundleURLLoaderFactory {
  public:
+  class URLLoader;
+
   // Used for UMA. Append-only.
   enum class SubresourceWebBundleLoadResult {
     kSuccess = 0,
@@ -52,7 +54,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) WebBundleURLLoaderFactory {
   WebBundleURLLoaderFactory& operator=(const WebBundleURLLoaderFactory&) =
       delete;
 
-  base::WeakPtr<WebBundleURLLoaderFactory> GetWeakPtr() const;
+  base::WeakPtr<WebBundleURLLoaderFactory> GetWeakPtr();
 
   void SetBundleStream(mojo::ScopedDataPipeConsumerHandle body);
   void ReportErrorAndCancelPendingLoaders(SubresourceWebBundleLoadResult result,
@@ -61,19 +63,20 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) WebBundleURLLoaderFactory {
   mojo::PendingRemote<mojom::URLLoaderClient> MaybeWrapURLLoaderClient(
       mojo::PendingRemote<mojom::URLLoaderClient> wrapped);
 
-  void StartSubresourceRequest(
+  static base::WeakPtr<URLLoader> CreateURLLoader(
       mojo::PendingReceiver<mojom::URLLoader> receiver,
       const ResourceRequest& url_request,
       mojo::PendingRemote<mojom::URLLoaderClient> client,
       mojo::Remote<mojom::TrustedHeaderClient> trusted_header_client,
       base::Time request_start_time,
-      base::TimeTicks request_start_time_ticks);
+      base::TimeTicks request_start_time_ticks,
+      base::OnceCallback<void(URLLoader*)> will_be_deleted_callback);
 
+  void StartLoader(base::WeakPtr<URLLoader> loader);
   void OnWebBundleFetchFailed();
 
  private:
   class BundleDataSource;
-  class URLLoader;
 
   bool HasError() const;
 
@@ -115,7 +118,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) WebBundleURLLoaderFactory {
   mojo::Remote<mojom::DevToolsObserver> devtools_observer_;
   absl::optional<std::string> devtools_request_id_;
   const CrossOriginEmbedderPolicy cross_origin_embedder_policy_;
-  raw_ptr<mojom::CrossOriginEmbedderPolicyReporter> coep_reporter_;
+  raw_ptr<mojom::CrossOriginEmbedderPolicyReporter, FlakyDanglingUntriaged>
+      coep_reporter_;
   std::unique_ptr<BundleDataSource> source_;
   mojo::Remote<web_package::mojom::WebBundleParser> parser_;
   web_package::mojom::BundleMetadataPtr metadata_;

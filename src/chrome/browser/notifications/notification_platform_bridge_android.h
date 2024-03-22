@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,6 +82,10 @@ class NotificationPlatformBridgeAndroid : public NotificationPlatformBridge {
   void Close(Profile* profile, const std::string& notification_id) override;
   void GetDisplayed(Profile* profile,
                     GetDisplayedNotificationsCallback callback) const override;
+  void GetDisplayedForOrigin(
+      Profile* profile,
+      const GURL& origin,
+      GetDisplayedNotificationsCallback callback) const override;
   void SetReadyCallback(NotificationBridgeReadyCallback callback) override;
   void DisplayServiceShutDown(Profile* profile) override;
 

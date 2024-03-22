@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
 
 #include <memory>
 #include <set>
+#include <utility>
 
+#include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
-#include "base/supports_user_data.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/system/buffer.h"
 #include "ui/aura/aura_export.h"
+#include "ui/aura/client/cursor_shape_client.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
 #include "ui/events/event_target.h"
 #include "ui/events/types/event_type.h"
@@ -45,12 +47,10 @@ class WindowOcclusionTracker;
 class WindowTreeHost;
 
 // A singleton object that tracks general state within Aura.
-class AURA_EXPORT Env : public ui::EventTarget,
-                        public base::SupportsUserData {
+class AURA_EXPORT Env : public ui::EventTarget {
  public:
   Env(const Env&) = delete;
   Env& operator=(const Env&) = delete;
-
   ~Env() override;
 
   // Creates a new Env instance.
@@ -90,10 +90,12 @@ class AURA_EXPORT Env : public ui::EventTarget,
   // coordinates.
   const gfx::Point& last_mouse_location() const { return last_mouse_location_; }
   void SetLastMouseLocation(const gfx::Point& last_mouse_location);
+  void SetLastTouchLocation(const aura::Window* target,
+                            const gfx::Point& last_touch_location);
 
   // Whether any touch device is currently down.
   bool is_touch_down() const { return is_touch_down_; }
-  void set_touch_down(bool value) { is_touch_down_ = value; }
+  void SetTouchDown(bool value);
 
   void set_context_factory(ui::ContextFactory* context_factory) {
     context_factory_ = context_factory;
@@ -117,8 +119,10 @@ class AURA_EXPORT Env : public ui::EventTarget,
   void SetGestureRecognizer(
       std::unique_ptr<ui::GestureRecognizer> gesture_recognizer);
 
-  // The `fallback` parameter allows callers of this API to specify a
-  // value to be returned in the case of a missing touch state.
+  // Returns the location of last mouse or touch event. Note that touch makes
+  // sense only during pressed state, and this will fallback to to the
+  // 'fallback' value, or mouse pointer location in the case of a missing touch
+  // state.
   gfx::Point GetLastPointerPoint(ui::mojom::DragEventSource event_source,
                                  aura::Window* window,
                                  absl::optional<gfx::Point> fallback);
@@ -140,6 +144,13 @@ class AURA_EXPORT Env : public ui::EventTarget,
                         const std::set<ui::EventType>& types);
   void RemoveEventObserver(ui::EventObserver* observer);
   void NotifyEventObservers(const ui::Event& event);
+
+  client::CursorShapeClient* cursor_shape_client() {
+    return cursor_shape_client_;
+  }
+  void set_cursor_shape_client(client::CursorShapeClient* cursor_shape_client) {
+    cursor_shape_client_ = cursor_shape_client;
+  }
 
   const std::vector<aura::WindowTreeHost*>& window_tree_hosts() const {
     return window_tree_hosts_;
@@ -186,8 +197,9 @@ class AURA_EXPORT Env : public ui::EventTarget,
 
   std::unique_ptr<EnvInputStateController> env_controller_;
   int mouse_button_flags_ = 0;
-  // Location of last mouse event, in screen coordinates.
+  // Location of last mouse event and touch event in screen coordinates.
   mutable gfx::Point last_mouse_location_;
+  mutable gfx::Point last_touch_location_;
   bool is_touch_down_ = false;
 
   std::unique_ptr<ui::GestureRecognizer> gesture_recognizer_;
@@ -199,9 +211,7 @@ class AURA_EXPORT Env : public ui::EventTarget,
   std::unique_ptr<InputStateLookup> input_state_lookup_;
   std::unique_ptr<ui::PlatformEventSource> event_source_;
 
-  // TODO(crbug.com/1298696): Breaks content_unittests.
-  raw_ptr<ui::ContextFactory, DanglingUntriagedDegradeToNoOpWhenMTE>
-      context_factory_ = nullptr;
+  raw_ptr<ui::ContextFactory, DanglingUntriaged> context_factory_ = nullptr;
 
   static bool initial_throttle_input_on_resize_;
   bool throttle_input_on_resize_ = initial_throttle_input_on_resize_;
@@ -209,6 +219,12 @@ class AURA_EXPORT Env : public ui::EventTarget,
   std::unique_ptr<WindowOcclusionTracker> window_occlusion_tracker_;
 
   std::vector<aura::WindowTreeHost*> window_tree_hosts_;
+
+  // Touch points. The `target` window may be stale and should not be accessed
+  // other than looking up purpose.
+  base::flat_map<const aura::Window*, gfx::Point> last_touch_locations_;
+
+  raw_ptr<client::CursorShapeClient> cursor_shape_client_ = nullptr;
 };
 
 }  // namespace aura

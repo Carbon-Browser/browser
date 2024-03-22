@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -147,6 +147,11 @@ void ArcTtsService::OnVoicesChanged(std::vector<mojom::TtsVoicePtr> voices) {
   impl->SetVoices(std::move(chrome_voices));
 
   content::TtsController::GetInstance()->VoicesChanged();
+}
+
+// static
+void ArcTtsService::EnsureFactoryBuilt() {
+  ArcTtsServiceFactory::GetInstance();
 }
 
 }  // namespace arc

@@ -1,18 +1,18 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './strings.m.js';
 
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {appendParam} from 'chrome://resources/js/util.m.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {appendParam} from 'chrome://resources/js/util.js';
 
 
-type EventLogEntry = {
-  [key: string]: number|string,
-};
+interface EventLogEntry {
+  [key: string]: number|string;
+}
 
 /**
  * Requests the list of WebRTC logs from the backend.

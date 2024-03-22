@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,9 +67,15 @@ class StatusIndicatorViewBinder {
                     ColorStateList.valueOf(model.get(StatusIndicatorProperties.ICON_TINT));
             text.setDrawableTintColor(tint);
         } else if (StatusIndicatorProperties.CURRENT_VISIBLE_HEIGHT == propertyKey) {
-            final float yOffset = model.get(StatusIndicatorProperties.CURRENT_VISIBLE_HEIGHT)
-                    - view.javaViewRoot.getHeight();
+            final float yOffset =
+                    model.get(StatusIndicatorProperties.CURRENT_VISIBLE_HEIGHT)
+                            - view.javaViewRoot.getHeight();
             view.javaViewRoot.setTranslationY(yOffset);
+        } else if (StatusIndicatorProperties.IS_OBSCURED == propertyKey) {
+            view.javaViewRoot.setImportantForAccessibility(
+                    model.get(StatusIndicatorProperties.IS_OBSCURED)
+                            ? View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                            : View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
         } else {
             assert false : "Unhandled property detected in StatusIndicatorViewBinder!";
         }

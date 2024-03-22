@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,8 @@ namespace autofill {
 
 class TestAutofillDataModel : public AutofillDataModel {
  public:
-  TestAutofillDataModel(const std::string& guid, const std::string& origin);
-  TestAutofillDataModel(const std::string& guid,
-                        size_t use_count,
-                        base::Time use_date);
+  explicit TestAutofillDataModel();
+  TestAutofillDataModel(size_t use_count, base::Time use_date);
 
   TestAutofillDataModel(const TestAutofillDataModel&) = delete;
   TestAutofillDataModel& operator=(const TestAutofillDataModel&) = delete;
@@ -25,10 +23,9 @@ class TestAutofillDataModel : public AutofillDataModel {
 
  private:
   std::u16string GetRawInfo(ServerFieldType type) const override;
-  void SetRawInfoWithVerificationStatus(
-      ServerFieldType type,
-      const std::u16string& value,
-      structured_address::VerificationStatus status) override;
+  void SetRawInfoWithVerificationStatus(ServerFieldType type,
+                                        const std::u16string& value,
+                                        VerificationStatus status) override;
   void GetSupportedTypes(ServerFieldTypeSet* supported_types) const override;
 };
 

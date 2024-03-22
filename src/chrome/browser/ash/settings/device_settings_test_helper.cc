@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 
 #include <memory>
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
+#include "chrome/browser/net/fake_nss_service.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
@@ -55,13 +56,13 @@ void DeviceSettingsTestBase::SetUp() {
   device_policy_ = std::make_unique<policy::DevicePolicyBuilder>();
   user_manager_ = new FakeChromeUserManager();
   user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-      base::WrapUnique(user_manager_));
+      base::WrapUnique(user_manager_.get()));
   owner_key_util_ = new ownership::MockOwnerKeyUtil();
   device_settings_service_ = std::make_unique<DeviceSettingsService>();
   ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
   UserDataAuthClient::InitializeFake();
   CryptohomeMiscClient::InitializeFake();
-  PowerManagerClient::InitializeFake();
+  chromeos::PowerManagerClient::InitializeFake();
   chromeos::TpmManagerClient::InitializeFake();
   OwnerSettingsServiceAshFactory::SetDeviceSettingsServiceForTesting(
       device_settings_service_.get());
@@ -77,6 +78,9 @@ void DeviceSettingsTestBase::SetUp() {
                                               owner_key_util_);
 
   profile_ = std::make_unique<TestingProfile>();
+
+  FakeNssService::InitializeForBrowserContext(profile_.get(),
+                                              /*enable_system_slot=*/false);
 }
 
 void DeviceSettingsTestBase::TearDown() {
@@ -86,13 +90,13 @@ void DeviceSettingsTestBase::TearDown() {
   device_settings_service_->UnsetSessionManager();
   device_settings_service_.reset();
   chromeos::TpmManagerClient::Shutdown();
-  PowerManagerClient::Shutdown();
+  chromeos::PowerManagerClient::Shutdown();
   CryptohomeMiscClient::Shutdown();
   UserDataAuthClient::Shutdown();
-  ConciergeClient::Shutdown();
   device_policy_.reset();
   base::RunLoop().RunUntilIdle();
   profile_.reset();
+  ConciergeClient::Shutdown();
 }
 
 void DeviceSettingsTestBase::ReloadDevicePolicy() {
@@ -115,17 +119,18 @@ void DeviceSettingsTestBase::InitOwner(const AccountId& account_id,
   if (!user) {
     user = user_manager_->AddUser(account_id);
     profile_->set_profile_name(account_id.GetUserEmail());
-
     ProfileHelper::Get()->SetUserToProfileMappingForTesting(user,
                                                             profile_.get());
-    ProfileHelper::Get()->SetProfileToUserMappingForTesting(
-        const_cast<user_manager::User*>(user));
   }
   OwnerSettingsServiceAsh* service =
       OwnerSettingsServiceAshFactory::GetForBrowserContext(profile_.get());
   CHECK(service);
   if (tpm_is_ready)
     service->OnTPMTokenReady();
+}
+
+void DeviceSettingsTestBase::SetSessionStopping() {
+  session_manager_client_.NotifySessionStopping();
 }
 
 }  // namespace ash

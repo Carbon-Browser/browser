@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
   chrome.send('pageLoaded');
 
   // Auto-refresh when interval is given as pathname.
-  var interval = parseInt(window.location.pathname.split('/')[1]);
+  const interval = parseInt(window.location.pathname.split('/')[1]);
   if (interval > 0) {
     $('refresh-message').textContent =
         '(Auto-refreshing page every ' + interval + 's)';

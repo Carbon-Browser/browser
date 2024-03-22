@@ -1,17 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/test/browser_test.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/network_change_notifier.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/network_service_test.mojom.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
@@ -112,8 +114,6 @@ class NetworkChangeManagerClientBrowserTest : public InProcessBrowserTest {
  public:
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
-    service_client_ = ShillServiceClient::Get()->GetTestInterface();
-    service_client_->ClearServices();
 
     // Make sure everyone thinks we have an ethernet connection.
     NetObserver().WaitForConnectionType(
@@ -122,30 +122,22 @@ class NetworkChangeManagerClientBrowserTest : public InProcessBrowserTest {
         network::mojom::ConnectionType::CONNECTION_ETHERNET);
 
     // Wait for all services to be removed.
+    ShillServiceClient::Get()->GetTestInterface()->ClearServices();
     base::RunLoop().RunUntilIdle();
-    // TODO(b/229673213): Remove log once flakiness is fixed.
-    LOG(INFO) << "Setup Main thread completed";
   }
 
   ShillServiceClient::TestInterface* service_client() {
-    return service_client_;
+    return ShillServiceClient::Get()->GetTestInterface();
   }
-
- private:
-  ShillServiceClient::TestInterface* service_client_;
 };
 
 // Tests that network changes from shill are received by both the
 // NetworkChangeNotifier and NetworkConnectionTracker.
 IN_PROC_BROWSER_TEST_F(NetworkChangeManagerClientBrowserTest,
-                       DISABLED_ReceiveNotifications) {
-  // TODO(b/229673213): Remove log once flakiness is fixed.
-  LOG(INFO) << "ReceiveNotifications test start";
+                       ReceiveNotifications) {
   NetObserver net_observer;
   NetworkServiceObserver network_service_observer;
 
-  // TODO(b/229673213): Remove log once flakiness is fixed.
-  LOG(INFO) << "ReceiveNotificationsTEST: Add service test start";
   service_client()->AddService("wifi", "wifi", "wifi", shill::kTypeWifi,
                                shill::kStateOnline, true);
 
@@ -174,7 +166,7 @@ IN_PROC_BROWSER_TEST_F(NetworkChangeManagerClientBrowserTest,
   // BrowserTestBase::SimulateNetworkServiceCrash to avoid the cleanup and
   // reconnection work it does for you.
   mojo::Remote<network::mojom::NetworkServiceTest> network_service_test;
-  content::GetNetworkService()->BindTestInterface(
+  content::GetNetworkService()->BindTestInterfaceForTesting(
       network_service_test.BindNewPipeAndPassReceiver());
   IgnoreNetworkServiceCrashes();
   network_service_test->SimulateCrash();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
-#include "third_party/blink/renderer/core/css/parser/css_parser_selector.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
@@ -23,15 +22,15 @@ class SelectorFilterParentScopeTest : public testing::Test {
 
   Document& GetDocument() { return dummy_page_holder_->GetDocument(); }
 
-  static constexpr size_t max_identifier_hashes = 4;
-
  private:
   std::unique_ptr<DummyPageHolder> dummy_page_holder_;
 };
 
 TEST_F(SelectorFilterParentScopeTest, ParentScope) {
-  GetDocument().body()->setAttribute(html_names::kClassAttr, "match");
-  GetDocument().documentElement()->SetIdAttribute("myId");
+  HeapVector<CSSSelector> arena;
+  GetDocument().body()->setAttribute(html_names::kClassAttr,
+                                     AtomicString("match"));
+  GetDocument().documentElement()->SetIdAttribute(AtomicString("myId"));
   auto* div = GetDocument().CreateRawElement(html_names::kDivTag);
   GetDocument().body()->appendChild(div);
   SelectorFilter& filter = GetDocument().GetStyleResolver().GetSelectorFilter();
@@ -46,21 +45,21 @@ TEST_F(SelectorFilterParentScopeTest, ParentScope) {
       SelectorFilterParentScope div_scope(*div);
       SelectorFilterParentScope::EnsureParentStackIsPushed();
 
-      CSSSelectorVector selector_vector = CSSParser::ParseSelector(
+      base::span<CSSSelector> selector_vector = CSSParser::ParseSelector(
           MakeGarbageCollected<CSSParserContext>(
               kHTMLStandardMode, SecureContextMode::kInsecureContext),
-          nullptr, "html *, body *, .match *, #myId *");
-      CSSSelectorList selectors =
+          CSSNestingType::kNone, /*parent_rule_for_nesting=*/nullptr, nullptr,
+          "html *, body *, .match *, #myId *", arena);
+      CSSSelectorList* selectors =
           CSSSelectorList::AdoptSelectorVector(selector_vector);
 
-      for (const CSSSelector* selector = selectors.First(); selector;
+      for (const CSSSelector* selector = selectors->First(); selector;
            selector = CSSSelectorList::Next(*selector)) {
-        unsigned selector_hashes[max_identifier_hashes];
-        filter.CollectIdentifierHashes(*selector, selector_hashes,
-                                       max_identifier_hashes);
-        EXPECT_NE(selector_hashes[0], 0u);
-        EXPECT_FALSE(
-            filter.FastRejectSelector<max_identifier_hashes>(selector_hashes));
+        Vector<unsigned> selector_hashes;
+        filter.CollectIdentifierHashes(*selector, /* style_scope */ nullptr,
+                                       selector_hashes);
+        EXPECT_NE(selector_hashes.size(), 0u);
+        EXPECT_FALSE(filter.FastRejectSelector(selector_hashes));
       }
     }
   }
@@ -75,24 +74,26 @@ TEST_F(SelectorFilterParentScopeTest, RootScope) {
   SelectorFilter& filter = GetDocument().GetStyleResolver().GetSelectorFilter();
   GetDocument().Lifecycle().AdvanceTo(DocumentLifecycle::kInStyleRecalc);
 
-  SelectorFilterRootScope span_scope(GetDocument().getElementById("y"));
+  SelectorFilterRootScope span_scope(
+      GetDocument().getElementById(AtomicString("y")));
   SelectorFilterParentScope::EnsureParentStackIsPushed();
 
-  CSSSelectorVector selector_vector = CSSParser::ParseSelector(
+  HeapVector<CSSSelector> arena;
+  base::span<CSSSelector> selector_vector = CSSParser::ParseSelector(
       MakeGarbageCollected<CSSParserContext>(
           kHTMLStandardMode, SecureContextMode::kInsecureContext),
-      nullptr, "html *, body *, div *, span *, .x *, #y *");
-  CSSSelectorList selectors =
+      CSSNestingType::kNone, /*parent_rule_for_nesting=*/nullptr, nullptr,
+      "html *, body *, div *, span *, .x *, #y *", arena);
+  CSSSelectorList* selectors =
       CSSSelectorList::AdoptSelectorVector(selector_vector);
 
-  for (const CSSSelector* selector = selectors.First(); selector;
+  for (const CSSSelector* selector = selectors->First(); selector;
        selector = CSSSelectorList::Next(*selector)) {
-    unsigned selector_hashes[max_identifier_hashes];
-    filter.CollectIdentifierHashes(*selector, selector_hashes,
-                                   max_identifier_hashes);
-    EXPECT_NE(selector_hashes[0], 0u);
-    EXPECT_FALSE(
-        filter.FastRejectSelector<max_identifier_hashes>(selector_hashes));
+    Vector<unsigned> selector_hashes;
+    filter.CollectIdentifierHashes(*selector, /* style_scope */ nullptr,
+                                   selector_hashes);
+    EXPECT_NE(selector_hashes.size(), 0u);
+    EXPECT_FALSE(filter.FastRejectSelector(selector_hashes));
   }
 }
 
@@ -133,21 +134,22 @@ TEST_F(SelectorFilterParentScopeTest, AttributeFilter) {
   SelectorFilterRootScope span_scope(inner);
   SelectorFilterParentScope::EnsureParentStackIsPushed();
 
-  CSSSelectorVector selector_vector = CSSParser::ParseSelector(
+  HeapVector<CSSSelector> arena;
+  base::span<CSSSelector> selector_vector = CSSParser::ParseSelector(
       MakeGarbageCollected<CSSParserContext>(
           kHTMLStandardMode, SecureContextMode::kInsecureContext),
-      nullptr, "[Attr] *, [attr] *, [viewbox] *, [VIEWBOX] *");
-  CSSSelectorList selectors =
+      CSSNestingType::kNone, /*parent_rule_for_nesting=*/nullptr, nullptr,
+      "[Attr] *, [attr] *, [viewbox] *, [VIEWBOX] *", arena);
+  CSSSelectorList* selectors =
       CSSSelectorList::AdoptSelectorVector(selector_vector);
 
-  for (const CSSSelector* selector = selectors.First(); selector;
+  for (const CSSSelector* selector = selectors->First(); selector;
        selector = CSSSelectorList::Next(*selector)) {
-    unsigned selector_hashes[max_identifier_hashes];
-    filter.CollectIdentifierHashes(*selector, selector_hashes,
-                                   max_identifier_hashes);
-    EXPECT_NE(selector_hashes[0], 0u);
-    EXPECT_FALSE(
-        filter.FastRejectSelector<max_identifier_hashes>(selector_hashes));
+    Vector<unsigned> selector_hashes;
+    filter.CollectIdentifierHashes(*selector, /* style_scope */ nullptr,
+                                   selector_hashes);
+    EXPECT_NE(selector_hashes.size(), 0u);
+    EXPECT_FALSE(filter.FastRejectSelector(selector_hashes));
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/test/bookmark_test_helpers.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "extensions/browser/api_test_utils.h"
 
 namespace extensions {
@@ -30,7 +31,7 @@ class BookmarkManagerPrivateApiUnitTest : public ExtensionServiceTestBase {
   void SetUp() override {
     ExtensionServiceTestBase::SetUp();
 
-    ExtensionServiceInitParams params = CreateDefaultInitParams();
+    ExtensionServiceInitParams params;
     params.enable_bookmark_model = true;
     InitializeExtensionService(params);
 
@@ -127,13 +128,13 @@ TEST_F(BookmarkManagerPrivateApiUnitTest, RunOpenInNewTabFunctionFolder) {
 }
 
 TEST_F(BookmarkManagerPrivateApiUnitTest, RunOpenInNewWindowFunctionFolder) {
-  auto new_tab_function =
+  auto new_window_function =
       base::MakeRefCounted<BookmarkManagerPrivateOpenInNewWindowFunction>();
   std::string node_id =
       base::NumberToString(model()->bookmark_bar_node()->id());
   std::string args = base::StringPrintf(R"([["%s"], false])", node_id.c_str());
   EXPECT_EQ("Cannot open a folder in a new window.",
-            api_test_utils::RunFunctionAndReturnError(new_tab_function.get(),
+            api_test_utils::RunFunctionAndReturnError(new_window_function.get(),
                                                       args, profile()));
 }
 
@@ -141,13 +142,13 @@ TEST_F(BookmarkManagerPrivateApiUnitTest,
        RunOpenInNewWindowFunctionIncognitoDisabled) {
   // Incognito disabled.
   IncognitoModePrefs::SetAvailability(
-      profile()->GetPrefs(), IncognitoModePrefs::Availability::kDisabled);
+      profile()->GetPrefs(), policy::IncognitoModeAvailability::kDisabled);
 
-  auto new_tab_function =
+  auto new_window_function =
       base::MakeRefCounted<BookmarkManagerPrivateOpenInNewWindowFunction>();
   std::string args = base::StringPrintf(R"([["%s"], true])", node_id().c_str());
   EXPECT_EQ("Incognito mode is disabled.",
-            api_test_utils::RunFunctionAndReturnError(new_tab_function.get(),
+            api_test_utils::RunFunctionAndReturnError(new_window_function.get(),
                                                       args, profile()));
 }
 
@@ -155,14 +156,14 @@ TEST_F(BookmarkManagerPrivateApiUnitTest,
        RunOpenInNewWindowFunctionIncognitoForced) {
   // Incognito forced.
   IncognitoModePrefs::SetAvailability(
-      profile()->GetPrefs(), IncognitoModePrefs::Availability::kForced);
+      profile()->GetPrefs(), policy::IncognitoModeAvailability::kForced);
 
-  auto new_tab_function =
+  auto new_window_function =
       base::MakeRefCounted<BookmarkManagerPrivateOpenInNewWindowFunction>();
   std::string args =
       base::StringPrintf(R"([["%s"], false])", node_id().c_str());
   EXPECT_EQ("Incognito mode is forced. Cannot open normal windows.",
-            api_test_utils::RunFunctionAndReturnError(new_tab_function.get(),
+            api_test_utils::RunFunctionAndReturnError(new_window_function.get(),
                                                       args, profile()));
 }
 
@@ -172,11 +173,11 @@ TEST_F(BookmarkManagerPrivateApiUnitTest,
       model()->other_node(), 0, u"history", GURL("chrome://history"));
   std::string node_id = base::NumberToString(node->id());
 
-  auto new_tab_function =
+  auto new_window_function =
       base::MakeRefCounted<BookmarkManagerPrivateOpenInNewWindowFunction>();
   std::string args = base::StringPrintf(R"([["%s"], true])", node_id.c_str());
   EXPECT_EQ("Cannot open URL \"chrome://history/\" in an incognito window.",
-            api_test_utils::RunFunctionAndReturnError(new_tab_function.get(),
+            api_test_utils::RunFunctionAndReturnError(new_window_function.get(),
                                                       args, profile()));
 }
 

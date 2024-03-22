@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,6 @@
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "ios/web_view/internal/app/application_context.h"
 #import "ios/web_view/internal/utils/nsobject_description_utils.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface CWVAutofillProfile ()
 

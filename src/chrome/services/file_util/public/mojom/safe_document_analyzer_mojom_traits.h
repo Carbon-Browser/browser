@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@
 
 #if !BUILDFLAG(FULL_SAFE_BROWSING) || \
     (!BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_WIN))
-#error BUILDFLAG(FULL_SAFE_BROWSING) should be set and either OS_LINUX or OS_WIN defined.
+#error FULL_SAFE_BROWSING should be set and either IS_LINUX or IS_WIN set.
 #endif
 
 namespace mojo {

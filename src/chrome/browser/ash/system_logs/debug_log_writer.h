@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_SYSTEM_LOGS_DEBUG_LOG_WRITER_H_
 #define CHROME_BROWSER_ASH_SYSTEM_LOGS_DEBUG_LOG_WRITER_H_
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
@@ -24,13 +24,5 @@ void StoreLogs(
 
 }  // namespace debug_log_writer
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace debug_log_writer {
-using ::ash::debug_log_writer::StoreLogs;
-}  // namespace debug_log_writer
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_LOGS_DEBUG_LOG_WRITER_H_

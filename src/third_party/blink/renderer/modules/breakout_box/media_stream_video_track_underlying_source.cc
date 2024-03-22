@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/breakout_box/media_stream_video_track_underlying_source.h"
 
 #include "base/feature_list.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/capture/video/video_capture_buffer_pool_util.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -30,8 +31,9 @@ bool IsScreenOrWindowCapture(const std::string& device_id) {
 }
 }  // namespace
 
-const base::Feature kBreakoutBoxFrameLimiter{"BreakoutBoxFrameLimiter",
-                                             base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kBreakoutBoxFrameLimiter,
+             "BreakoutBoxFrameLimiter",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 const int MediaStreamVideoTrackUnderlyingSource::kMaxMonitoredFrameCount = 20;
 const int MediaStreamVideoTrackUnderlyingSource::kMinMonitoredFrameCount = 2;
@@ -66,6 +68,9 @@ MediaStreamVideoTrackUnderlyingSource::GetStreamTransferOptimizer() {
       this, GetRealmRunner(), MaxQueueSize(),
       CrossThreadBindOnce(
           &MediaStreamVideoTrackUnderlyingSource::OnSourceTransferStarted,
+          WrapCrossThreadWeakPersistent(this)),
+      CrossThreadBindOnce(
+          &MediaStreamVideoTrackUnderlyingSource::ClearTransferredSource,
           WrapCrossThreadWeakPersistent(this)));
 }
 
@@ -76,15 +81,14 @@ MediaStreamVideoTrackUnderlyingSource::GetIOTaskRunner() {
 
 void MediaStreamVideoTrackUnderlyingSource::OnSourceTransferStarted(
     scoped_refptr<base::SequencedTaskRunner> transferred_runner,
-    TransferredVideoFrameQueueUnderlyingSource* source) {
+    CrossThreadPersistent<TransferredVideoFrameQueueUnderlyingSource> source) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  TransferSource(source);
+  TransferSource(std::move(source));
   RecordBreakoutBoxUsage(BreakoutBoxUsage::kReadableVideoWorker);
 }
 
 void MediaStreamVideoTrackUnderlyingSource::OnFrameFromTrack(
     scoped_refptr<media::VideoFrame> media_frame,
-    std::vector<scoped_refptr<media::VideoFrame>> /*scaled_media_frames*/,
     base::TimeTicks estimated_capture_time) {
   DCHECK(GetIOTaskRunner()->RunsTasksInCurrentSequence());
   // The scaled video frames are currently ignored.

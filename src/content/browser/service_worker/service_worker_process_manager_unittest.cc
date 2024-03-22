@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "content/browser/site_info.h"
 #include "content/browser/site_instance_impl.h"
 #include "content/browser/storage_partition_impl.h"
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/browser_task_environment.h"
@@ -24,6 +24,8 @@
 #include "url/gurl.h"
 
 namespace content {
+
+using AncestorFrameType = blink::mojom::AncestorFrameType;
 
 namespace {
 
@@ -54,13 +56,13 @@ class SiteInstanceRenderProcessHostFactory : public RenderProcessHostFactory {
     return processes_.back().get();
   }
 
-  SiteInstance* last_site_instance_used() const {
-    return last_site_instance_used_;
+  SiteInstance* last_site_instance_used() {
+    return last_site_instance_used_.get();
   }
 
  private:
-  mutable std::vector<std::unique_ptr<MockRenderProcessHost>> processes_;
-  mutable raw_ptr<SiteInstance> last_site_instance_used_;
+  std::vector<std::unique_ptr<MockRenderProcessHost>> processes_;
+  scoped_refptr<SiteInstance> last_site_instance_used_;
 };
 
 }  // namespace
@@ -76,8 +78,7 @@ class ServiceWorkerProcessManagerTest : public testing::Test {
 
   void SetUp() override {
     browser_context_ = std::make_unique<TestBrowserContext>();
-    process_manager_ =
-        std::make_unique<ServiceWorkerProcessManager>(browser_context_.get());
+    process_manager_ = std::make_unique<ServiceWorkerProcessManager>();
     process_manager_->set_storage_partition(static_cast<StoragePartitionImpl*>(
         browser_context_->GetDefaultStoragePartition()));
     script_url_ = GURL("http://www.example.com/sw.js");
@@ -134,7 +135,8 @@ TEST_F(ServiceWorkerProcessManagerTest,
       process_manager_->AllocateWorkerProcess(
           kEmbeddedWorkerId, script_url_,
           network::mojom::CrossOriginEmbedderPolicyValue::kNone,
-          true /* can_use_existing_process */, &process_info);
+          true /* can_use_existing_process */, AncestorFrameType::kNormalFrame,
+          &process_info);
 
   // An existing process should be allocated to the worker.
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status);
@@ -178,7 +180,8 @@ TEST_F(ServiceWorkerProcessManagerTest,
       process_manager_->AllocateWorkerProcess(
           kEmbeddedWorkerId, script_url_,
           network::mojom::CrossOriginEmbedderPolicyValue::kNone,
-          false /* can_use_existing_process */, &process_info);
+          false /* can_use_existing_process */, AncestorFrameType::kNormalFrame,
+          &process_info);
 
   // A new process should be allocated to the worker.
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status);
@@ -207,7 +210,8 @@ TEST_F(ServiceWorkerProcessManagerTest, AllocateWorkerProcess_InShutdown) {
   blink::ServiceWorkerStatusCode status =
       process_manager_->AllocateWorkerProcess(
           1, script_url_, network::mojom::CrossOriginEmbedderPolicyValue::kNone,
-          true /* can_use_existing_process */, &process_info);
+          true /* can_use_existing_process */, AncestorFrameType::kNormalFrame,
+          &process_info);
 
   // Allocating a process in shutdown should abort.
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kErrorAbort, status);
@@ -231,7 +235,8 @@ TEST_F(ServiceWorkerProcessManagerTest,
         process_manager_->AllocateWorkerProcess(
             kEmbeddedWorkerId, script_url_,
             network::mojom::CrossOriginEmbedderPolicyValue::kNone,
-            true /* can_use_existing_process */, &process_info);
+            true /* can_use_existing_process */,
+            AncestorFrameType::kNormalFrame, &process_info);
     EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status);
     EXPECT_EQ(
         GURL("http://example.com"),
@@ -273,7 +278,8 @@ TEST_F(ServiceWorkerProcessManagerTest,
         process_manager_->AllocateWorkerProcess(
             kEmbeddedWorkerId, script_url_,
             network::mojom::CrossOriginEmbedderPolicyValue::kNone,
-            true /* can_use_existing_process */, &process_info);
+            true /* can_use_existing_process */,
+            AncestorFrameType::kNormalFrame, &process_info);
     EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status);
     EXPECT_EQ(guest_site_instance->GetStoragePartitionConfig(),
               render_process_host_factory_->last_site_instance_used()

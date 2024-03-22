@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,13 +13,12 @@ PdfStreamDelegate::PdfStreamDelegate() = default;
 PdfStreamDelegate::~PdfStreamDelegate() = default;
 
 absl::optional<GURL> PdfStreamDelegate::MapToOriginalUrl(
-    content::WebContents* contents,
-    const GURL& stream_url) {
+    content::NavigationHandle& navigation_handle) {
   return absl::nullopt;
 }
 
 absl::optional<PdfStreamDelegate::StreamInfo> PdfStreamDelegate::GetStreamInfo(
-    content::WebContents* contents) {
+    content::RenderFrameHost* embedder_frame) {
   return absl::nullopt;
 }
 

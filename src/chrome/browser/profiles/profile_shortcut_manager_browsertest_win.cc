@@ -1,19 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 
+#include "base/base_paths.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_path_override.h"
 #include "base/threading/thread_restrictions.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_shortcut_manager_win.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_switches.h"
@@ -77,18 +80,23 @@ IN_PROC_BROWSER_TEST_F(ProfileShortcutManagerBrowserTest,
   // number of profiles is one.
   base::FilePath path_profile2 =
       g_browser_process->profile_manager()->GenerateNextProfileDirectoryPath();
-  g_browser_process->profile_manager()->CreateProfileAsync(
-      path_profile2, ProfileManager::CreateCallback());
-
-  content::RunAllTasksUntilIdle();
+  profiles::testing::CreateProfileSync(g_browser_process->profile_manager(),
+                                       path_profile2);
 
   // This is for triggering a profile icon update on the next run. 1 is just a
   // small enough number for kCurrentProfileIconVersion.
   browser()->profile()->GetPrefs()->SetInteger(prefs::kProfileIconVersion, 1);
+
+  // Ensure that any tasks started by profile creation are finished before we
+  // advance to the main test. In particular, we want to finish all tasks that
+  // might update the profile icon before the main test runs.
+  content::RunAllTasksUntilIdle();
 }
 
 IN_PROC_BROWSER_TEST_F(ProfileShortcutManagerBrowserTest,
                        UpdateProfileIconOnAvatarLoaded) {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  base::ScopedPathOverride desktop_override(base::DIR_USER_DESKTOP);
   std::string badged_icon;
   EXPECT_NO_FATAL_FAILURE(badged_icon = ReadProfileIcon());
 

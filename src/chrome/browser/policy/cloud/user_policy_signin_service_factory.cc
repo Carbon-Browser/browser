@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/common/pref_names.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -30,18 +29,23 @@ namespace policy {
 namespace {
 
 // Used only for testing.
-DeviceManagementService* g_device_management_service = NULL;
+DeviceManagementService* g_device_management_service = nullptr;
 
 }  // namespace
 
 UserPolicySigninServiceFactory::UserPolicySigninServiceFactory()
-    : BrowserContextKeyedServiceFactory(
-        "UserPolicySigninService",
-        BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory(
+          "UserPolicySigninService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
 }
 
-UserPolicySigninServiceFactory::~UserPolicySigninServiceFactory() {}
+UserPolicySigninServiceFactory::~UserPolicySigninServiceFactory() = default;
 
 // static
 UserPolicySigninService* UserPolicySigninServiceFactory::GetForProfile(
@@ -52,7 +56,8 @@ UserPolicySigninService* UserPolicySigninServiceFactory::GetForProfile(
 
 // static
 UserPolicySigninServiceFactory* UserPolicySigninServiceFactory::GetInstance() {
-  return base::Singleton<UserPolicySigninServiceFactory>::get();
+  static base::NoDestructor<UserPolicySigninServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -61,7 +66,8 @@ void UserPolicySigninServiceFactory::SetDeviceManagementServiceForTesting(
   g_device_management_service = device_management_service;
 }
 
-KeyedService* UserPolicySigninServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+UserPolicySigninServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = static_cast<Profile*>(context);
   BrowserPolicyConnector* connector =
@@ -70,12 +76,11 @@ KeyedService* UserPolicySigninServiceFactory::BuildServiceInstanceFor(
       g_device_management_service ? g_device_management_service
                                   : connector->device_management_service();
 
-  UserPolicySigninService* service = new UserPolicySigninService(
+  return std::make_unique<UserPolicySigninService>(
       profile, g_browser_process->local_state(), device_management_service,
       profile->GetUserCloudPolicyManager(),
       IdentityManagerFactory::GetForProfile(profile),
       g_browser_process->shared_url_loader_factory());
-  return service;
 }
 
 bool

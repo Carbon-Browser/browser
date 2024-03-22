@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,8 @@ TEST(SkottieTransferCacheEntryTest, SerializationDeserialization) {
   // De-serialize
   auto entry(std::make_unique<ServiceSkottieTransferCacheEntry>());
   ASSERT_TRUE(entry->Deserialize(
-      nullptr, base::make_span(static_cast<uint8_t*>(data.data()), size)));
+      /*gr_context=*/nullptr, /*graphite_recorder=*/nullptr,
+      base::make_span(static_cast<uint8_t*>(data.data()), size)));
 
   EXPECT_EQ(entry->skottie()->id(), skottie->id());
   EXPECT_EQ(entry->skottie()->duration(), skottie->duration());

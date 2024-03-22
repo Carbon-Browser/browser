@@ -1,15 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://profile-picker/profile_picker.js';
 
 import {ManageProfilesBrowserProxyImpl, ProfileCardMenuElement, ProfileState, Statistics, StatisticsResult} from 'chrome://profile-picker/profile_picker.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {waitBeforeNextRender} from 'chrome://webui-test/test_util.js';
+import {waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
 // <if expr="chromeos_lacros">
-import {waitAfterNextRender} from 'chrome://webui-test/test_util.js';
+import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 // </if>
 
 import {TestManageProfilesBrowserProxy} from './test_manage_profiles_browser_proxy.js';
@@ -29,7 +29,7 @@ suite('ProfileCardMenuTest', function() {
   setup(function() {
     browserProxy = new TestManageProfilesBrowserProxy();
     ManageProfilesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     profileCardMenuElement = document.createElement('profile-card-menu');
     document.body.appendChild(profileCardMenuElement);
     const testProfileState: ProfileState = {
@@ -93,6 +93,7 @@ suite('ProfileCardMenuTest', function() {
     assertTrue(dialog.open);
     dialog.querySelector<HTMLElement>('.cancel-button')!.click();
     assertFalse(dialog.open);
+    assertEquals(browserProxy.getCallCount('closeProfileStatistics'), 1);
     assertEquals(browserProxy.getCallCount('removeProfile'), 0);
   });
 
@@ -106,6 +107,7 @@ suite('ProfileCardMenuTest', function() {
     await browserProxy.whenCalled('removeProfile');
     webUIListenerCallback('profile-removed', 'profilePath');
     assertFalse(dialog.open);
+    assertEquals(browserProxy.getCallCount('closeProfileStatistics'), 0);
   });
 
   // The profile info in the remove confirmation dialog is displayed correctly.
@@ -200,7 +202,7 @@ suite('ProfileCardMenuLacrosTest', function() {
   setup(async function() {
     browserProxy = new TestManageProfilesBrowserProxy();
     ManageProfilesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     primaryProfileCardMenuElement = document.createElement('profile-card-menu');
     document.body.appendChild(primaryProfileCardMenuElement);
     const testPrimaryProfileState: ProfileState = {

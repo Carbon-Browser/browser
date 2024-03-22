@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,7 @@ class FakeNavigationManagerDelegate : public NavigationManagerDelegate {
                                bool has_user_gesture) override;
   void RemoveWebView() override;
   NavigationItemImpl* GetPendingItem() override;
+  GURL GetCurrentURL() const override;
 
   // Setters for tests to inject dependencies.
   void SetWebViewNavigationProxy(id test_web_view);

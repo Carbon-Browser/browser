@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/at_exit.h"
 #import "ios/web/public/browser_state.h"
 #include "ios/web/public/test/web_task_environment.h"
 #import "ios/web/public/web_client.h"
@@ -14,9 +15,9 @@
 
 namespace web {
 
-// A class with required web task environment and a |WebState*| set up in its
+// A class with required web task environment and a `WebState*| set up in its
 // constructor. It should be used as a function level static var in the
-// libFuzzer |LLVMFuzzerTestOneInput| to run the environment set up once. It can
+// libFuzzer `LLVMFuzzerTestOneInput` to run the environment set up once. It can
 // be extended to add more set ups in subclass's constructor.
 class FuzzerEnvWithWebState {
  public:
@@ -26,6 +27,7 @@ class FuzzerEnvWithWebState {
   web::WebState* web_state();
 
  private:
+  base::AtExitManager at_exit_manager_;
   std::unique_ptr<WebClient> web_client_;
   std::unique_ptr<WebTaskEnvironment> task_environment_;
   std::unique_ptr<BrowserState> browser_state_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/tab_contents/web_contents_collection.h"
@@ -124,6 +124,8 @@ class UnloadController : public WebContentsCollection::Observer,
   // the state of the stack), pass in false.
   void ClearUnloadState(content::WebContents* web_contents, bool process_now);
 
+  bool IsUnclosableApp() const;
+
   bool is_calling_before_unload_handlers() {
     return !on_close_confirmed_.is_null();
   }
@@ -132,11 +134,11 @@ class UnloadController : public WebContentsCollection::Observer,
 
   WebContentsCollection web_contents_collection_;
 
-  // Tracks tabs that need there beforeunload event fired before we can
+  // Tracks tabs that need their beforeunload event fired before we can
   // close the browser. Only gets populated when we try to close the browser.
   UnloadListenerSet tabs_needing_before_unload_fired_;
 
-  // Tracks tabs that need there unload event fired before we can
+  // Tracks tabs that need their unload event fired before we can
   // close the browser. Only gets populated when we try to close the browser.
   UnloadListenerSet tabs_needing_unload_fired_;
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,8 @@ mojom::InjectionType ProgrammaticScriptInjector::script_type() const {
   return mojom::InjectionType::kProgrammaticScript;
 }
 
-bool ProgrammaticScriptInjector::IsUserGesture() const {
+blink::mojom::UserActivationOption ProgrammaticScriptInjector::IsUserGesture()
+    const {
   DCHECK(params_->injection->is_js());
   return params_->injection->get_js()->user_gesture;
 }
@@ -60,12 +61,14 @@ ProgrammaticScriptInjector::GetCSSInjectionOperation() const {
   return params_->injection->get_css()->operation;
 }
 
-bool ProgrammaticScriptInjector::ExpectsResults() const {
+blink::mojom::WantResultOption ProgrammaticScriptInjector::ExpectsResults()
+    const {
   DCHECK(params_->injection->is_js());
   return params_->injection->get_js()->wants_result;
 }
 
-bool ProgrammaticScriptInjector::ShouldWaitForPromise() const {
+blink::mojom::PromiseResultOption
+ProgrammaticScriptInjector::ShouldWaitForPromise() const {
   DCHECK(params_->injection->is_js());
   return params_->injection->get_js()->wait_for_promise;
 }
@@ -160,12 +163,10 @@ ProgrammaticScriptInjector::GetCssSources(
 }
 
 void ProgrammaticScriptInjector::OnInjectionComplete(
-    std::unique_ptr<base::Value> execution_result,
+    std::optional<base::Value> execution_result,
     mojom::RunLocation run_location) {
   DCHECK(!result_.has_value());
-  if (execution_result) {
-    result_ = base::Value::FromUniquePtrValue(std::move(execution_result));
-  }
+  result_ = std::move(execution_result);
   Finish(std::string());
 }
 

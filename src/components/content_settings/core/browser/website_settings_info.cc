@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,9 +65,19 @@ uint32_t WebsiteSettingsInfo::GetPrefRegistrationFlags() const {
 }
 
 bool WebsiteSettingsInfo::SupportsSecondaryPattern() const {
-  return scoping_type_ == COOKIES_SCOPE ||
-         scoping_type_ == STORAGE_ACCESS_SCOPE ||
-         scoping_type_ == SINGLE_ORIGIN_WITH_EMBEDDED_EXCEPTIONS_SCOPE;
+  switch (scoping_type_) {
+    case REQUESTING_ORIGIN_WITH_TOP_ORIGIN_EXCEPTIONS_SCOPE:
+    case REQUESTING_AND_TOP_ORIGIN_SCOPE:
+    case TOP_ORIGIN_WITH_RESOURCE_EXCEPTIONS_SCOPE:
+    case REQUESTING_AND_TOP_SCHEMEFUL_SITE_SCOPE:
+    case REQUESTING_ORIGIN_AND_TOP_SCHEMEFUL_SITE_SCOPE:
+      return true;
+    case REQUESTING_ORIGIN_ONLY_SCOPE:
+    case TOP_ORIGIN_ONLY_SCOPE:
+    case GENERIC_SINGLE_ORIGIN_SCOPE:
+    case REQUESTING_SCHEMEFUL_SITE_ONLY_SCOPE:
+      return false;
+  }
 }
 
 }  // namespace content_settings

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/scheduled_task_util.h"
 
 namespace policy {
@@ -55,7 +55,7 @@ void FakeScheduledTaskExecutor::Start(
   scheduled_task_time_ =
       cur_time + delay_to_next_schedule.value() + external_delay;
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(result_cb), true));
   timer_.Start(FROM_HERE, delay_to_next_schedule.value() + external_delay,
                std::move(timer_expired_cb));

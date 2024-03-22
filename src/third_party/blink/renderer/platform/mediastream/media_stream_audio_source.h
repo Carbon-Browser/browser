@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,18 +47,16 @@ class MediaStreamComponent;
 //
 //   class MyAudioSource : public MediaStreamAudioSource { ... };
 //
-//   MediaStreamSource* media_stream_source = ...;
+//   MediaStreamSource* media_stream_source =
+//       MakeGarbageCollected<MediaStreamSource>(
+//           ..., std::make_unique<MyAudioSource>());
 //   MediaStreamComponent* media_stream_track = ...;
-//   source->setExtraData(new MyAudioSource());  // Takes ownership.
 //   if (MediaStreamAudioSource::From(media_stream_source)
-//           ->ConnectToTrack(media_stream_track)) {
+//           ->ConnectToInitializedTrack(media_stream_track)) {
 //     LOG(INFO) << "Success!";
 //   } else {
 //     LOG(ERROR) << "Failed!";
 //   }
-//   // Regardless of whether ConnectToTrack() succeeds, there will always be a
-//   // MediaStreamAudioTrack instance created.
-//   CHECK(MediaStreamAudioTrack::From(media_stream_track));
 class PLATFORM_EXPORT MediaStreamAudioSource
     : public WebPlatformMediaStreamSource {
  public:
@@ -87,17 +85,6 @@ class PLATFORM_EXPORT MediaStreamAudioSource
   // microphone input or loopback audio capture) as opposed to audio being
   // streamed-in from outside the application.
   bool is_local_source() const { return is_local_source_; }
-
-  // Connects this source to the given |component|, creating the appropriate
-  // implementation of the content::MediaStreamAudioTrack interface, which
-  // becomes associated with and owned by |component|. Returns true if the
-  // source was successfully started.
-  // TODO(https://crbug.com/1302689): Remove this once all callers have been
-  // moved to ConnectToInitializedTrack().
-  [
-      [deprecated("Use ConnectToInitializedTrack() with a component which "
-                  "already has an associated MediaStreamAudioTrack.")]] bool
-  ConnectToTrack(MediaStreamComponent* component);
 
   // Connects this source to the given |component|, which already has an
   // associated MediaStreamAudioTrack. Returns true if the source was
@@ -141,12 +128,15 @@ class PLATFORM_EXPORT MediaStreamAudioSource
     return error_code_;
   }
 
- protected:
   // Returns a new MediaStreamAudioTrack. |id| is the blink track's ID in UTF-8.
   // Subclasses may override this to provide an extended implementation.
   virtual std::unique_ptr<MediaStreamAudioTrack> CreateMediaStreamAudioTrack(
       const std::string& id);
 
+  // Number of MediaStreamAudioTracks added as consumers.
+  size_t NumTracks() const override;
+
+ protected:
   // Returns true if the source has already been started and has not yet been
   // stopped. Otherwise, attempts to start the source and returns true if
   // successful. While the source is running, it may provide audio on any thread
@@ -202,9 +192,6 @@ class PLATFORM_EXPORT MediaStreamAudioSource
   // audio data. The "stop callback" that was provided to the track calls
   // this.
   void StopAudioDeliveryTo(MediaStreamAudioTrack* track);
-
-  // Number of MediaStreamAudioTracks added as consumers.
-  int NumConsumers() const;
 
   void LogMessage(const std::string& message);
 

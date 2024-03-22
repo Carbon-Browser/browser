@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,17 @@
 
 #include <pulse/pulseaudio.h>
 #include <stddef.h>
+
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/threading/thread_checker.h"
 #include "media/audio/agc_audio_stream.h"
 #include "media/audio/audio_device_name.h"
 #include "media/audio/audio_io.h"
 #include "media/audio/audio_manager.h"
+#include "media/base/amplitude_peak_detector.h"
 #include "media/base/audio_block_fifo.h"
 #include "media/base/audio_parameters.h"
 
@@ -25,7 +28,7 @@ class AudioManagerPulse;
 class PulseAudioInputStream : public AgcAudioStream<AudioInputStream> {
  public:
   PulseAudioInputStream(AudioManagerPulse* audio_manager,
-                        const std::string& device_name,
+                        const std::string& source_name,
                         const AudioParameters& params,
                         pa_threaded_mainloop* mainloop,
                         pa_context* context,
@@ -67,9 +70,10 @@ class PulseAudioInputStream : public AgcAudioStream<AudioInputStream> {
   // Utility method used by GetVolume() and IsMuted().
   bool GetSourceInformation(pa_source_info_cb_t callback);
 
+  // May be nullptr if not managed by AudioManagerPulse.
   raw_ptr<AudioManagerPulse> audio_manager_;
   raw_ptr<AudioInputCallback> callback_;
-  std::string device_name_;
+  std::string source_name_;
   AudioParameters params_;
   int channels_;
   double volume_;
@@ -90,7 +94,11 @@ class PulseAudioInputStream : public AgcAudioStream<AudioInputStream> {
   // Callback to send log messages to registered clients.
   AudioManager::LogCallback log_callback_;
 
-  pa_stream* handle_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION pa_stream* handle_;
+
+  AmplitudePeakDetector peak_detector_;
 
   base::ThreadChecker thread_checker_;
 };

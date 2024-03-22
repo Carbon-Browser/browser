@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/layout/layout_manager.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 // A stub layout manager that returns a specific preferred size and height for
 // width.
@@ -47,7 +46,6 @@ class TestLayoutManager : public LayoutManager {
   int invalidate_count_ = 0;
 };
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test
 
 #endif  // UI_VIEWS_TEST_TEST_LAYOUT_MANAGER_H_

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,8 @@
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
-#include "base/values.h"
 #include "components/gcm_driver/instance_id/instance_id.h"
 #include "components/invalidation/impl/fcm_invalidation_listener.h"
-#include "components/invalidation/impl/invalidation_logger.h"
 #include "components/invalidation/impl/invalidator_registrar_with_memory.h"
 #include "components/invalidation/public/invalidation_handler.h"
 #include "components/invalidation/public/invalidation_service.h"
@@ -35,8 +33,7 @@ using FCMNetworkHandlerCallback =
 
 using PerUserTopicSubscriptionManagerCallback =
     base::RepeatingCallback<std::unique_ptr<PerUserTopicSubscriptionManager>(
-        const std::string& project_id,
-        bool migrate_prefs)>;
+        const std::string& project_id)>;
 
 // This InvalidationService wraps the C++ Invalidation Client (FCM) library.
 // It provides invalidations for desktop platforms (Win, Mac, Linux).
@@ -61,30 +58,26 @@ class FCMInvalidationServiceBase : public InvalidationService,
   virtual void Init() = 0;
 
   static void RegisterPrefs(PrefRegistrySimple* registry);
+  static void ClearDeprecatedPrefs(PrefService* prefs);
 
   // InvalidationService implementation.
   // It is an error to have registered handlers when the service is destroyed.
-  void RegisterInvalidationHandler(InvalidationHandler* handler) override;
+  void AddObserver(InvalidationHandler* handler) override;
+  bool HasObserver(const InvalidationHandler* handler) const override;
   bool UpdateInterestedTopics(InvalidationHandler* handler,
                               const TopicSet& topics) override;
-  void UnsubscribeFromUnregisteredTopics(InvalidationHandler* handler) override;
-  void UnregisterInvalidationHandler(InvalidationHandler* handler) override;
+  void RemoveObserver(const InvalidationHandler* handler) override;
   InvalidatorState GetInvalidatorState() const override;
   std::string GetInvalidatorClientId() const override;
-  InvalidationLogger* GetInvalidationLogger() override;
-  void RequestDetailedStatus(
-      base::RepeatingCallback<void(base::Value::Dict)> caller) const override;
 
   // FCMInvalidationListener::Delegate implementation.
-  void OnInvalidate(const TopicInvalidationMap& invalidation_map) override;
+  void OnInvalidate(const Invalidation& invalidation) override;
   void OnInvalidatorStateChange(InvalidatorState state) override;
 
  protected:
   // Initializes with an injected listener.
   void InitForTest(
       std::unique_ptr<FCMInvalidationListener> invalidation_listener);
-
-  virtual base::Value::Dict CollectDebugData() const;
 
   // Returns true if the service is currently started and able to receive
   // invalidations.
@@ -120,10 +113,6 @@ class FCMInvalidationServiceBase : public InvalidationService,
 
   const std::string sender_id_;
   InvalidatorRegistrarWithMemory invalidator_registrar_;
-
-  // The invalidation logger object we use to record state changes
-  // and invalidations.
-  InvalidationLogger logger_;
 
   FCMNetworkHandlerCallback fcm_network_handler_callback_;
   PerUserTopicSubscriptionManagerCallback

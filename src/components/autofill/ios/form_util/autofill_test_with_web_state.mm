@@ -1,5 +1,4 @@
-
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +8,7 @@
 #import "components/autofill/ios/form_util/form_handlers_java_script_feature.h"
 #import "components/autofill/ios/form_util/form_util_java_script_feature.h"
 #include "ios/web/public/js_messaging/web_frame.h"
+#import "ios/web/public/test/js_test_util.h"
 #import "ios/web/public/test/web_test_with_web_state.h"
 #import "ios/web/public/web_client.h"
 
@@ -55,4 +55,14 @@ void AutofillTestWithWebState::TrackFormMutations(web::WebFrame* frame) {
   ASSERT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
     return [ExecuteJavaScript(@"trackFormMutationsComplete") boolValue];
   }));
+}
+
+id AutofillTestWithWebState::ExecuteJavaScript(NSString* script) {
+  // Pass all JavaScript execution to the correct content world. Note that
+  // although `FormHandlersJavaScriptFeature` is specified, all autofill
+  // features must live in the same content world so any one of them could be
+  // used here.
+  return web::test::ExecuteJavaScriptForFeature(
+      web_state(), script,
+      autofill::FormHandlersJavaScriptFeature::GetInstance());
 }

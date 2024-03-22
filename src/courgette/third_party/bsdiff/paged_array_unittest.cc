@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <stdint.h>
 
-#include <algorithm>
 #include <iterator>
 #include <random>
 #include <vector>
 
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -176,8 +176,7 @@ TEST_F(PagedArrayTest, TestIterator) {
 
   TestPagedArray a;
   EXPECT_TRUE(a.Allocate(kIteratorTestDataSize));
-  std::copy(kIteratorTestData, kIteratorTestData + kIteratorTestDataSize,
-            a.begin());
+  base::ranges::copy(kIteratorTestData, a.begin());
   const TestPagedArray& a_const = a;
 
   // Test TestPagedArray::const_iterator.

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
 #include "net/base/net_export.h"
@@ -36,9 +35,8 @@ class NET_EXPORT CTLogVerifier
   // using |public_key|, which is a DER-encoded SubjectPublicKeyInfo.
   // If |public_key| refers to an unsupported public key, returns NULL.
   // |description| is a textual description of the log.
-  static scoped_refptr<const CTLogVerifier> Create(
-      const base::StringPiece& public_key,
-      std::string description);
+  static scoped_refptr<const CTLogVerifier> Create(base::StringPiece public_key,
+                                                   std::string description);
 
   // Returns the log's key ID (RFC6962, Section 3.2)
   const std::string& key_id() const { return key_id_; }
@@ -77,13 +75,13 @@ class NET_EXPORT CTLogVerifier
   ~CTLogVerifier();
 
   // Performs crypto-library specific initialization.
-  bool Init(const base::StringPiece& public_key);
+  bool Init(base::StringPiece public_key);
 
   // Performs the underlying verification using the selected public key. Note
   // that |signature| contains the raw signature data (eg: without any
   // DigitallySigned struct encoding).
-  bool VerifySignature(const base::StringPiece& data_to_sign,
-                       const base::StringPiece& signature) const;
+  bool VerifySignature(base::StringPiece data_to_sign,
+                       base::StringPiece signature) const;
 
   // Returns true if the signature and hash algorithms in |signature|
   // match those of the log
@@ -96,7 +94,7 @@ class NET_EXPORT CTLogVerifier
   ct::DigitallySigned::SignatureAlgorithm signature_algorithm_ =
       ct::DigitallySigned::SIG_ALGO_ANONYMOUS;
 
-  raw_ptr<EVP_PKEY> public_key_ = nullptr;
+  bssl::UniquePtr<EVP_PKEY> public_key_;
 };
 
 }  // namespace net

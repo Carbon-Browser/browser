@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {RootPath, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {recursiveExpand, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_DRIVE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET} from './test_data.js';
 
 /**
@@ -13,8 +14,8 @@ import {BASIC_DRIVE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET} from './test_data.js';
  * When we are not in guest mode, we fill Google Drive with the basic entry set
  * which causes an extra tree-item to be added.
  */
-export const TREEITEM_DRIVE = '#directory-tree [entry-label="My Drive"]';
-export const TREEITEM_DOWNLOADS = '#directory-tree [entry-label="Downloads"]';
+export const TREEITEM_DRIVE = 'My Drive';
+export const TREEITEM_DOWNLOADS = 'Downloads';
 
 /**
  * Selects the first item in the file list.
@@ -43,15 +44,30 @@ async function selectFirstFileListItem(appId) {
   chrome.test.assertEq('listitem-1', elements[0].attributes['id']);
 }
 
+/*
+ * Searches for the file being renamed and gets current value for the renaming
+ * field. Throws test assertion error if fails to find one.
+ *
+ * @param {string} appId The Files app windowId.
+ * @return {string} Current value of the name.
+ */
+async function getFileRenamingValue(appId) {
+  const renamingInput = await remoteCall.callRemoteTestUtil(
+      'queryAllElements', appId,
+      ['#file-list .table-row[renaming] input.rename']);
+  chrome.test.assertEq(1, renamingInput.length);
+  return renamingInput[0].value;
+}
+
 /**
  * Creates a new folder in the file list.
  *
  * @param {string} appId The Files app windowId.
  * @param {!Array<!TestEntryInfo>} initialEntrySet Initial set of entries.
- * @param {string} selector Downloads or Drive directory tree item selector.
+ * @param {string} label Downloads or Drive directory tree item label.
  * @return {Promise} Promise to be fulfilled on success.
  */
-async function createNewFolder(appId, initialEntrySet, selector) {
+async function createNewFolder(appId, initialEntrySet, label) {
   const textInput = '#file-list .table-row[renaming] input.rename';
 
   // Focus the file-list.
@@ -63,17 +79,20 @@ async function createNewFolder(appId, initialEntrySet, selector) {
   chrome.test.assertTrue(
       await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, key));
 
+  let newFolderName = 'New folder';
   // Check: a new folder should be shown in the file list.
-  let files = [['New folder', '--', 'Folder', '']].concat(
+  let files = [[newFolderName, '--', 'Folder', '']].concat(
       TestEntryInfo.getExpectedRows(initialEntrySet));
+  await remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true});
 
   // Check: a new folder should be present in the directory tree.
-  const newSubtreeChildItem =
-      selector + ' .tree-children .tree-item[entry-label="New folder"]';
-  await remoteCall.waitForElement(appId, newSubtreeChildItem);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForChildItemByLabel(label, newFolderName);
 
   // Check: the text input should be shown in the file list.
   await remoteCall.waitForElement(appId, textInput);
+
+  chrome.test.assertEq(newFolderName, await getFileRenamingValue(appId));
 
   // Get all file list rows that have attribute 'renaming'.
   const renamingFileListRows = ['#file-list .table-row[renaming]'];
@@ -82,8 +101,9 @@ async function createNewFolder(appId, initialEntrySet, selector) {
 
   // Check: the new folder only should be 'renaming'.
   chrome.test.assertEq(1, elements.length);
-  chrome.test.assertEq(0, elements[0].text.indexOf('New folder--'));
   chrome.test.assertTrue('selected' in elements[0].attributes);
+
+  chrome.test.assertEq(newFolderName, await getFileRenamingValue(appId));
 
   // Get all file list rows that have attribute 'selected'.
   const selectedFileListRows = ['#file-list .table-row[selected]'];
@@ -92,11 +112,11 @@ async function createNewFolder(appId, initialEntrySet, selector) {
 
   // Check: the new folder only should be 'selected'.
   chrome.test.assertEq(1, elements.length);
-  chrome.test.assertEq(0, elements[0].text.indexOf('New folder--'));
   chrome.test.assertTrue('renaming' in elements[0].attributes);
 
   // Type the test folder name.
-  await remoteCall.inputText(appId, textInput, 'Test Folder Name');
+  newFolderName = 'Test Folder Name';
+  await remoteCall.inputText(appId, textInput, newFolderName);
 
   // Press the Enter key.
   key = [textInput, 'Enter', false, false, false];
@@ -108,29 +128,23 @@ async function createNewFolder(appId, initialEntrySet, selector) {
   await remoteCall.waitForElementLost(appId, renamingItem);
 
   // Check: the test folder should be shown in the file list.
-  files = [['Test Folder Name', '--', 'Folder', '']].concat(
+  files = [[newFolderName, '--', 'Folder', '']].concat(
       TestEntryInfo.getExpectedRows(initialEntrySet));
+  await remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true});
 
   // Check: the test folder should be present in the directory tree.
-  const testSubtreeChildItem =
-      selector + ' .tree-children .tree-item[entry-label="Test Folder Name"]';
-  await remoteCall.waitForElement(appId, testSubtreeChildItem);
+  await directoryTree.waitForChildItemByLabel(label, newFolderName);
 
-  // Get all file list rows that have attribute 'selected'.
-  elements = await remoteCall.callRemoteTestUtil(
-      'queryAllElements', appId, selectedFileListRows);
-
-  // Check: the test folder only should be 'selected'.
-  chrome.test.assertEq(1, elements.length);
-  chrome.test.assertEq(
-      0, elements[0].text.indexOf('Test Folder Name--'),
-      'Actual text was: ' + elements[0].text);
+  // Wait for the new folder to become selected in the file list.
+  await remoteCall.waitForElement(
+      appId, [`#file-list .table-row[file-name="${newFolderName}"][selected]`]);
 }
 
 testcase.selectCreateFolderDownloads = async () => {
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
-  await recursiveExpand(appId, '/My files/Downloads');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.recursiveExpand('/My files/Downloads');
   await selectFirstFileListItem(appId);
   await createNewFolder(appId, BASIC_LOCAL_ENTRY_SET, TREEITEM_DOWNLOADS);
 };
@@ -138,22 +152,24 @@ testcase.selectCreateFolderDownloads = async () => {
 testcase.createFolderDownloads = async () => {
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
-  await recursiveExpand(appId, '/My files/Downloads');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.recursiveExpand('/My files/Downloads');
   await createNewFolder(appId, BASIC_LOCAL_ENTRY_SET, TREEITEM_DOWNLOADS);
 };
 
 testcase.createFolderNestedDownloads = async () => {
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
-  await recursiveExpand(appId, '/My files/Downloads');
-  await remoteCall.navigateWithDirectoryTree(
-      appId, '/Downloads/photos', 'My files/Downloads');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.recursiveExpand('/My files/Downloads');
+  await directoryTree.navigateToPath('/My files/Downloads/photos');
   await createNewFolder(appId, [], TREEITEM_DOWNLOADS);
 };
 
 testcase.createFolderDrive = async () => {
   const appId =
       await setupAndWaitUntilReady(RootPath.DRIVE, [], BASIC_DRIVE_ENTRY_SET);
-  await recursiveExpand(appId, '/Google Drive/My Drive');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.recursiveExpand('/Google Drive/My Drive');
   await createNewFolder(appId, BASIC_DRIVE_ENTRY_SET, TREEITEM_DRIVE);
 };

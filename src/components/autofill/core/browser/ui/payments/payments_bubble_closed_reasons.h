@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 namespace autofill {
 
 // The reason why payments bubbles are closed.
+// A java IntDef@ is generated from this.
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.autofill
 enum class PaymentsBubbleClosedReason {
   // Bubble closed reason not specified.
   kUnknown,

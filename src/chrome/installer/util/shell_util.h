@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -14,7 +14,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <array>
 #include <map>
 #include <memory>
 #include <set>
@@ -24,7 +23,6 @@
 
 #include "base/check.h"
 #include "base/containers/flat_map.h"
-#include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/installer/util/work_item_list.h"
@@ -408,17 +406,21 @@ class ShellUtil {
       bool& should_install_shortcut,
       base::FilePath& shortcut_path);
 
-  // Updates shortcut in |location| (or creates it if |options| specify
+  // Updates shortcut in `location` (or creates it if `options` specify
   // SHELL_SHORTCUT_CREATE_ALWAYS).
-  // |properties| and |operation| affect this method as described on their
+  // `properties` and `operation` affect this method as described on their
   // invidividual definitions above.
-  // |location| may be one of SHORTCUT_LOCATION_DESKTOP,
+  // `location` may be one of SHORTCUT_LOCATION_DESKTOP,
   // SHORTCUT_LOCATION_QUICK_LAUNCH, SHORTCUT_LOCATION_START_MENU_ROOT,
   // SHORTCUT_LOCATION_START_MENU_CHROME_DIR, or
   // SHORTCUT_LOCATION_START_MENU_CHROME_APPS_DIR.
+  // If `pinned` is not null, and `properties` requests that the shortcut be
+  // pinned, and the shortcut creation succeeds, `pinned` will be set to true
+  // if pinning was successful, false otherwise.
   static bool CreateOrUpdateShortcut(ShortcutLocation location,
                                      const ShortcutProperties& properties,
-                                     ShortcutOperation operation);
+                                     ShortcutOperation operation,
+                                     bool* pinned = nullptr);
 
   // Returns the string "|icon_path|,|icon_index|" (see, for example,
   // http://msdn.microsoft.com/library/windows/desktop/dd391573.aspx).
@@ -490,19 +492,6 @@ class ShellUtil {
   // on the Windows shell to prompt the user. This is the case for versions of
   // Windows prior to Windows 8.
   static bool CanMakeChromeDefaultUnattended();
-
-  enum InteractiveSetDefaultMode {
-    // The intent picker is opened with the different choices available to the
-    // user.
-    INTENT_PICKER,
-    // The Windows default apps settings page is opened with the current default
-    // app focused.
-    SYSTEM_SETTINGS,
-  };
-
-  // Returns the interactive mode that should be used to set the default browser
-  // or default protocol client on Windows 8+.
-  static InteractiveSetDefaultMode GetInteractiveSetDefaultMode();
 
   // Returns the DefaultState of Chrome for HTTP and HTTPS and updates the
   // default browser beacons as appropriate.
@@ -850,19 +839,6 @@ class ShellUtil {
       HKEY root,
       const std::vector<std::unique_ptr<RegistryEntry>>& entries,
       bool best_effort_no_rollback = false);
-
-  static std::array<uint32_t, 4> ComputeHashForTesting(
-      base::span<const uint8_t> input);
-
-  static std::wstring ComputeUserChoiceHashForTesting(
-      const std::wstring& extension,
-      const std::wstring& sid,
-      const std::wstring& prog_id,
-      const std::wstring& datetime);
-
-  // Use IPinnedList3 to pin shortcut to taskbar on WIN10_RS5 and above.
-  // Returns true if pinning was successful.
-  static bool PinShortcut(const base::FilePath& shortcut);
 };
 
 #endif  // CHROME_INSTALLER_UTIL_SHELL_UTIL_H_

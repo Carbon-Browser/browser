@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,12 @@
 #include "base/files/scoped_file.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/timer/timer.h"
 #include "ui/gfx/gpu_fence_handle.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/common/wayland_overlay_config.h"
+#include "ui/ozone/platform/wayland/common/wayland_presentation_info.h"
 
 namespace ui {
 
@@ -35,6 +37,7 @@ struct WaylandFrame {
  public:
   // A frame originated from gpu process, and hence, requires acknowledgements.
   WaylandFrame(uint32_t frame_id,
+               int64_t seq,
                WaylandSurface* root_surface,
                wl::WaylandOverlayConfig root_config,
                base::circular_deque<
@@ -57,7 +60,7 @@ struct WaylandFrame {
   friend class WaylandFrameManager;
 
   uint32_t frame_id;
-  raw_ptr<WaylandSurface> root_surface;
+  raw_ptr<WaylandSurface, DanglingUntriaged> root_surface;
   wl::WaylandOverlayConfig root_config;
   base::circular_deque<std::pair<WaylandSubsurface*, wl::WaylandOverlayConfig>>
       subsurfaces_to_overlays;
@@ -86,6 +89,10 @@ struct WaylandFrame {
   absl::optional<gfx::PresentationFeedback> feedback = absl::nullopt;
   // Whether this frame has had OnPresentation sent for it.
   bool presentation_acked;
+
+  // The sequence ID for this frame. This is used to know when the proper
+  // buffers associated with a configure arrive.
+  [[maybe_unused]] int64_t seq = -1;
 };
 
 // This is the frame update manager that configures graphical window/surface
@@ -114,11 +121,12 @@ class WaylandFrameManager {
   void MaybeProcessPendingFrame();
 
   // Clears the state of the |frame_manager_| when the GPU channel is destroyed.
-  // If |closing| is true, pending frames won't be processed.
-  void ClearStates(bool closing = false);
+  void ClearStates();
 
   // Similar to ClearStates(), but does not clear submitted frames.
   void Hide();
+
+  static base::TimeDelta GetPresentationFlushTimerDurationForTesting();
 
  private:
   void PlayBackFrame(std::unique_ptr<WaylandFrame> frame);
@@ -131,27 +139,35 @@ class WaylandFrameManager {
                              bool needs_opaque_region);
 
   void MaybeProcessSubmittedFrames();
-  void ProcessOldSubmittedFrame(WaylandFrame* frame,
-                                gfx::GpuFenceHandle release_fence_handle);
+  void ProcessOldSubmittedFrame(WaylandFrame* frame);
+
+  // Gets presentation feedback information ready to be sent for submitted
+  // frames. Also updates `presentation_acked` of corresponding frames to true.
+  std::vector<wl::WaylandPresentationInfo> GetReadyPresentations();
+  bool HaveReadyPresentations() const;
+
+  // Clears submitted frames that are fully released and have already sent
+  // presentation feedback info.
+  void ClearProcessedSubmittedFrames();
+
   void OnExplicitBufferRelease(WaylandSurface* surface,
-                               struct wl_buffer* wl_buffer,
+                               wl_buffer* wl_buffer,
                                base::ScopedFD fence);
-  void OnWlBufferRelease(WaylandSurface* surface, struct wl_buffer* wl_buffer);
+  void OnWlBufferRelease(WaylandSurface* surface, wl_buffer* wl_buffer);
 
-  // wl_callback_listener
-  static void FrameCallbackDone(void* data,
-                                struct wl_callback* callback,
-                                uint32_t time);
-  void OnFrameCallback(struct wl_callback* callback);
+  // wl_callback_listener callbacks:
+  static void OnFrameDone(void* data, wl_callback* callback, uint32_t time);
 
-  // wp_presentation_feedback_listener
-  static void FeedbackSyncOutput(
+  void HandleFrameCallback(wl_callback* callback);
+
+  // wp_presentation_feedback_listener callbacks:
+  static void OnSyncOutput(
       void* data,
-      struct wp_presentation_feedback* wp_presentation_feedback,
-      struct wl_output* output);
-  static void FeedbackPresented(
+      struct wp_presentation_feedback* presentation_feedback,
+      wl_output* output);
+  static void OnPresented(
       void* data,
-      struct wp_presentation_feedback* wp_presentation_feedback,
+      struct wp_presentation_feedback* presentation_feedback,
       uint32_t tv_sec_hi,
       uint32_t tv_sec_lo,
       uint32_t tv_nsec,
@@ -159,13 +175,14 @@ class WaylandFrameManager {
       uint32_t seq_hi,
       uint32_t seq_lo,
       uint32_t flags);
-  static void FeedbackDiscarded(
+  static void OnDiscarded(
       void* data,
-      struct wp_presentation_feedback* wp_presentation_feedback);
+      struct wp_presentation_feedback* presentation_feedback);
 
-  void OnPresentation(struct wp_presentation_feedback* wp_presentation_feedback,
-                      const gfx::PresentationFeedback& feedback,
-                      bool discarded = false);
+  void HandlePresentationFeedback(
+      struct wp_presentation_feedback* presentation_feedback,
+      const gfx::PresentationFeedback& feedback,
+      bool discarded = false);
 
   // Verifies the number of submitted frames and discards pending presentation
   // feedbacks if the number is too big.
@@ -177,6 +194,15 @@ class WaylandFrameManager {
   // |frame::buffer_lost| is set and false is returned. That means that the
   // frame must not be used for the further submission.
   bool EnsureWlBuffersExist(WaylandFrame& frame);
+
+  // Immediately clears submitted_buffers in the 1st in-flight submitted_frame.
+  // This unblocks the pipeline.
+  // TODO(crbug.com/1358908): Remove related workaround once CrOS side fix
+  // stablizes.
+  void FreezeTimeout();
+
+  void UpdatePresentationFlushTimer();
+  void OnPresentationFlushTimerFired();
 
   const raw_ptr<WaylandWindow> window_;
 
@@ -190,6 +216,14 @@ class WaylandFrameManager {
 
   // Non-owned pointer to the main connection.
   const raw_ptr<WaylandConnection> connection_;
+
+  // Set when invalid frame data is sent and the gpu process must be terminated.
+  std::string fatal_error_message_;
+
+  uint32_t frames_in_flight_ = 0;
+  base::OneShotTimer freeze_timeout_timer_;
+
+  base::OneShotTimer presentation_flush_timer_;
 
   base::WeakPtrFactory<WaylandFrameManager> weak_factory_;
 };

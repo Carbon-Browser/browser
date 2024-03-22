@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,18 +16,20 @@ RenderWidgetHostFactory* RenderWidgetHostFactory::factory_ = nullptr;
 std::unique_ptr<RenderWidgetHostImpl> RenderWidgetHostFactory::Create(
     FrameTree* frame_tree,
     RenderWidgetHostDelegate* delegate,
+    viz::FrameSinkId frame_sink_id,
     base::SafeRef<SiteInstanceGroup> site_instance_group,
     int32_t routing_id,
     bool hidden,
     bool renderer_initiated_creation) {
   if (factory_) {
-    return factory_->CreateRenderWidgetHost(frame_tree, delegate,
+    return factory_->CreateRenderWidgetHost(frame_tree, delegate, frame_sink_id,
                                             std::move(site_instance_group),
                                             routing_id, hidden);
   }
   return RenderWidgetHostImpl::Create(
-      frame_tree, delegate, std::move(site_instance_group), routing_id, hidden,
-      renderer_initiated_creation, std::make_unique<FrameTokenMessageQueue>());
+      frame_tree, delegate, frame_sink_id, std::move(site_instance_group),
+      routing_id, hidden, renderer_initiated_creation,
+      std::make_unique<FrameTokenMessageQueue>());
 }
 
 // static

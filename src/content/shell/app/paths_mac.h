@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,17 @@ namespace base {
 class FilePath;
 }
 
-// Sets up base::mac::FrameworkBundle.
+// Sets up base::apple::FrameworkBundle.
 void OverrideFrameworkBundlePath();
 
-// Set up base::mac::OuterBundle.
+// Set up base::apple::OuterBundle.
 void OverrideOuterBundlePath();
 
 // Sets up the CHILD_PROCESS_EXE path to properly point to the helper app.
 void OverrideChildProcessPath();
 
-// Sets up base::DIR_SOURCE_ROOT to properly point to the source directory.
+// Sets up base::DIR_SRC_TEST_DATA_ROOT to properly point to the source
+// directory.
 void OverrideSourceRootPath();
 
 // Gets the path to the content shell's pak file.

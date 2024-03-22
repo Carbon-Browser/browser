@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <wrl/implements.h>
 
 #include <string>
+#include <string_view>
 
 namespace device {
 
@@ -24,6 +25,9 @@ class FakeDeviceInformationPairingWinrt
   explicit FakeDeviceInformationPairingWinrt(std::string pin);
   explicit FakeDeviceInformationPairingWinrt(
       ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind);
+  explicit FakeDeviceInformationPairingWinrt(
+      ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind,
+      std::string_view display_pin);
 
   FakeDeviceInformationPairingWinrt(const FakeDeviceInformationPairingWinrt&) =
       delete;

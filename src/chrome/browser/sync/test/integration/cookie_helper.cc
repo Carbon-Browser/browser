@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,7 @@ void AddSigninCookie(Profile* profile) {
           /*last_update=*/base::Time(),
           /*secure=*/true,
           /*httponly=*/false, net::CookieSameSite::NO_RESTRICTION,
-          net::COOKIE_PRIORITY_DEFAULT,
-          /*same_party=*/false);
+          net::COOKIE_PRIORITY_DEFAULT);
 
   network::mojom::CookieManager* cookie_manager =
       profile->GetDefaultStoragePartition()

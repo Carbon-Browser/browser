@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 namespace blink {
 
 class ComputedStyle;
+class ComputedStyleBuilder;
 class CSSProperty;
 
 class NumberPropertyFunctions {
@@ -24,7 +25,7 @@ class NumberPropertyFunctions {
   static absl::optional<double> GetNumber(const CSSProperty&,
                                           const ComputedStyle&);
   static double ClampNumber(const CSSProperty&, double);
-  static bool SetNumber(const CSSProperty&, ComputedStyle&, double);
+  static bool SetNumber(const CSSProperty&, ComputedStyleBuilder&, double);
 };
 
 }  // namespace blink

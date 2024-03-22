@@ -1,64 +1,58 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/overview/overview_session.h"
 
-#include <algorithm>
-#include <functional>
 #include <utility>
 
-#include "ash/accelerators/debug_commands.h"
 #include "ash/accessibility/accessibility_controller_impl.h"
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/frame_throttler/frame_throttling_controller.h"
 #include "ash/metrics/user_metrics_recorder.h"
-#include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/root_window_controller.h"
 #include "ash/root_window_settings.h"
 #include "ash/scoped_animation_disabler.h"
 #include "ash/screen_util.h"
 #include "ash/shell.h"
-#include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
-#include "ash/system/message_center/ash_message_popup_collection.h"
-#include "ash/system/message_center/unified_message_center_bubble.h"
-#include "ash/system/unified/unified_system_tray.h"
-#include "ash/system/unified/unified_system_tray_bubble.h"
-#include "ash/utility/haptics_util.h"
 #include "ash/wm/desks/desk.h"
-#include "ash/wm/desks/desks_bar_view.h"
-#include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/desks/desks_util.h"
+#include "ash/wm/desks/legacy_desk_bar_view.h"
 #include "ash/wm/desks/templates/saved_desk_dialog_controller.h"
+#include "ash/wm/desks/templates/saved_desk_grid_view.h"
+#include "ash/wm/desks/templates/saved_desk_item_view.h"
 #include "ash/wm/desks/templates/saved_desk_library_view.h"
 #include "ash/wm/desks/templates/saved_desk_presenter.h"
 #include "ash/wm/desks/templates/saved_desk_util.h"
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_delegate.h"
+#include "ash/wm/overview/overview_focus_cycler.h"
 #include "ash/wm/overview/overview_grid.h"
-#include "ash/wm/overview/overview_highlight_controller.h"
 #include "ash/wm/overview/overview_item.h"
+#include "ash/wm/overview/overview_item_view.h"
 #include "ash/wm/overview/overview_utils.h"
 #include "ash/wm/overview/overview_window_drag_controller.h"
+#include "ash/wm/overview/scoped_float_container_stacker.h"
 #include "ash/wm/overview/scoped_overview_animation_settings.h"
-#include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_utils.h"
+#include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/base/hit_test.h"
-#include "ui/base/l10n/l10n_util.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/trace_event/trace_event.h"
+#include "chromeos/utils/haptics_util.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/compositor/layer.h"
-#include "ui/compositor/scoped_layer_animation_settings.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
 #include "ui/events/devices/haptic_touchpad_effects.h"
 #include "ui/events/event.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -78,7 +72,29 @@ constexpr int kKeyboardHoldScrollingDp = 15;
 // Tries to end overview. Returns true if overview is successfully ended, or
 // just was not active in the first place.
 bool EndOverview(OverviewEndAction action) {
-  return Shell::Get()->overview_controller()->EndOverview(action);
+  return OverviewController::Get()->EndOverview(action);
+}
+
+// Returns the window to be activated when the given `overview_item` is
+// selected.
+aura::Window* GetWindowForSelection(
+    OverviewItemBase* overview_item,
+    const std::vector<aura::Window*>& window_list) {
+  const auto item_windows = overview_item->GetWindows();
+  CHECK(!item_windows.empty());
+  if (item_windows.size() == 1u) {
+    return item_windows[0];
+  }
+
+  // When the given `overview_item` is a group item, return the first window in
+  // the `window_list` that is contained in `item_windows`.
+  for (auto* window : window_list) {
+    if (base::Contains(item_windows, window)) {
+      return window;
+    }
+  }
+
+  NOTREACHED_NORETURN();
 }
 
 // A self-deleting window state observer that runs the given callback when its
@@ -120,23 +136,9 @@ class AsyncWindowStateChangeObserver : public WindowStateObserver,
     window_->RemoveObserver(this);
   }
 
-  aura::Window* window_;
+  raw_ptr<aura::Window, ExperimentalAsh> window_;
 
   base::OnceCallback<void(WindowState*)> on_post_window_state_changed_;
-};
-
-// Simple override of views::Button. Allows to use a element of accessibility
-// role button as the overview focus widget's contents.
-class OverviewFocusButton : public views::Button {
- public:
-  OverviewFocusButton() : views::Button(views::Button::PressedCallback()) {
-    // Make this not focusable to avoid accessibility error since this view has
-    // no accessible name.
-    SetFocusBehavior(FocusBehavior::NEVER);
-  }
-  OverviewFocusButton(const OverviewFocusButton&) = delete;
-  OverviewFocusButton& operator=(const OverviewFocusButton&) = delete;
-  ~OverviewFocusButton() override = default;
 };
 
 }  // namespace
@@ -144,8 +146,7 @@ class OverviewFocusButton : public views::Button {
 OverviewSession::OverviewSession(OverviewDelegate* delegate)
     : delegate_(delegate),
       overview_start_time_(base::Time::Now()),
-      highlight_controller_(
-          std::make_unique<OverviewHighlightController>(this)),
+      focus_cycler_(std::make_unique<OverviewFocusCycler>(this)),
       chromevox_enabled_(Shell::Get()
                              ->accessibility_controller()
                              ->spoken_feedback()
@@ -159,7 +160,7 @@ OverviewSession::~OverviewSession() {
   // using it.
   if (window_drag_controller_) {
     window_drag_controller_->ResetOverviewSession();
-    base::ThreadTaskRunnerHandle::Get()->DeleteSoon(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(
         FROM_HERE, window_drag_controller_.release());
   }
 }
@@ -167,12 +168,17 @@ OverviewSession::~OverviewSession() {
 // NOTE: The work done in Init() is not done in the constructor because it may
 // cause other, unrelated classes, to make indirect method calls on a partially
 // constructed object.
-void OverviewSession::Init(const WindowList& windows,
-                           const WindowList& hide_windows) {
+void OverviewSession::Init(const aura::Window::Windows& windows,
+                           const aura::Window::Windows& hide_windows) {
+  TRACE_EVENT0("ui", "OverviewSession::Init");
+
   Shell::Get()->AddShellObserver(this);
 
-  if (saved_desk_util::IsSavedDesksEnabled())
-    tablet_mode_observation_.Observe(Shell::Get()->tablet_mode_controller());
+  if (saved_desk_util::IsSavedDesksEnabled()) {
+    hide_windows_for_saved_desks_grid_ =
+        std::make_unique<ScopedOverviewHideWindows>(
+            /*windows=*/std::vector<aura::Window*>{}, /*forced_hidden=*/true);
+  }
 
   hide_overview_windows_ = std::make_unique<ScopedOverviewHideWindows>(
       std::move(hide_windows), /*force_hidden=*/false);
@@ -180,7 +186,7 @@ void OverviewSession::Init(const WindowList& windows,
   active_window_before_overview_ = window_util::GetActiveWindow();
   if (active_window_before_overview_) {
     active_window_before_overview_observation_.Observe(
-        active_window_before_overview_);
+        active_window_before_overview_.get());
   }
 
   // Create this before the desks bar widget.
@@ -203,7 +209,6 @@ void OverviewSession::Init(const WindowList& windows,
 
   for (auto* root : root_windows) {
     auto grid = std::make_unique<OverviewGrid>(root, windows, this);
-    num_items_ += grid->size();
     grid_list_.push_back(std::move(grid));
   }
 
@@ -213,32 +218,41 @@ void OverviewSession::Init(const WindowList& windows,
   // suppressed during overview mode so they don't conflict with overview mode
   // animations.
 
-  // Do not call PrepareForOverview until all items are added to window_list_
+  // Do not call PrepareForOverview until all items are added to `item_list_`
   // as we don't want to cause any window updates until all windows in
   // overview are observed. See http://crbug.com/384495.
   for (std::unique_ptr<OverviewGrid>& overview_grid : grid_list_) {
     overview_grid->PrepareForOverview();
 
-    // Do not animate if there is any window that is being dragged in the
-    // grid.
-    if (enter_exit_overview_type_ == OverviewEnterExitType::kImmediateEnter) {
-      overview_grid->PositionWindows(/*animate=*/false);
-    } else {
-      // Exit only types should not appear here:
-      DCHECK_NE(enter_exit_overview_type_, OverviewEnterExitType::kFadeOutExit);
-
-      overview_grid->PositionWindows(/*animate=*/true, /*ignored_items=*/{},
-                                     OverviewTransition::kEnter);
+    // If we are entering because of a continuous scroll, don't
+    // position overview items for starting a continuous scroll as we will
+    // place them during future scroll updates.
+    if (enter_exit_overview_type_ ==
+        OverviewEnterExitType::kContinuousAnimationEnterOnScrollUpdate) {
+      break;
     }
+
+    if (ShouldEnterWithoutAnimations()) {
+      overview_grid->PositionWindows(/*animate=*/false);
+      continue;
+    }
+
+    // Exit only types should not appear here.
+    DCHECK_NE(enter_exit_overview_type_, OverviewEnterExitType::kFadeOutExit);
+    overview_grid->PositionWindows(/*animate=*/true, /*ignored_items=*/{},
+                                   OverviewTransition::kEnter);
   }
 
-  UpdateNoWindowsWidgetOnEachGrid();
+  const bool is_continuous_enter =
+      enter_exit_overview_type_ ==
+      OverviewEnterExitType::kContinuousAnimationEnterOnScrollUpdate;
+  const bool animate = !is_continuous_enter && !ShouldEnterWithoutAnimations();
+  UpdateNoWindowsWidgetOnEachGrid(animate, is_continuous_enter);
 
   // Create the widget that will receive focus while in overview mode for
-  // accessibility purposes. Add a button as the contents so that
+  // accessibility purposes. Make its role a button as the contents so that
   // `UpdateAccessibilityFocus` can put it on the accessibility focus
   // cycler.
-  overview_focus_widget_ = std::make_unique<views::Widget>();
   views::Widget::InitParams params;
   params.type = views::Widget::InitParams::TYPE_WINDOW_FRAMELESS;
   params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
@@ -248,12 +262,15 @@ void OverviewSession::Init(const WindowList& windows,
   params.layer_type = ui::LAYER_NOT_DRAWN;
   params.name = "OverviewModeFocusWidget";
   params.z_order = ui::ZOrderLevel::kFloatingWindow;
-  params.init_properties_container.SetProperty(ash::kExcludeInMruKey, true);
-  overview_focus_widget_->Init(std::move(params));
+  params.init_properties_container.SetProperty(kExcludeInMruKey, true);
+  overview_focus_widget_ = std::make_unique<views::Widget>(std::move(params));
   overview_focus_widget_->SetContentsView(
-      std::make_unique<OverviewFocusButton>());
+      views::Builder<views::View>()
+          .SetAccessibleRole(ax::mojom::Role::kButton)
+          .Build());
 
-  UMA_HISTOGRAM_COUNTS_100("Ash.Overview.Items", num_items_);
+  num_start_windows_ = GetNumWindows();
+  UMA_HISTOGRAM_COUNTS_100("Ash.Overview.Items", num_start_windows_);
 
   SplitViewController::Get(Shell::GetPrimaryRootWindow())->AddObserver(this);
 
@@ -268,14 +285,16 @@ void OverviewSession::Init(const WindowList& windows,
   ignore_activations_ = false;
 }
 
-// NOTE: The work done in Shutdown() is not done in the destructor because it
+// NOTE: The work done in `Shutdown()` is not done in the destructor because it
 // may cause other, unrelated classes, to make indirect calls to
-// restoring_minimized_windows() on a partially destructed object.
+// `restoring_minimized_windows()` on a partially destructed object.
 void OverviewSession::Shutdown() {
-  bool was_desks_templates_grid_showing = false;
+  TRACE_EVENT0("ui", "OverviewSession::Shutdown");
+
+  bool was_saved_desk_library_showing = false;
   for (auto& grid : grid_list_) {
-    if (grid->IsShowingDesksTemplatesGrid()) {
-      was_desks_templates_grid_showing = true;
+    if (grid->IsShowingSavedDeskLibrary()) {
+      was_saved_desk_library_showing = true;
       break;
     }
   }
@@ -293,7 +312,7 @@ void OverviewSession::Shutdown() {
   Shell::Get()->RemovePreTargetHandler(this);
   Shell::Get()->RemoveShellObserver(this);
 
-  tablet_mode_observation_.Reset();
+  float_container_stacker_.reset();
 
   // Stop the presenter from receiving any events that may update the model or
   // UI.
@@ -321,15 +340,14 @@ void OverviewSession::Shutdown() {
       overview_grid->CalculateWindowListAnimationStates(
           selected_item_ &&
                   selected_item_->overview_grid() == overview_grid.get()
-              ? selected_item_
+              ? selected_item_.get()
               : nullptr,
           OverviewTransition::kExit, /*target_bounds=*/{});
     }
     for (const auto& overview_item : overview_grid->window_list()) {
       overview_item->RestoreWindow(/*reset_transform=*/true,
-                                   was_desks_templates_grid_showing);
+                                   /*animate=*/!was_saved_desk_library_showing);
     }
-    remaining_items += overview_grid->size();
   }
 
   // Setting focus after restoring windows' state avoids unnecessary animations.
@@ -344,14 +362,15 @@ void OverviewSession::Shutdown() {
   for (std::unique_ptr<OverviewGrid>& overview_grid : grid_list_)
     overview_grid->Shutdown(enter_exit_overview_type_);
 
-  DCHECK(num_items_ >= remaining_items);
-  if (!was_desks_templates_grid_showing) {
+  if (!was_saved_desk_library_showing) {
     UMA_HISTOGRAM_COUNTS_100("Ash.Overview.OverviewClosedItems",
-                             num_items_ - remaining_items);
+                             num_start_windows_ - remaining_items);
     UMA_HISTOGRAM_MEDIUM_TIMES("Ash.Overview.TimeInOverview",
                                base::Time::Now() - overview_start_time_);
   }
 
+  // Explicitly clear the `selected_item_` to avoid dangling raw_ptr detection.
+  selected_item_ = nullptr;
   grid_list_.clear();
 
   // Hide the focus widget on overview session end to prevent it from retaining
@@ -367,8 +386,10 @@ void OverviewSession::OnGridEmpty() {
 
   if (SplitViewController::Get(Shell::GetPrimaryRootWindow())
           ->InTabletSplitViewMode()) {
-    UpdateNoWindowsWidgetOnEachGrid();
-  } else {
+    UpdateNoWindowsWidgetOnEachGrid(/*animate=*/true,
+                                    /*is_continuous_enter=*/false);
+  } else if (!allow_empty_desk_without_exiting_ &&
+             !IsShowingSavedDeskLibrary()) {
     EndOverview(OverviewEndAction::kLastWindowRemoved);
   }
 }
@@ -379,15 +400,25 @@ void OverviewSession::IncrementSelection(bool forward) {
 
 bool OverviewSession::AcceptSelection() {
   // Activate selected window or desk.
-  return highlight_controller_->MaybeActivateHighlightedViewOnOverviewExit();
+  return focus_cycler_->MaybeActivateFocusedViewOnOverviewExit();
 }
 
-void OverviewSession::SelectWindow(OverviewItem* item) {
-  aura::Window* window = item->GetWindow();
-  aura::Window::Windows window_list =
-      Shell::Get()->mru_window_tracker()->BuildMruWindowList(kActiveDesk);
+void OverviewSession::SelectWindow(OverviewItemBase* item) {
+  // `BuildWindowListIgnoreModal()` is used here to make sure the main window is
+  // included in the `window_list` with the existence of modal transient
+  // window(s) which makes the main window not activatable.
+  const aura::Window::Windows window_list =
+      Shell::Get()->mru_window_tracker()->BuildWindowListIgnoreModal(
+          kActiveDesk);
+
+  const auto windows = item->GetWindows();
+  CHECK(!windows.empty());
+  aura::Window* window = windows.size() > 1u
+                             ? GetWindowForSelection(item, window_list)
+                             : windows[0];
+
   if (!window_list.empty()) {
-    // Record WindowSelector_ActiveWindowChanged if the user is selecting a
+    // Record `WindowSelector_ActiveWindowChanged` if the user is selecting a
     // window other than the window that was active prior to entering overview
     // mode (i.e., the window at the front of the MRU list).
     if (window_list[0] != window) {
@@ -396,18 +427,22 @@ void OverviewSession::SelectWindow(OverviewItem* item) {
       Shell::Get()->metrics()->task_switch_metrics_recorder().OnTaskSwitch(
           TaskSwitchSource::OVERVIEW_MODE);
     }
-    const auto it = std::find(window_list.begin(), window_list.end(), window);
-    if (it != window_list.end()) {
+
+    if (const auto it = base::ranges::find(window_list, window);
+        it != window_list.end()) {
       // Record 1-based index so that selecting a top MRU window will record 1.
       UMA_HISTOGRAM_COUNTS_100("Ash.Overview.SelectionDepth",
                                1 + it - window_list.begin());
     }
   }
+
   item->EnsureVisible();
+
   if (window->GetProperty(kPipOriginalWindowKey)) {
     window_util::ExpandArcPipWindow();
     return;
   }
+
   // If the selected window is a minimized window, un-minimize it first before
   // activating it so that the window can use the scale-up animation instead of
   // un-minimizing animation. The activation of the window will happen in an
@@ -427,12 +462,14 @@ void OverviewSession::SelectWindow(OverviewItem* item) {
           }
           wm::ActivateWindow(window_state->window());
         }));
+
     // If we are in split mode, use Show() here to delegate un-minimizing to
     // SplitViewController as it handles auto snapping cases.
-    if (SplitViewController::Get(window)->InSplitViewMode())
+    if (SplitViewController::Get(window)->InSplitViewMode()) {
       window->Show();
-    else
+    } else {
       window_state->Unminimize();
+    }
     return;
   }
 
@@ -469,7 +506,7 @@ void OverviewSession::ResetSplitViewDragIndicatorsWindowDraggingStates() {
   }
 }
 
-void OverviewSession::RearrangeDuringDrag(OverviewItem* dragged_item) {
+void OverviewSession::RearrangeDuringDrag(OverviewItemBase* dragged_item) {
   for (std::unique_ptr<OverviewGrid>& grid : grid_list_) {
     DCHECK(grid->split_view_drag_indicators());
     grid->RearrangeDuringDrag(
@@ -479,10 +516,10 @@ void OverviewSession::RearrangeDuringDrag(OverviewItem* dragged_item) {
 }
 
 void OverviewSession::UpdateDropTargetsBackgroundVisibilities(
-    OverviewItem* dragged_item,
+    OverviewItemBase* dragged_item,
     const gfx::PointF& location_in_screen) {
   for (std::unique_ptr<OverviewGrid>& grid : grid_list_) {
-    if (grid->GetDropTarget()) {
+    if (grid->drop_target()) {
       grid->UpdateDropTargetBackgroundVisibility(dragged_item,
                                                  location_in_screen);
     }
@@ -503,13 +540,14 @@ void OverviewSession::AddItem(
     aura::Window* window,
     bool reposition,
     bool animate,
-    const base::flat_set<OverviewItem*>& ignored_items,
+    const base::flat_set<OverviewItemBase*>& ignored_items,
     size_t index) {
   // Early exit if a grid already contains |window|.
   OverviewGrid* grid = GetGridWithRootWindow(window->GetRootWindow());
   if (!grid || grid->GetOverviewItemContaining(window))
     return;
 
+  base::AutoReset<bool> ignore(&ignore_activations_, true);
   grid->AddItem(window, reposition, animate, ignored_items, index,
                 /*use_spawn_animation=*/false, /*restack=*/false);
   OnItemAdded(window);
@@ -523,6 +561,10 @@ void OverviewSession::AppendItem(aura::Window* window,
   if (!grid || grid->GetOverviewItemContaining(window))
     return;
 
+  if (IsShowingSavedDeskLibrary())
+    animate = false;
+
+  base::AutoReset<bool> ignore(&ignore_activations_, true);
   grid->AppendItem(window, reposition, animate, /*use_spawn_animation=*/true);
   OnItemAdded(window);
 }
@@ -537,16 +579,17 @@ void OverviewSession::AddItemInMruOrder(aura::Window* window,
   if (!grid || grid->GetOverviewItemContaining(window))
     return;
 
+  base::AutoReset<bool> ignore(&ignore_activations_, true);
   grid->AddItemInMruOrder(window, reposition, animate, restack,
                           use_spawn_animation);
   OnItemAdded(window);
 }
 
-void OverviewSession::RemoveItem(OverviewItem* overview_item) {
+void OverviewSession::RemoveItem(OverviewItemBase* overview_item) {
   RemoveItem(overview_item, /*item_destroying=*/false, /*reposition=*/false);
 }
 
-void OverviewSession::RemoveItem(OverviewItem* overview_item,
+void OverviewSession::RemoveItem(OverviewItemBase* overview_item,
                                  bool item_destroying,
                                  bool reposition) {
   if (overview_item->GetWindow() == active_window_before_overview_) {
@@ -556,65 +599,67 @@ void OverviewSession::RemoveItem(OverviewItem* overview_item,
 
   overview_item->overview_grid()->RemoveItem(overview_item, item_destroying,
                                              reposition);
-  --num_items_;
 
-  UpdateNoWindowsWidgetOnEachGrid();
+  UpdateNoWindowsWidgetOnEachGrid(/*animate=*/true,
+                                  /*is_continuous_enter=*/false);
   UpdateAccessibilityFocus();
 }
 
 void OverviewSession::RemoveDropTargets() {
   for (std::unique_ptr<OverviewGrid>& grid : grid_list_) {
-    if (grid->GetDropTarget())
+    if (grid->drop_target()) {
       grid->RemoveDropTarget();
+    }
   }
 }
 
-void OverviewSession::InitiateDrag(OverviewItem* item,
+void OverviewSession::InitiateDrag(OverviewItemBase* item,
                                    const gfx::PointF& location_in_screen,
-                                   bool is_touch_dragging) {
-  if (Shell::Get()->overview_controller()->IsInStartAnimation() ||
+                                   bool is_touch_dragging,
+                                   OverviewItemBase* event_source_item) {
+  if (OverviewController::Get()->IsInStartAnimation() ||
       SplitViewController::Get(Shell::GetPrimaryRootWindow())
           ->IsDividerAnimating()) {
     return;
   }
 
-  highlight_controller_->SetFocusHighlightVisibility(false);
+  focus_cycler_->SetFocusVisibility(false);
   window_drag_controller_ = std::make_unique<OverviewWindowDragController>(
-      this, item, is_touch_dragging);
+      this, item, is_touch_dragging, event_source_item);
   window_drag_controller_->InitiateDrag(location_in_screen);
 
   for (std::unique_ptr<OverviewGrid>& grid : grid_list_) {
-    grid->OnSelectorItemDragStarted(item);
+    grid->OnOverviewItemDragStarted(item);
     grid->UpdateSaveDeskButtons();
   }
 
   // Fire a haptic event if necessary.
   if (!is_touch_dragging) {
-    haptics_util::PlayHapticTouchpadEffect(
+    chromeos::haptics_util::PlayHapticTouchpadEffect(
         ui::HapticTouchpadEffect::kTick,
         ui::HapticTouchpadEffectStrength::kMedium);
   }
 }
 
-void OverviewSession::Drag(OverviewItem* item,
+void OverviewSession::Drag(OverviewItemBase* item,
                            const gfx::PointF& location_in_screen) {
   DCHECK(window_drag_controller_);
   DCHECK_EQ(item, window_drag_controller_->item());
   window_drag_controller_->Drag(location_in_screen);
 }
 
-void OverviewSession::CompleteDrag(OverviewItem* item,
+void OverviewSession::CompleteDrag(OverviewItemBase* item,
                                    const gfx::PointF& location_in_screen) {
   DCHECK(window_drag_controller_);
   DCHECK_EQ(item, window_drag_controller_->item());
 
-  // Note: The highlight should be updated first as completing a drag may cause
-  // a selection which would destroy |item|.
-  highlight_controller_->SetFocusHighlightVisibility(true);
+  // Note: The focus ring should be updated first as completing a drag may cause
+  // a selection which would destroy `item`.
+  focus_cycler_->SetFocusVisibility(true);
   const bool snap = window_drag_controller_->CompleteDrag(location_in_screen) ==
                     OverviewWindowDragController::DragResult::kSnap;
   for (std::unique_ptr<OverviewGrid>& grid : grid_list_) {
-    grid->OnSelectorItemDragEnded(snap);
+    grid->OnOverviewItemDragEnded(snap);
     grid->UpdateSaveDeskButtons();
   }
 }
@@ -624,7 +669,7 @@ void OverviewSession::StartNormalDragMode(
   window_drag_controller_->StartNormalDragMode(location_in_screen);
 }
 
-void OverviewSession::Fling(OverviewItem* item,
+void OverviewSession::Fling(OverviewItemBase* item,
                             const gfx::PointF& location_in_screen,
                             float velocity_x,
                             float velocity_y) {
@@ -637,7 +682,7 @@ void OverviewSession::Fling(OverviewItem* item,
                                                    velocity_x, velocity_y) ==
                     OverviewWindowDragController::DragResult::kSnap;
   for (std::unique_ptr<OverviewGrid>& grid : grid_list_) {
-    grid->OnSelectorItemDragEnded(snap);
+    grid->OnOverviewItemDragEnded(snap);
     grid->UpdateSaveDeskButtons();
   }
 }
@@ -649,7 +694,7 @@ void OverviewSession::ActivateDraggedWindow() {
 void OverviewSession::ResetDraggedWindowGesture() {
   window_drag_controller_->ResetGesture();
   for (std::unique_ptr<OverviewGrid>& grid : grid_list_) {
-    grid->OnSelectorItemDragEnded(/*snap=*/false);
+    grid->OnOverviewItemDragEnded(/*snap=*/false);
     grid->UpdateSaveDeskButtons();
   }
 }
@@ -661,6 +706,13 @@ void OverviewSession::OnWindowDragStarted(aura::Window* dragged_window,
   if (!target_grid)
     return;
   target_grid->OnWindowDragStarted(dragged_window, animate);
+
+  // The stacker object may be already created depending on the overview enter
+  // type.
+  if (!float_container_stacker_) {
+    float_container_stacker_ = std::make_unique<ScopedFloatContainerStacker>();
+  }
+  float_container_stacker_->OnDragStarted(dragged_window);
 }
 
 void OverviewSession::OnWindowDragContinued(
@@ -679,6 +731,9 @@ void OverviewSession::OnWindowDragEnded(aura::Window* dragged_window,
                                         const gfx::PointF& location_in_screen,
                                         bool should_drop_window_into_overview,
                                         bool snap) {
+  DCHECK(float_container_stacker_);
+  float_container_stacker_->OnDragFinished(dragged_window);
+
   OverviewGrid* target_grid =
       GetGridWithRootWindow(dragged_window->GetRootWindow());
   if (!target_grid)
@@ -704,7 +759,7 @@ void OverviewSession::SetVisibleDuringWindowDragging(bool visible,
 
 void OverviewSession::PositionWindows(
     bool animate,
-    const base::flat_set<OverviewItem*>& ignored_items) {
+    const base::flat_set<OverviewItemBase*>& ignored_items) {
   for (std::unique_ptr<OverviewGrid>& grid : grid_list_)
     grid->PositionWindows(animate, ignored_items);
 
@@ -719,12 +774,12 @@ bool OverviewSession::IsWindowInOverview(const aura::Window* window) {
   return false;
 }
 
-OverviewItem* OverviewSession::GetOverviewItemForWindow(
+OverviewItemBase* OverviewSession::GetOverviewItemForWindow(
     const aura::Window* window) {
   for (const std::unique_ptr<OverviewGrid>& grid : grid_list_) {
-    OverviewItem* item = grid->GetOverviewItemContaining(window);
-    if (item)
+    if (OverviewItemBase* item = grid->GetOverviewItemContaining(window)) {
       return item;
+    }
   }
 
   return nullptr;
@@ -740,8 +795,9 @@ void OverviewSession::SetWindowListNotAnimatedWhenExiting(
 
 void OverviewSession::UpdateRoundedCornersAndShadow() {
   for (auto& grid : grid_list_)
-    for (auto& window : grid->window_list())
+    for (auto& window : grid->window_list()) {
       window->UpdateRoundedCornersAndShadow();
+    }
 }
 
 void OverviewSession::OnStartingAnimationComplete(bool canceled,
@@ -774,7 +830,13 @@ void OverviewSession::OnStartingAnimationComplete(bool canceled,
   }
 
   UpdateAccessibilityFocus();
-  Shell::Get()->overview_controller()->DelayedUpdateRoundedCornersAndShadow();
+  OverviewController::Get()->DelayedUpdateRoundedCornersAndShadow();
+
+  // The stacker object may be already created if a drag has started prior to
+  // this.
+  if (!float_container_stacker_) {
+    float_container_stacker_ = std::make_unique<ScopedFloatContainerStacker>();
+  }
 }
 
 void OverviewSession::OnWindowActivating(
@@ -784,19 +846,22 @@ void OverviewSession::OnWindowActivating(
   if (ignore_activations_ || gained_active == GetOverviewFocusWindow())
     return;
 
-  // Activating the Desks bar or the Desks Templates grid should not end
-  // overview.
-  if (gained_active &&
-      (gained_active->GetId() == kShellWindowId_DesksBarWindow ||
-       gained_active->GetId() == kShellWindowId_SavedDeskLibraryWindow)) {
+  // Activating any UI created for overview should not end overview.
+  if (gained_active && gained_active->GetProperty(kOverviewUiKey)) {
     return;
   }
 
-  // Activating or deactivating one of the confirmation dialogs associated with
-  // desks templates should not end overview.
-  if (gained_active && saved_desk_util::IsSavedDesksEnabled()) {
-    if (ShouldKeepOverviewOpenForSavedDeskDialog(gained_active, lost_active))
-      return;
+  // In addition to activation, overview UI that are modal dialogs (confirmation
+  // dialogs associated with saved desk) should not end overview.
+  if (lost_active && lost_active->GetProperty(kOverviewUiKey) &&
+      lost_active->GetProperty(aura::client::kModalKey) ==
+          ui::ModalType::MODAL_TYPE_SYSTEM) {
+    return;
+  }
+
+  if (gained_active &&
+      gained_active->GetProperty(kStayInOverviewOnActivationKey)) {
+    return;
   }
 
   if (DesksController::Get()->AreDesksBeingModified()) {
@@ -811,39 +876,24 @@ void OverviewSession::OnWindowActivating(
     // Cancel overview session and do not restore activation when active window
     // is set to nullptr. This happens when removing a display.
     RestoreWindowActivation(false);
-    EndOverview(OverviewEndAction::kWindowActivating);
+    EndOverview(OverviewEndAction::kWindowDeactivating);
     return;
-  }
-
-  // The message center takes activation when someone clicks one of its buttons.
-  // We shouldn't close overview in that case. There are two different possible
-  // message center widgets. The stand alone one, and the one that is part of
-  // the unified system tray bubble.
-  if (gained_active->GetName() ==
-      AshMessagePopupCollection::kMessagePopupWidgetName) {
-    return;
-  }
-
-  for (RootWindowController* root_window_controller :
-       Shell::GetAllRootWindowControllers()) {
-    UnifiedSystemTray* system_tray =
-        root_window_controller->GetStatusAreaWidget()->unified_system_tray();
-    if (system_tray->IsMessageCenterBubbleShown()) {
-      if (gained_active == system_tray->message_center_bubble()
-                               ->GetBubbleWidget()
-                               ->GetNativeWindow()) {
-        return;
-      }
-    }
   }
 
   // If app list is open in clamshell mode, end overview. Note: we have special
   // logic to end overview when app list (i.e., home launcher) is open in tablet
   // mode, so do not handle it here.
   if (gained_active == Shell::Get()->app_list_controller()->GetWindow() &&
-      !Shell::Get()->tablet_mode_controller()->InTabletMode()) {
+      !display::Screen::GetScreen()->InTabletMode()) {
     RestoreWindowActivation(false);
     EndOverview(OverviewEndAction::kAppListActivatedInClamshell);
+    return;
+  }
+
+  if (RootWindowController::ForWindow(gained_active)
+          ->split_view_overview_session()) {
+    // Let `SplitViewOverviewSession` handle the window activation change.
+    RestoreWindowActivation(false);
     return;
   }
 
@@ -852,10 +902,14 @@ void OverviewSession::OnWindowActivating(
   // handle the window activation change. Check for split view mode without
   // using |SplitViewController::state_| which is updated asynchronously when
   // snapping an ARC window.
+  // We also check if `gained_active` is to-be-snapped transitional state. In
+  // the case, the window has not been attached to SplitViewController yet but
+  // will be very soon.
   SplitViewController* split_view_controller =
       SplitViewController::Get(gained_active);
-  if (split_view_controller->left_window() ||
-      split_view_controller->right_window()) {
+  if (split_view_controller->primary_window() ||
+      split_view_controller->secondary_window() ||
+      split_view_controller->IsWindowInTransitionalState(gained_active)) {
     RestoreWindowActivation(false);
     return;
   }
@@ -864,21 +918,23 @@ void OverviewSession::OnWindowActivating(
   // dragged as evidenced by the presence of a drop target. (Dragging to close
   // does not count; canceling overview mode is okay then.)
   for (std::unique_ptr<OverviewGrid>& overview_grid : grid_list_) {
-    if (overview_grid->GetDropTarget())
+    if (overview_grid->drop_target()) {
       return;
+    }
   }
 
   auto* grid = GetGridWithRootWindow(gained_active->GetRootWindow());
   DCHECK(grid);
-  if (OverviewItem* item = grid->GetOverviewItemContaining(gained_active))
+  if (OverviewItemBase* item = grid->GetOverviewItemContaining(gained_active)) {
     selected_item_ = item;
+  }
 
   // Don't restore window activation on exit if a window was just activated.
   RestoreWindowActivation(false);
   EndOverview(OverviewEndAction::kWindowActivating);
 }
 
-bool OverviewSession::IsTemplatesUiLosingActivation(aura::Window* lost_active) {
+bool OverviewSession::IsSavedDeskUiLosingActivation(aura::Window* lost_active) {
   if (!saved_desk_util::IsSavedDesksEnabled() || !lost_active)
     return false;
 
@@ -896,18 +952,14 @@ bool OverviewSession::IsTemplatesUiLosingActivation(aura::Window* lost_active) {
              lost_active;
 }
 
-aura::Window* OverviewSession::GetOverviewFocusWindow() {
-  if (overview_focus_widget_)
-    return overview_focus_widget_->GetNativeWindow();
-
-  return nullptr;
+aura::Window* OverviewSession::GetOverviewFocusWindow() const {
+  return overview_focus_widget_ ? overview_focus_widget_->GetNativeWindow()
+                                : nullptr;
 }
 
-aura::Window* OverviewSession::GetHighlightedWindow() {
-  OverviewItem* item = highlight_controller_->GetHighlightedItem();
-  if (!item)
-    return nullptr;
-  return item->GetWindow();
+aura::Window* OverviewSession::GetFocusedWindow() const {
+  OverviewItemBase* item = focus_cycler_->GetFocusedItem();
+  return item ? item->GetWindow() : nullptr;
 }
 
 void OverviewSession::SuspendReposition() {
@@ -929,6 +981,8 @@ bool OverviewSession::IsEmpty() const {
 }
 
 void OverviewSession::RestoreWindowActivation(bool restore) {
+  TRACE_EVENT0("ui", "OverviewSession::RestoreWindowActivation");
+
   if (!active_window_before_overview_)
     return;
 
@@ -946,43 +1000,43 @@ void OverviewSession::RestoreWindowActivation(bool restore) {
   active_window_before_overview_ = nullptr;
 }
 
-void OverviewSession::OnHighlightedItemActivated(OverviewItem* item) {
+void OverviewSession::OnFocusedItemActivated(OverviewItem* item) {
   UMA_HISTOGRAM_COUNTS_100("Ash.Overview.ArrowKeyPresses", num_key_presses_);
-  UMA_HISTOGRAM_CUSTOM_COUNTS("Ash.Overview.KeyPressesOverItemsRatio",
-                              (num_key_presses_ * 100) / num_items_, 1, 300,
-                              30);
+
+  // Do not record this if `num_start_windows_` has changed as it will be
+  // inaccurate.
+  if (num_start_windows_ == GetNumWindows()) {
+    UMA_HISTOGRAM_CUSTOM_COUNTS("Ash.Overview.KeyPressesOverItemsRatio",
+                                (num_key_presses_ * 100) / num_start_windows_,
+                                1, 300, 30);
+  }
   base::RecordAction(
       base::UserMetricsAction("WindowSelector_OverviewEnterKey"));
   SelectWindow(item);
 }
 
-void OverviewSession::OnHighlightedItemClosed(OverviewItem* item) {
+void OverviewSession::OnFocusedItemClosed(OverviewItem* item) {
   base::RecordAction(
       base::UserMetricsAction("WindowSelector_OverviewCloseKey"));
-  item->CloseWindow();
+  item->CloseWindows();
 }
 
 void OverviewSession::OnRootWindowClosing(aura::Window* root) {
-  auto iter = std::find_if(grid_list_.begin(), grid_list_.end(),
-                           [root](std::unique_ptr<OverviewGrid>& grid) {
-                             return grid->root_window() == root;
-                           });
+  auto iter = base::ranges::find(grid_list_, root, &OverviewGrid::root_window);
   DCHECK(iter != grid_list_.end());
   (*iter)->Shutdown(OverviewEnterExitType::kImmediateExit);
   grid_list_.erase(iter);
 }
 
-OverviewItem* OverviewSession::GetCurrentDraggedOverviewItem() const {
-  if (!window_drag_controller_)
-    return nullptr;
-  return window_drag_controller_->item();
+OverviewItemBase* OverviewSession::GetCurrentDraggedOverviewItem() const {
+  return window_drag_controller_ ? window_drag_controller_->item() : nullptr;
 }
 
 bool OverviewSession::CanProcessEvent() const {
   return CanProcessEvent(/*sender=*/nullptr, /*from_touch_gesture=*/false);
 }
 
-bool OverviewSession::CanProcessEvent(OverviewItem* sender,
+bool OverviewSession::CanProcessEvent(OverviewItemBase* sender,
                                       bool from_touch_gesture) const {
   // Allow processing the event if no current window is being dragged.
   const bool drag_in_progress = window_util::IsAnyWindowDragged();
@@ -1010,13 +1064,51 @@ bool OverviewSession::IsWindowActiveWindowBeforeOverview(
   return window == active_window_before_overview_;
 }
 
-void OverviewSession::ShowDesksTemplatesGrids(
-    bool was_zero_state,
-    const base::GUID& item_to_focus,
+bool OverviewSession::HandleContinuousScrollIntoOverview(float y_offset) {
+  if (OverviewController::Get()->is_continuous_scroll_in_progress()) {
+    CHECK_EQ(enter_exit_overview_type_,
+             OverviewEnterExitType::kContinuousAnimationEnterOnScrollUpdate);
+
+    // If a scroll is in progress, position the windows continuously.
+    for (std::unique_ptr<OverviewGrid>& overview_grid : grid_list_) {
+      overview_grid->PositionWindowsContinuously(y_offset);
+    }
+    return true;
+  }
+
+  // If a scroll has ended, reset the opacity of minimized windows before
+  // animating all windows into their final positions.
+  for (std::unique_ptr<OverviewGrid>& overview_grid : grid_list_) {
+    for (const auto& window_item : overview_grid->window_list()) {
+      window_item->item_widget()->GetLayer()->SetOpacity(1.f);
+      window_item->UpdateRoundedCornersAndShadow();
+    }
+    overview_grid->PositionWindows(/*animate=*/true, /*ignored_items=*/{},
+                                   /*transition=*/OverviewTransition::kEnter);
+
+    // TODO(http://b/292125336): Animate the desk bar transformation and no
+    // windows label opacity.
+    if (auto* desks_bar = overview_grid->desks_bar_view()) {
+      desks_bar->layer()->SetTransform({});
+    }
+
+    if (auto* no_windows_widget = overview_grid->no_windows_widget()) {
+      no_windows_widget->SetOpacity(1.f);
+    }
+  }
+  return true;
+}
+
+void OverviewSession::ShowSavedDeskLibrary(
+    const base::Uuid& item_to_focus,
     const std::u16string& saved_desk_name,
     aura::Window* const root_window) {
-  if (Shell::Get()->tablet_mode_controller()->InTabletMode() ||
-      IsShowingDesksTemplatesGrid()) {
+  // Some windows such as the print preview may request activation due to
+  // occlusion computations. These should not cause use to exit overview.
+  base::AutoReset<bool> ignore(&ignore_activations_, true);
+
+  if (display::Screen::GetScreen()->InTabletMode() ||
+      IsShowingSavedDeskLibrary()) {
     return;
   }
 
@@ -1025,43 +1117,77 @@ void OverviewSession::ShowDesksTemplatesGrids(
 
   // Send an a11y alert.
   Shell::Get()->accessibility_controller()->TriggerAccessibilityAlert(
-      AccessibilityAlert::DESK_TEMPLATES_MODE_ENTERED);
+      AccessibilityAlert::SAVED_DESKS_MODE_ENTERED);
 
   for (auto& grid : grid_list_)
-    grid->ShowDesksTemplatesGrid(was_zero_state);
+    grid->ShowSavedDeskLibrary();
+
   // Only ask for all entries if it is the first time creating the grid widgets.
   // Otherwise, add or update the entries one at a time.
-  if (created_grid_widgets)
+  if (created_grid_widgets) {
     saved_desk_presenter_->GetAllEntries(item_to_focus, saved_desk_name,
                                          root_window);
-  UpdateNoWindowsWidgetOnEachGrid();
+  }
+  UpdateNoWindowsWidgetOnEachGrid(/*animate=*/true,
+                                  /*is_continuous_enter=*/false);
 
   UpdateAccessibilityFocus();
 
   // TODO(crbug.com/1307467): This doesn't need to be reset if it's an ancestor
   // of the desks bar view. Also, add testing for this. Note that this isn't
   // needed when hiding, because we either move the focus to the new desk, or
-  // delete all the grid templates items which would reset their highlights.
-  highlight_controller_->ResetHighlightedView();
+  // delete all the grid templates items which would reset their focus.
+  focus_cycler_->ResetFocusedView();
+
+  // If not given anything to focus, focus the first saved desk.
+  if (item_to_focus.is_valid())
+    return;
+
+  OverviewGrid* overview_grid = GetGridWithRootWindow(root_window);
+  if (!overview_grid)
+    return;
+
+  SavedDeskLibraryView* library_view = overview_grid->GetSavedDeskLibraryView();
+  if (!library_view)
+    return;
+
+  std::vector<SavedDeskGridView*> grid_views = library_view->grid_views();
+  if (grid_views.empty())
+    return;
+
+  std::vector<SavedDeskItemView*> grid_items = grid_views.front()->grid_items();
+  if (grid_items.empty() ||
+      library_view->GetWidget()->GetNativeWindow()->GetRootWindow() !=
+          root_window) {
+    return;
+  }
+
+  focus_cycler_->MoveFocusToView(grid_items.front(),
+                                 /*suppress_accessibility_event=*/false);
 }
 
-void OverviewSession::HideDesksTemplatesGrids() {
-  // Before hiding the templates grid, we need to explicitly activate the focus
-  // window. Otherwise, some other window may get activated as the templates
-  // grid is hidden, and this could in turn lead to exiting overview mode.
-  wm::ActivateWindow(GetOverviewFocusWindow());
+void OverviewSession::HideSavedDeskLibrary() {
+  // Some windows such as the print preview may request activation due to
+  // occlusion computations. These should not cause use to exit overview.
+  base::AutoReset<bool> ignore(&ignore_activations_, true);
 
   for (auto& grid : grid_list_)
-    grid->HideDesksTemplatesGrid(/*exit_overview=*/false);
+    grid->HideSavedDeskLibrary(/*exit_overview=*/false);
 
   UpdateAccessibilityFocus();
 }
 
-bool OverviewSession::IsShowingDesksTemplatesGrid() const {
-  // All the grids should show the templates grid at the same time so just check
-  // if the first grid is showing.
+bool OverviewSession::IsShowingSavedDeskLibrary() const {
+  // All the overview grids should show the saved desk grid at the same time so
+  // just check if the first grid is showing.
   return grid_list_.empty() ? false
-                            : grid_list_.front()->IsShowingDesksTemplatesGrid();
+                            : grid_list_.front()->IsShowingSavedDeskLibrary();
+}
+
+bool OverviewSession::ShouldEnterWithoutAnimations() const {
+  return enter_exit_overview_type_ == OverviewEnterExitType::kImmediateEnter ||
+         enter_exit_overview_type_ ==
+             OverviewEnterExitType::kImmediateEnterWithoutFocus;
 }
 
 void OverviewSession::UpdateAccessibilityFocus() {
@@ -1076,9 +1202,9 @@ void OverviewSession::UpdateAccessibilityFocus() {
     a11y_widgets.push_back(overview_focus_widget_.get());
 
   // Note that this order matches the order of the tab cycling in
-  // `OverviewHighlightController::GetTraversableViews`.
+  // `OverviewFocusCycler::GetTraversableViews()`.
   for (auto& grid : grid_list_) {
-    if (grid->IsShowingDesksTemplatesGrid()) {
+    if (grid->IsShowingSavedDeskLibrary()) {
       a11y_widgets.push_back(grid->saved_desk_library_widget());
     } else {
       for (const auto& item : grid->window_list())
@@ -1090,10 +1216,8 @@ void OverviewSession::UpdateAccessibilityFocus() {
     if (grid->IsSaveDeskButtonContainerVisible())
       a11y_widgets.push_back(grid->save_desk_button_container_widget());
 
-    auto* no_windows_widget = grid->no_windows_widget();
-    if (no_windows_widget) {
-      a11y_widgets.push_back(
-          static_cast<views::Widget*>(grid->no_windows_widget()));
+    if (auto* no_windows_widget = grid->no_windows_widget()) {
+      a11y_widgets.push_back(no_windows_widget);
     }
   }
 
@@ -1125,9 +1249,25 @@ void OverviewSession::UpdateAccessibilityFocus() {
   }
 }
 
-void OverviewSession::OnDeskAdded(const Desk* desk) {}
-void OverviewSession::OnDeskRemoved(const Desk* desk) {}
-void OverviewSession::OnDeskReordered(int old_index, int new_index) {}
+void OverviewSession::UpdateFrameThrottling() {
+  std::vector<aura::Window*> windows_to_throttle;
+  if (!grid_list_.empty()) {
+    windows_to_throttle.reserve(num_start_windows_ * 2);
+    for (auto& grid : grid_list_) {
+      if (grid->dragged_window()) {
+        windows_to_throttle.push_back(grid->dragged_window());
+      }
+
+      for (auto& item : grid->window_list()) {
+        for (auto* window : item->GetWindows()) {
+          windows_to_throttle.push_back(window);
+        }
+      }
+    }
+  }
+  Shell::Get()->frame_throttling_controller()->StartThrottling(
+      windows_to_throttle);
+}
 
 void OverviewSession::OnDeskActivationChanged(const Desk* activated,
                                               const Desk* deactivated) {
@@ -1141,11 +1281,6 @@ void OverviewSession::OnDeskActivationChanged(const Desk* activated,
       overview_grid->UpdateSaveDeskButtons();
   }
 }
-
-void OverviewSession::OnDeskSwitchAnimationLaunching() {}
-void OverviewSession::OnDeskSwitchAnimationFinished() {}
-void OverviewSession::OnDeskNameChanged(const Desk* desk,
-                                        const std::u16string& new_name) {}
 
 void OverviewSession::OnDisplayAdded(const display::Display& display) {
   if (EndOverview(OverviewEndAction::kDisplayAdded))
@@ -1204,6 +1339,18 @@ void OverviewSession::OnWindowAdded(aura::Window* new_window) {
   active_window_before_overview_ = nullptr;
 }
 
+void OverviewSession::OnMouseEvent(ui::MouseEvent* event) {
+  for (auto& grid : grid_list_) {
+    if (auto* split_view_overview_session =
+            RootWindowController::ForWindow(grid->root_window())
+                ->split_view_overview_session();
+        split_view_overview_session) {
+      split_view_overview_session->OnMouseEvent(*event);
+      return;
+    }
+  }
+}
+
 void OverviewSession::OnKeyEvent(ui::KeyEvent* event) {
   // If app list is open when overview is active (it can happen in clamshell
   // mode, when we snap an overview window to one side of the screen and then
@@ -1211,9 +1358,8 @@ void OverviewSession::OnKeyEvent(ui::KeyEvent* event) {
   // we let the app list to handle the key event.
   // TODO(crbug.com/952315): Explore better ways to handle this splitview +
   // overview + applist case.
-  Shell* shell = Shell::Get();
-  if (!shell->tablet_mode_controller()->InTabletMode() &&
-      shell->app_list_controller()->IsVisible()) {
+  if (!display::Screen::GetScreen()->InTabletMode() &&
+      Shell::Get()->app_list_controller()->IsVisible()) {
     return;
   }
 
@@ -1231,7 +1377,7 @@ void OverviewSession::OnKeyEvent(ui::KeyEvent* event) {
       is_key_press && key_code == ui::VKEY_TAB;
   for (auto& grid : grid_list_) {
     if (grid->IsDeskNameBeingModified() ||
-        grid->IsTemplateNameBeingModified()) {
+        grid->IsSavedDeskNameBeingModified()) {
       if (!should_commit_name_changes)
         return;
 
@@ -1270,7 +1416,7 @@ void OverviewSession::OnKeyEvent(ui::KeyEvent* event) {
     case ui::VKEY_RIGHT:
       ++num_key_presses_;
       if (!is_control_down ||
-          !highlight_controller_->MaybeSwapHighlightedView(/*right=*/true)) {
+          !focus_cycler_->MaybeSwapFocusedView(/*right=*/true)) {
         Move(/*reverse=*/false);
       }
       break;
@@ -1283,57 +1429,35 @@ void OverviewSession::OnKeyEvent(ui::KeyEvent* event) {
     case ui::VKEY_LEFT:
       ++num_key_presses_;
       if (!is_control_down ||
-          !highlight_controller_->MaybeSwapHighlightedView(/*right=*/false)) {
+          !focus_cycler_->MaybeSwapFocusedView(/*right=*/false)) {
         Move(/*reverse=*/true);
       }
       break;
-    case ui::VKEY_T: {
-      // See default section to see why we want to consume events during the
-      // start animation.
-      if (shell->overview_controller()->IsInStartAnimation())
-        break;
-
-        // Make pressing t while in overview show the templates grid if there
-        // are templates to be viewed. This allows developers to view the
-        // templates grid slightly quicker.
-        // TODO(crbug.com/1281685): Remove before feature launch.
-#if !defined(OFFICIAL_BUILD)
-      if (!saved_desk_util::IsSavedDesksEnabled())
-        return;
-
-      // There are no templates to be viewed.
-      if (!saved_desk_presenter_->should_show_templates_ui())
-        return;
-
-      DCHECK(!grid_list_.empty());
-      ShowDesksTemplatesGrids(grid_list_[0]->desks_bar_view()->IsZeroState(),
-                              base::GUID(), /*saved_desk_name=*/u"",
-                              Shell::GetPrimaryRootWindow());
-      break;
-#else
-      return;
-#endif
-    }
     case ui::VKEY_W: {
       if (!is_control_down)
         return;
 
       const bool primary_action = !event->IsShiftDown();
-      if (!highlight_controller_->MaybeCloseHighlightedView(primary_action))
+      if (!focus_cycler_->MaybeCloseFocusedView(primary_action)) {
         return;
+      }
       break;
     }
     case ui::VKEY_Z: {
       // Ctrl + Z undos a close all operation if the toast has not yet expired.
-      if (!is_control_down || !features::IsDesksCloseAllEnabled())
+      // Ctrl + Alt + Z triggers ChromeVox so we don't do anything here to
+      // interrupt that.
+      if (!is_control_down || (is_control_down && event->IsAltDown())) {
         return;
+      }
 
       DesksController::Get()->MaybeCancelDeskRemoval();
       break;
     }
     case ui::VKEY_RETURN: {
-      if (!highlight_controller_->MaybeActivateHighlightedView())
+      if (!focus_cycler_->MaybeActivateFocusedView()) {
         return;
+      }
       break;
     }
     default: {
@@ -1341,8 +1465,28 @@ void OverviewSession::OnKeyEvent(ui::KeyEvent* event) {
       // finished for performance reasons. During the animation, the focused
       // window prior to entering overview still has focus so stop events from
       // reaching it. See https://crbug.com/951324 for more details.
-      if (shell->overview_controller()->IsInStartAnimation())
+      if (OverviewController::Get()->IsInStartAnimation()) {
         break;
+      }
+
+      if (window_util::IsFasterSplitScreenOrSnapGroupEnabledInClamshell()) {
+        // If we are in partial overview and an unsupported key is pressed, e.g.
+        // alt + tab, escape the pairing session.
+        for (auto& grid : grid_list_) {
+          if (auto* split_view_overview_session =
+                  RootWindowController::ForWindow(grid->root_window())
+                      ->split_view_overview_session();
+              split_view_overview_session) {
+            // There may be at most one `SplitViewOverviewSession` per root
+            // window; if any is active we end overview for simplicity.
+            // TODO(b/314022922): Consider moving `SplitViewOverviewSession` to
+            // `OverviewGrid`.
+            // `this` will be destroyed after this line.
+            split_view_overview_session->OnKeyEvent();
+            return;
+          }
+        }
+      }
       return;
     }
   }
@@ -1412,8 +1556,9 @@ void OverviewSession::OnSplitViewStateChanged(
     SplitViewController::State previous_state,
     SplitViewController::State state) {
   // Do nothing if overview is being shutdown.
-  if (!Shell::Get()->overview_controller()->InOverviewSession())
+  if (!OverviewController::Get()->InOverviewSession()) {
     return;
+  }
 
   RefreshNoWindowsWidgetBoundsOnEachGrid(/*animate=*/false);
 }
@@ -1422,31 +1567,33 @@ void OverviewSession::OnSplitViewDividerPositionChanged() {
   RefreshNoWindowsWidgetBoundsOnEachGrid(/*animate=*/false);
 }
 
-void OverviewSession::OnTabletModeStarted() {
-  OnTabletModeChanged();
-}
+void OverviewSession::OnDisplayTabletStateChanged(display::TabletState state) {
+  if (display::IsTabletStateChanging(state)) {
+    // Do nothing if the tablet state is still in the process of transition.
+    return;
+  }
 
-void OverviewSession::OnTabletModeEnded() {
   OnTabletModeChanged();
 }
 
 void OverviewSession::OnTabletModeChanged() {
   DCHECK(saved_desk_util::IsSavedDesksEnabled());
   DCHECK(saved_desk_presenter_);
-  saved_desk_presenter_->UpdateDesksTemplatesUI();
+  saved_desk_presenter_->UpdateUIForSavedDeskLibrary();
 }
 
 void OverviewSession::Move(bool reverse) {
-  // Do not allow moving the highlight while in the middle of a drag.
+  // Do not allow moving the focus ring while in the middle of a drag.
   if (window_util::IsAnyWindowDragged() || desks_util::IsDraggingAnyDesk())
     return;
 
-  highlight_controller_->MoveHighlight(reverse);
+  focus_cycler_->MoveFocus(reverse);
 }
 
 bool OverviewSession::ProcessForScrolling(const ui::KeyEvent& event) {
-  if (!ShouldUseTabletModeGridLayout())
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     return false;
+  }
 
   // TODO(sammiequon): This only works for tablet mode at the moment, so using
   // the primary display works. If this feature is adapted for multi display
@@ -1489,12 +1636,15 @@ void OverviewSession::RemoveAllObservers() {
   active_window_before_overview_ = nullptr;
 }
 
-void OverviewSession::UpdateNoWindowsWidgetOnEachGrid() {
+void OverviewSession::UpdateNoWindowsWidgetOnEachGrid(
+    bool animate,
+    bool is_continuous_enter) {
   if (is_shutting_down_)
     return;
 
-  for (auto& grid : grid_list_)
-    grid->UpdateNoWindowsWidget(IsEmpty());
+  for (auto& grid : grid_list_) {
+    grid->UpdateNoWindowsWidget(IsEmpty(), animate, is_continuous_enter);
+  }
 }
 
 void OverviewSession::RefreshNoWindowsWidgetBoundsOnEachGrid(bool animate) {
@@ -1508,48 +1658,32 @@ void OverviewSession::RefreshNoWindowsWidgetBoundsOnEachGrid(bool animate) {
 }
 
 void OverviewSession::OnItemAdded(aura::Window* window) {
-  ++num_items_;
-  UpdateNoWindowsWidgetOnEachGrid();
+  UpdateNoWindowsWidgetOnEachGrid(/*animate=*/true,
+                                  /*is_continuous_enter=*/false);
 
-  OverviewGrid* grid = GetGridWithRootWindow(window->GetRootWindow());
-  // The drop target window is non-activatable, so no need to transfer focus.
-  if (grid && grid->IsDropTargetWindow(window))
-    return;
-
-  // Transfer focus from |window| to |overview_focus_widget_| to match the
+  // Transfer focus from `window` to `overview_focus_widget_` to match the
   // behavior of entering overview mode in the beginning.
   DCHECK(overview_focus_widget_);
-  // |overview_focus_widget_| might not visible yet as OnItemAdded() might be
-  // called before OnStartingAnimationComplete() is called, so use Show()
-  // instead of ActivateWindow() to show and activate the widget.
-  overview_focus_widget_->Show();
+  // `overview_focus_widget_` might not visible yet as `OnItemAdded()` might be
+  // called before `OnStartingAnimationComplete()` is called, so use `Show()` or
+  // `ShowInactive()` instead of `ActivateWindow()` to show the widget.
+  // When the saved desk library is on, do not switch focus to avoid unexpected
+  // name commit.
+  bool saved_desk_grid_should_keep_focus = IsShowingSavedDeskLibrary();
+  if (saved_desk_grid_should_keep_focus)
+    overview_focus_widget_->ShowInactive();
+  else
+    overview_focus_widget_->Show();
 
   UpdateAccessibilityFocus();
 }
 
-bool OverviewSession::ShouldKeepOverviewOpenForSavedDeskDialog(
-    aura::Window* gained_active,
-    aura::Window* lost_active) {
-  DCHECK(saved_desk_util::IsSavedDesksEnabled());
-  const views::Widget* dialog_widget =
-      saved_desk_dialog_controller_->dialog_widget();
-  if (!dialog_widget)
-    return false;
-
-  auto* dialog_window = dialog_widget->GetNativeWindow();
-  return gained_active == dialog_window || lost_active == dialog_window;
-}
-
-void OverviewSession::UpdateFrameThrottling() {
-  std::vector<aura::Window*> windows_to_throttle;
-  if (!grid_list_.empty()) {
-    windows_to_throttle.reserve(grid_list_.size() * grid_list_[0]->size() * 2);
-    for (auto& grid : grid_list_) {
-      for (auto& item : grid->window_list())
-        windows_to_throttle.push_back(item->GetWindow());
-    }
+size_t OverviewSession::GetNumWindows() const {
+  size_t size = 0u;
+  for (const std::unique_ptr<OverviewGrid>& grid : grid_list_) {
+    size += grid->GetNumWindows();
   }
-  Shell::Get()->frame_throttling_controller()->StartThrottling(
-      windows_to_throttle);
+  return size;
 }
+
 }  // namespace ash

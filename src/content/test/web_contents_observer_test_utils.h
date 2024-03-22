@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_TEST_WEB_CONTENTS_OBSERVER_TEST_UTILS_H_
 #define CONTENT_TEST_WEB_CONTENTS_OBSERVER_TEST_UTILS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 

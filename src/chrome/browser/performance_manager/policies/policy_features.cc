@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,25 +17,21 @@
 namespace performance_manager {
 namespace features {
 
-#if BUILDFLAG(IS_WIN)
-// Empty the working set of processes in which all frames are frozen.
-const base::Feature kEmptyWorkingSet{"EmptyWorkingSet",
-                                     base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // BUILDFLAG(IS_WIN)
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 
-const base::Feature kTrimOnMemoryPressure{"TrimOnMemoryPressure",
-                                          base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kTrimOnMemoryPressure,
+             "TrimOnMemoryPressure",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-const base::Feature kTrimArcOnMemoryPressure{"TrimArcOnMemoryPressure",
-                                             base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kTrimArcOnMemoryPressure,
+             "TrimArcOnMemoryPressure",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-const base::Feature kTrimArcVmOnMemoryPressure{
-    "TrimArcVmOnMemoryPressure", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kTrimArcVmOnMemoryPressure,
+             "TrimArcVmOnMemoryPressure",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-const base::Feature kTrimOnFreeze{"TrimOnFreeze",
-                                  base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kTrimOnFreeze, "TrimOnFreeze", base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<int> kGraphWalkBackoffTimeSec = {
     &kTrimOnMemoryPressure, "GraphWalkBackoffTimeSec", 180};
@@ -80,21 +76,18 @@ const base::FeatureParam<bool>
         "OnlyDropCachesOnFirstMemoryPressureAfterArcVmBoot", true};
 
 const base::FeatureParam<int> kTrimArcVmMaxPagesPerIteration = {
-    &kTrimArcVmOnMemoryPressure, "MaxPageLimit", arc::ArcSession::kNoPageLimit};
+    &kTrimArcVmOnMemoryPressure, "MaxPageLimit", 300000};
 
 const base::FeatureParam<int> kTrimArcVmPagesPerMinute = {
-    &kTrimArcVmOnMemoryPressure, "PagesPerMinute",
-    arc::ArcSession::kNoPageLimit};
+    &kTrimArcVmOnMemoryPressure, "PagesPerMinute", 15000};
 
 // Specifies the minimum amount of time a parent frame node must be invisible
 // before considering the process node for working set trim.
-const base::FeatureParam<int> kNodeInvisibileTimeSec = {
-    &kTrimOnMemoryPressure, "NodeInvisibleTimeSec", 900};
+const int kNodeInvisibileTimeSec = 900;
 
 // Specifies the minimum amount of time a parent frame node must be invisible
 // before considering the process node for working set trim.
-const base::FeatureParam<int> kNodeTrimBackoffTimeSec = {
-    &kTrimOnMemoryPressure, "NodeTrimBackoffTimeSec", 1800};
+const int kNodeTrimBackoffTimeSec = 1800;
 
 TrimOnMemoryPressureParams::TrimOnMemoryPressureParams() = default;
 TrimOnMemoryPressureParams::TrimOnMemoryPressureParams(
@@ -106,8 +99,8 @@ TrimOnMemoryPressureParams TrimOnMemoryPressureParams::GetParams() {
   TrimOnMemoryPressureParams params;
   params.graph_walk_backoff_time =
       base::Seconds(kGraphWalkBackoffTimeSec.Get());
-  params.node_invisible_time = base::Seconds(kNodeInvisibileTimeSec.Get());
-  params.node_trim_backoff_time = base::Seconds(kNodeTrimBackoffTimeSec.Get());
+  params.node_invisible_time = base::Seconds(kNodeInvisibileTimeSec);
+  params.node_trim_backoff_time = base::Seconds(kNodeTrimBackoffTimeSec);
 
   params.arc_process_trim_backoff_time =
       base::Seconds(kArcProcessTrimBackoffTimeSec.Get());

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,14 +34,10 @@ public interface ContextMenuPopulator {
      */
     boolean onItemSelected(int itemId);
 
-    /**
-     * Called when the context menu is closed.
-     */
+    /** Called when the context menu is closed. */
     void onMenuClosed();
 
-    /**
-     * Determines whether the the containing browser is switched to incognito mode.
-     */
+    /** Determines whether the the containing browser is switched to incognito mode. */
     boolean isIncognito();
 
     /**

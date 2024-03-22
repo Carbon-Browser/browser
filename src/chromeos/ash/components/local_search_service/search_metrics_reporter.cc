@@ -1,18 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/local_search_service/search_metrics_reporter.h"
 
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "chromeos/ash/components/local_search_service/pref_names.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
+
 namespace {
 
 // Interval for asking metrics::DailyEvent to check whether a day has passed.
@@ -25,6 +26,7 @@ constexpr std::array<const char*, SearchMetricsReporter::kNumberIndexIds>
         prefs::kLocalSearchServiceMetricsHelpAppCount,
         prefs::kLocalSearchServiceMetricsHelpAppLauncherCount,
         prefs::kLocalSearchServiceMetricsPersonalizationCount,
+        prefs::kLocalSearchServiceMetricsShortcutsAppCount,
 };
 
 // Histograms corresponding to IndexId values.
@@ -34,6 +36,7 @@ constexpr std::array<const char*, SearchMetricsReporter::kNumberIndexIds>
         SearchMetricsReporter::kHelpAppName,
         SearchMetricsReporter::kHelpAppLauncherName,
         SearchMetricsReporter::kPersonalizationName,
+        SearchMetricsReporter::kShortcutsAppName,
 };
 
 }  // namespace
@@ -48,6 +51,8 @@ const char SearchMetricsReporter::kHelpAppLauncherName[] =
     "LocalSearchService.HelpAppLauncher.DailySearch";
 const char SearchMetricsReporter::kPersonalizationName[] =
     "LocalSearchService.Personalization.DailySearch";
+const char SearchMetricsReporter::kShortcutsAppName[] =
+    "LocalSearchService.ShortcutsApp.DailySearch";
 
 constexpr int SearchMetricsReporter::kNumberIndexIds;
 
@@ -71,7 +76,7 @@ class SearchMetricsReporter::DailyEventObserver
   }
 
  private:
-  SearchMetricsReporter* reporter_;  // Not owned.
+  raw_ptr<SearchMetricsReporter, ExperimentalAsh> reporter_;  // Not owned.
 };
 
 // static:
@@ -145,5 +150,4 @@ void SearchMetricsReporter::ReportDailyMetrics(
   }
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

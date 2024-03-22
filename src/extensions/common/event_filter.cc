@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -165,7 +165,7 @@ std::set<EventFilter::MatcherID> EventFilter::MatchEvent(
     // The context that installed the event listener should be the same context
     // as the one where the event listener is called.
     if (routing_id != MSG_ROUTING_NONE &&
-        event_matcher->GetRoutingID() != routing_id) {
+        event_matcher->routing_id() != routing_id) {
       continue;
     }
     if (event_matcher->MatchNonURLCriteria(event_info)) {

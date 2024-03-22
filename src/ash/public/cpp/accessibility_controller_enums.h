@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,8 +41,8 @@ enum class AccessibilityAlert {
   // to others.
   WORKSPACE_FULLSCREEN_STATE_EXITED,
 
-  // When the user enters desk templates mode.
-  DESK_TEMPLATES_MODE_ENTERED
+  // When the user enters saved desks mode.
+  SAVED_DESKS_MODE_ENTERED
 
 };
 
@@ -222,6 +222,21 @@ enum class DictationBubbleHintType {
   kHelp,
   kUnselect,
   kCopy,
+};
+
+// The types of notifications that can be shown by Dictation.
+enum class DictationNotificationType {
+  kAllDlcsDownloaded,
+  kNoDlcsDownloaded,
+  kOnlySodaDownloaded,
+  kOnlyPumpkinDownloaded,
+};
+
+// The types of accessibility-related toasts. This enum should be kept in sync
+// with chrome.accessibilityPrivate.ToastType.
+enum class AccessibilityToastType {
+  kDictationMicMuted,
+  kDictationNoFocusedTextField,
 };
 
 }  // namespace ash

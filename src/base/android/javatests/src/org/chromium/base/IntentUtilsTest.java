@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,17 +24,13 @@ import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.build.BuildConfig;
 
-/**
- * Tests for {@link IntentUtils}.
- */
+/** Tests for {@link IntentUtils}. */
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.UNIT_TESTS)
 public class IntentUtilsTest {
-    @Mock
-    private Context mContext;
+    @Mock private Context mContext;
 
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     private void assertTargetsSelf(boolean targetsSelf, Intent intent, boolean expectAssertion) {
         boolean asserted = false;

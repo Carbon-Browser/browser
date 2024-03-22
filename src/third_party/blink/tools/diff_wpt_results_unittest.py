@@ -1,4 +1,4 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 
 # Copyright (C) 2021 Google Inc.  All rights reserved.
 #
@@ -24,7 +24,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import copy
-import io
 import logging
 import json
 import six
@@ -46,7 +45,7 @@ from diff_wpt_results import (
     _get_product_test_results)
 
 MockArgs = namedtuple('MockArgs', ['product_to_compare', 'baseline_product'])
-TEST_PRODUCT = 'android_weblayer'
+TEST_PRODUCT = 'android_webview'
 TEST_BASELINE_PRODUCT = 'chrome_android'
 
 
@@ -66,7 +65,7 @@ class MockWPTResultsDiffer(WPTResultsDiffer):
             def flakes_by_path(self, *args, **kwargs):
 
                 class AlwaysGet(object):
-                    def get(*_):
+                    def get(self, *_):
                         if product == TEST_PRODUCT:
                             return {'FAIL', 'TIMEOUT'}
                         else:
@@ -154,7 +153,7 @@ class CreateCsvTest(unittest.TestCase):
         def process_cmds(cmd_args):
             if 'token' in cmd_args:
                 return '00000'
-            elif (('weblayer_shell_wpt on '
+            elif (('system_webview_wpt on '
                    'Ubuntu-16.04 or Ubuntu-18.04') in cmd_args):
                 return json.dumps(actual_mp)
             elif (('chrome_public_wpt on '
@@ -165,26 +164,14 @@ class CreateCsvTest(unittest.TestCase):
             else:
                 return '{"number": 400, "id":"abcd"}'
 
-        def byteify(data):
-            if six.PY3:
-                return data
-            if isinstance(data, dict):
-                return {byteify(key): byteify(value) for key, value in data.iteritems()}
-            elif isinstance(data, list):
-                return [byteify(element) for element in data]
-            elif isinstance(data, unicode):
-                return data.encode('utf-8')
-            else:
-                return data
-
         host.executive = MockExecutive(run_command_fn=process_cmds)
 
         with DataIO() as csv_out,                                                 \
-                _get_product_test_results(host, 'android_weblayer') as test_results,   \
-                _get_product_test_results(host, 'chrome_android') as baseline_results:
+                _get_product_test_results(host, 'android_webview', 0) as test_results,   \
+                _get_product_test_results(host, 'chrome_android', 0) as baseline_results:
 
-            actual_results_json = byteify(json.loads(test_results.read()))
-            baseline_results_json = byteify(json.loads(baseline_results.read()))
+            actual_results_json = json.loads(test_results.read())
+            baseline_results_json = json.loads(baseline_results.read())
 
             tests_to_actual_results = {}
             tests_to_baseline_results = {}

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,13 +47,11 @@ class CredentialLeakDialogControllerImpl
   std::u16string GetDescription() const override;
   std::u16string GetTitle() const override;
   bool ShouldCheckPasswords() const override;
-  bool ShouldOfferAutomatedPasswordChange() const override;
   bool ShouldShowCancelButton() const override;
 
  private:
   raw_ptr<CredentialLeakPrompt> credential_leak_dialog_ = nullptr;
   raw_ptr<PasswordsLeakDialogDelegate> delegate_;
-  const password_manager::CredentialLeakType leak_type_;
   std::unique_ptr<password_manager::LeakDialogTraits> leak_dialog_traits_;
   GURL url_;
   std::u16string username_;

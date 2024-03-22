@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,11 @@
 #include "net/cert/x509_certificate.h"
 
 namespace net::ct {
+
+// The wire form of the OID 1.3.6.1.4.1.11129.2.4.2. See Section 3.3 of
+// RFC6962.
+inline constexpr uint8_t kEmbeddedSCTOid[] = {0x2B, 0x06, 0x01, 0x04, 0x01,
+                                              0xD6, 0x79, 0x02, 0x04, 0x02};
 
 struct SignedEntryData;
 

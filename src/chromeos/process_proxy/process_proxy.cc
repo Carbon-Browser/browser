@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,19 +11,20 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/file_descriptor_posix.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
 #include "base/process/process.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/thread_pool.h"
+#include "base/uuid.h"
 #include "third_party/cros_system_api/switches/chrome_switches.h"
 
 namespace {
@@ -101,35 +102,31 @@ bool ProcessProxy::StartWatchingOutput(
 }
 
 void ProcessProxy::OnProcessOutput(ProcessOutputType type,
-                                   const std::string& output,
-                                   base::OnceClosure callback) {
+                                   const std::string& output) {
   if (!callback_runner_.get())
     return;
 
   callback_runner_->PostTask(
       FROM_HERE, base::BindOnce(&ProcessProxy::CallOnProcessOutputCallback,
-                                this, type, output, std::move(callback)));
+                                this, type, output));
 }
 
 void ProcessProxy::CallOnProcessOutputCallback(ProcessOutputType type,
-                                               const std::string& output,
-                                               base::OnceClosure callback) {
+                                               const std::string& output) {
   // We may receive some output even after Close was called (crosh process does
   // not have to quit instantly, or there may be some trailing data left in
   // output stream fds). In that case owner of the callback may be gone so we
   // don't want to send it anything. |callback_set_| is reset when this gets
   // closed.
   if (callback_set_) {
-    output_ack_callback_ = std::move(callback);
     callback_.Run(type, output);
   }
 }
 
 void ProcessProxy::AckOutput() {
-  if (output_ack_callback_) {
-    std::move(output_ack_callback_).Run();
-    output_ack_callback_.Reset();
-  }
+  watcher_runner_->PostTask(FROM_HERE,
+                            base::BindOnce(&ProcessOutputWatcher::AckOutput,
+                                           output_watcher_->GetWeakPtr()));
 }
 
 void ProcessProxy::StopWatching() {
@@ -157,11 +154,20 @@ void ProcessProxy::Close() {
   CloseFdPair(pt_pair_);
 }
 
-bool ProcessProxy::Write(const std::string& text) {
+void ProcessProxy::Write(const std::string& text,
+                         base::OnceCallback<void(bool)> callback) {
   if (!process_launched_)
-    return false;
+    return std::move(callback).Run(false);
 
-  return base::WriteFileDescriptor(pt_pair_[PT_MASTER_FD], text);
+  // Use ThreadPool for write to avoid deadlock on registry TaskRunner.
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE, {base::TaskPriority::BEST_EFFORT, base::MayBlock()},
+      base::BindOnce(
+          [](int fd, const std::string& text) {
+            return base::WriteFileDescriptor(fd, text);
+          },
+          pt_pair_[PT_MASTER_FD], text),
+      std::move(callback));
 }
 
 bool ProcessProxy::OnTerminalResize(int width, int height) {
@@ -252,7 +258,8 @@ bool ProcessProxy::LaunchProcess(const base::CommandLine& cmdline,
     // We use the GUID API as it's trivial and works well enough.
     // We prepend the pid to avoid random number collisions.  It should be a
     // guaranteed unique id for the life of this Chrome session.
-    *id = std::to_string(process_.Pid()) + "-" + base::GenerateGUID();
+    *id = std::to_string(process_.Pid()) + "-" +
+          base::Uuid::GenerateRandomV4().AsLowercaseString();
   }
 
   // TODO(rvargas) crbug/417532: This is somewhat wrong but the interface of

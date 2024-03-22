@@ -221,6 +221,20 @@ Windows, Mac or Linux.
   - macOS: Accessibility Inspector
   - Windows: Inspect, AViewer, accProbe (and many others)
 
+### Command Line Options
+
+Accessibility features in Chrome are off by default and enabled automatically
+on-demand. When running Chrome from the command line, certain options can be
+used to impact the behavior of the Chrome accessibility engine at launch.
+
+* `--force-renderer-accessibility=[basic|form-controls|complete]`: Force
+  accessibility to be enabled, with optional parameter to force the AXMode
+  to one of the predefined bundles during the entire execution. If the optional
+  parameter is invalid, then the default AXMode will be `complete`. If the
+  optional parameter is missing, then the AXMode will initially default to
+  `complete` but allow changes to the mode during execution.
+* `--disable-renderer-accessibility`: Disable accessibility
+
 ### Supported Platforms and APIs
 
 * Windows: IAccessible (also known as Microsoft Active Accessibility or MSAA),
@@ -489,8 +503,8 @@ usually forwarded to [BrowserAccessibilityManager] which is responsible for:
    APIs. This is done in the platform-specific subclasses of
    BrowserAccessibilityManager, in a method named `NotifyAccessibilityEvent`.
 3. Dispatching incoming accessibility actions to the appropriate recipient, via
-   [BrowserAccessibilityDelegate]. For messages destined for a renderer,
-   [RenderFrameHostImpl], which is a BrowserAccessibilityDelegate, is
+   [AXPlatformTreeManagerDelegate]. For messages destined for a renderer,
+   [RenderFrameHostImpl], which is a WebAXPlatformTreeManagerDelegate, is
    responsible for calling the remote method
    [ax.mojom.RenderAccessibility.PerformAction()], implemented by the renderer,
    with the appropriate payload (of type [ax.mojom.AXActionData]). This IPC call
@@ -543,9 +557,10 @@ For more detail on Chrome OS accessibility, read [How Chrome OS Accessibility Wo
 [AXTreeSerializer]: https://cs.chromium.org/chromium/src/ui/accessibility/ax_tree_serializer.h
 [BlinkAXTreeSource]: https://cs.chromium.org/chromium/src/content/renderer/accessibility/blink_ax_tree_source.h
 [BrowserAccessibility]: https://cs.chromium.org/chromium/src/content/browser/accessibility/browser_accessibility.h
-[BrowserAccessibilityDelegate]: https://cs.chromium.org/chromium/src/content/browser/accessibility/browser_accessibility_manager.h?sq=package:chromium&l=64
 [BrowserAccessibilityManager]: https://cs.chromium.org/chromium/src/content/browser/accessibility/browser_accessibility_manager.h
+[WebAXPlatformTreeManagerDelegate]: https://cs.chromium.org/chromium/src/content/browser/accessibility/web_ax_platform_tree_manager_delegate.h
 [LayoutObject]: https://cs.chromium.org/chromium/src/third_party/blink/renderer/core/layout/layout_object.h
+[AXPlatformTreeManagerDelegate]: https://cs.chromium.org/chromium/src/ui/accessibility/platform/ax_platform_tree_manager_delegate.h
 [ViewAccessibility]: https://cs.chromium.org/chromium/src/ui/views/accessibility/view_accessibility.h
 [Node]: https://cs.chromium.org/chromium/src/third_party/blink/renderer/core/dom/node.h
 [RenderAccessibilityImpl]: https://cs.chromium.org/chromium/src/content/renderer/accessibility/render_accessibility_impl.h

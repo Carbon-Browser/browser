@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,6 +36,8 @@ class MEDIA_EXPORT NullMediaLog : public media::MediaLog {
 MEDIA_EXPORT AudioParameters::Format ConvertAudioCodecToBitstreamFormat(
     media::AudioCodec codec);
 
+// Returns true if tracing is enabled for the media category.
+MEDIA_EXPORT bool MediaTraceIsEnabled();
 }  // namespace media
 
 #endif  // MEDIA_BASE_MEDIA_UTIL_H_

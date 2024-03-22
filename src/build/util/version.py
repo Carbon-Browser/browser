@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 version.py -- Chromium version string substitution utility.
 """
 
-from __future__ import print_function
 
 import argparse
 import os
@@ -26,9 +25,10 @@ def FetchValuesFromFile(values_dict, file_name):
 
   The file must exist, otherwise you get the Python exception from open().
   """
-  for line in open(file_name, 'r').readlines():
-    key, val = line.rstrip('\r\n').split('=', 1)
-    values_dict[key] = val
+  with open(file_name, 'r') as f:
+    for line in f.readlines():
+      key, val = line.rstrip('\r\n').split('=', 1)
+      values_dict[key] = val
 
 
 def FetchValues(file_list, is_official_build=None):
@@ -95,25 +95,29 @@ def SubstFile(file_name, values):
 
   This is like SubstTemplate, except it operates on a file.
   """
-  template = open(file_name, 'r').read()
+  with open(file_name, 'r') as f:
+    template = f.read()
   return SubstTemplate(template, values)
 
 
-def WriteIfChanged(file_name, contents):
+def WriteIfChanged(file_name, contents, mode):
   """
   Writes the specified contents to the specified file_name.
 
   Does nothing if the contents aren't different than the current contents.
   """
   try:
-    old_contents = open(file_name, 'r').read()
+    with open(file_name, 'r') as f:
+      old_contents = f.read()
   except EnvironmentError:
     pass
   else:
-    if contents == old_contents:
+    if contents == old_contents and mode == os.lstat(file_name).st_mode:
       return
     os.unlink(file_name)
-  open(file_name, 'w').write(contents)
+  with open(file_name, 'w') as f:
+    f.write(contents)
+  os.chmod(file_name, mode)
 
 
 def BuildParser():
@@ -127,6 +131,11 @@ def BuildParser():
                       help='Write substituted strings to FILE.')
   parser.add_argument('-t', '--template', default=None,
                       help='Use TEMPLATE as the strings to substitute.')
+  parser.add_argument('-x',
+                      '--executable',
+                      default=False,
+                      action='store_true',
+                      help='Set the executable bit on the output (on POSIX).')
   parser.add_argument(
       '-e',
       '--eval',
@@ -146,12 +155,10 @@ def BuildParser():
                       help='Whether the current build should be an official '
                            'build, used in addition to the environment '
                            'variable.')
-  parser.add_argument(
-      '--next',
-      action='store_true',
-      help='Whether the current build should be a "next" '
-      'build, which targets pre-release versions of '
-      'Android')
+  parser.add_argument('--next',
+                      action='store_true',
+                      help='Whether the current build should be a "next" '
+                      'build, which targets pre-release versions of Android.')
   parser.add_argument('args', nargs=argparse.REMAINDER,
                       help='For compatibility: INPUT and OUTPUT can be '
                            'passed as positional arguments.')
@@ -233,6 +240,18 @@ OFFICIAL_BUILD=%(OFFICIAL_BUILD)s
 """ % values
 
 
+def GenerateOutputMode(options):
+  """Construct output mode (e.g. from template).
+
+  Arguments:
+  options -- argparse parsed arguments
+  """
+  if options.executable:
+    return 0o755
+  else:
+    return 0o644
+
+
 def BuildOutput(args):
   """Gets all input and output values needed for writing output."""
   # Build argparse parser with arguments
@@ -247,17 +266,18 @@ def BuildOutput(args):
 
   # Get the raw values that will be used the generate the output
   values = GenerateValues(options, evals)
-  # Get the output string
+  # Get the output string and mode
   contents = GenerateOutputContents(options, values)
+  mode = GenerateOutputMode(options)
 
-  return {'options': options, 'contents': contents}
+  return {'options': options, 'contents': contents, 'mode': mode}
 
 
-def main():
-  output = BuildOutput(sys.argv[1:])
+def main(args):
+  output = BuildOutput(args)
 
   if output['options'].output is not None:
-    WriteIfChanged(output['options'].output, output['contents'])
+    WriteIfChanged(output['options'].output, output['contents'], output['mode'])
   else:
     print(output['contents'])
 
@@ -265,4 +285,4 @@ def main():
 
 
 if __name__ == '__main__':
-  sys.exit(main())
+  sys.exit(main(sys.argv[1:]))

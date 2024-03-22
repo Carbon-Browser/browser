@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,11 @@ PowerEventObserverTestApi::PowerEventObserverTestApi(
     : power_event_observer_(power_event_observer) {}
 
 PowerEventObserverTestApi::~PowerEventObserverTestApi() = default;
+
+void PowerEventObserverTestApi::SendLidEvent(
+    chromeos::PowerManagerClient::LidState state) {
+  power_event_observer_->LidEventReceived(state, base::TimeTicks::Now());
+}
 
 void PowerEventObserverTestApi::CompositingDidCommit(
     ui::Compositor* compositor) {

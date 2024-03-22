@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,18 @@
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/animation/animation_delegate.h"
 #include "ui/gfx/animation/linear_animation.h"
+#include "ui/views/metadata/view_factory.h"
 #include "ui/views/view.h"
 
 namespace views {
 
 class Label;
-class Tab;
+class TabbedPaneTab;
 class TabbedPaneListener;
-class TabStrip;
+class TabbedPaneTabStrip;
 
 namespace test {
 class TabbedPaneAccessibilityMacTest;
@@ -47,7 +49,8 @@ class VIEWS_EXPORT TabbedPane : public View {
   };
 
   explicit TabbedPane(Orientation orientation = Orientation::kHorizontal,
-                      TabStripStyle style = TabStripStyle::kBorder);
+                      TabStripStyle style = TabStripStyle::kBorder,
+                      bool scrollable = false);
 
   TabbedPane(const TabbedPane&) = delete;
   TabbedPane& operator=(const TabbedPane&) = delete;
@@ -62,7 +65,7 @@ class VIEWS_EXPORT TabbedPane : public View {
   size_t GetSelectedTabIndex() const;
 
   // Returns the number of tabs.
-  size_t GetTabCount();
+  size_t GetTabCount() const;
 
   // Adds a new tab at the end of this TabbedPane with the specified |title|.
   // |contents| is the view displayed when the tab is selected and is owned by
@@ -88,7 +91,10 @@ class VIEWS_EXPORT TabbedPane : public View {
   void SelectTabAt(size_t index, bool animate = true);
 
   // Selects |tab| (the tabstrip view, not its content) if it is valid.
-  void SelectTab(Tab* tab, bool animate = true);
+  void SelectTab(TabbedPaneTab* tab, bool animate = true);
+
+  // Gets the scroll view containing the tab strip, if it exists
+  ScrollView* GetScrollView();
 
   // Gets the orientation of the tab alignment.
   Orientation GetOrientation() const;
@@ -97,12 +103,12 @@ class VIEWS_EXPORT TabbedPane : public View {
   TabStripStyle GetStyle() const;
 
   // Returns the tab at the given index.
-  Tab* GetTabAt(size_t index);
+  TabbedPaneTab* GetTabAt(size_t index);
 
  private:
   friend class FocusTraversalTest;
-  friend class Tab;
-  friend class TabStrip;
+  friend class TabbedPaneTab;
+  friend class TabbedPaneTabStrip;
   friend class test::TabbedPaneWithWidgetTest;
   friend class test::TabbedPaneAccessibilityMacTest;
 
@@ -113,10 +119,11 @@ class VIEWS_EXPORT TabbedPane : public View {
                       const std::u16string& title,
                       std::unique_ptr<View> contents);
 
-  // Get the Tab (the tabstrip view, not its content) at the selected index.
-  Tab* GetSelectedTab();
+  // Get the TabbedPaneTab (the tabstrip view, not its content) at the selected
+  // index.
+  TabbedPaneTab* GetSelectedTab();
 
-  // Returns the content View of the currently selected Tab.
+  // Returns the content View of the currently selected TabbedPaneTab.
   View* GetSelectedTabContentView();
 
   // Moves the selection by |delta| tabs, where negative delta means leftwards
@@ -133,22 +140,28 @@ class VIEWS_EXPORT TabbedPane : public View {
   raw_ptr<TabbedPaneListener> listener_ = nullptr;
 
   // The tab strip and contents container. The child indices of these members
-  // correspond to match each Tab with its respective content View.
-  raw_ptr<TabStrip> tab_strip_ = nullptr;
+  // correspond to match each TabbedPaneTab with its respective content View.
+  raw_ptr<TabbedPaneTabStrip> tab_strip_ = nullptr;
   raw_ptr<View> contents_ = nullptr;
+
+  // The scroll view containing the tab strip, if |scrollable| is specified on
+  // creation.
+  raw_ptr<ScrollView> scroll_view_ = nullptr;
 };
 
 // The tab view shown in the tab strip.
-class VIEWS_EXPORT Tab : public View {
+class VIEWS_EXPORT TabbedPaneTab : public View {
  public:
-  METADATA_HEADER(Tab);
+  METADATA_HEADER(TabbedPaneTab);
 
-  Tab(TabbedPane* tabbed_pane, const std::u16string& title, View* contents);
+  TabbedPaneTab(TabbedPane* tabbed_pane,
+                const std::u16string& title,
+                View* contents);
 
-  Tab(const Tab&) = delete;
-  Tab& operator=(const Tab&) = delete;
+  TabbedPaneTab(const TabbedPaneTab&) = delete;
+  TabbedPaneTab& operator=(const TabbedPaneTab&) = delete;
 
-  ~Tab() override;
+  ~TabbedPaneTab() override;
 
   View* contents() const { return contents_; }
 
@@ -198,33 +211,34 @@ class VIEWS_EXPORT Tab : public View {
 };
 
 // The tab strip shown above/left of the tab contents.
-class TabStrip : public View, public gfx::AnimationDelegate {
+class TabbedPaneTabStrip : public View, public gfx::AnimationDelegate {
  public:
-  METADATA_HEADER(TabStrip);
-
+  METADATA_HEADER(TabbedPaneTabStrip);
   // The return value of GetSelectedTabIndex() when no tab is selected.
   static constexpr size_t kNoSelectedTab = static_cast<size_t>(-1);
 
-  TabStrip(TabbedPane::Orientation orientation,
-           TabbedPane::TabStripStyle style);
+  TabbedPaneTabStrip(TabbedPane::Orientation orientation,
+                     TabbedPane::TabStripStyle style);
 
-  TabStrip(const TabStrip&) = delete;
-  TabStrip& operator=(const TabStrip&) = delete;
+  TabbedPaneTabStrip(const TabbedPaneTabStrip&) = delete;
+  TabbedPaneTabStrip& operator=(const TabbedPaneTabStrip&) = delete;
 
-  ~TabStrip() override;
+  ~TabbedPaneTabStrip() override;
 
   // AnimationDelegate:
   void AnimationProgressed(const gfx::Animation* animation) override;
   void AnimationEnded(const gfx::Animation* animation) override;
 
-  // Called by TabStrip when the selected tab changes. This function is only
-  // called if |from_tab| is not null, i.e., there was a previously selected
-  // tab.
-  void OnSelectedTabChanged(Tab* from_tab, Tab* to_tab, bool animate = true);
+  // Called by TabbedPaneTabStrip when the selected tab changes. This function
+  // is only called if |from_tab| is not null, i.e., there was a previously
+  // selected tab.
+  void OnSelectedTabChanged(TabbedPaneTab* from_tab,
+                            TabbedPaneTab* to_tab,
+                            bool animate = true);
 
-  Tab* GetSelectedTab() const;
-  Tab* GetTabAtDeltaFromSelected(int delta) const;
-  Tab* GetTabAtIndex(size_t index) const;
+  TabbedPaneTab* GetSelectedTab() const;
+  TabbedPaneTab* GetTabAtDeltaFromSelected(int delta) const;
+  TabbedPaneTab* GetTabAtIndex(size_t index) const;
   size_t GetSelectedTabIndex() const;
 
   TabbedPane::Orientation GetOrientation() const;
@@ -262,6 +276,15 @@ class TabStrip : public View, public gfx::AnimationDelegate {
   Coordinates animating_to_;
 };
 
+BEGIN_VIEW_BUILDER(VIEWS_EXPORT, TabbedPane, View)
+VIEW_BUILDER_METHOD_ALIAS(AddTab,
+                          AddTab<View>,
+                          const std::u16string&,
+                          std::unique_ptr<View>)
+END_VIEW_BUILDER
+
 }  // namespace views
+
+DEFINE_VIEW_BUILDER(VIEWS_EXPORT, TabbedPane)
 
 #endif  // UI_VIEWS_CONTROLS_TABBED_PANE_TABBED_PANE_H_

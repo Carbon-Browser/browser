@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,11 @@
 
 #include <string>
 
+#include "net/quic/quic_chromium_client_session.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 
 namespace net {
 
-class QuicChromiumClientSession;
 class QuicChromiumClientStream;
 
 namespace test {
@@ -27,15 +27,13 @@ class QuicChromiumClientSessionPeer {
   static void SetHostname(QuicChromiumClientSession* session,
                           const std::string& hostname);
 
-  static uint64_t GetPushedBytesCount(QuicChromiumClientSession* session);
-
-  static uint64_t GetPushedAndUnclaimedBytesCount(
-      QuicChromiumClientSession* session);
-
   static QuicChromiumClientStream* CreateOutgoingStream(
       QuicChromiumClientSession* session);
 
   static bool GetSessionGoingAway(QuicChromiumClientSession* session);
+
+  static MigrationCause GetCurrentMigrationCause(
+      QuicChromiumClientSession* session);
 };
 
 }  // namespace test

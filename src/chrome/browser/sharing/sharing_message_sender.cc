@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sharing/sharing_message_sender.h"
 
-#include "base/guid.h"
 #include "base/trace_event/trace_event.h"
+#include "base/uuid.h"
 #include "chrome/browser/sharing/sharing_constants.h"
 #include "chrome/browser/sharing/sharing_fcm_sender.h"
 #include "chrome/browser/sharing/sharing_metrics.h"
@@ -37,7 +37,7 @@ base::OnceClosure SharingMessageSender::SendMessageToDevice(
       SharingMessageTypeToString(
           SharingPayloadCaseToMessageType(message.payload_case())));
 
-  std::string message_guid = base::GenerateGUID();
+  std::string message_guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   chrome_browser_sharing::MessageType message_type =
       SharingPayloadCaseToMessageType(message.payload_case());
   SharingDevicePlatform receiver_device_platform = GetDevicePlatform(device);
@@ -140,11 +140,6 @@ void SharingMessageSender::OnAckReceived(
 
   auto metadata_iter = message_metadata_.find(message_guid);
   DCHECK(metadata_iter != message_metadata_.end());
-  const SentMessageMetadata& metadata = metadata_iter->second;
-
-  LogSharingMessageAckTime(metadata.type, metadata.receiver_device_platform,
-                           metadata.channel_type,
-                           base::TimeTicks::Now() - metadata.timestamp);
 
   InvokeSendMessageCallback(message_guid, SharingSendMessageResult::kSuccessful,
                             std::move(response));

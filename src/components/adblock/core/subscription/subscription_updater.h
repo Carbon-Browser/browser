@@ -18,14 +18,16 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_UPDATER_H_
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_UPDATER_H_
 
-#include "components/keyed_service/core/keyed_service.h"
+#include "base/functional/callback_forward.h"
 
 namespace adblock {
 
 // Periodically updates installed subscriptions.
-class SubscriptionUpdater : public KeyedService {
+class SubscriptionUpdater {
  public:
-  virtual void StartSchedule() = 0;
+  virtual ~SubscriptionUpdater() = default;
+  virtual void StartSchedule(base::RepeatingClosure run_update_check) = 0;
+  virtual void StopSchedule() = 0;
 };
 
 }  // namespace adblock

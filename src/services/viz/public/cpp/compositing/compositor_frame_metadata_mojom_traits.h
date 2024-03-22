@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,6 +69,11 @@ struct StructTraits<viz::mojom::CompositorFrameMetadataDataView,
   static bool is_resourceless_software_draw_with_scroll_or_animation(
       const viz::CompositorFrameMetadata& metadata) {
     return metadata.is_resourceless_software_draw_with_scroll_or_animation;
+  }
+
+  static bool is_handling_interaction(
+      const viz::CompositorFrameMetadata& metadata) {
+    return metadata.is_handling_interaction;
   }
 
   static SkColor4f root_background_color(

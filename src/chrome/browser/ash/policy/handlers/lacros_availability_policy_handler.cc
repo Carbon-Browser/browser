@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ void LacrosAvailabilityPolicyHandler::ApplyPolicySettings(
   }
 }
 
-absl::optional<crosapi::browser_util::LacrosAvailability>
+absl::optional<ash::standalone_browser::LacrosAvailability>
 LacrosAvailabilityPolicyHandler::GetValue(const PolicyMap& policies,
                                           PolicyErrorMap* errors) {
   const base::Value* value;
@@ -47,9 +47,10 @@ LacrosAvailabilityPolicyHandler::GetValue(const PolicyMap& policies,
     return absl::nullopt;
 
   auto parsed =
-      crosapi::browser_util::ParseLacrosAvailability(value->GetString());
+      ash::standalone_browser::ParseLacrosAvailability(value->GetString());
   if (!parsed.has_value() && errors)
-    errors->AddError(policy_name(), IDS_POLICY_VALUE_FORMAT_ERROR);
+    errors->AddError(policy_name(), IDS_POLICY_INVALID_SELECTION_ERROR,
+                     "LacrosAvailabilty value");
   return parsed;
 }
 

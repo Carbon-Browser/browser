@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,9 @@
 namespace blink {
 namespace {
 InterpolationValue ConvertTransform(TransformOperations&& transform) {
-  return InterpolationValue(
-      std::make_unique<InterpolableTransformList>(std::move(transform)));
+  return InterpolationValue(MakeGarbageCollected<InterpolableTransformList>(
+      std::move(transform),
+      TransformOperations::BoxSizeDependentMatrixBlending::kAllow));
 }
 
 InterpolationValue ConvertTransform(const TransformOperations& transform) {
@@ -82,7 +83,7 @@ InterpolationValue CSSTransformInterpolationType::MaybeConvertValue(
     const CSSValue& value,
     const StyleResolverState* state,
     ConversionCheckers& conversion_checkers) const {
-  DCHECK(state);
+  CHECK(state);
   if (auto* list_value = DynamicTo<CSSValueList>(value)) {
     CSSPrimitiveValue::LengthTypeFlags types;
     for (const CSSValue* item : *list_value) {
@@ -116,8 +117,9 @@ InterpolationValue CSSTransformInterpolationType::MaybeConvertValue(
       conversion_checkers.push_back(std::move(length_units_checker));
   }
 
-  return InterpolationValue(
-      InterpolableTransformList::ConvertCSSValue(value, state));
+  return InterpolationValue(InterpolableTransformList::ConvertCSSValue(
+      value, state->CssToLengthConversionData(),
+      TransformOperations::BoxSizeDependentMatrixBlending::kAllow));
 }
 
 InterpolationValue
@@ -181,7 +183,7 @@ void CSSTransformInterpolationType::ApplyStandardPropertyValue(
     const InterpolableValue& interpolable_value,
     const NonInterpolableValue* untyped_non_interpolable_value,
     StyleResolverState& state) const {
-  state.Style()->SetTransform(
+  state.StyleBuilder().SetTransform(
       To<InterpolableTransformList>(interpolable_value).operations());
 }
 

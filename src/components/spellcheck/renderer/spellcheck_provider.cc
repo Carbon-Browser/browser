@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 
 #include <unordered_map>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -55,7 +57,7 @@ class SpellCheckProvider::DictionaryUpdateObserverImpl
   void OnDictionaryUpdated(const WebVector<WebString>& words_added) override;
 
  private:
-  SpellCheckProvider* owner_;
+  raw_ptr<SpellCheckProvider, ExperimentalRenderer> owner_;
 };
 
 SpellCheckProvider::DictionaryUpdateObserverImpl::DictionaryUpdateObserverImpl(
@@ -286,9 +288,10 @@ void SpellCheckProvider::CheckSpelling(
     std::vector<std::u16string> suggestions;
     spellcheck::FillSuggestions(per_language_suggestions, &suggestions);
     WebVector<WebString> web_suggestions(suggestions.size());
-    std::transform(
-        suggestions.begin(), suggestions.end(), web_suggestions.begin(),
-        [](const std::u16string& s) { return WebString::FromUTF16(s); });
+    base::ranges::transform(suggestions, web_suggestions.begin(),
+                            [](const auto& suggestion) {
+                              return WebString::FromUTF16(suggestion);
+                            });
     *optional_suggestions = web_suggestions;
     spellcheck_renderer_metrics::RecordCheckedTextLengthWithSuggestions(
         base::saturated_cast<int>(word.size()));
@@ -341,7 +344,7 @@ void SpellCheckProvider::OnRespondSpellingService(
 
   // Cache the request and the converted results.
   last_request_ = line;
-  last_results_.Swap(textcheck_results);
+  last_results_.swap(textcheck_results);
 }
 #endif
 
@@ -402,7 +405,7 @@ void SpellCheckProvider::OnRespondTextCheck(
 
   // Cache the request and the converted results.
   last_request_ = line;
-  last_results_.Swap(textcheck_results);
+  last_results_.swap(textcheck_results);
 }
 #endif  // BUILDFLAG(USE_BROWSER_SPELLCHECKER)
 

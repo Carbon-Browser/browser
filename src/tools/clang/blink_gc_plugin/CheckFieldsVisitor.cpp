@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,8 @@ CheckFieldsVisitor::Errors& CheckFieldsVisitor::invalid_fields() {
 
 bool CheckFieldsVisitor::ContainsInvalidFields(RecordInfo* info) {
   stack_allocated_host_ = info->IsStackAllocated();
-  managed_host_ = stack_allocated_host_ ||
-                  info->IsGCAllocated() ||
-                  info->IsNonNewable() ||
-                  info->IsOnlyPlacementNewable();
+  managed_host_ =
+      stack_allocated_host_ || info->IsGCAllocated() || info->IsNewDisallowed();
   for (RecordInfo::Fields::iterator it = info->GetFields().begin();
        it != info->GetFields().end();
        ++it) {
@@ -42,14 +40,12 @@ void CheckFieldsVisitor::AtMember(Member*) {
     if ((*it)->Kind() == Edge::kRoot)
       return;
   }
-  invalid_fields_.push_back(std::make_pair(current_, kMemberInUnmanaged));
+  bool is_ptr = Parent() && (Parent()->IsRawPtr() || Parent()->IsRefPtr());
+  invalid_fields_.push_back(std::make_pair(
+      current_, is_ptr ? kPtrToMemberInUnmanaged : kMemberInUnmanaged));
 }
 
 void CheckFieldsVisitor::AtWeakMember(WeakMember*) {
-  // TODO(sof): remove this once crbug.com/724418's change
-  // has safely been rolled out.
-  if (options_.enable_weak_members_in_unmanaged_classes)
-    return;
   AtMember(nullptr);
 }
 
@@ -62,18 +58,27 @@ void CheckFieldsVisitor::AtIterator(Iterator* edge) {
 }
 
 void CheckFieldsVisitor::AtValue(Value* edge) {
-  // TODO: what should we do to check unions?
-  if (edge->value()->record()->isUnion())
-    return;
+  RecordInfo* record = edge->value();
 
-  if (!stack_allocated_host_ && edge->value()->IsStackAllocated()) {
+  // TODO: what should we do to check unions?
+  if (record->record()->isUnion()) {
+    return;
+  }
+
+  // Don't allow unmanaged classes to contain traceable part-objects.
+  const bool child_is_part_object = record->IsNewDisallowed() && !Parent();
+  if (!managed_host_ && child_is_part_object && record->RequiresTraceMethod()) {
+    invalid_fields_.push_back(
+        std::make_pair(current_, kTraceablePartObjectInUnmanaged));
+    return;
+  }
+
+  if (!stack_allocated_host_ && record->IsStackAllocated()) {
     invalid_fields_.push_back(std::make_pair(current_, kPtrFromHeapToStack));
     return;
   }
 
-  if (!Parent() &&
-      edge->value()->IsGCDerived() &&
-      !edge->value()->IsGCMixin()) {
+  if (!Parent() && record->IsGCDerived() && !record->IsGCMixin()) {
     invalid_fields_.push_back(std::make_pair(current_, kGCDerivedPartObject));
     return;
   }
@@ -82,7 +87,9 @@ void CheckFieldsVisitor::AtValue(Value* edge) {
   // heap collections with Members are okay.
   if (stack_allocated_host_ && Parent() &&
       (Parent()->IsMember() || Parent()->IsWeakMember())) {
-    if (!GrandParent() || !GrandParent()->IsCollection()) {
+    if (!GrandParent() ||
+        (!GrandParent()->IsCollection() && !GrandParent()->IsRawPtr() &&
+         !GrandParent()->IsRefPtr())) {
       invalid_fields_.push_back(
           std::make_pair(current_, kMemberInStackAllocated));
       return;
@@ -109,8 +116,9 @@ void CheckFieldsVisitor::AtValue(Value* edge) {
   if (!Parent() || !edge->value()->IsGCAllocated())
     return;
 
-  // Disallow unique_ptr<T>, scoped_refptr<T>, WeakPtr<T>.
-  if (Parent()->IsUniquePtr() || Parent()->IsRefPtr()) {
+  // Disallow unique_ptr<T>, scoped_refptr<T>
+  if (Parent()->IsUniquePtr() ||
+      (Parent()->IsRefPtr() && (Parent()->Kind() == Edge::kStrong))) {
     invalid_fields_.push_back(std::make_pair(
         current_, InvalidSmartPtr(Parent())));
     return;
@@ -124,14 +132,19 @@ void CheckFieldsVisitor::AtValue(Value* edge) {
 }
 
 void CheckFieldsVisitor::AtCollection(Collection* edge) {
+  if (GrandParent() &&
+      (GrandParent()->IsRawPtr() || GrandParent()->IsRefPtr())) {
+    // Don't alert on pointers to unique_ptr. Alerting on the pointed unique_ptr
+    // should suffice.
+    return;
+  }
   if (edge->on_heap() && Parent() && Parent()->IsUniquePtr())
     invalid_fields_.push_back(std::make_pair(current_, kUniquePtrToGCManaged));
 }
 
 CheckFieldsVisitor::Error CheckFieldsVisitor::InvalidSmartPtr(Edge* ptr) {
   if (ptr->IsRefPtr())
-    return ptr->Kind() == Edge::kStrong ? kRefPtrToGCManaged
-                                        : kWeakPtrToGCManaged;
+    return kRefPtrToGCManaged;
   if (ptr->IsUniquePtr())
     return kUniquePtrToGCManaged;
   llvm_unreachable("Unknown smart pointer kind");

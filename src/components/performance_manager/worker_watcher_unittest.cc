@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/uuid.h"
 #include "components/performance_manager/frame_node_source.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/graph/page_node_impl.h"
@@ -24,6 +24,7 @@
 #include "components/performance_manager/performance_manager_impl.h"
 #include "components/performance_manager/process_node_source.h"
 #include "components/performance_manager/public/features.h"
+#include "content/public/browser/dedicated_worker_creator.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/shared_worker_service.h"
 #include "content/public/test/browser_task_environment.h"
@@ -86,7 +87,7 @@ class TestDedicatedWorkerService : public content::DedicatedWorkerService {
   // Creates a new dedicated worker and returns its ID.
   const blink::DedicatedWorkerToken& CreateDedicatedWorker(
       int worker_process_id,
-      content::GlobalRenderFrameHostId client_render_frame_host_id);
+      content::DedicatedWorkerCreator creator);
 
   // Destroys an existing dedicated worker.
   void DestroyDedicatedWorker(const blink::DedicatedWorkerToken& token);
@@ -94,9 +95,9 @@ class TestDedicatedWorkerService : public content::DedicatedWorkerService {
  private:
   base::ObserverList<Observer> observer_list_;
 
-  // Maps each running worker to its client RenderFrameHost ID.
-  base::flat_map<blink::DedicatedWorkerToken, content::GlobalRenderFrameHostId>
-      dedicated_worker_client_frame_;
+  // Maps each running worker to its creator.
+  base::flat_map<blink::DedicatedWorkerToken, content::DedicatedWorkerCreator>
+      dedicated_worker_creators_;
 };
 
 TestDedicatedWorkerService::TestDedicatedWorkerService() = default;
@@ -119,19 +120,17 @@ void TestDedicatedWorkerService::EnumerateDedicatedWorkers(Observer* observer) {
 const blink::DedicatedWorkerToken&
 TestDedicatedWorkerService::CreateDedicatedWorker(
     int worker_process_id,
-    content::GlobalRenderFrameHostId client_render_frame_host_id) {
+    content::DedicatedWorkerCreator creator) {
   // Create a new token for the worker and add it to the map, along with its
   // client ID.
   const blink::DedicatedWorkerToken token;
 
-  auto result = dedicated_worker_client_frame_.emplace(
-      token, client_render_frame_host_id);
+  auto result = dedicated_worker_creators_.emplace(token, creator);
   DCHECK(result.second);  // Check inserted.
 
   // Notify observers.
   for (auto& observer : observer_list_) {
-    observer.OnWorkerCreated(token, worker_process_id,
-                             client_render_frame_host_id);
+    observer.OnWorkerCreated(token, worker_process_id, creator);
   }
 
   return result.first->first;
@@ -139,15 +138,15 @@ TestDedicatedWorkerService::CreateDedicatedWorker(
 
 void TestDedicatedWorkerService::DestroyDedicatedWorker(
     const blink::DedicatedWorkerToken& token) {
-  auto it = dedicated_worker_client_frame_.find(token);
-  DCHECK(it != dedicated_worker_client_frame_.end());
+  auto it = dedicated_worker_creators_.find(token);
+  DCHECK(it != dedicated_worker_creators_.end());
 
   // Notify observers that the worker is being destroyed.
   for (auto& observer : observer_list_)
     observer.OnBeforeWorkerDestroyed(token, it->second);
 
   // Remove the worker ID from the map.
-  dedicated_worker_client_frame_.erase(it);
+  dedicated_worker_creators_.erase(it);
 }
 
 // TestSharedWorkerService -----------------------------------------------------
@@ -415,10 +414,11 @@ void TestServiceWorkerContext::StartServiceWorker(int64_t version_id,
   GURL scope_url;
   for (auto& observer : observer_list_) {
     observer.OnVersionStartedRunning(
-        version_id, content::ServiceWorkerRunningInfo(
-                        worker_url, scope_url,
-                        blink::StorageKey(url::Origin::Create(scope_url)),
-                        worker_process_id, blink::ServiceWorkerToken()));
+        version_id,
+        content::ServiceWorkerRunningInfo(
+            worker_url, scope_url,
+            blink::StorageKey::CreateFirstParty(url::Origin::Create(scope_url)),
+            worker_process_id, blink::ServiceWorkerToken()));
   }
 }
 
@@ -438,7 +438,9 @@ void TestServiceWorkerContext::StopServiceWorker(int64_t version_id) {
 std::string TestServiceWorkerContext::AddClient(
     int64_t version_id,
     const content::ServiceWorkerClientInfo& client_info) {
-  return AddClientWithClientID(version_id, base::GenerateGUID(), client_info);
+  return AddClientWithClientID(
+      version_id, base::Uuid::GenerateRandomV4().AsLowercaseString(),
+      client_info);
 }
 
 std::string TestServiceWorkerContext::AddClientWithClientID(
@@ -535,8 +537,8 @@ int TestProcessNodeSource::CreateProcessNode() {
   int render_process_id = GenerateNextId();
 
   // Create the process node and insert it into the map.
-  auto process_node = PerformanceManagerImpl::CreateProcessNode(
-      content::PROCESS_TYPE_RENDERER, RenderProcessHostProxy());
+  auto process_node =
+      PerformanceManagerImpl::CreateProcessNode(RenderProcessHostProxy());
   bool inserted =
       process_node_map_.insert({render_process_id, std::move(process_node)})
           .second;
@@ -566,7 +568,7 @@ class TestFrameNodeSource : public FrameNodeSource {
   void UnsubscribeFromFrameNode(
       content::GlobalRenderFrameHostId render_frame_host_id) override;
 
-  // Creates a frame node and returns its generated render frame host id.
+  // Creates a frame node and returns its generated RenderFrameHost id.
   content::GlobalRenderFrameHostId CreateFrameNode(
       int render_process_id,
       ProcessNodeImpl* process_node);
@@ -582,7 +584,7 @@ class TestFrameNodeSource : public FrameNodeSource {
   // The page node that hosts all frames.
   std::unique_ptr<PageNodeImpl> page_node_;
 
-  // Maps each frame's render frame host id with their associated frame node.
+  // Maps each frame's RenderFrameHost id with their associated frame node.
   base::flat_map<content::GlobalRenderFrameHostId,
                  std::unique_ptr<FrameNodeImpl>>
       frame_node_map_;
@@ -597,8 +599,7 @@ TestFrameNodeSource::TestFrameNodeSource()
           WebContentsProxy(),
           "page_node_context_id",
           GURL(),
-          false,
-          false,
+          PagePropertyFlags{},
           base::TimeTicks::Now(),
           PageNode::PageState::kActive)) {}
 
@@ -647,7 +648,8 @@ content::GlobalRenderFrameHostId TestFrameNodeSource::CreateFrameNode(
   content::GlobalRenderFrameHostId render_frame_host_id(render_process_id,
                                                         frame_id);
   auto frame_node = PerformanceManagerImpl::CreateFrameNode(
-      process_node, page_node_.get(), nullptr, frame_id,
+      process_node, page_node_.get(), /*parent_frame_node=*/nullptr,
+      /*fenced_frame_embedder_frame_node*/ nullptr, frame_id,
       blink::LocalFrameToken(), content::BrowsingInstanceId(0),
       content::SiteInstanceId(0));
 
@@ -707,6 +709,8 @@ class WorkerWatcherTest : public testing::Test {
   WorkerNodeImpl* GetSharedWorkerNode(
       const blink::SharedWorkerToken& shared_worker_token);
   WorkerNodeImpl* GetServiceWorkerNode(int64_t version_id);
+
+  WorkerWatcher* worker_watcher() { return worker_watcher_.get(); }
 
   TestDedicatedWorkerService* dedicated_worker_service() {
     return &dedicated_worker_service_;
@@ -801,7 +805,7 @@ WorkerNodeImpl* WorkerWatcherTest::GetServiceWorkerNode(int64_t version_id) {
   return worker_watcher_->GetServiceWorkerNode(version_id);
 }
 
-// This test creates one dedicated worker.
+// This test creates one dedicated worker with a frame client.
 TEST_F(WorkerWatcherTest, SimpleDedicatedWorker) {
   int render_process_id = process_node_source()->CreateProcessNode();
 
@@ -817,20 +821,65 @@ TEST_F(WorkerWatcherTest, SimpleDedicatedWorker) {
                                                         render_frame_host_id);
 
   // Check expectations on the graph.
+  WorkerNodeImpl* worker_node = GetDedicatedWorkerNode(token);
   CallOnGraphAndWait(base::BindLambdaForTesting(
-      [process_node = process_node_source()->GetProcessNode(render_process_id),
-       worker_node = GetDedicatedWorkerNode(token),
+      [worker_node,
+       process_node = process_node_source()->GetProcessNode(render_process_id),
        client_frame_node = frame_node_source()->GetFrameNode(
            render_frame_host_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(worker_node));
-        EXPECT_EQ(worker_node->worker_type(),
+        EXPECT_EQ(worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kDedicated);
         EXPECT_EQ(worker_node->process_node(), process_node);
         EXPECT_TRUE(IsWorkerClient(worker_node, client_frame_node));
       }));
 
+  EXPECT_EQ(worker_watcher()->FindWorkerNodeForToken(token), worker_node);
+
   // Disconnect and clean up the dedicated worker.
   dedicated_worker_service()->DestroyDedicatedWorker(token);
+
+  EXPECT_EQ(worker_watcher()->FindWorkerNodeForToken(token), nullptr);
+}
+
+TEST_F(WorkerWatcherTest, NestedDedicatedWorker) {
+  int render_process_id = process_node_source()->CreateProcessNode();
+
+  // Create the ancestor frame node.
+  content::GlobalRenderFrameHostId render_frame_host_id =
+      frame_node_source()->CreateFrameNode(
+          render_process_id,
+          process_node_source()->GetProcessNode(render_process_id));
+
+  // Create the parent worker.
+  const blink::DedicatedWorkerToken parent_worker_token =
+      dedicated_worker_service()->CreateDedicatedWorker(render_process_id,
+                                                        render_frame_host_id);
+
+  // Create the nested worker.
+  const blink::DedicatedWorkerToken nested_worker_token =
+      dedicated_worker_service()->CreateDedicatedWorker(render_process_id,
+                                                        parent_worker_token);
+
+  // Check expectations on the graph.
+  CallOnGraphAndWait(base::BindLambdaForTesting(
+      [process_node = process_node_source()->GetProcessNode(render_process_id),
+       parent_worker_node = GetDedicatedWorkerNode(parent_worker_token),
+       nested_worker_node = GetDedicatedWorkerNode(nested_worker_token),
+       ancestor_frame_node = frame_node_source()->GetFrameNode(
+           render_frame_host_id)](GraphImpl* graph) {
+        EXPECT_TRUE(graph->NodeInGraph(nested_worker_node));
+        EXPECT_EQ(nested_worker_node->GetWorkerType(),
+                  WorkerNode::WorkerType::kDedicated);
+        EXPECT_EQ(nested_worker_node->process_node(), process_node);
+        // The ancestor frame is not directly a client of the nested worker.
+        EXPECT_FALSE(IsWorkerClient(nested_worker_node, ancestor_frame_node));
+        EXPECT_TRUE(IsWorkerClient(nested_worker_node, parent_worker_node));
+      }));
+
+  // Disconnect and clean up the dedicated workers.
+  dedicated_worker_service()->DestroyDedicatedWorker(nested_worker_token);
+  dedicated_worker_service()->DestroyDedicatedWorker(parent_worker_token);
 }
 
 // This test creates one shared worker with one client frame.
@@ -851,21 +900,29 @@ TEST_F(WorkerWatcherTest, SimpleSharedWorker) {
   shared_worker_service()->AddClient(shared_worker_token, render_frame_host_id);
 
   // Check expectations on the graph.
+  WorkerNodeImpl* worker_node = GetSharedWorkerNode(shared_worker_token);
   CallOnGraphAndWait(base::BindLambdaForTesting(
-      [process_node = process_node_source()->GetProcessNode(render_process_id),
-       worker_node = GetSharedWorkerNode(shared_worker_token),
+      [worker_node,
+       process_node = process_node_source()->GetProcessNode(render_process_id),
        client_frame_node = frame_node_source()->GetFrameNode(
            render_frame_host_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(worker_node));
-        EXPECT_EQ(worker_node->worker_type(), WorkerNode::WorkerType::kShared);
+        EXPECT_EQ(worker_node->GetWorkerType(),
+                  WorkerNode::WorkerType::kShared);
         EXPECT_EQ(worker_node->process_node(), process_node);
         EXPECT_TRUE(IsWorkerClient(worker_node, client_frame_node));
       }));
+
+  EXPECT_EQ(worker_watcher()->FindWorkerNodeForToken(shared_worker_token),
+            worker_node);
 
   // Disconnect and clean up the shared worker.
   shared_worker_service()->RemoveClient(shared_worker_token,
                                         render_frame_host_id);
   shared_worker_service()->DestroySharedWorker(shared_worker_token);
+
+  EXPECT_EQ(worker_watcher()->FindWorkerNodeForToken(shared_worker_token),
+            nullptr);
 }
 
 // This test creates one service worker with one client frame.
@@ -883,18 +940,25 @@ TEST_F(WorkerWatcherTest, ServiceWorkerFrameClient) {
       service_worker_version_id, content::ServiceWorkerClientInfo());
 
   // Check expectations on the graph.
+  const WorkerNodeImpl* worker_node =
+      GetServiceWorkerNode(service_worker_version_id);
+  blink::WorkerToken token;
   CallOnGraphAndWait(base::BindLambdaForTesting(
-      [process_node = process_node_source()->GetProcessNode(render_process_id),
-       worker_node =
-           GetServiceWorkerNode(service_worker_version_id)](GraphImpl* graph) {
+      [worker_node,
+       process_node = process_node_source()->GetProcessNode(render_process_id),
+       &token](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(worker_node));
-        EXPECT_EQ(worker_node->worker_type(), WorkerNode::WorkerType::kService);
+        EXPECT_EQ(worker_node->GetWorkerType(),
+                  WorkerNode::WorkerType::kService);
         EXPECT_EQ(worker_node->process_node(), process_node);
 
         // The frame can not be connected to the service worker until its
-        // render frame host is available, which happens when the navigation
+        // RenderFrameHost is available, which happens when the navigation
         // commits.
         EXPECT_TRUE(worker_node->client_frames().empty());
+
+        // Save the token for the FindWorkerNodeForToken() test.
+        token = worker_node->GetWorkerToken();
       }));
 
   // Now simulate the navigation commit.
@@ -913,16 +977,21 @@ TEST_F(WorkerWatcherTest, ServiceWorkerFrameClient) {
        client_frame_node = frame_node_source()->GetFrameNode(
            render_frame_host_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(worker_node));
-        EXPECT_EQ(worker_node->worker_type(), WorkerNode::WorkerType::kService);
+        EXPECT_EQ(worker_node->GetWorkerType(),
+                  WorkerNode::WorkerType::kService);
         EXPECT_EQ(worker_node->process_node(), process_node);
         EXPECT_TRUE(IsWorkerClient(worker_node, client_frame_node));
       }));
+
+  EXPECT_EQ(worker_watcher()->FindWorkerNodeForToken(token), worker_node);
 
   // Disconnect and clean up the service worker.
   service_worker_context()->RemoveClient(service_worker_version_id,
                                          service_worker_client_uuid);
   service_worker_context()->StopServiceWorker(service_worker_version_id);
   service_worker_context()->DestroyServiceWorker(service_worker_version_id);
+
+  EXPECT_EQ(worker_watcher()->FindWorkerNodeForToken(token), nullptr);
 }
 
 // Ensures that the WorkerWatcher handles the case where a frame with a service
@@ -958,14 +1027,14 @@ TEST_F(WorkerWatcherTest, ServiceWorkerFrameClientOfTwoWorkers) {
        second_worker_node = GetServiceWorkerNode(
            second_service_worker_version_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(first_worker_node));
-        EXPECT_EQ(first_worker_node->worker_type(),
+        EXPECT_EQ(first_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_EQ(first_worker_node->process_node(), process_node);
         // The frame was never added as a client of the service worker.
         EXPECT_TRUE(first_worker_node->client_frames().empty());
 
         EXPECT_TRUE(graph->NodeInGraph(second_worker_node));
-        EXPECT_EQ(second_worker_node->worker_type(),
+        EXPECT_EQ(second_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_EQ(second_worker_node->process_node(), process_node);
         // The frame was never added as a client of the service worker.
@@ -1009,7 +1078,8 @@ TEST_F(WorkerWatcherTest, ServiceWorkerTwoFrameClientRelationships) {
        worker_node =
            GetServiceWorkerNode(service_worker_version_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(worker_node));
-        EXPECT_EQ(worker_node->worker_type(), WorkerNode::WorkerType::kService);
+        EXPECT_EQ(worker_node->GetWorkerType(),
+                  WorkerNode::WorkerType::kService);
         // The frame was not yet added as a client.
         EXPECT_TRUE(worker_node->client_frames().empty());
       }));
@@ -1032,7 +1102,7 @@ TEST_F(WorkerWatcherTest, ServiceWorkerTwoFrameClientRelationships) {
        client_frame_node = frame_node_source()->GetFrameNode(
            render_frame_host_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(service_worker_node));
-        EXPECT_EQ(service_worker_node->worker_type(),
+        EXPECT_EQ(service_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_EQ(1u, service_worker_node->client_frames().size());
         EXPECT_TRUE(IsWorkerClient(service_worker_node, client_frame_node));
@@ -1048,7 +1118,7 @@ TEST_F(WorkerWatcherTest, ServiceWorkerTwoFrameClientRelationships) {
        client_frame_node = frame_node_source()->GetFrameNode(
            render_frame_host_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(service_worker_node));
-        EXPECT_EQ(service_worker_node->worker_type(),
+        EXPECT_EQ(service_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_EQ(1u, service_worker_node->client_frames().size());
         EXPECT_TRUE(IsWorkerClient(service_worker_node, client_frame_node));
@@ -1064,7 +1134,7 @@ TEST_F(WorkerWatcherTest, ServiceWorkerTwoFrameClientRelationships) {
        client_frame_node = frame_node_source()->GetFrameNode(
            render_frame_host_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(service_worker_node));
-        EXPECT_EQ(service_worker_node->worker_type(),
+        EXPECT_EQ(service_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_EQ(1u, service_worker_node->client_frames().size());
         EXPECT_TRUE(IsWorkerClient(service_worker_node, client_frame_node));
@@ -1099,7 +1169,8 @@ TEST_F(WorkerWatcherTest, ServiceWorkerFrameClientDestroyedBeforeCommit) {
        worker_node =
            GetServiceWorkerNode(service_worker_version_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(worker_node));
-        EXPECT_EQ(worker_node->worker_type(), WorkerNode::WorkerType::kService);
+        EXPECT_EQ(worker_node->GetWorkerType(),
+                  WorkerNode::WorkerType::kService);
         EXPECT_EQ(worker_node->process_node(), process_node);
 
         // The frame was never added as a client of the service worker.
@@ -1256,7 +1327,7 @@ TEST_F(WorkerWatcherTest, ServiceWorkerStartsAndStopsWithExistingClients) {
        shared_worker_node =
            GetSharedWorkerNode(shared_worker_token)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(service_worker_node));
-        EXPECT_EQ(service_worker_node->worker_type(),
+        EXPECT_EQ(service_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_EQ(service_worker_node->process_node(), process_node);
 
@@ -1334,7 +1405,8 @@ TEST_F(WorkerWatcherTest, SharedWorkerCrossProcessClient) {
        client_frame_node = frame_node_source()->GetFrameNode(
            render_frame_host_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(worker_node));
-        EXPECT_EQ(worker_node->worker_type(), WorkerNode::WorkerType::kShared);
+        EXPECT_EQ(worker_node->GetWorkerType(),
+                  WorkerNode::WorkerType::kShared);
         EXPECT_EQ(worker_node->process_node(), worker_process_node);
         EXPECT_TRUE(IsWorkerClient(worker_node, client_frame_node));
       }));
@@ -1390,7 +1462,7 @@ TEST_F(WorkerWatcherTest, SharedWorkerStartsWithDeadWorkerClients) {
        service_worker_node =
            GetServiceWorkerNode(service_worker_version_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(service_worker_node));
-        EXPECT_EQ(service_worker_node->worker_type(),
+        EXPECT_EQ(service_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_EQ(service_worker_node->process_node(), process_node);
         EXPECT_TRUE(service_worker_node->child_workers().empty());
@@ -1408,7 +1480,7 @@ TEST_F(WorkerWatcherTest, SharedWorkerStartsWithDeadWorkerClients) {
        service_worker_node =
            GetServiceWorkerNode(service_worker_version_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(service_worker_node));
-        EXPECT_EQ(service_worker_node->worker_type(),
+        EXPECT_EQ(service_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_EQ(service_worker_node->process_node(), process_node);
         EXPECT_TRUE(service_worker_node->child_workers().empty());
@@ -1439,10 +1511,10 @@ TEST_F(WorkerWatcherTest, SharedWorkerDiesAsServiceWorkerClient) {
        shared_worker_node =
            GetSharedWorkerNode(shared_worker_token)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(service_worker_node));
-        EXPECT_EQ(service_worker_node->worker_type(),
+        EXPECT_EQ(service_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_TRUE(graph->NodeInGraph(shared_worker_node));
-        EXPECT_EQ(shared_worker_node->worker_type(),
+        EXPECT_EQ(shared_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kShared);
         EXPECT_TRUE(IsWorkerClient(service_worker_node, shared_worker_node));
       }));
@@ -1456,7 +1528,7 @@ TEST_F(WorkerWatcherTest, SharedWorkerDiesAsServiceWorkerClient) {
       [service_worker_node =
            GetServiceWorkerNode(service_worker_version_id)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(service_worker_node));
-        EXPECT_EQ(service_worker_node->worker_type(),
+        EXPECT_EQ(service_worker_node->GetWorkerType(),
                   WorkerNode::WorkerType::kService);
         EXPECT_TRUE(service_worker_node->client_workers().empty());
       }));
@@ -1496,7 +1568,8 @@ TEST_F(WorkerWatcherTest, OneSharedWorkerTwoClients) {
        client_frame_node_2 = frame_node_source()->GetFrameNode(
            render_frame_host_id_2)](GraphImpl* graph) {
         EXPECT_TRUE(graph->NodeInGraph(worker_node));
-        EXPECT_EQ(worker_node->worker_type(), WorkerNode::WorkerType::kShared);
+        EXPECT_EQ(worker_node->GetWorkerType(),
+                  WorkerNode::WorkerType::kShared);
 
         // Check frame 1.
         EXPECT_TRUE(IsWorkerClient(worker_node, client_frame_node_1));
@@ -1541,13 +1614,13 @@ TEST_F(WorkerWatcherTest, OneClientTwoSharedWorkers) {
            render_frame_host_id)](GraphImpl* graph) {
         // Check worker 1.
         EXPECT_TRUE(graph->NodeInGraph(worker_node_1));
-        EXPECT_EQ(worker_node_1->worker_type(),
+        EXPECT_EQ(worker_node_1->GetWorkerType(),
                   WorkerNode::WorkerType::kShared);
         EXPECT_TRUE(IsWorkerClient(worker_node_1, client_frame_node));
 
         // Check worker 2.
         EXPECT_TRUE(graph->NodeInGraph(worker_node_2));
-        EXPECT_EQ(worker_node_2->worker_type(),
+        EXPECT_EQ(worker_node_2->GetWorkerType(),
                   WorkerNode::WorkerType::kShared);
         EXPECT_TRUE(IsWorkerClient(worker_node_2, client_frame_node));
       }));

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -202,6 +202,9 @@ void ChromotingClient::SetVideoLayout(const protocol::VideoLayout& layout) {
 
 void ChromotingClient::SetTransportInfo(
     const protocol::TransportInfo& transport_info) {}
+
+void ChromotingClient::SetActiveDisplay(
+    const protocol::ActiveDisplay& active_display) {}
 
 void ChromotingClient::InjectClipboardEvent(
     const protocol::ClipboardEvent& event) {

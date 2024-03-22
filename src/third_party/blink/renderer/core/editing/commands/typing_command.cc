@@ -302,7 +302,7 @@ void TypingCommand::ForwardDeleteKeyPressed(Document& document,
 }
 
 String TypingCommand::TextDataForInputEvent() const {
-  if (commands_.IsEmpty() || IsIncrementalInsertion())
+  if (commands_.empty() || IsIncrementalInsertion())
     return text_to_insert_;
   return commands_.back()->TextDataForInputEvent();
 }
@@ -409,8 +409,7 @@ void TypingCommand::InsertText(
   }
 
   // Do nothing if no need to delete and insert.
-  if (passed_selection_for_insertion_as_undo_step.IsCaret() &&
-      new_text.IsEmpty())
+  if (passed_selection_for_insertion_as_undo_step.IsCaret() && new_text.empty())
     return;
 
   // TODO(editing-dev): The use of UpdateStyleAndLayout
@@ -422,6 +421,9 @@ void TypingCommand::InsertText(
   if (selection_offsets.IsNull())
     return;
   const wtf_size_t selection_start = selection_offsets.Start();
+
+  frame->GetEditor().NotifyAccessibilityOfDeletionOrInsertionInTextField(
+      passed_selection_for_insertion_as_undo_step, /* is_deletion*/ false);
 
   // Set the starting and ending selection appropriately if we are using a
   // selection that is different from the current selection.  In the future, we
@@ -555,7 +557,7 @@ void TypingCommand::DoApply(EditingState* editing_state) {
     return;
 
   if (command_type_ == kDeleteKey) {
-    if (commands_.IsEmpty())
+    if (commands_.empty())
       opened_by_backward_delete_ = true;
   }
 
@@ -635,7 +637,7 @@ void TypingCommand::InsertTextInternal(const String& text,
                                        EditingState* editing_state) {
   text_to_insert_ = text;
 
-  if (text.IsEmpty()) {
+  if (text.empty()) {
     InsertTextRunWithoutNewlines(text, editing_state);
     return;
   }
@@ -999,6 +1001,8 @@ void TypingCommand::DeleteKeyPressedInternal(
   if (frame->GetEditor().Behavior().ShouldUndoOfDeleteSelectText() &&
       opened_by_backward_delete_)
     SetStartingSelection(selection_after_undo);
+  frame->GetEditor().NotifyAccessibilityOfDeletionOrInsertionInTextField(
+      selection_to_delete, /* is_deletion */ true);
   DeleteSelectionIfRange(selection_to_delete, editing_state);
   if (editing_state->IsAborted())
     return;

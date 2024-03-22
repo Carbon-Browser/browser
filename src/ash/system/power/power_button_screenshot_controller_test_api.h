@@ -1,9 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SYSTEM_POWER_POWER_BUTTON_SCREENSHOT_CONTROLLER_TEST_API_H_
 #define ASH_SYSTEM_POWER_POWER_BUTTON_SCREENSHOT_CONTROLLER_TEST_API_H_
+
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -32,7 +34,8 @@ class PowerButtonScreenshotControllerTestApi {
   [[nodiscard]] bool TriggerVolumeUpTimer();
 
  private:
-  PowerButtonScreenshotController* controller_;
+  raw_ptr<PowerButtonScreenshotController, DanglingUntriaged | ExperimentalAsh>
+      controller_;
 };
 
 }  // namespace ash

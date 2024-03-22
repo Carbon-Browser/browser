@@ -1,45 +1,37 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/reading_list/reading_list_list_item_util.h"
 
-#include "base/i18n/time_formatting.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/time/time.h"
+#import "base/i18n/time_formatting.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
+#import "base/time/time.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_list_item.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-#include "ui/base/l10n/time_format.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
+#import "ui/base/l10n/time_format.h"
+#import "url/gurl.h"
 
 NSString* GetReadingListCellAccessibilityLabel(
     NSString* title,
     NSString* subtitle,
-    ReadingListUIDistillationStatus distillation_status) {
+    ReadingListUIDistillationStatus distillation_status,
+    BOOL showCloudSlashIcon) {
   int state_string_id =
       distillation_status == ReadingListUIDistillationStatusSuccess
           ? IDS_IOS_READING_LIST_ACCESSIBILITY_STATE_DOWNLOADED
           : IDS_IOS_READING_LIST_ACCESSIBILITY_STATE_NOT_DOWNLOADED;
   NSString* a11y_state = l10n_util::GetNSString(state_string_id);
+  int base_string_id =
+      showCloudSlashIcon
+          ? IDS_IOS_READING_LIST_ENTRY_WITH_UPLOAD_STATE_ACCESSIBILITY_LABEL
+          : IDS_IOS_READING_LIST_ENTRY_ACCESSIBILITY_LABEL;
 
-  return l10n_util::GetNSStringF(IDS_IOS_READING_LIST_ENTRY_ACCESSIBILITY_LABEL,
-                                 base::SysNSStringToUTF16(title),
-                                 base::SysNSStringToUTF16(a11y_state),
-                                 base::SysNSStringToUTF16(subtitle));
-}
-
-NSString* GetReadingListCellDistillationSizeText(int64_t distillation_size) {
-  if (!distillation_size)
-    return nil;
-  return [NSByteCountFormatter
-      stringFromByteCount:distillation_size
-               countStyle:NSByteCountFormatterCountStyleFile];
+  return l10n_util::GetNSStringF(
+      base_string_id, base::SysNSStringToUTF16(title),
+      base::SysNSStringToUTF16(a11y_state), base::SysNSStringToUTF16(subtitle));
 }
 
 NSString* GetReadingListCellDistillationDateText(int64_t distillation_date) {
@@ -64,11 +56,10 @@ BOOL AreReadingListListItemsEqual(id<ReadingListListItem> first,
     return YES;
   if (!first || !second || ![second isKindOfClass:[first class]])
     return NO;
-  return
-      [first.title isEqualToString:second.title] &&
-      first.entryURL.host() == second.entryURL.host() &&
-      first.distillationState == second.distillationState &&
-      [first.distillationSizeText
-          isEqualToString:second.distillationSizeText] &&
-      [first.distillationDateText isEqualToString:second.distillationDateText];
+  return [first.title isEqualToString:second.title] &&
+         first.entryURL.host() == second.entryURL.host() &&
+         first.distillationState == second.distillationState &&
+         [first.distillationDateText
+             isEqualToString:second.distillationDateText] &&
+         first.showCloudSlashIcon == second.showCloudSlashIcon;
 }

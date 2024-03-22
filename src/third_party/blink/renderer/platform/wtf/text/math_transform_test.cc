@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ TEST(MathTransform, Italics) {
       {0x03F5, 0x1D716}};
 
   for (auto& test_data : italics_test_data)
-    EXPECT_EQ(MathVariant(test_data.code_point), test_data.expected);
+    EXPECT_EQ(ItalicMathVariant(test_data.code_point), test_data.expected);
 }
 
 }  // anonymous namespace

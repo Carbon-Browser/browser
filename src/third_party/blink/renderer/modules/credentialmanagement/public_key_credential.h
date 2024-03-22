@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@ enum class AuthenticatorAttachment;
 class AuthenticatorResponse;
 class ScriptPromise;
 class ScriptState;
+class V8UnionAuthenticationResponseJSONOrRegistrationResponseJSON;
 
 class MODULES_EXPORT PublicKeyCredential : public Credential {
   DEFINE_WRAPPERTYPEINFO();
@@ -34,7 +35,7 @@ class MODULES_EXPORT PublicKeyCredential : public Credential {
       AuthenticatorResponse*,
       mojom::AuthenticatorAttachment authenticator_attachment,
       const AuthenticationExtensionsClientOutputs* extension_outputs,
-      const String& type = "");
+      const String& type = g_empty_string);
 
   DOMArrayBuffer* rawId() const { return raw_id_.Get(); }
   AuthenticatorResponse* response() const { return response_.Get(); }
@@ -44,6 +45,9 @@ class MODULES_EXPORT PublicKeyCredential : public Credential {
   static ScriptPromise isUserVerifyingPlatformAuthenticatorAvailable(
       ScriptState*);
   AuthenticationExtensionsClientOutputs* getClientExtensionResults() const;
+  static ScriptPromise isConditionalMediationAvailable(ScriptState*);
+  const V8UnionAuthenticationResponseJSONOrRegistrationResponseJSON* toJSON(
+      ScriptState*) const;
 
   // Credential:
   void Trace(Visitor*) const override;

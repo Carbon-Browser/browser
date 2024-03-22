@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,6 +76,12 @@ bool WasMigrationRun(Profile* profile, base::StringPiece feature_name);
 void SetMigrationRun(Profile* profile,
                      base::StringPiece feature_name,
                      bool was_migrated);
+
+// Returns whether the device has a stylus-enabled internal touchscreen, used
+// for determining whether the device should enable/disable particular
+// preinstalled apps. Returns absl::nullopt if attached devices could not be
+// determined, due to ui::DeviceDataManager not being fully initialized.
+absl::optional<bool> DeviceHasStylusEnabledTouchscreen();
 
 }  // namespace web_app
 

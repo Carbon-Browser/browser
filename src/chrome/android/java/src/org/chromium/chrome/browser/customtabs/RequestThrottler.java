@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,6 @@ import android.os.SystemClock;
 import android.text.TextUtils;
 import android.text.format.DateUtils;
 import android.util.SparseArray;
-
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.task.PostTask;
@@ -175,7 +173,8 @@ class RequestThrottler {
     /** Resets the banning state. */
     void reset() {
         if (sUidToThrottler != null) sUidToThrottler.remove(mUid);
-        mSharedPreferences.edit()
+        mSharedPreferences
+                .edit()
                 .remove(SCORE + mUid)
                 .remove(LAST_REQUEST + mUid)
                 .remove(BANNED_UNTIL + mUid)
@@ -204,9 +203,13 @@ class RequestThrottler {
     static void loadInBackground() {
         boolean alreadyDone = !sAccessedSharedPreferences.compareAndSet(false, true);
         if (alreadyDone) return;
-        PostTask.postTask(TaskTraits.BEST_EFFORT_MAY_BLOCK, () -> {
-            ContextUtils.getApplicationContext().getSharedPreferences(PREFERENCES_NAME, 0).edit();
-        });
+        PostTask.postTask(
+                TaskTraits.BEST_EFFORT_MAY_BLOCK,
+                () -> {
+                    ContextUtils.getApplicationContext()
+                            .getSharedPreferences(PREFERENCES_NAME, 0)
+                            .edit();
+                });
     }
 
     /** Removes all the UIDs that haven't been seen since at least {@link FORGET_AFTER_MS}. */
@@ -233,7 +236,6 @@ class RequestThrottler {
         editor.apply();
     }
 
-    @VisibleForTesting
     static void purgeAllEntriesForTesting() {
         SharedPreferences sharedPreferences =
                 ContextUtils.getApplicationContext().getSharedPreferences(PREFERENCES_NAME, 0);

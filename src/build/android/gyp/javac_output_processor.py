@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Contains helper class for processing javac output."""
@@ -8,27 +8,24 @@
 import os
 import pathlib
 import re
+import shlex
 import sys
 import traceback
 
 from util import build_utils
+from util import dep_utils
 
 sys.path.insert(
     0,
     os.path.join(build_utils.DIR_SOURCE_ROOT, 'third_party', 'colorama', 'src'))
 import colorama
-sys.path.insert(
-    0,
-    os.path.join(build_utils.DIR_SOURCE_ROOT, 'tools', 'android',
-                 'modularization', 'convenience'))
-import lookup_dep
 
 
 class JavacOutputProcessor:
   def __init__(self, target_name):
     self._target_name = self._RemoveSuffixesIfPresent(
         ["__compile_java", "__errorprone", "__header"], target_name)
-    self._suggested_deps = set()
+    self._suggested_targets_list = set()
 
     # Example: ../../ui/android/java/src/org/chromium/ui/base/Clipboard.java:45:
     fileline_prefix = (
@@ -40,19 +37,15 @@ class JavacOutputProcessor:
                                 r'(?P<full_message> (?P<message>.*))$')
     self._marker_re = re.compile(r'\s*(?P<marker>\^)\s*$')
 
-    # First element in pair is bool which indicates whether the missing
-    # class/package is part of the error message.
     self._symbol_not_found_re_list = [
         # Example:
         # error: package org.chromium.components.url_formatter does not exist
-        (True,
-         re.compile(fileline_prefix +
-                    r'( error: package [\w.]+ does not exist)$')),
+        re.compile(fileline_prefix +
+                   r'( error: package [\w.]+ does not exist)$'),
         # Example: error: cannot find symbol
-        (False, re.compile(fileline_prefix + r'( error: cannot find symbol)$')),
+        re.compile(fileline_prefix + r'( error: cannot find symbol)$'),
         # Example: error: symbol not found org.chromium.url.GURL
-        (True,
-         re.compile(fileline_prefix + r'( error: symbol not found [\w.]+)$')),
+        re.compile(fileline_prefix + r'( error: symbol not found [\w.]+)$'),
     ]
 
     # Example: import org.chromium.url.GURL;
@@ -79,7 +72,7 @@ class JavacOutputProcessor:
     lines = self._ElaborateLinesForUnknownSymbol(iter(lines))
     for line in lines:
       yield self._ApplyColors(line)
-    if self._suggested_deps:
+    if self._suggested_targets_list:
 
       def yellow(text):
         return colorama.Fore.YELLOW + text + colorama.Fore.RESET
@@ -88,8 +81,21 @@ class JavacOutputProcessor:
       yield yellow('Hint:') + ' One or more errors due to missing GN deps.'
       yield (yellow('Hint:') + ' Try adding the following to ' +
              yellow(self._target_name))
-      for dep in sorted(self._suggested_deps):
-        yield '    "{}",'.format(dep)
+
+      for targets in sorted(self._suggested_targets_list):
+        if len(targets) > 1:
+          suggested_targets_str = 'one of: ' + ', '.join(targets)
+        else:
+          suggested_targets_str = targets[0]
+        yield '    "{}",'.format(suggested_targets_str)
+
+      yield ''
+      yield yellow('Hint:') + (' Run the following command to add the missing '
+                               'deps:')
+      missing_targets = {targets[0] for targets in self._suggested_targets_list}
+      cmd = dep_utils.CreateAddDepsCommand(self._target_name,
+                                           sorted(missing_targets))
+      yield f'    {shlex.join(cmd)}\n '  # Extra space necessary for new line.
 
   def _ElaborateLinesForUnknownSymbol(self, lines):
     """ Elaborates passed-in javac output for unresolved symbols.
@@ -139,53 +145,27 @@ class JavacOutputProcessor:
     if not import_re_match:
       return
 
-    symbol_missing = False
-    has_missing_symbol_in_error_msg = False
-    for symbol_in_error_msg, regex in self._symbol_not_found_re_list:
+    for regex in self._symbol_not_found_re_list:
       if regex.match(line):
-        symbol_missing = True
-        has_missing_symbol_in_error_msg = symbol_in_error_msg
         break
-
-    if not symbol_missing:
+    else:
       return
 
+    if self._class_lookup_index is None:
+      self._class_lookup_index = dep_utils.ClassLookupIndex(
+          pathlib.Path(os.getcwd()),
+          should_build=False,
+      )
+
     class_to_lookup = import_re_match.group('imported_class')
-    if self._class_lookup_index == None:
-      self._class_lookup_index = lookup_dep.ClassLookupIndex(pathlib.Path(
-          os.getcwd()),
-                                                             should_build=False)
     suggested_deps = self._class_lookup_index.match(class_to_lookup)
 
-    if len(suggested_deps) != 1:
-      suggested_deps = self._DisambiguateDeps(suggested_deps)
+    if not suggested_deps:
+      print(f'No suggested deps for {class_to_lookup}')
+      return
 
-    if len(suggested_deps) != 1:
-      suggested_target = ('one of: ' + ', '.join(s.target
-                                                 for s in suggested_deps))
-    else:
-      suggested_target = suggested_deps[0].target
-
-    if not has_missing_symbol_in_error_msg:
-      line = "{} {}".format(line, class_to_lookup)
-
-    self._suggested_deps.add(suggested_target)
-
-  @staticmethod
-  def _DisambiguateDeps(class_entries):
-    # android_library_factory() targets set low_classpath_priority=true, and any
-    # target that is the "impl" side of a target that uses jar_excluded_patterns
-    # should use this as well.
-    # We should generally always suggest depending on the non-impl library
-    # target.
-    # TODO(crbug.com/1296711): Also use "visibility" a hint here.
-    low_entries = [x for x in class_entries if x.low_classpath_priority]
-    class_entries = low_entries or class_entries
-
-    # E.g. javax_annotation_jsr250_api_java.
-    jsr_entries = [x for x in class_entries if 'jsr' in x.target]
-    class_entries = jsr_entries or class_entries
-    return class_entries
+    suggested_deps = dep_utils.DisambiguateDeps(suggested_deps)
+    self._suggested_targets_list.add(tuple(d.target for d in suggested_deps))
 
   @staticmethod
   def _RemoveSuffixesIfPresent(suffixes, text):

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -26,7 +26,7 @@ class TimeTicks;
 
 // Stores compressed thumbnail data for a tab and can vend that data as an
 // uncompressed image to observers.
-class ThumbnailImage : public base::RefCounted<ThumbnailImage> {
+class ThumbnailImage : public base::RefCountedThreadSafe<ThumbnailImage> {
  public:
   // Describes the readiness of the source page for thumbnail capture.
   enum class CaptureReadiness : int {
@@ -119,7 +119,8 @@ class ThumbnailImage : public base::RefCounted<ThumbnailImage> {
     raw_ptr<ThumbnailImage> thumbnail_ = nullptr;
   };
 
-  explicit ThumbnailImage(Delegate* delegate);
+  explicit ThumbnailImage(Delegate* delegate,
+                          CompressedThumbnailData data = nullptr);
 
   ThumbnailImage(const ThumbnailImage&) = delete;
   ThumbnailImage& operator=(const ThumbnailImage&) = delete;
@@ -167,10 +168,12 @@ class ThumbnailImage : public base::RefCounted<ThumbnailImage> {
     async_operation_finished_callback_ = std::move(callback);
   }
 
+  CompressedThumbnailData data() { return data_; }
+
  private:
   friend class Delegate;
   friend class ThumbnailImageTest;
-  friend class base::RefCounted<ThumbnailImage>;
+  friend class base::RefCountedThreadSafe<ThumbnailImage>;
 
   virtual ~ThumbnailImage();
 

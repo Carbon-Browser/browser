@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,8 +72,6 @@ class NET_EXPORT_PRIVATE Stats {
   int64_t GetCounter(Counters counter) const;
 
   void GetItems(StatsItems* items);
-  int GetHitRatio() const;
-  int GetResurrectRatio() const;
   void ResetRatios();
 
   // Returns the lower bound of the space used by entries bigger than 512 KB.

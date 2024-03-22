@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,11 +38,6 @@ class CC_EXPORT UkmManager {
 
   void SetSourceId(ukm::SourceId source_id);
 
-  void RecordThroughputUKM(FrameSequenceTrackerType tracker_type,
-                           FrameInfo::SmoothEffectDrivingThread thread_type,
-                           int64_t throughput) const;
-  void RecordAggregateThroughput(AggregationType aggregation_type,
-                                 int64_t throughput_percent) const;
   void RecordCompositorLatencyUKM(
       const CompositorFrameReporter::FrameReportTypes& report_types,
       const std::vector<CompositorFrameReporter::StageData>& stage_history,

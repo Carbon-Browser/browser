@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_sub_apps_add_options.h"
-#include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_sub_apps_add_params.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_sub_apps_list_result.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_sub_apps_result_code.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -25,54 +26,66 @@
 
 namespace blink {
 
+using mojom::blink::SubAppsService;
+using mojom::blink::SubAppsServiceAddParameters;
+using mojom::blink::SubAppsServiceAddParametersPtr;
+using mojom::blink::SubAppsServiceAddResultPtr;
+using mojom::blink::SubAppsServiceListResultEntryPtr;
 using mojom::blink::SubAppsServiceListResultPtr;
-using mojom::blink::SubAppsServiceResult;
+using mojom::blink::SubAppsServiceRemoveResultPtr;
+using mojom::blink::SubAppsServiceResultCode;
 
 namespace {
 
-Vector<std::pair<String, String>> ResultsFromMojo(
-    Vector<mojom::blink::SubAppsServiceAddResultPtr> sub_apps_mojo) {
-  Vector<std::pair<String, String>> subapps;
-  for (const auto& pair : sub_apps_mojo) {
-    std::string result;
+const int kMaximumNumberOfSubappsPerAddCall = 7;
 
-    switch (pair->result_code) {
-      case mojom::blink::SubAppsServiceAddResultCode::kSuccessNewInstall:
-        result = "success-new-install";
-        break;
-      case mojom::blink::SubAppsServiceAddResultCode::kSuccessAlreadyInstalled:
-        result = "success-already-installed";
-        break;
-      case mojom::blink::SubAppsServiceAddResultCode::kUserInstallDeclined:
-        result = "user-install-declined";
-        break;
-      case mojom::blink::SubAppsServiceAddResultCode::kExpectedAppIdCheckFailed:
-        result = "expected-app-id-check-failed";
-        break;
-      case mojom::blink::SubAppsServiceAddResultCode::kParentAppUninstalled:
-        result = "parent-app-uninstalled";
-        break;
-      case mojom::blink::SubAppsServiceAddResultCode::kFailure:
-        result = "failure";
-        break;
-    }
-    subapps.emplace_back(pair->unhashed_app_id, result);
+Vector<std::pair<String, V8SubAppsResultCode>> AddResultsFromMojo(
+    Vector<SubAppsServiceAddResultPtr> add_results_mojo) {
+  Vector<std::pair<String, V8SubAppsResultCode>> add_results_idl;
+  for (auto& add_result : add_results_mojo) {
+    auto result_code =
+        add_result->result_code == SubAppsServiceResultCode::kSuccess
+            ? V8SubAppsResultCode(V8SubAppsResultCode::Enum::kSuccess)
+            : V8SubAppsResultCode(V8SubAppsResultCode::Enum::kFailure);
+    add_results_idl.emplace_back(add_result->manifest_id_path, result_code);
   }
-  return subapps;
+  return add_results_idl;
 }
 
-Vector<mojom::blink::SubAppsServiceAddInfoPtr> InstallParamsToMojo(
-    const HeapVector<std::pair<String, Member<SubAppsAddOptions>>>
-        sub_apps_idl) {
-  Vector<mojom::blink::SubAppsServiceAddInfoPtr> subapps;
-  for (const auto& [unhashed_app_id, install_options] : sub_apps_idl) {
-    mojom::blink::SubAppsServiceAddInfoPtr mojom_pair =
-        mojom::blink::SubAppsServiceAddInfo::New();
-    mojom_pair->unhashed_app_id = unhashed_app_id;
-    mojom_pair->install_url = KURL(install_options->installUrl());
-    subapps.push_back(std::move(mojom_pair));
+Vector<std::pair<String, V8SubAppsResultCode>> RemoveResultsFromMojo(
+    Vector<SubAppsServiceRemoveResultPtr> remove_results_mojo) {
+  Vector<std::pair<String, V8SubAppsResultCode>> results;
+  for (auto& remove_result : remove_results_mojo) {
+    auto result_code =
+        remove_result->result_code == SubAppsServiceResultCode::kSuccess
+            ? V8SubAppsResultCode(V8SubAppsResultCode::Enum::kSuccess)
+            : V8SubAppsResultCode(V8SubAppsResultCode::Enum::kFailure);
+    results.emplace_back(remove_result->manifest_id_path, result_code);
   }
-  return subapps;
+  return results;
+}
+
+Vector<SubAppsServiceAddParametersPtr> AddOptionsToMojo(
+    HeapVector<std::pair<String, Member<SubAppsAddParams>>>
+        sub_apps_to_add_idl) {
+  Vector<SubAppsServiceAddParametersPtr> sub_apps_to_add_mojo;
+  for (auto& [manifest_id_path, add_params] : sub_apps_to_add_idl) {
+    sub_apps_to_add_mojo.emplace_back(SubAppsServiceAddParameters::New(
+        manifest_id_path, add_params->installURL()));
+  }
+  return sub_apps_to_add_mojo;
+}
+
+HeapVector<std::pair<String, Member<SubAppsListResult>>> ListResultsFromMojo(
+    Vector<SubAppsServiceListResultEntryPtr> sub_apps_list_mojo) {
+  HeapVector<std::pair<String, Member<SubAppsListResult>>> sub_apps_list_idl;
+  for (auto& sub_app_entry : sub_apps_list_mojo) {
+    SubAppsListResult* list_result = SubAppsListResult::Create();
+    list_result->setAppName(std::move(sub_app_entry->app_name));
+    sub_apps_list_idl.emplace_back(std::move(sub_app_entry->manifest_id_path),
+                                   list_result);
+  }
+  return sub_apps_list_idl;
 }
 
 }  // namespace
@@ -100,7 +113,7 @@ void SubApps::Trace(Visitor* visitor) const {
   visitor->Trace(service_);
 }
 
-HeapMojoRemote<mojom::blink::SubAppsService>& SubApps::GetService() {
+HeapMojoRemote<SubAppsService>& SubApps::GetService() {
   if (!service_.is_bound()) {
     auto* context = GetSupplementable()->GetExecutionContext();
     context->GetBrowserInterfaceBroker().GetInterface(
@@ -109,7 +122,7 @@ HeapMojoRemote<mojom::blink::SubAppsService>& SubApps::GetService() {
     // In case the other endpoint gets disconnected, we want to reset our end of
     // the pipe as well so that we don't remain connected to a half-open pipe.
     service_.set_disconnect_handler(
-        WTF::Bind(&SubApps::OnConnectionError, WrapWeakPersistent(this)));
+        WTF::BindOnce(&SubApps::OnConnectionError, WrapWeakPersistent(this)));
   }
   return service_;
 }
@@ -120,7 +133,8 @@ void SubApps::OnConnectionError() {
 
 ScriptPromise SubApps::add(
     ScriptState* script_state,
-    const HeapVector<std::pair<String, Member<SubAppsAddOptions>>>& sub_apps,
+    const HeapVector<std::pair<String, Member<SubAppsAddParams>>>&
+        sub_apps_to_add,
     ExceptionState& exception_state) {
   // [SecureContext] from the IDL ensures this.
   DCHECK(ExecutionContext::From(script_state)->IsSecureContext());
@@ -129,33 +143,55 @@ ScriptPromise SubApps::add(
     return ScriptPromise();
   }
 
-  Navigator* const navigator = GetSupplementable();
-  const SecurityOrigin* frame_origin = navigator->DomWindow()
-                                           ->GetFrame()
-                                           ->GetSecurityContext()
-                                           ->GetSecurityOrigin();
+  LocalFrame* frame = GetSupplementable()->DomWindow()->GetFrame();
+  // TODO(crbug.com/1326843): Maybe we don't need user activation if
+  // the right policy is set.
+  if (!LocalFrame::ConsumeTransientUserActivation(frame)) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotAllowedError,
+        "Unable to add sub-app. This API can only be called shortly after a "
+        "user activation.");
+    return ScriptPromise();
+  }
 
-  // Check that each sub app's install url has the same origin as the parent
-  // app, throw exception otherwise.
-  for (const auto& [manifest_id, install_options] : sub_apps) {
-    KURL sub_app_install_url(install_options->installUrl());
-    if (!frame_origin->IsSameOriginWith(
-            SecurityOrigin::Create(sub_app_install_url).get())) {
+  // TODO(crbug.com/1326843): Maybe we don't need to limit add() if the
+  // right policy is set, we mainly want to avoid overwhelming the user with
+  // a permissions prompt that lists dozens of apps to install.
+  if (sub_apps_to_add.size() > kMaximumNumberOfSubappsPerAddCall) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kDataError,
+        "Unable to add sub-apps. The maximum number of apps added per call "
+        "is " +
+            String::Number(kMaximumNumberOfSubappsPerAddCall) + ", but " +
+            String::Number(sub_apps_to_add.size()) + " were provided.");
+    return ScriptPromise();
+  }
+
+  // Check that the arguments are root-relative paths.
+  for (const auto& [manifest_id_path, add_params] : sub_apps_to_add) {
+    if (KURL(manifest_id_path).IsValid() ||
+        KURL(add_params->installURL()).IsValid()) {
       exception_state.ThrowDOMException(
-          DOMExceptionCode::kURLMismatchError,
-          "Install path must be a fully qualified URL matching the origin of "
-          "the caller.");
+          DOMExceptionCode::kNotSupportedError,
+          "Arguments must be root-relative paths.");
       return ScriptPromise();
     }
   }
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   GetService()->Add(
-      InstallParamsToMojo(sub_apps),
-      resolver->WrapCallbackInScriptScope(WTF::Bind(
-          [](ScriptPromiseResolver* resolver,
-             Vector<mojom::blink::SubAppsServiceAddResultPtr> mojom_results) {
-            resolver->Resolve(ResultsFromMojo(std::move(mojom_results)));
+      AddOptionsToMojo(std::move(sub_apps_to_add)),
+      resolver->WrapCallbackInScriptScope(
+          WTF::BindOnce([](ScriptPromiseResolver* resolver,
+                           Vector<SubAppsServiceAddResultPtr> results_mojo) {
+            for (const auto& add_result : results_mojo) {
+              if (add_result->result_code ==
+                  SubAppsServiceResultCode::kFailure) {
+                return resolver->Reject(
+                    AddResultsFromMojo(std::move(results_mojo)));
+              }
+            }
+            resolver->Resolve(AddResultsFromMojo(std::move(results_mojo)));
           })));
   return resolver->Promise();
 }
@@ -167,10 +203,11 @@ ScriptPromise SubApps::list(ScriptState* script_state,
   }
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  GetService()->List(resolver->WrapCallbackInScriptScope(WTF::Bind(
+  GetService()->List(resolver->WrapCallbackInScriptScope(WTF::BindOnce(
       [](ScriptPromiseResolver* resolver, SubAppsServiceListResultPtr result) {
-        if (result->code == SubAppsServiceResult::kSuccess) {
-          resolver->Resolve(result->sub_app_ids);
+        if (result->result_code == SubAppsServiceResultCode::kSuccess) {
+          resolver->Resolve(
+              ListResultsFromMojo(std::move(result->sub_apps_list)));
         } else {
           resolver->Reject(V8ThrowDOMException::CreateOrDie(
               resolver->GetScriptState()->GetIsolate(),
@@ -184,28 +221,37 @@ ScriptPromise SubApps::list(ScriptState* script_state,
 }
 
 ScriptPromise SubApps::remove(ScriptState* script_state,
-                              const String& unhashed_app_id,
+                              const Vector<String>& manifest_id_paths,
                               ExceptionState& exception_state) {
   if (!CheckPreconditionsMaybeThrow(exception_state)) {
     return ScriptPromise();
   }
 
+  // Check that the arguments are root-relative paths.
+  for (const auto& manifest_id_path : manifest_id_paths) {
+    if (KURL(manifest_id_path).IsValid()) {
+      exception_state.ThrowDOMException(
+          DOMExceptionCode::kNotSupportedError,
+          "Arguments must be root-relative paths.");
+      return ScriptPromise();
+    }
+  }
+
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   GetService()->Remove(
-      unhashed_app_id,
-      resolver->WrapCallbackInScriptScope(WTF::Bind(
-          [](ScriptPromiseResolver* resolver, SubAppsServiceResult result) {
-            if (result == SubAppsServiceResult::kSuccess) {
-              resolver->Resolve();
-            } else {
-              resolver->Reject(V8ThrowDOMException::CreateOrDie(
-                  resolver->GetScriptState()->GetIsolate(),
-                  DOMExceptionCode::kOperationError,
-                  "Unable to remove given sub-app. Check whether the calling "
-                  "app is installed."));
+      manifest_id_paths,
+      resolver->WrapCallbackInScriptScope(
+          WTF::BindOnce([](ScriptPromiseResolver* resolver,
+                           Vector<SubAppsServiceRemoveResultPtr> results_mojo) {
+            for (const auto& remove_result : results_mojo) {
+              if (remove_result->result_code ==
+                  SubAppsServiceResultCode::kFailure) {
+                return resolver->Reject(
+                    RemoveResultsFromMojo(std::move(results_mojo)));
+              }
             }
+            resolver->Resolve(RemoveResultsFromMojo(std::move(results_mojo)));
           })));
-
   return resolver->Promise();
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/client/client_test_helper.h"
 #include "gpu/command_buffer/client/gles2_cmd_helper.h"
@@ -204,42 +204,45 @@ class GLES2ImplementationTest : public testing::Test {
       helper_->Initialize(limits.command_buffer_size);
 
       gpu_control_.reset(new StrictMock<MockClientGpuControl>());
-      capabilities_.VisitPrecisions(
+      gl_capabilities_.VisitPrecisions(
           [](GLenum shader, GLenum type,
-             Capabilities::ShaderPrecision* precision) {
+             GLCapabilities::ShaderPrecision* precision) {
             precision->min_range = 3;
             precision->max_range = 5;
             precision->precision = 7;
           });
-      capabilities_.max_combined_texture_image_units =
+      gl_capabilities_.max_combined_texture_image_units =
           kMaxCombinedTextureImageUnits;
-      capabilities_.max_cube_map_texture_size = kMaxCubeMapTextureSize;
-      capabilities_.max_fragment_uniform_vectors = kMaxFragmentUniformVectors;
-      capabilities_.max_renderbuffer_size = kMaxRenderbufferSize;
-      capabilities_.max_texture_image_units = kMaxTextureImageUnits;
+      gl_capabilities_.max_cube_map_texture_size = kMaxCubeMapTextureSize;
+      gl_capabilities_.max_fragment_uniform_vectors =
+          kMaxFragmentUniformVectors;
+      gl_capabilities_.max_renderbuffer_size = kMaxRenderbufferSize;
+      gl_capabilities_.max_texture_image_units = kMaxTextureImageUnits;
       capabilities_.max_texture_size = kMaxTextureSize;
-      capabilities_.max_varying_vectors = kMaxVaryingVectors;
-      capabilities_.max_vertex_attribs = kMaxVertexAttribs;
-      capabilities_.max_vertex_texture_image_units =
+      gl_capabilities_.max_varying_vectors = kMaxVaryingVectors;
+      gl_capabilities_.max_vertex_attribs = kMaxVertexAttribs;
+      gl_capabilities_.max_vertex_texture_image_units =
           kMaxVertexTextureImageUnits;
-      capabilities_.max_vertex_uniform_vectors = kMaxVertexUniformVectors;
-      capabilities_.max_viewport_width = kMaxViewportWidth;
-      capabilities_.max_viewport_height = kMaxViewportHeight;
-      capabilities_.num_compressed_texture_formats =
+      gl_capabilities_.max_vertex_uniform_vectors = kMaxVertexUniformVectors;
+      gl_capabilities_.max_viewport_width = kMaxViewportWidth;
+      gl_capabilities_.max_viewport_height = kMaxViewportHeight;
+      gl_capabilities_.num_compressed_texture_formats =
           kNumCompressedTextureFormats;
-      capabilities_.num_shader_binary_formats = kNumShaderBinaryFormats;
-      capabilities_.max_transform_feedback_separate_attribs =
+      gl_capabilities_.num_shader_binary_formats = kNumShaderBinaryFormats;
+      gl_capabilities_.max_transform_feedback_separate_attribs =
           kMaxTransformFeedbackSeparateAttribs;
-      capabilities_.max_uniform_buffer_bindings = kMaxUniformBufferBindings;
-      capabilities_.bind_generates_resource_chromium =
+      gl_capabilities_.max_uniform_buffer_bindings = kMaxUniformBufferBindings;
+      gl_capabilities_.bind_generates_resource_chromium =
           bind_generates_resource_service ? 1 : 0;
       capabilities_.sync_query = sync_query;
-      capabilities_.occlusion_query_boolean = occlusion_query_boolean;
-      capabilities_.timer_queries = timer_queries;
+      gl_capabilities_.occlusion_query_boolean = occlusion_query_boolean;
+      gl_capabilities_.timer_queries = timer_queries;
       capabilities_.major_version = major_version;
       capabilities_.minor_version = minor_version;
       EXPECT_CALL(*gpu_control_, GetCapabilities())
           .WillOnce(ReturnRef(capabilities_));
+      EXPECT_CALL(*gpu_control_, GetGLCapabilities())
+          .WillOnce(ReturnRef(gl_capabilities_));
 
       {
         InSequence sequence;
@@ -303,6 +306,7 @@ class GLES2ImplementationTest : public testing::Test {
     raw_ptr<CommandBufferEntry> commands_;
     int token_;
     Capabilities capabilities_;
+    GLCapabilities gl_capabilities_;
   };
 
   GLES2ImplementationTest() : commands_(nullptr) {}
@@ -469,7 +473,7 @@ class GLES2ImplementationTest : public testing::Test {
   raw_ptr<MockClientGpuControl> gpu_control_;
   raw_ptr<GLES2CmdHelper> helper_;
   raw_ptr<MockTransferBuffer> transfer_buffer_;
-  raw_ptr<GLES2Implementation> gl_;
+  raw_ptr<GLES2Implementation, DanglingUntriaged> gl_;
   raw_ptr<CommandBufferEntry> commands_;
 };
 
@@ -3597,7 +3601,7 @@ TEST_F(GLES2ImplementationTest, CreateAndConsumeTextureCHROMIUM) {
     GLbyte data[GL_MAILBOX_SIZE_CHROMIUM];
   };
 
-  Mailbox mailbox = Mailbox::Generate();
+  Mailbox mailbox = Mailbox::GenerateLegacyMailboxForTesting();
   Cmds expected;
   expected.cmd.Init(kTexturesStartId, mailbox.name);
   GLuint id = gl_->CreateAndConsumeTextureCHROMIUM(mailbox.name);
@@ -3613,25 +3617,8 @@ TEST_F(GLES2ImplementationTest, CreateAndTexStorage2DSharedImageCHROMIUM) {
 
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
   Cmds expected;
-  expected.cmd.Init(kTexturesStartId, GL_NONE, mailbox.name);
+  expected.cmd.Init(kTexturesStartId, mailbox.name);
   GLuint id = gl_->CreateAndTexStorage2DSharedImageCHROMIUM(mailbox.name);
-  EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
-  EXPECT_EQ(kTexturesStartId, id);
-}
-
-TEST_F(GLES2ImplementationTest,
-       CreateAndTexStorage2DSharedImageWithInternalFormatCHROMIUM) {
-  struct Cmds {
-    cmds::CreateAndTexStorage2DSharedImageINTERNALImmediate cmd;
-    GLbyte data[GL_MAILBOX_SIZE_CHROMIUM];
-  };
-
-  Mailbox mailbox = Mailbox::GenerateForSharedImage();
-  const GLenum kFormat = GL_RGBA;
-  Cmds expected;
-  expected.cmd.Init(kTexturesStartId, kFormat, mailbox.name);
-  GLuint id = gl_->CreateAndTexStorage2DSharedImageWithInternalFormatCHROMIUM(
-      mailbox.name, kFormat);
   EXPECT_EQ(0, memcmp(&expected, commands_, sizeof(expected)));
   EXPECT_EQ(kTexturesStartId, id);
 }

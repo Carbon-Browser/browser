@@ -29,8 +29,10 @@ import org.chromium.base.ContextUtils;
 
 import android.widget.ImageView;
 import android.content.Context;
+import org.chromium.base.task.AsyncTask;
 
 public class RemoteHelper {
+    private static String ip;
 
     public interface SpeedDialInterface {
         void onDappReceived(String json);
@@ -40,7 +42,136 @@ public class RemoteHelper {
         void onTakeoverReceived(String json);
     }
 
-    public RemoteHelper() {
+    public RemoteHelper(SpeedDialInterface mInterface) {
+      SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+
+      String tempIP = mPrefs.getString("u_ip", null);
+      String userGeo = mPrefs.getString("u_geo", null);
+      if (tempIP != null) {
+        ip = tempIP;
+        if (userGeo == null) {
+          getUserGeo(mInterface);
+        }
+      } else {
+        getUserIP(mInterface);
+      }
+    }
+
+    public void getUserGeo(SpeedDialInterface mInterface) {
+      new AsyncTask<String>() {
+          @Override
+          protected String doInBackground() {
+              HttpURLConnection conn = null;
+              StringBuffer response = new StringBuffer();
+              try {
+                  URL mUrl = new URL("https://hydrisapps.com/carbon/android-resources/country-getter/?key=4ktn59ugn93473474nedkdvwoeegzz");
+
+                  conn = (HttpURLConnection) mUrl.openConnection();
+                  conn.setDoOutput(false);
+                  conn.setConnectTimeout(4000);
+                  conn.setDoInput(true);
+                  conn.setUseCaches(false);
+                  conn.setRequestMethod("GET");
+                  conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+
+                  // handle the response
+                  int status = conn.getResponseCode();
+                  if (status != 200) {
+                      throw new IOException("Post failed with error code " + status);
+                  } else {
+                      BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                      String inputLine;
+                      while ((inputLine = in.readLine()) != null) {
+                          response.append(inputLine);
+                      }
+                      in.close();
+                  }
+              } catch (SocketTimeoutException timeout) {
+                  // Time out, don't set a background - lazy
+              } catch (Exception e) {
+
+              } finally {
+                  if (conn != null)
+                      conn.disconnect();
+              }
+
+              return response.toString();
+          }
+
+          @Override
+          protected void onPostExecute(String result) {
+              try {
+                  if (result == null || result == "") return;
+
+                  SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+                  mPrefs.edit().putString("u_geo", result.toString()).apply();
+
+                  String json = mPrefs.getString("cached_dapps", null);
+                  if (json != null && !json.trim().isEmpty()) {
+                      // Only proceed if mInterface is not null
+                      if (mInterface != null) {
+                          mInterface.onDappReceived(json);
+                      }
+                  }
+              } catch (Exception ignore) {}
+          }
+      }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    }
+
+    public void getUserIP(SpeedDialInterface mInterface) {
+        new AsyncTask<String>() {
+            @Override
+            protected String doInBackground() {
+                HttpURLConnection conn = null;
+                StringBuffer response = new StringBuffer();
+                try {
+                    URL mUrl = new URL("https://hydrisapps.com/carbon/android-resources/ip-getter/?key=trccfbgf3q98hr9ofpbjevlksjdcb");
+
+                    conn = (HttpURLConnection) mUrl.openConnection();
+                    conn.setDoOutput(false);
+                    conn.setConnectTimeout(4000);
+                    conn.setDoInput(true);
+                    conn.setUseCaches(false);
+                    conn.setRequestMethod("GET");
+                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+
+                    // handle the response
+                    int status = conn.getResponseCode();
+                    if (status != 200) {
+                        throw new IOException("Post failed with error code " + status);
+                    } else {
+                        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                        String inputLine;
+                        while ((inputLine = in.readLine()) != null) {
+                            response.append(inputLine);
+                        }
+                        in.close();
+                    }
+                } catch (SocketTimeoutException timeout) {
+                    // Time out, don't set a background - lazy
+                } catch (Exception e) {
+
+                } finally {
+                    if (conn != null)
+                        conn.disconnect();
+                }
+
+                return response.toString();
+            }
+
+            @Override
+            protected void onPostExecute(String result) {
+                try {
+                    if (result == null || result == "") return;
+
+                    SharedPreferences mPrefs = ContextUtils.getAppSharedPreferences();
+                    mPrefs.edit().putString("u_ip", result.toString()).apply();
+
+                    if (ip == null) ip = result;
+                    getUserGeo(mInterface);
+                } catch (Exception ignore) {}
+            }
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     public void getDapps(ChromeActivity activity, SpeedDialInterface mInterface) {

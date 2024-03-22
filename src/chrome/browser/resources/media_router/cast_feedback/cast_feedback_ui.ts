@@ -1,19 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './strings.m.js';
-import '//resources/cr_elements/cr_button/cr_button.m.js';
-import '//resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import '//resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import '//resources/cr_elements/cr_input/cr_input.m.js';
-import '//resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
-import '//resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
-import '//resources/cr_elements/shared_style_css.m.js';
-import '//resources/cr_elements/shared_vars_css.m.js';
+import '//resources/cr_elements/cr_button/cr_button.js';
+import '//resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import '//resources/cr_elements/cr_input/cr_input.js';
+import '//resources/cr_elements/cr_radio_button/cr_radio_button.js';
+import '//resources/cr_elements/cr_radio_group/cr_radio_group.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
+import '//resources/cr_elements/cr_shared_vars.css.js';
 
-import {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './cast_feedback_ui.html.js';
@@ -52,7 +52,7 @@ export interface FeedbackUiBrowserProxy {
    * Proxy for chrome.feedbackPrivate.sendFeedback().
    */
   sendFeedback(info: chrome.feedbackPrivate.FeedbackInfo):
-      Promise<chrome.feedbackPrivate.Status>;
+      Promise<chrome.feedbackPrivate.SendFeedbackResult>;
 }
 
 export class FeedbackUiBrowserProxyImpl implements FeedbackUiBrowserProxy {
@@ -63,10 +63,8 @@ export class FeedbackUiBrowserProxyImpl implements FeedbackUiBrowserProxy {
   }
 
   sendFeedback(info: chrome.feedbackPrivate.FeedbackInfo) {
-    return new Promise<chrome.feedbackPrivate.Status>(
-        resolve => chrome.feedbackPrivate.sendFeedback(
-            info, /*loadSystemInfo=*/ undefined, /*formOpenTime=*/ undefined,
-            resolve));
+    return chrome.feedbackPrivate.sendFeedback(
+        info, /*loadSystemInfo=*/ undefined, /*formOpenTime=*/ undefined);
   }
 
   static getInstance(): FeedbackUiBrowserProxy {
@@ -302,8 +300,8 @@ export class FeedbackUiElement extends PolymerElement {
       delayMs: number) {
     setTimeout(() => {
       const sendStartTime = Date.now();
-      this.browserProxy_.sendFeedback(feedback).then(status => {
-        if (status === chrome.feedbackPrivate.Status.SUCCESS) {
+      this.browserProxy_.sendFeedback(feedback).then(result => {
+        if (result.status === chrome.feedbackPrivate.Status.SUCCESS) {
           this.feedbackSent = true;
           this.updateSendDialog_(FeedbackEvent.SUCCEEDED, 'sendSuccess', true);
         } else if (failureCount < this.maxResendAttempts) {

@@ -1,9 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ENTERPRISE_CONNECTORS_DEVICE_TRUST_KEY_MANAGEMENT_CORE_PERSISTENCE_LINUX_KEY_PERSISTENCE_DELEGATE_H_
 #define CHROME_BROWSER_ENTERPRISE_CONNECTORS_DEVICE_TRUST_KEY_MANAGEMENT_CORE_PERSISTENCE_LINUX_KEY_PERSISTENCE_DELEGATE_H_
+
+#include <memory>
+#include <vector>
 
 #include "base/files/file.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/key_persistence_delegate.h"
@@ -15,6 +18,8 @@ class FilePath;
 
 namespace enterprise_connectors {
 
+class SigningKeyPair;
+
 // Linux implementation of the KeyPersistenceDelegate interface.
 class LinuxKeyPersistenceDelegate : public KeyPersistenceDelegate {
  public:
@@ -25,9 +30,12 @@ class LinuxKeyPersistenceDelegate : public KeyPersistenceDelegate {
   bool CheckRotationPermissions() override;
   bool StoreKeyPair(KeyPersistenceDelegate::KeyTrustLevel trust_level,
                     std::vector<uint8_t> wrapped) override;
-  KeyPersistenceDelegate::KeyInfo LoadKeyPair() override;
-  std::unique_ptr<crypto::UnexportableKeyProvider> GetUnexportableKeyProvider()
-      override;
+  scoped_refptr<SigningKeyPair> LoadKeyPair(
+      KeyStorageType type,
+      LoadPersistedKeyResult* result) override;
+  scoped_refptr<SigningKeyPair> CreateKeyPair() override;
+  bool PromoteTemporaryKeyPair() override;
+  bool DeleteKeyPair(KeyStorageType type) override;
 
  private:
   friend class LinuxKeyPersistenceDelegateTest;

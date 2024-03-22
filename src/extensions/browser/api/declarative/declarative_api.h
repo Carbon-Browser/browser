@@ -1,33 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_API_DECLARATIVE_DECLARATIVE_API_H_
 #define EXTENSIONS_BROWSER_API_DECLARATIVE_DECLARATIVE_API_H_
 
+#include <optional>
 #include <string>
-
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "extensions/browser/api/declarative/rules_registry.h"
 #include "extensions/browser/extension_function.h"
+#include "extensions/common/api/events.h"
 
 namespace extensions {
-
-namespace api {
-namespace events {
-namespace Event {
-namespace AddRules {
-struct Params;
-}  // namespace AddRules
-namespace GetRules {
-struct Params;
-}  // namespace GetRules
-namespace RemoveRules {
-struct Params;
-}  // namespace RemoveRules
-}  // namespace Event
-}  // namespace events
-}  // namespace api
 
 class RulesFunction : public ExtensionFunction {
  public:
@@ -75,7 +60,7 @@ class EventsEventAddRulesFunction : public RulesFunction {
   void RecordUMA(const std::string& event_name) const override;
 
  private:
-  std::unique_ptr<api::events::Event::AddRules::Params> params_;
+  std::optional<api::events::Event::AddRules::Params> params_;
 };
 
 class EventsEventRemoveRulesFunction : public RulesFunction {
@@ -93,7 +78,7 @@ class EventsEventRemoveRulesFunction : public RulesFunction {
   void RecordUMA(const std::string& event_name) const override;
 
  private:
-  std::unique_ptr<api::events::Event::RemoveRules::Params> params_;
+  std::optional<api::events::Event::RemoveRules::Params> params_;
 };
 
 class EventsEventGetRulesFunction : public RulesFunction {
@@ -111,7 +96,7 @@ class EventsEventGetRulesFunction : public RulesFunction {
   void RecordUMA(const std::string& event_name) const override;
 
  private:
-  std::unique_ptr<api::events::Event::GetRules::Params> params_;
+  std::optional<api::events::Event::GetRules::Params> params_;
 };
 
 }  // namespace extensions

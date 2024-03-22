@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <algorithm>
+
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_math.h"
+#include "base/ranges/algorithm.h"
 #include "mojo/core/ports/user_message.h"
 
 namespace mojo {
@@ -279,11 +282,11 @@ void UserMessageEvent::SerializeData(void* buffer) const {
   data->padding = 0;
 
   auto* ports_data = reinterpret_cast<PortDescriptor*>(data + 1);
-  std::copy(port_descriptors_.begin(), port_descriptors_.end(), ports_data);
+  base::ranges::copy(port_descriptors_, ports_data);
 
   auto* port_names_data =
       reinterpret_cast<PortName*>(ports_data + ports_.size());
-  std::copy(ports_.begin(), ports_.end(), port_names_data);
+  base::ranges::copy(ports_, port_names_data);
 }
 
 PortAcceptedEvent::PortAcceptedEvent(const PortName& port_name,

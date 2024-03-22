@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/test/bookmark_test_helpers.h"
 #include "components/bookmarks/test/test_bookmark_client.h"
 #include "content/public/test/browser_task_environment.h"
@@ -89,7 +90,8 @@ TEST_F(RecentlyUsedFoldersComboModelTest, NotifyObserver) {
 
   const size_t initial_count = model.GetItemCount();
   // Remove a folder, it should remove an item from the model too.
-  bookmark_model->Remove(sub_folder);
+  bookmark_model->Remove(sub_folder,
+                         bookmarks::metrics::BookmarkEditSource::kOther);
   EXPECT_TRUE(observer.GetAndClearChanged());
   const size_t updated_count = model.GetItemCount();
   EXPECT_LT(updated_count, initial_count);

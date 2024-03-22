@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_CUSTOM_HANDLERS_PROTOCOL_HANDLER_UTILS_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_CUSTOM_HANDLERS_PROTOCOL_HANDLER_UTILS_H_
 
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/common/security/protocol_handler_security_level.h"
 

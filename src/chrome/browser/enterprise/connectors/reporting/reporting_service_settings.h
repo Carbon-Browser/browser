@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,6 @@
 
 namespace enterprise_connectors {
 
-// Feature flags for individual event types.
-extern const base::Feature kExtensionEventsEnabled;
-
 // The settings for a report service obtained from a connector policy.
 class ReportingServiceSettings {
  public:
@@ -38,6 +35,7 @@ class ReportingServiceSettings {
 
   static constexpr char kExtensionInstallEvent[] =
       "browserExtensionInstallEvent";
+  static constexpr char kBrowserCrashEvent[] = "browserCrashEvent";
 
   // All events that the reporting connector supports.
   static const constexpr char* kAllReportingEvents[] = {
@@ -49,7 +47,10 @@ class ReportingServiceSettings {
       extensions::SafeBrowsingPrivateEventRouter::kKeyUnscannedFileEvent,
       extensions::SafeBrowsingPrivateEventRouter::kKeyLoginEvent,
       extensions::SafeBrowsingPrivateEventRouter::kKeyPasswordBreachEvent,
+      extensions::SafeBrowsingPrivateEventRouter::
+          kKeyUrlFilteringInterstitialEvent,
       kExtensionInstallEvent,
+      kBrowserCrashEvent,
   };
 
  private:

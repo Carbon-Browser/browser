@@ -1,9 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "fuchsia_web/common/test/frame_test_util.h"
 
+#include <utility>
+#include <vector>
+
+#include <optional>
+#include "base/check.h"
 #include "base/fuchsia/mem_buffer_util.h"
 #include "base/json/json_reader.h"
 #include "base/run_loop.h"
@@ -32,8 +37,8 @@ bool LoadUrlAndExpectResponse(
   return LoadUrlAndExpectResponse(controller.get(), std::move(params), url);
 }
 
-absl::optional<base::Value> ExecuteJavaScript(fuchsia::web::Frame* frame,
-                                              base::StringPiece script) {
+std::optional<base::Value> ExecuteJavaScript(fuchsia::web::Frame* frame,
+                                             base::StringPiece script) {
   base::test::TestFuture<fuchsia::web::Frame_ExecuteJavaScript_Result> result;
   frame->ExecuteJavaScript({"*"}, base::MemBufferFromString(script, "test"),
                            CallbackToFitFunction(result.GetCallback()));
@@ -41,7 +46,7 @@ absl::optional<base::Value> ExecuteJavaScript(fuchsia::web::Frame* frame,
   if (!result.Wait() || !result.Get().is_response())
     return {};
 
-  absl::optional<std::string> result_json =
+  std::optional<std::string> result_json =
       base::StringFromMemBuffer(result.Get().response().result);
   if (!result_json) {
     return {};

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,59 @@
 #include <list>
 #include <utility>
 
-#include "base/lazy_instance.h"
-#include "base/threading/thread_local.h"
+#include <string.h>
+
+#include "base/json/json_reader.h"
+#include "base/json/json_writer.h"
+#include "base/logging.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/strings/string_util.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/chrome/chrome.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 #include "chrome/test/chromedriver/chrome/web_view.h"
 #include "chrome/test/chromedriver/logging.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
 namespace {
 
-base::LazyInstance<base::ThreadLocalPointer<Session>>::DestructorAtExit
-    lazy_tls_session = LAZY_INSTANCE_INITIALIZER;
+ABSL_CONST_INIT thread_local Session* session = nullptr;
 
 }  // namespace
+
+namespace internal {
+
+Status SplitChannel(std::string* channel,
+                    int* connection_id,
+                    std::string* suffix) {
+  DCHECK(channel);  // precondition
+  size_t k = channel->size();
+  for (; k && (*channel)[k - 1] != '/'; --k) {
+  }
+  if (k == 0) {
+    return Status{kUnknownError,
+                  "channel does not end with an expected suffix"};
+  }
+  *suffix = channel->substr(k - 1);
+  channel->erase(std::next(channel->begin(), k - 1), channel->end());
+  --k;
+
+  for (; k && (*channel)[k - 1] != '/'; --k) {
+  }
+  if (k == 0) {
+    return Status{kUnknownError, "channel does not contain connection_id"};
+  }
+  std::string connection_str = channel->substr(k);
+  channel->erase(std::next(channel->begin(), k - 1), channel->end());
+  if (!base::StringToInt(connection_str, connection_id)) {
+    return Status{kUnknownError,
+                  "connection_id in the channel must be integer"};
+  }
+
+  return Status{kOk};
+}
+}  // namespace internal
 
 FrameInfo::FrameInfo(const std::string& parent_frame_id,
                      const std::string& frame_id,
@@ -29,7 +68,7 @@ FrameInfo::FrameInfo(const std::string& parent_frame_id,
       frame_id(frame_id),
       chromedriver_frame_id(chromedriver_frame_id) {}
 
-InputCancelListEntry::InputCancelListEntry(base::DictionaryValue* input_state,
+InputCancelListEntry::InputCancelListEntry(base::Value::Dict* input_state,
                                            const MouseEvent* mouse_event,
                                            const TouchEvent* touch_event,
                                            const KeyEvent* key_event)
@@ -51,10 +90,29 @@ InputCancelListEntry::InputCancelListEntry(InputCancelListEntry&& other) =
 
 InputCancelListEntry::~InputCancelListEntry() = default;
 
+BidiConnection::BidiConnection(int connection_id,
+                               SendTextFunc send_response,
+                               CloseFunc close_connection)
+    : connection_id(connection_id),
+      send_response(std::move(send_response)),
+      close_connection(std::move(close_connection)) {}
+
+BidiConnection::BidiConnection(BidiConnection&& other) = default;
+
+BidiConnection::~BidiConnection() = default;
+
+BidiConnection& BidiConnection::operator=(BidiConnection&& other) = default;
+
 // The default timeout values came from W3C spec.
 const base::TimeDelta Session::kDefaultImplicitWaitTimeout = base::Seconds(0);
 const base::TimeDelta Session::kDefaultPageLoadTimeout = base::Seconds(300);
 const base::TimeDelta Session::kDefaultScriptTimeout = base::Seconds(30);
+// The extra timeout values.
+const base::TimeDelta Session::kDefaultBrowserStartupTimeout =
+    base::Seconds(60);
+const char Session::kChannelSuffix[] = "/chan";
+const char Session::kNoChannelSuffix[] = "/nochan";
+const char Session::kBlockingChannelSuffix[] = "/blocking";
 
 Session::Session(const std::string& id)
     : id(id),
@@ -142,10 +200,92 @@ void Session::SwitchFrameInternal(bool for_top_frame) {
   }
 }
 
-Session* GetThreadLocalSession() {
-  return lazy_tls_session.Pointer()->Get();
+Status Session::OnBidiResponse(base::Value::Dict payload) {
+  std::string* channel = payload.FindString("channel");
+  if (!channel) {
+    return Status{kUnknownError, "channel is missing in the BiDi response"};
+  }
+
+  if (base::EndsWith(*channel, kBlockingChannelSuffix)) {
+    if (!awaiting_bidi_response) {
+      return Status{kUnknownError, "unexpected blocking BiDi response"};
+    }
+    awaiting_bidi_response = false;
+    size_t pos = channel->size() - strlen(kBlockingChannelSuffix);
+    // Update the channel value of the payload in-place.
+    channel->erase(std::next(channel->begin(), pos), channel->end());
+  }
+
+  int connection_id = -1;
+  std::string suffix;
+  Status status = internal::SplitChannel(channel, &connection_id, &suffix);
+  if (status.IsError()) {
+    return status;
+  }
+
+  if (suffix == kNoChannelSuffix) {
+    payload.Remove("channel");
+  } else if (suffix != kChannelSuffix) {
+    return Status{kUnknownError,
+                  "unexpected channel name in the BiDi response"};
+  }
+
+  std::string message;
+  // `OPTIONS_OMIT_DOUBLE_TYPE_PRESERVATION` is needed to keep the BiDi format.
+  // crbug.com/chromedriver/4297.
+  if (!base::JSONWriter::WriteWithOptions(
+          payload, base::JSONWriter::OPTIONS_OMIT_DOUBLE_TYPE_PRESERVATION,
+          &message)) {
+    return Status{kUnknownError, "unable to serialize a BiDi response"};
+  }
+
+  auto it = base::ranges::find(bidi_connections_, connection_id,
+                               &BidiConnection::connection_id);
+  if (it == bidi_connections_.end()) {
+    // It can happen that we receive a message from the mapper designated to the
+    // channel that has recently been closed.
+    LOG(INFO) << "BiDi connection is closed. Skipping the BiDiMapper message: "
+              << message;
+    return Status{kOk};
+  }
+
+  it->send_response.Run(std::move(message));
+  return Status{kOk};
 }
 
-void SetThreadLocalSession(std::unique_ptr<Session> session) {
-  lazy_tls_session.Pointer()->Set(session.release());
+void Session::AddBidiConnection(int connection_id,
+                                SendTextFunc send_response,
+                                CloseFunc close_connection) {
+  bidi_connections_.emplace_back(connection_id, std::move(send_response),
+                                 std::move(close_connection));
+}
+
+void Session::RemoveBidiConnection(int connection_id) {
+  // As connections can be closed by both remote and local ends
+  // we don't treat an attempt to close a non-existing (presumably closed)
+  // connection as an error.
+  // Reallistically we will not have many connections, therefore linear search
+  // is optimal.
+  auto it = base::ranges::find(bidi_connections_, connection_id,
+                               &BidiConnection::connection_id);
+  if (it != bidi_connections_.end()) {
+    bidi_connections_.erase(it);
+  }
+}
+
+void Session::CloseAllConnections() {
+  for (BidiConnection& conn : bidi_connections_) {
+    // If the callback fails (asynchronously) because the connection was
+    // terminated we simply ignore this - it is already closed.
+    conn.close_connection.Run();
+  }
+  bidi_connections_.clear();
+}
+
+Session* GetThreadLocalSession() {
+  return session;
+}
+
+void SetThreadLocalSession(std::unique_ptr<Session> new_session) {
+  session = new_session.release();
 }

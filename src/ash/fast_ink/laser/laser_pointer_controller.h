@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,7 @@ class ASH_EXPORT LaserPointerObserver : public base::CheckedObserver {
 
 // Controller for the laser pointer functionality. Enables/disables laser
 // pointer as well as receives points and passes them off to be rendered.
-class ASH_EXPORT LaserPointerController
-    : public fast_ink::FastInkPointerController {
+class ASH_EXPORT LaserPointerController : public FastInkPointerController {
  public:
   LaserPointerController();
 

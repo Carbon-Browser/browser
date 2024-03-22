@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <string>
 
 #include "build/build_config.h"
+#include "net/base/host_port_pair.h"
 #include "net/ssl/client_cert_identity.h"
 
 class GURL;
@@ -27,6 +28,11 @@ bool IsBrowserManaged(Profile* profile);
 // Extracts the domain from provided |email| if it's an email address and
 // returns an empty string, otherwise.
 std::string GetDomainFromEmail(const std::string& email);
+
+// Returns an HTTPS URL for the host and port identified by `host_port_pair`.
+// This is intended to be used to build a `requesting_url` for
+// `AutoSelectCertificates`.
+GURL GetRequestingUrl(const net::HostPortPair host_port_pair);
 
 // Partitions |client_certs| according to the value of the
 // |ContentSettingsType::AUTO_SELECT_CERTIFICATE| content setting for the
@@ -58,11 +64,18 @@ bool UserAcceptedAccountManagement(Profile* profile);
 // management through the enterprise account confirmation dialog.
 bool ProfileCanBeManaged(Profile* profile);
 
+// Checks `email_domain` against the list of pre-defined known consumer domains.
+// Use this for optimization purposes when you want to skip some code paths for
+// most non-managed (=consumer) users with domains like gmail.com. Note that it
+// can still return `false` for consumer domains which are not hardcoded in
+// implementation.
+bool IsKnownConsumerDomain(const std::string& email_domain);
+
 #if BUILDFLAG(IS_ANDROID)
 
 // Returns the UTF8-encoded string representation of the entity that manages
 // `profile` or nullopt if unmanaged. `profile` must be not-null.
-std::string GetAccountManagerName(Profile* profile);
+std::string GetBrowserManagerName(Profile* profile);
 
 #endif  // BUILDFLAG(IS_ANDROID)
 

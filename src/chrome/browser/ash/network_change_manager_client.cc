@@ -1,17 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/network_change_manager_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/crosapi/mojom/network_change.mojom.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "content/public/browser/network_service_instance.h"
-#include "content/public/common/network_service_util.h"
-#include "net/base/network_change_notifier_posix.h"
+#include "content/public/browser/network_service_util.h"
+#include "net/base/network_change_notifier_passive.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 
 namespace ash {
@@ -21,14 +22,14 @@ NetworkChangeManagerClient* g_network_change_manager_client = nullptr;
 }
 
 NetworkChangeManagerClient::NetworkChangeManagerClient(
-    net::NetworkChangeNotifierPosix* network_change_notifier)
+    net::NetworkChangeNotifierPassive* network_change_notifier)
     : connection_type_(net::NetworkChangeNotifier::GetConnectionType()),
       connection_subtype_(net::NetworkChangeNotifier::GetConnectionSubtype()),
       network_change_notifier_(network_change_notifier) {
   DCHECK(!g_network_change_manager_client);
   g_network_change_manager_client = this;
 
-  PowerManagerClient::Get()->AddObserver(this);
+  chromeos::PowerManagerClient::Get()->AddObserver(this);
 
   network_state_handler_observer_.Observe(
       NetworkHandler::Get()->network_state_handler());
@@ -42,7 +43,7 @@ NetworkChangeManagerClient::NetworkChangeManagerClient(
 }
 
 NetworkChangeManagerClient::~NetworkChangeManagerClient() {
-  PowerManagerClient::Get()->RemoveObserver(this);
+  chromeos::PowerManagerClient::Get()->RemoveObserver(this);
   DCHECK_EQ(g_network_change_manager_client, this);
   g_network_change_manager_client = nullptr;
 }
@@ -64,7 +65,7 @@ void NetworkChangeManagerClient::SuspendDone(base::TimeDelta sleep_duration) {
 }
 
 void NetworkChangeManagerClient::DefaultNetworkChanged(
-    const chromeos::NetworkState* default_network) {
+    const NetworkState* default_network) {
   bool connection_type_changed = false;
   bool connection_subtype_changed = false;
   bool ip_address_changed = false;
@@ -118,7 +119,7 @@ void NetworkChangeManagerClient::ReconnectToNetworkChangeManager() {
 }
 
 void NetworkChangeManagerClient::UpdateState(
-    const chromeos::NetworkState* default_network,
+    const NetworkState* default_network,
     bool* dns_changed,
     bool* ip_address_changed,
     bool* connection_type_changed,

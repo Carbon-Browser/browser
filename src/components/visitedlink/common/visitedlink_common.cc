@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,13 +19,11 @@ namespace visitedlink {
 const VisitedLinkCommon::Fingerprint VisitedLinkCommon::null_fingerprint_ = 0;
 const VisitedLinkCommon::Hash VisitedLinkCommon::null_hash_ = -1;
 
-VisitedLinkCommon::VisitedLinkCommon()
-    : hash_table_(nullptr), table_length_(0) {
+VisitedLinkCommon::VisitedLinkCommon() {
   memset(salt_, 0, sizeof(salt_));
 }
 
-VisitedLinkCommon::~VisitedLinkCommon() {
-}
+VisitedLinkCommon::~VisitedLinkCommon() = default;
 
 // FIXME: this uses linear probing, it should be replaced with quadratic
 // probing or something better. See VisitedLinkWriter::AddFingerprint

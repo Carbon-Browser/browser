@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@
 #include <stdint.h>
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/auto_reset.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "content/common/content_export.h"
@@ -24,7 +25,6 @@ class WaitableEvent;
 }
 
 namespace blink {
-class WebResourceRequestSenderDelegate;
 struct UserAgentMetadata;
 
 namespace scheduler {
@@ -73,11 +73,11 @@ class CONTENT_EXPORT RenderThread : virtual public ChildThread {
       int32_t routing_id,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner) = 0;
   virtual void RemoveRoute(int32_t routing_id) = 0;
-  virtual int GenerateRoutingID() = 0;
   virtual bool GenerateFrameRoutingID(
       int32_t& routing_id,
       blink::LocalFrameToken& frame_token,
-      base::UnguessableToken& devtools_frame_token) = 0;
+      base::UnguessableToken& devtools_frame_token,
+      blink::DocumentToken& document_token) = 0;
 
   // These map to IPC::ChannelProxy methods.
   virtual void AddFilter(IPC::MessageFilter* filter) = 0;
@@ -86,12 +86,6 @@ class CONTENT_EXPORT RenderThread : virtual public ChildThread {
   // Add/remove observers for the process.
   virtual void AddObserver(RenderThreadObserver* observer) = 0;
   virtual void RemoveObserver(RenderThreadObserver* observer) = 0;
-
-  // Set the WebResourceRequestSender delegate object for this process.
-  // This does not take the ownership of the delegate. It is expected that the
-  // delegate is kept alive while a request may be dispatched.
-  virtual void SetResourceRequestSenderDelegate(
-      blink::WebResourceRequestSenderDelegate* delegate) = 0;
 
   // Post task to all worker threads. Returns number of workers.
   virtual int PostTaskToAllWebWorkers(base::RepeatingClosure closure) = 0;
@@ -108,14 +102,15 @@ class CONTENT_EXPORT RenderThread : virtual public ChildThread {
 
   // Returns the user-agent string.
   virtual blink::WebString GetUserAgent() = 0;
-  virtual blink::WebString GetFullUserAgent() = 0;
-  virtual blink::WebString GetReducedUserAgent() = 0;
   virtual const blink::UserAgentMetadata& GetUserAgentMetadata() = 0;
 
   // Write a representation of the current Renderer process into a trace.
   virtual void WriteIntoTrace(
       perfetto::TracedProto<perfetto::protos::pbzero::RenderProcessHost>
           proto) = 0;
+
+ private:
+  const base::AutoReset<RenderThread*> resetter_;
 };
 
 }  // namespace content

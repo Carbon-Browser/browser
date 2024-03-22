@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -172,9 +172,10 @@ def _BuildBrowserArgs(user_data_dir, extra_browser_args, variations_args):
   """
   # Make sure each run is fresh, but avoid first run setup steps.
   browser_args = [
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--user-data-dir=%s' % user_data_dir,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--user-data-dir=%s' % user_data_dir,
+      '--disable-field-trial-config',
   ]
   browser_args.extend(extra_browser_args)
   browser_args.extend(variations_args)

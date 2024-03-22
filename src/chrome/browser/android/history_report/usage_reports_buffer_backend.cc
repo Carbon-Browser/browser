@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,10 +57,6 @@ bool UsageReportsBufferBackend::Init() {
     return false;
   }
   CHECK(db_);
-
-  UMA_HISTOGRAM_COUNTS_1M(
-      "Search.HistoryReport.UsageReportsBuffer.LevelDBEntries",
-      usage_report_util::DatabaseEntries(db_.get()));
 
   return true;
 }

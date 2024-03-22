@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include "ash/public/cpp/ime_controller.h"
 #include "ash/public/cpp/ime_info.h"
+#include "base/memory/raw_ptr.h"
 
 // Class that resets the ImeController instance to nullptr and then restores it
 // when it is destroyed.
@@ -21,7 +22,7 @@ class ImeControllerResetterForTest {
   ~ImeControllerResetterForTest();
 
  private:
-  ash::ImeController* const instance_;
+  const raw_ptr<ash::ImeController, ExperimentalAsh> instance_;
 };
 
 class TestImeController : private ImeControllerResetterForTest,

@@ -1,8 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addSingletonGetter, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/ash/common/cr.m.js';
 
 /** @interface */
 export class NetworkUIBrowserProxy {
@@ -25,6 +25,11 @@ export class NetworkUIBrowserProxy {
    * @return {Promise<!Array>}
    */
   getShillNetworkProperties(guid) {}
+
+  /**
+   * @return {Promise<!Array>}
+   */
+  getFirstWifiNetworkProperties() {}
 
   /**
    * @param {string} content
@@ -72,6 +77,40 @@ export class NetworkUIBrowserProxy {
   disableActiveESimProfile() {}
 
   resetEuicc() {}
+
+  resetApnMigrator() {}
+
+  /**
+   * @return {Promise<string>}
+   */
+  getTetheringCapabilities() {}
+
+  /**
+   * @return {Promise<string>}
+   */
+  getTetheringStatus() {}
+
+  /**
+   * @return {Promise<string>}
+   */
+  getTetheringConfig() {}
+
+  /**
+   * @param {string} config
+   * @return {Promise<string>}
+   */
+  setTetheringConfig(config) {}
+
+  /**
+   * @return {Promise<string>}
+   */
+  checkTetheringReadiness() {}
+
+  /**
+   * @param {boolean} enabled
+   * @return {Promise<string>}
+   */
+  setTetheringEnabled(enabled) {}
 }
 
 /**
@@ -96,6 +135,11 @@ export class NetworkUIBrowserProxyImpl {
   /** @override */
   getShillNetworkProperties(guid) {
     return sendWithPromise('getShillNetworkProperties', guid);
+  }
+
+  /** @override */
+  getFirstWifiNetworkProperties() {
+    return sendWithPromise('getFirstWifiNetworkProperties');
   }
 
   /** @override */
@@ -161,6 +205,61 @@ export class NetworkUIBrowserProxyImpl {
   resetEuicc() {
     chrome.send('resetEuicc');
   }
+
+  /** @override */
+  resetApnMigrator() {
+    chrome.send('resetApnMigrator');
+  }
+
+  /**
+   * @return {Promise<string>}
+   */
+  getTetheringCapabilities() {
+    return sendWithPromise('getTetheringCapabilities');
+  }
+
+  /**
+   * @return {Promise<string>}
+   */
+  getTetheringStatus() {
+    return sendWithPromise('getTetheringStatus');
+  }
+
+  /**
+   * @return {Promise<string>}
+   */
+  getTetheringConfig() {
+    return sendWithPromise('getTetheringConfig');
+  }
+
+  /**
+   * @param {string} config
+   * @return {Promise<string>}
+   */
+  setTetheringConfig(config) {
+    return sendWithPromise('setTetheringConfig', config);
+  }
+
+  /**
+   * @return {Promise<string>}
+   */
+  checkTetheringReadiness() {
+    return sendWithPromise('checkTetheringReadiness');
+  }
+
+  /**
+   * @param {boolean} enabled
+   * @return {Promise<string>}
+   */
+  setTetheringEnabled(enabled) {
+    return sendWithPromise('setTetheringEnabled', enabled);
+  }
+
+  /** @return {!NetworkUIBrowserProxy} */
+  static getInstance() {
+    return instance || (instance = new NetworkUIBrowserProxyImpl());
+  }
 }
 
-addSingletonGetter(NetworkUIBrowserProxyImpl);
+/** @type {?NetworkUIBrowserProxy} */
+let instance = null;

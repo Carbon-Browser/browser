@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GTK_X_GTK_UI_PLATFORM_X11_H_
 #define UI_GTK_X_GTK_UI_PLATFORM_X11_H_
 
-#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/x/connection.h"
 #include "ui/gtk/gtk_ui_platform.h"
@@ -34,11 +34,14 @@ class GtkUiPlatformX11 : public GtkUiPlatform {
                                 gfx::AcceleratedWidget parent) override;
   void ClearTransientFor(gfx::AcceleratedWidget parent) override;
   void ShowGtkWindow(GtkWindow* window) override;
+  std::unique_ptr<ui::LinuxInputMethodContext> CreateInputMethodContext(
+      ui::LinuxInputMethodContextDelegate* delegate) const override;
+  bool IncludeFontScaleInDeviceScale() const override;
 
  private:
   GdkDisplay* GetGdkDisplay();
 
-  const raw_ptr<x11::Connection> connection_;
+  const raw_ref<x11::Connection> connection_;
   raw_ptr<GdkDisplay> display_ = nullptr;
   std::unique_ptr<GtkEventLoopX11> event_loop_;
 };

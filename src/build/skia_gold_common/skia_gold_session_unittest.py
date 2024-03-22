@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -349,6 +349,25 @@ class SkiaGoldSessionAuthenticateTest(fake_filesystem_unittest.TestCase):
                                                 self._json_keys, '', '')
     with self.assertRaises(RuntimeError):
       session.Authenticate(use_luci=False)
+
+  def test_commandWithUseLuciAndServiceAccount(self) -> None:
+    args = createSkiaGoldArgs(git_revision='a', local_pixel_tests=False)
+    sgp = skia_gold_properties.SkiaGoldProperties(args)
+    session = skia_gold_session.SkiaGoldSession(self._working_dir, sgp,
+                                                self._json_keys, '', '')
+    with self.assertRaises(AssertionError):
+      session.Authenticate(use_luci=True, service_account='a')
+
+  def test_commandWithServiceAccount(self) -> None:
+    self.cmd_mock.return_value = (None, None)
+    args = createSkiaGoldArgs(git_revision='a', local_pixel_tests=False)
+    sgp = skia_gold_properties.SkiaGoldProperties(args)
+    session = skia_gold_session.SkiaGoldSession(self._working_dir, sgp,
+                                                self._json_keys, '', '')
+    session.Authenticate(use_luci=False, service_account='service_account')
+    call_args = self.cmd_mock.call_args[0][0]
+    self.assertNotIn('--luci', call_args)
+    assertArgWith(self, call_args, '--service-account', 'service_account')
 
   def test_commandCommonArgs(self) -> None:
     self.cmd_mock.return_value = (None, None)

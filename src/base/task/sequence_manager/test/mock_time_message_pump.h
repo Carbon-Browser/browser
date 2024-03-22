@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_TASK_SEQUENCE_MANAGER_TEST_MOCK_TIME_MESSAGE_PUMP_H_
 #define BASE_TASK_SEQUENCE_MANAGER_TEST_MOCK_TIME_MESSAGE_PUMP_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump.h"
 #include "base/synchronization/waitable_event.h"

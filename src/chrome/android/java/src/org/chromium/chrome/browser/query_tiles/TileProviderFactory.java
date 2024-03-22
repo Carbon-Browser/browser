@@ -1,10 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.query_tiles;
 
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.query_tiles.TileProvider;
 
@@ -27,6 +29,7 @@ public class TileProviderFactory {
     /** For testing only. */
     public static void setTileProviderForTesting(TileProvider provider) {
         sTileProviderForTesting = provider;
+        ResettersForTesting.register(() -> sTileProviderForTesting = null);
     }
 
     @NativeMethods

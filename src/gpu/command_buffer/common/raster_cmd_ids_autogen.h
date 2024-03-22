@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,16 +28,18 @@
   OP(DeleteTransferCacheEntryINTERNAL)            /* 269 */ \
   OP(UnlockTransferCacheEntryINTERNAL)            /* 270 */ \
   OP(DeletePaintCachePathsINTERNALImmediate)      /* 271 */ \
-  OP(ClearPaintCacheINTERNAL)                     /* 272 */ \
-  OP(CopySubTextureINTERNALImmediate)             /* 273 */ \
-  OP(WritePixelsINTERNALImmediate)                /* 274 */ \
-  OP(ReadbackARGBImagePixelsINTERNALImmediate)    /* 275 */ \
-  OP(ReadbackYUVImagePixelsINTERNALImmediate)     /* 276 */ \
-  OP(ConvertYUVAMailboxesToRGBINTERNALImmediate)  /* 277 */ \
-  OP(ConvertRGBAToYUVAMailboxesINTERNALImmediate) /* 278 */ \
-  OP(TraceBeginCHROMIUM)                          /* 279 */ \
-  OP(TraceEndCHROMIUM)                            /* 280 */ \
-  OP(SetActiveURLCHROMIUM)                        /* 281 */
+  OP(DeletePaintCachePathsINTERNAL)               /* 272 */ \
+  OP(ClearPaintCacheINTERNAL)                     /* 273 */ \
+  OP(CopySharedImageINTERNALImmediate)            /* 274 */ \
+  OP(WritePixelsINTERNALImmediate)                /* 275 */ \
+  OP(WritePixelsYUVINTERNALImmediate)             /* 276 */ \
+  OP(ReadbackARGBImagePixelsINTERNALImmediate)    /* 277 */ \
+  OP(ReadbackYUVImagePixelsINTERNALImmediate)     /* 278 */ \
+  OP(ConvertYUVAMailboxesToRGBINTERNALImmediate)  /* 279 */ \
+  OP(ConvertRGBAToYUVAMailboxesINTERNALImmediate) /* 280 */ \
+  OP(TraceBeginCHROMIUM)                          /* 281 */ \
+  OP(TraceEndCHROMIUM)                            /* 282 */ \
+  OP(SetActiveURLCHROMIUM)                        /* 283 */
 
 enum CommandId {
   kOneBeforeStartPoint =

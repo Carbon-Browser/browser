@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@ namespace blink {
 
 class CanvasContextCreationAttributesModule;
 class ExceptionState;
-class ExecutionContext;
 class HTMLCanvasElement;
 class OffscreenCanvas;
+class ScriptState;
 
 class MODULES_EXPORT HTMLCanvasElementModule {
   STATIC_ONLY(HTMLCanvasElementModule);
@@ -29,12 +29,12 @@ class MODULES_EXPORT HTMLCanvasElementModule {
       const String& context_id,
       const CanvasContextCreationAttributesModule* attributes,
       ExceptionState& exception_state);
-  static OffscreenCanvas* transferControlToOffscreen(ExecutionContext*,
+  static OffscreenCanvas* transferControlToOffscreen(ScriptState*,
                                                      HTMLCanvasElement&,
                                                      ExceptionState&);
 
  private:
-  static OffscreenCanvas* TransferControlToOffscreenInternal(ExecutionContext*,
+  static OffscreenCanvas* TransferControlToOffscreenInternal(ScriptState*,
                                                              HTMLCanvasElement&,
                                                              ExceptionState&);
 };

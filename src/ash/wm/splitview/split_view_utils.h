@@ -1,18 +1,20 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_WM_SPLITVIEW_SPLIT_VIEW_UTILS_H_
 #define ASH_WM_SPLITVIEW_SPLIT_VIEW_UTILS_H_
 
+#include <optional>
 #include <vector>
 
 #include "ash/ash_export.h"
 #include "ash/wm/splitview/split_view_controller.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_observer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/gfx/geometry/transform.h"
+#include "ui/views/widget/widget.h"
 
 namespace aura {
 class Window;
@@ -99,7 +101,7 @@ class ASH_EXPORT WindowTransformAnimationObserver
   void OnWindowDestroying(aura::Window* window) override;
 
  private:
-  aura::Window* const window_;
+  const raw_ptr<aura::Window, ExperimentalAsh> window_;
 
   WindowTransformAnimationObserver(const WindowTransformAnimationObserver&) =
       delete;
@@ -140,7 +142,7 @@ void ShowAppCannotSnapToast();
 // ignoring any properties of the window itself. The |root_window| is of the
 // current screen. |initial_location_in_screen| is the location at drag start if
 // the drag began in |root_window|, and is empty otherwise. To be snappable
-// (meaning the return value is not |SplitViewController::NONE|),
+// (meaning the return value is not |SplitViewController::SnapPosition::kNone|),
 // |location_in_screen| must be either inside |snap_distance_from_edge| or
 // dragged toward the edge for at least |minimum_drag_distance| distance until
 // it's dragged into a suitable edge of the work area of |root_window| (i.e.,
@@ -149,7 +151,7 @@ void ShowAppCannotSnapToast();
 SplitViewController::SnapPosition GetSnapPositionForLocation(
     aura::Window* root_window,
     const gfx::Point& location_in_screen,
-    const absl::optional<gfx::Point>& initial_location_in_screen,
+    const std::optional<gfx::Point>& initial_location_in_screen,
     int snap_distance_from_edge,
     int minimum_drag_distance,
     int horizontal_edge_inset,
@@ -169,6 +171,38 @@ ASH_EXPORT SplitViewController::SnapPosition GetSnapPosition(
     int minimum_drag_distance,
     int horizontal_edge_inset,
     int vertical_edge_inset);
+
+// Returns true if the snap group is enabled in clamshell mode. The
+// `split_view_divider_` will show to indicate that the two windows are in a
+// snap-group state.
+bool IsSnapGroupEnabledInClamshellMode();
+
+// Gets the expected window component for a window in split view, depending on
+// current screen orientation for resizing purpose.
+int GetWindowComponentForResize(aura::Window* window);
+
+// Returns the widget init params needed to create the widget.
+views::Widget::InitParams CreateWidgetInitParams(
+    aura::Window* parent_window,
+    const std::string& widget_name);
+
+// Builds the full histogram that records whether the window layout completes on
+// `SplitViewOverviewSession` exit. The full histogram is shown in the example
+// below:
+// |------------prefix----------|-----root_word-------------------|
+// "Ash.SplitViewOverviewSession.WindowLayoutCompleteOnSessionExit"
+//                                                               |--ui_mode--|
+//                                                            ".ClamshellMode",
+ASH_EXPORT std::string BuildWindowLayoutCompleteOnSessionExitHistogram();
+
+// Builds the full histogram that records the exit point of the
+// `SplitViewOverviewSession` by inserting the `snap_action_source` and
+// appending the ui mode suffix to build the full histogram name.
+// The full histogram is shown in the example below:
+// |------------prefix----------|-snap_action_source-|-root_word-|--ui_mode--|
+// "Ash.SplitViewOverviewSession.DragWindowEdgeToSnap.ExitPoint.ClamshellMode".
+ASH_EXPORT std::string BuildSplitViewOverviewExitPointHistogramName(
+    WindowSnapActionSource snap_action_source);
 
 }  // namespace ash
 

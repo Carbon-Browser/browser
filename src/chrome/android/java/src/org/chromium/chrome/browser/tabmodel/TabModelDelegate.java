@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,11 +28,14 @@ public interface TabModelDelegate {
      * Request to the native TabRestoreService to restore the most recently closed tab.
      * @param tabModel The model requesting the restore.
      */
-    default void openMostRecentlyClosedEntry(TabModel model){};
+    default void openMostRecentlyClosedEntry(TabModel model) {}
 
     // TODO(aurimas): clean these methods up.
     TabModel getCurrentModel();
+
     TabModel getModel(boolean incognito);
+
     boolean isSessionRestoreInProgress();
+
     void selectModel(boolean incognito);
 }

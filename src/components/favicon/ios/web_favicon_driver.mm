@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/favicon/ios/web_favicon_driver.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "components/favicon/core/favicon_url.h"
 #include "components/favicon/ios/favicon_url_util.h"
@@ -19,21 +19,7 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/image/image.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace favicon {
-
-// static
-void WebFaviconDriver::CreateForWebState(web::WebState* web_state,
-                                         CoreFaviconService* favicon_service) {
-  if (FromWebState(web_state))
-    return;
-
-  web_state->SetUserData(UserDataKey(), base::WrapUnique(new WebFaviconDriver(
-                                            web_state, favicon_service)));
-}
 
 gfx::Image WebFaviconDriver::GetFavicon() const {
   return web_state_->GetFaviconStatus().image;

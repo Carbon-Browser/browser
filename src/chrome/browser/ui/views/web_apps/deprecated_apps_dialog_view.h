@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/tab_dialogs.h"
@@ -99,7 +99,7 @@ class DeprecatedAppsDialogView : public views::DialogDelegateView {
   absl::optional<std::u16string> single_app_name_;
   base::OnceClosure launch_anyways_;
 
-  raw_ptr<content::WebContents> web_contents_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_;
 
   base::WeakPtrFactory<DeprecatedAppsDialogView> weak_ptr_factory_{this};
 };

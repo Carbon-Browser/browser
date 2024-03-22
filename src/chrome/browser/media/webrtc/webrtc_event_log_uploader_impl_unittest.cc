@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/webrtc/webrtc_event_log_manager_common.h"
@@ -85,7 +86,7 @@ class WebRtcEventLogUploaderImplTest : public ::testing::Test {
     EXPECT_TRUE(base::Time::FromString("30 Dec 1983", &kReasonableTime));
 
     uploader_factory_ = std::make_unique<WebRtcEventLogUploaderImpl::Factory>(
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
   }
 
   ~WebRtcEventLogUploaderImplTest() override {
@@ -115,9 +116,7 @@ class WebRtcEventLogUploaderImplTest : public ::testing::Test {
     ASSERT_TRUE(base::CreateTemporaryFileInDir(logs_dir, &log_file_));
     constexpr size_t kLogFileSizeBytes = 100u;
     const std::string file_contents(kLogFileSizeBytes, 'A');
-    ASSERT_EQ(
-        base::WriteFile(log_file_, file_contents.c_str(), file_contents.size()),
-        static_cast<int>(file_contents.size()));
+    ASSERT_TRUE(base::WriteFile(log_file_, file_contents));
   }
 
   // For tests which imitate a response (or several).

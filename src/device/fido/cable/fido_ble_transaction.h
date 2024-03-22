@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/component_export.h"
 #include "base/containers/queue.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "device/fido/cable/fido_ble_frames.h"
@@ -49,7 +50,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoBleTransaction {
   void StopTimeout();
   void OnError(absl::optional<FidoBleFrame> response_frame);
 
-  FidoBleConnection* connection_;
+  raw_ptr<FidoBleConnection> connection_;
   uint16_t control_point_length_;
 
   absl::optional<FidoBleFrame> request_frame_;

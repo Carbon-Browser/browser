@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "media/cast/common/openscreen_conversion_helpers.h"
 #include "media/cast/common/sender_encoded_frame.h"
 #include "media/cast/constants.h"
+#include "third_party/openscreen/src/cast/streaming/encoded_frame.h"
 
 namespace media::cast {
 namespace {
@@ -85,7 +86,7 @@ FrameSenderImpl::FrameSenderImpl(
       is_audio_(config.rtp_payload_type <= RtpPayloadType::AUDIO_LAST),
       // We only use the adaptive control for software video encoding.
       congestion_control_(
-          (!config.use_external_encoder && !is_audio_)
+          (!config.use_hardware_encoder && !is_audio_)
               ? NewAdaptiveCongestionControl(cast_environment->Clock(),
                                              config.max_bitrate,
                                              config.min_bitrate,
@@ -98,13 +99,12 @@ FrameSenderImpl::FrameSenderImpl(
   DCHECK(transport_sender_);
   DCHECK_GT(config_.rtp_timebase, 0);
   DCHECK(congestion_control_);
-  // We assume animated content to begin with since that is the common use
-  // case today.
+
+  // We start at the minimum playout delay and extend if necessary later.
   VLOG(1) << SENDER_SSRC << "min latency "
-          << config_.min_playout_delay.InMilliseconds() << "max latency "
-          << config_.max_playout_delay.InMilliseconds() << "animated latency "
-          << config_.animated_playout_delay.InMilliseconds();
-  SetTargetPlayoutDelay(config_.animated_playout_delay);
+          << config_.min_playout_delay.InMilliseconds() << ", max latency "
+          << config_.max_playout_delay.InMilliseconds();
+  SetTargetPlayoutDelay(config_.min_playout_delay);
 
   CastTransportRtpConfig transport_config;
   transport_config.ssrc = config.sender_ssrc;
@@ -244,7 +244,7 @@ void FrameSenderImpl::RecordLatestFrameTimestamps(
 }
 
 base::TimeDelta FrameSenderImpl::GetInFlightMediaDuration() const {
-  const base::TimeDelta encoder_duration = client_.GetEncoderBacklogDuration();
+  const base::TimeDelta encoder_duration = client_->GetEncoderBacklogDuration();
   // No frames are in flight, so only look at the encoder duration.
   if (last_sent_frame_id_ == latest_acked_frame_id_) {
     return encoder_duration;
@@ -293,7 +293,7 @@ base::TimeDelta FrameSenderImpl::CurrentRoundTripTime() const {
 base::TimeTicks FrameSenderImpl::LastSendTime() const {
   return last_send_time_;
 }
-FrameId FrameSenderImpl::LatestAckedFrameId() const {
+FrameId FrameSenderImpl::LastAckedFrameId() const {
   return latest_acked_frame_id_;
 }
 
@@ -304,7 +304,7 @@ base::TimeDelta FrameSenderImpl::GetAllowedInFlightMediaDuration() const {
   return target_playout_delay_ + (current_round_trip_time_ / 2);
 }
 
-void FrameSenderImpl::EnqueueFrame(
+CastStreamingFrameDropReason FrameSenderImpl::EnqueueFrame(
     std::unique_ptr<SenderEncodedFrame> encoded_frame) {
   DCHECK(cast_environment_->CurrentlyOn(CastEnvironment::MAIN));
 
@@ -316,14 +316,15 @@ void FrameSenderImpl::EnqueueFrame(
   const bool is_first_frame_to_be_sent = last_send_time_.is_null();
 
   if (picture_lost_at_receiver_ &&
-      (encoded_frame->dependency == EncodedFrame::KEY)) {
+      (encoded_frame->dependency ==
+       openscreen::cast::EncodedFrame::Dependency::kKeyFrame)) {
     picture_lost_at_receiver_ = false;
     DCHECK(frame_id > latest_acked_frame_id_);
     // Cancel sending remaining frames.
     std::vector<FrameId> cancel_sending_frames;
     for (FrameId id = latest_acked_frame_id_ + 1; id < frame_id; ++id) {
       cancel_sending_frames.push_back(id);
-      client_.OnFrameCanceled(id);
+      client_->OnFrameCanceled(id);
     }
     transport_sender_->CancelSendingFrames(config_.sender_ssrc,
                                            cancel_sending_frames);
@@ -341,7 +342,9 @@ void FrameSenderImpl::EnqueueFrame(
     ScheduleNextResendCheck();
   }
 
-  VLOG_IF(1, !is_audio_ && encoded_frame->dependency == EncodedFrame::KEY)
+  VLOG_IF(1, !is_audio_ &&
+                 encoded_frame->dependency ==
+                     openscreen::cast::EncodedFrame::Dependency::kKeyFrame)
       << SENDER_SSRC << "Sending encoded key frame, id=" << frame_id;
 
   std::unique_ptr<FrameEvent> encode_event(new FrameEvent());
@@ -351,7 +354,9 @@ void FrameSenderImpl::EnqueueFrame(
   encode_event->rtp_timestamp = encoded_frame->rtp_timestamp;
   encode_event->frame_id = frame_id;
   encode_event->size = base::checked_cast<uint32_t>(encoded_frame->data.size());
-  encode_event->key_frame = encoded_frame->dependency == EncodedFrame::KEY;
+  encode_event->key_frame =
+      encoded_frame->dependency ==
+      openscreen::cast::EncodedFrame::Dependency::kKeyFrame;
   encode_event->target_bitrate = encoded_frame->encoder_bitrate;
   encode_event->encoder_cpu_utilization = encoded_frame->encoder_utilization;
   encode_event->idealized_bitrate_utilization = encoded_frame->lossiness;
@@ -396,6 +401,7 @@ void FrameSenderImpl::EnqueueFrame(
       "cast.stream", name, TRACE_ID_WITH_SCOPE(name, frame_id.lower_32_bits()),
       "rtp_timestamp", encoded_frame->rtp_timestamp.lower_32_bits());
   transport_sender_->InsertFrame(config_.sender_ssrc, *encoded_frame);
+  return CastStreamingFrameDropReason::kNotDropped;
 }
 
 void FrameSenderImpl::OnReceivedCastFeedback(
@@ -482,7 +488,7 @@ void FrameSenderImpl::OnReceivedCastFeedback(
     do {
       ++latest_acked_frame_id_;
       frames_to_cancel.push_back(latest_acked_frame_id_);
-      client_.OnFrameCanceled(latest_acked_frame_id_);
+      client_->OnFrameCanceled(latest_acked_frame_id_);
       // This is a good place to match the trace for frame ids
       // since this ensures we not only track frame ids that are
       // implicitly ACKed, but also handles duplicate ACKs
@@ -501,15 +507,14 @@ void FrameSenderImpl::OnReceivedPli() {
   picture_lost_at_receiver_ = true;
 }
 
-bool FrameSenderImpl::ShouldDropNextFrame(
-    base::TimeDelta frame_duration) const {
+CastStreamingFrameDropReason FrameSenderImpl::ShouldDropNextFrame(
+    base::TimeDelta frame_duration) {
   // Check that accepting the next frame won't cause more frames to become
   // in-flight than the system's design limit.
   const int count_frames_in_flight =
-      GetUnacknowledgedFrameCount() + client_.GetNumberOfFramesInEncoder();
+      GetUnacknowledgedFrameCount() + client_->GetNumberOfFramesInEncoder();
   if (count_frames_in_flight >= kMaxUnackedFrames) {
-    VLOG(1) << SENDER_SSRC << "Dropping: Too many frames would be in-flight.";
-    return true;
+    return CastStreamingFrameDropReason::kTooManyFramesInFlight;
   }
 
   // Check that accepting the next frame won't exceed the configured maximum
@@ -518,8 +523,7 @@ bool FrameSenderImpl::ShouldDropNextFrame(
   const double max_frames_in_flight =
       max_frame_rate_ * duration_in_flight.InSecondsF();
   if (count_frames_in_flight >= max_frames_in_flight + kMaxFrameBurst) {
-    VLOG(1) << SENDER_SSRC << "Dropping: Burst threshold would be exceeded.";
-    return true;
+    return CastStreamingFrameDropReason::kBurstThresholdExceeded;
   }
 
   // Check that accepting the next frame won't exceed the allowed in-flight
@@ -539,12 +543,11 @@ bool FrameSenderImpl::ShouldDropNextFrame(
         << " usec for next frame --> " << percent << "% of allowed in-flight.";
   }
   if (duration_would_be_in_flight > allowed_in_flight) {
-    VLOG(1) << SENDER_SSRC << "Dropping: In-flight duration would be too high.";
-    return true;
+    return CastStreamingFrameDropReason::kInFlightDurationTooHigh;
   }
 
   // Next frame is accepted.
-  return false;
+  return CastStreamingFrameDropReason::kNotDropped;
 }
 
 }  // namespace media::cast

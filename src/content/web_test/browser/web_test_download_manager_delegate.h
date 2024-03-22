@@ -1,12 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_WEB_TEST_BROWSER_WEB_TEST_DOWNLOAD_MANAGER_DELEGATE_H_
 #define CONTENT_WEB_TEST_BROWSER_WEB_TEST_DOWNLOAD_MANAGER_DELEGATE_H_
 
-#include "base/callback_forward.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback_forward.h"
 #include "content/public/browser/download_manager_delegate.h"
 #include "content/shell/browser/shell_download_manager_delegate.h"
 

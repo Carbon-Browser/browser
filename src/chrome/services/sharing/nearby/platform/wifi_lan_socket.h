@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,6 @@ namespace base {
 class SequencedTaskRunner;
 }  // namespace base
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -74,6 +73,5 @@ class WifiLanSocket : public api::WifiLanSocket {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_WIFI_LAN_SOCKET_H_

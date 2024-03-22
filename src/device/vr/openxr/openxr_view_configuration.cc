@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/vr/openxr/openxr_view_configuration.h"
 
 #include "base/check_op.h"
+#include "base/ranges/algorithm.h"
 #include "third_party/openxr/src/include/openxr/openxr.h"
 
 namespace device {
@@ -121,6 +122,19 @@ XrCompositionLayerProjectionView& OpenXrViewConfiguration::GetProjectionView(
     uint32_t view_index) {
   DCHECK_LT(view_index, projection_views_.size());
   return projection_views_[view_index];
+}
+
+bool OpenXrViewConfiguration::CanEnableAntiAliasing() const {
+  // From the OpenXR Spec:
+  // maxSwapchainSampleCount is the maximum number of sub-data element samples
+  // supported for swapchain images that will be rendered into for this view.
+  //
+  // To ease the workload on low end devices, we disable anti-aliasing when the
+  // max sample count is 1.
+  return base::ranges::all_of(properties_,
+                              [](const XrViewConfigurationView& view) {
+                                return view.maxSwapchainSampleCount > 1;
+                              });
 }
 
 OpenXrLayers::OpenXrLayers(XrSpace space,

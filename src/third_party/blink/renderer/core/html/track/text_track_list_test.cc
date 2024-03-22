@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,8 @@ TEST(TextTrackListTest, InvalidateTrackIndexes) {
   const size_t kNumTextTracks = 4;
   TextTrack* text_tracks[kNumTextTracks];
   for (size_t i = 0; i < kNumTextTracks; ++i) {
-    text_tracks[i] = MakeGarbageCollected<TextTrack>("subtitles", "", "");
+    text_tracks[i] = MakeGarbageCollected<TextTrack>(
+        AtomicString("subtitles"), g_empty_atom, g_empty_atom, *list->Owner());
     list->Append(text_tracks[i]);
   }
 

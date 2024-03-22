@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/syslog_logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/lacros/lacros_service.h"
 #include "chromeos/startup/browser_params_proxy.h"
 #include "components/policy/core/common/cloud/affiliation.h"
@@ -94,13 +95,13 @@ void PolicyLoaderLacros::InitOnBackgroundThread() {
   }
 }
 
-std::unique_ptr<PolicyBundle> PolicyLoaderLacros::Load() {
+PolicyBundle PolicyLoaderLacros::Load() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  std::unique_ptr<PolicyBundle> bundle = std::make_unique<PolicyBundle>();
+  PolicyBundle bundle;
 
   // If per_profile loader is used, apply policy for extensions.
   if (per_profile_ == PolicyPerProfileFilter::kTrue && component_policy_)
-    bundle->MergeFrom(*component_policy_);
+    bundle.MergeFrom(*component_policy_);
 
   if (!policy_fetch_response_ || policy_fetch_response_->empty()) {
     return bundle;
@@ -138,14 +139,15 @@ std::unique_ptr<PolicyBundle> PolicyLoaderLacros::Load() {
         NOTREACHED();
     }
   }
-  bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()))
+  bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()))
       .MergeFrom(policy_map);
 
-  // Remember if the policy is managed or not.
-  g_is_main_user_managed_ = IsManaged(*validator.policy_data());
-  if (g_is_main_user_managed_ &&
-      per_profile_ == PolicyPerProfileFilter::kFalse) {
-    *MainUserPolicyDataStorage() = *validator.policy_data();
+  // Remember if the main profile is managed or not.
+  if (per_profile_ == PolicyPerProfileFilter::kFalse) {
+    g_is_main_user_managed_ = IsManaged(*validator.policy_data());
+    if (g_is_main_user_managed_) {
+      *MainUserPolicyDataStorage() = *validator.policy_data();
+    }
   }
   policy_data_ = std::move(validator.policy_data());
 
@@ -190,16 +192,14 @@ void PolicyLoaderLacros::SetComponentPolicy(
     std::string error;
     // The component policy received from Ash is the JSON data corresponding to
     // the policy for the namespace.
-    ParseComponentPolicy(policy_pair.second.Clone(), POLICY_SCOPE_USER,
-                         POLICY_SOURCE_CLOUD_FROM_ASH, &component_policy_map,
-                         &error);
+    ParseComponentPolicy(policy_pair.second.GetDict().Clone(),
+                         POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD_FROM_ASH,
+                         &component_policy_map, &error);
     DCHECK(error.empty());
 
     // The data is also good; expose the policies.
     component_policy_->Get(policy_pair.first).Swap(&component_policy_map);
   }
-  // TODO(igorcov): crbug.com/1301854 Remove after bug fix.
-  SYSLOG(INFO) << "New component policy installed";
 }
 
 enterprise_management::PolicyData* PolicyLoaderLacros::GetPolicyData() {
@@ -228,8 +228,6 @@ bool PolicyLoaderLacros::IsMainUserManaged() {
 bool PolicyLoaderLacros::IsMainUserAffiliated() {
   const enterprise_management::PolicyData* policy =
       policy::PolicyLoaderLacros::main_user_policy_data();
-  const chromeos::BrowserParamsProxy* init_params =
-      chromeos::BrowserParamsProxy::Get();
 
   // To align with `DeviceLocalAccountUserBase::IsAffiliated()`, a device local
   // account user is always treated as affiliated.
@@ -237,12 +235,10 @@ bool PolicyLoaderLacros::IsMainUserAffiliated() {
     return true;
   }
 
+  const auto& device_ids = PolicyLoaderLacros::device_affiliation_ids();
   if (policy && !policy->user_affiliation_ids().empty() &&
-      init_params->DeviceProperties() &&
-      init_params->DeviceProperties()->device_affiliation_ids.has_value()) {
+      !device_ids.empty()) {
     const auto& user_ids = policy->user_affiliation_ids();
-    const auto& device_ids =
-        init_params->DeviceProperties()->device_affiliation_ids.value();
     return policy::IsAffiliated({user_ids.begin(), user_ids.end()},
                                 {device_ids.begin(), device_ids.end()});
   }
@@ -260,6 +256,30 @@ void PolicyLoaderLacros::set_main_user_policy_data_for_testing(
     const enterprise_management::PolicyData& policy_data) {
   *MainUserPolicyDataStorage() = policy_data;
   g_is_main_user_managed_ = IsManaged(policy_data);
+}
+
+// static
+const std::vector<std::string> PolicyLoaderLacros::device_affiliation_ids() {
+  const chromeos::BrowserParamsProxy* init_params =
+      chromeos::BrowserParamsProxy::Get();
+  if (!init_params->DeviceProperties()) {
+    return {};
+  }
+  if (!init_params->DeviceProperties()->device_affiliation_ids.has_value()) {
+    return {};
+  }
+  return init_params->DeviceProperties()->device_affiliation_ids.value();
+}
+
+// static
+const std::string PolicyLoaderLacros::device_dm_token() {
+  const chromeos::BrowserParamsProxy* init_params =
+      chromeos::BrowserParamsProxy::Get();
+  if (!init_params->DeviceProperties()) {
+    return std::string();
+  }
+
+  return init_params->DeviceProperties()->device_dm_token;
 }
 
 }  // namespace policy

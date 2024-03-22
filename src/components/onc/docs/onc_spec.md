@@ -158,6 +158,13 @@ fetching new policy or logging in.
 A [Help Center article](https://support.google.com/chrome/a/answer/6326250)
 warns admins of the implications of mis-using this policy for Chrome OS.
 
+* **AllowCellularHotspot**
+    * (optional, defaults to true) - **boolean**
+    * When this field is present and set to true, chromebook users will be allowed to
+      turn on hotspot on their devices. If there is an active hotspot and this field
+      is set to false, hotspot will be turned off and a notification will be
+      displayed to the user.
+
 * **AllowCellularSimLock**
     * (optional, defaults to true) - **boolean**
     * When this field is present and set to false, a SIM cannot be PIM Locked on
@@ -195,6 +202,18 @@ warns admins of the implications of mis-using this policy for Chrome OS.
       enabled and a network scan shows a new policy managed network, the device
       will automatically switch to the managed network.
 
+* **AllowTextMessages**
+    * (optional, defaults to Unset) - **string**
+    * When this field is present and set to Allow text message notifications
+     will be shown. When this field is set to Suppress, no text message
+     notifications will be shown and text messages will be dropped forever.
+     When this field is Unset, text messages notifications will be shown by
+     default and will allow user configuration for suppressing text messages.
+     * Allowed values are:
+        * *Allow*
+        * *Suppress*
+        * *Unset*
+
 * **BlacklistedHexSSIDs** <!--- nocheck -->
     * DEPRECATED, use **BlockedHexSSIDs** instead.<br/>
     * (optional) - **array of string**
@@ -220,6 +239,21 @@ warns admins of the implications of mis-using this policy for Chrome OS.
     * Adding *VPN* to the list will disable all VPN types. Android VPN
       connections may still be established successfully but will be
       closed shortly after that by the Chrome OS connection manager.
+
+* **RecommendedValuesAreEphemeral**
+    * (optional, defaults to false) - **boolean**
+    * When this field is set to true, settings of device-wide policy-provided
+      network configurations marked as "Recommended" will be regarded as
+      ephemeral. These settings will be reverted to the policy-recommended (or
+      default) value on reboot (startup), logout, and when the device has been
+      idle.
+
+* **UserCreatedNetworkConfigurationsAreEphemeral**
+    * (optional, defaults to false) - **boolean**
+    * When this field is set to true, device-wide network configurations created
+      by the user will be regarded as ephemeral.  These network configurations
+      will be deleted on reboot (startup), logout, and when the device has been
+      idle.
 
 ## Network Configuration
 
@@ -492,6 +526,35 @@ field **WiFi** must be set to an object of type [WiFi](#WiFi-type).
     * (optional, defaults to *false*) - **boolean**
     * Indicating that the network should be connected to automatically when in
       range.
+
+* **BSSIDAllowlist**
+    * (optional) - **array of string**
+    * Array of BSSIDs that control what APs can be connected to. BSSIDs
+      should be formatted as colon-separated octets (e.g.
+      `"00:01:02:03:04:05"`).
+    * Values are:
+        * *Empty list*: The WiFi network can associate with any AP.
+        * *Non-empty list*: The Wifi network will only associate with the
+          specified BSSes.
+        * *["00:00:00:00:00:00"]*: Special value indicating the network
+          shouldn't associate with any AP. `"00:00:00:00:00:00"` shouldn't be a
+          part of any other list of values, otherwise it may cause an error.
+
+* **BSSIDRequested**
+    * (optional) - **string**
+    * BSSID that the AP should connect to. BSSIDs
+      should be formatted as colon-separated octets (e.g.
+      `"00:01:02:03:04:05"`).
+    * If the AP cannot connect to the requested BSSID, then it will not fallback
+      to another BSSID and will remain unconnected.
+    * If **BSSIDRequested** is empty and **BSSIDAllowlist** is not, then the
+      WiFi network will follow the values in **BSSIDAllowlist**
+    * If **BSSIDAllowlist** is empty and **BSSIDRequested** is not, then the
+      WiFi network will follow the value in **BSSIDRequested**
+    * If **BSSIDRequested** and **BSSIDAllowlist** have a disjoint set of
+      values, then the WiFi network will not connect.
+    * If **BSSIDRequested** is also in **BSSIDAllowlist**, then the network will
+      follow the value in **BSSIDRequested**
 
 * **EAP**
     * (required if **Security** is
@@ -1066,6 +1129,11 @@ L2TP over IPsec with pre-shared key:
 
 ### WireGuard type
 
+* **IPAddresses**
+    * (required) - **array of string**
+    * Array of IP addresses in string representation (case-insensitive for IPv6)
+      to be configured on the local WireGuard interface.
+
 * **PrivateKey**
     * (optional) - **string**
     * The base64 private key of the wireguard client peer. If not set, a random
@@ -1257,6 +1325,12 @@ type exists to configure the authentication.
       presented to the outer protocol. This value is subject to string
       expansions. If not specified, use empty string.
 
+* **ClientCertKeyPairAlias**
+    * (required if **ClientCertType** is *KeyPairAlias*, otherwise ignored) -
+      **string**
+    * Key pair alias specifies the client certificate stored in Android keychain
+      and allowed for Wi-Fi authentication.
+
 * **ClientCertPKCS11Id**
     * (required if **ClientCertType** is *PKCS11Id*, otherwise ignored) -
     * PKCS#11 identifier in the format slot:key_id.
@@ -1273,12 +1347,13 @@ type exists to configure the authentication.
 * **ClientCertType**
     * (optional) - **string**
     * Allowed values are:
+        * *KeyPairAlias* (Android only)
         * *PKCS11Id*
         * *Pattern*
         * *Ref*
         * *None*
-    * *Ref* and *Pattern* indicate that the associated property should be used
-      to identify the client certificate.
+    * *KeyPairAlias*, *Ref* and *Pattern* indicate that the associated property
+      should be used to identify the client certificate.
     * *PKCS11Id* is used when representing a certificate in a local store and is
       only valid when describing a local configuration.
     * *None* indicates that the server is configured to not require client
@@ -1356,21 +1431,21 @@ type exists to configure the authentication.
 
 * **SubjectMatch**
     * (optional) - **string**
-    * WiFi only. A substring which a remote RADIUS service certificate subject
-      name must contain in order to connect.
+    * A substring which a remote RADIUS service certificate subject name must
+      contain in order to connect.
 
 * **SubjectAlternativeNameMatch**
 	* (optional) - [array of AlternativeSubjectName](#AlternativeSubjectName-type)
-	* WiFi only. A list of alternative subject names to be matched against the
-    alternative subject name of an authentication server certificate.
+	* A list of alternative subject names to be matched against the alternative
+      subject name of an authentication server certificate.
 
 * **DomainSuffixMatch**
     * (optional) - **array of string**
-    * WiFi only. A list of constraints for the server domain name. If set, the
-      entries will be used as suffix match requirements against the DNS name
-      element(s) of the alternative subject name of an authentication server
-      certificate. When multiple match strings are specified, a match with any one
-      of the values is considered a sufficient match for the server certificate.
+    * A list of constraints for the server domain name. If set, the entries will
+      be used as suffix match requirements against the DNS name element(s) of
+      the alternative subject name of an authentication server certificate.
+      When multiple match strings are specified, a match with any one of the
+      values is considered a sufficient match for the server certificate.
 
 * **TLSVersionMax**
     * (optional) - **string**
@@ -1457,6 +1532,11 @@ ONC configuration of of **Cellular** networks is not yet supported.
       possible. Note, that disabled **AllowRoaming**
       takes precedence over autoconnect.
 
+* **CustomAPNList**
+    * (optional) - [array of APN](#APN-type)
+    * List of custom APN configurations, added by either the user or enterprise
+      admin.
+
 * **EID**
     * (optional, read-only, provided only for eSIM networks) - **string**
     * For GSM / LTE modems, the Embedded Universal Integrated Circuit Card
@@ -1506,6 +1586,16 @@ ONC configuration of of **Cellular** networks is not yet supported.
     * (optional, read-only, provided only if **Family** is *GSM*) - **string**
     * For GSM modems, the International Mobile Subscriber Identity of the SIM
       card installed in the device.
+
+* **LastConnectedAttachApnProperty**
+    * (optional, read-only) - [APN](#APN-type)
+    * The attach APN information used in the last successful connection
+    * attempt. This value is not cleared if the connection fails.
+
+* **LastConnectedDefaultApnProperty**
+    * (optional, read-only) - [APN](#APN-type)
+    * The default APN information used in the last successful connection
+    * attempt. This value is not cleared if the connection fails.
 
 * **LastGoodAPN**
     * (optional, read-only) - [APN](#APN-type)
@@ -1591,13 +1681,29 @@ ONC configuration of of **Cellular** networks is not yet supported.
 
 * **SMDPAddress**
     * (optional, read-only) - **string**
-    * When set with the address of an SMDP+ server, indicates that eSIM profile
-      for this network should be downloaded and installed using this address.
+    * The activation code containing the address of the SM-DP+ server that
+      should be used to download and install an eSIM profile for this network.
+      This field is mutually exclusive with SMDSAddress. While this field has
+      "address" in its name for backwards compatibility, its value is expected
+      to be formatted according to the GSMA specification. Policies that do not
+      conform to the GSMA specification will fail. Learn more about the
+      specification at
+      https://www.gsma.com/newsroom/wp-content/uploads/SGP.22_v2.2.pdf.
+
+* **SMDSAddress**
+    * (optional, read-only) - **string**
+    * The activation code containing the address of the SM-DS server that should
+      be used to download and install an eSIM profile for this network. This
+      field is mutually exclusive with SMDPAddress. While this field has
+      "address" in its name for backwards compatibility, its value is expected
+      to be formatted according to the GSMA specification. Policies that do not
+      conform to the GSMA specification will fail. Learn more about the
+      specification at
+      https://www.gsma.com/newsroom/wp-content/uploads/SGP.22_v2.2.pdf.
 
 * **SupportNetworkScan**
     * (optional, read-only) - **boolean**
     * True if the cellular network supports scanning.
-
 
 ### APN type
 
@@ -2203,7 +2309,7 @@ If a policy configuration exists, the following rules apply:
     it is considered 'Recommended'. If a UserSetting or SharedSetting value
     exists, it can be selected as the Effective value.
 
-### Dictionary format
+### Managed ONC Dictionary format ("augmented")
 
 Managed ONC dictionaries contain the keys described under
 [Network Configuration](#Network-Configuration), however the values are
@@ -2292,7 +2398,7 @@ In this simplified format, a descriptive enum is used to describe the effective
 policy source and whether it is enforced or recommended.
 
 The conversion code can be found in cros_network_config.cc:GetManagedDictionary
-https://source.chromium.org/chromium/chromium/src/+/main:chromeos/services/network_config/cros_network_config.cc
+https://source.chromium.org/chromium/chromium/src/+/main:chromeos/ash/services/network_config/cros_network_config.cc
 
 ```
 enum PolicySource {

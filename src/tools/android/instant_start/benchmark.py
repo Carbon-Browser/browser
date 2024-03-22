@@ -1,6 +1,6 @@
-#!/usr/bin/env vpython
+#!/usr/bin/env vpython3
 #
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Run benchmark for Instant start."""
@@ -58,11 +58,9 @@ def run_apk(variant, dry_run=False, reinstall=False, check_state=False):
         '--disable-fre', '--disable-field-trial-config', features,
         '--force-fieldtrials=Study/Group',
         '--force-fieldtrial-params=Study.Group:'
-        'tab_switcher_on_return_time_ms/0'
-        '/start_surface_variation/single'
+        'start_surface_return_time_seconds/0'
         '/show_last_active_tab_only/true'
         '/open_ntp_instead_of_start/true'
-        '/exclude_mv_tiles/true'
     ] + extra_cmd)
 
     if reinstall:

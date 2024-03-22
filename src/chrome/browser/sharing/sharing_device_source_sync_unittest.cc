@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,20 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/guid.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "chrome/browser/sharing/fake_device_info.h"
 #include "chrome/browser/sharing/features.h"
 #include "chrome/browser/sharing/sharing_constants.h"
 #include "chrome/browser/sharing/sharing_utils.h"
 #include "components/send_tab_to_self/features.h"
 #include "components/send_tab_to_self/target_device_info.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/sync_device_info/fake_device_info_sync_service.h"
 #include "components/sync_device_info/fake_device_info_tracker.h"
@@ -52,8 +52,10 @@ std::unique_ptr<syncer::DeviceInfo> CreateDeviceInfo(
                                                {enabled_feature});
 
   return CreateFakeDeviceInfo(
-      base::GenerateGUID(), client_name, std::move(sharing_info),
-      sync_pb::SyncEnums_DeviceType_TYPE_LINUX, manufacturer_name, model_name);
+      base::Uuid::GenerateRandomV4().AsLowercaseString(), client_name,
+      std::move(sharing_info), sync_pb::SyncEnums_DeviceType_TYPE_LINUX,
+      syncer::DeviceInfo::OsType::kLinux,
+      syncer::DeviceInfo::FormFactor::kDesktop, manufacturer_name, model_name);
 }
 
 class SharingDeviceSourceSyncTest : public testing::Test {
@@ -369,7 +371,6 @@ TEST_F(SharingDeviceSourceSyncTest, GetDeviceCandidates_NoChannel) {
 }
 
 TEST_F(SharingDeviceSourceSyncTest, GetDeviceCandidates_FCMChannel) {
-  scoped_feature_list_.InitAndDisableFeature(kSharingSendViaSync);
   auto device_source = CreateDeviceSource(/*wait_until_ready=*/true);
   auto device_info = CreateDeviceInfo(
       "client_name", sync_pb::SharingSpecificFields::CLICK_TO_CALL_V2,
@@ -385,8 +386,6 @@ TEST_F(SharingDeviceSourceSyncTest, GetDeviceCandidates_FCMChannel) {
 }
 
 TEST_F(SharingDeviceSourceSyncTest, GetDeviceCandidates_SenderIDChannel) {
-  test_sync_service_.SetActiveDataTypes(
-      {syncer::DEVICE_INFO, syncer::SHARING_MESSAGE});
   auto device_source = CreateDeviceSource(/*wait_until_ready=*/true);
   auto device_info = CreateDeviceInfo(
       "client_name", sync_pb::SharingSpecificFields::CLICK_TO_CALL_V2,

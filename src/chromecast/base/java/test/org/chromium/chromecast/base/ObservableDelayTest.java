@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,17 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.BlockJUnit4ClassRunner;
 
+import org.chromium.base.test.util.Batch;
+
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.BiFunction;
 
 /**
  * Tests for Observable#delay().
  */
 @RunWith(BlockJUnit4ClassRunner.class)
+@Batch(Batch.UNIT_TESTS)
 public class ObservableDelayTest {
     // Helper function that inserts the key-value pair into a Map if the key isn't already in the
     // Map, or updates the value for the key by applying the combinator to the current value and the
@@ -120,8 +124,8 @@ public class ObservableDelayTest {
     @Test
     public void testDelayHigherCardinalityObservable() {
         FakeScheduler scheduler = new FakeScheduler();
-        Observable<Integer> src = Observable.make(observer
-                -> Scopes.combine(observer.open(10), observer.open(20), observer.open(30)));
+        Observable<Integer> src =
+                observer -> observer.open(10).and(observer.open(20)).and(observer.open(30));
         ReactiveRecorder recorder = ReactiveRecorder.record(src.delay(scheduler, 100));
         recorder.verify().end();
         scheduler.fastForwardBy(100);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/guest_os/guest_os_mime_types_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace guest_os {
 
@@ -25,16 +24,22 @@ GuestOsMimeTypesServiceFactory* GuestOsMimeTypesServiceFactory::GetInstance() {
 }
 
 GuestOsMimeTypesServiceFactory::GuestOsMimeTypesServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "GuestOsMimeTypesService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {}
 
 GuestOsMimeTypesServiceFactory::~GuestOsMimeTypesServiceFactory() = default;
 
-KeyedService* GuestOsMimeTypesServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+GuestOsMimeTypesServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new GuestOsMimeTypesService(profile);
+  return std::make_unique<GuestOsMimeTypesService>(profile);
 }
 
 }  // namespace guest_os

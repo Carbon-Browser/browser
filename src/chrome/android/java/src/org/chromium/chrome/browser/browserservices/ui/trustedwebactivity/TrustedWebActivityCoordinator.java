@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.browserservices.ui.trustedwebactivity;
 
+import dagger.Lazy;
+
 import org.chromium.chrome.browser.browserservices.InstalledWebappRegistrar;
-import org.chromium.chrome.browser.browserservices.QualityEnforcer;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
 import org.chromium.chrome.browser.browserservices.metrics.TrustedWebActivityUmaRecorder;
 import org.chromium.chrome.browser.browserservices.ui.SharedActivityCoordinator;
@@ -24,8 +25,6 @@ import org.chromium.components.embedder_support.util.Origin;
 
 import javax.inject.Inject;
 
-import dagger.Lazy;
-
 /**
  * Coordinator for the Trusted Web Activity component.
  * Add methods here if other components need to communicate with Trusted Web Activity component.
@@ -38,17 +37,19 @@ public class TrustedWebActivityCoordinator {
     private final ClientPackageNameProvider mClientPackageNameProvider;
 
     @Inject
-    public TrustedWebActivityCoordinator(SharedActivityCoordinator sharedActivityCoordinator,
+    public TrustedWebActivityCoordinator(
+            SharedActivityCoordinator sharedActivityCoordinator,
             TrustedWebActivityDisclosureController disclosureController,
             DisclosureUiPicker disclosureUiPicker,
             TrustedWebActivityOpenTimeRecorder openTimeRecorder,
-            CurrentPageVerifier currentPageVerifier, Lazy<TwaSplashController> splashController,
+            CurrentPageVerifier currentPageVerifier,
+            Lazy<TwaSplashController> splashController,
             BrowserServicesIntentDataProvider intentDataProvider,
             TrustedWebActivityUmaRecorder umaRecorder,
             ActivityLifecycleDispatcher lifecycleDispatcher,
             InstalledWebappRegistrar installedWebappRegistrar,
             ClientPackageNameProvider clientPackageNameProvider,
-            CustomTabsConnection customTabsConnection, QualityEnforcer enforcer) {
+            CustomTabsConnection customTabsConnection) {
         // We don't need to do anything with most of the classes above, we just need to resolve them
         // so they start working.
         mSharedActivityCoordinator = sharedActivityCoordinator;
@@ -63,7 +64,8 @@ public class TrustedWebActivityCoordinator {
                 new PostMessageDisabler(customTabsConnection, intentDataProvider));
     }
 
-    private void initSplashScreen(Lazy<TwaSplashController> splashController,
+    private void initSplashScreen(
+            Lazy<TwaSplashController> splashController,
             BrowserServicesIntentDataProvider intentDataProvider,
             TrustedWebActivityUmaRecorder umaRecorder) {
         boolean showSplashScreen =
@@ -83,7 +85,7 @@ public class TrustedWebActivityCoordinator {
         // want to register the clients once the state reaches SUCCESS.
         if (state != null && state.status == VerificationStatus.SUCCESS) {
             mInstalledWebappRegistrar.registerClient(
-                    mClientPackageNameProvider.get(), Origin.create(state.scope));
+                    mClientPackageNameProvider.get(), Origin.create(state.scope), state.url);
         }
     }
 
@@ -93,7 +95,8 @@ public class TrustedWebActivityCoordinator {
         private final CustomTabsConnection mCustomTabsConnection;
         private final BrowserServicesIntentDataProvider mIntentDataProvider;
 
-        PostMessageDisabler(CustomTabsConnection connection,
+        PostMessageDisabler(
+                CustomTabsConnection connection,
                 BrowserServicesIntentDataProvider intentDataProvider) {
             mCustomTabsConnection = connection;
             mIntentDataProvider = intentDataProvider;

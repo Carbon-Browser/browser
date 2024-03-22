@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_DATA_MODEL_AUTOFILL_STRUCTURED_ADDRESS_COMPONENT_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
+#include "components/autofill/core/browser/data_model/autofill_i18n_parsing_expression_components.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -19,7 +21,6 @@ class RE2;
 }  // namespace re2
 
 namespace autofill {
-namespace structured_address {
 
 struct AddressToken;
 struct SortedTokenComparisonResult;
@@ -27,7 +28,7 @@ struct SortedTokenComparisonResult;
 // Represents the validation status of value stored in the AutofillProfile.
 // The associated integer values used to store the verification code in SQL and
 // should not be modified.
-// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.autofill
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.autofill
 enum class VerificationStatus {
   // No verification status assigned.
   kNoStatus = 0,
@@ -84,15 +85,17 @@ enum MergeMode {
   kRecursivelyMergeSingleTokenSubset = 1 << 6,
   // If one is a substring of the other use the most recent one.
   kUseMostRecentSubstring = 1 << 7,
-  // Merge the child nodes and reformat the node from its children after merge
-  // if the value has changed.
+  // If the tokens match or one is a subset of the other, pick the shorter one.
   kPickShorterIfOneContainsTheOther = 1 << 8,
   // If the normalized values are different, use the better one in terms
   // of verification score or the most recent one if both scores are the same.
   kUseBetterOrMostRecentIfDifferent = 1 << 9,
-  // Defines the default merging behavior.
+  // Merge the child nodes and reformat the node from its children after merge
+  // if the value has changed.
   kMergeChildrenAndReformatIfNeeded = 1 << 10,
-  // If the tokens match or one is a subset of the other, pick the shorter one.
+  // Make a merge decision based on canonicalized values.
+  kMergeBasedOnCanonicalizedValues = 1 << 11,
+  // Defines the default merging behavior.
   kDefault = kRecursivelyMergeTokenEquivalentValues
 };
 
@@ -137,9 +140,12 @@ enum MergeMode {
 //  NAME_LAST values but only a formatted NAME_FULL value.
 class AddressComponent {
  public:
+  // List of node subcomponents.
+  using SubcomponentsList = std::vector<std::unique_ptr<AddressComponent>>;
+
   // Constructor for a compound child node.
   AddressComponent(ServerFieldType storage_type,
-                   AddressComponent* parent,
+                   SubcomponentsList subcomponents,
                    unsigned int merge_mode);
 
   // Disallows copies and direct assignments since they are not needed in the
@@ -151,7 +157,7 @@ class AddressComponent {
 
   // Migrates from a legacy structure in which tokens are imported without
   // a status.
-  virtual void MigrateLegacyStructure(bool is_verified_profile) {}
+  virtual void MigrateLegacyStructure() {}
 
   // Comparison operators are deleted in favor of and |SameAs()|.
   bool operator==(const AddressComponent& right) const = delete;
@@ -182,100 +188,55 @@ class AddressComponent {
   // assigned, an empty string is returned.
   const std::u16string& GetValue() const;
 
+  // Returns a canonicalized version of the value or absl::nullopt if
+  // canonicalization is not possible or not implemented.
+  virtual absl::optional<std::u16string> GetCanonicalizedValue() const;
+
   // Returns true if the value of this AddressComponent is assigned.
   bool IsValueAssigned() const;
 
   // Sets the value corresponding to the storage type of this AddressComponent.
   virtual void SetValue(std::u16string value, VerificationStatus status);
 
+  // Wrapper function around
+  // SetValueForTypeIfPossible(/*invalidate_child_nodes=*/false);
+  bool SetValueForType(ServerFieldType field_type,
+                       const std::u16string& value,
+                       const VerificationStatus& status);
+
+  // Wrapper function around
+  // SetValueForTypeIfPossible(/*invalidate_child_nodes=*/true);
+  // TODO(1440504): Remove and merge with SetValueForType.
+  bool SetValueForTypeAndResetSubstructure(ServerFieldType field_type,
+                                           const std::u16string& value,
+                                           const VerificationStatus& status);
+
   // Sets the value to an empty string, marks it unassigned and sets the
   // verification status to |kNoStatus|.
   virtual void UnsetValue();
 
-  // The method sets the value of the current node if its |storage_type_| is
-  // |type| or if |ConvertAndGetTheValueForAdditionalFieldTypeName()| supports
-  // retrieving |type|. Otherwise, the call is delegated recursively to the
-  // node's children.
-  // Returns true if the |value_| and |verification_status_| were successfully
-  // set for this or an ancestor node with the storage type |type|. If
-  // |invalidate_child_nodes|, all child nodes of the assigned node are
-  // unassigned. If |invalidate_parent_nodes|, all ancestor nodes of the
-  // assigned node as unassigned.
-  bool SetValueForTypeIfPossible(const ServerFieldType& type,
-                                 const std::u16string& value,
-                                 const VerificationStatus& verification_status,
-                                 bool invalidate_child_nodes = false,
-                                 bool invalidate_parent_nodes = false);
+  // Convenience method to get the value of |field_type|.
+  // Returns an empty string if |field_type| is not supported.
+  std::u16string GetValueForType(ServerFieldType field_type) const;
 
-  // Same as |SetValueForTypeIfPossible()| but the type is supplied in the
-  // corresponding string representation.
-  bool SetValueForTypeIfPossible(const std::string& type_name,
-                                 const std::u16string& value,
-                                 const VerificationStatus& verification_status,
-                                 bool invalidate_child_nodes = false,
-                                 bool invalidate_parent_nodes = false);
-
-  // Convenience wrapper to allow setting the value using a std::string.
-  bool SetValueForTypeIfPossible(const ServerFieldType& type,
-                                 const std::string& value,
-                                 const VerificationStatus& verification_status,
-                                 bool invalidate_child_nodes = false,
-                                 bool invalidate_parent_nodes = false);
-
-  // Convenience wrapper to allow setting the value using a std::string.
-  bool SetValueForTypeIfPossible(const std::string& type_name,
-                                 const std::string& value,
-                                 const VerificationStatus& verification_status,
-                                 bool invalidate_child_nodes = false,
-                                 bool invalidate_parent_nodes = false);
-
-  // Convenience method to get the value of |type|.
-  // Returns an empty string if |type| is not supported.
-  std::u16string GetValueForType(const ServerFieldType& type) const;
-
-  // Convenience method to get the value of |type| identified by its string
-  // representation name. Returns an empty string if |type| is not supported.
-  std::u16string GetValueForType(const std::string& type) const;
-
-  // Convenience method to get the verification status of |type|.
-  // Returns |VerificationStatus::kNoStatus| if |type| is not supported.
-  VerificationStatus GetVerificationStatusForType(
-      const ServerFieldType& type) const;
-
-  // Convenience method to get the verification status of |type| identified by
-  // its name. Returns |VerificationStatus::kNoStatus| if |type| is not
+  // Convenience method to get the value of `field_type` to be used for
+  // comparison with `other`. Returns an empty string if `field_type` is not
   // supported.
+  std::u16string GetValueForComparisonForType(
+      ServerFieldType field_type,
+      const AddressComponent& other) const;
+
+  // Convenience method to get the verification status of `field_type`.
+  // Returns |VerificationStatus::kNoStatus| if `field_type` is not supported.
   VerificationStatus GetVerificationStatusForType(
-      const std::string& type) const;
-
-  // Get the value and status of a |type|,
-  // Returns false if the |type| is not supported by the structure.
-  // The method returns |value_| and |validation_status_| of the current node if
-  // its |storage_type_| is |type| or if
-  // |ConvertAndSetTheValueForAdditionalFieldTypeName()| supports setting
-  // |type|. Otherwise, the call is delegated recursively to the node's
-  // children. Returns false if the neither the node or one of its ancestors
-  // supports |type|.
-  bool GetValueAndStatusForTypeIfPossible(const ServerFieldType& type,
-                                          std::u16string* value,
-                                          VerificationStatus* status) const;
-
-  // Get the value and status of a |type| identified by its name.
-  // Returns false if the |type| is not supported by the structure.
-  bool GetValueAndStatusForTypeIfPossible(const std::string& type_name,
-                                          std::u16string* value,
-                                          VerificationStatus* status) const;
+      ServerFieldType field_type) const;
 
   // Returns true if the |value| and |verification_status| were successfully
   // unset for |type|.
-  bool UnsetValueForTypeIfSupported(const ServerFieldType& type);
+  bool UnsetValueForTypeIfSupported(ServerFieldType field_type);
 
   // Parses |value_| to assign values to the subcomponents.
-  // The method uses 3 stages:
-  //
-  // * Use |ParseValueAndAssignSubcomponentsByMethod()|. This stage exists
-  // to catch special cases and may fail. The method is virtual and can be
-  // implemented on the type level.
+  // The method uses 2 stages:
   //
   // * Use |ParseValueAndAssignSubcomponentsByRegularExpressions()|. This stage
   // uses a list of regular expressions acquired by the virtual method
@@ -304,10 +265,20 @@ class AddressComponent {
   // |GetAdditionalSupportedFieldTypes()| to add field types.
   void GetSupportedTypes(ServerFieldTypeSet* supported_types) const;
 
+  // Recursively adds only the storable types to the set. No computed type is
+  // ever added (e.g. GetAdditionalSupportedFieldTypes).
+  void GetStorableTypes(ServerFieldTypeSet* supported_types) const;
+
+  // Recursively finds the storable type of `type`:
+  // - If `type` is a `storable_type_` of any node, this is simply `type`.
+  // - If `type` is an additional supported type of any node, this is the
+  //   storable type of that node.
+  // - Otherwise, if `type` is not a supported type of any node, return nullopt.
+  std::optional<ServerFieldType> GetStorableTypeOf(ServerFieldType type) const;
+
   // Adds the additional supported field types to |supported_types|.
   // The method should DCHECK that the added types are not part of the set yet.
-  virtual void GetAdditionalSupportedFieldTypes(
-      ServerFieldTypeSet* supported_types) const {}
+  virtual const ServerFieldTypeSet GetAdditionalSupportedFieldTypes() const;
 
   // Unassigns all nodes with parsed or formatted values.
   void UnsetParsedAndFormattedValuesInEntireTree();
@@ -340,9 +311,7 @@ class AddressComponent {
   bool MergeTokenEquivalentComponent(const AddressComponent& newer_component);
 
   // Returns a constant vector of pointers to the child nodes of the component.
-  const std::vector<AddressComponent*>& Subcomponents() const {
-    return subcomponents_;
-  }
+  const SubcomponentsList& Subcomponents() const { return subcomponents_; }
 
   // Returns a vector containing sorted normalized tokens of the
   // value of the component. The tokens are lazily calculated when first needed.
@@ -351,28 +320,16 @@ class AddressComponent {
   // Recursively unsets all subcomponents.
   void RecursivelyUnsetSubcomponents();
 
-  // Return if the value associated with |field_type_name| is valid.
+  // Return if the value associated with |field_type| is valid.
   // If |wipe_if_not|, the value is unset if invalid.
-  bool IsValueForTypeValid(const std::string& field_type_name,
-                           bool wipe_if_not = false);
-
-  // Convenience wrapper to work the ServerFieldTypes.
   bool IsValueForTypeValid(ServerFieldType field_type,
                            bool wipe_if_not = false);
 
-  // Recursively determines the validity status of a component value associated
-  // with |field_type_name|.  If |wipe_if_not|, the value is unset if invalid.
-  // Returns true if it is possible to determine the validity status of the
-  // value in this subcomponent.
-  bool GetIsValueForTypeValidIfPossible(const std::string& field_type_name,
-                                        bool* validity_status,
-                                        bool wipe_if_not = false);
-
-  // While merging two structured addresses, if only one of them has their
+  // While processing two structured addresses, if only one of them has their
   // country set, the other should assume the non-empty one while merging. This
   // is required to do consistent address rewriting.
   // Returns the common country to be used.
-  std::u16string GetCommonCountryForMerge(const AddressComponent& other) const;
+  std::u16string GetCommonCountry(const AddressComponent& other) const;
 
   // Deletes the stored structure and returns true if |IsStructureValid()|
   // returns false.
@@ -393,9 +350,7 @@ class AddressComponent {
   }
 
   // Returns the best format string for testing.
-  std::u16string GetBestFormatStringForTesting() {
-    return GetBestFormatString();
-  }
+  std::u16string GetFormatStringForTesting() const { return GetFormatString(); }
 
   // Returns the parse expressions by relevance for testing.
   std::vector<const re2::RE2*>
@@ -405,12 +360,6 @@ class AddressComponent {
 
   // Returns a reference to the root node of the tree for testing.
   AddressComponent& GetRootNodeForTesting() { return GetRootNode(); }
-
-  // Replaces placeholder values in the best format string with the
-  // corresponding values.
-  std::u16string GetReplacedPlaceholderTypesWithValuesForTesting() const {
-    return ReplacePlaceholderTypesWithValues(GetBestFormatString());
-  }
 
   // Returns a vector containing the |storage_types_| of all direct
   // subcomponents.
@@ -422,9 +371,13 @@ class AddressComponent {
   void SetMergeModeForTesting(int merge_mode) { merge_mode_ = merge_mode; }
 
   // Returns the value used for comparison for testing purposes.
-  std::u16string ValueForComparisonForTesting(
+  std::u16string GetValueForComparisonForTesting(
       const AddressComponent& other) const {
-    return ValueForComparison(other);
+    return GetValueForComparison(other);
+  }
+
+  AddressComponent* GetNodeForTypeForTesting(ServerFieldType field_type) {
+    return GetNodeForType(field_type);
   }
 #endif
 
@@ -433,24 +386,23 @@ class AddressComponent {
   // Each observed node contributes to the validation score by 1.
   virtual int GetStructureVerificationScore() const;
 
+  // Returns whether `field_type` is a supported type for the current node.
+  bool IsSupportedType(ServerFieldType field_type) const;
+
   // Returns a vector containing the |storage_types_| of all direct
   // subcomponents.
   std::vector<ServerFieldType> GetSubcomponentTypes() const;
 
-  // Heuristic method to get the best suited format string.
-  // This method is virtual and can be reimplemented for each type.
-  virtual std::u16string GetBestFormatString() const;
+  // Setter for the component's parent.
+  void SetParent(AddressComponent* parent) { parent_ = parent; }
+
+  // Heuristic method to get the format string suited for the node's type and
+  // country.
+  virtual std::u16string GetFormatString() const;
 
   // Returns pointers to regular expressions sorted by their relevance.
-  // This method is virtual and can be reimplemented for each type.
   virtual std::vector<const re2::RE2*> GetParseRegularExpressionsByRelevance()
       const;
-
-  // Method to parse |value_| into the values of |subcomponents_|. The
-  // purpose of this method is to cover special cases. This method returns true
-  // on success and is allowed to fail. On failure, the |subcomponents_| are not
-  // altered.
-  virtual bool ParseValueAndAssignSubcomponentsByMethod();
 
   // This method parses |value_| to assign values to the subcomponents.
   // The method is virtual and can be reimplemented per type.
@@ -458,21 +410,17 @@ class AddressComponent {
   virtual void ParseValueAndAssignSubcomponentsByFallbackMethod();
 
   // This method is used to set the value given by a type different than the
-  // storage type. It must implement the conversion logic specific to each type.
-  // It returns true if conversion logic exists and the type can be set.
-  virtual bool ConvertAndSetValueForAdditionalFieldTypeName(
-      const std::string& field_type_name,
-      const std::u16string& value,
-      const VerificationStatus& status);
+  // storage type. It must implement the conversion logic specific to each
+  // type.
+  virtual void SetValueForOtherSupportedType(ServerFieldType field_type,
+                                             const std::u16string& value,
+                                             const VerificationStatus& status);
 
   // This method is used to retrieve the value for a supported field type
   // different from the storage type. It must implement the conversion logic
-  // specific to each type. It returns true if the type is supported and the
-  // value can be written back to value.
-  // The method must handle |nullptr|s for both the value and status.
-  virtual bool ConvertAndGetTheValueForAdditionalFieldTypeName(
-      const std::string& field_type_name,
-      std::u16string* value) const;
+  // specific to each type.
+  virtual std::u16string GetValueForOtherSupportedType(
+      ServerFieldType field_type) const;
 
   // Clears all parsed and formatted values.
   void ClearAllParsedAndFormattedValues();
@@ -505,7 +453,7 @@ class AddressComponent {
   // In the default implementation, this converts the value to lower case and
   // removes white spaces. This function may be reimplemented to perform
   // different normalization operations.
-  virtual std::u16string NormalizedValue() const;
+  virtual std::u16string GetNormalizedValue() const;
 
   // Returns a value used for comparison.
   // In the default implementation this is just the normalized value but this
@@ -513,13 +461,20 @@ class AddressComponent {
   // the normalized value.
   // |other| represents the component we are comparing with and is required
   // for consistent rewriting rules.
-  virtual std::u16string ValueForComparison(
+  std::u16string GetValueForComparison(const AddressComponent& other) const;
+
+  // Formats `value` to be used for comparison.
+  // In the default implementation this is `value` normalized but this function
+  // can be overridden in subclasses to apply further operations on `value`.
+  // `other` represents the component we are comparing with and is required
+  // for consistent rewriting rules.
+  virtual std::u16string GetValueForComparison(
+      const std::u16string& value,
       const AddressComponent& other) const;
 
   // Returns true if the merging of two token identical values should give
-  // precedence to the newer value. By default, the newer component gets
-  // precedence if it has the same or better verification status.
-  virtual bool HasNewerValuePrecendenceInMerging(
+  // precedence to the newer value.
+  virtual bool HasNewerValuePrecedenceInMerging(
       const AddressComponent& newer_component) const;
 
   // Parses |value| by using |parse_expressions| and assigns the values.
@@ -536,16 +491,38 @@ class AddressComponent {
   // from the component to a leaf node.
   int MaximumNumberOfAssignedAddressComponentsOnNodeToLeafPaths() const;
 
- private:
   // Function to be called by child nodes on construction to register
   // themselves as child nodes.
-  void RegisterChildNode(AddressComponent* child);
+  void RegisterChildNode(std::unique_ptr<AddressComponent> child);
 
+  // Returns the node in the tree that supports `field_type`. This node, if it
+  // exists, is unique by definition. Returns nullptr if no such node exists.
+  AddressComponent* GetNodeForType(ServerFieldType field_type);
+
+  // const version of GetNodeForType.
+  const AddressComponent* GetNodeForType(ServerFieldType field_type) const;
+
+  // Recursively adds the supported types to the set. If `!storable_only`, calls
+  // |GetAdditionalSupportedFieldTypes()| to add computed field types.
+  virtual void GetTypes(bool storable_only,
+                        ServerFieldTypeSet* supported_types) const;
+
+ private:
   // Unsets the node and all of its children.
   void UnsetAddressComponentAndItsSubcomponents();
 
   // Unsets the children of a node.
   void UnsetSubcomponents();
+
+  // In cases where the tree has been initially completed, there might still be
+  // nodes that are empty (e.g. a new leaf or internal node got recently
+  // introduced). Gap filling addresses all those cases.
+  // The overall strategy is: For every empty node, try building its value by
+  // parsing its parent. If that's not possible (e.g. info can't be parsed), use
+  // formatting rules to build a value from its children. Note that this process
+  // respects non-empty nodes and the information growth invariant (i.e child
+  // information is always contained on their ancestors).
+  void FillTreeGaps();
 
   // Determines a value from the subcomponents by using the
   // most suitable format string determined by |GetBestFormatString()|.
@@ -553,16 +530,53 @@ class AddressComponent {
 
   // Replaces placeholder values with the corresponding values.
   std::u16string ReplacePlaceholderTypesWithValues(
-      const std::u16string& format) const;
+      std::u16string_view format) const;
 
-  // Replaces placeholder values with the corresponding values.
-  std::u16string ReplacePlaceholderTypesWithValuesRegexVersion(
-      const std::u16string& format) const;
+  // This method uses i18n parsing instructions used by
+  // `ParseValueByI18nRegularExpression` to parse |value_| into the values of
+  // the subcomponents. Returns true on success and is allowed to fail.
+  bool ParseValueAndAssignSubcomponentsByI18nParsingRules();
 
   // This method uses regular expressions acquired by
   // |GetParseRegularExpressionsByRelevance| to parse |value_| into the values
   // of the subcomponents. Returns true on success and is allowed to fail.
   bool ParseValueAndAssignSubcomponentsByRegularExpressions();
+
+  // This method uses regular expressions acquired by
+  // |GetParseRegularExpressionsByRelevance| to parse |value_| into the values
+  // of the subcomponents that are empty, components with non-empty values
+  // remain unchanged. If parsing is not successful, the function does not
+  // perform any modifications. Returns true if parsing was successful.
+  void TryParseValueAndAssignSubcomponentsRespectingSetValues();
+
+  // Parses |value| by using |parse_expressions| and assigns values to empty
+  // subcomponents only. The value assigned to each subcomponent is compatible
+  // with the information growth invariant (i.e child information is always
+  // contained on their ancestors). If parsing is not successful, the function
+  // does not perform any modifications. Returns true if parsing was successful.
+  bool ParseValueAndAssignSubcomponentsRespectingSetValues(
+      const std::u16string& value,
+      const re2::RE2* parse_expression);
+
+  // Assigns parsing results to the corresponding subcomponents. Overrides
+  // previously set values if necessary.
+  void AssignParsedValuesToSubcomponents(
+      i18n_model_definition::ValueParsingResults values);
+
+  // Assigns parsing results to the corresponding subcomponents. The value
+  // assigned to each subcomponent must be compatible with the information
+  // growth invariant (i.e child information is always contained in their
+  // ancestors). Previously set values are not overridden.
+  bool AssignParsedValuesToSubcomponentsRespectingSetValues(
+      i18n_model_definition::ValueParsingResults values);
+
+  // This method verifies that the `value` is token compatible with this node
+  // and all the node's descendants.
+  bool IsValueCompatibleWithDescendants(const std::u16string& value) const;
+
+  // This method verifies that the `value` is token compatible with this node
+  // and all the node's ancestors.
+  bool IsValueCompatibleWithAncestors(const std::u16string& value) const;
 
   // The unstructured value of this component.
   absl::optional<std::u16string> value_;
@@ -574,8 +588,8 @@ class AddressComponent {
   // The storable Autofill type of the component.
   const ServerFieldType storage_type_;
 
-  // A vector of pointers to the subcomponents.
-  std::vector<AddressComponent*> subcomponents_;
+  // A vector of children of the component.
+  SubcomponentsList subcomponents_;
 
   // A vector that contains the tokens of |value_| after normalization,
   // meaning that it was converted to lower case and diacritics have been
@@ -585,13 +599,11 @@ class AddressComponent {
 
   // A pointer to the parent node. It is set to nullptr if the node is the root
   // node of the AddressComponent tree.
-  const raw_ptr<AddressComponent> parent_;
+  raw_ptr<AddressComponent> parent_ = nullptr;
 
   // Defines if and how two components can be merged.
   int merge_mode_;
 };
-
-}  // namespace structured_address
 
 }  // namespace autofill
 #endif  // COMPONENTS_AUTOFILL_CORE_BROWSER_DATA_MODEL_AUTOFILL_STRUCTURED_ADDRESS_COMPONENT_H_

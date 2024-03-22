@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,10 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "cc/base/completion_event.h"
 #include "cc/base/delayed_unique_notifier.h"
 #include "cc/input/browser_controls_state.h"
-#include "cc/metrics/jank_injector.h"
 #include "cc/scheduler/scheduler.h"
 #include "cc/trees/layer_tree_host_impl.h"
 
@@ -26,8 +26,6 @@ namespace cc {
 class LayerTreeHost;
 class ProxyMain;
 class RenderFrameMetadataObserver;
-
-class JankInjector;
 class ScopedCommitCompletionEvent;
 
 // This class aggregates all the interactions that the main side of the
@@ -57,6 +55,7 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   void InitializePaintWorkletLayerPainterOnImpl(
       std::unique_ptr<PaintWorkletLayerPainter> painter);
   void SetDeferBeginMainFrameFromMain(bool defer_begin_main_frame);
+  void SetPauseRendering(bool pause_rendering);
   void SetNeedsRedrawOnImpl(const gfx::Rect& damage_rect);
   void SetNeedsCommitOnImpl();
   void SetTargetLocalSurfaceIdOnImpl(
@@ -74,6 +73,7 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
                                  const ThreadUnsafeCommitState* unsafe_state,
                                  base::TimeTicks main_thread_start_time,
                                  const viz::BeginFrameArgs& commit_args,
+                                 bool scroll_and_viewport_changes_synced,
                                  CommitTimestamps* commit_timestamps,
                                  bool commit_timeout = false);
   void SetSourceURL(ukm::SourceId source_id, const GURL& url);
@@ -81,6 +81,8 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
       base::WritableSharedMemoryMapping ukm_smoothness_data);
   void SetRenderFrameObserver(
       std::unique_ptr<RenderFrameMetadataObserver> observer);
+  void DetachInputDelegateAndRenderFrameObserver(
+      CompletionEvent* completion_event);
 
   void MainFrameWillHappenOnImplForTesting(CompletionEvent* completion,
                                            bool* main_frame_will_happen);
@@ -88,6 +90,10 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
 
   void ClearHistory() override;
   size_t CommitDurationSampleCountForTesting() const override;
+  const DelayedUniqueNotifier& SmoothnessPriorityExpirationNotifierForTesting()
+      const {
+    return smoothness_priority_expiration_notifier_;
+  }
 
  private:
   // LayerTreeHostImplClient implementation
@@ -118,6 +124,7 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
                                    bool skip_draw) override;
   void NeedsImplSideInvalidation(bool needs_first_draw_on_activation) override;
   void NotifyImageDecodeRequestFinished() override;
+  void NotifyTransitionRequestFinished(uint32_t sequence_id) override;
   void DidPresentCompositorFrameOnImplThread(
       uint32_t frame_token,
       PresentationTimeCallbackBuffer::PendingCallbacks activated,
@@ -129,13 +136,12 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
       Scheduler::PaintWorkletState state) override;
   void NotifyThroughputTrackerResults(CustomTrackerResults results) override;
   void DidObserveFirstScrollDelay(
+      int source_frame_number,
       base::TimeDelta first_scroll_delay,
       base::TimeTicks first_scroll_timestamp) override;
   bool IsInSynchronousComposite() const override;
   void FrameSinksToThrottleUpdated(
       const base::flat_set<viz::FrameSinkId>& id) override;
-  void ReportEventLatency(
-      std::vector<EventLatencyTracker::LatencyData> latencies) override;
 
   // SchedulerClient implementation
   bool WillBeginImplFrame(const viz::BeginFrameArgs& args) override;
@@ -159,7 +165,6 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
   void ScheduledActionBeginMainFrameNotExpectedUntil(
       base::TimeTicks time) override;
   void FrameIntervalUpdated(base::TimeDelta interval) override {}
-  bool HasInvalidationAnimation() const override;
 
   DrawResult DrawInternal(bool forced_draw);
 
@@ -205,17 +210,11 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
 
   bool send_compositor_frame_ack_;
 
-  JankInjector jank_injector_;
-
-  TreePriority last_raster_priority_;
-
   raw_ptr<TaskRunnerProvider> task_runner_provider_;
 
   DelayedUniqueNotifier smoothness_priority_expiration_notifier_;
 
   std::unique_ptr<LayerTreeHostImpl> host_impl_;
-
-  bool is_jank_injection_enabled_ = false;
 
   // Used to post tasks to ProxyMain on the main thread.
   base::WeakPtr<ProxyMain> proxy_main_weak_ptr_;

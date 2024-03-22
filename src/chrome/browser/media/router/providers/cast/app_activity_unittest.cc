@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
@@ -21,7 +21,8 @@
 #include "chrome/browser/media/router/providers/cast/cast_session_client.h"
 #include "chrome/browser/media/router/providers/cast/test_util.h"
 #include "chrome/browser/media/router/test/provider_test_helpers.h"
-#include "components/cast_channel/cast_test_util.h"
+#include "components/media_router/common/providers/cast/channel/cast_message_util.h"
+#include "components/media_router/common/providers/cast/channel/cast_test_util.h"
 #include "components/media_router/common/test/test_helper.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -31,7 +32,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 using base::test::IsJson;
-using base::test::ParseJson;
+using base::test::ParseJsonDict;
 using blink::mojom::PresentationConnectionCloseReason;
 using blink::mojom::PresentationConnectionMessage;
 using blink::mojom::PresentationConnectionMessagePtr;
@@ -90,7 +91,7 @@ TEST_F(AppActivityTest, SendAppMessageToReceiver) {
       }));
 
   std::unique_ptr<CastInternalMessage> message =
-      CastInternalMessage::From(ParseJson(R"({
+      CastInternalMessage::From(ParseJsonDict(R"({
     "type": "app_message",
     "clientId": "theClientId",
     "sequenceNumber": 999,
@@ -124,7 +125,7 @@ TEST_F(AppActivityTest, SendMediaRequestToReceiver) {
       .WillOnce(Return(request_id));
 
   std::unique_ptr<CastInternalMessage> message =
-      CastInternalMessage::From(ParseJson(R"({
+      CastInternalMessage::From(ParseJsonDict(R"({
     "type": "v2_message",
     "clientId": "theClientId",
     "sequenceNumber": 999,
@@ -158,7 +159,7 @@ TEST_F(AppActivityTest, SendSetVolumeRequestToReceiver) {
 
   SetUpSession();
   std::unique_ptr<CastInternalMessage> message =
-      CastInternalMessage::From(ParseJson(R"({
+      CastInternalMessage::From(ParseJsonDict(R"({
     "type": "v2_message",
     "clientId": "theClientId",
     "sequenceNumber": 999,
@@ -314,8 +315,8 @@ TEST_F(AppActivityTest, OnAppMessage) {
 
   auto* client = AddMockClient("theClientId");
   auto message = cast_channel::CreateCastMessage(
-      "urn:x-cast:com.google.foo", base::Value(base::Value::Type::DICTIONARY),
-      "sourceId", "theClientId");
+      "urn:x-cast:com.google.foo", base::Value(base::Value::Dict()), "sourceId",
+      "theClientId");
   EXPECT_CALL(*client,
               SendMessageToClient(IsPresentationConnectionMessage(
                   CreateAppMessage("theSessionId", "theClientId", message)
@@ -329,8 +330,8 @@ TEST_F(AppActivityTest, OnAppMessageAllClients) {
   auto* client1 = AddMockClient("theClientId1");
   auto* client2 = AddMockClient("theClientId2");
   auto message = cast_channel::CreateCastMessage(
-      "urn:x-cast:com.google.foo", base::Value(base::Value::Type::DICTIONARY),
-      "sourceId", "*");
+      "urn:x-cast:com.google.foo", base::Value(base::Value::Dict()), "sourceId",
+      "*");
   EXPECT_CALL(*client1,
               SendMessageToClient(IsPresentationConnectionMessage(
                   CreateAppMessage("theSessionId", "theClientId1", message)
@@ -347,8 +348,48 @@ TEST_F(AppActivityTest, CloseConnectionOnReceiver) {
   AddMockClient("theClientId1");
 
   EXPECT_CALL(message_handler_, CloseConnection(kChannelId, "theClientId1",
-                                                session_->transport_id()));
+                                                session_->destination_id()));
   activity_->CloseConnectionOnReceiver("theClientId1");
+}
+
+TEST_F(AppActivityTest, ForwardInternalMediaMessage) {
+  const std::string client_id = "theClientId";
+  base::Value::Dict payload = ParseJsonDict(R"({
+    "type": "v2_message",
+    "clientId": "theClientId",
+    "message": {
+      "type": "INVALID_REQUEST",
+      "sessionId": "theSessionId",
+    },
+  })");
+  SetUpSession();
+  MockCastSessionClient* client = AddMockClient(client_id);
+
+  EXPECT_CALL(*client, SendMediaMessageToClient);
+  activity_->OnInternalMessage(cast_channel::InternalMessage(
+      cast_channel::CastMessageType::kInvalidRequest, "theSourceId", client_id,
+      cast_channel::kMediaNamespace, std::move(payload)));
+}
+
+TEST_F(AppActivityTest, IgnoreInternalMediaStatusMessage) {
+  const std::string client_id = "theClientId";
+  base::Value::Dict media_status_payload = ParseJsonDict(R"({
+    "type": "v2_message",
+    "clientId": "theClientId",
+    "message": {
+      "type": "MEDIA_STATUS",
+      "sessionId": "theSessionId",
+    },
+  })");
+  SetUpSession();
+  MockCastSessionClient* client = AddMockClient(client_id);
+
+  // OnInternalMessage() should ignore `kMediaStatus` messages because they're
+  // handled elsewhere.
+  EXPECT_CALL(*client, SendMediaMessageToClient).Times(0);
+  activity_->OnInternalMessage(cast_channel::InternalMessage(
+      cast_channel::CastMessageType::kMediaStatus, "theSourceId", client_id,
+      cast_channel::kMediaNamespace, std::move(media_status_payload)));
 }
 
 }  // namespace media_router

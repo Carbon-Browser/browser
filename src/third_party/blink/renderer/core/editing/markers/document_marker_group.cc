@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ const DocumentMarker* DocumentMarkerGroup::GetMarkerForText(
     const Text* text) const {
   for (const auto& marker_text : marker_text_map_) {
     if (marker_text.value == text) {
-      return marker_text.key;
+      return marker_text.key.Get();
     }
   }
   return nullptr;

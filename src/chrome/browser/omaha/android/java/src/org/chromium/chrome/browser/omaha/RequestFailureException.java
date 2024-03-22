@@ -1,12 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.omaha;
 
-/**
- * Serves as a general exception for failed POST requests to the Omaha Update Server.
- */
+/** Serves as a general exception for failed POST requests to the Omaha Update Server. */
 public class RequestFailureException extends Exception {
     public static final int ERROR_UNDEFINED = 0;
     public static final int ERROR_MALFORMED_XML = 1;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,7 @@ class DefaultSearchPolicyHandler : public ConfigurationPolicyHandler {
   // a blank string.
   void EnsureStringPrefExists(PrefValueMap* prefs, const std::string& path);
 
-  // Make sure that the |path| is present in |prefs_| and is a ListValue.  If
+  // Make sure that the |path| is present in |prefs_| and is a List.  If
   // not, set it to an empty list.
   void EnsureListPrefExists(PrefValueMap* prefs, const std::string& path);
 };

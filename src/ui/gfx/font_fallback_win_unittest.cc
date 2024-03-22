@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "base/strings/string_piece.h"
 #include "base/test/task_environment.h"
-#include "base/win/windows_version.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace gfx {
@@ -106,10 +105,6 @@ TEST_F(FontFallbackWinTest, NulTerminatedStringPiece) {
 }
 
 TEST_F(FontFallbackWinTest, CJKLocaleFallback) {
-  // The uniscribe fallback used by win7 does not support locale.
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return;
-
   // Han unification is an effort to map multiple character sets of the CJK
   // languages into a single set of unified characters. Han characters are a
   // common feature of written Chinese (hanzi), Japanese (kanji), and Korean

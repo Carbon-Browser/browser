@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ namespace api {
 namespace {
 
 WindowType GetWindowType(content::WebContents* web_contents) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser)
     return WindowType::kNoBrowser;
   if (!browser->app_controller())
@@ -49,7 +49,7 @@ ExtensionFunction::ResponseAction CrashReportPrivateReportErrorFunction::Run() {
   }
 
   const auto params = crash_report_private::ReportError::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   auto processor = JsErrorReportProcessor::Get();
   if (!processor) {

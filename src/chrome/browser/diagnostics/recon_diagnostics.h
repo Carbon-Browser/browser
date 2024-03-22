@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,8 @@ enum OutcomeCodes {
   DIAG_RECON_PARSE_ERROR,
 };
 
-std::unique_ptr<DiagnosticsTest> MakeBookMarksTest();
+std::unique_ptr<DiagnosticsTest> MakeLocalOrSyncableBookmarksTest();
+std::unique_ptr<DiagnosticsTest> MakeAccountBookmarksTest();
 std::unique_ptr<DiagnosticsTest> MakeDictonaryDirTest();
 std::unique_ptr<DiagnosticsTest> MakeDiskSpaceTest();
 std::unique_ptr<DiagnosticsTest> MakeInstallTypeTest();

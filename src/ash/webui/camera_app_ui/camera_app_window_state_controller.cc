@@ -1,17 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/camera_app_ui/camera_app_window_state_controller.h"
 
-#include "ash/public/cpp/tablet_mode.h"
+#include "ui/display/screen.h"
 
 namespace ash {
 
 namespace {
 
 bool IsRestored(views::Widget* widget) {
-  if (TabletMode::Get()->InTabletMode()) {
+  if (display::Screen::GetScreen()->InTabletMode()) {
     return !widget->IsMinimized();
   }
   return !widget->IsMinimized() && !widget->IsMaximized() &&
@@ -113,6 +113,7 @@ void CameraAppWindowStateController::OnWidgetActivationChanged(
     std::move(focus_callbacks_.front()).Run();
     focus_callbacks_.pop();
   }
+  OnWindowFocusChanged(active);
 }
 
 void CameraAppWindowStateController::OnWidgetBoundsChanged(
@@ -148,6 +149,12 @@ void CameraAppWindowStateController::OnWindowStateChanged() {
     for (const auto& monitor : monitors_) {
       monitor->OnWindowStateChanged(ToVector(window_states_));
     }
+  }
+}
+
+void CameraAppWindowStateController::OnWindowFocusChanged(bool is_focus) {
+  for (const auto& monitor : monitors_) {
+    monitor->OnWindowFocusChanged(is_focus);
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,9 +67,7 @@ void VerifyBinaryIntegrity(
     std::unique_ptr<ClientDownloadRequest_SignatureInfo> signature_info(
         new ClientDownloadRequest_SignatureInfo());
 
-    base::TimeTicks time_before = base::TimeTicks::Now();
     binary_feature_extractor->CheckSignature(binary_path, signature_info.get());
-    RecordSignatureVerificationTime(i, base::TimeTicks::Now() - time_before);
 
     // Only create a report if the signature is untrusted.
     if (!signature_info->trusted()) {

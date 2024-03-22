@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,39 +6,92 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "content/public/renderer/render_frame.h"
 #include "ipc/ipc_message.h"
 #include "net/http/http_request_headers.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
+#include "third_party/blink/public/platform/web_security_origin.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "extensions/common/constants.h"
+#endif
 
 namespace safe_browsing {
 
 WebSocketSBHandshakeThrottle::WebSocketSBHandshakeThrottle(
     mojom::SafeBrowsing* safe_browsing,
-    int render_frame_id)
-    : render_frame_id_(render_frame_id), safe_browsing_(safe_browsing) {}
+    base::optional_ref<const blink::LocalFrameToken> local_frame_token)
+    : frame_token_(local_frame_token.CopyAsOptional()),
+      safe_browsing_(safe_browsing) {}
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+WebSocketSBHandshakeThrottle::WebSocketSBHandshakeThrottle(
+    mojom::SafeBrowsing* safe_browsing,
+    base::optional_ref<const blink::LocalFrameToken> local_frame_token,
+    mojom::ExtensionWebRequestReporter* extension_web_request_reporter)
+    : frame_token_(local_frame_token.CopyAsOptional()),
+      safe_browsing_(safe_browsing),
+      extension_web_request_reporter_(
+          std::move(extension_web_request_reporter)) {}
+#endif
 
 WebSocketSBHandshakeThrottle::~WebSocketSBHandshakeThrottle() = default;
 
 void WebSocketSBHandshakeThrottle::ThrottleHandshake(
     const blink::WebURL& url,
+    const blink::WebSecurityOrigin& creator_origin,
     blink::WebSocketHandshakeThrottle::OnCompletion completion_callback) {
   DCHECK(!url_checker_);
   DCHECK(!completion_callback_);
   completion_callback_ = std::move(completion_callback);
   url_ = url;
   int load_flags = 0;
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  // Send web request data to the browser if destination is WS/WSS scheme.
+  if (creator_origin.Protocol().Ascii() == extensions::kExtensionScheme &&
+      url_.SchemeIsWSOrWSS()) {
+    const std::string& origin_extension_id =
+        creator_origin.Host().Utf8().data();
+    // Logging "false" represents the data being *sent*.
+    base::UmaHistogramBoolean(
+        "SafeBrowsing.ExtensionTelemetry.WebSocketRequestDataSentOrReceived",
+        false);
+    // TODO(crbug.com/1494413): Refactor |isolated_world_origin| info in
+    // websockets to track extension requests from content scripts. Even though
+    // |kExtension| is passed down for |ContactInitiatorType| now, the browser
+    // side will declare unspecified for websocket connections. The correct
+    // |ContactInitiatorType| will be passed down once the refactoring is done.
+    extension_web_request_reporter_->SendWebRequestData(
+        origin_extension_id, url, mojom::WebRequestProtocolType::kWebSocket,
+        mojom::WebRequestContactInitiatorType::kExtension);
+  }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
   DCHECK_EQ(state_, State::kInitial);
   state_ = State::kStarted;
+
+  // If |kSafeBrowsingSkipSubresources2| is enabled, skip Safe Browsing checks
+  // on WebSockets. Note that we still want to perform the extensions telemetry
+  // code above.
+  if (base::FeatureList::IsEnabled(kSafeBrowsingSkipSubresources2)) {
+    base::UmaHistogramBoolean("SafeBrowsing.WebSocketCheck.Skipped", true);
+    OnCompleteCheck(/*proceed=*/true, /*showed_interstitial=*/false);
+    return;
+  }
+
+  base::UmaHistogramBoolean("SafeBrowsing.WebSocketCheck.Skipped", false);
   safe_browsing_->CreateCheckerAndCheck(
-      render_frame_id_, url_checker_.BindNewPipeAndPassReceiver(), url, "GET",
+      frame_token_, url_checker_.BindNewPipeAndPassReceiver(), url, "GET",
       net::HttpRequestHeaders(), load_flags,
       network::mojom::RequestDestination::kEmpty, false /* has_user_gesture */,
       false /* originated_from_service_worker */,

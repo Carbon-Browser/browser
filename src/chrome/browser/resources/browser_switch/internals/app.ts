@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import '../strings.m.js';
 import 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
 
-import {addWebUIListener} from 'chrome://resources/js/cr.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {addWebUiListener} from 'chrome://resources/js/cr.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './app.html.js';
@@ -92,7 +92,7 @@ class BrowserSwitchInternalsAppElement extends
     this.updateEverything();
 
     document.addEventListener('DOMContentLoaded', () => {
-      addWebUIListener('data-changed', () => this.updateEverything());
+      addWebUiListener('data-changed', () => this.updateEverything());
     });
   }
 
@@ -122,10 +122,11 @@ class BrowserSwitchInternalsAppElement extends
 
     for (const [rulesetName, ruleset] of Object.entries(rulesets)) {
       for (const [listName, rules] of Object.entries(ruleset as RuleSet)) {
-        this.push(listNameToProperty[listName], ...rules.map((rule) => ({
-                                                               rulesetName,
-                                                               rule,
-                                                             })));
+        this.push(
+            listNameToProperty[listName], ...rules.map((rule: string) => ({
+                                                         rulesetName,
+                                                         rule,
+                                                       })));
       }
     }
   }
@@ -256,7 +257,7 @@ class BrowserSwitchInternalsAppElement extends
    * Section: XML configuration source
    * Shows information about the last time XML sitelists were downloaded.
    */
-  private getXMLSitelistsLastDownloadLabel(): string {
+  private getXmlSitelistsLastDownloadLabel(): string {
     return this.i18n('xmlSitelistLastDownloadDate', this.lastFetch_);
   }
 
@@ -264,7 +265,7 @@ class BrowserSwitchInternalsAppElement extends
    * Section: XML configuration source
    * Shows information about the next download time of XML sitelists.
    */
-  private getXMLSitelistsNextDownloadLabel(): string {
+  private getXmlSitelistsNextDownloadLabel(): string {
     return this.i18n('xmlSitelistNextDownloadDate', this.nextFetch_);
   }
 
@@ -274,7 +275,7 @@ class BrowserSwitchInternalsAppElement extends
    * BrowserSwitcherExternalGreylistUrl and BrowserSwitcherUrlGreylist
    * will not trigger a browser switch.
    */
-  private getIgnoreURLMatchingLabel(): string {
+  private getIgnoreUrlMatchingLabel(): string {
     return this.i18n('ignoreParagraph2', getBrowserName(), getAltBrowserName());
   }
 }

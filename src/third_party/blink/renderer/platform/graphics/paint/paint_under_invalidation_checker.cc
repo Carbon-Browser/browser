@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ PaintUnderInvalidationChecker::PaintUnderInvalidationChecker(
     : paint_controller_(paint_controller) {
 #if DCHECK_IS_ON()
   DCHECK(RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled());
-  DCHECK_EQ(paint_controller_.GetUsage(), PaintController::kMultiplePaints);
+  DCHECK_EQ(paint_controller_->GetUsage(), PaintController::kMultiplePaints);
 #endif
 }
 
@@ -27,19 +27,19 @@ PaintUnderInvalidationChecker::~PaintUnderInvalidationChecker() {
 bool PaintUnderInvalidationChecker::IsChecking() const {
   if (old_item_index_ != kNotFound) {
     DCHECK(RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled());
-    DCHECK(!subsequence_client_ ||
+    DCHECK(subsequence_client_id_ == kInvalidDisplayItemClientId ||
            (old_chunk_index_ != kNotFound && new_chunk_index_ != kNotFound));
     return true;
   }
 
-  DCHECK(!subsequence_client_);
+  DCHECK_EQ(subsequence_client_id_, kInvalidDisplayItemClientId);
   DCHECK_EQ(old_chunk_index_, kNotFound);
   DCHECK_EQ(new_chunk_index_, kNotFound);
   return false;
 }
 
 bool PaintUnderInvalidationChecker::IsCheckingSubsequence() const {
-  if (subsequence_client_) {
+  if (subsequence_client_id_ != kInvalidDisplayItemClientId) {
     DCHECK(IsChecking());
     return true;
   }
@@ -51,7 +51,7 @@ void PaintUnderInvalidationChecker::Stop() {
   old_chunk_index_ = kNotFound;
   new_chunk_index_ = kNotFound;
   old_item_index_ = kNotFound;
-  subsequence_client_ = nullptr;
+  subsequence_client_id_ = kInvalidDisplayItemClientId;
 }
 
 void PaintUnderInvalidationChecker::WouldUseCachedItem(
@@ -63,13 +63,13 @@ void PaintUnderInvalidationChecker::WouldUseCachedItem(
 void PaintUnderInvalidationChecker::CheckNewItem() {
   DCHECK(IsChecking());
 
-  if (paint_controller_.IsSkippingCache()) {
+  if (paint_controller_->IsSkippingCache()) {
     // We allow cache skipping and temporary under-invalidation in cached
     // subsequences. See the usage of DisplayItemCacheSkipper in BoxPainter.
     Stop();
     // Match the remaining display items in the subsequence normally.
-    paint_controller_.next_item_to_match_ = old_item_index_;
-    paint_controller_.next_item_to_index_ = old_item_index_;
+    paint_controller_->next_item_to_match_ = old_item_index_;
+    paint_controller_->next_item_to_index_ = old_item_index_;
     return;
   }
 
@@ -91,7 +91,7 @@ void PaintUnderInvalidationChecker::CheckNewItem() {
       old_item.IsCacheable() ? PaintInvalidationReason::kNone
                              : PaintInvalidationReason::kUncacheable);
 
-  if (subsequence_client_) {
+  if (subsequence_client_id_ != kInvalidDisplayItemClientId) {
     // We are checking under-invalidation of a cached subsequence.
     ++old_item_index_;
   } else {
@@ -101,15 +101,15 @@ void PaintUnderInvalidationChecker::CheckNewItem() {
 }
 
 void PaintUnderInvalidationChecker::WouldUseCachedSubsequence(
-    const DisplayItemClient& client) {
+    DisplayItemClientId client_id) {
   DCHECK(!IsChecking());
 
-  const auto* markers = paint_controller_.GetSubsequenceMarkers(client.Id());
+  const auto* markers = paint_controller_->GetSubsequenceMarkers(client_id);
   DCHECK(markers);
   old_chunk_index_ = markers->start_chunk_index;
   new_chunk_index_ = NewPaintChunks().size();
   old_item_index_ = OldPaintChunks()[markers->start_chunk_index].begin_index;
-  subsequence_client_ = &client;
+  subsequence_client_id_ = client_id;
 }
 
 void PaintUnderInvalidationChecker::CheckNewChunk() {
@@ -133,7 +133,7 @@ void PaintUnderInvalidationChecker::WillEndSubsequence(
   if (!IsCheckingSubsequence())
     return;
 
-  const auto* markers = paint_controller_.GetSubsequenceMarkers(client_id);
+  const auto* markers = paint_controller_->GetSubsequenceMarkers(client_id);
   if (!markers) {
     if (start_chunk_index != NewPaintChunks().size())
       ShowSubsequenceError("unexpected subsequence", client_id);
@@ -151,14 +151,14 @@ void PaintUnderInvalidationChecker::WillEndSubsequence(
     }
   }
 
-  if (subsequence_client_->Id() == client_id)
+  if (subsequence_client_id_ == client_id)
     Stop();
 }
 
 void PaintUnderInvalidationChecker::CheckNewChunkInternal() {
-  DCHECK(subsequence_client_);
+  DCHECK_NE(subsequence_client_id_, kInvalidDisplayItemClientId);
   const auto* markers =
-      paint_controller_.GetSubsequenceMarkers(subsequence_client_->Id());
+      paint_controller_->GetSubsequenceMarkers(subsequence_client_id_);
   DCHECK(markers);
   const auto& new_chunk = NewPaintChunks()[new_chunk_index_];
   if (old_chunk_index_ >= markers->end_chunk_index) {
@@ -179,33 +179,33 @@ void PaintUnderInvalidationChecker::ShowItemError(
     const char* reason,
     const DisplayItem& new_item,
     const DisplayItem* old_item) const {
-  if (subsequence_client_) {
+  if (subsequence_client_id_ != kInvalidDisplayItemClientId) {
     LOG(ERROR) << "(In cached subsequence for "
-               << subsequence_client_->DebugName() << ")";
+               << paint_controller_->new_paint_artifact_->ClientDebugName(
+                      subsequence_client_id_)
+               << ")";
   }
   LOG(ERROR) << "Under-invalidation: " << reason;
 #if DCHECK_IS_ON()
   LOG(ERROR) << "New display item: "
-             << new_item.AsDebugString(*paint_controller_.new_paint_artifact_);
+             << new_item.AsDebugString(*paint_controller_->new_paint_artifact_);
   if (old_item) {
     LOG(ERROR) << "Old display item: "
                << old_item->AsDebugString(
-                      *paint_controller_.current_paint_artifact_);
+                      *paint_controller_->current_paint_artifact_);
   }
   LOG(ERROR) << "See http://crbug.com/619103.";
 
   if (auto* new_drawing = DynamicTo<DrawingDisplayItem>(new_item)) {
-    auto* new_record = new_drawing->GetPaintRecord().get();
     LOG(INFO) << "new record:\n"
-              << (new_record ? RecordAsDebugString(*new_record).Utf8() : "{}");
+              << RecordAsDebugString(new_drawing->GetPaintRecord()).Utf8();
   }
   if (auto* old_drawing = DynamicTo<DrawingDisplayItem>(old_item)) {
-    auto* old_record = old_drawing->GetPaintRecord().get();
     LOG(INFO) << "old record:\n"
-              << (old_record ? RecordAsDebugString(*old_record).Utf8() : "{}");
+              << RecordAsDebugString(old_drawing->GetPaintRecord()).Utf8();
   }
 
-  paint_controller_.ShowDebugData();
+  paint_controller_->ShowDebugData();
 #else
   LOG(ERROR) << "Run a build with DCHECK on to get more details.";
 #endif
@@ -217,29 +217,31 @@ void PaintUnderInvalidationChecker::ShowSubsequenceError(
     DisplayItemClientId client_id,
     const PaintChunk* new_chunk,
     const PaintChunk* old_chunk) {
-  if (subsequence_client_) {
+  if (subsequence_client_id_ != kInvalidDisplayItemClientId) {
     LOG(ERROR) << "(In cached subsequence for "
-               << subsequence_client_->DebugName() << ")";
+               << paint_controller_->new_paint_artifact_->ClientDebugName(
+                      subsequence_client_id_)
+               << ")";
   }
   LOG(ERROR) << "Under-invalidation: " << reason;
   if (client_id != kInvalidDisplayItemClientId) {
-    // |client| may be different from |subsequence_client_| if the error occurs
-    // in a descendant subsequence of the cached subsequence.
+    // |client_id| may be different from |subsequence_client_id_| if the error
+    // occurs in a descendant subsequence of the cached subsequence.
     LOG(ERROR) << "Subsequence client: "
-               << paint_controller_.new_paint_artifact_->ClientDebugName(
+               << paint_controller_->new_paint_artifact_->ClientDebugName(
                       client_id);
   }
   if (new_chunk) {
     LOG(ERROR) << "New paint chunk: "
-               << new_chunk->ToString(*paint_controller_.new_paint_artifact_);
+               << new_chunk->ToString(*paint_controller_->new_paint_artifact_);
   }
   if (old_chunk) {
     LOG(ERROR) << "Old paint chunk: "
                << old_chunk->ToString(
-                      *paint_controller_.current_paint_artifact_);
+                      *paint_controller_->current_paint_artifact_);
   }
 #if DCHECK_IS_ON()
-  paint_controller_.ShowDebugData();
+  paint_controller_->ShowDebugData();
 #else
   LOG(ERROR) << "Run a build with DCHECK on to get more details.";
 #endif
@@ -248,20 +250,20 @@ void PaintUnderInvalidationChecker::ShowSubsequenceError(
 
 const Vector<PaintChunk>& PaintUnderInvalidationChecker::OldPaintChunks()
     const {
-  return paint_controller_.current_paint_artifact_->PaintChunks();
+  return paint_controller_->current_paint_artifact_->PaintChunks();
 }
 
 const Vector<PaintChunk>& PaintUnderInvalidationChecker::NewPaintChunks()
     const {
-  return paint_controller_.new_paint_artifact_->PaintChunks();
+  return paint_controller_->new_paint_artifact_->PaintChunks();
 }
 
 DisplayItemList& PaintUnderInvalidationChecker::OldDisplayItemList() {
-  return paint_controller_.current_paint_artifact_->GetDisplayItemList();
+  return paint_controller_->current_paint_artifact_->GetDisplayItemList();
 }
 
 DisplayItemList& PaintUnderInvalidationChecker::NewDisplayItemList() {
-  return paint_controller_.new_paint_artifact_->GetDisplayItemList();
+  return paint_controller_->new_paint_artifact_->GetDisplayItemList();
 }
 
 }  // namespace blink

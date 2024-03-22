@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@ AX_BASE_EXPORT extern const char
     kEnableExperimentalAccessibilityLanguageDetection[];
 AX_BASE_EXPORT extern const char
     kEnableExperimentalAccessibilityLanguageDetectionDynamic[];
+AX_BASE_EXPORT extern const char kEnableExperimentalAccessibilityManifestV3[];
 AX_BASE_EXPORT extern const char
     kEnableExperimentalAccessibilitySwitchAccessText[];
 
@@ -31,13 +32,6 @@ IsExperimentalAccessibilityLanguageDetectionDynamicEnabled();
 
 // Returns true if experimental accessibility Switch Access text is enabled.
 AX_BASE_EXPORT bool IsExperimentalAccessibilitySwitchAccessTextEnabled();
-
-#if BUILDFLAG(IS_WIN)
-AX_BASE_EXPORT extern const char kEnableExperimentalUIAutomation[];
-#endif
-
-// Returns true if experimental support for UIAutomation is enabled.
-AX_BASE_EXPORT bool IsExperimentalAccessibilityPlatformUIAEnabled();
 
 // Returns true if Switch Access point scanning is enabled.
 AX_BASE_EXPORT bool IsMagnifierDebugDrawRectEnabled();

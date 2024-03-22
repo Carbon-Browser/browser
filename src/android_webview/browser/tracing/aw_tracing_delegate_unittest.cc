@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ class AwTracingDelegateTest : public testing::Test {
 
   void TearDown() override {
     delete browser_process_;
-    tracing::BackgroundTracingStateManager::GetInstance().Reset();
+    tracing::BackgroundTracingStateManager::GetInstance().ResetForTesting();
   }
 
   android_webview::AwTracingDelegate delegate_;
@@ -49,44 +49,39 @@ class AwTracingDelegateTest : public testing::Test {
 };
 
 std::unique_ptr<content::BackgroundTracingConfig> CreateValidConfig() {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("scenario_name", "TestScenario");
-  dict.SetStringKey("mode", "PREEMPTIVE_TRACING_MODE");
-  dict.SetStringKey("custom_categories", "toplevel");
-  base::Value rules_list(base::Value::Type::LIST);
+  base::Value::Dict dict;
+  dict.Set("scenario_name", "TestScenario");
+  dict.Set("mode", "PREEMPTIVE_TRACING_MODE");
+  dict.Set("custom_categories", "toplevel");
+  base::Value::List rules_list;
 
   {
-    base::Value rules_dict(base::Value::Type::DICTIONARY);
-    rules_dict.SetStringKey("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED");
-    rules_dict.SetStringKey("trigger_name", "test");
+    base::Value::Dict rules_dict;
+    rules_dict.Set("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED");
+    rules_dict.Set("trigger_name", "test");
     rules_list.Append(std::move(rules_dict));
   }
 
-  dict.SetKey("configs", std::move(rules_list));
+  dict.Set("configs", std::move(rules_list));
   return content::BackgroundTracingConfig::FromDict(std::move(dict));
 }
 
 TEST_F(AwTracingDelegateTest, IsAllowedToBegin) {
-  auto config = CreateValidConfig();
-
-  EXPECT_TRUE(delegate_.IsAllowedToBeginBackgroundScenario(
-      *config, /*requires_anonymized_data=*/false));
-  EXPECT_TRUE(delegate_.IsAllowedToEndBackgroundScenario(
-      *config, /*requires_anonymized_data=*/false,
-      /*is_crash_scenario=*/false));
+  EXPECT_TRUE(delegate_.OnBackgroundTracingActive(
+      /*requires_anonymized_data=*/false));
+  EXPECT_TRUE(delegate_.OnBackgroundTracingIdle(
+      /*requires_anonymized_data=*/false));
 }
 
 TEST_F(AwTracingDelegateTest, IsAllowedToBeginSessionEndedUnexpectedly) {
   tracing::BackgroundTracingStateManager::GetInstance().SaveState(
-      {}, tracing::BackgroundTracingState::STARTED);
+      tracing::BackgroundTracingState::STARTED);
 
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value dict(base::Value::Type::DICT);
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
 
-  auto config = CreateValidConfig();
-
-  EXPECT_FALSE(delegate_.IsAllowedToBeginBackgroundScenario(
-      *config, /*requires_anonymized_data=*/false));
+  EXPECT_FALSE(delegate_.OnBackgroundTracingActive(
+      /*requires_anonymized_data=*/false));
 }
 
 }  // namespace android_webview

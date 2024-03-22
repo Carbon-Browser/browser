@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,20 @@ class RectF;
 // Bound of a selection end-point.
 class GFX_EXPORT SelectionBound {
  public:
-  enum Type { LEFT, RIGHT, CENTER, EMPTY, LAST = EMPTY };
+  enum Type {
+    // The LEFT and RIGHT hand side of a selection bound.
+    LEFT,
+    RIGHT,
+    // Used when a selection is zero width (a caret) and the selection handle
+    // should be shown.
+    CENTER,
+    // Used when a selection is zero width (a caret), but the selection handle
+    // should not be shown.
+    HIDDEN,
+    // No selection.
+    EMPTY,
+    LAST = EMPTY
+  };
 
   SelectionBound();
   SelectionBound(const SelectionBound& other);
@@ -46,6 +59,9 @@ class GFX_EXPORT SelectionBound {
 
   // Returns the vertical difference between rounded start and end.
   int GetHeight() const;
+
+  // Returns whether the type is one that should show a selection handle.
+  bool HasHandle() const { return !(type_ == EMPTY || type_ == HIDDEN); }
 
   std::string ToString() const;
 
@@ -78,6 +94,12 @@ GFX_EXPORT gfx::RectF RectFBetweenSelectionBounds(const SelectionBound& b1,
 GFX_EXPORT gfx::RectF RectFBetweenVisibleSelectionBounds(
     const SelectionBound& b1,
     const SelectionBound& b2);
-}  // namespace ui
+
+// This is declared here for use in gtest-based unit tests but is defined in
+// the //ui/gfx:test_support target. Depend on that to use this in your unit
+// test. This should not be used in production code - call ToString() instead.
+void PrintTo(const SelectionBound& bound, ::std::ostream* os);
+
+}  // namespace gfx
 
 #endif  // UI_GFX_SELECTION_BOUND_H_

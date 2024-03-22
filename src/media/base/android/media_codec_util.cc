@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <vector>
 
 #include "base/android/build_info.h"
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
@@ -20,6 +20,7 @@
 #include "media/base/android/media_jni_headers/CodecProfileLevelList_jni.h"
 #include "media/base/android/media_jni_headers/MediaCodecUtil_jni.h"
 #include "media/base/video_codecs.h"
+#include "third_party/re2/src/re2/re2.h"
 #include "url/gurl.h"
 
 using base::android::AttachCurrentThread;
@@ -48,6 +49,7 @@ const char kVp8MimeType[] = "video/x-vnd.on2.vp8";
 const char kVp9MimeType[] = "video/x-vnd.on2.vp9";
 const char kAv1MimeType[] = "video/av01";
 const char kDtsMimeType[] = "audio/vnd.dts";
+const char kDtseMimeType[] = "audio/vnd.dts;profile=lbr";
 const char kDtsxP2MimeType[] = "audio/vnd.dts.uhd;profile=p2";
 }  // namespace
 
@@ -68,19 +70,7 @@ static bool IsSupportedAndroidMimeType(const std::string& mime_type) {
       kMp3MimeType, kAacMimeType,         kOpusMimeType, kVorbisMimeType,
       kAvcMimeType, kDolbyVisionMimeType, kHevcMimeType, kVp8MimeType,
       kVp9MimeType, kAv1MimeType};
-  return std::find(supported.begin(), supported.end(), mime_type) !=
-         supported.end();
-}
-
-static std::string GetDefaultCodecName(const std::string& mime_type,
-                                       MediaCodecDirection direction,
-                                       bool requires_software_codec) {
-  JNIEnv* env = AttachCurrentThread();
-  ScopedJavaLocalRef<jstring> j_mime = ConvertUTF8ToJavaString(env, mime_type);
-  ScopedJavaLocalRef<jstring> j_codec_name =
-      Java_MediaCodecUtil_getDefaultCodecName(
-          env, j_mime, static_cast<int>(direction), requires_software_codec);
-  return ConvertJavaStringToUTF8(env, j_codec_name.obj());
+  return base::Contains(supported, mime_type);
 }
 
 static bool IsDecoderSupportedByDevice(const std::string& android_mime_type) {
@@ -151,6 +141,8 @@ std::string MediaCodecUtil::CodecToAndroidMimeType(AudioCodec codec,
       return kEac3MimeType;
     case AudioCodec::kDTS:
       return kDtsMimeType;
+    case AudioCodec::kDTSE:
+      return kDtseMimeType;
     case AudioCodec::kDTSXP2:
       return kDtsxP2MimeType;
     default:
@@ -179,12 +171,6 @@ std::string MediaCodecUtil::CodecToAndroidMimeType(VideoCodec codec) {
 }
 
 // static
-bool MediaCodecUtil::PlatformSupportsCbcsEncryption(int sdk) {
-  JNIEnv* env = AttachCurrentThread();
-  return Java_MediaCodecUtil_platformSupportsCbcsEncryption(env, sdk);
-}
-
-// static
 std::set<int> MediaCodecUtil::GetEncoderColorFormats(
     const std::string& mime_type) {
   std::set<int> color_formats;
@@ -202,13 +188,6 @@ std::set<int> MediaCodecUtil::GetEncoderColorFormats(
 
   return color_formats;
 }
-
-#if BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
-// static
-bool MediaCodecUtil::IsDolbyVisionDecoderAvailable() {
-  return IsDecoderSupportedByDevice(kDolbyVisionMimeType);
-}
-#endif
 
 // static
 bool MediaCodecUtil::IsVp8DecoderAvailable() {
@@ -255,6 +234,13 @@ bool MediaCodecUtil::IsHEVCDecoderAvailable() {
 #endif
 
 // static
+bool MediaCodecUtil::IsAACEncoderAvailable() {
+  // We only support AAC encoding on android Q+, due to our use of the NDK.
+  return base::android::BuildInfo::GetInstance()->sdk_int() >=
+         base::android::SDK_VERSION_Q;
+}
+
+// static
 bool MediaCodecUtil::IsSurfaceViewOutputSupported() {
   // Disable SurfaceView output for the Samsung Galaxy S3; it does not work
   // well enough for even 360p24 H264 playback.  http://crbug.com/602870.
@@ -291,11 +277,90 @@ bool MediaCodecUtil::IsPassthroughAudioFormat(AudioCodec codec) {
   switch (codec) {
     case AudioCodec::kAC3:
     case AudioCodec::kEAC3:
+    case AudioCodec::kDTS:
+    case AudioCodec::kDTSXP2:
     case AudioCodec::kMpegHAudio:
       return true;
     default:
       return false;
   }
+}
+
+// static
+absl::optional<gfx::Size> MediaCodecUtil::LookupCodedSizeAlignment(
+    base::StringPiece name,
+    absl::optional<int> host_sdk_int) {
+  // Below we build a map of codec names to coded size alignments. We do this on
+  // a best effort basis to avoid glitches during a coded size change.
+  //
+  // A codec name may have multiple entries, if so they must be in descending
+  // order by SDK version since the array is scanned from front to back.
+  //
+  // When testing codec names, we don't require an exact match, just that the
+  // name we're looking up starts with `name_prefix` since many codecs have
+  // multiple variants with various suffixes appended.
+  //
+  // New alignments can be added by inspecting logcat or
+  // chrome://media-internals after running the test page at
+  // https://crbug.com/1456427#c69.
+  struct CodecAlignment {
+    const char* name_regex;
+    gfx::Size alignment;
+    int sdk_int = base::android::SDK_VERSION_NOUGAT;
+  };
+  using base::android::SDK_VERSION_Q;
+  using base::android::SDK_VERSION_R;
+  using base::android::SDK_VERSION_Sv2;
+  constexpr CodecAlignment kCodecAlignmentMap[] = {
+      // Codec2 software decoders.
+      {"c2.android.avc", gfx::Size(128, 2), SDK_VERSION_Sv2},
+      {"c2.android.avc", gfx::Size(32, 2), SDK_VERSION_R},
+      {"c2.android.avc", gfx::Size(64, 2)},
+      {"c2.android.hevc", gfx::Size(128, 2), SDK_VERSION_Sv2},
+      {"c2.android.hevc", gfx::Size(32, 2), SDK_VERSION_R},
+      {"c2.android.hevc", gfx::Size(64, 2)},
+      {"c2.android.(vp8|vp9|av1)", gfx::Size(16, 2)},
+
+      // Codec1 software decoders.
+      {"omx.google.(h264|hevc|vp8|vp9)", gfx::Size(2, 2)},
+
+      // Google AV1 hardware decoder.
+      {"c2.google.av1", gfx::Size(64, 8)},
+
+      // Qualcomm
+      {"c2.qti.(avc|vp8)", gfx::Size(16, 16)},
+      {"c2.qti.(hevc|vp9)", gfx::Size(8, 8)},
+      {"omx.qcom.video.decoder.avc", gfx::Size(16, 16), SDK_VERSION_Q},
+      {"omx.qcom.video.decoder.avc", gfx::Size(1, 1)},
+      {"omx.qcom.video.decoder.hevc", gfx::Size(8, 8), SDK_VERSION_Q},
+      {"omx.qcom.video.decoder.hevc", gfx::Size(1, 1)},
+      {"omx.qcom.video.decoder.vp8", gfx::Size(16, 16), SDK_VERSION_R},
+      {"omx.qcom.video.decoder.vp8", gfx::Size(1, 1)},
+      {"omx.qcom.video.decoder.vp9", gfx::Size(8, 8), SDK_VERSION_R},
+      {"omx.qcom.video.decoder.vp9", gfx::Size(1, 1)},
+
+      // Samsung
+      {"(omx|c2).exynos.h264", gfx::Size(16, 16)},
+      {"(omx|c2).exynos.hevc", gfx::Size(8, 8)},
+      {"(omx|c2).exynos.(vp8|vp9)", gfx::Size(1, 1)},
+
+      // Unisoc
+      {"omx.sprd.(h264|vpx)", gfx::Size(16, 16)},
+      {"omx.sprd.(hevc|vp9)", gfx::Size(64, 64)},
+  };
+
+  const auto lower_name = base::ToLowerASCII(name);
+
+  const auto sdk_int =
+      host_sdk_int.value_or(base::android::BuildInfo::GetInstance()->sdk_int());
+  for (const auto& entry : kCodecAlignmentMap) {
+    if (sdk_int >= entry.sdk_int &&
+        RE2::PartialMatch(lower_name, entry.name_regex)) {
+      return entry.alignment;
+    }
+  }
+
+  return absl::nullopt;
 }
 
 // static
@@ -330,33 +395,28 @@ void MediaCodecUtil::AddSupportedCodecProfileLevels(
 // static
 bool MediaCodecUtil::IsKnownUnaccelerated(VideoCodec codec,
                                           MediaCodecDirection direction) {
-  std::string codec_name =
-      GetDefaultCodecName(CodecToAndroidMimeType(codec), direction, false);
-  DVLOG(1) << __func__ << "Default codec for " << GetCodecName(codec) << " : "
-           << codec_name << ", direction: " << static_cast<int>(direction);
+  auto* env = AttachCurrentThread();
+  auto j_mime = ConvertUTF8ToJavaString(env, CodecToAndroidMimeType(codec));
+  auto j_codec_name = Java_MediaCodecUtil_getDefaultCodecName(
+      env, j_mime, static_cast<int>(direction), /*requireSoftwareCodec=*/false,
+      /*requireHardwareCodec=*/true);
+
+  auto codec_name = ConvertJavaStringToUTF8(env, j_codec_name.obj());
+  DVLOG(1) << __func__ << "Default hardware codec for " << GetCodecName(codec)
+           << " : " << codec_name
+           << ", direction: " << static_cast<int>(direction);
   if (codec_name.empty())
     return true;
 
   // MediaTek hardware vp8 is known slower than the software implementation.
-  if (base::StartsWith(codec_name, "OMX.MTK.", base::CompareCase::SENSITIVE)) {
-    if (codec == VideoCodec::kVP8) {
-      // We may still reject VP8 hardware decoding later on certain chipsets,
-      // see isDecoderSupportedForDevice(). We don't have the the chipset ID
-      // here to check now though.
-      return base::android::BuildInfo::GetInstance()->sdk_int() < SDK_VERSION_P;
-    }
-
-    return false;
+  if (base::StartsWith(codec_name, "OMX.MTK.") && codec == VideoCodec::kVP8) {
+    // We may still reject VP8 hardware decoding later on certain chipsets,
+    // see isDecoderSupportedForDevice(). We don't have the the chipset ID
+    // here to check now though.
+    return base::android::BuildInfo::GetInstance()->sdk_int() < SDK_VERSION_P;
   }
 
-  // It would be nice if MediaCodecInfo externalized some notion of
-  // HW-acceleration but it doesn't. Android Media guidance is that the
-  // "OMX.google" prefix is always used for SW decoders, so that's what we
-  // use. "OMX.SEC.*" codec is Samsung software implementation - report it
-  // as unaccelerated as well.
-  return base::StartsWith(codec_name, "OMX.google.",
-                          base::CompareCase::SENSITIVE) ||
-         base::StartsWith(codec_name, "OMX.SEC.", base::CompareCase::SENSITIVE);
+  return false;
 }
 
 }  // namespace media

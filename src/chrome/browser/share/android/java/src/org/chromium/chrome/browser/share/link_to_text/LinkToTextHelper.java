@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * This class provides the utility methods for link to text.
- */
+/** This class provides the utility methods for link to text. */
 public class LinkToTextHelper {
     public static final String SHARED_HIGHLIGHTING_SUPPORT_URL =
             "https://support.google.com/chrome?p=shared_highlighting";
@@ -78,12 +76,15 @@ public class LinkToTextHelper {
             return;
         }
 
-        tab.getWebContents().getMainFrame().getCanonicalUrlForSharing(new Callback<GURL>() {
-            @Override
-            public void onResult(GURL result) {
-                callback.onResult(result.getSpec());
-            }
-        });
+        tab.getWebContents()
+                .getMainFrame()
+                .getCanonicalUrlForSharing(
+                        new Callback<GURL>() {
+                            @Override
+                            public void onResult(GURL result) {
+                                callback.onResult(result.getSpec());
+                            }
+                        });
     }
 
     private static boolean shouldRequestCanonicalUrl(Tab tab) {
@@ -115,14 +116,16 @@ public class LinkToTextHelper {
                 continue;
             }
 
-            getExistingSelectorsForFrame(producer, (text) -> {
-                if (text.length > 0) {
-                    callback.onResult(true);
-                } else {
-                    callback.onResult(false);
-                }
-                producer.close();
-            });
+            getExistingSelectorsForFrame(
+                    producer,
+                    (text) -> {
+                        if (text.length > 0) {
+                            callback.onResult(true);
+                        } else {
+                            callback.onResult(false);
+                        }
+                        producer.close();
+                    });
         }
     }
 
@@ -163,8 +166,11 @@ public class LinkToTextHelper {
      * @param callback The {@link Callback} to handle the existing selectors result.
      * @param index The index of the item in {@link List<RenderFrameHost>}
      */
-    private static void getExistingSelectorsFromFrameAtIndex(List<String> selectorsList,
-            List<RenderFrameHost> renderFrameHosts, Callback<String> callback, int index) {
+    private static void getExistingSelectorsFromFrameAtIndex(
+            List<String> selectorsList,
+            List<RenderFrameHost> renderFrameHosts,
+            Callback<String> callback,
+            int index) {
         if (index >= renderFrameHosts.size()) {
             String selectors = String.join(ADDITIONAL_TEXT_FRAGMENT_SELECTOR, selectorsList);
             callback.onResult(selectors);
@@ -178,16 +184,19 @@ public class LinkToTextHelper {
         if (producer == null) {
             getExistingSelectorsFromFrameAtIndex(
                     selectorsList, renderFrameHosts, callback, index + 1);
+            return;
         }
 
-        getExistingSelectorsForFrame(producer, (selectors) -> {
-            if (selectors.length > 0) {
-                selectorsList.addAll(Arrays.asList(selectors));
-            }
-            getExistingSelectorsFromFrameAtIndex(
-                    selectorsList, renderFrameHosts, callback, index + 1);
-            producer.close();
-        });
+        getExistingSelectorsForFrame(
+                producer,
+                (selectors) -> {
+                    if (selectors.length > 0) {
+                        selectorsList.addAll(Arrays.asList(selectors));
+                    }
+                    getExistingSelectorsFromFrameAtIndex(
+                            selectorsList, renderFrameHosts, callback, index + 1);
+                    producer.close();
+                });
     }
 
     /**
@@ -199,12 +208,13 @@ public class LinkToTextHelper {
      */
     public static void getExistingSelectorsForFrame(
             TextFragmentReceiver producer, Callback<String[]> callback) {
-        producer.getExistingSelectors(new TextFragmentReceiver.GetExistingSelectors_Response() {
-            @Override
-            public void call(String[] text) {
-                callback.onResult(text);
-            }
-        });
+        producer.getExistingSelectors(
+                new TextFragmentReceiver.GetExistingSelectors_Response() {
+                    @Override
+                    public void call(String[] text) {
+                        callback.onResult(text);
+                    }
+                });
     }
 
     /**
@@ -216,28 +226,30 @@ public class LinkToTextHelper {
      */
     public static void requestSelector(
             TextFragmentReceiver producer, RequestSelectorCallback callback) {
-        producer.requestSelector(new TextFragmentReceiver.RequestSelector_Response() {
-            @Override
-            public void call(String selector, Integer error, Integer readyStatus) {
-                if (ChromeFeatureList.isEnabled(
-                            ChromeFeatureList.PREEMPTIVE_LINK_TO_TEXT_GENERATION)) {
-                    LinkToTextMetricsHelper.recordLinkToTextDiagnoseStatus(
-                            LinkToTextMetricsHelper.LinkToTextDiagnoseStatus.SELECTOR_RECEIVED);
-                }
-                callback.apply(selector, error, readyStatus);
-            }
-        });
+        producer.requestSelector(
+                new TextFragmentReceiver.RequestSelector_Response() {
+                    @Override
+                    public void call(String selector, Integer error, Integer readyStatus) {
+                        if (ChromeFeatureList.isEnabled(
+                                ChromeFeatureList.PREEMPTIVE_LINK_TO_TEXT_GENERATION)) {
+                            LinkToTextMetricsHelper.recordLinkToTextDiagnoseStatus(
+                                    LinkToTextMetricsHelper.LinkToTextDiagnoseStatus
+                                            .SELECTOR_RECEIVED);
+                        }
+                        callback.apply(selector, error, readyStatus);
+                    }
+                });
     }
 
     /**
      * This checks that the URL has a text fragment selector (e.g: #:~:text=selector) attached.
      *
      * @param url The url which may include the text fragment.
-     * @returns whether or not the url had a text fragment selector.
+     * @return whether or not the url had a text fragment selector.
      */
     public static boolean hasTextFragment(GURL url) {
         Uri uri = Uri.parse(url.getSpec());
         String fragment = uri.getEncodedFragment();
-        return fragment != null ? fragment.contains(TEXT_FRAGMENT_PREFIX) : false;
+        return (fragment != null) && fragment.contains(TEXT_FRAGMENT_PREFIX);
     }
 }

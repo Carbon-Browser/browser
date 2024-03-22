@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,34 @@
 
 #import <Foundation/Foundation.h>
 
+namespace password_manager {
+struct CredentialUIEntry;
+}
+
 // Commands relative to the passwords in the Settings.
 @protocol PasswordsSettingsCommands <NSObject>
 
-// Shows the screen with password issues.
-- (void)showCompromisedPasswords;
+// Shows the Password Checkup screen.
+- (void)showPasswordCheckup;
 
-// Shows passwords details.
-- (void)showDetailedViewForForm:(const password_manager::PasswordForm&)form;
+// Shows passwords details for blocked passwords.
+- (void)showDetailedViewForCredential:
+    (const password_manager::CredentialUIEntry&)credential;
+
+// Shows passwords details for saved passwords.
+- (void)showDetailedViewForAffiliatedGroup:
+    (const password_manager::AffiliatedGroup&)affiliatedGroup;
 
 // Shows form to manually enter new password credentials.
 - (void)showAddPasswordSheet;
 
-// Shows promotional view for Passwords In Other Apps.
-- (void)showPasswordsInOtherAppsPromo;
+// Shows delete confirmation for batch passwords delete.
+- (void)showPasswordDeleteDialogWithOrigins:(NSArray<NSString*>*)origins
+                                 completion:(void (^)(void))completion;
+
+// Shows a dialog offering the user to set a passcode in order to see the
+// password details.
+- (void)showSetupPasscodeDialog;
 
 @end
 

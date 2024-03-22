@@ -1,37 +1,37 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web_view/public/cwv_trusted_vault_utils.h"
 
-#import "components/sync/driver/trusted_vault_histograms.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "components/trusted_vault/trusted_vault_histograms.h"
 
 namespace {
-syncer::TrustedVaultDeviceRegistrationStateForUMA CWVConvertTrustedVaultState(
-    CWVTrustedVaultState state) {
+trusted_vault::TrustedVaultDeviceRegistrationStateForUMA
+CWVConvertTrustedVaultState(CWVTrustedVaultState state) {
   switch (state) {
-    case CWVTrustedVaultStateAlreadyRegistered:
-      return syncer::TrustedVaultDeviceRegistrationStateForUMA::
+    case CWVTrustedVaultStateAlreadyRegisteredV0:
+      return trusted_vault::TrustedVaultDeviceRegistrationStateForUMA::
           kAlreadyRegisteredV0;
     case CWVTrustedVaultStateLocalKeysAreStale:
-      return syncer::TrustedVaultDeviceRegistrationStateForUMA::
+      return trusted_vault::TrustedVaultDeviceRegistrationStateForUMA::
           kLocalKeysAreStale;
     case CWVTrustedVaultStateThrottledClientSide:
-      return syncer::TrustedVaultDeviceRegistrationStateForUMA::
+      return trusted_vault::TrustedVaultDeviceRegistrationStateForUMA::
           kThrottledClientSide;
     case CWVTrustedVaultStateAttemptingRegistrationWithNewKeyPair:
-      return syncer::TrustedVaultDeviceRegistrationStateForUMA::
+      return trusted_vault::TrustedVaultDeviceRegistrationStateForUMA::
           kAttemptingRegistrationWithNewKeyPair;
     case CWVTrustedVaultStateAttemptingRegistrationWithExistingKeyPair:
-      return syncer::TrustedVaultDeviceRegistrationStateForUMA::
+      return trusted_vault::TrustedVaultDeviceRegistrationStateForUMA::
           kAttemptingRegistrationWithExistingKeyPair;
     case CWVTrustedVaultStateAttemptingRegistrationWithPersistentAuthError:
-      return syncer::TrustedVaultDeviceRegistrationStateForUMA::
-          kAttemptingRegistrationWithPersistentAuthError;
+      // TODO(crbug.com/1418027): remove CWV version of this bucket.
+      return trusted_vault::TrustedVaultDeviceRegistrationStateForUMA::
+          kDeprecatedAttemptingRegistrationWithPersistentAuthError;
+    case CWVTrustedVaultStateAlreadyRegisteredV1:
+      return trusted_vault::TrustedVaultDeviceRegistrationStateForUMA::
+          kAlreadyRegisteredV1;
   }
 }
 }  // namespace
@@ -39,14 +39,14 @@ syncer::TrustedVaultDeviceRegistrationStateForUMA CWVConvertTrustedVaultState(
 @implementation CWVTrustedVaultUtils
 
 + (void)logTrustedVaultDidUpdateState:(CWVTrustedVaultState)state {
-  syncer::RecordTrustedVaultDeviceRegistrationState(
+  trusted_vault::RecordTrustedVaultDeviceRegistrationState(
       CWVConvertTrustedVaultState(state));
 }
 
 + (void)logTrustedVaultDidReceiveHTTPStatusCode:(NSInteger)statusCode {
-  syncer::RecordTrustedVaultURLFetchResponse(
+  trusted_vault::RecordTrustedVaultURLFetchResponse(
       statusCode, /*net_error=*/0,
-      syncer::TrustedVaultURLFetchReasonForUMA::kUnspecified);
+      trusted_vault::TrustedVaultURLFetchReasonForUMA::kUnspecified);
 }
 
 + (void)logTrustedVaultDidFailKeyDistribution:(NSError*)error {

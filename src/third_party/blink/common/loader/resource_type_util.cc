@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,6 @@
 #include "services/network/public/cpp/request_destination.h"
 
 namespace blink {
-
-bool IsResourceTypeFrame(blink::mojom::ResourceType type) {
-  return type == blink::mojom::ResourceType::kMainFrame ||
-         type == blink::mojom::ResourceType::kSubFrame;
-}
 
 bool IsRequestDestinationFrame(network::mojom::RequestDestination destination) {
   // kObject and kEmbed can also be destinations for a frame navigation.

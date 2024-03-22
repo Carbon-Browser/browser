@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define CHROME_BROWSER_MEDIA_ROUTER_MEDIA_ROUTER_FEATURE_H_
 
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class PrefService;
@@ -27,29 +27,37 @@ bool MediaRouterEnabled(content::BrowserContext* context);
 void ClearMediaRouterStoredPrefsForTesting();
 
 #if !BUILDFLAG(IS_ANDROID)
-
 // Enables the media router. Can be disabled in tests unrelated to
 // Media Router where it interferes. Can also be useful to disable for local
 // development on Mac because DIAL local discovery opens a local port
 // and triggers a permission prompt.
-extern const base::Feature kMediaRouter;
+BASE_DECLARE_FEATURE(kMediaRouter);
 
 // If enabled, allows Media Router to connect to Cast devices on all IP
 // addresses, not just RFC1918/RFC4193 private addresses. Workaround for
 // https://crbug.com/813974.
-extern const base::Feature kCastAllowAllIPsFeature;
+BASE_DECLARE_FEATURE(kCastAllowAllIPsFeature);
 
 // Determine whether global media controls are used to start and stop casting.
-extern const base::Feature kGlobalMediaControlsCastStartStop;
+BASE_DECLARE_FEATURE(kGlobalMediaControlsCastStartStop);
 
 // If enabled, allows all websites to request to start mirroring via
 // Presentation API. If disabled, only the allowlisted sites can do so.
-extern const base::Feature kAllowAllSitesToInitiateMirroring;
+BASE_DECLARE_FEATURE(kAllowAllSitesToInitiateMirroring);
 
-// If enabled, HTTP requests for DIAL can only be made to URLs that contain the
-// target device IP address.
-// TODO(crbug.com/1270509): Remove this base::Feature once fully launched.
-extern const base::Feature kDialEnforceUrlIPAddress;
+// If enabled, The browser allows discovery of the DIAL support cast device.
+// It sends a discovery SSDP message every 120 seconds.
+BASE_DECLARE_FEATURE(kDialMediaRouteProvider);
+
+// If enabled, sinks that do not support presentation or remote playback, will
+// fall back to audio tab mirroring when casting from the Global Media Controls.
+BASE_DECLARE_FEATURE(kFallbackToAudioTabMirroring);
+
+// If enabled, mirroring sessions use the playout delay specified by
+// `kCastMirroringPlayoutDelayMs`.
+BASE_DECLARE_FEATURE(kCastMirroringPlayoutDelay);
+
+extern const base::FeatureParam<int> kCastMirroringPlayoutDelayMs;
 
 // Registers |kMediaRouterCastAllowAllIPs| with local state pref |registry|.
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
@@ -74,6 +82,9 @@ bool DialMediaRouteProviderEnabled();
 // Media Router is enabled for |context|.
 bool GlobalMediaControlsCastStartStopEnabled(content::BrowserContext* context);
 
+// Returns the optional value to use for mirroring playout delay from the
+// relevant command line flag or feature, if any are set.
+absl::optional<base::TimeDelta> GetCastMirroringPlayoutDelay();
 #endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace media_router

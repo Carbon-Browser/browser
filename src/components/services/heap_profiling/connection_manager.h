@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
@@ -63,7 +64,8 @@ class ConnectionManager {
   void OnNewConnection(base::ProcessId pid,
                        mojo::PendingRemote<mojom::ProfilingClient> client,
                        mojom::ProcessType process_type,
-                       mojom::ProfilingParamsPtr params);
+                       mojom::ProfilingParamsPtr params,
+                       base::OnceClosure started_profiling_closure);
 
   // Returns pids of clients that have started profiling.
   std::vector<base::ProcessId> GetConnectionPids();

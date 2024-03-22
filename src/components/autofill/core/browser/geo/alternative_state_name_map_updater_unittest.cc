@@ -1,16 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/autofill/core/browser/geo/alternative_state_name_map_updater.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/geo/alternative_state_name_map.h"
 #include "components/autofill/core/browser/geo/alternative_state_name_map_test_utils.h"
 #include "components/autofill/core/browser/geo/mock_alternative_state_name_map_updater.h"
@@ -27,6 +28,12 @@
 using base::ASCIIToUTF16;
 using base::UTF8ToUTF16;
 
+namespace i18n::addressinput {
+
+using ::operator<<;
+
+}  // namespace i18n::addressinput
+
 namespace autofill {
 
 class AlternativeStateNameMapUpdaterTest : public ::testing::Test {
@@ -34,9 +41,6 @@ class AlternativeStateNameMapUpdaterTest : public ::testing::Test {
   AlternativeStateNameMapUpdaterTest() = default;
 
   void SetUp() override {
-    feature_.InitAndEnableFeature(
-        features::kAutofillUseAlternativeStateNameMap);
-
     autofill_client_.SetPrefs(test::PrefServiceForTesting());
     ASSERT_TRUE(data_install_dir_.CreateUniqueTempDir());
     personal_data_manager_.Init(/*profile_database=*/database_,
@@ -45,9 +49,9 @@ class AlternativeStateNameMapUpdaterTest : public ::testing::Test {
                                 /*local_state=*/autofill_client_.GetPrefs(),
                                 /*identity_manager=*/nullptr,
                                 /*history_service=*/nullptr,
+                                /*sync_service=*/nullptr,
                                 /*strike_database=*/nullptr,
-                                /*image_fetcher=*/nullptr,
-                                /*is_off_the_record=*/false);
+                                /*image_fetcher=*/nullptr);
     alternative_state_name_map_updater_ =
         std::make_unique<AlternativeStateNameMapUpdater>(
             autofill_client_.GetPrefs(), &personal_data_manager_);
@@ -67,7 +71,6 @@ class AlternativeStateNameMapUpdaterTest : public ::testing::Test {
   std::unique_ptr<AlternativeStateNameMapUpdater>
       alternative_state_name_map_updater_;
   base::ScopedTempDir data_install_dir_;
-  base::test::ScopedFeatureList feature_;
   TestPersonalDataManager personal_data_manager_;
 };
 
@@ -266,9 +269,8 @@ TEST_F(AlternativeStateNameMapUpdaterTest,
   base::WriteFile(GetPath().AppendASCII("DE"),
                   test::CreateStatesProtoAsString());
 
-  AutofillProfile profile;
+  AutofillProfile profile(AddressCountryCode("DE"));
   profile.SetInfo(ADDRESS_HOME_STATE, u"Bavaria", "en-US");
-  profile.SetInfo(ADDRESS_HOME_COUNTRY, u"DE", "en-US");
 
   base::RunLoop run_loop;
   MockAlternativeStateNameMapUpdater mock_alternative_state_name_updater(

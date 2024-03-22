@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,7 +76,7 @@ void LoginScreenStorageExtensionFunction::OnDataRetrieved(
       Respond(Error(result->get_error_message()));
       return;
     case Result::Tag::kData:
-      Respond(OneArgument(base::Value(result->get_data())));
+      Respond(WithArguments(result->get_data()));
       return;
   }
 }
@@ -88,7 +88,7 @@ LoginScreenStorageStorePersistentDataFunction::
 
 ExtensionFunction::ResponseAction
 LoginScreenStorageStorePersistentDataFunction::Run() {
-  std::unique_ptr<login_screen_storage::StorePersistentData::Params> params =
+  absl::optional<login_screen_storage::StorePersistentData::Params> params =
       login_screen_storage::StorePersistentData::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -125,7 +125,7 @@ LoginScreenStorageRetrievePersistentDataFunction::
 
 ExtensionFunction::ResponseAction
 LoginScreenStorageRetrievePersistentDataFunction::Run() {
-  std::unique_ptr<login_screen_storage::RetrievePersistentData::Params> params =
+  absl::optional<login_screen_storage::RetrievePersistentData::Params> params =
       login_screen_storage::RetrievePersistentData::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
@@ -151,7 +151,7 @@ LoginScreenStorageStoreCredentialsFunction::
 
 ExtensionFunction::ResponseAction
 LoginScreenStorageStoreCredentialsFunction::Run() {
-  std::unique_ptr<login_screen_storage::StoreCredentials::Params> params =
+  absl::optional<login_screen_storage::StoreCredentials::Params> params =
       login_screen_storage::StoreCredentials::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 

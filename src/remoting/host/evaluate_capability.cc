@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,7 +85,7 @@ base::FilePath BuildHostBinaryPath() {
 
   return directory.Append(FILE_PATH_LITERAL("remoting_host.exe"));
 #else
-  #error "BuildHostBinaryPath is not implemented for current platform."
+#error "BuildHostBinaryPath is not implemented for current platform."
 #endif
 }
 

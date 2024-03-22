@@ -1,13 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.content_creation.notes.bridges;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Callback;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.components.content_creation.notes.NoteService;
 import org.chromium.components.content_creation.notes.models.NoteTemplate;
 
@@ -41,27 +42,11 @@ public class NoteServiceBridge implements NoteService {
         NoteServiceBridgeJni.get().getTemplates(mNativeNoteServiceBridge, this, callback);
     }
 
-    @Override
-    public boolean isPublishAvailable() {
-        if (mNativeNoteServiceBridge == 0) return false;
-        return NoteServiceBridgeJni.get().isPublishAvailable(mNativeNoteServiceBridge, this);
-    }
-
-    @Override
-    public void publishNote(String selectedText, String shareUrl, Callback<String> callback) {
-        if (mNativeNoteServiceBridge == 0) return;
-        NoteServiceBridgeJni.get().publishNote(
-                mNativeNoteServiceBridge, this, selectedText, shareUrl, callback);
-    }
-
     @NativeMethods
     interface Natives {
-        void getTemplates(long nativeNoteServiceBridge, NoteServiceBridge caller,
+        void getTemplates(
+                long nativeNoteServiceBridge,
+                NoteServiceBridge caller,
                 Callback<List<NoteTemplate>> callback);
-
-        boolean isPublishAvailable(long nativeNoteServiceBridge, NoteServiceBridge caller);
-
-        void publishNote(long nativeNoteServiceBridge, NoteServiceBridge caller,
-                String selectedText, String shareUrl, Callback<String> callback);
     }
 }

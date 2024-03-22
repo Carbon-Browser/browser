@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "base/bind.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "components/dom_distiller/core/article_entry.h"
 #include "components/dom_distiller/core/proto/distilled_article.pb.h"
 
@@ -68,7 +69,7 @@ class InMemoryContentStore : public DistilledContentStore {
     void operator()(DistilledArticleProto* proto);
 
    private:
-    InMemoryContentStore* store_;
+    raw_ptr<InMemoryContentStore> store_;
   };
 
   void AddUrlToIdMapping(const ArticleEntry& entry,

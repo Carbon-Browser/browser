@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <cstring>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/notreached.h"
@@ -294,7 +295,7 @@ class FakeCameraDevice::Subscription
   void OnFrameReadyInBuffer(
       video_capture::mojom::ReadyFrameInBufferPtr buffer) {
     DCHECK(is_active_ && !is_suspended_);
-    subscriber_->OnFrameReadyInBuffer(std::move(buffer), {});
+    subscriber_->OnFrameReadyInBuffer(std::move(buffer));
   }
 
   void OnFrameDropped() {
@@ -335,7 +336,7 @@ class FakeCameraDevice::Subscription
   }
 
   // The camera device which owns this object.
-  FakeCameraDevice* const owner_device_;
+  const raw_ptr<FakeCameraDevice, ExperimentalAsh> owner_device_;
 
   mojo::Receiver<video_capture::mojom::PushVideoStreamSubscription> receiver_{
       this};
@@ -410,6 +411,9 @@ void FakeCameraDevice::CreatePushSubscription(
               kCreatedWithRequestedSettings),
       requested_settings);
 }
+
+void FakeCameraDevice::RegisterVideoEffectsManager(
+    mojo::PendingRemote<::video_capture::mojom::VideoEffectsManager> remote) {}
 
 void FakeCameraDevice::OnFinishedConsumingBuffer(int32_t buffer_id) {
   auto iter = buffer_pool_.find(buffer_id);
@@ -494,7 +498,6 @@ void FakeCameraDevice::OnNextFrame() {
     info->coded_size = current_settings_->requested_format.frame_size;
     info->visible_rect = gfx::Rect(info->coded_size);
     info->is_premapped = false;
-    info->color_space = gfx::ColorSpace();
 
     subscription->OnFrameReadyInBuffer(
         video_capture::mojom::ReadyFrameInBuffer::New(buffer->buffer_id(),
@@ -545,8 +548,8 @@ FakeCameraDevice::Buffer* FakeCameraDevice::AllocateOrReuseBuffer() {
 void FakeCameraDevice::RetireAllBuffers() {
   for (auto& pair : buffer_pool_) {
     const int buffer_id = pair.first;
-    for (auto& pair : subscriptions_map_) {
-      auto* subscription = pair.first;
+    for (auto& subscription_pair : subscriptions_map_) {
+      auto* subscription = subscription_pair.first;
       if (subscription->is_active())
         subscription->OnBufferRetired(buffer_id);
     }

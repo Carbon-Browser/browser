@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "components/content_settings/common/content_settings_agent.mojom.h"
 #include "components/content_settings/common/content_settings_manager.mojom.h"
@@ -84,14 +84,13 @@ class ContentSettingsAgentImpl
   bool AllowScript(bool enabled_per_settings) override;
   bool AllowScriptFromSource(bool enabled_per_settings,
                              const blink::WebURL& script_url) override;
-  bool AllowAutoDarkWebContent(bool enabled_per_settings) override;
   bool AllowReadFromClipboard(bool default_value) override;
   bool AllowWriteToClipboard(bool default_value) override;
   bool AllowMutationEvents(bool default_value) override;
+  void DidNotAllowImage() override;
   void DidNotAllowScript() override;
   bool AllowRunningInsecureContent(bool allowed_per_settings,
                                    const blink::WebURL& url) override;
-  bool AllowPopupsAndRedirects(bool default_value) override;
   bool ShouldAutoupgradeMixedContent() override;
 
   bool allow_running_insecure_content() const {

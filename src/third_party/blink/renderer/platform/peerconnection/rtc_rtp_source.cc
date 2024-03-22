@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/notreached.h"
 #include "base/time/time.h"
+#include "third_party/blink/renderer/platform/peerconnection/webrtc_util.h"
 #include "third_party/webrtc/api/scoped_refptr.h"
 #include "third_party/webrtc/system_wrappers/include/ntp_time.h"
 
@@ -30,7 +31,7 @@ RTCRtpSource::Type RTCRtpSource::SourceType() const {
 }
 
 base::TimeTicks RTCRtpSource::Timestamp() const {
-  return base::TimeTicks() + base::Milliseconds(source_.timestamp_ms());
+  return ConvertToBaseTimeTicks(source_.timestamp());
 }
 
 uint32_t RTCRtpSource::Source() const {

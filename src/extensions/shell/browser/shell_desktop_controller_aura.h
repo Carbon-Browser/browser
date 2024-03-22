@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <map>
 #include <memory>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -17,7 +17,7 @@
 #include "extensions/shell/browser/desktop_controller.h"
 #include "extensions/shell/browser/root_window_controller.h"
 #include "ui/aura/window.h"
-#include "ui/base/ime/input_method_delegate.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/display/display.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -68,7 +68,7 @@ class ShellDesktopControllerAura
       public chromeos::PowerManagerClient::Observer,
       public display::DisplayConfigurator::Observer,
 #endif
-      public ui::internal::InputMethodDelegate,
+      public ui::ImeKeyEventDispatcher,
       public KeepAliveStateObserver {
  public:
   explicit ShellDesktopControllerAura(content::BrowserContext* browser_context);
@@ -100,7 +100,7 @@ class ShellDesktopControllerAura
       const display::DisplayConfigurator::DisplayStateList& displays) override;
 #endif
 
-  // ui::internal::InputMethodDelegate:
+  // ui::ImeKeyEventDispatcher:
   ui::EventDispatchDetails DispatchKeyEventPostIME(
       ui::KeyEvent* key_event) override;
 

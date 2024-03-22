@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ import android.view.View;
 
 import org.chromium.base.ThreadUtils;
 
-/**
- * Collection of keyboard utilities.
- */
+/** Collection of keyboard utilities. */
 public class KeyUtils {
     /**
      * Sends (synchronously) a single key down/up pair of events to the specified view.
@@ -88,17 +86,21 @@ public class KeyUtils {
 
     private static void dispatchKeyEventToView(
             final Instrumentation i, final View v, final KeyEvent event) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            if (!v.dispatchKeyEventPreIme(event)) {
-                v.dispatchKeyEvent(event);
-            }
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    if (!v.dispatchKeyEventPreIme(event)) {
+                        v.dispatchKeyEvent(event);
+                    }
+                });
         if (!ThreadUtils.runningOnUiThread()) i.waitForIdleSync();
     }
 
     private static void dispatchKeyEventToActivity(
             final Instrumentation i, final Activity a, final KeyEvent event) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> { a.dispatchKeyEvent(event); });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    a.dispatchKeyEvent(event);
+                });
         i.waitForIdleSync();
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -239,16 +239,6 @@ class VIEWS_EXPORT TextfieldModel {
   // composition text.
   void SetCompositionText(const ui::CompositionText& composition);
 
-#if BUILDFLAG(IS_CHROMEOS)
-  // Return the text range corresponding to the autocorrected text.
-  const gfx::Range& autocorrect_range() const { return autocorrect_range_; }
-
-  // Sets the autocorrect range to |range|. If |range| is empty, then the
-  // autocorrect range is cleared. Returns true if the range was set or cleared
-  // successfully.
-  bool SetAutocorrectRange(const gfx::Range& range);
-#endif
-
   // Puts the text in the specified range into composition mode.
   // This method should not be called with composition text or an invalid range.
   // The provided range is checked against the string's length, if |range| is
@@ -257,7 +247,7 @@ class VIEWS_EXPORT TextfieldModel {
 
   // Converts current composition text into final content and returns the
   // length of the text committed.
-  uint32_t ConfirmCompositionText();
+  size_t ConfirmCompositionText();
 
   // Removes current composition text.
   void CancelCompositionText();
@@ -339,10 +329,6 @@ class VIEWS_EXPORT TextfieldModel {
   std::unique_ptr<gfx::RenderText> render_text_;
 
   gfx::Range composition_range_;
-
-#if BUILDFLAG(IS_CHROMEOS)
-  gfx::Range autocorrect_range_;
-#endif
 
   // The list of Edits. The oldest Edits are at the front of the list, and the
   // newest ones are at the back of the list.

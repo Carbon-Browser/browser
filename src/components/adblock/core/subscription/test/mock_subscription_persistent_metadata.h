@@ -22,16 +22,22 @@
 
 #include "testing/gmock/include/gmock/gmock.h"
 
+using testing::NiceMock;
+
 namespace adblock {
 
 class MockSubscriptionPersistentMetadata
-    : public SubscriptionPersistentMetadata {
+    : public NiceMock<SubscriptionPersistentMetadata> {
  public:
   MockSubscriptionPersistentMetadata();
   ~MockSubscriptionPersistentMetadata() override;
   MOCK_METHOD(void,
               SetExpirationInterval,
               (const GURL& subscription_url, base::TimeDelta expires_in),
+              (override));
+  MOCK_METHOD(void,
+              SetLastInstallationTime,
+              (const GURL& subscription_url),
               (override));
   MOCK_METHOD(void,
               SetVersion,
@@ -71,4 +77,4 @@ class MockSubscriptionPersistentMetadata
 
 }  // namespace adblock
 
-#endif  // COMPONENTS_ADBLOCK_CORE_TEST_MOCK_SUBSCRIPTION_PERSISTENT_METADATA_H_
+#endif  // COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_TEST_MOCK_SUBSCRIPTION_PERSISTENT_METADATA_H_

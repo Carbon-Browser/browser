@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class HIDConnectionEvent final : public Event {
   HIDConnectionEvent(const AtomicString& type, const HIDConnectionEventInit*);
   HIDConnectionEvent(const AtomicString& type, HIDDevice*);
 
-  HIDDevice* device() const { return device_; }
+  HIDDevice* device() const { return device_.Get(); }
 
   void Trace(Visitor*) const override;
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,11 +27,6 @@ bool IsRestricted(UserActivationNotificationType notification_type) {
 }
 
 }  // namespace
-
-// The expiry time should be long enough to allow network round trips even in a
-// very slow connection (to support xhr-like calls with user activation), yet
-// not too long to make an "unattended" page feel activated.
-constexpr base::TimeDelta kActivationLifespan = base::Seconds(5);
 
 UserActivationState::UserActivationState()
     : first_notification_type_(UserActivationNotificationType::kNone),

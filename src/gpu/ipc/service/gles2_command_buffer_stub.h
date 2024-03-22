@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,19 +48,20 @@ class GPU_IPC_SERVICE_EXPORT GLES2CommandBufferStub
 
 // ImageTransportSurfaceDelegate implementation:
 #if BUILDFLAG(IS_WIN)
-  void DidCreateAcceleratedSurfaceChildWindow(
-      SurfaceHandle parent_window,
-      SurfaceHandle child_window) override;
+  void AddChildWindowToBrowser(gpu::SurfaceHandle child_window) override;
 #endif
   const gles2::FeatureInfo* GetFeatureInfo() const override;
   const GpuPreferences& GetGpuPreferences() const override;
   viz::GpuVSyncCallback GetGpuVSyncCallback() override;
-  base::TimeDelta GetGpuBlockedTimeSinceLastSwap() override;
 
  private:
   // CommandBufferStub overrides:
-  void OnTakeFrontBuffer(const Mailbox& mailbox) override;
-  void OnReturnFrontBuffer(const Mailbox& mailbox, bool is_lost) override;
+  void OnSetDefaultFramebufferSharedImage(const Mailbox& mailbox,
+                                          int samples_count,
+                                          bool preserve,
+                                          bool needs_depth,
+                                          bool needs_stencil) override;
+
   void CreateGpuFenceFromHandle(uint32_t id,
                                 gfx::GpuFenceHandle handle) override;
   void GetGpuFenceHandle(uint32_t gpu_fence_id,

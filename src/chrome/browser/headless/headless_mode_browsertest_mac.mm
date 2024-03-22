@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,26 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gfx/native_widget_types.h"
+#include "ui/views/widget/widget.h"
+
+namespace headless {
+
+// static
+bool HeadlessModeBrowserTest::IsPlatformWindowVisible(views::Widget* widget) {
+  CHECK(widget);
+
+  gfx::NativeWindow native_window = widget->GetNativeWindow();
+  CHECK(native_window);
+
+  NSWindow* ns_window = native_window.GetNativeNSWindow();
+  CHECK(ns_window);
+
+  return ns_window.visible;
+}
+
+namespace {
 
 INSTANTIATE_TEST_SUITE_P(HeadlessModeBrowserTestWithStartWindowMode,
                          HeadlessModeBrowserTestWithStartWindowMode,
@@ -75,3 +93,64 @@ IN_PROC_BROWSER_TEST_F(HeadlessModeBrowserTest,
   EXPECT_TRUE(browser()->window()->IsVisible());
   EXPECT_FALSE(ns_window.visible);
 }
+
+IN_PROC_BROWSER_TEST_F(HeadlessModeBrowserTest,
+                       MaximizedRestoredWindowVisibility) {
+  gfx::NativeWindow native_window = browser()->window()->GetNativeWindow();
+  NSWindow* ns_window = native_window.GetNativeNSWindow();
+
+  // Verify initial state.
+  ASSERT_FALSE(browser()->window()->IsMaximized());
+  EXPECT_TRUE(browser()->window()->IsVisible());
+  EXPECT_FALSE(ns_window.visible);
+
+  // Verify maximized state.
+  browser()->window()->Maximize();
+  ASSERT_TRUE(browser()->window()->IsMaximized());
+  EXPECT_TRUE(browser()->window()->IsVisible());
+  EXPECT_FALSE(ns_window.visible);
+
+  // Verify restored state.
+  browser()->window()->Restore();
+  ASSERT_FALSE(browser()->window()->IsMaximized());
+  EXPECT_TRUE(browser()->window()->IsVisible());
+  EXPECT_FALSE(ns_window.visible);
+}
+
+IN_PROC_BROWSER_TEST_F(HeadlessModeBrowserTestWithWindowSize, LargeWindowSize) {
+  gfx::NativeWindow native_window = browser()->window()->GetNativeWindow();
+  NSWindow* ns_window = native_window.GetNativeNSWindow();
+
+  // Expect the platform window size to be the same as the requested window
+  // size.
+  NSRect frame_rect = [ns_window frame];
+  EXPECT_EQ(NSWidth(frame_rect), kWindowSize.width());
+  EXPECT_EQ(NSHeight(frame_rect), kWindowSize.height());
+
+  // Expect the reported browser window size to be the same as the requested
+  // window size.
+  gfx::Rect bounds = browser()->window()->GetBounds();
+  EXPECT_EQ(bounds.size(), kWindowSize);
+}
+
+IN_PROC_BROWSER_TEST_F(HeadlessModeBrowserTestWithWindowSizeAndScale,
+                       WindowSizeWithScale) {
+  gfx::NativeWindow native_window = browser()->window()->GetNativeWindow();
+  NSWindow* ns_window = native_window.GetNativeNSWindow();
+
+  // Expect the platform window size to be the same as the requested window size
+  // due to scaling because Mac does not appear to support device scaling at
+  // this time.
+  NSRect frame_rect = [ns_window frame];
+  EXPECT_EQ(NSWidth(frame_rect), kWindowSize.width());
+  EXPECT_EQ(NSHeight(frame_rect), kWindowSize.height());
+
+  // Expect the reported browser window size to be the same as the requested
+  // window size.
+  gfx::Rect bounds = browser()->window()->GetBounds();
+  EXPECT_EQ(bounds.size(), kWindowSize);
+}
+
+}  // namespace
+
+}  // namespace headless

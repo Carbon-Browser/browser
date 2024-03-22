@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,18 @@
 
 #include <utility>
 
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/win/windows_types.h"
+#include "ui/wm/core/native_cursor_manager_delegate.h"
 
 namespace views {
 
 namespace {
+
 constexpr int kDefaultCursorSize = 32;
+
 }  // namespace
 
 DesktopNativeCursorManagerWin::DesktopNativeCursorManagerWin() = default;
@@ -24,7 +30,8 @@ void DesktopNativeCursorManagerWin::SetSystemCursorSize(
   if (hkcu_cursor_regkey_.Valid() &&
       hkcu_cursor_regkey_.ReadValueDW(L"CursorBaseSize", &cursor_base_size) ==
           ERROR_SUCCESS) {
-    system_cursor_size_ = gfx::Size(cursor_base_size, cursor_base_size);
+    int size = base::checked_cast<int>(cursor_base_size);
+    system_cursor_size_ = gfx::Size(size, size);
   }
 
   // Report cursor size.
@@ -52,8 +59,9 @@ void DesktopNativeCursorManagerWin::RegisterCursorRegkeyObserver(
 
 void DesktopNativeCursorManagerWin::InitCursorSizeObserver(
     wm::NativeCursorManagerDelegate* delegate) {
-  hkcu_cursor_regkey_.Open(HKEY_CURRENT_USER, L"Control Panel\\Cursors",
-                           KEY_READ | KEY_NOTIFY);
+  // Validity of this key is checked at time-of-use.
+  (void)hkcu_cursor_regkey_.Open(HKEY_CURRENT_USER, L"Control Panel\\Cursors",
+                                 KEY_READ | KEY_NOTIFY);
   system_cursor_size_ = gfx::Size(kDefaultCursorSize, kDefaultCursorSize);
   RegisterCursorRegkeyObserver(delegate);
   SetSystemCursorSize(delegate);

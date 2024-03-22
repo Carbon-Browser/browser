@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/task/sequenced_task_runner.h"
 #include "components/policy/core/common/cloud/cloud_policy_manager.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
 
@@ -37,7 +38,7 @@ class POLICY_EXPORT MachineLevelUserCloudPolicyManager
   // Initializes the cloud connection. |local_state| must stay valid until this
   // object is deleted or DisconnectAndRemovePolicy gets called.
   void Connect(PrefService* local_state,
-               std::unique_ptr<CloudPolicyClient> client);
+               std::unique_ptr<CloudPolicyClient> client) override;
 
   // Add or remove |observer| to/from the CloudPolicyClient embedded in |core_|.
   void AddClientObserver(CloudPolicyClient::Observer* observer);
@@ -47,7 +48,7 @@ class POLICY_EXPORT MachineLevelUserCloudPolicyManager
 
   // Shuts down the MachineLevelUserCloudPolicyManager (removes and stops
   // refreshing the cached cloud policy).
-  void DisconnectAndRemovePolicy();
+  void DisconnectAndRemovePolicy() override;
 
   // ConfigurationPolicyProvider:
   void Init(SchemaRegistry* registry) override;

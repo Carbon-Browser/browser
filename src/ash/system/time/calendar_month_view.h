@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include "ash/ash_export.h"
 #include "ash/system/time/calendar_model.h"
 #include "ash/system/time/calendar_view_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/view.h"
 
@@ -76,6 +78,7 @@ class CalendarDateCellView : public CalendarViewController::Observer,
 
  private:
   // For unit tests.
+  friend class CalendarMonthViewFetchTest;
   friend class CalendarMonthViewTest;
 
   // Callback called when this view is activated.
@@ -108,6 +111,9 @@ class CalendarDateCellView : public CalendarViewController::Observer,
   // The number of event for `date_`.
   int event_number_ = 0;
 
+  // For testing. Whether the events indicator is drawn or not.
+  bool is_events_indicator_drawn = false;
+
   // The tool tip for this view. Before events data is back, only show date.
   // After the events date is back, show date and event numbers.
   std::u16string tool_tip_;
@@ -116,7 +122,8 @@ class CalendarDateCellView : public CalendarViewController::Observer,
   base::TimeDelta time_difference_;
 
   // Owned by UnifiedCalendarViewController.
-  CalendarViewController* const calendar_view_controller_;
+  const raw_ptr<CalendarViewController, ExperimentalAsh>
+      calendar_view_controller_;
 
   base::ScopedObservation<CalendarViewController,
                           CalendarViewController::Observer>
@@ -126,6 +133,7 @@ class CalendarDateCellView : public CalendarViewController::Observer,
 //  Container for `CalendarDateCellView` for a single month.
 class ASH_EXPORT CalendarMonthView : public views::View,
                                      public CalendarModel::Observer {
+  METADATA_HEADER(CalendarMonthView, views::View)
  public:
   CalendarMonthView(base::Time first_day_of_month,
                     CalendarViewController* calendar_view_controller);
@@ -156,9 +164,14 @@ class ASH_EXPORT CalendarMonthView : public views::View,
   // Returns the index of this month view's last row.
   int last_row_index() const { return last_row_index_; }
 
+  // If this month contains any events.
+  bool has_events() { return has_events_; }
+
  private:
   // For unit tests.
   friend class CalendarMonthViewTest;
+  friend class CalendarMonthViewFetchTest;
+
   // Adds the `current_date`'s `CalendarDateCellView` to the table layout and
   // returns it.
   CalendarDateCellView* AddDateCellToLayout(base::Time current_date,
@@ -171,13 +184,16 @@ class ASH_EXPORT CalendarMonthView : public views::View,
   void FetchEvents(const base::Time& month);
 
   // Owned by `CalendarView`.
-  CalendarViewController* const calendar_view_controller_;
+  const raw_ptr<CalendarViewController, ExperimentalAsh>
+      calendar_view_controller_;
 
   // If today's cell is in this view.
   bool has_today_ = false;
 
   // The index of this month view's last row.
   int last_row_index_;
+
+  bool has_events_ = false;
 
   // The cells of each row that should be first focused on. These
   // `CalendarDateCellView`s are the children of this view.
@@ -188,7 +204,7 @@ class ASH_EXPORT CalendarMonthView : public views::View,
 
   // Raw pointer to the (singleton) CalendarModel, to avoid a bunch of
   // daisy-chained calls to get the std::unique_ptr<>.
-  CalendarModel* const calendar_model_;
+  const raw_ptr<CalendarModel, ExperimentalAsh> calendar_model_;
 
   base::ScopedObservation<CalendarModel, CalendarModel::Observer>
       scoped_calendar_model_observer_{this};

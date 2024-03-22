@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,9 @@ class CORE_EXPORT UnderlyingSinkBase : public ScriptWrappable {
   void Trace(Visitor*) const override;
 
  protected:
-  WritableStreamDefaultController* Controller() const { return controller_; }
+  WritableStreamDefaultController* Controller() const {
+    return controller_.Get();
+  }
 
  private:
   Member<WritableStreamDefaultController> controller_;

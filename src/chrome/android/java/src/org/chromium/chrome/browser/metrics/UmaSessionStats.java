@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,25 +8,24 @@ import android.Manifest;
 import android.content.ComponentCallbacks;
 import android.content.Context;
 import android.content.res.Configuration;
+import android.view.InputDevice;
+
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.base.task.PostTask;
-import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.DefaultBrowserInfo;
-import org.chromium.chrome.browser.instantapps.InstantAppsHandler;
 import org.chromium.chrome.browser.omnibox.voice.VoiceRecognitionHandler.AudioPermissionState;
 import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManagerImpl;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorTabObserver;
-import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.variations.SyntheticTrialAnnotationMode;
 import org.chromium.content_public.browser.BrowserStartupController;
+import org.chromium.content_public.browser.DeviceUtils;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.permissions.AndroidPermissionDelegate;
 import org.chromium.url.GURL;
@@ -38,7 +37,6 @@ import org.chromium.url.GURL;
  */
 public class UmaSessionStats {
     private static final String TAG = "UmaSessionStats";
-    private static final String SAMSUNG_MULTWINDOW_PACKAGE = "com.sec.feature.multiwindow";
 
     private static long sNativeUmaSessionStats;
 
@@ -58,22 +56,19 @@ public class UmaSessionStats {
 
     private void recordPageLoadStats(Tab tab) {
         WebContents webContents = tab.getWebContents();
-        boolean isDesktopUserAgent = webContents != null
-                && webContents.getNavigationController().getUseDesktopUserAgent();
+        boolean isDesktopUserAgent =
+                webContents != null
+                        && webContents.getNavigationController().getUseDesktopUserAgent();
         UmaSessionStatsJni.get().recordPageLoaded(isDesktopUserAgent);
+        var connectedDevices = DeviceUtils.getConnectedDevices();
+        if (!connectedDevices.isEmpty()) {
+            UmaSessionStatsJni.get().recordPageLoadedWithAccessory();
+        }
         if (mKeyboardConnected) {
             UmaSessionStatsJni.get().recordPageLoadedWithKeyboard();
         }
-
-        GURL url = tab.getUrl();
-        if (UrlUtilities.isHttpOrHttps(url)) {
-            PostTask.postTask(TaskTraits.BEST_EFFORT_MAY_BLOCK, () -> {
-                boolean isEligible =
-                        InstantAppsHandler.getInstance().getInstantAppIntentForUrl(url.getSpec())
-                        != null;
-                RecordHistogram.recordBooleanHistogram(
-                        "Android.InstantApps.EligiblePageLoaded", isEligible);
-            });
+        if (connectedDevices.contains(InputDevice.SOURCE_MOUSE)) {
+            UmaSessionStatsJni.get().recordPageLoadedWithMouse();
         }
 
         // If the session has ended (i.e. chrome is in the background), escape early. Ideally we
@@ -102,26 +97,30 @@ public class UmaSessionStats {
 
         mTabModelSelector = tabModelSelector;
         if (mTabModelSelector != null) {
-            mComponentCallbacks = new ComponentCallbacks() {
-                @Override
-                public void onLowMemory() {
-                    // Not required
-                }
+            mComponentCallbacks =
+                    new ComponentCallbacks() {
+                        @Override
+                        public void onLowMemory() {
+                            // Not required
+                        }
 
-                @Override
-                public void onConfigurationChanged(Configuration newConfig) {
-                    mKeyboardConnected = newConfig.keyboard != Configuration.KEYBOARD_NOKEYS;
-                }
-            };
+                        @Override
+                        public void onConfigurationChanged(Configuration newConfig) {
+                            mKeyboardConnected =
+                                    newConfig.keyboard != Configuration.KEYBOARD_NOKEYS;
+                        }
+                    };
             mContext.registerComponentCallbacks(mComponentCallbacks);
-            mKeyboardConnected = mContext.getResources().getConfiguration()
-                    .keyboard != Configuration.KEYBOARD_NOKEYS;
-            mTabModelSelectorTabObserver = new TabModelSelectorTabObserver(mTabModelSelector) {
-                @Override
-                public void onPageLoadFinished(Tab tab, GURL url) {
-                    recordPageLoadStats(tab);
-                }
-            };
+            mKeyboardConnected =
+                    mContext.getResources().getConfiguration().keyboard
+                            != Configuration.KEYBOARD_NOKEYS;
+            mTabModelSelectorTabObserver =
+                    new TabModelSelectorTabObserver(mTabModelSelector) {
+                        @Override
+                        public void onPageLoadFinished(Tab tab, GURL url) {
+                            recordPageLoadStats(tab);
+                        }
+                    };
         }
 
         UmaSessionStatsJni.get().umaResumeSession(sNativeUmaSessionStats, UmaSessionStats.this);
@@ -134,8 +133,7 @@ public class UmaSessionStats {
     }
 
     private void recordAudioPermissionState(AndroidPermissionDelegate permissionDelegate) {
-        @AudioPermissionState
-        int permissionState;
+        @AudioPermissionState int permissionState;
         if (permissionDelegate.hasPermission(Manifest.permission.RECORD_AUDIO)) {
             permissionState = AudioPermissionState.GRANTED;
         } else if (permissionDelegate.canRequestPermission(Manifest.permission.RECORD_AUDIO)) {
@@ -144,7 +142,8 @@ public class UmaSessionStats {
             permissionState = AudioPermissionState.DENIED_CANNOT_ASK_AGAIN;
         }
         RecordHistogram.recordEnumeratedHistogram(
-                "VoiceInteraction.AudioPermissionEvent.SessionStart", permissionState,
+                "VoiceInteraction.AudioPermissionEvent.SessionStart",
+                permissionState,
                 AudioPermissionState.NUM_ENTRIES);
     }
 
@@ -156,9 +155,7 @@ public class UmaSessionStats {
         }
     }
 
-    /**
-     * Logs the current session.
-     */
+    /** Logs the current session. */
     public void logAndEndSession() {
         if (mTabModelSelector != null) {
             mContext.unregisterComponentCallbacks(mComponentCallbacks);
@@ -173,20 +170,19 @@ public class UmaSessionStats {
      * Updates the metrics services based on a change of consent. This can happen during first-run
      * flow, and when the user changes their preferences.
      */
-    public static void changeMetricsReportingConsent(boolean consent) {
+    public static void changeMetricsReportingConsent(
+            boolean consent, @ChangeMetricsReportingStateCalledFrom int calledFrom) {
         PrivacyPreferencesManagerImpl privacyManager = PrivacyPreferencesManagerImpl.getInstance();
         // Update the metrics reporting preference.
         privacyManager.setUsageAndCrashReporting(consent);
 
         // Perform native changes needed to reflect the new consent value.
-        UmaSessionStatsJni.get().changeMetricsReportingConsent(consent);
+        UmaSessionStatsJni.get().changeMetricsReportingConsent(consent, calledFrom);
 
         updateMetricsServiceState();
     }
 
-    /**
-     * Initializes the metrics consent bit to false. Used only for testing.
-     */
+    /** Initializes the metrics consent bit to false. Used only for testing. */
     public static void initMetricsAndCrashReportingForTesting() {
         UmaSessionStatsJni.get().initMetricsAndCrashReportingForTesting();
     }
@@ -198,16 +194,12 @@ public class UmaSessionStats {
         UmaSessionStatsJni.get().unsetMetricsAndCrashReportingForTesting();
     }
 
-    /**
-     * Updates the metrics consent bit to |consent|. Used only for testing.
-     */
+    /** Updates the metrics consent bit to |consent|. Used only for testing. */
     public static void updateMetricsAndCrashReportingForTesting(boolean consent) {
         UmaSessionStatsJni.get().updateMetricsAndCrashReportingForTesting(consent);
     }
 
-    /**
-     * Updates the state of MetricsService to account for the user's preferences.
-     */
+    /** Updates the state of MetricsService to account for the user's preferences. */
     public static void updateMetricsServiceState() {
         PrivacyPreferencesManagerImpl privacyManager = PrivacyPreferencesManagerImpl.getInstance();
 
@@ -220,9 +212,7 @@ public class UmaSessionStats {
         UmaSessionStatsJni.get().updateMetricsServiceState(mayUploadStats);
     }
 
-    /**
-     * Updates relevant Android and native preferences.
-     */
+    /** Updates relevant Android and native preferences. */
     private void updatePreferences() {
         PrivacyPreferencesManagerImpl prefManager = PrivacyPreferencesManagerImpl.getInstance();
 
@@ -243,8 +233,8 @@ public class UmaSessionStats {
     public static void registerExternalExperiment(
             String fallbackStudyName, int[] experimentIds, boolean overrideExistingIds) {
         assert isMetricsServiceAvailable();
-        UmaSessionStatsJni.get().registerExternalExperiment(
-                fallbackStudyName, experimentIds, overrideExistingIds);
+        UmaSessionStatsJni.get()
+                .registerExternalExperiment(fallbackStudyName, experimentIds, overrideExistingIds);
     }
 
     public static void registerSyntheticFieldTrial(String trialName, String groupName) {
@@ -275,9 +265,7 @@ public class UmaSessionStats {
         return BrowserStartupController.getInstance().isFullBrowserStarted();
     }
 
-    /**
-     * Returns whether there is a visible activity.
-     */
+    /** Returns whether there is a visible activity. */
     @CalledByNative
     private static boolean hasVisibleActivity() {
         return ApplicationStatus.hasVisibleActivities();
@@ -286,19 +274,37 @@ public class UmaSessionStats {
     @NativeMethods
     interface Natives {
         long init();
-        void changeMetricsReportingConsent(boolean consent);
+
+        void changeMetricsReportingConsent(boolean consent, int calledFrom);
+
         void initMetricsAndCrashReportingForTesting();
+
         void unsetMetricsAndCrashReportingForTesting();
+
         void updateMetricsAndCrashReportingForTesting(boolean consent);
+
         void updateMetricsServiceState(boolean mayUpload);
+
         void umaResumeSession(long nativeUmaSessionStats, UmaSessionStats caller);
+
         void umaEndSession(long nativeUmaSessionStats, UmaSessionStats caller);
+
         void registerExternalExperiment(
                 String studyName, int[] experimentIds, boolean overrideExistingIds);
-        void registerSyntheticFieldTrial(String trialName, String groupName,
+
+        void registerSyntheticFieldTrial(
+                String trialName,
+                String groupName,
                 @SyntheticTrialAnnotationMode int annotationMode);
+
         void recordTabCountPerLoad(int numTabsOpen);
+
         void recordPageLoaded(boolean isDesktopUserAgent);
+
         void recordPageLoadedWithKeyboard();
+
+        void recordPageLoadedWithMouse();
+
+        void recordPageLoadedWithAccessory();
     }
 }

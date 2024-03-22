@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,23 @@
  * and manipulate state.
  */
 
-import {emptyState, PersonalizationStore, reduce} from 'chrome://personalization/trusted/personalization_app.js';
-import {Action} from 'chrome://resources/js/cr/ui/store.js';
+import {Actions, emptyState, PersonalizationState, PersonalizationStore, reduce} from 'chrome://personalization/js/personalization_app.js';
 import {TestStore} from 'chrome://webui-test/test_store.js';
 
-export class TestPersonalizationStore extends TestStore {
+/**
+ * Records actions and states observed during a test run. A Personalization App
+ * specific specialization of the generic TestStore.
+ */
+export class TestPersonalizationStore extends
+    TestStore<PersonalizationState, Actions> {
   // received actions and states.
-  private actions_: Action[];
+  private actions_: Actions[];
   private states_: any[];
 
-  constructor(data: any) {
-    super(data, PersonalizationStore, emptyState(), reduce);
+  override data: PersonalizationState = emptyState();
+
+  constructor(data: Partial<PersonalizationState>) {
+    super(data, emptyState(), reduce);
     this.actions_ = [];
     this.states_ = [];
   }
@@ -30,13 +36,13 @@ export class TestPersonalizationStore extends TestStore {
     return this.states_;
   }
 
-  override reduce(action: Action) {
+  override reduce(action: Actions) {
     super.reduce(action);
     this.actions_.push(action);
     this.states_.push(this.data);
   }
 
-  override replaceSingleton() {
+  replaceSingleton() {
     PersonalizationStore.setInstance(this);
   }
 

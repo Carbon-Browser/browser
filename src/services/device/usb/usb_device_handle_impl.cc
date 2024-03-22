@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/device_event_log/device_event_log.h"
 #include "services/device/public/cpp/usb/usb_utils.h"
 #include "services/device/usb/usb_context.h"
@@ -143,7 +144,7 @@ class UsbDeviceHandleImpl::InterfaceClaimer
   int alternate_setting_;
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
   ResultCallback release_callback_;
-  base::SequenceChecker sequence_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 UsbDeviceHandleImpl::InterfaceClaimer::InterfaceClaimer(
@@ -156,7 +157,7 @@ UsbDeviceHandleImpl::InterfaceClaimer::InterfaceClaimer(
       task_runner_(task_runner) {}
 
 UsbDeviceHandleImpl::InterfaceClaimer::~InterfaceClaimer() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
   int rc = libusb_release_interface(handle_->handle(), interface_number_);
@@ -384,7 +385,7 @@ UsbDeviceHandleImpl::Transfer::Transfer(
       claimed_interface_(claimed_interface),
       length_(length),
       callback_(std::move(callback)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 UsbDeviceHandleImpl::Transfer::Transfer(
     scoped_refptr<UsbDeviceHandleImpl> device_handle,
@@ -396,7 +397,7 @@ UsbDeviceHandleImpl::Transfer::Transfer(
       buffer_(buffer),
       claimed_interface_(claimed_interface),
       iso_callback_(std::move(callback)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 UsbDeviceHandleImpl::Transfer::~Transfer() {
   if (platform_transfer_) {
@@ -847,7 +848,7 @@ UsbDeviceHandleImpl::UsbDeviceHandleImpl(
     scoped_refptr<base::SequencedTaskRunner> blocking_task_runner)
     : device_(std::move(device)),
       handle_(std::move(handle)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       blocking_task_runner_(blocking_task_runner) {
   DCHECK(handle_.IsValid()) << "Cannot create device with an invalid handle.";
 }
@@ -862,8 +863,7 @@ UsbDeviceHandleImpl::~UsbDeviceHandleImpl() {
     handle_.Reset();
   } else {
     blocking_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce([](ScopedLibusbDeviceHandle) {}, std::move(handle_)));
+        FROM_HERE, base::DoNothingWithBoundArgs(std::move(handle_)));
   }
 }
 

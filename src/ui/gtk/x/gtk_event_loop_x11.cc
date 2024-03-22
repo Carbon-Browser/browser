@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <xcb/xcb.h>
 #include <xcb/xproto.h>
 
+#include "base/functional/bind.h"
 #include "ui/base/x/x11_util.h"
 #include "ui/gfx/x/event.h"
 #include "ui/gtk/gtk_compat.h"
@@ -24,13 +25,17 @@ x11::Event ConvertGdkEventToKeyEvent(GdkEvent* gdk_event) {
   if (!gtk::GtkCheckVersion(4)) {
     auto* key = reinterpret_cast<GdkEventKey*>(gdk_event);
     DCHECK(key->type == GdkKeyPress() || key->type == GdkKeyRelease());
+    x11::Window window = x11::Window::None;
+    if (key->window)
+      window = static_cast<x11::Window>(gdk_x11_window_get_xid(key->window));
+
     x11::KeyEvent key_event{
         .opcode = key->type == GdkKeyPress() ? x11::KeyEvent::Press
                                              : x11::KeyEvent::Release,
         .detail = static_cast<x11::KeyCode>(key->hardware_keycode),
         .time = static_cast<x11::Time>(key->time),
         .root = ui::GetX11RootWindow(),
-        .event = static_cast<x11::Window>(gdk_x11_window_get_xid(key->window)),
+        .event = window,
         .state = BuildXkbStateFromGdkEvent(key->state, key->group),
         .same_screen = true,
     };
@@ -103,23 +108,22 @@ void ProcessGdkEvent(GdkEvent* gdk_event) {
 GtkEventLoopX11::GtkEventLoopX11(GtkWidget* widget) {
   if (gtk::GtkCheckVersion(4)) {
     surface_ = gtk_native_get_surface(gtk_widget_get_native(widget));
-    signal_id_ =
-        g_signal_connect(surface_, "event", G_CALLBACK(OnEventThunk), this);
+    signal_ = ScopedGSignal(
+        surface_, "event",
+        base::BindRepeating(&GtkEventLoopX11::OnEvent, base::Unretained(this)));
   } else {
     gdk_event_handler_set(DispatchGdkEvent, nullptr, nullptr);
   }
 }
 
 GtkEventLoopX11::~GtkEventLoopX11() {
-  if (gtk::GtkCheckVersion(4)) {
-    g_signal_handler_disconnect(surface_, signal_id_);
-  } else {
+  if (!gtk::GtkCheckVersion(4)) {
     gdk_event_handler_set(reinterpret_cast<GdkEventFunc>(gtk_main_do_event),
                           nullptr, nullptr);
   }
 }
 
-gboolean GtkEventLoopX11::OnEvent(GdkEvent* gdk_event) {
+gboolean GtkEventLoopX11::OnEvent(GdkSurface* surface, GdkEvent* gdk_event) {
   DCHECK(gtk::GtkCheckVersion(4));
   ProcessGdkEvent(gdk_event);
   return false;

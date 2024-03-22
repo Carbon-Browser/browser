@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,7 @@ class ServiceWorkerPaymentAppTest : public testing::Test,
     modifier_2->total->amount->currency = "USD";
     modifier_2->total->amount->value = "3.00";
     modifier_2->method_data = mojom::PaymentMethodData::New();
-    modifier_2->method_data->supported_method = "https://bobpay.com";
+    modifier_2->method_data->supported_method = "https://bobpay.test";
     details->modifiers->push_back(std::move(modifier_2));
 
     mojom::PaymentDetailsModifierPtr modifier_3 =
@@ -78,7 +78,7 @@ class ServiceWorkerPaymentAppTest : public testing::Test,
     modifier_3->total->amount->currency = "USD";
     modifier_3->total->amount->value = "2.00";
     modifier_3->method_data = mojom::PaymentMethodData::New();
-    modifier_3->method_data->supported_method = "https://alicepay.com";
+    modifier_3->method_data->supported_method = "https://alicepay.test";
     details->modifiers->push_back(std::move(modifier_3));
 
     std::vector<mojom::PaymentMethodDataPtr> method_data;
@@ -90,7 +90,7 @@ class ServiceWorkerPaymentAppTest : public testing::Test,
     method_data.push_back(std::move(entry_1));
 
     mojom::PaymentMethodDataPtr entry_2 = mojom::PaymentMethodData::New();
-    entry_2->supported_method = "https://bobpay.com";
+    entry_2->supported_method = "https://bobpay.test";
     method_data.push_back(std::move(entry_2));
 
     spec_ = std::make_unique<PaymentRequestSpec>(
@@ -100,21 +100,41 @@ class ServiceWorkerPaymentAppTest : public testing::Test,
 
   void TearDown() override {}
 
-  void CreateServiceWorkerPaymentApp(bool with_url_method) {
+  void CreateInstallableServiceWorkerPaymentApp() {
+    constexpr int kBitmapDimension = 16;
+
+    std::unique_ptr<WebAppInstallationInfo> app_info =
+        std::make_unique<WebAppInstallationInfo>();
+    app_info->name = "bobpay";
+    app_info->sw_js_url = "sw.js";
+    app_info->sw_scope = "/some/scope/";
+    app_info->icon = std::make_unique<SkBitmap>();
+    app_info->icon->allocN32Pixels(kBitmapDimension, kBitmapDimension);
+    app_info->icon->eraseColor(SK_ColorRED);
+
+    icon_bitmap_ = app_info->icon.get();
+    app_ = std::make_unique<ServiceWorkerPaymentApp>(
+        web_contents_, GURL("https://testmerchant.com"),
+        GURL("https://testmerchant.com/bobpay"), spec_->AsWeakPtr(),
+        std::move(app_info), /*enabled_method=*/"https://bobpay.test",
+        /*is_incognito=*/false, /*show_processing_spinner=*/base::DoNothing());
+  }
+
+  void CreateInstalledServiceWorkerPaymentApp(bool with_url_method) {
     constexpr int kBitmapDimension = 16;
 
     std::unique_ptr<content::StoredPaymentApp> stored_app =
         std::make_unique<content::StoredPaymentApp>();
     stored_app->registration_id = 123456;
-    stored_app->scope = GURL("https://bobpay.com");
+    stored_app->scope = GURL("https://bobpay.test");
     stored_app->name = "bobpay";
     stored_app->icon = std::make_unique<SkBitmap>();
     stored_app->icon->allocN32Pixels(kBitmapDimension, kBitmapDimension);
     stored_app->icon->eraseColor(SK_ColorRED);
     stored_app->enabled_methods.emplace_back("basic-card");
     if (with_url_method)
-      stored_app->enabled_methods.emplace_back("https://bobpay.com");
-    stored_app->capabilities.emplace_back(content::StoredCapabilities());
+      stored_app->enabled_methods.emplace_back("https://bobpay.test");
+    stored_app->capabilities.emplace_back();
     stored_app->capabilities.back().supported_card_networks.emplace_back(
         static_cast<int32_t>(mojom::BasicCardNetwork::UNIONPAY));
     stored_app->capabilities.back().supported_card_networks.emplace_back(
@@ -154,12 +174,12 @@ class ServiceWorkerPaymentAppTest : public testing::Test,
 
 // Test app info and status are correct.
 TEST_F(ServiceWorkerPaymentAppTest, AppInfo) {
-  CreateServiceWorkerPaymentApp(true);
+  CreateInstalledServiceWorkerPaymentApp(true);
 
   EXPECT_TRUE(GetApp()->IsCompleteForPayment());
 
   EXPECT_EQ(base::UTF16ToUTF8(GetApp()->GetLabel()), "bobpay");
-  EXPECT_EQ(base::UTF16ToUTF8(GetApp()->GetSublabel()), "bobpay.com");
+  EXPECT_EQ(base::UTF16ToUTF8(GetApp()->GetSublabel()), "bobpay.test");
 
   ASSERT_NE(nullptr, GetApp()->icon_bitmap());
   EXPECT_EQ(GetApp()->icon_bitmap()->width(), icon_bitmap()->width());
@@ -169,7 +189,7 @@ TEST_F(ServiceWorkerPaymentAppTest, AppInfo) {
 // Test payment request event data can be correctly constructed for invoking
 // InvokePaymentApp.
 TEST_F(ServiceWorkerPaymentAppTest, CreatePaymentRequestEventData) {
-  CreateServiceWorkerPaymentApp(true);
+  CreateInstalledServiceWorkerPaymentApp(true);
 
   mojom::PaymentRequestEventDataPtr event_data =
       CreatePaymentRequestEventData();
@@ -181,7 +201,8 @@ TEST_F(ServiceWorkerPaymentAppTest, CreatePaymentRequestEventData) {
   EXPECT_EQ(event_data->method_data.size(), 2U);
   EXPECT_EQ(event_data->method_data[0]->supported_method, "basic-card");
   EXPECT_EQ(event_data->method_data[0]->supported_networks.size(), 3U);
-  EXPECT_EQ(event_data->method_data[1]->supported_method, "https://bobpay.com");
+  EXPECT_EQ(event_data->method_data[1]->supported_method,
+            "https://bobpay.test");
 
   EXPECT_EQ(event_data->total->currency, "USD");
   EXPECT_EQ(event_data->total->value, "5.00");
@@ -195,18 +216,18 @@ TEST_F(ServiceWorkerPaymentAppTest, CreatePaymentRequestEventData) {
   EXPECT_EQ(event_data->modifiers[1]->total->amount->value, "3.00");
   EXPECT_EQ(event_data->modifiers[1]->total->amount->currency, "USD");
   EXPECT_EQ(event_data->modifiers[1]->method_data->supported_method,
-            "https://bobpay.com");
+            "https://bobpay.test");
 }
 
 // Test CanMakePaymentEventData can be correctly constructed for invoking
 // Validate.
 TEST_F(ServiceWorkerPaymentAppTest, CreateCanMakePaymentEvent) {
-  CreateServiceWorkerPaymentApp(false);
+  CreateInstalledServiceWorkerPaymentApp(false);
   mojom::CanMakePaymentEventDataPtr event_data =
       CreateCanMakePaymentEventData();
   EXPECT_TRUE(event_data.is_null());
 
-  CreateServiceWorkerPaymentApp(true);
+  CreateInstalledServiceWorkerPaymentApp(true);
   event_data = CreateCanMakePaymentEventData();
   EXPECT_FALSE(event_data.is_null());
 
@@ -215,100 +236,40 @@ TEST_F(ServiceWorkerPaymentAppTest, CreateCanMakePaymentEvent) {
             "https://testmerchant.com/bobpay");
 
   EXPECT_EQ(event_data->method_data.size(), 1U);
-  EXPECT_EQ(event_data->method_data[0]->supported_method, "https://bobpay.com");
+  EXPECT_EQ(event_data->method_data[0]->supported_method,
+            "https://bobpay.test");
 
   EXPECT_EQ(event_data->modifiers.size(), 1U);
   EXPECT_EQ(event_data->modifiers[0]->total->amount->value, "3.00");
   EXPECT_EQ(event_data->modifiers[0]->total->amount->currency, "USD");
   EXPECT_EQ(event_data->modifiers[0]->method_data->supported_method,
-            "https://bobpay.com");
+            "https://bobpay.test");
 }
 
-// Test the case when CanMakePaymentEvent cannot be fired. The app should be
-// considered valid, but not ready for payment.
+// This test validates the scenario where CanMakePaymentEvent cannot be fired.
+// The app is expected to be considered valid but not ready for payment.
 TEST_F(ServiceWorkerPaymentAppTest, ValidateCanMakePayment) {
-  // CanMakePaymentEvent is not fired because this test app does not have any
+  // CanMakePaymentEvent is not triggered because this test app lacks any
   // explicitly verified methods.
-  CreateServiceWorkerPaymentApp(/*with_url_method=*/true);
+  CreateInstalledServiceWorkerPaymentApp(/*with_url_method=*/true);
   GetApp()->ValidateCanMakePayment(base::BindOnce(
-      [](ServiceWorkerPaymentApp*, bool result) { EXPECT_TRUE(result); }));
+      [](base::WeakPtr<ServiceWorkerPaymentApp> app, bool result) {
+        EXPECT_NE(nullptr, app.get());
+        EXPECT_TRUE(result);
+      }));
   EXPECT_FALSE(GetApp()->HasEnrolledInstrument());
 }
 
-class ServiceWorkerPaymentAppBasicCardDisabledTest
-    : public ServiceWorkerPaymentAppTest {
- public:
-  ServiceWorkerPaymentAppBasicCardDisabledTest(
-      const ServiceWorkerPaymentAppBasicCardDisabledTest&) = delete;
-  ServiceWorkerPaymentAppBasicCardDisabledTest& operator=(
-      const ServiceWorkerPaymentAppBasicCardDisabledTest&) = delete;
+TEST_F(ServiceWorkerPaymentAppTest, IsValidForModifier) {
+  CreateInstalledServiceWorkerPaymentApp(true);
+  EXPECT_TRUE(GetApp()->IsValidForModifier(/*method=*/"https://bobpay.test"));
+  EXPECT_TRUE(GetApp()->IsValidForModifier(/*method=*/"basic-card"));
+  EXPECT_FALSE(GetApp()->IsValidForModifier(/*method=*/"foo-bar"));
 
- protected:
-  ServiceWorkerPaymentAppBasicCardDisabledTest() {
-    feature_list_.InitAndDisableFeature(::features::kPaymentRequestBasicCard);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-// Test modifiers can be matched based on capabilities.
-TEST_F(ServiceWorkerPaymentAppBasicCardDisabledTest, IsValidForModifier) {
-  CreateServiceWorkerPaymentApp(true);
-
-  EXPECT_FALSE(GetApp()->IsValidForModifier(
-      /*method=*/"basic-card", /*supported_networks_specified=*/false,
-      /*supported_networks=*/{}));
-
-  EXPECT_TRUE(GetApp()->IsValidForModifier(
-      /*method=*/"https://bobpay.com", /*supported_networks_specified=*/true,
-      /*supported_networks=*/{}));
-
-  EXPECT_FALSE(GetApp()->IsValidForModifier(
-      /*method=*/"basic-card", /*supported_networks_specified=*/true,
-      /*supported_networks=*/{"mastercard"}));
-
-  EXPECT_FALSE(GetApp()->IsValidForModifier(
-      /*method=*/"basic-card", /*supported_networks_specified=*/true,
-      /*supported_networks=*/{"unionpay"}));
-}
-
-class ServiceWorkerPaymentAppBasicCardEnabledTest
-    : public ServiceWorkerPaymentAppTest {
- public:
-  ServiceWorkerPaymentAppBasicCardEnabledTest(
-      const ServiceWorkerPaymentAppBasicCardEnabledTest&) = delete;
-  ServiceWorkerPaymentAppBasicCardEnabledTest& operator=(
-      const ServiceWorkerPaymentAppBasicCardEnabledTest&) = delete;
-
- protected:
-  ServiceWorkerPaymentAppBasicCardEnabledTest() {
-    feature_list_.InitAndEnableFeature(::features::kPaymentRequestBasicCard);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-// Test modifiers can be matched based on capabilities.
-TEST_F(ServiceWorkerPaymentAppBasicCardEnabledTest, IsValidForModifier) {
-  CreateServiceWorkerPaymentApp(true);
-
-  EXPECT_TRUE(GetApp()->IsValidForModifier(
-      /*method=*/"basic-card", /*supported_networks_specified=*/false,
-      /*supported_networks=*/{}));
-
-  EXPECT_TRUE(GetApp()->IsValidForModifier(
-      /*method=*/"https://bobpay.com", /*supported_networks_specified=*/true,
-      /*supported_networks=*/{}));
-
-  EXPECT_FALSE(GetApp()->IsValidForModifier(
-      /*method=*/"basic-card", /*supported_networks_specified=*/true,
-      /*supported_networks=*/{"mastercard"}));
-
-  EXPECT_TRUE(GetApp()->IsValidForModifier(
-      /*method=*/"basic-card", /*supported_networks_specified=*/true,
-      /*supported_networks=*/{"unionpay"}));
+  CreateInstallableServiceWorkerPaymentApp();
+  EXPECT_TRUE(GetApp()->IsValidForModifier(/*method=*/"https://bobpay.test"));
+  EXPECT_FALSE(GetApp()->IsValidForModifier(/*method=*/"basic-card"));
+  EXPECT_FALSE(GetApp()->IsValidForModifier(/*method=*/"foo-bar"));
 }
 
 }  // namespace payments

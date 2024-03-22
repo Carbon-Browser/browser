@@ -4,42 +4,45 @@
 // Source: Media Source Extensions™ (https://w3c.github.io/media-source/)
 
 enum ReadyState {
-    "closed",
-    "open",
-    "ended"
+  "closed",
+  "open",
+  "ended",
 };
 
 enum EndOfStreamError {
-    "network",
-    "decode"
+  "network",
+  "decode",
 };
 
 [Exposed=(Window,DedicatedWorker)]
 interface MediaSource : EventTarget {
     constructor();
-    readonly        attribute SourceBufferList    sourceBuffers;
-    readonly        attribute SourceBufferList    activeSourceBuffers;
-    readonly        attribute ReadyState          readyState;
-                    attribute unrestricted double duration;
-                    attribute EventHandler        onsourceopen;
-                    attribute EventHandler        onsourceended;
-                    attribute EventHandler        onsourceclose;
-    static readonly attribute boolean canConstructInDedicatedWorker;
-    SourceBuffer      addSourceBuffer (DOMString type);
-    undefined         removeSourceBuffer (SourceBuffer sourceBuffer);
-    undefined         endOfStream (optional EndOfStreamError error);
-    undefined         setLiveSeekableRange (double start, double end);
-    undefined         clearLiveSeekableRange ();
-    MediaSourceHandle getHandle ();
-    static boolean    isTypeSupported (DOMString type);
+
+    [ SameObject, Exposed=DedicatedWorker ]
+    readonly              attribute MediaSourceHandle   handle;
+
+    readonly              attribute SourceBufferList    sourceBuffers;
+    readonly              attribute SourceBufferList    activeSourceBuffers;
+    readonly              attribute ReadyState          readyState;
+                          attribute unrestricted double duration;
+                          attribute EventHandler        onsourceopen;
+                          attribute EventHandler        onsourceended;
+                          attribute EventHandler        onsourceclose;
+    static readonly       attribute boolean canConstructInDedicatedWorker;
+    SourceBuffer          addSourceBuffer (DOMString type);
+    undefined             removeSourceBuffer (SourceBuffer sourceBuffer);
+    undefined             endOfStream (optional EndOfStreamError error);
+    undefined             setLiveSeekableRange (double start, double end);
+    undefined             clearLiveSeekableRange ();
+    static boolean        isTypeSupported (DOMString type);
 };
 
-[Exposed=(Window,DedicatedWorker)]
+[Transferable, Exposed=(Window,DedicatedWorker)]
 interface MediaSourceHandle {};
 
 enum AppendMode {
-    "segments",
-    "sequence"
+  "segments",
+  "sequence",
 };
 
 [Exposed=(Window,DedicatedWorker)]

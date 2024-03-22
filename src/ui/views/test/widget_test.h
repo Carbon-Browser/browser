@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,10 +27,8 @@
 #endif
 
 namespace ui {
-namespace internal {
-class InputMethodDelegate;
-}
 class EventSink;
+class ImeKeyEventDispatcher;
 }  // namespace ui
 
 namespace views {
@@ -56,6 +54,11 @@ namespace test {
 // randomly choose a child to return, so make sure your predicate matches
 // *only* the view you want!
 using ViewPredicate = base::RepeatingCallback<bool(const View*)>;
+View* AnyViewMatchingPredicate(View* root, const ViewPredicate& predicate);
+template <typename Pred>
+View* AnyViewMatchingPredicate(View* root, Pred predicate) {
+  return AnyViewMatchingPredicate(root, base::BindLambdaForTesting(predicate));
+}
 View* AnyViewMatchingPredicate(Widget* widget, const ViewPredicate& predicate);
 template <typename Pred>
 View* AnyViewMatchingPredicate(Widget* widget, Pred predicate) {
@@ -71,28 +74,40 @@ class WidgetTest : public ViewsTestBase {
   explicit WidgetTest(
       std::unique_ptr<base::test::TaskEnvironment> task_environment);
 
+  template <typename... TaskEnvironmentTraits>
+  explicit WidgetTest(TaskEnvironmentTraits&&... traits)
+      : ViewsTestBase(std::forward<TaskEnvironmentTraits>(traits)...) {}
+
   WidgetTest(const WidgetTest&) = delete;
   WidgetTest& operator=(const WidgetTest&) = delete;
 
   ~WidgetTest() override;
 
   // Create Widgets with |native_widget| in InitParams set to an instance of
-  // platform specific widget type that has stubbled capture calls.
+  // platform specific widget type that has stubbled capture calls. This will
+  // create a non-desktop widget.
   Widget* CreateTopLevelPlatformWidget();
   Widget* CreateTopLevelFramelessPlatformWidget();
   Widget* CreateChildPlatformWidget(gfx::NativeView parent_native_view);
 
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+  // Create Widgets with |native_widget| in InitParams set to an instance of
+  // platform specific widget type that has stubbled capture calls. This will
+  // create a desktop widget.
+  Widget* CreateTopLevelPlatformDesktopWidget();
+#endif
+
   // Create Widgets initialized without a |native_widget| set in InitParams.
   // Depending on the test environment, ViewsDelegate::OnBeforeWidgetInit() may
-  // still provide one.
+  // provide a desktop or non-desktop NativeWidget.
   Widget* CreateTopLevelNativeWidget();
   Widget* CreateChildNativeWidgetWithParent(Widget* parent);
 
-  View* GetMousePressedHandler(internal::RootView* root_view);
+  View* GetMousePressedHandler(views::internal::RootView* root_view);
 
-  View* GetMouseMoveHandler(internal::RootView* root_view);
+  View* GetMouseMoveHandler(views::internal::RootView* root_view);
 
-  View* GetGestureHandler(internal::RootView* root_view);
+  View* GetGestureHandler(views::internal::RootView* root_view);
 
   // Simulate an activation of the native window held by |widget|, as if it was
   // clicked by the user. This is a synchronous method for use in
@@ -105,6 +120,7 @@ class WidgetTest : public ViewsTestBase {
 
   // Return true if |above| is higher than |below| in the native window Z-order.
   // Both windows must be visible.
+  // WARNING: This does not work for Aura desktop widgets (crbug.com/1333445).
   static bool IsWindowStackedAbove(Widget* above, Widget* below);
 
   // Query the native window system for the minimum size configured for user
@@ -116,8 +132,8 @@ class WidgetTest : public ViewsTestBase {
   // sink.
   static ui::EventSink* GetEventSink(Widget* widget);
 
-  // Get the InputMethodDelegate, for setting on a Mock InputMethod in tests.
-  static ui::internal::InputMethodDelegate* GetInputMethodDelegateForWidget(
+  // Get the ImeKeyEventDispatcher, for setting on a Mock InputMethod in tests.
+  static ui::ImeKeyEventDispatcher* GetImeKeyEventDispatcherForWidget(
       Widget* widget);
 
   // Return true if |window| is transparent according to the native platform.
@@ -215,7 +231,7 @@ class TestDesktopWidgetDelegate : public WidgetDelegate {
 
  private:
   raw_ptr<Widget> widget_;
-  raw_ptr<View> contents_view_ = nullptr;
+  raw_ptr<View, AcrossTasksDanglingUntriaged> contents_view_ = nullptr;
   int window_closing_count_ = 0;
   gfx::Rect initial_bounds_ = gfx::Rect(100, 100, 200, 200);
   bool can_close_ = true;
@@ -264,7 +280,7 @@ class WidgetActivationWaiter : public WidgetObserver {
   // views::WidgetObserver override:
   void OnWidgetActivationChanged(Widget* widget, bool active) override;
 
-  bool observed_;
+  bool observed_ = false;
   bool active_;
 
   base::RunLoop run_loop_;
@@ -311,7 +327,7 @@ class WidgetVisibleWaiter : public WidgetObserver {
   void OnWidgetVisibilityChanged(Widget* widget, bool visible) override;
   void OnWidgetDestroying(Widget* widget) override;
 
-  const raw_ptr<Widget> widget_;
+  const raw_ptr<Widget, AcrossTasksDanglingUntriaged> widget_;
   base::RunLoop run_loop_;
   base::ScopedObservation<Widget, WidgetObserver> widget_observation_{this};
 };

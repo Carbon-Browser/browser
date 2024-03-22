@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,11 @@ class SharedStorageRenderThreadWorkletDriver
 
   // SharedStorageWorkletDriver overrides
   void StartWorkletService(
-      mojo::PendingReceiver<
-          shared_storage_worklet::mojom::SharedStorageWorkletService>
-          pending_receiver) override;
+      mojo::PendingReceiver<blink::mojom::SharedStorageWorkletService>
+          pending_receiver,
+      blink::mojom::WorkletGlobalScopeCreationParamsPtr
+          global_scope_creation_params) override;
+  RenderProcessHost* GetProcessHost() override;
 
   // RenderProcessHostObserver overrides
   void RenderProcessHostDestroyed(RenderProcessHost* host) override;

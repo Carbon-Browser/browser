@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "services/network/test/test_network_connection_tracker.h"
@@ -44,7 +43,7 @@ class NetworkMetricsProviderTest : public testing::Test {
  private:
   MetricsTaskEnvironment task_environment_;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::NetworkHandlerTestHelper network_handler_test_helper_;
+  ash::NetworkHandlerTestHelper network_handler_test_helper_;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 };
 

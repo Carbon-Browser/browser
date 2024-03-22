@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,28 +60,25 @@ const char kFinchSeedMinUpdatePeriod[] = "finch-seed-min-update-period";
 const char kWebViewEnableModernCookieSameSite[] =
     "webview-enable-modern-cookie-same-site";
 
-// Disables throttling querying apps package names allowlist components in
-// WebView clients.
-const char kWebViewDisablePackageAllowlistThrottling[] =
-    "webview-disable-package-allowlist-throttling";
-
 // Enables use selective image inversion to automatically darken page, it will
 // be used when WebView is in dark mode, but website doesn't provide dark style.
 const char kWebViewSelectiveImageInversionDarkening[] =
     "webview-selective-image-inversion-darkening";
 
-// Enables MPArch-based FencedFrames. This also implies
-// PrivacySandboxAdsAPIsOverride and SharedStorageAPI.
-const char kWebViewMPArchFencedFrames[] = "webview-mparch-fenced-frames";
-
-// Enables ShadowDOM-based FencedFrames. This also implies
-// PrivacySandboxAdsAPIsOverride and SharedStorageAPI.
-const char kWebViewShadowDOMFencedFrames[] = "webview-shadow-dom-fenced-frames";
+// Enables FencedFrames. This also implies PrivacySandboxAdsAPIsOverride and
+// SharedStorageAPI.
+const char kWebViewFencedFrames[] = "webview-fenced-frames";
 
 // Disables WebView from checking for app recovery mitigations.
 const char kWebViewDisableAppRecovery[] = "webview-disable-app-recovery";
 
 // Enables WebView to check for app recovery mitigations.
 const char kWebViewEnableAppRecovery[] = "webview-enable-app-recovery";
+
+// Enables downloading TrustTokenKeyCommitmentsComponent by the component
+// updater downloading service in nonembedded WebView. See
+// https://crbug.com/1170468.
+const char kWebViewEnableTrustTokensComponent[] =
+    "webview-enable-trust-tokens-component";
 
 }  // namespace switches

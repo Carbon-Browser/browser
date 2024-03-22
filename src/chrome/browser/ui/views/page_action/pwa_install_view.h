@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,10 @@ class AppBannerManager;
 class PwaInstallView : public PageActionIconView, public TabStripModelObserver {
  public:
   METADATA_HEADER(PwaInstallView);
-  explicit PwaInstallView(
-      CommandUpdater* command_updater,
-      IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
-      PageActionIconView::Delegate* page_action_icon_delegate,
-      Browser* browser);
+  PwaInstallView(CommandUpdater* command_updater,
+                 IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
+                 PageActionIconView::Delegate* page_action_icon_delegate,
+                 Browser* browser);
   PwaInstallView(const PwaInstallView&) = delete;
   PwaInstallView& operator=(const PwaInstallView&) = delete;
   ~PwaInstallView() override;
@@ -42,11 +41,8 @@ class PwaInstallView : public PageActionIconView, public TabStripModelObserver {
   void OnExecuting(PageActionIconView::ExecuteSource source) override;
   views::BubbleDialogDelegate* GetBubble() const override;
   const gfx::VectorIcon& GetVectorIcon() const override;
-  std::u16string GetTextForTooltipAndAccessibleName() const override;
 
  private:
-  raw_ptr<Browser> browser_ = nullptr;
-
   // Called when IPH is closed.
   void OnIphClosed();
 
@@ -57,6 +53,7 @@ class PwaInstallView : public PageActionIconView, public TabStripModelObserver {
   bool ShouldShowIph(content::WebContents* web_contents,
                      webapps::AppBannerManager* manager);
 
+  raw_ptr<Browser> browser_ = nullptr;
   base::WeakPtrFactory<PwaInstallView> weak_ptr_factory_{this};
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,7 @@ namespace internal {
 
 // Interfaces with Mac OS's MPNowPlayingInfoCenter and related MediaPlayer API.
 // The combination of those two form the full SystemMediaControls API.
-class API_AVAILABLE(macos(10.13.1)) SystemMediaControlsMac
-    : public SystemMediaControls {
+class SystemMediaControlsMac : public SystemMediaControls {
  public:
   SystemMediaControlsMac();
   SystemMediaControlsMac(const SystemMediaControlsMac&) = delete;

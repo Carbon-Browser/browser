@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,13 +32,16 @@ public class TabbedSystemUiCoordinator {
      * @param layoutManagerSupplier {@link LayoutManager} associated with the containing activity.
      * @param mFullscreenManager The {@link FullscreenManager} used for containing activity
      */
-    public TabbedSystemUiCoordinator(Window window, TabModelSelector tabModelSelector,
+    public TabbedSystemUiCoordinator(
+            Window window,
+            TabModelSelector tabModelSelector,
             @Nullable ObservableSupplier<LayoutManager> layoutManagerSupplier,
             FullscreenManager mFullscreenManager) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             assert layoutManagerSupplier != null;
-            mNavigationBarColorController = new TabbedNavigationBarColorController(
-                    window, tabModelSelector, layoutManagerSupplier, mFullscreenManager);
+            mNavigationBarColorController =
+                    new TabbedNavigationBarColorController(
+                            window, tabModelSelector, layoutManagerSupplier, mFullscreenManager);
         }
     }
 

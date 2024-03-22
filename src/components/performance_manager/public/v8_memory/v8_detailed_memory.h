@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -485,7 +485,8 @@ class V8DetailedMemoryRequestOneShot final : public V8DetailedMemoryObserver {
   void OnOwnerUnregistered();
 
 #if DCHECK_IS_ON()
-  raw_ptr<const ProcessNode> process_ GUARDED_BY_CONTEXT(sequence_checker_);
+  raw_ptr<const ProcessNode, AcrossTasksDanglingUntriaged> process_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 #endif
 
   MeasurementCallback callback_ GUARDED_BY_CONTEXT(sequence_checker_);

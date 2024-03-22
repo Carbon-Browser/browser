@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,6 +36,8 @@ class ReadingListManagerImpl : public ReadingListManager,
                                   const GURL& url) override;
   void ReadingListDidMoveEntry(const ReadingListModel* model,
                                const GURL& url) override;
+  void ReadingListDidUpdateEntry(const ReadingListModel* model,
+                                 const GURL& url) override;
   void ReadingListDidApplyChanges(ReadingListModel* model) override;
   void ReadingListModelBeganBatchUpdates(
       const ReadingListModel* model) override;
@@ -59,6 +61,7 @@ class ReadingListManagerImpl : public ReadingListManager,
   const bookmarks::BookmarkNode* GetRoot() const override;
   size_t size() const override;
   size_t unread_size() const override;
+  void SetTitle(const GURL& url, const std::u16string& title) override;
   void SetReadStatus(const GURL& url, bool read) override;
   bool GetReadStatus(const bookmarks::BookmarkNode* node) override;
   bool IsLoaded() const override;
@@ -87,6 +90,7 @@ class ReadingListManagerImpl : public ReadingListManager,
 
   // Whether |reading_list_model_| is in batch update mode.
   bool performing_batch_update_;
+  bool changes_applied_during_batch_;
 
   base::ObserverList<Observer> observers_;
 };

@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_OWNERSHIP_FAKE_OWNER_SETTINGS_SERVICE_H_
 #define CHROME_BROWSER_ASH_OWNERSHIP_FAKE_OWNER_SETTINGS_SERVICE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash.h"
 
@@ -47,15 +48,10 @@ class FakeOwnerSettingsService : public OwnerSettingsServiceAsh {
  private:
   bool set_management_settings_result_ = true;
   ManagementSettings last_settings_;
-  StubCrosSettingsProvider* settings_provider_;
+  raw_ptr<StubCrosSettingsProvider, DanglingUntriaged | ExperimentalAsh>
+      settings_provider_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::FakeOwnerSettingsService;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_OWNERSHIP_FAKE_OWNER_SETTINGS_SERVICE_H_

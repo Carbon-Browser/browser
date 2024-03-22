@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/simple_test_clock.h"
@@ -22,9 +22,9 @@
 #include "components/sync/model/metadata_batch.h"
 #include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/model_type_state.pb.h"
-#include "components/sync/test/model/mock_model_type_change_processor.h"
-#include "components/sync/test/model/model_type_store_test_util.h"
-#include "components/sync/test/model/test_matchers.h"
+#include "components/sync/test/mock_model_type_change_processor.h"
+#include "components/sync/test/model_type_store_test_util.h"
+#include "components/sync/test/test_matchers.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/sync_device_info/device_info_util.h"
 #include "components/sync_device_info/fake_device_info_tracker.h"
@@ -79,7 +79,9 @@ std::unique_ptr<syncer::DeviceInfo> CreateDevice(
     bool send_tab_to_self_receiving_enabled = true) {
   return std::make_unique<syncer::DeviceInfo>(
       guid, name, "chrome_version", "user_agent",
-      sync_pb::SyncEnums_DeviceType_TYPE_LINUX, "scoped_id", "manufacturer",
+      sync_pb::SyncEnums_DeviceType_TYPE_LINUX,
+      syncer::DeviceInfo::OsType::kLinux,
+      syncer::DeviceInfo::FormFactor::kDesktop, "scoped_id", "manufacturer",
       "model", "full_hardware_class", last_updated_timestamp,
       syncer::DeviceInfoUtil::GetPulseInterval(),
       send_tab_to_self_receiving_enabled, /*sharing_info=*/absl::nullopt,
@@ -267,12 +269,12 @@ TEST_F(SendTabToSelfBridgeTest, SyncAddOneEntry) {
   auto metadata_change_list =
       std::make_unique<syncer::InMemoryMetadataChangeList>();
   EXPECT_CALL(*mock_observer(), EntriesAddedRemotely(SizeIs(1)));
-  bridge()->MergeSyncData(std::move(metadata_change_list),
-                          std::move(remote_input));
+  bridge()->MergeFullSyncData(std::move(metadata_change_list),
+                              std::move(remote_input));
   EXPECT_EQ(1ul, bridge()->GetAllGuids().size());
 }
 
-TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesAddTwoSpecifics) {
+TEST_F(SendTabToSelfBridgeTest, ApplyIncrementalSyncChangesAddTwoSpecifics) {
   InitializeBridge();
 
   const sync_pb::SendTabToSelfSpecifics specifics1 = CreateSpecifics(1);
@@ -285,12 +287,12 @@ TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesAddTwoSpecifics) {
 
   EXPECT_CALL(*mock_observer(), EntriesAddedRemotely(SizeIs(2)));
 
-  auto error = bridge()->ApplySyncChanges(
+  auto error = bridge()->ApplyIncrementalSyncChanges(
       std::move(metadata_changes), EntityAddList({specifics1, specifics2}));
   EXPECT_FALSE(error);
 }
 
-TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesOneAdd) {
+TEST_F(SendTabToSelfBridgeTest, ApplyIncrementalSyncChangesOneAdd) {
   InitializeBridge();
 
   SendTabToSelfEntry entry("guid1", GURL("http://www.example.com/"), "title",
@@ -305,13 +307,13 @@ TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesOneAdd) {
       std::make_unique<syncer::InMemoryMetadataChangeList>();
 
   EXPECT_CALL(*mock_observer(), EntriesAddedRemotely(SizeIs(1)));
-  bridge()->ApplySyncChanges(std::move(metadata_change_list),
-                             std::move(add_changes));
+  bridge()->ApplyIncrementalSyncChanges(std::move(metadata_change_list),
+                                        std::move(add_changes));
   EXPECT_EQ(1ul, bridge()->GetAllGuids().size());
 }
 
 // Tests that the send tab to self entry is correctly removed.
-TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesOneDeletion) {
+TEST_F(SendTabToSelfBridgeTest, ApplyIncrementalSyncChangesOneDeletion) {
   InitializeBridge();
 
   SendTabToSelfEntry entry("guid1", GURL("http://www.example.com/"), "title",
@@ -324,15 +326,15 @@ TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesOneDeletion) {
       syncer::EntityChange::CreateAdd("guid1", MakeEntityData(entry)));
 
   EXPECT_CALL(*mock_observer(), EntriesAddedRemotely(SizeIs(1)));
-  bridge()->ApplySyncChanges(bridge()->CreateMetadataChangeList(),
-                             std::move(add_changes));
+  bridge()->ApplyIncrementalSyncChanges(bridge()->CreateMetadataChangeList(),
+                                        std::move(add_changes));
   EXPECT_EQ(1ul, bridge()->GetAllGuids().size());
   syncer::EntityChangeList delete_changes;
   delete_changes.push_back(syncer::EntityChange::CreateDelete("guid1"));
 
   EXPECT_CALL(*mock_observer(), EntriesRemovedRemotely(SizeIs(1)));
-  bridge()->ApplySyncChanges(bridge()->CreateMetadataChangeList(),
-                             std::move(delete_changes));
+  bridge()->ApplyIncrementalSyncChanges(bridge()->CreateMetadataChangeList(),
+                                        std::move(delete_changes));
   EXPECT_EQ(0ul, bridge()->GetAllGuids().size());
 }
 
@@ -360,8 +362,8 @@ TEST_F(SendTabToSelfBridgeTest, LocalHistoryDeletion) {
   add_changes.push_back(
       syncer::EntityChange::CreateAdd("guid3", MakeEntityData(entry3)));
 
-  bridge()->ApplySyncChanges(bridge()->CreateMetadataChangeList(),
-                             std::move(add_changes));
+  bridge()->ApplyIncrementalSyncChanges(bridge()->CreateMetadataChangeList(),
+                                        std::move(add_changes));
 
   ASSERT_EQ(3ul, bridge()->GetAllGuids().size());
 
@@ -378,12 +380,12 @@ TEST_F(SendTabToSelfBridgeTest, LocalHistoryDeletion) {
   EXPECT_EQ(1ul, bridge()->GetAllGuids().size());
 }
 
-TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesEmpty) {
+TEST_F(SendTabToSelfBridgeTest, ApplyIncrementalSyncChangesEmpty) {
   InitializeBridge();
   EXPECT_CALL(*mock_observer(), EntriesAddedRemotely(_)).Times(0);
 
-  auto error = bridge()->ApplySyncChanges(bridge()->CreateMetadataChangeList(),
-                                          syncer::EntityChangeList());
+  auto error = bridge()->ApplyIncrementalSyncChanges(
+      bridge()->CreateMetadataChangeList(), syncer::EntityChangeList());
   EXPECT_FALSE(error);
 }
 
@@ -396,8 +398,8 @@ TEST_F(SendTabToSelfBridgeTest, AddEntryAndRestartBridge) {
       bridge()->CreateMetadataChangeList();
   metadata_changes->UpdateModelTypeState(state);
 
-  auto error = bridge()->ApplySyncChanges(std::move(metadata_changes),
-                                          EntityAddList({specifics}));
+  auto error = bridge()->ApplyIncrementalSyncChanges(
+      std::move(metadata_changes), EntityAddList({specifics}));
   ASSERT_FALSE(error);
 
   ShutdownBridge();
@@ -416,7 +418,7 @@ TEST_F(SendTabToSelfBridgeTest, AddEntryAndRestartBridge) {
             bridge()->GetEntryByGUID(guids[0])->GetURL().spec());
 }
 
-TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesInMemory) {
+TEST_F(SendTabToSelfBridgeTest, ApplyIncrementalSyncChangesInMemory) {
   InitializeBridge();
 
   const sync_pb::SendTabToSelfSpecifics specifics = CreateSpecifics(1);
@@ -425,7 +427,7 @@ TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesInMemory) {
 
   EXPECT_CALL(*mock_observer(), EntriesAddedRemotely(SizeIs(1)));
 
-  auto error_on_add = bridge()->ApplySyncChanges(
+  auto error_on_add = bridge()->ApplyIncrementalSyncChanges(
       bridge()->CreateMetadataChangeList(), EntityAddList({specifics}));
 
   EXPECT_FALSE(error_on_add);
@@ -437,7 +439,7 @@ TEST_F(SendTabToSelfBridgeTest, ApplySyncChangesInMemory) {
   syncer::EntityChangeList entity_change_list;
   entity_change_list.push_back(
       syncer::EntityChange::CreateDelete(specifics.guid()));
-  auto error_on_delete = bridge()->ApplySyncChanges(
+  auto error_on_delete = bridge()->ApplyIncrementalSyncChanges(
       bridge()->CreateMetadataChangeList(), std::move(entity_change_list));
 
   EXPECT_FALSE(error_on_delete);
@@ -455,8 +457,8 @@ TEST_F(SendTabToSelfBridgeTest, ApplyDeleteNonexistent) {
 
   syncer::EntityChangeList entity_change_list;
   entity_change_list.push_back(syncer::EntityChange::CreateDelete("guid"));
-  auto error = bridge()->ApplySyncChanges(std::move(metadata_changes),
-                                          std::move(entity_change_list));
+  auto error = bridge()->ApplyIncrementalSyncChanges(
+      std::move(metadata_changes), std::move(entity_change_list));
   EXPECT_FALSE(error);
 }
 
@@ -468,8 +470,8 @@ TEST_F(SendTabToSelfBridgeTest, MarkEntryOpenedInformsServer) {
   syncer::EntityChangeList remote_data;
   remote_data.push_back(
       syncer::EntityChange::CreateAdd("guid", MakeEntityData(entry)));
-  bridge()->MergeSyncData(bridge()->CreateMetadataChangeList(),
-                          std::move(remote_data));
+  bridge()->MergeFullSyncData(bridge()->CreateMetadataChangeList(),
+                              std::move(remote_data));
   ASSERT_THAT(bridge()->GetAllGuids(), UnorderedElementsAre("guid"));
 
   syncer::EntityData uploaded_opened_entity;
@@ -487,8 +489,8 @@ TEST_F(SendTabToSelfBridgeTest, DismissEntryInformsServer) {
   syncer::EntityChangeList remote_data;
   remote_data.push_back(
       syncer::EntityChange::CreateAdd("guid", MakeEntityData(entry)));
-  bridge()->MergeSyncData(bridge()->CreateMetadataChangeList(),
-                          std::move(remote_data));
+  bridge()->MergeFullSyncData(bridge()->CreateMetadataChangeList(),
+                              std::move(remote_data));
   ASSERT_THAT(bridge()->GetAllGuids(), UnorderedElementsAre("guid"));
 
   syncer::EntityData uploaded_dismissed_entity;
@@ -506,8 +508,8 @@ TEST_F(SendTabToSelfBridgeTest, PreserveDissmissalAfterRestartBridge) {
   std::unique_ptr<syncer::MetadataChangeList> metadata_changes =
       bridge()->CreateMetadataChangeList();
 
-  auto error = bridge()->ApplySyncChanges(std::move(metadata_changes),
-                                          EntityAddList({specifics}));
+  auto error = bridge()->ApplyIncrementalSyncChanges(
+      std::move(metadata_changes), EntityAddList({specifics}));
   ASSERT_FALSE(error);
 
   EXPECT_CALL(*processor(), Put(_, _, _));
@@ -539,7 +541,7 @@ TEST_F(SendTabToSelfBridgeTest, ExpireEntryDuringInit) {
       bridge()->CreateMetadataChangeList();
   metadata_changes->UpdateModelTypeState(state);
 
-  auto error = bridge()->ApplySyncChanges(
+  auto error = bridge()->ApplyIncrementalSyncChanges(
       std::move(metadata_changes),
       EntityAddList({expired_specifics, not_expired_specifics}));
   ASSERT_FALSE(error);
@@ -577,7 +579,7 @@ TEST_F(SendTabToSelfBridgeTest, AddExpiredEntry) {
 
   EXPECT_CALL(*processor(), Delete(_, _));
 
-  auto error = bridge()->ApplySyncChanges(
+  auto error = bridge()->ApplyIncrementalSyncChanges(
       std::move(metadata_changes),
       EntityAddList({expired_specifics, not_expired_specifics}));
 
@@ -657,8 +659,8 @@ TEST_F(SendTabToSelfBridgeTest, NotifyRemoteSendTabToSelfEntryAdded) {
 
   // There should only be one entry sent to the observers.
   EXPECT_CALL(*mock_observer(), EntriesAddedRemotely(SizeIs(1)));
-  bridge()->MergeSyncData(std::move(metadata_change_list),
-                          std::move(remote_input));
+  bridge()->MergeFullSyncData(std::move(metadata_change_list),
+                              std::move(remote_input));
 
   EXPECT_EQ(2ul, bridge()->GetAllGuids().size());
 }
@@ -688,7 +690,7 @@ TEST_F(SendTabToSelfBridgeTest,
 
   TargetDeviceInfo target_device_info(
       recent_device->client_name(), recent_device->client_name(),
-      recent_device->guid(), recent_device->device_type(),
+      recent_device->guid(), recent_device->form_factor(),
       recent_device->last_updated_timestamp());
 
   EXPECT_THAT(bridge()->GetTargetDeviceInfoSortedList(),
@@ -712,7 +714,7 @@ TEST_F(SendTabToSelfBridgeTest,
 
   TargetDeviceInfo target_device_info(
       enabled_device->client_name(), enabled_device->client_name(),
-      enabled_device->guid(), enabled_device->device_type(),
+      enabled_device->guid(), enabled_device->form_factor(),
       enabled_device->last_updated_timestamp());
 
   EXPECT_THAT(bridge()->GetTargetDeviceInfoSortedList(),
@@ -734,7 +736,7 @@ TEST_F(SendTabToSelfBridgeTest,
 
   TargetDeviceInfo target_device_info(
       valid_device->client_name(), valid_device->client_name(),
-      valid_device->guid(), valid_device->device_type(),
+      valid_device->guid(), valid_device->form_factor(),
       valid_device->last_updated_timestamp());
 
   EXPECT_THAT(bridge()->GetTargetDeviceInfoSortedList(),
@@ -760,7 +762,7 @@ TEST_F(SendTabToSelfBridgeTest, GetTargetDeviceInfoSortedList_NoLocalDevice) {
 
   TargetDeviceInfo target_device_info(
       other_device->client_name(), other_device->client_name(),
-      other_device->guid(), other_device->device_type(),
+      other_device->guid(), other_device->form_factor(),
       other_device->last_updated_timestamp());
 
   EXPECT_THAT(bridge()->GetTargetDeviceInfoSortedList(),
@@ -783,11 +785,11 @@ TEST_F(SendTabToSelfBridgeTest,
 
   TargetDeviceInfo older_device_info(
       older_device->client_name(), older_device->client_name(),
-      older_device->guid(), older_device->device_type(),
+      older_device->guid(), older_device->form_factor(),
       older_device->last_updated_timestamp());
   TargetDeviceInfo recent_device_info(
       recent_device->client_name(), recent_device->client_name(),
-      recent_device->guid(), recent_device->device_type(),
+      recent_device->guid(), recent_device->form_factor(),
       recent_device->last_updated_timestamp());
 
   // Make sure the list has the 2 devices.
@@ -814,7 +816,7 @@ TEST_F(SendTabToSelfBridgeTest,
 
   // Make sure the list has the device.
   TargetDeviceInfo device_info(device->client_name(), device->client_name(),
-                               device->guid(), device->device_type(),
+                               device->guid(), device->form_factor(),
                                device->last_updated_timestamp());
 
   EXPECT_THAT(bridge()->GetTargetDeviceInfoSortedList(),
@@ -828,7 +830,7 @@ TEST_F(SendTabToSelfBridgeTest,
   // Make sure both devices are in the list.
   TargetDeviceInfo new_device_info(
       new_device->client_name(), new_device->client_name(), new_device->guid(),
-      new_device->device_type(), new_device->last_updated_timestamp());
+      new_device->form_factor(), new_device->last_updated_timestamp());
 
   EXPECT_THAT(bridge()->GetTargetDeviceInfoSortedList(),
               ElementsAre(device_info, new_device_info));
@@ -851,11 +853,11 @@ TEST_F(SendTabToSelfBridgeTest,
       bridge()->GetTargetDeviceInfoSortedList(),
       ElementsAre(
           TargetDeviceInfo(device1->client_name(), device1->client_name(),
-                           device1->guid(), device1->device_type(),
+                           device1->guid(), device1->form_factor(),
                            device1->last_updated_timestamp()),
           TargetDeviceInfo(device2_old->client_name(),
                            device2_old->client_name(), device2_old->guid(),
-                           device2_old->device_type(),
+                           device2_old->form_factor(),
                            device2_old->last_updated_timestamp())));
 
   // Simulate device 2 being used today.
@@ -869,10 +871,10 @@ TEST_F(SendTabToSelfBridgeTest,
       ElementsAre(
           TargetDeviceInfo(device2_new->client_name(),
                            device2_new->client_name(), device2_new->guid(),
-                           device2_new->device_type(),
+                           device2_new->form_factor(),
                            device2_new->last_updated_timestamp()),
           TargetDeviceInfo(device1->client_name(), device1->client_name(),
-                           device1->guid(), device1->device_type(),
+                           device1->guid(), device1->form_factor(),
                            device1->last_updated_timestamp())));
 }
 
@@ -902,8 +904,8 @@ TEST_F(SendTabToSelfBridgeTest, NotifyRemoteSendTabToSelfEntryOpened) {
   EXPECT_CALL(*mock_observer(),
               EntriesOpenedRemotely(
                   AllOf(SizeIs(1), UnorderedElementsAre(GuidIs("guid1")))));
-  bridge()->MergeSyncData(std::move(metadata_change_list),
-                          std::move(remote_input));
+  bridge()->MergeFullSyncData(std::move(metadata_change_list),
+                              std::move(remote_input));
 
   EXPECT_EQ(2ul, bridge()->GetAllGuids().size());
 }
@@ -917,6 +919,18 @@ TEST_F(SendTabToSelfBridgeTest,
   ASSERT_FALSE(device_info_tracker()->IsSyncing());
 
   EXPECT_FALSE(bridge()->HasValidTargetDevice());
+}
+
+TEST_F(SendTabToSelfBridgeTest, CollapseWhitespacesOfEntryTitle) {
+  InitializeBridge();
+
+  const SendTabToSelfEntry* result =
+      bridge()->AddEntry(GURL("http://a.com"), " a  b ", kLocalDeviceCacheGuid);
+  EXPECT_EQ("a b", result->GetTitle());
+
+  result =
+      bridge()->AddEntry(GURL("http://b.com"), "입", kLocalDeviceCacheGuid);
+  EXPECT_EQ("입", result->GetTitle());
 }
 
 }  // namespace

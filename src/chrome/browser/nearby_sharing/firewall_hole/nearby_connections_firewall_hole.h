@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "ash/services/nearby/public/mojom/firewall_hole.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/firewall_hole.mojom.h"
 
 namespace chromeos {
 class FirewallHole;
@@ -15,7 +15,7 @@ class FirewallHole;
 
 // An implementation of the mojo interface representing a firewall hole for
 // Nearby Connections WifiLan TCP sockets. This implementation is essentially a
-// wrapper around a chromeos::FirewallHole.
+// wrapper around a ash::FirewallHole.
 class NearbyConnectionsFirewallHole : public sharing::mojom::FirewallHole {
  public:
   explicit NearbyConnectionsFirewallHole(

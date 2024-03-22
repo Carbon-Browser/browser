@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,12 +20,10 @@ class ChromeBrowserState;
 + (TopSitesSpotlightManager*)topSitesSpotlightManagerWithBrowserState:
     (ChromeBrowserState*)browserState;
 
+- (instancetype)init NS_UNAVAILABLE;
+
 // Reindexes all top sites, batching reindexes by 1 second.
 - (void)reindexTopSites;
-
-// Called before the instance is deallocated. This method should be overridden
-// by the subclasses and de-activate the instance.
-- (void)shutdown;
 
 @end
 

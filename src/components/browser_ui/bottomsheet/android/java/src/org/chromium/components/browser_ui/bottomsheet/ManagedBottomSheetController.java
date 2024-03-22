@@ -1,10 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.browser_ui.bottomsheet;
-
-import org.chromium.ui.util.AccessibilityUtil;
 
 /**
  * An interface for the owning object to manage interaction between the bottom sheet and the rest
@@ -46,9 +44,6 @@ public interface ManagedBottomSheetController
      * @param ratio The hidden ratio of the browser controls in range [0, 1].
      */
     void setBrowserControlsHiddenRatio(float ratio);
-
-    /** @param accessibilityUtil A mechanism for testing whether accessibility is enabled. */
-    void setAccessibilityUtil(AccessibilityUtil accessibilityUtil);
 
     /** Clean up any state maintained by the controller. */
     void destroy();

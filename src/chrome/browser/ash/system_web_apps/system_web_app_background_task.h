@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 
 #include <utility>
 
+#include "ash/webui/system_apps/public/system_web_app_type.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/one_shot_event.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/system_web_apps/types/system_web_app_background_task_info.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/web_applications/web_app_url_loader.h"
+#include "chrome/browser/web_applications/web_contents/web_app_url_loader.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
@@ -115,7 +115,6 @@ class SystemWebAppBackgroundTask {
   void MaybeOpenPage();
 
   void NavigateBackgroundPage();
-  void OnLoaderReady(web_app::WebAppUrlLoader::Result);
   void OnPageReady(web_app::WebAppUrlLoader::Result);
 
   void CloseWebContents(content::WebContents* contents);

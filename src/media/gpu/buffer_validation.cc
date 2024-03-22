@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,10 +29,13 @@ bool GetFileSize(const int fd, size_t* size) {
     return false;
   }
 
-  off_t fd_size = lseek(fd, 0, SEEK_END);
-  lseek(fd, 0, SEEK_SET);
-  if (fd_size < 0u) {
-    VPLOG(1) << "Fail to find the size of fd";
+  const off_t fd_size = lseek(fd, 0, SEEK_END);
+  if (fd_size == static_cast<off_t>(-1)) {
+    VPLOG(1) << "Failed to get the size of the dma-buf";
+    return false;
+  }
+  if (lseek(fd, 0, SEEK_SET) == static_cast<off_t>(-1)) {
+    VPLOG(1) << "Failed to reset the file offset of the dma-buf";
     return false;
   }
 
@@ -44,7 +47,7 @@ bool GetFileSize(const int fd, size_t* size) {
     return false;
   }
 
-  *size = static_cast<size_t>(fd_size);
+  *size = base::checked_cast<size_t>(fd_size);
   return true;
 #else
   NOTIMPLEMENTED();
@@ -69,7 +72,8 @@ bool VerifyGpuMemoryBufferHandle(
   // YV12 is used by ARC++ on MTK8173. Consider removing it.
   if (pixel_format != PIXEL_FORMAT_I420 && pixel_format != PIXEL_FORMAT_YV12 &&
       pixel_format != PIXEL_FORMAT_NV12 &&
-      pixel_format != PIXEL_FORMAT_P016LE) {
+      pixel_format != PIXEL_FORMAT_P016LE &&
+      pixel_format != PIXEL_FORMAT_ARGB) {
     VLOG(1) << "Unsupported: " << pixel_format;
     return false;
   }
@@ -103,11 +107,11 @@ bool VerifyGpuMemoryBufferHandle(
                !GetFileSize(plane.fd.get(), &file_size_in_bytes)) {
       return false;
     }
-    size_t plane_height =
+    const size_t plane_height =
         media::VideoFrame::Rows(i, pixel_format, coded_size.height());
     base::CheckedNumeric<size_t> min_plane_size =
         base::CheckMul(base::strict_cast<size_t>(plane.stride), plane_height);
-    size_t plane_pixel_width =
+    const size_t plane_pixel_width =
         media::VideoFrame::RowBytes(i, pixel_format, coded_size.width());
     if (!min_plane_size.IsValid<uint64_t>() ||
         min_plane_size.ValueOrDie<uint64_t>() > plane.size ||

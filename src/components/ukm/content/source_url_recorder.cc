@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -240,11 +240,12 @@ void SourceUrlRecorderWebContentsObserver::DidOpenRequestedURL(
     ui::PageTransition transition,
     bool started_from_context_menu,
     bool renderer_initiated) {
-  auto* new_recorder =
-      SourceUrlRecorderWebContentsObserver::FromWebContents(new_contents);
-  if (!new_recorder)
-    return;
-  new_recorder->opener_source_id_ = GetLastCommittedSourceId();
+  // Ensure that a source recorder exists at this point, since it is possible
+  // that this is called before tab helpers are added in //chrome, especially on
+  // Android. See crbug.com/1024952 for more details.
+  InitializeSourceUrlRecorderForWebContents(new_contents);
+  SourceUrlRecorderWebContentsObserver::FromWebContents(new_contents)
+      ->opener_source_id_ = GetLastCommittedSourceId();
 }
 
 void SourceUrlRecorderWebContentsObserver::WebContentsDestroyed() {
@@ -297,16 +298,18 @@ void SourceUrlRecorderWebContentsObserver::MaybeRecordUrl(
   navigation_data.is_same_document_navigation =
       navigation_handle->IsSameDocument();
 
-  navigation_data.same_origin_status =
-      UkmSource::NavigationData::SameOriginStatus::UNSET;
+  navigation_data.same_origin_status = UkmSource::NavigationData::
+      SourceSameOriginStatus::SOURCE_SAME_ORIGIN_STATUS_UNSET;
   // Only set the same origin flag for committed non-error,
   // non-same-document navigations.
   if (navigation_handle->HasCommitted() && !navigation_handle->IsErrorPage() &&
       !navigation_handle->IsSameDocument()) {
     navigation_data.same_origin_status =
         navigation_handle->IsSameOrigin()
-            ? UkmSource::NavigationData::SameOriginStatus::SAME_ORIGIN
-            : UkmSource::NavigationData::SameOriginStatus::CROSS_ORIGIN;
+            ? UkmSource::NavigationData::SourceSameOriginStatus::
+                  SOURCE_SAME_ORIGIN
+            : UkmSource::NavigationData::SourceSameOriginStatus::
+                  SOURCE_CROSS_ORIGIN;
   }
   navigation_data.is_renderer_initiated =
       navigation_handle->IsRendererInitiated();

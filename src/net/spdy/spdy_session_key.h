@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define NET_SPDY_SPDY_SESSION_KEY_H_
 
 #include "net/base/net_export.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/network_isolation_key.h"
 #include "net/base/privacy_mode.h"
-#include "net/base/proxy_server.h"
+#include "net/base/proxy_chain.h"
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/socket/socket_tag.h"
-
+#include "third_party/abseil-cpp/absl/types/optional.h"
 namespace net {
 
 // SpdySessionKey is used as unique index for SpdySessionPool.
@@ -22,7 +23,7 @@ class NET_EXPORT_PRIVATE SpdySessionKey {
     // This means this is a ProxyServer::Direct() session for an HTTP2 proxy,
     // with |host_port_pair| being the proxy host and port. This should not be
     // confused with a tunnel over an HTTP2 proxy session, for which
-    // |proxy_server| will be information about the proxy being used, and
+    // |proxy_chain| will be information about the proxy being used, and
     // |host_port_pair| will be information not about the proxy, but the host
     // that we're proxying the connection to.
     kTrue,
@@ -31,11 +32,11 @@ class NET_EXPORT_PRIVATE SpdySessionKey {
   SpdySessionKey();
 
   SpdySessionKey(const HostPortPair& host_port_pair,
-                 const ProxyServer& proxy_server,
+                 const ProxyChain& proxy_chain,
                  PrivacyMode privacy_mode,
                  IsProxySession is_proxy_session,
                  const SocketTag& socket_tag,
-                 const NetworkIsolationKey& network_isolation_key,
+                 const NetworkAnonymizationKey& network_anonymization_key,
                  SecureDnsPolicy secure_dns_policy);
 
   SpdySessionKey(const SpdySessionKey& other);
@@ -77,9 +78,7 @@ class NET_EXPORT_PRIVATE SpdySessionKey {
     return host_port_proxy_pair_.first;
   }
 
-  const ProxyServer& proxy_server() const {
-    return host_port_proxy_pair_.second;
-  }
+  const ProxyChain& proxy_chain() const { return host_port_proxy_pair_.second; }
 
   PrivacyMode privacy_mode() const {
     return privacy_mode_;
@@ -89,8 +88,8 @@ class NET_EXPORT_PRIVATE SpdySessionKey {
 
   const SocketTag& socket_tag() const { return socket_tag_; }
 
-  const NetworkIsolationKey& network_isolation_key() const {
-    return network_isolation_key_;
+  const NetworkAnonymizationKey& network_anonymization_key() const {
+    return network_anonymization_key_;
   }
 
   SecureDnsPolicy secure_dns_policy() const { return secure_dns_policy_; }
@@ -101,8 +100,9 @@ class NET_EXPORT_PRIVATE SpdySessionKey {
   PrivacyMode privacy_mode_ = PRIVACY_MODE_DISABLED;
   IsProxySession is_proxy_session_;
   SocketTag socket_tag_;
-  // Used to separate requests made in different contexts.
-  NetworkIsolationKey network_isolation_key_;
+  // Used to separate requests made in different contexts. If network state
+  // partitioning is disabled this will be set to an empty key.
+  NetworkAnonymizationKey network_anonymization_key_;
   SecureDnsPolicy secure_dns_policy_;
 };
 

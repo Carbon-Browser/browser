@@ -1,12 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.paintpreview.player;
 
 import android.graphics.Rect;
-
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.UnguessableToken;
 
@@ -31,8 +29,12 @@ class PaintPreviewFrame {
     private int mInitialScrollX;
     private int mInitialScrollY;
 
-    PaintPreviewFrame(UnguessableToken guid, int contentWidth, int contentHeight,
-            int initialScrollX, int initialScrollY) {
+    PaintPreviewFrame(
+            UnguessableToken guid,
+            int contentWidth,
+            int contentHeight,
+            int initialScrollX,
+            int initialScrollY) {
         mGuid = guid;
         mContentWidth = contentWidth;
         mContentHeight = contentHeight;
@@ -40,8 +42,13 @@ class PaintPreviewFrame {
         mInitialScrollY = initialScrollY;
     }
 
-    private PaintPreviewFrame(UnguessableToken guid, int contentWidth, int contentHeight,
-            int initialScrollX, int initialScrollY, PaintPreviewFrame[] subFrames,
+    private PaintPreviewFrame(
+            UnguessableToken guid,
+            int contentWidth,
+            int contentHeight,
+            int initialScrollX,
+            int initialScrollY,
+            PaintPreviewFrame[] subFrames,
             Rect[] subFrameClips) {
         mGuid = guid;
         mContentWidth = contentWidth;
@@ -146,11 +153,21 @@ class PaintPreviewFrame {
         return sb.toString();
     }
 
-    @VisibleForTesting
-    static PaintPreviewFrame createInstanceForTest(UnguessableToken guid, int contentWidth,
-            int contentHeight, int initialScrollX, int initialScrollY,
-            PaintPreviewFrame[] subFrames, Rect[] subFrameClips) {
-        return new PaintPreviewFrame(guid, contentWidth, contentHeight, initialScrollX,
-                initialScrollY, subFrames, subFrameClips);
+    static PaintPreviewFrame createInstanceForTest(
+            UnguessableToken guid,
+            int contentWidth,
+            int contentHeight,
+            int initialScrollX,
+            int initialScrollY,
+            PaintPreviewFrame[] subFrames,
+            Rect[] subFrameClips) {
+        return new PaintPreviewFrame(
+                guid,
+                contentWidth,
+                contentHeight,
+                initialScrollX,
+                initialScrollY,
+                subFrames,
+                subFrameClips);
     }
 }

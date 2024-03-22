@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ namespace ui {
 // NOTE: This parser is not complete and only processes the required tags for
 // the existing tests.
 // |role_conversions| is a map of role strings in the JSON file to Chrome roles.
-// TODO(https://crbug.com/1278249): Drop |role_conversions| once Chrome roles
+// TODO(https://crbug.com/1341655): Drop |role_conversions| once Chrome roles
 // are added to the JSON file.
 AXTreeUpdate AXTreeUpdateFromJSON(
     const base::Value& json,

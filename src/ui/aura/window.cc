@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,18 @@
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/adapters.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -122,7 +123,6 @@ enum BoundsCallbackIndex : int {
 
 namespace aura {
 namespace {
-static const char* kExo = "Exo";
 
 class ScopedCursorHider {
  public:
@@ -248,7 +248,7 @@ Window::~Window() {
   if (frame_sink_id_.is_valid() && !embeds_external_client_) {
     auto* context_factory = Env::GetInstance()->context_factory();
     auto* host_frame_sink_manager = context_factory->GetHostFrameSinkManager();
-    host_frame_sink_manager->InvalidateFrameSinkId(frame_sink_id_);
+    host_frame_sink_manager->InvalidateFrameSinkId(frame_sink_id_, this);
   }
 }
 
@@ -369,7 +369,7 @@ bool Window::IsVisible() const {
   // when a Window is hidden, we want this function to return false immediately
   // after, even though the client may decide to animate the hide effect (and
   // so the layer will be visible for some time after Hide() is called).
-  return visible_ ? layer()->IsDrawn() : false;
+  return visible_ ? layer()->IsVisible() : false;
 }
 
 Window::OcclusionState Window::GetOcclusionState() const {
@@ -439,18 +439,8 @@ void Window::SetTransform(const gfx::Transform& transform) {
   layer()->SetTransform(transform);
 }
 
-void Window::SetLayoutManager(LayoutManager* layout_manager) {
-  if (layout_manager == layout_manager_.get())
-    return;
-  layout_manager_.reset(layout_manager);
-  if (!layout_manager)
-    return;
-  // If we're changing to a new layout manager, ensure it is aware of all the
-  // existing child windows.
-  for (Windows::const_iterator it = children_.begin();
-       it != children_.end();
-       ++it)
-    layout_manager_->OnWindowAddedToLayout(*it);
+void Window::SetLayoutManager(std::nullptr_t) {
+  SetLayoutManagerImpl(nullptr);
 }
 
 std::unique_ptr<WindowTargeter> Window::SetEventTargeter(
@@ -482,14 +472,12 @@ void Window::SetBounds(const gfx::Rect& new_bounds) {
 
 void Window::SetBoundsInScreen(const gfx::Rect& new_bounds_in_screen,
                                const display::Display& dst_display) {
-  aura::client::ScreenPositionClient* screen_position_client = nullptr;
-  Window* root = GetRootWindow();
-  if (root)
-    screen_position_client = aura::client::GetScreenPositionClient(root);
-  if (screen_position_client)
+  if (auto* screen_position_client =
+          aura::client::GetScreenPositionClient(GetRootWindow())) {
     screen_position_client->SetBounds(this, new_bounds_in_screen, dst_display);
-  else
+  } else {
     SetBounds(new_bounds_in_screen);
+  }
 }
 
 gfx::Rect Window::GetTargetBounds() const {
@@ -677,7 +665,7 @@ void Window::MoveCursorTo(const gfx::Point& point_in_window) {
 }
 
 gfx::NativeCursor Window::GetCursor(const gfx::Point& point) const {
-  return delegate_ ? delegate_->GetCursor(point) : gfx::kNullCursor;
+  return delegate_ ? delegate_->GetCursor(point) : gfx::NativeCursor{};
 }
 
 void Window::AddObserver(WindowObserver* observer) {
@@ -953,10 +941,17 @@ void Window::AfterPropertyChange(const void* key, int64_t old_value) {
 // Window, private:
 
 void Window::SetEmbedFrameSinkIdImpl(const viz::FrameSinkId& frame_sink_id) {
+  if (frame_sink_id_ == frame_sink_id) {
+    return;
+  }
+
   UnregisterFrameSinkId();
 
-  DCHECK(frame_sink_id.is_valid());
   frame_sink_id_ = frame_sink_id;
+  if (!frame_sink_id_.is_valid()) {
+    return;
+  }
+
   RegisterFrameSinkId();
 }
 
@@ -1024,10 +1019,11 @@ void Window::SetOcclusionInfo(OcclusionState occlusion_state,
       occluded_region_in_root_ == occluded_region) {
     return;
   }
+  OcclusionState old_occlusion_state = occlusion_state_;
   occlusion_state_ = occlusion_state;
   occluded_region_in_root_ = occluded_region;
   if (delegate_)
-    delegate_->OnWindowOcclusionChanged(occlusion_state);
+    delegate_->OnWindowOcclusionChanged(old_occlusion_state, occlusion_state);
 
   for (WindowObserver& observer : observers_)
     observer.OnWindowOcclusionChanged(this);
@@ -1055,7 +1051,7 @@ void Window::RemoveChildImpl(Window* child, Window* new_parent) {
   if (child->OwnsLayer())
     layer()->Remove(child->layer());
   child->parent_ = nullptr;
-  auto i = std::find(children_.begin(), children_.end(), child);
+  auto i = base::ranges::find(children_, child);
   DCHECK(i != children_.end());
   children_.erase(i);
   child->OnParentChanged();
@@ -1088,9 +1084,9 @@ void Window::StackChildRelativeTo(Window* child,
     return;
 
   const size_t child_i =
-      std::find(children_.begin(), children_.end(), child) - children_.begin();
+      base::ranges::find(children_, child) - children_.begin();
   const size_t target_i =
-      std::find(children_.begin(), children_.end(), target) - children_.begin();
+      base::ranges::find(children_, target) - children_.begin();
 
   DCHECK_LT(child_i, children_.size()) << "Child was not in list of children!";
   DCHECK_LT(target_i, children_.size())
@@ -1245,10 +1241,12 @@ void Window::NotifyWindowVisibilityChangedUp(aura::Window* target,
 }
 
 bool Window::CleanupGestureState() {
-  // If it's in the process already, nothing has to be done. Reentrant can
+  // If it's in the process already, clean up the consumer state. Reentrant can
   // happen through some event handlers for CancelActiveTouches().
-  if (cleaning_up_gesture_state_)
-    return false;
+  Env* env = Env::GetInstance();
+  if (cleaning_up_gesture_state_) {
+    return env->gesture_recognizer()->CleanupStateForConsumer(this);
+  }
   cleaning_up_gesture_state_ = true;
 
   // Cancelling active touches may end up destroying this window. We use a
@@ -1256,11 +1254,11 @@ bool Window::CleanupGestureState() {
   WindowTracker tracking_this({this});
 
   bool state_modified = false;
-  Env* env = Env::GetInstance();
   state_modified |= env->gesture_recognizer()->CancelActiveTouches(this);
-  state_modified |= env->gesture_recognizer()->CleanupStateForConsumer(this);
   if (!tracking_this.Contains(this))
     return state_modified;
+
+  state_modified |= env->gesture_recognizer()->CleanupStateForConsumer(this);
   // Potentially event handlers for CancelActiveTouches() within
   // CleanupGestureState may change the window hierarchy (or reorder the
   // |children_|), and therefore iterating over |children_| is not safe. Use
@@ -1305,11 +1303,10 @@ std::unique_ptr<cc::LayerTreeFrameSink> Window::CreateLayerTreeFrameSink() {
       Env::GetInstance()->context_factory()->GetGpuMemoryBufferManager();
   params.pipes.compositor_frame_sink_remote = std::move(sink_remote);
   params.pipes.client_receiver = std::move(client_receiver);
-  params.client_name = kExo;
   auto frame_sink =
       std::make_unique<cc::mojo_embedder::AsyncLayerTreeFrameSink>(
-          nullptr /* context_provider */, nullptr /* worker_context_provider */,
-          &params);
+          /*context_provider=*/nullptr, /*worker_context_provider=*/nullptr,
+          /*shared_image_interface=*/nullptr, &params);
   frame_sink_ = frame_sink->GetWeakPtr();
   AllocateLocalSurfaceId();
   DCHECK(GetLocalSurfaceId().is_valid());
@@ -1348,10 +1345,11 @@ const viz::LocalSurfaceId& Window::GetLocalSurfaceId() {
   return GetCurrentLocalSurfaceId();
 }
 
-void Window::InvalidateLocalSurfaceId() {
+void Window::InvalidateLocalSurfaceId(bool also_invalidate_allocation_group) {
   if (!parent_local_surface_id_allocator_)
     return;
-  parent_local_surface_id_allocator_->Invalidate();
+  parent_local_surface_id_allocator_->Invalidate(
+      also_invalidate_allocation_group);
 }
 
 void Window::UpdateLocalSurfaceIdFromEmbeddedClient(
@@ -1734,6 +1732,18 @@ void Window::SetY(int y) {
   if (y == bounds().y())
     return;
   SetBounds({bounds().x(), y, bounds().width(), bounds().height()});
+}
+
+void Window::SetLayoutManagerImpl(
+    std::unique_ptr<LayoutManager> layout_manager) {
+  layout_manager_ = std::move(layout_manager);
+  if (!layout_manager_)
+    return;
+  // If we're changing to a new layout manager, ensure it is aware of all the
+  // existing child windows.
+  for (Windows::const_iterator it = children_.begin(); it != children_.end();
+       ++it)
+    layout_manager_->OnWindowAddedToLayout(*it);
 }
 
 bool Window::GetCapture() const {

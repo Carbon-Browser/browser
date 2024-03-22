@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,10 @@ enum class AudioDecoderType : int {
   kTesting = 6,          // Never send this to UKM, for tests only.
   kAudioToolbox = 7,     // AudioToolbox (macOS)
   kMediaFoundation = 8,  // MediaFoundationAudioDecoder
+  kPassthroughDTS = 9,   // Passthrough DTS audio
 
   // Keep this at the end and equal to the last entry.
-  kMaxValue = kMediaFoundation,
+  kMaxValue = kPassthroughDTS,
 };
 
 // List of known VideoDecoder implementations; recorded to UKM, always add new
@@ -43,18 +44,20 @@ enum class VideoDecoderType : int {
   kDav1d = 7,       // Dav1dVideoDecoder
   kFuchsia = 8,     // FuchsiaVideoDecoder
   kMediaCodec = 9,  // MediaCodecVideoDecoder (Android)
-  kGav1 = 10,       // Gav1VideoDecoder
-  kD3D11 = 11,      // D3D11VideoDecoder
-  kVaapi = 12,      // VaapiVideoDecoder
-  kBroker = 13,     // VideoDecoderBroker (Webcodecs)
-  kVda = 14,        // VDAVideoDecoder
-  // kChromeOs = 15,  // DEPRECATED, should be kVaapi or kV4L2 instead.
-  kV4L2 = 16,       // V4L2VideoDecoder
-
-  kTesting = 17,  // Never send this to UKM, for tests only.
+  // kGav1 = 10,    // Gav1VideoDecoder. (DEPRECATED)
+  kD3D11 = 11,   // D3D11VideoDecoder
+  kVaapi = 12,   // VaapiVideoDecoder
+  kBroker = 13,  // VideoDecoderBroker (Webcodecs)
+  kVda = 14,     // VDAVideoDecoder
+  // kChromeOs = 15,  // DEPRECATED, should be kVaapi, kV4L2, or kOutOfProcess
+  // instead.
+  kV4L2 = 16,          // V4L2VideoDecoder
+  kTesting = 17,       // Never send this to UKM, for tests only.
+  kOutOfProcess = 18,  // OOPVideoDecoder (Linux and ChromeOS)
+  kVideoToolbox = 19,  // VideoToolboxVideoDecoder (Mac)
 
   // Keep this at the end and equal to the last entry.
-  kMaxValue = kTesting
+  kMaxValue = kVideoToolbox
 };
 
 MEDIA_EXPORT std::string GetDecoderName(AudioDecoderType type);

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,7 +91,7 @@ inline MojoResult GetMessageData(MessageHandle message,
 }
 
 inline MojoResult NotifyBadMessage(MessageHandle message,
-                                   const base::StringPiece& error) {
+                                   const std::string_view& error) {
   DCHECK(message.is_valid());
   DCHECK(base::IsValueInRangeForNumericType<uint32_t>(error.size()));
   return MojoNotifyBadMessage(message.value(), error.data(),

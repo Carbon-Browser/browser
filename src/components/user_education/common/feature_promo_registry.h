@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,8 @@
 
 #include <map>
 
+#include "base/feature_list.h"
 #include "components/user_education/common/feature_promo_specification.h"
-
-namespace base {
-struct Feature;
-}
 
 namespace user_education {
 
@@ -22,6 +19,8 @@ namespace user_education {
 class FeaturePromoRegistry {
  public:
   FeaturePromoRegistry();
+  FeaturePromoRegistry(FeaturePromoRegistry&& other) noexcept;
+  FeaturePromoRegistry& operator=(FeaturePromoRegistry&& other) noexcept;
   ~FeaturePromoRegistry();
 
   // Determines whether or not a particular feature is registered.
@@ -44,7 +43,7 @@ class FeaturePromoRegistry {
   void RegisterFeature(FeaturePromoSpecification spec);
 
   const std::map<const base::Feature*, FeaturePromoSpecification>&
-  GetRegisteredFeaturePromoSpecifications() {
+  GetRegisteredFeaturePromoSpecifications() const {
     return feature_promo_data_;
   }
 

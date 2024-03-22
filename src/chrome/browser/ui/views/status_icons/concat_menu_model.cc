@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@ ConcatMenuModel::ConcatMenuModel(ui::MenuModel* m1, ui::MenuModel* m2)
     : m1_(m1), m2_(m2) {}
 
 ConcatMenuModel::~ConcatMenuModel() = default;
-
-bool ConcatMenuModel::HasIcons() const {
-  return m1_->HasIcons() || m2_->HasIcons();
-}
 
 size_t ConcatMenuModel::GetItemCount() const {
   return m1_->GetItemCount() + m2_->GetItemCount();

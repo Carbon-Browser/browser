@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,11 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_suggestion.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_suggestion.h"
 
 namespace base {
 class UnguessableToken;
@@ -31,7 +31,7 @@ class AssistantUiElement;
 class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantResponse
     : public base::RefCounted<AssistantResponse> {
  public:
-  using AssistantSuggestion = chromeos::assistant::AssistantSuggestion;
+  using AssistantSuggestion = assistant::AssistantSuggestion;
   using ProcessingCallback = base::OnceCallback<void(bool)>;
 
   enum class ProcessingState {

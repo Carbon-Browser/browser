@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/scoped_observation.h"
@@ -170,7 +170,8 @@ class AccessTokenFetcher : public ProfileOAuth2TokenServiceObserver,
                      PrimaryAccountManager* primary_account_manager,
                      const ScopeSet& scopes,
                      TokenCallback callback,
-                     Mode mode);
+                     Mode mode,
+                     bool should_verify_scope_access);
 
   // Instantiates a fetcher and immediately starts the process of obtaining an
   // OAuth2 access token for |account_id| and |scopes|, allowing clients to pass
@@ -185,20 +186,8 @@ class AccessTokenFetcher : public ProfileOAuth2TokenServiceObserver,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const ScopeSet& scopes,
       TokenCallback callback,
-      Mode mode);
-
-  // Instantiates a fetcher and immediately starts the process of obtaining an
-  // OAuth2 access token for |account_id| and |scopes| using both the
-  // |client_id| and |client_secret| to identify the OAuth client app.
-  AccessTokenFetcher(const CoreAccountId& account_id,
-                     const std::string client_id,
-                     const std::string client_secret,
-                     const std::string& oauth_consumer_name,
-                     ProfileOAuth2TokenService* token_service,
-                     PrimaryAccountManager* primary_account_manager,
-                     const ScopeSet& scopes,
-                     TokenCallback callback,
-                     Mode mode);
+      Mode mode,
+      bool should_verify_scope_access);
 
   AccessTokenFetcher(const AccessTokenFetcher&) = delete;
   AccessTokenFetcher& operator=(const AccessTokenFetcher&) = delete;
@@ -206,18 +195,6 @@ class AccessTokenFetcher : public ProfileOAuth2TokenServiceObserver,
   ~AccessTokenFetcher() override;
 
  private:
-  AccessTokenFetcher(
-      const CoreAccountId& account_id,
-      const std::string client_id,
-      const std::string client_secret,
-      const std::string& oauth_consumer_name,
-      ProfileOAuth2TokenService* token_service,
-      PrimaryAccountManager* primary_account_manager,
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      const ScopeSet& scopes,
-      TokenCallback callback,
-      Mode mode);
-
   // Returns true iff a refresh token is available for |account_id_|. Should
   // only be called in mode |kWaitUntilAvailable|.
   bool IsRefreshTokenAvailable() const;
@@ -246,20 +223,22 @@ class AccessTokenFetcher : public ProfileOAuth2TokenServiceObserver,
                               AccessTokenInfo access_token_info);
 
   const CoreAccountId account_id_;
-  const std::string client_id_;
-  const std::string client_secret_;
-  raw_ptr<ProfileOAuth2TokenService> token_service_;
+  raw_ptr<ProfileOAuth2TokenService, DanglingUntriaged> token_service_;
   // Suppress unused typedef warnings in some compiler builds when DCHECK is
   // disabled.
-  [[maybe_unused]] raw_ptr<PrimaryAccountManager> primary_account_manager_;
+  [[maybe_unused]] raw_ptr<PrimaryAccountManager, DanglingUntriaged>
+      primary_account_manager_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   const ScopeSet scopes_;
-  const Mode mode_;
-
   // NOTE: This callback should only be invoked from |RunCallbackAndMaybeDie|,
   // as invoking it has the potential to destroy this object per this class's
   // contract.
   TokenCallback callback_;
+  const Mode mode_;
+
+  // TODO(crbug.com/1462858): Remove this field once
+  // kReplaceSyncPromosWithSignInPromos launches.
+  const bool should_verify_scope_access_;
 
   base::ScopedObservation<ProfileOAuth2TokenService,
                           ProfileOAuth2TokenServiceObserver>

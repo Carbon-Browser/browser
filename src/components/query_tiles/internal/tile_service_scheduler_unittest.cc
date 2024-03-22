@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/simple_test_clock.h"
@@ -16,6 +16,7 @@
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/time/time.h"
+#include "components/background_task_scheduler/background_task_scheduler.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/query_tiles/internal/black_hole_log_sink.h"
@@ -89,13 +90,9 @@ class TileServiceSchedulerTest : public testing::Test {
   base::SimpleTestTickClock* tick_clock() { return &tick_clock_; }
 
   std::unique_ptr<net::BackoffEntry> GetBackoffPolicy() {
-    std::unique_ptr<net::BackoffEntry> result;
-    const base::Value* value = prefs()->GetList(kBackoffEntryKey);
-    if (value) {
-      result = net::BackoffEntrySerializer::DeserializeFromValue(
-          *value, &kTestPolicy, tick_clock(), clock()->Now());
-    }
-    return result;
+    const base::Value::List& value = prefs()->GetList(kBackoffEntryKey);
+    return net::BackoffEntrySerializer::DeserializeFromList(
+        value, &kTestPolicy, tick_clock(), clock()->Now());
   }
 
   void ResetTileServiceScheduler() {

@@ -1,21 +1,23 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/guest_os/public/guest_os_mount_provider.h"
+
 #include <memory>
 
-#include "ash/components/disks/disk_mount_manager.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/stringprintf.h"
-#include "chrome/browser/ash/borealis/infra/expected.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/guest_os/infra/cached_callback.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "storage/browser/file_system/external_mount_points.h"
 
 namespace guest_os {
@@ -29,9 +31,11 @@ class ScopedVolume {
       std::string display_name,
       std::string mount_label,
       base::FilePath remote_path,
-      const ash::disks::DiskMountManager::MountPointInfo& mount_info,
+      const ash::disks::DiskMountManager::MountPoint& mount_info,
       VmType vm_type)
-      : profile_(profile), mount_label_(mount_label) {
+      : profile_(profile),
+        mount_label_(std::move(mount_label)),
+        vm_type_(vm_type) {
     base::FilePath mount_path = base::FilePath(mount_info.mount_path);
     if (!storage::ExternalMountPoints::GetSystemInstance()->RegisterFileSystem(
             mount_label_, storage::kFileSystemTypeLocal,
@@ -41,39 +45,39 @@ class ScopedVolume {
       // TODO(crbug/1293229): This follows the logic of existing code, but we
       // can probably change it to revoke the filesystem on unmount.
     }
-
     auto* vmgr = file_manager::VolumeManager::Get(profile_);
     if (vmgr) {
       // vmgr is null in unit tests.
       vmgr->AddSftpGuestOsVolume(display_name, mount_path, remote_path,
-                                 vm_type);
+                                 vm_type_);
     }
   }
 
   ~ScopedVolume() {
     if (profile_->ShutdownStarted()) {
-      // We're shutting down, but because we're not a keyed service we don't get
-      // two-phase shutdown, we just can't call anything. Either the whole
-      // system is shutting down (in which case everything gets undone anyway)
-      // or it's just the browser (in which case it's basically the same as a
-      // browser crash which we also need to handle).
+      // We're shutting down or have shut down, but because we're not a keyed
+      // service we don't get two-phase shutdown, we just can't call anything.
+      // Either the whole system is shutting down (in which case everything
+      // gets undone anyway) or it's just the browser (in which case it's
+      // basically the same as a browser crash which we also need to handle).
       // So do nothing.
       return;
     }
 
-    auto* vmgr = file_manager::VolumeManager::Get(profile_);
+    auto* vmgr = file_manager::VolumeManager::Get(profile_.get());
     if (vmgr) {
       // vmgr is null in unit tests. Also, this calls disk_manager to unmount
       // for us (and we never unregister the filesystem) hence unmount doesn't
       // seem symmetric with mount.
       vmgr->RemoveSftpGuestOsVolume(
-          file_manager::util::GetGuestOsMountDirectory(mount_label_),
+          file_manager::util::GetGuestOsMountDirectory(mount_label_), vm_type_,
           base::DoNothing());
     }
   }
 
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
   std::string mount_label_;
+  const VmType vm_type_;
 };
 
 class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
@@ -86,10 +90,13 @@ class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
       base::RepeatingCallback<void(GuestOsMountProvider::PrepareCallback)>
           prepare)
       : profile_(profile),
-        display_name_(display_name),
-        container_id_(container_id),
+        display_name_(std::move(display_name)),
+        container_id_(std::move(container_id)),
         vm_type_(vm_type),
-        prepare_(prepare) {}
+        prepare_(std::move(prepare)) {
+    // This profile should be the user's primary profile, not an incognito one.
+    DCHECK(!profile->IsOffTheRecord());
+  }
 
   // Mount.
   void Build(RealCallback callback) override {
@@ -97,6 +104,7 @@ class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
                                 weak_ptr_factory_.GetWeakPtr(),
                                 std::move(callback)));
   }
+
   void MountPath(RealCallback callback,
                  bool success,
                  int cid,
@@ -115,23 +123,24 @@ class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
     std::string source_path = base::StringPrintf("sftp://%d:%d", cid, port);
 
     dmgr->MountPath(source_path, "", mount_label_, {},
-                    chromeos::MOUNT_TYPE_NETWORK_STORAGE,
-                    chromeos::MOUNT_ACCESS_MODE_READ_WRITE,
+                    ash::MountType::kNetworkStorage,
+                    ash::MountAccessMode::kReadWrite,
                     base::BindOnce(&GuestOsMountProviderInner::OnMountEvent,
                                    weak_ptr_factory_.GetWeakPtr(),
                                    std::move(callback), remote_path));
   }
+
   void OnMountEvent(
       RealCallback callback,
       base::FilePath remote_path,
-      chromeos::MountError error_code,
-      const ash::disks::DiskMountManager::MountPointInfo& mount_info) {
-    if (error_code != chromeos::MountError::MOUNT_ERROR_NONE) {
+      ash::MountError error_code,
+      const ash::disks::DiskMountManager::MountPoint& mount_info) {
+    if (error_code != ash::MountError::kSuccess) {
       LOG(ERROR) << "Error mounting Guest OS container: error_code="
                  << error_code << ", source_path=" << mount_info.source_path
                  << ", mount_path=" << mount_info.mount_path
-                 << ", mount_type=" << mount_info.mount_type
-                 << ", mount_condition=" << mount_info.mount_condition;
+                 << ", mount_type=" << static_cast<int>(mount_info.mount_type)
+                 << ", mount_error=" << mount_info.mount_error;
       std::move(callback).Run(Failure(false));
       return;
     }
@@ -144,13 +153,14 @@ class GuestOsMountProviderInner : public CachedCallback<ScopedVolume, bool> {
     std::move(callback).Run(RealResult(std::move(scoped_volume)));
   }
 
-  Profile* profile_;
-  std::string display_name_;
-  guest_os::GuestId container_id_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
+  const std::string display_name_;
+  const guest_os::GuestId container_id_;
   std::string mount_label_;
-  VmType vm_type_;
+  const VmType vm_type_;
   // Callback to prepare the VM for mounting.
-  base::RepeatingCallback<void(GuestOsMountProvider::PrepareCallback)> prepare_;
+  const base::RepeatingCallback<void(GuestOsMountProvider::PrepareCallback)>
+      prepare_;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.
@@ -167,7 +177,7 @@ void GuestOsMountProvider::Mount(base::OnceCallback<void(bool)> callback) {
   callback_->Get(base::BindOnce(
       [](base::OnceCallback<void(bool)> callback,
          guest_os::GuestOsMountProviderInner::Result result) {
-        std::move(callback).Run(!!result);
+        std::move(callback).Run(result.has_value());
       },
       std::move(callback)));
 }

@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/cloud_content_scanning/file_opening_job.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/task/task_traits.h"
 
 namespace safe_browsing {
@@ -15,7 +15,10 @@ namespace {
 constexpr char kMaxFileOpeningThreads[] = "wp-max-file-opening-threads";
 constexpr size_t kDefaultMaxFileOpeningThreads = 5;
 
-size_t GetMaxFileOpeningThreads() {
+}  // namespace
+
+// static
+size_t FileOpeningJob::GetMaxFileOpeningThreads() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(kMaxFileOpeningThreads)) {
     int parsed_max;
@@ -31,8 +34,6 @@ size_t GetMaxFileOpeningThreads() {
 
   return kDefaultMaxFileOpeningThreads;
 }
-
-}  // namespace
 
 FileOpeningJob::FileOpeningTask::FileOpeningTask() = default;
 FileOpeningJob::FileOpeningTask::~FileOpeningTask() = default;

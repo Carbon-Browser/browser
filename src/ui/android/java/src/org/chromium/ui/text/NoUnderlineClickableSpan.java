@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,9 @@ import org.chromium.base.Callback;
 import org.chromium.ui.R;
 import org.chromium.ui.util.AttrUtils;
 
-/**
- * Shows a blue clickable link with underlines turned off.
- */
+/** Shows a blue clickable link with underlines turned off. */
 public class NoUnderlineClickableSpan extends ClickableSpan {
-    private final int mColor = -1;
+    private final int mColor;
     private final Callback<View> mOnClick;
 
     /**
@@ -28,8 +26,11 @@ public class NoUnderlineClickableSpan extends ClickableSpan {
      * @param onClickCallback The callback notified when the span is clicked.
      */
     public NoUnderlineClickableSpan(Context context, Callback<View> onClickCallback) {
-        // mColor = AttrUtils.resolveColor(context.getTheme(), R.attr.globalClickableSpanColor,
-        //         R.color.default_text_color_link_baseline);
+        mColor =
+                AttrUtils.resolveColor(
+                        context.getTheme(),
+                        R.attr.globalClickableSpanColor,
+                        R.color.default_text_color_link_baseline);
         mOnClick = onClickCallback;
     }
 
@@ -40,7 +41,7 @@ public class NoUnderlineClickableSpan extends ClickableSpan {
      */
     public NoUnderlineClickableSpan(
             Context context, @ColorRes int colorResId, Callback<View> onClickCallback) {
-        // mColor = context.getColor(colorResId);
+        mColor = context.getColor(colorResId);
         mOnClick = onClickCallback;
     }
 

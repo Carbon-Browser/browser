@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,13 +29,14 @@ class V8SchemaRegistry {
   ~V8SchemaRegistry();
 
   // Creates a NativeHandler wrapper |this|. Supports GetSchema.
-  std::unique_ptr<NativeHandler> AsNativeHandler();
+  std::unique_ptr<NativeHandler> AsNativeHandler(v8::Isolate* isolate);
 
   // Returns a v8::Array with all the schemas for the APIs in |apis|.
-  v8::Local<v8::Array> GetSchemas(const std::vector<std::string>& apis);
+  v8::Local<v8::Array> GetSchemas(v8::Isolate* isolate,
+                                  const std::vector<std::string>& apis);
 
   // Returns a v8::Object for the schema for |api|, possibly from the cache.
-  v8::Local<v8::Object> GetSchema(const std::string& api);
+  v8::Local<v8::Object> GetSchema(v8::Isolate* isolate, const std::string& api);
 
  private:
   // Gets the separate context that backs the registry, creating a new one if

@@ -56,11 +56,11 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
 
   Node* FirstAssignedNode() const {
     auto& nodes = AssignedNodes();
-    return nodes.IsEmpty() ? nullptr : nodes.front().Get();
+    return nodes.empty() ? nullptr : nodes.front().Get();
   }
   Node* LastAssignedNode() const {
     auto& nodes = AssignedNodes();
-    return nodes.IsEmpty() ? nullptr : nodes.back().Get();
+    return nodes.empty() ? nullptr : nodes.back().Get();
   }
 
   Node* AssignedNodeNextTo(const Node&) const;
@@ -79,7 +79,7 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
       DetachDisplayLockedAssignedNodesLayoutTreeIfNeeded();
   }
 
-  void AttachLayoutTree(AttachContext&) final;
+  void AttachLayoutTreeForSlotChildren(AttachContext&);
   void DetachLayoutTree(bool performing_reattach) final;
   void RebuildDistributedChildrenLayoutTrees(WhitespaceAttacher&);
 
@@ -95,7 +95,7 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
   // Returns true if the slot has assigned nodes, without doing assignment
   // recalc. Used by FlatTreeParentForChildDirty() which needs to avoid doing
   // slot assignments while marking the tree style-dirty.
-  bool HasAssignedNodesNoRecalc() const { return !assigned_nodes_.IsEmpty(); }
+  bool HasAssignedNodesNoRecalc() const { return !assigned_nodes_.empty(); }
 
   bool SupportsAssignment() const { return IsInShadowTree(); }
 
@@ -122,6 +122,7 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
   void assign(HeapVector<Member<V8UnionElementOrText>>& nodes, ExceptionState&);
   // assign() c++ implementation.
   void Assign(const HeapVector<Member<Node>>& nodes);
+  void Assign(Node* node);
 
   const HeapLinkedHashSet<WeakMember<Node>>& ManuallyAssignedNodes() const {
     return manually_assigned_nodes_;
@@ -157,6 +158,8 @@ class CORE_EXPORT HTMLSlotElement final : public HTMLElement {
   void UpdateFlatTreeNodeDataForAssignedNodes();
   void ClearAssignedNodesAndFlatTreeChildren();
   void DetachDisplayLockedAssignedNodesLayoutTreeIfNeeded();
+
+  void UpdateDirAutoAncestorsForSupportsAssignmentChange();
 
   HeapVector<Member<Node>> assigned_nodes_;
   HeapVector<Member<Node>> flat_tree_children_;

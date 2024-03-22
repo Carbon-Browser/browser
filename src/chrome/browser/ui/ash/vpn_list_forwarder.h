@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define CHROME_BROWSER_UI_ASH_VPN_LIST_FORWARDER_H_
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/ash/app_list/arc/arc_vpn_provider_manager.h"
 #include "chrome/browser/ash/crosapi/vpn_extension_observer_ash.h"
-#include "chrome/browser/ui/app_list/arc/arc_vpn_provider_manager.h"
-#include "chromeos/services/network_config/public/mojom/cros_network_config.mojom-forward.h"
-
+#include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "components/user_manager/user_manager.h"
 #include "extensions/browser/extension_registry_observer.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -84,11 +84,13 @@ class VpnListForwarder
   void AttachToVpnExtensionObserverAsh();
 
   // The primary user's extension registry, if a user is logged in.
-  extensions::ExtensionRegistry* extension_registry_ = nullptr;
+  raw_ptr<extensions::ExtensionRegistry, ExperimentalAsh> extension_registry_ =
+      nullptr;
 
   // The primary user's app_list::ArcVpnProviderManager, if a user is logged
   // in.
-  app_list::ArcVpnProviderManager* arc_vpn_provider_manager_ = nullptr;
+  raw_ptr<app_list::ArcVpnProviderManager, ExperimentalAsh>
+      arc_vpn_provider_manager_ = nullptr;
 
   std::unique_ptr<
       mojo::Remote<chromeos::network_config::mojom::CrosNetworkConfig>>

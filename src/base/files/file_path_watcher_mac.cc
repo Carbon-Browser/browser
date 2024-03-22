@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,9 +54,7 @@ class FilePathWatcherImpl : public FilePathWatcher::PlatformDelegate {
 
 }  // namespace
 
-FilePathWatcher::FilePathWatcher() {
-  sequence_checker_.DetachFromSequence();
-  impl_ = std::make_unique<FilePathWatcherImpl>();
-}
+FilePathWatcher::FilePathWatcher()
+    : FilePathWatcher(std::make_unique<FilePathWatcherImpl>()) {}
 
 }  // namespace base

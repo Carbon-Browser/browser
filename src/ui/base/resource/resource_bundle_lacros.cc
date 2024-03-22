@@ -1,8 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/resource/resource_bundle.h"
+
+#include <memory>
+#include <string>
+#include <utility>
 
 #include "base/command_line.h"
 #include "base/files/file_util.h"
@@ -11,6 +15,7 @@
 #include "chromeos/crosapi/cpp/crosapi_constants.h"
 #include "chromeos/lacros/lacros_paths.h"
 #include "ui/base/resource/data_pack_with_resource_sharing_lacros.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/base/ui_base_switches.h"
 
 namespace ui {

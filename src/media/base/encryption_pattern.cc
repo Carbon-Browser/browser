@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,12 @@ bool EncryptionPattern::operator==(const EncryptionPattern& other) const {
 
 bool EncryptionPattern::operator!=(const EncryptionPattern& other) const {
   return !operator==(other);
+}
+
+std::ostream& operator<<(std::ostream& os,
+                         const EncryptionPattern& encryption_pattern) {
+  return os << "{" << encryption_pattern.crypt_byte_block() << ", "
+            << encryption_pattern.skip_byte_block() << "}";
 }
 
 }  // namespace media

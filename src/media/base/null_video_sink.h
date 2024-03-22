@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,7 @@ class MEDIA_EXPORT NullVideoSink : public VideoRendererSink {
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
   bool started_;
-  raw_ptr<RenderCallback> callback_;
+  raw_ptr<RenderCallback, AcrossTasksDanglingUntriaged> callback_;
 
   // Manages cancellation of periodic Render() callback task.
   base::CancelableRepeatingClosure cancelable_worker_;

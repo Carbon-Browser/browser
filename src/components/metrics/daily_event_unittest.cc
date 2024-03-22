@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,9 @@ class DailyEventTest : public testing::Test {
  public:
   DailyEventTest() : event_(&prefs_, kTestPrefName, kTestMetricName) {
     DailyEvent::RegisterPref(prefs_.registry(), kTestPrefName);
-    observer_ = new TestDailyObserver();
-    event_.AddObserver(base::WrapUnique(observer_.get()));
+    auto observer = std::make_unique<TestDailyObserver>();
+    observer_ = observer.get();
+    event_.AddObserver(std::move(observer));
   }
 
   DailyEventTest(const DailyEventTest&) = delete;
@@ -49,8 +50,8 @@ class DailyEventTest : public testing::Test {
 
  protected:
   TestingPrefServiceSimple prefs_;
+  DailyEvent event_;  // Owns and outlives `observer_`
   raw_ptr<TestDailyObserver> observer_;
-  DailyEvent event_;
 };
 
 }  // namespace

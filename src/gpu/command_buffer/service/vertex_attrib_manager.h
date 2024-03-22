@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -196,7 +196,7 @@ class GPU_GLES2_EXPORT VertexAttribManager
 
   explicit VertexAttribManager(bool do_buffer_refcounting);
 
-  void Initialize(uint32_t num_vertex_attribs, bool init_attribs);
+  void Initialize(uint32_t num_vertex_attribs);
 
   bool Enable(GLuint index, bool enable);
 

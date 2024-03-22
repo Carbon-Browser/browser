@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "components/download/public/background_service/clients.h"
 #include "net/base/isolation_info.h"
@@ -178,7 +178,8 @@ struct DownloadParams {
   // The feature that is requesting this download.
   DownloadClient client;
 
-  // A unique GUID that represents this download.  See |base::GenerateGUID()|.
+  // A unique GUID that represents this download.  See
+  // `base::Uuid::GenerateRandomV4().AsLowercaseString()`.
   std::string guid;
 
   // A callback that will be notified if this download has been accepted and

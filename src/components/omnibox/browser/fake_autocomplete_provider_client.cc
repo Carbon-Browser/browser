@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/history_service_test_util.h"
 #include "components/omnibox/browser/in_memory_url_index.h"
-#include "components/omnibox/browser/in_memory_url_index_test_util.h"
 #include "components/omnibox/browser/shortcuts_backend.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/query_tiles/test/fake_tile_service.h"
@@ -27,6 +26,10 @@ FakeAutocompleteProviderClient::FakeAutocompleteProviderClient() {
   pref_service_ = std::make_unique<TestingPrefServiceSimple>();
   local_state_ = std::make_unique<TestingPrefServiceSimple>();
   tile_service_ = std::make_unique<query_tiles::FakeTileService>();
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+  on_device_tail_model_service_ =
+      std::make_unique<FakeOnDeviceTailModelService>();
+#endif  // BUILDFLAG(BUILD_WITH_TFLITE_LIB)
 }
 
 FakeAutocompleteProviderClient::~FakeAutocompleteProviderClient() {
@@ -60,7 +63,8 @@ FakeAutocompleteProviderClient::GetHistoryClustersService() {
   return history_clusters_service_;
 }
 
-bookmarks::BookmarkModel* FakeAutocompleteProviderClient::GetBookmarkModel() {
+bookmarks::BookmarkModel*
+FakeAutocompleteProviderClient::GetLocalOrSyncableBookmarkModel() {
   return bookmark_model_.get();
 }
 
@@ -90,3 +94,15 @@ const TabMatcher& FakeAutocompleteProviderClient::GetTabMatcher() const {
 scoped_refptr<history::TopSites> FakeAutocompleteProviderClient::GetTopSites() {
   return top_sites_;
 }
+
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+OnDeviceTailModelService*
+FakeAutocompleteProviderClient::GetOnDeviceTailModelService() const {
+  return on_device_tail_model_service_.get();
+}
+
+AutocompleteScoringModelService*
+FakeAutocompleteProviderClient::GetAutocompleteScoringModelService() const {
+  return scoring_model_service_.get();
+}
+#endif  // BUILDFLAG(BUILD_WITH_TFLITE_LIB)

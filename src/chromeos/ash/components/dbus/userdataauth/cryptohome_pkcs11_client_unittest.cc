@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 #include "dbus/mock_bus.h"
 #include "dbus/mock_object_proxy.h"
 #include "dbus/object_path.h"
@@ -96,7 +97,7 @@ class CryptohomePkcs11ClientTest : public testing::Test {
   scoped_refptr<dbus::MockObjectProxy> proxy_;
 
   // Convenience pointer to the global instance.
-  CryptohomePkcs11Client* client_;
+  raw_ptr<CryptohomePkcs11Client, DanglingUntriaged | ExperimentalAsh> client_;
 
   // The expected replies to the respective D-Bus calls.
   ::user_data_auth::Pkcs11IsTpmTokenReadyReply

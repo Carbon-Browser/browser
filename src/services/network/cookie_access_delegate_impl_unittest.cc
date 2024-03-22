@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,8 @@
 
 #include "base/test/task_environment.h"
 #include "net/base/schemeful_site.h"
-#include "net/cookies/cookie_constants.h"
-#include "net/cookies/first_party_set_metadata.h"
-#include "net/cookies/same_party_context.h"
+#include "net/first_party_sets/first_party_set_metadata.h"
+#include "net/first_party_sets/first_party_sets_cache_filter.h"
 #include "services/network/first_party_sets/first_party_sets_manager.h"
 #include "services/network/public/mojom/cookie_manager.mojom-shared.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
@@ -20,6 +19,7 @@ namespace network {
 namespace {
 
 using testing::_;
+using testing::FieldsAre;
 using testing::IsEmpty;
 using testing::Optional;
 
@@ -27,7 +27,7 @@ class CookieAccessDelegateImplTest : public testing::Test {
  public:
   CookieAccessDelegateImplTest()
       : delegate_(mojom::CookieAccessDelegateType::ALWAYS_LEGACY,
-                  /*first_party_sets_manager=*/nullptr,
+                  /*first_party_sets_access_delegate=*/nullptr,
                   /*cookie_settings=*/nullptr) {}
 
  protected:
@@ -46,28 +46,22 @@ TEST_F(CookieAccessDelegateImplTest, NullFirstPartySetsManager) {
 
   // Same as the default ctor, but just to be explicit:
   net::FirstPartySetMetadata expected_metadata(
-      net::SamePartyContext(), /*frame_owner=*/nullptr,
-      /*top_frame_owner=*/nullptr, net::FirstPartySetsContextType::kUnknown);
-  EXPECT_THAT(delegate().ComputeFirstPartySetMetadataMaybeAsync(
-                  site, &site, {},
-                  base::BindOnce([](net::FirstPartySetMetadata) { FAIL(); })),
-              Optional(std::ref(expected_metadata)));
-
-  EXPECT_THAT(delegate().FindFirstPartySetOwner(
-                  site, base::BindOnce([](FirstPartySetsManager::OwnerResult) {
-                    FAIL();
-                  })),
-              Optional(absl::nullopt));
+      /*frame_entry=*/nullptr,
+      /*top_frame_entry=*/nullptr);
+  EXPECT_THAT(
+      delegate().ComputeFirstPartySetMetadataMaybeAsync(
+          site, &site,
+          base::BindOnce(
+              [](net::FirstPartySetMetadata,
+                 net::FirstPartySetsCacheFilter::MatchInfo) { FAIL(); })),
+      Optional(std::make_pair(std::ref(expected_metadata),
+                              net::FirstPartySetsCacheFilter::MatchInfo())));
 
   EXPECT_THAT(
-      delegate().FindFirstPartySetOwners(
+      delegate().FindFirstPartySetEntries(
           {site},
-          base::BindOnce([](FirstPartySetsManager::OwnersResult) { FAIL(); })),
+          base::BindOnce([](FirstPartySetsManager::EntriesResult) { FAIL(); })),
       Optional(IsEmpty()));
-
-  EXPECT_THAT(delegate().RetrieveFirstPartySets(base::BindOnce(
-                  [](FirstPartySetsManager::SetsByOwner) { FAIL(); })),
-              Optional(IsEmpty()));
 }
 
 }  // namespace

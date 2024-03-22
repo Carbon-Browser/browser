@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,19 +15,22 @@ namespace content {
 class CONTENT_EXPORT AggregatableHistogramContribution {
  public:
   AggregatableHistogramContribution(absl::uint128 key, uint32_t value);
-  AggregatableHistogramContribution(
-      const AggregatableHistogramContribution& other) = default;
-  AggregatableHistogramContribution& operator=(
-      const AggregatableHistogramContribution& other) = default;
-  AggregatableHistogramContribution(AggregatableHistogramContribution&& other) =
+  AggregatableHistogramContribution(const AggregatableHistogramContribution&) =
       default;
   AggregatableHistogramContribution& operator=(
-      AggregatableHistogramContribution&& other) = default;
+      const AggregatableHistogramContribution&) = default;
+  AggregatableHistogramContribution(AggregatableHistogramContribution&&) =
+      default;
+  AggregatableHistogramContribution& operator=(
+      AggregatableHistogramContribution&&) = default;
   ~AggregatableHistogramContribution() = default;
 
   absl::uint128 key() const { return key_; }
 
   uint32_t value() const { return value_; }
+
+  friend bool operator==(const AggregatableHistogramContribution&,
+                         const AggregatableHistogramContribution&) = default;
 
  private:
   absl::uint128 key_;

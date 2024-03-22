@@ -1,26 +1,28 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/shortcut_viewer/views/ksv_search_box_view.h"
 
 #include "ash/constants/ash_features.h"
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/search_box/search_box_constants.h"
 #include "ash/search_box/search_box_view_base.h"
-#include "ash/search_box/search_box_view_delegate.h"
 #include "ash/shortcut_viewer/strings/grit/shortcut_viewer_strings.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
+#include "base/metrics/user_metrics.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/textfield/textfield.h"
+#include "ui/views/widget/widget.h"
 
 namespace keyboard_shortcut_viewer {
 
@@ -34,10 +36,9 @@ constexpr int kBorderThichness = 2;
 
 }  // namespace
 
-KSVSearchBoxView::KSVSearchBoxView(ash::SearchBoxViewDelegate* delegate)
-    : ash::SearchBoxViewBase(delegate) {
+KSVSearchBoxView::KSVSearchBoxView(QueryHandler query_handler)
+    : query_handler_(std::move(query_handler)) {
   SetSearchBoxBackgroundCornerRadius(kBorderCornerRadius);
-  UpdateBackgroundColor(GetBackgroundColor());
   search_box()->SetBackgroundColor(SK_ColorTRANSPARENT);
   search_box()->SetColor(GetPrimaryTextColor());
   SetPlaceholderTextAttributes();
@@ -47,6 +48,26 @@ KSVSearchBoxView::KSVSearchBoxView(ash::SearchBoxViewDelegate* delegate)
   search_box()->SetAccessibleName(search_box_name);
   SetSearchIconImage(
       gfx::CreateVectorIcon(ash::kKsvSearchBarIcon, GetPrimaryIconColor()));
+
+  views::ImageButton* close_button = CreateCloseButton(base::BindRepeating(
+      &KSVSearchBoxView::CloseButtonPressed, base::Unretained(this)));
+  close_button->SetHasInkDropActionOnClick(true);
+  close_button->SetPreferredSize(gfx::Size(kIconSize, kIconSize));
+  close_button->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
+  close_button->SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
+  const std::u16string close_button_label(
+      l10n_util::GetStringUTF16(IDS_KSV_CLEAR_SEARCHBOX_ACCESSIBILITY_NAME));
+  close_button->SetAccessibleName(close_button_label);
+  close_button->SetTooltipText(close_button_label);
+}
+
+KSVSearchBoxView::~KSVSearchBoxView() = default;
+
+void KSVSearchBoxView::Initialize() {
+  ash::SearchBoxViewBase::InitParams params;
+  params.show_close_button_when_active = false;
+  params.create_background = true;
+  Init(params);
 }
 
 gfx::Size KSVSearchBoxView::CalculatePreferredSize() const {
@@ -76,12 +97,10 @@ void KSVSearchBoxView::OnKeyEvent(ui::KeyEvent* event) {
 void KSVSearchBoxView::OnThemeChanged() {
   ash::SearchBoxViewBase::OnThemeChanged();
 
-  back_button()->SetImage(
+  close_button()->SetImageModel(
       views::ImageButton::STATE_NORMAL,
-      gfx::CreateVectorIcon(ash::kKsvSearchBackIcon, GetBackButtonColor()));
-  close_button()->SetImage(
-      views::ImageButton::STATE_NORMAL,
-      gfx::CreateVectorIcon(ash::kKsvSearchCloseIcon, GetCloseButtonColor()));
+      ui::ImageModel::FromVectorIcon(ash::kKsvSearchCloseIcon,
+                                     GetCloseButtonColor()));
   search_box()->SetBackgroundColor(SK_ColorTRANSPARENT);
   search_box()->SetColor(GetPrimaryTextColor());
   search_box()->set_placeholder_text_color(GetPlaceholderTextColor());
@@ -97,6 +116,11 @@ void KSVSearchBoxView::SetAccessibleValue(const std::u16string& value) {
   NotifyAccessibilityEvent(ax::mojom::Event::kValueChanged, true);
 }
 
+void KSVSearchBoxView::HandleQueryChange(const std::u16string& query,
+                                         bool initiated_by_user) {
+  query_handler_.Run(query);
+}
+
 void KSVSearchBoxView::UpdateSearchBoxBorder() {
   // TODO(wutao): Rename this function or create another function in base class.
   // It updates many things in addition to the border.
@@ -106,44 +130,17 @@ void KSVSearchBoxView::UpdateSearchBoxBorder() {
   if (ShouldUseFocusedColors()) {
     SetBorder(views::CreateRoundedRectBorder(
         kBorderThichness, kBorderCornerRadius, GetBorderColor()));
-    UpdateBackgroundColor(GetBackgroundColor());
     return;
   }
   SetBorder(views::CreateRoundedRectBorder(
       kBorderThichness, kBorderCornerRadius, GetBorderColor()));
-  UpdateBackgroundColor(GetBackgroundColor());
 }
 
-void KSVSearchBoxView::SetupCloseButton() {
-  views::ImageButton* close = close_button();
-  close->SetHasInkDropActionOnClick(true);
-  close->SetImage(
-      views::ImageButton::STATE_NORMAL,
-      gfx::CreateVectorIcon(ash::kKsvSearchCloseIcon, GetCloseButtonColor()));
-  close->SetPreferredSize(gfx::Size(kIconSize, kIconSize));
-  close->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
-  close->SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
-  const std::u16string close_button_label(
-      l10n_util::GetStringUTF16(IDS_KSV_CLEAR_SEARCHBOX_ACCESSIBILITY_NAME));
-  close->SetAccessibleName(close_button_label);
-  close->SetTooltipText(close_button_label);
-  close->SetVisible(false);
-}
-
-void KSVSearchBoxView::SetupBackButton() {
-  views::ImageButton* back = back_button();
-  back->SetHasInkDropActionOnClick(true);
-  back->SetImage(
-      views::ImageButton::STATE_NORMAL,
-      gfx::CreateVectorIcon(ash::kKsvSearchBackIcon, GetBackButtonColor()));
-  back->SetPreferredSize(gfx::Size(kIconSize, kIconSize));
-  back->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
-  back->SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
-  const std::u16string back_button_label(
-      l10n_util::GetStringUTF16(IDS_KSV_BACK_ACCESSIBILITY_NAME));
-  back->SetAccessibleName(back_button_label);
-  back->SetTooltipText(back_button_label);
-  back->SetVisible(false);
+void KSVSearchBoxView::OnSearchBoxActiveChanged(bool active) {
+  if (active) {
+    base::RecordAction(
+        base::UserMetricsAction("KeyboardShortcutViewer.Search"));
+  }
 }
 
 void KSVSearchBoxView::UpdatePlaceholderTextStyle() {
@@ -157,21 +154,14 @@ void KSVSearchBoxView::SetPlaceholderTextAttributes() {
                           : gfx::Canvas::TEXT_ALIGN_LEFT);
 }
 
-SkColor KSVSearchBoxView::GetBackgroundColor() {
-  constexpr SkColor kBackgroundDarkColor =
-      SkColorSetARGB(0xFF, 0x32, 0x33, 0x34);
-
-  if (ShouldUseDarkThemeColors()) {
-    return kBackgroundDarkColor;
-  }
-
-  return ShouldUseFocusedColors()
-             ? gfx::kGoogleGrey100
-             : ash::AppListColorProvider::Get()->GetSearchBoxBackgroundColor();
+void KSVSearchBoxView::CloseButtonPressed() {
+  // After clicking search box close button focus the search box text field.
+  search_box()->RequestFocus();
+  ClearSearch();
 }
 
-SkColor KSVSearchBoxView::GetBackButtonColor() {
-  return ShouldUseDarkThemeColors() ? gfx::kGoogleBlue300 : gfx::kGoogleBlue500;
+SkColor KSVSearchBoxView::GetBackgroundColor() {
+  return GetColorProvider()->GetColor(cros_tokens::kToolbarSearchBgColor);
 }
 
 SkColor KSVSearchBoxView::GetBorderColor() {
@@ -179,13 +169,7 @@ SkColor KSVSearchBoxView::GetBorderColor() {
     return SK_ColorTRANSPARENT;
   }
 
-  constexpr SkColor kActiveBorderLightColor =
-      SkColorSetARGB(0x7F, 0x1A, 0x73, 0xE8);
-  const SkColor kActiveBorderDarkColor =
-      ash::AppListColorProvider::Get()->GetFocusRingColor();
-
-  return ShouldUseDarkThemeColors() ? kActiveBorderDarkColor
-                                    : kActiveBorderLightColor;
+  return GetColorProvider()->GetColor(ui::kColorAshFocusRing);
 }
 
 SkColor KSVSearchBoxView::GetCloseButtonColor() {
@@ -210,8 +194,10 @@ bool KSVSearchBoxView::ShouldUseFocusedColors() {
 }
 
 bool KSVSearchBoxView::ShouldUseDarkThemeColors() {
-  return ash::features::IsDarkLightModeEnabled() &&
-         ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
+  return ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
 }
+
+BEGIN_METADATA(KSVSearchBoxView)
+END_METADATA
 
 }  // namespace keyboard_shortcut_viewer

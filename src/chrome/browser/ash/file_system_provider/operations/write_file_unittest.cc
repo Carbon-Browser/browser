@@ -1,16 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_system_provider/operations/write_file.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/values.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
@@ -61,12 +60,9 @@ TEST_F(FileSystemProviderOperationsWriteFileTest, Execute) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   util::StatusCallbackLog callback_log;
 
-  WriteFile write_file(NULL, file_system_info_, kFileHandle, io_buffer_.get(),
-                       kOffset, io_buffer_->size(),
+  WriteFile write_file(&dispatcher, file_system_info_, kFileHandle,
+                       io_buffer_.get(), kOffset, io_buffer_->size(),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  write_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(write_file.Execute(kRequestId));
 
@@ -81,27 +77,25 @@ TEST_F(FileSystemProviderOperationsWriteFileTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  WriteFileRequestedOptions options;
-  ASSERT_TRUE(WriteFileRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  EXPECT_EQ(kFileHandle, options.open_request_id);
-  EXPECT_EQ(kOffset, static_cast<double>(options.offset));
+  auto options =
+      WriteFileRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  EXPECT_EQ(kFileHandle, options->open_request_id);
+  EXPECT_EQ(kOffset, static_cast<double>(options->offset));
   std::string write_data(kWriteData);
   EXPECT_EQ(std::vector<uint8_t>(write_data.begin(), write_data.end()),
-            options.data);
+            options->data);
 }
 
 TEST_F(FileSystemProviderOperationsWriteFileTest, Execute_NoListener) {
   util::LoggingDispatchEventImpl dispatcher(false /* dispatch_reply */);
   util::StatusCallbackLog callback_log;
 
-  WriteFile write_file(NULL, file_system_info_, kFileHandle, io_buffer_.get(),
-                       kOffset, io_buffer_->size(),
+  WriteFile write_file(&dispatcher, file_system_info_, kFileHandle,
+                       io_buffer_.get(), kOffset, io_buffer_->size(),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  write_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(write_file.Execute(kRequestId));
 }
@@ -115,12 +109,9 @@ TEST_F(FileSystemProviderOperationsWriteFileTest, Execute_ReadOnly) {
       base::FilePath() /* mount_path */, false /* configurable */,
       true /* watchable */, extensions::SOURCE_FILE, IconSet());
 
-  WriteFile write_file(NULL, read_only_file_system_info, kFileHandle,
+  WriteFile write_file(&dispatcher, read_only_file_system_info, kFileHandle,
                        io_buffer_.get(), kOffset, io_buffer_->size(),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  write_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(write_file.Execute(kRequestId));
 }
@@ -129,17 +120,13 @@ TEST_F(FileSystemProviderOperationsWriteFileTest, OnSuccess) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   util::StatusCallbackLog callback_log;
 
-  WriteFile write_file(NULL, file_system_info_, kFileHandle, io_buffer_.get(),
-                       kOffset, io_buffer_->size(),
+  WriteFile write_file(&dispatcher, file_system_info_, kFileHandle,
+                       io_buffer_.get(), kOffset, io_buffer_->size(),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  write_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(write_file.Execute(kRequestId));
 
-  write_file.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                       false /* has_more */);
+  write_file.OnSuccess(kRequestId, RequestValue(), false /* has_more */);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_OK, callback_log[0]);
 }
@@ -148,16 +135,13 @@ TEST_F(FileSystemProviderOperationsWriteFileTest, OnError) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   util::StatusCallbackLog callback_log;
 
-  WriteFile write_file(NULL, file_system_info_, kFileHandle, io_buffer_.get(),
-                       kOffset, io_buffer_->size(),
+  WriteFile write_file(&dispatcher, file_system_info_, kFileHandle,
+                       io_buffer_.get(), kOffset, io_buffer_->size(),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  write_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(write_file.Execute(kRequestId));
 
-  write_file.OnError(kRequestId, std::make_unique<RequestValue>(),
+  write_file.OnError(kRequestId, RequestValue(),
                      base::File::FILE_ERROR_TOO_MANY_OPENED);
 
   ASSERT_EQ(1u, callback_log.size());

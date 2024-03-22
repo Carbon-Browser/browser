@@ -1,15 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/web_graphics_context_3d_video_frame_pool.h"
 
+#include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/context_support.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
 #include "gpu/command_buffer/client/raster_interface.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
+#include "gpu/command_buffer/common/shared_image_capabilities.h"
 #include "media/base/video_frame.h"
 #include "media/renderers/video_frame_rgba_to_yuva_converter.h"
 #include "media/video/gpu_video_accelerator_factories.h"
@@ -40,6 +44,27 @@ class Context : public media::RenderableGpuMemoryBufferVideoFramePool::Context {
   }
 
   void CreateSharedImage(gfx::GpuMemoryBuffer* gpu_memory_buffer,
+                         const viz::SharedImageFormat& si_format,
+                         const gfx::ColorSpace& color_space,
+                         GrSurfaceOrigin surface_origin,
+                         SkAlphaType alpha_type,
+                         uint32_t usage,
+                         gpu::Mailbox& mailbox,
+                         gpu::SyncToken& sync_token) override {
+    auto* sii = SharedImageInterface();
+    if (!sii) {
+      return;
+    }
+    auto client_shared_image = sii->CreateSharedImage(
+        si_format, gpu_memory_buffer->GetSize(), color_space, surface_origin,
+        alpha_type, usage, "WebGraphicsContext3DVideoFramePool",
+        gpu_memory_buffer->CloneHandle());
+    CHECK(client_shared_image);
+    mailbox = client_shared_image->mailbox();
+    sync_token = sii->GenVerifiedSyncToken();
+  }
+
+  void CreateSharedImage(gfx::GpuMemoryBuffer* gpu_memory_buffer,
                          gfx::BufferPlane plane,
                          const gfx::ColorSpace& color_space,
                          GrSurfaceOrigin surface_origin,
@@ -50,9 +75,11 @@ class Context : public media::RenderableGpuMemoryBufferVideoFramePool::Context {
     auto* sii = SharedImageInterface();
     if (!sii || !gmb_manager_)
       return;
-    mailbox =
-        sii->CreateSharedImage(gpu_memory_buffer, gmb_manager_, plane,
-                               color_space, surface_origin, alpha_type, usage);
+    auto client_shared_image = sii->CreateSharedImage(
+        gpu_memory_buffer, gmb_manager_, plane, color_space, surface_origin,
+        alpha_type, usage, "WebGraphicsContext2DVideoFramePool");
+    CHECK(client_shared_image);
+    mailbox = client_shared_image->mailbox();
     sync_token = sii->GenVerifiedSyncToken();
   }
 
@@ -76,7 +103,7 @@ class Context : public media::RenderableGpuMemoryBufferVideoFramePool::Context {
 
   base::WeakPtr<blink::WebGraphicsContext3DProviderWrapper>
       weak_context_provider_;
-  gpu::GpuMemoryBufferManager* gmb_manager_;
+  raw_ptr<gpu::GpuMemoryBufferManager, ExperimentalRenderer> gmb_manager_;
 };
 
 }  // namespace
@@ -113,7 +140,7 @@ WebGraphicsContext3DVideoFramePool::GetRasterInterface() const {
 }
 
 bool WebGraphicsContext3DVideoFramePool::CopyRGBATextureToVideoFrame(
-    viz::ResourceFormat src_format,
+    viz::SharedImageFormat src_format,
     const gfx::Size& src_size,
     const gfx::ColorSpace& src_color_space,
     GrSurfaceOrigin src_surface_origin,
@@ -132,8 +159,11 @@ bool WebGraphicsContext3DVideoFramePool::CopyRGBATextureToVideoFrame(
 #if BUILDFLAG(IS_WIN)
   // CopyRGBATextureToVideoFrame below needs D3D shared images on Windows so
   // early out before creating the GMB since it's going to fail anyway.
-  if (!context_provider->GetCapabilities().shared_image_d3d)
+  if (!context_provider->SharedImageInterface()
+           ->GetCapabilities()
+           .shared_image_d3d) {
     return false;
+  }
 #endif  // BUILDFLAG(IS_WIN)
 
   auto dst_frame = pool_->MaybeCreateVideoFrame(src_size, dst_color_space);
@@ -144,7 +174,17 @@ bool WebGraphicsContext3DVideoFramePool::CopyRGBATextureToVideoFrame(
   DCHECK(ri);
   unsigned query_id = 0;
   ri->GenQueriesEXT(1, &query_id);
-  ri->BeginQueryEXT(GL_COMMANDS_COMPLETED_CHROMIUM, query_id);
+
+#if BUILDFLAG(IS_WIN)
+  // On Windows, GMB data read will do synchronization on its own.
+  // No need for GL_COMMANDS_COMPLETED_CHROMIUM QueryEXT.
+  GLenum queryTarget = GL_COMMANDS_ISSUED_CHROMIUM;
+#else
+  // QueryEXT functions are used to make sure that CopyRGBATextureToVideoFrame()
+  // texture copy is complete before we access GMB data.
+  GLenum queryTarget = GL_COMMANDS_COMPLETED_CHROMIUM;
+#endif
+  ri->BeginQueryEXT(queryTarget, query_id);
 
   const bool copy_succeeded = media::CopyRGBATextureToVideoFrame(
       raster_context_provider, src_format, src_size, src_color_space,
@@ -154,9 +194,7 @@ bool WebGraphicsContext3DVideoFramePool::CopyRGBATextureToVideoFrame(
     return false;
   }
 
-  // QueryEXT functions are used to make sure that CopyRGBATextureToVideoFrame()
-  // texture copy before we access GMB data.
-  ri->EndQueryEXT(GL_COMMANDS_COMPLETED_CHROMIUM);
+  ri->EndQueryEXT(queryTarget);
 
   auto on_query_done_cb =
       [](scoped_refptr<media::VideoFrame> frame,
@@ -206,6 +244,14 @@ void ApplyMetadataAndRunCallback(
   std::move(orig_callback).Run(std::move(wrapped));
 }
 
+BASE_FEATURE(kGpuMemoryBufferReadbackFromTexture,
+             "GpuMemoryBufferReadbackFromTexture",
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
 }  // namespace
 
 bool WebGraphicsContext3DVideoFramePool::ConvertVideoFrame(
@@ -219,19 +265,19 @@ bool WebGraphicsContext3DVideoFramePool::ConvertVideoFrame(
          format == media::PIXEL_FORMAT_ARGB)
       << "Invalid format " << format;
   DCHECK_EQ(src_video_frame->NumTextures(), std::size_t{1});
-  viz::ResourceFormat texture_format;
+  viz::SharedImageFormat texture_format;
   switch (format) {
     case media::PIXEL_FORMAT_XBGR:
-      texture_format = viz::RGBX_8888;
+      texture_format = viz::SinglePlaneFormat::kRGBX_8888;
       break;
     case media::PIXEL_FORMAT_ABGR:
-      texture_format = viz::RGBA_8888;
+      texture_format = viz::SinglePlaneFormat::kRGBA_8888;
       break;
     case media::PIXEL_FORMAT_XRGB:
-      texture_format = viz::BGRX_8888;
+      texture_format = viz::SinglePlaneFormat::kBGRX_8888;
       break;
     case media::PIXEL_FORMAT_ARGB:
-      texture_format = viz::BGRA_8888;
+      texture_format = viz::SinglePlaneFormat::kBGRA_8888;
       break;
     default:
       NOTREACHED();
@@ -245,8 +291,14 @@ bool WebGraphicsContext3DVideoFramePool::ConvertVideoFrame(
           ? kTopLeft_GrSurfaceOrigin
           : kBottomLeft_GrSurfaceOrigin,
       src_video_frame->mailbox_holder(0), dst_color_space,
-      WTF::Bind(ApplyMetadataAndRunCallback, src_video_frame,
-                std::move(callback)));
+      WTF::BindOnce(ApplyMetadataAndRunCallback, src_video_frame,
+                    std::move(callback)));
+}
+
+// static
+bool WebGraphicsContext3DVideoFramePool::
+    IsGpuMemoryBufferReadbackFromTextureEnabled() {
+  return base::FeatureList::IsEnabled(kGpuMemoryBufferReadbackFromTexture);
 }
 
 }  // namespace blink

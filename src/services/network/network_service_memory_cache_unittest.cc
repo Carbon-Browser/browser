@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -29,10 +30,13 @@
 #include "services/network/public/cpp/cors/origin_access_list.h"
 #include "services/network/public/cpp/cross_origin_embedder_policy.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/mojom/client_security_state.mojom.h"
+#include "services/network/public/mojom/http_raw_headers.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "services/network/resource_scheduler/resource_scheduler_client.h"
 #include "services/network/test/fake_test_cert_verifier_params_factory.h"
+#include "services/network/test/mock_devtools_observer.h"
 #include "services/network/test/test_url_loader_client.h"
 #include "services/network/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -165,7 +169,8 @@ class TestURLLoaderFactory : public mojom::URLLoaderFactory {
 
     mojo::Remote<mojom::URLLoaderClient> client(std::move(pending_client));
     mojom::URLResponseHeadPtr response_head = CreateCacheableURLResponseHead();
-    client->OnReceiveResponse(std::move(response_head), /*body=*/{});
+    client->OnReceiveResponse(std::move(response_head), /*body=*/{},
+                              absl::nullopt);
     client->OnComplete(URLLoaderCompletionStatus(net::OK));
   }
   void Clone(mojo::PendingReceiver<mojom::URLLoaderFactory> receiver) override {
@@ -236,6 +241,7 @@ class NetworkServiceMemoryCacheTest : public testing::Test {
     auto factory_params = network::mojom::URLLoaderFactoryParams::New();
     constexpr int kProcessId = 123;
     factory_params->process_id = kProcessId;
+    factory_params->is_trusted = true;
     factory_params->request_initiator_origin_lock =
         url::Origin::Create(test_server_.base_url());
     if (HasFactoryOverride()) {
@@ -256,7 +262,7 @@ class NetworkServiceMemoryCacheTest : public testing::Test {
         network_context_.get(), std::move(factory_params),
         /*resource_scheduler_client=*/nullptr,
         cors_url_loader_factory_remote_.BindNewPipeAndPassReceiver(),
-        &origin_access_list_);
+        &origin_access_list_, /*resource_block_list=*/nullptr);
   }
 
   base::test::TaskEnvironment& task_environment() { return task_environment_; }
@@ -585,7 +591,7 @@ TEST_F(NetworkServiceMemoryCacheTest, CanServe_NetworkIsolationKeyIsTransient) {
 
   ASSERT_TRUE(CanServeFromMemoryCache(request));
   ASSERT_FALSE(CanServeFromMemoryCache(
-      request, net::NetworkIsolationKey::CreateTransient()));
+      request, net::NetworkIsolationKey::CreateTransientForTesting()));
 }
 
 TEST_F(NetworkServiceMemoryCacheTest, CanServe_InvalidURL) {
@@ -815,13 +821,58 @@ TEST_F(NetworkServiceMemoryCacheTest, CanServe_UnsupportedMultipleVaryHeader) {
 }
 
 TEST_F(NetworkServiceMemoryCacheTest, CanServe_DevToolsAttached) {
-  ResourceRequest request = CreateRequest("/cacheable");
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(net::features::kPartitionedCookies);
+
+  ResourceRequest request = CreateRequest("/cacheable?max-age=120");
   request.devtools_request_id = "fake-id";
   StoreResponseToMemoryCache(request);
 
-  // TODO(https://crbug.com/1339708): Change the the expectation when the
-  // in-memory supports DevTools.
-  ASSERT_FALSE(CanServeFromMemoryCache(request));
+  MockDevToolsObserver devtools_observer;
+  request.trusted_params = ResourceRequest::TrustedParams();
+  request.trusted_params->devtools_observer = devtools_observer.Bind();
+
+  LoaderPair loader_pair = CreateLoaderAndStart(request);
+  loader_pair.client->RunUntilComplete();
+  const URLLoaderCompletionStatus& status =
+      loader_pair.client->completion_status();
+  ASSERT_EQ(status.error_code, net::OK);
+  ASSERT_TRUE(status.exists_in_memory_cache);
+
+  devtools_observer.WaitUntilRawResponse(0u);
+  ASSERT_EQ(200, devtools_observer.raw_response_http_status_code());
+
+  // Check whether the cached response has `Cache-Control: max-age=120` as the
+  // original response had.
+  bool has_expected_header = false;
+  for (const auto& header_pair : devtools_observer.response_headers()) {
+    if (base::EqualsCaseInsensitiveASCII(header_pair->key, "cache-control") &&
+        header_pair->value == "max-age=120") {
+      has_expected_header = true;
+      break;
+    }
+  }
+  ASSERT_TRUE(has_expected_header);
+
+  EXPECT_EQ(net::CookiePartitionKey::FromURLForTesting(request.url),
+            devtools_observer.response_cookie_partition_key());
+}
+
+TEST_F(NetworkServiceMemoryCacheTest, CanServe_ClientSecurityStateProvided) {
+  ResourceRequest request = CreateRequest("/cacheable");
+  StoreResponseToMemoryCache(request);
+
+  request.trusted_params = ResourceRequest::TrustedParams();
+  request.trusted_params->client_security_state =
+      mojom::ClientSecurityState::New();
+
+  // This should not hit any (D)CHECKs.
+  LoaderPair loader_pair = CreateLoaderAndStart(request);
+  loader_pair.client->RunUntilComplete();
+  const URLLoaderCompletionStatus& status =
+      loader_pair.client->completion_status();
+  ASSERT_EQ(status.error_code, net::OK);
+  ASSERT_TRUE(status.exists_in_memory_cache);
 }
 
 TEST_F(NetworkServiceMemoryCacheTest, UpdateStoredCache) {
@@ -1045,8 +1096,8 @@ TEST_F(NetworkServiceMemoryCacheTest, ServeFromCache_LargeBody) {
 
     if (result == MOJO_RESULT_SHOULD_WAIT) {
       base::RunLoop run_loop;
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       run_loop.QuitClosure());
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, run_loop.QuitClosure());
       run_loop.Run();
       continue;
     }
@@ -1094,8 +1145,8 @@ TEST_F(NetworkServiceMemoryCacheTest,
         consumer_handle->ReadData(buf, &num_bytes, MOJO_READ_DATA_FLAG_NONE);
     if (result == MOJO_RESULT_SHOULD_WAIT) {
       base::RunLoop run_loop;
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       run_loop.QuitClosure());
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, run_loop.QuitClosure());
       run_loop.Run();
       continue;
     }

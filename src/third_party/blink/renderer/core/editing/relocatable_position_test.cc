@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@ class RelocatablePositionTest : public EditingTestBase {};
 
 TEST_F(RelocatablePositionTest, position) {
   SetBodyContent("<b>foo</b><textarea>bar</textarea>");
-  Node* boldface = GetDocument().QuerySelector("b");
-  Node* textarea = GetDocument().QuerySelector("textarea");
+  Node* boldface = GetDocument().QuerySelector(AtomicString("b"));
+  Node* textarea = GetDocument().QuerySelector(AtomicString("textarea"));
 
   Position position(textarea, PositionAnchorType::kBeforeAnchor);
   RelocatablePosition relocatable_position(position);
@@ -35,7 +35,7 @@ TEST_F(RelocatablePositionTest, position) {
 
 TEST_F(RelocatablePositionTest, positionAnchorTypes) {
   SetBodyContent("<div>text</div>");
-  Node* node = GetDocument().QuerySelector("div");
+  Node* node = GetDocument().QuerySelector(AtomicString("div"));
 
   Position before(node, PositionAnchorType::kBeforeAnchor);
   Position offset0(node, 0);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 class PasswordGenerationController;
 
 namespace password_manager {
-class PasswordManagerDriver;
+class ContentPasswordManagerDriver;
 }  // namespace password_manager
 
 class PasswordGenerationDialogViewInterface {
@@ -27,7 +27,7 @@ class PasswordGenerationDialogViewInterface {
   // Used for metrics.
   virtual void Show(
       std::u16string& password,
-      base::WeakPtr<password_manager::PasswordManagerDriver>
+      base::WeakPtr<password_manager::ContentPasswordManagerDriver>
           target_frame_driver,
       autofill::password_generation::PasswordGenerationType type) = 0;
 

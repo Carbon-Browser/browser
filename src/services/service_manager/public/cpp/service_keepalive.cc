@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/service_manager/public/cpp/service_keepalive.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
+#include "base/task/sequenced_task_runner.h"
 #include "services/service_manager/public/cpp/service_receiver.h"
 
 namespace service_manager {
@@ -66,7 +67,8 @@ ServiceKeepalive::~ServiceKeepalive() = default;
 std::unique_ptr<ServiceKeepaliveRef> ServiceKeepalive::CreateRef() {
   AddRef();
   return std::make_unique<ServiceKeepaliveRefImpl>(
-      weak_ptr_factory_.GetWeakPtr(), base::SequencedTaskRunnerHandle::Get());
+      weak_ptr_factory_.GetWeakPtr(),
+      base::SequencedTaskRunner::GetCurrentDefault());
 }
 
 bool ServiceKeepalive::HasNoRefs() {

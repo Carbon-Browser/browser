@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ class FakePlatformSensor : public PlatformSensor {
   // PlatformSensor:
   MOCK_METHOD1(StartSensor,
                bool(const PlatformSensorConfiguration& configuration));
+  mojom::ReportingMode GetReportingMode() override;
 
   void set_maximum_supported_frequency(double maximum_supported_frequency) {
     maximum_supported_frequency_ = maximum_supported_frequency;
@@ -39,8 +40,6 @@ class FakePlatformSensor : public PlatformSensor {
       const PlatformSensorConfiguration& configuration) override;
 
   PlatformSensorConfiguration GetDefaultConfiguration() override;
-
-  mojom::ReportingMode GetReportingMode() override;
 
   double GetMaximumSupportedFrequency() override;
   double GetMinimumSupportedFrequency() override;

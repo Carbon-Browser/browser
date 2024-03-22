@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/policy/networking/network_configuration_updater.h"
 #include "components/onc/onc_constants.h"
@@ -16,17 +17,13 @@
 
 namespace ash {
 class CrosSettings;
+class ManagedNetworkConfigurationHandler;
+class NetworkDeviceHandler;
 }  // namespace ash
 
 namespace base {
-class DictionaryValue;
-class ListValue;
+class Value;
 }  // namespace base
-
-namespace chromeos {
-class ManagedNetworkConfigurationHandler;
-class NetworkDeviceHandler;
-}  // namespace chromeos
 
 namespace policy {
 
@@ -57,16 +54,16 @@ class DeviceNetworkConfigurationUpdaterAsh
   static std::unique_ptr<DeviceNetworkConfigurationUpdaterAsh>
   CreateForDevicePolicy(
       PolicyService* policy_service,
-      chromeos::ManagedNetworkConfigurationHandler* network_config_handler,
-      chromeos::NetworkDeviceHandler* network_device_handler,
+      ash::ManagedNetworkConfigurationHandler* network_config_handler,
+      ash::NetworkDeviceHandler* network_device_handler,
       ash::CrosSettings* cros_settings,
       const DeviceAssetIDFetcher& device_asset_id_fetcher);
 
  private:
   DeviceNetworkConfigurationUpdaterAsh(
       PolicyService* policy_service,
-      chromeos::ManagedNetworkConfigurationHandler* network_config_handler,
-      chromeos::NetworkDeviceHandler* network_device_handler,
+      ash::ManagedNetworkConfigurationHandler* network_config_handler,
+      ash::NetworkDeviceHandler* network_device_handler,
       ash::CrosSettings* cros_settings,
       const DeviceAssetIDFetcher& device_asset_id_fetcher);
 
@@ -74,15 +71,17 @@ class DeviceNetworkConfigurationUpdaterAsh
   void Init() override;
   void ImportClientCertificates() override;
   void ApplyNetworkPolicy(
-      base::ListValue* network_configs_onc,
-      base::DictionaryValue* global_network_config) override;
+      const base::Value::List& network_configs_onc,
+      const base::Value::Dict& global_network_config) override;
   void OnDataRoamingSettingChanged();
 
   // Pointer to the global singleton or a test instance.
-  chromeos::ManagedNetworkConfigurationHandler* const network_config_handler_;
+  const raw_ptr<ash::ManagedNetworkConfigurationHandler, ExperimentalAsh>
+      network_config_handler_;
 
-  chromeos::NetworkDeviceHandler* const network_device_handler_;
-  ash::CrosSettings* const cros_settings_;
+  const raw_ptr<ash::NetworkDeviceHandler, ExperimentalAsh>
+      network_device_handler_;
+  const raw_ptr<ash::CrosSettings, ExperimentalAsh> cros_settings_;
   base::CallbackListSubscription data_roaming_setting_subscription_;
 
   // Returns the device's administrator-set asset id.

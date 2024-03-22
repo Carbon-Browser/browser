@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,8 @@ class MEDIA_EXPORT MemoryDataSource final : public DataSource {
   [[nodiscard]] bool GetSize(int64_t* size_out) final;
   bool IsStreaming() final;
   void SetBitrate(int bitrate) final;
+  bool PassedTimingAllowOriginCheck() final;
+  bool WouldTaintOrigin() final;
 
  private:
   const std::string data_string_;

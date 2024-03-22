@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,5 +16,8 @@ MockOsIntegrationManager::MockOsIntegrationManager(
                            std::move(protocol_handler_manager),
                            nullptr) {}
 MockOsIntegrationManager::~MockOsIntegrationManager() = default;
+
+void MockOsIntegrationManager::SetProvider(base::PassKey<WebAppProvider>,
+                                           WebAppProvider& provider) {}
 
 }  // namespace web_app

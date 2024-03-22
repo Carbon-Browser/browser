@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
@@ -36,7 +36,7 @@ TCPClientSocket::TCPClientSocket(
     NetworkQualityEstimator* network_quality_estimator,
     net::NetLog* net_log,
     const net::NetLogSource& source,
-    NetworkChangeNotifier::NetworkHandle network)
+    handles::NetworkHandle network)
     : TCPClientSocket(
           std::make_unique<TCPSocket>(std::move(socket_performance_watcher),
                                       net_log,
@@ -56,18 +56,19 @@ TCPClientSocket::TCPClientSocket(std::unique_ptr<TCPSocket> connected_socket,
                       // TODO(https://crbug.com/1123197: Pass non-null
                       // NetworkQualityEstimator
                       nullptr /* network_quality_estimator */,
-                      NetworkChangeNotifier::kInvalidNetworkHandle) {}
+                      handles::kInvalidNetworkHandle) {}
 
 TCPClientSocket::TCPClientSocket(
     std::unique_ptr<TCPSocket> unconnected_socket,
     const AddressList& addresses,
+    std::unique_ptr<IPEndPoint> bound_address,
     NetworkQualityEstimator* network_quality_estimator)
     : TCPClientSocket(std::move(unconnected_socket),
                       addresses,
                       -1 /* current_address_index */,
-                      nullptr /* bind_address */,
+                      std::move(bound_address),
                       network_quality_estimator,
-                      NetworkChangeNotifier::kInvalidNetworkHandle) {}
+                      handles::kInvalidNetworkHandle) {}
 
 TCPClientSocket::~TCPClientSocket() {
   Disconnect();
@@ -84,7 +85,7 @@ std::unique_ptr<TCPClientSocket> TCPClientSocket::CreateFromBoundSocket(
   return base::WrapUnique(new TCPClientSocket(
       std::move(bound_socket), addresses, -1 /* current_address_index */,
       std::make_unique<IPEndPoint>(bound_address), network_quality_estimator,
-      NetworkChangeNotifier::kInvalidNetworkHandle));
+      handles::kInvalidNetworkHandle));
 }
 
 int TCPClientSocket::Bind(const IPEndPoint& address) {
@@ -161,7 +162,7 @@ TCPClientSocket::TCPClientSocket(
     int current_address_index,
     std::unique_ptr<IPEndPoint> bind_address,
     NetworkQualityEstimator* network_quality_estimator,
-    NetworkChangeNotifier::NetworkHandle network)
+    handles::NetworkHandle network)
     : socket_(std::move(socket)),
       bind_address_(std::move(bind_address)),
       addresses_(addresses),
@@ -346,7 +347,6 @@ void TCPClientSocket::DoDisconnect() {
   }
 
   total_received_bytes_ = 0;
-  EmitTCPMetricsHistogramsOnDisconnect();
 
   // If connecting or already connected, record that the socket has been
   // disconnected.
@@ -390,10 +390,6 @@ const NetLogWithSource& TCPClientSocket::NetLog() const {
 
 bool TCPClientSocket::WasEverUsed() const {
   return was_ever_used_;
-}
-
-bool TCPClientSocket::WasAlpnNegotiated() const {
-  return false;
 }
 
 NextProto TCPClientSocket::GetNegotiatedProtocol() const {
@@ -550,7 +546,7 @@ int TCPClientSocket::OpenSocket(AddressFamily family) {
   if (result != OK)
     return result;
 
-  if (network_ != NetworkChangeNotifier::kInvalidNetworkHandle) {
+  if (network_ != handles::kInvalidNetworkHandle) {
     result = socket_->BindToNetwork(network_);
     if (result != OK) {
       socket_->Close();
@@ -561,14 +557,6 @@ int TCPClientSocket::OpenSocket(AddressFamily family) {
   socket_->SetDefaultOptionsForClient();
 
   return OK;
-}
-
-void TCPClientSocket::EmitTCPMetricsHistogramsOnDisconnect() {
-  base::TimeDelta rtt;
-  if (socket_->GetEstimatedRoundTripTime(&rtt)) {
-    UMA_HISTOGRAM_CUSTOM_TIMES("Net.TcpRtt.AtDisconnect", rtt,
-                               base::Milliseconds(1), base::Minutes(10), 100);
-  }
 }
 
 void TCPClientSocket::EmitConnectAttemptHistograms(int result) {

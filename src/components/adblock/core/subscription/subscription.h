@@ -39,6 +39,8 @@ class Subscription : public base::RefCountedThreadSafe<Subscription> {
     // Subscription is being downloaded and not yet in use. No preloaded
     // substitute is available.
     Installing,
+    // State is unknown when FilteringConfiguration is disabled.
+    Unknown,
   };
   // Returns the URL of the text version of the subscription, ex.
   // https://easylist-downloads.adblockplus.org/easylist.txt.

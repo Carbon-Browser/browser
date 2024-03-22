@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/stl_util.h"
+#include "base/types/optional_util.h"
 #include "components/password_manager/core/browser/credentials_filter.h"
 #include "components/password_manager/core/browser/password_form_manager_for_ui.h"
 #include "components/version_info/channel.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace password_manager {
@@ -59,10 +60,17 @@ void StubPasswordManagerClient::NotifySuccessfulLoginWithExistingPassword(
 
 void StubPasswordManagerClient::NotifyStorePasswordCalled() {}
 
+void StubPasswordManagerClient::NotifyKeychainError() {}
+
 void StubPasswordManagerClient::AutomaticPasswordSave(
-    std::unique_ptr<PasswordFormManagerForUI> saved_manager) {}
+    std::unique_ptr<PasswordFormManagerForUI> saved_manager,
+    bool is_update_confirmation) {}
 
 PrefService* StubPasswordManagerClient::GetPrefs() const {
+  return nullptr;
+}
+
+PrefService* StubPasswordManagerClient::GetLocalStatePrefs() const {
   return nullptr;
 }
 
@@ -85,15 +93,6 @@ PasswordReuseManager* StubPasswordManagerClient::GetPasswordReuseManager()
   return nullptr;
 }
 
-PasswordScriptsFetcher* StubPasswordManagerClient::GetPasswordScriptsFetcher() {
-  return nullptr;
-}
-
-MockPasswordChangeSuccessTracker*
-StubPasswordManagerClient::GetPasswordChangeSuccessTracker() {
-  return &password_change_success_tracker_;
-}
-
 const GURL& StubPasswordManagerClient::GetLastCommittedURL() const {
   return GURL::EmptyGURL();
 }
@@ -107,7 +106,7 @@ const CredentialsFilter* StubPasswordManagerClient::GetStoreResultFilter()
   return &credentials_filter_;
 }
 
-const autofill::LogManager* StubPasswordManagerClient::GetLogManager() const {
+autofill::LogManager* StubPasswordManagerClient::GetLogManager() {
   return &log_manager_;
 }
 
@@ -132,14 +131,6 @@ void StubPasswordManagerClient::CheckSafeBrowsingReputation(
     const GURL& frame_url) {}
 #endif
 
-void StubPasswordManagerClient::CheckProtectedPasswordEntry(
-    metrics_util::PasswordType reused_password_type,
-    const std::string& username,
-    const std::vector<MatchingReusedCredential>& matching_reused_credentials,
-    bool password_field_exists) {}
-
-void StubPasswordManagerClient::LogPasswordReuseDetectedEvent() {}
-
 ukm::SourceId StubPasswordManagerClient::GetUkmSourceId() {
   return ukm_source_id_;
 }
@@ -149,7 +140,7 @@ StubPasswordManagerClient::GetMetricsRecorder() {
   if (!metrics_recorder_) {
     metrics_recorder_.emplace(GetUkmSourceId());
   }
-  return base::OptionalOrNullptr(metrics_recorder_);
+  return base::OptionalToPtr(metrics_recorder_);
 }
 
 signin::IdentityManager* StubPasswordManagerClient::GetIdentityManager() {
@@ -171,14 +162,6 @@ bool StubPasswordManagerClient::IsIsolationForPasswordSitesEnabled() const {
 }
 
 bool StubPasswordManagerClient::IsNewTabPage() const {
-  return false;
-}
-
-FieldInfoManager* StubPasswordManagerClient::GetFieldInfoManager() const {
-  return nullptr;
-}
-
-bool StubPasswordManagerClient::IsAutofillAssistantUIVisible() const {
   return false;
 }
 

@@ -1,12 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_COMPONENT_UPDATER_TIMER_H_
 #define COMPONENTS_COMPONENT_UPDATER_TIMER_H_
 
-#include "base/callback.h"
-#include "base/threading/thread_checker.h"
+#include "base/functional/callback.h"
+#include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 
@@ -30,7 +30,7 @@ class Timer {
  private:
   void OnDelay();
 
-  base::ThreadChecker thread_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 
   base::OneShotTimer timer_;
 

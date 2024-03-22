@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,15 @@
 #include "chrome/browser/sharing/sharing_sync_preference.h"
 #include "chrome/browser/signin/chrome_device_id_helper.h"
 #include "chrome/browser/sync/sync_invalidations_service_factory.h"
-#include "components/send_tab_to_self/features.h"
-#include "components/sync/base/sync_prefs.h"
 #include "components/sync/invalidations/sync_invalidations_service.h"
+#include "components/sync/service/sync_prefs.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/webauthn/android/cable_module_android.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #endif
 
 namespace browser_sync {
@@ -51,9 +54,15 @@ std::string DeviceInfoSyncClientImpl::GetSigninScopedDeviceId() const {
 
 // syncer::DeviceInfoSyncClient:
 bool DeviceInfoSyncClientImpl::GetSendTabToSelfReceivingEnabled() const {
-  // Always true starting with M101, see crbug.com/1299833. Older clients and
-  // clients from other embedders might still return false.
+  // TODO(crbug.com/1286405): Current logic allows to disable receiving tabs
+  // in Ash, while sending is still enabled - this seems to be the best solution
+  // for Lacros-Primary. Once Lacros-Only is the only available option, this
+  // should simply check whether SendTabToSelf datatype is enabled.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  return !crosapi::browser_util::IsLacrosEnabled();
+#else
   return true;
+#endif
 }
 
 // syncer::DeviceInfoSyncClient:
@@ -66,37 +75,23 @@ DeviceInfoSyncClientImpl::GetLocalSharingInfo() const {
 // syncer::DeviceInfoSyncClient:
 absl::optional<std::string> DeviceInfoSyncClientImpl::GetFCMRegistrationToken()
     const {
-  syncer::SyncInvalidationsService* service =
-      SyncInvalidationsServiceFactory::GetForProfile(profile_);
-  if (service) {
-    return service->GetFCMRegistrationToken();
-  }
-  // If the service is not enabled, then the registration token must be empty,
-  // not unknown (absl::nullopt). This is needed to reset previous token if
-  // the invalidations have been turned off.
-  return std::string();
+  return SyncInvalidationsServiceFactory::GetForProfile(profile_)
+      ->GetFCMRegistrationToken();
 }
 
 // syncer::DeviceInfoSyncClient:
 absl::optional<syncer::ModelTypeSet>
 DeviceInfoSyncClientImpl::GetInterestedDataTypes() const {
-  syncer::SyncInvalidationsService* service =
-      SyncInvalidationsServiceFactory::GetForProfile(profile_);
-  if (service) {
-    return service->GetInterestedDataTypes();
-  }
-  // If the service is not enabled, then the list of types must be empty, not
-  // unknown (absl::nullopt). This is needed to reset previous types if the
-  // invalidations have been turned off.
-  return syncer::ModelTypeSet();
+  return SyncInvalidationsServiceFactory::GetForProfile(profile_)
+      ->GetInterestedDataTypes();
 }
 
-absl::optional<syncer::DeviceInfo::PhoneAsASecurityKeyInfo>
+syncer::DeviceInfo::PhoneAsASecurityKeyInfo::StatusOrInfo
 DeviceInfoSyncClientImpl::GetPhoneAsASecurityKeyInfo() const {
 #if BUILDFLAG(IS_ANDROID)
   return webauthn::authenticator::GetSyncDataIfRegistered();
 #else
-  return absl::nullopt;
+  return syncer::DeviceInfo::PhoneAsASecurityKeyInfo::NoSupport();
 #endif
 }
 

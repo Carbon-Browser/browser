@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 // Enum representing the existing set of menu actions as types. Current values
 // should not be renumbered. Please keep in sync with "IOSMenuAction" in
 // src/tools/metrics/histograms/enums.xml.
+// LINT.IfChange
 enum class MenuActionType {
   OpenInNewTab = 0,
   OpenInNewIncognitoTab = 1,
@@ -44,11 +45,17 @@ enum class MenuActionType {
   ShowQRScanner = 32,
   StartVoiceSearch = 33,
   StartNewSearch = 34,
-  StartNewIcognitoSearch = 35,
+  StartNewIncognitoSearch = 35,
   SearchCopiedImage = 36,
   VisitCopiedLink = 37,
   SearchCopiedText = 38,
-  kMaxValue = SearchCopiedText
+  PinTab = 39,
+  UnpinTab = 40,
+  LensCameraSearch = 41,
+  SaveImageToGooglePhotos = 42,
+  CloseAllOtherTabs = 43,
+  kMaxValue = CloseAllOtherTabs
 };
+// LINT.ThenChange(/tools/metrics/histograms/enums.xml)
 
 #endif  // IOS_CHROME_BROWSER_UI_MENU_MENU_ACTION_TYPE_H_

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,6 +83,20 @@ const std::string CloudOrLocalAnalysisSettings::local_path() const {
 bool CloudOrLocalAnalysisSettings::user_specific() const {
   DCHECK(absl::holds_alternative<LocalAnalysisSettings>(*this));
   return absl::get<LocalAnalysisSettings>(*this).user_specific;
+}
+
+base::span<const char* const> CloudOrLocalAnalysisSettings::subject_names()
+    const {
+  DCHECK(absl::holds_alternative<LocalAnalysisSettings>(*this));
+  return absl::get<LocalAnalysisSettings>(*this).subject_names;
+}
+
+size_t CloudOrLocalAnalysisSettings::max_file_size() const {
+  if (is_local_analysis()) {
+    return absl::get<LocalAnalysisSettings>(*this).max_file_size;
+  } else {
+    return absl::get<CloudAnalysisSettings>(*this).max_file_size;
+  }
 }
 
 AnalysisSettings::AnalysisSettings() = default;

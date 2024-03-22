@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,22 +11,23 @@
 #include <winioctl.h>
 #include <winusb.h>
 
-#include <algorithm>
 #include <memory>
 #include <numeric>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/win/object_watcher.h"
 #include "components/device_event_log/device_event_log.h"
 #include "services/device/public/cpp/usb/usb_utils.h"
@@ -44,7 +45,7 @@ using mojom::UsbTransferStatus;
 
 namespace {
 
-const base::WStringPiece kWinUsbDriverName = L"winusb";
+const std::wstring_view kWinUsbDriverName = L"winusb";
 
 uint8_t BuildRequestFlags(UsbTransferDirection direction,
                           UsbControlTransferType request_type,
@@ -218,8 +219,7 @@ void UsbDeviceHandleWin::Close() {
     // this runner which will close it on completion. This is guaranteed to run
     // after any queued operations have completed.
     blocking_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce([](base::win::ScopedHandle) {}, std::move(hub_handle_)));
+        FROM_HERE, base::DoNothingWithBoundArgs(std::move(hub_handle_)));
   }
 
   for (auto& map_entry : interfaces_) {
@@ -585,28 +585,27 @@ const mojom::UsbInterfaceInfo* UsbDeviceHandleWin::FindInterfaceByEndpoint(
 
 UsbDeviceHandleWin::UsbDeviceHandleWin(scoped_refptr<UsbDeviceWin> device)
     : device_(std::move(device)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       blocking_task_runner_(UsbService::CreateBlockingTaskRunner()) {
-  // Windows only supports configuration 1, which therefore must be active.
-  DCHECK(device_->GetActiveConfiguration());
+  if (const auto* config = device_->GetActiveConfiguration()) {
+    for (const auto& interface : config->interfaces) {
+      for (const auto& alternate : interface->alternates) {
+        if (alternate->alternate_setting != 0)
+          continue;
 
-  for (const auto& interface : device_->GetActiveConfiguration()->interfaces) {
-    for (const auto& alternate : interface->alternates) {
-      if (alternate->alternate_setting != 0)
-        continue;
+        Interface& interface_info = interfaces_[interface->interface_number];
+        interface_info.info = interface.get();
+        interface_info.interface_number = interface->interface_number;
+        interface_info.first_interface = interface->first_interface;
+        RegisterEndpoints(interface.get(), *alternate);
 
-      Interface& interface_info = interfaces_[interface->interface_number];
-      interface_info.info = interface.get();
-      interface_info.interface_number = interface->interface_number;
-      interface_info.first_interface = interface->first_interface;
-      RegisterEndpoints(interface.get(), *alternate);
-
-      if (device_->driver_type() == UsbDeviceWin::DriverType::kComposite) {
-        if (interface->interface_number == interface->first_interface) {
-          auto it = device_->functions().find(interface->interface_number);
-          if (it != device_->functions().end()) {
-            interface_info.function_driver = it->second.driver;
-            interface_info.function_path = it->second.path;
+        if (device_->driver_type() == UsbDeviceWin::DriverType::kComposite) {
+          if (interface->interface_number == interface->first_interface) {
+            auto it = device_->functions().find(interface->interface_number);
+            if (it != device_->functions().end()) {
+              interface_info.function_driver = it->second.driver;
+              interface_info.function_path = it->second.path;
+            }
           }
         }
       }
@@ -635,7 +634,7 @@ UsbDeviceHandleWin::UsbDeviceHandleWin(
     scoped_refptr<base::SequencedTaskRunner> blocking_task_runner)
     : device_(std::move(device)),
       hub_handle_(std::move(handle)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       blocking_task_runner_(std::move(blocking_task_runner)) {}
 
 UsbDeviceHandleWin::~UsbDeviceHandleWin() = default;
@@ -1001,11 +1000,8 @@ UsbDeviceHandleWin::Request* UsbDeviceHandleWin::MakeRequest(
 
 std::unique_ptr<UsbDeviceHandleWin::Request> UsbDeviceHandleWin::UnlinkRequest(
     UsbDeviceHandleWin::Request* request_ptr) {
-  auto it = std::find_if(
-      requests_.begin(), requests_.end(),
-      [request_ptr](const std::unique_ptr<Request>& request) -> bool {
-        return request.get() == request_ptr;
-      });
+  auto it = base::ranges::find(requests_, request_ptr,
+                               &std::unique_ptr<Request>::get);
   DCHECK(it != requests_.end());
   std::unique_ptr<Request> request = std::move(*it);
   requests_.erase(it);
@@ -1017,10 +1013,6 @@ void UsbDeviceHandleWin::GotNodeConnectionInformation(
     void* node_connection_info_ptr,
     scoped_refptr<base::RefCountedBytes> buffer,
     std::pair<DWORD, DWORD> result_and_bytes_transferred) {
-  USB_NODE_CONNECTION_INFORMATION_EX* node_connection_info =
-      static_cast<USB_NODE_CONNECTION_INFORMATION_EX*>(
-          node_connection_info_ptr);
-
   if (result_and_bytes_transferred.first != ERROR_SUCCESS) {
     SetLastError(result_and_bytes_transferred.first);
     USB_PLOG(ERROR) << "Failed to get node connection information";
@@ -1030,6 +1022,13 @@ void UsbDeviceHandleWin::GotNodeConnectionInformation(
 
   DCHECK_EQ(result_and_bytes_transferred.second,
             sizeof(USB_NODE_CONNECTION_INFORMATION_EX));
+  USB_NODE_CONNECTION_INFORMATION_EX* node_connection_info =
+      static_cast<USB_NODE_CONNECTION_INFORMATION_EX*>(
+          node_connection_info_ptr);
+
+  device_->ActiveConfigurationChanged(
+      node_connection_info->CurrentConfigurationValue);
+
   size_t bytes_transferred =
       std::min(sizeof(USB_DEVICE_DESCRIPTOR), buffer->size());
   memcpy(buffer->front(), &node_connection_info->DeviceDescriptor,
@@ -1045,7 +1044,7 @@ void UsbDeviceHandleWin::GotDescriptorFromNodeConnection(
     std::pair<DWORD, DWORD> result_and_bytes_transferred) {
   if (result_and_bytes_transferred.first != ERROR_SUCCESS) {
     SetLastError(result_and_bytes_transferred.first);
-    USB_PLOG(ERROR) << "Failed to read descriptor from node connection";
+    USB_PLOG(DEBUG) << "Failed to read descriptor from node connection";
     std::move(callback).Run(UsbTransferStatus::TRANSFER_ERROR,
                             /*buffer=*/nullptr, /*length=*/0);
     return;

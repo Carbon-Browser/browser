@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,9 @@
 #include <memory>
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/timezone_settings.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -25,6 +23,8 @@
 #include "chrome/browser/ash/policy/scheduled_task_handler/scheduled_task_util.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/task_executor_with_retries.h"
 #include "chrome/common/chrome_features.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/timezone_settings.h"
 
 namespace policy {
 
@@ -46,7 +46,7 @@ constexpr char kTaskTimeFieldName[] = "update_check_time";
 // so it's safe to use "this" with any callbacks.
 DeviceScheduledUpdateChecker::DeviceScheduledUpdateChecker(
     ash::CrosSettings* cros_settings,
-    chromeos::NetworkStateHandler* network_state_handler,
+    ash::NetworkStateHandler* network_state_handler,
     std::unique_ptr<ScheduledTaskExecutor> update_check_executor)
     : cros_settings_(cros_settings),
       cros_settings_subscription_(cros_settings_->AddSettingsObserver(

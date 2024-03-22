@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,17 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/apps/intent_helper/apps_navigation_types.h"
-#include "chrome/browser/apps/intent_helper/intent_picker_features.h"
-#include "chrome/browser/apps/intent_helper/intent_picker_helpers.h"
+#include "chrome/browser/apps/link_capturing/intent_picker_info.h"
+#include "chrome/browser/apps/link_capturing/link_capturing_feature_test_support.h"
+#include "chrome/browser/apps/link_capturing/link_capturing_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
@@ -29,8 +29,11 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/events/base_event_utils.h"
+#include "ui/events/event_constants.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/events/test/event_generator.h"
+#include "ui/events/types/event_type.h"
 #include "ui/gfx/image/image.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/animation/ink_drop.h"
@@ -40,6 +43,7 @@
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/scroll_view.h"
 #include "ui/views/resources/grit/views_resources.h"
+#include "ui/views/test/button_test_api.h"
 #include "ui/views/widget/widget_utils.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -56,7 +60,10 @@ using content::Referrer;
 
 class IntentPickerBubbleViewTest : public TestWithBrowserView {
  public:
-  IntentPickerBubbleViewTest() = default;
+  IntentPickerBubbleViewTest() {
+    feature_list_.InitWithFeatures(
+        {}, apps::test::GetFeaturesToDisableLinkCapturingUX());
+  }
 
   IntentPickerBubbleViewTest(const IntentPickerBubbleViewTest&) = delete;
   IntentPickerBubbleViewTest& operator=(const IntentPickerBubbleViewTest&) =
@@ -92,18 +99,9 @@ class IntentPickerBubbleViewTest : public TestWithBrowserView {
                       ui::PAGE_TRANSITION_TYPED, false));
     CommitPendingLoad(&web_contents->GetController());
 
-    std::vector<AppInfo> app_info;
-
-    // AppInfo is move only. Manually create a new app_info array to pass into
-    // the bubble constructor.
-    for (const auto& app : app_info_) {
-      app_info.emplace_back(app.type, app.icon_model, app.launch_name,
-                            app.display_name);
-    }
-
     auto* widget = IntentPickerBubbleView::ShowBubble(
         anchor_view_, /*highlighted_button=*/nullptr, bubble_type, web_contents,
-        std::move(app_info), show_stay_in_chrome,
+        app_info_, show_stay_in_chrome,
         /*show_remember_selection=*/true, initiating_origin,
         base::BindOnce(&IntentPickerBubbleViewTest::OnBubbleClosed,
                        base::Unretained(this)));
@@ -143,7 +141,7 @@ class IntentPickerBubbleViewTest : public TestWithBrowserView {
   }
 
   views::LabelButton* GetLabelButtonAtIndex(size_t index) {
-    CHECK(!apps::features::LinkCapturingUiUpdateEnabled());
+    CHECK(!apps::features::ShouldShowLinkCapturingUX());
     return static_cast<views::LabelButton*>(GetButtonAtIndex(index));
   }
 
@@ -174,8 +172,10 @@ class IntentPickerBubbleViewTest : public TestWithBrowserView {
     last_selection_should_persist_ = should_persist;
   }
 
-  raw_ptr<IntentPickerBubbleView> bubble_ = nullptr;
-  raw_ptr<views::View> anchor_view_;
+  base::test::ScopedFeatureList feature_list_;
+
+  raw_ptr<IntentPickerBubbleView, DanglingUntriaged> bubble_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> anchor_view_;
   std::vector<AppInfo> app_info_;
   std::unique_ptr<ui::test::EventGenerator> event_generator_;
 
@@ -350,16 +350,14 @@ class IntentPickerBubbleViewLayoutTest
     : public IntentPickerBubbleViewTest,
       public ::testing::WithParamInterface<BubbleInterfaceType> {
  public:
-  void SetUp() override {
+  IntentPickerBubbleViewLayoutTest() {
     if (GetParam() == BubbleInterfaceType::kGridView) {
-      feature_list_.InitAndEnableFeature(
-          apps::features::kLinkCapturingUiUpdate);
+      feature_list_.InitWithFeaturesAndParameters(
+          apps::test::GetFeaturesToEnableLinkCapturingUX(), {});
     } else {
-      feature_list_.InitAndDisableFeature(
-          apps::features::kLinkCapturingUiUpdate);
+      feature_list_.InitWithFeatures(
+          {}, apps::test::GetFeaturesToDisableLinkCapturingUX());
     }
-
-    IntentPickerBubbleViewTest::SetUp();
   }
 
  private:
@@ -382,9 +380,10 @@ TEST_P(IntentPickerBubbleViewLayoutTest, RememberCheckbox) {
   ClickApp(0);
   ASSERT_FALSE(checkbox->GetEnabled());
 
-  // kWeb entries should allow persistence when PWA persistence is enabled.
+  // kWeb entries should allow persistence on CrOS. The checkbox does not pop up
+  // on non-ChromeOS platforms, and persistence results in a no-op behavior.
   ClickApp(1);
-  ASSERT_EQ(checkbox->GetEnabled(), apps::IntentPickerPwaPersistenceEnabled());
+  ASSERT_TRUE(checkbox->GetEnabled());
 
   // Other app types can be persisted.
   ClickApp(2);
@@ -453,6 +452,7 @@ TEST_P(IntentPickerBubbleViewLayoutTest, CloseDialog) {
             apps::IntentPickerCloseReason::DIALOG_DEACTIVATED);
 }
 
+// TODO(crbug.com/1330440): Fix flakiness on Windows.
 #if BUILDFLAG(IS_WIN)
 #define MAYBE_KeyboardNavigation DISABLED_KeyboardNavigation
 #else
@@ -487,9 +487,14 @@ TEST_P(IntentPickerBubbleViewLayoutTest, DoubleClickToAccept) {
                    BubbleType::kLinkCapturing,
                    /*initiating_origin=*/absl::nullopt);
 
-  event_generator_->MoveMouseTo(
-      GetButtonAtIndex(0)->GetBoundsInScreen().CenterPoint());
-  event_generator_->DoubleClickLeftButton();
+  views::test::ButtonTestApi button(GetButtonAtIndex(0));
+
+  button.NotifyClick(ui::MouseEvent(ui::ET_MOUSE_PRESSED, gfx::PointF(),
+                                    gfx::PointF(), ui::EventTimeForNow(),
+                                    ui::EF_NONE, ui::EF_NONE));
+  button.NotifyClick(ui::MouseEvent(ui::ET_MOUSE_PRESSED, gfx::PointF(),
+                                    gfx::PointF(), ui::EventTimeForNow(),
+                                    ui::EF_IS_DOUBLE_CLICK, ui::EF_NONE));
 
   EXPECT_EQ(last_selected_launch_name_, "web_app_id");
   EXPECT_EQ(last_close_reason_, apps::IntentPickerCloseReason::OPEN_APP);
@@ -501,9 +506,14 @@ INSTANTIATE_TEST_SUITE_P(All,
                                          BubbleInterfaceType::kGridView));
 
 class IntentPickerBubbleViewGridLayoutTest : public IntentPickerBubbleViewTest {
+ public:
+  IntentPickerBubbleViewGridLayoutTest() {
+    feature_list_.InitWithFeaturesAndParameters(
+        apps::test::GetFeaturesToEnableLinkCapturingUX(), {});
+  }
+
  private:
-  base::test::ScopedFeatureList feature_list_{
-      apps::features::kLinkCapturingUiUpdate};
+  base::test::ScopedFeatureList feature_list_;
 };
 
 TEST_F(IntentPickerBubbleViewGridLayoutTest, DefaultSelectionOneApp) {
@@ -524,4 +534,24 @@ TEST_F(IntentPickerBubbleViewGridLayoutTest, DefaultSelectionTwoApps) {
                    /*initiating_origin=*/absl::nullopt);
 
   ASSERT_FALSE(bubble_->GetSelectedIndex().has_value());
+}
+
+// TODO(crbug.com/1330440): Fix flakiness on Windows.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_OpenWithReturnKey DISABLED_OpenWithReturnKey
+#else
+#define MAYBE_OpenWithReturnKey OpenWithReturnKey
+#endif
+TEST_F(IntentPickerBubbleViewGridLayoutTest, MAYBE_OpenWithReturnKey) {
+  AddDefaultApps();
+  CreateBubbleView(/*use_icons=*/false, /*show_stay_in_chrome=*/false,
+                   BubbleType::kLinkCapturing,
+                   /*initiating_origin=*/absl::nullopt);
+
+  GetButtonAtIndex(0)->RequestFocus();
+  EXPECT_TRUE(GetButtonAtIndex(0)->HasFocus());
+
+  event_generator_->PressKey(ui::VKEY_RETURN, ui::EF_NONE);
+
+  EXPECT_EQ(last_close_reason_, apps::IntentPickerCloseReason::OPEN_APP);
 }

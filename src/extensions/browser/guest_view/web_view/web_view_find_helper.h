@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,8 +72,8 @@ class WebViewFindHelper {
                           int active_match_ordinal,
                           bool final_update);
 
-    // Stores find results into a DictionaryValue.
-    void PrepareResults(base::DictionaryValue* results);
+    // Stores find results into a base::Value::Dict.
+    void PrepareResults(base::Value::Dict& results);
 
    private:
     int number_of_matches_;
@@ -100,8 +100,8 @@ class WebViewFindHelper {
                           int active_match_ordinal,
                           bool final_update);
 
-    // Stores find results and other event info into a DictionaryValue.
-    void PrepareResults(base::DictionaryValue* results);
+    // Stores find results and other event info into a Value::Dict.
+    void PrepareResults(base::Value::Dict& dict);
 
    private:
     const std::u16string search_text_;

@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/passwords/move_to_account_store_bubble_view.h"
+
+#include <utility>
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
@@ -31,7 +33,7 @@ class MoveToAccountStoreBubbleViewTest : public PasswordBubbleViewTestBase {
   void TearDown() override;
 
  protected:
-  raw_ptr<MoveToAccountStoreBubbleView> view_;
+  raw_ptr<MoveToAccountStoreBubbleView> view_ = nullptr;
 };
 
 void MoveToAccountStoreBubbleViewTest::CreateViewAndShow() {
@@ -48,8 +50,9 @@ void MoveToAccountStoreBubbleViewTest::CreateViewAndShow() {
 }
 
 void MoveToAccountStoreBubbleViewTest::TearDown() {
-  view_->GetWidget()->CloseWithReason(
-      views::Widget::ClosedReason::kCloseButtonClicked);
+  std::exchange(view_, nullptr)
+      ->GetWidget()
+      ->CloseWithReason(views::Widget::ClosedReason::kCloseButtonClicked);
 
   PasswordBubbleViewTestBase::TearDown();
 }

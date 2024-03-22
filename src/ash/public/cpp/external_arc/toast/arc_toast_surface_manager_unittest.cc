@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "components/exo/surface.h"
 #include "components/exo/toast_surface.h"
 #include "components/exo/wm_helper.h"
-#include "components/exo/wm_helper_chromeos.h"
 #include "components/session_manager/session_manager_types.h"
 
 namespace ash {
@@ -26,7 +25,7 @@ class ArcToastSurfaceManagerTest : public AshTestBase {
 
   void SetUp() override {
     AshTestBase::SetUp();
-    wm_helper_ = std::make_unique<exo::WMHelperChromeOS>();
+    wm_helper_ = std::make_unique<exo::WMHelper>();
 
     // Start in the ACTIVE (logged-in) state.
     ChangeLockState(false);

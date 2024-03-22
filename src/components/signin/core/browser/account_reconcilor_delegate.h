@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ class AccountReconcilorDelegate {
   virtual bool ShouldAbortReconcileIfPrimaryHasError() const;
 
   // Returns the consent level that should be used for obtaining the primary
-  // account. Defaults to ConsentLevel::kSync.
+  // account. Defaults to ConsentLevel::kSignin.
   virtual ConsentLevel GetConsentLevelForPrimaryAccount() const;
 
   // Returns a pair of mode and accounts to send to Mutilogin endpoint.
@@ -126,7 +126,7 @@ class AccountReconcilorDelegate {
       bool first_execution,
       bool primary_has_error) const;
 
-  raw_ptr<AccountReconcilor> reconcilor_;
+  raw_ptr<AccountReconcilor, DanglingUntriaged> reconcilor_;
 };
 
 }  // namespace signin

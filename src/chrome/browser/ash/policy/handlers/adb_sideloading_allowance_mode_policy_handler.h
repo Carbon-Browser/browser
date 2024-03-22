@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/notifications/adb_sideloading_policy_change_notification.h"
@@ -99,9 +100,9 @@ class AdbSideloadingAllowanceModePolicyHandler
   void MaybeShowPowerwashNotification(bool is_sideloading_enabled);
   void MaybeShowPowerwashUponRebootNotification();
 
-  ash::CrosSettings* const cros_settings_;
+  const raw_ptr<ash::CrosSettings, ExperimentalAsh> cros_settings_;
 
-  PrefService* const local_state_;
+  const raw_ptr<PrefService, ExperimentalAsh> local_state_;
 
   std::unique_ptr<ash::AdbSideloadingPolicyChangeNotification>
       adb_sideloading_policy_change_notification_;

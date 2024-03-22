@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,9 @@
 #include "content/public/browser/ax_event_notification_details.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/ax_common.h"
 #include "ui/accessibility/ax_tree.h"
+#include "ui/accessibility/test_ax_tree_update.h"
 
 namespace content {
 
@@ -80,8 +82,7 @@ void BrowserAccessibilityManagerTest::SetUp() {
       std::make_unique<TestBrowserAccessibilityDelegate>();
 }
 
-// Temporarily disabled due to bug http://crbug.com/765490
-TEST_F(BrowserAccessibilityManagerTest, DISABLED_TestFatalError) {
+TEST_F(BrowserAccessibilityManagerTest, TestErrorOnCreateIsFatal) {
   // Test that BrowserAccessibilityManager raises a fatal error
   // (which will crash the renderer) if the same id is used in
   // two places in the tree.
@@ -93,42 +94,53 @@ TEST_F(BrowserAccessibilityManagerTest, DISABLED_TestFatalError) {
   root.child_ids.push_back(2);
 
   std::unique_ptr<BrowserAccessibilityManager> manager;
-  ASSERT_FALSE(test_browser_accessibility_delegate_->got_fatal_error());
-  manager.reset(BrowserAccessibilityManager::Create(
-      MakeAXTreeUpdate(root), test_browser_accessibility_delegate_.get()));
-  ASSERT_TRUE(test_browser_accessibility_delegate_->got_fatal_error());
+  EXPECT_DEATH_IF_SUPPORTED(manager.reset(BrowserAccessibilityManager::Create(
+                                MakeAXTreeUpdateForTesting(root),
+                                test_browser_accessibility_delegate_.get())),
+                            "Node 1 has duplicate child id 2");
+}
 
-  ui::AXNodeData root2;
-  root2.id = 1;
-  root2.role = ax::mojom::Role::kRootWebArea;
-  root2.child_ids.push_back(2);
-  root2.child_ids.push_back(3);
+TEST_F(BrowserAccessibilityManagerTest, TestErrorOnUpdate) {
+  ui::AXNodeData root;
+  root.id = 1;
+  root.role = ax::mojom::Role::kRootWebArea;
 
-  ui::AXNodeData child1;
-  child1.id = 2;
-  child1.child_ids.push_back(4);
-  child1.child_ids.push_back(5);
+  ui::AXNodeData node2;
+  node2.id = 2;
+  root.child_ids.push_back(2);
 
-  ui::AXNodeData child2;
-  child2.id = 3;
-  child2.child_ids.push_back(6);
-  child2.child_ids.push_back(5);  // Duplicate
+  ui::AXNodeData node3;
+  node3.id = 3;
+  root.child_ids.push_back(3);
 
-  ui::AXNodeData grandchild4;
-  grandchild4.id = 4;
+  ui::AXNodeData node4;
+  node4.id = 4;
+  node3.child_ids.push_back(4);
 
-  ui::AXNodeData grandchild5;
-  grandchild5.id = 5;
+  ui::AXNodeData node5;
+  node5.id = 5;
+  root.child_ids.push_back(5);
 
-  ui::AXNodeData grandchild6;
-  grandchild6.id = 6;
+  std::unique_ptr<BrowserAccessibilityManager> manager(
+      BrowserAccessibilityManager::Create(
+          MakeAXTreeUpdateForTesting(root, node2, node3, node4, node5),
+          test_browser_accessibility_delegate_.get()));
 
-  test_browser_accessibility_delegate_->reset_got_fatal_error();
-  manager.reset(BrowserAccessibilityManager::Create(
-      MakeAXTreeUpdate(root2, child1, child2, grandchild4, grandchild5,
-                       grandchild6),
-      test_browser_accessibility_delegate_.get()));
-  ASSERT_TRUE(test_browser_accessibility_delegate_->got_fatal_error());
+  // node4 has two child ids now.
+  node4.child_ids.push_back(5);
+  node4.child_ids.push_back(5);
+  ui::AXTreeUpdate update = MakeAXTreeUpdateForTesting(node4, node5);
+  update.tree_data.tree_id = manager->GetTreeID();
+  AXEventNotificationDetails events;
+  events.updates = {update};
+
+#if defined(AX_FAIL_FAST_BUILD)
+  // Update errors are fatal in AX_FAIL_FAST_BUILD builds.
+  EXPECT_DEATH_IF_SUPPORTED(manager->OnAccessibilityEvents(events),
+                            "Node 4 has duplicate child id 5");
+#else
+  ASSERT_FALSE(manager->OnAccessibilityEvents(events));
+#endif
 }
 
 // This test depends on hypertext, which is only used on
@@ -184,10 +196,12 @@ TEST_F(BrowserAccessibilityManagerTest, BoundsForRange) {
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, static_text, inline_text1, inline_text2),
+          MakeAXTreeUpdateForTesting(root, static_text, inline_text1,
+                                     inline_text2),
           test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   BrowserAccessibility* static_text_accessible =
       root_accessible->PlatformGetChild(0);
@@ -283,11 +297,12 @@ TEST_F(BrowserAccessibilityManagerTest, BoundsForRangeMultiElement) {
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, static_text, inline_text1, static_text2,
-                           inline_text2),
+          MakeAXTreeUpdateForTesting(root, static_text, inline_text1,
+                                     static_text2, inline_text2),
           test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   BrowserAccessibility* static_text_accessible =
       root_accessible->PlatformGetChild(0);
@@ -401,10 +416,12 @@ TEST_F(BrowserAccessibilityManagerTest, BoundsForRangeBiDi) {
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, static_text, inline_text1, inline_text2),
+          MakeAXTreeUpdateForTesting(root, static_text, inline_text1,
+                                     inline_text2),
           test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   BrowserAccessibility* static_text_accessible =
       root_accessible->PlatformGetChild(0);
@@ -484,10 +501,11 @@ TEST_F(BrowserAccessibilityManagerTest, BoundsForRangeScrolledWindow) {
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, static_text, inline_text),
+          MakeAXTreeUpdateForTesting(root, static_text, inline_text),
           test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   BrowserAccessibility* static_text_accessible =
       root_accessible->PlatformGetChild(0);
@@ -573,10 +591,11 @@ TEST_F(BrowserAccessibilityManagerTest, BoundsForRangeOnParentElement) {
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, div, static_text1, img, static_text2,
-                           inline_text1, inline_text2),
+          MakeAXTreeUpdateForTesting(root, div, static_text1, img, static_text2,
+                                     inline_text1, inline_text2),
           test_browser_accessibility_delegate_.get()));
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   BrowserAccessibility* div_accessible = root_accessible->PlatformGetChild(0);
   ASSERT_NE(nullptr, div_accessible);
@@ -620,32 +639,20 @@ TEST_F(BrowserAccessibilityManagerTest, BoundsForRangeOnParentElement) {
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(USE_ATK)
 
 TEST_F(BrowserAccessibilityManagerTest, TestNextPreviousInTreeOrder) {
-  ui::AXNodeData root;
-  root.id = 1;
-  root.role = ax::mojom::Role::kRootWebArea;
-
-  ui::AXNodeData node2;
-  node2.id = 2;
-  root.child_ids.push_back(2);
-
-  ui::AXNodeData node3;
-  node3.id = 3;
-  root.child_ids.push_back(3);
-
-  ui::AXNodeData node4;
-  node4.id = 4;
-  node3.child_ids.push_back(4);
-
-  ui::AXNodeData node5;
-  node5.id = 5;
-  root.child_ids.push_back(5);
+  ui::TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++2 kUnknown
+    ++++3 kUnknown
+    ++++++4 kUnknown
+    ++++5 kUnknown
+  )HTML"));
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, node2, node3, node4, node5),
-          test_browser_accessibility_delegate_.get()));
+          update, test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   ASSERT_EQ(3U, root_accessible->PlatformChildCount());
   BrowserAccessibility* node2_accessible = root_accessible->PlatformGetChild(0);
@@ -723,32 +730,20 @@ TEST_F(BrowserAccessibilityManagerTest, TestNextPreviousInTreeOrder) {
 }
 
 TEST_F(BrowserAccessibilityManagerTest, TestNextNonDescendantInTreeOrder) {
-  ui::AXNodeData root;
-  root.id = 1;
-  root.role = ax::mojom::Role::kRootWebArea;
-
-  ui::AXNodeData node2;
-  node2.id = 2;
-  root.child_ids.push_back(2);
-
-  ui::AXNodeData node3;
-  node3.id = 3;
-  root.child_ids.push_back(3);
-
-  ui::AXNodeData node4;
-  node4.id = 4;
-  node3.child_ids.push_back(4);
-
-  ui::AXNodeData node5;
-  node5.id = 5;
-  root.child_ids.push_back(5);
+  ui::TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++2 kUnknown
+    ++++3 kUnknown
+    ++++++4 kUnknown
+    ++++5 kUnknown
+  )HTML"));
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, node2, node3, node4, node5),
-          test_browser_accessibility_delegate_.get()));
+          update, test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   ASSERT_EQ(3U, root_accessible->PlatformChildCount());
   BrowserAccessibility* node2_accessible = root_accessible->PlatformGetChild(0);
@@ -772,59 +767,25 @@ TEST_F(BrowserAccessibilityManagerTest, TestNextNonDescendantInTreeOrder) {
 }
 
 TEST_F(BrowserAccessibilityManagerTest, TestNextPreviousTextOnlyObject) {
-  ui::AXNodeData root;
-  root.id = 1;
-  root.role = ax::mojom::Role::kRootWebArea;
-
-  ui::AXNodeData node2;
-  node2.id = 2;
-  root.child_ids.push_back(2);
-
-  ui::AXNodeData text1;
-  text1.id = 3;
-  text1.role = ax::mojom::Role::kStaticText;
-  root.child_ids.push_back(3);
-
-  ui::AXNodeData node3;
-  node3.id = 4;
-  root.child_ids.push_back(4);
-
-  ui::AXNodeData text2;
-  text2.id = 5;
-  text2.role = ax::mojom::Role::kStaticText;
-  node3.child_ids.push_back(5);
-
-  ui::AXNodeData node4;
-  node4.id = 6;
-  node3.child_ids.push_back(6);
-
-  ui::AXNodeData text3;
-  text3.id = 7;
-  text3.role = ax::mojom::Role::kStaticText;
-  node3.child_ids.push_back(7);
-
-  ui::AXNodeData node5;
-  node5.id = 8;
-  node5.role = ax::mojom::Role::kGenericContainer;
-  root.child_ids.push_back(8);
-
-  ui::AXNodeData text4;
-  text4.id = 9;
-  text4.role = ax::mojom::Role::kLineBreak;
-  node5.child_ids.push_back(9);
-
-  ui::AXNodeData link;
-  link.id = 10;
-  link.role = ax::mojom::Role::kLink;
-  node5.child_ids.push_back(10);
+  ui::TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++2 kUnknown
+    ++++3 kStaticText
+    ++++4 kUnknown
+    ++++++5 kStaticText
+    ++++++6 kUnknown
+    ++++++7 kStaticText
+    ++++8 kGenericContainer
+    ++++++9 kLineBreak
+    ++++++10 kLink
+  )HTML"));
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, node2, node3, node4, node5, text1, text2,
-                           text3, text4, link),
-          test_browser_accessibility_delegate_.get()));
+          update, test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   ASSERT_EQ(4U, root_accessible->PlatformChildCount());
   BrowserAccessibility* node2_accessible = root_accessible->PlatformGetChild(0);
@@ -882,62 +843,24 @@ TEST_F(BrowserAccessibilityManagerTest, TestNextPreviousTextOnlyObject) {
 // Linux and Windows.
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(USE_ATK)
 TEST_F(BrowserAccessibilityManagerTest, TestFindIndicesInCommonParent) {
-  ui::AXNodeData root;
-  root.id = 1;
-  root.role = ax::mojom::Role::kRootWebArea;
-
-  ui::AXNodeData div;
-  div.id = 2;
-  div.role = ax::mojom::Role::kGenericContainer;
-  root.child_ids.push_back(div.id);
-
-  ui::AXNodeData button;
-  button.id = 3;
-  button.role = ax::mojom::Role::kButton;
-  div.child_ids.push_back(button.id);
-
-  ui::AXNodeData button_text;
-  button_text.id = 4;
-  button_text.role = ax::mojom::Role::kStaticText;
-  button_text.SetName("Button");
-  button.child_ids.push_back(button_text.id);
-
-  ui::AXNodeData line_break;
-  line_break.id = 5;
-  line_break.role = ax::mojom::Role::kLineBreak;
-  line_break.SetName("\n");
-  div.child_ids.push_back(line_break.id);
-
-  ui::AXNodeData paragraph;
-  paragraph.id = 6;
-  paragraph.role = ax::mojom::Role::kParagraph;
-  root.child_ids.push_back(paragraph.id);
-
-  ui::AXNodeData paragraph_text;
-  paragraph_text.id = 7;
-  paragraph_text.role = ax::mojom::Role::kStaticText;
-  paragraph.child_ids.push_back(paragraph_text.id);
-
-  ui::AXNodeData paragraph_line1;
-  paragraph_line1.id = 8;
-  paragraph_line1.role = ax::mojom::Role::kInlineTextBox;
-  paragraph_line1.SetName("Hello ");
-  paragraph_text.child_ids.push_back(paragraph_line1.id);
-
-  ui::AXNodeData paragraph_line2;
-  paragraph_line2.id = 9;
-  paragraph_line2.role = ax::mojom::Role::kInlineTextBox;
-  paragraph_line2.SetName("world.");
-  paragraph_text.child_ids.push_back(paragraph_line2.id);
+  ui::TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++2 kGenericContainer
+    ++++++3 kButton
+    ++++++++4 kStaticText name="Button"
+    ++++++5 kLineBreak name="\n"
+    ++++6 kParagraph
+    ++++++7 kStaticText
+    ++++++++8 kInlineTextBox name="Hello"
+    ++++++++9 kInlineTextBox name="world."
+  )HTML"));
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, div, button, button_text, line_break,
-                           paragraph, paragraph_text, paragraph_line1,
-                           paragraph_line2),
-          test_browser_accessibility_delegate_.get()));
+          update, test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   ASSERT_EQ(2U, root_accessible->PlatformChildCount());
   BrowserAccessibility* div_accessible = root_accessible->PlatformGetChild(0);
@@ -1091,12 +1014,14 @@ TEST_F(BrowserAccessibilityManagerTest, TestGetTextForRange) {
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, div, button, button_text, container,
-                           container_text, line_break, paragraph,
-                           paragraph_text, paragraph_line1, paragraph_line2),
+          MakeAXTreeUpdateForTesting(root, div, button, button_text, container,
+                                     container_text, line_break, paragraph,
+                                     paragraph_text, paragraph_line1,
+                                     paragraph_line2),
           test_browser_accessibility_delegate_.get()));
 
-  BrowserAccessibility* root_accessible = manager->GetRoot();
+  BrowserAccessibility* root_accessible =
+      manager->GetBrowserAccessibilityRoot();
   ASSERT_NE(nullptr, root_accessible);
   ASSERT_EQ(2U, root_accessible->PlatformChildCount());
   BrowserAccessibility* div_accessible = root_accessible->PlatformGetChild(0);
@@ -1216,14 +1141,14 @@ TEST_F(BrowserAccessibilityManagerTest, DeletingFocusedNodeDoesNotCrash) {
   ui::AXNodeData node2;
   node2.id = 2;
 
-  ui::AXTreeUpdate initial_state = MakeAXTreeUpdate(root, node2);
+  ui::AXTreeUpdate initial_state = MakeAXTreeUpdateForTesting(root, node2);
   initial_state.has_tree_data = true;
   initial_state.tree_data.focus_id = 2;
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
           initial_state, test_browser_accessibility_delegate_.get()));
 
-  EXPECT_EQ(1, manager->GetRoot()->GetId());
+  EXPECT_EQ(1, manager->GetBrowserAccessibilityRoot()->GetId());
   ASSERT_NE(nullptr, manager->GetFocus());
   EXPECT_EQ(2, manager->GetFocus()->GetId());
 
@@ -1232,7 +1157,8 @@ TEST_F(BrowserAccessibilityManagerTest, DeletingFocusedNodeDoesNotCrash) {
   root2.id = 3;
   root2.role = ax::mojom::Role::kRootWebArea;
 
-  ui::AXTreeUpdate update2 = MakeAXTreeUpdate(root2);
+  ui::AXTreeUpdate update2 = MakeAXTreeUpdateForTesting(root2);
+  update2.tree_data.tree_id = initial_state.tree_data.tree_id;
   update2.node_id_to_clear = root.id;
   update2.root_id = root2.id;
   AXEventNotificationDetails events2;
@@ -1241,7 +1167,7 @@ TEST_F(BrowserAccessibilityManagerTest, DeletingFocusedNodeDoesNotCrash) {
 
   // Make sure that the focused node was updated to the new root and
   // that this doesn't crash.
-  EXPECT_EQ(3, manager->GetRoot()->GetId());
+  EXPECT_EQ(3, manager->GetBrowserAccessibilityRoot()->GetId());
   ASSERT_NE(nullptr, manager->GetFocus());
   EXPECT_EQ(3, manager->GetFocus()->GetId());
 }
@@ -1264,14 +1190,15 @@ TEST_F(BrowserAccessibilityManagerTest, DeletingFocusedNodeDoesNotCrash2) {
   ui::AXNodeData node4;
   node4.id = 4;
 
-  ui::AXTreeUpdate initial_state = MakeAXTreeUpdate(root, node2, node3, node4);
+  ui::AXTreeUpdate initial_state =
+      MakeAXTreeUpdateForTesting(root, node2, node3, node4);
   initial_state.has_tree_data = true;
   initial_state.tree_data.focus_id = 2;
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
           initial_state, test_browser_accessibility_delegate_.get()));
 
-  EXPECT_EQ(1, manager->GetRoot()->GetId());
+  EXPECT_EQ(1, manager->GetBrowserAccessibilityRoot()->GetId());
   ASSERT_NE(nullptr, manager->GetFocus());
   EXPECT_EQ(2, manager->GetFocus()->GetId());
 
@@ -1281,7 +1208,8 @@ TEST_F(BrowserAccessibilityManagerTest, DeletingFocusedNodeDoesNotCrash2) {
   root2.role = ax::mojom::Role::kRootWebArea;
 
   // Make an update that explicitly clears the previous root.
-  ui::AXTreeUpdate update2 = MakeAXTreeUpdate(root2);
+  ui::AXTreeUpdate update2 = MakeAXTreeUpdateForTesting(root2);
+  update2.tree_data.tree_id = initial_state.tree_data.tree_id;
   update2.node_id_to_clear = root.id;
   update2.root_id = root2.id;
   AXEventNotificationDetails events2;
@@ -1290,7 +1218,7 @@ TEST_F(BrowserAccessibilityManagerTest, DeletingFocusedNodeDoesNotCrash2) {
 
   // Make sure that the focused node was updated to the new root and
   // that this doesn't crash.
-  EXPECT_EQ(3, manager->GetRoot()->GetId());
+  EXPECT_EQ(3, manager->GetBrowserAccessibilityRoot()->GetId());
   ASSERT_NE(nullptr, manager->GetFocus());
   EXPECT_EQ(3, manager->GetFocus()->GetId());
 }
@@ -1308,15 +1236,15 @@ TEST_F(BrowserAccessibilityManagerTest, IsIgnoredChangedDueToFocusChange) {
   button.role = ax::mojom::Role::kButton;
   button.AddState(ax::mojom::State::kIgnored);
 
-  ui::AXTreeUpdate initial_state = MakeAXTreeUpdate(root, button);
+  ui::AXTreeUpdate initial_state = MakeAXTreeUpdateForTesting(root, button);
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
           initial_state, test_browser_accessibility_delegate_.get()));
-  ASSERT_EQ(0u, manager->GetRoot()->PlatformChildCount());
+  ASSERT_EQ(0u, manager->GetBrowserAccessibilityRoot()->PlatformChildCount());
 
   // On purpose we omit "button" from the list of updated nodes. It should be
   // added due to the focus changing.
-  ui::AXTreeUpdate update = MakeAXTreeUpdate(root);
+  ui::AXTreeUpdate update = MakeAXTreeUpdateForTesting(root);
   ui::AXTreeData tree_data;
   tree_data.focused_tree_id = manager->GetTreeID();
   tree_data.focus_id = button.id;
@@ -1327,9 +1255,10 @@ TEST_F(BrowserAccessibilityManagerTest, IsIgnoredChangedDueToFocusChange) {
   ASSERT_TRUE(manager->OnAccessibilityEvents(events));
 
   // Now that the button is focused, it is no longer ignored.
-  ASSERT_EQ(1u, manager->GetRoot()->PlatformChildCount());
-  EXPECT_EQ(ax::mojom::Role::kButton,
-            manager->GetRoot()->PlatformGetChild(0)->GetRole());
+  ASSERT_EQ(1u, manager->GetBrowserAccessibilityRoot()->PlatformChildCount());
+  EXPECT_EQ(
+      ax::mojom::Role::kButton,
+      manager->GetBrowserAccessibilityRoot()->PlatformGetChild(0)->GetRole());
 }
 
 TEST_F(BrowserAccessibilityManagerTest, TreeUpdatesAreMergedWhenPossible) {
@@ -1392,7 +1321,8 @@ TEST_F(BrowserAccessibilityManagerTest, TestHitTestScaled) {
   child_child.SetName("child_child");
   child_child.relative_bounds.bounds = gfx::RectF(0, 0, 100, 100);
 
-  ui::AXTreeUpdate child_update = MakeAXTreeUpdate(child_root, child_child);
+  ui::AXTreeUpdate child_update =
+      MakeAXTreeUpdateForTesting(child_root, child_child);
 
   // Next, create the parent tree's nodes and tree-update, with kChildTreeId
   // pointing to the child tree.
@@ -1412,11 +1342,12 @@ TEST_F(BrowserAccessibilityManagerTest, TestHitTestScaled) {
   ui::AXNodeData parent_childtree;
   parent_childtree.id = 3;
   parent_childtree.AddChildTreeId(child_update.tree_data.tree_id);
+  parent_childtree.role = ax::mojom::Role::kGenericContainer;
   parent_childtree.SetName("parent_childtree");
   parent_childtree.relative_bounds.bounds = gfx::RectF(100, 100, 100, 100);
 
   ui::AXTreeUpdate parent_update =
-      MakeAXTreeUpdate(parent_root, parent_child, parent_childtree);
+      MakeAXTreeUpdateForTesting(parent_root, parent_child, parent_childtree);
 
   // Link the child trees to their parent trees.
   child_update.tree_data.parent_tree_id = parent_update.tree_data.tree_id;
@@ -1428,7 +1359,7 @@ TEST_F(BrowserAccessibilityManagerTest, TestHitTestScaled) {
   std::unique_ptr<BrowserAccessibilityManager> child_manager(
       BrowserAccessibilityManager::Create(child_update, nullptr));
 
-  ASSERT_EQ(parent_manager.get(), child_manager->GetRootManager());
+  ASSERT_EQ(parent_manager.get(), child_manager->GetManagerForRootFrame());
 
   // Set scaling factor for testing to be 200%
   parent_manager->UseCustomDeviceScaleFactorForTesting(2.0f);
@@ -1448,31 +1379,19 @@ TEST_F(BrowserAccessibilityManagerTest, TestHitTestScaled) {
 }
 
 TEST_F(BrowserAccessibilityManagerTest, TestShouldFireEventForNode) {
-  ui::AXNodeData inline_text;
-  inline_text.id = 1111;
-  inline_text.role = ax::mojom::Role::kInlineTextBox;
-  inline_text.SetName("One two three.");
+  ui::TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++11 kParagraph
+    ++++++111 kStaticText
+    ++++++++1111 kInlineTextBox
+  )HTML"));
 
-  ui::AXNodeData text;
-  text.id = 111;
-  text.role = ax::mojom::Role::kStaticText;
-  text.SetName("One two three.");
-  text.child_ids = {inline_text.id};
-
-  ui::AXNodeData paragraph;
-  paragraph.id = 11;
-  paragraph.role = ax::mojom::Role::kParagraph;
-  paragraph.child_ids = {text.id};
-
-  ui::AXNodeData root;
-  root.id = 1;
-  root.role = ax::mojom::Role::kRootWebArea;
-  root.child_ids = {paragraph.id};
+  update.nodes[2].SetName("One two three.");
+  update.nodes[3].SetName("One two three.");
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, paragraph, text, inline_text),
-          test_browser_accessibility_delegate_.get()));
+          update, test_browser_accessibility_delegate_.get()));
 
   EXPECT_TRUE(manager->ShouldFireEventForNode(manager->GetFromID(1)));
   EXPECT_TRUE(manager->ShouldFireEventForNode(manager->GetFromID(11)));
@@ -1498,48 +1417,28 @@ TEST_F(BrowserAccessibilityManagerTest, NestedChildRoot) {
 
   ui::AXNodeData child_tree_root;
   child_tree_root.id = 3;
-  child_tree_root.role = ax::mojom::Role::kRootWebArea;
-  root.child_ids.push_back(3);
+  child_tree_root.role = ax::mojom::Role::kGroup;
+  child_tree_root.AddIntAttribute(ax::mojom::IntAttribute::kPopupForId, 2);
+  popup_button.child_ids.push_back(3);
 
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
-          MakeAXTreeUpdate(root, popup_button, child_tree_root),
+          MakeAXTreeUpdateForTesting(root, popup_button, child_tree_root),
           test_browser_accessibility_delegate_.get()));
 
   ASSERT_NE(manager->GetPopupRoot(), nullptr);
   EXPECT_EQ(manager->GetPopupRoot()->GetId(), 3);
 
-  // Update tree to change the role of the nested child root, add new child root
-  // in same update.
-  child_tree_root.role = ax::mojom::Role::kGroup;
-  ui::AXNodeData second_child_tree_root;
-  second_child_tree_root.id = 4;
-  second_child_tree_root.role = ax::mojom::Role::kRootWebArea;
-  root.child_ids.push_back(4);
-
-  manager->Initialize(
-      MakeAXTreeUpdate(root, child_tree_root, second_child_tree_root));
-
-  ASSERT_NE(manager->GetPopupRoot(), nullptr);
-  EXPECT_EQ(manager->GetPopupRoot()->GetId(), 4);
-
-  // Update tree to change the role of the nested child root, so that there is
-  // no longer any nested child root.
-  second_child_tree_root.role = ax::mojom::Role::kGroup;
-  manager->Initialize(MakeAXTreeUpdate(second_child_tree_root));
-  EXPECT_EQ(manager->GetPopupRoot(), nullptr);
-
   // Test deleting child root.
 
-  // First, ensure a child root exists.
-  second_child_tree_root.role = ax::mojom::Role::kRootWebArea;
-  manager->Initialize(MakeAXTreeUpdate(second_child_tree_root));
-  ASSERT_NE(manager->GetPopupRoot(), nullptr);
-  EXPECT_EQ(manager->GetPopupRoot()->GetId(), 4);
-
   // Now remove the child root from the tree.
-  root.child_ids = {2, 3};
-  manager->Initialize(MakeAXTreeUpdate(root));
+  popup_button.child_ids = {};
+  ui::AXTreeUpdate update = MakeAXTreeUpdateForTesting(popup_button);
+  update.tree_data.tree_id = manager->GetTreeID();
+  AXEventNotificationDetails events;
+  events.updates = {update};
+  ASSERT_TRUE(manager->OnAccessibilityEvents(events));
+
   EXPECT_EQ(manager->GetPopupRoot(), nullptr);
 }
 
@@ -1563,7 +1462,7 @@ TEST_F(BrowserAccessibilityManagerTest, TestApproximateHitTestCache) {
   child2.SetName("child2");
   child2.relative_bounds.bounds = gfx::RectF(50, 50, 50, 50);
 
-  ui::AXTreeUpdate update = MakeAXTreeUpdate(root, child1, child2);
+  ui::AXTreeUpdate update = MakeAXTreeUpdateForTesting(root, child1, child2);
 
   // Create manager.
   std::unique_ptr<BrowserAccessibilityManager> manager(
@@ -1597,7 +1496,8 @@ TEST_F(BrowserAccessibilityManagerTest, TestOnNodeReparented) {
 
   root.child_ids = {child1.id, child2.id};
 
-  const ui::AXTreeUpdate update1 = MakeAXTreeUpdate(root, child1, child2);
+  const ui::AXTreeUpdate update1 =
+      MakeAXTreeUpdateForTesting(root, child1, child2);
   CountingAXTreeObserver observer;
   std::unique_ptr<BrowserAccessibilityManager> manager(
       BrowserAccessibilityManager::Create(
@@ -1609,15 +1509,23 @@ TEST_F(BrowserAccessibilityManagerTest, TestOnNodeReparented) {
   // Reparenting a child found in the tree should not crash.
   root.child_ids = {child1.id};
   child1.child_ids = {child2.id};
-  const ui::AXTreeUpdate update2 = MakeAXTreeUpdate(root, child1, child2);
+  ui::AXTreeUpdate update2 = MakeAXTreeUpdateForTesting(root, child1, child2);
+  update2.tree_data.tree_id = update1.tree_data.tree_id;
   manager->ax_tree()->Unserialize(update2);
   EXPECT_EQ(1, observer.reparent_count());
   EXPECT_EQ(3, observer.node_count());
 
-  // Reparenting a new child that is not found in the tree should not crash.
+  // Reparenting a new child that is not found in the tree should trigger a
+  // DCHECK in AX_FAIL_FAST_BUILD builds, otherwise it should not crash.
   ui::AXNode child3(manager->ax_tree(), /* parent */ nullptr, /* id */ 4,
                     /* index_in_parent */ 0u);
+#if defined(AX_FAIL_FAST_BUILD)
+  EXPECT_DEATH_IF_SUPPORTED(
+      manager->OnNodeReparented(manager->ax_tree(), &child3),
+      "Missing BrowserAccessibility");
+#else
   manager->OnNodeReparented(manager->ax_tree(), &child3);
+#endif
   // We avoid checking the observer on purpose, since reparenting a non-existent
   // node should not trigger any tree observers. The node is not in the tree,
   // hence the normal tree update process cannot be followed.

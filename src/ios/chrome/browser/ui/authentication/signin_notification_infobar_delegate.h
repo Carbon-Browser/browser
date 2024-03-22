@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 
 #include "components/infobars/core/confirm_infobar_delegate.h"
-#include "components/sync/driver/sync_service_observer.h"
-#include "ios/chrome/browser/sync/sync_setup_service.h"
+#include "components/sync/service/sync_service_observer.h"
+#include "ios/chrome/browser/sync/model/sync_setup_service.h"
 #include "ui/gfx/image/image.h"
 
 @protocol ApplicationSettingsCommands;

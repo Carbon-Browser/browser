@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,11 +36,11 @@ class UnittestingSystemAppDelegate : public SystemWebAppDelegate {
                                        const GURL&,
                                        const apps::AppLaunchParams&)>;
 
-  std::unique_ptr<WebAppInstallInfo> GetWebAppInfo() const override;
+  std::unique_ptr<web_app::WebAppInstallInfo> GetWebAppInfo() const override;
 
   std::vector<std::string> GetAppIdsToUninstallAndReplace() const override;
   gfx::Size GetMinimumWindowSize() const override;
-  bool ShouldReuseExistingWindow() const override;
+  Browser* GetWindowForLaunch(Profile* profile, const GURL& url) const override;
   bool ShouldShowNewWindowMenuOption() const override;
   base::FilePath GetLaunchDirectory(
       const apps::AppLaunchParams& params) const override;
@@ -51,6 +51,7 @@ class UnittestingSystemAppDelegate : public SystemWebAppDelegate {
   bool ShouldCaptureNavigations() const override;
   bool ShouldAllowResize() const override;
   bool ShouldAllowMaximize() const override;
+  bool ShouldAllowFullscreen() const override;
   bool ShouldHaveTabStrip() const override;
   bool ShouldHaveReloadButtonInMinimalUi() const override;
   bool ShouldAllowScriptsToCloseWindows() const override;
@@ -64,11 +65,12 @@ class UnittestingSystemAppDelegate : public SystemWebAppDelegate {
   bool IsAppEnabled() const override;
   bool IsUrlInSystemAppScope(const GURL& url) const override;
   bool PreferManifestBackgroundColor() const override;
+  bool UseSystemThemeColor() const override;
 #if BUILDFLAG(IS_CHROMEOS)
   bool ShouldAnimateThemeChanges() const override;
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-  void SetAppIdsToUninstallAndReplace(const std::vector<web_app::AppId>&);
+  void SetAppIdsToUninstallAndReplace(const std::vector<webapps::AppId>&);
   void SetMinimumWindowSize(const gfx::Size&);
   void SetShouldReuseExistingWindow(bool);
   void SetShouldShowNewWindowMenuOption(bool);
@@ -90,6 +92,7 @@ class UnittestingSystemAppDelegate : public SystemWebAppDelegate {
   void SetIsAppEnabled(bool);
   void SetUrlInSystemAppScope(const GURL& url);
   void SetPreferManifestBackgroundColor(bool);
+  void SetUseSystemThemeColor(bool);
 #if BUILDFLAG(IS_CHROMEOS)
   void SetShouldAnimateThemeChanges(bool);
 #endif  // BUILDFLAG(IS_CHROMEOS)
@@ -97,7 +100,7 @@ class UnittestingSystemAppDelegate : public SystemWebAppDelegate {
  private:
   web_app::WebAppInstallInfoFactory info_factory_;
 
-  std::vector<web_app::AppId> uninstall_and_replace_;
+  std::vector<webapps::AppId> uninstall_and_replace_;
   gfx::Size minimum_window_size_;
   bool single_window_ = true;
   bool show_new_window_menu_option_ = false;
@@ -109,12 +112,14 @@ class UnittestingSystemAppDelegate : public SystemWebAppDelegate {
   bool capture_navigations_ = false;
   bool is_resizeable_ = true;
   bool is_maximizable_ = true;
+  bool is_fullscreenable_ = true;
   bool has_tab_strip_ = false;
   bool should_have_reload_button_in_minimal_ui_ = true;
   bool allow_scripts_to_close_windows_ = false;
   bool is_app_enabled = true;
   GURL url_in_system_app_scope_;
   bool prefer_manifest_background_color_ = false;
+  bool use_system_theme_color_ = true;
 #if BUILDFLAG(IS_CHROMEOS)
   bool should_animate_theme_changes_ = false;
 #endif  // BUILDFLAG(IS_CHROMEOS)
@@ -214,11 +219,13 @@ class TestSystemWebAppInstallation {
       absl::optional<SkColor> background_color,
       absl::optional<SkColor> dark_mode_background_color);
 
+  static std::unique_ptr<TestSystemWebAppInstallation> SetUpAppWithValidIcons();
+
   ~TestSystemWebAppInstallation();
 
   void WaitForAppInstall();
 
-  web_app::AppId GetAppId();
+  webapps::AppId GetAppId();
   const GURL& GetAppUrl();
   SystemWebAppDelegate* GetDelegate();
   SystemWebAppType GetType();
@@ -243,7 +250,7 @@ class TestSystemWebAppInstallation {
   // Must be called in SetUp*App() methods, before WebAppProvider is created.
   void RegisterAutoGrantedPermissions(ContentSettingsType permission);
 
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
   SystemWebAppManager::UpdatePolicy update_policy_ =
       SystemWebAppManager::UpdatePolicy::kAlwaysUpdate;
 

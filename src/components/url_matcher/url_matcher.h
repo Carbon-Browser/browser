@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,7 +93,7 @@ class URL_MATCHER_EXPORT URLMatcherCondition {
   Criterion criterion_;
 
   // This is the MatcherStringPattern that is used in a SubstringSetMatcher.
-  raw_ptr<const base::MatcherStringPattern> string_pattern_;
+  raw_ptr<const base::MatcherStringPattern, DanglingUntriaged> string_pattern_;
 };
 
 // Class to map the problem of finding {host, path, query} {prefixes, suffixes,

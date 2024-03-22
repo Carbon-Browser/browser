@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
 #include "components/browsing_data/core/pref_names.h"
@@ -114,8 +114,11 @@ void BrowsingDataCounter::ReportResult(std::unique_ptr<Result> result) {
       staged_result_ = std::move(result);
       return;
     case State::IDLE:
+      NOTREACHED() << "State::IDLE";
+      return;
     case State::REPORT_STAGED_RESULT:
-      NOTREACHED();
+      NOTREACHED() << "State::REPORT_STAGED_RESULT";
+      return;
   }
 }
 

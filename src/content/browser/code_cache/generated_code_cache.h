@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,8 @@ class CONTENT_EXPORT GeneratedCodeCache {
   };
 
   // Used for collecting statistics about cache behaviour.
-  enum CacheEntryStatus {
+  // Since it's uploaded to UMA, its values must never change.
+  enum CacheEntryStatus : uint8_t {
     kHit,
     kMiss,
     kClear,

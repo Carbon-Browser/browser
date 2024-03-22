@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "net/base/features.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/schemeful_site.h"
 #include "net/cookies/cookie_access_result.h"
 #include "net/cookies/cookie_store.h"
@@ -621,15 +621,15 @@ TEST_F(ReportingUploaderTest, DontCacheResponse) {
   EXPECT_EQ(2, request_count);
 }
 
-// Create two requests with the same NetworkIsolationKey, and one request with a
-// different one, and make sure only the requests with the same
-// NetworkIsolationKey share a socket.
-TEST_F(ReportingUploaderTest, RespectsNetworkIsolationKey) {
-  // While features::kPartitionConnectionsByNetworkIsolationKey is not needed
-  // for reporting code to respect NetworkIsolationKeys, this test works by
-  // ensuring that Reporting's NetworkIsolationKey makes it to the socket pool
-  // layer and is respected there, so this test needs to enable
-  // kPartitionConnectionsByNetworkIsolationKey.
+// Create two requests with the same NetworkAnonymizationKey, and one request
+// with a different one, and make sure only the requests with the same
+// NetworkAnonymizationKey share a socket.
+TEST_F(ReportingUploaderTest, RespectsNetworkAnonymizationKey) {
+  // While network state partitioning is not needed for reporting code to
+  // respect NetworkAnonymizationKey, this test works by ensuring that
+  // Reporting's NetworkAnonymizationKey makes it to the socket pool layer and
+  // is respected there, so this test needs to enable
+  // network state partitioning.
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndEnableFeature(
       features::kPartitionConnectionsByNetworkIsolationKey);
@@ -639,10 +639,14 @@ TEST_F(ReportingUploaderTest, RespectsNetworkIsolationKey) {
   ASSERT_NE(kSite1, kSite2);
   const NetworkIsolationKey kNetworkIsolationKey1(kSite1, kSite1);
   const NetworkIsolationKey kNetworkIsolationKey2(kSite2, kSite2);
-  const IsolationInfo kIsolationInfo1 = IsolationInfo::CreatePartial(
-      IsolationInfo::RequestType::kOther, kNetworkIsolationKey1);
-  const IsolationInfo kIsolationInfo2 = IsolationInfo::CreatePartial(
-      IsolationInfo::RequestType::kOther, kNetworkIsolationKey2);
+  const url::Origin kSiteOrigin1 = url::Origin::Create(kSite1.GetURL());
+  const url::Origin kSiteOrigin2 = url::Origin::Create(kSite2.GetURL());
+  const IsolationInfo kIsolationInfo1 =
+      IsolationInfo::Create(net::IsolationInfo::RequestType::kOther,
+                            kSiteOrigin1, kSiteOrigin1, net::SiteForCookies());
+  const IsolationInfo kIsolationInfo2 =
+      IsolationInfo::Create(net::IsolationInfo::RequestType::kOther,
+                            kSiteOrigin2, kSiteOrigin2, net::SiteForCookies());
 
   MockClientSocketFactory socket_factory;
   auto context_builder = CreateTestURLRequestContextBuilder();
@@ -720,8 +724,8 @@ TEST_F(ReportingUploaderTest, RespectsNetworkIsolationKey) {
   EXPECT_EQ(ReportingUploader::Outcome::SUCCESS, callback1.outcome());
 
   // Start two more requests in parallel. The first started uses a different
-  // NetworkIsolationKey, so should create a new socket, while the second one
-  // gets the other socket. Start in parallel to make sure that a new socket
+  // NetworkAnonymizationKey, so should create a new socket, while the second
+  // one gets the other socket. Start in parallel to make sure that a new socket
   // isn't created just because the first is returned to the socket pool
   // asynchronously.
   TestUploadCallback callback2;

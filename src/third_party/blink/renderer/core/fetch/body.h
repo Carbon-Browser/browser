@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,8 +52,6 @@ class CORE_EXPORT Body : public ExecutionContextClient {
 
   // True if the body is locked.
   bool IsBodyLocked() const;
-
-  bool HasPendingActivity() const;
 
  private:
   // TODO(e_hakkinen): Fix |MimeType()| to always contain parameters and

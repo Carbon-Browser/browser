@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,15 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/native_web_keyboard_event.h"
-#include "content/public/browser/notification_details.h"
-#include "content/public/browser/notification_source.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/events/event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
+#include "ui/gfx/native_widget_types.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/widget/native_widget_private.h"
@@ -67,7 +65,8 @@ END_METADATA
 
 WebDialogView::WebDialogView(content::BrowserContext* context,
                              WebDialogDelegate* delegate,
-                             std::unique_ptr<WebContentsHandler> handler)
+                             std::unique_ptr<WebContentsHandler> handler,
+                             content::WebContents* web_contents)
     : ClientView(nullptr, nullptr),
       WebDialogWebContentsDelegate(context, std::move(handler)),
       delegate_(delegate),
@@ -87,6 +86,10 @@ WebDialogView::WebDialogView(content::BrowserContext* context,
       AddAccelerator(accelerator);
     RegisterWindowWillCloseCallback(base::BindOnce(
         &WebDialogView::NotifyDialogWillClose, base::Unretained(this)));
+  }
+
+  if (web_contents) {
+    web_view_->SetWebContents(web_contents);
   }
 }
 
@@ -230,8 +233,7 @@ std::unique_ptr<NonClientFrameView> WebDialogView::CreateNonClientFrameView(
     case WebDialogDelegate::FrameKind::kDialog:
       return DialogDelegate::CreateDialogFrameView(widget);
     default:
-      NOTREACHED() << "Unknown frame kind type enum specified.";
-      return std::unique_ptr<NonClientFrameView>{};
+      NOTREACHED_NORETURN() << "Unknown frame kind type enum specified.";
   }
 }
 
@@ -271,7 +273,7 @@ GURL WebDialogView::GetDialogContentURL() const {
 }
 
 void WebDialogView::GetWebUIMessageHandlers(
-    std::vector<WebUIMessageHandler*>* handlers) const {
+    std::vector<WebUIMessageHandler*>* handlers) {
   if (delegate_)
     delegate_->GetWebUIMessageHandlers(handlers);
 }
@@ -299,10 +301,6 @@ void WebDialogView::OnDialogShown(content::WebUI* webui) {
 
 void WebDialogView::OnDialogClosed(const std::string& json_retval) {
   Detach();
-  if (delegate_) {
-    // Store the dialog content area size.
-    delegate_->StoreDialogSize(GetContentsBounds().size());
-  }
 
   if (GetWidget())
     GetWidget()->Close();
@@ -371,8 +369,9 @@ void WebDialogView::SetContentsBounds(WebContents* source,
 // they're all browser-specific. (This may change in the future.)
 bool WebDialogView::HandleKeyboardEvent(content::WebContents* source,
                                         const NativeWebKeyboardEvent& event) {
-  if (!event.os_event)
+  if (!event.os_event) {
     return false;
+  }
 
   return unhandled_keyboard_event_handler_.HandleKeyboardEvent(
       event, GetFocusManager());
@@ -402,11 +401,11 @@ void WebDialogView::AddNewContents(
     std::unique_ptr<content::WebContents> new_contents,
     const GURL& target_url,
     WindowOpenDisposition disposition,
-    const gfx::Rect& initial_rect,
+    const blink::mojom::WindowFeatures& window_features,
     bool user_gesture,
     bool* was_blocked) {
   WebDialogWebContentsDelegate::AddNewContents(
-      source, std::move(new_contents), target_url, disposition, initial_rect,
+      source, std::move(new_contents), target_url, disposition, window_features,
       user_gesture, was_blocked);
 }
 
@@ -446,7 +445,7 @@ void WebDialogView::RequestMediaAccessPermission(
 
 bool WebDialogView::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   if (delegate_) {
     return delegate_->CheckMediaAccessPermission(render_frame_host,

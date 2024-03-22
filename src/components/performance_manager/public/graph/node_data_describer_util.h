@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,8 @@
 #include "components/performance_manager/public/execution_context_priority/execution_context_priority.h"
 
 namespace performance_manager {
+
+class Node;
 
 // Converts a Mojo enum to a human-readable string.
 template <typename T>
@@ -34,6 +36,14 @@ base::Value MaybeNullStringToValue(base::StringPiece str);
 
 base::Value PriorityAndReasonToValue(
     const execution_context_priority::PriorityAndReason& priority_and_reason);
+
+// Returns `node`'s description as described by its primary data describer as
+// a formatted string.
+std::string DumpNodeDescription(const Node* node);
+
+// Returns the output of all registered data describers for `node` as a
+// formatted string.
+std::string DumpRegisteredDescribers(const Node* node);
 
 }  // namespace performance_manager
 

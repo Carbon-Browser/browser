@@ -1,8 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addSingletonGetter, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/ash/common/cr.m.js';
 import {NearbyShareStates, StatusCode} from './types.js';
 
 /**
@@ -120,6 +120,13 @@ export class NearbyUiTriggerBrowserProxy {
   }
 
   /**
+   * Tells C++ side to trigger a Nearby Share received notification.
+   */
+  showNearbyShareReceivedNotification() {
+    chrome.send('showNearbyShareReceivedNotification');
+  }
+
+  /**
    * Tells C++ side to trigger a Fast Pair error notification.
    */
   notifyFastPairError() {
@@ -160,6 +167,12 @@ export class NearbyUiTriggerBrowserProxy {
   notifyFastPairAssociateAccount() {
     chrome.send('notifyFastPairAssociateAccount');
   }
+
+  /** @return {!NearbyUiTriggerBrowserProxy} */
+  static getInstance() {
+    return instance || (instance = new NearbyUiTriggerBrowserProxy());
+  }
 }
 
-addSingletonGetter(NearbyUiTriggerBrowserProxy);
+/** @type {?NearbyUiTriggerBrowserProxy} */
+let instance = null;

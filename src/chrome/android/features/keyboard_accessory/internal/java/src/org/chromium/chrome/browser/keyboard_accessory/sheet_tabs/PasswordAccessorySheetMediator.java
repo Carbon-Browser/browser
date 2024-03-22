@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,18 @@ package org.chromium.chrome.browser.keyboard_accessory.sheet_tabs;
 import androidx.annotation.Nullable;
 
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData.AccessorySheetData;
+import org.chromium.ui.modelutil.PropertyModel;
 
-/**
- * This class contains the logic specific to the password accessory sheet.
- */
+/** This class contains the logic specific to the password accessory sheet. */
 class PasswordAccessorySheetMediator extends AccessorySheetTabMediator {
     private final ToggleChangeDelegate mToggleChangeDelegate;
 
-    PasswordAccessorySheetMediator(AccessorySheetTabModel model, int tabType, int userInfoType,
-            int manageActionToRecord, @Nullable ToggleChangeDelegate toggleChangeDelegate) {
+    PasswordAccessorySheetMediator(
+            PropertyModel model,
+            int tabType,
+            int userInfoType,
+            int manageActionToRecord,
+            @Nullable ToggleChangeDelegate toggleChangeDelegate) {
         super(model, tabType, userInfoType, manageActionToRecord, toggleChangeDelegate);
         mToggleChangeDelegate = toggleChangeDelegate;
     }

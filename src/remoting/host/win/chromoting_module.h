@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define REMOTING_HOST_WIN_CHROMOTING_MODULE_H_
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/win/atl.h"
 #include "base/win/scoped_com_initializer.h"
 
@@ -65,6 +65,6 @@ class ChromotingModule : public ATL::CAtlModuleT<ChromotingModule> {
   raw_ptr<ATL::_ATL_OBJMAP_ENTRY> classes_end_;
 };
 
-} // namespace remoting
+}  // namespace remoting
 
 #endif  // REMOTING_HOST_WIN_CHROMOTING_MODULE_H_

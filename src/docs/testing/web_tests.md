@@ -23,6 +23,9 @@ Note: if you are looking for a guide for the Web Platform Test, you should read
 ["Web platform tests"](./web_platform_tests.md) (WPT). This document does not
 cover WPT specific features/behaviors.
 
+Note: if you are looking for a guide for running the Web Platform Tests with
+Chrome, Chrome Android or WebView, you should read ["Running Web Platform Tests with run_wpt_tests.py"](./run_web_platform_tests.md).
+
 [TOC]
 
 ## Running Web Tests
@@ -59,8 +62,8 @@ strip ./out/Default/Content\ Shell.app/Contents/MacOS/Content\ Shell
 The test runner script is in `third_party/blink/tools/run_web_tests.py`.
 
 To specify which build directory to use (e.g. out/Default, etc.)
-you should pass the `-t` or `--target` parameter. For example, to
-use the build in `out/Default`, use:
+you should pass the `-t` or `--target` parameter. If no directory is specified,
+`out/Release` will be used. To use the built-in `out/Default`, use:
 
 ```bash
 third_party/blink/tools/run_web_tests.py -t Default
@@ -83,7 +86,7 @@ learn more about TestExpectations and related files.
 
 *** promo
 Currently only the tests listed in
-[Default.txt](../../third_party/blink/web_tests/SmokeTests/Default.txt) are run
+[Default.txt](../../third_party/blink/web_tests/TestLists/Default.txt) are run
 on the Fuchsia bots, since running all web tests takes too long on Fuchshia.
 Most developers focus their Blink testing on Linux. We rely on the fact that the
 Linux and Fuchsia behavior is nearly identical for scenarios outside those
@@ -92,7 +95,7 @@ covered by the smoke tests.
 
 *** promo
 Similar to Fuchsia's case, the tests listed in [Mac.txt]
-(../../third_party/blink/web_tests/SmokeTests/Mac.txt)
+(../../third_party/blink/web_tests/TestLists/Mac.txt)
 are run on older mac version bots. By doing this we reduced the resources needed to run
 the tests. This relies on the fact that the majority of web tests will behavior similarly on
 different mac versions.
@@ -191,7 +194,7 @@ to see a full list of options. A few of the most useful options are below:
 A test succeeds when its output matches the pre-defined expected results. If any
 tests fail, the test script will place the actual generated results, along with
 a diff of the actual and expected results, into
-`src/out/Default/layout_test_results/`, and by default launch a browser with a
+`src/out/Default/layout-test-results/`, and by default launch a browser with a
 summary and link to the results/diffs.
 
 The expected results for tests are in the
@@ -220,14 +223,21 @@ on this.
 
 There are two ways to run web tests with additional command-line arguments:
 
-### --flag-specific or --additional-driver-flag:
+### --flag-specific
 
 ```bash
-# Actually we prefer --flag-specific in some cases. See below for details.
-third_party/blink/tools/run_web_tests.py --additional-driver-flag=--blocking-repaint
+third_party/blink/tools/run_web_tests.py --flag-specific=blocking-repaint
+```
+It requires that `web_tests/FlagSpecificConfig` contains an entry like:
+
+```json
+{
+  "name": "blocking-repaint",
+  "args": ["--blocking-repaint", "--another-flag"]
+}
 ```
 
-This tells the test harness to pass `--blocking-repaint` to the
+This tells the test harness to pass `--blocking-repaint --another-flag` to the
 content_shell binary.
 
 It will also look for flag-specific expectations in
@@ -239,38 +249,16 @@ is always merged into the used expectations.
 It will also look for baselines in `web_tests/flag-specific/blocking-repaint`.
 The baselines in this directory override the fallback baselines.
 
-By default, name of the expectation file name under
-`web_tests/FlagExpectations` and name of the baseline directory under
-`web_tests/flag-specific` uses the first flag of --additional-driver-flag
-with leading '-'s stripped.
-
-You can also customize the name in `web_tests/FlagSpecificConfig` when
-the name is too long or when we need to match multiple additional args:
-
-```json
-{
-  "name": "short-name",
-  "args": ["--blocking-repaint", "--another-flag"]
-}
-```
-
-`web_tests/FlagSpecificConfig` is preferred when you need multiple flags,
-or the flag is long.
-
-With the config, you can use `--flag-specific=short-name` as a shortcut
-of `--additional-driver-flag=--blocking-repaint --additional-driver-flag=--another-flag`.
-
-`--additional-driver-flags` still works with `web_tests/FlagSpecificConfig`.
-For example, when at least `--additional-driver-flag=--blocking-repaint` and
-`--additional-driver-flag=--another-flag` are specified, `short-name` will
-be used as name of the flag specific expectation file and the baseline directory.
-
 *** note
 [BUILD.gn](../../BUILD.gn) assumes flag-specific builders always runs on linux bots, so
 flag-specific test expectations and baselines are only downloaded to linux bots.
-If you need run flag-specific builders on other platforms, please update
+If you need run flag-specific builderst-n other platforms, please update
 BUILD.gn to download flag-specific related data to that platform.
 ***
+
+You can also use `--additional-driver-flag` to specify additional command-line
+arguments to content_shell, but the test harness won't use any flag-specific
+test expectations or baselines.
 
 ### Virtual test suites
 
@@ -310,7 +298,7 @@ These virtual tests exist in addition to the original `compositing/...` and
 `web_tests/TestExpectations`, and their own baselines. The test harness will
 use the non-virtual expectations and baselines as a fallback. If a virtual
 test has its own expectations, they will override all non-virtual
-expectations. otherwise the non-virtual expectations will be used. However,
+expectations. Otherwise the non-virtual expectations will be used. However,
 `[ Slow ]` in either virtual or non-virtual expectations is always merged
 into the used expectations. If a virtual test is expected to pass while the
 non-virtual test is expected to fail, you need to add an explicit `[ Pass ]`
@@ -328,27 +316,85 @@ should be listed in the same "bases" list. The "bases" list can be empty,
 in case that we just want to run the real tests under `virtual/<prefix>`
 with the flags without creating any virtual tests.
 
+A virtual test suite can have an optional `exclusive_tests` field to specify
+all (with `"ALL"`) or a subset of `bases` tests that will be exclusively run
+under this virtual suite. The specified base tests will be skipped. Corresponding
+virtual tests under other virtual suites that don't specify the tests in their
+`exclusive_tests` list will be skipped, too. For example (unrelated fields
+are omitted):
+
+```json
+{
+  "prefix": "v1",
+  "bases": ["a"],
+}
+{
+  "prefix": "v2",
+  "bases": ["a/a1", "a/a2"],
+  "exclusive_tests": "ALL",
+}
+{
+  "prefix": "v3",
+  "bases": ["a"],
+  "exclusive_tests": ["a/a1"],
+}
+```
+
+Suppose there are directories `a/a1`, `a/a2` and `a/a3`, we will run the
+following tests:
+
+|      Suite |   a/a1  |   a/a2  | a/a3 |
+| ---------: | :-----: | :-----: | :--: |
+|       base | skipped | skipped | run  |
+| virtual/v1 | skipped | skipped | run  |
+| virtual/v2 |   run   |   run   | n/a  |
+| virtual/v3 |   run   | skipped | run  |
+
+In a similar manner, a virtual test suite can also have an optional
+`skip_base_tests` field to specify all (with `"ALL"`) or a subset of `bases`
+tests that will be run under this virtual while the base tests will be skipped.
+This will not affect other virtual suites.
+
+```json
+{
+  "prefix": "v1",
+  "bases": ["a/a1"],
+}
+{
+  "prefix": "v2",
+  "bases": ["a/a1"],
+  "skip_base_tests": "ALL",
+}
+```
+Suppose there are directories `a/a1` and `a/a2` we will run the following tests:
+
+|      Suite |   a/a1  |   a/a2  |
+| ---------: | :-----: | :-----: |
+|       base | skipped |   run   |
+| virtual/v1 |   run   |   n/a   |
+| virtual/v2 |   run   |   n/a   |
+
+
 ### Choosing between flag-specific and virtual test suite
 
 For flags whose implementation is still in progress, flag-specific expectations
 and virtual test suites represent two alternative strategies for testing both
-the enabled code path and not-enabled code path. They are preferred to only
+the enabled code path and non-enabled code path. They are preferred to only
 setting a [runtime enabled feature](../../third_party/blink/renderer/platform/RuntimeEnabledFeatures.md)
 to `status: "test"` if the feature has substantially different code path from
 production because the latter would cause loss of test coverage of the production
 code path.
 
 Consider the following when choosing between virtual test suites and
-flag-specific expectations:
+flag-specific suites:
 
 * The
   [waterfall builders](https://dev.chromium.org/developers/testing/chromium-build-infrastructure/tour-of-the-chromium-buildbot)
   and [try bots](https://dev.chromium.org/developers/testing/try-server-usage)
   will run all virtual test suites in addition to the non-virtual tests.
-  Conversely, a flag-specific expectations file won't automatically cause the
-  bots to test your flag - if you want bot coverage without virtual test suites,
-  you will need to set up a dedicated bot ([example](https://chromium-review.googlesource.com/c/chromium/src/+/1850255))
-  for your flag.
+  Conversely, a flag-specific configuration won't automatically cause the bots
+  to test your flag - if you want bot coverage without virtual test suites, you
+  will need to follow [these instructions](#running-a-new-flag_specific-suite-in-cq_ci).
 
 * Due to the above, virtual test suites incur a performance penalty for the
   commit queue and the continuous build infrastructure. This is exacerbated by
@@ -371,6 +417,32 @@ additional flags will be applied. The fallback order of baselines and
 expectations will be: 1) flag-specific virtual, 2) non-flag-specific virtual,
 3) flag-specific base, 4) non-flag-specific base
 ***
+
+### Running a New Flag-Specific Suite in CQ/CI
+
+Assuming you have already created a `FlagSpecificConfig` entry:
+
+1. File a resource request ([internal
+   docs](https://g3doc.corp.google.com/company/teams/chrome/ops/business/resources/resource-request-program.md?cl=head&polyglot=chrome-browser#i-need-new-resources))
+   for increased capacity in the `chromium.tests` swarming pool and wait for
+   approval.
+1. Define a new dedicated
+   [Buildbot test suite](https://source.chromium.org/chromium/chromium/src/+/main:testing/buildbot/test_suites.pyl;l=1516-1583;drc=0694b605fb77c975a065a3734bdcf3bd81fd8ca4;bpv=0;bpt=0)
+   with `--flag-specific` and possibly other special configurations (e.g., fewer shards).
+1. Add the Buildbot suite to the relevant `*-blink-rel` builder's
+   composition suite first
+   ([example](https://source.chromium.org/chromium/chromium/src/+/main:testing/buildbot/test_suites.pyl;l=5779-5780;drc=0694b605fb77c975a065a3734bdcf3bd81fd8ca4;bpv=0;bpt=0)).
+1. Add the flag-specific step name to the relevant builder in
+   [`builders.json`](https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/tools/blinkpy/common/config/builders.json;l=127-129;drc=ff938aaff9566b2cc442476a51835e0b90b1c6f6;bpv=0;bpt=0).
+   `rebaseline-cl` and the WPT importer will now create baselines for that suite.
+1. Rebaseline the new suite and add any necessary suppressions under
+   `FlagExpectations/`.
+1. Enable the flag-specific suite for CQ/CI by adding the Buildbot suite to the
+   desired builder.
+   This could be an existing CQ builder like
+   [`linux-rel`](https://source.chromium.org/chromium/chromium/src/+/main:testing/buildbot/test_suites.pyl;l=5828-5829;drc=0694b605fb77c975a065a3734bdcf3bd81fd8ca4;bpv=0;bpt=0)
+   or a dedicated builder like
+   [`linux-blink-web-tests-force-accessibility-rel`](https://source.chromium.org/chromium/chromium/src/+/main:infra/config/subprojects/chromium/try/tryserver.chromium.accessibility.star;drc=adad4c6d55e69783ba1f16d30f4bc7367e2e626a;bpv=0;bpt=0), which has customized location filters.
 
 ## Tracking Test Failures
 

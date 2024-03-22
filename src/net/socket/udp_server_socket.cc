@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,6 +73,10 @@ int UDPServerSocket::SetSendBufferSize(int32_t size) {
 
 int UDPServerSocket::SetDoNotFragment() {
   return socket_.SetDoNotFragment();
+}
+
+int UDPServerSocket::SetRecvEcn() {
+  return socket_.SetRecvEcn();
 }
 
 void UDPServerSocket::SetMsgConfirm(bool confirm) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <limits>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/format_macros.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -422,8 +422,7 @@ const char* VideoCaptureOracle::EventAsString(Event event) {
     case kNumEvents:
       break;
   }
-  NOTREACHED();
-  return "unknown";
+  NOTREACHED_NORETURN();
 }
 
 base::TimeTicks VideoCaptureOracle::GetFrameTimestamp(int frame_number) const {

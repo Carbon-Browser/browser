@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -116,10 +116,14 @@ class CORE_EXPORT CSSParserContext final
   // CSSParserContext is not well understood and thus we sometimes need to
   // override this field.
   void SetMode(CSSParserMode mode) { mode_ = mode; }
+  CSSParserMode GetMode() const { return mode_; }
 
   void SetIsAdRelated() { is_ad_related_ = true; }
 
   KURL CompleteURL(const String& url) const;
+
+  // Like CompleteURL(), but if `url` is empty a null KURL is returned.
+  KURL CompleteNonEmptyURL(const String& url) const;
 
   SecureContextMode GetSecureContextMode() const {
     return secure_context_mode_;
@@ -128,7 +132,7 @@ class CORE_EXPORT CSSParserContext final
   void Count(WebFeature) const;
   void Count(CSSParserMode, CSSPropertyID) const;
   void CountDeprecation(WebFeature) const;
-  bool IsUseCounterRecordingEnabled() const { return document_; }
+  bool IsUseCounterRecordingEnabled() const { return document_ != nullptr; }
   bool IsDocumentHandleEqual(const Document* other) const;
   const Document* GetDocument() const;
   const ExecutionContext* GetExecutionContext() const;

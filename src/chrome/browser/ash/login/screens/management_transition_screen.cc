@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,29 +8,25 @@
 #include "ash/components/arc/arc_prefs.h"
 #include "ash/components/arc/session/arc_management_transition.h"
 #include "ash/public/cpp/login_screen.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
-#include "chrome/browser/ash/login/screens/management_transition_screen.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/ash/system_tray_client_impl.h"
 #include "chrome/browser/ui/managed_ui.h"
-#include "chrome/browser/ui/webui/chromeos/login/management_transition_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/management_transition_screen_handler.h"
+
+namespace ash {
 
 namespace {
 
 constexpr base::TimeDelta kWaitingTimeout = base::Minutes(2);
 
-}  // namespace
-
-namespace ash {
-
-namespace {
 // Management transition screen step names.
 constexpr const char kUserActionfinishManagementTransition[] =
     "finish-management-transition";
@@ -69,9 +65,9 @@ void ManagementTransitionScreen::ShowImpl() {
   // Disable system tray, shutdown button and prevent login as guest when
   // management transition screen is shown.
   SystemTrayClientImpl::Get()->SetPrimaryTrayEnabled(false);
-  ash::LoginScreen::Get()->EnableShutdownButton(false);
-  ash::LoginScreen::Get()->SetAllowLoginAsGuest(false);
-  ash::LoginScreen::Get()->SetIsFirstSigninStep(false);
+  LoginScreen::Get()->EnableShutdownButton(false);
+  LoginScreen::Get()->SetAllowLoginAsGuest(false);
+  LoginScreen::Get()->SetIsFirstSigninStep(false);
 
   arc::ArcManagementTransition arc_management_transition =
       arc::GetManagementTransition(profile);

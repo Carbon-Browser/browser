@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ struct COMPONENT_EXPORT(DISPLAY_SHARED_MOJOM_TRAITS)
     return r.is_monochrome;
   }
 
-  static int display_frequency(const display::ScreenInfo& r) {
+  static float display_frequency(const display::ScreenInfo& r) {
     return r.display_frequency;
   }
 

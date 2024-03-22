@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_VR_SCHEDULER_DELEGATE_H_
 #define CHROME_BROWSER_VR_SCHEDULER_DELEGATE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/vr/frame_type.h"
 #include "chrome/browser/vr/vr_export.h"
 #include "device/vr/public/mojom/isolated_xr_service.mojom.h"
@@ -30,8 +30,6 @@ class VR_EXPORT SchedulerDelegate {
   virtual void OnResume() = 0;
 
   virtual void OnExitPresent() = 0;
-  virtual void SetWebXrMode(bool enabled) = 0;
-  virtual void SetShowingVrDialog(bool showing) = 0;
   virtual void SetBrowserRenderer(
       SchedulerBrowserRendererInterface* browser_renderer) = 0;
   virtual void SubmitDrawnFrame(FrameType frame_type,

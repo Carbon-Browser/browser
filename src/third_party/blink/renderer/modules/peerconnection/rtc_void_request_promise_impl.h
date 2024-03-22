@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,7 @@ class RTCPeerConnection;
 // shared code as to not repeat the majority of the implementations.
 class RTCVoidRequestPromiseImpl final : public RTCVoidRequest {
  public:
-  RTCVoidRequestPromiseImpl(absl::optional<RTCSetSessionDescriptionOperation>,
-                            RTCPeerConnection*,
+  RTCVoidRequestPromiseImpl(RTCPeerConnection*,
                             ScriptPromiseResolver*,
                             const char* interface_name,
                             const char* property_name);
@@ -37,7 +36,6 @@ class RTCVoidRequestPromiseImpl final : public RTCVoidRequest {
  private:
   void Clear();
 
-  absl::optional<RTCSetSessionDescriptionOperation> operation_;
   Member<RTCPeerConnection> requester_;
   Member<ScriptPromiseResolver> resolver_;
   const char* interface_name_;

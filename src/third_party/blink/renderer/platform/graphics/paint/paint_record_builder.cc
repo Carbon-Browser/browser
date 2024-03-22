@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ PaintRecordBuilder::PaintRecordBuilder(PaintController& paint_controller)
 
 PaintRecordBuilder::~PaintRecordBuilder() = default;
 
-sk_sp<PaintRecord> PaintRecordBuilder::EndRecording(
+PaintRecord PaintRecordBuilder::EndRecording(
     const PropertyTreeState& replay_state) {
   paint_controller_->CommitNewDisplayItems();
   return paint_controller_->GetPaintArtifact().GetPaintRecord(replay_state);

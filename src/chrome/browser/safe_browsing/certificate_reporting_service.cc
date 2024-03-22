@@ -1,12 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/safe_browsing/certificate_reporting_service.h"
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/clock.h"
@@ -272,8 +272,8 @@ void CertificateReportingService::Reset(bool enabled) {
 void CertificateReportingService::OnPreferenceChanged() {
   safe_browsing::SafeBrowsingService* safe_browsing_service_ =
       g_browser_process->safe_browsing_service();
-  const bool enabled = safe_browsing_service_ &&
-                       safe_browsing_service_->enabled_by_prefs() &&
-                       safe_browsing::IsExtendedReportingEnabled(pref_service_);
+  const bool enabled =
+      safe_browsing_service_ && safe_browsing_service_->enabled_by_prefs() &&
+      safe_browsing::IsExtendedReportingEnabled(*pref_service_);
   SetEnabled(enabled);
 }

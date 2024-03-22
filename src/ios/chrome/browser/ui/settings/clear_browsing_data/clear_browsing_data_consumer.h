@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@ enum class BrowsingDataRemoveMask;
 
 @protocol ClearBrowsingDataConsumer <NSObject>
 // Execute action to clear browsing data.
+// `completionBlock` is then executed asynchronously.
 - (void)removeBrowsingDataForBrowserState:(ChromeBrowserState*)browserState
                                timePeriod:(browsing_data::TimePeriod)timePeriod
                                removeMask:(BrowsingDataRemoveMask)removeMask
@@ -30,6 +31,9 @@ enum class BrowsingDataRemoveMask;
 
 // Indicate to user that data has been cleared.
 - (void)showBrowsingHistoryRemovedDialog;
+
+// Dismisses the alert coordinator.
+- (void)dismissAlertCoordinator;
 
 @end
 

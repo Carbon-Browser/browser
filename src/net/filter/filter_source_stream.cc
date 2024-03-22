@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/containers/fixed_flat_map.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_util.h"
-#include "net/base/features.h"
+#include "components/miracle_parameter/common/public/miracle_parameter.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 
@@ -20,10 +21,20 @@ namespace net {
 
 namespace {
 
-const char kDeflate[] = "deflate";
-const char kGZip[] = "gzip";
-const char kXGZip[] = "x-gzip";
-const char kBrotli[] = "br";
+constexpr char kDeflate[] = "deflate";
+constexpr char kGZip[] = "gzip";
+constexpr char kXGZip[] = "x-gzip";
+constexpr char kBrotli[] = "br";
+constexpr char kZstd[] = "zstd";
+
+BASE_FEATURE(kBufferSizeForFilterSourceStreamFeature,
+             "BufferSizeForFilterSourceStreamFeature",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+MIRACLE_PARAMETER_FOR_INT(GetBufferSizeForFilterSourceStream,
+                          kBufferSizeForFilterSourceStreamFeature,
+                          "BufferSizeForFilterSourceStream",
+                          32 * 1024)
 
 }  // namespace
 
@@ -45,8 +56,7 @@ int FilterSourceStream::Read(IOBuffer* read_buffer,
   // Allocate a BlockBuffer during first Read().
   if (!input_buffer_) {
     input_buffer_ = base::MakeRefCounted<IOBufferWithSize>(
-        net::features::kOptimizeNetworkBuffersFilterSourceStreamBufferSize
-            .Get());
+        GetBufferSizeForFilterSourceStream());
     // This is first Read(), start with reading data from |upstream_|.
     next_state_ = STATE_READ_DATA;
   } else {
@@ -56,7 +66,7 @@ int FilterSourceStream::Read(IOBuffer* read_buffer,
   }
 
   output_buffer_ = read_buffer;
-  output_buffer_size_ = read_buffer_size;
+  output_buffer_size_ = base::checked_cast<size_t>(read_buffer_size);
   int rv = DoLoop(OK);
 
   if (rv == ERR_IO_PENDING)
@@ -77,18 +87,21 @@ bool FilterSourceStream::MayHaveMoreBytes() const {
 
 FilterSourceStream::SourceType FilterSourceStream::ParseEncodingType(
     const std::string& encoding) {
-  if (encoding.empty()) {
-    return TYPE_NONE;
-  } else if (base::EqualsCaseInsensitiveASCII(encoding, kBrotli)) {
-    return TYPE_BROTLI;
-  } else if (base::EqualsCaseInsensitiveASCII(encoding, kDeflate)) {
-    return TYPE_DEFLATE;
-  } else if (base::EqualsCaseInsensitiveASCII(encoding, kGZip) ||
-             base::EqualsCaseInsensitiveASCII(encoding, kXGZip)) {
-    return TYPE_GZIP;
-  } else {
+  std::string lower_encoding = base::ToLowerASCII(encoding);
+  static constexpr auto kEncodingMap =
+      base::MakeFixedFlatMap<base::StringPiece, SourceType>({
+          {"", TYPE_NONE},
+          {kBrotli, TYPE_BROTLI},
+          {kDeflate, TYPE_DEFLATE},
+          {kGZip, TYPE_GZIP},
+          {kXGZip, TYPE_GZIP},
+          {kZstd, TYPE_ZSTD},
+      });
+  auto* encoding_type = kEncodingMap.find(lower_encoding);
+  if (encoding_type == kEncodingMap.end()) {
     return TYPE_UNKNOWN;
   }
+  return encoding_type->second;
 }
 
 int FilterSourceStream::DoLoop(int result) {
@@ -126,11 +139,10 @@ int FilterSourceStream::DoReadData() {
 
   next_state_ = STATE_READ_DATA_COMPLETE;
   // Use base::Unretained here is safe because |this| owns |upstream_|.
-  int rv = upstream_->Read(
-      input_buffer_.get(),
-      net::features::kOptimizeNetworkBuffersFilterSourceStreamBufferSize.Get(),
-      base::BindOnce(&FilterSourceStream::OnIOComplete,
-                     base::Unretained(this)));
+  int rv =
+      upstream_->Read(input_buffer_.get(), GetBufferSizeForFilterSourceStream(),
+                      base::BindOnce(&FilterSourceStream::OnIOComplete,
+                                     base::Unretained(this)));
 
   return rv;
 }
@@ -152,30 +164,40 @@ int FilterSourceStream::DoFilterData() {
   DCHECK(output_buffer_);
   DCHECK(drainable_input_buffer_);
 
-  int consumed_bytes = 0;
-  int bytes_output = FilterData(output_buffer_.get(), output_buffer_size_,
-                                drainable_input_buffer_.get(),
-                                drainable_input_buffer_->BytesRemaining(),
-                                &consumed_bytes, upstream_end_reached_);
-  DCHECK_LE(consumed_bytes, drainable_input_buffer_->BytesRemaining());
-  DCHECK(bytes_output != 0 ||
-         consumed_bytes == drainable_input_buffer_->BytesRemaining());
+  size_t consumed_bytes = 0;
+  base::expected<size_t, Error> bytes_output = FilterData(
+      output_buffer_.get(), output_buffer_size_, drainable_input_buffer_.get(),
+      drainable_input_buffer_->BytesRemaining(), &consumed_bytes,
+      upstream_end_reached_);
 
+  const auto bytes_remaining =
+      base::checked_cast<size_t>(drainable_input_buffer_->BytesRemaining());
+  if (bytes_output.has_value() && bytes_output.value() == 0) {
+    DCHECK_EQ(consumed_bytes, bytes_remaining);
+  } else {
+    DCHECK_LE(consumed_bytes, bytes_remaining);
+  }
   // FilterData() is not allowed to return ERR_IO_PENDING.
-  DCHECK_NE(ERR_IO_PENDING, bytes_output);
+  if (!bytes_output.has_value())
+    DCHECK_NE(ERR_IO_PENDING, bytes_output.error());
 
   if (consumed_bytes > 0)
     drainable_input_buffer_->DidConsume(consumed_bytes);
 
   // Received data or encountered an error.
-  if (bytes_output != 0)
-    return bytes_output;
+  if (!bytes_output.has_value()) {
+    CHECK_LT(bytes_output.error(), 0);
+    return bytes_output.error();
+  }
+  if (bytes_output.value() != 0)
+    return base::checked_cast<int>(bytes_output.value());
+
   // If no data is returned, continue reading if |this| needs more input.
   if (NeedMoreData()) {
     DCHECK_EQ(0, drainable_input_buffer_->BytesRemaining());
     next_state_ = STATE_READ_DATA;
   }
-  return bytes_output;
+  return 0;
 }
 
 void FilterSourceStream::OnIOComplete(int result) {

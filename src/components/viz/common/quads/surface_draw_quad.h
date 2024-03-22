@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,8 @@ namespace viz {
 
 class VIZ_COMMON_EXPORT SurfaceDrawQuad : public DrawQuad {
  public:
+  static constexpr Material kMaterial = Material::kSurfaceContent;
+
   SurfaceDrawQuad();
   SurfaceDrawQuad(const SurfaceDrawQuad& other);
   ~SurfaceDrawQuad() override;

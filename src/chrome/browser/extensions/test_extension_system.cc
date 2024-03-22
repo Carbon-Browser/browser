@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,8 @@
 #include "chrome/browser/extensions/blocklist.h"
 #include "chrome/browser/extensions/chrome_app_sorting.h"
 #include "chrome/browser/extensions/crx_installer.h"
+#include "chrome/browser/extensions/cws_info_service.h"
+#include "chrome/browser/extensions/cws_info_service_factory.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/shared_module_service.h"
@@ -28,7 +30,6 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/extensions_browser_client.h"
-#include "extensions/browser/info_map.h"
 #include "extensions/browser/management_policy.h"
 #include "extensions/browser/quota_service.h"
 #include "extensions/browser/state_store.h"
@@ -44,6 +45,49 @@ using content::BrowserThread;
 
 namespace extensions {
 
+namespace {
+
+// A fake CWSInfoService for tests that utilize the test extension system and
+// service infrastructure but do not depend on the actual functionality of the
+// service.
+class FakeCWSInfoService : public CWSInfoService {
+ public:
+  explicit FakeCWSInfoService(Profile* profile) {}
+
+  explicit FakeCWSInfoService(const CWSInfoService&) = delete;
+  FakeCWSInfoService& operator=(const CWSInfoService&) = delete;
+  ~FakeCWSInfoService() override = default;
+
+  // CWSInfoServiceInterface:
+  absl::optional<bool> IsLiveInCWS(const Extension& extension) const override;
+  absl::optional<CWSInfo> GetCWSInfo(const Extension& extension) const override;
+  void CheckAndMaybeFetchInfo() override {}
+  void AddObserver(Observer* observer) override {}
+  void RemoveObserver(Observer* observer) override {}
+
+  // KeyedService:
+  // Ensure that the keyed service shutdown is a no-op.
+  void Shutdown() override {}
+};
+
+absl::optional<bool> FakeCWSInfoService::IsLiveInCWS(
+    const Extension& extension) const {
+  return true;
+}
+
+absl::optional<CWSInfoServiceInterface::CWSInfo> FakeCWSInfoService::GetCWSInfo(
+    const Extension& extension) const {
+  return CWSInfoServiceInterface::CWSInfo();
+}
+
+std::unique_ptr<KeyedService> BuildFakeCWSService(
+    content::BrowserContext* context) {
+  return std::make_unique<FakeCWSInfoService>(
+      Profile::FromBrowserContext(context));
+}
+
+}  // namespace
+
 TestExtensionSystem::TestExtensionSystem(Profile* profile)
     : profile_(profile),
       store_factory_(new value_store::TestValueStoreFactory()),
@@ -51,7 +95,6 @@ TestExtensionSystem::TestExtensionSystem(Profile* profile)
                                   store_factory_,
                                   StateStore::BackendType::RULES,
                                   false)),
-      info_map_(new InfoMap()),
       quota_service_(new QuotaService()),
       app_sorting_(new ChromeAppSorting(profile_)) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -75,14 +118,38 @@ ExtensionService* TestExtensionSystem::CreateExtensionService(
     const base::FilePath& install_directory,
     bool autoupdate_enabled,
     bool extensions_enabled) {
+  return CreateExtensionService(command_line, install_directory,
+                                base::FilePath(), autoupdate_enabled,
+                                extensions_enabled);
+}
+
+ExtensionService* TestExtensionSystem::CreateExtensionService(
+    const base::CommandLine* command_line,
+    const base::FilePath& install_directory,
+    const base::FilePath& unpacked_install_directory,
+    bool autoupdate_enabled,
+    bool extensions_enabled) {
+  if (CWSInfoService::Get(profile_) == nullptr) {
+    Profile* profile = profile_;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    // TODO(crbug.com/1414225): Refactor this convenience upstream to test
+    // callers. Possibly just BuiltInAppTest.BuildGuestMode.
+    if (profile_->IsGuestSession()) {
+      profile = profile_->GetOriginalProfile();
+    }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+    // Associate a dummy CWSInfoService with this profile if necessary.
+    CWSInfoServiceFactory::GetInstance()->SetTestingFactory(
+        profile, base::BindRepeating(&BuildFakeCWSService));
+  }
   management_policy_ = std::make_unique<ManagementPolicy>();
   management_policy_->RegisterProviders(
       ExtensionManagementFactory::GetForBrowserContext(profile_)
           ->GetProviders());
   extension_service_ = std::make_unique<ExtensionService>(
-      profile_, command_line, install_directory, ExtensionPrefs::Get(profile_),
-      Blocklist::Get(profile_), autoupdate_enabled, extensions_enabled,
-      &ready_);
+      profile_, command_line, install_directory, unpacked_install_directory,
+      ExtensionPrefs::Get(profile_), Blocklist::Get(profile_),
+      autoupdate_enabled, extensions_enabled, &ready_);
 
   unzip::SetUnzipperLaunchOverrideForTesting(
       base::BindRepeating(&unzip::LaunchInProcessUnzipper));
@@ -134,8 +201,6 @@ TestExtensionSystem::store_factory() {
   return store_factory_;
 }
 
-InfoMap* TestExtensionSystem::info_map() { return info_map_.get(); }
-
 QuotaService* TestExtensionSystem::quota_service() {
   return quota_service_.get();
 }
@@ -153,7 +218,7 @@ bool TestExtensionSystem::is_ready() const {
 }
 
 ContentVerifier* TestExtensionSystem::content_verifier() {
-  return NULL;
+  return content_verifier_.get();
 }
 
 std::unique_ptr<ExtensionSet> TestExtensionSystem::GetDependentExtensions(
@@ -173,7 +238,7 @@ void TestExtensionSystem::InstallUpdate(
 
 void TestExtensionSystem::PerformActionBasedOnOmahaAttributes(
     const std::string& extension_id,
-    const base::Value& attributes) {}
+    const base::Value::Dict& attributes) {}
 
 bool TestExtensionSystem::FinishDelayedInstallationIfReady(
     const std::string& extension_id,

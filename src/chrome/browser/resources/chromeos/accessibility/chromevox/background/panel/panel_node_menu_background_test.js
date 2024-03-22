@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 GEN_INCLUDE([
   '../../../common/testing/documents.js',
-  '../../testing/chromevox_next_e2e_test_base.js',
+  '../../testing/chromevox_e2e_test_base.js',
 ]);
 
 // Fake Msgs object.
@@ -19,15 +19,22 @@ const PanelBridge = {
 };
 
 /** Test fixture for PanelNodeMenuBackground. */
-ChromeVoxPanelNodeMenuBackgroundTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxPanelNodeMenuBackgroundTest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'PanelBackground', '/chromevox/background/panel/panel_background.js');
-    await importModule(
-        'PanelNodeMenuBackground',
-        '/chromevox/background/panel/panel_node_menu_background.js');
+
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'PanelBackground', '/chromevox/background/panel/panel_background.js'),
+      importModule(
+          'PanelNodeMenuBackground',
+          '/chromevox/background/panel/panel_node_menu_background.js'),
+      importModule(
+          ['PanelNodeMenuId', 'ALL_PANEL_MENU_NODE_DATA'],
+          '/chromevox/common/panel_menu_data.js'),
+    ]);
   }
 
   assertMenuItemIndicatesNoNodesFound(item) {
@@ -53,7 +60,7 @@ ChromeVoxPanelNodeMenuBackgroundTest = class extends ChromeVoxNextE2ETest {
   }
 
   assertMenusHaveNoNodesFoundExcept(id) {
-    for (const menu of ALL_NODE_MENU_DATA) {
+    for (const menu of ALL_PANEL_MENU_NODE_DATA) {
       if (menu.menuId === id) {
         continue;
       }
@@ -162,7 +169,7 @@ AX_TEST_F(
 
       // Expect that one element is added per menu, specifying that no nodes
       // of that type are found.
-      assertEquals(ALL_NODE_MENU_DATA.length, PanelBridge.calls.length);
+      assertEquals(ALL_PANEL_MENU_NODE_DATA.length, PanelBridge.calls.length);
       // Assert all menus have a no nodes found element.
       this.assertMenusHaveNoNodesFoundExcept(null);
     });
@@ -174,7 +181,8 @@ AX_TEST_F('ChromeVoxPanelNodeMenuBackgroundTest', 'DISABLED_Headings', async fun
   // Check that there are the correct number of calls (one for each menu,
   // plus two extra for the additional headings found, plus six for the
   // additional system elements).
-  assertEquals(ALL_NODE_MENU_DATA.length + 2 + 6, PanelBridge.calls.length);
+  assertEquals(
+      ALL_PANEL_MENU_NODE_DATA.length + 2 + 6, PanelBridge.calls.length);
 
   // Expect that the three items are added to the headings menu
   const headingItems = PanelBridge.calls.filter(this.isHeading);
@@ -194,7 +202,8 @@ AX_TEST_F(
 
       // Check that there are the correct number of calls (one for each menu,
       // plus seven extra for the additional landmarks found).
-      assertEquals(ALL_NODE_MENU_DATA.length + 7, PanelBridge.calls.length);
+      assertEquals(
+          ALL_PANEL_MENU_NODE_DATA.length + 7, PanelBridge.calls.length);
 
       // Verify that eight items were added to the landmarks menu.
       const landmarkItems = PanelBridge.calls.filter(this.isLandmark);
@@ -218,7 +227,7 @@ AX_TEST_F('ChromeVoxPanelNodeMenuBackgroundTest', 'DISABLED_Links', async functi
 
   // Check that there are the correct number of calls (one for each menu, plus
   // three extra for the additional links found).
-  assertEquals(ALL_NODE_MENU_DATA.length + 3, PanelBridge.calls.length);
+  assertEquals(ALL_PANEL_MENU_NODE_DATA.length + 3, PanelBridge.calls.length);
 
   // Verify that four items were added to the links menu.
   const linkItems = PanelBridge.calls.filter(this.isLink);
@@ -240,7 +249,8 @@ AX_TEST_F(
       // Check that there are the correct number of calls (one for each menu,
       // plus five extra for the additional form controls found, plus seven for
       // the system elements).
-      assertEquals(ALL_NODE_MENU_DATA.length + 5 + 7, PanelBridge.calls.length);
+      assertEquals(
+          ALL_PANEL_MENU_NODE_DATA.length + 5 + 7, PanelBridge.calls.length);
 
       // Verify that all of the items were added to the form controls menu.
       const formItems = PanelBridge.calls.filter(this.isFormControl);
@@ -262,7 +272,7 @@ AX_TEST_F('ChromeVoxPanelNodeMenuBackgroundTest', 'DISABLED_Tables', async funct
 
   // Check that there are the correct number of calls (one for each menu,
   // plus one extra for the additional links found).
-  assertEquals(ALL_NODE_MENU_DATA.length + 1, PanelBridge.calls.length);
+  assertEquals(ALL_PANEL_MENU_NODE_DATA.length + 1, PanelBridge.calls.length);
 
   // Verify that two items were added to the tables menu.
   const tableItems = PanelBridge.calls.filter(this.isTable);
@@ -280,7 +290,7 @@ AX_TEST_F(
       this.createAllNodeMenuBackgrounds();
 
       // Check that there are the correct number of calls (one for each menu).
-      assertEquals(ALL_NODE_MENU_DATA.length, PanelBridge.calls.length);
+      assertEquals(ALL_PANEL_MENU_NODE_DATA.length, PanelBridge.calls.length);
 
       // Check that each item was added to the correct menu.
       const formItem = PanelBridge.calls.find(this.isFormControl);

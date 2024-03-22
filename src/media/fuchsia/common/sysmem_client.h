@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/threading/thread_checker.h"
 #include "media/base/media_export.h"
 
@@ -75,7 +75,7 @@ class MEDIA_EXPORT SysmemCollectionClient {
   fuchsia::sysmem::BufferCollectionPtr collection_;
 
   bool writable_ = false;
-  std::vector<base::OnceClosure> sync_completion_closures_;
+  std::vector<base::OnceClosure> shared_token_ready_closures_;
   AcquireBuffersCB acquire_buffers_cb_;
 
   THREAD_CHECKER(thread_checker_);

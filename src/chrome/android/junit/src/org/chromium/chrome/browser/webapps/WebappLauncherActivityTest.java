@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,8 @@ import static org.junit.Assert.assertTrue;
 import android.content.Intent;
 import android.os.Bundle;
 
-import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.annotation.Config;
@@ -38,17 +35,9 @@ public class WebappLauncherActivityTest {
     private static final String WEBAPK_PACKAGE_NAME = "org.chromium.webapk.test_package";
     private static final String START_URL = "https://www.google.com/scope/a_is_for_apple";
 
-    @Rule
-    public TestRule mCommandLineFlagsRule = CommandLineFlags.getTestRule();
-
     @Before
     public void setUp() {
         WebApkValidator.setDisableValidationForTesting(true);
-    }
-
-    @After
-    public void tearDown() {
-        WebApkValidator.setDisableValidationForTesting(false);
     }
 
     /**
@@ -68,9 +57,7 @@ public class WebappLauncherActivityTest {
         assertNull(WebApkIntentDataProviderFactory.create(intent));
     }
 
-    /**
-     * Test the launch intent created by {@link WebappLauncherActivity} for old-style WebAPKs.
-     */
+    /** Test the launch intent created by {@link WebappLauncherActivity} for old-style WebAPKs. */
     @Test
     public void testOldStyleLaunchIntent() {
         registerWebApk(WEBAPK_PACKAGE_NAME, START_URL);
@@ -87,9 +74,7 @@ public class WebappLauncherActivityTest {
         assertNotNull(WebApkIntentDataProviderFactory.create(launchIntent));
     }
 
-    /**
-     * Test the launch intent created by {@link WebappLauncherActivity} for new-style WebAPKs.
-     */
+    /** Test the launch intent created by {@link WebappLauncherActivity} for new-style WebAPKs. */
     @Test
     public void testNewStyleLaunchIntent() {
         registerWebApk(WEBAPK_PACKAGE_NAME, START_URL);
@@ -109,7 +94,7 @@ public class WebappLauncherActivityTest {
         Bundle bundle = new Bundle();
         bundle.putString(WebApkMetaDataKeys.START_URL, START_URL);
         WebApkTestHelper.registerWebApkWithMetaData(
-                webApkPackage, bundle, null /* shareTargetMetaData */);
+                webApkPackage, bundle, /* shareTargetMetaData= */ null);
         WebApkTestHelper.addIntentFilterForUrl(webApkPackage, startUrl);
     }
 

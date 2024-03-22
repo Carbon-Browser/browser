@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "net/base/net_export.h"
 #include "net/socket/next_proto.h"
@@ -47,21 +47,8 @@ struct NET_EXPORT SSLServerConfig {
   // to reject early data that is non-safe to be replayed.
   bool early_data_enabled = false;
 
-  // Presorted list of cipher suites which should be explicitly prevented from
-  // being used in addition to those disabled by the net built-in policy.
-  //
-  // By default, all cipher suites supported by the underlying SSL
-  // implementation will be enabled except for:
-  // - Null encryption cipher suites.
-  // - Weak cipher suites: < 80 bits of security strength.
-  // - FORTEZZA cipher suites (obsolete).
-  // - IDEA cipher suites (RFC 5469 explains why).
-  // - Anonymous cipher suites.
-  // - ECDSA cipher suites on platforms that do not support ECDSA signed
-  //   certificates, as servers may use the presence of such ciphersuites as a
-  //   hint to send an ECDSA certificate.
-  // The ciphers listed in |disabled_cipher_suites| will be removed in addition
-  // to the above list.
+  // A list of cipher suites which should be explicitly prevented from being
+  // used in addition to those disabled by the net built-in policy.
   //
   // Though cipher suites are sent in TLS as "uint8_t CipherSuite[2]", in
   // big-endian form, they should be declared in host byte order, with the
@@ -101,7 +88,7 @@ struct NET_EXPORT SSLServerConfig {
   // and must outlive any sockets spawned from this SSLServerContext.
   // This field is meaningful only if client certificates are requested.
   // If a verifier is not provided then all certificates are accepted.
-  raw_ptr<ClientCertVerifier> client_cert_verifier = nullptr;
+  raw_ptr<ClientCertVerifier, DanglingUntriaged> client_cert_verifier = nullptr;
 
   // The list of application level protocols supported with ALPN (Application
   // Layer Protocol Negotiation), in decreasing order of preference.  Protocols

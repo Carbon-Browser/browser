@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class UI_TOUCH_SELECTION_EXPORT TouchHandleDrawable {
   // Update the handle visuals to |orientation|.
   // |mirror_vertical| and |mirror_horizontal| are used to invert the drawables
   // if required for adaptive handle orientation.
-  virtual void SetOrientation(ui::TouchHandleOrientation orientation,
+  virtual void SetOrientation(TouchHandleOrientation orientation,
                               bool mirror_vertical,
                               bool mirror_horizontal) = 0;
 
@@ -142,7 +142,7 @@ class UI_TOUCH_SELECTION_EXPORT TouchHandle : public TouchSelectionDraggable {
 
   std::unique_ptr<TouchHandleDrawable> drawable_;
 
-  const raw_ptr<TouchHandleClient, DanglingUntriaged> client_;
+  const raw_ptr<TouchHandleClient> client_;
 
   gfx::PointF focus_bottom_;
   gfx::PointF focus_top_;

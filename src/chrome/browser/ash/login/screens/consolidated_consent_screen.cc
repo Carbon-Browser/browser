@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,15 @@
 #include "ash/components/arc/arc_prefs.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
+#include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/hash/sha1.h"
 #include "base/i18n/timezone.h"
+#include "base/memory/weak_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
+#include "base/values.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/optin/arc_optin_preference_handler.h"
 #include "chrome/browser/ash/login/demo_mode/demo_setup_controller.h"
@@ -34,9 +38,10 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
+#include "chromeos/ash/components/osauth/public/auth_session_storage.h"
 #include "components/consent_auditor/consent_auditor.h"
 #include "components/metrics/metrics_service.h"
 #include "components/prefs/pref_service.h"
@@ -44,86 +49,116 @@
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/user_manager/user_manager.h"
 
-using ArcBackupAndRestoreConsent =
-    sync_pb::UserConsentTypes::ArcBackupAndRestoreConsent;
-using ArcGoogleLocationServiceConsent =
-    sync_pb::UserConsentTypes::ArcGoogleLocationServiceConsent;
-using ArcPlayTermsOfServiceConsent =
-    sync_pb::UserConsentTypes::ArcPlayTermsOfServiceConsent;
-using sync_pb::UserConsentTypes;
-
 namespace ash {
+
 namespace {
+
+using ArcBackupAndRestoreConsent =
+    ::sync_pb::UserConsentTypes::ArcBackupAndRestoreConsent;
+using ArcGoogleLocationServiceConsent =
+    ::sync_pb::UserConsentTypes::ArcGoogleLocationServiceConsent;
+using ArcPlayTermsOfServiceConsent =
+    ::sync_pb::UserConsentTypes::ArcPlayTermsOfServiceConsent;
+using ::sync_pb::UserConsentTypes;
+
 constexpr const char kBackDemoButtonClicked[] = "back";
+constexpr const char kAcceptButtonClicked[] = "tos-accept";
 
-std::string GetGoogleEulaOnlineUrl() {
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kOobeEulaUrlForTests)) {
+enum class ToS { GOOGLE_EULA, CROS_EULA, ARC, PRIVACY_POLICY };
+
+static constexpr auto kTermsTypeToUrlAndSwitch =
+    base::MakeFixedFlatMap<ToS, std::pair<const char*, const char*>>(
+        {{ToS::GOOGLE_EULA,
+          {chrome::kGoogleEulaOnlineURLPath, switches::kOobeEulaUrlForTests}},
+         {ToS::CROS_EULA,
+          {chrome::kCrosEulaOnlineURLPath, switches::kOobeEulaUrlForTests}},
+         {ToS::ARC,
+          {chrome::kArcTosOnlineURLPath, switches::kArcTosHostForTests}},
+         {ToS::PRIVACY_POLICY,
+          {chrome::kPrivacyPolicyOnlineURLPath,
+           switches::kPrivacyPolicyHostForTests}}});
+
+std::string GetTosHost(ToS terms_type) {
+  const char* ash_switch = kTermsTypeToUrlAndSwitch.at(terms_type).second;
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(ash_switch)) {
     return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-        switches::kOobeEulaUrlForTests);
+        ash_switch);
   }
 
-  return base::StringPrintf(chrome::kGoogleEulaOnlineURLPath,
-                            g_browser_process->GetApplicationLocale().c_str());
+  const char* url_path = kTermsTypeToUrlAndSwitch.at(terms_type).first;
+  if (terms_type == ToS::GOOGLE_EULA || terms_type == ToS::CROS_EULA) {
+    return base::StringPrintfNonConstexpr(
+        url_path, g_browser_process->GetApplicationLocale().c_str());
+  }
+  return url_path;
 }
 
-std::string GetCrosEulaOnlineUrl() {
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kOobeEulaUrlForTests)) {
-    return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-        switches::kOobeEulaUrlForTests);
+ConsolidatedConsentScreen::RecoveryOptInResult GetRecoveryOptInResult(
+    const WizardContext::RecoverySetup& recovery_setup) {
+  if (!recovery_setup.is_supported)
+    return ConsolidatedConsentScreen::RecoveryOptInResult::kNotSupported;
+
+  if (recovery_setup.ask_about_recovery_consent) {
+    // The user was shown the opt-in checkbox.
+    if (recovery_setup.recovery_factor_opted_in) {
+      return ConsolidatedConsentScreen::RecoveryOptInResult::kUserOptIn;
+    }
+    return ConsolidatedConsentScreen::RecoveryOptInResult::kUserOptOut;
   }
 
-  return base::StringPrintf(chrome::kCrosEulaOnlineURLPath,
-                            g_browser_process->GetApplicationLocale().c_str());
+  // The user was not shown the opt-in checkbox. In this case the policy value
+  // is used.
+  if (recovery_setup.recovery_factor_opted_in)
+    return ConsolidatedConsentScreen::RecoveryOptInResult::kPolicyOptIn;
+  return ConsolidatedConsentScreen::RecoveryOptInResult::kPolicyOptOut;
 }
+
+void RecordRecoveryOptinResult(
+    const WizardContext::RecoverySetup& recovery_setup) {
+  base::UmaHistogramEnumeration(
+      "OOBE.ConsolidatedConsentScreen.RecoveryOptInResult",
+      GetRecoveryOptInResult(recovery_setup));
+}
+
 }  // namespace
 
 std::string ConsolidatedConsentScreen::GetResultString(Result result) {
   switch (result) {
     case Result::ACCEPTED:
+      return "AcceptedRegular";
     case Result::ACCEPTED_DEMO_ONLINE:
-    case Result::ACCEPTED_DEMO_OFFLINE:
-      return "Accepted";
+      return "AcceptedDemo";
     case Result::BACK_DEMO:
-      return "Back";
+      return "BackDemo";
     case Result::NOT_APPLICABLE:
       return BaseScreen::kNotApplicable;
   }
 }
 
 ConsolidatedConsentScreen::ConsolidatedConsentScreen(
-    ConsolidatedConsentScreenView* view,
+    base::WeakPtr<ConsolidatedConsentScreenView> view,
     const ScreenExitCallback& exit_callback)
     : BaseScreen(ConsolidatedConsentScreenView::kScreenId,
                  OobeScreenPriority::DEFAULT),
-      view_(view),
+      view_(std::move(view)),
       exit_callback_(exit_callback) {
   DCHECK(view_);
-  if (view_)
-    view_->Bind(this);
 }
 
 ConsolidatedConsentScreen::~ConsolidatedConsentScreen() {
-  if (view_) {
-    view_->Unbind();
-  }
-
   for (auto& observer : observer_list_)
     observer.OnConsolidatedConsentScreenDestroyed();
 }
 
-void ConsolidatedConsentScreen::OnViewDestroyed(
-    ConsolidatedConsentScreenView* view) {
-  if (view_ == view)
-    view_ = nullptr;
-}
+bool ConsolidatedConsentScreen::MaybeSkip(WizardContext& context) {
+  if (context.skip_post_login_screens_for_tests) {
+    StartupUtils::MarkEulaAccepted();
 
-bool ConsolidatedConsentScreen::MaybeSkip(WizardContext* context) {
-  if (context->skip_post_login_screens_for_tests) {
-    if (features::IsOobeConsolidatedConsentEnabled())
-      StartupUtils::MarkEulaAccepted();
+    exit_callback_.Run(Result::NOT_APPLICABLE);
+    return true;
+  }
 
+  if (!context.is_branded_build) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
   }
@@ -131,11 +166,7 @@ bool ConsolidatedConsentScreen::MaybeSkip(WizardContext* context) {
   if (arc::IsArcDemoModeSetupFlow())
     return false;
 
-  policy::BrowserPolicyConnectorAsh* policy_connector =
-      g_browser_process->platform_part()->browser_policy_connector_ash();
-  if (!context->is_branded_build ||
-      policy_connector->IsActiveDirectoryManaged() ||
-      user_manager::UserManager::Get()->IsLoggedInAsPublicAccount()) {
+  if (user_manager::UserManager::Get()->IsLoggedInAsManagedGuestSession()) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
   }
@@ -172,27 +203,65 @@ void ConsolidatedConsentScreen::ShowImpl() {
       base::BindOnce(&ConsolidatedConsentScreen::OnOwnershipStatusCheckDone,
                      weak_factory_.GetWeakPtr()));
 
-  ConsolidatedConsentScreenView::ScreenConfig config;
-  config.is_arc_enabled = arc::IsArcTermsOfServiceOobeNegotiationNeeded();
-  config.is_demo = arc::IsArcDemoModeSetupFlow();
-  config.is_tos_hidden = chrome::enterprise_util::IsProfileAffiliated(profile);
-  config.is_child_account = is_child_account_;
-  config.country_code = base::CountryCodeForCurrentTimezone();
-  config.google_eula_url = GetGoogleEulaOnlineUrl();
-  config.cros_eula_url = GetCrosEulaOnlineUrl();
-  view_->Show(config);
+  base::Value::Dict data;
+
+  // If ARC is enabled, show the ARC ToS and the related opt-ins.
+  data.Set("isArcEnabled", arc::IsArcTermsOfServiceOobeNegotiationNeeded());
+  // In demo mode, don't show any opt-ins related to ARC and allow showing the
+  // offline ARC ToS if the online version failed to load.
+  data.Set("isDemo", arc::IsArcDemoModeSetupFlow());
+  // Child accounts have alternative strings for the opt-ins.
+  data.Set("isChildAccount", is_child_account_);
+  // If the user is affiliated with the device management domain, ToS should be
+  // hidden.
+  data.Set("isTosHidden",
+           chrome::enterprise_util::IsProfileAffiliated(profile));
+
+  // ToS URLs.
+  data.Set("googleEulaUrl", GetTosHost(ToS::GOOGLE_EULA));
+  data.Set("crosEulaUrl", GetTosHost(ToS::CROS_EULA));
+  data.Set("arcTosUrl", GetTosHost(ToS::ARC));
+  data.Set("privacyPolicyUrl", GetTosHost(ToS::PRIVACY_POLICY));
+
+  // Option that controls if Recovery factor opt-in should be shown for the
+  // user.
+  data.Set("showRecoveryOption",
+           context()->recovery_setup.ask_about_recovery_consent);
+  // Default value for recovery opt toggle.
+  data.Set("recoveryOptionDefault",
+           context()->recovery_setup.recovery_factor_opted_in);
+
+  view_->Show(std::move(data));
+
+  if (ash::features::AreLocalPasswordsEnabledForConsumers()) {
+    if (context()->extra_factors_token) {
+      session_refresher_ = AuthSessionStorage::Get()->KeepAlive(
+          context()->extra_factors_token.value());
+    }
+  }
 }
 
 void ConsolidatedConsentScreen::HideImpl() {
   pref_handler_.reset();
+  session_refresher_.reset();
 }
 
-void ConsolidatedConsentScreen::OnUserActionDeprecated(
-    const std::string& action_id) {
-  if (action_id == kBackDemoButtonClicked)
+void ConsolidatedConsentScreen::OnUserAction(const base::Value::List& args) {
+  const std::string& action_id = args[0].GetString();
+  if (action_id == kBackDemoButtonClicked) {
     exit_callback_.Run(Result::BACK_DEMO);
-  else
-    BaseScreen::OnUserActionDeprecated(action_id);
+  } else if (action_id == kAcceptButtonClicked) {
+    CHECK_EQ(args.size(), 6u);
+    const bool enable_usage = args[1].GetBool();
+    const bool enable_backup = args[2].GetBool();
+    const bool enable_location = args[3].GetBool();
+    const std::string& tos_content = args[4].GetString();
+    const bool enable_recovery = args[5].GetBool();
+    OnAccept(enable_usage, enable_backup, enable_location, tos_content,
+             enable_recovery);
+  } else {
+    BaseScreen::OnUserAction(args);
+  }
 }
 
 void ConsolidatedConsentScreen::AddObserver(Observer* observer) {
@@ -211,8 +280,9 @@ void ConsolidatedConsentScreen::OnMetricsModeChanged(bool enabled,
 void ConsolidatedConsentScreen::OnBackupAndRestoreModeChanged(bool enabled,
                                                               bool managed) {
   backup_restore_managed_ = managed;
-  if (view_)
+  if (view_) {
     view_->SetBackupMode(enabled, managed);
+  }
 }
 
 void ConsolidatedConsentScreen::OnLocationServicesModeChanged(bool enabled,
@@ -225,8 +295,9 @@ void ConsolidatedConsentScreen::OnLocationServicesModeChanged(bool enabled,
 void ConsolidatedConsentScreen::UpdateMetricsMode(bool enabled, bool managed) {
   // When the usage opt-in is not managed, override the enabled value
   // with `true` to encourage users to consent with it during OptIn flow.
-  if (view_)
+  if (view_) {
     view_->SetUsageMode(/*enabled=*/!managed || enabled, managed);
+  }
 }
 
 void ConsolidatedConsentScreen::OnOwnershipStatusCheckDone(
@@ -237,10 +308,12 @@ void ConsolidatedConsentScreen::OnOwnershipStatusCheckDone(
   policy::BrowserPolicyConnectorAsh* policy_connector =
       g_browser_process->platform_part()->browser_policy_connector_ash();
   bool is_managed = policy_connector->IsDeviceEnterpriseManaged();
-  if (status == DeviceSettingsService::OWNERSHIP_NONE)
+  if (status == DeviceSettingsService::OwnershipStatus::kOwnershipNone) {
     is_owner_ = !is_managed;
-  else if (status == DeviceSettingsService::OWNERSHIP_TAKEN)
+  } else if (status ==
+             DeviceSettingsService::OwnershipStatus::kOwnershipTaken) {
     is_owner_ = user_manager::UserManager::Get()->IsCurrentUserOwner();
+  }
 
   // Save this value for future reuse in the wizard flow. Note: it might remain
   // unset.
@@ -249,9 +322,8 @@ void ConsolidatedConsentScreen::OnOwnershipStatusCheckDone(
   // If the user is not the owner and the owner disabled metrics, the user
   // is not allowed to update the usage opt-in.
   if (view_) {
-    view_->SetUsageOptinOptinHidden(
-        !is_owner_.value_or(false) &&
-        !ash::StatsReportingController::Get()->IsEnabled());
+    view_->SetUsageOptinHidden(!is_owner_.value_or(false) &&
+                               !StatsReportingController::Get()->IsEnabled());
   }
 
   const bool is_demo = arc::IsArcDemoModeSetupFlow();
@@ -270,7 +342,7 @@ void ConsolidatedConsentScreen::OnOwnershipStatusCheckDone(
     arc::SetArcPlayStoreEnabledForProfile(profile, true);
 
     pref_handler_ = std::make_unique<arc::ArcOptInPreferenceHandler>(
-        this, profile->GetPrefs());
+        this, profile->GetPrefs(), g_browser_process->metrics_service());
     pref_handler_->Start();
   } else if (!is_demo) {
     // Since ARC OOBE Negotiation is not needed, we should avoid using
@@ -283,7 +355,7 @@ void ConsolidatedConsentScreen::OnOwnershipStatusCheckDone(
       is_enabled = *metrics_service->GetCurrentUserMetricsConsent();
     } else {
       DCHECK(g_browser_process->local_state());
-      is_enabled = ash::StatsReportingController::Get()->IsEnabled();
+      is_enabled = StatsReportingController::Get()->IsEnabled();
     }
 
     UpdateMetricsMode(is_enabled, is_managed);
@@ -354,7 +426,7 @@ void ConsolidatedConsentScreen::RecordConsents(
 void ConsolidatedConsentScreen::ReportUsageOptIn(bool is_enabled) {
   DCHECK(is_owner_.has_value());
   if (is_owner_.value()) {
-    ash::StatsReportingController::Get()->SetEnabled(
+    StatsReportingController::Get()->SetEnabled(
         ProfileManager::GetActiveUserProfile(), is_enabled);
     return;
   }
@@ -367,16 +439,26 @@ void ConsolidatedConsentScreen::ReportUsageOptIn(bool is_enabled) {
   metrics_service->UpdateCurrentUserMetricsConsent(is_enabled);
 }
 
+void ConsolidatedConsentScreen::NotifyConsolidatedConsentAcceptForTesting() {
+  for (auto& observer : observer_list_) {
+    observer.OnConsolidatedConsentAccept();
+  }
+}
+
 void ConsolidatedConsentScreen::OnAccept(bool enable_stats_usage,
                                          bool enable_backup_restore,
                                          bool enable_location_services,
-                                         const std::string& tos_content) {
+                                         const std::string& tos_content,
+                                         bool enable_recovery) {
   ReportUsageOptIn(enable_stats_usage);
+
+  context()->recovery_setup.recovery_factor_opted_in = enable_recovery;
 
   if (arc::IsArcDemoModeSetupFlow() ||
       !arc::IsArcTermsOfServiceOobeNegotiationNeeded()) {
-    for (auto& observer : observer_list_)
+    for (auto& observer : observer_list_) {
       observer.OnConsolidatedConsentAccept();
+    }
 
     ExitScreenWithAcceptedResult();
     return;
@@ -406,6 +488,7 @@ void ConsolidatedConsentScreen::OnAccept(bool enable_stats_usage,
 }
 
 void ConsolidatedConsentScreen::ExitScreenWithAcceptedResult() {
+  RecordRecoveryOptinResult(context()->recovery_setup);
   StartupUtils::MarkEulaAccepted();
   network_portal_detector::GetInstance()->Enable();
 

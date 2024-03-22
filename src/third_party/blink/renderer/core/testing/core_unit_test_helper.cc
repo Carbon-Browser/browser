@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/html/html_iframe_element.h"
 #include "third_party/blink/renderer/core/input/event_handler.h"
+#include "third_party/blink/renderer/core/layout/constraint_space_builder.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
@@ -55,7 +57,10 @@ LocalFrame* SingleChildLocalFrameClient::CreateFrame(
   auto policy_container = std::make_unique<PolicyContainer>(
       dummy_host.Unbind(), std::move(policy_container_data));
 
-  child->Init(/*opener=*/nullptr, std::move(policy_container));
+  child->Init(/*opener=*/nullptr, DocumentToken(), std::move(policy_container),
+              parent_frame->DomWindow()->GetStorageKey(),
+              /*document_ukm_source_id=*/ukm::kInvalidSourceId,
+              /*creator_base_url=*/KURL());
 
   return child;
 }
@@ -64,9 +69,8 @@ void LocalFrameClientWithParent::Detached(FrameDetachType) {
   parent_->RemoveChild(parent_->FirstChild());
 }
 
-void RenderingTestChromeClient::InjectGestureScrollEvent(
+void RenderingTestChromeClient::InjectScrollbarGestureScroll(
     LocalFrame& local_frame,
-    WebGestureDevice device,
     const gfx::Vector2dF& delta,
     ui::ScrollGranularity granularity,
     CompositorElementId scrollable_area_element_id,
@@ -75,12 +79,12 @@ void RenderingTestChromeClient::InjectGestureScrollEvent(
   // would be added to the event queue and handled asynchronously but immediate
   // handling is sufficient to test scrollbar dragging.
   std::unique_ptr<WebGestureEvent> gesture_event =
-      WebGestureEvent::GenerateInjectedScrollGesture(
-          injected_type, base::TimeTicks::Now(), device, gfx::PointF(0, 0),
-          delta, granularity);
+      WebGestureEvent::GenerateInjectedScrollbarGestureScroll(
+          injected_type, base::TimeTicks::Now(), gfx::PointF(0, 0), delta,
+          granularity);
   if (injected_type == WebInputEvent::Type::kGestureScrollBegin) {
     gesture_event->data.scroll_begin.scrollable_area_element_id =
-        scrollable_area_element_id.GetStableId();
+        scrollable_area_element_id.GetInternalValue();
   }
   local_frame.GetEventHandler().HandleGestureEvent(*gesture_event);
 }
@@ -141,7 +145,7 @@ void RenderingTest::TearDown() {
   PageTestBase::TearDown();
 
   // Clear memory cache, otherwise we can leak pruned resources.
-  GetMemoryCache()->EvictResources();
+  MemoryCache::Get()->EvictResources();
 }
 
 void RenderingTest::SetChildFrameHTML(const String& html) {
@@ -153,6 +157,16 @@ void RenderingTest::SetChildFrameHTML(const String& html) {
   ChildDocument().OverrideIsInitialEmptyDocument();
   // And let the frame view exit the initial throttled state.
   ChildDocument().View()->BeginLifecycleUpdates();
+}
+
+ConstraintSpace RenderingTest::ConstraintSpaceForAvailableSize(
+    LayoutUnit inline_size) const {
+  ConstraintSpaceBuilder builder(
+      WritingMode::kHorizontalTb,
+      {WritingMode::kHorizontalTb, TextDirection::kLtr},
+      /* is_new_fc */ false);
+  builder.SetAvailableSize(LogicalSize(inline_size, LayoutUnit::Max()));
+  return builder.ToConstraintSpace();
 }
 
 }  // namespace blink

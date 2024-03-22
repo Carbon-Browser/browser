@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "components/subresource_filter/content/browser/async_document_subresource_filter.h"
 #include "components/subresource_filter/content/browser/content_subresource_filter_web_contents_helper.h"
@@ -79,7 +79,7 @@ ActivationStateComputingNavigationThrottle::WillRedirectRequest() {
 
 content::NavigationThrottle::ThrottleCheckResult
 ActivationStateComputingNavigationThrottle::WillProcessResponse() {
-  // If no parent activation, this is main frame that was never notified of
+  // If no parent activation, this is root frame that was never notified of
   // activation.
   if (!parent_activation_state_) {
     DCHECK(IsInSubresourceFilterRoot(navigation_handle()));
@@ -144,7 +144,7 @@ void ActivationStateComputingNavigationThrottle::OnActivationStateComputed(
 }
 
 void ActivationStateComputingNavigationThrottle::UpdateWithMoreAccurateState() {
-  // This method is only needed for main frame navigations that are notified of
+  // This method is only needed for root frame navigations that are notified of
   // page activation more than once. Even for those that are updated once, it
   // should be a no-op.
   DCHECK(IsInSubresourceFilterRoot(navigation_handle()));

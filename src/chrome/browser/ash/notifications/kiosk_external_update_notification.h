@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define CHROME_BROWSER_ASH_NOTIFICATIONS_KIOSK_EXTERNAL_UPDATE_NOTIFICATION_H_
 
 #include <string>
+
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -30,7 +32,8 @@ class KioskExternalUpdateNotification {
   void Dismiss();
   void CreateAndShowNotificationView(const std::u16string& message);
 
-  KioskExternalUpdateNotificationView* view_;  // Owned by views hierarchy.
+  raw_ptr<KioskExternalUpdateNotificationView, ExperimentalAsh>
+      view_;  // Owned by views hierarchy.
 };
 
 }  // namespace ash

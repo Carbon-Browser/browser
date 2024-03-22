@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/views/border.h"
@@ -25,8 +26,7 @@
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/view_class_properties.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 
@@ -35,6 +35,9 @@ constexpr int kLayoutExampleLeftPadding = 8;
 constexpr gfx::Size kLayoutExampleDefaultChildSize(180, 90);
 
 class LayoutPanel : public View {
+ public:
+  METADATA_HEADER(LayoutPanel);
+
  protected:
   void OnThemeChanged() override {
     View::OnThemeChanged();
@@ -42,6 +45,9 @@ class LayoutPanel : public View {
         1, GetColorProvider()->GetColor(ui::kColorFocusableBorderUnfocused)));
   }
 };
+
+BEGIN_METADATA(LayoutPanel, View)
+END_METADATA
 
 // This View holds two other views which consists of a view on the left onto
 // which the BoxLayout is attached for demonstrating its features. The view
@@ -51,11 +57,15 @@ class LayoutPanel : public View {
 // 25%.
 class FullPanel : public View {
  public:
+  METADATA_HEADER(FullPanel);
   FullPanel() = default;
   FullPanel(const FullPanel&) = delete;
   FullPanel& operator=(const FullPanel&) = delete;
   ~FullPanel() override = default;
 };
+
+BEGIN_METADATA(FullPanel, View)
+END_METADATA
 
 std::unique_ptr<Textfield> CreateCommonTextfield(
     TextfieldController* container) {
@@ -164,6 +174,9 @@ Textfield* LayoutExampleBase::ChildPanel::CreateTextfield(
   return AddChildView(CreateCommonTextfieldWithAXName(this, name));
 }
 
+BEGIN_METADATA(LayoutExampleBase, ChildPanel, View)
+END_METADATA
+
 LayoutExampleBase::LayoutExampleBase(const char* title) : ExampleBase(title) {}
 
 LayoutExampleBase::~LayoutExampleBase() = default;
@@ -216,7 +229,7 @@ Textfield* LayoutExampleBase::CreateAndAddTextfield(
       kLayoutExampleVerticalSpacing));
   auto* label = row->AddChildView(std::make_unique<Label>(label_text));
   auto* text_field = row->AddChildView(CreateCommonTextfield(this));
-  text_field->SetAssociatedLabel(label);
+  text_field->SetAccessibleName(label);
   return text_field;
 }
 
@@ -319,5 +332,4 @@ void LayoutExampleBase::AddButtonPressed() {
   RefreshLayoutPanel(false);
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

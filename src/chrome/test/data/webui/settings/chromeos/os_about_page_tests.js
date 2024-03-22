@@ -1,15 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {CrPolicyIndicatorType} from '//resources/cr_elements/policy/cr_policy_indicator_behavior.m.js';
-import {AboutPageBrowserProxyImpl, BrowserChannel, DeviceNameBrowserProxyImpl, DeviceNameState, LifetimeBrowserProxyImpl, Router, routes, SetDeviceNameResult, UpdateStatus} from 'chrome://os-settings/chromeos/os_settings.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
-import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
-import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {eventToPromise, flushTasks, waitAfterNextRender} from 'chrome://test/test_util.js';
+import 'chrome://os-settings/os_settings.js';
+import 'chrome://os-settings/lazy_load.js';
 
+import {CrPolicyIndicatorType} from '//resources/ash/common/cr_policy_indicator_behavior.js';
+import {AboutPageBrowserProxyImpl, BrowserChannel, DeviceNameBrowserProxyImpl, DeviceNameState, LifetimeBrowserProxyImpl, Router, routes, SetDeviceNameResult, setUserActionRecorderForTesting, UpdateStatus, userActionRecorderMojom} from 'chrome://os-settings/os_settings.js';
+import {webUIListenerCallback} from 'chrome://resources/ash/common/cr.m.js';
+import {getDeepActiveElement} from 'chrome://resources/ash/common/util.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
+import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
+
+import {FakeUserActionRecorder} from './fake_user_action_recorder.js';
 import {TestAboutPageBrowserProxyChromeOS} from './test_about_page_browser_proxy_chromeos.js';
 import {TestDeviceNameBrowserProxy} from './test_device_name_browser_proxy.js';
 import {TestLifetimeBrowserProxy} from './test_os_lifetime_browser_proxy.js';
@@ -23,12 +28,19 @@ suite('AboutPageTest', function() {
   /** @type {?TestLifetimeBrowserProxy} */
   let lifetimeBrowserProxy = null;
 
+  /** @type {?userActionRecorderMojom.UserActionRecorderInterface} */
+  let userActionRecorder = null;
+
   const SPINNER_ICON_LIGHT_MODE =
       'chrome://resources/images/throbber_small.svg';
   const SPINNER_ICON_DARK_MODE =
       'chrome://resources/images/throbber_small_dark.svg';
 
   setup(function() {
+    loadTimeData.overrideValues({isRevampWayfindingEnabled: false});
+    userActionRecorder = new FakeUserActionRecorder();
+    setUserActionRecorderForTesting(userActionRecorder);
+
     lifetimeBrowserProxy = new TestLifetimeBrowserProxy();
     LifetimeBrowserProxyImpl.setInstance(lifetimeBrowserProxy);
 
@@ -41,15 +53,18 @@ suite('AboutPageTest', function() {
     page.remove();
     page = null;
     Router.getInstance().resetRouteForTesting();
+    setUserActionRecorderForTesting(null);
   });
 
   /**
    * @param {!UpdateStatus} status
    * @param {{
    *   progress: number|undefined,
-   *   message: string|undefined
-   *   rollback: bool|undefined
-   *   powerwash: bool|undefined
+   *   message: string|undefined,
+   *   rollback: bool|undefined,
+   *   powerwash: bool|undefined,
+   *   version: string|undefined,
+   *   size: string|undefined,
    * }} opt_options
    */
   function fireStatusChanged(status, opt_options) {
@@ -57,9 +72,11 @@ suite('AboutPageTest', function() {
     webUIListenerCallback('update-status-changed', {
       progress: options.progress === undefined ? 1 : options.progress,
       message: options.message,
-      status: status,
+      status,
       rollback: options.rollback,
       powerwash: options.powerwash,
+      version: options.version,
+      size: options.size,
     });
   }
 
@@ -68,13 +85,13 @@ suite('AboutPageTest', function() {
     aboutBrowserProxy.reset();
     lifetimeBrowserProxy.reset();
     PolymerTest.clearBody();
-    page = document.createElement('os-settings-about-page');
+    page = document.createElement('os-about-page');
     Router.getInstance().navigateTo(routes.ABOUT);
     document.body.appendChild(page);
     return Promise.all([
       aboutBrowserProxy.whenCalled('getChannelInfo'),
       aboutBrowserProxy.whenCalled('refreshUpdateStatus'),
-      aboutBrowserProxy.whenCalled('refreshTPMFirmwareUpdateStatus'),
+      aboutBrowserProxy.whenCalled('refreshTpmFirmwareUpdateStatus'),
       aboutBrowserProxy.whenCalled('checkInternetConnection'),
     ]);
   }
@@ -85,7 +102,7 @@ suite('AboutPageTest', function() {
   function navigateToSettingsPageWithId(id) {
     const params = new URLSearchParams();
     params.append('settingId', id);
-    Router.getInstance().navigateTo(routes.ABOUT_ABOUT, params);
+    Router.getInstance().navigateTo(routes.ABOUT, params);
 
     flush();
   }
@@ -106,6 +123,19 @@ suite('AboutPageTest', function() {
     assertTrue(!!page);
     page.isDarkModeActive_ = active;
   }
+
+  suite('When OsSettingsRevampWayfinding feature is enabled', () => {
+    setup(() => {
+      loadTimeData.overrideValues({isRevampWayfindingEnabled: true});
+    });
+
+    test('Crostini settings card is visible', async () => {
+      await initNewPage();
+      const crostiniSettingsCard =
+          page.shadowRoot.querySelector('crostini-settings-card');
+      assertTrue(isVisible(crostiniSettingsCard));
+    });
+  });
 
   ['light', 'dark'].forEach((mode) => {
     suite(`with ${mode} mode active`, () => {
@@ -221,26 +251,51 @@ suite('AboutPageTest', function() {
 
     assertEquals(
         page.i18nAdvanced(
-            'aboutRollbackInProgress',
-            {substitutions: [page.deviceManager_, progress + '%']}),
-        statusMessageEl.innerHTML);
+                'aboutRollbackInProgress',
+                {substitutions: [page.deviceManager_, progress + '%']})
+            .toString(),
+        statusMessageEl.textContent);
 
     fireStatusChanged(
         UpdateStatus.NEARLY_UPDATED, {powerwash: true, rollback: true});
 
     assertEquals(
         page.i18nAdvanced(
-            'aboutRollbackSuccess', {substitutions: [page.deviceManager_]}),
-        statusMessageEl.innerHTML);
+                'aboutRollbackSuccess', {substitutions: [page.deviceManager_]})
+            .toString(),
+        statusMessageEl.textContent);
+
+    // Simulate update disallowed to previously installed version after a
+    // consumer rollback.
+    fireStatusChanged(UpdateStatus.UPDATE_TO_ROLLBACK_VERSION_DISALLOWED);
+    const expectedMessage =
+        page.i18n('aboutUpdateToRollbackVersionDisallowed').toString();
+    assertEquals(expectedMessage, statusMessageEl.textContent);
   });
+
+  test(
+      'Warning dialog is shown when attempting to update over metered network',
+      async () => {
+        await initNewPage();
+
+        fireStatusChanged(
+            UpdateStatus.NEED_PERMISSION_TO_UPDATE,
+            {version: '9001.0.0', size: '9999'});
+        flush();
+
+        const warningDialog =
+            page.shadowRoot.querySelector('settings-update-warning-dialog');
+        assertTrue(!!warningDialog);
+        assertTrue(
+            warningDialog.$.dialog.open, 'Warning dialog should be open');
+      });
 
   test('NoInternet', function() {
     assertTrue(page.$.updateStatusMessage.hidden);
     aboutBrowserProxy.sendStatusNoInternet();
     flush();
     assertFalse(page.$.updateStatusMessage.hidden);
-    assertNotEquals(
-        page.$.updateStatusMessage.innerHTML.includes('no internet'));
+    assertTrue(page.$.updateStatusMessage.textContent.includes('no internet'));
   });
 
   /**
@@ -427,7 +482,7 @@ suite('AboutPageTest', function() {
 
     const params = new URLSearchParams();
     params.append('settingId', '1703');
-    Router.getInstance().navigateTo(routes.ABOUT_ABOUT, params);
+    Router.getInstance().navigateTo(routes.ABOUT, params);
 
     flush();
 
@@ -472,7 +527,7 @@ suite('AboutPageTest', function() {
   test('TPMFirmwareUpdate', async () => {
     assertTrue(page.$.aboutTPMFirmwareUpdate.hidden);
     aboutBrowserProxy.setTPMFirmwareUpdateStatus({updateAvailable: true});
-    aboutBrowserProxy.refreshTPMFirmwareUpdateStatus();
+    aboutBrowserProxy.refreshTpmFirmwareUpdateStatus();
     assertFalse(page.$.aboutTPMFirmwareUpdate.hidden);
     page.$.aboutTPMFirmwareUpdate.click();
     await flushTasks();
@@ -538,6 +593,37 @@ suite('AboutPageTest', function() {
     await checkHasEndOfLife(false);
   });
 
+  test('DeviceEndOfLifeIncentive', async () => {
+    async function checkEndOfLifeIncentive(isShowing) {
+      await aboutBrowserProxy.whenCalled('getEndOfLifeInfo');
+      const eolSection = page.shadowRoot.querySelector('eol-offer-section');
+      assertEquals(isShowing, !!eolSection);
+
+      if (isShowing) {
+        eolSection.$.eolIncentiveButton.click();
+        await aboutBrowserProxy.whenCalled('endOfLifeIncentiveButtonClicked');
+      }
+    }
+
+    aboutBrowserProxy.setEndOfLifeInfo({
+      hasEndOfLife: false,
+      endOfLifeAboutMessage: '',
+      shouldShowEndOfLifeIncentive: false,
+      shouldShowOfferText: false,
+    });
+    await initNewPage();
+    await checkEndOfLifeIncentive(false);
+
+    aboutBrowserProxy.setEndOfLifeInfo({
+      hasEndOfLife: false,
+      endOfLifeAboutMessage: '',
+      shouldShowEndOfLifeIncentive: true,
+      shouldShowOfferText: false,
+    });
+    await initNewPage();
+    await checkEndOfLifeIncentive(true);
+  });
+
   test('managed detailed build info page', async () => {
     loadTimeData.overrideValues({
       isManaged: true,
@@ -550,11 +636,13 @@ suite('AboutPageTest', function() {
       aboutPageEndOfLifeMessage: 'message',
     });
     await initNewPage();
-    page.scroller = page.offsetParent;
-    assertTrue(!!page.$['detailed-build-info-trigger']);
-    page.$['detailed-build-info-trigger'].click();
+
+    const subpageTrigger =
+        page.shadowRoot.querySelector('#detailedBuildInfoTrigger');
+    assertTrue(!!subpageTrigger);
+    subpageTrigger.click();
     const buildInfoPage =
-        page.shadowRoot.querySelector('settings-detailed-build-info');
+        page.shadowRoot.querySelector('settings-detailed-build-info-subpage');
     assertTrue(!!buildInfoPage);
     assertTrue(!!buildInfoPage.$['endOfLifeSectionContainer']);
     assertTrue(buildInfoPage.$['endOfLifeSectionContainer'].hidden);
@@ -568,7 +656,7 @@ suite('AboutPageTest', function() {
     async function checkEndOfLifeSection() {
       await aboutBrowserProxy.whenCalled('getEndOfLifeInfo');
       const buildInfoPage =
-          page.shadowRoot.querySelector('settings-detailed-build-info');
+          page.shadowRoot.querySelector('settings-detailed-build-info-subpage');
       assertTrue(!!buildInfoPage.$['endOfLifeSectionContainer']);
       assertFalse(buildInfoPage.$['endOfLifeSectionContainer'].hidden);
     }
@@ -578,11 +666,12 @@ suite('AboutPageTest', function() {
       aboutPageEndOfLifeMessage: '',
     });
     await initNewPage();
-    page.scroller = page.offsetParent;
-    assertTrue(!!page.$['detailed-build-info-trigger']);
-    page.$['detailed-build-info-trigger'].click();
+    let subpageTrigger =
+        page.shadowRoot.querySelector('#detailedBuildInfoTrigger');
+    assertTrue(!!subpageTrigger);
+    subpageTrigger.click();
     const buildInfoPage =
-        page.shadowRoot.querySelector('settings-detailed-build-info');
+        page.shadowRoot.querySelector('settings-detailed-build-info-subpage');
     assertTrue(!!buildInfoPage);
     assertTrue(!!buildInfoPage.$['endOfLifeSectionContainer']);
     assertTrue(buildInfoPage.$['endOfLifeSectionContainer'].hidden);
@@ -592,18 +681,44 @@ suite('AboutPageTest', function() {
       aboutPageEndOfLifeMessage: 'message',
     });
     await initNewPage();
-    page.scroller = page.offsetParent;
-    assertTrue(!!page.$['detailed-build-info-trigger']);
-    page.$['detailed-build-info-trigger'].click();
+    subpageTrigger = page.shadowRoot.querySelector('#detailedBuildInfoTrigger');
+    assertTrue(!!subpageTrigger);
+    subpageTrigger.click();
     checkEndOfLifeSection();
   });
 
+  test(
+      'Detailed build info subpage trigger is focused when returning ' +
+          'from subpage',
+      async () => {
+        const triggerSelector = '#detailedBuildInfoTrigger';
+        const subpageTrigger = page.shadowRoot.querySelector(triggerSelector);
+        assertTrue(!!subpageTrigger);
+
+        // Sub-page trigger navigates to Detailed build info subpage
+        subpageTrigger.click();
+        assertEquals(
+            routes.ABOUT_DETAILED_BUILD_INFO,
+            Router.getInstance().currentRoute);
+
+        // Navigate back
+        const popStateEventPromise = eventToPromise('popstate', window);
+        Router.getInstance().navigateToPreviousRoute();
+        await popStateEventPromise;
+        await waitAfterNextRender(page);
+
+        assertEquals(
+            subpageTrigger, page.shadowRoot.activeElement,
+            `${triggerSelector} should be focused.`);
+      });
+
   function getBuildInfoPage() {
-    page.scroller = page.offsetParent;
-    assertTrue(!!page.$['detailed-build-info-trigger']);
-    page.$['detailed-build-info-trigger'].click();
+    const subpageTrigger =
+        page.shadowRoot.querySelector('#detailedBuildInfoTrigger');
+    assertTrue(!!subpageTrigger);
+    subpageTrigger.click();
     const buildInfoPage =
-        page.shadowRoot.querySelector('settings-detailed-build-info');
+        page.shadowRoot.querySelector('settings-detailed-build-info-subpage');
     assertTrue(!!buildInfoPage);
     return buildInfoPage;
   }
@@ -611,15 +726,15 @@ suite('AboutPageTest', function() {
   test('Managed user auto update toggle in build info page', async () => {
     loadTimeData.overrideValues({
       isManaged: true,
-      // Set this to true to catch UI bugs.
-      showConsumerAutoUpdateToggle: true,
     });
 
-    async function checkManagedAutoUpdateToggle(isToggleEnabled) {
+    async function checkManagedAutoUpdateToggle(isToggleEnabled, showToggle) {
       // Create the page.
       await initNewPage();
       // Set overrides + response values.
       aboutBrowserProxy.setManagedAutoUpdate(isToggleEnabled);
+
+      loadTimeData.overrideValues({showAutoUpdateToggle: showToggle});
       // Go to the build info page.
       const buildInfoPage = getBuildInfoPage();
       // Wait for overrides + response values.
@@ -627,17 +742,25 @@ suite('AboutPageTest', function() {
 
       const mau_toggle =
           buildInfoPage.shadowRoot.querySelector('#managedAutoUpdateToggle');
-      assertTrue(!!mau_toggle);
-      // Managed auto update toggle should always be disabled to toggle.
-      assertTrue(!!mau_toggle.hasAttribute('disabled'));
-      assertEquals(isToggleEnabled, mau_toggle.checked);
-      // Consumer auto update toggle should not exist.
-      assertFalse(!!buildInfoPage.shadowRoot.querySelector(
-          '#consumerAutoUpdateToggle'));
+
+      if (showToggle) {
+        assertTrue(!!mau_toggle);
+        // Managed auto update toggle should always be disabled to toggle.
+        assertTrue(!!mau_toggle.hasAttribute('disabled'));
+        assertEquals(isToggleEnabled, mau_toggle.checked);
+        // Consumer auto update toggle should not exist.
+        assertFalse(!!buildInfoPage.shadowRoot.querySelector(
+            '#consumerAutoUpdateToggle'));
+      } else {
+        assertFalse(!!mau_toggle);
+      }
     }
 
-    await checkManagedAutoUpdateToggle(true);
-    await checkManagedAutoUpdateToggle(false);
+    for (let i = 0; i < (1 << 2); i++) {
+      await checkManagedAutoUpdateToggle(
+          /*isToggleEnabled=*/ (i & 1) > 0,
+          /*showToggle=*/ (i & 2) > 0);
+    }
   });
 
   test('Consumer user auto update toggle in build info page', async () => {
@@ -652,7 +775,7 @@ suite('AboutPageTest', function() {
       // Set overrides + response values.
       loadTimeData.overrideValues({
         isConsumerAutoUpdateTogglingAllowed: isTogglingAllowed,
-        showConsumerAutoUpdateToggle: showToggle,
+        showAutoUpdateToggle: showToggle,
       });
       aboutBrowserProxy.resetConsumerAutoUpdate(isEnabled);
       const prefs = {
@@ -754,8 +877,6 @@ suite('AboutPageTest', function() {
   });
 
   test('FirmwareUpdatesBadge No Updates', async function() {
-    loadTimeData.overrideValues({isFirmwareUpdaterAppEnabled: true});
-
     aboutBrowserProxy.setFirmwareUpdatesCount(0);
     await initNewPage();
     flush();
@@ -769,8 +890,6 @@ suite('AboutPageTest', function() {
   });
 
   test('FirmwareUpdatesBadge N Updates', async function() {
-    loadTimeData.overrideValues({isFirmwareUpdaterAppEnabled: true});
-
     for (let i = 1; i < 10; i++) {
       aboutBrowserProxy.setFirmwareUpdatesCount(i);
       await initNewPage();
@@ -788,8 +907,6 @@ suite('AboutPageTest', function() {
   });
 
   test('FirmwareUpdatesBadge 10 Updates', async function() {
-    loadTimeData.overrideValues({isFirmwareUpdaterAppEnabled: true});
-
     aboutBrowserProxy.setFirmwareUpdatesCount(10);
     await initNewPage();
     flush();
@@ -807,7 +924,6 @@ suite('AboutPageTest', function() {
   test('LaunchFirmwareUpdates', async function() {
     loadTimeData.overrideValues({
       isDeepLinkingEnabled: true,
-      isFirmwareUpdaterAppEnabled: true,
     });
 
     await initNewPage();
@@ -821,7 +937,6 @@ suite('AboutPageTest', function() {
   test('Deep link to firmware updates', async () => {
     loadTimeData.overrideValues({
       isDeepLinkingEnabled: true,
-      isFirmwareUpdaterAppEnabled: true,
     });
 
     await initNewPage();
@@ -883,7 +998,7 @@ suite('DetailedBuildInfoTest', function() {
       isManaged: false,
     });
 
-    page = document.createElement('settings-detailed-build-info');
+    page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
 
     await Promise.all([
@@ -901,7 +1016,7 @@ suite('DetailedBuildInfoTest', function() {
       isManaged: true,
     });
 
-    page = document.createElement('settings-detailed-build-info');
+    page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
 
     await Promise.all([
@@ -923,7 +1038,7 @@ suite('DetailedBuildInfoTest', function() {
    */
   async function checkChangeChannelButton(canChangeChannel) {
     browserProxy.setCanChangeChannel(canChangeChannel);
-    page = document.createElement('settings-detailed-build-info');
+    page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
     await browserProxy.whenCalled('canChangeChannel');
     await waitAfterNextRender(page);
@@ -948,7 +1063,7 @@ suite('DetailedBuildInfoTest', function() {
       });
     }
     browserProxy.setCanChangeChannel(canChangeChannel);
-    page = document.createElement('settings-detailed-build-info');
+    page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
     await browserProxy.whenCalled('canChangeChannel');
     await waitAfterNextRender(page);
@@ -1027,12 +1142,12 @@ suite('DetailedBuildInfoTest', function() {
     loadTimeData.overrideValues({
       isDeepLinkingEnabled: true,
     });
-    page = document.createElement('settings-detailed-build-info');
+    page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
 
     const params = new URLSearchParams();
     params.append('settingId', '1700');
-    Router.getInstance().navigateTo(routes.DETAILED_BUILD_INFO, params);
+    Router.getInstance().navigateTo(routes.ABOUT_DETAILED_BUILD_INFO, params);
 
     flush();
 
@@ -1044,7 +1159,7 @@ suite('DetailedBuildInfoTest', function() {
   });
 
   async function checkCopyBuildDetailsButton() {
-    page = document.createElement('settings-detailed-build-info');
+    page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
     const copyBuildDetailsButton =
         page.shadowRoot.querySelector('cr-icon-button');
@@ -1080,12 +1195,12 @@ suite('DetailedBuildInfoTest', function() {
     loadTimeData.overrideValues({
       isDeepLinkingEnabled: true,
     });
-    page = document.createElement('settings-detailed-build-info');
+    page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
 
     const params = new URLSearchParams();
     params.append('settingId', '1708');
-    Router.getInstance().navigateTo(routes.DETAILED_BUILD_INFO, params);
+    Router.getInstance().navigateTo(routes.ABOUT_DETAILED_BUILD_INFO, params);
 
     flush();
 
@@ -1155,7 +1270,7 @@ suite('DetailedBuildInfoTest', function() {
       isHostnameSettingEnabled: true,
     });
 
-    page = document.createElement('settings-detailed-build-info');
+    page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
 
     await deviceNameBrowserProxy.whenCalled('notifyReadyForDeviceName');
@@ -1199,7 +1314,7 @@ suite('EditHostnameDialogTest', function() {
       isHostnameSettingEnabled: true,
     });
 
-    const page = document.createElement('settings-detailed-build-info');
+    const page = document.createElement('settings-detailed-build-info-subpage');
     document.body.appendChild(page);
 
     await deviceNameBrowserProxy.whenCalled('notifyReadyForDeviceName');
@@ -1375,7 +1490,7 @@ suite('ChannelSwitcherDialogTest', function() {
   let browserProxy = null;
   let currentChannel;
 
-  setup(function() {
+  setup(async function() {
     currentChannel = BrowserChannel.BETA;
     browserProxy = new TestAboutPageBrowserProxyChromeOS();
     browserProxy.setChannels(currentChannel, currentChannel);
@@ -1386,7 +1501,7 @@ suite('ChannelSwitcherDialogTest', function() {
 
     radioButtons = dialog.shadowRoot.querySelectorAll('cr-radio-button');
     assertEquals(3, radioButtons.length);
-    return browserProxy.whenCalled('getChannelInfo');
+    await browserProxy.whenCalled('getChannelInfo');
   });
 
   teardown(function() {
@@ -1516,7 +1631,7 @@ suite('AboutPageTest_OfficialBuild', function() {
     browserProxy = new TestAboutPageBrowserProxyChromeOS();
     AboutPageBrowserProxyImpl.setInstanceForTesting(browserProxy);
     PolymerTest.clearBody();
-    page = document.createElement('os-settings-about-page');
+    page = document.createElement('os-about-page');
     document.body.appendChild(page);
   });
 
@@ -1526,10 +1641,10 @@ suite('AboutPageTest_OfficialBuild', function() {
     Router.getInstance().resetRouteForTesting();
   });
 
-  test('ReportAnIssue', function() {
+  test('ReportAnIssue', async function() {
     assertTrue(!!page.$.reportIssue);
     page.$.reportIssue.click();
-    return browserProxy.whenCalled('openFeedbackDialog');
+    await browserProxy.whenCalled('openFeedbackDialog');
   });
 
   test('Deep link to report an issue', async () => {
@@ -1539,7 +1654,7 @@ suite('AboutPageTest_OfficialBuild', function() {
 
     const params = new URLSearchParams();
     params.append('settingId', '1705');
-    Router.getInstance().navigateTo(routes.ABOUT_ABOUT, params);
+    Router.getInstance().navigateTo(routes.ABOUT, params);
 
     flush();
 
@@ -1558,7 +1673,7 @@ suite('AboutPageTest_OfficialBuild', function() {
 
     const params = new URLSearchParams();
     params.append('settingId', '1706');
-    Router.getInstance().navigateTo(routes.ABOUT_ABOUT, params);
+    Router.getInstance().navigateTo(routes.ABOUT, params);
 
     flush();
 

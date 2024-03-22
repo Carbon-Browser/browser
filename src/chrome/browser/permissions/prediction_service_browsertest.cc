@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,13 @@
 #include "chrome/browser/optimization_guide/browser_test_util.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
-#include "chrome/browser/permissions/prediction_model_handler_factory.h"
+#include "chrome/browser/permissions/prediction_model_handler_provider_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_key.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/content_settings/core/common/pref_names.h"
 #include "components/metrics/content/subprocess_metrics_provider.h"
 #include "components/optimization_guide/core/model_util.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
@@ -28,9 +29,11 @@
 #include "components/permissions/permission_request_manager.h"
 #include "components/permissions/permission_uma_util.h"
 #include "components/permissions/permission_util.h"
-#include "components/permissions/prediction_service/prediction_model_handler.h"
+#include "components/permissions/prediction_service/prediction_model_handler_provider.h"
+#include "components/permissions/request_type.h"
 #include "components/permissions/test/mock_permission_prompt_factory.h"
 #include "components/permissions/test/mock_permission_request.h"
+#include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
@@ -42,10 +45,17 @@ namespace permissions {
 class PredictionServiceBrowserTest : public InProcessBrowserTest {
  public:
   PredictionServiceBrowserTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {features::kPermissionOnDeviceNotificationPredictions,
-         optimization_guide::features::kOptimizationHints,
-         optimization_guide::features::kRemoteOptimizationGuideFetching},
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        {
+            {features::kPermissionOnDeviceNotificationPredictions,
+             {{feature_params::
+                   kPermissionOnDeviceNotificationPredictionsHoldbackChance
+                       .name,
+               "0"}}},
+            {optimization_guide::features::kOptimizationHints, {}},
+            {optimization_guide::features::kRemoteOptimizationGuideFetching,
+             {}},
+        },
         {});
   }
 
@@ -57,6 +67,10 @@ class PredictionServiceBrowserTest : public InProcessBrowserTest {
     mock_permission_prompt_factory_ =
         std::make_unique<MockPermissionPromptFactory>(manager);
     host_resolver()->AddRule("*", "127.0.0.1");
+    browser()->profile()->GetPrefs()->SetBoolean(prefs::kEnableNotificationCPSS,
+                                                 true);
+    browser()->profile()->GetPrefs()->SetBoolean(prefs::kEnableGeolocationCPSS,
+                                                 true);
   }
 
   void TearDownOnMainThread() override {
@@ -80,8 +94,9 @@ class PredictionServiceBrowserTest : public InProcessBrowserTest {
   }
 
   PredictionModelHandler* prediction_model_handler() {
-    return PredictionModelHandlerFactory::GetForBrowserContext(
-        browser()->profile());
+    return PredictionModelHandlerProviderFactory::GetForBrowserContext(
+               browser()->profile())
+        ->GetPredictionModelHandler(RequestType::kNotifications);
   }
 
   void TriggerPromptAndVerifyUI(
@@ -115,7 +130,7 @@ class PredictionServiceBrowserTest : public InProcessBrowserTest {
 base::FilePath& model_file_path() {
   static base::NoDestructor<base::FilePath> file_path([]() {
     base::FilePath source_root_dir;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &source_root_dir);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_root_dir);
     return source_root_dir.AppendASCII("chrome")
         .AppendASCII("test")
         .AppendASCII("data")

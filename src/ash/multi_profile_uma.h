@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,10 @@ namespace ash {
 class ASH_EXPORT MultiProfileUMA {
  public:
   // Used for UMA metrics. Do not reorder.
-  enum SwitchActiveUserAction {
-    SWITCH_ACTIVE_USER_BY_TRAY = 0,
-    SWITCH_ACTIVE_USER_BY_ACCELERATOR,
-    NUM_SWITCH_ACTIVE_USER_ACTIONS
+  enum class SwitchActiveUserAction {
+    kByTray = 0,
+    kByAccelerator,
+    kNumActions
   };
 
   MultiProfileUMA() = delete;

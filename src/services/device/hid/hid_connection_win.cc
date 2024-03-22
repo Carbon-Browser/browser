@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 #include <cstring>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/win/object_watcher.h"
 #include "components/device_event_log/device_event_log.h"
-#include "services/device/hid/hid_report_type.h"
+#include "services/device/public/cpp/hid/hid_report_type.h"
 
 #define INITGUID
 
@@ -253,7 +254,7 @@ void HidConnectionWin::OnReadInputReport(
   }
 
   uint8_t report_id = buffer->data()[0];
-  if (!IsReportIdProtected(report_id, HidReportType::kInput)) {
+  if (!IsReportProtected(report_id, HidReportType::kInput)) {
     // Hold a reference to |this| to prevent a callback executed by
     // ProcessInputReport from freeing this object.
     scoped_refptr<HidConnection> self(this);
@@ -312,11 +313,8 @@ void HidConnectionWin::OnWriteComplete(HANDLE file_handle,
 
 std::unique_ptr<PendingHidTransfer> HidConnectionWin::UnlinkTransfer(
     PendingHidTransfer* transfer) {
-  auto it = std::find_if(
-      transfers_.begin(), transfers_.end(),
-      [transfer](const std::unique_ptr<PendingHidTransfer>& this_transfer) {
-        return transfer == this_transfer.get();
-      });
+  auto it = base::ranges::find(transfers_, transfer,
+                               &std::unique_ptr<PendingHidTransfer>::get);
   DCHECK(it != transfers_.end());
   std::unique_ptr<PendingHidTransfer> saved_transfer = std::move(*it);
   transfers_.erase(it);

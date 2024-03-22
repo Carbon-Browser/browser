@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,8 @@ void FakeTextInputClient::SetCompositionText(
   selection_ = gfx::Range(new_cursor, new_cursor);
 }
 
-uint32_t FakeTextInputClient::ConfirmCompositionText(bool keep_selection) {
-  return UINT32_MAX;
+size_t FakeTextInputClient::ConfirmCompositionText(bool keep_selection) {
+  return std::numeric_limits<size_t>::max();
 }
 
 void FakeTextInputClient::ClearCompositionText() {}
@@ -78,7 +78,15 @@ base::i18n::TextDirection FakeTextInputClient::GetTextDirection() const {
 }
 
 int FakeTextInputClient::GetTextInputFlags() const {
-  return EF_NONE;
+  return flags_;
+}
+
+void FakeTextInputClient::SetFlags(const int flags) {
+  flags_ = flags;
+}
+
+void FakeTextInputClient::SetUrl(const GURL& url) {
+  url_ = url;
 }
 
 bool FakeTextInputClient::CanComposeInline() const {
@@ -93,7 +101,7 @@ gfx::Rect FakeTextInputClient::GetSelectionBoundingBox() const {
   return {};
 }
 
-bool FakeTextInputClient::GetCompositionCharacterBounds(uint32_t index,
+bool FakeTextInputClient::GetCompositionCharacterBounds(size_t index,
                                                         gfx::Rect* rect) const {
   return false;
 }
@@ -202,6 +210,13 @@ void FakeTextInputClient::SetActiveCompositionForAccessibility(
     const gfx::Range& range,
     const std::u16string& active_composition_text,
     bool is_composition_committed) {}
+#endif
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
+ui::TextInputClient::EditingContext
+FakeTextInputClient::GetTextEditingContext() {
+  return EditingContext{.page_url = url_};
+}
 #endif
 
 }  // namespace ui

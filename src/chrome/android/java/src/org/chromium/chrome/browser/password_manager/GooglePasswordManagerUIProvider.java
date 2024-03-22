@@ -1,13 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.password_manager;
 
 import android.app.Activity;
 
-/**
- * Shows the Google Password Manager UI if possible.
- */
+/** Shows the Google Password Manager UI if possible. */
 public interface GooglePasswordManagerUIProvider {
     /**
      * Shows the Google Password Manager UI if possible.

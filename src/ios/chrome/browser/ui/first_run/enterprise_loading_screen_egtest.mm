@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,6 @@
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "net/http/http_status_code.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -47,19 +43,24 @@ constexpr char kEnrollmentToken[] = "enrollment_token";
   GREYAssertTrue(_policyTestServer->Start(),
                  @"Policy test server did not start.");
 
-  [PolicyAppInterface clearAllPoliciesInMemory];
-  [PolicyAppInterface clearDMTokenDirectory];
-  [PolicyAppInterface clearCloudPolicyDirectory];
+  [self clearPolicies];
 }
 
 - (void)tearDown {
-  [PolicyAppInterface clearAllPoliciesInMemory];
-  [PolicyAppInterface clearDMTokenDirectory];
-  [PolicyAppInterface clearCloudPolicyDirectory];
+  [self clearPolicies];
   [super tearDown];
 }
 
 #pragma mark - Helpers
+
+// Removes all policies stored in memory.
+- (void)clearPolicies {
+  [PolicyAppInterface clearAllPoliciesInNSUserDefault];
+  GREYAssertTrue([PolicyAppInterface clearDMTokenDirectory],
+                 @"DM token directory not cleared.");
+  GREYAssertTrue([PolicyAppInterface clearCloudPolicyDirectory],
+                 @"Cloud policy directory not cleared.");
+}
 
 // Waits and verify that the enterprise loading screen is not displayed.
 - (void)verifyLoadingScreenIsDismissed {
@@ -79,7 +80,8 @@ constexpr char kEnrollmentToken[] = "enrollment_token";
   // Waits for enterprise loading screen to be dismissed or timeout after
   // kWaitForUIElementTimeout.
   GREYAssertTrue([loadingScreenDismissed
-                     waitWithTimeout:base::test::ios::kWaitForUIElementTimeout],
+                     waitWithTimeout:base::test::ios::kWaitForUIElementTimeout
+                                         .InSecondsF()],
                  @"Enterprise loading screen still visible.");
 }
 
@@ -114,7 +116,8 @@ constexpr char kEnrollmentToken[] = "enrollment_token";
 
 // Ensures that the loading screen is dismissed when registration and policy
 // fetch succeed.
-- (void)testLoadingScreenDismissedByPolicyFetchSuccess {
+// TODO(crbug.com/1412454): Flaky.
+- (void)FLAKY_testLoadingScreenDismissedByPolicyFetchSuccess {
   [self configureAppWithEnrollmentTokenValid:YES];
   [self verifyLoadingScreenIsDismissed];
   GREYAssertTrue([PolicyAppInterface isCloudPolicyClientRegistered],
@@ -122,7 +125,8 @@ constexpr char kEnrollmentToken[] = "enrollment_token";
 }
 
 // Ensures that the loading screen is dismissed when registration fails.
-- (void)testLoadingScreenDismissedByRegisterFail {
+// TODO(crbug.com/1412454): Flaky.
+- (void)FLAKY_testLoadingScreenDismissedByRegisterFail {
   [self configureAppWithEnrollmentTokenValid:NO];
   [self verifyLoadingScreenIsDismissed];
   GREYAssertFalse(
@@ -132,7 +136,8 @@ constexpr char kEnrollmentToken[] = "enrollment_token";
 
 // Ensures that the loading screen is dismissed when registration succeeds and
 // policy fetch fails.
-- (void)testLoadingScreenDismissedByPolicyFetchError {
+// TODO(crbug.com/1411631): Flaky.
+- (void)DISABLED_testLoadingScreenDismissedByPolicyFetchError {
   _policyTestServer->ConfigureRequestError(
       policy::dm_protocol::kValueRequestPolicy, net::HTTP_METHOD_NOT_ALLOWED);
 

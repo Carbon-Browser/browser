@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string.h>
 
 #include "base/big_endian.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/task/thread_pool.h"
 #include "content/public/browser/browser_thread.h"
@@ -166,27 +166,20 @@ class WebRtcRtpDumpWriter::FileWorker {
       return 0;
     }
 
-    int bytes_written = -1;
+    bool success = false;
 
     if (base::PathExists(dump_path_)) {
-      bytes_written = base::AppendToFile(dump_path_, compressed_buffer)
-                          ? compressed_buffer.size()
-                          : -1;
+      success = base::AppendToFile(dump_path_, compressed_buffer);
     } else {
-      bytes_written = base::WriteFile(
-          dump_path_,
-          reinterpret_cast<const char*>(&compressed_buffer[0]),
-          compressed_buffer.size());
+      success = base::WriteFile(dump_path_, compressed_buffer);
     }
 
-    if (bytes_written == -1) {
+    if (!success) {
       DVLOG(2) << "Writing file failed: " << dump_path_.value();
       *result = FLUSH_RESULT_FAILURE;
       return 0;
     }
-
-    DCHECK_EQ(static_cast<size_t>(bytes_written), compressed_buffer.size());
-    return bytes_written;
+    return compressed_buffer.size();
   }
 
   // Compresses |input| into |output|.
@@ -207,8 +200,8 @@ class WebRtcRtpDumpWriter::FileWorker {
 
     output->resize(output->size() - stream_.avail_out);
 
-    stream_.next_in = NULL;
-    stream_.next_out = NULL;
+    stream_.next_in = nullptr;
+    stream_.next_out = nullptr;
     stream_.avail_out = 0;
     return true;
   }
@@ -220,7 +213,7 @@ class WebRtcRtpDumpWriter::FileWorker {
     std::vector<uint8_t> output_buffer;
     output_buffer.resize(kMinimumGzipOutputBufferSize);
 
-    stream_.next_in = NULL;
+    stream_.next_in = nullptr;
     stream_.avail_in = 0;
     stream_.next_out = &output_buffer[0];
     stream_.avail_out = output_buffer.size();

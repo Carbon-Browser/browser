@@ -1,21 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/performance_manager/policies/working_set_trimmer_policy_chromeos.h"
 
 #include "ash/components/arc/arc_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/process/arc_process.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
+#include "chrome/browser/ash/arc/vmm/arcvm_working_set_trim_executor.h"
 #include "chrome/browser/performance_manager/mechanisms/working_set_trimmer.h"
 #include "chrome/browser/performance_manager/policies/policy_features.h"
 #include "chrome/browser/performance_manager/policies/working_set_trimmer_policy_arcvm.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "components/performance_manager/performance_manager_impl.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/graph.h"
@@ -76,8 +76,6 @@ void GetArcProcessListOnUIThread(
 }  // namespace
 
 WorkingSetTrimmerPolicyChromeOS::WorkingSetTrimmerPolicyChromeOS() {
-  trim_on_memory_pressure_ =
-      base::FeatureList::IsEnabled(features::kTrimOnMemoryPressure);
   trim_on_freeze_ = base::FeatureList::IsEnabled(features::kTrimOnFreeze);
   trim_arc_on_memory_pressure_ =
       base::FeatureList::IsEnabled(features::kTrimArcOnMemoryPressure);
@@ -124,11 +122,9 @@ void WorkingSetTrimmerPolicyChromeOS::OnMemoryPressure(
   // Try not to walk the graph too frequently because we can receive moderate
   // memory pressure notifications every 10s.
 
-  if (trim_on_memory_pressure_) {
-    if (!last_graph_walk_ || (base::TimeTicks::Now() - *last_graph_walk_ >
-                              params_.graph_walk_backoff_time)) {
-      TrimNodesOnGraph();
-    }
+  if (!last_graph_walk_ || (base::TimeTicks::Now() - *last_graph_walk_ >
+                            params_.graph_walk_backoff_time)) {
+    TrimNodesOnGraph();
   }
 
   if (trim_arc_on_memory_pressure_) {
@@ -240,14 +236,14 @@ WorkingSetTrimmerPolicyChromeOS::GetTrimmer() {
       mechanism::WorkingSetTrimmer::GetInstance());
 }
 
-bool WorkingSetTrimmerPolicyChromeOS::TrimArcProcess(base::ProcessId pid) {
+void WorkingSetTrimmerPolicyChromeOS::TrimArcProcess(base::ProcessId pid) {
   SetArcProcessLastTrimTime(pid, base::TimeTicks::Now());
 
   static int arc_processes_trimmed = 0;
   base::UmaHistogramCounts10000("Memory.WorkingSetTrim.ArcProcessTrimCount",
                                 ++arc_processes_trimmed);
 
-  return GetTrimmer()->TrimWorkingSet(pid);
+  GetTrimmer()->TrimWorkingSet(pid);
 }
 
 void WorkingSetTrimmerPolicyChromeOS::TrimReceivedArcProcesses(
@@ -521,15 +517,14 @@ void WorkingSetTrimmerPolicyChromeOS::OnAllFramesInProcessFrozen(
 }
 
 void WorkingSetTrimmerPolicyChromeOS::OnPassedToGraph(Graph* graph) {
-  if (trim_on_memory_pressure_ || trim_arc_on_memory_pressure_) {
-    // We wait to register the memory pressure listener so we're on the
-    // right sequence.
-    params_ = features::TrimOnMemoryPressureParams::GetParams();
-    memory_pressure_listener_.emplace(
-        FROM_HERE,
-        base::BindRepeating(&WorkingSetTrimmerPolicyChromeOS::OnMemoryPressure,
-                            base::Unretained(this)));
-  }
+  // We wait to register the memory pressure listener so we're on the
+  // right sequence.
+  params_ = features::TrimOnMemoryPressureParams::GetParams();
+  memory_pressure_listener_.emplace(
+      FROM_HERE,
+      base::BindRepeating(&WorkingSetTrimmerPolicyChromeOS::OnMemoryPressure,
+                          base::Unretained(this)));
+
   if (trim_arcvm_on_memory_pressure_) {
     arcvm_trim_metric_report_timer_.Start(
         FROM_HERE, kArcVmTrimMetricReportDelay,

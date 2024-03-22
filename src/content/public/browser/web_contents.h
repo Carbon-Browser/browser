@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
+#include "base/functional/function_ref.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/safety_checks.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/kill.h"
@@ -29,22 +31,25 @@
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/page.h"
 #include "content/public/browser/page_navigator.h"
+#include "content/public/browser/preloading.h"
+#include "content/public/browser/preloading_trigger_type.h"
 #include "content/public/browser/prerender_handle.h"
-#include "content/public/browser/prerender_trigger_type.h"
 #include "content/public/browser/save_page_type.h"
 #include "content/public/browser/visibility.h"
 #include "content/public/common/stop_find_action.h"
-#include "services/data_decoder/public/mojom/web_bundler.mojom.h"
 #include "services/network/public/mojom/web_sandbox_flags.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom-forward.h"
 #include "third_party/blink/public/mojom/frame/find_in_page.mojom-forward.h"
-#include "third_party/blink/public/mojom/frame/frame.mojom-forward.h"
+#include "third_party/blink/public/mojom/frame/remote_frame.mojom-forward.h"
 #include "third_party/blink/public/mojom/input/pointer_lock_result.mojom.h"
 #include "third_party/blink/public/mojom/media/capture_handle_config.mojom-forward.h"
+#include "third_party/blink/public/mojom/picture_in_picture_window_options/picture_in_picture_window_options.mojom.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/accessibility/ax_mode.h"
+#include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
+#include "ui/color/color_provider_key.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
@@ -119,13 +124,20 @@ class PreloadingAttempt;
 // https://www.chromium.org/developers/design-documents/multi-process-architecture
 // .
 //
-// Each WebContents has exactly one NavigationController; each
-// NavigationController belongs to one WebContents. The NavigationController can
-// be obtained from GetController(), and is used to load URLs into the
-// WebContents, navigate it backwards/forwards, etc. See navigation_controller.h
-// for more details.
+// The owner of `std::unique_ptr<content::WebContents> web_contents` is
+// responsible for ensuring that `web_contents` are destroyed (e.g. closed)
+// *before* the corresponding `browser_context` is destroyed.
+//
+// Each WebContents has a `NavigationController`, which can be obtained from
+// `GetController()`, and is used to load URLs into the WebContents, navigate
+// it backwards/forwards, etc.
+// See navigation_controller.h for more details.
 class WebContents : public PageNavigator,
                     public base::SupportsUserData {
+  // Do not remove this macro!
+  // The macro is maintained by the memory safety team.
+  ADVANCED_MEMORY_SAFETY_CHECKS();
+
  public:
   struct CONTENT_EXPORT CreateParams {
     explicit CreateParams(
@@ -178,8 +190,8 @@ class WebContents : public PageNavigator,
     raw_ptr<BrowserPluginGuestDelegate> guest_delegate = nullptr;
 
     // Used to specify the location context which display the new view should
-    // belong. This can be nullptr if not needed.
-    gfx::NativeView context = nullptr;
+    // belong. This can be unset if not needed.
+    gfx::NativeView context = gfx::NativeView();
 
     // Used to specify that the new WebContents creation is driven by the
     // renderer process. In this case, the renderer-side objects, such as
@@ -221,11 +233,12 @@ class WebContents : public PageNavigator,
       kOkayToHaveRendererProcess,
 
       // Ensures that the created WebContents are backed by an OS process which
-      // has an initialized RenderView.
+      // has an initialized `blink::WebView`.
       //
       // TODO(lukasza): https://crbug.com/848366: Remove
       // kInitializeAndWarmupRendererProcess value - warming up the renderer by
-      // initializing the RenderView is redundant with the warm-up that can be
+      // initializing the `blink::WebView` is redundant with the warm-up that
+      // can be
       // achieved by either 1) warming up the spare renderer before creating
       // WebContents and/or 2) speculative RenderFrameHost used internally
       // during a navigation.
@@ -253,16 +266,60 @@ class WebContents : public PageNavigator,
     // invariant violations to a particular flavor of WebContents).
     base::Location creator_location;
 
+#if BUILDFLAG(IS_ANDROID)
+    // Same as `creator_location`, for WebContents created via Java. This
+    // java.lang.Throwable contains the entire
+    // WebContentsCreator.createWebContents() stack trace.
+    base::android::ScopedJavaGlobalRef<jthrowable> java_creator_location;
+#endif  // BUILDFLAG(IS_ANDROID)
+
     // Enables contents to hold wake locks, for example, to keep the screen on
     // while playing video.
     bool enable_wake_locks = true;
 
     // Options specific to WebContents created for picture-in-picture windows.
-    float initial_picture_in_picture_aspect_ratio = 0;
-    bool lock_picture_in_picture_aspect_ratio = false;
+    absl::optional<blink::mojom::PictureInPictureWindowOptions>
+        picture_in_picture_options;
+
+    // WebContentsDelegate given for the case early initialization code depends
+    // on the delegate callbacks.
+    // For instance, WebContentsDelegate::IsInPreviewMode() will be called in
+    // RenderFrameHostImpl::ctor for the initial instance that is constructed
+    // in WebContents::Create() call, and callers have no chance to set their
+    // delegates.
+    raw_ptr<WebContentsDelegate> delegate = nullptr;
+  };
+
+  // Token that causes input to be blocked on this WebContents for at least as
+  // long as it exists.
+  class CONTENT_EXPORT ScopedIgnoreInputEvents {
+   public:
+    ~ScopedIgnoreInputEvents();
+
+    ScopedIgnoreInputEvents(ScopedIgnoreInputEvents&&);
+    ScopedIgnoreInputEvents& operator=(ScopedIgnoreInputEvents&&);
+
+   private:
+    friend class WebContentsImpl;
+    explicit ScopedIgnoreInputEvents(base::OnceClosure on_destruction_cb);
+
+    base::ScopedClosureRunner on_destruction_cb_;
   };
 
   // Creates a new WebContents.
+  //
+  // The caller is responsible for ensuring that the returned WebContents is
+  // destroyed (e.g. closed) *before* the BrowserContext associated with
+  // `params` is destroyed.  It is a security bug if WebContents haven't been
+  // destroyed when the destructor of BrowserContext starts running.  It is not
+  // necessarily a bug if WebContents haven't been destroyed when
+  // BrowserContext::NotifyWillBeDestroyed starts running.
+  //
+  // Best practices for managing the lifetime of `WebContents` and
+  // `BrowserContext` will vary across different //content embedders.  For
+  // example, for information specific to the //chrome layer, please see the
+  // "Managing lifetime of a Profile" section in
+  // //chrome/browser/profiles/README.md.
   CONTENT_EXPORT static std::unique_ptr<WebContents> Create(
       const CreateParams& params);
 
@@ -366,6 +423,8 @@ class WebContents : public PageNavigator,
   // Returns the primary main frame for the currently active page. Always
   // non-null except during WebContents destruction. This WebContents may
   // have additional main frames for prerendered pages, bfcached pages, etc.
+  // See docs/frame_trees.md for more details.
+  virtual const RenderFrameHost* GetPrimaryMainFrame() const = 0;
   virtual RenderFrameHost* GetPrimaryMainFrame() = 0;
 
   // Returns the current page in the primary frame tree of this WebContents.
@@ -399,6 +458,7 @@ class WebContents : public PageNavigator,
   // reference to RenderFrameHost or a Page (e.g. each IPC from the renderer
   // process should be associated with a particular RenderFrameHost), it should
   // be used instead of getting the primary page from the WebContents.
+  // See docs/frame_trees.md for more details.
   virtual Page& GetPrimaryPage() = 0;
 
   // Returns the focused frame for the primary page or an inner page thereof.
@@ -432,10 +492,11 @@ class WebContents : public PageNavigator,
   // For callers only interested in the primary page,
   // |GetMainFrame()->ForEachRenderFrameHost()| can be used.
   // See |RenderFrameHost::ForEachRenderFrameHost| for details.
+  using FrameIterationAction = RenderFrameHost::FrameIterationAction;
+  virtual void ForEachRenderFrameHostWithAction(
+      base::FunctionRef<FrameIterationAction(RenderFrameHost*)> on_frame) = 0;
   virtual void ForEachRenderFrameHost(
-      RenderFrameHost::FrameIterationCallback on_frame) = 0;
-  virtual void ForEachRenderFrameHost(
-      RenderFrameHost::FrameIterationAlwaysContinueCallback on_frame) = 0;
+      base::FunctionRef<void(RenderFrameHost*)> on_frame) = 0;
 
   // Gets the current RenderViewHost for this tab.
   virtual RenderViewHost* GetRenderViewHost() = 0;
@@ -457,7 +518,6 @@ class WebContents : public PageNavigator,
       base::OnceCallback<void(const ui::AXTreeUpdate&)>;
   virtual void RequestAXTreeSnapshot(AXTreeSnapshotCallback callback,
                                      ui::AXMode ax_mode,
-                                     bool exclude_offscreen,
                                      size_t max_nodes,
                                      base::TimeDelta timeout) = 0;
 
@@ -496,6 +556,9 @@ class WebContents : public PageNavigator,
   // always return a valid ColorProvider instance.
   virtual const ui::ColorProvider& GetColorProvider() const = 0;
 
+  // Gets the color mode for the ColorProvider associated with this WebContents.
+  virtual ui::ColorProviderKey::ColorMode GetColorMode() const = 0;
+
   // Returns the committed WebUI if one exists.
   virtual WebUI* GetWebUI() = 0;
 
@@ -522,9 +585,14 @@ class WebContents : public PageNavigator,
 
   virtual const blink::UserAgentOverride& GetUserAgentOverride() = 0;
 
-  // Set the accessibility mode so that accessibility events are forwarded
-  // to each WebContentsObserver.
-  virtual void EnableWebContentsOnlyAccessibilityMode() = 0;
+  // Updates all renderers to start sending subresource notifications since a
+  // certificate error or HTTP exception has been allowed by the user.
+  virtual void SetAlwaysSendSubresourceNotifications() = 0;
+  virtual bool GetSendSubresourceNotification() = 0;
+
+  // Adds accessibility mode. If accessibility is already enabled, it will be
+  // reset, i.e., the full accessibility tree will be sent to the observers.
+  virtual void EnableAccessibilityMode(ui::AXMode mode) = 0;
 
   // Returns true only if the WebContentsObserver accessibility mode is
   // enabled.
@@ -582,7 +650,7 @@ class WebContents : public PageNavigator,
   // Returns whether a navigation is currently in progress that should show
   // loading UI if such UI exists (progress bar, loading spinner, stop button,
   // etc.) True for different-document navigations and the navigation API's
-  // transitionWhile(). This being true implies that IsLoading() is also true.
+  // intercept(). This being true implies that IsLoading() is also true.
   virtual bool ShouldShowLoadingUI() = 0;
 
   // Returns whether the current primary main document has reached and finished
@@ -618,6 +686,11 @@ class WebContents : public PageNavigator,
   // request and reset to false in FrameTreeNode.
   virtual bool WasDiscarded() = 0;
   virtual void SetWasDiscarded(bool was_discarded) = 0;
+
+  // Notifies observers that this WebContents is about to be discarded, and
+  // replaced with `new_contents`. See the comment on
+  // WebContentsObserver::AboutToBeDiscarded.
+  virtual void AboutToBeDiscarded(WebContents* new_contents) = 0;
 
   // Internal state ------------------------------------------------------------
 
@@ -699,6 +772,10 @@ class WebContents : public PageNavigator,
   // device.
   virtual bool IsConnectedToHidDevice() = 0;
 
+  // Indicates whether any frame in the WebContents is connected to a USB
+  // device.
+  virtual bool IsConnectedToUsbDevice() = 0;
+
   // Indicates whether any frame in the WebContents has File System Access
   // handles.
   virtual bool HasFileSystemAccessHandles() = 0;
@@ -746,6 +823,12 @@ class WebContents : public PageNavigator,
   // Returns the visibility of the WebContents' view.
   virtual Visibility GetVisibility() = 0;
 
+  // Sets the visibility of the WebContents' view and notifies the WebContents
+  // observers about Visibility change. Call UpdateWebContentsVisibility instead
+  // of WasShown() if you are setting Visibility to VISIBLE for the first time.
+  // TODO(crbug.com/1444248): Make updating Visibility more robust.
+  virtual void UpdateWebContentsVisibility(Visibility visibility) = 0;
+
   // This function checks *all* frames in this WebContents (not just the main
   // frame) and returns true if at least one frame has either a beforeunload or
   // an unload/pagehide/visibilitychange handler.
@@ -787,15 +870,6 @@ class WebContents : public PageNavigator,
   // GetOuterWebContents instead.
   virtual bool IsInnerWebContentsForGuest() = 0;
 
-  // Returns whether this WebContents is a portal. This returns true even when
-  // this WebContents is not attached to its portal host's WebContents tree.
-  // This value may change over time due to portal activation and adoption.
-  virtual bool IsPortal() = 0;
-
-  // If |IsPortal()| is true, returns this WebContents' portal host's
-  // WebContents. Otherwise, returns nullptr.
-  virtual WebContents* GetPortalHostWebContents() = 0;
-
   // Returns the outer WebContents frame, the same frame that this WebContents
   // was attached in AttachToOuterWebContentsFrame().
   virtual RenderFrameHost* GetOuterWebContentsFrame() = 0;
@@ -822,6 +896,10 @@ class WebContents : public PageNavigator,
   // it for rendering).
   //
   // Always returns a non-null value.
+  //
+  // TODO(crbug.com/1498410): Consider replacing this with
+  // GuestViewBase::GetTopLevelWebContents, since that is now the only case
+  // where this would return a contents other than |this|.
   virtual WebContents* GetResponsibleWebContents() = 0;
 
   // Invoked when visible security state changes.
@@ -855,6 +933,7 @@ class WebContents : public PageNavigator,
   virtual void Cut() = 0;
   virtual void Copy() = 0;
   virtual void CopyToFindPboard() = 0;
+  virtual void CenterSelection() = 0;
   virtual void Paste() = 0;
   virtual void PasteAndMatchStyle() = 0;
   virtual void Delete() = 0;
@@ -986,14 +1065,8 @@ class WebContents : public PageNavigator,
       const MHTMLGenerationParams& params,
       MHTMLGenerationResult::GenerateMHTMLCallback callback) = 0;
 
-  // Generates a Web Bundle representation of the current page.
-  virtual void GenerateWebBundle(
-      const base::FilePath& file_path,
-      base::OnceCallback<void(uint64_t /* file_size */,
-                              data_decoder::mojom::WebBundlerError)>
-          callback) = 0;
-
-  // Returns the contents MIME type after a navigation.
+  // Returns the MIME type bound to the primary page contents after a primary
+  // page navigation.
   virtual const std::string& GetContentsMimeType() = 0;
 
   // Returns the settings which get passed to the renderer.
@@ -1038,13 +1111,13 @@ class WebContents : public PageNavigator,
   // Returns false if the request is no longer valid, otherwise true.
   virtual bool GotResponseToKeyboardLockRequest(bool allowed) = 0;
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_APPLE)
   // Called when the user has selected a color in the color chooser.
   virtual void DidChooseColorInColorChooser(SkColor color) = 0;
 
   // Called when the color chooser has ended.
   virtual void DidEndColorChooser() = 0;
-#endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#endif
 
   // Returns true if the location bar should be focused by default rather than
   // the page contents. The view calls this function when the tab is focused
@@ -1095,10 +1168,9 @@ class WebContents : public PageNavigator,
   // be called with the bitmaps received from the renderer.
   // If |is_favicon| is true, the cookies are not sent and not accepted during
   // download.
-  // Bitmaps with pixel sizes larger than |max_bitmap_size| are filtered out
-  // from the bitmap results. If there are no bitmap results <=
-  // |max_bitmap_size|, the smallest bitmap is resized to |max_bitmap_size| and
-  // is the only result. A |max_bitmap_size| of 0 means unlimited.
+  // If there are no bitmap results <= |max_bitmap_size|, the smallest bitmap
+  // is resized to |max_bitmap_size| and is the only result.
+  // A |max_bitmap_size| of 0 means unlimited.
   // For vector images, |preferred_size| will serve as a viewport into which
   // the image will be rendered. This would usually be the dimensions of the
   // rectangle where the bitmap will be rendered. If |preferred_size| is empty,
@@ -1253,6 +1325,10 @@ class WebContents : public PageNavigator,
       const base::android::JavaRef<jobject>& jweb_contents_android);
   virtual base::android::ScopedJavaLocalRef<jobject> GetJavaWebContents() = 0;
 
+  // Returns the value from CreateParams::java_creator_location.
+  virtual base::android::ScopedJavaLocalRef<jthrowable>
+  GetJavaCreatorLocation() = 0;
+
   // Selects and zooms to the find result nearest to the point (x,y) defined in
   // find-in-page coordinates.
   virtual void ActivateNearestFindResult(float x, float y) = 0;
@@ -1281,11 +1357,13 @@ class WebContents : public PageNavigator,
   // that an action that requires a user gesture actually has one in the
   // trustworthy browser process, rather than relying on the untrustworthy
   // renderer. This should be eventually merged into and accounted for in the
-  // user activation work.
-  virtual bool HasRecentInteractiveInputEvent() = 0;
+  // user activation work: crbug.com/848778
+  virtual bool HasRecentInteraction() = 0;
 
-  // Sets a flag that causes the WebContents to ignore input events.
-  virtual void SetIgnoreInputEvents(bool ignore_input_events) = 0;
+  // Causes the WebContents to ignore input events for at least as long as the
+  // token exists.  In the event of multiple calls, input events will be ignored
+  // until all tokens have been destroyed.
+  [[nodiscard]] virtual ScopedIgnoreInputEvents IgnoreInputEvents() = 0;
 
   // Returns the group id for all audio streams that correspond to a single
   // WebContents. This can be used to determine if a AudioOutputStream was
@@ -1318,11 +1396,9 @@ class WebContents : public PageNavigator,
   // Returns the value from CreateParams::creator_location.
   virtual const base::Location& GetCreatorLocation() = 0;
 
-  // Returns the initial_aspect_ratio value from CreateParams.
-  virtual float GetPictureInPictureInitialAspectRatio() = 0;
-
-  // Returns the lock_aspect_ratio value from CreateParams.
-  virtual bool GetPictureInPictureLockAspectRatio() = 0;
+  // Returns the parameters associated with PictureInPicture WebContents
+  virtual const absl::optional<blink::mojom::PictureInPictureWindowOptions>&
+  GetPictureInPictureOptions() const = 0;
 
   // Hide or show the browser controls for the given WebContents, based on
   // allowed states, desired state and whether the transition should be animated
@@ -1330,6 +1406,11 @@ class WebContents : public PageNavigator,
   virtual void UpdateBrowserControlsState(cc::BrowserControlsState constraints,
                                           cc::BrowserControlsState current,
                                           bool animate) = 0;
+
+  // Transmits data to V8CrowdsourcedCompileHintsConsumer in the renderer. The
+  // data is a model describing which JavaScript functions on the page should be
+  // eagerly parsed & compiled by the JS engine.
+  virtual void SetV8CompileHints(base::ReadOnlySharedMemoryRegion data) = 0;
 
   // Sets the last time a tab switch made this WebContents visible.
   // `start_time` is the timestamp of the input event that triggered the tab
@@ -1339,6 +1420,15 @@ class WebContents : public PageNavigator,
   // event and the time when the WebContents is painted.
   virtual void SetTabSwitchStartTime(base::TimeTicks start_time,
                                      bool destination_is_loaded) = 0;
+
+  // Activates the primary page that is shown in preview mode. This will relax
+  // capability restriction in the browser process, and notify the renderer to
+  // process the prerendering activation algorithm.
+  // This all processes happens asynchronously, and
+  // `WebContentsDelegate::DidActivatePreviewedPage` will be called once it's
+  // done.
+  // Should be called while WebContentsDelegate::IsInPreviewMode returns true.
+  virtual void ActivatePreviewPage() = 0;
 
   // Starts an embedder triggered (browser-initiated) prerendering page and
   // returns the unique_ptr<PrerenderHandle>, which cancels prerendering on its
@@ -1352,14 +1442,48 @@ class WebContents : public PageNavigator,
   // ignore some parameter mismatches. Note that if the mismatched prerender URL
   // will be activated due to the predicate returning true, the last committed
   // URL in the prerendered RenderFrameHost will be activated.
+  // `prerender_navigation_handle_callback` allows embedders to attach their own
+  // NavigationHandleUserData when prerender starts, and the user data can be
+  // used for identifying the types of embedder for metrics logging.
   virtual std::unique_ptr<PrerenderHandle> StartPrerendering(
       const GURL& prerendering_url,
-      PrerenderTriggerType trigger_type,
+      PreloadingTriggerType trigger_type,
       const std::string& embedder_histogram_suffix,
       ui::PageTransition page_transition,
+      PreloadingHoldbackStatus holdback_status_override,
       PreloadingAttempt* preloading_attempt,
       absl::optional<base::RepeatingCallback<bool(const GURL&)>>
-          url_match_predicate = absl::nullopt) = 0;
+          url_match_predicate = absl::nullopt,
+      absl::optional<base::RepeatingCallback<void(NavigationHandle&)>>
+          prerender_navigation_handle_callback = absl::nullopt) = 0;
+
+  // May be called when the embedder believes that it is likely that the user
+  // will perform a back navigation due to the trigger indicated by `predictor`
+  // (e.g. they're hovering over a back button). `disposition` indicates where
+  // the navigation is predicted to happen (which could differ from where the
+  // navigation actually happens).
+  virtual void BackNavigationLikely(PreloadingPredictor predictor,
+                                    WindowOpenDisposition disposition) = 0;
+
+  // Returns a scope object that needs to be owned by caller in order to
+  // disallow custom cursors. Custom cursors whose width or height are larger
+  // than `max_dimension_dips` are diallowed in this web contents for as long as
+  // any of the returned `ScopedClosureRunner` objects is alive.
+  [[nodiscard]] virtual base::ScopedClosureRunner
+  CreateDisallowCustomCursorScope(int max_dimension_dips = 0) = 0;
+
+  // Enables overscroll history navigation.
+  virtual void SetOverscrollNavigationEnabled(bool enabled) = 0;
+
+  // Tag `WebContents` with its owner. Used purely for debugging purposes so it
+  // does not need to be exhaustive or perfectly correct.
+  // TODO(crbug.com/1407197): Remove after bug is fixed.
+  virtual void SetOwnerLocationForDebug(
+      absl::optional<base::Location> owner_location) = 0;
+
+  // Sends the attribution support state to all renderer processes for the
+  // current page.
+  virtual void UpdateAttributionSupportRenderer() = 0;
 
  private:
   // This interface should only be implemented inside content.

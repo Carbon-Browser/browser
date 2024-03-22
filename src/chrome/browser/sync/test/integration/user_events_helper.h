@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ class UserEventEqualityChecker : public SingleClientStatusChangeChecker {
   bool IsExitConditionSatisfied(std::ostream* os) override;
 
  private:
-  raw_ptr<fake_server::FakeServer> fake_server_;
+  const raw_ptr<fake_server::FakeServer> fake_server_;
   const std::vector<sync_pb::UserEventSpecifics> expected_specifics_;
 };
 

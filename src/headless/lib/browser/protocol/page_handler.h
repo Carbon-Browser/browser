@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,8 @@ class PageHandler : public DomainHandler, public Page::Backend {
                   Maybe<String> footer_template,
                   Maybe<bool> prefer_css_page_size,
                   Maybe<String> transfer_mode,
+                  Maybe<bool> generate_tagged_pdf,
+                  Maybe<bool> generate_document_outline,
                   std::unique_ptr<PrintToPDFCallback> callback) override;
 
  private:

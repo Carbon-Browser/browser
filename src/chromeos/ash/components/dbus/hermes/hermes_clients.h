@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,11 +23,5 @@ COMPONENT_EXPORT(HERMES_CLIENT) void InitializeFakes();
 COMPONENT_EXPORT(HERMES_CLIENT) void Shutdown();
 
 }  // namespace ash::hermes_clients
-
-// TODO(https://crbug.com/1164001): remove when it moved to ash.
-namespace chromeos::hermes_clients {
-using ::ash::hermes_clients::InitializeFakes;
-using ::ash::hermes_clients::Shutdown;
-}  // namespace chromeos::hermes_clients
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_HERMES_HERMES_CLIENTS_H_

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,6 @@
 
 namespace media_router {
 
-class LoggerImpl;
-
 class NoopDualMediaSinkService : public DualMediaSinkService {
  public:
   NoopDualMediaSinkService();
@@ -22,12 +20,10 @@ class NoopDualMediaSinkService : public DualMediaSinkService {
   ~NoopDualMediaSinkService() override;
 
   // DualMediaSinkService
-  void OnUserGesture() override {}
+  void DiscoverSinksNow() override {}
 #if BUILDFLAG(IS_WIN)
   void StartMdnsDiscovery() override {}
 #endif
-  void BindLogger(LoggerImpl* logger_impl) override {}
-  void RemoveLogger() override {}
 };
 
 }  // namespace media_router

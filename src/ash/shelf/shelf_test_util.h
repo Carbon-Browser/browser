@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,9 @@ class ShelfTestUtil {
   static ShelfItem AddAppShortcutWithIcon(const std::string& id,
                                           ShelfItemType type,
                                           gfx::ImageSkia icon);
+
+  // Adds an app that is not pinnable to the shelf model.
+  static ShelfItem AddAppNotPinnable(const std::string& id);
 };
 
 // Waits for an overview enter animation if |enter|; waits for an overview exit

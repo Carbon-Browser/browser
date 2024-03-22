@@ -24,7 +24,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "components/adblock/core/common/content_type.h"
 #include "components/adblock/core/common/sitekey.h"
-#include "components/adblock/core/subscription/subscription_collection.h"
+#include "components/adblock/core/subscription/subscription_service.h"
 #include "net/http/http_response_headers.h"
 #include "url/gurl.h"
 
@@ -49,28 +49,36 @@ class ResourceClassifier
     // If decision is Blocked or Allowed, |decisive_subscription| has the URL of
     // the subscription that had the decisive filter.
     GURL decisive_subscription;
+    // If decision is Blocked or Allowed, |decisive_configuration_name| has the
+    // name of the FilteringConfiguration that contain matched filter.
+    std::string decisive_configuration_name;
   };
 
   virtual ClassificationResult ClassifyRequest(
-      const SubscriptionCollection& subscription_collection,
+      const SubscriptionService::Snapshot subscription_collections,
       const GURL& request_url,
       const std::vector<GURL>& frame_hierarchy,
       ContentType content_type,
       const SiteKey& sitekey) const = 0;
 
   virtual ClassificationResult ClassifyPopup(
-      const SubscriptionCollection& subscription_collection,
+      const SubscriptionService::Snapshot& subscription_collections,
       const GURL& popup_url,
-      const GURL& opener_url,
+      const std::vector<GURL>& opener_frame_hierarchy,
       const SiteKey& sitekey) const = 0;
 
   virtual ClassificationResult ClassifyResponse(
-      const SubscriptionCollection& subscription_collection,
+      const SubscriptionService::Snapshot subscription_collections,
       const GURL& request_url,
       const std::vector<GURL>& frame_hierarchy,
       ContentType content_type,
       const scoped_refptr<net::HttpResponseHeaders>& response_headers)
       const = 0;
+
+  virtual absl::optional<GURL> CheckRewrite(
+      const SubscriptionService::Snapshot subscription_collections,
+      const GURL& request_url,
+      const std::vector<GURL>& frame_hierarchy) const = 0;
 
  protected:
   friend class base::RefCountedThreadSafe<ResourceClassifier>;

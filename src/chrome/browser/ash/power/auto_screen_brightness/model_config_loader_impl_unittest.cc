@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,11 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -80,7 +80,7 @@ class ModelConfigLoaderImplTest : public testing::Test {
 
     WriteParamsToFile(model_params);
     model_config_loader_ = ModelConfigLoaderImpl::CreateForTesting(
-        temp_params_path_, base::SequencedTaskRunnerHandle::Get());
+        temp_params_path_, base::SequencedTaskRunner::GetCurrentDefault());
 
     test_observer_ = std::make_unique<TestObserver>();
     model_config_loader_->AddObserver(test_observer_.get());
@@ -93,12 +93,7 @@ class ModelConfigLoaderImplTest : public testing::Test {
       return;
 
     CHECK(!temp_params_path_.empty());
-
-    const int bytes_written =
-        base::WriteFile(temp_params_path_, params.data(), params.size());
-    ASSERT_EQ(bytes_written, static_cast<int>(params.size()))
-        << "Wrote " << bytes_written << " byte(s) instead of " << params.size()
-        << " to " << temp_params_path_;
+    ASSERT_TRUE(base::WriteFile(temp_params_path_, params));
   }
 
   content::BrowserTaskEnvironment task_environment_;

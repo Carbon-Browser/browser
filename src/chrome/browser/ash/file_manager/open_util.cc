@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/drive/file_system_util.h"
@@ -33,8 +33,7 @@
 using content::BrowserThread;
 using storage::FileSystemURL;
 
-namespace file_manager {
-namespace util {
+namespace file_manager::util {
 namespace {
 
 bool shell_operations_allowed = true;
@@ -47,16 +46,19 @@ void IgnoreFileTaskExecuteResult(
 void ExecuteFileTaskForUrl(Profile* profile,
                            const file_tasks::TaskDescriptor& task,
                            const GURL& url) {
-  if (!shell_operations_allowed)
+  if (!shell_operations_allowed) {
     return;
+  }
   storage::FileSystemContext* file_system_context =
       GetFileManagerFileSystemContext(profile);
 
+  // There is no Files app window for spawned WebUI to be modal to.
+  gfx::NativeWindow modal_parent = gfx::NativeWindow();
   file_tasks::ExecuteFileTask(
       profile, task,
       std::vector<FileSystemURL>(
           1, file_system_context->CrackURLInFirstPartyContext(url)),
-      base::BindOnce(&IgnoreFileTaskExecuteResult));
+      modal_parent, base::BindOnce(&IgnoreFileTaskExecuteResult));
 }
 
 // Opens the file manager for the specified |url|. Used to implement
@@ -69,8 +71,9 @@ void OpenFileManagerWithInternalActionId(Profile* profile,
                                          const GURL& url,
                                          const std::string& action_id) {
   DCHECK(action_id == "open" || action_id == "select");
-  if (!shell_operations_allowed)
+  if (!shell_operations_allowed) {
     return;
+  }
   base::RecordAction(base::UserMetricsAction("ShowFileBrowserFullTab"));
 
   file_tasks::TaskDescriptor task(
@@ -82,24 +85,26 @@ void OpenFileMimeTypeAfterTasksListed(
     Profile* profile,
     const GURL& url,
     platform_util::OpenOperationCallback callback,
-    std::unique_ptr<std::vector<file_tasks::FullTaskDescriptor>> tasks) {
+    std::unique_ptr<file_tasks::ResultingTasks> resulting_tasks) {
   // Select a default handler. If a default handler is not available, select
   // the first non-generic file handler.
   const file_tasks::FullTaskDescriptor* chosen_task = nullptr;
-  for (const auto& task : *tasks) {
+  for (const auto& task : resulting_tasks->tasks) {
     if (!task.is_generic_file_handler) {
       if (task.is_default) {
         chosen_task = &task;
         break;
       }
-      if (!chosen_task)
+      if (!chosen_task) {
         chosen_task = &task;
+      }
     }
   }
 
   if (chosen_task != nullptr) {
-    if (shell_operations_allowed)
+    if (shell_operations_allowed) {
       ExecuteFileTaskForUrl(profile, chosen_task->task_descriptor, url);
+    }
     std::move(callback).Run(platform_util::OPEN_SUCCEEDED);
   } else {
     std::move(callback).Run(
@@ -120,7 +125,7 @@ void OpenFileWithMimeType(Profile* profile,
   file_urls.push_back(url);
 
   file_tasks::FindAllTypesOfTasks(
-      profile, entries, file_urls,
+      profile, entries, file_urls, {""},
       base::BindOnce(&OpenFileMimeTypeAfterTasksListed, profile, url,
                      std::move(callback)));
 }
@@ -205,7 +210,7 @@ void OpenItem(Profile* profile,
 
   GetMetadataForPath(
       GetFileManagerFileSystemContext(profile), file_path,
-      storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY,
+      {storage::FileSystemOperation::GetMetadataField::kIsDirectory},
       base::BindOnce(&OpenItemWithMetadata, profile, file_path, url,
                      expected_type, std::move(callback)));
 }
@@ -224,7 +229,7 @@ void ShowItemInFolder(Profile* profile,
 
   GetMetadataForPath(
       GetFileManagerFileSystemContext(profile), file_path,
-      storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY,
+      {storage::FileSystemOperation::GetMetadataField::kIsDirectory},
       base::BindOnce(&ShowItemInFolderWithMetadata, profile, file_path, url,
                      std::move(callback)));
 }
@@ -233,5 +238,4 @@ void DisableShellOperationsForTesting() {
   shell_operations_allowed = false;
 }
 
-}  // namespace util
-}  // namespace file_manager
+}  // namespace file_manager::util

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_util.h"
 #include "base/test/bind.h"
@@ -97,7 +97,8 @@ error_page::LocalizedError::PageState GetErrorPageState(int error_code,
       /*offline_content_feature_enabled=*/false,
       /*auto_fetch_feature_enabled=*/false, /*is_kiosk_mode=*/is_kiosk_mode,
       /*locale=*/"",
-      /*is_blocked_by_extension=*/false);
+      /*is_blocked_by_extension=*/false,
+      /*error_page_params=*/nullptr);
 }
 
 class NetErrorHelperCoreTest : public testing::Test,
@@ -218,7 +219,7 @@ class NetErrorHelperCoreTest : public testing::Test,
       bool can_show_network_diagnostics_dialog,
       content::mojom::AlternativeErrorPageOverrideInfoPtr
           alternative_error_page_info,
-      std::string* html) const override {
+      std::string* html) override {
     last_can_show_network_diagnostics_dialog_ =
         can_show_network_diagnostics_dialog;
 
@@ -253,6 +254,8 @@ class NetErrorHelperCoreTest : public testing::Test,
     diagnose_error_count_++;
     diagnose_error_url_ = page_url;
   }
+
+  void PortalSignin() override {}
 
   void DownloadPageLater() override { download_count_++; }
 
@@ -378,12 +381,12 @@ TEST_F(NetErrorHelperCoreTest,
 
   auto* suggestions_details = page_state.strings.FindList("suggestionsDetails");
   ASSERT_TRUE(suggestions_details);
-  EXPECT_FALSE(suggestions_details->empty());
+  ASSERT_TRUE(suggestions_details->empty());
 
   auto* suggestions_summary_list =
       page_state.strings.FindList("suggestionsSummaryList");
   ASSERT_TRUE(suggestions_summary_list);
-  EXPECT_FALSE(suggestions_summary_list->empty());
+  EXPECT_TRUE(suggestions_summary_list->empty());
 }
 
 TEST_F(NetErrorHelperCoreTest,
@@ -895,10 +898,10 @@ TEST_F(NetErrorHelperCoreTest, AlternativeErrorPageNoUpdates) {
            skia::SkColorToHexString(SK_ColorYELLOW));
   dict.Set("app_short_name", "Test Short Name");
   dict.Set(
-      "web_app_default_offline_message",
+      "web_app_error_page_message",
       l10n_util::GetStringUTF16(IDS_ERRORPAGES_HEADING_INTERNET_DISCONNECTED));
   alternative_error_page_info->alternative_error_page_params = std::move(dict);
-  alternative_error_page_info->resource_id = IDR_WEBAPP_DEFAULT_OFFLINE_HTML;
+  alternative_error_page_info->resource_id = IDR_WEBAPP_ERROR_PAGE_HTML;
 
   // Loading fails, and an error page is requested.
   std::string html;

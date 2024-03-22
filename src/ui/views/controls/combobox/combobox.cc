@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,20 @@
 #include <algorithm>
 #include <memory>
 #include <utility>
+#include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/ime/input_method.h"
+#include "ui/base/menu_source_utils.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
@@ -37,6 +40,7 @@
 #include "ui/views/controls/combobox/empty_combobox_model.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/focusable_border.h"
+#include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/menu/menu_config.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/controls/prefix_selector.h"
@@ -44,6 +48,7 @@
 #include "ui/views/mouse_constants.h"
 #include "ui/views/style/platform_style.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 
@@ -51,42 +56,34 @@ namespace views {
 
 namespace {
 
+constexpr int kBorderThickness = 1;
+
+float GetCornerRadius() {
+  return LayoutProvider::Get()->GetCornerRadiusMetric(
+      ShapeContextTokens::kComboboxRadius);
+}
+
 SkColor GetTextColorForEnableState(const Combobox& combobox, bool enabled) {
   const int style = enabled ? style::STYLE_PRIMARY : style::STYLE_DISABLED;
-  return style::GetColor(combobox, style::CONTEXT_TEXTFIELD, style);
+  return combobox.GetColorProvider()->GetColor(
+      TypographyProvider::Get().GetColorId(style::CONTEXT_TEXTFIELD, style));
 }
 
 // The transparent button which holds a button state but is not rendered.
 class TransparentButton : public Button {
  public:
+  METADATA_HEADER(TransparentButton);
   explicit TransparentButton(PressedCallback callback)
       : Button(std::move(callback)) {
     SetFocusBehavior(FocusBehavior::NEVER);
     button_controller()->set_notify_action(
         ButtonController::NotifyAction::kOnPress);
 
-    InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-    SetHasInkDropActionOnClick(true);
-    InkDrop::UseInkDropForSquareRipple(InkDrop::Get(this),
-                                       /*highlight_on_hover=*/false);
-    views::InkDrop::Get(this)->SetBaseColorCallback(base::BindRepeating(
-        [](Button* host) {
-          // This button will be used like a LabelButton, so use the same
-          // foreground base color as a label button.
-          return color_utils::DeriveDefaultIconColor(
-              views::style::GetColor(*host, views::style::CONTEXT_BUTTON,
-                                     views::style::STYLE_PRIMARY));
-        },
-        this));
-    InkDrop::Get(this)->SetCreateRippleCallback(base::BindRepeating(
-        [](Button* host) -> std::unique_ptr<views::InkDropRipple> {
-          return std::make_unique<views::FloodFillInkDropRipple>(
-              host->size(),
-              InkDrop::Get(host)->GetInkDropCenterBasedOnLastEvent(),
-              host->GetColorProvider()->GetColor(ui::kColorLabelForeground),
-              InkDrop::Get(host)->GetVisibleOpacity());
-        },
-        this));
+    if (features::IsChromeRefresh2023()) {
+      views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(),
+                                                    GetCornerRadius());
+    }
+    ConfigureComboboxButtonInkDrop(this);
   }
   TransparentButton(const TransparentButton&) = delete;
   TransparentButton& operator&=(const TransparentButton&) = delete;
@@ -119,27 +116,23 @@ class TransparentButton : public Button {
   }
 };
 
+BEGIN_METADATA(TransparentButton, Button)
+END_METADATA
+
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 // Combobox, public:
 
-Combobox::Combobox(int text_context, int text_style)
+Combobox::Combobox()
     : Combobox(std::make_unique<internal::EmptyComboboxModel>()) {}
 
-Combobox::Combobox(std::unique_ptr<ui::ComboboxModel> model,
-                   int text_context,
-                   int text_style)
-    : Combobox(model.get(), text_context, text_style) {
+Combobox::Combobox(std::unique_ptr<ui::ComboboxModel> model)
+    : Combobox(model.get()) {
   owned_model_ = std::move(model);
 }
 
-Combobox::Combobox(ui::ComboboxModel* model, int text_context, int text_style)
-    : text_context_(text_context),
-      text_style_(text_style),
-      arrow_button_(new TransparentButton(
-          base::BindRepeating(&Combobox::ArrowButtonPressed,
-                              base::Unretained(this)))) {
+Combobox::Combobox(ui::ComboboxModel* model) {
   SetModel(model);
 #if BUILDFLAG(IS_MAC)
   SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
@@ -147,18 +140,49 @@ Combobox::Combobox(ui::ComboboxModel* model, int text_context, int text_style)
   SetFocusBehavior(FocusBehavior::ALWAYS);
 #endif
 
-  SetBackgroundColorId(ui::kColorTextfieldBackground);
+  SetBackgroundColorId(features::IsChromeRefresh2023()
+                           ? ui::kColorComboboxBackground
+                           : ui::kColorTextfieldBackground);
+
   UpdateBorder();
 
-  arrow_button_->SetVisible(true);
-  AddChildView(arrow_button_.get());
+  FocusRing::Install(this);
+  views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);
+
+  arrow_button_ =
+      AddChildView(std::make_unique<TransparentButton>(base::BindRepeating(
+          &Combobox::ArrowButtonPressed, base::Unretained(this))));
+
+  if (features::IsChromeRefresh2023()) {
+    // TODO(crbug.com/1400024): This setter should be removed and the behavior
+    // made default when ChromeRefresh2023 is finalized.
+    SetEventHighlighting(true);
+    enabled_changed_subscription_ =
+        AddEnabledChangedCallback(base::BindRepeating(
+            [](Combobox* combobox) {
+              combobox->SetBackgroundColorId(
+                  combobox->GetEnabled()
+                      ? ui::kColorComboboxBackground
+                      : ui::kColorComboboxBackgroundDisabled);
+              combobox->UpdateBorder();
+            },
+            base::Unretained(this)));
+  }
 
   // A layer is applied to make sure that canvas bounds are snapped to pixel
   // boundaries (for the sake of drawing the arrow).
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
 
-  FocusRing::Install(this);
+  if (features::IsChromeRefresh2023()) {
+    views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(),
+                                                  GetCornerRadius());
+  }
+
+  // `ax::mojom::Role::kComboBox` is for UI elements with a dropdown and
+  // an editable text field, which `views::Combobox` does not have. Use
+  // `ax::mojom::Role::kPopUpButton` to match an HTML <select> element.
+  SetAccessibilityProperties(ax::mojom::Role::kPopUpButton);
 }
 
 Combobox::~Combobox() {
@@ -169,7 +193,7 @@ Combobox::~Combobox() {
 }
 
 const gfx::FontList& Combobox::GetFontList() const {
-  return style::GetFont(text_context_, text_style_);
+  return TypographyProvider::Get().GetFont(kContext, kStyle);
 }
 
 void Combobox::SetSelectedIndex(absl::optional<size_t> index) {
@@ -235,16 +259,9 @@ std::u16string Combobox::GetTooltipTextAndAccessibleName() const {
 void Combobox::SetTooltipTextAndAccessibleName(
     const std::u16string& tooltip_text) {
   arrow_button_->SetTooltipText(tooltip_text);
-  if (accessible_name_.empty())
-    accessible_name_ = tooltip_text;
-}
-
-void Combobox::SetAccessibleName(const std::u16string& name) {
-  accessible_name_ = name;
-}
-
-std::u16string Combobox::GetAccessibleName() const {
-  return accessible_name_;
+  if (GetAccessibleName().empty()) {
+    SetAccessibleName(tooltip_text);
+  }
 }
 
 void Combobox::SetInvalid(bool invalid) {
@@ -266,8 +283,22 @@ void Combobox::SetBorderColorId(ui::ColorId color_id) {
 }
 
 void Combobox::SetBackgroundColorId(ui::ColorId color_id) {
-  SetBackground(CreateThemedRoundedRectBackground(
-      color_id, FocusableBorder::kCornerRadiusDp));
+  SetBackground(CreateThemedRoundedRectBackground(color_id, GetCornerRadius()));
+}
+
+void Combobox::SetForegroundColorId(ui::ColorId color_id) {
+  foreground_color_id_ = color_id;
+  SchedulePaint();
+}
+
+void Combobox::SetForegroundIconColorId(ui::ColorId color_id) {
+  foreground_icon_color_id_ = color_id;
+  SchedulePaint();
+}
+
+void Combobox::SetForegroundTextStyle(style::TextStyle text_style) {
+  foreground_text_style_ = text_style;
+  SchedulePaint();
 }
 
 void Combobox::SetEventHighlighting(bool should_highlight) {
@@ -314,6 +345,11 @@ std::u16string Combobox::GetTextForRow(size_t row) {
                                             : GetModel()->GetItemAt(row);
 }
 
+base::CallbackListSubscription Combobox::AddMenuWillShowCallback(
+    MenuWillShowCallback callback) {
+  return on_menu_will_show_.Add(std::move(callback));
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Combobox, View overrides:
 
@@ -323,14 +359,19 @@ gfx::Size Combobox::CalculatePreferredSize() const {
 
   // The preferred size will drive the local bounds which in turn is used to set
   // the minimum width for the dropdown list.
-  const int width = std::max(kMinComboboxWidth, content_size_.width()) +
-                    LayoutProvider::Get()->GetDistanceMetric(
-                        DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING) *
-                        2 +
-                    kComboboxArrowContainerWidth + GetInsets().width();
-  const int height = LayoutProvider::GetControlHeightForFont(
-      text_context_, text_style_, GetFontList());
-  return gfx::Size(width, height);
+  int width = std::max(kMinComboboxWidth, content_size_.width()) +
+              LayoutProvider::Get()->GetDistanceMetric(
+                  DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING) *
+                  2 +
+              GetInsets().width();
+
+  // If an arrow is being shown, add extra width to include that arrow.
+  if (should_show_arrow_) {
+    width += GetComboboxArrowContainerWidthAndMargins();
+  }
+
+  return gfx::Size(width, LayoutProvider::GetControlHeightForFont(
+                              kContext, kStyle, GetForegroundFontList()));
 }
 
 void Combobox::OnBoundsChanged(const gfx::Rect& previous_bounds) {
@@ -458,23 +499,19 @@ void Combobox::OnBlur() {
 }
 
 void Combobox::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  // ax::mojom::Role::kComboBox is for UI elements with a dropdown and
-  // an editable text field, which views::Combobox does not have. Use
-  // ax::mojom::Role::kPopUpButton to match an HTML <select> element.
-  node_data->role = ax::mojom::Role::kPopUpButton;
+  View::GetAccessibleNodeData(node_data);
   if (menu_runner_) {
     node_data->AddState(ax::mojom::State::kExpanded);
   } else {
     node_data->AddState(ax::mojom::State::kCollapsed);
   }
 
-  node_data->SetName(accessible_name_);
   node_data->SetValue(model_->GetItemAt(selected_index_.value()));
   if (GetEnabled()) {
     node_data->SetDefaultActionVerb(ax::mojom::DefaultActionVerb::kOpen);
   }
   node_data->AddIntAttribute(ax::mojom::IntAttribute::kPosInSet,
-                             selected_index_.value());
+                             base::checked_cast<int>(selected_index_.value()));
   node_data->AddIntAttribute(ax::mojom::IntAttribute::kSetSize,
                              base::checked_cast<int>(model_->GetItemCount()));
 }
@@ -520,12 +557,23 @@ const std::unique_ptr<ui::ComboboxModel>& Combobox::GetOwnedModel() const {
 }
 
 void Combobox::UpdateBorder() {
-  std::unique_ptr<FocusableBorder> border(new FocusableBorder());
-  if (border_color_id_.has_value())
-    border->SetColorId(border_color_id_.value());
-  if (invalid_)
-    border->SetColorId(ui::kColorAlertHighSeverity);
-  SetBorder(std::move(border));
+  if (features::IsChromeRefresh2023()) {
+    if (!GetEnabled()) {
+      SetBorder(nullptr);
+      return;
+    }
+    SetBorder(CreateThemedRoundedRectBorder(
+        kBorderThickness, GetCornerRadius(),
+        invalid_
+            ? ui::kColorAlertHighSeverity
+            : border_color_id_.value_or(ui::kColorComboboxContainerOutline)));
+  } else {
+    auto border = std::make_unique<FocusableBorder>();
+    border->SetColorId(invalid_ ? ui::kColorAlertHighSeverity
+                                : border_color_id_.value_or(
+                                      ui::kColorFocusableBorderUnfocused));
+    SetBorder(std::move(border));
+  }
 }
 
 void Combobox::AdjustBoundsForRTLUI(gfx::Rect* rect) const {
@@ -550,36 +598,58 @@ void Combobox::PaintIconAndText(gfx::Canvas* canvas) {
   // Draw the icon.
   ui::ImageModel icon = GetModel()->GetIconAt(selected_index_.value());
   if (!icon.IsEmpty()) {
+    // Update the icon color if provided and if the icon color can be changed.
+    if (foreground_icon_color_id_ && icon.IsVectorIcon()) {
+      icon = ui::ImageModel::FromVectorIcon(*icon.GetVectorIcon().vector_icon(),
+                                            foreground_icon_color_id_.value(),
+                                            icon.GetVectorIcon().icon_size());
+    }
     gfx::ImageSkia icon_skia = icon.Rasterize(GetColorProvider());
     int icon_y = y + (contents_height - icon_skia.height()) / 2;
     gfx::Rect icon_bounds(x, icon_y, icon_skia.width(), icon_skia.height());
     AdjustBoundsForRTLUI(&icon_bounds);
     canvas->DrawImageInt(icon_skia, icon_bounds.x(), icon_bounds.y());
-    x += icon_skia.width() + LayoutProvider::Get()->GetDistanceMetric(
-                                 DISTANCE_RELATED_LABEL_HORIZONTAL);
+    x += icon_skia.width();
   }
 
   // Draw the text.
-  SkColor text_color = GetTextColorForEnableState(*this, GetEnabled());
-  std::u16string text = GetModel()->GetItemAt(selected_index_.value());
+  SkColor text_color = foreground_color_id_
+                           ? GetColorProvider()->GetColor(*foreground_color_id_)
+                           : GetTextColorForEnableState(*this, GetEnabled());
+  std::u16string text = GetModel()->GetItemAt(*selected_index_);
+  const gfx::FontList& font_list = GetForegroundFontList();
 
-  int disclosure_arrow_offset = width() - kComboboxArrowContainerWidth;
+  // If the text is not empty, add padding between it and the icon. If there
+  // was an empty icon, this padding is not necessary.
+  if (!text.empty() && !icon.IsEmpty()) {
+    x += LayoutProvider::Get()->GetDistanceMetric(
+        DISTANCE_RELATED_LABEL_HORIZONTAL);
+  }
 
-  const gfx::FontList& font_list = GetFontList();
+  // The total width of the text is the minimum of either the string width,
+  // or the available space, accounting for optional arrow.
   int text_width = gfx::GetStringWidth(text, font_list);
-  text_width =
-      std::min(text_width, disclosure_arrow_offset - insets.right() - x);
+  int available_width = width() - x - insets.right();
+  if (should_show_arrow_) {
+    available_width -= GetComboboxArrowContainerWidthAndMargins();
+  }
+  text_width = std::min(text_width, available_width);
 
   gfx::Rect text_bounds(x, y, text_width, contents_height);
   AdjustBoundsForRTLUI(&text_bounds);
   canvas->DrawStringRect(text, font_list, text_color, text_bounds);
 
-  gfx::Rect arrow_bounds(disclosure_arrow_offset, 0,
-                         kComboboxArrowContainerWidth, height());
-  arrow_bounds.ClampToCenteredSize(ComboboxArrowSize());
-  AdjustBoundsForRTLUI(&arrow_bounds);
+  // Draw the arrow.
+  // TODO(crbug.com/1392549): Replace placeholder spacing and color values for
+  // ChromeRefresh2023.
+  if (should_show_arrow_) {
+    gfx::Rect arrow_bounds(width() - GetComboboxArrowContainerWidthAndMargins(),
+                           0, GetComboboxArrowContainerWidth(), height());
+    arrow_bounds.ClampToCenteredSize(ComboboxArrowSize());
+    AdjustBoundsForRTLUI(&arrow_bounds);
 
-  PaintComboboxArrow(text_color, arrow_bounds, canvas);
+    PaintComboboxArrow(text_color, arrow_bounds, canvas);
+  }
 }
 
 void Combobox::ArrowButtonPressed(const ui::Event& event) {
@@ -593,6 +663,8 @@ void Combobox::ArrowButtonPressed(const ui::Event& event) {
 }
 
 void Combobox::ShowDropDownMenu(ui::MenuSourceType source_type) {
+  on_menu_will_show_.Notify();
+
   constexpr int kMenuBorderWidthTop = 1;
   // Menu's requested position's width should be the same as local bounds so the
   // border of the menu lines up with the border of the combobox. The y
@@ -660,7 +732,7 @@ void Combobox::OnPerformAction() {
 }
 
 gfx::Size Combobox::GetContentSize() const {
-  const gfx::FontList& font_list = GetFontList();
+  const gfx::FontList& font_list = GetForegroundFontList();
   int height = font_list.GetHeight();
   int width = 0;
   for (size_t i = 0; i < GetModel()->GetItemCount(); ++i) {
@@ -668,17 +740,29 @@ gfx::Size Combobox::GetContentSize() const {
       continue;
 
     if (size_to_largest_label_ || i == selected_index_) {
-      int item_width = gfx::GetStringWidth(GetModel()->GetItemAt(i), font_list);
+      int item_width = 0;
       ui::ImageModel icon = GetModel()->GetIconAt(i);
+      std::u16string text = GetModel()->GetItemAt(i);
       if (!icon.IsEmpty()) {
         gfx::ImageSkia icon_skia;
         if (GetWidget())
           icon_skia = icon.Rasterize(GetColorProvider());
-        item_width +=
-            icon_skia.width() + LayoutProvider::Get()->GetDistanceMetric(
-                                    DISTANCE_RELATED_LABEL_HORIZONTAL);
+        item_width += icon_skia.width();
         height = std::max(height, icon_skia.height());
+
+        // If both the text and icon are not empty, include padding between.
+        // We do not include this padding if there is no icon present.
+        if (!text.empty()) {
+          item_width += LayoutProvider::Get()->GetDistanceMetric(
+              DISTANCE_RELATED_LABEL_HORIZONTAL);
+        }
       }
+
+      // If text is not empty, the content size needs to include the text width
+      if (!text.empty()) {
+        item_width += gfx::GetStringWidth(GetModel()->GetItemAt(i), font_list);
+      }
+
       if (size_to_largest_label_)
         item_width = MaybeAdjustWidthForCheckmarks(item_width);
       width = std::max(width, item_width);
@@ -706,6 +790,13 @@ PrefixSelector* Combobox::GetPrefixSelector() {
   return selector_.get();
 }
 
+const gfx::FontList& Combobox::GetForegroundFontList() const {
+  if (foreground_text_style_) {
+    return TypographyProvider::Get().GetFont(kContext, *foreground_text_style_);
+  }
+  return GetFontList();
+}
+
 BEGIN_METADATA(Combobox, View)
 ADD_PROPERTY_METADATA(base::RepeatingClosure, Callback)
 ADD_PROPERTY_METADATA(std::unique_ptr<ui::ComboboxModel>, OwnedModel)
@@ -713,7 +804,6 @@ ADD_PROPERTY_METADATA(ui::ComboboxModel*, Model)
 ADD_PROPERTY_METADATA(absl::optional<size_t>, SelectedIndex)
 ADD_PROPERTY_METADATA(bool, Invalid)
 ADD_PROPERTY_METADATA(bool, SizeToLargestLabel)
-ADD_PROPERTY_METADATA(std::u16string, AccessibleName)
 ADD_PROPERTY_METADATA(std::u16string, TooltipTextAndAccessibleName)
 END_METADATA
 

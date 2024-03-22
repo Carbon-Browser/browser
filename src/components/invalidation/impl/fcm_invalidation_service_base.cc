@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,36 +6,20 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/time_formatting.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "components/gcm_driver/instance_id/instance_id_driver.h"
 #include "components/invalidation/impl/fcm_network_handler.h"
 #include "components/invalidation/impl/invalidation_prefs.h"
 #include "components/invalidation/public/invalidator_state.h"
 #include "components/invalidation/public/topic_data.h"
-#include "components/invalidation/public/topic_invalidation_map.h"
 #include "components/prefs/scoped_user_pref_update.h"
 
 namespace invalidation {
 namespace {
 const char kApplicationName[] = "com.google.chrome.fcm.invalidations";
-// Sender ID coming from the Firebase console.
-const char kInvalidationGCMSenderId[] = "8181035976";
-
-// Added in M76.
-void MigratePrefs(PrefService* prefs, const std::string& sender_id) {
-  if (!prefs->HasPrefPath(prefs::kFCMInvalidationClientIDCacheDeprecated)) {
-    return;
-  }
-  DictionaryPrefUpdate update(prefs, prefs::kInvalidationClientIDCache);
-  update->SetStringKey(
-      sender_id,
-      prefs->GetString(prefs::kFCMInvalidationClientIDCacheDeprecated));
-  prefs->ClearPref(prefs::kFCMInvalidationClientIDCacheDeprecated);
-}
-
+constexpr char kDeprecatedSyncInvalidationGCMSenderId[] = "8181035976";
 }  // namespace
 
 FCMInvalidationServiceBase::FCMInvalidationServiceBase(
@@ -45,15 +29,15 @@ FCMInvalidationServiceBase::FCMInvalidationServiceBase(
     instance_id::InstanceIDDriver* instance_id_driver,
     PrefService* pref_service,
     const std::string& sender_id)
-    : sender_id_(sender_id.empty() ? kInvalidationGCMSenderId : sender_id),
-      invalidator_registrar_(pref_service,
-                             sender_id_,
-                             sender_id_ == kInvalidationGCMSenderId),
+    : sender_id_(sender_id),
+      invalidator_registrar_(pref_service, sender_id_),
       fcm_network_handler_callback_(std::move(fcm_network_handler_callback)),
       per_user_topic_subscription_manager_callback_(
           std::move(per_user_topic_subscription_manager_callback)),
       instance_id_driver_(instance_id_driver),
-      pref_service_(pref_service) {}
+      pref_service_(pref_service) {
+  CHECK(!sender_id_.empty());
+}
 
 FCMInvalidationServiceBase::~FCMInvalidationServiceBase() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -66,19 +50,27 @@ FCMInvalidationServiceBase::~FCMInvalidationServiceBase() {
 
 // static
 void FCMInvalidationServiceBase::RegisterPrefs(PrefRegistrySimple* registry) {
-  registry->RegisterStringPref(prefs::kFCMInvalidationClientIDCacheDeprecated,
-                               /*default_value=*/std::string());
   registry->RegisterDictionaryPref(prefs::kInvalidationClientIDCache);
 }
 
-void FCMInvalidationServiceBase::RegisterInvalidationHandler(
-    InvalidationHandler* handler) {
+// static
+void FCMInvalidationServiceBase::ClearDeprecatedPrefs(PrefService* prefs) {
+  if (prefs->HasPrefPath(prefs::kInvalidationClientIDCache)) {
+    ScopedDictPrefUpdate update(prefs, prefs::kInvalidationClientIDCache);
+    update->Remove(kDeprecatedSyncInvalidationGCMSenderId);
+  }
+}
+
+void FCMInvalidationServiceBase::AddObserver(InvalidationHandler* handler) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DVLOG(2) << "Registering an invalidation handler";
-  invalidator_registrar_.RegisterHandler(handler);
-  // Populate the id for newly registered handlers.
-  handler->OnInvalidatorClientIdChange(client_id_);
-  logger_.OnRegistration(handler->GetOwnerName());
+  invalidator_registrar_.AddObserver(handler);
+}
+
+bool FCMInvalidationServiceBase::HasObserver(
+    const InvalidationHandler* handler) const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return invalidator_registrar_.HasObserver(handler);
 }
 
 bool FCMInvalidationServiceBase::UpdateInterestedTopics(
@@ -98,25 +90,14 @@ bool FCMInvalidationServiceBase::UpdateInterestedTopics(
     return false;
   }
   DoUpdateSubscribedTopicsIfNeeded();
-  logger_.OnUpdatedTopics(invalidator_registrar_.GetHandlerNameToTopicsMap());
   return true;
 }
 
-void FCMInvalidationServiceBase::UnsubscribeFromUnregisteredTopics(
-    InvalidationHandler* handler) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DVLOG(2) << "Unsubscribing from unregistered topics";
-  invalidator_registrar_.RemoveUnregisteredTopics(handler);
-  DoUpdateSubscribedTopicsIfNeeded();
-  logger_.OnUpdatedTopics(invalidator_registrar_.GetHandlerNameToTopicsMap());
-}
-
-void FCMInvalidationServiceBase::UnregisterInvalidationHandler(
-    InvalidationHandler* handler) {
+void FCMInvalidationServiceBase::RemoveObserver(
+    const InvalidationHandler* handler) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DVLOG(2) << "Unregistering";
-  invalidator_registrar_.UnregisterHandler(handler);
-  logger_.OnUnregistration(handler->GetOwnerName());
+  invalidator_registrar_.RemoveObserver(handler);
 }
 
 InvalidatorState FCMInvalidationServiceBase::GetInvalidatorState() const {
@@ -134,31 +115,14 @@ std::string FCMInvalidationServiceBase::GetInvalidatorClientId() const {
   return client_id_;
 }
 
-InvalidationLogger* FCMInvalidationServiceBase::GetInvalidationLogger() {
-  return &logger_;
-}
-
-void FCMInvalidationServiceBase::RequestDetailedStatus(
-    base::RepeatingCallback<void(base::Value::Dict)> return_callback) const {
-  return_callback.Run(CollectDebugData());
-  invalidator_registrar_.RequestDetailedStatus(return_callback);
-
-  if (IsStarted()) {
-    invalidation_listener_->RequestDetailedStatus(return_callback);
-  }
-}
-
 void FCMInvalidationServiceBase::OnInvalidate(
-    const TopicInvalidationMap& invalidation_map) {
-  invalidator_registrar_.DispatchInvalidationsToHandlers(invalidation_map);
-
-  logger_.OnInvalidation(invalidation_map);
+    const Invalidation& invalidation) {
+  invalidator_registrar_.DispatchInvalidationToHandlers(invalidation);
 }
 
 void FCMInvalidationServiceBase::OnInvalidatorStateChange(
     InvalidatorState state) {
   invalidator_registrar_.UpdateInvalidatorState(state);
-  logger_.OnStateChange(state);
 }
 
 void FCMInvalidationServiceBase::InitForTest(
@@ -173,27 +137,6 @@ void FCMInvalidationServiceBase::InitForTest(
 
   PopulateClientID();
   DoUpdateSubscribedTopicsIfNeeded();
-}
-
-base::Value::Dict FCMInvalidationServiceBase::CollectDebugData() const {
-  base::Value::Dict status;
-
-  status.SetByDottedPath(
-      "InvalidationService.IID-requested",
-      base::TimeFormatShortDateAndTime(diagnostic_info_.instance_id_requested));
-  status.SetByDottedPath(
-      "InvalidationService.IID-received",
-      base::TimeFormatShortDateAndTime(diagnostic_info_.instance_id_received));
-  status.SetByDottedPath(
-      "InvalidationService.IID-cleared",
-      base::TimeFormatShortDateAndTime(diagnostic_info_.instance_id_cleared));
-  status.SetByDottedPath(
-      "InvalidationService.Service-stopped",
-      base::TimeFormatShortDateAndTime(diagnostic_info_.service_was_stopped));
-  status.SetByDottedPath(
-      "InvalidationService.Service-started",
-      base::TimeFormatShortDateAndTime(diagnostic_info_.service_was_started));
-  return status;
 }
 
 bool FCMInvalidationServiceBase::IsStarted() const {
@@ -216,8 +159,8 @@ void FCMInvalidationServiceBase::StartInvalidator() {
   // the startup cached messages might exists.
   invalidation_listener_ =
       std::make_unique<FCMInvalidationListener>(std::move(network));
-  auto subscription_manager = per_user_topic_subscription_manager_callback_.Run(
-      sender_id_, /*migrate_prefs=*/sender_id_ == kInvalidationGCMSenderId);
+  auto subscription_manager =
+      per_user_topic_subscription_manager_callback_.Run(sender_id_);
   invalidation_listener_->Start(this, std::move(subscription_manager));
 
   PopulateClientID();
@@ -244,20 +187,12 @@ void FCMInvalidationServiceBase::StopInvalidatorPermanently() {
 void FCMInvalidationServiceBase::PopulateClientID() {
   diagnostic_info_.instance_id_requested = base::Time::Now();
 
-  if (sender_id_ == kInvalidationGCMSenderId) {
-    MigratePrefs(pref_service_, sender_id_);
-  }
-
   // Retrieve any client ID (aka Instance ID) from a previous run, which was
   // cached in prefs.
   const std::string* client_id_pref =
-      pref_service_->GetDictionary(prefs::kInvalidationClientIDCache)
-          ->FindStringKey(sender_id_);
+      pref_service_->GetDict(prefs::kInvalidationClientIDCache)
+          .FindString(sender_id_);
   client_id_ = client_id_pref ? *client_id_pref : "";
-
-  // There might already be clients (handlers) registered, so tell them about
-  // the client ID.
-  invalidator_registrar_.UpdateInvalidatorInstanceId(client_id_);
 
   // Also retrieve a fresh (or validated) client ID. If the |client_id_| just
   // retrieved from prefs is non-empty, then the fresh/validated one will
@@ -283,12 +218,8 @@ void FCMInvalidationServiceBase::ResetClientID() {
   // source of truth, and are responsible for ensuring that the deletion
   // actually happens.
   client_id_.clear();
-  DictionaryPrefUpdate update(pref_service_, prefs::kInvalidationClientIDCache);
-  update->RemoveKey(sender_id_);
-
-  // Also let the registrar (and its observers) know that the instance ID is
-  // gone.
-  invalidator_registrar_.UpdateInvalidatorInstanceId(std::string());
+  ScopedDictPrefUpdate update(pref_service_, prefs::kInvalidationClientIDCache);
+  update->Remove(sender_id_);
 
   // This will also delete all Instance ID *tokens*; we need to let the
   // FCMInvalidationListener know.
@@ -302,10 +233,9 @@ void FCMInvalidationServiceBase::OnInstanceIDReceived(
   diagnostic_info_.instance_id_received = base::Time::Now();
   if (client_id_ != instance_id) {
     client_id_ = instance_id;
-    DictionaryPrefUpdate update(pref_service_,
+    ScopedDictPrefUpdate update(pref_service_,
                                 prefs::kInvalidationClientIDCache);
-    update->SetStringKey(sender_id_, instance_id);
-    invalidator_registrar_.UpdateInvalidatorInstanceId(instance_id);
+    update->Set(sender_id_, instance_id);
   }
 }
 
@@ -326,11 +256,6 @@ void FCMInvalidationServiceBase::DoUpdateSubscribedTopicsIfNeeded() {
 }
 
 const std::string FCMInvalidationServiceBase::GetApplicationName() {
-  // If using the default |sender_id_|, use the bare |kApplicationName|, so the
-  // old app name is maintained.
-  if (sender_id_ == kInvalidationGCMSenderId) {
-    return kApplicationName;
-  }
   return base::StrCat({kApplicationName, "-", sender_id_});
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ static bool AppendHex(const std::vector<uint8_t> bytes,
       rough_max_output_bytes) {
     return false;
   }
-  s->append(base::HexEncode(bytes.data(), bytes.size()));
+  s->append(base::HexEncode(bytes));
 
   s->push_back('\'');
   return true;
@@ -134,7 +134,9 @@ static bool Serialize(const Value& node,
           break;
       }
       break;
-
+    case Value::Type::FLOAT_VALUE:
+      s->append(base::NumberToString(node.GetDouble()));
+      break;
     case Value::Type::NONE:
       s->append("none");
       break;

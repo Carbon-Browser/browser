@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ bool Animation::ScrollAnimationsEnabledBySystem() {
 
   bool enabled = false;
   id value = nil;
-  value = [[NSUserDefaults standardUserDefaults]
+  value = [NSUserDefaults.standardUserDefaults
       objectForKey:@"NSScrollAnimationEnabled"];
   if (value)
     enabled = [value boolValue];
@@ -37,7 +37,7 @@ void Animation::UpdatePrefersReducedMotion() {
   // TODO(crbug.com/927163): DCHECK this assertion once tests are well-behaved.
 
   prefers_reduced_motion_ =
-      [[NSWorkspace sharedWorkspace] accessibilityDisplayShouldReduceMotion];
+      NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
 }
 
 } // namespace gfx

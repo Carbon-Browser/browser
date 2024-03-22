@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,6 +56,9 @@ class MetricsServicesManagerClient {
   // Update the running state of metrics services managed by the embedder, for
   // example, crash reporting.
   virtual void UpdateRunningServices(bool may_record, bool may_upload) {}
+
+  // Called when a document starts loading for the first time.
+  virtual void OnPageLoadStarted() {}
 };
 
 }  // namespace metrics_services_manager

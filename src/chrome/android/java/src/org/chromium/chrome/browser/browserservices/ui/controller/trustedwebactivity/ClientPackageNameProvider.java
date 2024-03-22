@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ public class ClientPackageNameProvider implements SaveInstanceStateObserver {
     private final String mClientPackageName;
 
     @Inject
-    public ClientPackageNameProvider(ActivityLifecycleDispatcher lifecycleDispatcher,
+    public ClientPackageNameProvider(
+            ActivityLifecycleDispatcher lifecycleDispatcher,
             BrowserServicesIntentDataProvider intentDataProvider,
             CustomTabsConnection customTabsConnection,
             @Named(SAVED_INSTANCE_SUPPLIER) Supplier<Bundle> savedInstanceStateSupplier) {
@@ -38,8 +39,9 @@ public class ClientPackageNameProvider implements SaveInstanceStateObserver {
         if (savedInstanceState != null) {
             mClientPackageName = savedInstanceState.getString(KEY_CLIENT_PACKAGE);
         } else {
-            mClientPackageName = customTabsConnection.getClientPackageNameForSession(
-                    intentDataProvider.getSession());
+            mClientPackageName =
+                    customTabsConnection.getClientPackageNameForSession(
+                            intentDataProvider.getSession());
         }
         assert mClientPackageName != null;
 

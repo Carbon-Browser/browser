@@ -1,12 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_CROSTINI_CROSTINI_UPGRADER_H_
 #define CHROME_BROWSER_ASH_CROSTINI_CROSTINI_UPGRADER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/crostini/crostini_export_import.h"
 #include "chrome/browser/ash/crostini/crostini_export_import_status_tracker.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
@@ -62,6 +64,8 @@ class CrostiniUpgrader : public KeyedService,
   // Return true if internal state allows starting upgrade.
   bool CanUpgrade();
 
+  static void EnsureFactoryBuilt();
+
  private:
   void CreateNewLogFile();
 
@@ -111,7 +115,7 @@ class CrostiniUpgrader : public KeyedService,
   };
   friend class StatusTracker;
 
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
   guest_os::GuestId container_id_;
   base::ObserverList<CrostiniUpgraderUIObserver>::Unchecked upgrader_observers_;
 

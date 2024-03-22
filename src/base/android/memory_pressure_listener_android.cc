@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/memory_pressure_listener_android.h"
 
-#include "base/base_jni_headers/MemoryPressureListener_jni.h"
+#include "base/base_jni/MemoryPressureListener_jni.h"
 #include "base/memory/memory_pressure_listener.h"
 
 using base::android::JavaParamRef;

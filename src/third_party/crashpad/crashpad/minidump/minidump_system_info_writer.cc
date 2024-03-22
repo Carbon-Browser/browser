@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,6 +131,9 @@ void MinidumpSystemInfoWriter::InitializeFromSnapshot(
       break;
     case kCPUArchitectureARM64:
       cpu_architecture = kMinidumpCPUArchitectureARM64;
+      break;
+    case kCPUArchitectureRISCV64:
+      cpu_architecture = kMinidumpCPUArchitectureRISCV64Breakpad;
       break;
     default:
       NOTREACHED();

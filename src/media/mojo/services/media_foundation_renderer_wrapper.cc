@@ -1,12 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/mojo/services/media_foundation_renderer_wrapper.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/win/mf_helpers.h"
 #include "media/mojo/mojom/renderer_extensions.mojom.h"
+#include "media/mojo/services/media_foundation_gpu_info_monitor.h"
 #include "media/mojo/services/mojo_media_log.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "mojo/public/cpp/system/platform_handle.h"
@@ -16,7 +18,7 @@ namespace media {
 namespace {
 
 bool HasAudio(MediaResource* media_resource) {
-  DCHECK(media_resource->GetType() == MediaResource::Type::STREAM);
+  DCHECK(media_resource->GetType() == MediaResource::Type::kStream);
 
   const auto media_streams = media_resource->GetAllStreams();
   for (const media::DemuxerStream* stream : media_streams) {
@@ -25,6 +27,13 @@ bool HasAudio(MediaResource* media_resource) {
   }
 
   return false;
+}
+
+LUID ChromeLuidToLuid(const CHROME_LUID& chrome_luid) {
+  LUID luid;
+  luid.LowPart = chrome_luid.LowPart;
+  luid.HighPart = chrome_luid.HighPart;
+  return luid;
 }
 
 }  // namespace
@@ -36,16 +45,23 @@ MediaFoundationRendererWrapper::MediaFoundationRendererWrapper(
     mojo::PendingReceiver<RendererExtension> renderer_extension_receiver,
     mojo::PendingRemote<ClientExtension> client_extension_remote)
     : frame_interfaces_(frame_interfaces),
-      renderer_(std::make_unique<MediaFoundationRenderer>(
-          task_runner,
-          std::make_unique<MojoMediaLog>(std::move(media_log_remote),
-                                         task_runner))),
       renderer_extension_receiver_(this,
                                    std::move(renderer_extension_receiver)),
       client_extension_remote_(std::move(client_extension_remote), task_runner),
       site_mute_observer_(this) {
   DVLOG_FUNC(1);
   DCHECK(frame_interfaces_);
+
+  renderer_ = std::make_unique<MediaFoundationRenderer>(
+      std::move(task_runner),
+      std::make_unique<MojoMediaLog>(std::move(media_log_remote), task_runner),
+      ChromeLuidToLuid(
+          MediaFoundationGpuInfoMonitor::GetInstance()->gpu_luid()));
+
+  luid_update_subscription_ =
+      MediaFoundationGpuInfoMonitor::GetInstance()->AddLuidObserver(
+          base::BindRepeating(&MediaFoundationRendererWrapper::OnGpuLuidChange,
+                              weak_factory_.GetWeakPtr()));
 }
 
 MediaFoundationRendererWrapper::~MediaFoundationRendererWrapper() {
@@ -105,6 +121,10 @@ base::TimeDelta MediaFoundationRendererWrapper::GetMediaTime() {
   return renderer_->GetMediaTime();
 }
 
+RendererType MediaFoundationRendererWrapper::GetRendererType() {
+  return RendererType::kMediaFoundation;
+}
+
 void MediaFoundationRendererWrapper::GetDCOMPSurface(
     GetDCOMPSurfaceCallback callback) {
   if (has_get_dcomp_surface_called_) {
@@ -137,6 +157,11 @@ void MediaFoundationRendererWrapper::OnMuteStateChange(bool muted) {
 
   muted_ = muted;
   renderer_->SetVolume(muted_ ? 0 : volume_);
+}
+
+void MediaFoundationRendererWrapper::OnGpuLuidChange(
+    const CHROME_LUID& adapter_luid) {
+  renderer_->SetGpuProcessAdapterLuid(ChromeLuidToLuid(adapter_luid));
 }
 
 void MediaFoundationRendererWrapper::OnReceiveDCOMPSurface(
@@ -211,10 +236,8 @@ void MediaFoundationRendererWrapper::NotifyFrameReleased(
   renderer_->NotifyFrameReleased(frame_token);
 }
 
-void MediaFoundationRendererWrapper::RequestNextFrameBetweenTimestamps(
-    base::TimeTicks deadline_min,
-    base::TimeTicks deadline_max) {
-  renderer_->RequestNextFrameBetweenTimestamps(deadline_min, deadline_max);
+void MediaFoundationRendererWrapper::RequestNextFrame() {
+  renderer_->RequestNextFrame();
 }
 
 void MediaFoundationRendererWrapper::SetMediaFoundationRenderingMode(

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,8 @@ PointerDetails::PointerDetails(EventPointerType pointer_type,
                                float radius_y,
                                float force,
                                float twist,
-                               float tilt_x,
-                               float tilt_y,
+                               double tilt_x,
+                               double tilt_y,
                                float tangential_pressure)
     : pointer_type(pointer_type),
       // If we aren't provided with a radius on one axis, use the

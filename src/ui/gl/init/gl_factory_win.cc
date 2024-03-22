@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ namespace init {
 
 std::vector<GLImplementationParts> GetAllowedGLImplementations() {
   std::vector<GLImplementationParts> impls;
-  impls.emplace_back(GLImplementationParts(kGLImplementationEGLANGLE));
+  impls.emplace_back(kGLImplementationEGLANGLE);
   return impls;
 }
 
@@ -53,47 +53,49 @@ scoped_refptr<GLContext> CreateGLContext(GLShareGroup* share_group,
       stub_context->SetUseStubApi(true);
       return stub_context;
     }
+    case kGLImplementationDisabled:
+      return nullptr;
     default:
-      NOTREACHED();
+      DUMP_WILL_BE_NOTREACHED_NORETURN();
       return nullptr;
   }
 }
 
-scoped_refptr<GLSurface> CreateViewGLSurface(gfx::AcceleratedWidget window) {
+scoped_refptr<GLSurface> CreateViewGLSurface(GLDisplay* display,
+                                             gfx::AcceleratedWidget window) {
   TRACE_EVENT0("gpu", "gl::init::CreateViewGLSurface");
   switch (GetGLImplementation()) {
     case kGLImplementationEGLANGLE: {
       DCHECK_NE(window, gfx::kNullAcceleratedWidget);
       return InitializeGLSurface(base::MakeRefCounted<NativeViewGLSurfaceEGL>(
-          GLSurfaceEGL::GetGLDisplayEGL(), window,
+          display->GetAs<gl::GLDisplayEGL>(), window,
           std::make_unique<VSyncProviderWin>(window)));
     }
     case kGLImplementationMockGL:
     case kGLImplementationStubGL:
-      return new GLSurfaceStub;
+      return InitializeGLSurface(new GLSurfaceStub());
     default:
       NOTREACHED();
       return nullptr;
   }
 }
 
-scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
-    const gfx::Size& size, GLSurfaceFormat format) {
+scoped_refptr<GLSurface> CreateOffscreenGLSurface(GLDisplay* display,
+                                                  const gfx::Size& size) {
   TRACE_EVENT0("gpu", "gl::init::CreateOffscreenGLSurface");
   switch (GetGLImplementation()) {
-    case kGLImplementationEGLANGLE:
-      if (GLSurfaceEGL::GetGLDisplayEGL()->IsEGLSurfacelessContextSupported() &&
+    case kGLImplementationEGLANGLE: {
+      GLDisplayEGL* display_egl = display->GetAs<gl::GLDisplayEGL>();
+      if (display_egl->IsEGLSurfacelessContextSupported() &&
           size.width() == 0 && size.height() == 0) {
-        return InitializeGLSurfaceWithFormat(
-            new SurfacelessEGL(GLSurfaceEGL::GetGLDisplayEGL(), size), format);
+        return InitializeGLSurface(new SurfacelessEGL(display_egl, size));
       } else {
-        return InitializeGLSurfaceWithFormat(
-            new PbufferGLSurfaceEGL(GLSurfaceEGL::GetGLDisplayEGL(), size),
-            format);
+        return InitializeGLSurface(new PbufferGLSurfaceEGL(display_egl, size));
       }
+    }
     case kGLImplementationMockGL:
     case kGLImplementationStubGL:
-      return new GLSurfaceStub;
+      return InitializeGLSurface(new GLSurfaceStub());
     default:
       NOTREACHED();
       return nullptr;
@@ -121,7 +123,7 @@ bool InitializeExtensionSettingsOneOffPlatform(GLDisplay* display) {
   switch (implementation) {
     case kGLImplementationEGLANGLE:
       return InitializeExtensionSettingsOneOffEGL(
-          static_cast<GLDisplayEGL*>(display));
+          display->GetAs<GLDisplayEGL>());
     case kGLImplementationMockGL:
     case kGLImplementationStubGL:
       return true;

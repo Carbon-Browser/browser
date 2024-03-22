@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,18 @@
 #include <ostream>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/version.h"
 #include "chrome/updater/enum_traits.h"
+#include "chrome/updater/util/util.h"
 #include "components/update_client/update_client.h"
 
 namespace updater {
 
 struct RegistrationRequest;
-struct RegistrationResponse;
 
 enum class UpdaterScope;
 
@@ -57,7 +57,7 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
     // concurrently.
     kUpdateInProgress = 1,
 
-    // Not used. TODO(crbug.com/1014591).
+    // Not used. TODO(crbug.com/1290331).
     kUpdateCanceled = 2,
 
     // The function failed because of a throttling policy such as load shedding.
@@ -85,6 +85,10 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
 
     // Failed to run app installer.
     kInstallFailed = 10,
+
+    // The service has been stopped, because the system is shutting down, or
+    // any other reason.
+    kServiceStopped = 11,
 
     // Update EnumTraits<UpdateService::Result> when adding new values.
   };
@@ -166,6 +170,11 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
     ErrorCategory error_category = ErrorCategory::kNone;
     int error_code = 0;
     int extra_code1 = 0;
+
+    // Results collected from installer result API. See the definition of
+    // `update_client::CrxInstaller::Result` for the meaning of the members.
+    std::string installer_text;
+    std::string installer_cmd_line;
   };
 
   // Urgency of the update service invocation.
@@ -190,7 +199,11 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
 
     std::string app_id;
     base::Version version;
+    base::FilePath version_path;
+    std::string version_key;
     std::string ap;
+    base::FilePath ap_path;
+    std::string ap_key;
     std::string brand_code;
     base::FilePath brand_path;
     base::FilePath ecp;
@@ -198,17 +211,18 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
 
   using Callback = base::OnceCallback<void(Result)>;
   using StateChangeCallback = base::RepeatingCallback<void(const UpdateState&)>;
-  using RegisterAppCallback =
-      base::OnceCallback<void(const RegistrationResponse&)>;
   using InstallerResult = update_client::CrxInstaller::Result;
 
   // Returns the version of the active updater. The version object is invalid
   // if an error (including timeout) occurs.
   virtual void GetVersion(base::OnceCallback<void(const base::Version&)>) = 0;
 
+  // Fetches policies from device management.
+  virtual void FetchPolicies(base::OnceCallback<void(int)> callback) = 0;
+
   // Registers given request to the updater.
   virtual void RegisterApp(const RegistrationRequest& request,
-                           RegisterAppCallback callback) = 0;
+                           base::OnceCallback<void(int)> callback) = 0;
 
   // Gets state of all registered apps.
   virtual void GetAppStates(
@@ -218,11 +232,16 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
   // applications or doing background updates for registered applications.
   virtual void RunPeriodicTasks(base::OnceClosure callback) = 0;
 
-  // Initiates an update check for all registered applications. Receives state
-  // change notifications through the repeating `state_update` callback.
-  // Calls `callback` once  the operation is complete.
-  virtual void UpdateAll(StateChangeCallback state_update,
-                         Callback callback) = 0;
+  // DEPRECATED - queries the server for updates, gets an update response, but
+  // does not download, install, or run any payload. This is intended to
+  // support the legacy on-demand Omaha interface but it should not be used
+  // by new code. The parameters are similar to the parameters of `Update`.
+  virtual void CheckForUpdate(
+      const std::string& app_id,
+      Priority priority,
+      PolicySameVersionUpdate policy_same_version_update,
+      StateChangeCallback state_update,
+      Callback callback) = 0;
 
   // Updates specified product. This update may be on-demand.
   //
@@ -250,11 +269,19 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
                       StateChangeCallback state_update,
                       Callback callback) = 0;
 
+  // Initiates an update check for all registered applications. Receives state
+  // change notifications through the repeating `state_update` callback.
+  // Calls `callback` once  the operation is complete.
+  virtual void UpdateAll(StateChangeCallback state_update,
+                         Callback callback) = 0;
+
   // Registers and installs an application from the network.
   //
   // Args:
   //   `registration`: Registration data about the app.
-  //   `install_data_index`: Index of the server install data.
+  //   `client_install_data`: User provided install data.
+  //   `install_data_index`: Index of the server install data. Effective only
+  //     when `client_install_data` is not set.
   //   `priority`: Priority for processing this update.
   //   `state_update`: The callback will be invoked every time the update
   //     changes state when the engine starts. It will be called on the
@@ -269,6 +296,7 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
   //   `callback` arg:
   //     Result: the final result from the update engine.
   virtual void Install(const RegistrationRequest& registration,
+                       const std::string& client_install_data,
                        const std::string& install_data_index,
                        Priority priority,
                        StateChangeCallback state_update,
@@ -306,10 +334,6 @@ class UpdateService : public base::RefCountedThreadSafe<UpdateService> {
                             StateChangeCallback state_update,
                             Callback callback) = 0;
 
-  // Provides a way to commit data or clean up resources before the task
-  // scheduler is shutting down.
-  virtual void Uninitialize() = 0;
-
  protected:
   friend class base::RefCountedThreadSafe<UpdateService>;
 
@@ -321,7 +345,7 @@ template <>
 struct EnumTraits<UpdateService::Result> {
   using Result = UpdateService::Result;
   static constexpr Result first_elem = Result::kSuccess;
-  static constexpr Result last_elem = Result::kInstallFailed;
+  static constexpr Result last_elem = Result::kServiceStopped;
 };
 
 template <>
@@ -338,11 +362,6 @@ struct EnumTraits<UpdateService::ErrorCategory> {
   static constexpr ErrorCategory last_elem = ErrorCategory::kUpdateCheck;
 };
 
-inline std::ostream& operator<<(std::ostream& os,
-                                const UpdateService::Result& result) {
-  return os << static_cast<int>(result);
-}
-
 std::ostream& operator<<(std::ostream& os,
                          const UpdateService::UpdateState& update_state);
 
@@ -357,6 +376,13 @@ inline std::ostream& operator<<(
         return "allowed";
     }
   }();
+}
+
+bool operator==(const UpdateService::UpdateState& lhs,
+                const UpdateService::UpdateState& rhs);
+inline bool operator!=(const UpdateService::UpdateState& lhs,
+                       const UpdateService::UpdateState& rhs) {
+  return !(lhs == rhs);
 }
 
 }  // namespace updater

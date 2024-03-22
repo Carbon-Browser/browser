@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "ash/assistant/model/assistant_ui_model_observer.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/separator.h"
@@ -66,11 +67,14 @@ class ASH_EXPORT AppListAssistantMainStage
   void OnUiVisibilityChanged(
       AssistantVisibility new_visibility,
       AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point) override;
+      std::optional<AssistantEntryPoint> entry_point,
+      std::optional<AssistantExitPoint> exit_point) override;
+
+  void InitializeUIForBubbleView();
 
  private:
   void InitLayout();
+  void InitLayoutWithIph();
   std::unique_ptr<views::View> CreateContentLayoutContainer();
   std::unique_ptr<views::View> CreateMainContentLayoutContainer();
   std::unique_ptr<views::View> CreateDividerLayoutContainer();
@@ -79,20 +83,19 @@ class ASH_EXPORT AppListAssistantMainStage
   void AnimateInZeroState();
   void AnimateInFooter();
 
-  void MaybeHideZeroState();
+  void MaybeHideZeroStateAndShowFooter();
+  void InitializeUIForStartingSession(bool from_search);
 
-  AssistantViewDelegate* const delegate_;  // Owned by Shell.
-
-  // Whether to use dark/light mode colors, which default to dark.
-  const bool use_dark_light_mode_colors_;
+  const raw_ptr<AssistantViewDelegate, ExperimentalAsh>
+      delegate_;  // Owned by Shell.
 
   // Owned by view hierarchy.
-  AssistantProgressIndicator* progress_indicator_;
-  views::Separator* horizontal_separator_;
-  AssistantQueryView* query_view_;
-  UiElementContainerView* ui_element_container_;
-  AssistantZeroStateView* zero_state_view_;
-  AssistantFooterView* footer_;
+  raw_ptr<AssistantProgressIndicator, ExperimentalAsh> progress_indicator_;
+  raw_ptr<views::Separator, ExperimentalAsh> horizontal_separator_;
+  raw_ptr<AssistantQueryView, ExperimentalAsh> query_view_;
+  raw_ptr<UiElementContainerView, ExperimentalAsh> ui_element_container_;
+  raw_ptr<AssistantZeroStateView, ExperimentalAsh> zero_state_view_;
+  raw_ptr<AssistantFooterView, ExperimentalAsh> footer_;
 
   base::ScopedObservation<AssistantController, AssistantControllerObserver>
       assistant_controller_observation_{this};

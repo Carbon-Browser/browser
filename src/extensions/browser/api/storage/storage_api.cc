@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "base/values.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -38,35 +40,34 @@ constexpr PrefMap kPrefSessionStorageAccessLevel = {
     PrefScope::kExtensionSpecific};
 
 // Returns a vector of any strings within the given list.
-std::vector<std::string> GetKeysFromList(const base::Value& list) {
-  DCHECK(list.is_list());
+std::vector<std::string> GetKeysFromList(const base::Value::List& list) {
   std::vector<std::string> keys;
-  keys.reserve(list.GetList().size());
-  for (const auto& value : list.GetList()) {
+  keys.reserve(list.size());
+  for (const auto& value : list) {
     auto* as_string = value.GetIfString();
-    if (as_string)
+    if (as_string) {
       keys.push_back(*as_string);
+    }
   }
   return keys;
 }
 
 // Returns a vector of keys within the given dict.
-std::vector<std::string> GetKeysFromDict(const base::Value& dict) {
-  DCHECK(dict.is_dict());
+std::vector<std::string> GetKeysFromDict(const base::Value::Dict& dict) {
   std::vector<std::string> keys;
-  keys.reserve(dict.DictSize());
-  for (auto value : dict.DictItems()) {
+  keys.reserve(dict.size());
+  for (auto value : dict) {
     keys.push_back(value.first);
   }
   return keys;
 }
 
-// Converts a map to a Value::Type::DICTIONARY.
-base::Value MapAsValueDict(
+// Converts a map to a Value::Dict.
+base::Value::Dict MapAsValueDict(
     const std::map<std::string, const base::Value*>& values) {
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict dict;
   for (const auto& value : values)
-    dict.SetKey(value.first, value.second->Clone());
+    dict.Set(value.first, value.second->Clone());
   return dict;
 }
 
@@ -90,16 +91,16 @@ void GetModificationQuotaLimitHeuristics(QuotaLimitHeuristics* heuristics) {
 // Returns a nested dictionary Value converted from a ValueChange.
 base::Value ValueChangeToValue(
     std::vector<SessionStorageManager::ValueChange> changes) {
-  base::Value changes_value(base::Value::Type::DICTIONARY);
+  base::Value::Dict changes_value;
   for (auto& change : changes) {
-    base::Value change_value(base::Value::Type::DICTIONARY);
+    base::Value::Dict change_value;
     if (change.old_value.has_value())
-      change_value.SetKey("oldValue", std::move(change.old_value.value()));
+      change_value.Set("oldValue", std::move(change.old_value.value()));
     if (change.new_value)
-      change_value.SetKey("newValue", change.new_value->Clone());
-    changes_value.SetKey(change.key, std::move(change_value));
+      change_value.Set("newValue", change.new_value->Clone());
+    changes_value.Set(change.key, std::move(change_value));
   }
-  return changes_value;
+  return base::Value(std::move(changes_value));
 }
 
 }  // namespace
@@ -168,7 +169,7 @@ ExtensionFunction::ResponseAction SettingsFunction::Run() {
   }
 
   observer_ = GetSequenceBoundSettingsChangedCallback(
-      base::SequencedTaskRunnerHandle::Get(), frontend->GetObserver());
+      base::SequencedTaskRunner::GetCurrentDefault(), frontend->GetObserver());
 
   frontend->RunWithStorage(
       extension(), settings_namespace_,
@@ -190,7 +191,7 @@ ExtensionFunction::ResponseValue SettingsFunction::UseReadResult(
   if (!result.status().ok())
     return Error(result.status().message);
 
-  return OneArgument(base::Value(result.PassSettings()));
+  return WithArguments(result.PassSettings());
 }
 
 ExtensionFunction::ResponseValue SettingsFunction::UseWriteResult(
@@ -217,7 +218,7 @@ void SettingsFunction::OnSessionSettingsChanged(
     // This used to dispatch asynchronously as a result of a
     // ObserverListThreadSafe. Ideally, we'd just run this synchronously, but it
     // appears at least some tests rely on the asynchronous behavior.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(observer, extension_id(), storage_area_,
                                   ValueChangeToValue(std::move(changes))));
   }
@@ -226,16 +227,20 @@ void SettingsFunction::OnSessionSettingsChanged(
 bool SettingsFunction::IsAccessToStorageAllowed() {
   ExtensionPrefs* prefs = ExtensionPrefs::Get(browser_context());
   // Default access level is only secure contexts.
-  int access_level = api::storage::ACCESS_LEVEL_TRUSTED_CONTEXTS;
+  int access_level =
+      base::to_underlying(api::storage::AccessLevel::kTrustedContexts);
   prefs->ReadPrefAsInteger(extension()->id(), kPrefSessionStorageAccessLevel,
                            &access_level);
 
   // Only a blessed extension context is considered trusted.
-  if (access_level == api::storage::ACCESS_LEVEL_TRUSTED_CONTEXTS)
+  if (access_level ==
+      base::to_underlying(api::storage::AccessLevel::kTrustedContexts)) {
     return source_context_type() == Feature::BLESSED_EXTENSION_CONTEXT;
+  }
 
   // All contexts are allowed.
-  DCHECK_EQ(api::storage::ACCESS_LEVEL_TRUSTED_AND_UNTRUSTED_CONTEXTS,
+  DCHECK_EQ(base::to_underlying(
+                api::storage::AccessLevel::kTrustedAndUntrustedContexts),
             access_level);
   return true;
 }
@@ -256,10 +261,11 @@ ExtensionFunction::ResponseValue StorageStorageAreaGetFunction::RunWithStorage(
       return UseReadResult(storage->Get(input.GetString()));
 
     case base::Value::Type::LIST:
-      return UseReadResult(storage->Get(GetKeysFromList(input)));
+      return UseReadResult(storage->Get(GetKeysFromList(input.GetList())));
 
-    case base::Value::Type::DICTIONARY: {
-      ValueStore::ReadResult result = storage->Get(GetKeysFromDict(input));
+    case base::Value::Type::DICT: {
+      ValueStore::ReadResult result =
+          storage->Get(GetKeysFromDict(input.GetDict()));
       if (!result.status().ok()) {
         return UseReadResult(std::move(result));
       }
@@ -279,7 +285,7 @@ ExtensionFunction::ResponseValue StorageStorageAreaGetFunction::RunInSession() {
     return BadMessage();
   base::Value& input = mutable_args()[0];
 
-  base::Value value_dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict value_dict;
   SessionStorageManager* session_manager =
       SessionStorageManager::GetForBrowserContext(browser_context());
 
@@ -294,20 +300,20 @@ ExtensionFunction::ResponseValue StorageStorageAreaGetFunction::RunInSession() {
       break;
 
     case base::Value::Type::LIST:
-      value_dict = MapAsValueDict(
-          session_manager->Get(extension_id(), GetKeysFromList(input)));
+      value_dict = MapAsValueDict(session_manager->Get(
+          extension_id(), GetKeysFromList(input.GetList())));
       break;
 
-    case base::Value::Type::DICTIONARY: {
-      std::map<std::string, const base::Value*> values =
-          session_manager->Get(extension_id(), GetKeysFromDict(input));
+    case base::Value::Type::DICT: {
+      std::map<std::string, const base::Value*> values = session_manager->Get(
+          extension_id(), GetKeysFromDict(input.GetDict()));
 
-      for (auto default_value : input.DictItems()) {
+      for (auto default_value : input.GetDict()) {
         auto value_it = values.find(default_value.first);
-        value_dict.SetKey(default_value.first,
-                          value_it != values.end()
-                              ? value_it->second->Clone()
-                              : std::move(default_value.second));
+        value_dict.Set(default_value.first,
+                       value_it != values.end()
+                           ? value_it->second->Clone()
+                           : std::move(default_value.second));
       }
       break;
     }
@@ -315,7 +321,7 @@ ExtensionFunction::ResponseValue StorageStorageAreaGetFunction::RunInSession() {
       return BadMessage();
   }
 
-  return OneArgument(std::move(value_dict));
+  return WithArguments(std::move(value_dict));
 }
 
 ExtensionFunction::ResponseValue
@@ -340,14 +346,14 @@ StorageStorageAreaGetBytesInUseFunction::RunWithStorage(ValueStore* storage) {
       break;
 
     case base::Value::Type::LIST:
-      bytes_in_use = storage->GetBytesInUse(GetKeysFromList(input));
+      bytes_in_use = storage->GetBytesInUse(GetKeysFromList(input.GetList()));
       break;
 
     default:
       return BadMessage();
   }
 
-  return OneArgument(base::Value(static_cast<int>(bytes_in_use)));
+  return WithArguments(static_cast<double>(bytes_in_use));
 }
 
 ExtensionFunction::ResponseValue
@@ -371,18 +377,17 @@ StorageStorageAreaGetBytesInUseFunction::RunInSession() {
       break;
 
     case base::Value::Type::LIST:
-      bytes_in_use = session_manager->GetBytesInUse(extension_id(),
-                                                    GetKeysFromList(input));
+      bytes_in_use = session_manager->GetBytesInUse(
+          extension_id(), GetKeysFromList(input.GetList()));
       break;
 
     default:
       return BadMessage();
   }
 
-  // Checked cast should not overflow since `bytes_in_use` is guaranteed to be a
-  // small number, due to the quota limits we have in place for in-memory
-  // storage
-  return OneArgument(base::Value(base::checked_cast<int>(bytes_in_use)));
+  // Checked cast should not overflow since a double can represent up to 2*53
+  // bytes before a loss of precision.
+  return WithArguments(base::checked_cast<double>(bytes_in_use));
 }
 
 ExtensionFunction::ResponseValue StorageStorageAreaSetFunction::RunWithStorage(
@@ -403,7 +408,7 @@ ExtensionFunction::ResponseValue StorageStorageAreaSetFunction::RunInSession() {
   mutable_args().erase(args().begin());
 
   std::map<std::string, base::Value> values;
-  for (auto item : input.DictItems()) {
+  for (auto item : input.GetDict()) {
     values.emplace(std::move(item.first), std::move(item.second));
   }
 
@@ -439,7 +444,7 @@ StorageStorageAreaRemoveFunction::RunWithStorage(ValueStore* storage) {
       return UseWriteResult(storage->Remove(input.GetString()));
 
     case base::Value::Type::LIST:
-      return UseWriteResult(storage->Remove(GetKeysFromList(input)));
+      return UseWriteResult(storage->Remove(GetKeysFromList(input.GetList())));
 
     default:
       return BadMessage();
@@ -462,7 +467,8 @@ StorageStorageAreaRemoveFunction::RunInSession() {
       break;
 
     case base::Value::Type::LIST:
-      session_manager->Remove(extension_id(), GetKeysFromList(input), changes);
+      session_manager->Remove(extension_id(), GetKeysFromList(input.GetList()),
+                              changes);
       break;
 
     default:
@@ -511,21 +517,22 @@ StorageStorageAreaSetAccessLevelFunction::RunInSession() {
   if (source_context_type() != Feature::BLESSED_EXTENSION_CONTEXT)
     return Error("Context cannot set the storage access level");
 
-  std::unique_ptr<api::storage::StorageArea::SetAccessLevel::Params> params(
-      api::storage::StorageArea::SetAccessLevel::Params::Create(args()));
+  std::optional<api::storage::StorageArea::SetAccessLevel::Params> params =
+      api::storage::StorageArea::SetAccessLevel::Params::Create(args());
 
   if (!params)
     return BadMessage();
 
   // The parsing code ensures `access_level` is sane.
   DCHECK(params->access_options.access_level ==
-             api::storage::ACCESS_LEVEL_TRUSTED_CONTEXTS ||
+             api::storage::AccessLevel::kTrustedContexts ||
          params->access_options.access_level ==
-             api::storage::ACCESS_LEVEL_TRUSTED_AND_UNTRUSTED_CONTEXTS);
+             api::storage::AccessLevel::kTrustedAndUntrustedContexts);
 
   ExtensionPrefs* prefs = ExtensionPrefs::Get(browser_context());
-  prefs->SetIntegerPref(extension_id(), kPrefSessionStorageAccessLevel,
-                        params->access_options.access_level);
+  prefs->SetIntegerPref(
+      extension_id(), kPrefSessionStorageAccessLevel,
+      base::to_underlying(params->access_options.access_level));
 
   return NoArguments();
 }

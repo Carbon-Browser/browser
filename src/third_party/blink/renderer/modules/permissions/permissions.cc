@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,10 @@
 #include "third_party/blink/renderer/core/frame/frame.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/modules/permissions/permission_status.h"
 #include "third_party/blink/renderer/modules/permissions/permission_utils.h"
+#include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
@@ -54,12 +56,33 @@ Permissions::Permissions(NavigatorBase& navigator)
 ScriptPromise Permissions::query(ScriptState* script_state,
                                  const ScriptValue& raw_permission,
                                  ExceptionState& exception_state) {
+  // https://www.w3.org/TR/permissions/#query-method
+  // If this's relevant global object is a Window object, and if the current
+  // settings object's associated Document is not fully active, return a promise
+  // rejected with an "InvalidStateError" DOMException.
+  auto* context = ExecutionContext::From(script_state);
+  if (auto* window = DynamicTo<LocalDOMWindow>(context)) {
+    auto* document = window->document();
+    if (document && !document->IsActive()) {
+      // It's impossible for Permissions.query to occur while in BFCache.
+      if (document->GetPage()) {
+        DCHECK(!document->GetPage()
+                    ->GetPageLifecycleState()
+                    ->is_in_back_forward_cache);
+      }
+      exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                        "The document is not active");
+      return ScriptPromise();
+    }
+  }
+
   PermissionDescriptorPtr descriptor =
       ParsePermissionDescriptor(script_state, raw_permission, exception_state);
   if (exception_state.HadException())
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   // If the current origin is a file scheme, it will unlikely return a
@@ -67,10 +90,9 @@ ScriptPromise Permissions::query(ScriptState* script_state,
   // permission prompt will be shown even if the returned permission will most
   // likely be "prompt".
   PermissionDescriptorPtr descriptor_copy = descriptor->Clone();
-  GetService(ExecutionContext::From(script_state))
-      ->HasPermission(
-          std::move(descriptor),
-          WTF::Bind(&Permissions::TaskComplete, WrapPersistent(this),
+  GetService(context)->HasPermission(
+      std::move(descriptor),
+      WTF::BindOnce(&Permissions::TaskComplete, WrapPersistent(this),
                     WrapPersistent(resolver), std::move(descriptor_copy)));
   return promise;
 }
@@ -85,7 +107,8 @@ ScriptPromise Permissions::request(ScriptState* script_state,
 
   ExecutionContext* context = ExecutionContext::From(script_state);
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   PermissionDescriptorPtr descriptor_copy = descriptor->Clone();
@@ -94,9 +117,9 @@ ScriptPromise Permissions::request(ScriptState* script_state,
 
   GetService(context)->RequestPermission(
       std::move(descriptor), LocalFrame::HasTransientUserActivation(frame),
-      WTF::Bind(&Permissions::VerifyPermissionAndReturnStatus,
-                WrapPersistent(this), WrapPersistent(resolver),
-                std::move(descriptor_copy)));
+      WTF::BindOnce(&Permissions::VerifyPermissionAndReturnStatus,
+                    WrapPersistent(this), WrapPersistent(resolver),
+                    std::move(descriptor_copy)));
   return promise;
 }
 
@@ -108,15 +131,16 @@ ScriptPromise Permissions::revoke(ScriptState* script_state,
   if (exception_state.HadException())
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   PermissionDescriptorPtr descriptor_copy = descriptor->Clone();
   GetService(ExecutionContext::From(script_state))
       ->RevokePermission(
           std::move(descriptor),
-          WTF::Bind(&Permissions::TaskComplete, WrapPersistent(this),
-                    WrapPersistent(resolver), std::move(descriptor_copy)));
+          WTF::BindOnce(&Permissions::TaskComplete, WrapPersistent(this),
+                        WrapPersistent(resolver), std::move(descriptor_copy)));
   return promise;
 }
 
@@ -153,11 +177,12 @@ ScriptPromise Permissions::requestAll(
     caller_index_to_internal_index[i] = internal_index;
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   Vector<PermissionDescriptorPtr> internal_permissions_copy;
-  internal_permissions_copy.ReserveCapacity(internal_permissions.size());
+  internal_permissions_copy.reserve(internal_permissions.size());
   for (const auto& descriptor : internal_permissions)
     internal_permissions_copy.push_back(descriptor->Clone());
 
@@ -167,7 +192,7 @@ ScriptPromise Permissions::requestAll(
   GetService(context)->RequestPermissions(
       std::move(internal_permissions),
       LocalFrame::HasTransientUserActivation(frame),
-      WTF::Bind(
+      WTF::BindOnce(
           &Permissions::VerifyPermissionsAndReturnStatus, WrapPersistent(this),
           WrapPersistent(resolver), std::move(internal_permissions_copy),
           std::move(caller_index_to_internal_index),
@@ -195,7 +220,7 @@ PermissionService* Permissions::GetService(
         execution_context,
         service_.BindNewPipeAndPassReceiver(
             execution_context->GetTaskRunner(TaskType::kPermission)));
-    service_.set_disconnect_handler(WTF::Bind(
+    service_.set_disconnect_handler(WTF::BindOnce(
         &Permissions::ServiceConnectionError, WrapWeakPersistent(this)));
   }
   return service_.get();
@@ -267,12 +292,12 @@ void Permissions::VerifyPermissionsAndReturnStatus(
       auto descriptor_copy = descriptors[internal_index]->Clone();
       service_->HasPermission(
           std::move(descriptor_copy),
-          WTF::Bind(&Permissions::PermissionVerificationComplete,
-                    WrapPersistent(this), WrapPersistent(resolver),
-                    std::move(descriptors),
-                    std::move(caller_index_to_internal_index),
-                    std::move(results), std::move(verification_descriptor),
-                    internal_index, is_bulk_request));
+          WTF::BindOnce(&Permissions::PermissionVerificationComplete,
+                        WrapPersistent(this), WrapPersistent(resolver),
+                        std::move(descriptors),
+                        std::move(caller_index_to_internal_index),
+                        std::move(results), std::move(verification_descriptor),
+                        internal_index, is_bulk_request));
       return;
     }
 
@@ -342,7 +367,9 @@ absl::optional<PermissionType> Permissions::GetPermissionType(
       descriptor.extension && descriptor.extension->is_camera_device() &&
           descriptor.extension->get_camera_device()->panTiltZoom,
       descriptor.extension && descriptor.extension->is_clipboard() &&
-          descriptor.extension->get_clipboard()->allowWithoutSanitization);
+          descriptor.extension->get_clipboard()->will_be_sanitized,
+      descriptor.extension && descriptor.extension->is_clipboard() &&
+          descriptor.extension->get_clipboard()->has_user_gesture);
 }
 
 mojom::blink::PermissionDescriptorPtr

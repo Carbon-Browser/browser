@@ -1,8 +1,6 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-import {assert} from 'chrome://resources/js/assert.m.js';
 
 /**
  * Processes touch events and calls back to the class user when tap events
@@ -17,57 +15,57 @@ export class FileTapHandler {
     /**
      * Whether the pointer is currently down and at the same place as the
      * initial position.
-     * @private {boolean}
+     * @private @type {boolean}
      */
     this.tapStarted_ = false;
 
-    /** @private {boolean} */
+    /** @private @type {boolean} */
     this.isLongTap_ = false;
 
-    /** @private {boolean} */
+    /** @private @type {boolean} */
     this.isTwoFingerTap_ = false;
 
-    /** @private {boolean} */
+    /** @private @type {boolean} */
     this.hasLongPressProcessed_ = false;
 
-    /** @private {number} */
+    /** @private @type {number} */
     this.longTapDetectorTimerId_ = -1;
 
     /**
      * If defined, the identifier of the active touch. Note that 0 is a valid
      * touch identifier.
-     * @private {number|undefined}
+     * @private @type {number|undefined}
      */
     this.activeTouchId_ = undefined;
 
     /**
      * The index of the item which is being touched by the active touch. Valid
      * only when |activeTouchId_| is defined.
-     * @private {number}
+     * @private @type {number}
      */
     this.activeItemIndex_ = -1;
 
     /**
      * Last touch X position in client co-ords.
-     * @private {number}
+     * @private @type {number}
      */
     this.lastTouchX_ = 0;
 
     /**
      * Last touch Y position in client co-ords.
-     * @private {number}
+     * @private @type {number}
      */
     this.lastTouchY_ = 0;
 
     /**
      * The absolute sum of all touch X deltas.
-     * @private {number}
+     * @private @type {number}
      */
     this.totalMoveX_ = 0;
 
     /**
      * The absolute sum of all touch Y deltas.
-     * @private {number}
+     * @private @type {number}
      */
     this.totalMoveY_ = 0;
   }
@@ -81,11 +79,11 @@ export class FileTapHandler {
    *    ... if touchend.preventDefault() not called ...
    *      browser events: mouseover > mousedown > [mousemove] > mouseup
    *
-   * @param {!Event} event Touch event.
+   * @param {!TouchEvent} event Touch event.
    * @param {number} index Index of the target item in the file list.
-   * @param {function(!Event, number, !FileTapHandler.TapEvent)} callback
-   *     Called when a tap event is detected. Should return true if it has
-   *     taken any action, and false if it ignores the event.
+   * @param {function(!TouchEvent, number, !FileTapHandler.TapEvent):boolean}
+   *     callback Called when a tap event is detected. Should return true if it
+   *     has taken any action, and false if it ignores the event.
    * @return {boolean} True if a tap event was detected and the |callback|
    *     processed the event. False otherwise.
    */
@@ -115,7 +113,7 @@ export class FileTapHandler {
 
         this.resetTouchTracking_();
         const touch = event.targetTouches[0];
-        this.activeTouchId_ = touch.identifier;
+        this.activeTouchId_ = touch?.identifier;
         this.tapStarted_ = true;
 
         this.activeItemIndex_ = index;
@@ -134,13 +132,15 @@ export class FileTapHandler {
           }
         }, FileTapHandler.LONG_PRESS_THRESHOLD_MILLISECONDS);
 
-        this.lastTouchX_ = touch.clientX;
-        this.lastTouchY_ = touch.clientY;
+        this.lastTouchX_ = touch?.clientX ?? 0;
+        this.lastTouchY_ = touch?.clientY ?? 0;
         this.totalMoveX_ = 0;
         this.totalMoveY_ = 0;
       } break;
 
       case 'touchmove': {
+        // @ts-ignore: error TS2339: Property 'changedTouches' does not exist on
+        // type 'Event'.
         const touch = this.findActiveTouch_(event.changedTouches);
         if (touch === undefined) {
           break;
@@ -248,11 +248,13 @@ export class FileTapHandler {
   findActiveTouch_(touches) {
     if (this.activeTouchId_ !== undefined) {
       for (let i = 0; i < touches.length; i++) {
+        // @ts-ignore: error TS2532: Object is possibly 'undefined'.
         if (touches[i].identifier === this.activeTouchId_) {
           return touches[i];
         }
       }
     }
+    return;
   }
 }
 
@@ -272,6 +274,8 @@ FileTapHandler.LONG_PRESS_THRESHOLD_MILLISECONDS = 500;
  * @type {number}
  * @private
  */
+// @ts-ignore: error TS2341: Property 'MAX_TRACKING_FOR_TAP_' is private and
+// only accessible within class 'FileTapHandler'.
 FileTapHandler.MAX_TRACKING_FOR_TAP_ = 8;
 
 /**

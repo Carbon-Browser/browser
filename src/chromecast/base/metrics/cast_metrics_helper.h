@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/no_destructor.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/values.h"
 
@@ -151,7 +151,7 @@ class CastMetricsHelper {
   // |tick_clock| just provided for unit test to construct; normally it should
   // be nullptr when accessed through GetInstance.
   CastMetricsHelper(scoped_refptr<base::SequencedTaskRunner> task_runner =
-                        base::SequencedTaskRunnerHandle::Get(),
+                        base::SequencedTaskRunner::GetCurrentDefault(),
                     const base::TickClock* tick_clock = nullptr);
   virtual ~CastMetricsHelper();
 
@@ -164,7 +164,7 @@ class CastMetricsHelper {
                              int num_buckets);
   void LogMediumTimeHistogramEvent(const std::string& name,
                                    base::TimeDelta value);
-  base::Value CreateEventBase(const std::string& name);
+  base::Value::Dict CreateEventBase(const std::string& name);
   base::TimeTicks Now();
 
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;

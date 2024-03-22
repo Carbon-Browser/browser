@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,16 +28,19 @@ DesktopDisplayInfo DesktopDisplayInfoLoaderWin::GetCurrentDisplayInfo() {
     enum_result = EnumDisplayDevices(NULL, device_index, &device, 0);
 
     // |enum_result| is 0 if we have enumerated all devices.
-    if (!enum_result)
+    if (!enum_result) {
       break;
+    }
 
     // We only care about active displays.
-    if (!(device.StateFlags & DISPLAY_DEVICE_ACTIVE))
+    if (!(device.StateFlags & DISPLAY_DEVICE_ACTIVE)) {
       continue;
+    }
 
     bool is_default = false;
-    if (device.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE)
+    if (device.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) {
       is_default = true;
+    }
 
     // Get additional info about device.
     DEVMODE devmode;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,69 +7,105 @@
 
 #import <Foundation/Foundation.h>
 
+#import "components/sync/base/model_type.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_delegate.h"
 
 class AuthenticationService;
 class ChromeAccountManagerService;
-@class ChromeIdentity;
 class PrefService;
 @protocol SigninPresenter;
+@protocol AccountSettingsPresenter;
 @class SigninPromoViewConfigurator;
 @protocol SigninPromoViewConsumer;
+@protocol SystemIdentity;
 
 namespace signin_metrics {
 enum class AccessPoint;
 }
 
-namespace ios {
+namespace syncer {
+class SyncService;
+}
+
+namespace user_prefs {
+class PrefRegistrySyncable;
+}  // namespace user_prefs
+
 // Enums for the sign-in promo view state. Those states are sequential, with no
 // way to go backwards. All states can be skipped except `NeverVisible` and
 // `Invalid`.
 enum class SigninPromoViewState {
   // Initial state. When -[SigninPromoViewMediator disconnect] is called with
   // that state, no metrics is recorded.
-  NeverVisible = 0,
+  kNeverVisible = 0,
   // None of the buttons has been used yet.
-  Unused,
+  kUnused,
   // Sign-in buttons have been used at least once.
-  UsedAtLeastOnce,
+  kUsedAtLeastOnce,
   // Sign-in promo has been closed.
-  Closed,
+  kClosed,
   // Sign-in promo view has been removed.
-  Invalid,
+  kInvalid,
 };
-}  // namespace ios
 
-namespace user_prefs {
-class PrefRegistrySyncable;
-}  // namespace user_prefs
+// The action performed when accepting the promo.
+enum class SigninPromoAction {
+  // Performs AuthenticationOperationSigninAndSync.
+  kSync = 0,
+  // Primary button signs the user in instantly.
+  // Secondary button opens a floating dialog with the available accounts. When
+  // an account is tapped, it is signed in instantly.
+  kInstantSignin,
+  // Single button. If there is an account, ask which account to use. Otherwise,
+  // add the add account dialog, and then sign-in directly.
+  kSigninWithNoDefaultIdentity,
+  // Performs AuthenticationOperationSigninOnly.
+  kSigninSheet,
+  // Shows account settings.
+  kReviewAccountSettings,
+};
 
 // Class that monitors the available identities and creates
 // SigninPromoViewConfigurator. This class makes the link between the model and
 // the view. The consumer will receive notification if default identity is
 // changed or updated.
+// TODO(crbug.com/1425862): This class needs to be split with a coordinator.
 @interface SigninPromoViewMediator : NSObject<SigninPromoViewDelegate>
 
 // Consumer to handle identity update notifications.
 @property(nonatomic, weak) id<SigninPromoViewConsumer> consumer;
 
-// Chrome identity used to configure the view in the following modes:
-//  - SigninPromoViewModeSigninWithAccount
-//  - SigninPromoViewModeSyncWithPrimaryAccount
-// Otherwise contains nil.
-@property(nonatomic, strong, readonly) ChromeIdentity* identity;
+// The identity whose avatar is shown by the promo and which will be signed-in
+// if the user taps the primary button.
+// When the user is signed-out with no accounts on the device, this is nil
+// (in that case the button opens a dialog to add an account instead).
+// When the user is signed-out and has accounts on the device, this is the
+// default identity.
+// when the user is signed-in and not syncing, this is the signed-in identity
+// (not necessarily the default one).
+@property(nonatomic, strong, readonly) id<SystemIdentity> displayedIdentity;
 
 // Sign-in promo view state.
-@property(nonatomic, assign) ios::SigninPromoViewState signinPromoViewState;
+@property(nonatomic, assign) SigninPromoViewState signinPromoViewState;
 
-// YES if the sign-in interaction controller is shown.
-@property(nonatomic, assign, readonly, getter=isSigninInProgress)
-    BOOL signinInProgress;
+// YES if the promo spinner should be displayed. Either the sign-in or the
+// initial sync is in progress.
+@property(nonatomic, assign, readonly) BOOL showSpinner;
 
 // Returns YES if the sign-in promo view is `Invalid`, `Closed` or invisible.
 @property(nonatomic, assign, readonly, getter=isInvalidClosedOrNeverVisible)
     BOOL invalidClosedOrNeverVisible;
+
+// The action performed when accepting the promo.
+@property(nonatomic, assign) SigninPromoAction signinPromoAction;
+
+// Set the data type that should be synced before the sign-in completes.
+// The default value is `syncer::ModelType::UNSPECIFIED`, therefore the sign-in
+// promo will not wait for the initial sync.
+// This value has to be set while the mediator is being set (right after the
+// init method).
+@property(nonatomic, assign) syncer::ModelType dataTypeToWaitForInitialSync;
 
 // Registers the feature preferences.
 + (void)registerBrowserStatePrefs:(user_prefs::PrefRegistrySyncable*)registry;
@@ -78,19 +114,26 @@ class PrefRegistrySyncable;
 // of times it has been displayed and if the user closed the sign-in promo view.
 + (BOOL)shouldDisplaySigninPromoViewWithAccessPoint:
             (signin_metrics::AccessPoint)accessPoint
+                              authenticationService:
+                                  (AuthenticationService*)authenticationService
                                         prefService:(PrefService*)prefService;
 
-// See -[SigninPromoViewMediator initWithBrowserState:].
+// See `-[SigninPromoViewMediator initWithBrowser:accountManagerService:
+// authService:prefService:accessPointpresenter:baseViewController]`.
 - (instancetype)init NS_UNAVAILABLE;
 
 // Designated initializer.
+// `baseViewController` is the view to present UI for sign-in.
 - (instancetype)
     initWithAccountManagerService:
         (ChromeAccountManagerService*)accountManagerService
                       authService:(AuthenticationService*)authService
                       prefService:(PrefService*)prefService
+                      syncService:(syncer::SyncService*)syncService
                       accessPoint:(signin_metrics::AccessPoint)accessPoint
-                        presenter:(id<SigninPresenter>)presenter
+                  signinPresenter:(id<SigninPresenter>)signinPresenter
+         accountSettingsPresenter:
+             (id<AccountSettingsPresenter>)accountSettingsPresenter
     NS_DESIGNATED_INITIALIZER;
 
 - (SigninPromoViewConfigurator*)createConfigurator;

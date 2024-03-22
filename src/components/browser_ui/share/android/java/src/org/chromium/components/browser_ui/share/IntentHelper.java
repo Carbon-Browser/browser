@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,14 @@ import android.net.Uri;
 import android.text.Html;
 import android.text.TextUtils;
 
+import org.jni_zero.CalledByNative;
+
 import org.chromium.base.ContentUriUtils;
 import org.chromium.base.ContextUtils;
-import org.chromium.base.annotations.CalledByNative;
 
 import java.io.File;
 
-/**
- * Helper for issuing intents to the android framework.
- */
+/** Helper for issuing intents to the android framework. */
 public abstract class IntentHelper {
     private IntentHelper() {}
 

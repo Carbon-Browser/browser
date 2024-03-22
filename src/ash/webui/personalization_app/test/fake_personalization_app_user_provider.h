@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,7 @@ namespace content {
 class WebUI;
 }  // namespace content
 
-namespace ash {
-namespace personalization_app {
+namespace ash::personalization_app {
 
 class FakePersonalizationAppUserProvider
     : public PersonalizationAppUserProvider {
@@ -46,6 +45,7 @@ class FakePersonalizationAppUserProvider
           observer) override;
   void GetUserInfo(GetUserInfoCallback callback) override;
   void GetDefaultUserImages(GetDefaultUserImagesCallback callback) override;
+  bool IsCustomizationSelectorsPrefEnabled() override;
   void SelectDefaultImage(int index) override;
   void SelectProfileImage() override;
   void SelectCameraImage(::mojo_base::BigBuffer data) override;
@@ -57,7 +57,6 @@ class FakePersonalizationAppUserProvider
       this};
 };
 
-}  // namespace personalization_app
-}  // namespace ash
+}  // namespace ash::personalization_app
 
 #endif  // ASH_WEBUI_PERSONALIZATION_APP_TEST_FAKE_PERSONALIZATION_APP_USER_PROVIDER_H_

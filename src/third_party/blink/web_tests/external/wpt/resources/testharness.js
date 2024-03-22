@@ -91,7 +91,12 @@
         }
 
         on_event(window, 'load', function() {
+          setTimeout(() => {
             this_obj.all_loaded = true;
+            if (tests.all_done()) {
+              tests.complete();
+            }
+          },0);
         });
 
         on_event(window, 'message', function(event) {
@@ -494,7 +499,7 @@
     ShellTestEnvironment.prototype.next_default_test_name = function() {
         var suffix = this.name_counter > 0 ? " " + this.name_counter : "";
         this.name_counter++;
-        return "Untitled" + suffix;
+        return get_title() + suffix;
     };
 
     ShellTestEnvironment.prototype.on_new_harness_properties = function() {};
@@ -1127,7 +1132,7 @@
      *
      * Typically this function is called implicitly on page load; it's
      * only necessary for users to call this when either the
-     * ``explict_done`` or ``single_page`` properties have been set
+     * ``explicit_done`` or ``single_page`` properties have been set
      * via the :js:func:`setup` function.
      *
      * For single page tests this marks the test as complete and sets its status.
@@ -1426,12 +1431,16 @@
         function assert_wrapper(...args) {
             let status = Test.statuses.TIMEOUT;
             let stack = null;
+            let new_assert_index = null;
             try {
                 if (settings.debug) {
                     console.debug("ASSERT", name, tests.current_test && tests.current_test.name, args);
                 }
                 if (tests.output) {
                     tests.set_assert(name, args);
+                    // Remember the newly pushed assert's index, because `apply`
+                    // below might push new asserts.
+                    new_assert_index = tests.asserts_run.length - 1;
                 }
                 const rv = f.apply(undefined, args);
                 status = Test.statuses.PASS;
@@ -1445,7 +1454,7 @@
                     stack = get_stack();
                 }
                 if (tests.output) {
-                    tests.set_assert_status(status, stack);
+                    tests.set_assert_status(new_assert_index, status, stack);
                 }
             }
         }
@@ -1493,7 +1502,7 @@
     /**
      * Assert that ``actual`` is the same value as ``expected``.
      *
-     * For objects this compares by cobject identity; for primitives
+     * For objects this compares by object identity; for primitives
      * this distinguishes between 0 and -0, and has correct handling
      * of NaN.
      *
@@ -2246,7 +2255,8 @@
                 ReadOnlyError: 0,
                 VersionError: 0,
                 OperationError: 0,
-                NotAllowedError: 0
+                NotAllowedError: 0,
+                OptOutError: 0
             };
 
             var code_name_map = {};
@@ -2476,6 +2486,10 @@
         this.cleanup_callbacks = [];
         this._user_defined_cleanup_count = 0;
         this._done_callbacks = [];
+
+        if (typeof AbortController === "function") {
+            this._abortController = new AbortController();
+        }
 
         // Tests declared following harness completion are likely an indication
         // of a programming error, but they cannot be reported
@@ -2719,22 +2733,10 @@
      * to reduce intermittents without compromising test execution
      * speed when the condition is quickly met.
      *
-     * @example
-     * async_test(t => {
-     *  const popup = window.open("resources/coop-coep.py?coop=same-origin&coep=&navigate=about:blank");
-     *  t.add_cleanup(() => popup.close());
-     *  assert_equals(window, popup.opener);
-     *
-     *  popup.onload = t.step_func(() => {
-     *    assert_true(popup.location.href.endsWith("&navigate=about:blank"));
-     *    // Use step_wait_func_done as about:blank cannot message back.
-     *    t.step_wait_func_done(() => popup.location.href === "about:blank");
-     *  });
-     * }, "Navigating a popup to about:blank");
-     *
      * @param {Function} cond A function taking no arguments and
-     *                        returning a boolean. The callback is called
-     *                        when this function returns true.
+     *                        returning a boolean or a Promise. The callback is
+     *                        called when this function returns true, or the
+     *                        returned Promise is resolved with true.
      * @param {Function} func A function taking no arguments to call once
      *                        the condition is met.
      * @param {string} [description] Error message to add to assert in case of
@@ -2750,17 +2752,23 @@
         var remaining = Math.ceil(timeout_full / interval);
         var test_this = this;
 
-        var wait_for_inner = test_this.step_func(() => {
-            if (cond()) {
+        const step = test_this.step_func((result) => {
+            if (result) {
                 func();
             } else {
-                if(remaining === 0) {
+                if (remaining === 0) {
                     assert(false, "step_wait_func", description,
                            "Timed out waiting on condition");
                 }
                 remaining--;
                 setTimeout(wait_for_inner, interval);
             }
+        });
+
+        var wait_for_inner = test_this.step_func(() => {
+            Promise.resolve(cond()).then(
+                step,
+                test_this.unreached_func("step_wait_func"));
         });
 
         wait_for_inner();
@@ -2774,9 +2782,23 @@
      * to reduce intermittents without compromising test execution speed
      * when the condition is quickly met.
      *
+     * @example
+     * async_test(t => {
+     *  const popup = window.open("resources/coop-coep.py?coop=same-origin&coep=&navigate=about:blank");
+     *  t.add_cleanup(() => popup.close());
+     *  assert_equals(window, popup.opener);
+     *
+     *  popup.onload = t.step_func(() => {
+     *    assert_true(popup.location.href.endsWith("&navigate=about:blank"));
+     *    // Use step_wait_func_done as about:blank cannot message back.
+     *    t.step_wait_func_done(() => popup.location.href === "about:blank");
+     *  });
+     * }, "Navigating a popup to about:blank");
+     *
      * @param {Function} cond A function taking no arguments and
-     *                        returning a boolean. The callback is called
-     *                        when this function returns true.
+     *                        returning a boolean or a Promise. The callback is
+     *                        called when this function returns true, or the
+     *                        returned Promise is resolved with true.
      * @param {Function} func A function taking no arguments to call once
      *                        the condition is met.
      * @param {string} [description] Error message to add to assert in case of
@@ -2812,7 +2834,7 @@
      * }, "");
      *
      * @param {Function} cond A function taking no arguments and
-     *                        returning a boolean.
+     *                        returning a boolean or a Promise.
      * @param {string} [description] Error message to add to assert in case of
      *                              failure.
      * @param {number} timeout Timeout in ms. This is multiplied by the global
@@ -2953,6 +2975,10 @@
 
         this.phase = this.phases.CLEANING;
 
+        if (this._abortController) {
+            this._abortController.abort("Test cleanup");
+        }
+
         forEach(this.cleanup_callbacks,
                 function(cleanup_callback) {
                     var result;
@@ -3044,6 +3070,16 @@
                     callback();
                 });
         test._done_callbacks.length = 0;
+    }
+
+    /**
+     * Gives an AbortSignal that will be aborted when the test finishes.
+     */
+    Test.prototype.get_signal = function() {
+        if (!this._abortController) {
+            throw new Error("AbortController is not supported in this browser");
+        }
+        return this._abortController.signal;
     }
 
     /**
@@ -3654,8 +3690,8 @@
         this.asserts_run.push(new AssertRecord(this.current_test, assert_name, args))
     }
 
-    Tests.prototype.set_assert_status = function(status, stack) {
-        let assert_record = this.asserts_run[this.asserts_run.length - 1];
+    Tests.prototype.set_assert_status = function(index, status, stack) {
+        let assert_record = this.asserts_run[index];
         assert_record.status = status;
         assert_record.stack = stack;
     }
@@ -3822,7 +3858,9 @@
             return;
         }
 
-        this.pending_remotes.push(this.create_remote_window(remote));
+        var remoteContext = this.create_remote_window(remote);
+        this.pending_remotes.push(remoteContext);
+        return remoteContext.done;
     };
 
     /**
@@ -3837,7 +3875,7 @@
      * @param {Window} window - The window to fetch tests from.
      */
     function fetch_tests_from_window(window) {
-        tests.fetch_tests_from_window(window);
+        return tests.fetch_tests_from_window(window);
     }
     expose(fetch_tests_from_window, 'fetch_tests_from_window');
 
@@ -3871,7 +3909,7 @@
      */
     function begin_shadow_realm_tests(postMessage) {
         if (!(test_environment instanceof ShadowRealmTestEnvironment)) {
-            throw new Error("beign_shadow_realm_tests called in non-Shadow Realm environment");
+            throw new Error("begin_shadow_realm_tests called in non-Shadow Realm environment");
         }
 
         test_environment.begin(function (msg) {
@@ -3883,7 +3921,7 @@
     /**
      * Timeout the tests.
      *
-     * This only has an effect when ``explict_timeout`` has been set
+     * This only has an effect when ``explicit_timeout`` has been set
      * in :js:func:`setup`. In other cases any call is a no-op.
      *
      */
@@ -4733,7 +4771,7 @@
         if ('META_TITLE' in global_scope && META_TITLE) {
             return META_TITLE;
         }
-        if ('location' in global_scope) {
+        if ('location' in global_scope && 'pathname' in location) {
             return location.pathname.substring(location.pathname.lastIndexOf('/') + 1, location.pathname.indexOf('.'));
         }
         return "Untitled";

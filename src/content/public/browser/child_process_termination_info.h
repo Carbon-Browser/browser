@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ struct CONTENT_EXPORT ChildProcessTerminationInfo {
   // the same as not having main frames.
   bool renderer_was_subframe = false;
 
-  // True if child service has strong or moderate binding at time of death.
+  // Child service binding state at time of death.
   base::android::ChildBindingState binding_state =
       base::android::ChildBindingState::UNBOUND;
 
@@ -55,17 +55,16 @@ struct CONTENT_EXPORT ChildProcessTerminationInfo {
 
   // True if the child shut itself down cleanly by quitting the main runloop.
   bool clean_exit = false;
-
-  // Eg lowest ranked process at time of death should have value 0.
-  // Valid values are non-negative.
-  // -1 means could not be obtained due to threading restrictions.
-  // -2 means not applicable because process is not ranked.
-  int best_effort_reverse_rank = -1;
 #endif
 
 #if BUILDFLAG(IS_WIN)
   // The LastError if there was a failure to launch the process.
   DWORD last_error;
+#endif
+
+#if !BUILDFLAG(IS_ANDROID)
+  // The cumulative CPU usage of this process.
+  base::TimeDelta cpu_usage;
 #endif
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker.mojom.h"
 
 namespace content {
@@ -53,17 +53,24 @@ class FakeServiceWorker : public blink::mojom::ServiceWorker {
   // Flush messages in the message pipe.
   void FlushForTesting();
 
+  base::WeakPtr<FakeServiceWorker> AsWeakPtr();
+
  protected:
   // blink::mojom::ServiceWorker overrides:
   void InitializeGlobalScope(
       mojo::PendingAssociatedRemote<blink::mojom::ServiceWorkerHost>
           service_worker_host,
+      mojo::PendingAssociatedRemote<blink::mojom::AssociatedInterfaceProvider>
+          associated_interfaces_from_browser,
+      mojo::PendingAssociatedReceiver<blink::mojom::AssociatedInterfaceProvider>
+          associated_interfaces_to_browser,
       blink::mojom::ServiceWorkerRegistrationObjectInfoPtr registration_info,
       blink::mojom::ServiceWorkerObjectInfoPtr service_worker_info,
       FetchHandlerExistence fetch_handler_existence,
       mojo::PendingReceiver<blink::mojom::ReportingObserver>
           reporting_observer_receiver,
-      blink::mojom::AncestorFrameType ancestor_frame_type) override;
+      blink::mojom::AncestorFrameType ancestor_frame_type,
+      const blink::StorageKey& storage_key) override;
   void DispatchInstallEvent(DispatchInstallEventCallback callback) override;
   void DispatchActivateEvent(DispatchActivateEventCallback callback) override;
   void DispatchBackgroundFetchAbortEvent(
@@ -132,6 +139,8 @@ class FakeServiceWorker : public blink::mojom::ServiceWorker {
       DispatchContentDeleteEventCallback callback) override;
   void Ping(PingCallback callback) override;
   void SetIdleDelay(base::TimeDelta delay) override;
+  void AddKeepAlive() override;
+  void ClearKeepAlive() override;
   void AddMessageToConsole(blink::mojom::ConsoleMessageLevel level,
                            const std::string& message) override;
   void ExecuteScriptForTest(const std::u16string& script,
@@ -157,6 +166,8 @@ class FakeServiceWorker : public blink::mojom::ServiceWorker {
 
   // absl::nullopt means SetIdleDelay() is not called.
   absl::optional<base::TimeDelta> idle_delay_;
+
+  base::WeakPtrFactory<FakeServiceWorker> weak_ptr_factory_{this};
 };
 
 }  // namespace content

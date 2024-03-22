@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,10 +56,10 @@ class MockWidget : public blink::mojom::Widget {
   void WasShown(bool was_evicted,
                 blink::mojom::RecordContentToVisibleTimeRequestPtr
                     record_tab_switch_time_request) override;
-  void RequestPresentationTimeForNextFrame(
+  void RequestSuccessfulPresentationTimeForNextFrame(
       blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request)
       override;
-  void CancelPresentationTimeRequest() override;
+  void CancelSuccessfulPresentationTimeRequest() override;
 
  private:
   absl::optional<bool> is_hidden_;

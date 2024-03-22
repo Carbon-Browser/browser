@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "chrome/browser/file_system_access/file_system_access_permission_context_factory.h"
 #include "chrome/browser/ui/views/file_system_access/file_system_access_usage_bubble_view.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
@@ -24,8 +25,13 @@ FileSystemAccessIconView::FileSystemAccessIconView(
     : PageActionIconView(nullptr,
                          0,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate) {
+                         page_action_icon_delegate,
+                         "FileSystemAccess") {
   SetVisible(false);
+  SetAccessibilityProperties(
+      /*role*/ absl::nullopt,
+      l10n_util::GetStringUTF16(
+          IDS_FILE_SYSTEM_ACCESS_DIRECTORY_USAGE_TOOLTIP));
 }
 
 views::BubbleDialogDelegate* FileSystemAccessIconView::GetBubble() const {
@@ -53,19 +59,16 @@ void FileSystemAccessIconView::UpdateImpl() {
   if (has_write_access_ != had_write_access)
     UpdateIconImage();
 
+  SetAccessibleName(has_write_access_
+                        ? l10n_util::GetStringUTF16(
+                              IDS_FILE_SYSTEM_ACCESS_WRITE_USAGE_TOOLTIP)
+                        : l10n_util::GetStringUTF16(
+                              IDS_FILE_SYSTEM_ACCESS_DIRECTORY_USAGE_TOOLTIP));
+
   // If icon isn't visible, a bubble shouldn't be shown either. Close it if
   // it was still open.
   if (!GetVisible())
     FileSystemAccessUsageBubbleView::CloseCurrentBubble();
-}
-
-std::u16string FileSystemAccessIconView::GetTextForTooltipAndAccessibleName()
-    const {
-  return has_write_access_
-             ? l10n_util::GetStringUTF16(
-                   IDS_FILE_SYSTEM_ACCESS_WRITE_USAGE_TOOLTIP)
-             : l10n_util::GetStringUTF16(
-                   IDS_FILE_SYSTEM_ACCESS_DIRECTORY_USAGE_TOOLTIP);
 }
 
 void FileSystemAccessIconView::OnExecuting(ExecuteSource execute_source) {
@@ -82,7 +85,7 @@ void FileSystemAccessIconView::OnExecuting(ExecuteSource execute_source) {
   }
 
   ChromeFileSystemAccessPermissionContext::Grants grants =
-      context->GetPermissionGrants(origin);
+      context->ConvertObjectsToGrants(context->GetGrantedObjects(origin));
 
   FileSystemAccessUsageBubbleView::Usage usage;
   usage.readable_files = std::move(grants.file_read_grants);
@@ -95,7 +98,12 @@ void FileSystemAccessIconView::OnExecuting(ExecuteSource execute_source) {
 }
 
 const gfx::VectorIcon& FileSystemAccessIconView::GetVectorIcon() const {
-  return has_write_access_ ? vector_icons::kSaveOriginalFileIcon
+  if (OmniboxFieldTrial::IsChromeRefreshIconsEnabled()) {
+    return has_write_access_ ? kFileSaveChromeRefreshIcon
+                             : vector_icons::kInsertDriveFileOutlineIcon;
+  }
+
+  return has_write_access_ ? kFileSaveIcon
                            : vector_icons::kInsertDriveFileOutlineIcon;
 }
 

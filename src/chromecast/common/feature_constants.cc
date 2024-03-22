@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@ const char kEnableTrackControlAppRendererFeatureUse[] =
 const char kEnablePlayready[] = "playready";
 const char kEnableDevMode[] = "dev_mode";
 const char kDevModeOrigin[] = "dev_mode_origin";
-const char kEnableAccessibilityControls[] = "accessibility_controls";
 const char kEnableSystemGestures[] = "system_gestures";
 const char kEnableWindowControls[] = "enable_window_controls";
 const char kEnableSettingsUiMojo[] = "enable_settings_ui_mojo";

@@ -1,11 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_APP_RESTORE_APP_RESTORE_ARC_TEST_HELPER_H_
 #define CHROME_BROWSER_ASH_APP_RESTORE_APP_RESTORE_ARC_TEST_HELPER_H_
 
+#include <memory>
 #include <string>
+
+#include "base/memory/raw_ptr.h"
 
 class ArcAppListPrefs;
 class Profile;
@@ -53,7 +56,7 @@ class AppRestoreArcTestHelper {
   arc::mojom::AppHost* GetAppHost();
 
  private:
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged | ExperimentalAsh> profile_ = nullptr;
 
   std::unique_ptr<arc::FakeAppInstance> app_instance_;
 };

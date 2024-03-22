@@ -1,17 +1,20 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 
+#include <map>
+#include <string>
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -21,13 +24,15 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/cryptohome/account_identifier_operators.h"
 #include "chromeos/ash/components/dbus/login_manager/policy_descriptor.pb.h"
+#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/constants/dbus_paths.h"
-#include "chromeos/dbus/cryptohome/account_identifier_operators.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "crypto/sha2.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -71,9 +76,19 @@ void StoreFiles(std::map<base::FilePath, std::string> paths_and_data) {
       continue;
     }
     const std::string& data = kv.second;
-    int result = base::WriteFile(path, data.data(), data.size());
-    if (result == -1 || static_cast<size_t>(result) != data.size())
+    if (!base::WriteFile(path, data)) {
       LOG(WARNING) << "Failed to write to " << path.value();
+    }
+  }
+}
+
+void EnsureFilesDeleted(
+    const base::flat_set<base::FilePath>& files_to_clean_up) {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  for (const base::FilePath& path : files_to_clean_up) {
+    if (!base::DeleteFile(path)) {
+      LOG(ERROR) << "Failed to delete " << path;
+    }
   }
 }
 
@@ -106,7 +121,8 @@ std::vector<std::string> ReadCreateStateKeysStub(const base::FilePath& path) {
     for (int i = 0; i < 5; ++i) {
       contents += crypto::SHA256HashString(
           base::NumberToString(i) +
-          base::NumberToString(base::Time::Now().ToJavaTime()));
+          base::NumberToString(
+              base::Time::Now().InMillisecondsSinceUnixEpoch()));
     }
     StoreFiles({{path, contents}});
   }
@@ -218,7 +234,7 @@ template <typename CallbackType, typename ResponseType>
 void PostReply(const base::Location& from_here,
                CallbackType callback,
                ResponseType response) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       from_here, base::BindOnce(std::move(callback), std::move(response)));
 }
 
@@ -241,6 +257,13 @@ FakeSessionManagerClient::FakeSessionManagerClient(
 
 FakeSessionManagerClient::~FakeSessionManagerClient() {
   g_is_fake = false;
+
+  // Run this on the current thread since the task runner will CHECK if it's
+  // posted Remove created files if necessary. The kInMemory is not expected to
+  // leave persistent changes and the following tests might fail because of
+  // them. Posting a non-skippable task during the shutdown phase is not
+  // allowed, so just do it on the current thread.
+  EnsureFilesDeleted(files_to_clean_up_);
 }
 
 // static
@@ -272,8 +295,8 @@ bool FakeSessionManagerClient::HasObserver(const Observer* observer) const {
 }
 
 void FakeSessionManagerClient::WaitForServiceToBeAvailable(
-    WaitForServiceToBeAvailableCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+    chromeos::WaitForServiceToBeAvailableCallback callback) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
@@ -288,10 +311,11 @@ void FakeSessionManagerClient::EmitLoginPromptVisible() {
 
 void FakeSessionManagerClient::EmitAshInitialized() {}
 
-void FakeSessionManagerClient::RestartJob(int socket_fd,
-                                          const std::vector<std::string>& argv,
-                                          RestartJobReason reason,
-                                          VoidDBusMethodCallback callback) {
+void FakeSessionManagerClient::RestartJob(
+    int socket_fd,
+    const std::vector<std::string>& argv,
+    RestartJobReason reason,
+    chromeos::VoidDBusMethodCallback callback) {
   DCHECK(supports_browser_restart_);
 
   restart_job_argv_ = argv;
@@ -299,7 +323,7 @@ void FakeSessionManagerClient::RestartJob(int socket_fd,
   if (restart_job_callback_)
     std::move(restart_job_callback_).Run();
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
@@ -312,27 +336,41 @@ void FakeSessionManagerClient::LoginScreenStorageStore(
     const login_manager::LoginScreenStorageMetadata& metadata,
     const std::string& data,
     LoginScreenStorageStoreCallback callback) {
+  // `metadata` is ignored. To implement it (`clear_on_session_exit` flag) we'd
+  // need to store data into the file. Currently all the data is cleared on
+  // session exit.
+  login_screen_storage_[key] = data;
   PostReply(FROM_HERE, std::move(callback), absl::nullopt /* error */);
 }
 
 void FakeSessionManagerClient::LoginScreenStorageRetrieve(
     const std::string& key,
     LoginScreenStorageRetrieveCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), "Test" /* data */,
-                                absl::nullopt /* error */));
+  // Default value which is checked in tests.
+  std::string data = "Test";
+  if (base::Contains(login_screen_storage_, key)) {
+    data = login_screen_storage_[key];
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), data, absl::nullopt /* error */));
 }
 
 void FakeSessionManagerClient::LoginScreenStorageListKeys(
     LoginScreenStorageListKeysCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  std::vector<std::string> keys;
+  for (const auto& [key, value] : login_screen_storage_) {
+    keys.push_back(key);
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
-      base::BindOnce(std::move(callback), std::vector<std::string>() /* keys */,
-                     absl::nullopt /* error */));
+      base::BindOnce(std::move(callback), keys, absl::nullopt /* error */));
 }
 
 void FakeSessionManagerClient::LoginScreenStorageDelete(
-    const std::string& key) {}
+    const std::string& key) {
+  login_screen_storage_.erase(key);
+}
 
 void FakeSessionManagerClient::StartSession(
     const cryptohome::AccountIdentifier& cryptohome_id) {
@@ -346,6 +384,12 @@ void FakeSessionManagerClient::StartSession(
   user_sessions_[cryptohome_id.account_id()] = user_id_hash;
 }
 
+void FakeSessionManagerClient::StartSessionEx(
+    const cryptohome::AccountIdentifier& cryptohome_id,
+    bool /*chrome_side_key_generation*/) {
+  StartSession(cryptohome_id);
+}
+
 void FakeSessionManagerClient::StopSession(
     login_manager::SessionStopReason reason) {
   session_stopped_ = true;
@@ -357,16 +401,20 @@ void FakeSessionManagerClient::LoadShillProfile(
     const cryptohome::AccountIdentifier& cryptohome_id) {
   if (on_load_shill_profile_callback_.is_null())
     return;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(on_load_shill_profile_callback_, cryptohome_id));
 }
 
-void FakeSessionManagerClient::StartDeviceWipe() {
+void FakeSessionManagerClient::StartDeviceWipe(
+    chromeos::VoidDBusMethodCallback callback) {
   start_device_wipe_call_count_++;
   if (!on_start_device_wipe_callback_.is_null()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(on_start_device_wipe_callback_));
+  }
+  for (auto& observer : observers_) {
+    observer.PowerwashRequested(/*admin_requested*/ false);
   }
 }
 
@@ -374,14 +422,35 @@ void FakeSessionManagerClient::StartRemoteDeviceWipe(
     const enterprise_management::SignedData& signed_command) {
   start_device_wipe_call_count_++;
   if (!on_start_device_wipe_callback_.is_null()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(on_start_device_wipe_callback_));
+  }
+  for (auto& observer : observers_) {
+    observer.PowerwashRequested(/*admin_requested*/ true);
   }
 }
 
 void FakeSessionManagerClient::ClearForcedReEnrollmentVpd(
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   clear_forced_re_enrollment_vpd_call_count_++;
+  PostReply(FROM_HERE, std::move(callback), true);
+}
+
+void FakeSessionManagerClient::UnblockDevModeForEnrollment(
+    chromeos::VoidDBusMethodCallback callback) {
+  unblock_dev_mode_enrollment_call_count_++;
+  PostReply(FROM_HERE, std::move(callback), true);
+}
+
+void FakeSessionManagerClient::UnblockDevModeForInitialStateDetermination(
+    chromeos::VoidDBusMethodCallback callback) {
+  unblock_dev_mode_init_state_call_count_++;
+  PostReply(FROM_HERE, std::move(callback), true);
+}
+
+void FakeSessionManagerClient::UnblockDevModeForCarrierLock(
+    chromeos::VoidDBusMethodCallback callback) {
+  unblock_dev_mode_carrier_lock_call_count_++;
   PostReply(FROM_HERE, std::move(callback), true);
 }
 
@@ -407,11 +476,18 @@ void FakeSessionManagerClient::NotifyLockScreenDismissed() {
   screen_is_locked_ = false;
 }
 
-bool FakeSessionManagerClient::RequestBrowserDataMigration(
+bool FakeSessionManagerClient::BlockingRequestBrowserDataMigration(
     const cryptohome::AccountIdentifier& cryptohome_id,
-    const bool is_move) {
+    const std::string& mode) {
   request_browser_data_migration_called_ = true;
-  request_browser_data_migration_for_move_called_ = is_move;
+  request_browser_data_migration_mode_called_ = true;
+  request_browser_data_migration_mode_value_ = mode;
+  return true;
+}
+
+bool FakeSessionManagerClient::BlockingRequestBrowserDataBackwardMigration(
+    const cryptohome::AccountIdentifier& cryptohome_id) {
+  request_browser_data_backward_migration_called_ = true;
   return true;
 }
 
@@ -475,7 +551,7 @@ void FakeSessionManagerClient::RetrievePolicy(
   // Simulate load error.
   if (force_retrieve_policy_load_error_) {
     enterprise_management::PolicyFetchResponse empty;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), RetrievePolicyResponseType::SUCCESS,
                        empty.SerializeAsString()));
@@ -494,7 +570,7 @@ void FakeSessionManagerClient::RetrievePolicy(
         base::BindOnce(std::move(callback),
                        RetrievePolicyResponseType::SUCCESS));
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), RetrievePolicyResponseType::SUCCESS,
                        policy_[GetMemoryStorageKey(descriptor)]));
@@ -517,7 +593,7 @@ RetrievePolicyResponseType FakeSessionManagerClient::BlockingRetrievePolicy(
 
 void FakeSessionManagerClient::StoreDevicePolicy(
     const std::string& policy_blob,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   login_manager::PolicyDescriptor descriptor = MakeChromePolicyDescriptor(
       login_manager::ACCOUNT_TYPE_DEVICE, kEmptyAccountId);
   StorePolicy(descriptor, policy_blob, std::move(callback));
@@ -526,7 +602,7 @@ void FakeSessionManagerClient::StoreDevicePolicy(
 void FakeSessionManagerClient::StorePolicyForUser(
     const cryptohome::AccountIdentifier& cryptohome_id,
     const std::string& policy_blob,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   login_manager::PolicyDescriptor descriptor = MakeChromePolicyDescriptor(
       login_manager::ACCOUNT_TYPE_USER, cryptohome_id.account_id());
   StorePolicy(descriptor, policy_blob, std::move(callback));
@@ -535,7 +611,7 @@ void FakeSessionManagerClient::StorePolicyForUser(
 void FakeSessionManagerClient::StoreDeviceLocalAccountPolicy(
     const std::string& account_id,
     const std::string& policy_blob,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   login_manager::PolicyDescriptor descriptor = MakeChromePolicyDescriptor(
       login_manager::ACCOUNT_TYPE_DEVICE_LOCAL_ACCOUNT, account_id);
   StorePolicy(descriptor, policy_blob, std::move(callback));
@@ -544,7 +620,7 @@ void FakeSessionManagerClient::StoreDeviceLocalAccountPolicy(
 void FakeSessionManagerClient::StorePolicy(
     const login_manager::PolicyDescriptor& descriptor,
     const std::string& policy_blob,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   // Decode the blob to get the new key.
   enterprise_management::PolicyFetchResponse response;
   if (!response.ParseFromString(policy_blob)) {
@@ -584,6 +660,7 @@ void FakeSessionManagerClient::StorePolicy(
         base::FilePath key_path;
         GetStubPolicyFilePath(descriptor, &key_path);
         DCHECK(!key_path.empty());
+        files_to_clean_up_.insert(key_path);
 
         base::ThreadPool::PostTaskAndReply(
             FROM_HERE,
@@ -666,8 +743,8 @@ void FakeSessionManagerClient::GetPsmDeviceActiveSecret(
 }
 
 void FakeSessionManagerClient::StartArcMiniContainer(
-    const login_manager::StartArcMiniContainerRequest& request,
-    VoidDBusMethodCallback callback) {
+    const arc::StartArcMiniInstanceRequest& request,
+    chromeos::VoidDBusMethodCallback callback) {
   last_start_arc_mini_container_request_ = request;
 
   if (!arc_available_) {
@@ -680,14 +757,14 @@ void FakeSessionManagerClient::StartArcMiniContainer(
 }
 
 void FakeSessionManagerClient::UpgradeArcContainer(
-    const login_manager::UpgradeArcContainerRequest& request,
-    VoidDBusMethodCallback callback) {
+    const arc::UpgradeArcContainerRequest& request,
+    chromeos::VoidDBusMethodCallback callback) {
   last_upgrade_arc_request_ = request;
 
   PostReply(FROM_HERE, std::move(callback), !force_upgrade_failure_);
   if (force_upgrade_failure_) {
     // Emulate ArcInstanceStopped signal propagation.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeSessionManagerClient::NotifyArcInstanceStopped,
                        weak_ptr_factory_.GetWeakPtr(),
@@ -698,7 +775,7 @@ void FakeSessionManagerClient::UpgradeArcContainer(
 void FakeSessionManagerClient::StopArcInstance(
     const std::string& account_id,
     bool should_backup_log,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   if (!arc_available_ || !container_running_) {
     PostReply(FROM_HERE, std::move(callback), false /* result */);
     return;
@@ -706,7 +783,7 @@ void FakeSessionManagerClient::StopArcInstance(
 
   PostReply(FROM_HERE, std::move(callback), true /* result */);
   // Emulate ArcInstanceStopped signal propagation.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeSessionManagerClient::NotifyArcInstanceStopped,
                      weak_ptr_factory_.GetWeakPtr(),
@@ -717,18 +794,18 @@ void FakeSessionManagerClient::StopArcInstance(
 
 void FakeSessionManagerClient::SetArcCpuRestriction(
     login_manager::ContainerCpuRestrictionState restriction_state,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   PostReply(FROM_HERE, std::move(callback), arc_available_);
 }
 
 void FakeSessionManagerClient::EmitArcBooted(
     const cryptohome::AccountIdentifier& cryptohome_id,
-    VoidDBusMethodCallback callback) {
+    chromeos::VoidDBusMethodCallback callback) {
   PostReply(FROM_HERE, std::move(callback), arc_available_);
 }
 
 void FakeSessionManagerClient::GetArcStartTime(
-    DBusMethodCallback<base::TimeTicks> callback) {
+    chromeos::DBusMethodCallback<base::TimeTicks> callback) {
   PostReply(
       FROM_HERE, std::move(callback),
       arc_available_ ? absl::make_optional(arc_start_time_) : absl::nullopt);
@@ -739,7 +816,7 @@ void FakeSessionManagerClient::EnableAdbSideload(
 
 void FakeSessionManagerClient::QueryAdbSideload(
     QueryAdbSideloadCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), adb_sideload_response_,
                                 adb_sideload_enabled_));
 }
@@ -773,11 +850,11 @@ bool FakeSessionManagerClient::GetFlagsForUser(
   }
 
   // Encode origin list values.
-  base::Value origin_list_dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict origin_list_dict;
   for (const auto& entry : iter->second.origin_list_flags) {
-    origin_list_dict.SetStringKey(entry.first, entry.second);
+    origin_list_dict.Set(entry.first, entry.second);
   }
-  if (!origin_list_dict.DictEmpty()) {
+  if (!origin_list_dict.empty()) {
     std::string encoded;
     base::JSONWriter::Write(origin_list_dict, &encoded);
     out_flags_for_user->push_back(base::StringPrintf(
@@ -786,6 +863,12 @@ bool FakeSessionManagerClient::GetFlagsForUser(
   }
 
   return true;
+}
+
+void FakeSessionManagerClient::NotifySessionStopping() const {
+  for (auto& observer : observers_) {
+    observer.SessionStopping();
+  }
 }
 
 const std::string& FakeSessionManagerClient::device_policy() const {
@@ -861,21 +944,33 @@ void FakeSessionManagerClient::set_on_start_device_wipe_callback(
 FakeSessionManagerClient::FlagsState::FlagsState() = default;
 FakeSessionManagerClient::FlagsState::~FlagsState() = default;
 
-ScopedFakeSessionManagerClient::ScopedFakeSessionManagerClient() {
-  SessionManagerClient::InitializeFake();
+ScopedFakeSessionManagerClient::ScopedFakeSessionManagerClient()
+    : ScopedFakeSessionManagerClient(
+          FakeSessionManagerClient::PolicyStorageType::kOnDisk) {}
+
+ScopedFakeSessionManagerClient::ScopedFakeSessionManagerClient(
+    FakeSessionManagerClient::PolicyStorageType policy_storage) {
+  // No previous FakeSessionManagerClient instance.
+  DCHECK(!FakeSessionManagerClient::Get());
+
+  // Release the existing instance if any.
+  if (SessionManagerClient::Get()) {
+    SessionManagerClient::Shutdown();
+  }
+
+  switch (policy_storage) {
+    case FakeSessionManagerClient::PolicyStorageType::kOnDisk:
+      SessionManagerClient::InitializeFake();
+      break;
+    case FakeSessionManagerClient::PolicyStorageType::kInMemory:
+      SessionManagerClient::InitializeFakeInMemory();
+      break;
+  }
 }
 
 ScopedFakeSessionManagerClient::~ScopedFakeSessionManagerClient() {
-  SessionManagerClient::Shutdown();
-}
-
-ScopedFakeInMemorySessionManagerClient::
-    ScopedFakeInMemorySessionManagerClient() {
-  SessionManagerClient::InitializeFakeInMemory();
-}
-
-ScopedFakeInMemorySessionManagerClient::
-    ~ScopedFakeInMemorySessionManagerClient() {
+  // The current instance should be a FakeSessionManagerClient.
+  DCHECK_EQ(SessionManagerClient::Get(), FakeSessionManagerClient::Get());
   SessionManagerClient::Shutdown();
 }
 

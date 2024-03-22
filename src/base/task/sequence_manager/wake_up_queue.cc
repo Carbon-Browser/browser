@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ void WakeUpQueue::RemoveAllCanceledDelayedTasksFromFront(LazyNow* lazy_now) {
   // needed because a different queue can become the top one once you remove the
   // canceled tasks.
   while (!wake_up_queue_.empty()) {
-    auto* top_queue = wake_up_queue_.top().queue;
+    auto* top_queue = wake_up_queue_.top().queue.get();
 
     // If no tasks are removed from the top queue, then it means the top queue
     // cannot change anymore.

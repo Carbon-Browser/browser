@@ -18,8 +18,8 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_ONGOING_SUBSCRIPTION_REQUEST_H_
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_ONGOING_SUBSCRIPTION_REQUEST_H_
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 
 namespace adblock {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,18 +22,15 @@ import org.chromium.chrome.browser.util.AndroidTaskUtils;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Operations that need to be executed on startup for incognito mode.
- */
+/** Operations that need to be executed on startup for incognito mode. */
 public class IncognitoStartup {
     public static void onResumeWithNative(
             ObservableSupplier<TabModelSelector> tabModelSelectorSupplier,
             Set<String> componentNames) {
         if (shouldDestroyIncognitoProfileOnStartup(
-                    tabModelSelectorSupplier.get().getCurrentModel().isIncognito(),
-                    componentNames)) {
+                tabModelSelectorSupplier.get().getCurrentModel().isIncognito(), componentNames)) {
             Profile.getLastUsedRegularProfile()
-                    .getPrimaryOTRProfile(/*createIfNeeded=*/true)
+                    .getPrimaryOTRProfile(/* createIfNeeded= */ true)
                     .destroyWhenAppropriate();
         } else {
             CookiesFetcher.restoreCookies();

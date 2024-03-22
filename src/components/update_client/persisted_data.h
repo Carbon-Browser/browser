@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/values.h"
@@ -18,10 +18,13 @@ class PrefRegistrySimple;
 class PrefService;
 
 namespace base {
+class Time;
 class Version;
 }  // namespace base
 
 namespace update_client {
+
+extern const char kPersistedDataPreference[];
 
 class ActivityDataService;
 
@@ -29,9 +32,9 @@ class ActivityDataService;
 // update data that outlives the browser process and isn't exposed outside of
 // update_client.
 //
-// The public methods of this class should be called only on the thread that
-// initializes it - which also has to match the thread the PrefService has been
-// initialized on.
+// The public methods of this class should be called only on the sequence that
+// initializes it - which also has to match the sequence the PrefService has
+// been initialized on.
 class PersistedData {
  public:
   // Constructs a provider using the specified |pref_service| and
@@ -77,6 +80,12 @@ class PersistedData {
   // This is called only via update_client's RegisterUpdateClientPreferences.
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
+  // Returns the install date for the specified |id|.
+  // "InstallDate" refers to the initial date that the given |id| was first
+  // installed on the machine. Date information is returned by the server. If
+  // "InstallDate" is not known, -2 is returned.
+  int GetInstallDate(const std::string& id) const;
+
   // These functions return cohort data for the specified |id|. "Cohort"
   // indicates the membership of the client in any release channels components
   // have set up in a machine-readable format, while "CohortName" does so in a
@@ -115,12 +124,18 @@ class PersistedData {
   std::string GetFingerprint(const std::string& id) const;
   void SetFingerprint(const std::string& id, const std::string& fingerprint);
 
+  // These functions get and set the time after which update checks are allowed.
+  // To clear the throttle, pass base::Time().
+  base::Time GetThrottleUpdatesUntil() const;
+  void SetThrottleUpdatesUntil(const base::Time& time);
+
  private:
   // Returns nullptr if the app key does not exist.
-  const base::Value* GetAppKey(const std::string& id) const;
+  const base::Value::Dict* GetAppKey(const std::string& id) const;
 
   // Returns an existing or newly created app key under a root pref.
-  base::Value* GetOrCreateAppKey(const std::string& id, base::Value* root);
+  base::Value::Dict* GetOrCreateAppKey(const std::string& id,
+                                       base::Value::Dict& root);
 
   // Returns fallback if the key does not exist.
   int GetInt(const std::string& id, const std::string& key, int fallback) const;
@@ -138,8 +153,8 @@ class PersistedData {
                              const std::set<std::string>& active_ids);
 
   SEQUENCE_CHECKER(sequence_checker_);
-  raw_ptr<PrefService> pref_service_;
-  raw_ptr<ActivityDataService> activity_data_service_;
+  raw_ptr<PrefService, LeakedDanglingUntriaged> pref_service_;
+  raw_ptr<ActivityDataService, DanglingUntriaged> activity_data_service_;
 };
 
 }  // namespace update_client

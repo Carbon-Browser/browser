@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/unified/feature_pod_button.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
 namespace ash {
@@ -36,7 +37,7 @@ class ASH_EXPORT NetworkFeaturePodButton : public FeaturePodButton {
   // views::Button:
   void OnThemeChanged() override;
 
-  Delegate* delegate_;
+  raw_ptr<Delegate, DanglingUntriaged | ExperimentalAsh> delegate_;
 };
 
 }  // namespace ash

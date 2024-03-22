@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -34,48 +34,53 @@ METHOD_RE = re.compile(r'.* ([^ ]*)\(.*\);')
 # the first version of Cronet and will be supported forever.
 # TODO(pauljensen): Remove these.
 ALLOWED_EXCEPTIONS = [
-'org.chromium.net.impl.CronetEngineBuilderImpl/build ->'
+    'org.chromium.net.impl.CronetEngineBuilderImpl/build ->'
     ' org/chromium/net/ExperimentalCronetEngine/getVersionString:'
     '()Ljava/lang/String;',
-'org.chromium.net.urlconnection.CronetFixedModeOutputStream$UploadDataProviderI'
+    'org.chromium.net.urlconnection.CronetFixedModeOutputStream$UploadDataProviderI'
     'mpl/read -> org/chromium/net/UploadDataSink/onReadSucceeded:(Z)V',
-'org.chromium.net.urlconnection.CronetFixedModeOutputStream$UploadDataProviderI'
+    'org.chromium.net.urlconnection.CronetFixedModeOutputStream$UploadDataProviderI'
     'mpl/rewind -> org/chromium/net/UploadDataSink/onRewindError:'
     '(Ljava/lang/Exception;)V',
-'org.chromium.net.urlconnection.CronetHttpURLConnection/disconnect ->'
+    'org.chromium.net.urlconnection.CronetHttpURLConnection/disconnect ->'
     ' org/chromium/net/UrlRequest/cancel:()V',
-'org.chromium.net.urlconnection.CronetHttpURLConnection/disconnect ->'
+    'org.chromium.net.urlconnection.CronetHttpURLConnection/disconnect ->'
     ' org/chromium/net/UrlResponseInfo/getHttpStatusText:()Ljava/lang/String;',
-'org.chromium.net.urlconnection.CronetHttpURLConnection/disconnect ->'
+    'org.chromium.net.urlconnection.CronetHttpURLConnection/disconnect ->'
     ' org/chromium/net/UrlResponseInfo/getHttpStatusCode:()I',
-'org.chromium.net.urlconnection.CronetHttpURLConnection/getHeaderField ->'
+    'org.chromium.net.urlconnection.CronetHttpURLConnection/getHeaderField ->'
     ' org/chromium/net/UrlResponseInfo/getHttpStatusCode:()I',
-'org.chromium.net.urlconnection.CronetHttpURLConnection/getErrorStream ->'
+    'org.chromium.net.urlconnection.CronetHttpURLConnection/getErrorStream ->'
     ' org/chromium/net/UrlResponseInfo/getHttpStatusCode:()I',
-'org.chromium.net.urlconnection.CronetHttpURLConnection/setConnectTimeout ->'
+    'org.chromium.net.urlconnection.CronetHttpURLConnection/setConnectTimeout ->'
     ' org/chromium/net/UrlRequest/read:(Ljava/nio/ByteBuffer;)V',
-'org.chromium.net.urlconnection.CronetHttpURLConnection$CronetUrlRequestCallbac'
+    'org.chromium.net.urlconnection.CronetHttpURLConnection$CronetUrlRequestCallbac'
     'k/onRedirectReceived -> org/chromium/net/UrlRequest/followRedirect:()V',
-'org.chromium.net.urlconnection.CronetHttpURLConnection$CronetUrlRequestCallbac'
+    'org.chromium.net.urlconnection.CronetHttpURLConnection$CronetUrlRequestCallbac'
     'k/onRedirectReceived -> org/chromium/net/UrlRequest/cancel:()V',
-'org.chromium.net.urlconnection.CronetChunkedOutputStream$UploadDataProviderImp'
+    'org.chromium.net.urlconnection.CronetChunkedOutputStream$UploadDataProviderImp'
     'l/read -> org/chromium/net/UploadDataSink/onReadSucceeded:(Z)V',
-'org.chromium.net.urlconnection.CronetChunkedOutputStream$UploadDataProviderImp'
+    'org.chromium.net.urlconnection.CronetChunkedOutputStream$UploadDataProviderImp'
     'l/rewind -> org/chromium/net/UploadDataSink/onRewindError:'
     '(Ljava/lang/Exception;)V',
-'org.chromium.net.urlconnection.CronetBufferedOutputStream$UploadDataProviderIm'
+    'org.chromium.net.urlconnection.CronetBufferedOutputStream$UploadDataProviderIm'
     'pl/read -> org/chromium/net/UploadDataSink/onReadSucceeded:(Z)V',
-'org.chromium.net.urlconnection.CronetBufferedOutputStream$UploadDataProviderIm'
+    'org.chromium.net.urlconnection.CronetBufferedOutputStream$UploadDataProviderIm'
     'pl/rewind -> org/chromium/net/UploadDataSink/onRewindSucceeded:()V',
-'org.chromium.net.urlconnection.CronetHttpURLStreamHandler/org.chromium.net.url'
+    'org.chromium.net.urlconnection.CronetHttpURLStreamHandler/org.chromium.net.url'
     'connection.CronetHttpURLStreamHandler -> org/chromium/net/ExperimentalCron'
     'etEngine/openConnection:(Ljava/net/URL;)Ljava/net/URLConnection;',
-'org.chromium.net.urlconnection.CronetHttpURLStreamHandler/org.chromium.net.url'
+    'org.chromium.net.urlconnection.CronetHttpURLStreamHandler/org.chromium.net.url'
     'connection.CronetHttpURLStreamHandler -> org/chromium/net/ExperimentalCron'
     'etEngine/openConnection:(Ljava/net/URL;Ljava/net/Proxy;)Ljava/net/URLConne'
     'ction;',
-# getMessage() is an java.lang.Exception member, and so cannot be removed.
-'org.chromium.net.impl.NetworkExceptionImpl/getMessage -> '
+    'org.chromium.net.impl.CronetEngineBase/newBidirectionalStreamBuilder -> org/ch'
+    'romium/net/ExperimentalCronetEngine/newBidirectionalStreamBuilder:(Ljava/l'
+    'ang/String;Lorg/chromium/net/BidirectionalStream$Callback;Ljava/util/concu'
+    'rrent/Executor;)Lorg/chromium/net/ExperimentalBidirectionalStream$'
+    'Builder;',
+    # getMessage() is an java.lang.Exception member, and so cannot be removed.
+    'org.chromium.net.impl.NetworkExceptionImpl/getMessage -> '
     'org/chromium/net/NetworkException/getMessage:()Ljava/lang/String;',
 ]
 
@@ -97,32 +102,36 @@ def find_api_calls(dump, api_classes, bad_calls):
   # |bad_calls| is the list of calls through API classes.  This list is built up
   #             by this function.
 
-  for line in dump:
-    if CLASS_RE.match(line):
-      caller_class = CLASS_RE.match(line).group(1)
-    if METHOD_RE.match(line):
-      caller_method = METHOD_RE.match(line).group(1)
-    if line[8:16] == ': invoke':
-      callee = line.split(' // ')[1].split('Method ')[1].split('\n')[0]
-      callee_class = callee.split('.')[0]
-      assert callee_class
-      if callee_class in api_classes:
-        callee_method = callee.split('.')[1]
-        assert callee_method
-        # Ignore constructor calls for now as every implementation class
-        # that extends an API class will call them.
-        # TODO(pauljensen): Look into enforcing restricting constructor calls.
-        # https://crbug.com/674975
-        if callee_method.startswith('"<init>"'):
-          continue
-        # Ignore VersionSafe calls
-        if 'VersionSafeCallbacks' in caller_class:
-          continue
-        bad_call = '%s/%s -> %s/%s' % (caller_class, caller_method,
-                                       callee_class, callee_method)
-        if bad_call in ALLOWED_EXCEPTIONS:
-          continue
-        bad_calls += [bad_call]
+  for i, line in enumerate(dump):
+    try:
+      if CLASS_RE.match(line):
+        caller_class = CLASS_RE.match(line).group(2)
+      if METHOD_RE.match(line):
+        caller_method = METHOD_RE.match(line).group(1)
+      if line.startswith(': invoke', 8) and not line.startswith('dynamic', 16):
+        callee = line.split(' // ')[1].split('Method ')[1].split('\n')[0]
+        callee_class = callee.split('.')[0]
+        assert callee_class
+        if callee_class in api_classes:
+          callee_method = callee.split('.')[1]
+          assert callee_method
+          # Ignore constructor calls for now as every implementation class
+          # that extends an API class will call them.
+          # TODO(pauljensen): Look into enforcing restricting constructor calls.
+          # https://crbug.com/674975
+          if callee_method.startswith('"<init>"'):
+            continue
+          # Ignore VersionSafe calls
+          if 'VersionSafeCallbacks' in caller_class:
+            continue
+          bad_call = '%s/%s -> %s/%s' % (caller_class, caller_method,
+                                         callee_class, callee_method)
+          if bad_call in ALLOWED_EXCEPTIONS:
+            continue
+          bad_calls += [bad_call]
+    except Exception:
+      sys.stderr.write(f'Failed on line {i+1}: {line}')
+      raise
 
 
 def check_api_calls(opts):

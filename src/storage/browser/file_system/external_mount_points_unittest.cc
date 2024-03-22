@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -249,8 +249,6 @@ TEST(ExternalMountPointsTest, HandlesFileSystemMountType) {
   EXPECT_FALSE(mount_points->HandlesFileSystemMountType(kFileSystemTypeTest));
   // Not even if it's external subtype.
   EXPECT_FALSE(mount_points->HandlesFileSystemMountType(kFileSystemTypeLocal));
-  EXPECT_FALSE(
-      mount_points->HandlesFileSystemMountType(kFileSystemTypeRestrictedLocal));
   EXPECT_FALSE(
       mount_points->HandlesFileSystemMountType(kFileSystemTypeDriveFs));
   EXPECT_FALSE(

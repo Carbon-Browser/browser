@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -27,8 +23,9 @@ TEST_F(CWVAutofillSuggestionTest, Initialization) {
   FormSuggestion* formSuggestion =
       [FormSuggestion suggestionWithValue:@"TestValue"
                        displayDescription:@"TestDisplayDescription"
-                                     icon:@"TestIcon"
-                               identifier:1337
+                                     icon:nil
+                              popupItemId:autofill::PopupItemId::kAddressEntry
+                        backendIdentifier:nil
                            requiresReauth:NO];
   CWVAutofillSuggestion* suggestion =
       [[CWVAutofillSuggestion alloc] initWithFormSuggestion:formSuggestion
@@ -41,7 +38,6 @@ TEST_F(CWVAutofillSuggestionTest, Initialization) {
   EXPECT_NSEQ(frameID, suggestion.frameID);
   EXPECT_NSEQ(formSuggestion.displayDescription, suggestion.displayDescription);
   EXPECT_NSEQ(formSuggestion.value, suggestion.value);
-  EXPECT_EQ(1337, suggestion.uniqueIdentifier);
   EXPECT_EQ(formSuggestion, suggestion.formSuggestion);
   EXPECT_FALSE([suggestion isPasswordSuggestion]);
 }

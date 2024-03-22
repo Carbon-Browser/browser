@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <cstddef>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -105,9 +105,10 @@ class FramebustBlockBrowserTest
         iframe.src='%s'
     )";
     content::TestNavigationObserver load_observer(contents);
-    bool result = content::ExecuteScriptWithoutUserGesture(
+    bool result = content::ExecJs(
         contents,
-        base::StringPrintf(kScript, iframe_id.c_str(), url.spec().c_str()));
+        base::StringPrintf(kScript, iframe_id.c_str(), url.spec().c_str()),
+        content::EXECUTE_SCRIPT_NO_USER_GESTURE);
     load_observer.Wait();
     return result;
   }
@@ -144,7 +145,7 @@ class FramebustBlockBrowserTest
   absl::optional<size_t> clicked_index_;
 
   base::OnceClosure blocked_url_added_closure_;
-  raw_ptr<Browser> current_browser_;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> current_browser_;
 };
 
 // Tests that clicking an item in the list of blocked URLs trigger a navigation
@@ -373,7 +374,7 @@ class FramebustBlockPrerenderTest : public FramebustBlockBrowserTest {
   ~FramebustBlockPrerenderTest() override = default;
 
   void SetUpOnMainThread() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     FramebustBlockBrowserTest::SetUpOnMainThread();
   }
 

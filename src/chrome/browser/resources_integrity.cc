@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 
 #include <array>
 
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
 #endif
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/memory/page_size.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/path_service.h"
@@ -21,6 +22,7 @@
 #include "base/task/thread_pool.h"
 #include "chrome/common/chrome_paths.h"
 #include "crypto/secure_hash.h"
+#include "ui/base/buildflags.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "chrome/app/chrome_exe_main_win.h"
@@ -109,8 +111,10 @@ void CheckPakFileIntegrity() {
       kSha256_resources_pak;
   base::span<const uint8_t, crypto::kSHA256Length> chrome_100_hash =
       kSha256_chrome_100_percent_pak;
+#if BUILDFLAG(ENABLE_HIDPI)
   base::span<const uint8_t, crypto::kSHA256Length> chrome_200_hash =
       kSha256_chrome_200_percent_pak;
+#endif
 #endif  // BUILDFLAG(IS_WIN)
 
   scoped_refptr<base::SequencedTaskRunner> task_runner =
@@ -126,9 +130,11 @@ void CheckPakFileIntegrity() {
       chrome_100_hash, task_runner,
       base::BindOnce(&ReportPakIntegrity,
                      "SafeBrowsing.PakIntegrity.Chrome100"));
+#if BUILDFLAG(ENABLE_HIDPI)
   CheckResourceIntegrity(
       resources_pack_path.DirName().AppendASCII("chrome_200_percent.pak"),
       chrome_200_hash, task_runner,
       base::BindOnce(&ReportPakIntegrity,
                      "SafeBrowsing.PakIntegrity.Chrome200"));
+#endif
 }

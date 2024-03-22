@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,13 @@
 // not active, the UI will not react to changes in the tab model, so generally
 // an inactive BVC should not be visible.
 @property(nonatomic, assign, getter=isActive) BOOL active;
+
+// Whether the controller's view is currently visible.
+// YES from viewDidAppear to viewWillDisappear.
+@property(nonatomic, readonly) BOOL viewVisible;
+
+// Height of the header view.
+@property(nonatomic, readonly) CGFloat headerHeight;
 
 // Dismisses all presented views, excluding the omnibox if `dismissOmnibox` is
 // NO, then calls `completion`.

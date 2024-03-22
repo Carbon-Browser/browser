@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,7 @@ public class DisableIf {
         String message() default "";
 
         int sdk_is_greater_than() default 0;
+
         int sdk_is_less_than() default Integer.MAX_VALUE;
 
         String supported_abis_includes() default "";

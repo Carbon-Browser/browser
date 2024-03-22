@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,11 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
+#include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_screen.h"
-#include "base/bind.h"
+#include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -28,8 +30,8 @@
 #include "chrome/browser/prefs/pref_service_syncable_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/gesture_navigation_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/marketing_opt_in_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gesture_navigation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/marketing_opt_in_screen_handler.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
@@ -39,6 +41,7 @@
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
+
 namespace {
 
 constexpr char kUserActionGetStarted[] = "get-started";
@@ -105,15 +108,15 @@ MarketingOptInScreen::~MarketingOptInScreen() {
   }
 }
 
-bool MarketingOptInScreen::MaybeSkip(WizardContext* context) {
-  if (context->skip_post_login_screens_for_tests) {
+bool MarketingOptInScreen::MaybeSkip(WizardContext& context) {
+  if (context.skip_post_login_screens_for_tests) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
   }
   Initialize();
 
-  if (chrome_user_manager_util::IsPublicSessionOrEphemeralLogin() ||
-      IsCurrentUserManaged() || !context->is_branded_build) {
+  if (chrome_user_manager_util::IsManagedGuestSessionOrEphemeralLogin() ||
+      IsCurrentUserManaged() || !context.is_branded_build) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
   }
@@ -146,10 +149,8 @@ void MarketingOptInScreen::ShowImpl() {
   // screen was shown.
   if (view_) {
     view_->UpdateA11ySettingsButtonVisibility(
-        static_cast<GestureNavigationScreen*>(
-            WizardController::default_controller()->screen_manager()->GetScreen(
-                GestureNavigationScreenView::kScreenId))
-            ->was_shown());
+        context()->is_gesture_navigation_screen_was_shown ||
+        switches::ShouldShowAccessibilityButtonOnMarketingOptInForTesting());
 
     view_->UpdateA11yShelfNavigationButtonToggle(prefs->GetBoolean(
         prefs::kAccessibilityTabletModeShelfNavigationButtonsEnabled));
@@ -176,13 +177,13 @@ void MarketingOptInScreen::OnUserAction(const base::Value::List& args) {
   const std::string& action_id = args[0].GetString();
 
   if (action_id == kUserActionGetStarted) {
-    CHECK_EQ(args.size(), 2);
+    CHECK_EQ(args.size(), 2u);
     const bool chromebook_email_opt_in = args[1].GetBool();
     OnGetStarted(chromebook_email_opt_in);
     return;
   }
   if (action_id == kUserActionSetA11yNavigationButtonsEnabled) {
-    CHECK_EQ(args.size(), 2);
+    CHECK_EQ(args.size(), 2u);
     const bool enabled = args[1].GetBool();
     SetA11yNavigationButtonsEnabled(enabled);
     return;
@@ -222,10 +223,11 @@ void MarketingOptInScreen::SetA11yButtonVisibilityForTest(bool shown) {
 }
 
 void MarketingOptInScreen::OnA11yShelfNavigationButtonPrefChanged() {
-  if (view_) {
-    ProfileManager::GetActiveUserProfile()->GetPrefs()->GetBoolean(
-        prefs::kAccessibilityTabletModeShelfNavigationButtonsEnabled);
-  }
+  if (!view_)
+    return;
+  view_->UpdateA11yShelfNavigationButtonToggle(
+      ProfileManager::GetActiveUserProfile()->GetPrefs()->GetBoolean(
+          prefs::kAccessibilityTabletModeShelfNavigationButtonsEnabled));
 }
 
 bool MarketingOptInScreen::IsCurrentUserManaged() {
@@ -279,8 +281,7 @@ void MarketingOptInScreen::SetCountryFromTimezoneIfAvailable(
 
 void MarketingOptInScreen::SetA11yNavigationButtonsEnabled(bool enabled) {
   ProfileManager::GetActiveUserProfile()->GetPrefs()->SetBoolean(
-      ash::prefs::kAccessibilityTabletModeShelfNavigationButtonsEnabled,
-      enabled);
+      prefs::kAccessibilityTabletModeShelfNavigationButtonsEnabled, enabled);
   a11y_nav_buttons_toggle_metrics_reporter_timer_.Start(
       FROM_HERE, base::Seconds(10),
       base::BindOnce(&RecordShowShelfNavigationButtonsValueChange, enabled));
@@ -291,10 +292,8 @@ bool MarketingOptInScreen::ShouldShowOptionToSubscribe() {
   // we need to know whether the prefs have been loaded.
   sync_preferences::PrefServiceSyncable* prefs =
       PrefServiceSyncableFromProfile(ProfileManager::GetActiveUserProfile());
-  const bool sync_complete = ignore_pref_sync_for_testing_ ||
-                             (features::IsSyncSettingsCategorizationEnabled()
-                                  ? prefs->AreOsPrefsSyncing()
-                                  : prefs->IsSyncing());
+  const bool sync_complete =
+      ignore_pref_sync_for_testing_ || prefs->AreOsPrefsSyncing();
   // Do not show if the preferences cannot be synced
   if (!sync_complete)
     return false;

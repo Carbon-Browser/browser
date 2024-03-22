@@ -1,8 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/send_tab_to_self_sync_service_factory.h"
@@ -29,17 +29,17 @@ class TestSendTabToSelfBubbleController : public SendTabToSelfBubbleController {
   std::vector<TargetDeviceInfo> GetValidDevices() override {
     const auto now = base::Time::Now();
     return {{"Device_1", "Device_1", "device_guid_1",
-             sync_pb::SyncEnums_DeviceType_TYPE_LINUX, now - base::Days(0)},
+             syncer::DeviceInfo::FormFactor::kDesktop, now - base::Days(0)},
             {"Device_2", "Device_2", "device_guid_2",
-             sync_pb::SyncEnums_DeviceType_TYPE_PHONE, now - base::Days(0)},
+             syncer::DeviceInfo::FormFactor::kPhone, now - base::Days(0)},
             {"Device_3", "Device_3", "device_guid_3",
-             sync_pb::SyncEnums_DeviceType_TYPE_WIN, now - base::Days(1)},
+             syncer::DeviceInfo::FormFactor::kDesktop, now - base::Days(1)},
             {"Device_4", "Device_4", "device_guid_4",
-             sync_pb::SyncEnums_DeviceType_TYPE_PHONE, now - base::Days(1)},
+             syncer::DeviceInfo::FormFactor::kPhone, now - base::Days(1)},
             {"Device_5", "Device_5", "device_guid_5",
-             sync_pb::SyncEnums_DeviceType_TYPE_MAC, now - base::Days(5)},
+             syncer::DeviceInfo::FormFactor::kDesktop, now - base::Days(5)},
             {"Device_6", "Device_6", "device_guid_6",
-             sync_pb::SyncEnums_DeviceType_TYPE_PHONE, now - base::Days(5)}};
+             syncer::DeviceInfo::FormFactor::kPhone, now - base::Days(5)}};
   }
 
   AccountInfo GetSharingAccountInfo() override {
@@ -74,17 +74,22 @@ class SendTabToSelfBubbleTest : public DialogBrowserTest {
       BrowserView::GetBrowserViewForBrowser(browser())
           ->ShowSendTabToSelfPromoBubble(web_contents,
                                          /*show_signin_button=*/true);
-    } else if (name == "ShowNoTargetDevicePromo") {
+    } else {
+      DCHECK_EQ(name, "ShowNoTargetDevicePromo");
       BrowserView::GetBrowserViewForBrowser(browser())
           ->ShowSendTabToSelfPromoBubble(web_contents,
                                          /*show_signin_button=*/false);
-    } else {
-      NOTREACHED();
     }
   }
 };
 
-IN_PROC_BROWSER_TEST_F(SendTabToSelfBubbleTest, InvokeUi_ShowDeviceList) {
+// TODO(crbug.com/1473988): Flakily fails on some Windows builders.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_InvokeUi_ShowDeviceList DISABLED_InvokeUi_ShowDeviceList
+#else
+#define MAYBE_InvokeUi_ShowDeviceList InvokeUi_ShowDeviceList
+#endif
+IN_PROC_BROWSER_TEST_F(SendTabToSelfBubbleTest, MAYBE_InvokeUi_ShowDeviceList) {
   ShowAndVerifyUi();
 }
 
@@ -96,8 +101,8 @@ IN_PROC_BROWSER_TEST_F(SendTabToSelfBubbleTest, InvokeUi_ShowSigninPromo) {
 
 IN_PROC_BROWSER_TEST_F(SendTabToSelfBubbleTest,
                        InvokeUi_ShowNoTargetDevicePromo) {
-  // Last updated in crrev.com/c/3776623.
-  set_baseline("3776623");
+  // Last updated in crrev.com/c/3832669.
+  set_baseline("3832669");
   ShowAndVerifyUi();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@ import android.telephony.TelephonyManager;
 import android.view.MotionEvent;
 
 import androidx.annotation.RequiresApi;
+import androidx.annotation.RequiresPermission;
 
 import org.chromium.base.Callback;
 import org.chromium.base.task.AsyncTask;
@@ -44,10 +45,12 @@ public final class ApiHelperForQ {
     private ApiHelperForQ() {}
 
     /** See {@link TelephonyManager.requestCellInfoUpdate() }. */
+    @RequiresPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
     public static void requestCellInfoUpdate(
             TelephonyManager telephonyManager, Callback<List<CellInfo>> callback) {
         telephonyManager.requestCellInfoUpdate(
-                AsyncTask.THREAD_POOL_EXECUTOR, new TelephonyManager.CellInfoCallback() {
+                AsyncTask.THREAD_POOL_EXECUTOR,
+                new TelephonyManager.CellInfoCallback() {
                     @Override
                     @SuppressLint("Override")
                     public void onCellInfo(List<CellInfo> cellInfos) {
@@ -56,8 +59,13 @@ public final class ApiHelperForQ {
                 });
     }
 
-    public static boolean bindIsolatedService(Context context, Intent intent, int flags,
-            String instanceName, Executor executor, ServiceConnection connection) {
+    public static boolean bindIsolatedService(
+            Context context,
+            Intent intent,
+            int flags,
+            String instanceName,
+            Executor executor,
+            ServiceConnection connection) {
         return context.bindIsolatedService(intent, flags, instanceName, executor, connection);
     }
 
@@ -98,6 +106,7 @@ public final class ApiHelperForQ {
     }
 
     /** See {@link BiometricManager#canAuthenticate() }. */
+    @RequiresPermission(android.Manifest.permission.USE_BIOMETRIC)
     public static int canAuthenticate(BiometricManager manager) {
         return manager.canAuthenticate();
     }

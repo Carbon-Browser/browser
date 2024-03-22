@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <map>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/usb/fake_usbguard_client.h"
 #include "chromeos/ash/components/dbus/usb/usbguard_observer.h"
@@ -115,8 +116,8 @@ class UsbguardClientImpl : public UsbguardClient {
         << "Failed to connect to usbguard signal: " << signal_name;
   }
 
-  dbus::Bus* bus_ = nullptr;
-  dbus::ObjectProxy* usbguard_proxy_ = nullptr;
+  raw_ptr<dbus::Bus, ExperimentalAsh> bus_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> usbguard_proxy_ = nullptr;
   base::ObserverList<UsbguardObserver> observers_;
 
   // Note: This should remain the last member so it'll be destroyed and

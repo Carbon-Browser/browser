@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
-
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/types/expected.h"
 #include "base/values.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_device.h"
@@ -30,7 +31,6 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"
 #include "extensions/common/api/bluetooth_low_energy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -109,6 +109,9 @@ class BluetoothLowEnergyEventRouter
     kStatusErrorTimeout,
     kStatusErrorUnsupportedDevice,
     kStatusErrorInvalidServiceId,
+    kStatusErrorNotReady,
+    kStatusErrorAlreadyExists,
+    kStatusErrorDoesNotExist,
   };
 
   // Error callback is used by asynchronous methods to report failures.
@@ -150,70 +153,59 @@ class BluetoothLowEnergyEventRouter
                   ErrorCallback error_callback);
 
   // Returns the list of api::bluetooth_low_energy::Service objects
-  // associated with the Bluetooth device with address |device_address| in
-  // |out_services|.
-  // Returns false, if no device with the given address is known. If the device
-  // is found but it has no GATT services, then returns true and leaves
-  // |out_services| empty. Returns true, on success. |out_services| must not
-  // be NULL. If it is non-empty, then its contents will be cleared.
+  // associated with the Bluetooth device with address |device_address| if
+  // successful. Otherwise returns std::nullopt, if no device with the given
+  // address is known. If the device is found but it has no GATT services, then
+  // returns an empty list.
   typedef std::vector<api::bluetooth_low_energy::Service> ServiceList;
-  bool GetServices(const std::string& device_address,
-                   ServiceList* out_services) const;
+  std::optional<ServiceList> GetServices(
+      const std::string& device_address) const;
 
-  // Populates |out_service| based on GATT service with instance ID
-  // |instance_id|. |out_service| must not be NULL.
-  Status GetService(const std::string& instance_id,
-                    api::bluetooth_low_energy::Service* out_service) const;
+  // Returns a service based on GATT service with instance ID |instance_id| if
+  // successful. Otherwise returns an error status.
+  base::expected<api::bluetooth_low_energy::Service, Status> GetService(
+      const std::string& instance_id) const;
 
-  // Populates |out_services| with the list of GATT services that are included
-  // by the GATT service with instance ID |instance_id|. Returns false, if not
-  // GATT service with the given ID is known. If the given service has no
-  // included services, then |out_service| will be empty. |out_service| must not
-  // be NULL. If it is non-empty, then its contents will be cleared.
-  Status GetIncludedServices(const std::string& instance_id,
-                             ServiceList* out_services) const;
+  // Returns a service list of GATT services that are included
+  // by the GATT service with instance ID |instance_id|. Returns an error status
+  // if no GATT service with the given ID is known. If the given service has no
+  // included services, then an empty list is returned.
+  base::expected<ServiceList, Status> GetIncludedServices(
+      const std::string& instance_id) const;
 
   // Returns the list of api::bluetooth_low_energy::Characteristic objects
-  // associated with the GATT service with instance ID |instance_id| in
-  // |out_characteristics|. Returns false, if no service with the given instance
-  // ID is known. If the service is found but it has no characteristics, then
-  // returns true and leaves |out_characteristics| empty.
-  // |out_characteristics| must not be NULL and if it is non-empty,
-  // then its contents will be cleared. |extension| is the extension that made
-  // the call.
+  // associated with the GATT service with instance ID |instance_id|. Returns an
+  // error status, if no service with the given instance ID is known. If the
+  // service is found but it has no characteristics, then returns empty list.
+  // |extension| is the extension that made the call.
   typedef std::vector<api::bluetooth_low_energy::Characteristic>
       CharacteristicList;
-  Status GetCharacteristics(const Extension* extension,
-                            const std::string& instance_id,
-                            CharacteristicList* out_characteristics) const;
-
-  // Populates |out_characteristic| based on GATT characteristic with instance
-  // ID |instance_id|. |out_characteristic| must not be NULL. |extension| is the
-  // extension that made the call.
-  Status GetCharacteristic(
+  base::expected<CharacteristicList, Status> GetCharacteristics(
       const Extension* extension,
-      const std::string& instance_id,
-      api::bluetooth_low_energy::Characteristic* out_characteristic) const;
+      const std::string& instance_id) const;
+
+  // Returns a Characteristic based on GATT characteristic with instance
+  // ID |instance_id|. |extension| is the
+  // extension that made the call.
+  base::expected<api::bluetooth_low_energy::Characteristic, Status>
+  GetCharacteristic(const Extension* extension,
+                    const std::string& instance_id) const;
 
   // Returns the list of api::bluetooth_low_energy::Descriptor objects
-  // associated with the GATT characteristic with instance ID |instance_id| in
-  // |out_descriptors|. If the characteristic is found but it has no
-  // descriptors, then returns true and leaves |out_descriptors| empty.
-  // |out_descriptors| must not be NULL and if it is non-empty,
-  // then its contents will be cleared. |extension| is the extension that made
-  // the call.
+  // associated with the GATT characteristic with instance ID |instance_id|. If
+  // the characteristic is found but it has no descriptors, then returns an
+  // empty list. In case of failure, returns a error status. |extension| is the
+  // extension that made the call.
   typedef std::vector<api::bluetooth_low_energy::Descriptor> DescriptorList;
-  Status GetDescriptors(const Extension* extension,
-                        const std::string& instance_id,
-                        DescriptorList* out_descriptors) const;
-
-  // Populates |out_descriptor| based on GATT characteristic descriptor with
-  // instance ID |instance_id|. |out_descriptor| must not be NULL.
-  // |extension| is the extension that made the call.
-  Status GetDescriptor(
+  base::expected<DescriptorList, Status> GetDescriptors(
       const Extension* extension,
-      const std::string& instance_id,
-      api::bluetooth_low_energy::Descriptor* out_descriptor) const;
+      const std::string& instance_id) const;
+
+  // Returns a descriptor based on GATT characteristic descriptor with
+  // instance ID |instance_id|. |extension| is the extension that made the call.
+  base::expected<api::bluetooth_low_energy::Descriptor, Status> GetDescriptor(
+      const Extension* extension,
+      const std::string& instance_id) const;
 
   // Sends a request to read the value of the characteristic with intance ID
   // |instance_id|. Invokes |callback| on success and |error_callback| on
@@ -438,14 +430,14 @@ class BluetoothLowEnergyEventRouter
       const std::string& characteristic_instance_id,
       base::OnceClosure callback,
       ErrorCallback error_callback,
-      absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+      std::optional<device::BluetoothGattService::GattErrorCode> error_code,
       const std::vector<uint8_t>& value);
 
   // Runs |callback|.
   void OnReadRemoteDescriptor(
       base::OnceClosure callback,
       ErrorCallback error_callback,
-      absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+      std::optional<device::BluetoothGattService::GattErrorCode> error_code,
       const std::vector<uint8_t>& value);
 
   // Called by BluetoothDevice in response to a call to CreateGattConnection.
@@ -455,7 +447,7 @@ class BluetoothLowEnergyEventRouter
       const std::string& device_address,
       ErrorCallback callback,
       std::unique_ptr<device::BluetoothGattConnection> connection,
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
 
   // Called by BluetoothGattService in response to Register().
   void OnRegisterGattServiceSuccess(const std::string& service_id,

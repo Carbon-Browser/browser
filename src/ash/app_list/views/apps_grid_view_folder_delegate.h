@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,6 +48,9 @@ class ASH_EXPORT AppsGridViewFolderDelegate {
       bool events_forwarded_to_drag_drop_host,
       bool cancel_drag,
       std::unique_ptr<AppDragIconProxy> drag_icon_proxy) = 0;
+
+  // Close the associated folder and goes back to top level page grid.
+  virtual void Close() = 0;
 
   // Returns whether |drag_point| in the folder apps grid bounds is within the
   // folder view's bounds.

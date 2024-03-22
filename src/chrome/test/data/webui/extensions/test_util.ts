@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /** @fileoverview Common utilities for extension ui tests. */
 import {ItemDelegate} from 'chrome://extensions/extensions.js';
 import {assertDeepEquals, assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {FakeChromeEvent} from 'chrome://webui-test/fake_chrome_event.js';
 import {MockController, MockMethod} from 'chrome://webui-test/mock_controller.js';
 import {isChildVisible} from 'chrome://webui-test/test_util.js';
 
@@ -30,10 +31,10 @@ export class ClickMock {
   }
 }
 
-type ListenerInfo = {
-  satisfied: boolean,
-  args: any,
-};
+interface ListenerInfo {
+  satisfied: boolean;
+  args: any;
+}
 
 /**
  * A mock to test receiving expected events and verify that they were called
@@ -82,13 +83,22 @@ export class ListenerMock {
  * A mock delegate for the item, capable of testing functionality.
  */
 export class MockItemDelegate extends ClickMock implements ItemDelegate {
+  itemStateChangedTarget: FakeChromeEvent = new FakeChromeEvent();
   deleteItem(_id: string) {}
+  deleteItems(_ids: string[]) {
+    return Promise.resolve();
+  }
+  uninstallItem(_id: string) {
+    return Promise.resolve();
+  }
+  setItemSafetyCheckWarningAcknowledged(_id: string) {}
   setItemEnabled(_id: string, _isEnabled: boolean) {}
   setItemAllowedIncognito(_id: string, _isAllowedIncognito: boolean) {}
   setItemAllowedOnFileUrls(_id: string, _isAllowedOnFileUrls: boolean) {}
   setItemHostAccess(
       _id: string, _hostAccess: chrome.developerPrivate.HostAccess) {}
   setItemCollectsErrors(_id: string, _collectsErrors: boolean) {}
+  setItemPinnedToToolbar(_id: string, _pinnedToToolbar: boolean) {}
   inspectItemView(_id: string, _view: chrome.developerPrivate.ExtensionView) {}
   openUrl(_url: string) {}
 
@@ -113,7 +123,13 @@ export class MockItemDelegate extends ClickMock implements ItemDelegate {
     return Promise.resolve();
   }
 
+  setShowAccessRequestsInToolbar(_id: string, _showRequests: boolean) {}
+
   recordUserAction(_metricName: string) {}
+
+  getItemStateChangedTarget() {
+    return this.itemStateChangedTarget;
+  }
 }
 
 /**
@@ -180,6 +196,7 @@ export function createExtensionInfo(
           suspiciousInstall: false,
           corruptInstall: false,
           updateRequired: false,
+          publishedInStoreRequired: false,
           blockedByPolicy: false,
           custodianApprovalRequired: false,
           parentDisabledPermissions: false,
@@ -202,7 +219,7 @@ export function createExtensionInfo(
         offlineEnabled: false,
         runtimeErrors: [],
         runtimeWarnings: [],
-        permissions: {simplePermissions: []},
+        permissions: {simplePermissions: [], canAccessSiteData: false},
         state: 'ENABLED',
         type: 'EXTENSION',
         updateUrl: '',
@@ -211,6 +228,8 @@ export function createExtensionInfo(
         views: [{url: baseUrl + 'foo.html'}, {url: baseUrl + 'bar.html'}],
         webStoreUrl: '',
         showSafeBrowsingAllowlistWarning: false,
+        showAccessRequestsInToolbar: false,
+        acknowledgeSafetyCheckWarning: false,
       },
       properties || {});
 }

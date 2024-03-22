@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,10 @@
 #include <string>
 #include <vector>
 
+#include "base/component_export.h"
 #include "base/memory/ref_counted.h"
 #include "base/values.h"
+#include "net/base/request_priority.h"
 
 namespace network {
 class SharedURLLoaderFactory;
@@ -23,15 +25,15 @@ class SharedURLLoaderFactory;
 // instances.
 namespace gaia {
 
-struct OAuthClientInfo {
+struct COMPONENT_EXPORT(GOOGLE_APIS) OAuthClientInfo {
   std::string client_id;
   std::string client_secret;
   std::string redirect_uri;
 };
 
-class GaiaOAuthClient {
+class COMPONENT_EXPORT(GOOGLE_APIS) GaiaOAuthClient {
  public:
-  class Delegate {
+  class COMPONENT_EXPORT(GOOGLE_APIS) Delegate {
    public:
     // Invoked on a successful response to the GetTokensFromAuthCode request.
     virtual void OnGetTokensResponse(const std::string& refresh_token,
@@ -45,13 +47,11 @@ class GaiaOAuthClient {
     // Invoked on a successful response to the GetUserId request.
     virtual void OnGetUserIdResponse(const std::string& user_id) {}
     // Invoked on a successful response to the GetUserInfo request.
-    virtual void OnGetUserInfoResponse(
-        std::unique_ptr<base::DictionaryValue> user_info) {}
+    virtual void OnGetUserInfoResponse(const base::Value::Dict& user_info) {}
     // Invoked on a successful response to the GetTokenInfo request.
-    virtual void OnGetTokenInfoResponse(
-        std::unique_ptr<base::DictionaryValue> token_info) {}
+    virtual void OnGetTokenInfoResponse(const base::Value::Dict& token_info) {}
     virtual void OnGetAccountCapabilitiesResponse(
-        std::unique_ptr<base::Value> account_capabilities) {}
+        const base::Value::Dict& account_capabilities) {}
     // Invoked when there is an OAuth error with one of the requests.
     virtual void OnOAuthError() = 0;
     // Invoked when there is a network error or upon receiving an invalid
@@ -148,6 +148,7 @@ class GaiaOAuthClient {
   void GetAccountCapabilities(
       const std::string& oauth_access_token,
       const std::vector<std::string>& capabilities_names,
+      net::RequestPriority priority,
       int max_retries,
       Delegate* delegate);
 
@@ -156,6 +157,7 @@ class GaiaOAuthClient {
   class Core;
   scoped_refptr<Core> core_;
 };
-}
+
+}  // namespace gaia
 
 #endif  // GOOGLE_APIS_GAIA_GAIA_OAUTH_CLIENT_H_

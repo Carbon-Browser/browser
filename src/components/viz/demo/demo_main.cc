@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
+#include "components/viz/demo/common/switches.h"
 #include "components/viz/demo/host/demo_host.h"
 #include "components/viz/demo/service/demo_service.h"
 #include "mojo/core/embedder/embedder.h"
@@ -21,11 +22,12 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "ui/events/platform/platform_event_source.h"
+#include "ui/gl/init/gl_factory.h"
 #include "ui/platform_window/platform_window.h"
 #include "ui/platform_window/platform_window_delegate.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_gpu_test_helper.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/surface_factory_ozone.h"
@@ -118,9 +120,9 @@ class DemoWindow : public ui::PlatformWindowDelegate {
   std::unique_ptr<ui::PlatformWindow> CreatePlatformWindow(
       const gfx::Rect& bounds) {
     ui::PlatformWindowInitProperties props(bounds);
-#if defined(USE_OZONE)
-      return ui::OzonePlatform::GetInstance()->CreatePlatformWindow(
-          this, std::move(props));
+#if BUILDFLAG(IS_OZONE)
+    return ui::OzonePlatform::GetInstance()->CreatePlatformWindow(
+        this, std::move(props));
 #elif BUILDFLAG(IS_WIN)
     return std::make_unique<ui::WinWindow>(this, props.bounds);
 #else
@@ -159,7 +161,7 @@ class DemoWindow : public ui::PlatformWindowDelegate {
 
   // ui::PlatformWindowDelegate:
   void OnBoundsChanged(const BoundsChange& bounds) override {
-    host_->Resize(bounds.bounds.size());
+    host_->Resize(platform_window_->GetBoundsInPixels().size());
   }
 
   void OnAcceleratedWidgetAvailable(gfx::AcceleratedWidget widget) override {
@@ -179,6 +181,9 @@ class DemoWindow : public ui::PlatformWindowDelegate {
   void OnAcceleratedWidgetDestroyed() override {}
   void OnActivationChanged(bool active) override {}
   void OnMouseEnter() override {}
+  int64_t OnStateUpdate(const State& old, const State& latest) override {
+    return -1;
+  }
 
   std::unique_ptr<demo::DemoHost> host_;
   std::unique_ptr<demo::DemoService> service_;
@@ -195,12 +200,10 @@ int DemoMain() {
   return 0;
 }
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 std::unique_ptr<ui::OzoneGpuTestHelper> gpu_helper;
 
 static void SetupOzone(base::WaitableEvent* done) {
-  base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
-  cmd_line->AppendSwitchASCII(switches::kUseGL, gl::kGLImplementationEGLName);
   ui::OzonePlatform::InitParams params;
   params.single_process = true;
   ui::OzonePlatform::InitializeForGPU(params);
@@ -211,10 +214,10 @@ static void SetupOzone(base::WaitableEvent* done) {
 }  // namespace
 
 int main(int argc, char** argv) {
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   base::CommandLine command_line(argc, argv);
   auto feature_list = std::make_unique<base::FeatureList>();
-  feature_list->InitializeFromCommandLine(
+  feature_list->InitFromCommandLine(
       command_line.GetSwitchValueASCII(switches::kEnableFeatures),
       command_line.GetSwitchValueASCII(switches::kDisableFeatures));
   base::FeatureList::SetInstance(std::move(feature_list));
@@ -226,7 +229,7 @@ int main(int argc, char** argv) {
   InitMojo mojo;
   InitUI ui;
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   ui::OzonePlatform::InitParams params;
   params.single_process = true;
   ui::OzonePlatform::InitializeForUI(params);
@@ -234,16 +237,24 @@ int main(int argc, char** argv) {
   base::Thread::Options options;
   options.message_pump_type = base::MessagePumpType::UI;
   CHECK(rendering_thread.StartWithOptions(std::move(options)));
-  base::WaitableEvent done(base::WaitableEvent::ResetPolicy::AUTOMATIC,
-                           base::WaitableEvent::InitialState::NOT_SIGNALED);
-  rendering_thread.task_runner()->PostTask(FROM_HERE,
-                                           base::BindOnce(&SetupOzone, &done));
-  done.Wait();
+
+  const bool use_gpu = command_line.HasSwitch(switches::kVizDemoUseGPU);
+  if (use_gpu) {
+    command_line.AppendSwitchASCII(switches::kUseGL,
+                                   gl::kGLImplementationEGLName);
+    base::WaitableEvent done(base::WaitableEvent::ResetPolicy::AUTOMATIC,
+                             base::WaitableEvent::InitialState::NOT_SIGNALED);
+    rendering_thread.task_runner()->PostTask(
+        FROM_HERE, base::BindOnce(&SetupOzone, &done));
+    done.Wait();
+  }
 
   // To create dmabuf through gbm, Ozone needs to be set up.
   gpu_helper = std::make_unique<ui::OzoneGpuTestHelper>();
   gpu_helper->Initialize();
+  if (use_gpu) {
+    gl::init::InitializeGLOneOff(gl::GpuPreference::kDefault);
+  }
 #endif
-
   return DemoMain();
 }

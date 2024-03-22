@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,6 +36,12 @@ bool PathProvider(int key, base::FilePath* result) {
       if (!base::android::GetCacheDirectory(&cur))
         return false;
       cur = cur.Append(FILE_PATH_LITERAL("SafeBrowsing"));
+      break;
+    case DIR_LOCAL_TRACES:
+      if (!base::android::GetCacheDirectory(&cur)) {
+        return false;
+      }
+      cur = cur.Append(FILE_PATH_LITERAL("Local Traces"));
       break;
     default:
       return false;

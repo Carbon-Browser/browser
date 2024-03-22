@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 #include <tuple>
 #include <utility>
 
-#include "ash/components/policy/weekly_time/time_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/time/default_clock.h"
 #include "base/time/tick_clock.h"
@@ -17,7 +16,8 @@
 #include "chrome/browser/ash/login/users/chrome_user_manager_util.h"
 #include "chrome/browser/ash/policy/off_hours/off_hours_proto_parser.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/policy/weekly_time/time_utils.h"
 #include "components/prefs/pref_value_map.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,21 +71,13 @@ enum Permission : NSUInteger;
     didChangeStateForPermission:(web::Permission)permission
     API_AVAILABLE(ios(15.0));
 
-// Invoked by WebStateObserverBridge::WebFrameDidBecomeAvailable.
-- (void)webState:(web::WebState*)webState
-    frameDidBecomeAvailable:(web::WebFrame*)webFrame;
-
-// Invoked by WebStateObserverBridge::WebFrameWillBecomeUnavailable.
-- (void)webState:(web::WebState*)webState
-    frameWillBecomeUnavailable:(web::WebFrame*)webFrame;
-
 // Invoked by WebStateObserverBridge::RenderProcessGone.
 - (void)renderProcessGoneForWebState:(web::WebState*)webState;
 
 // Invoked by WebStateObserverBridge::WebStateRealized.
 - (void)webStateRealized:(web::WebState*)webState;
 
-// Note: after |webStateDestroyed:| is invoked, the WebState being observed
+// Note: after `webStateDestroyed:` is invoked, the WebState being observed
 // is no longer valid.
 - (void)webStateDestroyed:(web::WebState*)webState;
 
@@ -129,10 +121,6 @@ class WebStateObserverBridge : public web::WebStateObserver {
   void PermissionStateChanged(web::WebState* web_state,
                               web::Permission permission) override
       API_AVAILABLE(ios(15.0));
-  void WebFrameDidBecomeAvailable(WebState* web_state,
-                                  WebFrame* web_frame) override;
-  void WebFrameWillBecomeUnavailable(WebState* web_state,
-                                     WebFrame* web_frame) override;
   void RenderProcessGone(web::WebState* web_state) override;
   void WebStateRealized(web::WebState* web_state) override;
   void WebStateDestroyed(web::WebState* web_state) override;

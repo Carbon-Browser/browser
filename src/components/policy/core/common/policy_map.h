@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,12 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/values.h"
 #include "components/policy/core/common/external_data_fetcher.h"
+#include "components/policy/core/common/policy_details.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -102,6 +103,9 @@ class POLICY_EXPORT PolicyMap {
     // Removes all the conflicts.
     void ClearConflicts();
 
+    // Whether the policy has conflicting policies.
+    bool HasConflicts();
+
     // Getter for |ignored_|.
     bool ignored() const;
     // Sets |ignored_| to true.
@@ -172,6 +176,7 @@ class POLICY_EXPORT PolicyMap {
   };
 
   typedef std::map<std::string, Entry> PolicyMapType;
+  typedef PolicyMapType::const_reference const_reference;
   typedef PolicyMapType::const_iterator const_iterator;
   typedef PolicyMapType::iterator iterator;
 
@@ -252,19 +257,15 @@ class POLICY_EXPORT PolicyMap {
   // could be `map_.end()`).
   iterator EraseIt(const_iterator it);
 
-  // Erase all entries for which |filter| returns true.
-  void EraseMatching(
-      const base::RepeatingCallback<bool(const const_iterator)>& filter);
-
-  // Erase all entries for which |filter| returns false.
-  void EraseNonmatching(
-      const base::RepeatingCallback<bool(const const_iterator)>& filter);
-
   // Swaps the internal representation of |this| with |other|.
   void Swap(PolicyMap* other);
 
   // Returns a copy of |this|.
   PolicyMap Clone() const;
+
+  // Returns a copy of |this| that contains only the entries matching |filter|.
+  PolicyMap CloneIf(
+      const base::RepeatingCallback<bool(const_reference)>& filter) const;
 
   // Helper method used to merge entries corresponding to the same policy.
   // Setting |using_default_precedence| to true results in external factors,
@@ -286,7 +287,7 @@ class POLICY_EXPORT PolicyMap {
   // Loads the values in |policies| into this PolicyMap. All policies loaded
   // will have |level|, |scope| and |source| in their entries. Existing entries
   // are replaced.
-  void LoadFrom(const base::DictionaryValue* policies,
+  void LoadFrom(const base::Value::Dict& policies,
                 PolicyLevel level,
                 PolicyScope scope,
                 PolicySource source);
@@ -322,6 +323,11 @@ class POLICY_EXPORT PolicyMap {
   // Returns the set containing device affiliation ID strings.
   const base::flat_set<std::string>& GetDeviceAffiliationIds() const;
 
+  // Sets the ChromePolicyDetailsCallback, which is used in IsPolicyExternal(),
+  // in test environments
+  void set_chrome_policy_details_callback_for_test(
+      const GetChromePolicyDetailsCallback& details_callback);
+
   bool Equals(const PolicyMap& other) const;
   bool empty() const;
   size_t size() const;
@@ -343,21 +349,22 @@ class POLICY_EXPORT PolicyMap {
   Entry* GetMutableUntrusted(const std::string& policy);
 
   // Helper function for Equals().
-  static bool MapEntryEquals(const PolicyMapType::value_type& a,
-                             const PolicyMapType::value_type& b);
+  static bool MapEntryEquals(const_reference& a, const_reference& b);
 
-  // Erase all entries for which |filter| returns |deletion_value|.
-  void FilterErase(
-      const base::RepeatingCallback<bool(const const_iterator)>& filter,
-      bool deletion_value);
-
+#if !BUILDFLAG(IS_CHROMEOS)
   // Updates the stored state of computed metapolicies.
   void UpdateStoredComputedMetapolicies();
+#endif
 
   // Updates the stored state of user affiliation.
   void UpdateStoredUserAffiliation();
 
+  // Returns True if the passed policy has a max_external_data_size > 0
+  bool IsPolicyExternal(const std::string& policy);
+
   PolicyMapType map_;
+
+  GetChromePolicyDetailsCallback details_callback_;
 
   // Affiliation
   bool is_user_affiliated_ = false;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "media/gpu/h264_decoder.h"
 #include "media/gpu/h264_dpb.h"
@@ -35,6 +36,8 @@ class V4L2VideoDecoderDelegateH264 : public H264Decoder::H264Accelerator {
 
   // H264Decoder::H264Accelerator implementation.
   scoped_refptr<H264Picture> CreateH264Picture() override;
+  scoped_refptr<H264Picture> CreateH264PictureSecure(
+      uint64_t secure_handle) override;
   Status SubmitFrameMetadata(const H264SPS* sps,
                              const H264PPS* pps,
                              const H264DPB& dpb,
@@ -60,8 +63,8 @@ class V4L2VideoDecoderDelegateH264 : public H264Decoder::H264Accelerator {
   scoped_refptr<V4L2DecodeSurface> H264PictureToV4L2DecodeSurface(
       H264Picture* pic);
 
-  V4L2DecodeSurfaceHandler* const surface_handler_;
-  V4L2Device* const device_;
+  raw_ptr<V4L2DecodeSurfaceHandler> const surface_handler_;
+  raw_ptr<V4L2Device> const device_;
 
   // Contains the kernel-specific structures that we don't want to expose
   // outside of the compilation unit.

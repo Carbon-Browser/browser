@@ -1,16 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_utils.h"
 
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#include "ios/components/ui_util/dynamic_type_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/common/ui/util/ui_util.h"
+#import "ios/components/ui_util/dynamic_type_util.h"
 
 namespace {
 
@@ -50,7 +47,7 @@ CGFloat ToolbarCollapsedHeight(UIContentSizeCategory category) {
 
 CGFloat ToolbarExpandedHeight(UIContentSizeCategory category) {
   category = NormalizedCategory(category);
-  return Interpolate(category, kPrimaryToolbarHeight, kNonDynamicToolbarHeight);
+  return Interpolate(category, kToolbarOmniboxHeight, kNonDynamicToolbarHeight);
 }
 
 CGFloat LocationBarHeight(UIContentSizeCategory category) {

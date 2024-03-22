@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/rgbkbd/fake_rgbkbd_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -59,6 +60,23 @@ class RgbkbdClientImpl : public RgbkbdClient {
     dbus::MethodCall method_call(rgbkbd::kRgbkbdServiceName,
                                  rgbkbd::kSetStaticBackgroundColor);
     dbus::MessageWriter writer(&method_call);
+    writer.AppendByte(r);
+    writer.AppendByte(g);
+    writer.AppendByte(b);
+    CHECK(rgbkbd_proxy_);
+    rgbkbd_proxy_->CallMethod(&method_call,
+                              dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+                              base::DoNothing());
+  }
+
+  void SetZoneColor(int zone, uint8_t r, uint8_t g, uint8_t b) override {
+    VLOG(1) << "rgbkbd: SetZoneColor Zone: " << zone
+            << "R: " << static_cast<int>(r) << "G: " << static_cast<int>(g)
+            << "B: " << static_cast<int>(b);
+    dbus::MethodCall method_call(rgbkbd::kRgbkbdServiceName,
+                                 rgbkbd::kSetZoneColor);
+    dbus::MessageWriter writer(&method_call);
+    writer.AppendInt32(zone);
     writer.AppendByte(r);
     writer.AppendByte(g);
     writer.AppendByte(b);
@@ -139,7 +157,7 @@ class RgbkbdClientImpl : public RgbkbdClient {
         << "Failed to connect to CapabilityUpdatedForTesting signal.";
   }
 
-  dbus::ObjectProxy* rgbkbd_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> rgbkbd_proxy_ = nullptr;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,21 +19,21 @@ namespace ipcz {
 
 namespace {
 
-IpczResult IPCZ_API NotifyTransport(IpczHandle transport,
+IpczResult IPCZ_API NotifyTransport(IpczHandle listener,
                                     const void* data,
                                     size_t num_bytes,
                                     const IpczDriverHandle* driver_handles,
                                     size_t num_driver_handles,
                                     IpczTransportActivityFlags flags,
                                     const void* options) {
-  DriverTransport* t = DriverTransport::FromHandle(transport);
+  DriverTransport* t = DriverTransport::FromHandle(listener);
   if (!t) {
     return IPCZ_RESULT_INVALID_ARGUMENT;
   }
 
   if (flags & IPCZ_TRANSPORT_ACTIVITY_DEACTIVATED) {
     const Ref<DriverTransport> doomed_transport =
-        DriverTransport::TakeFromHandle(transport);
+        DriverTransport::TakeFromHandle(listener);
     doomed_transport->NotifyDeactivated();
     return IPCZ_RESULT_OK;
   }
@@ -102,7 +102,12 @@ IpczResult DriverTransport::Deactivate() {
 
 IpczResult DriverTransport::Transmit(Message& message) {
   ABSL_ASSERT(message.CanTransmitOn(*this));
-  message.Serialize(*this);
+  if (!message.Serialize(*this)) {
+    // If serialization fails despite the object appearing to be serializable,
+    // we have to assume the transport is in a dysfunctional state and will be
+    // torn down by the driver soon. Discard the transmission.
+    return IPCZ_RESULT_FAILED_PRECONDITION;
+  }
 
   const absl::Span<const uint8_t> data = message.data_view();
   const absl::Span<const IpczDriverHandle> handles =

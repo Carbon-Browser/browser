@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,7 @@
 #include "ui/wm/core/base_focus_rules.h"
 #include "ui/wm/core/focus_controller.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
@@ -106,5 +105,4 @@ TEST_F(NativeWidgetAuraTest, NonActiveWindowRequestImeFocus) {
   widget2->CloseNow();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

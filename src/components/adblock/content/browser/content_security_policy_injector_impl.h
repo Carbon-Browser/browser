@@ -18,6 +18,9 @@
 #ifndef COMPONENTS_ADBLOCK_CONTENT_BROWSER_CONTENT_SECURITY_POLICY_INJECTOR_IMPL_H_
 #define COMPONENTS_ADBLOCK_CONTENT_BROWSER_CONTENT_SECURITY_POLICY_INJECTOR_IMPL_H_
 
+#include <string_view>
+
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/adblock/content/browser/content_security_policy_injector.h"
@@ -43,18 +46,18 @@ class ContentSecurityPolicyInjectorImpl final
       InsertContentSecurityPolicyHeadersCallback callback) final;
 
  private:
-  void OnCspInjectionSearchFinished(
-      const GURL& request_url,
-      const scoped_refptr<net::HttpResponseHeaders>& headers,
+  void OnCspInjectionsSearchFinished(
+      const GURL request_url,
+      const scoped_refptr<net::HttpResponseHeaders> headers,
       InsertContentSecurityPolicyHeadersCallback callback,
-      std::string csp_injection);
+      std::set<std::string_view> csp_injections);
 
   void OnUpdatedHeadersParsed(
       InsertContentSecurityPolicyHeadersCallback callback,
       network::mojom::ParsedHeadersPtr parsed_headers);
 
   SEQUENCE_CHECKER(sequence_checker_);
-  SubscriptionService* subscription_service_;
+  raw_ptr<SubscriptionService> subscription_service_;
   std::unique_ptr<FrameHierarchyBuilder> frame_hierarchy_builder_;
   base::WeakPtrFactory<ContentSecurityPolicyInjectorImpl> weak_ptr_factory{
       this};

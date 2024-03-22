@@ -1,15 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.ui.messages.snackbar;
 
-import static android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS;
-import static android.view.accessibility.AccessibilityManager.FLAG_CONTENT_ICONS;
-import static android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT;
-
 import android.app.Activity;
-import android.os.Build;
 import android.os.Handler;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -23,7 +18,9 @@ import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
 import org.chromium.base.UnownedUserData;
 import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
+import org.chromium.ui.accessibility.AccessibilityState;
 import org.chromium.ui.base.WindowAndroid;
 
 /**
@@ -37,9 +34,7 @@ import org.chromium.ui.base.WindowAndroid;
  * {@link Snackbar#TYPE_PERSISTENT} do not get automatically dismissed after a timeout.
  */
 public class SnackbarManager implements OnClickListener, ActivityStateListener, UnownedUserData {
-    /**
-     * Interface that shows the ability to provide a snackbar manager.
-     */
+    /** Interface that shows the ability to provide a snackbar manager. */
     public interface SnackbarManageable {
         /**
          * @return The snackbar manager that has a proper anchor view.
@@ -83,13 +78,16 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
     private ViewGroup mSnackbarParentView;
     private ViewGroup mSnackbarTemporaryParentView;
     private final WindowAndroid mWindowAndroid;
-    private final Runnable mHideRunnable = new Runnable() {
-        @Override
-        public void run() {
-            mSnackbars.removeCurrentDueToTimeout();
-            updateView();
-        }
-    };
+    private final Runnable mHideRunnable =
+            new Runnable() {
+                @Override
+                public void run() {
+                    mSnackbars.removeCurrentDueToTimeout();
+                    updateView();
+                }
+            };
+    private final ObservableSupplierImpl<Boolean> mIsShowingSupplier =
+            new ObservableSupplierImpl<>();
 
     /**
      * Constructs a SnackbarManager to show snackbars in the given window.
@@ -98,7 +96,9 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
      * @param windowAndroid The WindowAndroid used for starting animation. If it is null,
      *                      Animator#start is called instead.
      */
-    public SnackbarManager(Activity activity, ViewGroup snackbarParentView,
+    public SnackbarManager(
+            Activity activity,
+            ViewGroup snackbarParentView,
             @Nullable WindowAndroid windowAndroid) {
         mActivity = activity;
         mUIThreadHandler = new Handler();
@@ -110,6 +110,8 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
                 || ApplicationStatus.getStateForActivity(mActivity) == ActivityState.RESUMED) {
             onStart();
         }
+
+        mIsShowingSupplier.set(isShowing());
     }
 
     @Override
@@ -122,16 +124,12 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
         }
     }
 
-    /**
-     * Notifies the snackbar manager that the activity is running in foreground now.
-     */
+    /** Notifies the snackbar manager that the activity is running in foreground now. */
     private void onStart() {
         mActivityInForeground = true;
     }
 
-    /**
-     * Notifies the snackbar manager that the activity has been pushed to background.
-     */
+    /** Notifies the snackbar manager that the activity has been pushed to background. */
     private void onStop() {
         mSnackbars.clear();
         updateView();
@@ -191,9 +189,7 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
         }
     }
 
-    /**
-     * Handles click event for action button at end of snackbar.
-     */
+    /** Handles click event for action button at end of snackbar. */
     @Override
     public void onClick(View v) {
         mView.announceActionForAccessibility();
@@ -239,6 +235,13 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
     }
 
     /**
+     * @return Supplier of whether the snackbar is showing
+     */
+    public ObservableSupplier<Boolean> isShowingSupplier() {
+        return mIsShowingSupplier;
+    }
+
+    /**
      * @return Whether there is a snackbar on screen.
      */
     public boolean isShowing() {
@@ -261,8 +264,13 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
         } else {
             boolean viewChanged = true;
             if (mView == null) {
-                mView = new SnackbarView(
-                        mActivity, this, currentSnackbar, mSnackbarParentView, mWindowAndroid);
+                mView =
+                        new SnackbarView(
+                                mActivity,
+                                this,
+                                currentSnackbar,
+                                mSnackbarParentView,
+                                mWindowAndroid);
                 mView.show();
 
                 // If there is a temporary parent set, reparent accordingly. We override here
@@ -284,6 +292,8 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
                 mView.announceforAccessibility();
             }
         }
+
+        mIsShowingSupplier.set(isShowing());
     }
 
     @VisibleForTesting
@@ -291,25 +301,15 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
         int durationMs = snackbar.getDuration();
         if (durationMs == 0) durationMs = sSnackbarDurationMs;
 
-        if (ChromeAccessibilityUtil.get().isAccessibilityEnabled()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                return ChromeAccessibilityUtil.get().getRecommendedTimeoutMillis(
-                        durationMs, FLAG_CONTENT_ICONS | FLAG_CONTENT_CONTROLS | FLAG_CONTENT_TEXT);
-            } else {
-                durationMs *= 2;
-                if (durationMs < sAccessibilitySnackbarDurationMs) {
-                    durationMs = sAccessibilitySnackbarDurationMs;
-                }
-            }
-        }
-
-        return durationMs;
+        // If no a11y service that can perform gestures is enabled, use the set duration. Otherwise
+        // multiply the duration by the recommended multiplier and use that with a minimum of 30s.
+        return !AccessibilityState.isPerformGesturesEnabled()
+                ? durationMs
+                : AccessibilityState.getRecommendedTimeoutMillis(
+                        sAccessibilitySnackbarDurationMs, durationMs);
     }
 
-    /**
-     * Disables the snackbar manager. This is only intended for testing purposes.
-     */
-    @VisibleForTesting
+    /** Disables the snackbar manager. This is only intended for testing purposes. */
     public void disableForTesting() {
         mIsDisabledForTesting = true;
     }
@@ -318,27 +318,21 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
      * Overrides the default snackbar duration with a custom value for testing.
      * @param durationMs The duration to use in ms.
      */
-    @VisibleForTesting
     public static void setDurationForTesting(int durationMs) {
         sSnackbarDurationMs = durationMs;
         sAccessibilitySnackbarDurationMs = durationMs;
     }
 
-    /**
-     * Clears any overrides set for testing.
-     */
-    @VisibleForTesting
-    public static void restDurationForTesting() {
+    /** Clears any overrides set for testing. */
+    public static void resetDurationForTesting() {
         sSnackbarDurationMs = DEFAULT_SNACKBAR_DURATION_MS;
         sAccessibilitySnackbarDurationMs = ACCESSIBILITY_MODE_SNACKBAR_DURATION_MS;
     }
 
-    @VisibleForTesting
     static int getDefaultDurationForTesting() {
         return sSnackbarDurationMs;
     }
 
-    @VisibleForTesting
     static int getDefaultA11yDurationForTesting() {
         return sAccessibilitySnackbarDurationMs;
     }
@@ -346,7 +340,6 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
     /**
      * @return The currently showing snackbar. For testing only.
      */
-    @VisibleForTesting
     public Snackbar getCurrentSnackbarForTesting() {
         return mSnackbars.getCurrent();
     }
@@ -354,7 +347,6 @@ public class SnackbarManager implements OnClickListener, ActivityStateListener, 
     /**
      * @return The currently showing snackbar view. For testing only.
      */
-    @VisibleForTesting
     public SnackbarView getCurrentSnackbarViewForTesting() {
         return mView;
     }

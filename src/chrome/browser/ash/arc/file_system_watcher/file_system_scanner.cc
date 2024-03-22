@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -210,8 +210,8 @@ void FileSystemScanner::ScheduleFullScan() {
   // several SystemTimeClock change happened later (in separate CL). To do the
   // skip, we could have a boolean variable full_scan_requested, and PostTask
   // full_scan_requested from the OnFullScanFinished.
-  base::PostTaskAndReplyWithResult(
-      scan_runner_.get(), FROM_HERE,
+  scan_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&FullScan, cros_dir_, previous_scan_time_, cros_dir_,
                      android_dir_),
       base::BindOnce(&FileSystemScanner::OnFullScanFinished,
@@ -238,8 +238,8 @@ void FileSystemScanner::ScheduleRegularScan() {
   if (state_ != State::kIdle)
     return;
   state_ = State::kWaitingForScanToFinish;
-  base::PostTaskAndReplyWithResult(
-      scan_runner_.get(), FROM_HERE,
+  scan_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&RegularScan, previous_scan_time_, cros_dir_, android_dir_,
                      ctime_callback_),
       base::BindOnce(&FileSystemScanner::OnRegularScanFinished,

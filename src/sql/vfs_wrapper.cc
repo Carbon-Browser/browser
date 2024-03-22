@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/backup_util.h"
+#include "base/apple/backup_util.h"
 #endif
 
 #if BUILDFLAG(IS_FUCHSIA)
@@ -206,8 +206,8 @@ int Open(sqlite3_vfs* vfs, const char* file_name, sqlite3_file* wrapper_file,
     size_t dash_index = file_name_string_piece.rfind('-');
     if (dash_index != base::StringPiece::npos) {
       base::StringPiece db_name(file_name, dash_index);
-      if (base::mac::GetBackupExclusion(base::FilePath(db_name))) {
-        base::mac::SetBackupExclusion(base::FilePath(file_name_string_piece));
+      if (base::apple::GetBackupExclusion(base::FilePath(db_name))) {
+        base::apple::SetBackupExclusion(base::FilePath(file_name_string_piece));
       }
     }
   }

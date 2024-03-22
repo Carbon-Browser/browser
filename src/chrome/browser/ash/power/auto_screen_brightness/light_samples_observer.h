@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_POWER_AUTO_SCREEN_BRIGHTNESS_LIGHT_SAMPLES_OBSERVER_H_
 #define CHROME_BROWSER_ASH_POWER_AUTO_SCREEN_BRIGHTNESS_LIGHT_SAMPLES_OBSERVER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "chrome/browser/ash/power/auto_screen_brightness/als_reader.h"
@@ -51,7 +52,7 @@ class LightSamplesObserver
   void SetChannelsEnabled();
   void SetChannelsEnabledCallback(const std::vector<int32_t>& failed_indices);
 
-  AlsReader* als_reader_;
+  raw_ptr<AlsReader, DanglingUntriaged | ExperimentalAsh> als_reader_;
 
   mojo::Remote<chromeos::sensors::mojom::SensorDevice> sensor_device_remote_;
 

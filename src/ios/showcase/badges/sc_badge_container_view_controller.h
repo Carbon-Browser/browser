@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,6 @@
 
 // The consumer being set up by the showcase badge coordinator.
 @property(nonatomic, weak) id<BadgeConsumer> consumer;
-
-// Whether new popup UI is enabled.
-@property(nonatomic, readonly) BOOL useNewPopupUI;
 
 @end
 

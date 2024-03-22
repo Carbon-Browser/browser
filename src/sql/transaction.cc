@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ Transaction::~Transaction() {
 #endif  // DCHECK_IS_ON()
 
   if (is_active_)
-    database_.RollbackTransaction();
+    database_->RollbackTransaction();
 }
 
 bool Transaction::Begin() {
@@ -33,7 +33,7 @@ bool Transaction::Begin() {
 #endif  // DCHECK_IS_ON()
 
   DCHECK(!is_active_);
-  is_active_ = database_.BeginTransaction();
+  is_active_ = database_->BeginTransaction();
   return is_active_;
 }
 
@@ -49,7 +49,7 @@ void Transaction::Rollback() {
   DCHECK(is_active_) << __func__ << " called after Begin() failed";
   is_active_ = false;
 
-  database_.RollbackTransaction();
+  database_->RollbackTransaction();
 }
 
 bool Transaction::Commit() {
@@ -63,7 +63,7 @@ bool Transaction::Commit() {
 
   DCHECK(is_active_) << __func__ << " called after Begin() failed";
   is_active_ = false;
-  return database_.CommitTransaction();
+  return database_->CommitTransaction();
 }
 
 }  // namespace sql

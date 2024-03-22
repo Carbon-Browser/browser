@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 
 #include "ash/ash_export.h"
 #include "ash/capture_mode/capture_mode_types.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
 
-class CaptureModeToggleButton;
+class TabSlider;
+class TabSliderButton;
 
 // A view that is part of the CaptureBar view, from which the user can toggle
 // between the three available capture sources (fullscreen, region, and window).
@@ -26,13 +28,13 @@ class ASH_EXPORT CaptureModeSourceView : public views::View {
   CaptureModeSourceView& operator=(const CaptureModeSourceView&) = delete;
   ~CaptureModeSourceView() override;
 
-  CaptureModeToggleButton* fullscreen_toggle_button() const {
+  TabSliderButton* fullscreen_toggle_button() const {
     return fullscreen_toggle_button_;
   }
-  CaptureModeToggleButton* region_toggle_button() const {
+  TabSliderButton* region_toggle_button() const {
     return region_toggle_button_;
   }
-  CaptureModeToggleButton* window_toggle_button() const {
+  TabSliderButton* window_toggle_button() const {
     return window_toggle_button_;
   }
 
@@ -47,10 +49,14 @@ class ASH_EXPORT CaptureModeSourceView : public views::View {
   void OnRegionToggle();
   void OnWindowToggle();
 
-  // Owned by the views hierarchy.
-  CaptureModeToggleButton* fullscreen_toggle_button_;
-  CaptureModeToggleButton* region_toggle_button_;
-  CaptureModeToggleButton* window_toggle_button_;
+  // Owned by the view hierarchy. Contains fullscreen, region, and window toggle
+  // buttons.
+  raw_ptr<TabSlider, ExperimentalAsh> capture_source_switch_;
+
+  // Owned by the `capture_source_switch_`.
+  raw_ptr<TabSliderButton, ExperimentalAsh> fullscreen_toggle_button_;
+  raw_ptr<TabSliderButton, ExperimentalAsh> region_toggle_button_;
+  raw_ptr<TabSliderButton, ExperimentalAsh> window_toggle_button_;
 };
 
 }  // namespace ash

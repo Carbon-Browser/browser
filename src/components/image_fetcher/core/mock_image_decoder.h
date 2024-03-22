@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_IMAGE_FETCHER_CORE_MOCK_IMAGE_DECODER_H_
 #define COMPONENTS_IMAGE_FETCHER_CORE_MOCK_IMAGE_DECODER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/image_fetcher/core/image_decoder.h"
 #include "testing/gmock/include/gmock/gmock.h"
 

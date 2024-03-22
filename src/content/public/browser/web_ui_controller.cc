@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/browser/web_ui_controller.h"
 
 #include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/browser/webui/web_ui_managed_interface.h"
 #include "content/public/browser/web_ui_browser_interface_broker_registry.h"
 
 namespace content {
@@ -21,7 +22,9 @@ base::LazyInstance<WebUIBrowserInterfaceBrokerRegistry>::Leaky
 
 WebUIController::WebUIController(WebUI* web_ui) : web_ui_(web_ui) {}
 
-WebUIController::~WebUIController() = default;
+WebUIController::~WebUIController() {
+  RemoveWebUIManagedInterfaces(this);
+}
 
 bool WebUIController::OverrideHandleWebUIMessage(
     const GURL& source_url,

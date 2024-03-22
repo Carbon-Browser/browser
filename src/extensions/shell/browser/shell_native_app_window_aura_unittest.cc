@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,15 +33,14 @@ class ShellNativeAppWindowAuraTest : public ExtensionsTest {
 TEST_F(ShellNativeAppWindowAuraTest, Bounds) {
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "test extension")
                            .Set("version", "1")
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
 
-  AppWindow* app_window =
-      new AppWindow(browser_context(), new ShellAppDelegate, extension.get());
+  AppWindow* app_window = new AppWindow(
+      browser_context(), std::make_unique<ShellAppDelegate>(), extension.get());
 
   std::unique_ptr<content::WebContents> web_contents(
       content::WebContents::Create(

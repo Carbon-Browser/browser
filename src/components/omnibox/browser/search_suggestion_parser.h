@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,25 +11,27 @@
 #include <vector>
 
 #include "base/strings/string_piece.h"
+#include "base/values.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
 #include "components/omnibox/browser/suggestion_answer.h"
-#include "components/omnibox/browser/suggestion_group.h"
+#include "components/omnibox/browser/suggestion_group_util.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/metrics_proto/chrome_searchbox_stats.pb.h"
+#include "third_party/omnibox_proto/chrome_searchbox_stats.pb.h"
+#include "third_party/omnibox_proto/entity_info.pb.h"
+#include "third_party/omnibox_proto/types.pb.h"
 #include "url/gurl.h"
 
 class AutocompleteInput;
 class AutocompleteSchemeClassifier;
 
-namespace base {
-class Value;
-}
-
 namespace network {
 class SimpleURLLoader;
 }
+
+// Returns the omnibox::SuggestSubtype enum object corresponding to `value`.
+omnibox::SuggestSubtype SuggestSubtypeForNumber(int value);
 
 class SearchSuggestionParser {
  public:
@@ -51,6 +53,7 @@ class SearchSuggestionParser {
            int relevance,
            bool relevance_from_server,
            AutocompleteMatchType::Type type,
+           omnibox::SuggestType suggest_type,
            std::vector<int> subtypes,
            const std::string& deletion_url);
     Result(const Result& other);
@@ -64,6 +67,7 @@ class SearchSuggestionParser {
     }
 
     AutocompleteMatchType::Type type() const { return type_; }
+    omnibox::SuggestType suggest_type() const { return suggest_type_; }
     const std::vector<int>& subtypes() const { return subtypes_; }
     int relevance() const { return relevance_; }
     void set_relevance(int relevance) { relevance_ = relevance; }
@@ -97,7 +101,11 @@ class SearchSuggestionParser {
     // True if the result came from a keyword suggestion.
     bool from_keyword_;
 
+    // AutocompleteMatch type.
     AutocompleteMatchType::Type type_;
+
+    // Suggestion type.
+    omnibox::SuggestType suggest_type_;
 
     // Suggestion subtypes.
     std::vector<int> subtypes_;
@@ -128,6 +136,7 @@ class SearchSuggestionParser {
    public:
     SuggestResult(const std::u16string& suggestion,
                   AutocompleteMatchType::Type type,
+                  omnibox::SuggestType suggest_type,
                   std::vector<int> subtypes,
                   bool from_keyword,
                   int relevance,
@@ -135,14 +144,13 @@ class SearchSuggestionParser {
                   const std::u16string& input_text);
     SuggestResult(const std::u16string& suggestion,
                   AutocompleteMatchType::Type type,
+                  omnibox::SuggestType suggest_type,
                   std::vector<int> subtypes,
                   const std::u16string& match_contents,
                   const std::u16string& match_contents_prefix,
                   const std::u16string& annotation,
-                  const std::string& additional_query_params,
+                  omnibox::EntityInfo entity_info,
                   const std::string& deletion_url,
-                  const std::string& image_dominant_color,
-                  const std::string& image_url,
                   bool from_keyword,
                   int relevance,
                   bool relevance_from_server,
@@ -159,24 +167,20 @@ class SearchSuggestionParser {
       return match_contents_prefix_;
     }
     const std::u16string& annotation() const { return annotation_; }
-    const std::string& additional_query_params() const {
-      return additional_query_params_;
-    }
 
-    void set_suggestion_group_id(SuggestionGroupId suggestion_group_id) {
+    void set_suggestion_group_id(
+        absl::optional<omnibox::GroupId> suggestion_group_id) {
       suggestion_group_id_ = suggestion_group_id;
     }
-    absl::optional<SuggestionGroupId> suggestion_group_id() const {
+    absl::optional<omnibox::GroupId> suggestion_group_id() const {
       return suggestion_group_id_;
     }
 
     void SetAnswer(const SuggestionAnswer& answer);
     const absl::optional<SuggestionAnswer>& answer() const { return answer_; }
 
-    const std::string& image_dominant_color() const {
-      return image_dominant_color_;
-    }
-    const GURL& image_url() const { return image_url_; }
+    void SetEntityInfo(const omnibox::EntityInfo&);
+    const omnibox::EntityInfo& entity_info() const { return entity_info_; }
 
     bool should_prefetch() const { return should_prefetch_; }
     bool should_prerender() const { return should_prerender_; }
@@ -207,25 +211,15 @@ class SearchSuggestionParser {
     // separately to facilitate different formatting.
     std::u16string annotation_;
 
-    // Optional additional parameters to be added to the search URL.
-    std::string additional_query_params_;
-
-    // The suggestion group ID based on the SuggestionGroupIds enum in
-    // suggestion_config.proto. Used to look up the suggestion group info this
-    // suggestion belong to such as the header text this suggestion must appear
-    // under.
-    // Note: Use SuggestionGroupId::kInvalid in place of a missing suggestion
-    // group Id when this is to be converted to a primitive type.
-    absl::optional<SuggestionGroupId> suggestion_group_id_;
+    // The optional suggestion group ID used to look up the suggestion group
+    // config for the group this suggestion belongs to from the server response.
+    absl::optional<omnibox::GroupId> suggestion_group_id_;
 
     // Optional short answer to the input that produced this suggestion.
     absl::optional<SuggestionAnswer> answer_;
 
-    // Optional image information. Used for entity suggestions. The dominant
-    // color can be used to paint the image placeholder while fetching the
-    // image.
-    std::string image_dominant_color_;
-    GURL image_url_;
+    // Proto containing various pieces of data related to entity suggestions.
+    omnibox::EntityInfo entity_info_;
 
     // Should this result be prefetched?
     bool should_prefetch_;
@@ -240,6 +234,7 @@ class SearchSuggestionParser {
     NavigationResult(const AutocompleteSchemeClassifier& scheme_classifier,
                      const GURL& url,
                      AutocompleteMatchType::Type type,
+                     omnibox::SuggestType suggest_type,
                      std::vector<int> subtypes,
                      const std::u16string& description,
                      const std::string& deletion_url,
@@ -285,7 +280,7 @@ class SearchSuggestionParser {
 
   typedef std::vector<SuggestResult> SuggestResults;
   typedef std::vector<NavigationResult> NavigationResults;
-  typedef std::vector<metrics::ChromeSearchboxStats::ExperimentStatsV2>
+  typedef std::vector<omnibox::metrics::ChromeSearchboxStats::ExperimentStatsV2>
       ExperimentStatsV2s;
 
   // A simple structure bundling most of the information (including
@@ -336,8 +331,8 @@ class SearchSuggestionParser {
     // If the relevance values of the results are from the server.
     bool relevances_from_server;
 
-    // The server supplied map of suggestion group IDs to suggestion group info.
-    SuggestionGroupsMap suggestion_groups_map;
+    // The map of suggestion group IDs to suggestion group information.
+    omnibox::GroupConfigMap suggestion_groups_map;
   };
 
   // Converts JSON loaded by a SimpleURLLoader into UTF-8 and returns the
@@ -355,7 +350,7 @@ class SearchSuggestionParser {
   // Parses JSON response received from the provider, stripping XSSI
   // protection if needed. Returns the parsed data if successful, NULL
   // otherwise.
-  static std::unique_ptr<base::Value> DeserializeJsonData(
+  static absl::optional<base::Value::List> DeserializeJsonData(
       base::StringPiece json_data);
 
   // Parses results from the suggest server and updates the appropriate suggest
@@ -363,7 +358,7 @@ class SearchSuggestionParser {
   // whether the response was received from the keyword provider.
   // Returns whether the appropriate result list members were updated.
   static bool ParseSuggestResults(
-      const base::Value& root_val,
+      const base::Value::List& root_list,
       const AutocompleteInput& input,
       const AutocompleteSchemeClassifier& scheme_classifier,
       int default_result_relevance,

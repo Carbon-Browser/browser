@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace remote_cocoa {
 // Shows the platform certificate viewer, displaying |certificate| and parented
 // to |owning_window|.
 void ShowCertificateViewerForWindow(NSWindow* owning_window,
-                                    net::X509Certificate* ceriticate);
+                                    net::X509Certificate* certificate);
 
 }  // namespace remote_cocoa
 

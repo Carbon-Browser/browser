@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,9 @@
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/engine/commit_and_get_updates_types.h"
 #include "components/sync/engine/model_type_processor.h"
-#include "components/sync/model/in_memory_metadata_change_list.h"
 #include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/session_specifics.pb.h"
+#include "components/sync/protocol/sync_enums.pb.h"
 #include "components/sync_sessions/open_tabs_ui_delegate.h"
 #include "components/sync_sessions/session_store.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -202,8 +202,10 @@ void RecentTabsBuilderTestHelper::ExportToSessionSync(
   }
 
   sync_pb::ModelTypeState model_type_state;
-  model_type_state.set_initial_sync_done(true);
-  processor->OnUpdateReceived(model_type_state, std::move(updates));
+  model_type_state.set_initial_sync_state(
+      sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
+  processor->OnUpdateReceived(model_type_state, std::move(updates),
+                              /*gc_directive=*/absl::nullopt);
   // ClientTagBasedModelTypeProcessor uses ModelTypeProcessorProxy during
   // activation, which involves task posting for receiving updates.
   base::RunLoop().RunUntilIdle();
@@ -217,9 +219,8 @@ void RecentTabsBuilderTestHelper::VerifyExport(
   ASSERT_TRUE(delegate->GetAllForeignSessions(&sessions));
   ASSERT_EQ(GetSessionCount(), static_cast<int>(sessions.size()));
   for (int s = 0; s < GetSessionCount(); ++s) {
-    std::vector<const sessions::SessionWindow*> windows;
-    ASSERT_TRUE(delegate->GetForeignSession(ToSessionTag(GetSessionID(s)),
-                                            &windows));
+    std::vector<const sessions::SessionWindow*> windows =
+        delegate->GetForeignSession(ToSessionTag(GetSessionID(s)));
     ASSERT_EQ(GetWindowCount(s), static_cast<int>(windows.size()));
     for (int w = 0; w < GetWindowCount(s); ++w)
       ASSERT_EQ(GetTabCount(s, w), static_cast<int>(windows[w]->tabs.size()));
@@ -266,7 +267,7 @@ void RecentTabsBuilderTestHelper::AddWindowToHeaderSpecifics(
   SessionID window_id = GetWindowID(session_index, window_index);
   window->set_window_id(window_id.id());
   window->set_selected_tab_index(0);
-  window->set_browser_type(sync_pb::SessionWindow_BrowserType_TYPE_TABBED);
+  window->set_browser_type(sync_pb::SyncEnums_BrowserType_TYPE_TABBED);
   for (int i = 0; i < GetTabCount(session_index, window_index); ++i)
     window->add_tab(GetTabID(session_index, window_index, i).id());
 }

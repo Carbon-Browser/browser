@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,7 +80,9 @@ void OverlayAgentMac::InstallPreTargetHandlerOnWidget(views::Widget* widget) {
     return;
   widget->GetRootView()->AddPreTargetHandler(
       this, ui::EventTarget::Priority::kSystem);
-  widget->AddObserver(this);
+  if (!widget->HasObserver(this)) {
+    widget->AddObserver(this);
+  }
 }
 void OverlayAgentMac::RemovePreTargetHandlerOnWidget(views::Widget* widget) {
   if (!widget)

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/webapps/browser/android/add_to_homescreen_installer.h"
 #include "components/webapps/browser/android/add_to_homescreen_mediator.h"
@@ -24,6 +24,14 @@ bool AddToHomescreenCoordinator::ShowForAppBanner(
     base::RepeatingCallback<void(AddToHomescreenInstaller::Event,
                                  const AddToHomescreenParams&)>
         event_callback) {
+  // Don't start if app info is not available.
+  if ((params->app_type == AddToHomescreenParams::AppType::NATIVE &&
+       params->native_app_data.is_null()) ||
+      (params->app_type == AddToHomescreenParams::AppType::WEBAPK &&
+       !params->shortcut_info)) {
+    return false;
+  }
+
   JNIEnv* env = base::android::AttachCurrentThread();
   AddToHomescreenMediator* mediator = (AddToHomescreenMediator*)
       Java_AddToHomescreenCoordinator_initMvcAndReturnMediator(

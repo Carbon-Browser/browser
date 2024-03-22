@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,30 +6,23 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/statusor.h"
 
 namespace reporting {
 
-namespace {
-
 // Temporary: enable/disable encryption.
-const base::Feature kEncryptedReportingFeature{
-    EncryptionModuleInterface::kEncryptedReporting,
-    base::FEATURE_ENABLED_BY_DEFAULT};
-
-}  // namespace
-
-// static
-const char EncryptionModuleInterface::kEncryptedReporting[] =
-    "EncryptedReporting";
+BASE_FEATURE(kEncryptedReportingFeature,
+             "EncryptedReporting",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // static
 bool EncryptionModuleInterface::is_enabled() {
@@ -43,7 +36,7 @@ EncryptionModuleInterface::EncryptionModuleInterface(
 EncryptionModuleInterface::~EncryptionModuleInterface() = default;
 
 void EncryptionModuleInterface::EncryptRecord(
-    base::StringPiece record,
+    std::string_view record,
     base::OnceCallback<void(StatusOr<EncryptedRecord>)> cb) const {
   if (!is_enabled()) {
     // Encryptor disabled.
@@ -58,8 +51,8 @@ void EncryptionModuleInterface::EncryptRecord(
   // Encryptor enabled: start encryption of the record as a whole.
   if (!has_encryption_key()) {
     // Encryption key is not available.
-    std::move(cb).Run(
-        Status(error::NOT_FOUND, "Cannot encrypt record - no key"));
+    std::move(cb).Run(base::unexpected(
+        Status(error::NOT_FOUND, "Cannot encrypt record - no key")));
     return;
   }
   // Encryption key is available, encrypt.
@@ -67,7 +60,7 @@ void EncryptionModuleInterface::EncryptRecord(
 }
 
 void EncryptionModuleInterface::UpdateAsymmetricKey(
-    base::StringPiece new_public_key,
+    std::string_view new_public_key,
     PublicKeyId new_public_key_id,
     base::OnceCallback<void(Status)> response_cb) {
   UpdateAsymmetricKeyImpl(

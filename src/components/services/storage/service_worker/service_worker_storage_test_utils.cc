@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/service_worker/service_worker_storage_test_utils.h"
 
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -29,7 +30,7 @@ void ReadDataPipeInternal(mojo::DataPipeConsumerHandle handle,
         std::move(quit_closure).Run();
         return;
       case MOJO_RESULT_SHOULD_WAIT:
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(&ReadDataPipeInternal, handle, result,
                                       std::move(quit_closure)));
         return;
@@ -50,33 +51,6 @@ void ReadDataPipeInternal(mojo::DataPipeConsumerHandle handle,
 }
 
 }  // namespace
-
-FakeServiceWorkerDataPipeStateNotifier::
-    FakeServiceWorkerDataPipeStateNotifier() = default;
-
-FakeServiceWorkerDataPipeStateNotifier::
-    ~FakeServiceWorkerDataPipeStateNotifier() = default;
-
-mojo::PendingRemote<mojom::ServiceWorkerDataPipeStateNotifier>
-FakeServiceWorkerDataPipeStateNotifier::BindNewPipeAndPassRemote() {
-  return receiver_.BindNewPipeAndPassRemote();
-}
-
-int32_t FakeServiceWorkerDataPipeStateNotifier::WaitUntilComplete() {
-  if (!complete_status_.has_value()) {
-    base::RunLoop loop;
-    on_complete_callback_ = loop.QuitClosure();
-    loop.Run();
-    DCHECK(complete_status_.has_value());
-  }
-  return *complete_status_;
-}
-
-void FakeServiceWorkerDataPipeStateNotifier::OnComplete(int32_t status) {
-  complete_status_ = status;
-  if (on_complete_callback_)
-    std::move(on_complete_callback_).Run();
-}
 
 namespace test {
 

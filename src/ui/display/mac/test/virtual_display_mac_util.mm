@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,64 +9,36 @@
 
 #include <map>
 
-#include "base/auto_reset.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/check.h"
 #include "base/check_op.h"
-#include "base/mac/scoped_nsobject.h"
-#include "build/build_config.h"
+#include "base/strings/sys_string_conversions.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/size.h"
 
 // These interfaces were generated from CoreGraphics binaries.
-API_AVAILABLE(macos(10.14))
-@interface CGVirtualDisplay : NSObject {
-  unsigned int _vendorID;
-  unsigned int _productID;
-  unsigned int _serialNum;
-  NSString* _name;
-  struct CGSize _sizeInMillimeters;
-  unsigned int _maxPixelsWide;
-  unsigned int _maxPixelsHigh;
-  struct CGPoint _redPrimary;
-  struct CGPoint _greenPrimary;
-  struct CGPoint _bluePrimary;
-  struct CGPoint _whitePoint;
-  id _queue;
-  id _terminationHandler;
-  unsigned int _displayID;
-  unsigned int _hiDPI;
-  NSArray* _modes;
-}
+@interface CGVirtualDisplay : NSObject
 
+@property(readonly, nonatomic) unsigned int vendorID;
+@property(readonly, nonatomic) unsigned int productID;
+@property(readonly, nonatomic) unsigned int serialNum;
+@property(readonly, nonatomic) NSString* name;
+@property(readonly, nonatomic) struct CGSize sizeInMillimeters;
+@property(readonly, nonatomic) unsigned int maxPixelsWide;
+@property(readonly, nonatomic) unsigned int maxPixelsHigh;
+@property(readonly, nonatomic) struct CGPoint redPrimary;
+@property(readonly, nonatomic) struct CGPoint greenPrimary;
+@property(readonly, nonatomic) struct CGPoint bluePrimary;
+@property(readonly, nonatomic) struct CGPoint whitePoint;
+@property(readonly, nonatomic) id queue;
+@property(readonly, nonatomic) id terminationHandler;
+@property(readonly, nonatomic) unsigned int displayID;
+@property(readonly, nonatomic) unsigned int hiDPI;
+@property(readonly, nonatomic) NSArray* modes;
 @property(readonly, nonatomic)
-    unsigned int vendorID;  // @synthesize vendorID=_vendorID;
-@property(readonly, nonatomic)
-    unsigned int productID;  // @synthesize productID=_productID;
-@property(readonly, nonatomic)
-    unsigned int serialNum;  // @synthesize serialNum=_serialNum;
-@property(readonly, nonatomic) NSString* name;  // @synthesize name=_name;
-@property(readonly, nonatomic) struct CGSize
-    sizeInMillimeters;  // @synthesize sizeInMillimeters=_sizeInMillimeters;
-@property(readonly, nonatomic)
-    unsigned int maxPixelsWide;  // @synthesize maxPixelsWide=_maxPixelsWide;
-@property(readonly, nonatomic)
-    unsigned int maxPixelsHigh;  // @synthesize maxPixelsHigh=_maxPixelsHigh;
-@property(readonly, nonatomic)
-    struct CGPoint redPrimary;  // @synthesize redPrimary=_redPrimary;
-@property(readonly, nonatomic)
-    struct CGPoint greenPrimary;  // @synthesize greenPrimary=_greenPrimary;
-@property(readonly, nonatomic)
-    struct CGPoint bluePrimary;  // @synthesize bluePrimary=_bluePrimary;
-@property(readonly, nonatomic)
-    struct CGPoint whitePoint;            // @synthesize whitePoint=_whitePoint;
-@property(readonly, nonatomic) id queue;  // @synthesize queue=_queue;
-@property(readonly, nonatomic) id
-    terminationHandler;  // @synthesize terminationHandler=_terminationHandler;
-@property(readonly, nonatomic)
-    unsigned int displayID;  // @synthesize displayID=_displayID;
-@property(readonly, nonatomic) unsigned int hiDPI;  // @synthesize hiDPI=_hiDPI;
-@property(readonly, nonatomic) NSArray* modes;      // @synthesize modes=_modes;
+    unsigned int serialNumber API_AVAILABLE(macos(11.0));
+@property(readonly, nonatomic) unsigned int rotation API_AVAILABLE(macos(11.0));
 - (BOOL)applySettings:(id)arg1;
 - (void)dealloc;
 - (id)initWithDescriptor:(id)arg1;
@@ -74,46 +46,22 @@ API_AVAILABLE(macos(10.14))
 @end
 
 // These interfaces were generated from CoreGraphics binaries.
-API_AVAILABLE(macos(10.14))
-@interface CGVirtualDisplayDescriptor : NSObject {
-  unsigned int _vendorID;
-  unsigned int _productID;
-  unsigned int _serialNum;
-  NSString* _name;
-  struct CGSize _sizeInMillimeters;
-  unsigned int _maxPixelsWide;
-  unsigned int _maxPixelsHigh;
-  struct CGPoint _redPrimary;
-  struct CGPoint _greenPrimary;
-  struct CGPoint _bluePrimary;
-  struct CGPoint _whitePoint;
-  id _queue;
-  id _terminationHandler;
-}
+@interface CGVirtualDisplayDescriptor : NSObject
 
-@property(nonatomic) unsigned int vendorID;  // @synthesize vendorID=_vendorID;
-@property(nonatomic)
-    unsigned int productID;  // @synthesize productID=_productID;
-@property(nonatomic)
-    unsigned int serialNum;  // @synthesize serialNum=_serialNum;
-@property(strong, nonatomic) NSString* name;  // @synthesize name=_name;
-@property(nonatomic) struct CGSize
-    sizeInMillimeters;  // @synthesize sizeInMillimeters=_sizeInMillimeters;
-@property(nonatomic)
-    unsigned int maxPixelsWide;  // @synthesize maxPixelsWide=_maxPixelsWide;
-@property(nonatomic)
-    unsigned int maxPixelsHigh;  // @synthesize maxPixelsHigh=_maxPixelsHigh;
-@property(nonatomic)
-    struct CGPoint redPrimary;  // @synthesize redPrimary=_redPrimary;
-@property(nonatomic)
-    struct CGPoint greenPrimary;  // @synthesize greenPrimary=_greenPrimary;
-@property(nonatomic)
-    struct CGPoint bluePrimary;  // @synthesize bluePrimary=_bluePrimary;
-@property(nonatomic)
-    struct CGPoint whitePoint;          // @synthesize whitePoint=_whitePoint;
-@property(retain, nonatomic) id queue;  // @synthesize queue=_queue;
-@property(copy, nonatomic) id
-    terminationHandler;  // @synthesize terminationHandler=_terminationHandler;
+@property(nonatomic) unsigned int vendorID;
+@property(nonatomic) unsigned int productID;
+@property(nonatomic) unsigned int serialNum;
+@property(strong, nonatomic) NSString* name;
+@property(nonatomic) struct CGSize sizeInMillimeters;
+@property(nonatomic) unsigned int maxPixelsWide;
+@property(nonatomic) unsigned int maxPixelsHigh;
+@property(nonatomic) struct CGPoint redPrimary;
+@property(nonatomic) struct CGPoint greenPrimary;
+@property(nonatomic) struct CGPoint bluePrimary;
+@property(nonatomic) struct CGPoint whitePoint;
+@property(strong, nonatomic) id queue;
+@property(copy, nonatomic) id terminationHandler;
+@property(nonatomic) unsigned int serialNumber API_AVAILABLE(macos(11.0));
 - (void)dealloc;
 - (id)init;
 - (id)dispatchQueue;
@@ -122,33 +70,28 @@ API_AVAILABLE(macos(10.14))
 @end
 
 // These interfaces were generated from CoreGraphics binaries.
-API_AVAILABLE(macos(10.14))
-@interface CGVirtualDisplayMode : NSObject {
-  unsigned int _width;
-  unsigned int _height;
-  double _refreshRate;
-}
+@interface CGVirtualDisplayMode : NSObject
 
-@property(readonly, nonatomic) unsigned int width;  // @synthesize width=_width;
-@property(readonly, nonatomic)
-    unsigned int height;  // @synthesize height=_height;
-@property(readonly, nonatomic)
-    double refreshRate;  // @synthesize refreshRate=_refreshRate;
+@property(readonly, nonatomic) unsigned int width;
+@property(readonly, nonatomic) unsigned int height;
+@property(readonly, nonatomic) double refreshRate;
+@property(copy, nonatomic) id transferFunction API_AVAILABLE(macos(13.3));
 - (id)initWithWidth:(unsigned int)arg1
              height:(unsigned int)arg2
         refreshRate:(double)arg3;
+- (id)initWithWidth:(unsigned int)arg1
+              height:(unsigned int)arg2
+         refreshRate:(double)arg3
+    transferFunction:(id)arg4 API_AVAILABLE(macos(13.3));
 
 @end
 
 // These interfaces were generated from CoreGraphics binaries.
-API_AVAILABLE(macos(10.14))
-@interface CGVirtualDisplaySettings : NSObject {
-  NSArray* _modes;
-  unsigned int _hiDPI;
-}
+@interface CGVirtualDisplaySettings : NSObject
 
-@property(strong, nonatomic) NSArray* modes;  // @synthesize modes=_modes;
-@property(nonatomic) unsigned int hiDPI;      // @synthesize hiDPI=_hiDPI;
+@property(strong, nonatomic) NSArray* modes;
+@property(nonatomic) unsigned int hiDPI;
+@property(nonatomic) unsigned int rotation API_AVAILABLE(macos(11.0));
 - (void)dealloc;
 - (id)init;
 
@@ -156,71 +99,64 @@ API_AVAILABLE(macos(10.14))
 
 namespace {
 
-static bool g_during_warm_up = false;
-
-base::flat_set<int64_t> g_unexpected_display_ids;
+static bool g_need_display_removal_workaround = true;
 
 // A global singleton that tracks the current set of mocked displays.
-std::map<int64_t, base::scoped_nsobject<CGVirtualDisplay>> g_display_map
-    API_AVAILABLE(macos(10.14));
+std::map<int64_t, CGVirtualDisplay * __strong> g_display_map;
 
 // A helper function for creating virtual display and return CGVirtualDisplay
 // object.
-base::scoped_nsobject<CGVirtualDisplay> CreateVirtualDisplay(int width,
-                                                             int height,
-                                                             int ppi,
-                                                             BOOL hiDPI,
-                                                             NSString* name)
-    API_AVAILABLE(macos(10.14)) {
-  base::scoped_nsobject<CGVirtualDisplaySettings> settings(
-      [[CGVirtualDisplaySettings alloc] init]);
-  [settings setHiDPI:hiDPI];
-
-  base::scoped_nsobject<CGVirtualDisplayDescriptor> descriptor(
-      [[CGVirtualDisplayDescriptor alloc] init]);
-  [descriptor
-      setQueue:dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0)];
-  [descriptor setName:name];
-
-  // See System Preferences > Displays > Color > Open Profile > Apple display
-  // native information
-  [descriptor setWhitePoint:CGPointMake(0.3125, 0.3291)];
-  [descriptor setBluePrimary:CGPointMake(0.1494, 0.0557)];
-  [descriptor setGreenPrimary:CGPointMake(0.2559, 0.6983)];
-  [descriptor setRedPrimary:CGPointMake(0.6797, 0.3203)];
-  [descriptor setMaxPixelsHigh:height];
-  [descriptor setMaxPixelsWide:width];
-  [descriptor
-      setSizeInMillimeters:CGSizeMake(25.4 * width / ppi, 25.4 * height / ppi)];
-  [descriptor setSerialNum:0];
-  [descriptor setProductID:0];
-  [descriptor setVendorID:0];
-
-  base::scoped_nsobject<CGVirtualDisplay> display(
-      [[CGVirtualDisplay alloc] initWithDescriptor:descriptor]);
-
-  if ([settings hiDPI]) {
-    width /= 2;
-    height /= 2;
+CGVirtualDisplay* CreateVirtualDisplay(int width,
+                                       int height,
+                                       int ppi,
+                                       BOOL hiDPI,
+                                       NSString* name,
+                                       int serial_number) {
+  CGVirtualDisplayDescriptor* descriptor =
+      [[CGVirtualDisplayDescriptor alloc] init];
+  descriptor.queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
+  descriptor.name = name;
+  descriptor.whitePoint = CGPointMake(0.3125, 0.3291);
+  descriptor.bluePrimary = CGPointMake(0.1494, 0.0557);
+  descriptor.greenPrimary = CGPointMake(0.2559, 0.6983);
+  descriptor.redPrimary = CGPointMake(0.6797, 0.3203);
+  descriptor.maxPixelsHigh = height;
+  descriptor.maxPixelsWide = width;
+  descriptor.sizeInMillimeters =
+      CGSizeMake(25.4 * width / ppi, 25.4 * height / ppi);
+  // macOS 14 expects different virtual displays to have different serial
+  // numbers.
+  descriptor.serialNum = serial_number;
+  descriptor.productID = 0;
+  // macOS 14 expects a non-zero vendorID. Choose an arbitrary value.
+  int kVendorID = 505;
+  descriptor.vendorID = kVendorID;
+  descriptor.terminationHandler = nil;
+  if (@available(macos 11.0, *)) {
+    descriptor.serialNumber = serial_number;
   }
-  base::scoped_nsobject<CGVirtualDisplayMode> mode([[CGVirtualDisplayMode alloc]
-      initWithWidth:width
-             height:height
-        refreshRate:60]);
-  [settings setModes:@[ mode ]];
 
-  if (![display applySettings:settings])
-    return base::scoped_nsobject<CGVirtualDisplay>();
+  CGVirtualDisplay* display =
+      [[CGVirtualDisplay alloc] initWithDescriptor:descriptor];
+  if (!display) {
+    LOG(ERROR) << __func__ << " - CGVirtualDisplay initWithDescriptor failed";
+    return nil;
+  }
 
+  CGVirtualDisplaySettings* settings = [[CGVirtualDisplaySettings alloc] init];
+  settings.hiDPI = hiDPI;
+  if (@available(macos 11.0, *)) {
+    settings.rotation = 0;
+  }
+  CGVirtualDisplayMode* mode =
+      [[CGVirtualDisplayMode alloc] initWithWidth:(hiDPI ? width / 2 : width)
+                                           height:(hiDPI ? height / 2 : height)
+                                      refreshRate:60];
+  settings.modes = @[ mode ];
+  if (![display applySettings:settings]) {
+    LOG(ERROR) << __func__ << " - CGVirtualDisplay applySettings failed";
+  }
   return display;
-}
-
-void DealWithUnexpectedDisplay(int64_t id) {
-  if (g_unexpected_display_ids.count(id)) {
-    g_unexpected_display_ids.erase(id);
-  } else {
-    g_unexpected_display_ids.insert(id);
-  }
 }
 
 // This method detects whether the local machine is running headless.
@@ -262,6 +198,100 @@ bool IsRunningHeadless() {
   return is_running_headless;
 }
 
+// Observer for display metrics change notifications.
+class DisplayMetricsChangeObserver : public display::DisplayObserver {
+ public:
+  DisplayMetricsChangeObserver(int64_t display_id,
+                               const gfx::Size& size,
+                               uint32_t expected_changed_metrics)
+      : display_id_(display_id),
+        size_(size),
+        expected_changed_metrics_(expected_changed_metrics) {
+    display::Screen::GetScreen()->AddObserver(this);
+  }
+  ~DisplayMetricsChangeObserver() override {
+    display::Screen::GetScreen()->RemoveObserver(this);
+  }
+
+  DisplayMetricsChangeObserver(const DisplayMetricsChangeObserver&) = delete;
+  DisplayMetricsChangeObserver& operator=(const DisplayMetricsChangeObserver&) =
+      delete;
+
+  // Runs a loop until the display metrics change is seen (unless one has
+  // already been observed, in which case it returns immediately).
+  void Wait() {
+    if (observed_change_)
+      return;
+
+    run_loop_.Run();
+  }
+
+ private:
+  // display::DisplayObserver:
+  void OnDisplayMetricsChanged(const display::Display& display,
+                               uint32_t changed_metrics) override {
+    if (!(display.id() == display_id_ && display.size() == size_ &&
+          (changed_metrics & expected_changed_metrics_))) {
+      return;
+    }
+
+    observed_change_ = true;
+    if (run_loop_.running())
+      run_loop_.Quit();
+  }
+  void OnDisplayAdded(const display::Display& new_display) override {}
+  void OnDisplayRemoved(const display::Display& old_display) override {}
+
+  const int64_t display_id_;
+  const gfx::Size size_;
+  const uint32_t expected_changed_metrics_;
+
+  bool observed_change_ = false;
+  base::RunLoop run_loop_;
+};
+
+void EnsureDisplayWithResolution(CGDirectDisplayID display_id,
+                                 const gfx::Size& size) {
+  base::apple::ScopedCFTypeRef<CGDisplayModeRef> current_display_mode(
+      CGDisplayCopyDisplayMode(display_id));
+  if (gfx::Size(CGDisplayModeGetWidth(current_display_mode.get()),
+                CGDisplayModeGetHeight(current_display_mode.get())) == size) {
+    return;
+  }
+
+  base::apple::ScopedCFTypeRef<CFArrayRef> display_modes(
+      CGDisplayCopyAllDisplayModes(display_id, nullptr));
+  DCHECK(display_modes);
+
+  CGDisplayModeRef preferred_display_mode = nullptr;
+  for (CFIndex i = 0; i < CFArrayGetCount(display_modes.get()); ++i) {
+    CGDisplayModeRef display_mode =
+        (CGDisplayModeRef)CFArrayGetValueAtIndex(display_modes.get(), i);
+    if (gfx::Size(CGDisplayModeGetWidth(display_mode),
+                  CGDisplayModeGetHeight(display_mode)) == size) {
+      preferred_display_mode = display_mode;
+      break;
+    }
+  }
+  DCHECK(preferred_display_mode);
+
+  uint32_t expected_changed_metrics =
+      display::DisplayObserver::DISPLAY_METRIC_BOUNDS |
+      display::DisplayObserver::DISPLAY_METRIC_WORK_AREA |
+      display::DisplayObserver::DISPLAY_METRIC_DEVICE_SCALE_FACTOR;
+  DisplayMetricsChangeObserver display_metrics_change_observer(
+      display_id, size, expected_changed_metrics);
+
+  // This operation is always synchronous. The function doesn’t return until the
+  // mode switch is complete.
+  CGError result =
+      CGDisplaySetDisplayMode(display_id, preferred_display_mode, nullptr);
+  DCHECK_EQ(result, kCGErrorSuccess);
+
+  // Wait for `display::Screen` and `display::Display` structures to be updated.
+  display_metrics_change_observer.Wait();
+}
+
 }  // namespace
 
 namespace display::test {
@@ -276,19 +306,17 @@ struct DisplayParams {
         height(height),
         ppi(ppi),
         hiDPI(hiDPI),
-        description([NSString
-            stringWithCString:description.c_str()
-                     encoding:[NSString defaultCStringEncoding]]) {}
+        description(base::SysUTF8ToNSString(description)) {}
 
   bool IsValid() const {
-    return width > 0 && height > 0 && ppi > 0 && [description length] > 0;
+    return width > 0 && height > 0 && ppi > 0 && description.length > 0;
   }
 
   int width;
   int height;
   int ppi;
   BOOL hiDPI;
-  base::scoped_nsobject<NSString> description;
+  NSString* __strong description;
 };
 
 VirtualDisplayMacUtil::VirtualDisplayMacUtil() {
@@ -300,107 +328,90 @@ VirtualDisplayMacUtil::~VirtualDisplayMacUtil() {
   display::Screen::GetScreen()->RemoveObserver(this);
 }
 
-void VirtualDisplayMacUtil::WarmUp() {
-  constexpr int kMaxRetryCount = 4;
-
-  // TODO(crbug.com/1126278): Please remove this log or replace it with
-  // [D]CHECK() ASAP when the TEST is stable.
-  LOG(INFO) << "VirtualDisplayMacUtil::" << __func__ << " - start.";
-
-  base::AutoReset<bool> auto_reset(&g_during_warm_up, true);
-
-  int retry_count = 0;
-  do {
-    for (int64_t display_id : {1, 2}) {
-      AddDisplay(display_id, k1920x1080);
-    }
-    RemoveAllDisplays();
-
-    retry_count++;
-  } while (!g_unexpected_display_ids.empty() && retry_count <= kMaxRetryCount);
-
-  // TODO(crbug.com/1126278): Please remove this log or replace it with
-  // [D]CHECK() ASAP when the TEST is stable.
-  LOG(INFO) << "VirtualDisplayMacUtil::" << __func__ << " - end.";
-}
-
 int64_t VirtualDisplayMacUtil::AddDisplay(int64_t display_id,
                                           const DisplayParams& display_params) {
-  if (@available(macos 10.14, *)) {
-    bool need_warm_up = NeedWarmUp();
+  DCHECK(display_params.IsValid());
 
-    DCHECK(display_params.IsValid());
+  NSString* display_name =
+      [NSString stringWithFormat:@"Virtual Display #%lld", display_id];
+  CGVirtualDisplay* display = CreateVirtualDisplay(
+      display_params.width, display_params.height, display_params.ppi,
+      display_params.hiDPI, display_name, display_id);
+  DCHECK(display);
 
-    NSString* display_name =
-        [NSString stringWithFormat:@"Virtual Display #%lld", display_id];
-    base::scoped_nsobject<CGVirtualDisplay> display = CreateVirtualDisplay(
-        display_params.width, display_params.height, display_params.ppi,
-        display_params.hiDPI, display_name);
-    DCHECK(display.get());
+  // TODO(crbug.com/1126278): Please remove this log or replace it with
+  // [D]CHECK() ASAP when the TEST is stable.
+  LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
+            << " - display id: " << display_id
+            << ". CreateVirtualDisplay success.";
 
-    // TODO(crbug.com/1126278): Please remove this log or replace it with
-    // [D]CHECK() ASAP when the TEST is stable.
-    LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
-              << " - display id: " << display_id
-              << ". CreateVirtualDisplay success.";
+  int64_t id = display.displayID;
+  DCHECK_NE(id, 0u);
 
-    int64_t id = [display displayID];
-    DCHECK_NE(id, 0u);
+  WaitForDisplay(id, /*added=*/true);
 
-    WaitForDisplay(id, /*added=*/true);
+  EnsureDisplayWithResolution(
+      id, gfx::Size(display_params.width, display_params.height));
 
-    // TODO(crbug.com/1126278): Please remove this log or replace it with
-    // [D]CHECK() ASAP when the TEST is stable.
-    LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
-              << " - display id: " << display_id << "(" << id
-              << "). WaitForDisplay success.";
+  // TODO(crbug.com/1126278): Please remove this log or replace it with
+  // [D]CHECK() ASAP when the TEST is stable.
+  LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
+            << " - display id: " << display_id << "(" << id
+            << "). WaitForDisplay success.";
 
-    DCHECK(!g_display_map[id]);
-    g_display_map[id] = display;
+  DCHECK(!g_display_map[id]);
+  g_display_map[id] = display;
 
-    if (need_warm_up) {
-      int64_t tmp_id = AddDisplay(0, display_params);
-      RemoveDisplay(tmp_id);
-    }
-
-    return id;
-  }
-  return display::kInvalidDisplayId;
+  return id;
 }
 
 void VirtualDisplayMacUtil::RemoveDisplay(int64_t display_id) {
-  if (@available(macos 10.14, *)) {
-    auto it = g_display_map.find(display_id);
-    DCHECK(it != g_display_map.end());
+  auto it = g_display_map.find(display_id);
+  DCHECK(it != g_display_map.end());
+
+  // The first display removal has known flaky timeouts if removed
+  // individually. Remove another display simultaneously during the first
+  // display removal.
+  // TODO(crbug.com/1126278): Resolve this defect in a more hermetic manner.
+  if (g_need_display_removal_workaround) {
+    const int64_t tmp_display_id = AddDisplay(0, k1920x1080);
+    auto tmp_it = g_display_map.find(tmp_display_id);
+    DCHECK(tmp_it != g_display_map.end());
+
+    waiting_for_ids_.insert(display_id);
+    waiting_for_ids_.insert(tmp_display_id);
 
     g_display_map.erase(it);
+    g_display_map.erase(tmp_it);
 
-    // TODO(crbug.com/1126278): Please remove this log or replace it with
-    // [D]CHECK() ASAP when the TEST is stable.
-    LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
-              << " - display id: " << display_id << ". Erase success.";
+    g_need_display_removal_workaround = false;
 
-    WaitForDisplay(display_id, /*added=*/false);
+    StartWaiting();
 
-    // TODO(crbug.com/1126278): Please remove this log or replace it with
-    // [D]CHECK() ASAP when the TEST is stable.
-    LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
-              << " - display id: " << display_id << ". WaitForDisplay success.";
+    return;
   }
+
+  g_display_map.erase(it);
+
+  // TODO(crbug.com/1126278): Please remove this log or replace it with
+  // [D]CHECK() ASAP when the TEST is stable.
+  LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
+            << " - display id: " << display_id << ". Erase success.";
+
+  WaitForDisplay(display_id, /*added=*/false);
+
+  // TODO(crbug.com/1126278): Please remove this log or replace it with
+  // [D]CHECK() ASAP when the TEST is stable.
+  LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
+            << " - display id: " << display_id << ". WaitForDisplay success.";
 }
 
 // static
 bool VirtualDisplayMacUtil::IsAPIAvailable() {
-  bool is_arch_cpu_arm_family = false;
-#if defined(ARCH_CPU_ARM_FAMILY)
-  is_arch_cpu_arm_family = true;
-#endif  // defined(ARCH_CPU_ARM_FAMILY)
-  if (is_arch_cpu_arm_family) {
-    return false;
-  }
-
   bool is_api_available = false;
-  if (@available(macos 12.0, *)) {
+  // The underlying API is only available on macos 10.14 or higher.
+  // TODO(crbug.com/1126278): enable support on 10.15.
+  if (@available(macos 11.0, *)) {
     is_api_available = true;
   }
   if (!is_api_available) {
@@ -532,7 +543,11 @@ void VirtualDisplayMacUtil::OnDisplayRemoved(
 
 void VirtualDisplayMacUtil::OnDisplayAddedOrRemoved(int64_t id) {
   if (!waiting_for_ids_.count(id)) {
-    DealWithUnexpectedDisplay(id);
+    // TODO(crbug.com/1126278): Please remove this log or replace it with
+    // [D]CHECK() ASAP when the TEST is stable.
+    LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
+              << " - unexpected display id: " << id << ".";
+
     return;
   }
 
@@ -541,33 +556,33 @@ void VirtualDisplayMacUtil::OnDisplayAddedOrRemoved(int64_t id) {
     return;
   }
 
-  run_loop_->Quit();
+  StopWaiting();
 }
 
 void VirtualDisplayMacUtil::RemoveAllDisplays() {
-  if (@available(macos 10.14, *)) {
-    int display_count = g_display_map.size();
+  int display_count = g_display_map.size();
 
-    // TODO(crbug.com/1126278): Please remove this log or replace it with
-    // [D]CHECK() ASAP when the TEST is stable.
-    LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
-              << " - display count: " << display_count << ".";
+  // TODO(crbug.com/1126278): Please remove this log or replace it with
+  // [D]CHECK() ASAP when the TEST is stable.
+  LOG(INFO) << "VirtualDisplayMacUtil::" << __func__
+            << " - display count: " << display_count << ".";
 
-    if (!display_count) {
-      return;
-    }
-
-    auto iter = g_display_map.begin();
-    while (iter != g_display_map.end()) {
-      waiting_for_ids_.insert(iter->first);
-      iter++;
-    }
-
-    g_display_map.clear();
-
-    run_loop_ = std::make_unique<base::RunLoop>();
-    run_loop_->Run();
+  if (!display_count) {
+    return;
   }
+
+  if (display_count == 1 && g_need_display_removal_workaround) {
+    RemoveDisplay(g_display_map.begin()->first);
+    return;
+  }
+
+  for (const auto& [id, display] : g_display_map) {
+    waiting_for_ids_.insert(id);
+  }
+
+  g_display_map.clear();
+
+  StartWaiting();
 }
 
 void VirtualDisplayMacUtil::WaitForDisplay(int64_t id, bool added) {
@@ -576,27 +591,26 @@ void VirtualDisplayMacUtil::WaitForDisplay(int64_t id, bool added) {
     return;
   }
 
+  waiting_for_ids_.insert(id);
+
   // TODO(crbug.com/1126278): Please remove this log or replace it with
   // [D]CHECK() ASAP when the TEST is stable.
   LOG(INFO) << "VirtualDisplayMacUtil::" << __func__ << " - display id: " << id
             << "(added: " << added << "). Start waiting.";
 
-  waiting_for_ids_.insert(id);
-
-  run_loop_ = std::make_unique<base::RunLoop>();
-  run_loop_->Run();
+  StartWaiting();
 }
 
-bool VirtualDisplayMacUtil::NeedWarmUp() {
-  if (g_during_warm_up) {
-    return false;
-  }
+void VirtualDisplayMacUtil::StartWaiting() {
+  DCHECK(!run_loop_);
+  run_loop_ = std::make_unique<base::RunLoop>();
+  run_loop_->Run();
+  run_loop_.reset();
+}
 
-  if (@available(macos 10.14, *)) {
-    return g_display_map.empty();
-  }
-
-  return false;
+void VirtualDisplayMacUtil::StopWaiting() {
+  DCHECK(run_loop_);
+  run_loop_->Quit();
 }
 
 }  // namespace display::test

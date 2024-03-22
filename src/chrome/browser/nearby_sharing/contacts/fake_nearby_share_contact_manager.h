@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_manager.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_manager_impl.h"
 #include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
@@ -64,15 +65,24 @@ class FakeNearbyShareContactManager : public NearbyShareContactManager {
         NearbyShareProfileInfoProvider* profile_info_provider) override;
 
     std::vector<FakeNearbyShareContactManager*> instances_;
-    PrefService* latest_pref_service_ = nullptr;
-    NearbyShareClientFactory* latest_http_client_factory_ = nullptr;
-    NearbyShareLocalDeviceDataManager* latest_local_device_data_manager_ =
-        nullptr;
-    NearbyShareProfileInfoProvider* latest_profile_info_provider_ = nullptr;
+    raw_ptr<PrefService, ExperimentalAsh> latest_pref_service_ = nullptr;
+    raw_ptr<NearbyShareClientFactory, DanglingUntriaged | ExperimentalAsh>
+        latest_http_client_factory_ = nullptr;
+    raw_ptr<NearbyShareLocalDeviceDataManager,
+            DanglingUntriaged | ExperimentalAsh>
+        latest_local_device_data_manager_ = nullptr;
+    raw_ptr<NearbyShareProfileInfoProvider, DanglingUntriaged | ExperimentalAsh>
+        latest_profile_info_provider_ = nullptr;
   };
 
   FakeNearbyShareContactManager();
   ~FakeNearbyShareContactManager() override;
+
+  // NearbyShareContactsManager:
+  void DownloadContacts() override;
+  void SetAllowedContacts(
+      const std::set<std::string>& allowed_contact_ids) override;
+  std::set<std::string> GetAllowedContacts() const override;
 
   size_t num_download_contacts_calls() const {
     return num_download_contacts_calls_;
@@ -89,9 +99,6 @@ class FakeNearbyShareContactManager : public NearbyShareContactManager {
 
  private:
   // NearbyShareContactsManager:
-  void DownloadContacts() override;
-  void SetAllowedContacts(
-      const std::set<std::string>& allowed_contact_ids) override;
   void OnStart() override;
   void OnStop() override;
   void Bind(mojo::PendingReceiver<nearby_share::mojom::ContactManager> receiver)

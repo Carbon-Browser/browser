@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ chrome.test.runTests([
 
     window.onCheckOpenerLoaded = function(testWindow) {
       // The opener should now be set...
-      chrome.test.assertTrue(testWindow.opener != null);
+      chrome.test.assertNe(null, testWindow.opener);
       // ...and the test window should only have one tab (because it was
       // targetted via the "target-window" name).
       chrome.tabs.getAllInWindow(

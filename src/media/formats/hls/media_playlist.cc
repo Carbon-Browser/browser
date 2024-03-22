@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,14 @@
 #include <utility>
 #include <vector>
 
+#include "base/memory/scoped_refptr.h"
 #include "base/numerics/clamped_math.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "media/formats/hls/media_segment.h"
 #include "media/formats/hls/multivariant_playlist.h"
 #include "media/formats/hls/parse_status.h"
+#include "media/formats/hls/playlist.h"
 #include "media/formats/hls/playlist_common.h"
 #include "media/formats/hls/source_string.h"
 #include "media/formats/hls/tags.h"
@@ -31,7 +33,7 @@ struct MediaPlaylist::CtorArgs {
   bool independent_segments;
   base::TimeDelta target_duration;
   absl::optional<PartialSegmentInfo> partial_segment_info;
-  std::vector<MediaSegment> segments;
+  std::vector<scoped_refptr<MediaSegment>> segments;
   base::TimeDelta total_duration;
   absl::optional<PlaylistType> playlist_type;
   bool end_list;
@@ -44,17 +46,24 @@ struct MediaPlaylist::CtorArgs {
   absl::optional<base::TimeDelta> part_hold_back_distance;
 };
 
-MediaPlaylist::MediaPlaylist(MediaPlaylist&&) = default;
-
-MediaPlaylist& MediaPlaylist::operator=(MediaPlaylist&&) = default;
-
 MediaPlaylist::~MediaPlaylist() = default;
 
+Playlist::Kind MediaPlaylist::GetKind() const {
+  return Kind::kMediaPlaylist;
+}
+
 // static
-ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
+ParseStatus::Or<scoped_refptr<MediaPlaylist>> MediaPlaylist::Parse(
     base::StringPiece source,
     GURL uri,
+    types::DecimalInteger version,
     const MultivariantPlaylist* parent_playlist) {
+  DCHECK(version != 0);
+  if (version < Playlist::kMinSupportedVersion ||
+      version > Playlist::kMaxSupportedVersion) {
+    return ParseStatusCode::kPlaylistHasUnsupportedVersion;
+  }
+
   if (!uri.is_valid()) {
     return ParseStatusCode::kInvalidUri;
   }
@@ -64,7 +73,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
   // Parse the first line of the playlist. This must be an M3U tag.
   {
     auto m3u_tag_result = CheckM3uTag(&src_iter);
-    if (m3u_tag_result.has_error()) {
+    if (!m3u_tag_result.has_value()) {
       return std::move(m3u_tag_result).error();
     }
   }
@@ -84,7 +93,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
   absl::optional<XServerControlTag> server_control_tag;
   absl::optional<XMediaSequenceTag> media_sequence_tag;
   absl::optional<XDiscontinuitySequenceTag> discontinuity_sequence_tag;
-  std::vector<MediaSegment> segments;
+  std::vector<scoped_refptr<MediaSegment>> segments;
   scoped_refptr<MediaSegment::InitializationSegment> initialization_segment;
 
   types::DecimalInteger discontinuity_sequence_number = 0;
@@ -99,7 +108,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
   // Get segments out of the playlist
   while (true) {
     auto item_result = GetNextLineItem(&src_iter);
-    if (item_result.has_error()) {
+    if (!item_result.has_value()) {
       auto error = std::move(item_result).error();
 
       // Only tolerated error is EOF, in which case we're done.
@@ -143,7 +152,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
         }
         case MediaPlaylistTagName::kXBitrate: {
           auto result = XBitrateTag::Parse(*tag);
-          if (result.has_error()) {
+          if (!result.has_value()) {
             return std::move(result).error();
           }
           bitrate_tag = std::move(result).value();
@@ -168,7 +177,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
           // number by 1. The spec doesn't explicitly forbid this, and this
           // seems to be how other HLS clients handle this scenario.
           auto result = XDiscontinuityTag::Parse(*tag);
-          if (result.has_error()) {
+          if (!result.has_value()) {
             return std::move(result).error();
           }
 
@@ -225,7 +234,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
         case MediaPlaylistTagName::kXMap: {
           auto result =
               XMapTag::Parse(*tag, common_state.variable_dict, sub_buffer);
-          if (result.has_error()) {
+          if (!result.has_value()) {
             return std::move(result).error();
           }
           auto value = std::move(result).value();
@@ -325,7 +334,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
     static_assert(absl::variant_size<GetNextLineItemResult>() == 2);
     auto segment_uri_result = ParseUri(absl::get<UriItem>(std::move(item)), uri,
                                        common_state, sub_buffer);
-    if (segment_uri_result.has_error()) {
+    if (!segment_uri_result.has_value()) {
       return std::move(segment_uri_result).error();
     }
     auto segment_uri = std::move(segment_uri_result).value();
@@ -356,12 +365,12 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
         offset = range.offset.value();
       } else if (segments.empty()) {
         return ParseStatusCode::kByteRangeRequiresOffset;
-      } else if (!segments.back().GetByteRange().has_value()) {
+      } else if (!segments.back()->GetByteRange().has_value()) {
         return ParseStatusCode::kByteRangeRequiresOffset;
-      } else if (segments.back().GetUri() != segment_uri) {
+      } else if (segments.back()->GetUri() != segment_uri) {
         return ParseStatusCode::kByteRangeRequiresOffset;
       } else {
-        offset = segments.back().GetByteRange()->GetEnd();
+        offset = segments.back()->GetByteRange()->GetEnd();
       }
 
       byterange = types::ByteRange::Validate(range.length, offset);
@@ -383,16 +392,21 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
       bitrate = base::ClampMul(bitrate_tag->bitrate, 1000u);
     }
 
-    segments.emplace_back(inf_tag->duration, media_sequence_number,
-                          discontinuity_sequence_number, std::move(segment_uri),
-                          initialization_segment, byterange, bitrate,
-                          discontinuity_tag.has_value(), gap_tag.has_value());
+    segments.push_back(base::MakeRefCounted<MediaSegment>(
+        inf_tag->duration, media_sequence_number, discontinuity_sequence_number,
+        std::move(segment_uri), initialization_segment, byterange, bitrate,
+        discontinuity_tag.has_value(), gap_tag.has_value()));
 
     // Reset per-segment tags
     inf_tag.reset();
     gap_tag.reset();
     discontinuity_tag.reset();
     byterange_tag.reset();
+  }
+
+  // Version must match what was expected.
+  if (!common_state.CheckVersion(version)) {
+    return ParseStatusCode::kPlaylistHasVersionMismatch;
   }
 
   if (!target_duration_tag.has_value()) {
@@ -469,7 +483,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
     // duration after rounding to the nearest integer.
     // https://datatracker.ietf.org/doc/html/draft-pantos-hls-rfc8216bis#section-4.4.3.1
     const auto rounded_duration =
-        std::round(segment.GetDuration().InSecondsF());
+        std::round(segment->GetDuration().InSecondsF());
 
     // Compare the rounded segment duration to the target duration (as an
     // integer). Target duration should always be an integer of seconds, so to
@@ -479,7 +493,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
       return ParseStatusCode::kMediaSegmentExceedsTargetDuration;
     }
 
-    total_duration += segment.GetDuration();
+    total_duration += segment->GetDuration();
   }
 
   if (total_duration.is_max()) {
@@ -500,9 +514,10 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
     playlist_type = playlist_type_tag->type;
   }
 
-  return MediaPlaylist(
+  return base::MakeRefCounted<MediaPlaylist>(
+      base::PassKey<MediaPlaylist>(),
       CtorArgs{.uri = std::move(uri),
-               .version = common_state.GetVersion(),
+               .version = version,
                .independent_segments = independent_segments,
                .target_duration = target_duration,
                .partial_segment_info = std::move(partial_segment_info),
@@ -519,7 +534,7 @@ ParseStatus::Or<MediaPlaylist> MediaPlaylist::Parse(
                .part_hold_back_distance = part_hold_back_distance});
 }
 
-MediaPlaylist::MediaPlaylist(CtorArgs args)
+MediaPlaylist::MediaPlaylist(base::PassKey<MediaPlaylist>, CtorArgs args)
     : Playlist(std::move(args.uri), args.version, args.independent_segments),
       target_duration_(args.target_duration),
       partial_segment_info_(std::move(args.partial_segment_info)),

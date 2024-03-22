@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -232,7 +232,7 @@ class DisassemblerElf32 : public Disassembler {
   // An ordering of |section_header_table_|, sorted by file offset.
   std::vector<Elf32_Half> section_header_file_offset_order_;
 
-  raw_ptr<const Elf32_Phdr> program_header_table_;
+  raw_ptr<const Elf32_Phdr, AllowPtrArithmetic> program_header_table_;
   Elf32_Half program_header_table_size_;
 
   // Pointer to string table containing section names.

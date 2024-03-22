@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
@@ -52,8 +53,6 @@ class LoginWebDialog : public ui::WebDialogDelegate {
   ui::ModalType GetDialogModalType() const override;
   std::u16string GetDialogTitle() const override;
   GURL GetDialogContentURL() const override;
-  void GetWebUIMessageHandlers(
-      std::vector<content::WebUIMessageHandler*>* handlers) const override;
   void GetDialogSize(gfx::Size* size) const override;
   void GetMinimumDialogSize(gfx::Size* size) const override;
   std::string GetDialogArgs() const override;
@@ -73,7 +72,7 @@ class LoginWebDialog : public ui::WebDialogDelegate {
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
 
  private:
-  content::BrowserContext* const browser_context_;
+  const raw_ptr<content::BrowserContext, ExperimentalAsh> browser_context_;
   gfx::NativeWindow parent_window_;
   gfx::NativeWindow dialog_window_;
 
@@ -82,11 +81,5 @@ class LoginWebDialog : public ui::WebDialogDelegate {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the chrome/browser/chromeos/
-// source migration is finished.
-namespace chromeos {
-using ::ash::LoginWebDialog;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_UI_LOGIN_WEB_DIALOG_H_

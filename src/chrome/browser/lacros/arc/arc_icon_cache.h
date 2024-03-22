@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "chromeos/crosapi/mojom/arc.mojom.h"
 #include "components/arc/common/intent_helper/activity_icon_loader.h"

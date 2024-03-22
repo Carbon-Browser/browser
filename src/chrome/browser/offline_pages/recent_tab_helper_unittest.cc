@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/offline_pages/offline_page_model_factory.h"
 #include "chrome/browser/offline_pages/request_coordinator_factory.h"
 #include "chrome/browser/offline_pages/test_offline_page_model_builder.h"
@@ -198,7 +198,7 @@ std::unique_ptr<OfflinePageArchiver> TestDelegate::CreatePageArchiver(
   std::unique_ptr<OfflinePageTestArchiver> archiver(new OfflinePageTestArchiver(
       observer_, web_contents->GetLastCommittedURL(), archive_result_,
       std::u16string(), kArchiveSizeToReport, std::string(),
-      base::ThreadTaskRunnerHandle::Get()));
+      base::SingleThreadTaskRunner::GetCurrentDefault()));
   return std::move(archiver);
 }
 

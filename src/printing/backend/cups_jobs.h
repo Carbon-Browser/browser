@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,6 +88,10 @@ struct COMPONENT_EXPORT(PRINT_BACKEND) PrinterInfo {
 
   // Does ipp-features-supported contain 'ipp-everywhere'.
   bool ipp_everywhere = false;
+
+  // URI of OAuth2 Authorization Server and scope. Empty strings if not set.
+  std::string oauth_server;
+  std::string oauth_scope;
 };
 
 // Specifies classes of jobs.
@@ -115,8 +119,8 @@ void ParseJobsResponse(ipp_t* response,
 void ParsePrinterStatus(ipp_t* response, PrinterStatus* printer_status);
 
 // Queries the printer at `address` on `port` with a Get-Printer-Attributes
-// request to populate `printer_info`. If `encrypted` is true, request is made
-// using ipps, otherwise, ipp is used. Returns false if the request failed.
+// request to populate `printer_info` and `printer_status`. If `encrypted` is
+// true, request is made using ipps, otherwise, ipp is used.
 PrinterQueryResult COMPONENT_EXPORT(PRINT_BACKEND)
     GetPrinterInfo(const std::string& address,
                    int port,

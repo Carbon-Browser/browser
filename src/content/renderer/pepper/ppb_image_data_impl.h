@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "ppapi/c/ppb_image_data.h"
@@ -215,7 +216,7 @@ class ImageDataAutoMapper {
   bool is_valid() const { return is_valid_; }
 
  private:
-  PPB_ImageData_Impl* image_data_;
+  raw_ptr<PPB_ImageData_Impl, ExperimentalRenderer> image_data_;
   bool is_valid_;
   bool needs_unmap_;
 };

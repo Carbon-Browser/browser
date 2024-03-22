@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 #define EXTENSIONS_BROWSER_API_DECLARATIVE_NET_REQUEST_TEST_UTILS_H_
 
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <vector>
-
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
@@ -22,7 +22,6 @@
 #include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/api/declarative_net_request/constants.h"
 #include "extensions/common/extension_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class BrowserContext;
@@ -36,7 +35,7 @@ namespace declarative_net_request {
 
 class FileBackedRulesetSource;
 class RulesetMatcher;
-struct RulesCountPair;
+struct RuleCounts;
 struct TestRule;
 
 // Enum specifying the extension load type. Used for parameterized tests.
@@ -60,9 +59,9 @@ std::ostream& operator<<(std::ostream& output, RequestAction::Type type);
 std::ostream& operator<<(std::ostream& output, const RequestAction& action);
 std::ostream& operator<<(std::ostream& output, const ParseResult& result);
 std::ostream& operator<<(std::ostream& output,
-                         const absl::optional<RequestAction>& action);
+                         const std::optional<RequestAction>& action);
 std::ostream& operator<<(std::ostream& output, LoadRulesetResult result);
-std::ostream& operator<<(std::ostream& output, const RulesCountPair& count);
+std::ostream& operator<<(std::ostream& output, const RuleCounts& count);
 
 // Returns true if the given extension's indexed static rulesets are all valid.
 // Should be called on a sequence where file IO is allowed.
@@ -87,7 +86,7 @@ FileBackedRulesetSource CreateTemporarySource(
 api::declarative_net_request::ModifyHeaderInfo CreateModifyHeaderInfo(
     api::declarative_net_request::HeaderOperation operation,
     std::string header,
-    absl::optional<std::string> value);
+    std::optional<std::string> value);
 
 bool EqualsForTesting(
     const api::declarative_net_request::ModifyHeaderInfo& lhs,
@@ -120,7 +119,7 @@ class RulesetManagerObserver : public RulesetManager::TestObserver {
 
   const raw_ptr<RulesetManager> manager_;
   size_t current_count_ = 0;
-  absl::optional<size_t> expected_count_;
+  std::optional<size_t> expected_count_;
   std::unique_ptr<base::RunLoop> run_loop_;
   std::vector<GURL> observed_requests_;
   SEQUENCE_CHECKER(sequence_checker_);
@@ -149,6 +148,11 @@ class WarningServiceObserver : public WarningService::Observer {
   const ExtensionId extension_id_;
   base::RunLoop run_loop_;
 };
+
+base::flat_set<int> GetDisabledRuleIdsFromMatcherForTesting(
+    const RulesetManager& ruleset_manager,
+    const Extension& extension,
+    const std::string& ruleset_id_string);
 
 }  // namespace declarative_net_request
 }  // namespace extensions

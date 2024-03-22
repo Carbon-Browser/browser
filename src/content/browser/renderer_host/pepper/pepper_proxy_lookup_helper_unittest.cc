@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -159,7 +159,7 @@ TEST_F(PepperProxyLookupHelperTest, Success) {
   ClaimProxyLookupClient()->OnProxyLookupComplete(net::OK, proxy_info_response);
   WaitForLookupCompletion();
   ASSERT_TRUE(proxy_info());
-  EXPECT_EQ("PROXY result:80", proxy_info()->ToPacString());
+  EXPECT_EQ("PROXY result:80", proxy_info()->ToDebugString());
 }
 
 // Basic failure case - an error is passed to the PepperProxyLookupHelper

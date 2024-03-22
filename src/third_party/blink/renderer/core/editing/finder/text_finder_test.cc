@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -356,7 +356,8 @@ TEST_F(TextFinderTest, ScopeTextMatchesSimple) {
 
   // Modify the document size and ensure the cached match rects are recomputed
   // to reflect the updated layout.
-  GetDocument().body()->setAttribute(html_names::kStyleAttr, "margin: 2000px");
+  GetDocument().body()->setAttribute(html_names::kStyleAttr,
+                                     AtomicString("margin: 2000px"));
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kTest);
 
   match_rects = GetTextFinder().FindMatchRects();
@@ -674,13 +675,14 @@ TEST_F(TextFinderTest, BeforeMatchEvent) {
       EvalJs("window.beforematchFiredOnFoo");
   ASSERT_TRUE(beforematch_fired_on_foo->IsBoolean());
   EXPECT_FALSE(
-      beforematch_fired_on_foo->ToBoolean(v8::Isolate::GetCurrent())->Value());
+      beforematch_fired_on_foo->ToBoolean(v8_testing_scope.GetIsolate())
+          ->Value());
 
   v8::Local<v8::Value> beforematch_fired_on_bar =
       EvalJs("window.beforematchFiredOnBar");
   ASSERT_TRUE(beforematch_fired_on_bar->IsBoolean());
-  EXPECT_TRUE(
-      beforematch_fired_on_bar->ToBoolean(v8::Isolate::GetCurrent())->Value());
+  EXPECT_TRUE(beforematch_fired_on_bar->ToBoolean(v8_testing_scope.GetIsolate())
+                  ->Value());
 
   // Scrolling should occur after the beforematch event.
   v8::Local<v8::Context> context =
@@ -720,8 +722,8 @@ TEST_F(TextFinderTest, BeforeMatchEventRemoveElement) {
   v8::Local<v8::Value> beforematch_fired_on_foo =
       EvalJs("window.beforematchFiredOnFoo");
   ASSERT_TRUE(beforematch_fired_on_foo->IsBoolean());
-  EXPECT_TRUE(
-      beforematch_fired_on_foo->ToBoolean(v8::Isolate::GetCurrent())->Value());
+  EXPECT_TRUE(beforematch_fired_on_foo->ToBoolean(v8_testing_scope.GetIsolate())
+                  ->Value());
 
   // TODO(jarhar): Update this test to include checks for scrolling behavior
   // once we decide what the behavior should be. Right now it is just here to
@@ -760,12 +762,11 @@ TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUkm) {
     <!DOCTYPE html>
     <div id=hiddenid hidden=until-found>hidden</div>
   )HTML");
-  Compositor().BeginFrame();
+  ukm::TestAutoSetUkmRecorder recorder;
+  GetDocument().View()->ResetUkmAggregatorForTesting();
 
-  GetDocument().ukm_recorder_ = std::make_unique<ukm::TestUkmRecorder>();
-  auto* recorder =
-      static_cast<ukm::TestUkmRecorder*>(GetDocument().UkmRecorder());
-  EXPECT_EQ(recorder->entries_count(), 0u);
+  Compositor().BeginFrame();
+  EXPECT_EQ(recorder.entries_count(), 0u);
 
   GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
                        *mojom::blink::FindOptions::New(),
@@ -773,7 +774,7 @@ TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUkm) {
 
   Compositor().BeginFrame();
 
-  auto entries = recorder->GetEntriesByName("Blink.FindInPage");
+  auto entries = recorder.GetEntriesByName("Blink.FindInPage");
   // There are two entries because
   // DisplayLockUtilities::ActivateFindInPageMatchRangeIfNeeded followed by
   // DisplayLockContext::CommitForActivationWithSignal sets a

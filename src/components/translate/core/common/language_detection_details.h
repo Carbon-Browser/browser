@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,15 @@
 
 namespace translate {
 
+// This struct corresponds to LanguageDetectionDetails defined in
+// translate.mojom, any changes need to be made to both definitions.
 struct LanguageDetectionDetails {
   LanguageDetectionDetails();
   LanguageDetectionDetails(const LanguageDetectionDetails& other);
   ~LanguageDetectionDetails();
+
+  // Whether language detection has been run on the page.
+  bool has_run_lang_detection = false;
 
   // The time when this was created.
   base::Time time;

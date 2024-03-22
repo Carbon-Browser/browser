@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,8 +74,8 @@ TEST_F(LogoutButtonTrayTest, Visibility) {
   EXPECT_FALSE(button->GetVisible());
 }
 
-TEST_F(LogoutButtonTrayTest, ButtonPressed) {
-  constexpr char kUserEmail[] = "user1@test.com";
+// TODO(crbug.com/1491544): Test is flaky.
+TEST_F(LogoutButtonTrayTest, DISABLED_ButtonPressed) {
   constexpr char kUserAction[] = "DemoMode.ExitFromShelf";
 
   LogoutButtonTray* const tray = Shell::GetPrimaryRootWindowController()

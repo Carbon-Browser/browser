@@ -33,7 +33,6 @@
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/core/dom/attribute.h"
-#include "third_party/blink/renderer/core/dom/context_features.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
@@ -62,8 +61,10 @@ DOMPatchSupport::DOMPatchSupport(DOMEditor* dom_editor, Document& document)
 
 void DOMPatchSupport::PatchDocument(const String& markup) {
   Document* new_document = nullptr;
-  DocumentInit init = DocumentInit::Create().WithExecutionContext(
-      GetDocument().GetExecutionContext());
+  DocumentInit init =
+      DocumentInit::Create()
+          .WithExecutionContext(GetDocument().GetExecutionContext())
+          .WithAgent(GetDocument().GetAgent());
   if (IsA<HTMLDocument>(GetDocument()))
     new_document = MakeGarbageCollected<HTMLDocument>(init);
   else if (GetDocument().IsSVGDocument())
@@ -74,7 +75,6 @@ void DOMPatchSupport::PatchDocument(const String& markup) {
     new_document = MakeGarbageCollected<XMLDocument>(init);
 
   DCHECK(new_document);
-  new_document->SetContextFeatures(GetDocument().GetContextFeatures());
   if (!IsA<HTMLDocument>(GetDocument())) {
     DocumentParser* parser =
         MakeGarbageCollected<XMLDocumentParser>(*new_document, nullptr);
@@ -324,9 +324,7 @@ bool DOMPatchSupport::InnerPatchChildren(
   // 1. First strip everything except for the nodes that retain. Collect pending
   // merges.
   HeapHashMap<Member<Digest>, Member<Digest>> merges;
-  HashSet<wtf_size_t, WTF::IntHash<wtf_size_t>,
-          WTF::UnsignedWithZeroKeyHashTraits<wtf_size_t>>
-      used_new_ordinals;
+  HashSet<wtf_size_t, IntWithZeroKeyHashTraits<wtf_size_t>> used_new_ordinals;
   for (wtf_size_t i = 0; i < old_list.size(); ++i) {
     if (old_map[i].first) {
       if (used_new_ordinals.insert(old_map[i].second).is_new_entry)
@@ -369,9 +367,7 @@ bool DOMPatchSupport::InnerPatchChildren(
   }
 
   // Mark retained nodes as used, do not reuse node more than once.
-  HashSet<wtf_size_t, WTF::IntHash<wtf_size_t>,
-          WTF::UnsignedWithZeroKeyHashTraits<wtf_size_t>>
-      used_old_ordinals;
+  HashSet<wtf_size_t, IntWithZeroKeyHashTraits<wtf_size_t>> used_old_ordinals;
   for (wtf_size_t i = 0; i < new_list.size(); ++i) {
     if (!new_map[i].first)
       continue;
@@ -526,7 +522,7 @@ bool DOMPatchSupport::RemoveChildAndMoveToNew(Digest* old_digest,
 void DOMPatchSupport::MarkNodeAsUsed(Digest* digest) {
   HeapDeque<Member<Digest>> queue;
   queue.push_back(digest);
-  while (!queue.IsEmpty()) {
+  while (!queue.empty()) {
     Digest* first = queue.TakeFirst();
     unused_nodes_map_.erase(first->sha1_);
     for (wtf_size_t i = 0; i < first->children_.size(); ++i)

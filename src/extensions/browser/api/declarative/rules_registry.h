@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,6 @@
 #include "base/one_shot_event.h"
 #include "base/time/time.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "extensions/common/api/events.h"
 #include "extensions/common/extension_id.h"
 
@@ -229,12 +227,12 @@ class RulesRegistry : public base::RefCountedThreadSafe<RulesRegistry> {
   std::string RemoveAllRulesNoStoreUpdate(const std::string& extension_id,
                                           bool remove_manifest_rules);
 
-  void MarkReady(base::Time storage_init_time);
+  void MarkReady();
 
   // Deserialize the rules from the given Value object and add them to the
   // RulesRegistry.
   void DeserializeAndAddRules(const std::string& extension_id,
-                              std::unique_ptr<base::Value> rules);
+                              std::optional<base::Value> rules);
 
   // Reports an internal error with the specified params to the extensions
   // client.
@@ -242,7 +240,7 @@ class RulesRegistry : public base::RefCountedThreadSafe<RulesRegistry> {
                            const std::string& error);
 
   // The context to which this rules registry belongs.
-  raw_ptr<content::BrowserContext> browser_context_;
+  raw_ptr<content::BrowserContext, LeakedDanglingUntriaged> browser_context_;
 
   // The ID of the thread on which the rules registry lives.
   const content::BrowserThread::ID owner_thread_;

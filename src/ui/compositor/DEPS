@@ -11,12 +11,17 @@ include_rules = [
   "+ui/base",
   "+ui/accelerated_widget_mac",
   "+ui/display/display_switches.h",
+  "+ui/display/types/display_constants.h",
   "+ui/gfx",
   "+ui/gl",
+  "+ui/ozone/buildflags.h",
 ]
 
 specific_include_rules = {
   "compositor.cc": [
+    "+mojo/public/cpp/bindings",
+  ],
+  "compositor.h": [
     "+mojo/public/cpp/bindings",
   ],
   "run_all_unittests\.cc": [

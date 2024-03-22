@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/values.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/tabs/tabs_constants.h"
 #include "chrome/browser/extensions/api/tabs/tabs_windows_api.h"
@@ -29,10 +28,10 @@
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/common/features/feature.h"
+#include "extensions/common/mojom/event_dispatcher.mojom-forward.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/page/page_zoom.h"
 
-using base::DictionaryValue;
-using base::ListValue;
 using base::Value;
 using content::WebContents;
 using zoom::ZoomController;
@@ -47,29 +46,27 @@ bool WillDispatchTabUpdatedEvent(
     content::BrowserContext* browser_context,
     Feature::Context target_context,
     const Extension* extension,
-    const base::DictionaryValue* listener_filter,
-    std::unique_ptr<base::Value::List>* event_args_out,
-    mojom::EventFilteringInfoPtr* event_filtering_info_out) {
+    const base::Value::Dict* listener_filter,
+    absl::optional<base::Value::List>& event_args_out,
+    mojom::EventFilteringInfoPtr& event_filtering_info_out) {
   ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
       ExtensionTabUtil::GetScrubTabBehavior(extension, target_context,
                                             contents);
-  std::unique_ptr<api::tabs::Tab> tab_object =
-      ExtensionTabUtil::CreateTabObject(contents, scrub_tab_behavior,
-                                        extension);
+  api::tabs::Tab tab_object = ExtensionTabUtil::CreateTabObject(
+      contents, scrub_tab_behavior, extension);
 
-  base::Value tab_value =
-      base::Value::FromUniquePtrValue(tab_object->ToValue());
+  base::Value::Dict tab_value = tab_object.ToValue();
 
   base::Value::Dict changed_properties;
   for (const auto& property : changed_property_names) {
-    if (const base::Value* value = tab_value.FindKey(property))
+    if (const base::Value* value = tab_value.Find(property))
       changed_properties.Set(property, value->Clone());
   }
 
-  *event_args_out = std::make_unique<base::Value::List>();
-  (*event_args_out)->Append(ExtensionTabUtil::GetTabId(contents));
-  (*event_args_out)->Append(std::move(changed_properties));
-  (*event_args_out)->Append(std::move(tab_value));
+  event_args_out.emplace();
+  event_args_out->Append(ExtensionTabUtil::GetTabId(contents));
+  event_args_out->Append(std::move(changed_properties));
+  event_args_out->Append(std::move(tab_value));
   return true;
 }
 
@@ -79,20 +76,20 @@ bool WillDispatchTabCreatedEvent(
     content::BrowserContext* browser_context,
     Feature::Context target_context,
     const Extension* extension,
-    const base::DictionaryValue* listener_filter,
-    std::unique_ptr<base::Value::List>* event_args_out,
-    mojom::EventFilteringInfoPtr* event_filtering_info_out) {
+    const base::Value::Dict* listener_filter,
+    absl::optional<base::Value::List>& event_args_out,
+    mojom::EventFilteringInfoPtr& event_filtering_info_out) {
   ExtensionTabUtil::ScrubTabBehavior scrub_tab_behavior =
       ExtensionTabUtil::GetScrubTabBehavior(extension, target_context,
                                             contents);
-  base::Value tab_value = base::Value::FromUniquePtrValue(
+  base::Value::Dict tab_value =
       ExtensionTabUtil::CreateTabObject(contents, scrub_tab_behavior, extension)
-          ->ToValue());
-  tab_value.SetBoolKey(tabs_constants::kSelectedKey, active);
-  tab_value.SetBoolKey(tabs_constants::kActiveKey, active);
+          .ToValue();
+  tab_value.Set(tabs_constants::kSelectedKey, active);
+  tab_value.Set(tabs_constants::kActiveKey, active);
 
-  *event_args_out = std::make_unique<base::Value::List>();
-  (*event_args_out)->Append(std::move(tab_value));
+  event_args_out.emplace();
+  event_args_out->Append(std::move(tab_value));
   return true;
 }
 
@@ -191,7 +188,7 @@ void TabsEventRouter::OnBrowserSetLastActive(Browser* browser) {
   TabsWindowsAPI* tabs_window_api = TabsWindowsAPI::Get(profile_);
   if (tabs_window_api) {
     tabs_window_api->windows_event_router()->OnActiveWindowChanged(
-        browser ? browser->extension_window_controller() : NULL);
+        browser ? browser->extension_window_controller() : nullptr);
   }
 }
 
@@ -272,6 +269,13 @@ void TabsEventRouter::TabGroupedStateChanged(
   std::set<std::string> changed_property_names;
   changed_property_names.insert(tabs_constants::kGroupIdKey);
   DispatchTabUpdatedEvent(contents, std::move(changed_property_names));
+}
+
+void TabsEventRouter::OnZoomControllerDestroyed(
+    zoom::ZoomController* zoom_controller) {
+  if (zoom_scoped_observations_.IsObservingSource(zoom_controller)) {
+    zoom_scoped_observations_.RemoveObservation(zoom_controller);
+  }
 }
 
 void TabsEventRouter::OnZoomChanged(
@@ -447,7 +451,7 @@ void TabsEventRouter::DispatchTabSelectionChanged(
     const ui::ListSelectionModel& old_model) {
   ui::ListSelectionModel::SelectedIndices new_selection =
       tab_strip_model->selection_model().selected_indices();
-  base::ListValue all_tabs;
+  base::Value::List all_tabs;
 
   for (int index : new_selection) {
     WebContents* contents = tab_strip_model->GetWebContentsAt(index);
@@ -599,8 +603,8 @@ void TabsEventRouter::DispatchTabUpdatedEvent(
 void TabsEventRouter::RegisterForTabNotifications(WebContents* contents) {
   favicon_scoped_observations_.AddObservation(
       favicon::ContentFaviconDriver::FromWebContents(contents));
-
-  ZoomController::FromWebContents(contents)->AddObserver(this);
+  zoom_scoped_observations_.AddObservation(
+      ZoomController::FromWebContents(contents));
 
   int tab_id = ExtensionTabUtil::GetTabId(contents);
   DCHECK(tab_entries_.find(tab_id) == tab_entries_.end());
@@ -608,10 +612,12 @@ void TabsEventRouter::RegisterForTabNotifications(WebContents* contents) {
 }
 
 void TabsEventRouter::UnregisterForTabNotifications(WebContents* contents) {
+  if (auto* zoom_controller = ZoomController::FromWebContents(contents);
+      zoom_scoped_observations_.IsObservingSource(zoom_controller)) {
+    zoom_scoped_observations_.RemoveObservation(zoom_controller);
+  }
   favicon_scoped_observations_.RemoveObservation(
       favicon::ContentFaviconDriver::FromWebContents(contents));
-
-  ZoomController::FromWebContents(contents)->RemoveObserver(this);
 
   int tab_id = ExtensionTabUtil::GetTabId(contents);
   int removed_count = tab_entries_.erase(tab_id);

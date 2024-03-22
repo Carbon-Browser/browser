@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,13 @@
 #include <memory>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/threading/thread.h"
 #include "components/cronet/cronet_context.h"
 #include "components/prefs/json_pref_store.h"
-#include "net/base/network_change_notifier.h"
+#include "net/base/network_handle.h"
 #include "net/nqe/effective_connection_type.h"
 #include "net/nqe/effective_connection_type_observer.h"
 #include "net/nqe/network_quality_estimator.h"
@@ -64,8 +63,8 @@ class CronetContextAdapter : public CronetContext::Callback {
   bool IsOnNetworkThread() const;
 
   net::URLRequestContext* GetURLRequestContext(
-      net::NetworkChangeNotifier::NetworkHandle network =
-          net::NetworkChangeNotifier::kInvalidNetworkHandle);
+      net::handles::NetworkHandle network =
+          net::handles::kInvalidNetworkHandle);
 
   // TODO(xunjieli): Keep only one version of StartNetLog().
 
@@ -88,6 +87,10 @@ class CronetContextAdapter : public CronetContext::Callback {
   // flush any remaining writes to disk.
   void StopNetLog(JNIEnv* env,
                   const base::android::JavaParamRef<jobject>& jcaller);
+
+  // Whether Cronet Telemetry should be enabled or not.
+  bool GetEnableTelemetry(JNIEnv* env,
+                          const base::android::JavaParamRef<jobject>& jcaller);
 
   // Default net::LOAD flags used to create requests.
   int default_load_flags() const;
@@ -152,4 +155,4 @@ class CronetContextAdapter : public CronetContext::Callback {
 
 }  // namespace cronet
 
-#endif  // COMPONENTS_CRONET_ANDROID_CRONET_ADAPTER_H_
+#endif  // COMPONENTS_CRONET_ANDROID_CRONET_CONTEXT_ADAPTER_H_

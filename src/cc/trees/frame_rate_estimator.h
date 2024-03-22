@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_TREES_FRAME_RATE_ESTIMATOR_H_
 #define CC_TREES_FRAME_RATE_ESTIMATOR_H_
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "cc/base/delayed_unique_notifier.h"
@@ -17,7 +18,7 @@ class CC_EXPORT FrameRateEstimator {
   explicit FrameRateEstimator(base::SequencedTaskRunner* task_runner);
   ~FrameRateEstimator();
 
-  void SetFrameEstimationEnabled(bool enabled);
+  void SetVideoConferenceMode(bool enabled);
   void WillDraw(base::TimeTicks now);
   void NotifyInputEvent();
   base::TimeDelta GetPreferredInterval() const;
@@ -28,7 +29,7 @@ class CC_EXPORT FrameRateEstimator {
 
   // Set if an estimated frame rate should be used or we should assume the
   // highest frame rate available.
-  bool frame_rate_estimation_enabled_ = false;
+  bool assumes_video_conference_mode_ = false;
 
   // The frame time for the last drawn frame since frame estimation was
   // enabled.

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/public/cpp/shelf_model.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
+#include "chrome/browser/extensions/extension_keeplist_chromeos.h"
 #include "chrome/browser/ui/ash/shelf/standalone_browser_extension_app_shelf_item_controller.h"
 #include "components/app_restore/full_restore_utils.h"
 #include "components/exo/shell_surface_util.h"
@@ -99,6 +100,7 @@ void ChromeAppWindowTrackerAsh::CheckWindowNoLongerPending(
   // The window is still pending
   if (pending_window->second.app_id.empty() || !pending_window->second.window)
     return;
+
 
   std::string app_id = std::move(pending_window->second.app_id);
   aura::Window* window = pending_window->second.window;

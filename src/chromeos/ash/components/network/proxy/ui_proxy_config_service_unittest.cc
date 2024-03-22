@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/json/json_reader.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_util.h"
+#include "base/test/gtest_tags.h"
 #include "base/test/task_environment.h"
+#include "base/test/values_test_util.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
+#include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/components/onc/onc_utils.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
 #include "components/onc/onc_pref_names.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/proxy_config/pref_proxy_config_tracker_impl.h"
@@ -25,7 +27,7 @@
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -48,6 +50,13 @@ constexpr char kAugmentedOncValueTemplate[] =
 constexpr char kAugmentedOncValueWithUserSettingTemplate[] =
     R"({"Active": $2, "Effective": "$1", "$1": $2, "UserSetting": $3,
       "UserEditable": $4})";
+
+std::unique_ptr<NetworkState> GetNetworkState(const std::string& guid) {
+  auto network_state = std::make_unique<NetworkState>("path");
+  network_state->PropertyChanged("Profile", base::Value("profile"));
+  network_state->PropertyChanged("GUID", base::Value(guid));
+  return network_state;
+}
 
 std::string UserSettingOncValue(const std::string& value) {
   return base::ReplaceStringPlaceholders(
@@ -106,6 +115,8 @@ class UIProxyConfigServiceTest : public testing::Test {
   }
 
   void SetUp() override {
+    base::AddTagToTestResult("feature_id",
+                             "screenplay-bb5f01d1-9cf8-4aba-9aa6-925608747b02");
     ConfigureService(kTestUserWifiConfig);
     ConfigureService(kTestSharedWifiConfig);
     ConfigureService(kTestUnconfiguredWifiConfig);
@@ -114,11 +125,11 @@ class UIProxyConfigServiceTest : public testing::Test {
   ~UIProxyConfigServiceTest() override = default;
 
   void ConfigureService(const std::string& shill_json_string) {
-    base::Value shill_json_dict =
-        onc::ReadDictionaryFromJson(shill_json_string);
-    ASSERT_TRUE(shill_json_dict.is_dict());
+    absl::optional<base::Value::Dict> shill_json_dict =
+        chromeos::onc::ReadDictionaryFromJson(shill_json_string);
+    CHECK(shill_json_dict.has_value());
     ShillManagerClient::Get()->ConfigureService(
-        shill_json_dict, base::DoNothing(),
+        *shill_json_dict, base::DoNothing(),
         base::BindOnce([](const std::string& name, const std::string& msg) {}));
     base::RunLoop().RunUntilIdle();
   }
@@ -148,17 +159,17 @@ class UIProxyConfigServiceTest : public testing::Test {
 TEST_F(UIProxyConfigServiceTest, UnknownNetwork) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_FALSE(service->MergeEnforcedProxyConfig("unkown_network", &config));
-  EXPECT_EQ(base::Value(base::Value::Type::DICTIONARY), config);
+  EXPECT_EQ(base::Value::Dict(), config);
 }
 
 TEST_F(UIProxyConfigServiceTest, UserConfigOnly) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_FALSE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
-  EXPECT_EQ(base::Value(base::Value::Type::DICTIONARY), config);
+  EXPECT_EQ(base::Value::Dict(), config);
 }
 
 TEST_F(UIProxyConfigServiceTest, LocalStatePrefIgnoredForUserService) {
@@ -168,9 +179,9 @@ TEST_F(UIProxyConfigServiceTest, LocalStatePrefIgnoredForUserService) {
       proxy_config::prefs::kProxy,
       ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_FALSE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
-  EXPECT_EQ(base::Value(base::Value::Type::DICTIONARY), config);
+  EXPECT_EQ(base::Value::Dict(), config);
 }
 
 TEST_F(UIProxyConfigServiceTest, LocalStatePolicyPrefForDeviceService) {
@@ -180,7 +191,7 @@ TEST_F(UIProxyConfigServiceTest, LocalStatePolicyPrefForDeviceService) {
       proxy_config::prefs::kProxy,
       ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -188,10 +199,8 @@ TEST_F(UIProxyConfigServiceTest, LocalStatePolicyPrefForDeviceService) {
       {DevicePolicyOncValue(R"("PAC")"),
        DevicePolicyOncValue(R"("http://pac/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest,
@@ -202,25 +211,23 @@ TEST_F(UIProxyConfigServiceTest,
       proxy_config::prefs::kProxy,
       ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_FALSE(
       service->MergeEnforcedProxyConfig(kTestUnconfiguredWifiGuid, &config));
-  EXPECT_EQ(base::Value(base::Value::Type::DICTIONARY), config);
+  EXPECT_EQ(base::Value::Dict(), config);
 }
 
 TEST_F(UIProxyConfigServiceTest, ExtensionProxyNotMergedForUnconfiguredNetork) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceOffLocalState();
 
-  base::Value extension_prefs_config =
-      ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true);
   user_prefs_.SetExtensionPref(
       proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+      ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_FALSE(
       service->MergeEnforcedProxyConfig(kTestUnconfiguredWifiGuid, &config));
-  EXPECT_EQ(base::Value(base::Value::Type::DICTIONARY), config);
+  EXPECT_EQ(base::Value::Dict(), config);
 }
 
 TEST_F(UIProxyConfigServiceTest, OncPolicyNotMergedForUnfongiuredNetork) {
@@ -230,12 +237,12 @@ TEST_F(UIProxyConfigServiceTest, OncPolicyNotMergedForUnfongiuredNetork) {
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "WPAD"}}])",
       {kTestUnconfiguredWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(user_onc_config));
+                             base::test::ParseJsonList(user_onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_FALSE(
       service->MergeEnforcedProxyConfig(kTestUnconfiguredWifiGuid, &config));
-  EXPECT_EQ(base::Value(base::Value::Type::DICTIONARY), config);
+  EXPECT_EQ(base::Value::Dict(), config);
 }
 
 TEST_F(UIProxyConfigServiceTest, PacPolicyPref) {
@@ -245,7 +252,7 @@ TEST_F(UIProxyConfigServiceTest, PacPolicyPref) {
       proxy_config::prefs::kProxy,
       ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -253,10 +260,8 @@ TEST_F(UIProxyConfigServiceTest, PacPolicyPref) {
       {UserPolicyOncValue(R"("PAC")"),
        UserPolicyOncValue(R"("http://pac/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, AutoDetectPolicyPref) {
@@ -265,15 +270,13 @@ TEST_F(UIProxyConfigServiceTest, AutoDetectPolicyPref) {
   user_prefs_.SetManagedPref(proxy_config::prefs::kProxy,
                              ProxyConfigDictionary::CreateAutoDetect());
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {UserPolicyOncValue(R"("WPAD")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, DirectPolicyPref) {
@@ -282,15 +285,13 @@ TEST_F(UIProxyConfigServiceTest, DirectPolicyPref) {
   user_prefs_.SetManagedPref(proxy_config::prefs::kProxy,
                              ProxyConfigDictionary::CreateDirect());
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {UserPolicyOncValue(R"("Direct")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, ManualPolicyPref) {
@@ -301,7 +302,7 @@ TEST_F(UIProxyConfigServiceTest, ManualPolicyPref) {
       ProxyConfigDictionary::CreateFixedServers(
           "http=proxy1:81;https=proxy2:81;socks=proxy3:81", "localhost"));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -317,10 +318,8 @@ TEST_F(UIProxyConfigServiceTest, ManualPolicyPref) {
        UserPolicyOncValue(R"("proxy2")"), UserPolicyOncValue(R"("proxy3")"),
        UserPolicyOncValue("81"), UserPolicyOncValue(R"(["localhost"])")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, PartialManualPolicyPref) {
@@ -330,7 +329,7 @@ TEST_F(UIProxyConfigServiceTest, PartialManualPolicyPref) {
       proxy_config::prefs::kProxy,
       ProxyConfigDictionary::CreateFixedServers("http=proxy1:81;", ""));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -346,10 +345,8 @@ TEST_F(UIProxyConfigServiceTest, PartialManualPolicyPref) {
        UserPolicyOncValue("81"), UserPolicyOncValue(R"("")"),
        UserPolicyOncValue("0"), UserPolicyOncValue("[]")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, ManualPolicyPrefWithPacPreset) {
@@ -365,12 +362,9 @@ TEST_F(UIProxyConfigServiceTest, ManualPolicyPrefWithPacPreset) {
       {UserSettingOncValue(R"("PAC")"),
        UserSettingOncValue(R"("http://pac/test.script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> config =
-      base::JSONReader::ReadDeprecated(config_json);
-  ASSERT_TRUE(config) << config_json;
+  base::Value::Dict config = base::test::ParseJsonDict(config_json);
 
-  EXPECT_TRUE(
-      service->MergeEnforcedProxyConfig(kTestUserWifiGuid, config.get()));
+  EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1,
@@ -387,22 +381,18 @@ TEST_F(UIProxyConfigServiceTest, ManualPolicyPrefWithPacPreset) {
        UserSettingOncValue(R"("http://pac/test.script.pac")"),
        UserPolicyOncValue(R"(["localhost"])")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, *config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, PacExtensionPref) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value extension_prefs_config =
-      ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true);
   user_prefs_.SetExtensionPref(
       proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+      ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -410,62 +400,49 @@ TEST_F(UIProxyConfigServiceTest, PacExtensionPref) {
       {ExtensionControlledOncValue(R"("PAC")"),
        ExtensionControlledOncValue(R"("http://pac/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, AutoDetectExtensionPref) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value extension_prefs_config =
-      ProxyConfigDictionary::CreateAutoDetect();
-  user_prefs_.SetExtensionPref(
-      proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+  user_prefs_.SetExtensionPref(proxy_config::prefs::kProxy,
+                               ProxyConfigDictionary::CreateAutoDetect());
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {ExtensionControlledOncValue(R"("WPAD")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, DirectExtensionPref) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value extension_prefs_config = ProxyConfigDictionary::CreateDirect();
-  user_prefs_.SetExtensionPref(
-      proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+  user_prefs_.SetExtensionPref(proxy_config::prefs::kProxy,
+                               ProxyConfigDictionary::CreateDirect());
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {ExtensionControlledOncValue(R"("Direct")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, ManualExtensionPref) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value extension_prefs_config =
-      ProxyConfigDictionary::CreateFixedServers(
-          "http=proxy1:81;https=proxy2:82;socks=proxy3:81", "localhost");
   user_prefs_.SetExtensionPref(
       proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+      ProxyConfigDictionary::CreateFixedServers(
+          "http=proxy1:81;https=proxy2:82;socks=proxy3:81", "localhost"));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -485,32 +462,25 @@ TEST_F(UIProxyConfigServiceTest, ManualExtensionPref) {
        ExtensionControlledOncValue(R"("proxy3")"),
        ExtensionControlledOncValue(R"(["localhost"])")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, ExtensionProxyOverridesDefault) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value extension_prefs_config = ProxyConfigDictionary::CreatePacScript(
-      "http://extension/script.pac", true);
-  user_prefs_.SetExtensionPref(
-      proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+  user_prefs_.SetExtensionPref(proxy_config::prefs::kProxy,
+                               ProxyConfigDictionary::CreatePacScript(
+                                   "http://extension/script.pac", true));
 
   std::string config_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1, "PAC": $2})",
       {UserSettingOncValue(R"("PAC")"),
        UserSettingOncValue(R"("http://default/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> config =
-      base::JSONReader::ReadDeprecated(config_json);
-  ASSERT_TRUE(config) << config_json;
+  base::Value::Dict config = base::test::ParseJsonDict(config_json);
 
-  EXPECT_TRUE(
-      service->MergeEnforcedProxyConfig(kTestUserWifiGuid, config.get()));
+  EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1, "PAC": $2})",
@@ -519,10 +489,8 @@ TEST_F(UIProxyConfigServiceTest, ExtensionProxyOverridesDefault) {
            R"("http://extension/script.pac")",
            R"("http://default/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, *config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, PolicyPrefOverridesExtensionPref) {
@@ -532,13 +500,10 @@ TEST_F(UIProxyConfigServiceTest, PolicyPrefOverridesExtensionPref) {
                              ProxyConfigDictionary::CreatePacScript(
                                  "http://managed/script.pac", true));
 
-  base::Value extension_prefs_config =
-      ProxyConfigDictionary::CreateAutoDetect();
-  user_prefs_.SetExtensionPref(
-      proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+  user_prefs_.SetExtensionPref(proxy_config::prefs::kProxy,
+                               ProxyConfigDictionary::CreateAutoDetect());
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -546,10 +511,12 @@ TEST_F(UIProxyConfigServiceTest, PolicyPrefOverridesExtensionPref) {
       {UserPolicyOncValue(R"("PAC")"),
        UserPolicyOncValue(R"("http://managed/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_PAC_SCRIPT);
 }
 
 TEST_F(UIProxyConfigServiceTest, PolicyPrefForSharedNetwork) {
@@ -558,35 +525,36 @@ TEST_F(UIProxyConfigServiceTest, PolicyPrefForSharedNetwork) {
   user_prefs_.SetManagedPref(proxy_config::prefs::kProxy,
                              ProxyConfigDictionary::CreateAutoDetect());
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestSharedWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {UserPolicyOncValue(R"("WPAD")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestSharedWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_AUTO_DETECT);
 }
 
 TEST_F(UIProxyConfigServiceTest, ExtensionPrefForSharedNetwork) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value extension_prefs_config =
-      ProxyConfigDictionary::CreateAutoDetect();
-  user_prefs_.SetExtensionPref(
-      proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+  user_prefs_.SetExtensionPref(proxy_config::prefs::kProxy,
+                               ProxyConfigDictionary::CreateAutoDetect());
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestSharedWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {ExtensionControlledOncValue(R"("WPAD")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestSharedWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_AUTO_DETECT);
 }
 
 TEST_F(UIProxyConfigServiceTest, PacOncUserPolicy) {
@@ -597,9 +565,9 @@ TEST_F(UIProxyConfigServiceTest, PacOncUserPolicy) {
            "PAC": "http://onc/script.pac"}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(onc_config));
+                             base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -607,10 +575,12 @@ TEST_F(UIProxyConfigServiceTest, PacOncUserPolicy) {
       {UserPolicyOncValue(R"("PAC")"),
        UserPolicyOncValue(R"("http://onc/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_PAC_SCRIPT);
 }
 
 TEST_F(UIProxyConfigServiceTest, AutoDetectOncUserPolicy) {
@@ -620,17 +590,19 @@ TEST_F(UIProxyConfigServiceTest, AutoDetectOncUserPolicy) {
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "WPAD"}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(onc_config));
+                             base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {UserPolicyOncValue(R"("WPAD")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_AUTO_DETECT);
 }
 
 // Tests that ONC policy configured networks without proxy settings force Direct
@@ -642,17 +614,19 @@ TEST_F(UIProxyConfigServiceTest, OncUserPolicyWithoutProxySettings) {
       R"([{"GUID": "$1", "Type": "WiFi", "AutoConnect": false}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(onc_config));
+                             base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {UserPolicyOncValue(R"("Direct")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_DIRECT);
 }
 
 TEST_F(UIProxyConfigServiceTest, DirectOncUserPolicy) {
@@ -663,17 +637,15 @@ TEST_F(UIProxyConfigServiceTest, DirectOncUserPolicy) {
            "ProxySettings": {"Type": "Direct"}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(onc_config));
+                             base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {UserPolicyOncValue(R"("Direct")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
 }
 
 TEST_F(UIProxyConfigServiceTest, ManualOncUserPolicy) {
@@ -689,9 +661,9 @@ TEST_F(UIProxyConfigServiceTest, ManualOncUserPolicy) {
              "SOCKS": {"Host": "proxy3", "Port": 83}}}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(onc_config));
+                             base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -709,10 +681,12 @@ TEST_F(UIProxyConfigServiceTest, ManualOncUserPolicy) {
        UserPolicyOncValue(R"("proxy3")"),
        UserPolicyOncValue(R"(["foo.test", "localhost"])")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_FIXED_SERVERS);
 }
 
 TEST_F(UIProxyConfigServiceTest, PartialManualOncUserPolicy) {
@@ -726,9 +700,9 @@ TEST_F(UIProxyConfigServiceTest, PartialManualOncUserPolicy) {
              "SOCKS": {"Host": "proxy4", "Port": 84}}}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(onc_config));
+                             base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -745,10 +719,12 @@ TEST_F(UIProxyConfigServiceTest, PartialManualOncUserPolicy) {
        UserPolicyOncValue("84"), UserPolicyOncValue(R"("")"),
        UserPolicyOncValue("0"), UserPolicyOncValue(R"([])")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_FIXED_SERVERS);
 }
 
 TEST_F(UIProxyConfigServiceTest, OncDevicePolicy) {
@@ -759,9 +735,9 @@ TEST_F(UIProxyConfigServiceTest, OncDevicePolicy) {
            "PAC": "http://onc/script.pac"}}])",
       {kTestUserWifiGuid}, nullptr);
   local_state_.SetManagedPref(::onc::prefs::kDeviceOpenNetworkConfiguration,
-                              base::JSONReader::ReadDeprecated(onc_config));
+                              base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -769,10 +745,12 @@ TEST_F(UIProxyConfigServiceTest, OncDevicePolicy) {
       {DevicePolicyOncValue(R"("PAC")"),
        DevicePolicyOncValue(R"("http://onc/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_PAC_SCRIPT);
 }
 
 TEST_F(UIProxyConfigServiceTest, OncUserPolicyForSharedNetwork) {
@@ -782,17 +760,19 @@ TEST_F(UIProxyConfigServiceTest, OncUserPolicyForSharedNetwork) {
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "WPAD"}}])",
       {kTestSharedWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(onc_config));
+                             base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestSharedWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {UserPolicyOncValue(R"("WPAD")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestSharedWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_AUTO_DETECT);
 }
 
 TEST_F(UIProxyConfigServiceTest, OncDevicePolicyForSharedNetwork) {
@@ -803,9 +783,9 @@ TEST_F(UIProxyConfigServiceTest, OncDevicePolicyForSharedNetwork) {
            "PAC": "http://onc/script.pac"}}])",
       {kTestSharedWifiGuid}, nullptr);
   local_state_.SetManagedPref(::onc::prefs::kDeviceOpenNetworkConfiguration,
-                              base::JSONReader::ReadDeprecated(onc_config));
+                              base::test::ParseJsonList(onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestSharedWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -813,10 +793,12 @@ TEST_F(UIProxyConfigServiceTest, OncDevicePolicyForSharedNetwork) {
       {DevicePolicyOncValue(R"("PAC")"),
        DevicePolicyOncValue(R"("http://onc/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestSharedWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_PAC_SCRIPT);
 }
 
 TEST_F(UIProxyConfigServiceTest, OncUserAndDevicePolicy) {
@@ -826,25 +808,26 @@ TEST_F(UIProxyConfigServiceTest, OncUserAndDevicePolicy) {
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "WPAD"}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(user_onc_config));
+                             base::test::ParseJsonList(user_onc_config));
 
   const std::string device_onc_config = base::ReplaceStringPlaceholders(
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "PAC",
            "PAC": "http://onc/script.pac"}}])",
       {kTestUserWifiGuid}, nullptr);
-  local_state_.SetManagedPref(
-      ::onc::prefs::kDeviceOpenNetworkConfiguration,
-      base::JSONReader::ReadDeprecated(device_onc_config));
+  local_state_.SetManagedPref(::onc::prefs::kDeviceOpenNetworkConfiguration,
+                              base::test::ParseJsonList(device_onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1})", {UserPolicyOncValue(R"("WPAD")")}, nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_AUTO_DETECT);
 }
 
 TEST_F(UIProxyConfigServiceTest, OncUserAndDevicePolicyBuiltOffLocalState) {
@@ -854,17 +837,16 @@ TEST_F(UIProxyConfigServiceTest, OncUserAndDevicePolicyBuiltOffLocalState) {
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "WPAD"}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(user_onc_config));
+                             base::test::ParseJsonList(user_onc_config));
 
   const std::string device_onc_config = base::ReplaceStringPlaceholders(
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "PAC",
            "PAC": "http://onc/script.pac"}}])",
       {kTestUserWifiGuid}, nullptr);
-  local_state_.SetManagedPref(
-      ::onc::prefs::kDeviceOpenNetworkConfiguration,
-      base::JSONReader::ReadDeprecated(device_onc_config));
+  local_state_.SetManagedPref(::onc::prefs::kDeviceOpenNetworkConfiguration,
+                              base::test::ParseJsonList(device_onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -872,10 +854,12 @@ TEST_F(UIProxyConfigServiceTest, OncUserAndDevicePolicyBuiltOffLocalState) {
       {DevicePolicyOncValue(R"("PAC")"),
        DevicePolicyOncValue(R"("http://onc/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_PAC_SCRIPT);
 }
 
 TEST_F(UIProxyConfigServiceTest, OncUserPolicyOverridesUserSettings) {
@@ -885,29 +869,28 @@ TEST_F(UIProxyConfigServiceTest, OncUserPolicyOverridesUserSettings) {
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "WPAD"}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(user_onc_config));
+                             base::test::ParseJsonList(user_onc_config));
 
   std::string config_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1, "PAC": $2})",
       {UserSettingOncValue(R"("PAC")"),
        UserSettingOncValue(R"("http://pac/test.script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> config =
-      base::JSONReader::ReadDeprecated(config_json);
-  ASSERT_TRUE(config) << config_json;
+  base::Value::Dict config = base::test::ParseJsonDict(config_json);
 
-  EXPECT_TRUE(
-      service->MergeEnforcedProxyConfig(kTestUserWifiGuid, config.get()));
+  EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
       R"({"Type": $1, "PAC": $2})",
       {UserPolicyAndUserSettingOncValue(R"("WPAD")", R"("PAC")"),
        UserSettingOncValue(R"("http://pac/test.script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, *config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_AUTO_DETECT);
 }
 
 TEST_F(UIProxyConfigServiceTest, PolicyPrefOverridesOncPolicy) {
@@ -921,9 +904,9 @@ TEST_F(UIProxyConfigServiceTest, PolicyPrefOverridesOncPolicy) {
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "WPAD"}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(user_onc_config));
+                             base::test::ParseJsonList(user_onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -931,28 +914,28 @@ TEST_F(UIProxyConfigServiceTest, PolicyPrefOverridesOncPolicy) {
       {UserPolicyOncValue(R"("PAC")"),
        UserPolicyOncValue(R"("http://pac/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_PAC_SCRIPT);
 }
 
 TEST_F(UIProxyConfigServiceTest, ExtensionPrefOverridesOncPolicy) {
   std::unique_ptr<UIProxyConfigService> service = CreateServiceForUser();
 
-  base::Value extension_prefs_config =
-      ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true);
   user_prefs_.SetExtensionPref(
       proxy_config::prefs::kProxy,
-      base::Value::ToUniquePtrValue(std::move(extension_prefs_config)));
+      ProxyConfigDictionary::CreatePacScript("http://pac/script.pac", true));
 
   const std::string user_onc_config = base::ReplaceStringPlaceholders(
       R"([{"GUID": "$1", "Type": "WiFi", "ProxySettings": {"Type": "WPAD"}}])",
       {kTestUserWifiGuid}, nullptr);
   user_prefs_.SetManagedPref(::onc::prefs::kOpenNetworkConfiguration,
-                             base::JSONReader::ReadDeprecated(user_onc_config));
+                             base::test::ParseJsonList(user_onc_config));
 
-  base::Value config(base::Value::Type::DICTIONARY);
+  base::Value::Dict config;
   EXPECT_TRUE(service->MergeEnforcedProxyConfig(kTestUserWifiGuid, &config));
 
   std::string expected_json = base::ReplaceStringPlaceholders(
@@ -960,10 +943,12 @@ TEST_F(UIProxyConfigServiceTest, ExtensionPrefOverridesOncPolicy) {
       {ExtensionControlledOncValue(R"("PAC")"),
        ExtensionControlledOncValue(R"("http://pac/script.pac")")},
       nullptr);
-  std::unique_ptr<base::Value> expected =
-      base::JSONReader::ReadDeprecated(expected_json);
-  ASSERT_TRUE(expected) << expected_json;
-  EXPECT_EQ(*expected, config);
+  base::Value::Dict expected = base::test::ParseJsonDict(expected_json);
+  EXPECT_EQ(expected, config);
+
+  auto network_state = GetNetworkState(kTestUserWifiGuid);
+  EXPECT_EQ(service->ProxyModeForNetwork(network_state.get()),
+            ProxyPrefs::MODE_PAC_SCRIPT);
 }
 
-}  // namespace chromeos
+}  // namespace ash

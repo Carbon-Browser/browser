@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,27 +69,28 @@ SystemMetrics SystemMetrics::Sample() {
   return system_metrics;
 }
 
-Value SystemMetrics::ToValue() const {
-  Value res(Value::Type::DICTIONARY);
+Value::Dict SystemMetrics::ToDict() const {
+  Value::Dict res;
 
-  res.SetIntKey("committed_memory", static_cast<int>(committed_memory_));
+  res.Set("committed_memory", static_cast<int>(committed_memory_));
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
-  Value meminfo = memory_info_.ToValue();
-  Value vmstat = vmstat_info_.ToValue();
-  meminfo.MergeDictionary(&vmstat);
-  res.SetKey("meminfo", std::move(meminfo));
-  res.SetKey("diskinfo", disk_info_.ToValue());
+  Value::Dict meminfo = memory_info_.ToDict();
+  meminfo.Merge(vmstat_info_.ToDict());
+  res.Set("meminfo", std::move(meminfo));
+  res.Set("diskinfo", disk_info_.ToDict());
 #endif
 #if BUILDFLAG(IS_CHROMEOS)
-  res.SetKey("swapinfo", swap_info_.ToValue());
-  res.SetKey("gpu_meminfo", gpu_memory_info_.ToValue());
+  res.Set("swapinfo", swap_info_.ToDict());
+  res.Set("gpu_meminfo", gpu_memory_info_.ToDict());
 #endif
 #if BUILDFLAG(IS_WIN)
-  res.SetKey("perfinfo", performance_.ToValue());
+  res.Set("perfinfo", performance_.ToDict());
 #endif
 
   return res;
 }
+
+ProcessMetrics::~ProcessMetrics() = default;
 
 std::unique_ptr<ProcessMetrics> ProcessMetrics::CreateCurrentProcessMetrics() {
 #if !BUILDFLAG(IS_MAC)
@@ -100,8 +101,8 @@ std::unique_ptr<ProcessMetrics> ProcessMetrics::CreateCurrentProcessMetrics() {
 }
 
 #if !BUILDFLAG(IS_FREEBSD) || !BUILDFLAG(IS_POSIX)
-double ProcessMetrics::GetPlatformIndependentCPUUsage() {
-  TimeDelta cumulative_cpu = GetCumulativeCPUUsage();
+double ProcessMetrics::GetPlatformIndependentCPUUsage(
+    TimeDelta cumulative_cpu) {
   TimeTicks time = TimeTicks::Now();
 
   if (last_cumulative_cpu_.is_zero()) {
@@ -113,7 +114,6 @@ double ProcessMetrics::GetPlatformIndependentCPUUsage() {
 
   TimeDelta cpu_time_delta = cumulative_cpu - last_cumulative_cpu_;
   TimeDelta time_delta = time - last_cpu_time_;
-  DCHECK(!time_delta.is_zero());
   if (time_delta.is_zero())
     return 0;
 
@@ -122,11 +122,14 @@ double ProcessMetrics::GetPlatformIndependentCPUUsage() {
 
   return 100.0 * cpu_time_delta / time_delta;
 }
+
+double ProcessMetrics::GetPlatformIndependentCPUUsage() {
+  return GetPlatformIndependentCPUUsage(GetCumulativeCPUUsage());
+}
 #endif
 
 #if BUILDFLAG(IS_WIN)
-double ProcessMetrics::GetPreciseCPUUsage() {
-  TimeDelta cumulative_cpu = GetPreciseCumulativeCPUUsage();
+double ProcessMetrics::GetPreciseCPUUsage(TimeDelta cumulative_cpu) {
   TimeTicks time = TimeTicks::Now();
 
   if (last_precise_cumulative_cpu_.is_zero()) {
@@ -146,6 +149,10 @@ double ProcessMetrics::GetPreciseCPUUsage() {
   last_cpu_time_for_precise_cpu_usage_ = time;
 
   return 100.0 * cpu_time_delta / time_delta;
+}
+
+double ProcessMetrics::GetPreciseCPUUsage() {
+  return GetPreciseCPUUsage(GetPreciseCumulativeCPUUsage());
 }
 #endif  // BUILDFLAG(IS_WIN)
 

@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 import logging
@@ -67,6 +67,17 @@ class RenderingSharedState(shared_page_state.SharedPageState):
                              [self.current_page.scoreLowerBound])
       results.AddMeasurement('motionmarkUpper', unit,
                              [self.current_page.scoreUpperBound])
+
+      stories = self.current_page.stories
+      storyScores = self.current_page.storyScores
+      lowerBounds = self.current_page.storyScoreLowerBounds
+      upperBounds = self.current_page.storyScoreUpperBounds
+      score_index = 0
+      for story in stories:
+        results.AddMeasurement(story, unit, storyScores[score_index])
+        results.AddMeasurement(story + ' Lower', unit, lowerBounds[score_index])
+        results.AddMeasurement(story + ' Upper', unit, upperBounds[score_index])
+        score_index += 1
 
     if (self.current_page.TAGS and
         story_tags.KEY_IDLE_POWER in self.current_page.TAGS):

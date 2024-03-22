@@ -1,9 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/html/link_style.h"
 
+#include "base/metrics/histogram_functions.h"
 #include "services/network/public/mojom/referrer_policy.mojom-blink.h"
 #include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -14,6 +15,7 @@
 #include "third_party/blink/renderer/core/html/cross_origin_attribute.h"
 #include "third_party/blink/renderer/core/html/html_link_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
+#include "third_party/blink/renderer/core/inspector/inspector_audits_issue.h"
 #include "third_party/blink/renderer/core/loader/fetch_priority_attribute.h"
 #include "third_party/blink/renderer/core/loader/link_load_parameters.h"
 #include "third_party/blink/renderer/core/loader/resource/css_style_sheet_resource.h"
@@ -31,7 +33,7 @@ namespace blink {
 
 static bool StyleSheetTypeIsSupported(const String& type) {
   String trimmed_type = ContentType(type).GetType();
-  return trimmed_type.IsEmpty() ||
+  return trimmed_type.empty() ||
          MIMETypeRegistry::IsSupportedStyleSheetMIMEType(trimmed_type);
 }
 
@@ -58,12 +60,21 @@ void LinkStyle::NotifyFinished(Resource* resource) {
     return;
   }
 
+  if (resource->LoadFailedOrCanceled()) {
+    AuditsIssue::ReportStylesheetLoadingRequestFailedIssue(
+        &GetDocument(), resource->Url(),
+        resource->LastResourceRequest().GetDevToolsId(), GetDocument().Url(),
+        resource->Options().initiator_info.position.line_,
+        resource->Options().initiator_info.position.column_,
+        resource->GetResourceError().LocalizedDescription());
+  }
+
   auto* cached_style_sheet = To<CSSStyleSheetResource>(resource);
   // See the comment in pending_script.cc about why this check is necessary
   // here, instead of in the resource fetcher. https://crbug.com/500701.
   if ((!cached_style_sheet->ErrorOccurred() &&
-       !owner_->FastGetAttribute(html_names::kIntegrityAttr).IsEmpty() &&
-       !cached_style_sheet->IntegrityMetadata().IsEmpty()) ||
+       !owner_->FastGetAttribute(html_names::kIntegrityAttr).empty() &&
+       !cached_style_sheet->IntegrityMetadata().empty()) ||
       resource->IsLinkPreload()) {
     ResourceIntegrityDisposition disposition =
         cached_style_sheet->IntegrityDisposition();
@@ -107,6 +118,7 @@ void LinkStyle::NotifyFinished(Resource* resource) {
     return;
   }
 
+  auto parser_start_time = base::TimeTicks::Now();
   auto* style_sheet = MakeGarbageCollected<StyleSheetContents>(
       parser_context, cached_style_sheet->Url());
 
@@ -130,6 +142,9 @@ void LinkStyle::NotifyFinished(Resource* resource) {
     const_cast<CSSStyleSheetResource*>(cached_style_sheet)
         ->SaveParsedStyleSheet(style_sheet);
   }
+  base::UmaHistogramMicrosecondsTimes(
+      "Blink.CSSStyleSheetResource.ParseTime",
+      base::TimeTicks::Now() - parser_start_time);
   ClearResource();
 }
 
@@ -263,14 +278,14 @@ LinkStyle::LoadReturnValue LinkStyle::LoadStylesheetIfNeeded(
   loading_ = true;
 
   String title = owner_->title();
-  if (!title.IsEmpty() && !owner_->IsAlternate() &&
+  if (!title.empty() && !owner_->IsAlternate() &&
       disabled_state_ != kEnabledViaScript && owner_->IsInDocumentTree()) {
     GetDocument().GetStyleEngine().SetPreferredStylesheetSetNameIfNotSet(title);
   }
 
   bool media_query_matches = true;
   LocalFrame* frame = LoadingFrame();
-  if (!owner_->Media().IsEmpty() && frame) {
+  if (!owner_->Media().empty() && frame) {
     MediaQuerySet* media =
         MediaQuerySet::Create(owner_->Media(), GetExecutionContext());
     MediaQueryEvaluator evaluator(frame);
@@ -364,7 +379,7 @@ void LinkStyle::SetSheetTitle(const String& title) {
   if (sheet_)
     sheet_->SetTitle(title);
 
-  if (title.IsEmpty() || !IsUnset() || owner_->IsAlternate())
+  if (title.empty() || !IsUnset() || owner_->IsAlternate())
     return;
 
   const KURL& href = owner_->GetNonEmptyURLAttribute(html_names::kHrefAttr);

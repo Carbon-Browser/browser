@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/media_router/query_result_manager.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "components/media_router/browser/media_sinks_observer.h"
 #include "components/media_router/browser/test/mock_media_router.h"
@@ -33,8 +33,9 @@ const char kOrigin[] = "https://origin.com";
 
 class MockObserver : public MediaSinkWithCastModesObserver {
  public:
-  MOCK_METHOD1(OnSinksUpdated,
-               void(const std::vector<MediaSinkWithCastModes>& sinks));
+  MOCK_METHOD(void,
+              OnSinksUpdated,
+              (const std::vector<MediaSinkWithCastModes>& sinks));
 };
 
 }  // namespace

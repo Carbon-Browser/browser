@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,18 +26,18 @@ function createAttributionEligibleScriptSrc(src) {
 }
 
 function doAttributionEligibleFetch(url) {
-  const headers = {
-    'Attribution-Reporting-Eligible': 'event-source'
-  };
   // Optionally set keepalive to ensure the request outlives the page.
-  window.fetch(url,
-               { headers, keepalive: true});
+  fetch(url, {
+    attributionReporting: {eventSourceEligible: true, triggerEligible: false},
+    keepalive: true
+  });
 }
 
 function doAttributionEligibleXHR(url) {
   const req = new XMLHttpRequest();
   req.open('GET', url);
-  req.setRequestHeader('Attribution-Reporting-Eligible', 'event-source');
+  req.setAttributionReporting(
+      {eventSourceEligible: true, triggerEligible: false});
   req.send();
 }
 

@@ -1,15 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {AutomationPredicate} from '../../common/automation_predicate.js';
 import {EventGenerator} from '../../common/event_generator.js';
+import {KeyCode} from '../../common/key_code.js';
+import {RepeatedEventHandler} from '../../common/repeated_event_handler.js';
 import {Navigator} from '../navigator.js';
-import {SAConstants, SwitchAccessMenuAction} from '../switch_access_constants.js';
+import {ActionResponse} from '../switch_access_constants.js';
 
 import {BasicNode} from './basic_node.js';
 import {SAChildNode, SARootNode} from './switch_access_node.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
+const MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
 
 /**
  * This class handles interactions with combo boxes.
@@ -30,10 +34,9 @@ class ComboBoxNode extends BasicNode {
   /** @override */
   get actions() {
     const actions = super.actions;
-    if (!actions.includes(SwitchAccessMenuAction.INCREMENT) &&
-        !actions.includes(SwitchAccessMenuAction.DECREMENT)) {
-      actions.push(
-          SwitchAccessMenuAction.INCREMENT, SwitchAccessMenuAction.DECREMENT);
+    if (!actions.includes(MenuAction.INCREMENT) &&
+        !actions.includes(MenuAction.DECREMENT)) {
+      actions.push(MenuAction.INCREMENT, MenuAction.DECREMENT);
     }
     return actions;
   }
@@ -64,19 +67,19 @@ class ComboBoxNode extends BasicNode {
     // by selecting a value without opening the pop-up, using the up and down
     // arrows.
     switch (action) {
-      case SwitchAccessMenuAction.DECREMENT:
+      case MenuAction.DECREMENT:
         EventGenerator.sendKeyPress(KeyCode.UP);
-        return SAConstants.ActionResponse.REMAIN_OPEN;
-      case SwitchAccessMenuAction.INCREMENT:
+        return ActionResponse.REMAIN_OPEN;
+      case MenuAction.INCREMENT:
         EventGenerator.sendKeyPress(KeyCode.DOWN);
-        return SAConstants.ActionResponse.REMAIN_OPEN;
+        return ActionResponse.REMAIN_OPEN;
     }
     return super.performAction(action);
   }
 
   onExpandedChanged() {
     // TODO: figure out why a short timeout is needed here.
-    window.setTimeout(() => {
+    setTimeout(() => {
       if (this.isGroup()) {
         Navigator.byItem.enterGroup();
       }

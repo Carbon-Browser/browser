@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ namespace ui {
 class COMPONENT_EXPORT(UI_BASE_IME_WIN) InputMethodWinImm32
     : public InputMethodWinBase {
  public:
-  InputMethodWinImm32(internal::InputMethodDelegate* delegate,
+  InputMethodWinImm32(ImeKeyEventDispatcher* ime_key_event_dispatcher,
                       HWND attached_window_handle);
 
   InputMethodWinImm32(const InputMethodWinImm32&) = delete;

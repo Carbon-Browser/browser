@@ -1,16 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/app_mode/chrome_kiosk_app_launcher.h"
 
+#include "base/check_deref.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/syslog_logging.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/chromeos/app_mode/kiosk_app_service_launcher.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/extensions/application_launch.h"
+#include "chrome/common/chrome_features.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "extensions/browser/app_window/app_window.h"
 #include "extensions/browser/app_window/app_window_registry.h"
@@ -21,7 +27,7 @@
 #include "extensions/common/manifest_handlers/offline_enabled_info.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -36,7 +42,7 @@ void RecordKioskSecondaryAppsInstallResult(bool success) {
 
 }  // namespace
 
-namespace ash {
+namespace chromeos {
 
 ChromeKioskAppLauncher::ChromeKioskAppLauncher(Profile* profile,
                                                const std::string& app_id,
@@ -45,7 +51,7 @@ ChromeKioskAppLauncher::ChromeKioskAppLauncher(Profile* profile,
       app_id_(app_id),
       network_available_(network_available) {}
 
-ChromeKioskAppLauncher::~ChromeKioskAppLauncher() {}
+ChromeKioskAppLauncher::~ChromeKioskAppLauncher() = default;
 
 void ChromeKioskAppLauncher::LaunchApp(LaunchCallback callback) {
   on_ready_callback_ = std::move(callback);
@@ -56,6 +62,12 @@ void ChromeKioskAppLauncher::LaunchApp(LaunchCallback callback) {
   // this means that the kiosk app might not yet be downloaded. If that is
   // the case, bail out from the app launch.
   if (!primary_app) {
+    ReportLaunchFailure(LaunchResult::kUnableToLaunch);
+    return;
+  }
+
+  if (!extensions::KioskModeInfo::IsKioskEnabled(primary_app)) {
+    SYSLOG(WARNING) << "Kiosk app not kiosk enabled";
     ReportLaunchFailure(LaunchResult::kUnableToLaunch);
     return;
   }
@@ -87,17 +99,13 @@ void ChromeKioskAppLauncher::LaunchApp(LaunchCallback callback) {
   const extensions::Extension* extension = GetPrimaryAppExtension();
   CHECK(extension);
 
-  DCHECK(extensions::KioskModeInfo::IsKioskEnabled(extension));
-
   SYSLOG(INFO) << "Attempt to launch app.";
 
-  // Always open the app in a window.
-  ::OpenApplication(
-      profile_,
-      apps::AppLaunchParams(
-          extension->id(), apps::LaunchContainer::kLaunchContainerWindow,
-          WindowOpenDisposition::NEW_WINDOW, apps::LaunchSource::kFromKiosk));
-
+  app_service_launcher_ = std::make_unique<KioskAppServiceLauncher>(profile_);
+  app_service_launcher_->CheckAndMaybeLaunchApp(
+      extension->id(),
+      base::BindOnce(&ChromeKioskAppLauncher::OnAppServiceAppLaunched,
+                     weak_ptr_factory_.GetWeakPtr()));
   WaitForAppWindow();
 }
 
@@ -119,15 +127,23 @@ void ChromeKioskAppLauncher::OnAppWindowAdded(
   }
 }
 
+void ChromeKioskAppLauncher::OnAppServiceAppLaunched(bool success) {
+  if (!success) {
+    ReportLaunchFailure(LaunchResult::kUnableToLaunch);
+  }
+}
+
 void ChromeKioskAppLauncher::MaybeUpdateAppData() {
   // Skip copying meta data from the current installed primary app when
   // there is a pending update.
-  if (PrimaryAppHasPendingUpdate())
+  if (PrimaryAppHasPendingUpdate()) {
     return;
+  }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  KioskAppManager::Get()->ClearAppData(app_id_);
-  KioskAppManager::Get()->UpdateAppDataFromProfile(app_id_, profile_, nullptr);
+  ash::KioskChromeAppManager::Get()->ClearAppData(app_id_);
+  ash::KioskChromeAppManager::Get()->UpdateAppDataFromProfile(app_id_, profile_,
+                                                              nullptr);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
@@ -157,11 +173,11 @@ const extensions::Extension* ChromeKioskAppLauncher::GetPrimaryAppExtension()
 }
 
 bool ChromeKioskAppLauncher::AreSecondaryAppsInstalled() const {
-  const extensions::Extension* extension = GetPrimaryAppExtension();
-  DCHECK(extension);
-  const extensions::KioskModeInfo* info =
-      extensions::KioskModeInfo::Get(extension);
-  for (const auto& app : info->secondary_apps) {
+  const extensions::Extension& extension =
+      CHECK_DEREF(GetPrimaryAppExtension());
+  const auto& info = CHECK_DEREF(extensions::KioskModeInfo::Get(&extension));
+
+  for (const auto& app : info.secondary_apps) {
     if (!extensions::ExtensionRegistry::Get(profile_)->GetInstalledExtension(
             app.id)) {
       return false;
@@ -183,8 +199,9 @@ void ChromeKioskAppLauncher::SetSecondaryAppsEnabledState(
   for (const auto& app_info : info->secondary_apps) {
     // If the enabled on launch is not specified in the manifest, the apps
     // enabled state should be kept as is.
-    if (!app_info.enabled_on_launch.has_value())
+    if (!app_info.enabled_on_launch.has_value()) {
       continue;
+    }
 
     SetAppEnabledState(app_info.id, app_info.enabled_on_launch.value());
   }
@@ -217,4 +234,4 @@ void ChromeKioskAppLauncher::SetAppEnabledState(
   }
 }
 
-}  // namespace ash
+}  // namespace chromeos

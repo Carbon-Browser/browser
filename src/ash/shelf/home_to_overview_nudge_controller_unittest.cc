@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
 #include "ash/wm/window_state.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -130,16 +130,14 @@ class HomeToOverviewNudgeControllerTest : public AshTestBase {
     ASSERT_TRUE(nudge_widget);
     EXPECT_TRUE(nudge_widget->IsVisible());
 
-    gfx::RectF nudge_bounds_f(
-        nudge_widget->GetNativeWindow()->GetTargetBounds());
-    nudge_widget->GetLayer()->transform().TransformRect(&nudge_bounds_f);
-    const gfx::Rect nudge_bounds = gfx::ToEnclosingRect(nudge_bounds_f);
+    const gfx::Rect nudge_bounds =
+        nudge_widget->GetLayer()->transform().MapRect(
+            nudge_widget->GetNativeWindow()->GetTargetBounds());
 
     HotseatWidget* const hotseat = GetHotseatWidget();
-    gfx::RectF hotseat_bounds_f(hotseat->GetNativeWindow()->GetTargetBounds());
-    hotseat->GetLayerForNudgeAnimation()->transform().TransformRect(
-        &hotseat_bounds_f);
-    const gfx::Rect hotseat_bounds = gfx::ToEnclosingRect(hotseat_bounds_f);
+    const gfx::Rect hotseat_bounds =
+        hotseat->GetLayerForNudgeAnimation()->transform().MapRect(
+            hotseat->GetNativeWindow()->GetTargetBounds());
 
     // Nudge and hotseat should have the same transform.
     EXPECT_EQ(hotseat->GetLayerForNudgeAnimation()->transform(),

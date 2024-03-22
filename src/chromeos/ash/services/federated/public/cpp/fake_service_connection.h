@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 
 #include <string>
 
+#include "base/containers/flat_map.h"
 #include "chromeos/ash/services/federated/public/cpp/service_connection.h"
 #include "chromeos/ash/services/federated/public/mojom/example.mojom.h"
 #include "chromeos/ash/services/federated/public/mojom/federated_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace federated {
@@ -39,6 +41,9 @@ class FakeServiceConnectionImpl
                  receiver) override;
   void ReportExample(const std::string& client_name,
                      chromeos::federated::mojom::ExamplePtr example) override;
+  void StartScheduling(
+      const absl::optional<base::flat_map<std::string, std::string>>&
+          client_launch_stage) override;
 
  private:
   mojo::ReceiverSet<chromeos::federated::mojom::FederatedService> receivers_;

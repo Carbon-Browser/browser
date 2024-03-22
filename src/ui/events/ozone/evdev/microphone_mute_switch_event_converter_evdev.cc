@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,6 +90,14 @@ void MicrophoneMuteSwitchEventConverterEvdev::ProcessEvent(
     const input_event& input) {
   if (input.type == EV_SW && input.code == SW_MUTE_DEVICE)
     dispatcher_->DispatchMicrophoneMuteSwitchValueChanged(input.value);
+}
+
+std::ostream& MicrophoneMuteSwitchEventConverterEvdev::DescribeForLog(
+    std::ostream& os) const {
+  os << "class=ui::MicrophoneMuteSwitchEventConverterEvdev id="
+     << input_device_.id << std::endl
+     << "base ";
+  return EventConverterEvdev::DescribeForLog(os);
 }
 
 }  // namespace ui

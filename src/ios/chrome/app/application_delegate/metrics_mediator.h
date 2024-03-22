@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,8 +48,10 @@ void RecordWidgetUsage(base::span<const HistogramNameCountPair> histograms);
 - (void)updateMetricsStateBasedOnPrefsUserTriggered:(BOOL)isUserTriggered;
 // Logs the duration of the cold start startup. Does nothing if there isn't a
 // cold start.
-+ (void)logStartupDuration:(id<StartupInformation>)startupInformation
-     connectionInformation:(id<ConnectionInformation>)connectionInformation;
++ (void)logStartupDuration:(id<StartupInformation>)startupInformation;
+// Creates a MetricKit extended launch task to track startup duration. This must
+// be called before the first scene becomes active.
++ (void)createStartupTrackingTask;
 // Logs the number of tabs open and the start type.
 + (void)logLaunchMetricsWithStartupInformation:
             (id<StartupInformation>)startupInformation

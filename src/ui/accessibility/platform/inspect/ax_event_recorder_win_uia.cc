@@ -1,15 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/platform/inspect/ax_event_recorder_win_uia.h"
 
-#include <algorithm>
 #include <numeric>
 #include <utility>
 
 #include <psapi.h>
 
+#include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -266,9 +267,7 @@ AXEventRecorderWinUia::Thread::EventHandler::HandleFocusChangedEvent(
   }
   if (auto lock_scope = id.CreateLockScope<VT_I4>()) {
     // Debounce focus events received from the same |sender|.
-    if (std::equal(lock_scope->begin(), lock_scope->end(),
-                   last_focused_runtime_id_.begin(),
-                   last_focused_runtime_id_.end())) {
+    if (base::ranges::equal(*lock_scope, last_focused_runtime_id_)) {
       return S_OK;
     }
 

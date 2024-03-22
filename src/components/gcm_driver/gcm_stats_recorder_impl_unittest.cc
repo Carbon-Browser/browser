@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -424,8 +424,7 @@ TEST_F(GCMStatsRecorderImplTest, ClearLogTest) {
   VerifyRecordedSendingCount(0);
 }
 
-// This test is flaky, see https://crbug.com/1010462
-TEST_F(GCMStatsRecorderImplTest, DISABLED_CheckinTest) {
+TEST_F(GCMStatsRecorderImplTest, CheckinTest) {
   recorder_.RecordCheckinInitiated(kAndroidId);
   VerifyRecordedCheckinCount(1);
   VerifyCheckinInitiated("1st call");

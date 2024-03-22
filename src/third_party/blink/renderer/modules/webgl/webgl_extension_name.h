@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,23 +10,33 @@ namespace blink {
 // Extension names are needed to properly wrap instances in JavaScript objects.
 enum WebGLExtensionName {
   kANGLEInstancedArraysName,
+  kEXTBlendFuncExtendedName,
   kEXTBlendMinMaxName,
+  kEXTClipControlName,
   kEXTColorBufferFloatName,
   kEXTColorBufferHalfFloatName,
+  kEXTConservativeDepthName,
+  kEXTDepthClampName,
   kEXTDisjointTimerQueryName,
   kEXTDisjointTimerQueryWebGL2Name,
   kEXTFloatBlendName,
   kEXTFragDepthName,
+  kEXTPolygonOffsetClampName,
+  kEXTRenderSnormName,
   kEXTShaderTextureLODName,
   kEXTsRGBName,
   kEXTTextureCompressionBPTCName,
   kEXTTextureCompressionRGTCName,
   kEXTTextureFilterAnisotropicName,
+  kEXTTextureMirrorClampToEdgeName,
   kEXTTextureNorm16Name,
   kKHRParallelShaderCompileName,
+  kNVShaderNoperspectiveInterpolationName,
   kOESDrawBuffersIndexedName,
   kOESElementIndexUintName,
   kOESFboRenderMipmapName,
+  kOESSampleVariablesName,
+  kOESShaderMultisampleInterpolationName,
   kOESStandardDerivativesName,
   kOESTextureFloatLinearName,
   kOESTextureFloatName,
@@ -34,6 +44,7 @@ enum WebGLExtensionName {
   kOESTextureHalfFloatName,
   kOESVertexArrayObjectName,
   kOVRMultiview2Name,
+  kWebGLClipCullDistanceName,
   kWebGLColorBufferFloatName,
   kWebGLCompressedTextureASTCName,
   kWebGLCompressedTextureETCName,
@@ -52,7 +63,11 @@ enum WebGLExtensionName {
   kWebGLMultiDrawInstancedName,
   kWebGLMultiDrawInstancedBaseVertexBaseInstanceName,
   kWebGLMultiviewName,
-  kWebGLVideoTextureName,
+  kWebGLPolygonModeName,
+  kWebGLProvokingVertexName,
+  kWebGLRenderSharedExponentName,
+  kWebGLShaderPixelLocalStorageName,
+  kWebGLStencilTexturingName,
   kWebGLWebCodecsVideoFrameName,
   kWebGLExtensionNameCount,  // Must be the last entry
 };

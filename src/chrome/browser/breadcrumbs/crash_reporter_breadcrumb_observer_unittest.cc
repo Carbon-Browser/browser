@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,6 +46,11 @@ class CrashReporterBreadcrumbObserverTest : public PlatformTest {
  public:
   void SetUp() override {
     PlatformTest::SetUp();
+
+    // Ensure the CrashReporterBreadcrumbObserver singleton is created
+    // and registered.
+    breadcrumbs::CrashReporterBreadcrumbObserver::GetInstance();
+
     crash_reporter::InitializeCrashKeysForTesting();
   }
 
@@ -58,38 +63,20 @@ class CrashReporterBreadcrumbObserverTest : public PlatformTest {
   }
 
  protected:
-  // Returns the BreadcrumbManagerKeyedService for |browser_context|, and sets
-  // |crash_reporter_breadcrumb_observer_| as its observer.
-  breadcrumbs::BreadcrumbManagerKeyedService* GetAndObserveBreadcrumbService(
-      content::BrowserContext* browser_context) {
-    breadcrumbs::BreadcrumbManagerKeyedService* const breadcrumb_service =
-        BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(
-            browser_context);
-    crash_reporter_breadcrumb_observer_.ObserveBreadcrumbManagerService(
-        breadcrumb_service);
-    return breadcrumb_service;
-  }
-
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile browser_context_;
   TestingProfile browser_context_2_;
-
-  // Must be destroyed before browser contexts to ensure that it stops observing
-  // the browser contexts' BreadcrumbManagers before they are destroyed.
-  breadcrumbs::CrashReporterBreadcrumbObserver
-      crash_reporter_breadcrumb_observer_;
 };
 
 // Tests that breadcrumb events logged to a single BreadcrumbManagerKeyedService
 // are collected by the CrashReporterBreadcrumbObserver and attached to crash
 // reports.
 TEST_F(CrashReporterBreadcrumbObserverTest, EventsAttachedToCrashReport) {
-  breadcrumbs::BreadcrumbManagerKeyedService* breadcrumb_service =
-      GetAndObserveBreadcrumbService(&browser_context_);
+  BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(&browser_context_)
+      ->AddEvent(std::string("Breadcrumb Event"));
 
-  breadcrumb_service->AddEvent(std::string("Breadcrumb Event"));
-
-  const std::list<std::string> events = breadcrumb_service->GetEvents(0);
+  const auto& events =
+      breadcrumbs::BreadcrumbManager::GetInstance().GetEvents();
   std::string expected_breadcrumbs;
   for (const auto& event : events)
     expected_breadcrumbs += event + "\n";
@@ -106,9 +93,6 @@ TEST_F(CrashReporterBreadcrumbObserverTest, EventsAttachedToCrashReport) {
 
 // Tests that breadcrumbs string is cut when it exceeds the max allowed length.
 TEST_F(CrashReporterBreadcrumbObserverTest, MAYBE_ProductDataOverflow) {
-  breadcrumbs::BreadcrumbManagerKeyedService* breadcrumb_service =
-      GetAndObserveBreadcrumbService(&browser_context_);
-
   // Build a sample breadcrumbs string greater than the maximum allowed size.
   std::string breadcrumbs;
   while (breadcrumbs.length() < breadcrumbs::kMaxDataLength) {
@@ -117,7 +101,8 @@ TEST_F(CrashReporterBreadcrumbObserverTest, MAYBE_ProductDataOverflow) {
   breadcrumbs.append("12:01 Fake Breadcrumb Event/n");
   ASSERT_GT(breadcrumbs.length(), breadcrumbs::kMaxDataLength);
 
-  breadcrumb_service->AddEvent(breadcrumbs);
+  BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(&browser_context_)
+      ->AddEvent(breadcrumbs);
 
   // Confirm that the total length of the breadcrumbs crash string is
   // |breadcrumbs::kMaxDataLength|.
@@ -125,15 +110,15 @@ TEST_F(CrashReporterBreadcrumbObserverTest, MAYBE_ProductDataOverflow) {
   // Linux uses Breakpad, which breaks the crash key value up into chunks of 127
   // characters each, named <crash key>__1, <crash key>__2, etc. These must be
   // summed to determine the total length of the breadcrumbs crash string.
-  static const std::string kBreakpadNameFormat =
-      std::string(breadcrumbs::kBreadcrumbsProductDataKey) + "__%d";
   int chunk = 1;
   size_t chunk_length = 0;
   size_t breadcrumbs_crash_string_length = 0;
   do {
-    chunk_length = crash_reporter::GetCrashKeyValue(
-                       base::StringPrintf(kBreakpadNameFormat.c_str(), chunk))
-                       .length();
+    chunk_length =
+        crash_reporter::GetCrashKeyValue(
+            base::StringPrintf("%s__%d",
+                               breadcrumbs::kBreadcrumbsProductDataKey, chunk))
+            .length();
     breadcrumbs_crash_string_length += chunk_length;
     chunk++;
   } while (chunk_length > 0);
@@ -153,21 +138,21 @@ TEST_F(CrashReporterBreadcrumbObserverTest,
   const std::string event = "Breadcrumb Event";
 
   breadcrumbs::BreadcrumbManagerKeyedService* breadcrumb_service =
-      GetAndObserveBreadcrumbService(&browser_context_);
-
+      BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(
+          &browser_context_);
   breadcrumb_service->AddEvent(event);
   EXPECT_EQ(1, CountSubstrings(GetBreadcrumbsCrashKeyValue(), event));
 
   breadcrumbs::BreadcrumbManagerKeyedService* otr_breadcrumb_service =
-      GetAndObserveBreadcrumbService(browser_context_.GetOffTheRecordProfile(
-          Profile::OTRProfileID::PrimaryID(), /*create_if_needed=*/true));
-
+      BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(
+          browser_context_.GetOffTheRecordProfile(
+              Profile::OTRProfileID::PrimaryID(), /*create_if_needed=*/true));
   otr_breadcrumb_service->AddEvent(event);
   EXPECT_EQ(2, CountSubstrings(GetBreadcrumbsCrashKeyValue(), event));
 
   breadcrumbs::BreadcrumbManagerKeyedService* breadcrumb_service_2 =
-      GetAndObserveBreadcrumbService(&browser_context_2_);
-
+      BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(
+          &browser_context_2_);
   breadcrumb_service_2->AddEvent(event);
   EXPECT_EQ(3, CountSubstrings(GetBreadcrumbsCrashKeyValue(), event));
 }

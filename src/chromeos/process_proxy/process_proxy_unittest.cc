@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,17 @@
 #include <string>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/kill.h"
 #include "base/process/process.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/process_proxy/process_proxy_registry.h"
 
 namespace chromeos {
@@ -59,7 +58,7 @@ class TestRunner {
 
  protected:
   std::string id_;
-  raw_ptr<const base::Process> process_;
+  raw_ptr<const base::Process, AcrossTasksDanglingUntriaged> process_;
 
   base::OnceClosure done_read_closure_;
 };
@@ -111,7 +110,9 @@ class RegistryTestRunner : public TestRunner {
 
   void StartRegistryTest(ProcessProxyRegistry* registry) override {
     for (int i = 0; i < kTestLineNum; i++) {
-      EXPECT_TRUE(registry->SendInput(id_, kTestLineToSend));
+      registry->SendInput(id_, kTestLineToSend, base::BindOnce([](bool result) {
+                            EXPECT_TRUE(result);
+                          }));
     }
   }
 
@@ -173,7 +174,8 @@ class RegistryNotifiedOnProcessExitTestRunner : public TestRunner {
   }
 
   void StartRegistryTest(ProcessProxyRegistry* registry) override {
-    EXPECT_TRUE(registry->SendInput(id_, "p"));
+    registry->SendInput(
+        id_, "p", base::BindOnce([](bool result) { EXPECT_TRUE(result); }));
   }
 
  private:
@@ -237,7 +239,7 @@ class ProcessProxyTest : public testing::Test {
         base::BindOnce(
             &ProcessProxyTest::InitRegistryTest, base::Unretained(this),
             base::BindOnce(&RunOnTaskRunner, init_registry_waiter.QuitClosure(),
-                           base::SequencedTaskRunnerHandle::Get())));
+                           base::SequencedTaskRunner::GetCurrentDefault())));
     // Wait until all data from output watcher is received (QuitTask will be
     // fired on watcher thread).
     init_registry_waiter.Run();
@@ -248,7 +250,7 @@ class ProcessProxyTest : public testing::Test {
         base::BindOnce(
             &ProcessProxyTest::EndRegistryTest, base::Unretained(this),
             base::BindOnce(&RunOnTaskRunner, end_registry_waiter.QuitClosure(),
-                           base::SequencedTaskRunnerHandle::Get())));
+                           base::SequencedTaskRunner::GetCurrentDefault())));
     // Wait until we clean up the process proxy.
     end_registry_waiter.Run();
   }
@@ -261,7 +263,7 @@ class ProcessProxyTest : public testing::Test {
 
   raw_ptr<ProcessProxyRegistry> registry_;
   std::string id_;
-  raw_ptr<const base::Process> process_ = nullptr;
+  raw_ptr<const base::Process, AcrossTasksDanglingUntriaged> process_ = nullptr;
 
   base::test::TaskEnvironment task_environment_;
 };

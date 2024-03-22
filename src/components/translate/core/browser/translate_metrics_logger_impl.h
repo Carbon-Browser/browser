@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,6 @@ extern const char kTranslateTranslationType[];
 extern const char kTranslateUiInteractionEvent[];
 
 // Page-load frequency UMA histograms.
-extern const char kTranslatePageLoadAutofillAssistantDeferredTriggerDecision[];
 extern const char kTranslatePageLoadFinalSourceLanguage[];
 extern const char kTranslatePageLoadFinalState[];
 extern const char kTranslatePageLoadFinalTargetLanguage[];
@@ -72,11 +71,10 @@ class NullTranslateMetricsLogger : public TranslateMetricsLogger {
   void LogRankerStart() override {}
   void LogRankerFinish() override {}
   void LogTriggerDecision(TriggerDecision trigger_decision) override {}
-  void LogAutofillAssistantDeferredTriggerDecision() override {}
   void LogInitialState() override {}
   void LogTranslationStarted(TranslationType translation_type) override {}
   void LogTranslationFinished(bool was_successful,
-                              TranslateErrors::Type error_type) override {}
+                              TranslateErrors error_type) override {}
   void LogReversion() override {}
   void LogUIChange(bool is_ui_shown) override {}
   void LogOmniboxIconChange(bool is_omnibox_icon_shown) override {}
@@ -134,11 +132,10 @@ class TranslateMetricsLoggerImpl : public TranslateMetricsLogger {
   void LogRankerStart() override;
   void LogRankerFinish() override;
   void LogTriggerDecision(TriggerDecision trigger_decision) override;
-  void LogAutofillAssistantDeferredTriggerDecision() override;
   void LogInitialState() override;
   void LogTranslationStarted(TranslationType translation_type) override;
   void LogTranslationFinished(bool was_successful,
-                              TranslateErrors::Type error_type) override;
+                              TranslateErrors error_type) override;
   void LogReversion() override;
   void LogUIChange(bool is_ui_shown) override;
   void LogOmniboxIconChange(bool is_omnibox_icon_shown) override;
@@ -224,7 +221,6 @@ class TranslateMetricsLoggerImpl : public TranslateMetricsLogger {
   // Stores the reason for the initial state of the page load. In the case there
   // are multiple reasons, only the first reported reason is stored.
   TriggerDecision trigger_decision_ = TriggerDecision::kUninitialized;
-  bool autofill_assistant_deferred_trigger_decision_ = false;
 
   // Tracks the different dimensions that determine the state of Translate.
   bool is_initial_state_set_ = false;
@@ -286,7 +282,7 @@ class TranslateMetricsLoggerImpl : public TranslateMetricsLogger {
   float model_detection_reliability_score_ = 0.0;
 
   // Tracks any translation errors that occur over the course of the page load.
-  TranslateErrors::Type first_translate_error_type_ = TranslateErrors::NONE;
+  TranslateErrors first_translate_error_type_ = TranslateErrors::NONE;
   int num_translate_errors_ = 0;
 
   // Tracks the user's high level interaction with the Translate UI over the

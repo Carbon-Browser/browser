@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include "base/location.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/views/exclusive_access_bubble_views_context.h"
@@ -30,6 +30,7 @@
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/controls/link.h"
 #include "ui/views/view.h"
+#include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
@@ -41,10 +42,12 @@ ExclusiveAccessBubbleViews::ExclusiveAccessBubbleViews(
     ExclusiveAccessBubbleViewsContext* context,
     const GURL& url,
     ExclusiveAccessBubbleType bubble_type,
+    bool notify_download,
     ExclusiveAccessBubbleHideCallback bubble_first_hide_callback)
     : ExclusiveAccessBubble(context->GetExclusiveAccessManager(),
                             url,
-                            bubble_type),
+                            bubble_type,
+                            notify_download),
       bubble_view_context_(context),
       popup_(nullptr),
       bubble_first_hide_callback_(std::move(bubble_first_hide_callback)),
@@ -52,6 +55,8 @@ ExclusiveAccessBubbleViews::ExclusiveAccessBubbleViews(
   // Create the contents view.
   auto content_view = std::make_unique<SubtleNotificationView>();
   view_ = content_view.get();
+  view_->SetProperty(views::kElementIdentifierKey,
+                     kExclusiveAccessBubbleViewElementId);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Technically the exit fullscreen key on ChromeOS is F11 and the
@@ -81,9 +86,10 @@ ExclusiveAccessBubbleViews::ExclusiveAccessBubbleViews(
   popup_ = SubtleNotificationView::CreatePopupWidget(
       bubble_view_context_->GetBubbleParentView(), std::move(content_view));
 
-  gfx::Size size = GetPopupRect(true).size();
+  gfx::Rect popup_rect = GetPopupRect();
+  gfx::Size size = popup_rect.size();
   // Bounds are in screen coordinates.
-  popup_->SetBounds(GetPopupRect(false));
+  popup_->SetBounds(popup_rect);
   // Why is this special enough to require the "security surface" level? A
   // decision was made a long time ago to not require confirmation when a site
   // asks to go fullscreen, and that's not changing. However, a site going
@@ -120,7 +126,8 @@ ExclusiveAccessBubbleViews::~ExclusiveAccessBubbleViews() {
   // the popup to synchronously hide, and then asynchronously close and delete
   // itself.
   popup_->Close();
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, popup_.get());
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                popup_.get());
   CHECK(!views::WidgetObserver::IsInObserverList());
 }
 
@@ -128,10 +135,20 @@ void ExclusiveAccessBubbleViews::UpdateContent(
     const GURL& url,
     ExclusiveAccessBubbleType bubble_type,
     ExclusiveAccessBubbleHideCallback bubble_first_hide_callback,
+    bool notify_download,
     bool force_update) {
-  DCHECK_NE(EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE, bubble_type);
+  DCHECK(EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE != bubble_type || notify_download);
   if (bubble_type_ == bubble_type && url_ == url && !force_update)
     return;
+
+  // Show the notification about overriding only if requesting a download
+  // notification, a notification was visible earlier, and the earlier
+  // notification was either a non-download one, or was one about an override
+  // itself.
+  notify_overridden_ = notify_download &&
+                       (IsVisible() || animation_->IsShowing()) &&
+                       (!notify_download_ || notify_overridden_);
+  notify_download_ = notify_download;
 
   // Bubble maybe be re-used after timeout.
   RunHideCallbackIfNeeded(ExclusiveAccessBubbleHideReason::kInterrupted);
@@ -139,12 +156,15 @@ void ExclusiveAccessBubbleViews::UpdateContent(
   bubble_first_hide_callback_ = std::move(bubble_first_hide_callback);
 
   url_ = url;
-  bubble_type_ = bubble_type;
+  // When a request to notify about a download is made, the bubble type
+  // should be preserved from the old value, and not be updated.
+  if (!notify_download) {
+    bubble_type_ = bubble_type;
+  }
   UpdateViewContent(bubble_type_);
 
-  gfx::Size size = GetPopupRect(true).size();
-  view_->SetSize(size);
-  popup_->SetBounds(GetPopupRect(false));
+  view_->SizeToPreferredSize();
+  popup_->SetBounds(GetPopupRect());
   Show();
 
   // Stop watching the mouse even if UpdateMouseWatcher() will start watching
@@ -156,16 +176,7 @@ void ExclusiveAccessBubbleViews::UpdateContent(
 }
 
 void ExclusiveAccessBubbleViews::RepositionIfVisible() {
-#if BUILDFLAG(IS_MAC)
-  // Due to a quirk on the Mac, the popup will not be visible for a short period
-  // of time after it is shown (it's asynchronous) so if we don't check the
-  // value of the animation we'll have a stale version of the bounds when we
-  // show it and it will appear in the wrong place - typically where the window
-  // was located before going to fullscreen.
-  if (popup_->IsVisible() || animation_->GetCurrentValue() > 0.0)
-#else
-  if (popup_->IsVisible())
-#endif
+  if (IsVisible())
     UpdateBounds();
 }
 
@@ -200,7 +211,7 @@ void ExclusiveAccessBubbleViews::UpdateMouseWatcher() {
 }
 
 void ExclusiveAccessBubbleViews::UpdateBounds() {
-  gfx::Rect popup_rect(GetPopupRect(false));
+  gfx::Rect popup_rect(GetPopupRect());
   if (!popup_rect.IsEmpty()) {
     popup_->SetBounds(popup_rect);
     view_->SetY(popup_rect.height() - view_->height());
@@ -209,24 +220,36 @@ void ExclusiveAccessBubbleViews::UpdateBounds() {
 
 void ExclusiveAccessBubbleViews::UpdateViewContent(
     ExclusiveAccessBubbleType bubble_type) {
-  DCHECK_NE(EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE, bubble_type);
+  DCHECK(notify_download_ || EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE != bubble_type);
 
   std::u16string accelerator;
-  if (bubble_type ==
-          EXCLUSIVE_ACCESS_BUBBLE_TYPE_BROWSER_FULLSCREEN_EXIT_INSTRUCTION ||
-      bubble_type ==
-          EXCLUSIVE_ACCESS_BUBBLE_TYPE_EXTENSION_FULLSCREEN_EXIT_INSTRUCTION) {
+  if ((notify_download_ && bubble_type == EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE) ||
+      exclusive_access_bubble::IsExclusiveAccessModeBrowserFullscreen(
+          bubble_type)) {
     accelerator = browser_fullscreen_exit_accelerator_;
   } else {
     accelerator = l10n_util::GetStringUTF16(IDS_APP_ESC_KEY);
-  }
 #if BUILDFLAG(IS_MAC)
-  // Mac keyboards use lowercase for everything except function keys, which are
-  // typically reserved for system use. Since |accelerator| is placed in a box
-  // to make it look like a keyboard key it looks weird to not follow suit.
-  accelerator = base::i18n::ToLower(accelerator);
+    // Mac keyboards use lowercase for the non-letter keys, and since the key is
+    // placed in a box to make it look like a keyboard key it looks weird to not
+    // follow suit.
+    accelerator = base::i18n::ToLower(accelerator);
 #endif
+  }
   view_->UpdateContent(GetInstructionText(accelerator));
+}
+
+bool ExclusiveAccessBubbleViews::IsVisible() const {
+#if BUILDFLAG(IS_MAC)
+  // Due to a quirk on the Mac, the popup will not be visible for a short period
+  // of time after it is shown (it's asynchronous) so if we don't check the
+  // value of the animation we'll have a stale version of the bounds when we
+  // show it and it will appear in the wrong place - typically where the window
+  // was located before going to fullscreen.
+  return (popup_->IsVisible() || animation_->GetCurrentValue() > 0.0);
+#else
+  return (popup_->IsVisible());
+#endif
 }
 
 views::View* ExclusiveAccessBubbleViews::GetBrowserRootView() const {
@@ -251,15 +274,15 @@ void ExclusiveAccessBubbleViews::AnimationEnded(
   AnimationProgressed(animation);
 }
 
-gfx::Rect ExclusiveAccessBubbleViews::GetPopupRect(
-    bool ignore_animation_state) const {
+gfx::Rect ExclusiveAccessBubbleViews::GetPopupRect() const {
   gfx::Size size(view_->GetPreferredSize());
   gfx::Rect widget_bounds = bubble_view_context_->GetClientAreaBoundsInScreen();
   int x = widget_bounds.x() + (widget_bounds.width() - size.width()) / 2;
 
   int top_container_bottom = widget_bounds.y();
+#if !BUILDFLAG(IS_MAC)
   if (bubble_view_context_->IsImmersiveModeEnabled()) {
-    // Skip querying the top container height in non-immersive fullscreen
+    // Skip querying the top container height in CrOS non-immersive fullscreen
     // because:
     // - The top container height is always zero in non-immersive fullscreen.
     // - Querying the top container height may return the height before entering
@@ -271,6 +294,7 @@ gfx::Rect ExclusiveAccessBubbleViews::GetPopupRect(
     top_container_bottom =
         bubble_view_context_->GetTopContainerBoundsInScreen().bottom();
   }
+#endif
   // |desired_top| is the top of the bubble area including the shadow.
   const int desired_top = kSimplifiedPopupTopPx - view_->GetInsets().top();
   const int y = top_container_bottom + desired_top;

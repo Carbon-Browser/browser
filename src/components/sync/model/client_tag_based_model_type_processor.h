@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,6 +91,7 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   base::WeakPtr<ModelTypeControllerDelegate> GetControllerDelegate() override;
   const sync_pb::EntitySpecifics& GetPossiblyTrimmedRemoteSpecifics(
       const std::string& storage_key) const override;
+  base::WeakPtr<ModelTypeChangeProcessor> GetWeakPtr() override;
 
   // ModelTypeProcessor implementation.
   void ConnectSync(std::unique_ptr<CommitQueue> worker) override;
@@ -103,7 +104,12 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
       const FailedCommitResponseDataList& error_response_list) override;
   void OnCommitFailed(SyncCommitError commit_error) override;
   void OnUpdateReceived(const sync_pb::ModelTypeState& type_state,
-                        UpdateResponseDataList updates) override;
+                        UpdateResponseDataList updates,
+                        absl::optional<sync_pb::GarbageCollectionDirective>
+                            gc_directive) override;
+  void StorePendingInvalidations(
+      std::vector<sync_pb::ModelTypeState::Invalidation> invalidations_to_store)
+      override;
 
   // ModelTypeControllerDelegate implementation.
   // |start_callback| will never be called synchronously.
@@ -115,6 +121,7 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
       base::OnceCallback<void(const TypeEntitiesCount&)> callback)
       const override;
   void RecordMemoryUsageAndCountsHistograms() override;
+  void ClearMetadataIfStopped() override;
 
   // Returns the estimate of dynamically allocated memory in bytes.
   size_t EstimateMemoryUsage() const;
@@ -128,7 +135,7 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused. Public for tests.
   enum class ErrorSite {
-    kBridgeInitiated = 0,
+    kReportedByBridge = 0,
     kApplyFullUpdates = 1,
     kApplyIncrementalUpdates = 2,
     kApplyUpdatesOnCommitResponse = 3,
@@ -161,15 +168,18 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   // Validates the update specified by the input parameters and returns whether
   // it should get further processed. If the update is incorrect, this function
   // also reports an error.
-  bool ValidateUpdate(const sync_pb::ModelTypeState& model_type_state,
-                      const UpdateResponseDataList& updates);
+  bool ValidateUpdate(
+      const sync_pb::ModelTypeState& model_type_state,
+      const UpdateResponseDataList& updates,
+      const absl::optional<sync_pb::GarbageCollectionDirective>& gc_directive);
 
   // Handle the first update received from the server after being enabled. If
   // the data type does not support incremental updates, this will be called for
   // any server update.
   absl::optional<ModelError> OnFullUpdateReceived(
       const sync_pb::ModelTypeState& type_state,
-      UpdateResponseDataList updates);
+      UpdateResponseDataList updates,
+      absl::optional<sync_pb::GarbageCollectionDirective> gc_directive);
 
   // Handle any incremental updates received from the server after being
   // enabled.
@@ -225,10 +235,15 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   void MergeDataWithMetadataForDebugging(AllNodesCallback callback,
                                          std::unique_ptr<DataBatch> batch);
 
-  // Checks for valid persisted state. Resets state (incl. the persisted data)
+  // Verifies that the persisted ModelTypeState (in `entity_tracker_`) is valid.
+  // May modify the state (incl. the persisted data) or even clear it entirely
   // if it is invalid.
-  void CheckForInvalidPersistedModelTypeState();
-  bool CheckForInvalidPersistedMetadata(const EntityMetadataMap& metadata_map);
+  void ClearPersistedMetadataIfInconsistentWithActivationRequest();
+
+  // Verifies that the passed-in metadata (ModelTypeState plus entity metadata)
+  // is valid, and clears it (incl. the persisted data) if not. Returns whether
+  // the metadata was cleared.
+  bool ClearPersistedMetadataIfInvalid(const MetadataBatch& metadata);
 
   // Reports error and records a metric about |site| where the error occurred.
   void ReportErrorImpl(const ModelError& error, ErrorSite site);
@@ -242,10 +257,14 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
 
   // ModelTypeSyncBridge linked to this processor. The bridge owns this
   // processor instance so the pointer should never become invalid.
-  raw_ptr<ModelTypeSyncBridge> bridge_;
+  raw_ptr<ModelTypeSyncBridge, DanglingUntriaged> bridge_ = nullptr;
 
   // Function to capture and upload a stack trace when an error occurs.
   const base::RepeatingClosure dump_stack_;
+
+  // Whether there is an ongoing processing of incoming updates, used to detect
+  // local updates based on remote changes.
+  bool processing_incremental_updates_ = false;
 
   /////////////////
   // Model state //
@@ -258,6 +277,10 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   // Whether the model has initialized its internal state for sync (and provided
   // metadata).
   bool model_ready_to_sync_ = false;
+
+  // Marks whether metadata should be cleared upon ModelReadyToSync(). True if
+  // ClearMetadataIfStopped() is called before ModelReadyToSync().
+  bool pending_clear_metadata_ = false;
 
   ////////////////
   // Sync state //
@@ -287,7 +310,7 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
 
   // WeakPtrFactory for this processor for ModelTypeController (only gets
   // invalidated during destruction).
-  base::WeakPtrFactory<ModelTypeControllerDelegate>
+  base::WeakPtrFactory<ClientTagBasedModelTypeProcessor>
       weak_ptr_factory_for_controller_{this};
 
   // WeakPtrFactory for this processor which will be sent to sync thread.

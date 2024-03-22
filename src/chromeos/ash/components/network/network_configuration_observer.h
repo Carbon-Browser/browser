@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,9 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/values.h"
 
-namespace base {
-class Value;
-}
-
-namespace chromeos {
+namespace ash {
 
 // Observer class for network configuration events (remove only).
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationObserver {
@@ -28,7 +25,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationObserver {
   // Called whenever properties on a network configuration are modified.
   virtual void OnConfigurationModified(const std::string& service_path,
                                        const std::string& guid,
-                                       const base::Value* set_properties);
+                                       const base::Value::Dict* set_properties);
 
   // Called before a delete is attempted.
   virtual void OnBeforeConfigurationRemoved(const std::string& service_path,
@@ -49,6 +46,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConfigurationObserver {
   virtual ~NetworkConfigurationObserver();
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CONFIGURATION_OBSERVER_H_

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,10 +27,11 @@ class ColorSchemeHelper {
   ~ColorSchemeHelper();
 
   void SetPreferredColorScheme(
-      const mojom::PreferredColorScheme preferred_color_scheme);
-  void SetPreferredContrast(const mojom::PreferredContrast preferred_contrast);
-  void SetForcedColors(Document& document, const ForcedColors forced_colors);
-  void SetForcedColors(Page& page, const ForcedColors forced_colors);
+      mojom::PreferredColorScheme preferred_color_scheme);
+  void SetPreferredContrast(mojom::PreferredContrast preferred_contrast);
+  void SetForcedColors(Document& document, ForcedColors forced_colors);
+  void SetForcedColors(Page& page, ForcedColors forced_colors);
+  void SetEmulatedForcedColors(Document& document, bool is_dark_theme);
 
  private:
   WebThemeEngine* web_theme_engine_ = nullptr;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -188,7 +188,7 @@ bool ModifierKeyboardHookWinImpl::Register() {
 void ModifierKeyboardHookWinImpl::ClearModifierStates() {
   BYTE keyboard_state[kKeyboardStateArraySize] = {0};
   if (!GetKeyboardState(keyboard_state)) {
-    DPLOG(ERROR) << "GetKeyboardState() failed: ";
+    PLOG(ERROR) << "GetKeyboardState() failed: ";
     return;
   }
 
@@ -203,7 +203,7 @@ void ModifierKeyboardHookWinImpl::ClearModifierStates() {
   keyboard_state[VK_RWIN] = kKeyUp;
 
   if (!SetKeyboardState(keyboard_state))
-    DPLOG(ERROR) << "SetKeyboardState() failed: ";
+    PLOG(ERROR) << "SetKeyboardState() failed: ";
 }
 
 bool ModifierKeyboardHookWinImpl::ProcessKeyEventMessage(WPARAM w_param,
@@ -282,7 +282,7 @@ void ModifierKeyboardHookWinImpl::UpdateModifierState(DWORD vk,
                                                       bool is_key_down) {
   BYTE keyboard_state[kKeyboardStateArraySize] = {0};
   if (!GetKeyboardState(keyboard_state)) {
-    DPLOG(ERROR) << "GetKeyboardState() failed: ";
+    PLOG(ERROR) << "GetKeyboardState() failed: ";
     return;
   }
 

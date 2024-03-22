@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,22 +7,23 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/display/display_features.h"
-#include "ui/display/fake/fake_display_snapshot.h"
 #include "ui/display/manager/test/action_logger_util.h"
+#include "ui/display/manager/test/fake_display_snapshot.h"
 #include "ui/display/manager/test/test_native_display_delegate.h"
+#include "ui/display/manager/util/display_manager_test_util.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/display/util/display_util.h"
+#include "ui/ozone/public/ozone_switches.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 namespace {
 
@@ -37,8 +38,8 @@ std::unique_ptr<DisplayMode> MakeDisplayMode(int width,
                                              int height,
                                              bool is_interlaced,
                                              float refresh_rate) {
-  return std::make_unique<DisplayMode>(gfx::Size(width, height), is_interlaced,
-                                       refresh_rate);
+  return CreateDisplayModePtrForTest({width, height}, is_interlaced,
+                                     refresh_rate);
 }
 
 enum CallbackResult {
@@ -110,7 +111,7 @@ class TestObserver : public DisplayConfigurator::Observer {
   }
 
  private:
-  DisplayConfigurator* configurator_;  // Not owned.
+  raw_ptr<DisplayConfigurator, ExperimentalAsh> configurator_;  // Not owned.
 
   // Number of times that OnDisplayMode*() has been called.
   int num_changes_;
@@ -218,7 +219,8 @@ class ConfigurationWaiter {
     callback_result_ = status ? CALLBACK_SUCCESS : CALLBACK_FAILURE;
   }
 
-  DisplayConfigurator::TestApi* test_api_;  // Not owned.
+  raw_ptr<DisplayConfigurator::TestApi, ExperimentalAsh>
+      test_api_;  // Not owned.
 
   // The status of the display configuration.
   CallbackResult callback_result_;
@@ -242,44 +244,50 @@ class DisplayConfiguratorTest : public testing::Test {
     scoped_feature_list_.InitAndEnableFeature(
         features::kEnableHardwareMirrorMode);
 
-    // Force system compositor mode to simulate on-device configurator behavior.
-    base::CommandLine::ForCurrentProcess()->AppendSwitch(
-        ash::switches::kForceSystemCompositorMode);
-
     native_display_delegate_ = new TestNativeDisplayDelegate(log_.get());
+    // Force configuring displays to simulate on-device configurator behavior.
+    configurator_.SetConfigureDisplays(true);
     configurator_.SetDelegateForTesting(
         std::unique_ptr<NativeDisplayDelegate>(native_display_delegate_));
 
     configurator_.set_state_controller(&state_controller_);
     configurator_.set_mirroring_controller(&mirroring_controller_);
 
-    outputs_[0] = FakeDisplaySnapshot::Builder()
-                      .SetId(kDisplayIds[0])
-                      .SetNativeMode(small_mode_.Clone())
-                      .SetCurrentMode(small_mode_.Clone())
-                      .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
-                      .SetBaseConnectorId(kEdpConnectorId)
-                      .SetIsAspectPerservingScaling(true)
-                      .Build();
+    owned_outputs_[0] = FakeDisplaySnapshot::Builder()
+                            .SetId(kDisplayIds[0])
+                            .SetNativeMode(small_mode_.Clone())
+                            .SetCurrentMode(small_mode_.Clone())
+                            .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                            .SetBaseConnectorId(kEdpConnectorId)
+                            .SetIsAspectPreservingScaling(true)
+                            .SetVariableRefreshRateState(kVrrDisabled)
+                            .SetVsyncRateMin(40)
+                            .Build();
 
-    outputs_[1] = FakeDisplaySnapshot::Builder()
-                      .SetId(kDisplayIds[1])
-                      .SetNativeMode(big_mode_.Clone())
-                      .SetCurrentMode(big_mode_.Clone())
-                      .AddMode(small_mode_.Clone())
-                      .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
-                      .SetBaseConnectorId(kSecondConnectorId)
-                      .SetIsAspectPerservingScaling(true)
-                      .Build();
+    owned_outputs_[1] = FakeDisplaySnapshot::Builder()
+                            .SetId(kDisplayIds[1])
+                            .SetNativeMode(big_mode_.Clone())
+                            .SetCurrentMode(big_mode_.Clone())
+                            .AddMode(small_mode_.Clone())
+                            .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
+                            .SetBaseConnectorId(kSecondConnectorId)
+                            .SetIsAspectPreservingScaling(true)
+                            .SetVariableRefreshRateState(kVrrNotCapable)
+                            .Build();
 
-    outputs_[2] = FakeDisplaySnapshot::Builder()
-                      .SetId(kDisplayIds[2])
-                      .SetNativeMode(small_mode_.Clone())
-                      .SetCurrentMode(small_mode_.Clone())
-                      .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
-                      .SetBaseConnectorId(kThirdConnectorId)
-                      .SetIsAspectPerservingScaling(true)
-                      .Build();
+    owned_outputs_[2] = FakeDisplaySnapshot::Builder()
+                            .SetId(kDisplayIds[2])
+                            .SetNativeMode(small_mode_.Clone())
+                            .SetCurrentMode(small_mode_.Clone())
+                            .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
+                            .SetBaseConnectorId(kThirdConnectorId)
+                            .SetIsAspectPreservingScaling(true)
+                            .SetVariableRefreshRateState(kVrrNotCapable)
+                            .Build();
+
+    for (size_t i = 0; i < kNumOutputs; ++i) {
+      outputs_[i] = owned_outputs_[i].get();
+    }
 
     UpdateOutputs(2, false);
   }
@@ -289,8 +297,10 @@ class DisplayConfiguratorTest : public testing::Test {
   }
 
   // Predefined modes that can be used by outputs.
-  const DisplayMode small_mode_{gfx::Size(1366, 768), false, 60.0f};
-  const DisplayMode big_mode_{gfx::Size(2560, 1600), false, 60.0f};
+  const DisplayMode small_mode_ =
+      CreateDisplayModeForTest({1366, 768}, false, 60.0f);
+  const DisplayMode big_mode_ =
+      CreateDisplayModeForTest({2560, 1600}, false, 60.0f);
 
  protected:
   // Configures |native_display_delegate_| to return the first |num_outputs|
@@ -301,8 +311,9 @@ class DisplayConfiguratorTest : public testing::Test {
   void UpdateOutputs(size_t num_outputs, bool send_events) {
     ASSERT_LE(num_outputs, std::size(outputs_));
     std::vector<DisplaySnapshot*> outputs;
-    for (size_t i = 0; i < num_outputs; ++i)
-      outputs.push_back(outputs_[i].get());
+    for (size_t i = 0; i < num_outputs; ++i) {
+      outputs.push_back(outputs_[i]);
+    }
     native_display_delegate_->set_outputs(outputs);
 
     if (send_events) {
@@ -360,13 +371,14 @@ class DisplayConfiguratorTest : public testing::Test {
   DisplayConfigurator configurator_;
   TestObserver observer_{&configurator_};
   std::unique_ptr<ActionLogger> log_;
-  TestNativeDisplayDelegate* native_display_delegate_;  // not owned
+  raw_ptr<TestNativeDisplayDelegate, ExperimentalAsh>
+      native_display_delegate_;  // not owned
   DisplayConfigurator::TestApi test_api_{&configurator_};
   ConfigurationWaiter config_waiter_{&test_api_};
   base::test::ScopedFeatureList scoped_feature_list_;
 
   static constexpr size_t kNumOutputs = 3;
-  std::unique_ptr<DisplaySnapshot> outputs_[kNumOutputs];
+  DisplaySnapshot* outputs_[kNumOutputs];
 
   CallbackResult display_control_result_ = CALLBACK_NOT_CALLED;
 
@@ -394,6 +406,10 @@ class DisplayConfiguratorTest : public testing::Test {
     return rest.empty() ? action
                         : JoinActions(action.c_str(), rest.c_str(), nullptr);
   }
+
+  // These snapshots must outlive their usage in |outputs_| because they may
+  // still be referenced by the DisplayConfigurator cache.
+  std::unique_ptr<DisplaySnapshot> owned_outputs_[kNumOutputs];
 };
 
 }  // namespace
@@ -509,13 +525,14 @@ TEST_F(DisplayConfiguratorTest, ConnectSecondOutput) {
   EXPECT_EQ(1, observer_.num_changes());
 
   // Get rid of shared modes to force software mirroring.
-  outputs_[1] = FakeDisplaySnapshot::Builder()
+  auto output = FakeDisplaySnapshot::Builder()
                     .SetId(kDisplayIds[1])
                     .SetNativeMode(big_mode_.Clone())
                     .SetCurrentMode(big_mode_.Clone())
                     .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
-                    .SetIsAspectPerservingScaling(true)
+                    .SetIsAspectPreservingScaling(true)
                     .Build();
+  outputs_[1] = output.get();
 
   state_controller_.set_state(MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED);
   UpdateOutputs(2, true);
@@ -645,13 +662,14 @@ TEST_F(DisplayConfiguratorTest, SetDisplayPower) {
   EXPECT_EQ(1, observer_.num_changes());
 
   // Get rid of shared modes to force software mirroring.
-  outputs_[1] = FakeDisplaySnapshot::Builder()
+  auto output = FakeDisplaySnapshot::Builder()
                     .SetId(kDisplayIds[1])
                     .SetNativeMode(big_mode_.Clone())
                     .SetCurrentMode(big_mode_.Clone())
                     .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
-                    .SetIsAspectPerservingScaling(true)
+                    .SetIsAspectPreservingScaling(true)
                     .Build();
+  outputs_[1] = output.get();
 
   state_controller_.set_state(MULTIPLE_DISPLAY_STATE_MULTI_MIRROR);
   observer_.Reset();
@@ -884,14 +902,15 @@ TEST_F(DisplayConfiguratorTest, Headless) {
   EXPECT_EQ(kNoActions, log_->GetActionsAndClear());
 
   // Connect an external display and check that it's configured correctly.
-  outputs_[0] = FakeDisplaySnapshot::Builder()
+  auto output = FakeDisplaySnapshot::Builder()
                     .SetId(kDisplayIds[0])
                     .SetNativeMode(big_mode_.Clone())
                     .SetCurrentMode(big_mode_.Clone())
                     .AddMode(small_mode_.Clone())
                     .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
-                    .SetIsAspectPerservingScaling(true)
+                    .SetIsAspectPreservingScaling(true)
                     .Build();
+  outputs_[0] = output.get();
 
   UpdateOutputs(1, true);
   EXPECT_EQ(JoinActions(kTestModesetStr, GetCrtcActions(&big_mode_).c_str(),
@@ -1005,6 +1024,51 @@ TEST_F(DisplayConfiguratorTest, UpdateCachedOutputsEvenAfterFailure) {
   EXPECT_EQ(outputs_[1]->current_mode(), cached[1]->current_mode());
 }
 
+TEST_F(DisplayConfiguratorTest, VerifyInternalPanelIsAtTheTopOfTheList) {
+  InitWithOutputs(&small_mode_);
+
+  // Initialize with 3 displays where the internal panel is not at the top of
+  // the display list.
+  auto output0 = FakeDisplaySnapshot::Builder()
+                     .SetId(1L)
+                     .SetType(DISPLAY_CONNECTION_TYPE_DISPLAYPORT)
+                     .SetNativeMode(big_mode_.Clone())
+                     .Build();
+  outputs_[0] = output0.get();
+  auto output1 = FakeDisplaySnapshot::Builder()
+                     .SetId(2L)
+                     .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                     .SetNativeMode(small_mode_.Clone())
+                     .Build();
+  outputs_[1] = output1.get();
+  auto output2 = FakeDisplaySnapshot::Builder()
+                     .SetId(3L)
+                     .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
+                     .SetNativeMode(big_mode_.Clone())
+                     .Build();
+  outputs_[2] = output2.get();
+
+  native_display_delegate_->set_max_configurable_pixels(
+      big_mode_.size().GetArea());
+  UpdateOutputs(3, true);
+
+  // We expect the internal display to be at the top of DisplayConfigurator's
+  // |cached_displays_| list post configuration. The rest of the display should
+  // be in the original order from DRM.
+  const DisplayConfigurator::DisplayStateList& cached =
+      configurator_.cached_displays();
+  ASSERT_EQ(cached.size(), 3U);
+
+  EXPECT_EQ(cached[0]->display_id(), 2L);
+  EXPECT_EQ(cached[0]->type(), DISPLAY_CONNECTION_TYPE_INTERNAL);
+
+  EXPECT_EQ(cached[1]->display_id(), 1L);
+  EXPECT_EQ(cached[1]->type(), DISPLAY_CONNECTION_TYPE_DISPLAYPORT);
+
+  EXPECT_EQ(cached[2]->display_id(), 3L);
+  EXPECT_EQ(cached[2]->type(), DISPLAY_CONNECTION_TYPE_HDMI);
+}
+
 TEST_F(DisplayConfiguratorTest, DoNotConfigureWithSuspendedDisplays) {
   InitWithOutputs(&small_mode_);
 
@@ -1109,18 +1173,19 @@ TEST_F(DisplayConfiguratorTest, HandleConfigureCrtcFailure) {
   modes.push_back(MakeDisplayMode(1920, 1080, false, 60.0));
   modes.push_back(MakeDisplayMode(1920, 1080, false, 40.0));
 
-  outputs_[0] = FakeDisplaySnapshot::Builder()
-                    .SetId(kDisplayIds[0])
-                    .SetNativeMode(modes[0]->Clone())
-                    .SetCurrentMode(modes[0]->Clone())
-                    .AddMode(modes[1]->Clone())
-                    .AddMode(modes[2]->Clone())
-                    .AddMode(modes[3]->Clone())
-                    .AddMode(modes[4]->Clone())
-                    .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
-                    .SetBaseConnectorId(kEdpConnectorId)
-                    .SetIsAspectPerservingScaling(true)
-                    .Build();
+  auto output0 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[0])
+                     .SetNativeMode(modes[0]->Clone())
+                     .SetCurrentMode(modes[0]->Clone())
+                     .AddMode(modes[1]->Clone())
+                     .AddMode(modes[2]->Clone())
+                     .AddMode(modes[3]->Clone())
+                     .AddMode(modes[4]->Clone())
+                     .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                     .SetBaseConnectorId(kEdpConnectorId)
+                     .SetIsAspectPreservingScaling(true)
+                     .Build();
+  outputs_[0] = output0.get();
 
   // Since Chrome restricts the internal display to its native mode it should
   // not attempt other available modes. The likelihood of an internal display
@@ -1146,18 +1211,19 @@ TEST_F(DisplayConfiguratorTest, HandleConfigureCrtcFailure) {
                 kModesetOutcomeFailure, nullptr),
             log_->GetActionsAndClear());
 
-  outputs_[0] = FakeDisplaySnapshot::Builder()
-                    .SetId(kDisplayIds[0])
-                    .SetNativeMode(modes[0]->Clone())
-                    .SetCurrentMode(modes[0]->Clone())
-                    .AddMode(modes[1]->Clone())
-                    .AddMode(modes[2]->Clone())
-                    .AddMode(modes[3]->Clone())
-                    .AddMode(modes[4]->Clone())
-                    .SetType(DISPLAY_CONNECTION_TYPE_DISPLAYPORT)
-                    .SetBaseConnectorId(kEdpConnectorId)
-                    .SetIsAspectPerservingScaling(true)
-                    .Build();
+  auto output1 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[0])
+                     .SetNativeMode(modes[0]->Clone())
+                     .SetCurrentMode(modes[0]->Clone())
+                     .AddMode(modes[1]->Clone())
+                     .AddMode(modes[2]->Clone())
+                     .AddMode(modes[3]->Clone())
+                     .AddMode(modes[4]->Clone())
+                     .SetType(DISPLAY_CONNECTION_TYPE_DISPLAYPORT)
+                     .SetBaseConnectorId(kEdpConnectorId)
+                     .SetIsAspectPreservingScaling(true)
+                     .Build();
+  outputs_[0] = output1.get();
 
   // This test simply fails in MULTIPLE_DISPLAY_STATE_SINGLE mode for an
   // external display (assuming the internal display is disabled; e.g. the lid
@@ -1199,31 +1265,33 @@ TEST_F(DisplayConfiguratorTest, HandleConfigureCrtcFailure) {
                 kModesetOutcomeSuccess, nullptr),
             log_->GetActionsAndClear());
 
-  outputs_[0] = FakeDisplaySnapshot::Builder()
-                    .SetId(kDisplayIds[0])
-                    .SetNativeMode(modes[0]->Clone())
-                    .SetCurrentMode(modes[0]->Clone())
-                    .AddMode(modes[1]->Clone())
-                    .AddMode(modes[2]->Clone())
-                    .AddMode(modes[3]->Clone())
-                    .AddMode(modes[4]->Clone())
-                    .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
-                    .SetBaseConnectorId(kEdpConnectorId)
-                    .SetIsAspectPerservingScaling(true)
-                    .Build();
+  auto output2 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[0])
+                     .SetNativeMode(modes[0]->Clone())
+                     .SetCurrentMode(modes[0]->Clone())
+                     .AddMode(modes[1]->Clone())
+                     .AddMode(modes[2]->Clone())
+                     .AddMode(modes[3]->Clone())
+                     .AddMode(modes[4]->Clone())
+                     .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                     .SetBaseConnectorId(kEdpConnectorId)
+                     .SetIsAspectPreservingScaling(true)
+                     .Build();
+  outputs_[0] = output2.get();
 
-  outputs_[1] = FakeDisplaySnapshot::Builder()
-                    .SetId(kDisplayIds[1])
-                    .SetNativeMode(modes[0]->Clone())
-                    .SetCurrentMode(modes[0]->Clone())
-                    .AddMode(modes[1]->Clone())
-                    .AddMode(modes[2]->Clone())
-                    .AddMode(modes[3]->Clone())
-                    .AddMode(modes[4]->Clone())
-                    .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
-                    .SetBaseConnectorId(kSecondConnectorId)
-                    .SetIsAspectPerservingScaling(true)
-                    .Build();
+  auto output3 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[1])
+                     .SetNativeMode(modes[0]->Clone())
+                     .SetCurrentMode(modes[0]->Clone())
+                     .AddMode(modes[1]->Clone())
+                     .AddMode(modes[2]->Clone())
+                     .AddMode(modes[3]->Clone())
+                     .AddMode(modes[4]->Clone())
+                     .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
+                     .SetBaseConnectorId(kSecondConnectorId)
+                     .SetIsAspectPreservingScaling(true)
+                     .Build();
+  outputs_[1] = output3.get();
 
   // This test should attempt to configure a mirror mode that will not succeed
   // and should end up in extended mode.
@@ -1934,6 +2002,421 @@ TEST_F(DisplayConfiguratorTest, PowerStateChange) {
   EXPECT_EQ(chromeos::DISPLAY_POWER_ALL_ON, observer_.latest_power_state());
 }
 
+TEST_F(DisplayConfiguratorTest, RefreshRateThrottle_SingleDisplay) {
+  InitWithOutputs(&small_mode_);
+  // Set up display with HRR native mode and eligible throttle candidate mode.
+  std::vector<std::unique_ptr<const DisplayMode>> modes;
+  modes.push_back(MakeDisplayMode(1366, 768, false, 120.0));
+  modes.push_back(MakeDisplayMode(1366, 768, false, 60.0));
+  auto output = FakeDisplaySnapshot::Builder()
+                    .SetId(kDisplayIds[0])
+                    .SetNativeMode(modes[0]->Clone())
+                    .SetCurrentMode(modes[0]->Clone())
+                    .AddMode(modes[1]->Clone())
+                    .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                    .SetBaseConnectorId(kEdpConnectorId)
+                    .SetIsAspectPreservingScaling(true)
+                    .Build();
+  outputs_[0] = output.get();
+  state_controller_.set_state(MULTIPLE_DISPLAY_STATE_SINGLE);
+  UpdateOutputs(1, true);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  log_->GetActionsAndClear();
+  observer_.Reset();
+
+  // Set throttle state noop.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleDisabled);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(0, observer_.num_changes());
+  EXPECT_EQ(kNoActions, log_->GetActionsAndClear());
+
+  // Set throttle state enabled.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleEnabled);
+  EXPECT_EQ(60.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(1, observer_.num_changes());
+  EXPECT_EQ(JoinActions(kTestModesetStr, kSeamlessModesetStr,
+                        GetCrtcAction({outputs_[0]->display_id(),
+                                       gfx::Point(0, 0), modes[1].get()})
+                            .c_str(),
+                        kModesetOutcomeSuccess, kCommitModesetStr,
+                        kSeamlessModesetStr,
+                        GetCrtcAction({outputs_[0]->display_id(),
+                                       gfx::Point(0, 0), modes[1].get()})
+                            .c_str(),
+                        kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+  observer_.Reset();
+
+  // Set throttle state disabled.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleDisabled);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(1, observer_.num_changes());
+  EXPECT_EQ(JoinActions(kTestModesetStr, kSeamlessModesetStr,
+                        GetCrtcAction({outputs_[0]->display_id(),
+                                       gfx::Point(0, 0), modes[0].get()})
+                            .c_str(),
+                        kModesetOutcomeSuccess, kCommitModesetStr,
+                        kSeamlessModesetStr,
+                        GetCrtcAction({outputs_[0]->display_id(),
+                                       gfx::Point(0, 0), modes[0].get()})
+                            .c_str(),
+                        kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+}
+
+TEST_F(DisplayConfiguratorTest, RefreshRateThrottle_MultipleDisplays) {
+  InitWithOutputs(&small_mode_, &big_mode_);
+  // Set up each display with HRR native mode and eligible throttle candidate
+  // mode.
+  std::vector<std::unique_ptr<const DisplayMode>> modes;
+  modes.push_back(MakeDisplayMode(1366, 768, false, 120.0));
+  modes.push_back(MakeDisplayMode(1366, 768, false, 60.0));
+  auto output0 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[0])
+                     .SetNativeMode(modes[0]->Clone())
+                     .SetCurrentMode(modes[0]->Clone())
+                     .AddMode(modes[1]->Clone())
+                     .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                     .SetBaseConnectorId(kEdpConnectorId)
+                     .SetIsAspectPreservingScaling(true)
+                     .Build();
+  outputs_[0] = output0.get();
+  // External display should never be throttled irregardless of its modes.
+  auto output1 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[1])
+                     .SetNativeMode(modes[0]->Clone())
+                     .SetCurrentMode(modes[0]->Clone())
+                     .AddMode(modes[1]->Clone())
+                     .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
+                     .SetBaseConnectorId(kSecondConnectorId)
+                     .SetIsAspectPreservingScaling(true)
+                     .Build();
+  outputs_[1] = output1.get();
+  state_controller_.set_state(MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED);
+  UpdateOutputs(2, true);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(120.0f, outputs_[1]->current_mode()->refresh_rate());
+  log_->GetActionsAndClear();
+  observer_.Reset();
+
+  // Set throttle state noop.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleDisabled);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(120.0f, outputs_[1]->current_mode()->refresh_rate());
+  EXPECT_EQ(0, observer_.num_changes());
+  EXPECT_EQ(kNoActions, log_->GetActionsAndClear());
+
+  // Set throttle state enabled.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleEnabled);
+  EXPECT_EQ(60.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(120.0f, outputs_[1]->current_mode()->refresh_rate());
+  EXPECT_EQ(1, observer_.num_changes());
+  int vertical_offset = outputs_[0]->native_mode()->size().height() +
+                        DisplayConfigurator::kVerticalGap;
+  EXPECT_EQ(JoinActions(
+                kTestModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[1].get()})
+                    .c_str(),
+                GetCrtcAction({outputs_[1]->display_id(),
+                               gfx::Point(0, vertical_offset), modes[0].get()})
+                    .c_str(),
+                kModesetOutcomeSuccess, kCommitModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[1].get()})
+                    .c_str(),
+                GetCrtcAction({outputs_[1]->display_id(),
+                               gfx::Point(0, vertical_offset), modes[0].get()})
+                    .c_str(),
+                kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+  observer_.Reset();
+
+  // Set throttle state disabled.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleDisabled);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(120.0f, outputs_[1]->current_mode()->refresh_rate());
+  EXPECT_EQ(1, observer_.num_changes());
+  EXPECT_EQ(JoinActions(
+                kTestModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[0].get()})
+                    .c_str(),
+                GetCrtcAction({outputs_[1]->display_id(),
+                               gfx::Point(0, vertical_offset), modes[0].get()})
+                    .c_str(),
+                kModesetOutcomeSuccess, kCommitModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[0].get()})
+                    .c_str(),
+                GetCrtcAction({outputs_[1]->display_id(),
+                               gfx::Point(0, vertical_offset), modes[0].get()})
+                    .c_str(),
+                kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+}
+
+TEST_F(DisplayConfiguratorTest, SetVrrEnabled) {
+  InitWithOutputs(&small_mode_);
+  UpdateOutputs(2, true);
+  EXPECT_FALSE(outputs_[0]->IsVrrEnabled());
+  EXPECT_FALSE(outputs_[1]->IsVrrEnabled());
+  log_->GetActionsAndClear();
+  observer_.Reset();
+
+  // Set VRR noop.
+  configurator_.SetVrrEnabled(false);
+  EXPECT_EQ(0, observer_.num_changes());
+  EXPECT_FALSE(outputs_[0]->IsVrrEnabled());
+  EXPECT_FALSE(outputs_[1]->IsVrrEnabled());
+  EXPECT_EQ(kNoActions, log_->GetActionsAndClear());
+
+  // Set VRR enabled.
+  configurator_.SetVrrEnabled(true);
+  EXPECT_EQ(1, observer_.num_changes());
+  EXPECT_TRUE(outputs_[0]->IsVrrEnabled());
+  EXPECT_FALSE(outputs_[1]->IsVrrEnabled());
+  int vertical_offset = outputs_[0]->native_mode()->size().height() +
+                        DisplayConfigurator::kVerticalGap;
+  EXPECT_EQ(JoinActions(
+                kTestModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               outputs_[0]->native_mode(), /*enable_vrr=*/true})
+                    .c_str(),
+                GetCrtcAction(
+                    {outputs_[1]->display_id(), gfx::Point(0, vertical_offset),
+                     outputs_[1]->native_mode(), /*enable_vrr=*/false})
+                    .c_str(),
+                kModesetOutcomeSuccess, kCommitModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               outputs_[0]->native_mode(), /*enable_vrr=*/true})
+                    .c_str(),
+                GetCrtcAction(
+                    {outputs_[1]->display_id(), gfx::Point(0, vertical_offset),
+                     outputs_[1]->native_mode(), /*enable_vrr=*/false})
+                    .c_str(),
+                kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+  observer_.Reset();
+
+  // Set VRR disabled.
+  configurator_.SetVrrEnabled(false);
+  EXPECT_EQ(1, observer_.num_changes());
+  EXPECT_FALSE(outputs_[0]->IsVrrEnabled());
+  EXPECT_FALSE(outputs_[1]->IsVrrEnabled());
+  EXPECT_EQ(
+      JoinActions(
+          kTestModesetStr, kSeamlessModesetStr,
+          GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                         outputs_[0]->native_mode(), /*enable_vrr=*/false})
+              .c_str(),
+          GetCrtcAction({outputs_[1]->display_id(),
+                         gfx::Point(0, vertical_offset),
+                         outputs_[1]->native_mode(), /*enable_vrr=*/false})
+              .c_str(),
+          kModesetOutcomeSuccess, kCommitModesetStr, kSeamlessModesetStr,
+          GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                         outputs_[0]->native_mode(), /*enable_vrr=*/false})
+              .c_str(),
+          GetCrtcAction({outputs_[1]->display_id(),
+                         gfx::Point(0, vertical_offset),
+                         outputs_[1]->native_mode(), /*enable_vrr=*/false})
+              .c_str(),
+          kModesetOutcomeSuccess, nullptr),
+      log_->GetActionsAndClear());
+}
+
+TEST_F(DisplayConfiguratorTest, SetVrrEnabled_NotCapable) {
+  outputs_[0]->set_variable_refresh_rate_state(kVrrNotCapable);
+  InitWithOutputs(&small_mode_);
+  UpdateOutputs(2, true);
+  EXPECT_FALSE(outputs_[0]->IsVrrEnabled());
+  EXPECT_FALSE(outputs_[1]->IsVrrEnabled());
+  log_->GetActionsAndClear();
+  observer_.Reset();
+
+  configurator_.SetVrrEnabled(true);
+  EXPECT_EQ(0, observer_.num_changes());
+  EXPECT_FALSE(outputs_[0]->IsVrrEnabled());
+  EXPECT_FALSE(outputs_[1]->IsVrrEnabled());
+  EXPECT_EQ(kNoActions, log_->GetActionsAndClear());
+}
+
+TEST_F(DisplayConfiguratorTest, RefreshRateThrottle_VrrEnabled) {
+  InitWithOutputs(&small_mode_);
+  // Set up display with HRR native mode and eligible throttle candidate mode.
+  std::vector<std::unique_ptr<const DisplayMode>> modes;
+  modes.push_back(MakeDisplayMode(1366, 768, false, 120.0));
+  modes.push_back(MakeDisplayMode(1366, 768, false, 60.0));
+  auto output = FakeDisplaySnapshot::Builder()
+                    .SetId(kDisplayIds[0])
+                    .SetNativeMode(modes[0]->Clone())
+                    .SetCurrentMode(modes[0]->Clone())
+                    .AddMode(modes[1]->Clone())
+                    .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                    .SetBaseConnectorId(kEdpConnectorId)
+                    .SetIsAspectPreservingScaling(true)
+                    .SetVariableRefreshRateState(kVrrDisabled)
+                    .SetVsyncRateMin(40)
+                    .Build();
+  outputs_[0] = output.get();
+  state_controller_.set_state(MULTIPLE_DISPLAY_STATE_SINGLE);
+  UpdateOutputs(1, true);
+  // Enable VRR on internal display.
+  configurator_.SetVrrEnabled(true);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_TRUE(outputs_[0]->IsVrrEnabled());
+  log_->GetActionsAndClear();
+  observer_.Reset();
+
+  // Set throttle state enabled.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleEnabled);
+  EXPECT_EQ(60.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(1, observer_.num_changes());
+  // Throttling should be unaffected by the internal display VRR state and still
+  // result in seamless modesets.
+  EXPECT_EQ(JoinActions(
+                kTestModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[1].get(), /*enable_vrr=*/true})
+                    .c_str(),
+                kModesetOutcomeSuccess, kCommitModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[1].get(), /*enable_vrr=*/true})
+                    .c_str(),
+                kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+  observer_.Reset();
+
+  // Set throttle state disabled.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleDisabled);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(1, observer_.num_changes());
+  // Unthrottling should be unaffected by the internal display VRR state and
+  // still result in seamless modesets.
+  EXPECT_EQ(JoinActions(
+                kTestModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[0].get(), /*enable_vrr=*/true})
+                    .c_str(),
+                kModesetOutcomeSuccess, kCommitModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[0].get(), /*enable_vrr=*/true})
+                    .c_str(),
+                kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+}
+
+TEST_F(DisplayConfiguratorTest,
+       RefreshRateThrottle_VrrEnabledOnExternalDisplay) {
+  InitWithOutputs(&small_mode_, &big_mode_);
+  // Set up each display with HRR native mode and eligible throttle candidate
+  // mode.
+  std::vector<std::unique_ptr<const DisplayMode>> modes;
+  modes.push_back(MakeDisplayMode(1366, 768, false, 120.0));
+  modes.push_back(MakeDisplayMode(1366, 768, false, 60.0));
+  auto output0 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[0])
+                     .SetNativeMode(modes[0]->Clone())
+                     .SetCurrentMode(modes[0]->Clone())
+                     .AddMode(modes[1]->Clone())
+                     .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                     .SetBaseConnectorId(kEdpConnectorId)
+                     .SetIsAspectPreservingScaling(true)
+                     .SetVariableRefreshRateState(kVrrNotCapable)
+                     .Build();
+  outputs_[0] = output0.get();
+  auto output1 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[1])
+                     .SetNativeMode(big_mode_.Clone())
+                     .SetCurrentMode(big_mode_.Clone())
+                     .AddMode(small_mode_.Clone())
+                     .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
+                     .SetBaseConnectorId(kSecondConnectorId)
+                     .SetIsAspectPreservingScaling(true)
+                     .SetVariableRefreshRateState(kVrrDisabled)
+                     .SetVsyncRateMin(40)
+                     .Build();
+  outputs_[1] = output1.get();
+  state_controller_.set_state(MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED);
+  UpdateOutputs(2, true);
+  // Enable VRR when only the external display is VRR-capable.
+  configurator_.SetVrrEnabled(true);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(60.0f, outputs_[1]->current_mode()->refresh_rate());
+  EXPECT_FALSE(outputs_[0]->IsVrrEnabled());
+  EXPECT_TRUE(outputs_[1]->IsVrrEnabled());
+  log_->GetActionsAndClear();
+  observer_.Reset();
+
+  // Set throttle state enabled.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleEnabled);
+  EXPECT_EQ(60.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(60.0f, outputs_[1]->current_mode()->refresh_rate());
+  EXPECT_EQ(1, observer_.num_changes());
+  int vertical_offset = outputs_[0]->native_mode()->size().height() +
+                        DisplayConfigurator::kVerticalGap;
+  // Throttling should be unaffected by the external display VRR state and still
+  // result in seamless modesets.
+  EXPECT_EQ(JoinActions(
+                kTestModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[1].get(), /*enable_vrr=*/false})
+                    .c_str(),
+                GetCrtcAction({outputs_[1]->display_id(),
+                               gfx::Point(0, vertical_offset), &big_mode_,
+                               /*enable_vrr=*/true})
+                    .c_str(),
+                kModesetOutcomeSuccess, kCommitModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[1].get(), /*enable_vrr=*/false})
+                    .c_str(),
+                GetCrtcAction({outputs_[1]->display_id(),
+                               gfx::Point(0, vertical_offset), &big_mode_,
+                               /*enable_vrr=*/true})
+                    .c_str(),
+                kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+  observer_.Reset();
+
+  // Set throttle state disabled.
+  configurator_.MaybeSetRefreshRateThrottleState(outputs_[0]->display_id(),
+                                                 kRefreshRateThrottleDisabled);
+  EXPECT_EQ(120.0f, outputs_[0]->current_mode()->refresh_rate());
+  EXPECT_EQ(60.0f, outputs_[1]->current_mode()->refresh_rate());
+  EXPECT_EQ(1, observer_.num_changes());
+  // Unthrottling should be unaffected by the external display VRR state and
+  // still result in seamless modesets.
+  EXPECT_EQ(JoinActions(
+                kTestModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[0].get(), /*enable_vrr=*/false})
+                    .c_str(),
+                GetCrtcAction({outputs_[1]->display_id(),
+                               gfx::Point(0, vertical_offset), &big_mode_,
+                               /*enable_vrr=*/true})
+                    .c_str(),
+                kModesetOutcomeSuccess, kCommitModesetStr, kSeamlessModesetStr,
+                GetCrtcAction({outputs_[0]->display_id(), gfx::Point(0, 0),
+                               modes[0].get(), /*enable_vrr=*/false})
+                    .c_str(),
+                GetCrtcAction({outputs_[1]->display_id(),
+                               gfx::Point(0, vertical_offset), &big_mode_,
+                               /*enable_vrr=*/true})
+                    .c_str(),
+                kModesetOutcomeSuccess, nullptr),
+            log_->GetActionsAndClear());
+}
+
 class DisplayConfiguratorMultiMirroringTest : public DisplayConfiguratorTest {
  public:
   DisplayConfiguratorMultiMirroringTest() = default;
@@ -1988,16 +2471,17 @@ class DisplayConfiguratorMultiMirroringTest : public DisplayConfiguratorTest {
 TEST_F(DisplayConfiguratorMultiMirroringTest,
        FindMirrorModeWithInternalDisplay) {
   // Initialize with one internal display and two external displays.
-  outputs_[0] = FakeDisplaySnapshot::Builder()
-                    .SetId(kDisplayIds[0])
-                    .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
-                    .SetNativeMode(MakeDisplayMode(1920, 1600, false, 60.0))
-                    .AddMode(MakeDisplayMode(1920, 1600, false, 60.0))
-                    .AddMode(MakeDisplayMode(1920, 1200, false, 60.0))
-                    .AddMode(MakeDisplayMode(1920, 1080, true, 60.0))
-                    .AddMode(MakeDisplayMode(1440, 900, true, 60.0))
-                    .Build();
-  outputs_[1] =
+  auto output0 = FakeDisplaySnapshot::Builder()
+                     .SetId(kDisplayIds[0])
+                     .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+                     .SetNativeMode(MakeDisplayMode(1920, 1600, false, 60.0))
+                     .AddMode(MakeDisplayMode(1920, 1600, false, 60.0))
+                     .AddMode(MakeDisplayMode(1920, 1200, false, 60.0))
+                     .AddMode(MakeDisplayMode(1920, 1080, true, 60.0))
+                     .AddMode(MakeDisplayMode(1440, 900, true, 60.0))
+                     .Build();
+  outputs_[0] = output0.get();
+  auto output1 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[1])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2008,7 +2492,8 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1440, 900, true, 60.0))    // same AR
           .AddMode(MakeDisplayMode(500, 500, false, 60.0))
           .Build();
-  outputs_[2] =
+  outputs_[1] = output1.get();
+  auto output2 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[2])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2018,12 +2503,13 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1680, 1050, false, 60.0))  // same AR
           .AddMode(MakeDisplayMode(1440, 900, true, 60.0))    // same AR
           .Build();
+  outputs_[2] = output2.get();
 
   // Find an exactly matching mirror mode while preserving aspect.
   TestHardwareMirrorModeExist(MakeDisplayMode(1440, 900, true, 60.0));
 
   // Find an exactly matching mirror mode while not preserving aspect.
-  outputs_[2] =
+  auto output3 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[2])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2031,10 +2517,11 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1920, 1200, false, 60.0))  // same AR
           .AddMode(MakeDisplayMode(1920, 1080, true, 60.0))
           .Build();
+  outputs_[2] = output3.get();
   TestHardwareMirrorModeExist(MakeDisplayMode(1920, 1080, true, 60.0));
 
   // Cannot find a matching mirror mode, so enable software mirroring.
-  outputs_[2] =
+  auto output4 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[2])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2042,13 +2529,14 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1920, 1200, false, 60.0))  // same AR
           .AddMode(MakeDisplayMode(500, 500, true, 60.0))
           .Build();
+  outputs_[2] = output4.get();
   TestHardwareMirrorModeNotExist();
 }
 
 TEST_F(DisplayConfiguratorMultiMirroringTest,
        FindMirrorModeWithoutInternalDisplay) {
   // Initialize with 3 external displays.
-  outputs_[0] =
+  auto output0 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[0])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2057,7 +2545,8 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1920, 1080, false, 60.0))
           .AddMode(MakeDisplayMode(1680, 1050, true, 60.0))  // same AR
           .Build();
-  outputs_[1] =
+  outputs_[0] = output0.get();
+  auto output1 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[1])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2066,7 +2555,8 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1920, 1080, false, 60.0))
           .AddMode(MakeDisplayMode(1680, 1050, true, 60.0))  // same AR
           .Build();
-  outputs_[2] =
+  outputs_[1] = output1.get();
+  auto output2 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[2])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2075,12 +2565,13 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1920, 1080, false, 60.0))
           .AddMode(MakeDisplayMode(1680, 1050, true, 60.0))  // same AR
           .Build();
+  outputs_[2] = output2.get();
 
   // Find an exactly matching mirror mode while preserving aspect.
   TestHardwareMirrorModeExist(MakeDisplayMode(1680, 1050, true, 60.0));
 
   // Find an exactly matching mirror mode while not preserving aspect.
-  outputs_[2] =
+  auto output3 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[2])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2089,10 +2580,11 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1920, 1200, false, 60.0))
           .AddMode(MakeDisplayMode(1920, 1080, false, 60.0))
           .Build();
+  outputs_[2] = output3.get();
   TestHardwareMirrorModeExist(MakeDisplayMode(1920, 1080, false, 60.0));
 
   // Cannot find a matching mirror mode, so enable software mirroring.
-  outputs_[2] =
+  auto output4 =
       FakeDisplaySnapshot::Builder()
           .SetId(kDisplayIds[2])
           .SetType(DISPLAY_CONNECTION_TYPE_HDMI)
@@ -2100,8 +2592,8 @@ TEST_F(DisplayConfiguratorMultiMirroringTest,
           .AddMode(MakeDisplayMode(1920, 1600, false, 60.0))  // same AR
           .AddMode(MakeDisplayMode(1920, 1200, false, 60.0))
           .Build();
+  outputs_[2] = output4.get();
   TestHardwareMirrorModeNotExist();
 }
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test

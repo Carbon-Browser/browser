@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/ssl/ssl_config_service_manager.h"
@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
@@ -25,8 +25,6 @@
 #include "components/prefs/pref_member.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "components/variations/client_filterable_state.h"
-#include "components/variations/pref_names.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "net/cert/cert_verifier.h"
@@ -38,21 +36,13 @@
 
 namespace {
 
-const char* kVariationsRestrictionsByPolicy =
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    // On Chrome OS the ChromeVariations policy doesn't exist and is replaced by
-    // DeviceChromeVariations.
-    variations::prefs::kDeviceVariationsRestrictionsByPolicy;
-#else
-    variations::prefs::kVariationsRestrictionsByPolicy;
-#endif
-
-// Converts a ListValue of StringValues into a vector of strings. Any Values
-// which cannot be converted will be skipped.
-std::vector<std::string> ListValueToStringVector(const base::ListValue* value) {
+// Converts a `base::Value::List` of StringValues into a vector of strings. Any
+// values which cannot be converted will be skipped.
+std::vector<std::string> ValueListToStringVector(
+    const base::Value::List& list) {
   std::vector<std::string> results;
-  results.reserve(value->GetListDeprecated().size());
-  for (const auto& entry : value->GetListDeprecated()) {
+  results.reserve(list.size());
+  for (const auto& entry : list) {
     const std::string* s = entry.GetIfString();
     if (s)
       results.push_back(*s);
@@ -136,21 +126,22 @@ SSLConfigServiceManager::SSLConfigServiceManager(PrefService* local_state) {
                         local_state_callback);
   h2_client_cert_coalescing_host_patterns_.Init(
       prefs::kH2ClientCertCoalescingHosts, local_state, local_state_callback);
-  cecpq2_enabled_.Init(prefs::kCECPQ2Enabled, local_state,
-                       local_state_callback);
+  post_quantum_enabled_.Init(prefs::kPostQuantumKeyAgreementEnabled,
+                             local_state, local_state_callback);
   ech_enabled_.Init(prefs::kEncryptedClientHelloEnabled, local_state,
                     local_state_callback);
+  insecure_hash_enabled_.Init(prefs::kInsecureHashesInTLSHandshakesEnabled,
+                              local_state, local_state_callback);
+  rsa_key_usage_for_local_anchors_enabled_.Init(
+      prefs::kRSAKeyUsageForLocalAnchorsEnabled, local_state,
+      local_state_callback);
 
   local_state_change_registrar_.Init(local_state);
   local_state_change_registrar_.Add(prefs::kCipherSuiteBlacklist,
                                     local_state_callback);
-  local_state_change_registrar_.Add(kVariationsRestrictionsByPolicy,
-                                    local_state_callback);
 
   // Populate |disabled_cipher_suites_| with the initial pref value.
   OnDisabledCipherSuitesChange(local_state);
-
-  CacheVariationsPolicy(local_state);
 }
 
 SSLConfigServiceManager::~SSLConfigServiceManager() = default;
@@ -168,10 +159,16 @@ void SSLConfigServiceManager::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterStringPref(prefs::kSSLVersionMax, std::string());
   registry->RegisterListPref(prefs::kCipherSuiteBlacklist);
   registry->RegisterListPref(prefs::kH2ClientCertCoalescingHosts);
-  registry->RegisterBooleanPref(prefs::kCECPQ2Enabled,
-                                default_context_config.cecpq2_enabled);
   registry->RegisterBooleanPref(prefs::kEncryptedClientHelloEnabled,
                                 default_context_config.ech_enabled);
+
+  // Default value for these prefs don't matter since they are only used when
+  // managed.
+  registry->RegisterBooleanPref(prefs::kInsecureHashesInTLSHandshakesEnabled,
+                                false);
+  registry->RegisterBooleanPref(prefs::kPostQuantumKeyAgreementEnabled, false);
+  registry->RegisterBooleanPref(prefs::kRSAKeyUsageForLocalAnchorsEnabled,
+                                false);
 }
 
 void SSLConfigServiceManager::AddToNetworkContextParams(
@@ -193,8 +190,6 @@ void SSLConfigServiceManager::OnPreferenceChanged(
   DCHECK(prefs);
   if (pref_name_in == prefs::kCipherSuiteBlacklist)
     OnDisabledCipherSuitesChange(prefs);
-
-  CacheVariationsPolicy(prefs);
 
   network::mojom::SSLConfigPtr new_config = GetSSLConfigFromPrefs();
   network::mojom::SSLConfig* raw_config = new_config.get();
@@ -234,31 +229,41 @@ network::mojom::SSLConfigPtr SSLConfigServiceManager::GetSSLConfigFromPrefs()
   config->disabled_cipher_suites = disabled_cipher_suites_;
   config->client_cert_pooling_policy = CanonicalizeHostnamePatterns(
       h2_client_cert_coalescing_host_patterns_.GetValue());
-  // CECPQ2 is not enabled if ChromeVariations has been set to limit the
-  // applicability of Finch trials. We take that as a signal that the customer
-  // is especially conservative.
-  config->cecpq2_enabled =
-      cecpq2_enabled_.GetValue() && variations_unrestricted_;
+
   config->ech_enabled = ech_enabled_.GetValue();
+
+  if (post_quantum_enabled_.IsManaged()) {
+    config->post_quantum_override = post_quantum_enabled_.GetValue()
+                                        ? network::mojom::OptionalBool::kTrue
+                                        : network::mojom::OptionalBool::kFalse;
+  } else {
+    config->post_quantum_override = network::mojom::OptionalBool::kUnset;
+  }
+
+  if (insecure_hash_enabled_.IsManaged()) {
+    config->insecure_hash_override = insecure_hash_enabled_.GetValue()
+                                         ? network::mojom::OptionalBool::kTrue
+                                         : network::mojom::OptionalBool::kFalse;
+  } else {
+    config->insecure_hash_override = network::mojom::OptionalBool::kUnset;
+  }
+
+  if (rsa_key_usage_for_local_anchors_enabled_.IsManaged()) {
+    config->rsa_key_usage_for_local_anchors_override =
+        rsa_key_usage_for_local_anchors_enabled_.GetValue()
+            ? network::mojom::OptionalBool::kTrue
+            : network::mojom::OptionalBool::kFalse;
+  } else {
+    config->rsa_key_usage_for_local_anchors_override =
+        network::mojom::OptionalBool::kUnset;
+  }
 
   return config;
 }
 
 void SSLConfigServiceManager::OnDisabledCipherSuitesChange(
     PrefService* local_state) {
-  const base::ListValue* value = &base::Value::AsListValue(
-      *local_state->GetList(prefs::kCipherSuiteBlacklist));
-  disabled_cipher_suites_ = ParseCipherSuites(ListValueToStringVector(value));
-}
-
-void SSLConfigServiceManager::CacheVariationsPolicy(PrefService* local_state) {
-  const PrefService::Preference* const pref =
-      local_state->FindPreference(kVariationsRestrictionsByPolicy);
-  // kVariationsRestrictionsByPolicy may not be registered in test contexts
-  // therefore that case is handled by assuming that it has the default value
-  // of |NO_RESTRICTIONS|.
-  variations_unrestricted_ =
-      !pref ||
-      pref->GetValue()->GetInt() ==
-          static_cast<int>(variations::RestrictionPolicy::NO_RESTRICTIONS);
+  const base::Value::List& list =
+      local_state->GetList(prefs::kCipherSuiteBlacklist);
+  disabled_cipher_suites_ = ParseCipherSuites(ValueListToStringVector(list));
 }

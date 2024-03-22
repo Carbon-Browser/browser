@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/buildflag.h"
 #include "media/base/decoder_factory.h"
 #include "media/base/decoder_status.h"
@@ -36,6 +38,10 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "ui/gfx/color_space.h"
+
+#if BUILDFLAG(IS_FUCHSIA)
+#include "media/fuchsia/video/fuchsia_decoder_factory.h"
+#endif
 
 using DecoderDetails = blink::VideoDecoderBroker::DecoderDetails;
 
@@ -107,6 +113,11 @@ class MediaVideoTaskWrapper {
                                  WTF::CrossThreadUnretained(this),
                                  std::move(media_interface_factory)));
 
+#if BUILDFLAG(IS_FUCHSIA)
+    execution_context.GetBrowserInterfaceBroker().GetInterface(
+        fuchsia_media_codec_provider_.InitWithNewPipeAndPassReceiver());
+#endif
+
     // TODO(sandersd): Target color space is used by DXVA VDA to pick an
     // efficient conversion for FP16 HDR content, and for no other purpose.
     // For <video>, we use the document's colorspace, but for WebCodecs we can't
@@ -141,8 +152,8 @@ class MediaVideoTaskWrapper {
 
     selector_->SelectDecoder(
         config, low_delay,
-        WTF::Bind(&MediaVideoTaskWrapper::OnDecoderSelected,
-                  weak_factory_.GetWeakPtr()));
+        WTF::BindOnce(&MediaVideoTaskWrapper::OnDecoderSelected,
+                      weak_factory_.GetWeakPtr()));
   }
 
   void Decode(scoped_refptr<media::DecoderBuffer> buffer, int cb_id) {
@@ -155,8 +166,8 @@ class MediaVideoTaskWrapper {
     }
 
     decoder_->Decode(std::move(buffer),
-                     WTF::Bind(&MediaVideoTaskWrapper::OnDecodeDone,
-                               weak_factory_.GetWeakPtr(), cb_id));
+                     WTF::BindOnce(&MediaVideoTaskWrapper::OnDecodeDone,
+                                   weak_factory_.GetWeakPtr(), cb_id));
   }
 
   void Reset(int cb_id) {
@@ -168,8 +179,8 @@ class MediaVideoTaskWrapper {
       return;
     }
 
-    decoder_->Reset(WTF::Bind(&MediaVideoTaskWrapper::OnReset,
-                              weak_factory_.GetWeakPtr(), cb_id));
+    decoder_->Reset(WTF::BindOnce(&MediaVideoTaskWrapper::OnReset,
+                                  weak_factory_.GetWeakPtr(), cb_id));
   }
 
   void UpdateHardwarePreference(HardwarePreference preference) {
@@ -198,12 +209,17 @@ class MediaVideoTaskWrapper {
     // Bind the |interface_factory_| above before passing to
     // |external_decoder_factory|.
     std::unique_ptr<media::DecoderFactory> external_decoder_factory;
-#if BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
     if (hardware_preference_ != HardwarePreference::kPreferSoftware) {
+#if BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)
       external_decoder_factory = std::make_unique<media::MojoDecoderFactory>(
           media_interface_factory_.get());
-    }
+#elif BUILDFLAG(IS_FUCHSIA)
+      DCHECK(fuchsia_media_codec_provider_);
+      external_decoder_factory = std::make_unique<media::FuchsiaDecoderFactory>(
+          std::move(fuchsia_media_codec_provider_),
+          /*allow_overlays=*/false);
 #endif
+    }
 
     if (hardware_preference_ == HardwarePreference::kPreferHardware) {
       decoder_factory_ = std::move(external_decoder_factory);
@@ -308,7 +324,9 @@ class MediaVideoTaskWrapper {
   base::WeakPtr<CrossThreadVideoDecoderClient> weak_client_;
   scoped_refptr<base::SequencedTaskRunner> media_task_runner_;
   scoped_refptr<base::SequencedTaskRunner> main_task_runner_;
-  media::GpuVideoAcceleratorFactories* gpu_factories_;
+  raw_ptr<media::GpuVideoAcceleratorFactories, ExperimentalRenderer>
+      gpu_factories_;
+  std::unique_ptr<media::MediaLog> media_log_;
   mojo::Remote<media::mojom::InterfaceFactory> media_interface_factory_;
   std::unique_ptr<WebCodecsVideoDecoderSelector> selector_;
   std::unique_ptr<media::DecoderFactory> decoder_factory_;
@@ -317,7 +335,10 @@ class MediaVideoTaskWrapper {
   HardwarePreference hardware_preference_ = HardwarePreference::kNoPreference;
   bool decoder_factory_needs_update_ = true;
 
-  std::unique_ptr<media::MediaLog> media_log_;
+#if BUILDFLAG(IS_FUCHSIA)
+  mojo::PendingRemote<media::mojom::FuchsiaMediaCodecProvider>
+      fuchsia_media_codec_provider_;
+#endif
 
   SEQUENCE_CHECKER(sequence_checker_);
 

@@ -1,13 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/workers/dedicated_worker_test.h"
 
 #include <bitset>
+#include <cstddef>
 #include <memory>
 
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/bind.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
@@ -15,24 +17,31 @@
 #include "third_party/blink/public/mojom/worker/dedicated_worker_host.mojom-blink.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/sanitize_script_errors.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_worker_options.h"
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
-#include "third_party/blink/renderer/core/inspector/thread_debugger.h"
+#include "third_party/blink/renderer/core/inspector/thread_debugger_common_impl.h"
 #include "third_party/blink/renderer/core/messaging/blink_transferable_message.h"
 #include "third_party/blink/renderer/core/script/script.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
+#include "third_party/blink/renderer/core/testing/wait_for_event.h"
+#include "third_party/blink/renderer/core/workers/dedicated_worker.h"
 #include "third_party/blink/renderer/core/workers/dedicated_worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/dedicated_worker_messaging_proxy.h"
 #include "third_party/blink/renderer/core/workers/dedicated_worker_object_proxy.h"
 #include "third_party/blink/renderer/core/workers/dedicated_worker_thread.h"
 #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
+#include "third_party/blink/renderer/core/workers/parent_execution_context_task_runners.h"
 #include "third_party/blink/renderer/core/workers/worker_backing_thread_startup_data.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
 #include "third_party/blink/renderer/core/workers/worker_thread_test_helper.h"
+#include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
@@ -125,38 +134,44 @@ class DedicatedWorkerObjectProxyForTest final
 class DedicatedWorkerMessagingProxyForTest
     : public DedicatedWorkerMessagingProxy {
  public:
-  DedicatedWorkerMessagingProxyForTest(ExecutionContext* execution_context)
-      : DedicatedWorkerMessagingProxy(execution_context,
-                                      nullptr /* worker_object */) {
-    // The |worker_object_proxy_| should not have been set in the
-    // DedicatedWorkerMessagingProxy constructor as |worker_object| is nullptr.
-    DCHECK(!worker_object_proxy_);
-    worker_object_proxy_ = std::make_unique<DedicatedWorkerObjectProxyForTest>(
-        this, GetParentExecutionContextTaskRunners());
+  DedicatedWorkerMessagingProxyForTest(ExecutionContext* execution_context,
+                                       DedicatedWorker* worker_object)
+      : DedicatedWorkerMessagingProxy(
+            execution_context,
+            worker_object,
+            [](DedicatedWorkerMessagingProxy* messaging_proxy,
+               DedicatedWorker*,
+               ParentExecutionContextTaskRunners* runners) {
+              return std::make_unique<DedicatedWorkerObjectProxyForTest>(
+                  messaging_proxy, runners);
+            }) {
     script_url_ = KURL("http://fake.url/");
   }
 
   ~DedicatedWorkerMessagingProxyForTest() override = default;
 
-  void StartWorker() {
+  void StartWorker(
+      std::unique_ptr<GlobalScopeCreationParams> params = nullptr) {
     scoped_refptr<const SecurityOrigin> security_origin =
         SecurityOrigin::Create(script_url_);
     auto worker_settings = std::make_unique<WorkerSettings>(
         To<LocalDOMWindow>(GetExecutionContext())->GetFrame()->GetSettings());
-    auto params = std::make_unique<GlobalScopeCreationParams>(
-        script_url_, mojom::blink::ScriptType::kClassic,
-        "fake global scope name", "fake user agent", UserAgentMetadata(),
-        nullptr /* web_worker_fetch_context */,
-        Vector<network::mojom::blink::ContentSecurityPolicyPtr>(),
-        Vector<network::mojom::blink::ContentSecurityPolicyPtr>(),
-        network::mojom::ReferrerPolicy::kDefault, security_origin.get(),
-        false /* starter_secure_context */,
-        CalculateHttpsState(security_origin.get()),
-        nullptr /* worker_clients */, nullptr /* content_settings_client */,
-        nullptr /* inherited_trial_features */,
-        base::UnguessableToken::Create(), std::move(worker_settings),
-        mojom::blink::V8CacheOptions::kDefault,
-        nullptr /* worklet_module_responses_map */);
+    if (!params) {
+      params = std::make_unique<GlobalScopeCreationParams>(
+          script_url_, mojom::blink::ScriptType::kClassic,
+          "fake global scope name", "fake user agent", UserAgentMetadata(),
+          nullptr /* web_worker_fetch_context */,
+          Vector<network::mojom::blink::ContentSecurityPolicyPtr>(),
+          Vector<network::mojom::blink::ContentSecurityPolicyPtr>(),
+          network::mojom::ReferrerPolicy::kDefault, security_origin.get(),
+          false /* starter_secure_context */,
+          CalculateHttpsState(security_origin.get()),
+          nullptr /* worker_clients */, nullptr /* content_settings_client */,
+          nullptr /* inherited_trial_features */,
+          base::UnguessableToken::Create(), std::move(worker_settings),
+          mojom::blink::V8CacheOptions::kDefault,
+          nullptr /* worklet_module_responses_map */);
+    }
     params->parent_context_token =
         GetExecutionContext()->GetExecutionContextToken();
     InitializeWorkerThread(
@@ -164,7 +179,7 @@ class DedicatedWorkerMessagingProxyForTest
         WorkerBackingThreadStartupData(
             WorkerBackingThreadStartupData::HeapLimitMode::kDefault,
             WorkerBackingThreadStartupData::AtomicsWaitMode::kAllow),
-        worker_object_proxy_->token());
+        WorkerObjectProxy().token());
 
     if (base::FeatureList::IsEnabled(features::kPlzDedicatedWorker)) {
       PostCrossThreadTask(
@@ -190,6 +205,8 @@ class DedicatedWorkerMessagingProxyForTest
     DedicatedWorkerMessagingProxy::Trace(visitor);
   }
 
+  const KURL& script_url() const { return script_url_; }
+
  private:
   std::unique_ptr<WorkerThread> CreateWorkerThread() override {
     return std::make_unique<DedicatedWorkerThreadForTest>(GetExecutionContext(),
@@ -199,21 +216,58 @@ class DedicatedWorkerMessagingProxyForTest
   KURL script_url_;
 };
 
+class FakeWebDedicatedWorkerHostFactoryClient
+    : public WebDedicatedWorkerHostFactoryClient {
+ public:
+  // Implements WebDedicatedWorkerHostFactoryClient.
+  void CreateWorkerHostDeprecated(
+      const DedicatedWorkerToken& dedicated_worker_token,
+      const WebURL& script_url,
+      CreateWorkerHostCallback callback) override {}
+  void CreateWorkerHost(
+      const DedicatedWorkerToken& dedicated_worker_token,
+      const WebURL& script_url,
+      network::mojom::CredentialsMode credentials_mode,
+      const WebFetchClientSettingsObject& fetch_client_settings_object,
+      CrossVariantMojoRemote<blink::mojom::BlobURLTokenInterfaceBase>
+          blob_url_token) override {}
+  scoped_refptr<blink::WebWorkerFetchContext> CloneWorkerFetchContext(
+      WebWorkerFetchContext* web_worker_fetch_context,
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner) override {
+    return nullptr;
+  }
+};
+
+class FakeWebDedicatedWorkerHostFactoryClientPlatformSupport
+    : public TestingPlatformSupport {
+ public:
+  std::unique_ptr<blink::WebDedicatedWorkerHostFactoryClient>
+  CreateDedicatedWorkerHostFactoryClient(
+      WebDedicatedWorker* worker,
+      const BrowserInterfaceBrokerProxy& interface_broker) override {
+    return std::make_unique<FakeWebDedicatedWorkerHostFactoryClient>();
+  }
+};
+
 void DedicatedWorkerTest::SetUp() {
   PageTestBase::SetUp(gfx::Size());
-  worker_messaging_proxy_ =
-      MakeGarbageCollected<DedicatedWorkerMessagingProxyForTest>(
-          GetFrame().DomWindow());
+  LocalDOMWindow* window = GetFrame().DomWindow();
+
+  worker_object_ = MakeGarbageCollected<DedicatedWorker>(
+      window, KURL("http://fake.url/"), WorkerOptions::Create(),
+      [&](DedicatedWorker* worker) {
+        auto* proxy =
+            MakeGarbageCollected<DedicatedWorkerMessagingProxyForTest>(window,
+                                                                       worker);
+        worker_messaging_proxy_ = proxy;
+        return proxy;
+      });
+  worker_object_->UpdateStateIfNeeded();
 }
 
 void DedicatedWorkerTest::TearDown() {
   GetWorkerThread()->TerminateForTesting();
   GetWorkerThread()->WaitForShutdownForTesting();
-}
-
-void DedicatedWorkerTest::DispatchMessageEvent() {
-  BlinkTransferableMessage message;
-  WorkerMessagingProxy()->PostMessageToWorkerGlobalScope(std::move(message));
 }
 
 DedicatedWorkerMessagingProxyForTest*
@@ -225,8 +279,9 @@ DedicatedWorkerThreadForTest* DedicatedWorkerTest::GetWorkerThread() {
   return worker_messaging_proxy_->GetDedicatedWorkerThread();
 }
 
-void DedicatedWorkerTest::StartWorker() {
-  WorkerMessagingProxy()->StartWorker();
+void DedicatedWorkerTest::StartWorker(
+    std::unique_ptr<GlobalScopeCreationParams> params) {
+  WorkerMessagingProxy()->StartWorker(std::move(params));
 }
 
 void DedicatedWorkerTest::EvaluateClassicScript(const String& source_code) {
@@ -289,7 +344,7 @@ TEST_F(DedicatedWorkerTest, UseCounter) {
   test::EnterRunLoop();
 
   // This feature is randomly selected from Deprecation::deprecationMessage().
-  const WebFeature kFeature2 = WebFeature::kPrefixedStorageInfo;
+  const WebFeature kFeature2 = WebFeature::kPaymentInstruments;
 
   // Deprecated API use on the DedicatedWorkerGlobalScope should be recorded in
   // UseCounter on the Document.
@@ -318,6 +373,227 @@ TEST_F(DedicatedWorkerTest, TaskRunner) {
       CrossThreadBindOnce(&DedicatedWorkerThreadForTest::TestTaskRunner,
                           CrossThreadUnretained(GetWorkerThread())));
   test::EnterRunLoop();
+}
+
+namespace {
+
+BlinkTransferableMessage MakeTransferableMessage(
+    base::UnguessableToken agent_cluster_id) {
+  BlinkTransferableMessage message;
+  message.message = SerializedScriptValue::NullValue();
+  message.sender_agent_cluster_id = agent_cluster_id;
+  return message;
+}
+
+}  // namespace
+
+TEST_F(DedicatedWorkerTest, DispatchMessageEventOnWorkerObject) {
+  StartWorker();
+
+  base::RunLoop run_loop;
+  auto* wait = MakeGarbageCollected<WaitForEvent>();
+  wait->AddEventListener(WorkerObject(), event_type_names::kMessage);
+  wait->AddEventListener(WorkerObject(), event_type_names::kMessageerror);
+  wait->AddCompletionClosure(run_loop.QuitClosure());
+
+  auto message = MakeTransferableMessage(
+      GetDocument().GetExecutionContext()->GetAgentClusterID());
+  WorkerMessagingProxy()->PostMessageToWorkerObject(std::move(message));
+  run_loop.Run();
+
+  EXPECT_EQ(wait->GetLastEvent()->type(), event_type_names::kMessage);
+}
+
+TEST_F(DedicatedWorkerTest,
+       DispatchMessageEventOnWorkerObject_CannotDeserialize) {
+  StartWorker();
+
+  base::RunLoop run_loop;
+  auto* wait = MakeGarbageCollected<WaitForEvent>();
+  wait->AddEventListener(WorkerObject(), event_type_names::kMessage);
+  wait->AddEventListener(WorkerObject(), event_type_names::kMessageerror);
+  wait->AddCompletionClosure(run_loop.QuitClosure());
+
+  SerializedScriptValue::ScopedOverrideCanDeserializeInForTesting
+      override_can_deserialize_in(base::BindLambdaForTesting(
+          [&](const SerializedScriptValue&, ExecutionContext* execution_context,
+              bool can_deserialize) {
+            EXPECT_EQ(execution_context, GetFrame().DomWindow());
+            EXPECT_TRUE(can_deserialize);
+            return false;
+          }));
+  auto message = MakeTransferableMessage(
+      GetDocument().GetExecutionContext()->GetAgentClusterID());
+  WorkerMessagingProxy()->PostMessageToWorkerObject(std::move(message));
+  run_loop.Run();
+
+  EXPECT_EQ(wait->GetLastEvent()->type(), event_type_names::kMessageerror);
+}
+
+TEST_F(DedicatedWorkerTest, DispatchMessageEventOnWorkerGlobalScope) {
+  // Script must run for the worker global scope to dispatch messages.
+  const String source_code = "// Do nothing";
+  StartWorker();
+  EvaluateClassicScript(source_code);
+
+  AtomicString event_type;
+  base::RunLoop run_loop_1;
+  base::RunLoop run_loop_2;
+
+  PostCrossThreadTask(
+      *GetWorkerThread()->GetTaskRunner(TaskType::kInternalTest), FROM_HERE,
+      CrossThreadBindOnce(
+          [](DedicatedWorkerThreadForTest* worker_thread,
+             AtomicString* event_type, WTF::CrossThreadOnceClosure quit_1,
+             WTF::CrossThreadOnceClosure quit_2) {
+            auto* global_scope = worker_thread->GlobalScope();
+            auto* wait = MakeGarbageCollected<WaitForEvent>();
+            wait->AddEventListener(global_scope, event_type_names::kMessage);
+            wait->AddEventListener(global_scope,
+                                   event_type_names::kMessageerror);
+            wait->AddCompletionClosure(WTF::BindOnce(
+                [](WaitForEvent* wait, AtomicString* event_type,
+                   WTF::CrossThreadOnceClosure quit_closure) {
+                  *event_type = wait->GetLastEvent()->type();
+                  std::move(quit_closure).Run();
+                },
+                WrapPersistent(wait), WTF::Unretained(event_type),
+                std::move(quit_2)));
+            std::move(quit_1).Run();
+          },
+          CrossThreadUnretained(GetWorkerThread()),
+          CrossThreadUnretained(&event_type),
+          WTF::CrossThreadOnceClosure(run_loop_1.QuitClosure()),
+          WTF::CrossThreadOnceClosure(run_loop_2.QuitClosure())));
+
+  // Wait for the first run loop to quit, which signals that the event listeners
+  // are registered. Then post the message and wait to be notified of the
+  // result. Each run loop can only be used once.
+  run_loop_1.Run();
+  auto message = MakeTransferableMessage(
+      GetDocument().GetExecutionContext()->GetAgentClusterID());
+  WorkerMessagingProxy()->PostMessageToWorkerGlobalScope(std::move(message));
+  run_loop_2.Run();
+
+  EXPECT_EQ(event_type, event_type_names::kMessage);
+}
+
+TEST_F(DedicatedWorkerTest, TopLevelFrameSecurityOrigin) {
+  ScopedTestingPlatformSupport<
+      FakeWebDedicatedWorkerHostFactoryClientPlatformSupport>
+      platform;
+  const auto& script_url = WorkerMessagingProxy()->script_url();
+  scoped_refptr<SecurityOrigin> security_origin =
+      SecurityOrigin::Create(script_url);
+  WorkerObject()
+      ->GetExecutionContext()
+      ->GetSecurityContext()
+      .SetSecurityOriginForTesting(security_origin);
+  StartWorker(WorkerObject()->CreateGlobalScopeCreationParams(
+      script_url, network::mojom::ReferrerPolicy::kDefault,
+      Vector<network::mojom::blink::ContentSecurityPolicyPtr>()));
+  base::RunLoop run_loop;
+
+  PostCrossThreadTask(
+      *GetWorkerThread()->GetTaskRunner(TaskType::kInternalTest), FROM_HERE,
+      CrossThreadBindOnce(
+          [](DedicatedWorkerThreadForTest* worker_thread,
+             WTF::CrossThreadOnceClosure quit,
+             const SecurityOrigin* security_origin, const KURL& script_url) {
+            // Check the worker's top level frame security origin.
+            auto* worker_global_scope =
+                static_cast<WorkerGlobalScope*>(worker_thread->GlobalScope());
+            ASSERT_TRUE(worker_global_scope->top_level_frame_security_origin());
+            EXPECT_TRUE(worker_global_scope->top_level_frame_security_origin()
+                            ->IsSameOriginDomainWith(security_origin));
+
+            // Create a nested worker and check the top level frame security
+            // origin of the GlobalScopeCreationParams.
+            {
+              auto* nested_worker_object =
+                  MakeGarbageCollected<DedicatedWorker>(
+                      worker_global_scope, script_url, WorkerOptions::Create());
+              nested_worker_object->UpdateStateIfNeeded();
+
+              auto nested_worker_params =
+                  nested_worker_object->CreateGlobalScopeCreationParams(
+                      script_url, network::mojom::ReferrerPolicy::kDefault,
+                      Vector<
+                          network::mojom::blink::ContentSecurityPolicyPtr>());
+              ASSERT_TRUE(
+                  nested_worker_params->top_level_frame_security_origin);
+              EXPECT_TRUE(nested_worker_params->top_level_frame_security_origin
+                              ->IsSameOriginDomainWith(security_origin));
+            }
+            std::move(quit).Run();
+          },
+          CrossThreadUnretained(GetWorkerThread()),
+          WTF::CrossThreadOnceClosure(run_loop.QuitClosure()),
+          CrossThreadUnretained(WorkerObject()
+                                    ->GetExecutionContext()
+                                    ->GetSecurityContext()
+                                    .GetSecurityOrigin()),
+          script_url));
+  run_loop.Run();
+}
+
+TEST_F(DedicatedWorkerTest,
+       DispatchMessageEventOnWorkerGlobalScope_CannotDeserialize) {
+  // Script must run for the worker global scope to dispatch messages.
+  const String source_code = "// Do nothing";
+  StartWorker();
+  EvaluateClassicScript(source_code);
+
+  AtomicString event_type;
+  base::RunLoop run_loop_1;
+  base::RunLoop run_loop_2;
+
+  auto* worker_thread = GetWorkerThread();
+  SerializedScriptValue::ScopedOverrideCanDeserializeInForTesting
+      override_can_deserialize_in(base::BindLambdaForTesting(
+          [&](const SerializedScriptValue&, ExecutionContext* execution_context,
+              bool can_deserialize) {
+            EXPECT_EQ(execution_context, worker_thread->GlobalScope());
+            EXPECT_TRUE(can_deserialize);
+            return false;
+          }));
+
+  PostCrossThreadTask(
+      *GetWorkerThread()->GetTaskRunner(TaskType::kInternalTest), FROM_HERE,
+      CrossThreadBindOnce(
+          [](DedicatedWorkerThreadForTest* worker_thread,
+             AtomicString* event_type, WTF::CrossThreadOnceClosure quit_1,
+             WTF::CrossThreadOnceClosure quit_2) {
+            auto* global_scope = worker_thread->GlobalScope();
+            auto* wait = MakeGarbageCollected<WaitForEvent>();
+            wait->AddEventListener(global_scope, event_type_names::kMessage);
+            wait->AddEventListener(global_scope,
+                                   event_type_names::kMessageerror);
+            wait->AddCompletionClosure(WTF::BindOnce(
+                [](WaitForEvent* wait, AtomicString* event_type,
+                   WTF::CrossThreadOnceClosure quit_closure) {
+                  *event_type = wait->GetLastEvent()->type();
+                  std::move(quit_closure).Run();
+                },
+                WrapPersistent(wait), WTF::Unretained(event_type),
+                std::move(quit_2)));
+            std::move(quit_1).Run();
+          },
+          CrossThreadUnretained(worker_thread),
+          CrossThreadUnretained(&event_type),
+          WTF::CrossThreadOnceClosure(run_loop_1.QuitClosure()),
+          WTF::CrossThreadOnceClosure(run_loop_2.QuitClosure())));
+
+  // Wait for the first run loop to quit, which signals that the event listeners
+  // are registered. Then post the message and wait to be notified of the
+  // result. Each run loop can only be used once.
+  run_loop_1.Run();
+  auto message = MakeTransferableMessage(
+      GetDocument().GetExecutionContext()->GetAgentClusterID());
+  WorkerMessagingProxy()->PostMessageToWorkerGlobalScope(std::move(message));
+  run_loop_2.Run();
+
+  EXPECT_EQ(event_type, event_type_names::kMessageerror);
 }
 
 }  // namespace blink

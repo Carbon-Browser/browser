@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,10 @@ const int kPluginOomScore = kMiscOomScore - kOomScoreBump;
 
 static_assert(kMiscOomScore > 0, "kMiscOomScore should be greater than 0");
 static_assert(kPluginOomScore > 0, "kPluginOomScore should be greater than 0");
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+const int kAndroidMinimumTabletWidthDp = 600;
 #endif
 
 }  // namespace content

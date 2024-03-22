@@ -1,370 +1,467 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="ru">
+<translation id="1001716830750249114">К настройкам версии Carbon Browser</translation>
 <translation id="1026101648481255140">Продолжить установку</translation>
 <translation id="1029669172902658969">Чтобы установить обновление, перезапустите Google Chrome OS.</translation>
+<translation id="1040916596585577953">Carbon Browser рекомендует проверить это расширение.</translation>
+<translation id="1042552502243217427">Когда сайт запрашивает анонимную предзагрузку страниц по ссылкам на нем, Carbon Browser использует серверы Google. Благодаря этому предзагруженный сайт не получает сведений о вашей личности, а данные о нем передаются в Google.</translation>
 <translation id="1065672644894730302">Не удается получить настройки. Некоторые функции могут быть недоступны, а изменения настроек не будут сохраняться.</translation>
-<translation id="1098170124587656448">Carbon Browser Browser поможет обеспечить защиту от утечки данных, ненадежных расширений и других проблем с безопасностью.</translation>
-<translation id="1104942323762546749">Чтобы экспортировать пароли из Carbon Browser Browser, введите пароль своего аккаунта Windows.</translation>
-<translation id="113122355610423240">Carbon Browser Browser используется как браузер по умолчанию</translation>
-<translation id="1131805035311359397">Чтобы проверить, защищены ли ваши пароли от утечки данных и прочих проблем с безопасностью, <ph name="BEGIN_LINK" />войдите в Carbon Browser Browser<ph name="END_LINK" />.</translation>
-<translation id="1185134272377778587">О Carbon Browser Browser</translation>
+<translation id="1083934481477628225">Родители отключили в Carbon Browser параметр "Разрешения для сайтов, приложений и расширений".</translation>
+<translation id="1098170124587656448">Carbon Browser поможет обеспечить защиту от утечки данных, ненадежных расширений и других проблем с безопасностью.</translation>
+<translation id="1104942323762546749">Чтобы экспортировать пароли из Carbon Browser, введите пароль своего аккаунта Windows.</translation>
+<translation id="113122355610423240">Carbon Browser используется как браузер по умолчанию</translation>
+<translation id="1131805035311359397">Чтобы проверить, защищены ли ваши пароли от утечки данных и прочих проблем с безопасностью, <ph name="BEGIN_LINK" />войдите в Carbon Browser<ph name="END_LINK" />.</translation>
+<translation id="1153368717515616349">Откройте меню Carbon Browser</translation>
+<translation id="1185134272377778587">О Carbon Browser</translation>
 <translation id="1203500561924088507">Спасибо, что установили <ph name="BUNDLE_NAME" />. Чтобы изменения вступили в силу, перезапустите браузер.</translation>
-<translation id="1315551408014407711">Создайте профиль Carbon Browser Browser</translation>
-<translation id="1385859895174722837">Google Ассистент в Carbon Browser Browser</translation>
-<translation id="1396446129537741364">Вводимые пароли будут отображаться в Carbon Browser Browser.</translation>
-<translation id="1414495520565016063">Добро пожаловать в Carbon Browser Browser!</translation>
-<translation id="1524282610922162960">Откройте доступ к вкладке Carbon Browser Browser</translation>
-<translation id="1553461853655228091">Carbon Browser Browser запрашивает доступ к камере, чтобы создавать 3D-карты места, в котором вы находитесь.</translation>
-<translation id="1607715478322902680">{COUNT,plural, =0{Администратор требует перезапустить Carbon Browser Browser для установки обновления.}=1{Администратор требует перезапустить Carbon Browser Browser для установки обновления. Окно в режиме инкогнито не будет открыто повторно.}one{Администратор требует перезапустить Carbon Browser Browser для установки обновления. # окно в режиме инкогнито не будет открыто повторно.}few{Администратор требует перезапустить Carbon Browser Browser для установки обновления. # окна в режиме инкогнито не будут открыты повторно.}many{Администратор требует перезапустить Carbon Browser Browser для установки обновления. # окон в режиме инкогнито не будут открыты повторно.}other{Администратор требует перезапустить Carbon Browser Browser для установки обновления. # окна в режиме инкогнито не будут открыты повторно.}}</translation>
-<translation id="1625909126243026060">Проверьте основные настройки конфиденциальности и безопасности в Carbon Browser Browser.</translation>
-<translation id="1632539827495546968">Если этот аккаунт в браузере Carbon Browser Browser вам больше не понадобится, можно воспользоваться <ph name="GUEST_LINK_BEGIN" />гостевым режимом<ph name="GUEST_LINK_END" />. Если вы хотите добавить аккаунт для другого человека, <ph name="LINK_BEGIN" />создайте профиль пользователя<ph name="LINK_END" /> на <ph name="DEVICE_TYPE" />.
+<translation id="1261119230216066228">В режиме экономии памяти Carbon Browser работает ещё быстрее</translation>
+<translation id="1262876892872089030">Пока эта вкладка была неактивна, выделенная для нее память была освобождена, чтобы браузер Carbon Browser работал быстрее. Вы можете сделать так, чтобы вкладки с этим сайтом всегда были активны.</translation>
+<translation id="1265577313130862557">Carbon Browser заблокировал скачивание, поскольку файл опасен</translation>
+<translation id="1315551408014407711">Создайте профиль Carbon Browser</translation>
+<translation id="1342274909142618978">Также удалить данные из Carbon Browser (<ph name="URL" />)</translation>
+<translation id="1414495520565016063">Добро пожаловать в Carbon Browser!</translation>
+<translation id="1478370723027452770">Справка о Carbon Browser для тестирования</translation>
+<translation id="1497802159252041924">Ошибка установки: <ph name="INSTALL_ERROR" />.</translation>
+<translation id="1524282610922162960">Откройте доступ к вкладке Carbon Browser</translation>
+<translation id="1553461853655228091">Carbon Browser запрашивает доступ к камере, чтобы создавать 3D-карты места, в котором вы находитесь.</translation>
+<translation id="1574377791422810894">Инструменты безопасности Carbon Browser</translation>
+<translation id="1607715478322902680">{COUNT,plural, =0{Администратор требует перезапустить Carbon Browser для установки обновления.}=1{Администратор требует перезапустить Carbon Browser для установки обновления. Окно в режиме инкогнито не будет открыто повторно.}one{Администратор требует перезапустить Carbon Browser для установки обновления. # окно в режиме инкогнито не будет открыто повторно.}few{Администратор требует перезапустить Carbon Browser для установки обновления. # окна в режиме инкогнито не будут открыты повторно.}many{Администратор требует перезапустить Carbon Browser для установки обновления. # окон в режиме инкогнито не будут открыты повторно.}other{Администратор требует перезапустить Carbon Browser для установки обновления. # окна в режиме инкогнито не будут открыты повторно.}}</translation>
+<translation id="1625909126243026060">Проверьте основные настройки конфиденциальности и безопасности в Carbon Browser.</translation>
+<translation id="1632539827495546968">Если этот аккаунт в браузере Carbon Browser вам больше не понадобится, можно воспользоваться <ph name="GUEST_LINK_BEGIN" />гостевым режимом<ph name="GUEST_LINK_END" />. Если вы хотите добавить аккаунт для другого человека, <ph name="LINK_BEGIN" />создайте профиль пользователя<ph name="LINK_END" /> на <ph name="DEVICE_TYPE" />.
 
 Разрешения, предоставленные сайтам и приложениям, могут применяться к этому аккаунту. Для управления аккаунтами Google перейдите в <ph name="SETTINGS_LINK_BEGIN" />настройки<ph name="SETTINGS_LINK_END" />.</translation>
 <translation id="1640672724030957280">Загрузка...</translation>
-<translation id="1708666629004767631">Доступна новая, еще более быстрая версия Carbon Browser Browser.</translation>
-<translation id="17264556997921157">Вы можете просматривать и удалять потенциально интересные вам темы, используемые сайтами для показа рекламы. Carbon Browser Browser определяет такие темы на основе вашей недавней истории браузера.</translation>
-<translation id="1774152462503052664">Разрешить Carbon Browser Browser работать в фоновом режиме</translation>
-<translation id="1779356040007214683">Чтобы обеспечить безопасность ваших данных, некоторые расширения Carbon Browser Browser были отключены, так как <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> не содержит сведений о них, то есть эти компоненты могли быть установлены без вашего ведома.</translation>
-<translation id="1808667845054772817">Переустановить Carbon Browser Browser</translation>
-<translation id="185970820835152459">В этом разделе можно управлять аккаунтами Google, в которые вы вошли. Они используются в Google Play, Gmail, браузере Carbon Browser Browser и других сервисах. Чтобы указать аккаунт участника семейной группы или кого-нибудь ещё, добавьте на устройство <ph name="DEVICE_TYPE" /> нового пользователя. <ph name="LINK_BEGIN" />Подробнее…<ph name="LINK_END" /></translation>
-<translation id="1863308913976887472">Сайты могут хранить в Carbon Browser Browser информацию о ваших интересах. Например, вы перешли на сайт, чтобы купить беговые кроссовки. Он определит, что вам интересны марафоны. Когда вы перейдете на другой сайт, чтобы зарегистрироваться на забег, то увидите рекламу беговых кроссовок.</translation>
-<translation id="1881322772814446296">Выполнив вход в управляемый аккаунт, вы предоставляете администратору право контролировать настройки вашего профиля Carbon Browser Browser. Ваши данные Carbon Browser Browser (приложения, закладки, история, пароли и другие настройки) будут временно связаны с аккаунтом <ph name="USER_NAME" />. Эти данные можно удалить в Личном кабинете Google, но их нельзя связать с другим аккаунтом. Чтобы сохранить данные Carbon Browser Browser отдельно, создайте новый профиль. <ph name="LEARN_MORE" /></translation>
-<translation id="1911763535808217981">Отключив эту функцию, вы сможете входить в систему на сайтах Google (например, Gmail) без необходимости выполнять вход в Carbon Browser Browser.</translation>
-<translation id="1929939181775079593">Carbon Browser Browser не отвечает. Перезапустить сейчас?</translation>
+<translation id="1708666629004767631">Доступна новая, еще более быстрая версия Carbon Browser.</translation>
+<translation id="1715127912119967311">Carbon Browser отправляет в Google информацию о том, как вы используете эти функции, чтобы мы могли их улучшить. Наши специалисты могут изучать, аннотировать и обрабатывать полученные данные.</translation>
+<translation id="17264556997921157">Вы можете просматривать и удалять потенциально интересные вам темы, используемые сайтами для показа рекламы. Carbon Browser определяет такие темы на основе вашей недавней истории браузера.</translation>
+<translation id="1733725117201708356">Данные о работе в Carbon Browser скоро будут удалены</translation>
+<translation id="1736443181683099871">Carbon Browser будет менять используемый протокол на HTTPS, где это возможно.</translation>
+<translation id="1745121272106313518">Carbon Browser перезапустится через <ph name="REMAINING_TIME" /></translation>
+<translation id="1749104137266986751">Если протокол HTTPS недоступен, Carbon Browser будет использовать незащищенное соединение, не предупреждая вас</translation>
+<translation id="1774152462503052664">Разрешить Carbon Browser работать в фоновом режиме</translation>
+<translation id="1779356040007214683">Чтобы обеспечить безопасность ваших данных, некоторые расширения Carbon Browser были отключены, так как <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> не содержит сведений о них, то есть эти компоненты могли быть установлены без вашего ведома.</translation>
+<translation id="1808667845054772817">Переустановить Carbon Browser</translation>
+<translation id="1820835682567584003">Carbon Browser пытается <ph name="AUTHENTICATION_PURPOSE" />.</translation>
+<translation id="185970820835152459">В этом разделе можно управлять аккаунтами Google, в которые вы вошли. Они используются в Google Play, Gmail, браузере Carbon Browser и других сервисах. Чтобы указать аккаунт участника семейной группы или кого-нибудь ещё, добавьте на устройство <ph name="DEVICE_TYPE" /> нового пользователя. <ph name="LINK_BEGIN" />Подробнее…<ph name="LINK_END" /></translation>
+<translation id="1863308913976887472">Сайты могут хранить в Carbon Browser информацию о ваших интересах. Например, вы перешли на сайт, чтобы купить беговые кроссовки. Он определит, что вам интересны марафоны. Когда вы перейдете на другой сайт, чтобы зарегистрироваться на забег, то увидите рекламу беговых кроссовок.</translation>
+<translation id="1881322772814446296">Выполнив вход в управляемый аккаунт, вы предоставляете администратору право контролировать настройки вашего профиля Carbon Browser. Ваши данные Carbon Browser (приложения, закладки, история, пароли и другие настройки) будут временно связаны с аккаунтом <ph name="USER_NAME" />. Эти данные можно удалить в Личном кабинете Google, но их нельзя связать с другим аккаунтом. Чтобы сохранить данные Carbon Browser отдельно, создайте новый профиль. <ph name="LEARN_MORE" /></translation>
+<translation id="1906696617298807388">Когда вы вводите текст в адресную строку или окно поиска, Carbon Browser отправляет запрос в Google Диск, чтобы предложить вам подходящие файлы. В режиме инкогнито эта функция не работает.</translation>
+<translation id="1911763535808217981">Отключив эту функцию, вы сможете входить в систему на сайтах Google (например, Gmail) без необходимости выполнять вход в Carbon Browser.</translation>
+<translation id="1929939181775079593">Carbon Browser не отвечает. Перезапустить сейчас?</translation>
 <translation id="193439633299369377">Чтобы установить обновление, перезапустите Google Chrome OS.</translation>
-<translation id="1940680973325097484">Если этот аккаунт в браузере Carbon Browser Browser вам больше не понадобится, можно воспользоваться гостевым режимом. Если вы хотите добавить аккаунт для другого человека, <ph name="LINK_BEGIN" />создайте профиль пользователя<ph name="LINK_END" /> на <ph name="DEVICE_TYPE" />.
-
-Разрешения, предоставленные сайтам и приложениям, могут применяться к этому аккаунту. Для управления аккаунтами Google перейдите в <ph name="SETTINGS_LINK_BEGIN" />настройки<ph name="SETTINGS_LINK_END" />.</translation>
+<translation id="1951406923938785464">Carbon Browser заблокировал скачивание, поскольку этот тип файлов скачивают редко и он может быть опасен</translation>
 <translation id="1953553007165777902">Скачивание… Осталось: <ph name="MINUTE" /> мин.</translation>
-<translation id="1966382378801805537">Carbon Browser Browser не удалось определить или задать браузер по умолчанию</translation>
-<translation id="2008474315282236005">С устройства будет удален 1 объект. Чтобы восстановить данные позже, войдите в Carbon Browser Browser как <ph name="USER_EMAIL" />.</translation>
+<translation id="1966382378801805537">Carbon Browser не удалось определить или задать браузер по умолчанию</translation>
+<translation id="2008474315282236005">С устройства будет удален 1 объект. Чтобы восстановить данные позже, войдите в Carbon Browser как <ph name="USER_EMAIL" />.</translation>
 <translation id="2018879682492276940">Ошибка установки. Повторите попытку.</translation>
-<translation id="2020032459870799438">Чтобы проверить, защищены ли другие ваши пароли от утечки данных и прочих проблем с безопасностью, <ph name="BEGIN_LINK" />войдите в Carbon Browser Browser<ph name="END_LINK" />.</translation>
-<translation id="2049376729098081731">Укажите, нужно ли использовать историю Carbon Browser Browser для персонализации сервисов Google.</translation>
-<translation id="2088953378266246249">Информация о том, как Carbon Browser Browser управляет корневыми сертификатами</translation>
-<translation id="2174178932569897599">Настроить Carbon Browser Browser</translation>
+<translation id="2020032459870799438">Чтобы проверить, защищены ли другие ваши пароли от утечки данных и прочих проблем с безопасностью, <ph name="BEGIN_LINK" />войдите в Carbon Browser<ph name="END_LINK" />.</translation>
+<translation id="2049376729098081731">Укажите, нужно ли использовать историю Carbon Browser для персонализации сервисов Google.</translation>
+<translation id="2086476982681781442">Carbon Browser заблокировал скачивание, поскольку файл поддельный. Он может внести неожиданные изменения на вашем устройстве.</translation>
+<translation id="2088953378266246249">Информация о том, как Carbon Browser управляет корневыми сертификатами</translation>
+<translation id="2120965832000301375">{COUNT,plural, =1{Ваша организация задала настройки, согласно которым данные о работе в браузере автоматически удаляются, если в Carbon Browser не выполняются действия в течение 1 минуты. История, сведения для автозаполнения и скачанные файлы также могут быть удалены. Вкладки останутся открытыми.}one{Ваша организация задала настройки, согласно которым данные о работе в браузере автоматически удаляются, если в Carbon Browser не выполняются действия в течение # минуты. История, сведения для автозаполнения и скачанные файлы также могут быть удалены. Вкладки останутся открытыми.}few{Ваша организация задала настройки, согласно которым данные о работе в браузере автоматически удаляются, если в Carbon Browser не выполняются действия в течение # минут. История, сведения для автозаполнения и скачанные файлы также могут быть удалены. Вкладки останутся открытыми.}many{Ваша организация задала настройки, согласно которым данные о работе в браузере автоматически удаляются, если в Carbon Browser не выполняются действия в течение # минут. История, сведения для автозаполнения и скачанные файлы также могут быть удалены. Вкладки останутся открытыми.}other{Ваша организация задала настройки, согласно которым данные о работе в браузере автоматически удаляются, если в Carbon Browser не выполняются действия в течение # минуты. История, сведения для автозаполнения и скачанные файлы также могут быть удалены. Вкладки останутся открытыми.}}</translation>
+<translation id="2126108037660393668">Не удалось выполнить проверку скачанного файла.</translation>
+<translation id="2130870084309816036">Не удалось подключиться к интернету. Если вы используете брандмауэр, добавьте приложение <ph name="PRODUCT_EXE_NAME" /> в белый список.</translation>
+<translation id="215352261310130060">Carbon Browser заблокировал скачивание, поскольку подключение к сайту не защищено и файл мог быть изменен</translation>
+<translation id="2174178932569897599">Настроить Carbon Browser</translation>
 <translation id="2174917724755363426">Установка не завершена. Отменить ее?</translation>
-<translation id="2185166961232948079">Carbon Browser Browser – вход в сеть – "<ph name="PAGE_TITLE" />"</translation>
-<translation id="2241627712206172106">Если, кроме вас, компьютером пользуется кто-то ещё, например родные или друзья, они тоже смогут настроить Carbon Browser Browser на свой вкус.</translation>
-<translation id="2313870531055795960">Сверяет URL со списком небезопасных сайтов в Carbon Browser Browser. Если вы скачаете вредоносный файл или сайт попытается похитить ваш пароль, Carbon Browser Browser может отправить URL с образцами контента на проверку с помощью Безопасного просмотра.</translation>
-<translation id="2343156876103232566">Чтобы отправить номер на телефон Android, войдите в Carbon Browser Browser на обоих устройствах.</translation>
-<translation id="2347108572062610441">Расширение изменило стартовую страницу Carbon Browser Browser.</translation>
+<translation id="2185166961232948079">Carbon Browser – вход в сеть – "<ph name="PAGE_TITLE" />"</translation>
+<translation id="2190166659037789668">Ошибка проверки обновлений: <ph name="UPDATE_CHECK_ERROR" />.</translation>
+<translation id="2241627712206172106">Если, кроме вас, компьютером пользуется кто-то ещё, например родные или друзья, они тоже смогут настроить Carbon Browser на свой вкус.</translation>
+<translation id="2313870531055795960">Сверяет URL со списком небезопасных сайтов в Carbon Browser. Если вы скачаете вредоносный файл или сайт попытается похитить ваш пароль, Carbon Browser может отправить URL с образцами контента на проверку с помощью Безопасного просмотра.</translation>
+<translation id="2329088755516916767">Когда этот параметр включен, Carbon Browser предварительно загружает страницы, ускоряя работу браузера и поиска.</translation>
+<translation id="2343156876103232566">Чтобы отправить номер на телефон Android, войдите в Carbon Browser на обоих устройствах.</translation>
 <translation id="2359808026110333948">Продолжить</translation>
+<translation id="2359920621792549529">Чтобы удалить данные о работе в браузере с этого устройства, но оставить их в аккаунте Google, <ph name="BEGIN_LINK" />выйдите из Carbon Browser<ph name="END_LINK" />.</translation>
 <translation id="2384373936468275798">Не удалось выполнить синхронизацию, так как учетные данные устарели.</translation>
-<translation id="2396765026452590966">Расширение "<ph name="EXTENSION_NAME" />" изменило стартовую страницу Carbon Browser Browser.</translation>
-<translation id="2401032172288869980">Браузер Carbon Browser Browser запрашивает доступ к камере и микрофону для этого сайта.</translation>
-<translation id="2483889755041906834">В Carbon Browser Browser</translation>
+<translation id="2398377054246527950">{NUM_DEVICES,plural, =0{Одно или несколько расширений Carbon Browser обращались к одному HID-устройству}=1{Одно или несколько расширений Carbon Browser обращались к одному HID-устройству}one{Одно или несколько расширений Carbon Browser обращались к # HID-устройству}few{Одно или несколько расширений Carbon Browser обращались к # HID-устройствам}many{Одно или несколько расширений Carbon Browser обращались к # HID-устройствам}other{Одно или несколько расширений Carbon Browser обращались к # HID-устройства}}</translation>
+<translation id="2401032172288869980">Браузер Carbon Browser запрашивает доступ к камере и микрофону для этого сайта.</translation>
+<translation id="2440750600860946460"><ph name="BEGIN_LINK" />Инструменты Carbon Browser<ph name="END_LINK" /> защищают ваши данные при работе в интернете</translation>
+<translation id="2451727308784734061">Ярлык позволит быстро открывать Менеджер паролей. Вы можете переместить ярлык на главный экран или панель запуска приложений.</translation>
+<translation id="2478295928299953161">Carbon Browser скоро будет закрыт</translation>
+<translation id="2483889755041906834">В Carbon Browser</translation>
 <translation id="2485422356828889247">Удалить</translation>
-<translation id="2560420686485554789">Для скачивания файлов браузеру Carbon Browser Browser требуется доступ к хранилищу.</translation>
-<translation id="2572494885440352020">Помощник по Carbon Browser Browser</translation>
-<translation id="2583187216237139145">Администратор рабочего профиля может удалять любые данные, сохраненные в браузере Carbon Browser Browser при использовании этого профиля (например, добавленные закладки, историю, пароли и настройки). <ph name="LEARN_MORE" /></translation>
-<translation id="2648074677641340862">В процессе установки произошла ошибка в операционной системе. Скачайте Carbon Browser Browser ещё раз.</translation>
-<translation id="2661879430930417727">Если кроме вас устройством пользуется кто-то ещё, например родные или друзья, они тоже смогут настроить Carbon Browser Browser на свой вкус.</translation>
-<translation id="268602741124540128"><ph name="ACCOUNT_FIRST_NAME" />, добро пожаловать в Carbon Browser Browser!</translation>
-<translation id="2711502716910134313">Вкладка Carbon Browser Browser</translation>
-<translation id="2718390899429598676">В целях повышения безопасности Carbon Browser Browser шифрует ваши данные.</translation>
+<translation id="2513154137948333830">Требуется перезагрузка. <ph name="INSTALL_SUCCESS" /></translation>
+<translation id="2554739539410784893">Carbon Browser пытается заменить текущие пароли. Чтобы разрешить это, введите свой пароль Windows.</translation>
+<translation id="2560420686485554789">Для скачивания файлов браузеру Carbon Browser требуется доступ к хранилищу.</translation>
+<translation id="2572494885440352020">Помощник по Carbon Browser</translation>
+<translation id="2583187216237139145">Администратор рабочего профиля может удалять любые данные, сохраненные в браузере Carbon Browser при использовании этого профиля (например, добавленные закладки, историю, пароли и настройки). <ph name="LEARN_MORE" /></translation>
+<translation id="2592940277904433508">Продолжить работу в Carbon Browser</translation>
+<translation id="259935314519650377">Не удалось кешировать скачанный установщик. Ошибка: <ph name="UNPACK_CACHING_ERROR_CODE" />.</translation>
+<translation id="2648074677641340862">В процессе установки произошла ошибка в операционной системе. Скачайте Carbon Browser ещё раз.</translation>
+<translation id="2661879430930417727">Если кроме вас устройством пользуется кто-то ещё, например родные или друзья, они тоже смогут настроить Carbon Browser на свой вкус.</translation>
+<translation id="268602741124540128"><ph name="ACCOUNT_FIRST_NAME" />, добро пожаловать в Carbon Browser!</translation>
+<translation id="2711502716910134313">Вкладка Carbon Browser</translation>
+<translation id="2718390899429598676">В целях повышения безопасности Carbon Browser шифрует ваши данные.</translation>
+<translation id="2738871930057338499">Не удалось подключиться к интернету. Ошибка HTTP 403: доступ запрещен. Проверьте настройки прокси-сервера.</translation>
 <translation id="2770231113462710648">Назначить браузером по умолчанию:</translation>
+<translation id="2785438272836277133">Это расширение содержит вредоносное ПО и может быть опасным. Удалите его из Carbon Browser, чтобы оно больше не могло читать и менять ваши данные с сайтов (включая личную информацию), которые вы посещаете.</translation>
 <translation id="2799223571221894425">Перезапустить</translation>
-<translation id="2837693172913560447">Будет создан новый профиль Carbon Browser Browser для <ph name="USER_EMAIL_ADDRESS" />.</translation>
-<translation id="2847479871509788944">Удалить из Carbon Browser Browser</translation>
-<translation id="2850691299438350830">Защищает вас в браузере Carbon Browser Browser и других приложениях Google, когда выполнен вход в аккаунт.</translation>
+<translation id="2837693172913560447">Будет создан новый профиль Carbon Browser для <ph name="USER_EMAIL_ADDRESS" />.</translation>
+<translation id="2846251086934905009">Произошла ошибка. Не удалось завершить установку. Она была прервана.</translation>
+<translation id="2847479871509788944">Удалить из Carbon Browser</translation>
+<translation id="2850691299438350830">Защищает вас в браузере Carbon Browser и других приложениях Google, когда выполнен вход в аккаунт.</translation>
 <translation id="2885378588091291677">Диспетчер задач</translation>
-<translation id="2910007522516064972">О &amp;Carbon Browser Browser</translation>
+<translation id="2910007522516064972">О &amp;Carbon Browser</translation>
 <translation id="2915996080311180594">Перезапустить позже</translation>
 <translation id="2928420929544864228">Установка завершена.</translation>
-<translation id="2977470724722393594">Вы используете последнюю версию Carbon Browser Browser</translation>
-<translation id="2977506796191543575">Если вы скачаете вредоносный файл или сайт попытается похитить ваш пароль, Carbon Browser Browser может отправить URL с образцами контента на проверку с помощью Безопасного просмотра.</translation>
-<translation id="2983934633046890458">Carbon Browser Browser пытается изменить пароли</translation>
-<translation id="3032706164202344641">Не удается запустить проверку паролей в Carbon Browser Browser. Повторите попытку позже.</translation>
-<translation id="3032787606318309379">Добавление в Carbon Browser Browser...</translation>
+<translation id="2945997411976714835">Произошла ошибка. Не удалось начать установку.</translation>
+<translation id="2977470724722393594">Вы используете последнюю версию Carbon Browser</translation>
+<translation id="2977506796191543575">Если вы скачаете вредоносный файл или сайт попытается похитить ваш пароль, Carbon Browser может отправить URL с образцами контента на проверку с помощью Безопасного просмотра.</translation>
+<translation id="3032706164202344641">Не удается запустить проверку паролей в Carbon Browser. Повторите попытку позже.</translation>
+<translation id="3032787606318309379">Добавление в Carbon Browser...</translation>
 <translation id="3038232873781883849">Ожидание установки…</translation>
-<translation id="3068515742935458733">Помочь улучшить Carbon Browser Browser, отправляя в Google отчеты о сбоях и <ph name="UMA_LINK" /></translation>
-<translation id="3101560983689755071">История браузера влияет на предложенные интересы, которые представлены ниже, и на то, какую рекламу вы будете видеть. Чтобы обеспечивать вашу конфиденциальность, Carbon Browser Browser каждый месяц автоматически удаляет ваши интересы. Они могут обновляться, если вы их не удалите.</translation>
-<translation id="3103660991484857065">Установка прервана на этапе распаковки архива. Скачайте Carbon Browser Browser ещё раз.</translation>
-<translation id="3130323860337406239">Carbon Browser Browser использует микрофон.</translation>
-<translation id="3155163173539279776">Перезапустить Carbon Browser Browser</translation>
-<translation id="3179665906251668410">Открыть ссылку в режиме инкогнито браузера Carbon Browser Browser</translation>
-<translation id="3185330573522821672">Настройте новый профиль Carbon Browser Browser</translation>
-<translation id="3190315855212034486">Произошел сбой Carbon Browser Browser. Перезапустить?</translation>
-<translation id="3229526316128325841">Вы собираетесь экспортировать пароли из Carbon Browser Browser.</translation>
-<translation id="3258596308407688501">Carbon Browser Browser не может выполнять операции чтения и записи в своем каталоге: <ph name="USER_DATA_DIRECTORY" /></translation>
-<translation id="3283186697780795848">Установлен браузер Carbon Browser Browser версии <ph name="PRODUCT_VERSION" />.</translation>
+<translation id="3068515742935458733">Помочь улучшить Carbon Browser, отправляя в Google отчеты о сбоях и <ph name="UMA_LINK" /></translation>
+<translation id="3079753320517721795">{NUM_DEVICES,plural, =0{Одно или несколько расширений Carbon Browser обращались к одному USB-устройству}=1{Одно или несколько расширений Carbon Browser обращались к одному USB-устройству}one{Одно или несколько расширений Carbon Browser обращались к # USB-устройству}few{Одно или несколько расширений Carbon Browser обращались к # USB-устройствам}many{Одно или несколько расширений Carbon Browser обращались к # USB-устройствам}other{Одно или несколько расширений Carbon Browser обращались к # USB-устройства}}</translation>
+<translation id="3101560983689755071">История браузера влияет на предложенные интересы, которые представлены ниже, и на то, какую рекламу вы будете видеть. Чтобы обеспечивать вашу конфиденциальность, Carbon Browser каждый месяц автоматически удаляет ваши интересы. Они могут обновляться, если вы их не удалите.</translation>
+<translation id="3103660991484857065">Установка прервана на этапе распаковки архива. Скачайте Carbon Browser ещё раз.</translation>
+<translation id="3130323860337406239">Carbon Browser использует микрофон.</translation>
+<translation id="3155163173539279776">Перезапустить Carbon Browser</translation>
+<translation id="3179665906251668410">Открыть ссылку в режиме инкогнито браузера Carbon Browser</translation>
+<translation id="3185330573522821672">Настройте новый профиль Carbon Browser</translation>
+<translation id="3190315855212034486">Произошел сбой Carbon Browser. Перезапустить?</translation>
+<translation id="3258596308407688501">Carbon Browser не может выполнять операции чтения и записи в своем каталоге: <ph name="USER_DATA_DIRECTORY" /></translation>
+<translation id="3283186697780795848">Установлен браузер Carbon Browser версии <ph name="PRODUCT_VERSION" />.</translation>
 <translation id="3286538390144397061">Перезапустить сейчас</translation>
-<translation id="328888136576916638">Отсутствуют ключи API Google. Некоторые функции Carbon Browser Browser могут не работать.</translation>
-<translation id="3296368748942286671">Продолжить выполнение фоновых приложений после закрытия Carbon Browser Browser</translation>
-<translation id="3350761136195634146">Профиль Carbon Browser Browser для этого аккаунта уже существует.</translation>
+<translation id="328888136576916638">Отсутствуют ключи API Google. Некоторые функции Carbon Browser могут не работать.</translation>
+<translation id="3296368748942286671">Продолжить выполнение фоновых приложений после закрытия Carbon Browser</translation>
+<translation id="3313189106987092621">Carbon Browser будет предупреждать вас о переходе на любой сайт с незащищенным соединением</translation>
+<translation id="3350761136195634146">Профиль Carbon Browser для этого аккаунта уже существует.</translation>
 <translation id="3387527074123400161">Google Chrome OS</translation>
-<translation id="3406848076815591792">Переключиться на существующий профиль Carbon Browser Browser?</translation>
+<translation id="3406848076815591792">Переключиться на существующий профиль Carbon Browser?</translation>
 <translation id="3412460710772753638">В Менеджере паролей на этом устройстве</translation>
-<translation id="3430503420100763906">Профили Carbon Browser Browser нужны для раздельного использования браузера, например разными людьми или в разных целях.</translation>
-<translation id="347328004046849135">Вы получите уведомление от Carbon Browser Browser, если войдете в аккаунт с паролем, который был раскрыт.</translation>
-<translation id="3474745554856756813">С устройства будут удалены объекты (<ph name="ITEMS_COUNT" />). Чтобы восстановить данные позже, войдите в Carbon Browser Browser как <ph name="USER_EMAIL" />.</translation>
-<translation id="3497319089134299931">Переключиться на другой профиль Carbon Browser Browser можно с помощью сочетания клавиш <ph name="SHORTCUT" /></translation>
-<translation id="3509308970982693815">Закройте все окна Carbon Browser Browser и повторите попытку снова.</translation>
-<translation id="3518180795744733843">С помощью Google Ассистента в Carbon Browser Browser можно выполнять действия на сайтах</translation>
-<translation id="3533435340678213462">Для защиты вашей конфиденциальности интересы автоматически удаляются через 4 недели с момента создания. Если после этого вы продолжите использовать браузер, то удаленные интересы могут вновь появиться в списке. Чтобы Carbon Browser Browser не учитывал конкретные интересы, вы можете их удалить.</translation>
-<translation id="3567254597502212821">Ваша история браузера – список сайтов, которые вы открывали в Carbon Browser Browser на этом устройстве.</translation>
-<translation id="3575459661164320785">На компьютере обнаружено вредоносное ПО. Carbon Browser Browser может удалить его, восстановить настройки и отключить расширения. Это вернет браузер в обычное состояние.</translation>
-<translation id="3593091352817399191">Вход уже выполнен в другой аккаунт. Вы можете создать свой профиль, чтобы использовать Carbon Browser Browser отдельно.</translation>
-<translation id="3639635944603682591">Данные о работе этого пользователя в браузере будут удалены с устройства. Чтобы восстановить их, войдите в Carbon Browser Browser как <ph name="USER_EMAIL" />.</translation>
-<translation id="364817392622123556">{COUNT,plural, =0{Для Carbon Browser Browser доступно обновление. Оно будет установлено при перезапуске браузера.}=1{Для Carbon Browser Browser доступно обновление. Оно будет установлено при перезапуске браузера. Окно в режиме инкогнито не будет открыто повторно.}one{Для Carbon Browser Browser доступно обновление. Оно будет установлено при перезапуске браузера. # окно в режиме инкогнито не будет открыто повторно.}few{Для Carbon Browser Browser доступно обновление. Оно будет установлено при перезапуске браузера. # окна в режиме инкогнито не будут открыты повторно.}many{Для Carbon Browser Browser доступно обновление. Оно будет установлено при перезапуске браузера. # окон в режиме инкогнито не будут открыты повторно.}other{Для Carbon Browser Browser доступно обновление. Оно будет установлено при перезапуске браузера. # окна в режиме инкогнито не будут открыты повторно.}}</translation>
-<translation id="3651803019964686660">Чтобы отправить номер с сайта <ph name="ORIGIN" /> на свой телефон Android, войдите в Carbon Browser Browser на обоих устройствах.</translation>
-<translation id="3685209450716071127">Не удается запустить проверку паролей в Carbon Browser Browser. Проверьте подключение к Интернету.</translation>
-<translation id="3702352323269013324">О персонализации рекламы в Carbon Browser Browser</translation>
-<translation id="370962675267501463">{COUNT,plural, =0{Администратор просит перезапустить Carbon Browser Browser для установки обновления.}=1{Администратор просит перезапустить Carbon Browser Browser для установки обновления. Окно в режиме инкогнито не будет открыто повторно.}one{Администратор просит перезапустить Carbon Browser Browser для установки обновления. # окно в режиме инкогнито не будет открыто повторно.}few{Администратор просит перезапустить Carbon Browser Browser для установки обновления. # окна в режиме инкогнито не будут открыты повторно.}many{Администратор просит перезапустить Carbon Browser Browser для установки обновления. # окон в режиме инкогнито не будут открыты повторно.}other{Администратор просит перезапустить Carbon Browser Browser для установки обновления. # окна в режиме инкогнито не будут открыты повторно.}}</translation>
-<translation id="3713809861844741608">Открыть ссылку в новой вкладке браузера Carbon Browser Browser</translation>
-<translation id="3728336900324680424">Carbon Browser Browser получит доступ к вашему Google Диску, чтобы вы могли просматривать рекомендации в адресной строке.</translation>
-<translation id="378917192836375108">В Carbon Browser Browser вы можете нажать на любой номер телефона и позвонить на него через Skype.</translation>
+<translation id="3430503420100763906">Профили Carbon Browser нужны для раздельного использования браузера, например разными людьми или в разных целях.</translation>
+<translation id="347328004046849135">Вы получите уведомление от Carbon Browser, если войдете в аккаунт с паролем, который был раскрыт.</translation>
+<translation id="3474745554856756813">С устройства будут удалены объекты (<ph name="ITEMS_COUNT" />). Чтобы восстановить данные позже, войдите в Carbon Browser как <ph name="USER_EMAIL" />.</translation>
+<translation id="3497319089134299931">Переключиться на другой профиль Carbon Browser можно с помощью сочетания клавиш <ph name="SHORTCUT" /></translation>
+<translation id="3509308970982693815">Закройте все окна Carbon Browser и повторите попытку снова.</translation>
+<translation id="3533435340678213462">Для защиты вашей конфиденциальности интересы автоматически удаляются через 4 недели с момента создания. Если после этого вы продолжите использовать браузер, то удаленные интересы могут вновь появиться в списке. Чтобы Carbon Browser не учитывал конкретные интересы, вы можете их удалить.</translation>
+<translation id="3567254597502212821">Ваша история браузера – список сайтов, которые вы открывали в Carbon Browser на этом устройстве.</translation>
+<translation id="3593091352817399191">Вход уже выполнен в другой аккаунт. Вы можете создать свой профиль, чтобы использовать Carbon Browser отдельно.</translation>
+<translation id="363078681319665186">На вашем компьютере используется macOS 10.13. Чтобы получать обновления Carbon Browser, установите на устройство macOS 10.15 или более поздней версии.</translation>
+<translation id="3639635944603682591">Данные о работе этого пользователя в браузере будут удалены с устройства. Чтобы восстановить их, войдите в Carbon Browser как <ph name="USER_EMAIL" />.</translation>
+<translation id="364817392622123556">{COUNT,plural, =0{Для Carbon Browser доступно обновление. Оно будет установлено при перезапуске браузера.}=1{Для Carbon Browser доступно обновление. Оно будет установлено при перезапуске браузера. Окно в режиме инкогнито не будет открыто повторно.}one{Для Carbon Browser доступно обновление. Оно будет установлено при перезапуске браузера. # окно в режиме инкогнито не будет открыто повторно.}few{Для Carbon Browser доступно обновление. Оно будет установлено при перезапуске браузера. # окна в режиме инкогнито не будут открыты повторно.}many{Для Carbon Browser доступно обновление. Оно будет установлено при перезапуске браузера. # окон в режиме инкогнито не будут открыты повторно.}other{Для Carbon Browser доступно обновление. Оно будет установлено при перезапуске браузера. # окна в режиме инкогнито не будут открыты повторно.}}</translation>
+<translation id="3651803019964686660">Чтобы отправить номер с сайта <ph name="ORIGIN" /> на свой телефон Android, войдите в Carbon Browser на обоих устройствах.</translation>
+<translation id="3667616615096815454">Не удалось выполнить установку из-за того, что сервер не распознал приложение.</translation>
+<translation id="3685209450716071127">Не удается запустить проверку паролей в Carbon Browser. Проверьте подключение к Интернету.</translation>
+<translation id="3702352323269013324">О персонализации рекламы в Carbon Browser</translation>
+<translation id="370962675267501463">{COUNT,plural, =0{Администратор просит перезапустить Carbon Browser для установки обновления.}=1{Администратор просит перезапустить Carbon Browser для установки обновления. Окно в режиме инкогнито не будет открыто повторно.}one{Администратор просит перезапустить Carbon Browser для установки обновления. # окно в режиме инкогнито не будет открыто повторно.}few{Администратор просит перезапустить Carbon Browser для установки обновления. # окна в режиме инкогнито не будут открыты повторно.}many{Администратор просит перезапустить Carbon Browser для установки обновления. # окон в режиме инкогнито не будут открыты повторно.}other{Администратор просит перезапустить Carbon Browser для установки обновления. # окна в режиме инкогнито не будут открыты повторно.}}</translation>
+<translation id="3713809861844741608">Открыть ссылку в новой вкладке браузера Carbon Browser</translation>
+<translation id="378917192836375108">В Carbon Browser вы можете нажать на любой номер телефона и позвонить на него через Skype.</translation>
+<translation id="3790262771324122253">Подробнее о том, почему Carbon Browser блокирует скачивание некоторых файлов…</translation>
+<translation id="379589255253486813">Мы сообщим, когда они появятся.</translation>
+<translation id="3802055581630249637">Carbon Browser предварительно загружает страницы, которые вы с большой вероятностью посетите, чтобы они открылись быстрее.</translation>
 <translation id="3830894615770080216">Google Chrome OS</translation>
-<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> – Carbon Browser Browser</translation>
+<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> – Carbon Browser</translation>
 <translation id="386822487697155367">Подробнее о Google Chrome OS</translation>
-<translation id="3871664619793219264">Получите доступ к данным браузера Carbon Browser Browser, сохраненным в аккаунте <ph name="ACCOUNT_EMAIL" />.</translation>
-<translation id="388648406173476553">Настройка и управление Carbon Browser Browser Требуется ваше внимание. Нажмите, чтобы получить подробную информацию.</translation>
-<translation id="3889543394854987837">Нажмите на свое имя, чтобы войти в Carbon Browser Browser.</translation>
-<translation id="390528597099634151">Пользователь <ph name="EXISTING_USER" /> уже выполнил вход в профиль Carbon Browser Browser. Вы можете создать свой профиль, чтобы использовать Carbon Browser Browser отдельно.</translation>
-<translation id="391789666908693569">Вашим аккаунтом управляет <ph name="MANAGER_NAME" />. Администратор может просматривать и изменять этот профиль Carbon Browser Browser и данные в нем, включая закладки, историю и пароли.</translation>
-<translation id="3945058413678539331">Carbon Browser Browser пытается скопировать пароли. Чтобы разрешить это действие, введите свой пароль Windows.</translation>
-<translation id="3962623956404948996">Carbon Browser Browser рекомендует просканировать этот потенциально вредоносный файл.</translation>
+<translation id="3871664619793219264">Получите доступ к данным браузера Carbon Browser, сохраненным в аккаунте <ph name="ACCOUNT_EMAIL" />.</translation>
+<translation id="387966568917439637">На вашем компьютере используется macOS 10.14. Чтобы получать обновления Carbon Browser, установите на устройство macOS 10.15 или более поздней версии.</translation>
+<translation id="388648406173476553">Настройка и управление Carbon Browser Требуется ваше внимание. Нажмите, чтобы получить подробную информацию.</translation>
+<translation id="3889543394854987837">Нажмите на свое имя, чтобы войти в Carbon Browser.</translation>
+<translation id="390528597099634151">Пользователь <ph name="EXISTING_USER" /> уже выполнил вход в профиль Carbon Browser. Вы можете создать свой профиль, чтобы использовать Carbon Browser отдельно.</translation>
+<translation id="3909353120217047026">Это расширение нарушает правила интернет-магазина Carbon Browser и может быть опасным. Удалите его из Carbon Browser, чтобы оно больше не могло читать и менять ваши данные с сайтов (включая личную информацию), которые вы посещаете.</translation>
+<translation id="391789666908693569">Вашим аккаунтом управляет <ph name="MANAGER_NAME" />. Администратор может просматривать и изменять этот профиль Carbon Browser и данные в нем, включая закладки, историю и пароли.</translation>
+<translation id="3922825997980843979">Когда вы печатаете запрос, Carbon Browser передает содержимое адресной строки или окна поиска в поисковую систему по умолчанию.</translation>
+<translation id="3941890832296813527">Произошла ошибка. Название файла установщика недействительно или не поддерживается.</translation>
+<translation id="3945058413678539331">Carbon Browser пытается скопировать пароли. Чтобы разрешить это действие, введите свой пароль Windows.</translation>
+<translation id="3962647064319009959">Как Carbon Browser обеспечивает безопасность</translation>
+<translation id="3975724895399328945">О &amp;Carbon Browser для тестирования</translation>
 <translation id="3997429360543082038">О Google Chrome OS</translation>
 <translation id="4019629340646866719">Google Chrome OS, как и <ph name="BEGIN_LINK_LINUX_OSS" />среда разработки Linux<ph name="END_LINK_LINUX_OSS" />, работает благодаря дополнительному <ph name="BEGIN_LINK_CROS_OSS" />программному обеспечению с открытым исходным кодом<ph name="END_LINK_CROS_OSS" />.</translation>
-<translation id="4036079820698952681">Отправьте отчет о <ph name="BEGIN_LINK" />текущих настройках Carbon Browser Browser<ph name="END_LINK" />, чтобы помочь нам улучшить браузер</translation>
+<translation id="4028143804911941282">Если отключить параметр, вы будете видеть локальные подсказки от Carbon Browser.</translation>
+<translation id="4036079820698952681">Отправьте отчет о <ph name="BEGIN_LINK" />текущих настройках Carbon Browser<ph name="END_LINK" />, чтобы помочь нам улучшить браузер</translation>
 <translation id="4050175100176540509">В последней версии улучшена защита и добавлены новые функции.</translation>
+<translation id="4055805654398742145">Менеджер &amp;паролей</translation>
+<translation id="4095980151185649725">{COUNT,plural, =1{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение 1 минуты. Данные о работе в браузере, включая историю, сведения для автозаполнения и скачанные файлы, будут удалены.}one{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение # минуты. Данные о работе в браузере, включая историю, сведения для автозаполнения и скачанные файлы, будут удалены.}few{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение # минут. Данные о работе в браузере, включая историю, сведения для автозаполнения и скачанные файлы, будут удалены.}many{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение # минут. Данные о работе в браузере, включая историю, сведения для автозаполнения и скачанные файлы, будут удалены.}other{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение # минуты. Данные о работе в браузере, включая историю, сведения для автозаполнения и скачанные файлы, будут удалены.}}</translation>
+<translation id="4118474109249235144">Режим инкогнито в Carbon Browser</translation>
 <translation id="4148957013307229264">Установка...</translation>
-<translation id="419998258129752635">"<ph name="PAGE_TITLE" />" – вход в сеть – Carbon Browser Browser</translation>
-<translation id="421369550622382712">Широкий выбор приложений, игр, расширений и тем для Carbon Browser Browser.</translation>
-<translation id="4216212958613226427">На этом языке отображается интерфейс Carbon Browser Browser</translation>
+<translation id="419998258129752635">"<ph name="PAGE_TITLE" />" – вход в сеть – Carbon Browser</translation>
+<translation id="421369550622382712">Широкий выбор приложений, игр, расширений и тем для Carbon Browser.</translation>
+<translation id="4216212958613226427">На этом языке отображается интерфейс Carbon Browser</translation>
 <translation id="4222932583846282852">Отмена…</translation>
-<translation id="4230135487732243613">Связать данные Carbon Browser Browser с этим аккаунтом?</translation>
-<translation id="4271805377592243930">Справка Carbon Browser Browser</translation>
-<translation id="4285930937574705105">Установка не удалась из-за неизвестной ошибки. Если Carbon Browser Browser продолжает работать, закройте его и повторите попытку.</translation>
-<translation id="4304713468139749426">Диспетчер паролей</translation>
+<translation id="4230135487732243613">Связать данные Carbon Browser с этим аккаунтом?</translation>
+<translation id="4251772536351901305">Предупреждает об опасных сайтах, даже если раньше они были неизвестны Google. При этом анализируется больше данных по сравнению со стандартной защитой. Вы можете пропускать такие уведомления Carbon Browser.</translation>
+<translation id="4271805377592243930">Справка Carbon Browser</translation>
+<translation id="4281844954008187215">Условия использования</translation>
+<translation id="4285930937574705105">Установка не удалась из-за неизвестной ошибки. Если Carbon Browser продолжает работать, закройте его и повторите попытку.</translation>
+<translation id="4304713468139749426">Менеджер паролей</translation>
 <translation id="4334294535648607276">Скачивание завершено.</translation>
 <translation id="439358628917130594">Согласно действующим правилам <ph name="MANAGER" />, до начала работы с устройством необходимо ознакомиться с приведенными ниже Условиями использования и принять их. Они не дополняют, не заменяют и не ограничивают Условия использования Google Chrome OS.</translation>
-<translation id="4407044323746248786">Закрыть Carbon Browser Browser?</translation>
-<translation id="4415566066719264597">Разрешить Carbon Browser Browser работать в фоновом режиме</translation>
-<translation id="4423735387467980091">Настройка и управление Carbon Browser Browser</translation>
+<translation id="4407044323746248786">Закрыть Carbon Browser?</translation>
+<translation id="4415566066719264597">Разрешить Carbon Browser работать в фоновом режиме</translation>
+<translation id="4423735387467980091">Настройка и управление Carbon Browser</translation>
 <translation id="4427306783828095590">В режиме "Улучшенная защита" фишинговые атаки и вредоносное ПО блокируются ещё эффективнее.</translation>
-<translation id="4440114195512068100">Чтобы посмотреть, обновлена ли операционная система устройства, перейдите в <ph name="LINK_BEGIN" />настройки Google Chrome OS<ph name="LINK_END" />.</translation>
-<translation id="452711251841752011">Добро пожаловать в Carbon Browser Browser! Открыто новое окно браузера.</translation>
-<translation id="4544142686420020088">Не удалось обновить Carbon Browser Browser. <ph name="BEGIN_LINK" />Выяснить причины неполадок и устранить их<ph name="END_LINK" /></translation>
-<translation id="454579500955453258">Продолжить в новом профиле Carbon Browser Browser?</translation>
+<translation id="4447409407328223819">О Carbon Browser для тестирования</translation>
+<translation id="4501471624619070934">Не удалось выполнить установку из-за ограничения доступа в этой стране.</translation>
+<translation id="452711251841752011">Добро пожаловать в Carbon Browser! Открыто новое окно браузера.</translation>
+<translation id="4544142686420020088">Не удалось обновить Carbon Browser. <ph name="BEGIN_LINK" />Выяснить причины неполадок и устранить их<ph name="END_LINK" /></translation>
+<translation id="454579500955453258">Продолжить в новом профиле Carbon Browser?</translation>
 <translation id="4567424176335768812">Вы вошли с помощью аккаунта <ph name="USER_EMAIL_ADDRESS" />. Ваши закладки, история и другие настройки теперь доступны на всех устройствах, где вы используете этот аккаунт.</translation>
+<translation id="4570813286784708942">Carbon Browser заблокировал скачивание, поскольку Безопасный просмотр отключен и файл невозможно проверить</translation>
 <translation id="4594305310729380060">В Менеджере паролей на этом устройстве</translation>
-<translation id="459535195905078186">Приложения Carbon Browser Browser</translation>
+<translation id="459535195905078186">Приложения Carbon Browser</translation>
 <translation id="4613863813562375431">Версия Google Chrome OS</translation>
-<translation id="4621240073146040695">Чтобы завершить обновление, перезапустите Carbon Browser Browser.</translation>
-<translation id="4665829708273112819">Внимание! Carbon Browser Browser не может запретить расширениям записывать историю браузера. Чтобы отключить это расширение в режиме инкогнито, снимите этот флажок.</translation>
-<translation id="4673151026126227699">Если вы также отправляете отчеты об использовании Carbon Browser Browser, в них включаются URL посещенных вами страниц.</translation>
-<translation id="4677944499843243528">Скорее всего, профиль используется другим процессом Carbon Browser Browser (<ph name="PROCESS_ID" />) на другом компьютере (<ph name="HOST_NAME" />). Во избежание сбоев профиль был заблокирован. Если вы уверены, что профиль не используется другими процессами, разблокируйте его и перезапустите Carbon Browser Browser.</translation>
+<translation id="4621240073146040695">Чтобы завершить обновление, перезапустите Carbon Browser.</translation>
+<translation id="4665829708273112819">Внимание! Carbon Browser не может запретить расширениям записывать историю браузера. Чтобы отключить это расширение в режиме инкогнито, снимите этот флажок.</translation>
+<translation id="4673151026126227699">Если вы также отправляете отчеты об использовании Carbon Browser, в них включаются URL посещенных вами страниц.</translation>
+<translation id="4677944499843243528">Скорее всего, профиль используется другим процессом Carbon Browser (<ph name="PROCESS_ID" />) на другом компьютере (<ph name="HOST_NAME" />). Во избежание сбоев профиль был заблокирован. Если вы уверены, что профиль не используется другими процессами, разблокируйте его и перезапустите Carbon Browser.</translation>
 <translation id="4680828127924988555">Отменить установку</translation>
-<translation id="4708774505295300557">Ранее вход в Carbon Browser Browser на этом компьютере выполнялся из аккаунта <ph name="ACCOUNT_EMAIL_LAST" />. Чтобы ваши данные хранились отдельно, создайте новый профиль Carbon Browser Browser.</translation>
-<translation id="4746050847053251315">Завершить работу Carbon Browser Browser?</translation>
-<translation id="4748217263233248895">Установлено специальное обновление системы безопасности. Перезапустите Carbon Browser Browser (все вкладки будут восстановлены).</translation>
-<translation id="4765210420921718862">Вы можете в любое время изменить свое решение в настройках Carbon Browser Browser. Экспериментальные функции действуют одновременно с текущими настройками показа рекламы, поэтому вы не сразу заметите изменения.</translation>
-<translation id="4788777615168560705">Не удается проверить пароли в Carbon Browser Browser. Повторите попытку через 24 часа или <ph name="BEGIN_LINK" />проверьте пароли в аккаунте Google<ph name="END_LINK" />.</translation>
+<translation id="4708774505295300557">Ранее вход в Carbon Browser на этом компьютере выполнялся из аккаунта <ph name="ACCOUNT_EMAIL_LAST" />. Чтобы ваши данные хранились отдельно, создайте новый профиль Carbon Browser.</translation>
+<translation id="4724676981607797757">Выполнить установку не удалось, так как протокол не поддерживается.</translation>
+<translation id="4746050847053251315">Завершить работу Carbon Browser?</translation>
+<translation id="4748217263233248895">Установлено специальное обновление системы безопасности. Перезапустите Carbon Browser (все вкладки будут восстановлены).</translation>
+<translation id="4765210420921718862">Вы можете в любое время изменить свое решение в настройках Carbon Browser. Экспериментальные функции действуют одновременно с текущими настройками показа рекламы, поэтому вы не сразу заметите изменения.</translation>
+<translation id="4788777615168560705">Не удается проверить пароли в Carbon Browser. Повторите попытку через 24 часа или <ph name="BEGIN_LINK" />проверьте пароли в аккаунте Google<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Используется та же технология проверки правописания, что и в Google Поиске. Текст, который вы введете в браузере, будет отправлен в Google. Этот параметр можно изменить в настройках.</translation>
-<translation id="4888717733111232871">Разрешить в Carbon Browser Browser передачу входящего трафика по протоколу mDNS</translation>
-<translation id="4893347770495441059">Перезапустить для обновления &amp;Carbon Browser Browser</translation>
-<translation id="4943838377383847465">Carbon Browser Browser работает в фоновом режиме</translation>
-<translation id="4987820182225656817">Используйте Carbon Browser Browser в гостевом режиме, если не хотите сохранять данные о посещенных сайтах.</translation>
-<translation id="4994636714258228724">Добавить пользователя Carbon Browser Browser</translation>
-<translation id="5114678101347489141">Команда Carbon Browser Browser разрабатывает новые функции, благодаря которым сайты функционируют в обычном режиме, собирая меньше информации о вас.</translation>
-<translation id="5224391634244552924">Сохраненных паролей нет. Чтобы браузер Carbon Browser Browser мог проверять пароли, сохраните их.</translation>
-<translation id="5252179775517634216">Пользователь <ph name="EXISTING_USER" /> уже выполнил вход в профиль Carbon Browser Browser. Вы можете создать новый профиль Carbon Browser Browser для <ph name="USER_EMAIL_ADDRESS" />.</translation>
-<translation id="5277894862589591112">Чтобы изменения вступили в силу, перезапустите Carbon Browser Browser.</translation>
-<translation id="5296845517486664001">Если пробные функции включены и Carbon Browser Browser случайным образом выберет вас для их тестирования, то история браузера будет влиять на предложенные интересы, которые представлены ниже, и на то, какую рекламу вы будете видеть. Чтобы обеспечивать вашу конфиденциальность, Carbon Browser Browser каждый месяц удаляет ваши интересы.</translation>
-<translation id="5358375970380395591">Выполнив вход в управляемый аккаунт, вы предоставляете администратору право контролировать настройки вашего профиля Carbon Browser Browser. Ваши данные Carbon Browser Browser (приложения, закладки, история, пароли и другие настройки) будут временно связаны с аккаунтом <ph name="USER_NAME" />. Эти данные можно удалить в Личном кабинете Google, но их нельзя связать с другим аккаунтом. <ph name="LEARN_MORE" /></translation>
-<translation id="5386450000063123300">Обновление Carbon Browser Browser (<ph name="PROGRESS_PERCENT" />)…</translation>
-<translation id="538767207339317086">Разрешить вход в Carbon Browser Browser</translation>
-<translation id="5398878173008909840">Доступна новая версия Carbon Browser Browser.</translation>
-<translation id="5427571867875391349">Сделать Carbon Browser Browser браузером по умолчанию</translation>
-<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> – Carbon Browser Browser (бета-версия)</translation>
-<translation id="5473971139929175403">В работе Carbon Browser Browser могут возникать сбои, так как браузер больше не поддерживает этот дистрибутив Linux.</translation>
-<translation id="5480860683791598150">Для этого сайта Carbon Browser Browser запрашивает доступ к данным о вашем местоположении.</translation>
-<translation id="5487574057737591516">Для защиты вашей конфиденциальности интересы автоматически удаляются через 4 недели с момента создания. Если после этого вы продолжите использовать браузер, то удаленные интересы могут вновь появиться в списке. Если вы не хотите видеть на сайтах конкретную рекламу или выводы Carbon Browser Browser не соответствуют действительности, можно удалить связанный интерес.</translation>
-<translation id="549669000822060376">Подождите, пока Carbon Browser Browser устанавливает последние обновления системы</translation>
-<translation id="5496810170689441661">Carbon Browser Browser пытается изменить пароли. Чтобы разрешить это действие, введите свой пароль Windows.</translation>
-<translation id="5527463683072221100">Открывать PDF-файлы в Carbon Browser Browser</translation>
-<translation id="5614091477838198795">Также выполняется выход из Carbon Browser Browser</translation>
-<translation id="5623402015214259806">{0,plural, =0{Доступно обновление Carbon Browser Browser}=1{Доступно обновление Carbon Browser Browser}one{Обновление Carbon Browser Browser доступно # день}few{Обновление Carbon Browser Browser доступно # дня}many{Обновление Carbon Browser Browser доступно # дней}other{Обновление Carbon Browser Browser доступно # дня}}</translation>
-<translation id="5634636535844844681">Для работы Carbon Browser Browser необходима ОС Windows 7 или более поздней версии.</translation>
-<translation id="5653831366781983928">Перезапустите Carbon Browser Browser</translation>
-<translation id="5698481217667032250">Отображать Carbon Browser Browser на этом языке</translation>
-<translation id="5862307444128926510">Добро пожаловать в Carbon Browser Browser</translation>
-<translation id="5883558403894052917">Браузер Carbon Browser Browser обнаружил, что эти объекты содержат вредоносное ПО:</translation>
+<translation id="4814736265800133385">Работать с Carbon Browser, не входя в аккаунт</translation>
+<translation id="4888717733111232871">Разрешить в Carbon Browser передачу входящего трафика по протоколу mDNS</translation>
+<translation id="4893347770495441059">Перезапустить для обновления &amp;Carbon Browser</translation>
+<translation id="4943838377383847465">Carbon Browser работает в фоновом режиме</translation>
+<translation id="4987820182225656817">Используйте Carbon Browser в гостевом режиме, если не хотите сохранять данные о посещенных сайтах.</translation>
+<translation id="4994636714258228724">Добавить пользователя Carbon Browser</translation>
+<translation id="5114678101347489141">Команда Carbon Browser разрабатывает новые функции, благодаря которым сайты функционируют в обычном режиме, собирая меньше информации о вас.</translation>
+<translation id="5224391634244552924">Сохраненных паролей нет. Чтобы браузер Carbon Browser мог проверять пароли, сохраните их.</translation>
+<translation id="5252179775517634216">Пользователь <ph name="EXISTING_USER" /> уже выполнил вход в профиль Carbon Browser. Вы можете создать новый профиль Carbon Browser для <ph name="USER_EMAIL_ADDRESS" />.</translation>
+<translation id="5277894862589591112">Чтобы изменения вступили в силу, перезапустите Carbon Browser.</translation>
+<translation id="5294316920224716406">При работе в режиме инкогнито Carbon Browser будет предупреждать вас о переходе на сайт с незащищенным соединением</translation>
+<translation id="5296845517486664001">Если пробные функции включены и Carbon Browser случайным образом выберет вас для их тестирования, то история браузера будет влиять на предложенные интересы, которые представлены ниже, и на то, какую рекламу вы будете видеть. Чтобы обеспечивать вашу конфиденциальность, Carbon Browser каждый месяц удаляет ваши интересы.</translation>
+<translation id="5352264705793813212">У нас есть несколько рекомендаций по безопасности во время работы в Carbon Browser</translation>
+<translation id="5358375970380395591">Выполнив вход в управляемый аккаунт, вы предоставляете администратору право контролировать настройки вашего профиля Carbon Browser. Ваши данные Carbon Browser (приложения, закладки, история, пароли и другие настройки) будут временно связаны с аккаунтом <ph name="USER_NAME" />. Эти данные можно удалить в Личном кабинете Google, но их нельзя связать с другим аккаунтом. <ph name="LEARN_MORE" /></translation>
+<translation id="5368118228313795342">Дополнительный код: <ph name="EXTRA_CODE" />.</translation>
+<translation id="5383439451358640070">Узнайте, почему Carbon Browser блокирует скачивание некоторых файлов</translation>
+<translation id="5386450000063123300">Обновление Carbon Browser (<ph name="PROGRESS_PERCENT" />)…</translation>
+<translation id="538767207339317086">Разрешить вход в Carbon Browser</translation>
+<translation id="5398878173008909840">Доступна новая версия Carbon Browser.</translation>
+<translation id="5405650547142096840">Удалить из Carbon Browser</translation>
+<translation id="5427571867875391349">Сделать Carbon Browser браузером по умолчанию</translation>
+<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> – Carbon Browser (бета-версия)</translation>
+<translation id="5473971139929175403">В работе Carbon Browser могут возникать сбои, так как браузер больше не поддерживает этот дистрибутив Linux.</translation>
+<translation id="5480860683791598150">Для этого сайта Carbon Browser запрашивает доступ к данным о вашем местоположении.</translation>
+<translation id="5487574057737591516">Для защиты вашей конфиденциальности интересы автоматически удаляются через 4 недели с момента создания. Если после этого вы продолжите использовать браузер, то удаленные интересы могут вновь появиться в списке. Если вы не хотите видеть на сайтах конкретную рекламу или выводы Carbon Browser не соответствуют действительности, можно удалить связанный интерес.</translation>
+<translation id="549669000822060376">Подождите, пока Carbon Browser устанавливает последние обновления системы</translation>
+<translation id="5496810170689441661">Carbon Browser пытается изменить пароли. Чтобы разрешить это действие, введите свой пароль Windows.</translation>
+<translation id="5527463683072221100">Открывать PDF-файлы в Carbon Browser</translation>
+<translation id="5623402015214259806">{0,plural, =0{Доступно обновление Carbon Browser}=1{Доступно обновление Carbon Browser}one{Обновление Carbon Browser доступно # день}few{Обновление Carbon Browser доступно # дня}many{Обновление Carbon Browser доступно # дней}other{Обновление Carbon Browser доступно # дня}}</translation>
+<translation id="5643865575100044307">Всегда удалять с устройства данные сайтов при закрытии Carbon Browser</translation>
+<translation id="5653831366781983928">Перезапустите Carbon Browser</translation>
+<translation id="5675598751761067447">Этот файл может быть опасен.<ph name="LINE_BREAK" />Carbon Browser проверит его, если вы введете пароль. Ваш пароль останется на устройстве.</translation>
+<translation id="5690427481109656848">Carbon X Labs</translation>
+<translation id="5698481217667032250">Отображать Carbon Browser на этом языке</translation>
+<translation id="569897634095159764">Не удалось подключиться к интернету. Прокси-сервер требует пройти аутентификацию.</translation>
+<translation id="5809516625706423866">Не удалось подключиться к интернету. Ошибка HTTP 401: нет авторизации. Проверьте настройки прокси-сервера.</translation>
+<translation id="5862307444128926510">Добро пожаловать в Carbon Browser</translation>
+<translation id="5883558403894052917">Браузер Carbon Browser обнаружил, что эти объекты содержат вредоносное ПО:</translation>
+<translation id="5889361821821684993">Carbon Browser регулярно проверяет, используются ли в браузере максимально безопасные настройки. Мы сообщим, если потребуется ваше участие.</translation>
 <translation id="5895138241574237353">Перезапустить</translation>
 <translation id="5903106910045431592">"<ph name="PAGE_TITLE" />" – вход в сеть</translation>
 <translation id="5924017743176219022">Подключение к интернету…</translation>
 <translation id="5941711191222866238">Свернуть</translation>
-<translation id="5972142260211327093">Если Carbon Browser Browser случайным образом выберет вас для тестирования пробной функции, то история браузера будет влиять на предложенные интересы, которые представлены ниже, и на то, какую рекламу вы будете видеть. Чтобы обеспечивать вашу конфиденциальность, Carbon Browser Browser каждый месяц удаляет ваши интересы. Они обновляются, если вы их не удалите.</translation>
-<translation id="5987687638152509985">Чтобы начать синхронизацию, обновите Carbon Browser Browser</translation>
-<translation id="5988505247484123880">Обычно сайты, которые вы посещаете, запоминают ваши интересы, чтобы показывать персонализированную рекламу. В том числе они могут хранить об этом информацию в Carbon Browser Browser.</translation>
+<translation id="5972142260211327093">Если Carbon Browser случайным образом выберет вас для тестирования пробной функции, то история браузера будет влиять на предложенные интересы, которые представлены ниже, и на то, какую рекламу вы будете видеть. Чтобы обеспечивать вашу конфиденциальность, Carbon Browser каждый месяц удаляет ваши интересы. Они обновляются, если вы их не удалите.</translation>
+<translation id="5986585015444752010">{COUNT,plural, =1{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение 1 минуты.}one{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение # минуты.}few{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение # минут.}many{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение # минут.}other{Ваша организация задала настройки, согласно которым браузер Carbon Browser автоматически закрывается, если в нем не выполняются действия в течение # минуты.}}</translation>
+<translation id="5987687638152509985">Чтобы начать синхронизацию, обновите Carbon Browser</translation>
+<translation id="5988505247484123880">Обычно сайты, которые вы посещаете, запоминают ваши интересы, чтобы показывать персонализированную рекламу. В том числе они могут хранить об этом информацию в Carbon Browser.</translation>
 <translation id="6003112304606738118">Скачивание… Осталось: <ph name="HOURS" /> ч.</translation>
 <translation id="6040143037577758943">Закрыть</translation>
-<translation id="6055895534982063517">Доступна новая версия Carbon Browser Browser, которая стала еще быстрее.</translation>
-<translation id="6063093106622310249">&amp;Открыть в Carbon Browser Browser</translation>
-<translation id="6072279588547424923">Расширение "<ph name="EXTENSION_NAME" />" добавлено в Carbon Browser Browser</translation>
+<translation id="6055895534982063517">Доступна новая версия Carbon Browser, которая стала еще быстрее.</translation>
+<translation id="6058380562449900225">Чтобы защитить свои данные, разрешите Carbon Browser отзывать разрешения у сайтов, которые вы давно не посещали. Уведомления при этом не отключаются.</translation>
+<translation id="6063093106622310249">&amp;Открыть в Carbon Browser</translation>
+<translation id="6072279588547424923">Расширение "<ph name="EXTENSION_NAME" />" добавлено в Carbon Browser</translation>
+<translation id="6072463441809498330">Carbon Browser может работать ещё быстрее</translation>
 <translation id="608006075545470555">Добавление рабочего профиля в браузер</translation>
-<translation id="6096348254544841612">Новая версия Carbon Browser Browser уже вышла!</translation>
+<translation id="6096348254544841612">Новая версия Carbon Browser уже вышла!</translation>
+<translation id="6102072151902574948">Carbon Browser экономит заряд батареи, ограничивая фоновую активность и визуальные эффекты, например плавную прокрутку страниц и частоту кадров в видео.</translation>
+<translation id="6119438414301547735">Разрешить расширению показывать запросы доступа на панели инструментов Carbon Browser</translation>
 <translation id="6120345080069858279">Этот пароль будет сохранен в аккаунте Google. Вам не нужно его запоминать.</translation>
-<translation id="6129621093834146363">Carbon Browser Browser заблокировал файл <ph name="FILE_NAME" /> как опасный.</translation>
-<translation id="6134968993075716475">Безопасный просмотр отключен. Carbon Browser Browser рекомендует включить его.</translation>
-<translation id="6145820983052037069">Здесь можно переключиться на другой профиль Carbon Browser Browser</translation>
-<translation id="6183079672144801177">Убедитесь, что вы вошли в Carbon Browser Browser на устройстве <ph name="TARGET_DEVICE_NAME" />, и попробуйте повторить отправку.</translation>
-<translation id="6212496753309875659">На этом компьютере установлена актуальная версия Carbon Browser Browser. Если программа не работает, удалите Carbon Browser Browser и повторите попытку.</translation>
-<translation id="6219195342503754812">{0,plural, =0{Carbon Browser Browser перезапускается}=1{Carbon Browser Browser перезапустится через 1 секунду}one{Carbon Browser Browser перезапустится через # секунду}few{Carbon Browser Browser перезапустится через # секунды}many{Carbon Browser Browser перезапустится через # секунд}other{Carbon Browser Browser перезапустится через # секунды}}</translation>
-<translation id="6241367896540709610">Для скачивания файлов браузеру Carbon Browser Browser требуется доступ к хранилищу.</translation>
-<translation id="6245734527075554892">Сверяет URL со списком небезопасных сайтов в Carbon Browser Browser.</translation>
-<translation id="6248213926982192922">Назначить Carbon Browser Browser браузером по умолчанию</translation>
-<translation id="6266342355635466082">Не удалось проверить наличие обновлений в Carbon Browser Browser. Проверьте подключение к Интернету.</translation>
-<translation id="6268381023930128611">Выйти из Carbon Browser Browser?</translation>
+<translation id="6129621093834146363">Carbon Browser заблокировал файл <ph name="FILE_NAME" /> как опасный.</translation>
+<translation id="6132897690380286411">Carbon Browser скоро будет закрыт, а данные о работе удалены</translation>
+<translation id="6134968993075716475">Безопасный просмотр отключен. Carbon Browser рекомендует включить его.</translation>
+<translation id="6144416395842701622">Чтобы пользоваться всеми возможностями Carbon Browser, войдите в аккаунт.</translation>
+<translation id="6145820983052037069">Здесь можно переключиться на другой профиль Carbon Browser</translation>
+<translation id="615103374448673771">Если вы разрешили использование файлов cookie, Carbon Browser может применять их для предзагрузки.</translation>
+<translation id="6175304430031192654">В зависимости от настроек Carbon Browser также может передавать файлы cookie и ваш текущий URL.</translation>
+<translation id="6182736845697986886">Выполнить установку не удалось из-за внутренней ошибки сервера.</translation>
+<translation id="6183079672144801177">Убедитесь, что вы вошли в Carbon Browser на устройстве <ph name="TARGET_DEVICE_NAME" />, и попробуйте повторить отправку.</translation>
+<translation id="6212496753309875659">На этом компьютере установлена актуальная версия Carbon Browser. Если программа не работает, удалите Carbon Browser и повторите попытку.</translation>
+<translation id="6219195342503754812">{0,plural, =0{Carbon Browser перезапускается}=1{Carbon Browser перезапустится через 1 секунду}one{Carbon Browser перезапустится через # секунду}few{Carbon Browser перезапустится через # секунды}many{Carbon Browser перезапустится через # секунд}other{Carbon Browser перезапустится через # секунды}}</translation>
+<translation id="6241367896540709610">Для скачивания файлов браузеру Carbon Browser требуется доступ к хранилищу.</translation>
+<translation id="6245734527075554892">Сверяет URL со списком небезопасных сайтов в Carbon Browser.</translation>
+<translation id="6248213926982192922">Назначить Carbon Browser браузером по умолчанию</translation>
+<translation id="6266342355635466082">Не удалось проверить наличие обновлений в Carbon Browser. Проверьте подключение к Интернету.</translation>
+<translation id="6268381023930128611">Выйти из Carbon Browser?</translation>
 <translation id="6273793429163604305">Подготовка…</translation>
-<translation id="6281746429495226318">Настроить профиль Carbon Browser Browser</translation>
-<translation id="6290827346642914212">Настройте профиль Carbon Browser Browser</translation>
-<translation id="6295779123002464101">Carbon Browser Browser заблокировал файл <ph name="FILE_NAME" /> как потенциально опасный.</translation>
-<translation id="6309712487085796862">Carbon Browser Browser использует камеру.</translation>
-<translation id="632355235628111698">Carbon Browser Browser заблокировал этот файл как опасный.</translation>
+<translation id="6281746429495226318">Настроить профиль Carbon Browser</translation>
+<translation id="6290827346642914212">Настройте профиль Carbon Browser</translation>
+<translation id="6295779123002464101">Carbon Browser заблокировал файл <ph name="FILE_NAME" /> как потенциально опасный.</translation>
+<translation id="6309712487085796862">Carbon Browser использует камеру.</translation>
+<translation id="632355235628111698">Carbon Browser заблокировал этот файл как опасный.</translation>
 <translation id="6327105987658262776">Нет обновлений.</translation>
-<translation id="6333502561965082103">Carbon Browser Browser выполняет другую операцию. Повторите попытку позже.</translation>
-<translation id="6334986366598267305">Теперь с Carbon Browser Browser ещё удобнее работать в аккаунте Google, в том числе на общих компьютерах.</translation>
-<translation id="6373523479360886564">Вы действительно хотите удалить Carbon Browser Browser?</translation>
-<translation id="6384011394608460044"><ph name="BEGIN_BOLD" />Как мы используем эти данные.<ph name="END_BOLD" /> Carbon Browser Browser может предполагать, какие темы вам интересны. Сайты, которые вы посетите в дальнейшем, могут обращаться к Carbon Browser Browser, чтобы получать сведения о ваших интересах и показывать вам подходящую рекламу.</translation>
-<translation id="6403826409255603130">Carbon Browser Browser – браузер, который открывает веб-страницы и приложения за секунды. Он быстр, стабилен в работе и прост в использовании. Встроенная в Carbon Browser Browser защита от мошенничества и вредоносного ПО обеспечивает максимально безопасную работу в Интернете.</translation>
+<translation id="6333502561965082103">Carbon Browser выполняет другую операцию. Повторите попытку позже.</translation>
+<translation id="6334986366598267305">Теперь с Carbon Browser ещё удобнее работать в аккаунте Google, в том числе на общих компьютерах.</translation>
+<translation id="6366160072964553914">Carbon Browser заблокировал скачивание, поскольку этот файл скачивают редко и он может быть опасен</translation>
+<translation id="6373523479360886564">Вы действительно хотите удалить Carbon Browser?</translation>
+<translation id="6375219077595103062">Добавьте ярлык для Менеджера паролей.</translation>
+<translation id="6384011394608460044"><ph name="BEGIN_BOLD" />Как мы используем эти данные.<ph name="END_BOLD" /> Carbon Browser может предполагать, какие темы вам интересны. Сайты, которые вы посетите в дальнейшем, могут обращаться к Carbon Browser, чтобы получать сведения о ваших интересах и показывать вам подходящую рекламу.</translation>
+<translation id="6400112897226594999">Логотип Carbon Browser на экране компьютера.</translation>
+<translation id="6403826409255603130">Carbon Browser – браузер, который открывает веб-страницы и приложения за секунды. Он быстр, стабилен в работе и прост в использовании. Встроенная в Carbon Browser защита от мошенничества и вредоносного ПО обеспечивает максимально безопасную работу в Интернете.</translation>
 <translation id="6442900851116057561">Перезапустите Google Chrome OS</translation>
-<translation id="6455857529632101747">Представляем профили Carbon Browser Browser</translation>
-<translation id="6457450909262716557">{SECONDS,plural, =1{Carbon Browser Browser перезапустится через 1 секунду}one{Carbon Browser Browser перезапустится через # секунду}few{Carbon Browser Browser перезапустится через # секунды}many{Carbon Browser Browser перезапустится через # секунд}other{Carbon Browser Browser перезапустится через # секунды}}</translation>
-<translation id="6475912303565314141">Кроме того, расширение изменило стартовую страницу Carbon Browser Browser.</translation>
-<translation id="6510925080656968729">Удаление Carbon Browser Browser</translation>
-<translation id="6542839706527980775">В каждом профиле отдельно хранятся данные пользователей Carbon Browser Browser, такие как закладки, история просмотров и пароли.</translation>
-<translation id="6570579332384693436">Для проверки правописания Carbon Browser Browser отправляет введенный вами текст в Google.</translation>
-<translation id="6598877126913850652">Открыть настройки уведомлений Carbon Browser Browser</translation>
-<translation id="6613594504749178791">Изменения вступят в силу при следующем входе в Carbon Browser Browser.</translation>
-<translation id="665732753414869868">Для создания 3D-карты места, в котором вы находитесь, браузеру Carbon Browser Browser требуется доступ к камере.</translation>
+<translation id="6443470774889161065">Carbon Browser предварительно загружает ещё больше страниц, которые вы с большой вероятностью посетите, чтобы они открылись быстрее.</translation>
+<translation id="6455857529632101747">Представляем профили Carbon Browser</translation>
+<translation id="6475912303565314141">Кроме того, расширение изменило стартовую страницу Carbon Browser.</translation>
+<translation id="648319183876919572">Улучшенный Безопасный просмотр дополнительно защищает вас от угроз на сайтах и вредоносных скачанных файлов.</translation>
+<translation id="6510925080656968729">Удаление Carbon Browser</translation>
+<translation id="6539122709674868420">Ваша организация задала настройки, согласно которым браузер Carbon Browser закрывается, если он не используется в течение <ph name="TIMEOUT_DURATION" />. Данные о работе браузера, включая историю, сведения для автозаполнения и скачанные файлы, были удалены.</translation>
+<translation id="6542839706527980775">В каждом профиле отдельно хранятся данные пользователей Carbon Browser, такие как закладки, история просмотров и пароли.</translation>
+<translation id="6563921047760808519">Подробнее о том, <ph name="BEGIN_LINK" />как Carbon Browser обеспечивает конфиденциальность ваших данных<ph name="END_LINK" />…</translation>
+<translation id="656935081669708576">Вы можете переключиться на другой профиль Carbon Browser и посмотреть пароли в нем</translation>
+<translation id="6570579332384693436">Для проверки правописания Carbon Browser отправляет введенный вами текст в Google.</translation>
+<translation id="6598877126913850652">Открыть настройки уведомлений Carbon Browser</translation>
+<translation id="6613594504749178791">Изменения вступят в силу при следующем входе в Carbon Browser.</translation>
+<translation id="665732753414869868">Для создания 3D-карты места, в котором вы находитесь, браузеру Carbon Browser требуется доступ к камере.</translation>
+<translation id="6663852025006259149">Скорее всего, сайты сайты будут работать так, как вы ожидаете, но после закрытия всех окон Carbon Browser данные о ваших действиях будут удаляться</translation>
+<translation id="6669284030132180248">Сохранив закладки в аккаунте Google, вы сможете отслеживать в Carbon Browser цены на товары и получать уведомления о скидках.</translation>
 <translation id="6676384891291319759">Доступ в Интернет</translation>
 <translation id="668175097507315160">Не удалось синхронизировать данные из-за ошибки входа в аккаунт.</translation>
-<translation id="6709350901466051922">Браузер Carbon Browser Browser запрашивает доступ к микрофону для этого сайта.</translation>
-<translation id="6717134281241384636">Ваш профиль не может использоваться, поскольку он от более новой версии Carbon Browser Browser.
+<translation id="6709350901466051922">Браузер Carbon Browser запрашивает доступ к микрофону для этого сайта.</translation>
+<translation id="6712881677154121168">Ошибка при скачивании: <ph name="DOWNLOAD_ERROR" />.</translation>
+<translation id="6717134281241384636">Ваш профиль не может использоваться, поскольку он от более новой версии Carbon Browser.
 
-Некоторые возможности могут быть недоступны. Укажите другой каталог профиля либо используйте более новую версию Carbon Browser Browser.</translation>
-<translation id="6734291798041940871">Carbon Browser Browser уже установлен для всех пользователей вашего компьютера</translation>
-<translation id="673636774878526923">Чтобы получить доступ к данным в Carbon Browser Browser на всех своих устройствах, выполните вход и включите синхронизацию.</translation>
-<translation id="6774082503108938489">Родители отключили в Carbon Browser Browser параметр "Разрешения для сайтов, приложений и расширений". Включать это <ph name="EXTENSION_TYPE_PARAMETER" /> запрещено.</translation>
+Некоторые возможности могут быть недоступны. Укажите другой каталог профиля либо используйте более новую версию Carbon Browser.</translation>
+<translation id="6730677189742196061">В режиме экономии памяти Carbon Browser работает ещё быстрее</translation>
+<translation id="6734291798041940871">Carbon Browser уже установлен для всех пользователей вашего компьютера</translation>
+<translation id="673636774878526923">Чтобы получить доступ к данным в Carbon Browser на всех своих устройствах, выполните вход и включите синхронизацию.</translation>
+<translation id="67706546131546258">Carbon Browser рекомендует просканировать этот потенциально вредоносный файл.</translation>
 <translation id="6779406956731413166">Google Chrome OS работает благодаря дополнительному <ph name="BEGIN_LINK_CROS_OSS" />программному обеспечению с открытым исходным кодом<ph name="END_LINK_CROS_OSS" />.</translation>
-<translation id="6847869444787758381">Carbon Browser Browser сообщит вам, если возникнет проблема с безопасностью ваших паролей.</translation>
-<translation id="6852530923436401894">Браузер Carbon Browser Browser заблокировал файл, так как он содержит вредоносное ПО.</translation>
-<translation id="6857782730669500492">Carbon Browser Browser – <ph name="PAGE_TITLE" /></translation>
-<translation id="6863361426438995919">Google Pay (скопирована в Carbon Browser Browser)</translation>
-<translation id="6873893289264747459">Браузер Carbon Browser Browser обнаружил, что расширение "<ph name="EXTENSION_NAME" />" содержит вредоносное ПО.</translation>
-<translation id="6893813176749746474">Carbon Browser Browser был обновлен, однако вы не использовали его в течение последних 30 дней.</translation>
-<translation id="691026815377248078">Чтобы продолжить подключение, предоставьте браузеру Carbon Browser Browser доступ к Bluetooth. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
-<translation id="6929417474050522668">Если пробные функции включены, сайты, которые вы посещаете, смогут проводить оценку эффективности рекламы, запрашивая информацию у Carbon Browser Browser. Оценка эффективности рекламы ограничивает межсайтовое отслеживание, сокращая объем информации, передаваемой между сайтами, до минимума.</translation>
-<translation id="6940431691900807093">Сайты, на которые вы зайдете в дальнейшем, смогут запрашивать у Carbon Browser Browser сведения о ваших интересах, чтобы показывать вам подходящую рекламу. Carbon Browser Browser может предоставлять информацию не более чем о трех интересах.</translation>
-<translation id="6964305034639999644">Открыть ссылку в режиме инкогнито браузера Carbon Browser Browser</translation>
-<translation id="6978145336957848883">Простые пароли легко подобрать. Разрешите Carbon Browser Browser <ph name="BEGIN_LINK" />создавать и хранить надежные пароли для вас<ph name="END_LINK" />.</translation>
+<translation id="6847869444787758381">Carbon Browser сообщит вам, если возникнет проблема с безопасностью ваших паролей.</translation>
+<translation id="6852530923436401894">Браузер Carbon Browser заблокировал файл, так как он содержит вредоносное ПО.</translation>
+<translation id="6857782730669500492">Carbon Browser – <ph name="PAGE_TITLE" /></translation>
+<translation id="6863361426438995919">Google Pay (скопирована в Carbon Browser)</translation>
+<translation id="6873893289264747459">Браузер Carbon Browser обнаружил, что расширение "<ph name="EXTENSION_NAME" />" содержит вредоносное ПО.</translation>
+<translation id="6893813176749746474">Carbon Browser был обновлен, однако вы не использовали его в течение последних 30 дней.</translation>
+<translation id="691026815377248078">Чтобы продолжить подключение, предоставьте браузеру Carbon Browser доступ к Bluetooth. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="6929417474050522668">Если пробные функции включены, сайты, которые вы посещаете, смогут проводить оценку эффективности рекламы, запрашивая информацию у Carbon Browser. Оценка эффективности рекламы ограничивает межсайтовое отслеживание, сокращая объем информации, передаваемой между сайтами, до минимума.</translation>
+<translation id="6940431691900807093">Сайты, на которые вы зайдете в дальнейшем, смогут запрашивать у Carbon Browser сведения о ваших интересах, чтобы показывать вам подходящую рекламу. Carbon Browser может предоставлять информацию не более чем о трех интересах.</translation>
+<translation id="6964305034639999644">Открыть ссылку в режиме инкогнито браузера Carbon Browser</translation>
+<translation id="6978145336957848883">Простые пароли легко подобрать. Разрешите Carbon Browser <ph name="BEGIN_LINK" />создавать и хранить надежные пароли для вас<ph name="END_LINK" />.</translation>
+<translation id="6981396265751285733">В этом режиме Carbon Browser освобождает память, выделенную для неактивных вкладок. Это нужно, чтобы активным вкладкам и другим приложениям было доступно больше ресурсов, а скорость работы Carbon Browser не снижалась. Неактивные вкладки становятся активными, как только вы на них переходите.</translation>
 <translation id="6985329841647292029">Условия использования Google Chrome OS</translation>
-<translation id="6990124437352146030">Для этого сайта Carbon Browser Browser запрашивает доступ к микрофону.</translation>
+<translation id="6990124437352146030">Для этого сайта Carbon Browser запрашивает доступ к микрофону.</translation>
+<translation id="7011190694940573312">Установка не удалась, так как эта версия ОС не поддерживается.</translation>
+<translation id="7024536598735240744">Ошибка при распаковке: <ph name="UNPACK_ERROR" />.</translation>
 <translation id="7025789849649390912">Установка отменена.</translation>
-<translation id="705851970750939768">Обновить Carbon Browser Browser</translation>
-<translation id="7067091210845072982">Если у изображения нет понятного описания, Carbon Browser Browser попытается его найти. Для создания описаний изображения отправляются в Google.</translation>
-<translation id="718435575166326686">Браузер Carbon Browser Browser запрашивает доступ к камере для этого сайта.</translation>
-<translation id="7196312274710523067">Не удалось запустить Carbon Browser Browser. Повторите попытку.</translation>
-<translation id="7197677400338048821">Не удается проверить пароли в Carbon Browser Browser. Повторите попытку через 24 часа.</translation>
-<translation id="7218568399872925918">Ваши данные сохраняются на посещенных сайтах, пока вы не закроете браузер Carbon Browser Browser.</translation>
-<translation id="7223968959479464213">Диспетчер задач – Carbon Browser Browser</translation>
-<translation id="7246575524853130370">Ваши интересы по данным Carbon Browser Browser</translation>
-<translation id="7309928523159922338">Сайты, которые вы посещаете, смогут проводить оценку эффективности рекламы, запрашивая информацию у Carbon Browser Browser. Оценка эффективности рекламы ограничивает межсайтовое отслеживание, сокращая объем информации, передаваемой между сайтами, до минимума.</translation>
-<translation id="731795002583552498">Обновление Carbon Browser Browser…</translation>
-<translation id="7318036098707714271">Файл настроек поврежден или недействителен. Carbon Browser Browser не может восстановить ваши параметры.</translation>
-<translation id="7337881442233988129">Carbon Browser Browser</translation>
+<translation id="705851970750939768">Обновить Carbon Browser</translation>
+<translation id="7067091210845072982">Если у изображения нет понятного описания, Carbon Browser попытается его найти. Для создания описаний изображения отправляются в Google.</translation>
+<translation id="7141270731789036260">Настроить Carbon Browser для тестирования</translation>
+<translation id="7173822816570314652">Ваша организация задала настройки, согласно которым данные Carbon Browser удаляются, если они не используются в течение <ph name="TIMEOUT_DURATION" />. Они могут включать в себя историю, сведения для автозаполнения и скачанные файлы.</translation>
+<translation id="718435575166326686">Браузер Carbon Browser запрашивает доступ к камере для этого сайта.</translation>
+<translation id="7196312274710523067">Не удалось запустить Carbon Browser. Повторите попытку.</translation>
+<translation id="7197677400338048821">Не удается проверить пароли в Carbon Browser. Повторите попытку через 24 часа.</translation>
+<translation id="7213407614656404070">Открывайте ссылки в сообщениях, документах и других приложениях с помощью Carbon Browser</translation>
+<translation id="7223968959479464213">Диспетчер задач – Carbon Browser</translation>
+<translation id="7246575524853130370">Ваши интересы по данным Carbon Browser</translation>
+<translation id="7309928523159922338">Сайты, которые вы посещаете, смогут проводить оценку эффективности рекламы, запрашивая информацию у Carbon Browser. Оценка эффективности рекламы ограничивает межсайтовое отслеживание, сокращая объем информации, передаваемой между сайтами, до минимума.</translation>
+<translation id="731795002583552498">Обновление Carbon Browser…</translation>
+<translation id="7318036098707714271">Файл настроек поврежден или недействителен. Carbon Browser не может восстановить ваши параметры.</translation>
 <translation id="7339898014177206373">Новое окно</translation>
-<translation id="734373864078049451">Все веб-страницы, закладки и другие данные Carbon Browser Browser можно найти здесь.</translation>
-<translation id="7349591376906416160">Ваш системный администратор задал настройки, согласно которым Carbon Browser Browser должен запускать <ph name="ALTERNATIVE_BROWSER_NAME" /> для доступа к сайту <ph name="TARGET_URL_HOSTNAME" />.</translation>
-<translation id="7398989605938454041">Профили Carbon Browser Browser позволяют хранить личные и рабочие данные в браузере раздельно.</translation>
-<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> – Carbon Browser Browser для разработчиков</translation>
-<translation id="7451052299415159299">Для этого сайта Carbon Browser Browser запрашивает доступ к камере.</translation>
-<translation id="7467949745582939695">Перезапустить Carbon Browser Browser?</translation>
-<translation id="7483335560992089831">Невозможно установить ту же версию Carbon Browser Browser, которая уже присутствует в системе. Закройте Carbon Browser Browser и повторите попытку.</translation>
-<translation id="753534427205733210">{0,plural, =1{Carbon Browser Browser перезапустится через 1 минуту}one{Carbon Browser Browser перезапустится через # минуту}few{Carbon Browser Browser перезапустится через # минуты}many{Carbon Browser Browser перезапустится через # минут}other{Carbon Browser Browser перезапустится через # минуты}}</translation>
-<translation id="7561906087460245826">Также удалить данные из Carbon Browser Browser (<ph name="URL" />)</translation>
-<translation id="7582945390259497898">Carbon Browser Browser может предполагать, какие темы вас интересуют. Сайты, которые вы посетите в дальнейшем, могут обращаться к Carbon Browser Browser, чтобы получать сведения о ваших интересах и показывать вам подходящую рекламу.</translation>
+<translation id="734373864078049451">Все веб-страницы, закладки и другие данные Carbon Browser можно найти здесь.</translation>
+<translation id="7349591376906416160">Ваш системный администратор задал настройки, согласно которым Carbon Browser должен запускать <ph name="ALTERNATIVE_BROWSER_NAME" /> для доступа к сайту <ph name="TARGET_URL_HOSTNAME" />.</translation>
+<translation id="7398989605938454041">Профили Carbon Browser позволяют хранить личные и рабочие данные в браузере раздельно.</translation>
+<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> – Carbon Browser для разработчиков</translation>
+<translation id="7451052299415159299">Для этого сайта Carbon Browser запрашивает доступ к камере.</translation>
+<translation id="7461356015007898716">На вашем компьютере используется Windows 7. Чтобы получать обновления Carbon Browser, установите на устройство Windows 10 или более поздней версии.</translation>
+<translation id="7467949745582939695">Перезапустить Carbon Browser?</translation>
+<translation id="7483335560992089831">Невозможно установить ту же версию Carbon Browser, которая уже присутствует в системе. Закройте Carbon Browser и повторите попытку.</translation>
+<translation id="753534427205733210">{0,plural, =1{Carbon Browser перезапустится через 1 минуту}one{Carbon Browser перезапустится через # минуту}few{Carbon Browser перезапустится через # минуты}many{Carbon Browser перезапустится через # минут}other{Carbon Browser перезапустится через # минуты}}</translation>
+<translation id="7582945390259497898">Carbon Browser может предполагать, какие темы вас интересуют. Сайты, которые вы посетите в дальнейшем, могут обращаться к Carbon Browser, чтобы получать сведения о ваших интересах и показывать вам подходящую рекламу.</translation>
 <translation id="7583399374488819119">Установщик <ph name="COMPANY_NAME" /></translation>
-<translation id="7597596667193879455">В вашем аккаунте включен улучшенный Безопасный просмотр. Воспользуйтесь его преимуществами в Carbon Browser Browser.</translation>
-<translation id="761356813943268536">Carbon Browser Browser использует камеру и микрофон.</translation>
-<translation id="7617377681829253106">Carbon Browser Browser становится все лучше</translation>
+<translation id="761356813943268536">Carbon Browser использует камеру и микрофон.</translation>
+<translation id="7617377681829253106">Carbon Browser становится все лучше</translation>
 <translation id="7649070708921625228">Справка</translation>
-<translation id="7682213815243802460">Вы можете узнать больше об этих функциях в настройках Carbon Browser Browser.</translation>
-<translation id="7682601070171973634">Carbon Browser Browser представляет новый взгляд на просмотр веб-страниц: сайты функционируют в обычном режиме, собирая меньше данных о вас.</translation>
-<translation id="7686590090926151193">Carbon Browser Browser не является браузером по умолчанию.</translation>
-<translation id="7689606757190482937">Синхронизируйте данные Carbon Browser Browser на всех устройствах</translation>
-<translation id="7745317241717453663">Данные о работе в браузере будут удалены с устройства. Чтобы восстановить их позже, войдите в Carbon Browser Browser как <ph name="USER_EMAIL" />.</translation>
+<translation id="7682213815243802460">Вы можете узнать больше об этих функциях в настройках Carbon Browser.</translation>
+<translation id="7682601070171973634">Carbon Browser представляет новый взгляд на просмотр веб-страниц: сайты функционируют в обычном режиме, собирая меньше данных о вас.</translation>
+<translation id="7686590090926151193">Carbon Browser не является браузером по умолчанию.</translation>
+<translation id="7689606757190482937">Синхронизируйте данные Carbon Browser на всех устройствах</translation>
+<translation id="7699779824407626136">обновление Carbon Browser</translation>
+<translation id="7745317241717453663">Данные о работе в браузере будут удалены с устройства. Чтобы восстановить их позже, войдите в Carbon Browser как <ph name="USER_EMAIL" />.</translation>
 <translation id="7747138024166251722">Программе установки не удалось создать временный каталог. Возможно, у вас нет прав на установку приложений или недостаточно места на диске.</translation>
-<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Canary</translation>
-<translation id="7828947555739565424">На данном устройстве уже есть профиль Carbon Browser Browser для этого аккаунта.</translation>
+<translation id="7786760609782648049">Carbon Browser может работать ещё быстрее</translation>
+<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> – Carbon Browser Canary</translation>
+<translation id="7828947555739565424">На данном устройстве уже есть профиль Carbon Browser для этого аккаунта.</translation>
 <translation id="7845233973568007926">Спасибо, что установили <ph name="BUNDLE_NAME" />. Чтобы изменения вступили в силу, перезапустите компьютер.</translation>
-<translation id="7867198900892795913">Не удалось установить последнюю версию Carbon Browser Browser, в которой добавлены новые функции и обновления системы безопасности.</translation>
+<translation id="7859018312476869945">Когда вы вводите текст в адресную строку или окно поиска, Carbon Browser отправляет запрос в поисковую систему по умолчанию, чтобы предложить вам более подходящие подсказки. В режиме инкогнито эта функция не работает.</translation>
+<translation id="7867198900892795913">Не удалось установить последнюю версию Carbon Browser, в которой добавлены новые функции и обновления системы безопасности.</translation>
 <translation id="7872446069773932638">Скачивание… Осталось: <ph name="SECONDS" /> сек.</translation>
-<translation id="7877292582355102282"><ph name="BEGIN_BOLD" />Как вы можете управлять своими данными.<ph name="END_BOLD" /> Для защиты вашей конфиденциальности интересы автоматически удаляются через 4 недели с момента создания. Если после этого вы продолжите использовать браузер, то удаленные интересы могут вновь появиться в списке. Чтобы Carbon Browser Browser не учитывал конкретные интересы, вы можете их удалить.</translation>
-<translation id="7937630085815544518">Ранее вы входили в Carbon Browser Browser как <ph name="USER_EMAIL_ADDRESS" />. Войдите снова, используя тот же аккаунт.</translation>
-<translation id="7975919845073681630">Это дополнительная установка Carbon Browser Browser. Его нельзя сделать браузером по умолчанию.</translation>
-<translation id="7982481011030453202">Если нужного параметра нет на этой странице, откройте <ph name="LINK_BEGIN" />
-      настройки Google Chrome OS<ph name="LINK_END" />.</translation>
+<translation id="7877292582355102282"><ph name="BEGIN_BOLD" />Как вы можете управлять своими данными.<ph name="END_BOLD" /> Для защиты вашей конфиденциальности интересы автоматически удаляются через 4 недели с момента создания. Если после этого вы продолжите использовать браузер, то удаленные интересы могут вновь появиться в списке. Чтобы Carbon Browser не учитывал конкретные интересы, вы можете их удалить.</translation>
+<translation id="7937630085815544518">Ранее вы входили в Carbon Browser как <ph name="USER_EMAIL_ADDRESS" />. Войдите снова, используя тот же аккаунт.</translation>
+<translation id="7975919845073681630">Это дополнительная установка Carbon Browser. Его нельзя сделать браузером по умолчанию.</translation>
 <translation id="7997934263947464652">Расширения, приложения и темы из неизвестных источников могут навредить устройству. Рекомендуем скачивать подобное ПО только из <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />.</translation>
-<translation id="8013436988911883588">Когда вы предоставите доступ Carbon Browser Browser, веб-сайты также смогут запрашивать у вас доступ.</translation>
+<translation id="8013436988911883588">Когда вы предоставите доступ Carbon Browser, веб-сайты также смогут запрашивать у вас доступ.</translation>
 <translation id="80471789339884597">Спасибо, что установили <ph name="BUNDLE_NAME" />. Чтобы изменения вступили в силу, перезапустите все открытые браузеры.</translation>
-<translation id="8105840573057009683">Браузер Carbon Browser Browser запрашивает доступ к данным о местоположении для этого сайта.</translation>
+<translation id="8086881907087796310">Установка не удалась, так как аппаратное обеспечение компьютера не соответствует минимальным требованиям.</translation>
+<translation id="8096472344908884505"><ph name="PAGE_TITLE" /> – Carbon Browser для тестирования</translation>
+<translation id="8105840573057009683">Браузер Carbon Browser запрашивает доступ к данным о местоположении для этого сайта.</translation>
 <translation id="8133124826068723441">Не удалось синхронизировать данные, так как эта функция недоступна для вашего домена.</translation>
 <translation id="813913629614996137">Инициализация...</translation>
-<translation id="81770708095080097">Carbon Browser Browser заблокировал этот файл как опасный.</translation>
-<translation id="8213374284266571500">Carbon Browser Browser заблокировал файл с опасным расширением.</translation>
-<translation id="8248265253516264921">Если у изображения нет понятного описания, Carbon Browser Browser попытается его найти. Для создания описаний изображения отправляются в Google. Эту функцию можно отключить в настройках в любое время.</translation>
-<translation id="8266560134891435528">Не удается запустить проверку паролей в Carbon Browser Browser, поскольку вы не вошли в аккаунт.</translation>
-<translation id="8276522524898344151">Carbon Browser Browser пытается скопировать пароли</translation>
-<translation id="8290862415967981663">Carbon Browser Browser заблокировал этот файл как потенциально опасный.</translation>
-<translation id="8330519371938183845">Войдите, чтобы синхронизировать данные Carbon Browser Browser на всех устройствах</translation>
-<translation id="8340674089072921962">Адрес <ph name="USER_EMAIL_ADDRESS" /> уже использовался в Carbon Browser Browser</translation>
-<translation id="8357820681460164151">Чтобы получить доступ к данным в браузере Carbon Browser Browser на всех своих устройствах, войдите в аккаунт и включите синхронизацию.</translation>
-<translation id="8417404458978023919">{0,plural, =1{Перезапустите Carbon Browser Browser в течение дня}one{Перезапустите Carbon Browser Browser в течение # дня}few{Перезапустите Carbon Browser Browser в течение # дней}many{Перезапустите Carbon Browser Browser в течение # дней}other{Перезапустите Carbon Browser Browser в течение # дня}}</translation>
-<translation id="8453117565092476964">Установочный архив поврежден. Скачайте Carbon Browser Browser ещё раз.</translation>
+<translation id="81770708095080097">Carbon Browser заблокировал этот файл как опасный.</translation>
+<translation id="8213374284266571500">Carbon Browser заблокировал файл с опасным расширением.</translation>
+<translation id="8248265253516264921">Если у изображения нет понятного описания, Carbon Browser попытается его найти. Для создания описаний изображения отправляются в Google. Эту функцию можно отключить в настройках в любое время.</translation>
+<translation id="8266560134891435528">Не удается запустить проверку паролей в Carbon Browser, поскольку вы не вошли в аккаунт.</translation>
+<translation id="8286943863733751221"><ph name="BEGIN_LINK" />Carbon Browser предупреждает<ph name="END_LINK" /> о небезопасных сайтах и файлах в интернете</translation>
+<translation id="8290862415967981663">Carbon Browser заблокировал этот файл как потенциально опасный.</translation>
+<translation id="8318772038038596122">Ваша организация задала настройки, согласно которым браузер Carbon Browser закрывается, если он не используется в течение <ph name="TIMEOUT_DURATION" />.</translation>
+<translation id="8325404639443959713">Больше возможностей в Carbon Browser</translation>
+<translation id="8330519371938183845">Войдите, чтобы синхронизировать данные Carbon Browser на всех устройствах</translation>
+<translation id="8340674089072921962">Адрес <ph name="USER_EMAIL_ADDRESS" /> уже использовался в Carbon Browser</translation>
+<translation id="8357820681460164151">Чтобы получить доступ к данным в браузере Carbon Browser на всех своих устройствах, войдите в аккаунт и включите синхронизацию.</translation>
+<translation id="8360718212975266891">На вашем компьютере используется Windows 8. Чтобы получать обновления Carbon Browser, установите на устройство Windows 10 или более поздней версии.</translation>
+<translation id="8370517070665726704">© Carbon X Labs, <ph name="YEAR" />. Все права защищены.</translation>
+<translation id="8401454788024434101">Разработчик отменил публикацию этого расширения, поэтому оно может быть опасным. Удалите его из Carbon Browser, чтобы оно больше не могло читать и менять ваши данные с сайтов (включая личную информацию), которые вы посещаете.</translation>
+<translation id="8417404458978023919">{0,plural, =1{Перезапустите Carbon Browser в течение дня}one{Перезапустите Carbon Browser в течение # дня}few{Перезапустите Carbon Browser в течение # дней}many{Перезапустите Carbon Browser в течение # дней}other{Перезапустите Carbon Browser в течение # дня}}</translation>
+<translation id="8453117565092476964">Установочный архив поврежден. Скачайте Carbon Browser ещё раз.</translation>
+<translation id="8458614432758743027">Для Carbon Browser требуется ОС Windows 10 или более поздней версии.</translation>
 <translation id="8463672209299734063">Автоматически отправлять данные об использовании и диагностике в Google, чтобы помогать нам повышать производительность и улучшать функции Google Chrome OS (необязательно)</translation>
-<translation id="8493179195440786826">Версия Carbon Browser Browser устарела</translation>
+<translation id="8493179195440786826">Версия Carbon Browser устарела</translation>
+<translation id="8522801943730206384">Чтобы браузер Carbon Browser мог проверять пароли, сохраните их</translation>
 <translation id="8550334526674375523">Этот рабочий профиль никак не связан с вашим личным профилем.</translation>
-<translation id="8558383651099478961">Родители отключили в Carbon Browser Browser параметр "Разрешения для сайтов, приложений и расширений". Добавлять это <ph name="EXTENSION_TYPE_PARAMETER" /> запрещено.</translation>
-<translation id="8561285221328166383">На вашем компьютере используется macOS 10.12. Чтобы получать обновления Carbon Browser Browser, установите на устройство macOS 10.13 или более поздней версии.</translation>
-<translation id="8568283329061645092">Carbon Browser Browser проверит ваши пароли, когда вы войдете в аккаунт Google.</translation>
-<translation id="8586442755830160949">© Carbon Browser Browser X Labs, <ph name="YEAR" /> . Все права защищены.</translation>
-<translation id="8608079656141766906"><ph name="BEGIN_BOLD" />Как мы используем эти данные.<ph name="END_BOLD" /> Сайты могут хранить в Carbon Browser Browser информацию о ваших интересах. Например, вы перешли на сайт, чтобы купить беговые кроссовки. Он определит, что вам интересны марафоны. Когда вы перейдете на другой сайт, чтобы зарегистрироваться на забег, то увидите рекламу беговых кроссовок.</translation>
-<translation id="8619360774459241877">Запуск Carbon Browser Browser...</translation>
-<translation id="8621669128220841554">В процессе установки произошла неизвестная ошибка. Скачайте Carbon Browser Browser ещё раз.</translation>
-<translation id="8697124171261953979">Кроме того, расширение изменило стартовую страницу Carbon Browser Browser и поисковую систему, используемую по умолчанию при вводе запроса в омнибокс.</translation>
-<translation id="8704119203788522458">Ваш персональный Carbon Browser Browser</translation>
-<translation id="8713679423359107094">Когда вы закроете все окна браузера Carbon Browser Browser, файлы cookie и данные сайтов будут автоматически удалены.</translation>
-<translation id="8796443464227412154">Когда вы закроете Carbon Browser Browser, вы <ph name="BEGIN_BOLD" />выйдете с большинства сайтов<ph name="END_BOLD" />. Если синхронизация отключена, вы также <ph name="BEGIN_BOLD" />выйдете из сервисов Google и браузера Carbon Browser Browser<ph name="END_BOLD" />.</translation>
-<translation id="8796602469536043152">Для этого сайта Carbon Browser Browser запрашивает доступ к камере и микрофону.</translation>
+<translation id="8555465886620020932">Ошибка службы: <ph name="SERVICE_ERROR" />.</translation>
+<translation id="8568283329061645092">Carbon Browser проверит ваши пароли, когда вы войдете в аккаунт Google.</translation>
+<translation id="8586442755830160949">© Carbon X Labs, <ph name="YEAR" /> . Все права защищены.</translation>
+<translation id="8608079656141766906"><ph name="BEGIN_BOLD" />Как мы используем эти данные.<ph name="END_BOLD" /> Сайты могут хранить в Carbon Browser информацию о ваших интересах. Например, вы перешли на сайт, чтобы купить беговые кроссовки. Он определит, что вам интересны марафоны. Когда вы перейдете на другой сайт, чтобы зарегистрироваться на забег, то увидите рекламу беговых кроссовок.</translation>
+<translation id="8619360774459241877">Запуск Carbon Browser...</translation>
+<translation id="8621669128220841554">В процессе установки произошла неизвестная ошибка. Скачайте Carbon Browser ещё раз.</translation>
+<translation id="8648201657708811153">Carbon Browser для тестирования нельзя сделать браузером по умолчанию.</translation>
+<translation id="8697124171261953979">Кроме того, расширение изменило стартовую страницу Carbon Browser и поисковую систему, используемую по умолчанию при вводе запроса в омнибокс.</translation>
+<translation id="8704119203788522458">Ваш персональный Carbon Browser</translation>
+<translation id="8719993436687031146">Войти в Carbon Browser?</translation>
+<translation id="878572486461146056">Произошла ошибка. Администратор вашей сети применил групповую политику, которая не позволяет выполнить установку. <ph name="INSTALL_ERROR" /></translation>
+<translation id="8796602469536043152">Для этого сайта Carbon Browser запрашивает доступ к камере и микрофону.</translation>
+<translation id="8826492472752484139">Нажмите "Менеджер паролей"</translation>
 <translation id="8833697763442816810">Google Chrome OS</translation>
-<translation id="8846118132221683440"><ph name="BEGIN_BOLD" />Какие данные используются.<ph name="END_BOLD" /> История вашего браузера – это список сайтов, которые вы открывали в Carbon Browser Browser на этом устройстве.</translation>
+<translation id="8846118132221683440"><ph name="BEGIN_BOLD" />Какие данные используются.<ph name="END_BOLD" /> История вашего браузера – это список сайтов, которые вы открывали в Carbon Browser на этом устройстве.</translation>
 <translation id="8862326446509486874">У вас нет прав, необходимых для установки на системном уровне. Запустите программу установки еще раз в качестве администратора.</translation>
-<translation id="8880203542552872219">Если да, то вам нужно сменить пароль, сохраненный в Carbon Browser Browser, на новый.</translation>
-<translation id="8897323336392112261">Кроме того, расширение изменило стартовую страницу Carbon Browser Browser и страницу, отображаемую при нажатии кнопки "Главная страница".</translation>
+<translation id="8880203542552872219">Если да, то вам нужно сменить пароль, сохраненный в Carbon Browser, на новый.</translation>
 <translation id="8907580949721785412">Чтобы просмотреть пароли, введите пароль своего аккаунта Windows.</translation>
-<translation id="8931379085695076764">Carbon Browser Browser может предполагать ваши интересы, анализируя историю браузера за последние несколько недель. Эта информация хранится только на вашем устройстве.</translation>
-<translation id="8941642502866065432">Не удалось обновить Carbon Browser Browser</translation>
-<translation id="897581876605952338">Логотип Carbon Browser Browser Enterprise</translation>
+<translation id="8931379085695076764">Carbon Browser может предполагать ваши интересы, анализируя историю браузера за последние несколько недель. Эта информация хранится только на вашем устройстве.</translation>
+<translation id="8941642502866065432">Не удалось обновить Carbon Browser</translation>
+<translation id="897581876605952338">Логотип Carbon Browser Enterprise</translation>
 <translation id="8986207147630327271">После добавления рабочего профиля администратор не сможет управлять другими профилями.</translation>
 <translation id="9019929317751753759">Чтобы обеспечить безопасность ваших данных, некоторые расширения были отключены, так как <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> не содержит сведений о них (то есть они могли быть установлены без вашего ведома).</translation>
-<translation id="9022552996538154597">Войти в Carbon Browser Browser</translation>
-<translation id="9089354809943900324">Версия Carbon Browser Browser устарела</translation>
-<translation id="9093206154853821181">{0,plural, =1{Carbon Browser Browser перезапустится через 1 час}one{Carbon Browser Browser перезапустится через # час}few{Carbon Browser Browser перезапустится через # часа}many{Carbon Browser Browser перезапустится через # часов}other{Carbon Browser Browser перезапустится через # часа}}</translation>
-<translation id="91086099826398415">Открыть ссылку в новой вкладке браузера Carbon Browser Browser</translation>
+<translation id="9022552996538154597">Войти в Carbon Browser</translation>
+<translation id="907832235989677238">Войдите в Carbon Browser. Если этот аккаунт вам больше не понадобится, можно <ph name="GUEST_LINK_BEGIN" />воспользоваться устройством в гостевом режиме<ph name="GUEST_LINK_END" />.</translation>
+<translation id="9078733879136747090">Carbon Browser был закрыт автоматически</translation>
+<translation id="9089354809943900324">Версия Carbon Browser устарела</translation>
+<translation id="9093206154853821181">{0,plural, =1{Carbon Browser перезапустится через 1 час}one{Carbon Browser перезапустится через # час}few{Carbon Browser перезапустится через # часа}many{Carbon Browser перезапустится через # часов}other{Carbon Browser перезапустится через # часа}}</translation>
+<translation id="9106612006984859720">На вашем компьютере используется Windows 8.1. Чтобы получать обновления Carbon Browser, установите на устройство Windows 10 или более поздней версии.</translation>
+<translation id="91086099826398415">Открыть ссылку в новой вкладке браузера Carbon Browser</translation>
 <translation id="911206726377975832">Также удалить данные о работе в браузере?</translation>
-<translation id="9144490074902256427">Во время тестирования новых функций вы сможете просматривать и удалять потенциально интересные вам темы, используемые сайтами для показа рекламы. Carbon Browser Browser определяет такие темы на основе вашей недавней истории браузера.</translation>
-<translation id="9158494823179993217">Ваш системный администратор задал настройки, согласно которым Carbon Browser Browser должен запускать альтернативный браузер для доступа к сайту <ph name="TARGET_URL_HOSTNAME" />.</translation>
-<translation id="9185526690718004400">Перезапустить для обновления &amp;Carbon Browser Browser</translation>
-<translation id="9190841055450128916">Carbon Browser Browser (mDNS-In)</translation>
-<translation id="93478295209880648">В работе Carbon Browser Browser могут возникать сбои, так как браузер больше не поддерживает Windows XP и Windows Vista.</translation>
-<translation id="942598560705308788">Сертификаты, которыми управляет Carbon Browser Browser</translation>
-<translation id="945990405696787151">На вашем компьютере используется OS X 10.11. Чтобы получать обновления Carbon Browser Browser, установите на устройство macOS 10.13 или более поздней версии.</translation>
-<translation id="965162752251293939">Кто использует Carbon Browser Browser?</translation>
-<translation id="967427899662692980">Обеспечьте максимальную защиту в Carbon Browser Browser</translation>
-<translation id="985602178874221306">Авторы Carbon Browser Browser</translation>
+<translation id="9144490074902256427">Во время тестирования новых функций вы сможете просматривать и удалять потенциально интересные вам темы, используемые сайтами для показа рекламы. Carbon Browser определяет такие темы на основе вашей недавней истории браузера.</translation>
+<translation id="9158494823179993217">Ваш системный администратор задал настройки, согласно которым Carbon Browser должен запускать альтернативный браузер для доступа к сайту <ph name="TARGET_URL_HOSTNAME" />.</translation>
+<translation id="9185526690718004400">Перезапустить для обновления &amp;Carbon Browser</translation>
+<translation id="9190841055450128916">Carbon Browser (mDNS-In)</translation>
+<translation id="924957577793602335">Настройте Carbon Browser для себя</translation>
+<translation id="93478295209880648">В работе Carbon Browser могут возникать сбои, так как браузер больше не поддерживает Windows XP и Windows Vista.</translation>
+<translation id="942598560705308788">Сертификаты, которыми управляет Carbon Browser</translation>
+<translation id="965162752251293939">Кто использует Carbon Browser?</translation>
+<translation id="967427899662692980">Обеспечьте максимальную защиту в Carbon Browser</translation>
+<translation id="983803489796659991">Выполнить установку не удалось, так как на сервере нет никаких хешированных данных для приложения.</translation>
+<translation id="985602178874221306">Авторы Carbon Browser</translation>
 </translationbundle>

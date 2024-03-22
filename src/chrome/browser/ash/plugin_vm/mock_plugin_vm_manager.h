@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_PLUGIN_VM_MOCK_PLUGIN_VM_MANAGER_H_
 #define CHROME_BROWSER_ASH_PLUGIN_VM_MOCK_PLUGIN_VM_MANAGER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -15,7 +15,7 @@ namespace test {
 class MockPluginVmManager : public PluginVmManager {
  public:
   MockPluginVmManager();
-  ~MockPluginVmManager();
+  ~MockPluginVmManager() override;
   MockPluginVmManager(const MockPluginVmManager&) = delete;
   MockPluginVmManager& operator=(const MockPluginVmManager&) = delete;
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 namespace base {
 class SequencedTaskRunner;
@@ -21,11 +21,11 @@ namespace scheduler {
 class WebThreadScheduler;
 class WebMockThreadScheduler;
 
-// Creates simple scheduling infrastructure for unit tests.
-// It allows creation of FrameSchedulers and PageSchedulers, but doesn't provide
-// any task running infrastructure, relying on the presence of
-// ThreadTaskRunnerHandle::Get() instead, meaning that the users also have to
-// create base::debug::TaskEnvironment.
+// Creates simple scheduling infrastructure for unit tests.  It allows creation
+// of FrameSchedulers and PageSchedulers, but doesn't provide any task running
+// infrastructure, relying on the presence of
+// SingleThreadTaskRunner::GetCurrentDefault() instead, meaning that the users
+// also have to create base::debug::TaskEnvironment.
 std::unique_ptr<WebThreadScheduler> CreateWebMainThreadSchedulerForTests();
 
 // Simple scheduling infrastructure for unit tests, with the addition of mocked
@@ -33,17 +33,14 @@ std::unique_ptr<WebThreadScheduler> CreateWebMainThreadSchedulerForTests();
 std::unique_ptr<WebMockThreadScheduler>
 CreateMockWebMainThreadSchedulerForTests();
 
-void RunIdleTasksForTesting(WebThreadScheduler* scheduler,
-                            base::OnceClosure callback);
-
 // Returns a SequencedTaskRunner. This implementation is same as
-// SequencedTaskRunnerHandle::Get(), but this is intended to be used for
-// testing. See crbug.com/794123.
+// base::SequencedTaskRunner::GetCurrentDefault(), but this is intended to be
+// used for testing. See crbug.com/794123.
 scoped_refptr<base::SequencedTaskRunner> GetSequencedTaskRunnerForTesting();
 
 // Returns the SingleThreadTaskRunner for the current thread for testing. This
-// implementation is same as ThreadTaskRunnerHandle::Get(), but this is intended
-// to be used for testing. See crbug.com/794123.
+// implementation is same as base::SingleThreadTaskRunner::GetCurrentDefault(),
+// but this is intended to be used for testing. See crbug.com/794123.
 scoped_refptr<base::SingleThreadTaskRunner>
 GetSingleThreadTaskRunnerForTesting();
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,8 +102,8 @@ class SelectionTemplate final {
   bool operator==(const SelectionTemplate&) const;
   bool operator!=(const SelectionTemplate&) const;
 
-  PositionTemplate<Strategy> Base() const;
-  PositionTemplate<Strategy> Extent() const;
+  const PositionTemplate<Strategy>& Base() const;
+  const PositionTemplate<Strategy>& Extent() const;
   TextAffinity Affinity() const { return affinity_; }
   bool IsBaseFirst() const;
   bool IsCaret() const;
@@ -115,8 +115,8 @@ class SelectionTemplate final {
   bool AssertValid() const;
   bool AssertValidFor(const Document&) const;
 
-  PositionTemplate<Strategy> ComputeEndPosition() const;
-  PositionTemplate<Strategy> ComputeStartPosition() const;
+  const PositionTemplate<Strategy>& ComputeEndPosition() const;
+  const PositionTemplate<Strategy>& ComputeStartPosition() const;
   EphemeralRangeTemplate<Strategy> ComputeRange() const;
 
   void Trace(Visitor*) const;

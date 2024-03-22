@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,9 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
           case MediaCastMode::DESKTOP_MIRROR:
             return DialogActivationLocationAndCastMode::
                 kPinnedIconAndDesktopMirror;
+          case MediaCastMode::REMOTE_PLAYBACK:
+            return DialogActivationLocationAndCastMode::
+                kPinnedIconAndRemotePlayback;
         }
       } else {
         switch (cast_mode) {
@@ -46,6 +49,9 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
           case MediaCastMode::DESKTOP_MIRROR:
             return DialogActivationLocationAndCastMode::
                 kEphemeralIconAndDesktopMirror;
+          case MediaCastMode::REMOTE_PLAYBACK:
+            return DialogActivationLocationAndCastMode::
+                kEphemeralIconAndRemotePlayback;
         }
       }
       break;
@@ -59,6 +65,9 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
         case MediaCastMode::DESKTOP_MIRROR:
           return DialogActivationLocationAndCastMode::
               kContextMenuAndDesktopMirror;
+        case MediaCastMode::REMOTE_PLAYBACK:
+          return DialogActivationLocationAndCastMode::
+              kContextMenuAndRemotePlayback;
       }
       break;
     case MediaRouterDialogActivationLocation::PAGE:
@@ -69,6 +78,8 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
           return DialogActivationLocationAndCastMode::kPageAndTabMirror;
         case MediaCastMode::DESKTOP_MIRROR:
           return DialogActivationLocationAndCastMode::kPageAndDesktopMirror;
+        case MediaCastMode::REMOTE_PLAYBACK:
+          return DialogActivationLocationAndCastMode::kPageAndRemotePlayback;
       }
       break;
     case MediaRouterDialogActivationLocation::APP_MENU:
@@ -79,6 +90,8 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
           return DialogActivationLocationAndCastMode::kAppMenuAndTabMirror;
         case MediaCastMode::DESKTOP_MIRROR:
           return DialogActivationLocationAndCastMode::kAppMenuAndDesktopMirror;
+        case MediaCastMode::REMOTE_PLAYBACK:
+          return DialogActivationLocationAndCastMode::kAppMenuAndRemotePlayback;
       }
       break;
     case MediaRouterDialogActivationLocation::SHARING_HUB:
@@ -91,6 +104,9 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
         case MediaCastMode::DESKTOP_MIRROR:
           return DialogActivationLocationAndCastMode::
               kSharingHubAndDesktopMirror;
+        case MediaCastMode::REMOTE_PLAYBACK:
+          return DialogActivationLocationAndCastMode::
+              kSharingHubAndRemotePlayback;
       }
       break;
     // |OVERFLOW_MENU| refers to extension icons hidden in the app menu. That
@@ -100,8 +116,7 @@ DialogActivationLocationAndCastMode GetActivationLocationAndCastMode(
     case MediaRouterDialogActivationLocation::TOTAL_COUNT:
       break;
   }
-  NOTREACHED();
-  return DialogActivationLocationAndCastMode::kMaxValue;
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace
@@ -127,82 +142,21 @@ void CastDialogMetrics::OnSinksLoaded(const base::Time& sinks_load_time) {
   sinks_load_time_ = sinks_load_time;
 }
 
-void CastDialogMetrics::OnPaint(const base::Time& paint_time) {
-  if (!paint_time_.is_null())
-    return;
-  MediaRouterMetrics::RecordMediaRouterDialogPaint(paint_time -
-                                                   initialization_time_);
-  paint_time_ = paint_time;
-}
-
-void CastDialogMetrics::OnStartCasting(const base::Time& start_time,
-                                       int selected_sink_index,
-                                       MediaCastMode cast_mode,
-                                       SinkIconType icon_type,
-                                       bool has_cast_and_dial) {
-  DCHECK(!sinks_load_time_.is_null());
-  MediaRouterMetrics::RecordStartRouteDeviceIndex(selected_sink_index);
-  if (!first_action_recorded_) {
-    MediaRouterMetrics::RecordStartLocalSessionLatency(start_time -
-                                                       sinks_load_time_);
-  }
-  MaybeRecordFirstAction(MediaRouterUserAction::START_LOCAL);
+void CastDialogMetrics::OnStartCasting(MediaCastMode cast_mode,
+                                       SinkIconType icon_type) {
   MaybeRecordActivationLocationAndCastMode(cast_mode);
   MediaRouterMetrics::RecordMediaSinkTypeForCastDialog(icon_type);
-  if (has_cast_and_dial) {
-    MediaRouterMetrics::RecordMediaSinkTypeWhenCastAndDialPresent(
-        icon_type, UiType::kCastDialog);
-  }
-}
-
-void CastDialogMetrics::OnStopCasting(bool is_local_route) {
-  if (is_local_route) {
-    MediaRouterMetrics::RecordStopLocalRoute();
-    MaybeRecordFirstAction(MediaRouterUserAction::STOP_LOCAL);
-  } else {
-    MediaRouterMetrics::RecordStopRemoteRoute();
-    MaybeRecordFirstAction(MediaRouterUserAction::STOP_REMOTE);
-  }
-}
-
-void CastDialogMetrics::OnCastModeSelected() {
-  MaybeRecordFirstAction(MediaRouterUserAction::CHANGE_MODE);
-}
-
-void CastDialogMetrics::OnCloseDialog(const base::Time& close_time) {
-  if (!first_action_recorded_ && !paint_time_.is_null())
-    MediaRouterMetrics::RecordCloseDialogLatency(close_time - paint_time_);
-  MaybeRecordFirstAction(MediaRouterUserAction::CLOSE);
 }
 
 void CastDialogMetrics::OnRecordSinkCount(
     const std::vector<CastDialogSinkButton*>& sink_buttons) {
   media_router::MediaRouterMetrics::RecordDeviceCount(sink_buttons.size());
-
-  std::map<MediaRouteProviderId, std::map<bool, int>> counts = {
-      {MediaRouteProviderId::CAST, {{true, 0}, {false, 0}}},
-      {MediaRouteProviderId::DIAL, {{true, 0}, {false, 0}}},
-      {MediaRouteProviderId::WIRED_DISPLAY, {{true, 0}, {false, 0}}}};
-  for (const CastDialogSinkButton* sink_button : sink_buttons) {
-    if (sink_button->sink().provider != MediaRouteProviderId::TEST) {
-      counts.at(sink_button->sink().provider).at(sink_button->GetEnabled())++;
-    }
-  }
-  for (auto provider : {MediaRouteProviderId::CAST, MediaRouteProviderId::DIAL,
-                        MediaRouteProviderId::WIRED_DISPLAY}) {
-    for (bool is_available : {true, false}) {
-      int count = counts.at(provider).at(is_available);
-      media_router::MediaRouterMetrics::RecordCastDialogDeviceCount(
-          activation_location_, provider, is_available, count);
-    }
-  }
 }
 
-void CastDialogMetrics::MaybeRecordFirstAction(MediaRouterUserAction action) {
-  if (first_action_recorded_)
-    return;
-  MediaRouterMetrics::RecordMediaRouterInitialUserAction(action);
-  first_action_recorded_ = true;
+void CastDialogMetrics::OnRecordSinkCount(
+    const std::vector<raw_ptr<CastDialogSinkView, DanglingUntriaged>>&
+        sink_views) {
+  media_router::MediaRouterMetrics::RecordDeviceCount(sink_views.size());
 }
 
 void CastDialogMetrics::MaybeRecordActivationLocationAndCastMode(

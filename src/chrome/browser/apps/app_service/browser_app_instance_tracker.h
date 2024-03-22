@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -182,7 +182,7 @@ class BrowserAppInstanceTracker : public TabStripModelObserver,
   bool IsBrowserTracked(Browser* browser) const;
   bool IsActivationClientTracked(wm::ActivationClient* client) const;
 
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 
   std::map<content::WebContents*, std::unique_ptr<WebContentsObserver>>
       webcontents_to_observer_map_;
@@ -212,6 +212,10 @@ class BrowserAppInstanceTracker : public TabStripModelObserver,
 
   // Chrome browser windows.
   BrowserAppInstanceMap<Browser*, BrowserWindowInstance> window_instances_;
+
+  base::ScopedObservation<apps::AppRegistryCache,
+                          apps::AppRegistryCache::Observer>
+      app_registry_cache_observer_{this};
 
   base::ObserverList<BrowserAppInstanceObserver, true>::Unchecked observers_;
 };

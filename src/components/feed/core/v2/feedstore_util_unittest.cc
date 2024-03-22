@@ -1,14 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feed/core/v2/feedstore_util.h"
 
 #include <string>
+#include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
 #include "components/feed/core/v2/config.h"
 #include "components/feed/core/v2/test/test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+using testing::ElementsAreArray;
 
 namespace feedstore {
 namespace {
@@ -65,6 +68,43 @@ TEST(feedstore_util_test, GetNextActionId) {
 
   EXPECT_EQ(feed::LocalActionId(1), GetNextActionId(metadata));
   EXPECT_EQ(feed::LocalActionId(2), GetNextActionId(metadata));
+}
+
+using feed::StreamKind;
+using feed::StreamType;
+TEST(feedstore_util_test, StreamTypeFromId) {
+  StreamType for_you = StreamType(StreamKind::kForYou);
+  StreamType following = StreamType(StreamKind::kFollowing);
+  StreamType single_web_feed = StreamType(StreamKind::kSingleWebFeed);
+  StreamType single_web_feed_menu = StreamType(
+      StreamKind::kSingleWebFeed, "A", feed::SingleWebFeedEntryPoint::kMenu);
+  StreamType single_web_feed_other = StreamType(
+      StreamKind::kSingleWebFeed, "A", feed::SingleWebFeedEntryPoint::kOther);
+  StreamType supervised_feed = StreamType(StreamKind::kSupervisedUser);
+
+  StreamType unknown = StreamType();
+
+  EXPECT_EQ(StreamKey(for_you), kForYouStreamKey);
+  EXPECT_EQ(StreamKey(following), kFollowStreamKey);
+  EXPECT_EQ(StreamKey(supervised_feed), kSupervisedUserStreamKey);
+  EXPECT_DCHECK_DEATH(StreamKey(unknown));
+
+  EXPECT_TRUE(StreamTypeFromKey(StreamKey(single_web_feed)).IsSingleWebFeed());
+  EXPECT_TRUE(
+      StreamTypeFromKey(StreamKey(single_web_feed_menu)).IsSingleWebFeed());
+  EXPECT_TRUE(
+      StreamTypeFromKey(StreamKey(single_web_feed_other)).IsSingleWebFeed());
+
+  EXPECT_EQ(StreamTypeFromKey(StreamKey(single_web_feed_menu)).GetWebFeedId(),
+            "A");
+  EXPECT_EQ(StreamTypeFromKey(StreamKey(single_web_feed_other)).GetWebFeedId(),
+            "A");
+
+  EXPECT_TRUE(StreamTypeFromKey(StreamKey(following)).IsWebFeed());
+  EXPECT_TRUE(StreamTypeFromKey(StreamKey(for_you)).IsForYou());
+  EXPECT_TRUE(
+      StreamTypeFromKey(StreamKey(supervised_feed)).IsForSupervisedUser());
+  EXPECT_EQ(StreamTypeFromKey("z"), StreamType());
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,6 @@ class ToolbarActionViewController;
 
 namespace views {
 class Button;
-class MenuItemView;
 class MenuModelAdapter;
 class MenuRunner;
 }  // namespace views
@@ -41,8 +40,6 @@ class ExtensionContextMenuController : public views::ContextMenuController {
 
   bool IsMenuRunning() const;
 
-  views::MenuItemView* menu_for_testing() { return menu_; }
-
  private:
   void RunExtensionContextMenu(views::Button* source);
 
@@ -54,10 +51,6 @@ class ExtensionContextMenuController : public views::ContextMenuController {
 
   // Responsible for running the menu.
   std::unique_ptr<views::MenuRunner> menu_runner_;
-
-  // The root MenuItemView for the context menu, or null if no menu is being
-  // shown. This is used for testing.
-  raw_ptr<views::MenuItemView> menu_ = nullptr;
 
   // This controller contains the data for the extension's context menu.
   const raw_ptr<ToolbarActionViewController> controller_;

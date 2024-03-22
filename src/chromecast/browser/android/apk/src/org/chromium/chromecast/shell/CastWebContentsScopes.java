@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,12 @@ class CastWebContentsScopes {
             contentViewRenderView.setSurfaceViewBackgroundColor(backgroundColor);
             FrameLayout.LayoutParams matchParent = new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
-            layout.addView(contentViewRenderView, matchParent);
+
+            // Use a slightly smaller layout as a mitigation for b/245596038 until the
+            // Android-level fix is available.
+            FrameLayout.LayoutParams talkbackFixLayout = new FrameLayout.LayoutParams(matchParent);
+            talkbackFixLayout.setMargins(0, 0, 1, 1);
+            layout.addView(contentViewRenderView, talkbackFixLayout);
 
             ContentView contentView = ContentView.createContentView(
                     context, null /* eventOffsetHandler */, webContents);
@@ -82,6 +87,8 @@ class CastWebContentsScopes {
             // Enable display of current webContents.
             webContents.onShow();
             layout.addView(contentView, matchParent);
+            // Ensure that the foreground doesn't interfere with accessibility overlays.
+            layout.setForeground(null);
             contentView.setFocusable(true);
             contentView.requestFocus();
             contentView.setTag(VIEW_TAG_CONTENT_VIEW);
@@ -90,9 +97,7 @@ class CastWebContentsScopes {
                 layout.setForeground(new ColorDrawable(backgroundColor));
                 layout.removeView(contentView);
                 layout.removeView(contentViewRenderView);
-                if (webContents.getTopLevelNativeWindow() == window) {
-                    webContents.setTopLevelNativeWindow(null);
-                }
+                webContents.setTopLevelNativeWindow(null);
                 contentViewRenderView.destroy();
                 window.destroy();
             };
@@ -111,9 +116,9 @@ class CastWebContentsScopes {
                 if (!webContents.isDestroyed()) {
                     // WebContents can be destroyed by the app before CastWebContentsComponent
                     // unbinds, which is why we need this check.
+                    webContents.onHide();
 
                     if (webContents.getTopLevelNativeWindow() == window) {
-                        webContents.onHide();
                         webContents.setTopLevelNativeWindow(null);
                     }
                 }

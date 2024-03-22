@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,13 @@
 
 #include <memory>
 
-#include "ash/services/nearby/public/mojom/firewall_hole.mojom.h"
 #include "base/memory/weak_ptr.h"
+#include "chromeos/ash/services/nearby/public/mojom/firewall_hole.mojom.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 
-namespace ash {
-namespace nearby {
+namespace ash::nearby {
 class TcpServerSocketPort;
-}  // namespace nearby
-}  // namespace ash
+}  // namespace ash::nearby
 
 namespace chromeos {
 class FirewallHole;
@@ -23,7 +21,7 @@ class FirewallHole;
 
 // An implementation of the mojo service used to open firewall holes for Nearby
 // Connections WifiLan TCP sockets. This implementation is essentially a wrapper
-// around chromeos::FirewallHole::Open(). The lifetime of a firewall hole
+// around ash::FirewallHole::Open(). The lifetime of a firewall hole
 // mirrors the lifetime of the mojo remote provided by OpenFirewallHole(); the
 // corresponding mojo receivers are owned by |firewall_hole_receivers_|.
 class NearbyConnectionsFirewallHoleFactory

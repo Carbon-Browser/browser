@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,13 @@
 // Changes related to the buttons displayed when the omnibox is not focused.
 - (void)showControlButtons;
 - (void)hideControlButtons;
+
+// Changes related to the location bar height matching the fakebox height.
+- (void)setLocationBarHeightToMatchFakeOmnibox;
+- (void)setLocationBarHeightExpanded;
+
+// Changes related to the toolbar itself.
+- (void)setToolbarFaded:(BOOL)faded;
 
 @end
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,10 @@
 #include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/desks/desks_histogram_enums.h"
 #include "ash/wm/desks/root_window_desk_switch_animator.h"
-#include "base/callback.h"
+#include "ash/wm/overview/overview_controller.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_animation_sequence.h"
@@ -36,18 +38,10 @@ class DeskAnimationObserver : public DesksController::Observer {
   DeskAnimationObserver& operator=(const DeskAnimationObserver& rhs) = delete;
 
   // DesksController::Observer:
-  void OnDeskAdded(const Desk* desk) override {}
-  void OnDeskRemoved(const Desk* desk) override {}
-  void OnDeskReordered(int old_index, int new_index) override {}
-  void OnDeskActivationChanged(const Desk* activated,
-                               const Desk* deactivated) override {}
-  void OnDeskSwitchAnimationLaunching() override {}
   void OnDeskSwitchAnimationFinished() override {
     std::move(on_desk_animation_complete_).Run();
     delete this;
   }
-  void OnDeskNameChanged(const Desk* desk,
-                         const std::u16string& new_name) override {}
 
  private:
   base::OnceClosure on_desk_animation_complete_;
@@ -102,9 +96,6 @@ class ChainedDeskAnimationObserver : public ui::LayerAnimationObserver,
   }
 
   // DesksController::Observer:
-  void OnDeskAdded(const Desk* desk) override {}
-  void OnDeskRemoved(const Desk* desk) override {}
-  void OnDeskReordered(int old_index, int new_index) override {}
   void OnDeskActivationChanged(const Desk* activated,
                                const Desk* deactivated) override {
     // The first activation changed happens when the initial ending screenshot
@@ -119,19 +110,16 @@ class ChainedDeskAnimationObserver : public ui::LayerAnimationObserver,
                            ->GetAnimationLayerForTesting();
     animation_layer_->GetAnimator()->AddObserver(this);
   }
-  void OnDeskSwitchAnimationLaunching() override {}
   void OnDeskSwitchAnimationFinished() override {
     std::move(on_desk_animation_complete_).Run();
     delete this;
   }
-  void OnDeskNameChanged(const Desk* desk,
-                         const std::u16string& new_name) override {}
 
  private:
   const bool going_left_;
   const int target_index_;
   base::OnceClosure on_desk_animation_complete_;
-  ui::Layer* animation_layer_ = nullptr;
+  raw_ptr<ui::Layer, ExperimentalAsh> animation_layer_ = nullptr;
 };
 
 }  // namespace
@@ -139,6 +127,12 @@ class ChainedDeskAnimationObserver : public ui::LayerAnimationObserver,
 AutotestDesksApi::AutotestDesksApi() = default;
 
 AutotestDesksApi::~AutotestDesksApi() = default;
+
+AutotestDesksApi::DesksInfo::DesksInfo() = default;
+
+AutotestDesksApi::DesksInfo::DesksInfo(const DesksInfo&) = default;
+
+AutotestDesksApi::DesksInfo::~DesksInfo() = default;
 
 bool AutotestDesksApi::CreateNewDesk() {
   if (!DesksController::Get()->CanCreateDesks())
@@ -177,7 +171,10 @@ bool AutotestDesksApi::RemoveActiveDesk(base::OnceClosure on_complete) {
   if (!controller->CanRemoveDesks())
     return false;
 
-  new DeskAnimationObserver(std::move(on_complete));
+  // In overview, the desk removal animation does not apply,
+  // so we should not create a `DeskAnimationObserver` for it.
+  if (!Shell::Get()->overview_controller()->InOverviewSession())
+    new DeskAnimationObserver(std::move(on_complete));
   controller->RemoveDesk(controller->active_desk(),
                          DesksCreationRemovalSource::kButton,
                          DeskCloseType::kCombineDesks);
@@ -215,8 +212,24 @@ bool AutotestDesksApi::IsWindowInDesk(aura::Window* window, int desk_index) {
   return desk_container->Contains(window);
 }
 
-int AutotestDesksApi::GetDeskCount() const {
-  return DesksController::Get()->desks().size();
+AutotestDesksApi::DesksInfo AutotestDesksApi::GetDesksInfo() const {
+  auto* controller = DesksController::Get();
+
+  DesksInfo info;
+  info.active_desk_index = controller->GetActiveDeskIndex();
+  info.num_desks = controller->desks().size();
+  info.is_animating = !!controller->animation();
+
+  // Get the names of all desk containers. We just need any root window here
+  // since desks and their corresponding containers are laid out the same for
+  // all roots.
+  aura::Window* root = Shell::GetPrimaryRootWindow();
+  for (const auto& desk : controller->desks()) {
+    aura::Window* container = desk->GetDeskContainerForRoot(root);
+    info.desk_containers.push_back(container->GetName());
+  }
+
+  return info;
 }
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,10 @@
 #include "ash/app_list/views/continue_task_container_view.h"
 #include "ash/ash_export.h"
 #include "ash/public/cpp/app_list/app_list_controller_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/view.h"
-
-namespace views {
-class Label;
-}  // namespace views
 
 namespace ash {
 
@@ -81,7 +78,6 @@ class ASH_EXPORT ContinueSectionView : public views::View,
 
   // views::View:
   void AddedToWidget() override;
-  void OnThemeChanged() override;
   void RemovedFromWidget() override;
 
   // views::FocusChangeListener:
@@ -111,6 +107,9 @@ class ASH_EXPORT ContinueSectionView : public views::View,
   // section.
   bool HasMinimumFilesToShow() const;
 
+  // Whether there is at least 1 admin template.
+  bool HasDesksAdminTemplates() const;
+
   // Displays a toast with a privacy notice for the user in place of the
   // continue section. The user can accept the notice to display the continue
   // section in the launcher.
@@ -139,7 +138,7 @@ class ASH_EXPORT ContinueSectionView : public views::View,
   // when the privacy notice does not have enough items after an update.
   void MaybeAnimateOutPrivacyNotice();
 
-  AppListViewDelegate* const view_delegate_;
+  const raw_ptr<AppListViewDelegate, ExperimentalAsh> view_delegate_;
 
   bool tablet_mode_ = false;
 
@@ -147,11 +146,13 @@ class ASH_EXPORT ContinueSectionView : public views::View,
   base::OneShotTimer privacy_notice_shown_timer_;
 
   // Not owned.
-  AppListNudgeController* nudge_controller_ = nullptr;
+  raw_ptr<AppListNudgeController, DanglingUntriaged | ExperimentalAsh>
+      nudge_controller_ = nullptr;
 
-  views::Label* continue_label_ = nullptr;
-  AppListToastView* privacy_toast_ = nullptr;
-  ContinueTaskContainerView* suggestions_container_ = nullptr;
+  raw_ptr<AppListToastView, DanglingUntriaged | ExperimentalAsh>
+      privacy_toast_ = nullptr;
+  raw_ptr<ContinueTaskContainerView, ExperimentalAsh> suggestions_container_ =
+      nullptr;
 
   base::WeakPtrFactory<ContinueSectionView> weak_ptr_factory_{this};
 };

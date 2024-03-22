@@ -1,25 +1,24 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/devtools/devtools_file_watcher.h"
 
-#include <algorithm>
 #include <map>
 #include <memory>
 #include <set>
 #include <unordered_map>
 
-#include "base/bind.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_provider.h"
@@ -71,7 +70,7 @@ DevToolsFileWatcher::SharedFileWatcher::SharedFileWatcher()
   DevToolsFileWatcher::s_shared_watcher_ = this;
   base::trace_event::MemoryDumpManager::GetInstance()
       ->RegisterDumpProviderWithSequencedTaskRunner(
-          this, "DevTools", base::SequencedTaskRunnerHandle::Get(),
+          this, "DevTools", base::SequencedTaskRunner::GetCurrentDefault(),
           base::trace_event::MemoryDumpProvider::Options());
 }
 
@@ -114,7 +113,7 @@ void DevToolsFileWatcher::SharedFileWatcher::AddListener(
 void DevToolsFileWatcher::SharedFileWatcher::RemoveListener(
     DevToolsFileWatcher* watcher) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  auto it = std::find(listeners_.begin(), listeners_.end(), watcher);
+  auto it = base::ranges::find(listeners_, watcher);
   listeners_.erase(it);
   if (listeners_.empty()) {
     file_path_times_.clear();
@@ -175,7 +174,7 @@ void DevToolsFileWatcher::SharedFileWatcher::DirectoryChanged(
                                     ? base::Milliseconds(kFirstThrottleTimeout)
                                     : last_dispatch_cost_ * 2;
 
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(
           &DevToolsFileWatcher::SharedFileWatcher::DispatchNotifications, this),

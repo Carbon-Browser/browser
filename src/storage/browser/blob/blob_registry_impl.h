@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,9 @@
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback_forward.h"
+#include "components/file_access/scoped_file_access.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/self_owned_associated_receiver.h"
 #include "storage/browser/blob/blob_url_registry.h"
@@ -40,6 +43,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobRegistryImpl
   BlobRegistryImpl(base::WeakPtr<BlobStorageContext> context,
                    base::WeakPtr<BlobUrlRegistry> url_registry,
                    scoped_refptr<base::TaskRunner> url_registry_runner);
+
+  explicit BlobRegistryImpl(base::WeakPtr<BlobStorageContext> context);
 
   BlobRegistryImpl(const BlobRegistryImpl&) = delete;
   BlobRegistryImpl& operator=(const BlobRegistryImpl&) = delete;

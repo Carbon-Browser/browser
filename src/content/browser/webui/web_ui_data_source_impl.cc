@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/string_piece.h"
@@ -39,20 +39,9 @@ namespace content {
 // static
 WebUIDataSource* WebUIDataSource::CreateAndAdd(BrowserContext* browser_context,
                                                const std::string& source_name) {
-  WebUIDataSource* data_source = WebUIDataSource::Create(source_name);
-  WebUIDataSource::Add(browser_context, data_source);
+  auto* data_source = new WebUIDataSourceImpl(source_name);
+  URLDataManager::AddWebUIDataSource(browser_context, data_source);
   return data_source;
-}
-
-// static
-WebUIDataSource* WebUIDataSource::Create(const std::string& source_name) {
-  return new WebUIDataSourceImpl(source_name);
-}
-
-// static
-void WebUIDataSource::Add(BrowserContext* browser_context,
-                          WebUIDataSource* source) {
-  URLDataManager::AddWebUIDataSource(browser_context, source);
 }
 
 // static
@@ -83,15 +72,6 @@ void GetDataResourceBytesOnWorkerThread(
               resource_id, std::move(callback)));
 }
 
-std::string CleanUpPath(const std::string& path) {
-  // Remove the query string for named resource lookups.
-  std::string clean_path = path.substr(0, path.find_first_of('?'));
-  // Remove a URL fragment (for example #foo) if it exists.
-  clean_path = clean_path.substr(0, path.find_first_of('#'));
-
-  return clean_path;
-}
-
 const int kNonExistentResource = -1;
 
 }  // namespace
@@ -106,8 +86,8 @@ class WebUIDataSourceImpl::InternalDataSource : public URLDataSource {
 
   // URLDataSource implementation.
   std::string GetSource() override { return parent_->GetSource(); }
-  std::string GetMimeType(const std::string& path) override {
-    return parent_->GetMimeType(path);
+  std::string GetMimeType(const GURL& url) override {
+    return parent_->GetMimeType(url);
   }
   void StartDataRequest(const GURL& url,
                         const WebContents::Getter& wc_getter,
@@ -153,6 +133,16 @@ class WebUIDataSourceImpl::InternalDataSource : public URLDataSource {
   }
   bool ShouldReplaceI18nInJS() override {
     return parent_->ShouldReplaceI18nInJS();
+  }
+  bool ShouldServiceRequest(const GURL& url,
+                            BrowserContext* browser_context,
+                            int render_process_id) override {
+    if (parent_->supported_scheme_.has_value()) {
+      return url.SchemeIs(parent_->supported_scheme_.value());
+    }
+
+    return URLDataSource::ShouldServiceRequest(url, browser_context,
+                                               render_process_id);
   }
 
  private:
@@ -319,8 +309,14 @@ std::string WebUIDataSourceImpl::GetSource() {
   return source_name_;
 }
 
-std::string WebUIDataSourceImpl::GetMimeType(const std::string& path) const {
-  std::string file_path = CleanUpPath(path);
+void WebUIDataSourceImpl::SetSupportedScheme(base::StringPiece scheme) {
+  CHECK(!supported_scheme_.has_value());
+
+  supported_scheme_ = scheme;
+}
+
+std::string WebUIDataSourceImpl::GetMimeType(const GURL& url) const {
+  const base::StringPiece file_path = url.path_piece();
 
   if (base::EndsWith(file_path, ".css", base::CompareCase::INSENSITIVE_ASCII))
     return "text/css";
@@ -378,7 +374,7 @@ void WebUIDataSourceImpl::StartDataRequest(
     }
   }
 
-  int resource_id = PathToIdrOrDefault(CleanUpPath(path));
+  int resource_id = URLToIdrOrDefault(url);
   if (resource_id == kNonExistentResource) {
     std::move(callback).Run(nullptr);
   } else {
@@ -391,7 +387,8 @@ void WebUIDataSourceImpl::SendLocalizedStringsAsJSON(
     bool from_js_module) {
   std::string template_data;
   webui::AppendJsonJS(localized_strings_, &template_data, from_js_module);
-  std::move(callback).Run(base::RefCountedString::TakeString(&template_data));
+  std::move(callback).Run(
+      base::MakeRefCounted<base::RefCountedString>(std::move(template_data)));
 }
 
 const base::Value::Dict* WebUIDataSourceImpl::GetLocalizedStrings() const {
@@ -402,7 +399,8 @@ bool WebUIDataSourceImpl::ShouldReplaceI18nInJS() const {
   return should_replace_i18n_in_js_;
 }
 
-int WebUIDataSourceImpl::PathToIdrOrDefault(const std::string& path) const {
+int WebUIDataSourceImpl::URLToIdrOrDefault(const GURL& url) const {
+  const std::string path(url.path_piece().substr(1));
   auto it = path_to_idr_map_.find(path);
   if (it != path_to_idr_map_.end())
     return it->second;
@@ -413,7 +411,7 @@ int WebUIDataSourceImpl::PathToIdrOrDefault(const std::string& path) const {
   // Use GetMimeType() to check for most file requests. It returns text/html by
   // default regardless of the extension if it does not match a different file
   // type, so check for HTML file requests separately.
-  if (GetMimeType(path) != "text/html" ||
+  if (GetMimeType(url) != "text/html" ||
       base::EndsWith(path, ".html", base::CompareCase::INSENSITIVE_ASCII)) {
     return kNonExistentResource;
   }

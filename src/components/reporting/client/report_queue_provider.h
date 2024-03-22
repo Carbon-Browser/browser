@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,26 @@
 #define COMPONENTS_REPORTING_CLIENT_REPORT_QUEUE_PROVIDER_H_
 
 #include <memory>
+#include <queue>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/reporting/client/report_queue.h"
 #include "components/reporting/client/report_queue_configuration.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/storage/storage_module_interface.h"
-#include "components/reporting/util/shared_queue.h"
 #include "components/reporting/util/status.h"
+#include "components/reporting/util/status_macros.h"
 #include "components/reporting/util/statusor.h"
 
 namespace reporting {
+
+BASE_DECLARE_FEATURE(kEncryptedReportingPipeline);
 
 // ReportQueueProvider acts a single point for instantiating
 // |reporting::ReportQueue|s. By performing initialization atomically it ensures
@@ -39,10 +43,11 @@ namespace reporting {
 // void SendMessage(google::protobuf::ImportantMessage important_message,
 //                  reporting::ReportQueue::EnqueueCallback done_cb) {
 //   // Create configuration.
-//   auto config_result = reporting::ReportQueueConfiguration::Create(...);
+//   StatusOr<reporting::ReportQueueConfiguration> config_result =
+//      reporting::ReportQueueConfiguration::Create({...}).Set...().Build();
 //   // Bail out if configuration failed to create.
-//   if (!config_result.ok()) {
-//     std::move(done_cb).Run(config_result.status());
+//   if (!config_result.has_value()) {
+//     std::move(done_cb).Run(config_result.error());
 //     return;
 //   }
 //   // Asynchronously create ReportingQueue.
@@ -56,24 +61,24 @@ namespace reporting {
 //             reporting::ReportQueueProvider::CreateQueue(
 //                 std::move(config),
 //                 base::BindOnce(
-//                     [](base::StringPiece data,
+//                     [](std::string_view data,
 //                        reporting::ReportQueue::EnqueueCallback
 //                        done_cb, reporting::StatusOr<std::unique_ptr<
 //                            reporting::ReportQueue>>
 //                            report_queue_result) {
 //                       // Bail out if queue failed to create.
-//                       if (!report_queue_result.ok()) {
-//                         std::move(done_cb).Run(report_queue_result.status());
+//                       if (!report_queue_result.has_value()) {
+//                         std::move(done_cb).Run(report_queue_result.error());
 //                         return;
 //                       }
 //                       // Queue created successfully, enqueue the message.
-//                       report_queue_result.ValueOrDie()->Enqueue(
+//                       report_queue_result.value()->Enqueue(
 //                           important_message, std::move(done_cb));
 //                     },
 //                     important_message, std::move(done_cb)));
 //           },
 //           important_message, std::move(done_cb),
-//           std::move(config_result.ValueOrDie())))
+//           std::move(config_result.value())))
 // }
 class ReportQueueProvider {
  public:
@@ -89,8 +94,6 @@ class ReportQueueProvider {
   using CreateReportQueueCallback =
       base::OnceCallback<void(CreateReportQueueResponse)>;
 
-  using InitCompleteCallback = base::OnceCallback<void(Status)>;
-
   using OnStorageModuleCreatedCallback =
       base::OnceCallback<void(StatusOr<scoped_refptr<StorageModuleInterface>>)>;
   using StorageModuleCreateCallback =
@@ -102,7 +105,6 @@ class ReportQueueProvider {
   using ReportQueueConfiguredCallback = base::OnceCallback<void(
       StatusOr<std::unique_ptr<ReportQueueConfiguration>>)>;
 
-  explicit ReportQueueProvider(StorageModuleCreateCallback storage_create_cb);
   ReportQueueProvider(const ReportQueueProvider& other) = delete;
   ReportQueueProvider& operator=(const ReportQueueProvider& other) = delete;
   virtual ~ReportQueueProvider();
@@ -128,80 +130,22 @@ class ReportQueueProvider {
   static ReportQueueProvider* GetInstance();
 
   static bool IsEncryptedReportingPipelineEnabled();
-  static const base::Feature kEncryptedReportingPipeline;
 
- protected:
   // Accessors.
-  scoped_refptr<StorageModuleInterface> storage();
-  scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner();
+  base::WeakPtr<ReportQueueProvider> GetWeakPtr();
+  scoped_refptr<StorageModuleInterface> storage() const;
+  scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner() const;
 
-  class InitializationStateTracker
-      : public base::RefCountedThreadSafe<InitializationStateTracker> {
-   public:
-    using ReleaseLeaderCallback = base::OnceCallback<void(bool)>;
-    using LeaderPromotionRequestCallback =
-        base::OnceCallback<void(StatusOr<ReleaseLeaderCallback>)>;
-    using GetInitStateCallback = base::OnceCallback<void(bool)>;
-
-    static scoped_refptr<InitializationStateTracker> Create();
-
-    // Will call |get_init_state_cb| with |is_initialized_| value.
-    void GetInitState(GetInitStateCallback get_init_state_cb);
-
-    // Will promote one initializer to leader at a time. Will deny
-    // initialization requests if the provider is already initialized. If
-    // there are no errors will return a ReleaseLeaderCallback for releasing the
-    // initializing leadership.
-    //
-    // Error code responses:
-    // RESOURCE_EXHAUSTED - Returned when a promotion is requested when there is
-    //     already a leader.
-    // FAILED_PRECONDITION - Returned when a promotion is requested when
-    //     provider is already initialized.
-    void RequestLeaderPromotion(
-        LeaderPromotionRequestCallback promo_request_cb);
-
-   private:
-    friend class base::RefCountedThreadSafe<InitializationStateTracker>;
-    InitializationStateTracker();
-    virtual ~InitializationStateTracker();
-
-    void OnIsInitializedRequest(GetInitStateCallback get_init_state_cb);
-
-    void OnLeaderPromotionRequest(
-        LeaderPromotionRequestCallback promo_request_cb);
-
-    void ReleaseLeader(bool initialization_successful);
-    void OnLeaderRelease(bool initialization_successful);
-
-    bool has_promoted_initializing_context_{false};
-    bool is_initialized_{false};
-
-    scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;
-    SEQUENCE_CHECKER(sequence_checker_);
-  };
-
- protected:
   // Storage module creator (can be substituted for testing purposes).
   StorageModuleCreateCallback storage_create_cb_;
 
+ protected:
+  ReportQueueProvider(StorageModuleCreateCallback storage_create_cb,
+                      scoped_refptr<base::SequencedTaskRunner> seq_task_runner);
+
  private:
   // Holds the creation request for a ReportQueue.
-  class CreateReportQueueRequest {
-   public:
-    CreateReportQueueRequest(std::unique_ptr<ReportQueueConfiguration> config,
-                             CreateReportQueueCallback create_cb);
-    ~CreateReportQueueRequest();
-    CreateReportQueueRequest(CreateReportQueueRequest&& other);
-
-    std::unique_ptr<ReportQueueConfiguration> config();
-    CreateReportQueueCallback create_cb();
-
-   private:
-    std::unique_ptr<ReportQueueConfiguration> config_;
-    CreateReportQueueCallback create_cb_;
-  };
-  class InitializingContext;
+  class CreateReportQueueRequest;
 
   // Finalizes provider, if the initialization process succeeded.
   // May to be overridden by subclass to make more updates to the provider.
@@ -212,7 +156,8 @@ class ReportQueueProvider {
   virtual void CreateNewQueue(std::unique_ptr<ReportQueueConfiguration> config,
                               CreateReportQueueCallback cb);
   virtual StatusOr<std::unique_ptr<ReportQueue, base::OnTaskRunnerDeleter>>
-  CreateNewSpeculativeQueue();
+  CreateNewSpeculativeQueue(
+      const ReportQueue::SpeculativeConfigSettings& config_settings);
 
   // Configures a given report queue config with appropriate DM tokens after its
   // retrieval so it can be used for downstream processing while building a
@@ -222,25 +167,32 @@ class ReportQueueProvider {
       std::unique_ptr<ReportQueueConfiguration> report_queue_config,
       ReportQueueConfiguredCallback completion_cb) = 0;
 
-  void OnPushComplete();
-  void OnInitState(bool provider_configured);
-  void OnInitializationComplete(Status init_status);
+  // Checks whether the provider has been initialized, and if so, processes all
+  // pending queue creation requests.
+  void CheckInitializationState();
 
-  void ClearRequestQueue(base::queue<CreateReportQueueRequest> failed_requests);
-  void BuildRequestQueue(StatusOr<CreateReportQueueRequest> pop_result);
-
-  // Queue for storing creation requests while the provider is
-  // initializing.
-  scoped_refptr<SharedQueue<CreateReportQueueRequest>> create_request_queue_;
-  scoped_refptr<InitializationStateTracker> init_state_tracker_;
-
-  // Storage module associated with the provider. It serves all queues created
-  // by it. Protected by sequenced_task_runner_.
-  scoped_refptr<StorageModuleInterface> storage_;
+  // Processes storage or error returned by async call to `storage_create_cb_`.
+  void OnStorageModuleConfigured(
+      StatusOr<scoped_refptr<StorageModuleInterface>> storage_result);
 
   // Task runner used for guarding the provider elements.
   scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;
   SEQUENCE_CHECKER(sequence_checker_);
+
+  // Queue for storing creation requests while the provider is
+  // initializing.
+  std::queue<std::unique_ptr<CreateReportQueueRequest>> create_request_queue_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+
+  // Storage module associated with the provider. It serves all queues created
+  // by it. `storage_` is null initially and when it becomes non-null, the
+  // provider is ready to create actual queues (speculative queues can be
+  // created before that as well).
+  scoped_refptr<StorageModuleInterface> storage_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+
+  // Weak pointer factory.
+  base::WeakPtrFactory<ReportQueueProvider> weak_ptr_factory_{this};
 };
 
 }  // namespace reporting

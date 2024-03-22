@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 #include <memory>
 #include <vector>
 
+#include "ash/public/cpp/holding_space/holding_space_file.h"
 #include "ash/public/cpp/holding_space/holding_space_image.h"
 #include "ash/public/cpp/holding_space/holding_space_item.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -66,6 +67,12 @@ using PartitionFilePathsByValidityCallback =
 void PartitionFilePathsByValidity(Profile*,
                                   FilePathsWithValidityRequirements,
                                   PartitionFilePathsByValidityCallback);
+
+// Resolves the file system type associated with the specified
+// `file_system_url`.
+HoldingSpaceFile::FileSystemType ResolveFileSystemType(
+    Profile* profile,
+    const GURL& file_system_url);
 
 // Resolves the file system URL associated with the specified `file_path`.
 GURL ResolveFileSystemUrl(Profile* profile, const base::FilePath& file_path);

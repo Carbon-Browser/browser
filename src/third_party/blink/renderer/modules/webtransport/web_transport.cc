@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_arraybufferview.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_web_transport_close_info.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_web_transport_error.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_web_transport_hash.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_web_transport_options.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -31,11 +32,14 @@
 #include "third_party/blink/renderer/core/loader/subresource_filter.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/streams/readable_stream.h"
+#include "third_party/blink/renderer/core/streams/readable_stream_byob_request.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_default_controller_with_script_scope.h"
+#include "third_party/blink/renderer/core/streams/underlying_byte_source_base.h"
 #include "third_party/blink/renderer/core/streams/underlying_sink_base.h"
 #include "third_party/blink/renderer/core/streams/underlying_source_base.h"
 #include "third_party/blink/renderer/core/streams/writable_stream.h"
 #include "third_party/blink/renderer/core/streams/writable_stream_default_controller.h"
+#include "third_party/blink/renderer/core/typed_arrays/dom_array_piece.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/modules/webtransport/bidirectional_stream.h"
 #include "third_party/blink/renderer/modules/webtransport/datagram_duplex_stream.h"
@@ -152,8 +156,8 @@ class WebTransport::DatagramUnderlyingSink final : public UnderlyingSinkBase {
     for (const auto& datagram : pending_datagrams_) {
       web_transport_->transport_remote_->SendDatagram(
           base::make_span(datagram),
-          WTF::Bind(&DatagramUnderlyingSink::OnDatagramProcessed,
-                    WrapWeakPersistent(this)));
+          WTF::BindOnce(&DatagramUnderlyingSink::OnDatagramProcessed,
+                        WrapWeakPersistent(this)));
     }
     pending_datagrams_.clear();
   }
@@ -180,8 +184,8 @@ class WebTransport::DatagramUnderlyingSink final : public UnderlyingSinkBase {
 
     if (web_transport_->transport_remote_.is_bound()) {
       web_transport_->transport_remote_->SendDatagram(
-          data, WTF::Bind(&DatagramUnderlyingSink::OnDatagramProcessed,
-                          WrapWeakPersistent(this)));
+          data, WTF::BindOnce(&DatagramUnderlyingSink::OnDatagramProcessed,
+                              WrapWeakPersistent(this)));
     } else {
       Vector<uint8_t> datagram;
       datagram.Append(data.data(), static_cast<wtf_size_t>(data.size()));
@@ -193,7 +197,7 @@ class WebTransport::DatagramUnderlyingSink final : public UnderlyingSinkBase {
         static_cast<wtf_size_t>(high_water_mark)) {
       // In this case we pretend that the datagram is processed immediately, to
       // get more requests from the stream.
-      return ScriptPromise::CastUndefined(web_transport_->script_state_);
+      return ScriptPromise::CastUndefined(web_transport_->script_state_.Get());
     }
     return resolver->Promise();
   }
@@ -217,26 +221,28 @@ class WebTransport::DatagramUnderlyingSink final : public UnderlyingSinkBase {
 // own internal queue of datagrams so that stale datagrams won't remain in
 // ReadableStream's queue.
 class WebTransport::DatagramUnderlyingSource final
-    : public UnderlyingSourceBase {
+    : public UnderlyingByteSourceBase {
  public:
   DatagramUnderlyingSource(ScriptState* script_state,
                            DatagramDuplexStream* datagram_duplex_stream)
-      : UnderlyingSourceBase(script_state),
+      : UnderlyingByteSourceBase(),
+        script_state_(script_state),
         datagram_duplex_stream_(datagram_duplex_stream),
         expiry_timer_(ExecutionContext::From(script_state)
                           ->GetTaskRunner(TaskType::kNetworking),
                       this,
                       &DatagramUnderlyingSource::ExpiryTimerFired) {}
 
-  // Implementation of UnderlyingSourceBase.
-  ScriptPromise pull(ScriptState* script_state) override {
+  // Implementation of UnderlyingByteSourceBase.
+  ScriptPromise Pull(ReadableByteStreamController* controller,
+                     ExceptionState& exception_state) override {
     DVLOG(1) << "DatagramUnderlyingSource::pull()";
 
     if (waiting_for_datagrams_) {
       // This can happen if a second read is issued while a read is already
       // pending.
       DCHECK(queue_.empty());
-      return ScriptPromise::CastUndefined(script_state);
+      return ScriptPromise::CastUndefined(script_state_.Get());
     }
 
     // If high water mark is reset to 0 and then read() is called, it should
@@ -248,12 +254,12 @@ class WebTransport::DatagramUnderlyingSource final
 
     if (queue_.empty()) {
       if (close_when_queue_empty_) {
-        Controller()->Close();
-        return ScriptPromise::CastUndefined(script_state);
+        controller->close(script_state_, exception_state);
+        return ScriptPromise::CastUndefined(script_state_.Get());
       }
 
       waiting_for_datagrams_ = true;
-      return ScriptPromise::CastUndefined(script_state);
+      return ScriptPromise::CastUndefined(script_state_.Get());
     }
 
     const QueueEntry* entry = queue_.front();
@@ -265,48 +271,70 @@ class WebTransport::DatagramUnderlyingSource final
 
     // This has to go after any mutations as it may run JavaScript, leading to
     // re-entry.
-    Controller()->Enqueue(entry->datagram);
+    controller->enqueue(script_state_,
+                        NotShared<DOMUint8Array>(entry->datagram),
+                        exception_state);
+    if (exception_state.HadException()) {
+      return ScriptPromise::CastUndefined(script_state_.Get());
+    }
 
     // JavaScript could have called some other method at this point.
     // However, this is safe, because |close_when_queue_empty_| only ever
     // changes from false to true, and once it is true no more datagrams will
     // be added to |queue_|.
     if (close_when_queue_empty_ && queue_.empty()) {
-      Controller()->Close();
+      controller->close(script_state_, exception_state);
     }
 
-    return ScriptPromise::CastUndefined(script_state);
+    return ScriptPromise::CastUndefined(script_state_.Get());
   }
 
-  ScriptPromise Cancel(ScriptState* script_state, ScriptValue) override {
-    DVLOG(1) << "DatagramUnderlyingSource::Cancel()";
+  ScriptPromise Cancel(ExceptionState& exception_state) override {
+    return Cancel(v8::Undefined(script_state_->GetIsolate()), exception_state);
+  }
+
+  ScriptPromise Cancel(v8::Local<v8::Value> reason, ExceptionState&) override {
+    uint32_t code = 0;
+    WebTransportError* exception =
+        V8WebTransportError::ToWrappable(script_state_->GetIsolate(), reason);
+    if (exception) {
+      code = exception->streamErrorCode().value_or(0);
+    }
+    VLOG(1) << "DatagramUnderlyingSource::Cancel() with code " << code;
+
     waiting_for_datagrams_ = false;
     canceled_ = true;
     DiscardQueue();
 
-    return ScriptPromise::CastUndefined(script_state);
+    return ScriptPromise::CastUndefined(script_state_.Get());
   }
 
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
+
   // Interface for use by WebTransport.
-  void Close() {
+  void Close(ReadableByteStreamController* controller,
+             ExceptionState& exception_state) {
     DVLOG(1) << "DatagramUnderlyingSource::Close()";
 
     if (queue_.empty()) {
-      Controller()->Close();
+      controller->close(script_state_, exception_state);
     } else {
       close_when_queue_empty_ = true;
     }
   }
 
-  void Error(v8::Local<v8::Value> error) {
+  void Error(ReadableByteStreamController* controller,
+             v8::Local<v8::Value> error) {
     DVLOG(1) << "DatagramUnderlyingSource::Error()";
 
     waiting_for_datagrams_ = false;
     DiscardQueue();
-    Controller()->Error(error);
+    controller->error(script_state_,
+                      ScriptValue(script_state_->GetIsolate(), error));
   }
 
-  void OnDatagramReceived(base::span<const uint8_t> data) {
+  void OnDatagramReceived(ReadableByteStreamController* controller,
+                          base::span<const uint8_t> data) {
     DVLOG(1) << "DatagramUnderlyingSource::OnDatagramReceived() size="
              << data.size();
 
@@ -317,7 +345,7 @@ class WebTransport::DatagramUnderlyingSource final
       return;
     }
 
-    auto* datagram = DOMUint8Array::Create(data.data(), data.size());
+    DCHECK_GT(data.size(), 0u);
 
     // This fast path is expected to be hit frequently. Avoid the queue.
     if (waiting_for_datagrams_) {
@@ -325,7 +353,38 @@ class WebTransport::DatagramUnderlyingSource final
       waiting_for_datagrams_ = false;
       // This may run JavaScript, so it has to be called immediately before
       // returning to avoid confusion caused by re-entrant usage.
-      Controller()->Enqueue(datagram);
+      ScriptState::Scope scope(script_state_);
+      // |enqueue| and |respond| throw if close has been requested, stream state
+      // is not readable, or buffer is invalid. We checked
+      // |close_when_queue_empty_| and data.size() so stream is readable and
+      // buffer size is not 0.
+      // |respond| also throws if controller is undefined or destination's
+      // buffer size is not large enough. Controller is defined because
+      // the BYOB request is a property of the given controller. If
+      // destination's buffer size is not large enough, stream is errored before
+      // respond.
+      NonThrowableExceptionState exception_state;
+
+      if (ReadableStreamBYOBRequest* request = controller->byobRequest()) {
+        DOMArrayPiece view(request->view().Get());
+        // If the view supplied is not large enough, error the stream to avoid
+        // splitting a datagram.
+        if (view.ByteLength() < data.size()) {
+          controller->error(
+              script_state_,
+              ScriptValue(script_state_->GetIsolate(),
+                          V8ThrowException::CreateRangeError(
+                              script_state_->GetIsolate(),
+                              "supplied view is not large enough.")));
+          return;
+        }
+        memcpy(view.Data(), data.data(), data.size());
+        request->respond(script_state_, data.size(), exception_state);
+        return;
+      }
+
+      auto* datagram = DOMUint8Array::Create(data.data(), data.size());
+      controller->enqueue(script_state_, NotShared(datagram), exception_state);
       return;
     }
 
@@ -346,16 +405,18 @@ class WebTransport::DatagramUnderlyingSource final
       queue_.pop_front();
     }
 
+    auto* datagram = DOMUint8Array::Create(data.data(), data.size());
     auto now = base::TimeTicks::Now();
     queue_.push_back(MakeGarbageCollected<QueueEntry>(datagram, now));
     MaybeExpireDatagrams(now);
   }
 
   void Trace(Visitor* visitor) const override {
+    visitor->Trace(script_state_);
     visitor->Trace(queue_);
     visitor->Trace(datagram_duplex_stream_);
     visitor->Trace(expiry_timer_);
-    UnderlyingSourceBase::Trace(visitor);
+    UnderlyingByteSourceBase::Trace(visitor);
   }
 
  private:
@@ -431,7 +492,7 @@ class WebTransport::DatagramUnderlyingSource final
     }
 
     if (discarded && max_age_is_default) {
-      if (auto* execution_context = GetExecutionContext()) {
+      if (auto* execution_context = ExecutionContext::From(script_state_)) {
         execution_context->AddConsoleMessage(
             MakeGarbageCollected<ConsoleMessage>(
                 mojom::blink::ConsoleMessageSource::kNetwork,
@@ -471,6 +532,7 @@ class WebTransport::DatagramUnderlyingSource final
         datagram_duplex_stream_->incomingHighWaterMark());
   }
 
+  const Member<ScriptState> script_state_;
   HeapDeque<Member<const QueueEntry>> queue_;
   const Member<DatagramDuplexStream> datagram_duplex_stream_;
   HeapTaskRunnerTimer<DatagramUnderlyingSource> expiry_timer_;
@@ -504,14 +566,14 @@ class WebTransport::StreamVendingUnderlyingSource final
         script_state_(script_state),
         vendor_(vendor) {}
 
-  ScriptPromise pull(ScriptState* script_state) override {
+  ScriptPromise Pull(ScriptState* script_state, ExceptionState&) override {
     if (!is_opened_) {
       is_pull_waiting_ = true;
       return ScriptPromise::CastUndefined(script_state);
     }
 
-    vendor_->RequestStream(WTF::Bind(&StreamVendingUnderlyingSource::Enqueue,
-                                     WrapWeakPersistent(this)));
+    vendor_->RequestStream(WTF::BindOnce(
+        &StreamVendingUnderlyingSource::Enqueue, WrapWeakPersistent(this)));
 
     return ScriptPromise::CastUndefined(script_state);
   }
@@ -529,7 +591,8 @@ class WebTransport::StreamVendingUnderlyingSource final
 
     if (is_pull_waiting_) {
       ScriptState::Scope scope(script_state_);
-      pull(script_state_);
+      NonThrowableExceptionState exception_state;
+      Pull(script_state_, exception_state);
       is_pull_waiting_ = false;
     }
   }
@@ -556,9 +619,9 @@ class WebTransport::ReceiveStreamVendor final
       : script_state_(script_state), web_transport_(web_transport) {}
 
   void RequestStream(EnqueueCallback enqueue) override {
-    web_transport_->transport_remote_->AcceptUnidirectionalStream(
-        WTF::Bind(&ReceiveStreamVendor::OnAcceptUnidirectionalStreamResponse,
-                  WrapWeakPersistent(this), std::move(enqueue)));
+    web_transport_->transport_remote_->AcceptUnidirectionalStream(WTF::BindOnce(
+        &ReceiveStreamVendor::OnAcceptUnidirectionalStreamResponse,
+        WrapWeakPersistent(this), std::move(enqueue)));
   }
 
   void Trace(Visitor* visitor) const override {
@@ -577,9 +640,11 @@ class WebTransport::ReceiveStreamVendor final
         script_state_, web_transport_, stream_id, std::move(readable));
     auto* isolate = script_state_->GetIsolate();
     ExceptionState exception_state(
-        isolate, ExceptionState::kConstructionContext, "ReceiveStream");
+        isolate, ExceptionContextType::kConstructorOperationInvoke,
+        "ReceiveStream");
     v8::MicrotasksScope microtasks_scope(
-        isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+        isolate, ToMicrotaskQueue(script_state_),
+        v8::MicrotasksScope::kDoNotRunMicrotasks);
     receive_stream->Init(exception_state);
 
     if (exception_state.HadException()) {
@@ -620,7 +685,7 @@ class WebTransport::BidirectionalStreamVendor final
       : script_state_(script_state), web_transport_(web_transport) {}
 
   void RequestStream(EnqueueCallback enqueue) override {
-    web_transport_->transport_remote_->AcceptBidirectionalStream(WTF::Bind(
+    web_transport_->transport_remote_->AcceptBidirectionalStream(WTF::BindOnce(
         &BidirectionalStreamVendor::OnAcceptBidirectionalStreamResponse,
         WrapWeakPersistent(this), std::move(enqueue)));
   }
@@ -644,9 +709,11 @@ class WebTransport::BidirectionalStreamVendor final
 
     auto* isolate = script_state_->GetIsolate();
     ExceptionState exception_state(
-        isolate, ExceptionState::kConstructionContext, "BidirectionalStream");
+        isolate, ExceptionContextType::kConstructorOperationInvoke,
+        "BidirectionalStream");
     v8::MicrotasksScope microtasks_scope(
-        isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+        isolate, ToMicrotaskQueue(script_state_),
+        v8::MicrotasksScope::kDoNotRunMicrotasks);
     bidirectional_stream->Init(exception_state);
     if (exception_state.HadException()) {
       // Just throw away the stream.
@@ -690,7 +757,8 @@ WebTransport::WebTransport(PassKey,
 WebTransport::WebTransport(ScriptState* script_state,
                            const String& url,
                            ExecutionContext* context)
-    : ExecutionContextLifecycleObserver(context),
+    : ActiveScriptWrappable<WebTransport>({}),
+      ExecutionContextLifecycleObserver(context),
       script_state_(script_state),
       url_(NullURL(), url),
       connector_(context),
@@ -721,13 +789,14 @@ ScriptPromise WebTransport::createUnidirectionalStream(
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   create_stream_resolvers_.insert(resolver);
   transport_remote_->CreateStream(
       std::move(data_pipe_consumer), mojo::ScopedDataPipeProducerHandle(),
-      WTF::Bind(&WebTransport::OnCreateSendStreamResponse,
-                WrapWeakPersistent(this), WrapWeakPersistent(resolver),
-                std::move(data_pipe_producer)));
+      WTF::BindOnce(&WebTransport::OnCreateSendStreamResponse,
+                    WrapWeakPersistent(this), WrapWeakPersistent(resolver),
+                    std::move(data_pipe_producer)));
 
   return resolver->Promise();
 }
@@ -766,13 +835,15 @@ ScriptPromise WebTransport::createBidirectionalStream(
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   create_stream_resolvers_.insert(resolver);
   transport_remote_->CreateStream(
       std::move(outgoing_consumer), std::move(incoming_producer),
-      WTF::Bind(&WebTransport::OnCreateBidirectionalStreamResponse,
-                WrapWeakPersistent(this), WrapWeakPersistent(resolver),
-                std::move(outgoing_producer), std::move(incoming_consumer)));
+      WTF::BindOnce(&WebTransport::OnCreateBidirectionalStreamResponse,
+                    WrapWeakPersistent(this), WrapWeakPersistent(resolver),
+                    std::move(outgoing_producer),
+                    std::move(incoming_consumer)));
 
   return resolver->Promise();
 }
@@ -832,11 +903,9 @@ void WebTransport::close(const WebTransportCloseInfo* close_info) {
       WebTransportError::Source::kSession);
 
   network::mojom::blink::WebTransportCloseInfoPtr close_info_to_pass;
-  if (close_info && close_info->hasCloseCode()) {
-    String reason_string =
-        close_info->hasReason() ? close_info->reason() : g_empty_string;
+  if (close_info) {
     close_info_to_pass = network::mojom::blink::WebTransportCloseInfo::New(
-        close_info->closeCode(), reason_string);
+        close_info->closeCode(), close_info->reason());
   }
 
   transport_remote_->Close(std::move(close_info_to_pass));
@@ -868,8 +937,8 @@ void WebTransport::OnConnectionEstablished(
       GetExecutionContext()->GetTaskRunner(TaskType::kNetworking);
 
   client_receiver_.Bind(std::move(client_receiver), task_runner);
-  client_receiver_.set_disconnect_handler(
-      WTF::Bind(&WebTransport::OnConnectionError, WrapWeakPersistent(this)));
+  client_receiver_.set_disconnect_handler(WTF::BindOnce(
+      &WebTransport::OnConnectionError, WrapWeakPersistent(this)));
 
   DCHECK(!transport_remote_.is_bound());
   transport_remote_.Bind(std::move(web_transport), task_runner);
@@ -903,7 +972,8 @@ void WebTransport::OnHandshakeFailed(
 }
 
 void WebTransport::OnDatagramReceived(base::span<const uint8_t> data) {
-  datagram_underlying_source_->OnDatagramReceived(data);
+  datagram_underlying_source_->OnDatagramReceived(
+      received_datagrams_controller_, data);
 }
 
 void WebTransport::OnIncomingStreamClosed(uint32_t stream_id,
@@ -930,9 +1000,10 @@ void WebTransport::OnIncomingStreamClosed(uint32_t stream_id,
   stream->OnIncomingStreamClosed(fin_received);
 }
 
-void WebTransport::OnReceivedResetStream(uint32_t stream_id, uint8_t code) {
+void WebTransport::OnReceivedResetStream(uint32_t stream_id,
+                                         uint32_t stream_error_code) {
   DVLOG(1) << "WebTransport::OnReceivedResetStream(" << stream_id << ", "
-           << static_cast<uint32_t>(code) << ") this=" << this;
+           << stream_error_code << ") this=" << this;
   auto it = incoming_stream_map_.find(stream_id);
   if (it == incoming_stream_map_.end()) {
     return;
@@ -941,15 +1012,15 @@ void WebTransport::OnReceivedResetStream(uint32_t stream_id, uint8_t code) {
 
   ScriptState::Scope scope(script_state_);
   v8::Local<v8::Value> error = WebTransportError::Create(
-      script_state_->GetIsolate(),
-      /*stream_error_code=*/code, "Received RESET_STREAM.",
+      script_state_->GetIsolate(), stream_error_code, "Received RESET_STREAM.",
       WebTransportError::Source::kStream);
   stream->Error(ScriptValue(script_state_->GetIsolate(), error));
 }
 
-void WebTransport::OnReceivedStopSending(uint32_t stream_id, uint8_t code) {
-  DVLOG(1) << "WebTransport::OnReceivedResetStream(" << stream_id << ", "
-           << static_cast<uint32_t>(code) << ") this=" << this;
+void WebTransport::OnReceivedStopSending(uint32_t stream_id,
+                                         uint32_t stream_error_code) {
+  DVLOG(1) << "WebTransport::OnReceivedStopSending(" << stream_id << ", "
+           << stream_error_code << ") this=" << this;
 
   auto it = outgoing_stream_map_.find(stream_id);
   if (it == outgoing_stream_map_.end()) {
@@ -959,8 +1030,7 @@ void WebTransport::OnReceivedStopSending(uint32_t stream_id, uint8_t code) {
 
   ScriptState::Scope scope(script_state_);
   v8::Local<v8::Value> error = WebTransportError::Create(
-      script_state_->GetIsolate(),
-      /*stream_error_code=*/code, "Received STOP_SENDING.",
+      script_state_->GetIsolate(), stream_error_code, "Received STOP_SENDING.",
       WebTransportError::Source::kStream);
   stream->Error(ScriptValue(script_state_->GetIsolate(), error));
 }
@@ -1031,15 +1101,15 @@ void WebTransport::SendFin(uint32_t stream_id) {
   transport_remote_->SendFin(stream_id);
 }
 
-void WebTransport::ResetStream(uint32_t stream_id, uint8_t code) {
+void WebTransport::ResetStream(uint32_t stream_id, uint32_t code) {
   VLOG(0) << "WebTransport::ResetStream(" << stream_id << ", "
           << static_cast<uint32_t>(code) << ") this = " << this;
   transport_remote_->AbortStream(stream_id, code);
 }
 
-void WebTransport::StopSending(uint32_t stream_id, uint8_t code) {
-  DVLOG(1) << "WebTransport::StopSending(" << stream_id << ", "
-           << static_cast<uint32_t>(code) << ") this = " << this;
+void WebTransport::StopSending(uint32_t stream_id, uint32_t code) {
+  DVLOG(1) << "WebTransport::StopSending(" << stream_id << ", " << code
+           << ") this = " << this;
   transport_remote_->StopSending(stream_id, code);
 }
 
@@ -1058,6 +1128,7 @@ void WebTransport::ForgetOutgoingStream(uint32_t stream_id) {
 void WebTransport::Trace(Visitor* visitor) const {
   visitor->Trace(datagrams_);
   visitor->Trace(received_datagrams_);
+  visitor->Trace(received_datagrams_controller_);
   visitor->Trace(datagram_underlying_source_);
   visitor->Trace(outgoing_datagrams_);
   visitor->Trace(datagram_underlying_sink_);
@@ -1081,13 +1152,24 @@ void WebTransport::Trace(Visitor* visitor) const {
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 
-void WebTransport::Init(const String& url,
+void WebTransport::Init(const String& url_for_diagnostics,
                         const WebTransportOptions& options,
                         ExceptionState& exception_state) {
-  DVLOG(1) << "WebTransport::Init() url=" << url << " this=" << this;
+  DVLOG(1) << "WebTransport::Init() url=" << url_for_diagnostics
+           << " this=" << this;
+  // This is an intentional spec violation due to our limited support for
+  // detached realms.
+  if (!script_state_->ContextIsValid()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      "Frame is detached.");
+    return;
+  }
   if (!url_.IsValid()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kSyntaxError,
-                                      "The URL '" + url + "' is invalid.");
+    // Do not use `url_` in the error message, since we want to display the
+    // original URL and not the canonicalized version stored in `url_`.
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kSyntaxError,
+        "The URL '" + url_for_diagnostics + "' is invalid.");
     return;
   }
 
@@ -1164,16 +1246,25 @@ void WebTransport::Init(const String& url,
               hash->algorithm(), value_builder.ToString()));
     }
   }
-  if (!fingerprints.IsEmpty()) {
+  if (!fingerprints.empty()) {
     execution_context->CountUse(
         WebFeature::kWebTransportServerCertificateHashes);
   }
 
   if (auto* scheduler = execution_context->GetScheduler()) {
+    // Two features are registered with `DisableBackForwardCache` policy here:
+    // - `kWebTransport`: a non-sticky feature that will disable BFCache for any
+    // page. It will be reset after the `WebTransport` is disposed.
+    // - `kWebTransportSticky`: a sticky feature that will only disable BFCache
+    // for the page containing "Cache-Control: no-store" header. It won't be
+    // reset even if the `WebTransport` is disposed.
     feature_handle_for_scheduler_ = scheduler->RegisterFeature(
         SchedulingPolicy::Feature::kWebTransport,
         SchedulingPolicy{SchedulingPolicy::DisableAggressiveThrottling(),
                          SchedulingPolicy::DisableBackForwardCache()});
+    scheduler->RegisterStickyFeature(
+        SchedulingPolicy::Feature::kWebTransportSticky,
+        SchedulingPolicy{SchedulingPolicy::DisableBackForwardCache()});
   }
 
   if (DoesSubresourceFilterBlockConnection(url_)) {
@@ -1196,8 +1287,8 @@ void WebTransport::Init(const String& url,
         handshake_client_receiver_.BindNewPipeAndPassRemote(
             execution_context->GetTaskRunner(TaskType::kNetworking)));
 
-    handshake_client_receiver_.set_disconnect_handler(
-        WTF::Bind(&WebTransport::OnConnectionError, WrapWeakPersistent(this)));
+    handshake_client_receiver_.set_disconnect_handler(WTF::BindOnce(
+        &WebTransport::OnConnectionError, WrapWeakPersistent(this)));
   }
 
   probe::WebTransportCreated(execution_context, inspector_transport_id_, url_);
@@ -1208,8 +1299,10 @@ void WebTransport::Init(const String& url,
 
   datagram_underlying_source_ =
       MakeGarbageCollected<DatagramUnderlyingSource>(script_state_, datagrams_);
-  received_datagrams_ = ReadableStream::CreateWithCountQueueingStrategy(
-      script_state_, datagram_underlying_source_, 0);
+  received_datagrams_ = ReadableStream::CreateByteStream(
+      script_state_, datagram_underlying_source_);
+  received_datagrams_controller_ =
+      To<ReadableByteStreamController>(received_datagrams_->GetController());
 
   // We create a WritableStream with high water mark 1 and try to mimic the
   // given high water mark in the Sink, from two reasons:
@@ -1269,7 +1362,7 @@ void WebTransport::Cleanup(v8::Local<v8::Value> reason,
 
   RejectPendingStreamResolvers(error);
   ScriptValue error_value(isolate, error);
-  datagram_underlying_source_->Error(error);
+  datagram_underlying_source_->Error(received_datagrams_controller_, error);
   outgoing_datagrams_->Controller()->error(script_state_, error_value);
 
   // We use local variables to avoid re-entrant problems.
@@ -1354,10 +1447,11 @@ void WebTransport::OnCreateSendStreamResponse(
       script_state_, this, stream_id, std::move(producer));
 
   auto* isolate = script_state_->GetIsolate();
-  ExceptionState exception_state(isolate, ExceptionState::kConstructionContext,
-                                 "SendStream");
+  ExceptionState exception_state(
+      isolate, ExceptionContextType::kConstructorOperationInvoke, "SendStream");
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, ToMicrotaskQueue(script_state_),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
   send_stream->Init(exception_state);
   if (exception_state.HadException()) {
     resolver->Reject(exception_state.GetException());
@@ -1402,10 +1496,12 @@ void WebTransport::OnCreateBidirectionalStreamResponse(
       script_state_, this, stream_id, std::move(outgoing_producer),
       std::move(incoming_consumer));
 
-  ExceptionState exception_state(isolate, ExceptionState::kConstructionContext,
-                                 "BidirectionalStream");
+  ExceptionState exception_state(
+      isolate, ExceptionContextType::kConstructorOperationInvoke,
+      "BidirectionalStream");
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, ToMicrotaskQueue(script_state_),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
   bidirectional_stream->Init(exception_state);
   if (exception_state.HadException()) {
     resolver->Reject(exception_state.GetException());

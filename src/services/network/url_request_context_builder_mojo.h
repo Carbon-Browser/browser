@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/url_request/url_request_context_builder.h"
-#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/url_request_context_owner.h"
 #include "services/proxy_resolver/public/mojom/proxy_resolver.mojom.h"
 

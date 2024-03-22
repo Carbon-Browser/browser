@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,9 @@ class FormUtilJavaScriptFeature : public web::JavaScriptFeature {
   // Sets up the next available unique ID value in a document.
   void SetUpForUniqueIDsWithInitialState(web::WebFrame* frame,
                                          uint32_t next_available_id);
+
+  // Enables/disables the AutofillAcrossIframes feature in `frame`.
+  void SetAutofillAcrossIframes(web::WebFrame* frame, bool enabled);
 
  private:
   friend class base::NoDestructor<FormUtilJavaScriptFeature>;

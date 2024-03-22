@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/histogram_functions.h"
@@ -20,18 +20,17 @@
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/extensions/extension_management.h"
-#include "chrome/browser/extensions/extension_message_bubble_controller.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
+#include "chrome/browser/extensions/profile_util.h"
 #include "chrome/browser/extensions/tab_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/extensions/extension_action_view_controller.h"
-#include "chrome/browser/ui/extensions/extension_message_bubble_factory.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_controller.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model_factory.h"
+#include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_action_manager.h"
@@ -54,8 +53,7 @@ ToolbarActionsModel::ToolbarActionsModel(
       extension_registry_(extensions::ExtensionRegistry::Get(profile_)),
       extension_action_manager_(
           extensions::ExtensionActionManager::Get(profile_)),
-      actions_initialized_(false),
-      has_active_bubble_(false) {
+      actions_initialized_(false) {
   extensions::ExtensionSystem::Get(profile_)->ready().Post(
       FROM_HERE, base::BindOnce(&ToolbarActionsModel::OnReady,
                                 weak_ptr_factory_.GetWeakPtr()));
@@ -130,10 +128,12 @@ void ToolbarActionsModel::OnExtensionManagementSettingsChanged() {
 }
 
 void ToolbarActionsModel::OnExtensionPermissionsUpdated(
-    const extensions::UpdatedExtensionPermissionsInfo& info) {
-  if (HasAction(info.extension->id())) {
+    const extensions::Extension& extension,
+    const extensions::PermissionSet& permissions,
+    extensions::PermissionsManager::UpdateReason reason) {
+  if (HasAction(extension.id())) {
     for (Observer& observer : observers_)
-      observer.OnToolbarActionUpdated(info.extension->id());
+      observer.OnToolbarActionUpdated(extension.id());
   }
 }
 
@@ -146,8 +146,7 @@ void ToolbarActionsModel::RemovePref(const ActionId& action_id) {
   // the active pinned set.
   DCHECK(!IsActionPinned(action_id));
   auto stored_pinned_actions = extension_prefs_->GetPinnedExtensions();
-  auto iter = std::find(stored_pinned_actions.begin(),
-                        stored_pinned_actions.end(), action_id);
+  auto iter = base::ranges::find(stored_pinned_actions, action_id);
   if (iter != stored_pinned_actions.end()) {
     stored_pinned_actions.erase(iter);
     extension_prefs_->SetPinnedExtensions(stored_pinned_actions);
@@ -210,21 +209,19 @@ void ToolbarActionsModel::RemoveAction(const ActionId& action_id) {
     observer.OnToolbarActionRemoved(action_id);
 }
 
-std::unique_ptr<extensions::ExtensionMessageBubbleController>
-ToolbarActionsModel::GetExtensionMessageBubbleController(Browser* browser) {
-  std::unique_ptr<extensions::ExtensionMessageBubbleController> controller;
-  if (has_active_bubble())
-    return controller;
-  controller = ExtensionMessageBubbleFactory(browser).GetController();
-  if (controller)
-    controller->SetIsActiveBubble();
-  return controller;
-}
-
 const std::u16string ToolbarActionsModel::GetExtensionName(
     const ActionId& action_id) const {
   return base::UTF8ToUTF16(
       extension_registry_->enabled_extensions().GetByID(action_id)->name());
+}
+
+bool ToolbarActionsModel::HasAction(const ActionId& action_id) const {
+  return base::Contains(action_ids_, action_id);
+}
+
+bool ToolbarActionsModel::CanShowActionsInToolbar(const Browser& browser) {
+  // Pinning extensions is not available in PWAs.
+  return !web_app::AppBrowserController::IsWebApp(&browser);
 }
 
 bool ToolbarActionsModel::IsRestrictedUrl(const GURL& url) const {
@@ -236,11 +233,10 @@ bool ToolbarActionsModel::IsRestrictedUrl(const GURL& url) const {
   // If nay extension has access, we want to properly message that (since
   // saying "No extensions can run..." is inaccurate). Other extensions
   // will still be properly attributed in UI.
-  return std::all_of(
-      action_ids().begin(), action_ids().end(), [this, url](ActionId id) {
-        return GetExtensionById(id)->permissions_data()->IsRestrictedUrl(
-            url, /*error=*/nullptr);
-      });
+  return base::ranges::all_of(action_ids(), [this, url](ActionId id) {
+    return GetExtensionById(id)->permissions_data()->IsRestrictedUrl(
+        url, /*error=*/nullptr);
+  });
 }
 
 bool ToolbarActionsModel::IsActionPinned(const ActionId& action_id) const {
@@ -268,8 +264,8 @@ void ToolbarActionsModel::MovePinnedAction(const ActionId& action_id,
   DCHECK(!profile_->IsOffTheRecord())
       << "Changing action position is disallowed in incognito.";
 
-  auto current_position_on_toolbar = std::find(
-      pinned_action_ids_.begin(), pinned_action_ids_.end(), action_id);
+  auto current_position_on_toolbar =
+      base::ranges::find(pinned_action_ids_, action_id);
   DCHECK(current_position_on_toolbar != pinned_action_ids_.end());
   size_t current_index_on_toolbar =
       current_position_on_toolbar - pinned_action_ids_.begin();
@@ -335,13 +331,13 @@ void ToolbarActionsModel::MovePinnedAction(const ActionId& action_id,
   auto stored_pinned_actions = extension_prefs_->GetPinnedExtensions();
   const bool move_to_end =
       non_force_pinned_neighbor == pinned_action_ids_.end();
-  auto target_position = move_to_end ? stored_pinned_actions.end()
-                                     : std::find(stored_pinned_actions.begin(),
-                                                 stored_pinned_actions.end(),
-                                                 *non_force_pinned_neighbor);
+  auto target_position = move_to_end
+                             ? stored_pinned_actions.end()
+                             : base::ranges::find(stored_pinned_actions,
+                                                  *non_force_pinned_neighbor);
 
-  auto current_position_in_prefs = std::find(
-      stored_pinned_actions.begin(), stored_pinned_actions.end(), action_id);
+  auto current_position_in_prefs =
+      base::ranges::find(stored_pinned_actions, action_id);
   DCHECK(current_position_in_prefs != stored_pinned_actions.end());
 
   // Rotate |action_id| to be in the target position.
@@ -383,6 +379,11 @@ void ToolbarActionsModel::InitializeActionList() {
     // "Extensions.Toolbar" for historical reasons.
     base::UmaHistogramCounts100("ExtensionToolbarModel.BrowserActionsCount",
                                 action_ids_.size());
+    if (extensions::profile_util::ProfileCanUseNonComponentExtensions(
+            profile_)) {
+      base::UmaHistogramCounts100("Extension.Toolbar.BrowserActionsCount2",
+                                  action_ids_.size());
+    }
     if (!action_ids_.empty()) {
       base::UmaHistogramCounts100("Extensions.Toolbar.PinnedExtensionCount2",
                                   pinned_action_ids_.size());
@@ -408,10 +409,6 @@ void ToolbarActionsModel::Populate() {
       continue;
     action_ids_.insert(extension->id());
   }
-}
-
-bool ToolbarActionsModel::HasAction(const ActionId& action_id) const {
-  return base::Contains(action_ids_, action_id);
 }
 
 void ToolbarActionsModel::IncognitoPopulate() {

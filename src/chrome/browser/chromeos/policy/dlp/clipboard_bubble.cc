@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/policy/dlp/clipboard_bubble.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_clipboard_bubble_constants.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_policy_constants.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -26,7 +27,9 @@
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chrome/browser/lacros/browser_service_lacros.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/browser_navigator.h"
+#include "chrome/browser/ui/browser_navigator_params.h"
 #include "ui/chromeos/styles/cros_styles.h"
 #include "ui/native_theme/native_theme_aura.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -87,10 +90,11 @@ SkColor RetrieveColor(cros_styles::ColorName name) {
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
-class Button : public views::LabelButton {
+class BubbleButton : public views::LabelButton {
+  METADATA_HEADER(BubbleButton, views::LabelButton)
+
  public:
-  METADATA_HEADER(Button);
-  explicit Button(const std::u16string& button_label) {
+  explicit BubbleButton(const std::u16string& button_label) {
     SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_CENTER);
 
     SetText(button_label);
@@ -115,9 +119,9 @@ class Button : public views::LabelButton {
              kButtonHeight});
   }
 
-  Button(const Button&) = delete;
-  Button& operator=(const Button&) = delete;
-  ~Button() override = default;
+  BubbleButton(const BubbleButton&) = delete;
+  BubbleButton& operator=(const BubbleButton&) = delete;
+  ~BubbleButton() override = default;
 
   int GetLabelWidth() const { return label()->bounds().width(); }
 
@@ -130,24 +134,25 @@ class Button : public views::LabelButton {
 void OnLearnMoreLinkClicked() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::NewWindowDelegate::GetPrimary()->OpenUrl(
-      GURL(kDlpLearnMoreUrl),
-      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction);
+      GURL(dlp::kDlpLearnMoreUrl),
+      ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      ash::NewWindowDelegate::Disposition::kNewForegroundTab);
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  // TODO(hidehiko): Instantiating BrowserServiceLacros here is an unexpected
-  // use case. Get rid of this by replacing with Navigate() API invocation
-  // directly.
-  auto browser_service = std::make_unique<BrowserServiceLacros>();
-  using OpenUrlParams = crosapi::mojom::OpenUrlParams;
-  auto params = OpenUrlParams::New();
-  params->disposition = OpenUrlParams::WindowOpenDisposition::kNewForegroundTab;
-  browser_service->OpenUrl(GURL(kDlpLearnMoreUrl), std::move(params),
-                           base::DoNothing());
+  // The dlp policy applies to the main profile, so use the main profile for
+  // opening the page.
+  NavigateParams navigate_params(
+      ProfileManager::GetPrimaryUserProfile(), GURL(dlp::kDlpLearnMoreUrl),
+      ui::PageTransitionFromInt(ui::PAGE_TRANSITION_LINK |
+                                ui::PAGE_TRANSITION_FROM_API));
+  navigate_params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
+  navigate_params.window_action = NavigateParams::SHOW_WINDOW;
+  Navigate(&navigate_params);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
 }  // namespace
 
-BEGIN_METADATA(Button, views::LabelButton)
+BEGIN_METADATA(BubbleButton)
 ADD_READONLY_PROPERTY_METADATA(int, LabelWidth)
 END_METADATA
 
@@ -269,7 +274,7 @@ ClipboardBlockBubble::ClipboardBlockBubble(const std::u16string& text)
   // Add "Got it" button.
   std::u16string button_label =
       l10n_util::GetStringUTF16(IDS_POLICY_DLP_CLIPBOARD_BLOCK_DISMISS_BUTTON);
-  button_ = AddChildView(std::make_unique<Button>(button_label));
+  button_ = AddChildView(std::make_unique<BubbleButton>(button_label));
   button_->SetPaintToLayer();
   button_->layer()->SetFillsBoundsOpaquely(false);
   button_->SetPosition(
@@ -288,8 +293,7 @@ gfx::Size ClipboardBlockBubble::GetBubbleSize() const {
                             kButtonLabelSpacing + button_->height()};
 }
 
-void ClipboardBlockBubble::SetDismissCallback(
-    base::RepeatingCallback<void()> cb) {
+void ClipboardBlockBubble::SetDismissCallback(base::OnceClosure cb) {
   DCHECK(button_);
   button_->SetCallback(std::move(cb));
 }
@@ -302,7 +306,7 @@ ClipboardWarnBubble::ClipboardWarnBubble(const std::u16string& text)
   // Add paste button.
   std::u16string paste_label =
       l10n_util::GetStringUTF16(IDS_POLICY_DLP_CLIPBOARD_WARN_PROCEED_BUTTON);
-  paste_button_ = AddChildView(std::make_unique<Button>(paste_label));
+  paste_button_ = AddChildView(std::make_unique<BubbleButton>(paste_label));
   paste_button_->SetPaintToLayer();
   paste_button_->layer()->SetFillsBoundsOpaquely(false);
   paste_button_->SetPosition(
@@ -311,8 +315,8 @@ ClipboardWarnBubble::ClipboardWarnBubble(const std::u16string& text)
 
   // Add cancel button.
   std::u16string cancel_label =
-      l10n_util::GetStringUTF16(IDS_POLICY_DLP_CLIPBOARD_WARN_DISMISS_BUTTON);
-  cancel_button_ = AddChildView(std::make_unique<Button>(cancel_label));
+      l10n_util::GetStringUTF16(IDS_POLICY_DLP_WARN_CANCEL_BUTTON);
+  cancel_button_ = AddChildView(std::make_unique<BubbleButton>(cancel_label));
   cancel_button_->SetPaintToLayer();
   cancel_button_->layer()->SetFillsBoundsOpaquely(false);
   cancel_button_->SetPosition(
@@ -323,7 +327,11 @@ ClipboardWarnBubble::ClipboardWarnBubble(const std::u16string& text)
   UpdateBorderSize(GetBubbleSize());
 }
 
-ClipboardWarnBubble::~ClipboardWarnBubble() = default;
+ClipboardWarnBubble::~ClipboardWarnBubble() {
+  if (paste_cb_) {
+    std::move(paste_cb_).Run(false);
+  }
+}
 
 gfx::Size ClipboardWarnBubble::GetBubbleSize() const {
   DCHECK(label_);
@@ -333,14 +341,12 @@ gfx::Size ClipboardWarnBubble::GetBubbleSize() const {
                             kButtonLabelSpacing + paste_button_->height()};
 }
 
-void ClipboardWarnBubble::SetDismissCallback(
-    base::RepeatingCallback<void()> cb) {
+void ClipboardWarnBubble::SetDismissCallback(base::OnceClosure cb) {
   DCHECK(cancel_button_);
   cancel_button_->SetCallback(std::move(cb));
 }
 
-void ClipboardWarnBubble::SetProceedCallback(
-    base::RepeatingCallback<void()> cb) {
+void ClipboardWarnBubble::SetProceedCallback(base::OnceClosure cb) {
   DCHECK(paste_button_);
   paste_button_->SetCallback(std::move(cb));
 }

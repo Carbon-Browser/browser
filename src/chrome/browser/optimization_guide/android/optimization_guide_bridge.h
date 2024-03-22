@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,15 +41,16 @@ class OptimizationGuideBridge {
   void RegisterOptimizationTypes(
       JNIEnv* env,
       const base::android::JavaParamRef<jintArray>& joptimization_types);
-  void CanApplyOptimizationAsync(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& java_gurl,
-      jint optimization_type,
-      const base::android::JavaParamRef<jobject>& java_callback);
   void CanApplyOptimization(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& java_gurl,
       jint optimization_type,
+      const base::android::JavaParamRef<jobject>& java_callback);
+  void CanApplyOptimizationOnDemand(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobjectArray>& java_gurls,
+      const base::android::JavaParamRef<jintArray>& joptimization_types,
+      jint request_context,
       const base::android::JavaParamRef<jobject>& java_callback);
   void OnNewPushNotification(
       JNIEnv* env,

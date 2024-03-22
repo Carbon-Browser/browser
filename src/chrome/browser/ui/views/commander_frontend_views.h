@@ -1,24 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_COMMANDER_FRONTEND_VIEWS_H_
 #define CHROME_BROWSER_UI_VIEWS_COMMANDER_FRONTEND_VIEWS_H_
 
-#include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/commander/commander_frontend.h"
-
 #include <memory>
 
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser_list_observer.h"
+#include "chrome/browser/ui/commander/commander_frontend.h"
 #include "chrome/browser/ui/webui/commander/commander_handler.h"
 #include "ui/views/widget/widget_observer.h"
 
 class CommanderFocusLossWatcher;
 class CommanderWebView;
+class Profile;
 
 namespace views {
 class WidgetDelegate;

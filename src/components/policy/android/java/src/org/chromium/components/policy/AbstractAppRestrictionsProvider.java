@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,16 +30,15 @@ public abstract class AbstractAppRestrictionsProvider extends PolicyProvider {
     private static Bundle sTestRestrictions;
 
     private final Context mContext;
-    private final BroadcastReceiver mAppRestrictionsChangedReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            refresh();
-        }
-    };
+    private final BroadcastReceiver mAppRestrictionsChangedReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    refresh();
+                }
+            };
 
-    /**
-     * @param context The application context.
-     */
+    /** @param context The application context. */
     public AbstractAppRestrictionsProvider(Context context) {
         mContext = context;
     }
@@ -52,7 +51,7 @@ public abstract class AbstractAppRestrictionsProvider extends PolicyProvider {
 
     /**
      * @return The intent action to listen to to be notified of restriction changes,
-     * {@code null} if it is not supported.
+     * {@code null} if it is not supported. The action will/must be a protected broadcast action.
      */
     protected abstract String getRestrictionChangeIntentAction();
 
@@ -65,8 +64,11 @@ public abstract class AbstractAppRestrictionsProvider extends PolicyProvider {
         String changeIntentAction = getRestrictionChangeIntentAction();
         if (changeIntentAction == null) return;
 
-        ContextUtils.registerNonExportedBroadcastReceiver(mContext, mAppRestrictionsChangedReceiver,
-                new IntentFilter(changeIntentAction), new Handler(ThreadUtils.getUiThreadLooper()));
+        ContextUtils.registerProtectedBroadcastReceiver(
+                mContext,
+                mAppRestrictionsChangedReceiver,
+                new IntentFilter(changeIntentAction),
+                new Handler(ThreadUtils.getUiThreadLooper()));
     }
 
     /**
@@ -117,8 +119,15 @@ public abstract class AbstractAppRestrictionsProvider extends PolicyProvider {
      */
     @VisibleForTesting
     public static void setTestRestrictions(Bundle policies) {
-        Log.d(TAG, "Test Restrictions: %s",
+        Log.d(
+                TAG,
+                "Test Restrictions: %s",
                 (policies == null ? null : policies.keySet().toArray()));
         sTestRestrictions = policies;
+    }
+
+    /** Returns whether any restrictions were set using {@link #setTestRestrictions}. */
+    public static boolean hasTestRestrictions() {
+        return sTestRestrictions != null;
     }
 }

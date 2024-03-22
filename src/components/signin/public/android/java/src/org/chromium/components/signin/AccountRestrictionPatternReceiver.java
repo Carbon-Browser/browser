@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,14 +28,17 @@ final class AccountRestrictionPatternReceiver {
     private static final String ACCOUNT_RESTRICTION_PATTERNS_KEY = "RestrictAccountsToPatterns";
 
     AccountRestrictionPatternReceiver(Callback<List<PatternMatcher>> onPatternsUpdated) {
-        BroadcastReceiver receiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                getRestrictionPatternsAsync().then(onPatternsUpdated);
-            }
-        };
-        ContextUtils.getApplicationContext().registerReceiver(
-                receiver, new IntentFilter(Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED));
+        BroadcastReceiver receiver =
+                new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        getRestrictionPatternsAsync().then(onPatternsUpdated);
+                    }
+                };
+        ContextUtils.registerProtectedBroadcastReceiver(
+                ContextUtils.getApplicationContext(),
+                receiver,
+                new IntentFilter(Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED));
         getRestrictionPatternsAsync().then(onPatternsUpdated);
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/version.h"
 #include "chromeos/crosapi/mojom/browser_version.mojom.h"
@@ -34,7 +34,7 @@ void GetInstalledVersion(InstalledVersionCallback callback) {
               base::Version version(version_str);
               if (!version.IsValid() ||
                   (version < version_info::GetVersion() &&
-                   chromeos::BrowserParamsProxy::Get()->lacros_selection() ==
+                   chromeos::BrowserParamsProxy::Get()->LacrosSelection() ==
                        crosapi::mojom::BrowserInitParams::LacrosSelection::
                            kRootfs)) {
                 version = version_info::GetVersion();

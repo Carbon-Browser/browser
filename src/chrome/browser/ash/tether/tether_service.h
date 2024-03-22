@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,22 @@
 
 #include <memory>
 
-#include "ash/components/tether/tether_component.h"
-#include "ash/components/tether/tether_host_fetcher.h"
-#include "ash/services/device_sync/public/cpp/device_sync_client.h"
-#include "ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
+#include "chromeos/ash/components/tether/tether_component.h"
+#include "chromeos/ash/components/tether/tether_host_fetcher.h"
+#include "chromeos/ash/services/device_sync/public/cpp/device_sync_client.h"
+#include "chromeos/ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 
 class Profile;
-
-namespace chromeos {
-class NetworkStateHandler;
-}
 
 namespace session_manager {
 class SessionManager;
@@ -39,7 +36,7 @@ namespace ash {
 
 namespace secure_channel {
 class SecureChannelClient;
-}
+}  // namespace secure_channel
 
 namespace tether {
 
@@ -58,7 +55,7 @@ class TetherService
       public chromeos::PowerManagerClient::Observer,
       public TetherHostFetcher::Observer,
       public device::BluetoothAdapter::Observer,
-      public chromeos::NetworkStateHandlerObserver,
+      public NetworkStateHandlerObserver,
       public TetherComponent::Observer,
       public device_sync::DeviceSyncClient::Observer,
       public multidevice_setup::MultiDeviceSetupClient::Observer {
@@ -69,7 +66,6 @@ class TetherService
       device_sync::DeviceSyncClient* device_sync_client,
       secure_channel::SecureChannelClient* secure_channel_client,
       multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client,
-      chromeos::NetworkStateHandler* network_state_handler,
       session_manager::SessionManager* session_manager);
   TetherService(const TetherService&) = delete;
   TetherService& operator=(const TetherService&) = delete;
@@ -81,7 +77,7 @@ class TetherService
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
 
   // Attempt to start the Tether module. Only succeeds if all conditions to
-  // reach chromeos::NetworkStateHandler::TechnologyState::ENABLED are reached.
+  // reach NetworkStateHandler::TechnologyState::ENABLED are reached.
   // Should only be called once a user is logged in.
   virtual void StartTetherIfPossible();
 
@@ -103,9 +99,9 @@ class TetherService
   void AdapterPoweredChanged(device::BluetoothAdapter* adapter,
                              bool powered) override;
 
-  // chromeos::NetworkStateHandlerObserver:
+  // NetworkStateHandlerObserver:
   void DeviceListChanged() override;
-  void DevicePropertiesUpdated(const chromeos::DeviceState* device) override;
+  void DevicePropertiesUpdated(const DeviceState* device) override;
 
   // Helper method called from NetworkStateHandlerObserver methods.
   void UpdateEnabledState();
@@ -113,7 +109,7 @@ class TetherService
   // TetherComponent::Observer:
   void OnShutdownComplete() override;
 
-  // chromeos::device_sync::DeviceSyncClient::Observer:
+  // ash::device_sync::DeviceSyncClient::Observer:
   void OnReady() override;
 
   // ash::multidevice_setup::MultiDeviceSetupClient::Observer:
@@ -129,9 +125,9 @@ class TetherService
   virtual bool HasSyncedTetherHosts() const;
 
   virtual void UpdateTetherTechnologyState();
-  chromeos::NetworkStateHandler::TechnologyState GetTetherTechnologyState();
+  NetworkStateHandler::TechnologyState GetTetherTechnologyState();
 
-  chromeos::NetworkStateHandler* network_state_handler() {
+  NetworkStateHandler* network_state_handler() {
     return network_state_handler_;
   }
 
@@ -160,7 +156,12 @@ class TetherService
   FRIEND_TEST_ALL_PREFIXES(TetherServiceTest, TestProhibitedByPolicy);
   FRIEND_TEST_ALL_PREFIXES(TetherServiceTest, TestIsBluetoothPowered);
   FRIEND_TEST_ALL_PREFIXES(TetherServiceTest, TestCellularIsUnavailable);
-  FRIEND_TEST_ALL_PREFIXES(TetherServiceTest, TestCellularIsAvailable);
+  FRIEND_TEST_ALL_PREFIXES(
+      TetherServiceTest,
+      TestCellularIsAvailable_InstantHotspotRebrandDisabled);
+  FRIEND_TEST_ALL_PREFIXES(
+      TetherServiceTest,
+      TestCellularIsAvailable_InstantHotspotRebrandEnabled);
   FRIEND_TEST_ALL_PREFIXES(TetherServiceTest, TestDisabled);
   FRIEND_TEST_ALL_PREFIXES(TetherServiceTest, TestEnabled);
   FRIEND_TEST_ALL_PREFIXES(TetherServiceTest,
@@ -266,16 +267,19 @@ class TetherService
   TetherFeatureState previous_feature_state_ =
       TetherFeatureState::TETHER_FEATURE_STATE_MAX;
 
-  Profile* profile_;
-  chromeos::PowerManagerClient* power_manager_client_;
-  device_sync::DeviceSyncClient* device_sync_client_;
-  secure_channel::SecureChannelClient* secure_channel_client_;
-  multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client_;
-  chromeos::NetworkStateHandler* network_state_handler_;
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
+  raw_ptr<Profile, ExperimentalAsh> profile_;
+  raw_ptr<chromeos::PowerManagerClient, ExperimentalAsh> power_manager_client_;
+  raw_ptr<device_sync::DeviceSyncClient, DanglingUntriaged | ExperimentalAsh>
+      device_sync_client_;
+  raw_ptr<secure_channel::SecureChannelClient, ExperimentalAsh>
+      secure_channel_client_;
+  raw_ptr<multidevice_setup::MultiDeviceSetupClient,
+          DanglingUntriaged | ExperimentalAsh>
+      multidevice_setup_client_;
+  raw_ptr<NetworkStateHandler, ExperimentalAsh> network_state_handler_;
+  base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
-  session_manager::SessionManager* session_manager_;
+  raw_ptr<session_manager::SessionManager, ExperimentalAsh> session_manager_;
   std::unique_ptr<NotificationPresenter> notification_presenter_;
   std::unique_ptr<GmsCoreNotificationsStateTrackerImpl>
       gms_core_notifications_state_tracker_;
@@ -290,12 +294,5 @@ class TetherService
 
 }  // namespace tether
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-namespace tether {
-using ::ash::tether::TetherService;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_TETHER_TETHER_SERVICE_H_

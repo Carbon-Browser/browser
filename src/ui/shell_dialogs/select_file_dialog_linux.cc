@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -33,7 +33,7 @@ void SelectFileDialogLinux::ListenerDestroyed() {
 
 bool SelectFileDialogLinux::CallDirectoryExistsOnUIThread(
     const base::FilePath& path) {
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking scoped_allow_blocking;
   return base::DirectoryExists(path);
 }
 

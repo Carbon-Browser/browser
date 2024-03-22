@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,10 +44,10 @@ bool SameBlockWordIterator<Direction>::AdvanceNextWord() {
   do {
     int pos =
         Direction::FindNextWordPos(current_node_text_, current_text_offset_);
-    String next_word =
+    unsigned next_word_stripped_length =
         Direction::Substring(current_node_text_, current_text_offset_, pos)
-            .StripWhiteSpace();
-    if (!next_word.IsEmpty()) {
+            .LengthWithStrippedWhiteSpace();
+    if (next_word_stripped_length > 0) {
       current_text_offset_ = pos;
       return true;
     }
@@ -82,7 +82,9 @@ Node* SameBlockWordIterator<Direction>::NextVisibleTextNodeWithinBlock(
   Node* node = &start_node;
   do {
     node = Direction::Next(*node);
-    node = Direction::AdvanceUntilVisibleTextNode(*node);
+    if (node) {
+      node = Direction::AdvanceUntilVisibleTextNode(*node);
+    }
   } while (node && !node->GetLayoutObject());
 
   // Stop, if crossed block boundaries.

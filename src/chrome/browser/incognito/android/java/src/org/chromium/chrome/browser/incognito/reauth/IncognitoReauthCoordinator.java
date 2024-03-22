@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ import org.chromium.ui.modaldialog.DialogDismissalCause;
  * in an internal folder. Ideally only the controller would be potentially exposed.
  */
 interface IncognitoReauthCoordinator {
-    /**
-     * A method responsible to fire the re-auth screen.
-     */
+    /** A method responsible to fire the re-auth screen. */
     void show();
 
     /**
@@ -32,4 +30,7 @@ interface IncognitoReauthCoordinator {
      *                       screen.
      */
     void hide(@DialogDismissalCause int dismissalCause);
+
+    /** A method responsible to do any clean-up when the coordinator is being destroyed. */
+    void destroy();
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "media/formats/hls/media_playlist_test_builder.h"
 #include "media/formats/hls/multivariant_playlist.h"
 #include "media/formats/hls/parse_status.h"
+#include "media/formats/hls/playlist.h"
 #include "media/formats/hls/tags.h"
 #include "media/formats/hls/test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -23,18 +24,19 @@ namespace media::hls {
 
 namespace {
 
-MultivariantPlaylist CreateMultivariantPlaylist(
+scoped_refptr<MultivariantPlaylist> CreateMultivariantPlaylist(
     std::initializer_list<base::StringPiece> lines,
-    GURL uri = GURL("http://localhost/multi_playlist.m3u8")) {
+    GURL uri = GURL("http://localhost/multi_playlist.m3u8"),
+    types::DecimalInteger version = Playlist::kDefaultVersion) {
   std::string source;
   for (auto line : lines) {
-    source.append(line.data(), line.size());
+    source.append(line);
     source.append("\n");
   }
 
   // Parse the given source. Failure here isn't supposed to be part of the test,
   // so use a CHECK.
-  auto result = MultivariantPlaylist::Parse(source, std::move(uri));
+  auto result = MultivariantPlaylist::Parse(source, std::move(uri), version);
   CHECK(result.has_value());
   return std::move(result).value();
 }
@@ -46,7 +48,7 @@ TEST(HlsMediaPlaylistTest, Segments) {
   builder.AppendLine("#EXTM3U");
   builder.AppendLine("#EXT-X-TARGETDURATION:10");
   builder.AppendLine("#EXT-X-VERSION:5");
-  builder.ExpectPlaylist(HasVersion, 5);
+  builder.SetVersion(5);
   builder.ExpectPlaylist(HasTargetDuration, base::Seconds(10));
 
   builder.AppendLine("#EXTINF:9.2,\t");
@@ -150,7 +152,7 @@ TEST(HlsMediaPlaylistTest, VariableSubstitution) {
   builder.AppendLine("#EXTM3U");
   builder.AppendLine("#EXT-X-TARGETDURATION:10");
   builder.AppendLine("#EXT-X-VERSION:8");
-  builder.ExpectPlaylist(HasVersion, 8);
+  builder.SetVersion(8);
   builder.ExpectPlaylist(HasTargetDuration, base::Seconds(10));
 
   builder.AppendLine(R"(#EXT-X-DEFINE:NAME="ROOT",VALUE="http://video.com")");
@@ -199,11 +201,12 @@ TEST(HlsMediaPlaylistTest, VariableSubstitution) {
   // Test importing variables in a playlist with a parent
   auto parent = CreateMultivariantPlaylist(
       {"#EXTM3U", "#EXT-X-VERSION:8",
-       R"(#EXT-X-DEFINE:NAME="IMPORTED",VALUE="HELLO")"});
+       R"(#EXT-X-DEFINE:NAME="IMPORTED",VALUE="HELLO")"},
+      GURL("http://localhost/multi_playlist.m3u8"), 8);
   {
     // Referring to a parent playlist variable without importing it is an error
     auto fork = builder;
-    fork.SetParent(&parent);
+    fork.SetParent(parent.get());
     fork.AppendLine("#EXTINF:9.9,\t");
     fork.AppendLine("segments/{$IMPORTED}.ts");
     fork.ExpectError(ParseStatusCode::kVariableUndefined);
@@ -212,7 +215,7 @@ TEST(HlsMediaPlaylistTest, VariableSubstitution) {
     // Locally overwriting an unimported variable from a parent playlist is NOT
     // an error
     auto fork = builder;
-    fork.SetParent(&parent);
+    fork.SetParent(parent.get());
     fork.AppendLine(R"(#EXT-X-DEFINE:NAME="IMPORTED",VALUE="WORLD")");
     fork.AppendLine("#EXTINF:9.9,\t");
     fork.AppendLine("segments/{$IMPORTED}.ts");
@@ -227,7 +230,7 @@ TEST(HlsMediaPlaylistTest, VariableSubstitution) {
   {
     // Defining a variable once it's been imported is an error
     auto fork = builder;
-    fork.SetParent(&parent);
+    fork.SetParent(parent.get());
     fork.AppendLine(R"(#EXT-X-DEFINE:IMPORT="IMPORTED")");
     fork.AppendLine(R"(#EXT-X-DEFINE:NAME="IMPORTED",VALUE="WORLD")");
     fork.ExpectError(ParseStatusCode::kVariableDefinedMultipleTimes);
@@ -235,7 +238,7 @@ TEST(HlsMediaPlaylistTest, VariableSubstitution) {
   {
     // Importing the same variable twice is an error
     auto fork = builder;
-    fork.SetParent(&parent);
+    fork.SetParent(parent.get());
     fork.AppendLine(R"(#EXT-X-DEFINE:IMPORT="IMPORTED")");
     fork.AppendLine(R"(#EXT-X-DEFINE:IMPORT="IMPORTED")");
     fork.ExpectError(ParseStatusCode::kVariableDefinedMultipleTimes);
@@ -244,14 +247,14 @@ TEST(HlsMediaPlaylistTest, VariableSubstitution) {
     // Importing a variable that hasn't been defined in the parent playlist is
     // an error
     auto fork = builder;
-    fork.SetParent(&parent);
+    fork.SetParent(parent.get());
     fork.AppendLine(R"(#EXT-X-DEFINE:IMPORT="FOO")");
     fork.ExpectError(ParseStatusCode::kImportedVariableUndefined);
   }
   {
     // Test actually using an imported variable
     auto fork = builder;
-    fork.SetParent(&parent);
+    fork.SetParent(parent.get());
     fork.AppendLine(R"(#EXT-X-DEFINE:IMPORT="IMPORTED")");
     fork.AppendLine("#EXTINF:9.9,\t");
     fork.AppendLine("segments/{$IMPORTED}.ts");
@@ -294,7 +297,7 @@ TEST(HlsMediaPlaylistTest, XIndependentSegmentsTagInParent) {
 
   // Parent value should carryover to media playlist
   MediaPlaylistTestBuilder builder;
-  builder.SetParent(&parent1);
+  builder.SetParent(parent1.get());
   builder.AppendLine("#EXTM3U");
   builder.AppendLine("#EXT-X-TARGETDURATION:10");
   builder.ExpectPlaylist(HasIndependentSegments, true);
@@ -308,7 +311,7 @@ TEST(HlsMediaPlaylistTest, XIndependentSegmentsTagInParent) {
   // in the child
   auto parent2 = CreateMultivariantPlaylist({"#EXTM3U"});
   builder = MediaPlaylistTestBuilder();
-  builder.SetParent(&parent2);
+  builder.SetParent(parent2.get());
   builder.AppendLine("#EXTM3U");
   builder.AppendLine("#EXT-X-TARGETDURATION:10");
   {
@@ -319,7 +322,7 @@ TEST(HlsMediaPlaylistTest, XIndependentSegmentsTagInParent) {
   builder.AppendLine("#EXT-X-INDEPENDENT-SEGMENTS");
   builder.ExpectPlaylist(HasIndependentSegments, true);
   builder.ExpectOk();
-  EXPECT_FALSE(parent2.AreSegmentsIndependent());
+  EXPECT_FALSE(parent2->AreSegmentsIndependent());
 }
 
 TEST(HlsMediaPlaylistTest, XBitrateTag) {
@@ -633,7 +636,6 @@ TEST(HlsMediaPlaylistTest, XDiscontinuityTag) {
   MediaPlaylistTestBuilder builder;
   builder.AppendLine("#EXTM3U");
   builder.AppendLine("#EXT-X-TARGETDURATION:10");
-  builder.ExpectPlaylist(HasVersion, 1);
   builder.ExpectPlaylist(HasTargetDuration, base::Seconds(10));
 
   // Default discontinuity state is false
@@ -849,7 +851,6 @@ TEST(HlsMediaPlaylistTest, XGapTag) {
   MediaPlaylistTestBuilder builder;
   builder.AppendLine("#EXTM3U");
   builder.AppendLine("#EXT-X-TARGETDURATION:10");
-  builder.ExpectPlaylist(HasVersion, 1);
   builder.ExpectPlaylist(HasTargetDuration, base::Seconds(10));
 
   // Default gap state is false

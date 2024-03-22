@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -207,6 +207,14 @@ function testAppViewEmbedSelfShouldFail(appToEmbed) {
   });
 };
 
+function testCloseWithPendingEmbedRequest(appToEmbed) {
+  let appview = new AppView();
+  document.body.appendChild(appview);
+  appview.connect(appToEmbed, { 'deferRequest': true });
+  // The test continues on the C++ side.
+  embedder.test.succeed();
+};
+
 embedder.test.testList = {
   'testAppViewWithUndefinedDataShouldSucceed':
       testAppViewWithUndefinedDataShouldSucceed,
@@ -215,7 +223,8 @@ embedder.test.testList = {
   'testAppViewMultipleConnects': testAppViewMultipleConnects,
   'testAppViewConnectFollowingPreviousConnect':
       testAppViewConnectFollowingPreviousConnect,
-  'testAppViewEmbedSelfShouldFail': testAppViewEmbedSelfShouldFail
+  'testAppViewEmbedSelfShouldFail': testAppViewEmbedSelfShouldFail,
+  'testCloseWithPendingEmbedRequest': testCloseWithPendingEmbedRequest,
 };
 
 onload = function() {

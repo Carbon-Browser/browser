@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_LOCAL_SEARCH_SERVICE_SEARCH_METRICS_REPORTER_H_
 #define CHROMEOS_ASH_COMPONENTS_LOCAL_SEARCH_SERVICE_SEARCH_METRICS_REPORTER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/local_search_service/public/mojom/local_search_service.mojom.h"
 #include "chromeos/ash/components/local_search_service/shared_structs.h"
@@ -15,8 +16,7 @@
 class PrefRegistrySimple;
 class PrefService;
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 // SearchMetricsReporter logs daily search requests to UMA.
 class SearchMetricsReporter : public mojom::SearchMetricsReporter {
@@ -33,6 +33,7 @@ class SearchMetricsReporter : public mojom::SearchMetricsReporter {
   static const char kHelpAppName[];
   static const char kHelpAppLauncherName[];
   static const char kPersonalizationName[];
+  static const char kShortcutsAppName[];
 
   // Registers prefs used by SearchMetricsReporter in |registry|.
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
@@ -60,7 +61,7 @@ class SearchMetricsReporter : public mojom::SearchMetricsReporter {
   // |daily_event_|.
   void ReportDailyMetrics(metrics::DailyEvent::IntervalType type);
 
-  PrefService* pref_service_;  // Not owned.
+  raw_ptr<PrefService, ExperimentalAsh> pref_service_;  // Not owned.
 
   std::unique_ptr<metrics::DailyEvent> daily_event_;
 
@@ -75,7 +76,6 @@ class SearchMetricsReporter : public mojom::SearchMetricsReporter {
       receivers_;
 };
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service
 
 #endif  // CHROMEOS_ASH_COMPONENTS_LOCAL_SEARCH_SERVICE_SEARCH_METRICS_REPORTER_H_

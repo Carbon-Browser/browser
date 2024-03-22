@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,15 @@
 #include <stdint.h>
 
 #include <memory>
+#include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "ui/views/controls/menu/menu_runner_impl_interface.h"
 #include "ui/views/views_export.h"
+
+namespace gfx {
+class RoundedCornersF;
+}  // namespace gfx
 
 namespace views {
 
@@ -38,7 +43,10 @@ class VIEWS_EXPORT MenuRunnerImplAdapter : public MenuRunnerImplInterface {
                  const gfx::Rect& bounds,
                  MenuAnchorPosition anchor,
                  int32_t types,
-                 gfx::NativeView native_view_for_gestures) override;
+                 gfx::NativeView native_view_for_gestures,
+                 absl::optional<gfx::RoundedCornersF> corners = absl::nullopt,
+                 absl::optional<std::string> show_menu_host_duration_histogram =
+                     absl::nullopt) override;
   void Cancel() override;
   base::TimeTicks GetClosingEventTime() const override;
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,18 +14,18 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "components/search_engines/omnibox_focus_type.h"
 #include "components/search_engines/search_engine_type.h"
+#include "components/search_engines/search_terms_data.h"
 #include "components/search_engines/template_url_data.h"
 #include "components/search_engines/template_url_id.h"
-#include "third_party/metrics_proto/chrome_searchbox_stats.pb.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
+#include "third_party/omnibox_proto/chrome_searchbox_stats.pb.h"
 #include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
 #include "url/third_party/mozilla/url_parse.h"
 
-class SearchTermsData;
 class TemplateURL;
 
 
@@ -57,10 +57,13 @@ class TemplateURLRef {
     SEARCH,
     SUGGEST,
     IMAGE,
+    IMAGE_TRANSLATE,
     NEW_TAB,
     CONTEXTUAL_SEARCH,
     INDEXED
   };
+
+  using RequestSource = SearchTermsData::RequestSource;
 
   // Type to store <content_type, post_data> pair for POST URLs.
   // The |content_type|(first part of the pair) is the content-type of
@@ -68,14 +71,6 @@ class TemplateURLRef {
   // "multipart/form-data" format, it also contains the MIME boundary used in
   // the |post_data|. See http://tools.ietf.org/html/rfc2046 for the details.
   typedef std::pair<std::string, std::string> PostContent;
-
-  // Enumeration of the known search or suggest request sources. These values
-  // are not persisted or used in histograms; thus can be freely changed.
-  enum RequestSource {
-    SEARCHBOX,          // Omnibox or the NTP realbox. The default.
-    CROS_APP_LIST,      // Chrome OS app list search box.
-    NON_SEARCHBOX_NTP,  // Suggestions for the NTP surface.
-  };
 
   // This struct encapsulates arguments passed to
   // TemplateURLRef::ReplaceSearchTerms methods.  By default, only search_terms
@@ -121,6 +116,11 @@ class TemplateURLRef {
       // indicates experiment status and server processing results so that
       // can be logged in GWS Sawmill logs for offline analysis for the
       // Related Searches MVP experiment.
+      // The |apply_lang_hint| specifies whether or not the |source_lang| should
+      // be used as a hint for backend language detection. Otherwise, backend
+      // translation is forced using |source_lang|. Note that this only supports
+      // Partial Translate and so may only be enabled for select clients on the
+      // server.
       ContextualSearchParams(int version,
                              int contextual_cards_version,
                              std::string home_country,
@@ -130,7 +130,8 @@ class TemplateURLRef {
                              std::string source_lang,
                              std::string target_lang,
                              std::string fluent_languages,
-                             std::string related_searches_stamp);
+                             std::string related_searches_stamp,
+                             bool apply_lang_hint);
       ContextualSearchParams(const ContextualSearchParams& other);
       ~ContextualSearchParams();
 
@@ -176,6 +177,9 @@ class TemplateURLRef {
       // experiment. The value is an arbitrary string that starts with a
       // schema version number.
       std::string related_searches_stamp;
+
+      // Whether hinted language detection should be used on the backend.
+      bool apply_lang_hint = false;
     };
 
     // Estimates dynamic memory usage.
@@ -192,7 +196,8 @@ class TemplateURLRef {
     metrics::OmniboxInputType input_type = metrics::OmniboxInputType::EMPTY;
 
     // Specifies how the user last interacted with the searchbox UI element.
-    OmniboxFocusType focus_type = OmniboxFocusType::DEFAULT;
+    metrics::OmniboxFocusType focus_type =
+        metrics::OmniboxFocusType::INTERACTION_DEFAULT;
 
     // The optional assisted query stats, aka AQS, used for logging purposes.
     // This string contains impressions of all autocomplete matches shown
@@ -208,7 +213,7 @@ class TemplateURLRef {
     // For privacy reasons, we require the search provider to support HTTPS
     // protocol in order to receive the gs_lcrp param.
     // For more details, see go/chrome-suggest-logging-improvement.
-    metrics::ChromeSearchboxStats searchbox_stats;
+    omnibox::metrics::ChromeSearchboxStats searchbox_stats;
 
     // TODO: Remove along with "aq" CGI param.
     int accepted_suggestion = NO_SUGGESTIONS_AVAILABLE;
@@ -248,6 +253,12 @@ class TemplateURLRef {
     // search-by-image frontend.
     std::string image_thumbnail_content;
 
+    // The content type string for `image_thumbnail_content`.
+    std::string image_thumbnail_content_type;
+
+    // The image dimension data for a Google search-by-image query.
+    std::string processed_image_dimensions;
+
     // When searching for an image, the URL of the original image. Callers
     // should leave this empty for images specified via data: URLs.
     GURL image_url;
@@ -256,11 +267,12 @@ class TemplateURLRef {
     gfx::Size image_original_size;
 
     // Source of the search or suggest request.
-    RequestSource request_source = SEARCHBOX;
+    RequestSource request_source = RequestSource::SEARCHBOX;
 
-    // Whether the query is being fetched as a prefetch request before the user
-    // actually searches for the search terms.
-    bool is_prefetch = false;
+    // When the query is being fetched as a prefetch request, this is the value
+    // corresponding to the GOOGLE_PREFETCH_SOURCE ("pf") query param. Prefetch
+    // query params are not added if this is an empty string.
+    std::string prefetch_param;
 
     ContextualSearchParams contextual_search_params;
 
@@ -271,6 +283,12 @@ class TemplateURLRef {
     // Whether the request should bypass the HTTP cache, i.e., a "shift-reload".
     // If true, the net::LOAD_BYPASS_CACHE load flag will be set on the request.
     bool bypass_cache = false;
+
+    // The source locale used for image translations.
+    std::string image_translate_source_locale;
+
+    // The target locale used for image translations.
+    std::string image_translate_target_locale;
   };
 
   TemplateURLRef(const TemplateURL* owner, Type type);
@@ -384,6 +402,8 @@ class TemplateURLRef {
  private:
   friend class TemplateURL;
   friend class TemplateURLTest;
+  FRIEND_TEST_ALL_PREFIXES(TemplateURLTest,
+                           ImageThumbnailContentTypePostParams);
   FRIEND_TEST_ALL_PREFIXES(TemplateURLTest, SetPrepopulatedAndParse);
   FRIEND_TEST_ALL_PREFIXES(TemplateURLTest, ParseParameterKnown);
   FRIEND_TEST_ALL_PREFIXES(TemplateURLTest, ParseParameterUnknown);
@@ -420,11 +440,11 @@ class TemplateURLRef {
     GOOGLE_PAGE_CLASSIFICATION,
     GOOGLE_PREFETCH_QUERY,
     GOOGLE_PREFETCH_SOURCE,
+    GOOGLE_PROCESSED_IMAGE_DIMENSIONS,
     GOOGLE_RLZ,
     GOOGLE_SEARCH_CLIENT,
     GOOGLE_SEARCH_FIELDTRIAL_GROUP,
     GOOGLE_SEARCH_VERSION,
-    GOOGLE_SEARCHBOX_STATS,
     GOOGLE_SESSION_TOKEN,
     GOOGLE_SUGGEST_CLIENT,
     GOOGLE_SUGGEST_REQUEST_ID,
@@ -433,6 +453,8 @@ class TemplateURLRef {
     MAIL_RU_REFERRAL_ID,
     SEARCH_TERMS,
     YANDEX_REFERRAL_ID,
+    IMAGE_TRANSLATE_SOURCE_LOCALE,
+    IMAGE_TRANSLATE_TARGET_LOCALE,
   };
 
   // Used to identify an element of the raw url that can be replaced.
@@ -524,6 +546,7 @@ class TemplateURLRef {
   // belongs to a PostParam, the PostParam will be replaced by the term data.
   // Otherwise, the term data will be inserted at the place that the
   // replacement points to.
+  // Can be called repeatedly with the same replacement.
   void HandleReplacement(const std::string& name,
                          const std::string& value,
                          const Replacement& replacement,
@@ -701,6 +724,9 @@ class TemplateURL {
   const std::string& url() const { return data_.url(); }
   const std::string& suggestions_url() const { return data_.suggestions_url; }
   const std::string& image_url() const { return data_.image_url; }
+  const std::string& image_translate_url() const {
+    return data_.image_translate_url;
+  }
   const std::string& new_tab_url() const { return data_.new_tab_url; }
   const std::string& contextual_search_url() const {
     return data_.contextual_search_url;
@@ -716,6 +742,23 @@ class TemplateURL {
   }
   const std::string& side_search_param() const {
     return data_.side_search_param;
+  }
+  const std::string& side_image_search_param() const {
+    return data_.side_image_search_param;
+  }
+  const std::string& image_translate_source_language_param_key() const {
+    return data_.image_translate_source_language_param_key;
+  }
+  const std::string& image_translate_target_language_param_key() const {
+    return data_.image_translate_target_language_param_key;
+  }
+  const std::u16string& image_search_branding_label() const {
+    return !data_.image_search_branding_label.empty()
+               ? data_.image_search_branding_label
+               : short_name();
+  }
+  const std::vector<std::string>& search_intent_params() const {
+    return data_.search_intent_params;
   }
   const std::vector<std::string>& alternate_urls() const {
     return data_.alternate_urls;
@@ -740,8 +783,12 @@ class TemplateURL {
   base::Time last_modified() const { return data_.last_modified; }
   base::Time last_visited() const { return data_.last_visited; }
 
-  bool created_by_policy() const { return data_.created_by_policy; }
+  TemplateURLData::CreatedByPolicy created_by_policy() const {
+    return data_.created_by_policy;
+  }
+  bool enforced_by_policy() const { return data_.enforced_by_policy; }
   bool created_from_play_api() const { return data_.created_from_play_api; }
+  bool featured_by_policy() const { return data_.featured_by_policy; }
 
   int usage_count() const { return data_.usage_count; }
 
@@ -763,6 +810,9 @@ class TemplateURL {
     return suggestions_url_ref_;
   }
   const TemplateURLRef& image_url_ref() const { return image_url_ref_; }
+  const TemplateURLRef& image_translate_url_ref() const {
+    return image_translate_url_ref_;
+  }
   const TemplateURLRef& new_tab_url_ref() const { return new_tab_url_ref_; }
   const TemplateURLRef& contextual_search_url_ref() const {
     return contextual_search_url_ref_;
@@ -802,6 +852,10 @@ class TemplateURL {
   SearchEngineType GetEngineType(
       const SearchTermsData& search_terms_data) const;
 
+  // Returns the type of this search engine, i.e. whether the engine is a
+  // prepopulated engine, starter pack engine, or not built-in.
+  BuiltinEngineType GetBuiltinEngineType() const;
+
   // Use the alternate URLs and the search URL to match the provided |url|
   // and extract |search_terms| from it. Returns false and an empty
   // |search_terms| if no search terms can be matched. The URLs are matched in
@@ -815,6 +869,20 @@ class TemplateURL {
   // could be the result of performing a search with |this|.
   bool IsSearchURL(const GURL& url,
                    const SearchTermsData& search_terms_data) const;
+
+  // Given a `url` corresponding to this TemplateURL, keeps the search terms and
+  // optionally the search intent params and removes the other params. If
+  // `normalize_search_terms` is true, the search terms in the final URL
+  // will be converted to lowercase with extra whitespace characters collapsed.
+  // If `url` is not a search URL or replacement fails, leaves `out_url` and
+  // `out_search_terms` untouched and returns false. Used to compare
+  // normalized (aka canonical) search URLs.
+  bool KeepSearchTermsInURL(const GURL& url,
+                            const SearchTermsData& search_terms_data,
+                            const bool keep_search_intent_params,
+                            const bool normalize_search_terms,
+                            GURL* out_url,
+                            std::u16string* out_search_terms = nullptr) const;
 
   // Given a |url| corresponding to this TemplateURL, identifies the search
   // terms and replaces them with the ones in |search_terms_args|, leaving the
@@ -839,18 +907,43 @@ class TemplateURL {
       std::u16string* encoded_terms,
       std::u16string* encoded_original_query) const;
 
-  // Returns the search url for this template URL.
+  // Returns the search url for this template URL and the optional search terms.
+  // Uses something obscure as the default value for the search terms argument
+  // so that in the rare case the term replaces the URL it's unlikely another
+  // keyword would have the same url.
   // Returns an empty GURL if this template URL has no url().
-  GURL GenerateSearchURL(const SearchTermsData& search_terms_data) const;
+  GURL GenerateSearchURL(
+      const SearchTermsData& search_terms_data,
+      const std::u16string& search_terms = u"blah.blah.blah.blah.blah") const;
+
+  // Returns the suggest endpoint URL for this template URL.
+  // Returns an empty GURL if this template URL has no suggestions_url().
+  GURL GenerateSuggestionURL(const SearchTermsData& search_terms_data) const;
 
   // Returns true if this search engine supports the side search feature.
   bool IsSideSearchSupported() const;
+
+  // Returns true if this search engine supports the side image search feature.
+  bool IsSideImageSearchSupported() const;
 
   // Takes a search URL belonging to this search engine and generates the URL
   // appropriate for the side search side panel.
   GURL GenerateSideSearchURL(const GURL& search_url,
                              const std::string& version,
                              const SearchTermsData& search_terms_data) const;
+
+  // Takes a search URL that belongs to this side search in the side panel and
+  // removes the side search param from the URL.
+  GURL RemoveSideSearchParamFromURL(const GURL& side_search_url) const;
+
+  // Takes a search URL belonging to this image search engine and generates the
+  // URL appropriate for the image search in the side panel.
+  GURL GenerateSideImageSearchURL(const GURL& image_search_url,
+                                  const std::string& version) const;
+
+  // Takes a search URL that belongs to this image search in the side panel and
+  // removes the side image search param from the URL.
+  GURL RemoveSideImageSearchParamFromURL(const GURL& image_search_url) const;
 
   // TemplateURL internally caches values derived from a passed SearchTermsData
   // to make its functions quick. This method invalidates any cached values and
@@ -860,6 +953,12 @@ class TemplateURL {
   // Estimates dynamic memory usage.
   // See base/trace_event/memory_usage_estimator.h for more info.
   size_t EstimateMemoryUsage() const;
+
+  // Returns whether |url| query contains a side search param.
+  bool ContainsSideSearchParam(const GURL& url) const;
+
+  // Returns whether |url| query contains a side image search param.
+  bool ContainsSideImageSearchParam(const GURL& url) const;
 
  private:
   friend class TemplateURLService;
@@ -904,6 +1003,7 @@ class TemplateURL {
 
   TemplateURLRef suggestions_url_ref_;
   TemplateURLRef image_url_ref_;
+  TemplateURLRef image_translate_url_ref_;
   TemplateURLRef new_tab_url_ref_;
   TemplateURLRef contextual_search_url_ref_;
   std::unique_ptr<AssociatedExtensionInfo> extension_info_;

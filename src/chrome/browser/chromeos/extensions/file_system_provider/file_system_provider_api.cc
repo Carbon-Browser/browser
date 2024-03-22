@@ -1,41 +1,34 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/extensions/file_system_provider/file_system_provider_api.h"
 
-#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/trace_event/trace_event.h"
 #include "base/values.h"
-#include "chrome/browser/ash/crosapi/crosapi_ash.h"
-#include "chrome/browser/ash/crosapi/crosapi_manager.h"
-#include "chrome/browser/ash/crosapi/file_system_provider_service_ash.h"
-#include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
-#include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
-#include "chrome/browser/ash/file_system_provider/request_manager.h"
-#include "chrome/browser/ash/file_system_provider/request_value.h"
-#include "chrome/browser/ash/file_system_provider/service.h"
+#include "chrome/browser/chromeos/extensions/file_system_provider/provider_function.h"
+#include "chrome/browser/chromeos/extensions/file_system_provider/service_worker_lifetime_manager.h"
 #include "chrome/browser/extensions/chrome_extension_function_details.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 #include "chromeos/crosapi/mojom/file_system_provider.mojom.h"
 #include "storage/browser/file_system/watcher_manager.h"
 
-using ash::file_system_provider::MountOptions;
-using ash::file_system_provider::OpenedFiles;
-using ash::file_system_provider::ProvidedFileSystemInfo;
-using ash::file_system_provider::ProvidedFileSystemInterface;
-using ash::file_system_provider::ProvidedFileSystemObserver;
-using ash::file_system_provider::ProviderId;
-using ash::file_system_provider::RequestValue;
-using ash::file_system_provider::Service;
-using ash::file_system_provider::Watchers;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/crosapi/crosapi_ash.h"
+#include "chrome/browser/ash/crosapi/crosapi_manager.h"
+#include "chrome/browser/ash/crosapi/file_system_provider_service_ash.h"
+#include "chrome/browser/ash/guest_os/guest_os_terminal.h"
+#include "chrome/common/webui_url_constants.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace extensions {
 namespace {
@@ -51,15 +44,14 @@ api::file_system_provider::FileSystemInfo ConvertFileSystemInfoMojomToExtension(
   item.display_name = info->metadata->display_name;
   item.writable = info->metadata->writable;
   item.opened_files_limit = info->metadata->opened_files_limit;
-  item.supports_notify_tag =
-      std::make_unique<bool>(info->metadata->supports_notify);
+  item.supports_notify_tag = info->metadata->supports_notify;
 
   for (const auto& watcher : info->watchers) {
     Watcher watcher_item;
     watcher_item.entry_path = watcher->entry_path.value();
     watcher_item.recursive = watcher->recursive;
     if (!watcher->last_tag.empty()) {
-      watcher_item.last_tag = std::make_unique<std::string>(watcher->last_tag);
+      watcher_item.last_tag = watcher->last_tag;
     }
     item.watchers.push_back(std::move(watcher_item));
   }
@@ -71,11 +63,11 @@ api::file_system_provider::FileSystemInfo ConvertFileSystemInfoMojomToExtension(
     switch (opened_file->mode) {
       case crosapi::mojom::OpenFileMode::kRead:
         opened_file_item.mode =
-            extensions::api::file_system_provider::OPEN_FILE_MODE_READ;
+            extensions::api::file_system_provider::OpenFileMode::kRead;
         break;
       case crosapi::mojom::OpenFileMode::kWrite:
         opened_file_item.mode =
-            extensions::api::file_system_provider::OPEN_FILE_MODE_WRITE;
+            extensions::api::file_system_provider::OpenFileMode::kWrite;
         break;
     }
     item.opened_files.push_back(std::move(opened_file_item));
@@ -88,9 +80,9 @@ api::file_system_provider::FileSystemInfo ConvertFileSystemInfoMojomToExtension(
 crosapi::mojom::FSPChangeType ParseChangeType(
     const api::file_system_provider::ChangeType& change_type) {
   switch (change_type) {
-    case api::file_system_provider::CHANGE_TYPE_CHANGED:
+    case api::file_system_provider::ChangeType::kChanged:
       return crosapi::mojom::FSPChangeType::kChanged;
-    case api::file_system_provider::CHANGE_TYPE_DELETED:
+    case api::file_system_provider::ChangeType::kDeleted:
       return crosapi::mojom::FSPChangeType::kDeleted;
     default:
       break;
@@ -120,6 +112,18 @@ std::vector<crosapi::mojom::FSPChangePtr> ParseChanges(
 
 }  // namespace
 
+std::string FileSystemProviderBase::GetProviderId() const {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Terminal app is the only non-extension to use fsp.
+  if (!extension()) {
+    CHECK(url::IsSameOriginWith(source_url(),
+                                GURL(chrome::kChromeUIUntrustedTerminalURL)));
+    return guest_os::kTerminalSystemAppId;
+  }
+#endif
+  return extension_id();
+}
+
 void FileSystemProviderBase::RespondWithError(const std::string& error) {
   if (error.empty()) {
     Respond(NoArguments());
@@ -129,10 +133,18 @@ void FileSystemProviderBase::RespondWithError(const std::string& error) {
 }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-bool FileSystemProviderBase::InterfaceAvailable() {
+bool FileSystemProviderBase::MountFinishedInterfaceAvailable() {
   auto* service = chromeos::LacrosService::Get();
-  return service->GetInterfaceVersion(
-             crosapi::mojom::FileSystemProviderService::Uuid_) >=
+  return service->GetInterfaceVersion<
+             crosapi::mojom::FileSystemProviderService>() >=
+         int{crosapi::mojom::FileSystemProviderService::MethodMinVersions::
+                 kMountFinishedMinVersion};
+}
+
+bool FileSystemProviderBase::OperationFinishedInterfaceAvailable() {
+  auto* service = chromeos::LacrosService::Get();
+  return service->GetInterfaceVersion<
+             crosapi::mojom::FileSystemProviderService>() >=
          int{crosapi::mojom::FileSystemProviderService::MethodMinVersions::
                  kOperationFinishedMinVersion};
 }
@@ -146,7 +158,7 @@ FileSystemProviderBase::GetRemote() {
 
 ExtensionFunction::ResponseAction FileSystemProviderMountFunction::Run() {
   using api::file_system_provider::Mount::Params;
-  const std::unique_ptr<Params> params(Params::Create(args()));
+  const absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
   // It's an error if the file system Id is empty.
@@ -173,7 +185,7 @@ ExtensionFunction::ResponseAction FileSystemProviderMountFunction::Run() {
   crosapi::mojom::FileSystemMetadataPtr metadata =
       crosapi::mojom::FileSystemMetadata::New();
   metadata->file_system_id = crosapi::mojom::FileSystemId::New();
-  metadata->file_system_id->provider = extension_id();
+  metadata->file_system_id->provider = GetProviderId();
   metadata->file_system_id->id = params->options.file_system_id;
   metadata->display_name = params->options.display_name;
   metadata->writable =
@@ -194,7 +206,7 @@ ExtensionFunction::ResponseAction FileSystemProviderMountFunction::Run() {
       ->MountWithProfile(std::move(metadata), persistent, std::move(callback),
                          Profile::FromBrowserContext(browser_context()));
 #else
-  if (!InterfaceAvailable())
+  if (!OperationFinishedInterfaceAvailable())
     return RespondNow(Error(kInterfaceUnavailable));
   GetRemote()->Mount(std::move(metadata), persistent, std::move(callback));
 
@@ -204,11 +216,11 @@ ExtensionFunction::ResponseAction FileSystemProviderMountFunction::Run() {
 
 ExtensionFunction::ResponseAction FileSystemProviderUnmountFunction::Run() {
   using api::file_system_provider::Unmount::Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
   auto id = crosapi::mojom::FileSystemId::New();
-  id->provider = extension_id();
+  id->provider = GetProviderId();
   id->id = params->options.file_system_id;
   auto callback = base::BindOnce(
       &FileSystemProviderUnmountFunction::RespondWithError, this);
@@ -219,7 +231,7 @@ ExtensionFunction::ResponseAction FileSystemProviderUnmountFunction::Run() {
       ->UnmountWithProfile(std::move(id), std::move(callback),
                            Profile::FromBrowserContext(browser_context()));
 #else
-  if (!InterfaceAvailable())
+  if (!OperationFinishedInterfaceAvailable())
     return RespondNow(Error(kInterfaceUnavailable));
   GetRemote()->Unmount(std::move(id), std::move(callback));
 #endif
@@ -233,12 +245,12 @@ ExtensionFunction::ResponseAction FileSystemProviderGetAllFunction::Run() {
   crosapi::CrosapiManager::Get()
       ->crosapi_ash()
       ->file_system_provider_service_ash()
-      ->GetAllWithProfile(extension_id(), std::move(callback),
+      ->GetAllWithProfile(GetProviderId(), std::move(callback),
                           Profile::FromBrowserContext(browser_context()));
 #else
-  if (!InterfaceAvailable())
+  if (!OperationFinishedInterfaceAvailable())
     return RespondNow(Error(kInterfaceUnavailable));
-  GetRemote()->GetAll(extension_id(), std::move(callback));
+  GetRemote()->GetAll(GetProviderId(), std::move(callback));
 #endif
   return RespondLater();
 }
@@ -256,11 +268,11 @@ void FileSystemProviderGetAllFunction::RespondWithInfos(
 
 ExtensionFunction::ResponseAction FileSystemProviderGetFunction::Run() {
   using api::file_system_provider::Get::Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
   auto id = crosapi::mojom::FileSystemId::New();
-  id->provider = extension_id();
+  id->provider = GetProviderId();
   id->id = params->file_system_id;
   auto callback =
       base::BindOnce(&FileSystemProviderGetFunction::RespondWithInfo, this);
@@ -271,7 +283,7 @@ ExtensionFunction::ResponseAction FileSystemProviderGetFunction::Run() {
       ->GetWithProfile(std::move(id), std::move(callback),
                        Profile::FromBrowserContext(browser_context()));
 #else
-  if (!InterfaceAvailable())
+  if (!OperationFinishedInterfaceAvailable())
     return RespondNow(Error(kInterfaceUnavailable));
   GetRemote()->Get(std::move(id), std::move(callback));
 #endif
@@ -292,13 +304,13 @@ void FileSystemProviderGetFunction::RespondWithInfo(
 
 ExtensionFunction::ResponseAction FileSystemProviderNotifyFunction::Run() {
   using api::file_system_provider::Notify::Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
   auto callback =
       base::BindOnce(&FileSystemProviderNotifyFunction::RespondWithError, this);
   auto id = crosapi::mojom::FileSystemId::New();
-  id->provider = extension_id();
+  id->provider = GetProviderId();
   id->id = params->options.file_system_id;
 
   crosapi::mojom::FSPWatcherPtr watcher = crosapi::mojom::FSPWatcher::New();
@@ -321,7 +333,7 @@ ExtensionFunction::ResponseAction FileSystemProviderNotifyFunction::Run() {
                           std::move(changes), std::move(callback),
                           Profile::FromBrowserContext(browser_context()));
 #else
-  if (!InterfaceAvailable())
+  if (!OperationFinishedInterfaceAvailable())
     return RespondNow(Error(kInterfaceUnavailable));
   GetRemote()->Notify(std::move(id), std::move(watcher), type,
                       std::move(changes), std::move(callback));
@@ -339,10 +351,87 @@ void FileSystemProviderNotifyFunction::OnNotifyCompleted(
   Respond(NoArguments());
 }
 
+bool FileSystemProviderInternal::ForwardMountResult(int64_t request_id,
+                                                    base::Value::List& args) {
+  auto* profile = Profile::FromBrowserContext(browser_context());
+  auto* sw_lifetime_manager =
+      extensions::file_system_provider::ServiceWorkerLifetimeManager::Get(
+          profile);
+  sw_lifetime_manager->FinishRequest({
+      extension_id(),
+      /*file_system_id=*/"",
+      request_id,
+  });
+  auto callback =
+      base::BindOnce(&FileSystemProviderInternal::RespondWithError, this);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  crosapi::CrosapiManager::Get()
+      ->crosapi_ash()
+      ->file_system_provider_service_ash()
+      ->MountFinishedWithProfile(extension_id(), request_id, std::move(args),
+                                 std::move(callback), profile);
+  return true;
+#else
+  if (!MountFinishedInterfaceAvailable())
+    return false;
+  GetRemote()->MountFinished(extension_id(), request_id, std::move(args),
+                             std::move(callback));
+  return true;
+#endif
+}
+
+ExtensionFunction::ResponseAction
+FileSystemProviderInternalRespondToMountRequestFunction::Run() {
+  using api::file_system_provider_internal::RespondToMountRequest::Params;
+  absl::optional<Params> params(Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  int64_t request_id = params->request_id;
+  bool result = ForwardMountResult(request_id, mutable_args());
+  if (!result)
+    Respond(Error(kInterfaceUnavailable));
+  return RespondLater();
+}
+
+bool FileSystemProviderInternal::ForwardOperationResultImpl(
+    crosapi::mojom::FSPOperationResponse response,
+    crosapi::mojom::FileSystemIdPtr file_system_id,
+    int request_id,
+    base::Value::List args) {
+  auto* profile = Profile::FromBrowserContext(browser_context());
+  auto* sw_lifetime_manager =
+      extensions::file_system_provider::ServiceWorkerLifetimeManager::Get(
+          profile);
+  sw_lifetime_manager->FinishRequest({
+      file_system_id->provider,
+      file_system_id->id,
+      request_id,
+  });
+  auto callback =
+      base::BindOnce(&FileSystemProviderInternal::RespondWithError, this);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  crosapi::CrosapiManager::Get()
+      ->crosapi_ash()
+      ->file_system_provider_service_ash()
+      ->OperationFinishedWithProfile(response, std::move(file_system_id),
+                                     request_id, std::move(args),
+                                     std::move(callback), profile);
+  return true;
+#else
+  if (!OperationFinishedInterfaceAvailable()) {
+    return false;
+  }
+  GetRemote()->OperationFinished(response, std::move(file_system_id),
+                                 request_id, std::move(args),
+                                 std::move(callback));
+  return true;
+#endif
+}
+
 ExtensionFunction::ResponseAction
 FileSystemProviderInternalUnmountRequestedSuccessFunction::Run() {
   using api::file_system_provider_internal::UnmountRequestedSuccess::Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
   bool result = ForwardOperationResult(
@@ -356,7 +445,7 @@ FileSystemProviderInternalUnmountRequestedSuccessFunction::Run() {
 ExtensionFunction::ResponseAction
 FileSystemProviderInternalGetMetadataRequestedSuccessFunction::Run() {
   using api::file_system_provider_internal::GetMetadataRequestedSuccess::Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
   bool result = ForwardOperationResult(
@@ -370,7 +459,7 @@ FileSystemProviderInternalGetMetadataRequestedSuccessFunction::Run() {
 ExtensionFunction::ResponseAction
 FileSystemProviderInternalGetActionsRequestedSuccessFunction::Run() {
   using api::file_system_provider_internal::GetActionsRequestedSuccess::Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
   bool result = ForwardOperationResult(
       params, mutable_args(),
@@ -384,7 +473,7 @@ ExtensionFunction::ResponseAction
 FileSystemProviderInternalReadDirectoryRequestedSuccessFunction::Run() {
   using api::file_system_provider_internal::ReadDirectoryRequestedSuccess::
       Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
   bool result = ForwardOperationResult(
       params, mutable_args(),
@@ -400,7 +489,7 @@ FileSystemProviderInternalReadFileRequestedSuccessFunction::Run() {
   using api::file_system_provider_internal::ReadFileRequestedSuccess::Params;
 
   // TODO(https://crbug.com/1314397): Improve performance by removing copy.
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
   bool result = ForwardOperationResult(
       params, mutable_args(),
@@ -413,7 +502,7 @@ FileSystemProviderInternalReadFileRequestedSuccessFunction::Run() {
 ExtensionFunction::ResponseAction
 FileSystemProviderInternalOperationRequestedSuccessFunction::Run() {
   using api::file_system_provider_internal::OperationRequestedSuccess::Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
   bool result = ForwardOperationResult(
@@ -427,10 +516,10 @@ FileSystemProviderInternalOperationRequestedSuccessFunction::Run() {
 ExtensionFunction::ResponseAction
 FileSystemProviderInternalOperationRequestedErrorFunction::Run() {
   using api::file_system_provider_internal::OperationRequestedError::Params;
-  std::unique_ptr<Params> params(Params::Create(args()));
+  absl::optional<Params> params(Params::Create(args()));
   EXTENSION_FUNCTION_VALIDATE(params);
 
-  if (params->error == api::file_system_provider::PROVIDER_ERROR_OK) {
+  if (params->error == api::file_system_provider::ProviderError::kOk) {
     // It's incorrect to pass OK as an error code.
     return ValidationFailure(this);
   }

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 // Entry point for LibFuzzer.
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
-  absl::string_view crypto_input(reinterpret_cast<const char*>(data), size);
+  std::string_view crypto_input(reinterpret_cast<const char*>(data), size);
   std::unique_ptr<quic::CryptoHandshakeMessage> handshake_message(
       quic::CryptoFramer::ParseMessage(crypto_input));
 

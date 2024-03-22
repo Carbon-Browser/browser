@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,7 @@
 #include "ui/views/controls/menu/menu_runner_handler.h"
 #include "ui/views/test/menu_runner_test_api.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 namespace {
 
 // An dummy implementation of MenuRunnerHandler to check if the dropdown menu is
@@ -64,5 +63,4 @@ ui::MenuModel* ComboboxTestApi::menu_model() {
   return combobox_->menu_model_.get();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

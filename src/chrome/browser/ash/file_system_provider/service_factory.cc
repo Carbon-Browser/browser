@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "chrome/browser/extensions/extension_system_factory.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_factory.h"
 
@@ -28,32 +27,34 @@ Service* ServiceFactory::FindExisting(content::BrowserContext* context) {
 }
 
 ServiceFactory* ServiceFactory::GetInstance() {
-  return base::Singleton<ServiceFactory>::get();
+  static base::NoDestructor<ServiceFactory> instance;
+  return instance.get();
 }
 
 ServiceFactory::ServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "Service",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
   DependsOn(extensions::ExtensionSystemFactory::GetInstance());
   DependsOn(NotificationDisplayServiceFactory::GetInstance());
 }
 
-ServiceFactory::~ServiceFactory() {}
+ServiceFactory::~ServiceFactory() = default;
 
-KeyedService* ServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-  return new Service(Profile::FromBrowserContext(profile),
-                     extensions::ExtensionRegistry::Get(profile));
+  return std::make_unique<Service>(Profile::FromBrowserContext(profile),
+                                   extensions::ExtensionRegistry::Get(profile));
 }
 
 bool ServiceFactory::ServiceIsCreatedWithBrowserContext() const { return true; }
-
-content::BrowserContext* ServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
-}
 
 }  // namespace file_system_provider
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "base/strings/strcat.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/media/router/mojo/media_router_mojo_impl.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/browser.h"
@@ -20,7 +19,7 @@
 #include "chrome/browser/ui/toolbar/media_router_action_controller.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/media_router/common/pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -77,8 +76,7 @@ MediaRouterContextualMenu::CreateMenuModel() {
   menu_model->AddCheckItemWithStringId(IDC_MEDIA_ROUTER_TOGGLE_MEDIA_REMOTING,
                                        IDS_MEDIA_ROUTER_TOGGLE_MEDIA_REMOTING);
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  if (!browser_->profile()->IsOffTheRecord() &&
-      browser_->profile()->GetPrefs()->GetBoolean(
+  if (browser_->profile()->GetPrefs()->GetBoolean(
           prefs::kUserFeedbackAllowed)) {
     menu_model->AddSeparator(ui::NORMAL_SEPARATOR);
     menu_model->AddItemWithStringId(

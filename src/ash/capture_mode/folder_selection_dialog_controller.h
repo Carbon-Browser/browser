@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 #define ASH_CAPTURE_MODE_FOLDER_SELECTION_DIALOG_CONTROLLER_H_
 
 #include "ash/wm/window_dimmer.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/scoped_observation.h"
 #include "ui/aura/window.h"
@@ -74,7 +75,7 @@ class FolderSelectionDialogController : public ui::SelectFileDialog::Listener,
  private:
   friend class CaptureModeTestApi;
 
-  Delegate* const delegate_;
+  const raw_ptr<Delegate, ExperimentalAsh> delegate_;
 
   // Dims everything behind the dialog (including the capture bar, the settings
   // menu, and any capture-related UIs). The dimming window is the transient
@@ -86,7 +87,7 @@ class FolderSelectionDialogController : public ui::SelectFileDialog::Listener,
 
   // This is the window of the dialog that gets created by
   // |select_folder_dialog_| as a transient child of the dimming window.
-  aura::Window* dialog_window_ = nullptr;
+  raw_ptr<aura::Window, ExperimentalAsh> dialog_window_ = nullptr;
 
   // It will be set to true when user selects a folder from the dialog.
   bool did_user_select_a_folder_ = false;

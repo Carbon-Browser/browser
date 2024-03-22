@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,21 @@
  * @fileoverview Polymer element for displaying encryption migration screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/polymer/v3_0/paper-progress/paper-progress.js';
+import '//resources/polymer/v3_0/paper-styles/color.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+
+import {afterNextRender, dom, flush, html, mixinBehaviors, Polymer, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeTextButton} from '../../components/buttons/oobe_text_button.js';
+import {OOBE_UI_STATE, SCREEN_GAIA_SIGNIN} from '../../components/display_manager_types.js';
+
 
 /**
  * Enum for the UI states corresponding to sub steps inside migration screen.
@@ -15,7 +29,7 @@
  * enum must be the same.
  * @enum {string}
  */
-var EncryptionMigrationUIState = {
+const EncryptionMigrationUIState = {
   INITIAL: 'initial',
   READY: 'ready',
   MIGRATING: 'migrating',
@@ -30,16 +44,18 @@ var EncryptionMigrationUIState = {
  * @implements {OobeI18nBehaviorInterface}
  * @implements {MultiStepBehaviorInterface}
  */
-const EncryptionMigrationBase = Polymer.mixinBehaviors(
+const EncryptionMigrationBase = mixinBehaviors(
     [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior],
-    Polymer.Element);
+    PolymerElement);
 
 class EncryptionMigration extends EncryptionMigrationBase {
   static get is() {
     return 'encryption-migration-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {

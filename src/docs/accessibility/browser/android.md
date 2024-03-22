@@ -410,7 +410,7 @@ is great for tracking down flakiness. It is also possible to use a local reposit
 to test directly on the build bots, which is great when a test works locally but flakes
 or fails during builds. Let's look at some basic examples.
 
-First ensure that you have followed the basic [Android setup](https://chromium.googlesource.com/chromium/src/+/master/docs/android_build_instructions.md) guides and can
+First ensure that you have followed the basic [Android setup](https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md) guides and can
 successfully build the code. You should not proceed further until you can
 successfully run the command:
 
@@ -525,8 +525,6 @@ tools/mb/mb.py run -s --no-default-dimensions \
     --break-on-failure \
     -f "*WebContentsAccessibilityTreeTest*testExample"
 ```
-
-Piece of cake!
 
 ## Common Android accessibility "gotchas"
 
@@ -777,18 +775,19 @@ the Dispatcher simply drops/ignores the request. Preliminary data shows that thi
 has created a noticeable improvement for accessibility services that do not require
 the entire suite to function.
 
-### ComputeAXMode
+### AccessibilityPerformanceFiltering
 
-Loosely related to the OnDemand feature above, the "ComputeAXMode" feature is also
+Loosely related to the OnDemand feature above, the "AccessibilityPerformanceFiltering" feature is also
 a recent addition to improve overall performance. This feature uses the same
 mechanism as OnDemand to query the currently enabled services and the information
-they are interested in. ComputeAXMode then takes this information and uses a different
+they are interested in. AccessibilityPerformanceFiltering then takes this information and uses a different
 [AXMode](https://source.chromium.org/chromium/chromium/src/+/main:ui/accessibility/ax_mode.h)
-based on the situation. This effectively does the same thing as
+based on the situation. Each AXMode filters out a different level of information
+to improve performance while preserving necessary functionality. This effectively does the same thing as
 OnDemand, but further left/up-the-chain, giving a more significant performance
-improvement. This feature is still rolling out, and it currently only has two
-AXModes (full or basic). As it rolls out and we gather more data we will potentially
-add more AXModes in the future.
+improvement. This feature is still rolling out, and it currently only has three
+AXModes (basic, form controls only, and complete). As it rolls out and we gather more data
+we will potentially add more AXModes in the future.
 
 ### AutoDisableAccessibility
 

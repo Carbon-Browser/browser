@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 TEST(MiniDecompressTest, ExpandTest) {
   base::FilePath source_path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &source_path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_path);
   source_path = source_path.Append(FILE_PATH_LITERAL("chrome"))
                     .Append(FILE_PATH_LITERAL("installer"))
                     .Append(FILE_PATH_LITERAL("test"))

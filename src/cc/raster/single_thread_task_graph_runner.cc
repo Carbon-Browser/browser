@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,11 @@
 #include <string>
 #include <utility>
 
+#include "base/ranges/algorithm.h"
 #include "base/threading/simple_thread.h"
 #include "base/trace_event/base_tracing.h"
+#include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 
 namespace cc {
 
@@ -139,12 +142,10 @@ bool SingleThreadTaskGraphRunner::RunTaskWithLockAcquired() {
   // Find the first category with any tasks to run. This task graph runner
   // treats categories as an additional priority.
   const auto& ready_to_run_namespaces = work_queue_.ready_to_run_namespaces();
-  auto found = std::find_if(
-      ready_to_run_namespaces.cbegin(), ready_to_run_namespaces.cend(),
-      [](const std::pair<const uint16_t,
-                         TaskGraphWorkQueue::TaskNamespace::Vector>& pair) {
-        return !pair.second.empty();
-      });
+  auto found = base::ranges::find_if_not(
+      ready_to_run_namespaces,
+      &TaskGraphWorkQueue::TaskNamespace::Vector::empty,
+      &TaskGraphWorkQueue::ReadyNamespaces::value_type::second);
 
   if (found == ready_to_run_namespaces.cend()) {
     return false;
@@ -154,6 +155,9 @@ bool SingleThreadTaskGraphRunner::RunTaskWithLockAcquired() {
   auto prioritized_task = work_queue_.GetNextTaskToRun(category);
 
   {
+    TRACE_EVENT("toplevel", "cc::SingleThreadTaskGraphRunner::RunTask",
+                perfetto::TerminatingFlow::Global(
+                    prioritized_task.task->trace_task_id()));
     base::AutoUnlock unlock(lock_);
     prioritized_task.task->RunOnWorkerThread();
   }

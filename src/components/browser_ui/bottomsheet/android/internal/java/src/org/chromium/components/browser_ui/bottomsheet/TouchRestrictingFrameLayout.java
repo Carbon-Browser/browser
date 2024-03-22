@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,16 +21,12 @@ class TouchRestrictingFrameLayout extends FrameLayout {
         super(context, atts);
     }
 
-    /**
-     * @param sheet The bottom sheet.
-     */
+    /** @param sheet The bottom sheet. */
     public void setBottomSheet(BottomSheet sheet) {
         mBottomSheet = sheet;
     }
 
-    /**
-     * @return Whether touch is enabled.
-     */
+    /** @return Whether touch is enabled. */
     private boolean isTouchDisabled() {
         return mBottomSheet == null
                 || mBottomSheet.getSheetState() == BottomSheetController.SheetState.SCROLLING;

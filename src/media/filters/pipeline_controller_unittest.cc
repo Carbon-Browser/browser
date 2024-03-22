@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
@@ -147,8 +147,6 @@ class PipelineControllerTest : public ::testing::Test, public Pipeline::Client {
   void OnBufferingStateChange(BufferingState state,
                               BufferingStateChangeReason reason) override {}
   void OnDurationChange() override {}
-  void OnAddTextTrack(const TextTrackConfig& config,
-                      AddTextTrackDoneCB done_cb) override {}
   void OnWaiting(WaitingReason reason) override {}
   void OnVideoNaturalSizeChange(const gfx::Size& size) override {}
   void OnAudioConfigChange(const AudioDecoderConfig& config) override {}
@@ -162,7 +160,7 @@ class PipelineControllerTest : public ::testing::Test, public Pipeline::Client {
   base::test::SingleThreadTaskEnvironment task_environment_;
 
   NiceMock<MockDemuxer> demuxer_;
-  raw_ptr<StrictMock<MockPipeline>> pipeline_;
+  raw_ptr<StrictMock<MockPipeline>, DanglingUntriaged> pipeline_;
   PipelineController pipeline_controller_;
 
   bool was_seeked_ = false;

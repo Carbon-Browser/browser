@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/sync_file_system_internals/dump_database_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync_file_system/sync_file_system_service.h"
 #include "chrome/browser/sync_file_system/sync_file_system_service_factory.h"
@@ -38,8 +38,8 @@ void DumpDatabaseHandler::HandleGetDatabaseDump(const base::Value::List& args) {
 }
 
 void DumpDatabaseHandler::DidGetDatabaseDump(std::string callback_id,
-                                             const base::ListValue& list) {
-  ResolveJavascriptCallback(base::Value(callback_id), list);
+                                             base::Value::List list) {
+  ResolveJavascriptCallback(base::Value(callback_id), std::move(list));
 }
 
 }  // namespace syncfs_internals

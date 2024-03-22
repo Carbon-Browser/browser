@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,11 +91,17 @@ class BASE_EXPORT ConditionVariable {
 
   ~ConditionVariable();
 
+#if BUILDFLAG(IS_APPLE)
+  // Must be called early in process startup, but after FeatureList
+  // initialization.
+  static void InitializeFeatures();
+#endif
+
   // Wait() releases the caller's critical section atomically as it starts to
   // sleep, and the reacquires it when it is signaled. The wait functions are
   // susceptible to spurious wakeups. (See usage note 1 for more details.)
-  void NOT_TAIL_CALLED Wait();
-  void NOT_TAIL_CALLED TimedWait(const TimeDelta& max_time);
+  NOT_TAIL_CALLED void Wait();
+  NOT_TAIL_CALLED void TimedWait(const TimeDelta& max_time);
 
   // Broadcast() revives all waiting threads. (See usage note 2 for more
   // details.)

@@ -1,15 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_credential.h"
 
-#include "base/strings/sys_string_conversions.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/strings/sys_string_conversions.h"
+#import "url/gurl.h"
 
 @interface ManualFillCredential () {
   // iVar to backup URL.
@@ -46,16 +42,16 @@
     return NO;
   }
   ManualFillCredential* otherObject = (ManualFillCredential*)object;
-  if (![otherObject.host isEqual:self.host]) {
+  if (![otherObject.host isEqualToString:self.host]) {
     return NO;
   }
-  if (![otherObject.username isEqual:self.username]) {
+  if (![otherObject.username isEqualToString:self.username]) {
     return NO;
   }
-  if (![otherObject.password isEqual:self.password]) {
+  if (![otherObject.password isEqualToString:self.password]) {
     return NO;
   }
-  if (![otherObject.siteName isEqual:self.siteName]) {
+  if (![otherObject.siteName isEqualToString:self.siteName]) {
     return NO;
   }
   if (otherObject.URL != self.URL) {

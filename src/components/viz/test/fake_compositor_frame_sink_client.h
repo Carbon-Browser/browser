@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,23 +31,36 @@ class FakeCompositorFrameSinkClient : public mojom::CompositorFrameSinkClient {
   void DidReceiveCompositorFrameAck(
       std::vector<ReturnedResource> resources) override;
   void OnBeginFrame(const BeginFrameArgs& args,
-                    const FrameTimingDetailsMap& timing_details) override;
+                    const FrameTimingDetailsMap& timing_details,
+                    bool frame_ack,
+                    std::vector<ReturnedResource> resources) override;
   void ReclaimResources(std::vector<ReturnedResource> resources) override;
   void OnBeginFramePausedChanged(bool paused) override;
   void OnCompositorFrameTransitionDirectiveProcessed(
       uint32_t sequence_id) override {}
+  void OnSurfaceEvicted(const LocalSurfaceId& local_surface_id) override {}
 
   void clear_returned_resources() { returned_resources_.clear(); }
   const std::vector<ReturnedResource>& returned_resources() const {
     return returned_resources_;
   }
 
+  void clear_begin_frame_count() { begin_frame_count_ = 0; }
+  int begin_frame_count() const { return begin_frame_count_; }
+
+  const FrameTimingDetailsMap& all_frame_timing_details() const {
+    return all_frame_timing_details_;
+  }
+
  private:
   void InsertResources(std::vector<ReturnedResource> resources);
 
+  int begin_frame_count_ = 0;
   std::vector<ReturnedResource> returned_resources_;
 
   mojo::Receiver<mojom::CompositorFrameSinkClient> receiver_{this};
+
+  FrameTimingDetailsMap all_frame_timing_details_;
 };
 
 }  // namespace viz

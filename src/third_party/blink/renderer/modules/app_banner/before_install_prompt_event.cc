@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ BeforeInstallPromptEvent::BeforeInstallPromptEvent(
     mojo::PendingReceiver<mojom::blink::AppBannerEvent> event_receiver,
     const Vector<String>& platforms)
     : Event(name, Bubbles::kNo, Cancelable::kYes),
+      ActiveScriptWrappable<BeforeInstallPromptEvent>({}),
       ExecutionContextClient(&context),
       banner_service_remote_(&context),
       receiver_(this, &context),
@@ -44,6 +45,7 @@ BeforeInstallPromptEvent::BeforeInstallPromptEvent(
     const AtomicString& name,
     const BeforeInstallPromptEventInit* init)
     : Event(name, init),
+      ActiveScriptWrappable<BeforeInstallPromptEvent>({}),
       ExecutionContextClient(execution_context),
       banner_service_remote_(execution_context),
       receiver_(this, execution_context) {

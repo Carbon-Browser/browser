@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,18 @@
 #include <utility>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/test_file_util.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/autocomplete/in_memory_url_index_factory.h"
@@ -33,6 +33,7 @@
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
+#include "chrome/browser/origin_trials/origin_trials_factory.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/policy/schema_registry_service.h"
 #include "chrome/browser/policy/schema_registry_service_builder.h"
@@ -42,13 +43,12 @@
 #include "chrome/browser/profiles/profile_key.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/storage_partition_descriptor.h"
+#include "chrome/browser/reading_list/reading_list_model_factory.h"
 #include "chrome/browser/search_engines/template_url_fetcher_factory.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "chrome/browser/signin/signin_util.h"
 #include "chrome/browser/ssl/stateful_ssl_host_state_delegate_factory.h"
 #include "chrome/browser/transition_manager/full_browser_transition_manager.h"
-#include "chrome/browser/ui/read_later/reading_list_model_factory.h"
 #include "chrome/browser/ui/zoom/chrome_zoom_level_prefs.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_constants.h"
@@ -66,10 +66,10 @@
 #include "components/keyed_service/core/simple_key_map.h"
 #include "components/leveldb_proto/public/proto_database_provider.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
-#include "components/omnibox/browser/history_index_restore_observer.h"
 #include "components/omnibox/browser/in_memory_url_index.h"
 #include "components/policy/core/common/cloud/cloud_external_data_manager.h"
 #include "components/policy/core/common/cloud/mock_user_cloud_policy_store.h"
+#include "components/policy/core/common/cloud/profile_cloud_policy_manager.h"
 #include "components/policy/core/common/cloud/user_cloud_policy_manager.h"
 #include "components/policy/core/common/configuration_policy_provider.h"
 #include "components/policy/core/common/policy_service.h"
@@ -81,8 +81,8 @@
 #include "components/security_interstitials/content/stateful_ssl_host_state_delegate.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
-#include "components/sync/test/model/fake_sync_change_processor.h"
-#include "components/sync/test/model/sync_error_factory_mock.h"
+#include "components/supervised_user/core/common/pref_names.h"
+#include "components/sync/test/fake_sync_change_processor.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_prefs/user_prefs.h"
@@ -92,9 +92,9 @@
 #include "content/public/browser/cookie_store_factory.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/render_process_host.h"
+#include "content/public/browser/resource_context.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/zoom_level_delegate.h"
-#include "content/public/test/mock_resource_context.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/buildflags/buildflags.h"
 #include "extensions/common/constants.h"
@@ -111,7 +111,6 @@
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_provider_factory.h"
 #include "components/guest_view/browser/guest_view_manager.h"
-#include "extensions/browser/event_router_factory.h"
 #include "extensions/browser/extension_pref_value_map.h"
 #include "extensions/browser/extension_pref_value_map_factory.h"
 #include "extensions/browser/extension_prefs.h"
@@ -121,13 +120,13 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/account_manager/account_manager_factory.h"
 #include "chrome/browser/ash/arc/session/arc_service_launcher.h"
 #include "chrome/browser/ash/net/delay_network_call.h"
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager_factory.h"
 #include "chrome/browser/ash/system_web_apps/test_support/test_system_web_app_manager.h"
+#include "chromeos/ash/components/account_manager/account_manager_factory.h"
 #include "components/account_manager_core/chromeos/account_manager.h"
 #endif
 
@@ -137,9 +136,9 @@
 #endif
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "chrome/browser/supervised_user/supervised_user_constants.h"
-#include "chrome/browser/supervised_user/supervised_user_settings_service.h"
 #include "chrome/browser/supervised_user/supervised_user_settings_service_factory.h"
+#include "components/supervised_user/core/browser/supervised_user_settings_service.h"
+#include "components/supervised_user/core/common/supervised_user_constants.h"
 #endif
 
 using base::Time;
@@ -158,8 +157,27 @@ std::unique_ptr<KeyedService> BuildPersonalDataManagerInstanceFor(
 
 }  // namespace
 
+TestingProfile::TestingFactory::TestingFactory(
+    BrowserContextKeyedServiceFactory* service_factory,
+    BrowserContextKeyedServiceFactory::TestingFactory testing_factory)
+    : service_factory_and_testing_factory(
+          std::pair(service_factory, std::move(testing_factory))) {}
+
+TestingProfile::TestingFactory::TestingFactory(
+    RefcountedBrowserContextKeyedServiceFactory* service_factory,
+    RefcountedBrowserContextKeyedServiceFactory::TestingFactory testing_factory)
+    : service_factory_and_testing_factory(
+          std::pair(service_factory, std::move(testing_factory))) {}
+
+TestingProfile::TestingFactory::TestingFactory(const TestingFactory&) = default;
+
+TestingProfile::TestingFactory& TestingProfile::TestingFactory::operator=(
+    const TestingFactory&) = default;
+
+TestingProfile::TestingFactory::~TestingFactory() = default;
+
 // static
-const char TestingProfile::kDefaultProfileUserName[] = "testing_profile";
+const char TestingProfile::kDefaultProfileUserName[] = "testing_profile@test";
 
 // static
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -182,7 +200,7 @@ TestingProfile::TestingProfile(const base::FilePath& path, Delegate* delegate)
   }
   Init(/*is_supervised_profile=*/false);
   if (delegate_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TestingProfile::FinishInit, base::Unretained(this)));
   } else {
@@ -248,8 +266,11 @@ TestingProfile::TestingProfile(
   }
 
   // Set any testing factories prior to initializing the services.
-  for (TestingFactories::value_type& pair : testing_factories)
-    pair.first->SetTestingFactory(this, std::move(pair.second));
+  for (const auto& f : testing_factories) {
+    absl::visit(
+        [this](const auto& p) { p.first->SetTestingFactory(this, p.second); },
+        f.service_factory_and_testing_factory);
+  }
   testing_factories.clear();
 
   Init(is_supervised_profile);
@@ -259,7 +280,7 @@ TestingProfile::TestingProfile(
   // TODO(atwilson): See if this is still required once we convert the current
   // users of the constructor that takes a Delegate* param.
   if (delegate_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TestingProfile::FinishInit, base::Unretained(this)));
   } else {
@@ -303,16 +324,14 @@ void TestingProfile::Init(bool is_supervised_profile) {
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
   if (!IsOffTheRecord()) {
-    SupervisedUserSettingsService* settings_service =
+    supervised_user::SupervisedUserSettingsService* settings_service =
         SupervisedUserSettingsServiceFactory::GetForKey(key_.get());
-    supervised_user_pref_store_ = new TestingPrefStore();
+    supervised_user_pref_store_ = base::MakeRefCounted<TestingPrefStore>();
     settings_service->Init(supervised_user_pref_store_.get());
     settings_service->MergeDataAndStartSyncing(
         syncer::SUPERVISED_USER_SETTINGS, syncer::SyncDataList(),
         std::unique_ptr<syncer::SyncChangeProcessor>(
-            new syncer::FakeSyncChangeProcessor),
-        std::unique_ptr<syncer::SyncErrorFactory>(
-            new syncer::SyncErrorFactoryMock));
+            new syncer::FakeSyncChangeProcessor));
 
     supervised_user_pref_store_->SetInitializationCompleted();
   }
@@ -358,50 +377,50 @@ void TestingProfile::Init(bool is_supervised_profile) {
     launcher->MaybeSetProfile(this);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-  autofill::PersonalDataManagerFactory::GetInstance()->SetTestingFactory(
-      this, base::BindRepeating(&BuildPersonalDataManagerInstanceFor));
+  if (!AreKeyedServicesDisabledForProfileByDefault(this)) {
+    autofill::PersonalDataManagerFactory::GetInstance()->SetTestingFactory(
+        this, base::BindRepeating(&BuildPersonalDataManagerInstanceFor));
 
-  ReadingListModelFactory::GetInstance()->SetTestingFactory(
-      this, ReadingListModelFactory::GetDefaultFactoryForTesting());
+    ReadingListModelFactory::GetInstance()->SetTestingFactory(
+        this, ReadingListModelFactory::GetDefaultFactoryForTesting());
 
-  // TODO(joaodasilva): remove this once this PKS isn't created in ProfileImpl
-  // anymore, after converting the PrefService to a PKS. Until then it must
-  // be associated with a TestingProfile too.
-  if (!IsOffTheRecord())
-    CreateProfilePolicyConnector();
+    // TODO(joaodasilva): remove this once this PKS isn't created in ProfileImpl
+    // anymore, after converting the PrefService to a PKS. Until then it must
+    // be associated with a TestingProfile too.
+    if (!IsOffTheRecord())
+      CreateProfilePolicyConnector();
 
-  extensions_path_ = profile_path_.AppendASCII("Extensions");
+    extensions_path_ = profile_path_.AppendASCII("Extensions");
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-  // Note that the GetPrefs() creates a TestingPrefService, therefore
-  // the extension controlled pref values set in ExtensionPrefs
-  // are not reflected in the pref service. One would need to
-  // inject a new ExtensionPrefStore(extension_pref_value_map, false).
-  bool extensions_disabled = base::CommandLine::ForCurrentProcess()->HasSwitch(
-      switches::kDisableExtensions);
-  std::unique_ptr<extensions::ExtensionPrefs> extension_prefs(
-      extensions::ExtensionPrefs::Create(
-          this, GetPrefs(), extensions_path_,
-          ExtensionPrefValueMapFactory::GetForBrowserContext(this),
-          extensions_disabled,
-          std::vector<extensions::EarlyExtensionPrefsObserver*>()));
-  extensions::ExtensionPrefsFactory::GetInstance()->SetInstanceForTesting(
-      this, std::move(extension_prefs));
+    // Note that the GetPrefs() creates a TestingPrefService, therefore
+    // the extension controlled pref values set in ExtensionPrefs
+    // are not reflected in the pref service. One would need to
+    // inject a new ExtensionPrefStore(extension_pref_value_map, false).
+    bool extensions_disabled =
+        base::CommandLine::ForCurrentProcess()->HasSwitch(
+            switches::kDisableExtensions);
+    std::unique_ptr<extensions::ExtensionPrefs> extension_prefs =
+        extensions::ExtensionPrefs::Create(
+            this, GetPrefs(), extensions_path_,
+            ExtensionPrefValueMapFactory::GetForBrowserContext(this),
+            extensions_disabled,
+            std::vector<extensions::EarlyExtensionPrefsObserver*>());
+    extensions::ExtensionPrefsFactory::GetInstance()->SetInstanceForTesting(
+        this, std::move(extension_prefs));
 
-  extensions::ExtensionSystemFactory::GetInstance()->SetTestingFactory(
-      this, base::BindRepeating(&extensions::TestExtensionSystem::Build));
+    extensions::ExtensionSystemFactory::GetInstance()->SetTestingFactory(
+        this, base::BindRepeating(&extensions::TestExtensionSystem::Build));
 
-  extensions::EventRouterFactory::GetInstance()->SetTestingFactory(
-      this, BrowserContextKeyedServiceFactory::TestingFactory());
-
-  web_app::WebAppProviderFactory::GetInstance()->SetTestingFactory(
-      this, base::BindRepeating(&web_app::FakeWebAppProvider::BuildDefault));
+    web_app::WebAppProviderFactory::GetInstance()->SetTestingFactory(
+        this, base::BindRepeating(&web_app::FakeWebAppProvider::BuildDefault));
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::SystemWebAppManagerFactory::GetInstance()->SetTestingFactory(
-      this, base::BindRepeating(&ash::TestSystemWebAppManager::BuildDefault));
+    ash::SystemWebAppManagerFactory::GetInstance()->SetTestingFactory(
+        this, base::BindRepeating(&ash::TestSystemWebAppManager::BuildDefault));
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+  }
 
   // Prefs for incognito profiles are set in CreateIncognitoPrefService().
   SimpleFactoryKey* key = GetProfileKey();
@@ -473,13 +492,6 @@ void TestingProfile::FinishInit() {
   if (delegate_) {
     delegate_->OnProfileCreationFinished(this, CREATE_MODE_ASYNCHRONOUS, true,
                                          false);
-  } else {
-    // It is the role of the delegate to ensure that the signout allowed is
-    // properly updated after the profile is create is initialized.
-    // For testing profiles that do not have a delegate, the signout allowed
-    // must be initialized when the testing profile finishes its
-    // initialization.
-    signin_util::EnsureUserSignoutAllowedIsInitializedForProfile(this);
   }
 }
 
@@ -518,13 +530,13 @@ TestingProfile::~TestingProfile() {
     host_content_settings_map_->ShutdownOnUIThread();
 
   // Make sure SharedProtoDatabase doesn't post delayed tasks anymore.
-  ForEachStoragePartition(
-      base::BindRepeating([](content::StoragePartition* storage_partition) {
+  ForEachLoadedStoragePartition(
+      [](content::StoragePartition* storage_partition) {
         if (auto* provider =
                 storage_partition->GetProtoDatabaseProviderForTesting()) {
           provider->SetSharedDBDeleteObsoleteDelayForTesting(base::TimeDelta());
         }
-      }));
+      });
 
   // Shutdown storage partitions before we post a task to delete
   // the resource context.
@@ -560,7 +572,7 @@ TestingProfile::CreateZoomLevelDelegate(const base::FilePath& partition_path) {
 }
 
 scoped_refptr<base::SequencedTaskRunner> TestingProfile::GetIOTaskRunner() {
-  return base::ThreadTaskRunnerHandle::Get();
+  return base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 sync_preferences::TestingPrefServiceSyncable*
@@ -634,11 +646,14 @@ Profile* TestingProfile::GetOffTheRecordProfile(
 }
 
 std::vector<Profile*> TestingProfile::GetAllOffTheRecordProfiles() {
-  std::vector<Profile*> otr_profiles;
+  // This matches the implementation of OffTheRecordProfileImpl:
+  if (IsOffTheRecord())
+    return original_profile_->GetAllOffTheRecordProfiles();
 
+  // This matches the implementation of ProfileImpl:
+  std::vector<Profile*> otr_profiles;
   for (auto& otr : otr_profiles_)
     otr_profiles.push_back(otr.second.get());
-
   return otr_profiles;
 }
 
@@ -668,10 +683,14 @@ const Profile* TestingProfile::GetOriginalProfile() const {
   return this;
 }
 
-void TestingProfile::SetIsSupervisedProfile() {
+void TestingProfile::SetIsSupervisedProfile(bool is_supervised_profile) {
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-  GetPrefs()->SetString(prefs::kSupervisedUserId,
-                        supervised_users::kChildAccountSUID);
+  if (is_supervised_profile) {
+    GetPrefs()->SetString(prefs::kSupervisedUserId,
+                          supervised_user::kChildAccountSUID);
+  } else {
+    GetPrefs()->ClearPref(prefs::kSupervisedUserId);
+  }
 #else
   NOTREACHED() << "Supervised users are not enabled";
 #endif
@@ -680,7 +699,7 @@ void TestingProfile::SetIsSupervisedProfile() {
 bool TestingProfile::IsChild() const {
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
   return GetPrefs()->GetString(prefs::kSupervisedUserId) ==
-         supervised_users::kChildAccountSUID;
+         supervised_user::kChildAccountSUID;
 #else
   return false;
 #endif
@@ -726,12 +745,14 @@ void TestingProfile::CreatePrefServiceForSupervisedUser() {
 
   // Construct testing_prefs_ by hand to add the supervised user pref store.
   testing_prefs_ = new sync_preferences::TestingPrefServiceSyncable(
-      /*managed_prefs=*/new TestingPrefStore, supervised_user_pref_store_,
-      /*extension_prefs=*/new TestingPrefStore,
-      /*standalone_browser_prefs=*/new TestingPrefStore,
-      /*user_prefs=*/new TestingPrefStore,
-      /*recommended_prefs=*/new TestingPrefStore,
-      new user_prefs::PrefRegistrySyncable, new PrefNotifierImpl);
+      /*managed_prefs=*/base::MakeRefCounted<TestingPrefStore>(),
+      supervised_user_pref_store_,
+      /*extension_prefs=*/base::MakeRefCounted<TestingPrefStore>(),
+      /*standalone_browser_prefs=*/base::MakeRefCounted<TestingPrefStore>(),
+      /*user_prefs=*/base::MakeRefCounted<TestingPrefStore>(),
+      /*recommended_prefs=*/base::MakeRefCounted<TestingPrefStore>(),
+      base::MakeRefCounted<user_prefs::PrefRegistrySyncable>(),
+      std::make_unique<PrefNotifierImpl>());
   prefs_.reset(testing_prefs_);
   user_prefs::UserPrefs::Set(this, prefs_.get());
   RegisterUserProfilePrefs(testing_prefs_->registry());
@@ -796,9 +817,9 @@ content::ResourceContext* TestingProfile::GetResourceContext() {
   // non compliant tests: SpellingMenuObserverTest.SuggestionsForceTopSeparator
   if (!resource_context_) {
     resource_context_ =
-        std::unique_ptr<content::MockResourceContext,
+        std::unique_ptr<content::ResourceContext,
                         content::BrowserThread::DeleteOnIOThread>(
-            new content::MockResourceContext);
+            new content::ResourceContext);
   }
   return resource_context_.get();
 }
@@ -850,14 +871,14 @@ policy::UserCloudPolicyManagerAsh*
 TestingProfile::GetUserCloudPolicyManagerAsh() {
   return user_cloud_policy_manager_.get();
 }
-
-policy::ActiveDirectoryPolicyManager*
-TestingProfile::GetActiveDirectoryPolicyManager() {
-  return nullptr;
-}
 #else
 policy::UserCloudPolicyManager* TestingProfile::GetUserCloudPolicyManager() {
   return user_cloud_policy_manager_.get();
+}
+
+policy::ProfileCloudPolicyManager*
+TestingProfile::GetProfileCloudPolicyManager() {
+  return profile_cloud_policy_manager_.get();
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -968,6 +989,16 @@ TestingProfile::GetBrowsingDataRemoverDelegate() {
   return ChromeBrowsingDataRemoverDelegateFactory::GetForProfile(this);
 }
 
+content::ReduceAcceptLanguageControllerDelegate*
+TestingProfile::GetReduceAcceptLanguageControllerDelegate() {
+  return nullptr;
+}
+
+content::OriginTrialsControllerDelegate*
+TestingProfile::GetOriginTrialsControllerDelegate() {
+  return OriginTrialsFactory::GetForBrowserContext(this);
+}
+
 bool TestingProfile::WasCreatedByVersionOrLater(const std::string& version) {
   return true;
 }
@@ -985,90 +1016,131 @@ TestingProfile::Builder::Builder() = default;
 
 TestingProfile::Builder::~Builder() = default;
 
-void TestingProfile::Builder::SetPath(const base::FilePath& path) {
+TestingProfile::Builder& TestingProfile::Builder::SetPath(
+    const base::FilePath& path) {
   path_ = path;
+  return *this;
 }
 
-void TestingProfile::Builder::SetDelegate(Delegate* delegate) {
+TestingProfile::Builder& TestingProfile::Builder::SetDelegate(
+    Delegate* delegate) {
   delegate_ = delegate;
+  return *this;
 }
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-void TestingProfile::Builder::SetExtensionSpecialStoragePolicy(
+TestingProfile::Builder&
+TestingProfile::Builder::SetExtensionSpecialStoragePolicy(
     scoped_refptr<ExtensionSpecialStoragePolicy> policy) {
   extension_policy_ = policy;
+  return *this;
 }
 #endif
 
-void TestingProfile::Builder::SetPrefService(
+TestingProfile::Builder& TestingProfile::Builder::SetPrefService(
     std::unique_ptr<sync_preferences::PrefServiceSyncable> prefs) {
   pref_service_ = std::move(prefs);
+  return *this;
 }
 
-void TestingProfile::Builder::SetGuestSession() {
+TestingProfile::Builder& TestingProfile::Builder::SetGuestSession() {
   guest_session_ = true;
+  return *this;
 }
 
-void TestingProfile::Builder::DisallowBrowserWindows() {
+TestingProfile::Builder& TestingProfile::Builder::DisallowBrowserWindows() {
   allows_browser_windows_ = false;
+  return *this;
 }
 
-void TestingProfile::Builder::SetIsNewProfile(bool is_new_profile) {
+TestingProfile::Builder& TestingProfile::Builder::SetIsNewProfile(
+    bool is_new_profile) {
   is_new_profile_ = is_new_profile;
+  return *this;
 }
 
-void TestingProfile::Builder::SetIsSupervisedProfile() {
+TestingProfile::Builder& TestingProfile::Builder::SetIsSupervisedProfile() {
   is_supervised_profile_ = true;
+  return *this;
 }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-void TestingProfile::Builder::SetIsMainProfile(bool is_main_profile) {
+TestingProfile::Builder& TestingProfile::Builder::SetIsMainProfile(
+    bool is_main_profile) {
   is_main_profile_ = is_main_profile;
+  return *this;
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-void TestingProfile::Builder::SetUserCloudPolicyManagerAsh(
+TestingProfile::Builder& TestingProfile::Builder::SetUserCloudPolicyManagerAsh(
     std::unique_ptr<policy::UserCloudPolicyManagerAsh>
         user_cloud_policy_manager) {
   user_cloud_policy_manager_ = std::move(user_cloud_policy_manager);
+  return *this;
 }
 #else
-void TestingProfile::Builder::SetUserCloudPolicyManager(
+TestingProfile::Builder& TestingProfile::Builder::SetUserCloudPolicyManager(
     std::unique_ptr<policy::UserCloudPolicyManager> user_cloud_policy_manager) {
+  DCHECK_EQ(profile_cloud_policy_manager_, nullptr);
   user_cloud_policy_manager_ = std::move(user_cloud_policy_manager);
+  return *this;
+}
+
+TestingProfile::Builder& TestingProfile::Builder::SetProfileCloudPolicyManager(
+    std::unique_ptr<policy::ProfileCloudPolicyManager>
+        profile_cloud_policy_manager) {
+  DCHECK_EQ(user_cloud_policy_manager_, nullptr);
+  profile_cloud_policy_manager_ = std::move(profile_cloud_policy_manager);
+  return *this;
 }
 #endif
 
-void TestingProfile::Builder::SetPolicyService(
+TestingProfile::Builder& TestingProfile::Builder::SetPolicyService(
     std::unique_ptr<policy::PolicyService> policy_service) {
   policy_service_ = std::move(policy_service);
+  return *this;
 }
 
-void TestingProfile::Builder::SetProfileName(const std::string& profile_name) {
+TestingProfile::Builder& TestingProfile::Builder::SetProfileName(
+    const std::string& profile_name) {
   profile_name_ = profile_name;
+  return *this;
 }
 
-void TestingProfile::Builder::SetSharedURLLoaderFactory(
+TestingProfile::Builder& TestingProfile::Builder::SetSharedURLLoaderFactory(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
   url_loader_factory_ = url_loader_factory;
+  return *this;
 }
 
-void TestingProfile::Builder::OverridePolicyConnectorIsManagedForTesting(
+TestingProfile::Builder&
+TestingProfile::Builder::OverridePolicyConnectorIsManagedForTesting(
     bool is_managed) {
   override_policy_connector_is_managed_ = is_managed;
+  return *this;
 }
 
-void TestingProfile::Builder::AddTestingFactory(
+TestingProfile::Builder& TestingProfile::Builder::AddTestingFactory(
     BrowserContextKeyedServiceFactory* service_factory,
     BrowserContextKeyedServiceFactory::TestingFactory testing_factory) {
   testing_factories_.emplace_back(service_factory, std::move(testing_factory));
+  return *this;
 }
 
-void TestingProfile::Builder::AddTestingFactories(
+TestingProfile::Builder& TestingProfile::Builder::AddTestingFactory(
+    RefcountedBrowserContextKeyedServiceFactory* service_factory,
+    RefcountedBrowserContextKeyedServiceFactory::TestingFactory
+        testing_factory) {
+  testing_factories_.emplace_back(service_factory, std::move(testing_factory));
+  return *this;
+}
+
+TestingProfile::Builder& TestingProfile::Builder::AddTestingFactories(
     const TestingFactories& testing_factories) {
   testing_factories_.insert(testing_factories_.end(), testing_factories.begin(),
                             testing_factories.end());
+  return *this;
 }
 
 std::unique_ptr<TestingProfile> TestingProfile::Builder::Build() {

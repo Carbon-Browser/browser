@@ -1,14 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_BUBBLE_MENU_ITEM_FACTORY_H_
 #define CHROME_BROWSER_UI_VIEWS_BUBBLE_MENU_ITEM_FACTORY_H_
 
-#include <memory>
 #include <string>
 
-#include "ui/gfx/vector_icon_types.h"
+#include "ui/base/models/image_model.h"
 #include "ui/views/controls/button/button.h"
 
 class HoverButton;
@@ -21,6 +20,6 @@ std::unique_ptr<HoverButton> CreateBubbleMenuItem(
     int button_id,
     const std::u16string& name,
     views::Button::PressedCallback callback,
-    const gfx::VectorIcon* icon = nullptr);
+    const ui::ImageModel& icon = ui::ImageModel());
 
 #endif  // CHROME_BROWSER_UI_VIEWS_BUBBLE_MENU_ITEM_FACTORY_H_

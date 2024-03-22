@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -109,12 +109,6 @@ void SystemMemoryPressureEvaluator::OnMemoryPressure(
   }
 
   SendCurrentVote(notify);
-
-  // Record UMA histogram statistics for the current memory pressure level, it
-  // would seem that only Memory.PressureLevel would be necessary.
-  constexpr int kNumberPressureLevels = 3;
-  UMA_HISTOGRAM_ENUMERATION("ChromeOS.MemoryPressureLevel", current_vote(),
-                            kNumberPressureLevels);
 }
 
 }  // namespace memory

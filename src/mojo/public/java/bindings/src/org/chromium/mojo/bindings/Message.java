@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,19 +16,13 @@ import java.util.List;
  */
 public class Message {
 
-    /**
-     * The data of the message.
-     */
+    /** The data of the message. */
     private final ByteBuffer mBuffer;
 
-    /**
-     * The handles of the message.
-     */
+    /** The handles of the message. */
     private final List<? extends Handle> mHandles;
 
-    /**
-     * This message interpreted as a message for a mojo service with an appropriate header.
-     */
+    /** This message interpreted as a message for a mojo service with an appropriate header. */
     private ServiceMessage mWithHeader;
 
     /**
@@ -42,23 +36,17 @@ public class Message {
         mHandles = handles;
     }
 
-    /**
-     * The data of the message.
-     */
+    /** The data of the message. */
     public ByteBuffer getData() {
         return mBuffer;
     }
 
-    /**
-     * The handles of the message.
-     */
+    /** The handles of the message. */
     public List<? extends Handle> getHandles() {
         return mHandles;
     }
 
-    /**
-     * Returns the message interpreted as a message for a mojo service.
-     */
+    /** Returns the message interpreted as a message for a mojo service. */
     public ServiceMessage asServiceMessage() {
         if (mWithHeader == null) {
             mWithHeader = new ServiceMessage(this);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,8 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/win/winrt_foundation_helpers.h"
@@ -63,7 +63,7 @@ namespace win {
 //
 // // Offloading a heavy computation:
 // auto my_op = WRL::Make<base::win::AsyncOperation<FooBar*>>();
-// base::PostTaskAndReplyWithResult(
+// base::ThreadPool::PostTaskAndReplyWithResult(
 //     base::BindOnce(MakeFooBar), my_op->callback());
 
 namespace internal {

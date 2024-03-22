@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,6 @@
 @property(nonatomic, strong) ChromeBroadcaster* broadcaster;
 // The broadcasted UI state observed by this object.
 @property(nonatomic, readonly) CGFloat yOffset;
-@property(nonatomic, readonly, getter=isScrolling) BOOL scrolling;
-@property(nonatomic, readonly, getter=isDragging) BOOL dragging;
 
 @end
 

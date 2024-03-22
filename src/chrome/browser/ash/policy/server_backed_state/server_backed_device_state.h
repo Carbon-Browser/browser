@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@ extern const char kDeviceStateMode[];
 extern const char kDeviceStateDisabledMessage[];
 extern const char kDeviceStatePackagedLicense[];
 extern const char kDeviceStateLicenseType[];
+extern const char kDeviceStateAssignedUpgradeType[];
 
 // String constants used to persist the initial state action in the
 // kDeviceStateMode dictionary entry.
@@ -31,6 +32,11 @@ extern const char kDeviceStateLicenseTypeTerminal[];
 // String constants used to persist either the initial state action
 // or the restorative action in the kDeviceStateMode dictionary entry.
 extern const char kDeviceStateModeDisabled[];
+
+// String constants used to persist the assigned upgrade type in the
+// kDeviceStateAssignedUpgradeType dictionary entry.
+extern const char kDeviceStateAssignedUpgradeTypeChromeEnterprise[];
+extern const char kDeviceStateAssignedUpgradeTypeKiosk[];
 
 // Mode that a device needs to start in.
 enum DeviceStateMode {

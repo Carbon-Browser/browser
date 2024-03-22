@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/apps/platform_apps/api/sync_file_system/extension_sync_event_observer.h"
@@ -112,7 +112,8 @@ SyncFileSystemDeleteFileSystemFunction::Run() {
       FROM_HERE,
       BindOnce(
           &storage::FileSystemContext::DeleteFileSystem, file_system_context,
-          blink::StorageKey(url::Origin::Create(source_url())),
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(source_url())),
           file_system_url.type(),
           BindOnce(&SyncFileSystemDeleteFileSystemFunction::DidDeleteFileSystem,
                    this)));
@@ -141,7 +142,7 @@ void SyncFileSystemDeleteFileSystemFunction::DidDeleteFileSystem(
     return;
   }
 
-  Respond(OneArgument(base::Value(true)));
+  Respond(WithArguments(true));
 }
 
 ExtensionFunction::ResponseAction
@@ -158,7 +159,8 @@ SyncFileSystemRequestFileSystemFunction::Run() {
       FROM_HERE,
       BindOnce(&storage::FileSystemContext::OpenFileSystem,
                GetFileSystemContext(),
-               blink::StorageKey(url::Origin::Create(source_url())),
+               blink::StorageKey::CreateFirstParty(
+                   url::Origin::Create(source_url())),
                /*bucket=*/absl::nullopt, storage::kFileSystemTypeSyncable,
                storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
                base::BindOnce(&self::DidOpenFileSystem, this)));
@@ -194,12 +196,12 @@ void SyncFileSystemRequestFileSystemFunction::DidOpenFileSystem(
     return;
   }
 
-  std::unique_ptr<base::DictionaryValue> dict(new base::DictionaryValue());
-  dict->SetStringKey("name", file_system_name);
-  dict->SetStringKey("root", ::sync_file_system::GetSyncableFileSystemRootURI(
-                                 root_url.origin().GetURL())
-                                 .spec());
-  Respond(OneArgument(base::Value::FromUniquePtrValue(std::move(dict))));
+  base::Value::Dict dict;
+  dict.Set("name", file_system_name);
+  dict.Set("root", ::sync_file_system::GetSyncableFileSystemRootURI(
+                       root_url.origin().GetURL())
+                       .spec());
+  Respond(WithArguments(std::move(dict)));
 }
 
 ExtensionFunction::ResponseAction SyncFileSystemGetFileStatusFunction::Run() {
@@ -249,7 +251,7 @@ ExtensionFunction::ResponseAction SyncFileSystemGetFileStatusesFunction::Run() {
   // All FileEntries converted into array of URL Strings in JS custom bindings.
   EXTENSION_FUNCTION_VALIDATE(args().size() >= 1);
   EXTENSION_FUNCTION_VALIDATE(args()[0].is_list());
-  base::Value::ConstListView file_entry_urls = args()[0].GetListDeprecated();
+  const base::Value::List& file_entry_urls = args()[0].GetList();
 
   scoped_refptr<storage::FileSystemContext> file_system_context =
       browser_context()
@@ -266,10 +268,10 @@ ExtensionFunction::ResponseAction SyncFileSystemGetFileStatusesFunction::Run() {
   if (!sync_file_system_service)
     return RespondNow(Error(""));
 
-  for (unsigned int i = 0; i < num_expected_results_; i++) {
+  for (const auto& entry : file_entry_urls) {
     std::string url;
-    if (file_entry_urls[i].is_string())
-      url = file_entry_urls[i].GetString();
+    if (entry.is_string())
+      url = entry.GetString();
     storage::FileSystemURL file_system_url(
         file_system_context->CrackURLInFirstPartyContext(GURL(url)));
 
@@ -316,16 +318,15 @@ void SyncFileSystemGetFileStatusesFunction::DidGetFileStatus(
     sync_file_system::FileStatus file_status =
         SyncFileStatusToExtensionEnum(it->second.second);
 
-    dict.Set("entry", base::Value::FromUniquePtrValue(
-                          CreateDictionaryValueForFileSystemEntry(
-                              url, ::sync_file_system::SYNC_FILE_TYPE_FILE)));
+    dict.Set("entry", *CreateDictionaryValueForFileSystemEntry(
+                          url, ::sync_file_system::SYNC_FILE_TYPE_FILE));
     dict.Set("status", ToString(file_status));
 
     dict.Set("error", ErrorToString(file_error));
 
     status_array.Append(std::move(dict));
   }
-  Respond(OneArgument(base::Value(std::move(status_array))));
+  Respond(WithArguments(std::move(status_array)));
 }
 
 ExtensionFunction::ResponseAction
@@ -350,7 +351,8 @@ SyncFileSystemGetUsageAndQuotaFunction::Run() {
       FROM_HERE,
       BindOnce(
           &storage::QuotaManager::GetUsageAndQuotaForWebApps, quota_manager,
-          blink::StorageKey(url::Origin::Create(source_url())),
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(source_url())),
           storage::FileSystemTypeToQuotaStorageType(file_system_url.type()),
           BindOnce(&SyncFileSystemGetUsageAndQuotaFunction::DidGetUsageAndQuota,
                    this)));
@@ -401,8 +403,8 @@ SyncFileSystemSetConflictResolutionPolicyFunction::Run() {
 
 ExtensionFunction::ResponseAction
 SyncFileSystemGetConflictResolutionPolicyFunction::Run() {
-  return RespondNow(OneArgument(base::Value(sync_file_system::ToString(
-      sync_file_system::CONFLICT_RESOLUTION_POLICY_LAST_WRITE_WIN))));
+  return RespondNow(WithArguments(sync_file_system::ToString(
+      sync_file_system::ConflictResolutionPolicy::kLastWriteWin)));
 }
 
 ExtensionFunction::ResponseAction

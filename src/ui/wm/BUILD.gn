@@ -1,10 +1,11 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/ui.gni")
 import("//testing/test.gni")
+import("//ui/base/ui_features.gni")
 
 assert(use_aura)
 
@@ -24,14 +25,10 @@ component("wm") {
     "core/coordinate_conversion.h",
     "core/cursor_loader.cc",
     "core/cursor_loader.h",
-    "core/cursor_lookup.cc",
-    "core/cursor_lookup.h",
     "core/cursor_manager.cc",
     "core/cursor_manager.h",
     "core/cursor_util.cc",
     "core/cursor_util.h",
-    "core/cursors_aura.cc",
-    "core/cursors_aura.h",
     "core/default_activation_client.cc",
     "core/default_activation_client.h",
     "core/default_screen_position_client.cc",
@@ -81,6 +78,7 @@ component("wm") {
     "//ui/base",
     "//ui/base/cursor",
     "//ui/base/cursor/mojom:cursor_type",
+    "//ui/color",
     "//ui/compositor",
     "//ui/display",
     "//ui/events",
@@ -176,8 +174,10 @@ test("wm_unittests") {
     "//ui/events/platform",
     "//ui/gfx",
     "//ui/gfx:gfx_skia",
+    "//ui/gfx:test_support",
     "//ui/gfx/animation",
     "//ui/gfx/geometry",
+    "//ui/gfx/geometry:geometry_skia",
     "//ui/gl:test_support",
     "//ui/platform_window",
     "//ui/resources",
@@ -186,15 +186,18 @@ test("wm_unittests") {
 
   data_deps = [ "//ui/resources:ui_test_pak_data" ]
 
+  if (enable_hidpi) {
+    data_deps += [ "//ui/resources:ui_test_pak_data_200_percent" ]
+  }
+
   if (is_chromeos_ash) {
     sources += [ "core/ime_util_chromeos_unittest.cc" ]
   }
 
   if (is_fuchsia) {
-    use_cfv2 = false
     additional_manifest_fragments = [
-      "//build/config/fuchsia/test/present_view_capabilities.test-cmx",
-      "//build/config/fuchsia/test/vulkan_capabilities.test-cmx",
+      "//build/config/fuchsia/test/present_view.shard.test-cml",
+      "//third_party/fuchsia-sdk/sdk/pkg/vulkan/client.shard.cml",
     ]
   }
 }

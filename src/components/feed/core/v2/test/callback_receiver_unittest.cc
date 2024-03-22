@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feed/core/v2/test/callback_receiver.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -49,7 +49,7 @@ TEST(CallbackReceiverTest, RunAndGetResult) {
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 
   CallbackReceiver<int> cr1;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(cr1.Bind(), 42));
   EXPECT_EQ(42, cr1.RunAndGetResult());
 }
@@ -60,7 +60,7 @@ TEST(CallbackReceiverTest, RunAndGetResultExternalRunLoop) {
 
   base::RunLoop run_loop;
   CallbackReceiver<int> cr1(&run_loop);
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(cr1.Bind(), 42));
   EXPECT_EQ(42, cr1.RunAndGetResult());
 }

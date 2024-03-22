@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,13 +46,6 @@ const std::string GetDecodeStatusString(const DecoderStatus& status) {
 }
 
 }  // namespace
-
-// static
-bool ScopedDecodeTrace::IsEnabled() {
-  bool enable_decode_traces = false;
-  TRACE_EVENT_CATEGORY_GROUP_ENABLED("media", &enable_decode_traces);
-  return enable_decode_traces;
-}
 
 ScopedDecodeTrace::ScopedDecodeTrace(const char* trace_name,
                                      bool is_key_frame,

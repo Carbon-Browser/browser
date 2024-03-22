@@ -107,7 +107,7 @@ bool AutoscrollController::SelectionAutoscrollInProgress() const {
 }
 
 bool AutoscrollController::AutoscrollInProgress() const {
-  return autoscroll_layout_object_;
+  return autoscroll_layout_object_ != nullptr;
 }
 
 bool AutoscrollController::AutoscrollInProgressFor(
@@ -260,9 +260,9 @@ void AutoscrollController::HandleMouseMoveForMiddleClickAutoscroll(
       vertical_autoscroll_layout_box_ &&
       vertical_autoscroll_layout_box_->GetNode();
   if (horizontal_autoscroll_possible &&
-      !horizontal_autoscroll_layout_box_->CanBeScrolledAndHasScrollableArea() &&
+      !horizontal_autoscroll_layout_box_->IsUserScrollable() &&
       vertical_autoscroll_possible &&
-      !vertical_autoscroll_layout_box_->CanBeScrolledAndHasScrollableArea()) {
+      !vertical_autoscroll_layout_box_->IsUserScrollable()) {
     StopMiddleClickAutoscroll(frame);
     return;
   }
@@ -374,7 +374,7 @@ void AutoscrollController::StartMiddleClickAutoscroll(
   bool can_propagate_vertically = true;
   bool can_propagate_horizontally = true;
 
-  LayoutObject* layout_object = scrollable->GetNode()->GetLayoutObject();
+  LayoutObject* layout_object = scrollable;
 
   while (layout_object && !(can_scroll_horizontally && can_scroll_vertically)) {
     if (LayoutBox* layout_box = DynamicTo<LayoutBox>(layout_object)) {

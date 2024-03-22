@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -37,11 +37,15 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/tpm/stub_install_attributes.h"
 #include "chrome/browser/ash/settings/device_settings_cache.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #endif
+
+#if BUILDFLAG(IS_WIN)
+#include "base/test/test_reg_util_win.h"
+#endif  // BUILDFLAG(IS_WIN)
 
 struct MetricsReportingStateTestParameterizedParams {
   bool initial_value;
@@ -86,6 +90,21 @@ class MetricsReportingStateTest : public InProcessBrowserTest {
 
   virtual bool IsMetricsReportingEnabledInitialValue() const = 0;
 
+#if BUILDFLAG(IS_WIN)
+  void SetUp() override {
+    // Override HKCU to prevent writing to real keys. On Windows, the metrics
+    // reporting consent is stored in the registry, and it is used to determine
+    // the metrics reporting state when it is unset (e.g. during tests, which
+    // start with fresh user data dirs). Otherwise, this may cause flakiness
+    // since tests will sometimes start with metrics reporting enabled and
+    // sometimes disabled.
+    ASSERT_NO_FATAL_FAILURE(
+        override_manager_.OverrideRegistry(HKEY_CURRENT_USER));
+
+    InProcessBrowserTest::SetUp();
+  }
+#endif  // BUILDFLAG(IS_WIN)
+
   // InProcessBrowserTest overrides:
   bool SetUpUserDataDirectory() override {
     local_state_path_ = metrics::SetUpUserDataDirectoryForTesting(
@@ -109,6 +128,11 @@ class MetricsReportingStateTest : public InProcessBrowserTest {
   MetricsReportingStateTest() = default;
 
   base::FilePath local_state_path_;
+
+#if BUILDFLAG(IS_WIN)
+ private:
+  registry_util::RegistryOverrideManager override_manager_;
+#endif  // BUILDFLAG(IS_WIN)
 };
 
 // Used to verify the value for IsMetricsAndCrashReportingEnabled() is correctly
@@ -287,6 +311,7 @@ INSTANTIATE_TEST_SUITE_P(
     testing::ValuesIn<ChangeMetricsReportingStateCalledFrom>(
         {ChangeMetricsReportingStateCalledFrom::kUnknown,
          ChangeMetricsReportingStateCalledFrom::kUiSettings,
+         ChangeMetricsReportingStateCalledFrom::kUiFirstRun,
          ChangeMetricsReportingStateCalledFrom::kCrosMetricsSettingsChange}));
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)

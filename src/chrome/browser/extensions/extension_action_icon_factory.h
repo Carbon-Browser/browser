@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,9 +60,9 @@ class ExtensionActionIconFactory : public extensions::IconImage::Observer {
   gfx::Image GetIcon(int tab_id);
 
  private:
-  raw_ptr<Profile> profile_;
-  raw_ptr<const extensions::ExtensionAction> action_;
-  raw_ptr<Observer> observer_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
+  raw_ptr<const extensions::ExtensionAction, DanglingUntriaged> action_;
+  raw_ptr<Observer, DanglingUntriaged> observer_;
   const bool should_check_icons_;
   gfx::Image cached_default_icon_image_;
 

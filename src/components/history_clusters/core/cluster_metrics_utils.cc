@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,6 @@ std::string ClusterActionToString(ClusterAction action) {
       return "OpenedInTabGroup";
     case ClusterAction::kRelatedSearchClicked:
       return "RelatedSearchClicked";
-    case ClusterAction::kRelatedVisitsVisibilityToggled:
-      return "RelatedVisitsVisibilityToggled";
     case ClusterAction::kVisitClicked:
       return "VisitClicked";
   }
@@ -27,10 +25,12 @@ std::string ClusterActionToString(ClusterAction action) {
 
 std::string VisitActionToString(VisitAction action) {
   switch (action) {
-    case VisitAction::kDeleted:
-      return "Deleted";
     case VisitAction::kClicked:
       return "Clicked";
+    case VisitAction::kHidden:
+      return "Hidden";
+    case VisitAction::kDeleted:
+      return "Deleted";
   }
   NOTREACHED();
   return std::string();

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,20 @@
 namespace blink {
 
 // static
-std::unique_ptr<InterpolableTransformList>
-InterpolableTransformList::ConvertCSSValue(const CSSValue& css_value,
-                                           const StyleResolverState* state) {
-  TransformOperations transform = TransformBuilder::CreateTransformOperations(
-      css_value, state->CssToLengthConversionData());
-  return std::make_unique<InterpolableTransformList>(std::move(transform));
+InterpolableTransformList* InterpolableTransformList::ConvertCSSValue(
+    const CSSValue& css_value,
+    const CSSToLengthConversionData& conversion_data,
+    TransformOperations::BoxSizeDependentMatrixBlending box_size_dependent) {
+  TransformOperations transform =
+      TransformBuilder::CreateTransformOperations(css_value, conversion_data);
+  return MakeGarbageCollected<InterpolableTransformList>(std::move(transform),
+                                                         box_size_dependent);
 }
 
 void InterpolableTransformList::PreConcat(
     const InterpolableTransformList& underlying) {
   Vector<scoped_refptr<TransformOperation>> result;
-  result.ReserveCapacity(underlying.operations_.size() + operations_.size());
+  result.reserve(underlying.operations_.size() + operations_.size());
   result.AppendVector(underlying.operations_.Operations());
   result.AppendVector(operations_.Operations());
   operations_.Operations() = result;
@@ -36,8 +38,8 @@ void InterpolableTransformList::Interpolate(const InterpolableValue& to,
                                             const double progress,
                                             InterpolableValue& result) const {
   To<InterpolableTransformList>(result).operations_ =
-      To<InterpolableTransformList>(to).operations_.Blend(operations_,
-                                                          progress);
+      To<InterpolableTransformList>(to).operations_.Blend(operations_, progress,
+                                                          box_size_dependent_);
 }
 
 void InterpolableTransformList::AssertCanInterpolateWith(

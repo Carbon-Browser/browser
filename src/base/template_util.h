@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,21 +17,6 @@
 namespace base {
 
 namespace internal {
-
-// Uses expression SFINAE to detect whether using operator<< would work.
-template <typename T, typename = void>
-struct SupportsOstreamOperator : std::false_type {};
-template <typename T>
-struct SupportsOstreamOperator<T,
-                               decltype(void(std::declval<std::ostream&>()
-                                             << std::declval<T>()))>
-    : std::true_type {};
-
-template <typename T, typename = void>
-struct SupportsToString : std::false_type {};
-template <typename T>
-struct SupportsToString<T, decltype(void(std::declval<T>().ToString()))>
-    : std::true_type {};
 
 // Used to detech whether the given type is an iterator.  This is normally used
 // with std::enable_if to provide disambiguation for functions that take
@@ -60,11 +45,11 @@ namespace internal {
 
 // The indirection with std::is_enum<T> is required, because instantiating
 // std::underlying_type_t<T> when T is not an enum is UB prior to C++20.
-template <typename T, bool = std::is_enum<T>::value>
+template <typename T, bool = std::is_enum_v<T>>
 struct IsScopedEnumImpl : std::false_type {};
 
 template <typename T>
-struct IsScopedEnumImpl<T, /*std::is_enum<T>::value=*/true>
+struct IsScopedEnumImpl<T, /*std::is_enum_v<T>=*/true>
     : std::negation<std::is_convertible<T, std::underlying_type_t<T>>> {};
 
 }  // namespace internal
@@ -92,19 +77,6 @@ struct remove_cvref {
 // - https://wg21.link/meta.type.synop#lib:remove_cvref_t
 template <typename T>
 using remove_cvref_t = typename remove_cvref<T>::type;
-
-// Implementation of C++20's std::is_constant_evaluated.
-//
-// References:
-// - https://en.cppreference.com/w/cpp/types/is_constant_evaluated
-// - https://wg21.link/meta.const.eval
-constexpr bool is_constant_evaluated() noexcept {
-#if HAS_BUILTIN(__builtin_is_constant_evaluated)
-  return __builtin_is_constant_evaluated();
-#else
-  return false;
-#endif
-}
 
 // Simplified implementation of C++20's std::iter_value_t.
 // As opposed to std::iter_value_t, this implementation does not restrict

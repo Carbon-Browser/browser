@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/css/container_query_evaluator.h"
+#include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
 #include "third_party/blink/renderer/core/css/container_query.h"
+#include "third_party/blink/renderer/core/css/container_query_scroll_snapshot.h"
 #include "third_party/blink/renderer/core/css/css_container_values.h"
 #include "third_party/blink/renderer/core/css/resolver/match_result.h"
 #include "third_party/blink/renderer/core/css/style_recalc_context.h"
@@ -23,17 +25,47 @@ namespace {
 // applied containment (e.g. the 'contain' property itself).
 PhysicalAxes ContainerTypeAxes(const ComputedStyle& style) {
   LogicalAxes axes = kLogicalAxisNone;
-  if (style.ContainerType() & kContainerTypeInlineSize)
+  if (style.ContainerType() & kContainerTypeInlineSize) {
     axes |= kLogicalAxisInline;
-  if (style.ContainerType() & kContainerTypeBlockSize)
+  }
+  if (style.ContainerType() & kContainerTypeBlockSize) {
     axes |= kLogicalAxisBlock;
+  }
   return ToPhysicalAxes(axes, style.GetWritingMode());
 }
 
 bool NameMatches(const ComputedStyle& style,
-                 const ContainerSelector& container_selector) {
+                 const ContainerSelector& container_selector,
+                 const TreeScope* selector_tree_scope) {
   const AtomicString& name = container_selector.Name();
-  return name.IsNull() || (style.ContainerName().Contains(name));
+  if (name.IsNull()) {
+    return true;
+  }
+  if (const ScopedCSSNameList* container_name = style.ContainerName()) {
+    const HeapVector<Member<const ScopedCSSName>>& names =
+        container_name->GetNames();
+    for (auto scoped_name : names) {
+      if (scoped_name->GetName() == name) {
+        const TreeScope* name_tree_scope = scoped_name->GetTreeScope();
+        if (!name_tree_scope || !selector_tree_scope) {
+          // Either the container-name or @container have a UA or User origin.
+          // In that case always match the name regardless of the other one's
+          // origin.
+          return true;
+        }
+        // Match a tree-scoped container name if the container-name
+        // declaration's tree scope is an inclusive ancestor of the @container
+        // rule's tree scope.
+        for (const TreeScope* match_scope = selector_tree_scope; match_scope;
+             match_scope = match_scope->ParentTreeScope()) {
+          if (match_scope == name_tree_scope) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
 }
 
 bool TypeMatches(const ComputedStyle& style,
@@ -43,24 +75,53 @@ bool TypeMatches(const ComputedStyle& style,
 }
 
 bool Matches(const ComputedStyle& style,
-             const ContainerSelector& container_selector) {
-  return NameMatches(style, container_selector) &&
-         TypeMatches(style, container_selector);
+             const ContainerSelector& container_selector,
+             const TreeScope* selector_tree_scope) {
+  return TypeMatches(style, container_selector) &&
+         NameMatches(style, container_selector, selector_tree_scope);
+}
+
+Element* CachedContainer(Element* starting_element,
+                         const ContainerSelector& container_selector,
+                         const TreeScope* selector_tree_scope,
+                         ContainerSelectorCache& container_selector_cache) {
+  auto it =
+      container_selector_cache.Find<ScopedContainerSelectorHashTranslator>(
+          ScopedContainerSelector(container_selector, selector_tree_scope));
+  if (it != container_selector_cache.end()) {
+    return it->value.Get();
+  }
+  Element* container = ContainerQueryEvaluator::FindContainer(
+      starting_element, container_selector, selector_tree_scope);
+  container_selector_cache.insert(MakeGarbageCollected<ScopedContainerSelector>(
+                                      container_selector, selector_tree_scope),
+                                  container);
+  return container;
 }
 
 }  // namespace
 
+ContainerQueryEvaluator::ContainerQueryEvaluator(Element& container) {
+  auto* query_values = MakeGarbageCollected<CSSContainerValues>(
+      container.GetDocument(), container, absl::nullopt, absl::nullopt,
+      ContainerStuckPhysical::kNo, ContainerStuckPhysical::kNo);
+  media_query_evaluator_ =
+      MakeGarbageCollected<MediaQueryEvaluator>(query_values);
+}
+
 // static
 Element* ContainerQueryEvaluator::FindContainer(
-    Element* context_element,
-    const ContainerSelector& container_selector) {
+    Element* starting_element,
+    const ContainerSelector& container_selector,
+    const TreeScope* selector_tree_scope) {
   // TODO(crbug.com/1213888): Cache results.
-  for (Element* element = context_element; element;
+  for (Element* element = starting_element; element;
        element = element->ParentOrShadowHostElement()) {
     if (const ComputedStyle* style = element->GetComputedStyle()) {
-      if (style->IsContainerForSizeContainerQueries() &&
-          Matches(*style, container_selector)) {
-        return element;
+      if (style->StyleType() == kPseudoIdNone) {
+        if (Matches(*style, container_selector, selector_tree_scope)) {
+          return element;
+        }
       }
     }
   }
@@ -68,78 +129,198 @@ Element* ContainerQueryEvaluator::FindContainer(
   return nullptr;
 }
 
-bool ContainerQueryEvaluator::EvalAndAdd(const StyleRecalcContext& context,
-                                         const ContainerQuery& query,
-                                         MatchResult& match_result) {
-  Element* container = FindContainer(context.container, query.Selector());
-  if (!container)
+bool ContainerQueryEvaluator::EvalAndAdd(
+    Element* style_container_candidate,
+    const StyleRecalcContext& context,
+    const ContainerQuery& query,
+    ContainerSelectorCache& container_selector_cache,
+    MatchResult& match_result) {
+  const ContainerSelector& selector = query.Selector();
+  bool selects_size = selector.SelectsSizeContainers();
+  bool selects_style = selector.SelectsStyleContainers();
+  bool selects_state = selector.SelectsStateContainers();
+  if (!selects_size && !selects_style && !selects_state) {
     return false;
-  ContainerQueryEvaluator* evaluator = container->GetContainerQueryEvaluator();
-  if (!evaluator)
-    return false;
-  Change change = (context.container == container)
-                      ? Change::kNearestContainer
-                      : Change::kDescendantContainers;
-  return evaluator->EvalAndAdd(query, change, match_result);
+  }
+
+  if (selects_size) {
+    match_result.SetDependsOnSizeContainerQueries();
+  }
+  if (selects_style) {
+    match_result.SetDependsOnStyleContainerQueries();
+  }
+  if (selects_state) {
+    match_result.SetDependsOnStateContainerQueries();
+  }
+
+  Element* starting_element =
+      selects_size ? context.container : style_container_candidate;
+  if (Element* container = CachedContainer(starting_element, query.Selector(),
+                                           match_result.CurrentTreeScope(),
+                                           container_selector_cache)) {
+    Change change = starting_element == container
+                        ? Change::kNearestContainer
+                        : Change::kDescendantContainers;
+    return container->EnsureContainerQueryEvaluator().EvalAndAdd(query, change,
+                                                                 match_result);
+  }
+  return false;
 }
 
-double ContainerQueryEvaluator::Width() const {
-  return size_.width.ToDouble();
+absl::optional<double> ContainerQueryEvaluator::Width() const {
+  CHECK(media_query_evaluator_);
+  return media_query_evaluator_->GetMediaValues().Width();
 }
 
-double ContainerQueryEvaluator::Height() const {
-  return size_.height.ToDouble();
+absl::optional<double> ContainerQueryEvaluator::Height() const {
+  CHECK(media_query_evaluator_);
+  return media_query_evaluator_->GetMediaValues().Height();
 }
 
-bool ContainerQueryEvaluator::Eval(
+ContainerQueryEvaluator::Result ContainerQueryEvaluator::Eval(
     const ContainerQuery& container_query) const {
-  return Eval(container_query, nullptr /* result_flags */);
-}
+  CHECK(media_query_evaluator_);
 
-bool ContainerQueryEvaluator::Eval(const ContainerQuery& container_query,
-                                   MediaQueryResultFlags* result_flags) const {
-  if (!media_query_evaluator_)
-    return false;
-  return media_query_evaluator_->Eval(*container_query.query_, result_flags) ==
-         KleeneValue::kTrue;
+  if (container_query.Selector().HasUnknownFeature()) {
+    Element* container =
+        media_query_evaluator_->GetMediaValues().ContainerElement();
+    CHECK(container);
+    container->GetDocument().CountUse(WebFeature::kContainerQueryEvalUnknown);
+  }
+
+  MediaQueryResultFlags result_flags;
+  bool value =
+      (media_query_evaluator_->Eval(*container_query.query_, &result_flags) ==
+       KleeneValue::kTrue);
+
+  Result result;
+  result.value = value;
+  result.unit_flags = result_flags.unit_flags;
+  return result;
 }
 
 bool ContainerQueryEvaluator::EvalAndAdd(const ContainerQuery& query,
                                          Change change,
                                          MatchResult& match_result) {
-  MediaQueryResultFlags result_flags;
-  bool result = Eval(query, &result_flags);
-  unsigned unit_flags = result_flags.unit_flags;
-  if (unit_flags & MediaQueryExpValue::UnitFlags::kDynamicViewport)
+  HeapHashMap<Member<const ContainerQuery>, Result>::AddResult entry =
+      results_.insert(&query, Result());
+
+  Result& result = entry.stored_value->value;
+
+  // We can only use the cached values when evaluating queries whose results
+  // would have been cleared by [Size,Style]ContainerChanged. The following
+  // represents dependencies on external circumstance that can change without
+  // ContainerQueryEvaluator being notified.
+  bool use_cached =
+      (result.unit_flags & (MediaQueryExpValue::UnitFlags::kRootFontRelative |
+                            MediaQueryExpValue::UnitFlags::kDynamicViewport |
+                            MediaQueryExpValue::UnitFlags::kStaticViewport |
+                            MediaQueryExpValue::UnitFlags::kContainer)) == 0;
+  bool has_cached = !entry.is_new_entry;
+
+  if (has_cached && use_cached) {
+    // Verify that the cached result is equal to the value we would get
+    // had we Eval'ed in full.
+#if EXPENSIVE_DCHECKS_ARE_ON()
+    Result actual = Eval(query);
+
+    // This ignores `change`, because it's not actually part of Eval's result.
+    DCHECK_EQ(result.value, actual.value);
+    DCHECK_EQ(result.unit_flags, actual.unit_flags);
+#endif  // EXPENSIVE_DCHECKS_ARE_ON()
+  } else {
+    result = Eval(query);
+  }
+
+  // Store the most severe `Change` seen.
+  result.change = std::max(result.change, change);
+
+  if (result.unit_flags & MediaQueryExpValue::UnitFlags::kDynamicViewport) {
     match_result.SetDependsOnDynamicViewportUnits();
+  }
   // Note that container-relative units *may* fall back to the small viewport,
   // hence we also set the DependsOnStaticViewportUnits flag when in that case.
-  if (unit_flags & (MediaQueryExpValue::UnitFlags::kStaticViewport |
-                    MediaQueryExpValue::UnitFlags::kContainer)) {
+  if (result.unit_flags & (MediaQueryExpValue::UnitFlags::kStaticViewport |
+                           MediaQueryExpValue::UnitFlags::kContainer)) {
     match_result.SetDependsOnStaticViewportUnits();
   }
-  if (unit_flags & MediaQueryExpValue::UnitFlags::kRootFontRelative)
-    match_result.SetDependsOnRemContainerQueries();
-  results_.Set(&query, Result{result, unit_flags, change});
-  unit_flags_ |= unit_flags;
-  return result;
+  if (result.unit_flags & MediaQueryExpValue::UnitFlags::kRootFontRelative) {
+    match_result.SetDependsOnRootFontContainerQueries();
+  }
+  if (!depends_on_style_) {
+    depends_on_style_ = query.Selector().SelectsStyleContainers();
+  }
+  if (!depends_on_state_) {
+    depends_on_state_ = query.Selector().SelectsStateContainers();
+    if (depends_on_state_ && !snapshot_) {
+      CHECK(media_query_evaluator_);
+      Element* container_element =
+          media_query_evaluator_->GetMediaValues().ContainerElement();
+      CHECK(container_element);
+      snapshot_ = MakeGarbageCollected<ContainerQueryScrollSnapshot>(
+          *container_element);
+    }
+  }
+  unit_flags_ |= result.unit_flags;
+
+  return result.value;
 }
 
-ContainerQueryEvaluator::Change ContainerQueryEvaluator::ContainerChanged(
-    Document& document,
-    Element& container,
+ContainerQueryEvaluator::Change ContainerQueryEvaluator::SizeContainerChanged(
     PhysicalSize size,
     PhysicalAxes contained_axes) {
-  if (size_ == size && contained_axes_ == contained_axes && !font_dirty_)
+  if (size_ == size && contained_axes_ == contained_axes && !font_dirty_) {
     return Change::kNone;
+  }
 
-  SetData(document, container, size, contained_axes);
+  UpdateContainerSize(size, contained_axes);
   font_dirty_ = false;
 
-  Change change = ComputeChange();
+  Change change = ComputeSizeChange();
 
-  if (change != Change::kNone)
-    ClearResults(change);
+  if (change != Change::kNone) {
+    ClearResults(change, kSizeContainer);
+  }
+
+  return change;
+}
+
+ContainerQueryEvaluator::Change ContainerQueryEvaluator::ApplyScrollSnapshot() {
+  if (snapshot_) {
+    return StickyContainerChanged(snapshot_->StuckHorizontal(),
+                                  snapshot_->StuckVertical());
+  }
+  return ContainerQueryEvaluator::Change::kNone;
+}
+
+ContainerQueryEvaluator::Change ContainerQueryEvaluator::StickyContainerChanged(
+    ContainerStuckPhysical stuck_horizontal,
+    ContainerStuckPhysical stuck_vertical) {
+  if (stuck_horizontal_ == stuck_horizontal &&
+      stuck_vertical_ == stuck_vertical) {
+    return Change::kNone;
+  }
+
+  UpdateContainerStuck(stuck_horizontal, stuck_vertical);
+  Change change = ComputeStickyChange();
+  if (change != Change::kNone) {
+    ClearResults(change, kStickyContainer);
+  }
+
+  return change;
+}
+
+ContainerQueryEvaluator::Change
+ContainerQueryEvaluator::StyleContainerChanged() {
+  if (!depends_on_style_) {
+    return Change::kNone;
+  }
+
+  Change change = ComputeStyleChange();
+
+  if (change != Change::kNone) {
+    ClearResults(change, kStyleContainer);
+  }
 
   return change;
 }
@@ -147,24 +328,26 @@ ContainerQueryEvaluator::Change ContainerQueryEvaluator::ContainerChanged(
 void ContainerQueryEvaluator::Trace(Visitor* visitor) const {
   visitor->Trace(media_query_evaluator_);
   visitor->Trace(results_);
+  visitor->Trace(snapshot_);
 }
 
-void ContainerQueryEvaluator::SetData(Document& document,
-                                      Element& container,
-                                      PhysicalSize size,
-                                      PhysicalAxes contained_axes) {
+void ContainerQueryEvaluator::UpdateContainerSize(PhysicalSize size,
+                                                  PhysicalAxes contained_axes) {
   size_ = size;
   contained_axes_ = contained_axes;
 
   absl::optional<double> width;
   absl::optional<double> height;
 
+  const MediaValues& existing_values = media_query_evaluator_->GetMediaValues();
+  Element* container = existing_values.ContainerElement();
+
   // An axis is "supported" only when it appears in the computed value of
   // 'container-type', and when containment is actually applied for that axis.
   //
   // See IsEligibleForSizeContainment (and similar).
   PhysicalAxes supported_axes =
-      ContainerTypeAxes(container.ComputedStyleRef()) & contained_axes;
+      ContainerTypeAxes(container->ComputedStyleRef()) & contained_axes;
 
   if ((supported_axes & PhysicalAxes(kPhysicalAxisHorizontal)) !=
       PhysicalAxes(kPhysicalAxisNone)) {
@@ -177,75 +360,139 @@ void ContainerQueryEvaluator::SetData(Document& document,
   }
 
   auto* query_values = MakeGarbageCollected<CSSContainerValues>(
-      document, container, width, height);
+      container->GetDocument(), *container, width, height,
+      existing_values.StuckHorizontal(), existing_values.StuckVertical());
   media_query_evaluator_ =
       MakeGarbageCollected<MediaQueryEvaluator>(query_values);
 }
 
-void ContainerQueryEvaluator::ClearResults(Change change) {
-  switch (change) {
-    case Change::kNone:
-      NOTREACHED();
-      break;
-    case Change::kNearestContainer: {
-      DCHECK(!referenced_by_unit_);
-      // We are going to recalculate the style of all descendants which depend
-      // on this container, *excluding* those that exist within nested
-      // containers. Therefore all entries with `change` greater than
-      // kNearestContainer need to remain.
-      unit_flags_ = 0;
-      HeapHashMap<Member<const ContainerQuery>, Result> new_results;
-      for (const auto& pair : results_) {
-        if (pair.value.change > change) {
-          new_results.Set(pair.key, pair.value);
-          unit_flags_ |= pair.value.unit_flags;
-        }
-      }
-      std::swap(new_results, results_);
-      break;
-    }
-    case Change::kDescendantContainers: {
-      // We are going to recalculate the style of all descendants which
-      // depend on this container, *including* those that exist within nested
-      // containers. Therefore all results will be repopulated, and we can clear
-      // everything.
-      results_.clear();
-      referenced_by_unit_ = false;
-      unit_flags_ = 0;
-      break;
-    }
-  }
+void ContainerQueryEvaluator::UpdateContainerStuck(
+    ContainerStuckPhysical stuck_horizontal,
+    ContainerStuckPhysical stuck_vertical) {
+  stuck_horizontal_ = stuck_horizontal;
+  stuck_vertical_ = stuck_vertical;
+
+  const MediaValues& existing_values = media_query_evaluator_->GetMediaValues();
+  Element* container = existing_values.ContainerElement();
+
+  auto* query_values = MakeGarbageCollected<CSSContainerValues>(
+      container->GetDocument(), *container, existing_values.Width(),
+      existing_values.Height(), stuck_horizontal, stuck_vertical);
+  media_query_evaluator_ =
+      MakeGarbageCollected<MediaQueryEvaluator>(query_values);
 }
 
-ContainerQueryEvaluator::Change ContainerQueryEvaluator::ComputeChange() const {
+void ContainerQueryEvaluator::ClearResults(Change change,
+                                           ContainerType container_type) {
+  if (change == Change::kNone) {
+    return;
+  }
+  if (change == Change::kDescendantContainers) {
+    if (container_type == kSizeContainer) {
+      referenced_by_unit_ = false;
+    } else {
+      depends_on_style_ = false;
+    }
+  }
+  unit_flags_ = 0;
+
+  HeapHashMap<Member<const ContainerQuery>, Result> new_results;
+  for (const auto& pair : results_) {
+    if (pair.value.change <= change &&
+        ((container_type == kSizeContainer &&
+          pair.key->Selector().SelectsSizeContainers()) ||
+         (container_type == kStickyContainer &&
+          pair.key->Selector().SelectsStickyContainers()) ||
+         (container_type == kStyleContainer &&
+          pair.key->Selector().SelectsStyleContainers()))) {
+      continue;
+    }
+    new_results.Set(pair.key, pair.value);
+    unit_flags_ |= pair.value.unit_flags;
+  }
+
+  std::swap(new_results, results_);
+}
+
+ContainerQueryEvaluator::Change ContainerQueryEvaluator::ComputeSizeChange()
+    const {
+  if (referenced_by_unit_) {
+    return Change::kDescendantContainers;
+  }
+
   Change change = Change::kNone;
 
-  if (referenced_by_unit_)
-    return Change::kDescendantContainers;
-
   for (const auto& result : results_) {
-    if (Eval(*result.key) != result.value.value)
-      change = std::max(change, result.value.change);
+    const ContainerQuery& query = *result.key;
+    if (!query.Selector().SelectsSizeContainers()) {
+      continue;
+    }
+    if (Eval(query).value != result.value.value) {
+      change = std::max(result.value.change, change);
+    }
   }
 
   return change;
 }
 
-void ContainerQueryEvaluator::UpdateValuesIfNeeded(Document& document,
-                                                   Element& container,
-                                                   StyleRecalcChange change) {
-  if (!media_query_evaluator_)
-    return;
+ContainerQueryEvaluator::Change ContainerQueryEvaluator::ComputeStyleChange()
+    const {
+  Change change = Change::kNone;
+
+  for (const auto& result : results_) {
+    const ContainerQuery& query = *result.key;
+    if (!query.Selector().SelectsStyleContainers()) {
+      continue;
+    }
+    if (Eval(query).value == result.value.value) {
+      continue;
+    }
+    change = std::max(result.value.change, change);
+  }
+
+  return change;
+}
+
+ContainerQueryEvaluator::Change ContainerQueryEvaluator::ComputeStickyChange()
+    const {
+  Change change = Change::kNone;
+
+  for (const auto& result : results_) {
+    const ContainerQuery& query = *result.key;
+    if (!query.Selector().SelectsStickyContainers()) {
+      continue;
+    }
+    if (Eval(query).value == result.value.value) {
+      continue;
+    }
+    change = std::max(result.value.change, change);
+  }
+
+  return change;
+}
+
+void ContainerQueryEvaluator::UpdateContainerValuesFromUnitChanges(
+    StyleRecalcChange change) {
+  CHECK(media_query_evaluator_);
   unsigned changed_flags = 0;
-  if (change.RemUnitsMaybeChanged())
+  if (change.RemUnitsMaybeChanged()) {
     changed_flags |= MediaQueryExpValue::kRootFontRelative;
-  if (change.ContainerRelativeUnitsMaybeChanged())
+  }
+  if (change.ContainerRelativeUnitsMaybeChanged()) {
     changed_flags |= MediaQueryExpValue::kContainer;
-  if (!(unit_flags_ & changed_flags))
+  }
+  if (!(unit_flags_ & changed_flags)) {
     return;
+  }
+  // We recreate both the MediaQueryEvaluator and the CSSContainerValues objects
+  // here only to update the font-size etc from the current container style in
+  // CSSContainerValues.
   const MediaValues& existing_values = media_query_evaluator_->GetMediaValues();
+  Element* container = existing_values.ContainerElement();
   auto* query_values = MakeGarbageCollected<CSSContainerValues>(
-      document, container, existing_values.Width(), existing_values.Height());
+      container->GetDocument(), *container, existing_values.Width(),
+      existing_values.Height(), existing_values.StuckHorizontal(),
+      existing_values.StuckVertical());
   media_query_evaluator_ =
       MakeGarbageCollected<MediaQueryEvaluator>(query_values);
 }
@@ -253,8 +500,9 @@ void ContainerQueryEvaluator::UpdateValuesIfNeeded(Document& document,
 void ContainerQueryEvaluator::MarkFontDirtyIfNeeded(
     const ComputedStyle& old_style,
     const ComputedStyle& new_style) {
-  if (!(unit_flags_ & MediaQueryExpValue::kFontRelative) || font_dirty_)
+  if (!(unit_flags_ & MediaQueryExpValue::kFontRelative) || font_dirty_) {
     return;
+  }
   font_dirty_ = old_style.GetFont() != new_style.GetFont();
 }
 

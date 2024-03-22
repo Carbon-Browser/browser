@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ void RecordAverageCPUUsage(const char* histogram_suffix, double cpu_usage) {
 #endif
 
   base::UmaHistogramCustomCounts(
-      base::StrCat({"PerformanceMonitor.AverageCPU5.", histogram_suffix}),
+      base::StrCat({"PerformanceMonitor.AverageCPU8.", histogram_suffix}),
       cpu_usage * kCPUUsageFactor, kCPUUsageHistogramMin, kCPUUsageHistogramMax,
       kCPUUsageHistogramBucketCount);
 }
@@ -69,8 +69,5 @@ void RecordProcessHistograms(const char* histogram_suffix,
       base::StrCat(
           {"PerformanceMonitor.PackageExitIdleWakeups2.", histogram_suffix}),
       metrics.package_idle_wakeups);
-  base::UmaHistogramCounts100000(
-      base::StrCat({"PerformanceMonitor.EnergyImpact2.", histogram_suffix}),
-      metrics.energy_impact);
 #endif
 }

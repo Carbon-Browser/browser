@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,9 @@ class Browser;
 // Initializers. `browser` can't be nil.
 - (instancetype)initWithBrowser:(Browser*)browser NS_DESIGNATED_INITIALIZER;
 - (instancetype)initWithStyle:(UITableViewStyle)style NS_UNAVAILABLE;
+
+// Must be call before the view is deallocated.
+- (void)stop;
 
 // Prepares view controller so that -dismissViewControllerAnimated dismisses it.
 // Call this method before dismissing view controller.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #include <memory>
 #include <set>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/nix/mime_util_xdg.h"
 #include "base/nix/xdg_util.h"
@@ -17,6 +17,7 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
@@ -25,6 +26,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/shell_dialogs/select_file_dialog_linux.h"
 #include "ui/strings/grit/ui_strings.h"
+#include "url/gurl.h"
 
 namespace {
 
@@ -65,7 +67,8 @@ class SelectFileDialogLinuxKde : public SelectFileDialogLinux {
                       int file_type_index,
                       const base::FilePath::StringType& default_extension,
                       gfx::NativeWindow owning_window,
-                      void* params) override;
+                      void* params,
+                      const GURL* caller) override;
 
  private:
   bool HasMultipleFileTypeChoicesImpl() override;
@@ -166,7 +169,7 @@ class SelectFileDialogLinuxKde : public SelectFileDialogLinux {
       void* params,
       std::unique_ptr<KDialogOutputParams> results);
 
-  // Should be either DESKTOP_ENVIRONMENT_KDE3, KDE4, or KDE5.
+  // Should be either DESKTOP_ENVIRONMENT_KDE3, KDE4, KDE5, or KDE6.
   base::nix::DesktopEnvironment desktop_;
 
   // The set of all parent windows for which we are currently running
@@ -189,7 +192,7 @@ bool SelectFileDialogLinux::CheckKDEDialogWorksOnUIThread(
     std::string& kdialog_version) {
   // No choice. UI thread can't continue without an answer here. Fortunately we
   // only do this once, the first time a file dialog is displayed.
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking scoped_allow_blocking;
 
   base::CommandLine::StringVector cmd_vector;
   cmd_vector.push_back(kKdialogBinary);
@@ -198,7 +201,7 @@ bool SelectFileDialogLinux::CheckKDEDialogWorksOnUIThread(
   return base::GetAppOutput(command_line, &kdialog_version);
 }
 
-SelectFileDialogLinuxKde* NewSelectFileDialogLinuxKde(
+SelectFileDialog* NewSelectFileDialogLinuxKde(
     SelectFileDialog::Listener* listener,
     std::unique_ptr<ui::SelectFilePolicy> policy,
     base::nix::DesktopEnvironment desktop,
@@ -219,7 +222,8 @@ SelectFileDialogLinuxKde::SelectFileDialogLinuxKde(
            base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})) {
   DCHECK(desktop_ == base::nix::DESKTOP_ENVIRONMENT_KDE3 ||
          desktop_ == base::nix::DESKTOP_ENVIRONMENT_KDE4 ||
-         desktop_ == base::nix::DESKTOP_ENVIRONMENT_KDE5);
+         desktop_ == base::nix::DESKTOP_ENVIRONMENT_KDE5 ||
+         desktop_ == base::nix::DESKTOP_ENVIRONMENT_KDE6);
   // |kdialog_version| should be of the form "kdialog 1.2.3", so split on
   // whitespace and then try to parse a version from the second piece. If
   // parsing fails for whatever reason, we fall back to the behavior that works
@@ -257,7 +261,8 @@ void SelectFileDialogLinuxKde::SelectFileImpl(
     int file_type_index,
     const base::FilePath::StringType& default_extension,
     gfx::NativeWindow owning_window,
-    void* params) {
+    void* params,
+    const GURL* caller) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   set_type(type);
 

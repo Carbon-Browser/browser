@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,16 @@
 #include "ash/display/window_tree_host_manager.h"
 #include "ash/shell.h"
 #include "base/check.h"
+#include "ui/aura/client/cursor_shape_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
-#include "ui/base/layout.h"
-#include "ui/wm/core/cursor_loader.h"
 #include "ui/wm/core/native_cursor_manager_delegate.h"
 
 namespace ash {
+
 namespace {
 
 void SetCursorOnAllRootWindows(gfx::NativeCursor cursor) {
@@ -55,9 +55,13 @@ void NotifyMouseEventsEnableStateChange(bool enabled) {
 }  // namespace
 
 NativeCursorManagerAsh::NativeCursorManagerAsh()
-    : native_cursor_enabled_(true) {}
+    : native_cursor_enabled_(true) {
+  aura::client::SetCursorShapeClient(&cursor_loader_);
+}
 
-NativeCursorManagerAsh::~NativeCursorManagerAsh() = default;
+NativeCursorManagerAsh::~NativeCursorManagerAsh() {
+  aura::client::SetCursorShapeClient(nullptr);
+}
 
 void NativeCursorManagerAsh::SetNativeCursorEnabled(bool enabled) {
   native_cursor_enabled_ = enabled;
@@ -73,15 +77,9 @@ display::Display::Rotation NativeCursorManagerAsh::GetRotation() const {
 void NativeCursorManagerAsh::SetDisplay(
     const display::Display& display,
     ::wm::NativeCursorManagerDelegate* delegate) {
-  DCHECK(display.is_valid());
-
-  const float original_scale = display.device_scale_factor();
-  // And use the nearest resource scale factor.
-  const float cursor_scale = ui::GetScaleForResourceScaleFactor(
-      ui::GetSupportedResourceScaleFactor(original_scale));
-
-  if (cursor_loader_.SetDisplayData(display.panel_rotation(), cursor_scale))
+  if (cursor_loader_.SetDisplay(display)) {
     SetCursor(delegate->GetCursor(), delegate);
+  }
 
   Shell::Get()
       ->window_tree_host_manager()
@@ -98,8 +96,6 @@ void NativeCursorManagerAsh::SetCursor(
     gfx::NativeCursor invisible_cursor(ui::mojom::CursorType::kNone);
     cursor_loader_.SetPlatformCursor(&invisible_cursor);
     cursor.SetPlatformCursor(invisible_cursor.platform());
-    if (cursor.type() != ui::mojom::CursorType::kCustom)
-      cursor.set_image_scale_factor(cursor_loader_.scale());
   }
 
   delegate->CommitCursor(cursor);

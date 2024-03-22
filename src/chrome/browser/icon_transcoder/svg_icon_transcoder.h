@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,7 +89,7 @@ class SvgIconTranscoder : public content::RenderProcessHostObserver {
                        const std::vector<SkBitmap>& bitmaps,
                        const std::vector<gfx::Size>& sizes);
 
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
   std::unique_ptr<content::WebContents> web_contents_;
   bool web_contents_ready_{false};
   base::WeakPtrFactory<SvgIconTranscoder> weak_ptr_factory_{this};

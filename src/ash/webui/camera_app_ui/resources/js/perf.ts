@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,7 +89,7 @@ export class PerfLogger {
 
     // If there is error during performance measurement, drop it since it might
     // be inaccurate.
-    if (perfInfo.hasError) {
+    if (perfInfo.hasError ?? false) {
       return;
     }
 

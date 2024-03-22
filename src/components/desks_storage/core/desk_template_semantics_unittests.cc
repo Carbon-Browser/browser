@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,8 @@
 #include "components/desks_storage/core/desk_test_util.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/sync/protocol/workspace_desk_specifics.pb.h"
-#include "components/sync/test/model/mock_model_type_change_processor.h"
-#include "components/sync/test/model/model_type_store_test_util.h"
+#include "components/sync/test/mock_model_type_change_processor.h"
+#include "components/sync/test/model_type_store_test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace desks_storage {
@@ -24,20 +24,17 @@ namespace {
 base::Value PerformPolicyRoundtrip(const base::Value& expected,
                                    DeskSyncBridge* bridge,
                                    apps::AppRegistryCache* cache) {
-  std::unique_ptr<ash::DeskTemplate> policy_dt =
-      desk_template_conversion::ParseDeskTemplateFromSource(
-          expected, ash::DeskTemplateSource::kPolicy);
+  auto policy_dt = desk_template_conversion::ParseDeskTemplateFromBaseValue(
+      expected, ash::DeskTemplateSource::kPolicy);
 
-  EXPECT_TRUE(policy_dt != nullptr);
+  EXPECT_TRUE(policy_dt.has_value());
 
   sync_pb::WorkspaceDeskSpecifics proto_desk =
-      bridge->ToSyncProto(policy_dt.get());
+      desk_template_conversion::ToSyncProto(policy_dt.value().get(), cache);
 
   // Convert back to original format.
-  std::unique_ptr<ash::DeskTemplate> got_dt =
-      DeskSyncBridge::FromSyncProto(proto_desk);
-  return desk_template_conversion::SerializeDeskTemplateAsPolicy(got_dt.get(),
-                                                                 cache);
+  return desk_template_conversion::SerializeDeskTemplateAsBaseValue(
+      desk_template_conversion::FromSyncProto(proto_desk).get(), cache);
 }
 
 }  // namespace
@@ -80,8 +77,8 @@ class DeskTemplateSemanticsTest : public testing::TestWithParam<std::string> {
 };
 
 TEST_P(DeskTemplateSemanticsTest, PolicyTemplateSemanticallyEquivalentToProto) {
-  base::StringPiece raw_json = base::StringPiece(GetParam());
-  auto expected_json = base::JSONReader::ReadAndReturnValueWithError(raw_json);
+  auto expected_json = base::JSONReader::ReadAndReturnValueWithError(
+      base::StringPiece(GetParam()));
 
   EXPECT_TRUE(expected_json.has_value());
   EXPECT_TRUE(expected_json->is_dict());
@@ -98,6 +95,7 @@ INSTANTIATE_TEST_SUITE_P(
     ::testing::Values(
         desk_test_util::kValidPolicyTemplateBrowser,
         desk_test_util::kValidPolicyTemplateBrowserMinimized,
-        desk_test_util::kValidPolicyTemplateChromeAndProgressive));
+        desk_test_util::kValidPolicyTemplateChromeAndProgressive,
+        desk_test_util::kValidPolicyTemplateChromeForFloatingWorkspace));
 
 }  // namespace desks_storage

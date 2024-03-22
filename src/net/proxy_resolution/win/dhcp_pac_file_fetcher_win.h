@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -182,7 +182,8 @@ class NET_EXPORT_PRIVATE DhcpPacFileFetcherWin
 
   // Pointer to string we will write results to. Not valid in states
   // START and DONE.
-  raw_ptr<std::u16string> destination_string_ = nullptr;
+  raw_ptr<std::u16string, AcrossTasksDanglingUntriaged> destination_string_ =
+      nullptr;
 
   // PAC URL retrieved from DHCP, if any. Valid only in state STATE_DONE.
   GURL pac_url_;

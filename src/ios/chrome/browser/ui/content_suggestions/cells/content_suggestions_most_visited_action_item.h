@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,12 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/collection_view/cells/collection_view_item.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_tile_constants.h"
-#import "ios/chrome/browser/ui/content_suggestions/cells/suggested_content.h"
 
 // Item containing a most visited action button. These buttons belong to the
 // collection section as most visited items, but have static placement (the last
 // four) and cannot be removed.
-@interface ContentSuggestionsMostVisitedActionItem
-    : CollectionViewItem<SuggestedContent>
+@interface ContentSuggestionsMostVisitedActionItem : NSObject
 
 - (nonnull instancetype)initWithCollectionShortcutType:
     (NTPCollectionShortcutType)type;
@@ -35,6 +32,9 @@
 
 // Index position of this item.
 @property(nonatomic, assign) NTPCollectionShortcutType index;
+
+// Indicate if this suggestion is (temporary) disabled.
+@property(nonatomic, assign) BOOL disabled;
 
 @end
 

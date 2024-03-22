@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -146,7 +146,11 @@ void MediaSessionItemProducer::Session::OnSessionInteractedWith() {
 }
 
 bool MediaSessionItemProducer::Session::IsPlaying() const {
-  return is_playing_;
+  // Since both MediaSessionItemProducer and MediaSessionNotificationItem
+  // registered for MediaControllerObserver::MediaSessionInfoChanged(), we need
+  // to check both places to get the most recent playback state in case one has
+  // been updated while the other has not yet when this is called.
+  return is_playing_ || item_->IsPlaying();
 }
 
 void MediaSessionItemProducer::Session::SetAudioSinkId(const std::string& id) {
@@ -281,11 +285,9 @@ void MediaSessionItemProducer::OnFocusGained(
             this, id,
             std::make_unique<MediaSessionNotificationItem>(
                 this, id, session->source_name.value_or(std::string()),
-                std::move(item_controller), std::move(session->session_info)),
+                session->source_id, std::move(item_controller),
+                std::move(session->session_info)),
             std::move(session_controller)));
-
-    for (auto& observer : observers_)
-      observer.OnMediaSessionItemCreated(id);
   }
 }
 
@@ -370,6 +372,15 @@ bool MediaSessionItemProducer::IsItemActivelyPlaying(const std::string& id) {
   return it == sessions_.end() ? false : it->second.IsPlaying();
 }
 
+void MediaSessionItemProducer::ActivateItem(const std::string& id) {
+  DCHECK(HasSession(id));
+  if (base::Contains(inactive_session_ids_, id))
+    return;
+
+  active_controllable_session_ids_.insert(id);
+  item_manager_->ShowItem(id);
+}
+
 void MediaSessionItemProducer::HideItem(const std::string& id) {
   active_controllable_session_ids_.erase(id);
   frozen_session_ids_.erase(id);
@@ -381,21 +392,16 @@ void MediaSessionItemProducer::RemoveItem(const std::string& id) {
   active_controllable_session_ids_.erase(id);
   frozen_session_ids_.erase(id);
   inactive_session_ids_.erase(id);
-
-  for (auto& observer : observers_)
-    observer.OnMediaSessionItemDestroyed(id);
-
   item_manager_->HideItem(id);
   sessions_.erase(id);
 }
 
-void MediaSessionItemProducer::ActivateItem(const std::string& id) {
+void MediaSessionItemProducer::RefreshItem(const std::string& id) {
   DCHECK(HasSession(id));
   if (base::Contains(inactive_session_ids_, id))
     return;
 
-  active_controllable_session_ids_.insert(id);
-  item_manager_->ShowItem(id);
+  item_manager_->RefreshItem(id);
 }
 
 bool MediaSessionItemProducer::HasSession(const std::string& id) const {
@@ -416,6 +422,13 @@ void MediaSessionItemProducer::SetAudioSinkId(const std::string& id,
   it->second.SetAudioSinkId(sink_id);
 }
 
+media_session::mojom::RemotePlaybackMetadataPtr
+MediaSessionItemProducer::GetRemotePlaybackMetadataFromItem(
+    const std::string& id) {
+  auto* session = GetSession(id);
+  return session ? session->item()->GetRemotePlaybackMetadata() : nullptr;
+}
+
 base::CallbackListSubscription
 MediaSessionItemProducer::RegisterIsAudioOutputDeviceSwitchingSupportedCallback(
     const std::string& id,
@@ -425,6 +438,14 @@ MediaSessionItemProducer::RegisterIsAudioOutputDeviceSwitchingSupportedCallback(
 
   return it->second.RegisterIsAudioDeviceSwitchingSupportedCallback(
       std::move(callback));
+}
+
+void MediaSessionItemProducer::UpdateMediaItemSourceOrigin(
+    const std::string& id,
+    const url::Origin& origin) {
+  auto it = sessions_.find(id);
+  if (it != sessions_.end())
+    it->second.item()->UpdatePresentationRequestOrigin(origin);
 }
 
 MediaSessionItemProducer::Session* MediaSessionItemProducer::GetSession(
@@ -461,10 +482,6 @@ void MediaSessionItemProducer::OnSessionBecameInactive(const std::string& id) {
 
   // Let the service know that the item is hidden.
   item_manager_->HideItem(id);
-}
-
-void MediaSessionItemProducer::HideMediaDialog() {
-  item_manager_->HideDialog();
 }
 
 void MediaSessionItemProducer::OnReceivedAudioFocusRequests(

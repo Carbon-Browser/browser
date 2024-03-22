@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -27,6 +27,8 @@ source_set("media_transfer_protocol") {
     "mtp_device_manager.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   public_deps = [ "//services/device/public/mojom" ]
 
   deps = [
@@ -34,7 +36,7 @@ source_set("media_transfer_protocol") {
     ":mtp_storage_info_proto",
     "//base",
     "//build:chromeos_buildflags",
-    "//chromeos/dbus",
+    "//chromeos/ash/components/dbus",
     "//dbus",
   ]
 }

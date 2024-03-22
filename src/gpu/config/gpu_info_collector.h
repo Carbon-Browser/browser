@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,10 @@
 #if BUILDFLAG(IS_WIN)
 #include <d3dcommon.h>
 #endif  // BUILDFLAG(IS_WIN)
+
+namespace gl {
+class GLDisplay;
+}
 
 namespace angle {
 struct SystemInfo;
@@ -70,7 +74,8 @@ bool IdentifyActiveGPUWithLuid(GPUInfo* gpu_info);
 #endif  // BUILDFLAG(IS_WIN)
 
 // Create a GL context and collect GL strings and versions.
-GPU_EXPORT bool CollectGraphicsInfoGL(GPUInfo* gpu_info);
+GPU_EXPORT bool CollectGraphicsInfoGL(GPUInfo* gpu_info,
+                                      gl::GLDisplay* display);
 
 // If more than one GPUs are identified, and GL strings are available,
 // identify the active GPU based on GL strings.
@@ -91,6 +96,7 @@ GPU_EXPORT bool CollectGpuExtraInfo(gfx::GpuExtraInfo* gpu_extra_info,
 
 // Collect Dawn Toggle name info for about:gpu
 GPU_EXPORT void CollectDawnInfo(const gpu::GpuPreferences& gpu_preferences,
+                                bool collect_metrics,
                                 std::vector<std::string>* dawn_info_list);
 
 }  // namespace gpu

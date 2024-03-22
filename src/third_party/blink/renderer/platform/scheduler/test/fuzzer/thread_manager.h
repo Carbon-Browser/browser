@@ -1,6 +1,6 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file
+// found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FUZZER_THREAD_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FUZZER_THREAD_MANAGER_H_
@@ -11,6 +11,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -128,6 +129,9 @@ class PLATFORM_EXPORT ThreadManager {
   void DeleteTask(Task* task);
 
   scoped_refptr<TaskQueueWithVoters> GetTaskQueueFor(uint64_t task_queue_id);
+
+  scoped_refptr<SingleThreadTaskRunner> GetTaskRunnerFor(
+      uint64_t task_queue_id);
 
   // Used to protect |task_queues_| and |pending_tasks_|.
   Lock lock_;

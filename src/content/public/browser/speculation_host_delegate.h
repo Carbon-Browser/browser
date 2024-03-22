@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,19 +12,6 @@
 #include "third_party/blink/public/mojom/speculation_rules/speculation_rules.mojom.h"
 
 namespace content {
-class CONTENT_EXPORT SpeculationHostDevToolsObserver {
- public:
-  virtual void OnStartSinglePrefetch(
-      const std::string& request_id,
-      const network::ResourceRequest& request) = 0;
-  virtual void OnPrefetchResponseReceived(
-      const GURL& url,
-      const std::string& request_id,
-      const network::mojom::URLResponseHead& response) = 0;
-  virtual void OnPrefetchRequestComplete(
-      const std::string& request_id,
-      const network::URLLoaderCompletionStatus& status) = 0;
-};
 
 // Allow embedders to handle speculation candidates with their own strategies.
 // See third_party/blink/renderer/core/speculation_rules/README.md for more
@@ -38,8 +25,7 @@ class CONTENT_EXPORT SpeculationHostDelegate {
   // take action on `candidates` after this function returns. Therefore, the
   // delegate should remove elements that it decided to take an action on.
   virtual void ProcessCandidates(
-      std::vector<blink::mojom::SpeculationCandidatePtr>& candidates,
-      base::WeakPtr<SpeculationHostDevToolsObserver> devtools_observer) = 0;
+      std::vector<blink::mojom::SpeculationCandidatePtr>& candidates) = 0;
 };
 
 }  // namespace content

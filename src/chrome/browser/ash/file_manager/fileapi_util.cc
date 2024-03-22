@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,16 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/webui/file_manager/url_constants.h"
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/strings/escape.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/values.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/ash/file_manager/filesystem_api_util.h"
+#include "chrome/browser/ash/fileapi/file_system_backend.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -28,7 +28,6 @@
 #include "content/public/browser/storage_partition.h"
 #include "content/public/common/url_utils.h"
 #include "extensions/browser/extension_util.h"
-#include "extensions/common/extension.h"
 #include "google_apis/common/task_util.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/isolated_context.h"
@@ -153,8 +152,8 @@ void FileDefinitionListConverter::ConvertNextIterator(
   }
 
   storage::FileSystemURL url = file_system_context_->CreateCrackedFileSystemURL(
-      blink::StorageKey(origin_), storage::kFileSystemTypeExternal,
-      iterator->virtual_path);
+      blink::StorageKey::CreateFirstParty(origin_),
+      storage::kFileSystemTypeExternal, iterator->virtual_path);
 
   if (!url.is_valid()) {
     OnIteratorConverted(
@@ -243,15 +242,18 @@ void OnConvertFileDefinitionDone(
 bool IsUnderNonNativeLocalPath(const storage::FileSystemContext& context,
                                const base::FilePath& file_path) {
   base::FilePath virtual_path;
-  if (!context.external_backend()->GetVirtualPath(file_path, &virtual_path))
+  if (!ash::FileSystemBackend::Get(context)->GetVirtualPath(file_path,
+                                                            &virtual_path)) {
     return false;
+  }
 
   const storage::FileSystemURL url = context.CreateCrackedFileSystemURL(
       blink::StorageKey(), storage::kFileSystemTypeExternal, virtual_path);
-  if (!url.is_valid())
+  if (!url.is_valid()) {
     return false;
+  }
 
-  return IsNonNativeFileSystemType(url.type());
+  return !url.TypeImpliesPathIsReal();
 }
 
 // Helper class to convert SelectedFileInfoList into ChooserFileInfoList.
@@ -266,11 +268,10 @@ class ConvertSelectedFileInfoListToFileChooserFileInfoListImpl {
 
   ConvertSelectedFileInfoListToFileChooserFileInfoListImpl(
       storage::FileSystemContext* context,
-      const GURL& origin,
+      const url::Origin& origin,
       const SelectedFileInfoList& selected_info_list,
       FileChooserFileInfoListCallback callback)
-      : context_(context),
-        callback_(std::move(callback)) {
+      : context_(context), callback_(std::move(callback)) {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
     Lifetime lifetime(this);
@@ -298,7 +299,7 @@ class ConvertSelectedFileInfoListToFileChooserFileInfoListImpl {
 
       // Non-native file without a snapshot file.
       base::FilePath virtual_path;
-      if (!context->external_backend()->GetVirtualPath(
+      if (!ash::FileSystemBackend::Get(*context)->GetVirtualPath(
               selected_info_list[i].file_path, &virtual_path)) {
         NotifyError(std::move(lifetime));
         return;
@@ -379,9 +380,9 @@ class ConvertSelectedFileInfoListToFileChooserFileInfoListImpl {
 
     context_->operation_runner()->GetMetadata(
         context_->CrackURLInFirstPartyContext((*it)->get_file_system()->url),
-        storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY |
-            storage::FileSystemOperation::GET_METADATA_FIELD_SIZE |
-            storage::FileSystemOperation::GET_METADATA_FIELD_LAST_MODIFIED,
+        {storage::FileSystemOperation::GetMetadataField::kIsDirectory,
+         storage::FileSystemOperation::GetMetadataField::kSize,
+         storage::FileSystemOperation::GetMetadataField::kLastModified},
         base::BindOnce(
             &ConvertSelectedFileInfoListToFileChooserFileInfoListImpl::
                 OnGotMetadataOnIOThread,
@@ -442,7 +443,7 @@ void CheckIfDirectoryExistsOnIoThread(
 void GetMetadataForPathOnIoThread(
     scoped_refptr<storage::FileSystemContext> file_system_context,
     const storage::FileSystemURL& internal_url,
-    int fields,
+    storage::FileSystemOperationRunner::GetMetadataFieldSet fields,
     storage::FileSystemOperationRunner::GetMetadataCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   file_system_context->operation_runner()->GetMetadata(internal_url, fields,
@@ -478,7 +479,7 @@ void GenerateUnusedFilenameOnGotMetadata(
     return;
   } else if (error != base::File::FILE_OK &&
              error != base::File::FILE_ERROR_NOT_A_DIRECTORY) {
-    std::move(callback).Run(error);
+    std::move(callback).Run(base::unexpected(error));
     return;
   }
 
@@ -508,10 +509,7 @@ EntryDefinition::EntryDefinition(const EntryDefinition& other) = default;
 EntryDefinition::~EntryDefinition() = default;
 
 const GURL GetFileManagerURL() {
-  if (ash::features::IsFileManagerSwaEnabled()) {
-    return GURL(ash::file_manager::kChromeUIFileManagerURL);
-  }
-  return extensions::Extension::GetBaseURLFromExtensionId(kFileManagerAppId);
+  return GURL(ash::file_manager::kChromeUIFileManagerURL);
 }
 
 bool IsFileManagerURL(const GURL& source_url) {
@@ -557,14 +555,16 @@ bool ConvertAbsoluteFilePathToRelativeFileSystemPath(
     const GURL& source_url,
     const base::FilePath& absolute_path,
     base::FilePath* virtual_path) {
-  storage::ExternalFileSystemBackend* backend =
-      GetFileSystemContextForSourceURL(profile, source_url)->external_backend();
-  if (!backend)
+  auto* backend = ash::FileSystemBackend::Get(
+      *GetFileSystemContextForSourceURL(profile, source_url));
+  if (!backend) {
     return false;
+  }
 
   // Find if this file path is managed by the external backend.
-  if (!backend->GetVirtualPath(absolute_path, virtual_path))
+  if (!backend->GetVirtualPath(absolute_path, virtual_path)) {
     return false;
+  }
 
   return true;
 }
@@ -597,7 +597,7 @@ void ConvertFileDefinitionToEntryDefinition(
 
 void ConvertSelectedFileInfoListToFileChooserFileInfoList(
     storage::FileSystemContext* context,
-    const GURL& origin,
+    const url::Origin& origin,
     const SelectedFileInfoList& selected_info_list,
     FileChooserFileInfoListCallback callback) {
   // The object deletes itself.
@@ -605,25 +605,23 @@ void ConvertSelectedFileInfoListToFileChooserFileInfoList(
       context, origin, selected_info_list, std::move(callback));
 }
 
-std::unique_ptr<base::DictionaryValue> ConvertEntryDefinitionToValue(
+base::Value::Dict ConvertEntryDefinitionToValue(
     const EntryDefinition& entry_definition) {
-  auto entry = std::make_unique<base::DictionaryValue>();
-  entry->SetStringKey("fileSystemName", entry_definition.file_system_name);
-  entry->SetStringKey("fileSystemRoot", entry_definition.file_system_root_url);
-  entry->SetStringKey(
+  base::Value::Dict entry;
+  entry.Set("fileSystemName", entry_definition.file_system_name);
+  entry.Set("fileSystemRoot", entry_definition.file_system_root_url);
+  entry.Set(
       "fileFullPath",
       base::FilePath("/").Append(entry_definition.full_path).AsUTF8Unsafe());
-  entry->SetBoolKey("fileIsDirectory", entry_definition.is_directory);
+  entry.Set("fileIsDirectory", entry_definition.is_directory);
   return entry;
 }
 
-std::unique_ptr<base::ListValue> ConvertEntryDefinitionListToListValue(
+base::Value::List ConvertEntryDefinitionListToListValue(
     const EntryDefinitionList& entry_definition_list) {
-  auto entries = std::make_unique<base::ListValue>();
-  for (auto it = entry_definition_list.begin();
-       it != entry_definition_list.end(); ++it) {
-    entries->GetList().Append(
-        base::Value::FromUniquePtrValue(ConvertEntryDefinitionToValue(*it)));
+  base::Value::List entries;
+  for (const auto& entry : entry_definition_list) {
+    entries.Append(ConvertEntryDefinitionToValue(entry));
   }
   return entries;
 }
@@ -634,8 +632,7 @@ void CheckIfDirectoryExists(
     storage::FileSystemOperationRunner::StatusCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  storage::ExternalFileSystemBackend* const backend =
-      file_system_context->external_backend();
+  auto* const backend = ash::FileSystemBackend::Get(*file_system_context);
   DCHECK(backend);
   const storage::FileSystemURL internal_url =
       backend->CreateInternalURL(file_system_context.get(), directory_path);
@@ -650,12 +647,11 @@ void CheckIfDirectoryExists(
 void GetMetadataForPath(
     scoped_refptr<storage::FileSystemContext> file_system_context,
     const base::FilePath& entry_path,
-    int fields,
+    storage::FileSystemOperationRunner::GetMetadataFieldSet fields,
     storage::FileSystemOperationRunner::GetMetadataCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  storage::ExternalFileSystemBackend* const backend =
-      file_system_context->external_backend();
+  auto* const backend = ash::FileSystemBackend::Get(*file_system_context);
   DCHECK(backend);
   const storage::FileSystemURL internal_url =
       backend->CreateInternalURL(file_system_context.get(), entry_path);
@@ -669,11 +665,11 @@ void GetMetadataForPath(
 
 FileSystemURLAndHandle CreateIsolatedURLFromVirtualPath(
     const storage::FileSystemContext& context,
-    const GURL& origin,
+    const url::Origin& origin,
     const base::FilePath& virtual_path) {
   const storage::FileSystemURL original_url =
       context.CreateCrackedFileSystemURL(
-          blink::StorageKey(url::Origin::Create(origin)),
+          blink::StorageKey::CreateFirstParty(origin),
           storage::kFileSystemTypeExternal, virtual_path);
 
   std::string register_name;
@@ -682,7 +678,7 @@ FileSystemURLAndHandle CreateIsolatedURLFromVirtualPath(
           original_url.type(), original_url.filesystem_id(),
           original_url.path(), &register_name);
   storage::FileSystemURL isolated_url = context.CreateCrackedFileSystemURL(
-      blink::StorageKey(url::Origin::Create(origin)),
+      blink::StorageKey::CreateFirstParty(origin),
       storage::kFileSystemTypeIsolated,
       base::FilePath(file_system.id()).Append(register_name));
   return {isolated_url, file_system};
@@ -695,7 +691,8 @@ void GenerateUnusedFilename(
     base::OnceCallback<void(base::FileErrorOr<storage::FileSystemURL>)>
         callback) {
   if (filename.empty() || filename != filename.BaseName()) {
-    std::move(callback).Run(base::File::FILE_ERROR_INVALID_OPERATION);
+    std::move(callback).Run(
+        base::unexpected(base::File::FILE_ERROR_INVALID_OPERATION));
     return;
   }
 

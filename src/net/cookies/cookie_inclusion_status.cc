@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <initializer_list>
 #include <utility>
 
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "url/gurl.h"
 
@@ -45,6 +46,18 @@ bool CookieInclusionStatus::operator!=(
   return !operator==(other);
 }
 
+bool CookieInclusionStatus::operator<(
+    const CookieInclusionStatus& other) const {
+  static_assert(NUM_EXCLUSION_REASONS <= sizeof(unsigned long) * CHAR_BIT,
+                "use .ullong() instead");
+  static_assert(NUM_WARNING_REASONS <= sizeof(unsigned long) * CHAR_BIT,
+                "use .ullong() instead");
+  return std::make_pair(exclusion_reasons_.to_ulong(),
+                        warning_reasons_.to_ulong()) <
+         std::make_pair(other.exclusion_reasons_.to_ulong(),
+                        other.warning_reasons_.to_ulong());
+}
+
 bool CookieInclusionStatus::IsInclude() const {
   return exclusion_reasons_.none();
 }
@@ -63,6 +76,9 @@ void CookieInclusionStatus::AddExclusionReason(ExclusionReason reason) {
   // If the cookie would be excluded for reasons other than the new SameSite
   // rules, don't bother warning about it.
   MaybeClearSameSiteWarning();
+  // If the cookie would be excluded for reasons unrelated to 3pcd, don't bother
+  // warning about 3pcd.
+  MaybeClearThirdPartyPhaseoutReason();
 }
 
 void CookieInclusionStatus::RemoveExclusionReason(ExclusionReason reason) {
@@ -105,6 +121,19 @@ void CookieInclusionStatus::MaybeClearSameSiteWarning() {
   }
 }
 
+void CookieInclusionStatus::MaybeClearThirdPartyPhaseoutReason() {
+  if (!IsInclude()) {
+    RemoveWarningReason(WARN_THIRD_PARTY_PHASEOUT);
+  }
+  if (ExclusionReasonsWithout(
+          {EXCLUDE_THIRD_PARTY_PHASEOUT,
+           EXCLUDE_THIRD_PARTY_BLOCKED_WITHIN_FIRST_PARTY_SET}) != 0u) {
+    // TODO(crbug.com/1516673): Once the bug is fixed, also remove
+    // EXCLUDE_THIRD_PARTY_BLOCKED_WITHIN_FIRST_PARTY_SET.
+    RemoveExclusionReason(EXCLUDE_THIRD_PARTY_PHASEOUT);
+  }
+}
+
 bool CookieInclusionStatus::ShouldRecordDowngradeMetrics() const {
   return ExclusionReasonsWithout({
              EXCLUDE_SAMESITE_STRICT,
@@ -121,7 +150,7 @@ bool CookieInclusionStatus::HasWarningReason(WarningReason reason) const {
   return warning_reasons_[reason];
 }
 
-bool CookieInclusionStatus::HasDowngradeWarning(
+bool CookieInclusionStatus::HasSchemefulDowngradeWarning(
     CookieInclusionStatus::WarningReason* reason) const {
   if (!ShouldWarn())
     return false;
@@ -165,33 +194,31 @@ CookieInclusionStatus::GetBreakingDowngradeMetricsEnumValue(
 
   // Don't bother checking the return value because the default switch case
   // will handle if no reason was found.
-  HasDowngradeWarning(&reason);
+  HasSchemefulDowngradeWarning(&reason);
 
   switch (reason) {
     case WarningReason::WARN_STRICT_LAX_DOWNGRADE_STRICT_SAMESITE:
       return url_is_secure
-                 ? ContextDowngradeMetricValues::STRICT_LAX_STRICT_SECURE
-                 : ContextDowngradeMetricValues::STRICT_LAX_STRICT_INSECURE;
+                 ? ContextDowngradeMetricValues::kStrictLaxStrictSecure
+                 : ContextDowngradeMetricValues::kStrictLaxStrictInsecure;
     case WarningReason::WARN_STRICT_CROSS_DOWNGRADE_STRICT_SAMESITE:
       return url_is_secure
-                 ? ContextDowngradeMetricValues::STRICT_CROSS_STRICT_SECURE
-                 : ContextDowngradeMetricValues::STRICT_CROSS_STRICT_INSECURE;
+                 ? ContextDowngradeMetricValues::kStrictCrossStrictSecure
+                 : ContextDowngradeMetricValues::kStrictCrossStrictInsecure;
     case WarningReason::WARN_STRICT_CROSS_DOWNGRADE_LAX_SAMESITE:
       return url_is_secure
-                 ? ContextDowngradeMetricValues::STRICT_CROSS_LAX_SECURE
-                 : ContextDowngradeMetricValues::STRICT_CROSS_LAX_INSECURE;
+                 ? ContextDowngradeMetricValues::kStrictCrossLaxSecure
+                 : ContextDowngradeMetricValues::kStrictCrossLaxInsecure;
     case WarningReason::WARN_LAX_CROSS_DOWNGRADE_STRICT_SAMESITE:
       return url_is_secure
-                 ? ContextDowngradeMetricValues::LAX_CROSS_STRICT_SECURE
-                 : ContextDowngradeMetricValues::LAX_CROSS_STRICT_INSECURE;
+                 ? ContextDowngradeMetricValues::kLaxCrossStrictSecure
+                 : ContextDowngradeMetricValues::kLaxCrossStrictInsecure;
     case WarningReason::WARN_LAX_CROSS_DOWNGRADE_LAX_SAMESITE:
-      return url_is_secure
-                 ? ContextDowngradeMetricValues::LAX_CROSS_LAX_SECURE
-                 : ContextDowngradeMetricValues::LAX_CROSS_LAX_INSECURE;
+      return url_is_secure ? ContextDowngradeMetricValues::kLaxCrossLaxSecure
+                           : ContextDowngradeMetricValues::kLaxCrossLaxInsecure;
     default:
-      return url_is_secure
-                 ? ContextDowngradeMetricValues::NO_DOWNGRADE_SECURE
-                 : ContextDowngradeMetricValues::NO_DOWNGRADE_INSECURE;
+      return url_is_secure ? ContextDowngradeMetricValues::kNoDowngradeSecure
+                           : ContextDowngradeMetricValues::kNoDowngradeInsecure;
   }
 }
 
@@ -200,35 +227,49 @@ std::string CookieInclusionStatus::GetDebugString() const {
 
   if (IsInclude())
     base::StrAppend(&out, {"INCLUDE, "});
-  for (const auto& reason :
-       std::initializer_list<std::pair<ExclusionReason, std::string>>{
-           {EXCLUDE_UNKNOWN_ERROR, "EXCLUDE_UNKNOWN_ERROR"},
-           {EXCLUDE_HTTP_ONLY, "EXCLUDE_HTTP_ONLY"},
-           {EXCLUDE_SECURE_ONLY, "EXCLUDE_SECURE_ONLY"},
-           {EXCLUDE_DOMAIN_MISMATCH, "EXCLUDE_DOMAIN_MISMATCH"},
-           {EXCLUDE_NOT_ON_PATH, "EXCLUDE_NOT_ON_PATH"},
-           {EXCLUDE_SAMESITE_STRICT, "EXCLUDE_SAMESITE_STRICT"},
-           {EXCLUDE_SAMESITE_LAX, "EXCLUDE_SAMESITE_LAX"},
-           {EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX,
-            "EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX"},
-           {EXCLUDE_SAMESITE_NONE_INSECURE, "EXCLUDE_SAMESITE_NONE_INSECURE"},
-           {EXCLUDE_USER_PREFERENCES, "EXCLUDE_USER_PREFERENCES"},
-           {EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT,
-            "EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT"},
-           {EXCLUDE_FAILURE_TO_STORE, "EXCLUDE_FAILURE_TO_STORE"},
-           {EXCLUDE_NONCOOKIEABLE_SCHEME, "EXCLUDE_NONCOOKIEABLE_SCHEME"},
-           {EXCLUDE_OVERWRITE_SECURE, "EXCLUDE_OVERWRITE_SECURE"},
-           {EXCLUDE_OVERWRITE_HTTP_ONLY, "EXCLUDE_OVERWRITE_HTTP_ONLY"},
-           {EXCLUDE_INVALID_DOMAIN, "EXCLUDE_INVALID_DOMAIN"},
-           {EXCLUDE_INVALID_PREFIX, "EXCLUDE_INVALID_PREFIX"},
-           {EXCLUDE_INVALID_SAMEPARTY, "EXCLUDE_INVALID_SAMEPARTY"},
-           {EXCLUDE_INVALID_PARTITIONED, "EXCLUDE_INVALID_PARTITIONED"},
-           {EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE,
-            "EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE"},
-           {EXCLUDE_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE,
-            "EXCLUDE_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE"},
-           {EXCLUDE_DOMAIN_NON_ASCII, "EXCLUDE_DOMAIN_NON_ASCII"},
-       }) {
+
+  constexpr std::pair<ExclusionReason, const char*> exclusion_reasons[] = {
+      {EXCLUDE_UNKNOWN_ERROR, "EXCLUDE_UNKNOWN_ERROR"},
+      {EXCLUDE_HTTP_ONLY, "EXCLUDE_HTTP_ONLY"},
+      {EXCLUDE_SECURE_ONLY, "EXCLUDE_SECURE_ONLY"},
+      {EXCLUDE_DOMAIN_MISMATCH, "EXCLUDE_DOMAIN_MISMATCH"},
+      {EXCLUDE_NOT_ON_PATH, "EXCLUDE_NOT_ON_PATH"},
+      {EXCLUDE_SAMESITE_STRICT, "EXCLUDE_SAMESITE_STRICT"},
+      {EXCLUDE_SAMESITE_LAX, "EXCLUDE_SAMESITE_LAX"},
+      {EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX,
+       "EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX"},
+      {EXCLUDE_SAMESITE_NONE_INSECURE, "EXCLUDE_SAMESITE_NONE_INSECURE"},
+      {EXCLUDE_USER_PREFERENCES, "EXCLUDE_USER_PREFERENCES"},
+      {EXCLUDE_FAILURE_TO_STORE, "EXCLUDE_FAILURE_TO_STORE"},
+      {EXCLUDE_NONCOOKIEABLE_SCHEME, "EXCLUDE_NONCOOKIEABLE_SCHEME"},
+      {EXCLUDE_OVERWRITE_SECURE, "EXCLUDE_OVERWRITE_SECURE"},
+      {EXCLUDE_OVERWRITE_HTTP_ONLY, "EXCLUDE_OVERWRITE_HTTP_ONLY"},
+      {EXCLUDE_INVALID_DOMAIN, "EXCLUDE_INVALID_DOMAIN"},
+      {EXCLUDE_INVALID_PREFIX, "EXCLUDE_INVALID_PREFIX"},
+      {EXCLUDE_INVALID_PARTITIONED, "EXCLUDE_INVALID_PARTITIONED"},
+      {EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE,
+       "EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE"},
+      {EXCLUDE_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE,
+       "EXCLUDE_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE"},
+      {EXCLUDE_DOMAIN_NON_ASCII, "EXCLUDE_DOMAIN_NON_ASCII"},
+      {EXCLUDE_THIRD_PARTY_BLOCKED_WITHIN_FIRST_PARTY_SET,
+       "EXCLUDE_THIRD_PARTY_BLOCKED_WITHIN_FIRST_PARTY_SET"},
+      {EXCLUDE_PORT_MISMATCH, "EXCLUDE_PORT_MISMATCH"},
+      {EXCLUDE_SCHEME_MISMATCH, "EXCLUDE_SCHEME_MISMATCH"},
+      {EXCLUDE_SHADOWING_DOMAIN, "EXCLUDE_SHADOWING_DOMAIN"},
+      {EXCLUDE_DISALLOWED_CHARACTER, "EXCLUDE_DISALLOWED_CHARACTER"},
+      {EXCLUDE_THIRD_PARTY_PHASEOUT, "EXCLUDE_THIRD_PARTY_PHASEOUT"},
+      {EXCLUDE_NO_COOKIE_CONTENT, "EXCLUDE_NO_COOKIE_CONTENT"},
+  };
+  static_assert(
+      std::size(exclusion_reasons) == ExclusionReason::NUM_EXCLUSION_REASONS,
+      "Please ensure all ExclusionReason variants are enumerated in "
+      "GetDebugString");
+  static_assert(base::ranges::is_sorted(exclusion_reasons),
+                "Please keep the ExclusionReason variants sorted in numerical "
+                "order in GetDebugString");
+
+  for (const auto& reason : exclusion_reasons) {
     if (HasExclusionReason(reason.first))
       base::StrAppend(&out, {reason.second, ", "});
   }
@@ -239,44 +280,45 @@ std::string CookieInclusionStatus::GetDebugString() const {
     return out;
   }
 
-  for (const auto& reason :
-       std::initializer_list<std::pair<WarningReason, std::string>>{
-           {WARN_SAMESITE_UNSPECIFIED_CROSS_SITE_CONTEXT,
-            "WARN_SAMESITE_UNSPECIFIED_CROSS_SITE_CONTEXT"},
-           {WARN_SAMESITE_NONE_INSECURE, "WARN_SAMESITE_NONE_INSECURE"},
-           {WARN_SAMESITE_UNSPECIFIED_LAX_ALLOW_UNSAFE,
-            "WARN_SAMESITE_UNSPECIFIED_LAX_ALLOW_UNSAFE"},
-           {WARN_STRICT_LAX_DOWNGRADE_STRICT_SAMESITE,
-            "WARN_STRICT_LAX_DOWNGRADE_STRICT_SAMESITE"},
-           {WARN_STRICT_CROSS_DOWNGRADE_STRICT_SAMESITE,
-            "WARN_STRICT_CROSS_DOWNGRADE_STRICT_SAMESITE"},
-           {WARN_STRICT_CROSS_DOWNGRADE_LAX_SAMESITE,
-            "WARN_STRICT_CROSS_DOWNGRADE_LAX_SAMESITE"},
-           {WARN_LAX_CROSS_DOWNGRADE_STRICT_SAMESITE,
-            "WARN_LAX_CROSS_DOWNGRADE_STRICT_SAMESITE"},
-           {WARN_LAX_CROSS_DOWNGRADE_LAX_SAMESITE,
-            "WARN_LAX_CROSS_DOWNGRADE_LAX_SAMESITE"},
-           {WARN_SECURE_ACCESS_GRANTED_NON_CRYPTOGRAPHIC,
-            "WARN_SECURE_ACCESS_GRANTED_NON_CRYPTOGRAPHIC"},
-           {WARN_SAMEPARTY_EXCLUSION_OVERRULED_SAMESITE,
-            "WARN_SAMEPARTY_EXCLUSION_OVERRULED_SAMESITE"},
-           {WARN_SAMEPARTY_INCLUSION_OVERRULED_SAMESITE,
-            "WARN_SAMEPARTY_INCLUSION_OVERRULED_SAMESITE"},
-           {WARN_SAMESITE_NONE_REQUIRED, "WARN_SAMESITE_NONE_REQUIRED"},
-           {WARN_SAMESITE_NONE_INCLUDED_BY_SAMEPARTY_TOP_RESOURCE,
-            "WARN_SAMESITE_NONE_INCLUDED_BY_SAMEPARTY_TOP_RESOURCE"},
-           {WARN_SAMESITE_NONE_INCLUDED_BY_SAMEPARTY_ANCESTORS,
-            "WARN_SAMESITE_NONE_INCLUDED_BY_SAMEPARTY_ANCESTORS"},
-           {WARN_SAMESITE_NONE_INCLUDED_BY_SAMESITE_LAX,
-            "WARN_SAMESITE_NONE_INCLUDED_BY_SAMESITE_LAX"},
-           {WARN_SAMESITE_NONE_INCLUDED_BY_SAMESITE_STRICT,
-            "WARN_SAMESITE_NONE_INCLUDED_BY_SAMESITE_STRICT"},
-           {WARN_CROSS_SITE_REDIRECT_DOWNGRADE_CHANGES_INCLUSION,
-            "WARN_CROSS_SITE_REDIRECT_DOWNGRADE_CHANGES_INCLUSION"},
-           {WARN_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE,
-            "WARN_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE"},
-           {WARN_DOMAIN_NON_ASCII, "WARN_DOMAIN_NON_ASCII"},
-       }) {
+  constexpr std::pair<WarningReason, const char*> warning_reasons[] = {
+      {WARN_SAMESITE_UNSPECIFIED_CROSS_SITE_CONTEXT,
+       "WARN_SAMESITE_UNSPECIFIED_CROSS_SITE_CONTEXT"},
+      {WARN_SAMESITE_NONE_INSECURE, "WARN_SAMESITE_NONE_INSECURE"},
+      {WARN_SAMESITE_UNSPECIFIED_LAX_ALLOW_UNSAFE,
+       "WARN_SAMESITE_UNSPECIFIED_LAX_ALLOW_UNSAFE"},
+      {WARN_STRICT_LAX_DOWNGRADE_STRICT_SAMESITE,
+       "WARN_STRICT_LAX_DOWNGRADE_STRICT_SAMESITE"},
+      {WARN_STRICT_CROSS_DOWNGRADE_STRICT_SAMESITE,
+       "WARN_STRICT_CROSS_DOWNGRADE_STRICT_SAMESITE"},
+      {WARN_STRICT_CROSS_DOWNGRADE_LAX_SAMESITE,
+       "WARN_STRICT_CROSS_DOWNGRADE_LAX_SAMESITE"},
+      {WARN_LAX_CROSS_DOWNGRADE_STRICT_SAMESITE,
+       "WARN_LAX_CROSS_DOWNGRADE_STRICT_SAMESITE"},
+      {WARN_LAX_CROSS_DOWNGRADE_LAX_SAMESITE,
+       "WARN_LAX_CROSS_DOWNGRADE_LAX_SAMESITE"},
+      {WARN_SECURE_ACCESS_GRANTED_NON_CRYPTOGRAPHIC,
+       "WARN_SECURE_ACCESS_GRANTED_NON_CRYPTOGRAPHIC"},
+      {WARN_CROSS_SITE_REDIRECT_DOWNGRADE_CHANGES_INCLUSION,
+       "WARN_CROSS_SITE_REDIRECT_DOWNGRADE_CHANGES_INCLUSION"},
+      {WARN_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE,
+       "WARN_ATTRIBUTE_VALUE_EXCEEDS_MAX_SIZE"},
+      {WARN_DOMAIN_NON_ASCII, "WARN_DOMAIN_NON_ASCII"},
+      {WARN_PORT_MISMATCH, "WARN_PORT_MISMATCH"},
+      {WARN_SCHEME_MISMATCH, "WARN_SCHEME_MISMATCH"},
+      {WARN_TENTATIVELY_ALLOWING_SECURE_SOURCE_SCHEME,
+       "WARN_TENTATIVELY_ALLOWING_SECURE_SOURCE_SCHEME"},
+      {WARN_SHADOWING_DOMAIN, "WARN_SHADOWING_DOMAIN"},
+      {WARN_THIRD_PARTY_PHASEOUT, "WARN_THIRD_PARTY_PHASEOUT"},
+  };
+  static_assert(
+      std::size(warning_reasons) == WarningReason::NUM_WARNING_REASONS,
+      "Please ensure all WarningReason variants are enumerated in "
+      "GetDebugString");
+  static_assert(base::ranges::is_sorted(warning_reasons),
+                "Please keep the WarningReason variants sorted in numerical "
+                "order in GetDebugString");
+
+  for (const auto& reason : warning_reasons) {
     if (HasWarningReason(reason.first))
       base::StrAppend(&out, {reason.second, ", "});
   }
@@ -322,6 +364,19 @@ CookieInclusionStatus CookieInclusionStatus::MakeFromReasonsForTesting(
     status.AddWarningReason(warning);
   }
   return status;
+}
+
+bool CookieInclusionStatus::ExcludedByUserPreferences() const {
+  if (HasOnlyExclusionReason(ExclusionReason::EXCLUDE_USER_PREFERENCES) ||
+      HasOnlyExclusionReason(ExclusionReason::EXCLUDE_THIRD_PARTY_PHASEOUT)) {
+    return true;
+  }
+  return exclusion_reasons_.count() == 2 &&
+         (exclusion_reasons_[ExclusionReason::EXCLUDE_USER_PREFERENCES] ||
+          exclusion_reasons_[ExclusionReason::EXCLUDE_THIRD_PARTY_PHASEOUT]) &&
+         exclusion_reasons_
+             [ExclusionReason::
+                  EXCLUDE_THIRD_PARTY_BLOCKED_WITHIN_FIRST_PARTY_SET];
 }
 
 }  // namespace net

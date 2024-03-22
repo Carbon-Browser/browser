@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,12 @@ class MESSAGE_CENTER_EXPORT MessagePopupView
 
   // Update notification contents to |notification|. Virtual for unit testing.
   virtual void UpdateContents(const Notification& notification);
+
+  // Updates the content of the child notification view inside this popup.
+  // Virtual for unit testing.
+  virtual void UpdateContentsForChildNotification(
+      const std::string& notification_id,
+      const Notification& notification);
 
   // Return opacity of the widget.
   float GetOpacity() const;

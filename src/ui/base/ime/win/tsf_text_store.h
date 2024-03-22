@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/base/ime/ime_text_span.h"
-#include "ui/base/ime/input_method_delegate.h"
 #include "ui/events/event_utils.h"
 #include "ui/gfx/range/range.h"
 
@@ -253,11 +253,12 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN) TSFTextStore
   // Removes currently focused TextInputClient.
   void RemoveFocusedTextInputClient(TextInputClient* text_input_client);
 
-  // Sets InputMethodDelegate pointer.
-  void SetInputMethodDelegate(internal::InputMethodDelegate* delegate);
+  // Sets ImeKeyEventDispatcher pointer.
+  void SetImeKeyEventDispatcher(
+      ImeKeyEventDispatcher* ime_key_event_dispatcher);
 
-  // Removes InputMethodDelegate pointer.
-  void RemoveInputMethodDelegate();
+  // Removes ImeKeyEventDispatcher pointer.
+  void RemoveImeKeyEventDispatcher();
 
   // Cancels the ongoing composition if exists.
   bool CancelComposition();
@@ -267,6 +268,13 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN) TSFTextStore
 
   // Sends OnLayoutChange() via |text_store_acp_sink_|.
   void SendOnLayoutChange();
+
+  // Sends a Url change notification via |text_store_acp_sink_| if the current
+  // version of TSF supports empty text stores.
+  bool MaybeSendOnUrlChanged();
+
+  // Sets the flag to indicate TSF support for empty text stores.
+  void SetUseEmptyTextStore(bool isEnabled);
 
  private:
   friend class TSFTextStoreTest;
@@ -320,12 +328,15 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN) TSFTextStore
   // Returns if current input method is an IME.
   bool IsInputIME() const;
 
+  // Returns if the active input processor does not support vertical wrirting.
+  bool IsInputProcessorWithoutVerticalWriting() const;
+
   // Gets the style information from the display attribute for the actively
   // composed text.
   void GetStyle(const TF_DISPLAYATTRIBUTE& attribute, ImeTextSpan* span);
 
-  // Clear all of the pending supported attributes values and count.
-  void ClearSupportedAttributes();
+  // Indicates if it is a dummy/empty text store without any text capability.
+  bool is_empty_text_store_ = false;
 
   // The reference count of this instance.
   volatile LONG ref_count_ = 0;
@@ -342,8 +353,9 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN) TSFTextStore
   // Current TextInputClient which is set in SetFocusedTextInputClient.
   raw_ptr<TextInputClient> text_input_client_ = nullptr;
 
-  // InputMethodDelegate instance which is used dispatch key events.
-  raw_ptr<internal::InputMethodDelegate> input_method_delegate_ = nullptr;
+  // ImeKeyEventDispatcher instance which is used dispatch key events.
+  raw_ptr<ImeKeyEventDispatcher, AcrossTasksDanglingUntriaged>
+      ime_key_event_dispatcher_ = nullptr;
 
   //  |string_buffer_document_| contains all string in current active view.
   //  |string_pending_insertion_| contains only string in current edit session.

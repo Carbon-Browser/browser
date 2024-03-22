@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,15 +12,14 @@ import org.chromium.base.test.params.ParameterizedRunner.ParameterizedTestInstan
 
 import java.util.List;
 
-/**
- * Class runner delegate that extends BaseJUnit4ClassRunner
- */
-public final class BaseJUnit4RunnerDelegate
-        extends BaseJUnit4ClassRunner implements ParameterizedRunnerDelegate {
+/** Class runner delegate that extends BaseJUnit4ClassRunner */
+public final class BaseJUnit4RunnerDelegate extends BaseJUnit4ClassRunner
+        implements ParameterizedRunnerDelegate {
     private ParameterizedRunnerDelegateCommon mDelegateCommon;
 
-    public BaseJUnit4RunnerDelegate(Class<?> klass,
-            ParameterizedRunnerDelegateCommon delegateCommon) throws InitializationError {
+    public BaseJUnit4RunnerDelegate(
+            Class<?> klass, ParameterizedRunnerDelegateCommon delegateCommon)
+            throws InitializationError {
         super(klass);
         mDelegateCommon = delegateCommon;
     }

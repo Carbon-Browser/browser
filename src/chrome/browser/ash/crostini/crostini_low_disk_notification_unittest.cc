@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
@@ -20,7 +20,7 @@
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -35,7 +35,6 @@ class CrostiniLowDiskNotificationTest : public BrowserWithTestWindowTest {
 
   void SetUp() override {
     BrowserWithTestWindowTest::SetUp();
-    chromeos::DBusThreadManager::Initialize();
     ash::CiceroneClient::InitializeFake();
     ash::ConciergeClient::InitializeFake();
     ash::SeneschalClient::InitializeFake();
@@ -44,10 +43,7 @@ class CrostiniLowDiskNotificationTest : public BrowserWithTestWindowTest {
     GetCrosSettingsHelper()->SetBoolean(
         ash::kDeviceShowLowDiskSpaceNotification, true);
 
-    auto user_manager = std::make_unique<user_manager::FakeUserManager>();
-    user_manager_ = user_manager.get();
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(user_manager));
+    fake_user_manager_.Reset(std::make_unique<user_manager::FakeUserManager>());
 
     TestingBrowserProcess::GetGlobal()->SetSystemNotificationHelper(
         std::make_unique<SystemNotificationHelper>());
@@ -66,10 +62,10 @@ class CrostiniLowDiskNotificationTest : public BrowserWithTestWindowTest {
 
   void TearDown() override {
     low_disk_notification_.reset();
+    fake_user_manager_.Reset();
     ash::SeneschalClient::Shutdown();
     ash::ConciergeClient::Shutdown();
     ash::CiceroneClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
     BrowserWithTestWindowTest::TearDown();
   }
 
@@ -85,8 +81,8 @@ class CrostiniLowDiskNotificationTest : public BrowserWithTestWindowTest {
   void OnNotificationAdded() { notification_count_++; }
 
  protected:
-  user_manager::FakeUserManager* user_manager_ = nullptr;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
+  user_manager::TypedScopedUserManager<user_manager::FakeUserManager>
+      fake_user_manager_;
   std::unique_ptr<NotificationDisplayServiceTester> tester_;
   std::unique_ptr<CrostiniLowDiskNotification> low_disk_notification_;
   vm_tools::cicerone::LowDiskSpaceTriggeredSignal medium_notification_;
@@ -146,9 +142,9 @@ TEST_F(CrostiniLowDiskNotificationTest,
 }
 
 TEST_F(CrostiniLowDiskNotificationTest, ShowForMultipleUsersWhenEnrolled) {
-  user_manager_->AddUser(
+  fake_user_manager_->AddUser(
       AccountId::FromUserEmailGaiaId("test_user1@example.com", "1234567891"));
-  user_manager_->AddUser(
+  fake_user_manager_->AddUser(
       AccountId::FromUserEmailGaiaId("test_user2@example.com", "1234567892"));
 
   SetNotificationThrottlingInterval(-1);
@@ -157,9 +153,9 @@ TEST_F(CrostiniLowDiskNotificationTest, ShowForMultipleUsersWhenEnrolled) {
 }
 
 TEST_F(CrostiniLowDiskNotificationTest, SupressedForMultipleUsersWhenEnrolled) {
-  user_manager_->AddUser(
+  fake_user_manager_->AddUser(
       AccountId::FromUserEmailGaiaId("test_user1@example.com", "1234567891"));
-  user_manager_->AddUser(
+  fake_user_manager_->AddUser(
       AccountId::FromUserEmailGaiaId("test_user2@example.com", "1234567892"));
 
   GetCrosSettingsHelper()->SetBoolean(ash::kDeviceShowLowDiskSpaceNotification,

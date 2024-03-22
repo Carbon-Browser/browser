@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,19 +24,18 @@ import org.mockito.Spy;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 
 /** Unit tests for {@link UuidBasedUniqueIdentificationGenerator}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Batch(UniqueIdentificationGeneratorFactoryTest.IDENTITY_GENERATOR_BATCH_NAME)
 public class UuidBasedUniqueIdentificationGeneratorTest {
     // Tell R8 this class is spied on and shouldn't be made final.
-    @Spy
-    UuidBasedUniqueIdentificationGenerator mGenerator;
+    @Spy UuidBasedUniqueIdentificationGenerator mGenerator;
 
     @Before
     public void setUp() {
-        SharedPreferencesManager.getInstance().disableKeyCheckerForTesting();
+        ChromeSharedPreferences.getInstance().disableKeyCheckerForTesting();
     }
 
     @Test

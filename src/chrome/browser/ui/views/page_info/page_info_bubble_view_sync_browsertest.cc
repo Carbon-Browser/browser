@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,9 @@
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/strings/grit/components_strings.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_user_settings.h"
-#include "components/sync/test/fake_server/fake_server_network_resources.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
+#include "components/sync/test/fake_server_network_resources.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -38,19 +38,13 @@
 #include "ui/accessibility/ax_action_data.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/events/types/event_type.h"
+#include "ui/events/test/test_event.h"
 #include "ui/views/controls/styled_label.h"
 #include "ui/views/test/widget_test.h"
 
 namespace {
 
 using password_manager::metrics_util::PasswordType;
-
-// The ClickEvent class is copied from the PageInfoBubbleViewBrowserTest.iden
-class ClickEvent : public ui::Event {
- public:
-  ClickEvent() : ui::Event(ui::ET_UNKNOWN, base::TimeTicks(), 0) {}
-};
 
 void PerformMouseClickOnView(views::View* view) {
   ui::AXActionData data;
@@ -64,7 +58,7 @@ void OpenPageInfoBubble(Browser* browser) {
   LocationIconView* location_icon_view =
       browser_view->toolbar()->location_bar()->location_icon_view();
   ASSERT_TRUE(location_icon_view);
-  ClickEvent event;
+  ui::test::TestEvent event;
   location_icon_view->ShowBubble(event);
   views::BubbleDialogDelegateView* page_info =
       PageInfoBubbleView::GetPageInfoBubbleForTesting();
@@ -101,7 +95,8 @@ class PageInfoBubbleViewSyncBrowserTest : public SyncTest {
     ASSERT_TRUE(SetupClients());
 
     // Sign the profile in.
-    ASSERT_TRUE(GetClient(0)->SignInPrimaryAccount());
+    ASSERT_TRUE(
+        GetClient(0)->SignInPrimaryAccount(signin::ConsentLevel::kSync));
 
     CoreAccountInfo current_info =
         IdentityManagerFactory::GetForProfile(GetProfile(0))

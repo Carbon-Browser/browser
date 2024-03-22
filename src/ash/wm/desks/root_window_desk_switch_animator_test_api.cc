@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,11 @@ RootWindowDeskSwitchAnimatorTestApi::GetScreenshotLayerOfDeskWithIndex(
 
 int RootWindowDeskSwitchAnimatorTestApi::GetEndingDeskIndex() const {
   return animator_->ending_desk_index_;
+}
+
+DeskSwitchAnimationType RootWindowDeskSwitchAnimatorTestApi::GetAnimatorType()
+    const {
+  return animator_->type_;
 }
 
 void RootWindowDeskSwitchAnimatorTestApi::SetOnStartingScreenshotTakenCallback(

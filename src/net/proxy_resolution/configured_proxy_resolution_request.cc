@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "net/base/net_errors.h"
 #include "net/log/net_log_event_type.h"
 #include "net/proxy_resolution/configured_proxy_resolution_service.h"
@@ -19,7 +19,7 @@ ConfiguredProxyResolutionRequest::ConfiguredProxyResolutionRequest(
     ConfiguredProxyResolutionService* service,
     const GURL& url,
     const std::string& method,
-    const NetworkIsolationKey& network_isolation_key,
+    const NetworkAnonymizationKey& network_anonymization_key,
     ProxyInfo* results,
     CompletionOnceCallback user_callback,
     const NetLogWithSource& net_log)
@@ -28,7 +28,7 @@ ConfiguredProxyResolutionRequest::ConfiguredProxyResolutionRequest(
       results_(results),
       url_(url),
       method_(method),
-      network_isolation_key_(network_isolation_key),
+      network_anonymization_key_(network_anonymization_key),
       net_log_(net_log),
       creation_time_(base::TimeTicks::Now()) {
   DCHECK(!user_callback_.is_null());
@@ -61,7 +61,7 @@ int ConfiguredProxyResolutionRequest::Start() {
     return OK;
 
   return service_->GetProxyResolver()->GetProxyForURL(
-      url_, network_isolation_key_, results_,
+      url_, network_anonymization_key_, results_,
       base::BindOnce(&ConfiguredProxyResolutionRequest::QueryComplete,
                      base::Unretained(this)),
       &resolve_job_, net_log_);
@@ -91,8 +91,9 @@ int ConfiguredProxyResolutionRequest::QueryDidComplete(int result_code) {
   resolve_job_.reset();
 
   // Note that DidFinishResolvingProxy might modify |results_|.
-  int rv = service_->DidFinishResolvingProxy(url_, method_, results_,
-                                             result_code, net_log_);
+  int rv = service_->DidFinishResolvingProxy(url_, network_anonymization_key_,
+                                             method_, results_, result_code,
+                                             net_log_);
 
   // Make a note in the results which configuration was in use at the
   // time of the resolve.

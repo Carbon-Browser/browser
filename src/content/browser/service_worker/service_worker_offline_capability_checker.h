@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_SERVICE_WORKER_SERVICE_WORKER_OFFLINE_CAPABILITY_CHECKER_H_
 #define CONTENT_BROWSER_SERVICE_WORKER_SERVICE_WORKER_OFFLINE_CAPABILITY_CHECKER_H_
 
-#include "base/memory/weak_ptr.h"
 #include "content/browser/service_worker/service_worker_fetch_dispatcher.h"
 #include "content/public/browser/service_worker_context.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"

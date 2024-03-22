@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,16 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/media/webrtc/fake_desktop_media_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 FakeDesktopMediaPicker::FakeDesktopMediaPicker(
     FakeDesktopMediaPickerFactory::TestFlags* expectation)
-    : expectation_(expectation) {
+    : expectation_(expectation),
+      picker_params_(Params::RequestSource::kUnknown) {
   expectation_->picker_created = true;
 }
 FakeDesktopMediaPicker::~FakeDesktopMediaPicker() {
@@ -59,7 +60,7 @@ void FakeDesktopMediaPicker::Show(
 
   if (!expectation_->cancelled) {
     // Post a task to call the callback asynchronously.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeDesktopMediaPicker::CallCallback,
                        weak_factory_.GetWeakPtr(), std::move(done_callback)));
@@ -89,8 +90,8 @@ void FakeDesktopMediaPickerFactory::SetTestFlags(TestFlags* test_flags,
   current_test_ = 0;
 }
 
-std::unique_ptr<DesktopMediaPicker>
-FakeDesktopMediaPickerFactory::CreatePicker() {
+std::unique_ptr<DesktopMediaPicker> FakeDesktopMediaPickerFactory::CreatePicker(
+    const content::MediaStreamRequest* request) {
   EXPECT_LE(current_test_, tests_count_);
   if (current_test_ >= tests_count_)
     return nullptr;
@@ -105,6 +106,7 @@ FakeDesktopMediaPickerFactory::CreateMediaList(
     content::WebContents* web_contents,
     DesktopMediaList::WebContentsFilter includable_web_contents_filter) {
   EXPECT_LE(current_test_, tests_count_);
+  is_web_contents_excluded_ = !includable_web_contents_filter.Run(web_contents);
   std::vector<std::unique_ptr<DesktopMediaList>> media_lists;
   for (auto source_type : types)
     media_lists.emplace_back(new FakeDesktopMediaList(source_type));

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -59,23 +59,14 @@ namespace {
 base::LazyInstance<base::FilePath>::Leaky
     last_save_dir = LAZY_INSTANCE_INITIALIZER;
 
-content::WebUIDataSource* CreateNetExportHTMLSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUINetExportHost);
+void CreateAndAddNetExportHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUINetExportHost);
 
   source->UseStringsJs();
   source->AddResourcePath(net_log::kNetExportUICSS, IDR_NET_LOG_NET_EXPORT_CSS);
   source->AddResourcePath(net_log::kNetExportUIJS, IDR_NET_LOG_NET_EXPORT_JS);
   source->SetDefaultResource(IDR_NET_LOG_NET_EXPORT_HTML);
-  return source;
-}
-
-void SetIfNotNull(base::Value::Dict& dict,
-                  const base::StringPiece& path,
-                  std::unique_ptr<base::Value> in_value) {
-  if (in_value) {
-    dict.Set(path, base::Value::FromUniquePtrValue(std::move(in_value)));
-  }
 }
 
 // This class receives javascript messages from the renderer.
@@ -111,7 +102,7 @@ class NetExportMessageHandler
   void FileSelectionCanceled(void* params) override;
 
   // net_log::NetExportFileWriter::StateObserver implementation.
-  void OnNewState(const base::DictionaryValue& state) override;
+  void OnNewState(const base::Value::Dict& state) override;
 
  private:
   // Send NetLog data via email.
@@ -136,7 +127,7 @@ class NetExportMessageHandler
 
   // Fires net-log-info-changed event to update the JavaScript UI in the
   // renderer.
-  void NotifyUIWithState(std::unique_ptr<base::DictionaryValue> state);
+  void NotifyUIWithState(const base::Value::Dict& state);
 
   // Opens the SelectFileDialog UI with the default path to save a
   // NetLog file.
@@ -249,13 +240,13 @@ void NetExportMessageHandler::OnStopNetLog(const base::Value::List& list) {
   base::Value::Dict ui_thread_polled_data;
 
   Profile* profile = Profile::FromWebUI(web_ui());
-  SetIfNotNull(ui_thread_polled_data, "prerenderInfo",
-               chrome_browser_net::GetPrerenderInfo(profile));
-  SetIfNotNull(ui_thread_polled_data, "extensionInfo",
-               chrome_browser_net::GetExtensionInfo(profile));
+  ui_thread_polled_data.Set("prerenderInfo",
+                            chrome_browser_net::GetPrerenderInfo(profile));
+  ui_thread_polled_data.Set("extensionInfo",
+                            chrome_browser_net::GetExtensionInfo(profile));
 #if BUILDFLAG(IS_WIN)
-  SetIfNotNull(ui_thread_polled_data, "serviceProviders",
-               chrome_browser_net::GetWindowsServiceProviders());
+  ui_thread_polled_data.Set("serviceProviders",
+                            chrome_browser_net::GetWindowsServiceProviders());
 #endif
 
   file_writer_->StopNetLog(std::move(ui_thread_polled_data));
@@ -292,8 +283,8 @@ void NetExportMessageHandler::FileSelectionCanceled(void* params) {
   select_file_dialog_ = nullptr;
 }
 
-void NetExportMessageHandler::OnNewState(const base::DictionaryValue& state) {
-  NotifyUIWithState(state.CreateDeepCopy());
+void NetExportMessageHandler::OnNewState(const base::Value::Dict& state) {
+  NotifyUIWithState(state);
 }
 
 // static
@@ -347,10 +338,10 @@ bool NetExportMessageHandler::UsingMobileUI() {
 }
 
 void NetExportMessageHandler::NotifyUIWithState(
-    std::unique_ptr<base::DictionaryValue> state) {
+    const base::Value::Dict& state) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(web_ui());
-  FireWebUIListener(net_log::kNetLogInfoChangedEvent, *state);
+  FireWebUIListener(net_log::kNetLogInfoChangedEvent, state);
 }
 
 void NetExportMessageHandler::ShowSelectFileDialog(
@@ -378,6 +369,5 @@ NetExportUI::NetExportUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<NetExportMessageHandler>());
 
   // Set up the chrome://net-export/ source.
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, CreateNetExportHTMLSource());
+  CreateAndAddNetExportHTMLSource(Profile::FromWebUI(web_ui));
 }

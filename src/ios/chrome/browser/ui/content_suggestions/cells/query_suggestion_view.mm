@@ -1,22 +1,20 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/content_suggestions/cells/query_suggestion_view.h"
 
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_cells_constants.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // Size constraints for this view.
-const CGFloat kViewWidthAnchor = 149.0f;
+const CGFloat kviewWidthAnchor = 149.0f;
+const CGFloat kviewWidthAnchorLong = 194.0f;
 const CGFloat kViewHeightAnchor = 51.5f;
 
 // Width constraint for the search ImageView.
@@ -40,6 +38,8 @@ const CGFloat kTouchDownAlpha = 0.25f;
 
 @property(nonatomic, strong) UILabel* queryLabel;
 
+@property(nonatomic, strong) NSLayoutConstraint* widthLayoutAnchor;
+
 @end
 
 @implementation QuerySuggestionView
@@ -60,6 +60,10 @@ const CGFloat kTouchDownAlpha = 0.25f;
     self.queryLabel.translatesAutoresizingMaskIntoConstraints = NO;
     self.queryLabel.numberOfLines = 2;
     self.queryLabel.adjustsFontForContentSizeCategory = YES;
+    // Set this for visibility validation in EGTests.
+    self.queryLabel.accessibilityIdentifier = [NSString
+        stringWithFormat:@"%@%i", kQuerySuggestionViewA11yIdentifierPrefix,
+                         config.index];
 
     if (!config) {
       // If there is no config, then this is a placeholder tile.
@@ -75,6 +79,12 @@ const CGFloat kTouchDownAlpha = 0.25f;
     [self addSubview:searchImageView];
     [self addSubview:self.queryLabel];
 
+    CGFloat queryViewWidth = self.traitCollection.horizontalSizeClass ==
+                                     UIUserInterfaceSizeClassRegular
+                                 ? kviewWidthAnchorLong
+                                 : kviewWidthAnchor;
+    self.widthLayoutAnchor =
+        [self.widthAnchor constraintEqualToConstant:queryViewWidth];
     [NSLayoutConstraint activateConstraints:@[
       [searchImageView.widthAnchor
           constraintLessThanOrEqualToConstant:kQueryImageMaxWidth],
@@ -90,7 +100,7 @@ const CGFloat kTouchDownAlpha = 0.25f;
       [self.queryLabel.trailingAnchor
           constraintEqualToAnchor:self.trailingAnchor],
       [self.heightAnchor constraintEqualToConstant:kViewHeightAnchor],
-      [self.widthAnchor constraintEqualToConstant:kViewWidthAnchor]
+      self.widthLayoutAnchor
     ]];
     if (config) {
       // Let label take up all vertical space for two-line query text.
@@ -135,6 +145,18 @@ const CGFloat kTouchDownAlpha = 0.25f;
     self.queryLabel.alpha = kTouchDownAlpha;
   } else {
     self.queryLabel.alpha = 1.0;
+  }
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
+  [super traitCollectionDidChange:previousTraitCollection];
+  if (previousTraitCollection.horizontalSizeClass !=
+      self.traitCollection.horizontalSizeClass) {
+    self.widthLayoutAnchor.constant =
+        self.traitCollection.horizontalSizeClass ==
+                UIUserInterfaceSizeClassRegular
+            ? kviewWidthAnchorLong
+            : kviewWidthAnchor;
   }
 }
 

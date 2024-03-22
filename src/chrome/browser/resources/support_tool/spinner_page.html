@@ -1,6 +1,8 @@
-<!-- Copyright 2022 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2022 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <style include="support-tool-shared">
   paper-spinner-lite {
@@ -14,5 +16,7 @@
 <paper-spinner-lite active>
 </paper-spinner-lite>
 <div class="navigation-buttons">
-  <cr-button id="cancelButton" on-click="onCancelClick_">Cancel</cr-button>
+  <cr-button id="cancelButton" on-click="onCancelClick_">
+    $i18n{cancelButtonText}
+  </cr-button>
 </div>

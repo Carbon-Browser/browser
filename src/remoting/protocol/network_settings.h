@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,9 @@
 #include "base/time/time.h"
 #include "remoting/protocol/port_range.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 struct NetworkSettings {
-
   // When hosts are configured with NAT traversal disabled they will
   // typically also limit their P2P ports to this range, so that
   // sessions may be blocked or un-blocked via firewall rules.
@@ -38,8 +36,8 @@ struct NetworkSettings {
     NAT_TRAVERSAL_RELAY = 0x4,
 
     // Active NAT traversal using STUN and relay servers.
-    NAT_TRAVERSAL_FULL = NAT_TRAVERSAL_STUN | NAT_TRAVERSAL_RELAY |
-        NAT_TRAVERSAL_OUTGOING
+    NAT_TRAVERSAL_FULL =
+        NAT_TRAVERSAL_STUN | NAT_TRAVERSAL_RELAY | NAT_TRAVERSAL_OUTGOING
   };
 
   NetworkSettings() {}
@@ -58,7 +56,6 @@ struct NetworkSettings {
   int ice_reconnect_attempts = 2;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_NETWORK_SETTINGS_H_

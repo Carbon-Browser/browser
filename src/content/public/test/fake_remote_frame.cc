@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/test/fake_remote_frame.h"
 
+#include "third_party/blink/public/mojom/frame/frame_replication_state.mojom.h"
 #include "third_party/blink/public/mojom/timing/resource_timing.mojom.h"
 
 namespace content {
@@ -32,7 +33,7 @@ void FakeRemoteFrame::SetReplicatedOrigin(
     const url::Origin& origin,
     bool is_potentially_trustworthy_unique_origin) {}
 
-void FakeRemoteFrame::SetReplicatedIsAdSubframe(bool is_ad_subframe) {}
+void FakeRemoteFrame::SetReplicatedIsAdFrame(bool is_ad_frame) {}
 
 void FakeRemoteFrame::SetReplicatedName(const std::string& name,
                                         const std::string& unique_name) {}
@@ -61,10 +62,6 @@ void FakeRemoteFrame::SetEmbeddingToken(
 void FakeRemoteFrame::SetPageFocus(bool is_focused) {}
 
 void FakeRemoteFrame::RenderFallbackContent() {}
-
-void FakeRemoteFrame::RenderFallbackContentWithResourceTiming(
-    blink::mojom::ResourceTimingInfoPtr,
-    const std::string& server_timing_value) {}
 
 void FakeRemoteFrame::AddResourceTimingFromChild(
     blink::mojom::ResourceTimingInfoPtr timing) {}
@@ -96,4 +93,18 @@ void FakeRemoteFrame::DidUpdateVisualProperties(
 void FakeRemoteFrame::SetFrameSinkId(const viz::FrameSinkId& frame_sink_id) {}
 
 void FakeRemoteFrame::ChildProcessGone() {}
+
+void FakeRemoteFrame::CreateRemoteChild(
+    const blink::RemoteFrameToken& token,
+    const absl::optional<blink::FrameToken>& opener_frame_token,
+    blink::mojom::TreeScopeType tree_scope_type,
+    blink::mojom::FrameReplicationStatePtr replication_state,
+    blink::mojom::FrameOwnerPropertiesPtr owner_properties,
+    bool is_loading,
+    const base::UnguessableToken& devtools_frame_token,
+    blink::mojom::RemoteFrameInterfacesFromBrowserPtr remote_frame_interfaces) {
+}
+
+void FakeRemoteFrame::CreateRemoteChildren(
+    std::vector<blink::mojom::CreateRemoteChildParamsPtr> params) {}
 }  // namespace content

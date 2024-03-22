@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -104,9 +104,6 @@ void CrashMetricsReporter::ChildProcessExited(
       info.blink_oom_metrics.allocation_failed;
   const uint64_t private_footprint_kb =
       info.blink_oom_metrics.current_private_footprint_kb;
-  const uint64_t swap_kb = info.blink_oom_metrics.current_swap_kb;
-  const uint64_t vm_size_kb = info.blink_oom_metrics.current_vm_size_kb;
-  const uint64_t blink_usage_kb = info.blink_oom_metrics.current_blink_usage_kb;
 
   if (app_foreground && android_oom_kill) {
     if (info.process_type == content::PROCESS_TYPE_GPU) {
@@ -169,15 +166,6 @@ void CrashMetricsReporter::ChildProcessExited(
               "Memory.Experimental.OomIntervention."
               "RendererPrivateMemoryFootprintAtOOM",
               private_footprint_kb / 1024);
-          UMA_HISTOGRAM_MEMORY_MB(
-              "Memory.Experimental.OomIntervention.RendererSwapFootprintAtOOM",
-              swap_kb / 1024);
-          UMA_HISTOGRAM_MEMORY_MB(
-              "Memory.Experimental.OomIntervention.RendererBlinkUsageAtOOM",
-              blink_usage_kb / 1024);
-          UMA_HISTOGRAM_MEMORY_LARGE_MB(
-              "Memory.Experimental.OomIntervention.RendererVmSizeAtOOMLarge",
-              vm_size_kb / 1024);
         }
       }
     } else if (!crashed) {
@@ -186,7 +174,14 @@ void CrashMetricsReporter::ChildProcessExited(
       // the bindings are updated later than visibility on web contents.
       switch (info.binding_state) {
         case base::android::ChildBindingState::UNBOUND:
+          break;
         case base::android::ChildBindingState::WAIVED:
+          if (!intentional_kill && !info.normal_termination) {
+            ReportCrashCount(
+                ProcessedCrashCounts::
+                    kRendererForegroundInvisibleWithWaivedBindingOom,
+                &reported_counts);
+          }
           break;
         case base::android::ChildBindingState::STRONG:
           if (intentional_kill || info.normal_termination) {
@@ -201,16 +196,29 @@ void CrashMetricsReporter::ChildProcessExited(
                 &reported_counts);
           }
           break;
-        case base::android::ChildBindingState::MODERATE:
+        case base::android::ChildBindingState::VISIBLE:
           if (intentional_kill || info.normal_termination) {
             ReportCrashCount(
                 ProcessedCrashCounts::
-                    kRendererForegroundInvisibleWithModerateBindingKilled,
+                    kRendererForegroundInvisibleWithVisibleBindingKilled,
                 &reported_counts);
           } else {
             ReportCrashCount(
                 ProcessedCrashCounts::
-                    kRendererForegroundInvisibleWithModerateBindingOom,
+                    kRendererForegroundInvisibleWithVisibleBindingOom,
+                &reported_counts);
+          }
+          break;
+        case base::android::ChildBindingState::NOT_PERCEPTIBLE:
+          if (intentional_kill || info.normal_termination) {
+            ReportCrashCount(
+                ProcessedCrashCounts::
+                    kRendererForegroundInvisibleWithNotPerceptibleBindingKilled,
+                &reported_counts);
+          } else {
+            ReportCrashCount(
+                ProcessedCrashCounts::
+                    kRendererForegroundInvisibleWithNotPerceptibleBindingOom,
                 &reported_counts);
           }
           break;
@@ -244,17 +252,6 @@ void CrashMetricsReporter::ChildProcessExited(
       !info.normal_termination && info.renderer_shutdown_requested) {
     ReportCrashCount(ProcessedCrashCounts::kRendererProcessHostShutdown,
                      &reported_counts);
-  }
-
-  if (android_oom_kill) {
-    if (info.best_effort_reverse_rank >= 0) {
-      UMA_HISTOGRAM_EXACT_LINEAR("Stability.Android.OomKillReverseRank",
-                                 info.best_effort_reverse_rank, 50);
-    }
-    if (info.best_effort_reverse_rank != -2) {
-      UMA_HISTOGRAM_BOOLEAN("Stability.Android.OomKillReverseRankSuccess",
-                            info.best_effort_reverse_rank != -1);
-    }
   }
 
   RecordSystemExitReason(info.pid, reported_counts);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@ extern NSString* const kPasswordTableViewAccessibilityIdentifier;
 }  // namespace manual_fill
 
 @class PasswordViewController;
+@class CrURL;
 
 // Delegate of the PasswordViewController.
 @protocol PasswordViewControllerDelegate <NSObject>
@@ -26,6 +27,9 @@ extern NSString* const kPasswordTableViewAccessibilityIdentifier;
 // User Tapped "Done" button.
 - (void)passwordViewControllerDidTapDoneButton:
     (PasswordViewController*)passwordViewController;
+
+// Called when the user taps the link in the header.
+- (void)didTapLinkURL:(CrURL*)URL;
 
 @end
 

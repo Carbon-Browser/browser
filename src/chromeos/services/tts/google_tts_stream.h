@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_SERVICES_TTS_GOOGLE_TTS_STREAM_H_
 #define CHROMEOS_SERVICES_TTS_GOOGLE_TTS_STREAM_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/services/tts/public/mojom/tts_service.mojom.h"
 #include "chromeos/services/tts/tts_player.h"
 #include "library_loaders/libchrometts.h"
@@ -48,7 +49,7 @@ class GoogleTtsStream : public mojom::GoogleTtsStream {
   void ReadMoreFrames(bool is_first_buffer);
 
   // Owning service.
-  TtsService* owner_;
+  raw_ptr<TtsService, ExperimentalAsh> owner_;
 
   // Prebuilt.
   LibChromeTtsLoader libchrometts_;

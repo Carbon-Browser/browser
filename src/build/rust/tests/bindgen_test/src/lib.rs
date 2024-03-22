@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 mod c_ffi {
     #![allow(dead_code)]
+    #![allow(non_snake_case)]
     #![allow(non_camel_case_types)]
     #![allow(non_upper_case_globals)]
     include!(env!("BINDGEN_RS_FILE"));

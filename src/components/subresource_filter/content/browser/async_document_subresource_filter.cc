@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/subresource_filter/core/common/memory_mapped_ruleset.h"
 #include "components/subresource_filter/core/common/scoped_timers.h"
 #include "components/subresource_filter/core/common/time_measurements.h"
@@ -96,8 +94,8 @@ AsyncDocumentSubresourceFilter::AsyncDocumentSubresourceFilter(
   // because a task to delete it can only be posted to (and, therefore,
   // processed by) |task_runner| after this method returns, hence after the
   // below task is posted.
-  base::PostTaskAndReplyWithResult(
-      task_runner_, FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&Core::Initialize, base::Unretained(core_.get()),
                      std::move(params), ruleset_handle->ruleset_.get()),
       base::BindOnce(&AsyncDocumentSubresourceFilter::OnActivateStateCalculated,
@@ -128,7 +126,7 @@ AsyncDocumentSubresourceFilter::AsyncDocumentSubresourceFilter(
 }
 
 AsyncDocumentSubresourceFilter::~AsyncDocumentSubresourceFilter() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 void AsyncDocumentSubresourceFilter::OnActivateStateCalculated(
@@ -141,12 +139,12 @@ void AsyncDocumentSubresourceFilter::OnActivateStateCalculated(
 void AsyncDocumentSubresourceFilter::GetLoadPolicyForSubdocument(
     const GURL& subdocument_url,
     LoadPolicyCallback result_callback) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // TODO(pkalinnikov): Think about avoiding copy of |subdocument_url| if it is
   // too big and won't be allowed anyway (e.g., it's a data: URI).
-  base::PostTaskAndReplyWithResult(
-      task_runner_, FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           [](AsyncDocumentSubresourceFilter::Core* core,
              const GURL& subdocument_url) {
@@ -165,12 +163,12 @@ void AsyncDocumentSubresourceFilter::GetLoadPolicyForSubdocument(
 void AsyncDocumentSubresourceFilter::GetLoadPolicyForSubdocumentURLs(
     const std::vector<GURL>& urls,
     MultiLoadPolicyCallback result_callback) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // TODO(pkalinnikov): Think about avoiding copying of |urls| if they are
   // too big and won't be allowed anyway (e.g. data: URI).
-  base::PostTaskAndReplyWithResult(
-      task_runner_, FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&AsyncDocumentSubresourceFilter::Core::GetLoadPolicies,
                      base::Unretained(core_.get()), urls),
       std::move(result_callback));
@@ -213,11 +211,11 @@ const mojom::ActivationState& AsyncDocumentSubresourceFilter::activation_state()
 // AsyncDocumentSubresourceFilter::Core ----------------------------------------
 
 AsyncDocumentSubresourceFilter::Core::Core() {
-  sequence_checker_.DetachFromSequence();
+  DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
 AsyncDocumentSubresourceFilter::Core::~Core() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 std::vector<LoadPolicy> AsyncDocumentSubresourceFilter::Core::GetLoadPolicies(
@@ -242,7 +240,7 @@ void AsyncDocumentSubresourceFilter::Core::SetActivationState(
 mojom::ActivationState AsyncDocumentSubresourceFilter::Core::Initialize(
     InitializationParams params,
     VerifiedRuleset* verified_ruleset) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(verified_ruleset);
 
   if (!verified_ruleset->Get())
@@ -264,7 +262,7 @@ void AsyncDocumentSubresourceFilter::Core::InitializeWithActivation(
     mojom::ActivationState activation_state,
     const url::Origin& inherited_document_origin,
     VerifiedRuleset* verified_ruleset) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(verified_ruleset);
 
   // Avoids a crash in the rare case that the ruleset's status has changed to

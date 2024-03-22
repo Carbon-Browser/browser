@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,11 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/host/base/desktop_environment_options.h"
-#include "remoting/host/desktop_and_cursor_conditional_composer.h"
 #include "remoting/protocol/desktop_capturer.h"
+#include "third_party/webrtc/modules/desktop_capture/desktop_capture_types.h"
 
 namespace webrtc {
 class DesktopCapturer;
@@ -24,6 +23,7 @@ class MouseCursorMonitor;
 namespace remoting {
 
 class ActionExecutor;
+class ActiveDisplayMonitor;
 class AudioCapturer;
 class ClientSessionControl;
 class ClientSessionEvents;
@@ -43,7 +43,7 @@ class KeyboardLayout;
 // executor for a given desktop environment.
 class DesktopEnvironment {
  public:
-  virtual ~DesktopEnvironment() {}
+  virtual ~DesktopEnvironment() = default;
 
   // Factory methods used to create audio/video capturers, event executor, and
   // screen controls object for a particular desktop environment.
@@ -63,18 +63,13 @@ class DesktopEnvironment {
   virtual std::unique_ptr<KeyboardLayoutMonitor> CreateKeyboardLayoutMonitor(
       base::RepeatingCallback<void(const protocol::KeyboardLayout&)>
           callback) = 0;
+  virtual std::unique_ptr<ActiveDisplayMonitor> CreateActiveDisplayMonitor(
+      base::RepeatingCallback<void(webrtc::ScreenId)> callback) = 0;
   virtual std::unique_ptr<FileOperations> CreateFileOperations() = 0;
   virtual std::unique_ptr<UrlForwarderConfigurator>
   CreateUrlForwarderConfigurator() = 0;
   virtual std::unique_ptr<RemoteWebAuthnStateChangeNotifier>
   CreateRemoteWebAuthnStateChangeNotifier() = 0;
-
-  // For platforms that require the mouse cursor to be composited into the video
-  // stream when it is not rendered by the client, returns a composing capturer.
-  // If the platform already does this, this method return null, and the caller
-  // should use CreateVideoCapturer() instead.
-  virtual std::unique_ptr<DesktopAndCursorConditionalComposer>
-  CreateComposingVideoCapturer() = 0;
 
   // Returns the set of all capabilities supported by |this|.
   virtual std::string GetCapabilities() const = 0;

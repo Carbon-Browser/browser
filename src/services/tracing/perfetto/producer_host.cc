@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/process/process.h"
 #include "base/tracing/perfetto_task_runner.h"
 #include "build/build_config.h"
 #include "services/tracing/perfetto/perfetto_service.h"
 #include "services/tracing/public/cpp/perfetto/producer_client.h"
 #include "services/tracing/public/cpp/perfetto/shared_memory.h"
-#include "services/tracing/public/cpp/tracing_features.h"
+#include "third_party/perfetto/include/perfetto/ext/tracing/core/client_identity.h"
 #include "third_party/perfetto/include/perfetto/ext/tracing/core/commit_data_request.h"
 #include "third_party/perfetto/include/perfetto/tracing/core/data_source_descriptor.h"
 #include "third_party/perfetto/include/perfetto/tracing/core/trace_config.h"
@@ -51,7 +51,10 @@ ProducerHost::InitializationResult ProducerHost::Initialize(
 
   // TODO(oysteine): Figure out a uid once we need it.
   producer_endpoint_ = service->ConnectProducer(
-      this, 0 /* uid */, /*pid=*/::perfetto::base::kInvalidPid, name, shm_size,
+      this,
+      perfetto::ClientIdentity(/*uid=*/0,
+                               /*pid=*/perfetto::base::kInvalidPid),
+      name, shm_size,
       /*in_process=*/false,
       perfetto::TracingService::ProducerSMBScrapingMode::kDefault,
       shared_memory_buffer_page_size_bytes, std::move(shm));
@@ -68,6 +71,8 @@ ProducerHost::InitializationResult ProducerHost::Initialize(
     return InitializationResult::kSmbNotAdopted;
   }
 
+  // TODO(skyostil): Implement arbiter binding for the client API.
+#if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   // When we are in-process, we don't use the in-process arbiter perfetto would
   // provide (thus pass |in_process = false| to ConnectProducer), but rather
   // bind the ProducerClient's arbiter to the service's endpoint and task runner
@@ -77,15 +82,14 @@ ProducerHost::InitializationResult ProducerHost::Initialize(
   base::ProcessId pid;
   if (PerfettoService::ParsePidFromProducerName(name, &pid)) {
     bool in_process = (pid == base::Process::Current().Pid());
-    // TODO(skyostil): Implement arbiter binding for the client API.
-    if (in_process && !base::FeatureList::IsEnabled(
-                          features::kEnablePerfettoClientApiProducer)) {
+    if (in_process) {
       PerfettoTracedProcess::Get()
           ->producer_client()
           ->BindInProcessSharedMemoryArbiter(producer_endpoint_.get(),
                                              task_runner_);
     }
   }
+#endif  // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
   return InitializationResult::kSuccess;
 }
@@ -135,7 +139,8 @@ void ProducerHost::StopDataSource(perfetto::DataSourceInstanceID id) {
 void ProducerHost::Flush(
     perfetto::FlushRequestID id,
     const perfetto::DataSourceInstanceID* raw_data_source_ids,
-    size_t num_data_sources) {
+    size_t num_data_sources,
+    perfetto::FlushFlags /*ignored*/) {
   DCHECK(producer_client_);
   std::vector<uint64_t> data_source_ids(raw_data_source_ids,
                                         raw_data_source_ids + num_data_sources);

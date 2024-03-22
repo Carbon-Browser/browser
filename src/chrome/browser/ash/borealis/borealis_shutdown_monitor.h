@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_BOREALIS_BOREALIS_SHUTDOWN_MONITOR_H_
 
 #include "base/cancelable_callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 
 class Profile;
@@ -38,7 +39,7 @@ class BorealisShutdownMonitor {
   void OnShutdownTimerElapsed();
 
   // The profile which we will shutdown borealis for.
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
 
   // The length of time we wait before issuing a shutdown after a delayed
   // shutdown is requested.

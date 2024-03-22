@@ -80,12 +80,20 @@ void HTMLLinkElement::ParseAttribute(
       UseCounter::Count(&GetDocument(),
                         WebFeature::kHTMLLinkElementMonetization);
     }
+    if (rel_attribute_.IsCanonical() &&
+        GetDocument().IsInOutermostMainFrame()) {
+      UseCounter::Count(&GetDocument(), WebFeature::kLinkRelCanonical);
+    }
+    if (rel_attribute_.IsPrivacyPolicy()) {
+      UseCounter::Count(&GetDocument(), WebFeature::kLinkRelPrivacyPolicy);
+    }
+    if (rel_attribute_.IsTermsOfService()) {
+      UseCounter::Count(&GetDocument(), WebFeature::kLinkRelTermsOfService);
+    }
     rel_list_->DidUpdateAttributeValue(params.old_value, value);
     Process();
-  } else if (name == html_names::kBlockingAttr &&
-             RuntimeEnabledFeatures::BlockingAttributeEnabled()) {
-    blocking_attribute_->DidUpdateAttributeValue(params.old_value, value);
-    blocking_attribute_->CountTokenUsage();
+  } else if (name == html_names::kBlockingAttr) {
+    blocking_attribute_->OnAttributeValueChanged(params.old_value, value);
     if (!IsPotentiallyRenderBlocking()) {
       if (GetLinkStyle() && GetLinkStyle()->StyleSheetIsLoading())
         GetLinkStyle()->UnblockRenderingForPendingSheet();
@@ -120,9 +128,7 @@ void HTMLLinkElement::ParseAttribute(
     Process(LinkLoadParameters::Reason::kMediaChange);
   } else if (name == html_names::kIntegrityAttr) {
     integrity_ = value;
-  } else if (name == html_names::kFetchpriorityAttr &&
-             RuntimeEnabledFeatures::PriorityHintsEnabled(
-                 GetExecutionContext())) {
+  } else if (name == html_names::kFetchpriorityAttr) {
     UseCounter::Count(GetDocument(), WebFeature::kPriorityHints);
     fetch_priority_hint_ = value;
   } else if (name == html_names::kDisabledAttr) {
@@ -325,7 +331,7 @@ void HTMLLinkElement::ScheduleEvent() {
       .GetTaskRunner(TaskType::kDOMManipulation)
       ->PostTask(
           FROM_HERE,
-          WTF::Bind(
+          WTF::BindOnce(
               &HTMLLinkElement::DispatchPendingEvent, WrapPersistent(this),
               std::make_unique<IncrementLoadEventDelayCount>(GetDocument())));
 }
@@ -350,20 +356,9 @@ bool HTMLLinkElement::HasLegalLinkAttribute(const QualifiedName& name) const {
          HTMLElement::HasLegalLinkAttribute(name);
 }
 
-const QualifiedName& HTMLLinkElement::SubResourceAttributeName() const {
-  // If the link element is not css, ignore it.
-  if (EqualIgnoringASCIICase(FastGetAttribute(html_names::kTypeAttr),
-                             "text/css")) {
-    // FIXME: Add support for extracting links of sub-resources which
-    // are inside style-sheet such as @import, @font-face, url(), etc.
-    return html_names::kHrefAttr;
-  }
-  return HTMLElement::SubResourceAttributeName();
-}
-
 KURL HTMLLinkElement::Href() const {
   const String& url = FastGetAttribute(html_names::kHrefAttr);
-  if (url.IsEmpty())
+  if (url.empty())
     return KURL();
   return GetDocument().CompleteURL(url);
 }

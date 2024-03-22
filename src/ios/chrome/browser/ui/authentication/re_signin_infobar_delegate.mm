@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,27 +6,28 @@
 
 #import <UIKit/UIKit.h>
 
-#include <memory>
-#include <utility>
+#import <memory>
+#import <utility>
 
-#include "base/logging.h"
-#include "components/infobars/core/infobar_manager.h"
-#include "components/signin/public/base/signin_metrics.h"
-#include "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/infobars/infobar_ios.h"
-#include "ios/chrome/browser/infobars/infobar_manager_impl.h"
-#include "ios/chrome/browser/infobars/infobar_utils.h"
-#include "ios/chrome/browser/signin/authentication_service.h"
-#include "ios/chrome/browser/signin/authentication_service_factory.h"
+#import "base/feature_list.h"
+#import "base/logging.h"
+#import "components/infobars/core/infobar_manager.h"
+#import "components/signin/public/base/signin_metrics.h"
+#import "components/strings/grit/components_strings.h"
+#import "components/sync/base/features.h"
+#import "ios/chrome/browser/infobars/infobar_ios.h"
+#import "ios/chrome/browser/infobars/infobar_manager_impl.h"
+#import "ios/chrome/browser/infobars/infobar_utils.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/public/commands/show_signin_command.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/signin_presenter.h"
-#import "ios/chrome/browser/ui/commands/show_signin_command.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
+#import "ui/base/models/image_model.h"
 
 // static
 bool ReSignInInfoBarDelegate::Create(ChromeBrowserState* browser_state,
@@ -98,7 +99,8 @@ ReSignInInfoBarDelegate::ReSignInInfoBarDelegate(
     ChromeBrowserState* browser_state,
     id<SigninPresenter> presenter)
     : browser_state_(browser_state),
-      icon_([UIImage imageNamed:@"infobar_warning"]),
+      icon_(DefaultSymbolWithPointSize(kWarningFillSymbol,
+                                       kInfobarSymbolPointSize)),
       presenter_(presenter) {
   DCHECK(browser_state_);
   DCHECK(!browser_state_->IsOffTheRecord());
@@ -111,8 +113,20 @@ ReSignInInfoBarDelegate::GetIdentifier() const {
   return RE_SIGN_IN_INFOBAR_DELEGATE_IOS;
 }
 
+std::u16string ReSignInInfoBarDelegate::GetTitleText() const {
+  return base::FeatureList::IsEnabled(
+             syncer::kReplaceSyncPromosWithSignInPromos)
+             ? l10n_util::GetStringUTF16(
+                   IDS_IOS_GOOGLE_SERVICES_SETTINGS_SYNC_ENCRYPTION_FIX_NOW)
+             : std::u16string();
+}
+
 std::u16string ReSignInInfoBarDelegate::GetMessageText() const {
-  return l10n_util::GetStringUTF16(IDS_IOS_SYNC_LOGIN_INFO_OUT_OF_DATE);
+  return base::FeatureList::IsEnabled(
+             syncer::kReplaceSyncPromosWithSignInPromos)
+             ? l10n_util::GetStringUTF16(
+                   IDS_IOS_SYNC_LOGIN_INFO_OUT_OF_DATE_WITH_UNO)
+             : l10n_util::GetStringUTF16(IDS_IOS_SYNC_LOGIN_INFO_OUT_OF_DATE);
 }
 
 int ReSignInInfoBarDelegate::GetButtons() const {
@@ -121,8 +135,12 @@ int ReSignInInfoBarDelegate::GetButtons() const {
 
 std::u16string ReSignInInfoBarDelegate::GetButtonLabel(
     InfoBarButton button) const {
-  return l10n_util::GetStringUTF16(
-      IDS_IOS_SYNC_INFOBAR_SIGN_IN_SETTINGS_BUTTON_MOBILE);
+  return base::FeatureList::IsEnabled(
+             syncer::kReplaceSyncPromosWithSignInPromos)
+             ? l10n_util::GetStringUTF16(
+                   IDS_IOS_IDENTITY_ERROR_INFOBAR_VERIFY_BUTTON_LABEL)
+             : l10n_util::GetStringUTF16(
+                   IDS_IOS_SYNC_INFOBAR_SIGN_IN_SETTINGS_BUTTON_MOBILE);
 }
 
 ui::ImageModel ReSignInInfoBarDelegate::GetIcon() const {
@@ -133,7 +151,7 @@ bool ReSignInInfoBarDelegate::Accept() {
   signin_metrics::RecordSigninUserActionForAccessPoint(
       signin_metrics::AccessPoint::ACCESS_POINT_RESIGNIN_INFOBAR);
   ShowSigninCommand* command = [[ShowSigninCommand alloc]
-      initWithOperation:AuthenticationOperationReauthenticate
+      initWithOperation:AuthenticationOperation::kSigninAndSyncReauth
             accessPoint:signin_metrics::AccessPoint::
                             ACCESS_POINT_RESIGNIN_INFOBAR];
   [presenter_ showSignin:command];

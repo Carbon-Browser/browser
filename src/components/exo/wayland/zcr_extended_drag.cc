@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include <cstdint>
 
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "components/exo/data_offer.h"
 #include "components/exo/data_source.h"
@@ -63,7 +64,7 @@ class ZcrExtendedDragSourceDelegate : public ExtendedDragSource::Delegate {
   void OnDataSourceDestroying() override { delete this; }
 
  private:
-  wl_resource* const resource_;
+  const raw_ptr<wl_resource, ExperimentalAsh> resource_;
   const uint32_t settings_;
 };
 
@@ -105,7 +106,7 @@ class ZcrExtendedOfferDelegate : public ExtendedDragOffer::Delegate {
   void OnDataOfferDestroying() override { delete this; }
 
  private:
-  wl_resource* const resource_;
+  const raw_ptr<wl_resource, ExperimentalAsh> resource_;
 };
 
 void extended_drag_offer_destroy(wl_client* client, wl_resource* resource) {

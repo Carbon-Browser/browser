@@ -1,11 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
@@ -13,6 +14,7 @@
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/metadata/metadata_types.h"
+#include "ui/base/metadata/metadata_utils.h"
 #include "ui/gfx/geometry/insets.h"
 
 namespace UM = ui::metadata;
@@ -110,6 +112,9 @@ class ClassPropertyMetaDataTestClass : public MetadataTestBaseClass {
   METADATA_HEADER(ClassPropertyMetaDataTestClass);
 };
 
+// Test view which doesn't have metadata attached.
+struct MetadataTestClassNoMetadata : public MetadataTestBaseClass {};
+
 DEFINE_UI_CLASS_PROPERTY_KEY(int, kIntKey, -1)
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::Insets, kOwnedInsetsKey1, nullptr)
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::Insets, kOwnedInsetsKey2, nullptr)
@@ -205,8 +210,7 @@ TEST_F(MetadataTest, TestTypeCacheContainsTestClass) {
   UM::ClassMetaData* test_class_meta = MetadataTestClass::MetaData();
 
   const auto& cache_meta = cache->GetCachedTypes();
-  EXPECT_NE(std::find(cache_meta.begin(), cache_meta.end(), test_class_meta),
-            cache_meta.end());
+  EXPECT_TRUE(base::Contains(cache_meta, test_class_meta));
 }
 
 TEST_F(MetadataTest, TestMetaDataFile) {
@@ -257,4 +261,14 @@ TEST_F(MetadataTest, TestClassPropertyMetaData) {
                  {"kInsetsKey2", u"(assigned)"}};
 
   verify();
+}
+
+TEST_F(MetadataTest, TestHasMetaData) {
+  EXPECT_FALSE(UM::kHasClassMetadata<MetadataTestClassNoMetadata>);
+  EXPECT_TRUE(UM::kHasClassMetadata<ClassPropertyMetaDataTestClass>);
+  EXPECT_TRUE(UM::kHasClassMetadata<ClassPropertyMetaDataTestClass*>);
+  EXPECT_TRUE(UM::kHasClassMetadata<ClassPropertyMetaDataTestClass&>);
+  EXPECT_TRUE(UM::kHasClassMetadata<const ClassPropertyMetaDataTestClass>);
+  EXPECT_TRUE(UM::kHasClassMetadata<const ClassPropertyMetaDataTestClass*>);
+  EXPECT_TRUE(UM::kHasClassMetadata<const ClassPropertyMetaDataTestClass&>);
 }

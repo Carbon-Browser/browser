@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
 import 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
 import 'chrome://resources/cr_components/customize_themes/customize_themes.js';
@@ -14,8 +14,8 @@ import './customize_shortcuts.js';
 import './customize_modules.js';
 
 import {CustomizeThemesElement} from 'chrome://resources/cr_components/customize_themes/customize_themes.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {CrToggleElement} from 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {CustomizeBackgroundsElement} from './customize_backgrounds.js';
@@ -167,8 +167,8 @@ export class CustomizeDialogElement extends PolymerElement {
     if (!this.selectedCollection_) {
       return false;
     }
-    return !!this.theme &&
-        this.selectedCollection_.id === this.theme.dailyRefreshCollectionId;
+    return !!this.theme && this.theme.dailyRefreshEnabled &&
+        this.selectedCollection_!.id === this.theme.backgroundImageCollectionId;
   }
 
   private computeShowTitleNavigation_(): boolean {

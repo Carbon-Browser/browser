@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,8 +50,8 @@ class WakeLockBrowserTest : public InProcessBrowserTest {
 
   // Shorthand for starting the embedded web server and navigating to
   // simple.html.
-  // Tests calling this usually call content::ExecuteScriptAndExtractString()
-  // afterwards to run custom code on the dummy page.
+  // Tests calling this usually call content::EvalJs() afterwards to run custom
+  // code on the dummy page.
   void NavigateToSimplePage();
 
   // Registers a handle for "/js-response" in the embedded web server that

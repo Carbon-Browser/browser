@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,11 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
+#include "base/test/scoped_feature_list.h"
+
 class KeyedService;
 class Profile;
-
-namespace base {
-struct Feature;
-}  // namespace base
 
 namespace content {
 class BrowserContext;
@@ -59,9 +58,9 @@ class SpeechRecognitionTestHelper {
   // Sends a fake speech recognition error and waits for tasks to finish.
   void SendErrorAndWait();
   // Returns a list of features that should be enabled.
-  std::vector<base::Feature> GetEnabledFeatures();
+  std::vector<base::test::FeatureRef> GetEnabledFeatures();
   // Returns a list of features that should be disabled.
-  std::vector<base::Feature> GetDisabledFeatures();
+  std::vector<base::test::FeatureRef> GetDisabledFeatures();
 
  private:
   // Methods for setup.
@@ -79,7 +78,9 @@ class SpeechRecognitionTestHelper {
   std::unique_ptr<content::FakeSpeechRecognitionManager>
       fake_speech_recognition_manager_;
   // For on-device recognition. KeyedService owned by the test profile.
-  speech::FakeSpeechRecognitionService* fake_service_;
+  raw_ptr<speech::FakeSpeechRecognitionService,
+          DanglingUntriaged | ExperimentalAsh>
+      fake_service_;
 };
 
 #endif  // CHROME_BROWSER_SPEECH_SPEECH_RECOGNITION_TEST_HELPER_H_

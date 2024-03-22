@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define FUCHSIA_WEB_WEBENGINE_BROWSER_WEB_ENGINE_PERMISSION_DELEGATE_H_
 
 #include "content/public/browser/permission_controller_delegate.h"
+#include "content/public/browser/permission_result.h"
 
 namespace blink {
 enum class PermissionType;
@@ -24,18 +25,9 @@ class WebEnginePermissionDelegate
   WebEnginePermissionDelegate& operator=(WebEnginePermissionDelegate&) = delete;
 
   // content::PermissionControllerDelegate implementation:
-  void RequestPermission(
-      blink::PermissionType permission,
-      content::RenderFrameHost* render_frame_host,
-      const GURL& requesting_origin,
-      bool user_gesture,
-      base::OnceCallback<void(blink::mojom::PermissionStatus)> callback)
-      override;
   void RequestPermissions(
-      const std::vector<blink::PermissionType>& permission,
       content::RenderFrameHost* render_frame_host,
-      const GURL& requesting_origin,
-      bool user_gesture,
+      const content::PermissionRequestDescription& request_description,
       base::OnceCallback<
           void(const std::vector<blink::mojom::PermissionStatus>&)> callback)
       override;
@@ -43,9 +35,8 @@ class WebEnginePermissionDelegate
                        const GURL& requesting_origin,
                        const GURL& embedding_origin) override;
   void RequestPermissionsFromCurrentDocument(
-      const std::vector<blink::PermissionType>& permissions,
       content::RenderFrameHost* render_frame_host,
-      bool user_gesture,
+      const content::PermissionRequestDescription& request_description,
       base::OnceCallback<
           void(const std::vector<blink::mojom::PermissionStatus>&)> callback)
       override;
@@ -53,6 +44,10 @@ class WebEnginePermissionDelegate
       blink::PermissionType permission,
       const GURL& requesting_origin,
       const GURL& embedding_origin) override;
+  content::PermissionResult GetPermissionResultForOriginWithoutContext(
+      blink::PermissionType permission,
+      const url::Origin& requesting_origin,
+      const url::Origin& embedding_origin) override;
   blink::mojom::PermissionStatus GetPermissionStatusForCurrentDocument(
       blink::PermissionType permission,
       content::RenderFrameHost* render_frame_host) override;
@@ -60,6 +55,10 @@ class WebEnginePermissionDelegate
       blink::PermissionType permission,
       content::RenderProcessHost* render_process_host,
       const GURL& worker_origin) override;
+  blink::mojom::PermissionStatus GetPermissionStatusForEmbeddedRequester(
+      blink::PermissionType permission,
+      content::RenderFrameHost* render_frame_host,
+      const url::Origin& overridden_origin) override;
   SubscriptionId SubscribePermissionStatusChange(
       blink::PermissionType permission,
       content::RenderProcessHost* render_process_host,

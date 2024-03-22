@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,12 +49,13 @@ class ChromeExtensionsAPIClient : public ExtensionsAPIClient {
                          bool clear_badge_text) override;
   void ClearActionCount(content::BrowserContext* context,
                         const Extension& extension) override;
+  void OpenFileUrl(const GURL& file_url,
+                   content::BrowserContext* browser_context) override;
   AppViewGuestDelegate* CreateAppViewGuestDelegate() const override;
   ExtensionOptionsGuestDelegate* CreateExtensionOptionsGuestDelegate(
       ExtensionOptionsGuest* guest) const override;
   std::unique_ptr<guest_view::GuestViewManagerDelegate>
-  CreateGuestViewManagerDelegate(
-      content::BrowserContext* context) const override;
+  CreateGuestViewManagerDelegate() const override;
   std::unique_ptr<MimeHandlerViewGuestDelegate>
   CreateMimeHandlerViewGuestDelegate(
       MimeHandlerViewGuest* guest) const override;
@@ -62,6 +63,10 @@ class ChromeExtensionsAPIClient : public ExtensionsAPIClient {
       WebViewGuest* web_view_guest) const override;
   WebViewPermissionHelperDelegate* CreateWebViewPermissionHelperDelegate(
       WebViewPermissionHelper* web_view_permission_helper) const override;
+#if BUILDFLAG(IS_CHROMEOS)
+  std::unique_ptr<ConsentProvider> CreateConsentProvider(
+      content::BrowserContext* browser_context) const override;
+#endif  // BUILDFLAG(IS_CHROMEOS)
   scoped_refptr<ContentRulesRegistry> CreateContentRulesRegistry(
       content::BrowserContext* browser_context,
       RulesCacheDelegate* cache_delegate) const override;
@@ -74,7 +79,8 @@ class ChromeExtensionsAPIClient : public ExtensionsAPIClient {
       content::BrowserContext* browser_context) const override;
   ManagementAPIDelegate* CreateManagementAPIDelegate() const override;
   std::unique_ptr<SupervisedUserExtensionsDelegate>
-  CreateSupervisedUserExtensionsDelegate() const override;
+  CreateSupervisedUserExtensionsDelegate(
+      content::BrowserContext* browser_context) const override;
 
   std::unique_ptr<DisplayInfoProvider> CreateDisplayInfoProvider()
       const override;

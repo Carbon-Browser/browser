@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
@@ -18,7 +18,9 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/standalone_browser/lacros_availability.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
@@ -42,12 +44,11 @@ class LacrosAvailabilityPolicyObserverTest : public testing::Test {
 
   void SetUp() override {
     ash::SessionManagerClient::InitializeFake();
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
     profile_manager_ = std::make_unique<TestingProfileManager>(
         TestingBrowserProcess::GetGlobal());
     // Add primary user.
-    auto* user_manager = static_cast<ash::FakeChromeUserManager*>(
-        user_manager::UserManager::Get());
-    test_user_ = user_manager->AddPublicAccountUser(
+    test_user_ = fake_user_manager_->AddPublicAccountUser(
         AccountId::FromUserEmailGaiaId("test@test.com", "test_user"));
 
     ASSERT_TRUE(profile_manager_->SetUp());
@@ -58,6 +59,7 @@ class LacrosAvailabilityPolicyObserverTest : public testing::Test {
   }
 
   void TearDown() override {
+    primary_profile_ = nullptr;
     profile_manager_->DeleteAllTestingProfiles();
     profile_manager_.reset();
     ash::SessionManagerClient::Shutdown();
@@ -65,11 +67,9 @@ class LacrosAvailabilityPolicyObserverTest : public testing::Test {
 
   void CreatePrimaryProfile() {
     if (!primary_profile_) {
-      auto* user_manager = static_cast<ash::FakeChromeUserManager*>(
-          user_manager::UserManager::Get());
-      user_manager->LoginUser(test_user_->GetAccountId(),
-                              /*set_profile_created_flags=*/true);
-      user_manager->SwitchActiveUser(test_user_->GetAccountId());
+      fake_user_manager_->LoginUser(test_user_->GetAccountId(),
+                                    /*set_profile_created_flags=*/true);
+      fake_user_manager_->SwitchActiveUser(test_user_->GetAccountId());
       primary_profile_ = profile_manager_->CreateTestingProfile("test-profile");
     }
   }
@@ -91,7 +91,7 @@ class LacrosAvailabilityPolicyObserverTest : public testing::Test {
         absl::optional<base::Value> parsed = base::JSONReader::Read(flag_value);
         std::vector<std::string> result;
         if (parsed && parsed->is_list()) {
-          for (const auto& element : parsed->GetListDeprecated()) {
+          for (const auto& element : parsed->GetList()) {
             result.push_back(element.GetString());
           }
         }
@@ -108,12 +108,14 @@ class LacrosAvailabilityPolicyObserverTest : public testing::Test {
   }
 
   content::BrowserTaskEnvironment task_environment_;
-  user_manager::ScopedUserManager scoped_user_manager_{
-      std::make_unique<user_manager::FakeUserManager>()};
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  user_manager::User* test_user_ = nullptr;
-  TestingProfile* primary_profile_ = nullptr;
+  raw_ptr<user_manager::User, ExperimentalAsh> test_user_ = nullptr;
+  raw_ptr<TestingProfile, ExperimentalAsh> primary_profile_ = nullptr;
 };
+
+using ash::standalone_browser::LacrosAvailability;
 
 TEST_F(LacrosAvailabilityPolicyObserverTest, OnPolicyUpdate) {
   LacrosAvailabilityPolicyObserver observer;
@@ -124,24 +126,26 @@ TEST_F(LacrosAvailabilityPolicyObserverTest, OnPolicyUpdate) {
     EXPECT_TRUE(feature_flags.empty());
   }
 
-  local_state()->SetManagedPref(prefs::kLacrosLaunchSwitch, base::Value(2));
+  local_state()->SetManagedPref(
+      prefs::kLacrosLaunchSwitch,
+      base::Value(static_cast<int>(LacrosAvailability::kUserChoice)));
+  {
+    auto feature_flags = GetFeatureFlagsForPrimaryUser();
+    ASSERT_EQ(1u, feature_flags.size());
+    // Please find about_flags.cc for actual mapping of the enum value
+    // to the index.
+    EXPECT_EQ("lacros-availability-policy@1", feature_flags[0]);
+  }
 
+  local_state()->SetManagedPref(
+      prefs::kLacrosLaunchSwitch,
+      base::Value(static_cast<int>(LacrosAvailability::kLacrosOnly)));
   {
     auto feature_flags = GetFeatureFlagsForPrimaryUser();
     ASSERT_EQ(1u, feature_flags.size());
     // Please find about_flags.cc for actual mapping of the enum value
     // to the index.
     EXPECT_EQ("lacros-availability-policy@3", feature_flags[0]);
-  }
-
-  local_state()->SetManagedPref(prefs::kLacrosLaunchSwitch, base::Value(3));
-
-  {
-    auto feature_flags = GetFeatureFlagsForPrimaryUser();
-    ASSERT_EQ(1u, feature_flags.size());
-    // Please find about_flags.cc for actual mapping of the enum value
-    // to the index.
-    EXPECT_EQ("lacros-availability-policy@4", feature_flags[0]);
   }
 }
 
@@ -152,7 +156,9 @@ TEST_F(LacrosAvailabilityPolicyObserverTest, AroundPrimaryProfileCreation) {
     EXPECT_TRUE(feature_flags.empty());
   }
 
-  local_state()->SetManagedPref(prefs::kLacrosLaunchSwitch, base::Value(2));
+  local_state()->SetManagedPref(
+      prefs::kLacrosLaunchSwitch,
+      base::Value(static_cast<int>(LacrosAvailability::kLacrosOnly)));
   // Do not update the feature_flags in session_manger, until primary profile
   // is created.
   {

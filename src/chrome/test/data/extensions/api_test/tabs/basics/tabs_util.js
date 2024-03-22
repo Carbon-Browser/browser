@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@ var assertEq = chrome.test.assertEq;
 var assertFalse = chrome.test.assertFalse;
 var assertTrue = chrome.test.assertTrue;
 
-function pageUrl(letter) {
-  return chrome.extension.getURL(letter + ".html");
+function pageUrl(name) {
+  return chrome.extension.getURL(
+      '_test_resources/api_test/tabs/basics/' + name + '.html');
 }
 
 // Creates one window with tabs set to the urls in the array |tabUrls|.
@@ -51,7 +52,7 @@ function waitForAllTabs(callback) {
       if (ready)
         callback();
       else
-        window.setTimeout(waitForTabs, 30);
+        setTimeout(waitForTabs, 30);
     });
   }
   waitForTabs();

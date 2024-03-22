@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,8 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/accessibility/platform/ax_platform_node_base.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/table_model.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
@@ -38,18 +40,22 @@
 #include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
 class TestButton : public Button {
+  METADATA_HEADER(TestButton, Button)
+
  public:
   TestButton() : Button(Button::PressedCallback()) {}
   TestButton(const TestButton&) = delete;
   TestButton& operator=(const TestButton&) = delete;
   ~TestButton() override = default;
 };
+
+BEGIN_METADATA(TestButton)
+END_METADATA
 
 class TestAXEventObserver : public AXEventObserver {
  public:
@@ -112,27 +118,28 @@ class ViewAXPlatformNodeDelegateTest : public ViewsTestBase {
   void SetUp() override {
     ViewsTestBase::SetUp();
 
-    widget_ = new Widget;
+    widget_ = std::make_unique<Widget>();
     Widget::InitParams params =
         CreateParams(Widget::InitParams::TYPE_WINDOW_FRAMELESS);
+    params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
     params.bounds = gfx::Rect(0, 0, 200, 200);
     widget_->Init(std::move(params));
 
-    button_ = new TestButton();
+    button_ =
+        widget_->GetRootView()->AddChildView(std::make_unique<TestButton>());
     button_->SetID(NON_DEFAULT_VIEW_ID);
     button_->SetSize(gfx::Size(20, 20));
 
-    label_ = new Label();
+    label_ = button_->AddChildView(std::make_unique<Label>());
     label_->SetID(DEFAULT_VIEW_ID);
-    button_->AddChildView(label_.get());
 
-    widget_->GetRootView()->AddChildView(button_.get());
     widget_->Show();
   }
 
   void TearDown() override {
-    if (!widget_->IsClosed())
-      widget_->Close();
+    button_ = nullptr;
+    label_ = nullptr;
+    widget_.reset();
     ViewsTestBase::TearDown();
   }
 
@@ -201,10 +208,10 @@ class ViewAXPlatformNodeDelegateTest : public ViewsTestBase {
   const int DEFAULT_VIEW_ID = 0;
   const int NON_DEFAULT_VIEW_ID = 1;
 
-  raw_ptr<Widget> widget_ = nullptr;
+  std::unique_ptr<Widget> widget_;
   raw_ptr<Button> button_ = nullptr;
   raw_ptr<Label> label_ = nullptr;
-  ui::testing::ScopedAxModeSetter ax_mode_setter_;
+  ScopedAXModeSetter ax_mode_setter_;
 };
 
 class ViewAXPlatformNodeDelegateTableTest
@@ -241,7 +248,8 @@ class ViewAXPlatformNodeDelegateTableTest
 
  private:
   std::unique_ptr<TestTableModel> model_;
-  raw_ptr<TableView> table_ = nullptr;  // Owned by parent.
+  raw_ptr<TableView, AcrossTasksDanglingUntriaged> table_ =
+      nullptr;  // Owned by parent.
 };
 
 class ViewAXPlatformNodeDelegateMenuTest
@@ -256,8 +264,9 @@ class ViewAXPlatformNodeDelegateMenuTest
     owner_->Show();
 
     menu_delegate_ = std::make_unique<TestMenuDelegate>();
-    menu_ = new views::TestMenuItemView(menu_delegate_.get());
-    runner_ = std::make_unique<MenuRunner>(menu_, 0);
+    auto menu_owning = std::make_unique<TestMenuItemView>(menu_delegate_.get());
+    menu_ = menu_owning.get();
+    runner_ = std::make_unique<MenuRunner>(std::move(menu_owning), 0);
 
     menu_->AppendMenuItemImpl(0, u"normal", ui::ImageModel(),
                               MenuItemView::Type::kNormal);
@@ -297,12 +306,11 @@ class ViewAXPlatformNodeDelegateMenuTest
   }
 
  private:
-  // Owned by runner_.
-  raw_ptr<views::TestMenuItemView> menu_ = nullptr;
-
-  raw_ptr<SubmenuView> submenu_ = nullptr;
+  raw_ptr<SubmenuView, AcrossTasksDanglingUntriaged> submenu_ = nullptr;
   std::unique_ptr<TestMenuDelegate> menu_delegate_;
   std::unique_ptr<MenuRunner> runner_;
+  // Owned by runner_.
+  raw_ptr<views::TestMenuItemView> menu_ = nullptr;
   UniqueWidgetPtr owner_;
 };
 
@@ -409,11 +417,8 @@ TEST_F(ViewAXPlatformNodeDelegateTest, GetAuthorUniqueIdNonDefault) {
 
 TEST_F(ViewAXPlatformNodeDelegateTest, OverrideNameAndDescription) {
   // Initially the button has no name and no description.
-  // TODO(accessibility): If nothing has set the name, should the NameFrom
-  // be kNone or kUninitialized instead of kAttribute?
   EXPECT_EQ(button_accessibility()->GetName(), "");
-  EXPECT_EQ(button_accessibility()->GetNameFrom(),
-            ax::mojom::NameFrom::kAttribute);
+  EXPECT_EQ(button_accessibility()->GetNameFrom(), ax::mojom::NameFrom::kNone);
   EXPECT_EQ(button_accessibility()->GetDescription(), "");
   EXPECT_EQ(button_accessibility()->GetDescriptionFrom(),
             ax::mojom::DescriptionFrom::kNone);
@@ -498,16 +503,35 @@ TEST_F(ViewAXPlatformNodeDelegateTest, OverrideNameAndDescription) {
   EXPECT_EQ(button_accessibility()->GetNameFrom(),
             ax::mojom::NameFrom::kRelatedElement);
 
-  // Set the label's View as the description source of the accessible button.
-  // This should also remove the previously-set description.
-  button_accessibility()->OverrideDescribedBy(label_);
-  EXPECT_EQ(button_accessibility()->GetDescription(), "Label's Name");
-  EXPECT_EQ(button_accessibility()->GetDescriptionFrom(),
-            ax::mojom::DescriptionFrom::kRelatedElement);
-
   // Setting the labelledby View to itself should trigger a DCHECK.
   EXPECT_DCHECK_DEATH_WITH(button_accessibility()->OverrideLabelledBy(button_),
                            "Check failed: labelled_by_view != view_");
+}
+
+TEST_F(ViewAXPlatformNodeDelegateTest, OverrideIsSelected) {
+  View::Views view_ids = SetUpExtraViews();
+
+  view_ids[1]->GetViewAccessibility().OverrideIsSelected(true);
+  view_ids[2]->GetViewAccessibility().OverrideIsSelected(false);
+
+  ui::AXNodeData node_data_0;
+  view_ids[0]->GetViewAccessibility().GetAccessibleNodeData(&node_data_0);
+  EXPECT_FALSE(
+      node_data_0.HasBoolAttribute(ax::mojom::BoolAttribute::kSelected));
+
+  ui::AXNodeData node_data_1;
+  view_ids[1]->GetViewAccessibility().GetAccessibleNodeData(&node_data_1);
+  EXPECT_TRUE(
+      node_data_1.HasBoolAttribute(ax::mojom::BoolAttribute::kSelected));
+  EXPECT_TRUE(
+      node_data_1.GetBoolAttribute(ax::mojom::BoolAttribute::kSelected));
+
+  ui::AXNodeData node_data_2;
+  view_ids[2]->GetViewAccessibility().GetAccessibleNodeData(&node_data_2);
+  EXPECT_TRUE(
+      node_data_2.HasBoolAttribute(ax::mojom::BoolAttribute::kSelected));
+  EXPECT_FALSE(
+      node_data_2.GetBoolAttribute(ax::mojom::BoolAttribute::kSelected));
 }
 
 TEST_F(ViewAXPlatformNodeDelegateTest, IsOrderedSet) {
@@ -668,6 +692,25 @@ TEST_F(ViewAXPlatformNodeDelegateTest, TreeNavigation) {
   EXPECT_EQ(nullptr, child_view_4->GetNextSibling());
   EXPECT_EQ(child_view_3->GetNativeObject(),
             child_view_4->GetPreviousSibling());
+}
+
+TEST_F(ViewAXPlatformNodeDelegateTest, ComputeViewListItemName) {
+  View::Views extra_views = SetUpExtraViews();
+  ViewAXPlatformNodeDelegate* parent_view = view_accessibility(extra_views[0]);
+  ViewAXPlatformNodeDelegate* child_view_1 = view_accessibility(extra_views[1]);
+  ViewAXPlatformNodeDelegate* child_view_2 = view_accessibility(extra_views[2]);
+  ViewAXPlatformNodeDelegate* child_view_3 = view_accessibility(extra_views[3]);
+
+  parent_view->OverrideRole(ax::mojom::Role::kListItem);
+  child_view_1->OverrideRole(ax::mojom::Role::kStaticText);
+  child_view_2->OverrideRole(ax::mojom::Role::kLink);
+  child_view_3->OverrideRole(ax::mojom::Role::kStaticText);
+
+  child_view_1->OverrideName("1");
+  child_view_2->OverrideName("2");
+  child_view_3->OverrideName("3");
+
+  EXPECT_EQ(parent_view->ComputeListItemNameFromContent(), L"123");
 }
 
 TEST_F(ViewAXPlatformNodeDelegateTest, TreeNavigationWithLeafViews) {
@@ -932,7 +975,7 @@ TEST_F(ViewAXPlatformNodeDelegateTest, FocusOnMenuClose) {
 }
 
 TEST_F(ViewAXPlatformNodeDelegateTableTest, TableHasHeader) {
-  EXPECT_TRUE(table_accessibility()->GetTableHasColumnOrRowHeaderNode());
+  EXPECT_TRUE(table_accessibility()->TableHasColumnOrRowHeaderNodeForTesting());
   EXPECT_EQ(size_t{4}, table_accessibility()->GetColHeaderNodeIds().size());
   EXPECT_TRUE(table_accessibility()->GetColHeaderNodeIds(5).empty());
 }
@@ -1100,12 +1143,17 @@ TEST_F(ViewAXPlatformNodeDelegateMenuTest, MenuTest) {
 
 #if defined(USE_AURA)
 class DerivedTestView : public View {
+  METADATA_HEADER(DerivedTestView, View)
+
  public:
   DerivedTestView() = default;
   ~DerivedTestView() override = default;
 
   void OnBlur() override { SetVisible(false); }
 };
+
+BEGIN_METADATA(DerivedTestView)
+END_METADATA
 
 using AXViewTest = ViewsTestBase;
 
@@ -1122,10 +1170,8 @@ TEST_F(AXViewTest, LayoutCalledInvalidateRootView) {
   widget->Show();
 
   View* root = widget->GetRootView();
-  DerivedTestView* parent = new DerivedTestView();
-  DerivedTestView* child = new DerivedTestView();
-  root->AddChildView(parent);
-  parent->AddChildView(child);
+  auto* parent = root->AddChildView(std::make_unique<DerivedTestView>());
+  auto* child = parent->AddChildView(std::make_unique<DerivedTestView>());
   child->SetFocusBehavior(DerivedTestView::FocusBehavior::ALWAYS);
   parent->SetFocusBehavior(DerivedTestView::FocusBehavior::ALWAYS);
   root->SetFocusBehavior(DerivedTestView::FocusBehavior::ALWAYS);
@@ -1138,5 +1184,4 @@ TEST_F(AXViewTest, LayoutCalledInvalidateRootView) {
 }
 #endif
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

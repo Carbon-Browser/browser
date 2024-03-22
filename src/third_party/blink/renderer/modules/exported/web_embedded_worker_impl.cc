@@ -32,6 +32,7 @@
 
 #include <memory>
 #include <utility>
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/mojom/referrer_policy.mojom-blink.h"
@@ -211,12 +212,13 @@ void WebEmbeddedWorkerImpl::StartWorkerThread(
       nullptr /* worklet_module_respones_map */,
       std::move(browser_interface_broker),
       mojo::NullRemote() /* code_cache_host_interface */,
-      BeginFrameProviderParams(), nullptr /* parent_permissions_policy */,
+      mojo::NullRemote() /* blob_url_store */, BeginFrameProviderParams(),
+      nullptr /* parent_permissions_policy */,
       base::UnguessableToken() /* agent_cluster_id */,
       worker_start_data->ukm_source_id,
       absl::nullopt, /* parent_context_token */
       false,         /* parent_cross_origin_isolated_capability */
-      false,         /* parent_direct_socket_capability */
+      false,         /* parent_is_isolated_context */
       interface_registry);
 
   worker_thread_ = std::make_unique<ServiceWorkerThread>(
@@ -255,12 +257,11 @@ void WebEmbeddedWorkerImpl::StartWorkerThread(
     // > "classic": Fetch a classic worker script given job's serialized script
     // > url, job's client, "serviceworker", and the to-be-created environment
     // > settings object for this service worker.
-    // TODO(crbug.com/1177199): pass a proper policy container
     case mojom::blink::ScriptType::kClassic:
       worker_thread_->FetchAndRunClassicScript(
           worker_start_data->script_url,
           std::move(worker_start_data->main_script_load_params),
-          nullptr /* policy_container */,
+          std::move(worker_start_data->policy_container),
           std::move(fetch_client_setting_object_data),
           nullptr /* outside_resource_timing_notifier */,
           v8_inspector::V8StackTraceId());
@@ -270,11 +271,10 @@ void WebEmbeddedWorkerImpl::StartWorkerThread(
     // > script url, job’s client, "serviceworker", "omit", and the
     // > to-be-created environment settings object for this service worker.
     case mojom::blink::ScriptType::kModule:
-      // TODO(crbug.com/1177199): pass a proper policy container
       worker_thread_->FetchAndRunModuleScript(
           worker_start_data->script_url,
           std::move(worker_start_data->main_script_load_params),
-          nullptr /* policy_container */,
+          std::move(worker_start_data->policy_container),
           std::move(fetch_client_setting_object_data),
           nullptr /* outside_resource_timing_notifier */,
           network::mojom::CredentialsMode::kOmit);

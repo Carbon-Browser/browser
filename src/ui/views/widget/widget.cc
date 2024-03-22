@@ -1,19 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/widget/widget.h"
 
+#include <algorithm>
 #include <set>
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/notreached.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -25,6 +27,7 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/screen.h"
@@ -32,14 +35,17 @@
 #include "ui/events/event_utils.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/views/controls/menu/menu_controller.h"
+#include "ui/views/drag_controller.h"
 #include "ui/views/event_monitor.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/focus/focus_manager_factory.h"
 #include "ui/views/focus/widget_focus_manager.h"
 #include "ui/views/views_delegate.h"
+#include "ui/views/views_features.h"
 #include "ui/views/widget/any_widget_observer_singleton.h"
 #include "ui/views/widget/native_widget_private.h"
 #include "ui/views/widget/root_view.h"
+#include "ui/views/widget/sublevel_manager.h"
 #include "ui/views/widget/tooltip_manager.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/widget/widget_deletion_observer.h"
@@ -108,14 +114,18 @@ class DefaultWidgetDelegate : public WidgetDelegate {
     // In most situations where a Widget is used without a delegate the Widget
     // is used as a container, so that we want focus to advance to the top-level
     // widget. A good example of this is the find bar.
-    SetOwnedByWidget(true);
     SetFocusTraversesOut(true);
+    RegisterDeleteDelegateCallback(base::BindOnce(
+        &DefaultWidgetDelegate::Destroy, base::Unretained(this)));
   }
 
   DefaultWidgetDelegate(const DefaultWidgetDelegate&) = delete;
   DefaultWidgetDelegate& operator=(const DefaultWidgetDelegate&) = delete;
 
   ~DefaultWidgetDelegate() override = default;
+
+ private:
+  void Destroy() { delete this; }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -175,6 +185,18 @@ ui::ZOrderLevel Widget::InitParams::EffectiveZOrderLevel() const {
   }
 }
 
+bool Widget::InitParams::ShouldInitAsHeadless() const {
+  if (headless_mode) {
+    return true;
+  }
+
+  if (Widget* top_level_widget = GetTopLevelWidgetForNativeView(parent)) {
+    return top_level_widget->is_headless();
+  }
+
+  return false;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Widget, public:
 
@@ -188,13 +210,17 @@ Widget::~Widget() {
   if (widget_delegate_)
     widget_delegate_->WidgetDestroying();
   if (ownership_ == InitParams::WIDGET_OWNS_NATIVE_WIDGET) {
-    delete native_widget_;
-    DCHECK(native_widget_destroyed_);
-  } else {
+    owned_native_widget_.reset();
+    DCHECK(!native_widget_);
+  } else if (ownership_ == InitParams::NATIVE_WIDGET_OWNS_WIDGET) {
     // TODO(crbug.com/937381): Revert to DCHECK once we figure out the reason.
-    CHECK(native_widget_destroyed_)
+    CHECK(!native_widget_)
         << "Destroying a widget with a live native widget. "
         << "Widget probably should use WIDGET_OWNS_NATIVE_WIDGET ownership.";
+  } else {
+    DCHECK_EQ(ownership_, InitParams::CLIENT_OWNS_WIDGET);
+    if (native_widget_)
+      native_widget_->Close();
   }
   // Destroy RootView after the native widget, so in case the WidgetDelegate is
   // a View in the RootView hierarchy it gets destroyed as a WidgetDelegate
@@ -246,6 +272,9 @@ Widget* Widget::CreateWindowWithContext(
 
 // static
 Widget* Widget::GetWidgetForNativeView(gfx::NativeView native_view) {
+  if (!native_view)
+    return nullptr;
+
   internal::NativeWidgetPrivate* native_widget =
       internal::NativeWidgetPrivate::GetNativeWidgetForNativeView(native_view);
   return native_widget ? native_widget->GetWidget() : nullptr;
@@ -253,6 +282,9 @@ Widget* Widget::GetWidgetForNativeView(gfx::NativeView native_view) {
 
 // static
 Widget* Widget::GetWidgetForNativeWindow(gfx::NativeWindow native_window) {
+  if (!native_window)
+    return nullptr;
+
   internal::NativeWidgetPrivate* native_widget =
       internal::NativeWidgetPrivate::GetNativeWidgetForNativeWindow(
           native_window);
@@ -261,6 +293,9 @@ Widget* Widget::GetWidgetForNativeWindow(gfx::NativeWindow native_window) {
 
 // static
 Widget* Widget::GetTopLevelWidgetForNativeView(gfx::NativeView native_view) {
+  if (!native_view)
+    return nullptr;
+
   internal::NativeWidgetPrivate* native_widget =
       internal::NativeWidgetPrivate::GetTopLevelNativeWidget(native_view);
   return native_widget ? native_widget->GetWidget() : nullptr;
@@ -269,17 +304,24 @@ Widget* Widget::GetTopLevelWidgetForNativeView(gfx::NativeView native_view) {
 // static
 void Widget::GetAllChildWidgets(gfx::NativeView native_view,
                                 Widgets* children) {
+  if (!native_view)
+    return;
+
   internal::NativeWidgetPrivate::GetAllChildWidgets(native_view, children);
 }
 
 // static
 void Widget::GetAllOwnedWidgets(gfx::NativeView native_view, Widgets* owned) {
+  if (!native_view)
+    return;
+
   internal::NativeWidgetPrivate::GetAllOwnedWidgets(native_view, owned);
 }
 
 // static
 void Widget::ReparentNativeView(gfx::NativeView native_view,
                                 gfx::NativeView new_parent) {
+  DCHECK(native_view);
   internal::NativeWidgetPrivate::ReparentNativeView(native_view, new_parent);
   Widget* child_widget = GetWidgetForNativeView(native_view);
   Widget* parent_widget =
@@ -319,6 +361,9 @@ bool Widget::RequiresNonClientView(InitParams::Type type) {
 void Widget::Init(InitParams params) {
   TRACE_EVENT0("views", "Widget::Init");
 
+  DCHECK(!native_widget_initialized_)
+      << "This widget has already been initialized";
+
   if (params.name.empty() && params.delegate) {
     params.name = params.delegate->internal_name();
     // If an internal name was not provided the class name of the contents view
@@ -327,7 +372,8 @@ void Widget::Init(InitParams params) {
       params.name = params.delegate->GetContentsView()->GetClassName();
   }
 
-  parent_ = params.parent ? GetWidgetForNativeView(params.parent) : nullptr;
+  if (params.parent && GetWidgetForNativeView(params.parent))
+    parent_ = GetWidgetForNativeView(params.parent)->GetWeakPtr();
 
   // Subscripbe to parent's paint-as-active change.
   if (parent_) {
@@ -339,6 +385,7 @@ void Widget::Init(InitParams params) {
 
   params.child |= (params.type == InitParams::TYPE_CONTROL);
   is_top_level_ = !params.child;
+  is_headless_ = params.ShouldInitAsHeadless();
 
   if (params.opacity == views::Widget::InitParams::WindowOpacity::kInferred &&
       params.type != views::Widget::InitParams::TYPE_WINDOW) {
@@ -349,14 +396,21 @@ void Widget::Init(InitParams params) {
     // ViewsDelegate::OnBeforeWidgetInit() may change `params.delegate` either
     // by setting it to null or assigning a different value to it, so handle
     // both cases.
-    auto default_widget_delegate = std::make_unique<DefaultWidgetDelegate>();
-    widget_delegate_ =
-        params.delegate ? params.delegate : default_widget_delegate.get();
-
     ViewsDelegate::GetInstance()->OnBeforeWidgetInit(&params, this);
 
-    widget_delegate_ =
-        params.delegate ? params.delegate : default_widget_delegate.release();
+    if (params.delegate) {
+      // TODO(kylixrd): This will be unnecessary once the Widget can no longer
+      // "own" the delegate.
+      if (params.delegate->owned_by_widget()) {
+        owned_widget_delegate_ = base::WrapUnique(params.delegate.get());
+        widget_delegate_ = owned_widget_delegate_->AsWeakPtr();
+      } else {
+        widget_delegate_ = params.delegate->AsWeakPtr();
+      }
+    } else {
+      auto default_delegate = std::make_unique<DefaultWidgetDelegate>();
+      widget_delegate_ = default_delegate.release()->AsWeakPtr();
+    }
   }
   DCHECK(widget_delegate_);
 
@@ -372,14 +426,29 @@ void Widget::Init(InitParams params) {
   // Henceforth, ensure the delegate outlives the Widget.
   widget_delegate_->can_delete_this_ = false;
 
-  if (params.delegate)
-    params.delegate->WidgetInitializing(this);
+  widget_delegate_->WidgetInitializing(this);
 
   ownership_ = params.ownership;
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   background_elevation_ = params.background_elevation;
 #endif
-  native_widget_ = CreateNativeWidget(params, this)->AsNativeWidgetPrivate();
+
+  if (base::FeatureList::IsEnabled(features::kWidgetLayering)) {
+    sublevel_manager_ =
+        std::make_unique<SublevelManager>(this, params.sublevel);
+  }
+
+  if (params.native_theme) {
+    native_theme_ = params.native_theme;
+  }
+
+  internal::NativeWidgetPrivate* native_widget_raw_ptr =
+      CreateNativeWidget(params, this)->AsNativeWidgetPrivate();
+  native_widget_ = native_widget_raw_ptr->GetWeakPtr();
+  if (params.ownership == InitParams::WIDGET_OWNS_NATIVE_WIDGET) {
+    owned_native_widget_ = base::WrapUnique(native_widget_raw_ptr);
+  }
   root_view_.reset(CreateRootView());
 
   // Copy the elements of params that will be used after it is moved.
@@ -387,6 +456,12 @@ void Widget::Init(InitParams params) {
   const gfx::Rect bounds = params.bounds;
   const ui::WindowShowState show_state = params.show_state;
   WidgetDelegate* delegate = params.delegate;
+  bool should_set_initial_bounds = true;
+#if BUILDFLAG(IS_CHROMEOS)
+  // If the target display is specified on ChromeOS, the initial bounds will be
+  // set based on the display.
+  should_set_initial_bounds = !params.display_id.has_value();
+#endif
 
   native_widget_->InitNativeWidget(std::move(params));
   if (type == InitParams::TYPE_MENU)
@@ -408,7 +483,9 @@ void Widget::Init(InitParams params) {
     UpdateWindowIcon();
     UpdateWindowTitle();
     non_client_view_->ResetWindowControls();
-    SetInitialBounds(bounds);
+    if (should_set_initial_bounds) {
+      SetInitialBounds(bounds);
+    }
 
     // Perform the initial layout. This handles the case where the size might
     // not actually change when setting the initial bounds. If it did, child
@@ -423,7 +500,14 @@ void Widget::Init(InitParams params) {
     }
   } else if (delegate) {
     SetContentsView(delegate->TransferOwnershipOfContentsView());
-    SetInitialBoundsForFramelessWindow(bounds);
+    if (should_set_initial_bounds) {
+      SetInitialBoundsForFramelessWindow(bounds);
+    }
+  }
+
+  if (base::FeatureList::IsEnabled(features::kWidgetLayering)) {
+    if (parent_)
+      parent_->GetSublevelManager()->TrackChildWidget(this);
   }
 
   native_theme_observation_.Observe(GetNativeTheme());
@@ -438,21 +522,19 @@ void Widget::Init(InitParams params) {
 }
 
 void Widget::ShowEmojiPanel() {
-  native_widget_->ShowEmojiPanel();
+  if (native_widget_)
+    native_widget_->ShowEmojiPanel();
 }
 
 // Unconverted methods (see header) --------------------------------------------
 
 gfx::NativeView Widget::GetNativeView() const {
-  if (native_widget_destroyed_)
-    return gfx::kNullNativeView;
-  return native_widget_->GetNativeView();
+  return native_widget_ ? native_widget_->GetNativeView() : gfx::NativeView();
 }
 
 gfx::NativeWindow Widget::GetNativeWindow() const {
-  if (native_widget_destroyed_)
-    return gfx::kNullNativeWindow;
-  return native_widget_->GetNativeWindow();
+  return native_widget_ ? native_widget_->GetNativeWindow()
+                        : gfx::NativeWindow();
 }
 
 void Widget::AddObserver(WidgetObserver* observer) {
@@ -492,12 +574,14 @@ void Widget::ViewHierarchyChanged(const ViewHierarchyChangedDetails& details) {
     FocusManager* focus_manager = GetFocusManager();
     if (focus_manager)
       focus_manager->ViewRemoved(details.child);
-    if (!native_widget_destroyed_)
+    if (native_widget_)
       native_widget_->ViewRemoved(details.child);
   }
 }
 
 void Widget::NotifyNativeViewHierarchyWillChange() {
+  if (!native_widget_)
+    return;
   // During tear-down the top-level focus manager becomes unavailable to
   // GTK tabbed panes and their children, so normal deregistration via
   // |FocusManager::ViewRemoved()| calls are fouled.  We clear focus here
@@ -508,6 +592,8 @@ void Widget::NotifyNativeViewHierarchyWillChange() {
 }
 
 void Widget::NotifyNativeViewHierarchyChanged() {
+  if (!native_widget_)
+    return;
   native_widget_->OnNativeViewHierarchyChanged();
   root_view_->NotifyNativeViewHierarchyChanged();
 }
@@ -531,8 +617,7 @@ const Widget* Widget::GetTopLevelWidget() const {
   // focus manager.
   if (is_top_level())
     return this;
-  return native_widget_destroyed_ ? nullptr
-                                  : native_widget_->GetTopLevelWidget();
+  return native_widget_ ? native_widget_->GetTopLevelWidget() : nullptr;
 }
 
 Widget* Widget::GetPrimaryWindowWidget() {
@@ -570,78 +655,103 @@ View* Widget::GetContentsView() {
 }
 
 gfx::Rect Widget::GetWindowBoundsInScreen() const {
-  return native_widget_->GetWindowBoundsInScreen();
+  return native_widget_ ? native_widget_->GetWindowBoundsInScreen()
+                        : gfx::Rect();
 }
 
 gfx::Rect Widget::GetClientAreaBoundsInScreen() const {
-  return native_widget_->GetClientAreaBoundsInScreen();
+  return native_widget_ ? native_widget_->GetClientAreaBoundsInScreen()
+                        : gfx::Rect();
 }
 
 gfx::Rect Widget::GetRestoredBounds() const {
-  return native_widget_->GetRestoredBounds();
+  return native_widget_ ? native_widget_->GetRestoredBounds() : gfx::Rect();
 }
 
 std::string Widget::GetWorkspace() const {
-  return native_widget_->GetWorkspace();
+  return native_widget_ ? native_widget_->GetWorkspace() : "";
 }
 
 void Widget::SetBounds(const gfx::Rect& bounds) {
-  native_widget_->SetBounds(bounds);
+  if (native_widget_)
+    native_widget_->SetBounds(bounds);
 }
 
 void Widget::SetSize(const gfx::Size& size) {
-  native_widget_->SetSize(size);
+  if (native_widget_)
+    native_widget_->SetSize(size);
+}
+
+gfx::Size Widget::GetSize() const {
+  return GetRestoredBounds().size();
 }
 
 void Widget::CenterWindow(const gfx::Size& size) {
-  native_widget_->CenterWindow(size);
+  if (native_widget_)
+    native_widget_->CenterWindow(size);
 }
 
 void Widget::SetBoundsConstrained(const gfx::Rect& bounds) {
-  native_widget_->SetBoundsConstrained(bounds);
+  if (native_widget_)
+    native_widget_->SetBoundsConstrained(bounds);
 }
 
 void Widget::SetVisibilityChangedAnimationsEnabled(bool value) {
-  native_widget_->SetVisibilityChangedAnimationsEnabled(value);
+  if (native_widget_)
+    native_widget_->SetVisibilityChangedAnimationsEnabled(value);
 }
 
 void Widget::SetVisibilityAnimationDuration(const base::TimeDelta& duration) {
-  native_widget_->SetVisibilityAnimationDuration(duration);
+  if (native_widget_)
+    native_widget_->SetVisibilityAnimationDuration(duration);
 }
 
 void Widget::SetVisibilityAnimationTransition(VisibilityTransition transition) {
-  native_widget_->SetVisibilityAnimationTransition(transition);
+  if (native_widget_)
+    native_widget_->SetVisibilityAnimationTransition(transition);
 }
 
 bool Widget::IsMoveLoopSupported() const {
-  return native_widget_->IsMoveLoopSupported();
+  return native_widget_ ? native_widget_->IsMoveLoopSupported() : false;
 }
 
 Widget::MoveLoopResult Widget::RunMoveLoop(
     const gfx::Vector2d& drag_offset,
     MoveLoopSource source,
     MoveLoopEscapeBehavior escape_behavior) {
+  if (!native_widget_)
+    return MoveLoopResult::kCanceled;
+
   return native_widget_->RunMoveLoop(drag_offset, source, escape_behavior);
 }
 
 void Widget::EndMoveLoop() {
-  native_widget_->EndMoveLoop();
+  if (native_widget_)
+    native_widget_->EndMoveLoop();
 }
 
 void Widget::StackAboveWidget(Widget* widget) {
-  native_widget_->StackAbove(widget->GetNativeView());
+  if (native_widget_)
+    native_widget_->StackAbove(widget->GetNativeView());
 }
 
 void Widget::StackAbove(gfx::NativeView native_view) {
-  native_widget_->StackAbove(native_view);
+  if (native_widget_)
+    native_widget_->StackAbove(native_view);
 }
 
 void Widget::StackAtTop() {
-  native_widget_->StackAtTop();
+  if (native_widget_)
+    native_widget_->StackAtTop();
+}
+
+bool Widget::IsStackedAbove(gfx::NativeView native_view) {
+  return native_widget_ ? native_widget_->IsStackedAbove(native_view) : false;
 }
 
 void Widget::SetShape(std::unique_ptr<ShapeRects> shape) {
-  native_widget_->SetShape(std::move(shape));
+  if (native_widget_)
+    native_widget_->SetShape(std::move(shape));
 }
 
 void Widget::CloseWithReason(ClosedReason closed_reason) {
@@ -687,7 +797,8 @@ void Widget::CloseWithReason(ClosedReason closed_reason) {
   if (widget_delegate_)
     widget_delegate_->WindowWillClose();
 
-  native_widget_->Close();
+  if (native_widget_)
+    native_widget_->Close();
 }
 
 void Widget::Close() {
@@ -702,7 +813,11 @@ void Widget::CloseNow() {
   for (WidgetObserver& observer : observers_)
     observer.OnWidgetClosing(this);
   internal::AnyWidgetObserverSingleton::GetInstance()->OnAnyWidgetClosing(this);
-  native_widget_->CloseNow();
+
+  DCHECK(native_widget_initialized_) << "Native widget is never initialized.";
+
+  if (native_widget_)
+    native_widget_->CloseNow();
 }
 
 bool Widget::IsClosed() const {
@@ -710,6 +825,8 @@ bool Widget::IsClosed() const {
 }
 
 void Widget::Show() {
+  if (!native_widget_)
+    return;
   const ui::Layer* layer = GetLayer();
   TRACE_EVENT1("views", "Widget::Show", "layer",
                layer ? layer->name() : "none");
@@ -723,9 +840,7 @@ void Widget::Show() {
         !initial_restored_bounds_.IsEmpty() && !IsFullscreen()) {
       native_widget_->Show(ui::SHOW_STATE_MAXIMIZED, initial_restored_bounds_);
     } else {
-      native_widget_->Show(
-          IsFullscreen() ? ui::SHOW_STATE_FULLSCREEN : saved_show_state_,
-          gfx::Rect());
+      native_widget_->Show(saved_show_state_, gfx::Rect());
     }
     // |saved_show_state_| only applies the first time the window is shown.
     // If we don't reset the value the window may be shown maximized every time
@@ -734,15 +849,20 @@ void Widget::Show() {
   } else {
     native_widget_->Show(preferred_show_state, gfx::Rect());
   }
-  internal::AnyWidgetObserverSingleton::GetInstance()->OnAnyWidgetShown(this);
+
+  HandleShowRequested();
 }
 
 void Widget::Hide() {
+  if (!native_widget_)
+    return;
   native_widget_->Hide();
   internal::AnyWidgetObserverSingleton::GetInstance()->OnAnyWidgetHidden(this);
 }
 
 void Widget::ShowInactive() {
+  if (!native_widget_)
+    return;
   // If this gets called with saved_show_state_ == ui::SHOW_STATE_MAXIMIZED,
   // call SetBounds()with the restored bounds to set the correct size. This
   // normally should not happen, but if it does we should avoid showing unsized
@@ -753,59 +873,80 @@ void Widget::ShowInactive() {
     saved_show_state_ = ui::SHOW_STATE_NORMAL;
   }
   native_widget_->Show(ui::SHOW_STATE_INACTIVE, gfx::Rect());
-  internal::AnyWidgetObserverSingleton::GetInstance()->OnAnyWidgetShown(this);
+
+  HandleShowRequested();
 }
 
 void Widget::Activate() {
-  if (CanActivate())
+  if (CanActivate() && native_widget_)
     native_widget_->Activate();
 }
 
 void Widget::Deactivate() {
-  native_widget_->Deactivate();
+  if (native_widget_)
+    native_widget_->Deactivate();
 }
 
 bool Widget::IsActive() const {
-  return native_widget_->IsActive();
+  return native_widget_ ? native_widget_->IsActive() : false;
 }
 
 void Widget::SetZOrderLevel(ui::ZOrderLevel order) {
-  native_widget_->SetZOrderLevel(order);
+  if (native_widget_)
+    native_widget_->SetZOrderLevel(order);
 }
 
 ui::ZOrderLevel Widget::GetZOrderLevel() const {
-  return native_widget_->GetZOrderLevel();
+  return native_widget_ ? native_widget_->GetZOrderLevel()
+                        : ui::ZOrderLevel::kNormal;
+}
+
+void Widget::SetZOrderSublevel(int sublevel) {
+  sublevel_manager_->SetSublevel(sublevel);
+}
+
+int Widget::GetZOrderSublevel() const {
+  if (!sublevel_manager_)
+    return 0;
+
+  return sublevel_manager_->GetSublevel();
 }
 
 void Widget::SetVisibleOnAllWorkspaces(bool always_visible) {
-  native_widget_->SetVisibleOnAllWorkspaces(always_visible);
+  if (native_widget_)
+    native_widget_->SetVisibleOnAllWorkspaces(always_visible);
 }
 
 bool Widget::IsVisibleOnAllWorkspaces() const {
-  return native_widget_->IsVisibleOnAllWorkspaces();
+  return native_widget_ ? native_widget_->IsVisibleOnAllWorkspaces() : false;
 }
 
 void Widget::Maximize() {
-  native_widget_->Maximize();
+  if (native_widget_)
+    native_widget_->Maximize();
 }
 
 void Widget::Minimize() {
-  native_widget_->Minimize();
+  if (native_widget_)
+    native_widget_->Minimize();
 }
 
 void Widget::Restore() {
-  native_widget_->Restore();
+  if (native_widget_)
+    native_widget_->Restore();
 }
 
 bool Widget::IsMaximized() const {
-  return native_widget_->IsMaximized();
+  return native_widget_ ? native_widget_->IsMaximized() : false;
 }
 
 bool Widget::IsMinimized() const {
-  return native_widget_->IsMinimized();
+  return native_widget_ ? native_widget_->IsMinimized() : false;
 }
 
 void Widget::SetFullscreen(bool fullscreen, int64_t target_display_id) {
+  if (!native_widget_)
+    return;
   // It isn't valid to specify `target_display_id` when exiting fullscreen.
   if (!fullscreen)
     DCHECK(target_display_id == display::kInvalidDisplayId);
@@ -824,27 +965,51 @@ void Widget::SetFullscreen(bool fullscreen, int64_t target_display_id) {
 }
 
 bool Widget::IsFullscreen() const {
-  return native_widget_->IsFullscreen();
+  if (native_widget_ && native_widget_->IsFullscreen()) {
+    return true;
+  }
+  // Some widgets are logically the same window as their parent, and thus their
+  // parent must also be checked for fullscreen.
+  if (parent() && check_parent_for_fullscreen_) {
+    return parent()->IsFullscreen();
+  }
+  return false;
 }
 
 void Widget::SetCanAppearInExistingFullscreenSpaces(
     bool can_appear_in_existing_fullscreen_spaces) {
-  native_widget_->SetCanAppearInExistingFullscreenSpaces(
-      can_appear_in_existing_fullscreen_spaces);
+  if (native_widget_) {
+    native_widget_->SetCanAppearInExistingFullscreenSpaces(
+        can_appear_in_existing_fullscreen_spaces);
+  }
 }
 
 void Widget::SetOpacity(float opacity) {
   DCHECK(opacity >= 0.0f);
   DCHECK(opacity <= 1.0f);
-  native_widget_->SetOpacity(opacity);
+  if (native_widget_)
+    native_widget_->SetOpacity(opacity);
 }
 
 void Widget::SetAspectRatio(const gfx::SizeF& aspect_ratio) {
-  native_widget_->SetAspectRatio(aspect_ratio);
+  if (!native_widget_) {
+    return;
+  }
+
+  // The aspect ratio affects the client view only, so figure out how much of
+  // the widget isn't taken up by the client view.
+  gfx::Size excluded_margin;
+  if (non_client_view() && non_client_view()->frame_view()) {
+    excluded_margin =
+        non_client_view()->bounds().size() -
+        non_client_view()->frame_view()->GetBoundsForClientView().size();
+  }
+  native_widget_->SetAspectRatio(aspect_ratio, excluded_margin);
 }
 
 void Widget::FlashFrame(bool flash) {
-  native_widget_->FlashFrame(flash);
+  if (native_widget_)
+    native_widget_->FlashFrame(flash);
 }
 
 View* Widget::GetRootView() {
@@ -856,7 +1021,7 @@ const View* Widget::GetRootView() const {
 }
 
 bool Widget::IsVisible() const {
-  return native_widget_->IsVisible();
+  return native_widget_ ? native_widget_->IsVisible() : false;
 }
 
 const ui::ThemeProvider* Widget::GetThemeProvider() const {
@@ -869,8 +1034,7 @@ const ui::ThemeProvider* Widget::GetThemeProvider() const {
                                               : nullptr;
 }
 
-ui::ColorProviderManager::ThemeInitializerSupplier* Widget::GetCustomTheme()
-    const {
+ui::ColorProviderKey::ThemeInitializerSupplier* Widget::GetCustomTheme() const {
   return nullptr;
 }
 
@@ -885,7 +1049,7 @@ const FocusManager* Widget::GetFocusManager() const {
 }
 
 ui::InputMethod* Widget::GetInputMethod() {
-  if (is_top_level()) {
+  if (is_top_level() && native_widget_) {
     // Only creates the shared the input method instance on top level widget.
     return native_widget_private()->GetInputMethod();
   } else {
@@ -900,16 +1064,26 @@ ui::InputMethod* Widget::GetInputMethod() {
   }
 }
 
+SublevelManager* Widget::GetSublevelManager() {
+  return sublevel_manager_.get();
+}
+
 void Widget::RunShellDrag(View* view,
                           std::unique_ptr<ui::OSExchangeData> data,
                           const gfx::Point& location,
                           int operation,
                           ui::mojom::DragEventSource source) {
+  if (!native_widget_)
+    return;
   dragged_view_ = view;
   OnDragWillStart();
 
   for (WidgetObserver& observer : observers_)
     observer.OnWidgetDragWillStart(this);
+
+  if (view && view->drag_controller()) {
+    view->drag_controller()->OnWillStartDragForView(view);
+  }
 
   WidgetDeletionObserver widget_deletion_observer(this);
   native_widget_->RunShellDrag(view, std::move(data), location, operation,
@@ -935,32 +1109,38 @@ void Widget::SchedulePaintInRect(const gfx::Rect& rect) {
   // This happens when DestroyRootView removes all children from the
   // RootView which triggers a SchedulePaint that ends up here. This happens
   // after in ~Widget after native_widget_ is destroyed.
-  if (native_widget_destroyed_)
-    return;
-  native_widget_->SchedulePaintInRect(rect);
+  if (native_widget_)
+    native_widget_->SchedulePaintInRect(rect);
 }
 
 void Widget::ScheduleLayout() {
-  native_widget_->ScheduleLayout();
+  if (native_widget_)
+    native_widget_->ScheduleLayout();
 }
 
 void Widget::SetCursor(const ui::Cursor& cursor) {
-  native_widget_->SetCursor(cursor);
+  if (native_widget_)
+    native_widget_->SetCursor(cursor);
 }
 
 bool Widget::IsMouseEventsEnabled() const {
-  return native_widget_->IsMouseEventsEnabled();
+  return native_widget_ ? native_widget_->IsMouseEventsEnabled() : false;
 }
 
 void Widget::SetNativeWindowProperty(const char* name, void* value) {
-  native_widget_->SetNativeWindowProperty(name, value);
+  if (native_widget_)
+    native_widget_->SetNativeWindowProperty(name, value);
 }
 
 void* Widget::GetNativeWindowProperty(const char* name) const {
-  return native_widget_->GetNativeWindowProperty(name);
+  return native_widget_ ? native_widget_->GetNativeWindowProperty(name)
+                        : nullptr;
 }
 
 void Widget::UpdateWindowTitle() {
+  if (!native_widget_)
+    return;
+
   if (!non_client_view_)
     return;
 
@@ -975,6 +1155,9 @@ void Widget::UpdateWindowTitle() {
 }
 
 void Widget::UpdateWindowIcon() {
+  if (!native_widget_)
+    return;
+
   if (non_client_view_)
     non_client_view_->UpdateWindowIcon();
 
@@ -1033,10 +1216,13 @@ void Widget::SetFocusTraversableParentView(View* parent_view) {
 }
 
 void Widget::ClearNativeFocus() {
-  native_widget_->ClearNativeFocus();
+  if (native_widget_)
+    native_widget_->ClearNativeFocus();
 }
 
 std::unique_ptr<NonClientFrameView> Widget::CreateNonClientFrameView() {
+  if (!native_widget_)
+    return nullptr;
   auto frame_view = widget_delegate_->CreateNonClientFrameView(this);
   if (!frame_view)
     frame_view = native_widget_->CreateNonClientFrameView();
@@ -1053,45 +1239,30 @@ std::unique_ptr<NonClientFrameView> Widget::CreateNonClientFrameView() {
 bool Widget::ShouldUseNativeFrame() const {
   if (frame_type_ != FrameType::kDefault)
     return frame_type_ == FrameType::kForceNative;
-  return native_widget_->ShouldUseNativeFrame();
+  return native_widget_ ? native_widget_->ShouldUseNativeFrame() : false;
 }
 
 bool Widget::ShouldWindowContentsBeTransparent() const {
-  return native_widget_->ShouldWindowContentsBeTransparent();
-}
-
-void Widget::DebugToggleFrameType() {
-  if (frame_type_ == FrameType::kDefault) {
-    frame_type_ = ShouldUseNativeFrame() ? FrameType::kForceCustom
-                                         : FrameType::kForceNative;
-  } else {
-    frame_type_ = frame_type_ == FrameType::kForceCustom
-                      ? FrameType::kForceNative
-                      : FrameType::kForceCustom;
-  }
-  FrameTypeChanged();
+  return native_widget_ ? native_widget_->ShouldWindowContentsBeTransparent()
+                        : false;
 }
 
 void Widget::FrameTypeChanged() {
-  native_widget_->FrameTypeChanged();
+  if (native_widget_)
+    native_widget_->FrameTypeChanged();
 }
 
 const ui::Compositor* Widget::GetCompositor() const {
-  if (native_widget_destroyed_)
-    return nullptr;
-  return native_widget_->GetCompositor();
+  return native_widget_ ? native_widget_->GetCompositor() : nullptr;
 }
 
 const ui::Layer* Widget::GetLayer() const {
-  if (native_widget_destroyed_)
-    return nullptr;
-  return native_widget_->GetLayer();
+  return native_widget_ ? native_widget_->GetLayer() : nullptr;
 }
 
 void Widget::ReorderNativeViews() {
-  if (native_widget_destroyed_)
-    return;
-  native_widget_->ReorderNativeViews();
+  if (native_widget_)
+    native_widget_->ReorderNativeViews();
 }
 
 void Widget::LayerTreeChanged() {
@@ -1102,14 +1273,17 @@ void Widget::LayerTreeChanged() {
 }
 
 const NativeWidget* Widget::native_widget() const {
-  return native_widget_;
+  return native_widget_.get();
 }
 
 NativeWidget* Widget::native_widget() {
-  return native_widget_;
+  return native_widget_.get();
 }
 
 void Widget::SetCapture(View* view) {
+  if (!native_widget_)
+    return;
+
   if (!native_widget_->HasCapture()) {
     native_widget_->SetCapture();
 
@@ -1124,26 +1298,25 @@ void Widget::SetCapture(View* view) {
 }
 
 void Widget::ReleaseCapture() {
-  if (native_widget_->HasCapture())
+  if (native_widget_ && native_widget_->HasCapture())
     native_widget_->ReleaseCapture();
 }
 
 bool Widget::HasCapture() {
-  return native_widget_->HasCapture();
+  return native_widget_ ? native_widget_->HasCapture() : false;
 }
 
 TooltipManager* Widget::GetTooltipManager() {
-  if (native_widget_destroyed_)
-    return nullptr;
-  return native_widget_->GetTooltipManager();
+  return native_widget_ ? native_widget_->GetTooltipManager() : nullptr;
 }
 
 const TooltipManager* Widget::GetTooltipManager() const {
-  return native_widget_->GetTooltipManager();
+  return native_widget_ ? native_widget_->GetTooltipManager() : nullptr;
 }
 
 gfx::Rect Widget::GetWorkAreaBoundsInScreen() const {
-  return native_widget_->GetWorkAreaBoundsInScreen();
+  return native_widget_ ? native_widget_->GetWorkAreaBoundsInScreen()
+                        : gfx::Rect();
 }
 
 void Widget::SynthesizeMouseMoveEvent() {
@@ -1162,27 +1335,36 @@ void Widget::SynthesizeMouseMoveEvent() {
 }
 
 bool Widget::IsTranslucentWindowOpacitySupported() const {
-  return native_widget_->IsTranslucentWindowOpacitySupported();
+  return native_widget_ ? native_widget_->IsTranslucentWindowOpacitySupported()
+                        : false;
 }
 
 ui::GestureRecognizer* Widget::GetGestureRecognizer() {
-  return native_widget_->GetGestureRecognizer();
+  return native_widget_ ? native_widget_->GetGestureRecognizer() : nullptr;
 }
 
 ui::GestureConsumer* Widget::GetGestureConsumer() {
-  return native_widget_->GetGestureConsumer();
+  return native_widget_ ? native_widget_->GetGestureConsumer() : nullptr;
 }
 
 void Widget::OnSizeConstraintsChanged() {
-  native_widget_->OnSizeConstraintsChanged();
-  if (non_client_view_)
+  if (native_widget_) {
+    native_widget_->OnSizeConstraintsChanged();
+  }
+
+  if (non_client_view_) {
     non_client_view_->SizeConstraintsChanged();
+  }
+
+  for (WidgetObserver& observer : observers_) {
+    observer.OnWidgetSizeConstraintsChanged(this);
+  }
 }
 
 void Widget::OnOwnerClosing() {}
 
 std::string Widget::GetName() const {
-  return native_widget_->GetName();
+  return native_widget_ ? native_widget_->GetName() : "";
 }
 
 base::CallbackListSubscription Widget::RegisterPaintAsActiveChangedCallback(
@@ -1194,7 +1376,7 @@ std::unique_ptr<Widget::PaintAsActiveLock> Widget::LockPaintAsActive() {
   const bool was_paint_as_active = ShouldPaintAsActive();
   ++paint_as_active_refcount_;
   if (ShouldPaintAsActive() != was_paint_as_active) {
-    paint_as_active_callbacks_.Notify();
+    NotifyPaintAsActiveChanged();
     if (parent() && !parent_paint_as_active_lock_)
       parent_paint_as_active_lock_ = parent()->LockPaintAsActive();
   }
@@ -1220,7 +1402,7 @@ void Widget::OnParentShouldPaintAsActiveChanged() {
   // |native_widget_| has already been deleted and |this| is being deleted so
   // that we don't have to handle the event and also it's unsafe to reference
   // |native_widget_| in this case.
-  if (native_widget_destroyed_)
+  if (!native_widget_)
     return;
 
   // |native_widget_active| is being updated in
@@ -1231,15 +1413,34 @@ void Widget::OnParentShouldPaintAsActiveChanged() {
   // this->ShouldPaintAsActive() changes iff the native widget is
   // inactive and there's no lock on this widget.
   if (!(native_widget_active_ || paint_as_active_refcount_))
-    paint_as_active_callbacks_.Notify();
+    NotifyPaintAsActiveChanged();
+}
+
+void Widget::NotifyPaintAsActiveChanged() {
+  paint_as_active_callbacks_.Notify();
+  if (native_widget_) {
+    native_widget_->PaintAsActiveChanged();
+  }
 }
 
 void Widget::SetNativeTheme(ui::NativeTheme* native_theme) {
+  // If `native_theme_` has been set for testing ensure the theme instance is
+  // not reset.
+  if (native_theme_set_for_testing_) {
+    return;
+  }
+
+  const bool is_update = native_theme_ && (native_theme_ != native_theme);
   native_theme_ = native_theme;
   native_theme_observation_.Reset();
   if (native_theme)
     native_theme_observation_.Observe(native_theme);
-  ThemeChanged();
+
+  if (is_update) {
+    OnNativeThemeUpdated(native_theme);
+  } else {
+    ThemeChanged();
+  }
 }
 
 int Widget::GetX() const {
@@ -1307,10 +1508,16 @@ void Widget::SetVisible(bool visible) {
 // Widget, NativeWidgetDelegate implementation:
 
 bool Widget::IsModal() const {
+  if (!widget_delegate_)
+    return false;
+
   return widget_delegate_->GetModalType() != ui::MODAL_TYPE_NONE;
 }
 
 bool Widget::IsDialogBox() const {
+  if (!widget_delegate_)
+    return false;
+
   return !!widget_delegate_->AsDialogDelegate();
 }
 
@@ -1363,7 +1570,7 @@ bool Widget::OnNativeWidgetActivationChanged(bool active) {
   // Notify controls (e.g. LabelButton) and children widgets about the
   // paint-as-active change.
   if (ShouldPaintAsActive() != was_paint_as_active)
-    paint_as_active_callbacks_.Notify();
+    NotifyPaintAsActiveChanged();
 
   return true;
 }
@@ -1398,6 +1605,8 @@ void Widget::OnNativeWidgetCreated() {
   if (is_top_level())
     focus_manager_ = FocusManagerFactory::Create(this);
 
+  DCHECK(native_widget_);
+  DCHECK(widget_delegate_);
   native_widget_->InitModalType(widget_delegate_->GetModalType());
 
   for (WidgetObserver& observer : observers_)
@@ -1407,6 +1616,7 @@ void Widget::OnNativeWidgetCreated() {
 void Widget::OnNativeWidgetDestroying() {
   // Tell the focus manager (if any) that root_view is being removed
   // in case that the focused view is under this root view.
+  DCHECK(native_widget_);
   if (GetFocusManager() && root_view_)
     GetFocusManager()->ViewRemoved(root_view_.get());
   for (WidgetObserver& observer : observers_)
@@ -1419,13 +1629,25 @@ void Widget::OnNativeWidgetDestroying() {
 void Widget::OnNativeWidgetDestroyed() {
   for (WidgetObserver& observer : observers_)
     observer.OnWidgetDestroyed(this);
-  widget_delegate_->can_delete_this_ = true;
-  widget_delegate_->DeleteDelegate();
-  widget_delegate_ = nullptr;
-  // TODO(pbos): Replace this with native_widget_ = nullptr; and nullptr
-  // checking. This currently breaks on reentrant calls to CloseNow() that I'm
-  // too scared to fix right now.
-  native_widget_destroyed_ = true;
+  // TODO(kylixrd): Remove the references to owned_by_widget once widgets cease
+  // being able to "own" the delegate.
+  if (widget_delegate_) {
+    if (widget_delegate_->owned_by_widget()) {
+      widget_delegate_->DeleteDelegate();
+      widget_delegate_->can_delete_this_ = true;
+      owned_widget_delegate_.reset();
+    } else {
+      widget_delegate_->can_delete_this_ = true;
+      widget_delegate_->DeleteDelegate();
+    }
+  }
+  // Immediately reset the weak ptr. If NATIVE_WIDGET_OWNS_WIDGET destruction of
+  // the NativeWidget can destroy the Widget. We don't want to touch the
+  // NativeWidget during the destruction of the Widget either since some member
+  // variables on the NativeWidget may already be destroyed. In
+  // WIDGET_OWNS_NATIVE_WIDGET the NativeWidget will be cleaned up through
+  // |owned_native_widget_|
+  native_widget_.reset();
 }
 
 void Widget::OnNativeWidgetParentChanged(gfx::NativeView parent) {
@@ -1444,7 +1666,8 @@ gfx::Size Widget::GetMaximumSize() const {
 void Widget::OnNativeWidgetMove() {
   TRACE_EVENT0("ui", "Widget::OnNativeWidgetMove");
 
-  widget_delegate_->OnWidgetMove();
+  if (widget_delegate_)
+    widget_delegate_->OnWidgetMove();
   NotifyCaretBoundsChanged(GetInputMethod());
 
   for (WidgetObserver& observer : observers_)
@@ -1469,14 +1692,20 @@ void Widget::OnNativeWidgetWorkspaceChanged() {}
 
 void Widget::OnNativeWidgetWindowShowStateChanged() {
   SaveWindowPlacementIfInitialized();
+
+  for (WidgetObserver& observer : observers_) {
+    observer.OnWidgetShowStateChanged(this);
+  }
 }
 
 void Widget::OnNativeWidgetBeginUserBoundsChange() {
-  widget_delegate_->OnWindowBeginUserBoundsChange();
+  if (widget_delegate_)
+    widget_delegate_->OnWindowBeginUserBoundsChange();
 }
 
 void Widget::OnNativeWidgetEndUserBoundsChange() {
-  widget_delegate_->OnWindowEndUserBoundsChange();
+  if (widget_delegate_)
+    widget_delegate_->OnWindowEndUserBoundsChange();
 }
 
 void Widget::OnNativeWidgetAddedToCompositor() {}
@@ -1517,6 +1746,9 @@ void Widget::OnKeyEvent(ui::KeyEvent* event) {
 //                   RootView from anywhere in Widget. Use
 //                   SendEventToSink() instead. See crbug.com/348087.
 void Widget::OnMouseEvent(ui::MouseEvent* event) {
+  if (!native_widget_)
+    return;
+
   TRACE_EVENT0("ui", "Widget::OnMouseEvent");
 
   View* root_view = GetRootView();
@@ -1570,8 +1802,9 @@ void Widget::OnMouseEvent(ui::MouseEvent* event) {
           // process it.
           (event->flags() &
            (ui::EF_LEFT_MOUSE_BUTTON | ui::EF_MIDDLE_MOUSE_BUTTON |
-            ui::EF_RIGHT_MOUSE_BUTTON)) != 0)
+            ui::EF_RIGHT_MOUSE_BUTTON)) != 0) {
         event->SetHandled();
+      }
       return;
 
     case ui::ET_MOUSE_MOVED:
@@ -1586,6 +1819,13 @@ void Widget::OnMouseEvent(ui::MouseEvent* event) {
         last_mouse_event_was_move_ = true;
         if (root_view)
           root_view->OnMouseMoved(*event);
+      }
+      return;
+
+    case ui::ET_MOUSE_ENTERED:
+      last_mouse_event_was_move_ = false;
+      if (root_view) {
+        root_view->OnMouseEntered(*event);
       }
       return;
 
@@ -1635,14 +1875,23 @@ void Widget::OnGestureEvent(ui::GestureEvent* event) {
 }
 
 bool Widget::ExecuteCommand(int command_id) {
+  if (!widget_delegate_)
+    return false;
+
   return widget_delegate_->ExecuteWindowsCommand(command_id);
 }
 
 bool Widget::HasHitTestMask() const {
+  if (!widget_delegate_)
+    return false;
+
   return widget_delegate_->WidgetHasHitTestMask();
 }
 
 void Widget::GetHitTestMask(SkPath* mask) const {
+  if (!widget_delegate_)
+    return;
+
   DCHECK(mask);
   widget_delegate_->GetWidgetHitTestMask(mask);
 }
@@ -1657,7 +1906,7 @@ const Widget* Widget::AsWidget() const {
 
 bool Widget::SetInitialFocus(ui::WindowShowState show_state) {
   FocusManager* focus_manager = GetFocusManager();
-  if (!focus_manager)
+  if (!focus_manager || !widget_delegate_)
     return false;
   View* v = widget_delegate_->GetInitiallyFocusedView();
   if (!focus_on_creation_ || show_state == ui::SHOW_STATE_INACTIVE ||
@@ -1696,8 +1945,8 @@ bool Widget::ShouldDescendIntoChildForEventHandling(
 
   // Don't descend into |child| if there is a view with a Layer that contains
   // the point and is stacked above |child_layer|.
-  auto child_layer_iter = std::find(root_layer->children().begin(),
-                                    root_layer->children().end(), child_layer);
+  auto child_layer_iter =
+      base::ranges::find(root_layer->children(), child_layer);
   if (child_layer_iter == root_layer->children().end())
     return true;
 
@@ -1708,8 +1957,7 @@ bool Widget::ShouldDescendIntoChildForEventHandling(
     ui::Layer* layer = view->layer();
     DCHECK(layer);
     if (layer->visible() && layer->bounds().Contains(location)) {
-      auto root_layer_iter = std::find(root_layer->children().begin(),
-                                       root_layer->children().end(), layer);
+      auto root_layer_iter = base::ranges::find(root_layer->children(), layer);
       if (child_layer_iter > root_layer_iter) {
         // |child| is on top of the remaining layers, no need to continue.
         return true;
@@ -1754,15 +2002,13 @@ FocusSearch* Widget::GetFocusSearch() {
 FocusTraversable* Widget::GetFocusTraversableParent() {
   // We are a proxy to the root view, so we should be bypassed when traversing
   // up and as a result this should not be called.
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 View* Widget::GetFocusTraversableParentView() {
   // We are a proxy to the root view, so we should be bypassed when traversing
   // up and as a result this should not be called.
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1773,21 +2019,59 @@ void Widget::OnNativeThemeUpdated(ui::NativeTheme* observed_theme) {
   ThemeChanged();
 }
 
+void Widget::SetColorModeOverride(
+    absl::optional<ui::ColorProviderKey::ColorMode> color_mode) {
+  color_mode_override_ = color_mode;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Widget, ui::ColorProviderSource:
 
-ui::ColorProviderManager::Key Widget::GetColorProviderKey() const {
-  ui::ColorProviderManager::Key key =
-      GetNativeTheme()->GetColorProviderKey(GetCustomTheme());
+ui::ColorProviderKey Widget::GetColorProviderKey() const {
+  // Generally all Widgets should inherit the key of their parent, falling back
+  // to the key set by the NativeTheme otherwise.
+  // TODO(crbug.com/1455535): `parent_` does not always resolve to the logical
+  // parent as expected here (e.g. bubbles). This should be addressed and the
+  // use of parent_ below replaced with something like GetLogicalParent().
+  ui::ColorProviderKey key =
+      parent_ ? parent_->GetColorProviderKey()
+              : GetNativeTheme()->GetColorProviderKey(GetCustomTheme());
+
+  // Widgets may have specific overrides set on the Widget itself that should
+  // apply specifically to themselves and their children, apply these here.
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   key.elevation_mode = background_elevation_;
 #endif
+  if (color_mode_override_.has_value()) {
+    key.color_mode = color_mode_override_.value();
+  }
+
   return key;
 }
 
 const ui::ColorProvider* Widget::GetColorProvider() const {
   return ui::ColorProviderManager::Get().GetColorProviderFor(
       GetColorProviderKey());
+}
+
+const ui::RendererColorMap Widget::GetRendererColorMap(
+    ui::ColorProviderKey::ColorMode color_mode,
+    ui::ColorProviderKey::ForcedColors forced_colors) const {
+  auto key = GetColorProviderKey();
+  key.color_mode = color_mode;
+  key.forced_colors = forced_colors;
+  ui::ColorProvider* color_provider =
+      ui::ColorProviderManager::Get().GetColorProviderFor(key);
+  CHECK(color_provider);
+  return ui::CreateRendererColorMap(*color_provider);
+}
+
+ui::ColorProviderKey Widget::GetColorProviderKeyForTesting() const {
+  return GetColorProviderKey();
+}
+
+void Widget::SetCheckParentForFullscreen() {
+  check_parent_for_fullscreen_ = true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1820,10 +2104,8 @@ const ui::NativeTheme* Widget::GetNativeTheme() const {
     return parent_->GetNativeTheme();
 
 #if BUILDFLAG(IS_LINUX)
-  if (const ui::LinuxUi* linux_ui = ui::LinuxUi::instance()) {
-    if (auto* native_theme = linux_ui->GetNativeTheme(GetNativeWindow()))
-      return native_theme;
-  }
+  if (auto* linux_ui_theme = ui::LinuxUiTheme::GetForWindow(GetNativeWindow()))
+    return linux_ui_theme->GetNativeTheme();
 #endif
 
   return ui::NativeTheme::GetInstanceForNativeUi();
@@ -1837,7 +2119,8 @@ void Widget::SaveWindowPlacement() {
   // by go/crash) that in some circumstances we can end up here after
   // WM_DESTROY, at which point the window delegate is likely gone. So just
   // bail.
-  if (!widget_delegate_ || !widget_delegate_->ShouldSaveWindowPlacement())
+  if (!widget_delegate_ || !widget_delegate_->ShouldSaveWindowPlacement() ||
+      !native_widget_)
     return;
   ui::WindowShowState show_state = ui::SHOW_STATE_NORMAL;
   gfx::Rect bounds;
@@ -1890,7 +2173,7 @@ void Widget::SetInitialBoundsForFramelessWindow(const gfx::Rect& bounds) {
     // No initial bounds supplied, so size the window to its content and
     // center over its parent if preferred size is provided.
     gfx::Size size = contents_view->GetPreferredSize();
-    if (!size.IsEmpty())
+    if (!size.IsEmpty() && native_widget_)
       native_widget_->CenterWindow(size);
   } else {
     // Use the supplied initial bounds.
@@ -1899,10 +2182,11 @@ void Widget::SetInitialBoundsForFramelessWindow(const gfx::Rect& bounds) {
 }
 
 void Widget::SetParent(Widget* parent) {
-  if (parent == parent_)
+  if (parent == parent_.get())
     return;
 
-  parent_ = parent;
+  Widget* old_parent = parent_.get();
+  parent_ = parent ? parent->GetWeakPtr() : nullptr;
 
   // Release the paint-as-active lock on the old parent.
   bool has_lock_on_parent = !!parent_paint_as_active_lock_;
@@ -1917,6 +2201,13 @@ void Widget::SetParent(Widget* parent) {
         parent->RegisterPaintAsActiveChangedCallback(
             base::BindRepeating(&Widget::OnParentShouldPaintAsActiveChanged,
                                 base::Unretained(this)));
+  }
+
+  if (base::FeatureList::IsEnabled(features::kWidgetLayering)) {
+    if (old_parent)
+      old_parent->GetSublevelManager()->UntrackChildWidget(this);
+    if (parent)
+      parent->GetSublevelManager()->TrackChildWidget(this);
   }
 }
 
@@ -1960,7 +2251,7 @@ void Widget::UnlockPaintAsActive() {
     parent_paint_as_active_lock_.reset();
 
   if (ShouldPaintAsActive() != was_paint_as_active)
-    paint_as_active_callbacks_.Notify();
+    NotifyPaintAsActiveChanged();
 }
 
 void Widget::ClearFocusFromWidget() {
@@ -1969,6 +2260,13 @@ void Widget::ClearFocusFromWidget() {
   // the root_view_ being removed.
   if (focus_manager)
     focus_manager->ViewRemoved(root_view_.get());
+}
+
+void Widget::HandleShowRequested() {
+  if (base::FeatureList::IsEnabled(features::kWidgetLayering))
+    sublevel_manager_->EnsureOwnerSublevel();
+
+  internal::AnyWidgetObserverSingleton::GetInstance()->OnAnyWidgetShown(this);
 }
 
 BEGIN_METADATA_BASE(Widget)
@@ -1983,6 +2281,7 @@ ADD_PROPERTY_METADATA(int, Width)
 ADD_PROPERTY_METADATA(int, Height)
 ADD_PROPERTY_METADATA(bool, Visible)
 ADD_PROPERTY_METADATA(ui::ZOrderLevel, ZOrderLevel)
+ADD_PROPERTY_METADATA(gfx::Size, Size)
 END_METADATA
 
 namespace internal {

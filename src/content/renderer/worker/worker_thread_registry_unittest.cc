@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/worker/worker_thread_registry.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "content/public/renderer/worker_thread.h"
@@ -30,7 +31,7 @@ class MockObserver : public WorkerThread::Observer {
         .WillByDefault(testing::Invoke(this, &MockObserver::RemoveSelf));
   }
   void RemoveSelf() { WorkerThread::RemoveObserver(this); }
-  WorkerThreadRegistry* runner_;
+  raw_ptr<WorkerThreadRegistry, ExperimentalRenderer> runner_;
 };
 
 TEST_F(WorkerThreadRegistryTest, BasicObservingAndWorkerId) {

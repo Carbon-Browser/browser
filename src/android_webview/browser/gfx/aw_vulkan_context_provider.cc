@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <utility>
 
 #include "android_webview/public/browser/draw_fn.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/native_library.h"
+#include "base/ranges/algorithm.h"
 #include "gpu/config/skia_limits.h"
 #include "gpu/vulkan/init/gr_vk_memory_allocator_impl.h"
 #include "gpu/vulkan/init/vulkan_factory.h"
@@ -20,6 +21,7 @@
 #include "gpu/vulkan/vulkan_function_pointers.h"
 #include "gpu/vulkan/vulkan_util.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkDirectContext.h"
 #include "third_party/skia/include/gpu/vk/GrVkBackendContext.h"
 #include "third_party/skia/include/gpu/vk/GrVkExtensions.h"
 
@@ -151,9 +153,8 @@ bool AwVulkanContextProvider::Globals::Initialize(
       .fDeviceFeatures2 = params->device_features_2,
       .fMemoryAllocator = gpu::CreateGrVkMemoryAllocator(device_queue.get()),
       .fGetProc = get_proc,
-      .fOwnsInstanceAndDevice = false,
   };
-  gr_context = GrDirectContext::MakeVulkan(backend_context);
+  gr_context = GrDirectContexts::MakeVulkan(backend_context);
   if (!gr_context) {
     LOG(ERROR) << "Unable to initialize GrContext.";
     return false;
@@ -203,8 +204,7 @@ void AwVulkanContextProvider::EnqueueSecondaryCBSemaphores(
     std::vector<VkSemaphore> semaphores) {
   post_submit_semaphores_.reserve(post_submit_semaphores_.size() +
                                   semaphores.size());
-  std::copy(semaphores.begin(), semaphores.end(),
-            std::back_inserter(post_submit_semaphores_));
+  base::ranges::copy(semaphores, std::back_inserter(post_submit_semaphores_));
 }
 
 void AwVulkanContextProvider::EnqueueSecondaryCBPostSubmitTask(
@@ -212,9 +212,8 @@ void AwVulkanContextProvider::EnqueueSecondaryCBPostSubmitTask(
   post_submit_tasks_.push_back(std::move(closure));
 }
 
-absl::optional<uint32_t> AwVulkanContextProvider::GetSyncCpuMemoryLimit()
-    const {
-  return absl::optional<uint32_t>();
+std::optional<uint32_t> AwVulkanContextProvider::GetSyncCpuMemoryLimit() const {
+  return std::optional<uint32_t>();
 }
 
 bool AwVulkanContextProvider::Initialize(AwDrawFn_InitVkParams* params) {

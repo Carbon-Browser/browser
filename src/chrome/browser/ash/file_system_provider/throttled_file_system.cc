@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/queue.h"
 
 namespace ash {
@@ -134,6 +134,12 @@ AbortCallback ThrottledFileSystem::WriteFile(
                                  std::move(callback));
 }
 
+AbortCallback ThrottledFileSystem::FlushFile(
+    int file_handle,
+    storage::AsyncFileUtil::StatusCallback callback) {
+  return file_system_->FlushFile(file_handle, std::move(callback));
+}
+
 AbortCallback ThrottledFileSystem::MoveEntry(
     const base::FilePath& source_path,
     const base::FilePath& target_path,
@@ -173,7 +179,7 @@ const ProvidedFileSystemInfo& ThrottledFileSystem::GetFileSystemInfo() const {
   return file_system_->GetFileSystemInfo();
 }
 
-RequestManager* ThrottledFileSystem::GetRequestManager() {
+OperationRequestManager* ThrottledFileSystem::GetRequestManager() {
   return file_system_->GetRequestManager();
 }
 
@@ -211,6 +217,11 @@ void ThrottledFileSystem::Configure(
 
 base::WeakPtr<ProvidedFileSystemInterface> ThrottledFileSystem::GetWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
+}
+
+std::unique_ptr<ScopedUserInteraction>
+ThrottledFileSystem::StartUserInteraction() {
+  return file_system_->StartUserInteraction();
 }
 
 void ThrottledFileSystem::Abort(int queue_token) {

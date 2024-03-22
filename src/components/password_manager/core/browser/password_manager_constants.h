@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,11 +28,6 @@ extern const char kManageMyPasswordsURL[];
 
 // URL from which native Password Manager UI can be opened.
 extern const char kReferrerURL[];
-
-// URL for a testing website from which native Password Manager UI can be
-// opened.
-// TODO(crbug.com/1329165): remove when the main website is launched.
-extern const char kTestingReferrerURL[];
 
 }  // namespace password_manager
 

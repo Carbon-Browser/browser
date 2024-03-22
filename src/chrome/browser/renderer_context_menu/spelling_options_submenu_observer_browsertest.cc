@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,12 +58,12 @@ class SpellingOptionsSubMenuObserverTest : public InProcessBrowserTest {
         use_spellchecking_service);
     menu()->GetPrefs()->SetString(language::prefs::kAcceptLanguages,
                                   accept_languages);
-    base::ListValue dictionaries_value;
+    base::Value::List dictionaries_value;
     for (const std::string& dict : dictionaries) {
       dictionaries_value.Append(dict);
     }
-    menu()->GetPrefs()->Set(spellcheck::prefs::kSpellCheckDictionaries,
-                            dictionaries_value);
+    menu()->GetPrefs()->SetList(spellcheck::prefs::kSpellCheckDictionaries,
+                                std::move(dictionaries_value));
     observer()->InitMenu(content::ContextMenuParams());
   }
 
@@ -71,12 +71,12 @@ class SpellingOptionsSubMenuObserverTest : public InProcessBrowserTest {
                          const std::vector<std::string>& dictionaries) {
     EXPECT_EQ(spellcheck_enabled, menu()->GetPrefs()->GetBoolean(
                                       spellcheck::prefs::kSpellCheckEnable));
-    base::ListValue dictionaries_value;
+    base::Value::List dictionaries_value;
     for (const std::string& dict : dictionaries) {
       dictionaries_value.Append(dict);
     }
     EXPECT_EQ(dictionaries_value,
-              *menu()->GetPrefs()->GetList(
+              menu()->GetPrefs()->GetList(
                   spellcheck::prefs::kSpellCheckDictionaries));
   }
 

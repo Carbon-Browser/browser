@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
-#include "net/cert/pem.h"
 #include "net/cert/x509_certificate.h"
+#include "third_party/boringssl/src/pki/pem.h"
 
 namespace ash {
 namespace attestation {
@@ -21,7 +21,7 @@ CertificateExpiryStatus CheckCertificateExpiry(
   bool is_expiring_soon = false;
   bool invalid_certificate_found = false;
   bool any_certificate_found = false;
-  net::PEMTokenizer pem_tokenizer(certificate_chain, {"CERTIFICATE"});
+  bssl::PEMTokenizer pem_tokenizer(certificate_chain, {"CERTIFICATE"});
   while (pem_tokenizer.GetNext()) {
     any_certificate_found = true;
     scoped_refptr<net::X509Certificate> x509 =

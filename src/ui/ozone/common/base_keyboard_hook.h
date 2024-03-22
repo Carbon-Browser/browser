@@ -1,20 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_COMMON_BASE_KEYBOARD_HOOK_H_
 #define UI_OZONE_COMMON_BASE_KEYBOARD_HOOK_H_
 
-#include "base/callback.h"
-#include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 #include "ui/ozone/public/platform_keyboard_hook.h"
 
 namespace ui {
 
-enum class DomCode;
+enum class DomCode : uint32_t;
 class KeyEvent;
 
 // Base implementation of KeyboardHook for Ozone platforms.

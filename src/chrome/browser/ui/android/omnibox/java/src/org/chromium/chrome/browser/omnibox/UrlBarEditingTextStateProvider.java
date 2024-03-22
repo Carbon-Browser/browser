@@ -1,12 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.omnibox;
 
-/**
- * Provider of editing text state from the UrlBar/Omnibox.
- */
+/** Provider of editing text state from the UrlBar/Omnibox. */
 public interface UrlBarEditingTextStateProvider {
     /** Return the starting selection index for the text. */
     public int getSelectionStart();

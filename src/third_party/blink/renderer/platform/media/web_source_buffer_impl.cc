@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,12 @@
 #include <cmath>
 #include <limits>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "media/base/media_tracks.h"
+#include "media/base/stream_parser.h"
 #include "media/base/timestamp_constants.h"
 #include "media/filters/chunk_demuxer.h"
 #include "media/filters/source_buffer_parse_warnings.h"
@@ -133,12 +134,17 @@ bool WebSourceBufferImpl::EvictCodedFrames(double currentPlaybackTime,
                                     newDataSize);
 }
 
-bool WebSourceBufferImpl::Append(const unsigned char* data,
-                                 unsigned length,
-                                 double* timestamp_offset) {
+bool WebSourceBufferImpl::AppendToParseBuffer(const unsigned char* data,
+                                              size_t length) {
+  return demuxer_->AppendToParseBuffer(id_, data, length);
+}
+
+media::StreamParser::ParseStatus WebSourceBufferImpl::RunSegmentParserLoop(
+    double* timestamp_offset) {
   base::TimeDelta old_offset = timestamp_offset_;
-  bool success = demuxer_->AppendData(id_, data, length, append_window_start_,
-                                      append_window_end_, &timestamp_offset_);
+  media::StreamParser::ParseStatus parse_result =
+      demuxer_->RunSegmentParserLoop(id_, append_window_start_,
+                                     append_window_end_, &timestamp_offset_);
 
   // Coded frame processing may update the timestamp offset. If the caller
   // provides a non-nullptr |timestamp_offset| and frame processing changes the
@@ -148,7 +154,7 @@ bool WebSourceBufferImpl::Append(const unsigned char* data,
   if (timestamp_offset && old_offset != timestamp_offset_)
     *timestamp_offset = timestamp_offset_.InSecondsF();
 
-  return success;
+  return parse_result;
 }
 
 bool WebSourceBufferImpl::AppendChunks(
@@ -181,7 +187,20 @@ void WebSourceBufferImpl::ResetParserState() {
 void WebSourceBufferImpl::Remove(double start, double end) {
   DCHECK_GE(start, 0);
   DCHECK_GE(end, 0);
-  demuxer_->Remove(id_, DoubleToTimeDelta(start), DoubleToTimeDelta(end));
+
+  const auto timedelta_start = DoubleToTimeDelta(start);
+  const auto timedelta_end = DoubleToTimeDelta(end);
+
+  // Since `start - end` may be less than 1 microsecond and base::TimeDelta is
+  // limited to microseconds, treat smaller ranges as zero.
+  //
+  // We could throw an error here, but removing nanosecond ranges is allowed by
+  // the spec and the risk of breaking existing sites is high.
+  if (timedelta_start == timedelta_end) {
+    return;
+  }
+
+  demuxer_->Remove(id_, timedelta_start, timedelta_end);
 }
 
 bool WebSourceBufferImpl::CanChangeType(const WebString& content_type,
@@ -228,15 +247,12 @@ void WebSourceBufferImpl::RemovedFromMediaSource() {
 
 WebMediaPlayer::TrackType mediaTrackTypeToBlink(media::MediaTrack::Type type) {
   switch (type) {
-    case media::MediaTrack::Audio:
+    case media::MediaTrack::Type::kAudio:
       return WebMediaPlayer::kAudioTrack;
-    case media::MediaTrack::Text:
-      return WebMediaPlayer::kTextTrack;
-    case media::MediaTrack::Video:
+    case media::MediaTrack::Type::kVideo:
       return WebMediaPlayer::kVideoTrack;
   }
-  NOTREACHED();
-  return WebMediaPlayer::kAudioTrack;
+  NOTREACHED_NORETURN();
 }
 
 void WebSourceBufferImpl::InitSegmentReceived(

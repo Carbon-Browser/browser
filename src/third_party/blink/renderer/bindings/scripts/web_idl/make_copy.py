@@ -1,14 +1,6 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
-
-
-import sys
-
-# TODO(crbug.com/1174969): Remove this once Python2 is obsoleted.
-if sys.version_info.major != 2:
-    long = int
-    basestring = str
 
 
 def make_copy(obj, memo=None):
@@ -23,8 +15,7 @@ def make_copy(obj, memo=None):
     if memo is None:
         memo = dict()
 
-    if (obj is None
-            or isinstance(obj, (bool, int, long, float, complex, basestring))):
+    if obj is None or isinstance(obj, (bool, int, float, complex, str)):
         # Do not make a copy if the object is of an immutable primitive type
         # (or its subclass).
         #

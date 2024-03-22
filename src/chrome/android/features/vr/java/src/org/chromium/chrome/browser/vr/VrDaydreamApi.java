@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import com.google.vr.ndk.base.GvrApi;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.StrictModeContext;
 
-/**
- * A wrapper for DaydreamApi.
- */
+/** A wrapper for DaydreamApi. */
 public class VrDaydreamApi {
     private DaydreamApi mDaydreamApi;
 

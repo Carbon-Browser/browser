@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,14 @@
 #include <memory>
 #include <vector>
 
+#include "ash/ash_export.h"
 #include "ash/public/cpp/holding_space/holding_space_controller.h"
 #include "ash/public/cpp/holding_space/holding_space_controller_observer.h"
 #include "ash/public/cpp/holding_space/holding_space_model.h"
 #include "ash/public/cpp/holding_space/holding_space_model_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ui {
@@ -26,9 +29,12 @@ class HoldingSpaceItemViewsSection;
 class HoldingSpaceViewDelegate;
 
 // Child bubble of the `HoldingSpaceTrayBubble`.
-class HoldingSpaceTrayChildBubble : public views::View,
-                                    public HoldingSpaceControllerObserver,
-                                    public HoldingSpaceModelObserver {
+class ASH_EXPORT HoldingSpaceTrayChildBubble
+    : public views::View,
+      public HoldingSpaceControllerObserver,
+      public HoldingSpaceModelObserver {
+  METADATA_HEADER(HoldingSpaceTrayChildBubble, views::View)
+
  public:
   explicit HoldingSpaceTrayChildBubble(HoldingSpaceViewDelegate* delegate);
   HoldingSpaceTrayChildBubble(const HoldingSpaceTrayChildBubble& other) =
@@ -65,16 +71,21 @@ class HoldingSpaceTrayChildBubble : public views::View,
   virtual std::vector<std::unique_ptr<HoldingSpaceItemViewsSection>>
   CreateSections() = 0;
 
+  // Invoked to create the `placeholder_` for this child bubble to be shown
+  // when all `sections_` are not visible. Note that when a `placeholder_` is
+  // provided, the child bubble will always be visible. When absent, the child
+  // bubble will only be visible when one or more of its `sections_` are
+  // visible.
+  virtual std::unique_ptr<views::View> CreatePlaceholder();
+
   HoldingSpaceViewDelegate* delegate() { return delegate_; }
 
  private:
   // views::View:
-  const char* GetClassName() const override;
   void ChildPreferredSizeChanged(views::View* child) override;
   void ChildVisibilityChanged(views::View* child) override;
   void OnGestureEvent(ui::GestureEvent* event) override;
   bool OnMousePressed(const ui::MouseEvent& event) override;
-  void OnThemeChanged() override;
 
   // Invoked to animate in/out this view if necessary.
   void MaybeAnimateIn();
@@ -91,10 +102,12 @@ class HoldingSpaceTrayChildBubble : public views::View,
   void OnAnimateInCompleted(bool aborted);
   void OnAnimateOutCompleted(bool aborted);
 
-  HoldingSpaceViewDelegate* const delegate_;
+  const raw_ptr<HoldingSpaceViewDelegate, DanglingUntriaged | ExperimentalAsh>
+      delegate_;
 
   // Views owned by view hierarchy.
   std::vector<HoldingSpaceItemViewsSection*> sections_;
+  raw_ptr<views::View, ExperimentalAsh> placeholder_ = nullptr;
 
   // Whether or not to ignore `ChildVisibilityChanged()` events. This is used
   // when removing all holding space item views from `sections_` to prevent this

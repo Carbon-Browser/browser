@@ -1,15 +1,14 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/test/fake_speech_recognition_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/speech_recognition_event_listener.h"
@@ -129,7 +128,7 @@ void FakeSpeechRecognitionManager::StartSession(int session_id) {
 
   if (should_send_fake_response_) {
     // Give the fake result in a short while.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &FakeSpeechRecognitionManager::SetFakeRecognitionResult,
@@ -198,7 +197,7 @@ void FakeSpeechRecognitionManager::SetFakeRecognitionResult(
   blink::mojom::SpeechRecognitionResultPtr result =
       blink::mojom::SpeechRecognitionResult::New();
   result->hypotheses.push_back(blink::mojom::SpeechRecognitionHypothesis::New(
-      base::ASCIIToUTF16(fake_result_), 1.0));
+      base::UTF8ToUTF16(fake_result_), 1.0));
   // If `is_provisional` is true, then the result is an interim result that
   // could be changed. Otherwise, it's a final result. Consequently,
   // `is_provisional` is the converse of `is_final`.

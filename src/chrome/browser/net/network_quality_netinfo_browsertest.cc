@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -98,19 +98,19 @@ class NetInfoBrowserTest : public InProcessBrowserTest {
 
   std::string RunScriptExtractString(const std::string& script) {
     return content::EvalJs(browser()->tab_strip_model()->GetActiveWebContents(),
-                           script, content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+                           script)
         .ExtractString();
   }
 
   double RunScriptExtractDouble(const std::string& script) {
     return content::EvalJs(browser()->tab_strip_model()->GetActiveWebContents(),
-                           script, content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+                           script)
         .ExtractDouble();
   }
 
   int RunScriptExtractInt(const std::string& script) {
     return content::EvalJs(browser()->tab_strip_model()->GetActiveWebContents(),
-                           script, content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+                           script)
         .ExtractInt();
   }
 };

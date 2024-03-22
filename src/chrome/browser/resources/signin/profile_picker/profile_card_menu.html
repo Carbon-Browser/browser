@@ -143,12 +143,12 @@
 
 <cr-icon-button iron-icon="cr:more-vert" id="moreActionsButton"
     on-click="onMoreActionsButtonClicked_" title="$i18n{profileMenuName}"
-    aria-label="$i18n{profileMenuName}">
+    aria-label="[[moreActionsButtonAriaLabel_]]">
 </cr-icon-button>
 
 <cr-action-menu id="actionMenu" role-description="$i18n{menu}">
   <button class="dropdown-item" on-click="onCustomizeButtonClicked_">
-    <iron-icon icon="profiles:create" aria-hidden="true"></iron-icon>
+    <iron-icon icon="cr:create" aria-hidden="true"></iron-icon>
     $i18n{profileMenuCustomizeText}
   </button>
   <button class="dropdown-item" on-click="onRemoveButtonClicked_">

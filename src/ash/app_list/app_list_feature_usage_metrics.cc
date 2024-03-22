@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,23 +75,10 @@ AppListFeatureUsageMetrics::AppListFeatureUsageMetrics()
       tablet_delegate_(std::make_unique<TabletDelegate>()),
       tablet_metrics_(kTabletLauncher, tablet_delegate_.get()) {
   Shell::Get()->app_list_controller()->AddObserver(this);
-  Shell::Get()->tablet_mode_controller()->AddObserver(this);
 }
 
 AppListFeatureUsageMetrics::~AppListFeatureUsageMetrics() {
-  Shell::Get()->tablet_mode_controller()->RemoveObserver(this);
   Shell::Get()->app_list_controller()->RemoveObserver(this);
-}
-
-void AppListFeatureUsageMetrics::OnTabletModeStarted() {
-  // The legacy launcher can transition directly from clamshell to tablet mode
-  // without triggering a visibility update. ProductivityLauncher explicitly
-  // closes the clamshell launcher before showing the tablet launcher.
-  if (is_using_clamshell_ && !features::IsProductivityLauncherEnabled()) {
-    StopClamshellUsage();
-    if (Shell::Get()->app_list_controller()->IsVisible())
-      StartTabletUsage();
-  }
 }
 
 void AppListFeatureUsageMetrics::OnAppListVisibilityChanged(

@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_components/history_clusters/clusters.js';
-import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/cr_elements/cr_tabs/cr_tabs.js';
 import 'chrome://resources/polymer/v3_0/iron-media-query/iron-media-query.js';
 import 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
@@ -16,34 +16,38 @@ import './shared_style.css.js';
 import './side_bar.js';
 import './strings.m.js';
 
-import {CrDrawerElement} from 'chrome://resources/cr_elements/cr_drawer/cr_drawer.js';
-import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import {FindShortcutMixin, FindShortcutMixinInterface} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {hasKeyModifiers} from 'chrome://resources/js/util.m.js';
-import {WebUIListenerMixin, WebUIListenerMixinInterface} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import type {CrDrawerElement} from 'chrome://resources/cr_elements/cr_drawer/cr_drawer.js';
+import type {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import type {FindShortcutMixinInterface} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
+import {FindShortcutMixin} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
+import type {WebUiListenerMixinInterface} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {getTrustedScriptURL} from 'chrome://resources/js/static_types.js';
+import {hasKeyModifiers} from 'chrome://resources/js/util.js';
 import {IronA11yAnnouncer} from 'chrome://resources/polymer/v3_0/iron-a11y-announcer/iron-a11y-announcer.js';
-import {IronPagesElement} from 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
+import type {IronPagesElement} from 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
 import {IronScrollTargetBehavior} from 'chrome://resources/polymer/v3_0/iron-scroll-target-behavior/iron-scroll-target-behavior.js';
 import {mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './app.html.js';
-import {BrowserService, BrowserServiceImpl} from './browser_service.js';
+import type {BrowserService} from './browser_service.js';
+import {BrowserServiceImpl} from './browser_service.js';
 import {HistoryPageViewHistogram} from './constants.js';
-import {ForeignSession, QueryResult, QueryState} from './externs.js';
-import {HistoryListElement} from './history_list.js';
-import {HistoryToolbarElement} from './history_toolbar.js';
+import type {ForeignSession, QueryResult, QueryState} from './externs.js';
+import type {HistoryListElement} from './history_list.js';
+import type {HistoryToolbarElement} from './history_toolbar.js';
 import {Page, TABBED_PAGES} from './router.js';
-import {FooterInfo, HistorySideBarElement} from './side_bar.js';
+import type {FooterInfo, HistorySideBarElement} from './side_bar.js';
 
 let lazyLoadPromise: Promise<void>|null = null;
 export function ensureLazyLoaded(): Promise<void> {
   if (!lazyLoadPromise) {
     const script = document.createElement('script');
     script.type = 'module';
-    script.src = './lazy_load.js';
+    script.src = getTrustedScriptURL`./lazy_load.js` as unknown as string;
     document.body.appendChild(script);
 
     lazyLoadPromise = Promise.all([
@@ -110,13 +114,6 @@ export function listenForPrivilegedLinkClicks() {
   });
 }
 
-declare global {
-  interface Window {
-    // https://github.com/microsoft/TypeScript/issues/40807
-    requestIdleCallback(callback: () => void): void;
-  }
-}
-
 export interface HistoryAppElement {
   $: {
     'content': IronPagesElement,
@@ -132,9 +129,9 @@ export interface HistoryAppElement {
 const HistoryAppElementBase =
     mixinBehaviors(
         [IronScrollTargetBehavior],
-        FindShortcutMixin(WebUIListenerMixin(PolymerElement))) as {
+        FindShortcutMixin(WebUiListenerMixin(PolymerElement))) as {
       new (): PolymerElement & FindShortcutMixinInterface &
-          IronScrollTargetBehavior & WebUIListenerMixinInterface,
+          IronScrollTargetBehavior & WebUiListenerMixinInterface,
     };
 
 export class HistoryAppElement extends HistoryAppElementBase {
@@ -196,6 +193,12 @@ export class HistoryAppElement extends HistoryAppElementBase {
         value: () => loadTimeData.getBoolean('isHistoryClustersVisible'),
       },
 
+      historyClustersPath_: {
+        type: String,
+        value: () =>
+            loadTimeData.getBoolean('renameJourneys') ? 'grouped' : 'journeys',
+      },
+
       showHistoryClusters_: {
         type: Boolean,
         computed:
@@ -211,7 +214,8 @@ export class HistoryAppElement extends HistoryAppElementBase {
 
       tabsIcons_: {
         type: Array,
-        value: () => ['images/list.svg', 'images/journeys.svg'],
+        value: () =>
+            ['images/list.svg', 'chrome://resources/images/icon_journeys.svg'],
       },
 
       tabsNames_: {
@@ -227,16 +231,17 @@ export class HistoryAppElement extends HistoryAppElementBase {
   }
 
   footerInfo: FooterInfo;
-  private browserService_: BrowserService|null = null;
+  private browserService_: BrowserService = BrowserServiceImpl.getInstance();
   private eventTracker_: EventTracker = new EventTracker();
   private hasDrawer_: boolean;
   private historyClustersEnabled_: boolean;
+  private historyClustersPath_: string;
   private historyClustersVisible_: boolean;
   private isUserSignedIn_: boolean = loadTimeData.getBoolean('isUserSignedIn');
   private pendingDelete_: boolean;
   private queryResult_: QueryResult;
   private queryState_: QueryState;
-  private selectedPage_: Page;
+  private selectedPage_: string;
   private selectedTab_: number;
   private showHistoryClusters_: boolean;
   private tabsIcons_: string[];
@@ -260,21 +265,20 @@ export class HistoryAppElement extends HistoryAppElementBase {
     super.connectedCallback();
 
     this.eventTracker_.add(
-        document, 'keydown', e => this.onKeyDown_(e as KeyboardEvent));
+        document, 'keydown', (e: Event) => this.onKeyDown_(e as KeyboardEvent));
     this.eventTracker_.add(
         document, 'visibilitychange', this.onVisibilityChange_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'sign-in-state-changed',
         (signedIn: boolean) => this.onSignInStateChanged_(signedIn));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'has-other-forms-changed',
         (hasOtherForms: boolean) =>
             this.onHasOtherFormsChanged_(hasOtherForms));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'foreign-sessions-changed',
         (sessionList: ForeignSession[]) =>
             this.setForeignSessions_(sessionList));
-    this.browserService_ = BrowserServiceImpl.getInstance();
     this.shadowRoot!.querySelector('history-query-manager')!.initialize();
     this.browserService_!.getForeignSessions().then(
         sessionList => this.setForeignSessions_(sessionList));
@@ -283,12 +287,18 @@ export class HistoryAppElement extends HistoryAppElementBase {
   override ready() {
     super.ready();
 
-    this.addEventListener('cr-toolbar-menu-tap', this.onCrToolbarMenuTap_);
+    this.addEventListener('cr-toolbar-menu-click', this.onCrToolbarMenuClick_);
     this.addEventListener('delete-selected', this.deleteSelected);
     this.addEventListener('history-checkbox-select', this.checkboxSelected);
     this.addEventListener('history-close-drawer', this.closeDrawer_);
     this.addEventListener('history-view-changed', this.historyViewChanged_);
     this.addEventListener('unselect-all', this.unselectAll);
+
+    // If there are url params, the router updates the selectedTab/Page and
+    // sets queryState params. Setting the tab manually overrides this.
+    if (!window.location.search) {
+      this.selectedTab_ = this.getDefaultSelectedTab_();
+    }
   }
 
   override disconnectedCallback() {
@@ -301,22 +311,28 @@ export class HistoryAppElement extends HistoryAppElementBase {
         new CustomEvent(eventName, {bubbles: true, composed: true, detail}));
   }
 
+  /**
+   * Returns the tab that should be opened based on url params and then
+   * preferences
+   */
+  private getDefaultSelectedTab_(): number {
+    if (window.location.pathname === '/' + this.historyClustersPath_) {
+      return TABBED_PAGES.indexOf(Page.HISTORY_CLUSTERS);
+    }
+    return loadTimeData.getInteger('lastSelectedTab');
+  }
+
   private computeShowHistoryClusters_(): boolean {
     return this.historyClustersEnabled_ && this.historyClustersVisible_;
   }
 
   private historyClustersSelected_(
-      _selectedPage: Page, _showHistoryClusters: boolean): boolean {
+      _selectedPage: string, _showHistoryClusters: boolean): boolean {
     return this.selectedPage_ === Page.HISTORY_CLUSTERS &&
         this.showHistoryClusters_;
   }
 
   private onFirstRender_() {
-    setTimeout(() => {
-      this.browserService_!.recordTime(
-          'History.ResultsRenderedTime', window.performance.now());
-    });
-
     // Focus the search field on load. Done here to ensure the history page
     // is rendered before we try to take focus.
     const searchField = this.$.toolbar.searchField;
@@ -326,7 +342,7 @@ export class HistoryAppElement extends HistoryAppElementBase {
 
     // Lazily load the remainder of the UI.
     ensureLazyLoaded().then(function() {
-      window.requestIdleCallback(function() {
+      requestIdleCallback(function() {
         // https://github.com/microsoft/TypeScript/issues/13569
         (document as any).fonts.load('bold 12px Roboto');
       });
@@ -345,7 +361,7 @@ export class HistoryAppElement extends HistoryAppElementBase {
     }
   }
 
-  private onCrToolbarMenuTap_() {
+  private onCrToolbarMenuClick_() {
     this.$.drawer.get().toggle();
   }
 
@@ -467,7 +483,7 @@ export class HistoryAppElement extends HistoryAppElementBase {
     this.set('footerInfo.otherFormsOfHistory', hasOtherForms);
   }
 
-  private syncedTabsSelected_(_selectedPage: Page): boolean {
+  private syncedTabsSelected_(_selectedPage: string): boolean {
     return this.selectedPage_ === Page.SYNCED_TABS;
   }
 
@@ -480,7 +496,7 @@ export class HistoryAppElement extends HistoryAppElementBase {
     return querying && !incremental && searchTerm !== '';
   }
 
-  private selectedPageChanged_(newPage: Page, oldPage: Page) {
+  private selectedPageChanged_(newPage: string, oldPage: string) {
     this.unselectAll();
     this.historyViewChanged_();
     this.maybeUpdateSelectedHistoryTab_();
@@ -516,6 +532,7 @@ export class HistoryAppElement extends HistoryAppElementBase {
     // Change in the currently selected tab requires change in the currently
     // selected page.
     this.selectedPage_ = TABBED_PAGES[this.selectedTab_];
+    this.browserService_!.setLastSelectedTab(this.selectedTab_);
   }
 
   private maybeUpdateSelectedHistoryTab_() {

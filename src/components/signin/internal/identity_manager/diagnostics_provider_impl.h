@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,10 @@ class DiagnosticsProviderImpl final : public DiagnosticsProvider {
   base::TimeDelta GetDelayBeforeMakingCookieRequests() const override;
 
  private:
-  raw_ptr<GaiaCookieManagerService> gaia_cookie_manager_service_;
-  raw_ptr<ProfileOAuth2TokenService> profile_oauth2_token_service_;
+  raw_ptr<GaiaCookieManagerService, AcrossTasksDanglingUntriaged>
+      gaia_cookie_manager_service_;
+  raw_ptr<ProfileOAuth2TokenService, AcrossTasksDanglingUntriaged>
+      profile_oauth2_token_service_;
 };
 
 }  // namespace signin

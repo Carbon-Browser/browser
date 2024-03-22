@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,4 +27,4 @@ GL_EXPORT PFN_vkGetInstanceProcAddr QueryVkGetInstanceProcAddrFromANGLE();
 
 }  // namespace gl
 
-#endif  // UI_GL_GL_ANGLE_UTIL_H_
+#endif  // UI_GL_GL_ANGLE_UTIL_VULKAN_H_

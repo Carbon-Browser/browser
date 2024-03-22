@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/run_loop.h"
@@ -39,7 +39,7 @@ void ScopedPageFocusOverride::DispatchProtocolMessage(
       base::JSONReader::Read(message_str);
   ASSERT_TRUE(parsed_message.has_value());
 
-  absl::optional<int> id = parsed_message->FindIntPath("id");
+  absl::optional<int> id = parsed_message->GetDict().FindInt("id");
   if (!id || !*id || *id != last_sent_id_)
     return;
 
@@ -50,12 +50,11 @@ void ScopedPageFocusOverride::DispatchProtocolMessage(
 void ScopedPageFocusOverride::AgentHostClosed(DevToolsAgentHost* agent_host) {}
 
 void ScopedPageFocusOverride::SetFocusEmulationEnabled(bool enabled) {
-  base::Value command(base::Value::Type::DICTIONARY);
-  command.SetIntKey("id", ++last_sent_id_);
-  command.SetStringKey("method", "Emulation.setFocusEmulationEnabled");
-  base::Value params(base::Value::Type::DICTIONARY);
-  params.SetBoolKey("enabled", enabled);
-  command.SetKey("params", std::move(params));
+  base::Value::Dict command =
+      base::Value::Dict()
+          .Set("id", ++last_sent_id_)
+          .Set("method", "Emulation.setFocusEmulationEnabled")
+          .Set("params", base::Value::Dict().Set("enabled", enabled));
 
   std::string json_command;
   base::JSONWriter::Write(command, &json_command);

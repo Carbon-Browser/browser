@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/enterprise/browser/device_trust/device_trust_key_manager.h"
@@ -180,6 +181,9 @@ class ChromeBrowserCloudManagementController
 
     // Called when enrollment result is recorded.
     virtual void OnEnrollmentResultRecorded() {}
+
+    // Called when shutting down.
+    virtual void OnShutdown() {}
   };
 
   // Directory name under the user-data-dir where the policy data is stored.
@@ -255,10 +259,15 @@ class ChromeBrowserCloudManagementController
   void SetGaiaURLLoaderFactory(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
 
+  enterprise_reporting::ReportScheduler* report_scheduler() {
+    return report_scheduler_.get();
+  }
+
  protected:
   void NotifyPolicyRegisterFinished(bool succeeded);
   void NotifyBrowserUnenrolled(bool succeeded);
   void NotifyCloudReportingLaunched();
+  void NotifyShutdown();
 
  private:
   bool GetEnrollmentTokenAndClientId(std::string* enrollment_token,

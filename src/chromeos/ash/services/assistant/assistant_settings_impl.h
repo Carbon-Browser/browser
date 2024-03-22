@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,20 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_settings.h"
-#include "chromeos/services/libassistant/public/mojom/settings_controller.mojom-forward.h"
-#include "chromeos/services/libassistant/public/mojom/speaker_id_enrollment_controller.mojom-forward.h"
+#include "chromeos/ash/services/libassistant/public/mojom/settings_controller.mojom-forward.h"
+#include "chromeos/ash/services/libassistant/public/mojom/speaker_id_enrollment_controller.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
 namespace ash {
+
 class AssistantController;
 class AssistantStateBase;
-}  // namespace ash
 
-namespace chromeos {
 namespace assistant {
 
 class ServiceContext;
@@ -36,10 +36,10 @@ class AssistantSettingsImpl : public AssistantSettings {
   ~AssistantSettingsImpl() override;
 
   void Initialize(
-      mojo::PendingRemote<
-          chromeos::libassistant::mojom::SpeakerIdEnrollmentController>
+      mojo::PendingRemote<libassistant::mojom::SpeakerIdEnrollmentController>
           enrollment_controller_remote,
-      chromeos::libassistant::mojom::SettingsController* settings_controller);
+      libassistant::mojom::SettingsController* settings_controller);
+  void Stop();
 
   // AssistantSettings overrides:
   void GetSettings(const std::string& selector,
@@ -58,25 +58,26 @@ class AssistantSettingsImpl : public AssistantSettings {
 
  private:
   void HandleSpeakerIdEnrollmentStatusSync(
-      chromeos::libassistant::mojom::SpeakerIdEnrollmentStatusPtr status);
+      libassistant::mojom::SpeakerIdEnrollmentStatusPtr status);
   void HandleDeviceAppsStatusSync(base::OnceCallback<void(bool)> callback,
                                   const std::string& settings);
 
-  ash::AssistantStateBase* assistant_state();
-  ash::AssistantController* assistant_controller();
-  chromeos::libassistant::mojom::SettingsController& settings_controller();
+  AssistantStateBase* assistant_state();
+  AssistantController* assistant_controller();
+  libassistant::mojom::SettingsController& settings_controller();
 
-  ServiceContext* const context_;
-  chromeos::libassistant::mojom::SettingsController* settings_controller_ =
-      nullptr;
+  const raw_ptr<ServiceContext, ExperimentalAsh> context_;
+  raw_ptr<libassistant::mojom::SettingsController,
+          DanglingUntriaged | ExperimentalAsh>
+      settings_controller_ = nullptr;
 
-  mojo::Remote<chromeos::libassistant::mojom::SpeakerIdEnrollmentController>
+  mojo::Remote<libassistant::mojom::SpeakerIdEnrollmentController>
       speaker_id_enrollment_remote_;
 
   base::WeakPtrFactory<AssistantSettingsImpl> weak_factory_{this};
 };
 
 }  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_ASSISTANT_SETTINGS_IMPL_H_

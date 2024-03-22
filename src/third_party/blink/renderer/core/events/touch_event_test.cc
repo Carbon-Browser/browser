@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,8 @@ class TouchEventTest : public PageTestBase {
     web_touch_event.dispatch_type = dispatch_type;
     return TouchEvent::Create(
         WebCoalescedInputEvent(web_touch_event, ui::LatencyInfo()), nullptr,
-        nullptr, nullptr, "touchstart", &Window(), TouchAction::kAuto);
+        nullptr, nullptr, event_type_names::kTouchstart, &Window(),
+        TouchAction::kAuto);
   }
 
  private:

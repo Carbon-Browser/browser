@@ -1,14 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import { AppearanceBrowserProxy, AppearanceBrowserProxyImpl,HomeUrlInputElement, SettingsAppearancePageElement} from 'chrome://settings/settings.js';
-import { assertEquals,assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {AppearanceBrowserProxy, AppearanceBrowserProxyImpl, ColorSchemeMode, CustomizeColorSchemeModeBrowserProxy, CustomizeColorSchemeModeClientCallbackRouter, CustomizeColorSchemeModeClientRemote, CustomizeColorSchemeModeHandlerRemote, HomeUrlInputElement, SettingsAppearancePageElement, SettingsToggleButtonElement, SystemTheme} from 'chrome://settings/settings.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-// clang-format on
+import {TestMock} from 'chrome://webui-test/test_mock.js';
+import {isVisible} from 'chrome://webui-test/test_util.js';
 
 class TestAppearanceBrowserProxy extends TestBrowserProxy implements
     AppearanceBrowserProxy {
@@ -21,8 +21,12 @@ class TestAppearanceBrowserProxy extends TestBrowserProxy implements
       'getDefaultZoom',
       'getThemeInfo',
       'isChildAccount',
+      'recordHoverCardImagesEnabledChanged',
       'useDefaultTheme',
-      'useSystemTheme',
+      // <if expr="is_linux">
+      'useGtkTheme',
+      'useQtTheme',
+      // </if>
       'validateStartupPage',
     ]);
   }
@@ -55,13 +59,23 @@ class TestAppearanceBrowserProxy extends TestBrowserProxy implements
     return this.isChildAccount_;
   }
 
+  recordHoverCardImagesEnabledChanged(enabled: boolean) {
+    this.methodCalled('recordHoverCardImagesEnabledChanged', enabled);
+  }
+
   useDefaultTheme() {
     this.methodCalled('useDefaultTheme');
   }
 
-  useSystemTheme() {
-    this.methodCalled('useSystemTheme');
+  // <if expr="is_linux">
+  useGtkTheme() {
+    this.methodCalled('useGtkTheme');
   }
+
+  useQtTheme() {
+    this.methodCalled('useQtTheme');
+  }
+  // </if>
 
   setDefaultZoom(defaultZoom: number) {
     this.defaultZoom_ = defaultZoom;
@@ -83,10 +97,20 @@ class TestAppearanceBrowserProxy extends TestBrowserProxy implements
 
 let appearancePage: SettingsAppearancePageElement;
 let appearanceBrowserProxy: TestAppearanceBrowserProxy;
+let colorSchemeHandler: TestMock<CustomizeColorSchemeModeHandlerRemote>&
+    CustomizeColorSchemeModeHandlerRemote;
+let colorSchemeCallbackRouter: CustomizeColorSchemeModeClientRemote;
 
 function createAppearancePage() {
   appearanceBrowserProxy.reset();
-  document.body.innerHTML = '';
+  document.body.innerHTML = window.trustedTypes!.emptyHTML;
+
+  colorSchemeHandler =
+      TestMock.fromClass(CustomizeColorSchemeModeHandlerRemote);
+  CustomizeColorSchemeModeBrowserProxy.setInstance(
+      colorSchemeHandler, new CustomizeColorSchemeModeClientCallbackRouter());
+  colorSchemeCallbackRouter = CustomizeColorSchemeModeBrowserProxy.getInstance()
+                                  .callbackRouter.$.bindNewPipeAndPassRemote();
 
   appearancePage = document.createElement('settings-appearance-page');
   appearancePage.set('prefs', {
@@ -104,8 +128,8 @@ function createAppearancePage() {
         id: {
           value: '',
         },
-        use_system: {
-          value: false,
+        system_theme: {
+          value: SystemTheme.DEFAULT,
         },
       },
     },
@@ -123,6 +147,7 @@ suite('AppearanceHandler', function() {
   setup(function() {
     appearanceBrowserProxy = new TestAppearanceBrowserProxy();
     AppearanceBrowserProxyImpl.setInstance(appearanceBrowserProxy);
+
     createAppearancePage();
   });
 
@@ -133,20 +158,20 @@ suite('AppearanceHandler', function() {
   const THEME_ID_PREF = 'prefs.extensions.theme.id.value';
 
   // <if expr="is_linux">
-  const USE_SYSTEM_PREF = 'prefs.extensions.theme.use_system.value';
+  const SYSTEM_THEME_PREF = 'prefs.extensions.theme.system_theme.value';
 
   test('useDefaultThemeLinux', function() {
     assertFalse(!!appearancePage.get(THEME_ID_PREF));
-    assertFalse(appearancePage.get(USE_SYSTEM_PREF));
+    assertEquals(appearancePage.get(SYSTEM_THEME_PREF), SystemTheme.DEFAULT);
     // No custom nor system theme in use; "USE CLASSIC" should be hidden.
     assertFalse(!!appearancePage.shadowRoot!.querySelector('#useDefault'));
 
-    appearancePage.set(USE_SYSTEM_PREF, true);
+    appearancePage.set(SYSTEM_THEME_PREF, SystemTheme.GTK);
     flush();
     // If the system theme is in use, "USE CLASSIC" should show.
     assertTrue(!!appearancePage.shadowRoot!.querySelector('#useDefault'));
 
-    appearancePage.set(USE_SYSTEM_PREF, false);
+    appearancePage.set(SYSTEM_THEME_PREF, SystemTheme.DEFAULT);
     appearancePage.set(THEME_ID_PREF, 'fake theme id');
     flush();
 
@@ -159,19 +184,19 @@ suite('AppearanceHandler', function() {
     return appearanceBrowserProxy.whenCalled('useDefaultTheme');
   });
 
-  test('useSystemThemeLinux', function() {
+  test('useGtkThemeLinux', function() {
     assertFalse(!!appearancePage.get(THEME_ID_PREF));
-    appearancePage.set(USE_SYSTEM_PREF, true);
+    appearancePage.set(SYSTEM_THEME_PREF, SystemTheme.GTK);
     flush();
     // The "USE GTK+" button shouldn't be showing if it's already in use.
-    assertFalse(!!appearancePage.shadowRoot!.querySelector('#useSystem'));
+    assertFalse(!!appearancePage.shadowRoot!.querySelector('#useGtk'));
 
     appearanceBrowserProxy.setIsChildAccount(true);
-    appearancePage.set(USE_SYSTEM_PREF, false);
+    appearancePage.set(SYSTEM_THEME_PREF, SystemTheme.DEFAULT);
     flush();
     // Child account users have their own theme and can't use GTK+ theme.
     assertFalse(!!appearancePage.shadowRoot!.querySelector('#useDefault'));
-    assertFalse(!!appearancePage.shadowRoot!.querySelector('#useSystem'));
+    assertFalse(!!appearancePage.shadowRoot!.querySelector('#useGtk'));
     // If there's no "USE" buttons, the container should be hidden.
     assertTrue(
         appearancePage.shadowRoot!
@@ -187,11 +212,11 @@ suite('AppearanceHandler', function() {
             .querySelector<HTMLElement>('#themesSecondaryActions')!.hidden);
 
     const button =
-        appearancePage.shadowRoot!.querySelector<HTMLElement>('#useSystem');
+        appearancePage.shadowRoot!.querySelector<HTMLElement>('#useGtk');
     assertTrue(!!button);
 
     button!.click();
-    return appearanceBrowserProxy.whenCalled('useSystemTheme');
+    return appearanceBrowserProxy.whenCalled('useGtkTheme');
   });
   // </if>
 
@@ -250,6 +275,32 @@ suite('AppearanceHandler', function() {
   });
   // </if>
 
+  test('ColorSchemeMode', async () => {
+    assertFalse(isVisible(appearancePage.$.colorSchemeModeRow));
+
+    colorSchemeHandler.reset();
+    document.documentElement.toggleAttribute('chrome-refresh-2023', true);
+    createAppearancePage();
+    await colorSchemeHandler.whenCalled('initializeColorSchemeMode');
+
+    assertTrue(isVisible(appearancePage.$.colorSchemeModeRow));
+    assertEquals(
+        1, colorSchemeHandler.getCallCount('initializeColorSchemeMode'));
+
+    // Assert that changes to the color scheme mode updates the select menu.
+    colorSchemeCallbackRouter.setColorSchemeMode(ColorSchemeMode.kLight);
+    assertEquals(
+        `${ColorSchemeMode.kLight}`,
+        appearancePage.$.colorSchemeModeSelect.value);
+
+    // Assert that changing the select menu updates the color scheme.
+    appearancePage.$.colorSchemeModeSelect.value = `${ColorSchemeMode.kDark}`;
+    appearancePage.$.colorSchemeModeSelect.dispatchEvent(new Event('change'));
+    const handlerArg =
+        await colorSchemeHandler.whenCalled('setColorSchemeMode');
+    assertEquals(ColorSchemeMode.kDark, handlerArg);
+  });
+
   test('default zoom handling', async function() {
     function getDefaultZoomText() {
       const zoomLevel = appearancePage.$.zoomLevel;
@@ -306,7 +357,6 @@ suite('AppearanceHandler', function() {
     createAppearancePage();
     assertFalse(!!appearancePage.shadowRoot!.querySelector('#side-panel'));
   });
-
 });
 
 suite('HomeUrlInput', function() {
@@ -315,7 +365,7 @@ suite('HomeUrlInput', function() {
   setup(function() {
     appearanceBrowserProxy = new TestAppearanceBrowserProxy();
     AppearanceBrowserProxyImpl.setInstance(appearanceBrowserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     homeUrlInput = document.createElement('home-url-input');
     homeUrlInput.set(
@@ -331,7 +381,8 @@ suite('HomeUrlInput', function() {
 
     homeUrlInput.value = '@@@';
     appearanceBrowserProxy.setValidStartupPageResponse(false);
-    homeUrlInput.$.input.fire('input');
+    homeUrlInput.$.input.dispatchEvent(
+        new CustomEvent('input', {bubbles: true, composed: true}));
 
     const url = await appearanceBrowserProxy.whenCalled('validateStartupPage');
 
@@ -341,8 +392,49 @@ suite('HomeUrlInput', function() {
     assertTrue(homeUrlInput.invalid);
 
     // Should reset to default value on change event.
-    homeUrlInput.$.input.fire('change');
+    homeUrlInput.$.input.dispatchEvent(
+        new CustomEvent('change', {bubbles: true, composed: true}));
     flush();
     assertEquals(homeUrlInput.value, 'test');
+  });
+});
+
+suite('HoverCardSettings', function() {
+  const HOVER_CARD_IMAGES_PREF = 'browser.hovercard.image_previews_enabled';
+
+  setup(function() {
+    loadTimeData.overrideValues({
+      showHoverCardImagesOption: true,
+    });
+
+    createAppearancePage();
+    appearancePage.set('prefs.browser', {
+      hovercard: {
+        image_previews_enabled: {
+          value: false,
+        },
+      },
+    });
+  });
+
+  test('hover card image preview toggle', async function() {
+    const toggle =
+        appearancePage.shadowRoot!.querySelector<SettingsToggleButtonElement>(
+            '#hoverCardImagesToggle');
+    assertTrue(!!toggle);
+    assertFalse(toggle.checked);
+
+    toggle.click();
+    assertTrue(toggle.checked);
+    assertTrue(appearancePage.getPref(HOVER_CARD_IMAGES_PREF).value);
+    assertTrue(await appearanceBrowserProxy.whenCalled(
+        'recordHoverCardImagesEnabledChanged'));
+
+    appearanceBrowserProxy.reset();
+    toggle.click();
+    assertFalse(toggle.checked);
+    assertFalse(appearancePage.getPref(HOVER_CARD_IMAGES_PREF).value);
+    assertFalse(await appearanceBrowserProxy.whenCalled(
+        'recordHoverCardImagesEnabledChanged'));
   });
 });

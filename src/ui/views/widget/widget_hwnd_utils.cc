@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,6 @@
 #include "ui/base/ui_base_switches.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/win/hwnd_message_handler.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "ui/base/win/shell.h"
-#endif
 
 namespace views {
 
@@ -61,13 +57,13 @@ void CalculateWindowStylesFromInitParams(
       //   WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
       *style |= WS_OVERLAPPEDWINDOW;
       if (!widget_delegate->CanMaximize())
-        *style &= ~WS_MAXIMIZEBOX;
+        *style &= static_cast<DWORD>(~WS_MAXIMIZEBOX);
       if (!widget_delegate->CanMinimize())
-        *style &= ~WS_MINIMIZEBOX;
+        *style &= static_cast<DWORD>(~WS_MINIMIZEBOX);
       if (!widget_delegate->CanResize())
-        *style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
+        *style &= static_cast<DWORD>(~(WS_THICKFRAME | WS_MAXIMIZEBOX));
       if (params.remove_standard_frame)
-        *style &= ~(WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+        *style &= static_cast<DWORD>(~(WS_MINIMIZEBOX | WS_MAXIMIZEBOX));
 
       if (native_widget_delegate->IsDialogBox()) {
         *style |= DS_MODALFRAME;
@@ -87,7 +83,7 @@ void CalculateWindowStylesFromInitParams(
 
       // See layered window comment below.
       if (is_translucent)
-        *style &= ~(WS_THICKFRAME | WS_CAPTION);
+        *style &= static_cast<DWORD>(~(WS_THICKFRAME | WS_CAPTION));
       break;
     }
     case Widget::InitParams::TYPE_CONTROL:
@@ -107,12 +103,7 @@ void CalculateWindowStylesFromInitParams(
     case Widget::InitParams::TYPE_MENU:
       *style |= WS_POPUP;
       if (params.remove_standard_frame) {
-        // If the platform doesn't support drop shadow, decorate the Window
-        // with just a border.
-        if (ui::win::IsAeroGlassEnabled())
-          *style |= WS_THICKFRAME;
-        else
-          *style |= WS_BORDER;
+        *style |= WS_THICKFRAME;
       }
       if (!params.force_show_in_taskbar)
         *ex_style |= WS_EX_TOOLWINDOW;
@@ -123,7 +114,7 @@ void CalculateWindowStylesFromInitParams(
       *style |= WS_POPUP;
       break;
     default:
-      NOTREACHED();
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -163,11 +154,9 @@ void ConfigureWindowStyles(
   //    not have not have WM_SIZEBOX, WS_THICKFRAME or WS_CAPTION in its
   //    style.
   //
-  // This doesn't work when Aero is disabled, so disable it in that case.
   // Software composited windows can continue to use WS_EX_LAYERED.
   bool is_translucent =
-      (params.opacity == Widget::InitParams::WindowOpacity::kTranslucent &&
-       (ui::win::IsAeroGlassEnabled() || params.force_software_compositing));
+      (params.opacity == Widget::InitParams::WindowOpacity::kTranslucent);
 
   CalculateWindowStylesFromInitParams(params, widget_delegate,
                                       native_widget_delegate, is_translucent,

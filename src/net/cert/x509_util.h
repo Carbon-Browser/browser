@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "base/containers/span.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "crypto/signature_verifier.h"
@@ -20,6 +20,7 @@
 #include "net/base/net_export.h"
 #include "third_party/boringssl/src/include/openssl/base.h"
 #include "third_party/boringssl/src/include/openssl/pool.h"
+#include "third_party/boringssl/src/pki/parsed_certificate.h"
 
 namespace crypto {
 class RSAPrivateKey;
@@ -27,7 +28,6 @@ class RSAPrivateKey;
 
 namespace net {
 
-struct ParseCertificateOptions;
 class X509Certificate;
 
 namespace x509_util {
@@ -112,7 +112,7 @@ NET_EXPORT bssl::UniquePtr<CRYPTO_BUFFER> CreateCryptoBuffer(
 
 // Creates a CRYPTO_BUFFER in the same pool returned by GetBufferPool.
 NET_EXPORT bssl::UniquePtr<CRYPTO_BUFFER> CreateCryptoBuffer(
-    const base::StringPiece& data);
+    base::StringPiece data);
 
 // Overload with no definition, to disallow creating a CRYPTO_BUFFER from a
 // char* due to StringPiece implicit ctor.
@@ -151,7 +151,7 @@ NET_EXPORT bool CreateCertBuffersFromPKCS7Bytes(
     std::vector<bssl::UniquePtr<CRYPTO_BUFFER>>* handles);
 
 // Returns the default ParseCertificateOptions for the net stack.
-NET_EXPORT ParseCertificateOptions DefaultParseCertificateOptions();
+NET_EXPORT bssl::ParseCertificateOptions DefaultParseCertificateOptions();
 
 // On success, returns true and updates |hash| to be the SHA-256 hash of the
 // subjectPublicKeyInfo of the certificate in |buffer|. If |buffer| is not a
@@ -169,8 +169,10 @@ NET_EXPORT bool SignatureVerifierInitWithCertificate(
     base::span<const uint8_t> signature,
     const CRYPTO_BUFFER* certificate);
 
-// Returns true if the signature on the certificate uses SHA-1.
-NET_EXPORT_PRIVATE bool HasSHA1Signature(const CRYPTO_BUFFER* cert_buffer);
+// Returns true if the signature on the certificate is RSASSA-PKCS1-v1_5 with
+// SHA-1.
+NET_EXPORT_PRIVATE bool HasRsaPkcs1Sha1Signature(
+    const CRYPTO_BUFFER* cert_buffer);
 
 }  // namespace x509_util
 

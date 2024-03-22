@@ -1,35 +1,33 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/third_party_authenticator_base.h"
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "remoting/base/constants.h"
 #include "remoting/base/rsa_key_pair.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // static
-const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenUrlTag =
-    { remoting::kChromotingXmlNamespace, "third-party-token-url" };
-const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenScopeTag =
-    { remoting::kChromotingXmlNamespace, "third-party-token-scope" };
-const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenTag =
-    { remoting::kChromotingXmlNamespace, "third-party-token" };
+const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenUrlTag = {
+    remoting::kChromotingXmlNamespace, "third-party-token-url"};
+const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenScopeTag = {
+    remoting::kChromotingXmlNamespace, "third-party-token-scope"};
+const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenTag = {
+    remoting::kChromotingXmlNamespace, "third-party-token"};
 
 ThirdPartyAuthenticatorBase::ThirdPartyAuthenticatorBase(
     Authenticator::State initial_state)
     : token_state_(initial_state),
       started_(false),
-      rejection_reason_(INVALID_CREDENTIALS) {
-}
+      rejection_reason_(RejectionReason::INVALID_CREDENTIALS) {}
 
 ThirdPartyAuthenticatorBase::~ThirdPartyAuthenticatorBase() = default;
 
@@ -38,17 +36,19 @@ bool ThirdPartyAuthenticatorBase::started() const {
 }
 
 Authenticator::State ThirdPartyAuthenticatorBase::state() const {
-  if (token_state_ == ACCEPTED)
+  if (token_state_ == ACCEPTED) {
     return underlying_->state();
+  }
   return token_state_;
 }
 
-Authenticator::RejectionReason
-ThirdPartyAuthenticatorBase::rejection_reason() const {
+Authenticator::RejectionReason ThirdPartyAuthenticatorBase::rejection_reason()
+    const {
   DCHECK_EQ(state(), REJECTED);
 
-  if (token_state_ == REJECTED)
+  if (token_state_ == REJECTED) {
     return rejection_reason_;
+  }
   return underlying_->rejection_reason();
 }
 
@@ -98,5 +98,4 @@ ThirdPartyAuthenticatorBase::CreateChannelAuthenticator() const {
   return underlying_->CreateChannelAuthenticator();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

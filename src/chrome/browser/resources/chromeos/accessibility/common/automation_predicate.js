@@ -1,22 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
- * @fileoverview ChromeVox predicates for the automation extension API.
+ * @fileoverview Predicates for the automation extension API.
  */
+import {constants} from './constants.js';
 
-goog.provide('AutomationPredicate');
-goog.provide('AutomationPredicate.Binary');
-goog.provide('AutomationPredicate.Unary');
-
-goog.require('constants');
-
-goog.scope(function() {
+const ActionType = chrome.automation.ActionType;
 const AutomationNode = chrome.automation.AutomationNode;
+const DefaultActionVerb = chrome.automation.DefaultActionVerb;
+const Dir = constants.Dir;
 const InvalidState = chrome.automation.InvalidState;
 const MarkerType = chrome.automation.MarkerType;
-const Dir = constants.Dir;
 const Restriction = chrome.automation.Restriction;
 const Role = chrome.automation.RoleType;
 const State = chrome.automation.StateType;
@@ -33,8 +29,7 @@ const isActionableOrHasActionableDescendant = function(
   // Static text nodes are never actionable for the purposes of navigation even
   // if they have default action verb set.
   if (node.role !== Role.STATIC_TEXT && node.defaultActionVerb &&
-      (node.defaultActionVerb !==
-           chrome.automation.DefaultActionVerb.CLICK_ANCESTOR ||
+      (node.defaultActionVerb !== DefaultActionVerb.CLICK_ANCESTOR ||
        sawClickAncestorAction)) {
     return true;
   }
@@ -44,8 +39,7 @@ const isActionableOrHasActionableDescendant = function(
   }
 
   sawClickAncestorAction = sawClickAncestorAction || !node.defaultActionVerb ||
-      node.defaultActionVerb ===
-          chrome.automation.DefaultActionVerb.CLICK_ANCESTOR;
+      node.defaultActionVerb === DefaultActionVerb.CLICK_ANCESTOR;
   for (let i = 0; i < node.children.length; i++) {
     if (isActionableOrHasActionableDescendant(
             node.children[i], sawClickAncestorAction)) {
@@ -63,8 +57,7 @@ const isActionableOrHasActionableDescendant = function(
  */
 const hasActionableDescendant = function(node) {
   const sawClickAncestorAction = !node.defaultActionVerb ||
-      node.defaultActionVerb ===
-          chrome.automation.DefaultActionVerb.CLICK_ANCESTOR;
+      node.defaultActionVerb === DefaultActionVerb.CLICK_ANCESTOR;
   for (let i = 0; i < node.children.length; i++) {
     if (isActionableOrHasActionableDescendant(
             node.children[i], sawClickAncestorAction)) {
@@ -94,6 +87,9 @@ const nodeNameContainedInStaticTextChildren = function(node) {
     if (child.role !== Role.STATIC_TEXT) {
       return false;
     }
+    if (child.name === undefined) {
+      return false;
+    }
     if (name.substring(nameIndex, nameIndex + child.name.length) !==
         child.name) {
       return false;
@@ -110,9 +106,7 @@ const nodeNameContainedInStaticTextChildren = function(node) {
   return true;
 };
 
-AutomationPredicate = class {
-  constructor() {}
-
+export class AutomationPredicate {
   /**
    * Constructs a predicate given a list of roles.
    * @param {!Array<Role>} roles
@@ -345,7 +339,7 @@ AutomationPredicate = class {
       return true;
     }
 
-    // Given no other information, ChromeVox wants to visit focusable
+    // Given no other information, we want to visit focusable
     // (e.g. tabindex=0) nodes only when it has a name or is a control.
     if (node.state[State.FOCUSABLE] &&
         (node.name || node.state[State.EDITABLE] ||
@@ -442,11 +436,21 @@ AutomationPredicate = class {
         nodeNameContainedInStaticTextChildren(node)) {
       return false;
     }
+    // Do not consider containers that are clickable containers, unless they
+    // also contain actionable nodes.
+    if (node.clickable && !hasActionableDescendant(node)) {
+      return false;
+    }
 
     // Always try to dive into subtrees with actionable descendants for some
     // roles even if these roles are not naturally containers.
-    if ((node.role === Role.BUTTON || node.role === Role.CHECK_BOX ||
-         node.role === Role.RADIO_BUTTON || node.role === Role.SWITCH) &&
+    if ([
+          Role.BUTTON,
+          Role.CELL,
+          Role.CHECK_BOX,
+          Role.RADIO_BUTTON,
+          Role.SWITCH,
+        ].includes(node.role) &&
         hasActionableDescendant(node)) {
       return true;
     }
@@ -461,6 +465,7 @@ AutomationPredicate = class {
         Role.GENERIC_CONTAINER,
         Role.DOCUMENT,
         Role.GROUP,
+        Role.PDF_ROOT,
         Role.LIST,
         Role.LIST_ITEM,
         Role.TAB,
@@ -512,7 +517,7 @@ AutomationPredicate = class {
             });
       case Role.TOOLBAR:
         return node.root.role === Role.DESKTOP &&
-            !(node.nextFocus || !node.previousFocus);
+            !(node.nextWindowFocus || !node.previousWindowFocus);
       case Role.ROOT_WEB_AREA:
         if (node.parent && node.parent.role === Role.WEB_VIEW &&
             !node.parent.state[State.FOCUSED]) {
@@ -592,6 +597,12 @@ AutomationPredicate = class {
       return false;
     }
 
+    // AXTreeSourceAndroid computes names for clickables.
+    // Ignore nodes for which this computation is not done
+    if (node.clickable && !node.name && !node.value && !node.description) {
+      return true;
+    }
+
     // Ignore some roles.
     return AutomationPredicate.leaf(node) && (AutomationPredicate.roles([
              Role.CLIENT,
@@ -600,6 +611,7 @@ AutomationPredicate = class {
              Role.GROUP,
              Role.IMAGE,
              Role.PARAGRAPH,
+             Role.SCROLL_VIEW,
              Role.STATIC_TEXT,
              Role.SVG_ROOT,
              Role.TABLE_HEADER_CONTAINER,
@@ -735,10 +747,8 @@ AutomationPredicate = class {
    */
   static autoScrollable(node) {
     return Boolean(node.scrollable) &&
-        (node.standardActions.includes(
-             chrome.automation.ActionType.SCROLL_FORWARD) ||
-         node.standardActions.includes(
-             chrome.automation.ActionType.SCROLL_BACKWARD)) &&
+        (node.standardActions.includes(ActionType.SCROLL_FORWARD) ||
+         node.standardActions.includes(ActionType.SCROLL_BACKWARD)) &&
         (node.role === Role.GRID || node.role === Role.LIST ||
          node.role === Role.POP_UP_BUTTON || node.role === Role.SCROLL_VIEW);
   }
@@ -814,7 +824,7 @@ AutomationPredicate = class {
       return AutomationPredicate.listLike(autoNode) && (autoNode !== avoidNode);
     };
   }
-};
+}
 
 /**
  * @typedef {function(!AutomationNode) : boolean}
@@ -925,6 +935,7 @@ AutomationPredicate.structuralContainer = AutomationPredicate.roles([
   Role.PLUGIN_OBJECT,
   Role.UNKNOWN,
   Role.PANE,
+  Role.SCROLL_VIEW,
 ]);
 
 
@@ -938,12 +949,34 @@ AutomationPredicate.clickable = AutomationPredicate.match({
     AutomationPredicate.button,
     AutomationPredicate.link,
     node => {
-      return node.defaultActionVerb ===
-          chrome.automation.DefaultActionVerb.CLICK;
+      return node.defaultActionVerb === DefaultActionVerb.CLICK;
     },
   ],
   anyAttribute: {clickable: true},
 });
+
+/**
+ * Returns if the node is long clickable.
+ * @param {!AutomationNode} node
+ * @return {boolean}
+ */
+AutomationPredicate.longClickable = AutomationPredicate.match({
+  anyPredicate: [
+    node => {
+      return node.standardActions.includes(
+          chrome.automation.ActionType.LONG_CLICK);
+    },
+  ],
+  anyAttribute: {longClickable: true},
+});
+
+/**
+ * Returns if the node is a list option, either in a menu or a listbox.
+ * @param {!AutomationNode} node
+ * @return {boolean}
+ */
+AutomationPredicate.listOption =
+    AutomationPredicate.roles([Role.LIST_BOX_OPTION, Role.MENU_LIST_OPTION]);
 
 // Table related predicates.
 /**
@@ -954,6 +987,13 @@ AutomationPredicate.clickable = AutomationPredicate.match({
 AutomationPredicate.cellLike =
     AutomationPredicate.roles([Role.CELL, Role.ROW_HEADER, Role.COLUMN_HEADER]);
 
+/**
+ * Returns if the node is a table header.
+ * @param {!AutomationNode} node
+ * @return {boolean}
+ */
+AutomationPredicate.tableHeader =
+    AutomationPredicate.roles([Role.ROW_HEADER, Role.COLUMN_HEADER]);
 
 /**
  * Matches against nodes that we may be able to retrieve image data from.
@@ -992,4 +1032,14 @@ AutomationPredicate.selectableText = AutomationPredicate.roles([
   Role.LIST_MARKER,
 ]);
 
-});  // goog.scope
+/**
+ * Matches against pop-up button like nodes.
+ * Historically, single value <select> controls were represented as a
+ * popup button, but they are distinct from <button aria-haspopup='menu'>.
+ * @param {!AutomationNode} node
+ * @return {boolean}
+ */
+AutomationPredicate.popUpButton = AutomationPredicate.roles([
+  Role.COMBO_BOX_SELECT,
+  Role.POP_UP_BUTTON,
+]);

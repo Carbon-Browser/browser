@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class GeoNotifier final : public GarbageCollected<GeoNotifier>,
   void Trace(Visitor*) const;
   const char* NameInHeapSnapshot() const override { return "GeoNotifier"; }
 
-  const PositionOptions* Options() const { return options_; }
+  const PositionOptions* Options() const { return options_.Get(); }
 
   // Sets the given error as the fatal error if there isn't one yet.
   // Starts the timer with an interval of 0.

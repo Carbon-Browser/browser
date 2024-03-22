@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_OFFLINE_PAGES_ANDROID_DOWNLOADS_OFFLINE_PAGE_INFOBAR_DELEGATE_H_
 #define CHROME_BROWSER_OFFLINE_PAGES_ANDROID_DOWNLOADS_OFFLINE_PAGE_INFOBAR_DELEGATE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/download/android/duplicate_download_infobar_delegate.h"
 #include "components/infobars/core/infobar_delegate.h"
 #include "url/gurl.h"

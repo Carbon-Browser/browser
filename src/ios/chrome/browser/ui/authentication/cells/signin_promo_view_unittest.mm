@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,13 @@
 
 #import <MaterialComponents/MaterialOverlayWindow.h>
 
-#import "ios/chrome/browser/signin/signin_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/signin/model/signin_util.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_constants.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/util/image_util.h"
 #import "ios/public/provider/chrome/browser/signin/signin_resources_api.h"
-#include "testing/platform_test.h"
-#include "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
+#import "third_party/ocmock/gtest_support.h"
 
 using SigninPromoViewTest = PlatformTest;
 
@@ -39,7 +35,7 @@ TEST_F(SigninPromoViewTest, ChromiumLogoImage) {
   // The image should be different than the one set, since a circular background
   // should have been added.
   EXPECT_NE(customImage, view.imageView.image);
-  view.mode = SigninPromoViewModeSyncWithPrimaryAccount;
+  view.mode = SigninPromoViewModeSignedInWithPrimaryAccount;
   EXPECT_NE(nil, view.imageView.image);
   // The image should has been changed from the logo.
   EXPECT_NE(chromiumLogo, view.imageView.image);
@@ -57,7 +53,7 @@ TEST_F(SigninPromoViewTest, SecondaryButtonVisibility) {
   EXPECT_TRUE(view.secondaryButton.hidden);
   view.mode = SigninPromoViewModeSigninWithAccount;
   EXPECT_FALSE(view.secondaryButton.hidden);
-  view.mode = SigninPromoViewModeSyncWithPrimaryAccount;
+  view.mode = SigninPromoViewModeSignedInWithPrimaryAccount;
   EXPECT_TRUE(view.secondaryButton.hidden);
 }
 
@@ -81,20 +77,55 @@ TEST_F(SigninPromoViewTest, AccessibilityLabel) {
 
 // Tests that signin is created on non-compact layout and that setting compact
 // layout changes the primary button styling.
-TEST_F(SigninPromoViewTest, CompactLayout) {
+TEST_F(SigninPromoViewTest, ChangeLayout) {
   UIWindow* currentWindow = GetAnyKeyWindow();
   SigninPromoView* view =
       [[SigninPromoView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
   view.mode = SigninPromoViewModeNoAccounts;
   [currentWindow.rootViewController.view addSubview:view];
-  // Ensure that default layout is not compact.
-  EXPECT_FALSE(view.compactLayout);
+  // The default mode should be CompactVertical.
+  EXPECT_EQ(view.promoViewStyle, SigninPromoViewStyleStandard);
   // In full layout, the primary button is rounded with background color.
   EXPECT_TRUE(view.primaryButton.backgroundColor);
   EXPECT_GT(view.primaryButton.layer.cornerRadius, 0.0);
 
-  [view setCompactLayout:YES];
-  // In compact layout, the primary button is plain.
+  // Switch to compact vertical layout.
+  view.promoViewStyle = SigninPromoViewStyleCompactVertical;
+  EXPECT_EQ(view.promoViewStyle, SigninPromoViewStyleCompactVertical);
+  // In compact vertical layout, the primary button has a background color.
+  EXPECT_TRUE(view.primaryButton.backgroundColor);
+  EXPECT_GT(view.primaryButton.layer.cornerRadius, 0.0);
+  // The secondary button should be hidden.
+  EXPECT_TRUE(view.secondaryButton.hidden);
+
+  // Switch to compact horizontal layout.
+  view.promoViewStyle = SigninPromoViewStyleCompactHorizontal;
+  EXPECT_EQ(view.promoViewStyle, SigninPromoViewStyleCompactHorizontal);
+  // In compact vertical layout, the primary button is plain.
   EXPECT_FALSE(view.primaryButton.backgroundColor);
   EXPECT_EQ(view.primaryButton.layer.cornerRadius, 0.0);
+  // The secondary button should be hidden.
+  EXPECT_TRUE(view.secondaryButton.hidden);
+}
+
+// Tests that buttons are disabled or enabled when the spinner started or
+// stopped.
+TEST_F(SigninPromoViewTest, StartAndStopSpinner) {
+  UIWindow* currentWindow = GetAnyKeyWindow();
+  SigninPromoView* view =
+      [[SigninPromoView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
+  view.mode = SigninPromoViewModeNoAccounts;
+  [currentWindow.rootViewController.view addSubview:view];
+  view.mode = SigninPromoViewModeSigninWithAccount;
+  EXPECT_TRUE(view.primaryButton.enabled);
+  EXPECT_TRUE(view.secondaryButton.enabled);
+  EXPECT_TRUE(view.closeButton.enabled);
+  [view startSignInSpinner];
+  EXPECT_FALSE(view.primaryButton.enabled);
+  EXPECT_FALSE(view.secondaryButton.enabled);
+  EXPECT_FALSE(view.closeButton.enabled);
+  [view stopSignInSpinner];
+  EXPECT_TRUE(view.primaryButton.enabled);
+  EXPECT_TRUE(view.secondaryButton.enabled);
+  EXPECT_TRUE(view.closeButton.enabled);
 }

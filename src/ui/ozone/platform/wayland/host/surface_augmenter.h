@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,16 @@ class SurfaceAugmenter : public wl::GlobalObjectRegistrar<SurfaceAugmenter> {
   ~SurfaceAugmenter();
 
   bool SupportsSubpixelAccuratePosition() const;
+  // Returns true if augmented_sub_surface_set_clip_rect is supported.
+  // TODO(crbug.com/1457446): Remove this when augmented_surface_set_clip_rect
+  // is spread enough.
+  bool SupportsClipRect() const;
+  // Returns true if augmented_surface_set_clip_rect is supported.
+  bool SupportsClipRectOnAugmentedSurface() const;
+  bool SupportsTransform() const;
+  // Returns true if augmented_surface_set_rounded_corners_clip_bounds handles
+  // bounds as its in local surface coordinates space.
+  bool NeedsRoundedClipBoundsInLocalSurfaceCoordinates() const;
 
   uint32_t GetSurfaceAugmentorVersion() const;
 
@@ -42,7 +52,7 @@ class SurfaceAugmenter : public wl::GlobalObjectRegistrar<SurfaceAugmenter> {
   wl::Object<augmented_sub_surface> CreateAugmentedSubSurface(
       wl_subsurface* subsurface);
 
-  wl::Object<wl_buffer> CreateSolidColorBuffer(SkColor color,
+  wl::Object<wl_buffer> CreateSolidColorBuffer(const SkColor4f& color,
                                                const gfx::Size& size);
 
  private:

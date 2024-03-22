@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/identity/identity_token_cache.h"
 
-#include <algorithm>
+#include <map>
+#include <set>
 
-#include "base/containers/cxx20_erase.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/extensions/api/identity/identity_constants.h"
 
@@ -184,7 +184,7 @@ void IdentityTokenCache::EraseAccessToken(const std::string& extension_id,
        entry_it != access_tokens_cache_.end(); entry_it++) {
     if (entry_it->first.extension_id == extension_id) {
       AccessTokensValue& cached_tokens = entry_it->second;
-      size_t num_erased = base::EraseIf(
+      size_t num_erased = std::erase_if(
           cached_tokens, [&token](const IdentityTokenCacheValue& cached_token) {
             return cached_token.token() == token;
           });
@@ -200,12 +200,12 @@ void IdentityTokenCache::EraseAccessToken(const std::string& extension_id,
 
 void IdentityTokenCache::EraseAllTokensForExtension(
     const std::string& extension_id) {
-  base::EraseIf(access_tokens_cache_,
+  std::erase_if(access_tokens_cache_,
                 [&extension_id](const auto& key_value_pair) {
                   const AccessTokensKey& key = key_value_pair.first;
                   return key.extension_id == extension_id;
                 });
-  base::EraseIf(intermediate_value_cache_,
+  std::erase_if(intermediate_value_cache_,
                 [&extension_id](const auto& key_value_pair) {
                   const ExtensionTokenKey& key = key_value_pair.first;
                   return key.extension_id == extension_id;
@@ -224,9 +224,8 @@ const IdentityTokenCacheValue& IdentityTokenCache::GetToken(
   auto find_tokens_it = access_tokens_cache_.find(access_tokens_key);
   if (find_tokens_it != access_tokens_cache_.end()) {
     const AccessTokensValue& cached_tokens = find_tokens_it->second;
-    auto matched_token_it = std::find_if(
-        cached_tokens.begin(), cached_tokens.end(),
-        [&key](const auto& cached_token) {
+    auto matched_token_it =
+        base::ranges::find_if(cached_tokens, [&key](const auto& cached_token) {
           return key.scopes.size() <= cached_token.granted_scopes().size() &&
                  base::ranges::includes(cached_token.granted_scopes(),
                                         key.scopes);
@@ -258,7 +257,7 @@ void IdentityTokenCache::EraseStaleTokens() {
   for (auto it = access_tokens_cache_.begin();
        it != access_tokens_cache_.end();) {
     auto& cached_tokens = it->second;
-    base::EraseIf(cached_tokens, [](const IdentityTokenCacheValue& value) {
+    std::erase_if(cached_tokens, [](const IdentityTokenCacheValue& value) {
       return value.status() == IdentityTokenCacheValue::CACHE_STATUS_NOTFOUND;
     });
 
@@ -268,7 +267,7 @@ void IdentityTokenCache::EraseStaleTokens() {
       ++it;
   }
 
-  base::EraseIf(intermediate_value_cache_, [](const auto& key_value_pair) {
+  std::erase_if(intermediate_value_cache_, [](const auto& key_value_pair) {
     const IdentityTokenCacheValue& value = key_value_pair.second;
     return value.status() == IdentityTokenCacheValue::CACHE_STATUS_NOTFOUND;
   });

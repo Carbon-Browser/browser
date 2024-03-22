@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,26 @@
 
 namespace blink {
 
+// Description of a change to a <source> element.
+enum class ImageSourceChangeType {
+  // A <source> element was added.
+  kAdded,
+  // A <source> element was removed.
+  kRemoved,
+  // An attribute of a <source> element changed.
+  kAttribute,
+  // The 'media' condition of a <source> element changed.
+  kMedia,
+};
+
 class HTMLPictureElement final : public HTMLElement {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   explicit HTMLPictureElement(Document&);
 
-  void SourceOrMediaChanged();
-  void SourceAttributeChanged();
+  void SourceChanged(ImageSourceChangeType);
+  void SourceDimensionChanged();
   void RemoveListenerFromSourceChildren();
   void AddListenerToSourceChildren();
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,19 @@
  * @fileoverview Calculates the menu items for the node menus in the ChromeVox
  * panel.
  */
+import {AutomationPredicate} from '../../../common/automation_predicate.js';
+import {AutomationUtil} from '../../../common/automation_util.js';
+import {constants} from '../../../common/constants.js';
 import {CursorRange} from '../../../common/cursors/range.js';
+import {AutomationTreeWalker} from '../../../common/tree_walker.js';
+import {BridgeCallbackId} from '../../common/bridge_callback_manager.js';
+import {BridgeContext} from '../../common/bridge_constants.js';
 import {Msgs} from '../../common/msgs.js';
 import {PanelBridge} from '../../common/panel_bridge.js';
-import {ChromeVoxState} from '../chromevox_state.js';
+import {PanelNodeMenuData, PanelNodeMenuId, PanelNodeMenuItemData} from '../../common/panel_menu_data.js';
+import {ChromeVoxRange} from '../chromevox_range.js';
 import {Output} from '../output/output.js';
-import {OutputEventType} from '../output/output_types.js';
+import {OutputCustomEvent} from '../output/output_types.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
 
@@ -38,16 +45,15 @@ export class PanelNodeMenuBackground {
     this.nodeCount_ = 0;
     /** @private {boolean} */
     this.isEmpty_ = true;
+    /** @private {function()} */
+    this.onFinish_;
+    /** @private {!Promise} */
+    this.finishPromise_ = new Promise(resolve => this.onFinish_ = resolve);
   }
 
-  /** @param {number} callbackNodeIndex */
-  static focusNodeCallback(callbackNodeIndex) {
-    if (!PanelNodeMenuBackground.callbackNodes_[callbackNodeIndex]) {
-      return;
-    }
-    ChromeVoxState.instance.navigateToRange(CursorRange.fromNode(
-        /** @type {!AutomationNode} */ (
-            PanelNodeMenuBackground.callbackNodes_[callbackNodeIndex])));
+  /** @return {!Promise} */
+  waitForFinish() {
+    return this.finishPromise_;
   }
 
   /**
@@ -93,21 +99,22 @@ export class PanelNodeMenuBackground {
         const output = new Output();
         const range = CursorRange.fromNode(node);
         output.withoutHints();
-        output.withSpeech(range, range, OutputEventType.NAVIGATE);
+        output.withSpeech(range, range, OutputCustomEvent.NAVIGATE);
         const title = output.toString();
 
-        const callbackNodeIndex = PanelNodeMenuBackground.callbackNodes_.length;
-        PanelNodeMenuBackground.callbackNodes_.push(node);
+        const callbackId = new BridgeCallbackId(
+            BridgeContext.BACKGROUND,
+            () => ChromeVoxRange.navigateTo(CursorRange.fromNode(node)));
         const isActive = node === this.node_ && this.isActivated_;
         const menuId = this.menuId_;
-        this.addMenuItemFromData_({title, callbackNodeIndex, isActive, menuId});
+        this.addMenuItemFromData_({title, callbackId, isActive, menuId});
       }
 
       if (!this.isActivated_) {
         this.nodeCount_++;
         if (this.nodeCount_ >= PanelNodeMenuBackground.MAX_NODES_BEFORE_ASYNC) {
           this.nodeCount_ = 0;
-          window.setTimeout(this.findMoreNodes_.bind(this), 0);
+          setTimeout(() => this.findMoreNodes_(), 0);
           return;
         }
       }
@@ -124,11 +131,12 @@ export class PanelNodeMenuBackground {
     if (this.isEmpty_) {
       this.addMenuItemFromData_({
         title: Msgs.getMsg('panel_menu_item_none'),
-        callbackNodeIndex: -1,
+        callbackId: null,
         isActive: false,
         menuId: this.menuId_,
       });
     }
+    this.onFinish_();
   }
 
   /**
@@ -146,10 +154,3 @@ export class PanelNodeMenuBackground {
  * @const {number}
  */
 PanelNodeMenuBackground.MAX_NODES_BEFORE_ASYNC = 100;
-
-/**
- * An array of nodes associated with a PanelNodeMenuItem, saved so we can
- * set the current ChromeVox range when the user selects an item.
- * @private {!Array<chrome.automation.AutomationNode>}
- */
-PanelNodeMenuBackground.callbackNodes_ = [];

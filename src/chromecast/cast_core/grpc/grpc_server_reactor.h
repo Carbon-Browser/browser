@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <grpcpp/generic/async_generic_service.h>
 #include <grpcpp/grpcpp.h>
 
+#include <optional>
 #include "base/check_op.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromecast/cast_core/grpc/grpc_status_or.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cast {
 namespace utils {
@@ -129,10 +130,10 @@ class GrpcServerReactor : public grpc::ServerGenericBidiReactor {
   }
 
   const std::string name_;
-  grpc::CallbackServerContext* context_;
+  raw_ptr<grpc::CallbackServerContext> context_;
 
-  absl::optional<grpc::ByteBuffer> request_byte_buffer_;
-  absl::optional<grpc::ByteBuffer> response_byte_buffer_;
+  std::optional<grpc::ByteBuffer> request_byte_buffer_;
+  std::optional<grpc::ByteBuffer> response_byte_buffer_;
 };
 
 }  // namespace utils

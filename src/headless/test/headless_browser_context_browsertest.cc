@@ -1,30 +1,31 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/thread_restrictions.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
-#include "headless/app/headless_shell_switches.h"
 #include "headless/lib/browser/headless_web_contents_impl.h"
-#include "headless/public/devtools/domains/runtime.h"
 #include "headless/public/headless_browser.h"
 #include "headless/public/headless_browser_context.h"
-#include "headless/public/headless_devtools_client.h"
-#include "headless/public/headless_devtools_target.h"
 #include "headless/public/headless_web_contents.h"
 #include "headless/test/headless_browser_test.h"
+#include "headless/test/headless_browser_test_utils.h"
+#include "headless/test/headless_devtooled_browsertest.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/size.h"
+
+using simple_devtools_protocol_client::SimpleDevToolsProtocolClient;
 
 namespace headless {
 namespace {
@@ -47,10 +48,9 @@ const char kIsolatedPageCookie[] = "mood=quixotic";
 //
 // If the tabs aren't properly isolated, step 7 will fail.
 class HeadlessBrowserContextIsolationTest
-    : public HeadlessAsyncDevTooledBrowserTest {
+    : public HeadlessDevTooledBrowserTest {
  public:
-  HeadlessBrowserContextIsolationTest()
-      : browser_context_(nullptr), web_contents2_(nullptr) {
+  HeadlessBrowserContextIsolationTest() {
     EXPECT_TRUE(embedded_test_server()->Start());
   }
 
@@ -63,97 +63,73 @@ class HeadlessBrowserContextIsolationTest
       return;
     }
 
-    devtools_client2_ = HeadlessDevToolsClient::Create();
-    web_contents2_->GetDevToolsTarget()->AttachClient(devtools_client2_.get());
-    HeadlessAsyncDevTooledBrowserTest::DevToolsTargetReady();
+    devtools_client2_.AttachToWebContents(
+        HeadlessWebContentsImpl::From(web_contents2_)->web_contents());
+
+    HeadlessDevTooledBrowserTest::DevToolsTargetReady();
   }
 
   void RunDevTooledTest() override {
-    load_observer_ = std::make_unique<LoadObserver>(
-        devtools_client_.get(),
-        base::BindOnce(
-            &HeadlessBrowserContextIsolationTest::OnFirstLoadComplete,
+    devtools_client_.AddEventHandler(
+        "Page.loadEventFired",
+        base::BindRepeating(
+            &HeadlessBrowserContextIsolationTest::OnFirstLoadEventFired,
             base::Unretained(this)));
-    devtools_client_->GetPage()->Navigate(
-        embedded_test_server()->GetURL("/hello.html").spec());
+    SendCommandSync(devtools_client_, "Page.enable");
+
+    devtools_client_.SendCommand(
+        "Page.navigate",
+        Param("url", embedded_test_server()->GetURL("/hello.html").spec()));
   }
 
-  void OnFirstLoadComplete() {
-    EXPECT_TRUE(load_observer_->navigation_succeeded());
-    load_observer_ = std::make_unique<LoadObserver>(
-        devtools_client2_.get(),
-        base::BindOnce(
-            &HeadlessBrowserContextIsolationTest::OnSecondLoadComplete,
+  void OnFirstLoadEventFired(const base::Value::Dict&) {
+    devtools_client2_.AddEventHandler(
+        "Page.loadEventFired",
+        base::BindRepeating(
+            &HeadlessBrowserContextIsolationTest::OnSecondLoadEventFired,
             base::Unretained(this)));
-    devtools_client2_->GetPage()->Navigate(
-        embedded_test_server()->GetURL("/hello.html").spec());
+    SendCommandSync(devtools_client2_, "Page.enable");
+
+    devtools_client2_.SendCommand(
+        "Page.navigate",
+        Param("url", embedded_test_server()->GetURL("/hello.html").spec()));
   }
 
-  void OnSecondLoadComplete() {
-    EXPECT_TRUE(load_observer_->navigation_succeeded());
-    load_observer_.reset();
+  void OnSecondLoadEventFired(const base::Value::Dict&) {
+    // Set cookies on both pages.
+    EXPECT_THAT(EvaluateScript(web_contents_,
+                               base::StringPrintf("document.cookie = '%s'",
+                                                  kMainPageCookie)),
+                DictHasValue("result.result.value", kMainPageCookie));
 
-    devtools_client_->GetRuntime()->Evaluate(
-        base::StringPrintf("document.cookie = '%s'", kMainPageCookie),
-        base::BindOnce(
-            &HeadlessBrowserContextIsolationTest::OnFirstSetCookieResult,
-            base::Unretained(this)));
-  }
+    EXPECT_THAT(EvaluateScript(web_contents2_,
+                               base::StringPrintf("document.cookie = '%s'",
+                                                  kIsolatedPageCookie)),
+                DictHasValue("result.result.value", kIsolatedPageCookie));
 
-  void OnFirstSetCookieResult(std::unique_ptr<runtime::EvaluateResult> result) {
-    EXPECT_EQ(kMainPageCookie, result->GetResult()->GetValue()->GetString());
+    // Get cookies from both pages and verify.
+    EXPECT_THAT(EvaluateScript(web_contents_, "document.cookie"),
+                DictHasValue("result.result.value", kMainPageCookie));
 
-    devtools_client2_->GetRuntime()->Evaluate(
-        base::StringPrintf("document.cookie = '%s'", kIsolatedPageCookie),
-        base::BindOnce(
-            &HeadlessBrowserContextIsolationTest::OnSecondSetCookieResult,
-            base::Unretained(this)));
-  }
+    EXPECT_THAT(EvaluateScript(web_contents2_, "document.cookie"),
+                DictHasValue("result.result.value", kIsolatedPageCookie));
 
-  void OnSecondSetCookieResult(
-      std::unique_ptr<runtime::EvaluateResult> result) {
-    EXPECT_EQ(kIsolatedPageCookie,
-              result->GetResult()->GetValue()->GetString());
-
-    devtools_client_->GetRuntime()->Evaluate(
-        "document.cookie",
-        base::BindOnce(
-            &HeadlessBrowserContextIsolationTest::OnFirstGetCookieResult,
-            base::Unretained(this)));
-  }
-
-  void OnFirstGetCookieResult(std::unique_ptr<runtime::EvaluateResult> result) {
-    EXPECT_EQ(kMainPageCookie, result->GetResult()->GetValue()->GetString());
-
-    devtools_client2_->GetRuntime()->Evaluate(
-        "document.cookie",
-        base::BindOnce(
-            &HeadlessBrowserContextIsolationTest::OnSecondGetCookieResult,
-            base::Unretained(this)));
-  }
-
-  void OnSecondGetCookieResult(
-      std::unique_ptr<runtime::EvaluateResult> result) {
-    EXPECT_EQ(kIsolatedPageCookie,
-              result->GetResult()->GetValue()->GetString());
-    FinishTest();
-  }
-
-  void FinishTest() {
     web_contents2_->RemoveObserver(this);
     web_contents2_->Close();
     browser_context_->Close();
+
     FinishAsynchronousTest();
   }
 
  private:
-  raw_ptr<HeadlessBrowserContext> browser_context_;
-  raw_ptr<HeadlessWebContents> web_contents2_;
-  std::unique_ptr<HeadlessDevToolsClient> devtools_client2_;
-  std::unique_ptr<LoadObserver> load_observer_;
+  raw_ptr<HeadlessBrowserContext, AcrossTasksDanglingUntriaged>
+      browser_context_ = nullptr;
+  raw_ptr<HeadlessWebContents, AcrossTasksDanglingUntriaged> web_contents2_ =
+      nullptr;
+  SimpleDevToolsProtocolClient devtools_client2_;
 };
 
-HEADLESS_ASYNC_DEVTOOLED_TEST_F(HeadlessBrowserContextIsolationTest);
+HEADLESS_DEVTOOLED_TEST_F(HeadlessBrowserContextIsolationTest);
 
 class HeadlessBrowserUserDataDirTest : public HeadlessBrowserTest {
  protected:
@@ -282,32 +258,6 @@ IN_PROC_BROWSER_TEST_P(HeadlessBrowserTestWithUserDataDirAndMaybeIncognito,
   EXPECT_TRUE(WaitForLoad(web_contents));
 
   EXPECT_EQ(incognito(), base::IsDirectoryEmpty(user_data_dir()));
-}
-
-IN_PROC_BROWSER_TEST_F(HeadlessBrowserTest, ContextWebPreferences) {
-  // By default, hide_scrollbars should be false.
-  EXPECT_FALSE(WebPreferences().hide_scrollbars);
-
-  // Set hide_scrollbars preference to true for a new BrowserContext.
-  HeadlessBrowserContext* browser_context =
-      browser()
-          ->CreateBrowserContextBuilder()
-          .SetOverrideWebPreferencesCallback(base::BindRepeating(
-              [](blink::web_pref::WebPreferences* preferences) {
-                preferences->hide_scrollbars = true;
-              }))
-          .Build();
-  HeadlessWebContents* web_contents =
-      browser_context->CreateWebContentsBuilder()
-          .SetInitialURL(GURL("about:blank"))
-          .Build();
-
-  // Verify that the preference takes effect.
-  HeadlessWebContentsImpl* contents_impl =
-      HeadlessWebContentsImpl::From(web_contents);
-  EXPECT_TRUE(contents_impl->web_contents()
-                  ->GetOrCreateWebPreferences()
-                  .hide_scrollbars);
 }
 
 }  // namespace headless

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,11 @@
 #include <process.h>
 #include <stdint.h>
 
+#include <optional>
+#include "base/containers/span.h"
 #include "base/logging.h"
-#include "base/win/windows_version.h"
+#include "base/win/access_token.h"
+#include "sandbox/win/src/acl.h"
 #include "sandbox/win/src/crosscall_client.h"
 #include "sandbox/win/src/handle_closer_agent.h"
 #include "sandbox/win/src/heap_helper.h"
@@ -111,6 +114,22 @@ bool WarmupWindowsLocales() {
   return (0 != ::GetUserDefaultLocaleName(localeName, LOCALE_NAME_MAX_LENGTH));
 }
 
+bool SetProcessIntegrityLevel(IntegrityLevel integrity_level) {
+  std::optional<DWORD> rid = GetIntegrityLevelRid(integrity_level);
+  if (!rid) {
+    // No mandatory level specified, we don't change it.
+    return true;
+  }
+
+  std::optional<base::win::AccessToken> token =
+      base::win::AccessToken::FromCurrentProcess(/*impersonation=*/false,
+                                                 TOKEN_ADJUST_DEFAULT);
+  if (!token) {
+    return false;
+  }
+  return token->SetIntegrityLevel(*rid);
+}
+
 // Used as storage for g_target_services, because other allocation facilities
 // are not available early. We can't use a regular function static because on
 // VS2015, because the CRT tries to acquire a lock to guard initialization, but
@@ -120,9 +139,8 @@ TargetServicesBase* g_target_services = nullptr;
 
 }  // namespace
 
-SANDBOX_INTERCEPT IntegrityLevel g_shared_delayed_integrity_level =
-    INTEGRITY_LEVEL_LAST;
-SANDBOX_INTERCEPT MitigationFlags g_shared_delayed_mitigations = 0;
+SANDBOX_INTERCEPT IntegrityLevel g_shared_delayed_integrity_level;
+SANDBOX_INTERCEPT MitigationFlags g_shared_delayed_mitigations;
 
 TargetServicesBase::TargetServicesBase() {}
 
@@ -131,11 +149,16 @@ ResultCode TargetServicesBase::Init() {
   return SBOX_ALL_OK;
 }
 
+std::optional<base::span<const uint8_t>> TargetServicesBase::GetDelegateData() {
+  CHECK(process_state_.InitCalled());
+  return sandbox::GetGlobalDelegateData();
+}
+
 // Failure here is a breach of security so the process is terminated.
 void TargetServicesBase::LowerToken() {
-  if (ERROR_SUCCESS !=
-      SetProcessIntegrityLevel(g_shared_delayed_integrity_level))
+  if (!SetProcessIntegrityLevel(g_shared_delayed_integrity_level)) {
     ::TerminateProcess(::GetCurrentProcess(), SBOX_FATAL_INTEGRITY);
+  }
   process_state_.SetRevertedToSelf();
   // If the client code as called RegOpenKey, advapi32.dll has cached some
   // handles. The following code gets rid of them.
@@ -153,8 +176,9 @@ void TargetServicesBase::LowerToken() {
   process_state_.SetCsrssConnected(is_csrss_connected);
   // Enabling mitigations must happen last otherwise handle closing breaks
   if (g_shared_delayed_mitigations &&
-      !ApplyProcessMitigationsToCurrentProcess(g_shared_delayed_mitigations))
+      !LockDownSecurityMitigations(g_shared_delayed_mitigations)) {
     ::TerminateProcess(::GetCurrentProcess(), SBOX_FATAL_MITIGATION);
+  }
 }
 
 ProcessState* TargetServicesBase::GetState() {
@@ -166,38 +190,6 @@ TargetServicesBase* TargetServicesBase::GetInstance() {
   if (!g_target_services)
     g_target_services = new (g_target_services_memory) TargetServicesBase;
   return g_target_services;
-}
-
-SOCKET TargetServicesBase::CreateBrokeredSocket(int af,
-                                                int type,
-                                                int protocol) {
-  if (!GetState()->InitCalled())
-    return INVALID_SOCKET;
-
-  // IPC must be fully started.
-  void* memory = GetGlobalIPCMemory();
-  if (!memory)
-    return INVALID_SOCKET;
-
-  CrossCallReturn answer = {0};
-  SharedMemIPCClient ipc(memory);
-
-  WSAPROTOCOL_INFOW protocol_info = {};
-
-  InOutCountedBuffer protocol_info_buffer(&protocol_info,
-                                          sizeof(WSAPROTOCOL_INFOW));
-
-  ResultCode code = CrossCall(ipc, IpcTag::WS2SOCKET, af, type, protocol,
-                              protocol_info_buffer, &answer);
-
-  if (code != SBOX_ALL_OK)
-    return INVALID_SOCKET;
-
-  if (answer.extended_count == 1)
-    WSASetLastError(static_cast<int>(answer.extended[0].unsigned_int));
-
-  return ::WSASocket(af, type, protocol, &protocol_info, 0,
-                     WSA_FLAG_OVERLAPPED);
 }
 
 // The broker services a 'test' IPC service with the PING tag.

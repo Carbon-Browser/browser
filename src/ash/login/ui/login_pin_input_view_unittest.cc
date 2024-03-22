@@ -1,15 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/login/ui/login_pin_input_view.h"
+
 #include <memory>
+#include <optional>
 #include <string>
-#include "ash/login/ui/login_palette.h"
+
 #include "ash/login/ui/login_test_base.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom-shared.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/events/test/event_generator.h"
@@ -32,7 +34,7 @@ class LoginPinInputViewTest
 
   void SetUp() override {
     LoginTestBase::SetUp();
-    view_ = new LoginPinInputView(CreateDefaultLoginPalette());
+    view_ = new LoginPinInputView();
     view_->Init(base::BindRepeating(&LoginPinInputViewTest::OnPinSubmit,
                                     base::Unretained(this)),
                 base::BindRepeating(&LoginPinInputViewTest::OnPinChanged,
@@ -44,11 +46,11 @@ class LoginPinInputViewTest
   }
 
   void OnPinSubmit(const std::u16string& pin) {
-    submitted_pin_ = absl::make_optional(pin);
+    submitted_pin_ = std::make_optional(pin);
   }
 
   void OnPinChanged(const bool is_empty) {
-    is_empty_ = absl::make_optional(is_empty);
+    is_empty_ = std::make_optional(is_empty);
   }
 
   void PressKeyHelper(ui::KeyboardCode key) {
@@ -73,12 +75,13 @@ class LoginPinInputViewTest
     ExpectAttribute(value, ax::mojom::StringAttribute::kValue);
   }
 
-  LoginPinInputView* view_ = nullptr;
+  raw_ptr<LoginPinInputView, DanglingUntriaged | ExperimentalAsh> view_ =
+      nullptr;
   int length_ = 0;
 
   // Generated during the callback response.
-  absl::optional<std::u16string> submitted_pin_;
-  absl::optional<bool> is_empty_;
+  std::optional<std::u16string> submitted_pin_;
+  std::optional<bool> is_empty_;
 };
 
 // Verifies that pressing 'Return' on the PIN input field triggers an
@@ -112,23 +115,41 @@ TEST_P(LoginPinInputViewTest, AccessibleValues) {
 
   PressKeyHelper(ui::KeyboardCode::VKEY_1);
   ExpectDescription("5 digits remaining");
-  ExpectTextValue("\u2022     ");                     /* 1 bullet 5 spaces */
+  ExpectTextValue("\u2022     "); /* 1 bullet 5 spaces */
 
   PressKeyHelper(ui::KeyboardCode::VKEY_1);
   ExpectDescription("4 digits remaining");
-  ExpectTextValue("\u2022\u2022    ");                /* 2 bullets 4 spaces */
+  ExpectTextValue("\u2022\u2022    "); /* 2 bullets 4 spaces */
 
   PressKeyHelper(ui::KeyboardCode::VKEY_1);
   ExpectDescription("3 digits remaining");
-  ExpectTextValue("\u2022\u2022\u2022   ");           /* 3 bullets 3 spaces */
+  ExpectTextValue("\u2022\u2022\u2022   "); /* 3 bullets 3 spaces */
 
   PressKeyHelper(ui::KeyboardCode::VKEY_1);
-  ExpectTextValue("\u2022\u2022\u2022\u2022  ");      /* 4 bullets 2 spaces */
+  ExpectTextValue("\u2022\u2022\u2022\u2022  "); /* 4 bullets 2 spaces */
   ExpectDescription("2 digits remaining");
 
   PressKeyHelper(ui::KeyboardCode::VKEY_1);
   ExpectTextValue("\u2022\u2022\u2022\u2022\u2022 "); /* 5 bullets 1 space */
   ExpectDescription("One digit remaining");
+}
+
+TEST_P(LoginPinInputViewTest, ReadOnly) {
+  EXPECT_FALSE(view_->IsReadOnly());
+  view_->SetReadOnly(true);
+  EXPECT_TRUE(view_->IsReadOnly());
+  ExpectTextValue("      ");
+
+  // Keys are ignored in the read-only mode.
+  PressKeyHelper(ui::KeyboardCode::VKEY_1);
+  ExpectTextValue("      ");
+  PressKeyHelper(ui::KeyboardCode::VKEY_RETURN);
+  EXPECT_FALSE(submitted_pin_.has_value());
+
+  // After unsetting the read-only mode, keys start working again.
+  view_->SetReadOnly(false);
+  PressKeyHelper(ui::KeyboardCode::VKEY_1);
+  ExpectTextValue("\u2022     "); /* 1 bullet 5 spaces */
 }
 
 INSTANTIATE_TEST_SUITE_P(PinInputViewTests,

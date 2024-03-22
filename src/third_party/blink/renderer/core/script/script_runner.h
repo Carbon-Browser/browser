@@ -56,9 +56,9 @@ class CORE_EXPORT ScriptRunner final : public GarbageCollected<ScriptRunner>,
   // be at most one active `ScriptRunnerDelayer` for each `ScriptRunnerDelayer`
   // for each `ScriptRunner`.
   //
-  // Each script can choose to wait or not to wait for each `DelayReason` (See
-  // `DetermineDelayReasonsToWait()`), and are evaluated after all of its
-  // relevant `ScriptRunnerDelayer`s are deactivated.
+  // Each script can choose to wait or not to wait for each `DelayReason`, and
+  // are evaluated after all of its relevant `ScriptRunnerDelayer`s are
+  // deactivated.
   //
   // This can be spec-conformant (pretending that the loading of async scripts
   // are not completed until `ScriptRunnerDelayer`s are deactivated), but be
@@ -79,13 +79,25 @@ class CORE_EXPORT ScriptRunner final : public GarbageCollected<ScriptRunner>,
   };
   using DelayReasons = std::underlying_type<DelayReason>::type;
 
-  void QueueScriptForExecution(
-      PendingScript*,
-      absl::optional<DelayReasons> delay_reason_override_for_test =
-          absl::nullopt);
+  void QueueScriptForExecution(PendingScript*, DelayReasons);
+  bool IsActive(DelayReason delay_reason) const {
+    return active_delay_reasons_ & static_cast<DelayReasons>(delay_reason);
+  }
 
   void SetTaskRunnerForTesting(base::SingleThreadTaskRunner* task_runner) {
     task_runner_ = task_runner;
+  }
+
+  // Returns true until all async scripts are evaluated.
+  // pending_async_scripts_ can be empty a little earlier than that.
+  bool HasAsyncScripts() const {
+    return number_of_async_scripts_not_evaluated_yet_ > 0;
+  }
+
+  // Returns true until all force in-order scripts are evaluated.
+  // pending_force_in_order_scripts_ can be empty a little earlier than that.
+  bool HasForceInOrderScripts() const {
+    return pending_force_in_order_scripts_count_ > 0;
   }
 
   void Trace(Visitor*) const override;
@@ -94,6 +106,11 @@ class CORE_EXPORT ScriptRunner final : public GarbageCollected<ScriptRunner>,
   // PendingScriptClient
   void PendingScriptFinished(PendingScript*) override;
 
+  void ExecuteAsyncPendingScript(PendingScript* pending_script,
+                                 base::TimeTicks ready_to_evaluate_time);
+  void ExecuteForceInOrderPendingScript(PendingScript*);
+  void ExecuteParserBlockingScriptsBlockedByForceInOrder();
+
  private:
   // Execute the given pending script.
   void ExecutePendingScript(PendingScript*);
@@ -101,10 +118,7 @@ class CORE_EXPORT ScriptRunner final : public GarbageCollected<ScriptRunner>,
   friend class ScriptRunnerDelayer;
   void AddDelayReason(DelayReason);
   void RemoveDelayReason(DelayReason);
-  DelayReasons DetermineDelayReasonsToWait(PendingScript*);
   void RemoveDelayReasonFromScript(PendingScript*, DelayReason);
-
-  Member<Document> document_;
 
   // https://html.spec.whatwg.org/C/#list-of-scripts-that-will-execute-in-order-as-soon-as-possible
   HeapDeque<Member<PendingScript>> pending_in_order_scripts_;
@@ -113,7 +127,21 @@ class CORE_EXPORT ScriptRunner final : public GarbageCollected<ScriptRunner>,
   // before its evaluation.
   HeapHashMap<Member<PendingScript>, DelayReasons> pending_async_scripts_;
 
+  Member<Document> document_;
+
+  // The number of async scripts that aren't yet evaluated. This is different
+  // from pending_async_scripts_.size() == the number of async scripts that
+  // aren't yet scheduled to evaluate.
+  wtf_size_t number_of_async_scripts_not_evaluated_yet_ = 0;
+
+  HeapDeque<Member<PendingScript>> pending_force_in_order_scripts_;
+  // The number of force in-order scripts that aren't yet evaluated. This is
+  // different from pending_force_in_order_scripts_.size() == the number of
+  // force in-order scripts that aren't yet scheduled to evaluate.
+  wtf_size_t pending_force_in_order_scripts_count_ = 0;
+
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+  scoped_refptr<base::SingleThreadTaskRunner> low_priority_task_runner_;
 
   DelayReasons active_delay_reasons_ = 0;
 };
@@ -136,6 +164,14 @@ class CORE_EXPORT ScriptRunnerDelayer final
   const ScriptRunner::DelayReason delay_reason_;
   bool activated_ = false;
 };
+
+// This function is exported for testing purposes only.
+void CORE_EXPORT PostTaskWithLowPriorityUntilTimeoutForTesting(
+    const base::Location& from_here,
+    base::OnceClosure task,
+    base::TimeDelta timeout,
+    scoped_refptr<base::SingleThreadTaskRunner> lower_priority_task_runner,
+    scoped_refptr<base::SingleThreadTaskRunner> normal_priority_task_runner);
 
 }  // namespace blink
 

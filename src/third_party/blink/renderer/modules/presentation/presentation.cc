@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ void Presentation::Trace(Visitor* visitor) const {
 }
 
 PresentationRequest* Presentation::defaultRequest() const {
-  return default_request_;
+  return default_request_.Get();
 }
 
 void Presentation::setDefaultRequest(PresentationRequest* request) {
@@ -80,7 +80,7 @@ void Presentation::MaybeInitReceiver() {
 
 PresentationReceiver* Presentation::receiver() {
   MaybeInitReceiver();
-  return receiver_;
+  return receiver_.Get();
 }
 
 }  // namespace blink

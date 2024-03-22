@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,6 +97,9 @@ class NetErrorPageController : public gin::Wrappable<NetErrorPageController> {
 
   // Execute a "Diagnose Errors" button click.
   bool DiagnoseErrorsButtonClick();
+
+  // Execute a "Sign in to network" button click.
+  bool PortalSigninButtonClick();
 
   // Used internally by other button click methods.
   bool ButtonClick(NetErrorHelperCore::Button button);

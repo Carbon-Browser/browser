@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ std::ostream& operator<<(std::ostream& os, ArcInstanceMode mode) {
 }
 
 std::ostream& operator<<(std::ostream& os,
-                         absl::optional<ArcInstanceMode> mode) {
+                         std::optional<ArcInstanceMode> mode) {
   return os << (mode.has_value() ? ArcInstanceModeToString(mode.value())
                                  : "(nullopt)");
 }

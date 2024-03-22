@@ -54,8 +54,9 @@ class AdblockFrameHierarchyTest : public content::RenderViewHostTestHarness {
     NavigateAndCommit(root);
     auto* frame = main_rfh();
 
-    for (const GURL& it : urls)
+    for (const GURL& it : urls) {
       frame = AddChildFrame(frame, it);
+    }
 
     adblock::FrameHierarchyBuilder builder;
     return builder.BuildFrameHierarchy(frame);
@@ -73,8 +74,7 @@ const char kBlank[] = "about:blank";
 
 TEST_F(AdblockFrameHierarchyTest, FindMainFrame) {
   FrameHierarchyBuilder builder;
-  auto* host = builder.FindRenderFrameHost(main_rfh()->GetProcess()->GetID(),
-                                           main_rfh()->GetRoutingID());
+  auto* host = builder.FindRenderFrameHost(main_rfh()->GetGlobalId());
   ASSERT_TRUE(host);
   EXPECT_EQ(host, main_rfh());
 }
@@ -85,8 +85,7 @@ TEST_F(AdblockFrameHierarchyTest, FindChildFrame) {
   auto* child_frame = AddChildFrame(main_rfh(), GURL(kFrame1));
   CHECK(child_frame);
   CHECK(child_frame->GetProcess());
-  auto* host = builder.FindRenderFrameHost(child_frame->GetProcess()->GetID(),
-                                           child_frame->GetRoutingID());
+  auto* host = builder.FindRenderFrameHost(child_frame->GetGlobalId());
   ASSERT_TRUE(host);
   EXPECT_EQ(host, child_frame);
 }
@@ -107,12 +106,14 @@ TEST_F(AdblockFrameHierarchyTest, CannotFindUnknownIds) {
   const int32_t process_id = 30;
   CHECK_NE(routing_id, main_rfh()->GetRoutingID());
   CHECK_NE(routing_id, child_frame->GetRoutingID());
-  CHECK_NE(routing_id, web_contents->GetPrimaryMainFrame()->GetFrameTreeNodeId());
+  CHECK_NE(routing_id,
+           web_contents->GetPrimaryMainFrame()->GetFrameTreeNodeId());
   CHECK_NE(process_id, main_rfh()->GetProcess()->GetID());
   CHECK_NE(process_id, network::mojom::kBrowserProcessId);
 
   // It's impossible to find a RFH for those parameters.
-  auto* host = builder.FindRenderFrameHost(process_id, routing_id);
+  auto* host = builder.FindRenderFrameHost(
+      content::GlobalRenderFrameHostId(process_id, routing_id));
   EXPECT_FALSE(host);
 }
 

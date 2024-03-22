@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace remoting {
 
 namespace protocol {
 class CursorShapeStub;
-}  // namespace
+}  // namespace protocol
 
 // MouseShapePump is responsible for capturing mouse shape using
 // MouseCursorMonitor and sending it to a CursorShapeStub.
@@ -31,6 +31,9 @@ class MouseShapePump : public webrtc::MouseCursorMonitor::Callback {
 
   ~MouseShapePump() override;
 
+  // Restarts the mouse shape capture timer using |new_capture_interval|.
+  void SetCursorCaptureInterval(base::TimeDelta new_capture_interval);
+
   // Sets or unsets the callback to which to delegate MouseCursorMonitor events
   // after they have been processed.
   void SetMouseCursorMonitorCallback(
@@ -38,6 +41,8 @@ class MouseShapePump : public webrtc::MouseCursorMonitor::Callback {
 
  private:
   void Capture();
+
+  void StartCaptureTimer(base::TimeDelta capture_interval);
 
   // webrtc::MouseCursorMonitor::Callback implementation.
   void OnMouseCursor(webrtc::MouseCursor* mouse_cursor) override;

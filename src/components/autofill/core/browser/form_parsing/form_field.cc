@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,32 +15,43 @@
 #include "base/feature_list.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/autofill_field.h"
-#include "components/autofill/core/browser/autofill_regexes.h"
 #include "components/autofill/core/browser/autofill_type.h"
+#include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_parsing/address_field.h"
 #include "components/autofill/core/browser/form_parsing/autofill_parsing_utils.h"
 #include "components/autofill/core/browser/form_parsing/autofill_scanner.h"
 #include "components/autofill/core/browser/form_parsing/birthdate_field.h"
 #include "components/autofill/core/browser/form_parsing/credit_card_field.h"
 #include "components/autofill/core/browser/form_parsing/email_field.h"
+#include "components/autofill/core/browser/form_parsing/form_field.h"
+#include "components/autofill/core/browser/form_parsing/iban_field.h"
 #include "components/autofill/core/browser/form_parsing/merchant_promo_code_field.h"
 #include "components/autofill/core/browser/form_parsing/name_field.h"
+#include "components/autofill/core/browser/form_parsing/numeric_quantity_field.h"
 #include "components/autofill/core/browser/form_parsing/phone_field.h"
 #include "components/autofill/core/browser/form_parsing/price_field.h"
 #include "components/autofill/core/browser/form_parsing/search_field.h"
+#include "components/autofill/core/browser/form_parsing/standalone_cvc_field.h"
 #include "components/autofill/core/browser/form_parsing/travel_field.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/logging/log_manager.h"
+#include "components/autofill/core/common/autocomplete_parsing_util.h"
 #include "components/autofill/core/common/autofill_constants.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_internals/log_message.h"
 #include "components/autofill/core/common/autofill_internals/logging_scope.h"
+#include "components/autofill/core/common/autofill_payments_features.h"
+#include "components/autofill/core/common/autofill_regexes.h"
 #include "components/autofill/core/common/autofill_util.h"
+#include "components/autofill/core/common/dense_set.h"
 
 namespace autofill {
 
 namespace {
+
+constexpr char16_t kEmptyLabelRegex[] = u"^$";
 
 constexpr bool IsEmpty(const char16_t* s) {
   return s == nullptr || s[0] == '\0';
@@ -49,143 +60,314 @@ constexpr bool IsEmpty(const char16_t* s) {
 }  // namespace
 
 // static
-bool FormField::MatchesPattern(const base::StringPiece16& input,
-                               const base::StringPiece16& pattern,
-                               std::vector<std::u16string>* groups) {
-  static base::NoDestructor<AutofillRegexes> g_autofill_regexes(
-      ThreadSafe(true));
-  return g_autofill_regexes->MatchesPattern(input, pattern, groups);
+bool FormField::MatchesRegexWithCache(base::StringPiece16 input,
+                                      base::StringPiece16 pattern,
+                                      std::vector<std::u16string>* groups) {
+  // TODO(crbug.com/1309848): If ParseForm() is called from the same thread,
+  // use a thread-unsafe parser.
+  static base::NoDestructor<AutofillRegexCache> cache(ThreadSafe(true));
+  const icu::RegexPattern* regex_pattern = cache->GetRegexPattern(pattern);
+  return autofill::MatchesRegex(input, *regex_pattern, groups);
 }
 
 // static
-FieldCandidatesMap FormField::ParseFormFields(
+void FormField::ParseFormFields(
     const std::vector<std::unique_ptr<AutofillField>>& fields,
+    const GeoIpCountryCode& client_country,
     const LanguageCode& page_language,
     bool is_form_tag,
     PatternSource pattern_source,
+    FieldCandidatesMap& field_candidates,
     LogManager* log_manager) {
   std::vector<AutofillField*> processed_fields = RemoveCheckableFields(fields);
-  FieldCandidatesMap field_candidates;
 
   // Email pass.
-  ParseFormFieldsPass(EmailField::Parse, processed_fields, &field_candidates,
-                      page_language, pattern_source, log_manager);
-  const size_t email_count = field_candidates.size();
-
-  // Merchant promo code pass.
-  ParseFormFieldsPass(MerchantPromoCodeField::Parse, processed_fields,
-                      &field_candidates, page_language, pattern_source,
+  ParseFormFieldsPass(EmailField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
                       log_manager);
-  const size_t promo_code_count = field_candidates.size() - email_count;
+  bool found_email_field = !field_candidates.empty();
 
   // Phone pass.
-  ParseFormFieldsPass(PhoneField::Parse, processed_fields, &field_candidates,
-                      page_language, pattern_source, log_manager);
+  ParseFormFieldsPass(PhoneField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
+                      log_manager);
 
   // Travel pass.
-  ParseFormFieldsPass(TravelField::Parse, processed_fields, &field_candidates,
-                      page_language, pattern_source, log_manager);
+  ParseFormFieldsPass(TravelField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
+                      log_manager);
 
   // Address pass.
-  ParseFormFieldsPass(AddressField::Parse, processed_fields, &field_candidates,
-                      page_language, pattern_source, log_manager);
+  ParseFormFieldsPass(AddressField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
+                      log_manager);
 
   // Birthdate pass.
   if (base::FeatureList::IsEnabled(features::kAutofillEnableBirthdateParsing)) {
     ParseFormFieldsPass(BirthdateField::Parse, processed_fields,
-                        &field_candidates, page_language, pattern_source,
-                        log_manager);
+                        field_candidates, client_country, page_language,
+                        pattern_source, log_manager);
   }
 
+  // Numeric quantity pass.
+  ParseFormFieldsPass(NumericQuantityField::Parse, processed_fields,
+                      field_candidates, client_country, page_language,
+                      pattern_source, log_manager);
+
+  const size_t candidates_size = field_candidates.size();
   // Credit card pass.
   ParseFormFieldsPass(CreditCardField::Parse, processed_fields,
-                      &field_candidates, page_language, pattern_source,
-                      log_manager);
+                      field_candidates, client_country, page_language,
+                      pattern_source, log_manager);
+  bool found_cc_fields = candidates_size != field_candidates.size();
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillParseVcnCardOnFileStandaloneCvcFields) &&
+      !found_email_field && !found_cc_fields) {
+    // No email or cc fields found. Standalone CVC field pass for the VCN card
+    // on file case.
+    ParseStandaloneCVCFields(fields, client_country, page_language,
+                             pattern_source, field_candidates, log_manager);
+    // Any detected standalone cvc fields are considered fillable single fields.
+  }
 
   // Price pass.
-  ParseFormFieldsPass(PriceField::Parse, processed_fields, &field_candidates,
-                      page_language, pattern_source, log_manager);
+  ParseFormFieldsPass(PriceField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
+                      log_manager);
 
   // Name pass.
-  ParseFormFieldsPass(NameField::Parse, processed_fields, &field_candidates,
-                      page_language, pattern_source, log_manager);
+  ParseFormFieldsPass(NameField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
+                      log_manager);
 
   // Search pass.
-  ParseFormFieldsPass(SearchField::Parse, processed_fields, &field_candidates,
-                      page_language, pattern_source, log_manager);
+  ParseFormFieldsPass(SearchField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
+                      log_manager);
 
-  size_t fillable_fields = 0;
-  if (base::FeatureList::IsEnabled(features::kAutofillFixFillableFieldTypes)) {
-    for (const auto& [field_id, candidates] : field_candidates) {
-      if (IsFillableFieldType(candidates.BestHeuristicType()))
-        ++fillable_fields;
-    }
-  } else {
-    fillable_fields = field_candidates.size();
+  // Deduce `field_candidates` for the `processed_fields` by parsing their
+  // `parsable_name()` as an autocomplete attribute.
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillParseNameAsAutocompleteType)) {
+    ParseUsingAutocompleteAttributes(processed_fields, field_candidates);
   }
+
+  // Single fields pass.
+  ParseSingleFieldForms(fields, client_country, page_language, is_form_tag,
+                        pattern_source, field_candidates, log_manager);
+
+  ClearCandidatesIfHeuristicsDidNotFindEnoughFields(
+      fields, field_candidates, is_form_tag, client_country, log_manager);
+}
+
+// static
+void FormField::ClearCandidatesIfHeuristicsDidNotFindEnoughFields(
+    const std::vector<std::unique_ptr<AutofillField>>& fields,
+    FieldCandidatesMap& field_candidates,
+    bool is_form_tag,
+    const GeoIpCountryCode& client_country,
+    LogManager* log_manager) {
+  // Set to count distinct field types.
+  ServerFieldTypeSet heuristic_types;
+  for (const auto& [field_id, candidates] : field_candidates) {
+    if (ServerFieldType heuristic_type = candidates.BestHeuristicType();
+        IsFillableFieldType(heuristic_type)) {
+      heuristic_types.insert(heuristic_type);
+    }
+  }
+
+  // We consider the number of distinct fillable field types, not the number of
+  // distinct fillable fields, to determine whether local heuristics should be
+  // applied. This reduces false positives by counting similar fields only once.
+  // "Fillable" refers to the field type, not whether a specific field is
+  // visible and editable by the user.
+  size_t fillable_distinct_field_types = heuristic_types.size();
 
   // Do not autofill a form if there aren't enough fields. Otherwise, it is
   // very easy to have false positives. See http://crbug.com/447332
   // For <form> tags, make an exception for email fields, which are commonly
   // the only recognized field on account registration sites. Also make an
-  // exception for promo code fields, which are often a single field in its own
-  // form.
-  if (fillable_fields < kMinRequiredFieldsForHeuristics) {
-    if ((is_form_tag && email_count > 0) || promo_code_count > 0) {
-      base::EraseIf(field_candidates, [&](const auto& candidate) {
-        return !(candidate.second.BestHeuristicType() == EMAIL_ADDRESS ||
-                 candidate.second.BestHeuristicType() == MERCHANT_PROMO_CODE);
-      });
-    } else {
-      LogBuffer table_rows(IsLoggingActive(log_manager));
-      for (const auto& field : fields)
-        LOG_AF(table_rows) << Tr{} << "Field:" << *field;
-      for (const auto& [field_id, candidates] : field_candidates) {
-        LogBuffer name(IsLoggingActive(log_manager));
-        name << "Type candidate for frame and renderer ID: " << field_id;
-        LogBuffer description(IsLoggingActive(log_manager));
-        LOG_AF(description)
-            << "BestHeuristicType: "
-            << AutofillType::ServerFieldTypeToString(
-                   candidates.BestHeuristicType())
-            << ", is fillable: "
-            << IsFillableFieldType(candidates.BestHeuristicType());
-        LOG_AF(table_rows) << Tr{} << std::move(name) << std::move(description);
+  // exception for single-field Autofillable types, even when the form contains
+  // less than kMinRequiredFieldsForHeuristics fields in its form signature.
+  if (fillable_distinct_field_types >= kMinRequiredFieldsForHeuristics) {
+    return;
+  }
+
+  ServerFieldTypeSet permitted_single_field_types{
+      MERCHANT_PROMO_CODE, IBAN_VALUE,
+      CREDIT_CARD_STANDALONE_VERIFICATION_CODE};
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillEnableZipOnlyAddressForms) &&
+      AddressField::IsStandaloneZipSupported(client_country)) {
+    permitted_single_field_types.insert(ADDRESS_HOME_ZIP);
+  }
+
+  // For historic reasons email addresses are only retained if they appear in
+  // a <form> tag. It's unclear whether that's necessary.
+  ServerFieldTypeSet permitted_single_field_types_in_form{EMAIL_ADDRESS};
+
+  // Returns whether a field type may exist as a stand-alone field.
+  auto retainable_field_type =
+      [&is_form_tag, &permitted_single_field_types_in_form,
+       &permitted_single_field_types](ServerFieldType heuristic_type) {
+        return (is_form_tag && permitted_single_field_types_in_form.contains(
+                                   heuristic_type)) ||
+               permitted_single_field_types.contains(heuristic_type);
+      };
+
+  struct WipedField {
+    FieldGlobalId field_id;
+    ServerFieldType best_heuristic_type;
+  };
+  std::vector<WipedField> wiped_fields;
+  if (IsLoggingActive(log_manager)) {
+    for (const auto& [field_id, candidates] : field_candidates) {
+      ServerFieldType heuristic_type = candidates.BestHeuristicType();
+      if (!retainable_field_type(heuristic_type)) {
+        wiped_fields.emplace_back(WipedField{field_id, heuristic_type});
       }
-      LOG_AF(log_manager)
-          << LoggingScope::kParsing
-          << LogMessage::kLocalHeuristicDidNotFindEnoughFillableFields
-          << Tag{"table"} << Attrib{"class", "form"} << std::move(table_rows)
-          << CTag{"table"};
-      field_candidates.clear();
     }
   }
 
-  return field_candidates;
+  // Given that we don't have kMinRequiredFieldsForHeuristics distinct field
+  // types, we expect field_candidates to be small and don't need to be
+  // extremely performant. It's ok to use EraseIf even if in some cases we could
+  // clear everything.
+  base::EraseIf(
+      field_candidates,
+      [&retainable_field_type](
+          const FieldCandidatesMap::container_type::value_type& candidate) {
+        return !retainable_field_type(candidate.second.BestHeuristicType());
+      });
+
+  if (IsLoggingActive(log_manager)) {
+    LogBuffer table_rows;
+    for (const auto& field : fields) {
+      LOG_AF(table_rows) << Tr{} << "Field:" << *field;
+    }
+    for (const auto& f : wiped_fields) {
+      LogBuffer name;
+      name << "Type candidate for frame and renderer ID: " << f.field_id;
+
+      LogBuffer description;
+      LOG_AF(description) << "BestHeuristicType: "
+                          << FieldTypeToStringView(f.best_heuristic_type)
+                          << ", is fillable: "
+                          << IsFillableFieldType(f.best_heuristic_type);
+
+      LOG_AF(table_rows) << Tr{} << std::move(name) << std::move(description);
+    }
+    LOG_AF(log_manager)
+        << LoggingScope::kParsing
+        << LogMessage::kLocalHeuristicDidNotFindEnoughFillableFields
+        << Tag{"table"} << Attrib{"class", "form"} << std::move(table_rows)
+        << CTag{"table"};
+  }
 }
 
-FieldCandidatesMap FormField::ParseFormFieldsForPromoCodes(
+void FormField::ParseSingleFieldForms(
     const std::vector<std::unique_ptr<AutofillField>>& fields,
+    const GeoIpCountryCode& client_country,
     const LanguageCode& page_language,
     bool is_form_tag,
     PatternSource pattern_source,
+    FieldCandidatesMap& field_candidates,
     LogManager* log_manager) {
   std::vector<AutofillField*> processed_fields = RemoveCheckableFields(fields);
-  FieldCandidatesMap field_candidates;
 
   // Merchant promo code pass.
   ParseFormFieldsPass(MerchantPromoCodeField::Parse, processed_fields,
-                      &field_candidates, page_language, pattern_source,
+                      field_candidates, client_country, page_language,
+                      pattern_source, log_manager);
+
+  // IBAN pass.
+  ParseFormFieldsPass(IbanField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
                       log_manager);
 
-  return field_candidates;
+  if (AddressField::IsStandaloneZipSupported(client_country)) {
+    // In some countries we observe address forms that are particularly small
+    // (e.g. only a zip code.)
+    ParseFormFieldsPass(AddressField::ParseStandaloneZip, processed_fields,
+                        field_candidates, client_country, page_language,
+                        pattern_source, log_manager);
+  }
+}
+
+void FormField::ParseStandaloneCVCFields(
+    const std::vector<std::unique_ptr<AutofillField>>& fields,
+    const GeoIpCountryCode& client_country,
+    const LanguageCode& page_language,
+    PatternSource pattern_source,
+    FieldCandidatesMap& field_candidates,
+    LogManager* log_manager) {
+  std::vector<AutofillField*> processed_fields = RemoveCheckableFields(fields);
+  ParseFormFieldsPass(StandaloneCvcField::Parse, processed_fields,
+                      field_candidates, client_country, page_language,
+                      pattern_source, log_manager);
+}
+
+void FormField::ParseStandaloneEmailFields(
+    const std::vector<std::unique_ptr<AutofillField>>& fields,
+    const GeoIpCountryCode& client_country,
+    const LanguageCode& page_language,
+    PatternSource pattern_source,
+    FieldCandidatesMap& field_candidates,
+    LogManager* log_manager) {
+  std::vector<AutofillField*> processed_fields = RemoveCheckableFields(fields);
+  ParseFormFieldsPass(EmailField::Parse, processed_fields, field_candidates,
+                      client_country, page_language, pattern_source,
+                      log_manager);
+}
+
+// static
+bool FormField::FieldMatchesMatchPatternRef(
+    base::span<const MatchPatternRef> patterns,
+    const AutofillField& field,
+    const RegExLogging& logging) {
+  for (MatchPatternRef pattern_ref : patterns) {
+    MatchingPattern pattern = *pattern_ref;
+    if (!MatchesFormControlType(
+            FormControlTypeToString(field.form_control_type),
+            pattern.match_field_input_types)) {
+      continue;
+    }
+
+    // For each of the two match field attributes, kName and kLabel, that are
+    // active for the current pattern, test if the attribute matches the
+    // negative pattern. If yes, remove it from the attributes that are
+    // considered for positive matching.
+    MatchParams match_type(pattern.match_field_attributes,
+                           pattern.match_field_input_types);
+
+    if (!IsEmpty(pattern.negative_pattern)) {
+      for (MatchAttribute attribute : pattern.match_field_attributes) {
+        if (FormField::Match(&field, pattern.negative_pattern,
+                             MatchParams({attribute}, match_type.field_types),
+                             logging)) {
+          match_type.attributes.erase(attribute);
+        }
+      }
+    }
+
+    if (match_type.attributes.empty()) {
+      continue;
+    }
+
+    if (!IsEmpty(pattern.positive_pattern) &&
+        FormField::Match(&field, pattern.positive_pattern, match_type,
+                         logging)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // static
 bool FormField::ParseField(AutofillScanner* scanner,
                            base::StringPiece16 pattern,
                            base::span<const MatchPatternRef> patterns,
-                           AutofillField** match,
+                           raw_ptr<AutofillField>* match,
                            const RegExLogging& logging) {
   return ParseFieldSpecifics(scanner, pattern, kDefaultMatchParams, patterns,
                              match, logging);
@@ -196,14 +378,14 @@ bool FormField::ParseFieldSpecificsWithLegacyPattern(
     AutofillScanner* scanner,
     base::StringPiece16 pattern,
     MatchParams match_type,
-    AutofillField** match,
+    raw_ptr<AutofillField>* match,
     const RegExLogging& logging) {
   if (scanner->IsEnd())
     return false;
 
   const AutofillField* field = scanner->Cursor();
 
-  if (!MatchesFormControlType(field->form_control_type,
+  if (!MatchesFormControlType(FormControlTypeToString(field->form_control_type),
                               match_type.field_types)) {
     return false;
   }
@@ -215,7 +397,7 @@ bool FormField::ParseFieldSpecificsWithLegacyPattern(
 bool FormField::ParseFieldSpecificsWithNewPatterns(
     AutofillScanner* scanner,
     base::span<const MatchPatternRef> patterns,
-    AutofillField** match,
+    raw_ptr<AutofillField>* match,
     const RegExLogging& logging,
     MatchingPattern (*projection)(const MatchingPattern&)) {
   if (scanner->IsEnd())
@@ -226,8 +408,9 @@ bool FormField::ParseFieldSpecificsWithNewPatterns(
   for (MatchPatternRef pattern_ref : patterns) {
     MatchingPattern pattern =
         projection ? (*projection)(*pattern_ref) : *pattern_ref;
-    if (!MatchesFormControlType(field->form_control_type,
-                                pattern.match_field_input_types)) {
+    if (!MatchesFormControlType(
+            FormControlTypeToString(field->form_control_type),
+            pattern.match_field_input_types)) {
       continue;
     }
 
@@ -267,10 +450,14 @@ bool FormField::ParseFieldSpecifics(
     base::StringPiece16 pattern,
     const MatchParams& match_type,
     base::span<const MatchPatternRef> patterns,
-    AutofillField** match,
+    raw_ptr<AutofillField>* match,
     const RegExLogging& logging,
     MatchingPattern (*projection)(const MatchingPattern&)) {
-  return base::FeatureList::IsEnabled(features::kAutofillParsingPatternProvider)
+  return (base::FeatureList::IsEnabled(
+              features::kAutofillParsingPatternProvider) ||
+          // Some patterns may not exist as an old-school regex because they
+          // require negative matching.
+          pattern == kNoLegacyPattern)
              ? ParseFieldSpecificsWithNewPatterns(scanner, patterns, match,
                                                   logging, projection)
              : ParseFieldSpecificsWithLegacyPattern(scanner, pattern,
@@ -280,7 +467,8 @@ bool FormField::ParseFieldSpecifics(
 // static
 bool FormField::ParseInAnyOrder(
     AutofillScanner* scanner,
-    std::vector<std::pair<AutofillField**, base::RepeatingCallback<bool()>>>
+    std::vector<
+        std::pair<raw_ptr<AutofillField>*, base::RepeatingCallback<bool()>>>
         fields_and_parsers) {
   if (scanner->IsEnd())
     return fields_and_parsers.empty();
@@ -315,9 +503,9 @@ bool FormField::ParseInAnyOrder(
 
 // static
 bool FormField::ParseEmptyLabel(AutofillScanner* scanner,
-                                AutofillField** match) {
+                                raw_ptr<AutofillField>* match) {
   return ParseFieldSpecificsWithLegacyPattern(
-      scanner, u"^$",
+      scanner, kEmptyLabelRegex,
       MatchParams({MatchAttribute::kLabel}, kAllMatchFieldTypes), match,
       /*logging=*/{});
 }
@@ -326,12 +514,12 @@ bool FormField::ParseEmptyLabel(AutofillScanner* scanner,
 void FormField::AddClassification(const AutofillField* field,
                                   ServerFieldType type,
                                   float score,
-                                  FieldCandidatesMap* field_candidates) {
+                                  FieldCandidatesMap& field_candidates) {
   // Several fields are optional.
   if (field == nullptr)
     return;
 
-  FieldCandidates& candidates = (*field_candidates)[field->global_id()];
+  FieldCandidates& candidates = field_candidates[field->global_id()];
   candidates.AddFieldCandidate(type, score);
 }
 
@@ -348,7 +536,7 @@ std::vector<AutofillField*> FormField::RemoveCheckableFields(
     // synthetic fields.)
     if (IsCheckable(field->check_status) ||
         (field->role == FormFieldData::RoleAttribute::kPresentation &&
-         field->form_control_type != "select-one")) {
+         !field->IsSelectElement())) {
       continue;
     }
     processed_fields.push_back(field.get());
@@ -360,7 +548,7 @@ std::vector<AutofillField*> FormField::RemoveCheckableFields(
 bool FormField::MatchAndAdvance(AutofillScanner* scanner,
                                 base::StringPiece16 pattern,
                                 MatchParams match_type,
-                                AutofillField** match,
+                                raw_ptr<AutofillField>* match,
                                 const RegExLogging& logging) {
   AutofillField* field = scanner->Cursor();
   if (FormField::Match(field, pattern, match_type, logging)) {
@@ -395,19 +583,24 @@ bool FormField::Match(const AutofillField* field,
 
   const bool match_label =
       match_type.attributes.contains(MatchAttribute::kLabel);
-  if (match_label && MatchesPattern(label, pattern, capture_destination)) {
+  if (match_label &&
+      MatchesRegexWithCache(label, pattern, capture_destination)) {
     found_match = true;
     match_type_string = "Match in label";
     value = label;
   } else if (match_type.attributes.contains(MatchAttribute::kName) &&
-             MatchesPattern(name, pattern, capture_destination)) {
+             MatchesRegexWithCache(name, pattern, capture_destination)) {
     found_match = true;
     match_type_string = "Match in name";
     value = name;
-  } else if (match_label &&
+  } else if (match_label && pattern != kEmptyLabelRegex &&
              base::FeatureList::IsEnabled(
-                 features::kAutofillConsiderPlaceholderForParsing) &&
-             MatchesPattern(field->placeholder, pattern, capture_destination)) {
+                 features::kAutofillAlwaysParsePlaceholders) &&
+             MatchesRegexWithCache(field->placeholder, pattern,
+                                   capture_destination)) {
+    // Placeholders are matched against the same regexes as labels. However, to
+    // prevent false positives in `ParseEmptyLabel()`, matches in placeholders
+    // are explicitly prevented for `kEmptyLabelRegex`.
     // TODO(crbug.com/1317961): The label and placeholder cases should logically
     // be grouped together. Placeholder is currently last, because for the finch
     // study we want the group assignment to happen as late as possible.
@@ -437,14 +630,15 @@ bool FormField::Match(const AutofillField* field,
 // static
 void FormField::ParseFormFieldsPass(ParseFunction parse,
                                     const std::vector<AutofillField*>& fields,
-                                    FieldCandidatesMap* field_candidates,
+                                    FieldCandidatesMap& field_candidates,
+                                    const GeoIpCountryCode& client_country,
                                     const LanguageCode& page_language,
                                     PatternSource pattern_source,
                                     LogManager* log_manager) {
   AutofillScanner scanner(fields);
   while (!scanner.IsEnd()) {
-    std::unique_ptr<FormField> form_field =
-        parse(&scanner, page_language, pattern_source, log_manager);
+    std::unique_ptr<FormField> form_field = parse(
+        &scanner, client_country, page_language, pattern_source, log_manager);
     if (form_field == nullptr) {
       scanner.Advance();
     } else {
@@ -467,8 +661,10 @@ bool FormField::MatchesFormControlType(base::StringPiece type,
   if (match_type.contains(MatchFieldType::kTelephone) && type == "tel")
     return true;
 
-  if (match_type.contains(MatchFieldType::kSelect) && type == "select-one")
+  if (match_type.contains(MatchFieldType::kSelect) &&
+      (type == "select-one" || type == "selectlist")) {
     return true;
+  }
 
   if (match_type.contains(MatchFieldType::kTextArea) && type == "textarea")
     return true;
@@ -483,6 +679,28 @@ bool FormField::MatchesFormControlType(base::StringPiece type,
     return true;
 
   return false;
+}
+
+// static
+bool FormField::IsSingleFieldParseableType(ServerFieldType field_type) {
+  return field_type == MERCHANT_PROMO_CODE || field_type == IBAN_VALUE ||
+         field_type == CREDIT_CARD_STANDALONE_VERIFICATION_CODE;
+}
+
+// static
+void FormField::ParseUsingAutocompleteAttributes(
+    const std::vector<AutofillField*>& fields,
+    FieldCandidatesMap& field_candidates) {
+  for (const AutofillField* field : fields) {
+    HtmlFieldType html_type = FieldTypeFromAutocompleteAttributeValue(
+        base::UTF16ToUTF8(field->parseable_name()));
+    // The HTML_MODE is irrelevant when converting to a ServerFieldType.
+    ServerFieldType type = AutofillType(html_type).GetStorableType();
+    if (type != UNKNOWN_TYPE) {
+      AddClassification(field, type, kBaseAutocompleteParserScore,
+                        field_candidates);
+    }
+  }
 }
 
 }  // namespace autofill

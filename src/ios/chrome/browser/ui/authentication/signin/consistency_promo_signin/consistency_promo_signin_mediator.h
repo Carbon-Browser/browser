@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,13 @@
 #import "base/ios/block_types.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 
+@class AuthenticationFlow;
 class AuthenticationService;
 class ChromeAccountManagerService;
-@class ChromeIdentity;
 @class ConsistencyPromoSigninMediator;
 class PrefService;
 @class SigninCompletionInfo;
+@protocol SystemIdentity;
 
 namespace signin {
 class IdentityManager;
@@ -37,18 +38,25 @@ typedef NS_ENUM(NSInteger, ConsistencyPromoSigninMediatorError) {
 @protocol ConsistencyPromoSigninMediatorDelegate <NSObject>
 
 // Called when the sign-in flow is started. One of the following will be called
-// to finish the sign-in flow (once the cookies are available or not):
+// to finish the sign-in flow (once the cookies are available or not, or when
+// the flow is cancelled):
 // -[id<ConsistencyPromoSigninMediatorDelegate>
 // consistencyPromoSigninMediatorSignInDone:withIdentity:]
 // -[id<ConsistencyPromoSigninMediatorDelegate>
 // consistencyPromoSigninMediatorGenericErrorDidHappen:]
+// -[id<ConsistencyPromoSigninMediatorDelegate>
+// consistencyPromoSigninMediatorSignInCancelled:]
 - (void)consistencyPromoSigninMediatorSigninStarted:
     (ConsistencyPromoSigninMediator*)mediator;
 
 // Called if the sign-in is successful.
 - (void)consistencyPromoSigninMediatorSignInDone:
             (ConsistencyPromoSigninMediator*)mediator
-                                    withIdentity:(ChromeIdentity*)identity;
+                                    withIdentity:(id<SystemIdentity>)identity;
+
+// Called if the sign-in is cancelled.
+- (void)consistencyPromoSigninMediatorSignInCancelled:
+    (ConsistencyPromoSigninMediator*)mediator;
 
 // Called if there is sign-in error.
 - (void)consistencyPromoSigninMediator:(ConsistencyPromoSigninMediator*)mediator
@@ -74,10 +82,10 @@ typedef NS_ENUM(NSInteger, ConsistencyPromoSigninMediatorError) {
 - (void)disconnectWithResult:(SigninCoordinatorResult)signinResult;
 
 // Records when an identity is added by a subscreen of the web sign-in dialogs.
-- (void)chromeIdentityAdded:(ChromeIdentity*)identity;
+- (void)systemIdentityAdded:(id<SystemIdentity>)identity;
 
 // Starts the sign-in flow.
-- (void)signinWithIdentity:(ChromeIdentity*)identity;
+- (void)signinWithAuthenticationFlow:(AuthenticationFlow*)authenticationFlow;
 
 @end
 

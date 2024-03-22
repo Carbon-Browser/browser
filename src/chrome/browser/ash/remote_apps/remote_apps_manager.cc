@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,23 +6,32 @@
 
 #include <utility>
 
+#include "ash/app_list/app_list_controller_impl.h"
 #include "ash/public/cpp/app_menu_constants.h"
 #include "ash/public/cpp/image_downloader.h"
-#include "base/bind.h"
+#include "ash/shell.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "cc/paint/paint_flags.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/menu_util.h"
+#include "chrome/browser/ash/app_list/app_list_model_updater.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service_factory.h"
+#include "chrome/browser/ash/app_list/chrome_app_list_item.h"
+#include "chrome/browser/ash/app_list/chrome_app_list_model_updater.h"
+#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/remote_apps/remote_apps_impl.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_model_updater.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service_factory.h"
 #include "chrome/browser/ui/app_list/app_list_util.h"
-#include "chrome/browser/ui/app_list/chrome_app_list_item.h"
 #include "chrome/common/apps/platform_apps/api/enterprise_remote_apps.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/account_id/account_id.h"
+#include "components/services/app_service/public/cpp/menu.h"
+#include "components/user_manager/user.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_event_histogram_value.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -62,7 +71,7 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
 
 class ImageDownloaderImpl : public RemoteAppsManager::ImageDownloader {
  public:
-  ImageDownloaderImpl() = default;
+  explicit ImageDownloaderImpl(const Profile* profile) : profile_(profile) {}
   ImageDownloaderImpl(const ImageDownloaderImpl&) = delete;
   ImageDownloaderImpl& operator=(const ImageDownloaderImpl&) = delete;
   ~ImageDownloaderImpl() override = default;
@@ -70,8 +79,15 @@ class ImageDownloaderImpl : public RemoteAppsManager::ImageDownloader {
   void Download(const GURL& url, DownloadCallback callback) override {
     ash::ImageDownloader* image_downloader = ash::ImageDownloader::Get();
     DCHECK(image_downloader);
-    image_downloader->Download(url, kTrafficAnnotation, std::move(callback));
+    auto* const user = ProfileHelper::Get()->GetUserByProfile(profile_);
+    DCHECK(user);
+    const AccountId& account_id = user->GetAccountId();
+    image_downloader->Download(url, kTrafficAnnotation, account_id,
+                               std::move(callback));
   }
+
+ private:
+  const raw_ptr<const Profile> profile_;
 };
 
 // Placeholder icon which shows the first letter of the app's name on top of a
@@ -132,19 +148,20 @@ RemoteAppsManager::RemoteAppsManager(Profile* profile)
           apps::AppServiceProxyFactory::GetForProfile(profile_),
           this)),
       model_(std::make_unique<RemoteAppsModel>()),
-      image_downloader_(std::make_unique<ImageDownloaderImpl>()) {
+      image_downloader_(std::make_unique<ImageDownloaderImpl>(profile)) {
   remote_apps_->Initialize();
   app_list_syncable_service_ =
       app_list::AppListSyncableServiceFactory::GetForProfile(profile_);
   model_updater_ = app_list_syncable_service_->GetModelUpdater();
-  app_list_model_updater_observation_.Observe(model_updater_);
+  app_list_model_updater_observation_.Observe(model_updater_.get());
 
   // |AppListSyncableService| manages the Chrome side AppList and has to be
   // initialized before apps can be added.
   if (app_list_syncable_service_->IsInitialized()) {
     Initialize();
   } else {
-    app_list_syncable_service_observation_.Observe(app_list_syncable_service_);
+    app_list_syncable_service_observation_.Observe(
+        app_list_syncable_service_.get());
   }
 }
 
@@ -246,6 +263,24 @@ RemoteAppsError RemoteAppsManager::DeleteApp(const std::string& id) {
   remote_apps_->DeleteApp(id);
   app_id_to_source_id_map_.erase(id);
   return RemoteAppsError::kNone;
+}
+
+void RemoteAppsManager::SortLauncherWithRemoteAppsFirst() {
+  static_cast<ChromeAppListModelUpdater*>(model_updater_)
+      ->RequestAppListSort(AppListSortOrder::kAlphabeticalEphemeralAppFirst);
+}
+
+RemoteAppsError RemoteAppsManager::SetPinnedApps(
+    const std::vector<std::string>& app_ids) {
+  if (app_ids.size() > 1) {
+    return RemoteAppsError::kPinningMultipleAppsNotSupported;
+  }
+
+  // Providing an empty app id will reset the pinned app.
+  std::string app_id = app_ids.empty() ? "" : app_ids[0];
+  bool success =
+      Shell::Get()->app_list_controller()->SetHomeButtonQuickApp(app_id);
+  return success ? RemoteAppsError::kNone : RemoteAppsError::kFailedToPinAnApp;
 }
 
 std::string RemoteAppsManager::AddFolder(const std::string& folder_name,
@@ -353,12 +388,11 @@ gfx::ImageSkia RemoteAppsManager::GetPlaceholderIcon(const std::string& id,
   return icon;
 }
 
-apps::mojom::MenuItemsPtr RemoteAppsManager::GetMenuModel(
-    const std::string& id) {
-  apps::mojom::MenuItemsPtr menu_items = apps::mojom::MenuItems::New();
+apps::MenuItems RemoteAppsManager::GetMenuModel(const std::string& id) {
+  apps::MenuItems menu_items;
   // TODO(b/236785623): Temporary string for menu item.
   apps::AddCommandItem(ash::LAUNCH_NEW, IDS_APP_CONTEXT_MENU_ACTIVATE_ARC,
-                       &menu_items);
+                       menu_items);
   return menu_items;
 }
 
@@ -369,7 +403,7 @@ void RemoteAppsManager::OnSyncModelUpdated() {
 }
 
 void RemoteAppsManager::OnAppListItemAdded(ChromeAppListItem* item) {
-  if (item->is_folder() || item->is_page_break())
+  if (item->is_folder())
     return;
 
   // Make a copy of id as item->metadata can be invalidated.

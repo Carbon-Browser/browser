@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "build/build_config.h"
 #include "mojo/core/system_impl_export.h"
 #include "mojo/public/cpp/platform/platform_channel_endpoint.h"
-#include "mojo/public/cpp/platform/platform_channel_server_endpoint.h"
 
 namespace mojo {
 namespace core {
@@ -18,7 +17,6 @@ class MOJO_SYSTEM_IMPL_EXPORT ConnectionParams {
  public:
   ConnectionParams();
   explicit ConnectionParams(PlatformChannelEndpoint endpoint);
-  explicit ConnectionParams(PlatformChannelServerEndpoint server_endpoint);
   ConnectionParams(ConnectionParams&&);
 
   ConnectionParams(const ConnectionParams&) = delete;
@@ -29,27 +27,25 @@ class MOJO_SYSTEM_IMPL_EXPORT ConnectionParams {
   ConnectionParams& operator=(ConnectionParams&&);
 
   const PlatformChannelEndpoint& endpoint() const { return endpoint_; }
-  const PlatformChannelServerEndpoint& server_endpoint() const {
-    return server_endpoint_;
-  }
 
   PlatformChannelEndpoint TakeEndpoint() { return std::move(endpoint_); }
 
-  PlatformChannelServerEndpoint TakeServerEndpoint() {
-    return std::move(server_endpoint_);
-  }
-
   void set_is_async(bool is_async) { is_async_ = is_async; }
   bool is_async() const { return is_async_; }
+
+  void set_is_untrusted_process(bool is_untrusted_process) {
+    is_untrusted_process_ = is_untrusted_process;
+  }
+  bool is_untrusted_process() const { return is_untrusted_process_; }
 
   void set_leak_endpoint(bool leak_endpoint) { leak_endpoint_ = leak_endpoint; }
   bool leak_endpoint() const { return leak_endpoint_; }
 
  private:
   bool is_async_ = false;
+  bool is_untrusted_process_ = false;
   bool leak_endpoint_ = false;
   PlatformChannelEndpoint endpoint_;
-  PlatformChannelServerEndpoint server_endpoint_;
 };
 
 }  // namespace core

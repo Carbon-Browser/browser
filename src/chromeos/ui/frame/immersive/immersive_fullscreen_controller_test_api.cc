@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,10 @@ void ImmersiveFullscreenControllerTestApi::SetupForTest() {
 
 bool ImmersiveFullscreenControllerTestApi::IsTopEdgeHoverTimerRunning() const {
   return immersive_fullscreen_controller_->top_edge_hover_timer_.IsRunning();
+}
+
+void ImmersiveFullscreenControllerTestApi::EndAnimation() {
+  immersive_fullscreen_controller_->animation_->End();
 }
 
 ImmersiveFullscreenControllerTestApi::GlobalAnimationDisabler::

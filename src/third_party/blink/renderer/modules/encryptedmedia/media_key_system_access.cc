@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,6 @@
 #include "third_party/blink/renderer/modules/encryptedmedia/encrypted_media_utils.h"
 #include "third_party/blink/renderer/modules/encryptedmedia/media_key_session.h"
 #include "third_party/blink/renderer/modules/encryptedmedia/media_keys.h"
-#include "third_party/blink/renderer/modules/encryptedmedia/media_keys_controller.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/timer.h"
 
@@ -157,7 +156,7 @@ void ReportMetrics(ExecutionContext* execution_context,
 
   ukm::builders::Media_EME_CreateMediaKeys builder(document->UkmSourceID());
   builder.SetKeySystem(KeySystemForUkmLegacy::kWidevine);
-  builder.SetIsAdFrame(static_cast<int>(frame->IsAdSubframe()));
+  builder.SetIsAdFrame(static_cast<int>(frame->IsAdFrame()));
   builder.SetIsCrossOrigin(
       static_cast<int>(frame->IsCrossOriginToOutermostMainFrame()));
   builder.SetIsTopFrame(static_cast<int>(frame->IsOutermostMainFrame()));

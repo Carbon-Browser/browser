@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 
 #include "dbus/message.h"
@@ -137,15 +137,15 @@ bool PropertySet::GetAndBlock(PropertyBase* property) {
   writer.AppendString(property->name());
 
   DCHECK(object_proxy_);
-  std::unique_ptr<dbus::Response> response(object_proxy_->CallMethodAndBlock(
-      &method_call, ObjectProxy::TIMEOUT_USE_DEFAULT));
+  auto result = object_proxy_->CallMethodAndBlock(
+      &method_call, ObjectProxy::TIMEOUT_USE_DEFAULT);
 
-  if (!response.get()) {
+  if (!result.has_value()) {
     LOG(WARNING) << property->name() << ": GetAndBlock: failed.";
     return false;
   }
 
-  MessageReader reader(response.get());
+  MessageReader reader(result->get());
   if (property->PopValueFromReader(&reader)) {
     property->set_valid(true);
     NotifyPropertyChanged(property->name());
@@ -203,11 +203,9 @@ bool PropertySet::SetAndBlock(PropertyBase* property) {
   property->AppendSetValueToWriter(&writer);
 
   DCHECK(object_proxy_);
-  std::unique_ptr<dbus::Response> response(object_proxy_->CallMethodAndBlock(
-      &method_call, ObjectProxy::TIMEOUT_USE_DEFAULT));
-  if (response.get())
-    return true;
-  return false;
+  return object_proxy_
+      ->CallMethodAndBlock(&method_call, ObjectProxy::TIMEOUT_USE_DEFAULT)
+      .has_value();
 }
 
 void PropertySet::OnSet(PropertyBase* property,

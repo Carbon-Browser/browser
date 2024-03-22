@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/display/display.h"
 #include "ui/display/display_export.h"
 #include "ui/display/display_layout.h"
@@ -43,8 +44,17 @@ class DISPLAY_EXPORT DisplayManagerTestApi {
   // Update the display configuration as given in |display_specs|. The format of
   // |display_spec| is a list of comma separated spec for each displays. Please
   // refer to the comment in |display::ManagedDisplayInfo::CreateFromSpec| for
-  // the format of the display spec.
-  void UpdateDisplay(const std::string& display_specs);
+  // the format of the display spec. If `from_native_platform` is true, the non
+  // native information, such as display zoom, will be ignored and instead
+  // copied from the current configuration.  Note: To add rounded-corners
+  // properly upon startup, set it via specifying the command line switch
+  // `ash-host-window-bounds`.
+  void UpdateDisplay(const std::string& display_specs,
+                     bool from_native_platform = false);
+
+  void UpdateDisplayWithDisplayInfoList(
+      const std::vector<ManagedDisplayInfo>& display_info_list,
+      bool from_native_platform = false);
 
   // Set the 1st display as an internal display and returns the display Id for
   // the internal display.
@@ -73,7 +83,7 @@ class DISPLAY_EXPORT DisplayManagerTestApi {
   // Indicate the maximum number of displays that chrome device can support.
   static size_t maximum_support_display_;
 
-  DisplayManager* display_manager_;  // not owned
+  raw_ptr<DisplayManager, ExperimentalAsh> display_manager_;  // not owned
 };
 
 class DISPLAY_EXPORT ScopedSetInternalDisplayId {
@@ -92,11 +102,10 @@ DISPLAY_EXPORT bool SetDisplayResolution(DisplayManager* display_manager,
                                          int64_t display_id,
                                          const gfx::Size& resolution);
 
-// Creates the dislpay layout from position and offset for the current
-// display list. If you simply want to create a new layout that is
-// independent of current displays, use DisplayLayoutBuilder or simply
-// create a new DisplayLayout and set display id fields (primary, ids
-// in placement) manually.
+// Creates the display layout from position and offset for the current display
+// list. If you simply want to create a new layout that is independent of
+// current displays, use DisplayLayoutBuilder or simply create a new
+// DisplayLayout and set display id fields (primary, ids in placement) manually.
 DISPLAY_EXPORT std::unique_ptr<DisplayLayout> CreateDisplayLayout(
     DisplayManager* display_manager,
     DisplayPlacement::Position position,

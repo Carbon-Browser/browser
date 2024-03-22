@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,13 @@
 
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
+
+namespace crostini {
+
+// Shows the UI with the error message when installing a package fails.
+void ShowCrostiniPackageInstallFailureView(const std::string& error_message);
+
+}  // namespace crostini
 
 // Displays error information when the user fails to install a package.
 class CrostiniPackageInstallFailureView

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "base/android/jni_android.h"
 #include "base/memory/ptr_util.h"
-#include "chrome/android/features/stack_unwinder/public/memory_regions_map.h"
 #include "chrome/android/modules/stack_unwinder/provider/jni_headers/StackUnwinderModuleProvider_jni.h"
 
 namespace stack_unwinder {
@@ -40,27 +39,43 @@ std::unique_ptr<Module> Module::Load() {
           Java_StackUnwinderModuleProvider_getCreateNativeUnwinderFunction(
               env));
 
-  return base::WrapUnique(
-      new Module(create_memory_regions_map, create_native_unwinder));
+  CreateLibunwindstackUnwinderFunction create_libunwindstack_unwinder =
+      reinterpret_cast<CreateLibunwindstackUnwinderFunction>(
+          Java_StackUnwinderModuleProvider_getCreateLibunwindstackUnwinderFunction(
+              env));
+
+  return base::WrapUnique(new Module(create_memory_regions_map,
+                                     create_native_unwinder,
+                                     create_libunwindstack_unwinder));
 }
 
-std::unique_ptr<MemoryRegionsMap> Module::CreateMemoryRegionsMap() {
+std::unique_ptr<base::NativeUnwinderAndroidMemoryRegionsMap>
+Module::CreateMemoryRegionsMap() {
   return create_memory_regions_map_();
 }
 
 std::unique_ptr<base::Unwinder> Module::CreateNativeUnwinder(
-    MemoryRegionsMap* memory_regions_map,
-    uintptr_t exclude_module_with_base_address) {
-  return create_native_unwinder_(memory_regions_map,
-                                 exclude_module_with_base_address);
+    base::NativeUnwinderAndroidMapDelegate* map_delegate,
+    uintptr_t exclude_module_with_base_address,
+    bool is_java_name_hashing_enabled) {
+  return create_native_unwinder_(map_delegate, exclude_module_with_base_address,
+                                 is_java_name_hashing_enabled);
 }
 
-Module::Module(CreateMemoryRegionsMapFunction create_memory_regions_map,
-               CreateNativeUnwinderFunction create_native_unwinder)
+std::unique_ptr<base::Unwinder> Module::CreateLibunwindstackUnwinder() {
+  return create_libunwindstack_unwinder_();
+}
+
+Module::Module(
+    CreateMemoryRegionsMapFunction create_memory_regions_map,
+    CreateNativeUnwinderFunction create_native_unwinder,
+    CreateLibunwindstackUnwinderFunction create_libunwindstack_unwinder)
     : create_memory_regions_map_(create_memory_regions_map),
-      create_native_unwinder_(create_native_unwinder) {
+      create_native_unwinder_(create_native_unwinder),
+      create_libunwindstack_unwinder_(create_libunwindstack_unwinder) {
   DCHECK(create_memory_regions_map);
   DCHECK(create_native_unwinder);
+  DCHECK(create_libunwindstack_unwinder);
 }
 
 }  // namespace stack_unwinder

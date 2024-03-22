@@ -1,18 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/active_tab_permission_granter.h"
 
 #include <set>
-#include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
-#include "base/no_destructor.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/extensions/extension_action_runner.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/profiles/profile.h"
@@ -23,15 +21,16 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_util.h"
+#include "extensions/browser/network_permissions_updater.h"
 #include "extensions/browser/process_manager.h"
 #include "extensions/browser/renderer_startup_helper.h"
-#include "extensions/common/cors_util.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_messages.h"
 #include "extensions/common/manifest_handlers/incognito_info.h"
 #include "extensions/common/mojom/renderer.mojom.h"
 #include "extensions/common/permissions/permission_set.h"
 #include "extensions/common/permissions/permissions_data.h"
+#include "extensions/common/url_pattern_set.h"
 #include "extensions/common/user_script.h"
 #include "url/gurl.h"
 
@@ -93,46 +92,21 @@ void SendRendererMessageToProcesses(
     renderer_message.Run(false, tab_process);
 }
 
-std::unique_ptr<ActiveTabPermissionGranter::Delegate>&
-GetActiveTabPermissionGranterDelegateWrapper() {
-  static base::NoDestructor<
-      std::unique_ptr<ActiveTabPermissionGranter::Delegate>>
-      delegate_wrapper;
-  return *delegate_wrapper;
-}
-
-ActiveTabPermissionGranter::Delegate* GetActiveTabPermissionGranterDelegate() {
-  return GetActiveTabPermissionGranterDelegateWrapper().get();
-}
-
-// Returns true if activeTab is allowed to be granted to the extension. This can
-// return false for platform-specific implementations.
-bool ShouldGrantActiveTabOrPrompt(const Extension* extension,
-                                  content::WebContents* web_contents) {
-  return !GetActiveTabPermissionGranterDelegate() ||
-         GetActiveTabPermissionGranterDelegate()->ShouldGrantActiveTabOrPrompt(
-             extension, web_contents);
-}
-
 void SetCorsOriginAccessList(content::BrowserContext* browser_context,
                              const Extension& extension,
                              base::OnceClosure closure) {
   // To limit how far the new permissions reach, we only apply them to the
-  // ActiveTab's profile for split-mode extensions.  OTOH, spanning-mode
+  // ActiveTab's context for split-mode extensions.  OTOH, spanning-mode
   // extensions need to get the new permissions in all profiles (e.g. if the
   // ActiveTab is in an incognito window, than the [single/only/spanning]
   // background page in the regular profile also needs to get the new
   // permissions).
-  std::vector<content::BrowserContext*> target_contexts;
-  if (IncognitoInfo::IsSplitMode(&extension)) {
-    target_contexts = {browser_context};
-  } else {
-    target_contexts = util::GetAllRelatedProfiles(
-        Profile::FromBrowserContext(browser_context), extension);
-  }
-
-  util::SetCorsOriginAccessListForExtension(target_contexts, extension,
-                                            std::move(closure));
+  NetworkPermissionsUpdater::ContextSet context_set =
+      IncognitoInfo::IsSplitMode(&extension)
+          ? NetworkPermissionsUpdater::ContextSet::kCurrentContextOnly
+          : NetworkPermissionsUpdater::ContextSet::kAllRelatedContexts;
+  NetworkPermissionsUpdater::UpdateExtension(*browser_context, extension,
+                                             context_set, std::move(closure));
 }
 
 }  // namespace
@@ -147,12 +121,6 @@ ActiveTabPermissionGranter::ActiveTabPermissionGranter(
 
 ActiveTabPermissionGranter::~ActiveTabPermissionGranter() {}
 
-// static
-void ActiveTabPermissionGranter::SetPlatformDelegate(
-    std::unique_ptr<Delegate> delegate) {
-  GetActiveTabPermissionGranterDelegateWrapper() = std::move(delegate);
-}
-
 void ActiveTabPermissionGranter::GrantIfRequested(const Extension* extension) {
   if (granted_extensions_.Contains(extension->id()))
     return;
@@ -162,23 +130,19 @@ void ActiveTabPermissionGranter::GrantIfRequested(const Extension* extension) {
 
   const PermissionsData* permissions_data = extension->permissions_data();
 
-  const GURL& url =
-      web_contents()->GetPrimaryMainFrame()->GetLastCommittedOrigin().GetURL();
+  // Do not use `RFH::GetLastCommittedOrigin()` because it returns an empty
+  // origin in case of a frame with CSP sandbox.
+  const GURL& url = web_contents()->GetLastCommittedURL();
 
   // If the extension requested the host permission to |url| but had it
   // withheld, we grant it active tab-style permissions, even if it doesn't have
   // the activeTab permission in the manifest. This is necessary for the
   // runtime host permissions feature to work.
-  // Note: It's important that we check if the extension has activeTab before
-  // checking ShouldGrantActiveTabOrPrompt() in order to prevent
-  // ShouldGrantActiveTabOrPrompt() from prompting for extensions that don't
-  // request the activeTab permission.
   content::BrowserContext* browser_context =
       web_contents()->GetBrowserContext();
-  if ((permissions_data->HasAPIPermission(mojom::APIPermissionID::kActiveTab) ||
-       permissions_data->withheld_permissions().effective_hosts().MatchesURL(
-           url)) &&
-      ShouldGrantActiveTabOrPrompt(extension, web_contents())) {
+  if (permissions_data->HasAPIPermission(mojom::APIPermissionID::kActiveTab) ||
+      permissions_data->withheld_permissions().effective_hosts().MatchesURL(
+          url)) {
     // Gate activeTab for file urls on extensions having explicit access to file
     // urls.
     int valid_schemes = UserScript::ValidUserScriptSchemes();
@@ -229,7 +193,7 @@ void ActiveTabPermissionGranter::GrantIfRequested(const Extension* extension) {
 }
 
 void ActiveTabPermissionGranter::RevokeForTesting() {
-  ClearActiveExtensionsAndNotify();
+  ClearGrantedExtensionsAndNotify();
 }
 
 void ActiveTabPermissionGranter::DidFinishNavigation(
@@ -245,11 +209,11 @@ void ActiveTabPermissionGranter::DidFinishNavigation(
   if (navigation_handle->IsSameOrigin())
     return;
 
-  ClearActiveExtensionsAndNotify();
+  ClearGrantedExtensionsAndNotify();
 }
 
 void ActiveTabPermissionGranter::WebContentsDestroyed() {
-  ClearActiveExtensionsAndNotify();
+  ClearGrantedExtensionsAndNotify();
 }
 
 void ActiveTabPermissionGranter::OnExtensionUnloaded(
@@ -261,16 +225,34 @@ void ActiveTabPermissionGranter::OnExtensionUnloaded(
   granted_extensions_.Remove(extension->id());
 }
 
-void ActiveTabPermissionGranter::ClearActiveExtensionsAndNotify() {
-  if (granted_extensions_.is_empty())
+void ActiveTabPermissionGranter::ClearGrantedExtensionsAndNotify() {
+  ClearGrantedExtensionsAndNotify(granted_extensions_);
+}
+
+void ActiveTabPermissionGranter::ClearActiveExtensionAndNotify(
+    const ExtensionId& id) {
+  if (!granted_extensions_.Contains(id)) {
     return;
+  }
+
+  ExtensionSet granted_to_remove{};
+  granted_to_remove.Insert(granted_extensions_.GetByID(id));
+  ClearGrantedExtensionsAndNotify(granted_to_remove);
+}
+
+void ActiveTabPermissionGranter::ClearGrantedExtensionsAndNotify(
+    const ExtensionSet& granted_extensions_to_remove) {
+  if (granted_extensions_to_remove.empty()) {
+    return;
+  }
 
   std::set<content::RenderFrameHost*> frame_hosts;
   std::vector<std::string> extension_ids;
   content::BrowserContext* browser_context =
       web_contents()->GetBrowserContext();
   ProcessManager* process_manager = ProcessManager::Get(browser_context);
-  for (const scoped_refptr<const Extension>& extension : granted_extensions_) {
+  for (const scoped_refptr<const Extension>& extension :
+       granted_extensions_to_remove) {
     extension->permissions_data()->ClearTabSpecificPermissions(tab_id_);
     SetCorsOriginAccessList(browser_context, *extension, base::DoNothing());
 
@@ -287,7 +269,9 @@ void ActiveTabPermissionGranter::ClearActiveExtensionsAndNotify() {
       frame_hosts, web_contents()->GetPrimaryMainFrame()->GetProcess(),
       clear_message);
 
-  granted_extensions_.Clear();
+  for (const auto& id : extension_ids) {
+    granted_extensions_.Remove(id);
+  }
 }
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/shell/browser/shell.h"
+#include "ui/accessibility/ax_common.h"
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_tree.h"
 
@@ -42,7 +43,9 @@ class AccessibilityIpcErrorBrowserTest : public ContentBrowserTest {
 };
 
 // Failed on Android x86 in crbug.com/1123641.
-#if BUILDFLAG(IS_ANDROID) && defined(ARCH_CPU_X86)
+// Do not test on AX_FAIL_FAST_BUILDS, where the BAD IPC will simply assert.
+#if (BUILDFLAG(IS_ANDROID) && defined(ARCH_CPU_X86)) || \
+    defined(AX_FAIL_FAST_BUILD)
 #define MAYBE_ResetBrowserAccessibilityManager \
   DISABLED_ResetBrowserAccessibilityManager
 #else
@@ -77,7 +80,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityIpcErrorBrowserTest,
     // the first event.
     AccessibilityNotificationWaiter waiter(shell()->web_contents(),
                                            ui::kAXModeComplete,
-                                           ax::mojom::Event::kLayoutComplete);
+                                           ax::mojom::Event::kLoadComplete);
     ASSERT_TRUE(waiter.WaitForNotification());
   }
 
@@ -98,7 +101,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityIpcErrorBrowserTest,
     // notification triggered by the hide.
     AccessibilityNotificationWaiter waiter(shell()->web_contents(),
                                            ui::kAXModeComplete,
-                                           ax::mojom::Event::kChildrenChanged);
+                                           ax::mojom::Event::kLayoutComplete);
     ASSERT_TRUE(ExecJs(
         shell(), "document.getElementById('p1').style.display = 'none';"));
     ASSERT_TRUE(waiter.WaitForNotification());
@@ -142,7 +145,8 @@ IN_PROC_BROWSER_TEST_F(AccessibilityIpcErrorBrowserTest,
   EXPECT_EQ(ax::mojom::Role::kButton, button->GetRole());
 }
 
-#if BUILDFLAG(IS_LINUX)
+// Do not test on AX_FAIL_FAST_BUILDS, where the BAD IPC will simply assert.
+#if BUILDFLAG(IS_LINUX) && !defined(AX_FAIL_FAST_BUILD)
 #define MAYBE_MultipleBadAccessibilityIPCsKillsRenderer \
   MultipleBadAccessibilityIPCsKillsRenderer
 #else
@@ -172,7 +176,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityIpcErrorBrowserTest,
     // the first event.
     AccessibilityNotificationWaiter waiter(shell()->web_contents(),
                                            ui::kAXModeComplete,
-                                           ax::mojom::Event::kLayoutComplete);
+                                           ax::mojom::Event::kLoadComplete);
     ASSERT_TRUE(waiter.WaitForNotification());
   }
 

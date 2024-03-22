@@ -1,12 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/inspector/inspector_highlight.h"
 
 #include "base/test/values_test_util.h"
+#include "base/values.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/core/accessibility/ax_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
@@ -35,13 +37,7 @@ void AssertValueEqualsJSON(const std::unique_ptr<protocol::Value>& actual_value,
 
 }  // namespace
 
-class InspectorHighlightTest : public testing::Test,
-                               private ScopedCSSContainerQueriesForTest,
-                               private ScopedLayoutNGForTest {
- public:
-  InspectorHighlightTest()
-      : ScopedCSSContainerQueriesForTest(true), ScopedLayoutNGForTest(true) {}
-
+class InspectorHighlightTest : public testing::Test {
  protected:
   void SetUp() override;
 
@@ -60,7 +56,7 @@ TEST_F(InspectorHighlightTest, BuildSnapContainerInfoNoSnapAreas) {
     <div id="target">test</div>
   )HTML");
   GetDocument().View()->UpdateAllLifecyclePhasesForTest();
-  Element* target = GetDocument().getElementById("target");
+  Element* target = GetDocument().getElementById(AtomicString("target"));
   EXPECT_FALSE(BuildSnapContainerInfo(target));
 }
 
@@ -86,7 +82,7 @@ TEST_F(InspectorHighlightTest, BuildSnapContainerInfoSnapAreas) {
     <div id="snap"><div>A</div><div>B</div></div>
   )HTML");
   GetDocument().View()->UpdateAllLifecyclePhasesForTest();
-  Element* container = GetDocument().getElementById("snap");
+  Element* container = GetDocument().getElementById(AtomicString("snap"));
   auto info = BuildSnapContainerInfo(container);
   EXPECT_TRUE(info);
 
@@ -171,7 +167,7 @@ TEST_F(InspectorHighlightTest,
     <div id="container"></div>
   )HTML");
   GetDocument().View()->UpdateAllLifecyclePhasesForTest();
-  Element* container = GetDocument().getElementById("container");
+  Element* container = GetDocument().getElementById(AtomicString("container"));
   auto info = BuildContainerQueryContainerInfo(
       container, InspectorContainerQueryContainerHighlightConfig(), 1.0f);
   EXPECT_TRUE(info);
@@ -208,7 +204,7 @@ TEST_F(InspectorHighlightTest,
   )HTML");
   GetDocument().View()->UpdateAllLifecyclePhasesForTest();
 
-  Element* container = GetDocument().getElementById("container");
+  Element* container = GetDocument().getElementById(AtomicString("container"));
 
   LineStyle line_style;
   line_style.color = Color(1, 1, 1);
@@ -224,7 +220,7 @@ TEST_F(InspectorHighlightTest,
       "containerBorder":["M",8,8,"L",408,8,"L",408,508,"L",8,508,"Z"],
       "containerQueryContainerHighlightConfig": {
         "descendantBorder": {
-          "color": "#010101",
+          "color": "rgb(1, 1, 1)",
           "pattern": ""
         }
       },
@@ -249,7 +245,7 @@ TEST_F(InspectorHighlightTest, BuildIsolatedElementInfo) {
     <div id="element"></div>
   )HTML");
   GetDocument().View()->UpdateAllLifecyclePhasesForTest();
-  Element* element = GetDocument().getElementById("element");
+  Element* element = GetDocument().getElementById(AtomicString("element"));
   auto info = BuildIsolatedElementInfo(
       *element, InspectorIsolationModeHighlightConfig(), 1.0f);
   EXPECT_TRUE(info);
@@ -274,6 +270,84 @@ TEST_F(InspectorHighlightTest, BuildIsolatedElementInfo) {
   AssertValueEqualsJSON(protocol::ValueConversions<protocol::Value>::fromValue(
                             info.get(), &errors),
                         expected_isolated_element);
+}
+
+static std::string GetBackgroundColorFromElementInfo(Element* element) {
+  EXPECT_TRUE(element);
+  AXContext ax_context(element->GetDocument(), ui::kAXModeBasic);
+  element->GetDocument().View()->UpdateAllLifecyclePhasesForTest();
+  auto info = BuildElementInfo(element);
+  EXPECT_TRUE(info);
+  AppendStyleInfo(element, info.get(), {}, {});
+
+  protocol::ErrorSupport errors;
+  auto actual_value = protocol::ValueConversions<protocol::Value>::fromValue(
+      info.get(), &errors);
+  EXPECT_TRUE(actual_value);
+
+  std::string json_actual;
+  auto status_to_json = crdtp::json::ConvertCBORToJSON(
+      crdtp::SpanFrom(actual_value->Serialize()), &json_actual);
+  EXPECT_TRUE(status_to_json.ok());
+  base::Value::Dict parsed_json_actual = ParseJson(json_actual).TakeDict();
+  auto* style = parsed_json_actual.FindDict("style");
+  EXPECT_TRUE(style);
+  auto* background_color = style->FindString("background-color-css-text");
+  if (!background_color) {
+    background_color = style->FindString("background-color");
+  }
+  EXPECT_TRUE(background_color);
+  return std::move(*background_color);
+}
+
+TEST_F(InspectorHighlightTest, BuildElementInfo_Colors) {
+  GetDocument().body()->setInnerHTML(R"HTML(
+    <style>
+      div {
+        width: 400px;
+        height: 500px;
+      }
+      #lab {
+        background-color: lab(100% 0 0);
+      }
+      #color {
+        background-color: color(display-p3 50% 50% 50%);
+      }
+      #hex {
+        background-color: #ff00ff;
+      }
+      #rgb {
+        background-color: rgb(128 128 128);
+      }
+      #var {
+        background-color: Var(--lab);
+      }
+      :root {
+        --lab: lab(20% -10 -10);
+      }
+    </style>
+    <div id="lab"></div>
+    <div id="color"></div>
+    <div id="hex"></div>
+    <div id="rgb"></div>
+    <div id="var"></div>
+  )HTML");
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
+  EXPECT_THAT(GetBackgroundColorFromElementInfo(
+                  GetDocument().getElementById(AtomicString("lab"))),
+              Eq("lab(100 0 0)"));
+  EXPECT_THAT(GetBackgroundColorFromElementInfo(
+                  GetDocument().getElementById(AtomicString("color"))),
+              Eq("color(display-p3 0.5 0.5 0.5)"));
+  EXPECT_THAT(GetBackgroundColorFromElementInfo(
+                  GetDocument().getElementById(AtomicString("hex"))),
+              Eq("#FF00FFFF"));
+  EXPECT_THAT(GetBackgroundColorFromElementInfo(
+                  GetDocument().getElementById(AtomicString("rgb"))),
+              Eq("#808080FF"));
+  EXPECT_THAT(GetBackgroundColorFromElementInfo(
+                  GetDocument().getElementById(AtomicString("var"))),
+              Eq("lab(20 -10 -10)"));
 }
 
 }  // namespace blink

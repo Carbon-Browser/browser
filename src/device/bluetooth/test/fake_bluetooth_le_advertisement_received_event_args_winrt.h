@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 
-#include "base/strings/string_piece_forward.h"
+#include <string_view>
 
 namespace device {
 
@@ -23,7 +23,7 @@ class FakeBluetoothLEAdvertisementReceivedEventArgsWinrt
  public:
   FakeBluetoothLEAdvertisementReceivedEventArgsWinrt(
       int16_t rssi,
-      base::StringPiece address,
+      std::string_view address,
       Microsoft::WRL::ComPtr<ABI::Windows::Devices::Bluetooth::Advertisement::
                                  IBluetoothLEAdvertisement> advertisement);
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
@@ -21,15 +23,12 @@
 #include "third_party/blink/renderer/modules/mediastream/user_media_request.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_descriptor.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_wrapper_mode.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
-
-namespace gfx {
-class Size;
-}
 
 namespace blink {
 class AudioCaptureSettings;
@@ -50,9 +49,13 @@ class WebString;
 // render thread. There should be only one UserMediaProcessor per frame.
 class MODULES_EXPORT UserMediaProcessor
     : public GarbageCollected<UserMediaProcessor> {
+  USING_PRE_FINALIZER(UserMediaProcessor, StopAllProcessing);
+
  public:
   using MediaDevicesDispatcherCallback = base::RepeatingCallback<
       blink::mojom::blink::MediaDevicesDispatcherHost*()>;
+  using KeepDeviceAliveForTransferCallback = base::OnceCallback<void(bool)>;
+
   // |frame| must outlive this instance.
   UserMediaProcessor(LocalFrame* frame,
                      MediaDevicesDispatcherCallback media_devices_dispatcher_cb,
@@ -100,6 +103,7 @@ class MODULES_EXPORT UserMediaProcessor
   void OnDeviceRequestStateChange(
       const MediaStreamDevice& device,
       const mojom::blink::MediaStreamStateChange new_state);
+  void OnDeviceCaptureConfigurationChange(const MediaStreamDevice& device);
   void OnDeviceCaptureHandleChange(const MediaStreamDevice& device);
 
   void set_media_stream_dispatcher_host_for_testing(
@@ -107,6 +111,14 @@ class MODULES_EXPORT UserMediaProcessor
           dispatcher_host) {
     dispatcher_host_.Bind(std::move(dispatcher_host), task_runner_);
   }
+
+  // Ensure the MediaStreamDevice underlying a source is not closed even if
+  // there are no remaining usages from this frame, as it's in the process of
+  // being transferred.
+  void KeepDeviceAliveForTransfer(
+      base::UnguessableToken session_id,
+      base::UnguessableToken transfer_id,
+      KeepDeviceAliveForTransferCallback keep_alive_cb);
 
   virtual void Trace(Visitor*) const;
 
@@ -145,7 +157,7 @@ class MODULES_EXPORT UserMediaProcessor
                            TiltConstraintRequestPanTiltZoomPermission);
   FRIEND_TEST_ALL_PREFIXES(UserMediaClientTest,
                            ZoomConstraintRequestPanTiltZoomPermission);
-  FRIEND_TEST_ALL_PREFIXES(UserMediaClientTest, MultiDeviceOnStreamGenerated);
+  FRIEND_TEST_ALL_PREFIXES(UserMediaClientTest, MultiDeviceOnStreamsGenerated);
   class RequestInfo;
   using LocalStreamSources = HeapVector<Member<MediaStreamSource>>;
 
@@ -153,19 +165,17 @@ class MODULES_EXPORT UserMediaProcessor
                      blink::mojom::blink::MediaStreamRequestResult result,
                      blink::mojom::blink::GetOpenDeviceResponsePtr response);
 
-  void OnStreamGenerated(int32_t request_id,
-                         blink::mojom::blink::MediaStreamRequestResult result,
-                         const String& label,
-                         mojom::blink::StreamDevicesSetPtr stream_devices_set,
-                         bool pan_tilt_zoom_allowed);
+  void OnStreamsGenerated(int32_t request_id,
+                          blink::mojom::blink::MediaStreamRequestResult result,
+                          const String& label,
+                          mojom::blink::StreamDevicesSetPtr stream_devices_set,
+                          bool pan_tilt_zoom_allowed);
 
   void GotAllVideoInputFormatsForDevice(
       UserMediaRequest* user_media_request,
       const String& label,
       const Vector<String>& device_ids,
       const Vector<media::VideoCaptureFormat>& formats);
-
-  gfx::Size GetScreenSize();
 
   void OnStreamGenerationFailed(
       int32_t request_id,
@@ -293,8 +303,8 @@ class MODULES_EXPORT UserMediaProcessor
   WebMediaStreamDeviceObserver* GetMediaStreamDeviceObserver();
 
   // Owned by the test.
-  WebMediaStreamDeviceObserver* media_stream_device_observer_for_testing_ =
-      nullptr;
+  raw_ptr<WebMediaStreamDeviceObserver, DanglingUntriaged>
+      media_stream_device_observer_for_testing_ = nullptr;
 
   LocalStreamSources local_sources_;
   LocalStreamSources pending_local_sources_;

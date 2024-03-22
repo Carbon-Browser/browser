@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "content/web_test/common/web_test.mojom.h"
@@ -26,6 +27,8 @@
 #include "content/web_test/renderer/gamepad_controller.h"
 #include "content/web_test/renderer/layout_dump.h"
 #include "content/web_test/renderer/web_test_content_settings_client.h"
+#include "printing/buildflags/buildflags.h"
+#include "printing/page_range.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/web_effective_connection_type.h"
 #include "third_party/blink/public/platform/web_url.h"
@@ -128,6 +131,22 @@ class TestRunner {
   // Returns false if the browser should capture the pixel output, true if it
   // can be done locally in the renderer via DumpPixelsInRenderer().
   bool CanDumpPixelsFromRenderer() const;
+
+#if BUILDFLAG(ENABLE_PRINTING)
+  // Returns the default page size to be used for printing. This is either the
+  // size that was explicitly set via SetPrintingSize or the size of the frame
+  // if no size was set.
+  gfx::Size GetPrintingPageSize(blink::WebLocalFrame* frame) const;
+
+  // Returns the default page margin size to be used for printing. The value
+  // applies to all four sides of the page.
+  int GetPrintingMargin() const;
+
+  // Returns the page ranges to be printed. This is specified in the document
+  // via a tag of the form <meta name=reftest-pages content="1,2-3,5-">. If no
+  // tag is found, print all pages.
+  printing::PageRanges GetPrintingPageRanges(blink::WebLocalFrame* frame) const;
+#endif
 
   // Snapshots the content of |main_frame| using the mode requested by the
   // current test.
@@ -250,6 +269,15 @@ class TestRunner {
   blink::WebString GetAbsoluteWebStringFromUTF8Path(
       const std::string& utf8_path);
 
+  // Disables automatic drag and drop in web tests' web frame widget
+  // (WebTestWebFrameWidgetImpl).
+  //
+  // In general, drag and drop will automatically be performed because web tests
+  // do not have drag and drop enabled. If you need to control the drag and drop
+  // lifecycle yourself, you can disable it here.
+  void DisableAutomaticDragDrop();
+  bool AutomaticDragDropEnabled();
+
  private:
   friend class TestRunnerBindings;
   friend class WorkQueue;
@@ -299,7 +327,7 @@ class TestRunner {
     // Collection of flags to be synced with the browser process.
     TrackedDictionary states_;
 
-    TestRunner* controller_;
+    raw_ptr<TestRunner, ExperimentalRenderer> controller_;
   };
 
   // If the main test window's main frame is hosted in this renderer process,
@@ -439,7 +467,6 @@ class TestRunner {
 
   // WebContentSettingsClient related.
   void SetImagesAllowed(bool allowed);
-  void SetScriptsAllowed(bool allowed);
   void SetStorageAllowed(bool allowed);
   void SetAllowRunningOfInsecureContent(bool allowed);
   void DumpPermissionClientCallbacks();
@@ -453,6 +480,8 @@ class TestRunner {
   // Causes layout to happen as if targetted to printed pages.
   void SetPrinting();
   void SetPrintingForFrame(const std::string& frame_name);
+  void SetPrintingSize(int width, int height);
+  void SetPrintingMargin(int size);
 
   void SetShouldStayOnPageAfterHandlingBeforeUnload(bool value);
 

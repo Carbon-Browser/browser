@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,9 +78,9 @@ class MediaSessionAndroid final
   JavaObjectWeakGlobalRef j_media_session_;
   // WebContentsAndroid corresponding to the Java WebContentsImpl that holds a
   // strong reference to |j_media_session_|.
-  raw_ptr<WebContentsAndroid> web_contents_android_;
+  raw_ptr<WebContentsAndroid, DanglingUntriaged> web_contents_android_;
 
-  const raw_ptr<MediaSessionImpl> media_session_;
+  const raw_ptr<MediaSessionImpl, DanglingUntriaged> media_session_;
 
   bool is_paused_ = false;
   bool is_controllable_ = false;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,6 +60,7 @@ void CustomImageView::OnPaint(gfx::Canvas* canvas) {
 
 class BadgeView : public ::views::ImageView {
  public:
+  METADATA_HEADER(BadgeView);
   explicit BadgeView(BadgedProfilePhoto::BadgeType badge_type)
       : badge_type_(badge_type) {
     SetPosition(gfx::Point(kBadgedProfilePhotoWidth - kBadgeIconSize,
@@ -100,8 +101,7 @@ class BadgeView : public ::views::ImageView {
             kSyncPausedCircleIcon, ui::kColorIcon, kBadgeIconSize));
         break;
       case BadgedProfilePhoto::BADGE_TYPE_NONE:
-        NOTREACHED();
-        break;
+        NOTREACHED_NORETURN();
     }
     SizeToPreferredSize();
   }
@@ -109,6 +109,9 @@ class BadgeView : public ::views::ImageView {
  private:
   const BadgedProfilePhoto::BadgeType badge_type_;
 };
+
+BEGIN_METADATA(BadgeView, views::ImageView)
+END_METADATA
 
 }  // namespace
 
@@ -124,7 +127,8 @@ BadgedProfilePhoto::BadgedProfilePhoto(BadgeType badge_type,
   views::ImageView* profile_photo_view = badge_type == BADGE_TYPE_NONE
                                              ? new views::ImageView()
                                              : new CustomImageView();
-  profile_photo_view->SetImage(*profile_photo_circular.ToImageSkia());
+  profile_photo_view->SetImage(
+      ui::ImageModel::FromImage(profile_photo_circular));
   profile_photo_view->SizeToPreferredSize();
   AddChildView(profile_photo_view);
 

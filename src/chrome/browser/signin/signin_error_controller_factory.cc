@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,18 @@
 #include "chrome/browser/signin/identity_manager_factory.h"
 
 SigninErrorControllerFactory::SigninErrorControllerFactory()
-    : ProfileKeyedServiceFactory("SigninErrorController") {
+    : ProfileKeyedServiceFactory(
+          "SigninErrorController",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
 }
 
-SigninErrorControllerFactory::~SigninErrorControllerFactory() {}
+SigninErrorControllerFactory::~SigninErrorControllerFactory() = default;
 
 // static
 SigninErrorController* SigninErrorControllerFactory::GetForProfile(
@@ -26,7 +33,8 @@ SigninErrorController* SigninErrorControllerFactory::GetForProfile(
 
 // static
 SigninErrorControllerFactory* SigninErrorControllerFactory::GetInstance() {
-  return base::Singleton<SigninErrorControllerFactory>::get();
+  static base::NoDestructor<SigninErrorControllerFactory> instance;
+  return instance.get();
 }
 
 KeyedService* SigninErrorControllerFactory::BuildServiceInstanceFor(

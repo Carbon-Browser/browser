@@ -81,8 +81,9 @@ class CSSCrossfadeValue::ObserverProxy final
   bool WillRenderImage() override {
     for (const ImageResourceObserver* const_observer : Clients().Keys()) {
       auto* observer = const_cast<ImageResourceObserver*>(const_observer);
-      if (observer->WillRenderImage())
+      if (observer->WillRenderImage()) {
         return true;
+      }
     }
     return false;
   }
@@ -91,8 +92,9 @@ class CSSCrossfadeValue::ObserverProxy final
       mojom::blink::ImageAnimationPolicy& animation_policy) override {
     for (const ImageResourceObserver* const_observer : Clients().Keys()) {
       auto* observer = const_cast<ImageResourceObserver*>(const_observer);
-      if (observer->GetImageAnimationPolicy(animation_policy))
+      if (observer->GetImageAnimationPolicy(animation_policy)) {
         return true;
+      }
     }
     return false;
   }
@@ -107,13 +109,14 @@ class CSSCrossfadeValue::ObserverProxy final
  private:
   const ClientSizeCountMap& Clients() const { return owner_->Clients(); }
 
-  Member<CSSCrossfadeValue> owner_;
+  Member<const CSSCrossfadeValue> owner_;
 };
 
 ImageResourceObserver* CSSCrossfadeValue::GetObserverProxy() {
-  if (!observer_proxy_)
+  if (!observer_proxy_) {
     observer_proxy_ = MakeGarbageCollected<ObserverProxy>(this);
-  return observer_proxy_;
+  }
+  return observer_proxy_.Get();
 }
 
 void CSSCrossfadeValue::TraceAfterDispatch(Visitor* visitor) const {

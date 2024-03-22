@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,14 +33,14 @@ struct StructTraits<media::mojom::StatusDataDataView,
     return input.message;
   }
 
-  static base::span<const base::Value> frames(
+  static const base::Value::List& frames(
       const media::internal::StatusData& input) {
     return input.frames;
   }
 
   static mojo::OptionalAsPointer<const media::internal::StatusData> cause(
       const media::internal::StatusData& input) {
-    return mojo::MakeOptionalAsPointer(input.cause.get());
+    return mojo::OptionalAsPointer(input.cause.get());
   }
 
   static const base::Value& data(const media::internal::StatusData& input) {
@@ -60,7 +60,7 @@ template <typename StatusEnum, typename DataView>
 struct StructTraits<DataView, media::TypedStatus<StatusEnum>> {
   static mojo::OptionalAsPointer<const media::internal::StatusData> internal(
       const media::TypedStatus<StatusEnum>& input) {
-    return mojo::MakeOptionalAsPointer(input.data_.get());
+    return mojo::OptionalAsPointer(input.data_.get());
   }
 
   static bool Read(DataView data, media::TypedStatus<StatusEnum>* output) {

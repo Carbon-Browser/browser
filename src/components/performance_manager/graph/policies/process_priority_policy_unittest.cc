@@ -1,20 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/graph/policies/process_priority_policy.h"
 
 #include <memory>
-#include <utility>
 
 #include "base/test/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "components/performance_manager/graph/graph_impl.h"
 #include "components/performance_manager/graph/process_node_impl.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/render_process_user_data.h"
 #include "components/performance_manager/test_support/performance_manager_test_harness.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/process_type.h"
 #include "content/public/test/navigation_simulator.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -45,7 +45,7 @@ void PostToggleProcessNodePriority(content::RenderProcessHost* rph) {
   PerformanceManager::CallOnGraph(
       FROM_HERE, base::BindLambdaForTesting([process_node]() {
         process_node->set_priority(
-            GetOppositePriority(process_node->priority()));
+            GetOppositePriority(process_node->GetPriority()));
       }));
 }
 
@@ -79,6 +79,10 @@ class ProcessPriorityPolicyTest : public PerformanceManagerTestHarness {
     PerformanceManagerTestHarness::TearDown();
   }
 
+  void OnGraphCreated(GraphImpl* graph) override {
+    graph->PassToGraph(std::make_unique<ProcessPriorityPolicy>());
+  }
+
   void RunUntilOnSetPriority() {
     base::RunLoop run_loop;
     quit_closure_ = run_loop.QuitClosure();
@@ -102,14 +106,6 @@ class ProcessPriorityPolicyTest : public PerformanceManagerTestHarness {
 }  // namespace
 
 TEST_F(ProcessPriorityPolicyTest, GraphReflectedToRenderProcessHost) {
-  // Create an instance of the process priority policy.
-  PerformanceManager::CallOnGraph(
-      FROM_HERE, base::BindOnce([](Graph* graph) {
-        std::unique_ptr<ProcessPriorityPolicy> policy(
-            new ProcessPriorityPolicy());
-        graph->PassToGraph(std::move(policy));
-      }));
-
   // Set the active contents in the RenderViewHostTestHarness.
   SetContents(CreateTestWebContents());
   auto* rvh = web_contents()->GetPrimaryMainFrame()->GetRenderViewHost();

@@ -35,7 +35,7 @@ class AdblockSubscriptionPersistentMetadataImplTest
     : public testing::TestWithParam<PersistenceType> {
  public:
   AdblockSubscriptionPersistentMetadataImplTest() {
-    prefs::RegisterProfilePrefs(prefs_.registry());
+    common::prefs::RegisterProfilePrefs(prefs_.registry());
     metadata_ = std::make_unique<SubscriptionPersistentMetadataImpl>(&prefs_);
   }
 
@@ -90,22 +90,12 @@ TEST_P(AdblockSubscriptionPersistentMetadataImplTest, ExpirationTimeTracked) {
   metadata_->SetExpirationInterval(kUrl1, expiration1);
   metadata_->SetExpirationInterval(kUrl2, expiration2);
 
-  // Last installation time gets set.
-  EXPECT_EQ(metadata_->GetLastInstallationTime(kUrl1), base::Time::Now());
-  EXPECT_EQ(metadata_->GetLastInstallationTime(kUrl2), base::Time::Now());
-
   // Both expiration dates are in the future.
   EXPECT_FALSE(metadata_->IsExpired(kUrl1));
   EXPECT_FALSE(metadata_->IsExpired(kUrl2));
 
   // Forward clock by 1 day to trigger first expiration.
   task_environment_.AdvanceClock(base::Days(1));
-
-  // Last installation time is now in the past.
-  EXPECT_EQ(metadata_->GetLastInstallationTime(kUrl1),
-            base::Time::Now() - base::Days(1));
-  EXPECT_EQ(metadata_->GetLastInstallationTime(kUrl2),
-            base::Time::Now() - base::Days(1));
 
   // First subscription is now expired.
   EXPECT_TRUE(metadata_->IsExpired(kUrl1));
@@ -119,12 +109,15 @@ TEST_P(AdblockSubscriptionPersistentMetadataImplTest, ExpirationTimeTracked) {
   // Both subscriptions are now expired.
   EXPECT_TRUE(metadata_->IsExpired(kUrl1));
   EXPECT_TRUE(metadata_->IsExpired(kUrl2));
+}
 
-  // Last installation time is even further in the past.
-  EXPECT_EQ(metadata_->GetLastInstallationTime(kUrl1),
-            base::Time::Now() - base::Days(2));
-  EXPECT_EQ(metadata_->GetLastInstallationTime(kUrl2),
-            base::Time::Now() - base::Days(2));
+TEST_P(AdblockSubscriptionPersistentMetadataImplTest,
+       LastInstallationTimeTracked) {
+  // Last installation time is not yet set.
+  EXPECT_EQ(metadata_->GetLastInstallationTime(kUrl1), base::Time());
+  metadata_->SetLastInstallationTime(kUrl1);
+  // Last installation time gets set.
+  EXPECT_EQ(metadata_->GetLastInstallationTime(kUrl1), base::Time::Now());
 }
 
 TEST_P(AdblockSubscriptionPersistentMetadataImplTest, VersionTracked) {

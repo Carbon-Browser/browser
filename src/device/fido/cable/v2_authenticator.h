@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "device/fido/cable/v2_constants.h"
 #include "device/fido/fido_constants.h"
 #include "services/network/public/mojom/network_context.mojom-forward.h"
@@ -69,9 +69,10 @@ class Platform {
     DISCOVERABLE_CREDENTIALS_REQUEST = 115,
   };
 
-  using MakeCredentialCallback =
-      base::OnceCallback<void(uint32_t status,
-                              base::span<const uint8_t> attestation_obj)>;
+  using MakeCredentialCallback = base::OnceCallback<void(
+      uint32_t status,
+      base::span<const uint8_t> attestation_obj,
+      bool prf_enabled)>;
 
   virtual void MakeCredential(
       blink::mojom::PublicKeyCredentialCreationOptionsPtr params,
@@ -136,7 +137,6 @@ std::unique_ptr<Transaction> TransactWithPlaintextTransport(
 // TransactFromQRCode starts a network-based transaction based on the decoded
 // contents of a QR code.
 std::unique_ptr<Transaction> TransactFromQRCode(
-    unsigned protocol_revision,
     std::unique_ptr<Platform> platform,
     network::mojom::NetworkContext* network_context,
     base::span<const uint8_t, kRootSecretSize> root_secret,
@@ -144,13 +144,11 @@ std::unique_ptr<Transaction> TransactFromQRCode(
     // TODO: name this constant.
     base::span<const uint8_t, 16> qr_secret,
     base::span<const uint8_t, kP256X962Length> peer_identity,
-    absl::optional<std::vector<uint8_t>> contact_id,
-    bool use_new_crypter_construction);
+    absl::optional<std::vector<uint8_t>> contact_id);
 
 // TransactFromFCM starts a network-based transaction based on the decoded
 // contents of a cloud message.
 std::unique_ptr<Transaction> TransactFromFCM(
-    unsigned protocol_revision,
     std::unique_ptr<Platform> platform,
     network::mojom::NetworkContext* network_context,
     base::span<const uint8_t, kRootSecretSize> root_secret,

@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,6 +7,8 @@ import("//components/metrics/generate_expired_histograms_array.gni")
 source_set("test_support") {
   testonly = true
   sources = [
+    "testing/metrics_reporting_pref_helper.cc",
+    "testing/metrics_reporting_pref_helper.h",
     "testing/sync_metrics_test_utils.cc",
     "testing/sync_metrics_test_utils.h",
   ]
@@ -17,7 +19,7 @@ source_set("test_support") {
     "//chrome/browser",
     "//chrome/test:sync_integration_test_support",
     "//components/signin/public/identity_manager",
-    "//components/sync/test/fake_server",
+    "//components/sync:test_support",
     "//third_party/metrics_proto",
   ]
 

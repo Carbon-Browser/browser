@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -30,6 +30,7 @@ component("util") {
     "//ash/assistant/model",
     "//ash/constants",
     "//ash/public/cpp",
+    "//ash/webui/settings/public/constants:mojom",
     "//base",
     "//base:i18n",
     "//chromeos/ash/services/assistant/public/cpp",

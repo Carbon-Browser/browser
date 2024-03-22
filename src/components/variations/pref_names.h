@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@ COMPONENT_EXPORT(VARIATIONS) extern const char kVariationsCountry[];
 COMPONENT_EXPORT(VARIATIONS) extern const char kVariationsCrashStreak[];
 COMPONENT_EXPORT(VARIATIONS)
 extern const char kVariationsFailedToFetchSeedStreak[];
+COMPONENT_EXPORT(VARIATIONS) extern const char kVariationsGoogleGroups[];
 COMPONENT_EXPORT(VARIATIONS) extern const char kVariationsLastFetchTime[];
 COMPONENT_EXPORT(VARIATIONS) extern const char kVariationsSeedMilestone[];
 COMPONENT_EXPORT(VARIATIONS)

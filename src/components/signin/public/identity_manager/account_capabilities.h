@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "components/signin/public/identity_manager/tribool.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -17,9 +18,9 @@
 #include "base/android/scoped_java_ref.h"
 #endif
 
-namespace base {
-class Value;
-}
+namespace ios {
+class AccountCapabilitiesFetcherIOS;
+}  // namespace ios
 
 // Stores the information about account capabilities. Capabilities provide
 // information about state and features of Gaia accounts.
@@ -41,6 +42,15 @@ class AccountCapabilities {
       JNIEnv* env) const;
 #endif
 
+#if BUILDFLAG(IS_IOS)
+  AccountCapabilities(base::flat_map<std::string, bool> capabilities);
+  const base::flat_map<std::string, bool>& ConvertToAccountCapabilitiesIOS();
+#endif
+  // Keep sorted alphabetically.
+
+  // Chrome can display the email address for accounts with this capability.
+  signin::Tribool can_have_email_address_displayed() const;
+
   // Chrome can offer extended promos for turning on Sync to accounts with this
   // capability.
   signin::Tribool can_offer_extended_chrome_sync_promos() const;
@@ -48,15 +58,37 @@ class AccountCapabilities {
   // Chrome can run privacy sandbox trials for accounts with this capability.
   signin::Tribool can_run_chrome_privacy_sandbox_trials() const;
 
-  // Chrome can stop parental supervision if the user chooses to do so with
-  // this capability.
-  signin::Tribool can_stop_parental_supervision() const;
+  // The user account has opted in to parental supervision (Geller account).
+  // Chrome applies parental controls to accounts with this capability.
+  signin::Tribool is_opted_in_to_parental_supervision() const;
+
+  // Chrome can toggle auto updates with this capability.
+  signin::Tribool can_toggle_auto_updates() const;
+
+  // The user account is able to use IP Protection.
+  signin::Tribool can_use_chrome_ip_protection() const;
+
+  // The user account is able to use model execution features.
+  signin::Tribool can_use_model_execution_features() const;
+
+  // Chrome can send user data to Google servers for machine learning purposes
+  // with this capability.
+  signin::Tribool is_allowed_for_machine_learning() const;
+
+  // Chrome must show the notice before using the privacy sandbox restricted
+  // measurement API
+  signin::Tribool
+  is_subject_to_chrome_privacy_sandbox_restricted_measurement_notice() const;
+
+  // Chrome applies enterprise policies to accounts with this capability.
+  signin::Tribool is_subject_to_enterprise_policies() const;
 
   // Chrome applies parental controls to accounts with this capability.
   signin::Tribool is_subject_to_parental_controls() const;
 
-  // Chrome can toggle auto updates with this capability.
-  signin::Tribool can_toggle_auto_updates() const;
+  // Whether at least one of the capabilities is not
+  // `signin::Tribool::kUnknown`.
+  bool AreAnyCapabilitiesKnown() const;
 
   // Whether none of the capabilities has `signin::Tribool::kUnknown`.
   bool AreAllCapabilitiesKnown() const;
@@ -71,8 +103,11 @@ class AccountCapabilities {
 
  private:
   friend absl::optional<AccountCapabilities> AccountCapabilitiesFromValue(
-      const base::Value& account_capabilities);
+      const base::Value::Dict& account_capabilities);
   friend class AccountCapabilitiesFetcherGaia;
+#if BUILDFLAG(IS_IOS)
+  friend class ios::AccountCapabilitiesFetcherIOS;
+#endif
   friend class AccountCapabilitiesTestMutator;
   friend class AccountTrackerService;
 

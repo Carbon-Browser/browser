@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_NOTIFICATIONS_DEPRECATION_NOTIFICATION_CONTROLLER_H_
 
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
 
@@ -31,11 +32,6 @@ class DeprecationNotificationController {
   // deprecated. Returns true if a notification was displayed. The notification
   // will only be shown once per user session.
   bool NotifyDeprecatedRightClickRewrite();
-
-  // Call to inform the notification controller that a Search + Digit
-  // key rewrite (eg. Search+Digit to F<digit>) was deprecated. The
-  // notification will only be shown once per user session.
-  bool NotifyDeprecatedFKeyRewrite();
 
   // Call to inform the notification controller that a legacy six-pack (PageUp,
   // PageDown, Insert, Delete, Home, End) key rewrite (eg. Alt+Up -> PageUp)
@@ -70,14 +66,13 @@ class DeprecationNotificationController {
   // Used to only show the right click notification once per user session.
   bool right_click_notification_shown_ = false;
 
-  // Used to only show the F-Key notification once per user session.
-  bool fkey_notification_shown_ = false;
-
   // Used to only show the key rewrite notifications once per user session.
   base::flat_set<ui::KeyboardCode> shown_key_notifications_;
 
   // MessageCenter for adding notifications.
-  message_center::MessageCenter* const message_center_;
+  const raw_ptr<message_center::MessageCenter,
+                DanglingUntriaged | ExperimentalAsh>
+      message_center_;
 };
 
 }  // namespace ash

@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_WEBUI_HELP_VERSION_UPDATER_CHROMEOS_H_
 #define CHROME_BROWSER_UI_WEBUI_HELP_VERSION_UPDATER_CHROMEOS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/help/version_updater.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -33,6 +34,7 @@ class VersionUpdaterCros : public VersionUpdater,
   void SetUpdateOverCellularOneTimePermission(StatusCallback callback,
                                               const std::string& update_version,
                                               int64_t update_size) override;
+  void ApplyDeferredUpdate() override;
 
   // Gets the last update status, without triggering a new check or download.
   void GetUpdateStatus(StatusCallback callback);
@@ -66,7 +68,7 @@ class VersionUpdaterCros : public VersionUpdater,
                           absl::optional<bool> enabled);
 
   // BrowserContext in which the class was instantiated.
-  content::BrowserContext* context_;
+  raw_ptr<content::BrowserContext, ExperimentalAsh> context_;
 
   // Callback used to communicate update status to the client.
   StatusCallback callback_;

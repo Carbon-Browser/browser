@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
@@ -19,7 +20,6 @@
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -123,7 +123,8 @@ class BluetoothServerSocketTest : public testing::Test {
   }
 
  protected:
-  FakeServerSocket* fake_server_socket_ = nullptr;
+  raw_ptr<FakeServerSocket, DanglingUntriaged | ExperimentalAsh>
+      fake_server_socket_ = nullptr;
 
   std::unique_ptr<BluetoothServerSocket> bluetooth_server_socket_;
 
@@ -220,4 +221,3 @@ TEST_F(BluetoothServerSocketTest, TestDestroy) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

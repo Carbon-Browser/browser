@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,10 @@
 #include <memory>
 #include <string>
 
+#include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
-
-namespace base {
-class ListValue;
-}
 
 namespace user_manager {
 class User;
@@ -33,7 +30,7 @@ absl::optional<std::string> GetCountryCodeFromTimezoneIfAvailable(
 std::u16string GetCurrentTimezoneName();
 
 // Creates a list of pairs of each timezone's ID and name.
-std::unique_ptr<base::ListValue> GetTimezoneList();
+base::Value::List GetTimezoneList();
 
 // Returns true if device is managed and has SystemTimezonePolicy set.
 bool HasSystemTimezonePolicy();
@@ -77,20 +74,5 @@ bool FineGrainedTimeZoneDetectionEnabled();
 
 }  // namespace system
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace system {
-using ::ash::system::GetCurrentTimezoneName;
-using ::ash::system::GetTimezoneList;
-using ::ash::system::HasSystemTimezonePolicy;
-using ::ash::system::PerUserTimezoneEnabled;
-using ::ash::system::SetSystemAndSigninScreenTimezone;
-using ::ash::system::SetSystemTimezone;
-using ::ash::system::SetTimezoneFromUI;
-using ::ash::system::UpdateSystemTimezone;
-}  // namespace system
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_TIMEZONE_UTIL_H_

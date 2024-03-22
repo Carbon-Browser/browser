@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -43,6 +43,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/notifier_catalogs.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #endif
 
 namespace {
@@ -191,6 +192,13 @@ void WebUsbDetector::Initialize() {
   // buggy devices and drivers.
   if (!base::FeatureList::IsEnabled(features::kWebUsbDeviceDetection))
     return;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (crosapi::browser_util::IsLacrosEnabled()) {
+    // Delegate to the Lacros browser to prevent duplicate notifications.
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Tests may set a fake manager.
   if (!device_manager_) {

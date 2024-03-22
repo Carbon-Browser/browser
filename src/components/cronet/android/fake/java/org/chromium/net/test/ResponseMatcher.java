@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import org.chromium.net.UrlRequest;
 import java.util.List;
 import java.util.Map;
 
-/**
- * An interface for matching {@link UrlRequest}s to {@link FakeUrlResponse}s.
- */
+/** An interface for matching {@link UrlRequest}s to {@link FakeUrlResponse}s. */
 public interface ResponseMatcher {
     /**
      * Optionally gets a response based on the request parameters.

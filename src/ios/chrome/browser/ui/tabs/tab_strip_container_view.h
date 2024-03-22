@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 #define IOS_CHROME_BROWSER_UI_TABS_TAB_STRIP_CONTAINER_VIEW_H_
 
 #import <UIKit/UIKit.h>
-#import "ios/chrome/browser/ui/tabs/tab_strip_containing.h"
 
 @class TabStripView;
 
 // Container for the Tab Strip view, allowing to snapshot it.
-@interface TabStripContainerView : UIView <TabStripContaining>
+@interface TabStripContainerView : UIView
 
 // A weak reference to the Tab Strip view.
 @property(nonatomic, weak) TabStripView* tabStripView;

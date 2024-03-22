@@ -1,11 +1,9 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_TEST_FAKE_LAYER_TREE_HOST_IMPL_CLIENT_H_
 #define CC_TEST_FAKE_LAYER_TREE_HOST_IMPL_CLIENT_H_
-
-#include <vector>
 
 #include "cc/trees/layer_tree_host_impl.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
@@ -43,6 +41,7 @@ class FakeLayerTreeHostImplClient : public LayerTreeHostImplClient {
                                    bool skip_draw) override {}
   void NeedsImplSideInvalidation(bool needs_first_draw_on_activation) override;
   void NotifyImageDecodeRequestFinished() override {}
+  void NotifyTransitionRequestFinished(uint32_t sequence_id) override {}
   void DidPresentCompositorFrameOnImplThread(
       uint32_t frame_token,
       PresentationTimeCallbackBuffer::PendingCallbacks activated,
@@ -54,6 +53,7 @@ class FakeLayerTreeHostImplClient : public LayerTreeHostImplClient {
       Scheduler::PaintWorkletState state) override {}
   void NotifyThroughputTrackerResults(CustomTrackerResults results) override {}
   void DidObserveFirstScrollDelay(
+      int source_frame_number,
       base::TimeDelta first_scroll_delay,
       base::TimeTicks first_scroll_timestamp) override {}
   bool IsInSynchronousComposite() const override;
@@ -61,8 +61,6 @@ class FakeLayerTreeHostImplClient : public LayerTreeHostImplClient {
       const base::flat_set<viz::FrameSinkId>& ids) override {}
   void ClearHistory() override {}
   size_t CommitDurationSampleCountForTesting() const override;
-  void ReportEventLatency(
-      std::vector<EventLatencyTracker::LatencyData> latencies) override {}
 
   void reset_did_request_impl_side_invalidation() {
     did_request_impl_side_invalidation_ = false;

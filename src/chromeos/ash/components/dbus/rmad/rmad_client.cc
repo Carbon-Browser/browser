@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/path_service.h"
 #include "base/task/thread_pool.h"
@@ -37,24 +38,32 @@ class RmadClientImpl : public RmadClient {
   void SetRmaRequiredCallbackForSessionManager(
       base::OnceClosure session_manager_callback) override;
   void GetCurrentState(
-      DBusMethodCallback<rmad::GetStateReply> callback) override;
+      chromeos::DBusMethodCallback<rmad::GetStateReply> callback) override;
   void TransitionNextState(
       const rmad::RmadState& state,
-      DBusMethodCallback<rmad::GetStateReply> callback) override;
+      chromeos::DBusMethodCallback<rmad::GetStateReply> callback) override;
   void TransitionPreviousState(
-      DBusMethodCallback<rmad::GetStateReply> callback) override;
-
-  void AbortRma(DBusMethodCallback<rmad::AbortRmaReply> callback) override;
-
-  void GetLog(DBusMethodCallback<rmad::GetLogReply> callback) override;
-
-  void SaveLog(DBusMethodCallback<rmad::SaveLogReply> callback) override;
-
+      chromeos::DBusMethodCallback<rmad::GetStateReply> callback) override;
+  void AbortRma(
+      chromeos::DBusMethodCallback<rmad::AbortRmaReply> callback) override;
+  void GetLog(
+      chromeos::DBusMethodCallback<rmad::GetLogReply> callback) override;
+  void SaveLog(
+      const std::string& diagnostics_log_text,
+      chromeos::DBusMethodCallback<rmad::SaveLogReply> callback) override;
   void RecordBrowserActionMetric(
       const rmad::RecordBrowserActionMetricRequest request,
-      DBusMethodCallback<rmad::RecordBrowserActionMetricReply> callback)
-      override;
-
+      chromeos::DBusMethodCallback<rmad::RecordBrowserActionMetricReply>
+          callback) override;
+  void ExtractExternalDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::ExtractExternalDiagnosticsAppReply>
+          callback) override;
+  void InstallExtractedDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::InstallExtractedDiagnosticsAppReply>
+          callback) override;
+  void GetInstalledDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::GetInstalledDiagnosticsAppReply>
+          callback) override;
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
   bool HasObserver(const Observer* observer) const override;
@@ -69,13 +78,15 @@ class RmadClientImpl : public RmadClient {
   void OnCheckIfRmaIsRequired(dbus::Response* response);
 
   template <class T>
-  void OnProtoReply(DBusMethodCallback<T> callback, dbus::Response* response);
+  void OnProtoReply(chromeos::DBusMethodCallback<T> callback,
+                    dbus::Response* response);
 
   void CalibrationProgressReceived(dbus::Signal* signal);
   void CalibrationOverallProgressReceived(dbus::Signal* signal);
   void ErrorReceived(dbus::Signal* signal);
   void HardwareWriteProtectionStateReceived(dbus::Signal* signal);
   void PowerCableStateReceived(dbus::Signal* signal);
+  void ExternalDiskStatusReceived(dbus::Signal* signal);
   void ProvisioningProgressReceived(dbus::Signal* signal);
   void HardwareVerificationResultReceived(dbus::Signal* signal);
   void FinalizationProgressReceived(dbus::Signal* signal);
@@ -94,7 +105,7 @@ class RmadClientImpl : public RmadClient {
   // Sends out the requests to verify if RMAD files exist on device.
   void StartCheckForRmadFiles();
 
-  dbus::ObjectProxy* rmad_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> rmad_proxy_ = nullptr;
   base::ObserverList<Observer, /*check_empty=*/true, /*allow_reentrancy=*/false>
       observers_;
 
@@ -130,6 +141,8 @@ void RmadClientImpl::Init(dbus::Bus* bus) {
       {rmad::kHardwareWriteProtectionStateSignal,
        &RmadClientImpl::HardwareWriteProtectionStateReceived},
       {rmad::kPowerCableStateSignal, &RmadClientImpl::PowerCableStateReceived},
+      {rmad::kExternalDiskDetectedSignal,
+       &RmadClientImpl::ExternalDiskStatusReceived},
       {rmad::kProvisioningProgressSignal,
        &RmadClientImpl::ProvisioningProgressReceived},
       {rmad::kHardwareVerificationResultSignal,
@@ -297,6 +310,21 @@ void RmadClientImpl::PowerCableStateReceived(dbus::Signal* signal) {
   }
 }
 
+void RmadClientImpl::ExternalDiskStatusReceived(dbus::Signal* signal) {
+  DCHECK_EQ(signal->GetMember(), rmad::kExternalDiskDetectedSignal);
+  dbus::MessageReader reader(signal);
+  bool detected;
+  if (!reader.PopBool(&detected)) {
+    LOG(ERROR) << "Unable to decode detected bool from " << signal->GetMember()
+               << " signal";
+    return;
+  }
+  DCHECK(!reader.HasMoreData());
+  for (auto& observer : observers_) {
+    observer.ExternalDiskState(detected);
+  }
+}
+
 void RmadClientImpl::ProvisioningProgressReceived(dbus::Signal* signal) {
   DCHECK_EQ(signal->GetMember(), rmad::kProvisioningProgressSignal);
   dbus::MessageReader reader(signal);
@@ -309,13 +337,16 @@ void RmadClientImpl::ProvisioningProgressReceived(dbus::Signal* signal) {
   DCHECK(!reader.HasMoreData());
   int32_t status;
   double progress;
-  if (!sub_reader.PopInt32(&status) || !sub_reader.PopDouble(&progress)) {
+  int32_t error;
+  if (!sub_reader.PopInt32(&status) || !sub_reader.PopDouble(&progress) ||
+      !sub_reader.PopInt32(&error)) {
     LOG(ERROR) << "Unable to decode signal for " << signal->GetMember();
     return;
   }
   rmad::ProvisionStatus signal_proto;
   signal_proto.set_status(static_cast<rmad::ProvisionStatus::Status>(status));
   signal_proto.set_progress(progress);
+  signal_proto.set_error(static_cast<rmad::ProvisionStatus::Error>(error));
   for (auto& observer : observers_) {
     observer.ProvisioningProgress(signal_proto);
   }
@@ -358,13 +389,16 @@ void RmadClientImpl::FinalizationProgressReceived(dbus::Signal* signal) {
   DCHECK(!reader.HasMoreData());
   int32_t status;
   double progress;
-  if (!sub_reader.PopInt32(&status) || !sub_reader.PopDouble(&progress)) {
+  int32_t error;
+  if (!sub_reader.PopInt32(&status) || !sub_reader.PopDouble(&progress) ||
+      !sub_reader.PopInt32(&error)) {
     LOG(ERROR) << "Unable to decode signal for " << signal->GetMember();
     return;
   }
   rmad::FinalizeStatus signal_proto;
   signal_proto.set_status(static_cast<rmad::FinalizeStatus::Status>(status));
   signal_proto.set_progress(progress);
+  signal_proto.set_error(static_cast<rmad::FinalizeStatus::Error>(error));
   for (auto& observer : observers_) {
     observer.FinalizationProgress(signal_proto);
   }
@@ -387,7 +421,7 @@ void RmadClientImpl::RoFirmwareUpdateProgressReceived(dbus::Signal* signal) {
 }
 
 void RmadClientImpl::GetCurrentState(
-    DBusMethodCallback<rmad::GetStateReply> callback) {
+    chromeos::DBusMethodCallback<rmad::GetStateReply> callback) {
   dbus::MethodCall method_call(rmad::kRmadInterfaceName,
                                rmad::kGetCurrentStateMethod);
   dbus::MessageWriter writer(&method_call);
@@ -399,7 +433,7 @@ void RmadClientImpl::GetCurrentState(
 
 void RmadClientImpl::TransitionNextState(
     const rmad::RmadState& state,
-    DBusMethodCallback<rmad::GetStateReply> callback) {
+    chromeos::DBusMethodCallback<rmad::GetStateReply> callback) {
   dbus::MethodCall method_call(rmad::kRmadInterfaceName,
                                rmad::kTransitionNextStateMethod);
   dbus::MessageWriter writer(&method_call);
@@ -418,7 +452,7 @@ void RmadClientImpl::TransitionNextState(
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 void RmadClientImpl::TransitionPreviousState(
-    DBusMethodCallback<rmad::GetStateReply> callback) {
+    chromeos::DBusMethodCallback<rmad::GetStateReply> callback) {
   dbus::MethodCall method_call(rmad::kRmadInterfaceName,
                                rmad::kTransitionPreviousStateMethod);
   dbus::MessageWriter writer(&method_call);
@@ -429,7 +463,7 @@ void RmadClientImpl::TransitionPreviousState(
 }
 
 void RmadClientImpl::AbortRma(
-    DBusMethodCallback<rmad::AbortRmaReply> callback) {
+    chromeos::DBusMethodCallback<rmad::AbortRmaReply> callback) {
   dbus::MethodCall method_call(rmad::kRmadInterfaceName, rmad::kAbortRmaMethod);
   dbus::MessageWriter writer(&method_call);
   rmad_proxy_->CallMethod(
@@ -438,7 +472,8 @@ void RmadClientImpl::AbortRma(
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-void RmadClientImpl::GetLog(DBusMethodCallback<rmad::GetLogReply> callback) {
+void RmadClientImpl::GetLog(
+    chromeos::DBusMethodCallback<rmad::GetLogReply> callback) {
   dbus::MethodCall method_call(rmad::kRmadInterfaceName, rmad::kGetLogMethod);
   dbus::MessageWriter writer(&method_call);
   rmad_proxy_->CallMethod(
@@ -447,9 +482,12 @@ void RmadClientImpl::GetLog(DBusMethodCallback<rmad::GetLogReply> callback) {
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-void RmadClientImpl::SaveLog(DBusMethodCallback<rmad::SaveLogReply> callback) {
+void RmadClientImpl::SaveLog(
+    const std::string& diagnostics_log_text,
+    chromeos::DBusMethodCallback<rmad::SaveLogReply> callback) {
   dbus::MethodCall method_call(rmad::kRmadInterfaceName, rmad::kSaveLogMethod);
   dbus::MessageWriter writer(&method_call);
+  writer.AppendString(diagnostics_log_text);
   rmad_proxy_->CallMethod(
       &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
       base::BindOnce(&RmadClientImpl::OnProtoReply<rmad::SaveLogReply>,
@@ -458,7 +496,8 @@ void RmadClientImpl::SaveLog(DBusMethodCallback<rmad::SaveLogReply> callback) {
 
 void RmadClientImpl::RecordBrowserActionMetric(
     const rmad::RecordBrowserActionMetricRequest request,
-    DBusMethodCallback<rmad::RecordBrowserActionMetricReply> callback) {
+    chromeos::DBusMethodCallback<rmad::RecordBrowserActionMetricReply>
+        callback) {
   dbus::MethodCall method_call(rmad::kRmadInterfaceName,
                                rmad::kRecordBrowserActionMetricMethod);
   dbus::MessageWriter writer(&method_call);
@@ -474,6 +513,45 @@ void RmadClientImpl::RecordBrowserActionMetric(
       &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
       base::BindOnce(
           &RmadClientImpl::OnProtoReply<rmad::RecordBrowserActionMetricReply>,
+          weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void RmadClientImpl::ExtractExternalDiagnosticsApp(
+    chromeos::DBusMethodCallback<rmad::ExtractExternalDiagnosticsAppReply>
+        callback) {
+  dbus::MethodCall method_call(rmad::kRmadInterfaceName,
+                               rmad::kExtractExternalDiagnosticsAppMethod);
+  dbus::MessageWriter writer(&method_call);
+  rmad_proxy_->CallMethod(
+      &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+      base::BindOnce(&RmadClientImpl::OnProtoReply<
+                         rmad::ExtractExternalDiagnosticsAppReply>,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void RmadClientImpl::InstallExtractedDiagnosticsApp(
+    chromeos::DBusMethodCallback<rmad::InstallExtractedDiagnosticsAppReply>
+        callback) {
+  dbus::MethodCall method_call(rmad::kRmadInterfaceName,
+                               rmad::kInstallExtractedDiagnosticsAppMethod);
+  dbus::MessageWriter writer(&method_call);
+  rmad_proxy_->CallMethod(
+      &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+      base::BindOnce(&RmadClientImpl::OnProtoReply<
+                         rmad::InstallExtractedDiagnosticsAppReply>,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void RmadClientImpl::GetInstalledDiagnosticsApp(
+    chromeos::DBusMethodCallback<rmad::GetInstalledDiagnosticsAppReply>
+        callback) {
+  dbus::MethodCall method_call(rmad::kRmadInterfaceName,
+                               rmad::kGetInstalledDiagnosticsAppMethod);
+  dbus::MessageWriter writer(&method_call);
+  rmad_proxy_->CallMethod(
+      &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+      base::BindOnce(
+          &RmadClientImpl::OnProtoReply<rmad::GetInstalledDiagnosticsAppReply>,
           weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
@@ -494,7 +572,7 @@ bool RmadClientImpl::HasObserver(const Observer* observer) const {
 }
 
 template <class T>
-void RmadClientImpl::OnProtoReply(DBusMethodCallback<T> callback,
+void RmadClientImpl::OnProtoReply(chromeos::DBusMethodCallback<T> callback,
                                   dbus::Response* response) {
   if (!response) {
     LOG(ERROR) << "Error calling rmad function";

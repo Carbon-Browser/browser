@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <vector>
 
+#include "base/power_monitor/battery_level_provider.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "chrome/browser/metrics/power/battery_level_provider.h"
 #include "chrome/browser/metrics/power/process_monitor.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -42,25 +42,53 @@ enum class BatteryDischargeMode {
 
 struct BatteryDischarge {
   BatteryDischargeMode mode;
-  // Discharge rate in 1/10000 of full capacity per minute.
-  absl::optional<int64_t> rate;
+  // Discharge rate in milliwatts.
+  absl::optional<int64_t> rate_milliwatts;
+#if BUILDFLAG(IS_WIN)
+  // Discharge rate in milliwatts, if the client's battery discharge granularity
+  // is at most 17 mWh. Calculated using the used capacity instead of the
+  // current capacity.
+  absl::optional<int64_t> rate_milliwatts_with_precise_granularity;
+#endif  // BUILDFLAG(IS_WIN)
+  // Discharge rate in hundredth of a percent per minute.
+  absl::optional<int64_t> rate_relative;
 };
 
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
+// Returns the discharge rate in milliwatts.
+int64_t CalculateDischargeRateMilliwatts(
+    const base::BatteryLevelProvider::BatteryState& previous_battery_state,
+    const base::BatteryLevelProvider::BatteryState& new_battery_state,
+    base::TimeDelta interval_duration);
+
+// Returns the discharge rate in one hundredth of a percent of full capacity per
+// minute.
+int64_t CalculateDischargeRateRelative(
+    const base::BatteryLevelProvider::BatteryState& previous_battery_state,
+    const base::BatteryLevelProvider::BatteryState& new_battery_state,
+    base::TimeDelta interval_duration);
+
 // Computes and returns the battery discharge mode and rate during the interval.
 // If the discharge rate isn't valid, the returned rate is nullopt and the
 // reason is indicated per BatteryDischargeMode.
 BatteryDischarge GetBatteryDischargeDuringInterval(
-    const absl::optional<BatteryLevelProvider::BatteryState>&
+    const absl::optional<base::BatteryLevelProvider::BatteryState>&
         previous_battery_state,
-    const absl::optional<BatteryLevelProvider::BatteryState>& new_battery_state,
+    const absl::optional<base::BatteryLevelProvider::BatteryState>&
+        new_battery_state,
     base::TimeDelta interval_duration);
 
-// Report battery metrics to histograms with |suffixes|.
+// Report battery metrics to histograms with |scenario_suffixes|.
 void ReportBatteryHistograms(base::TimeDelta interval_duration,
                              BatteryDischarge battery_discharge,
-                             const std::vector<const char*>& suffixes);
-#endif  // HAS_BATTERY_LEVEL_PROVIDER_IMPL()
+                             bool is_initial_interval,
+                             const std::vector<const char*>& scenario_suffixes);
+
+#if BUILDFLAG(IS_WIN)
+// Report battery metrics captured over a >10 minutes interval.
+void ReportBatteryHistogramsTenMinutesInterval(
+    base::TimeDelta interval_duration,
+    BatteryDischarge battery_discharge);
+#endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_MAC)
 void ReportShortIntervalHistograms(

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,17 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "base/functional/callback.h"
+#include "build/chromeos_buildflags.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "components/webapps/browser/install_result_code.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
-struct WebAppInstallInfo;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/webui/system_apps/public/system_web_app_type.h"
+#endif
 
 namespace content {
 class WebContents;
@@ -25,12 +27,14 @@ class WebContents;
 
 namespace web_app {
 
+struct WebAppInstallInfo;
+
 // |app_id| may be empty on failure.
 using OnceInstallCallback =
-    base::OnceCallback<void(const AppId& app_id,
+    base::OnceCallback<void(const webapps::AppId& app_id,
                             webapps::InstallResultCode code)>;
 using OnceUninstallCallback =
-    base::OnceCallback<void(const AppId& app_id, bool uninstalled)>;
+    base::OnceCallback<void(const webapps::AppId& app_id, bool uninstalled)>;
 
 // Callback used to indicate whether a user has accepted the installation of a
 // web app.
@@ -45,19 +49,6 @@ using WebAppInstallDialogCallback = base::OnceCallback<void(
     std::unique_ptr<WebAppInstallInfo> web_app_info,
     WebAppInstallationAcceptanceCallback acceptance_callback)>;
 
-enum class InstallableCheckResult {
-  kNotInstallable,
-  kInstallable,
-  kAlreadyInstalled,
-};
-// Callback with the result of manifest check.
-// |web_contents| owns the WebContents that was used to check for a manifest.
-// |app_id| will be present iff already installed.
-using WebAppManifestCheckCallback =
-    base::OnceCallback<void(std::unique_ptr<content::WebContents> web_contents,
-                            InstallableCheckResult result,
-                            absl::optional<AppId> app_id)>;
-
 // See related ExternalInstallOptions struct and
 // ConvertExternalInstallOptionsToParams function.
 struct WebAppInstallParams {
@@ -69,15 +60,10 @@ struct WebAppInstallParams {
   bool force_reinstall = false;
 
   // See `WebAppInstallTask::ApplyParamsToWebAppInstallInfo`
-  absl::optional<UserDisplayMode> user_display_mode = absl::nullopt;
+  absl::optional<mojom::UserDisplayMode> user_display_mode = absl::nullopt;
 
   // URL to be used as start_url if manifest is unavailable.
   GURL fallback_start_url;
-
-  // Setting this field will force the webapp to have a manifest id, which
-  // will result in a different AppId than if it isn't set. Currently here
-  // to support forwards compatibility with future sync entities..
-  absl::optional<std::string> override_manifest_id;
 
   // App name to be used if manifest is unavailable.
   absl::optional<std::u16string> fallback_app_name;
@@ -100,23 +86,29 @@ struct WebAppInstallParams {
   bool is_disabled = false;
   bool handles_file_open_intents = true;
 
-  bool bypass_service_worker_check = false;
   bool require_manifest = false;
+
+  // Used only by ExternallyManagedInstallCommand.
+  // Has the same meaning as WebAppInstallFlow::kCreateShortcut
+  bool install_as_shortcut = false;
 
   std::vector<std::string> additional_search_terms;
 
   absl::optional<std::string> launch_query_params;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   absl::optional<ash::SystemWebAppType> system_app_type;
+#endif
 
   bool oem_installed = false;
-
-  // Set for SUB_APP API installs.
-  absl::optional<AppId> parent_app_id;
 
   // The install URL for the app. This does not always need to be
   // populated (especially for user installed or sync installed apps)
   // in which case the URL will not be written to the web_app DB.
   GURL install_url;
+
+  // If true, do not validate origin associations as part of the install even if
+  // app has valid scope_extensions.
+  bool skip_origin_association_validation = false;
 };
 
 // The different UI flows that exist for creating a web app.

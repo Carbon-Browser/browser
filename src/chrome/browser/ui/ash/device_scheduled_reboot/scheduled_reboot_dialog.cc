@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/time_formatting.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/strings/grit/components_strings.h"
@@ -42,10 +42,12 @@ void ScheduledRebootDialog::ShowBubble(const base::Time& reboot_time,
   auto dialog_model =
       ui::DialogModel::Builder(std::make_unique<ui::DialogModelDelegate>())
           .SetTitle(BuildTitle())
-          .AddOkButton(base::OnceClosure())
-          .AddCancelButton(std::move(reboot_callback),
-                           l10n_util::GetStringUTF16(IDS_POLICY_REBOOT_BUTTON))
-          .AddBodyText(
+          .AddOkButton(base::DoNothing())
+          .AddCancelButton(
+              std::move(reboot_callback),
+              ui::DialogModelButton::Params().SetLabel(
+                  l10n_util::GetStringUTF16(IDS_POLICY_REBOOT_BUTTON)))
+          .AddParagraph(
               ui::DialogModelLabel(
                   l10n_util::GetStringFUTF16(
                       IDS_POLICY_DEVICE_SCHEDULED_REBOOT_DIALOG_MESSAGE,

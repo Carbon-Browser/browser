@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,20 @@
  * transition screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/cr_shared_vars.css.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/polymer/v3_0/paper-progress/paper-progress.js';
+import '../../components/buttons/oobe_text_button.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+
 
 const ManagementTransitionUIState = {
   PROGRESS: 'progress',
@@ -33,21 +46,35 @@ const ARC_SUPERVISION_TRANSITION = {
  * @implements {OobeI18nBehaviorInterface}
  * @implements {MultiStepBehaviorInterface}
  */
-const ManagementTransitionScreenBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior],
-    Polymer.Element);
+const ManagementTransitionScreenBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
 
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   arcTransition: ARC_SUPERVISION_TRANSITION,
+ *   managementEntity: string,
+ * }}
+ */
+let ManagementTransitionScreenData;
+
+/**
+ * @polymer
+ */
 class ManagementTransitionScreen extends ManagementTransitionScreenBase {
   static get is() {
     return 'management-transition-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
       /**
        * Property that determines transition direction.
+       * @type {ARC_SUPERVISION_TRANSITION}
        */
       arcTransition_: Number,
       /**
@@ -84,6 +111,9 @@ class ManagementTransitionScreen extends ManagementTransitionScreenBase {
     this.initializeLoginScreen('ManagementTransitionScreen');
   }
 
+  /**
+   * @param {ManagementTransitionScreenData} data
+   */
   onBeforeShow(data) {
     this.setArcTransition(data['arcTransition']);
     this.setManagementEntity(data['managementEntity']);
@@ -99,7 +129,8 @@ class ManagementTransitionScreen extends ManagementTransitionScreenBase {
 
   /**
    * Sets arc transition type.
-   * @param {number} arc_transition enum element indicating transition type
+   * @param {ARC_SUPERVISION_TRANSITION} arc_transition enum element indicating
+   *     transition type
    */
   setArcTransition(arc_transition) {
     switch (arc_transition) {
@@ -117,6 +148,9 @@ class ManagementTransitionScreen extends ManagementTransitionScreenBase {
     }
   }
 
+  /**
+   * @param {string} management_entity
+   */
   setManagementEntity(management_entity) {
     this.managementEntity_ = management_entity;
   }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -33,7 +33,7 @@ const int kRenderFrameId = 0;
 
 blink::LocalFrameToken TokenFromInt(int i) {
   static base::UnguessableToken base_token = base::UnguessableToken::Create();
-  return blink::LocalFrameToken(base::UnguessableToken::Deserialize(
+  return blink::LocalFrameToken(base::UnguessableToken::CreateForTesting(
       base_token.GetHighForSerialization() + i,
       base_token.GetLowForSerialization() + i));
 }

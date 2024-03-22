@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 
 #include "chrome/browser/ui/webui/settings/metrics_reporting_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
@@ -60,24 +60,21 @@ void MetricsReportingHandler::HandleGetMetricsReporting(
   AllowJavascript();
   CHECK_GT(args.size(), 0u);
   const base::Value& callback_id = args[0];
-  ResolveJavascriptCallback(callback_id, *CreateMetricsReportingDict());
+  ResolveJavascriptCallback(callback_id, CreateMetricsReportingDict());
 }
 
-std::unique_ptr<base::DictionaryValue>
-    MetricsReportingHandler::CreateMetricsReportingDict() {
-  std::unique_ptr<base::DictionaryValue> dict(
-      std::make_unique<base::DictionaryValue>());
-  dict->SetBoolKey(
-      "enabled",
-      ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled());
+base::Value::Dict MetricsReportingHandler::CreateMetricsReportingDict() {
+  base::Value::Dict dict;
+  dict.Set("enabled",
+           ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled());
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // To match the pre-Lacros settings UX, we show the managed icon if the ash
   // device-level metrics reporting pref is managed. https://crbug.com/1148604
   bool managed = chromeos::BrowserParamsProxy::Get()->AshMetricsManaged() ==
                  crosapi::mojom::MetricsReportingManaged::kManaged;
-  dict->SetBoolKey("managed", managed);
+  dict.Set("managed", managed);
 #else
-  dict->SetBoolKey("managed", IsMetricsReportingPolicyManaged());
+  dict.Set("managed", IsMetricsReportingPolicyManaged());
 #endif
   return dict;
 }
@@ -107,7 +104,7 @@ void MetricsReportingHandler::HandleSetMetricsReportingEnabled(
   if (!lacros_chrome_service)
     return;
   // The metrics reporting API was added in Chrome OS 89.
-  if (!lacros_chrome_service->IsMetricsReportingAvailable()) {
+  if (!lacros_chrome_service->IsSupported<crosapi::mojom::MetricsReporting>()) {
     LOG(WARNING) << "MetricsReporting API not available";
     return;
   }
@@ -129,7 +126,7 @@ void MetricsReportingHandler::OnPrefChanged(const std::string& pref_name) {
 }
 
 void MetricsReportingHandler::SendMetricsReportingChange() {
-  FireWebUIListener("metrics-reporting-change", *CreateMetricsReportingDict());
+  FireWebUIListener("metrics-reporting-change", CreateMetricsReportingDict());
 }
 
 }  // namespace settings

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 #include <string>
 #include <vector>
 
+#include "base/auto_reset.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/apps/intent_helper/apps_navigation_types.h"
+#include "chrome/browser/apps/link_capturing/intent_picker_info.h"
 #include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
-#include "components/services/app_service/public/mojom/types.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/gfx/image/image.h"
@@ -96,6 +96,9 @@ class IntentPickerBubbleView : public LocationBarBubbleDelegateView {
   static IntentPickerBubbleView* intent_picker_bubble() {
     return intent_picker_bubble_;
   }
+
+  static base::AutoReset<bool> SetAutoAcceptIntentPickerBubbleForTesting();
+
   static void CloseCurrentBubble();
 
   // LocationBarBubbleDelegateView overrides:

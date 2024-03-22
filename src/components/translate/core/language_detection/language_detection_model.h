@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,7 +69,7 @@ class LanguageDetectionModel {
   // Execute the model on the provided |sampled_str| and return the top language
   // and the models score/confidence in that prediction.
   std::pair<std::string, float> DetectTopLanguage(
-      const std::string& sampled_str) const;
+      const std::u16string& sampled_str) const;
 
   // The tflite classifier that can determine the language of text.
   std::unique_ptr<tflite::task::text::nlclassifier::NLClassifier>

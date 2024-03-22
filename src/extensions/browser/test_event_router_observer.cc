@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,8 @@ void TestEventRouterObserver::OnWillDispatchEvent(const Event& event) {
   events_[event.event_name] = event.DeepCopy();
 }
 
-void TestEventRouterObserver::OnDidDispatchEventToProcess(const Event& event) {
+void TestEventRouterObserver::OnDidDispatchEventToProcess(const Event& event,
+                                                          int process_id) {
   DCHECK(!event.event_name.empty());
   dispatched_events_[event.event_name] = event.DeepCopy();
 }

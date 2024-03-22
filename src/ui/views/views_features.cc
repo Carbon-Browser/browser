@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,46 @@
 #include "base/feature_list.h"
 #include "build/build_config.h"
 
-namespace views {
-namespace features {
+namespace views::features {
 
 // Please keep alphabetized.
 
+// Implements desktop widgets reparenting. Enabling this feature allows them
+// to function correctly as tab modals.
+BASE_FEATURE(kDesktopWidgetReparentAura,
+             "kDesktopWidgetReparentAura",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 // Use a high-contrast style for ink drops when in platform high-contrast mode,
 // including full opacity and a high-contrast color
-const base::Feature kEnablePlatformHighContrastInkDrop{
-    "EnablePlatformHighContrastInkDrop", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnablePlatformHighContrastInkDrop,
+             "EnablePlatformHighContrastInkDrop",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Only paint views that are invalidated/dirty (i.e. a paint was directly
 // scheduled on those views) as opposed to painting all views that intersect
 // an invalid rectangle on the layer.
-const base::Feature kEnableViewPaintOptimization{
-    "EnableViewPaintOptimization", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnableViewPaintOptimization,
+             "EnableViewPaintOptimization",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-}  // namespace features
-}  // namespace views
+// When enabled, views::Label falls back to use the legacy preferred size
+// calculation in which the size bounds might be ignored to respect its
+// current width. TODO(crbug.com/1346889): remove this.
+BASE_FEATURE(kForceUseLegacyPreferredSize,
+             "ForceUseLegacyPreferredSize",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Used to enable keyboard-accessible tooltips in Views UI, as opposed
+// to kKeyboardAccessibleTooltip in //ui/base/ui_base_features.cc.
+BASE_FEATURE(kKeyboardAccessibleTooltipInViews,
+             "KeyboardAccessibleTooltipInViews",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Enables trackpad gestures to dismiss notifications. Also, updates gestures to
+// When enabled, widgets will be shown based on their z-order level
+BASE_FEATURE(kWidgetLayering,
+             "WidgetLayering",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+}  // namespace views::features

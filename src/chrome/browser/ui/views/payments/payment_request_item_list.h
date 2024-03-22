@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/payments/payment_request_row_view.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace views {
 class ImageView;
@@ -31,6 +32,8 @@ class PaymentRequestItemList {
  public:
   // Represents an item in the item list.
   class Item : public PaymentRequestRowView {
+    METADATA_HEADER(Item, PaymentRequestRowView)
+
    public:
     // Creates an item that will be owned by `list` with the initial state set
     // to `selected`. `clickable` indicates whether or not the user can interact
@@ -114,7 +117,7 @@ class PaymentRequestItemList {
 
     base::WeakPtr<PaymentRequestSpec> spec_;
     base::WeakPtr<PaymentRequestState> state_;
-    raw_ptr<PaymentRequestItemList> list_;
+    raw_ptr<PaymentRequestItemList, DanglingUntriaged> list_;
     std::u16string accessible_item_description_;
     bool selected_;
     bool show_edit_button_;
@@ -151,7 +154,7 @@ class PaymentRequestItemList {
   void UnselectSelectedItem();
 
   std::vector<std::unique_ptr<Item>> items_;
-  raw_ptr<Item> selected_item_;
+  raw_ptr<Item, DanglingUntriaged> selected_item_;
   base::WeakPtr<PaymentRequestDialogView> dialog_;
 };
 

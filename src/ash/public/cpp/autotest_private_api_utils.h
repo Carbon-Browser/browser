@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace aura {
 class Window;

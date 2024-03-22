@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,10 @@ enum class ProtocolHandlerSecurityLevel {
   // https://html.spec.whatwg.org/multipage/system-state.html#normalize-protocol-handler-parameters
   kStrict,
 
-  // Allow registration calls to cross-origin URLs.
+  // Similar to kStrict, but allows URLs with non-HTTP(S) schemes.
+  kSameOrigin,
+
+  // Allow registration calls to cross-origin HTTP/HTTPS URLs.
   kUntrustedOrigins,
 
   // Allow extension features: ext+foo schemes and chrome-extension:// URLs.

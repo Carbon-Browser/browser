@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,13 +16,21 @@
 #include "chrome/browser/ui/views/frame/browser_frame_view_linux.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/desktop_browser_frame_aura_linux.h"
+#include "chrome/browser/ui/views/frame/picture_in_picture_browser_frame_view.h"
+#include "chrome/browser/ui/views/tabs/tab_drag_controller.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRRect.h"
+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/skia_conversions.h"
+#include "ui/linux/linux_ui.h"
+#include "ui/native_theme/native_theme.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/platform_window/extensions/wayland_extension.h"
 #include "ui/platform_window/extensions/x11_extension.h"
+#include "ui/platform_window/platform_window_init_properties.h"
 
 namespace {
 
@@ -37,6 +45,16 @@ bool CreateGlobalMenuBar() {
 std::unordered_set<std::string>& SentStartupIds() {
   static base::NoDestructor<std::unordered_set<std::string>> sent_startup_ids;
   return *sent_startup_ids;
+}
+
+// Returns the event source for the active tab drag session.
+absl::optional<ui::mojom::DragEventSource> GetCurrentTabDragEventSource() {
+  if (auto* source_context = TabDragController::GetSourceContext()) {
+    if (auto* drag_controller = source_context->GetDragController()) {
+      return drag_controller->event_source();
+    }
+  }
+  return absl::nullopt;
 }
 
 }  // namespace
@@ -66,12 +84,25 @@ BrowserDesktopWindowTreeHostLinux::BrowserDesktopWindowTreeHostLinux(
     scale_observation_.Observe(linux_ui);
 }
 
-BrowserDesktopWindowTreeHostLinux::~BrowserDesktopWindowTreeHostLinux() =
-    default;
+BrowserDesktopWindowTreeHostLinux::~BrowserDesktopWindowTreeHostLinux() {
+  native_frame_->set_host(nullptr);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // BrowserDesktopWindowTreeHostLinux,
 //     BrowserDesktopWindowTreeHost implementation:
+
+void BrowserDesktopWindowTreeHostLinux::AddAdditionalInitProperties(
+    const views::Widget::InitParams& params,
+    ui::PlatformWindowInitProperties* properties) {
+  views::DesktopWindowTreeHostLinux::AddAdditionalInitProperties(params,
+                                                                 properties);
+
+  auto* profile = browser_view_->browser()->profile();
+  const auto* linux_ui_theme = ui::LinuxUiTheme::GetForProfile(profile);
+  properties->prefer_dark_theme =
+      linux_ui_theme && linux_ui_theme->PreferDarkTheme();
+}
 
 views::DesktopWindowTreeHost*
 BrowserDesktopWindowTreeHostLinux::AsDesktopWindowTreeHost() {
@@ -136,9 +167,12 @@ void BrowserDesktopWindowTreeHostLinux::TabDraggingKindChanged(
 
   if (auto* wayland_extension = ui::GetWaylandExtension(*platform_window())) {
     if (tab_drag_kind != TabDragKind::kNone) {
-      auto allow_system_drag = base::FeatureList::IsEnabled(
-          features::kAllowWindowDragUsingSystemDragDrop);
-      wayland_extension->StartWindowDraggingSessionIfNeeded(allow_system_drag);
+      if (auto event_source = GetCurrentTabDragEventSource()) {
+        const auto allow_system_drag = base::FeatureList::IsEnabled(
+            features::kAllowWindowDragUsingSystemDragDrop);
+        wayland_extension->StartWindowDraggingSessionIfNeeded(
+            *event_source, allow_system_drag);
+      }
     }
   }
 }
@@ -149,11 +183,10 @@ bool BrowserDesktopWindowTreeHostLinux::SupportsClientFrameShadow() const {
 }
 
 void BrowserDesktopWindowTreeHostLinux::UpdateFrameHints() {
-  auto* view = static_cast<BrowserFrameViewLinux*>(
-      native_frame_->browser_frame()->GetFrameView());
-  auto* layout = view->layout();
   auto* window = platform_window();
   float scale = device_scale_factor();
+  auto* view =
+      static_cast<BrowserNonClientFrameView*>(browser_frame_->GetFrameView());
   bool showing_frame =
       browser_frame_->native_browser_frame()->UseCustomFrame() &&
       !view->IsFrameCondensed();
@@ -162,25 +195,26 @@ void BrowserDesktopWindowTreeHostLinux::UpdateFrameHints() {
 
   if (SupportsClientFrameShadow()) {
     // Set the frame decoration insets.
-    // For a window in maximised or minimised state, insets should be zero, see
-    // https://crbug.com/1281211.  However, if we also set zero insets when the
-    // window is being initialised and has unknown state, it will be inflated on
-    // later steps.
-    // See https://crbug.com/1287212 for details.
-    const auto window_state = window->GetPlatformWindowState();
-    const gfx::Insets insets =
-        (window_state == ui::PlatformWindowState::kUnknown ||
-         window_state == ui::PlatformWindowState::kNormal)
-            ? layout->MirroredFrameBorderInsets()
-            : gfx::Insets();
+    gfx::Insets insets = view->MirroredFrameBorderInsets();
+    const auto tiled_edges = browser_frame_->tiled_edges();
+    if (tiled_edges.left)
+      insets.set_left(0);
+    if (tiled_edges.right)
+      insets.set_right(0);
+    if (tiled_edges.top)
+      insets.set_top(0);
+    if (tiled_edges.bottom)
+      insets.set_bottom(0);
     const gfx::Insets insets_px = gfx::ScaleToCeiledInsets(insets, scale);
     window->SetDecorationInsets(showing_frame ? &insets_px : nullptr);
 
     // Set the input region.
     gfx::Rect input_bounds(widget_size);
-    input_bounds.Inset(insets + layout->GetInputInsets());
+    input_bounds.Inset(insets + view->GetInputInsets());
     input_bounds = gfx::ScaleToEnclosingRect(input_bounds, scale);
-    window->SetInputRegion(showing_frame ? &input_bounds : nullptr);
+    window->SetInputRegion(showing_frame
+                               ? absl::optional<gfx::Rect>(input_bounds)
+                               : absl::nullopt);
   }
 
   if (window->IsTranslucentWindowOpacitySupported()) {
@@ -223,14 +257,24 @@ void BrowserDesktopWindowTreeHostLinux::UpdateFrameHints() {
         region.op(corner_rect, SkRegion::kDifference_Op);
       }
 
+      auto translucent_top_area_rect = SkIRect::MakeXYWH(
+          rect.x(), rect.y(), rect.width(),
+          std::ceil(view->GetTranslucentTopAreaHeight() * scale - rect.y()));
+      region.op(translucent_top_area_rect, SkRegion::kDifference_Op);
+
       // Convert the region to a list of rectangles.
       for (SkRegion::Iterator i(region); !i.done(); i.next())
         opaque_region.push_back(gfx::SkIRectToRect(i.rect()));
     } else {
-      // Set the entire window as opaque.
-      opaque_region.push_back({{}, widget_size});
+      // The entire window except for the translucent top is opaque.
+      gfx::Rect opaque_region_dip(widget_size);
+      gfx::Insets insets;
+      insets.set_top(view->GetTranslucentTopAreaHeight());
+      opaque_region_dip.Inset(insets);
+      opaque_region.push_back(
+          gfx::ScaleToEnclosingRect(opaque_region_dip, scale));
     }
-    window->SetOpaqueRegion(&opaque_region);
+    window->SetOpaqueRegion(opaque_region);
   }
 
   SizeConstraintsChanged();
@@ -308,6 +352,12 @@ void BrowserDesktopWindowTreeHostLinux::OnWindowStateChanged(
     browser_view_->FullscreenStateChanging();
   }
 
+  UpdateFrameHints();
+}
+
+void BrowserDesktopWindowTreeHostLinux::OnWindowTiledStateChanged(
+    ui::WindowTiledEdges new_tiled_edges) {
+  browser_frame_->set_tiled_edges(new_tiled_edges);
   UpdateFrameHints();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@ namespace content {
 class WebContents;
 }
 
+class Browser;
 class ExtensionsToolbarButton;
 class ExtensionsRequestAccessButton;
 class ToolbarActionViewController;
@@ -25,7 +26,6 @@ class ExtensionsToolbarControls : public ToolbarIconContainerView {
 
   explicit ExtensionsToolbarControls(
       std::unique_ptr<ExtensionsToolbarButton> extensions_button,
-      std::unique_ptr<ExtensionsToolbarButton> site_access_button,
       std::unique_ptr<ExtensionsRequestAccessButton> request_button);
   ExtensionsToolbarControls(const ExtensionsToolbarControls&) = delete;
   ExtensionsToolbarControls operator=(const ExtensionsToolbarControls&) =
@@ -36,29 +36,18 @@ class ExtensionsToolbarControls : public ToolbarIconContainerView {
     return extensions_button_;
   }
 
-  // Methods for testing.
-  ExtensionsToolbarButton* site_access_button_for_testing() const {
-    return site_access_button_;
-  }
-  ExtensionsRequestAccessButton* request_access_button_for_testing() const {
+  ExtensionsRequestAccessButton* request_access_button() const {
     return request_access_button_;
   }
 
-  // Update the controls given `actions` and the user `site_setting` in the
-  // `current_web_contents`.
+  // Update the controls given whether `is_restricted_url`, the `actions` and
+  // the user `site_setting` in the `current_web_contents`.
   void UpdateControls(
+      bool is_restricted_url,
       const std::vector<std::unique_ptr<ToolbarActionViewController>>& actions,
       extensions::PermissionsManager::UserSiteSetting site_setting,
-      content::WebContents* current_web_contents);
-
-  // ToolbarIconContainerView:
-  void UpdateAllIcons() override;
-
- private:
-  // Updates `site_access_button_` visibility given `actions` in `web_contents`.
-  void UpdateSiteAccessButton(
-      const std::vector<std::unique_ptr<ToolbarActionViewController>>& actions,
-      content::WebContents* web_contents);
+      content::WebContents* current_web_contents,
+      Browser* browser);
 
   // Updates `request_access_button_` visibility given the user `site_setting`
   // and `actions` in `web_contents`.
@@ -67,8 +56,28 @@ class ExtensionsToolbarControls : public ToolbarIconContainerView {
       extensions::PermissionsManager::UserSiteSetting site_setting,
       content::WebContents* web_contents);
 
+  // Hides the confirmation message in the request access button.
+  void ResetConfirmation();
+
+  // Returns whether the button is showing a confirmation message.
+  bool IsShowingConfirmation() const;
+
+  // Returns whether the button is showing a confirmation message for `origin`.
+  bool IsShowingConfirmationFor(const url::Origin& origin) const;
+
+  // ToolbarIconContainerView:
+  void UpdateAllIcons() override;
+
+ private:
+  // Updates `extensions_button_` icon given `actions`, the user `site_setting`
+  // and whether `is_restricted_url` in `web_contents`.
+  void UpdateExtensionsButton(
+      const std::vector<std::unique_ptr<ToolbarActionViewController>>& actions,
+      extensions::PermissionsManager::UserSiteSetting site_setting,
+      content::WebContents* web_contents,
+      bool is_restricted_url);
+
   const raw_ptr<ExtensionsRequestAccessButton> request_access_button_;
-  const raw_ptr<ExtensionsToolbarButton> site_access_button_;
   const raw_ptr<ExtensionsToolbarButton> extensions_button_;
 };
 

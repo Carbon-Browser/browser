@@ -1,12 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "net/base/net_errors.h"
 #include "remoting/base/rsa_key_pair.h"
@@ -41,8 +42,7 @@ const char kSharedSecretBad[] = "0000-0000-0001";
 
 }  // namespace
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class ThirdPartyAuthenticatorTest : public AuthenticatorTestBase {
   class FakeTokenFetcher {
@@ -74,9 +74,7 @@ class ThirdPartyAuthenticatorTest : public AuthenticatorTestBase {
 
   class FakeTokenValidator : public TokenValidator {
    public:
-    FakeTokenValidator()
-     : token_url_(kTokenUrl),
-       token_scope_(kTokenScope) {}
+    FakeTokenValidator() : token_url_(kTokenUrl), token_scope_(kTokenScope) {}
 
     ~FakeTokenValidator() override = default;
 
@@ -122,7 +120,7 @@ class ThirdPartyAuthenticatorTest : public AuthenticatorTestBase {
     host_ = std::make_unique<ThirdPartyHostAuthenticator>(
         base::BindRepeating(&V2Authenticator::CreateForHost, host_cert_,
                             key_pair_),
-        base::WrapUnique(token_validator_));
+        base::WrapUnique(token_validator_.get()));
     client_ = std::make_unique<ThirdPartyClientAuthenticator>(
         base::BindRepeating(&V2Authenticator::CreateForClient),
         base::BindRepeating(&FakeTokenFetcher::FetchThirdPartyToken,
@@ -130,7 +128,7 @@ class ThirdPartyAuthenticatorTest : public AuthenticatorTestBase {
   }
 
   FakeTokenFetcher token_fetcher_;
-  FakeTokenValidator* token_validator_;
+  raw_ptr<FakeTokenValidator> token_validator_;
 };
 
 TEST_F(ThirdPartyAuthenticatorTest, SuccessfulAuth) {
@@ -174,8 +172,7 @@ TEST_F(ThirdPartyAuthenticatorTest, InvalidToken) {
   ASSERT_NO_FATAL_FAILURE(InitAuthenticators());
   ASSERT_NO_FATAL_FAILURE(RunHostInitiatedAuthExchange());
   ASSERT_EQ(Authenticator::PROCESSING_MESSAGE, client_->state());
-  ASSERT_NO_FATAL_FAILURE(token_fetcher_.OnTokenFetched(
-      kToken, kSharedSecret));
+  ASSERT_NO_FATAL_FAILURE(token_fetcher_.OnTokenFetched(kToken, kSharedSecret));
   ASSERT_EQ(Authenticator::PROCESSING_MESSAGE, host_->state());
   ASSERT_NO_FATAL_FAILURE(token_validator_->OnTokenValidated(std::string()));
 
@@ -202,8 +199,7 @@ TEST_F(ThirdPartyAuthenticatorTest, HostBadSecret) {
   ASSERT_EQ(Authenticator::PROCESSING_MESSAGE, client_->state());
   ASSERT_NO_FATAL_FAILURE(token_fetcher_.OnTokenFetched(kToken, kSharedSecret));
   ASSERT_EQ(Authenticator::PROCESSING_MESSAGE, host_->state());
-  ASSERT_NO_FATAL_FAILURE(
-      token_validator_->OnTokenValidated(kSharedSecretBad));
+  ASSERT_NO_FATAL_FAILURE(token_validator_->OnTokenValidated(kSharedSecretBad));
 
   // The end result is that the host rejected the fake authentication.
   ASSERT_EQ(Authenticator::REJECTED, client_->state());
@@ -216,12 +212,10 @@ TEST_F(ThirdPartyAuthenticatorTest, ClientBadSecret) {
   ASSERT_NO_FATAL_FAILURE(
       token_fetcher_.OnTokenFetched(kToken, kSharedSecretBad));
   ASSERT_EQ(Authenticator::PROCESSING_MESSAGE, host_->state());
-  ASSERT_NO_FATAL_FAILURE(
-      token_validator_->OnTokenValidated(kSharedSecret));
+  ASSERT_NO_FATAL_FAILURE(token_validator_->OnTokenValidated(kSharedSecret));
 
   // The end result is that the host rejected the fake authentication.
   ASSERT_EQ(Authenticator::REJECTED, client_->state());
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

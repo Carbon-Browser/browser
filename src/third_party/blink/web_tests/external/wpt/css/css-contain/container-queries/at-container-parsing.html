@@ -100,7 +100,7 @@
   test_condition_known('((width: 100px) and (height: 100px))');
   test_condition_known('(((width: 40px) or (width: 50px)) and (height: 100px))');
   test_condition_known('((width: 100px) and ((height: 40px) or (height: 50px)))');
-  test_condition_known('(((width: 40x) and (height: 50px)) or (height: 100px))');
+  test_condition_known('(((width: 40px) and (height: 50px)) or (height: 100px))');
   test_condition_known('((width: 50px) or ((width: 40px) and (height: 50px)))');
   test_condition_known('((width: 100px) and (not (height: 100px)))');
   test_condition_known('(width < 100px)');
@@ -136,6 +136,7 @@
   test_condition_unknown('(asdf)');
   test_condition_unknown('(resolution > 100dpi)');
   test_condition_unknown('(resolution: 150dpi)');
+  test_condition_unknown('(resolution: calc(2x))');
   test_condition_unknown('(color)');
   test_condition_unknown('(min-color: 1)');
   test_condition_unknown('(color-index >= 1)');
@@ -167,6 +168,10 @@
   test_container_name_valid('foo');
   test_container_name_valid(' foo');
   test_container_name_valid(' foo ');
+  test_container_name_valid('normal');
+  test_container_name_valid('Normal');
+  test_container_name_valid('auto');
+  test_container_name_valid('Auto');
 
   test_container_name_invalid('foo foo');
   test_container_name_invalid('1px');
@@ -175,28 +180,16 @@
   test_container_name_invalid('type(inline-size)');
   test_container_name_invalid('"foo"');
   test_container_name_invalid('"inherit"');
+  test_container_name_invalid('inherit');
+  test_container_name_invalid('INITIAL');
+  test_container_name_invalid('Unset');
+  test_container_name_invalid('deFAULT');
   test_container_name_invalid('none');
   test_container_name_invalid('None');
-  test_container_name_invalid('normal');
-  test_container_name_invalid('Normal');
-  test_container_name_invalid('auto');
-  test_container_name_invalid('Auto');
   test_container_name_invalid('and');
   test_container_name_invalid('or');
   test_container_name_invalid('not');
   test_container_name_invalid('And');
   test_container_name_invalid('oR');
   test_container_name_invalid('nOt');
-
-  test_condition_known('style(--my-prop: foo)');
-  test_condition_known('style(--my-prop: foo - bar ())');
-  test_condition_known('style(not ((--foo: calc(10px + 2em)) and ((--foo: url(x)))))');
-  test_condition_known('style((--foo: bar) or (--bar: 10px))');
-  test_condition_known('style(--foo: bar !important)');
-  test_condition_known('style(--my-prop:)');
-  test_condition_known('style(--my-prop: )');
-
-  test_condition_unknown('style(--foo: bar;)');
-  test_condition_unknown('style(--foo)');
-  test_condition_unknown('style(style(--foo: bar))');
 </script>

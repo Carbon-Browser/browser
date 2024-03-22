@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/mojo/clients/win/media_foundation_renderer_client_factory.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/win/dcomp_texture_wrapper.h"
 #include "media/base/win/mf_feature_checks.h"
 #include "media/base/win/mf_helpers.h"
@@ -41,7 +42,7 @@ MediaFoundationRendererClientFactory::~MediaFoundationRendererClientFactory() {
 
 std::unique_ptr<media::Renderer>
 MediaFoundationRendererClientFactory::CreateRenderer(
-    const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+    const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
     const scoped_refptr<base::TaskRunner>& /*worker_task_runner*/,
     media::AudioRendererSink* /*audio_renderer_sink*/,
     media::VideoRendererSink* video_renderer_sink,
@@ -76,8 +77,10 @@ MediaFoundationRendererClientFactory::CreateRenderer(
   auto client_extension_receiver =
       client_extension_remote.InitWithNewPipeAndPassReceiver();
 
+  // `dcomp_texture_wrapper` could be null, which will be handled in
+  // MediaFoundationRendererClient::Initialize() for a more consistent error
+  // handling.
   auto dcomp_texture_wrapper = get_dcomp_texture_wrapper_cb_.Run();
-  DCHECK(dcomp_texture_wrapper);
 
   std::unique_ptr<media::MojoRenderer> mojo_renderer =
       mojo_renderer_factory_->CreateMediaFoundationRenderer(
@@ -106,7 +109,7 @@ MediaFoundationRendererClientFactory::CreateRenderer(
 
 media::MediaResource::Type
 MediaFoundationRendererClientFactory::GetRequiredMediaResourceType() {
-  return media::MediaResource::Type::STREAM;
+  return media::MediaResource::Type::kStream;
 }
 
 }  // namespace media

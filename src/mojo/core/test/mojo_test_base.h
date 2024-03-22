@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 #include "mojo/core/test/multiprocess_test_helper.h"
 #include "mojo/public/c/system/trap.h"
@@ -49,6 +49,10 @@ class MojoTestBase : public testing::Test {
 
     ~ClientController();
 
+#if BUILDFLAG(USE_BLINK)
+    const base::Process& process() const { return helper_.test_child(); }
+#endif
+
     MojoHandle pipe() const { return pipe_.get().value(); }
 
     int WaitForShutdown();
@@ -56,7 +60,7 @@ class MojoTestBase : public testing::Test {
    private:
     friend class MojoTestBase;
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
     MultiprocessTestHelper helper_;
 #endif
     ScopedMessagePipeHandle pipe_;
@@ -76,6 +80,14 @@ class MojoTestBase : public testing::Test {
     ClientController& c = StartClient(client_name);
     handler(c.pipe());
     return c.WaitForShutdown();
+  }
+
+  template <typename HandlerFunc>
+  void RunTestClientWithController(const std::string& client_name,
+                                   HandlerFunc handler) {
+    ClientController& c = StartClient(client_name);
+    handler(c);
+    EXPECT_EQ(0, c.WaitForShutdown());
   }
 
   // Closes a handle and expects success.
@@ -133,12 +145,12 @@ class MojoTestBase : public testing::Test {
   // Maps a buffer, writes some data into it, and unmaps it.
   static void WriteToBuffer(MojoHandle h,
                             size_t offset,
-                            const base::StringPiece& s);
+                            const std::string_view& s);
 
   // Maps a buffer, tests the value of some of its contents, and unmaps it.
   static void ExpectBufferContents(MojoHandle h,
                                    size_t offset,
-                                   const base::StringPiece& s);
+                                   const std::string_view& s);
 
   //////// Data pipe test utilities /////////
 
@@ -189,7 +201,7 @@ class MojoTestBase : public testing::Test {
 // |pipe_name| will be bound to the MojoHandle of a message pipe connected
 // to the test process (see RunTestClient* above.) This pipe handle is
 // automatically closed on test client teardown.
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 #define DEFINE_TEST_CLIENT_WITH_PIPE(client_name, test_base, pipe_name) \
   class client_name##_MainFixture : public test_base {                  \
     void TestBody() override {}                                         \
@@ -225,10 +237,24 @@ class MojoTestBase : public testing::Test {
                        base::Unretained(&test)));                            \
   }                                                                          \
   void client_name##_MainFixture::Main(MojoHandle pipe_name)
-#else  // !BUILDFLAG(IS_IOS)
-#define DEFINE_TEST_CLIENT_WITH_PIPE(client_name, test_base, pipe_name)
-#define DEFINE_TEST_CLIENT_TEST_WITH_PIPE(client_name, test_base, pipe_name)
-#endif  // !BUILDFLAG(IS_IOS)
+#else  // BUILDFLAG(USE_BLINK)
+#define DEFINE_TEST_CLIENT_WITH_PIPE(client_name, test_base, pipe_name) \
+  class client_name##_MainFixture : public test_base {                  \
+    void TestBody() override {}                                         \
+                                                                        \
+   public:                                                              \
+    int Main(MojoHandle);                                               \
+  };                                                                    \
+  int client_name##_MainFixture::Main(MojoHandle pipe_name)
+#define DEFINE_TEST_CLIENT_TEST_WITH_PIPE(client_name, test_base, pipe_name) \
+  class client_name##_MainFixture : public test_base {                       \
+    void TestBody() override {}                                              \
+                                                                             \
+   public:                                                                   \
+    void Main(MojoHandle);                                                   \
+  };                                                                         \
+  void client_name##_MainFixture::Main(MojoHandle pipe_name)
+#endif  // BUILDFLAG(USE_BLINK)
 
 }  // namespace test
 }  // namespace core

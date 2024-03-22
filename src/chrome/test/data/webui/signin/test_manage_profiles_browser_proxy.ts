@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,11 +17,13 @@ export class TestManageProfilesBrowserProxy extends TestBrowserProxy implements
       'openManageProfileSettingsSubPage', 'launchSelectedProfile',
       'askOnStartupChanged', 'getNewProfileSuggestedThemeInfo',
       'getProfileThemeInfo', 'removeProfile', 'getProfileStatistics',
-      'selectAccountLacros', 'createProfile', 'setProfileName',
+      'closeProfileStatistics', 'selectNewAccount',
+      'createProfileAndOpenCustomizationDialog', 'setProfileName',
       'recordSignInPromoImpression', 'getAvailableIcons', 'getSwitchProfile',
-      'confirmProfileSwitch', 'cancelProfileSwitch',
+      'confirmProfileSwitch', 'cancelProfileSwitch', 'updateProfileOrder',
       // <if expr="chromeos_lacros">
       'getAvailableAccounts', 'openAshAccountSettingsPage',
+      'selectExistingAccountLacros', 'openDeviceGuestLinkLacros',
       // </if>
     ]);
 
@@ -100,16 +102,17 @@ export class TestManageProfilesBrowserProxy extends TestBrowserProxy implements
     this.methodCalled('getProfileStatistics', profilePath);
   }
 
-  selectAccountLacros(profileColor: number|null, gaiaId: string) {
-    this.methodCalled('selectAccountLacros', [profileColor, gaiaId]);
+  closeProfileStatistics() {
+    this.methodCalled('closeProfileStatistics');
   }
 
-  createProfile(
-      profileName: string, profileColor: number, avatarIndex: number,
-      createShortcut: boolean) {
+  selectNewAccount(profileColor: number|null) {
+    this.methodCalled('selectNewAccount', [profileColor]);
+  }
+
+  createProfileAndOpenCustomizationDialog(profileColor: number) {
     this.methodCalled(
-        'createProfile',
-        [profileName, profileColor, avatarIndex, createShortcut]);
+        'createProfileAndOpenCustomizationDialog', [profileColor]);
   }
 
   setProfileName(profilePath: string, profileName: string) {
@@ -160,6 +163,10 @@ export class TestManageProfilesBrowserProxy extends TestBrowserProxy implements
     this.methodCalled('cancelProfileSwitch');
   }
 
+  updateProfileOrder(fromIndex: number, toIndex: number) {
+    this.methodCalled('updateProfileOrder', [fromIndex, toIndex]);
+  }
+
   // <if expr="chromeos_lacros">
   getAvailableAccounts() {
     this.methodCalled('getAvailableAccounts');
@@ -167,6 +174,14 @@ export class TestManageProfilesBrowserProxy extends TestBrowserProxy implements
 
   openAshAccountSettingsPage() {
     this.methodCalled('openAshAccountSettingsPage');
+  }
+
+  selectExistingAccountLacros(profileColor: number|null, gaiaId: string) {
+    this.methodCalled('selectExistingAccountLacros', [profileColor, gaiaId]);
+  }
+
+  openDeviceGuestLinkLacros() {
+    this.methodCalled('openDeviceGuestLinkLacros');
   }
   // </if>
 }

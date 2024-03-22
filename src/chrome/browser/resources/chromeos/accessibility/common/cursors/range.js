@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,10 @@
  * @fileoverview Structures related to ranges, which are pairs of cursors over
  * the automation tree.
  */
+
+import {AutomationPredicate} from '../automation_predicate.js';
+import {AutomationUtil} from '../automation_util.js';
+import {constants} from '../constants.js';
 
 import {Cursor, CURSOR_NODE_INDEX, CursorMovement, CursorUnit, WrappingCursor} from './cursor.js';
 

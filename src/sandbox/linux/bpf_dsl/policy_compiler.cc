@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -435,17 +435,15 @@ CodeGen::Node PolicyCompiler::Return(uint32_t ret) {
     // The performance penalty for this extra round-trip to user-space is not
     // actually that bad, as we only ever pay it for denied system calls; and a
     // typical program has very few of these.
-    return Trap(ReturnErrno, reinterpret_cast<void*>(ret & SECCOMP_RET_DATA),
-                true);
+    return Trap(
+        {ReturnErrno, reinterpret_cast<void*>(ret & SECCOMP_RET_DATA), true});
   }
 
   return gen_.MakeInstruction(BPF_RET + BPF_K, ret);
 }
 
-CodeGen::Node PolicyCompiler::Trap(TrapRegistry::TrapFnc fnc,
-                                   const void* aux,
-                                   bool safe) {
-  uint16_t trap_id = registry_->Add(fnc, aux, safe);
+CodeGen::Node PolicyCompiler::Trap(const TrapRegistry::Handler& handler) {
+  uint16_t trap_id = registry_->Add(handler);
   return gen_.MakeInstruction(BPF_RET + BPF_K, SECCOMP_RET_TRAP + trap_id);
 }
 

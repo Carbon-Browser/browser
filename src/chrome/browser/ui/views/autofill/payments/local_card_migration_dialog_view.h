@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,7 +63,7 @@ class LocalCardMigrationDialogView : public LocalCardMigrationDialog,
 
   // The view containing a list of cards. It is the content of the scroll bar.
   // Owned by the LocalCardMigrationOfferView.
-  raw_ptr<views::View> card_list_view_;
+  raw_ptr<views::View> card_list_view_ = nullptr;
 };
 
 }  // namespace autofill

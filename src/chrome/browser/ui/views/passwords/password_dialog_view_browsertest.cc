@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -14,6 +14,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/autofill/chrome_autofill_client.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/passwords/manage_passwords_ui_controller.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -80,12 +81,15 @@ class TestManagePasswordsUIController : public ManagePasswordsUIController {
         current_credential_leak_prompt_);
   }
 
-  MOCK_METHOD0(OnDialogClosed, void());
+  MOCK_METHOD(void, OnDialogClosed, (), ());
 
  private:
-  raw_ptr<AccountChooserPrompt> current_account_chooser_;
-  raw_ptr<AutoSigninFirstRunPrompt> current_autosignin_prompt_;
-  raw_ptr<CredentialLeakPrompt> current_credential_leak_prompt_;
+  raw_ptr<AccountChooserPrompt, AcrossTasksDanglingUntriaged>
+      current_account_chooser_;
+  raw_ptr<AutoSigninFirstRunPrompt, AcrossTasksDanglingUntriaged>
+      current_autosignin_prompt_;
+  raw_ptr<CredentialLeakPrompt, AcrossTasksDanglingUntriaged>
+      current_credential_leak_prompt_;
 };
 
 TestManagePasswordsUIController::TestManagePasswordsUIController(
@@ -159,8 +163,11 @@ class PasswordDialogViewTest : public DialogBrowserTest {
         browser()->tab_strip_model()->GetActiveWebContents());
   }
 
-  MOCK_METHOD1(OnChooseCredential, void(const password_manager::PasswordForm*));
-  MOCK_METHOD0(OnIconRequestDone, void());
+  MOCK_METHOD(void,
+              OnChooseCredential,
+              (const password_manager::PasswordForm*),
+              ());
+  MOCK_METHOD(void, OnIconRequestDone, (), ());
 
   // Called on the server background thread.
   std::unique_ptr<HttpResponse> HandleRequest(const HttpRequest& request) {
@@ -172,7 +179,8 @@ class PasswordDialogViewTest : public DialogBrowserTest {
   }
 
  private:
-  raw_ptr<TestManagePasswordsUIController> controller_;
+  raw_ptr<TestManagePasswordsUIController, AcrossTasksDanglingUntriaged>
+      controller_;
 };
 
 void PasswordDialogViewTest::SetUpOnMainThread() {
@@ -208,9 +216,10 @@ content::WebContents* PasswordDialogViewTest::SetupTabWithTestController(
   content::WebContents* raw_new_tab = new_tab.get();
   EXPECT_TRUE(raw_new_tab);
 
-  // ManagePasswordsUIController needs ChromePasswordManagerClient for logging.
-  ChromePasswordManagerClient::CreateForWebContentsWithAutofillClient(
-      raw_new_tab, nullptr);
+  // ManagePasswordsUIController needs ChromePasswordManagerClient for logging
+  // and ChromePasswordManagerClient needs ChromeAutofillClient.
+  autofill::ChromeAutofillClient::CreateForWebContents(raw_new_tab);
+  ChromePasswordManagerClient::CreateForWebContents(raw_new_tab);
   EXPECT_TRUE(ChromePasswordManagerClient::FromWebContents(raw_new_tab));
   controller_ = new TestManagePasswordsUIController(raw_new_tab);
   browser->tab_strip_model()->AppendWebContents(std::move(new_tab), true);
@@ -237,6 +246,7 @@ IN_PROC_BROWSER_TEST_F(PasswordDialogViewTest,
   form.display_name = u"Peter";
   form.username_value = u"peter@pan.test";
   form.icon_url = GURL("broken url");
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
   local_credentials.push_back(
       std::make_unique<password_manager::PasswordForm>(form));
   form.icon_url = embedded_test_server()->GetURL("/icon.png");
@@ -273,6 +283,7 @@ IN_PROC_BROWSER_TEST_F(
   form.display_name = u"Peter";
   form.username_value = u"peter@pan.test";
   form.icon_url = GURL("broken url");
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
   local_credentials.push_back(
       std::make_unique<password_manager::PasswordForm>(form));
   GURL icon_url("https://google.com/icon.png");
@@ -308,6 +319,7 @@ IN_PROC_BROWSER_TEST_F(PasswordDialogViewTest,
   form.url = origin;
   form.display_name = u"Peter";
   form.username_value = u"peter@pan.test";
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
   local_credentials.push_back(
       std::make_unique<password_manager::PasswordForm>(form));
 
@@ -332,6 +344,7 @@ IN_PROC_BROWSER_TEST_F(PasswordDialogViewTest,
   form.url = origin;
   form.display_name = u"Peter";
   form.username_value = u"peter@pan.test";
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
   local_credentials.push_back(
       std::make_unique<password_manager::PasswordForm>(form));
 
@@ -356,6 +369,7 @@ IN_PROC_BROWSER_TEST_F(PasswordDialogViewTest,
   form.url = origin;
   form.display_name = u"Peter";
   form.username_value = u"peter@pan.test";
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
   local_credentials.push_back(
       std::make_unique<password_manager::PasswordForm>(form));
 
@@ -388,6 +402,7 @@ IN_PROC_BROWSER_TEST_F(PasswordDialogViewTest,
   form.url = origin;
   form.display_name = u"Peter";
   form.username_value = u"peter@pan.test";
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
   local_credentials.push_back(
       std::make_unique<password_manager::PasswordForm>(form));
 
@@ -421,6 +436,7 @@ IN_PROC_BROWSER_TEST_F(PasswordDialogViewTest, PopupAccountChooserInIncognito) {
   form.url = origin;
   form.display_name = u"Peter";
   form.username_value = u"peter@pan.test";
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
   local_credentials.push_back(
       std::make_unique<password_manager::PasswordForm>(form));
 
@@ -493,6 +509,7 @@ IN_PROC_BROWSER_TEST_F(PasswordDialogViewTest,
   form.url = origin;
   form.username_value = u"peter@pan.test";
   form.password_value = u"I can fly!";
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
 
   // Successful login alone will not prompt:
   client()->NotifySuccessfulLoginWithExistingPassword(WrapFormInManager(&form));
@@ -552,6 +569,8 @@ void PasswordDialogViewTest::ShowUi(const std::string& name) {
   form.url = origin;
   form.display_name = u"Peter Pan";
   form.username_value = u"peter@pan.test";
+  form.match_type = password_manager::PasswordForm::MatchType::kExact;
+
   if (name == "PopupAutoSigninPrompt") {
     form.icon_url = GURL("broken url");
     local_credentials.push_back(

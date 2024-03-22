@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@ import './strings.m.js';
 import './unguessable_token.mojom-lite.js';
 import './file_system_access_transfer_token.mojom-lite.js';
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 
 import * as error_reporter from './error_reporter.js';
-import {assertCast, MessagePipe} from './message_pipe.m.js';
+import {assertCast, MessagePipe} from './message_pipe.js';
 import {DeleteFileMessage, EditInPhotosMessage, FileContext, IsFileArcWritableMessage, IsFileBrowserWritableMessage, LoadFilesMessage, Message, NavigateMessage, NotifyCurrentFileMessage, OpenAllowedFileMessage, OpenAllowedFileResponse, OpenFilesWithPickerMessage, OverwriteFileMessage, OverwriteViaFilePickerResponse, RenameFileMessage, RenameResult, RequestSaveFileMessage, RequestSaveFileResponse, SaveAsMessage, SaveAsResponse} from './message_types.js';
 import {mediaAppPageHandler} from './mojo_api_bootstrap.js';
 
@@ -241,6 +241,10 @@ guestMessagePipe.registerHandler(Message.OPEN_IN_SANDBOXED_VIEWER, message => {
 
 guestMessagePipe.registerHandler(Message.RELOAD_MAIN_FRAME, () => {
   window.location.reload();
+});
+
+guestMessagePipe.registerHandler(Message.MAYBE_TRIGGER_PDF_HATS, () => {
+  mediaAppPageHandler.maybeTriggerPdfHats();
 });
 
 guestMessagePipe.registerHandler(Message.EDIT_IN_PHOTOS, message => {
@@ -950,7 +954,10 @@ async function getFileHandleFromCurrentDirectory(
       // Some filenames (e.g. "thumbs.db") can't be opened (or deleted) by
       // filename. TypeError doesn't give a good error message in the app, so
       // convert to a new Error.
-      if (e.name === 'TypeError' && e.message === 'Name is not allowed.') {
+      if (e.name === 'TypeError' &&
+          e.message ===
+              'Failed to execute \'getFileHandle\' on ' +
+                  '\'FileSystemDirectoryHandle\': Name is not allowed.') {
         console.warn(e);  // Warn so a crash report is not generated.
         throw new DOMException(
             'File has a reserved name and can not be opened',

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
+#include "base/memory/raw_ptr_exclusion.h"
 
 namespace device {
 
@@ -21,7 +23,9 @@ struct UsbProduct {
 // For example, uint16_t instead of size_t.
 struct UsbVendor {
   const char* name;
-  const UsbProduct* products;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const UsbProduct* products;
   const uint16_t id;
   const uint16_t product_size;
 };

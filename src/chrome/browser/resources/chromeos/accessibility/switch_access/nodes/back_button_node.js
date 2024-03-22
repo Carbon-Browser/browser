@@ -1,17 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {EventHandler} from '../../common/event_handler.js';
+import {RepeatedEventHandler} from '../../common/repeated_event_handler.js';
 import {ActionManager} from '../action_manager.js';
 import {FocusRingManager} from '../focus_ring_manager.js';
 import {MenuManager} from '../menu_manager.js';
 import {Navigator} from '../navigator.js';
 import {SwitchAccess} from '../switch_access.js';
-import {SAConstants, SwitchAccessMenuAction} from '../switch_access_constants.js';
+import {ActionResponse} from '../switch_access_constants.js';
 
 import {SAChildNode, SARootNode} from './switch_access_node.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
+const MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
 
 /**
  * This class handles the behavior of the back button.
@@ -36,7 +39,7 @@ export class BackButtonNode extends SAChildNode {
 
   /** @override */
   get actions() {
-    return [SwitchAccessMenuAction.SELECT];
+    return [MenuAction.SELECT];
   }
 
   /** @override */
@@ -120,11 +123,11 @@ export class BackButtonNode extends SAChildNode {
 
   /** @override */
   performAction(action) {
-    if (action === SwitchAccessMenuAction.SELECT && this.automationNode) {
+    if (action === MenuAction.SELECT && this.automationNode) {
       BackButtonNode.onClick_();
-      return SAConstants.ActionResponse.CLOSE_MENU;
+      return ActionResponse.CLOSE_MENU;
     }
-    return SAConstants.ActionResponse.NO_ACTION_TAKEN;
+    return ActionResponse.NO_ACTION_TAKEN;
   }
 
   /** @override */

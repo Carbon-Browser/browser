@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ IN_PROC_BROWSER_TEST_F(SettingsUITest, TriggerHappinessTrackingSurveys) {
           browser()->profile(), base::BindRepeating(&BuildMockHatsService)));
   EXPECT_CALL(*mock_hats_service_,
               LaunchDelayedSurveyForWebContents(kHatsSurveyTriggerSettings, _,
-                                                _, _, _, _));
+                                                _, _, _, _, _, _, _));
   ASSERT_TRUE(NavigateToURL(browser(), GURL(chrome::kChromeUISettingsURL)));
   base::RunLoop().RunUntilIdle();
 }

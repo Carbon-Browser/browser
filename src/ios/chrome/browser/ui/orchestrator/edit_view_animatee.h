@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 // An object that represents the edit state location bar for focusing animation.
 @protocol EditViewAnimatee<NSObject>
 
-// Toggles the visibility of the leading icon.
-- (void)setLeadingIconFaded:(BOOL)faded;
+// Sets the scale of the leading icon.
+- (void)setLeadingIconScale:(CGFloat)scale;
 
 // Toggles the visibility of the clear button.
 - (void)setClearButtonFaded:(BOOL)faded;

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ import org.chromium.components.embedder_support.delegate.WebContentsDelegateAndr
 import org.chromium.components.external_intents.ExternalNavigationHandler;
 import org.chromium.components.navigation_interception.InterceptNavigationDelegate;
 
-/**
- * An interface for factory to create {@link Tab} related delegates.
- */
+/** An interface for factory to create {@link Tab} related delegates. */
 public interface TabDelegateFactory {
     /**
      * Creates the {@link WebContentsDelegateAndroid} the tab will be initialized with.

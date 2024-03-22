@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ namespace mojo {
 //        wrapper type, or the following alternatives:
 //        - string:
 //          Value or reference of any type that has a StringTraits defined.
-//          Supported by default: base::StringPiece, std::string,
+//          Supported by default: std::string_view, std::string,
 //          WTF::String (in blink).
 //
 //        - array:
@@ -49,7 +49,7 @@ namespace mojo {
 //          Value of any type that has an EnumTraits defined.
 //
 //      For any nullable string/struct/array/map/union field you could also
-//      return value or reference of absl::optional<T>, if T has the right
+//      return value or reference of std::optional<T>, if T has the right
 //      *Traits defined.
 //
 //      During serialization, getters for all fields are called exactly once. It

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,17 +14,43 @@
 #include "media/gpu/vaapi/vaapi_video_encoder_delegate.h"
 #include "media/gpu/vp9_picture.h"
 #include "media/gpu/vp9_reference_frame_vector.h"
-#include "media/gpu/vpx_rate_control.h"
 
 namespace libvpx {
-struct VP9FrameParamsQpRTC;
 class VP9RateControlRTC;
+struct VP9FrameParamsQpRTC;
 struct VP9RateControlRtcConfig;
 }  // namespace libvpx
 
 namespace media {
 class VaapiWrapper;
-class VP9SVCLayers;
+class VP9SVCLayersStateful;
+
+// Wrapper for the libVPX VP9 rate controller that allows us to override methods
+// for unit testing.
+class VP9RateControlWrapper {
+ public:
+  static std::unique_ptr<VP9RateControlWrapper> Create(
+      const libvpx::VP9RateControlRtcConfig& config);
+
+  VP9RateControlWrapper();
+  explicit VP9RateControlWrapper(
+      std::unique_ptr<libvpx::VP9RateControlRTC> impl);
+  virtual ~VP9RateControlWrapper();
+
+  virtual void UpdateRateControl(
+      const libvpx::VP9RateControlRtcConfig& rate_control_config);
+  // libvpx::VP9FrameParamsQpRTC take 0-63 quantization parameter.
+  // ComputeQP() returns vp9 ac/dc table index. The range is 0-255.
+  virtual int ComputeQP(const libvpx::VP9FrameParamsQpRTC& frame_params);
+  // GetLoopfilterLevel() needs to be called after ComputeQP().
+  virtual int GetLoopfilterLevel() const;
+  virtual void PostEncodeUpdate(
+      uint64_t encoded_frame_size,
+      const libvpx::VP9FrameParamsQpRTC& frame_params);
+
+ private:
+  const std::unique_ptr<libvpx::VP9RateControlRTC> impl_;
+};
 
 class VP9VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
  public:
@@ -44,6 +70,8 @@ class VP9VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
     // 0-255.
     uint8_t min_qp;
     uint8_t max_qp;
+
+    bool error_resilident_mode = false;
   };
 
   VP9VaapiVideoEncoderDelegate(scoped_refptr<VaapiWrapper> vaapi_wrapper,
@@ -68,17 +96,15 @@ class VP9VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
   friend class VP9VaapiVideoEncoderDelegateTest;
   friend class VaapiVideoEncodeAcceleratorTest;
 
-  using VP9RateControl = VPXRateControl<libvpx::VP9RateControlRtcConfig,
-                                        libvpx::VP9RateControlRTC,
-                                        libvpx::VP9FrameParamsQpRTC>;
-  void set_rate_ctrl_for_testing(std::unique_ptr<VP9RateControl> rate_ctrl);
+  void set_rate_ctrl_for_testing(
+      std::unique_ptr<VP9RateControlWrapper> rate_ctrl);
 
   bool ApplyPendingUpdateRates();
 
   bool PrepareEncodeJob(EncodeJob& encode_job) override;
   BitstreamBufferMetadata GetMetadata(const EncodeJob& encode_job,
                                       size_t payload_size) override;
-  void BitrateControlUpdate(uint64_t encoded_chunk_size_bytes) override;
+  void BitrateControlUpdate(const BitstreamBufferMetadata& metadata) override;
 
   Vp9FrameHeader GetDefaultFrameHeader(const bool keyframe) const;
   void SetFrameHeader(bool keyframe,
@@ -103,12 +129,15 @@ class VP9VaapiVideoEncoderDelegate : public VaapiVideoEncoderDelegate {
   EncodeParams current_params_;
 
   Vp9ReferenceFrameVector reference_frames_;
-  std::unique_ptr<VP9SVCLayers> svc_layers_;
+  std::unique_ptr<VP9SVCLayersStateful> svc_layers_;
 
   absl::optional<std::pair<VideoBitrateAllocation, uint32_t>>
       pending_update_rates_;
 
-  std::unique_ptr<VP9RateControl> rate_ctrl_;
+  std::unique_ptr<VP9RateControlWrapper> rate_ctrl_;
+
+  // TODO(b/297226972): Remove the workaround once the iHD driver is fixed.
+  bool is_last_encoded_key_frame_ = false;
 };
 }  // namespace media
 

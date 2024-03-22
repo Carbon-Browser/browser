@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
+#include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/views/test/scoped_views_test_helper.h"
 #include "ui/views/test/test_views_delegate.h"
@@ -87,10 +88,19 @@ class ViewsTestBase : public PlatformTest {
       Widget::InitParams::Type type =
           Widget::InitParams::TYPE_WINDOW_FRAMELESS);
 
+  virtual std::unique_ptr<Widget> CreateTestWidget(Widget::InitParams params);
+
   bool HasCompositingManager() const;
 
-  // Simulate an OS-level destruction of the native window held by |widget|.
+  // Simulate an OS-level destruction of the native window held by non-desktop
+  // |widget|.
   void SimulateNativeDestroy(Widget* widget);
+
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+  // Simulate an OS-level destruction of the native window held by desktop
+  // |widget|.
+  void SimulateDesktopNativeDestroy(Widget* widget);
+#endif
 
   // Get the system reserved height at the top of the screen. On Mac, this
   // includes the menu bar and title bar.
@@ -109,9 +119,12 @@ class ViewsTestBase : public PlatformTest {
     native_widget_type_ = native_widget_type;
   }
 
-  void set_views_delegate(std::unique_ptr<TestViewsDelegate> views_delegate) {
+  template <typename T>
+  T* set_views_delegate(std::unique_ptr<T> views_delegate) {
     DCHECK(!setup_called_);
-    views_delegate_for_setup_.swap(views_delegate);
+    T* const ret = views_delegate.get();
+    views_delegate_for_setup_ = std::move(views_delegate);
+    return ret;
   }
 
 #if defined(USE_AURA)
@@ -168,25 +181,8 @@ class ViewsTestBase : public PlatformTest {
 #endif
 };
 
-class ViewsTestBaseWithNativeWidgetType
-    : public ViewsTestBase,
-      public testing::WithParamInterface<ViewsTestBase::NativeWidgetType> {
- public:
-  using ViewsTestBase::ViewsTestBase;
-
-  ViewsTestBaseWithNativeWidgetType(const ViewsTestBaseWithNativeWidgetType&) =
-      delete;
-  ViewsTestBaseWithNativeWidgetType& operator=(
-      const ViewsTestBaseWithNativeWidgetType&) = delete;
-
-  ~ViewsTestBaseWithNativeWidgetType() override = default;
-
-  // ViewsTestBase:
-  void SetUp() override;
-};
-
 // A helper that makes it easier to declare basic views tests that want to test
-// desktop native widgets. See |ViewsTestBase::native_wiget_type_| and
+// desktop native widgets. See |ViewsTestBase::native_widget_type_| and
 // |ViewsTestBase::CreateNativeWidgetForTest|. In short, for Aura, this will
 // result in most Widgets automatically being backed by a
 // DesktopNativeWidgetAura. For Mac, it has no impact as a NativeWidgetMac is
@@ -204,6 +200,14 @@ class ViewsTestWithDesktopNativeWidget : public ViewsTestBase {
 
   // ViewsTestBase:
   void SetUp() override;
+};
+
+class ScopedAXModeSetter {
+ public:
+  explicit ScopedAXModeSetter(ui::AXMode new_mode) {
+    ui::AXPlatformNode::SetAXMode(new_mode);
+  }
+  ~ScopedAXModeSetter() { ui::AXPlatformNode::SetAXMode(ui::AXMode::kNone); }
 };
 
 }  // namespace views

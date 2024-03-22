@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,9 +33,6 @@ class ScopedOSInfoOverride {
     kWin10Pro,
     kWin10Home,
     kWinServer2016,
-    kWin81Pro,
-    kWinServer2012R2,
-    kWin7ProSP1,
   };
 
   explicit ScopedOSInfoOverride(Type type);

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,16 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/files/scoped_file.h"
 #include "base/fuchsia/fuchsia_logging.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_for_io.h"
 #include "base/synchronization/lock.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "mojo/core/platform_handle_in_transit.h"
 
@@ -110,9 +111,9 @@ class MessageView {
     offset_ += num_bytes;
   }
 
-  std::vector<PlatformHandleInTransit> TakeHandles() {
-    if (handles_.empty())
-      return std::vector<PlatformHandleInTransit>();
+  std::vector<PlatformHandleInTransit> TakeHandles(bool unwrap_fds) {
+    if (handles_.empty() || !unwrap_fds)
+      return std::move(handles_);
 
     // We can only pass Fuchsia handles via IPC, so unwrap any FDIO file-
     // descriptors in |handles_| into the underlying handles, with metadata in
@@ -231,6 +232,22 @@ class ChannelFuchsia : public Channel,
     return true;
   }
 
+  bool GetReadPlatformHandlesForIpcz(
+      size_t num_handles,
+      std::vector<PlatformHandle>& handles) override {
+    if (incoming_handles_.size() < num_handles) {
+      return true;
+    }
+
+    DCHECK(handles.empty());
+    handles.reserve(num_handles);
+    for (size_t i = 0; i < num_handles; ++i) {
+      handles.emplace_back(std::move(incoming_handles_.front()));
+      incoming_handles_.pop_front();
+    }
+    return true;
+  }
+
  private:
   ~ChannelFuchsia() override { DCHECK(!read_watch_); }
 
@@ -333,7 +350,7 @@ class ChannelFuchsia : public Channel,
       message_view.advance_data_offset(write_bytes);
 
       std::vector<PlatformHandleInTransit> outgoing_handles =
-          message_view.TakeHandles();
+          message_view.TakeHandles(/*unwrap_fds=*/!is_for_ipcz());
       zx_handle_t handles[ZX_CHANNEL_MAX_MSG_HANDLES] = {};
       size_t handles_count = outgoing_handles.size();
 

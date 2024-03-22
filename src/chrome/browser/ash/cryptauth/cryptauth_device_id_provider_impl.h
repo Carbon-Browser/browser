@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "ash/services/device_sync/public/cpp/cryptauth_device_id_provider.h"
 #include "base/no_destructor.h"
+#include "chromeos/ash/services/device_sync/public/cpp/cryptauth_device_id_provider.h"
 
 class PrefRegistrySimple;
 

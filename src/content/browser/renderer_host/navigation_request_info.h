@@ -1,13 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_RENDERER_HOST_NAVIGATION_REQUEST_INFO_H_
 #define CONTENT_BROWSER_RENDERER_HOST_NAVIGATION_REQUEST_INFO_H_
 
-#include "base/memory/ref_counted.h"
 #include "base/unguessable_token.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/weak_document_ptr.h"
 #include "content/public/common/referrer.h"
 #include "net/base/isolation_info.h"
@@ -16,11 +16,14 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/mojom/client_security_state.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/navigation/navigation_params.mojom-forward.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
 namespace content {
+
+class PrefetchServingPageMetricsContainer;
 
 // A struct to hold the parameters needed to start a navigation request in
 // ResourceDispatcherHost. It is initialized on the UI thread, and then passed
@@ -47,7 +50,15 @@ struct CONTENT_EXPORT NavigationRequestInfo {
       const absl::optional<std::vector<net::SourceStream::SourceType>>&
           devtools_accepted_stream_types,
       bool is_pdf,
-      WeakDocumentPtr initiator_document);
+      int initiator_process_id,
+      absl::optional<blink::DocumentToken> initiator_document_token,
+      const GlobalRenderFrameHostId& previous_render_frame_host_id,
+      base::WeakPtr<PrefetchServingPageMetricsContainer>
+          prefetch_serving_page_metrics_container,
+      bool allow_cookies_from_browser,
+      int64_t navigation_id,
+      bool shared_storage_writable,
+      bool is_ad_tagged);
   NavigationRequestInfo(const NavigationRequestInfo& other) = delete;
   ~NavigationRequestInfo();
 
@@ -67,7 +78,7 @@ struct CONTENT_EXPORT NavigationRequestInfo {
   // Contains information used to prevent sharing information from a navigation
   // request across first party contexts. In particular, tracks the
   // SiteForCookies, which controls what site's SameSite cookies may be set,
-  // NetworkIsolationKey, which is used to restrict sharing of network
+  // NetworkAnonymizationKey, which is used to restrict sharing of network
   // resources, and how to update them across redirects, which is different for
   // main frames and subresources.
   const net::IsolationInfo isolation_info;
@@ -128,8 +139,34 @@ struct CONTENT_EXPORT NavigationRequestInfo {
   // Indicates that this navigation is for PDF content in a renderer.
   const bool is_pdf;
 
-  // The initiator document, if still available.
-  const WeakDocumentPtr initiator_document;
+  // The initiator document's token and its process ID.
+  const int initiator_process_id;
+  const absl::optional<blink::DocumentToken> initiator_document_token;
+
+  // The previous document's RenderFrameHostId, used for speculation rules
+  // prefetch.
+  // This corresponds to `NavigationRequest::GetPreviousRenderFrameHostId()`.
+  const GlobalRenderFrameHostId previous_render_frame_host_id;
+
+  // For per-navigation metrics of speculation rules prefetch.
+  base::WeakPtr<PrefetchServingPageMetricsContainer>
+      prefetch_serving_page_metrics_container;
+
+  // Whether a Cookie header added to this request should not be overwritten by
+  // the network service.
+  const bool allow_cookies_from_browser;
+
+  // Unique id that identifies the navigation.
+  const int64_t navigation_id;
+
+  // Whether or not the request is eligible to write to shared storage from
+  // response headers. See
+  // https://github.com/WICG/shared-storage#from-response-headers.
+  bool shared_storage_writable_eligible;
+
+  // Whether the embedder indicated this navigation is being used for
+  // advertising purposes.
+  bool is_ad_tagged;
 };
 
 }  // namespace content

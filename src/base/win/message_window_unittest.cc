@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <windows.h>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -57,7 +57,8 @@ TEST(MessageWindowTest, SendMessage) {
 
 // Verifies that a named window can be found by name.
 TEST(MessageWindowTest, FindWindow) {
-  std::wstring name = UTF8ToWide(base::GenerateGUID());
+  std::wstring name =
+      UTF8ToWide(base::Uuid::GenerateRandomV4().AsLowercaseString());
   win::MessageWindow window;
   EXPECT_TRUE(window.CreateNamed(base::BindRepeating(&HandleMessage), name));
 

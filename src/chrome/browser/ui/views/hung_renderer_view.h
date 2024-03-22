@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "components/favicon/content/content_favicon_driver.h"
@@ -100,8 +100,8 @@ class HungPagesTableModel : public ui::TableModel,
     }
 
     // WebContentsObserver overrides:
-    void RenderViewHostChanged(content::RenderViewHost* old_host,
-                               content::RenderViewHost* new_host) override;
+    void RenderFrameHostChanged(content::RenderFrameHost* old_host,
+                                content::RenderFrameHost* new_host) override;
     void WebContentsDestroyed() override;
 
    private:
@@ -118,7 +118,7 @@ class HungPagesTableModel : public ui::TableModel,
 
   std::vector<std::unique_ptr<WebContentsObserverImpl>> tab_observers_;
 
-  raw_ptr<ui::TableModelObserver> observer_ = nullptr;
+  raw_ptr<ui::TableModelObserver, DanglingUntriaged> observer_ = nullptr;
   raw_ptr<Delegate> delegate_ = nullptr;
 
   raw_ptr<content::RenderWidgetHost> render_widget_host_ = nullptr;
@@ -221,7 +221,8 @@ class HungRendererDialogView : public views::DialogDelegateView,
   static void BypassActiveBrowserRequirementForTests();
 
   // The WebContents that this dialog was created for and is associated with.
-  const raw_ptr<content::WebContents> web_contents_;
+  const raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
+      web_contents_;
 
   // The label describing the list.
   raw_ptr<views::Label> info_label_ = nullptr;

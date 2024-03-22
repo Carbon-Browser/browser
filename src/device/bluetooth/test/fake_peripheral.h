@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef DEVICE_BLUETOOTH_TEST_FAKE_PERIPHERAL_H_
@@ -78,7 +78,7 @@ class FakePeripheral : public device::BluetoothDevice {
   uint32_t GetBluetoothClass() const override;
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
   device::BluetoothTransport GetType() const override;
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
   std::string GetIdentifier() const override;
   std::string GetAddress() const override;
   AddressType GetAddressType() const override;

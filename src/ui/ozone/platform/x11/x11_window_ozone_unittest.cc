@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ ACTION_P(StoreWidget, widget_ptr) {
 }
 
 ACTION_P(CloneEvent, event_ptr) {
-  *event_ptr = Event::Clone(*arg0);
+  *event_ptr = arg0->Clone();
 }
 
 // TestScreen implementation. We need to set a screen instance, because
@@ -282,7 +282,7 @@ class FakeX11ExtensionDelegateForSize : public X11ExtensionDelegate {
 };
 
 // Verifies X11Window sets fullscreen bounds in pixels when going to fullscreen.
-TEST_F(X11WindowOzoneTest, ToggleFullscreen) {
+TEST_F(X11WindowOzoneTest, SetFullscreen) {
   constexpr gfx::Rect screen_bounds_in_px(640, 480, 1280, 720);
   test_screen_.SetScaleAndBoundsForPrimaryDisplay(2, screen_bounds_in_px);
 
@@ -292,9 +292,11 @@ TEST_F(X11WindowOzoneTest, ToggleFullscreen) {
   FakeX11ExtensionDelegateForSize x11_extension_delegate(screen_bounds_in_px);
   auto window =
       CreatePlatformWindow(&delegate, bounds, &widget, &x11_extension_delegate);
+  EXPECT_CALL(
+      delegate,
+      OnBoundsChanged(testing::Eq(PlatformWindowDelegate::BoundsChange{true})));
 
-  EXPECT_CALL(delegate, OnBoundsChanged(testing::Eq(screen_bounds_in_px)));
-  window->ToggleFullscreen();
+  window->SetFullscreen(true, display::kInvalidDisplayId);
 }
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -136,6 +136,8 @@ class FramebufferInfoTestBase : public GpuServiceTest {
         nullptr, kMaxRenderbufferSize, kMaxSamples, feature_info_.get());
   }
   ~FramebufferInfoTestBase() override {
+    // Drop unowned reference before `manager_` destroys it.
+    framebuffer_ = nullptr;
     manager_.Destroy(false);
     texture_manager_->MarkContextLost();
     texture_manager_->Destroy();
@@ -433,8 +435,6 @@ TEST_F(FramebufferInfoTest, AttachRenderbuffer) {
             framebuffer_->IsPossiblyComplete(feature_info_.get()));
 
   // Change samples.
-  ASSERT_FALSE(
-      feature_info_->feature_flags().chromium_framebuffer_mixed_samples);
   renderbuffer_manager_->SetInfoAndInvalidate(renderbuffer5, kDifferentSamples5,
                                               kFormat5, kWidth5, kHeight5);
   EXPECT_EQ(static_cast<GLenum>(GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE),

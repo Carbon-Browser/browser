@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,6 +65,10 @@ bool PowerButtonControllerTestApi::IsMenuOpened() const {
   return controller_->IsMenuOpened();
 }
 
+bool PowerButtonControllerTestApi::MenuHasPowerOffItem() const {
+  return IsMenuOpened() && GetPowerButtonMenuView()->power_off_item_for_test();
+}
+
 bool PowerButtonControllerTestApi::MenuHasSignOutItem() const {
   return IsMenuOpened() && GetPowerButtonMenuView()->sign_out_item_for_test();
 }
@@ -72,6 +76,11 @@ bool PowerButtonControllerTestApi::MenuHasSignOutItem() const {
 bool PowerButtonControllerTestApi::MenuHasLockScreenItem() const {
   return IsMenuOpened() &&
          GetPowerButtonMenuView()->lock_screen_item_for_test();
+}
+
+bool PowerButtonControllerTestApi::MenuHasCaptureModeItem() const {
+  return IsMenuOpened() &&
+         GetPowerButtonMenuView()->capture_mode_item_for_test();
 }
 
 bool PowerButtonControllerTestApi::MenuHasFeedbackItem() const {

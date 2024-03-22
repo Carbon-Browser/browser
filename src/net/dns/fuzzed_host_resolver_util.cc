@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,20 @@
 
 #include <fuzzer/FuzzedDataProvider.h>
 
-#include <algorithm>
 #include <limits>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/address_list.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
@@ -35,6 +35,7 @@
 #include "net/dns/host_cache.h"
 #include "net/dns/host_resolver_manager.h"
 #include "net/dns/host_resolver_proc.h"
+#include "net/dns/host_resolver_system_task.h"
 #include "net/dns/mdns_client.h"
 #include "net/dns/public/util.h"
 #include "net/dns/resolve_context.h"
@@ -154,7 +155,8 @@ class FuzzedHostResolverProc : public HostResolverProc {
       base::WeakPtr<FuzzedDataProvider> data_provider)
       : HostResolverProc(nullptr),
         data_provider_(data_provider),
-        network_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+        network_task_runner_(
+            base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
   FuzzedHostResolverProc(const FuzzedHostResolverProc&) = delete;
   FuzzedHostResolverProc& operator=(const FuzzedHostResolverProc&) = delete;
@@ -247,7 +249,7 @@ class FuzzedMdnsSocket : public DatagramServerSocket {
 
     // Maybe never receive any responses.
     if (data_provider_->ConsumeBool()) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(&FuzzedMdnsSocket::CompleteRecv,
                          weak_factory_.GetWeakPtr(), std::move(callback),
@@ -268,7 +270,7 @@ class FuzzedMdnsSocket : public DatagramServerSocket {
                  : data_provider_->PickValueInArray(kMdnsErrors);
     }
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FuzzedMdnsSocket::CompleteSend,
                        weak_factory_.GetWeakPtr(), std::move(callback)));
@@ -302,6 +304,7 @@ class FuzzedMdnsSocket : public DatagramServerSocket {
   }
   void UseNonBlockingIO() override {}
   int SetDoNotFragment() override { return OK; }
+  int SetRecvEcn() override { return OK; }
   void SetMsgConfirm(bool confirm) override {}
   const NetLogWithSource& NetLog() const override { return net_log_; }
 
@@ -320,7 +323,7 @@ class FuzzedMdnsSocket : public DatagramServerSocket {
     if (data_provider_->ConsumeBool()) {
       std::string data =
           data_provider_->ConsumeRandomLengthString(buffer_length);
-      std::copy(data.begin(), data.end(), buffer->data());
+      base::ranges::copy(data, buffer->data());
       *out_address =
           IPEndPoint(FuzzIPAddress(data_provider_), FuzzPort(data_provider_));
       return data.size();
@@ -336,7 +339,7 @@ class FuzzedMdnsSocket : public DatagramServerSocket {
       std::move(callback).Run(data_provider_->PickValueInArray(kMdnsErrors));
   }
 
-  FuzzedDataProvider* const data_provider_;
+  const raw_ptr<FuzzedDataProvider> data_provider_;
   const IPEndPoint local_address_;
   const NetLogWithSource net_log_;
 
@@ -356,7 +359,7 @@ class FuzzedMdnsSocketFactory : public MDnsSocketFactory {
   }
 
  private:
-  FuzzedDataProvider* const data_provider_;
+  const raw_ptr<FuzzedDataProvider> data_provider_;
 };
 
 class FuzzedHostResolverManager : public HostResolverManager {
@@ -371,18 +374,18 @@ class FuzzedHostResolverManager : public HostResolverManager {
                             nullptr /* system_dns_config_notifier */,
                             net_log),
         data_provider_(data_provider),
-        is_ipv6_reachable_(data_provider->ConsumeBool()),
+        is_globally_reachable_(data_provider->ConsumeBool()),
+        start_globally_reachable_async_(data_provider->ConsumeBool()),
         socket_factory_(data_provider_),
         net_log_(net_log),
         data_provider_weak_factory_(data_provider) {
-    ProcTaskParams proc_task_params(
+    HostResolverSystemTask::Params system_task_params(
         base::MakeRefCounted<FuzzedHostResolverProc>(
             data_provider_weak_factory_.GetWeakPtr()),
         // Retries are only used when the original request hangs, which this
         // class currently can't simulate.
         0 /* max_retry_attempts */);
-    set_proc_params_for_test(proc_task_params);
-    SetTaskRunnerForTesting(base::SequencedTaskRunnerHandle::Get());
+    set_host_resolver_system_params_for_test(system_task_params);  // IN-TEST
     SetMdnsSocketFactoryForTesting(
         std::make_unique<FuzzedMdnsSocketFactory>(data_provider_));
     std::unique_ptr<DnsClient> dns_client = DnsClient::CreateClientForTesting(
@@ -408,24 +411,34 @@ class FuzzedHostResolverManager : public HostResolverManager {
 
  private:
   // HostResolverManager implementation:
-  bool IsGloballyReachable(const IPAddress& dest,
-                           const NetLogWithSource& net_log) override {
-    return is_ipv6_reachable_;
+  int StartGloballyReachableCheck(const IPAddress& dest,
+                                  const NetLogWithSource& net_log,
+                                  ClientSocketFactory* client_socket_factory,
+                                  CompletionOnceCallback callback) override {
+    int reachable_rv = is_globally_reachable_ ? OK : ERR_FAILED;
+    if (start_globally_reachable_async_) {
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), reachable_rv));
+      return ERR_IO_PENDING;
+    }
+    return reachable_rv;
   }
 
   void RunLoopbackProbeJob() override {
     SetHaveOnlyLoopbackAddresses(data_provider_->ConsumeBool());
   }
 
-  FuzzedDataProvider* const data_provider_;
+  const raw_ptr<FuzzedDataProvider> data_provider_;
 
-  // Fixed value to be returned by IsIPv6Reachable.
-  const bool is_ipv6_reachable_;
+  // Fixed value to be returned by StartGloballyReachableCheck.
+  const bool is_globally_reachable_;
+  // Determines if StartGloballyReachableCheck returns sync or async.
+  const bool start_globally_reachable_async_;
 
   // Used for UDP and TCP sockets if the async resolver is enabled.
   FuzzedSocketFactory socket_factory_;
 
-  NetLog* const net_log_;
+  const raw_ptr<NetLog> net_log_;
 
   base::WeakPtrFactory<FuzzedDataProvider> data_provider_weak_factory_;
 };

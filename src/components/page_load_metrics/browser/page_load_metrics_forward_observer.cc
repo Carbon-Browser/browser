@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,18 @@ const char* PageLoadMetricsForwardObserver::GetObserverName() const {
   if (parent_observer_)
     return parent_observer_->GetObserverName();
   return nullptr;
+}
+
+const PageLoadMetricsObserverDelegate&
+PageLoadMetricsForwardObserver::GetDelegate() const {
+  NOTREACHED();
+  const PageLoadMetricsObserverDelegate* null_value = nullptr;
+  return *null_value;
+}
+
+void PageLoadMetricsForwardObserver::SetDelegate(
+    PageLoadMetricsObserverDelegate* delegate) {
+  // No need to set. Ignore.
 }
 
 // Registration and initialization of PageLoadMetricsForwardObserver is
@@ -48,6 +60,14 @@ PageLoadMetricsForwardObserver::OnFencedFramesStart(
 
 PageLoadMetricsObserverInterface::ObservePolicy
 PageLoadMetricsForwardObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  NOTREACHED();
+  return STOP_OBSERVING;
+}
+
+PageLoadMetricsObserverInterface::ObservePolicy
+PageLoadMetricsForwardObserver::OnPreviewStart(
     content::NavigationHandle* navigation_handle,
     const GURL& currently_committed_url) {
   NOTREACHED();
@@ -105,15 +125,12 @@ PageLoadMetricsForwardObserver::OnShown() {
 PageLoadMetricsObserverInterface::ObservePolicy
 PageLoadMetricsForwardObserver::OnEnterBackForwardCache(
     const mojom::PageLoadTiming& timing) {
-  NOTREACHED() << "Not supported.";
   return CONTINUE_OBSERVING;
 }
 
 void PageLoadMetricsForwardObserver::OnRestoreFromBackForwardCache(
     const mojom::PageLoadTiming& timing,
-    content::NavigationHandle* navigation_handle) {
-  NOTREACHED() << "Not supported.";
-}
+    content::NavigationHandle* navigation_handle) {}
 
 PageLoadMetricsObserverInterface::ObservePolicy
 PageLoadMetricsForwardObserver::ShouldObserveMimeType(
@@ -132,21 +149,19 @@ void PageLoadMetricsForwardObserver::OnTimingUpdate(
     const mojom::PageLoadTiming& timing) {}
 
 // Soft navigations only happen in outermost top-level documents.
-void PageLoadMetricsForwardObserver::OnSoftNavigationCountUpdated() {}
-
-void PageLoadMetricsForwardObserver::OnMobileFriendlinessUpdate(
-    const blink::MobileFriendliness& mobile_friendliness) {
-  if (!parent_observer_)
-    return;
-  parent_observer_->OnMobileFriendlinessUpdate(mobile_friendliness);
-}
+void PageLoadMetricsForwardObserver::OnSoftNavigationUpdated(
+    const mojom::SoftNavigationMetrics&) {}
 
 void PageLoadMetricsForwardObserver::OnInputTimingUpdate(
     content::RenderFrameHost* subframe_rfh,
     const mojom::InputTiming& input_timing_delta) {}
 
 void PageLoadMetricsForwardObserver::OnPageInputTimingUpdate(
-    uint64_t num_input_events) {}
+    uint64_t num_interactions) {}
+
+void PageLoadMetricsForwardObserver::OnPageRenderDataUpdate(
+    const mojom::FrameRenderDataUpdate& render_data,
+    bool is_main_frame) {}
 
 void PageLoadMetricsForwardObserver::OnSubFrameRenderDataUpdate(
     content::RenderFrameHost* subframe_rfh,
@@ -176,9 +191,6 @@ void PageLoadMetricsForwardObserver::OnDomContentLoadedEventStart(
     const mojom::PageLoadTiming& timing) {}
 
 void PageLoadMetricsForwardObserver::OnLoadEventStart(
-    const mojom::PageLoadTiming& timing) {}
-
-void PageLoadMetricsForwardObserver::OnFirstLayout(
     const mojom::PageLoadTiming& timing) {}
 
 void PageLoadMetricsForwardObserver::OnParseStart(
@@ -223,11 +235,15 @@ void PageLoadMetricsForwardObserver::OnFirstMeaningfulPaintInMainFrameDocument(
 void PageLoadMetricsForwardObserver::OnFirstInputInPage(
     const mojom::PageLoadTiming& timing) {}
 
-// OnLoadingBehaviorObserved is called through PageLoadTracker::UpdateMetrics.
-// So, the event is always forwarded at the PageLoadTracker layer.
+// OnLoadingBehaviorObserved and OnJavaScriptFrameworksObserved are called
+// through PageLoadTracker::UpdateMetrics. So, the event is always forwarded at
+// the PageLoadTracker layer.
 void PageLoadMetricsForwardObserver::OnLoadingBehaviorObserved(
     content::RenderFrameHost* rfh,
     int behavior_flags) {}
+void PageLoadMetricsForwardObserver::OnJavaScriptFrameworksObserved(
+    content::RenderFrameHost* rfh,
+    const blink::JavaScriptFrameworkDetectionResult&) {}
 
 void PageLoadMetricsForwardObserver::OnFeaturesUsageObserved(
     content::RenderFrameHost* rfh,
@@ -237,11 +253,13 @@ void PageLoadMetricsForwardObserver::OnFeaturesUsageObserved(
   parent_observer_->OnFeaturesUsageObserved(rfh, features);
 }
 
+// SetUpSharedMemoryForSmoothness is called only for the outermost page.
 void PageLoadMetricsForwardObserver::SetUpSharedMemoryForSmoothness(
     const base::ReadOnlySharedMemoryRegion& shared_memory) {
-  if (!parent_observer_)
-    return;
-  parent_observer_->SetUpSharedMemoryForSmoothness(shared_memory);
+  // See also MetricsWebContentsObserver::SetUpSharedMemoryForSmoothness and
+  // the relevant TODO. Currently, information from OOPIFs and FencedFrames are
+  // not handled.
+  NOTREACHED();
 }
 
 // PageLoadTracker already aggregates inter-pages data and processes it via
@@ -273,6 +291,14 @@ void PageLoadMetricsForwardObserver::OnMainFrameViewportRectChanged(
   if (!parent_observer_)
     return;
   parent_observer_->OnMainFrameViewportRectChanged(main_frame_viewport_rect);
+}
+
+void PageLoadMetricsForwardObserver::OnMainFrameImageAdRectsChanged(
+    const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) {
+  if (!parent_observer_) {
+    return;
+  }
+  parent_observer_->OnMainFrameImageAdRectsChanged(main_frame_image_ad_rects);
 }
 
 // Don't need to forward FlushMetricsOnAppEnterBackground and OnComplete as they
@@ -333,23 +359,27 @@ void PageLoadMetricsForwardObserver::OnSubFrameDeleted(int frame_tree_node_id) {
 void PageLoadMetricsForwardObserver::OnCookiesRead(
     const GURL& url,
     const GURL& first_party_url,
-    const net::CookieList& cookie_list,
-    bool blocked_by_policy) {
+    bool blocked_by_policy,
+    bool is_ad_tagged,
+    const net::CookieSettingOverrides& cookie_setting_overrides) {
   if (!parent_observer_)
     return;
-  parent_observer_->OnCookiesRead(url, first_party_url, cookie_list,
-                                  blocked_by_policy);
+  parent_observer_->OnCookiesRead(url, first_party_url, blocked_by_policy,
+                                  is_ad_tagged, cookie_setting_overrides);
 }
 
 void PageLoadMetricsForwardObserver::OnCookieChange(
     const GURL& url,
     const GURL& first_party_url,
     const net::CanonicalCookie& cookie,
-    bool blocked_by_policy) {
+    bool blocked_by_policy,
+    bool is_ad_tagged,
+    const net::CookieSettingOverrides& cookie_setting_overrides) {
   if (!parent_observer_)
     return;
   parent_observer_->OnCookieChange(url, first_party_url, cookie,
-                                   blocked_by_policy);
+                                   blocked_by_policy, is_ad_tagged,
+                                   cookie_setting_overrides);
 }
 
 void PageLoadMetricsForwardObserver::OnStorageAccessed(
@@ -368,21 +398,23 @@ void PageLoadMetricsForwardObserver::OnPrefetchLikely() {
   NOTREACHED();
 }
 
-void PageLoadMetricsForwardObserver::DidActivatePortal(
-    base::TimeTicks activation_time) {
-  NOTREACHED() << "Not supported.";
-}
-
 void PageLoadMetricsForwardObserver::DidActivatePrerenderedPage(
-    content::NavigationHandle* navigation_handle) {
-  NOTREACHED() << "Not supported.";
-}
+    content::NavigationHandle* navigation_handle) {}
+
+void PageLoadMetricsForwardObserver::DidActivatePreviewedPage(
+    base::TimeTicks activation_time) {}
 
 void PageLoadMetricsForwardObserver::OnV8MemoryChanged(
     const std::vector<MemoryUpdate>& memory_updates) {
   if (!parent_observer_)
     return;
   parent_observer_->OnV8MemoryChanged(memory_updates);
+}
+
+void PageLoadMetricsForwardObserver::OnSharedStorageWorkletHostCreated() {
+  if (!parent_observer_)
+    return;
+  parent_observer_->OnSharedStorageWorkletHostCreated();
 }
 
 }  // namespace page_load_metrics

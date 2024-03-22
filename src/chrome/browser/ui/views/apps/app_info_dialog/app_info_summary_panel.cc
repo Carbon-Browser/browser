@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/extensions/launch_util.h"
@@ -233,7 +233,8 @@ void AppInfoSummaryPanel::StartCalculatingAppSize() {
   if (!app_->path().empty()) {
     extensions::path_util::CalculateAndFormatExtensionDirectorySize(
         app_->path(), IDS_APPLICATION_INFO_SIZE_SMALL_LABEL,
-        base::BindOnce(&AppInfoSummaryPanel::OnAppSizeCalculated, AsWeakPtr()));
+        base::BindOnce(&AppInfoSummaryPanel::OnAppSizeCalculated,
+                       weak_ptr_factory_.GetWeakPtr()));
   }
 }
 

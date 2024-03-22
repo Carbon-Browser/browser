@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/base/audio_encoder.h"
 
 #include "base/logging.h"
+#include "base/task/bind_post_task.h"
 #include "base/time/time.h"
 #include "media/base/audio_timestamp_helper.h"
 
@@ -38,6 +39,24 @@ AudioEncoder::AudioEncoder() {
 
 AudioEncoder::~AudioEncoder() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+}
+
+void AudioEncoder::DisablePostedCallbacks() {
+  post_callbacks_ = false;
+}
+
+AudioEncoder::OutputCB AudioEncoder::BindCallbackToCurrentLoopIfNeeded(
+    OutputCB&& callback) {
+  return post_callbacks_
+             ? base::BindPostTaskToCurrentDefault(std::move(callback))
+             : std::move(callback);
+}
+
+AudioEncoder::EncoderStatusCB AudioEncoder::BindCallbackToCurrentLoopIfNeeded(
+    EncoderStatusCB&& callback) {
+  return post_callbacks_
+             ? base::BindPostTaskToCurrentDefault(std::move(callback))
+             : std::move(callback);
 }
 
 }  // namespace media

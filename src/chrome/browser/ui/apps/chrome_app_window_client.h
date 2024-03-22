@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ class ChromeAppWindowClient : public extensions::AppWindowClient {
       content::BrowserContext* context,
       const extensions::Extension* extension,
       extensions::api::app_runtime::ActionType action) override;
-  extensions::NativeAppWindow* CreateNativeAppWindow(
+  std::unique_ptr<extensions::NativeAppWindow> CreateNativeAppWindow(
       extensions::AppWindow* window,
       extensions::AppWindow::CreateParams* params) override;
   void OpenDevToolsWindow(content::WebContents* web_contents,

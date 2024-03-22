@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "base/memory/ptr_util.h"
 #include "chromeos/ash/components/network/network_device_handler_impl.h"
 
-namespace chromeos {
+namespace ash {
 
 const char NetworkDeviceHandler::kErrorDeviceMissing[] = "device-missing";
 const char NetworkDeviceHandler::kErrorFailure[] = "failure";
@@ -32,4 +32,4 @@ NetworkDeviceHandler::InitializeForTesting(
   return base::WrapUnique(handler);
 }
 
-}  // namespace chromeos
+}  // namespace ash

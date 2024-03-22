@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ class FencedFrameTask : public RendererTask {
   //    the task. At that point the RFH is still alive.
   const raw_ptr<content::SiteInstance> site_instance_;
   // Allows us to focus on the embedder's tab.
-  const raw_ptr<RendererTask> embedder_task_;
+  const raw_ptr<RendererTask, FlakyDanglingUntriaged> embedder_task_;
 };
 
 }  // namespace task_manager

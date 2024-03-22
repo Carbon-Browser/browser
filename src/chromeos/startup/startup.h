@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,10 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromeos {
+
+// Return true if the current process was called with post-login params FD.
+COMPONENT_EXPORT(CHROMEOS_STARTUP)
+bool IsLaunchedWithPostLoginParams();
 
 // Reads the startup data. The FD to be read for the startup data should be
 // specified via the kCrosStartupDataFD command line flag. This function
@@ -31,6 +35,18 @@ absl::optional<std::string> ReadPostLoginData();
 COMPONENT_EXPORT(CHROMEOS_STARTUP)
 base::ScopedFD CreateMemFDFromBrowserInitParams(
     const crosapi::mojom::BrowserInitParamsPtr& data);
+
+// Creates a memory backed file containing the serialized |params|
+// for BrowserPostLoginParams, and returns its FD.
+COMPONENT_EXPORT(CHROMEOS_STARTUP)
+base::ScopedFD CreateMemFDFromBrowserPostLoginParams(
+    const crosapi::mojom::BrowserPostLoginParamsPtr& data);
+
+// The Lacros process exited because the post-login parameters received
+// from Ash are either empty or invalid (Lacros-only).
+// We define a new Chrome result code here, and static_assert that there
+// are no conflicts in chrome/common/chrome_result_codes.h.
+inline constexpr int RESULT_CODE_INVALID_POST_LOGIN_PARAMS = 38;
 
 }  // namespace chromeos
 

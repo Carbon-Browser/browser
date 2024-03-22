@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/process/kill.h"
+#include "base/scoped_observation.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui/signin/login_ui_test_utils.h"
 #include "chrome/browser/ui/zoom/chrome_zoom_level_prefs.h"
@@ -175,7 +177,7 @@ IN_PROC_BROWSER_TEST_F(ZoomControllerBrowserTest,
 
     content::WebContentsDestroyedWatcher destroyed_watcher(web_contents);
     tab_strip->CloseWebContentsAt(tab_strip->active_index(),
-                                  TabStripModel::CLOSE_CREATE_HISTORICAL_TAB);
+                                  TabCloseTypes::CLOSE_CREATE_HISTORICAL_TAB);
     destroyed_watcher.Wait();
   }
   EXPECT_EQ(1, tab_strip->count());
@@ -405,7 +407,7 @@ class ZoomControllerForPrerenderingTest : public ZoomControllerBrowserTest,
   ~ZoomControllerForPrerenderingTest() override = default;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     ZoomControllerBrowserTest::SetUp();
   }
 
@@ -413,13 +415,11 @@ class ZoomControllerForPrerenderingTest : public ZoomControllerBrowserTest,
     host_resolver()->AddRule("*", "127.0.0.1");
     ASSERT_TRUE(embedded_test_server()->Start());
 
-    zoom_controller_ = ZoomController::FromWebContents(GetWebContents());
-    zoom_controller_->AddObserver(this);
+    auto* zoom_controller = ZoomController::FromWebContents(GetWebContents());
+    zoom_observation_.Observe(zoom_controller);
   }
 
-  void TearDownOnMainThread() override {
-    zoom_controller_->RemoveObserver(this);
-  }
+  void TearDownOnMainThread() override { zoom_observation_.Reset(); }
 
   content::test::PrerenderTestHelper& prerender_helper() {
     return prerender_helper_;
@@ -430,6 +430,10 @@ class ZoomControllerForPrerenderingTest : public ZoomControllerBrowserTest,
   }
 
   // ZoomObserver implementation:
+  void OnZoomControllerDestroyed(
+      zoom::ZoomController* zoom_controller) override {
+    zoom_observation_.Reset();
+  }
   void OnZoomChanged(
       const zoom::ZoomController::ZoomChangedEventData& data) override {
     is_on_zoom_changed_called_ = true;
@@ -442,7 +446,8 @@ class ZoomControllerForPrerenderingTest : public ZoomControllerBrowserTest,
   bool is_on_zoom_changed_called_ = false;
 
   content::test::PrerenderTestHelper prerender_helper_;
-  raw_ptr<ZoomController> zoom_controller_;
+  base::ScopedObservation<zoom::ZoomController, zoom::ZoomObserver>
+      zoom_observation_{this};
 };
 
 IN_PROC_BROWSER_TEST_F(ZoomControllerForPrerenderingTest,

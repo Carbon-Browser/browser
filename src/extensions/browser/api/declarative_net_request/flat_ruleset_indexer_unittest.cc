@@ -1,16 +1,19 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/declarative_net_request/flat_ruleset_indexer.h"
 
 #include <stdint.h>
+
 #include <map>
 #include <string>
 
 #include "base/format_macros.h"
-#include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/values_test_util.h"
 #include "components/url_pattern_index/flat/url_pattern_index_generated.h"
 #include "extensions/browser/api/declarative_net_request/constants.h"
 #include "extensions/browser/api/declarative_net_request/flat/extension_ruleset_generated.h"
@@ -63,17 +66,17 @@ std::vector<dnr_api::ModifyHeaderInfo> ToVector(
     const flatbuffers::String* flat_value = flat_header_info->value();
     switch (flat_operation) {
       case flat::HeaderOperation_append:
-        header_info.operation = dnr_api::HEADER_OPERATION_APPEND;
+        header_info.operation = dnr_api::HeaderOperation::kAppend;
         DCHECK(flat_value);
-        header_info.value = std::make_unique<std::string>(ToString(flat_value));
+        header_info.value = ToString(flat_value);
         break;
       case flat::HeaderOperation_set:
-        header_info.operation = dnr_api::HEADER_OPERATION_SET;
+        header_info.operation = dnr_api::HeaderOperation::kSet;
         DCHECK(flat_value);
-        header_info.value = std::make_unique<std::string>(ToString(flat_value));
+        header_info.value = ToString(flat_value);
         break;
       case flat::HeaderOperation_remove:
-        header_info.operation = dnr_api::HEADER_OPERATION_REMOVE;
+        header_info.operation = dnr_api::HeaderOperation::kRemove;
         break;
     };
 
@@ -88,7 +91,7 @@ std::vector<dnr_api::ModifyHeaderInfo> ToVector(
 }
 
 // Helper to create a generic URLTransform.
-std::unique_ptr<dnr_api::URLTransform> CreateUrlTransform() {
+dnr_api::URLTransform CreateUrlTransform() {
   const char* transform = R"(
     {
       "scheme" : "http",
@@ -109,14 +112,10 @@ std::unique_ptr<dnr_api::URLTransform> CreateUrlTransform() {
     }
   )";
 
-  absl::optional<base::Value> value = base::JSONReader::Read(transform);
-  CHECK(value);
-
-  std::u16string error;
-  auto result = dnr_api::URLTransform::FromValue(*value, &error);
-  CHECK(result);
-  CHECK(error.empty());
-  return result;
+  auto result =
+      dnr_api::URLTransform::FromValue(base::test::ParseJsonDict(transform));
+  CHECK(result.has_value());
+  return std::move(result).value();
 }
 
 // Helper to verify the indexed form of URlTransform created by
@@ -179,10 +178,10 @@ IndexedRule CreateIndexedRule(
     std::string url_pattern,
     std::vector<std::string> domains,
     std::vector<std::string> excluded_domains,
-    absl::optional<std::string> redirect_url,
+    std::optional<std::string> redirect_url,
     dnr_api::RuleActionType action_type,
-    std::unique_ptr<dnr_api::URLTransform> url_transform,
-    absl::optional<std::string> regex_substitution,
+    std::optional<dnr_api::URLTransform> url_transform,
+    std::optional<std::string> regex_substitution,
     std::vector<dnr_api::ModifyHeaderInfo> request_headers,
     std::vector<dnr_api::ModifyHeaderInfo> response_headers) {
   IndexedRule rule;
@@ -201,8 +200,8 @@ IndexedRule CreateIndexedRule(
   rule.action_type = action_type;
   rule.url_transform = std::move(url_transform);
   rule.regex_substitution = std::move(regex_substitution);
-  rule.request_headers = std::move(request_headers);
-  rule.response_headers = std::move(response_headers);
+  rule.request_headers_to_modify = std::move(request_headers);
+  rule.response_headers_to_modify = std::move(response_headers);
   return rule;
 }
 
@@ -258,22 +257,22 @@ std::vector<const flat_rule::UrlRule*> GetAllRulesFromIndex(
 void VerifyIndexEquality(const std::vector<const IndexedRule*>& rules,
                          const flat_rule::UrlPatternIndex* index) {
   struct RulePair {
-    const IndexedRule* indexed_rule = nullptr;
-    const flat_rule::UrlRule* url_rule = nullptr;
+    raw_ptr<const IndexedRule> indexed_rule = nullptr;
+    raw_ptr<const flat_rule::UrlRule> url_rule = nullptr;
   };
 
   // Build a map from rule IDs to RulePair(s).
   std::map<uint32_t, RulePair> map;
 
   for (const auto* rule : rules) {
-    EXPECT_EQ(nullptr, map[rule->id].indexed_rule);
+    EXPECT_EQ(nullptr, map[rule->id].indexed_rule.get());
     map[rule->id].indexed_rule = rule;
   }
 
   std::vector<const flat_rule::UrlRule*> flat_rules =
       GetAllRulesFromIndex(index);
   for (const auto* rule : flat_rules) {
-    EXPECT_EQ(nullptr, map[rule->id()].url_rule);
+    EXPECT_EQ(nullptr, map[rule->id()].url_rule.get());
     map[rule->id()].url_rule = rule;
   }
 
@@ -292,8 +291,8 @@ void VerifyExtensionMetadata(
     const ::flatbuffers::Vector<flatbuffers::Offset<flat::UrlRuleMetadata>>*
         extension_metdata) {
   struct MetadataPair {
-    const IndexedRule* indexed_rule = nullptr;
-    const flat::UrlRuleMetadata* metadata = nullptr;
+    raw_ptr<const IndexedRule> indexed_rule = nullptr;
+    raw_ptr<const flat::UrlRuleMetadata> metadata = nullptr;
   };
 
   // Build a map from IDs to MetadataPair(s).
@@ -309,7 +308,7 @@ void VerifyExtensionMetadata(
 
   int previous_id = kMinValidID - 1;
   for (const auto* metadata : *extension_metdata) {
-    EXPECT_EQ(nullptr, map[metadata->id()].metadata);
+    EXPECT_EQ(nullptr, map[metadata->id()].metadata.get());
     map[metadata->id()].metadata = metadata;
 
     // Also verify that the metadata vector is sorted by ID.
@@ -348,16 +347,16 @@ void VerifyExtensionMetadata(
         [](const ::flatbuffers::Vector<
                ::flatbuffers::Offset<flat::ModifyHeaderInfo>>* metadata_headers,
            const std::vector<dnr_api::ModifyHeaderInfo>& indexed_headers) {
-          return std::equal(indexed_headers.begin(), indexed_headers.end(),
-                            ToVector(metadata_headers).begin(),
-                            EqualsForTesting);
+          return base::ranges::equal(
+              indexed_headers, ToVector(metadata_headers), EqualsForTesting);
         };
 
     EXPECT_TRUE(are_header_modifications_equal(
-        pair.metadata->request_headers(), pair.indexed_rule->request_headers));
-    EXPECT_TRUE(
-        are_header_modifications_equal(pair.metadata->response_headers(),
-                                       pair.indexed_rule->response_headers));
+        pair.metadata->request_headers(),
+        pair.indexed_rule->request_headers_to_modify));
+    EXPECT_TRUE(are_header_modifications_equal(
+        pair.metadata->response_headers(),
+        pair.indexed_rule->response_headers_to_modify));
 
     return true;
   };
@@ -432,15 +431,15 @@ TEST_F(FlatRulesetIndexerTest, MultipleRules) {
       flat_rule::ElementType_OBJECT, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_SUBSTRING, flat_rule::AnchorType_NONE,
       flat_rule::AnchorType_BOUNDARY, "google.com", {"a.com"}, {"x.a.com"},
-      absl::nullopt, dnr_api::RULE_ACTION_TYPE_BLOCK, nullptr, absl::nullopt,
+      std::nullopt, dnr_api::RuleActionType::kBlock, std::nullopt, std::nullopt,
       {}, {}));
   rules_to_index.push_back(CreateIndexedRule(
       2, kMinValidPriority, flat_rule::OptionFlag_APPLIES_TO_THIRD_PARTY,
       flat_rule::ElementType_IMAGE | flat_rule::ElementType_WEBSOCKET,
       flat_rule::ActivationType_NONE, flat_rule::UrlPatternType_WILDCARDED,
       flat_rule::AnchorType_NONE, flat_rule::AnchorType_NONE, "*google*",
-      {"a.com"}, {}, absl::nullopt, dnr_api::RULE_ACTION_TYPE_BLOCK, nullptr,
-      absl::nullopt, {}, {}));
+      {"a.com"}, {}, std::nullopt, dnr_api::RuleActionType::kBlock,
+      std::nullopt, std::nullopt, {}, {}));
 
   // Redirect rules.
   rules_to_index.push_back(CreateIndexedRule(
@@ -448,27 +447,27 @@ TEST_F(FlatRulesetIndexerTest, MultipleRules) {
       flat_rule::ElementType_IMAGE, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_SUBSTRING, flat_rule::AnchorType_SUBDOMAIN,
       flat_rule::AnchorType_BOUNDARY, "google.com", {}, {},
-      "http://example1.com", dnr_api::RULE_ACTION_TYPE_REDIRECT, nullptr,
-      absl::nullopt, {}, {}));
+      "http://example1.com", dnr_api::RuleActionType::kRedirect, std::nullopt,
+      std::nullopt, {}, {}));
   rules_to_index.push_back(CreateIndexedRule(
       10, 2, flat_rule::OptionFlag_NONE,
       flat_rule::ElementType_SUBDOCUMENT | flat_rule::ElementType_SCRIPT,
       flat_rule::ActivationType_NONE, flat_rule::UrlPatternType_SUBSTRING,
       flat_rule::AnchorType_NONE, flat_rule::AnchorType_NONE, "example1", {},
-      {"a.com"}, "http://example2.com", dnr_api::RULE_ACTION_TYPE_REDIRECT,
-      nullptr, absl::nullopt, {}, {}));
+      {"a.com"}, "http://example2.com", dnr_api::RuleActionType::kRedirect,
+      std::nullopt, std::nullopt, {}, {}));
   rules_to_index.push_back(CreateIndexedRule(
       9, 3, flat_rule::OptionFlag_NONE, flat_rule::ElementType_NONE,
       flat_rule::ActivationType_NONE, flat_rule::UrlPatternType_WILDCARDED,
       flat_rule::AnchorType_NONE, flat_rule::AnchorType_NONE, "*", {}, {},
-      "http://example2.com", dnr_api::RULE_ACTION_TYPE_REDIRECT, nullptr,
-      absl::nullopt, {}, {}));
+      "http://example2.com", dnr_api::RuleActionType::kRedirect, std::nullopt,
+      std::nullopt, {}, {}));
   rules_to_index.push_back(CreateIndexedRule(
       100, 3, flat_rule::OptionFlag_NONE, flat_rule::ElementType_NONE,
       flat_rule::ActivationType_NONE, flat_rule::UrlPatternType_WILDCARDED,
       flat_rule::AnchorType_NONE, flat_rule::AnchorType_NONE, "*", {}, {},
-      absl::nullopt, dnr_api::RULE_ACTION_TYPE_REDIRECT, CreateUrlTransform(),
-      absl::nullopt, {}, {}));
+      std::nullopt, dnr_api::RuleActionType::kRedirect, CreateUrlTransform(),
+      std::nullopt, {}, {}));
 
   // Allow rules.
   rules_to_index.push_back(CreateIndexedRule(
@@ -476,58 +475,58 @@ TEST_F(FlatRulesetIndexerTest, MultipleRules) {
       flat_rule::ElementType_PING | flat_rule::ElementType_SCRIPT,
       flat_rule::ActivationType_NONE, flat_rule::UrlPatternType_SUBSTRING,
       flat_rule::AnchorType_SUBDOMAIN, flat_rule::AnchorType_NONE,
-      "example1.com", {"xyz.com"}, {}, absl::nullopt,
-      dnr_api::RULE_ACTION_TYPE_ALLOW, nullptr, absl::nullopt, {}, {}));
+      "example1.com", {"xyz.com"}, {}, std::nullopt,
+      dnr_api::RuleActionType::kAllow, std::nullopt, std::nullopt, {}, {}));
   rules_to_index.push_back(CreateIndexedRule(
       16, kMinValidPriority,
       flat_rule::OptionFlag_IS_ALLOWLIST |
           flat_rule::OptionFlag_IS_CASE_INSENSITIVE,
       flat_rule::ElementType_IMAGE, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_SUBSTRING, flat_rule::AnchorType_NONE,
-      flat_rule::AnchorType_NONE, "example3", {}, {}, absl::nullopt,
-      dnr_api::RULE_ACTION_TYPE_ALLOW, nullptr, absl::nullopt, {}, {}));
+      flat_rule::AnchorType_NONE, "example3", {}, {}, std::nullopt,
+      dnr_api::RuleActionType::kAllow, std::nullopt, std::nullopt, {}, {}));
 
   // Allow all requests rule.
   rules_to_index.push_back(CreateIndexedRule(
       22, 3, flat_rule::OptionFlag_NONE, flat_rule::ElementType_SUBDOCUMENT,
       flat_rule::ActivationType_NONE, flat_rule::UrlPatternType_SUBSTRING,
       flat_rule::AnchorType_NONE, flat_rule::AnchorType_NONE, "example.com", {},
-      {}, absl::nullopt, dnr_api::RULE_ACTION_TYPE_ALLOWALLREQUESTS, nullptr,
-      absl::nullopt, {}, {}));
+      {}, std::nullopt, dnr_api::RuleActionType::kAllowAllRequests,
+      std::nullopt, std::nullopt, {}, {}));
 
   // Modify headers rules.
   std::vector<dnr_api::ModifyHeaderInfo> request_headers_1;
   request_headers_1.push_back(CreateModifyHeaderInfo(
-      dnr_api::HEADER_OPERATION_SET, "cookie", "sample-cookie"));
+      dnr_api::HeaderOperation::kSet, "cookie", "sample-cookie"));
 
   std::vector<dnr_api::ModifyHeaderInfo> response_headers_1;
   response_headers_1.push_back(CreateModifyHeaderInfo(
-      dnr_api::HEADER_OPERATION_REMOVE, "set-cookie", absl::nullopt));
+      dnr_api::HeaderOperation::kRemove, "set-cookie", std::nullopt));
 
   response_headers_1.push_back(CreateModifyHeaderInfo(
-      dnr_api::HEADER_OPERATION_APPEND, "custom-1", "value-1"));
+      dnr_api::HeaderOperation::kAppend, "custom-1", "value-1"));
 
   response_headers_1.push_back(CreateModifyHeaderInfo(
-      dnr_api::HEADER_OPERATION_SET, "custom-2", "value-2"));
+      dnr_api::HeaderOperation::kSet, "custom-2", "value-2"));
 
   rules_to_index.push_back(CreateIndexedRule(
       23, kMinValidPriority, flat_rule::OptionFlag_IS_CASE_INSENSITIVE,
       flat_rule::ElementType_SUBDOCUMENT, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_SUBSTRING, flat_rule::AnchorType_SUBDOMAIN,
-      flat_rule::AnchorType_NONE, "example.com", {}, {}, absl::nullopt,
-      dnr_api::RULE_ACTION_TYPE_MODIFYHEADERS, nullptr, absl::nullopt,
+      flat_rule::AnchorType_NONE, "example.com", {}, {}, std::nullopt,
+      dnr_api::RuleActionType::kModifyHeaders, std::nullopt, std::nullopt,
       std::move(request_headers_1), std::move(response_headers_1)));
 
   std::vector<dnr_api::ModifyHeaderInfo> request_headers_2;
   request_headers_2.push_back(CreateModifyHeaderInfo(
-      dnr_api::HEADER_OPERATION_REMOVE, "referer", absl::nullopt));
+      dnr_api::HeaderOperation::kRemove, "referer", std::nullopt));
 
   rules_to_index.push_back(CreateIndexedRule(
       24, kMinValidPriority, flat_rule::OptionFlag_IS_CASE_INSENSITIVE,
       flat_rule::ElementType_SUBDOCUMENT, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_SUBSTRING, flat_rule::AnchorType_SUBDOMAIN,
-      flat_rule::AnchorType_NONE, "example.com", {}, {}, absl::nullopt,
-      dnr_api::RULE_ACTION_TYPE_MODIFYHEADERS, nullptr, absl::nullopt,
+      flat_rule::AnchorType_NONE, "example.com", {}, {}, std::nullopt,
+      dnr_api::RuleActionType::kModifyHeaders, std::nullopt, std::nullopt,
       std::move(request_headers_2), {}));
 
   // Note: It's unsafe to store/return pointers to a mutable vector since the
@@ -560,37 +559,37 @@ TEST_F(FlatRulesetIndexerTest, RegexRules) {
       flat_rule::ElementType_OBJECT, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_REGEXP, flat_rule::AnchorType_NONE,
       flat_rule::AnchorType_NONE, R"(^https://(abc|def))", {"a.com"},
-      {"x.a.com"}, absl::nullopt, dnr_api::RULE_ACTION_TYPE_BLOCK, nullptr,
-      absl::nullopt, {}, {}));
+      {"x.a.com"}, std::nullopt, dnr_api::RuleActionType::kBlock, std::nullopt,
+      std::nullopt, {}, {}));
   // Redirect rule.
   rules_to_index.push_back(CreateIndexedRule(
       15, 2, flat_rule::OptionFlag_APPLIES_TO_FIRST_PARTY,
       flat_rule::ElementType_IMAGE, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_REGEXP, flat_rule::AnchorType_NONE,
       flat_rule::AnchorType_NONE, R"(^(http|https))", {}, {},
-      "http://example1.com", dnr_api::RULE_ACTION_TYPE_REDIRECT, nullptr,
-      absl::nullopt, {}, {}));
+      "http://example1.com", dnr_api::RuleActionType::kRedirect, std::nullopt,
+      std::nullopt, {}, {}));
   // Regex substitution rule.
   rules_to_index.push_back(CreateIndexedRule(
       10, 29, flat_rule::OptionFlag_APPLIES_TO_FIRST_PARTY,
       flat_rule::ElementType_SCRIPT, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_REGEXP, flat_rule::AnchorType_NONE,
-      flat_rule::AnchorType_NONE, R"((\d+\).google.com)", {}, {}, absl::nullopt,
-      dnr_api::RULE_ACTION_TYPE_REDIRECT, nullptr,
+      flat_rule::AnchorType_NONE, R"((\d+\).google.com)", {}, {}, std::nullopt,
+      dnr_api::RuleActionType::kRedirect, std::nullopt,
       R"(http://redirect.com?num=\1)", {}, {}));
 
   // Modify headers rule.
   std::vector<dnr_api::ModifyHeaderInfo> request_headers;
   request_headers.push_back(CreateModifyHeaderInfo(
-      dnr_api::HEADER_OPERATION_REMOVE, "referer", absl::nullopt));
+      dnr_api::HeaderOperation::kRemove, "referer", std::nullopt));
   request_headers.push_back(CreateModifyHeaderInfo(
-      dnr_api::HEADER_OPERATION_SET, "cookie", "sample-cookie"));
+      dnr_api::HeaderOperation::kSet, "cookie", "sample-cookie"));
   rules_to_index.push_back(CreateIndexedRule(
       21, kMinValidPriority, flat_rule::OptionFlag_IS_CASE_INSENSITIVE,
       flat_rule::ElementType_SUBDOCUMENT, flat_rule::ActivationType_NONE,
       flat_rule::UrlPatternType_REGEXP, flat_rule::AnchorType_NONE,
-      flat_rule::AnchorType_NONE, "*", {}, {}, absl::nullopt,
-      dnr_api::RULE_ACTION_TYPE_MODIFYHEADERS, nullptr, absl::nullopt,
+      flat_rule::AnchorType_NONE, "*", {}, {}, std::nullopt,
+      dnr_api::RuleActionType::kModifyHeaders, std::nullopt, std::nullopt,
       std::move(request_headers), {}));
 
   flatbuffers::DetachedBuffer buffer;

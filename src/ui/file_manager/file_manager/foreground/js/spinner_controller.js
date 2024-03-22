@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
  * spinner invisible.
  */
 export class SpinnerController {
-  /** @param {!Element} element */
+  /** @param {!HTMLElement} element */
   constructor(element) {
     /**
      * The container element of the file list.
-     * @type {!Element}
+     * @type {!HTMLElement}
      * @const
      * @private
      */
@@ -57,7 +57,7 @@ export class SpinnerController {
    * Shows the spinner until hide is called. The returned callback must be
    * called when the spinner is not necessary anymore.
    * @param {number} delay Delay in milliseconds.
-   * @param {function()} callback Show callback.
+   * @param {function():void} callback Show callback.
    * @return {function()} Hide callback.
    */
   showWithDelay(delay, callback) {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,11 @@
 #include "services/service_manager/public/cpp/binder_registry.h"
 #include "third_party/blink/public/mojom/badging/badging.mojom.h"
 #include "third_party/blink/public/mojom/clipboard/clipboard.mojom.h"
-#include "third_party/blink/public/mojom/conversions/attribution_reporting_automation.mojom-forward.h"
 #include "third_party/blink/public/mojom/cookie_manager/cookie_manager_automation.mojom-forward.h"
 #include "third_party/blink/public/mojom/permissions/permission_automation.mojom-forward.h"
+#include "third_party/blink/public/mojom/sensor/web_sensor_provider_automation.mojom-forward.h"
 #include "third_party/blink/public/mojom/storage_access/storage_access_automation.mojom-forward.h"
+#include "third_party/blink/public/mojom/webid/federated_auth_request_automation.mojom-forward.h"
 
 namespace blink {
 namespace web_pref {
@@ -38,6 +39,7 @@ class FakeBluetoothDelegate;
 class MockBadgeService;
 class MockClipboardHost;
 class WebTestBrowserContext;
+class WebTestSensorProviderManager;
 
 class WebTestContentBrowserClient : public ShellContentBrowserClient {
  public:
@@ -64,6 +66,9 @@ class WebTestContentBrowserClient : public ShellContentBrowserClient {
       RenderProcessHost* render_process_host) override;
   void OverrideWebkitPrefs(WebContents* web_contents,
                            blink::web_pref::WebPreferences* prefs) override;
+  std::vector<std::unique_ptr<content::NavigationThrottle>>
+  CreateThrottlesForNavigation(
+      content::NavigationHandle* navigation_handle) override;
   void AppendExtraCommandLineSwitches(base::CommandLine* command_line,
                                       int child_process_id) override;
   std::unique_ptr<BrowserMainParts> CreateBrowserMainParts(
@@ -101,7 +106,7 @@ class WebTestContentBrowserClient : public ShellContentBrowserClient {
       bool first_auth_attempt,
       LoginAuthRequiredCallback auth_required_callback) override;
 #if BUILDFLAG(IS_WIN)
-  bool PreSpawnChild(sandbox::TargetPolicy* policy,
+  bool PreSpawnChild(sandbox::TargetConfig* config,
                      sandbox::mojom::Sandbox sandbox_type,
                      ChildSpawnFlags flags) override;
 #endif
@@ -110,6 +115,11 @@ class WebTestContentBrowserClient : public ShellContentBrowserClient {
                                  InterestGroupApiOperation operation,
                                  const url::Origin& top_frame_origin,
                                  const url::Origin& api_origin) override;
+  bool IsPrivacySandboxReportingDestinationAttested(
+      content::BrowserContext* browser_context,
+      const url::Origin& destination_origin,
+      content::PrivacySandboxInvokingAPI invoking_api,
+      bool post_impression_reporting) override;
   void GetHyphenationDictionary(
       base::OnceCallback<void(const base::FilePath&)>) override;
 
@@ -144,14 +154,22 @@ class WebTestContentBrowserClient : public ShellContentBrowserClient {
       mojo::PendingReceiver<blink::test::mojom::CookieManagerAutomation>
           receiver);
 
-  void BindAttributionReportingAutomation(
+  void BindFedCmAutomation(
       RenderFrameHost* render_frame_host,
-      mojo::PendingReceiver<blink::test::mojom::AttributionReportingAutomation>
+      mojo::PendingReceiver<blink::test::mojom::FederatedAuthRequestAutomation>
+          receiver);
+
+  void BindWebSensorProviderAutomation(
+      RenderFrameHost* render_frame_host,
+      mojo::PendingReceiver<blink::test::mojom::WebSensorProviderAutomation>
           receiver);
 
   void BindWebTestControlHost(
       int render_process_id,
       mojo::PendingAssociatedReceiver<mojom::WebTestControlHost> receiver);
+
+  void BindNonAssociatedWebTestControlHost(
+      mojo::PendingReceiver<mojom::NonAssociatedWebTestControlHost> receiver);
 
   bool block_popups_ = true;
   bool screen_orientation_changed_ = false;
@@ -161,10 +179,11 @@ class WebTestContentBrowserClient : public ShellContentBrowserClient {
   std::unique_ptr<FakeBluetoothDelegate> fake_bluetooth_delegate_;
   std::unique_ptr<MockClipboardHost> mock_clipboard_host_;
   std::unique_ptr<MockBadgeService> mock_badge_service_;
+  std::unique_ptr<WebTestSensorProviderManager> sensor_provider_manager_;
   mojo::UniqueReceiverSet<blink::test::mojom::CookieManagerAutomation>
       cookie_managers_;
-  mojo::UniqueReceiverSet<blink::test::mojom::AttributionReportingAutomation>
-      attribution_reporting_receivers_;
+  mojo::UniqueReceiverSet<blink::test::mojom::FederatedAuthRequestAutomation>
+      fedcm_managers_;
 };
 
 }  // namespace content

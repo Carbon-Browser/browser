@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "components/autofill/core/common/form_field_data.h"
-#include "components/password_manager/core/browser/form_parsing/form_parser.h"
+#include "components/password_manager/core/browser/form_parsing/form_data_parser.h"
 #include "components/password_manager/core/browser/form_parsing/fuzzer/form_data_essentials.pb.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -45,13 +45,10 @@ FormData GenerateWithProto(const ::form_data_fuzzer::Form& form_proto) {
   for (int i = 0; i < form_proto.fields_size(); ++i) {
     const ::form_data_fuzzer::FormField& form_data_proto = form_proto.fields(i);
     result.fields[i].id_attribute = UTF8ToUTF16(form_data_proto.id());
-#if BUILDFLAG(IS_IOS)
-    result.fields[i].unique_id =
-        result.fields[i].id_attribute + u"-" + base::NumberToString16(i);
-#endif
     result.fields[i].name_attribute = UTF8ToUTF16(form_data_proto.name());
     result.fields[i].is_focusable = form_data_proto.is_focusable();
-    result.fields[i].form_control_type = form_data_proto.form_control_type();
+    result.fields[i].form_control_type = static_cast<autofill::FormControlType>(
+        form_data_proto.form_control_type());
     result.fields[i].autocomplete_attribute =
         form_data_proto.autocomplete_attribute();
     result.fields[i].label = UTF8ToUTF16(form_data_proto.label());

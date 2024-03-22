@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.net.impl;
 
 import org.chromium.net.QuicException;
 
-/**
- * Implements {@link QuicException}.
- */
+/** Implements {@link QuicException}. */
 public class QuicExceptionImpl extends QuicException {
     private final int mQuicDetailedErrorCode;
     private final NetworkExceptionImpl mNetworkException;

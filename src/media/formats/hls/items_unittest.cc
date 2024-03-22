@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ void RunTest(base::StringPiece source,
         CheckSourceString(expected_uri.content, uri.content, from);
       }
     } else {
-      EXPECT_TRUE(result.has_error()) << from.ToString();
+      EXPECT_FALSE(result.has_value()) << from.ToString();
       auto error = std::move(result).error();
       auto expected_error = std::move(expectation).error();
       EXPECT_EQ(error.code(), expected_error.code()) << from.ToString();

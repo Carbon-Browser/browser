@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ AppIdExcludeProbeTask::~AppIdExcludeProbeTask() = default;
 
 void AppIdExcludeProbeTask::StartTask() {
   DCHECK(request_.app_id_exclude);
-  DCHECK(!options_.make_u2f_api_credential);
   DCHECK_EQ(device()->supported_protocol(), ProtocolVersion::kCtap2);
   DCHECK(!device()->NoSilentRequests());
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
@@ -88,19 +88,18 @@ const char* CTPolicyComplianceToString(CTPolicyCompliance status) {
   return "unknown";
 }
 
-base::Value NetLogCertComplianceCheckResultParams(
+base::Value::Dict NetLogCertComplianceCheckResultParams(
     net::X509Certificate* cert,
     bool build_timely,
     CTPolicyCompliance compliance) {
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict dict;
   // TODO(mattm): This double-wrapping of the certificate list is weird. Remove
   // this (probably requires updates to netlog-viewer).
-  base::Value certificate_dict(base::Value::Type::DICTIONARY);
-  certificate_dict.SetKey("certificates", net::NetLogX509CertificateList(cert));
-  dict.SetKey("certificate", std::move(certificate_dict));
-  dict.SetBoolKey("build_timely", build_timely);
-  dict.SetStringKey("ct_compliance_status",
-                    CTPolicyComplianceToString(compliance));
+  base::Value::Dict certificate_dict;
+  certificate_dict.Set("certificates", net::NetLogX509CertificateList(cert));
+  dict.Set("certificate", std::move(certificate_dict));
+  dict.Set("build_timely", build_timely);
+  dict.Set("ct_compliance_status", CTPolicyComplianceToString(compliance));
   return dict;
 }
 
@@ -160,15 +159,15 @@ void ChromeCTPolicyEnforcer::UpdateCTLogList(
   log_operator_history_ = std::move(log_operator_history);
 
   if (valid_google_log_for_testing_.has_value()) {
-    valid_google_log_for_testing_ = absl::nullopt;
+    valid_google_log_for_testing_ = std::nullopt;
   }
   if (disqualified_log_for_testing_.has_value()) {
-    disqualified_log_for_testing_ = absl::nullopt;
+    disqualified_log_for_testing_ = std::nullopt;
   }
 }
 
 bool ChromeCTPolicyEnforcer::IsLogDisqualified(
-    base::StringPiece log_id,
+    std::string_view log_id,
     base::Time* disqualification_date) const {
   CHECK_EQ(log_id.size(), crypto::kSHA256Length);
 
@@ -180,7 +179,7 @@ bool ChromeCTPolicyEnforcer::IsLogDisqualified(
 
   auto p = std::lower_bound(
       std::begin(disqualified_logs_), std::end(disqualified_logs_), log_id,
-      [](const auto& a, base::StringPiece b) { return a.first < b; });
+      [](const auto& a, std::string_view b) { return a.first < b; });
   if (p == std::end(disqualified_logs_) || p->first != log_id) {
     return false;
   }
@@ -192,7 +191,7 @@ bool ChromeCTPolicyEnforcer::IsLogDisqualified(
 }
 
 bool ChromeCTPolicyEnforcer::IsLogOperatedByGoogle(
-    base::StringPiece log_id) const {
+    std::string_view log_id) const {
   if (valid_google_log_for_testing_.has_value() &&
       log_id == valid_google_log_for_testing_.value()) {
     return true;
@@ -261,7 +260,7 @@ CTPolicyCompliance ChromeCTPolicyEnforcer::CheckCTPolicyCompliance(
   bool has_embedded_google_sct = false;
   bool has_embedded_nongoogle_sct = false;
   bool has_diverse_log_operators = false;
-  std::vector<base::StringPiece> embedded_log_ids;
+  std::vector<std::string_view> embedded_log_ids;
   std::string first_seen_operator;
   for (const auto& sct : verified_scts) {
     base::Time disqualification_date;

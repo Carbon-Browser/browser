@@ -1,18 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.privacy_sandbox;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Callback;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 /** Bridge, providing access to the native-side Privacy Sandbox configuration. */
+// TODO(crbug.com/1410601): Pass in the profile and remove GetActiveUserProfile in C++.
 public class PrivacySandboxBridge {
     public static boolean isPrivacySandboxEnabled() {
         return PrivacySandboxBridgeJni.get().isPrivacySandboxEnabled();
@@ -26,28 +28,12 @@ public class PrivacySandboxBridge {
         return PrivacySandboxBridgeJni.get().isPrivacySandboxRestricted();
     }
 
+    public static boolean isRestrictedNoticeEnabled() {
+        return PrivacySandboxBridgeJni.get().isRestrictedNoticeEnabled();
+    }
+
     public static void setPrivacySandboxEnabled(boolean enabled) {
         PrivacySandboxBridgeJni.get().setPrivacySandboxEnabled(enabled);
-    }
-
-    public static String getFlocStatusString() {
-        return PrivacySandboxBridgeJni.get().getFlocStatusString();
-    }
-
-    public static String getFlocGroupString() {
-        return PrivacySandboxBridgeJni.get().getFlocGroupString();
-    }
-
-    public static String getFlocUpdateString() {
-        return PrivacySandboxBridgeJni.get().getFlocUpdateString();
-    }
-
-    public static String getFlocDescriptionString() {
-        return PrivacySandboxBridgeJni.get().getFlocDescriptionString();
-    }
-
-    public static String getFlocResetExplanationString() {
-        return PrivacySandboxBridgeJni.get().getFlocResetExplanationString();
     }
 
     public static List<Topic> getCurrentTopTopics() {
@@ -59,8 +45,8 @@ public class PrivacySandboxBridge {
     }
 
     public static void setTopicAllowed(Topic topic, boolean allowed) {
-        PrivacySandboxBridgeJni.get().setTopicAllowed(
-                topic.getTopicId(), topic.getTaxonomyVersion(), allowed);
+        PrivacySandboxBridgeJni.get()
+                .setTopicAllowed(topic.getTopicId(), topic.getTaxonomyVersion(), allowed);
     }
 
     @CalledByNative
@@ -69,7 +55,11 @@ public class PrivacySandboxBridge {
     }
 
     private static List<Topic> sortTopics(List<Topic> topics) {
-        Collections.sort(topics, (o1, o2) -> { return o1.getName().compareTo(o2.getName()); });
+        Collections.sort(
+                topics,
+                (o1, o2) -> {
+                    return o1.getName().compareTo(o2.getName());
+                });
         return topics;
     }
 
@@ -96,24 +86,79 @@ public class PrivacySandboxBridge {
         PrivacySandboxBridgeJni.get().promptActionOccurred(action);
     }
 
+    public static boolean isFirstPartySetsDataAccessEnabled() {
+        return PrivacySandboxBridgeJni.get().isFirstPartySetsDataAccessEnabled();
+    }
+
+    public static boolean isFirstPartySetsDataAccessManaged() {
+        return PrivacySandboxBridgeJni.get().isFirstPartySetsDataAccessManaged();
+    }
+
+    public static boolean isPartOfManagedFirstPartySet(String origin) {
+        return PrivacySandboxBridgeJni.get().isPartOfManagedFirstPartySet(origin);
+    }
+
+    public static void setFirstPartySetsDataAccessEnabled(boolean enabled) {
+        PrivacySandboxBridgeJni.get().setFirstPartySetsDataAccessEnabled(enabled);
+    }
+
+    /**
+     * Gets the First Party Sets owner hostname given a FPS member origin.
+     * @param memberOrigin FPS member origin.
+     * @return A string containing the owner hostname, null if it doesn't exist.
+     */
+    public static String getFirstPartySetOwner(String memberOrigin) {
+        return PrivacySandboxBridgeJni.get().getFirstPartySetOwner(memberOrigin);
+    }
+
+    public static void topicsToggleChanged(boolean newValue) {
+        PrivacySandboxBridgeJni.get().topicsToggleChanged(newValue);
+    }
+
+    public static void setAllPrivacySandboxAllowedForTesting() {
+        PrivacySandboxBridgeJni.get().setAllPrivacySandboxAllowedForTesting(); // IN-TEST
+    }
+
     @NativeMethods
     public interface Natives {
         boolean isPrivacySandboxEnabled();
+
         boolean isPrivacySandboxManaged();
+
         boolean isPrivacySandboxRestricted();
+
+        boolean isRestrictedNoticeEnabled();
+
+        boolean isFirstPartySetsDataAccessEnabled();
+
+        boolean isFirstPartySetsDataAccessManaged();
+
+        boolean isPartOfManagedFirstPartySet(String origin);
+
         void setPrivacySandboxEnabled(boolean enabled);
-        String getFlocStatusString();
-        String getFlocGroupString();
-        String getFlocUpdateString();
-        String getFlocDescriptionString();
-        String getFlocResetExplanationString();
+
+        void setFirstPartySetsDataAccessEnabled(boolean enabled);
+
+        String getFirstPartySetOwner(String memberOrigin);
+
         Topic[] getCurrentTopTopics();
+
         Topic[] getBlockedTopics();
+
         void setTopicAllowed(int topicId, int taxonomyVersion, boolean allowed);
+
         void getFledgeJoiningEtldPlusOneForDisplay(Callback<String[]> callback);
+
         String[] getBlockedFledgeJoiningTopFramesForDisplay();
+
         void setFledgeJoiningAllowed(String topFrameEtldPlus1, boolean allowed);
+
         int getRequiredPromptType();
+
         void promptActionOccurred(int action);
+
+        void topicsToggleChanged(boolean newValue);
+
+        void setAllPrivacySandboxAllowedForTesting(); // IN-TEST
     }
 }

@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/printing/cups_printer_status.h"
+
+#include "base/values.h"
 
 #include <stddef.h>
 
@@ -52,6 +54,26 @@ void CupsPrinterStatus::AddStatusReason(
     const CupsPrinterStatusReason::Reason& reason,
     const CupsPrinterStatusReason::Severity& severity) {
   status_reasons_.emplace(CupsPrinterStatusReason(reason, severity));
+}
+
+void CupsPrinterStatus::SetAuthenticationInfo(
+    const PrinterAuthenticationInfo& auth_info) {
+  auth_info_ = auth_info;
+}
+
+base::Value::Dict CupsPrinterStatus::ConvertToValue() const {
+  base::Value::Dict dict;
+  dict.Set("printerId", printer_id_);
+  dict.Set("timestamp", timestamp_.InMillisecondsFSinceUnixEpochIgnoringNull());
+  base::Value::List status_reasons;
+  for (const CupsPrinterStatusReason& reason : status_reasons_) {
+    base::Value::Dict status_reason;
+    status_reason.Set("reason", static_cast<int>(reason.GetReason()));
+    status_reason.Set("severity", static_cast<int>(reason.GetSeverity()));
+    status_reasons.Append(std::move(status_reason));
+  }
+  dict.Set("statusReasons", std::move(status_reasons));
+  return dict;
 }
 
 }  // namespace chromeos

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,10 @@ BASE_EXPORT uint64_t HashMetricName(base::StringPiece name);
 // Computes a uint32_t hash of a given string based on its MD5 hash. This
 // can be more suitable for contexts where memory use is a concern.
 BASE_EXPORT uint32_t HashMetricNameAs32Bits(base::StringPiece name);
+
+// Computes a uint32_t hash of a given string based on its SHA1 hash. Suitable
+// for uniquely identifying field trial names and group names.
+BASE_EXPORT uint32_t HashFieldTrialName(base::StringPiece name);
 
 }  // namespace base
 

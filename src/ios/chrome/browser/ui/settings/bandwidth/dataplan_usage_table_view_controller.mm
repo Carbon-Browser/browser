@@ -1,27 +1,24 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/bandwidth/dataplan_usage_table_view_controller.h"
+#import "ios/chrome/browser/ui/settings/bandwidth/dataplan_usage_table_view_controller+Testing.h"
 
-#include "base/check.h"
-#import "base/mac/foundation_util.h"
-#include "components/prefs/pref_member.h"
-#include "components/prefs/pref_service.h"
-#import "ios/chrome/browser/prerender/prerender_pref.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
+#import "base/apple/foundation_util.h"
+#import "base/check.h"
+#import "components/prefs/pref_member.h"
+#import "components/prefs/pref_service.h"
+#import "ios/chrome/browser/prerender/model/prerender_pref.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 using prerender_prefs::NetworkPredictionSetting;
 
@@ -131,8 +128,7 @@ NetworkPredictionSetting SettingWithItemType(ItemType item_type) {
 // Updates the checked state of the cells to match the preferences.
 - (void)updateCheckedState {
   NetworkPredictionSetting setting =
-      static_cast<prerender_prefs::NetworkPredictionSetting>(
-          _settingPreference.GetValue());
+      static_cast<NetworkPredictionSetting>(_settingPreference.GetValue());
 
   TableViewModel<TableViewItem*>* model = self.tableViewModel;
 
@@ -161,9 +157,8 @@ NetworkPredictionSetting SettingWithItemType(ItemType item_type) {
   if (!prefs)
     return nil;
 
-  NetworkPredictionSetting setting =
-      static_cast<prerender_prefs::NetworkPredictionSetting>(
-          prefs->GetInteger(settingPreference));
+  NetworkPredictionSetting setting = static_cast<NetworkPredictionSetting>(
+      prefs->GetInteger(settingPreference));
   switch (setting) {
     case NetworkPredictionSetting::kDisabled: {
       return l10n_util::GetNSString(IDS_IOS_OPTIONS_DATA_USAGE_NEVER);
@@ -178,7 +173,7 @@ NetworkPredictionSetting SettingWithItemType(ItemType item_type) {
   }
 }
 
-- (void)updateSetting:(prerender_prefs::NetworkPredictionSetting)newSetting {
+- (void)updateSetting:(NetworkPredictionSetting)newSetting {
   _settingPreference.SetValue(static_cast<int>(newSetting));
   [self updateCheckedState];
 }

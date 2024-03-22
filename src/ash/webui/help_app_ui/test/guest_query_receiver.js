@@ -1,10 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {TEST_ONLY} from './receiver.js';
 
 const {parentMessagePipe} = TEST_ONLY;
+
+/**
+ * @typedef {{
+ *     name: string,
+ *     message: string,
+ *     stack: string,
+ * }}
+ */
+let GenericErrorResponse;
 
 /**
  * Test cases registered by GUEST_TEST.

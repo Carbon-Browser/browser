@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,6 +88,18 @@ const uint8_t kSampleCorruptPakContents[] = {
     's', ' ', 'i', 's', ' ', 'i', 'd', ' ', '6'};
 
 const size_t kSampleCorruptPakSize = sizeof(kSampleCorruptPakContents);
+
+const uint8_t kSampleMisorderedPakContents[] = {
+    0x05, 0x00, 0x00, 0x00,              // version
+    0x01, 0x00, 0x00, 0x00,              // encoding + padding
+    0x02, 0x00, 0x00, 0x00,              // num_resources, num_aliases
+    0x06, 0x00, 0x2a, 0x00, 0x00, 0x00,  // index entry 6 (wrong order)
+    0x04, 0x00, 0x1e, 0x00, 0x00, 0x00,  // index entry 4
+    0x00, 0x00, 0x36, 0x00, 0x00, 0x00,  // extra entry for the size of last
+    't',  'h',  'i',  's',  ' ',  'i',  's', ' ', 'i', 'd', ' ', '4',
+    't',  'h',  'i',  's',  ' ',  'i',  's', ' ', 'i', 'd', ' ', '6'};
+
+const size_t kSampleMisorderedPakSize = sizeof(kSampleMisorderedPakContents);
 
 const uint8_t kSamplePakContents2x[] = {
     0x04, 0x00, 0x00, 0x00,              // header(version

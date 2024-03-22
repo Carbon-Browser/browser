@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include "base/memory/raw_ptr.h"
 #include "content/browser/renderer_host/input/input_router.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "cc/input/touch_action.h"
-#include "content/browser/renderer_host/event_with_latency_info.h"
 #include "content/common/input/event_with_latency_info.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/input/touch_event.mojom.h"

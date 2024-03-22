@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -143,12 +143,12 @@ TEST_F(PolicyInfoTest, ExtensionPolicy) {
   extension_registry->AddEnabled(
       extensions::ExtensionBuilder("extension_name")
           .SetID(kExtensionId1)
-          .SetManifestPath({"storage", "managed_schema"}, "schema.json")
+          .SetManifestPath("storage.managed_schema", "schema.json")
           .Build());
   extension_registry->AddEnabled(
       extensions::ExtensionBuilder("extension_name")
           .SetID(kExtensionId2)
-          .SetManifestPath({"storage", "managed_schema"}, "schema.json")
+          .SetManifestPath("storage.managed_schema", "schema.json")
           .Build());
 
   extension_policy_map()->Set(kPolicyName1, policy::POLICY_LEVEL_MANDATORY,

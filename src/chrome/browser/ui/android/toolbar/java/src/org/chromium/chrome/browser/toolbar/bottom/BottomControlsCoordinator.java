@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@ import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
 import org.chromium.chrome.browser.layouts.LayoutManager;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
+import org.chromium.chrome.browser.tab.TabObscuringHandler;
 import org.chromium.chrome.browser.toolbar.R;
 import org.chromium.chrome.browser.toolbar.bottom.BottomControlsViewBinder.ViewHolder;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
@@ -25,10 +26,10 @@ import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 import org.chromium.ui.resources.ResourceManager;
 import org.chromium.ui.widget.Toast;
+
 import org.chromium.ui.widget.ChromeImageButton;
 import android.view.View.OnClickListener;
-import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-import org.chromium.chrome.browser.toolbar.TabCountProvider;
+// import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton;
@@ -39,6 +40,7 @@ import android.content.res.ColorStateList;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.chrome.browser.theme.ThemeUtils;
 import androidx.appcompat.content.res.AppCompatResources;
+
 import org.chromium.chrome.browser.toolbar.circlemenu.widget.FloatingActionButton;
 import org.chromium.chrome.browser.toolbar.circlemenu.ArcMenu;
 import android.widget.PopupWindow;
@@ -54,6 +56,7 @@ import android.os.Handler;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
+
 import org.chromium.chrome.browser.toolbar.bottom.MediatorCommunicator;
 
 import android.content.SharedPreferences;
@@ -65,6 +68,8 @@ import android.content.Intent;
 import org.chromium.base.IntentUtils;
 
 import android.content.ComponentName;
+import org.chromium.base.supplier.Supplier;
+import androidx.core.widget.ImageViewCompat;
 
 /**
  * The root coordinator for the bottom controls component. This component is intended for use with
@@ -75,9 +80,7 @@ import android.content.ComponentName;
  */
 public class BottomControlsCoordinator implements BackPressHandler, BottomToolbarVisibilityController,
       BottomToolbarThemeCommunicator, FullscreenManager.Observer, MediatorCommunicator {
-    /**
-     * Interface for the BottomControls component to hide and show itself.
-     */
+    /** Interface for the BottomControls component to hide and show itself. */
     public interface BottomControlsVisibilityController {
         void setBottomControlsVisible(boolean isVisible);
     }
@@ -107,7 +110,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     private LayoutStateProvider mLayoutStateProvider;
     private final LayoutStateProvider.LayoutStateObserver mLayoutStateObserver;
 
-    private TabModelSelector mTabModelSelector;
+    // private TabModelSelector mTabModelSelector;
 
     SharedPreferences mPrefs;
 
@@ -145,24 +148,36 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
      * Build the coordinator that manages the bottom controls.
      * @param activity Activity instance to use.
      * @param windowAndroid A {@link WindowAndroid} for watching keyboard visibility events.
+     * @param layoutManager A {@link LayoutManager} to attach overlays to.
+     * @param resourceManager A {@link ResourceManager} for loading textures into the compositor.
      * @param controlsSizer A {@link BrowserControlsSizer} to update the bottom controls
      *                          height for the renderer.
      * @param fullscreenManager A {@link FullscreenManager} to listen for fullscreen changes.
-     * @param stub The bottom controls {@link ViewStub} to inflate.
+     * @param root The parent {@link ViewGroup} for the bottom controls.
      * @param contentDelegate Delegate for bottom controls UI operations.
+     * @param tabObscuringHandler Delegate object handling obscuring views.
      * @param overlayPanelVisibilitySupplier Notifies overlay panel visibility event.
-     * @param resourceManager A {@link ResourceManager} for loading textures into the compositor.
-     * @param layoutManager A {@link LayoutManagerImpl} to attach overlays to.
+     * @param constraintsSupplier Used to access current constraints of the browser controls.
      */
     @SuppressLint("CutPasteId") // Not actually cut and paste since it's View vs ViewGroup.
-    public BottomControlsCoordinator(Activity activity, WindowAndroid windowAndroid,
-            LayoutManager layoutManager, ResourceManager resourceManager,
-            BrowserControlsSizer controlsSizer, FullscreenManager fullscreenManager,
+    public BottomControlsCoordinator(
+            Activity activity,
+            WindowAndroid windowAndroid,
+            LayoutManager layoutManager,
+            ResourceManager resourceManager,
+            BrowserControlsSizer controlsSizer,
+            FullscreenManager fullscreenManager,
             ScrollingBottomViewResourceFrameLayout root,
             BottomControlsContentDelegate contentDelegate,
+            TabObscuringHandler tabObscuringHandler,
             ObservableSupplier<Boolean> overlayPanelVisibilitySupplier,
-            BottomToolbarCoordinator BottomToolbarCoordinator, OnClickListener tabSwitcherClickHandler,
-            TabModelSelector tabModelSelector, TabCountProvider tabCountProvider) {
+            ObservableSupplier<Integer> constraintsSupplier,
+            BottomToolbarCoordinator bottomToolbarCoordinator,
+            OnClickListener tabSwitcherClickHandler,
+            // TabModelSelector tabModelSelector,
+            ObservableSupplier<Integer> tabCountSupplier,
+            Supplier<Boolean> incognitoSupplier) {
+        root.setConstraintsSupplier(constraintsSupplier);
         PropertyModel model = new PropertyModel(BottomControlsProperties.ALL_KEYS);
 
         ScrollingBottomViewSceneLayer sceneLayer =
@@ -176,21 +191,30 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         // View container = root.findViewById(R.id.bottom_container_slot);
         // ViewGroup.LayoutParams params = container.getLayoutParams();
         // params.height = root.getResources().getDimensionPixelOffset(bottomControlsHeightId);
-        // mBottomToolbarWrapper = root.findViewById(R.id.bottom_toolbar_wrapper);
+
         mBottomToolbarWrapperLeft = root.findViewById(R.id.bottom_toolbar_wrapper_left);
         mBottomToolbarWrapperRight = root.findViewById(R.id.bottom_toolbar_wrapper_right);
         mBottomToolbarWrapperBottom = root.findViewById(R.id.middle_spacer_bottom);
         mBottomToolbarCurve = root.findViewById(R.id.middle_space_curve);
         mContainer = root.findViewById(R.id.bottom_container_slot);
         fullscreenManager.addObserver(this);
+
         mMediator =
-                new BottomControlsMediator(windowAndroid, model, controlsSizer, fullscreenManager,
+                new BottomControlsMediator(
+                        windowAndroid,
+                        model,
+                        controlsSizer,
+                        fullscreenManager,
+                        tabObscuringHandler,
                         root.getResources().getDimensionPixelOffset(bottomControlsHeightId),
-                        overlayPanelVisibilitySupplier, this, root.getResources().getDimensionPixelOffset(R.dimen.bottom_controls_height_hidden_controls),
+                        overlayPanelVisibilitySupplier,
+                        this,
+                        root.getResources().getDimensionPixelOffset(R.dimen.bottom_controls_height_hidden_controls),
                         this);
 
-        resourceManager.getDynamicResourceLoader().registerResource(
-                root.getId(), root.getResourceAdapter());
+        resourceManager
+                .getDynamicResourceLoader()
+                .registerResource(root.getId(), root.getResourceAdapter());
 
         mContentDelegate = contentDelegate;
         Toast.setGlobalExtraYOffset(
@@ -204,13 +228,14 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         layoutManager.addSceneOverlay(sceneLayer);
 
         if (mContentDelegate != null) {
-            mContentDelegate.initializeWithNative(activity, mMediator::setBottomControlsVisible);
+            mContentDelegate.initializeWithNative(
+                    activity, mMediator::setBottomControlsVisible, root::onModelTokenChange);
         }
 
         mTabSwitcherButton = root.findViewById(R.id.tab_switcher_button_bottom);
         if (mTabSwitcherButton != null) {
             mTabSwitcherButton.setOnClickListener(tabSwitcherClickHandler);
-            mTabSwitcherButton.setTabCountProvider(tabCountProvider);
+            mTabSwitcherButton.setTabCountSupplier(tabCountSupplier, incognitoSupplier);
         }
 
         mCarbonActionButton = root.findViewById(R.id.carbon_action_button);
@@ -290,7 +315,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             	menu.addItem(mStakingItem, "", new View.OnClickListener() {
               		@Override
               		public void onClick(View v) {
-              		   BottomToolbarCoordinator.loadUrl("https://stake.carbon.website", v);
+              		   bottomToolbarCoordinator.loadUrl("https://stake.carbon.website", v);
                      menu.menuOnclickMethod();
                      new Handler().postDelayed(new Runnable() {
                          @Override
@@ -307,7 +332,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             	menu.addItem(mSwapsItem, "", new View.OnClickListener() {
               		@Override
               		public void onClick(View v) {
-                     BottomToolbarCoordinator.loadUrl("https://www.ldx.fi/", v);
+                     bottomToolbarCoordinator.loadUrl("https://www.ldx.fi/", v);
                      menu.menuOnclickMethod();
                      new Handler().postDelayed(new Runnable() {
                          @Override
@@ -324,7 +349,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             	menu.addItem(mRewardsItem, "", new View.OnClickListener() {
               		@Override
               		public void onClick(View v) {
-              		   BottomToolbarCoordinator.openRewardsPopup(v);
+              		   bottomToolbarCoordinator.openRewardsPopup(v);
                      mPopup.dismiss();
               		}
             	});
@@ -360,7 +385,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         mSettingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                BottomToolbarCoordinator.openSettings(v);
+                bottomToolbarCoordinator.openSettings(v);
             }
         });
 
@@ -368,7 +393,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         mHomeButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                BottomToolbarCoordinator.loadHomepage(v);
+                bottomToolbarCoordinator.loadHomepage(v);
             }
         });
 
@@ -377,7 +402,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
             @Override
             public void onClick(View v) {
                 // do callback
-                BottomToolbarCoordinator.focusUrlBar();
+                bottomToolbarCoordinator.focusUrlBar();
             }
         });
 
@@ -397,7 +422,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
         mLayoutStateObserver = new LayoutStateProvider.LayoutStateObserver() {
             @Override
-            public void onStartedShowing(@LayoutType int layoutType, boolean showToolbar) {
+            public void onStartedShowing(@LayoutType int layoutType) {
                 if (layoutType == LayoutType.TAB_SWITCHER) {;
                     // SHOWING OVERVIEW
                     setBottomToolbarVisible(false);
@@ -409,7 +434,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
 
             @Override
             public void onStartedHiding(
-                    @LayoutType int layoutType, boolean showToolbar, boolean delayAnimation) { }
+                    @LayoutType int layoutType) { }
         };
 
         if (mPrefs == null) {
@@ -434,7 +459,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
                 @Override
                 public void onClick(View v) {
                     // do callback
-                    BottomToolbarCoordinator.openRewardsPopup(v);
+                    bottomToolbarCoordinator.openRewardsPopup(v);
                 }
             });
         }
@@ -474,7 +499,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     public void onThemeChanged(int color) {
         if (mBottomToolbarWrapperLeft == null) return;
         // mBottomToolbarWrapper.setBackgroundColor(color);
-        // ApiCompatibilityUtils.setImageTintList(mBottomToolbarCurve, color);
+        // ImageViewCompat.setImageTintList(mBottomToolbarCurve, color);
         mBottomToolbarCurve.setBackground(mTabSwitcherButton.isIncognito() ? mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_incognito) : isColorDark(color) ? mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_dark) :
           mHomeButton.getContext().getResources().getDrawable(R.drawable.middle_curved_background_light));
         mBottomToolbarWrapperLeft.setBackgroundColor(color);
@@ -484,19 +509,19 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         ColorStateList tint = isColorDark(color) ? AppCompatResources.getColorStateList(mHomeButton.getContext(), R.color.default_icon_color_light_tint_list)
                         : AppCompatResources.getColorStateList(mHomeButton.getContext(), R.color.default_icon_color_dark_tint_list);
 
-        ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, tint);
-        ApiCompatibilityUtils.setImageTintList(mHomeButton, tint);
-        ApiCompatibilityUtils.setImageTintList(mSettingsButton, tint);
-        ApiCompatibilityUtils.setImageTintList(mTabSwitcherButton, tint);
-        mTabSwitcherButton.setBrandedColorScheme(isColorDark(color) ? BrandedColorScheme.DARK_BRANDED_THEME : BrandedColorScheme.LIGHT_BRANDED_THEME);
+        ImageViewCompat.setImageTintList(mSearchAccelerator, tint);
+        ImageViewCompat.setImageTintList(mHomeButton, tint);
+        ImageViewCompat.setImageTintList(mSettingsButton, tint);
+        ImageViewCompat.setImageTintList(mTabSwitcherButton, tint);
+        // mTabSwitcherButton.setBrandedColorScheme(isColorDark(color) ? BrandedColorScheme.DARK_BRANDED_THEME : BrandedColorScheme.LIGHT_BRANDED_THEME);
     }
 
     @Override
     public void onTintChanged(ColorStateList tint, @BrandedColorScheme int brandedColorScheme) {
 
-        // ApiCompatibilityUtils.setImageTintList(mSearchAccelerator, tint);
-        // // ApiCompatibilityUtils.setImageTintList(mSpeedDialButton, tint);
-        // ApiCompatibilityUtils.setImageTintList(mHomeButton, tint);
+        // ImageViewCompat.setImageTintList(mSearchAccelerator, tint);
+        // // ImageViewCompat.setImageTintList(mSpeedDialButton, tint);
+        // ImageViewCompat.setImageTintList(mHomeButton, tint);
         //
         // mTabSwitcherButton.setBrandedColorScheme(brandedColorScheme);
     }
@@ -529,8 +554,9 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
     }
 
     @Override
-    public void handleBackPress() {
-        if (mContentDelegate != null) mContentDelegate.handleBackPress();
+    public @BackPressResult int handleBackPress() {
+        if (mContentDelegate != null) return mContentDelegate.handleBackPress();
+        return BackPressResult.FAILURE;
     }
 
     @Override
@@ -539,9 +565,7 @@ public class BottomControlsCoordinator implements BackPressHandler, BottomToolba
         return mContentDelegate.getHandleBackPressChangedSupplier();
     }
 
-    /**
-     * Clean up any state when the bottom controls component is destroyed.
-     */
+    /** Clean up any state when the bottom controls component is destroyed. */
     public void destroy() {
         if (mContentDelegate != null) mContentDelegate.destroy();
 

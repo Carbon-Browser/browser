@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,20 @@ module network.mojom;
 import "url/mojom/origin.mojom";
 import "mojo/public/mojom/base/time.mojom";
 
+// Supported Trust Token versions. A new item is added to this enum when a new
+// version is available. Version resolution will be carried based on the
+// version specified in TrustTokenParams.
+enum TrustTokenMajorVersion {
+  kPrivateStateTokenV1,
+};
+
 // TrustTokenProtocolVersion enumerates the versions of Trust Token that the
 // client knows about. Different versions represent different configuration
 // flows, data structure meanings, etc and may require clearing the database
-// due to incompatibilities. kTrustTokenV3Pmb and kTrustTokenV3Voprf can
-// safely be supported at the same time, as they use the same underlying data
-// model; they just use different cryptosystems to generate tokens' signatures.
+// due to incompatibilities. kPrivateStateTokenV1Pmb, kPrivateStateTokenV1Voprf,
+// kTrustTokenV3Pmb, and kTrustTokenV3Voprf can safely be supported at the same
+// time, as they use the same underlying data model; they just use different
+// cryptosystems to generate tokens' signatures.
 // TODO(crbug/1133969): Schema versioning needs to be implemented for future
 // versions that need to clear the database on schema changes.
 //
@@ -21,6 +29,8 @@ import "mojo/public/mojom/base/time.mojom";
 enum TrustTokenProtocolVersion {
   kTrustTokenV3Pmb,
   kTrustTokenV3Voprf,
+  kPrivateStateTokenV1Pmb,
+  kPrivateStateTokenV1Voprf,
 };
 
 
@@ -35,8 +45,11 @@ enum TrustTokenOperationStatus {
   // A client-provided argument was malformed or otherwise invalid.
   kInvalidArgument,
 
-  // A precondition failed (for instance, no verification key was available for
-  // an issuer when executing an operation required such a key to be present).
+  // There are no key commitments registered for the issuer.
+  kMissingIssuerKeys,
+
+  // A precondition failed (for instance, there was an error parsing the
+  // verification keys for an issuer).
   kFailedPrecondition,
 
   // No inputs for the given operation available, or a quota on the operation's
@@ -49,6 +62,9 @@ enum TrustTokenOperationStatus {
   // Internal storage has not yet initialized, or the system is unavailable in
   // some other general, probably transient, manner.
   kUnavailable,
+
+  // The operation was unauthorized due to some sort of policy.
+  kUnauthorized,
 
   // The server response was malformed or otherwise invalid.
   kBadResponse,
@@ -116,14 +132,24 @@ enum TrustTokenSignRequestData {
 // operation.
 struct TrustTokenParams {
   // Required.
-  TrustTokenOperationType type;
+  TrustTokenMajorVersion version;
 
-  // Required exactly when "type" is "kRedemption"; specifies whether the
+  // Required.
+  TrustTokenOperationType operation;
+
+  // Required exactly when "operation" is "kRedemption"; specifies whether the
   // caller wishes to use a cached Redemption Record (RR) if available or
   // redeem a new token, evicting the RR currently stored.
   TrustTokenRefreshPolicy refresh_policy = kUseCached;
 
-  // The remaining members are used only when "type" is "kSigning": these
+  // "custom_key_commitment" stores a custom key commitment that should be
+  // used for this operation if set.
+  string? custom_key_commitment;
+
+  // "custom_issuer" specifies what issuer to use for this operation if set.
+  url.mojom.Origin? custom_issuer;
+
+  // The remaining members are used only when "operation" is "kSigning": these
   // parameters specify the manner in which the outgoing request should be
   // signed, including optionally specifying additional data to add in
   // browser-provided request headers (for instance, a timestamp or custom
@@ -147,6 +173,12 @@ struct HasTrustTokensResult {
   bool has_trust_tokens;
 };
 
+// Result struct for a HasRedemptionRecord (see below) call:
+struct HasRedemptionRecordResult {
+  TrustTokenOperationStatus status;
+  bool has_redemption_record;
+};
+
 // This interface is implicitly scoped to a top-level origin that is
 // (1) potentially trustworthy and (2) either HTTP or HTTPS. (All Trust Tokens
 // state is keyed by origins satisfying those two conditions.)
@@ -168,6 +200,17 @@ interface TrustTokenQueryAnswerer {
   // - if all of these conditions pass, returns kOk alongside a boolean
   // denoting whether the user possesses any trust tokens issued by |issuer|.
   HasTrustTokens(url.mojom.Origin issuer) => (HasTrustTokensResult result);
+
+  // Returns whether the user has a redemption record of redemption of an
+  // |issuer| issued token redeemed by the underlying top level origin.
+  //
+  // This method verifies that |issuer| is HTTP(S) and potentially trustworthy,
+  // which are preconditions for a Trust Tokens issuer origin, returns
+  // kInvalidArgument if not. It returns kOk alongside a boolean denoting
+  // whether the user possesses a valid redemption record issued by |issuer|
+  // and redeemed from the underlying top level origin.
+  HasRedemptionRecord(url.mojom.Origin issuer) =>
+                                       (HasRedemptionRecordResult result);
 };
 
 // Struct TrustTokenKeyCommitmentResult represents a trust token issuer's
@@ -181,6 +224,8 @@ struct TrustTokenVerificationKey {
 };
 
 struct TrustTokenKeyCommitmentResult {
+  TrustTokenMajorVersion version;
+
   // |protocol_version| is the Trust Token version that this key commitment is
   // for.
   TrustTokenProtocolVersion protocol_version;
@@ -269,10 +314,10 @@ struct FulfillTrustTokenIssuanceAnswer {
 };
 
 // TrustTokenOperationResult contains all the information required by
-// DevTools. Which fields are set depend on |type| and |status|.
+// DevTools. Which fields are set depend on |operation| and |status|.
 struct TrustTokenOperationResult {
   // Required.
-  TrustTokenOperationType type;
+  TrustTokenOperationType operation;
   TrustTokenOperationStatus status;
 
   // Shared among the different operation types.

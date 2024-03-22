@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,10 @@
 
 #include <utility>
 
-#include "ash/constants/ash_features.h"
 #include "ash/webui/grit/ash_media_app_resources.h"
 #include "ash/webui/media_app_ui/buildflags.h"
 #include "ash/webui/media_app_ui/media_app_page_handler.h"
-#include "ash/webui/media_app_ui/url_constants.h"
 #include "ash/webui/web_applications/webui_test_prod_util.h"
-#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/grit/chromeos_media_app_bundle_resources.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
@@ -36,18 +33,13 @@ constexpr webui::LocalizedString kLocalizedStrings[] = {
     {"fileFilterVideo", IDS_MEDIA_APP_FILE_FILTER_VIDEO},
 };
 
-content::WebUIDataSource* CreateHostDataSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(kChromeUIMediaAppHost);
+content::WebUIDataSource* CreateAndAddHostDataSource(
+    content::BrowserContext* browser_context) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      browser_context, kChromeUIMediaAppHost);
 
   // Add resources from ash_media_app_resources.pak.
-  // TODO(b/218419680): Remove index_dark_light_html when the dark/light flag is
-  // no longer needed.
-  if (chromeos::features::IsDarkLightModeEnabled()) {
-    source->SetDefaultResource(IDR_MEDIA_APP_INDEX_DARK_LIGHT_HTML);
-  } else {
-    source->SetDefaultResource(IDR_MEDIA_APP_INDEX_HTML);
-  }
+  source->SetDefaultResource(IDR_MEDIA_APP_INDEX_DARK_LIGHT_HTML);
   source->AddResourcePath("launch.js", IDR_MEDIA_APP_LAUNCH_JS);
   source->AddResourcePath("viewpdfhost.html", IDR_MEDIA_APP_VIEWPDFHOST_HTML);
   source->AddResourcePath("viewpdfhost.js", IDR_MEDIA_APP_VIEWPDFHOST_JS);
@@ -59,50 +51,24 @@ content::WebUIDataSource* CreateHostDataSource() {
 
   // Redirects "system_assets/*" (from manifest.json) to the icons for the
   // gallery app.
-  bool app_icons_added = false;
-  if (base::FeatureList::IsEnabled(chromeos::features::kMediaAppHandlesPdf)) {
-#if BUILDFLAG(ENABLE_CROS_MEDIA_APP)
-    source->AddResourcePath("system_assets/app_icon_16.png",
-                            IDR_MEDIA_APP_APP_ICON_16_PNG);
-    source->AddResourcePath("system_assets/app_icon_32.png",
-                            IDR_MEDIA_APP_APP_ICON_32_PNG);
-    source->AddResourcePath("system_assets/app_icon_48.png",
-                            IDR_MEDIA_APP_APP_ICON_48_PNG);
-    source->AddResourcePath("system_assets/app_icon_64.png",
-                            IDR_MEDIA_APP_APP_ICON_64_PNG);
-    source->AddResourcePath("system_assets/app_icon_96.png",
-                            IDR_MEDIA_APP_APP_ICON_96_PNG);
-    source->AddResourcePath("system_assets/app_icon_128.png",
-                            IDR_MEDIA_APP_APP_ICON_128_PNG);
-    source->AddResourcePath("system_assets/app_icon_192.png",
-                            IDR_MEDIA_APP_APP_ICON_192_PNG);
-    source->AddResourcePath("system_assets/app_icon_256.png",
-                            IDR_MEDIA_APP_APP_ICON_256_PNG);
-    source->AddResourcePath("system_assets/app_icon.svg",
-                            IDR_MEDIA_APP_APP_ICON_192_SVG);  // App favicon.
-    app_icons_added = true;
-#endif  // BUILDFLAG(ENABLE_CROS_MEDIA_APP)
-  }
-  if (!app_icons_added) {
-    source->AddResourcePath("system_assets/app_icon_16.png",
-                            IDR_MEDIA_APP_GALLERY_ICON_16_PNG);
-    source->AddResourcePath("system_assets/app_icon_32.png",
-                            IDR_MEDIA_APP_GALLERY_ICON_32_PNG);
-    source->AddResourcePath("system_assets/app_icon_48.png",
-                            IDR_MEDIA_APP_GALLERY_ICON_48_PNG);
-    source->AddResourcePath("system_assets/app_icon_64.png",
-                            IDR_MEDIA_APP_GALLERY_ICON_64_PNG);
-    source->AddResourcePath("system_assets/app_icon_96.png",
-                            IDR_MEDIA_APP_GALLERY_ICON_96_PNG);
-    source->AddResourcePath("system_assets/app_icon_128.png",
-                            IDR_MEDIA_APP_GALLERY_ICON_128_PNG);
-    source->AddResourcePath("system_assets/app_icon_192.png",
-                            IDR_MEDIA_APP_GALLERY_ICON_192_PNG);
-    source->AddResourcePath("system_assets/app_icon_256.png",
-                            IDR_MEDIA_APP_GALLERY_ICON_256_PNG);
-    source->AddResourcePath("system_assets/app_icon.svg",
-                            IDR_MEDIA_APP_APP_ICON_SVG);  // App favicon.
-  }
+  source->AddResourcePath("system_assets/app_icon_16.png",
+                          IDR_MEDIA_APP_APP_ICON_16_PNG);
+  source->AddResourcePath("system_assets/app_icon_32.png",
+                          IDR_MEDIA_APP_APP_ICON_32_PNG);
+  source->AddResourcePath("system_assets/app_icon_48.png",
+                          IDR_MEDIA_APP_APP_ICON_48_PNG);
+  source->AddResourcePath("system_assets/app_icon_64.png",
+                          IDR_MEDIA_APP_APP_ICON_64_PNG);
+  source->AddResourcePath("system_assets/app_icon_96.png",
+                          IDR_MEDIA_APP_APP_ICON_96_PNG);
+  source->AddResourcePath("system_assets/app_icon_128.png",
+                          IDR_MEDIA_APP_APP_ICON_128_PNG);
+  source->AddResourcePath("system_assets/app_icon_192.png",
+                          IDR_MEDIA_APP_APP_ICON_192_PNG);
+  source->AddResourcePath("system_assets/app_icon_256.png",
+                          IDR_MEDIA_APP_APP_ICON_256_PNG);
+  source->AddResourcePath("system_assets/app_icon.svg",
+                          IDR_MEDIA_APP_APP_ICON_192_SVG);  // App favicon.
 
   // File-type favicons.
   source->AddResourcePath("system_assets/pdf_icon.svg",
@@ -135,8 +101,8 @@ MediaAppUI::MediaAppUI(content::WebUI* web_ui,
     : MojoWebUIController(web_ui), delegate_(std::move(delegate)) {
   content::BrowserContext* browser_context =
       web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource* host_source = CreateHostDataSource();
-  content::WebUIDataSource::Add(browser_context, host_source);
+  content::WebUIDataSource* host_source =
+      CreateAndAddHostDataSource(browser_context);
 
   // The guest is in an <iframe>. Add it to CSP.
   std::string csp = std::string("frame-src ") + kChromeUIMediaAppGuestURL + ";";

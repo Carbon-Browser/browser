@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,10 @@ package org.chromium.net;
 import android.net.TrafficStats;
 import android.os.Process;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
 
-/**
- * This class interacts with TrafficStats API provided by Android.
- */
+/** This class interacts with TrafficStats API provided by Android. */
 @JNINamespace("net::android::traffic_stats")
 public class AndroidTrafficStats {
     private AndroidTrafficStats() {}

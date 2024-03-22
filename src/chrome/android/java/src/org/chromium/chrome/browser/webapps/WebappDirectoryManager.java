@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,9 +32,7 @@ public class WebappDirectoryManager {
     /** Whether or not the class has already started trying to clean up obsolete directories. */
     private static final AtomicBoolean sMustCleanUpOldDirectories = new AtomicBoolean(true);
 
-    /**
-     * Deletes web app directories with stale data.
-     */
+    /** Deletes web app directories with stale data. */
     public static void cleanUpDirectories() {
         if (!sMustCleanUpOldDirectories.getAndSet(false)) return;
 

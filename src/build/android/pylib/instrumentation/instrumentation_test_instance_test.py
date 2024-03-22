@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,7 +12,6 @@ import collections
 import tempfile
 import unittest
 
-from six.moves import range  # pylint: disable=redefined-builtin
 from pylib.base import base_test_result
 from pylib.instrumentation import instrumentation_test_instance
 
@@ -153,7 +152,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
       },
     ]
 
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -191,8 +189,7 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
       },
     ]
 
-    o._test_filter = 'org.chromium.test.SampleTest.testMethod1'
-    o._test_jar = 'path/to/test.jar'
+    o._test_filters = ['org.chromium.test.SampleTest.testMethod1']
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -256,9 +253,78 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
         },
     ]
 
-    o._test_filter = \
-      'org.chromium.test.SampleTest.*-org.chromium.test.SampleTest.testMethod2'
-    o._test_jar = 'path/to/test.jar'
+    o._test_filters = [
+        'org.chromium.test.SampleTest.*'\
+          '-org.chromium.test.SampleTest.testMethod2'
+    ]
+    o._junit4_runner_class = 'J4Runner'
+    actual_tests = o.ProcessRawTests(raw_tests)
+
+    self.assertEqual(actual_tests, expected_tests)
+
+  def testGetTests_multipleGtestPositiveAndNegativeFilter(self):
+    o = self.createTestInstance()
+    raw_tests = [{
+        'annotations': {
+            'Feature': {
+                'value': ['Foo']
+            }
+        },
+        'class':
+        'org.chromium.test.SampleTest',
+        'superclass':
+        'java.lang.Object',
+        'methods': [
+            {
+                'annotations': {
+                    'SmallTest': None
+                },
+                'method': 'testMethod1',
+            },
+            {
+                'annotations': {
+                    'MediumTest': None
+                },
+                'method': 'testMethod2',
+            },
+        ],
+    }, {
+        'annotations': {
+            'Feature': {
+                'value': ['Foo']
+            }
+        },
+        'class':
+        'org.chromium.test.SampleTest2',
+        'superclass':
+        'java.lang.Object',
+        'methods': [{
+            'annotations': {
+                'SmallTest': None
+            },
+            'method': 'testMethod1',
+        }],
+    }]
+
+    expected_tests = [
+        {
+            'annotations': {
+                'Feature': {
+                    'value': ['Foo']
+                },
+                'SmallTest': None,
+            },
+            'class': 'org.chromium.test.SampleTest',
+            'is_junit4': True,
+            'method': 'testMethod1',
+        },
+    ]
+
+    o._test_filters = [
+        'org.chromium.test.SampleTest*testMethod1',
+        'org.chromium.test.SampleTest.*'\
+          '-org.chromium.test.SampleTest.testMethod2'
+    ]
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -296,8 +362,7 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
       },
     ]
 
-    o._test_filter = 'SampleTest.testMethod1'
-    o._test_jar = 'path/to/test.jar'
+    o._test_filters = ['SampleTest.testMethod1']
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -355,9 +420,8 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
       },
     ]
 
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
-    o._test_filter = 'org.chromium.test.SampleTest.testMethod1'
+    o._test_filters = ['org.chromium.test.SampleTest.testMethod1']
     actual_tests = o.ProcessRawTests(raw_tests)
 
     self.assertEqual(actual_tests, expected_tests)
@@ -405,8 +469,7 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
       },
     ]
 
-    o._test_filter = 'org.chromium.test.SampleTest2.*'
-    o._test_jar = 'path/to/test.jar'
+    o._test_filters = ['org.chromium.test.SampleTest2.*']
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -464,8 +527,7 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
       },
     ]
 
-    o._test_filter = '*-org.chromium.test.SampleTest.testMethod1'
-    o._test_jar = 'path/to/test.jar'
+    o._test_filters = ['*-org.chromium.test.SampleTest.testMethod1']
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -524,7 +586,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
     ]
 
     o._annotations = [('SmallTest', None)]
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -576,7 +637,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
     ]
 
     o._excluded_annotations = [('SmallTest', None)]
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -670,7 +730,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
     ]
 
     o._excluded_annotations = [('DoNotRevive', None), ('Manual', None)]
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -732,7 +791,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
     ]
 
     o._annotations = [('TestValue', '1')]
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -782,7 +840,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
     ]
 
     o._annotations = [('Feature', 'Bar')]
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -907,7 +964,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
     ]
 
     o._annotations = [('Feature', 'Bar'), ('Feature', 'Baz')]
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
 
@@ -1105,7 +1161,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
       expected_tests[i]['annotations'].update(
           raw_tests[0]['methods'][i]['annotations'])
 
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
     self.assertEqual(actual_tests, expected_tests)
@@ -1228,7 +1283,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
     expected_tests[4]['annotations'].update(
         raw_tests[0]['methods'][0]['annotations'])
 
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
     self.assertEqual(actual_tests, expected_tests)
@@ -1289,7 +1343,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
       expected_tests[i]['annotations'].update(
           raw_tests[0]['methods'][i]['annotations'])
 
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     actual_tests = o.ProcessRawTests(raw_tests)
     self.assertEqual(actual_tests, expected_tests)
@@ -1333,7 +1386,6 @@ class InstrumentationTestInstanceTest(unittest.TestCase):
         },
     ]
 
-    o._test_jar = 'path/to/test.jar'
     o._junit4_runner_class = 'J4Runner'
     self.assertRaises(
         instrumentation_test_instance.CommandLineParameterizationException,

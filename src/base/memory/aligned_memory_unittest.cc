@@ -1,8 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/memory/aligned_memory.h"
+
+#include <string.h>
 
 #include <memory>
 
@@ -13,23 +15,27 @@ namespace base {
 
 TEST(AlignedMemoryTest, DynamicAllocation) {
   void* p = AlignedAlloc(8, 8);
-  EXPECT_TRUE(p);
+  ASSERT_TRUE(p);
   EXPECT_TRUE(IsAligned(p, 8));
+  memset(p, 0, 8);  // Fill to check allocated size under ASAN.
   AlignedFree(p);
 
   p = AlignedAlloc(8, 16);
-  EXPECT_TRUE(p);
+  ASSERT_TRUE(p);
   EXPECT_TRUE(IsAligned(p, 16));
+  memset(p, 0, 8);  // Fill to check allocated size under ASAN.
   AlignedFree(p);
 
   p = AlignedAlloc(8, 256);
-  EXPECT_TRUE(p);
+  ASSERT_TRUE(p);
   EXPECT_TRUE(IsAligned(p, 256));
+  memset(p, 0, 8);  // Fill to check allocated size under ASAN.
   AlignedFree(p);
 
   p = AlignedAlloc(8, 4096);
-  EXPECT_TRUE(p);
+  ASSERT_TRUE(p);
   EXPECT_TRUE(IsAligned(p, 4096));
+  memset(p, 0, 8);  // Fill to check allocated size under ASAN.
   AlignedFree(p);
 }
 

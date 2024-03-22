@@ -1,21 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/download/vcard_coordinator.h"
 
-#include <ContactsUI/ContactsUI.h>
+#import <ContactsUI/ContactsUI.h>
 
-#include "base/scoped_observation.h"
-#import "ios/chrome/browser/download/vcard_tab_helper.h"
-#import "ios/chrome/browser/download/vcard_tab_helper_delegate.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/web_state_list/web_state_dependency_installer_bridge.h"
+#import "base/scoped_observation.h"
+#import "ios/chrome/browser/download/model/vcard_tab_helper.h"
+#import "ios/chrome/browser/download/model/vcard_tab_helper_delegate.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/web_state_list/model/web_state_dependency_installer_bridge.h"
 #import "ios/web/public/web_state_observer_bridge.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface VcardCoordinator () <DependencyInstalling, VcardTabHelperDelegate> {
   // Bridge which observes WebStateList and alerts this coordinator when this
@@ -53,15 +49,11 @@
 #pragma mark - DependencyInstalling methods
 
 - (void)installDependencyForWebState:(web::WebState*)webState {
-  if (VcardTabHelper::FromWebState(webState)) {
-    VcardTabHelper::FromWebState(webState)->set_delegate(self);
-  }
+  VcardTabHelper::FromWebState(webState)->set_delegate(self);
 }
 
 - (void)uninstallDependencyForWebState:(web::WebState*)webState {
-  if (VcardTabHelper::FromWebState(webState)) {
-    VcardTabHelper::FromWebState(webState)->set_delegate(nil);
-  }
+  VcardTabHelper::FromWebState(webState)->set_delegate(nil);
 }
 
 #pragma mark - Private

@@ -1,17 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
 import 'chrome://settings/lazy_load.js';
 
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-// <if expr="not chromeos_ash and not chromeos_lacros">
-import {listenOnce} from 'chrome://resources/js/util.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+// <if expr="not is_chromeos">
+import {listenOnce} from 'chrome://resources/js/util.js';
 // </if>
 
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// <if expr="not chromeos_ash and not chromeos_lacros">
+// <if expr="not is_chromeos">
 import {CrCheckboxElement} from 'chrome://settings/lazy_load.js';
 // </if>
 
@@ -21,14 +21,15 @@ import {loadTimeData} from 'chrome://settings/settings.js';
 
 import {pageVisibility, ProfileInfoBrowserProxyImpl, Router, routes, SettingsPeoplePageElement, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-// <if expr="not chromeos_ash and not chromeos_lacros">
+// <if expr="not is_chromeos">
 import {assertLT} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks, waitBeforeNextRender} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import {waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
 // </if>
 
 import {simulateSyncStatus} from './sync_test_util.js';
-// <if expr="not chromeos_ash and not chromeos_lacros">
+// <if expr="not is_chromeos">
 import {simulateStoredAccounts} from './sync_test_util.js';
 // </if>
 
@@ -58,7 +59,7 @@ suite('ProfileInfoTests', function() {
     syncBrowserProxy = new TestSyncBrowserProxy();
     SyncBrowserProxyImpl.setInstance(syncBrowserProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     peoplePage = document.createElement('settings-people-page');
     peoplePage.pageVisibility = pageVisibility;
     document.body.appendChild(peoplePage);
@@ -99,7 +100,7 @@ suite('ProfileInfoTests', function() {
   });
 });
 
-// <if expr="not chromeos_ash and not chromeos_lacros">
+// <if expr="not is_chromeos">
 suite('SigninDisallowedTests', function() {
   setup(function() {
     loadTimeData.overrideValues({signinAllowed: false});
@@ -110,7 +111,7 @@ suite('SigninDisallowedTests', function() {
     profileInfoBrowserProxy = new TestProfileInfoBrowserProxy();
     ProfileInfoBrowserProxyImpl.setInstance(profileInfoBrowserProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     peoplePage = document.createElement('settings-people-page');
     peoplePage.pageVisibility = pageVisibility;
     document.body.appendChild(peoplePage);
@@ -141,14 +142,17 @@ suite('SigninDisallowedTests', function() {
 
 suite('SyncStatusTests', function() {
   setup(async function() {
-    loadTimeData.overrideValues({signinAllowed: true});
+    loadTimeData.overrideValues({
+      signinAllowed: true,
+      turnOffSyncAllowedForManagedProfiles: false,
+    });
     syncBrowserProxy = new TestSyncBrowserProxy();
     SyncBrowserProxyImpl.setInstance(syncBrowserProxy);
 
     profileInfoBrowserProxy = new TestProfileInfoBrowserProxy();
     ProfileInfoBrowserProxyImpl.setInstance(profileInfoBrowserProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     peoplePage = document.createElement('settings-people-page');
     peoplePage.pageVisibility = pageVisibility;
     document.body.appendChild(peoplePage);
@@ -314,9 +318,12 @@ suite('SyncStatusTests', function() {
   });
   // </if>
 
-  test('SignOutDialogManagedProfile', async function() {
+  test('SignOutDialogManagedProfileTurnOffSyncDisallowed', async function() {
     let accountControl = null;
     await syncBrowserProxy.whenCalled('getSyncStatus');
+    loadTimeData.overrideValues({
+      turnOffSyncAllowedForManagedProfiles: false,
+    });
     simulateSyncStatus({
       signedIn: true,
       domain: 'example.com',
@@ -347,7 +354,6 @@ suite('SyncStatusTests', function() {
 
     syncBrowserProxy.resetResolver('signOut');
 
-
     disconnectManagedProfileConfirm!.click();
 
     await new Promise(function(resolve) {
@@ -355,6 +361,51 @@ suite('SyncStatusTests', function() {
     });
     const deleteProfile = await syncBrowserProxy.whenCalled('signOut');
     assertTrue(deleteProfile);
+  });
+
+  test('SignOutDialogManagedProfileTurnOffSyncAllowed', async function() {
+    let accountControl = null;
+    await syncBrowserProxy.whenCalled('getSyncStatus');
+    loadTimeData.overrideValues({
+      turnOffSyncAllowedForManagedProfiles: true,
+    });
+    simulateSyncStatus({
+      signedIn: true,
+      domain: 'example.com',
+      syncSystemEnabled: true,
+      statusAction: StatusAction.NO_ACTION,
+    });
+
+    assertFalse(!!peoplePage.shadowRoot!.querySelector('#dialog'));
+    accountControl =
+        peoplePage.shadowRoot!.querySelector('settings-sync-account-control')!;
+    await waitBeforeNextRender(accountControl);
+    const turnOffButton =
+        accountControl.shadowRoot!.querySelector<HTMLElement>('#turn-off')!;
+    turnOffButton.click();
+    flush();
+
+    await flushTasks();
+    const signoutDialog =
+        peoplePage.shadowRoot!.querySelector('settings-signout-dialog')!;
+    assertTrue(signoutDialog.$.dialog.open);
+    assertTrue(!!signoutDialog.shadowRoot!.querySelector('#deleteProfile'));
+
+    const disconnectConfirm =
+        signoutDialog.shadowRoot!.querySelector<HTMLElement>(
+            '#disconnectConfirm');
+    assertTrue(!!disconnectConfirm);
+    assertFalse(disconnectConfirm!.hidden);
+
+    syncBrowserProxy.resetResolver('signOut');
+
+    disconnectConfirm!.click();
+
+    await new Promise(function(resolve) {
+      listenOnce(window, 'popstate', resolve);
+    });
+    const deleteProfile = await syncBrowserProxy.whenCalled('signOut');
+    assertFalse(deleteProfile);
   });
 
   test('getProfileStatsCount', async function() {
@@ -451,7 +502,7 @@ suite('SyncSettings', function() {
     profileInfoBrowserProxy = new TestProfileInfoBrowserProxy();
     ProfileInfoBrowserProxyImpl.setInstance(profileInfoBrowserProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     peoplePage = document.createElement('settings-people-page');
     peoplePage.pageVisibility = pageVisibility;
     document.body.appendChild(peoplePage);

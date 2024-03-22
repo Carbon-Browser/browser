@@ -1,16 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/eche_app_ui/apps_access_manager_impl.h"
 
-#include "ash/components/multidevice/logging/logging.h"
-#include "ash/components/phonehub/multidevice_feature_access_manager.h"
 #include "ash/constants/ash_features.h"
-#include "ash/services/multidevice_setup/public/cpp/prefs.h"
 #include "ash/webui/eche_app_ui/pref_names.h"
 #include "ash/webui/eche_app_ui/proto/exo_messages.pb.h"
 #include "base/metrics/histogram_functions.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/components/phonehub/multidevice_feature_access_manager.h"
+#include "chromeos/ash/services/multidevice_setup/public/cpp/prefs.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
@@ -132,11 +132,13 @@ void AppsAccessManagerImpl::OnSendAppsSetupResponseReceived(
     // Log the error response before we change the setup operation to not in
     // progress.
     LogAppsSetupResponse(apps_setup_response.result());
-    SetAppsSetupOperationStatus(
-        (apps_setup_response.result() ==
-         proto::Result::RESULT_ERROR_USER_REJECTED)
-            ? AppsAccessSetupOperation::Status::kCompletedUserRejected
-            : AppsAccessSetupOperation::Status::kOperationFailedOrCancelled);
+    if (apps_setup_response.result() != proto::Result::RESULT_ACK_BY_EXO) {
+      SetAppsSetupOperationStatus(
+          (apps_setup_response.result() ==
+           proto::Result::RESULT_ERROR_USER_REJECTED)
+              ? AppsAccessSetupOperation::Status::kCompletedUserRejected
+              : AppsAccessSetupOperation::Status::kOperationFailedOrCancelled);
+    }
   }
 }
 
@@ -266,13 +268,13 @@ void AppsAccessManagerImpl::UpdateFeatureEnabledState(
         PA_LOG(INFO) << "Enabling Apps when the access is changed from "
                         "kAvailableButNotGranted to kAccessGranted.";
         multidevice_setup_client_->SetFeatureEnabledState(
-            Feature::kEche, /*enabled=*/true, /*auth_token=*/absl::nullopt,
+            Feature::kEche, /*enabled=*/true, /*auth_token=*/std::nullopt,
             base::DoNothing());
       } else if (IsWaitingForAccessToInitiallyEnableApps()) {
         PA_LOG(INFO) << "Enabling Apps for the first time now "
                      << "that access has been granted by the phone.";
         multidevice_setup_client_->SetFeatureEnabledState(
-            Feature::kEche, /*enabled=*/true, /*auth_token=*/absl::nullopt,
+            Feature::kEche, /*enabled=*/true, /*auth_token=*/std::nullopt,
             base::DoNothing());
       }
       break;
@@ -285,7 +287,7 @@ void AppsAccessManagerImpl::UpdateFeatureEnabledState(
         PA_LOG(INFO) << "Disabling kEche feature.";
         multidevice_setup_client_->SetFeatureEnabledState(
             Feature::kEche, /*enabled=*/false,
-            /*auth_token=*/absl::nullopt, base::DoNothing());
+            /*auth_token=*/std::nullopt, base::DoNothing());
       }
       break;
   }
@@ -392,6 +394,10 @@ void AppsAccessManagerImpl::LogAppsSetupResponse(
     case proto::Result::RESULT_ERROR_SYSTEM:
       base::UmaHistogramEnumeration(kEcheOnboardingHistogramName,
                                     OnboardingUserActionMetric::kSystemError);
+      break;
+    case proto::Result::RESULT_ACK_BY_EXO:
+      base::UmaHistogramEnumeration(kEcheOnboardingHistogramName,
+                                    OnboardingUserActionMetric::kAckByExo);
       break;
     default:
       base::UmaHistogramEnumeration(

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include "base/files/file.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "components/services/storage/public/cpp/filesystem/filesystem_impl.h"
 #include "components/services/unzip/public/mojom/unzipper.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -35,13 +37,12 @@ class UnzipperImpl : public mojom::Unzipper {
 
  private:
   // unzip::mojom::Unzipper:
-  void Unzip(
-      base::File zip_file,
-      mojo::PendingRemote<filesystem::mojom::Directory> output_dir_remote,
-      mojom::UnzipOptionsPtr options,
-      mojo::PendingRemote<mojom::UnzipFilter> filter_remote,
-      mojo::PendingRemote<mojom::UnzipListener> listener_remote,
-      UnzipCallback callback) override;
+  void Unzip(base::File zip_file,
+             mojo::PendingRemote<storage::mojom::Directory> output_dir_remote,
+             mojom::UnzipOptionsPtr options,
+             mojo::PendingRemote<mojom::UnzipFilter> filter_remote,
+             mojo::PendingRemote<mojom::UnzipListener> listener_remote,
+             UnzipCallback callback) override;
 
   void DetectEncoding(base::File zip_file,
                       DetectEncodingCallback callback) override;

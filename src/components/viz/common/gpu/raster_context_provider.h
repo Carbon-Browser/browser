@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,13 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "components/viz/common/gpu/context_cache_controller.h"
 #include "components/viz/common/gpu/context_lost_observer.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "components/viz/common/viz_common_export.h"
 #include "gpu/command_buffer/common/capabilities.h"
 #include "gpu/command_buffer/common/context_result.h"
@@ -39,6 +41,10 @@ class RasterInterface;
 }
 }  // namespace gpu
 
+namespace media {
+class VideoResourceUpdater;
+}
+
 namespace viz {
 
 class VIZ_COMMON_EXPORT RasterContextProvider {
@@ -54,7 +60,9 @@ class VIZ_COMMON_EXPORT RasterContextProvider {
     }
 
    private:
-    RasterContextProvider* const context_provider_;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION RasterContextProvider* const context_provider_;
     base::AutoLock context_lock_;
     std::unique_ptr<ContextCacheController::ScopedBusy> busy_;
   };
@@ -63,16 +71,16 @@ class VIZ_COMMON_EXPORT RasterContextProvider {
   virtual void AddRef() const = 0;
   virtual void Release() const = 0;
 
-  // Bind the 3d context to the current thread. This should be called before
+  // Bind the 3d context to the current sequence. This should be called before
   // accessing the contexts. Calling it more than once should have no effect.
   // Once this function has been called, the class should only be accessed
-  // from the same thread unless the function has some explicitly specified
-  // rules for access on a different thread. See SetupLockOnMainThread(), which
-  // can be used to provide access from multiple threads.
-  virtual gpu::ContextResult BindToCurrentThread() = 0;
+  // from the same sequence unless the function has some explicitly specified
+  // rules for access on a different sequence. See SetupLockOnMainThread(),
+  // which can be used to provide access from multiple threads.
+  virtual gpu::ContextResult BindToCurrentSequence() = 0;
 
   // Adds/removes an observer to be called when the context is lost. AddObserver
-  // should be called before BindToCurrentThread from the same thread that the
+  // should be called before BindToCurrentSequence from the same thread that the
   // context is bound to, or any time while the lock is acquired after checking
   // for context loss.
   // NOTE: Implementations must avoid post-tasking the to the observer directly
@@ -84,8 +92,8 @@ class VIZ_COMMON_EXPORT RasterContextProvider {
   // threads. This can be called on any thread.
   // Returns null if the context does not support locking and must be used from
   // the same thread.
-  // NOTE: Helper method for ScopedContextLock. Use that instead of calling this
-  // directly.
+  // NOTE: Helper method for ScopedRasterContextLock. Use that instead of
+  // calling this directly.
   virtual base::Lock* GetLock() = 0;
 
   // Get a CacheController interface to the 3d context.  The context provider
@@ -112,18 +120,22 @@ class VIZ_COMMON_EXPORT RasterContextProvider {
   // calling this.
   virtual const gpu::GpuFeatureInfo& GetGpuFeatureInfo() const = 0;
 
-  // TODO(vmiura): Hide ContextGL() & GrContext() behind some kind of lock.
-
-  // Get a GLES2 interface to the 3d context.  The context provider must have
-  // been successfully bound to a thread before calling this.
-  virtual gpu::gles2::GLES2Interface* ContextGL() = 0;
-
   // Get a Raster interface to the 3d context.  The context provider must have
   // been successfully bound to a thread before calling this.
   virtual gpu::raster::RasterInterface* RasterInterface() = 0;
 
+  // Returns the format that should be used for GL texture storage.
+  virtual unsigned int GetGrGLTextureFormat(SharedImageFormat format) const = 0;
+
  protected:
   virtual ~RasterContextProvider() = default;
+
+ private:
+  friend media::VideoResourceUpdater;
+  // Get a GLES2 interface to the 3d context.  The context provider must have
+  // been successfully bound to a thread before calling this.
+  // Used only by VideoResourceUpdater, remove once that is removed.
+  virtual gpu::gles2::GLES2Interface* ContextGL() = 0;
 };
 
 }  // namespace viz

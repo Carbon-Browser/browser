@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,7 @@ ui::NavButtonProvider::ButtonState ButtonStateToNavButtonProviderState(
 
     case views::Button::STATE_COUNT:
     default:
-      NOTREACHED();
-      return ui::NavButtonProvider::ButtonState::kNormal;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -55,6 +54,11 @@ float BrowserFrameViewLinuxNative::GetRestoredCornerRadiusDip() const {
   return window_frame_provider_->GetTopCornerRadiusDip();
 }
 
+int BrowserFrameViewLinuxNative::GetTranslucentTopAreaHeight() const {
+  return window_frame_provider_->IsTopFrameTranslucent() ? GetTopAreaHeight()
+                                                         : 0;
+}
+
 void BrowserFrameViewLinuxNative::Layout() {
   // Calling MaybeUpdateCachedFrameButtonImages() from Layout() is sufficient to
   // catch all cases that could update the appearance, since
@@ -72,7 +76,8 @@ BrowserFrameViewLinuxNative::GetFrameButtonStyle() const {
 void BrowserFrameViewLinuxNative::PaintRestoredFrameBorder(
     gfx::Canvas* canvas) const {
   window_frame_provider_->PaintWindowFrame(
-      canvas, GetLocalBounds(), GetTopAreaHeight(), ShouldPaintAsActive());
+      canvas, GetLocalBounds(), GetTopAreaHeight(), ShouldPaintAsActive(),
+      GetTiledEdges());
 }
 
 void BrowserFrameViewLinuxNative::MaybeUpdateCachedFrameButtonImages() {
@@ -97,10 +102,10 @@ void BrowserFrameViewLinuxNative::MaybeUpdateCachedFrameButtonImages() {
       views::Button* button = GetButtonFromDisplayType(type);
       DCHECK_EQ(std::string(views::ImageButton::kViewClassName),
                 button->GetClassName());
-      static_cast<views::ImageButton*>(button)->SetImage(
+      static_cast<views::ImageButton*>(button)->SetImageModel(
           button_state,
-          nav_button_provider_->GetImage(
-              type, ButtonStateToNavButtonProviderState(button_state)));
+          ui::ImageModel::FromImageSkia(nav_button_provider_->GetImage(
+              type, ButtonStateToNavButtonProviderState(button_state))));
     }
   }
 }
@@ -117,7 +122,6 @@ views::Button* BrowserFrameViewLinuxNative::GetButtonFromDisplayType(
     case ui::NavButtonProvider::FrameButtonDisplayType::kClose:
       return close_button();
     default:
-      NOTREACHED();
-      return nullptr;
+      NOTREACHED_NORETURN();
   }
 }

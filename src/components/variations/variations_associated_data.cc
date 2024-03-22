@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,8 @@ class GroupMapAccessor {
 
   // Retrieve the singleton.
   static GroupMapAccessor* GetInstance() {
-    return base::Singleton<GroupMapAccessor>::get();
+    return base::Singleton<GroupMapAccessor,
+                           base::LeakySingletonTraits<GroupMapAccessor>>::get();
   }
 
   GroupMapAccessor(const GroupMapAccessor&) = delete;
@@ -148,54 +149,6 @@ VariationID GetGoogleVariationIDFromHashes(
     IDCollectionKey key,
     const ActiveGroupId& active_group) {
   return GroupMapAccessor::GetInstance()->GetID(key, active_group);
-}
-
-bool AssociateVariationParams(
-    const std::string& trial_name,
-    const std::string& group_name,
-    const std::map<std::string, std::string>& params) {
-  return base::AssociateFieldTrialParams(trial_name, group_name, params);
-}
-
-bool GetVariationParams(const std::string& trial_name,
-                        std::map<std::string, std::string>* params) {
-  return base::GetFieldTrialParams(trial_name, params);
-}
-
-bool GetVariationParamsByFeature(const base::Feature& feature,
-                                 std::map<std::string, std::string>* params) {
-  return base::GetFieldTrialParamsByFeature(feature, params);
-}
-
-std::string GetVariationParamValue(const std::string& trial_name,
-                                   const std::string& param_name) {
-  return base::GetFieldTrialParamValue(trial_name, param_name);
-}
-
-std::string GetVariationParamValueByFeature(const base::Feature& feature,
-                                            const std::string& param_name) {
-  return base::GetFieldTrialParamValueByFeature(feature, param_name);
-}
-
-int GetVariationParamByFeatureAsInt(const base::Feature& feature,
-                                    const std::string& param_name,
-                                    int default_value) {
-  return base::GetFieldTrialParamByFeatureAsInt(feature, param_name,
-                                                default_value);
-}
-
-double GetVariationParamByFeatureAsDouble(const base::Feature& feature,
-                                          const std::string& param_name,
-                                          double default_value) {
-  return base::GetFieldTrialParamByFeatureAsDouble(feature, param_name,
-                                                   default_value);
-}
-
-bool GetVariationParamByFeatureAsBool(const base::Feature& feature,
-                                      const std::string& param_name,
-                                      bool default_value) {
-  return base::GetFieldTrialParamByFeatureAsBool(feature, param_name,
-                                                 default_value);
 }
 
 // Functions below are exposed for testing explicitly behind this namespace.

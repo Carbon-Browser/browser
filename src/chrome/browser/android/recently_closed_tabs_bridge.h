@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "chrome/browser/ui/android/tab_model/android_live_tab_context_wrapper.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/sessions/core/tab_restore_service_observer.h"
@@ -55,10 +56,10 @@ class TabIterator {
  private:
   void SetupInnerTabList();
 
-  const sessions::TabRestoreService::Entries& entries_;
+  const raw_ref<const sessions::TabRestoreService::Entries> entries_;
   sessions::TabRestoreService::Entries::const_iterator current_entry_;
-  const std::vector<std::unique_ptr<sessions::TabRestoreService::Tab>>* tabs_ =
-      nullptr;
+  raw_ptr<const std::vector<std::unique_ptr<sessions::TabRestoreService::Tab>>>
+      tabs_ = nullptr;
   absl::optional<std::vector<std::unique_ptr<
       sessions::TabRestoreService::Tab>>::const_reverse_iterator>
       current_tab_ = absl::nullopt;
@@ -75,10 +76,6 @@ class RecentlyClosedTabsBridge : public sessions::TabRestoreServiceObserver {
 
   void Destroy(JNIEnv* env);
 
-  jboolean GetRecentlyClosedTabs(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& jtabs,
-      jint max_tab_count);
   jboolean GetRecentlyClosedEntries(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& jentries,

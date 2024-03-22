@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ class DictionaryValueINIParser : public INIParser {
 
   ~DictionaryValueINIParser() override;
 
-  const base::DictionaryValue& root() const { return root_; }
+  const base::Value::Dict& root() const { return root_; }
 
  private:
   // INIParser implementation.
@@ -59,7 +59,7 @@ class DictionaryValueINIParser : public INIParser {
                      base::StringPiece key,
                      base::StringPiece value) override;
 
-  base::DictionaryValue root_;
+  base::Value::Dict root_;
 };
 
 #endif  // CHROME_COMMON_INI_PARSER_H_

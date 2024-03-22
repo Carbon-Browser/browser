@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,8 +54,8 @@ class TabStripController {
   // one whose content is shown.
   virtual bool IsActiveTab(int index) const = 0;
 
-  // Returns the index of the active tab.
-  virtual int GetActiveIndex() const = 0;
+  // Returns the index of the active tab, or nullopt if no tab is active.
+  virtual absl::optional<int> GetActiveIndex() const = 0;
 
   // Returns true if the selected index is selected.
   virtual bool IsTabSelected(int index) const = 0;
@@ -106,7 +106,7 @@ class TabStripController {
 
   // Switches the collapsed state of a tab group. Returns false if the state was
   // not successfully switched.
-  virtual bool ToggleTabGroupCollapsedState(
+  virtual void ToggleTabGroupCollapsedState(
       const tab_groups::TabGroupId group,
       ToggleTabGroupCollapsedStateOrigin origin =
           ToggleTabGroupCollapsedStateOrigin::kImplicitAction) = 0;
@@ -123,7 +123,8 @@ class TabStripController {
   virtual int HasAvailableDragActions() const = 0;
 
   // Notifies controller of a drop index update.
-  virtual void OnDropIndexUpdate(int index, bool drop_before) = 0;
+  virtual void OnDropIndexUpdate(absl::optional<int> index,
+                                 bool drop_before) = 0;
 
   // Creates the new tab.
   virtual void CreateNewTab() = 0;
@@ -194,10 +195,6 @@ class TabStripController {
   // Returns whether the shapes of background tabs are visible against the
   // frame for either active or inactive windows.
   virtual bool EverHasVisibleBackgroundTabShapes() const = 0;
-
-  // Returnes whether the window frame is being painted as active. This
-  // determines which colors are used in the tab strip.
-  virtual bool ShouldPaintAsActiveFrame() const = 0;
 
   // Returns whether tab strokes can ever be drawn. If true, strokes will only
   // be drawn if necessary.

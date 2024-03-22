@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,6 +6,7 @@ import("//build/config/android/config.gni")
 import("//build/config/arm.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/sanitizers/sanitizers.gni")
+import("//testing/test.gni")
 import("//third_party/libvpx/libvpx_srcs.gni")
 import("//third_party/nasm/nasm_assemble.gni")
 
@@ -30,11 +31,18 @@ if (current_cpu == "x86") {
     cpu_arch_full = "arm"
   }
 } else if (current_cpu == "arm64") {
-  if (is_chromeos || is_mac) {
+  if (is_win || is_chromeos || is_mac) {
+    # This is necessary for CrOS and macOS as they reuse the Linux
+    # configuration, of which there are two (see the later definition of
+    # os_category).
     cpu_arch_full = "arm64-highbd"
   } else {
     cpu_arch_full = current_cpu
   }
+} else if (current_cpu == "riscv64") {
+  cpu_arch_full = "generic"
+} else if (current_cpu == "loong64") {
+  cpu_arch_full = "loongarch"
 } else {
   cpu_arch_full = current_cpu
 }
@@ -245,13 +253,78 @@ if (current_cpu == "x86" || (current_cpu == "x64" && !is_msan)) {
   }
 }
 
-if (cpu_arch_full == "arm-neon-cpu-detect") {
-  static_library("libvpx_intrinsics_neon") {
-    configs -= [ "//build/config/compiler:compiler_arm_fpu" ]
+if (current_cpu == "loong64") {
+  source_set("libvpx_loongarch_lsx") {
+    configs -= [ "//build/config/compiler:chromium_code" ]
+    configs += [ "//build/config/compiler:no_chromium_code" ]
     configs += [ ":libvpx_config" ]
-    cflags = [ "-mfpu=neon" ]
-    sources = libvpx_srcs_arm_neon_cpu_detect_neon
-    deps = [ ":libvpx_arm_neon_cpu_detect_headers" ]
+    cflags = [ "-mlsx" ]
+    sources = libvpx_srcs_loongarch_lsx
+  }
+}
+
+if (current_cpu == "arm" || current_cpu == "arm64") {
+  source_set("libvpx_intrinsics_neon") {
+    check_includes = false
+    configs -= [ "//build/config/compiler:chromium_code" ]
+    configs += [ "//build/config/compiler:no_chromium_code" ]
+    configs += [ ":libvpx_config" ]
+    if (current_cpu == "arm") {
+      configs -= [ "//build/config/compiler:compiler_arm_fpu" ]
+      cflags = [ "-mfpu=neon" ]
+    }
+    if (cpu_arch_full == "arm-neon") {
+      sources = libvpx_srcs_arm_neon_neon
+      deps = [ ":libvpx_arm_neon_headers" ]
+    } else if (cpu_arch_full == "arm-neon-highbd") {
+      sources = libvpx_srcs_arm_neon_highbd_neon
+      deps = [ ":libvpx_arm_neon_highbd_headers" ]
+    } else if (cpu_arch_full == "arm-neon-cpu-detect") {
+      sources = libvpx_srcs_arm_neon_cpu_detect_neon
+      deps = [ ":libvpx_arm_neon_cpu_detect_headers" ]
+    } else if (cpu_arch_full == "arm64") {
+      sources = libvpx_srcs_arm64_neon
+      deps = [ ":libvpx_arm64_headers" ]
+    } else if (cpu_arch_full == "arm64-highbd") {
+      sources = libvpx_srcs_arm64_highbd_neon
+      deps = [ ":libvpx_arm64_highbd_headers" ]
+    }
+  }
+}
+
+if (current_cpu == "arm64") {
+  source_set("libvpx_intrinsics_neon_dotprod") {
+    check_includes = false
+    configs -= [ "//build/config/compiler:chromium_code" ]
+    configs += [ "//build/config/compiler:no_chromium_code" ]
+    configs += [ ":libvpx_config" ]
+    if (!is_win || is_clang) {
+      cflags = [ "-march=armv8.2-a+dotprod" ]
+    }
+    if (cpu_arch_full == "arm64") {
+      sources = libvpx_srcs_arm64_neon_dotprod
+      deps = [ ":libvpx_arm64_headers" ]
+    } else if (cpu_arch_full == "arm64-highbd") {
+      sources = libvpx_srcs_arm64_highbd_neon_dotprod
+      deps = [ ":libvpx_arm64_highbd_headers" ]
+    }
+  }
+
+  source_set("libvpx_intrinsics_neon_i8mm") {
+    check_includes = false
+    configs -= [ "//build/config/compiler:chromium_code" ]
+    configs += [ "//build/config/compiler:no_chromium_code" ]
+    configs += [ ":libvpx_config" ]
+    if (!is_win || is_clang) {
+      cflags = [ "-march=armv8.2-a+i8mm" ]
+    }
+    if (cpu_arch_full == "arm64") {
+      sources = libvpx_srcs_arm64_neon_i8mm
+      deps = [ ":libvpx_arm64_headers" ]
+    } else if (cpu_arch_full == "arm64-highbd") {
+      sources = libvpx_srcs_arm64_highbd_neon_i8mm
+      deps = [ ":libvpx_arm64_highbd_headers" ]
+    }
   }
 }
 
@@ -316,6 +389,10 @@ source_set("libvpx_x86_headers") {
 
 source_set("libvpx_x86_64_headers") {
   sources = libvpx_srcs_x86_64_headers
+}
+
+source_set("libvpx_loongarch_headers") {
+  sources = libvpx_srcs_loongarch_headers
 }
 
 source_set("libvpx_arm_headers") {
@@ -401,6 +478,12 @@ static_library("libvpx") {
     }
   } else if (current_cpu == "ppc64") {
     sources = libvpx_srcs_ppc64
+  } else if (current_cpu == "riscv64") {
+    sources = libvpx_srcs_generic
+    public_deps = [ ":libvpx_generic_headers" ]
+  } else if (current_cpu == "loong64") {
+    sources = libvpx_srcs_loongarch
+    public_deps = [ ":libvpx_loongarch_headers" ]
   }
 
   configs -= [ "//build/config/compiler:chromium_code" ]
@@ -419,14 +502,22 @@ static_library("libvpx") {
       ":libvpx_intrinsics_ssse3",
     ]
   }
-  if (cpu_arch_full == "arm-neon-cpu-detect") {
+  if (cpu_arch_full == "arm-neon-highbd" || cpu_arch_full == "arm-neon" ||
+      cpu_arch_full == "arm-neon-cpu-detect" || current_cpu == "arm64") {
     deps += [ ":libvpx_intrinsics_neon" ]
   }
+  if (current_cpu == "arm64") {
+    deps += [ ":libvpx_intrinsics_neon_dotprod" ]
+    deps += [ ":libvpx_intrinsics_neon_i8mm" ]
+  }
   if (is_android) {
-    deps += [ "//third_party/android_ndk:cpu_features" ]
+    deps += [ "//third_party/cpu_features:ndk_compat" ]
   }
   if (current_cpu == "arm" && arm_assembly_sources != []) {
     deps += [ ":libvpx_assembly_arm" ]
+  }
+  if (current_cpu == "loong64") {
+    deps += [ ":libvpx_loongarch_lsx" ]
   }
 
   public_configs = [ ":libvpx_external_config" ]
@@ -452,4 +543,17 @@ static_library("libvpxrc") {
   public_deps = [ ":libvpx" ]
 
   public_configs = [ ":libvpx_external_config" ]
+}
+
+if (fuzztest_supported) {
+  test("vp8_encoder_fuzz_test") {
+    sources = [ "tests/fuzzer/vp8_encoder_fuzz_test.cc" ]
+
+    enable_fuzztest = true
+
+    deps = [
+      ":libvpx",
+      "//third_party/fuzztest:fuzztest_gtest_main",
+    ]
+  }
 }

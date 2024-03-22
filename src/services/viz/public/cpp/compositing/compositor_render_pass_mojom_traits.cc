@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,8 @@ bool StructTraits<viz::mojom::CompositorRenderPassDataView,
       !data.ReadSubtreeCaptureId(&(*out)->subtree_capture_id) ||
       !data.ReadSubtreeSize(&(*out)->subtree_size) ||
       !data.ReadCopyRequests(&(*out)->copy_requests) ||
-      !data.ReadSharedElementResourceId(&(*out)->shared_element_resource_id) ||
+      !data.ReadViewTransitionElementResourceId(
+          &(*out)->view_transition_element_resource_id) ||
       !data.ReadId(&(*out)->id)) {
     return false;
   }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class InSessionAuthDialogControllerImpl : public InSessionAuthDialogController {
   // `auth_token_provider_` will outlive this controller since the controller
   // is part of `ash::Shell` and will be destroyed as part of `AshShellInit`
   // before `auth_token_provider`.
-  base::raw_ptr<InSessionAuthTokenProvider> auth_token_provider_;
+  raw_ptr<InSessionAuthTokenProvider> auth_token_provider_;
 };
 
 }  // namespace ash

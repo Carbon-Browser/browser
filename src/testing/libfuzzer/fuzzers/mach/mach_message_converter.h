@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/mac/scoped_mach_port.h"
+#include "base/apple/scoped_mach_port.h"
 #include "base/memory/raw_ptr.h"
 #include "testing/libfuzzer/fuzzers/mach/mach_message.pb.h"
 
@@ -23,8 +23,8 @@ struct SendablePort {
   mach_msg_type_name_t disposition = 0;
   MachPortType proto_type = static_cast<MachPortType>(-1);
 
-  base::mac::ScopedMachSendRight send_right;
-  base::mac::ScopedMachReceiveRight receive_right;
+  base::apple::ScopedMachSendRight send_right;
+  base::apple::ScopedMachReceiveRight receive_right;
 };
 
 // Holds the buffer allocation and port references for a message to be sent.

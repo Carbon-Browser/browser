@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,7 @@ import android.widget.FrameLayout;
 import org.chromium.chrome.browser.omnibox.R;
 import org.chromium.chrome.browser.omnibox.suggestions.base.BaseSuggestionView;
 
-/**
- * Container view for Search-Ready Omnibox suggestions.
- * Decorates the suggestion with a divider.
- */
+/** Container view for Search-Ready Omnibox suggestions. Decorates the suggestion with a divider. */
 public class EditUrlSuggestionView extends FrameLayout {
     private BaseSuggestionView<View> mContent;
     private View mDivider;
@@ -36,12 +33,16 @@ public class EditUrlSuggestionView extends FrameLayout {
         addView(mDivider, dividerLayoutParams);
     }
 
-    /** @return The base suggestion view for this edit URL suggestion. */
+    /**
+     * @return The base suggestion view for this edit URL suggestion.
+     */
     BaseSuggestionView<View> getBaseSuggestionView() {
         return mContent;
     }
 
-    /** @return The divider of this edit URL suggestion. */
+    /**
+     * @return The divider of this edit URL suggestion.
+     */
     View getDivider() {
         return mDivider;
     }

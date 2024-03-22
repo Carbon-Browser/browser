@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,8 @@
 #include <utility>
 
 #include "base/notreached.h"
-#include "base/strings/abseil_string_conversions.h"
 #include "net/http/http_raw_request_headers.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 
 namespace net {
 
@@ -65,9 +64,9 @@ void MultiplexedHttpStream::DispatchRequestHeadersCallback(
   if (!request_headers_callback_)
     return;
   HttpRawRequestHeaders raw_headers;
-  for (const auto& entry : spdy_headers)
-    raw_headers.Add(base::StringViewToStringPiece(entry.first),
-                    base::StringViewToStringPiece(entry.second));
+  for (const auto& entry : spdy_headers) {
+    raw_headers.Add(entry.first, entry.second);
+  }
   request_headers_callback_.Run(std::move(raw_headers));
 }
 

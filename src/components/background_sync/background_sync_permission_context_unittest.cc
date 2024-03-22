@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
@@ -43,11 +43,11 @@ class BackgroundSyncPermissionContextTest
     base::RunLoop run_loop;
 
     const permissions::PermissionRequestID id(
-        web_contents()->GetPrimaryMainFrame()->GetProcess()->GetID(),
-        web_contents()->GetPrimaryMainFrame()->GetRoutingID(),
+        web_contents()->GetPrimaryMainFrame()->GetGlobalId(),
         permissions::PermissionRequestID::RequestLocalId());
     permission_context->RequestPermission(
-        id, url, /* user_gesture= */ false,
+        permissions::PermissionRequestData(permission_context, id,
+                                           /*user_gesture=*/false, url),
         base::BindOnce(
             &BackgroundSyncPermissionContextTest::TrackPermissionDecision,
             base::Unretained(this), run_loop.QuitClosure()));

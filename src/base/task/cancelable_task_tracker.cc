@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task/scoped_set_task_priority_for_current_thread.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 namespace base {
 
@@ -31,51 +28,6 @@ void RunOrPostToTaskRunner(scoped_refptr<SequencedTaskRunner> task_runner,
     task_runner->PostTask(FROM_HERE, std::move(closure));
 }
 
-// TODO(https://crbug.com/1009795): Remove these once we have established
-// whether off-sequence cancelation is worthwhile.
-
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum class TaskStatus {
-  kSameSequenceLive = 0,
-  kOffSequenceLive = 1,
-  kSameSequenceCanceled = 2,
-  kOffSequenceCanceled = 3,
-  kMaxValue = kOffSequenceCanceled,
-};
-
-void UmaRecordTaskDuration(bool same_sequence,
-                           bool background,
-                           bool canceled,
-                           TimeDelta duration) {
-#define DECLARE_HISTOGRAM(suffix)                              \
-  Histogram::FactoryTimeGet(                                   \
-      "Scheduler.CancelableTaskTracker.TaskDuration2_" suffix, \
-      Milliseconds(1), Seconds(10), 50, Histogram::kUmaTargetedHistogramFlag)
-
-  static HistogramBase* histograms[] = {
-      DECLARE_HISTOGRAM("LiveForegroundOffSequence"),
-      DECLARE_HISTOGRAM("LiveForegroundSameSequence"),
-      DECLARE_HISTOGRAM("LiveBackgroundOffSequence"),
-      DECLARE_HISTOGRAM("LiveBackgroundSameSequence"),
-      DECLARE_HISTOGRAM("CanceledForegroundOffSequence"),
-      DECLARE_HISTOGRAM("CanceledForegroundSameSequence"),
-      DECLARE_HISTOGRAM("CanceledBackgroundOffSequence"),
-      DECLARE_HISTOGRAM("CanceledBackgroundSameSequence")};
-
-  int i = (same_sequence ? 1 : 0) + (background ? 2 : 0) + (canceled ? 4 : 0);
-  histograms[i]->AddTimeMillisecondsGranularity(duration);
-}
-
-const base::Feature kAllowOffSequenceTaskCancelation{
-    "AllowOffSequenceTaskCancelation", base::FEATURE_ENABLED_BY_DEFAULT};
-
-bool AllowOffSequenceTaskCancelation() {
-  if (!base::FeatureList::GetInstance())
-    return true;
-  return base::FeatureList::IsEnabled(kAllowOffSequenceTaskCancelation);
-}
-
 }  // namespace
 
 // static
@@ -86,7 +38,7 @@ CancelableTaskTracker::CancelableTaskTracker() {
 }
 
 CancelableTaskTracker::~CancelableTaskTracker() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   TryCancelAll();
 }
@@ -95,7 +47,7 @@ CancelableTaskTracker::TaskId CancelableTaskTracker::PostTask(
     TaskRunner* task_runner,
     const Location& from_here,
     OnceClosure task) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(weak_this_);
 
   return PostTaskAndReply(task_runner, from_here, std::move(task), DoNothing());
@@ -106,11 +58,11 @@ CancelableTaskTracker::TaskId CancelableTaskTracker::PostTaskAndReply(
     const Location& from_here,
     OnceClosure task,
     OnceClosure reply) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(weak_this_);
 
-  // We need a SequencedTaskRunnerHandle to run |reply|.
-  DCHECK(SequencedTaskRunnerHandle::IsSet());
+  // We need a SequencedTaskRunner::CurrentDefaultHandle to run |reply|.
+  DCHECK(SequencedTaskRunner::HasCurrentDefault());
 
   auto flag = MakeRefCounted<TaskCancellationFlag>();
 
@@ -122,11 +74,9 @@ CancelableTaskTracker::TaskId CancelableTaskTracker::PostTaskAndReply(
   OnceClosure untrack_closure =
       BindOnce(&CancelableTaskTracker::Untrack, Unretained(this), id);
   bool success = task_runner->PostTaskAndReply(
-      from_here,
-      BindOnce(&RunIfNotCanceled, SequencedTaskRunnerHandle::Get(), flag,
-               std::move(task)),
-      BindOnce(&RunThenUntrackIfNotCanceled, SequencedTaskRunnerHandle::Get(),
-               flag, std::move(reply), std::move(untrack_closure)));
+      from_here, BindOnce(&RunIfNotCanceled, flag, std::move(task)),
+      BindOnce(&RunThenUntrackIfNotCanceled, flag, std::move(reply),
+               std::move(untrack_closure)));
 
   if (!success)
     return kBadTaskId;
@@ -137,8 +87,8 @@ CancelableTaskTracker::TaskId CancelableTaskTracker::PostTaskAndReply(
 
 CancelableTaskTracker::TaskId CancelableTaskTracker::NewTrackedTaskId(
     IsCanceledCallback* is_canceled_cb) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
-  DCHECK(SequencedTaskRunnerHandle::IsSet());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(SequencedTaskRunner::HasCurrentDefault());
 
   TaskId id = next_id_;
   next_id_++;  // int64_t is big enough that we ignore the potential overflow.
@@ -152,19 +102,17 @@ CancelableTaskTracker::TaskId CancelableTaskTracker::NewTrackedTaskId(
 
   // Will always run |untrack_closure| on current sequence.
   ScopedClosureRunner untrack_runner(
-      BindOnce(&RunOrPostToTaskRunner, SequencedTaskRunnerHandle::Get(),
-               BindOnce(&RunIfNotCanceled, SequencedTaskRunnerHandle::Get(),
-                        flag, std::move(untrack_closure))));
+      BindOnce(&RunOrPostToTaskRunner, SequencedTaskRunner::GetCurrentDefault(),
+               BindOnce(&RunIfNotCanceled, flag, std::move(untrack_closure))));
 
-  *is_canceled_cb = BindRepeating(&IsCanceled, SequencedTaskRunnerHandle::Get(),
-                                  flag, std::move(untrack_runner));
+  *is_canceled_cb = BindRepeating(&IsCanceled, flag, std::move(untrack_runner));
 
   Track(id, std::move(flag));
   return id;
 }
 
 void CancelableTaskTracker::TryCancel(TaskId id) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const auto it = task_flags_.find(id);
   if (it == task_flags_.end()) {
@@ -186,85 +134,52 @@ void CancelableTaskTracker::TryCancel(TaskId id) {
 }
 
 void CancelableTaskTracker::TryCancelAll() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (const auto& it : task_flags_)
     it.second->data.Set();
   task_flags_.clear();
 }
 
 bool CancelableTaskTracker::HasTrackedTasks() const {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return !task_flags_.empty();
 }
 
 // static
 void CancelableTaskTracker::RunIfNotCanceled(
-    const scoped_refptr<SequencedTaskRunner>& origin_task_runner,
     const scoped_refptr<TaskCancellationFlag>& flag,
     OnceClosure task) {
-  // TODO(https://crbug.com/1009795): Record durations for executed tasks,
-  // correlated with whether the task runs on a background or foreground
-  // sequence, and whether it is the same sequence as the CancelableTaskTracker.
-  // Also correlate with whether the task was run despite being canceled, to
-  // allow an experiment to assess the value of off-sequence cancelation.
-
-  // Record canceled & off-sequence status for all tasks.
-  const bool was_canceled = flag->data.IsSet();
-  const bool same_sequence = origin_task_runner->RunsTasksInCurrentSequence();
-  const TaskStatus task_status =
-      was_canceled ? (same_sequence ? TaskStatus::kSameSequenceCanceled
-                                    : TaskStatus::kOffSequenceCanceled)
-                   : (same_sequence ? TaskStatus::kSameSequenceLive
-                                    : TaskStatus::kOffSequenceLive);
-  UMA_HISTOGRAM_ENUMERATION("Scheduler.CancelableTaskTracker.TaskStatus",
-                            task_status);
-
-  // Skip tasks if they are canceled, taking into account the off-sequence
-  // cancelation experiment.
-  const bool skip_task =
-      was_canceled && (AllowOffSequenceTaskCancelation() || same_sequence);
-  if (skip_task)
-    return;
-
-  // Run the task and record its duration.
-  const TimeTicks before_task_ticks = TimeTicks::Now();
-  std::move(task).Run();
-  const TimeDelta duration = TimeTicks::Now() - before_task_ticks;
-  const bool is_background =
-      internal::GetTaskPriorityForCurrentThread() < TaskPriority::USER_VISIBLE;
-  UmaRecordTaskDuration(same_sequence, is_background, was_canceled, duration);
+  if (!flag->data.IsSet()) {
+    std::move(task).Run();
+  }
 }
 
 // static
 void CancelableTaskTracker::RunThenUntrackIfNotCanceled(
-    const scoped_refptr<SequencedTaskRunner>& origin_task_runner,
     const scoped_refptr<TaskCancellationFlag>& flag,
     OnceClosure task,
     OnceClosure untrack) {
-  RunIfNotCanceled(origin_task_runner, flag, std::move(task));
-  RunIfNotCanceled(origin_task_runner, flag, std::move(untrack));
+  RunIfNotCanceled(flag, std::move(task));
+  RunIfNotCanceled(flag, std::move(untrack));
 }
 
 // static
 bool CancelableTaskTracker::IsCanceled(
-    const scoped_refptr<SequencedTaskRunner>& origin_task_runner,
     const scoped_refptr<TaskCancellationFlag>& flag,
     const ScopedClosureRunner& cleanup_runner) {
-  return flag->data.IsSet() &&
-         (AllowOffSequenceTaskCancelation() ||
-          origin_task_runner->RunsTasksInCurrentSequence());
+  return flag->data.IsSet();
 }
 
 void CancelableTaskTracker::Track(TaskId id,
                                   scoped_refptr<TaskCancellationFlag> flag) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(weak_this_);
   bool success = task_flags_.insert(std::make_pair(id, std::move(flag))).second;
   DCHECK(success);
 }
 
 void CancelableTaskTracker::Untrack(TaskId id) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CHECK(weak_this_);
   size_t num = task_flags_.erase(id);
   DCHECK_EQ(1u, num);

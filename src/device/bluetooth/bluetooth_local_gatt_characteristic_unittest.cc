@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,7 @@ class BluetoothLocalGattCharacteristicTest : public BluetoothGattServerTest {
   base::WeakPtr<BluetoothLocalGattCharacteristic> write_characteristic_;
   base::WeakPtr<BluetoothLocalGattCharacteristic> notify_characteristic_;
   base::WeakPtr<BluetoothLocalGattCharacteristic> indicate_characteristic_;
-  raw_ptr<BluetoothDevice> device_;
+  raw_ptr<BluetoothDevice, DanglingUntriaged> device_;
 };
 
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)

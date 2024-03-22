@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,6 +59,16 @@ void DocumentResourceCoordinator::SetHadFormInteraction() {
   if (!had_form_interaction_)
     service_->SetHadFormInteraction();
   had_form_interaction_ = true;
+}
+
+void DocumentResourceCoordinator::SetHadUserEdits() {
+  // Only send this signal for the first interaction as it doesn't get cleared
+  // for the lifetime of the frame and it's inefficient to send this message
+  // for every keystroke.
+  if (!had_user_edits_) {
+    service_->SetHadUserEdits();
+  }
+  had_user_edits_ = true;
 }
 
 void DocumentResourceCoordinator::OnFirstContentfulPaint(

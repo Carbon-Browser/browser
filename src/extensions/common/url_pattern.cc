@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include <ostream>
 
+#include "base/containers/contains.h"
 #include "base/strings/pattern.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
@@ -322,8 +323,9 @@ URLPattern::ParseResult URLPattern::Parse(base::StringPiece pattern) {
   // No other '*' can occur in the host, though. This isn't necessary, but is
   // done as a convenience to developers who might otherwise be confused and
   // think '*' works as a glob in the host.
-  if (host_.find('*') != std::string::npos)
+  if (base::Contains(host_, '*')) {
     return ParseResult::kInvalidHostWildcard;
+  }
 
   if (!host_.empty()) {
     // If |host_| is present (i.e., isn't a wildcard), we need to canonicalize
@@ -336,8 +338,9 @@ URLPattern::ParseResult URLPattern::Parse(base::StringPiece pattern) {
   }
 
   // Null characters are not allowed in hosts.
-  if (host_.find('\0') != std::string::npos)
+  if (base::Contains(host_, '\0')) {
     return ParseResult::kInvalidHost;
+  }
 
   return ParseResult::kSuccess;
 }
@@ -353,7 +356,7 @@ void URLPattern::SetValidSchemes(int valid_schemes) {
 
 void URLPattern::SetHost(base::StringPiece host) {
   spec_.clear();
-  host_.assign(host.data(), host.size());
+  host_ = host;
 }
 
 void URLPattern::SetMatchAllURLs(bool val) {
@@ -375,7 +378,7 @@ void URLPattern::SetMatchSubdomains(bool val) {
 
 bool URLPattern::SetScheme(base::StringPiece scheme) {
   spec_.clear();
-  scheme_.assign(scheme.data(), scheme.size());
+  scheme_ = scheme;
   if (scheme_ == "*") {
     valid_schemes_ &= (SCHEME_HTTP | SCHEME_HTTPS);
   } else if (!IsValidScheme(scheme_)) {
@@ -398,7 +401,7 @@ bool URLPattern::IsValidScheme(base::StringPiece scheme) const {
 
 void URLPattern::SetPath(base::StringPiece path) {
   spec_.clear();
-  path_.assign(path.data(), path.size());
+  path_ = path;
   path_escaped_ = path_;
   base::ReplaceSubstringsAfterOffset(&path_escaped_, 0, "\\", "\\\\");
   base::ReplaceSubstringsAfterOffset(&path_escaped_, 0, "?", "\\?");
@@ -407,7 +410,7 @@ void URLPattern::SetPath(base::StringPiece path) {
 bool URLPattern::SetPort(base::StringPiece port) {
   spec_.clear();
   if (IsValidPortForScheme(scheme_, port)) {
-    port_.assign(port.data(), port.size());
+    port_ = port;
     return true;
   }
   return false;
@@ -451,7 +454,7 @@ bool URLPattern::MatchesURL(const GURL& test) const {
 
 bool URLPattern::MatchesSecurityOrigin(const GURL& test) const {
   const GURL* test_url = &test;
-  bool has_inner_url = test.inner_url() != NULL;
+  bool has_inner_url = test.inner_url() != nullptr;
 
   if (has_inner_url) {
     if (!test.SchemeIsFileSystem())
@@ -629,7 +632,7 @@ bool URLPattern::Contains(const URLPattern& other) const {
          MatchesPath(StripTrailingWildcard(other.path()));
 }
 
-absl::optional<URLPattern> URLPattern::CreateIntersection(
+std::optional<URLPattern> URLPattern::CreateIntersection(
     const URLPattern& other) const {
   // Easy case: Schemes don't overlap. Return nullopt.
   int intersection_schemes = URLPattern::SCHEME_NONE;
@@ -641,7 +644,7 @@ absl::optional<URLPattern> URLPattern::CreateIntersection(
     intersection_schemes = valid_schemes_ & other.valid_schemes_;
 
   if (intersection_schemes == URLPattern::SCHEME_NONE)
-    return absl::nullopt;
+    return std::nullopt;
 
   {
     // In a few cases, we can (mostly) return a copy of one of the patterns.
@@ -703,7 +706,7 @@ absl::optional<URLPattern> URLPattern::CreateIntersection(
       !get_intersection(port_, other.port_, &URLPattern::MatchesPortPattern,
                         &port) ||
       !get_intersection(path_, other.path_, &URLPattern::MatchesPath, &path)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Only match subdomains if both patterns match subdomains.
@@ -767,14 +770,24 @@ bool URLPattern::MatchesPortPattern(base::StringPiece port) const {
 
 std::vector<std::string> URLPattern::GetExplicitSchemes() const {
   std::vector<std::string> result;
+  const bool is_wildcard_scheme = (scheme_ == "*");
 
-  if (scheme_ != "*" && !match_all_urls_ && IsValidScheme(scheme_)) {
+  if (!is_wildcard_scheme && !match_all_urls_ && IsValidScheme(scheme_)) {
     result.push_back(scheme_);
     return result;
   }
 
+  result.reserve(std::size(kValidSchemes));
   for (size_t i = 0; i < std::size(kValidSchemes); ++i) {
-    if (MatchesScheme(kValidSchemes[i])) {
+    const bool is_valid_scheme = (valid_schemes_ == SCHEME_ALL ||
+                                  (valid_schemes_ & kValidSchemeMasks[i]));
+    if (!is_valid_scheme) {
+      continue;
+    }
+
+    const bool scheme_matches =
+        (is_wildcard_scheme || kValidSchemes[i] == scheme_);
+    if (scheme_matches) {
       result.push_back(kValidSchemes[i]);
     }
   }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ class DiscoverFeedService;
 class DiscoverFeedServiceFactory : public BrowserStateKeyedServiceFactory {
  public:
   static DiscoverFeedService* GetForBrowserState(
-      ChromeBrowserState* browser_state);
+      ChromeBrowserState* browser_state,
+      bool create = true);
 
   static DiscoverFeedServiceFactory* GetInstance();
 

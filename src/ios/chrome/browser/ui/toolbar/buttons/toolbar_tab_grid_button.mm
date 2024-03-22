@@ -1,18 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tab_grid_button.h"
 
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_configuration.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
-#include "ios/chrome/browser/ui/util/ui_util.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const CGFloat kLabelSize = 14;
@@ -37,7 +32,8 @@ const CGFloat kLabelSize = 14;
   // the button's title may be empty or contain an easter egg, but the
   // accessibility value will always be equal to `tabCount`.
   NSString* tabStripButtonValue = [NSString stringWithFormat:@"%d", tabCount];
-  self.tabCountLabel.text = TextForTabCount(tabCount);
+  self.tabCountLabel.attributedText =
+      TextForTabCount(tabCount, kTabGridButtonFontSize);
   [self setAccessibilityValue:tabStripButtonValue];
 }
 
@@ -51,8 +47,27 @@ const CGFloat kLabelSize = 14;
   }
 }
 
+- (void)setIphHighlighted:(BOOL)iphHighlighted {
+  if (self.iphHighlighted == iphHighlighted) {
+    return;
+  }
+  [super setIphHighlighted:iphHighlighted];
+  if (self.iphHighlighted) {
+    self.tabCountLabel.textColor =
+        self.toolbarConfiguration.buttonsTintColorIPHHighlighted;
+  } else {
+    self.tabCountLabel.textColor = self.toolbarConfiguration.buttonsTintColor;
+  }
+}
+
 - (UILabel*)tabCountLabel {
   if (!_tabCountLabel) {
+    [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(accessibilityBoldTextStatusDidChange)
+               name:UIAccessibilityBoldTextStatusDidChangeNotification
+             object:nil];
+
     _tabCountLabel = [[UILabel alloc] init];
     [self addSubview:_tabCountLabel];
 
@@ -63,8 +78,6 @@ const CGFloat kLabelSize = 14;
     ]];
     AddSameCenterConstraints(self, _tabCountLabel);
 
-    _tabCountLabel.font = [UIFont systemFontOfSize:kTabGridButtonFontSize
-                                            weight:UIFontWeightBold];
     _tabCountLabel.adjustsFontSizeToFitWidth = YES;
     _tabCountLabel.minimumScaleFactor = 0.1;
     _tabCountLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
@@ -72,6 +85,15 @@ const CGFloat kLabelSize = 14;
     _tabCountLabel.textColor = self.toolbarConfiguration.buttonsTintColor;
   }
   return _tabCountLabel;
+}
+
+#pragma mark - Private
+
+// Callback for the notification that the user changed the bold status.
+- (void)accessibilityBoldTextStatusDidChange {
+  // Reset the attributed string to pick up the new font.
+  self.tabCountLabel.attributedText =
+      TextForTabCount(self.tabCount, kTabGridButtonFontSize);
 }
 
 @end

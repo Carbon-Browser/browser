@@ -1,13 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_API_API_RESOURCE_H_
 #define EXTENSIONS_BROWSER_API_API_RESOURCE_H_
 
-#include "base/memory/ref_counted.h"
 #include "content/public/browser/browser_thread.h"
-#include "extensions/common/extension.h"
+#include "extensions/common/extension_id.h"
 
 namespace extensions {
 
@@ -21,7 +20,7 @@ class ApiResource {
 
   virtual ~ApiResource();
 
-  const std::string& owner_extension_id() const { return owner_extension_id_; }
+  const ExtensionId& owner_extension_id() const { return owner_extension_id_; }
 
   // If this method returns |true|, the resource remains open when the
   // owning extension is suspended due to inactivity.
@@ -35,7 +34,7 @@ class ApiResource {
 
  private:
   // The extension that owns this resource.
-  const std::string owner_extension_id_;
+  const ExtensionId owner_extension_id_;
 };
 
 }  // namespace extensions

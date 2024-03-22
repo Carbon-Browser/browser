@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,11 +17,12 @@ namespace blink {
 class CORE_EXPORT InterpolableGridTrackRepeater final
     : public InterpolableValue {
  public:
-  InterpolableGridTrackRepeater(std::unique_ptr<InterpolableList> values,
+  InterpolableGridTrackRepeater(InterpolableList* values,
                                 const NGGridTrackRepeater& repeater);
-  static std::unique_ptr<InterpolableGridTrackRepeater> Create(
+  static InterpolableGridTrackRepeater* Create(
       const NGGridTrackRepeater& repeater,
-      const Vector<GridTrackSize, 1>& repeater_track_sizes);
+      const Vector<GridTrackSize, 1>& repeater_track_sizes,
+      float zoom);
 
   Vector<GridTrackSize, 1> CreateTrackSizes(
       const CSSToLengthConversionData& conversion_data) const;
@@ -49,12 +50,17 @@ class CORE_EXPORT InterpolableGridTrackRepeater final
   // they combine discretely.
   bool IsCompatibleWith(const InterpolableValue& other) const;
 
+  void Trace(Visitor* v) const override {
+    InterpolableValue::Trace(v);
+    v->Trace(values_);
+  }
+
  private:
   InterpolableGridTrackRepeater* RawClone() const final;
   InterpolableGridTrackRepeater* RawCloneAndZero() const final;
 
   // Stores the track sizes of a repeater.
-  std::unique_ptr<InterpolableList> values_;
+  Member<InterpolableList> values_;
   NGGridTrackRepeater repeater_;
 };
 

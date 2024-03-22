@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,11 @@ public class SelectableListUtils {
      * @param source The description source which indicates what kind of accessibility string to
      *         add.
      */
-    public static void setContentDescriptionContext(@NonNull Context context, @NonNull View view,
-            @Nullable String accessibilityContext, @ContentDescriptionSource int source) {
+    public static void setContentDescriptionContext(
+            @NonNull Context context,
+            @NonNull View view,
+            @Nullable String accessibilityContext,
+            @ContentDescriptionSource int source) {
         boolean missingContext = TextUtils.isEmpty(accessibilityContext);
         int accessibilityResource = -1;
         switch (source) {
@@ -43,16 +46,19 @@ public class SelectableListUtils {
                         missingContext ? R.string.remove : R.string.accessibility_list_menu_button;
                 break;
             case ContentDescriptionSource.REMOVE_BUTTON:
-                accessibilityResource = missingContext ? R.string.accessibility_toolbar_btn_menu
-                                                       : R.string.accessibility_list_remove_button;
+                accessibilityResource =
+                        missingContext
+                                ? R.string.accessibility_toolbar_btn_menu
+                                : R.string.accessibility_list_remove_button;
                 break;
             default:
                 assert false : "Unsupported ContentDescriptionSource detected!";
                 return;
         }
-        view.setContentDescription(missingContext
+        view.setContentDescription(
+                missingContext
                         ? context.getResources().getString(accessibilityResource)
-                        : context.getResources().getString(
-                                accessibilityResource, accessibilityContext));
+                        : context.getResources()
+                                .getString(accessibilityResource, accessibilityContext));
     }
 }

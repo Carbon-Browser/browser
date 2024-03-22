@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <functional>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "chrome/common/pdf_util.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
@@ -19,8 +19,8 @@ content::RenderFrameHost* FindPdfChildFrame(content::RenderFrameHost* rfh) {
     return nullptr;
 
   content::RenderFrameHost* pdf_rfh = nullptr;
-  rfh->ForEachRenderFrameHost(base::BindRepeating(
-      [](content::RenderFrameHost*& pdf_rfh, content::RenderFrameHost* rfh) {
+  rfh->ForEachRenderFrameHost(
+      [&pdf_rfh](content::RenderFrameHost* rfh) {
         if (!rfh->GetProcess()->IsPdf())
           return;
 
@@ -28,8 +28,7 @@ content::RenderFrameHost* FindPdfChildFrame(content::RenderFrameHost* rfh) {
             rfh->GetParent()->GetLastCommittedOrigin()));
         DCHECK(!pdf_rfh);
         pdf_rfh = rfh;
-      },
-      std::ref(pdf_rfh)));
+      });
 
   return pdf_rfh;
 }

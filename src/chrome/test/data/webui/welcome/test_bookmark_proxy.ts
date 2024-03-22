@@ -1,9 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
-import {AddBookmarkCallback, BookmarkData, BookmarkProxy} from 'chrome://welcome/shared/bookmark_proxy.js';
+import {BookmarkData, BookmarkProxy} from 'chrome://welcome/shared/bookmark_proxy.js';
 
 export class TestBookmarkProxy extends TestBrowserProxy implements
     BookmarkProxy {
@@ -18,9 +18,9 @@ export class TestBookmarkProxy extends TestBrowserProxy implements
     ]);
   }
 
-  addBookmark(data: BookmarkData, callback: AddBookmarkCallback) {
+  addBookmark(data: BookmarkData) {
     this.methodCalled('addBookmark', data);
-    callback({
+    return Promise.resolve({
       id: (this.fakeBookmarkId_++).toString(),
       title: '',
     });

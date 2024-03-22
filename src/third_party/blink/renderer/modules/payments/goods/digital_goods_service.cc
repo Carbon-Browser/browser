@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,9 +89,12 @@ void OnConsumeResponse(ScriptPromiseResolver* resolver,
 }  // namespace
 
 DigitalGoodsService::DigitalGoodsService(
-    mojo::PendingRemote<payments::mojom::blink::DigitalGoods> pending_remote) {
+    ExecutionContext* context,
+    mojo::PendingRemote<payments::mojom::blink::DigitalGoods> pending_remote)
+    : mojo_service_(context) {
   DCHECK(pending_remote.is_valid());
-  mojo_service_.Bind(std::move(pending_remote));
+  mojo_service_.Bind(std::move(pending_remote),
+                     context->GetTaskRunner(TaskType::kMiscPlatformAPI));
   DCHECK(mojo_service_);
 }
 
@@ -102,14 +105,14 @@ ScriptPromise DigitalGoodsService::getDetails(ScriptState* script_state,
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
-  if (item_ids.IsEmpty()) {
+  if (item_ids.empty()) {
     resolver->Reject(V8ThrowException::CreateTypeError(
         script_state->GetIsolate(), "Must specify at least one item ID."));
     return promise;
   }
 
   mojo_service_->GetDetails(
-      item_ids, WTF::Bind(&OnGetDetailsResponse, WrapPersistent(resolver)));
+      item_ids, WTF::BindOnce(&OnGetDetailsResponse, WrapPersistent(resolver)));
   return promise;
 }
 
@@ -117,8 +120,8 @@ ScriptPromise DigitalGoodsService::listPurchases(ScriptState* script_state) {
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
-  mojo_service_->ListPurchases(
-      WTF::Bind(&ResolveWithPurchaseReferenceList, WrapPersistent(resolver)));
+  mojo_service_->ListPurchases(WTF::BindOnce(&ResolveWithPurchaseReferenceList,
+                                             WrapPersistent(resolver)));
   return promise;
 }
 
@@ -127,8 +130,8 @@ ScriptPromise DigitalGoodsService::listPurchaseHistory(
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
-  mojo_service_->ListPurchaseHistory(
-      WTF::Bind(&ResolveWithPurchaseReferenceList, WrapPersistent(resolver)));
+  mojo_service_->ListPurchaseHistory(WTF::BindOnce(
+      &ResolveWithPurchaseReferenceList, WrapPersistent(resolver)));
   return promise;
 }
 
@@ -137,18 +140,20 @@ ScriptPromise DigitalGoodsService::consume(ScriptState* script_state,
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
-  if (purchase_token.IsEmpty()) {
+  if (purchase_token.empty()) {
     resolver->Reject(V8ThrowException::CreateTypeError(
         script_state->GetIsolate(), "Must specify purchase token."));
     return promise;
   }
 
   mojo_service_->Consume(
-      purchase_token, WTF::Bind(&OnConsumeResponse, WrapPersistent(resolver)));
+      purchase_token,
+      WTF::BindOnce(&OnConsumeResponse, WrapPersistent(resolver)));
   return promise;
 }
 
 void DigitalGoodsService::Trace(Visitor* visitor) const {
+  visitor->Trace(mojo_service_);
   ScriptWrappable::Trace(visitor);
 }
 

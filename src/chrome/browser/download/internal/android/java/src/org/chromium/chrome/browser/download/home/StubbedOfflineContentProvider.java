@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -92,10 +92,11 @@ public class StubbedOfflineContentProvider implements OfflineContentProvider {
             }
         }
 
-        mHandler.post(() -> {
-            if (mObserver != null) mObserver.onItemRemoved(id);
-            mDeleteItemCallback.notifyCalled();
-        });
+        mHandler.post(
+                () -> {
+                    if (mObserver != null) mObserver.onItemRemoved(id);
+                    mDeleteItemCallback.notifyCalled();
+                });
     }
 
     @Override
@@ -105,7 +106,7 @@ public class StubbedOfflineContentProvider implements OfflineContentProvider {
     public void pauseDownload(ContentId id) {}
 
     @Override
-    public void resumeDownload(ContentId id, boolean hasUserGesture) {}
+    public void resumeDownload(ContentId id) {}
 
     @Override
     public void cancelDownload(ContentId id) {}
@@ -118,6 +119,11 @@ public class StubbedOfflineContentProvider implements OfflineContentProvider {
     /** Triggers the onItemUpdated method of any observer. */
     protected void notifyObservers(ContentId id) {
         if (mObserver != null) mObserver.onItemUpdated(findItem(id), null);
+    }
+
+    /** Triggers the onItemRemoved method of any observer. */
+    protected void notifyObserversOfRemoval(ContentId id) {
+        if (mObserver != null) mObserver.onItemRemoved(id);
     }
 
     /** @return an offline item with matching {@link ContentId} if it exists and null otherwise. */

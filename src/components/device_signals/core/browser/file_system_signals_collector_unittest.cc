@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,12 +37,12 @@ SignalsAggregationRequest CreateRequest(SignalName signal_name,
     GetFileSystemInfoOptions options1;
     options1.file_path = base::FilePath::FromUTF8Unsafe("some file path");
     options1.compute_sha256 = true;
-    options1.compute_is_executable = true;
+    options1.compute_executable_metadata = true;
 
     GetFileSystemInfoOptions options2;
     options2.file_path = base::FilePath::FromUTF8Unsafe("some file path");
     options2.compute_sha256 = true;
-    options2.compute_is_executable = true;
+    options2.compute_executable_metadata = true;
 
     request.file_system_signal_parameters.push_back(options1);
     request.file_system_signal_parameters.push_back(options2);

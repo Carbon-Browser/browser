@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "mojo/core/ports/message_filter.h"
 #include "mojo/core/request_context.h"
 #include "mojo/core/user_message_impl.h"
+#include "mojo/public/cpp/bindings/mojo_buildflags.h"
 
 namespace mojo {
 namespace core {
@@ -201,7 +202,7 @@ MojoResult MessagePipeDispatcher::ReadMessage(
 }
 
 MojoResult MessagePipeDispatcher::SetQuota(MojoQuotaType type, uint64_t limit) {
-  absl::optional<uint64_t> new_ack_request_interval;
+  std::optional<uint64_t> new_ack_request_interval;
   {
     base::AutoLock lock(signal_lock_);
     switch (type) {
@@ -397,8 +398,11 @@ MojoResult MessagePipeDispatcher::CloseNoLock() {
     base::AutoUnlock unlock(signal_lock_);
     node_controller_->ClosePort(port_);
 
-    TRACE_EVENT_WITH_FLOW0("toplevel.flow", "MessagePipe closing",
-                           pipe_id_ + endpoint_, TRACE_EVENT_FLAG_FLOW_OUT);
+#if BUILDFLAG(MOJO_TRACE_ENABLED)
+    TRACE_EVENT_WITH_FLOW0(TRACE_DISABLED_BY_DEFAULT("mojom"),
+                           "MessagePipe closing", pipe_id_ + endpoint_,
+                           TRACE_EVENT_FLAG_FLOW_OUT);
+#endif
   }
 
   return MOJO_RESULT_OK;
@@ -442,17 +446,18 @@ HandleSignalsState MessagePipeDispatcher::GetHandleSignalsStateNoLock() const {
   }
   rv.satisfiable_signals |=
       MOJO_HANDLE_SIGNAL_PEER_CLOSED | MOJO_HANDLE_SIGNAL_QUOTA_EXCEEDED;
-
+#if BUILDFLAG(MOJO_TRACE_ENABLED)
   const bool was_peer_closed =
       last_known_satisfied_signals_ & MOJO_HANDLE_SIGNAL_PEER_CLOSED;
   const bool is_peer_closed =
       rv.satisfied_signals & MOJO_HANDLE_SIGNAL_PEER_CLOSED;
-  last_known_satisfied_signals_ = rv.satisfied_signals;
   if (is_peer_closed && !was_peer_closed) {
-    TRACE_EVENT_WITH_FLOW0("toplevel.flow", "MessagePipe peer closed",
-                           pipe_id_ + (1 - endpoint_),
-                           TRACE_EVENT_FLAG_FLOW_IN);
+    TRACE_EVENT_WITH_FLOW0(
+        TRACE_DISABLED_BY_DEFAULT("mojom"), "MessagePipe peer closed",
+        pipe_id_ + (1 - endpoint_), TRACE_EVENT_FLAG_FLOW_IN);
   }
+#endif
+  last_known_satisfied_signals_ = rv.satisfied_signals;
 
   return rv;
 }

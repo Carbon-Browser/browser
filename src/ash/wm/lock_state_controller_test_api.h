@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_WM_LOCK_STATE_CONTROLLER_TEST_API_H_
 
 #include "ash/wm/lock_state_controller.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -24,9 +25,6 @@ class LockStateControllerTestApi {
     controller_->shutdown_controller_ = shutdown_controller;
   }
 
-  bool lock_fail_timer_is_running() const {
-    return controller_->lock_fail_timer_.IsRunning();
-  }
   bool shutdown_timer_is_running() const {
     return controller_->pre_shutdown_timer_.IsRunning();
   }
@@ -35,10 +33,6 @@ class LockStateControllerTestApi {
   }
   bool is_animating_lock() const { return controller_->animating_lock_; }
 
-  void trigger_lock_fail_timeout() {
-    controller_->OnLockFailTimeout();
-    controller_->lock_fail_timer_.Stop();
-  }
   void trigger_shutdown_timeout() {
     controller_->OnPreShutdownAnimationTimeout();
     controller_->pre_shutdown_timer_.Stop();
@@ -49,7 +43,8 @@ class LockStateControllerTestApi {
   }
 
  private:
-  LockStateController* controller_;  // not owned
+  raw_ptr<LockStateController, DanglingUntriaged | ExperimentalAsh>
+      controller_;  // not owned
 };
 
 }  // namespace ash

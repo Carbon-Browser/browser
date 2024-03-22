@@ -1,10 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/printing/oauth2/authorization_zone_impl.h"
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -12,14 +11,18 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/containers/adapters.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/types/expected.h"
+#include "base/types/expected_macros.h"
 #include "chrome/browser/ash/printing/oauth2/authorization_server_session.h"
+#include "chrome/browser/ash/printing/oauth2/client_ids_database.h"
 #include "chrome/browser/ash/printing/oauth2/constants.h"
 #include "chrome/browser/ash/printing/oauth2/ipp_endpoint_token_fetcher.h"
 #include "chromeos/printing/uri.h"
@@ -54,8 +57,8 @@ std::string RandBase64String() {
 // from Section 2.3 of [RFC3986], with a minimum length of 43 characters
 // and a maximum length of 128 characters."
 std::string CodeChallengeS256(const std::string& code_verifier) {
-  DCHECK_GE(code_verifier.size(), 43);
-  DCHECK_LE(code_verifier.size(), 128);
+  DCHECK_GE(code_verifier.size(), 43u);
+  DCHECK_LE(code_verifier.size(), 128u);
   std::string output;
   base::Base64Encode(crypto::SHA256HashString(code_verifier), &output);
   return output;
@@ -104,26 +107,14 @@ base::expected<std::string, std::string> ExtractParameter(
   if (value.empty()) {
     return base::unexpected(base::StrCat({"parameter '", name, "' is empty"}));
   }
-  return value;
+  return base::ok(std::move(value));
 }
 
 // Calls `callback` with `status` and `data` as parameters. When `status` equals
 // StatusCode::kOK, ignores `data` and passes an empty string instead.
-void NoDataForOK(StatusCallback callback,
-                 StatusCode status,
-                 const std::string& data) {
-  std::move(callback).Run(status, (status == StatusCode::kOK) ? "" : data);
-}
-
-// Calls `callback`. Adds a prefix with `context` to an error sent in `data`.
-void PrefixForError(StatusCallback callback,
-                    const std::string& context,
-                    StatusCode status,
-                    const std::string& data) {
-  std::string msg = status == StatusCode::kOK
-                        ? data
-                        : base::StrCat({"[", context, "] ", data});
-  std::move(callback).Run(status, msg);
+void NoDataForOK(StatusCallback callback, StatusCode status, std::string data) {
+  std::move(callback).Run(status,
+                          (status == StatusCode::kOK) ? "" : std::move(data));
 }
 
 }  // namespace
@@ -144,8 +135,10 @@ AuthorizationZoneImpl::PendingAuthorization::~PendingAuthorization() = default;
 AuthorizationZoneImpl::AuthorizationZoneImpl(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const GURL& authorization_server_uri,
-    const std::string& client_id)
-    : server_data_(url_loader_factory, authorization_server_uri, client_id),
+    ClientIdsDatabase* client_ids_database)
+    : server_data_(url_loader_factory,
+                   authorization_server_uri,
+                   client_ids_database),
       url_loader_factory_(url_loader_factory) {}
 
 AuthorizationZoneImpl::~AuthorizationZoneImpl() = default;
@@ -153,7 +146,6 @@ AuthorizationZoneImpl::~AuthorizationZoneImpl() = default;
 void AuthorizationZoneImpl::InitAuthorization(const std::string& scope,
                                               StatusCallback callback) {
   DCHECK_LE(waiting_authorizations_.size(), kMaxNumberOfSessions);
-  AddContextToErrorMessage(callback);
 
   // If there are too many callbacks waiting, remove the oldest one.
   if (waiting_authorizations_.size() == kMaxNumberOfSessions) {
@@ -189,8 +181,6 @@ void AuthorizationZoneImpl::InitAuthorization(const std::string& scope,
 
 void AuthorizationZoneImpl::FinishAuthorization(const GURL& redirect_url,
                                                 StatusCallback callback) {
-  AddContextToErrorMessage(callback);
-
   // Parse the URL and retrieve the query segment.
   chromeos::Uri uri(redirect_url.spec());
   if (uri.GetLastParsingError().status !=
@@ -202,15 +192,12 @@ void AuthorizationZoneImpl::FinishAuthorization(const GURL& redirect_url,
   const auto query = uri.GetQueryAsMap();
 
   // Extract the parameter "state".
-  base::expected<std::string, std::string> val_or_err =
-      ExtractParameter(query, "state");
-  if (!val_or_err.has_value()) {
-    std::move(callback).Run(
-        StatusCode::kInvalidResponse,
-        base::StrCat({"Authorization Request: ", val_or_err.error()}));
-    return;
-  }
-  const std::string state = std::move(val_or_err.value());
+  ASSIGN_OR_RETURN(const std::string state, ExtractParameter(query, "state"),
+                   [&](std::string error) {
+                     std::move(callback).Run(
+                         StatusCode::kInvalidResponse,
+                         "Authorization Request: " + std::move(error));
+                   });
 
   // Use `state` to match pending authorization.
   base::flat_set<std::string> scopes;
@@ -224,14 +211,12 @@ void AuthorizationZoneImpl::FinishAuthorization(const GURL& redirect_url,
   // Check if the parameter "error" is present. If yes, try to extract the error
   // message.
   if (query.contains("error")) {
-    val_or_err = ExtractParameter(query, "error");
-    if (!val_or_err.has_value()) {
-      std::move(callback).Run(
-          StatusCode::kInvalidResponse,
-          base::StrCat({"Authorization Request: ", val_or_err.error()}));
-      return;
-    }
-    const std::string error = std::move(val_or_err.value());
+    ASSIGN_OR_RETURN(const std::string error, ExtractParameter(query, "error"),
+                     [&](std::string error) {
+                       std::move(callback).Run(
+                           StatusCode::kInvalidResponse,
+                           "Authorization Request: " + std::move(error));
+                     });
 
     StatusCode status;
     if (error == "server_error") {
@@ -241,29 +226,26 @@ void AuthorizationZoneImpl::FinishAuthorization(const GURL& redirect_url,
     } else {
       status = StatusCode::kAccessDenied;
     }
-    std::move(callback).Run(
-        status, base::StrCat({"Authorization Request: error=", error}));
+    std::move(callback).Run(status, "Authorization Request: error=" + error);
     return;
   }
 
   // Extract the parameter "code".
-  val_or_err = ExtractParameter(query, "code");
-  if (!val_or_err.has_value()) {
-    std::move(callback).Run(
-        StatusCode::kInvalidResponse,
-        base::StrCat({"Authorization Request: ", val_or_err.error()}));
-    return;
-  }
-  const std::string code = std::move(val_or_err.value());
+  ASSIGN_OR_RETURN(const std::string code, ExtractParameter(query, "code"),
+                   [&](std::string error) {
+                     std::move(callback).Run(
+                         StatusCode::kInvalidResponse,
+                         "Authorization Request: " + std::move(error));
+                   });
 
   // Create and add a new session.
   if (sessions_.size() == kMaxNumberOfSessions) {
     // There are too many sessions. Remove the oldest one.
-    auto callbacks = sessions_.front()->TakeWaitingList();
+    auto sessions_callbacks = sessions_.front()->TakeWaitingList();
     sessions_.pop_front();
-    for (auto& callback : callbacks) {
-      std::move(callback).Run(StatusCode::kTooManySessions,
-                              "The oldest session was closed");
+    for (auto& sessions_callback : sessions_callbacks) {
+      std::move(sessions_callback)
+          .Run(StatusCode::kTooManySessions, "The oldest session was closed");
     }
     // TODO(b:228876367) - revoke the token in AuthorizationServerSession
   }
@@ -340,15 +322,43 @@ void AuthorizationZoneImpl::AuthorizationProcedure() {
     PendingAuthorization& pa = pending_authorizations_.emplace_back(
         std::move(wa.scopes), RandBase64String<kLengthOfState>(),
         RandBase64String<kLengthOfCodeVerifier>());
-    const std::string auth_url = GetAuthorizationURL(
-        server_data_, pa.scopes, pa.state, pa.code_verifier);
-    std::move(wa.callback).Run(StatusCode::kOK, auth_url);
+    std::string auth_url = GetAuthorizationURL(server_data_, pa.scopes,
+                                               pa.state, pa.code_verifier);
+    std::move(wa.callback).Run(StatusCode::kOK, std::move(auth_url));
   }
   waiting_authorizations_.clear();
 }
 
+void AuthorizationZoneImpl::MarkAuthorizationZoneAsUntrusted() {
+  const std::string msg = "Authorization Server marked as untrusted";
+
+  pending_authorizations_.clear();
+
+  // This method will call all callbacks from `waiting_authorizations_` and
+  // empty it.
+  OnInitializeCallback(StatusCode::kUntrustedAuthorizationServer, msg);
+
+  // Clear `sessions_`.
+  for (std::unique_ptr<AuthorizationServerSession>& session : sessions_) {
+    std::vector<StatusCallback> callbacks = session->TakeWaitingList();
+    for (StatusCallback& callback : callbacks) {
+      std::move(callback).Run(StatusCode::kUntrustedAuthorizationServer, msg);
+    }
+  }
+  sessions_.clear();
+
+  // Clear `ipp_endpoints_`.
+  for (auto& [_, ipp_endpoint] : ipp_endpoints_) {
+    std::vector<StatusCallback> callbacks = ipp_endpoint->TakeWaitingList();
+    for (StatusCallback& callback : callbacks) {
+      std::move(callback).Run(StatusCode::kUntrustedAuthorizationServer, msg);
+    }
+  }
+  ipp_endpoints_.clear();
+}
+
 void AuthorizationZoneImpl::OnInitializeCallback(StatusCode status,
-                                                 const std::string& data) {
+                                                 std::string data) {
   if (status == StatusCode::kOK) {
     AuthorizationProcedure();
     return;
@@ -363,34 +373,28 @@ void AuthorizationZoneImpl::OnInitializeCallback(StatusCode status,
 void AuthorizationZoneImpl::OnSendTokenRequestCallback(
     AuthorizationServerSession* session,
     StatusCode status,
-    const std::string& data) {
+    std::string data) {
   // Find the session for which the request was completed.
-  auto it_session = std::find_if(
-      sessions_.begin(), sessions_.end(),
-      [&session](const std::unique_ptr<AuthorizationServerSession>& as) {
-        return as.get() == session;
-      });
+  auto it_session = base::ranges::find(
+      sessions_, session, &std::unique_ptr<AuthorizationServerSession>::get);
   DCHECK(it_session != sessions_.end());
 
   // Get the list of callbacks to run and copy the data.
   std::vector<StatusCallback> callbacks = session->TakeWaitingList();
-  // We have to make a copy of `data` here because it may be an error message
-  // owned by the session object deleted in the next if block.
-  const std::string data2 = data;
   // Erase the session if the request failed.
   if (status != StatusCode::kOK) {
     sessions_.erase(it_session);
   }
   // Run the callbacks.
   for (auto& callback : callbacks) {
-    std::move(callback).Run(status, data2);
+    std::move(callback).Run(status, data);
   }
 }
 
 void AuthorizationZoneImpl::OnTokenExchangeRequestCallback(
     const chromeos::Uri& ipp_endpoint,
     StatusCode status,
-    const std::string& data) {
+    std::string data) {
   if (status == StatusCode::kInvalidAccessToken) {
     // The access token used by IppEndpointFetcher is invalid. Find the session
     // the token came from and ask it to refresh the token.
@@ -418,34 +422,31 @@ void AuthorizationZoneImpl::OnTokenExchangeRequestCallback(
     return;
   }
   // For all other statuses just send back the result.
-  ResultForIppEndpoint(ipp_endpoint, status, data);
+  ResultForIppEndpoint(ipp_endpoint, status, std::move(data));
 }
 
 void AuthorizationZoneImpl::ResultForIppEndpoint(
     const chromeos::Uri& ipp_endpoint,
     StatusCode status,
-    const std::string& data) {
+    std::string data) {
   auto it = ipp_endpoints_.find(ipp_endpoint);
   DCHECK(it != ipp_endpoints_.end());
   // The list of callbacks to run.
   std::vector<StatusCallback> callbacks = it->second->TakeWaitingList();
-  // We have to make a copy of `data` here because it may be an error message
-  // owned by the ipp_endpoint object deleted in the next if block.
-  const std::string data2 = data;
   // Erase the IPP Endpoint in case of an error.
   if (status != StatusCode::kOK) {
     ipp_endpoints_.erase(it);
   }
   // Run the callbacks.
   for (auto& callback : callbacks) {
-    std::move(callback).Run(status, data2);
+    std::move(callback).Run(status, data);
   }
 }
 
 void AuthorizationZoneImpl::OnAccessTokenForEndpointCallback(
     const chromeos::Uri& ipp_endpoint,
     StatusCode status,
-    const std::string& data) {
+    std::string data) {
   auto it = ipp_endpoints_.find(ipp_endpoint);
   DCHECK(it != ipp_endpoints_.end());
   IppEndpointTokenFetcher* endpoint = it->second.get();
@@ -472,7 +473,7 @@ void AuthorizationZoneImpl::OnAccessTokenForEndpointCallback(
       break;
     default:
       // For all other statuses just send back the result.
-      ResultForIppEndpoint(ipp_endpoint, status, data);
+      ResultForIppEndpoint(ipp_endpoint, status, std::move(data));
       break;
   }
 }
@@ -481,9 +482,9 @@ void AuthorizationZoneImpl::AttemptTokenExchange(
     IppEndpointTokenFetcher* endpoint) {
   AuthorizationServerSession* auth_session = nullptr;
   // Try to match a session starting from the newest one.
-  for (auto its = sessions_.rbegin(); its != sessions_.rend(); ++its) {
-    if ((*its)->ContainsAll(endpoint->scope())) {
-      auth_session = its->get();
+  for (auto& session : base::Reversed(sessions_)) {
+    if (session->ContainsAll(endpoint->scope())) {
+      auth_session = session.get();
       break;
     }
   }
@@ -526,9 +527,8 @@ bool AuthorizationZoneImpl::FindAndRemovePendingAuthorization(
     const std::string& state,
     base::flat_set<std::string>& scopes,
     std::string& code_verifier) {
-  std::list<PendingAuthorization>::iterator it = std::find_if(
-      pending_authorizations_.begin(), pending_authorizations_.end(),
-      [&state](const PendingAuthorization& pa) { return pa.state == state; });
+  std::list<PendingAuthorization>::iterator it = base::ranges::find(
+      pending_authorizations_, state, &PendingAuthorization::state);
   if (it == pending_authorizations_.end()) {
     return false;
   }
@@ -538,19 +538,12 @@ bool AuthorizationZoneImpl::FindAndRemovePendingAuthorization(
   return true;
 }
 
-void AuthorizationZoneImpl::AddContextToErrorMessage(StatusCallback& callback) {
-  // Wrap the `callback` with the function PrefixForError() defined above.
-  const std::string prefix = server_data_.AuthorizationServerURI().spec();
-  auto new_call = base::BindOnce(&PrefixForError, std::move(callback), prefix);
-  callback = std::move(new_call);
-}
-
 std::unique_ptr<AuthorizationZone> AuthorizationZone::Create(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const GURL& authorization_server_uri,
-    const std::string& client_id) {
+    ClientIdsDatabase* client_ids_database) {
   return std::make_unique<AuthorizationZoneImpl>(
-      url_loader_factory, authorization_server_uri, client_id);
+      url_loader_factory, authorization_server_uri, client_ids_database);
 }
 
 }  // namespace oauth2

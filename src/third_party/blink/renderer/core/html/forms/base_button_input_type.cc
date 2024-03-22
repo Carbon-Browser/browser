@@ -37,12 +37,12 @@
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
+#include "third_party/blink/renderer/core/layout/forms/layout_button.h"
 
 namespace blink {
 
-BaseButtonInputType::BaseButtonInputType(HTMLInputElement& element)
-    : InputType(element), KeyboardClickableInputTypeView(element) {}
+BaseButtonInputType::BaseButtonInputType(Type type, HTMLInputElement& element)
+    : InputType(type, element), KeyboardClickableInputTypeView(element) {}
 
 void BaseButtonInputType::Trace(Visitor* visitor) const {
   KeyboardClickableInputTypeView::Trace(visitor);
@@ -59,18 +59,22 @@ void BaseButtonInputType::CreateShadowSubtree() {
       GetElement().GetDocument(), GetElement().ValueOrDefaultLabel()));
 }
 
-HTMLFormControlElement::PopupTriggerSupport
-BaseButtonInputType::SupportsPopupTriggering() const {
-  return HTMLFormControlElement::PopupTriggerSupport::kSupported;
+HTMLFormControlElement::PopoverTriggerSupport
+BaseButtonInputType::SupportsPopoverTriggering() const {
+  return HTMLFormControlElement::PopoverTriggerSupport::kSupported;
 }
 
 void BaseButtonInputType::ValueAttributeChanged() {
-  To<Text>(GetElement().UserAgentShadowRoot()->firstChild())
+  To<Text>(GetElement().EnsureShadowSubtree()->firstChild())
       ->setData(GetElement().ValueOrDefaultLabel());
 }
 
 bool BaseButtonInputType::ShouldSaveAndRestoreFormControlState() const {
   return false;
+}
+
+bool BaseButtonInputType::IsAutoDirectionalityFormAssociated() const {
+  return RuntimeEnabledFeatures::DirnameMoreInputTypesEnabled();
 }
 
 void BaseButtonInputType::AppendToFormData(FormData&) const {}
@@ -80,9 +84,8 @@ ControlPart BaseButtonInputType::AutoAppearance() const {
 }
 
 LayoutObject* BaseButtonInputType::CreateLayoutObject(
-    const ComputedStyle& style,
-    LegacyLayout legacy) const {
-  return LayoutObjectFactory::CreateButton(GetElement(), style, legacy);
+    const ComputedStyle&) const {
+  return MakeGarbageCollected<LayoutButton>(&GetElement());
 }
 
 InputType::ValueMode BaseButtonInputType::GetValueMode() const {

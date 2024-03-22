@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -17,8 +17,8 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/common/user_agent.h"
+#include "extensions/browser/api/core_extensions_browser_api_provider.h"
 #include "extensions/browser/api/extensions_api_client.h"
-#include "extensions/browser/core_extensions_browser_api_provider.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extensions_browser_interface_binders.h"
 #include "extensions/browser/null_app_sorting.h"
@@ -35,7 +35,7 @@
 #include "services/network/public/mojom/url_loader.mojom.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #endif
 
 using content::BrowserContext;
@@ -66,7 +66,7 @@ bool ShellExtensionsBrowserClient::AreExtensionsDisabled(
   return false;
 }
 
-bool ShellExtensionsBrowserClient::IsValidContext(BrowserContext* context) {
+bool ShellExtensionsBrowserClient::IsValidContext(void* context) {
   DCHECK(browser_context_);
   return context == browser_context_;
 }
@@ -84,7 +84,7 @@ bool ShellExtensionsBrowserClient::HasOffTheRecordContext(
 BrowserContext* ShellExtensionsBrowserClient::GetOffTheRecordContext(
     BrowserContext* context) {
   // app_shell only supports a single context.
-  return NULL;
+  return nullptr;
 }
 
 BrowserContext* ShellExtensionsBrowserClient::GetOriginalContext(
@@ -92,12 +92,37 @@ BrowserContext* ShellExtensionsBrowserClient::GetOriginalContext(
   return context;
 }
 
+content::BrowserContext*
+ShellExtensionsBrowserClient::GetContextRedirectedToOriginal(
+    content::BrowserContext* context,
+    bool force_guest_profile) {
+  return context;
+}
+
+content::BrowserContext* ShellExtensionsBrowserClient::GetContextOwnInstance(
+    content::BrowserContext* context,
+    bool force_guest_profile) {
+  return context;
+}
+
+content::BrowserContext*
+ShellExtensionsBrowserClient::GetContextForOriginalOnly(
+    content::BrowserContext* context,
+    bool force_guest_profile) {
+  return context;
+}
+
+bool ShellExtensionsBrowserClient::AreExtensionsDisabledForContext(
+    content::BrowserContext* context) {
+  return false;
+}
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 std::string ShellExtensionsBrowserClient::GetUserIdHashFromContext(
     content::BrowserContext* context) {
-  if (!chromeos::LoginState::IsInitialized())
+  if (!ash::LoginState::IsInitialized())
     return "";
-  return chromeos::LoginState::Get()->primary_user_hash();
+  return ash::LoginState::Get()->primary_user_hash();
 }
 #endif
 
@@ -176,7 +201,7 @@ void ShellExtensionsBrowserClient::GetEarlyExtensionPrefsObservers(
 
 ProcessManagerDelegate*
 ShellExtensionsBrowserClient::GetProcessManagerDelegate() const {
-  return NULL;
+  return nullptr;
 }
 
 std::unique_ptr<ExtensionHostDelegate>
@@ -234,7 +259,7 @@ ShellExtensionsBrowserClient::CreateRuntimeAPIDelegate(
 
 const ComponentExtensionResourceManager*
 ShellExtensionsBrowserClient::GetComponentExtensionResourceManager() {
-  return NULL;
+  return nullptr;
 }
 
 void ShellExtensionsBrowserClient::BroadcastEventToRenderers(
@@ -298,7 +323,7 @@ std::string ShellExtensionsBrowserClient::GetApplicationLocale() {
 
 std::string ShellExtensionsBrowserClient::GetUserAgent() const {
   return content::BuildUserAgentFromProduct(
-      version_info::GetProductNameAndVersionForUserAgent());
+      std::string(version_info::GetProductNameAndVersionForUserAgent()));
 }
 
 void ShellExtensionsBrowserClient::InitWithBrowserContext(

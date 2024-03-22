@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,7 +72,7 @@ class HandoffObserver : public BrowserListObserver,
   raw_ptr<Browser> active_browser_ = nullptr;
 
   // Instances of this class should be owned by their |delegate_|.
-  NSObject<HandoffObserverDelegate>* delegate_;
+  NSObject<HandoffObserverDelegate>* __weak delegate_;
 };
 
 #endif  // CHROME_BROWSER_UI_COCOA_HANDOFF_OBSERVER_H_

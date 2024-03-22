@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ void UserUninstalledPreinstalledWebAppPrefs::RegisterProfilePrefs(
 }
 
 void UserUninstalledPreinstalledWebAppPrefs::Add(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     base::flat_set<GURL> install_urls) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   base::Value::List url_list;
@@ -48,22 +48,22 @@ void UserUninstalledPreinstalledWebAppPrefs::Add(
         base::UserMetricsAction(kUserUninstalledPreinstalledAppAction));
   }
 
-  DictionaryPrefUpdate update(pref_service_,
+  ScopedDictPrefUpdate update(pref_service_,
                               prefs::kUserUninstalledPreinstalledWebAppPref);
-  update->SetKey(app_id, base::Value(std::move(url_list)));
+  update->Set(app_id, std::move(url_list));
 }
 
-absl::optional<AppId>
+absl::optional<webapps::AppId>
 UserUninstalledPreinstalledWebAppPrefs::LookUpAppIdByInstallUrl(
     const GURL& url) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  const base::Value* ids_to_urls = pref_service_->GetDictionary(
-      prefs::kUserUninstalledPreinstalledWebAppPref);
+  const base::Value::Dict& ids_to_urls =
+      pref_service_->GetDict(prefs::kUserUninstalledPreinstalledWebAppPref);
 
-  if (!ids_to_urls || !url.is_valid())
+  if (!url.is_valid())
     return absl::nullopt;
 
-  for (auto it : ids_to_urls->DictItems()) {
+  for (auto it : ids_to_urls) {
     const base::Value::List* urls = it.second.GetIfList();
     if (!urls)
       continue;
@@ -78,33 +78,25 @@ UserUninstalledPreinstalledWebAppPrefs::LookUpAppIdByInstallUrl(
 }
 
 bool UserUninstalledPreinstalledWebAppPrefs::DoesAppIdExist(
-    const AppId& app_id) {
+    const webapps::AppId& app_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  const base::Value* ids_to_urls = pref_service_->GetDictionary(
-      prefs::kUserUninstalledPreinstalledWebAppPref);
+  const base::Value::Dict& ids_to_urls =
+      pref_service_->GetDict(prefs::kUserUninstalledPreinstalledWebAppPref);
 
-  if (!ids_to_urls)
-    return false;
-
-  const base::Value::Dict* pref_info = ids_to_urls->GetIfDict();
-  return pref_info && pref_info->contains(app_id);
+  return ids_to_urls.contains(app_id);
 }
 
 void UserUninstalledPreinstalledWebAppPrefs::AppendExistingInstallUrlsPerAppId(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     base::flat_set<GURL>& urls) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  const base::Value* ids_to_urls = pref_service_->GetDictionary(
-      prefs::kUserUninstalledPreinstalledWebAppPref);
+  const base::Value::Dict& ids_to_urls =
+      pref_service_->GetDict(prefs::kUserUninstalledPreinstalledWebAppPref);
 
-  if (!ids_to_urls)
+  if (!ids_to_urls.contains(app_id))
     return;
 
-  const base::Value::Dict* pref_info = ids_to_urls->GetIfDict();
-  if (!pref_info || !pref_info->contains(app_id))
-    return;
-
-  const base::Value::List* current_list = pref_info->FindList(app_id);
+  const base::Value::List* current_list = ids_to_urls.FindList(app_id);
   if (!current_list)
     return;
 
@@ -118,33 +110,26 @@ void UserUninstalledPreinstalledWebAppPrefs::AppendExistingInstallUrlsPerAppId(
 
 int UserUninstalledPreinstalledWebAppPrefs::Size() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  const base::Value* ids_to_urls = pref_service_->GetDictionary(
-      prefs::kUserUninstalledPreinstalledWebAppPref);
+  const base::Value::Dict& ids_to_urls =
+      pref_service_->GetDict(prefs::kUserUninstalledPreinstalledWebAppPref);
 
-  if (!ids_to_urls)
-    return 0;
-
-  const base::Value::Dict* pref_info = ids_to_urls->GetIfDict();
-  return pref_info->size();
+  return ids_to_urls.size();
 }
 
 bool UserUninstalledPreinstalledWebAppPrefs::RemoveByInstallUrl(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     const GURL& install_url) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  const base::Value* ids_to_urls = pref_service_->GetDictionary(
-      prefs::kUserUninstalledPreinstalledWebAppPref);
+  const base::Value::Dict& ids_to_urls =
+      pref_service_->GetDict(prefs::kUserUninstalledPreinstalledWebAppPref);
 
   // Prefs are empty, so no need of removal.
-  if (!ids_to_urls)
-    return false;
 
   // Pref does not contain the app_id, so no need of removal.
-  const base::Value::Dict& pref_info = ids_to_urls->GetDict();
-  if (!pref_info.contains(app_id))
+  if (!ids_to_urls.contains(app_id))
     return false;
 
-  const base::Value::List* url_list = pref_info.FindList(app_id);
+  const base::Value::List* url_list = ids_to_urls.FindList(app_id);
   base::Value::List install_urls;
   for (const base::Value& url : *url_list) {
     const std::string* url_str = url.GetIfString();
@@ -157,21 +142,35 @@ bool UserUninstalledPreinstalledWebAppPrefs::RemoveByInstallUrl(
   if (install_urls.size() == url_list->size())
     return false;
 
-  DictionaryPrefUpdate update(pref_service_,
+  ScopedDictPrefUpdate update(pref_service_,
                               prefs::kUserUninstalledPreinstalledWebAppPref);
 
   // Add the URLs back to the pref and clear pref in case there are
   // app_ids with empty URLs.
   if (install_urls.size() == 0)
-    return update->RemoveKey(app_id);
+    return update->Remove(app_id);
 
   // Add the remaining URLs to the preinstalled prefs after deletion.
-  update->SetKey(app_id, base::Value(std::move(install_urls)));
+  update->Set(app_id, std::move(install_urls));
   return true;
 }
 
+bool UserUninstalledPreinstalledWebAppPrefs::RemoveByAppId(
+    const webapps::AppId& app_id) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  const base::Value::Dict& ids_to_urls =
+      pref_service_->GetDict(prefs::kUserUninstalledPreinstalledWebAppPref);
+
+  // Pref does not contain the app_id, so no need of removal.
+  if (!ids_to_urls.contains(app_id))
+    return false;
+  ScopedDictPrefUpdate update(pref_service_,
+                              prefs::kUserUninstalledPreinstalledWebAppPref);
+  return update->Remove(app_id);
+}
+
 bool UserUninstalledPreinstalledWebAppPrefs::AppIdContainsAllUrls(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     const base::flat_map<WebAppManagement::Type,
                          WebApp::ExternalManagementConfig>& url_map,
     const bool only_default) {
@@ -179,16 +178,10 @@ bool UserUninstalledPreinstalledWebAppPrefs::AppIdContainsAllUrls(
   if (url_map.empty())
     return false;
 
-  const base::Value* ids_to_urls = pref_service_->GetDictionary(
-      prefs::kUserUninstalledPreinstalledWebAppPref);
-  if (!ids_to_urls)
-    return false;
+  const base::Value::Dict& ids_to_urls =
+      pref_service_->GetDict(prefs::kUserUninstalledPreinstalledWebAppPref);
 
-  const base::Value::Dict* pref_info = ids_to_urls->GetIfDict();
-  if (!pref_info)
-    return false;
-
-  const base::Value::List* current_list = pref_info->FindList(app_id);
+  const base::Value::List* current_list = ids_to_urls.FindList(app_id);
   if (!current_list)
     return false;
 

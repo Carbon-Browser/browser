@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,8 @@ const char* const kNegativeLatin[] = {
     "hidden", "password", "loluszais",  "tenimiafina",
     "second", "passwort", "middlename", "paroladordine",
     "codice", "pasvorto", "familyname", "inomboloyokuvula",
-    "modpas", "salasana", "motdepasse", "numeraeleiloaesesi"};
+    "modpas", "salasana", "motdepasse", "numeraeleiloaesesi",
+    "captcha"};
 const size_t kNegativeLatinSize = std::size(kNegativeLatin);
 
 const char* const kNegativeNonLatin[] = {"fjalëkalim",

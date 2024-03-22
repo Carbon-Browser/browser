@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,12 +79,10 @@ namespace chromeos {
 // static
 DesksHelper* DesksHelper::Get(aura::Window* window) {
   DCHECK(window);
-  DesksHelperLacros* desks_helper = window->GetProperty(kDesksHelperLacrosKey);
-  if (!desks_helper) {
-    desks_helper = new DesksHelperLacros(window);
-    window->SetProperty(kDesksHelperLacrosKey, desks_helper);
-  }
-  return desks_helper;
+  if (auto* desks_helper = window->GetProperty(kDesksHelperLacrosKey))
+    return desks_helper;
+  return window->SetProperty(kDesksHelperLacrosKey,
+                             std::make_unique<DesksHelperLacros>(window));
 }
 
 DesksHelper::DesksHelper() = default;

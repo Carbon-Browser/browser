@@ -1,12 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.payments.ui;
 
-/**
- * The line item on the bill.
- */
+/** The line item on the bill. */
 public class LineItem {
     private final String mLabel;
     private final String mCurrency;

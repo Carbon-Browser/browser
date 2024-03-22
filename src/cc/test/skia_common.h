@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <optional>
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
@@ -19,7 +20,6 @@
 #include "cc/paint/image_animation_count.h"
 #include "cc/paint/paint_image.h"
 #include "cc/paint/paint_image_generator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
@@ -59,7 +59,7 @@ PaintImage CreateDiscardablePaintImage(
     bool allocate_encoded_memory = true,
     PaintImage::Id id = PaintImage::kInvalidId,
     SkColorType color_type = kN32_SkColorType,
-    absl::optional<YUVSubsampling> yuv_format = absl::nullopt,
+    std::optional<YUVSubsampling> yuv_format = std::nullopt,
     SkYUVAPixmapInfo::DataType yuv_data_type =
         SkYUVAPixmapInfo::DataType::kUnorm8);
 

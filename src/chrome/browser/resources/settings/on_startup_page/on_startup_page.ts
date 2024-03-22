@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
  * @fileoverview
  * 'settings-on-startup-page' is a settings page.
  */
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
-import '../controls/controlled_radio_button.js';
-import '../controls/extension_controlled_indicator.js';
-import '../controls/settings_radio_group.js';
+import '/shared/settings/controls/controlled_radio_button.js';
+import '/shared/settings/controls/extension_controlled_indicator.js';
+import '/shared/settings/controls/settings_radio_group.js';
 import './startup_urls_page.js';
 import '../i18n_setup.js';
 import '../settings_shared.css.js';
 
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {NtpExtension, OnStartupBrowserProxyImpl} from './on_startup_browser_proxy.js';
@@ -30,7 +30,7 @@ enum PrefValues {
   CONTINUE_AND_OPEN_SPECIFIC = 6,
 }
 
-const SettingsOnStartupPageElementBase = WebUIListenerMixin(PolymerElement);
+const SettingsOnStartupPageElementBase = WebUiListenerMixin(PolymerElement);
 
 export class SettingsOnStartupPageElement extends
     SettingsOnStartupPageElementBase {
@@ -67,7 +67,7 @@ export class SettingsOnStartupPageElement extends
     };
     OnStartupBrowserProxyImpl.getInstance().getNtpExtension().then(
         updateNtpExtension);
-    this.addWebUIListener('update-ntp-extension', updateNtpExtension);
+    this.addWebUiListener('update-ntp-extension', updateNtpExtension);
   }
 
   private getName_(value: number): string {

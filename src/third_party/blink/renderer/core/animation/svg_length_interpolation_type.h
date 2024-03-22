@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 
 namespace blink {
 
-class SVGLengthContext;
 enum class SVGLengthMode;
 
 class SVGLengthInterpolationType : public SVGInterpolationType {
@@ -23,11 +22,10 @@ class SVGLengthInterpolationType : public SVGInterpolationType {
             SVGLength::NegativeValuesForbiddenForAnimatedLengthAttribute(
                 attribute)) {}
 
-  static std::unique_ptr<InterpolableValue> NeutralInterpolableValue();
+  static InterpolableValue* NeutralInterpolableValue();
   static InterpolationValue MaybeConvertSVGLength(const SVGLength&);
   static SVGLength* ResolveInterpolableSVGLength(
       const InterpolableValue&,
-      const SVGLengthContext&,
       SVGLengthMode,
       bool negative_values_forbidden);
 
@@ -38,9 +36,6 @@ class SVGLengthInterpolationType : public SVGInterpolationType {
       const SVGPropertyBase& svg_value) const final;
   SVGPropertyBase* AppliedSVGValue(const InterpolableValue&,
                                    const NonInterpolableValue*) const final;
-  void Apply(const InterpolableValue&,
-             const NonInterpolableValue*,
-             InterpolationEnvironment&) const final;
 
   const SVGLengthMode unit_mode_;
   const bool negative_values_forbidden_;

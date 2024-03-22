@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,12 @@
 #include <algorithm>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "ash/app_list/app_list_model_provider.h"
+#include "ash/app_list/app_list_util.h"
 #include "ash/app_list/app_list_view_delegate.h"
 #include "ash/app_list/model/app_list_model.h"
 #include "ash/app_list/views/app_list_keyboard_controller.h"
@@ -23,7 +25,6 @@
 #include "ash/app_list/views/scrollable_apps_grid_view.h"
 #include "ash/app_list/views/search_box_view.h"
 #include "ash/bubble/bubble_utils.h"
-#include "ash/constants/ash_features.h"
 #include "ash/controls/rounded_scroll_bar.h"
 #include "ash/controls/scroll_view_gradient_helper.h"
 #include "ash/public/cpp/metrics_util.h"
@@ -31,14 +32,17 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/icon_button.h"
-#include "base/bind.h"
+#include "ash/style/typography.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
@@ -67,8 +71,9 @@ namespace {
 
 constexpr int kContinueColumnCount = 2;
 
-// Insets for the vertical scroll bar.
-constexpr auto kVerticalScrollInsets = gfx::Insets::TLBR(1, 0, 1, 1);
+// Insets for the vertical scroll bar. The bottom is pushed up slightly to keep
+// the scroll bar from being clipped by the rounded corners.
+constexpr auto kVerticalScrollInsets = gfx::Insets::TLBR(1, 0, 16, 1);
 
 // The padding between different sections within the apps page. Also used for
 // interior apps page container margin.
@@ -107,6 +112,42 @@ constexpr base::TimeDelta kShowPageAnimationTransformDuration =
 constexpr base::TimeDelta kShowPageAnimationOpacityDuration =
     base::Milliseconds(100);
 
+// A view that runs a click callback when clicked or tapped.
+class ClickableView : public views::View {
+  METADATA_HEADER(ClickableView, views::View)
+
+ public:
+  explicit ClickableView(base::RepeatingClosure click_callback)
+      : click_callback_(click_callback) {}
+  ~ClickableView() override = default;
+
+  // views::View:
+  bool OnMousePressed(const ui::MouseEvent& event) override {
+    views::View::OnMousePressed(event);
+    // Return true so this object will receive a mouse released event.
+    return true;
+  }
+
+  void OnMouseReleased(const ui::MouseEvent& event) override {
+    views::View::OnMouseReleased(event);
+    click_callback_.Run();
+  }
+
+  void OnGestureEvent(ui::GestureEvent* event) override {
+    views::View::OnGestureEvent(event);
+    if (event->type() == ui::ET_GESTURE_TAP) {
+      event->SetHandled();
+      click_callback_.Run();
+    }
+  }
+
+ private:
+  base::RepeatingClosure click_callback_;
+};
+
+BEGIN_METADATA(ClickableView)
+END_METADATA
+
 }  // namespace
 
 AppListBubbleAppsPage::AppListBubbleAppsPage(
@@ -118,6 +159,8 @@ AppListBubbleAppsPage::AppListBubbleAppsPage(
     SearchBoxView* search_box)
     : view_delegate_(view_delegate),
       search_box_(search_box),
+      app_list_keyboard_controller_(
+          std::make_unique<AppListKeyboardController>(this)),
       app_list_nudge_controller_(std::make_unique<AppListNudgeController>()) {
   DCHECK(view_delegate);
   DCHECK(drag_and_drop_host);
@@ -134,7 +177,7 @@ AppListBubbleAppsPage::AppListBubbleAppsPage(
   scroll_view_->ClipHeightTo(0, std::numeric_limits<int>::max());
   scroll_view_->SetDrawOverflowIndicator(false);
   // Don't paint a background. The bubble already has one.
-  scroll_view_->SetBackgroundColor(absl::nullopt);
+  scroll_view_->SetBackgroundColor(std::nullopt);
   // Arrow keys are used to select app icons.
   scroll_view_->SetAllowKeyboardScrolling(false);
 
@@ -159,11 +202,9 @@ AppListBubbleAppsPage::AppListBubbleAppsPage(
       kVerticalPaddingBetweenSections));
   layout->set_cross_axis_alignment(BoxLayout::CrossAxisAlignment::kStretch);
 
-  // When feature LauncherHideContinueSection is enabled, the "Continue where
-  // you left off" label is in a container that is a child of this view.
-  // Otherwise the label is a child of the ContinueSectionView.
-  if (features::IsLauncherHideContinueSectionEnabled())
-    InitContinueLabelContainer(scroll_contents.get());
+  // The "Continue where you left off" label is in a container that is a child
+  // of this view.
+  InitContinueLabelContainer(scroll_contents.get());
 
   // Continue section row.
   continue_section_ = scroll_contents->AddChildView(
@@ -172,20 +213,18 @@ AppListBubbleAppsPage::AppListBubbleAppsPage(
   continue_section_->SetBorder(
       views::CreateEmptyBorder(kContinueSectionInsets));
   continue_section_->SetNudgeController(app_list_nudge_controller_.get());
-  if (features::IsLauncherHideContinueSectionEnabled()) {
-    // Decrease the between-sections spacing so the continue label is closer to
-    // the continue tasks section.
-    continue_section_->SetProperty(views::kMarginsKey,
-                                   gfx::Insets::TLBR(-14, 0, 0, 0));
-  }
+  // Decrease the between-sections spacing so the continue label is closer to
+  // the continue tasks section.
+  continue_section_->SetProperty(views::kMarginsKey,
+                                 gfx::Insets::TLBR(-14, 0, 0, 0));
 
   // Observe changes in continue section visibility, to keep separator
   // visibility in sync.
   continue_section_->AddObserver(this);
 
   // Recent apps row.
-  recent_apps_ = scroll_contents->AddChildView(
-      std::make_unique<RecentAppsView>(this, view_delegate));
+  recent_apps_ = scroll_contents->AddChildView(std::make_unique<RecentAppsView>(
+      app_list_keyboard_controller_.get(), view_delegate));
   recent_apps_->UpdateAppListConfig(app_list_config);
   // Observe changes in continue section visibility, to keep separator
   // visibility in sync.
@@ -195,27 +234,29 @@ AppListBubbleAppsPage::AppListBubbleAppsPage(
   separator_ =
       scroll_contents->AddChildView(std::make_unique<views::Separator>());
   separator_->SetBorder(views::CreateEmptyBorder(kSeparatorInsets));
-  separator_->SetColorId(ui::kColorAshSystemUIMenuSeparator);
+  if (chromeos::features::IsJellyEnabled()) {
+    separator_->SetColorId(cros_tokens::kCrosSysSeparator);
+  } else {
+    separator_->SetColorId(ui::kColorAshSystemUIMenuSeparator);
+  }
 
   // Add a empty container view. A toast view should be added to
   // `toast_container_` when the app list starts temporary sorting.
-  if (features::IsLauncherAppSortEnabled()) {
-    toast_container_ = scroll_contents->AddChildView(
-        std::make_unique<AppListToastContainerView>(
-            app_list_nudge_controller_.get(), a11y_announcer, view_delegate,
-            /*delegate=*/this,
-            /*tablet_mode=*/false));
-  }
+  toast_container_ =
+      scroll_contents->AddChildView(std::make_unique<AppListToastContainerView>(
+          app_list_nudge_controller_.get(), app_list_keyboard_controller_.get(),
+          a11y_announcer, view_delegate,
+          /*delegate=*/this,
+          /*tablet_mode=*/false));
 
   // All apps section.
   scrollable_apps_grid_view_ =
       scroll_contents->AddChildView(std::make_unique<ScrollableAppsGridView>(
           a11y_announcer, view_delegate,
           /*folder_delegate=*/nullptr, scroll_view_, folder_controller,
-          /*focus_delegate=*/this));
+          app_list_keyboard_controller_.get()));
   scrollable_apps_grid_view_->SetDragAndDropHostOfCurrentAppList(
       drag_and_drop_host);
-  scrollable_apps_grid_view_->Init();
   scrollable_apps_grid_view_->UpdateAppListConfig(app_list_config);
   scrollable_apps_grid_view_->SetMaxColumns(5);
   AppListModel* const model = AppListModelProvider::Get()->model();
@@ -227,9 +268,6 @@ AppListBubbleAppsPage::AppListBubbleAppsPage(
   layout->SetFlexForView(scrollable_apps_grid_view_, 1);
 
   scroll_view_->SetContents(std::move(scroll_contents));
-
-  app_list_keyboard_controller_ = std::make_unique<AppListKeyboardController>(
-      this, recent_apps_, toast_container_, scrollable_apps_grid_view_);
 
   UpdateSuggestions();
   UpdateContinueSectionVisibility();
@@ -320,6 +358,12 @@ void AppListBubbleAppsPage::AnimateShowLauncher(bool is_side_shelf) {
   // Use a special cleanup callback to show the gradient mask at the end of the
   // animation. No need to use SlideViewIntoPosition() because this view always
   // has a layer.
+
+  // Set up fade in/fade out gradients at top/bottom of scroll view.
+  gradient_helper_ = std::make_unique<ScrollViewGradientHelper>(
+      scroll_view_, kScrollViewGradientSize);
+  gradient_helper_->UpdateGradientMask();
+
   StartSlideInAnimation(
       scrollable_apps_grid_view_, vertical_offset, slide_duration, tween_type,
       base::BindRepeating(&AppListBubbleAppsPage::OnAppsGridViewAnimationEnded,
@@ -329,6 +373,7 @@ void AppListBubbleAppsPage::AnimateShowLauncher(bool is_side_shelf) {
 void AppListBubbleAppsPage::PrepareForHideLauncher() {
   // Remove the gradient mask from the scroll view to improve performance.
   gradient_helper_.reset();
+  scrollable_apps_grid_view_->EndDrag(/*cancel=*/true);
 }
 
 void AppListBubbleAppsPage::AnimateShowPage() {
@@ -360,9 +405,25 @@ void AppListBubbleAppsPage::AnimateShowPage() {
   gfx::Transform translate_down;
   translate_down.Translate(0, kShowPageAnimationVerticalOffset);
 
+  // Update view visibility when the animation is done. Needed to ensure
+  // the view has the correct opacity and transform when the animation is
+  // aborted.
+  auto set_visible_true = base::BindRepeating(
+      [](base::WeakPtr<AppListBubbleAppsPage> self) {
+        if (!self)
+          return;
+        self->SetVisible(true);
+        ui::Layer* layer = self->scroll_view()->contents()->layer();
+        layer->SetOpacity(1.f);
+        layer->SetTransform(gfx::Transform());
+      },
+      weak_factory_.GetWeakPtr());
+
   views::AnimationBuilder()
       .SetPreemptionStrategy(
           ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET)
+      .OnEnded(set_visible_true)
+      .OnAborted(set_visible_true)
       .Once()
       .SetOpacity(scroll_contents, 0.f)
       .SetTransform(scroll_contents, translate_down)
@@ -381,6 +442,8 @@ void AppListBubbleAppsPage::AnimateHidePage() {
     SetVisible(false);
     return;
   }
+
+  scrollable_apps_grid_view_->CancelDragWithNoDropAnimation();
 
   // Update view visibility when the animation is done.
   auto set_visible_false = base::BindRepeating(
@@ -443,17 +506,22 @@ void AppListBubbleAppsPage::AbortAllAnimations() {
 }
 
 void AppListBubbleAppsPage::DisableFocusForShowingActiveFolder(bool disabled) {
+  toggle_continue_section_button_->SetEnabled(!disabled);
+  // Prevent container items from being accessed by ChromeVox.
+  SetViewIgnoredForAccessibility(continue_label_container_, disabled);
+
   continue_section_->DisableFocusForShowingActiveFolder(disabled);
   recent_apps_->DisableFocusForShowingActiveFolder(disabled);
+  if (toast_container_)
+    toast_container_->DisableFocusForShowingActiveFolder(disabled);
   scrollable_apps_grid_view_->DisableFocusForShowingActiveFolder(disabled);
 }
 
 void AppListBubbleAppsPage::UpdateForNewSortingOrder(
-    const absl::optional<AppListSortOrder>& new_order,
+    const std::optional<AppListSortOrder>& new_order,
     bool animate,
     base::OnceClosure update_position_closure,
     base::OnceClosure animation_done_closure) {
-  DCHECK(features::IsLauncherAppSortEnabled());
   DCHECK_EQ(animate, !update_position_closure.is_null());
   DCHECK(!animation_done_closure || animate);
 
@@ -462,7 +530,8 @@ void AppListBubbleAppsPage::UpdateForNewSortingOrder(
   // on the toast. Note that when `new_order` is null, `animate` was set to true
   // only if the sort was reverted.
   if (new_order) {
-    toast_container_->AnnounceSortOrder(*new_order);
+    if (*new_order != AppListSortOrder::kAlphabeticalEphemeralAppFirst)
+      toast_container_->AnnounceSortOrder(*new_order);
   } else if (animate) {
     toast_container_->AnnounceUndoSort();
   }
@@ -526,7 +595,7 @@ bool AppListBubbleAppsPage::MaybeScrollToShowToast() {
 void AppListBubbleAppsPage::Layout() {
   views::View::Layout();
   if (gradient_helper_)
-    gradient_helper_->UpdateGradientZone();
+    gradient_helper_->UpdateGradientMask();
 }
 
 void AppListBubbleAppsPage::VisibilityChanged(views::View* starting_from,
@@ -537,25 +606,16 @@ void AppListBubbleAppsPage::VisibilityChanged(views::View* starting_from,
     scrollable_apps_grid_view_->CancelDragWithNoDropAnimation();
   }
 
-  if (features::IsLauncherAppSortEnabled()) {
-    // Updates the visibility state in toast container.
-    AppListToastContainerView::VisibilityState state =
-        is_visible ? AppListToastContainerView::VisibilityState::kShown
-                   : AppListToastContainerView::VisibilityState::kHidden;
-    toast_container_->UpdateVisibilityState(state);
+  // Updates the visibility state in toast container.
+  AppListToastContainerView::VisibilityState state =
+      is_visible ? AppListToastContainerView::VisibilityState::kShown
+                 : AppListToastContainerView::VisibilityState::kHidden;
+  toast_container_->UpdateVisibilityState(state);
 
-    // Check if the reorder nudge view needs update if the bubble apps page is
-    // showing.
-    if (is_visible)
-      toast_container_->MaybeUpdateReorderNudgeView();
-  }
-}
-
-void AppListBubbleAppsPage::OnThemeChanged() {
-  views::View::OnThemeChanged();
-  if (continue_label_) {
-    bubble_utils::ApplyStyle(continue_label_,
-                             bubble_utils::LabelStyle::kSubtitle);
+  // Check if the reorder nudge view needs update if the bubble apps page is
+  // showing.
+  if (is_visible) {
+    toast_container_->MaybeUpdateReorderNudgeView();
   }
 }
 
@@ -575,22 +635,6 @@ void AppListBubbleAppsPage::OnViewVisibilityChanged(
     UpdateSeparatorVisibility();
 }
 
-void AppListBubbleAppsPage::MoveFocusUpFromRecents() {
-  app_list_keyboard_controller_->MoveFocusUpFromRecents();
-}
-
-void AppListBubbleAppsPage::MoveFocusDownFromRecents(int column) {
-  app_list_keyboard_controller_->MoveFocusDownFromRecents(column);
-}
-
-bool AppListBubbleAppsPage::MoveFocusUpFromToast(int column) {
-  return app_list_keyboard_controller_->MoveFocusUpFromToast(column);
-}
-
-bool AppListBubbleAppsPage::MoveFocusDownFromToast(int column) {
-  return app_list_keyboard_controller_->MoveFocusDownFromToast(column);
-}
-
 void AppListBubbleAppsPage::OnNudgeRemoved() {
   const gfx::Rect current_grid_bounds = scrollable_apps_grid_view_->bounds();
 
@@ -606,8 +650,20 @@ void AppListBubbleAppsPage::OnNudgeRemoved() {
                         gfx::Tween::ACCEL_40_DECEL_100_3, base::DoNothing());
 }
 
-bool AppListBubbleAppsPage::MoveFocusUpFromAppsGrid(int column) {
-  return app_list_keyboard_controller_->MoveFocusUpFromAppsGrid(column);
+ContinueSectionView* AppListBubbleAppsPage::GetContinueSectionView() {
+  return continue_section_;
+}
+
+RecentAppsView* AppListBubbleAppsPage::GetRecentAppsView() {
+  return recent_apps_;
+}
+
+AppListToastContainerView* AppListBubbleAppsPage::GetToastContainerView() {
+  return toast_container_;
+}
+
+AppsGridView* AppListBubbleAppsPage::GetAppsGridView() {
+  return scrollable_apps_grid_view_;
 }
 
 ui::Layer* AppListBubbleAppsPage::GetPageAnimationLayerForTest() {
@@ -619,8 +675,13 @@ ui::Layer* AppListBubbleAppsPage::GetPageAnimationLayerForTest() {
 
 void AppListBubbleAppsPage::InitContinueLabelContainer(
     views::View* scroll_contents) {
+  // The entire container view is clickable/tappable. The view is not focusable,
+  // but the toggle button is focusable, and that satisfies the user's need for
+  // an element with keyboard or accessibility focus.
   continue_label_container_ =
-      scroll_contents->AddChildView(std::make_unique<views::View>());
+      scroll_contents->AddChildView(std::make_unique<ClickableView>(
+          base::BindRepeating(&AppListBubbleAppsPage::OnToggleContinueSection,
+                              base::Unretained(this))));
   continue_label_container_->SetBorder(
       views::CreateEmptyBorder(kContinueLabelContainerPadding));
 
@@ -631,22 +692,25 @@ void AppListBubbleAppsPage::InitContinueLabelContainer(
   continue_label_ =
       continue_label_container_->AddChildView(std::make_unique<views::Label>(
           l10n_util::GetStringUTF16(IDS_ASH_LAUNCHER_CONTINUE_SECTION_LABEL)));
-  bubble_utils::ApplyStyle(continue_label_,
-                           bubble_utils::LabelStyle::kSubtitle);
+  bubble_utils::ApplyStyle(
+      continue_label_, TypographyToken::kCrosAnnotation1,
+      chromeos::features::IsJellyEnabled()
+          ? static_cast<ui::ColorId>(cros_tokens::kCrosSysOnSurfaceVariant)
+          : kColorAshTextColorSecondary);
   continue_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
 
   // Button should be right aligned, so flex label to fill empty space.
   layout->SetFlexForView(continue_label_, 1);
 
+  // The toggle button is clickable/tappable in addition to the container view.
+  // This ensures ink drop ripple effects play when the button is clicked.
   toggle_continue_section_button_ =
       continue_label_container_->AddChildView(std::make_unique<IconButton>(
           base::BindRepeating(&AppListBubbleAppsPage::OnToggleContinueSection,
                               base::Unretained(this)),
-          IconButton::Type::kTinyFloating, &kChevronUpIcon,
+          IconButton::Type::kSmallFloating, &kChevronUpIcon,
           /*is_togglable=*/false,
           /*has_border=*/false));
-  // The icon is scaled down since the button is tiny.
-  toggle_continue_section_button_->SetIconSize(16);
   // See ButtonFocusSkipper in app_list_bubble_view.cc for focus handling.
 }
 
@@ -692,18 +756,6 @@ void AppListBubbleAppsPage::DestroyLayerForView(views::View* view) {
 }
 
 void AppListBubbleAppsPage::OnAppsGridViewAnimationEnded() {
-  // If the window is destroyed during an animation the animation will end, but
-  // there's no need to build the gradient mask layer.
-  if (GetWidget()->GetNativeWindow()->is_destroying())
-    return;
-
-  // Set up fade in/fade out gradients at top/bottom of scroll view. Wait until
-  // the end of the show animation because the animation performs better without
-  // the gradient mask layer.
-  gradient_helper_ = std::make_unique<ScrollViewGradientHelper>(
-      scroll_view_, kScrollViewGradientSize);
-  gradient_helper_->UpdateGradientZone();
-
   // Show the scroll bar for keyboard-driven scroll position changes.
   scroll_bar_->SetShowOnThumbBoundsChanged(true);
 }
@@ -726,7 +778,7 @@ void AppListBubbleAppsPage::HandleFocusAfterSort() {
 }
 
 void AppListBubbleAppsPage::OnAppsGridViewFadeOutAnimationEnded(
-    const absl::optional<AppListSortOrder>& new_order,
+    const std::optional<AppListSortOrder>& new_order,
     bool aborted) {
   // Update item positions after the fade out animation but before the fade in
   // animation. NOTE: `update_position_closure_` can be empty in some edge

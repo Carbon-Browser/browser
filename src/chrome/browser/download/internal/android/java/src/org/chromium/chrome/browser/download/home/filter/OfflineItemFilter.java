@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,7 @@ public abstract class OfflineItemFilter
      */
     protected void onFilterChanged() {
         Set<OfflineItem> removed = new HashSet<>();
-        for (Iterator<OfflineItem> iter = mItems.iterator(); iter.hasNext();) {
+        for (Iterator<OfflineItem> iter = mItems.iterator(); iter.hasNext(); ) {
             OfflineItem item = iter.next();
             if (isFilteredOut(item)) {
                 iter.remove();

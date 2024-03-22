@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,9 @@
 
 namespace {
 
-content::WebUIDataSource* CreateTranslateInternalsHTMLSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUITranslateInternalsHost);
+void CreateAndAddTranslateInternalsHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUITranslateInternalsHost);
 
   source->SetDefaultResource(IDR_TRANSLATE_INTERNALS_HTML);
   source->UseStringsJs();
@@ -38,8 +38,9 @@ content::WebUIDataSource* CreateTranslateInternalsHTMLSource() {
       network::mojom::CSPDirectiveName::TrustedTypes,
       "trusted-types static-types;");
 
-  base::Value langs = translate::TranslateInternalsHandler::GetLanguages();
-  for (const auto key_value_pair : langs.DictItems()) {
+  base::Value::Dict langs =
+      translate::TranslateInternalsHandler::GetLanguages();
+  for (const auto key_value_pair : langs) {
     DCHECK(key_value_pair.second.is_string());
     std::string key = "language-" + key_value_pair.first;
     const std::string& value = key_value_pair.second.GetString();
@@ -48,12 +49,10 @@ content::WebUIDataSource* CreateTranslateInternalsHTMLSource() {
 
   if (translate::IsTFLiteLanguageDetectionEnabled()) {
     source->AddString("model-version", "TFLite_v1");
-    return source;
+  } else {
+    // The default language detection model is "CLD3".
+    source->AddString("model-version", "CLD3");
   }
-  // The default language detection model is "CLD3".
-  source->AddString("model-version", "CLD3");
-
-  return source;
 }
 
 }  // namespace
@@ -63,6 +62,5 @@ TranslateInternalsUI::TranslateInternalsUI(content::WebUI* web_ui)
   web_ui->AddMessageHandler(
       std::make_unique<ChromeTranslateInternalsHandler>());
 
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, CreateTranslateInternalsHTMLSource());
+  CreateAndAddTranslateInternalsHTMLSource(Profile::FromWebUI(web_ui));
 }

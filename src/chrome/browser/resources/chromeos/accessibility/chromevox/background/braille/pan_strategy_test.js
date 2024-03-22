@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,14 @@ GEN_INCLUDE(['../../../common/testing/accessibility_test_base.js']);
 ChromeVoxPanStrategyUnitTest = class extends AccessibilityTestBase {
   /** @override */
   async setUpDeferred() {
-    await importModule(
-        'CursorDots', '/chromevox/background/braille/cursor_dots.js');
-    await importModule(
-        'PanStrategy', '/chromevox/background/braille/pan_strategy.js');
+    await super.setUpDeferred();
+
+    await Promise.all([
+      importModule(
+          'CursorDots', '/chromevox/background/braille/cursor_dots.js'),
+      importModule(
+          'PanStrategy', '/chromevox/background/braille/pan_strategy.js'),
+    ]);
   }
 };
 

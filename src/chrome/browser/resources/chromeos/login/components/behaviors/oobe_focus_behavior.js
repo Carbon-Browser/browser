@@ -1,19 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
-// #import {afterNextRender} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// clang-format on
+import {afterNextRender} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 /**
  * @fileoverview
  * 'OobeFocusBehavior' is a special behavior which supports focus transferring
- * when new screen is shown.
+ * when a new screen is shown.
  */
 
 /** @polymerBehavior */
-/* #export */ const OobeFocusBehavior = {
+export const OobeFocusBehavior = {
   /**
    * @private
    * Focuses the element. As cr-input uses focusInput() instead of focus() due
@@ -35,21 +33,19 @@
     if (!root) {
       return;
     }
-    var focusedElements = root.getElementsByClassName('focus-on-show');
-    var focused = false;
-    for (var i = 0; i < focusedElements.length; ++i) {
+    const focusedElements = root.getElementsByClassName('focus-on-show');
+    let focused = false;
+    for (let i = 0; i < focusedElements.length; ++i) {
       if (focusedElements[i].hidden) {
         continue;
       }
 
       focused = true;
-      Polymer.RenderStatus.afterNextRender(
-          this, () => this.focusOnElement_(focusedElements[i]));
+      afterNextRender(this, () => this.focusOnElement_(focusedElements[i]));
       break;
     }
     if (!focused && focusedElements.length > 0) {
-      Polymer.RenderStatus.afterNextRender(
-          this, () => this.focusOnElement_(focusedElements[0]));
+      afterNextRender(this, () => this.focusOnElement_(focusedElements[0]));
     }
 
     this.fire('show-dialog');
@@ -63,3 +59,8 @@
  * }}
  */
 OobeFocusBehavior.Proto;
+
+/** @interface */
+export class OobeFocusBehaviorInterface {
+  focusMarkedElement(root) {}
+}

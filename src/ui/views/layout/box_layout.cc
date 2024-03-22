@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 
 #include <algorithm>
 
+#include "base/containers/adapters.h"
+#include "base/ranges/algorithm.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/view_class_properties.h"
 
@@ -196,8 +198,7 @@ void BoxLayout::Layout(View* host) {
           size = total_main_axis_size;
           break;
         default:
-          NOTREACHED();
-          break;
+          NOTREACHED_NORETURN();
       }
     }
     gfx::Rect new_child_area(child_area);
@@ -381,11 +382,16 @@ void BoxLayout::ViewRemoved(View* host, View* view) {
 }
 
 int BoxLayout::GetFlexForView(const View* view) const {
-  auto it = flex_map_.find(view);
-  if (it == flex_map_.end())
-    return default_flex_;
-
-  return it->second.flex_weight;
+  // Give precedence to flex provided via the layout.
+  if (auto it = flex_map_.find(view); it != flex_map_.end()) {
+    return it->second.flex_weight;
+  }
+  // Respect flex provided via the `kFlexBehaviorKey`.
+  if (auto* flex_behavior_key = view->GetProperty(kFlexBehaviorKey)) {
+    return flex_behavior_key->weight();
+  }
+  // Fall back to default.
+  return default_flex_;
 }
 
 int BoxLayout::GetMinimumSizeForView(const View* view) const {
@@ -670,8 +676,8 @@ View* BoxLayout::FirstVisibleView() const {
 
 View* BoxLayout::LastVisibleView() const {
   const auto& children = host_->children();
-  const auto i = std::find_if(
-      children.crbegin(), children.crend(),
+  const auto i = base::ranges::find_if(
+      base::Reversed(children),
       [this](View* v) { return ViewWrapper(this, v).VisibleToLayout(); });
   return (i == children.crend()) ? nullptr : *i;
 }

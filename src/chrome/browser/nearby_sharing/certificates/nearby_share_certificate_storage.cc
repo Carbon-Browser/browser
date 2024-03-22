@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <algorithm>
+#include "chrome/browser/nearby_sharing/certificates/nearby_share_certificate_storage.h"
 
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/nearby_sharing/certificates/common.h"
-#include "chrome/browser/nearby_sharing/certificates/nearby_share_certificate_storage.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
+#include "components/cross_device/logging/logging.h"
 
 absl::optional<base::Time>
 NearbyShareCertificateStorage::NextPrivateCertificateExpirationTime() {
@@ -28,23 +28,23 @@ void NearbyShareCertificateStorage::UpdatePrivateCertificate(
   absl::optional<std::vector<NearbySharePrivateCertificate>> certs =
       GetPrivateCertificates();
   if (!certs) {
-    NS_LOG(WARNING) << __func__ << ": No private certificates to update.";
+    CD_LOG(WARNING, Feature::NS)
+        << __func__ << ": No private certificates to update.";
     return;
   }
 
-  auto it = std::find_if(
-      certs->begin(), certs->end(),
-      [&private_certificate](const NearbySharePrivateCertificate& cert) {
-        return cert.id() == private_certificate.id();
-      });
+  auto it = base::ranges::find(*certs, private_certificate.id(),
+                               &NearbySharePrivateCertificate::id);
   if (it == certs->end()) {
-    NS_LOG(VERBOSE) << __func__ << ": No private certificate with id="
-                    << base::HexEncode(private_certificate.id());
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__ << ": No private certificate with id="
+        << base::HexEncode(private_certificate.id());
     return;
   }
 
-  NS_LOG(VERBOSE) << __func__ << ": Updating private certificate id="
-                  << base::HexEncode(private_certificate.id());
+  CD_LOG(VERBOSE, Feature::NS)
+      << __func__ << ": Updating private certificate id="
+      << base::HexEncode(private_certificate.id());
   *it = private_certificate;
   ReplacePrivateCertificates(*certs);
 }
@@ -69,13 +69,14 @@ void NearbyShareCertificateStorage::RemoveExpiredPrivateCertificates(
   if (num_removed == 0)
     return;
 
-  NS_LOG(VERBOSE) << __func__ << ": Removing " << num_removed
-                  << " expired private certificates.";
+  CD_LOG(VERBOSE, Feature::NS) << __func__ << ": Removing " << num_removed
+                               << " expired private certificates.";
   ReplacePrivateCertificates(unexpired_certs);
 }
 
 void NearbyShareCertificateStorage::ClearPrivateCertificates() {
-  NS_LOG(VERBOSE) << __func__ << ": Removing all private certificates.";
+  CD_LOG(VERBOSE, Feature::NS)
+      << __func__ << ": Removing all private certificates.";
   ReplacePrivateCertificates(std::vector<NearbySharePrivateCertificate>());
 }
 
@@ -97,9 +98,9 @@ void NearbyShareCertificateStorage::ClearPrivateCertificatesOfVisibility(
   }
 
   if (were_certs_removed) {
-    NS_LOG(VERBOSE) << __func__
-                    << ": Removing all private certificates of visibility "
-                    << visibility;
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__ << ": Removing all private certificates of visibility "
+        << visibility;
     ReplacePrivateCertificates(new_certs);
   }
 }

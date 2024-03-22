@@ -1,29 +1,31 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
 #include "chromeos/ash/components/network/geolocation_handler.h"
-#include "chromeos/dbus/shill/shill_clients.h"
 #endif
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/network_change_notifier.h"
 #include "services/device/device_service_test_base.h"
 #include "services/device/geolocation/geolocation_provider_impl.h"
+#include "services/device/geolocation/mock_wifi_data_provider.h"
 #include "services/device/geolocation/network_location_request.h"
+#include "services/device/geolocation/wifi_data_provider_handle.h"
 #include "services/device/public/cpp/device_features.h"
 #include "services/device/public/mojom/geolocation.mojom.h"
 #include "services/device/public/mojom/geolocation_config.mojom.h"
 #include "services/device/public/mojom/geolocation_context.mojom.h"
 #include "services/device/public/mojom/geolocation_control.mojom.h"
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 #include "services/device/public/cpp/test/fake_geolocation_manager.h"
 #endif
 
@@ -51,13 +53,17 @@ class GeolocationServiceUnitTest : public DeviceServiceTestBase {
  protected:
   void SetUp() override {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    chromeos::shill_clients::InitializeFakes();
-    chromeos::NetworkHandler::Initialize();
+    ash::shill_clients::InitializeFakes();
+    ash::NetworkHandler::Initialize();
 #endif
     network_change_notifier_ = net::NetworkChangeNotifier::CreateMockIfNeeded();
     // We need to initialize the above *before* the base fixture instantiates
     // the device service.
     DeviceServiceTestBase::SetUp();
+
+    wifi_data_provider_ = MockWifiDataProvider::CreateInstance();
+    WifiDataProviderHandle::SetFactoryForTesting(
+        MockWifiDataProvider::GetInstance);
 
     device_service()->BindGeolocationControl(
         geolocation_control_.BindNewPipeAndPassReceiver());
@@ -70,11 +76,13 @@ class GeolocationServiceUnitTest : public DeviceServiceTestBase {
   }
 
   void TearDown() override {
+    WifiDataProviderHandle::ResetFactoryForTesting();
+
     DeviceServiceTestBase::TearDown();
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    chromeos::NetworkHandler::Shutdown();
-    chromeos::shill_clients::Shutdown();
+    ash::NetworkHandler::Shutdown();
+    ash::shill_clients::Shutdown();
 #endif
 
     // Let the GeolocationImpl destruct earlier than GeolocationProviderImpl to
@@ -91,6 +99,7 @@ class GeolocationServiceUnitTest : public DeviceServiceTestBase {
         geolocation_config_.BindNewPipeAndPassReceiver());
   }
 
+  scoped_refptr<MockWifiDataProvider> wifi_data_provider_;
   std::unique_ptr<net::NetworkChangeNotifier> network_change_notifier_;
   mojo::Remote<mojom::GeolocationControl> geolocation_control_;
   mojo::Remote<mojom::GeolocationContext> geolocation_context_;
@@ -105,7 +114,7 @@ class GeolocationServiceUnitTest : public DeviceServiceTestBase {
 TEST_F(GeolocationServiceUnitTest, UrlWithApiKey) {
 // To align with user expectation we do not make Network Location Requests
 // on macOS unless the browser has Location Permission from the OS.
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   fake_geolocation_manager_->SetSystemPermission(
       LocationSystemPermissionStatus::kAllowed);
 #endif

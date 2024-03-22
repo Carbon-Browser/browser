@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """
@@ -8,8 +8,8 @@ bundle that need to be signed, as well as providing utilities to sign them.
 
 import os.path
 
-from . import commands, signing
-from .model import CodeSignOptions, CodeSignedProduct, VerifyOptions
+from signing import commands, signing
+from signing.model import CodeSignOptions, CodeSignedProduct, VerifyOptions
 
 _PROVISIONPROFILE_EXT = '.provisionprofile'
 _PROVISIONPROFILE_DEST = 'embedded.provisionprofile'
@@ -117,6 +117,15 @@ def get_parts(config):
                 verify_options=verify_options),
     }
 
+    if config.enable_updater:
+        parts['privileged-helper'] = CodeSignedProduct(
+            ('{.app_product}.app/Contents/Library/LaunchServices/' +
+             '{}.UpdaterPrivilegedHelper').format(config,
+                                                  uncustomized_bundle_id),
+            '{}.UpdaterPrivilegedHelper'.format(uncustomized_bundle_id),
+            options=CodeSignOptions.FULL_HARDENED_RUNTIME_OPTIONS,
+            verify_options=verify_options)
+
     dylibs = [
         'libEGL.dylib',
         'libGLESv2.dylib',
@@ -191,7 +200,7 @@ def sign_chrome(paths, config, sign_framework=False):
         # signing the Current version.
         # https://developer.apple.com/library/content/technotes/tn2206/_index.html#//apple_ref/doc/uid/DTS40007919-CH1-TNTAG13
         for name, part in parts.items():
-            if name in ('app', 'framework'):
+            if name in ('app', 'framework', 'privileged-helper'):
                 continue
             signing.sign_part(paths, config, part)
 
@@ -206,6 +215,10 @@ def sign_chrome(paths, config, sign_framework=False):
                 provisioning_profile_basename + _PROVISIONPROFILE_EXT),
             os.path.join(paths.work, parts['app'].path, 'Contents',
                          _PROVISIONPROFILE_DEST))
+
+    # Sign the privileged helper.
+    if 'privileged-helper' in parts:
+        signing.sign_part(paths, config, parts['privileged-helper'])
 
     # Sign the outer app bundle.
     signing.sign_part(paths, config, parts['app'])

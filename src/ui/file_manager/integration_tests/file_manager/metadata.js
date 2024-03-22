@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@ import {addEntries, createTestFile, ENTRIES, EntryType, RootPath, TestEntryInfo}
 import {testcase} from '../testcase.js';
 
 import {openNewWindow, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_LOCAL_ENTRY_SET} from './test_data.js';
 
 /**
@@ -103,8 +104,8 @@ testcase.metadataDrive = async () => {
 
   // Navigate 2 folders deep, because navigating in directory tree might
   // trigger further metadata fetches.
-  await remoteCall.navigateWithDirectoryTree(
-      appId, '/root/photos1/folder1', 'My Drive', 'drive');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/My Drive/photos1/folder1');
 
   // Fetch the metadata stats.
   const metadataStats = /** @type {!MetadataStatsType} */
@@ -121,7 +122,18 @@ testcase.metadataDrive = async () => {
   // +  2 folders when expanding photos1
   // = 14
   chrome.test.assertEq(14, metadataStats.fullFetch);
-  chrome.test.assertEq(12, metadataStats.fromCache);
+  if (directoryTree.isNewTree) {
+    // TODO(b/301204017): The metadata for the "3 folders in My Drive" and "2
+    // folders in photos1" are being fetched twice, hence the 5 more cache hit
+    // here. This is because metadata is fetched right after reading sub
+    // directories, when "My Drive" is rendered, we need to read sub directories
+    // in order to see if we need to show expanded icon or not, and when "My
+    // Drive" is expanded, we read sub directories again, same for "photos1".
+    // Revisit this when we are doing performance improvement.
+    chrome.test.assertEq(17, metadataStats.fromCache);
+  } else {
+    chrome.test.assertEq(12, metadataStats.fromCache);
+  }
 
   // Cleared 8 files + 3 folders when navigated out of My Drive and
   // clearing file list.
@@ -142,8 +154,8 @@ testcase.metadataDownloads = async () => {
 
   // Navigate 2 folders deep, because navigating in directory tree might
   // triggers further metadata fetches.
-  await remoteCall.navigateWithDirectoryTree(
-      appId, '/Downloads/photos1/folder1', 'My files');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/My files/Downloads/photos1/folder1');
 
   // Fetch the metadata stats.
   const metadataStats =
@@ -201,9 +213,9 @@ testcase.metadataLargeDrive = async () => {
   console.log('setupAndWaitUntilReady finished!');
 
   // Navigate only 1 folder deep,which is slightly different from
-  // metadatatDrive test.
-  await remoteCall.navigateWithDirectoryTree(
-      appId, '/root/folder1', 'My Drive', 'drive');
+  // metadataDrive test.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/My Drive/folder1');
 
   // Wait for the metadata stats to reach the desired count.
   // File list component, doesn't display all files at once for performance
@@ -262,36 +274,19 @@ testcase.metadataTeamDrives = async () => {
   // on Drive/Shared drives.
   const downloadsEntries = entries.slice(0, 7);
 
-  const sharedDrivesTreeItem = '#directory-tree [entry-label="Shared drives"]';
-
   // Open Files app on Drive.
   const appId = await setupAndWaitUntilReady(
       RootPath.DRIVE, downloadsEntries, entries.concat(driveEntries));
 
   // Navigate to Shared drives root.
-  await remoteCall.navigateWithDirectoryTree(
-      appId, '/team_drives', 'Shared drives', 'drive');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/Shared drives');
 
   // Expand Shared Drives, because expanding might need metadata.
-  const expandIcon = sharedDrivesTreeItem + ' > .tree-row .expand-icon';
-  await remoteCall.waitForElement(appId, expandIcon);
+  await directoryTree.expandTreeItemByLabel('Shared drives');
 
-  // Click expand icon.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, [expandIcon]));
-
-  // Wait for the subtree to expand and display its children.
-  const expandedSubItems =
-      sharedDrivesTreeItem + ' > .tree-children[expanded] > .tree-item';
-  await remoteCall.waitForElement(appId, expandedSubItems);
-
-  // Get all Shared Drives' children.
-  const elements = await remoteCall.callRemoteTestUtil(
-      'queryAllElements', appId,
-      [sharedDrivesTreeItem + ' > .tree-children[expanded] > .tree-item']);
-
-  // Check that we have 50 team drives.
-  chrome.test.assertEq(50, elements.length);
+  // Get all Shared Drives' children and check that we have 50 team drives.
+  await directoryTree.waitForChildItemsCountByLabel('Shared drives', 50);
 
   // Fetch the metadata stats.
   const metadataStats =
@@ -326,33 +321,23 @@ testcase.metadataTeamDrives = async () => {
  *  Tests that fetching content metadata from a DocumentsProvider completes.
  */
 testcase.metadataDocumentsProvider = async () => {
-  const documentsProviderVolumeQuery =
-      '[has-children="true"] [volume-type-icon="documents_provider"]';
-
   // Add files to the DocumentsProvider volume.
   await addEntries(['documents_provider'], BASIC_LOCAL_ENTRY_SET);
 
   // Open Files app.
   const appId = await openNewWindow(RootPath.DOWNLOADS);
 
-  // Wait for the DocumentsProvider volume to mount.
-  await remoteCall.waitForElement(appId, documentsProviderVolumeQuery);
-
-  // Click to open the DocumentsProvider volume.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId, [documentsProviderVolumeQuery]),
-      'fakeMouseClick failed');
+  // Wait for the DocumentsProvider volume to mount and click to open the
+  // DocumentsProvider volume.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('documents_provider');
 
   // Check: the DocumentsProvider files should appear in the file list.
   const files = TestEntryInfo.getExpectedRows(BASIC_LOCAL_ENTRY_SET);
   await remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true});
 
   // Select file hello.txt in the file list.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'selectFile', appId, [ENTRIES.hello.nameText]),
-      'selectFile failed');
+  await remoteCall.waitUntilSelected(appId, ENTRIES.hello.nameText);
 
   // Check that a request for content metadata completes.
   const result = await await remoteCall.callRemoteTestUtil(

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "components/performance_manager/graph/graph_impl.h"
+#include "components/performance_manager/graph/page_node_impl.h"
+#include "components/performance_manager/public/browser_child_process_host_proxy.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/page_node.h"
 #include "components/performance_manager/public/graph/worker_node.h"
@@ -32,7 +33,7 @@ class GURL;
 
 namespace performance_manager {
 
-class PageNodeImpl;
+struct BrowserProcessNodeTag;
 
 // The performance manager is a rendezvous point for binding to performance
 // manager interfaces.
@@ -97,6 +98,7 @@ class PerformanceManagerImpl : public PerformanceManager {
       ProcessNodeImpl* process_node,
       PageNodeImpl* page_node,
       FrameNodeImpl* parent_frame_node,
+      FrameNodeImpl* fenced_frame_embedder_frame_node,
       int render_frame_id,
       const blink::LocalFrameToken& frame_token,
       content::BrowsingInstanceId browsing_instance_id,
@@ -107,13 +109,16 @@ class PerformanceManagerImpl : public PerformanceManager {
       const WebContentsProxy& contents_proxy,
       const std::string& browser_context_id,
       const GURL& visible_url,
-      bool is_visible,
-      bool is_audible,
+      PagePropertyFlags initial_properties,
       base::TimeTicks visibility_change_time,
       PageNode::PageState page_state);
   static std::unique_ptr<ProcessNodeImpl> CreateProcessNode(
-      content::ProcessType process_type,
+      BrowserProcessNodeTag tag);
+  static std::unique_ptr<ProcessNodeImpl> CreateProcessNode(
       RenderProcessHostProxy proxy);
+  static std::unique_ptr<ProcessNodeImpl> CreateProcessNode(
+      content::ProcessType process_type,
+      BrowserChildProcessHostProxy proxy);
   static std::unique_ptr<WorkerNodeImpl> CreateWorkerNode(
       const std::string& browser_context_id,
       WorkerNode::WorkerType worker_type,
@@ -196,8 +201,8 @@ void PerformanceManagerImpl::CallOnGraphAndReplyWithResult(
     const base::Location& from_here,
     base::OnceCallback<TaskReturnType(GraphImpl*)> task,
     base::OnceCallback<void(TaskReturnType)> reply) {
-  base::PostTaskAndReplyWithResult(
-      GetTaskRunner().get(), from_here,
+  GetTaskRunner()->PostTaskAndReplyWithResult(
+      from_here,
       base::BindOnce(
           &PerformanceManagerImpl::RunCallbackWithGraphAndReplyWithResult<
               TaskReturnType>,

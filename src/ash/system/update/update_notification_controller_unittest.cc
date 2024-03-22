@@ -1,8 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/update/update_notification_controller.h"
+
+#include <optional>
 
 #include "ash/public/cpp/login_types.h"
 #include "ash/public/cpp/notification_utils.h"
@@ -21,11 +23,13 @@
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/branding_buildflags.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/vector_icons/vector_icons.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_id.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/message_center_observer.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
@@ -64,7 +68,7 @@ class AddNotificationWaiter : public message_center::MessageCenterObserver {
 void ShowDefaultUpdateNotification() {
   Shell::Get()->system_tray_model()->ShowUpdateIcon(
       UpdateSeverity::kLow, /*factory_reset_required=*/false,
-      /*rollback=*/false, UpdateType::kSystem);
+      /*rollback=*/false);
 }
 
 }  // namespace
@@ -120,10 +124,6 @@ class UpdateNotificationControllerTest : public AshTestBase {
 
   int GetNotificationPriority() { return GetNotification()->priority(); }
 
-  absl::optional<SkColor> GetNotificationColor() {
-    return GetNotification()->accent_color();
-  }
-
   const gfx::VectorIcon& GetNotificationIcon() {
     return GetNotification()->vector_small_image();
   }
@@ -133,8 +133,8 @@ class UpdateNotificationControllerTest : public AshTestBase {
   }
 
   void AddSlowBootFilePath(const base::FilePath& file_path) {
-    int bytes_written = base::WriteFile(file_path, "1\n", 2);
-    EXPECT_TRUE(bytes_written == 2);
+    bool success = base::WriteFile(file_path, "1\n");
+    EXPECT_TRUE(success);
     Shell::Get()
         ->system_notification_controller()
         ->update_->slow_boot_file_path_ = file_path;
@@ -144,6 +144,19 @@ class UpdateNotificationControllerTest : public AshTestBase {
     return Shell::Get()
         ->system_notification_controller()
         ->update_->confirmation_dialog_;
+  }
+
+  void CompareNotificationColor(SkColor expected_color,
+                                ui::ColorId expected_color_id_for_jelly) {
+    const auto color_id = GetNotification()->accent_color_id();
+    const auto color = GetNotification()->accent_color();
+
+    if (chromeos::features::IsJellyEnabled() && color_id.has_value()) {
+      // We use `ui::ColorId` for Jelly.
+      EXPECT_EQ(expected_color_id_for_jelly, color_id);
+    } else if (color.has_value()) {
+      EXPECT_EQ(expected_color, color);
+    }
   }
 
   std::u16string system_app_name_;
@@ -161,7 +174,9 @@ TEST_F(UpdateNotificationControllerTest, VisibilityAfterUpdate) {
 
   // The notification is now visible.
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorNormal, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorNormal,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysPrimary);
   EXPECT_TRUE(strcmp(kSystemMenuUpdateIcon.name, GetNotificationIcon().name) ==
               0);
   EXPECT_EQ("Update available", GetNotificationTitle());
@@ -169,6 +184,14 @@ TEST_F(UpdateNotificationControllerTest, VisibilityAfterUpdate) {
                 base::UTF16ToUTF8(system_app_name_) + " update",
             GetNotificationMessage());
   EXPECT_EQ("Restart to update", GetNotificationButton(0));
+
+  // Click the restart button.
+  message_center::MessageCenter::Get()->ClickOnNotificationButton(
+      kNotificationId, 0);
+
+  // Restart was requested.
+  EXPECT_EQ(1,
+            GetSessionControllerClient()->request_restart_for_update_count());
 }
 
 // Tests that the update icon becomes visible when an update becomes
@@ -188,7 +211,9 @@ TEST_F(UpdateNotificationControllerTest, VisibilityAfterUpdateWithSlowReboot) {
 
   // The notification is now visible.
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorNormal, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorNormal,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysPrimary);
   EXPECT_TRUE(strcmp(kSystemMenuUpdateIcon.name, GetNotificationIcon().name) ==
               0);
   EXPECT_EQ("Update available", GetNotificationTitle());
@@ -233,7 +258,9 @@ TEST_F(UpdateNotificationControllerTest,
 
   // The notification is now visible.
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorNormal, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorNormal,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysPrimary);
   EXPECT_TRUE(strcmp(kSystemMenuUpdateIcon.name, GetNotificationIcon().name) ==
               0);
   EXPECT_EQ("Update available", GetNotificationTitle());
@@ -260,7 +287,7 @@ TEST_F(UpdateNotificationControllerTest,
        VisibilityAfterUpdateRequiringFactoryReset) {
   // Simulate an update that requires factory reset.
   Shell::Get()->system_tray_model()->ShowUpdateIcon(UpdateSeverity::kLow, true,
-                                                    false, UpdateType::kSystem);
+                                                    false);
 
   // Showing Update Notification posts a task to check for slow boot request
   // and use the result of that check to generate appropriate notification. Wait
@@ -271,7 +298,9 @@ TEST_F(UpdateNotificationControllerTest,
 
   // The notification is now visible.
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorNormal, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorNormal,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysPrimary);
   EXPECT_TRUE(strcmp(kSystemMenuUpdateIcon.name, GetNotificationIcon().name) ==
               0);
   EXPECT_EQ(l10n_util::GetStringUTF8(IDS_UPDATE_NOTIFICATION_TITLE),
@@ -292,7 +321,7 @@ TEST_F(UpdateNotificationControllerTest, NoUpdateNotification) {
 TEST_F(UpdateNotificationControllerTest, RollbackNotification) {
   Shell::Get()->system_tray_model()->ShowUpdateIcon(
       UpdateSeverity::kLow, /*factory_reset_required=*/true,
-      /*rollback=*/true, UpdateType::kSystem);
+      /*rollback=*/true);
 
   // Showing Update Notification posts a task to check for slow boot request
   // and use the result of that check to generate appropriate notification. Wait
@@ -303,7 +332,9 @@ TEST_F(UpdateNotificationControllerTest, RollbackNotification) {
 
   // The notification is now visible.
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorWarning, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorWarning,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysWarning);
   EXPECT_TRUE(
       strcmp(kSystemMenuRollbackIcon.name, GetNotificationIcon().name) == 0);
   EXPECT_EQ(l10n_util::GetStringUTF8(IDS_ROLLBACK_NOTIFICATION_TITLE),
@@ -319,7 +350,7 @@ TEST_F(UpdateNotificationControllerTest, RollbackNotification) {
 TEST_F(UpdateNotificationControllerTest, RollbackRecommendedNotification) {
   Shell::Get()->system_tray_model()->ShowUpdateIcon(
       UpdateSeverity::kLow, /*factory_reset_required=*/true,
-      /*rollback=*/true, UpdateType::kSystem);
+      /*rollback=*/true);
 
   Shell::Get()->system_tray_model()->SetRelaunchNotificationState(
       {.requirement_type = RelaunchNotificationState::kRecommendedNotOverdue});
@@ -333,7 +364,9 @@ TEST_F(UpdateNotificationControllerTest, RollbackRecommendedNotification) {
 
   // Notification is the same as for a non-recommended rollback.
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorWarning, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorWarning,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysWarning);
   EXPECT_TRUE(
       strcmp(kSystemMenuRollbackIcon.name, GetNotificationIcon().name) == 0);
   EXPECT_EQ(l10n_util::GetStringUTF8(IDS_ROLLBACK_NOTIFICATION_TITLE),
@@ -350,7 +383,7 @@ TEST_F(UpdateNotificationControllerTest,
        RollbackRecommendedOverdueNotification) {
   Shell::Get()->system_tray_model()->ShowUpdateIcon(
       UpdateSeverity::kLow, /*factory_reset_required=*/true,
-      /*rollback=*/true, UpdateType::kSystem);
+      /*rollback=*/true);
 
   Shell::Get()->system_tray_model()->SetRelaunchNotificationState(
       {.requirement_type = RelaunchNotificationState::kRecommendedAndOverdue});
@@ -363,7 +396,9 @@ TEST_F(UpdateNotificationControllerTest,
   const std::u16string chrome_os_device_name = ui::GetChromeOSDeviceName();
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorCriticalWarning, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorCriticalWarning,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysError);
   EXPECT_TRUE(
       strcmp(kSystemMenuRollbackIcon.name, GetNotificationIcon().name) == 0);
   EXPECT_EQ(l10n_util::GetStringUTF8(IDS_ROLLBACK_OVERDUE_NOTIFICATION_TITLE),
@@ -379,7 +414,7 @@ TEST_F(UpdateNotificationControllerTest,
 TEST_F(UpdateNotificationControllerTest, RollbackRequiredNotification) {
   Shell::Get()->system_tray_model()->ShowUpdateIcon(
       UpdateSeverity::kLow, /*factory_reset_required=*/true,
-      /*rollback=*/true, UpdateType::kSystem);
+      /*rollback=*/true);
 
   constexpr base::TimeDelta remaining_time = base::Seconds(3);
 
@@ -396,7 +431,9 @@ TEST_F(UpdateNotificationControllerTest, RollbackRequiredNotification) {
   task_environment()->RunUntilIdle();
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorCriticalWarning, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorCriticalWarning,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysError);
   EXPECT_TRUE(
       strcmp(kSystemMenuRollbackIcon.name, GetNotificationIcon().name) == 0);
   EXPECT_EQ(
@@ -427,7 +464,9 @@ TEST_F(UpdateNotificationControllerTest, SetUpdateNotificationRecommended) {
       chrome_os_device_name);
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorNormal, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorNormal,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysPrimary);
   EXPECT_TRUE(strcmp(vector_icons::kBusinessIcon.name,
                      GetNotificationIcon().name) == 0);
   EXPECT_EQ(expected_notification_title, GetNotificationTitle());
@@ -454,7 +493,9 @@ TEST_F(UpdateNotificationControllerTest,
       chrome_os_device_name);
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorNormal, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorNormal,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysPrimary);
   EXPECT_TRUE(strcmp(vector_icons::kBusinessIcon.name,
                      GetNotificationIcon().name) == 0);
   EXPECT_EQ(expected_notification_title, GetNotificationTitle());
@@ -483,7 +524,9 @@ TEST_F(UpdateNotificationControllerTest, SetUpdateNotificationRequiredDays) {
       chrome_os_device_name);
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorWarning, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorWarning,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysWarning);
   EXPECT_TRUE(strcmp(vector_icons::kBusinessIcon.name,
                      GetNotificationIcon().name) == 0);
   EXPECT_EQ(message_center::SYSTEM_PRIORITY, GetNotificationPriority());
@@ -555,7 +598,9 @@ TEST_F(UpdateNotificationControllerTest, SetUpdateNotificationRequiredHours) {
       chrome_os_device_name);
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorWarning, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorWarning,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysWarning);
   EXPECT_TRUE(strcmp(vector_icons::kBusinessIcon.name,
                      GetNotificationIcon().name) == 0);
   EXPECT_EQ(message_center::SYSTEM_PRIORITY, GetNotificationPriority());
@@ -586,7 +631,9 @@ TEST_F(UpdateNotificationControllerTest, SetUpdateNotificationRequiredMinutes) {
       chrome_os_device_name);
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorWarning, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorWarning,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysWarning);
   EXPECT_TRUE(strcmp(vector_icons::kBusinessIcon.name,
                      GetNotificationIcon().name) == 0);
   EXPECT_EQ(message_center::SYSTEM_PRIORITY, GetNotificationPriority());
@@ -617,7 +664,9 @@ TEST_F(UpdateNotificationControllerTest, SetUpdateNotificationRequiredSeconds) {
       chrome_os_device_name);
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorWarning, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorWarning,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysWarning);
   EXPECT_TRUE(strcmp(vector_icons::kBusinessIcon.name,
                      GetNotificationIcon().name) == 0);
   EXPECT_EQ(message_center::SYSTEM_PRIORITY, GetNotificationPriority());
@@ -644,7 +693,9 @@ TEST_F(UpdateNotificationControllerTest, SetBackToDefault) {
   task_environment()->RunUntilIdle();
 
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorNormal, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorNormal,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysPrimary);
   EXPECT_TRUE(strcmp(kSystemMenuUpdateIcon.name, GetNotificationIcon().name) ==
               0);
   EXPECT_EQ(l10n_util::GetStringUTF8(IDS_UPDATE_NOTIFICATION_TITLE),
@@ -658,31 +709,57 @@ TEST_F(UpdateNotificationControllerTest, SetBackToDefault) {
             GetNotificationPriority());
 }
 
-TEST_F(UpdateNotificationControllerTest, VisibilityAfterLacrosUpdate) {
-  // Simulate an update.
-  AddNotificationWaiter waiter;
-  Shell::Get()->system_tray_model()->ShowUpdateIcon(UpdateSeverity::kLow, false,
-                                                    false, UpdateType::kLacros);
-  waiter.Wait();
+TEST_F(UpdateNotificationControllerTest,
+       VisibilityAfterDeferredUpdateShowNotification) {
+  // Simulate a deferred update.
+  Shell::Get()->system_tray_model()->SetUpdateDeferred(
+      DeferredUpdateState::kShowNotification);
+
+  // Wait until everything is complete and then check if the notification is
+  // visible.
+  task_environment()->RunUntilIdle();
 
   // The notification is now visible.
   ASSERT_TRUE(HasNotification());
-  EXPECT_EQ(kSystemNotificationColorNormal, *GetNotificationColor());
+  CompareNotificationColor(
+      /*expected_color=*/kSystemNotificationColorNormal,
+      /*expected_color_id_for_jelly=*/cros_tokens::kCrosSysPrimary);
   EXPECT_TRUE(strcmp(kSystemMenuUpdateIcon.name, GetNotificationIcon().name) ==
               0);
-  EXPECT_EQ("Lacros update available", GetNotificationTitle());
-  EXPECT_EQ("Device restart is required to apply the update.",
-            GetNotificationMessage());
-  EXPECT_EQ("Restart to update", GetNotificationButton(0));
+  EXPECT_EQ("Update available", GetNotificationTitle());
+  EXPECT_EQ(
+      "Get the latest features and security improvements. Updates happen in "
+      "the background.",
+      GetNotificationMessage());
+  EXPECT_EQ("Update", GetNotificationButton(0));
+  EXPECT_EQ("Automatic updates", GetNotificationButton(1));
+}
 
-  // Click the "Restart to update" button.
-  message_center::MessageCenter::Get()
-      ->FindVisibleNotificationById(kNotificationId)
-      ->delegate()
-      ->Click(/*button_index=*/0, /*reply=*/absl::nullopt);
+TEST_F(UpdateNotificationControllerTest,
+       VisibilityAfterDeferredUpdateShowDialog) {
+  // Simulate a deferred update.
+  Shell::Get()->system_tray_model()->SetUpdateDeferred(
+      DeferredUpdateState::kShowDialog);
 
-  // Controller tried to restart chrome.
-  EXPECT_EQ(1, GetSessionControllerClient()->attempt_restart_chrome_count());
+  // Wait until everything is complete and then check if the notification is
+  // not visible.
+  task_environment()->RunUntilIdle();
+
+  // The notification is not visible.
+  ASSERT_FALSE(HasNotification());
+}
+
+TEST_F(UpdateNotificationControllerTest, VisibilityAfterDeferredUpdateOff) {
+  // Simulate a deferred update.
+  Shell::Get()->system_tray_model()->SetUpdateDeferred(
+      DeferredUpdateState::kNone);
+
+  // Wait until everything is complete and then check if the notification is
+  // not visible.
+  task_environment()->RunUntilIdle();
+
+  // The notification is not visible.
+  ASSERT_FALSE(HasNotification());
 }
 
 }  // namespace ash

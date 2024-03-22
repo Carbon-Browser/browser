@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,9 @@ namespace chrome_pdf {
 
 base::FilePath GetTestDataFilePath(const base::FilePath& path) {
   base::FilePath source_root;
-  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, &source_root))
+  if (!base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_root)) {
     return {};
+  }
 
   return source_root.Append(FILE_PATH_LITERAL("pdf"))
       .Append(FILE_PATH_LITERAL("test"))
@@ -39,7 +40,7 @@ testing::AssertionResult MatchesPngFile(
     return testing::AssertionFailure() << "Reference: " << expected_png_file;
 
   if (!cc::MatchesPNGFile(actual_bitmap, GetTestDataFilePath(expected_png_file),
-                          cc::ExactPixelComparator(/*discard_alpha=*/false))) {
+                          cc::ExactPixelComparator())) {
     return testing::AssertionFailure() << "Reference: " << expected_png_file;
   }
 
@@ -48,7 +49,8 @@ testing::AssertionResult MatchesPngFile(
 
 sk_sp<SkSurface> CreateSkiaSurfaceForTesting(const gfx::Size& size,
                                              SkColor color) {
-  auto surface = SkSurface::MakeRasterN32Premul(size.width(), size.height());
+  auto surface = SkSurfaces::Raster(
+      SkImageInfo::MakeN32Premul(size.width(), size.height()));
   surface->getCanvas()->clear(color);
   return surface;
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,13 +24,6 @@ SyntheticPointerActionListParams::~SyntheticPointerActionListParams() {}
 SyntheticGestureParams::GestureType
 SyntheticPointerActionListParams::GetGestureType() const {
   return POINTER_ACTION_LIST;
-}
-
-const SyntheticPointerActionListParams* SyntheticPointerActionListParams::Cast(
-    const SyntheticGestureParams* gesture_params) {
-  DCHECK(gesture_params);
-  DCHECK_EQ(POINTER_ACTION_LIST, gesture_params->GetGestureType());
-  return static_cast<const SyntheticPointerActionListParams*>(gesture_params);
 }
 
 void SyntheticPointerActionListParams::PushPointerActionParams(

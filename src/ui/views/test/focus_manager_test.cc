@@ -1,11 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/test/focus_manager_test.h"
 
-#include <algorithm>
-
+#include "base/ranges/algorithm.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/widget/widget.h"
 
@@ -62,8 +61,7 @@ const Widget* FocusManagerTest::GetWidget() const {
 }
 
 void FocusManagerTest::GetAccessiblePanes(std::vector<View*>* panes) {
-  std::copy(accessible_panes_.begin(), accessible_panes_.end(),
-            std::back_inserter(*panes));
+  base::ranges::copy(accessible_panes_, std::back_inserter(*panes));
 }
 
 void FocusManagerTest::InitContentView() {}
@@ -74,11 +72,27 @@ void FocusManagerTest::AddFocusChangeListener(FocusChangeListener* listener) {
   GetFocusManager()->AddFocusChangeListener(listener);
 }
 
+void FocusManagerTest::RemoveFocusChangeListener(
+    FocusChangeListener* listener) {
+  ASSERT_TRUE(focus_change_listener_);
+  ASSERT_EQ(focus_change_listener_, listener);
+  GetFocusManager()->RemoveFocusChangeListener(listener);
+  focus_change_listener_ = nullptr;
+}
+
 void FocusManagerTest::AddWidgetFocusChangeListener(
     WidgetFocusChangeListener* listener) {
   ASSERT_FALSE(widget_focus_change_listener_);
   widget_focus_change_listener_ = listener;
   WidgetFocusManager::GetInstance()->AddFocusChangeListener(listener);
+}
+
+void FocusManagerTest::RemoveWidgetFocusChangeListener(
+    WidgetFocusChangeListener* listener) {
+  ASSERT_TRUE(widget_focus_change_listener_);
+  ASSERT_EQ(widget_focus_change_listener_, listener);
+  WidgetFocusManager::GetInstance()->RemoveFocusChangeListener(listener);
+  widget_focus_change_listener_ = nullptr;
 }
 
 void FocusManagerTest::SetAccessiblePanes(const std::vector<View*>& panes) {

@@ -1,20 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/observer_list.h"
 
-#include "base/memory/raw_ptr.h"
-
-// observer_list.h is a widely included header and its size has significant
-// impact on build time. Try not to raise this limit unless necessary. See
-// https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
-#ifndef NACL_TC_REV
-#pragma clang max_tokens_here 550000
-#endif
-
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/test/gtest_util.h"
 #include "base/threading/simple_thread.h"
@@ -561,7 +553,7 @@ class ListDestructor : public Foo {
   explicit ListDestructor(ObserverListType* list) : list_(list) {}
   ~ListDestructor() override = default;
 
-  void Observe(int x) override { delete list_; }
+  void Observe(int x) override { delete list_.ExtractAsDangling(); }
 
  private:
   raw_ptr<ObserverListType> list_;
@@ -827,8 +819,8 @@ TYPED_TEST(ObserverListTest, NonCompactList) {
   ObserverListFoo observer_list;
   Adder a(1), b(-1);
 
+  Disrupter disrupter2(&observer_list, true);  // Must outlive `disrupter1`.
   Disrupter disrupter1(&observer_list, true);
-  Disrupter disrupter2(&observer_list, true);
 
   // Disrupt itself and another one.
   disrupter1.SetDoomed(&disrupter2);
@@ -856,8 +848,8 @@ TYPED_TEST(ObserverListTest, BecomesEmptyThanNonEmpty) {
   ObserverListFoo observer_list;
   Adder a(1), b(-1);
 
+  Disrupter disrupter2(&observer_list, true);  // Must outlive `disrupter1`.
   Disrupter disrupter1(&observer_list, true);
-  Disrupter disrupter2(&observer_list, true);
 
   // Disrupt itself and another one.
   disrupter1.SetDoomed(&disrupter2);

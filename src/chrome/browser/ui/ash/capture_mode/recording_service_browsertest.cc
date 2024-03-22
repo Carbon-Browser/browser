@@ -1,21 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <string>
 
+#include "ash/capture_mode/capture_mode_types.h"
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/capture_mode/capture_mode_test_api.h"
 #include "ash/public/cpp/test/shell_test_api.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/download/download_prefs.h"
@@ -28,7 +30,9 @@
 #include "content/public/test/browser_test.h"
 #include "media/base/media_tracks.h"
 #include "media/base/mock_media_log.h"
+#include "media/base/stream_parser.h"
 #include "media/formats/webm/webm_stream_parser.h"
+#include "third_party/skia/include/codec/SkGifDecoder.h"
 #include "ui/aura/window.h"
 #include "ui/display/screen.h"
 #include "ui/display/test/display_manager_test_api.h"
@@ -45,7 +49,7 @@ void WaitForMilliseconds(int milliseconds) {
 #endif
 
   base::RunLoop loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, loop.QuitClosure(), base::Milliseconds(milliseconds));
   loop.Run();
 }
@@ -65,6 +69,26 @@ base::FilePath WaitForVideoFileToBeSaved() {
   return result;
 }
 
+// Attempts to load and decode the GIF image whose file is at the given `path`,
+// and verifies that the decoding is successful.
+void VerifyGifImage(const base::FilePath& path) {
+  ASSERT_TRUE(path.MatchesExtension(".gif"));
+
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  ASSERT_TRUE(base::PathExists(path));
+  std::string file_content;
+  EXPECT_TRUE(base::ReadFileToString(path, &file_content));
+  EXPECT_FALSE(file_content.empty());
+  sk_sp<SkData> data =
+      SkData::MakeWithoutCopy(file_content.data(), file_content.size());
+  ASSERT_TRUE(SkGifDecoder::IsGif(data->bytes(), data->size()));
+  std::unique_ptr<SkCodec> codec = SkGifDecoder::Decode(data, nullptr);
+  ASSERT_TRUE(codec);
+  SkImageInfo targetInfo = codec->getInfo().makeAlphaType(kPremul_SkAlphaType);
+  sk_sp<SkImage> image = std::get<0>(codec->getImage(targetInfo));
+  ASSERT_TRUE(image);
+}
+
 // Verifies the contents of a WebM file by parsing it.
 class WebmVerifier {
  public:
@@ -74,7 +98,6 @@ class WebmVerifier {
         base::BindRepeating(&WebmVerifier::OnNewConfig, base::Unretained(this)),
         base::BindRepeating(&WebmVerifier::OnNewBuffers,
                             base::Unretained(this)),
-        /*ignore_text_tracks=*/true,
         base::BindRepeating(&WebmVerifier::OnEncryptedMediaInitData,
                             base::Unretained(this)),
         base::BindRepeating(&WebmVerifier::OnNewMediaSegment,
@@ -89,17 +112,27 @@ class WebmVerifier {
 
   // Parses the given |webm_file_content| and returns true on success.
   bool Verify(const std::string& webm_file_content) {
-    return webm_parser_.Parse(
-        reinterpret_cast<const uint8_t*>(webm_file_content.data()),
-        webm_file_content.size());
+    if (!webm_parser_.AppendToParseBuffer(
+            reinterpret_cast<const uint8_t*>(webm_file_content.data()),
+            webm_file_content.size())) {
+      return false;
+    }
+
+    // Run the segment parser loop one time with the full size of the appended
+    // data to ensure the parser has had a chance to parse all the appended
+    // bytes.
+    media::StreamParser::ParseStatus result =
+        webm_parser_.Parse(webm_file_content.size());
+
+    // Note that media::StreamParser::ParseStatus::kSuccessHasMoreData is deemed
+    // a verification failure here, since the parser was told to parse all the
+    // appended bytes and should not have uninspected data afterwards.
+    return result == media::StreamParser::ParseStatus::kSuccess;
   }
 
  private:
   void OnInit(const media::StreamParser::InitParameters&) {}
-  bool OnNewConfig(std::unique_ptr<media::MediaTracks> tracks,
-                   const media::StreamParser::TextTrackConfigMap&) {
-    return true;
-  }
+  bool OnNewConfig(std::unique_ptr<media::MediaTracks> tracks) { return true; }
   bool OnNewBuffers(const media::StreamParser::BufferQueueMap& map) {
     return true;
   }
@@ -136,7 +169,8 @@ class RecordingServiceBrowserTest : public InProcessBrowserTest {
     // muxer to discard video frames if it expects audio frames but got none,
     // which may cause the produced webm file to be empty. See issues
     // https://crbug.com/1151167 and https://crbug.com/1151418.
-    ash::CaptureModeTestApi().SetAudioRecordingEnabled(false);
+    ash::CaptureModeTestApi().SetAudioRecordingMode(
+        ash::AudioRecordingMode::kOff);
   }
 
   aura::Window* GetBrowserWindow() const {
@@ -199,7 +233,7 @@ IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, RecordWindow) {
 
 IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, RecordWindowMultiDisplay) {
   display::test::DisplayManagerTestApi(ash::ShellTestApi().display_manager())
-      .UpdateDisplay("300x200,301+0-400x400");
+      .UpdateDisplay("300x200,301+0-400x350");
 
   ash::CaptureModeTestApi capture_mode_test_api;
   capture_mode_test_api.StartForWindow(/*for_video=*/true);
@@ -248,7 +282,8 @@ IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, RecordWindowMultiDisplay) {
   VerifyVideoFileAndDelete(video_path);
 }
 
-IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, RecordRegion) {
+// TODO(b/273521375): Flaky.
+IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, DISABLED_RecordRegion) {
   ash::CaptureModeTestApi test_api;
   test_api.StartForRegion(/*for_video=*/true);
   // Select a random partial region of the screen.
@@ -256,8 +291,9 @@ IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, RecordRegion) {
   FinishVideoRecordingTest(&test_api);
 }
 
+// TODO(b/273521375): Flaky.
 IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest,
-                       RecordingServiceEndpointDropped) {
+                       DISABLED_RecordingServiceEndpointDropped) {
   ash::CaptureModeTestApi test_api;
   test_api.StartForFullscreen(/*for_video=*/true);
   test_api.PerformCapture();
@@ -284,7 +320,9 @@ IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest,
   VerifyVideoFileAndDelete(video_path, /*allow_empty=*/true);
 }
 
-IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, SuccessiveRecording) {
+// TODO(b/273521375): Flaky.
+IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest,
+                       DISABLED_SuccessiveRecording) {
   ash::CaptureModeTestApi test_api;
   // Do a fullscreen recording, followed by a region recording.
   test_api.StartForFullscreen(/*for_video=*/true);
@@ -295,8 +333,9 @@ IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, SuccessiveRecording) {
 }
 
 // Tests that recording will be interrupted once screen capture becomes locked.
+// TODO(b/273521375): Flaky.
 IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest,
-                       RecordingInterruptedOnCaptureLocked) {
+                       DISABLED_RecordingInterruptedOnCaptureLocked) {
   ash::CaptureModeTestApi test_api;
   test_api.StartForFullscreen(/*for_video=*/true);
   test_api.PerformCapture();
@@ -311,7 +350,7 @@ IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, InvalidDownloadsPath) {
   auto* download_prefs =
       DownloadPrefs::FromBrowserContext(browser()->profile());
   const base::FilePath removable_path =
-      chromeos::CrosDisksClient::GetRemovableDiskMountPoint();
+      ash::CrosDisksClient::GetRemovableDiskMountPoint();
   const base::FilePath invalid_path =
       removable_path.Append(FILE_PATH_LITERAL("backup"));
   download_prefs->SetDownloadPath(invalid_path);
@@ -323,4 +362,38 @@ IN_PROC_BROWSER_TEST_F(RecordingServiceBrowserTest, InvalidDownloadsPath) {
   ash::CaptureModeTestApi test_api;
   test_api.StartForFullscreen(/*for_video=*/true);
   FinishVideoRecordingTest(&test_api);
+}
+
+// -----------------------------------------------------------------------------
+// GifRecordingBrowserTest:
+
+class GifRecordingBrowserTest : public InProcessBrowserTest {
+ public:
+  GifRecordingBrowserTest()
+      : scoped_feature_list_(ash::features::kGifRecording) {}
+  ~GifRecordingBrowserTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// Records a GIF image of a region that fills the entire screen, then attempts
+// to decode the resulting file to verify the GIF encoding was successful.
+IN_PROC_BROWSER_TEST_F(GifRecordingBrowserTest, SuccessfulEncodeDecode) {
+  aura::Window* browser_window = browser()->window()->GetNativeWindow();
+  ash::CaptureModeTestApi test_api;
+  test_api.SetRecordingType(ash::RecordingType::kGif);
+  test_api.SetUserSelectedRegion(browser_window->GetRootWindow()->bounds());
+
+  test_api.StartForRegion(/*for_video=*/true);
+  test_api.PerformCapture();
+  WaitForMilliseconds(1000);
+  EXPECT_TRUE(test_api.IsVideoRecordingInProgress());
+  test_api.FlushRecordingServiceForTesting();
+
+  WaitForMilliseconds(2000);
+
+  test_api.StopVideoRecording();
+  base::FilePath gif_file = WaitForVideoFileToBeSaved();
+  VerifyGifImage(gif_file);
 }

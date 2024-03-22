@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/time/time.h"
 #include "cc/animation/animation_timeline.h"
 #include "third_party/blink/renderer/core/animation/animation.h"
+#include "third_party/blink/renderer/core/animation/timeline_range.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/cssom/css_numeric_value.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
@@ -40,6 +41,10 @@ class CORE_EXPORT AnimationTimeline : public ScriptWrappable {
   ~AnimationTimeline() override = default;
 
   virtual V8CSSNumberish* currentTime();
+  virtual CSSNumericValue* getCurrentTime(const String& rangeName) {
+    return nullptr;
+  }
+
   absl::optional<AnimationTimeDelta> CurrentTime();
   absl::optional<double> CurrentTimeMilliseconds();
   absl::optional<double> CurrentTimeSeconds();
@@ -49,16 +54,23 @@ class CORE_EXPORT AnimationTimeline : public ScriptWrappable {
   TimelinePhase Phase() { return CurrentPhaseAndTime().phase; }
 
   virtual bool IsDocumentTimeline() const { return false; }
+  virtual bool IsScrollSnapshotTimeline() const { return false; }
   virtual bool IsScrollTimeline() const { return false; }
-  virtual bool IsCSSScrollTimeline() const { return false; }
   virtual bool IsViewTimeline() const { return false; }
 
+  // Determines which AnimationTimeline instance we should return
+  // from Animation.timeline.
+  virtual AnimationTimeline* ExposedTimeline() { return this; }
+
   virtual bool IsActive() const = 0;
+  virtual bool IsResolved() const { return true; }
   virtual AnimationTimeDelta ZeroTime() = 0;
   // https://w3.org/TR/web-animations-1/#monotonically-increasing-timeline
   // A timeline is monotonically increasing if its reported current time is
   // always greater than or equal than its previously reported current time.
   bool IsMonotonicallyIncreasing() const { return IsDocumentTimeline(); }
+  // https://drafts.csswg.org/web-animations-2/#progress-based-timeline
+  bool IsProgressBased() const { return IsScrollSnapshotTimeline(); }
   // Returns the initial start time for animations that are linked to this
   // timeline. This method gets invoked when initializing the start time of an
   // animation on this timeline for the first time. It exists because the
@@ -68,11 +80,27 @@ class CORE_EXPORT AnimationTimeline : public ScriptWrappable {
   // Changing scroll-linked animation start_time initialization is under
   // consideration here: https://github.com/w3c/csswg-drafts/issues/2075.
   virtual absl::optional<base::TimeDelta> InitialStartTimeForAnimations() = 0;
-  virtual AnimationTimeDelta CalculateIntrinsicIterationDuration(
-      const Timing&) {
-    return AnimationTimeDelta();
+
+  AnimationTimeDelta CalculateIntrinsicIterationDuration(
+      const Animation* animation,
+      const Timing& timing) {
+    return CalculateIntrinsicIterationDuration(
+        animation->GetRangeStartInternal(), animation->GetRangeEndInternal(),
+        timing);
   }
-  Document* GetDocument() const { return document_; }
+
+  AnimationTimeDelta CalculateIntrinsicIterationDuration(
+      const absl::optional<TimelineOffset>& range_start,
+      const absl::optional<TimelineOffset>& range_end,
+      const Timing& timing) {
+    return CalculateIntrinsicIterationDuration(GetTimelineRange(), range_start,
+                                               range_end, timing);
+  }
+
+  // See class TimelineRange.
+  virtual TimelineRange GetTimelineRange() const { return TimelineRange(); }
+
+  Document* GetDocument() const { return document_.Get(); }
   virtual void AnimationAttached(Animation*);
   virtual void AnimationDetached(Animation*);
 
@@ -83,10 +111,11 @@ class CORE_EXPORT AnimationTimeline : public ScriptWrappable {
   // Schedules animation timing update on next frame.
   virtual void ScheduleServiceOnNextFrame();
 
-  Animation* Play(AnimationEffect*, ExceptionState& = ASSERT_NO_EXCEPTION);
+  virtual Animation* Play(AnimationEffect*,
+                          ExceptionState& = ASSERT_NO_EXCEPTION);
 
   virtual bool NeedsAnimationTimingUpdate();
-  virtual bool HasAnimations() const { return !animations_.IsEmpty(); }
+  virtual bool HasAnimations() const { return !animations_.empty(); }
   virtual bool HasOutdatedAnimation() const {
     return outdated_animation_count_ > 0;
   }
@@ -124,6 +153,14 @@ class CORE_EXPORT AnimationTimeline : public ScriptWrappable {
 
  protected:
   virtual PhaseAndTime CurrentPhaseAndTime() = 0;
+
+  virtual AnimationTimeDelta CalculateIntrinsicIterationDuration(
+      const TimelineRange&,
+      const absl::optional<TimelineOffset>& range_start,
+      const absl::optional<TimelineOffset>& range_end,
+      const Timing&) {
+    return AnimationTimeDelta();
+  }
 
   Member<Document> document_;
   unsigned outdated_animation_count_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -2465,6 +2465,36 @@ const GpuControlList::DriverInfo kDriverInfoForGpuControlTestingEntry80 = {
 };
 
 const GpuControlList::More kMoreForEntry80_1440601243 = {
+    GpuControlList::kGLTypeNone,  // gl_type
+    {GpuControlList::kUnknown, GpuControlList::kVersionStyleNumerical,
+     GpuControlList::kVersionSchemaCommon, nullptr, nullptr},  // gl_version
+    {GpuControlList::kUnknown, GpuControlList::kVersionStyleNumerical,
+     GpuControlList::kVersionSchemaCommon, nullptr,
+     nullptr},  // pixel_shader_version
+    false,      // in_process_gpu
+    0,          // gl_reset_notification_strategy
+    {GpuControlList::kUnknown, GpuControlList::kVersionStyleNumerical,
+     GpuControlList::kVersionSchemaCommon, nullptr,
+     nullptr},  // direct_rendering_version
+    {GpuControlList::kUnknown, GpuControlList::kVersionStyleNumerical,
+     GpuControlList::kVersionSchemaCommon, nullptr, nullptr},  // gpu_count
+    GpuControlList::kDontCare,  // hardware_overlay
+    0,                          // test_group
+    GpuControlList::kDontCare,  // subpixel_font_rendering
+};
+
+const int kFeatureListForGpuControlTestingEntry81[1] = {
+    TEST_FEATURE_0,
+};
+
+const GpuControlList::GLStrings kGLStringsForGpuControlTestingEntry81 = {
+    nullptr,
+    "ANGLE \\(Samsung Xclipse 920\\) on Vulkan 1.1.179",
+    nullptr,
+    nullptr,
+};
+
+const GpuControlList::More kMoreForEntry81_1440601243 = {
     GpuControlList::kGLTypeNone,  // gl_type
     {GpuControlList::kUnknown, GpuControlList::kVersionStyleNumerical,
      GpuControlList::kVersionSchemaCommon, nullptr, nullptr},  // gl_version

@@ -158,12 +158,10 @@ scoped_refptr<EncodedFormData> EncodedFormData::DeepCopy() const {
 }
 
 void EncodedFormData::AppendData(const void* data, wtf_size_t size) {
-  if (elements_.IsEmpty() || elements_.back().type_ != FormDataElement::kData)
+  if (elements_.empty() || elements_.back().type_ != FormDataElement::kData)
     elements_.push_back(FormDataElement());
   FormDataElement& e = elements_.back();
-  wtf_size_t old_size = e.data_.size();
-  e.data_.Grow(old_size + size);
-  memcpy(e.data_.data() + old_size, data, size);
+  e.data_.Append(static_cast<const char*>(data), size);
 }
 
 void EncodedFormData::AppendFile(

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "base/containers/queue.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/chromeos_buildflags.h"
 #include "dbus/object_path.h"
@@ -136,7 +137,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterBlueZ final
   void SetDiscoverable(bool discoverable,
                        base::OnceClosure callback,
                        ErrorCallback error_callback) override;
-  uint32_t GetDiscoverableTimeout() const;
+  base::TimeDelta GetDiscoverableTimeout() const override;
   bool IsDiscovering() const override;
   bool IsDiscoveringForTesting() const;
   std::unordered_map<device::BluetoothDevice*, device::BluetoothDevice::UUIDSet>
@@ -169,7 +170,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterBlueZ final
       const std::string& address,
       const absl::optional<device::BluetoothDevice::AddressType>& address_type,
       ConnectDeviceCallback callback,
-      ErrorCallback error_callback) override;
+      ConnectDeviceErrorCallback error_callback) override;
 
   device::BluetoothLocalGattService* GetGattService(
       const std::string& identifier) const override;
@@ -386,6 +387,14 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterBlueZ final
                         ConfirmationCallback callback) override;
   void Cancel() override;
 
+#if BUILDFLAG(IS_CHROMEOS)
+  // Called by dbus:: on completion of the D-Bus method call to update
+  // bluetooth devcoredump state.
+  void OnSetDevCoredumpSuccess();
+  void OnSetDevCoredumpError(const std::string& error_name,
+                             const std::string& error_message);
+#endif // BUILDFLAG(IS_CHROMEOS)
+
   // Called by dbus:: on completion of the D-Bus method call to enable LL
   // privacy.
   void OnSetLLPrivacySuccess();
@@ -520,7 +529,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterBlueZ final
 
   void OnConnectDevice(ConnectDeviceCallback callback,
                        const dbus::ObjectPath& object_path);
-  void OnConnectDeviceError(ErrorCallback error_callback,
+  void OnConnectDeviceError(ConnectDeviceErrorCallback error_callback,
                             const std::string& error_name,
                             const std::string& error_message);
 

@@ -1,14 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.endpoint_fetcher;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
-/**
- * Encapsulates the response from the {@Link EndpointFetcher}
- */
+/** Encapsulates the response from the {@Link EndpointFetcher} */
 public class EndpointResponse {
     private final String mResponseString;
 
@@ -20,9 +18,7 @@ public class EndpointResponse {
         mResponseString = responseString;
     }
 
-    /**
-     * Response string acquired from calling an endpoint
-     */
+    /** Response string acquired from calling an endpoint */
     public String getResponseString() {
         return mResponseString;
     }

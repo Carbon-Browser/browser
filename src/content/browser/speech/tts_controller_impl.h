@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,6 +65,7 @@ class CONTENT_EXPORT TtsControllerImpl
                   int char_index,
                   int length,
                   const std::string& error_message) override;
+  void OnTtsUtteranceBecameInvalid(int utterance_id) override;
   void GetVoices(BrowserContext* browser_context,
                  const GURL& source_url,
                  std::vector<VoiceData>* out_voices) override;
@@ -108,6 +109,8 @@ class CONTENT_EXPORT TtsControllerImpl
                          const GURL& source_url,
                          std::vector<VoiceData>* out_voices);
 
+  void SpeakOrEnqueueInternal(std::unique_ptr<TtsUtterance> utterance);
+
   // Get the platform TTS implementation (or injected mock).
   TtsPlatform* GetTtsPlatform();
 
@@ -130,6 +133,17 @@ class CONTENT_EXPORT TtsControllerImpl
   // Stops the current utterance if it matches |source_url|. Returns true on
   // success, false if the current utterance does not match |source_url|.
   bool StopCurrentUtteranceIfMatches(const GURL& source_url);
+
+  // Stops the current utterance.
+  void StopCurrentUtterance();
+
+  // Removes the utterance matching |utterance_id|, and stops the current
+  // utterance if it matches |utterance_id|.
+  void RemoveUtteranceAndStopIfNeeded(int utterance_id);
+
+  // Stops the current utterance if it matches |utterance_id|. Returns true on
+  // success, false if the current utterance does not match |utterance_id|.
+  bool StopCurrentUtteranceIfMatches(int utterance_id);
 
   // Clear the utterance queue. If send_events is true, will send
   // TTS_EVENT_CANCELLED events on each one.
@@ -180,11 +194,14 @@ class CONTENT_EXPORT TtsControllerImpl
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   TtsControllerDelegate* GetTtsControllerDelegate();
   void SetTtsControllerDelegateForTesting(TtsControllerDelegate* delegate);
-  TtsControllerDelegate* delegate_ = nullptr;
-  RemoteTtsEngineDelegate* remote_engine_delegate_ = nullptr;
+  raw_ptr<TtsControllerDelegate, DanglingUntriaged | ExperimentalAsh>
+      delegate_ = nullptr;
 #endif
 
-  raw_ptr<TtsEngineDelegate> engine_delegate_ = nullptr;
+  raw_ptr<RemoteTtsEngineDelegate, DanglingUntriaged> remote_engine_delegate_ =
+      nullptr;
+
+  raw_ptr<TtsEngineDelegate, DanglingUntriaged> engine_delegate_ = nullptr;
 
   bool stop_speaking_when_hidden_ = false;
 
@@ -199,7 +216,7 @@ class CONTENT_EXPORT TtsControllerImpl
 
   // A pointer to the platform implementation of text-to-speech, for
   // dependency injection.
-  raw_ptr<TtsPlatform> tts_platform_ = nullptr;
+  raw_ptr<TtsPlatform, DanglingUntriaged> tts_platform_ = nullptr;
 
   // A queue of utterances to speak after the current one finishes.
   std::list<std::unique_ptr<TtsUtterance>> utterance_list_;

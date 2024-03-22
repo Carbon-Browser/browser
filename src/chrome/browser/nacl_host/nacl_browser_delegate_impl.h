@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "extensions/buildflags/buildflags.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-#include "base/memory/ref_counted.h"
 #include "extensions/common/url_pattern.h"
 #endif
 
@@ -53,7 +52,7 @@ class NaClBrowserDelegateImpl : public NaClBrowserDelegate {
   std::vector<URLPattern> debug_patterns_;
 #endif
 
-  raw_ptr<ProfileManager> profile_manager_;
+  raw_ptr<ProfileManager, LeakedDanglingUntriaged> profile_manager_;
   bool inverse_debug_patterns_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/sync/engine/data_type_activation_response.h"
 
 namespace syncer {
@@ -32,13 +33,6 @@ void ModelTypeConnectorProxy::DisconnectDataType(ModelType type) {
   task_runner_->PostTask(FROM_HERE,
                          base::BindOnce(&ModelTypeConnector::DisconnectDataType,
                                         model_type_connector_, type));
-}
-
-void ModelTypeConnectorProxy::SetProxyTabsDatatypeEnabled(bool enabled) {
-  task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&ModelTypeConnector::SetProxyTabsDatatypeEnabled,
-                     model_type_connector_, enabled));
 }
 
 }  // namespace syncer

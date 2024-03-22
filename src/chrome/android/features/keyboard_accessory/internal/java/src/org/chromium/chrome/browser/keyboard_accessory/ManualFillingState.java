@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.keyboard_accessory;
 import android.util.SparseArray;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.keyboard_accessory.data.CachedProviderAdapter;
@@ -28,9 +27,7 @@ import java.util.ArrayList;
  */
 class ManualFillingState {
     private static final int[] TAB_ORDER = {
-            AccessoryTabType.PASSWORDS,
-            AccessoryTabType.CREDIT_CARDS,
-            AccessoryTabType.ADDRESSES,
+        AccessoryTabType.PASSWORDS, AccessoryTabType.CREDIT_CARDS, AccessoryTabType.ADDRESSES,
     };
     private final WebContents mWebContents;
     private final SparseArray<SheetState> mSheetStates = new SparseArray<>();
@@ -40,8 +37,7 @@ class ManualFillingState {
     private boolean mWebContentsShowing;
 
     private static class SheetState {
-        @Nullable
-        Provider<AccessorySheetData> mDataProvider;
+        @Nullable Provider<AccessorySheetData> mDataProvider;
 
         /**
          *  @deprecated Storing a sheet per WebContents is too expensive. Instead, reuse the already
@@ -49,9 +45,7 @@ class ManualFillingState {
          *              The state knows about {@link #mAvailableTabs} which is sufficient to request
          *              updates via {@link #requestRecentSheets()} for browser-scoped sheets.
          */
-        @Deprecated
-        @Nullable
-        AccessorySheetTabCoordinator mSheet;
+        @Deprecated @Nullable AccessorySheetTabCoordinator mSheet;
 
         // TODO(crbug.com/1169167): Remove this method when the legacy accessory is cleaned up.
         void notifyProviderObservers() {
@@ -84,7 +78,7 @@ class ManualFillingState {
             super.wasHidden();
             mWebContentsShowing = false;
         }
-    };
+    }
 
     private final WebContentsObserver mWebContentsObserver;
 
@@ -93,11 +87,12 @@ class ManualFillingState {
      * @param webContents Some {@link WebContents} which are assumed to be shown right now.
      */
     ManualFillingState(@Nullable WebContents webContents) {
-        mWebContents = webContents;
-        if (webContents == null) {
+        if (webContents == null || webContents.isDestroyed()) {
+            mWebContents = null;
             mWebContentsObserver = null;
             return;
         }
+        mWebContents = webContents;
         mWebContentsShowing = true;
         mWebContentsObserver = new Observer(mWebContents);
         mWebContents.addObserver(mWebContentsObserver);
@@ -116,6 +111,7 @@ class ManualFillingState {
             }
         }
     }
+
     void setSheetUpdater(ManualFillingComponent.UpdateAccessorySheetDelegate delegate) {
         mUpdater = delegate;
     }
@@ -158,10 +154,12 @@ class ManualFillingState {
      * @param provider A {@link PropertyProvider} providing actions.
      * @param defaultActions A default set of actions to prepopulate the adapter's cache.
      */
-    void wrapActionsProvider(PropertyProvider<KeyboardAccessoryData.Action[]> provider,
+    void wrapActionsProvider(
+            PropertyProvider<KeyboardAccessoryData.Action[]> provider,
             KeyboardAccessoryData.Action[] defaultActions) {
-        mActionsProvider = new CachedProviderAdapter<>(
-                provider, defaultActions, this::onAdapterReceivedNewData);
+        mActionsProvider =
+                new CachedProviderAdapter<>(
+                        provider, defaultActions, this::onAdapterReceivedNewData);
     }
 
     /**
@@ -204,7 +202,7 @@ class ManualFillingState {
     void setAccessorySheet(
             @AccessoryTabType int tabType, @Nullable AccessorySheetTabCoordinator sheet) {
         assert !ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
-            : "Storing sheets in a WebContents-scoped cache is too expensive!";
+                : "Storing sheets in a WebContents-scoped cache is too expensive!";
         getStateFor(tabType).mSheet = sheet;
     }
 
@@ -227,7 +225,7 @@ class ManualFillingState {
     @Nullable
     AccessorySheetTabCoordinator getAccessorySheet(@AccessoryTabType int tabType) {
         assert !ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
-            : "Storing sheets in a WebContents-scoped cache is too expensive!";
+                : "Storing sheets in a WebContents-scoped cache is too expensive!";
         return getStateFor(tabType).mSheet;
     }
 
@@ -235,7 +233,6 @@ class ManualFillingState {
         if (mWebContentsShowing) adapter.notifyAboutCachedItems();
     }
 
-    @VisibleForTesting
     WebContentsObserver getWebContentsObserverForTesting() {
         return mWebContentsObserver;
     }

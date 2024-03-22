@@ -1,14 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/ipc/in_process_gpu_thread_holder.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/service/mailbox_manager_factory.h"
 #include "gpu/command_buffer/service/scheduler.h"
@@ -17,6 +16,7 @@
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/config/gpu_info_collector.h"
 #include "gpu/config/gpu_util.h"
+#include "ui/gl/gl_utils.h"
 #include "ui/gl/init/gl_factory.h"
 
 namespace gpu {
@@ -78,9 +78,10 @@ void InProcessGpuThreadHolder::InitializeOnGpuThread(
       gles2::PassthroughCommandDecoderSupported();
 
   share_group_ = new gl::GLShareGroup();
-  surface_ = gl::init::CreateOffscreenGLSurface(gfx::Size());
-  gl::GLContextAttribs attribs = gles2::GenerateGLContextAttribs(
-      ContextCreationAttribs(), use_passthrough_cmd_decoder);
+  surface_ =
+      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size());
+  gl::GLContextAttribs attribs =
+      gles2::GenerateGLContextAttribsForCompositor(use_passthrough_cmd_decoder);
   context_ =
       gl::init::CreateGLContext(share_group_.get(), surface_.get(), attribs);
   CHECK(context_->MakeCurrent(surface_.get()));
@@ -109,8 +110,7 @@ void InProcessGpuThreadHolder::InitializeOnGpuThread(
   auto feature_info = base::MakeRefCounted<gles2::FeatureInfo>(
       gpu_driver_bug_workarounds, gpu_feature_info_);
   context_state_->InitializeGL(gpu_preferences_, feature_info);
-  context_state_->InitializeGrContext(gpu_preferences_,
-                                      gpu_driver_bug_workarounds, nullptr);
+  context_state_->InitializeSkia(gpu_preferences_, gpu_driver_bug_workarounds);
 
   task_executor_ = std::make_unique<GpuInProcessThreadService>(
       this, task_runner(), scheduler_.get(), sync_point_manager_.get(),

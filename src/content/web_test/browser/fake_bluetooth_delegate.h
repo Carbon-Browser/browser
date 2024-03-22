@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,8 @@ class FakeBluetoothDelegate : public BluetoothDelegate {
   void ShowDevicePairPrompt(RenderFrameHost* frame,
                             const std::u16string& device_identifier,
                             PairPromptCallback callback,
-                            PairingKind pairing_kind) override;
+                            PairingKind pairing_kind,
+                            const absl::optional<std::u16string>& pin) override;
 
   blink::WebBluetoothDeviceId GetWebBluetoothDeviceId(
       RenderFrameHost* frame,

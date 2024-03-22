@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,10 @@ class MockOneShotTimer : public OneShotTimer {
 
   // Testing method.
   void Fire();
+
+  // OneShotTimer::FireNow requires no task runner is set. Override FireNow to
+  // bypass the check.
+  void FireNow() override;
 
  private:
   // Timer implementation.

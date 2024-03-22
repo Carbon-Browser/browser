@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <Security/Security.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 
 namespace enterprise_connectors {
 
@@ -20,13 +20,14 @@ class SecureEnclaveHelperImpl : public SecureEnclaveHelper {
   ~SecureEnclaveHelperImpl() override;
 
   // SecureEnclaveHelper:
-  base::ScopedCFTypeRef<SecKeyRef> CreateSecureKey(
-      CFDictionaryRef attributes) override;
-  bool Update(CFDictionaryRef query,
-              CFDictionaryRef attributes_to_update) override;
-  bool Delete(CFDictionaryRef query) override;
-  bool CheckExists(CFDictionaryRef query) override;
-  bool CheckKeychainUnlocked() override;
+  base::apple::ScopedCFTypeRef<SecKeyRef> CreateSecureKey(
+      CFDictionaryRef attributes,
+      OSStatus* error) override;
+  base::apple::ScopedCFTypeRef<SecKeyRef> CopyKey(CFDictionaryRef query,
+                                                  OSStatus* error) override;
+  OSStatus Update(CFDictionaryRef query,
+                  CFDictionaryRef attributes_to_update) override;
+  OSStatus Delete(CFDictionaryRef query) override;
   bool IsSecureEnclaveSupported() override;
 };
 

@@ -1,9 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_PAYMENTS_CARD_UNMASK_CHALLENGE_OPTION_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_PAYMENTS_CARD_UNMASK_CHALLENGE_OPTION_H_
+
+#include <string>
+
+#include "base/types/strong_alias.h"
 
 namespace autofill {
 
@@ -15,14 +19,46 @@ enum class CardUnmaskChallengeOptionType {
   kUnknownType = 0,
   // SMS OTP authentication.
   kSmsOtp = 1,
-  kMaxValue = kSmsOtp,
+  // CVC authentication.
+  kCvc = 2,
+  // Email OTP authentication.
+  kEmailOtp = 3,
+  kMaxValue = kEmailOtp,
+};
+
+// Indicates the position of the CVC, for example the front or back of the
+// user's card.
+enum class CvcPosition {
+  // Default value, should never be used.
+  kUnknown = 0,
+  // The CVC is on the front of the user's card.
+  kFrontOfCard = 1,
+  // The CVC is on the front of the user's card.
+  kBackOfCard = 2,
+  kMaxValue = kBackOfCard,
 };
 
 // The struct used by Autofill components to represent a card unmask challenge
-// option.
+// option. User must select a challenge option to unmask their credit card.
+// Currently, only CVC and SMS OTP are supported.
 struct CardUnmaskChallengeOption {
-  // The unique identifier for the challenge option.
-  std::string id = std::string();
+  // The challenge option ID is a unique identifier generated in the Payments
+  // server and is used to distinguish challenge options from one another.
+  using ChallengeOptionId =
+      base::StrongAlias<class SelectedChallengeOptionIdTag, std::string>;
+
+  CardUnmaskChallengeOption(ChallengeOptionId id,
+                            CardUnmaskChallengeOptionType type,
+                            const std::u16string& challenge_info,
+                            const size_t& challenge_input_length,
+                            CvcPosition cvc_position = CvcPosition::kUnknown);
+
+  CardUnmaskChallengeOption();
+  CardUnmaskChallengeOption(const CardUnmaskChallengeOption&);
+  CardUnmaskChallengeOption& operator=(const CardUnmaskChallengeOption&);
+  ~CardUnmaskChallengeOption();
+
+  ChallengeOptionId id = ChallengeOptionId();
 
   // The type of the challenge option.
   CardUnmaskChallengeOptionType type =
@@ -32,8 +68,11 @@ struct CardUnmaskChallengeOption {
   // option, such as the masked phone number that will receive an SMS, etc.
   std::u16string challenge_info = std::u16string();
 
-  // The predetermined length of the OTP value.
-  size_t otp_length = 0U;
+  // The predetermined length of the input of the challenge.
+  size_t challenge_input_length = 0U;
+
+  // The position of the CVC. Only present if `type` is `kCvc`.
+  CvcPosition cvc_position = CvcPosition::kUnknown;
 };
 
 }  // namespace autofill

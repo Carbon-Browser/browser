@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,6 +50,12 @@ struct BLINK_COMMON_EXPORT
     return r.compositing_scale_factor;
   }
 
+  static float cursor_accessibility_scale_factor(
+      const blink::FrameVisualProperties& r) {
+    DCHECK_GE(r.cursor_accessibility_scale_factor, 1.f);
+    return r.cursor_accessibility_scale_factor;
+  }
+
   static const gfx::Size& visible_viewport_size(
       const blink::FrameVisualProperties& r) {
     return r.visible_viewport_size;
@@ -75,9 +81,9 @@ struct BLINK_COMMON_EXPORT
     return r.compositor_viewport;
   }
 
-  static const gfx::Rect& screen_space_rect(
+  static const gfx::Rect& rect_in_local_root(
       const blink::FrameVisualProperties& r) {
-    return r.screen_space_rect;
+    return r.rect_in_local_root;
   }
 
   static const gfx::Size& local_frame_size(

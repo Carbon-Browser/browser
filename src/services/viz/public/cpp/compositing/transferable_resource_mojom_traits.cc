@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "gpu/ipc/common/mailbox_mojom_traits.h"
 #include "gpu/ipc/common/sync_token_mojom_traits.h"
 #include "services/viz/public/cpp/compositing/resource_id_mojom_traits.h"
+#include "services/viz/public/cpp/compositing/shared_image_format_mojom_traits.h"
 #include "ui/gfx/geometry/mojom/geometry_mojom_traits.h"
 #include "ui/gfx/mojom/color_space_mojom_traits.h"
 #include "ui/gfx/mojom/hdr_metadata_mojom_traits.h"
@@ -67,7 +68,6 @@ bool StructTraits<viz::mojom::TransferableResourceDataView,
     return false;
   }
   out->id = id;
-  out->filter = data.filter();
   out->is_software = data.is_software();
   out->is_overlay_candidate = data.is_overlay_candidate();
 

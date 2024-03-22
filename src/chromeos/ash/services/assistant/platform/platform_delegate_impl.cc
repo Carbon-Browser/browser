@@ -1,12 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/platform/platform_delegate_impl.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 PlatformDelegateImpl::~PlatformDelegateImpl() = default;
 PlatformDelegateImpl::PlatformDelegateImpl() = default;
@@ -16,6 +15,10 @@ void PlatformDelegateImpl::Bind(
   receiver_.Bind(std::move(pending_receiver));
 }
 
+void PlatformDelegateImpl::Stop() {
+  receiver_.reset();
+}
+
 void PlatformDelegateImpl::BindAudioStreamFactory(
     mojo::PendingReceiver<media::mojom::AudioStreamFactory> receiver) {
   AssistantBrowserDelegate::Get()->RequestAudioStreamFactory(
@@ -23,8 +26,7 @@ void PlatformDelegateImpl::BindAudioStreamFactory(
 }
 
 void PlatformDelegateImpl::BindAudioDecoderFactory(
-    mojo::PendingReceiver<
-        chromeos::assistant::mojom::AssistantAudioDecoderFactory> receiver) {
+    mojo::PendingReceiver<mojom::AssistantAudioDecoderFactory> receiver) {
   AssistantBrowserDelegate::Get()->RequestAudioDecoderFactory(
       std::move(receiver));
 }
@@ -51,5 +53,4 @@ void PlatformDelegateImpl::BindWakeLockProvider(
   AssistantBrowserDelegate::Get()->RequestWakeLockProvider(std::move(receiver));
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

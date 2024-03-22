@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -124,6 +124,11 @@ class FindBarHost : public DropdownBarHost,
   void RegisterAccelerators() override;
   void UnregisterAccelerators() override;
 
+#if BUILDFLAG(IS_MAC)
+  // Get the host widget.
+  views::Widget* GetHostWidget() override;
+#endif
+
  protected:
   // Overridden from DropdownBarHost:
   void OnVisibilityChanged() override;
@@ -133,6 +138,7 @@ class FindBarHost : public DropdownBarHost,
 
  private:
   friend class FindInPageTest;
+  friend class LegacyFindInPageTest;
 
   // Allows implementation to tweak widget position.
   void GetWidgetPositionNative(gfx::Rect* avoid_overlapping_rect);

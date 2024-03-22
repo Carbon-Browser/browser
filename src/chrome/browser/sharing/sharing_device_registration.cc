@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "base/base64url.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/sharing/buildflags.h"
@@ -24,7 +24,7 @@
 #include "components/gcm_driver/instance_id/instance_id_driver.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/prefs/pref_service.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #include "components/sync_device_info/device_info.h"
 #include "crypto/ec_private_key.h"
 
@@ -335,12 +335,8 @@ bool SharingDeviceRegistration::IsRemoteCopySupported() const {
 
 bool SharingDeviceRegistration::IsOptimizationGuidePushNotificationSupported()
     const {
-#if BUILDFLAG(IS_ANDROID)
   return optimization_guide::features::IsOptimizationHintsEnabled() &&
          optimization_guide::features::IsPushNotificationsEnabled();
-#else
-  return false;
-#endif
 }
 
 void SharingDeviceRegistration::SetEnabledFeaturesForTesting(

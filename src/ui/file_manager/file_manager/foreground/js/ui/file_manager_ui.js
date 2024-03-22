@@ -1,22 +1,27 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assertInstanceof} from 'chrome://resources/js/assert.m.js';
-import {decorate, define as crUiDefine} from 'chrome://resources/js/cr/ui.m.js';
-import {contextMenuHandler} from 'chrome://resources/js/cr/ui/context_menu_handler.m.js';
-import {Menu} from 'chrome://resources/js/cr/ui/menu.m.js';
-import {MenuItem} from 'chrome://resources/js/cr/ui/menu_item.m.js';
-import {queryRequiredElement} from 'chrome://resources/js/util.m.js';
+import '../../elements/icons.html.js';
 
-import {DialogType} from '../../../common/js/dialog_type.js';
-import {str, strf, util} from '../../../common/js/util.js';
+import {assertInstanceof} from 'chrome://resources/ash/common/assert.js';
+
+import {decorate} from '../../../common/js/cr_ui.js';
+import {queryDecoratedElement, queryRequiredElement} from '../../../common/js/dom_utils.js';
+import {isDlpEnabled, isNewDirectoryTreeEnabled} from '../../../common/js/flags.js';
+import {str, strf} from '../../../common/js/translations.js';
 import {AllowedPaths} from '../../../common/js/volume_manager_types.js';
 import {BreadcrumbContainer} from '../../../containers/breadcrumb_container.js';
-import {VolumeManager} from '../../../externs/volume_manager.js';
-import {FilesPasswordDialog} from '../../elements/files_password_dialog.js';
-import {FilesToast} from '../../elements/files_toast.js';
-import {FilesTooltip} from '../../elements/files_tooltip.js';
+import {CloudPanelContainer} from '../../../containers/cloud_panel_container.js';
+import {DirectoryTreeContainer} from '../../../containers/directory_tree_container.js';
+import {NudgeContainer} from '../../../containers/nudge_container.js';
+import {SearchContainer} from '../../../containers/search_container.js';
+import {DialogType} from '../../../externs/ts/state.js';
+import {XfConflictDialog} from '../../../widgets/xf_conflict_dialog.js';
+import {XfDlpRestrictionDetailsDialog} from '../../../widgets/xf_dlp_restriction_details_dialog.js';
+import {XfPasswordDialog} from '../../../widgets/xf_password_dialog.js';
+import {XfSplitter} from '../../../widgets/xf_splitter.js';
+import {XfTree} from '../../../widgets/xf_tree.js';
 import {BannerController} from '../banner_controller.js';
 import {LaunchParam} from '../launch_param.js';
 import {ProvidersModel} from '../providers_model.js';
@@ -24,8 +29,8 @@ import {ProvidersModel} from '../providers_model.js';
 import {A11yAnnounce} from './a11y_announce.js';
 import {ActionModelUI} from './action_model_ui.js';
 import {ActionsSubmenu} from './actions_submenu.js';
-import {BreadcrumbController} from './breadcrumb_controller.js';
 import {ComboButton} from './combobutton.js';
+import {contextMenuHandler} from './context_menu_handler.js';
 import {DefaultTaskDialog} from './default_task_dialog.js';
 import {DialogFooter} from './dialog_footer.js';
 import {BaseDialog} from './dialogs.js';
@@ -38,14 +43,13 @@ import {FilesMenuItem} from './files_menu.js';
 import {GearMenu} from './gear_menu.js';
 import {ImportCrostiniImageDialog} from './import_crostini_image_dialog.js';
 import {InstallLinuxPackageDialog} from './install_linux_package_dialog.js';
-import {ListContainer} from './list_container.js';
+import {ListContainer, ListType} from './list_container.js';
+import {Menu} from './menu.js';
+import {MenuItem} from './menu_item.js';
 import {MultiMenu} from './multi_menu.js';
 import {MultiMenuButton} from './multi_menu_button.js';
 import {ProgressCenterPanel} from './progress_center_panel.js';
 import {ProvidersMenu} from './providers_menu.js';
-import {SearchBox} from './search_box.js';
-import {Splitter} from './splitter.js';
-
 
 /**
  * The root of the file manager's view managing the DOM of the Files app.
@@ -101,6 +105,22 @@ export class FileManagerUI {
     this.deleteConfirmDialog.focusCancelButton = true;
 
     /**
+     * Confirm dialog for emptying the trash.
+     * @type {!FilesConfirmDialog}
+     * @const
+     */
+    this.emptyTrashConfirmDialog = new FilesConfirmDialog(this.element);
+    this.emptyTrashConfirmDialog.setOkLabel(str('EMPTY_TRASH_DELETE_FOREVER'));
+
+    /**
+     * Restore dialog when trying to open files that are in the trash
+     * @type {!FilesConfirmDialog}
+     * @const
+     */
+    this.restoreConfirmDialog = new FilesConfirmDialog(this.element);
+    this.restoreConfirmDialog.setOkLabel(str('RESTORE_ACTION_LABEL'));
+
+    /**
      * Confirm dialog for file move operation.
      * @type {!FilesConfirmDialog}
      * @const
@@ -141,58 +161,73 @@ export class FileManagerUI {
 
     /**
      * Dialog for formatting
-     * @const {!HTMLElement}
+     * @const @type {!HTMLElement}
      */
     this.formatDialog = queryRequiredElement('#format-dialog');
 
     /**
      * Dialog for password prompt
-     * @type {?FilesPasswordDialog}
+     * @type {?XfPasswordDialog}
      */
     this.passwordDialog_ = null;
 
     /**
+     * Dialog for resolving file conflicts.
+     * @type {?XfConflictDialog}
+     */
+    this.xfConflictDialog_ = null;
+
+    /**
+     * Dialog for DLP (Data Leak Prevention) restriction details.
+     * @type {?XfDlpRestrictionDetailsDialog}
+     */
+    this.dlpRestrictionDetailsDialog_ = null;
+
+    /**
      * The container element of the dialog.
-     * @type {!HTMLElement}
+     * @type {!Element}
      */
     this.dialogContainer =
         queryRequiredElement('.dialog-container', this.element);
-    this.dialogContainer.addEventListener('relayout', (event) => {
-      this.layoutChanged_();
-    });
 
     /**
      * Context menu for texts.
      * @type {!Menu}
      * @const
      */
-    this.textContextMenu =
-        util.queryDecoratedElement('#text-context-menu', Menu);
+    // @ts-ignore: error TS2345: Argument of type '(arg0?: Object | undefined)
+    // => Element' is not assignable to parameter of type 'new (...args: any) =>
+    // Menu'.
+    this.textContextMenu = queryDecoratedElement('#text-context-menu', Menu);
 
     /**
      * Breadcrumb controller.
-     * @type {BreadcrumbController|BreadcrumbContainer}
+     * @private @type {?BreadcrumbContainer}
      */
-    this.breadcrumbController = null;
+    this.breadcrumbContainer_ = null;
+
+    /** @type {?DirectoryTreeContainer} */
+    this.directoryTreeContainer = null;
 
     /**
      * The toolbar which contains controls.
-     * @type {!HTMLElement}
+     * @type {!Element}
      * @const
      */
     this.toolbar = queryRequiredElement('.dialog-header', this.element);
 
     /**
      * The tooltip element.
-     * @type {!FilesTooltip}
+     * @type {!import('../../elements/files_tooltip.js').FilesTooltip}
      */
     this.filesTooltip =
-        assertInstanceof(document.querySelector('files-tooltip'), FilesTooltip);
+        /** @type {!import('../../elements/files_tooltip.js').FilesTooltip} */ (
+            document.querySelector('files-tooltip'));
 
     /**
      * The actionbar which contains buttons to perform actions on selected
      * file(s).
-     * @type {!HTMLElement}
+     * @type {!Element}
      * @const
      */
     this.actionbar = queryRequiredElement('#action-bar', this.toolbar);
@@ -206,16 +241,6 @@ export class FileManagerUI {
         queryRequiredElement('.dialog-navigation-list', this.element);
 
     /**
-     * Search box.
-     * @type {!SearchBox}
-     * @const
-     */
-    this.searchBox = new SearchBox(
-        queryRequiredElement('#search-box', this.element),
-        queryRequiredElement('#search-wrapper', this.element),
-        queryRequiredElement('#search-button', this.element));
-
-    /**
      * Toggle-view button.
      * @type {!Element}
      * @const
@@ -227,39 +252,21 @@ export class FileManagerUI {
      * @type {!MultiMenuButton}
      * @const
      */
-    this.sortButton =
-        util.queryDecoratedElement('#sort-button', MultiMenuButton);
-
-    /**
-     * Ripple effect of sort button.
-     * @type {!FilesToggleRippleElement}
-     * @const
-     */
-    this.sortButtonToggleRipple =
-        /** @type {!FilesToggleRippleElement} */ (
-            queryRequiredElement('files-toggle-ripple', this.sortButton));
+    this.sortButton = queryDecoratedElement('#sort-button', MultiMenuButton);
 
     /**
      * The button to open gear menu.
      * @type {!MultiMenuButton}
      * @const
      */
-    this.gearButton =
-        util.queryDecoratedElement('#gear-button', MultiMenuButton);
-
-    /**
-     * Ripple effect of gear button.
-     * @type {!FilesToggleRippleElement}
-     * @const
-     */
-    this.gearButtonToggleRipple =
-        /** @type {!FilesToggleRippleElement} */ (
-            queryRequiredElement('files-toggle-ripple', this.gearButton));
+    this.gearButton = queryDecoratedElement('#gear-button', MultiMenuButton);
 
     /**
      * @type {!GearMenu}
      * @const
      */
+    // @ts-ignore: error TS2339: Property 'menu' does not exist on type
+    // 'MultiMenuButton'.
     this.gearMenu = new GearMenu(this.gearButton.menu);
 
     /**
@@ -268,11 +275,11 @@ export class FileManagerUI {
      * @const
      */
     this.selectionMenuButton =
-        util.queryDecoratedElement('#selection-menu-button', MultiMenuButton);
+        queryDecoratedElement('#selection-menu-button', MultiMenuButton);
 
     /**
      * Directory tree.
-     * @type {DirectoryTree}
+     * @type {DirectoryTree|XfTree|null}
      */
     this.directoryTree = null;
 
@@ -302,20 +309,26 @@ export class FileManagerUI {
      * @const
      */
     this.fileContextMenu =
-        util.queryDecoratedElement('#file-context-menu', MultiMenu);
+        queryDecoratedElement('#file-context-menu', MultiMenu);
 
     /**
-     * @public {!FilesMenuItem}
+     * @public @type {!FilesMenuItem}
      * @const
      */
     this.defaultTaskMenuItem =
         /** @type {!FilesMenuItem} */
+        // @ts-ignore: error TS2345: Argument of type 'MultiMenu' is not
+        // assignable to parameter of type 'Document | Element | HTMLElement |
+        // DocumentFragment | undefined'.
         (queryRequiredElement('#default-task-menu-item', this.fileContextMenu));
 
     /**
-     * @public @const {!MenuItem}
+     * @public @const @type {!MenuItem}
      */
     this.tasksSeparator = /** @type {!MenuItem} */
+        // @ts-ignore: error TS2345: Argument of type 'MultiMenu' is not
+        // assignable to parameter of type 'Document | Element | HTMLElement |
+        // DocumentFragment | undefined'.
         (queryRequiredElement('#tasks-separator', this.fileContextMenu));
 
     /**
@@ -323,9 +336,11 @@ export class FileManagerUI {
      * @type {!ComboButton}
      * @const
      */
-    this.taskMenuButton = util.queryDecoratedElement('#tasks', ComboButton);
+    this.taskMenuButton = queryDecoratedElement('#tasks', ComboButton);
     this.taskMenuButton.showMenu = function(shouldSetFocus) {
       // Prevent the empty menu from opening.
+      // @ts-ignore: error TS2339: Property 'menu' does not exist on type
+      // 'ComboButton'.
       if (!this.menu.length) {
         return;
       }
@@ -334,7 +349,7 @@ export class FileManagerUI {
 
     /**
      * Banners in the file list.
-     * @type {BannerController}
+     * @type {?BannerController}
      */
     this.banners = null;
 
@@ -347,28 +362,41 @@ export class FileManagerUI {
         /** @type {!Document} */ (this.element.ownerDocument));
 
     /**
-     * @public {!ProvidersMenu}
+     * @public @type {!ProvidersMenu}
      * @const
      */
     this.providersMenu = new ProvidersMenu(
-        providersModel, util.queryDecoratedElement('#providers-menu', Menu));
+        // @ts-ignore: error TS2345: Argument of type '(arg0?: Object |
+        // undefined) => Element' is not assignable to parameter of type 'new
+        // (...args: any) => Menu'.
+        providersModel, queryDecoratedElement('#providers-menu', Menu));
 
     /**
-     * @public {!ActionsSubmenu}
+     * @public @type {!ActionsSubmenu}
      * @const
      */
+    // @ts-ignore: error TS2345: Argument of type 'MultiMenu' is not assignable
+    // to parameter of type 'Menu'.
     this.actionsSubmenu = new ActionsSubmenu(this.fileContextMenu);
 
     /**
-     * @type {!FilesToast}
+     * The container that maintains the lifetime of nudges.
+     * @public @type {!NudgeContainer}
+     * @const
+     */
+    this.nudgeContainer = new NudgeContainer();
+
+    /**
+     * @type {!import('../../elements/files_toast.js').FilesToast}
      * @const
      */
     this.toast =
-        /** @type {!FilesToast} */ (document.querySelector('files-toast'));
+        /** @type {!import('../../elements/files_toast.js').FilesToast} */ (
+            document.querySelector('files-toast'));
 
     /**
      * Container of file-type filter buttons.
-     * @const {!HTMLElement}
+     * @const @type {!HTMLElement}
      */
     this.fileTypeFilterContainer =
         queryRequiredElement('#file-type-filter-container', this.element);
@@ -383,14 +411,14 @@ export class FileManagerUI {
     /**
      * A hidden div that can be used to announce text to screen
      * reader/ChromeVox.
-     * @private {!HTMLElement}
+     * @private @type {!HTMLElement}
      */
     this.a11yMessage_ = queryRequiredElement('#a11y-msg', this.element);
 
     if (window.IN_TEST) {
       /**
        * Stores all a11y announces to be checked in tests.
-       * @public {Array<string>}
+       * @public @type {Array<string>}
        */
       this.a11yAnnounces = [];
     }
@@ -399,6 +427,7 @@ export class FileManagerUI {
     this.element.setAttribute('type', this.dialogType_);
     if (launchParam.allowedPaths !== AllowedPaths.ANY_PATH_OR_URL) {
       this.element.setAttribute('block-hosted-docs', '');
+      this.element.setAttribute('block-encrypted', '');
     }
 
     // Modify UI default behavior.
@@ -417,7 +446,7 @@ export class FileManagerUI {
      * 'drop_failed_plugin_vm_directory_not_shared' is received during drag, we
      * show the move-to-windows-files dialog.
      *
-     * @public {boolean}
+     * @public @type {boolean}
      */
     this.dragInProcess = false;
   }
@@ -430,10 +459,42 @@ export class FileManagerUI {
     if (this.passwordDialog_) {
       return this.passwordDialog_;
     }
-    this.passwordDialog_ = /** @type {!FilesPasswordDialog} */ (
-        document.createElement('files-password-dialog'));
+    this.passwordDialog_ = /** @type {!XfPasswordDialog} */ (
+        document.createElement('xf-password-dialog'));
     this.element.appendChild(this.passwordDialog_);
     return this.passwordDialog_;
+  }
+
+  /**
+   * Gets conflict dialog.
+   * @return {!XfConflictDialog}
+   */
+  get conflictDialog() {
+    if (this.xfConflictDialog_) {
+      return this.xfConflictDialog_;
+    }
+    this.xfConflictDialog_ = /** @type {!XfConflictDialog} */ (
+        document.createElement('xf-conflict-dialog'));
+    this.element.appendChild(this.xfConflictDialog_);
+    return this.xfConflictDialog_;
+  }
+
+  /**
+   * Gets the DlpRestrictionDetails dialog.
+   * @return {?XfDlpRestrictionDetailsDialog}
+   */
+  get dlpRestrictionDetailsDialog() {
+    if (!isDlpEnabled()) {
+      return null;
+    }
+    if (this.dlpRestrictionDetailsDialog_) {
+      return this.dlpRestrictionDetailsDialog_;
+    }
+    this.dlpRestrictionDetailsDialog_ =
+        /** @type {!XfDlpRestrictionDetailsDialog} */ (
+            document.createElement('xf-dlp-restriction-details-dialog'));
+    this.element.appendChild(this.dlpRestrictionDetailsDialog_);
+    return this.dlpRestrictionDetailsDialog_;
   }
 
   /**
@@ -441,7 +502,8 @@ export class FileManagerUI {
    *
    * @param {!FileTable} table
    * @param {!FileGrid} grid
-   * @param {!VolumeManager} volumeManager
+   * @param {!import('../../../externs/volume_manager.js').VolumeManager}
+   *     volumeManager
    */
   initAdditionalUI(table, grid, volumeManager) {
     // List container.
@@ -449,29 +511,48 @@ export class FileManagerUI {
         queryRequiredElement('#list-container', this.element), table, grid,
         this.dialogType_);
 
-    // Breadcrumb controller.
-    if (util.isFilesAppExperimental()) {
-      // TODO: Rename location-breadcrumbs to location-breadcrumb.
-      this.breadcrumbController = new BreadcrumbContainer(
-          queryRequiredElement('#location-breadcrumbs', this.element));
-    } else {
-      this.breadcrumbController = new BreadcrumbController(
-          queryRequiredElement('#location-breadcrumbs', this.element),
-          volumeManager, this.listContainer);
-    }
+    // Breadcrumb container.
+    this.breadcrumbContainer_ = new BreadcrumbContainer(
+        queryRequiredElement('#location-breadcrumbs', this.element));
 
     // Splitter.
-    this.decorateSplitter_(
-        queryRequiredElement('#navigation-list-splitter', this.element));
+    const splitterContainer =
+        queryRequiredElement('#navigation-list-splitter', this.element);
+    splitterContainer.addEventListener(
+        XfSplitter.events.SPLITTER_DRAGMOVE, this.relayout.bind(this));
+
+
+    /**
+     * Search container, which controls search UI elements.
+     * @type {!SearchContainer}
+     * @const
+     */
+    this.searchContainer = new SearchContainer(
+        volumeManager, queryRequiredElement('#search-wrapper', this.element),
+        queryRequiredElement('#search-options-container', this.element),
+        queryRequiredElement('#path-display-container', this.element),
+        /*a11y=*/ this);
+
+    /** @const {!CloudPanelContainer} */
+    this.cloudPanelContainer_ = new CloudPanelContainer(
+        // @ts-ignore: error TS2345: Argument of type 'HTMLElement' is not
+        // assignable to parameter of type 'XfCloudPanel'.
+        queryRequiredElement('xf-cloud-panel', this.element));
 
     // Init context menus.
+    // @ts-ignore: error TS2345: Argument of type 'MultiMenu' is not assignable
+    // to parameter of type 'Menu'.
     contextMenuHandler.setContextMenu(grid, this.fileContextMenu);
+    // @ts-ignore: error TS2345: Argument of type 'MultiMenu' is not assignable
+    // to parameter of type 'Menu'.
     contextMenuHandler.setContextMenu(table.list, this.fileContextMenu);
     contextMenuHandler.setContextMenu(
+        // @ts-ignore: error TS2345: Argument of type 'MultiMenu' is not
+        // assignable to parameter of type 'Menu'.
         queryRequiredElement('.drive-welcome.page'), this.fileContextMenu);
 
     // Add window resize handler.
-    document.defaultView.addEventListener('resize', this.relayout.bind(this));
+    document.defaultView?.addEventListener('resize', this.relayout.bind(this));
 
     // Add global pointer-active handler.
     const rootElement = document.documentElement;
@@ -483,13 +564,16 @@ export class FileManagerUI {
       document.addEventListener(eventType, (e) => {
         if (/down$/.test(e.type) === false) {
           rootElement.classList.toggle('pointer-active', false);
-        } else if (e.pointerType !== 'touch') {  // http://crbug.com/1311472
+        } else if (
+            /** @type {!PointerEvent}*/ (e).pointerType !==
+            'touch') {  // http://crbug.com/1311472
           rootElement.classList.toggle('pointer-active', true);
         }
       }, true);
     });
 
     // Add global drag-drop-active handler.
+    /** @type {?EventTarget} */
     let activeDropTarget = null;
     ['dragenter', 'dragleave', 'drop'].forEach((eventType) => {
       document.addEventListener(eventType, (event) => {
@@ -510,12 +594,6 @@ export class FileManagerUI {
     document.addEventListener('dragend', () => {
       this.dragInProcess = false;
     });
-
-    // Observe the dialog header content box size: the breadcrumb and action
-    // bar buttons can become wide enough to extend past the available viewport,
-    // and this.layoutChanged_() is used to clamp their size to the viewport.
-    const resizeObserver = new ResizeObserver(() => this.layoutChanged_());
-    resizeObserver.observe(queryRequiredElement('div.dialog-header'));
   }
 
   /**
@@ -527,9 +605,7 @@ export class FileManagerUI {
     let targetElement = null;
     if (this.dialogType_ == DialogType.SELECT_SAVEAS_FILE) {
       targetElement = this.dialogFooter.filenameInput;
-    } else if (
-        this.listContainer.currentListType !=
-        ListContainer.ListType.UNINITIALIZED) {
+    } else if (this.listContainer.currentListType !== ListType.UNINITIALIZED) {
       targetElement = this.listContainer.currentList;
     }
 
@@ -540,18 +616,69 @@ export class FileManagerUI {
 
   /**
    * TODO(hirono): Merge the method into initAdditionalUI.
-   * @param {!DirectoryTree} directoryTree
+   * @param {!(DirectoryTree|DirectoryTreeContainer)} directoryTree
    */
   initDirectoryTree(directoryTree) {
-    this.directoryTree = directoryTree;
+    if (isNewDirectoryTreeEnabled()) {
+      this.directoryTreeContainer =
+          /** @type {!DirectoryTreeContainer} */ (directoryTree);
+      this.directoryTree =
+          /** @type {!XfTree} */ (this.directoryTreeContainer.tree);
 
-    // Set up the context menu for the volume/shortcut items in directory tree.
-    this.directoryTree.contextMenuForRootItems =
-        util.queryDecoratedElement('#roots-context-menu', Menu);
-    this.directoryTree.contextMenuForSubitems =
-        util.queryDecoratedElement('#directory-tree-context-menu', Menu);
-    this.directoryTree.disabledContextMenu =
-        util.queryDecoratedElement('#disabled-context-menu', Menu);
+      this.directoryTreeContainer.contextMenuForRootItems =
+          // @ts-ignore: error TS2345: Argument of type '(arg0?: Object |
+          // undefined) => Element' is not assignable to parameter of type 'new
+          // (...args: any) => Menu | null'.
+          queryDecoratedElement('#roots-context-menu', Menu);
+      this.directoryTreeContainer.contextMenuForSubitems =
+          // @ts-ignore: error TS2345: Argument of type '(arg0?: Object |
+          // undefined) => Element' is not assignable to parameter of type 'new
+          // (...args: any) => Menu | null'.
+          queryDecoratedElement('#directory-tree-context-menu', Menu);
+      this.directoryTreeContainer.contextMenuForDisabledItems =
+          // @ts-ignore: error TS2345: Argument of type '(arg0?: Object |
+          // undefined) => Element' is not assignable to parameter of type 'new
+          // (...args: any) => Menu | null'.
+          queryDecoratedElement('#disabled-context-menu', Menu);
+    } else {
+      this.directoryTree = /** @type {!DirectoryTree} */ (directoryTree);
+
+      // Set up the context menu for the volume/shortcut items in directory
+      // tree.
+      this.directoryTree.contextMenuForRootItems =
+          // @ts-ignore: error TS2345: Argument of type '(arg0?: Object |
+          // undefined) => Element' is not assignable to parameter of type 'new
+          // (...args: any) => Menu | null'.
+          queryDecoratedElement('#roots-context-menu', Menu);
+      this.directoryTree.contextMenuForSubitems =
+          // @ts-ignore: error TS2345: Argument of type '(arg0?: Object |
+          // undefined) => Element' is not assignable to parameter of type 'new
+          // (...args: any) => Menu | null'.
+          queryDecoratedElement('#directory-tree-context-menu', Menu);
+      this.directoryTree.disabledContextMenu =
+          // @ts-ignore: error TS2345: Argument of type '(arg0?: Object |
+          // undefined) => Element' is not assignable to parameter of type 'new
+          // (...args: any) => Menu | null'.
+          queryDecoratedElement('#disabled-context-menu', Menu);
+
+      // The context menu event that is created via keyboard navigation is
+      // dispatched to the `directoryTree` however the tree items actually have
+      // the context menu handlers. To ensure they receive the event, recompute
+      // their location and re-dispatch the "contextmenu" event to the item that
+      // is selected.
+      this.directoryTree.addEventListener('contextmenu', e => {
+        const selectedItem = this.directoryTree?.selectedItem?.rowElement;
+        if (!selectedItem) {
+          return;
+        }
+        const domRect = selectedItem.getBoundingClientRect();
+        const x = domRect.x + (domRect.width / 2);
+        const y = domRect.y + (domRect.height / 2);
+        // @ts-ignore: error TS2531: Object is possibly 'null'.
+        this.directoryTree.selectedItem.dispatchEvent(
+            new PointerEvent(e.type, {...e, clientX: x, clientY: y}));
+      });
+    }
   }
 
   /**
@@ -581,6 +708,8 @@ export class FileManagerUI {
     for (let i = 0; i < filesMenuItems.length; i++) {
       const filesMenuItem = filesMenuItems[i];
       assertInstanceof(filesMenuItem, MenuItem);
+      // @ts-ignore: error TS2345: Argument of type 'Element | undefined' is not
+      // assignable to parameter of type 'string | Element'.
       decorate(filesMenuItem, FilesMenuItem);
     }
   }
@@ -590,65 +719,24 @@ export class FileManagerUI {
    */
   relayout() {
     // May not be available during initialization.
-    if (this.listContainer.currentListType !==
-        ListContainer.ListType.UNINITIALIZED) {
+    if (this.listContainer.currentListType !== ListType.UNINITIALIZED) {
       this.listContainer.currentView.relayout();
     }
-    if (this.directoryTree) {
-      this.directoryTree.relayout();
+    if (!isNewDirectoryTreeEnabled() && this.directoryTree) {
+      // @ts-ignore: error TS2339: Property 'relayout' does not exist on type
+      // 'XfTree | DirectoryTree'.
+      this.directoryTree?.relayout();
     }
-  }
-
-  /**
-   * Handles the 'relayout' event to set sizing of the dialog main panel.
-   *
-   * @private
-   */
-  layoutChanged_() {
-    if (this.scrollRAFActive_ === true) {
-      return;
-    }
-
-    /**
-     * True if a scroll RAF is active: scroll events are frequent and serviced
-     * using RAF to throttle our processing of these events.
-     * @type {boolean}
-     */
-    this.scrollRAFActive_ = true;
-
-    window.requestAnimationFrame(() => {
-      this.scrollRAFActive_ = false;
-
-      const mainWindow = document.querySelector('.dialog-container');
-      const navigationList = document.querySelector('.dialog-navigation-list');
-      const splitter = document.querySelector('.splitter');
-      const dialogMain = document.querySelector('.dialog-main');
-
-      // Check the width of the tree and splitter and set the main panel width
-      // to the remainder if it's too wide.
-      const mainWindowWidth = mainWindow.offsetWidth;
-      const navListWidth = navigationList.offsetWidth;
-      const splitStyle = window.getComputedStyle(splitter);
-      const splitMargin = parseInt(splitStyle.marginRight, 10) +
-          parseInt(splitStyle.marginLeft, 10);
-      const splitWidth = splitter.offsetWidth + splitMargin;
-      const dialogMainWidth = dialogMain.offsetWidth;
-      if (!dialogMain.style.width ||
-          (navListWidth + splitWidth + dialogMainWidth) > mainWindowWidth) {
-        dialogMain.style.width =
-            (mainWindowWidth - navListWidth - splitWidth) + 'px';
-      }
-    });
   }
 
   /**
    * Sets the current list type.
-   * @param {ListContainer.ListType} listType New list type.
+   * @param {ListType} listType New list type.
    */
   setCurrentListType(listType) {
     this.listContainer.setCurrentListType(listType);
 
-    const isListView = (listType === ListContainer.ListType.DETAIL);
+    const isListView = (listType === ListType.DETAIL);
     this.toggleViewButton.classList.toggle('thumbnail', isListView);
 
     const label = isListView ? str('CHANGE_TO_THUMBNAILVIEW_BUTTON_LABEL') :
@@ -666,6 +754,8 @@ export class FileManagerUI {
    * @private
    */
   onExternalLinkClick_(event) {
+    // @ts-ignore: error TS2339: Property 'href' does not exist on type
+    // 'EventTarget'.
     if (event.target.tagName != 'A' || !event.target.href) {
       return;
     }
@@ -673,40 +763,6 @@ export class FileManagerUI {
     if (this.dialogType_ != DialogType.FULL_PAGE) {
       this.dialogFooter.cancelButton.click();
     }
-  }
-
-  /**
-   * Decorates the given splitter element.
-   * @param {!HTMLElement} splitterElement
-   * @param {boolean=} opt_resizeNextElement
-   * @private
-   */
-  decorateSplitter_(splitterElement, opt_resizeNextElement) {
-    const self = this;
-    const FileSplitter = Splitter;
-    const customSplitter = crUiDefine('div');
-
-    customSplitter.prototype = {
-      __proto__: FileSplitter.prototype,
-
-      handleSplitterDragStart: function(e) {
-        FileSplitter.prototype.handleSplitterDragStart.apply(this, arguments);
-        this.ownerDocument.documentElement.classList.add('col-resize');
-      },
-
-      handleSplitterDragMove: function(deltaX) {
-        FileSplitter.prototype.handleSplitterDragMove.apply(this, arguments);
-        self.relayout();
-      },
-
-      handleSplitterDragEnd: function(e) {
-        FileSplitter.prototype.handleSplitterDragEnd.apply(this, arguments);
-        this.ownerDocument.documentElement.classList.remove('col-resize');
-      },
-    };
-
-    /** @type Object */ (customSplitter).decorate(splitterElement);
-    splitterElement.resizeNextElement = !!opt_resizeNextElement;
   }
 
   /**
@@ -728,11 +784,15 @@ export class FileManagerUI {
       return;
     }
     chrome.fileManagerPrivate.getProfiles(
+        // @ts-ignore: error TS6133: 'displayedId' is declared but its value is
+        // never read.
         (profiles, currentId, displayedId) => {
           // Find strings.
           let displayName;
           for (let i = 0; i < profiles.length; i++) {
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             if (profiles[i].profileId === currentId) {
+              // @ts-ignore: error TS2532: Object is possibly 'undefined'.
               displayName = profiles[i].displayName;
               break;
             }
@@ -743,7 +803,9 @@ export class FileManagerUI {
           }
 
           const title = entries.length > 1 ?
+              // @ts-ignore: error TS2532: Object is possibly 'undefined'.
               entries[0].name + '\u2026' /* ellipsis */ :
+              // @ts-ignore: error TS2532: Object is possibly 'undefined'.
               entries[0].name;
           const message = strf(
               entries.length > 1 ? 'OPEN_IN_OTHER_DESKTOP_MESSAGE_PLURAL' :
@@ -763,13 +825,19 @@ export class FileManagerUI {
    * @return {!Promise<boolean>}
    */
   showConfirmationDialog(isMove, messages) {
+    // @ts-ignore: error TS7034: Variable 'dialog' implicitly has type 'any' in
+    // some locations where its type cannot be determined.
     let dialog = null;
     if (isMove) {
       dialog = this.moveConfirmDialog;
     } else {
       dialog = this.copyConfirmDialog;
     }
+    // @ts-ignore: error TS6133: 'reject' is declared but its value is never
+    // read.
     return new Promise((resolve, reject) => {
+      // @ts-ignore: error TS7005: Variable 'dialog' implicitly has an 'any'
+      // type.
       dialog.show(
           messages.join(' '),
           () => {
@@ -793,6 +861,7 @@ export class FileManagerUI {
     this.a11yMessage_.textContent = '';
     this.a11yMessage_.textContent = text;
     if (window.IN_TEST) {
+      // @ts-ignore: error TS2532: Object is possibly 'undefined'.
       this.a11yAnnounces.push(text);
     }
   }

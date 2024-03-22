@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,12 +13,13 @@
 #include <utility>
 #include <vector>
 
-#include "ash/constants/ash_switches.h"
+#include "base/base_paths.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
+#include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -31,29 +32,38 @@
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/prefs/pref_service.h"
+#include "components/variations/variations_test_utils.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_switches.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #else
 #include "components/enterprise/browser/controller/fake_browser_dm_token_storage.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/toolbar_manager_test_helper_android.h"
+#endif  // BUILDFLAG(IS_ANDROID)
+
 namespace policy {
 
-const size_t kNumChunks = 8;
+const size_t kNumChunks = 32;
 
 namespace {
 
 base::FilePath GetTestCasePath() {
   base::ScopedAllowBlockingForTesting allow_blocking;
   base::FilePath path;
-  base::PathService::Get(chrome::DIR_TEST_DATA, &path);
-  return path.Append(FILE_PATH_LITERAL("policy"))
-      .Append(FILE_PATH_LITERAL("policy_test_cases.json"));
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
+  return path.Append(FILE_PATH_LITERAL("components"))
+      .Append(FILE_PATH_LITERAL("policy"))
+      .Append(FILE_PATH_LITERAL("test"))
+      .Append(FILE_PATH_LITERAL("data"))
+      .Append(FILE_PATH_LITERAL("pref_mapping"));
 }
 
 size_t GetNumChunks() {
@@ -83,6 +93,12 @@ class PolicyPrefsTest : public PlatformBrowserTest {
 
  protected:
   void SetUpInProcessBrowserTestFixture() override {
+    // Some policies default value might depend on features, enforce use of
+    // field trial testing config to avoid having unexpected results based on
+    // new feature flags coming from the server (e.g. on Chrome-branded CI
+    // bots).
+    variations::EnableTestingConfig();
+
     GetMockPolicyProvider()->SetDefaultReturns(
         true /* is_initialization_complete_return */,
         true /* is_first_policy_load_complete_return */);
@@ -129,7 +145,7 @@ class PolicyPrefsTest : public PlatformBrowserTest {
 class ChunkedPolicyPrefsTest : public PolicyPrefsTest,
                                public ::testing::WithParamInterface<size_t> {
  public:
-  ChunkedPolicyPrefsTest() = default;
+  ChunkedPolicyPrefsTest();
   ChunkedPolicyPrefsTest(const ChunkedPolicyPrefsTest&) = delete;
   ChunkedPolicyPrefsTest& operator=(const ChunkedPolicyPrefsTest&) = delete;
   ~ChunkedPolicyPrefsTest() override = default;
@@ -137,6 +153,15 @@ class ChunkedPolicyPrefsTest : public PolicyPrefsTest,
  protected:
   PrefMappingChunkInfo chunk_info_{GetParam(), GetNumChunks()};
 };
+
+ChunkedPolicyPrefsTest::ChunkedPolicyPrefsTest() {
+#if BUILDFLAG(IS_ANDROID)
+  // Skips recreating the Android activity when homepage settings are changed.
+  // This happens when the feature chrome::android::kStartSurfaceAndroid is
+  // enabled.
+  toolbar_manager::setSkipRecreateForTesting(true);
+#endif  // BUILDFLAG(IS_ANDROID)
+}
 
 // Verifies that policies make their corresponding preferences become managed,
 // and that the user can't override that setting.
@@ -146,6 +171,8 @@ class ChunkedPolicyPrefsTest : public PolicyPrefsTest,
 // IMPORTANT: Please add hendrich@chromium.org on any related bugs when
 // disabling this test.
 IN_PROC_BROWSER_TEST_P(ChunkedPolicyPrefsTest, PolicyToPrefsMapping) {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   policy::FakeBrowserDMTokenStorage storage;
   policy::BrowserDMTokenStorage::SetForTesting(&storage);
@@ -159,7 +186,7 @@ IN_PROC_BROWSER_TEST_P(ChunkedPolicyPrefsTest, PolicyToPrefsMapping) {
   VerifyPolicyToPrefMappings(GetTestCasePath(), local_state, user_prefs,
                              /* signin_profile_prefs= */ nullptr,
                              GetMockPolicyProvider(), &chunk_info_);
-};
+}
 
 INSTANTIATE_TEST_SUITE_P(Chunked,
                          ChunkedPolicyPrefsTest,

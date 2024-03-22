@@ -2,7 +2,6 @@
   #interceptDialog {
     display: flex;
     flex-direction: column;
-    height: 100%;
   }
 
   #header {
@@ -16,6 +15,9 @@
   #headerV2 {
     --header-width: 290px;
     --header-height: 140px;
+    /* Colors used in svg image file for split header border and box. */
+    --split-header-image-border-color-fill: var(--google-grey-200);
+    --split-header-image-box-color-fill: white;
     left: calc(50% - var(--header-width)/2);
     min-height: var(--header-height);
     position: relative;
@@ -72,11 +74,11 @@
   }
 
   #headerImagePrimary {
-    --color-fill: var(--primary-profile-color);
+    --split-header-image-theme-color-fill: var(--primary-profile-color);
   }
 
   #headerImageIntercepted {
-    --color-fill: var(--intercepted-profile-color);
+    --split-header-image-theme-color-fill: var(--intercepted-profile-color);
   }
 
   .avatar {
@@ -87,6 +89,10 @@
     height: var(--avatar-image-width);
     top: 43px;
     width: var(--avatar-image-width);
+  }
+
+  #headerV2 .avatar {
+    border-color: var(--split-header-image-box-color-fill);
   }
 
   .work-badge {
@@ -128,10 +134,10 @@
 
   #body {
     color: var(--cr-secondary-text-color);
-    flex-grow: 1;
     font-size: 13px;
     line-height: 20px;
     margin: 0 16px;
+    padding-bottom: 24px;
   }
 
   #title {
@@ -143,7 +149,7 @@
   }
 
   #contents {
-    margin: 0 0 8px;
+    margin: 0;
     overflow-wrap: break-word;  /** For very long names and emails */
   }
 
@@ -158,7 +164,7 @@
     font-weight: 400;
     justify-content: flex-start;
     line-height: 16px;
-    margin: 0 0 16px;
+    margin: 10px 0 0;
     padding: 10px 12px;
   }
 
@@ -189,15 +195,11 @@
     font-size: 12px;
   }
 
-  #interceptDialog [slot=footer] {
-    background: var(--paper-grey-50);
-    border-top: none;
-    padding: 0;
-  }
-
   @media (prefers-color-scheme: dark) {
-    #interceptDialog [slot=footer] {
-      background: rgb(50, 54, 57);  /* Custom color from Namrata. */
+    #headerV2 {
+      /* Colors used in svg image file for split header border and box. */
+      --split-header-image-border-color-fill: var(--google-grey-700);
+      --split-header-image-box-color-fill: var(--google-grey-800);
     }
 
     #headerV2 .work-badge {
@@ -209,16 +211,6 @@
       color: var(--google-grey-100);
     }
   }
-
-  .divider {
-    border-top: var(--cr-separator-line);
-  }
-
-  #footer-description {
-    color: var(--cr-secondary-text-color);
-    padding: 16px;
-    text-align: center;
-  }
 </style>
 
 <div role="dialog" id="interceptDialog" aria-labelledby="title"
@@ -226,9 +218,10 @@
   <template is="dom-if" if="[[interceptionParameters_.useV2Design]]" restamp>
     <div id="headerV2">
       <svg>
-        <use href="images/split_header.svg#primary" id="headerImagePrimary" >
+        <use href="images/split_header.svg#EXPORT_primary"
+            id="headerImagePrimary" >
         </use>
-        <use href="images/split_header.svg#intercepted"
+        <use href="images/split_header.svg#EXPORT_intercepted"
             id="headerImageIntercepted">
         </use>
       </svg>
@@ -274,7 +267,8 @@
           <iron-icon class="icon" icon="cr:domain"></iron-icon>
         </div>
         <div id="managedDisclaimerText"
-            inner-h-t-m-l="[[interceptionParameters_.managedDisclaimerText]]">
+            inner-h-t-m-l="[[sanitizeInnerHtml_(
+                interceptionParameters_.managedDisclaimerText)]]">
         </div>
       </div>
     </template>
@@ -293,13 +287,4 @@
       </cr-button>
     </div>
   </div>
-  <template is="dom-if" if="[[interceptionParameters_.showGuestOption]]"
-      restamp>
-    <div slot="footer">
-      <div class="divider"></div>
-      <div id="footer-description"
-          inner-h-t-m-l="[[guestLink_]]">
-      </div>
-    </div>
-  </template>
 </div>

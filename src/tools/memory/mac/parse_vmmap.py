@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Parses the output of vmmap to query IOSurface memory usage.
@@ -17,6 +17,25 @@ IOSurface = collections.namedtuple('IOSurface', [
     'start', 'end', 'virtual', 'resident', 'dirty', 'swapped', 'width',
     'height', 'size'
 ])
+
+
+def _FormatSize(n: int):
+  _KIB = 1024
+  _MIB = 1024 * _KIB
+  result = ''
+  if n > _MIB:
+    result = '%.1fMiB' % (n / _MIB)
+  else:
+    result = '%0.1fkiB' % (n / _KIB)
+  return result.rjust(8)
+
+
+def IOSurfaceToString(iosurface: IOSurface):
+  return ('%x-%x\tVirtual Size: %s\tResident: %s\tDirty: %s\tSwapped: %s'
+          '\tDimensions: %dx%d') % (
+              iosurface.start, iosurface.end, _FormatSize(iosurface.virtual),
+              _FormatSize(iosurface.resident), _FormatSize(iosurface.dirty),
+              _FormatSize(iosurface.swapped), iosurface.width, iosurface.height)
 
 
 def ExecuteVmmap(pid: int) -> str:
@@ -123,12 +142,17 @@ def main():
   io_surfaces.sort(key=operator.attrgetter('virtual'))
   print('\nIOSurfaces sorted by virtual size:')
   for io_surface in io_surfaces:
-    print('\t' + str(io_surface))
+    print('\t' + IOSurfaceToString(io_surface))
 
   io_surfaces.sort(key=operator.attrgetter('width'))
   print('\nIOSurfaces sorted by width:')
   for io_surface in io_surfaces:
-    print('\t' + str(io_surface))
+    print('\t' + IOSurfaceToString(io_surface))
+
+  io_surfaces.sort(key=lambda x: x.dirty + x.swapped)
+  print('\nIOSurfaces sorted by dirty/swapped:')
+  for io_surface in io_surfaces:
+    print('\t' + IOSurfaceToString(io_surface))
 
   lost_to_paging = sum(io_surface.virtual - io_surface.size
                        for io_surface in io_surfaces)

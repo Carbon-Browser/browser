@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "chrome/services/media_gallery_util/ipc_data_source.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/video_codecs.h"
 #include "media/base/video_thumbnail_decoder.h"
 #include "media/filters/android/video_frame_extractor.h"
 #include "media/filters/vpx_video_decoder.h"
 #include "media/media_buildflags.h"
-#include "media/mojo/common/mojo_shared_buffer_video_frame.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
@@ -38,8 +37,7 @@ void OnSoftwareVideoFrameDecoded(
 
   std::move(video_frame_callback)
       .Run(chrome::mojom::ExtractVideoFrameResult::New(
-          chrome::mojom::VideoFrameData::NewDecodedFrame(
-              media::MojoSharedBufferVideoFrame::CreateFromYUVFrame(*frame)),
+          chrome::mojom::VideoFrameData::NewDecodedFrame(std::move(frame)),
           config));
 }
 
@@ -110,5 +108,5 @@ void VideoThumbnailParser::Start(
       FROM_HERE,
       base::BindOnce(
           &ExtractVideoFrameOnMediaThread, data_source_.get(),
-          media::BindToCurrentLoop(std::move(video_frame_callback))));
+          base::BindPostTaskToCurrentDefault(std::move(video_frame_callback))));
 }

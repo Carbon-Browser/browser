@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <map>
+#include <ostream>
 #include <utility>
 #include <vector>
 
@@ -22,10 +23,10 @@
 #include "ui/gfx/image/image_skia.h"
 
 #if BUILDFLAG(IS_IOS)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "ui/gfx/image/image_skia_util_ios.h"
 #elif BUILDFLAG(IS_MAC)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "base/mac/mac_util.h"
 #include "ui/gfx/image/image_skia_util_mac.h"
 #endif

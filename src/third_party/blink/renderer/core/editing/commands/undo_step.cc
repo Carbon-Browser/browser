@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/core/editing/commands/undo_stack.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
+#include "third_party/blink/renderer/core/editing/frame_selection.h"
 #include "third_party/blink/renderer/core/editing/selection_template.h"
 #include "third_party/blink/renderer/core/editing/set_selection_options.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -72,11 +73,15 @@ void UndoStep::Unapply() {
                                   .SetShouldClearTypingStyle(true)
                                   .SetIsDirectional(SelectionIsDirectional())
                                   .Build());
-
+  // `new_selection` may not be valid here, e.g. "focus" event handler modifies
+  // DOM tree. See http://crbug.com/1378068
   Editor& editor = frame->GetEditor();
   editor.SetLastEditCommand(nullptr);
   editor.GetUndoStack().RegisterRedoStep(this);
-  editor.RespondToChangedContents(new_selection.Base());
+
+  // Take selection `FrameSelection` which `ChangeSelectionAfterCommand()` set.
+  editor.RespondToChangedContents(
+      frame->Selection().GetSelectionInDOMTree().Base());
 }
 
 void UndoStep::Reapply() {
@@ -113,11 +118,15 @@ void UndoStep::Reapply() {
                                   .SetShouldClearTypingStyle(true)
                                   .SetIsDirectional(SelectionIsDirectional())
                                   .Build());
-
+  // `new_selection` may not be valid here, e.g. "focus" event handler modifies
+  // DOM tree. See http://crbug.com/1378068
   Editor& editor = frame->GetEditor();
   editor.SetLastEditCommand(nullptr);
   editor.GetUndoStack().RegisterUndoStep(this);
-  editor.RespondToChangedContents(new_selection.Base());
+
+  // Take selection `FrameSelection` which `ChangeSelectionAfterCommand()` set.
+  editor.RespondToChangedContents(
+      frame->Selection().GetSelectionInDOMTree().Base());
 }
 
 void UndoStep::Append(SimpleEditCommand* command) {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,16 @@ class MockUserDelegate : public UserDelegate {
   MockUserDelegate();
   ~MockUserDelegate() override;
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  MOCK_METHOD(bool, IsSigninContext, (), (const, override));
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   MOCK_METHOD(bool, IsAffiliated, (), (const, override));
-  MOCK_METHOD(bool, IsManaged, (), (const, override));
+  MOCK_METHOD(bool, IsManagedUser, (), (const, override));
   MOCK_METHOD(bool, IsSameUser, (const std::string&), (const, override));
+  MOCK_METHOD(std::set<policy::PolicyScope>,
+              GetPolicyScopesNeedingSignals,
+              (),
+              (const, override));
 };
 
 }  // namespace device_signals

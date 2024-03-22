@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_SYSTEM_PHONEHUB_PHONE_HUB_TRAY_H_
 
 #include "ash/ash_export.h"
+#include "ash/display/window_tree_host_manager.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/system/phonehub/onboarding_view.h"
 #include "ash/system/phonehub/phone_hub_content_view.h"
@@ -13,11 +14,17 @@
 #include "ash/system/phonehub/phone_status_view.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/tray/tray_background_view.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "chromeos/ash/components/phonehub/app_stream_manager.h"
+#include "chromeos/ash/components/phonehub/icon_decoder.h"
+#include "chromeos/ash/components/phonehub/phone_hub_manager.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event.h"
 #include "ui/views/controls/button/image_button.h"
 
@@ -27,11 +34,15 @@ class ImageButton;
 namespace ash {
 
 class EcheIconLoadingIndicatorView;
+class OnboardingNudgeController;
 class PhoneHubContentView;
 class TrayBubbleWrapper;
 class SessionControllerImpl;
 
 namespace phonehub {
+namespace proto {
+class AppStreamUpdate;
+}  // namespace proto
 class PhoneHubManager;
 }
 
@@ -41,7 +52,11 @@ class ASH_EXPORT PhoneHubTray : public TrayBackgroundView,
                                 public OnboardingView::Delegate,
                                 public PhoneStatusView::Delegate,
                                 public PhoneHubUiController::Observer,
-                                public SessionObserver {
+                                public SessionObserver,
+                                public WindowTreeHostManager::Observer,
+                                public phonehub::AppStreamManager::Observer {
+  METADATA_HEADER(PhoneHubTray, TrayBackgroundView)
+
  public:
   explicit PhoneHubTray(Shelf* shelf);
   PhoneHubTray(const PhoneHubTray&) = delete;
@@ -53,6 +68,7 @@ class ASH_EXPORT PhoneHubTray : public TrayBackgroundView,
 
   // TrayBackgroundView:
   void ClickedOutsideBubble() override;
+  void UpdateTrayItemColor(bool is_active) override;
   std::u16string GetAccessibleNameForTray() override;
   void HandleLocaleChange() override;
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override;
@@ -60,11 +76,9 @@ class ASH_EXPORT PhoneHubTray : public TrayBackgroundView,
   void Initialize() override;
   void CloseBubble() override;
   void ShowBubble() override;
-  bool PerformAction(const ui::Event& event) override;
   TrayBubbleView* GetBubbleView() override;
   views::Widget* GetBubbleWidget() const override;
   const char* GetClassName() const override;
-  void OnThemeChanged() override;
 
   // PhoneStatusView::Delegate:
   bool CanOpenConnectedDeviceSettings() override;
@@ -72,6 +86,19 @@ class ASH_EXPORT PhoneHubTray : public TrayBackgroundView,
 
   // OnboardingView::Delegate:
   void HideStatusHeaderView() override;
+  bool IsPhoneHubIconClickedWhenNudgeVisible() override;
+
+  // WindowTreeHostManager::Observer
+  void OnDisplayConfigurationChanged() override;
+
+  // AppStreamManager::Observer:
+  void OnAppStreamUpdate(
+      const phonehub::proto::AppStreamUpdate app_stream_update) override;
+
+  void OnIconsDecoded(
+      std::string visible_name,
+      std::unique_ptr<std::vector<phonehub::IconDecoder::DecodingData>>
+          decoding_data_list);
 
   // Provides the Eche icon and Eche loading indicator to
   // `EcheTray` in order to let `EcheTray` control the visibiliity
@@ -84,16 +111,26 @@ class ASH_EXPORT PhoneHubTray : public TrayBackgroundView,
   }
 
   // Sets a callback that will be called when eche icon is activated.
-  void SetEcheIconActivationCallback(
-      base::RepeatingCallback<bool(const ui::Event&)> callback);
+  void SetEcheIconActivationCallback(base::RepeatingCallback<void()> callback);
 
   views::View* content_view_for_testing() { return content_view_; }
 
-  PhoneHubUiController* ui_controller_for_testing() {
-    return ui_controller_.get();
+  PhoneHubUiController* ui_controller() { return ui_controller_.get(); }
+
+  OnboardingNudgeController* onboarding_nudge_controller_for_testing() {
+    return onboarding_nudge_controller_.get();
   }
 
+ protected:
+  // TrayBackgroundView:
+  void OnVisibilityAnimationFinished(bool should_log_visible_pod_count,
+                                     bool aborted) override;
+
  private:
+  FRIEND_TEST_ALL_PREFIXES(PhoneHubTrayTest, EcheIconActivatesCallback);
+  FRIEND_TEST_ALL_PREFIXES(PhoneHubTrayTest, SafeAccessToHeaderView);
+  FRIEND_TEST_ALL_PREFIXES(PhoneHubTrayTest, TrayPressedMetrics);
+
   // TrayBubbleView::Delegate:
   std::u16string GetAccessibleNameForBubble() override;
   bool ShouldEnableExtraKeyboardAccessibility() override;
@@ -109,6 +146,7 @@ class ASH_EXPORT PhoneHubTray : public TrayBackgroundView,
   // Updates the visibility of the tray in the shelf based on the feature is
   // enabled.
   void UpdateVisibility();
+  void UpdateHeaderVisibility();
 
   // Disables the animation and enables it back after a 5s delay. This tray's
   // visibility can be updated when the connection is complete. After a session
@@ -122,32 +160,53 @@ class ASH_EXPORT PhoneHubTray : public TrayBackgroundView,
   void EcheIconActivated(const ui::Event& event);
   void PhoneHubIconActivated(const ui::Event& event);
 
+  views::View* GetPhoneStatusView();
+
+  // Checks if nudge should be shown based on user login time.
+  bool IsInsideUnlockWindow();
+
+  bool IsInPhoneHubNudgeExperimentGroup();
+
+  bool is_icon_clicked_when_setup_notification_visible_ = false;
+
+  bool is_icon_clicked_when_nudge_visible_ = false;
+
   // Icon of the tray. Unowned.
-  views::ImageButton* icon_;
+  raw_ptr<views::ImageButton, ExperimentalAsh> icon_;
 
   // Icon for Eche. Unowned.
-  views::ImageButton* eche_icon_ = nullptr;
+  raw_ptr<views::ImageButton, ExperimentalAsh> eche_icon_ = nullptr;
 
   // The loading indicator, showing a throbber animation on top of the icon.
-  EcheIconLoadingIndicatorView* eche_loading_indicator_ = nullptr;
+  raw_ptr<EcheIconLoadingIndicatorView, ExperimentalAsh>
+      eche_loading_indicator_ = nullptr;
 
   // This callback is called when the Eche icon is activated.
-  base::RepeatingCallback<bool(const ui::Event&)> eche_icon_callback_ =
-      base::BindRepeating([](const ui::Event&) { return true; });
+  base::RepeatingCallback<void()> eche_icon_callback_ = base::DoNothing();
 
   // Controls the main content view displayed in the bubble based on the current
   // PhoneHub state.
   std::unique_ptr<PhoneHubUiController> ui_controller_;
 
+  // Controls the behavior of a nudge shown to eligible users.
+  std::unique_ptr<OnboardingNudgeController> onboarding_nudge_controller_;
+
   // The bubble that appears after clicking the tray button.
   std::unique_ptr<TrayBubbleWrapper> bubble_;
 
   // The header status view on top of the bubble.
-  views::View* phone_status_view_ = nullptr;
+  // IMPORTANT: This is not owned, always access through GetPhoneStatusView
+  raw_ptr<views::View, ExperimentalAsh> phone_status_view_dont_use_ = nullptr;
 
   // The main content view of the bubble, which changes depending on the state.
   // Unowned.
-  PhoneHubContentView* content_view_ = nullptr;
+  raw_ptr<PhoneHubContentView, DanglingUntriaged | ExperimentalAsh>
+      content_view_ = nullptr;
+
+  raw_ptr<phonehub::PhoneHubManager, ExperimentalAsh> phone_hub_manager_ =
+      nullptr;
+
+  base::Time last_unlocked_timestamp_;
 
   base::ScopedObservation<PhoneHubUiController, PhoneHubUiController::Observer>
       observed_phone_hub_ui_controller_{this};

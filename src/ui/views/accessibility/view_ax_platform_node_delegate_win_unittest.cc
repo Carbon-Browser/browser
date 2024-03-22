@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -151,7 +151,7 @@ TEST_F(ViewAXPlatformNodeDelegateWinTest, TextfieldAssociatedLabel) {
   Label* label = new Label(u"Label");
   content->AddChildView(label);
   Textfield* textfield = new Textfield;
-  textfield->SetAssociatedLabel(label);
+  textfield->SetAccessibleName(label);
   content->AddChildView(textfield);
 
   ComPtr<IAccessible> content_accessible(content->GetNativeViewAccessible());
@@ -536,6 +536,28 @@ TEST_F(ViewAXPlatformNodeDelegateWinTest, IsUIAControlIsTrueEvenWhenReadonly) {
   ComPtr<IRawElementProviderSimple> textfield_provider =
       GetIRawElementProviderSimple(text_field);
   EXPECT_UIA_BOOL_EQ(textfield_provider, UIA_IsControlElementPropertyId, true);
+}
+
+TEST_F(ViewAXPlatformNodeDelegateWinTest, TextPositionAt) {
+  UniqueWidgetPtr widget = std::make_unique<Widget>();
+  Widget::InitParams init_params = CreateParams(Widget::InitParams::TYPE_POPUP);
+  widget->Init(std::move(init_params));
+
+  View* content = widget->SetContentsView(std::make_unique<View>());
+
+  Label* label = new Label(u"Label's Name");
+  content->AddChildView(label);
+  label->GetViewAccessibility().EnsureAtomicViewAXTreeManager();
+  ViewAXPlatformNodeDelegate* label_accessibility =
+      static_cast<ViewAXPlatformNodeDelegate*>(&label->GetViewAccessibility());
+  label_accessibility->GetData();
+
+  ui::AXNodePosition::AXPositionInstance actual_position =
+      label_accessibility->CreateTextPositionAt(
+          0, ax::mojom::TextAffinity::kDownstream);
+  EXPECT_NE(nullptr, actual_position.get());
+  EXPECT_EQ(0, actual_position->text_offset());
+  EXPECT_EQ(u"Label's Name", actual_position->GetText());
 }
 
 //

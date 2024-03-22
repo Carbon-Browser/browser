@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/performance_tracker.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "remoting/protocol/frame_stats.h"
 
@@ -18,8 +18,7 @@ constexpr int kLatencySampleSize = 10;
 
 }  // namespace
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 PerformanceTracker::PerformanceTracker()
     : video_bandwidth_(base::Seconds(kStatsUpdatePeriodSeconds)),
@@ -38,8 +37,9 @@ void PerformanceTracker::OnVideoFrameStats(const FrameStats& stats) {
   video_packet_rate_.Record(1);
 
   // Use only non-empty frames to estimate frame rate.
-  if (stats.host_stats.frame_size)
+  if (stats.host_stats.frame_size) {
     video_frame_rate_.Record(1);
+  }
 
   video_bandwidth_.Record(stats.host_stats.frame_size);
 
@@ -68,8 +68,9 @@ void PerformanceTracker::OnVideoFrameStats(const FrameStats& stats) {
 
   // |latest_event_timestamp| is set only for the first frame after an input
   // event.
-  if (stats.host_stats.latest_event_timestamp.is_null())
+  if (stats.host_stats.latest_event_timestamp.is_null()) {
     return;
+  }
 
   // For empty frames use time_received as time_rendered.
   base::TimeTicks time_rendered = (stats.host_stats.frame_size > 0)
@@ -80,5 +81,4 @@ void PerformanceTracker::OnVideoFrameStats(const FrameStats& stats) {
   round_trip_ms_.Record(round_trip_latency.InMilliseconds());
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

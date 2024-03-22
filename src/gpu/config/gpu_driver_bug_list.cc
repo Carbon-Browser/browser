@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,21 +27,20 @@ const GpuDriverBugWorkaroundInfo kFeatureList[] = {
 
 }  // namespace anonymous
 
-GpuDriverBugList::GpuDriverBugList(const GpuControlListData& data)
+GpuDriverBugList::GpuDriverBugList(base::span<const GpuControlList::Entry> data)
     : GpuControlList(data) {}
 
 GpuDriverBugList::~GpuDriverBugList() = default;
 
 // static
 std::unique_ptr<GpuDriverBugList> GpuDriverBugList::Create() {
-  GpuControlListData data(kGpuDriverBugListEntryCount,
-                          kGpuDriverBugListEntries);
-  return Create(data);
+  return Create(
+      base::make_span(kGpuDriverBugListEntries, kGpuDriverBugListEntryCount));
 }
 
 // static
 std::unique_ptr<GpuDriverBugList> GpuDriverBugList::Create(
-    const GpuControlListData& data) {
+    base::span<const GpuControlList::Entry> data) {
   std::unique_ptr<GpuDriverBugList> list(new GpuDriverBugList(data));
 
   DCHECK_EQ(static_cast<int>(std::size(kFeatureList)),

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 
 namespace net {
 
@@ -38,13 +38,15 @@ void CookieStore::DeleteAllAsync(DeleteCallback callback) {
                                    std::move(callback));
 }
 
-void CookieStore::SetForceKeepSessionState() {
-  // By default, do nothing.
-}
-
 void CookieStore::SetCookieAccessDelegate(
     std::unique_ptr<CookieAccessDelegate> delegate) {
   cookie_access_delegate_ = std::move(delegate);
+}
+
+absl::optional<bool> CookieStore::SiteHasCookieInOtherPartition(
+    const net::SchemefulSite& site,
+    const absl::optional<CookiePartitionKey>& partition_key) const {
+  return absl::nullopt;
 }
 
 }  // namespace net

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -26,9 +26,11 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/threading/thread_checker.h"
 #include "media/audio/audio_io.h"
 #include "media/audio/audio_manager.h"
+#include "media/base/amplitude_peak_detector.h"
 #include "media/base/audio_parameters.h"
 
 struct pa_context;
@@ -91,9 +93,15 @@ class PulseAudioOutputStream : public AudioOutputStream {
   AudioManager::LogCallback log_callback_;
 
   // PulseAudio API structs.
-  pa_context* pa_context_;
-  pa_threaded_mainloop* pa_mainloop_;
-  pa_stream* pa_stream_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION pa_context* pa_context_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION pa_threaded_mainloop* pa_mainloop_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION pa_stream* pa_stream_;
 
   // Float representation of volume from 0.0 to 1.0.
   float volume_;
@@ -106,6 +114,8 @@ class PulseAudioOutputStream : public AudioOutputStream {
   std::unique_ptr<AudioBus> audio_bus_;
 
   const size_t buffer_size_;
+
+  AmplitudePeakDetector peak_detector_;
 
   base::ThreadChecker thread_checker_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/component_export.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
 #include "device/fido/fido_discovery_base.h"
 #include "device/fido/fido_transport_protocol.h"
 
@@ -74,15 +74,14 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceDiscovery
   bool is_start_requested() const { return state_ != State::kIdle; }
   bool is_running() const { return state_ == State::kRunning; }
 
-  std::vector<FidoDeviceAuthenticator*> GetAuthenticatorsForTesting();
   std::vector<const FidoDeviceAuthenticator*> GetAuthenticatorsForTesting()
       const;
   FidoDeviceAuthenticator* GetAuthenticatorForTesting(
-      base::StringPiece authenticator_id);
+      std::string_view authenticator_id);
 
   // FidoDiscoveryBase:
   void Start() override;
-  bool MaybeStop() override;
+  void Stop() override;
 
  protected:
   explicit FidoDeviceDiscovery(FidoTransportProtocol transport);
@@ -93,15 +92,13 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDeviceDiscovery
   // |device|.
   bool AddDevice(std::unique_ptr<FidoDevice> device);
   bool AddAuthenticator(std::unique_ptr<FidoDeviceAuthenticator> authenticator);
-  bool RemoveDevice(base::StringPiece device_id);
-
-  FidoDeviceAuthenticator* GetAuthenticator(base::StringPiece authenticator_id);
+  bool RemoveDevice(std::string_view device_id);
 
   // Subclasses should implement this to actually start the discovery when it is
   // requested.
   //
   // The implementation should asynchronously invoke NotifyDiscoveryStarted when
-  // the discovery is s tarted.
+  // the discovery is started.
   virtual void StartInternal() = 0;
 
   // Map of ID to authenticator. It is a guarantee to subclasses that the ID of

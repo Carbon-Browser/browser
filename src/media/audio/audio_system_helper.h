@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ class MEDIA_EXPORT AudioSystemHelper {
   absl::optional<AudioParameters> ComputeOutputParameters(
       const std::string& device_id);
 
-  const raw_ptr<AudioManager> audio_manager_;
+  const raw_ptr<AudioManager, DanglingUntriaged> audio_manager_;
 };
 
 }  // namespace media

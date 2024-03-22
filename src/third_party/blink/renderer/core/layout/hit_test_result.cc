@@ -48,7 +48,7 @@
 #include "third_party/blink/renderer/core/layout/layout_embedded_content.h"
 #include "third_party/blink/renderer/core/layout/layout_image.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/layout/ng/ng_physical_box_fragment.h"
+#include "third_party/blink/renderer/core/layout/physical_box_fragment.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/page/scrolling/top_document_root_scroller_controller.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar.h"
@@ -57,6 +57,8 @@
 #include "ui/gfx/geometry/rect_conversions.h"
 
 namespace blink {
+
+using mojom::blink::FormControlType;
 
 HitTestResult::HitTestResult()
     : hit_test_request_(HitTestRequest::kReadOnly | HitTestRequest::kActive),
@@ -81,6 +83,7 @@ HitTestResult::HitTestResult(const HitTestResult& other)
       inner_url_element_(other.URLElement()),
       scrollbar_(other.GetScrollbar()),
       is_over_embedded_content_view_(other.IsOverEmbeddedContentView()),
+      is_over_resizer_(other.is_over_resizer_),
       canvas_region_id_(other.CanvasRegionId()) {
   // Only copy the NodeSet in case of list hit test.
   list_based_test_result_ =
@@ -127,6 +130,7 @@ void HitTestResult::PopulateFromCachedResult(const HitTestResult& other) {
   is_over_embedded_content_view_ = other.IsOverEmbeddedContentView();
   cacheable_ = other.cacheable_;
   canvas_region_id_ = other.CanvasRegionId();
+  is_over_resizer_ = other.IsOverResizer();
 
   // Only copy the NodeSet in case of list hit test.
   list_based_test_result_ =
@@ -145,10 +149,9 @@ void HitTestResult::Trace(Visitor* visitor) const {
   visitor->Trace(list_based_test_result_);
 }
 
-void HitTestResult::SetNodeAndPosition(
-    Node* node,
-    const NGPhysicalBoxFragment* box_fragment,
-    const PhysicalOffset& position) {
+void HitTestResult::SetNodeAndPosition(Node* node,
+                                       const PhysicalBoxFragment* box_fragment,
+                                       const PhysicalOffset& position) {
   if (box_fragment) {
     local_point_ = position + box_fragment->OffsetFromOwnerLayoutBox();
   } else {
@@ -221,7 +224,7 @@ PositionWithAffinity HitTestResult::GetPositionForInnerNodeOrImageMapImage()
   return position;
 }
 
-void HitTestResult::SetToShadowHostIfInRestrictedShadowRoot() {
+void HitTestResult::SetToShadowHostIfInUAShadowRoot() {
   Node* node = InnerNode();
   if (!node)
     return;
@@ -231,9 +234,7 @@ void HitTestResult::SetToShadowHostIfInRestrictedShadowRoot() {
 
   // Consider a closed shadow tree of SVG's <use> element as a special
   // case so that a toolip title in the shadow tree works.
-  while (containing_shadow_root &&
-         (containing_shadow_root->IsUserAgent() ||
-          IsA<SVGUseElement>(containing_shadow_root->host()))) {
+  while (containing_shadow_root && containing_shadow_root->IsUserAgent()) {
     shadow_host = &containing_shadow_root->host();
     containing_shadow_root = shadow_host->ContainingShadowRoot();
     // TODO(layout-dev): Not updating local_point_ here seems like a mistake?
@@ -246,9 +247,7 @@ void HitTestResult::SetToShadowHostIfInRestrictedShadowRoot() {
 }
 
 CompositorElementId HitTestResult::GetScrollableContainer() const {
-  DCHECK(InnerNode());
-  // TODO(1303411): Some users encounter InnerNode() == null here, but we don't
-  // know why. Return an invalid element ID in this case, which we check for in
+  // If no node was found, return an invalid element ID, which we check for in
   // InputHandlerProxy::ContinueScrollBeginAfterMainThreadHitTest.
   if (!InnerNode())
     return CompositorElementId();
@@ -418,13 +417,14 @@ KURL HitTestResult::AbsoluteImageURL(const Node* node) {
   auto* html_input_element = DynamicTo<HTMLInputElement>(node);
   if (IsA<HTMLImageElement>(*node) ||
       (html_input_element &&
-       html_input_element->type() == input_type_names::kImage))
+       html_input_element->FormControlType() == FormControlType::kInputImage)) {
     url_string = To<Element>(*node).ImageSourceURL();
-  else if ((node->GetLayoutObject() && node->GetLayoutObject()->IsImage()) &&
-           (IsA<HTMLEmbedElement>(*node) || IsA<HTMLObjectElement>(*node) ||
-            IsA<SVGImageElement>(*node)))
+  } else if ((node->GetLayoutObject() && node->GetLayoutObject()->IsImage()) &&
+             (IsA<HTMLEmbedElement>(*node) || IsA<HTMLObjectElement>(*node) ||
+              IsA<SVGImageElement>(*node))) {
     url_string = To<Element>(*node).ImageSourceURL();
-  if (url_string.IsEmpty())
+  }
+  if (url_string.empty())
     return KURL();
 
   return node->GetDocument().CompleteURL(
@@ -593,6 +593,7 @@ void HitTestResult::Append(const HitTestResult& other) {
     inner_url_element_ = other.URLElement();
     is_over_embedded_content_view_ = other.IsOverEmbeddedContentView();
     canvas_region_id_ = other.CanvasRegionId();
+    is_over_resizer_ = other.IsOverResizer();
   }
 
   if (other.list_based_test_result_) {

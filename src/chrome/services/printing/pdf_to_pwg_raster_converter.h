@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,7 @@ class PdfToPwgRasterConverter
                const PdfRenderSettings& pdf_settings,
                const PwgRasterSettings& pwg_raster_settings,
                ConvertCallback callback) override;
+  void SetUseSkiaRendererPolicy(bool use_skia) override;
 };
 
 }  // namespace printing

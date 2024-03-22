@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ namespace ash {
 // methods should be called from the origin thread (UI thread) which initializes
 // the DBusThreadManager instance.
 class COMPONENT_EXPORT(ASH_DBUS_ARC) ArcAppfuseProviderClient
-    : public DBusClient {
+    : public chromeos::DBusClient {
  public:
   // Returns the global instance if initialized. May return null.
   static ArcAppfuseProviderClient* Get();
@@ -37,19 +37,20 @@ class COMPONENT_EXPORT(ASH_DBUS_ARC) ArcAppfuseProviderClient
   // associated with the mounted file system.
   virtual void Mount(uint32_t uid,
                      int32_t mount_id,
-                     DBusMethodCallback<base::ScopedFD> callback) = 0;
+                     chromeos::DBusMethodCallback<base::ScopedFD> callback) = 0;
 
   // Unmounts the specified appfuse file system.
   virtual void Unmount(uint32_t uid,
                        int32_t mount_id,
-                       VoidDBusMethodCallback callback) = 0;
+                       chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Opens a file under the specified appfuse file system.
-  virtual void OpenFile(uint32_t uid,
-                        int32_t mount_id,
-                        int32_t file_id,
-                        int32_t flags,
-                        DBusMethodCallback<base::ScopedFD> callback) = 0;
+  virtual void OpenFile(
+      uint32_t uid,
+      int32_t mount_id,
+      int32_t file_id,
+      int32_t flags,
+      chromeos::DBusMethodCallback<base::ScopedFD> callback) = 0;
 
  protected:
   ArcAppfuseProviderClient();

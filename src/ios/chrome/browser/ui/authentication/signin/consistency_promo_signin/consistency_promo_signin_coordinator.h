@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,11 @@ enum class AccessPoint : int;
 // Coordinates various Identity options in Chrome including signing in
 // using accounts on the device, opening Incognito, and adding an account.
 @interface ConsistencyPromoSigninCoordinator : SigninCoordinator
+
++ (instancetype)
+    coordinatorWithBaseViewController:(UIViewController*)viewController
+                              browser:(Browser*)browser
+                          accessPoint:(signin_metrics::AccessPoint)accessPoint;
 
 - (instancetype)initWithBaseViewController:(UIViewController*)baseViewController
                                    browser:(Browser*)browser

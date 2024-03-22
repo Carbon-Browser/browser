@@ -16,7 +16,9 @@
  */
 
 #include "components/adblock/core/common/flatbuffer_data.h"
+
 #include <memory>
+#include <string_view>
 
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
@@ -39,8 +41,8 @@ TEST_F(AdblockMemoryMappedFlatbufferDataTest, FileContentIsReadLikeMemory) {
   ASSERT_TRUE(base::WriteFile(test_file, "content"));
 
   auto buffer = std::make_unique<MemoryMappedFlatbufferData>(test_file);
-  auto span = base::StringPiece(reinterpret_cast<const char*>(buffer->data()),
-                                buffer->size());
+  auto span = std::string_view(reinterpret_cast<const char*>(buffer->data()),
+                               buffer->size());
   EXPECT_EQ(span, "content");
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <hb.h>
 #include <unicode/uchar.h>
 
+#include "base/numerics/safe_conversions.h"
 #include "third_party/blink/renderer/platform/fonts/canvas_rotation_in_vertical.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
 #include "third_party/blink/renderer/platform/fonts/opentype/open_type_math_support.h"
@@ -36,7 +37,7 @@ GetAssemblyParameters(const HarfBuzzFace* harfbuzz_face,
   Vector<OpenTypeMathStretchData::GlyphPartRecord> parts =
       OpenTypeMathSupport::GetGlyphPartRecords(harfbuzz_face, base_glyph,
                                                stretch_axis, italic_correction);
-  if (parts.IsEmpty())
+  if (parts.empty())
     return absl::nullopt;
 
   hb_font_t* const hb_font = harfbuzz_face->GetScaledFont();
@@ -85,12 +86,14 @@ GetAssemblyParameters(const HarfBuzzFace* harfbuzz_face,
     return absl::nullopt;
 
   // Calculate the minimal number of repetitions needed to obtain an assembly
-  // size of size at least target size (r_min in MathML Core).
-  unsigned repetition_count = std::max<float>(
+  // size of size at least target size (r_min in MathML Core). Use a saturated
+  // cast; if the value does not fit in unsigned, the kMaxGlyphs limit below
+  // will take effect anyway.
+  unsigned repetition_count = base::saturated_cast<unsigned>(std::max<float>(
       std::ceil((target_size - non_extender_advance_sum +
                  min_connector_overlap * (non_extender_count - 1)) /
                 extender_non_overlapping_advance_sum),
-      0);
+      0));
 
   // Calculate the number of glyphs, limiting repetition_count to ensure the
   // assembly does not have more than HarfBuzzRunGlyphData::kMaxGlyphs.

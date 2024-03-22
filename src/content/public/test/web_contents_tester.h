@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,8 +74,9 @@ class WebContentsTester {
   static WebContents* CreateTestWebContents(
       const WebContents::CreateParams& params);
 
-  // Simulates the appropriate RenderView (pending if any, current otherwise)
-  // sending a navigate notification for the NavigationController pending entry.
+  // Simulates the appropriate `blink::WebView` (pending if any, current
+  // otherwise) sending a navigate notification for the NavigationController
+  // pending entry.
   virtual void CommitPendingNavigation() = 0;
 
   // Creates a pending navigation to the given URL with the default parameters
@@ -160,15 +161,13 @@ class WebContentsTester {
   // Sets the last active time.
   virtual void SetLastActiveTime(base::TimeTicks last_active_time) = 0;
 
+  // Increments/decrements the number of frames with connected USB devices.
+  virtual void TestIncrementUsbActiveFrameCount() = 0;
+  virtual void TestDecrementUsbActiveFrameCount() = 0;
+
   // Increments/decrements the number of connected Bluetooth devices.
   virtual void TestIncrementBluetoothConnectedDeviceCount() = 0;
   virtual void TestDecrementBluetoothConnectedDeviceCount() = 0;
-
-  // Used to create portals and retrieve their WebContents.
-  virtual const blink::PortalToken& CreatePortal(
-      std::unique_ptr<WebContents> portal_web_contents) = 0;
-  virtual WebContents* GetPortalContents(
-      const blink::PortalToken& portal_token) = 0;
 
   // Indicates if this WebContents has been frozen via a call to
   // SetPageFrozen().
@@ -192,6 +191,12 @@ class WebContentsTester {
   // Returns the time that was set with SetTabSwitchStartTime, or a null
   // TimeTicks if it was never called.
   virtual base::TimeTicks GetTabSwitchStartTime() = 0;
+
+  // Sets the return value for GetPictureInPictureOptions().
+  virtual void SetPictureInPictureOptions(
+      absl::optional<blink::mojom::PictureInPictureWindowOptions> options) = 0;
+
+  virtual bool GetOverscrollNavigationEnabled() = 0;
 };
 
 }  // namespace content

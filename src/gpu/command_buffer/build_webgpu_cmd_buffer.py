@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """code generator for webgpu command buffers."""
@@ -54,8 +54,9 @@ _FUNCTION_INFO = {
     'impl_func': False,
     'internal': True,
     'data_transfer_methods': ['shm'],
-    'cmd_args': 'uint32_t commands_shm_id, '
-                'uint32_t commands_shm_offset, uint32_t size',
+    'cmd_args': 'uint32_t trace_id_high, uint32_t trace_id_low, '
+                'uint32_t commands_shm_id, uint32_t commands_shm_offset, '
+                'uint32_t size',
     'size_args': {
       'commands': 'size * sizeof(char)',
     },
@@ -63,8 +64,13 @@ _FUNCTION_INFO = {
   'AssociateMailbox': {
     'impl_func': False,
     'client_test': False,
-    'type': 'PUT',
-    'count': 16,  # GL_MAILBOX_SIZE_CHROMIUM
+    'internal': True,
+    'cmd_args': 'GLuint device_id, GLuint device_generation, GLuint id, '
+                'GLuint generation, GLuint usage, MailboxFlags flags, '
+                'GLuint view_format_count, GLuint count, '
+                'const GLuint* mailbox_and_view_formats',
+    'type': 'PUTn',
+    'count': 1,
   },
   'DissociateMailbox': {
     'impl_func': False,
@@ -77,6 +83,10 @@ _FUNCTION_INFO = {
   'DestroyServer': {
     'impl_func': False,
     'internal': True,
+  },
+  'SetWebGPUExecutionContextToken': {
+    'impl_func': False,
+    'client_test': False,
   },
 }
 

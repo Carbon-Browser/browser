@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,12 +30,12 @@ class BackgroundTracingStateManagerTest : public testing::Test {
   }
 
   void TearDown() override {
-    tracing::BackgroundTracingStateManager::GetInstance().Reset();
+    tracing::BackgroundTracingStateManager::GetInstance().ResetForTesting();
   }
 
   std::string GetSessionStateJson() {
     const base::Value::Dict& state =
-        pref_service_->GetValueDict(tracing::kBackgroundTracingSessionState);
+        pref_service_->GetDict(tracing::kBackgroundTracingSessionState);
 
     std::string json;
     EXPECT_TRUE(base::JSONWriter::Write(state, &json));
@@ -50,63 +50,55 @@ class BackgroundTracingStateManagerTest : public testing::Test {
 
 TEST_F(BackgroundTracingStateManagerTest, InitializeEmptyPrefs) {
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-  EXPECT_EQ(GetSessionStateJson(), R"({"state":0,"upload_times":[]})");
+  EXPECT_EQ(GetSessionStateJson(), R"({"state":0})");
 }
 
 TEST_F(BackgroundTracingStateManagerTest, InitializeInvalidState) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("state",
-                 static_cast<int>(tracing::BackgroundTracingState::LAST) + 1);
-  pref_service_->Set(tracing::kBackgroundTracingSessionState, std::move(dict));
+  base::Value::Dict dict;
+  dict.Set("state",
+           static_cast<int>(tracing::BackgroundTracingState::LAST) + 1);
+  pref_service_->Set(tracing::kBackgroundTracingSessionState,
+                     base::Value(std::move(dict)));
 
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-  EXPECT_EQ(GetSessionStateJson(), R"({"state":0,"upload_times":[]})");
+  EXPECT_EQ(GetSessionStateJson(), R"({"state":0})");
 }
 
 TEST_F(BackgroundTracingStateManagerTest, InitializeNoScenario) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("state", static_cast<int>(
-                              tracing::BackgroundTracingState::NOT_ACTIVATED));
-  base::Value upload_times(base::Value::Type::LIST);
-  base::Value scenario(base::Value::Type::DICTIONARY);
-  scenario.SetKey("time", base::TimeToValue(base::Time::Now()));
-  upload_times.Append(std::move(scenario));
-  dict.SetKey("upload_times", std::move(upload_times));
-  pref_service_->Set(tracing::kBackgroundTracingSessionState, std::move(dict));
+  base::Value::Dict dict;
+  dict.Set("state",
+           static_cast<int>(tracing::BackgroundTracingState::NOT_ACTIVATED));
+  base::Value::Dict scenario;
+  scenario.Set("time", base::TimeToValue(base::Time::Now()));
+  pref_service_->Set(tracing::kBackgroundTracingSessionState,
+                     base::Value(std::move(dict)));
 
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-  EXPECT_EQ(GetSessionStateJson(), R"({"state":0,"upload_times":[]})");
+  EXPECT_EQ(GetSessionStateJson(), R"({"state":0})");
 }
 
 TEST_F(BackgroundTracingStateManagerTest, InitializeValidPrefs) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("state", static_cast<int>(
-                              tracing::BackgroundTracingState::NOT_ACTIVATED));
-  base::Value upload_times(base::Value::Type::LIST);
-  base::Value scenario(base::Value::Type::DICTIONARY);
-  scenario.SetStringKey("scenario", "TestScenario");
-  scenario.SetKey("time", base::TimeToValue(base::Time::Now()));
-  upload_times.Append(std::move(scenario));
-  dict.SetKey("upload_times", std::move(upload_times));
-  pref_service_->Set(tracing::kBackgroundTracingSessionState, std::move(dict));
+  base::Value::Dict dict;
+  dict.Set("state",
+           static_cast<int>(tracing::BackgroundTracingState::NOT_ACTIVATED));
+  base::Value::Dict scenario;
+  scenario.Set("scenario", "TestScenario");
+  scenario.Set("time", base::TimeToValue(base::Time::Now()));
+  pref_service_->Set(tracing::kBackgroundTracingSessionState,
+                     base::Value(std::move(dict)));
 
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-  EXPECT_TRUE(base::MatchPattern(
-      GetSessionStateJson(),
-      R"({"state":0,"upload_times":[{"scenario":"TestScenario","time":"*"}]})"))
+  EXPECT_TRUE(base::MatchPattern(GetSessionStateJson(), R"({"state":0})"))
       << "Actual: " << GetSessionStateJson();
   ;
 }
 
 TEST_F(BackgroundTracingStateManagerTest, SaveStateValidPrefs) {
   tracing::BackgroundTracingStateManager::GetInstance().SaveState(
-      {{"TestScenario", base::Time::Now()}},
       tracing::BackgroundTracingState::NOT_ACTIVATED);
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
 
-  EXPECT_TRUE(base::MatchPattern(
-      GetSessionStateJson(),
-      R"({"state":0,"upload_times":[{"scenario":"TestScenario","time":"*"}]})"))
+  EXPECT_TRUE(base::MatchPattern(GetSessionStateJson(), R"({"state":0})"))
       << "Actual: " << GetSessionStateJson();
   EXPECT_FALSE(tracing::BackgroundTracingStateManager::GetInstance()
                    .DidLastSessionEndUnexpectedly());
@@ -114,92 +106,24 @@ TEST_F(BackgroundTracingStateManagerTest, SaveStateValidPrefs) {
 
 TEST_F(BackgroundTracingStateManagerTest, SessionEndedUnexpectedly) {
   tracing::BackgroundTracingStateManager::GetInstance().SaveState(
-      {}, tracing::BackgroundTracingState::STARTED);
+      tracing::BackgroundTracingState::STARTED);
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
   EXPECT_TRUE(tracing::BackgroundTracingStateManager::GetInstance()
                   .DidLastSessionEndUnexpectedly());
 }
 
-TEST_F(BackgroundTracingStateManagerTest, NotUploadedRecently) {
-  tracing::BackgroundTracingStateManager::GetInstance().SaveState(
-      {{"TestScenario", base::Time::Now() - base::Days(8)}},
-      tracing::BackgroundTracingState::NOT_ACTIVATED);
+TEST_F(BackgroundTracingStateManagerTest, OnTracingStarted) {
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("scenario_name", "TestScenario");
-  dict.SetStringKey("mode", "PREEMPTIVE_TRACING_MODE");
-  dict.SetStringKey("custom_categories", "toplevel");
-  base::Value rules_list(base::Value::Type::LIST);
-
-  {
-    base::Value rules_dict(base::Value::Type::DICTIONARY);
-    rules_dict.SetStringKey("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED");
-    rules_dict.SetStringKey("trigger_name", "test");
-    rules_list.Append(std::move(rules_dict));
-  }
-
-  dict.SetKey("configs", std::move(rules_list));
-  std::unique_ptr<content::BackgroundTracingConfig> config(
-      content::BackgroundTracingConfig::FromDict(std::move(dict)));
-
-  EXPECT_FALSE(tracing::BackgroundTracingStateManager::GetInstance()
-                   .DidRecentlyUploadForScenario(*config));
-}
-
-TEST_F(BackgroundTracingStateManagerTest, UploadedRecently) {
-  tracing::BackgroundTracingStateManager::GetInstance().SaveState(
-      {{"TestScenario", base::Time::Now() - base::Days(1)}},
-      tracing::BackgroundTracingState::NOT_ACTIVATED);
-  tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("scenario_name", "TestScenario");
-  dict.SetStringKey("mode", "PREEMPTIVE_TRACING_MODE");
-  dict.SetStringKey("custom_categories", "toplevel");
-  base::Value rules_list(base::Value::Type::LIST);
-
-  {
-    base::Value rules_dict(base::Value::Type::DICTIONARY);
-    rules_dict.SetStringKey("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED");
-    rules_dict.SetStringKey("trigger_name", "test");
-    rules_list.Append(std::move(rules_dict));
-  }
-
-  dict.SetKey("configs", std::move(rules_list));
-  std::unique_ptr<content::BackgroundTracingConfig> config(
-      content::BackgroundTracingConfig::FromDict(std::move(dict)));
-
-  EXPECT_TRUE(tracing::BackgroundTracingStateManager::GetInstance()
-                  .DidRecentlyUploadForScenario(*config));
-}
-
-TEST_F(BackgroundTracingStateManagerTest, NotifyTracingStarted) {
-  tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-  tracing::BackgroundTracingStateManager::GetInstance().NotifyTracingStarted();
-  EXPECT_TRUE(base::MatchPattern(GetSessionStateJson(),
-                                 R"({"state":1,"upload_times":[]})"))
+  tracing::BackgroundTracingStateManager::GetInstance().OnTracingStarted();
+  EXPECT_TRUE(base::MatchPattern(GetSessionStateJson(), R"({"state":1})"))
       << "Actual: " << GetSessionStateJson();
 }
 
-TEST_F(BackgroundTracingStateManagerTest, NotifyFinalizationStarted) {
+TEST_F(BackgroundTracingStateManagerTest, OnTracingStopped) {
   tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-  tracing::BackgroundTracingStateManager::GetInstance()
-      .NotifyFinalizationStarted();
-  EXPECT_TRUE(base::MatchPattern(GetSessionStateJson(),
-                                 R"({"state":3,"upload_times":[]})"))
+  tracing::BackgroundTracingStateManager::GetInstance().OnTracingStopped();
+  EXPECT_TRUE(base::MatchPattern(GetSessionStateJson(), R"({"state":3})"))
       << "Actual: " << GetSessionStateJson();
 }
 
-TEST_F(BackgroundTracingStateManagerTest, OnScenarioUploaded) {
-  tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-  tracing::BackgroundTracingStateManager::GetInstance()
-      .NotifyFinalizationStarted();
-  tracing::BackgroundTracingStateManager::GetInstance().OnScenarioUploaded(
-      "TestScenario");
-  EXPECT_TRUE(base::MatchPattern(
-      GetSessionStateJson(),
-      R"({"state":3,"upload_times":[{"scenario":"TestScenario","time":"*"}]})"))
-      << "Actual: " << GetSessionStateJson();
-}
 }  // namespace tracing

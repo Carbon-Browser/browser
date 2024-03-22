@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,15 @@ inline bool GetGooglePacketHeadersFromControlMessageImpl(
 }
 
 inline void SetGoogleSocketOptionsImpl(int fd) {}
+
+inline int GetEcnCmsgArgsPreserveDscpImpl(const int fd,
+                                          const int address_family,
+                                          uint8_t ecn_codepoint,
+                                          int& type,
+                                          void* value,
+                                          socklen_t& value_len) {
+  return 0;
+}
 
 }  // namespace quiche
 

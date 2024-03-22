@@ -1,9 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SANDBOX_LINUX_SERVICES_CREDENTIALS_H_
 #define SANDBOX_LINUX_SERVICES_CREDENTIALS_H_
+
+#include <sys/types.h>
 
 #include "build/build_config.h"
 // Link errors are tedious to track, raise a compile-time error instead.

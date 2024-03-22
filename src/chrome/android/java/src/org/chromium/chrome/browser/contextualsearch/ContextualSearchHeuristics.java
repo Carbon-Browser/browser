@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import java.util.Set;
 public class ContextualSearchHeuristics {
     protected Set<ContextualSearchHeuristic> mHeuristics;
 
-    /**
-     * Manages a set of heuristics.
-     */
+    /** Manages a set of heuristics. */
     ContextualSearchHeuristics() {
         mHeuristics = new HashSet<ContextualSearchHeuristic>();
     }
@@ -32,9 +30,7 @@ public class ContextualSearchHeuristics {
         }
     }
 
-    /**
-     * Logs the condition state for all the Tap suppression heuristics.
-     */
+    /** Logs the condition state for all the Tap suppression heuristics. */
     public void logContitionState() {
         for (ContextualSearchHeuristic heuristic : mHeuristics) {
             heuristic.logConditionState();

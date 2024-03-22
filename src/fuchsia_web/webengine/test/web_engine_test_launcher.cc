@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,6 @@ class WebEngineTestLauncherDelegate : public content::TestLauncherDelegate {
 int main(int argc, char** argv) {
   base::CommandLine::Init(argc, argv);
   auto* command_line = base::CommandLine::ForCurrentProcess();
-  command_line->AppendSwitchASCII(switches::kOzonePlatform, "scenic");
   command_line->AppendSwitchASCII(switches::kEnableLogging, "stderr");
 
   // Indicate to all processes that they are being run as part of a browser

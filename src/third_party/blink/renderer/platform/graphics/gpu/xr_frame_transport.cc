@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/gpu/xr_frame_transport.h"
 
 #include "base/logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
@@ -150,7 +151,7 @@ void XRFrameTransport::FrameSubmit(
              device::mojom::blink::XRPresentationTransportMethod::
                  SUBMIT_AS_MAILBOX_HOLDER) {
     // The AcceleratedStaticBitmapImage must be kept alive until the
-    // mailbox is used via createAndConsumeTextureCHROMIUM, the mailbox
+    // mailbox is used via CreateAndTexStorage2DSharedImageCHROMIUM, the mailbox
     // itself does not keep it alive. We must keep a reference to the
     // image until the mailbox was consumed.
     StaticBitmapImage* static_image =
@@ -213,6 +214,7 @@ void XRFrameTransport::OnSubmitFrameTransferred(bool success) {
 }
 
 void XRFrameTransport::WaitForPreviousTransfer() {
+  DVLOG(3) << __func__ << " Start";
   TRACE_EVENT0("gpu", "waitForPreviousTransferToFinish");
   while (waiting_for_previous_frame_transfer_) {
     if (!submit_frame_client_receiver_.WaitForIncomingCall()) {
@@ -220,6 +222,7 @@ void XRFrameTransport::WaitForPreviousTransfer() {
       break;
     }
   }
+  DVLOG(3) << __func__ << " Stop";
 }
 
 void XRFrameTransport::OnSubmitFrameRendered() {
@@ -228,6 +231,7 @@ void XRFrameTransport::OnSubmitFrameRendered() {
 }
 
 base::TimeDelta XRFrameTransport::WaitForPreviousRenderToFinish() {
+  DVLOG(3) << __func__ << " Start";
   TRACE_EVENT0("gpu", "waitForPreviousRenderToFinish");
   base::TimeTicks start = base::TimeTicks::Now();
   while (waiting_for_previous_frame_render_) {
@@ -236,6 +240,7 @@ base::TimeDelta XRFrameTransport::WaitForPreviousRenderToFinish() {
       break;
     }
   }
+  DVLOG(3) << __func__ << " Stop";
   return base::TimeTicks::Now() - start;
 }
 
@@ -246,6 +251,7 @@ void XRFrameTransport::OnSubmitFrameGpuFence(gfx::GpuFenceHandle handle) {
 }
 
 base::TimeDelta XRFrameTransport::WaitForGpuFenceReceived() {
+  DVLOG(3) << __func__ << " Start";
   TRACE_EVENT0("gpu", "WaitForGpuFenceReceived");
   base::TimeTicks start = base::TimeTicks::Now();
   while (waiting_for_previous_frame_fence_) {
@@ -254,6 +260,7 @@ base::TimeDelta XRFrameTransport::WaitForGpuFenceReceived() {
       break;
     }
   }
+  DVLOG(3) << __func__ << " Stop";
   return base::TimeTicks::Now() - start;
 }
 

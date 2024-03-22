@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
-#include "cc/layers/solid_color_layer.h"
+#include "cc/slim/solid_color_layer.h"
 #include "chrome/browser/android/compositor/layer/toolbar_layer.h"
 #include "chrome/browser/ui/android/toolbar/jni_headers/TopToolbarSceneLayer_jni.h"
 #include "ui/android/resources/resource_manager_impl.h"
@@ -22,7 +22,7 @@ TopToolbarSceneLayer::TopToolbarSceneLayer(JNIEnv* env,
     : SceneLayer(env, jobj),
       should_show_background_(false),
       background_color_(SK_ColorWHITE),
-      content_container_(cc::Layer::Create()) {
+      content_container_(cc::slim::Layer::Create()) {
   layer()->AddChild(content_container_);
   layer()->SetIsDrawable(true);
 }
@@ -52,8 +52,9 @@ void TopToolbarSceneLayer::UpdateToolbarLayer(
   }
 
   toolbar_layer_->layer()->SetHideLayerAndSubtree(!visible);
-  if (!visible)
+  if (!visible) {
     return;
+  }
 
   toolbar_layer_->PushResource(toolbar_resource_id, toolbar_background_color,
                                anonymize, url_bar_color, url_bar_resource_id,

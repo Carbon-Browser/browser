@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -110,10 +110,10 @@ class ServicesDelegate {
 
   // Takes a SharedURLLoaderFactory from the BrowserProcess, for use in the
   // database manager.
-  virtual void StartOnIOThread(
+  virtual void StartOnSBThread(
       scoped_refptr<network::SharedURLLoaderFactory> browser_url_loader_factory,
       const V4ProtocolConfig& v4_config) = 0;
-  virtual void StopOnIOThread(bool shutdown) = 0;
+  virtual void StopOnSBThread(bool shutdown) = 0;
 
   virtual void CreateTelemetryService(Profile* profile) {}
   virtual void RemoveTelemetryService(Profile* profile) {}

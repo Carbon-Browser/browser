@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/android/scoped_java_ref.h"
+#include "base/memory/raw_ref.h"
 #include "ui/events/events_export.h"
 #include "ui/gfx/geometry/point_conversions.h"
 
@@ -38,7 +39,7 @@ class EVENTS_EXPORT DragEventAndroid {
   int action() const { return action_; }
   const gfx::PointF& location() const { return location_; }
   const gfx::PointF& screen_location() const { return screen_location_; }
-  const std::vector<std::u16string>& mime_types() const { return mime_types_; }
+  const std::vector<std::u16string>& mime_types() const { return *mime_types_; }
 
   base::android::ScopedJavaLocalRef<jstring> GetJavaContent() const;
 
@@ -53,7 +54,7 @@ class EVENTS_EXPORT DragEventAndroid {
   gfx::PointF location_;
   // Location relative to the screen coordinate.
   gfx::PointF screen_location_;
-  const std::vector<std::u16string>& mime_types_;
+  const raw_ref<const std::vector<std::u16string>> mime_types_;
   // The Java reference to the drop content to avoid unnecessary copying.
   base::android::ScopedJavaGlobalRef<jstring> content_;
 };

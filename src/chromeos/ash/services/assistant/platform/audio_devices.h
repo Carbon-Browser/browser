@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,17 @@
 
 #include <cstdint>
 
-#include "ash/components/audio/audio_device.h"
-// TODO(https://crbug.com/1164001): use forward declaration when migrated to
-// ash/.
-#include "ash/components/audio/cras_audio_handler.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
-#include "base/scoped_observation.h"
+#include "base/scoped_observation_traits.h"
+#include "chromeos/ash/components/audio/audio_device.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
+namespace ash {
+
+class CrasAudioHandler;
+
 namespace assistant {
 
 // This class will monitor the available audio devices (through
@@ -51,21 +52,15 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AudioDevices {
 
   // Used during unittests to simulate an update to the list of available audio
   // devices.
-  void SetAudioDevicesForTest(const chromeos::AudioDeviceList& audio_devices);
-
-  using ScopedObservation =
-      base::ScopedObservation<AudioDevices,
-                              Observer,
-                              &AudioDevices::AddAndFireObserver,
-                              &AudioDevices::RemoveObserver>;
+  void SetAudioDevicesForTest(const AudioDeviceList& audio_devices);
 
  private:
   class ScopedCrasAudioHandlerObserver;
   class HotwordModelUpdater;
 
-  void SetAudioDevices(const chromeos::AudioDeviceList& audio_devices);
-  void UpdateHotwordDeviceId(const chromeos::AudioDeviceList& devices);
-  void UpdateDeviceId(const chromeos::AudioDeviceList& devices);
+  void SetAudioDevices(const AudioDeviceList& audio_devices);
+  void UpdateHotwordDeviceId(const AudioDeviceList& devices);
+  void UpdateDeviceId(const AudioDeviceList& devices);
   void UpdateHotwordModel();
 
   // Handles the asynchronous nature of sending a new hotword model to
@@ -75,7 +70,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AudioDevices {
   base::ObserverList<Observer> observers_;
 
   // Owned by |AssistantManagerServiceImpl|.
-  CrasAudioHandler* const cras_audio_handler_;
+  const raw_ptr<CrasAudioHandler, ExperimentalAsh> cras_audio_handler_;
 
   std::string locale_;
   absl::optional<uint64_t> hotword_device_id_;
@@ -88,6 +83,23 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AudioDevices {
 };
 
 }  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<ash::assistant::AudioDevices,
+                               ash::assistant::AudioDevices::Observer> {
+  static void AddObserver(ash::assistant::AudioDevices* source,
+                          ash::assistant::AudioDevices::Observer* observer) {
+    source->AddAndFireObserver(observer);
+  }
+  static void RemoveObserver(ash::assistant::AudioDevices* source,
+                             ash::assistant::AudioDevices::Observer* observer) {
+    source->RemoveObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_DEVICES_H_

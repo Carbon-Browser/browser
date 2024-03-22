@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include "base/time/time.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
+#include "components/services/app_service/public/cpp/app_registry_cache.h"
 #include "components/services/app_service/public/cpp/app_types.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 
 class Profile;
 
@@ -39,10 +39,11 @@ enum class AppTypeName {
   kExtension = 14,
   kStandaloneBrowserExtension = 15,
   kStandaloneBrowserWebApp = 16,
+  kBruschetta = 17,
 
   // Add any new values above this one, and update kMaxValue to the highest
   // enumerator value.
-  kMaxValue = kStandaloneBrowserWebApp,
+  kMaxValue = kBruschetta,
 };
 
 // This is used for logging, so do not remove or reorder existing entries.
@@ -76,10 +77,11 @@ enum class AppTypeNameV2 {
   kStandaloneBrowserChromeAppTab = 19,
   kStandaloneBrowserWebAppWindow = 20,
   kStandaloneBrowserWebAppTab = 21,
+  kBruschetta = 22,
 
   // Add any new values above this one, and update kMaxValue to the highest
   // enumerator value.
-  kMaxValue = kStandaloneBrowserWebAppTab,
+  kMaxValue = kBruschetta,
 };
 
 extern const base::TimeDelta kMinDuration;
@@ -114,6 +116,7 @@ constexpr char kStandaloneBrowserWebAppWindowHistogramName[] =
     "StandaloneBrowserWebAppWindow";
 constexpr char kStandaloneBrowserWebAppTabHistogramName[] =
     "StandaloneBrowserWebAppTab";
+constexpr char kBruschettaHistogramName[] = "Bruschetta";
 
 // Determines what app type a web app should be logged as based on its launch
 // container and app id. In particular, web apps in tabs are logged as part of
@@ -174,6 +177,10 @@ AppTypeName GetAppTypeNameFromString(const std::string& app_type_name);
 // returns false.
 bool ShouldRecordUkm(Profile* profile);
 
+// Returns true if it's allowed to record UKM for `app_id`.
+bool ShouldRecordUkmForAppId(const std::string& app_id,
+                             const apps::AppRegistryCache& cache);
+
 // Due to the privacy limitation, only ARC apps, Chrome apps and web apps(PWA),
 // system web apps, builtin apps, Borealis apps, and Crostini apps are recorded
 // because they are synced to server/cloud, or part of OS. Other app types,
@@ -195,6 +202,9 @@ AppTypeName GetAppTypeName(Profile* profile,
 // app registry cache, so can identify apps which aren't registered with app
 // service.
 AppType GetAppType(Profile* profile, const std::string& app_id);
+
+// Returns true if |app_id| is a system web app for a given |profile|.
+bool IsSystemWebApp(Profile* profile, const std::string& app_id);
 
 }  // namespace apps
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/time/time.h"
@@ -109,12 +109,6 @@ TEST_F(PersistentPageConsistencyCheckTaskTest,
   EXPECT_FALSE(IsPageMissingFile(page6));
 
   histogram_tester()->ExpectUniqueSample(
-      "OfflinePages.ConsistencyCheck.Persistent.ExpiredEntryCount", 2, 1);
-  histogram_tester()->ExpectUniqueSample(
-      "OfflinePages.ConsistencyCheck.Persistent.MissingFileCount", 2, 1);
-  histogram_tester()->ExpectUniqueSample(
-      "OfflinePages.ConsistencyCheck.Persistent.ReappearedFileCount", 2, 1);
-  histogram_tester()->ExpectUniqueSample(
       "OfflinePages.ConsistencyCheck.Persistent.Result",
       static_cast<int>(SyncOperationResult::SUCCESS), 1);
 }
@@ -148,8 +142,6 @@ TEST_F(PersistentPageConsistencyCheckTaskTest,
       store(), archive_manager(), base::Time::Now(), callback.Get()));
 
   EXPECT_FALSE(store_test_util()->GetPageByOfflineId(page.offline_id));
-  histogram_tester()->ExpectUniqueSample(
-      "OfflinePages.ConsistencyCheck.Persistent.ExpiredEntryCount", 1, 1);
   histogram_tester()->ExpectUniqueSample(
       "OfflinePages.ConsistencyCheck.Persistent.Result",
       static_cast<int>(SyncOperationResult::SUCCESS), 1);

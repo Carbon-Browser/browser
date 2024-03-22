@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@ enum {
                            // default app order.
   FILE_MACHINE_INFO,       // Full path to machine hardware info file.
   FILE_VPD,                // Full path to VPD file.
+  FILE_VPD_STATUS,         // Full path to VPD status file.
   FILE_UPTIME,             // Full path to the file via which the kernel
                            // exposes the current device uptime.
   FILE_UPDATE_REBOOT_NEEDED_UPTIME,  // Full path to a file in which Chrome can
@@ -58,8 +59,10 @@ enum {
                                         // maintained for the signin profile.
   DIR_PREINSTALLED_COMPONENTS,          // Directory that contains pre-installed
                                         // components.
-  DIR_DEVICE_POLICY_EXTERNAL_DATA,  // Directory where device policy external
-                                    // data resources are cached.
+  DIR_DEVICE_POLICY_EXTERNAL_DATA,     // Directory where device policy external
+                                       // data resources are cached.
+  DIR_DEVICE_POLICY_SCREENSAVER_DATA,  // Directory where the device policy
+                                       // managed screensaver images are cached.
   PATH_END
 };
 
@@ -73,14 +76,5 @@ COMPONENT_EXPORT(ASH_CONSTANTS)
 void RegisterStubPathOverrides(const base::FilePath& stubs_dir);
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::DIR_DEVICE_DISPLAY_PROFILES;
-using ::ash::DIR_SIGNIN_PROFILE_EXTENSIONS;
-using ::ash::FILE_DEFAULT_APP_ORDER;
-using ::ash::FILE_MACHINE_INFO;
-using ::ash::FILE_VPD;
-}  // namespace chromeos
 
 #endif  // ASH_CONSTANTS_ASH_PATHS_H_

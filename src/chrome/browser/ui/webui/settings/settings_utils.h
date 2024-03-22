@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,9 +36,6 @@ bool FixupAndValidateStartupPage(const std::string& url_string,
                                  GURL* fixed_url);
 
 base::RefCountedMemory* GetFaviconResourceBytes(
-    ui::ResourceScaleFactor scale_factor);
-
-base::RefCountedMemory* GetPrivacySandboxFaviconResourceBytes(
     ui::ResourceScaleFactor scale_factor);
 
 #if BUILDFLAG(IS_MAC)

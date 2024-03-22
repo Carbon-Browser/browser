@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,27 +14,23 @@ struct PasswordFormGenerationData;
 
 class GURL;
 
-namespace password_manager {
-class PasswordGenerationFrameHelper;
-}  // namespace password_manager
-
 // C++ to ObjC bridge for methods of PasswordManagerDriver.
 @protocol PasswordManagerDriverBridge
 
 @property(readonly, nonatomic) const GURL& lastCommittedURL;
 
-// Finds and fills the password form using the supplied |formData| to
-// match the password form and to populate the field values. Calls
-// |completionHandler| with YES if a form field has been filled, NO otherwise.
-// |completionHandler| can be nil.
-- (void)fillPasswordForm:(const autofill::PasswordFormFillData&)formData
-       completionHandler:(void (^)(BOOL))completionHandler;
+// Prepares fill data with given password form data.
+// This method calls suggestions helper's processWithPasswordFormFillData.
+- (void)processPasswordFormFillData:
+            (const autofill::PasswordFormFillData&)formData
+                         forFrameId:(const std::string&)frameId
+                        isMainFrame:(BOOL)isMainFrame
+                  forSecurityOrigin:(const GURL&)origin;
 
 // Informs delegate that there are no saved credentials for the current page.
-- (void)onNoSavedCredentials;
-
-// Gets the PasswordGenerationFrameHelper owned by this delegate.
-- (password_manager::PasswordGenerationFrameHelper*)passwordGenerationHelper;
+// The frame is used to get the AccountSelectFillData and reset the credentials
+// cache and also to detach the bottom sheet listener.
+- (void)onNoSavedCredentialsWithFrameId:(const std::string&)frameId;
 
 // Informs delegate of form for password generation found.
 - (void)formEligibleForGenerationFound:

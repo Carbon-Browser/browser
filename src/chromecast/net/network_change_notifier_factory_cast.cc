@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@
 namespace chromecast {
 
 std::unique_ptr<net::NetworkChangeNotifier>
-NetworkChangeNotifierFactoryCast::CreateInstance() {
+NetworkChangeNotifierFactoryCast::CreateInstanceWithInitialTypes(
+    net::NetworkChangeNotifier::ConnectionType /*initial_type*/,
+    net::NetworkChangeNotifier::ConnectionSubtype /*initial_subtype*/) {
   // Caller assumes ownership.
   return std::make_unique<net::NetworkChangeNotifierLinux>(
       GetIgnoredInterfaces());
 }
 
-NetworkChangeNotifierFactoryCast::~NetworkChangeNotifierFactoryCast() {
-}
+NetworkChangeNotifierFactoryCast::~NetworkChangeNotifierFactoryCast() = default;
 
 }  // namespace chromecast

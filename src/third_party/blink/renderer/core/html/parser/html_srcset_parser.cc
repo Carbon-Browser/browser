@@ -88,7 +88,7 @@ struct DescriptorToken {
       ++position;
     }
     return CharactersToInt(attribute + start, length_excluding_descriptor,
-                           WTF::NumberParsingOptions::kNone, &is_valid);
+                           WTF::NumberParsingOptions(), &is_valid);
   }
 
   template <typename CharType>
@@ -412,10 +412,11 @@ static unsigned AvoidDownloadIfHigherDensityResourceIsInCache(
   for (unsigned i = image_candidates.size() - 1; i > winner; --i) {
     KURL url = document->CompleteURL(
         StripLeadingAndTrailingHTMLSpaces(image_candidates[i]->Url()));
-    if (GetMemoryCache()->ResourceForURL(
-            url, document->Fetcher()->GetCacheIdentifier(url)) ||
-        url.ProtocolIsData())
+    auto* resource = MemoryCache::Get()->ResourceForURL(
+        url, document->Fetcher()->GetCacheIdentifier(url));
+    if ((resource && resource->IsLoaded()) || url.ProtocolIsData()) {
       return i;
+    }
   }
   return winner;
 }
@@ -432,7 +433,7 @@ static ImageCandidate PickBestImageCandidate(
   // Setting max density value based on https://github.com/whatwg/html/pull/5901
   const float kMaxDensity = 2.2;
   bool ignore_src = false;
-  if (image_candidates.IsEmpty())
+  if (image_candidates.empty())
     return ImageCandidate();
 
   if (RuntimeEnabledFeatures::SrcsetMaxDensityEnabled() &&
@@ -512,7 +513,7 @@ ImageCandidate BestFitSourceForImageAttributes(float device_scale_factor,
   ParseImageCandidatesFromSrcsetAttribute(srcset_attribute, image_candidates,
                                           document);
 
-  if (!src_attribute.IsEmpty())
+  if (!src_attribute.empty())
     image_candidates.push_back(
         ImageCandidate(src_attribute, 0, src_attribute.length(),
                        DescriptorParsingResult(), ImageCandidate::kSrcOrigin));
@@ -531,7 +532,7 @@ String BestFitSourceForImageAttributes(float device_scale_factor,
   Vector<ImageCandidate> image_candidates;
   image_candidates.push_back(srcset_image_candidate);
 
-  if (!src_attribute.IsEmpty())
+  if (!src_attribute.empty())
     image_candidates.push_back(
         ImageCandidate(src_attribute, 0, src_attribute.length(),
                        DescriptorParsingResult(), ImageCandidate::kSrcOrigin));

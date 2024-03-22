@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/models/simple_menu_model.h"
 
 namespace ash {
@@ -33,14 +34,18 @@ class ASH_EXPORT ShelfContextMenuModel : public ui::SimpleMenuModel,
     MENU_ALIGNMENT_LEFT = 502,
     MENU_ALIGNMENT_RIGHT = 503,
     MENU_ALIGNMENT_BOTTOM = 504,
-    MENU_CHANGE_WALLPAPER = 505,
+    // Note: Value 505 was for MENU_CHANGE_WALLPAPER. Do not reuse.
     MENU_PERSONALIZATION_HUB = 506,
     MENU_HIDE_CONTINUE_SECTION = 507,
     MENU_SHOW_CONTINUE_SECTION = 508,
+    MENU_HIDE_DESK_NAME = 509,
+    MENU_SHOW_DESK_NAME = 510,
     MENU_ASH_END
   };
 
-  ShelfContextMenuModel(ShelfItemDelegate* delegate, int64_t display_id);
+  ShelfContextMenuModel(ShelfItemDelegate* delegate,
+                        int64_t display_id,
+                        bool menu_in_shelf);
 
   ShelfContextMenuModel(const ShelfContextMenuModel&) = delete;
   ShelfContextMenuModel& operator=(const ShelfContextMenuModel&) = delete;
@@ -55,8 +60,9 @@ class ASH_EXPORT ShelfContextMenuModel : public ui::SimpleMenuModel,
   // Add shelf auto-hide, shelf alignment, and wallpaper context menu items.
   void AddShelfAndWallpaperItems();
 
-  ShelfItemDelegate* delegate_;
+  raw_ptr<ShelfItemDelegate, ExperimentalAsh> delegate_;
   const int64_t display_id_;
+  const bool menu_in_shelf_;
   std::unique_ptr<ui::SimpleMenuModel> alignment_submenu_;
 };
 

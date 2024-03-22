@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ scoped_refptr<FakeRasterSource> FakeRasterSource::CreateFilled(
   PaintFlags salmon_pink_flags;
   salmon_pink_flags.setColor(SK_ColorRED);
   salmon_pink_flags.setBlendMode(SkBlendMode::kMultiply);
-  salmon_pink_flags.setAlpha(128);
+  salmon_pink_flags.setAlphaf(0.5f);
   recording_source->add_draw_rect_with_flags(gfx::Rect(size),
                                              salmon_pink_flags);
 

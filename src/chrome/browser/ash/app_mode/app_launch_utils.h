@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,10 @@
 #define CHROME_BROWSER_ASH_APP_MODE_APP_LAUNCH_UTILS_H_
 
 #include <string>
+#include "chrome/browser/ash/app_mode/kiosk_app_launcher.h"
+#include "chrome/browser/ash/app_mode/kiosk_app_types.h"
+#include "chrome/browser/ash/app_mode/lacros_launcher.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefService;
 class Profile;
@@ -16,12 +20,8 @@ class CommandLine;
 
 namespace ash {
 
-class KioskAppId;
-
-// Attempts to launch the app given by |kiosk_app_id| in app mode
-// or exit on failure. This function will not show any launch UI
-// during the launch. Use StartupAppLauncher for finer control
-// over the app launch processes.
+// Attempts to launch the app given by `kiosk_app_id` in app mode or exit on
+// failure. This function will not show any launch UI during the launch.
 void LaunchAppOrDie(Profile* profile, const KioskAppId& kiosk_app_id);
 
 // Removes obsolete preferences left out by previous user session;
@@ -33,12 +33,9 @@ void SetEphemeralKioskPreferencesListForTesting(std::vector<std::string>*);
 bool ShouldAutoLaunchKioskApp(const base::CommandLine& command_line,
                               PrefService* local_state);
 
+void CreateKioskSystemSession(const KioskAppId& kiosk_app_id,
+                              Profile* profile,
+                              const absl::optional<std::string>& app_name);
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration of
-// //chrome/browser/ash is finished.
-namespace chromeos {
-using ::ash::LaunchAppOrDie;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_APP_LAUNCH_UTILS_H_

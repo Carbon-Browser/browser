@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -10,9 +10,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/path_service.h"
 #include "base/strings/string_piece.h"
@@ -23,6 +23,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/test_safe_browsing_database_helper.h"
 #include "chrome/browser/subresource_filter/subresource_filter_profile_context_factory.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/chrome_test_utils.h"
 #include "components/adblock/core/features.h"
@@ -73,10 +74,10 @@ MockSubresourceFilterObserver::MockSubresourceFilterObserver(
 MockSubresourceFilterObserver::~MockSubresourceFilterObserver() = default;
 
 SubresourceFilterBrowserTest::SubresourceFilterBrowserTest() {
-  // Disable kAdblockPlusFeature as it interferes with SubresourceFilter by
-  // design.
-  scoped_feature_list_.InitWithFeatures({kAdTagging},
-                                        {adblock::kAdblockPlusFeature});
+  scoped_feature_list_.InitWithFeatures(
+      /*enabled_features=*/{kAdTagging},
+      /*disabled_features=*/{features::kHttpsUpgrades,
+                             adblock::kAdblockPlusFeature});
 }
 
 SubresourceFilterBrowserTest::~SubresourceFilterBrowserTest() = default;
@@ -205,15 +206,13 @@ void SubresourceFilterBrowserTest::ExpectFramesIncludedInLayout(
 bool SubresourceFilterBrowserTest::IsDynamicScriptElementLoaded(
     content::RenderFrameHost* rfh) {
   DCHECK(rfh);
-  return content::EvalJs(rfh, "insertScriptElementAndReportSuccess()",
-                         content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+  return content::EvalJs(rfh, "insertScriptElementAndReportSuccess()")
       .ExtractBool();
 }
 
 void SubresourceFilterBrowserTest::InsertDynamicFrameWithScript() {
   EXPECT_EQ(true, content::EvalJs(web_contents()->GetPrimaryMainFrame(),
-                                  "insertFrameWithScriptAndNotify()",
-                                  content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+                                  "insertFrameWithScriptAndNotify()"));
 }
 
 void SubresourceFilterBrowserTest::NavigateFromRendererSide(const GURL& url) {
@@ -320,7 +319,7 @@ SubresourceFilterPrerenderingBrowserTest::
     ~SubresourceFilterPrerenderingBrowserTest() = default;
 
 void SubresourceFilterPrerenderingBrowserTest::SetUp() {
-  prerender_helper_.SetUp(embedded_test_server());
+  prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
   SubresourceFilterListInsertingBrowserTest::SetUp();
 }
 

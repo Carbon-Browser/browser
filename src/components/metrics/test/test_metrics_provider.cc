@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,16 @@ void TestMetricsProvider::ProvideCurrentSessionData(
 void TestMetricsProvider::ProvideSystemProfileMetrics(
     SystemProfileProto* system_profile_proto) {
   provide_system_profile_metrics_called_ = true;
+}
+
+void TestMetricsProvider::RecordInitialHistogramSnapshots(
+    base::HistogramSnapshotManager* snapshot_manager) {
+  record_initial_histogram_snapshots_called_ = true;
+}
+
+void TestMetricsProvider::RecordHistogramSnapshots(
+    base::HistogramSnapshotManager* snapshot_manager) {
+  record_histogram_snapshots_called_ = true;
 }
 
 }  // namespace metrics

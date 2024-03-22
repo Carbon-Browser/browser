@@ -1,24 +1,20 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/import_data_table_view_controller.h"
 
-#include "base/mac/foundation_util.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/apple/foundation_util.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_model.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_image_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
-#import "ios/chrome/browser/ui/table_view/table_view_model.h"
-#include "ios/chrome/grit/ios_chromium_strings.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "testing/gtest/include/gtest/gtest.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
+#import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 
@@ -50,12 +46,13 @@ typedef NS_ENUM(NSInteger, ItemIndex) {
 
 namespace {
 
-class ImportDataTableViewControllerTest : public ChromeTableViewControllerTest {
+class ImportDataTableViewControllerTest
+    : public LegacyChromeTableViewControllerTest {
  public:
   ImportDataControllerTestDelegate* delegate() { return delegate_; }
 
  protected:
-  ChromeTableViewController* InstantiateController() override {
+  LegacyChromeTableViewController* InstantiateController() override {
     delegate_ = [[ImportDataControllerTestDelegate alloc] init];
     return [[ImportDataTableViewController alloc]
         initWithDelegate:delegate_
@@ -65,7 +62,8 @@ class ImportDataTableViewControllerTest : public ChromeTableViewControllerTest {
 
   void SelectRowAtIndex(NSInteger itemIndex) {
     ImportDataTableViewController* import_data_controller =
-        base::mac::ObjCCastStrict<ImportDataTableViewController>(controller());
+        base::apple::ObjCCastStrict<ImportDataTableViewController>(
+            controller());
     NSIndexPath* itemPath = [NSIndexPath indexPathForItem:itemIndex
                                                 inSection:1];
     [import_data_controller tableView:[import_data_controller tableView]
@@ -111,17 +109,17 @@ TEST_F(ImportDataTableViewControllerTest, TestUniqueBoxChecked) {
   CreateController();
 
   ImportDataTableViewController* import_data_controller =
-      base::mac::ObjCCastStrict<ImportDataTableViewController>(controller());
+      base::apple::ObjCCastStrict<ImportDataTableViewController>(controller());
   NSIndexPath* importIndexPath =
       [NSIndexPath indexPathForItem:kImportDataItemIndex inSection:1];
   NSIndexPath* keepSeparateIndexPath =
       [NSIndexPath indexPathForItem:kKeepDataSeparateItemIndex inSection:1];
   SettingsImageDetailTextItem* importItem =
-      base::mac::ObjCCastStrict<SettingsImageDetailTextItem>(
+      base::apple::ObjCCastStrict<SettingsImageDetailTextItem>(
           [import_data_controller.tableViewModel
               itemAtIndexPath:importIndexPath]);
   SettingsImageDetailTextItem* keepSeparateItem =
-      base::mac::ObjCCastStrict<SettingsImageDetailTextItem>(
+      base::apple::ObjCCastStrict<SettingsImageDetailTextItem>(
           [import_data_controller.tableViewModel
               itemAtIndexPath:keepSeparateIndexPath]);
   EXPECT_EQ(UITableViewCellAccessoryNone, importItem.accessoryType);

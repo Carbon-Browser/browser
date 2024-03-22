@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,15 +25,9 @@ ServiceWorkerContainer* NavigatorServiceWorker::From(LocalDOMWindow& window) {
 // static
 ServiceWorkerContainer* NavigatorServiceWorker::serviceWorker(
     ScriptState* script_state,
-    Navigator& navigator,
+    Navigator&,
     ExceptionState& exception_state) {
-  if (!navigator.DomWindow())
-    return nullptr;
-  LocalDOMWindow& window = *navigator.DomWindow();
-  DCHECK(ExecutionContext::From(script_state)
-             ->GetSecurityOrigin()
-             ->CanAccess(window.GetSecurityOrigin()));
-
+  LocalDOMWindow& window = *LocalDOMWindow::From(script_state);
   auto* container = From(window);
   if (!container) {
     String error_message;

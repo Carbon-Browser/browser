@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/fake_network_device_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 FakeNetworkDeviceHandler::FakeNetworkDeviceHandler() = default;
 
@@ -63,4 +63,4 @@ void FakeNetworkDeviceHandler::SetCellularPolicyAllowRoaming(
 void FakeNetworkDeviceHandler::SetUsbEthernetMacAddressSource(
     const std::string& source) {}
 
-}  // namespace chromeos
+}  // namespace ash

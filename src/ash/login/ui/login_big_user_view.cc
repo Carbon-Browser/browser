@@ -1,14 +1,20 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/login/ui/login_big_user_view.h"
 
+#include "ash/login/login_screen_controller.h"
 #include "ash/login/ui/login_constants.h"
 #include "ash/shell.h"
-#include "ash/style/default_color_constants.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
+#include "base/logging.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/account_id/account_id.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/views/background.h"
 #include "ui/views/layout/fill_layout.h"
@@ -40,8 +46,7 @@ LoginBigUserView::LoginBigUserView(
     const LoginUserInfo& user,
     const LoginAuthUserView::Callbacks& auth_user_callbacks,
     const LoginPublicAccountUserView::Callbacks& public_account_callbacks)
-    : NonAccessibleView(),
-      auth_user_callbacks_(auth_user_callbacks),
+    : auth_user_callbacks_(auth_user_callbacks),
       public_account_callbacks_(public_account_callbacks) {
   SetLayoutManager(std::make_unique<views::FillLayout>());
 
@@ -49,33 +54,38 @@ LoginBigUserView::LoginBigUserView(
   CreateChildView(user);
 
   observation_.Observe(Shell::Get()->wallpaper_controller());
-  // Adding the observer will not run OnWallpaperBlurChanged; run it now to set
-  // the initial state.
-  OnWallpaperBlurChanged();
 }
 
 LoginBigUserView::~LoginBigUserView() = default;
 
 void LoginBigUserView::CreateChildView(const LoginUserInfo& user) {
-  if (IsPublicAccountUser(user))
+  if (IsPublicAccountUser(user)) {
     CreatePublicAccount(user);
-  else
+  } else {
     CreateAuthUser(user);
+  }
 }
 
 void LoginBigUserView::UpdateForUser(const LoginUserInfo& user) {
   // Rebuild child view for the following swap case:
   // 1. Public Account -> Auth User
   // 2. Auth User      -> Public Account
-  if (IsPublicAccountUser(user) != IsPublicAccountUser(GetCurrentUser()))
+  if (IsPublicAccountUser(user) != IsPublicAccountUser(GetCurrentUser())) {
+    if (Shell::Get()->login_screen_controller()->IsAuthenticating()) {
+      // TODO(b/276246832): We should avoid re-layouting during Authentication.
+      LOG(WARNING)
+          << "LoginBigUserView::UpdateForUser called during Authentication.";
+    }
     CreateChildView(user);
+  }
 
   DCHECK(OnlyOneSet(public_account_, auth_user_));
   if (public_account_) {
     public_account_->UpdateForUser(user);
   }
-  if (auth_user_)
+  if (auth_user_) {
     auth_user_->UpdateForUser(user);
+  }
 }
 
 const LoginUserInfo& LoginBigUserView::GetCurrentUser() const {
@@ -110,19 +120,21 @@ void LoginBigUserView::RequestFocus() {
   return auth_user_->RequestFocus();
 }
 
-
 void LoginBigUserView::OnWallpaperBlurChanged() {
-  if (Shell::Get()->wallpaper_controller()->IsWallpaperBlurredForLockState()) {
+  if (Shell::Get()->wallpaper_controller()->IsWallpaperBlurredForLockState() ||
+      Shell::Get()->session_controller()->GetSessionState() !=
+          session_manager::SessionState::LOCKED) {
     SetPaintToLayer(ui::LayerType::LAYER_NOT_DRAWN);
     SetBackground(nullptr);
   } else {
     SetPaintToLayer();
     layer()->SetFillsBoundsOpaquely(false);
-    SetBackground(views::CreateBackgroundFromPainter(
-        views::Painter::CreateSolidRoundRectPainter(
-            AshColorProvider::Get()->GetShieldLayerColor(
-                AshColorProvider::ShieldLayerType::kShield80),
-            login::kNonBlurredWallpaperBackgroundRadiusDp)));
+    const ui::ColorId background_color_id =
+        chromeos::features::IsJellyEnabled()
+            ? static_cast<ui::ColorId>(cros_tokens::kCrosSysScrim2)
+            : kColorAshShieldAndBase80;
+    SetBackground(views::CreateThemedRoundedRectBackground(
+        background_color_id, login::kNonBlurredWallpaperBackgroundRadiusDp, 0));
   }
 }
 
@@ -133,7 +145,7 @@ void LoginBigUserView::CreateAuthUser(const LoginUserInfo& user) {
   auth_user_ = new LoginAuthUserView(user, auth_user_callbacks_);
   delete public_account_;
   public_account_ = nullptr;
-  AddChildView(auth_user_);
+  AddChildView(auth_user_.get());
 }
 
 void LoginBigUserView::CreatePublicAccount(const LoginUserInfo& user) {
@@ -144,7 +156,10 @@ void LoginBigUserView::CreatePublicAccount(const LoginUserInfo& user) {
       new LoginPublicAccountUserView(user, public_account_callbacks_);
   delete auth_user_;
   auth_user_ = nullptr;
-  AddChildView(public_account_);
+  AddChildView(public_account_.get());
 }
+
+BEGIN_METADATA(LoginBigUserView)
+END_METADATA
 
 }  // namespace ash

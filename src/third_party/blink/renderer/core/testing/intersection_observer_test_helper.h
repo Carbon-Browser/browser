@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,19 +33,24 @@ class TestIntersectionObserverDelegate : public IntersectionObserverDelegate {
     call_count_++;
     entries_.AppendVector(entries);
   }
+  bool NeedsInitialObservationWithDetachedTarget() const override {
+    return true;
+  }
   ExecutionContext* GetExecutionContext() const override {
     return document_->GetExecutionContext();
   }
   int CallCount() const { return call_count_; }
   int EntryCount() const { return entries_.size(); }
-  const IntersectionObserverEntry* LastEntry() const { return entries_.back(); }
+  const IntersectionObserverEntry* LastEntry() const {
+    return entries_.back().Get();
+  }
   void Clear() {
     entries_.clear();
     call_count_ = 0;
   }
-  PhysicalRect LastIntersectionRect() const {
-    if (entries_.IsEmpty())
-      return PhysicalRect();
+  gfx::RectF LastIntersectionRect() const {
+    if (entries_.empty())
+      return gfx::RectF();
     const IntersectionGeometry& geometry = entries_.back()->GetGeometry();
     return geometry.IntersectionRect();
   }

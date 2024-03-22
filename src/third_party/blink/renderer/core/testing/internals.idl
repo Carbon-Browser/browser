@@ -24,10 +24,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-[
-    DoNotCheckConstants
-] interface Internals {
-    GCObservation observeGC(any observed);
+interface Internals {
+    [RaisesException] GCObservation observeGC(any observed);
 
     [RaisesException] DOMString elementLayoutTreeAsText(Element element);
     boolean isPreloaded(DOMString url);
@@ -35,16 +33,20 @@
     boolean isLoading(DOMString url);
     boolean isLoadingFromMemoryCache(DOMString url);
 
-    // Call this function with the URL of a resource that has not yet been
-    // fetched. It returns a promise that resolves with the initial priority
+    // Call this function with the URL of a resource.
+    // It returns a promise that resolves with the initial priority
     // of the request, once it has been made.
     [CallWith=ScriptState] Promise<unsigned long> getInitialResourcePriority(DOMString url, Document document);
+
+    // Similar to getInitialResourcePriority, but doesn't query the priority of
+    // an already loaded resource.
+    [CallWith=ScriptState] Promise<unsigned long> getInitialResourcePriorityOfNewLoad(DOMString url, Document document);
 
     DOMString getResourceHeader(DOMString url, DOMString header, Document document);
 
     boolean doesWindowHaveUrlFragment(Window window);
 
-    CSSStyleDeclaration computedStyleIncludingVisitedInfo(Node node);
+    CSSStyleDeclaration computedStyleIncludingVisitedInfo(Element element);
 
     ShadowRoot createUserAgentShadowRoot(Element host);
 
@@ -62,6 +64,7 @@
     Node parentTreeScope(Node node);
     [RaisesException] unsigned short compareTreeScopePosition(Node treeScope1, Node treeScope2);
     [RaisesException] unsigned long updateStyleAndReturnAffectedElementCount();
+    [RaisesException] unsigned long styleForElementCount();
     [RaisesException] unsigned long needsLayoutCount();
     [RaisesException] unsigned long layoutCountForTesting();
     [RaisesException] unsigned long hitTestCount(Document document);
@@ -104,6 +107,7 @@
     DOMRectReadOnly boundingBox(Element element);
 
     [RaisesException] void setMarker(Document document, Range range, DOMString markerType);
+    [RaisesException] void removeMarker(Document document, Range range, DOMString markerType);
     [RaisesException] unsigned long markerCountForNode(Text text, DOMString markerType);
     unsigned long activeMarkerCountForNode(Text text);
     [RaisesException] Range markerRangeForNode(Text text, DOMString markerType, unsigned long index);
@@ -126,7 +130,6 @@
     [RaisesException] DOMString suggestedValue(Element inputElement);
     [RaisesException] void setSuggestedValue(Element inputElement, DOMString value);
     [RaisesException] void setAutofilledValue(Element inputElement, DOMString value);
-    [RaisesException] void setEditingValue(Element inputElement, DOMString value);
     [RaisesException] void setAutofilled(Element inputElement, boolean enabled);
     [RaisesException] void setSelectionRangeForNumberType(Element inputElement, unsigned long start, unsigned long end);
 
@@ -139,12 +142,16 @@
     [RaisesException] Node touchNodeAdjustedToBestClickableNode(long x, long y, long width, long height, Document document);
     [RaisesException] DOMPoint touchPositionAdjustedToBestContextMenuNode(long x, long y, long width, long height, Document document);
     [RaisesException] Node touchNodeAdjustedToBestContextMenuNode(long x, long y, long width, long height, Document document);
+    [RaisesException] Node touchNodeAdjustedToBestStylusWritableNode(long x, long y, long width, long height, Document document);
 
     [RaisesException] long lastSpellCheckRequestSequence(Document document);
     [RaisesException] long lastSpellCheckProcessedSequence(Document document);
+    [RaisesException] long spellCheckedTextLength(Document document);
     [RaisesException] void cancelCurrentSpellCheckRequest(Document document);
     [RaisesException] DOMString idleTimeSpellCheckerState(Document document);
     [RaisesException] void runIdleTimeSpellChecker(Document document);
+
+    [RaisesException] boolean hasLastEditCommand(Document document);
 
     sequence<DOMString> userPreferredLanguages();
     void setUserPreferredLanguages(sequence<DOMString> languages);
@@ -168,7 +175,8 @@
     DOMString svgNamespace();
     sequence<DOMString> svgTags();
 
-    [RaisesException] NodeList nodesFromRect(Document document, long x, long y,
+    [RaisesException, CallWith=ScriptState] NodeList nodesFromRect(
+        Document document, long x, long y,
         unsigned long width, unsigned long height, boolean ignoreClipping,
         boolean allowChildFrameContent);
 
@@ -180,8 +188,6 @@
     void setMockHyphenation(DOMString locale);
 
     unsigned long numberOfScrollableAreas(Document document);
-
-    boolean isPageBoxVisible(Document document, long pageNumber);
 
     readonly attribute InternalSettings settings;
     readonly attribute InternalRuntimeFlags runtimeFlags;
@@ -210,8 +216,6 @@
     sequence<DOMString> allIconURLs(Document document);
     [RaisesException] long numberOfPages(optional double pageWidthInPixels = 800, optional double pageHeightInPixels = 600);
     [RaisesException] DOMString pageProperty(DOMString propertyName, unsigned long pageNumber);
-    [RaisesException] DOMString pageSizeAndMarginsInPixels(unsigned long pageIndex, long width, long height, long marginTop, long marginRight, long marginBottom, long marginLeft);
-
     [RaisesException] float pageScaleFactor();
     [RaisesException] void setPageScaleFactor(float scaleFactor);
     [RaisesException] void setPageScaleFactorLimits(float minScaleFactor, float maxScaleFactor);
@@ -278,6 +282,8 @@
     long selectPopupItemStyleFontHeight(Node select, long itemIndex);
     void resetTypeAheadSession(HTMLSelectElement select);
 
+    void resetSelectListTypeAheadSession(HTMLSelectListElement selectlist);
+
     StaticSelection getDragCaret();
     [RaisesException] StaticSelection getSelectionInFlatTree(Window window);
     // TODO(editing-dev): We should change |visibleSelection*| to
@@ -324,13 +330,14 @@
     unsigned long canvasFontCacheMaxFonts();
     void forceLoseCanvasContext(HTMLCanvasElement canvas, DOMString contextType);
     void forceLoseCanvasContext(OffscreenCanvas offscreencanvas, DOMString context_type);
+    void disableCanvasAcceleration(HTMLCanvasElement canvas);
 
     DictionaryTest dictionaryTest();
     RecordTest recordTest();
     SequenceTest sequenceTest();
     UnionTypesTest unionTypesTest();
+    InternalsUkmRecorder initializeUKMRecorder();
     CallbackFunctionTest callbackFunctionTest();
-    [RaisesException] void setScrollChain(ScrollState scrollState, sequence<Element> elements);
 
     DOMString selectedHTMLForClipboard();
     DOMString selectedTextForClipboard();
@@ -395,10 +402,6 @@
     // be reported as raster under-invalidations.
     void simulateRasterUnderInvalidations(boolean enable);
 
-    // The number of calls to update the blink lifecycle (see:
-    // LocalFrameView::UpdateLifecyclePhasesInternal).
-    unsigned long LifecycleUpdateCount();
-
     // Disable the 'delay' option for IntersectionObserver, so that observations
     // are recomputed on every frame.  This eliminates the need to add
     // setTimeout(..., delay_ms) calls to web tests to wait for notifications
@@ -417,15 +420,7 @@
     // element mechanism.
     [RaisesException] void addEmbedderCustomElementName(DOMString name);
 
-    // https://html.spec.whatwg.org/C/#resolve-a-module-specifier
-    // Throws TypeError on error.
-    // Used for testing Import Maps https://github.com/domenic/import-maps
-    [RaisesException] DOMString resolveModuleSpecifier(DOMString specifier, DOMString base_url, Document document);
-
     // Returns the current serialized import map of the Document.
-    // TODO(crbug.com/927181): Currently this returns the "imports" value,
-    // because Blink doesn't support scopes yet. Update this once scopes are
-    // implemented.
     [RaisesException] DOMString getParsedImportMap(Document document);
 
     // Sets the scale for devtools device emulation.
@@ -443,7 +438,7 @@
     // Request generation of a Reporting report.
     void generateTestReport(DOMString message);
 
-    [RaisesException] void setIsAdSubframe(HTMLIFrameElement iframe);
+    [RaisesException] void setIsAdFrame(Document target_doc);
 
     [RaisesException, CallWith=ScriptState] ReadableStream createReadableStream(long queueSize, DOMString optimizer);
     // The return value consists of a WritableStream (.stream) and a promise of
@@ -451,4 +446,13 @@
     [RaisesException, CallWith=ScriptState] any createWritableStreamAndSink(long queueSize, DOMString optimizer);
 
     void setAllowPerChunkTransferring(ReadableStream stream);
+
+    void setBackForwardCacheRestorationBufferSize(long maxSize);
+
+    sequence<DOMString> getCreatorScripts(HTMLImageElement img);
+
+    // Wait until predicted LCP is painted. Never called if prediction is
+    // failed. Returns element_locator format string.
+    [CallWith=ScriptState] Promise<DOMString> LCPPrediction(Document document);
+
 };

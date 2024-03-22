@@ -41,25 +41,38 @@
 #include <unicode/char16ptr.h>
 #endif
 
-namespace blink {
+namespace {
 
 // http://www.whatwg.org/specs/web-apps/current-work/multipage/states-of-the-type-attribute.html#valid-e-mail-address
-static const char kLocalPartCharacters[] =
+const char kLocalPartCharacters[] =
     "abcdefghijklmnopqrstuvwxyz0123456789!#$%&'*+/=?^_`{|}~.-";
-static const char kEmailPattern[] =
+const char kEmailPattern[] =
     "[a-z0-9!#$%&'*+/=?^_`{|}~.-]+"  // local part
     "@"
     "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"  // domain part
     "(?:\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*";
 
 // RFC5321 says the maximum total length of a domain name is 255 octets.
-static const int32_t kMaximumDomainNameLength = 255;
-// Use the same option as in url/url_canon_icu.cc
-static const int32_t kIdnaConversionOption = UIDNA_CHECK_BIDI;
+const int32_t kMaximumDomainNameLength = 255;
 
-ScriptRegexp* EmailInputType::CreateEmailRegexp() {
-  return MakeGarbageCollected<ScriptRegexp>(kEmailPattern,
+// Use the same option as in url/url_canon_icu.cc
+// TODO(crbug.com/694157): Change the options if UseIDNA2008NonTransitional flag
+// is enabled.
+const int32_t kIdnaConversionOption = UIDNA_CHECK_BIDI;
+
+}  // namespace
+
+namespace blink {
+
+ScriptRegexp* EmailInputType::CreateEmailRegexp(v8::Isolate* isolate) {
+  return MakeGarbageCollected<ScriptRegexp>(isolate, kEmailPattern,
                                             kTextCaseUnicodeInsensitive);
+}
+
+Vector<String> EmailInputType::ParseMultipleValues(const String& value) {
+  Vector<String> values;
+  value.Split(',', true, values);
+  return values;
 }
 
 String EmailInputType::ConvertEmailAddressToASCII(const ScriptRegexp& regexp,
@@ -136,7 +149,7 @@ static bool IsInvalidDomainCharacter(UChar ch) {
 }
 
 static bool CheckValidDotUsage(const String& domain) {
-  if (domain.IsEmpty())
+  if (domain.empty())
     return true;
   if (domain[0] == '.' || domain[domain.length() - 1] == '.')
     return false;
@@ -156,7 +169,7 @@ bool EmailInputType::IsValidEmailAddress(const ScriptRegexp& regexp,
 }
 
 EmailInputType::EmailInputType(HTMLInputElement& element)
-    : BaseTextInputType(element) {}
+    : BaseTextInputType(Type::kEmail, element) {}
 
 void EmailInputType::CountUsage() {
   CountUsageIfVisible(WebFeature::kInputTypeEmail);
@@ -171,16 +184,12 @@ void EmailInputType::CountUsage() {
   }
 }
 
-const AtomicString& EmailInputType::FormControlType() const {
-  return input_type_names::kEmail;
-}
-
 // The return value is an invalid email address string if the specified string
 // contains an invalid email address. Otherwise, an empty string is returned.
 // If an empty string is returned, it means empty address is specified.
 // e.g. "foo@example.com,,bar@example.com" for multiple case.
 String EmailInputType::FindInvalidAddress(const String& value) const {
-  if (value.IsEmpty())
+  if (value.empty())
     return String();
   if (!GetElement().Multiple()) {
     return IsValidEmailAddress(GetElement().GetDocument().EnsureEmailRegexp(),
@@ -188,8 +197,7 @@ String EmailInputType::FindInvalidAddress(const String& value) const {
                ? String()
                : value;
   }
-  Vector<String> addresses;
-  value.Split(',', true, addresses);
+  Vector<String> addresses = ParseMultipleValues(value);
   for (const auto& address : addresses) {
     String stripped = StripLeadingAndTrailingHTMLSpaces(address);
     if (!IsValidEmailAddress(GetElement().GetDocument().EnsureEmailRegexp(),
@@ -210,7 +218,7 @@ bool EmailInputType::TypeMismatch() const {
 String EmailInputType::TypeMismatchText() const {
   String invalid_address = FindInvalidAddress(GetElement().Value());
   DCHECK(!invalid_address.IsNull());
-  if (invalid_address.IsEmpty()) {
+  if (invalid_address.empty()) {
     return GetLocale().QueryString(
         IDS_FORM_VALIDATION_TYPE_MISMATCH_EMAIL_EMPTY);
   }
@@ -225,11 +233,11 @@ String EmailInputType::TypeMismatchText() const {
   String unicode_address = ConvertEmailAddressToUnicode(invalid_address);
   String local_part = invalid_address.Left(at_index);
   String domain = invalid_address.Substring(at_index + 1);
-  if (local_part.IsEmpty())
+  if (local_part.empty())
     return GetLocale().QueryString(
         IDS_FORM_VALIDATION_TYPE_MISMATCH_EMAIL_EMPTY_LOCAL, at_sign,
         unicode_address);
-  if (domain.IsEmpty())
+  if (domain.empty())
     return GetLocale().QueryString(
         IDS_FORM_VALIDATION_TYPE_MISMATCH_EMAIL_EMPTY_DOMAIN, at_sign,
         unicode_address);
@@ -269,8 +277,7 @@ String EmailInputType::SanitizeValue(const String& proposed_value) const {
   String no_line_break_value = proposed_value.RemoveCharacters(IsHTMLLineBreak);
   if (!GetElement().Multiple())
     return StripLeadingAndTrailingHTMLSpaces(no_line_break_value);
-  Vector<String> addresses;
-  no_line_break_value.Split(',', true, addresses);
+  Vector<String> addresses = ParseMultipleValues(no_line_break_value);
   StringBuilder stripped_value;
   for (wtf_size_t i = 0; i < addresses.size(); ++i) {
     if (i > 0)
@@ -287,8 +294,7 @@ String EmailInputType::ConvertFromVisibleValue(
     return ConvertEmailAddressToASCII(
         GetElement().GetDocument().EnsureEmailRegexp(), sanitized_value);
   }
-  Vector<String> addresses;
-  sanitized_value.Split(',', true, addresses);
+  Vector<String> addresses = ParseMultipleValues(sanitized_value);
   StringBuilder builder;
   builder.ReserveCapacity(sanitized_value.length());
   for (wtf_size_t i = 0; i < addresses.size(); ++i) {
@@ -305,8 +311,7 @@ String EmailInputType::VisibleValue() const {
   if (!GetElement().Multiple())
     return ConvertEmailAddressToUnicode(value);
 
-  Vector<String> addresses;
-  value.Split(',', true, addresses);
+  Vector<String> addresses = ParseMultipleValues(value);
   StringBuilder builder;
   builder.ReserveCapacity(value.length());
   for (wtf_size_t i = 0; i < addresses.size(); ++i) {
@@ -315,6 +320,10 @@ String EmailInputType::VisibleValue() const {
     builder.Append(ConvertEmailAddressToUnicode(addresses[i]));
   }
   return builder.ToString();
+}
+
+void EmailInputType::MultipleAttributeChanged() {
+  GetElement().SetValueFromRenderer(SanitizeValue(GetElement().Value()));
 }
 
 }  // namespace blink

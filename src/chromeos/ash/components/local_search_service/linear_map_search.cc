@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,18 +11,16 @@
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/local_search_service/search_utils.h"
-#include "chromeos/components/string_matching/fuzzy_tokenized_string_match.h"
-#include "chromeos/components/string_matching/tokenized_string.h"
+#include "chromeos/ash/components/string_matching/fuzzy_tokenized_string_match.h"
+#include "chromeos/ash/components/string_matching/tokenized_string.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 namespace {
 
-using chromeos::string_matching::FuzzyTokenizedStringMatch;
-using chromeos::string_matching::TokenizedString;
-
+using string_matching::FuzzyTokenizedStringMatch;
+using string_matching::TokenizedString;
 using Positions = std::vector<local_search_service::Position>;
 using TokenizedStringWithId =
     std::pair<std::string, std::unique_ptr<TokenizedString>>;
@@ -53,13 +51,12 @@ bool IsItemRelevant(const TokenizedString& query,
   for (const auto& tag : search_tags) {
     FuzzyTokenizedStringMatch match;
     const double relevance =
-        match.Relevance(query, *(tag.second), true /* use_weighted_ratio */,
-                        false /* use_edit_distance */,
-                        0.9 /* partial_match_penalty_rate */, 0.1);
+        match.Relevance(query, *(tag.second), true /* use_weighted_ratio */);
     if (relevance >= relevance_threshold) {
       *relevance_score = relevance;
-      Position position;
-      position.content_id = tag.first;
+      // Initialize the `length` and `start` to 0, as they are currently not
+      // in-use by linear map search.
+      Position position(tag.first, 0, 0);
       positions->push_back(position);
       return true;
     }
@@ -193,5 +190,4 @@ std::vector<Result> LinearMapSearch::GetSearchResults(
   return results;
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

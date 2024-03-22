@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,4 +33,4 @@ class FontEnumerationDataSourceLinux : public FontEnumerationDataSource {
 
 }  // namespace content
 
-#endif  // CONTENT_BROWSER_FONT_ACCESS_FONT_ENUMERATION_CACHE_LINUX_H_
+#endif  // CONTENT_BROWSER_FONT_ACCESS_FONT_ENUMERATION_DATA_SOURCE_LINUX_H_

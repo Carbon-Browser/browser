@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ class KeepAliveStateObserver;
 // Note: BrowserProcessImpl registers to react on changes.
 // TestingBrowserProcess does not do it, meaning that the shutdown
 // sequence does not happen during unit tests.
+// Note: This is not thread-safe, and should only be used on the main thread.
 class KeepAliveRegistry {
  public:
   static KeepAliveRegistry* GetInstance();

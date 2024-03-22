@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "net/base/net_errors.h"
 #include "net/http/http_status_code.h"
-#include "services/network/public/cpp/cors/cors.h"
+#include "services/network/public/cpp/header_util.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
 namespace ash {
@@ -15,14 +15,14 @@ namespace quick_pair {
 FastPairHttpResult::FastPairHttpResult(
     const int net_error,
     const network::mojom::URLResponseHead* head) {
-  absl::optional<int> http_response_code;
+  std::optional<int> http_response_code;
   if (head && head->headers)
     http_response_code = head->headers->response_code();
   bool net_success = (net_error == net::OK ||
                       net_error == net::ERR_HTTP_RESPONSE_CODE_FAILURE) &&
                      http_response_code;
   bool http_success =
-      net_success && network::cors::IsOkStatus(*http_response_code);
+      net_success && network::IsSuccessfulStatus(*http_response_code);
   if (http_success) {
     type_ = Type::kSuccess;
   } else if (net_success) {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,30 @@ typedef NS_ENUM(NSInteger, FeedType) {
   FeedTypeFollowing
 };
 
+// Enum representing the reasons why the feed would be started.
+typedef NS_ENUM(NSUInteger, FeedStartReason) {
+  FeedStartReasonLaunch = 0,
+  FeedStartReasonAccountSwitch,
+  FeedStartReasonUserRequested,
+  FeedStartReasonOther,
+};
+
+// Enum representing the display strategy for reloads, indicating whether the
+// content is served from the cache or the server.
+typedef NS_ENUM(NSUInteger, FeedDisplayStrategy) {
+  FeedDisplayStrategyServer = 0,
+  FeedDisplayStrategyCache,
+  FeedDisplayStrategyOther,
+};
+
+// Enum representing the different types of feed updates.
+typedef NS_ENUM(NSInteger, FeedUpdateType) {
+  FeedUpdateTypeDefault = 0,
+  FeedUpdateTypeItemReloaded,
+  FeedUpdateTypeBackgroundFetch,
+  FeedUpdateTypeResumeFromBackground,
+};
+
 // The types of sorting for the Following feed.
 typedef NS_ENUM(NSInteger, FollowingFeedSortType) {
   // Does not provide a sort type. Used for non-Following feeds.
@@ -25,5 +49,8 @@ typedef NS_ENUM(NSInteger, FollowingFeedSortType) {
 
 // The identifier used to register and schedule background feed refresh tasks.
 extern NSString* const kFeedBackgroundRefreshTaskIdentifier;
+
+// The user defaults key indicating if the user has ever engaged with a feed.
+extern NSString* const kEngagedWithFeedKey;
 
 #endif  // IOS_CHROME_BROWSER_DISCOVER_FEED_FEED_CONSTANTS_H_

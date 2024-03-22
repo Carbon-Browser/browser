@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,8 @@ public class ReparentingDelegateFactory {
      *         dependencies for {@link ReparentingTask} to reparent a Tab.
      */
     public static ReparentingTask.Delegate createReparentingTaskDelegate(
-            final CompositorViewHolder compositorViewHolder, final WindowAndroid windowAndroid,
+            final CompositorViewHolder compositorViewHolder,
+            final WindowAndroid windowAndroid,
             TabDelegateFactory tabDelegateFactory) {
         return new ReparentingTask.Delegate() {
             @Override
@@ -51,8 +52,8 @@ public class ReparentingDelegateFactory {
             }
 
             @Override
-            public boolean isNTPUrl(GURL url) {
-                return UrlUtilities.isNTPUrl(url);
+            public boolean isNtpUrl(GURL url) {
+                return UrlUtilities.isNtpUrl(url);
             }
         };
     }

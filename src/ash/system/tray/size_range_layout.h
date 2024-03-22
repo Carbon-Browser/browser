@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/layout/layout_manager.h"
 
@@ -102,7 +103,7 @@ class ASH_EXPORT SizeRangeLayout : public views::LayoutManager {
   void ClampSizeToRange(gfx::Size* size) const;
 
   // The host View that this has been installed on.
-  views::View* host_ = nullptr;
+  raw_ptr<views::View, ExperimentalAsh> host_ = nullptr;
 
   // The layout manager that actually performs the layout.
   std::unique_ptr<views::LayoutManager> layout_manager_;

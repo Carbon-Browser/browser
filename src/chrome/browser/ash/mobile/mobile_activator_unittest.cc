@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
@@ -48,7 +49,7 @@ class TestMobileActivator : public MobileActivator {
   TestMobileActivator(const TestMobileActivator&) = delete;
   TestMobileActivator& operator=(const TestMobileActivator&) = delete;
 
-  virtual ~TestMobileActivator() {}
+  ~TestMobileActivator() override {}
 
   MOCK_METHOD3(ChangeState,
                void(const NetworkState*,
@@ -61,7 +62,8 @@ class TestMobileActivator : public MobileActivator {
   MOCK_CONST_METHOD0(HasRecentCellularPlanPayment, bool(void));
   MOCK_METHOD1(ConnectNetwork, void(const NetworkState*));
 
-  virtual const NetworkState* GetNetworkState(const std::string& service_path) {
+  const NetworkState* GetNetworkState(
+      const std::string& service_path) override {
     return cellular_network_;
   }
 
@@ -90,7 +92,7 @@ class TestMobileActivator : public MobileActivator {
  private:
   void DCheckOnThread(const BrowserThread::ID id) const {}
 
-  NetworkState* cellular_network_;
+  raw_ptr<NetworkState, ExperimentalAsh> cellular_network_;
 };
 
 class MobileActivatorTest : public testing::Test {
@@ -127,7 +129,7 @@ class MobileActivatorTest : public testing::Test {
   }
 
   base::test::SingleThreadTaskEnvironment task_environment_;
-  chromeos::NetworkHandlerTestHelper network_handler_test_helper_;
+  NetworkHandlerTestHelper network_handler_test_helper_;
   NetworkState cellular_network_;
   TestMobileActivator mobile_activator_;
 };
@@ -151,7 +153,7 @@ TEST_F(MobileActivatorTest, OTANoNetworkConnection) {
   // Make sure if we don't have a network connection, the mobile activator
   // connects to the network.
   EXPECT_CALL(mobile_activator_, GetDefaultNetwork())
-      .WillRepeatedly(Return(static_cast<NetworkState*>(NULL)));
+      .WillRepeatedly(Return(static_cast<NetworkState*>(nullptr)));
   EXPECT_CALL(mobile_activator_, ConnectNetwork(&cellular_network_));
   set_connection_state(shill::kStateIdle);
   set_network_activation_type(shill::kActivationTypeOTA);

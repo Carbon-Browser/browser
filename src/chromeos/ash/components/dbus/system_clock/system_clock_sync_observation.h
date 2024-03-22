@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
@@ -70,7 +71,7 @@ class COMPONENT_EXPORT(SYSTEM_CLOCK) SystemClockSyncObservation
   // SystemClockClient::Observer:
   void SystemClockUpdated() override;
 
-  SystemClockClient* const system_clock_client_;
+  const raw_ptr<SystemClockClient, ExperimentalAsh> system_clock_client_;
 
   // The callback to be called when the system clock has been synchronized or
   // the timeout tracked by `timeout_timer_` has been reached.

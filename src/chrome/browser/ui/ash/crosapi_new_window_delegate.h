@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_ASH_CROSAPI_NEW_WINDOW_DELEGATE_H_
 
 #include "ash/public/cpp/new_window_delegate.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "components/exo/wm_helper.h"
@@ -32,7 +33,9 @@ class CrosapiNewWindowDelegate : public ash::NewWindowDelegate {
       aura::Window* source_window,
       const ui::OSExchangeData& drop_data,
       NewWindowForDetachingTabCallback closure) override;
-  void OpenUrl(const GURL& url, OpenUrlFrom from) override;
+  void OpenUrl(const GURL& url,
+               OpenUrlFrom from,
+               Disposition disposition) override;
   void OpenCalculator() override;
   void OpenFileManager() override;
   void OpenDownloadsFolder() override;
@@ -40,6 +43,7 @@ class CrosapiNewWindowDelegate : public ash::NewWindowDelegate {
   void OpenGetHelp() override;
   void RestoreTab() override;
   void ShowKeyboardShortcutViewer() override;
+  void ShowShortcutCustomizationApp() override;
   void ShowTaskManager() override;
   void OpenDiagnostics() override;
   void OpenFeedbackPage(FeedbackSource source,
@@ -59,6 +63,7 @@ class CrosapiNewWindowDelegate : public ash::NewWindowDelegate {
 
     // aura::WindowObserver overrides.
     void OnWindowVisibilityChanged(aura::Window* window, bool visible) override;
+    void OnWindowDestroying(aura::Window* window) override;
 
     // WMHelper::ExoWindowObserver overrides.
     void OnExoWindowCreated(aura::Window* window) override;
@@ -66,7 +71,7 @@ class CrosapiNewWindowDelegate : public ash::NewWindowDelegate {
     void SetWindowID(const std::string& window_id);
 
    private:
-    CrosapiNewWindowDelegate* owner_;
+    raw_ptr<CrosapiNewWindowDelegate, ExperimentalAsh> owner_;
 
     // Observes windows launched after window tab-drop request.
     base::ScopedMultiSourceObservation<aura::Window, aura::WindowObserver>
@@ -92,7 +97,7 @@ class CrosapiNewWindowDelegate : public ash::NewWindowDelegate {
 
   // Not owned. Practically, this should point to ChromeNewWindowClient in
   // production.
-  ash::NewWindowDelegate* const delegate_;
+  const raw_ptr<ash::NewWindowDelegate, ExperimentalAsh> delegate_;
 
   std::unique_ptr<WindowObserver> window_observer_;
 };

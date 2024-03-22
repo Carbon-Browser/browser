@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,6 @@ NavigationPresence GetNavigationPresence(
     // (will fall through to the NOTREACHED() below).
     case UserEventSpecifics::kLanguageDetectionEvent:
     case UserEventSpecifics::kTranslationEvent:
-    case UserEventSpecifics::kUserConsent:
     case UserEventSpecifics::EVENT_NOT_SET:
       break;
   }
@@ -78,7 +77,6 @@ EventTypeForUMA GetEventTypeForUMA(UserEventSpecifics::EventCase event_case) {
     // (will fall through to the NOTREACHED() below).
     case UserEventSpecifics::kLanguageDetectionEvent:
     case UserEventSpecifics::kTranslationEvent:
-    case UserEventSpecifics::kUserConsent:
     case UserEventSpecifics::EVENT_NOT_SET:
       break;
   }

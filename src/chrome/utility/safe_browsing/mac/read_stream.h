@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include <unistd.h>
 
 #include <vector>
+
+#include "base/files/file.h"
 
 namespace safe_browsing {
 namespace dmg {
@@ -85,6 +87,10 @@ class MemoryReadStream : public ReadStream {
 // Reads the given |stream| until end-of-stream is reached, storying the read
 // bytes into |data|. Returns true on success and false on error.
 bool ReadEntireStream(ReadStream* stream, std::vector<uint8_t>* data);
+
+// CopyStreamToFile reads from `source` and writes the entire contents
+// of it into `dest`. Returns true on success and false on failure.
+bool CopyStreamToFile(ReadStream* source, base::File& dest);
 
 }  // namespace dmg
 }  // namespace safe_browsing

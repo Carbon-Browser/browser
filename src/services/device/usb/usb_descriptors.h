@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/scoped_refptr.h"
 #include "services/device/public/mojom/usb_device.mojom.h"
 
 namespace device {
@@ -27,8 +28,12 @@ struct CombinedInterfaceInfo {
 
   bool IsValid() const;
 
-  const mojom::UsbInterfaceInfo* interface = nullptr;
-  const mojom::UsbAlternateInterfaceInfo* alternate = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const mojom::UsbInterfaceInfo* interface = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const mojom::UsbAlternateInterfaceInfo* alternate = nullptr;
 };
 
 struct UsbDeviceDescriptor {

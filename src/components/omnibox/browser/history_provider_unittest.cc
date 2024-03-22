@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,8 +61,8 @@ void HistoryProviderTest::SetUp() {
       history::CreateHistoryService(history_dir_.GetPath(), true));
   client_->set_bookmark_model(bookmarks::TestBookmarkClient::CreateModel());
   client_->set_in_memory_url_index(std::make_unique<InMemoryURLIndex>(
-      client_->GetBookmarkModel(), client_->GetHistoryService(), nullptr,
-      history_dir_.GetPath(), SchemeSet()));
+      client_->GetLocalOrSyncableBookmarkModel(), client_->GetHistoryService(),
+      nullptr, history_dir_.GetPath(), SchemeSet()));
   client_->GetInMemoryURLIndex()->Init();
 
   provider_ = new TestHistoryProvider(client_.get());

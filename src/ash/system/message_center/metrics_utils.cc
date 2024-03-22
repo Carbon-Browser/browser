@@ -1,16 +1,55 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/message_center/metrics_utils.h"
 
+#include <optional>
+
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/strings/stringprintf.h"
+#include "base/strings/utf_string_conversions.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
+#include "ui/message_center/views/message_view.h"
+
+namespace {
+
+// Used in histogram names that are persisted to metric logs.
+std::string GetNotifierFrameworkNotificationHistogramBase(bool pinned) {
+  if (pinned)
+    return "Ash.NotifierFramework.PinnedSystemNotification";
+  return "Ash.NotifierFramework.SystemNotification";
+}
+
+// Used in histogram names that are persisted to metric logs.
+std::string GetNotifierFrameworkPopupDismissedTimeRange(
+    const base::TimeDelta& time) {
+  if (time <= base::Seconds(1))
+    return "Within1s";
+  if (time <= base::Seconds(3))
+    return "Within3s";
+  if (time <= base::Seconds(7))
+    return "Within7s";
+  return "After7s";
+}
+
+bool ValidCatalogName(const message_center::NotifierId& notifier_id) {
+  if (notifier_id.type != message_center::NotifierType::SYSTEM_COMPONENT)
+    return false;
+
+  if (notifier_id.catalog_name == ash::NotificationCatalogName::kNone) {
+    return false;
+  }
+
+  return true;
+}
+
+}  // namespace
 
 namespace ash {
 namespace metrics_utils {
@@ -100,8 +139,10 @@ NotificationTypeDetailed GetNotificationTypeForCrosSystemPriority(
     const message_center::Notification& notification) {
   // The warning level is not stored in the notification data, so we need to
   // infer it from the accent color.
-  absl::optional<SkColor> accent_color =
+  std::optional<SkColor> accent_color =
       notification.rich_notification_data().accent_color;
+  std::optional<ui::ColorId> accent_color_id =
+      notification.rich_notification_data().accent_color_id;
   message_center::SystemNotificationWarningLevel warning_level =
       message_center::SystemNotificationWarningLevel::NORMAL;
   if (accent_color.has_value()) {
@@ -109,6 +150,13 @@ NotificationTypeDetailed GetNotificationTypeForCrosSystemPriority(
       warning_level = message_center::SystemNotificationWarningLevel::WARNING;
     } else if (accent_color.value() ==
                kSystemNotificationColorCriticalWarning) {
+      warning_level =
+          message_center::SystemNotificationWarningLevel::CRITICAL_WARNING;
+    }
+  } else if (accent_color_id.has_value()) {
+    if (accent_color_id.value() == cros_tokens::kCrosSysWarning) {
+      warning_level = message_center::SystemNotificationWarningLevel::WARNING;
+    } else if (accent_color_id.value() == cros_tokens::kCrosSysError) {
       warning_level =
           message_center::SystemNotificationWarningLevel::CRITICAL_WARNING;
     }
@@ -227,9 +275,9 @@ NotificationTypeDetailed GetNotificationType(
   }
 }
 
-absl::optional<NotificationViewType> GetNotificationViewType(
+std::optional<NotificationViewType> GetNotificationViewType(
     message_center::Notification* notification) {
-  absl::optional<NotificationViewType> type;
+  std::optional<NotificationViewType> type;
 
   // Ignore ARC notification since its view is rendered through Android, and
   // its notification metadata for image and buttons is empty. Also ignore group
@@ -285,9 +333,9 @@ absl::optional<NotificationViewType> GetNotificationViewType(
   }
 }
 
-absl::optional<NotificationTypeDetailed> GetNotificationType(
+std::optional<NotificationTypeDetailed> GetNotificationType(
     const std::string& notification_id) {
-  absl::optional<NotificationTypeDetailed> type;
+  std::optional<NotificationTypeDetailed> type;
   auto* notification =
       message_center::MessageCenter::Get()->FindVisibleNotificationById(
           notification_id);
@@ -317,14 +365,21 @@ void LogClickedBody(const std::string& notification_id, bool is_popup) {
           notification_id);
   if (!notification)
     return;
-  auto type = GetNotificationType(*notification);
+  const auto type = GetNotificationType(*notification);
+  const auto catalog_name = notification->notifier_id().catalog_name;
 
   if (is_popup) {
-    UMA_HISTOGRAM_ENUMERATION("Notifications.Cros.Actions.Popup.ClickedBody",
-                              type);
+    base::UmaHistogramEnumeration(
+        "Notifications.Cros.Actions.Popup.ClickedBody", type);
+    base::UmaHistogramEnumeration(
+        "Notifications.Cros.Actions.Popup.ClickedBody.GroupedByCatalog",
+        catalog_name);
   } else {
-    UMA_HISTOGRAM_ENUMERATION("Notifications.Cros.Actions.Tray.ClickedBody",
-                              type);
+    base::UmaHistogramEnumeration("Notifications.Cros.Actions.Tray.ClickedBody",
+                                  type);
+    base::UmaHistogramEnumeration(
+        "Notifications.Cros.Actions.Tray.ClickedBody.GroupedByCatalog",
+        catalog_name);
   }
 
   // If notification's delegate is null, that means the notification is not
@@ -339,18 +394,34 @@ void LogClickedBody(const std::string& notification_id, bool is_popup) {
   }
 }
 
-void LogClickedActionButton(const std::string& notification_id, bool is_popup) {
-  auto type = GetNotificationType(notification_id);
-  if (!type.has_value())
+void LogClickedActionButton(const std::string& notification_id,
+                            bool is_popup,
+                            int button_index) {
+  auto* notification =
+      message_center::MessageCenter::Get()->FindVisibleNotificationById(
+          notification_id);
+  if (!notification) {
     return;
-
+  }
+  const auto type = GetNotificationType(*notification);
   if (is_popup) {
     UMA_HISTOGRAM_ENUMERATION(
-        "Notifications.Cros.Actions.Popup.ClickedActionButton", type.value());
+        "Notifications.Cros.Actions.Popup.ClickedActionButton", type);
   } else {
     UMA_HISTOGRAM_ENUMERATION(
-        "Notifications.Cros.Actions.Tray.ClickedActionButton", type.value());
+        "Notifications.Cros.Actions.Tray.ClickedActionButton", type);
   }
+
+  if (!ValidCatalogName(notification->notifier_id())) {
+    return;
+  }
+
+  const std::string histogram_base =
+      GetNotifierFrameworkNotificationHistogramBase(notification->pinned());
+  base::UmaHistogramEnumeration(
+      base::StringPrintf("%s.ClickedActionButton.%u", histogram_base.c_str(),
+                         button_index + 1),
+      notification->notifier_id().catalog_name);
 }
 
 void LogInlineReplySent(const std::string& notification_id, bool is_popup) {
@@ -458,6 +529,47 @@ void LogPopupShown(const std::string& notification_id) {
 
   UMA_HISTOGRAM_ENUMERATION("Notifications.Cros.Actions.Popup.Shown",
                             type.value());
+
+  auto* notification =
+      message_center::MessageCenter::Get()->FindNotificationById(
+          notification_id);
+  if (!notification)
+    return;
+
+  if (!ValidCatalogName(notification->notifier_id()))
+    return;
+
+  const std::string histogram_base =
+      GetNotifierFrameworkNotificationHistogramBase(notification->pinned());
+
+  base::UmaHistogramEnumeration(
+      base::StringPrintf("%s.Popup.ShownCount", histogram_base.c_str()),
+      notification->notifier_id().catalog_name);
+}
+
+void LogPopupClosed(message_center::MessagePopupView* popup) {
+  const message_center::NotifierId notifier_id =
+      popup->message_view()->notifier_id();
+
+  if (!ValidCatalogName(notifier_id))
+    return;
+
+  const std::string histogram_base =
+      GetNotifierFrameworkNotificationHistogramBase(
+          popup->message_view()->pinned());
+  const base::TimeDelta user_journey_time =
+      base::Time::Now() - popup->message_view()->timestamp();
+  const std::string time_range =
+      GetNotifierFrameworkPopupDismissedTimeRange(user_journey_time);
+
+  base::UmaHistogramMediumTimes(
+      base::StringPrintf("%s.Popup.UserJourneyTime", histogram_base.c_str()),
+      user_journey_time);
+
+  base::UmaHistogramEnumeration(
+      base::StringPrintf("%s.Popup.Dismissed.%s", histogram_base.c_str(),
+                         time_range.c_str()),
+      notifier_id.catalog_name);
 }
 
 void LogClosedByClearAll(const std::string& notification_id) {
@@ -470,8 +582,6 @@ void LogClosedByClearAll(const std::string& notification_id) {
 }
 
 void LogNotificationAdded(const std::string& notification_id) {
-  // TODO(kradtke): refactor on CL to reuse `FindNotificationById`
-  // https://chromium-review.googlesource.com/c/chromium/src/+/3774436
   LogSystemNotificationAdded(notification_id);
 
   auto* notification =
@@ -482,6 +592,9 @@ void LogNotificationAdded(const std::string& notification_id) {
 
   base::UmaHistogramEnumeration("Notifications.Cros.Actions.NotificationAdded",
                                 GetNotificationType(*notification));
+  base::UmaHistogramEnumeration(
+      "Notifications.Cros.Actions.NotificationAdded.GroupedByCatalog",
+      notification->notifier_id().catalog_name);
 
   auto notification_view_type = GetNotificationViewType(notification);
   if (!notification_view_type)
@@ -498,27 +611,15 @@ void LogSystemNotificationAdded(const std::string& notification_id) {
   if (!notification)
     return;
 
-  if (notification->notifier_id().type !=
-      message_center::NotifierType::SYSTEM_COMPONENT) {
+  if (!ValidCatalogName(notification->notifier_id()))
     return;
-  }
 
-  if (notification->notifier_id().catalog_name ==
-          NotificationCatalogName::kNone ||
-      notification->notifier_id().catalog_name ==
-          NotificationCatalogName::kTestCatalogName) {
-    return;
-  }
+  const std::string histogram_base =
+      GetNotifierFrameworkNotificationHistogramBase(notification->pinned());
 
-  if (!notification->pinned()) {
-    base::UmaHistogramEnumeration(
-        "Ash.NotifierFramework.SystemNotification.Added",
-        notification->notifier_id().catalog_name);
-  } else {
-    base::UmaHistogramEnumeration(
-        "Ash.NotifierFramework.PinnedSystemNotification.Added",
-        notification->notifier_id().catalog_name);
-  }
+  base::UmaHistogramEnumeration(
+      base::StringPrintf("%s.Added", histogram_base.c_str()),
+      notification->notifier_id().catalog_name);
 }
 
 void LogNotificationsShownInFirstMinute(int count) {

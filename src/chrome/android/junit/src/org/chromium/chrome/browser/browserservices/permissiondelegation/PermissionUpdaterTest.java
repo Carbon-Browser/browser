@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,26 +31,20 @@ import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.components.embedder_support.util.Origin;
 
-/**
- * Tests for {@link PermissionUpdater}.
- */
+/** Tests for {@link PermissionUpdater}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PermissionUpdaterTest {
     private static final Origin ORIGIN = Origin.create("https://www.website.com");
+    private static final String URL = "https://www.website.com";
     private static final String PACKAGE_NAME = "com.package.name";
-    private static final String OTHER_PACKAGE_NAME = "com.other.package.name";
 
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
-    @Mock
-    public InstalledWebappPermissionManager mPermissionManager;
+    @Mock public InstalledWebappPermissionManager mPermissionManager;
 
-    @Mock
-    public NotificationPermissionUpdater mNotificationsPermissionUpdater;
-    @Mock
-    public LocationPermissionUpdater mLocationPermissionUpdater;
+    @Mock public NotificationPermissionUpdater mNotificationsPermissionUpdater;
+    @Mock public LocationPermissionUpdater mLocationPermissionUpdater;
 
     private PermissionUpdater mPermissionUpdater;
     private ShadowPackageManager mShadowPackageManager;
@@ -61,14 +55,17 @@ public class PermissionUpdaterTest {
 
         PackageManager pm = RuntimeEnvironment.application.getPackageManager();
         mShadowPackageManager = shadowOf(pm);
-        mPermissionUpdater = new PermissionUpdater(
-                mPermissionManager, mNotificationsPermissionUpdater, mLocationPermissionUpdater);
+        mPermissionUpdater =
+                new PermissionUpdater(
+                        mPermissionManager,
+                        mNotificationsPermissionUpdater,
+                        mLocationPermissionUpdater);
     }
 
     @Test
     @Feature("TrustedWebActivities")
     public void doesntRegister_whenClientDoesntHandleIntents() {
-        mPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
 
         verifyPermissionNotUpdated();
     }
@@ -78,7 +75,7 @@ public class PermissionUpdaterTest {
     public void doesntRegister_whenOtherClientHandlesIntent() {
         installBrowsableIntentHandler(ORIGIN, "com.package.other");
 
-        mPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
 
         verifyPermissionNotUpdated();
     }
@@ -88,7 +85,7 @@ public class PermissionUpdaterTest {
     public void doesRegister_whenClientHandleIntentCorrectly() {
         installBrowsableIntentHandler(ORIGIN, PACKAGE_NAME);
 
-        mPermissionUpdater.onOriginVerified(ORIGIN, PACKAGE_NAME);
+        mPermissionUpdater.onOriginVerified(ORIGIN, URL, PACKAGE_NAME);
 
         verifyPermissionWillUpdate();
     }
@@ -106,11 +103,13 @@ public class PermissionUpdaterTest {
 
     private void verifyPermissionNotUpdated() {
         verify(mPermissionManager, never()).addDelegateApp(any(), anyString());
-        verify(mNotificationsPermissionUpdater, never()).onOriginVerified(any(), anyString());
+        verify(mNotificationsPermissionUpdater, never())
+                .onOriginVerified(any(), any(), anyString());
     }
 
     private void verifyPermissionWillUpdate() {
         verify(mPermissionManager).addDelegateApp(eq(ORIGIN), eq(PACKAGE_NAME));
-        verify(mNotificationsPermissionUpdater).onOriginVerified(eq(ORIGIN), eq(PACKAGE_NAME));
+        verify(mNotificationsPermissionUpdater)
+                .onOriginVerified(eq(ORIGIN), eq(URL), eq(PACKAGE_NAME));
     }
 }

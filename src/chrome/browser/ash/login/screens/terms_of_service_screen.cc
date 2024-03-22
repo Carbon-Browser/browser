@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,10 @@
 #include <string>
 #include <utility>
 
-#include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/no_destructor.h"
 #include "base/strings/escape.h"
@@ -26,7 +25,7 @@
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/terms_of_service_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/terms_of_service_screen_handler.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/storage_partition.h"
@@ -120,22 +119,21 @@ void TermsOfServiceScreen::OnRetry() {
   StartDownload();
 }
 
-bool TermsOfServiceScreen::MaybeSkip(WizardContext* context) {
+bool TermsOfServiceScreen::MaybeSkip(WizardContext& context) {
   // Only show the Terms of Service when Terms of Service have been specified
   // through policy. In all other cases, advance to the post-ToS part
   // immediately.
-  if (context->skip_post_login_screens_for_tests ||
+  if (context.skip_post_login_screens_for_tests ||
       !ProfileManager::GetActiveUserProfile()->GetPrefs()->IsManagedPreference(
           prefs::kTermsOfServiceURL)) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
   }
-  if (user_manager::UserManager::Get()->IsLoggedInAsPublicAccount())
+  if (user_manager::UserManager::Get()->IsLoggedInAsManagedGuestSession()) {
     return false;
+  }
 
-  if (!features::IsManagedTermsOfServiceEnabled())
-    exit_callback_.Run(Result::NOT_APPLICABLE);
-  return !features::IsManagedTermsOfServiceEnabled();
+  return false;
 }
 
 void TermsOfServiceScreen::ShowImpl() {
@@ -256,28 +254,22 @@ void TermsOfServiceScreen::OnDownloaded(
     // If the Terms of Service were downloaded successfully, sanitize and show
     // them to the user.
     view_->OnLoadSuccess(base::EscapeForHTML(*response_body));
-    if (features::IsManagedTermsOfServiceEnabled()) {
-      // Update locally saved terms.
-      SaveTos(base::EscapeForHTML(*response_body));
-    }
+    // Update locally saved terms.
+    SaveTos(base::EscapeForHTML(*response_body));
   }
 }
 
 void TermsOfServiceScreen::LoadFromFileOrShowError() {
   if (!view_)
     return;
-  if (features::IsManagedTermsOfServiceEnabled()) {
-    auto tos_path = GetTosFilePath();
-    base::ThreadPool::PostTaskAndReplyWithResult(
-        FROM_HERE,
-        {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
-         base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-        base::BindOnce(&ReadFileToOptionalString, tos_path),
-        base::BindOnce(&TermsOfServiceScreen::OnTosLoadedFromFile,
-                       weak_factory_.GetWeakPtr()));
-    return;
-  }
-  view_->OnLoadError();
+  auto tos_path = GetTosFilePath();
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE,
+      {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
+       base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+      base::BindOnce(&ReadFileToOptionalString, tos_path),
+      base::BindOnce(&TermsOfServiceScreen::OnTosLoadedFromFile,
+                     weak_factory_.GetWeakPtr()));
 }
 
 void TermsOfServiceScreen::OnTosLoadedFromFile(

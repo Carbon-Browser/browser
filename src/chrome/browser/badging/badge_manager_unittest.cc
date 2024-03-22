@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,20 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/badging/badge_manager_delegate.h"
 #include "chrome/browser/badging/test_badge_manager_delegate.h"
-#include "chrome/browser/web_applications/test/fake_web_app_registry_controller.h"
+#include "chrome/browser/web_applications/test/fake_web_app_provider.h"
+#include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test_observers.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/ukm/test_ukm_recorder.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
@@ -38,7 +39,7 @@ namespace {
 typedef std::pair<GURL, absl::optional<int>> SetBadgeAction;
 
 constexpr uint64_t kBadgeContents = 1;
-const web_app::AppId kAppId = "1";
+const webapps::AppId kAppId = "1";
 
 class TestBadgeManager : public BadgeManager {
  public:
@@ -70,13 +71,11 @@ class BadgeManagerUnittest : public ::testing::Test {
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
     profile_ = builder.Build();
 
-    fake_registry_controller_ =
-        std::make_unique<web_app::FakeWebAppRegistryController>();
-    controller().SetUp(profile());
-    controller().Init();
+    provider_ = web_app::FakeWebAppProvider::Get(profile());
+    web_app::test::AwaitStartWebAppProviderAndSubsystems(profile());
 
     badge_manager_ = std::make_unique<TestBadgeManager>(
-        profile(), &controller().sync_bridge());
+        profile(), &provider().sync_bridge_unsafe());
 
     // Delegate lifetime is managed by BadgeManager
     auto owned_delegate = std::make_unique<TestBadgeManagerDelegate>(
@@ -85,25 +84,34 @@ class BadgeManagerUnittest : public ::testing::Test {
     badge_manager().SetDelegate(std::move(owned_delegate));
   }
 
-  void TearDown() override { profile_.reset(); }
+  void TearDown() override {
+    // Set `provider_` to nullptr before `profile_` is reset to avoid a dangling
+    // pointer.
+    provider_ = nullptr;
+    profile_.reset();
+  }
 
   TestBadgeManagerDelegate* delegate() { return delegate_; }
+
+  void set_delegate(TestBadgeManagerDelegate* delegate) {
+    delegate_ = delegate;
+  }
 
   BadgeManager& badge_manager() const { return *badge_manager_; }
 
   Profile* profile() const { return profile_.get(); }
 
-  web_app::FakeWebAppRegistryController& controller() {
-    return *fake_registry_controller_;
-  }
+  web_app::WebAppProvider& provider() { return *provider_; }
 
  private:
-  raw_ptr<TestBadgeManagerDelegate> delegate_;
+  raw_ptr<web_app::FakeWebAppProvider> provider_;
+
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<BadgeManager> badge_manager_;
-  std::unique_ptr<web_app::FakeWebAppRegistryController>
-      fake_registry_controller_;
+
+  // Must be declared after `badge_manager_` to avoid a dangling pointer.
+  raw_ptr<TestBadgeManagerDelegate> delegate_;
 };
 
 TEST_F(BadgeManagerUnittest, SetFlagBadgeForApp) {
@@ -137,14 +145,14 @@ TEST_F(BadgeManagerUnittest, SetBadgeForApp) {
 }
 
 TEST_F(BadgeManagerUnittest, SetBadgeForMultipleApps) {
-  const web_app::AppId kOtherAppId = "2";
+  const webapps::AppId kOtherAppId = "2";
   constexpr uint64_t kOtherContents = 2;
 
-  std::vector<web_app::AppId> updated_apps;
+  std::vector<webapps::AppId> updated_apps;
   web_app::WebAppTestRegistryObserverAdapter observer(
-      &controller().registrar());
+      &provider().registrar_unsafe());
   observer.SetWebAppLastBadgingTimeChangedDelegate(base::BindLambdaForTesting(
-      [&updated_apps](const web_app::AppId& app_id, const base::Time& time) {
+      [&updated_apps](const webapps::AppId& app_id, const base::Time& time) {
         updated_apps.push_back(app_id);
       }));
 
@@ -201,32 +209,32 @@ TEST_F(BadgeManagerUnittest, ClearBadgeForBadgedApp) {
 #if !BUILDFLAG(IS_CHROMEOS_LACROS)
 TEST_F(BadgeManagerUnittest, BadgingMultipleProfiles) {
   std::unique_ptr<Profile> other_profile = std::make_unique<TestingProfile>();
-  auto fake_registry_controller =
-      std::make_unique<web_app::FakeWebAppRegistryController>();
-  fake_registry_controller->SetUp(other_profile.get());
-  fake_registry_controller->Init();
+  web_app::FakeWebAppProvider* new_provider =
+      web_app::FakeWebAppProvider::Get(other_profile.get());
+  web_app::test::AwaitStartWebAppProviderAndSubsystems(other_profile.get());
+
   auto other_badge_manager = std::make_unique<TestBadgeManager>(
-      other_profile.get(), &fake_registry_controller->sync_bridge());
+      other_profile.get(), &new_provider->sync_bridge_unsafe());
 
   auto owned_other_delegate = std::make_unique<TestBadgeManagerDelegate>(
       other_profile.get(), other_badge_manager.get());
   auto* other_delegate = owned_other_delegate.get();
   other_badge_manager->SetDelegate(std::move(owned_other_delegate));
 
-  std::vector<web_app::AppId> updated_apps;
-  std::vector<web_app::AppId> other_updated_apps;
+  std::vector<webapps::AppId> updated_apps;
+  std::vector<webapps::AppId> other_updated_apps;
   web_app::WebAppTestRegistryObserverAdapter other_observer(
-      &fake_registry_controller->registrar());
+      &new_provider->registrar_unsafe());
   other_observer.SetWebAppLastBadgingTimeChangedDelegate(
       base::BindLambdaForTesting(
-          [&other_updated_apps](const web_app::AppId& app_id,
+          [&other_updated_apps](const webapps::AppId& app_id,
                                 const base::Time& time) {
             other_updated_apps.push_back(app_id);
           }));
   web_app::WebAppTestRegistryObserverAdapter observer(
-      &controller().registrar());
+      &provider().registrar_unsafe());
   observer.SetWebAppLastBadgingTimeChangedDelegate(base::BindLambdaForTesting(
-      [&updated_apps](const web_app::AppId& app_id, const base::Time& time) {
+      [&updated_apps](const webapps::AppId& app_id, const base::Time& time) {
         updated_apps.push_back(app_id);
       }));
 
@@ -261,6 +269,8 @@ TEST_F(BadgeManagerUnittest, BadgingMultipleProfiles) {
 // Tests methods which call into the badge manager delegate do not crash when
 // the delegate is unset.
 TEST_F(BadgeManagerUnittest, BadgingWithNoDelegateDoesNotCrash) {
+  // Set the delegate to nullptr to avoid a dangling pointer.
+  set_delegate(nullptr);
   badge_manager().SetDelegate(nullptr);
 
   badge_manager().SetBadgeForTesting(kAppId, absl::nullopt,

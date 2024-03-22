@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "content/child/child_thread_impl.h"
 #include "content/child/scoped_child_process_reference.h"
 #include "content/public/common/content_client.h"
+#include "content/renderer/policy_container_util.h"
 #include "content/renderer/service_worker/service_worker_context_client.h"
 #include "content/renderer/worker/fetch_client_settings_object_helpers.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -78,6 +80,8 @@ void EmbeddedWorkerInstanceClientImpl::StartWorker(
     start_data->main_script_load_params->url_loader_client_endpoints =
         std::move(params->main_script_load_params->url_loader_client_endpoints);
   }
+  start_data->policy_container =
+      ToWebPolicyContainer(std::move(params->policy_container));
 
   for (const auto& feature : params->forced_enabled_runtime_features) {
     blink::WebRuntimeFeatures::EnableFeatureFromString(feature, true);
@@ -104,7 +108,8 @@ void EmbeddedWorkerInstanceClientImpl::StartWorker(
       std::move(params->subresource_loader_factories),
       std::move(params->subresource_loader_updater),
       params->script_url_to_skip_throttling, initiator_thread_task_runner_,
-      params->service_worker_route_id, cors_exempt_header_list_);
+      params->service_worker_route_id, cors_exempt_header_list_,
+      params->storage_key);
   // Record UMA to indicate StartWorker is received on renderer.
   StartWorkerHistogramEnum metric =
       params->is_installed ? StartWorkerHistogramEnum::RECEIVED_ON_INSTALLED

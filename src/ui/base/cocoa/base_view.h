@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #import <Cocoa/Cocoa.h>
 
 #include "base/component_export.h"
-#include "base/mac/scoped_nsobject.h"
 #import "ui/base/cocoa/tracking_area.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -19,17 +18,12 @@
 COMPONENT_EXPORT(UI_BASE)
 @interface BaseView : NSView {
  @public
-  enum EventHandled {
-    kEventNotHandled,
-    kEventHandled
-  };
-
- @private
-  ui::ScopedCrTrackingArea _trackingArea;
-  BOOL _dragging;
-  base::scoped_nsobject<NSEvent> _pendingExitEvent;
-  NSInteger _pressureEventStage;
+  enum EventHandled { kEventNotHandled, kEventHandled };
 }
+
+// |tracking| determines whether a CrTrackingArea is initialized during the
+// constructor.
+- (instancetype)initWithFrame:(NSRect)frame tracking:(BOOL)tracking;
 
 // Process an NSEventTypeLeftMouseUp event on this view that wasn't dispatched
 // already to BaseView (e.g. if captured via an event monitor). This may

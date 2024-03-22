@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMECAST_CAST_CORE_RUNTIME_BROWSER_GRPC_RESOURCE_DATA_SOURCE_H_
 #define CHROMECAST_CAST_CORE_RUNTIME_BROWSER_GRPC_RESOURCE_DATA_SOURCE_H_
 
+#include <optional>
 #include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/url_data_source.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cast_core/public/src/proto/v2/core_application_service.castcore.pb.h"
 
 namespace chromecast {
@@ -37,7 +37,7 @@ class GrpcResourceDataSource : public content::URLDataSource {
       const GURL& url,
       const content::WebContents::Getter& wc_getter,
       content::URLDataSource::GotDataCallback callback) override;
-  std::string GetMimeType(const std::string& path) override;
+  std::string GetMimeType(const GURL& url) override;
 
   // Determines whether the Url request is allowed.
   bool ShouldServiceRequest(const GURL& url,
@@ -67,7 +67,7 @@ class GrpcResourceDataSource : public content::URLDataSource {
   const bool for_webui_;
   cast::v2::CoreApplicationServiceStub* const core_app_service_stub_;
 
-  absl::optional<std::string> frame_src_;
+  std::optional<std::string> frame_src_;
   bool deny_xframe_options_ = true;
 
   base::WeakPtrFactory<GrpcResourceDataSource> weak_factory_{this};

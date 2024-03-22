@@ -1,14 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PASSWORD_MANAGER_ACCOUNT_PASSWORD_STORE_FACTORY_H_
 #define CHROME_BROWSER_PASSWORD_MANAGER_ACCOUNT_PASSWORD_STORE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "components/keyed_service/content/refcounted_browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/service_access_type.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 
 class Profile;
 
@@ -27,8 +27,12 @@ class AccountPasswordStoreFactory
   AccountPasswordStoreFactory& operator=(const AccountPasswordStoreFactory&) =
       delete;
 
+  // Returns the default factory, useful in tests where the service is null by
+  // default.
+  static TestingFactory GetDefaultFactoryForTesting();
+
  private:
-  friend struct base::DefaultSingletonTraits<AccountPasswordStoreFactory>;
+  friend base::NoDestructor<AccountPasswordStoreFactory>;
 
   AccountPasswordStoreFactory();
   ~AccountPasswordStoreFactory() override;

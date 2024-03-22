@@ -1,12 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SYSTEM_TRAY_TRAY_CONTAINER_H_
 #define ASH_SYSTEM_TRAY_TRAY_CONTAINER_H_
 
+#include <optional>
+
 #include "ash/system/tray/tray_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/view.h"
 
@@ -21,6 +24,8 @@ class TrayBackgroundView;
 // Base class for tray containers. Sets the border and layout. The container
 // auto-resizes the widget when necessary.
 class TrayContainer : public views::View {
+  METADATA_HEADER(TrayContainer, views::View)
+
  public:
   TrayContainer(Shelf* shelf, TrayBackgroundView* tray_background_view);
 
@@ -73,10 +78,13 @@ class TrayContainer : public views::View {
   // Collects the inputs for layout.
   LayoutInputs GetLayoutInputs() const;
 
+  // views::View:
+  void OnThemeChanged() override;
+
   // The set of inputs that impact this widget's layout. The assumption is that
   // this widget needs a relayout if, and only if, one or more of these has
   // changed.
-  absl::optional<LayoutInputs> layout_inputs_;
+  std::optional<LayoutInputs> layout_inputs_;
 
   // The border that has been calculated in the target bounds calculation
   // phase, and will be applied in the layout update phase.
@@ -86,8 +94,8 @@ class TrayContainer : public views::View {
   // phase, and will be applied in the layout update phase.
   std::unique_ptr<views::BoxLayout> layout_manager_;
 
-  Shelf* const shelf_;
-  TrayBackgroundView* const tray_background_view_;
+  const raw_ptr<Shelf, ExperimentalAsh> shelf_;
+  const raw_ptr<TrayBackgroundView, ExperimentalAsh> tray_background_view_;
 
   int main_axis_margin_ = 0;
   int cross_axis_margin_ = 0;

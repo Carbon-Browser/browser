@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ const bigImageUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA" +
 // will not run using a Service Worker-based extension.
 function logBigImageUrl() {
   var canvas = document.createElement('canvas');
-  // This is just enough to be took large for an icon. See
+  // This is just enough to be too large for an icon. See
   // message_center::kNotificationIconSize.
   canvas.width = 100;
   canvas.height = 100;

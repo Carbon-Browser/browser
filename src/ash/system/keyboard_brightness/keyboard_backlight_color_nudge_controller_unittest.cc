@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 #include "ash/controls/contextual_tooltip.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "ash/system/keyboard_brightness/keyboard_backlight_color_controller.h"
 #include "ash/test/ash_test_base.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "components/account_id/account_id.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -26,8 +24,7 @@ const AccountId account_id_1 = AccountId::FromUserEmailGaiaId(kUser1, kUser1);
 class KeyboardBacklightColorNudgeControllerTest : public AshTestBase {
  public:
   KeyboardBacklightColorNudgeControllerTest()
-      : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME),
-        scoped_feature_list_(features::kRgbKeyboard) {}
+      : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
 
   KeyboardBacklightColorNudgeControllerTest(
       const KeyboardBacklightColorNudgeControllerTest&) = delete;
@@ -36,18 +33,7 @@ class KeyboardBacklightColorNudgeControllerTest : public AshTestBase {
 
   ~KeyboardBacklightColorNudgeControllerTest() override = default;
 
-  // testing::Test:
-  void SetUp() override {
-    AshTestBase::SetUp();
-
-    controller_ = Shell::Get()
-                      ->keyboard_backlight_color_controller()
-                      ->keyboard_backlight_color_nudge_controller();
-  }
-
  protected:
-  KeyboardBacklightColorNudgeController* controller_ = nullptr;
-
   PrefService* pref_service() {
     return Shell::Get()->session_controller()->GetActivePrefService();
   }
@@ -58,8 +44,7 @@ class KeyboardBacklightColorNudgeControllerTest : public AshTestBase {
         contextual_tooltip::TooltipType::kKeyboardBacklightColor, nullptr);
   }
 
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
+  KeyboardBacklightColorNudgeController controller_;
 };
 
 TEST_F(KeyboardBacklightColorNudgeControllerTest, ShowEducationNudge) {
@@ -69,7 +54,7 @@ TEST_F(KeyboardBacklightColorNudgeControllerTest, ShowEducationNudge) {
 
   SimulateUserLogin(account_id_1);
   EXPECT_TRUE(can_show_nudge());
-  controller_->MaybeShowEducationNudge(&anchor_view);
+  controller_.MaybeShowEducationNudge(&anchor_view);
 
   EXPECT_FALSE(can_show_nudge());
 
@@ -83,7 +68,7 @@ TEST_F(KeyboardBacklightColorNudgeControllerTest,
   SimulateUserLogin(account_id_1);
   EXPECT_TRUE(can_show_nudge());
 
-  controller_->SetUserPerformedAction();
+  controller_.SetUserPerformedAction();
 
   EXPECT_FALSE(can_show_nudge());
 

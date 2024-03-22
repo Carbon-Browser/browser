@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class CORE_EXPORT CSSNumericValueType {
   static constexpr unsigned kNumBaseTypes =
       static_cast<unsigned>(BaseType::kNumBaseTypes);
 
-  static AtomicString BaseTypeToString(BaseType);
+  static String BaseTypeToString(BaseType);
 
   explicit CSSNumericValueType(
       CSSPrimitiveValue::UnitType = CSSPrimitiveValue::UnitType::kNumber);
@@ -52,10 +52,11 @@ class CORE_EXPORT CSSNumericValueType {
   void SetExponent(BaseType type, int new_value) {
     DCHECK_LT(type, BaseType::kNumBaseTypes);
     int& old_value = exponents_[static_cast<unsigned>(type)];
-    if (old_value == 0 && new_value != 0)
+    if (old_value == 0 && new_value != 0) {
       num_non_zero_entries_++;
-    else if (old_value != 0 && new_value == 0)
+    } else if (old_value != 0 && new_value == 0) {
       num_non_zero_entries_--;
+    }
     old_value = new_value;
   }
 

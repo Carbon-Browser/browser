@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "ash/public/cpp/shelf_item_delegate.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
@@ -100,7 +101,7 @@ class AppWindowShelfItemController : public ash::ShelfItemDelegate,
   // Pointer to the most recently active app window
   // TODO(khmel): Get rid of |last_active_window_| and provide more reliable
   // way to determine active window.
-  AppWindowBase* last_active_window_ = nullptr;
+  raw_ptr<AppWindowBase, ExperimentalAsh> last_active_window_ = nullptr;
 
   // Scoped list of observed windows (for removal on destruction)
   base::ScopedMultiSourceObservation<aura::Window, aura::WindowObserver>

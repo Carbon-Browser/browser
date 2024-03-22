@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,6 @@ namespace content {
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.content_public.browser
 // GENERATED_JAVA_CLASS_NAME_OVERRIDE: ClientDataRequestType
 enum class ClientDataRequestType {
-  kU2fRegister,
-  kU2fSign,
   kWebAuthnCreate,
   kWebAuthnGet,
   kPaymentGet,

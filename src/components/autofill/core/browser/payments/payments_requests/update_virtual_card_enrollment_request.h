@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/autofill/core/browser/autofill_client.h"
-#include "components/autofill/core/browser/payments/payments_client.h"
+#include "components/autofill/core/browser/payments/payments_network_interface.h"
 #include "components/autofill/core/browser/payments/payments_requests/payments_request.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -27,7 +27,7 @@ namespace payments {
 class UpdateVirtualCardEnrollmentRequest : public PaymentsRequest {
  public:
   UpdateVirtualCardEnrollmentRequest(
-      const PaymentsClient::UpdateVirtualCardEnrollmentRequestDetails&
+      const PaymentsNetworkInterface::UpdateVirtualCardEnrollmentRequestDetails&
           request_details,
       base::OnceCallback<void(AutofillClient::PaymentsRpcResult)> callback);
   UpdateVirtualCardEnrollmentRequest(
@@ -40,7 +40,7 @@ class UpdateVirtualCardEnrollmentRequest : public PaymentsRequest {
   std::string GetRequestUrlPath() override;
   std::string GetRequestContentType() override;
   std::string GetRequestContent() override;
-  void ParseResponse(const base::Value& response) override;
+  void ParseResponse(const base::Value::Dict& response) override;
   bool IsResponseComplete() override;
   void RespondToDelegate(AutofillClient::PaymentsRpcResult result) override;
 
@@ -49,13 +49,14 @@ class UpdateVirtualCardEnrollmentRequest : public PaymentsRequest {
 
   // Modifies the base::Value that |request_dict| points to by setting all of
   // the fields needed for an Enroll request.
-  void BuildEnrollRequestDictionary(base::Value* request_dict);
+  void BuildEnrollRequestDictionary(base::Value::Dict* request_dict);
 
   // Modifies the base::Value that |request_dict| points to by setting all of
   // the fields needed for an Unenroll request.
-  void BuildUnenrollRequestDictionary(base::Value* request_dict);
+  void BuildUnenrollRequestDictionary(base::Value::Dict* request_dict);
 
-  PaymentsClient::UpdateVirtualCardEnrollmentRequestDetails request_details_;
+  PaymentsNetworkInterface::UpdateVirtualCardEnrollmentRequestDetails
+      request_details_;
   base::OnceCallback<void(AutofillClient::PaymentsRpcResult)> callback_;
   absl::optional<std::string> enroll_result_;
 };

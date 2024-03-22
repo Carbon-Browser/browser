@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -161,9 +161,10 @@ bool RequestHandlerForPolicy::ProcessCloudPolicy(
 
   em::PolicyData policy_data;
   policy_data.set_policy_type(policy_type);
-  policy_data.set_timestamp(policy_storage()->timestamp().is_null()
-                                ? base::Time::Now().ToJavaTime()
-                                : policy_storage()->timestamp().ToJavaTime());
+  policy_data.set_timestamp(
+      policy_storage()->timestamp().is_null()
+          ? base::Time::Now().InMillisecondsSinceUnixEpoch()
+          : policy_storage()->timestamp().InMillisecondsSinceUnixEpoch());
   policy_data.set_request_token(client_info.device_token);
   policy_data.set_policy_value(policy_storage()->GetPolicyPayload(
       policy_type, fetch_request.settings_entity_id()));
@@ -174,21 +175,50 @@ bool RequestHandlerForPolicy::ProcessCloudPolicy(
           ? "policy-testserver-service-account-identity@gmail.com"
           : policy_storage()->service_account_identity());
   policy_data.set_device_id(client_info.device_id);
-  policy_data.set_username(
+  std::string username =
       client_info.username.value_or(policy_storage()->policy_user().empty()
                                         ? kDefaultUsername
-                                        : policy_storage()->policy_user()));
+                                        : policy_storage()->policy_user());
+  policy_data.set_username(username);
+  policy_data.set_managed_by(
+      gaia::ExtractDomainName(gaia::SanitizeEmail(username)));
   policy_data.set_policy_invalidation_topic(
       policy_storage()->policy_invalidation_topic());
 
-  if (fetch_request.signature_type() != em::PolicyFetchRequest::NONE)
+  if (fetch_request.signature_type() != em::PolicyFetchRequest::NONE) {
     policy_data.set_public_key_version(signing_key_version);
+  }
+
+  if (policy_type == dm_protocol::kChromeUserPolicyType ||
+      policy_type == dm_protocol::kChromePublicAccountPolicyType) {
+    std::vector<std::string> user_affiliation_ids =
+        policy_storage()->user_affiliation_ids();
+    if (!user_affiliation_ids.empty()) {
+      for (const std::string& user_affiliation_id : user_affiliation_ids) {
+        policy_data.add_user_affiliation_ids(user_affiliation_id);
+      }
+    }
+  } else if (policy_type == dm_protocol::kChromeDevicePolicyType) {
+    std::vector<std::string> device_affiliation_ids =
+        policy_storage()->device_affiliation_ids();
+    if (!device_affiliation_ids.empty()) {
+      for (const std::string& device_affiliation_id : device_affiliation_ids) {
+        policy_data.add_device_affiliation_ids(device_affiliation_id);
+      }
+    }
+  }
+
+  std::string directory_api_id = policy_storage()->directory_api_id();
+  if (!directory_api_id.empty()) {
+    policy_data.set_directory_api_id(directory_api_id);
+  }
 
   policy_data.SerializeToString(fetch_response->mutable_policy_data());
 
   if (fetch_request.signature_type() == em::PolicyFetchRequest::SHA1_RSA) {
     // Sign the serialized policy data.
     if (!signing_key->Sign(fetch_response->policy_data(),
+                           fetch_request.signature_type(),
                            fetch_response->mutable_policy_data_signature())) {
       error_msg->assign("Error signing policy_data");
       return false;
@@ -215,6 +245,7 @@ bool RequestHandlerForPolicy::ProcessCloudPolicy(
 
     if (client_key &&
         !client_key->Sign(fetch_response->new_public_key(),
+                          fetch_request.signature_type(),
                           fetch_response->mutable_new_public_key_signature())) {
       error_msg->assign("Error signing new_public_key");
       return false;

@@ -1,8 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 import './icons.html.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -13,10 +13,10 @@ import {Option} from './types.js';
  * Represents a substring of the option title, annotated with whether it's part
  * of a match or not.
  */
-export type MatchSpan = {
-  text: string,
-  isMatch: boolean,
-};
+export interface MatchSpan {
+  text: string;
+  isMatch: boolean;
+}
 
 export class CommanderOptionElement extends PolymerElement {
   static get is() {

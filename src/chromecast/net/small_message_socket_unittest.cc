@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,7 +69,8 @@ class TestSocket : public SmallMessageSocket::Delegate {
 
   void SendData(size_t size) {
     size_t data_offset = SmallMessageSocket::SizeDataBytes(size);
-    auto buffer = base::MakeRefCounted<net::IOBuffer>(data_offset + size);
+    auto buffer =
+        base::MakeRefCounted<net::IOBufferWithSize>(data_offset + size);
     SmallMessageSocket::WriteSizeData(buffer->data(), size);
     SetData(buffer->data() + data_offset, size);
     SendBuffer(std::move(buffer), size + data_offset);

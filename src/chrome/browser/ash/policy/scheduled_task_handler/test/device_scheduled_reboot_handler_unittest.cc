@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,20 @@
 
 #include <memory>
 
-#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "base/feature_list.h"
+#include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/bind.h"
+#include "base/test/mock_log.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
+#include "chrome/browser/ash/policy/scheduled_task_handler/scheduled_task_executor_impl.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/scheduled_task_util.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/test/fake_reboot_notifications_scheduler.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/test/fake_scheduled_task_executor.h"
@@ -23,6 +27,7 @@
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/prefs/testing_pref_service.h"
@@ -35,18 +40,26 @@ namespace policy {
 namespace {
 constexpr char kRebootTaskTimeFieldName[] = "reboot_time";
 constexpr base::TimeDelta kExternalRebootDelay = base::Seconds(100);
-}
+constexpr char kESTTimeZoneID[] = "America/New_York";
+constexpr char kTestName[] = "test@test";
+constexpr char kKioskName[] = "test@kiosk-apps.device-local.localhost";
+}  // namespace
+
+using ::testing::_;
+#define EXPECT_ERROR_LOG(matcher)                                    \
+  if (DLOG_IS_ON(ERROR)) {                                           \
+    EXPECT_CALL(log_, Log(logging::LOGGING_ERROR, _, _, _, matcher)) \
+        .WillOnce(testing::Return(true)); /* suppress logging */     \
+  }
 
 class DeviceScheduledRebootHandlerForTest
     : public DeviceScheduledRebootHandler {
  public:
-  DeviceScheduledRebootHandlerForTest(
-      ash::CrosSettings* cros_settings,
-      std::unique_ptr<ScheduledTaskExecutor> task_executor,
-      std::unique_ptr<RebootNotificationsScheduler> notifications_scheduler)
-      : DeviceScheduledRebootHandler(cros_settings,
-                                     std::move(task_executor),
-                                     std::move(notifications_scheduler)) {}
+  using DeviceScheduledRebootHandler::GetBootTimeCallback;
+
+  template <class... Args>
+  explicit DeviceScheduledRebootHandlerForTest(Args... args)
+      : DeviceScheduledRebootHandler(std::forward<Args>(args)...) {}
 
   DeviceScheduledRebootHandlerForTest(
       const DeviceScheduledRebootHandlerForTest&) = delete;
@@ -58,6 +71,9 @@ class DeviceScheduledRebootHandlerForTest
   }
 
   int GetRebootTimerExpirations() const { return reboot_timer_expirations_; }
+  int GetPolicyChangesProcessedCount() const {
+    return policy_changes_processed_;
+  }
 
  private:
   void OnRebootTimerExpired() override {
@@ -65,8 +81,16 @@ class DeviceScheduledRebootHandlerForTest
     DeviceScheduledRebootHandler::OnRebootTimerExpired();
   }
 
+  void OnScheduledRebootDataChanged() override {
+    ++policy_changes_processed_;
+    DeviceScheduledRebootHandler::OnScheduledRebootDataChanged();
+  }
+
   // Number of calls to |OnRebootTimerExpired|.
   int reboot_timer_expirations_ = 0;
+
+  // Number of calls to |OnScheduledRebootDataChanged|.
+  int policy_changes_processed_ = 0;
 };
 
 class DeviceScheduledRebootHandlerTest : public testing::Test {
@@ -74,8 +98,12 @@ class DeviceScheduledRebootHandlerTest : public testing::Test {
   DeviceScheduledRebootHandlerTest()
       : task_environment_(base::test::TaskEnvironment::MainThreadType::IO,
                           base::test::TaskEnvironment::TimeSource::MOCK_TIME),
-        mock_user_manager_(new ash::MockUserManager),
-        user_manager_enabler_(base::WrapUnique(mock_user_manager_)) {
+        user_manager_enabler_(std::make_unique<ash::FakeChromeUserManager>()),
+        prefs_(std::make_unique<TestingPrefServiceSimple>()),
+        notifications_scheduler_(task_environment_.GetMockClock(),
+                                 task_environment_.GetMockTickClock(),
+                                 prefs_.get()),
+        start_time_(task_environment_.GetMockClock()->Now()) {
     ScopedWakeLock::OverrideWakeLockProviderBinderForTesting(
         base::BindRepeating(&device::TestWakeLockProvider::BindReceiver,
                             base::Unretained(&wake_lock_provider_)));
@@ -86,17 +114,14 @@ class DeviceScheduledRebootHandlerTest : public testing::Test {
     auto task_executor = std::make_unique<FakeScheduledTaskExecutor>(
         task_environment_.GetMockClock());
     scheduled_task_executor_ = task_executor.get();
-    prefs_ = std::make_unique<TestingPrefServiceSimple>();
-    auto notifications_scheduler =
-        std::make_unique<FakeRebootNotificationsScheduler>(
-            task_environment_.GetMockClock(),
-            task_environment_.GetMockTickClock(), prefs_.get());
-    notifications_scheduler_ = notifications_scheduler.get();
     RebootNotificationsScheduler::RegisterProfilePrefs(prefs_->registry());
     device_scheduled_reboot_handler_ =
         std::make_unique<DeviceScheduledRebootHandlerForTest>(
             ash::CrosSettings::Get(), std::move(task_executor),
-            std::move(notifications_scheduler));
+            &notifications_scheduler_,
+            /*get_boot_time_callback=*/base::BindLambdaForTesting([this]() {
+              return start_time_;
+            }));
     // Set 0 delay for tests.
     device_scheduled_reboot_handler_->SetRebootDelayForTest(base::TimeDelta());
   }
@@ -134,18 +159,18 @@ class DeviceScheduledRebootHandlerTest : public testing::Test {
   }
 
   bool CheckNotificationStats(int notifications_shown, int dialogs_shown) {
-    if (notifications_scheduler_->GetShowNotificationCalls() !=
+    if (notifications_scheduler_.GetShowNotificationCalls() !=
         notifications_shown) {
       LOG(ERROR) << "Current notifications shown count: "
-                 << notifications_scheduler_->GetShowNotificationCalls()
+                 << notifications_scheduler_.GetShowNotificationCalls()
                  << " Expected notifications shown count: "
                  << notifications_shown;
       return false;
     }
 
-    if (notifications_scheduler_->GetShowDialogCalls() != dialogs_shown) {
+    if (notifications_scheduler_.GetShowDialogCalls() != dialogs_shown) {
       LOG(ERROR) << "Current dialogs shown count: "
-                 << notifications_scheduler_->GetShowDialogCalls()
+                 << notifications_scheduler_.GetShowDialogCalls()
                  << " Expected dialogs shown count: " << dialogs_shown;
       return false;
     }
@@ -170,24 +195,33 @@ class DeviceScheduledRebootHandlerTest : public testing::Test {
         /* disabled_features */ {ash::features::kDeviceForceScheduledReboot});
   }
 
+  ash::FakeChromeUserManager* GetFakeUserManager() {
+    return static_cast<ash::FakeChromeUserManager*>(
+        user_manager::UserManager::Get());
+  }
+
   base::test::TaskEnvironment task_environment_;
-  ash::MockUserManager* mock_user_manager_;  // Not owned.
   user_manager::ScopedUserManager user_manager_enabler_;
-  FakeScheduledTaskExecutor* scheduled_task_executor_;
+  raw_ptr<FakeScheduledTaskExecutor, DanglingUntriaged | ExperimentalAsh>
+      scheduled_task_executor_;
   std::unique_ptr<DeviceScheduledRebootHandlerForTest>
       device_scheduled_reboot_handler_;
   ash::ScopedTestingCrosSettings cros_settings_;
   std::unique_ptr<TestingPrefServiceSimple> prefs_;
   device::TestWakeLockProvider wake_lock_provider_;
-  FakeRebootNotificationsScheduler* notifications_scheduler_;
+  FakeRebootNotificationsScheduler notifications_scheduler_;
   base::test::ScopedFeatureList scoped_feature_list_;
+  const base::Time start_time_;
 };
 
 TEST_F(DeviceScheduledRebootHandlerTest,
        CheckIfDailyRebootIsScheduledForKiosk) {
   InitWithFeatureFlag(false /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsLoggedInAsKioskApp())
-      .WillRepeatedly(testing::Return(true));
+  auto* user_manager = GetFakeUserManager();
+  auto* user =
+      user_manager->AddKioskAppUser(AccountId::FromUserEmail(kKioskName));
+  user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
 
   // Calculate time from one hour from now and set the reboot policy to
   // happen daily at that time.
@@ -225,8 +259,10 @@ TEST_F(DeviceScheduledRebootHandlerTest,
 TEST_F(DeviceScheduledRebootHandlerTest,
        CheckIfDailyRebootIsScheduledForNonKiosk) {
   InitWithFeatureFlag(false /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsUserLoggedIn())
-      .WillRepeatedly(testing::Return(true));
+  auto* user_manager = GetFakeUserManager();
+  auto* user = user_manager->AddUser(AccountId::FromUserEmail(kTestName));
+  user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
 
   // Calculate time from one hour from now and set the reboot policy to
   // happen daily at that time.
@@ -261,8 +297,12 @@ TEST_F(DeviceScheduledRebootHandlerTest,
 
   // Switch to the kiosk mode, fast forward to the next day and check that the
   // reboot is scheduled and executed.
-  EXPECT_CALL(*mock_user_manager_, IsLoggedInAsKioskApp())
-      .WillOnce(testing::Return(true));
+  auto* kiosk_user =
+      user_manager->AddKioskAppUser(AccountId::FromUserEmail(kKioskName));
+  user_manager->UserLoggedIn(kiosk_user->GetAccountId(),
+                             kiosk_user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
+  user_manager->SwitchActiveUser(kiosk_user->GetAccountId());
   expected_scheduled_reboots += 1;
   expected_reboot_requests += 1;
   task_environment_.FastForwardBy(base::Days(1));
@@ -272,10 +312,10 @@ TEST_F(DeviceScheduledRebootHandlerTest,
 TEST_F(DeviceScheduledRebootHandlerTest,
        CheckIfWeeklyUpdateCheckIsScheduledForKiosk) {
   InitWithFeatureFlag(false /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsLoggedInAsKioskApp())
-      .WillRepeatedly(testing::Return(false));
-  EXPECT_CALL(*mock_user_manager_, IsUserLoggedIn())
-      .WillRepeatedly(testing::Return(true));
+  auto* user_manager = GetFakeUserManager();
+  auto* user = user_manager->AddUser(AccountId::FromUserEmail(kTestName));
+  user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
   // Set the first reboot to happen 49 hours from now (i.e. 1 hour from 2
   // days from now) and then weekly after.
   base::TimeDelta delay_from_now = base::Hours(49);
@@ -303,8 +343,12 @@ TEST_F(DeviceScheduledRebootHandlerTest,
 
   // Switch to the kiosk mode, fast forward to the next week and check that the
   // reboot is scheduled and executed.
-  EXPECT_CALL(*mock_user_manager_, IsLoggedInAsKioskApp())
-      .WillOnce(testing::Return(true));
+  auto* kiosk_user =
+      user_manager->AddKioskAppUser(AccountId::FromUserEmail(kKioskName));
+  user_manager->UserLoggedIn(kiosk_user->GetAccountId(),
+                             kiosk_user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
+  user_manager->SwitchActiveUser(kiosk_user->GetAccountId());
   expected_scheduled_reboots += 1;
   expected_reboot_requests += 1;
   task_environment_.FastForwardBy(base::Days(7));
@@ -314,10 +358,10 @@ TEST_F(DeviceScheduledRebootHandlerTest,
 TEST_F(DeviceScheduledRebootHandlerTest,
        CheckIfMonthlyRebootIsScheduledForKiosk) {
   InitWithFeatureFlag(false /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsLoggedInAsKioskApp())
-      .WillRepeatedly(testing::Return(false));
-  EXPECT_CALL(*mock_user_manager_, IsUserLoggedIn())
-      .WillRepeatedly(testing::Return(true));
+  auto* user_manager = GetFakeUserManager();
+  auto* user = user_manager->AddUser(AccountId::FromUserEmail(kTestName));
+  user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
 
   // Set the first reboot to happen 1 hour from now.
   base::TimeDelta delay_from_now = base::Hours(1);
@@ -350,8 +394,12 @@ TEST_F(DeviceScheduledRebootHandlerTest,
 
   // The next reboot should happen at the same day of month next month. Switch
   // to the kiosk mode and verify the reboot is executed.
-  EXPECT_CALL(*mock_user_manager_, IsLoggedInAsKioskApp())
-      .WillOnce(testing::Return(true));
+  auto* kiosk_user =
+      user_manager->AddKioskAppUser(AccountId::FromUserEmail(kKioskName));
+  user_manager->UserLoggedIn(kiosk_user->GetAccountId(),
+                             kiosk_user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
+  user_manager->SwitchActiveUser(kiosk_user->GetAccountId());
   expected_scheduled_reboots += 1;
   expected_reboot_requests += 1;
   EXPECT_TRUE(scheduled_task_test_util::AdvanceTimeAndSetDayOfMonth(
@@ -371,8 +419,10 @@ TEST_F(DeviceScheduledRebootHandlerTest,
   // Login user and disable kDeviceScheduledReboot flag. The reboot should not
   // occur.
   InitWithFeatureFlag(false /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsUserLoggedIn())
-      .WillRepeatedly(testing::Return(true));
+  auto* user_manager = GetFakeUserManager();
+  auto* user = user_manager->AddUser(AccountId::FromUserEmail(kTestName));
+  user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
   device_scheduled_reboot_handler_->SetRebootDelayForTest(kExternalRebootDelay);
 
   // Calculate time from one hour from now and set the reboot policy to
@@ -414,17 +464,20 @@ TEST_F(DeviceScheduledRebootHandlerTest,
 TEST_F(DeviceScheduledRebootHandlerTest,
        CheckIfDailyRebootIsScheduledForLoginScreen) {
   InitWithFeatureFlag(true /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsUserLoggedIn())
-      .WillRepeatedly(testing::Return(false));
 
   // Set device uptime to 10 minutes and schedule reboot in 30 minutes. Apply
   // grace time - reboot should not occur.
-  notifications_scheduler_->SetUptime(base::Minutes(10));
+  task_environment_.FastForwardBy(base::Minutes(10));
   base::TimeDelta delay_from_now = base::Minutes(30);
   auto policy_and_next_reboot_time = scheduled_task_test_util::CreatePolicy(
       scheduled_task_executor_->GetTimeZone(),
       scheduled_task_executor_->GetCurrentTime(), delay_from_now,
       ScheduledTaskExecutor::Frequency::kDaily, kRebootTaskTimeFieldName);
+  int expected_scheduled_reboots = 0;
+  int expected_reboot_requests = 0;
+  // Fast forward without an actual time so that the timer task is triggered.
+  task_environment_.FastForwardBy(base::TimeDelta());
+  EXPECT_TRUE(CheckStats(expected_scheduled_reboots, expected_reboot_requests));
 
   // Set a new scheduled reboot, fast forward to right before the
   // expected reboot and then verify reboot timer has not yet expired.
@@ -432,8 +485,6 @@ TEST_F(DeviceScheduledRebootHandlerTest,
   cros_settings_.device_settings()->Set(
       ash::kDeviceScheduledReboot,
       std::move(policy_and_next_reboot_time.first));
-  int expected_scheduled_reboots = 0;
-  int expected_reboot_requests = 0;
   task_environment_.FastForwardBy(delay_from_now - small_delay);
   EXPECT_TRUE(CheckStats(expected_scheduled_reboots, expected_reboot_requests));
 
@@ -461,8 +512,6 @@ TEST_F(DeviceScheduledRebootHandlerTest,
        VerifyLoginScreenRebootIsGuardedByFeatureFlag) {
   // Disable the feature. Reboot should not occur.
   InitWithFeatureFlag(false /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsUserLoggedIn())
-      .WillRepeatedly(testing::Return(false));
 
   // Schedule reboot in 30 minutes. Reboot should not occur because the flag is
   // disabled.
@@ -501,9 +550,12 @@ TEST_F(DeviceScheduledRebootHandlerTest, EnableForceRebootFeatureInKiosk) {
 
   // Set device uptime to 10 minutes and enable kiosk mode. We don't apply grace
   // period to kiosks, so reboot should occur.
-  notifications_scheduler_->SetUptime(base::Minutes(10));
-  EXPECT_CALL(*mock_user_manager_, IsLoggedInAsKioskApp())
-      .WillRepeatedly(testing::Return(true));
+  task_environment_.FastForwardBy(base::Minutes(10));
+  auto* user_manager = GetFakeUserManager();
+  auto* user =
+      user_manager->AddKioskAppUser(AccountId::FromUserEmail(kKioskName));
+  user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
 
   // Calculate time 30 minutes from now and set the reboot policy to
   // happen daily at that time.
@@ -535,13 +587,15 @@ TEST_F(DeviceScheduledRebootHandlerTest, EnableForceRebootFeatureInKiosk) {
 TEST_F(DeviceScheduledRebootHandlerTest,
        EnableForceRebootFeatureNonKioskSession) {
   InitWithFeatureFlag(true /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsUserLoggedIn())
-      .WillRepeatedly(testing::Return(true));
+  auto* user_manager = GetFakeUserManager();
+  auto* user = user_manager->AddUser(AccountId::FromUserEmail(kTestName));
+  user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
   EXPECT_FALSE(prefs_->GetBoolean(ash::prefs::kShowPostRebootNotification));
 
   // Set device uptime to 10 minutes and schedule reboot in 30 minutes. Apply
   // grace time - reboot should not occur.
-  notifications_scheduler_->SetUptime(base::Minutes(10));
+  task_environment_.FastForwardBy(base::Minutes(10));
   base::TimeDelta delay_from_now = base::Minutes(30);
   auto policy_and_next_reboot_time = scheduled_task_test_util::CreatePolicy(
       scheduled_task_executor_->GetTimeZone(),
@@ -587,8 +641,10 @@ TEST_F(DeviceScheduledRebootHandlerTest,
 
 TEST_F(DeviceScheduledRebootHandlerTest, SimulateNotificationButtonClick) {
   InitWithFeatureFlag(true /* enable_force_scheduled_reboots */);
-  EXPECT_CALL(*mock_user_manager_, IsUserLoggedIn())
-      .WillRepeatedly(testing::Return(true));
+  auto* user_manager = GetFakeUserManager();
+  auto* user = user_manager->AddUser(AccountId::FromUserEmail(kTestName));
+  user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                             /*browser_restart=*/false, /*is_child=*/false);
 
   /// Schedule reboot to happen in 3 hours.
   base::TimeDelta delay_from_now = base::Hours(3);
@@ -615,7 +671,7 @@ TEST_F(DeviceScheduledRebootHandlerTest, SimulateNotificationButtonClick) {
 
   // Simulate reboot button click on the notification. This should execute the
   // reboot.
-  notifications_scheduler_->SimulateRebootButtonClick();
+  notifications_scheduler_.SimulateRebootButtonClick();
   expected_reboot_requests += 1;
   EXPECT_TRUE(CheckStats(expected_scheduled_reboots, expected_reboot_requests));
 
@@ -623,4 +679,168 @@ TEST_F(DeviceScheduledRebootHandlerTest, SimulateNotificationButtonClick) {
   EXPECT_FALSE(prefs_->GetBoolean(ash::prefs::kShowPostRebootNotification));
 }
 
+class ScheduledRebootTimerFailureTest : public testing::Test {
+ public:
+  ScheduledRebootTimerFailureTest()
+      : task_environment_(base::test::TaskEnvironment::MainThreadType::IO,
+                          base::test::TaskEnvironment::TimeSource::MOCK_TIME),
+        notifications_scheduler_(task_environment_.GetMockClock(),
+                                 task_environment_.GetMockTickClock(),
+                                 nullptr),
+        start_time_(task_environment_.GetMockClock()->Now()) {
+    ScopedWakeLock::OverrideWakeLockProviderBinderForTesting(
+        base::BindRepeating(&device::TestWakeLockProvider::BindReceiver,
+                            base::Unretained(&wake_lock_provider_)));
+    chromeos::PowerManagerClient::InitializeFake();
+    chromeos::FakePowerManagerClient::Get()->set_tick_clock(
+        task_environment_.GetMockTickClock());
+    auto task_executor =
+        std::make_unique<ScheduledTaskExecutorImpl>("test_tag");
+    scheduled_task_executor_ = task_executor.get();
+    device_scheduled_reboot_handler_ =
+        std::make_unique<DeviceScheduledRebootHandlerForTest>(
+            ash::CrosSettings::Get(), std::move(task_executor),
+            &notifications_scheduler_,
+            /*get_boot_time_callback=*/base::BindLambdaForTesting([this]() {
+              return start_time_;
+            }));
+  }
+
+  ~ScheduledRebootTimerFailureTest() override {
+    device_scheduled_reboot_handler_.reset();
+    chromeos::PowerManagerClient::Shutdown();
+    ScopedWakeLock::OverrideWakeLockProviderBinderForTesting(
+        base::NullCallback());
+  }
+
+ protected:
+  base::test::TaskEnvironment task_environment_;
+  raw_ptr<ScheduledTaskExecutorImpl, DanglingUntriaged | ExperimentalAsh>
+      scheduled_task_executor_;
+  std::unique_ptr<DeviceScheduledRebootHandlerForTest>
+      device_scheduled_reboot_handler_;
+  ash::ScopedTestingCrosSettings cros_settings_;
+  device::TestWakeLockProvider wake_lock_provider_;
+  FakeRebootNotificationsScheduler notifications_scheduler_;
+  base::test::MockLog log_;
+  const base::Time start_time_;
+};
+
+TEST_F(ScheduledRebootTimerFailureTest, SimulateTimerStartFailure) {
+  // Schedule reboot in 30 minutes.
+  base::TimeDelta delay_from_now = base::Minutes(30);
+  auto time_zone_ = base::WrapUnique(icu::TimeZone::createTimeZone(
+      icu::UnicodeString::fromUTF8(kESTTimeZoneID)));
+  auto policy_and_next_reboot_time = scheduled_task_test_util::CreatePolicy(
+      *time_zone_.get(), task_environment_.GetMockClock()->Now(),
+      delay_from_now, ScheduledTaskExecutor::Frequency::kDaily,
+      kRebootTaskTimeFieldName);
+
+  // Simulate timer creation failure.
+  auto scoped_timer_failure =
+      chromeos::NativeTimer::ScopedFailureSimulatorForTesting();
+
+  // Verify timer start failure once the policy is set. Notification scheduler
+  // should close all pending notifications and reset state.
+  EXPECT_ERROR_LOG(testing::HasSubstr("Failed to start reboot timer"));
+  log_.StartCapturingLogs();
+  cros_settings_.device_settings()->Set(
+      ash::kDeviceScheduledReboot,
+      std::move(policy_and_next_reboot_time.first));
+
+  // Verify that the notifications were not shown.
+  EXPECT_EQ(notifications_scheduler_.GetShowNotificationCalls(), 0);
+  EXPECT_EQ(notifications_scheduler_.GetShowDialogCalls(), 0);
+  EXPECT_EQ(notifications_scheduler_.GetCloseNotificationCalls(), 0);
+  // Verify that the state is reset.
+  EXPECT_EQ(device_scheduled_reboot_handler_->GetScheduledRebootDataForTest(),
+            absl::nullopt);
+  EXPECT_EQ(device_scheduled_reboot_handler_->IsRebootSkippedForTest(), false);
+}
+
+class ScheduledRebootDelayedServiceTest : public testing::Test {
+ public:
+  ScheduledRebootDelayedServiceTest()
+      : task_environment_(base::test::TaskEnvironment::MainThreadType::IO,
+                          base::test::TaskEnvironment::TimeSource::MOCK_TIME),
+        notifications_scheduler_(task_environment_.GetMockClock(),
+                                 task_environment_.GetMockTickClock(),
+                                 nullptr),
+        start_time_(task_environment_.GetMockClock()->Now()) {
+    ScopedWakeLock::OverrideWakeLockProviderBinderForTesting(
+        base::BindRepeating(&device::TestWakeLockProvider::BindReceiver,
+                            base::Unretained(&wake_lock_provider_)));
+    chromeos::PowerManagerClient::InitializeFake();
+    chromeos::FakePowerManagerClient::Get()->SetServiceAvailability(
+        /*availability=*/absl::nullopt);
+    auto task_executor = std::make_unique<FakeScheduledTaskExecutor>(
+        task_environment_.GetMockClock());
+    scheduled_task_executor_ = task_executor.get();
+    device_scheduled_reboot_handler_ =
+        std::make_unique<DeviceScheduledRebootHandlerForTest>(
+            ash::CrosSettings::Get(), std::move(task_executor),
+            &notifications_scheduler_,
+            /*get_boot_time_callback=*/base::BindLambdaForTesting([this]() {
+              return start_time_;
+            }));
+  }
+
+  ~ScheduledRebootDelayedServiceTest() override {
+    device_scheduled_reboot_handler_.reset();
+    chromeos::PowerManagerClient::Shutdown();
+  }
+
+ protected:
+  base::test::TaskEnvironment task_environment_;
+  raw_ptr<FakeScheduledTaskExecutor, DanglingUntriaged | ExperimentalAsh>
+      scheduled_task_executor_;
+  std::unique_ptr<DeviceScheduledRebootHandlerForTest>
+      device_scheduled_reboot_handler_;
+  ash::ScopedTestingCrosSettings cros_settings_;
+  FakeRebootNotificationsScheduler notifications_scheduler_;
+  device::TestWakeLockProvider wake_lock_provider_;
+  const base::Time start_time_;
+};
+
+TEST_F(ScheduledRebootDelayedServiceTest, SimulateServiceIsAvailableLaterTest) {
+  int expected_policy_processed_count = 0;
+  EXPECT_EQ(device_scheduled_reboot_handler_->GetPolicyChangesProcessedCount(),
+            expected_policy_processed_count);
+  chromeos::FakePowerManagerClient::Get()->SetServiceAvailability(
+      /*availability=*/true);
+  expected_policy_processed_count += 1;
+  EXPECT_EQ(device_scheduled_reboot_handler_->GetPolicyChangesProcessedCount(),
+            expected_policy_processed_count);
+}
+
+TEST_F(ScheduledRebootDelayedServiceTest,
+       SimulateServiceStopsBeingAvailableTest) {
+  // Schedule reboot in 30 minutes.
+  base::TimeDelta delay_from_now = base::Minutes(30);
+  auto time_zone_ = base::WrapUnique(icu::TimeZone::createTimeZone(
+      icu::UnicodeString::fromUTF8(kESTTimeZoneID)));
+  auto policy_and_next_reboot_time = scheduled_task_test_util::CreatePolicy(
+      *time_zone_.get(), task_environment_.GetMockClock()->Now(),
+      delay_from_now, ScheduledTaskExecutor::Frequency::kDaily,
+      kRebootTaskTimeFieldName);
+  int expected_policy_processed_count =
+      device_scheduled_reboot_handler_->GetPolicyChangesProcessedCount();
+
+  // Notify that the service is available and expect processing policy.
+  chromeos::FakePowerManagerClient::Get()->SetServiceAvailability(
+      /*availability=*/true);
+  expected_policy_processed_count += 1;
+  EXPECT_EQ(device_scheduled_reboot_handler_->GetPolicyChangesProcessedCount(),
+            expected_policy_processed_count);
+
+  // Notify that the service stopped being available and verify that the state
+  // is reset and that the policy is not processed.
+  chromeos::FakePowerManagerClient::Get()->SetServiceAvailability(
+      /*availability=*/false);
+  EXPECT_EQ(device_scheduled_reboot_handler_->GetScheduledRebootDataForTest(),
+            absl::nullopt);
+  EXPECT_EQ(device_scheduled_reboot_handler_->IsRebootSkippedForTest(), false);
+  EXPECT_EQ(device_scheduled_reboot_handler_->GetPolicyChangesProcessedCount(),
+            expected_policy_processed_count);
+}
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,15 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
-#include "chrome/browser/web_applications/web_app_data_retriever.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_install_utils.h"
+#include "chrome/browser/web_applications/web_contents/web_app_data_retriever.h"
+#include "components/webapps/browser/installable/installable_logging.h"
+#include "components/webapps/browser/installable/installable_params.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-forward.h"
 #include "url/gurl.h"
 
@@ -32,11 +35,12 @@ class FakeDataRetriever : public WebAppDataRetriever {
                             GetWebAppInstallInfoCallback callback) override;
   void CheckInstallabilityAndRetrieveManifest(
       content::WebContents* web_contents,
-      bool bypass_service_worker_check,
-      CheckInstallabilityCallback callback) override;
+      CheckInstallabilityCallback callback,
+      absl::optional<webapps::InstallableParams> params) override;
   void GetIcons(content::WebContents* web_contents,
-                base::flat_set<GURL> icon_urls,
+                const base::flat_set<GURL>& icon_urls,
                 bool skip_page_favicons,
+                bool fail_all_if_any_fail,
                 GetIconsCallback callback) override;
 
   // Set info to respond on |GetWebAppInstallInfo|.
@@ -45,15 +49,10 @@ class FakeDataRetriever : public WebAppDataRetriever {
   void SetEmptyRendererWebAppInstallInfo();
   // Set arguments to respond on |CheckInstallabilityAndRetrieveManifest|.
   void SetManifest(blink::mojom::ManifestPtr manifest,
-                   bool is_installable,
+                   webapps::InstallableStatusCode error_code,
                    GURL manifest_url = GURL());
   // Set icons to respond on |GetIcons|.
   void SetIcons(IconsMap icons_map);
-  using GetIconsDelegate =
-      base::RepeatingCallback<IconsMap(content::WebContents* web_contents,
-                                       const base::flat_set<GURL>& icon_urls,
-                                       bool skip_page_favicons)>;
-  void SetGetIconsDelegate(GetIconsDelegate get_icons_delegate);
 
   // Sets `IconsDownloadedResult` to respond on `GetIcons`.
   void SetIconsDownloadedResult(IconsDownloadedResult result);
@@ -79,10 +78,10 @@ class FakeDataRetriever : public WebAppDataRetriever {
 
   blink::mojom::ManifestPtr manifest_;
   GURL manifest_url_;
-  bool is_installable_ = false;
+  webapps::InstallableStatusCode error_code_ =
+      webapps::InstallableStatusCode::NO_MANIFEST;
 
   IconsMap icons_map_;
-  GetIconsDelegate get_icons_delegate_;
 
   IconsDownloadedResult icons_downloaded_result_ =
       IconsDownloadedResult::kCompleted;

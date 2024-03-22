@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,19 @@
 
 #include "components/policy/test_support/embedded_policy_test_server.h"
 
+#include <memory>
+
+namespace private_membership::rlwe {
+class PrivateMembershipRlweClientRegressionTestData;
+}
 namespace policy {
 
 // Handler for request type `enterprise_psm_check`.
 class RequestHandlerForPsmAutoEnrollment
     : public EmbeddedPolicyTestServer::RequestHandler {
  public:
-  enum PirResponse {
-    kPirResponseHasMembership = 1,
-    kPirResponseHasNoMembership = 2,
-  };
+  using RlweTestData =
+      private_membership::rlwe::PrivateMembershipRlweClientRegressionTestData;
 
   explicit RequestHandlerForPsmAutoEnrollment(EmbeddedPolicyTestServer* parent);
   RequestHandlerForPsmAutoEnrollment(
@@ -29,6 +32,12 @@ class RequestHandlerForPsmAutoEnrollment
   std::string RequestType() override;
   std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
       const net::test_server::HttpRequest& request) override;
+
+  // Returns a copy of the regression test data.
+  static std::unique_ptr<RlweTestData> LoadTestData();
+
+ private:
+  std::unique_ptr<RlweTestData> test_data_;
 };
 
 }  // namespace policy

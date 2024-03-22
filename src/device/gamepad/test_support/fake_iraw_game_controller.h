@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <windows.gaming.input.h>
 #include <wrl.h>
 
-#include "base/strings/string_piece.h"
+#include <string_view>
 
 namespace device {
 
@@ -24,7 +24,7 @@ class FakeIRawGameController final
   FakeIRawGameController(int64_t gamepad_id,
                          UINT16 hardware_product_id,
                          UINT16 hardware_vendor_id,
-                         base::StringPiece display_name);
+                         std::string_view display_name);
 
   FakeIRawGameController(const FakeIRawGameController&) = delete;
   FakeIRawGameController& operator=(const FakeIRawGameController&) = delete;
@@ -71,7 +71,7 @@ class FakeIRawGameController final
   uint64_t gamepad_id_;
   UINT16 hardware_product_id_;
   UINT16 hardware_vendor_id_;
-  base::StringPiece display_name_;
+  std::string_view display_name_;
 };
 
 }  // namespace device

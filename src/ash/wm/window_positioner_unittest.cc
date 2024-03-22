@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/test/toplevel_window.h"
 #include "ash/test_shell_delegate.h"
-#include "ash/wm/window_positioner.h"
 #include "ash/wm/window_state.h"
 #include "base/strings/string_number_conversions.h"
 #include "ui/aura/client/aura_constants.h"
@@ -24,15 +23,7 @@
 
 namespace ash {
 
-class WindowPositionerTest : public AshTestBase {
- public:
-  WindowPositionerTest() = default;
-
-  WindowPositionerTest(const WindowPositionerTest&) = delete;
-  WindowPositionerTest& operator=(const WindowPositionerTest&) = delete;
-
-  ~WindowPositionerTest() override = default;
-};
+using WindowPositionerTest = AshTestBase;
 
 TEST_F(WindowPositionerTest, OpenDefaultWindowOnSecondDisplay) {
   UpdateDisplay("500x400,1400x900");
@@ -140,4 +131,5 @@ TEST_F(WindowPositionerTest, AutoRearrangeOnHideOrRemove) {
   window2.reset();
   EXPECT_EQ(gfx::Rect(200, 200, 330, 230), window1->GetBoundsInScreen());
 }
+
 }  // namespace ash

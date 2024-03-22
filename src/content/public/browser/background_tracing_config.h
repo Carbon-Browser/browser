@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,8 @@
 #include <memory>
 
 #include "base/trace_event/trace_event_impl.h"
+#include "base/values.h"
 #include "content/common/content_export.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace content {
 
@@ -34,9 +31,10 @@ class CONTENT_EXPORT BackgroundTracingConfig {
   const std::string& scenario_name() const { return scenario_name_; }
   bool has_crash_scenario() const { return has_crash_scenario_; }
 
-  static std::unique_ptr<BackgroundTracingConfig> FromDict(base::Value&& dict);
+  static std::unique_ptr<BackgroundTracingConfig> FromDict(
+      base::Value::Dict&& dict);
 
-  virtual base::Value ToDict() = 0;
+  virtual base::Value::Dict ToDict() = 0;
 
   virtual void SetPackageNameFilteringEnabled(bool) = 0;
 

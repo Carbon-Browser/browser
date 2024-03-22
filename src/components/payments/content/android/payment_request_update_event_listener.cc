@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "components/payments/content/android/jni_headers/PaymentRequestUpdateEventListener_jni.h"
+#include "components/payments/content/android/service_jni/PaymentRequestUpdateEventListener_jni.h"
 
 namespace payments {
 namespace android {

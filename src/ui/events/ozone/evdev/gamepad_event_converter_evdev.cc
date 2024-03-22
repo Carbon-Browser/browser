@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,7 @@ GamepadEventConverterEvdev::GamepadEventConverterEvdev(
   supports_rumble_ = devinfo.SupportsRumble();
   // Converts unsigned long to uint64_t.
   const auto key_bits = devinfo.GetKeyBits();
-  key_bits_.resize(key_bits.size());
+  key_bits_.resize(EVDEV_BITS_TO_INT64(KEY_CNT));
   for (int i = 0; i < KEY_CNT; i++) {
     if (EvdevBitIsSet(key_bits.data(), i)) {
       EvdevSetUint64Bit(key_bits_.data(), i);
@@ -296,4 +296,14 @@ void GamepadEventConverterEvdev::OnSync(const base::TimeTicks& timestamp) {
     will_send_frame_ = false;
   }
 }
+
+std::ostream& GamepadEventConverterEvdev::DescribeForLog(
+    std::ostream& os) const {
+  os << "class=ui::GamepadEventConverterEvdev id=" << input_device_.id
+     << std::endl
+     << " supports_rumble=" << supports_rumble_ << std::endl
+     << "base ";
+  return EventConverterEvdev::DescribeForLog(os);
+}
+
 }  //  namespace ui

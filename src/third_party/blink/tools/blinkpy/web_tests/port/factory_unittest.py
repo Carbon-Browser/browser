@@ -59,11 +59,10 @@ class FactoryTest(unittest.TestCase):
         self.assertIsInstance(port, cls)
 
     def test_mac(self):
-        self.assert_port(
-            port_name='mac',
-            os_name='mac',
-            os_version='mac10.14',
-            cls=mac.MacPort)
+        self.assert_port(port_name='mac',
+                         os_name='mac',
+                         os_version='mac10.15',
+                         cls=mac.MacPort)
 
     def test_linux(self):
         self.assert_port(
@@ -100,6 +99,12 @@ class FactoryTest(unittest.TestCase):
         self.assertEqual(
             factory.PortFactory(host).get_from_builder_name(
                 'My Fake Mac11 Builder').name(), 'mac-mac11')
+
+    def test_options_is_unchanged(self):
+        host = MockHost()
+        options = optparse.Values()
+        factory.PortFactory(host).get(options=options)
+        self.assertEqual(options, optparse.Values())
 
     def get_port(self, target=None, configuration=None, files=None):
         host = MockHost()
@@ -190,3 +195,7 @@ class FactoryTest(unittest.TestCase):
                 target='Debug',
                 configuration='Release',
                 files={'out/Debug/toolchain.ninja': ''})
+
+    def test_no_target_has_correct_config(self):
+        port = self.get_port(files={'out/Release/args.gn': 'is_debug = true'})
+        self.assertEqual(port._options.configuration, 'Debug')

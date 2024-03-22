@@ -32,7 +32,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_message_event_init.h"
 #include "third_party/blink/renderer/core/event_interface_names.h"
 #include "third_party/blink/renderer/core/frame/user_activation.h"
-#include "third_party/blink/renderer/core/html/portal/html_portal_element.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/to_v8.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
@@ -44,8 +43,7 @@ const V8PrivateProperty::SymbolKey kPrivatePropertyMessageEventCachedData;
 
 static inline bool IsValidSource(EventTarget* source) {
   return !source || source->ToDOMWindow() || source->ToMessagePort() ||
-         source->ToServiceWorker() || source->ToPortalHost() ||
-         IsA<HTMLPortalElement>(source->ToNode());
+         source->ToServiceWorker();
 }
 
 size_t MessageEvent::SizeOfExternalMemoryInBytes() {
@@ -244,7 +242,7 @@ void MessageEvent::initMessageEvent(const AtomicString& type,
   origin_ = origin;
   last_event_id_ = last_event_id;
   source_ = source;
-  if (ports.IsEmpty()) {
+  if (ports.empty()) {
     ports_ = nullptr;
   } else {
     ports_ = MakeGarbageCollected<MessagePortArray>();
@@ -382,6 +380,12 @@ bool MessageEvent::IsLockedToAgentCluster() const {
     return false;
   }
   return data_as_serialized_script_value_->Value()->IsLockedToAgentCluster();
+}
+
+bool MessageEvent::CanDeserializeIn(ExecutionContext* execution_context) const {
+  return data_type_ != kDataTypeSerializedScriptValue ||
+         data_as_serialized_script_value_->Value()->CanDeserializeIn(
+             execution_context);
 }
 
 void MessageEvent::EntangleMessagePorts(ExecutionContext* context) {

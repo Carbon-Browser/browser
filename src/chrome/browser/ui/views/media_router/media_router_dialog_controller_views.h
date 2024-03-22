@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "chrome/browser/ui/media_router/media_router_ui_service.h"
+#include "chrome/browser/ui/views/media_router/cast_dialog_coordinator.h"
 #include "components/media_router/browser/media_router_dialog_controller.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "ui/views/widget/widget.h"
@@ -53,6 +55,10 @@ class MediaRouterDialogControllerViews
 
   void SetHideMediaButtonForTesting(bool hide);
 
+  CastDialogCoordinator& GetCastDialogCoordinatorForTesting() {
+    return cast_dialog_coordinator_;
+  }
+
  private:
   friend class content::WebContentsUserData<MediaRouterDialogControllerViews>;
   friend class MediaRouterCastUiForTest;
@@ -64,14 +70,22 @@ class MediaRouterDialogControllerViews
   // MediaRouterUIService::Observer:
   void OnServiceDisabled() override;
 
-  // Initializes |ui_|.
+  // Initializes and destroys |ui_| respectively.
   void InitializeMediaRouterUI();
+  void DestroyMediaRouterUI();
 
+#if BUILDFLAG(IS_CHROMEOS)
+  // Show the GMC dialog in the Ash UI.
+  void ShowGlobalMediaControlsDialog(
+      std::unique_ptr<StartPresentationContext> context);
+#else
   // If there exists a media button, show the GMC dialog anchored to the media
   // button. Otherwise, show the dialog anchored to the top center of the web
   // contents.
-  void ShowGlobalMeidaControlsDialog(
+  void ShowGlobalMediaControlsDialogAsync(
       std::unique_ptr<StartPresentationContext> context);
+  void ShowGlobalMediaControlsDialog();
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Returns the media button from the browser that initiates the request to
   // open the dialog. Returns nullptr if:
@@ -91,6 +105,8 @@ class MediaRouterDialogControllerViews
   // GlobalMediaControlsCastStartStopEnabled() returns true.
   std::unique_ptr<MediaRouterUI> ui_;
 
+  CastDialogCoordinator cast_dialog_coordinator_;
+
   base::RepeatingClosure dialog_creation_callback_;
 
   base::ScopedMultiSourceObservation<views::Widget, views::WidgetObserver>
@@ -100,6 +116,9 @@ class MediaRouterDialogControllerViews
   const raw_ptr<MediaRouterUIService> media_router_ui_service_;
 
   bool hide_media_button_for_testing_ = false;
+
+  base::WeakPtrFactory<MediaRouterDialogControllerViews> weak_ptr_factory_{
+      this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

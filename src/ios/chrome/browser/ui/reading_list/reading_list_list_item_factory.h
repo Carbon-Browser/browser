@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,9 @@ class ReadingListEntry;
 @property(nonatomic, weak) id<ReadingListListItemFactoryDelegate> delegate;
 
 // Factory method that provides a ListItem for the reading list.
-- (ListItem<ReadingListListItem>*)cellItemForReadingListEntry:
-    (const ReadingListEntry*)entry;
+- (ListItem<ReadingListListItem>*)
+    cellItemForReadingListEntry:(const ReadingListEntry*)entry
+            needsExplicitUpload:(BOOL)needsExplicitUpload;
 
 @end
 

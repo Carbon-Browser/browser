@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -113,7 +113,7 @@ void ContentDecryptionModuleResultPromise::CompleteWithError(
   StringBuilder result;
   result.Append(error_message);
   if (system_code != 0) {
-    if (result.IsEmpty())
+    if (result.empty())
       result.Append("Rejected with system code");
     result.Append(" (");
     result.AppendNumber(system_code);
@@ -134,7 +134,7 @@ void ContentDecryptionModuleResultPromise::Reject(ExceptionCode code,
   ScriptState::Scope scope(resolver_->GetScriptState());
   ExceptionState exception_state(
       resolver_->GetScriptState()->GetIsolate(),
-      ExceptionState::kExecutionContext,
+      ExceptionContextType::kOperationInvoke,
       EncryptedMediaUtils::GetInterfaceName(api_type_),
       EncryptedMediaUtils::GetPropertyName(api_type_));
   exception_state.ThrowException(code, error_message);
@@ -154,6 +154,10 @@ bool ContentDecryptionModuleResultPromise::IsValidToFulfillPromise() {
   // process of being destroyed. If it is, there is no need to fulfill this
   // promise which is about to go away anyway.
   return GetExecutionContext() && !GetExecutionContext()->IsContextDestroyed();
+}
+
+MediaKeysConfig ContentDecryptionModuleResultPromise::GetMediaKeysConfig() {
+  return config_;
 }
 
 void ContentDecryptionModuleResultPromise::Trace(Visitor* visitor) const {

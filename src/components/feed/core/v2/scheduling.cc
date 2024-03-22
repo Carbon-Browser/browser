@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feed/core/v2/scheduling.h"
 
 #include "base/json/values_util.h"
-#include "base/stl_util.h"
 #include "base/time/time.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "base/values.h"
 #include "components/feed/core/v2/config.h"
 #include "components/feed/core/v2/feedstore_util.h"
@@ -137,7 +137,7 @@ bool ContentInvalidFromAge(const feedstore::Metadata& metadata,
   base::TimeDelta content_expiration_threshold =
       GetFeedConfig().content_expiration_threshold;
   if (base::FeatureList::IsEnabled(kWebFeedOnboarding) &&
-      !is_web_feed_subscriber && stream_type == kWebFeedStream) {
+      !is_web_feed_subscriber && stream_type.IsWebFeed()) {
     content_expiration_threshold =
         GetFeedConfig().subscriptionless_content_expiration_threshold;
   }

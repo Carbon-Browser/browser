@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,11 @@ class UmaSessionStats {
       variations::SyntheticTrialAnnotationMode annotation_mode);
 
   static bool IsBackgroundSessionStartForTesting();
+
+  // Reads counters Chrome.UMA.OnPostCreateCounter2 and
+  // Chrome.UMA.OnResumeCounter2 that are written to in ChromeActivity.java. The
+  // counters are encoded in an enum histogram, emitted and reset to 0.
+  static void EmitAndResetCounters();
 
  private:
   friend class base::NoDestructor<UmaSessionStats>;

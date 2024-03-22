@@ -29,10 +29,10 @@
 
 #include <atomic>
 
-#include "base/callback_forward.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
@@ -48,12 +48,8 @@
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_export.h"
 
-#if DCHECK_IS_ON()
-#include "third_party/blink/renderer/platform/wtf/thread_restriction_verifier.h"
-#endif
-
-#if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_cftyperef.h"
+#if BUILDFLAG(IS_APPLE)
+#include "base/apple/scoped_cftyperef.h"
 
 typedef const struct __CFString* CFStringRef;
 #endif
@@ -63,8 +59,6 @@ typedef const struct __CFString* CFStringRef;
 #endif
 
 namespace WTF {
-
-struct AlreadyHashed;
 
 enum TextCaseSensitivity {
   kTextCaseSensitive,
@@ -80,10 +74,11 @@ enum StripBehavior { kStripExtraWhiteSpace, kDoNotStripWhiteSpace };
 
 typedef bool (*CharacterMatchFunctionPtr)(UChar);
 typedef bool (*IsWhiteSpaceFunctionPtr)(UChar);
-typedef HashMap<wtf_size_t, StringImpl*, AlreadyHashed> StaticStringsTable;
+typedef HashMap<wtf_size_t, StringImpl*, AlreadyHashedTraits>
+    StaticStringsTable;
 
 // You can find documentation about this class in this doc:
-// https://docs.google.com/document/d/1kOCUlJdh2WJMJGDf-WoEQhmnjKLaOYRbiHz5TiGJl14/edit?usp=sharing
+// https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/renderer/platform/wtf/text/README.md
 class WTF_EXPORT StringImpl {
  private:
   // StringImpls are allocated out of the WTF buffer partition.
@@ -92,9 +87,7 @@ class WTF_EXPORT StringImpl {
   void operator delete(void*);
 
   // Used to construct static strings, which have a special ref_count_ that can
-  // never hit zero. This means that the static string will never be destroyed,
-  // which is important because static strings will be shared across threads &
-  // ref-counted in a non-threadsafe manner.
+  // never hit zero. This means that the static string will never be destroyed.
   enum ConstructEmptyStringTag { kConstructEmptyString };
   explicit StringImpl(ConstructEmptyStringTag)
       : length_(0),
@@ -263,9 +256,6 @@ class WTF_EXPORT StringImpl {
   }
 
   ALWAYS_INLINE bool HasOneRef() const {
-#if DCHECK_IS_ON()
-    DCHECK(IsStatic() || verifier_.IsSafeToUse()) << AsciiForDebugging();
-#endif
     return ref_count_.load(std::memory_order_acquire) == 1;
   }
 
@@ -346,7 +336,9 @@ class WTF_EXPORT StringImpl {
   static void CopyChars(T* destination,
                         const T* source,
                         wtf_size_t num_characters) {
-    memcpy(destination, source, num_characters * sizeof(T));
+    if (num_characters > 0) {
+      memcpy(destination, source, num_characters * sizeof(T));
+    }
   }
 
   ALWAYS_INLINE static void CopyChars(UChar* destination,
@@ -356,9 +348,8 @@ class WTF_EXPORT StringImpl {
       destination[i] = source[i];
   }
 
-  // Some string features, like refcounting and the atomicity flag, are not
-  // thread-safe. We achieve thread safety by isolation, giving each thread
-  // its own copy of the string.
+  // It is no longer required to create isolated copies for thread-safety
+  // purposes.
   scoped_refptr<StringImpl> IsolatedCopy() const;
 
   scoped_refptr<StringImpl> Substring(wtf_size_t pos,
@@ -398,6 +389,8 @@ class WTF_EXPORT StringImpl {
   scoped_refptr<StringImpl> FoldCase();
 
   scoped_refptr<StringImpl> Truncate(wtf_size_t length);
+
+  unsigned LengthWithStrippedWhiteSpace() const;
 
   scoped_refptr<StringImpl> StripWhiteSpace();
   scoped_refptr<StringImpl> StripWhiteSpace(IsWhiteSpaceFunctionPtr);
@@ -486,8 +479,8 @@ class WTF_EXPORT StringImpl {
                  wtf_size_t start = 0,
                  wtf_size_t length = UINT_MAX) const;
 
-#if BUILDFLAG(IS_MAC)
-  base::ScopedCFTypeRef<CFStringRef> CreateCFString();
+#if BUILDFLAG(IS_APPLE)
+  base::apple::ScopedCFTypeRef<CFStringRef> CreateCFString();
 #endif
 #ifdef __OBJC__
   operator NSString*();
@@ -505,8 +498,7 @@ class WTF_EXPORT StringImpl {
 
     // This is the only flag that can be both set and unset. It is safe to do
     // so because all accesses are mediated by the same atomic string table and
-    // so protected by thread locality (pre-unification) or a mutex
-    // (post-unification). Thus these accesses can also be relaxed.
+    // so protected by a mutex. Thus these accesses can also be relaxed.
     kIsAtomic = 1 << 2,
 
     // These bits are set atomically together. They are initially all
@@ -583,6 +575,8 @@ class WTF_EXPORT StringImpl {
                                     wtf_size_t replacement_length);
 
   template <class UCharPredicate>
+  unsigned LengthWithStrippedMatchedCharacters(UCharPredicate) const;
+  template <class UCharPredicate>
   scoped_refptr<StringImpl> StripMatchedCharacters(UCharPredicate);
   template <typename CharType, class UCharPredicate>
   scoped_refptr<StringImpl> SimplifyMatchedCharactersToSpace(UCharPredicate,
@@ -610,11 +604,9 @@ class WTF_EXPORT StringImpl {
 #endif
 
 #if DCHECK_IS_ON()
-  mutable ThreadRestrictionVerifier verifier_;
   mutable std::atomic<unsigned> ref_count_change_count_{0};
 #endif
-  // TODO (crbug.com/1083392): Use base::AtomicRefCount once Blink strings are
-  // fully thread-safe and ThreadRestrictionVerifier is no longer needed.
+  // TODO (crbug.com/1083392): Use base::AtomicRefCount.
   mutable std::atomic_uint32_t ref_count_{1};
   const unsigned length_;
   mutable std::atomic<uint32_t> hash_and_flags_;
@@ -674,7 +666,7 @@ template <typename CharType>
 ALWAYS_INLINE bool Equal(const CharType* a,
                          const CharType* b,
                          wtf_size_t length) {
-  return !memcmp(a, b, length * sizeof(CharType));
+  return std::equal(a, a + length, b);
 }
 
 ALWAYS_INLINE bool Equal(const LChar* a, const UChar* b, wtf_size_t length) {
@@ -960,19 +952,13 @@ inline void StringImpl::PrependTo(BufferType& result,
     result.Prepend(Characters16() + start, number_of_characters_to_copy);
 }
 
-struct StringHash;
-
-// StringHash is the default hash for StringImpl* and scoped_refptr<StringImpl>
 template <typename T>
-struct DefaultHash;
+struct HashTraits;
+// Defined in string_hash.h.
 template <>
-struct DefaultHash<StringImpl*> {
-  typedef StringHash Hash;
-};
+struct HashTraits<StringImpl*>;
 template <>
-struct DefaultHash<scoped_refptr<StringImpl>> {
-  typedef StringHash Hash;
-};
+struct HashTraits<scoped_refptr<StringImpl>>;
 
 }  // namespace WTF
 

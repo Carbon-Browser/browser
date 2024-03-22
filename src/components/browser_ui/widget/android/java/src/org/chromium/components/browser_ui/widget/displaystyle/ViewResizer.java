@@ -1,10 +1,9 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.browser_ui.widget.displaystyle;
 
-import android.content.res.Resources;
 import android.view.View;
 
 import androidx.core.view.ViewCompat;
@@ -19,14 +18,13 @@ import androidx.core.view.ViewCompat;
 public class ViewResizer implements DisplayStyleObserver {
     /** The default value for the lateral padding. */
     private int mDefaultPaddingPixels;
+
     /** The minimum wide display value used for the lateral padding. */
     private int mMinWidePaddingPixels;
-    protected final View mView;
+
+    private final View mView;
     private final DisplayStyleObserverAdapter mDisplayStyleObserver;
     protected final UiConfig mUiConfig;
-
-    @HorizontalDisplayStyle
-    private int mCurrentDisplayStyle;
 
     /**
      * @param view The view that will have its padding resized.
@@ -63,23 +61,18 @@ public class ViewResizer implements DisplayStyleObserver {
         return viewResizer;
     }
 
-    /**
-     * Attaches to the {@link UiConfig}.
-     */
+    /** Attaches to the {@link UiConfig}. */
     public void attach() {
         mDisplayStyleObserver.attach();
     }
 
-    /**
-     * Detaches from the {@link UiConfig}.
-     */
+    /** Detaches from the {@link UiConfig}. */
     public void detach() {
         mDisplayStyleObserver.detach();
     }
 
     @Override
     public void onDisplayStyleChanged(UiConfig.DisplayStyle newDisplayStyle) {
-        mCurrentDisplayStyle = newDisplayStyle.horizontal;
         updatePadding();
     }
 
@@ -102,22 +95,14 @@ public class ViewResizer implements DisplayStyleObserver {
                 mView, padding, mView.getPaddingTop(), padding, mView.getPaddingBottom());
     }
 
-    /**
-     * Computes the lateral padding to be applied to the associated view.
-     */
+    /** Computes the lateral padding to be applied to the associated view. */
     protected int computePadding() {
-        if (mCurrentDisplayStyle != HorizontalDisplayStyle.WIDE) return mDefaultPaddingPixels;
+        if (!mUiConfig.getCurrentDisplayStyle().isWide()) return mDefaultPaddingPixels;
+        return ViewResizerUtil.computePaddingForWideDisplay(
+                mUiConfig.getContext(), mMinWidePaddingPixels);
+    }
 
-        // mUiConfig.getContext().getResources() is used here instead of mView.getResources()
-        // because lemon compression, somehow, causes the resources to return a different
-        // configuration.
-        Resources resources = mUiConfig.getContext().getResources();
-        int screenWidthDp = resources.getConfiguration().screenWidthDp;
-        float dpToPx = resources.getDisplayMetrics().density;
-        int padding =
-                (int) (((screenWidthDp - UiConfig.WIDE_DISPLAY_STYLE_MIN_WIDTH_DP) / 2.f) * dpToPx);
-        padding = Math.max(mMinWidePaddingPixels, padding);
-
-        return padding;
+    protected int getMinWidePaddingPixels() {
+        return mMinWidePaddingPixels;
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <string_view>
+
 #include "base/component_export.h"
 #include "base/export_template.h"
 #include "base/memory/raw_ptr_exclusion.h"
+#include "base/numerics/clamped_math.h"
 #include "url/third_party/mozilla/url_parse.h"
 
 namespace url {
@@ -25,55 +28,47 @@ namespace url {
 // resize function that is called when the existing buffer is not big enough.
 // The derived class is then in charge of setting up our buffer which we will
 // manage.
-template<typename T>
+template <typename T>
 class CanonOutputT {
  public:
-  CanonOutputT() : buffer_(nullptr), buffer_len_(0), cur_len_(0) {}
-  virtual ~CanonOutputT() {
-  }
+  CanonOutputT() = default;
+  virtual ~CanonOutputT() = default;
 
   // Implemented to resize the buffer. This function should update the buffer
   // pointer to point to the new buffer, and any old data up to |cur_len_| in
   // the buffer must be copied over.
   //
   // The new size |sz| must be larger than buffer_len_.
-  virtual void Resize(int sz) = 0;
+  virtual void Resize(size_t sz) = 0;
 
   // Accessor for returning a character at a given position. The input offset
   // must be in the valid range.
-  inline T at(int offset) const {
-    return buffer_[offset];
-  }
+  inline T at(size_t offset) const { return buffer_[offset]; }
 
   // Sets the character at the given position. The given position MUST be less
   // than the length().
-  inline void set(int offset, T ch) {
-    buffer_[offset] = ch;
-  }
+  inline void set(size_t offset, T ch) { buffer_[offset] = ch; }
 
   // Returns the number of characters currently in the buffer.
-  inline int length() const {
-    return cur_len_;
-  }
+  inline size_t length() const { return cur_len_; }
 
   // Returns the current capacity of the buffer. The length() is the number of
   // characters that have been declared to be written, but the capacity() is
   // the number that can be written without reallocation. If the caller must
   // write many characters at once, it can make sure there is enough capacity,
   // write the data, then use set_size() to declare the new length().
-  int capacity() const {
-    return buffer_len_;
+  size_t capacity() const { return buffer_len_; }
+
+  // Returns the contents of the buffer as a string_view.
+  std::basic_string_view<T> view() const {
+    return std::basic_string_view<T>(data(), length());
   }
 
   // Called by the user of this class to get the output. The output will NOT
   // be NULL-terminated. Call length() to get the
   // length.
-  const T* data() const {
-    return buffer_;
-  }
-  T* data() {
-    return buffer_;
-  }
+  const T* data() const { return buffer_; }
+  T* data() { return buffer_; }
 
   // Shortens the URL to the new length. Used for "backing up" when processing
   // relative paths. This can also be used if an external function writes a lot
@@ -81,9 +76,7 @@ class CanonOutputT {
   // to declare the new length.
   //
   // This MUST NOT be used to expand the size of the buffer beyond capacity().
-  void set_length(int new_len) {
-    cur_len_ = new_len;
-  }
+  void set_length(size_t new_len) { cur_len_ = new_len; }
 
   // This is the most performance critical function, since it is called for
   // every character.
@@ -107,28 +100,29 @@ class CanonOutputT {
   }
 
   // Appends the given string to the output.
-  void Append(const T* str, int str_len) {
-    if (cur_len_ + str_len > buffer_len_) {
-      if (!Grow(cur_len_ + str_len - buffer_len_))
+  void Append(const T* str, size_t str_len) {
+    if (str_len > buffer_len_ - cur_len_) {
+      if (!Grow(str_len - (buffer_len_ - cur_len_)))
         return;
     }
-    for (int i = 0; i < str_len; i++)
-      buffer_[cur_len_ + i] = str[i];
+    memcpy(buffer_ + cur_len_, str, str_len * sizeof(T));
     cur_len_ += str_len;
   }
 
-  void ReserveSizeIfNeeded(int estimated_size) {
+  void Append(std::basic_string_view<T> str) { Append(str.data(), str.size()); }
+
+  void ReserveSizeIfNeeded(size_t estimated_size) {
     // Reserve a bit extra to account for escaped chars.
     if (estimated_size > buffer_len_)
-      Resize(estimated_size + 8);
+      Resize((base::ClampedNumeric<size_t>(estimated_size) + 8).RawValue());
   }
 
  protected:
   // Grows the given buffer so that it can fit at least |min_additional|
   // characters. Returns true if the buffer could be resized, false on OOM.
-  bool Grow(int min_additional) {
-    static const int kMinBufferLen = 16;
-    int new_len = (buffer_len_ == 0) ? kMinBufferLen : buffer_len_;
+  bool Grow(size_t min_additional) {
+    static const size_t kMinBufferLen = 16;
+    size_t new_len = (buffer_len_ == 0) ? kMinBufferLen : buffer_len_;
     do {
       if (new_len >= (1 << 30))  // Prevent overflow below.
         return false;
@@ -140,17 +134,17 @@ class CanonOutputT {
 
   // `buffer_` is not a raw_ptr<...> for performance reasons (based on analysis
   // of sampling profiler data).
-  RAW_PTR_EXCLUSION T* buffer_;
-  int buffer_len_;
+  RAW_PTR_EXCLUSION T* buffer_ = nullptr;
+  size_t buffer_len_ = 0;
 
   // Used characters in the buffer.
-  int cur_len_;
+  size_t cur_len_ = 0;
 };
 
 // Simple implementation of the CanonOutput using new[]. This class
 // also supports a static buffer so if it is allocated on the stack, most
 // URLs can be canonicalized with no heap allocations.
-template<typename T, int fixed_capacity = 1024>
+template <typename T, int fixed_capacity = 1024>
 class RawCanonOutputT : public CanonOutputT<T> {
  public:
   RawCanonOutputT() : CanonOutputT<T>() {
@@ -162,7 +156,7 @@ class RawCanonOutputT : public CanonOutputT<T> {
       delete[] this->buffer_;
   }
 
-  void Resize(int sz) override {
+  void Resize(size_t sz) override {
     T* new_buf = new T[sz];
     memcpy(new_buf, this->buffer_,
            sizeof(T) * (this->cur_len_ < sz ? this->cur_len_ : sz));
@@ -188,7 +182,7 @@ extern template class EXPORT_TEMPLATE_DECLARE(COMPONENT_EXPORT(URL))
 typedef CanonOutputT<char> CanonOutput;
 typedef CanonOutputT<char16_t> CanonOutputW;
 
-template<int fixed_capacity>
+template <int fixed_capacity>
 class RawCanonOutput : public RawCanonOutputT<char, fixed_capacity> {};
 template <int fixed_capacity>
 class RawCanonOutputW : public RawCanonOutputT<char16_t, fixed_capacity> {};
@@ -293,7 +287,7 @@ const char16_t* RemoveURLWhitespace(const char16_t* input,
 //
 // On error, returns false. The output in this case is undefined.
 COMPONENT_EXPORT(URL)
-bool IDNToASCII(const char16_t* src, int src_len, CanonOutputW* output);
+bool IDNToASCII(std::u16string_view src, CanonOutputW* output);
 
 // Piece-by-piece canonicalizers ----------------------------------------------
 //
@@ -367,16 +361,16 @@ struct CanonHostInfo {
 
   // This field summarizes how the input was classified by the canonicalizer.
   enum Family {
-    NEUTRAL,   // - Doesn't resemble an IP address. As far as the IP
-               //   canonicalizer is concerned, it should be treated as a
-               //   hostname.
-    BROKEN,    // - Almost an IP, but was not canonicalized. This could be an
-               //   IPv4 address where truncation occurred, or something
-               //   containing the special characters :[] which did not parse
-               //   as an IPv6 address. Never attempt to connect to this
-               //   address, because it might actually succeed!
-    IPV4,      // - Successfully canonicalized as an IPv4 address.
-    IPV6,      // - Successfully canonicalized as an IPv6 address.
+    NEUTRAL,  // - Doesn't resemble an IP address. As far as the IP
+              //   canonicalizer is concerned, it should be treated as a
+              //   hostname.
+    BROKEN,   // - Almost an IP, but was not canonicalized. This could be an
+              //   IPv4 address where truncation occurred, or something
+              //   containing the special characters :[] which did not parse
+              //   as an IPv6 address. Never attempt to connect to this
+              //   address, because it might actually succeed!
+    IPV4,     // - Successfully canonicalized as an IPv4 address.
+    IPV6,     // - Successfully canonicalized as an IPv6 address.
   };
   Family family;
 
@@ -401,7 +395,6 @@ struct CanonHostInfo {
     return family == IPV4 ? 4 : (family == IPV6 ? 16 : 0);
   }
 };
-
 
 // Host.
 //
@@ -719,7 +712,7 @@ bool CanonicalizeMailtoURL(const char16_t* spec,
 // This structures does not own any data. It is the caller's responsibility to
 // ensure that the data the pointers point to stays in scope and is not
 // modified.
-template<typename CHAR>
+template <typename CHAR>
 struct URLComponentSource {
   // Constructor normally used by callers wishing to replace components. This
   // will make them all NULL, which is no replacement. The caller would then
@@ -744,17 +737,32 @@ struct URLComponentSource {
         port(default_value),
         path(default_value),
         query(default_value),
-        ref(default_value) {
-  }
+        ref(default_value) {}
 
-  const CHAR* scheme;
-  const CHAR* username;
-  const CHAR* password;
-  const CHAR* host;
-  const CHAR* port;
-  const CHAR* path;
-  const CHAR* query;
-  const CHAR* ref;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const CHAR* scheme;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const CHAR* username;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const CHAR* password;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const CHAR* host;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const CHAR* port;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const CHAR* path;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const CHAR* query;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION const CHAR* ref;
 };
 
 // This structure encapsulates information on modifying a URL. Each component
@@ -767,11 +775,10 @@ struct URLComponentSource {
 // IN SCOPE BY THE CALLER for as long as this object exists!
 //
 // Prefer the 8-bit replacement version if possible since it is more efficient.
-template<typename CHAR>
+template <typename CHAR>
 class Replacements {
  public:
-  Replacements() {
-  }
+  Replacements() {}
 
   // Scheme
   void SetScheme(const CHAR* s, const Component& comp) {

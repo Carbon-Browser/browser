@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,19 @@ var getIframe = function() { return document.querySelector('iframe'); };
 
 window.tests = {
   canReadClipboard: function() {
-    domAutomationController.send(document.execCommand('paste'));
+    return document.execCommand('paste');
   },
 
   canWriteClipboard: function() {
-    domAutomationController.send(document.execCommand('copy'));
+    return document.execCommand('copy');
   },
 
   canReadClipboardInAboutBlankFrame: function() {
-    domAutomationController.send(
-        getIframe().contentDocument.execCommand('paste'));
+    return getIframe().contentDocument.execCommand('paste');
   },
 
   canWriteClipboardInAboutBlankFrame: function() {
-    domAutomationController.send(
-        getIframe().contentDocument.execCommand('copy'));
+    return getIframe().contentDocument.execCommand('copy');
   },
 };
 

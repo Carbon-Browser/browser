@@ -1,25 +1,27 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/interest_group/auction_process_manager.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_process_host_observer.h"
 #include "content/public/browser/service_process_host.h"
 #include "content/public/browser/site_instance.h"
-#include "content/public/common/child_process_host.h"
 #include "content/services/auction_worklet/public/mojom/auction_worklet_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -44,6 +46,7 @@ class AuctionProcessManager::WorkletProcess
       : render_process_host_(render_process_host),
         worklet_type_(worklet_type),
         origin_(origin),
+        start_time_(base::TimeTicks::Now()),
         uses_shared_process_(uses_shared_process),
         auction_process_manager_(auction_process_manager),
         service_(std::move(service)) {
@@ -85,6 +88,8 @@ class AuctionProcessManager::WorkletProcess
   }
 
   void OnLaunchedWithPid(base::ProcessId pid) {
+    base::UmaHistogramTimes("Ads.InterestGroup.Auction.ProcessLaunchTime",
+                            base::TimeTicks::Now() - start_time_);
     DCHECK(!pid_.has_value());
     pid_ = absl::make_optional<base::ProcessId>(pid);
     std::vector<base::OnceCallback<void(base::ProcessId)>> waiting_for_pid =
@@ -132,6 +137,7 @@ class AuctionProcessManager::WorkletProcess
 
   const WorkletType worklet_type_;
   const url::Origin origin_;
+  const base::TimeTicks start_time_;
   bool uses_shared_process_;
 
   absl::optional<base::ProcessId> pid_;
@@ -182,7 +188,7 @@ void AuctionProcessManager::ProcessHandle::AssignProcess(
   manager_ = nullptr;
 
   if (callback_) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&ProcessHandle::InvokeCallback,
                                   weak_ptr_factory_.GetWeakPtr()));
   }
@@ -426,9 +432,9 @@ RenderProcessHost* DedicatedAuctionProcessManager::LaunchProcess(
           // TODO(https://crbug.com/1281311) add a utility helper for Jit.
           .WithChildFlags(ChildProcessHost::CHILD_RENDERER)
 #endif
-          .WithProcessCallback(
-              base::BindOnce(&ProcessHandle::OnBaseProcessLaunched,
-                             process_handle->weak_ptr_factory_.GetWeakPtr()))
+          .WithProcessCallback(base::BindOnce(
+              &ProcessHandle::OnBaseProcessLaunched,
+              process_handle->weak_ptr_factory_.GetMutableWeakPtr()))
           .Pass());
   return nullptr;
 }

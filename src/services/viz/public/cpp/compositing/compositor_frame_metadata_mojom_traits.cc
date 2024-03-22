@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,7 @@ bool StructTraits<viz::mojom::CompositorFrameMetadataDataView,
   out->has_shared_element_resources = data.has_shared_element_resources();
   out->is_resourceless_software_draw_with_scroll_or_animation =
       data.is_resourceless_software_draw_with_scroll_or_animation();
+  out->is_handling_interaction = data.is_handling_interaction();
   out->send_frame_token_to_embedder = data.send_frame_token_to_embedder();
   out->min_page_scale_factor = data.min_page_scale_factor();
   if (data.top_controls_visible_height_set()) {

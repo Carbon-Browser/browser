@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,6 @@ class WebCacheImpl : public mojom::WebCache {
   };
 
   // mojom::WebCache methods:
-  void SetCacheCapacity(uint64_t capacity) override;
   // If |on_navigation| is true, the clearing is delayed until the next
   // navigation event.
   void ClearCache(bool on_navigation) override;
@@ -52,8 +51,6 @@ class WebCacheImpl : public mojom::WebCache {
   State clear_cache_state_ = kInit;
 
   mojo::ReceiverSet<mojom::WebCache> receivers_;
-
-  absl::optional<base::MemoryPressureListener> memory_pressure_listener_;
 };
 
 }  // namespace web_cache

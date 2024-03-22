@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,25 @@
 #include <cstddef>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/syslog_logging.h"
+#include "base/system/sys_info.h"
 #include "base/time/time.h"
-#include "chromeos/system/devicemode.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/display/display.h"
 #include "ui/display/display_features.h"
 #include "ui/display/display_switches.h"
 #include "ui/display/manager/content_protection_manager.h"
 #include "ui/display/manager/display_layout_manager.h"
-#include "ui/display/manager/display_manager_util.h"
 #include "ui/display/manager/managed_display_info.h"
 #include "ui/display/manager/update_display_configuration_task.h"
+#include "ui/display/manager/util/display_manager_util.h"
+#include "ui/display/types/display_constants.h"
 #include "ui/display/types/display_mode.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/display/types/gamma_ramp_rgb_entry.h"
@@ -35,23 +39,20 @@ namespace {
 typedef std::vector<const DisplayMode*> DisplayModeList;
 
 struct DisplayState {
-  DisplaySnapshot* display = nullptr;  // Not owned.
+  raw_ptr<DisplaySnapshot, ExperimentalAsh> display = nullptr;  // Not owned.
 
   // User-selected mode for the display.
-  const DisplayMode* selected_mode = nullptr;
+  raw_ptr<const DisplayMode, ExperimentalAsh> selected_mode = nullptr;
 
   // Mode used when displaying the same desktop on multiple displays.
-  const DisplayMode* mirror_mode = nullptr;
+  raw_ptr<const DisplayMode, ExperimentalAsh> mirror_mode = nullptr;
 };
 
 // Returns whether |display_id| can be found in |display_list|,
 bool IsDisplayIdInDisplayStateList(
     int64_t display_id,
     const DisplayConfigurator::DisplayStateList& display_list) {
-  return std::find_if(display_list.begin(), display_list.end(),
-                      [display_id](DisplaySnapshot* display) {
-                        return display->display_id() == display_id;
-                      }) != display_list.end();
+  return base::Contains(display_list, display_id, &DisplaySnapshot::display_id);
 }
 
 // Returns true if a platform native |mode| is equal to a |managed_mode|.
@@ -128,9 +129,14 @@ class DisplayConfigurator::DisplayLayoutManagerImpl
       MultipleDisplayState new_display_state,
       chromeos::DisplayPowerState new_power_state,
       RefreshRateThrottleState new_throttle_state,
+      bool new_vrr_enabled_state,
       std::vector<DisplayConfigureRequest>* requests) const override;
   DisplayStateList GetDisplayStates() const override;
   bool IsMirroring() const override;
+
+  void set_configure_displays(bool configure_displays) {
+    configure_displays_ = configure_displays;
+  }
 
  private:
   // Parses the |displays| into a list of DisplayStates. This effectively adds
@@ -162,7 +168,9 @@ class DisplayConfigurator::DisplayLayoutManagerImpl
   bool FindExactMatchingMirrorMode(const std::vector<DisplayState*>& displays,
                                    bool preserve_native_aspect_ratio) const;
 
-  DisplayConfigurator* configurator_;  // Not owned.
+  raw_ptr<DisplayConfigurator, ExperimentalAsh> configurator_;  // Not owned.
+
+  bool configure_displays_ = false;
 };
 
 DisplayConfigurator::DisplayLayoutManagerImpl::DisplayLayoutManagerImpl(
@@ -211,8 +219,9 @@ DisplayConfigurator::DisplayLayoutManagerImpl::ParseDisplays(
 
   // Hardware mirroring doesn't work on desktop-linux Chrome OS's fake displays.
   // Skip mirror mode setup in that case to fall back on software mirroring.
-  if (!chromeos::IsRunningAsSystemCompositor())
+  if (!configure_displays_) {
     return cached_displays;
+  }
 
   if (cached_displays.size() <= 1)
     return cached_displays;
@@ -253,6 +262,7 @@ bool DisplayConfigurator::DisplayLayoutManagerImpl::GetDisplayLayout(
     MultipleDisplayState new_display_state,
     chromeos::DisplayPowerState new_power_state,
     RefreshRateThrottleState new_throttle_state,
+    bool new_vrr_enabled_state,
     std::vector<DisplayConfigureRequest>* requests) const {
   std::vector<DisplayState> states = ParseDisplays(displays);
   std::vector<bool> display_power;
@@ -265,9 +275,10 @@ bool DisplayConfigurator::DisplayLayoutManagerImpl::GetDisplayLayout(
   // Framebuffer dimensions.
   gfx::Size size;
 
-  for (size_t i = 0; i < displays.size(); ++i) {
+  for (auto* display : displays) {
     requests->push_back(DisplayConfigureRequest(
-        displays[i], displays[i]->current_mode(), gfx::Point()));
+        display, display->current_mode(), gfx::Point(),
+        new_vrr_enabled_state && display->IsVrrCapable()));
   }
 
   switch (new_display_state) {
@@ -293,7 +304,8 @@ bool DisplayConfigurator::DisplayLayoutManagerImpl::GetDisplayLayout(
 
       for (size_t i = 0; i < states.size(); ++i) {
         const DisplayState* state = &states[i];
-        (*requests)[i].mode = display_power[i] ? state->selected_mode : NULL;
+        (*requests)[i].mode =
+            display_power[i] ? state->selected_mode.get() : NULL;
 
         if (display_power[i] || states.size() == 1) {
           const DisplayMode* mode_info = state->selected_mode;
@@ -342,7 +354,8 @@ bool DisplayConfigurator::DisplayLayoutManagerImpl::GetDisplayLayout(
 
       for (size_t i = 0; i < states.size(); ++i) {
         const DisplayState* state = &states[i];
-        (*requests)[i].mode = display_power[i] ? state->mirror_mode : NULL;
+        (*requests)[i].mode =
+            display_power[i] ? state->mirror_mode.get() : NULL;
       }
       break;
     }
@@ -358,7 +371,8 @@ bool DisplayConfigurator::DisplayLayoutManagerImpl::GetDisplayLayout(
         const DisplayState* state = &states[i];
         (*requests)[i].origin.set_y(size.height() ? size.height() + kVerticalGap
                                                   : 0);
-        (*requests)[i].mode = display_power[i] ? state->selected_mode : NULL;
+        (*requests)[i].mode =
+            display_power[i] ? state->selected_mode.get() : NULL;
 
         // Retain the full screen size even if all displays are off so the
         // same desktop configuration can be restored when the displays are
@@ -577,7 +591,7 @@ DisplayConfigurator::DisplayConfigurator()
     : state_controller_(nullptr),
       mirroring_controller_(nullptr),
       is_panel_fitting_enabled_(false),
-      configure_display_(chromeos::IsRunningAsSystemCompositor()),
+      configure_displays_(base::SysInfo::IsRunningOnChromeOS()),
       current_display_state_(MULTIPLE_DISPLAY_STATE_INVALID),
       current_power_state_(chromeos::DISPLAY_POWER_ALL_ON),
       requested_display_state_(MULTIPLE_DISPLAY_STATE_INVALID),
@@ -593,7 +607,8 @@ DisplayConfigurator::DisplayConfigurator()
           layout_manager_.get(),
           base::BindRepeating(&DisplayConfigurator::configurator_disabled,
                               base::Unretained(this)))),
-      has_unassociated_display_(false) {
+      has_unassociated_display_(false),
+      pending_vrr_state_(::features::IsVariableRefreshRateAlwaysOn()) {
   AddObserver(content_protection_manager_.get());
 }
 
@@ -612,13 +627,13 @@ void DisplayConfigurator::SetDelegateForTesting(
   DCHECK(!native_display_delegate_);
 
   native_display_delegate_ = std::move(display_delegate);
-  configure_display_ = true;
+  SetConfigureDisplays(true);
 }
 
 void DisplayConfigurator::SetInitialDisplayPower(
     chromeos::DisplayPowerState power_state) {
   if (requested_power_state_) {
-    // A new power state has alreday been requested so ignore the initial state.
+    // A new power state has already been requested so ignore the initial state.
     return;
   }
 
@@ -658,6 +673,11 @@ void DisplayConfigurator::Init(
 
   content_protection_manager_->set_native_display_delegate(
       native_display_delegate_.get());
+}
+
+void DisplayConfigurator::SetConfigureDisplays(bool configure_displays) {
+  configure_displays_ = configure_displays;
+  layout_manager_->set_configure_displays(configure_displays);
 }
 
 void DisplayConfigurator::TakeControl(DisplayControlCallback callback) {
@@ -765,7 +785,7 @@ void DisplayConfigurator::ForceInitialConfigure() {
       native_display_delegate_.get(), layout_manager_.get(),
       requested_display_state_, GetRequestedPowerState(),
       kSetDisplayPowerForceProbe, kRefreshRateThrottleDisabled,
-      /*force_configure=*/true, kConfigurationTypeFull,
+      GetRequestedVrrState(), /*force_configure=*/true, kConfigurationTypeFull,
       base::BindOnce(&DisplayConfigurator::OnConfigured,
                      weak_ptr_factory_.GetWeakPtr()));
   configuration_task_->Run();
@@ -779,14 +799,13 @@ bool DisplayConfigurator::SetColorMatrix(
   return native_display_delegate_->SetColorMatrix(display_id, color_matrix);
 }
 
-bool DisplayConfigurator::SetGammaCorrection(
-    int64_t display_id,
-    const std::vector<GammaRampRGBEntry>& degamma_lut,
-    const std::vector<GammaRampRGBEntry>& gamma_lut) {
+bool DisplayConfigurator::SetGammaCorrection(int64_t display_id,
+                                             const GammaCurve& degamma,
+                                             const GammaCurve& gamma) {
   if (!IsDisplayIdInDisplayStateList(display_id, cached_displays_))
     return false;
-  return native_display_delegate_->SetGammaCorrection(display_id, degamma_lut,
-                                                      gamma_lut);
+  return native_display_delegate_->SetGammaCorrection(display_id, degamma,
+                                                      gamma);
 }
 
 void DisplayConfigurator::SetPrivacyScreen(int64_t display_id,
@@ -816,7 +835,7 @@ chromeos::DisplayPowerState DisplayConfigurator::GetRequestedPowerState()
 }
 
 void DisplayConfigurator::PrepareForExit() {
-  configure_display_ = false;
+  configure_displays_ = false;
 }
 
 void DisplayConfigurator::SetDisplayPowerInternal(
@@ -909,6 +928,9 @@ void DisplayConfigurator::OnConfigurationChanged() {
 void DisplayConfigurator::OnDisplaySnapshotsInvalidated() {
   VLOG(1) << "Display snapshots invalidated.";
   cached_displays_.clear();
+  for (Observer& observer : observers_) {
+    observer.OnDisplaySnapshotsInvalidated();
+  }
 }
 
 void DisplayConfigurator::AddObserver(Observer* observer) {
@@ -917,6 +939,10 @@ void DisplayConfigurator::AddObserver(Observer* observer) {
 
 void DisplayConfigurator::RemoveObserver(Observer* observer) {
   observers_.RemoveObserver(observer);
+}
+
+bool DisplayConfigurator::HasObserverForTesting(Observer* observer) const {
+  return observers_.HasObserver(observer);
 }
 
 void DisplayConfigurator::MaybeSetRefreshRateThrottleState(
@@ -1037,7 +1063,7 @@ void DisplayConfigurator::RunPendingConfiguration() {
       requested_display_state_, pending_power_state_, pending_power_flags_,
       pending_refresh_rate_throttle_state_.value_or(
           kRefreshRateThrottleDisabled),
-      force_configure_, configuration_type,
+      GetRequestedVrrState(), force_configure_, configuration_type,
       base::BindOnce(&DisplayConfigurator::OnConfigured,
                      weak_ptr_factory_.GetWeakPtr()));
 
@@ -1048,6 +1074,7 @@ void DisplayConfigurator::RunPendingConfiguration() {
   has_pending_power_state_ = false;
   requested_display_state_ = MULTIPLE_DISPLAY_STATE_INVALID;
   pending_refresh_rate_throttle_state_ = absl::nullopt;
+  pending_vrr_state_ = absl::nullopt;
 
   DCHECK(in_progress_configuration_callbacks_.empty());
   in_progress_configuration_callbacks_.swap(queued_configuration_callbacks_);
@@ -1060,7 +1087,8 @@ void DisplayConfigurator::OnConfigured(
     const std::vector<DisplaySnapshot*>& displays,
     const std::vector<DisplaySnapshot*>& unassociated_displays,
     MultipleDisplayState new_display_state,
-    chromeos::DisplayPowerState new_power_state) {
+    chromeos::DisplayPowerState new_power_state,
+    bool new_vrr_state_) {
   VLOG(1) << "OnConfigured: success=" << success << " new_display_state="
           << MultipleDisplayStateToString(new_display_state)
           << " new_power_state=" << DisplayPowerStateToString(new_power_state);
@@ -1071,6 +1099,7 @@ void DisplayConfigurator::OnConfigured(
   if (success) {
     current_display_state_ = new_display_state;
     UpdatePowerState(new_power_state);
+    current_vrr_state_ = new_vrr_state_;
   }
 
   configuration_task_.reset();
@@ -1131,7 +1160,16 @@ bool DisplayConfigurator::HasPendingFullConfiguration() const {
 
 bool DisplayConfigurator::HasPendingSeamlessConfiguration() const {
   // Schedule if there is a pending request to change the refresh rate.
-  return pending_refresh_rate_throttle_state_.has_value();
+  if (pending_refresh_rate_throttle_state_.has_value()) {
+    return true;
+  }
+
+  // Schedule if there is a request to change the VRR enabled state.
+  if (ShouldConfigureVrr()) {
+    return true;
+  }
+
+  return false;
 }
 
 void DisplayConfigurator::CallAndClearInProgressCallbacks(bool success) {
@@ -1167,6 +1205,36 @@ void DisplayConfigurator::NotifyPowerStateObservers() {
 
 bool DisplayConfigurator::IsDisplayOn() const {
   return current_power_state_ != chromeos::DISPLAY_POWER_ALL_OFF;
+}
+
+void DisplayConfigurator::SetVrrEnabled(bool enable_vrr) {
+  if (current_vrr_state_ == enable_vrr) {
+    return;
+  }
+
+  pending_vrr_state_ = enable_vrr;
+
+  if (!configure_timer_.IsRunning()) {
+    RunPendingConfiguration();
+  }
+}
+
+bool DisplayConfigurator::GetRequestedVrrState() const {
+  return pending_vrr_state_.value_or(current_vrr_state_);
+}
+
+bool DisplayConfigurator::ShouldConfigureVrr() const {
+  for (const auto* display : cached_displays_) {
+    if (!display->IsVrrCapable()) {
+      continue;
+    }
+
+    if (display->IsVrrEnabled() != GetRequestedVrrState()) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 }  // namespace display

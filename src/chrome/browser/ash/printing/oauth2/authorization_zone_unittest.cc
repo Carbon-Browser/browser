@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,11 @@
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "chrome/browser/ash/printing/oauth2/constants.h"
+#include "chrome/browser/ash/printing/oauth2/mock_client_ids_database.h"
 #include "chrome/browser/ash/printing/oauth2/test_authorization_server.h"
 #include "chromeos/printing/uri.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -33,8 +35,13 @@ class PrintingOAuth2AuthorizationZoneTest : public testing::Test {
   void CreateAuthorizationZone(const std::string& client_id) {
     GURL auth_server_uri(authorization_server_uri_);
     CHECK(auth_server_uri.is_valid());
+
+    EXPECT_CALL(client_ids_database_, FetchId)
+        .WillOnce([client_id](const GURL& url, StatusCallback callback) {
+          std::move(callback).Run(StatusCode::kOK, client_id);
+        });
     authorization_zone_ = printing::oauth2::AuthorizationZone::Create(
-        server_.GetURLLoaderFactory(), auth_server_uri, client_id);
+        server_.GetURLLoaderFactory(), auth_server_uri, &client_ids_database_);
   }
 
   // Simulates the authorization process in the internet browser. Returns the
@@ -168,6 +175,7 @@ class PrintingOAuth2AuthorizationZoneTest : public testing::Test {
   const std::string token_uri_ = "https://example.com/token";
   const std::string registration_uri_ = "https://example.com/registration";
 
+  testing::NiceMock<MockClientIdsDatabase> client_ids_database_;
   std::unique_ptr<printing::oauth2::AuthorizationZone> authorization_zone_;
   FakeAuthorizationServer server_;
 };
@@ -219,7 +227,7 @@ TEST_F(PrintingOAuth2AuthorizationZoneTest,
   ASSERT_TRUE(
       ParseURLParameters(authorization_url.substr(question_mark + 1), params));
   EXPECT_EQ(params["client_id"], "clientID_!@#$");
-  EXPECT_EQ(params.count("scope"), 0);
+  EXPECT_EQ(params.count("scope"), 0u);
 }
 
 TEST_F(PrintingOAuth2AuthorizationZoneTest, FirstAccessToken) {
@@ -462,19 +470,52 @@ TEST_F(PrintingOAuth2AuthorizationZoneTest, ParallelFirstTokenRequests) {
   EXPECT_EQ(crs[0].status, printing::oauth2::StatusCode::kAuthorizationNeeded);
 }
 
-TEST_F(PrintingOAuth2AuthorizationZoneTest, PrefixInErrorMessage) {
-  CallbackResult cr;
-  CreateAuthorizationZone("");
+TEST_F(PrintingOAuth2AuthorizationZoneTest, CancellationDuringInitialization) {
+  CreateAuthorizationZone("clientID");
+  CallbackResult cr_0;
+  CallbackResult cr_1;
 
-  // Respond with error to Metadata Request.
-  authorization_zone_->InitAuthorization("", BindResult(cr));
-  server_.ReceiveGET(metadata_uri_);
-  server_.ResponseWithJSON(net::HttpStatusCode::HTTP_INTERNAL_SERVER_ERROR, {});
+  // Try to start two sessions and cancel before the first response from the
+  // server returns.
+  authorization_zone_->InitAuthorization("scope0", BindResult(cr_0));
+  authorization_zone_->InitAuthorization("scope1", BindResult(cr_1));
+  authorization_zone_->MarkAuthorizationZoneAsUntrusted();
+  EXPECT_EQ(cr_0.status, StatusCode::kUntrustedAuthorizationServer);
+  EXPECT_EQ(cr_1.status, StatusCode::kUntrustedAuthorizationServer);
 
-  // Check if the error message begins with the URI of the server.
-  EXPECT_EQ(cr.status, printing::oauth2::StatusCode::kServerError);
-  const std::string msg_prefix = "[" + authorization_server_uri_ + "]";
-  EXPECT_EQ(cr.data.substr(0, msg_prefix.length()), msg_prefix);
+  // Response from the server should not trigger anything.
+  ProcessMetadataRequest();
+  EXPECT_EQ(cr_0.status, StatusCode::kUntrustedAuthorizationServer);
+  EXPECT_EQ(cr_1.status, StatusCode::kUntrustedAuthorizationServer);
+}
+
+TEST_F(PrintingOAuth2AuthorizationZoneTest, CancelExistingSessions) {
+  CreateAuthorizationZone("clientID");
+  CallbackResult cr_0;
+  CallbackResult cr_1;
+
+  // Start two sessions and send request for the first access token.
+  authorization_zone_->InitAuthorization("scope0", BindResult(cr_0));
+  authorization_zone_->InitAuthorization("scope1", BindResult(cr_1));
+  ProcessMetadataRequest();
+  ASSERT_EQ(cr_0.status, printing::oauth2::StatusCode::kOK);
+  ASSERT_EQ(cr_1.status, printing::oauth2::StatusCode::kOK);
+  auto auth_url_0 = SimulateAuthorization(cr_0.data, "auth_code_0", "scope0");
+  auto auth_url_1 = SimulateAuthorization(cr_1.data, "auth_code_1", "scope1");
+  authorization_zone_->FinishAuthorization(GURL(auth_url_0), BindResult(cr_0));
+  authorization_zone_->FinishAuthorization(GURL(auth_url_1), BindResult(cr_1));
+
+  // Get the access token for the first session and ask for an endpoint access
+  // token.
+  ProcessFirstTokenRequest("auth_code_0", "acc_token_0", "ref_token_0");
+  ASSERT_EQ(cr_0.status, printing::oauth2::StatusCode::kOK);
+  authorization_zone_->GetEndpointAccessToken(chromeos::Uri("ipp://printer0"),
+                                              "scope0", BindResult(cr_0));
+
+  // Cancel the zone. All pending callbacks should return.
+  authorization_zone_->MarkAuthorizationZoneAsUntrusted();
+  EXPECT_EQ(cr_0.status, StatusCode::kUntrustedAuthorizationServer);
+  EXPECT_EQ(cr_1.status, StatusCode::kUntrustedAuthorizationServer);
 }
 
 }  // namespace

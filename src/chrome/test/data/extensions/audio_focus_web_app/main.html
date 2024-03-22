@@ -1,7 +1,7 @@
 <!--
- * Copyright 2018 The Chromium Authors. All rights reserved.  Use of this
- * source code is governed by a BSD-style license that can be found in the
- * LICENSE file.
+Copyright 2018 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
 -->
 <!DOCTYPE html>
 <html>
@@ -11,22 +11,23 @@
     const video = document.getElementsByTagName('video')[0];
 
     function startPlaying() {
-      video.play()
-        .then(() => window.domAutomationController.send(true))
-        .catch(() => window.domAutomationController.send(false));
+      return video.play()
+        .then(() =>  true)
+        .catch(() => false);
     }
 
     function waitForPause() {
       if (video.paused) {
-        window.domAutomationController.send(true);
-        return;
+        return true;
       }
 
-      video.addEventListener('pause', () => window.domAutomationController.send(true), { once: true });
+      return new Promise(resolve => {
+        video.addEventListener('pause', () => resolve(true), { once: true });
+      });
     }
 
     function isPaused() {
-      window.domAutomationController.send(video.paused);
+      return video.paused;
     }
   </script>
 </body>

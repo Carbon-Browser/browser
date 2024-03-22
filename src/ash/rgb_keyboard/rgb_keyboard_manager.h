@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,15 @@
 
 #include "ash/ash_export.h"
 #include "ash/ime/ime_controller_impl.h"
+#include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/rgbkbd/rgbkbd_client.h"
 #include "third_party/cros_system_api/dbus/rgbkbd/dbus-constants.h"
+#include "third_party/skia/include/core/SkColor.h"
 
 namespace ash {
+
+class RgbKeyboardManagerObserver;
 
 // RgbKeyboardManager is singleton class that provides clients access to
 // RGB keyboard-related API's. Clients should interact with this class instead
@@ -29,9 +33,16 @@ class ASH_EXPORT RgbKeyboardManager : public ImeControllerImpl::Observer,
   ~RgbKeyboardManager() override;
 
   rgbkbd::RgbKeyboardCapabilities GetRgbKeyboardCapabilities() const;
+  int GetZoneCount();
   void SetStaticBackgroundColor(uint8_t r, uint8_t g, uint8_t b);
+  void SetZoneColor(int zone, uint8_t r, uint8_t g, uint8_t b);
   void SetRainbowMode();
   void SetAnimationMode(rgbkbd::RgbAnimationMode mode);
+
+  // RgbkbdClient::Observer:
+  // Also used in tests to override the keyboard capability.
+  void OnCapabilityUpdatedForTesting(
+      rgbkbd::RgbKeyboardCapabilities capability) override;
 
   // Returns the global instance if initialized. May return null.
   static RgbKeyboardManager* Get();
@@ -40,19 +51,29 @@ class ASH_EXPORT RgbKeyboardManager : public ImeControllerImpl::Observer,
     return capabilities_ != rgbkbd::RgbKeyboardCapabilities::kNone;
   }
 
+  // Add and remove observers.
+  void AddObserver(RgbKeyboardManagerObserver* observer);
+  void RemoveObserver(RgbKeyboardManagerObserver* observer);
+
  private:
+  friend class KeyboardBacklightColorControllerTest;
+
+  // Enum to track the background mode sent to rgbkbd
+  enum class BackgroundType {
+    kNone,
+    kStaticSingleColor,
+    kStaticRainbow,
+    kStaticZones,
+  };
+
   // ImeControllerImpl::Observer:
   void OnCapsLockChanged(bool enabled) override;
   void OnKeyboardLayoutNameChanged(const std::string&) override {}
 
-  // RgbkbdClient::Observer:
-  void OnCapabilityUpdatedForTesting(
-      rgbkbd::RgbKeyboardCapabilities capability) override;
-
   void FetchRgbKeyboardSupport();
 
   void OnGetRgbKeyboardCapabilities(
-      absl::optional<rgbkbd::RgbKeyboardCapabilities> reply);
+      std::optional<rgbkbd::RgbKeyboardCapabilities> reply);
 
   void InitializeRgbKeyboard();
 
@@ -62,6 +83,16 @@ class ASH_EXPORT RgbKeyboardManager : public ImeControllerImpl::Observer,
       rgbkbd::RgbKeyboardCapabilities::kNone;
 
   raw_ptr<ImeControllerImpl> ime_controller_ptr_;
+
+  // Tracks the currently set background color when `background_type_` is set to
+  // `BackgroundType::kStaticSingleColor`.
+  SkColor background_color_;
+  // Tracks the currently set zone colors when `background_type_` is set to
+  // `BackgroundType::kStaticZones`.
+  base::flat_map<int, SkColor> zone_colors_;
+  BackgroundType background_type_ = BackgroundType::kNone;
+
+  base::ObserverList<RgbKeyboardManagerObserver> observers_;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

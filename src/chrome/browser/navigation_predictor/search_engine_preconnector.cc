@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/navigation_predictor/search_engine_preconnector.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
@@ -36,8 +36,9 @@ const bool kDefaultSkipInBackground = true;
 
 namespace features {
 // Feature to control preconnect to search.
-const base::Feature kPreconnectToSearch{"PreconnectToSearch",
-                                        base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kPreconnectToSearch,
+             "PreconnectToSearch",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 }  // namespace features
 
 SearchEnginePreconnector::SearchEnginePreconnector(
@@ -104,10 +105,10 @@ void SearchEnginePreconnector::PreconnectDSE() {
                                                kDefaultSkipInBackground) ||
       is_browser_app_likely_in_foreground) {
     net::SchemefulSite schemeful_site(preconnect_url);
-    net::NetworkIsolationKey network_isolation_key(schemeful_site,
-                                                   schemeful_site);
+    auto network_anonymziation_key =
+        net::NetworkAnonymizationKey::CreateSameSite(schemeful_site);
     loading_predictor->PreconnectURLIfAllowed(
-        preconnect_url, /*allow_credentials=*/true, network_isolation_key);
+        preconnect_url, /*allow_credentials=*/true, network_anonymziation_key);
   }
 
   // The delay beyond the idle socket timeout that net uses when

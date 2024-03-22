@@ -34,11 +34,11 @@
 #include "base/check_op.h"
 #include "base/memory/ptr_util.h"
 #include "cc/paint/paint_flags.h"
-#include "third_party/blink/renderer/platform/graphics/draw_looper_builder.h"
+#include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/stroke_data.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
-#include "third_party/skia/include/core/SkColorFilter.h"
+#include "third_party/skia/include/core/SkDrawLooper.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 
 namespace blink {
@@ -70,7 +70,11 @@ class PLATFORM_EXPORT GraphicsContextState final {
   void DecrementSaveCount() { --save_count_; }
 
   // Stroke data
-  Color StrokeColor() const { return stroke_flags_.getColor(); }
+  Color StrokeColor() const {
+    // This conversion from SkColor4f to Color will lose information about the
+    // original Color.
+    return Color::FromSkColor4f(stroke_flags_.getColor4f());
+  }
   void SetStrokeColor(const Color&);
 
   const StrokeData& GetStrokeData() const { return stroke_data_; }
@@ -82,7 +86,11 @@ class PLATFORM_EXPORT GraphicsContextState final {
   void SetLineDash(const DashArray&, float);
 
   // Fill data
-  Color FillColor() const { return fill_flags_.getColor(); }
+  Color FillColor() const {
+    // This conversion from SkColor4f to Color will lose information about the
+    // original Color.
+    return Color::FromSkColor4f(fill_flags_.getColor4f());
+  }
   void SetFillColor(const Color&);
 
   // Shadow. (This will need tweaking if we use draw loopers for other things.)
@@ -98,17 +106,16 @@ class PLATFORM_EXPORT GraphicsContextState final {
     text_drawing_mode_ = mode;
   }
 
-  SkColorFilter* GetColorFilter() const {
-    DCHECK_EQ(fill_flags_.getColorFilter(), stroke_flags_.getColorFilter());
-    return fill_flags_.getColorFilter().get();
-  }
-  void SetColorFilter(sk_sp<SkColorFilter>);
-
   // Image interpolation control.
   InterpolationQuality GetInterpolationQuality() const {
     return interpolation_quality_;
   }
   void SetInterpolationQuality(InterpolationQuality);
+
+  cc::PaintFlags::DynamicRangeLimit GetDynamicRangeLimit() const {
+    return dynamic_range_limit_;
+  }
+  void SetDynamicRangeLimit(cc::PaintFlags::DynamicRangeLimit limit);
 
   bool ShouldAntialias() const { return should_antialias_; }
   void SetShouldAntialias(bool);
@@ -127,6 +134,7 @@ class PLATFORM_EXPORT GraphicsContextState final {
   TextDrawingModeFlags text_drawing_mode_;
 
   InterpolationQuality interpolation_quality_;
+  cc::PaintFlags::DynamicRangeLimit dynamic_range_limit_;
 
   uint16_t save_count_;
 

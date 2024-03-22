@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ class MediaItemUIListViewTest : public views::ViewsTestBase {
 
  private:
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<MediaItemUIListView> list_view_ = nullptr;
+  raw_ptr<MediaItemUIListView, DanglingUntriaged> list_view_ = nullptr;
   std::unique_ptr<media_message_center::test::MockMediaNotificationItem> item_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ EmbeddedFrameSinkImpl::~EmbeddedFrameSinkImpl() {
     host_frame_sink_manager_->UnregisterFrameSinkHierarchy(
         parent_frame_sink_id_, frame_sink_id_);
   }
-  host_frame_sink_manager_->InvalidateFrameSinkId(frame_sink_id_);
+  host_frame_sink_manager_->InvalidateFrameSinkId(frame_sink_id_, this);
 }
 
 void EmbeddedFrameSinkImpl::CreateCompositorFrameSink(

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,17 @@
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
+#include "chrome/browser/ui/scoped_tabbed_browser_displayer.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/url_constants.h"
 #include "content/public/browser/browser_url_handler.h"
 #include "content/public/browser/web_contents.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_switches.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
+#include "chrome/browser/ash/url_handler.h"
+#endif
 
 namespace {
 
@@ -30,30 +37,96 @@ bool CompareURLsWithReplacements(const GURL& url,
 
 }  // namespace
 
+void ShowSingletonTab(Profile* profile, const GURL& url) {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (!crosapi::browser_util::IsAshWebBrowserEnabled()) {
+    ash::TryOpenUrl(url, WindowOpenDisposition::SINGLETON_TAB,
+                    NavigateParams::RESPECT,
+                    ash::ChromeSchemeSemantics::kLacros);
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+  chrome::ScopedTabbedBrowserDisplayer displayer(profile);
+  NavigateParams params(
+      GetSingletonTabNavigateParams(displayer.browser(), url));
+  Navigate(&params);
+}
+
 void ShowSingletonTab(Browser* browser, const GURL& url) {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (!crosapi::browser_util::IsAshWebBrowserEnabled()) {
+    ash::TryOpenUrl(url, WindowOpenDisposition::SINGLETON_TAB,
+                    NavigateParams::RESPECT,
+                    ash::ChromeSchemeSemantics::kLacros);
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   NavigateParams params(GetSingletonTabNavigateParams(browser, url));
   Navigate(&params);
 }
 
-void ShowSingletonTabOverwritingNTP(Browser* browser, NavigateParams* params) {
-  DCHECK(browser);
+void ShowSingletonTabOverwritingNTP(
+    Profile* profile,
+    const GURL& url,
+    NavigateParams::PathBehavior path_behavior) {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (!crosapi::browser_util::IsAshWebBrowserEnabled()) {
+    ash::TryOpenUrl(url, WindowOpenDisposition::SINGLETON_TAB, path_behavior,
+                    ash::ChromeSchemeSemantics::kLacros);
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+  chrome::ScopedTabbedBrowserDisplayer displayer(profile);
+  NavigateParams params(
+      GetSingletonTabNavigateParams(displayer.browser(), url));
+  params.path_behavior = path_behavior;
+  ShowSingletonTabOverwritingNTP(&params);
+}
+
+void ShowSingletonTabOverwritingNTP(
+    Browser* browser,
+    const GURL& url,
+    NavigateParams::PathBehavior path_behavior) {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (!crosapi::browser_util::IsAshWebBrowserEnabled()) {
+    ash::TryOpenUrl(url, WindowOpenDisposition::SINGLETON_TAB, path_behavior,
+                    ash::ChromeSchemeSemantics::kLacros);
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+  NavigateParams params(GetSingletonTabNavigateParams(browser, url));
+  params.path_behavior = path_behavior;
+  ShowSingletonTabOverwritingNTP(&params);
+}
+
+void ShowSingletonTabOverwritingNTP(NavigateParams* params) {
   DCHECK_EQ(params->disposition, WindowOpenDisposition::SINGLETON_TAB);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // TODO(neis): Make this a CHECK after confirming that it doesn't happen in
+  // the wild.
+  if (!crosapi::browser_util::IsAshWebBrowserEnabled() &&
+      !ash::switches::IsAshDebugBrowserEnabled()) {
+    base::debug::DumpWithoutCrashing();
+    LOG(ERROR) << "Unexpected SINGLETON_TAB navigation in Ash";
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   content::WebContents* contents =
-      browser->tab_strip_model()->GetActiveWebContents();
+      params->browser->tab_strip_model()->GetActiveWebContents();
   if (contents) {
     const GURL& contents_url = contents->GetVisibleURL();
     if (contents_url == chrome::kChromeUINewTabURL ||
         search::IsInstantNTP(contents) || contents_url == url::kAboutBlankURL) {
-      int tab_index = GetIndexOfExistingTab(browser, *params);
+      int tab_index = GetIndexOfExistingTab(params->browser, *params);
       if (tab_index < 0) {
         params->disposition = WindowOpenDisposition::CURRENT_TAB;
       } else {
         params->switch_to_singleton_tab =
-            browser->tab_strip_model()->GetWebContentsAt(tab_index);
+            params->browser->tab_strip_model()->GetWebContentsAt(tab_index);
       }
     }
   }
-
   Navigate(params);
 }
 
@@ -63,7 +136,7 @@ NavigateParams GetSingletonTabNavigateParams(Browser* browser,
   params.disposition = WindowOpenDisposition::SINGLETON_TAB;
   params.window_action = NavigateParams::SHOW_WINDOW;
   params.user_gesture = true;
-  params.tabstrip_add_types |= TabStripModel::ADD_INHERIT_OPENER;
+  params.tabstrip_add_types |= AddTabTypes::ADD_INHERIT_OPENER;
   return params;
 }
 
@@ -126,14 +199,9 @@ int GetIndexOfExistingTab(Browser* browser, const NavigateParams& params) {
 std::pair<Browser*, int> GetIndexAndBrowserOfExistingTab(
     Profile* profile,
     const NavigateParams& params) {
-  for (auto browser_it =
-           BrowserList::GetInstance()->begin_browsers_ordered_by_activation();
-       browser_it !=
-       BrowserList::GetInstance()->end_browsers_ordered_by_activation();
-       ++browser_it) {
-    Browser* browser = *browser_it;
+  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
     // When tab switching, only look at same profile and anonymity level.
-    if (profile == browser->profile()) {
+    if (profile == browser->profile() && !browser->is_delete_scheduled()) {
       int index = GetIndexOfExistingTab(browser, params);
       if (index >= 0)
         return {browser, index};

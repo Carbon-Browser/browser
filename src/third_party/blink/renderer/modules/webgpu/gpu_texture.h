@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 namespace blink {
 
 class ExceptionState;
-class HTMLCanvasElement;
 class GPUTextureDescriptor;
 class GPUTextureView;
 class GPUTextureViewDescriptor;
@@ -25,17 +24,16 @@ class GPUTexture : public DawnObject<WGPUTexture> {
   static GPUTexture* Create(GPUDevice* device,
                             const GPUTextureDescriptor* webgpu_desc,
                             ExceptionState& exception_state);
-  static GPUTexture* CreateError(GPUDevice* device);
-  static GPUTexture* FromCanvas(GPUDevice* device,
-                                HTMLCanvasElement* canvas,
-                                WGPUTextureUsage usage,
-                                ExceptionState& exception_state);
+  static GPUTexture* CreateError(GPUDevice* device,
+                                 const WGPUTextureDescriptor* desc);
 
   GPUTexture(GPUDevice* device, WGPUTexture texture);
   GPUTexture(GPUDevice* device,
              WGPUTextureFormat format,
              WGPUTextureUsage usage,
              scoped_refptr<WebGPUMailboxTexture> mailbox_texture);
+
+  ~GPUTexture() override;
 
   GPUTexture(const GPUTexture&) = delete;
   GPUTexture& operator=(const GPUTexture&) = delete;
@@ -55,7 +53,15 @@ class GPUTexture : public DawnObject<WGPUTexture> {
 
   WGPUTextureDimension Dimension() { return dimension_; }
   WGPUTextureFormat Format() { return format_; }
-  WGPUTextureUsage Usage() { return usage_; }
+  WGPUTextureUsageFlags Usage() { return usage_; }
+  bool Destroyed() { return destroyed_; }
+
+  void DissociateMailbox();
+
+  // Sets a callback which is called if destroy is called manually, before the
+  // WebGPU handle is actually destroyed.
+  void SetBeforeDestroyCallback(base::OnceClosure);
+  void ClearBeforeDestroyCallback();
 
  private:
   void setLabelImpl(const String& value) override {
@@ -65,8 +71,10 @@ class GPUTexture : public DawnObject<WGPUTexture> {
 
   WGPUTextureDimension dimension_;
   WGPUTextureFormat format_;
-  WGPUTextureUsage usage_;
+  WGPUTextureUsageFlags usage_;
   scoped_refptr<WebGPUMailboxTexture> mailbox_texture_;
+  bool destroyed_ = false;
+  base::OnceClosure destroy_callback_;
 };
 
 }  // namespace blink

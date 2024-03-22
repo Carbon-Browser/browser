@@ -31,7 +31,7 @@
 
 namespace blink {
 
-class LayoutNGSVGText;
+class LayoutSVGText;
 class SVGElement;
 enum class SVGTransformChange;
 
@@ -45,7 +45,11 @@ class CORE_EXPORT LayoutSVGRoot final : public LayoutReplaced {
   bool IsEmbeddedThroughFrameContainingSVGDocument() const;
 
   void IntrinsicSizingInfoChanged();
-  void UnscaledIntrinsicSizingInfo(IntrinsicSizingInfo&) const;
+  void UnscaledIntrinsicSizingInfo(IntrinsicSizingInfo&,
+                                   bool use_correct_viewbox = true) const;
+  // This is a special case for SVG documents with percentage dimensions which
+  // would normally not change under zoom. See: https://crbug.com/222786.
+  double LogicalSizeScaleFactorForPercentageLengths() const;
 
   // If you have a LayoutSVGRoot, use firstChild or lastChild instead.
   void SlowFirstChild() const = delete;
@@ -79,7 +83,7 @@ class CORE_EXPORT LayoutSVGRoot final : public LayoutReplaced {
     needs_boundaries_or_transform_update_ = true;
   }
 
-  void SetContainerSize(const LayoutSize& container_size) {
+  void SetContainerSize(const PhysicalSize& container_size) {
     NOT_DESTROYED();
     // SVGImage::draw() does a view layout prior to painting,
     // and we need that layout to know of the new size otherwise
@@ -91,7 +95,7 @@ class CORE_EXPORT LayoutSVGRoot final : public LayoutReplaced {
     container_size_ = container_size;
   }
 
-  LayoutSize GetContainerSize() const {
+  PhysicalSize GetContainerSize() const {
     NOT_DESTROYED();
     return container_size_;
   }
@@ -102,13 +106,15 @@ class CORE_EXPORT LayoutSVGRoot final : public LayoutReplaced {
     NOT_DESTROYED();
     return local_to_border_box_transform_;
   }
+  gfx::RectF ViewBoxRect() const;
+  gfx::SizeF ViewportSize() const;
 
   void RecalcVisualOverflow() override;
 
   bool HasNonIsolatedBlendingDescendants() const final;
 
-  void AddSvgTextDescendant(LayoutNGSVGText& svg_text);
-  void RemoveSvgTextDescendant(LayoutNGSVGText& svg_text);
+  void AddSvgTextDescendant(LayoutSVGText& svg_text);
+  void RemoveSvgTextDescendant(LayoutSVGText& svg_text);
 
   const char* GetName() const override {
     NOT_DESTROYED();
@@ -117,7 +123,7 @@ class CORE_EXPORT LayoutSVGRoot final : public LayoutReplaced {
 
  private:
   OverflowClipAxes ComputeOverflowClipAxes() const override;
-  LayoutRect ComputeContentsVisualOverflow() const;
+  PhysicalRect ComputeContentsVisualOverflow() const;
 
   LayoutObjectChildList* VirtualChildren() override {
     NOT_DESTROYED();
@@ -135,10 +141,6 @@ class CORE_EXPORT LayoutSVGRoot final : public LayoutReplaced {
   }
 
   void ComputeIntrinsicSizingInfo(IntrinsicSizingInfo&) const override;
-  LayoutUnit ComputeReplacedLogicalWidth(
-      ShouldComputePreferred = kComputeActual) const override;
-  LayoutUnit ComputeReplacedLogicalHeight(
-      LayoutUnit estimated_used_width = LayoutUnit()) const override;
   void UpdateLayout() override;
   void PaintReplaced(const PaintInfo&,
                      const PhysicalOffset& paint_offset) const override;
@@ -159,19 +161,20 @@ class CORE_EXPORT LayoutSVGRoot final : public LayoutReplaced {
     NOT_DESTROYED();
     return content_.ObjectBoundingBox();
   }
-  gfx::RectF StrokeBoundingBox() const override {
+  gfx::RectF DecoratedBoundingBox() const override {
     NOT_DESTROYED();
-    return content_.StrokeBoundingBox();
+    return content_.DecoratedBoundingBox();
   }
   gfx::RectF VisualRectInLocalSVGCoordinates() const override {
     NOT_DESTROYED();
-    return content_.StrokeBoundingBox();
+    return content_.DecoratedBoundingBox();
   }
 
-  bool NodeAtPoint(HitTestResult&,
-                   const HitTestLocation&,
-                   const PhysicalOffset& accumulated_offset,
-                   HitTestPhase) override;
+  bool HitTestChildren(HitTestResult&,
+                       const HitTestLocation& location_in_container,
+                       const PhysicalOffset& accumulated_offset,
+                       HitTestPhase) override;
+  bool IsInSelfHitTestingPhase(HitTestPhase) const final;
 
   void MapLocalToAncestor(const LayoutBoxModelObject* ancestor,
                           TransformState&,
@@ -187,21 +190,17 @@ class CORE_EXPORT LayoutSVGRoot final : public LayoutReplaced {
   bool IntrinsicSizeIsFontMetricsDependent() const;
   bool StyleChangeAffectsIntrinsicSize(const ComputedStyle& old_style) const;
 
-  void UpdateCachedBoundaries();
+  bool UpdateCachedBoundaries();
   SVGTransformChange BuildLocalToBorderBoxTransform();
 
   PositionWithAffinity PositionForPoint(const PhysicalOffset&) const final;
 
-  // This is a special case for SVG documents with percentage dimensions which
-  // would normally not change under zoom. See: https://crbug.com/222786.
-  double LogicalSizeScaleFactorForPercentageLengths() const;
-
   PaintLayerType LayerTypeRequired() const override;
 
   SVGContentContainer content_;
-  LayoutSize container_size_;
+  PhysicalSize container_size_;
   AffineTransform local_to_border_box_transform_;
-  HeapHashSet<Member<LayoutNGSVGText>> text_set_;
+  HeapHashSet<Member<LayoutSVGText>> text_set_;
   bool is_layout_size_changed_ : 1;
   bool did_screen_scale_factor_change_ : 1;
   bool needs_boundaries_or_transform_update_ : 1;

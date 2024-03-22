@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,8 +7,7 @@ import("//build/config/features.gni")
 import(
     "//chrome/browser/resources/chromeos/accessibility/tools/run_jsbundler.gni")
 import("//chrome/common/features.gni")
-import("//chrome/test/base/js2gtest.gni")
-import("//third_party/closure_compiler/compile_js.gni")
+import("//chrome/test/base/ash/js2gtest.gni")
 
 assert(is_chromeos_ash)
 
@@ -42,7 +41,9 @@ source_set("browser_tests") {
   deps = [ ":enhanced_network_tts_extjs_tests" ]
 
   data = [
-    "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts/",
+    "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts/background.html",
+    "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts/background.js",
+    "$root_out_dir/resources/chromeos/accessibility/enhanced_network_tts/enhanced_network_tts.js",
     "//chrome/browser/resources/chromeos/accessibility/common/",
     "//chrome/browser/resources/chromeos/accessibility/enhanced_network_tts/",
   ]
@@ -71,20 +72,4 @@ js2gtest("enhanced_network_tts_extjs_tests") {
     "//chrome/common",
   ]
   defines = [ "HAS_OUT_OF_PROC_TEST_RUNNER" ]
-}
-
-js_type_check("closure_compile") {
-  deps = [ ":enhanced_network_tts" ]
-}
-
-js_library("enhanced_network_tts") {
-  deps = [
-    "//ash/components/enhanced_network_tts/mojom:mojom_js_library_for_compile",
-  ]
-  externs_list = [
-    "mojo_bindings_externs.js",
-    "$externs_path/tts.js",
-    "$externs_path/ttsEngine.js",
-    "$externs_path/mojo_private.js",
-  ]
 }

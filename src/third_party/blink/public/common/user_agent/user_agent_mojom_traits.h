@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,6 +74,11 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::UserAgentMetadataDataView,
 
   static bool wow64(const ::blink::UserAgentMetadata& data) {
     return data.wow64;
+  }
+
+  static const std::vector<std::string>& form_factor(
+      const ::blink::UserAgentMetadata& data) {
+    return data.form_factor;
   }
 
   static bool Read(blink::mojom::UserAgentMetadataDataView data,

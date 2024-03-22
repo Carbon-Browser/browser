@@ -1,14 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_sink_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/media/router/chrome_media_router_factory.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_feature.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_sink_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/media_router/browser/media_router_factory.h"
 
 namespace media_router {
@@ -17,7 +16,7 @@ namespace media_router {
 AccessCodeCastSinkService* AccessCodeCastSinkServiceFactory::GetForProfile(
     Profile* profile) {
   DCHECK(profile);
-  if (!GetAccessCodeCastEnabledPref(profile->GetPrefs())) {
+  if (!GetAccessCodeCastEnabledPref(profile)) {
     return nullptr;
   }
   DCHECK(MediaRouterFactory::GetApiForBrowserContext(profile))
@@ -46,13 +45,19 @@ AccessCodeCastSinkService* AccessCodeCastSinkServiceFactory::GetForProfile(
 // static
 AccessCodeCastSinkServiceFactory*
 AccessCodeCastSinkServiceFactory::GetInstance() {
-  return base::Singleton<AccessCodeCastSinkServiceFactory>::get();
+  static base::NoDestructor<AccessCodeCastSinkServiceFactory> instance;
+  return instance.get();
 }
 
 AccessCodeCastSinkServiceFactory::AccessCodeCastSinkServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AccessCodeSinkService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   // TODO(b/238212430): Add a browsertest case to ensure that all media router
   // objects are created before the ACCSS.
   DependsOn(media_router::ChromeMediaRouterFactory::GetInstance());
@@ -60,13 +65,14 @@ AccessCodeCastSinkServiceFactory::AccessCodeCastSinkServiceFactory()
 
 AccessCodeCastSinkServiceFactory::~AccessCodeCastSinkServiceFactory() = default;
 
-KeyedService* AccessCodeCastSinkServiceFactory::BuildServiceInstanceFor(
-    content::BrowserContext* profile) const {
-  if (!GetAccessCodeCastEnabledPref(
-          Profile::FromBrowserContext(profile)->GetPrefs())) {
+std::unique_ptr<KeyedService>
+AccessCodeCastSinkServiceFactory::BuildServiceInstanceForBrowserContext(
+    content::BrowserContext* context) const {
+  auto* profile = Profile::FromBrowserContext(context);
+  if (!profile || !GetAccessCodeCastEnabledPref(profile)) {
     return nullptr;
   }
-  return new AccessCodeCastSinkService(static_cast<Profile*>(profile));
+  return std::make_unique<AccessCodeCastSinkService>(profile);
 }
 
 bool AccessCodeCastSinkServiceFactory::ServiceIsCreatedWithBrowserContext()

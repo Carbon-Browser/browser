@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,15 +22,18 @@ namespace internal {
 
 absl::optional<AllocatorSettings> GetAllocatorSettings(
     const base::Feature& feature,
-    bool boost_sampling);
+    bool boost_sampling,
+    const char* process_type);
 
 namespace {
 
 constexpr size_t kLoopIterations = 100;
-const base::Feature kTestFeature1{"GwpAsanTestFeature1",
-                                  base::FEATURE_ENABLED_BY_DEFAULT};
-const base::Feature kTestFeature2{"GwpAsanTestFeature2",
-                                  base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kTestFeature1,
+             "GwpAsanTestFeature1",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kTestFeature2,
+             "GwpAsanTestFeature2",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Tries to enable hooking with the given process sampling parameters
 // kLoopIterations times and return the number of times hooking was enabled.
@@ -46,8 +49,10 @@ size_t processSamplingTest(const char* process_sampling,
 
   size_t enabled = 0;
   for (size_t i = 0; i < kLoopIterations; i++) {
-    if (GetAllocatorSettings(kTestFeature1, process_sampling_boost != nullptr))
+    if (GetAllocatorSettings(kTestFeature1, process_sampling_boost != nullptr,
+                             "")) {
       enabled++;
+    }
   }
 
   return enabled;
@@ -69,8 +74,9 @@ std::set<size_t> allocationSamplingTest(
 
   std::set<size_t> frequencies;
   for (size_t i = 0; i < kLoopIterations; i++) {
-    if (auto settings = GetAllocatorSettings(kTestFeature2, false))
+    if (auto settings = GetAllocatorSettings(kTestFeature2, false, "")) {
       frequencies.insert(settings->sampling_frequency);
+    }
   }
 
   return frequencies;

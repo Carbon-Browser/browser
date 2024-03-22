@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -248,7 +248,7 @@ TEST(EncryptionHeaderParsersTest, ParseValidMultiValueCryptoKeyHeaders) {
   }
 }
 
-TEST(EncryptionHeaderParsersTest, DISABLED_ParseInvalidCryptoKeyHeaders) {
+TEST(EncryptionHeaderParsersTest, ParseInvalidCryptoKeyHeaders) {
   const char* const expected_failures[] = {
     // Values in the name-value pairs are not optional.
     "keyid",

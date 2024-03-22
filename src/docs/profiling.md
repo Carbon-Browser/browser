@@ -26,12 +26,9 @@ CPU profiling is not to be confused with tracing or task profiling:
 # Profiling on Linux
 
 ## General checkout setup
-Profiling should always be done on a Release build, which has very similar performance characteristics to an official build. Make sure the following appears in your `args.gn` file:
+Profiling should preferably be done on an official build. Make sure the following appears in your `args.gn` file:
 
-    is_debug = false
-    blink_symbol_level = 2
-    symbol_level = 2
-    dcheck_always_on = false
+    is_official_build = true
 
 ## Profiling a process or thread for a defined period of time using perf
 
@@ -60,6 +57,10 @@ To stop profiling, press `Control-c` in the terminal window where `perf` is runn
 *** promo
 Tip for Googlers: running `gcert` first will make `pprof` run faster, and eliminate some useless spew to the terminal.
 ***
+
+If you want to profile all renderer processes use the custom `--renderer-cmd-prefix` profiling script:
+
+  $ src/out/Release/chrome --renderer-cmd-prefix="tools/profiling/linux-perf-renderer-cmd.sh"
 
 If you want to limit the profile to a single thread, run:
 
@@ -147,6 +148,11 @@ To limit the profile to a single thread, use a command like this:
 The `--profile-process` and `--profile-thread` arguments support most of the common process names ('browser', 'gpu', 'renderer') and thread names ('main', 'io', 'compositor', etc.). However, if you need finer control of the process and/or thread to profile, you can specify an explicit Process ID or Thread ID. Check out the usage message for more info:
 
     $ src/out/Release/bin/chrome_public_apk help profile
+
+
+By default, simpleperf will collect CPU cycles. To collect other events, use a command like this:
+
+    $ src/out/Release/bin/chrome_public_apk profile --profile-process=renderer --profile-events cpu-cycles,branch-misses,branch-instructions,cache-references,cache-misses,stalled-cycles-frontend,stalled-cycles-backend
 
 # Profiling on ChromeOS
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "ash/components/policy/weekly_time/weekly_time.h"
-#include "ash/components/policy/weekly_time/weekly_time_interval.h"
 #include "base/values.h"
+#include "chromeos/ash/components/policy/weekly_time/weekly_time.h"
+#include "chromeos/ash/components/policy/weekly_time/weekly_time_interval.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -39,7 +39,7 @@ std::vector<int> ExtractIgnoredPolicyProtoTagsFromProto(
 absl::optional<std::string> ExtractTimezoneFromProto(
     const enterprise_management::DeviceOffHoursProto& container);
 
-// Return DictionaryValue in format:
+// Return Value::Dict in format:
 // { "timezone" : string,
 //   "intervals" : list of "OffHours" Intervals,
 //   "ignored_policy_proto_tags" : integer list }
@@ -52,7 +52,7 @@ absl::optional<std::string> ExtractTimezoneFromProto(
 // }
 // This function is used by device_policy_decoder.cc to save "OffHours"
 // policy in PolicyMap.
-std::unique_ptr<base::DictionaryValue> ConvertOffHoursProtoToValue(
+absl::optional<base::Value::Dict> ConvertOffHoursProtoToValue(
     const enterprise_management::DeviceOffHoursProto& container);
 
 }  // namespace off_hours

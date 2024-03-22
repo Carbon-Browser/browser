@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,6 @@ GLboolean color_mask_blue;
 GLboolean cached_color_mask_blue;
 GLboolean color_mask_alpha;
 GLboolean cached_color_mask_alpha;
-GLenum coverage_modulation;
 GLenum cull_mode;
 GLenum depth_func;
 GLboolean depth_mask;
@@ -78,7 +77,6 @@ GLclampf z_far;
 GLenum front_face;
 GLenum hint_generate_mipmap;
 GLenum hint_fragment_shader_derivative;
-GLenum hint_texture_filtering;
 GLfloat line_width;
 GLint pack_alignment;
 GLint unpack_alignment;

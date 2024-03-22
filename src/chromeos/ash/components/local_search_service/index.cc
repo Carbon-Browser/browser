@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 namespace {
 
@@ -28,6 +27,8 @@ std::string IndexIdBasedHistogramPrefix(IndexId index_id) {
       return prefix + "HelpAppLauncher";
     case IndexId::kPersonalization:
       return prefix + "Personalization";
+    case IndexId::kShortcutsApp:
+      return prefix + "ShortcutsApp";
   }
 }
 
@@ -120,5 +121,4 @@ void Index::ClearIndexCallbackWithTime(ClearIndexCallback callback,
   std::move(callback).Run();
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

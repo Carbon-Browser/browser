@@ -1,9 +1,9 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//media/media_options.gni")
 import("//testing/test.gni")
 
@@ -22,7 +22,11 @@ buildflag_header("buildflags") {
     if (service == "renderer") {
       enable_mojo_renderer = true
     } else if (service == "cdm") {
-      enable_mojo_cdm = true
+      # Fuchsia communicates directly with the platform CDM via FIDL instead of
+      # the mojo service.
+      if (!is_fuchsia) {
+        enable_mojo_cdm = true
+      }
     } else if (service == "audio_decoder") {
       enable_mojo_audio_decoder = true
     } else if (service == "audio_encoder") {
@@ -59,7 +63,6 @@ source_set("test_support") {
   public_deps = [
     "//media/mojo/clients",
     "//media/mojo/common",
-    "//media/mojo/common:mojo_shared_buffer_video_frame",
     "//media/mojo/mojom",
     "//media/mojo/mojom:test_interfaces",
     "//media/mojo/services",
@@ -68,12 +71,12 @@ source_set("test_support") {
 
 source_set("unit_tests") {
   testonly = true
-
   deps = [
     "//media/learning/mojo:unit_tests",
     "//media/mojo/clients:unit_tests",
     "//media/mojo/common:unit_tests",
     "//media/mojo/mojom:unit_tests",
+    "//media/mojo/mojom/stable:unit_tests",
     "//media/mojo/services:unit_tests",
     "//media/mojo/test:unit_tests",
   ]

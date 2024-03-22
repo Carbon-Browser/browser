@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ static Font ReplacementTextFont(const Document* document) {
   FontDescription font_description;
   LayoutTheme::GetTheme().SystemFont(CSSValueID::kWebkitSmallControl,
                                      font_description, document);
-  font_description.SetWeight(BoldWeightValue());
+  font_description.SetWeight(kBoldWeightValue);
   font_description.SetComputedSize(font_description.SpecifiedSize());
   Font font(font_description);
   return font;
@@ -76,7 +76,8 @@ void EmbeddedObjectPainter::PaintReplaced(const PaintInfo& paint_info,
   FloatRoundedRect rounded_background_rect(
       gfx::RectF(ToPixelSnappedRect(background_rect)),
       kReplacementTextRoundedRectRadius);
-  Color color = ScaleAlpha(Color::kWhite, kReplacementTextRoundedRectOpacity);
+  Color color = Color::FromSkColor(
+      ScaleAlpha(SK_ColorWHITE, kReplacementTextRoundedRectOpacity));
   AutoDarkMode auto_dark_mode(
       PaintAutoDarkMode(layout_embedded_object_.StyleRef(),
                         DarkModeFilter::ElementRole::kBackground));
@@ -86,7 +87,8 @@ void EmbeddedObjectPainter::PaintReplaced(const PaintInfo& paint_info,
   text_rect.Offset(gfx::PointF(content_rect.Center()) -
                    text_rect.CenterPoint());
   TextRunPaintInfo run_info(text_run);
-  context.SetFillColor(ScaleAlpha(Color::kBlack, kReplacementTextTextOpacity));
+  context.SetFillColor(Color::FromSkColor(
+      ScaleAlpha(SK_ColorBLACK, kReplacementTextTextOpacity)));
   context.DrawBidiText(
       font, run_info,
       text_rect.origin() +

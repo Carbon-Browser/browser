@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,11 @@ struct StructTraits<display::mojom::DisplayConfigurationParamsDataView,
   static const absl::optional<std::unique_ptr<display::DisplayMode>>& mode(
       const display::DisplayConfigurationParams& display_configuration_params) {
     return display_configuration_params.mode;
+  }
+
+  static bool enable_vrr(
+      const display::DisplayConfigurationParams& display_configuration_params) {
+    return display_configuration_params.enable_vrr;
   }
 
   static bool Read(display::mojom::DisplayConfigurationParamsDataView data,

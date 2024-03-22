@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,7 @@ class CONTENT_EXPORT RecentlyDestroyedHosts
  public:
   // Storage time for information about recently destroyed processes. Intended
   // to be long enough to capture a large portion of the process-reuse
-  // opportunity. This also serves as the maximum reuse interval that can be
-  // returned by GetPercentileReuseInterval().
+  // opportunity.
   static constexpr base::TimeDelta kRecentlyDestroyedStorageTimeout =
       base::Seconds(15);
 
@@ -57,13 +56,6 @@ class CONTENT_EXPORT RecentlyDestroyedHosts
   static void Add(RenderProcessHost* host,
                   const base::TimeDelta& time_spent_running_unload_handlers,
                   BrowserContext* browser_context);
-
-  // Returns the given |percentile| of the recent intervals between process
-  // shutdown and creation of a process for the same site. A maximum value of
-  // |kRecentlyDestroyedStorageTimeout| can be returned.
-  static base::TimeDelta GetPercentileReuseInterval(
-      int percentile,
-      BrowserContext* browser_context);
 
  private:
   friend class RecentlyDestroyedHostsTest;

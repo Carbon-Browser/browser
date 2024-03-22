@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/cicerone/fake_cicerone_client.h"
 #include "dbus/bus.h"
@@ -125,10 +126,19 @@ class CiceroneClientImpl : public CiceroneClient {
     return is_low_disk_space_triggered_signal_connected_;
   }
 
+  bool IsInhibitScreensaverSignalConencted() override {
+    return is_inhibit_screensaver_signal_connected_;
+  }
+
+  bool IsUninhibitScreensaverSignalConencted() override {
+    return is_uninhibit_screensaver_signal_connected_;
+  }
+
   void LaunchContainerApplication(
       const vm_tools::cicerone::LaunchContainerApplicationRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::LaunchContainerApplicationResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::LaunchContainerApplicationResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kLaunchContainerApplicationMethod);
@@ -137,7 +147,7 @@ class CiceroneClientImpl : public CiceroneClient {
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR)
           << "Failed to encode LaunchContainerApplicationRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
 
       return;
@@ -153,8 +163,8 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void GetContainerAppIcons(
       const vm_tools::cicerone::ContainerAppIconRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ContainerAppIconResponse> callback)
-      override {
+      chromeos::DBusMethodCallback<vm_tools::cicerone::ContainerAppIconResponse>
+          callback) override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kGetContainerAppIconMethod);
@@ -162,7 +172,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode ContainerAppIonRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -176,8 +186,8 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void GetLinuxPackageInfo(
       const vm_tools::cicerone::LinuxPackageInfoRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::LinuxPackageInfoResponse> callback)
-      override {
+      chromeos::DBusMethodCallback<vm_tools::cicerone::LinuxPackageInfoResponse>
+          callback) override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kGetLinuxPackageInfoMethod);
@@ -198,8 +208,8 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void InstallLinuxPackage(
       const vm_tools::cicerone::InstallLinuxPackageRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::InstallLinuxPackageResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::InstallLinuxPackageResponse> callback) override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kInstallLinuxPackageMethod);
@@ -207,7 +217,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode InstallLinuxPackageRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -221,8 +231,9 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void UninstallPackageOwningFile(
       const vm_tools::cicerone::UninstallPackageOwningFileRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::UninstallPackageOwningFileResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::UninstallPackageOwningFileResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kUninstallPackageOwningFileMethod);
@@ -231,7 +242,7 @@ class CiceroneClientImpl : public CiceroneClient {
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR)
           << "Failed to encode UninstallPackageOwningFileRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -246,15 +257,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void CreateLxdContainer(
       const vm_tools::cicerone::CreateLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CreateLxdContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CreateLxdContainerResponse> callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kCreateLxdContainerMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode CreateLxdContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -268,15 +279,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void DeleteLxdContainer(
       const vm_tools::cicerone::DeleteLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::DeleteLxdContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::DeleteLxdContainerResponse> callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kDeleteLxdContainerMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode DeleteLxdContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -290,15 +301,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void StartLxdContainer(
       const vm_tools::cicerone::StartLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::StartLxdContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::StartLxdContainerResponse> callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kStartLxdContainerMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode StartLxdContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -312,15 +323,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void StopLxdContainer(
       const vm_tools::cicerone::StopLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::StopLxdContainerResponse> callback)
-      override {
+      chromeos::DBusMethodCallback<vm_tools::cicerone::StopLxdContainerResponse>
+          callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kStopLxdContainerMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode StopLxdContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -334,8 +345,9 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void GetLxdContainerUsername(
       const vm_tools::cicerone::GetLxdContainerUsernameRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::GetLxdContainerUsernameResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::GetLxdContainerUsernameResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kGetLxdContainerUsernameMethod);
@@ -343,7 +355,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode GetLxdContainerUsernameRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -357,8 +369,9 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void SetUpLxdContainerUser(
       const vm_tools::cicerone::SetUpLxdContainerUserRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::SetUpLxdContainerUserResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::SetUpLxdContainerUserResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kSetUpLxdContainerUserMethod);
@@ -366,7 +379,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode SetUpLxdContainerUserRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -380,15 +393,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void ExportLxdContainer(
       const vm_tools::cicerone::ExportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ExportLxdContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ExportLxdContainerResponse> callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kExportLxdContainerMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode ExportLxdContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -402,15 +415,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void ImportLxdContainer(
       const vm_tools::cicerone::ImportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ImportLxdContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ImportLxdContainerResponse> callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kImportLxdContainerMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode ImportLxdContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -424,8 +437,9 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void CancelExportLxdContainer(
       const vm_tools::cicerone::CancelExportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelExportLxdContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelExportLxdContainerResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kCancelExportLxdContainerMethod);
@@ -433,7 +447,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode CancelExportLxdContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -448,8 +462,9 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void CancelImportLxdContainer(
       const vm_tools::cicerone::CancelImportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelImportLxdContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelImportLxdContainerResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kCancelImportLxdContainerMethod);
@@ -457,7 +472,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode CancelImportLxdContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -472,8 +487,8 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void ApplyAnsiblePlaybook(
       const vm_tools::cicerone::ApplyAnsiblePlaybookRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ApplyAnsiblePlaybookResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ApplyAnsiblePlaybookResponse> callback) override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kApplyAnsiblePlaybookMethod);
@@ -481,7 +496,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode ApplyAnsiblePlaybookRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -495,8 +510,9 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void ConfigureForArcSideload(
       const vm_tools::cicerone::ConfigureForArcSideloadRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ConfigureForArcSideloadResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ConfigureForArcSideloadResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kConfigureForArcSideloadMethod);
@@ -504,7 +520,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode ConfigureForArcSideloadRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -518,15 +534,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void UpgradeContainer(
       const vm_tools::cicerone::UpgradeContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::UpgradeContainerResponse> callback)
-      override {
+      chromeos::DBusMethodCallback<vm_tools::cicerone::UpgradeContainerResponse>
+          callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kUpgradeContainerMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode UpgradeContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -540,8 +556,9 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void CancelUpgradeContainer(
       const vm_tools::cicerone::CancelUpgradeContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelUpgradeContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelUpgradeContainerResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kCancelUpgradeContainerMethod);
@@ -549,7 +566,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode CancelUpgradeContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -561,16 +578,17 @@ class CiceroneClientImpl : public CiceroneClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  void StartLxd(const vm_tools::cicerone::StartLxdRequest& request,
-                DBusMethodCallback<vm_tools::cicerone::StartLxdResponse>
-                    callback) override {
+  void StartLxd(
+      const vm_tools::cicerone::StartLxdRequest& request,
+      chromeos::DBusMethodCallback<vm_tools::cicerone::StartLxdResponse>
+          callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kStartLxdMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode StartLxdRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -582,16 +600,17 @@ class CiceroneClientImpl : public CiceroneClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  void AddFileWatch(const vm_tools::cicerone::AddFileWatchRequest& request,
-                    DBusMethodCallback<vm_tools::cicerone::AddFileWatchResponse>
-                        callback) override {
+  void AddFileWatch(
+      const vm_tools::cicerone::AddFileWatchRequest& request,
+      chromeos::DBusMethodCallback<vm_tools::cicerone::AddFileWatchResponse>
+          callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kAddFileWatchMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode AddFileWatchRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -605,15 +624,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void RemoveFileWatch(
       const vm_tools::cicerone::RemoveFileWatchRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::RemoveFileWatchResponse> callback)
-      override {
+      chromeos::DBusMethodCallback<vm_tools::cicerone::RemoveFileWatchResponse>
+          callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kRemoveFileWatchMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode RemoveFileWatchRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -627,15 +646,15 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void GetVshSession(
       const vm_tools::cicerone::GetVshSessionRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::GetVshSessionResponse> callback)
-      override {
+      chromeos::DBusMethodCallback<vm_tools::cicerone::GetVshSessionResponse>
+          callback) override {
     dbus::MethodCall method_call(vm_tools::cicerone::kVmCiceroneInterface,
                                  vm_tools::cicerone::kGetVshSessionMethod);
     dbus::MessageWriter writer(&method_call);
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode GetVshSessionRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -649,8 +668,8 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void AttachUsbToContainer(
       const vm_tools::cicerone::AttachUsbToContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::AttachUsbToContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::AttachUsbToContainerResponse> callback) override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kAttachUsbToContainerMethod);
@@ -658,7 +677,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode AttachUsbToContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -672,8 +691,9 @@ class CiceroneClientImpl : public CiceroneClient {
 
   void DetachUsbFromContainer(
       const vm_tools::cicerone::DetachUsbFromContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::DetachUsbFromContainerResponse>
-          callback) override {
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::DetachUsbFromContainerResponse> callback)
+      override {
     dbus::MethodCall method_call(
         vm_tools::cicerone::kVmCiceroneInterface,
         vm_tools::cicerone::kDetachUsbFromContainerMethod);
@@ -681,7 +701,7 @@ class CiceroneClientImpl : public CiceroneClient {
 
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR) << "Failed to encode DetachUsbFromContainerRequest protobuf";
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -706,6 +726,77 @@ class CiceroneClientImpl : public CiceroneClient {
 
     cicerone_proxy_->CallMethod(&method_call, kDefaultTimeout.InMilliseconds(),
                                 base::DoNothing());
+  }
+
+  void ListRunningContainers(
+      const vm_tools::cicerone::ListRunningContainersRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ListRunningContainersResponse> callback)
+      override {
+    dbus::MethodCall method_call(
+        vm_tools::cicerone::kVmCiceroneInterface,
+        vm_tools::cicerone::kListRunningContainersMethod);
+    dbus::MessageWriter writer(&method_call);
+
+    if (!writer.AppendProtoAsArrayOfBytes(request)) {
+      LOG(ERROR) << "Failed to encode GetVshSessionRequest protobuf";
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+      return;
+    }
+
+    cicerone_proxy_->CallMethod(
+        &method_call, kDefaultTimeout.InMilliseconds(),
+        base::BindOnce(&CiceroneClientImpl::OnDBusProtoResponse<
+                           vm_tools::cicerone::ListRunningContainersResponse>,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  void GetGarconSessionInfo(
+      const vm_tools::cicerone::GetGarconSessionInfoRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::GetGarconSessionInfoResponse> callback) override {
+    dbus::MethodCall method_call(
+        vm_tools::cicerone::kVmCiceroneInterface,
+        vm_tools::cicerone::kGetGarconSessionInfoMethod);
+    dbus::MessageWriter writer(&method_call);
+
+    if (!writer.AppendProtoAsArrayOfBytes(request)) {
+      LOG(ERROR) << "Failed to encode GetVshSessionRequest protobuf";
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+      return;
+    }
+
+    cicerone_proxy_->CallMethod(
+        &method_call, kDefaultTimeout.InMilliseconds(),
+        base::BindOnce(&CiceroneClientImpl::OnDBusProtoResponse<
+                           vm_tools::cicerone::GetGarconSessionInfoResponse>,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  void UpdateContainerDevices(
+      const vm_tools::cicerone::UpdateContainerDevicesRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::UpdateContainerDevicesResponse> callback)
+      override {
+    dbus::MethodCall method_call(
+        vm_tools::cicerone::kVmCiceroneInterface,
+        vm_tools::cicerone::kUpdateContainerDevicesMethod);
+    dbus::MessageWriter writer(&method_call);
+
+    if (!writer.AppendProtoAsArrayOfBytes(request)) {
+      LOG(ERROR) << "Failed to encode UpdateContainerDevicesRequest protobuf";
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+      return;
+    }
+
+    cicerone_proxy_->CallMethod(
+        &method_call, kDefaultTimeout.InMilliseconds(),
+        base::BindOnce(&CiceroneClientImpl::OnDBusProtoResponse<
+                           vm_tools::cicerone::UpdateContainerDevicesResponse>,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
   void WaitForServiceToBeAvailable(
@@ -862,11 +953,27 @@ class CiceroneClientImpl : public CiceroneClient {
                             weak_ptr_factory_.GetWeakPtr()),
         base::BindOnce(&CiceroneClientImpl::OnSignalConnected,
                        weak_ptr_factory_.GetWeakPtr()));
+
+    cicerone_proxy_->ConnectToSignal(
+        vm_tools::cicerone::kVmCiceroneInterface,
+        vm_tools::cicerone::kInhibitScreensaverSignal,
+        base::BindRepeating(&CiceroneClientImpl::OnInhibitScreensaverSignal,
+                            weak_ptr_factory_.GetWeakPtr()),
+        base::BindOnce(&CiceroneClientImpl::OnSignalConnected,
+                       weak_ptr_factory_.GetWeakPtr()));
+
+    cicerone_proxy_->ConnectToSignal(
+        vm_tools::cicerone::kVmCiceroneInterface,
+        vm_tools::cicerone::kUninhibitScreensaverSignal,
+        base::BindRepeating(&CiceroneClientImpl::OnUninhibitScreensaverSignal,
+                            weak_ptr_factory_.GetWeakPtr()),
+        base::BindOnce(&CiceroneClientImpl::OnSignalConnected,
+                       weak_ptr_factory_.GetWeakPtr()));
   }
 
  private:
   template <typename ResponseProto>
-  void OnDBusProtoResponse(DBusMethodCallback<ResponseProto> callback,
+  void OnDBusProtoResponse(chromeos::DBusMethodCallback<ResponseProto> callback,
                            dbus::Response* dbus_response) {
     if (!dbus_response) {
       std::move(callback).Run(absl::nullopt);
@@ -1112,6 +1219,30 @@ class CiceroneClientImpl : public CiceroneClient {
     }
   }
 
+  void OnInhibitScreensaverSignal(dbus::Signal* signal) {
+    vm_tools::cicerone::InhibitScreensaverSignal proto;
+    dbus::MessageReader reader(signal);
+    if (!reader.PopArrayOfBytesAsProto(&proto)) {
+      LOG(ERROR) << "Failed to parse proto from DBus Signal";
+      return;
+    }
+    for (auto& observer : observer_list_) {
+      observer.OnInhibitScreensaver(proto);
+    }
+  }
+
+  void OnUninhibitScreensaverSignal(dbus::Signal* signal) {
+    vm_tools::cicerone::UninhibitScreensaverSignal proto;
+    dbus::MessageReader reader(signal);
+    if (!reader.PopArrayOfBytesAsProto(&proto)) {
+      LOG(ERROR) << "Failed to parse proto from DBus Signal";
+      return;
+    }
+    for (auto& observer : observer_list_) {
+      observer.OnUninhibitScreensaver(proto);
+    }
+  }
+
   void OnSignalConnected(const std::string& interface_name,
                          const std::string& signal_name,
                          bool is_connected) {
@@ -1165,12 +1296,16 @@ class CiceroneClientImpl : public CiceroneClient {
     } else if (signal_name ==
                vm_tools::cicerone::kLowDiskSpaceTriggeredSignal) {
       is_low_disk_space_triggered_signal_connected_ = is_connected;
+    } else if (signal_name == vm_tools::cicerone::kInhibitScreensaverSignal) {
+      is_inhibit_screensaver_signal_connected_ = is_connected;
+    } else if (signal_name == vm_tools::cicerone::kUninhibitScreensaverSignal) {
+      is_uninhibit_screensaver_signal_connected_ = is_connected;
     } else {
       NOTREACHED();
     }
   }
 
-  dbus::ObjectProxy* cicerone_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> cicerone_proxy_ = nullptr;
 
   base::ObserverList<Observer>::Unchecked observer_list_;
 
@@ -1192,6 +1327,8 @@ class CiceroneClientImpl : public CiceroneClient {
   bool is_start_lxd_progress_signal_connected_ = false;
   bool is_file_watch_triggered_signal_connected_ = false;
   bool is_low_disk_space_triggered_signal_connected_ = false;
+  bool is_inhibit_screensaver_signal_connected_ = false;
+  bool is_uninhibit_screensaver_signal_connected_ = false;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

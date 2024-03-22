@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
 #include "base/system/sys_info.h"
@@ -28,10 +28,8 @@ const char kCollectionOutcomeHistogramPrefix[] = "ChromeOS.CWP.Collect";
 const int kMinIntervalBetweenSessionRestoreCollectionsInSec = 30;
 
 // Returns a random TimeDelta uniformly selected between zero and |max|.
-base::TimeDelta RandomTimeDelta(base::TimeDelta max) {
-  if (max.is_zero())
-    return max;
-  return base::Microseconds(base::RandGenerator(max.InMicroseconds()));
+base::TimeDelta RandTimeDelta(base::TimeDelta max) {
+  return max.is_positive() ? base::RandTimeDeltaUpTo(max) : max;
 }
 
 // PerfDataProto is defined elsewhere with more fields than the definition in
@@ -66,6 +64,15 @@ void RemoveUnknownFieldsFromMessagesWithStrings(PerfDataProto* proto) {
           ->clear();
     }
   }
+  for (PerfDataProto::PerfEventType& event_type :
+       *proto->mutable_event_types()) {
+    event_type.mutable_unknown_fields()->clear();
+  }
+  for (PerfDataProto::PerfPMUMappingsMetadata& mapping :
+       *proto->mutable_pmu_mappings()) {
+    mapping.mutable_unknown_fields()->clear();
+  }
+  proto->mutable_unknown_fields()->clear();
 }
 
 }  // namespace
@@ -122,7 +129,7 @@ void MetricCollector::ScheduleSuspendDoneCollection(
 
   // Randomly pick a delay before doing the collection.
   base::TimeDelta collection_delay =
-      RandomTimeDelta(resume_params.max_collection_delay);
+      RandTimeDelta(resume_params.max_collection_delay);
   timer_.Start(FROM_HERE, collection_delay,
                base::BindOnce(&MetricCollector::CollectPerfDataAfterResume,
                               GetWeakPtr(), sleep_duration, collection_delay));
@@ -167,7 +174,7 @@ void MetricCollector::ScheduleSessionRestoreCollection(int num_tabs_restored) {
 
   // Randomly pick a delay before doing the collection.
   base::TimeDelta collection_delay =
-      RandomTimeDelta(restore_params.max_collection_delay);
+      RandTimeDelta(restore_params.max_collection_delay);
   timer_.Start(
       FROM_HERE, collection_delay,
       base::BindOnce(&MetricCollector::CollectPerfDataAfterSessionRestore,
@@ -226,7 +233,7 @@ void MetricCollector::ScheduleIntervalCollection() {
   // Pick a random time in the current interval.
   base::TimeTicks scheduled_time =
       next_profiling_interval_start_ +
-      RandomTimeDelta(collection_params_.periodic_interval);
+      RandTimeDelta(collection_params_.periodic_interval);
   // If the scheduled time has already passed in the time it took to make the
   // above calculations, trigger the collection event immediately.
   if (scheduled_time < now)

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@ module blink.mojom;
 import "mojo/public/mojom/base/string16.mojom";
 import "services/network/public/mojom/referrer_policy.mojom";
 import "third_party/blink/public/mojom/conversions/conversions.mojom";
+import "third_party/blink/public/mojom/forms/form_control_type.mojom";
 import "ui/base/mojom/ui_base_types.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
 import "url/mojom/url.mojom";
-import "url/mojom/origin.mojom";
 
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.blink_public.common
 // GENERATED_JAVA_CLASS_NAME_OVERRIDE: ContextMenuDataMediaType
@@ -37,32 +37,19 @@ enum ContextMenuDataMediaType {
   kPlugin,
 };
 
-enum ContextMenuDataInputFieldType {
-  // Not an input field.
-  kNone,
-
-  // type = text, search, email, url
-  kPlainText,
-
-  // type = password
-  kPassword,
-
-  // type = number
-  kNumber,
-
-  // type = tel
-  kTelephone,
-
-  // type = <etc.>
-  kOther,
-};
-
 enum CustomContextMenuItemType {
   kOption,
   kCheckableOption,
   kGroup,
   kSeparator,
   kSubMenu
+};
+
+// Container for information about the form renderer id from where the context
+// menu was triggered.
+// autofill::FormRendererId
+struct FormRendererId {
+  uint64 id;
 };
 
 // Container for information about the field renderer id where the context menu
@@ -186,9 +173,6 @@ struct UntrustworthyContextMenuParams {
 
   ui.mojom.MenuSourceType source_type;
 
-  // If this node is an input field, the type of that field.
-  ContextMenuDataInputFieldType input_field_type;
-
   // Rect representing the coordinates in the document space of the selection.
   gfx.mojom.Rect selection_rect;
 
@@ -199,9 +183,31 @@ struct UntrustworthyContextMenuParams {
   // See TextFragmentAnchor.
   bool opened_from_highlight;
 
-  // The renderer id of the input field from where the context menu is opened.
-  // `base::nullopt` if it is not an input field.
-  FieldRendererId? field_renderer_id;
+  // The type of the form control element on which the context menu is invoked,
+  // if any.
+  FormControlType? form_control_type;
+
+  // Indicates whether the context menu is invoked on a non-form,
+  // non-form-control element that is contenteditable. Thus, it is mutually
+  // exclusive with `form_control_type`.
+  // Only true if AutofillUseDomNodeIdForRendererId (crbug.com/1427131) is
+  // enabled.
+  bool is_content_editable_for_autofill;
+
+  // Identifies the element the context menu was invoked on if either
+  // `form_control_type` is engaged or `is_content_editable_for_autofill` is
+  // true.
+  // See `autofill::FieldRendererId` for the semantics of renderer IDs.
+  FieldRendererId field_renderer_id;
+
+  // Identifies form to which the field identified by `field_renderer_id` is
+  // associated.
+  // See `autofill::FormRendererId` for the semantics of renderer IDs.
+  FormRendererId form_renderer_id;
+
+  // True iff a field's type is plain text but heuristics (e.g. the name attribute
+  // contains 'password' as a substring) recognize it as a password field.
+  bool is_password_type_by_heuristics;
 };
 
 // Defines methods for Context menu to commnicate from the renderer to the

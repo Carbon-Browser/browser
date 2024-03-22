@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include "ash/components/arc/mojom/app.mojom.h"
 #include "ash/components/arc/session/connection_holder.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
@@ -26,7 +26,6 @@
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/intent.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
-#include "components/services/app_service/public/mojom/types.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
@@ -62,7 +61,7 @@ WebApkManager::WebApkManager(Profile* profile)
   // Always observe AppListPrefs, even when the rest of WebAPKs is not enabled,
   // so that we can detect WebAPK uninstalls that happen when the feature is
   // disabled.
-  arc_app_list_prefs_observer_.Observe(app_list_prefs_);
+  arc_app_list_prefs_observer_.Observe(app_list_prefs_.get());
   arc::ArcSessionManager::Get()->AddObserver(this);
   pref_change_registrar_->Init(profile_->GetPrefs());
   pref_change_registrar_->Add(
@@ -91,7 +90,10 @@ void WebApkManager::StartOrStopObserving() {
 
   if (arc_enabled && policy_enabled) {
     auto* cache = &proxy_->AppRegistryCache();
-    Observe(cache);
+    if (!app_registry_cache_observer_.IsObservingSource(cache)) {
+      app_registry_cache_observer_.Reset();
+      app_registry_cache_observer_.Observe(cache);
+    }
 
     if (cache->IsAppTypeInitialized(AppType::kWeb)) {
       Synchronize();
@@ -99,7 +101,7 @@ void WebApkManager::StartOrStopObserving() {
     return;
   }
 
-  Observe(nullptr);
+  app_registry_cache_observer_.Reset();
   initialized_ = false;
 
   if (!policy_enabled) {
@@ -186,7 +188,7 @@ void WebApkManager::OnAppTypeInitialized(AppType type) {
 }
 
 void WebApkManager::OnAppRegistryCacheWillBeDestroyed(AppRegistryCache* cache) {
-  Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }
 
 void WebApkManager::OnPackageListInitialRefreshed() {

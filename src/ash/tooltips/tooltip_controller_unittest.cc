@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,11 +70,6 @@ void AddViewToWidgetAndResize(views::Widget* widget, views::View* view) {
                               contents_view_bounds.size()));
 }
 
-TooltipController* GetController() {
-  return static_cast<TooltipController*>(
-      ::wm::GetTooltipClient(Shell::GetPrimaryRootWindow()));
-}
-
 }  // namespace
 
 class TooltipControllerTest : public AshTestBase {
@@ -88,7 +83,8 @@ class TooltipControllerTest : public AshTestBase {
 
   void SetUp() override {
     AshTestBase::SetUp();
-    helper_ = std::make_unique<TooltipControllerTestHelper>(GetController());
+    helper_ = std::make_unique<TooltipControllerTestHelper>(
+        Shell::GetPrimaryRootWindow());
   }
 
  protected:
@@ -129,6 +125,7 @@ TEST_F(TooltipControllerTest, HideTooltipWhenCursorHidden) {
   Shell::Get()->cursor_manager()->EnableMouseEvents();
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(Shell::Get()->cursor_manager()->IsCursorVisible());
+  generator.MoveMouseBy(0, 1);
   helper_->UpdateIfRequired(TooltipTrigger::kCursor);
   EXPECT_TRUE(helper_->IsTooltipVisible());
 }
@@ -168,6 +165,25 @@ TEST_F(TooltipControllerTest, TooltipsOnMultiDisplayShouldNotCrash) {
   generator1.MoveMouseRelativeTo(widget1->GetNativeView(),
                                  view1->bounds().CenterPoint());
   EXPECT_TRUE(helper_->IsTooltipVisible());
+}
+
+TEST_F(TooltipControllerTest, HideTooltipWhenViewHidden) {
+  std::unique_ptr<views::Widget> widget(CreateNewWidgetOn(0));
+  TooltipTestView* view = new TooltipTestView;
+  AddViewToWidgetAndResize(widget.get(), view);
+  view->set_tooltip_text(u"Tooltip Text");
+  EXPECT_EQ(std::u16string(), helper_->GetTooltipText());
+  EXPECT_EQ(nullptr, helper_->GetTooltipParentWindow());
+
+  ui::test::EventGenerator generator(Shell::GetPrimaryRootWindow());
+  generator.MoveMouseRelativeTo(widget->GetNativeView(),
+                                view->bounds().CenterPoint());
+
+  // Mouse event triggers tooltip update so it becomes visible.
+  EXPECT_TRUE(helper_->IsTooltipVisible());
+
+  view->SetVisible(false);
+  EXPECT_FALSE(helper_->IsTooltipVisible());
 }
 
 }  // namespace ash

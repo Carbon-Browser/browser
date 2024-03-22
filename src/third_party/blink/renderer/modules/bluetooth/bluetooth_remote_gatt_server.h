@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_BLUETOOTH_BLUETOOTH_REMOTE_GATT_SERVER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_BLUETOOTH_BLUETOOTH_REMOTE_GATT_SERVER_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/bluetooth/web_bluetooth.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
@@ -65,7 +66,7 @@ class BluetoothRemoteGATTServer
   void Trace(Visitor*) const override;
 
   // IDL exposed interface:
-  BluetoothDevice* device() { return device_; }
+  BluetoothDevice* device() { return device_.Get(); }
   bool connected() { return connected_; }
   ScriptPromise connect(ScriptState*, ExceptionState&);
   void disconnect(ScriptState*, ExceptionState&);

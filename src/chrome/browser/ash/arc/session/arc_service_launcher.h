@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "media/media_buildflags.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
 
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
 #include "base/memory/weak_ptr.h"
@@ -17,26 +17,26 @@
 
 class Profile;
 
-
-namespace chromeos {
+namespace ash {
 class SchedulerConfigurationManagerBase;
 }
 
 namespace arc {
 
-class ArcDemoModePreferenceHandler;
 class ArcDiskSpaceMonitor;
 class ArcIconCacheDelegateProvider;
 class ArcPlayStoreEnabledPreferenceHandler;
 class ArcServiceManager;
 class ArcSessionManager;
+class ArcVmDataMigrationNotifier;
+class BrowserUrlOpener;
 
 // Detects ARC availability and launches ARC bridge service.
 class ArcServiceLauncher {
  public:
   // |scheduler_configuration_manager| must outlive |this| object.
-  explicit ArcServiceLauncher(chromeos::SchedulerConfigurationManagerBase*
-                                  scheduler_configuration_manager);
+  explicit ArcServiceLauncher(
+      ash::SchedulerConfigurationManagerBase* scheduler_configuration_manager);
 
   ArcServiceLauncher(const ArcServiceLauncher&) = delete;
   ArcServiceLauncher& operator=(const ArcServiceLauncher&) = delete;
@@ -67,6 +67,9 @@ class ArcServiceLauncher {
   // OnPrimaryUserProfilePrepared() should be called.
   void ResetForTesting();
 
+  // Ensure all ARC keyed service factories are properly initialised.
+  static void EnsureFactoriesBuilt();
+
  private:
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   // Callback for when the CdmFactoryDaemon D-Bus service is available, also
@@ -92,13 +95,14 @@ class ArcServiceLauncher {
   std::unique_ptr<ArcSessionManager> arc_session_manager_;
   std::unique_ptr<ArcPlayStoreEnabledPreferenceHandler>
       arc_play_store_enabled_preference_handler_;
-  std::unique_ptr<ArcDemoModePreferenceHandler>
-      arc_demo_mode_preference_handler_;
   std::unique_ptr<ArcDiskSpaceMonitor> arc_disk_space_monitor_;
   std::unique_ptr<ArcIconCacheDelegateProvider>
       arc_icon_cache_delegate_provider_;
+  std::unique_ptr<BrowserUrlOpener> arc_net_url_opener_;
+  std::unique_ptr<ArcVmDataMigrationNotifier> arc_vm_data_migration_notifier_;
+
   // |scheduler_configuration_manager_| outlives |this|.
-  chromeos::SchedulerConfigurationManagerBase* const
+  const raw_ptr<ash::SchedulerConfigurationManagerBase, ExperimentalAsh>
       scheduler_configuration_manager_;
 
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,9 +42,10 @@ public class ComponentsInfoLoader {
 
             // TODO(https://crbug.com/1231543): Handle multiple versions by sorting semantically and
             // picking out the highest version
-            String version = (componentVersions == null || componentVersions.length == 0)
-                    ? ""
-                    : componentVersions[0];
+            String version =
+                    (componentVersions == null || componentVersions.length == 0)
+                            ? ""
+                            : componentVersions[0];
             String name = componentDirectory.getName();
 
             componentInfoList.add(new ComponentInfo(name, version));

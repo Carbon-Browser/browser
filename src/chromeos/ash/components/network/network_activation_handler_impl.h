@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "chromeos/ash/components/network/network_activation_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
 
-namespace chromeos {
+namespace ash {
 
 // The NetworkActivationHandlerImpl class allows making service specific
 // calls required for activation on mobile networks.
@@ -41,6 +41,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkActivationHandlerImpl
   void HandleShillSuccess(base::OnceClosure success_callback);
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_ACTIVATION_HANDLER_IMPL_H_

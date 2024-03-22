@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "net/base/address_list.h"
+#include "base/values.h"
+#include "net/base/ip_endpoint.h"
 #include "net/base/net_export.h"
 #include "net/base/rand_callback.h"
 #include "net/dns/dns_config.h"
@@ -89,7 +90,7 @@ class NET_EXPORT DnsClient {
 
   // Returns all preset addresses for the specified endpoint, if any are
   // present in the current effective DnsConfig.
-  virtual absl::optional<AddressList> GetPresetAddrs(
+  virtual absl::optional<std::vector<IPEndPoint>> GetPresetAddrs(
       const url::SchemeHostPort& endpoint) const = 0;
 
   // Returns null if the current config is not valid.
@@ -103,7 +104,7 @@ class NET_EXPORT DnsClient {
   // Return the effective DNS configuration as a value that can be recorded in
   // the NetLog. This also synthesizes interpretative data to the Value, e.g.
   // whether secure and insecure transactions are enabled.
-  virtual base::Value GetDnsConfigAsValueForNetLog() const = 0;
+  virtual base::Value::Dict GetDnsConfigAsValueForNetLog() const = 0;
 
   virtual absl::optional<DnsConfig> GetSystemConfigForTesting() const = 0;
   virtual DnsConfigOverrides GetConfigOverridesForTesting() const = 0;

@@ -6,13 +6,18 @@
   }
 
   #consentCardContainer {
-    border: 1px solid var(--ntp-border-color);
-    border-radius: 4px;
+    background-color: var(--color-new-tab-page-module-item-background);
+    border: 1px solid var(--color-new-tab-page-border);
+    border-radius: var(--ntp-module-item-border-radius);
     display: inline-flex;
     flex-direction: column;
     height: 140px;
     position: relative;
     width: 244px;
+  }
+
+  :host-context([chrome-refresh-2023]) #consentCardContainer {
+    background-color: var(--color-sys-base-container-elevated);
   }
 
   :host([color-consent-container_]) #consentCardContainer {
@@ -46,8 +51,13 @@
     width: 24px;
   }
 
+  .action-button {
+    --text-color-action: var(--color-new-tab-page-action-button-foreground);
+    background-color: var(--color-new-tab-page-action-button-background);
+  }
+
   .content-container {
-    color: var(--cr-primary-text-color);
+    color: var(--color-new-tab-page-primary-foreground);
     font-size: 13px;
     font-weight: 400;
     height: 40px;
@@ -80,12 +90,17 @@
   }
 
   #close {
+    --cr-icon-button-fill-color: var(--color-new-tab-page-secondary-foreground);
     --cr-icon-button-icon-size: 16px;
     --cr-icon-button-size: 24px;
     margin: 4px 4px;
     position: absolute;
     right: 0;
     top: 2px;
+  }
+
+  .action-button:focus-visible {
+    outline: var(--color-new-tab-page-focus-ring) 1px auto;
   }
 </style>
 
@@ -106,7 +121,7 @@
       <template id="consentStepRepeat" is="dom-repeat" items="[[steps_]]"
           as="step">
         <div class="step-container" id="[[step.id]]">
-          <div class="content-container truncate" tabindex="0">
+          <div class="content-container truncate">
             <span class="content">
               [[step.content]]
             </span>

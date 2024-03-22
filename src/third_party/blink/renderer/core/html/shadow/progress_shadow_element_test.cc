@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,8 @@ TEST_F(ProgressShadowElementTest, LayoutObjectIsNeeded) {
     <progress id='prog' style='-webkit-appearance:none' />
   )HTML");
 
-  auto* progress =
-      To<HTMLProgressElement>(GetDocument().getElementById("prog"));
+  auto* progress = To<HTMLProgressElement>(
+      GetDocument().getElementById(AtomicString("prog")));
   ASSERT_TRUE(progress);
 
   auto* shadow_element = To<Element>(progress->GetShadowRoot()->firstChild());
@@ -45,9 +45,34 @@ TEST_F(ProgressShadowElementTest, LayoutObjectIsNeeded) {
   GetDocument().GetStyleEngine().RecalcStyle();
   EXPECT_TRUE(shadow_element->GetComputedStyle());
 
-  scoped_refptr<ComputedStyle> style =
+  const ComputedStyle* style =
       shadow_element->StyleForLayoutObject(StyleRecalcContext());
   EXPECT_TRUE(shadow_element->LayoutObjectIsNeeded(*style));
+}
+
+TEST_F(ProgressShadowElementTest, OnlyChangeDirectionOnShadowElement) {
+  GetDocument().body()->setInnerHTML(R"HTML(
+    <progress id='prog' style='-webkit-appearance:none; writing-mode:vertical-lr; direction: ltr;' />
+  )HTML");
+
+  auto* progress = To<HTMLProgressElement>(
+      GetDocument().getElementById(AtomicString("prog")));
+  ASSERT_TRUE(progress);
+
+  auto* shadow_element = To<Element>(progress->GetShadowRoot()->firstChild());
+  ASSERT_TRUE(shadow_element);
+
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
+  progress->SetForceReattachLayoutTree();
+  GetDocument().Lifecycle().AdvanceTo(DocumentLifecycle::kInStyleRecalc);
+  GetDocument().GetStyleEngine().RecalcStyle();
+
+  EXPECT_TRUE(progress->GetComputedStyle());
+  EXPECT_EQ(progress->GetComputedStyle()->Direction(), TextDirection::kLtr);
+
+  EXPECT_TRUE(shadow_element->GetComputedStyle());
+  EXPECT_EQ(shadow_element->GetComputedStyle()->Direction(),
+            TextDirection::kRtl);
 }
 
 }  // namespace blink

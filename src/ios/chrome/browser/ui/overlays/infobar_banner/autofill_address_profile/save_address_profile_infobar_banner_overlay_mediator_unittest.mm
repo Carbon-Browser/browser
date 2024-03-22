@@ -1,28 +1,26 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/overlays/infobar_banner/autofill_address_profile/save_address_profile_infobar_banner_overlay_mediator.h"
 
-#include "base/bind.h"
-#include "base/feature_list.h"
-#include "base/guid.h"
-#include "base/strings/sys_string_conversions.h"
-#include "components/autofill/core/browser/autofill_client.h"
-#include "components/autofill/core/browser/autofill_save_update_address_profile_delegate_ios.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
-#include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "ios/chrome/browser/infobars/infobar_ios.h"
-#include "ios/chrome/browser/overlays/public/infobar_banner/infobar_banner_overlay_responses.h"
-#import "ios/chrome/browser/overlays/public/infobar_banner/save_address_profile_infobar_banner_overlay_request_config.h"
-#import "ios/chrome/browser/overlays/test/fake_overlay_request_callback_installer.h"
+#import "base/feature_list.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback_helpers.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/uuid.h"
+#import "components/autofill/core/browser/autofill_client.h"
+#import "components/autofill/core/browser/autofill_save_update_address_profile_delegate_ios.h"
+#import "components/autofill/core/browser/autofill_test_utils.h"
+#import "components/autofill/core/browser/data_model/autofill_profile.h"
+#import "ios/chrome/browser/infobars/infobar_ios.h"
+#import "ios/chrome/browser/overlays/model/public/infobar_banner/infobar_banner_overlay_responses.h"
+#import "ios/chrome/browser/overlays/model/public/infobar_banner/save_address_profile_infobar_banner_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/test/fake_overlay_request_callback_installer.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/infobars/banners/test/fake_infobar_banner_consumer.h"
 #import "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
 
 using autofill_address_profile_infobar_overlays::
     SaveAddressProfileBannerRequestConfig;
@@ -43,17 +41,15 @@ class SaveAddressProfileInfobarBannerOverlayMediatorTest : public PlatformTest {
 // Tests that a SaveAddressProfileInfobarBannerOverlayMediator correctly sets up
 // its consumer.
 TEST_F(SaveAddressProfileInfobarBannerOverlayMediatorTest, SetUpConsumer) {
-  autofill::AutofillProfile profile(base::GenerateGUID(),
-                                    "https://www.example.com/");
+  autofill::AutofillProfile profile;
   std::unique_ptr<autofill::AutofillSaveUpdateAddressProfileDelegateIOS>
       passed_delegate = std::make_unique<
           autofill::AutofillSaveUpdateAddressProfileDelegateIOS>(
-          profile, /*original_profile=*/nullptr, /*locale=*/"en-US",
-          base::BindOnce(
-              ^(autofill::AutofillClient::SaveAddressProfileOfferUserDecision
-                    user_decision,
-                autofill::AutofillProfile profile){
-              }));
+          profile, /*original_profile=*/nullptr,
+          /*user_email=*/std::nullopt,
+          /*locale=*/"en-US",
+          autofill::AutofillClient::SaveAddressProfilePromptOptions{},
+          base::DoNothing());
   autofill::AutofillSaveUpdateAddressProfileDelegateIOS* delegate =
       passed_delegate.get();
   InfoBarIOS infobar(InfobarType::kInfobarTypeSaveAutofillAddressProfile,
@@ -77,23 +73,23 @@ TEST_F(SaveAddressProfileInfobarBannerOverlayMediatorTest, SetUpConsumer) {
               consumer.buttonText);
   EXPECT_NSEQ(base::SysUTF16ToNSString(delegate->GetDescription()),
               consumer.subtitleText);
-  EXPECT_NSEQ([UIImage imageNamed:@"ic_place"], consumer.iconImage);
+  EXPECT_NSEQ(
+      CustomSymbolWithPointSize(kLocationSymbol, kInfobarSymbolPointSize),
+      consumer.iconImage);
 }
 
 // Tests that the modal is shown when infobar button is pressed.
 TEST_F(SaveAddressProfileInfobarBannerOverlayMediatorTest,
        PresentModalWhenInfobarButtonIsPressed) {
-  autofill::AutofillProfile profile(base::GenerateGUID(),
-                                    "https://www.example.com/");
+  autofill::AutofillProfile profile;
   std::unique_ptr<autofill::AutofillSaveUpdateAddressProfileDelegateIOS>
       passed_delegate = std::make_unique<
           autofill::AutofillSaveUpdateAddressProfileDelegateIOS>(
-          profile, /*original_profile=*/nullptr, /*locale=*/"en-US",
-          base::BindOnce(
-              ^(autofill::AutofillClient::SaveAddressProfileOfferUserDecision
-                    user_decision,
-                autofill::AutofillProfile profile){
-              }));
+          profile, /*original_profile=*/nullptr,
+          /*user_email=*/std::nullopt,
+          /*locale=*/"en-US",
+          autofill::AutofillClient::SaveAddressProfilePromptOptions{},
+          base::DoNothing());
   InfoBarIOS infobar(InfobarType::kInfobarTypeSaveAutofillAddressProfile,
                      std::move(passed_delegate));
 

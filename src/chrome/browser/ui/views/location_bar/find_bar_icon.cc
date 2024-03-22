@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "chrome/browser/ui/find_bar/find_bar.h"
 #include "chrome/browser/ui/find_bar/find_bar_controller.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -20,9 +21,12 @@ FindBarIcon::FindBarIcon(
     : PageActionIconView(nullptr,
                          0,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate),
+                         page_action_icon_delegate,
+                         "Find"),
       browser_(browser) {
   DCHECK(browser_);
+  SetAccessibilityProperties(/*role*/ absl::nullopt,
+                             l10n_util::GetStringUTF16(IDS_TOOLTIP_FIND));
 }
 
 FindBarIcon::~FindBarIcon() {}
@@ -45,10 +49,6 @@ void FindBarIcon::SetActive(bool activate, bool should_animate) {
   }
 }
 
-std::u16string FindBarIcon::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringUTF16(IDS_TOOLTIP_FIND);
-}
-
 void FindBarIcon::OnExecuting(ExecuteSource execute_source) {}
 
 views::BubbleDialogDelegate* FindBarIcon::GetBubble() const {
@@ -56,7 +56,9 @@ views::BubbleDialogDelegate* FindBarIcon::GetBubble() const {
 }
 
 const gfx::VectorIcon& FindBarIcon::GetVectorIcon() const {
-  return omnibox::kFindInPageIcon;
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? omnibox::kFindInPageChromeRefreshIcon
+             : omnibox::kFindInPageIcon;
 }
 
 void FindBarIcon::UpdateImpl() {

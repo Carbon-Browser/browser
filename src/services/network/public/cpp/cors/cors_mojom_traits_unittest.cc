@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,14 +13,13 @@ namespace network {
 namespace {
 
 TEST(CorsMojomTraitsTest, CorsErrorStatusMojoRoundTrip) {
-  CorsErrorStatus original;
-  original.cors_error = mojom::CorsError::kInsecurePrivateNetwork;
+  CorsErrorStatus original(mojom::CorsError::kInsecurePrivateNetwork,
+                           mojom::IPAddressSpace::kLocal,
+                           mojom::IPAddressSpace::kPrivate);
   original.failed_parameter = "bleep";
-  original.target_address_space = mojom::IPAddressSpace::kPrivate;
-  original.resource_address_space = mojom::IPAddressSpace::kLocal;
   original.has_authorization_covered_by_wildcard_on_preflight = true;
 
-  CorsErrorStatus copy;
+  CorsErrorStatus copy(mojom::CorsError::kInvalidResponse);
   EXPECT_TRUE(mojo::test::SerializeAndDeserialize<mojom::CorsErrorStatus>(
       original, copy));
   EXPECT_EQ(original, copy);

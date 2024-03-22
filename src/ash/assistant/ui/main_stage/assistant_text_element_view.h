@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/assistant/ui/main_stage/assistant_ui_element_view.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 
 namespace views {
 class Label;
@@ -46,7 +47,7 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantTextElementView
  private:
   void InitLayout(const std::string& text);
 
-  views::Label* label_;  // Owned by view hierarchy.
+  raw_ptr<views::Label, ExperimentalAsh> label_;  // Owned by view hierarchy.
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
  * This file contains typedefs for chromeOS OOBE properties.
  */
 
-/* #export */ var OobeTypes = {};
+export const OobeTypes = {};
 
 /**
  * ChromeOS OOBE language descriptor.
@@ -205,9 +205,9 @@ OobeTypes.GaiaDialogButtonsType = {
  * @enum {number}
  */
 OobeTypes.LicenseType = {
-  /* NONE: 0, not used in js */
+  NONE: 0,
   ENTERPRISE: 1,
-  /* EDUCATION: 2, not used in js */
+  EDUCATION: 2,
   KIOSK: 3,
 };
 

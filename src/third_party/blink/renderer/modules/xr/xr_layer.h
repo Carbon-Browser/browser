@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,14 @@ namespace blink {
 
 class XRSession;
 
-class XRLayer : public EventTargetWithInlineData {
+class XRLayer : public EventTarget {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   explicit XRLayer(XRSession*);
   ~XRLayer() override = default;
 
-  XRSession* session() const { return session_; }
+  XRSession* session() const { return session_.Get(); }
 
   // EventTarget overrides.
   ExecutionContext* GetExecutionContext() const override;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "build/build_config.h"
-#include "components/discardable_memory/service/discardable_shared_memory_manager.h"
 #include "components/services/print_compositor/public/cpp/print_service_mojo_types.h"
 #include "components/services/print_compositor/public/mojom/print_compositor.mojom.h"
 #include "components/strings/grit/components_strings.h"
@@ -21,6 +20,7 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/service_process_host.h"
 #include "printing/common/metafile_utils.h"
+#include "printing/print_settings.h"
 #include "printing/printing_utils.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 
@@ -61,14 +61,6 @@ ContentToFrameMap ConvertContentInfoMap(
     content_frame_map[content_id] = GenerateFrameGuid(rfh);
   }
   return content_frame_map;
-}
-
-void BindDiscardableSharedMemoryManagerOnIOThread(
-    mojo::PendingReceiver<
-        discardable_memory::mojom::DiscardableSharedMemoryManager> receiver) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
-  discardable_memory::DiscardableSharedMemoryManager::Get()->Bind(
-      std::move(receiver));
 }
 
 }  // namespace
@@ -162,7 +154,6 @@ void PrintCompositeClient::OnDidPrintFrameContent(
   printed_subframes_.insert(render_frame_host);
 }
 
-#if BUILDFLAG(ENABLE_TAGGED_PDF)
 void PrintCompositeClient::SetAccessibilityTree(
     int document_cookie,
     const ui::AXTreeUpdate& accessibility_tree) {
@@ -172,7 +163,6 @@ void PrintCompositeClient::SetAccessibilityTree(
   auto* compositor = GetCompositeRequest(document_cookie);
   compositor->SetAccessibilityTree(accessibility_tree);
 }
-#endif
 
 void PrintCompositeClient::PrintCrossProcessSubframe(
     const gfx::Rect& rect,
@@ -273,11 +263,13 @@ void PrintCompositeClient::DoCompositeDocumentToPdf(
     int document_cookie,
     content::RenderFrameHost* render_frame_host,
     const mojom::DidPrintContentParams& content,
+    const ui::AXTreeUpdate& accessibility_tree,
     mojom::PrintCompositor::CompositeDocumentToPdfCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(!GetIsDocumentConcurrentlyComposited(document_cookie));
 
   auto* compositor = CreateCompositeRequest(document_cookie, render_frame_host);
+  compositor->SetAccessibilityTree(accessibility_tree);
 
   for (auto& requested : requested_subframes_) {
     if (!IsDocumentCookieValid(requested->document_cookie_))
@@ -362,15 +354,6 @@ mojom::PrintCompositor* PrintCompositeClient::CreateCompositeRequest(
           .WithDisplayName(IDS_PRINT_COMPOSITOR_SERVICE_DISPLAY_NAME)
           .Pass());
 
-  mojo::PendingRemote<discardable_memory::mojom::DiscardableSharedMemoryManager>
-      discardable_memory_manager;
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(
-          &BindDiscardableSharedMemoryManagerOnIOThread,
-          discardable_memory_manager.InitWithNewPipeAndPassReceiver()));
-  compositor_->SetDiscardableSharedMemoryManager(
-      std::move(discardable_memory_manager));
   compositor_->SetWebContentsURL(web_contents()->GetLastCommittedURL());
   compositor_->SetUserAgent(user_agent_);
 
@@ -380,7 +363,7 @@ mojom::PrintCompositor* PrintCompositeClient::CreateCompositeRequest(
 void PrintCompositeClient::RemoveCompositeRequest(int cookie) {
   DCHECK_EQ(document_cookie_, cookie);
   compositor_.reset();
-  document_cookie_ = 0;
+  document_cookie_ = PrintSettings::NewInvalidCookie();
   initiator_frame_ = nullptr;
 
   // Reset state of the client.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
@@ -24,6 +24,7 @@
 #include "base/threading/scoped_blocking_call.h"
 #include "chrome/browser/lifetime/termination_notification.h"
 #include "chrome/browser/platform_util_internal.h"
+#include "chrome/browser/profiles/profile.h"
 // This file gets pulled in in Chromecast builds, which causes "gn check" to
 // complain as Chromecast doesn't use (or depend on) //components/dbus.
 // TODO(crbug.com/1215474): Eliminate //chrome being visible in the GN structure
@@ -104,10 +105,11 @@ class ShowItemHelper {
   void OnAppTerminating() {
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     // The browser process is about to exit. Clean up while we still can.
+    object_proxy_ = nullptr;
+    dbus_proxy_ = nullptr;
     if (bus_)
       bus_->ShutdownOnDBusThreadAndBlock();
     bus_.reset();
-    object_proxy_ = nullptr;
   }
 
   void CheckFileManagerRunning(Profile* profile,
@@ -277,6 +279,8 @@ class ShowItemHelper {
   }
 
   scoped_refptr<dbus::Bus> bus_;
+
+  // These proxy objects are owned by `bus_`.
   raw_ptr<dbus::ObjectProxy> dbus_proxy_ = nullptr;
   raw_ptr<dbus::ObjectProxy> object_proxy_ = nullptr;
 
@@ -355,7 +359,7 @@ void ShowItemInFolder(Profile* profile, const base::FilePath& full_path) {
   ShowItemHelper::GetInstance().ShowItemInFolder(profile, full_path);
 }
 
-void OpenExternal(Profile* profile, const GURL& url) {
+void OpenExternal(const GURL& url) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (url.SchemeIs("mailto"))
     XDGEmail(url.spec());

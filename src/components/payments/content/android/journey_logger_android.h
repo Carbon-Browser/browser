@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,11 @@ class JourneyLoggerAndroid {
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& jcaller,
       jboolean jvalue);
+  void SetOptOutOffered(JNIEnv* env,
+                        const base::android::JavaParamRef<jobject>& jcaller);
+  void SetActivationlessShow(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& jcaller);
   void SetSkippedShow(JNIEnv* env,
                       const base::android::JavaParamRef<jobject>& jcaller);
   void SetShown(JNIEnv* env,
@@ -73,6 +78,9 @@ class JourneyLoggerAndroid {
   void SetNotShown(JNIEnv* env,
                    const base::android::JavaParamRef<jobject>& jcaller,
                    jint jreason);
+  void SetNoMatchingCredentialsShown(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& jcaller);
   void RecordCheckoutStep(JNIEnv* env,
                           const base::android::JavaParamRef<jobject>& jcaller,
                           jint jstep);

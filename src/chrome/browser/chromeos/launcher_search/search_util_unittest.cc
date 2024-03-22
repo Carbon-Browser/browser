@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -92,7 +92,7 @@ TEST(SearchUtilTest, CreateResult) {
   EXPECT_EQ(result->is_omnibox_search,
             mojom::SearchResult::OptionalBool::kTrue);
   EXPECT_EQ(result->is_answer, mojom::SearchResult::OptionalBool::kFalse);
-  EXPECT_EQ(result->omnibox_type, mojom::SearchResult::OmniboxType::kRichImage);
+  EXPECT_EQ(result->omnibox_type, mojom::SearchResult::OmniboxType::kSearch);
   ASSERT_TRUE(result->image_url.has_value());
   EXPECT_EQ(result->image_url.value(),
             GURL("http://www.example.com/image.jpeg"));

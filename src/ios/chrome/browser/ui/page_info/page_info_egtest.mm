@@ -1,32 +1,34 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
 
-#include "components/strings/grit/components_chromium_strings.h"
+#import "base/ios/ios_util.h"
+#import "base/test/ios/wait_util.h"
+#import "components/strings/grit/components_branded_strings.h"
+#import "ios/chrome/browser/overlays/model/public/web_content_area/alert_constants.h"
 #import "ios/chrome/browser/ui/page_info/page_info_constants.h"
 #import "ios/chrome/browser/ui/permissions/permissions_app_interface.h"
 #import "ios/chrome/browser/ui/permissions/permissions_constants.h"
-#include "ios/chrome/grit/ios_chromium_strings.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ios/web/common/features.h"
 #import "ios/web/public/permissions/permissions.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
+
+using ::base::test::ios::kWaitForUIElementTimeout;
+using ::base::test::ios::WaitUntilConditionOrTimeout;
+
 // Matcher infobar modal camera permissions switch.
 id<GREYMatcher> CameraPermissionsSwitch(BOOL isOn) {
   return chrome_test_util::TableViewSwitchCell(
@@ -38,6 +40,7 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
   return chrome_test_util::TableViewSwitchCell(
       kPageInfoMicrophoneSwitchAccessibilityIdentifier, isOn);
 }
+
 }  // namespace
 
 @interface PageInfoTestCase : ChromeTestCase
@@ -45,17 +48,8 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
 
 @implementation PageInfoTestCase
 
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  if (@available(iOS 15.0, *)) {
-    config.features_enabled.push_back(web::features::kMediaPermissionsControl);
-  }
-  return config;
-}
-
 // Checks that if the alert for site permissions pops up, and allow it.
 - (void)checkAndAllowPermissionAlerts {
-  XCUIApplication* app = [[XCUIApplication alloc] init];
   // Allow system permission if shown.
   NSError* systemAlertFoundError = nil;
   [[EarlGrey selectElementWithMatcher:grey_systemAlertViewShown()]
@@ -68,11 +62,26 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
                   acceptAlertError);
   }
   // Allow site permission.
-  XCUIElement* alert =
-      [[app descendantsMatchingType:XCUIElementTypeAlert] firstMatch];
-  XCUIElement* button = alert.buttons[@"Allow"];
-  GREYAssertNotNil(button, @"Cannot find \"Allow\" button in system alert.");
-  [button tap];
+  id<GREYMatcher> dialogMatcher =
+      grey_accessibilityID(kPermissionsDialogAccessibilityIdentifier);
+  ConditionBlock condition = ^{
+    NSError* error = nil;
+    [[EarlGrey selectElementWithMatcher:dialogMatcher]
+        assertWithMatcher:grey_sufficientlyVisible()
+                    error:&error];
+    return !error;
+  };
+  GREYAssert(WaitUntilConditionOrTimeout(kWaitForUIElementTimeout, condition),
+             @"Permissions dialog was not shown.");
+  NSString* allowButtonText = l10n_util::GetNSString(
+      IDS_IOS_PERMISSIONS_ALERT_DIALOG_BUTTON_TEXT_GRANT);
+
+  id<GREYMatcher> allowButtonMatcher = allowButtonMatcher = grey_allOf(
+      grey_ancestor(dialogMatcher), grey_accessibilityLabel(allowButtonText),
+      grey_accessibilityTrait(UIAccessibilityTraitStaticText), nil);
+
+  [[[EarlGrey selectElementWithMatcher:allowButtonMatcher]
+      assertWithMatcher:grey_sufficientlyVisible()] performAction:grey_tap()];
 }
 
 // Checks `expectedStatesForPermissions` matches the actual states for
@@ -144,16 +153,14 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
 // Tests that the Permissions section is not displayed, as there isn't any
 // accessible permissions.
 - (void)testShowPageInfoWithNoAccessiblePermission {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
-    [ChromeEarlGreyUI openPageInfo];
-    // Checks that permission header is not visible.
-    [[EarlGrey
-        selectElementWithMatcher:grey_text(l10n_util::GetNSString(
-                                     IDS_IOS_PAGE_INFO_PERMISSIONS_HEADER))]
-        assertWithMatcher:grey_notVisible()];
-  }
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
+  [ChromeEarlGreyUI openPageInfo];
+  // Checks that permission header is not visible.
+  [[EarlGrey
+      selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                   IDS_IOS_PAGE_INFO_PERMISSIONS_HEADER))]
+      assertWithMatcher:grey_notVisible()];
 }
 
 // Tests that single accessible permission is shown in Permissions section with
@@ -168,41 +175,39 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
   testShowOneAccessiblePermissionInPageInfo
 #endif
 - (void)MAYBE_testShowOneAccessiblePermissionInPageInfo {
-  if (@available(iOS 15.0, *)) {
-    // Open a page that requests microphone permissions.
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey
-        loadURL:self.testServer->GetURL("/permissions/microphone_only.html")];
-    [self checkAndAllowPermissionAlerts];
+  // Open a page that requests microphone permissions.
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey
+      loadURL:self.testServer->GetURL("/permissions/microphone_only.html")];
+  [self checkAndAllowPermissionAlerts];
 
-    // Check that permission header is visible.
-    [ChromeEarlGreyUI openPageInfo];
-    [[EarlGrey
-        selectElementWithMatcher:grey_text(l10n_util::GetNSString(
-                                     IDS_IOS_PAGE_INFO_PERMISSIONS_HEADER))]
-        assertWithMatcher:grey_sufficientlyVisible()];
-    // Check that camera permission item is hidden, and in accordance with the
-    // web state permission states.
-    [self checkStatesForPermissions:@{
-      @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
-      @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
-    }];
-    [[EarlGrey
-        selectElementWithMatcher:grey_anyOf(CameraPermissionsSwitch(YES),
-                                            CameraPermissionsSwitch(NO), nil)]
-        assertWithMatcher:grey_notVisible()];
-    // Check that microphone permission item is visible, and turn it off.
-    [[EarlGrey selectElementWithMatcher:MicrophonePermissionsSwitch(YES)]
-        performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
-    [[EarlGrey  // Dismiss view.
-        selectElementWithMatcher:grey_accessibilityID(
-                                     kPageInfoViewAccessibilityIdentifier)]
-        performAction:grey_swipeFastInDirection(kGREYDirectionDown)];
-    [self checkStatesForPermissions:@{
-      @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
-      @(web::PermissionMicrophone) : @(web::PermissionStateBlocked)
-    }];
-  }
+  // Check that permission header is visible.
+  [ChromeEarlGreyUI openPageInfo];
+  [[EarlGrey
+      selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                   IDS_IOS_PAGE_INFO_PERMISSIONS_HEADER))]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Check that camera permission item is hidden, and in accordance with the
+  // web state permission states.
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
+    @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
+  }];
+  [[EarlGrey
+      selectElementWithMatcher:grey_anyOf(CameraPermissionsSwitch(YES),
+                                          CameraPermissionsSwitch(NO), nil)]
+      assertWithMatcher:grey_notVisible()];
+  // Check that microphone permission item is visible, and turn it off.
+  [[EarlGrey selectElementWithMatcher:MicrophonePermissionsSwitch(YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  [[EarlGrey  // Dismiss view.
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kPageInfoViewAccessibilityIdentifier)]
+      performAction:grey_swipeFastInDirection(kGREYDirectionDown)];
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
+    @(web::PermissionMicrophone) : @(web::PermissionStateBlocked)
+  }];
 }
 
 // Tests that two accessible permissions are shown in Permissions section with
@@ -217,39 +222,65 @@ id<GREYMatcher> MicrophonePermissionsSwitch(BOOL isOn) {
   testShowTwoAccessiblePermissionsInPageInfo
 #endif
 - (void)MAYBE_testShowTwoAccessiblePermissionsInPageInfo {
-  if (@available(iOS 15.0, *)) {
-    // Open a page that requests microphone permissions.
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey loadURL:self.testServer->GetURL(
-                                "/permissions/camera_and_microphone.html")];
-    [self checkAndAllowPermissionAlerts];
+  // Open a page that requests microphone permissions.
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL(
+                              "/permissions/camera_and_microphone.html")];
+  [self checkAndAllowPermissionAlerts];
 
-    // Check that permission header is visible.
-    [ChromeEarlGreyUI openPageInfo];
-    [[EarlGrey
-        selectElementWithMatcher:grey_text(l10n_util::GetNSString(
-                                     IDS_IOS_PAGE_INFO_PERMISSIONS_HEADER))]
-        assertWithMatcher:grey_sufficientlyVisible()];
-    // Check that switchs for both permissions are visible.
-    [self checkStatesForPermissions:@{
-      @(web::PermissionCamera) : @(web::PermissionStateAllowed),
-      @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
-    }];
-    // Check that both permission item is visible, and turn off camera
-    // permission.
-    [[EarlGrey selectElementWithMatcher:MicrophonePermissionsSwitch(YES)]
-        assertWithMatcher:grey_sufficientlyVisible()];
-    [[EarlGrey selectElementWithMatcher:CameraPermissionsSwitch(YES)]
-        performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
-    [[EarlGrey  // Dismiss view.
-        selectElementWithMatcher:grey_accessibilityID(
-                                     kPageInfoViewAccessibilityIdentifier)]
-        performAction:grey_swipeFastInDirection(kGREYDirectionDown)];
-    [self checkStatesForPermissions:@{
-      @(web::PermissionCamera) : @(web::PermissionStateBlocked),
-      @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
-    }];
-  }
+  // Check that permission header is visible.
+  [ChromeEarlGreyUI openPageInfo];
+  [[EarlGrey
+      selectElementWithMatcher:grey_text(l10n_util::GetNSString(
+                                   IDS_IOS_PAGE_INFO_PERMISSIONS_HEADER))]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Check that switchs for both permissions are visible.
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateAllowed),
+    @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
+  }];
+  // Check that both permission item is visible, and turn off camera
+  // permission.
+  [[EarlGrey selectElementWithMatcher:MicrophonePermissionsSwitch(YES)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:CameraPermissionsSwitch(YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  [[EarlGrey  // Dismiss view.
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kPageInfoViewAccessibilityIdentifier)]
+      performAction:grey_swipeFastInDirection(kGREYDirectionDown)];
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateBlocked),
+    @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
+  }];
+}
+
+// Tests that rotating the device will not dismiss the navigation bar.
+- (void)testShowPageInfoTitleRotation {
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/")];
+  [ChromeEarlGreyUI openPageInfo];
+
+  // Check that the navigation bar is visible.
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     kPageInfoViewNavigationBarAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Rotate to landscape mode and check the navigation bar is still visible.
+  [EarlGrey rotateDeviceToOrientation:UIDeviceOrientationLandscapeRight
+                                error:nil];
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     kPageInfoViewNavigationBarAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Rotate back to portrait mode and check the navigation bar is still visible.
+  [EarlGrey rotateDeviceToOrientation:UIDeviceOrientationPortrait error:nil];
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     kPageInfoViewNavigationBarAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
 }
 
 @end

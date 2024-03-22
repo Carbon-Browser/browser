@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace performance_manager {
 class FrameNodeImpl;
 
 // A RenderFrameHostProxy is used to post messages out of the performance
-// manager sequence that are bound for a RenderFrameHostProxy running on the UI
+// manager sequence that are bound for a RenderFrameHost running on the UI
 // thread. The object is bound to the UI thread. A RenderFrameHostProxy is
 // conceptually equivalent to a WeakPtr<RenderFrameHost>. Copy and assignment
 // are explicitly allowed for this object.

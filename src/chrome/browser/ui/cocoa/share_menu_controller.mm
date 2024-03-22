@@ -1,12 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "chrome/browser/ui/cocoa/share_menu_controller.h"
 
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
@@ -35,15 +34,6 @@
 
 namespace {
 
-NSString* const kExtensionPrefPanePath =
-    @"/System/Library/PreferencePanes/Extensions.prefPane";
-// Undocumented, used by Safari.
-const UInt32 kOpenSharingSubpaneDescriptorType = 'ptru';
-NSString* const kOpenSharingSubpaneActionKey = @"action";
-NSString* const kOpenSharingSubpaneActionValue = @"revealExtensionPoint";
-NSString* const kOpenSharingSubpaneProtocolKey = @"protocol";
-NSString* const kOpenSharingSubpaneProtocolValue = @"com.apple.share-services";
-
 // The reminder service doesn't have a convenient NSSharingServiceName*
 // constant.
 NSString* const kRemindersSharingServiceName =
@@ -66,12 +56,13 @@ bool CanShare() {
   // The following three ivars are provided to the system via NSSharingService
   // delegates. They're needed for the transition animation, and to provide a
   // screenshot of the shared site for services that support it.
-  NSWindow* _windowForShare;  // weak
+  NSWindow* __weak _windowForShare;
   NSRect _rectForShare;
-  base::scoped_nsobject<NSImage> _snapshotForShare;
+  NSImage* __strong _snapshotForShare;
+
   // The Reminders share extension reads title/URL from the currently active
   // activity.
-  base::scoped_nsobject<NSUserActivity> _activity;
+  NSUserActivity* __strong _activity;
 }
 
 // NSMenuDelegate
@@ -109,12 +100,12 @@ bool CanShare() {
     [item setEnabled:canShare];
     [menu addItem:item];
   }
-  base::scoped_nsobject<NSMenuItem> moreItem([[NSMenuItem alloc]
+  NSMenuItem* moreItem = [[NSMenuItem alloc]
       initWithTitle:l10n_util::GetNSString(IDS_SHARING_MORE_MAC)
              action:@selector(openSharingPrefs:)
-      keyEquivalent:@""]);
-  [moreItem setTarget:self];
-  [moreItem setImage:[self moreImage]];
+      keyEquivalent:@""];
+  moreItem.target = self;
+  moreItem.image = [self moreImage];
   [menu addItem:moreItem];
 }
 
@@ -173,16 +164,16 @@ bool CanShare() {
       browserView->ConvertRectToWidget(contentsView->bounds());
   gfx::Image image;
   if (ui::GrabWindowSnapshot(_windowForShare, rectInWidget, &image)) {
-    _snapshotForShare.reset([image.ToNSImage() retain]);
+    _snapshotForShare = image.ToNSImage();
   }
 }
 
 - (void)clearTransitionData {
   _windowForShare = nil;
   _rectForShare = NSZeroRect;
-  _snapshotForShare.reset();
+  _snapshotForShare = nil;
   [_activity invalidate];
-  _activity.reset();
+  _activity = nil;
 }
 
 // Performs the share action using the sharing service represented by |sender|.
@@ -198,21 +189,14 @@ bool CanShare() {
   NSString* title = base::SysUTF16ToNSString(contents->GetTitle());
 
   NSSharingService* service =
-      base::mac::ObjCCastStrict<NSSharingService>([sender representedObject]);
-  [service setDelegate:self];
-  [service setSubject:title];
+      base::apple::ObjCCastStrict<NSSharingService>([sender representedObject]);
+  service.delegate = self;
+  service.subject = title;
 
-  NSArray* itemsToShare;
-  if ([[service name] isEqual:NSSharingServiceNamePostOnTwitter]) {
-    // The Twitter share service expects the title as an additional share item.
-    // This is the same approach system apps use.
-    itemsToShare = @[ url, title ];
-  } else {
-    itemsToShare = @[ url ];
-  }
+  NSArray* itemsToShare = @[ url ];
   if ([[service name] isEqual:kRemindersSharingServiceName]) {
-    _activity.reset([[NSUserActivity alloc]
-        initWithActivityType:NSUserActivityTypeBrowsingWeb]);
+    _activity = [[NSUserActivity alloc]
+        initWithActivityType:NSUserActivityTypeBrowsingWeb];
     // webpageURL must be http or https or an exception is thrown.
     if ([url.scheme hasPrefix:@"http"]) {
       [_activity setWebpageURL:url];
@@ -225,26 +209,8 @@ bool CanShare() {
 
 // Opens the "Sharing" subpane of the "Extensions" macOS preference pane.
 - (void)openSharingPrefs:(NSMenuItem*)sender {
-  NSURL* prefPaneURL =
-      [NSURL fileURLWithPath:kExtensionPrefPanePath isDirectory:YES];
-  NSDictionary* args = @{
-    kOpenSharingSubpaneActionKey : kOpenSharingSubpaneActionValue,
-    kOpenSharingSubpaneProtocolKey : kOpenSharingSubpaneProtocolValue
-  };
-  NSData* data = [NSPropertyListSerialization
-      dataWithPropertyList:args
-                    format:NSPropertyListXMLFormat_v1_0
-                   options:0
-                     error:nil];
-  base::scoped_nsobject<NSAppleEventDescriptor> descriptor(
-      [[NSAppleEventDescriptor alloc]
-          initWithDescriptorType:kOpenSharingSubpaneDescriptorType
-                            data:data]);
-  [[NSWorkspace sharedWorkspace] openURLs:@[ prefPaneURL ]
-                  withAppBundleIdentifier:nil
-                                  options:NSWorkspaceLaunchAsync
-           additionalEventParamDescriptor:descriptor
-                        launchIdentifiers:NULL];
+  base::mac::OpenSystemSettingsPane(
+      base::mac::SystemSettingsPane::kPrivacySecurity_Extensions_Sharing);
 }
 
 // Returns the image to be used for the "More..." menu item, or nil on macOS
@@ -264,14 +230,13 @@ bool CanShare() {
   NSString* keyEquivalent = isMail ? [self keyEquivalentForMail] : @"";
   NSString* title = isMail ? l10n_util::GetNSString(IDS_EMAIL_LINK_MAC)
                            : service.menuItemTitle;
-  base::scoped_nsobject<NSMenuItem> item([[NSMenuItem alloc]
-      initWithTitle:title
-             action:@selector(performShare:)
-      keyEquivalent:keyEquivalent]);
-  [item setTarget:self];
-  [item setImage:[service image]];
-  [item setRepresentedObject:service];
-  return item.autorelease();
+  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title
+                                                action:@selector(performShare:)
+                                         keyEquivalent:keyEquivalent];
+  item.target = self;
+  item.image = [service image];
+  item.representedObject = service;
+  return item;
 }
 
 - (NSString*)keyEquivalentForMail {
@@ -279,11 +244,8 @@ bool CanShare() {
   bool found = GetDefaultMacAcceleratorForCommandId(IDC_EMAIL_PAGE_LOCATION,
                                                     &accelerator);
   DCHECK(found);
-  NSString* key_equivalent;
-  NSUInteger modifier_mask;
-  GetKeyEquivalentAndModifierMaskFromAccelerator(accelerator, &key_equivalent,
-                                                 &modifier_mask);
-  return key_equivalent;
+  return GetKeyEquivalentAndModifierMaskFromAccelerator(accelerator)
+      .keyEquivalent;
 }
 
 @end

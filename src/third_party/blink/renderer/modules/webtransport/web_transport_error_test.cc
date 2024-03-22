@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ TEST(WebTransportErrorTest, ConstructWithStreamErrorCode) {
   auto* error = WebTransportError::Create(init);
 
   ASSERT_TRUE(error->streamErrorCode().has_value());
-  EXPECT_EQ(error->streamErrorCode().value(), 11);
+  EXPECT_EQ(error->streamErrorCode().value(), 11u);
 }
 
 TEST(WebTransportErrorTest, ConstructWithMessage) {
@@ -55,14 +55,14 @@ TEST(WebTransportErrorTest, InternalCreate) {
   // Explicitly convert it to a string just in case.
   v8::Local<v8::String> stack_as_v8string;
   ASSERT_TRUE(stack->ToString(context).ToLocal(&stack_as_v8string));
-  String stack_string = ToCoreString(stack_as_v8string);
+  String stack_string = ToCoreString(isolate, stack_as_v8string);
   EXPECT_TRUE(stack_string.Contains("badness"));
 
   WebTransportError* error = V8WebTransportError::ToWrappable(isolate, v8value);
   ASSERT_TRUE(error);
   EXPECT_EQ(error->code(), 0);
   ASSERT_TRUE(error->streamErrorCode().has_value());
-  EXPECT_EQ(error->streamErrorCode().value(), 27);
+  EXPECT_EQ(error->streamErrorCode().value(), 27u);
   EXPECT_EQ(error->message(), "badness");
   EXPECT_EQ(error->source(), "session");
 }

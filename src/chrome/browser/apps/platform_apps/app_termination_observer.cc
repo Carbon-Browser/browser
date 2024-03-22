@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,14 @@
 #include "base/no_destructor.h"
 #include "chrome/browser/lifetime/termination_notification.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "content/public/browser/browser_context.h"
 
 namespace chrome_apps {
 
 namespace {
 
-class AppTerminationObserverFactory : public BrowserContextKeyedServiceFactory {
+class AppTerminationObserverFactory : public ProfileKeyedServiceFactory {
  public:
   AppTerminationObserverFactory();
   AppTerminationObserverFactory(const AppTerminationObserverFactory&) = delete;
@@ -27,24 +26,22 @@ class AppTerminationObserverFactory : public BrowserContextKeyedServiceFactory {
   // BrowserContextKeyedServiceFactory:
   KeyedService* BuildServiceInstanceFor(
       content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };
 
 AppTerminationObserverFactory::AppTerminationObserverFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AppTerminationObserver",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
 KeyedService* AppTerminationObserverFactory::BuildServiceInstanceFor(
     content::BrowserContext* browser_context) const {
   return new AppTerminationObserver(browser_context);
-}
-
-content::BrowserContext* AppTerminationObserverFactory::GetBrowserContextToUse(
-    content::BrowserContext* browser_context) const {
-  return Profile::FromBrowserContext(browser_context)->GetOriginalProfile();
 }
 
 bool AppTerminationObserverFactory::ServiceIsCreatedWithBrowserContext() const {

@@ -1,12 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/login_ash.h"
 
-#include "ash/components/login/auth/public/cryptohome_key_constants.h"
-#include "ash/components/login/auth/public/key.h"
-#include "ash/components/login/auth/public/user_context.h"
+#include "ash/system/session/guest_session_confirmation_dialog.h"
 #include "base/notreached.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
@@ -17,6 +15,11 @@
 #include "chrome/browser/chromeos/extensions/login_screen/login/shared_session_handler.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/login/auth/public/auth_types.h"
+#include "chromeos/ash/components/login/auth/public/cryptohome_key_constants.h"
+#include "chromeos/ash/components/login/auth/public/key.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "components/account_id/account_id.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user.h"
@@ -55,12 +58,13 @@ void LoginAsh::LaunchManagedGuestSession(
     ash::UserContext context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
                              user->GetAccountId());
     if (password) {
-      context.SetKey(chromeos::Key(*password));
+      context.SetKey(ash::Key(*password));
+      context.SetSamlPassword(ash::SamlPassword{*password});
       context.SetCanLockManagedGuestSession(true);
     }
 
-    chromeos::ExistingUserController* existing_user_controller =
-        chromeos::ExistingUserController::current_controller();
+    auto* existing_user_controller =
+        ash::ExistingUserController::current_controller();
     existing_user_controller->Login(context, ash::SigninSpecifics());
     std::move(callback).Run(absl::nullopt);
     return;
@@ -154,14 +158,14 @@ void LoginAsh::LaunchSamlUserSession(const std::string& email,
     return;
   }
 
-  chromeos::UserContext context(user_manager::USER_TYPE_REGULAR,
-                                user_manager::known_user::GetAccountId(
-                                    email, gaia_id, AccountType::GOOGLE));
-  chromeos::Key key(password);
+  ash::UserContext context(user_manager::USER_TYPE_REGULAR,
+                           AccountId::FromUserEmailGaiaId(email, gaia_id));
+  ash::Key key(password);
   key.SetLabel(ash::kCryptohomeGaiaKeyLabel);
   context.SetKey(key);
-  context.SetPasswordKey(chromeos::Key(password));
-  context.SetAuthFlow(chromeos::UserContext::AUTH_FLOW_GAIA_WITH_SAML);
+  context.SetSamlPassword(ash::SamlPassword{password});
+  context.SetPasswordKey(ash::Key(password));
+  context.SetAuthFlow(ash::UserContext::AUTH_FLOW_GAIA_WITH_SAML);
   context.SetIsUsingSamlPrincipalsApi(false);
   context.SetAuthCode(oauth_code);
 
@@ -272,6 +276,10 @@ void LoginAsh::NotifyOnExternalLogoutDone() {
   }
 }
 
+void LoginAsh::ShowGuestSessionConfirmationDialog() {
+  ash::GuestSessionConfirmationDialog::Show();
+}
+
 void LoginAsh::REMOVED_0(const absl::optional<std::string>& password,
                          REMOVED_0Callback callback) {
   NOTIMPLEMENTED();
@@ -330,8 +338,8 @@ absl::optional<std::string> LoginAsh::CanLaunchSession() {
     return extensions::login_api_errors::kAlreadyActiveSession;
   }
 
-  chromeos::ExistingUserController* existing_user_controller =
-      chromeos::ExistingUserController::current_controller();
+  auto* existing_user_controller =
+      ash::ExistingUserController::current_controller();
   if (existing_user_controller->IsSigninInProgress())
     return extensions::login_api_errors::kAnotherLoginAttemptInProgress;
 
@@ -385,7 +393,7 @@ void LoginAsh::UnlockSession(const std::string& password,
       user_manager::UserManager::Get();
   const user_manager::User* active_user = user_manager->GetActiveUser();
   ash::UserContext context(active_user->GetType(), active_user->GetAccountId());
-  context.SetKey(chromeos::Key(password));
+  context.SetKey(ash::Key(password));
 
   chromeos::LoginApiLockHandler* handler = chromeos::LoginApiLockHandler::Get();
   handler->Authenticate(

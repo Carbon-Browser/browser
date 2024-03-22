@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -138,6 +138,13 @@ public class CastWebContentsServiceTest {
         mServiceLifecycle.bind().unbind();
         assertTrue(mShadowService.getNotificationShouldRemoved());
         assertTrue(mShadowService.isForegroundStopped());
+    }
+
+    @Test
+    public void testBroadcastsComponentClosedWhenUnbind() {
+        mServiceLifecycle.bind();
+        IntentFilter filter = filterFor(CastWebContentsIntentUtils.ACTION_ACTIVITY_STOPPED);
+        expectBroadcastedIntent(filter, () -> mServiceLifecycle.unbind());
     }
 
     @Test

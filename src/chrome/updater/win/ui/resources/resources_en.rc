@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 IDI_APP   ICON    "chrome/updater/win/ui/resources/google_update.ico"
 
 IDB_ERROR_ILLUSTRATION BITMAP  "chrome/updater/win/ui/resources/error.bmp"
-IDB_CHROME             BITMAP  "chrome/updater/win/ui/resources/chrome.bmp"
 
 IDD_PROGRESS DIALOGEX 0, 0, 433, 187
 STYLE DS_SETFONT | WS_DLGFRAME | WS_POPUP | WS_SYSMENU | WS_MINIMIZEBOX
@@ -55,6 +54,3 @@ BEGIN
     CTEXT           "",IDC_YES_NO_TEXT,7,17,244,34
 END
 
-1 TYPELIB "chrome/updater/app/server/win/updater_idl.tlb"
-2 TYPELIB "chrome/updater/app/server/win/updater_internal_idl.tlb"
-3 TYPELIB "chrome/updater/app/server/win/updater_legacy_idl.tlb"

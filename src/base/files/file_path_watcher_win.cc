@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 
 #include <windows.h>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/win/object_watcher.h"
 
@@ -93,7 +93,7 @@ bool FilePathWatcherImpl::Watch(const FilePath& path,
                                 const FilePathWatcher::Callback& callback) {
   DCHECK(target_.value().empty());  // Can only watch one path.
 
-  set_task_runner(SequencedTaskRunnerHandle::Get());
+  set_task_runner(SequencedTaskRunner::GetCurrentDefault());
   callback_ = callback;
   target_ = path;
   type_ = type;
@@ -293,9 +293,7 @@ void FilePathWatcherImpl::DestroyWatch() {
 
 }  // namespace
 
-FilePathWatcher::FilePathWatcher() {
-  sequence_checker_.DetachFromSequence();
-  impl_ = std::make_unique<FilePathWatcherImpl>();
-}
+FilePathWatcher::FilePathWatcher()
+    : FilePathWatcher(std::make_unique<FilePathWatcherImpl>()) {}
 
 }  // namespace base

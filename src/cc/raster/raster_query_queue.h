@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,8 @@ class CC_EXPORT RasterQueryQueue {
   virtual bool CheckRasterFinishedQueries();
 
  private:
-  const raw_ptr<viz::RasterContextProvider> worker_context_provider_;
+  const raw_ptr<viz::RasterContextProvider, DanglingUntriaged>
+      worker_context_provider_;
 
   // Note that this lock should never be acquired while holding the raster
   // context lock.

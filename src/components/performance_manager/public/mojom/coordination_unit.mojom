@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@ import "components/performance_manager/public/mojom/lifecycle.mojom";
 import "components/performance_manager/public/mojom/v8_contexts.mojom";
 import "components/performance_manager/public/mojom/web_memory.mojom";
 import "third_party/blink/public/mojom/tokens/tokens.mojom";
-import "ui/gfx/geometry/mojom/geometry.mojom";
 
 // Any new type here needs to be mirrored between coordination_unit_types.h and
 // coordination_unit.mojom, and have mappings between the two defined in
@@ -32,6 +31,12 @@ interface DocumentCoordinationUnit {
 
   // Called the first time a form in this document is interacted with.
   SetHadFormInteraction();
+
+  // Called the first time the user has edited the content of an element. This
+  // is a superset of `SetHadFormInteraction()`: form interactions trigger both
+  // events but changes to e.g. a `<div>` with the `contenteditable` property
+  // will only trigger `SetHadUserEdits()`.
+  SetHadUserEdits();
 
   // Called whenever the frame associated with this document is tagged or
   // untagged as an ad, providing the new status.

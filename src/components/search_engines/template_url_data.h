@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,12 @@
 // users to do SSA-style usage of TemplateURL: construct a TemplateURLData with
 // whatever fields are desired, then create an immutable TemplateURL from it.
 struct TemplateURLData {
+  enum class CreatedByPolicy {
+    kNoPolicy = 0,
+    kDefaultSearchProvider = 1,
+    kSiteSearch = 2,
+  };
+
   TemplateURLData();
   TemplateURLData(const TemplateURLData& other);
   TemplateURLData& operator=(const TemplateURLData& other);
@@ -32,6 +38,7 @@ struct TemplateURLData {
                   base::StringPiece search_url,
                   base::StringPiece suggest_url,
                   base::StringPiece image_url,
+                  base::StringPiece image_translate_url,
                   base::StringPiece new_tab_url,
                   base::StringPiece contextual_search_url,
                   base::StringPiece logo_url,
@@ -40,9 +47,14 @@ struct TemplateURLData {
                   base::StringPiece suggest_url_post_params,
                   base::StringPiece image_url_post_params,
                   base::StringPiece side_search_param,
+                  base::StringPiece side_image_search_param,
+                  base::StringPiece image_translate_source_language_param_key,
+                  base::StringPiece image_translate_target_language_param_key,
+                  std::vector<std::string> search_intent_params,
                   base::StringPiece favicon_url,
                   base::StringPiece encoding,
-                  const base::Value& alternate_urls_list,
+                  base::StringPiece16 image_search_branding_label,
+                  const base::Value::List& alternate_urls_list,
                   bool preconnect_to_search_url,
                   bool prefetch_likely_navigations,
                   int prepopulate_id);
@@ -77,6 +89,7 @@ struct TemplateURLData {
   // Optional additional raw URLs.
   std::string suggestions_url;
   std::string image_url;
+  std::string image_translate_url;
   std::string new_tab_url;
   std::string contextual_search_url;
 
@@ -95,6 +108,27 @@ struct TemplateURLData {
   // The parameter appended to the engine's search URL when constructing the URL
   // for the side search side panel.
   std::string side_search_param;
+
+  // The parameter appended to the engine's image URL when constructing the
+  // URL for the image search entry in the side panel.
+  std::string side_image_search_param;
+
+  // The key of the parameter identifying the source language for an image
+  // translation.
+  std::string image_translate_source_language_param_key;
+
+  // The key of the parameter identifying the target language for an image
+  // translation.
+  std::string image_translate_target_language_param_key;
+
+  // Brand name used for image search queries. If not set, the short_name
+  // will be used.
+  std::u16string image_search_branding_label;
+
+  // The parameters making up the engine's canonical search URL in addition to
+  // the search terms. These params disambiguate the search terms and determine
+  // the fulfillment.
+  std::vector<std::string> search_intent_params;
 
   // Favicon for the TemplateURL.
   GURL favicon_url;
@@ -135,10 +169,21 @@ struct TemplateURLData {
 
   // True if this TemplateURL was automatically created by the administrator via
   // group policy.
-  bool created_by_policy;
+  CreatedByPolicy created_by_policy;
+
+  // True if this TemplateURL is forced to be the default search engine via
+  // policy. This prevents the user from setting another search engine as
+  // default.
+  // False if this TemplateURL is recommended or not set via policy. This allows
+  // the user to set another search engine as default.
+  bool enforced_by_policy;
 
   // True if this TemplateURL was created from metadata received from Play API.
   bool created_from_play_api;
+
+  // True if this TemplateURL should be promoted in the Omnibox along with the
+  // starter pack.
+  bool featured_by_policy = false;
 
   // Number of times this TemplateURL has been explicitly used to load a URL.
   // We don't increment this for uses as the "default search engine" since

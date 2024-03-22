@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/mojo_service_manager/fake_mojo_service_manager.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/fake_cros_healthd.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd.mojom.h"
 #include "components/reporting/util/test_support_callbacks.h"
@@ -32,22 +33,28 @@ class AudioEventsObserverTest : public ::testing::Test {
 
  private:
   base::test::TaskEnvironment task_environment_;
+  ::ash::mojo_service_manager::FakeMojoServiceManager fake_service_manager_;
 };
 
 TEST_F(AudioEventsObserverTest, SevereUnderrun) {
   AudioEventsObserver audio_observer;
   test::TestEvent<MetricData> result_metric_data;
 
-  audio_observer.SetOnEventObservedCallback(result_metric_data.cb());
+  audio_observer.SetOnEventObservedCallback(result_metric_data.repeating_cb());
   audio_observer.SetReportingEnabled(true);
 
-  ::ash::cros_healthd::FakeCrosHealthd::Get()
-      ->EmitAudioSevereUnderrunEventForTesting();
+  ::ash::cros_healthd::mojom::AudioEventInfo info;
+  info.state =
+      ::ash::cros_healthd::mojom::AudioEventInfo::State::kSevereUnderrun;
+  ::ash::cros_healthd::FakeCrosHealthd::Get()->EmitEventForCategory(
+      ::ash::cros_healthd::mojom::EventCategoryEnum::kAudio,
+      ::ash::cros_healthd::mojom::EventInfo::NewAudioEventInfo(info.Clone()));
 
   const auto metric_data = result_metric_data.result();
   ASSERT_TRUE(metric_data.has_event_data());
   EXPECT_EQ(metric_data.event_data().type(),
             reporting::MetricEventType::AUDIO_SEVERE_UNDERRUN);
 }
+
 }  // namespace
 }  // namespace reporting

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,18 @@ TEST_F(ImageDataTest, CreateImageDataTooBig) {
 }
 
 TEST_F(ImageDataTest, ImageDataTooBigToAllocateDoesNotCrash) {
-  ImageData* image_data = ImageData::CreateForTest(
-      gfx::Size(1, (v8::TypedArray::kMaxLength / 4) + 1));
+  constexpr size_t kBytesPerPixel = 4;
+  constexpr size_t kMaxSize = v8::TypedArray::kMaxByteLength / kBytesPerPixel;
+
+  // Statically compute a width and height such that the product is above
+  // kMaxSize.
+  constexpr int kWidth = 1 << 30;
+  constexpr int kHeight = (kMaxSize / kWidth) + 1;
+  static_assert(size_t{kWidth} * (kHeight - 1) <= kMaxSize);
+  static_assert(size_t{kWidth} * kHeight > kMaxSize);
+
+  gfx::Size too_big_size(kWidth, kHeight);
+  ImageData* image_data = ImageData::CreateForTest(too_big_size);
   EXPECT_EQ(image_data, nullptr);
 }
 

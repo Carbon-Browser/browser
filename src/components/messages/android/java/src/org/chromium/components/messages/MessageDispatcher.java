@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,11 @@ public interface MessageDispatcher {
      * @param scopeType The {@link MessageScopeType} of the message.
      * @param highPriority True if the message should be displayed ASAP.
      */
-    void enqueueMessage(PropertyModel messageProperties, WebContents webContents,
-            @MessageScopeType int scopeType, boolean highPriority);
+    void enqueueMessage(
+            PropertyModel messageProperties,
+            WebContents webContents,
+            @MessageScopeType int scopeType,
+            boolean highPriority);
 
     /**
      * Enqueues a message defined by its properties. This message will be of a

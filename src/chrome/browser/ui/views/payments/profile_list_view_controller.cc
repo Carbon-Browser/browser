@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/payments/profile_list_view_controller.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
@@ -368,8 +368,9 @@ bool ProfileListViewController::ShouldShowPrimaryButton() {
 
 PaymentRequestSheetController::ButtonCallback
 ProfileListViewController::GetSecondaryButtonCallback() {
-  return base::BindRepeating(&ProfileListViewController::ShowEditor,
-                             base::Unretained(this), nullptr);
+  return base::BindRepeating(
+      &ProfileListViewController::OnCreateNewProfileButtonClicked,
+      base::Unretained(this));
 }
 
 void ProfileListViewController::FillContentView(views::View* content_view) {
@@ -385,6 +386,17 @@ void ProfileListViewController::FillContentView(views::View* content_view) {
   std::unique_ptr<views::View> list_view = list_.CreateListView();
   list_view->SetID(static_cast<int>(GetDialogViewId()));
   content_view->AddChildView(list_view.release());
+}
+
+base::WeakPtr<PaymentRequestSheetController>
+ProfileListViewController::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
+void ProfileListViewController::OnCreateNewProfileButtonClicked(
+    const ui::Event& event) {
+  // nullptr means 'create a new profile'
+  ShowEditor(nullptr);
 }
 
 }  // namespace payments

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@ package org.chromium.components.browser_ui.photo_picker;
 import android.content.ContentResolver;
 import android.net.Uri;
 
-import androidx.annotation.VisibleForTesting;
-import androidx.appcompat.app.AlertDialog;
+import androidx.activity.OnBackPressedCallback;
 
+import org.chromium.components.browser_ui.widget.FullscreenAlertDialog;
 import org.chromium.ui.base.PhotoPicker;
 import org.chromium.ui.base.PhotoPickerListener;
 import org.chromium.ui.base.WindowAndroid;
@@ -17,11 +17,11 @@ import org.chromium.ui.base.WindowAndroid;
 import java.util.List;
 
 /**
- * UI for the photo chooser that shows on the Android platform as a result of
- * &lt;input type=file accept=image &gt; form element.
+ * UI for the photo chooser that shows on the Android platform as a result of &lt;input type=file
+ * accept=image &gt; form element.
  */
-public class PhotoPickerDialog
-        extends AlertDialog implements PhotoPickerToolbar.PhotoPickerToolbarDelegate, PhotoPicker {
+public class PhotoPickerDialog extends FullscreenAlertDialog
+        implements PhotoPickerToolbar.PhotoPickerToolbarDelegate, PhotoPicker {
     // Our window.
     private WindowAndroid mWindowAndroid;
 
@@ -45,9 +45,7 @@ public class PhotoPickerDialog
         // Whether the user selected to launch an external intent.
         private boolean mExternalIntentSelected;
 
-        /**
-         * The constructor, supplying the {@link PhotoPickerListener} object to encapsulate.
-         */
+        /** The constructor, supplying the {@link PhotoPickerListener} object to encapsulate. */
         public PhotoPickerListenerWrapper(PhotoPickerListener listener) {
             mListener = listener;
         }
@@ -69,9 +67,7 @@ public class PhotoPickerDialog
             mListener.onPhotoPickerDismissed();
         }
 
-        /**
-         * Returns whether the user picked an external intent to launch.
-         */
+        /** Returns whether the user picked an external intent to launch. */
         public boolean externalIntentSelected() {
             return mExternalIntentSelected;
         }
@@ -79,16 +75,21 @@ public class PhotoPickerDialog
 
     /**
      * The PhotoPickerDialog constructor.
+     *
      * @param windowAndroid The window of the hosting Activity.
      * @param contentResolver The ContentResolver to use to retrieve image metadata from disk.
      * @param listener The listener object that gets notified when an action is taken.
      * @param multiSelectionAllowed Whether the photo picker should allow multiple items to be
-     *                              selected.
+     *     selected.
      * @param mimeTypes A list of mime types to show in the dialog.
      */
-    public PhotoPickerDialog(WindowAndroid windowAndroid, ContentResolver contentResolver,
-            PhotoPickerListener listener, boolean multiSelectionAllowed, List<String> mimeTypes) {
-        super(windowAndroid.getContext().get(), R.style.ThemeOverlay_BrowserUI_Fullscreen);
+    public PhotoPickerDialog(
+            WindowAndroid windowAndroid,
+            ContentResolver contentResolver,
+            PhotoPickerListener listener,
+            boolean multiSelectionAllowed,
+            List<String> mimeTypes) {
+        super(windowAndroid.getContext().get());
 
         mWindowAndroid = windowAndroid;
         mListenerWrapper = new PhotoPickerListenerWrapper(listener);
@@ -98,17 +99,20 @@ public class PhotoPickerDialog
                 new PickerCategoryView(windowAndroid, contentResolver, multiSelectionAllowed, this);
         mCategoryView.initialize(this, mListenerWrapper, mimeTypes);
         setView(mCategoryView);
-    }
-
-    @Override
-    public void onBackPressed() {
-        // Pressing Back when a video is playing, should only end the video playback.
-        boolean videoWasStopped = mCategoryView.closeVideoPlayer();
-        if (videoWasStopped) {
-            return;
-        } else {
-            super.onBackPressed();
-        }
+        getOnBackPressedDispatcher()
+                .addCallback(
+                        new OnBackPressedCallback(true) {
+                            @Override
+                            public void handleOnBackPressed() {
+                                // Pressing Back when a video is playing, should only end the video
+                                // playback.
+                                boolean videoWasStopped = mCategoryView.closeVideoPlayer();
+                                if (!videoWasStopped) {
+                                    setEnabled(false);
+                                    getOnBackPressedDispatcher().onBackPressed();
+                                }
+                            }
+                        });
     }
 
     @Override
@@ -120,9 +124,7 @@ public class PhotoPickerDialog
         }
     }
 
-    /**
-     * Cancels the dialog in response to a back navigation.
-     */
+    /** Cancels the dialog in response to a back navigation. */
     @Override
     public void onNavigationBackCallback() {
         cancel();
@@ -136,7 +138,6 @@ public class PhotoPickerDialog
         dismiss();
     }
 
-    @VisibleForTesting
     public PickerCategoryView getCategoryViewForTesting() {
         return mCategoryView;
     }

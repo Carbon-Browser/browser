@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 #define CONTENT_PUBLIC_BROWSER_WEB_UI_MESSAGE_HANDLER_H_
 
 #include <ostream>
-#include <string>
-#include <vector>
 
 #include "base/check.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "content/common/content_export.h"
@@ -77,19 +76,19 @@ class CONTENT_EXPORT WebUIMessageHandler {
   // Helper method for responding to Javascript requests initiated with
   // cr.sendWithPromise() (defined in cr.js) for the case where the returned
   // promise should be resolved (request succeeded).
-  void ResolveJavascriptCallback(const base::Value& callback_id,
-                                 const base::Value& response);
+  void ResolveJavascriptCallback(const base::ValueView callback_id,
+                                 const base::ValueView response);
 
   // Helper method for responding to Javascript requests initiated with
   // cr.sendWithPromise() (defined in cr.js), for the case where the returned
   // promise should be rejected (request failed).
-  void RejectJavascriptCallback(const base::Value& callback_id,
-                                const base::Value& response);
+  void RejectJavascriptCallback(const base::ValueView callback_id,
+                                const base::ValueView response);
 
   // Helper method for notifying Javascript listeners added with
   // cr.addWebUIListener() (defined in cr.js).
   template <typename... Values>
-  void FireWebUIListener(const std::string& event_name,
+  void FireWebUIListener(base::StringPiece event_name,
                          const Values&... values) {
     // cr.webUIListenerCallback is a global JS function exposed from cr.js.
     CallJavascriptFunction("cr.webUIListenerCallback", base::Value(event_name),
@@ -103,7 +102,7 @@ class CONTENT_EXPORT WebUIMessageHandler {
   // All function names in WebUI must consist of only ASCII characters.
   // These functions will crash if JavaScript is not currently allowed.
   template <typename... Values>
-  void CallJavascriptFunction(const std::string& function_name,
+  void CallJavascriptFunction(base::StringPiece function_name,
                               const Values&... values) {
     CHECK(IsJavascriptAllowed()) << "Cannot CallJavascriptFunction before "
                                     "explicitly allowing JavaScript.";
@@ -132,8 +131,9 @@ class CONTENT_EXPORT WebUIMessageHandler {
 
   // True if the page is for JavaScript calls from this handler.
   bool javascript_allowed_ = false;
-
-  WebUI* web_ui_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION WebUI* web_ui_ = nullptr;
 };
 
 }  // namespace content

@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/peerconnection/webrtc_audio_sink.h"
 
+#include "base/memory/raw_ptr.h"
 #include "media/base/fake_single_thread_task_runner.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -42,7 +43,7 @@ class ScopedFakeClock : public rtc::ClockInterface {
   }
 
  private:
-  ClockInterface* const prev_clock_;
+  const raw_ptr<ClockInterface, ExperimentalRenderer> prev_clock_;
   int64_t time_ns_;
 };
 
@@ -77,9 +78,10 @@ TEST(WebRtcAudioSinkTest, CaptureTimestamp) {
   constexpr int64_t kStartCaptureTimestampMs = 12345678;
   constexpr int64_t kCaptureIntervalMs = 567;
 
-  web_media_stream_audio_sink->OnSetFormat(media::AudioParameters(
-      media::AudioParameters::AUDIO_PCM_LINEAR, media::CHANNEL_LAYOUT_STEREO,
-      kSampleRateHz, kOutputFramesPerBuffer));
+  web_media_stream_audio_sink->OnSetFormat(
+      media::AudioParameters(media::AudioParameters::AUDIO_PCM_LINEAR,
+                             media::ChannelLayoutConfig::Stereo(),
+                             kSampleRateHz, kOutputFramesPerBuffer));
   std::unique_ptr<media::AudioBus> bus =
       media::AudioBus::Create(kInputChannels, kInputFramesPerBuffer);
   bus->Zero();

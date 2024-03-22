@@ -1,11 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.tabmodel;
 
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.spy;
 
@@ -20,6 +19,7 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.MockTab;
 import org.chromium.chrome.browser.tab.Tab;
 
@@ -28,9 +28,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
-/**
- * Unit tests for {@link PendingTabClosureManager}.
- */
+/** Unit tests for {@link PendingTabClosureManager}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PendingTabClosureManagerTest {
@@ -104,22 +102,19 @@ public class PendingTabClosureManagerTest {
         public void notifyAllTabsClosureUndone() {}
 
         @Override
-        public void notifyDidCloseTabs(List<Tab> tabs) {}
+        public void notifyOnFinishingMultipleTabClosure(List<Tab> tabs) {}
     }
 
     FakeTabModel mTabModel;
-    @Mock
-    TabModelDelegate mTabModelDelegate;
-    PendingClosureDelegate mDelegate;
+    @Mock PendingClosureDelegate mDelegate;
+    @Mock Profile mProfile;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         mTabModel = new FakeTabModel();
         mDelegate = spy(new PendingClosureDelegate());
-        doReturn(false).when(mTabModelDelegate).isReparentingInProgress();
-        mPendingTabClosureManager =
-                new PendingTabClosureManager(mTabModel, mTabModelDelegate, mDelegate);
+        mPendingTabClosureManager = new PendingTabClosureManager(mTabModel, mDelegate);
     }
 
     @After
@@ -144,18 +139,18 @@ public class PendingTabClosureManagerTest {
             if (!ignoreClosing) {
                 Assert.assertTrue(manager.isClosurePending(tabs[i].getId()));
             }
-            Assert.assertEquals("Tab at index " + Integer.toString(i) + " doesn't match.", tabs[i],
+            Assert.assertEquals(
+                    "Tab at index " + Integer.toString(i) + " doesn't match.",
+                    tabs[i],
                     rewoundList.getTabAt(i));
         }
     }
 
-    /**
-     * Test that committing a single pending tab closure works.
-     */
+    /** Test that committing a single pending tab closure works. */
     @Test
     public void testCommitSingleTabEvent() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
+        Tab tab0 = new MockTab(0, mProfile);
         Tab[] tabList = new Tab[] {tab0};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -163,18 +158,18 @@ public class PendingTabClosureManagerTest {
         checkRewoundState(mPendingTabClosureManager, tabList, false);
 
         mPendingTabClosureManager.commitTabClosure(tab0.getId());
-        delegateInOrder.verify(mDelegate).notifyDidCloseTabs(eq(Arrays.asList(tabList)));
+        delegateInOrder
+                .verify(mDelegate)
+                .notifyOnFinishingMultipleTabClosure(eq(Arrays.asList(tabList)));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab0));
         checkRewoundState(mPendingTabClosureManager, new Tab[] {}, false);
     }
 
-    /**
-     * Test that cancelling a single pending tab closure works.
-     */
+    /** Test that cancelling a single pending tab closure works. */
     @Test
     public void testCancelSingleTabEvent() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
+        Tab tab0 = new MockTab(0, mProfile);
         Tab[] tabList = new Tab[] {tab0};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -194,8 +189,8 @@ public class PendingTabClosureManagerTest {
     @Test
     public void testCommitMultipleTabEvent() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
-        Tab tab1 = new MockTab(1, false);
+        Tab tab0 = new MockTab(0, mProfile);
+        Tab tab1 = new MockTab(1, mProfile);
         Tab[] tabList = new Tab[] {tab1, tab0};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -206,20 +201,20 @@ public class PendingTabClosureManagerTest {
         // No commits actually occur until later.
         checkRewoundState(mPendingTabClosureManager, tabList, false);
         mPendingTabClosureManager.commitTabClosure(tab1.getId());
-        delegateInOrder.verify(mDelegate).notifyDidCloseTabs(eq(Arrays.asList(tabList)));
+        delegateInOrder
+                .verify(mDelegate)
+                .notifyOnFinishingMultipleTabClosure(eq(Arrays.asList(tabList)));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab1));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab0));
         checkRewoundState(mPendingTabClosureManager, new Tab[] {}, false);
     }
 
-    /**
-     * Test that cancelling a pending multiple tab closure works and happens immediately.
-     */
+    /** Test that cancelling a pending multiple tab closure works and happens immediately. */
     @Test
     public void testCancelMultipleTabEvent() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
-        Tab tab1 = new MockTab(1, false);
+        Tab tab0 = new MockTab(0, mProfile);
+        Tab tab1 = new MockTab(1, mProfile);
         Tab[] tabList = new Tab[] {tab1, tab0};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -242,8 +237,8 @@ public class PendingTabClosureManagerTest {
      */
     @Test
     public void testEnforceAtomicityOfCommit() {
-        Tab tab0 = new MockTab(0, false);
-        Tab tab1 = new MockTab(1, false);
+        Tab tab0 = new MockTab(0, mProfile);
+        Tab tab1 = new MockTab(1, mProfile);
         Tab[] tabList = new Tab[] {tab1, tab0};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -270,8 +265,8 @@ public class PendingTabClosureManagerTest {
     @Test
     public void testEnforceAtomicityOfCancel() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
-        Tab tab1 = new MockTab(1, false);
+        Tab tab0 = new MockTab(0, mProfile);
+        Tab tab1 = new MockTab(1, mProfile);
         Tab[] tabList = new Tab[] {tab1, tab0};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -294,11 +289,11 @@ public class PendingTabClosureManagerTest {
     @Test
     public void testCommitAndCancelMultipleEventsOutOfOrder() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
-        Tab tab1 = new MockTab(1, false);
-        Tab tab2 = new MockTab(2, false);
-        Tab tab3 = new MockTab(3, false);
-        Tab tab4 = new MockTab(4, false);
+        Tab tab0 = new MockTab(0, mProfile);
+        Tab tab1 = new MockTab(1, mProfile);
+        Tab tab2 = new MockTab(2, mProfile);
+        Tab tab3 = new MockTab(3, mProfile);
+        Tab tab4 = new MockTab(4, mProfile);
         Tab[] tabList = new Tab[] {tab0, tab1, tab2, tab3, tab4};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -318,8 +313,9 @@ public class PendingTabClosureManagerTest {
         tabList = new Tab[] {tab0, tab1, tab3};
         mPendingTabClosureManager.commitTabClosure(tab4.getId());
         checkRewoundState(mPendingTabClosureManager, tabList, true);
-        delegateInOrder.verify(mDelegate).notifyDidCloseTabs(
-                eq(Arrays.asList(new Tab[] {tab2, tab4})));
+        delegateInOrder
+                .verify(mDelegate)
+                .notifyOnFinishingMultipleTabClosure(eq(Arrays.asList(new Tab[] {tab2, tab4})));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab2));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab4));
 
@@ -328,7 +324,9 @@ public class PendingTabClosureManagerTest {
         delegateInOrder.verify(mDelegate).insertUndoneTabClosureAt(eq(tab1), eq(0));
 
         mPendingTabClosureManager.commitTabClosure(tab0.getId());
-        delegateInOrder.verify(mDelegate).notifyDidCloseTabs(eq(Collections.singletonList(tab0)));
+        delegateInOrder
+                .verify(mDelegate)
+                .notifyOnFinishingMultipleTabClosure(eq(Collections.singletonList(tab0)));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab0));
         checkRewoundState(mPendingTabClosureManager, new Tab[] {tab1, tab3}, true);
     }
@@ -340,12 +338,12 @@ public class PendingTabClosureManagerTest {
     @Test
     public void testCommitAllClosures() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
-        Tab tab1 = new MockTab(1, false);
-        Tab tab2 = new MockTab(2, false);
-        Tab tab3 = new MockTab(3, false);
-        Tab tab4 = new MockTab(4, false);
-        Tab tab5 = new MockTab(5, false);
+        Tab tab0 = new MockTab(0, mProfile);
+        Tab tab1 = new MockTab(1, mProfile);
+        Tab tab2 = new MockTab(2, mProfile);
+        Tab tab3 = new MockTab(3, mProfile);
+        Tab tab4 = new MockTab(4, mProfile);
+        Tab tab5 = new MockTab(5, mProfile);
         Tab[] tabList = new Tab[] {tab0, tab1, tab2, tab3, tab4, tab5};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -363,7 +361,9 @@ public class PendingTabClosureManagerTest {
         // Fully close tab 2.
         mPendingTabClosureManager.commitTabClosure(tab2.getId());
         checkRewoundState(mPendingTabClosureManager, tabList, false);
-        delegateInOrder.verify(mDelegate).notifyDidCloseTabs(eq(Collections.singletonList(tab2)));
+        delegateInOrder
+                .verify(mDelegate)
+                .notifyOnFinishingMultipleTabClosure(eq(Collections.singletonList(tab2)));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab2));
 
         // Restore tab 5.
@@ -372,13 +372,18 @@ public class PendingTabClosureManagerTest {
         delegateInOrder.verify(mDelegate).insertUndoneTabClosureAt(eq(tab5), eq(0));
 
         mPendingTabClosureManager.commitAllTabClosures();
-        delegateInOrder.verify(mDelegate).notifyDidCloseTabs(eq(Collections.singletonList(tab0)));
+        delegateInOrder
+                .verify(mDelegate)
+                .notifyOnFinishingMultipleTabClosure(eq(Collections.singletonList(tab0)));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab0));
-        delegateInOrder.verify(mDelegate).notifyDidCloseTabs(
-                eq(Arrays.asList(new Tab[] {tab1, tab4})));
+        delegateInOrder
+                .verify(mDelegate)
+                .notifyOnFinishingMultipleTabClosure(eq(Arrays.asList(new Tab[] {tab1, tab4})));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab1));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab4));
-        delegateInOrder.verify(mDelegate).notifyDidCloseTabs(eq(Collections.singletonList(tab3)));
+        delegateInOrder
+                .verify(mDelegate)
+                .notifyOnFinishingMultipleTabClosure(eq(Collections.singletonList(tab3)));
         delegateInOrder.verify(mDelegate).finalizeClosure(eq(tab3));
         checkRewoundState(mPendingTabClosureManager, new Tab[] {tab5}, true);
     }
@@ -390,10 +395,10 @@ public class PendingTabClosureManagerTest {
     @Test
     public void testOpenMostRecentlyClosedWithCommit() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
-        Tab tab1 = new MockTab(1, false);
-        Tab tab2 = new MockTab(2, false);
-        Tab tab3 = new MockTab(3, false);
+        Tab tab0 = new MockTab(0, mProfile);
+        Tab tab1 = new MockTab(1, mProfile);
+        Tab tab2 = new MockTab(2, mProfile);
+        Tab tab3 = new MockTab(3, mProfile);
         Tab[] tabList = new Tab[] {tab0, tab1, tab2, tab3};
         setupRewoundState(mPendingTabClosureManager, tabList);
 
@@ -420,10 +425,10 @@ public class PendingTabClosureManagerTest {
     @Test
     public void testOpenMostRecentlyClosedWithClose() {
         InOrder delegateInOrder = inOrder(mDelegate);
-        Tab tab0 = new MockTab(0, false);
-        Tab tab1 = new MockTab(1, false);
-        Tab tab2 = new MockTab(2, false);
-        Tab tab3 = new MockTab(3, false);
+        Tab tab0 = new MockTab(0, mProfile);
+        Tab tab1 = new MockTab(1, mProfile);
+        Tab tab2 = new MockTab(2, mProfile);
+        Tab tab3 = new MockTab(3, mProfile);
         Tab[] tabList = new Tab[] {tab0, tab1, tab2, tab3};
         setupRewoundState(mPendingTabClosureManager, tabList);
 

@@ -2,6 +2,7 @@
   "android-clang-tidy-rel": {
     "gn_args": {
       "dcheck_always_on": true,
+      "debuggable_apks": false,
       "ffmpeg_branding": "Chrome",
       "is_component_build": false,
       "is_debug": false,
@@ -9,7 +10,8 @@
       "strip_debug_info": true,
       "symbol_level": 0,
       "target_os": "android",
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "fuchsia-clang-tidy-rel": {
@@ -19,22 +21,8 @@
       "is_debug": false,
       "symbol_level": 0,
       "target_os": "fuchsia",
-      "use_goma": true
-    }
-  },
-  "ios-clang-tidy-rel": {
-    "gn_args": {
-      "dcheck_always_on": false,
-      "ios_code_signing_identity_description": "Apple Development",
-      "ios_enable_code_signing": false,
-      "ios_set_attributes_for_xcode_project_generation": false,
-      "is_component_build": false,
-      "is_debug": false,
-      "symbol_level": 0,
-      "target_cpu": "arm64",
-      "target_environment": "device",
-      "target_os": "ios",
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "linux-chromeos-clang-tidy-rel": {
@@ -46,15 +34,8 @@
       "proprietary_codecs": true,
       "symbol_level": 0,
       "target_os": "chromeos",
-      "use_goma": true
-    }
-  },
-  "linux-clang-tidy-dbg": {
-    "gn_args": {
-      "is_component_build": true,
-      "is_debug": true,
-      "symbol_level": 1,
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "linux-clang-tidy-rel": {
@@ -63,7 +44,8 @@
       "is_component_build": false,
       "is_debug": false,
       "symbol_level": 0,
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "linux-lacros-clang-tidy-rel": {
@@ -75,7 +57,8 @@
       "is_debug": false,
       "symbol_level": 0,
       "target_os": "chromeos",
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "mac-clang-tidy-rel": {
@@ -84,7 +67,8 @@
       "is_component_build": false,
       "is_debug": false,
       "symbol_level": 0,
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "win10-clang-tidy-rel": {
@@ -93,7 +77,8 @@
       "is_component_build": false,
       "is_debug": false,
       "symbol_level": 0,
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   }
 }

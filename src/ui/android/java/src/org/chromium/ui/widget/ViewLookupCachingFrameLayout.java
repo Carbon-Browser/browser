@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,19 +41,20 @@ public class ViewLookupCachingFrameLayout extends OptimizedFrameLayout {
 
     /** The hierarchy listener responsible for notifying the cache that the tree has changed. */
     @VisibleForTesting
-    final OnHierarchyChangeListener mListener = new OnHierarchyChangeListener() {
-        @Override
-        public void onChildViewAdded(View parent, View child) {
-            mCachedViews.remove(child.getId());
-            setHierarchyListenerOnTree(child, this);
-        }
+    final OnHierarchyChangeListener mListener =
+            new OnHierarchyChangeListener() {
+                @Override
+                public void onChildViewAdded(View parent, View child) {
+                    mCachedViews.remove(child.getId());
+                    setHierarchyListenerOnTree(child, this);
+                }
 
-        @Override
-        public void onChildViewRemoved(View parent, View child) {
-            mCachedViews.remove(child.getId());
-            setHierarchyListenerOnTree(child, null);
-        }
-    };
+                @Override
+                public void onChildViewRemoved(View parent, View child) {
+                    mCachedViews.remove(child.getId());
+                    setHierarchyListenerOnTree(child, null);
+                }
+            };
 
     /** Default constructor for use in XML. */
     public ViewLookupCachingFrameLayout(Context context, AttributeSet atts) {
@@ -97,8 +98,8 @@ public class ViewLookupCachingFrameLayout extends OptimizedFrameLayout {
         if (view == null) view = findViewById(id);
         if (BuildConfig.ENABLE_ASSERTS) {
             assert view == findViewById(id) : "View caching logic is broken!";
-            assert ref == null
-                    || ref.get() != null : "Cache held reference to garbage collected view!";
+            assert ref == null || ref.get() != null
+                    : "Cache held reference to garbage collected view!";
         }
 
         if (view != null) mCachedViews.put(id, new WeakReference<>(view));

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,28 +10,24 @@ import android.media.MediaCodec;
 import android.media.MediaCodec.CryptoInfo;
 import android.media.MediaCrypto;
 import android.media.MediaFormat;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.view.Surface;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.MainDex;
-import org.chromium.base.annotations.NativeMethods;
 
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
 
-/**
- * A MediaCodec wrapper for adapting the API and catching exceptions.
- */
+/** A MediaCodec wrapper for adapting the API and catching exceptions. */
 @JNINamespace("media")
-@MainDex
 class MediaCodecBridge {
     private static final String TAG = "MediaCodecBridge";
 
@@ -111,8 +107,13 @@ class MediaCodecBridge {
         private final long mPresentationTimeMicroseconds;
         private final int mNumBytes;
 
-        private DequeueOutputResult(int status, int index, int flags, int offset,
-                long presentationTimeMicroseconds, int numBytes) {
+        private DequeueOutputResult(
+                int status,
+                int index,
+                int flags,
+                int offset,
+                long presentationTimeMicroseconds,
+                int numBytes) {
             mStatus = status;
             mIndex = index;
             mFlags = flags;
@@ -161,8 +162,10 @@ class MediaCodecBridge {
         }
 
         private boolean formatHasCropValues() {
-            return mFormat.containsKey(KEY_CROP_RIGHT) && mFormat.containsKey(KEY_CROP_LEFT)
-                    && mFormat.containsKey(KEY_CROP_BOTTOM) && mFormat.containsKey(KEY_CROP_TOP);
+            return mFormat.containsKey(KEY_CROP_RIGHT)
+                    && mFormat.containsKey(KEY_CROP_LEFT)
+                    && mFormat.containsKey(KEY_CROP_BOTTOM)
+                    && mFormat.containsKey(KEY_CROP_TOP);
         }
 
         @CalledByNative("MediaFormatWrapper")
@@ -191,12 +194,14 @@ class MediaCodecBridge {
 
         @CalledByNative("MediaFormatWrapper")
         private int stride() {
+            // Missing stride means a 16x16 resolution alignment is required. See configureVideo().
             if (!mFormat.containsKey(MediaFormat.KEY_STRIDE)) return width();
             return mFormat.getInteger(MediaFormat.KEY_STRIDE);
         }
 
         @CalledByNative("MediaFormatWrapper")
         private int yPlaneHeight() {
+            // Missing stride means a 16x16 resolution alignment is required. See configureVideo().
             if (!mFormat.containsKey(MediaFormat.KEY_SLICE_HEIGHT)) return height();
             return mFormat.getInteger(MediaFormat.KEY_SLICE_HEIGHT);
         }
@@ -225,6 +230,7 @@ class MediaCodecBridge {
     // to avoid race conditions.
     class MediaCodecCallback extends MediaCodec.Callback {
         private MediaCodecBridge mMediaCodecBridge;
+
         MediaCodecCallback(MediaCodecBridge bridge) {
             mMediaCodecBridge = bridge;
         }
@@ -251,7 +257,8 @@ class MediaCodecBridge {
         public void onOutputFormatChanged(MediaCodec codec, MediaFormat format) {
             mMediaCodecBridge.onOutputFormatChanged(format);
         }
-    };
+    }
+    ;
 
     MediaCodecBridge(
             MediaCodec mediaCodec, @BitrateAdjuster.Type int bitrateAdjuster, boolean useAsyncApi) {
@@ -299,8 +306,8 @@ class MediaCodecBridge {
 
     private synchronized void notifyBuffersAvailable() {
         if (mNativeMediaCodecBridge != 0) {
-            MediaCodecBridgeJni.get().onBuffersAvailable(
-                    mNativeMediaCodecBridge, MediaCodecBridge.this);
+            MediaCodecBridgeJni.get()
+                    .onBuffersAvailable(mNativeMediaCodecBridge, MediaCodecBridge.this);
         }
     }
 
@@ -322,8 +329,14 @@ class MediaCodecBridge {
         // Drop buffers that come in during a flush.
         if (mPendingStart) return;
 
-        mPendingOutputBuffers.add(new DequeueOutputResult(MediaCodecStatus.OK, index, info.flags,
-                info.offset, info.presentationTimeUs, info.size));
+        mPendingOutputBuffers.add(
+                new DequeueOutputResult(
+                        MediaCodecStatus.OK,
+                        index,
+                        info.flags,
+                        info.offset,
+                        info.presentationTimeUs,
+                        info.size));
         notifyBuffersAvailable();
     }
 
@@ -373,6 +386,7 @@ class MediaCodecBridge {
 
                     class CompletePendingStartTask implements Runnable {
                         private int mThisSequence;
+
                         CompletePendingStartTask(int sequence) {
                             mThisSequence = sequence;
                         }
@@ -381,13 +395,16 @@ class MediaCodecBridge {
                         public void run() {
                             onPendingStartComplete(mThisSequence);
                         }
-                    };
+                    }
+                    ;
 
                     // Ensure any pending indices are ignored until after start
                     // by trampolining through the handler/looper that the
                     // notifications are coming from.
-                    Handler h = sCallbackHandler == null ? new Handler(Looper.getMainLooper())
-                                                         : sCallbackHandler;
+                    Handler h =
+                            sCallbackHandler == null
+                                    ? new Handler(Looper.getMainLooper())
+                                    : sCallbackHandler;
                     h.post(new CompletePendingStartTask(mSequenceCounter));
                 }
             }
@@ -584,21 +601,31 @@ class MediaCodecBridge {
 
     @SuppressLint("WrongConstant") // False positive on logging statement.
     @CalledByNative
-    private int queueSecureInputBuffer(int index, int offset, byte[] iv, byte[] keyId,
-            int[] numBytesOfClearData, int[] numBytesOfEncryptedData, int numSubSamples,
-            int cipherMode, int patternEncrypt, int patternSkip, long presentationTimeUs) {
+    private int queueSecureInputBuffer(
+            int index,
+            int offset,
+            byte[] iv,
+            byte[] keyId,
+            int[] numBytesOfClearData,
+            int[] numBytesOfEncryptedData,
+            int numSubSamples,
+            int cipherMode,
+            int patternEncrypt,
+            int patternSkip,
+            long presentationTimeUs) {
         try {
             cipherMode = translateEncryptionSchemeValue(cipherMode);
             if (cipherMode == MEDIA_CODEC_UNKNOWN_CIPHER_MODE) {
                 return MediaCodecStatus.ERROR;
             }
             boolean usesCbcs = cipherMode == MediaCodec.CRYPTO_MODE_AES_CBC;
-            if (usesCbcs && !MediaCodecUtil.platformSupportsCbcsEncryption(Build.VERSION.SDK_INT)) {
-                Log.e(TAG, "Encryption scheme 'cbcs' not supported on this platform.");
-                return MediaCodecStatus.ERROR;
-            }
             CryptoInfo cryptoInfo = new CryptoInfo();
-            cryptoInfo.set(numSubSamples, numBytesOfClearData, numBytesOfEncryptedData, keyId, iv,
+            cryptoInfo.set(
+                    numSubSamples,
+                    numBytesOfClearData,
+                    numBytesOfEncryptedData,
+                    keyId,
+                    iv,
                     cipherMode);
             if (patternEncrypt != 0 && patternSkip != 0) {
                 if (usesCbcs) {
@@ -693,14 +720,60 @@ class MediaCodecBridge {
         return mMediaCodec.dequeueOutputBuffer(info, timeoutUs);
     }
 
-    // TODO(sanfin): Move this out of MediaCodecBridge.
+    private static int alignDown(int size, int alignment) {
+        return size & ~(alignment - 1);
+    }
+
     boolean configureVideo(MediaFormat format, Surface surface, MediaCrypto crypto, int flags) {
         try {
             mMediaCodec.configure(format, surface, crypto, flags);
-            if (format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
-                mMaxInputSize = format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE);
+
+            MediaFormat inputFormat = mMediaCodec.getInputFormat();
+
+            // This is always provided by MediaFormatBuilder, but we should see if the input
+            // format has the real value.
+            mMaxInputSize = format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE);
+            if (flags != MediaCodec.CONFIGURE_FLAG_ENCODE) {
+                if (inputFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                    mMaxInputSize = inputFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE);
+                }
                 return true;
             }
+
+            // Non 16x16 aligned resolutions don't work well with the MediaCodec encoder
+            // unfortunately, see https://crbug.com/1084702 for details. It seems they
+            // only work when the stride and slice height information are provided.
+            boolean requireAlignedResolution =
+                    !inputFormat.containsKey(MediaFormat.KEY_STRIDE)
+                            || !inputFormat.containsKey(MediaFormat.KEY_SLICE_HEIGHT);
+
+            if (!requireAlignedResolution) return true;
+
+            int currentWidth = inputFormat.getInteger(MediaFormat.KEY_WIDTH);
+            int alignedWidth = alignDown(currentWidth, 16);
+
+            int currentHeight = inputFormat.getInteger(MediaFormat.KEY_HEIGHT);
+            int alignedHeight = alignDown(currentHeight, 16);
+
+            if (alignedHeight == 0 || alignedWidth == 0) {
+                Log.e(
+                        TAG,
+                        "MediaCodec requires 16x16 alignment, which is not possible for: "
+                                + currentWidth
+                                + "x"
+                                + currentHeight);
+                return false;
+            }
+
+            if (alignedWidth == currentWidth && alignedHeight == currentHeight) return true;
+
+            // We must reconfigure the MediaCodec now since setParameters() doesn't work
+            // consistently across devices and versions of Android.
+            mMediaCodec.reset();
+            format.setInteger(MediaFormat.KEY_WIDTH, alignedWidth);
+            format.setInteger(MediaFormat.KEY_HEIGHT, alignedHeight);
+            mMediaCodec.configure(format, surface, crypto, flags);
+            return true;
         } catch (IllegalArgumentException e) {
             Log.e(TAG, "Cannot configure the video codec, wrong format or surface", e);
         } catch (IllegalStateException e) {

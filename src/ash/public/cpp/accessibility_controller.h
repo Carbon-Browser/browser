@@ -1,18 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_PUBLIC_CPP_ACCESSIBILITY_CONTROLLER_H_
 #define ASH_PUBLIC_CPP_ACCESSIBILITY_CONTROLLER_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/public/cpp/accelerators.h"
 #include "ash/public/cpp/accessibility_controller_enums.h"
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
 
 namespace gfx {
 class Rect;
@@ -25,6 +25,7 @@ enum class AccessibilityPanelState;
 enum class DictationToggleSource;
 enum class DictationBubbleHintType;
 enum class DictationBubbleIconType;
+enum class DictationNotificationType;
 class SelectToSpeakEventHandlerDelegate;
 enum class SelectToSpeakState;
 
@@ -116,6 +117,13 @@ class ASH_PUBLIC_EXPORT AccessibilityController {
   // Starts or stops dictation. Records metrics for toggling via SwitchAccess.
   virtual void ToggleDictationFromSource(DictationToggleSource source) = 0;
 
+  // Enables Dictation if the feature is currently disabled. Toggles (starts or
+  // stops) Dictation if the feature is currently enabled. Note: this behavior
+  // is currently behind a feature flag - if the feature flag is off, then this
+  // method behaves like ToggleDictationFromSource.
+  virtual void EnableOrToggleDictationFromSource(
+      DictationToggleSource source) = 0;
+
   // Shows a nudge explaining that a user's dictation language was upgraded to
   // work offline.
   virtual void ShowDictationLanguageUpgradedNudge(
@@ -124,7 +132,7 @@ class ASH_PUBLIC_EXPORT AccessibilityController {
 
   // Called when the Automatic Clicks extension finds scrollable bounds.
   virtual void HandleAutoclickScrollableBoundsFound(
-      gfx::Rect& bounds_in_screen) = 0;
+      const gfx::Rect& bounds_in_screen) = 0;
 
   // Retrieves a string description of the current battery status.
   virtual std::u16string GetBatteryDescription() const = 0;
@@ -150,9 +158,13 @@ class ASH_PUBLIC_EXPORT AccessibilityController {
   // Disables restoring of recommended policy values.
   virtual void DisablePolicyRecommendationRestorerForTesting() {}
 
-  // Set to true to disable the dialog.
+  // Disables the dialog shown when Switch Access is turned off.
   // Used in tests.
   virtual void DisableSwitchAccessDisableConfirmationDialogTesting() = 0;
+
+  // Disables the dialog shown when Switch Access is turned on.
+  // Used in tests.
+  virtual void DisableSwitchAccessEnableNotificationTesting() = 0;
 
   // Shows floating accessibility menu if it was enabled by policy.
   virtual void ShowFloatingMenuIfEnabled() {}
@@ -163,11 +175,12 @@ class ASH_PUBLIC_EXPORT AccessibilityController {
   // Enables ChromeVox's volume slide gesture.
   virtual void EnableChromeVoxVolumeSlideGesture() {}
 
-  // Shows a confirmation dialog with the given text and description,
-  // and calls the relevant callback when the dialog is confirmed, canceled
-  // or closed.
+  // Shows a confirmation dialog with the given text, description,
+  // and cancel button name, and calls the relevant callback when the
+  // dialog is confirmed, canceled or closed.
   virtual void ShowConfirmationDialog(const std::u16string& title,
                                       const std::u16string& description,
+                                      const std::u16string& cancel_name,
                                       base::OnceClosure on_accept_callback,
                                       base::OnceClosure on_cancel_callback,
                                       base::OnceClosure on_close_callback) {}
@@ -182,8 +195,8 @@ class ASH_PUBLIC_EXPORT AccessibilityController {
   // Shows a notification card in the message center informing the user that
   // speech recognition files have either downloaded successfully or failed.
   // Specific to the Dictation feature.
-  virtual void ShowSpeechRecognitionDownloadNotificationForDictation(
-      bool succeeded,
+  virtual void ShowNotificationForDictation(
+      DictationNotificationType type,
       const std::u16string& display_language) = 0;
 
   // Updates the Dictation UI bubble. `text` is optional to allow clients to
@@ -191,8 +204,14 @@ class ASH_PUBLIC_EXPORT AccessibilityController {
   virtual void UpdateDictationBubble(
       bool visible,
       DictationBubbleIconType icon,
-      const absl::optional<std::u16string>& text,
-      const absl::optional<std::vector<DictationBubbleHintType>>& hints) = 0;
+      const std::optional<std::u16string>& text,
+      const std::optional<std::vector<DictationBubbleHintType>>& hints) = 0;
+
+  // Cancels all of spoken feedback's current and queued speech immediately.
+  virtual void SilenceSpokenFeedback() = 0;
+
+  // Shows an accessibility-related toast.
+  virtual void ShowToast(AccessibilityToastType type) = 0;
 
  protected:
   AccessibilityController();

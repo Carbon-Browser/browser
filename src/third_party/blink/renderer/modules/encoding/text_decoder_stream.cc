@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,7 @@ class TextDecoderStream::Transformer final : public TransformStreamTransformer {
                      static_cast<uint32_t>(array_piece.ByteLength()),
                      WTF::FlushBehavior::kDoNotFlush, controller,
                      exception_state);
-    return ScriptPromise::CastUndefined(script_state_);
+    return ScriptPromise::CastUndefined(script_state_.Get());
   }
 
   // Implements the "encode and flush" algorithm.
@@ -73,10 +73,10 @@ class TextDecoderStream::Transformer final : public TransformStreamTransformer {
     DecodeAndEnqueue(nullptr, 0u, WTF::FlushBehavior::kDataEOF, controller,
                      exception_state);
 
-    return ScriptPromise::CastUndefined(script_state_);
+    return ScriptPromise::CastUndefined(script_state_.Get());
   }
 
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(script_state_);
@@ -102,14 +102,14 @@ class TextDecoderStream::Transformer final : public TransformStreamTransformer {
       return;
     }
 
-    if (outputChunk.IsEmpty())
+    if (outputChunk.empty())
       return;
 
     if (!ignore_bom_ && !bom_seen_) {
       bom_seen_ = true;
       if (encoding_has_bom_removal_ && outputChunk[0] == kBOM) {
         outputChunk.Remove(0);
-        if (outputChunk.IsEmpty())
+        if (outputChunk.empty())
           return;
       }
     }

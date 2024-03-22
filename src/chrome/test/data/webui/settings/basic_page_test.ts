@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,18 @@
 import 'chrome://settings/settings.js';
 import 'chrome://settings/lazy_load.js';
 
-import {isChromeOS, isLacros, webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
+import {isChromeOS, isLacros} from 'chrome://resources/js/platform.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {CrSettingsPrefs, MetricsBrowserProxyImpl, pageVisibility, PrivacyGuideBrowserProxy, PrivacyGuideBrowserProxyImpl, PrivacyGuideInteractions, Router, routes, SettingsBasicPageElement, SettingsIdleLoadElement, SettingsPrefsElement, SettingsSectionElement, StatusAction, SyncStatus} from 'chrome://settings/settings.js';
+import {CrSettingsPrefs, MetricsBrowserProxyImpl, pageVisibility, PerformanceBrowserProxyImpl, PrivacyGuideBrowserProxy, PrivacyGuideBrowserProxyImpl, PrivacyGuideInteractions, Router, routes, SettingsBasicPageElement, SettingsIdleLoadElement, SettingsPrefsElement, SettingsSectionElement, StatusAction, SyncStatus} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
-import {eventToPromise, flushTasks, isChildVisible, isVisible} from 'chrome://webui-test/test_util.js';
+import {eventToPromise, isChildVisible, isVisible} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
 import {TestMetricsBrowserProxy} from './test_metrics_browser_proxy.js';
+import {TestPerformanceBrowserProxy} from './test_performance_browser_proxy.js';
 
 // clang-format on
 class TestPrivacyGuideBrowserProxy extends TestBrowserProxy implements
@@ -37,7 +41,7 @@ class TestPrivacyGuideBrowserProxy extends TestBrowserProxy implements
   }
 }
 
-suite('SettingsBasicPage', () => {
+suite('BasicPage', () => {
   let page: SettingsBasicPageElement;
   let settingsPrefs: SettingsPrefsElement;
 
@@ -47,7 +51,7 @@ suite('SettingsBasicPage', () => {
   });
 
   setup(async function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     // Because some test() cases below call navigateTo(), need to ensure that
     // the route is being reset before each test.
@@ -86,7 +90,6 @@ suite('SettingsBasicPage', () => {
       'people',
       'search',
       'autofill',
-      'safetyCheck',
       'privacy',
     ];
     if (!isChromeOS && !isLacros) {
@@ -102,16 +105,20 @@ suite('SettingsBasicPage', () => {
     }
   });
 
+  // TODO(crbug/1469277): Remove after SafetyHub launched.
   test('safetyCheckVisibilityTest', function() {
-    // Set the visibility of the pages under test to "false".
-    page.pageVisibility = Object.assign(pageVisibility || {}, {
-      safetyCheck: false,
-    });
+    function querySafetyCheckSection() {
+      return page.shadowRoot!.querySelector('#safetyCheckSettingsSection');
+    }
+
+    // Set the visibility of the pages under test to their default value.
+    page.pageVisibility = pageVisibility;
     flush();
 
-    const sectionElement =
-        page.shadowRoot!.querySelector('settings-section-safety-check');
-    assertFalse(!!sectionElement);
+    // When enabled, SafetyHub replaces SafetyCheck by default.
+    assertFalse(
+        !!querySafetyCheckSection(),
+        'SafetyCheck should not be visible with default page visibility');
   });
 
   function assertActiveSection(section: string) {
@@ -235,10 +242,10 @@ suite('SettingsBasicPage', () => {
     Router.getInstance().navigateTo(routes.CLEAR_BROWSER_DATA);
     await whenDone;
     await flushTasks();
-    assertPriacyActiveSections();
+    assertPrivacyActiveSections();
   });
 
-  function assertPriacyActiveSections() {
+  function assertPrivacyActiveSections() {
     const activeSections =
         page.shadowRoot!.querySelectorAll<SettingsSectionElement>(
             'settings-section[active]');
@@ -248,11 +255,12 @@ suite('SettingsBasicPage', () => {
         routes.PRIVACY.section,
         activeSections[0]!.getAttribute('nest-under-section'));
     assertFalse(isChildVisible(page, '#privacyGuidePromo'));
-    // Safety check.
-    assertEquals(routes.SAFETY_CHECK.section, activeSections[1]!.section);
+    // Safety Hub.
+    assertEquals('safetyHubEntryPoint', activeSections[1]!.section);
     assertEquals(
         routes.PRIVACY.section,
         activeSections[1]!.getAttribute('nest-under-section'));
+    assertTrue(isChildVisible(page, '#safetyHubEntryPointSection'));
     // Privacy section.
     assertEquals(routes.PRIVACY.section, activeSections[2]!.section);
   }
@@ -265,7 +273,7 @@ suite('SettingsBasicPage', () => {
     Router.getInstance().navigateTo(routes.PRIVACY);
     await whenDone;
     await flushTasks();
-    assertPriacyActiveSections();
+    assertPrivacyActiveSections();
   });
 });
 
@@ -282,9 +290,10 @@ suite('PrivacyGuidePromo', () => {
   });
 
   setup(async function() {
+    loadTimeData.overrideValues({showPrivacyGuide: true});
     privacyGuideBrowserProxy = new TestPrivacyGuideBrowserProxy();
     PrivacyGuideBrowserProxyImpl.setInstance(privacyGuideBrowserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     page = document.createElement('settings-basic-page');
     page.prefs = settingsPrefs.prefs!;
     // The promo is only shown when privacy guide hasn't been visited yet.
@@ -313,6 +322,25 @@ suite('PrivacyGuidePromo', () => {
     // This will fail if there are any asserts or errors in the Settings page.
   });
 
+  test('promoNotShown', async function() {
+    loadTimeData.overrideValues({showPrivacyGuide: false});
+
+    page.remove();
+    page = document.createElement('settings-basic-page');
+    page.prefs = settingsPrefs.prefs!;
+    // The promo is only shown when privacy guide hasn't been visited yet.
+    page.setPrefValue('privacy_guide.viewed', false);
+    document.body.appendChild(page);
+
+    await flushTasks();
+    assertFalse(
+        loadTimeData.getBoolean('showPrivacyGuide'),
+        'showPrivacyGuide was not overwritten');
+    assertFalse(
+        isChildVisible(page, '#privacyGuidePromo'),
+        'privacyGuidePromo is visible');
+  });
+
   // Same as the SometimesMoreSectionsShown test in the suite above, but
   // including the privacy guide.
   test('SometimesMoreSectionsShownWithPrivacyGuide', async () => {
@@ -331,8 +359,8 @@ suite('PrivacyGuidePromo', () => {
         routes.PRIVACY.section,
         activeSections[0]!.getAttribute('nest-under-section'));
     assertTrue(isChildVisible(page, '#privacyGuidePromo'));
-    // Safety check.
-    assertEquals(routes.SAFETY_CHECK.section, activeSections[1]!.section);
+    // Safety Hub entry point.
+    assertEquals('safetyHubEntryPoint', activeSections[1]!.section);
     assertEquals(
         routes.PRIVACY.section,
         activeSections[1]!.getAttribute('nest-under-section'));
@@ -340,20 +368,22 @@ suite('PrivacyGuidePromo', () => {
     assertEquals(routes.PRIVACY.section, activeSections[2]!.section);
   });
 
-  test('privacyGuidePromoVisibilityChildAccount', function() {
+  test('privacyGuidePromoVisibilitySupervisedAccount', function() {
     assertTrue(isChildVisible(page, '#privacyGuidePromo'));
 
-    // The user signs in to a child user account. This hides the privacy guide
-    // promo.
-    let syncStatus:
-        SyncStatus = {childUser: true, statusAction: StatusAction.NO_ACTION};
+    // The user signs in to a supervised user account. This hides the privacy
+    // guide promo.
+    let syncStatus: SyncStatus = {
+      supervisedUser: true,
+      statusAction: StatusAction.NO_ACTION,
+    };
     webUIListenerCallback('sync-status-changed', syncStatus);
     flush();
     assertFalse(isChildVisible(page, '#privacyGuidePromo'));
 
-    // The user is no longer signed in to a child user account. This doesn't
-    // show the promo.
-    syncStatus = {childUser: false, statusAction: StatusAction.NO_ACTION};
+    // The user is no longer signed in to a supervised user account. This
+    // doesn't show the promo.
+    syncStatus = {supervisedUser: false, statusAction: StatusAction.NO_ACTION};
     webUIListenerCallback('sync-status-changed', syncStatus);
     flush();
     assertFalse(isChildVisible(page, '#privacyGuidePromo'));
@@ -397,10 +427,240 @@ suite('PrivacyGuidePromo', () => {
         page.shadowRoot!.querySelector<HTMLElement>('#privacyGuidePromo')!;
     privacyGuidePromo.shadowRoot!.querySelector<HTMLElement>(
                                      '#startButton')!.click();
-    flush();
+    await flushTasks();
 
     const result = await testMetricsBrowserProxy.whenCalled(
         'recordPrivacyGuideEntryExitHistogram');
     assertEquals(result, PrivacyGuideInteractions.PROMO_ENTRY);
+  });
+});
+
+suite('Performance', () => {
+  let page: SettingsBasicPageElement;
+  let performanceBrowserProxy: TestPerformanceBrowserProxy;
+
+  function queryPerformanceSettingsSection(): SettingsSectionElement|null {
+    return page.shadowRoot!.querySelector('#performanceSettingsSection');
+  }
+
+  function queryBatterySettingsSection(): SettingsSectionElement|null {
+    return page.shadowRoot!.querySelector('#batterySettingsSection');
+  }
+
+  function querySpeedSettingsSection(): SettingsSectionElement|null {
+    return page.shadowRoot!.querySelector('#speedSettingsSection');
+  }
+
+  // The following features may be overridden in tests. Reset them to the
+  // original values on teardown.
+  // TODO(crbug.com/1486635): Remove once preloading subpage in performance
+  // settings is launched
+  const defaultFeatureValues = {
+    isPerformanceSettingsPreloadingSubpageEnabled: loadTimeData.getBoolean(
+        'isPerformanceSettingsPreloadingSubpageEnabled'),
+    isPerformanceSettingsPreloadingSubpageV2Enabled: loadTimeData.getBoolean(
+        'isPerformanceSettingsPreloadingSubpageV2Enabled'),
+  };
+
+  teardown(function() {
+    loadTimeData.overrideValues(defaultFeatureValues);
+  });
+
+  async function createNewBasicPage() {
+    performanceBrowserProxy = new TestPerformanceBrowserProxy();
+    PerformanceBrowserProxyImpl.setInstance(performanceBrowserProxy);
+
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    page = document.createElement('settings-basic-page');
+    document.body.appendChild(page);
+    flush();
+    await page.shadowRoot!
+        .querySelector<SettingsIdleLoadElement>('#advancedPageTemplate')!.get();
+    const sections = page.shadowRoot!.querySelectorAll('settings-section');
+    assertTrue(sections.length > 1);
+  }
+
+  test('performanceVisibilityTestFeaturesAvailable', async function() {
+    await createNewBasicPage();
+    // Set the visibility of the pages under test to their default value.
+    page.pageVisibility = pageVisibility;
+    flush();
+
+    assertTrue(
+        !!queryBatterySettingsSection(),
+        'Battery section should exist with default page visibility');
+    assertTrue(
+        !!querySpeedSettingsSection(),
+        'Speed section should exist with default page visibility');
+    assertTrue(
+        !!queryPerformanceSettingsSection(),
+        'Performance section should exist with default page visibility');
+
+    // Set the visibility of the pages under test to "false".
+    page.pageVisibility = Object.assign(pageVisibility || {}, {
+      performance: false,
+    });
+    flush();
+
+    assertFalse(
+        !!queryBatterySettingsSection(),
+        'Battery section should not exist when visibility is false');
+    assertFalse(
+        !!querySpeedSettingsSection(),
+        'Speed section should not exist when visibility is false');
+    assertFalse(
+        !!queryPerformanceSettingsSection(),
+        'Performance section should not exist when visibility is false');
+  });
+
+  // TODO(crbug.com/1486635): Remove once preloading subpage in performance
+  // settings is launched
+  test('performanceVisibilityTestSpeedSectionNotEnabled', async function() {
+    loadTimeData.overrideValues({
+      isPerformanceSettingsPreloadingSubpageEnabled: false,
+    });
+    await createNewBasicPage();
+    // Set the visibility of the pages under test to their default value.
+    page.pageVisibility = pageVisibility;
+    flush();
+
+    assertFalse(
+        !!querySpeedSettingsSection(),
+        'Speed section should not be visible when feature flag is off');
+  });
+
+  // TODO(crbug.com/1486635): Remove once preloading subpage in performance
+  // settings is launched
+  test('performanceSpeedSectionV2', async function() {
+    await createNewBasicPage();
+    page.pageVisibility = pageVisibility;
+    flush();
+
+    const speedSection = querySpeedSettingsSection();
+    assertTrue(!!speedSection);
+    assertFalse(!!speedSection.querySelector('settings-preloading-page'));
+    assertTrue(!!speedSection.querySelector('settings-speed-page'));
+  });
+
+  // TODO(crbug.com/1486635): Remove once preloading subpage in performance
+  // settings is launched
+  test('performanceSpeedSectionV2NotEnabled', async function() {
+    loadTimeData.overrideValues({
+      isPerformanceSettingsPreloadingSubpageV2Enabled: false,
+    });
+    await createNewBasicPage();
+    page.pageVisibility = pageVisibility;
+    flush();
+
+    const speedSection = querySpeedSettingsSection();
+    assertTrue(!!speedSection);
+    assertTrue(!!speedSection.querySelector('settings-preloading-page'));
+    assertFalse(!!speedSection.querySelector('settings-speed-page'));
+  });
+
+  test('performanceVisibilityTestDeviceHasBattery', async function() {
+    await createNewBasicPage();
+    page.pageVisibility = pageVisibility;
+    flush();
+
+    await performanceBrowserProxy.whenCalled('getDeviceHasBattery');
+    const batterySettingsSection = queryBatterySettingsSection();
+    assertTrue(!!batterySettingsSection);
+    assertTrue(
+        batterySettingsSection.hidden,
+        'Battery section should be hidden at by default');
+
+    // Simulate OnDeviceHasBatteryChanged from backend
+    webUIListenerCallback('device-has-battery-changed', true);
+    assertFalse(
+        batterySettingsSection.hidden,
+        'Battery section should be visible after being notified that the ' +
+            'device has a battery');
+  });
+});
+
+// TODO(crbug/1469277): Remove after SafetyHub launched.
+suite('SafetyHubDisabled', () => {
+  let page: SettingsBasicPageElement;
+
+  setup(async function() {
+    loadTimeData.overrideValues({enableSafetyHub: false});
+
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    page = document.createElement('settings-basic-page');
+    document.body.appendChild(page);
+    flush();
+    await page.shadowRoot!
+        .querySelector<SettingsIdleLoadElement>('#advancedPageTemplate')!.get();
+    const sections = page.shadowRoot!.querySelectorAll('settings-section');
+    assertTrue(sections.length > 1);
+  });
+
+  test('load page', function() {
+    // This will fail if there are any asserts or errors in the Settings page.
+  });
+
+
+  test('safety check visible', function() {
+    function querySafetyCheckSection() {
+      return page.shadowRoot!.querySelector('#safetyCheckSettingsSection');
+    }
+
+    // Set the visibility of the pages under test to their default value.
+    page.pageVisibility = pageVisibility;
+    flush();
+
+    assertTrue(
+        !!querySafetyCheckSection(),
+        'Safety check section should be visible with default page visibility');
+
+    // Set the visibility of the pages under test to "false".
+    page.pageVisibility = Object.assign(pageVisibility || {}, {
+      safetyCheck: false,
+    });
+    flush();
+
+    assertFalse(!!querySafetyCheckSection());
+  });
+
+  test('safety hub not visible', function() {
+    function querySafetyHubSection() {
+      return page.shadowRoot!.querySelector('#safetyHubEntryPointSection');
+    }
+
+    // Set the visibility of the pages under test to their default value.
+    page.pageVisibility = pageVisibility;
+    flush();
+
+    assertFalse(
+        !!querySafetyHubSection(),
+        'Safety Hub section should not be visible with default visibility');
+  });
+});
+
+suite('ExperimentalAdvanced', () => {
+  let page: SettingsBasicPageElement;
+
+  function createBasicPage() {
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    page = document.createElement('settings-basic-page');
+    document.body.appendChild(page);
+    flush();
+  }
+
+  test('sectionNotVisible', function() {
+    loadTimeData.overrideValues({showAdvancedFeaturesMainControl: false});
+    createBasicPage();
+    const sectionElement =
+        page.shadowRoot!.querySelector('settings-section[section=ai]');
+    assertFalse(!!sectionElement);
+  });
+
+  test('sectionVisible', function() {
+    loadTimeData.overrideValues({showAdvancedFeaturesMainControl: true});
+    createBasicPage();
+    const sectionElement =
+        page.shadowRoot!.querySelector('settings-section[section=ai]');
+    assertTrue(!!sectionElement);
   });
 });

@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/notifications/pwa_notifier_controller.h"
 
 #include "ash/public/cpp/notifier_metadata.h"
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/notifications/notifier_dataset.h"
@@ -14,7 +14,7 @@
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/app_update.h"
 #include "components/services/app_service/public/cpp/permission.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/message_center/public/cpp/message_center_constants.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
 
@@ -31,13 +31,16 @@ std::vector<ash::NotifierMetadata> PwaNotifierController::GetNotifierList(
   if (observed_profile_ && !observed_profile_->IsSameOrParent(profile))
     weak_ptr_factory_.InvalidateWeakPtrs();
   observed_profile_ = profile;
-  apps::AppServiceProxy* service =
-      apps::AppServiceProxyFactory::GetForProfile(profile);
-  Observe(&service->AppRegistryCache());
+  auto* cache =
+      &apps::AppServiceProxyFactory::GetForProfile(profile)->AppRegistryCache();
+  if (!app_registry_cache_observer_.IsObservingSource(cache)) {
+    app_registry_cache_observer_.Reset();
+    app_registry_cache_observer_.Observe(cache);
+  }
   package_to_app_ids_.clear();
 
   std::vector<NotifierDataset> notifier_dataset;
-  service->AppRegistryCache().ForEachApp(
+  cache->ForEachApp(
       [&notifier_dataset](const apps::AppUpdate& update) {
         if (update.AppType() != apps::AppType::kWeb)
           return;
@@ -47,13 +50,13 @@ std::vector<ash::NotifierMetadata> PwaNotifierController::GetNotifierList(
               apps::PermissionType::kNotifications) {
             continue;
           }
-          DCHECK(permission->value->tristate_value.has_value());
+          DCHECK(absl::holds_alternative<apps::TriState>(permission->value));
           // Do not include notifier metadata for system apps.
           if (update.InstallReason() == apps::InstallReason::kSystem) {
             return;
           }
           notifier_dataset.push_back(NotifierDataset{
-              update.AppId() /*app_id*/, update.ShortName() /*app_name*/,
+              update.AppId() /*app_id*/, update.Name() /*app_name*/,
               update.PublisherId() /*publisher_id*/,
               permission->IsPermissionEnabled()});
         }
@@ -75,7 +78,7 @@ std::vector<ash::NotifierMetadata> PwaNotifierController::GetNotifierList(
         std::make_pair(app_data.publisher_id, app_data.app_id));
   }
   if (!package_to_app_ids_.empty()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&PwaNotifierController::CallLoadIcons,
                                   weak_ptr_factory_.GetWeakPtr()));
   }
@@ -90,11 +93,11 @@ void PwaNotifierController::SetNotifierEnabled(
       apps::AppServiceProxyFactory::IsAppServiceAvailableForProfile(profile));
   // We should not set permissions for a profile we are not currently observing.
   DCHECK(observed_profile_->IsSameOrParent(profile));
-  auto permission = apps::mojom::Permission::New();
-  permission->permission_type = apps::mojom::PermissionType::kNotifications;
-  permission->value = apps::mojom::PermissionValue::NewTristateValue(
-      enabled ? apps::mojom::TriState::kAllow : apps::mojom::TriState::kBlock);
-  permission->is_managed = false;
+
+  auto permission = std::make_unique<apps::Permission>(
+      apps::PermissionType::kNotifications,
+      enabled ? apps::TriState::kAllow : apps::TriState::kBlock,
+      /*is_managed=*/false);
   apps::AppServiceProxy* service =
       apps::AppServiceProxyFactory::GetForProfile(profile);
   service->SetPermission(notifier_id.id, std::move(permission));
@@ -158,5 +161,5 @@ void PwaNotifierController::OnAppUpdate(const apps::AppUpdate& update) {
 
 void PwaNotifierController::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
-  Observe(nullptr);
+  app_registry_cache_observer_.Reset();
 }

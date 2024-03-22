@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/memory/enterprise_memory_limit_pref_observer.h"
-#include "chrome/browser/memory/memory_ablation_study.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "base/logging.h"
@@ -41,8 +40,6 @@ void ChromeBrowserMainExtraPartsMemory::PostBrowserStart() {
     }
 #endif
   }
-
-  memory_ablation_study_ = std::make_unique<memory::MemoryAblationStudy>();
 }
 
 void ChromeBrowserMainExtraPartsMemory::PostMainMessageLoopRun() {

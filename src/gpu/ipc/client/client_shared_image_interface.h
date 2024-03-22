@@ -1,17 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_IPC_CLIENT_CLIENT_SHARED_IMAGE_INTERFACE_H_
 #define GPU_IPC_CLIENT_CLIENT_SHARED_IMAGE_INTERFACE_H_
 
-#include "base/memory/raw_ptr.h"
-#include "gpu/command_buffer/client/shared_image_interface.h"
+#include <set>
 
-#include "base/containers/flat_set.h"
+#include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "build/build_config.h"
+#include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/ipc/common/surface_handle.h"
 
 namespace gpu {
@@ -33,12 +34,11 @@ class GPU_EXPORT ClientSharedImageInterface : public SharedImageInterface {
   void PresentSwapChain(const SyncToken& sync_token,
                         const Mailbox& mailbox) override;
 #if BUILDFLAG(IS_FUCHSIA)
-  void RegisterSysmemBufferCollection(gfx::SysmemBufferCollectionId id,
-                                      zx::channel token,
+  void RegisterSysmemBufferCollection(zx::eventpair service_handle,
+                                      zx::channel sysmem_token,
                                       gfx::BufferFormat format,
                                       gfx::BufferUsage usage,
                                       bool register_with_image_pipe) override;
-  void ReleaseSysmemBufferCollection(gfx::SysmemBufferCollectionId id) override;
 #endif  // BUILDFLAG(IS_FUCHSIA)
   SyncToken GenUnverifiedSyncToken() override;
   SyncToken GenVerifiedSyncToken() override;
@@ -46,36 +46,74 @@ class GPU_EXPORT ClientSharedImageInterface : public SharedImageInterface {
   void Flush() override;
   scoped_refptr<gfx::NativePixmap> GetNativePixmap(
       const Mailbox& mailbox) override;
-  Mailbox CreateSharedImage(viz::ResourceFormat format,
-                            const gfx::Size& size,
-                            const gfx::ColorSpace& color_space,
-                            GrSurfaceOrigin surface_origin,
-                            SkAlphaType alpha_type,
-                            uint32_t usage,
-                            gpu::SurfaceHandle surface_handle) override;
-  Mailbox CreateSharedImage(viz::ResourceFormat format,
-                            const gfx::Size& size,
-                            const gfx::ColorSpace& color_space,
-                            GrSurfaceOrigin surface_origin,
-                            SkAlphaType alpha_type,
-                            uint32_t usage,
-                            base::span<const uint8_t> pixel_data) override;
-  Mailbox CreateSharedImage(gfx::GpuMemoryBuffer* gpu_memory_buffer,
-                            GpuMemoryBufferManager* gpu_memory_buffer_manager,
-                            gfx::BufferPlane plane,
-                            const gfx::ColorSpace& color_space,
-                            GrSurfaceOrigin surface_origin,
-                            SkAlphaType alpha_type,
-                            uint32_t usage) override;
-#if BUILDFLAG(IS_WIN)
-  std::vector<Mailbox> CreateSharedImageVideoPlanes(
+  scoped_refptr<ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gpu::SurfaceHandle surface_handle) override;
+  scoped_refptr<ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      base::span<const uint8_t> pixel_data) override;
+  scoped_refptr<ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gpu::SurfaceHandle surface_handle,
+      gfx::BufferUsage buffer_usage) override;
+  scoped_refptr<ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gpu::SurfaceHandle surface_handle,
+      gfx::BufferUsage buffer_usage,
+      gfx::GpuMemoryBufferHandle buffer_handle) override;
+  scoped_refptr<ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gfx::GpuMemoryBufferHandle buffer_handle) override;
+  // NOTE: The below method is DEPRECATED for `gpu_memory_buffer` only with
+  // single planar eg. RGB BufferFormats. Please use the equivalent method above
+  // taking in single planar SharedImageFormat with GpuMemoryBufferHandle.
+  scoped_refptr<ClientSharedImage> CreateSharedImage(
       gfx::GpuMemoryBuffer* gpu_memory_buffer,
       GpuMemoryBufferManager* gpu_memory_buffer_manager,
-      uint32_t usage) override;
+      gfx::BufferPlane plane,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label) override;
+#if BUILDFLAG(IS_WIN)
   void CopyToGpuMemoryBuffer(const SyncToken& sync_token,
                              const Mailbox& mailbox) override;
+  void UpdateSharedImage(const SyncToken& sync_token,
+                         scoped_refptr<gfx::D3DSharedFence> d3d_shared_fence,
+                         const Mailbox& mailbox) override;
 #endif
-  SwapChainMailboxes CreateSwapChain(viz::ResourceFormat format,
+  SwapChainMailboxes CreateSwapChain(viz::SharedImageFormat format,
                                      const gfx::Size& size,
                                      const gfx::ColorSpace& color_space,
                                      GrSurfaceOrigin surface_origin,
@@ -83,8 +121,17 @@ class GPU_EXPORT ClientSharedImageInterface : public SharedImageInterface {
                                      uint32_t usage) override;
   void DestroySharedImage(const SyncToken& sync_token,
                           const Mailbox& mailbox) override;
+  void DestroySharedImage(
+      const SyncToken& sync_token,
+      scoped_refptr<ClientSharedImage> client_shared_image) override;
   uint32_t UsageForMailbox(const Mailbox& mailbox) override;
   void NotifyMailboxAdded(const Mailbox& mailbox, uint32_t usage) override;
+
+  void AddReferenceToSharedImage(const SyncToken& sync_token,
+                                 const Mailbox& mailbox,
+                                 uint32_t usage) override;
+
+  const SharedImageCapabilities& GetCapabilities() override;
 
  private:
   Mailbox AddMailbox(const Mailbox& mailbox);
@@ -92,7 +139,7 @@ class GPU_EXPORT ClientSharedImageInterface : public SharedImageInterface {
   const raw_ptr<SharedImageInterfaceProxy> proxy_;
 
   base::Lock lock_;
-  base::flat_set<Mailbox> mailboxes_ GUARDED_BY(lock_);
+  std::multiset<Mailbox> mailboxes_ GUARDED_BY(lock_);
 };
 
 }  // namespace gpu

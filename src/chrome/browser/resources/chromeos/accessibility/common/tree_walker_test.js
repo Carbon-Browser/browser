@@ -1,18 +1,18 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Include test fixture.
 GEN_INCLUDE([
-  '../select_to_speak/select_to_speak_e2e_test_base.js',
-  '../chromevox/testing/snippets.js',
+  'testing/common_e2e_test_base.js',
+  'testing/snippets.js',
 ]);
 
 /**
  * Test fixture for tree_walker.js.
  */
 AccessibilityExtensionAutomationTreeWalkerTest =
-    class extends SelectToSpeakE2ETest {
+    class extends CommonE2ETestBase {
   /** @override */
   testGenCppIncludes() {
     super.testGenCppIncludes.call();
@@ -53,6 +53,13 @@ AccessibilityExtensionAutomationTreeWalkerTest =
 
   isDescendant(descendant, node) {
     return this.isAncestor(node, descendant);
+  }
+
+  async setUpDeferred() {
+    await super.setUpDeferred();
+    await importModule(
+        ['AutomationTreeWalker', 'AutomationTreeWalkerPhase'],
+        '/common/tree_walker.js');
   }
 };
 

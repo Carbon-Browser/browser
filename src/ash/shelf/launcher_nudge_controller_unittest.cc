@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/command_line.h"
 #include "base/json/values_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "ui/compositor/layer.h"
@@ -84,7 +85,7 @@ class TestNudgeAnimationObserver : public HomeButton::NudgeAnimationObserver {
  private:
   base::RunLoop animation_run_loop_;
   base::RunLoop label_run_loop_;
-  HomeButton* const home_button_;
+  const raw_ptr<HomeButton, ExperimentalAsh> home_button_;
 
   // Counts the number of started/ended animations.
   int started_animation_count_ = 0;
@@ -94,10 +95,7 @@ class TestNudgeAnimationObserver : public HomeButton::NudgeAnimationObserver {
 class LauncherNudgeControllerTest : public AshTestBase {
  public:
   LauncherNudgeControllerTest()
-      : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
-    scoped_feature_list_.InitWithFeatures(
-        {features::kShelfLauncherNudge, features::kProductivityLauncher}, {});
-  }
+      : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
   LauncherNudgeControllerTest(const LauncherNudgeControllerTest&) = delete;
   LauncherNudgeControllerTest& operator=(const LauncherNudgeControllerTest&) =
       delete;
@@ -144,13 +142,12 @@ class LauncherNudgeControllerTest : public AshTestBase {
     test_api_->RunMessageLoopUntilAnimationsDone();
   }
 
-  LauncherNudgeController* nudge_controller_;
+  raw_ptr<LauncherNudgeController, DanglingUntriaged | ExperimentalAsh>
+      nudge_controller_;
   std::unique_ptr<TestNudgeAnimationObserver> observer_;
-  ScrollableShelfView* scrollable_shelf_view_ = nullptr;
+  raw_ptr<ScrollableShelfView, DanglingUntriaged | ExperimentalAsh>
+      scrollable_shelf_view_ = nullptr;
   std::unique_ptr<ShelfViewTestAPI> test_api_;
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(LauncherNudgeControllerTest, DisableNudgeForGuestSession) {
@@ -223,14 +220,10 @@ TEST_F(LauncherNudgeControllerTest, StopShowingNudgeAfterLauncherIsOpened) {
   AdvanceClock(nudge_controller_->GetNudgeInterval(/*is_first_time=*/true));
   EXPECT_EQ(1, GetNudgeShownCount());
 
-  // Toggle the app list to show. Open fullscreen to avoid showing the expand
-  // arrow button, because the animation for that button causes an MSAN
-  // use-of-uninitialized-value. This workaround can be removed when
-  // ProductivityLauncher is the default, since it does not have an expand
-  // button. See https://crbug.com/926038.
+  // Toggle the app list to show.
   Shell::Get()->app_list_controller()->ToggleAppList(
       display::Screen::GetScreen()->GetPrimaryDisplay().id(),
-      AppListShowSource::kShelfButtonFullscreen, base::TimeTicks());
+      AppListShowSource::kShelfButton, base::TimeTicks());
   ASSERT_TRUE(Shell::Get()->app_list_controller()->IsVisible());
   AdvanceClock(nudge_controller_->GetNudgeInterval(/*is_first_time=*/false));
 
@@ -370,7 +363,7 @@ TEST_F(LauncherNudgeControllerTest, NudgeLabelVisibilityTest) {
 
   // Wait until the label to be shown and check if the label is visible.
   waiter.WaitUntilLabelShown();
-  views::View* label_container = home_button->label_container_for_test();
+  views::View* label_container = home_button->expandable_container_for_test();
   EXPECT_TRUE(label_container && label_container->GetVisible());
   EXPECT_EQ(label_container->layer()->opacity(), 1);
 
@@ -400,7 +393,7 @@ TEST_F(LauncherNudgeControllerTest, NudgeLabelVisibilityTest) {
   waiter2.WaitUntilAnimationEnded();
 
   // The label is removed after it is clicked.
-  EXPECT_FALSE(home_button->label_container_for_test());
+  EXPECT_FALSE(home_button->expandable_container_for_test());
 }
 
 TEST_F(LauncherNudgeControllerTest, AnimationUsedDependsOnAvailableSpace) {

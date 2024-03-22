@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@
 
 namespace favicon {
 
-class LargeFaviconProvider;
+class FaviconService;
 
 // Processes the png data returned from the FaviconService as part of a
 // LargeIconService request (resizing and decoding from PNG format).
@@ -40,7 +40,7 @@ class LargeIconWorker : public base::RefCountedThreadSafe<LargeIconWorker> {
       const favicon_base::FaviconRawBitmapResult& db_result);
 
   static base::CancelableTaskTracker::TaskId GetLargeIconRawBitmap(
-      LargeFaviconProvider* provider,
+      FaviconService* favicon_service,
       const GURL& page_url,
       int min_source_size_in_pixel,
       int desired_size_in_pixel,
@@ -62,7 +62,7 @@ class LargeIconWorker : public base::RefCountedThreadSafe<LargeIconWorker> {
   favicon_base::LargeIconCallback raw_bitmap_callback_;
   favicon_base::LargeIconImageCallback image_callback_;
   scoped_refptr<base::TaskRunner> background_task_runner_;
-  raw_ptr<base::CancelableTaskTracker> tracker_;
+  raw_ptr<base::CancelableTaskTracker, DanglingUntriaged> tracker_;
 
   favicon_base::FaviconRawBitmapResult raw_bitmap_result_;
   SkBitmap bitmap_result_;

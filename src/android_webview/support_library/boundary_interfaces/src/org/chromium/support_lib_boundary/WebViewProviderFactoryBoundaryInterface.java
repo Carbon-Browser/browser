@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,20 @@ import java.lang.reflect.InvocationHandler;
  */
 public interface WebViewProviderFactoryBoundaryInterface {
     /* SupportLibraryWebViewChromium */ InvocationHandler createWebView(WebView webview);
+
     /* SupportLibWebkitToCompatConverter */ InvocationHandler getWebkitToCompatConverter();
+
     /* StaticsAdapter */ InvocationHandler getStatics();
+
     String[] getSupportedFeatures();
+
     /* SupportLibraryServiceWorkerController */ InvocationHandler getServiceWorkerController();
+
     /* SupportLibraryTracingController */ InvocationHandler getTracingController();
+
     /* SupportLibraryProxyController */ InvocationHandler getProxyController();
-    void setSupportLibraryVersion(String version);
+
+    /* DropDataContentProviderBoundaryInterface*/ InvocationHandler getDropDataProvider();
+
+    /* ProfileStoreBoundaryInterface */ InvocationHandler getProfileStore();
 }

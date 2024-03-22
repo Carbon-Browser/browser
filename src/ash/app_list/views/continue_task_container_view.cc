@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,9 @@
 #include "ash/public/cpp/app_list/app_list_notifier.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "base/check.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "extensions/common/constants.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -44,17 +46,6 @@ constexpr int kColumnSpacingTablet = 16;
 constexpr int kRowSpacing = 8;
 constexpr size_t kMaxFilesForContinueSection = 4;
 
-struct CompareByDisplayIndexAndPositionPriority {
-  bool operator()(const SearchResult* result1,
-                  const SearchResult* result2) const {
-    SearchResultDisplayIndex index1 = result1->display_index();
-    SearchResultDisplayIndex index2 = result2->display_index();
-    if (index1 != index2)
-      return index1 < index2;
-    return result1->position_priority() > result2->position_priority();
-  }
-};
-
 std::vector<SearchResult*> GetTasksResultsForContinueSection(
     SearchModel::SearchResults* results) {
   auto continue_filter = [](const SearchResult& r) -> bool {
@@ -64,9 +55,6 @@ std::vector<SearchResult*> GetTasksResultsForContinueSection(
   continue_results = SearchModel::FilterSearchResultsByFunction(
       results, base::BindRepeating(continue_filter),
       /*max_results=*/4);
-
-  std::sort(continue_results.begin(), continue_results.end(),
-            CompareByDisplayIndexAndPositionPriority());
 
   return continue_results;
 }
@@ -81,7 +69,8 @@ void ScheduleFadeOutAnimation(views::View* view,
   scale.Scale(0.75f, 0.75f);
   sequence->SetTransform(
       view->layer(),
-      gfx::TransformAboutPivot(view->GetLocalBounds().CenterPoint(), scale),
+      gfx::TransformAboutPivot(gfx::RectF(view->GetLocalBounds()).CenterPoint(),
+                               scale),
       gfx::Tween::FAST_OUT_LINEAR_IN);
   sequence->SetOpacity(view->layer(), 0.0f, gfx::Tween::FAST_OUT_LINEAR_IN);
 }
@@ -278,12 +267,16 @@ void ContinueTaskContainerView::Update() {
   num_results_ = std::min(kMaxFilesForContinueSection, tasks.size());
 
   num_file_results_ = 0;
+  num_desks_admin_template_results_ = 0;
   for (size_t i = 0; i < num_results_; ++i) {
     if (tasks[i]->result_type() == AppListSearchResultType::kZeroStateFile ||
-        tasks[i]->result_type() == AppListSearchResultType::kFileChip ||
-        tasks[i]->result_type() == AppListSearchResultType::kZeroStateDrive ||
-        tasks[i]->result_type() == AppListSearchResultType::kDriveChip) {
+        tasks[i]->result_type() == AppListSearchResultType::kZeroStateDrive) {
       ++num_file_results_;
+    }
+
+    if (tasks[i]->result_type() ==
+        AppListSearchResultType::kDesksAdminTemplate) {
+      ++num_desks_admin_template_results_;
     }
   }
 
@@ -332,8 +325,7 @@ ContinueTaskContainerView::GetRemovalAnimationForTaskView(
     return TaskViewRemovalAnimation::kFadeOut;
 
   const std::string& task_id = task_view->result()->id();
-  auto new_ids_it =
-      std::find(new_task_ids.begin(), new_task_ids.end(), task_id);
+  auto new_ids_it = base::ranges::find(new_task_ids, task_id);
 
   // If the associated result was removed from the task list, animate it out.
   if (new_ids_it == new_task_ids.end())
@@ -497,7 +489,7 @@ void ContinueTaskContainerView::ScheduleUpdate() {
   // When search results are added one by one, each addition generates an update
   // request. Consolidates those update requests into one Update call.
   if (!update_factory_.HasWeakPtrs()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&ContinueTaskContainerView::Update,
                                   update_factory_.GetWeakPtr()));
   }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,19 @@ public class ChromeBulletSpan extends BulletSpan {
     }
 
     @Override
-    public void drawLeadingMargin(Canvas c, Paint p, int x, int dir, int top, int baseline,
-            int bottom, CharSequence text, int start, int end, boolean first, Layout l) {
+    public void drawLeadingMargin(
+            Canvas c,
+            Paint p,
+            int x,
+            int dir,
+            int top,
+            int baseline,
+            int bottom,
+            CharSequence text,
+            int start,
+            int end,
+            boolean first,
+            Layout l) {
         // Android cuts off the bullet points. Adjust the x-position so that the bullets aren't
         // cut off.
         super.drawLeadingMargin(

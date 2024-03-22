@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <stddef.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 
@@ -15,11 +16,10 @@
 #include <windows.h>
 #endif
 
-namespace base {
-namespace mac {
-class ScopedNSAutoreleasePool;
-}
-}
+#if BUILDFLAG(IS_MAC)
+#include "base/apple/scoped_nsautorelease_pool.h"
+#include "base/memory/stack_allocated.h"
+#endif
 
 namespace sandbox {
 struct SandboxInterfaceInfo;
@@ -41,17 +41,19 @@ struct CONTENT_EXPORT ContentMainParams {
   ContentMainParams(ContentMainParams&&);
   ContentMainParams& operator=(ContentMainParams&&);
 
-  ContentMainDelegate* delegate;
+  raw_ptr<ContentMainDelegate> delegate;
 
 #if BUILDFLAG(IS_WIN)
   HINSTANCE instance = nullptr;
 
   // |sandbox_info| should be initialized using InitializeSandboxInfo from
   // content_main_win.h
-  sandbox::SandboxInterfaceInfo* sandbox_info = nullptr;
+  raw_ptr<sandbox::SandboxInterfaceInfo> sandbox_info = nullptr;
 #elif !BUILDFLAG(IS_ANDROID)
   int argc = 0;
-  const char** argv = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #union
+  RAW_PTR_EXCLUSION const char** argv = nullptr;
 #endif
 
   // Used by BrowserTestBase. If set, BrowserMainLoop runs this task instead of
@@ -68,7 +70,8 @@ struct CONTENT_EXPORT ContentMainParams {
 
 #if BUILDFLAG(IS_MAC)
   // The outermost autorelease pool to pass to main entry points.
-  base::mac::ScopedNSAutoreleasePool* autorelease_pool = nullptr;
+  STACK_ALLOCATED_IGNORE("https://crbug.com/1424190")
+  base::apple::ScopedNSAutoreleasePool* autorelease_pool = nullptr;
 #endif
 
   // Returns a copy of this ContentMainParams without the move-only data
@@ -103,14 +106,6 @@ CONTENT_EXPORT int RunContentProcess(ContentMainParams params,
 // This should only be called once before ContentMainRunner actually running.
 // The ownership of |delegate| is transferred.
 CONTENT_EXPORT void SetContentMainDelegate(ContentMainDelegate* delegate);
-
-#if defined(CONTENT_IMPLEMENTATION)
-// In browser tests, ContentMain.java is not run either, and the browser test
-// harness does not run ContentMain() at all. It does need to make use of the
-// delegate though while replacing ContentMain().
-ContentMainDelegate* GetContentMainDelegate();
-#endif
-
 #else
 // ContentMain should be called from the embedder's main() function to do the
 // initial setup for every process. The embedder has a chance to customize

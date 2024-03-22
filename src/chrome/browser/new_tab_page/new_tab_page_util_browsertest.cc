@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,10 @@ class NewTabPageUtilBrowserTest : public InProcessBrowserTest {
 class NewTabPageUtilEnableFlagBrowserTest : public NewTabPageUtilBrowserTest {
  public:
   NewTabPageUtilEnableFlagBrowserTest() {
-    features_.InitWithFeatures({ntp_features::kNtpRecipeTasksModule,
-                                ntp_features::kNtpChromeCartModule},
-                               {});
+    features_.InitWithFeatures(
+        {ntp_features::kNtpRecipeTasksModule,
+         ntp_features::kNtpChromeCartModule, ntp_features::kNtpDriveModule},
+        {});
   }
 };
 
@@ -30,7 +31,8 @@ class NewTabPageUtilDisableFlagBrowserTest : public NewTabPageUtilBrowserTest {
  public:
   NewTabPageUtilDisableFlagBrowserTest() {
     features_.InitWithFeatures({}, {ntp_features::kNtpRecipeTasksModule,
-                                    ntp_features::kNtpChromeCartModule});
+                                    ntp_features::kNtpChromeCartModule,
+                                    ntp_features::kNtpDriveModule});
   }
 };
 
@@ -87,4 +89,21 @@ IN_PROC_BROWSER_TEST_F(NewTabPageUtilDisableFlagBrowserTest,
   auto locale = std::make_unique<ScopedBrowserLocale>("en-US");
   g_browser_process->variations_service()->OverrideStoredPermanentCountry("us");
   EXPECT_FALSE(IsCartModuleEnabled());
+}
+
+IN_PROC_BROWSER_TEST_F(NewTabPageUtilBrowserTest, EnableDriveByToT) {
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  EXPECT_TRUE(IsDriveModuleEnabled());
+#else
+  EXPECT_FALSE(IsDriveModuleEnabled());
+#endif
+}
+
+IN_PROC_BROWSER_TEST_F(NewTabPageUtilEnableFlagBrowserTest, EnableDriveByFlag) {
+  EXPECT_TRUE(IsDriveModuleEnabled());
+}
+
+IN_PROC_BROWSER_TEST_F(NewTabPageUtilDisableFlagBrowserTest,
+                       DisableDriveByFlag) {
+  EXPECT_FALSE(IsDriveModuleEnabled());
 }

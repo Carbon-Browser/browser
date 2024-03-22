@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -227,6 +227,9 @@ void CaptivePortalBlockingPage::CommandReceived(const std::string& command) {
       break;
     case security_interstitials::CMD_OPEN_WHITEPAPER:
       controller()->OpenExtendedReportingWhitepaper(true);
+      break;
+    case security_interstitials::CMD_OPEN_ENHANCED_PROTECTION_SETTINGS:
+      controller()->OpenEnhancedProtectionSettings();
       break;
     case security_interstitials::CMD_ERROR:
     case security_interstitials::CMD_TEXT_FOUND:

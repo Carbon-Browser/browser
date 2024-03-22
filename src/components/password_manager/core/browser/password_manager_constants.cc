@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,5 @@ const char kPasswordManagerHelpCenterSmartLock[] =
 const char kManageMyPasswordsURL[] = "https://passwords.google.com/app";
 
 const char kReferrerURL[] = "https://passwords.google/";
-
-const char kTestingReferrerURL[] =
-    "https://xl-password-manager-staging.uc.r.appspot.com/";
 
 }  // namespace password_manager

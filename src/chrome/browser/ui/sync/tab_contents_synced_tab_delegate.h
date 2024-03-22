@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,22 +25,22 @@ class TaskTabHelper;
 // (either initially or late) a WebContents.
 class TabContentsSyncedTabDelegate : public sync_sessions::SyncedTabDelegate {
  public:
-  TabContentsSyncedTabDelegate();
+  TabContentsSyncedTabDelegate() = default;
 
   TabContentsSyncedTabDelegate(const TabContentsSyncedTabDelegate&) = delete;
   TabContentsSyncedTabDelegate& operator=(const TabContentsSyncedTabDelegate&) =
       delete;
 
-  ~TabContentsSyncedTabDelegate() override;
+  ~TabContentsSyncedTabDelegate() override = default;
 
   // SyncedTabDelegate:
+  base::Time GetLastActiveTime() const override;
   bool IsBeingDestroyed() const override;
   std::string GetExtensionAppId() const override;
   bool IsInitialBlankNavigation() const override;
   int GetCurrentEntryIndex() const override;
   int GetEntryCount() const override;
   GURL GetVirtualURLAtIndex(int i) const override;
-  std::string GetPageLanguageAtIndex(int i) const override;
   void GetSerializedNavigationAtIndex(
       int i,
       sessions::SerializedNavigationEntry* serialized_entry) const override;
@@ -60,7 +60,7 @@ class TabContentsSyncedTabDelegate : public sync_sessions::SyncedTabDelegate {
  private:
   const tasks::TaskTabHelper* task_tab_helper() const;
 
-  raw_ptr<content::WebContents> web_contents_;
+  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_SYNC_TAB_CONTENTS_SYNCED_TAB_DELEGATE_H_

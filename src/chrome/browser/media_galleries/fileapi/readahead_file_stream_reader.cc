@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -102,7 +102,7 @@ void ReadaheadFileStreamReader::ReadFromSourceIfNeeded() {
   source_has_pending_read_ = true;
 
   scoped_refptr<net::IOBuffer> buf =
-      base::MakeRefCounted<net::IOBuffer>(kBufferSize);
+      base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
   int result = source_->Read(
       buf.get(), kBufferSize,
       base::BindOnce(&ReadaheadFileStreamReader::OnFinishReadFromSource,

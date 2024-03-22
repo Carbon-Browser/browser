@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ std::vector<ComponentInfo> ComponentsInfoHolder::GetComponents() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::vector<ComponentInfo> components_info;
   for (const auto& it : components_) {
-    components_info.emplace_back(it.first, "", std::u16string(), it.second);
+    components_info.emplace_back(it.first, "", std::u16string(), it.second, "");
   }
   return components_info;
 }

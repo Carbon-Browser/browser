@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,8 +42,8 @@ public class TabLayoutPageListener extends TabLayout.TabLayoutOnPageChangeListen
             if (mVisibleTab == i) {
                 mTabs.get(i).onResume();
             } else {
-                // Let the other tabs know that they are
-                // no longer in the foreground and pause them.
+                // Let the other tabs know that they are no longer in the foreground and pause
+                // them.
                 mTabs.get(i).onPause();
             }
         }

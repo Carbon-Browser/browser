@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@ FilePath WriteContentToTemporaryFile(const char* contents,
                                      unsigned int length) {
   FilePath tmp_file;
   CHECK(base::CreateTemporaryFile(&tmp_file));
-  unsigned int bytes_written = base::WriteFile(tmp_file, contents, length);
-  CHECK_EQ(bytes_written, length);
+  bool success = base::WriteFile(tmp_file, base::StringPiece(contents, length));
+  CHECK(success);
   return tmp_file;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 
 /**
  * Java implementations of SystemTimeChangeNotifierAndroid functionality.
@@ -40,7 +41,8 @@ public final class SystemTimeChangeNotifierAndroid {
             }
         };
         IntentFilter filter = new IntentFilter(Intent.ACTION_TIME_CHANGED);
-        ContextUtils.getApplicationContext().registerReceiver(mTimeChangeObserver, filter);
+        ContextUtils.registerProtectedBroadcastReceiver(
+                ContextUtils.getApplicationContext(), mTimeChangeObserver, filter);
     }
 
     @CalledByNative private void finalizeFromNative() {

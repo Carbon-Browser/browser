@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/values.h"
 #include "chrome/common/extensions/extension_test_util.h"
 #include "chrome/common/webui_url_constants.h"
 #include "components/crx_file/id_util.h"
@@ -34,7 +35,6 @@
 #include "extensions/common/switches.h"
 #include "extensions/common/url_pattern_set.h"
 #include "extensions/common/user_script.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -76,18 +76,17 @@ scoped_refptr<const Extension> GetExtensionWithHostPermission(
     const std::string& id,
     const std::string& host_permissions,
     ManifestLocation location) {
-  ListBuilder permissions;
+  base::Value::List permissions;
   if (!host_permissions.empty())
     permissions.Append(host_permissions);
 
   return ExtensionBuilder()
-      .SetManifest(DictionaryBuilder()
+      .SetManifest(base::Value::Dict()
                        .Set("name", id)
                        .Set("description", "an extension")
                        .Set("manifest_version", 2)
                        .Set("version", "1.0.0")
-                       .Set("permissions", permissions.Build())
-                       .Build())
+                       .Set("permissions", std::move(permissions)))
       .SetLocation(location)
       .SetID(id)
       .Build();
@@ -272,7 +271,7 @@ TEST(PermissionsDataTest, SocketPermissions) {
   extension = LoadManifestUnchecked("socket_permissions", "socket1.json",
                                     mojom::ManifestLocation::kInternal,
                                     Extension::NO_FLAGS, &error);
-  EXPECT_TRUE(extension.get() == NULL);
+  EXPECT_TRUE(extension.get() == nullptr);
   std::string expected_error_msg_header = ErrorUtils::FormatErrorMessage(
       manifest_errors::kInvalidPermissionWithDetail,
       "socket",
@@ -325,7 +324,8 @@ TEST(PermissionsDataTest, GetPermissionMessages_ManyAPIPermissions) {
   expected_messages.push_back("Read and change your data on api.flickr.com");
   expected_messages.push_back("Read and change your bookmarks");
   expected_messages.push_back("Detect your physical location");
-  expected_messages.push_back("Read and change your browsing history");
+  expected_messages.push_back(
+      "Read and change your browsing history on all your signed-in devices");
   expected_messages.push_back("Manage your apps, extensions, and themes");
   EXPECT_TRUE(VerifyPermissionMessages(extension->permissions_data(),
                                        expected_messages, false));
@@ -402,7 +402,7 @@ class ExtensionScriptAndCaptureVisibleTest : public testing::Test {
     urls_.insert(chrome_untrusted_url);
     urls_.insert(about_flags_url);
     // Ignore the policy delegate for this test.
-    PermissionsData::SetPolicyDelegate(NULL);
+    PermissionsData::SetPolicyDelegate(nullptr);
   }
 
   enum AccessType {
@@ -666,7 +666,7 @@ TEST_F(ExtensionScriptAndCaptureVisibleTest, PermissionsWithChromeURLsEnabled) {
   extension = LoadManifestUnchecked(
       "script_and_capture", "extension_wildcard_chrome.json",
       mojom::ManifestLocation::kInternal, Extension::NO_FLAGS, &error);
-  EXPECT_FALSE(extension.get() == NULL);
+  EXPECT_FALSE(extension.get() == nullptr);
   EXPECT_EQ(DISALLOWED, GetExtensionAccess(extension.get(), http_url));
   EXPECT_EQ(DISALLOWED, GetExtensionAccess(extension.get(), https_url));
   EXPECT_EQ(ALLOWED_SCRIPT_ONLY,
@@ -908,7 +908,7 @@ TEST_F(ExtensionScriptAndCaptureVisibleTest, CaptureFileURLs) {
             GetExtensionAccess(active_tab.get(), file_url, kTabId));
 }
 
-// Check that the webstore url is inaccessible.
+// Check that both the old and new webstore URL are inaccessible.
 TEST(PermissionsDataTest, ChromeWebstoreUrl) {
   scoped_refptr<const Extension> normal_extension =
       GetExtensionWithHostPermission("all_hosts_normal_extension",
@@ -936,6 +936,28 @@ TEST(PermissionsDataTest, ChromeWebstoreUrl) {
            "empty-new-tab-page/dpjamkmjmigaoobjbekmfgabipmfilij"),
       GURL("https://chrome.google.com./webstore/detail/"
            "empty-new-tab-page/dpjamkmjmigaoobjbekmfgabipmfilij"),
+      GURL("https://chromewebstore.google.com"),
+      GURL("https://chromewebstore.google.com."),
+      GURL("https://chromewebstore.google.com/category/foo/bar"),
+      GURL("https://chromewebstore.google.com./category/foo/bar"),
+      GURL("https://chromewebstore.google.com/collection/foo"),
+      GURL("https://chromewebstore.google.com./collection/foo"),
+      GURL("https://chromewebstore.google.com/detail/"
+           "empty-new-tab-page/dpjamkmjmigaoobjbekmfgabipmfilij"),
+      GURL("https://chromewebstore.google.com/search/foo"),
+      GURL("https://chromewebstore.google.com/user/installed"),
+      GURL("https://chromewebstore.google.com/user/library"),
+      GURL("https://chromewebstore.google.com/report/"
+           "dpjamkmjmigaoobjbekmfgabipmfilij"),
+
+      // Unintuitively, the script blocking also applies to deeper subdomains
+      // and other paths on chrome.google.com.
+      // TODO(crbug.com/1355623): We probably want to adjust the logic so these
+      // are not the case, but it's better to have the current behavior
+      // explicitly documented in tests for now.
+      GURL("https://foo.chrome.google.com/webstore"),
+      GURL("https://foo.bar.chromewebstore.google.com"),
+      GURL("https://chrome.google.com/foo"),
   };
 
   const int kTabId = 1;
@@ -947,6 +969,12 @@ TEST(PermissionsDataTest, ChromeWebstoreUrl) {
   tab_hosts.AddOrigin(
       UserScript::ValidUserScriptSchemes(),
       GURL("https://chrome.google.com./webstore").DeprecatedGetOriginAsURL());
+  tab_hosts.AddOrigin(
+      UserScript::ValidUserScriptSchemes(),
+      GURL("https://chromewebstore.google.com/").DeprecatedGetOriginAsURL());
+  tab_hosts.AddOrigin(
+      UserScript::ValidUserScriptSchemes(),
+      GURL("https://chromewebstore.google.com./").DeprecatedGetOriginAsURL());
   PermissionSet tab_permissions(APIPermissionSet(), ManifestPermissionSet(),
                                 tab_hosts.Clone(), tab_hosts.Clone());
   for (const Extension* extension : extensions) {
@@ -1502,8 +1530,11 @@ TEST_F(CaptureVisiblePageTest, URLsCapturableOnlyWithActiveTab) {
       // The NTP.
       GURL(chrome::kChromeUINewTabURL),
 
-      // The Chrome Web Store.
+      // The Chrome Web Store URL.
       ExtensionsClient::Get()->GetWebstoreBaseURL(),
+
+      // The new Chrome Web Store URL.
+      ExtensionsClient::Get()->GetNewWebstoreBaseURL(),
   };
 
   for (const GURL& url : test_urls) {
@@ -1630,6 +1661,17 @@ TEST_F(CaptureVisiblePageTest, SelfExtensionURLs) {
     EXPECT_TRUE(CanCapture(page_capture(), url,
                            extensions::CaptureRequirement::kPageCapture));
   }
+}
+
+TEST_F(CaptureVisiblePageTest, NoPermissions) {
+  const scoped_refptr<const Extension> no_permissions =
+      ExtensionBuilder("no_page capture").Build();
+  const GURL url("https://example.com");
+
+  EXPECT_FALSE(CanCapture(*no_permissions, url,
+                          extensions::CaptureRequirement::kPageCapture));
+  EXPECT_FALSE(CanCapture(*no_permissions, url,
+                          extensions::CaptureRequirement::kActiveTabOrAllUrls));
 }
 
 TEST_F(CaptureVisiblePageTest, PolicyBlockedURLs) {

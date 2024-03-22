@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,7 +84,8 @@ TEST_P(GLCubeMapTextureTest, TexImage2DAfterFBOBinding) {
   EXPECT_EQ(static_cast<GLenum>(GL_NO_ERROR), glGetError());
 }
 
-TEST_P(GLCubeMapTextureTest, ReadPixels) {
+// TODO(crbug.com/1384328): Re-enable this test
+TEST_P(GLCubeMapTextureTest, DISABLED_ReadPixels) {
   GLenum cube_map_target = GetParam();
 
   glBindTexture(GL_TEXTURE_CUBE_MAP, texture_);
@@ -110,8 +111,8 @@ TEST_P(GLCubeMapTextureTest, ReadPixels) {
   EXPECT_EQ(static_cast<GLenum>(GL_NO_ERROR), glGetError());
 }
 
-
-TEST_P(GLCubeMapTextureTest, ReadPixelsFromIncompleteCubeTexture) {
+// TODO(crbug.com/1384328): Re-enable this test
+TEST_P(GLCubeMapTextureTest, DISABLED_ReadPixelsFromIncompleteCubeTexture) {
   GLenum cube_map_target = GetParam();
 
   glBindTexture(GL_TEXTURE_CUBE_MAP, texture_);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ HRESULT MediaFoundationTexturePool::Initialize(
       1,
       1,
       // TODO(crbug.com/1276134): Need to handle higher bit-depths like HDR.
-      DXGI_FORMAT_R8G8B8A8_UNORM,
+      DXGI_FORMAT_B8G8R8A8_UNORM,
       {1, 0},
       D3D11_USAGE_DEFAULT,
       D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,

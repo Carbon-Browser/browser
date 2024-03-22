@@ -1,24 +1,33 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
 #include "ash/constants/ash_features.h"
-#include "base/callback_helpers.h"
+#include "ash/constants/ash_switches.h"
+#include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "base/values.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
+#include "chromeos/ash/components/network/cellular_utils.h"
+#include "chromeos/ash/components/network/metrics/cellular_network_metrics_logger.h"
 #include "chromeos/ash/components/network/network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_connection_handler_impl.h"
+#include "chromeos/ash/components/network/network_device_handler.h"
 #include "chromeos/ash/components/network/network_metadata_observer.h"
 #include "chromeos/ash/components/network/network_metadata_store.h"
+#include "chromeos/ash/components/network/network_profile_handler.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
-#include "chromeos/dbus/shill/shill_clients.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
 #include "components/account_id/account_id.h"
+#include "components/onc/onc_constants.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
@@ -29,7 +38,47 @@
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
-namespace chromeos {
+namespace ash {
+
+namespace {
+constexpr char kGuid[] = "wifi0";
+constexpr char kGuid1[] = "wifi1";
+constexpr char kGuid3[] = "eth0";
+constexpr char kConfigWifi0Connectable[] =
+    "{ \"GUID\": \"wifi0\", \"Type\": \"wifi\", \"State\": \"idle\", "
+    "  \"Connectable\": true }";
+constexpr char kConfigWifi0HiddenUser[] =
+    "{ \"GUID\": \"wifi0\", \"Type\": \"wifi\", \"State\": \"idle\", "
+    "  \"Connectable\": true, \"Profile\": \"user_profile_path\", "
+    "\"WiFi.HiddenSSID\": true }";
+constexpr char kConfigWifi1HiddenUser[] =
+    "{ \"GUID\": \"wifi1\", \"Type\": \"wifi\", \"State\": \"idle\", "
+    "  \"Connectable\": true, \"Profile\": \"user_profile_path\", "
+    "\"WiFi.HiddenSSID\": true }";
+constexpr char kConfigWifi1Shared[] =
+    "{ \"GUID\": \"wifi0\", \"Type\": \"wifi\", \"State\": \"idle\", "
+    "  \"Connectable\": true, \"Profile\": \"/profile/default\" }";
+constexpr char kConfigEthernet[] =
+    "{ \"GUID\": \"eth0\", \"Type\": \"ethernet\", \"State\": \"idle\", "
+    "  \"Connectable\": true }";
+constexpr char kHasFixedHiddenNetworks[] =
+    "metadata_store.has_fixed_hidden_networks";
+
+constexpr char kCellularkGuid[] = "cellular";
+constexpr char kConfigCellular[] =
+    R"({"GUID": "cellular_guid1", "Type": "cellular", "Technology": "LTE",
+            "State": "idle"})";
+constexpr char kApn[] = "apn";
+constexpr char kApnName[] = "apnName";
+constexpr char kApnUsername[] = "apnUsername";
+constexpr char kApnPassword[] = "apnPassword";
+constexpr char kApnAuthentication[] = "authentication";
+constexpr char kApnLocalizedName[] = "localizedName";
+constexpr char kApnLanguage[] = "language";
+constexpr char kApnAttach[] = "attach";
+constexpr base::TimeDelta kMigrationAge = base::Days(5);
+constexpr char kMigrationAgeASCII[] = "5";
+}  // namespace
 
 class TestNetworkMetadataObserver : public NetworkMetadataObserver {
  public:
@@ -41,7 +90,7 @@ class TestNetworkMetadataObserver : public NetworkMetadataObserver {
     connections_.insert(guid);
   }
   void OnNetworkUpdate(const std::string& guid,
-                       const base::Value* set_properties) override {
+                       const base::Value::Dict* set_properties) override {
     if (!updates_.contains(guid)) {
       updates_[guid] = 1;
     } else {
@@ -68,6 +117,7 @@ class TestNetworkMetadataObserver : public NetworkMetadataObserver {
 class NetworkMetadataStoreTest : public ::testing::Test {
  public:
   NetworkMetadataStoreTest() {
+    LoginState::Initialize();
     network_configuration_handler_ =
         NetworkConfigurationHandler::InitializeForTest(
             helper_.network_state_handler(),
@@ -78,10 +128,19 @@ class NetworkMetadataStoreTest : public ::testing::Test {
     network_connection_handler_->Init(
         helper_.network_state_handler(), network_configuration_handler_.get(),
         /*managed_network_configuration_handler=*/nullptr,
-        /*cellular_esim_connection_handler=*/nullptr);
+        /*cellular_connection_handler=*/nullptr);
 
     network_state_handler_ = helper_.network_state_handler();
     NetworkHandler::Initialize();
+    network_device_handler_ = NetworkDeviceHandler::InitializeForTesting(
+        network_state_handler_.get());
+    network_profile_handler_ = NetworkProfileHandler::InitializeForTesting();
+    managed_network_configuration_handler_ =
+        ManagedNetworkConfigurationHandler::InitializeForTesting(
+            network_state_handler_.get(), network_profile_handler_.get(),
+            network_device_handler_.get(), network_configuration_handler_.get(),
+            /*ui_proxy_config_service=*/nullptr);
+
     user_prefs_ =
         std::make_unique<sync_preferences::TestingPrefServiceSyncable>();
     device_prefs_ = std::make_unique<TestingPrefServiceSimple>();
@@ -99,7 +158,8 @@ class NetworkMetadataStoreTest : public ::testing::Test {
 
     metadata_store_ = std::make_unique<NetworkMetadataStore>(
         network_configuration_handler_.get(), network_connection_handler_.get(),
-        network_state_handler_, user_prefs_.get(), device_prefs_.get(),
+        network_state_handler_, managed_network_configuration_handler_.get(),
+        user_prefs_.get(), device_prefs_.get(),
         /*is_enterprise_enrolled=*/false);
     metadata_observer_ = std::make_unique<TestNetworkMetadataObserver>();
     metadata_store_->AddObserver(metadata_observer_.get());
@@ -114,10 +174,14 @@ class NetworkMetadataStoreTest : public ::testing::Test {
     metadata_observer_.reset();
     user_prefs_.reset();
     device_prefs_.reset();
+    managed_network_configuration_handler_.reset();
+    network_profile_handler_.reset();
+    network_device_handler_.reset();
     network_connection_handler_.reset();
     scoped_user_manager_.reset();
     network_configuration_handler_.reset();
     NetworkHandler::Shutdown();
+    LoginState::Shutdown();
   }
 
   void SetUp() override {
@@ -129,8 +193,8 @@ class NetworkMetadataStoreTest : public ::testing::Test {
   void SetIsEnterpriseEnrolled(bool is_enterprise_enrolled) {
     metadata_store_ = std::make_unique<NetworkMetadataStore>(
         network_configuration_handler_.get(), network_connection_handler_.get(),
-        network_state_handler_, user_prefs_.get(), device_prefs_.get(),
-        is_enterprise_enrolled);
+        network_state_handler_, managed_network_configuration_handler_.get(),
+        user_prefs_.get(), device_prefs_.get(), is_enterprise_enrolled);
     metadata_store_->AddObserver(metadata_observer_.get());
   }
 
@@ -176,54 +240,87 @@ class NetworkMetadataStoreTest : public ::testing::Test {
   void ResetStore() {
     metadata_store_ = std::make_unique<NetworkMetadataStore>(
         network_configuration_handler_.get(), network_connection_handler_.get(),
-        network_state_handler_, user_prefs_.get(), device_prefs_.get(),
+        network_state_handler_, managed_network_configuration_handler_.get(),
+        user_prefs_.get(), device_prefs_.get(),
         /*is_enterprise_enrolled=*/false);
     metadata_observer_ = std::make_unique<TestNetworkMetadataObserver>();
     metadata_store_->AddObserver(metadata_observer_.get());
   }
 
  protected:
-  const user_manager::User* primary_user_;
-  const user_manager::User* secondary_user_;
+  void TestGetSetCustomApnList() {
+    ConfigureService(kConfigCellular);
+    EXPECT_EQ(nullptr, metadata_store()->GetCustomApnList(kCellularkGuid));
+
+    auto custom_apn =
+        base::Value::Dict()
+            .Set(::onc::cellular_apn::kAccessPointName, kApn)
+            .Set(::onc::cellular_apn::kName, kApnName)
+            .Set(::onc::cellular_apn::kUsername, kApnUsername)
+            .Set(::onc::cellular_apn::kPassword, kApnPassword)
+            .Set(::onc::cellular_apn::kAuthentication, kApnAuthentication)
+            .Set(::onc::cellular_apn::kLocalizedName, kApnLocalizedName)
+            .Set(::onc::cellular_apn::kLanguage, kApnLanguage)
+            .Set(::onc::cellular_apn::kAttach, kApnAttach);
+    metadata_store()->SetCustomApnList(
+        kCellularkGuid, base::Value::List().Append(std::move(custom_apn)));
+
+    AssertCustomApnListFirstValue();
+    ResetStore();
+    AssertCustomApnListFirstValue();
+  }
+
+  raw_ptr<const user_manager::User, DanglingUntriaged | ExperimentalAsh>
+      primary_user_;
+  raw_ptr<const user_manager::User, DanglingUntriaged | ExperimentalAsh>
+      secondary_user_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 
  private:
+  void AssertCustomApnListFirstValue() {
+    const base::Value::List* custom_apn_list =
+        metadata_store()->GetCustomApnList(kCellularkGuid);
+
+    EXPECT_TRUE(custom_apn_list);
+    ASSERT_EQ(1u, custom_apn_list->size());
+    const base::Value::Dict& custom_apn = custom_apn_list->front().GetDict();
+    EXPECT_EQ(
+        kApn,
+        custom_apn.Find(::onc::cellular_apn::kAccessPointName)->GetString());
+    EXPECT_EQ(kApnName,
+              custom_apn.Find(::onc::cellular_apn::kName)->GetString());
+    EXPECT_EQ(kApnUsername,
+              custom_apn.Find(::onc::cellular_apn::kUsername)->GetString());
+    EXPECT_EQ(kApnPassword,
+              custom_apn.Find(::onc::cellular_apn::kPassword)->GetString());
+    EXPECT_EQ(
+        kApnAuthentication,
+        custom_apn.Find(::onc::cellular_apn::kAuthentication)->GetString());
+    EXPECT_EQ(
+        kApnLocalizedName,
+        custom_apn.Find(::onc::cellular_apn::kLocalizedName)->GetString());
+    EXPECT_EQ(kApnLanguage,
+              custom_apn.Find(::onc::cellular_apn::kLanguage)->GetString());
+    EXPECT_EQ(kApnAttach,
+              custom_apn.Find(::onc::cellular_apn::kAttach)->GetString());
+  }
+
   base::test::SingleThreadTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   NetworkStateTestHelper helper_{false /* use_default_devices_and_services */};
   std::unique_ptr<NetworkConfigurationHandler> network_configuration_handler_;
   std::unique_ptr<NetworkConnectionHandler> network_connection_handler_;
-  NetworkStateHandler* network_state_handler_;
+  raw_ptr<NetworkStateHandler, ExperimentalAsh> network_state_handler_;
+  std::unique_ptr<NetworkDeviceHandler> network_device_handler_;
+  std::unique_ptr<NetworkProfileHandler> network_profile_handler_;
+  std::unique_ptr<ManagedNetworkConfigurationHandler>
+      managed_network_configuration_handler_;
   std::unique_ptr<TestingPrefServiceSimple> device_prefs_;
   std::unique_ptr<sync_preferences::TestingPrefServiceSyncable> user_prefs_;
   std::unique_ptr<NetworkMetadataStore> metadata_store_;
   std::unique_ptr<TestNetworkMetadataObserver> metadata_observer_;
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 };
-
-namespace {
-const char* kGuid = "wifi0";
-const char* kGuid1 = "wifi1";
-const char* kGuid3 = "eth0";
-const char* kConfigWifi0Connectable =
-    "{ \"GUID\": \"wifi0\", \"Type\": \"wifi\", \"State\": \"idle\", "
-    "  \"Connectable\": true }";
-const char* kConfigWifi0HiddenUser =
-    "{ \"GUID\": \"wifi0\", \"Type\": \"wifi\", \"State\": \"idle\", "
-    "  \"Connectable\": true, \"Profile\": \"user_profile_path\", "
-    "\"WiFi.HiddenSSID\": true }";
-const char* kConfigWifi1HiddenUser =
-    "{ \"GUID\": \"wifi1\", \"Type\": \"wifi\", \"State\": \"idle\", "
-    "  \"Connectable\": true, \"Profile\": \"user_profile_path\", "
-    "\"WiFi.HiddenSSID\": true }";
-const char* kConfigWifi1Shared =
-    "{ \"GUID\": \"wifi0\", \"Type\": \"wifi\", \"State\": \"idle\", "
-    "  \"Connectable\": true, \"Profile\": \"/profile/default\" }";
-const char* kConfigEthernet =
-    "{ \"GUID\": \"eth0\", \"Type\": \"ethernet\", \"State\": \"idle\", "
-    "  \"Connectable\": true }";
-const char kHasFixedHiddenNetworks[] =
-    "metadata_store.has_fixed_hidden_networks";
-}  // namespace
 
 TEST_F(NetworkMetadataStoreTest, FirstConnect) {
   std::string service_path = ConfigureService(kConfigWifi0Connectable);
@@ -308,12 +405,14 @@ TEST_F(NetworkMetadataStoreTest, ConfigurationUpdated) {
   ASSERT_TRUE(metadata_store()->GetIsConfiguredBySync(kGuid));
   ASSERT_EQ(0, metadata_observer()->GetNumberOfUpdates(kGuid));
 
-  base::Value properties(base::Value::Type::DICTIONARY);
-  properties.SetKey(shill::kSecurityProperty, base::Value(shill::kSecurityPsk));
-  properties.SetKey(shill::kPassphraseProperty, base::Value("secret"));
+  auto properties =
+      base::Value::Dict()
+          .Set(shill::kSecurityClassProperty, shill::kSecurityClassPsk)
+          .Set(shill::kPassphraseProperty, "secret");
 
   network_configuration_handler()->SetShillProperties(
-      service_path, properties, base::DoNothing(), base::DoNothing());
+      service_path, std::move(properties), base::DoNothing(),
+      base::DoNothing());
   base::RunLoop().RunUntilIdle();
 
   ASSERT_TRUE(metadata_store()->GetLastConnectedTimestamp(kGuid).is_zero());
@@ -331,25 +430,26 @@ TEST_F(NetworkMetadataStoreTest, SharedConfigurationUpdatedByOtherUser) {
 
   LoginUser(secondary_user_);
 
-  base::Value other_properties(base::Value::Type::DICTIONARY);
-  other_properties.SetKey(shill::kAutoConnectProperty, base::Value(true));
-  other_properties.SetKey(shill::kProxyConfigProperty,
-                          base::Value("proxy_details"));
+  auto other_properties =
+      base::Value::Dict()
+          .Set(shill::kAutoConnectProperty, true)
+          .Set(shill::kProxyConfigProperty, "proxy_details");
 
   network_configuration_handler()->SetShillProperties(
-      service_path, other_properties, base::DoNothing(), base::DoNothing());
+      service_path, std::move(other_properties), base::DoNothing(),
+      base::DoNothing());
   base::RunLoop().RunUntilIdle();
 
   ASSERT_TRUE(metadata_store()->GetIsFieldExternallyModified(
       kGuid, shill::kProxyConfigProperty));
 
   LoginUser(primary_user_);
-  base::Value owner_properties(base::Value::Type::DICTIONARY);
-  owner_properties.SetKey(shill::kProxyConfigProperty,
-                          base::Value("new_proxy_details"));
+  auto owner_properties =
+      base::Value::Dict().Set(shill::kProxyConfigProperty, "new_proxy_details");
 
   network_configuration_handler()->SetShillProperties(
-      service_path, owner_properties, base::DoNothing(), base::DoNothing());
+      service_path, std::move(owner_properties), base::DoNothing(),
+      base::DoNothing());
   base::RunLoop().RunUntilIdle();
 
   ASSERT_FALSE(metadata_store()->GetIsFieldExternallyModified(
@@ -368,11 +468,12 @@ TEST_F(NetworkMetadataStoreTest, SharedConfigurationUpdated_NewPassword) {
 
   ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
 
-  base::Value other_properties(base::Value::Type::DICTIONARY);
-  other_properties.SetKey(shill::kPassphraseProperty, base::Value("pass2"));
+  auto other_properties =
+      base::Value::Dict().Set(shill::kPassphraseProperty, "pass2");
 
   network_configuration_handler()->SetShillProperties(
-      service_path, other_properties, base::DoNothing(), base::DoNothing());
+      service_path, std::move(other_properties), base::DoNothing(),
+      base::DoNothing());
   base::RunLoop().RunUntilIdle();
 
   ASSERT_TRUE(metadata_store()->GetIsCreatedByUser(kGuid));
@@ -410,7 +511,7 @@ TEST_F(NetworkMetadataStoreTest, OwnOobeNetworks) {
   LoginUser(primary_user_);
   ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
 
-  UserManager()->set_is_current_user_new(true);
+  UserManager()->SetIsCurrentUserNew(true);
   UserManager()->set_is_current_user_owner(true);
   metadata_store()->LoggedInStateChanged();
   ASSERT_TRUE(metadata_store()->GetIsCreatedByUser(kGuid));
@@ -425,7 +526,7 @@ TEST_F(NetworkMetadataStoreTest, OwnOobeNetworks_EnterpriseEnrolled) {
   LoginUser(primary_user_);
   ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
 
-  UserManager()->set_is_current_user_new(true);
+  UserManager()->SetIsCurrentUserNew(true);
   UserManager()->set_is_current_user_owner(true);
   metadata_store()->LoggedInStateChanged();
   ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
@@ -439,7 +540,7 @@ TEST_F(NetworkMetadataStoreTest, OwnOobeNetworks_NotOwner) {
   LoginUser(primary_user_);
   ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
 
-  UserManager()->set_is_current_user_new(true);
+  UserManager()->SetIsCurrentUserNew(true);
   UserManager()->set_is_current_user_owner(false);
   metadata_store()->LoggedInStateChanged();
   ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
@@ -453,26 +554,29 @@ TEST_F(NetworkMetadataStoreTest, OwnOobeNetworks_NotFirstLogin) {
   LoginUser(primary_user_);
   ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
 
-  UserManager()->set_is_current_user_new(false);
+  UserManager()->SetIsCurrentUserNew(false);
   UserManager()->set_is_current_user_owner(true);
   metadata_store()->LoggedInStateChanged();
   ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
 }
 
-TEST_F(NetworkMetadataStoreTest, NetworkCreationTimestampDefault) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      ash::features::kHiddenNetworkMigration);
+TEST_F(NetworkMetadataStoreTest, NetworkCreationTimestamp) {
   ConfigureService(kConfigWifi0Connectable);
+
+  const base::Time creation_timestamp =
+      metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid);
+  EXPECT_EQ(creation_timestamp, base::Time::Now().UTCMidnight());
+
+  // Fast forward one day to check that the timestamp returned is still the one
+  // that was initially persisted.
+  task_environment()->FastForwardBy(base::Days(1));
+
   EXPECT_EQ(metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid),
-            base::Time::Now().UTCMidnight());
+            creation_timestamp);
 }
 
 TEST_F(NetworkMetadataStoreTest,
        NetworkCreationTimestampIsEventuallyOverwritten) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      ash::features::kHiddenNetworkMigration);
   ConfigureService(kConfigWifi0Connectable);
   EXPECT_EQ(metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid),
             base::Time::Now().UTCMidnight());
@@ -484,23 +588,39 @@ TEST_F(NetworkMetadataStoreTest,
 }
 
 TEST_F(NetworkMetadataStoreTest, NetworkCreationTimestampNonWifi) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      ash::features::kHiddenNetworkMigration);
   ConfigureService(kConfigEthernet);
   EXPECT_EQ(metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid3),
-            base::Time::UnixEpoch());
+            base::Time::Now().UTCMidnight());
 }
 
 TEST_F(NetworkMetadataStoreTest, NetworkCreationTimestampNonExistentNetwork) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      ash::features::kHiddenNetworkMigration);
   EXPECT_EQ(metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid),
-            base::Time::UnixEpoch());
+            base::Time::Now().UTCMidnight());
   // Fast forward 2 weeks to check that creation timestamp is always
   // base::Time::UnixEpoch() for non-existent networks.
   task_environment()->FastForwardBy(base::Days(14));
+  EXPECT_EQ(metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid),
+            base::Time::Now().UTCMidnight());
+}
+
+TEST_F(NetworkMetadataStoreTest, NetworkCreationTimestampMigrationAgeOverride) {
+  base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+      switches::kHiddenNetworkMigrationAge, kMigrationAgeASCII);
+
+  ConfigureService(kConfigWifi0Connectable);
+
+  // Verify that the amount of time a network must have existed before its
+  // timestamp is overwritten can be controlled by the command line flag. We do
+  // this by checking just before the minimum age and at the minimum age.
+
+  const base::Time creation_timestamp =
+      metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid);
+
+  EXPECT_EQ(creation_timestamp, base::Time::Now().UTCMidnight());
+  task_environment()->FastForwardBy(kMigrationAge - base::Days(1));
+  EXPECT_EQ(metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid),
+            creation_timestamp);
+  task_environment()->FastForwardBy(base::Days(1));
   EXPECT_EQ(metadata_store()->UpdateAndRetrieveWiFiTimestamp(kGuid),
             base::Time::UnixEpoch());
 }
@@ -614,4 +734,209 @@ TEST_F(NetworkMetadataStoreTest, SetTrafficCountersAutoResetDay) {
   EXPECT_TRUE(value->is_none());
 }
 
-}  // namespace chromeos
+TEST_F(NetworkMetadataStoreTest, CustomApnListGetSet_ApnRevampDisabled) {
+  scoped_feature_list_.InitAndDisableFeature(ash::features::kApnRevamp);
+  TestGetSetCustomApnList();
+}
+
+TEST_F(NetworkMetadataStoreTest, CustomApnListGetSet_ApnRevampEnabled) {
+  scoped_feature_list_.InitAndEnableFeature(ash::features::kApnRevamp);
+  TestGetSetCustomApnList();
+}
+
+TEST_F(NetworkMetadataStoreTest, CustomApnListSetWrongApn) {
+  scoped_feature_list_.InitAndEnableFeature(ash::features::kApnRevamp);
+  ConfigureService(kConfigCellular);
+  EXPECT_EQ(nullptr, metadata_store()->GetCustomApnList(kCellularkGuid));
+
+  // Checks the case where the apn list doesn't contain a dict.
+  base::Value::List wrong_list;
+  base::Value not_dict(base::Value::Type::INTEGER);
+  wrong_list.Append(std::move(not_dict));
+  metadata_store()->SetCustomApnList(kCellularkGuid, std::move(wrong_list));
+  EXPECT_EQ(nullptr, metadata_store()->GetCustomApnList(kCellularkGuid));
+
+  // Checks the case where the apn list contains a dict without kAccessPointName
+  // key.
+  auto custom_apn =
+      base::Value::Dict().Set(::onc::cellular_apn::kAccessPointName, kApn);
+  auto wrong_custom_apn =
+      base::Value::Dict().Set(::onc::cellular_apn::kName, kApnName);
+  auto custom_apn_list = base::Value::List()
+                             .Append(std::move(custom_apn))
+                             .Append(std::move(wrong_custom_apn));
+  metadata_store()->SetCustomApnList(kCellularkGuid,
+                                     std::move(custom_apn_list));
+  EXPECT_EQ(nullptr, metadata_store()->GetCustomApnList(kCellularkGuid));
+
+  // Empty lists are valid.
+  metadata_store()->SetCustomApnList(kCellularkGuid, base::Value::List());
+  const base::Value::List* actual_list =
+      metadata_store()->GetCustomApnList(kCellularkGuid);
+  ASSERT_TRUE(actual_list);
+  EXPECT_TRUE(actual_list->empty());
+}
+
+TEST_F(NetworkMetadataStoreTest, CustomApnListFlagChangingValues) {
+  ConfigureService(kConfigCellular);
+  EXPECT_EQ(nullptr, metadata_store()->GetCustomApnList(kCellularkGuid));
+
+  auto expected_list_feature_disabled =
+      base::Value::List().Append(base::Value::Dict().Set(
+          ::onc::cellular_apn::kAccessPointName, "test_apn1"));
+
+  auto expected_list_feature_enabled =
+      base::Value::List()
+          .Append(base::Value::Dict().Set(::onc::cellular_apn::kAccessPointName,
+                                          "test_apn2"))
+          .Append(base::Value::Dict().Set(::onc::cellular_apn::kAccessPointName,
+                                          "test_apn3"));
+
+  {
+    base::test::ScopedFeatureList disabled_feature_list;
+    disabled_feature_list.InitAndDisableFeature(ash::features::kApnRevamp);
+    base::Value not_list(1);
+    // We validate the input only when the flag is enabled.
+    metadata_store()->SetCustomApnList(kCellularkGuid,
+                                       expected_list_feature_disabled.Clone());
+    EXPECT_EQ(expected_list_feature_disabled,
+              *metadata_store()->GetCustomApnList(kCellularkGuid));
+  }
+  {
+    base::test::ScopedFeatureList enabled_feature_list;
+    enabled_feature_list.InitAndEnableFeature(ash::features::kApnRevamp);
+    EXPECT_EQ(nullptr, metadata_store()->GetCustomApnList(kCellularkGuid));
+
+    metadata_store()->SetCustomApnList(kCellularkGuid,
+                                       expected_list_feature_enabled.Clone());
+    EXPECT_EQ(expected_list_feature_enabled,
+              *metadata_store()->GetCustomApnList(kCellularkGuid));
+  }
+  {
+    base::test::ScopedFeatureList disabled_feature_list;
+    disabled_feature_list.InitAndDisableFeature(ash::features::kApnRevamp);
+    EXPECT_EQ(expected_list_feature_disabled,
+              *metadata_store()->GetCustomApnList(kCellularkGuid));
+  }
+}
+
+TEST_F(NetworkMetadataStoreTest, GetPreRevampCustomApnList) {
+  ConfigureService(kConfigCellular);
+
+  // Verify that lists are empty
+  {
+    base::test::ScopedFeatureList disabled_feature_list;
+    disabled_feature_list.InitAndDisableFeature(ash::features::kApnRevamp);
+    EXPECT_EQ(nullptr, metadata_store()->GetCustomApnList(kCellularkGuid));
+#if !BUILDFLAG(ENABLE_LOG_ERROR_NOT_REACHED)
+    EXPECT_DEATH(metadata_store()->GetPreRevampCustomApnList(kCellularkGuid),
+                 "");
+#endif  // !BUILDFLAG(ENABLE_LOG_ERROR_NOT_REACHED)
+  }
+  {
+    base::test::ScopedFeatureList enabled_feature_list;
+    enabled_feature_list.InitAndEnableFeature(ash::features::kApnRevamp);
+    EXPECT_EQ(nullptr, metadata_store()->GetCustomApnList(kCellularkGuid));
+    EXPECT_EQ(nullptr,
+              metadata_store()->GetPreRevampCustomApnList(kCellularkGuid));
+  }
+
+  auto expected_list_feature_disabled =
+      base::Value::List().Append(base::Value::Dict().Set(
+          ::onc::cellular_apn::kAccessPointName, "test_apn1"));
+
+  auto expected_list_feature_enabled =
+      base::Value::List()
+          .Append(base::Value::Dict().Set(::onc::cellular_apn::kAccessPointName,
+                                          "test_apn2"))
+          .Append(base::Value::Dict().Set(::onc::cellular_apn::kAccessPointName,
+                                          "test_apn3"));
+
+  // Set the custom APN lists
+  {
+    base::test::ScopedFeatureList disabled_feature_list;
+    disabled_feature_list.InitAndDisableFeature(ash::features::kApnRevamp);
+    metadata_store()->SetCustomApnList(kCellularkGuid,
+                                       expected_list_feature_disabled.Clone());
+  }
+  {
+    base::test::ScopedFeatureList enabled_feature_list;
+    enabled_feature_list.InitAndEnableFeature(ash::features::kApnRevamp);
+    metadata_store()->SetCustomApnList(kCellularkGuid,
+                                       expected_list_feature_enabled.Clone());
+  }
+
+  // Verify that values are returned correctly if the APN revamp flag is
+  // disabled. GetPreRevampCustomApnList should assert in this case.
+  {
+    base::test::ScopedFeatureList disabled_feature_list;
+    disabled_feature_list.InitAndDisableFeature(ash::features::kApnRevamp);
+    EXPECT_EQ(expected_list_feature_disabled,
+              *metadata_store()->GetCustomApnList(kCellularkGuid));
+#if !BUILDFLAG(ENABLE_LOG_ERROR_NOT_REACHED)
+    EXPECT_DEATH(metadata_store()->GetPreRevampCustomApnList(kCellularkGuid),
+                 "");
+#endif  // !BUILDFLAG(ENABLE_LOG_ERROR_NOT_REACHED)
+  }
+
+  // Verify that values are returned correctly if the APN revamp flag is
+  // enabled. Both called should succeed.
+  {
+    base::test::ScopedFeatureList enabled_feature_list;
+    enabled_feature_list.InitAndEnableFeature(ash::features::kApnRevamp);
+    EXPECT_EQ(expected_list_feature_enabled,
+              *metadata_store()->GetCustomApnList(kCellularkGuid));
+    EXPECT_EQ(expected_list_feature_disabled,
+              *metadata_store()->GetPreRevampCustomApnList(kCellularkGuid));
+  }
+}
+
+TEST_F(NetworkMetadataStoreTest, UserTextMessageSuppressionState) {
+  base::test::ScopedFeatureList enabled_feature_list;
+  enabled_feature_list.InitAndEnableFeature(
+      ash::features::kSuppressTextMessages);
+  base::HistogramTester histogram_tester;
+  // Case: Suppression state should be Allow when user text message
+  // suppression state has never been set.
+  EXPECT_EQ(
+      UserTextMessageSuppressionState::kAllow,
+      metadata_store()->GetUserTextMessageSuppressionState(kCellularkGuid));
+
+  // Case: Suppression state should be Suppress when the user text message
+  // suppression state was set to Suppress.
+  metadata_store()->SetUserTextMessageSuppressionState(
+      kCellularkGuid, UserTextMessageSuppressionState::kSuppress);
+  EXPECT_EQ(
+      UserTextMessageSuppressionState::kSuppress,
+      metadata_store()->GetUserTextMessageSuppressionState(kCellularkGuid));
+  histogram_tester.ExpectBucketCount(
+      CellularNetworkMetricsLogger::
+          kUserAllowTextMessagesSuppressionStateHistogram,
+      CellularNetworkMetricsLogger::UserTextMessageSuppressionState::
+          kTextMessagesSuppress,
+      1u);
+  histogram_tester.ExpectTotalCount(
+      CellularNetworkMetricsLogger::
+          kUserAllowTextMessagesSuppressionStateHistogram,
+      1u);
+
+  // Case: Suppression state should be Allow when the user text message
+  // suppression state was set to Allow.
+  metadata_store()->SetUserTextMessageSuppressionState(
+      kCellularkGuid, UserTextMessageSuppressionState::kAllow);
+  EXPECT_EQ(
+      UserTextMessageSuppressionState::kAllow,
+      metadata_store()->GetUserTextMessageSuppressionState(kCellularkGuid));
+  histogram_tester.ExpectBucketCount(
+      CellularNetworkMetricsLogger::
+          kUserAllowTextMessagesSuppressionStateHistogram,
+      CellularNetworkMetricsLogger::UserTextMessageSuppressionState::
+          kTextMessagesAllow,
+      1u);
+  histogram_tester.ExpectTotalCount(
+      CellularNetworkMetricsLogger::
+          kUserAllowTextMessagesSuppressionStateHistogram,
+      2u);
+}
+
+}  // namespace ash

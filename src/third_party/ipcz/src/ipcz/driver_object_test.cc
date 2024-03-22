@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -160,7 +160,7 @@ TEST_F(DriverObjectTest, GetSerializedDimensions) {
   constexpr size_t kNumHandles = 7;
   EXPECT_CALL(driver(), Serialize(kHandle, kTransport, _, _, _, _, _, _))
       .WillOnce([&](IpczDriverHandle handle, IpczDriverHandle transport,
-                    uint32_t flags, const void* options, void* data,
+                    uint32_t flags, const void* options, volatile void* data,
                     size_t* num_bytes, IpczDriverHandle* handles,
                     size_t* num_handles) {
         EXPECT_EQ(nullptr, data);

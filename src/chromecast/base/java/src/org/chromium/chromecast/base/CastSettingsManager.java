@@ -1,10 +1,9 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chromecast.base;
 
-import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.database.ContentObserver;
@@ -58,7 +57,6 @@ public final class CastSettingsManager {
         return new CastSettingsManager(contentResolver, listener);
     }
 
-    @SuppressLint("NewApi")
     private CastSettingsManager(
             ContentResolver contentResolver, OnSettingChangedListener listener) {
         mContentResolver = contentResolver;
@@ -99,7 +97,6 @@ public final class CastSettingsManager {
         }
     }
 
-    @SuppressLint("NewApi")
     public boolean isCastEnabled() {
         // However, Cast is disabled until the device is provisioned (see b/18950240).
         // TODO(crbug.com/635567): Fix lint properly.
@@ -107,7 +104,6 @@ public final class CastSettingsManager {
                 mContentResolver, DEVICE_PROVISIONED_SETTING_KEY, 0) == 1;
     }
 
-    @SuppressLint("NewApi")
     public String getDeviceName() {
         // TODO(crbug.com/635567): Fix lint properly.
         String deviceName = Settings.Global.getString(mContentResolver, DEVICE_NAME_SETTING_KEY);

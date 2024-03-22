@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,12 @@ public class GlobalAppLocaleController {
      * Do not reorder or remove items, only add new items before NUM_ENTRIES.
      * Keep in sync with LanguageUsage.UI.Android.OverrideLanguage.IsSystemLanguage from enums.xml.
      */
-    @IntDef({OverrideLanguageStatus.DIFFERENT, OverrideLanguageStatus.SAME_BASE,
-            OverrideLanguageStatus.EXACT_MATCH, OverrideLanguageStatus.NO_OVERRIDE})
+    @IntDef({
+        OverrideLanguageStatus.DIFFERENT,
+        OverrideLanguageStatus.SAME_BASE,
+        OverrideLanguageStatus.EXACT_MATCH,
+        OverrideLanguageStatus.NO_OVERRIDE
+    })
     @Retention(RetentionPolicy.SOURCE)
     @interface OverrideLanguageStatus {
         int DIFFERENT = 0;
@@ -66,8 +70,9 @@ public class GlobalAppLocaleController {
             mIsOverridden = false;
         } else {
             mOverrideLanguage = AppLocaleUtils.getAppLanguagePrefStartUp(base);
-            mIsOverridden = shouldOverrideAppLocale(
-                    mOverrideLanguage, LocaleUtils.toLanguageTag(mOriginalSystemLocale));
+            mIsOverridden =
+                    shouldOverrideAppLocale(
+                            mOverrideLanguage, LocaleUtils.toLanguageTag(mOriginalSystemLocale));
         }
         return mIsOverridden;
     }
@@ -148,8 +153,9 @@ public class GlobalAppLocaleController {
                 AppLocaleUtils.isFollowSystemLanguage(mOverrideLanguage) ? "" : mOverrideLanguage;
         AndroidLanguageMetricsBridge.reportAppOverrideLanguage(histogramLanguage);
 
-        int status = getOverrideVsSystemLanguageStatus(
-                mOverrideLanguage, LocaleUtils.toLanguageTag(mOriginalSystemLocale));
+        int status =
+                getOverrideVsSystemLanguageStatus(
+                        mOverrideLanguage, LocaleUtils.toLanguageTag(mOriginalSystemLocale));
         RecordHistogram.recordEnumeratedHistogram(
                 IS_SYSTEM_LANGUAGE_HISTOGRAM, status, OverrideLanguageStatus.NUM_ENTRIES);
     }

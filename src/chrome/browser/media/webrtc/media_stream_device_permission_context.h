@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,8 @@ class MediaStreamDevicePermissionContext
                            permissions::BrowserPermissionCallback callback,
                            bool persist,
                            ContentSetting content_setting,
-                           bool is_one_time) override;
+                           bool is_one_time,
+                           bool is_final_decision) override;
 #endif
 
   // TODO(xhwang): GURL.DeprecatedGetOriginAsURL() shouldn't be used as the
@@ -46,9 +47,6 @@ class MediaStreamDevicePermissionContext
                        const GURL& embedding_origin) override;
 
  private:
-  // PermissionContextBase:
-  bool IsRestrictedToSecureOrigins() const override;
-
 #if BUILDFLAG(IS_ANDROID)
   // PermissionContextBase:
   void UpdateTabContext(const permissions::PermissionRequestID& id,

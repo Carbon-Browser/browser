@@ -1,9 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_TEST_FAKE_MASK_LAYER_IMPL_H_
 #define CC_TEST_FAKE_MASK_LAYER_IMPL_H_
+
+#include <memory>
 
 #include "cc/layers/picture_layer_impl.h"
 #include "cc/raster/raster_source.h"

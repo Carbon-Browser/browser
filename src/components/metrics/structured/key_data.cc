@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,7 @@
 #include "crypto/hmac.h"
 #include "crypto/sha2.h"
 
-namespace metrics {
-namespace structured {
+namespace metrics::structured {
 namespace {
 
 // The expected size of a key, in bytes.
@@ -33,6 +32,10 @@ std::string GenerateKey() {
 
 std::string HashToHex(const uint64_t hash) {
   return base::HexEncode(&hash, sizeof(uint64_t));
+}
+
+int NowInDays() {
+  return (base::Time::Now() - base::Time::UnixEpoch()).InDays();
 }
 
 }  // namespace
@@ -96,7 +99,7 @@ absl::optional<std::string> KeyData::ValidateAndGetKey(
     return absl::nullopt;
   }
 
-  const int now = (base::Time::Now() - base::Time::UnixEpoch()).InDays();
+  const int now = NowInDays();
   KeyProto& key = (*(proto_.get()->get()->mutable_keys()))[project_name_hash];
 
   // Generate or rotate key.
@@ -196,7 +199,8 @@ uint64_t KeyData::HmacMetric(const uint64_t project_name_hash,
 // Misc
 //-----
 
-absl::optional<int> KeyData::LastKeyRotation(const uint64_t project_name_hash) {
+absl::optional<int> KeyData::LastKeyRotation(
+    const uint64_t project_name_hash) const {
   const auto& keys = proto_.get()->get()->keys();
   const auto& it = keys.find(project_name_hash);
   if (it != keys.end()) {
@@ -205,9 +209,19 @@ absl::optional<int> KeyData::LastKeyRotation(const uint64_t project_name_hash) {
   return absl::nullopt;
 }
 
+absl::optional<int> KeyData::GetKeyAgeInWeeks(
+    uint64_t project_name_hash) const {
+  absl::optional<int> last_rotation = LastKeyRotation(project_name_hash);
+  if (!last_rotation.has_value()) {
+    return absl::nullopt;
+  }
+  const int now = NowInDays();
+  const int days_since_rotation = now - *last_rotation;
+  return days_since_rotation / 7;
+}
+
 void KeyData::Purge() {
   proto_->Purge();
 }
 
-}  // namespace structured
-}  // namespace metrics
+}  // namespace metrics::structured

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 #include <atomic>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -86,7 +88,11 @@ class CONTENT_EXPORT JankMonitorImpl : public content::JankMonitor,
       ~TaskMetadata();
 
       base::TimeTicks execution_start_time;
-      const void* identifier;
+      // Not a raw_ptr<...> for performance reasons: based on analysis of
+      // sampling profiler data (JankMonitorImpl::WillRunTaskOrEvent ->
+      // JankMonitorImpl::ThreadExecutionState::WillRunTaskOrEvent -> emplaces
+      // TaskMetadata in a vector).
+      RAW_PTR_EXCLUSION const void* identifier;
     };
     std::vector<TaskMetadata> task_execution_metadata_;
 
@@ -112,7 +118,7 @@ class CONTENT_EXPORT JankMonitorImpl : public content::JankMonitor,
 
   // Sends out notifications.
   void OnJankStarted(const void* opaque_identifier);
-  void OnJankStopped(const void* opaque_identifier);
+  void OnJankStopped(MayBeDangling<const void> opaque_identifier);
 
   // Call in DidRunTaskOrEvent() to for notification of jank stops.
   void NotifyJankStopIfNecessary(const void* opaque_identifier);

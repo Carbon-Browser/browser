@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "device/bluetooth/bluetooth_discovery_session.h"
@@ -199,6 +201,10 @@ namespace content {
 scoped_refptr<BluetoothAdapter>
 WebTestBluetoothAdapterProvider::GetBluetoothAdapter(
     const std::string& fake_adapter_name) {
+  // When modifying the set of supported test adapters this information must be
+  // kept in sync with
+  // third_party/blink/renderer/modules/bluetooth/testing/clusterfuzz/wbt_fakes.py
+  // so that invalid test cases are not generated.
   if (fake_adapter_name == "BaseAdapter")
     return GetBaseAdapter();
   if (fake_adapter_name == "ScanFilterCheckingAdapter")
@@ -276,12 +282,8 @@ WebTestBluetoothAdapterProvider::GetBluetoothAdapter(
     return GetDelayedServicesDiscoveryAdapter();
   if (fake_adapter_name.empty())
     return nullptr;
-  // New adapters that can be used when fuzzing the Web Bluetooth API
-  // should also be added to
-  // src/third_party/WebKit/Source/modules/
-  //   bluetooth/testing/clusterfuzz/constraints.py.
 
-  NOTREACHED() << fake_adapter_name;
+  LOG(ERROR) << "Test requested unrecognized adapter: " << fake_adapter_name;
   return nullptr;
 }
 
@@ -345,7 +347,7 @@ WebTestBluetoothAdapterProvider::GetScanFilterCheckingAdapter() {
                      const device::BluetoothDiscoveryFilter* discovery_filter,
                      device::BluetoothAdapter::DiscoverySessionResultCallback&
                          callback) {
-            base::ThreadTaskRunnerHandle::Get()->PostTask(
+            base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                 FROM_HERE, base::BindOnce(&NotifyDevicesAdded,
                                           base::RetainedRef(adapter_ptr)));
 
@@ -389,7 +391,7 @@ WebTestBluetoothAdapterProvider::GetEmptyAdapter() {
   ON_CALL(*adapter, StartScanWithFilter_(_, _))
       .WillByDefault(RunCallbackWithResultFunction<1 /* result_callback */>(
           /*is_error=*/false, [adapter_ptr]() {
-            base::ThreadTaskRunnerHandle::Get()->PostTask(
+            base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                 FROM_HERE, base::BindOnce(&NotifyDevicesAdded,
                                           base::RetainedRef(adapter_ptr)));
 
@@ -450,7 +452,7 @@ WebTestBluetoothAdapterProvider::GetSecondDiscoveryFindsHeartRateAdapter() {
           /*is_error=*/false, [adapter_ptr]() {
             // In the second discovery session, have the adapter discover a new
             // device, shortly after the session starts.
-            base::ThreadTaskRunnerHandle::Get()->PostTask(
+            base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                 FROM_HERE,
                 base::BindOnce(&AddDevice, base::WrapRefCounted(adapter_ptr),
                                GetHeartRateDevice(adapter_ptr)));
@@ -520,14 +522,14 @@ WebTestBluetoothAdapterProvider::GetDeviceEventAdapter() {
                   adapter_ptr, "New Glucose Device",
                   {BluetoothUUID(kGlucoseServiceUUID)}, makeMACAddress(0x4)));
 
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&AddDevice, base::WrapRefCounted(adapter_ptr),
                                  std::move(glucose_device)));
 
               // Add uuid and notify of device changed.
               changing_battery_ptr->AddUUID(BluetoothUUID(kBatteryServiceUUID));
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE, base::BindOnce(&NotifyDeviceChanged,
                                             base::RetainedRef(adapter_ptr),
                                             changing_battery_ptr));
@@ -535,7 +537,7 @@ WebTestBluetoothAdapterProvider::GetDeviceEventAdapter() {
               // Add uuid and notify of services discovered.
               discovery_generic_access_ptr->AddUUID(
                   BluetoothUUID(kGenericAccessServiceUUID));
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE, base::BindOnce(&NotifyServicesDiscovered,
                                             base::RetainedRef(adapter_ptr),
                                             discovery_generic_access_ptr));
@@ -580,19 +582,19 @@ WebTestBluetoothAdapterProvider::GetDevicesRemovedAdapter() {
 
               std::string glucose_address = glucose_device->GetAddress();
 
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&AddDevice, base::WrapRefCounted(adapter_ptr),
                                  std::move(glucose_device)));
 
               // Post task to remove ConnectedHeartRateDevice.
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE, base::BindOnce(&RemoveDevice,
                                             base::WrapRefCounted(adapter_ptr),
                                             connected_hr_address));
 
               // Post task to remove NewGlucoseDevice.
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE, base::BindOnce(&RemoveDevice,
                                             base::WrapRefCounted(adapter_ptr),
                                             glucose_address));
@@ -658,7 +660,7 @@ WebTestBluetoothAdapterProvider::GetDelayedServicesDiscoveryAdapter() {
                                              kHeartRateServiceUUID));
 
           device_ptr->AddMockService(std::move(heart_rate));
-          base::ThreadTaskRunnerHandle::Get()->PostTask(
+          base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
               FROM_HERE,
               base::BindOnce(&NotifyServicesDiscovered,
                              base::RetainedRef(adapter_ptr), device_ptr));
@@ -932,24 +934,27 @@ WebTestBluetoothAdapterProvider::GetServicesDiscoveredAfterReconnectionAdapter(
   // Gatt connection. When called after after IsGattDiscoveryComplete runs
   // success callback with a new Gatt connection and notifies of services
   // discovered.
-  ON_CALL(*device, CreateGattConnection_(_))
-      .WillByDefault(RunCallbackWithFunctionResult<0 /* callback */>(
-          [adapter_ptr, device_ptr]() {
+  ON_CALL(*device, CreateGattConnection(_, _))
+      .WillByDefault(
+          [adapter_ptr, device_ptr](
+              BluetoothDevice::GattConnectionCallback callback,
+              absl::optional<BluetoothUUID> service_uuid) {
             std::vector<BluetoothRemoteGattService*> services =
                 device_ptr->GetMockServices();
 
             if (services.size() != 0) {
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&NotifyServicesDiscovered,
                                  base::RetainedRef(adapter_ptr), device_ptr));
             }
 
             device_ptr->SetConnected(true);
-            return std::make_unique<NiceMockBluetoothGattConnection>(
-                adapter_ptr, device_ptr->GetAddress());
-          },
-          /*error_code=*/absl::nullopt));
+            std::move(callback).Run(
+                std::make_unique<NiceMockBluetoothGattConnection>(
+                    adapter_ptr, device_ptr->GetAddress()),
+                /*error_code=*/absl::nullopt);
+          });
 
   // The first time this function is called we:
   // 1. Add a service (This indicates that this function has been called)
@@ -970,7 +975,7 @@ WebTestBluetoothAdapterProvider::GetServicesDiscoveredAfterReconnectionAdapter(
 
           if (disconnect) {
             device_ptr->SetConnected(false);
-            base::ThreadTaskRunnerHandle::Get()->PostTask(
+            base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                 FROM_HERE,
                 base::BindOnce(&NotifyDeviceChanged,
                                base::RetainedRef(adapter_ptr), device_ptr));
@@ -999,17 +1004,18 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
                                  BluetoothUUID(kHealthThermometerUUID)})));
   NiceMockBluetoothDevice* device_ptr = device.get();
 
-  ON_CALL(*device, CreateGattConnection_(_))
+  ON_CALL(*device, CreateGattConnection(_, _))
       .WillByDefault(
-          Invoke([adapter_ptr, device_ptr](
-                     BluetoothDevice::GattConnectionCallback& callback) {
+          [adapter_ptr, device_ptr](
+              BluetoothDevice::GattConnectionCallback callback,
+              absl::optional<BluetoothUUID> service_uuid) {
             device_ptr->SetConnected(true);
             std::move(callback).Run(
                 std::make_unique<NiceMockBluetoothGattConnection>(
                     adapter_ptr, device_ptr->GetAddress()),
                 /*error_code=*/absl::nullopt);
             device_ptr->RunPendingCallbacks();
-          }));
+          });
 
   device->AddMockService(GetGenericAccessService(device.get()));
 
@@ -1036,14 +1042,15 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
                                        /*error_code=*/absl::nullopt,
                                        std::vector<uint8_t>({1}));
             } else {
-              pending = base::BindOnce(std::move(callback),
-                                       BluetoothGattService::GATT_ERROR_FAILED,
-                                       /*value=*/std::vector<uint8_t>());
+              pending =
+                  base::BindOnce(std::move(callback),
+                                 BluetoothGattService::GattErrorCode::kFailed,
+                                 /*value=*/std::vector<uint8_t>());
             }
             device_ptr->PushPendingCallback(std::move(pending));
             if (disconnect) {
               device_ptr->SetConnected(false);
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&NotifyDeviceChanged,
                                  base::RetainedRef(adapter_ptr), device_ptr));
@@ -1062,13 +1069,14 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
             if (succeeds) {
               pending = std::move(callback);
             } else {
-              pending = base::BindOnce(std::move(error_callback),
-                                       BluetoothGattService::GATT_ERROR_FAILED);
+              pending =
+                  base::BindOnce(std::move(error_callback),
+                                 BluetoothGattService::GattErrorCode::kFailed);
             }
             device_ptr->PushPendingCallback(std::move(pending));
             if (disconnect) {
               device_ptr->SetConnected(false);
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&NotifyDeviceChanged,
                                  base::RetainedRef(adapter_ptr), device_ptr));
@@ -1085,13 +1093,14 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
             if (succeeds) {
               pending = std::move(callback);
             } else {
-              pending = base::BindOnce(std::move(error_callback),
-                                       BluetoothGattService::GATT_ERROR_FAILED);
+              pending =
+                  base::BindOnce(std::move(error_callback),
+                                 BluetoothGattService::GattErrorCode::kFailed);
             }
             device_ptr->PushPendingCallback(std::move(pending));
             if (disconnect) {
               device_ptr->SetConnected(false);
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&NotifyDeviceChanged,
                                  base::RetainedRef(adapter_ptr), device_ptr));
@@ -1111,13 +1120,14 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
                   std::move(callback),
                   GetBaseGATTNotifySession(measurement_ptr->GetWeakPtr()));
             } else {
-              pending = base::BindOnce(std::move(error_callback),
-                                       BluetoothGattService::GATT_ERROR_FAILED);
+              pending =
+                  base::BindOnce(std::move(error_callback),
+                                 BluetoothGattService::GattErrorCode::kFailed);
             }
             device_ptr->PushPendingCallback(std::move(pending));
             if (disconnect) {
               device_ptr->SetConnected(false);
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&NotifyDeviceChanged,
                                  base::RetainedRef(adapter_ptr), device_ptr));
@@ -1139,14 +1149,15 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
                                        /*error_code=*/absl::nullopt,
                                        std::vector<uint8_t>({1}));
             } else {
-              pending = base::BindOnce(std::move(callback),
-                                       BluetoothGattService::GATT_ERROR_FAILED,
-                                       /*value=*/std::vector<uint8_t>());
+              pending =
+                  base::BindOnce(std::move(callback),
+                                 BluetoothGattService::GattErrorCode::kFailed,
+                                 /*value=*/std::vector<uint8_t>());
             }
             device_ptr->PushPendingCallback(std::move(pending));
             if (disconnect) {
               device_ptr->SetConnected(false);
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&NotifyDeviceChanged,
                                  base::RetainedRef(adapter_ptr), device_ptr));
@@ -1162,13 +1173,14 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
             if (succeeds) {
               pending = std::move(callback);
             } else {
-              pending = base::BindOnce(std::move(error_callback),
-                                       BluetoothGattService::GATT_ERROR_FAILED);
+              pending =
+                  base::BindOnce(std::move(error_callback),
+                                 BluetoothGattService::GattErrorCode::kFailed);
             }
             device_ptr->PushPendingCallback(std::move(pending));
             if (disconnect) {
               device_ptr->SetConnected(false);
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&NotifyDeviceChanged,
                                  base::RetainedRef(adapter_ptr), device_ptr));
@@ -1195,17 +1207,18 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
                                  BluetoothUUID(kHealthThermometerUUID)})));
   NiceMockBluetoothDevice* device_ptr = device.get();
 
-  ON_CALL(*device, CreateGattConnection_(_))
+  ON_CALL(*device, CreateGattConnection(_, _))
       .WillByDefault(
-          Invoke([adapter_ptr, device_ptr](
-                     BluetoothDevice::GattConnectionCallback& callback) {
+          [adapter_ptr, device_ptr](
+              BluetoothDevice::GattConnectionCallback callback,
+              absl::optional<BluetoothUUID> service_uuid) {
             device_ptr->SetConnected(true);
             std::move(callback).Run(
                 std::make_unique<NiceMockBluetoothGattConnection>(
                     adapter_ptr, device_ptr->GetAddress()),
                 /*error_code=*/absl::nullopt);
             device_ptr->RunPendingCallbacks();
-          }));
+          });
 
   device->AddMockService(GetGenericAccessService(device.get()));
 
@@ -1234,7 +1247,7 @@ scoped_refptr<NiceMockBluetoothAdapter> WebTestBluetoothAdapterProvider::
 
                   if (disconnect) {
                     device_ptr->SetConnected(false);
-                    base::ThreadTaskRunnerHandle::Get()->PostTask(
+                    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                         FROM_HERE,
                         base::BindOnce(&NotifyDeviceChanged,
                                        base::RetainedRef(adapter_ptr),
@@ -1309,8 +1322,11 @@ WebTestBluetoothAdapterProvider::GetFailingGATTOperationsAdapter() {
   auto service(
       GetBaseGATTService("Errors Service", device.get(), errorsServiceUUID));
 
-  for (int error = BluetoothGattService::GATT_ERROR_UNKNOWN;
-       error <= BluetoothGattService::GATT_ERROR_NOT_SUPPORTED; error++) {
+  for (int error =
+           static_cast<int>(BluetoothGattService::GattErrorCode::kUnknown);
+       error <=
+       static_cast<int>(BluetoothGattService::GattErrorCode::kMaxValue);
+       error++) {
     service->AddMockCharacteristic(GetErrorCharacteristic(
         service.get(),
         static_cast<BluetoothGattService::GattErrorCode>(error)));
@@ -1353,16 +1369,16 @@ WebTestBluetoothAdapterProvider::GetBaseDevice(
       .WillByDefault(
           Invoke(device.get(), &MockBluetoothDevice::GetMockService));
 
-  ON_CALL(*device, CreateGattConnection_(_))
+  ON_CALL(*device, CreateGattConnection(_, _))
       .WillByDefault(RunOnceCallback<0>(
           /*connection=*/nullptr, BluetoothDevice::ERROR_UNSUPPORTED_DEVICE));
 
   auto* device_ptr = device.get();
-  ON_CALL(*device, Pair_(_, _))
+  ON_CALL(*device, Pair(_, _))
       .WillByDefault(
-          WithArg<1>([device_ptr](BluetoothDevice::ConnectCallback& callback) {
+          WithArg<1>([device_ptr](BluetoothDevice::ConnectCallback callback) {
             device_ptr->SetPaired(/*paired=*/true);
-            base::SequencedTaskRunnerHandle::Get()->PostTask(
+            base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
                 FROM_HERE, base::BindOnce(std::move(callback),
                                           /*error_code=*/absl::nullopt));
           }));
@@ -1407,16 +1423,17 @@ WebTestBluetoothAdapterProvider::GetConnectableDevice(
 
   MockBluetoothDevice* device_ptr = device.get();
 
-  ON_CALL(*device, CreateGattConnection_(_))
+  ON_CALL(*device, CreateGattConnection(_, _))
       .WillByDefault(
-          Invoke([adapter, device_ptr](
-                     BluetoothDevice::GattConnectionCallback& callback) {
+          [adapter, device_ptr](
+              BluetoothDevice::GattConnectionCallback callback,
+              absl::optional<BluetoothUUID> service_uuid) {
             device_ptr->SetConnected(true);
             std::move(callback).Run(
                 std::make_unique<NiceMockBluetoothGattConnection>(
                     adapter, device_ptr->GetAddress()),
                 /*error_code=*/absl::nullopt);
-          }));
+          });
 
   ON_CALL(*device, IsGattServicesDiscoveryComplete())
       .WillByDefault(Return(true));
@@ -1436,7 +1453,7 @@ WebTestBluetoothAdapterProvider::GetUnconnectableDevice(
   auto device(
       GetBaseDevice(adapter, device_name, uuids, makeMACAddress(error_code)));
 
-  ON_CALL(*device, CreateGattConnection_(_))
+  ON_CALL(*device, CreateGattConnection(_, _))
       .WillByDefault(RunOnceCallback<0>(/*connection=*/nullptr, error_code));
 
   return device;
@@ -1724,20 +1741,20 @@ WebTestBluetoothAdapterProvider::GetBaseGATTCharacteristic(
 
   ON_CALL(*characteristic, ReadRemoteCharacteristic_(_))
       .WillByDefault(RunCallbackWithResult<0>(
-          BluetoothGattService::GATT_ERROR_NOT_SUPPORTED,
+          BluetoothGattService::GattErrorCode::kNotSupported,
           /*value=*/std::vector<uint8_t>()));
 
   ON_CALL(*characteristic, WriteRemoteCharacteristic_(_, _, _, _))
       .WillByDefault(
-          RunCallback<3>(BluetoothGattService::GATT_ERROR_NOT_SUPPORTED));
+          RunCallback<3>(BluetoothGattService::GattErrorCode::kNotSupported));
 
   ON_CALL(*characteristic, DeprecatedWriteRemoteCharacteristic_(_, _, _))
       .WillByDefault(
-          RunCallback<2>(BluetoothGattService::GATT_ERROR_NOT_SUPPORTED));
+          RunCallback<2>(BluetoothGattService::GattErrorCode::kNotSupported));
 
   ON_CALL(*characteristic, StartNotifySession_(_, _))
       .WillByDefault(
-          RunCallback<1>(BluetoothGattService::GATT_ERROR_NOT_SUPPORTED));
+          RunCallback<1>(BluetoothGattService::GattErrorCode::kNotSupported));
 
   return characteristic;
 }
@@ -1747,7 +1764,8 @@ std::unique_ptr<NiceMockBluetoothGattCharacteristic>
 WebTestBluetoothAdapterProvider::GetErrorCharacteristic(
     MockBluetoothGattService* service,
     BluetoothGattService::GattErrorCode error_code) {
-  uint32_t error_alias = error_code + 0xA1;  // Error UUIDs start at 0xA1.
+  // Error UUIDs start at 0xA1.
+  uint32_t error_alias = static_cast<int>(error_code) + 0xA1;
   auto characteristic(GetBaseGATTCharacteristic(
       // Use the UUID to generate unique identifiers.
       "Error Characteristic " + errorUUID(error_alias), service,

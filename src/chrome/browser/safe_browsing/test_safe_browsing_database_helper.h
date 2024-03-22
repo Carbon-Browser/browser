@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,11 +65,13 @@ class TestSafeBrowsingDatabaseHelper {
  private:
   std::unique_ptr<safe_browsing::TestSafeBrowsingServiceFactory> sb_factory_;
   // Owned by the V4Database.
-  raw_ptr<InsertingDatabaseFactory> v4_db_factory_ = nullptr;
+  raw_ptr<InsertingDatabaseFactory, AcrossTasksDanglingUntriaged>
+      v4_db_factory_ = nullptr;
 
   // Owned by the V4GetHashProtocolManager. Will stay nullptr if the v4 hash
   // factory is not being mocked.
-  raw_ptr<safe_browsing::TestV4GetHashProtocolManagerFactory>
+  raw_ptr<safe_browsing::TestV4GetHashProtocolManagerFactory,
+          AcrossTasksDanglingUntriaged>
       v4_get_hash_factory_ = nullptr;
 };
 

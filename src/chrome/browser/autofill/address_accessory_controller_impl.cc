@@ -1,20 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/autofill/address_accessory_controller_impl.h"
 
-#include <algorithm>
 #include <utility>
 
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/android/preferences/autofill/autofill_profile_bridge.h"
+#include "base/trace_event/trace_event.h"
+#include "chrome/browser/android/preferences/autofill/settings_launcher_helper.h"
 #include "chrome/browser/autofill/manual_filling_controller.h"
 #include "chrome/browser/autofill/manual_filling_utils.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/vr/vr_tab_helper.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -49,8 +49,10 @@ void AddProfileInfoAsSelectableField(UserInfo* info,
   if (type == ServerFieldType::NAME_MIDDLE && field.empty()) {
     field = profile->GetRawInfo(ServerFieldType::NAME_MIDDLE_INITIAL);
   }
-  info->add_field(AccessorySheetField(field, field, /*is_password=*/false,
-                                      /*selectable=*/true));
+  info->add_field(AccessorySheetField(
+      /*display_text=*/field, /*text_to_fill=*/field,
+      /*a11y_description=*/field, /*id=*/std::string(), /*is_obfuscated=*/false,
+      /*selectable=*/true));
 }
 
 UserInfo TranslateProfile(const AutofillProfile* profile) {
@@ -64,8 +66,7 @@ UserInfo TranslateProfile(const AutofillProfile* profile) {
 std::vector<UserInfo> UserInfosForProfiles(
     const std::vector<AutofillProfile*>& profiles) {
   std::vector<UserInfo> infos(profiles.size());
-  std::transform(profiles.begin(), profiles.end(), infos.begin(),
-                 TranslateProfile);
+  base::ranges::transform(profiles, infos.begin(), TranslateProfile);
   return infos;
 }
 
@@ -83,21 +84,8 @@ AddressAccessoryControllerImpl::~AddressAccessoryControllerImpl() {
 }
 
 // static
-bool AddressAccessoryController::AllowedForWebContents(
-    content::WebContents* web_contents) {
-  DCHECK(web_contents) << "Need valid WebContents to attach controller to!";
-  if (vr::VrTabHelper::IsInVr(web_contents)) {
-    return false;  // TODO(crbug.com/902305): Re-Enable if possible.
-  }
-  return base::FeatureList::IsEnabled(
-      autofill::features::kAutofillKeyboardAccessory);
-}
-
-// static
 AddressAccessoryController* AddressAccessoryController::GetOrCreate(
     content::WebContents* web_contents) {
-  DCHECK(AddressAccessoryController::AllowedForWebContents(web_contents));
-
   AddressAccessoryControllerImpl::CreateForWebContents(web_contents);
   return AddressAccessoryControllerImpl::FromWebContents(web_contents);
 }
@@ -136,8 +124,14 @@ void AddressAccessoryControllerImpl::OnFillingTriggered(
       autofill::ContentAutofillDriver::GetForRenderFrameHost(rfh);
   if (!driver)
     return;
-  driver->RendererShouldFillFieldWithValue(focused_field_id,
-                                           selection.display_text());
+  driver->browser_events().ApplyFieldAction(
+      mojom::ActionPersistence::kFill, mojom::TextReplacement::kReplaceAll,
+      focused_field_id, selection.display_text());
+}
+
+void AddressAccessoryControllerImpl::OnPasskeySelected(
+    const std::vector<uint8_t>& passkey_id) {
+  NOTIMPLEMENTED() << "Passkey support not available in address controller.";
 }
 
 void AddressAccessoryControllerImpl::OnOptionSelected(
@@ -158,21 +152,31 @@ void AddressAccessoryControllerImpl::OnToggleChanged(
 }
 
 void AddressAccessoryControllerImpl::RefreshSuggestions() {
+  TRACE_EVENT0("passwords",
+               "AddressAccessoryControllerImpl::RefreshSuggestions");
   if (!personal_data_manager_) {
     personal_data_manager_ =
         autofill::PersonalDataManagerFactory::GetForProfile(
             Profile::FromBrowserContext(GetWebContents().GetBrowserContext()));
     personal_data_manager_->AddObserver(this);
   }
-  absl::optional<AccessorySheetData> data = GetSheetData();
   if (source_observer_) {
-    source_observer_.Run(this, IsFillingSourceAvailable(data.has_value()));
+    source_observer_.Run(
+        this, IsFillingSourceAvailable(
+                  personal_data_manager_ &&
+                  !personal_data_manager_->GetProfilesToSuggest().empty()));
   } else {
     // TODO(crbug.com/1169167): Remove once filling controller pulls this
     // information instead of waiting to get it pushed.
+    absl::optional<AccessorySheetData> data = GetSheetData();
     DCHECK(data.has_value());
-    GetManualFillingController()->RefreshSuggestions(std::move(data.value()));
+    GetManualFillingController()->RefreshSuggestions(std::move(data).value());
   }
+}
+
+base::WeakPtr<AddressAccessoryController>
+AddressAccessoryControllerImpl::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void AddressAccessoryControllerImpl::OnPersonalDataChanged() {

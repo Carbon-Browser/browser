@@ -1,11 +1,9 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_INSTALLER_UTIL_LZMA_UTIL_H_
 #define CHROME_INSTALLER_UTIL_LZMA_UTIL_H_
-
-#include <set>
 
 #include "base/files/file.h"
 #include "base/files/file_path.h"
@@ -24,7 +22,7 @@ enum UnPackStatus {
   UNPACK_NO_FILENAME_ERROR = 6,
   UNPACK_CREATE_FILE_ERROR = 7,
   UNPACK_WRITE_FILE_ERROR = 8,
-  UNPACK_SET_FILE_TIME_ERROR = 9,
+  // UNPACK_SET_FILE_TIME_ERROR = 9, Deprecated.
   // UNPACK_CLOSE_FILE_ERROR = 10, Deprecated.
   UNPACK_ALLOCATE_ERROR = 11,
   UNPACK_CRC_ERROR = 12,
@@ -71,7 +69,6 @@ class LzmaUtilImpl {
 
  private:
   base::File archive_file_;
-  std::set<base::FilePath> directories_created_;
   absl::optional<DWORD> error_code_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "chromeos/dbus/dlcservice/fake_dlcservice_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/fake_dlcservice_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace arc {
@@ -106,24 +107,18 @@ constexpr CallbackTestData callback_test_data[] = {
 class ArcDlcInstallerTest : public testing::Test {
  protected:
   void SetUp() override {
-    chromeos::DlcserviceClient::InitializeFake();
-    fake_dlc_client_ = static_cast<chromeos::FakeDlcserviceClient*>(
-        chromeos::DlcserviceClient::Get());
-    fake_dlc_client_->set_install_root_path("default_dlc_root_path_");
+    fake_dlc_client_.set_install_root_path("default_dlc_root_path_");
     arc_dlc_installer_ = std::make_unique<ArcDlcInstaller>();
   }
 
-  void TearDown() override {
-    arc_dlc_installer_.reset();
-    chromeos::DlcserviceClient::Shutdown();
-  }
+  void TearDown() override { arc_dlc_installer_.reset(); }
 
   // Get installed DLC names from |fake_dlc_client_|.
   std::vector<std::string> GetInstalledDlcNames() {
     base::RunLoop run_loop;
 
     std::vector<std::string> dlc_list;
-    fake_dlc_client_->GetExistingDlcs(base::BindOnce(
+    fake_dlc_client_.GetExistingDlcs(base::BindOnce(
         [](base::OnceClosure quit, std::vector<std::string>* dlc_list,
            const std::string& err,
            const dlcservice::DlcsWithContent& dlcs_with_content) {
@@ -138,7 +133,7 @@ class ArcDlcInstallerTest : public testing::Test {
     return dlc_list;
   }
 
-  chromeos::FakeDlcserviceClient* fake_dlc_client_;
+  ash::FakeDlcserviceClient fake_dlc_client_;
   base::test::SingleThreadTaskEnvironment task_environment;
   std::unique_ptr<ArcDlcInstaller> arc_dlc_installer_;
 };
@@ -152,9 +147,9 @@ class ArcDlcInstallerEnableDisableTest
 
 TEST_P(ArcDlcInstallerEnableDisableTest, EnableDisableTest) {
   if (GetParam().action == Action::EnableDlc) {
-    fake_dlc_client_->set_install_error(GetParam().dlc_error);
+    fake_dlc_client_.set_install_error(GetParam().dlc_error);
   } else {
-    fake_dlc_client_->set_uninstall_error(GetParam().dlc_error);
+    fake_dlc_client_.set_uninstall_error(GetParam().dlc_error);
   }
   arc_dlc_installer_->SetStateForTesting(GetParam().state_to_be_set);
   base::MockCallback<base::OnceClosure> callback;
@@ -204,8 +199,8 @@ INSTANTIATE_TEST_SUITE_P(ArcDlcInstallerCallbackTest,
 
 // Tests that installation, followed by uninstallation, are both successful.
 TEST_F(ArcDlcInstallerTest, TestInstallAndUninstallSuccess) {
-  fake_dlc_client_->set_install_error(dlcservice::kErrorNone);
-  fake_dlc_client_->set_uninstall_error(dlcservice::kErrorNone);
+  fake_dlc_client_.set_install_error(dlcservice::kErrorNone);
+  fake_dlc_client_.set_uninstall_error(dlcservice::kErrorNone);
 
   arc_dlc_installer_->RequestEnable();
   base::RunLoop().RunUntilIdle();

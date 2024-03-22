@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <string>
 
 #include "base/strings/string_piece.h"
+#include "base/types/optional_util.h"
 #include "extensions/browser/extension_navigation_ui_data.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/guest_view/web_view/web_view_renderer_state.h"
@@ -103,7 +104,8 @@ bool AllowCrossRendererResourceLoad(
   // Allow web accessible extension resources to be loaded as
   // subresources/sub-frames.
   if (WebAccessibleResourcesInfo::IsResourceWebAccessible(
-          extension, std::string(resource_path), request.request_initiator)) {
+          extension, std::string(resource_path),
+          base::OptionalToPtr(request.request_initiator))) {
     *allowed = true;
     return true;
   }

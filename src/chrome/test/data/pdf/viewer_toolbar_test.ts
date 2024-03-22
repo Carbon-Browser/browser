@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -287,9 +287,14 @@ const tests = [
         toolbar.shadowRoot!.querySelector<HTMLElement>('#present-button');
     chrome.test.assertTrue(!!button);
 
+    chrome.test.assertFalse(toolbar.$['present-button'].disabled);
     const whenFired = eventToPromise('present-click', toolbar);
     button!.click();
     await whenFired;
+
+    // The present button should be disabled if the PDF Viewer is embedded.
+    toolbar.embeddedViewer = true;
+    chrome.test.assertTrue(toolbar.$['present-button'].disabled);
     chrome.test.succeed();
   },
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/fake_arc_session.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/platform_thread.h"
 #include "chrome/browser/speech/tts_chromeos.h"
 #include "chrome/test/base/testing_profile.h"
@@ -72,6 +73,7 @@ class TestableTtsController : public content::TtsController {
   void StripSSML(
       const std::string& utterance,
       base::OnceCallback<void(const std::string&)> callback) override {}
+  void OnTtsUtteranceBecameInvalid(int utterance_id) override {}
 
   int last_utterance_id_;
   content::TtsEventType last_event_type_;
@@ -107,7 +109,7 @@ class ArcTtsServiceTest : public testing::Test {
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<TestingProfile> testing_profile_;
   std::unique_ptr<TestableTtsController> tts_controller_;
-  ArcTtsService* const tts_service_;
+  const raw_ptr<ArcTtsService, ExperimentalAsh> tts_service_;
 };
 
 // Tests that ArcTtsService can be constructed and destructed.

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,19 +37,19 @@ bool URLSchemeListPolicyHandler::CheckPolicySettings(const PolicyMap& policies,
 
   const base::Value* schemes =
       policies.GetValue(policy_name(), base::Value::Type::LIST);
-  if (!schemes || schemes->GetListDeprecated().empty())
+  if (!schemes || schemes->GetList().empty())
     return true;
 
   // Filters more than |url_util::kMaxFiltersPerPolicy| are ignored, add a
   // warning message.
-  if (schemes->GetListDeprecated().size() > policy::kMaxUrlFiltersPerPolicy) {
+  if (schemes->GetList().size() > max_items()) {
     errors->AddError(policy_name(),
                      IDS_POLICY_URL_ALLOW_BLOCK_LIST_MAX_FILTERS_LIMIT_WARNING,
-                     base::NumberToString(policy::kMaxUrlFiltersPerPolicy));
+                     base::NumberToString(max_items()));
   }
 
   std::vector<std::string> invalid_policies;
-  for (const auto& entry : schemes->GetListDeprecated()) {
+  for (const auto& entry : schemes->GetList()) {
     if (!ValidatePolicyEntry(entry.GetIfString()))
       invalid_policies.push_back(entry.GetString());
   }
@@ -59,7 +59,7 @@ bool URLSchemeListPolicyHandler::CheckPolicySettings(const PolicyMap& policies,
                      base::JoinString(invalid_policies, ","));
   }
 
-  return invalid_policies.size() < schemes->GetListDeprecated().size();
+  return invalid_policies.size() < schemes->GetList().size();
 }
 
 void URLSchemeListPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
@@ -70,14 +70,19 @@ void URLSchemeListPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
     return;
   base::Value::List filtered_schemes;
   for (const auto& entry : schemes->GetList()) {
-    if (filtered_schemes.size() >= policy::kMaxUrlFiltersPerPolicy)
+    if (filtered_schemes.size() >= max_items()) {
       break;
+    }
 
     if (ValidatePolicyEntry(entry.GetIfString()))
       filtered_schemes.Append(entry.Clone());
   }
 
   prefs->SetValue(pref_path_, base::Value(std::move(filtered_schemes)));
+}
+
+size_t URLSchemeListPolicyHandler::max_items() {
+  return kMaxUrlFiltersPerPolicy;
 }
 
 // Validates that policy follows official pattern

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,18 @@
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "ash/public/cpp/shelf_types.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/extensions/launch_util.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/ash/ash_util.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
@@ -27,13 +29,15 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/common/extensions/manifest_handlers/app_launch_info.h"
+#include "components/app_constants/constants.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/app_window/native_app_window.h"
@@ -59,7 +63,7 @@ bool IsAppBrowser(Browser* browser) {
 // performed by activating the content.
 ash::ShelfAction ActivateContentOrMinimize(content::WebContents* content,
                                            bool allow_minimize) {
-  Browser* browser = chrome::FindBrowserWithWebContents(content);
+  Browser* browser = chrome::FindBrowserWithTab(content);
   TabStripModel* tab_strip = browser->tab_strip_model();
   int index = tab_strip->GetIndexOfWebContents(content);
   DCHECK_NE(TabStripModel::kNoTab, index);
@@ -102,7 +106,7 @@ absl::optional<ash::ShelfAction> AdvanceApp(
   size_t index = 0;
   if (active_item) {
     DCHECK(base::Contains(items, active_item));
-    auto it = std::find(items.cbegin(), items.cend(), active_item);
+    auto it = base::ranges::find(items, active_item);
     index = (it - items.cbegin() + 1) % items.size();
   }
   std::move(activate_callback).Run(items[index]);
@@ -122,8 +126,8 @@ class AppMatcher {
     DCHECK(profile);
     if (web_app::WebAppProvider* provider =
             web_app::WebAppProvider::GetForLocalAppsUnchecked(profile)) {
-      if (provider->registrar().IsLocallyInstalled(app_id)) {
-        registrar_ = &provider->registrar();
+      if (provider->registrar_unsafe().IsLocallyInstalled(app_id)) {
+        registrar_ = &provider->registrar_unsafe();
       }
     }
     if (!registrar_)
@@ -146,6 +150,8 @@ class AppMatcher {
     return extension_ ? WebContentMatchesHostedApp(web_contents, browser)
                       : WebContentMatchesWebApp(web_contents, browser);
   }
+
+  bool IsAshBrowser() const { return app_id_ == app_constants::kChromeAppId; }
 
  private:
   bool WebContentMatchesHostedApp(content::WebContents* web_contents,
@@ -220,10 +226,10 @@ class AppMatcher {
   // AppMatcher is stack allocated. Pointer members below are not owned.
 
   // registrar_ is set when app_id_ is a web app.
-  const web_app::WebAppRegistrar* registrar_ = nullptr;
+  raw_ptr<const web_app::WebAppRegistrar, ExperimentalAsh> registrar_ = nullptr;
 
   // extension_ is set when app_id_ is a hosted app.
-  const Extension* extension_ = nullptr;
+  raw_ptr<const Extension, ExperimentalAsh> extension_ = nullptr;
 };
 
 }  // namespace
@@ -248,12 +254,48 @@ AppShortcutShelfItemController::~AppShortcutShelfItemController() {
   BrowserList::RemoveObserver(this);
 }
 
+// This function is responsible for handling mouse and key events that are
+// triggered when Ash is the Chrome browser and when an SWA or PWA icon on
+// the shelf is clicked, or when the Alt+N accelerator is triggered for the
+// SWA or PWA. For Ash-chrome please refer to
+// BrowserShortcutShelfItemController. For Lacros please refer to
+// BrowserAppShelfItemController.
 void AppShortcutShelfItemController::ItemSelected(
     std::unique_ptr<ui::Event> event,
     int64_t display_id,
     ash::ShelfLaunchSource source,
     ItemSelectedCallback callback,
     const ItemFilterPredicate& filter_predicate) {
+  // Here we check the implicit assumption that the type of the event that gets
+  // passed in is never ui::ET_KEY_PRESSED. One may find it strange as usually
+  // ui::ET_KEY_RELEASED comes in pair with ui::ET_KEY_PRESSED, i.e, if we need
+  // to handle ui::ET_KEY_RELEASED, then we probably need to handle
+  // ui::ET_KEY_PRESSED too. However this is not the case here. The ui::KeyEvent
+  // that gets passed in is manufactured as an ui::ET_KEY_RELEASED typed
+  // KeyEvent right before being passed in. This is similar to the situations of
+  // BrowserShortcutShelfItemController and BrowserAppShelfItemController.
+  //
+  // One other thing regarding the KeyEvent here that one may find confusing is
+  // that even though the code here says ET_KEY_RELEASED, one only needs to
+  // conduct a press action (e.g., pressing Alt+1 on a physical device without
+  // letting go) to trigger this ItemSelected() function call. The subsequent
+  // key release action is not required. This naming disparity comes from the
+  // fact that while the key accelerator is triggered and handled by
+  // ui::AcceleratorManager::Process() with a KeyEvent instance as one of its
+  // inputs, further down the callstack, the same KeyEvent instance is not
+  // passed over into ash::Shelf::ActivateShelfItemOnDisplay(). Instead, a new
+  // KeyEvent instance is fabricated inside
+  // ash::Shelf::ActivateShelfItemOnDisplay(), with its type being
+  // ET_KEY_RELEASED, to represent the original KeyEvent, whose type is
+  // ET_KEY_PRESSED.
+  //
+  // The fabrication of the release typed key event was first introduced in this
+  // CL in 2013.
+  // https://chromiumcodereview.appspot.com/14551002/patch/41001/42001
+  //
+  // A bug is filed to track future works for fixing this confusing naming
+  // disparity. https://crbug.com/1473895
+  DCHECK(!(event && event->type() == ui::ET_KEY_PRESSED));
   // In case of a keyboard event, we were called by a hotkey. In that case we
   // activate the next item in line if an item of our list is already active.
   if (event && event->type() == ui::ET_KEY_RELEASED) {
@@ -280,8 +322,13 @@ void AppShortcutShelfItemController::ItemSelected(
     // LaunchApp may replace and destroy this item controller instance. Run the
     // callback first and copy the id to avoid crashes.
     std::move(callback).Run(ash::SHELF_ACTION_NEW_WINDOW_CREATED, {});
-    ChromeShelfController::instance()->LaunchApp(
-        ash::ShelfID(shelf_id()), source, ui::EF_NONE, display_id);
+
+    ChromeShelfController* chrome_shelf_controller =
+        ChromeShelfController::instance();
+    MaybeRecordAppLaunchForScalableIph(
+        shelf_id().app_id, chrome_shelf_controller->profile(), source);
+    chrome_shelf_controller->LaunchApp(ash::ShelfID(shelf_id()), source,
+                                       ui::EF_NONE, display_id);
     return;
   }
 
@@ -382,13 +429,13 @@ void AppShortcutShelfItemController::ExecuteCommand(bool from_context_menu,
     // invalid pointer cached in |app_menu_web_contents_| should yield a null
     // browser or kNoTab.
     content::WebContents* web_contents = app_menu_web_contents_[command_id];
-    Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+    Browser* browser = chrome::FindBrowserWithTab(web_contents);
     TabStripModel* tab_strip = browser ? browser->tab_strip_model() : nullptr;
     const int index = tab_strip ? tab_strip->GetIndexOfWebContents(web_contents)
                                 : TabStripModel::kNoTab;
     if (index != TabStripModel::kNoTab) {
       if (should_close) {
-        tab_strip->CloseWebContentsAt(index, TabStripModel::CLOSE_USER_GESTURE);
+        tab_strip->CloseWebContentsAt(index, TabCloseTypes::CLOSE_USER_GESTURE);
       } else {
         tab_strip->ActivateTabAt(index);
         activate_browser(browser);
@@ -406,7 +453,7 @@ void AppShortcutShelfItemController::Close() {
       browser->tab_strip_model()->CloseAllTabs();
   } else {
     for (content::WebContents* item : GetAppWebContents(base::NullCallback())) {
-      Browser* browser = chrome::FindBrowserWithWebContents(item);
+      Browser* browser = chrome::FindBrowserWithTab(item);
       if (!browser ||
           !multi_user_util::IsProfileFromActiveUser(browser->profile())) {
         continue;
@@ -414,7 +461,7 @@ void AppShortcutShelfItemController::Close() {
       TabStripModel* tab_strip = browser->tab_strip_model();
       int index = tab_strip->GetIndexOfWebContents(item);
       DCHECK(index != TabStripModel::kNoTab);
-      tab_strip->CloseWebContentsAt(index, TabStripModel::CLOSE_NONE);
+      tab_strip->CloseWebContentsAt(index, TabCloseTypes::CLOSE_NONE);
     }
   }
 }
@@ -423,8 +470,7 @@ void AppShortcutShelfItemController::OnBrowserClosing(Browser* browser) {
   if (!app_menu_cached_by_browsers_)
     return;
   // Reset pointers to the closed browser, but leave menu indices intact.
-  auto it =
-      std::find(app_menu_browsers_.begin(), app_menu_browsers_.end(), browser);
+  auto it = base::ranges::find(app_menu_browsers_, browser);
   if (it != app_menu_browsers_.end())
     *it = nullptr;
 }
@@ -458,8 +504,10 @@ AppShortcutShelfItemController::GetAppWebContents(
     TabStripModel* tab_strip = browser->tab_strip_model();
     for (int index = 0; index < tab_strip->count(); index++) {
       content::WebContents* web_contents = tab_strip->GetWebContentsAt(index);
-      if (matcher.WebContentMatchesApp(web_contents, browser))
+      if (matcher.IsAshBrowser() ||
+          matcher.WebContentMatchesApp(web_contents, browser)) {
         items.push_back(web_contents);
+      }
     }
   }
   return items;
@@ -516,7 +564,7 @@ AppShortcutShelfItemController::AdvanceToNextApp(
       base::BindOnce([](const std::vector<content::WebContents*>& web_contents,
                         aura::Window** out_window) -> content::WebContents* {
         for (auto* web_content : web_contents) {
-          Browser* browser = chrome::FindBrowserWithWebContents(web_content);
+          Browser* browser = chrome::FindBrowserWithTab(web_content);
           // The active web contents is on the active browser, and matches the
           // index of the current active tab.
           if (browser->window()->IsActive()) {
@@ -555,10 +603,10 @@ bool AppShortcutShelfItemController::IsWindowedWebApp() {
   if (web_app::WebAppProvider* provider =
           web_app::WebAppProvider::GetForLocalAppsUnchecked(
               ChromeShelfController::instance()->profile())) {
-    web_app::WebAppRegistrar& registrar = provider->registrar();
+    web_app::WebAppRegistrar& registrar = provider->registrar_unsafe();
     if (registrar.IsLocallyInstalled(app_id())) {
       return registrar.GetAppUserDisplayMode(app_id()) !=
-             web_app::UserDisplayMode::kBrowser;
+             web_app::mojom::UserDisplayMode::kBrowser;
     }
   }
   return false;

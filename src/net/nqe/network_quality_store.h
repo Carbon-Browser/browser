@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,7 @@ class NET_EXPORT_PRIVATE NetworkQualityStore {
   // Notifies |observer| of the current effective connection type if |observer|
   // is still registered as an observer.
   void NotifyCacheObserverIfPresent(
-      NetworkQualitiesCacheObserver* observer) const;
+      MayBeDangling<NetworkQualitiesCacheObserver> observer) const;
 
   // This does not use an unordered_map or hash_map for code simplicity (the key
   // just implements operator<, rather than hash and equality) and because the

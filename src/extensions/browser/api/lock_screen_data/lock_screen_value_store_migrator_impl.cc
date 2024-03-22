@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
@@ -76,7 +76,7 @@ void LockScreenValueStoreMigratorImpl::StartMigrationForExtension(
 void LockScreenValueStoreMigratorImpl::OnGotItemsForExtension(
     const ExtensionId& extension_id,
     OperationResult result,
-    std::unique_ptr<base::DictionaryValue> items) {
+    base::Value::Dict items) {
   if (!IsMigratingExtensionData(extension_id))
     return;
 
@@ -86,10 +86,9 @@ void LockScreenValueStoreMigratorImpl::OnGotItemsForExtension(
     return;
   }
 
-  for (base::DictionaryValue::Iterator item_iter(*items); !item_iter.IsAtEnd();
-       item_iter.Advance()) {
+  for (const auto item : items) {
     migration_items_[extension_id].pending.emplace_back(
-        std::make_unique<DataItem>(item_iter.key(), extension_id, context_,
+        std::make_unique<DataItem>(item.first, extension_id, context_,
                                    source_store_cache_, task_runner_,
                                    crypto_key_));
   }

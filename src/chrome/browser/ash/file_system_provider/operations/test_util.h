@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/files/file.h"
+#include "chrome/browser/ash/file_system_provider/request_dispatcher.h"
 
 namespace extensions {
 struct Event;
@@ -21,17 +22,21 @@ namespace util {
 
 // Fake event dispatcher implementation with extra logging capability. Acts as
 // a providing extension end-point.
-class LoggingDispatchEventImpl {
+class LoggingDispatchEventImpl : public RequestDispatcher {
  public:
   explicit LoggingDispatchEventImpl(bool dispatch_reply);
 
   LoggingDispatchEventImpl(const LoggingDispatchEventImpl&) = delete;
   LoggingDispatchEventImpl& operator=(const LoggingDispatchEventImpl&) = delete;
 
-  virtual ~LoggingDispatchEventImpl();
+  ~LoggingDispatchEventImpl() override;
 
-  // Handles sending an event to a providing extension.
-  bool OnDispatchEventImpl(std::unique_ptr<extensions::Event> event);
+  // Handles sending a request event to a providing extension.
+  bool DispatchRequest(int request_id,
+                       absl::optional<std::string> file_system_id,
+                       std::unique_ptr<extensions::Event> event) override;
+  void CancelRequest(int request_id,
+                     absl::optional<std::string> file_system_id) override;
 
   // Returns events sent to providing extensions.
   std::vector<std::unique_ptr<extensions::Event>>& events() { return events_; }

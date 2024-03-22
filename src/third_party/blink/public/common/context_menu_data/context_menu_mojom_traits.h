@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,18 @@
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/common/context_menu_data/untrustworthy_context_menu_params.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
+#include "third_party/blink/public/mojom/forms/form_control_type.mojom-shared.h"
 #include "url/mojom/url_gurl_mojom_traits.h"
 
 namespace mojo {
+
+template <>
+struct BLINK_COMMON_EXPORT
+    StructTraits<blink::mojom::FormRendererIdDataView, uint64_t> {
+  static uint64_t id(uint64_t r) { return r; }
+
+  static bool Read(blink::mojom::FormRendererIdDataView data, uint64_t* out);
+};
 
 template <>
 struct BLINK_COMMON_EXPORT
@@ -151,11 +160,6 @@ struct BLINK_COMMON_EXPORT
     return r.source_type;
   }
 
-  static blink::mojom::ContextMenuDataInputFieldType input_field_type(
-      const blink::UntrustworthyContextMenuParams& r) {
-    return r.input_field_type;
-  }
-
   static const gfx::Rect& selection_rect(
       const blink::UntrustworthyContextMenuParams& r) {
     return r.selection_rect;
@@ -171,9 +175,29 @@ struct BLINK_COMMON_EXPORT
     return r.opened_from_highlight;
   }
 
-  static const absl::optional<uint64_t>& field_renderer_id(
+  static std::optional<blink::mojom::FormControlType> form_control_type(
+      const blink::UntrustworthyContextMenuParams& r) {
+    return r.form_control_type;
+  }
+
+  static bool is_content_editable_for_autofill(
+      const blink::UntrustworthyContextMenuParams& r) {
+    return r.is_content_editable_for_autofill;
+  }
+
+  static uint64_t field_renderer_id(
       const blink::UntrustworthyContextMenuParams& r) {
     return r.field_renderer_id;
+  }
+
+  static uint64_t form_renderer_id(
+      const blink::UntrustworthyContextMenuParams& r) {
+    return r.form_renderer_id;
+  }
+
+  static bool is_password_type_by_heuristics(
+      const blink::UntrustworthyContextMenuParams& r) {
+    return r.is_password_type_by_heuristics;
   }
 
   static bool Read(blink::mojom::UntrustworthyContextMenuParamsDataView r,

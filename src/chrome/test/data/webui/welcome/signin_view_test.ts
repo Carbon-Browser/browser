@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ suite('SigninViewTest', function() {
     // calls to backend.
     SigninViewProxyImpl.setInstance(new TestSigninViewProxy());
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     testElement = document.createElement('signin-view');
     document.body.appendChild(testElement);
   });
@@ -34,13 +34,14 @@ suite('SigninViewTest', function() {
     testElement.remove();
   });
 
-  test('sign-in button', function() {
+  test('sign-in button', async function() {
     const signinButton = testElement.shadowRoot!.querySelector('cr-button');
     assertTrue(!!signinButton);
 
     signinButton!.click();
-    return testWelcomeBrowserProxy.whenCalled('handleActivateSignIn')
-        .then(redirectUrl => assertEquals(null, redirectUrl));
+    const redirectUrl =
+        await testWelcomeBrowserProxy.whenCalled('handleActivateSignIn');
+    assertEquals(null, redirectUrl);
   });
 
   test('no-thanks button', function() {

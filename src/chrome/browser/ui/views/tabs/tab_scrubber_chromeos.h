@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,9 @@ class TabScrubberChromeOS : public ui::EventHandler,
   void SetEnabled(bool enabled);
 
   // Synthesize an ScrollEvent given a x offset (in DIPs).
-  void SynthesizedScrollEvent(float x_offset);
+  // `is_fling_scroll_event` is set to true when the scroll event should be
+  // fling scroll event.
+  void SynthesizedScrollEvent(float x_offset, bool is_fling_scroll_event);
 
  private:
   friend class TabScrubberChromeOSTest;
@@ -91,7 +93,7 @@ class TabScrubberChromeOS : public ui::EventHandler,
   bool GetEnabledForTesting() const { return enabled_; }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  bool MaybeDelegateHandlingToLacros(ui::ScrollEvent* event);
+  static bool MaybeDelegateHandlingToLacros(ui::ScrollEvent* event);
 #endif
 
   // Are we currently scrubbing?.

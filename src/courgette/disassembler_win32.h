@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -127,7 +127,7 @@ class DisassemblerWin32 : public Disassembler {
 
   uint16_t machine_type_ = 0;
   uint16_t number_of_sections_ = 0;
-  raw_ptr<const Section> sections_ = nullptr;
+  raw_ptr<const Section, AllowPtrArithmetic> sections_ = nullptr;
   bool has_text_section_ = false;
 
   uint32_t size_of_code_ = 0;

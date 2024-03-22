@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -166,16 +166,6 @@ TEST_F(ClientPolicyTest, CheckNTPSuggestionsDefined) {
   ExpectPersistent(kNTPSuggestionsNamespace);
   ExpectRestrictedToTabFromClientId(kNTPSuggestionsNamespace, false);
   ExpectRequiresSpecificUserSettings(kNTPSuggestionsNamespace, false);
-}
-
-TEST_F(ClientPolicyTest, CheckSuggestedArticlesDefined) {
-  OfflinePageClientPolicy policy = GetPolicy(kSuggestedArticlesNamespace);
-  EXPECT_EQ(policy.name_space, kSuggestedArticlesNamespace);
-  EXPECT_TRUE(isTemporary(policy));
-  ExpectTemporary(kSuggestedArticlesNamespace);
-  ExpectDownloadSupport(kSuggestedArticlesNamespace, true);
-  ExpectRestrictedToTabFromClientId(kSuggestedArticlesNamespace, false);
-  ExpectRequiresSpecificUserSettings(kSuggestedArticlesNamespace, false);
 }
 
 TEST_F(ClientPolicyTest, CheckLivePageSharingDefined) {

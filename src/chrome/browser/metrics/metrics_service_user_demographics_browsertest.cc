@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@
 #include "components/metrics/demographics/demographic_metrics_test_utils.h"
 #include "components/metrics/metrics_switches.h"
 #include "components/metrics_services_manager/metrics_services_manager.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -47,8 +47,7 @@ class MetricsServiceUserDemographicsBrowserTest
       // Enable UMA and reporting of the synced user's birth year and gender.
       scoped_feature_list_.InitWithFeatures(
           // enabled_features =
-          {internal::kMetricsReportingFeature,
-           DemographicMetricsProvider::kDemographicMetricsReporting},
+          {internal::kMetricsReportingFeature, kDemographicMetricsReporting},
           // disabled_features =
           {});
     } else {
@@ -56,7 +55,7 @@ class MetricsServiceUserDemographicsBrowserTest
           // enabled_features =
           {internal::kMetricsReportingFeature},
           // disabled_features =
-          {DemographicMetricsProvider::kDemographicMetricsReporting});
+          {kDemographicMetricsReporting});
     }
   }
 
@@ -77,6 +76,8 @@ class MetricsServiceUserDemographicsBrowserTest
         &metrics_consent_);
     SyncTest::SetUp();
   }
+
+  PrefService* local_state() { return g_browser_process->local_state(); }
 
   // Forces a log record to be generated. Returns a copy of the record on
   // success; otherwise, returns nullptr.
@@ -125,7 +126,7 @@ IN_PROC_BROWSER_TEST_P(MetricsServiceUserDemographicsBrowserTest,
   std::unique_ptr<SyncServiceImplHarness> harness =
       test::InitializeProfileForSync(test_profile,
                                      GetFakeServer()->AsWeakPtr());
-  harness->SetupSync();
+  ASSERT_TRUE(harness->SetupSync());
 
   // Make sure that there is only one Profile to allow reporting the user's
   // birth year and gender.
@@ -137,9 +138,8 @@ IN_PROC_BROWSER_TEST_P(MetricsServiceUserDemographicsBrowserTest,
 
   // Check log content and the histogram.
   if (param.expect_reported_demographics) {
-    EXPECT_EQ(
-        test::GetNoisedBirthYear(*test_profile->GetPrefs(), test_birth_year),
-        uma_proto->user_demographics().birth_year());
+    EXPECT_EQ(test::GetNoisedBirthYear(local_state(), test_birth_year),
+              uma_proto->user_demographics().birth_year());
     EXPECT_EQ(test_gender, uma_proto->user_demographics().gender());
     histogram.ExpectUniqueSample("UMA.UserDemographics.Status",
                                  UserDemographicsStatus::kSuccess, 1);

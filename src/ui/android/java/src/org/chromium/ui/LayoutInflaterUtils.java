@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,11 @@ public class LayoutInflaterUtils {
     public static View inflate(
             Window window, int resource, @Nullable ViewGroup root, boolean attachToRoot) {
         return inflateImpl(window.getLayoutInflater(), resource, root, attachToRoot);
+    }
+
+    public static View inflate(
+            LayoutInflater layoutInflater, int resource, @Nullable ViewGroup root) {
+        return inflateImpl(layoutInflater, resource, root, root != null);
     }
 
     private static View inflateImpl(

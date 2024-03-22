@@ -1,16 +1,17 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "ui/base/idle/idle.h"
 #include "ui/base/idle/idle_internal.h"
 #include "ui/display/screen.h"
 
 #if defined(USE_DBUS)
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"

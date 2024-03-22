@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,14 @@
 #include "chrome/browser/history_clusters/history_clusters_metrics_logger.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/webui/history/history_ui.h"
-#include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/history_clusters/core/features.h"
+#include "components/history_clusters/core/history_clusters_prefs.h"
+#include "components/history_clusters/core/url_constants.h"
+#include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "ui/webui/resources/cr_components/history_clusters/history_clusters.mojom.h"
@@ -29,8 +32,11 @@ class HistoryClustersHandlerBrowserTest : public InProcessBrowserTest {
   ~HistoryClustersHandlerBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
+    browser()->profile()->GetPrefs()->SetInteger(
+        history_clusters::prefs::kLastSelectedTab,
+        history_clusters::prefs::TabbedPage::GROUP);
     EXPECT_TRUE(ui_test_utils::NavigateToURL(
-        browser(), GURL(chrome::kChromeUIHistoryClustersURL)));
+        browser(), GURL(GetChromeUIHistoryClustersURL())));
     EXPECT_TRUE(content::WaitForLoadStop(
         browser()->tab_strip_model()->GetActiveWebContents()));
     handler_ = browser()
@@ -43,7 +49,7 @@ class HistoryClustersHandlerBrowserTest : public InProcessBrowserTest {
   }
 
  protected:
-  raw_ptr<HistoryClustersHandler> handler_;
+  raw_ptr<HistoryClustersHandler, AcrossTasksDanglingUntriaged> handler_;
 
  private:
   base::test::ScopedFeatureList feature_list_;
@@ -77,14 +83,8 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersHandlerBrowserTest,
 }
 
 // TODO(https://crbug.com/1335515): Flaky.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_OpenVisitUrlsInTabGroupHardCap \
-  DISABLED_OpenVisitUrlsInTabGroupHardCap
-#else
-#define MAYBE_OpenVisitUrlsInTabGroupHardCap OpenVisitUrlsInTabGroupHardCap
-#endif
 IN_PROC_BROWSER_TEST_F(HistoryClustersHandlerBrowserTest,
-                       MAYBE_OpenVisitUrlsInTabGroupHardCap) {
+                       DISABLED_OpenVisitUrlsInTabGroupHardCap) {
   auto* tab_strip_model = browser()->tab_strip_model();
   ASSERT_EQ(1, tab_strip_model->GetTabCount());
 
@@ -123,7 +123,7 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersHandlerBrowserTest,
 
   content::WebContentsDestroyedWatcher destroyed_watcher(
       tab_strip_model->GetWebContentsAt(0));
-  tab_strip_model->CloseWebContentsAt(0, TabStripModel::CLOSE_USER_GESTURE);
+  tab_strip_model->CloseWebContentsAt(0, TabCloseTypes::CLOSE_USER_GESTURE);
   destroyed_watcher.Wait();
 
   histogram_tester.ExpectUniqueSample(
@@ -151,7 +151,7 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersHandlerBrowserTest,
 
   content::WebContentsDestroyedWatcher destroyed_watcher(
       tab_strip_model->GetWebContentsAt(0));
-  tab_strip_model->CloseWebContentsAt(0, TabStripModel::CLOSE_USER_GESTURE);
+  tab_strip_model->CloseWebContentsAt(0, TabCloseTypes::CLOSE_USER_GESTURE);
   destroyed_watcher.Wait();
 
   histogram_tester.ExpectUniqueSample(
@@ -173,7 +173,7 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersHandlerBrowserTest,
 
   content::WebContentsDestroyedWatcher destroyed_watcher(
       tab_strip_model->GetWebContentsAt(0));
-  tab_strip_model->CloseWebContentsAt(0, TabStripModel::CLOSE_USER_GESTURE);
+  tab_strip_model->CloseWebContentsAt(0, TabCloseTypes::CLOSE_USER_GESTURE);
   destroyed_watcher.Wait();
 
   histogram_tester.ExpectUniqueSample(
@@ -195,7 +195,7 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersHandlerBrowserTest,
 
   content::WebContentsDestroyedWatcher destroyed_watcher(
       tab_strip_model->GetWebContentsAt(0));
-  tab_strip_model->CloseWebContentsAt(0, TabStripModel::CLOSE_USER_GESTURE);
+  tab_strip_model->CloseWebContentsAt(0, TabCloseTypes::CLOSE_USER_GESTURE);
   destroyed_watcher.Wait();
 
   histogram_tester.ExpectUniqueSample(

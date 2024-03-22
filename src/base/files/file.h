@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,20 +18,11 @@
 #include "base/trace_event/base_tracing_forward.h"
 #include "build/build_config.h"
 
-#if BUILDFLAG(IS_BSD) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_NACL) || \
-    BUILDFLAG(IS_FUCHSIA) || (BUILDFLAG(IS_ANDROID) && __ANDROID_API__ < 21)
 struct stat;
-namespace base {
-typedef struct stat stat_wrapper_t;
-}
-#elif BUILDFLAG(IS_POSIX)
-struct stat64;
-namespace base {
-typedef struct stat64 stat_wrapper_t;
-}
-#endif
 
 namespace base {
+
+using stat_wrapper_t = struct stat;
 
 // Thin wrapper around an OS-level file.
 // Note that this class does not provide any support for asynchronous IO, other
@@ -43,6 +34,9 @@ namespace base {
 // obvious non-modifying way are marked as const. Any method that forward calls
 // to the OS is not considered const, even if there is no apparent change to
 // member variables.
+//
+// On POSIX, if the given file is a symbolic link, most of the methods apply to
+// the file that the symbolic link resolves to.
 class BASE_EXPORT File {
  public:
   // FLAG_(OPEN|CREATE).* are mutually exclusive. You should specify exactly one
@@ -50,7 +44,7 @@ class BASE_EXPORT File {
   // a file.
   // FLAG_(WRITE|APPEND) are mutually exclusive. This is so that APPEND behavior
   // will be consistent with O_APPEND on POSIX.
-  enum Flags {
+  enum Flags : uint32_t {
     FLAG_OPEN = 1 << 0,            // Opens a file, only if it exists.
     FLAG_CREATE = 1 << 1,          // Creates a new file, only if it does not
                                    // already exist.
@@ -77,6 +71,10 @@ class BASE_EXPORT File {
     FLAG_CAN_DELETE_ON_CLOSE = 1 << 20,  // Requests permission to delete a file
                                          // via DeleteOnClose() (Windows only).
                                          // See DeleteOnClose() for details.
+    FLAG_WIN_NO_EXECUTE =
+        1 << 21,  // Windows only. Marks the file with a deny ACE that prevents
+                  // opening the file with EXECUTE access. Cannot be used with
+                  // FILE_WIN_EXECUTE flag. See also PreventExecuteMapping.
   };
 
   // This enum has been recorded in multiple histograms using PlatformFileError
@@ -374,11 +372,27 @@ class BASE_EXPORT File {
   static std::string ErrorToString(Error error);
 
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
-  // Wrapper for stat() or stat64().
+  // Wrapper for stat().
   static int Stat(const char* path, stat_wrapper_t* sb);
+  // Wrapper for fstat().
   static int Fstat(int fd, stat_wrapper_t* sb);
+  // Wrapper for lstat().
   static int Lstat(const char* path, stat_wrapper_t* sb);
 #endif
+
+  // This function can be used to augment `flags` with the correct flags
+  // required to create a File that can be safely passed to an untrusted
+  // process. It must be called if the File is intended to be transferred to an
+  // untrusted process, but can still be safely called even if the File is not
+  // intended to be transferred.
+  static constexpr uint32_t AddFlagsForPassingToUntrustedProcess(
+      uint32_t flags) {
+    if (flags & File::FLAG_WRITE || flags & File::FLAG_APPEND ||
+        flags & File::FLAG_WRITE_ATTRIBUTES) {
+      flags |= File::FLAG_WIN_NO_EXECUTE;
+    }
+    return flags;
+  }
 
  private:
   friend class FileTracing::ScopedTrace;

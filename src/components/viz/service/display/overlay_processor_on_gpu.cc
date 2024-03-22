@@ -1,13 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/viz/service/display/overlay_processor_on_gpu.h"
 
 #include "build/build_config.h"
+#include "gpu/command_buffer/service/display_compositor_memory_and_task_controller_on_gpu.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
-#include "gpu/ipc/display_compositor_memory_and_task_controller_on_gpu.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
 namespace viz {

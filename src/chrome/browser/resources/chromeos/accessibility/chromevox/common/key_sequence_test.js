@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,12 @@ ChromeVoxKeySequenceUnitTest = class extends AccessibilityTestBase {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule('KeySequence', '/chromevox/common/key_sequence.js');
+
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule('KeyCode', '/common/key_code.js'),
+      importModule('KeySequence', '/chromevox/common/key_sequence.js'),
+    ]);
 
     // Set up mock ChromeVox modifier
     KeySequence.modKeyStr = 'Alt';
@@ -152,9 +157,6 @@ ChromeVoxKeySequenceUnitTest = class extends AccessibilityTestBase {
 /** @override */
 ChromeVoxKeySequenceUnitTest.prototype.extraLibraries = [
   '../../common/testing/assert_additions.js',
-  '../../common/closure_shim.js',
-  '../../common/key_code.js',
-  '../background/chromevox.js',
   '../testing/fake_dom.js',
 ];
 

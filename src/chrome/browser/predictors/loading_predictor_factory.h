@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PREDICTORS_LOADING_PREDICTOR_FACTORY_H_
 #define CHROME_BROWSER_PREDICTORS_LOADING_PREDICTOR_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -14,7 +14,7 @@ namespace predictors {
 
 class LoadingPredictor;
 
-class LoadingPredictorFactory : public BrowserContextKeyedServiceFactory {
+class LoadingPredictorFactory : public ProfileKeyedServiceFactory {
  public:
   static LoadingPredictor* GetForProfile(Profile* profile);
   static LoadingPredictorFactory* GetInstance();
@@ -23,13 +23,13 @@ class LoadingPredictorFactory : public BrowserContextKeyedServiceFactory {
   LoadingPredictorFactory& operator=(const LoadingPredictorFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<LoadingPredictorFactory>;
+  friend base::NoDestructor<LoadingPredictorFactory>;
 
   LoadingPredictorFactory();
   ~LoadingPredictorFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

@@ -1,6 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include <inttypes.h>
 
 #include <iostream>
 #include <map>
@@ -14,6 +16,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
@@ -70,8 +73,9 @@ absl::optional<std::map<std::string, std::string>> DecodeCerts(
                  << " instead of CERTIFICATE";
       return absl::nullopt;
     }
-    std::string sha256_hex = base::ToLowerASCII(
-        base::HexEncode(crypto::SHA256Hash(base::make_span(data, len))));
+    std::string sha256_hex =
+        base::ToLowerASCII(base::HexEncode(crypto::SHA256Hash(
+            base::make_span(data, base::checked_cast<size_t>(len)))));
     certs[sha256_hex] = std::string(data, data + len);
   }
   return std::move(certs);
@@ -145,20 +149,16 @@ bool WriteRootCppFile(const RootStore& root_store,
   CHECK_GT(root_store.trust_anchors_size(), 0);
 
   std::string string_to_write =
-      "// This file is auto-generated, DO NOT EDIT.\n\n"
-      "const ChromeRootCertInfo kChromeRootCertList[] = {\n";
+      "// This file is auto-generated, DO NOT EDIT.\n\n";
 
-  for (auto& anchor : root_store.trust_anchors()) {
+  for (int i = 0; i < root_store.trust_anchors_size(); i++) {
+    const auto& anchor = root_store.trust_anchors(i);
     // Every trust anchor at this point should have a DER.
     CHECK(!anchor.der().empty());
     std::string der = anchor.der();
 
-    // Begin struct. Assumed type of ChromeRootCertInfo:
-    //
-    // struct {
-    //   base::span<const uint8_t> der;
-    // };
-    string_to_write += "    {{{";
+    base::StringAppendF(&string_to_write,
+                        "constexpr uint8_t kChromeRootCert%d[] = {", i);
 
     // Convert each character to hex representation, escaped.
     for (auto c : der) {
@@ -167,12 +167,20 @@ bool WriteRootCppFile(const RootStore& root_store,
     }
 
     // End struct
-    string_to_write += "}}},\n";
+    string_to_write += "};\n";
+  }
+
+  string_to_write += "constexpr ChromeRootCertInfo kChromeRootCertList[] = {\n";
+
+  for (int i = 0; i < root_store.trust_anchors_size(); i++) {
+    base::StringAppendF(&string_to_write, "    {kChromeRootCert%d},\n", i);
   }
   string_to_write += "};";
 
-  string_to_write += "\n\n\nstatic const int64_t kRootStoreVersion = " +
-                     base::NumberToString(root_store.version_major()) + ";\n";
+  base::StringAppendF(&string_to_write,
+                      "\n\n\nstatic const int64_t kRootStoreVersion = %" PRId64
+                      ";\n",
+                      root_store.version_major());
   if (!base::WriteFile(cpp_path, string_to_write)) {
     return false;
   }
@@ -192,6 +200,12 @@ bool WriteEvCppFile(const RootStore& root_store,
   for (auto& anchor : root_store.trust_anchors()) {
     // Every trust anchor at this point should have a DER.
     CHECK(!anchor.der().empty());
+    if (anchor.ev_policy_oids_size() == 0) {
+      // The same input file is used for the Chrome Root Store and EV enabled
+      // certificates. Skip anchors that have no EV policy OIDs when generating
+      // the EV include file.
+      continue;
+    }
 
     std::string sha256_hash = crypto::SHA256HashString(anchor.der());
 
@@ -231,9 +245,6 @@ bool WriteEvCppFile(const RootStore& root_store,
     if (oids_size > kMaxPolicyOids) {
       PLOG(ERROR) << hexencode_hash << " has too many OIDs!";
       return false;
-    } else if (oids_size < 1) {
-      PLOG(ERROR) << hexencode_hash << " has no OIDs!";
-      return false;
     }
     for (int i = 0; i < kMaxPolicyOids; i++) {
       std::string oid;
@@ -255,10 +266,6 @@ bool WriteEvCppFile(const RootStore& root_store,
   return true;
 }
 
-bool ValidCppOutputFormatValue(base::StringPiece value) {
-  return (value == "root" || value == "ev");
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -274,23 +281,23 @@ int main(int argc, char** argv) {
 
   base::CommandLine& command_line = *base::CommandLine::ForCurrentProcess();
   base::FilePath proto_path = command_line.GetSwitchValuePath("write-proto");
-  base::FilePath cpp_path = command_line.GetSwitchValuePath("write-cpp");
-  std::string cpp_output_format =
-      command_line.GetSwitchValueASCII("cpp-output-format");
+  base::FilePath root_store_cpp_path =
+      command_line.GetSwitchValuePath("write-cpp-root-store");
+  base::FilePath ev_roots_cpp_path =
+      command_line.GetSwitchValuePath("write-cpp-ev-roots");
   base::FilePath root_store_path =
       command_line.GetSwitchValuePath("root-store");
   base::FilePath certs_path = command_line.GetSwitchValuePath("certs");
 
-  if ((proto_path.empty() && cpp_path.empty()) || root_store_path.empty() ||
-      command_line.HasSwitch("help") ||
-      (!cpp_path.empty() && !ValidCppOutputFormatValue(cpp_output_format))) {
-    std::cerr << cpp_output_format << " ";
+  if ((proto_path.empty() && root_store_cpp_path.empty() &&
+       ev_roots_cpp_path.empty()) ||
+      root_store_path.empty() || command_line.HasSwitch("help")) {
     std::cerr << "Usage: root_store_tool "
               << "--root-store=TEXTPROTO_FILE "
               << "[--certs=CERTS_FILE] "
               << "[--write-proto=PROTO_FILE] "
-              << "[--write-cpp=CPP_FILE --cpp-output-format=[ev|root]] "
-              << std::endl;
+              << "[--write-cpp-root-store=CPP_FILE] "
+              << "[--write-cpp-ev-roots=CPP_FILE] " << std::endl;
     return 1;
   }
 
@@ -317,20 +324,15 @@ int main(int argc, char** argv) {
     }
   }
 
-  if (!cpp_path.empty()) {
-    bool success;
-    if (cpp_output_format == "root") {
-      success = WriteRootCppFile(*root_store, cpp_path);
-    } else if (cpp_output_format == "ev") {
-      success = WriteEvCppFile(*root_store, cpp_path);
-    } else {
-      // Unknown format.
-      success = false;
-    }
-    if (!success) {
-      PLOG(ERROR) << "Error writing cpp include file";
-      return 1;
-    }
+  if (!root_store_cpp_path.empty() &&
+      !WriteRootCppFile(*root_store, root_store_cpp_path)) {
+    PLOG(ERROR) << "Error writing root store C++ include file";
+    return 1;
+  }
+  if (!ev_roots_cpp_path.empty() &&
+      !WriteEvCppFile(*root_store, ev_roots_cpp_path)) {
+    PLOG(ERROR) << "Error writing EV roots C++ include file";
+    return 1;
   }
 
   return 0;

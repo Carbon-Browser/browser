@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,12 +13,14 @@ const double GamepadHapticActuator::kMaxEffectDurationMillis;
 const size_t Gamepad::kIdLengthCap;
 const size_t Gamepad::kAxesLengthCap;
 const size_t Gamepad::kButtonsLengthCap;
+const size_t Gamepad::kTouchEventsLengthCap;
 
 Gamepad::Gamepad()
     : connected(false),
       timestamp(0),
       axes_length(0),
       buttons_length(0),
+      touch_events_length(0),
       mapping(GamepadMapping::kNone),
       display_id(0) {
   id[0] = 0;

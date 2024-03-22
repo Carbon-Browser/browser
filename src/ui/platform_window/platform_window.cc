@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,9 +65,10 @@ bool PlatformWindow::CanSetDecorationInsets() const {
 
 void PlatformWindow::SetDecorationInsets(const gfx::Insets* insets_px) {}
 
-void PlatformWindow::SetOpaqueRegion(const std::vector<gfx::Rect>* region_px) {}
+void PlatformWindow::SetOpaqueRegion(
+    absl::optional<std::vector<gfx::Rect>> region_px) {}
 
-void PlatformWindow::SetInputRegion(const gfx::Rect* region_px) {}
+void PlatformWindow::SetInputRegion(absl::optional<gfx::Rect> region_px) {}
 
 bool PlatformWindow::IsClientControlledWindowMovementSupported() const {
   return true;

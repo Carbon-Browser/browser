@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/notreached.h"
 #include "chrome/browser/ash/file_system_provider/service.h"
 #include "chrome/browser/ash/smb_client/smb_file_system_id.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
@@ -139,6 +140,13 @@ AbortCallback SmbFileSystem::WriteFile(
   return base::DoNothing();
 }
 
+AbortCallback SmbFileSystem::FlushFile(
+    int file_handle,
+    storage::AsyncFileUtil::StatusCallback callback) {
+  NOTREACHED();
+  return base::DoNothing();
+}
+
 AbortCallback SmbFileSystem::AddWatcher(
     const GURL& origin,
     const base::FilePath& entry_path,
@@ -167,9 +175,10 @@ SmbFileSystem::GetFileSystemInfo() const {
   return file_system_info_;
 }
 
-file_system_provider::RequestManager* SmbFileSystem::GetRequestManager() {
+file_system_provider::OperationRequestManager*
+SmbFileSystem::GetRequestManager() {
   NOTREACHED();
-  return NULL;
+  return nullptr;
 }
 
 file_system_provider::Watchers* SmbFileSystem::GetWatchers() {
@@ -211,6 +220,12 @@ void SmbFileSystem::Configure(storage::AsyncFileUtil::StatusCallback callback) {
 base::WeakPtr<file_system_provider::ProvidedFileSystemInterface>
 SmbFileSystem::GetWeakPtr() {
   return AsWeakPtr();
+}
+
+std::unique_ptr<file_system_provider::ScopedUserInteraction>
+SmbFileSystem::StartUserInteraction() {
+  NOTREACHED();
+  return nullptr;
 }
 
 }  // namespace smb_client

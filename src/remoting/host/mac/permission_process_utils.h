@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@
 // relevant binary (the one that needs the permission) with a command-line
 // option, and examining the returned exit-code.
 
-namespace remoting {
-namespace mac {
+namespace remoting::mac {
 
 enum class HostMode { ME2ME, IT2ME };
 
@@ -19,7 +18,6 @@ enum class HostMode { ME2ME, IT2ME };
 bool CheckAccessibilityPermission(HostMode mode);
 bool CheckScreenRecordingPermission(HostMode mode);
 
-}  // namespace mac
-}  // namespace remoting
+}  // namespace remoting::mac
 
 #endif  // REMOTING_HOST_MAC_PERMISSION_PROCESS_UTILS_H_

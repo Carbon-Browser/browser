@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -16,18 +17,17 @@
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/upgrade_detector/build_state_observer.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 
 class PrefRegistrySimple;
 
 namespace ash {
+class NetworkStateHandler;
 class UpdateRequiredNotification;
 }  // namespace ash
 
 namespace base {
 class Clock;
-class DictionaryValue;
 class Time;
 }  // namespace base
 
@@ -40,10 +40,9 @@ namespace policy {
 // also calls UpdateRequiredNotification to show in-session notifications if an
 // update is required but it cannot be downloaded due to network limitations or
 // Auto Update Expiration.
-class MinimumVersionPolicyHandler
-    : public BuildStateObserver,
-      public chromeos::NetworkStateHandlerObserver,
-      public ash::UpdateEngineClient::Observer {
+class MinimumVersionPolicyHandler : public BuildStateObserver,
+                                    public ash::NetworkStateHandlerObserver,
+                                    public ash::UpdateEngineClient::Observer {
  public:
   static const char kRequirements[];
   static const char kChromeOsVersion[];
@@ -106,7 +105,7 @@ class MinimumVersionPolicyHandler
     // Method used to create an instance of MinimumVersionRequirement from
     // dictionary if it contains valid version string.
     static std::unique_ptr<MinimumVersionRequirement> CreateInstanceIfValid(
-        const base::DictionaryValue* dict);
+        const base::Value::Dict& dict);
 
     // This is used to compare two MinimumVersionRequirement objects
     // and returns 1 if the first object has version or warning time
@@ -146,7 +145,7 @@ class MinimumVersionPolicyHandler
   void OnUpdate(const BuildState* build_state) override;
 
   // NetworkStateHandlerObserver:
-  void DefaultNetworkChanged(const chromeos::NetworkState* network) override;
+  void DefaultNetworkChanged(const ash::NetworkState* network) override;
   void OnShuttingDown() override;
 
   // UpdateEngineClient::Observer:
@@ -267,7 +266,7 @@ class MinimumVersionPolicyHandler
   // This delegate instance is owned by the owner of
   // MinimumVersionPolicyHandler. The owner is responsible to make sure that the
   // delegate lives throughout the life of the policy handler.
-  Delegate* delegate_;
+  raw_ptr<Delegate, ExperimentalAsh> delegate_;
 
   // This represents the current minimum version requirement.
   // It is chosen as one of the configurations specified in the policy. It is
@@ -302,9 +301,9 @@ class MinimumVersionPolicyHandler
 
   // Non-owning reference to CrosSettings. This class have shorter lifetime than
   // CrosSettings.
-  ash::CrosSettings* cros_settings_;
+  raw_ptr<ash::CrosSettings, ExperimentalAsh> cros_settings_;
 
-  base::Clock* const clock_;
+  const raw_ptr<base::Clock, ExperimentalAsh> clock_;
 
   base::OnceClosure fetch_eol_callback_;
 
@@ -314,8 +313,8 @@ class MinimumVersionPolicyHandler
   // current network and time to reach the deadline.
   std::unique_ptr<ash::UpdateRequiredNotification> notification_handler_;
 
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
+  base::ScopedObservation<ash::NetworkStateHandler,
+                          ash::NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
 
   // List of registered observers.

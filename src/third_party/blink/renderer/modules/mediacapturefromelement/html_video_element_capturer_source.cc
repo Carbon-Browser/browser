@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/mediacapturefromelement/html_video_element_capturer_source.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/single_thread_task_runner.h"
@@ -73,7 +73,10 @@ HtmlVideoElementCapturerSource::GetPreferredFormats() {
 void HtmlVideoElementCapturerSource::StartCapture(
     const media::VideoCaptureParams& params,
     const VideoCaptureDeliverFrameCB& new_frame_callback,
-    const VideoCaptureCropVersionCB& crop_version_callback,
+    const VideoCaptureSubCaptureTargetVersionCB&
+        sub_capture_target_version_callback,
+    // The HTML element does not report frame drops.
+    const VideoCaptureNotifyFrameDroppedCB&,
     const RunningCallback& running_callback) {
   DVLOG(2) << __func__ << " requested "
            << media::VideoCaptureFormat::ToString(params.requested_format);
@@ -95,8 +98,8 @@ void HtmlVideoElementCapturerSource::StartCapture(
 
   running_callback_.Run(RunState::kRunning);
   task_runner_->PostTask(
-      FROM_HERE, WTF::Bind(&HtmlVideoElementCapturerSource::sendNewFrame,
-                           weak_factory_.GetWeakPtr()));
+      FROM_HERE, WTF::BindOnce(&HtmlVideoElementCapturerSource::sendNewFrame,
+                               weak_factory_.GetWeakPtr()));
 }
 
 void HtmlVideoElementCapturerSource::StopCapture() {
@@ -132,7 +135,6 @@ void HtmlVideoElementCapturerSource::sendNewFrame() {
     PostCrossThreadTask(
         *io_task_runner_, FROM_HERE,
         CrossThreadBindOnce(new_frame_callback_, std::move(new_frame),
-                            std::vector<scoped_refptr<media::VideoFrame>>(),
                             current_time));
   }
 

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2020 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2020 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 <org.chromium.chrome.browser.share.screenshot.ScreenshotShareSheetView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -28,7 +30,8 @@
                     android:layout_height="match_parent"
                     android:gravity="center_horizontal"
                     android:layout_gravity="center_horizontal"
-                    android:padding="16dp" />
+                    android:padding="16dp"
+                    android:importantForAccessibility="no" />
 
             </FrameLayout>
 
@@ -37,7 +40,6 @@
                 android:layout_height="56dp"
                 android:layout_marginStart="36dp"
                 android:layout_marginEnd="36dp"
-                android:weightSum="4"
                 android:orientation="horizontal"
                 android:gravity="bottom"
                 android:layout_gravity="start|bottom">

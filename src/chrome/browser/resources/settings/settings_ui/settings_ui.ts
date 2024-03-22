@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@ import 'chrome://resources/cr_elements/cr_drawer/cr_drawer.js';
 import 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
 import 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar_search_field.js';
 import 'chrome://resources/cr_elements/cr_page_host_style.css.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
 import '../icons.html.js';
 import '../settings_main/settings_main.js';
@@ -23,19 +23,19 @@ import '../settings_menu/settings_menu.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 
-import {CrContainerShadowMixin, CrContainerShadowMixinInterface} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
+import {SettingsPrefsElement} from 'chrome://resources/cr_components/settings_prefs/prefs.js';
+import {CrContainerShadowMixin} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
 import {CrDrawerElement} from 'chrome://resources/cr_elements/cr_drawer/cr_drawer.js';
 import {CrToolbarElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
-import {FindShortcutMixin, FindShortcutMixinInterface} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
-import {listenOnce} from 'chrome://resources/js/util.m.js';
+import {FindShortcutMixin} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
+import {listenOnce} from 'chrome://resources/js/util.js';
 import {DomIf, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {resetGlobalScrollTargetForTesting, setGlobalScrollTarget} from '../global_scroll_target_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {PageVisibility, pageVisibility} from '../page_visibility.js';
-import {SettingsPrefsElement} from '../prefs/prefs.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
+import {Route, RouteObserverMixin, Router} from '../router.js';
 import {SettingsMainElement} from '../settings_main/settings_main.js';
 import {SettingsMenuElement} from '../settings_menu/settings_menu.js';
 
@@ -44,10 +44,6 @@ import {getTemplate} from './settings_ui.html.js';
 declare global {
   interface HTMLElementEventMap {
     'refresh-pref': CustomEvent<string>;
-  }
-
-  interface Window {
-    CrPolicyStrings: {[key: string]: string};
   }
 }
 
@@ -63,11 +59,8 @@ export interface SettingsUiElement {
   };
 }
 
-const SettingsUiElementBase = RouteObserverMixin(CrContainerShadowMixin(
-                                  FindShortcutMixin(PolymerElement))) as {
-  new (): PolymerElement & RouteObserverMixinInterface &
-      FindShortcutMixinInterface & CrContainerShadowMixinInterface,
-};
+const SettingsUiElementBase = RouteObserverMixin(
+    CrContainerShadowMixin(FindShortcutMixin(PolymerElement)));
 
 export class SettingsUiElement extends SettingsUiElementBase {
   static get is() {
@@ -138,6 +131,11 @@ export class SettingsUiElement extends SettingsUiElementBase {
           loadTimeData.getString('controlledSettingRecommendedMatches'),
       controlledSettingRecommendedDiffers:
           loadTimeData.getString('controlledSettingRecommendedDiffers'),
+      controlledSettingChildRestriction:
+          loadTimeData.getString('controlledSettingChildRestriction'),
+      controlledSettingParent:
+          loadTimeData.getString('controlledSettingParent'),
+
       // <if expr="chromeos_ash">
       controlledSettingShared:
           loadTimeData.getString('controlledSettingShared'),
@@ -145,10 +143,6 @@ export class SettingsUiElement extends SettingsUiElementBase {
           loadTimeData.getString('controlledSettingWithOwner'),
       controlledSettingNoOwner:
           loadTimeData.getString('controlledSettingNoOwner'),
-      controlledSettingParent:
-          loadTimeData.getString('controlledSettingParent'),
-      controlledSettingChildRestriction:
-          loadTimeData.getString('controlledSettingChildRestriction'),
       // </if>
     };
 
@@ -267,7 +261,7 @@ export class SettingsUiElement extends SettingsUiElementBase {
     this.$.drawer.close();
   }
 
-  private onMenuButtonTap_() {
+  private onMenuButtonClick_() {
     this.$.drawer.toggle();
   }
 

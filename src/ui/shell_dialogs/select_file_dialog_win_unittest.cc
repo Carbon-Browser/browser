@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@
 #include "base/test/test_timeouts.h"
 #include "base/threading/platform_thread.h"
 #include "base/win/scoped_com_initializer.h"
-#include "base/win/windows_version.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
@@ -199,10 +198,6 @@ class SelectFileDialogWinTest : public ::testing::Test,
 };
 
 TEST_F(SelectFileDialogWinTest, CancelAllDialogs) {
-  // TODO(crbug.com/1265379): Flaky on Windows 7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    GTEST_SKIP() << "Skipping test for Windows 7";
-
   // Intentionally not testing SELECT_UPLOAD_FOLDER because the dialog is
   // customized for that case.
   struct {
@@ -293,7 +288,11 @@ TEST_F(SelectFileDialogWinTest, UploadFolderCheckStrings) {
 
   EXPECT_FALSE(was_cancelled());
   ASSERT_EQ(1u, selected_paths().size());
-  EXPECT_EQ(selected_paths()[0], default_path);
+  // On some machines GetSystemDirectory returns C:\WINDOWS which is then
+  // normalized to C:\Windows by the file dialog, leading to spurious failures
+  // if a case-sensitive comparison is used.
+  EXPECT_TRUE(base::FilePath::CompareEqualIgnoreCase(
+      selected_paths()[0].value(), default_path.value()));
 }
 
 // Specifying the title when opening a dialog to select a file, select multiple
@@ -351,7 +350,11 @@ TEST_F(SelectFileDialogWinTest, TestSelectFile) {
 
   EXPECT_FALSE(was_cancelled());
   ASSERT_EQ(1u, selected_paths().size());
-  EXPECT_EQ(selected_paths()[0], default_path);
+  // On some machines GetSystemDirectory returns C:\WINDOWS which is then
+  // normalized to C:\Windows by the file dialog, leading to spurious failures
+  // if a case-sensitive comparison is used.
+  EXPECT_TRUE(base::FilePath::CompareEqualIgnoreCase(
+      selected_paths()[0].value(), default_path.value()));
 }
 
 // Tests that the file extension is automatically added.
@@ -379,7 +382,11 @@ TEST_F(SelectFileDialogWinTest, TestSaveFile) {
 
   EXPECT_FALSE(was_cancelled());
   ASSERT_EQ(1u, selected_paths().size());
-  EXPECT_EQ(selected_paths()[0], default_path.AddExtension(L"html"));
+  // On some machines GetSystemDirectory returns C:\WINDOWS which is then
+  // normalized to C:\Windows by the file dialog, leading to spurious failures
+  // if a case-sensitive comparison is used.
+  EXPECT_TRUE(base::FilePath::CompareEqualIgnoreCase(
+      selected_paths()[0].value(), default_path.AddExtension(L"html").value()));
 }
 
 // Tests that only specifying a basename as the default path works.
@@ -428,7 +435,11 @@ TEST_F(SelectFileDialogWinTest, SaveAsDifferentExtension) {
   RunUntilIdle();
 
   EXPECT_FALSE(was_cancelled());
-  EXPECT_EQ(selected_paths()[0], default_path);
+  // On some machines GetSystemDirectory returns C:\WINDOWS which is then
+  // normalized to C:\Windows by the file dialog, leading to spurious failures
+  // if a case-sensitive comparison is used.
+  EXPECT_TRUE(base::FilePath::CompareEqualIgnoreCase(
+      selected_paths()[0].value(), default_path.value()));
 }
 
 TEST_F(SelectFileDialogWinTest, OpenFileDifferentExtension) {
@@ -455,7 +466,11 @@ TEST_F(SelectFileDialogWinTest, OpenFileDifferentExtension) {
   RunUntilIdle();
 
   EXPECT_FALSE(was_cancelled());
-  EXPECT_EQ(selected_paths()[0], default_path);
+  // On some machines GetSystemDirectory returns C:\WINDOWS which is then
+  // normalized to C:\Windows by the file dialog, leading to spurious failures
+  // if a case-sensitive comparison is used.
+  EXPECT_TRUE(base::FilePath::CompareEqualIgnoreCase(
+      selected_paths()[0].value(), default_path.value()));
 }
 
 TEST_F(SelectFileDialogWinTest, SelectNonExistingFile) {

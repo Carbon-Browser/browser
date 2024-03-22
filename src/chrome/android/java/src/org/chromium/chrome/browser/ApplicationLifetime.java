@@ -1,19 +1,16 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser;
 
-import org.chromium.base.ObserverList;
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
-/**
- * Watches for when Chrome is told to restart itself.
- */
+import org.chromium.base.ObserverList;
+
+/** Watches for when Chrome is told to restart itself. */
 public class ApplicationLifetime {
-    /**
-     * Interface to be implemented to be notified of application termination.
-     */
+    /** Interface to be implemented to be notified of application termination. */
     public interface Observer {
         /**
          * Called when the application should be terminated.

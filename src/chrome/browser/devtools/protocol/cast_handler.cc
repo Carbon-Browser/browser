@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/ui/media_router/media_router_ui_helper.h"
 #include "components/media_router/browser/media_router.h"
@@ -121,8 +122,7 @@ void CastHandler::StartDesktopMirroring(
       base::BindOnce(&CastHandler::OnDesktopMirroringStarted,
                      weak_factory_.GetWeakPtr(), std::move(callback)),
       media_router::GetRouteRequestTimeout(
-          media_router::MediaCastMode::DESKTOP_MIRROR),
-      web_contents_->GetBrowserContext()->IsOffTheRecord());
+          media_router::MediaCastMode::DESKTOP_MIRROR));
 }
 
 void CastHandler::StartTabMirroring(
@@ -146,8 +146,7 @@ void CastHandler::StartTabMirroring(
       base::BindOnce(&CastHandler::OnTabMirroringStarted,
                      weak_factory_.GetWeakPtr(), std::move(callback)),
       media_router::GetRouteRequestTimeout(
-          media_router::MediaCastMode::TAB_MIRROR),
-      web_contents_->GetBrowserContext()->IsOffTheRecord());
+          media_router::MediaCastMode::TAB_MIRROR));
 }
 
 Response CastHandler::StopCasting(const std::string& in_sink_name) {
@@ -232,16 +231,14 @@ void CastHandler::StartPresentation(
       base::BindOnce(&CastHandler::OnPresentationStarted,
                      weak_factory_.GetWeakPtr(), std::move(context)),
       media_router::GetRouteRequestTimeout(
-          media_router::MediaCastMode::PRESENTATION),
-      web_contents_->GetBrowserContext()->IsOffTheRecord());
+          media_router::MediaCastMode::PRESENTATION));
 }
 
 media_router::MediaSink::Id CastHandler::GetSinkIdByName(
     const std::string& sink_name) const {
-  auto it = std::find_if(
-      sinks_.begin(), sinks_.end(),
-      [&sink_name](const media_router::MediaSinkWithCastModes& sink) {
-        return sink.sink.name() == sink_name;
+  auto it = base::ranges::find(
+      sinks_, sink_name, [](const media_router::MediaSinkWithCastModes& sink) {
+        return sink.sink.name();
       });
   return it == sinks_.end() ? media_router::MediaSink::Id() : it->sink.id();
 }
@@ -249,10 +246,7 @@ media_router::MediaSink::Id CastHandler::GetSinkIdByName(
 MediaRoute::Id CastHandler::GetRouteIdForSink(
     const media_router::MediaSink::Id& sink_id) const {
   const auto& routes = routes_observer_->routes();
-  auto it = std::find_if(routes.begin(), routes.end(),
-                         [&sink_id](const MediaRoute& route) {
-                           return route.media_sink_id() == sink_id;
-                         });
+  auto it = base::ranges::find(routes, sink_id, &MediaRoute::media_sink_id);
   return it == routes.end() ? MediaRoute::Id() : it->media_route_id();
 }
 
@@ -267,11 +261,11 @@ void CastHandler::StartObservingForSinks(
   query_result_manager_->SetSourcesForCastMode(
       media_router::MediaCastMode::TAB_MIRROR, {mirroring_source}, origin);
 
-  if (presentation_url.isJust()) {
+  if (presentation_url.has_value()) {
     url::Origin frame_origin =
         web_contents_->GetPrimaryMainFrame()->GetLastCommittedOrigin();
     std::vector<media_router::MediaSource> sources = {
-        media_router::MediaSource(presentation_url.fromJust())};
+        media_router::MediaSource(presentation_url.value())};
     query_result_manager_->SetSourcesForCastMode(
         media_router::MediaCastMode::PRESENTATION, sources, frame_origin);
   }
@@ -283,13 +277,11 @@ void CastHandler::SendSinkUpdate() {
 
   auto protocol_sinks = std::make_unique<protocol::Array<Sink>>();
   for (const media_router::MediaSinkWithCastModes& sink_with_modes : sinks_) {
-    auto route_it = std::find_if(
-        routes_observer_->routes().begin(), routes_observer_->routes().end(),
-        [&sink_with_modes](const MediaRoute& route) {
-          return route.media_sink_id() == sink_with_modes.sink.id();
-        });
+    auto route_it = base::ranges::find(routes_observer_->routes(),
+                                       sink_with_modes.sink.id(),
+                                       &MediaRoute::media_sink_id);
     std::string session = route_it == routes_observer_->routes().end()
-                              ? ""
+                              ? std::string()
                               : route_it->description();
     std::unique_ptr<Sink> sink = Sink::Create()
                                      .SetName(sink_with_modes.sink.name())

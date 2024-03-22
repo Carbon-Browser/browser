@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,11 @@ class TabMatcherAndroid : public TabMatcher {
                         const AutocompleteInput* input) const override;
 
  private:
-  GURLToTabInfoMap GetAllHiddenAndNonCCTTabInfos() const;
+  GURLToTabInfoMap GetAllHiddenAndNonCCTTabInfos(
+      const bool keep_search_intent_params,
+      const bool normalize_search_terms) const;
 
-  const TemplateURLService* template_url_service_;
+  raw_ptr<const TemplateURLService> template_url_service_;
   raw_ptr<Profile> profile_;
 };
 

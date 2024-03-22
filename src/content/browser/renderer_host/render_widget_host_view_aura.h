@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
@@ -35,6 +34,7 @@
 #include "content/common/cursors/webcursor.h"
 #include "content/public/browser/context_menu_params.h"
 #include "content/public/browser/visibility.h"
+#include "services/device/public/mojom/device_posture_provider.mojom.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
 #include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom-forward.h"
 #include "third_party/skia/include/core/SkRegion.h"
@@ -52,6 +52,8 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "content/browser/renderer_host/virtual_keyboard_controller_win.h"
+#include "mojo/public/cpp/bindings/receiver.h"
+#include "mojo/public/cpp/bindings/remote.h"
 #endif
 
 namespace aura_extra {
@@ -69,7 +71,7 @@ class Rect;
 }
 
 namespace ui {
-enum class DomCode;
+enum class DomCode : uint32_t;
 class InputMethod;
 class LocatedEvent;
 }
@@ -100,7 +102,8 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
       public aura::WindowDelegate,
       public wm::ActivationDelegate,
       public aura::client::FocusChangeObserver,
-      public aura::client::CursorClientObserver {
+      public aura::client::CursorClientObserver,
+      public device::mojom::DeviceViewportSegmentsClient {
  public:
   explicit RenderWidgetHostViewAura(RenderWidgetHost* host);
   RenderWidgetHostViewAura(const RenderWidgetHostViewAura&) = delete;
@@ -124,7 +127,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   void SetInsets(const gfx::Insets& insets) override;
   TouchSelectionControllerClientManager*
   GetTouchSelectionControllerClientManager() override;
-  bool ShouldVirtualKeyboardOverlayContent() override;
+  ui::mojom::VirtualKeyboardMode GetVirtualKeyboardMode() override;
   void NotifyVirtualKeyboardOverlayRect(
       const gfx::Rect& keyboard_rect) override;
   bool IsHTMLFormPopup() const override;
@@ -134,8 +137,8 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
                    const gfx::Rect& pos,
                    const gfx::Rect& anchor_rect) override;
   void Focus() override;
-  void UpdateCursor(const WebCursor& cursor) override;
-  void DisplayCursor(const WebCursor& cursor) override;
+  void UpdateCursor(const ui::Cursor& cursor) override;
+  void DisplayCursor(const ui::Cursor& cursor) override;
   CursorManager* GetCursorManager() override;
   void SetIsLoading(bool is_loading) override;
   void RenderProcessGone() override;
@@ -157,8 +160,10 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   gfx::Rect GetBoundsInRootWindow() override;
   void WheelEventAck(const blink::WebMouseWheelEvent& event,
                      blink::mojom::InputEventResultState ack_result) override;
-  void GestureEventAck(const blink::WebGestureEvent& event,
-                       blink::mojom::InputEventResultState ack_result) override;
+  void GestureEventAck(
+      const blink::WebGestureEvent& event,
+      blink::mojom::InputEventResultState ack_result,
+      blink::mojom::ScrollResultDataPtr scroll_result_data) override;
   void DidOverscroll(const ui::DidOverscrollParams& params) override;
   void ProcessAckedTouchEvent(
       const TouchEventWithLatencyInfo& touch,
@@ -180,11 +185,14 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   void UnlockKeyboard() override;
   bool IsKeyboardLocked() override;
   base::flat_map<std::string, std::string> GetKeyboardLayoutMap() override;
+  void InvalidateLocalSurfaceIdAndAllocationGroup() override;
   void ClearFallbackSurfaceForCommitPending() override;
   void ResetFallbackToFirstNavigationSurface() override;
   bool RequestRepaintForTesting() override;
   void DidStopFlinging() override;
-  void OnDidNavigateMainFrameToNewPage() override;
+  void OnOldViewDidNavigatePreCommit() override;
+  void OnNewViewDidNavigatePostCommit() override;
+  void DidEnterBackForwardCache() override;
   const viz::FrameSinkId& GetFrameSinkId() const override;
   const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   bool TransformPointToCoordSpaceForView(
@@ -211,11 +219,13 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
 
   // Overridden from ui::TextInputClient:
   void SetCompositionText(const ui::CompositionText& composition) override;
-  uint32_t ConfirmCompositionText(bool keep_selection) override;
+  size_t ConfirmCompositionText(bool keep_selection) override;
   void ClearCompositionText() override;
   void InsertText(const std::u16string& text,
                   InsertTextCursorBehavior cursor_behavior) override;
   void InsertChar(const ui::KeyEvent& event) override;
+  bool CanInsertImage() override;
+  void InsertImage(const GURL& src) override;
   ui::TextInputType GetTextInputType() const override;
   ui::TextInputMode GetTextInputMode() const override;
   base::i18n::TextDirection GetTextDirection() const override;
@@ -223,7 +233,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   bool CanComposeInline() const override;
   gfx::Rect GetCaretBounds() const override;
   gfx::Rect GetSelectionBoundingBox() const override;
-  bool GetCompositionCharacterBounds(uint32_t index,
+  bool GetCompositionCharacterBounds(size_t index,
                                      gfx::Rect* rect) const override;
   bool HasCompositionText() const override;
   ui::TextInputClient::FocusReason GetFocusReason() const override;
@@ -237,6 +247,11 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   bool ChangeTextDirectionAndLayoutAlignment(
       base::i18n::TextDirection direction) override;
   void ExtendSelectionAndDelete(size_t before, size_t after) override;
+#if BUILDFLAG(IS_CHROMEOS)
+  void ExtendSelectionAndReplace(size_t before,
+                                 size_t after,
+                                 base::StringPiece16 replacement_text) override;
+#endif
   void EnsureCaretNotInRect(const gfx::Rect& rect) override;
   bool IsTextEditCommandEnabled(ui::TextEditCommand command) const override;
   void SetTextEditCommandForNextKeyEvent(ui::TextEditCommand command) override;
@@ -278,12 +293,19 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
       const gfx::Range& range,
       const std::u16string& active_composition_text,
       bool is_composition_committed) override;
+#endif
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
   // Returns the editing context of the active web content.
-  // This is currently used by TSF to  to fetch the URL of the active web
-  // content.
+  // This is currently used by TSF and ChromeOS to fetch the URL of the active
+  // web content.
   // https://docs.microsoft.com/en-us/windows/win32/tsf/predefined-properties
   ui::TextInputClient::EditingContext GetTextEditingContext() override;
+#endif
+
+#if BUILDFLAG(IS_WIN)
+  // Notify TSF (via text store) when URL of the frame in focus changes.
+  void NotifyOnFrameFocusChanged() override;
 #endif
 
   // Overridden from display::DisplayObserver:
@@ -334,8 +356,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
                        aura::Window* lost_focus) override;
 
   // Overridden from aura::WindowTreeHostObserver:
-  void OnHostMovedInPixels(aura::WindowTreeHost* host,
-                           const gfx::Point& new_origin_in_pixels) override;
+  void OnHostMovedInPixels(aura::WindowTreeHost* host) override;
 
   // RenderFrameMetadataProvider::Observer implementation.
   void OnRenderFrameMetadataChangedBeforeActivation(
@@ -398,6 +419,14 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
 
   ui::Compositor* GetCompositor() override;
 
+  void AllocateLocalSurfaceIdOnNextShow() {
+    allocate_local_surface_id_on_next_show_ = true;
+  }
+
+  DelegatedFrameHost* GetDelegatedFrameHostForTesting() const {
+    return delegated_frame_host_.get();
+  }
+
  protected:
   ~RenderWidgetHostViewAura() override;
 
@@ -409,6 +438,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   }
 
   // RenderWidgetHostViewBase:
+  void UpdateFrameSinkIdRegistration() override;
   void UpdateBackgroundColor() override;
   bool HasFallbackSurface() const override;
   absl::optional<DisplayFeature> GetDisplayFeature() override;
@@ -417,10 +447,10 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   void NotifyHostAndDelegateOnWasShown(
       blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request)
       final;
-  void RequestPresentationTimeFromHostOrDelegate(
+  void RequestSuccessfulPresentationTimeFromHostOrDelegate(
       blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request)
       final;
-  void CancelPresentationTimeRequestForHostAndDelegate() final;
+  void CancelSuccessfulPresentationTimeRequestForHostAndDelegate() final;
 
   // May be overridden in tests.
   virtual bool ShouldSkipCursorUpdate() const;
@@ -441,6 +471,8 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
 #endif
   FRIEND_TEST_ALL_PREFIXES(InputMethodResultAuraTest,
                            FinishImeCompositionSession);
+  FRIEND_TEST_ALL_PREFIXES(PaintHoldingRenderWidgetHostViewBrowserTest,
+                           PaintHoldingOnNavigation);
   FRIEND_TEST_ALL_PREFIXES(RenderWidgetHostViewAuraTest,
                            PopupRetainsCaptureAfterMouseRelease);
   FRIEND_TEST_ALL_PREFIXES(RenderWidgetHostViewAuraTest, SetCompositionText);
@@ -645,9 +677,21 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
 
   void SetTooltipText(const std::u16string& tooltip_text);
 
-  // TODO(crbug.com/1298696): content_browsertests breaks with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<aura::Window, DegradeToNoOpWhenMTE> window_;
+#if BUILDFLAG(IS_WIN)
+  // Ensure that we're connecting to the device posture provider to
+  // get the DisplayFeatures.
+  void EnsureDevicePostureServiceConnection();
+#endif
+
+  // DeviceViewportSegmentClient.
+  void OnViewportSegmentsChanged(
+      const std::vector<gfx::Rect>& segments) override;
+
+  // Provided a list of viewport segments, calculate and set the
+  // DisplayFeature.
+  void ComputeDisplayFeature();
+
+  raw_ptr<aura::Window> window_;
 
   std::unique_ptr<DelegatedFrameHostClient> delegated_frame_host_client_;
   // NOTE: this may be null during destruction.
@@ -667,10 +711,10 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   bool in_bounds_changed_;
 
   // Our parent host view, if this is a popup.  NULL otherwise.
-  raw_ptr<RenderWidgetHostViewAura> popup_parent_host_view_;
+  raw_ptr<RenderWidgetHostViewAura, DanglingUntriaged> popup_parent_host_view_;
 
   // Our child popup host. NULL if we do not have a child popup.
-  raw_ptr<RenderWidgetHostViewAura> popup_child_host_view_;
+  raw_ptr<RenderWidgetHostViewAura, DanglingUntriaged> popup_child_host_view_;
 
   class EventObserverForPopupExit;
   std::unique_ptr<EventObserverForPopupExit> event_observer_for_popup_exit_;
@@ -782,8 +826,18 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   // are expressed in DIPs relative to the view. See display_feature.h for more
   // details.
   absl::optional<DisplayFeature> display_feature_;
+  // Viewport segments returned by the platform.
+  std::vector<gfx::Rect> viewport_segments_;
+
+#if BUILDFLAG(IS_WIN)
+  mojo::Remote<device::mojom::DevicePostureProvider> device_posture_provider_;
+  mojo::Receiver<device::mojom::DeviceViewportSegmentsClient>
+      device_posture_receiver_{this};
+#endif
 
   absl::optional<display::ScopedDisplayObserver> display_observer_;
+
+  bool allocate_local_surface_id_on_next_show_ = false;
 
   base::WeakPtrFactory<RenderWidgetHostViewAura> weak_ptr_factory_{this};
 };

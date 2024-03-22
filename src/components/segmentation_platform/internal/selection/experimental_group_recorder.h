@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 
 namespace segmentation_platform {
 
+struct Config;
 class FieldTrialRegister;
 
 // Records experimental sub groups for the given optimization target.
@@ -24,19 +25,20 @@ class ExperimentalGroupRecorder {
   // recording is complete, can be used only once.
   ExperimentalGroupRecorder(SegmentResultProvider* result_provider,
                             FieldTrialRegister* field_trial_register,
-                            const std::string& segmentation_key,
-                            proto::SegmentId selected_segment);
+                            const Config& config,
+                            proto::SegmentId segment_id);
   ~ExperimentalGroupRecorder();
 
-  ExperimentalGroupRecorder(ExperimentalGroupRecorder&) = delete;
-  ExperimentalGroupRecorder& operator=(ExperimentalGroupRecorder&) = delete;
+  ExperimentalGroupRecorder(const ExperimentalGroupRecorder&) = delete;
+  ExperimentalGroupRecorder& operator=(const ExperimentalGroupRecorder&) =
+      delete;
 
  private:
   void OnGetSegment(
       std::unique_ptr<SegmentResultProvider::SegmentResult> result);
 
   const raw_ptr<FieldTrialRegister> field_trial_register_;
-  const std::string segmentation_key_;
+  const std::string subsegment_trial_name_;
   const proto::SegmentId segment_id_;
 
   base::WeakPtrFactory<ExperimentalGroupRecorder> weak_ptr_factory_{this};

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 
 namespace mojo {
 
-// A class to wrap base::StringPiece as DataPipeProducer::DataSource class.
+// A class to wrap std::string_view as DataPipeProducer::DataSource class.
 class MOJO_CPP_SYSTEM_EXPORT StringDataSource final
     : public DataPipeProducer::DataSource {
  public:

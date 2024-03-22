@@ -1,8 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.m.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
 /**
  * @fileoverview This JavaScript prints an error message, throws uncaught
@@ -73,7 +73,7 @@ function unhandledPromiseRejection() {
   promise.then(promiseSuccessful);
 }
 
-$('error-button').onclick = logsErrorFromButtonClickHandler;
-$('exception-button').onclick = throwExceptionHandler;
-$('promise-button').onclick = unhandledPromiseRejection;
+getRequiredElement('error-button').onclick = logsErrorFromButtonClickHandler;
+getRequiredElement('exception-button').onclick = throwExceptionHandler;
+getRequiredElement('promise-button').onclick = unhandledPromiseRejection;
 logsErrorDuringPageLoadOuter();

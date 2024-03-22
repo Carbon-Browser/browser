@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -80,9 +81,9 @@ class BLINK_MODULES_EXPORT WebMediaPlayerMS
       WebMediaPlayerDelegate* delegate,
       std::unique_ptr<media::MediaLog> media_log,
       scoped_refptr<base::SingleThreadTaskRunner> main_render_task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+      scoped_refptr<base::SequencedTaskRunner> video_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner,
       scoped_refptr<base::TaskRunner> worker_task_runner,
       media::GpuVideoAcceleratorFactories* gpu_factories,
       const WebString& sink_id,
@@ -122,13 +123,14 @@ class BLINK_MODULES_EXPORT WebMediaPlayerMS
   void SetPreload(WebMediaPlayer::Preload preload) override;
   WebTimeRanges Buffered() const override;
   WebTimeRanges Seekable() const override;
+  void OnFrozen() override;
 
   // Methods for painting.
   void Paint(cc::PaintCanvas* canvas,
              const gfx::Rect& rect,
              cc::PaintFlags& flags) override;
   scoped_refptr<media::VideoFrame> GetCurrentFrameThenUpdate() override;
-  absl::optional<int> CurrentFrameId() const override;
+  absl::optional<media::VideoFrame::ID> CurrentFrameId() const override;
   media::PaintCanvasVideoRenderer* GetPaintCanvasVideoRenderer() override;
   void ResetCanvasCache();
 
@@ -167,7 +169,11 @@ class BLINK_MODULES_EXPORT WebMediaPlayerMS
   uint64_t AudioDecodedByteCount() const override;
   uint64_t VideoDecodedByteCount() const override;
 
+  // WebRTC doesn't need TAO checks, as the timing is already available through
+  // getStats().
+  bool PassedTimingAllowOriginCheck() const override { return true; }
   bool HasAvailableVideoFrame() const override;
+  bool HasReadableVideoFrame() const override;
 
   void SetVolumeMultiplier(double multiplier) override;
   void SuspendForFrameClosed() override;
@@ -206,6 +212,8 @@ class BLINK_MODULES_EXPORT WebMediaPlayerMS
 #if BUILDFLAG(IS_WIN)
   static const gfx::Size kUseGpuMemoryBufferVideoFramesMinResolution;
 #endif  // BUILDFLAG(IS_WIN)
+
+  void ReplaceCurrentFrameWithACopy();
 
   bool IsInPictureInPicture() const;
 
@@ -299,9 +307,9 @@ class BLINK_MODULES_EXPORT WebMediaPlayerMS
   std::unique_ptr<MediaStreamRendererFactory> renderer_factory_;
 
   const scoped_refptr<base::SingleThreadTaskRunner> main_render_task_runner_;
-  const scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
+  const scoped_refptr<base::SequencedTaskRunner> video_task_runner_;
   const scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
-  const scoped_refptr<base::SingleThreadTaskRunner> media_task_runner_;
+  const scoped_refptr<base::SequencedTaskRunner> media_task_runner_;
 
   const scoped_refptr<base::TaskRunner> worker_task_runner_;
   media::GpuVideoAcceleratorFactories* gpu_factories_;
@@ -309,7 +317,7 @@ class BLINK_MODULES_EXPORT WebMediaPlayerMS
   // Used for DCHECKs to ensure methods calls executed in the correct thread.
   THREAD_CHECKER(thread_checker_);
 
-  scoped_refptr<WebMediaPlayerMSCompositor> compositor_;
+  std::unique_ptr<WebMediaPlayerMSCompositor> compositor_;
 
   const WebString initial_audio_output_device_id_;
 

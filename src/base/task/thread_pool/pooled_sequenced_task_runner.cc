@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,20 +10,6 @@
 
 namespace base {
 namespace internal {
-
-namespace {
-
-// Leeway value applied to delayed tasks. An atomic is used here because the
-// value is queried from multiple threads when tasks are posted cross-thread,
-// which can race with its initialization.
-std::atomic<TimeDelta> g_task_leeway{PendingTask::kDefaultLeeway};
-
-}  // namespace
-
-// static
-void PooledSequencedTaskRunner::InitializeFeatures() {
-  g_task_leeway.store(kTaskLeewayParam.Get(), std::memory_order_relaxed);
-}
 
 PooledSequencedTaskRunner::PooledSequencedTaskRunner(
     const TaskTraits& traits,
@@ -45,7 +31,7 @@ bool PooledSequencedTaskRunner::PostDelayedTask(const Location& from_here,
   }
 
   Task task(from_here, std::move(closure), TimeTicks::Now(), delay,
-            g_task_leeway.load(std::memory_order_relaxed));
+            GetDefaultTaskLeeway());
 
   // Post the task as part of |sequence_|.
   return pooled_task_runner_delegate_->PostTaskWithSequence(std::move(task),
@@ -64,7 +50,7 @@ bool PooledSequencedTaskRunner::PostDelayedTaskAt(
   }
 
   Task task(from_here, std::move(closure), TimeTicks::Now(), delayed_run_time,
-            g_task_leeway.load(std::memory_order_relaxed), delay_policy);
+            GetDefaultTaskLeeway(), delay_policy);
 
   // Post the task as part of |sequence_|.
   return pooled_task_runner_delegate_->PostTaskWithSequence(std::move(task),

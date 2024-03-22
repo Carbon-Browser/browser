@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
+#include "components/safe_browsing/core/common/proto/realtimeapi.pb.h"
 
 namespace content {
 class BrowserContext;
@@ -28,10 +29,6 @@ class BrowserContext;
 
 namespace extensions {
 class EventRouter;
-}
-
-namespace signin {
-class IdentityManager;
 }
 
 class GURL;
@@ -47,12 +44,11 @@ namespace extensions {
 // the kRealtimeReportingFeature feature is enabled.
 class SafeBrowsingPrivateEventRouter : public KeyedService {
  public:
-  // Feature that controls whether real-time reports are sent.
-  static const base::Feature kRealtimeReportingFeature;
-
   // Key names used with when building the dictionary to pass to the real-time
   // reporting API.
   static const char kKeyUrl[];
+  static const char kKeySource[];
+  static const char kKeyDestination[];
   static const char kKeyUserName[];
   static const char kKeyIsPhishingUrl[];
   static const char kKeyProfileUserName[];
@@ -80,15 +76,23 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
   static const char kKeyPasswordBreachIdentitiesUrl[];
   static const char kKeyPasswordBreachIdentitiesUsername[];
   static const char kKeyUserJustification[];
+  static const char kKeyUrlCategory[];
+  static const char kKeyAction[];
+  static const char kKeyTabUrl[];
 
-  static const char kKeyPasswordReuseEvent[];
-  static const char kKeyPasswordChangedEvent[];
-  static const char kKeyDangerousDownloadEvent[];
-  static const char kKeyInterstitialEvent[];
-  static const char kKeySensitiveDataEvent[];
-  static const char kKeyUnscannedFileEvent[];
-  static const char kKeyLoginEvent[];
-  static const char kKeyPasswordBreachEvent[];
+  // All new event names should be added to the array
+  // `enterprise_connectors::ReportingServiceSettings::kAllReportingEvents` in
+  // chrome/browser/enterprise/connectors/reporting/reporting_service_settings.h
+  static constexpr char kKeyUrlFilteringInterstitialEvent[] =
+      "urlFilteringInterstitialEvent";
+  static constexpr char kKeyPasswordReuseEvent[] = "passwordReuseEvent";
+  static constexpr char kKeyPasswordChangedEvent[] = "passwordChangedEvent";
+  static constexpr char kKeyDangerousDownloadEvent[] = "dangerousDownloadEvent";
+  static constexpr char kKeyInterstitialEvent[] = "interstitialEvent";
+  static constexpr char kKeySensitiveDataEvent[] = "sensitiveDataEvent";
+  static constexpr char kKeyUnscannedFileEvent[] = "unscannedFileEvent";
+  static constexpr char kKeyLoginEvent[] = "loginEvent";
+  static constexpr char kKeyPasswordBreachEvent[] = "passwordBreachEvent";
 
   static const char kKeyUnscannedReason[];
 
@@ -98,6 +102,7 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
   static const char kTriggerFileUpload[];
   static const char kTriggerWebContentUpload[];
   static const char kTriggerPagePrint[];
+  static const char kTriggerFileTransfer[];
 
   explicit SafeBrowsingPrivateEventRouter(content::BrowserContext* context);
 
@@ -123,7 +128,8 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
   void OnPolicySpecifiedPasswordChanged(const std::string& user_name);
 
   // Notifies listeners that the user just opened a dangerous download.
-  void OnDangerousDownloadOpened(const GURL& url,
+  void OnDangerousDownloadOpened(const GURL& download_url,
+                                 const GURL& tab_url,
                                  const std::string& file_name,
                                  const std::string& download_digest_sha256,
                                  const std::string& mime_type,
@@ -144,6 +150,9 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
   // Notifies listeners that the analysis connector detected a violation.
   void OnAnalysisConnectorResult(
       const GURL& url,
+      const GURL& tab_url,
+      const std::string& source,
+      const std::string& destination,
       const std::string& file_name,
       const std::string& download_digest_sha256,
       const std::string& mime_type,
@@ -157,6 +166,9 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
   // Notifies listeners that an analysis connector violation was bypassed.
   void OnAnalysisConnectorWarningBypassed(
       const GURL& url,
+      const GURL& tab_url,
+      const std::string& source,
+      const std::string& destination,
       const std::string& file_name,
       const std::string& download_digest_sha256,
       const std::string& mime_type,
@@ -169,6 +181,9 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
 
   // Notifies listeners that deep scanning failed, for the given |reason|.
   void OnUnscannedFileEvent(const GURL& url,
+                            const GURL& tab_url,
+                            const std::string& source,
+                            const std::string& destination,
                             const std::string& file_name,
                             const std::string& download_digest_sha256,
                             const std::string& mime_type,
@@ -184,6 +199,7 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
   // - |download_digest_sha256| is the hex-encoded SHA256
   // - |threat_type| is the danger type of the download.
   void OnDangerousDownloadEvent(const GURL& url,
+                                const GURL& tab_url,
                                 const std::string& file_name,
                                 const std::string& download_digest_sha256,
                                 const std::string& threat_type,
@@ -192,6 +208,7 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
                                 const int64_t content_size,
                                 safe_browsing::EventResult event_result);
   void OnDangerousDownloadEvent(const GURL& url,
+                                const GURL& tab_url,
                                 const std::string& file_name,
                                 const std::string& download_digest_sha256,
                                 const download::DownloadDangerType danger_type,
@@ -207,6 +224,7 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
   // - |threat_type| is the danger type of the download.
   void OnDangerousDownloadWarningBypassed(
       const GURL& url,
+      const GURL& tab_url,
       const std::string& file_name,
       const std::string& download_digest_sha256,
       const std::string& threat_type,
@@ -215,6 +233,7 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
       const int64_t content_size);
   void OnDangerousDownloadWarningBypassed(
       const GURL& url,
+      const GURL& tab_url,
       const std::string& file_name,
       const std::string& download_digest_sha256,
       const download::DownloadDangerType danger_type,
@@ -231,11 +250,18 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
       const std::string& trigger,
       const std::vector<std::pair<GURL, std::u16string>>& identities);
 
-  void SetIdentityManagerForTesting(signin::IdentityManager* identity_manager);
+  // Notifies listeners that the user saw an enterprise policy related
+  // interstitial.
+  void OnUrlFilteringInterstitial(
+      const GURL& url,
+      const std::string& threat_type,
+      const safe_browsing::RTLookupResponse& response);
 
  private:
-  // Removes any path information and returns just the basename.
-  static std::string GetBaseName(const std::string& filename);
+  // Returns filename with full path if full path is required;
+  // Otherwise returns only the basename without full path.
+  static std::string GetFileName(const std::string& filename,
+                                 const bool include_full_path);
 
   // Returns the Gaia email address of the account signed in to the profile or
   // an empty string if the profile is not signed in.
@@ -243,7 +269,10 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
 
   // Notifies listeners that deep scanning detected a dangerous download.
   void OnDangerousDeepScanningResult(
-      const GURL& url,
+      const GURL& download_url,
+      const GURL& tab_url,
+      const std::string& source,
+      const std::string& destination,
       const std::string& file_name,
       const std::string& download_digest_sha256,
       const std::string& threat_type,
@@ -259,6 +288,9 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
   // Notifies listeners that the analysis connector detected a violation.
   void OnSensitiveDataEvent(
       const GURL& url,
+      const GURL& tab_url,
+      const std::string& source,
+      const std::string& destination,
       const std::string& file_name,
       const std::string& download_digest_sha256,
       const std::string& mime_type,
@@ -269,7 +301,6 @@ class SafeBrowsingPrivateEventRouter : public KeyedService {
       safe_browsing::EventResult event_result);
 
   raw_ptr<content::BrowserContext> context_;
-  raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;
   raw_ptr<EventRouter> event_router_ = nullptr;
   raw_ptr<enterprise_connectors::RealtimeReportingClient> reporting_client_ =
       nullptr;

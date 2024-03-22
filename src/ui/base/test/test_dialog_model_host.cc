@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,8 +64,7 @@ DialogModelTextfield* TestDialogModelHost::FindSingleTextfield() {
     if (field->type(GetPassKey()) == ui::DialogModelField::kTextfield)
       return field->AsTextfield(GetPassKey());
   }
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 void TestDialogModelHost::SetSingleTextfieldText(std::u16string text) {
@@ -89,14 +88,22 @@ ElementIdentifier TestDialogModelHost::GetId(ButtonId button_id) {
       ->id(GetPassKey());
 }
 
+ElementIdentifier TestDialogModelHost::GetInitiallyFocusedField() {
+  return dialog_model_->initially_focused_field(GetPassKey());
+}
+
 void TestDialogModelHost::Close() {
   // For now, TestDialogModelHost::Close() is the expected interface to close.
-  NOTREACHED();
+  NOTREACHED_NORETURN();
 }
 
 void TestDialogModelHost::OnFieldAdded(DialogModelField* field) {
   // TODO(pbos): Figure out what to do here. :)
-  NOTREACHED();
+  NOTREACHED_NORETURN();
+}
+
+void TestDialogModelHost::OnFieldChanged(DialogModelField* field) {
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace ui

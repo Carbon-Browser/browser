@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ VlogNetLogObserver::VlogNetLogObserver() {
 VlogNetLogObserver::~VlogNetLogObserver() = default;
 
 void VlogNetLogObserver::OnAddEntry(const net::NetLogEntry& entry) {
-  base::Value value = entry.ToValue();
+  base::Value::Dict value = entry.ToDict();
   std::string json;
   base::JSONWriter::Write(value, &json);
   VLOG(4) << json;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,6 +40,7 @@ base::StringPiece ParseStatusCodeToString(ParseStatusCode code) {
     PARSE_STATUS_CODE_CASE(kMediaSegmentExceedsTargetDuration);
     PARSE_STATUS_CODE_CASE(kPlaylistHasDuplicateTags);
     PARSE_STATUS_CODE_CASE(kPlaylistHasUnsupportedVersion);
+    PARSE_STATUS_CODE_CASE(kPlaylistHasVersionMismatch);
     PARSE_STATUS_CODE_CASE(kMediaPlaylistHasMultivariantPlaylistTag);
     PARSE_STATUS_CODE_CASE(kMultivariantPlaylistHasMediaPlaylistTag);
     PARSE_STATUS_CODE_CASE(kVariableUndefined);
@@ -61,10 +62,12 @@ base::StringPiece ParseStatusCodeToString(ParseStatusCode code) {
     PARSE_STATUS_CODE_CASE(kPartHoldBackDistanceTooLow);
     PARSE_STATUS_CODE_CASE(kPartInfTagWithoutPartHoldBack);
     PARSE_STATUS_CODE_CASE(kPlaylistHasUnexpectedDeltaUpdate);
+    PARSE_STATUS_CODE_CASE(kRenditionGroupHasMultipleDefaultRenditions);
+    PARSE_STATUS_CODE_CASE(kRenditionGroupHasDuplicateRenditionNames);
+    PARSE_STATUS_CODE_CASE(kRenditionGroupDoesNotExist);
   }
 
-  NOTREACHED();
-  return "";
+  NOTREACHED_NORETURN();
 }
 
 #undef PARSE_STATUS_CODE_CASE

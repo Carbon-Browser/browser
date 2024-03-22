@@ -1,12 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_parameters.h"
 #include "media/base/fake_audio_render_callback.h"
 #include "media/base/media_util.h"
@@ -36,7 +37,7 @@ class WebAudioSourceProviderImplTest : public testing::Test,
  public:
   WebAudioSourceProviderImplTest()
       : params_(media::AudioParameters::AUDIO_PCM_LINEAR,
-                media::CHANNEL_LAYOUT_STEREO,
+                media::ChannelLayoutConfig::Stereo(),
                 kTestSampleRate,
                 64),
         fake_callback_(0.1, kTestSampleRate),
@@ -47,7 +48,7 @@ class WebAudioSourceProviderImplTest : public testing::Test,
       delete;
   WebAudioSourceProviderImplTest& operator=(
       const WebAudioSourceProviderImplTest&) = delete;
-  virtual ~WebAudioSourceProviderImplTest() = default;
+  ~WebAudioSourceProviderImplTest() override = default;
 
   void CallAllSinkMethodsAndVerify(bool verify) {
     testing::InSequence s;
@@ -239,7 +240,7 @@ TEST_F(WebAudioSourceProviderImplTest, ProvideInput) {
 
   // Ensure volume adjustment is working.
   fake_callback_.reset();
-  fake_callback_.Render(base::TimeDelta(), base::TimeTicks::Now(), 0,
+  fake_callback_.Render(base::TimeDelta(), base::TimeTicks::Now(), {},
                         bus2.get());
   bus2->Scale(kTestVolume);
 
@@ -259,10 +260,10 @@ TEST_F(WebAudioSourceProviderImplTest, ProvideInput) {
   // configuring the fake callback to return half the data.  After these calls
   // bus1 is full of junk data, and bus2 is partially filled.
   wasp_impl_->SetVolume(1);
-  fake_callback_.Render(base::TimeDelta(), base::TimeTicks::Now(), 0,
+  fake_callback_.Render(base::TimeDelta(), base::TimeTicks::Now(), {},
                         bus1.get());
   fake_callback_.reset();
-  fake_callback_.Render(base::TimeDelta(), base::TimeTicks::Now(), 0,
+  fake_callback_.Render(base::TimeDelta(), base::TimeTicks::Now(), {},
                         bus2.get());
   bus2->ZeroFramesPartial(bus2->frames() / 2,
                           bus2->frames() - bus2->frames() / 2);
@@ -373,8 +374,8 @@ TEST_F(WebAudioSourceProviderImplTest, MultipleInitializeWithSetClient) {
   // given. Ensure this doesn't crash.
   EXPECT_FALSE(wasp_impl_->IsOptimizedForHardwareParameters());
   auto stream_params = media::AudioParameters(
-      media::AudioParameters::AUDIO_PCM_LINEAR, media::CHANNEL_LAYOUT_MONO,
-      kTestSampleRate * 2, 64);
+      media::AudioParameters::AUDIO_PCM_LINEAR,
+      media::ChannelLayoutConfig::Mono(), kTestSampleRate * 2, 64);
 
   EXPECT_CALL(*this,
               SetFormat(stream_params.channels(), stream_params.sample_rate()));
@@ -402,8 +403,8 @@ TEST_F(WebAudioSourceProviderImplTest, MultipleInitializeWithSetClient) {
 TEST_F(WebAudioSourceProviderImplTest, ProvideInputDifferentChannelCount) {
   // Create a stereo stream
   auto stereo_params = media::AudioParameters(
-      media::AudioParameters::AUDIO_PCM_LINEAR, media::CHANNEL_LAYOUT_STEREO,
-      kTestSampleRate * 2, 64);
+      media::AudioParameters::AUDIO_PCM_LINEAR,
+      media::ChannelLayoutConfig::Stereo(), kTestSampleRate * 2, 64);
 
   // When Initialize() is called after setClient(), the params should propagate
   // to the client via setFormat() during the call.
@@ -418,8 +419,8 @@ TEST_F(WebAudioSourceProviderImplTest, ProvideInputDifferentChannelCount) {
 
   // Create a mono stream
   auto mono_params = media::AudioParameters(
-      media::AudioParameters::AUDIO_PCM_LINEAR, media::CHANNEL_LAYOUT_MONO,
-      kTestSampleRate * 2, 64);
+      media::AudioParameters::AUDIO_PCM_LINEAR,
+      media::ChannelLayoutConfig::Mono(), kTestSampleRate * 2, 64);
 
   auto bus = media::AudioBus::Create(mono_params);
 

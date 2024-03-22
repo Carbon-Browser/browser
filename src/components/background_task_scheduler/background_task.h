@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_BACKGROUND_TASK_SCHEDULER_BACKGROUND_TASK_H_
 #define COMPONENTS_BACKGROUND_TASK_SCHEDULER_BACKGROUND_TASK_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/background_task_scheduler/task_parameters.h"
 #include "components/keyed_service/core/simple_factory_key.h"
 

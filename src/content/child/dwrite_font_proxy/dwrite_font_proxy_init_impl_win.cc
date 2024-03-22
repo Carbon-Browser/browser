@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/debug/alias.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/iat_patch_function.h"
 #include "base/win/windows_version.h"
@@ -79,17 +79,7 @@ void InitializeDWriteFontProxy() {
 
   skia::OverrideDefaultSkFontMgr(std::move(skia_font_manager));
 
-  // When IDWriteFontFallback is not available (prior to Win8.1) Skia will
-  // still attempt to use DirectWrite to determine fallback fonts (in
-  // SkFontMgr_DirectWrite::onMatchFamilyStyleCharacter), which will likely
-  // result in trying to load the system font collection. To avoid that and
-  // instead fall back on WebKit's fallback logic, we don't use Skia's font
-  // fallback if IDWriteFontFallback is not available.
-  // This flag can be removed when Win8.0 and earlier are no longer supported.
-  bool fallback_available = g_font_fallback != nullptr;
-  DCHECK_EQ(fallback_available,
-            base::win::GetVersion() > base::win::Version::WIN8);
-  blink::WebFontRendering::SetUseSkiaFontFallback(fallback_available);
+  DCHECK(g_font_fallback);
 }
 
 void UninitializeDWriteFontProxy() {

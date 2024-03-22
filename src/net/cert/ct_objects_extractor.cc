@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,11 +20,6 @@
 namespace net::ct {
 
 namespace {
-
-// The wire form of the OID 1.3.6.1.4.1.11129.2.4.2. See Section 3.3 of
-// RFC6962.
-const uint8_t kEmbeddedSCTOid[] = {0x2B, 0x06, 0x01, 0x04, 0x01,
-                                   0xD6, 0x79, 0x02, 0x04, 0x02};
 
 // The wire form of the OID 1.3.6.1.4.1.11129.2.4.5 - OCSP SingleExtension for
 // X.509v3 Certificate Transparency Signed Certificate Timestamp List, see
@@ -352,9 +347,9 @@ bool ExtractSCTListFromOCSPResponse(const CRYPTO_BUFFER* issuer,
                                     const std::string& cert_serial_number,
                                     base::StringPiece ocsp_response,
                                     std::string* sct_list) {
-  // The input is an OCSPResponse. See RFC2560, section 4.2.1. The SCT list is
-  // in the extensions field of the SingleResponse which matches the input
-  // certificate.
+  // The input is an bssl::OCSPResponse. See RFC2560, section 4.2.1. The SCT
+  // list is in the extensions field of the SingleResponse which matches the
+  // input certificate.
   CBS cbs;
   CBS_init(&cbs, reinterpret_cast<const uint8_t*>(ocsp_response.data()),
            ocsp_response.size());

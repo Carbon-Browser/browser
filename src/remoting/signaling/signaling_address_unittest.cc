@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ namespace remoting {
 namespace {
 
 std::unique_ptr<jingle_xmpp::XmlElement> GetEmptyJingleMessage() {
-  return std::unique_ptr<jingle_xmpp::XmlElement>(jingle_xmpp::XmlElement::ForStr(
+  return std::unique_ptr<
+      jingle_xmpp::XmlElement>(jingle_xmpp::XmlElement::ForStr(
       "<iq xmlns='jabber:client'><jingle xmlns='urn:xmpp:jingle:1'/></iq>"));
 }
 

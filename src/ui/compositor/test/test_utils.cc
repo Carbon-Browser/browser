@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ void CheckApproximatelyEqual(const gfx::Transform& lhs,
   unsigned int errors = 0;
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
-      EXPECT_FLOAT_EQ(lhs.matrix().rc(i, j), rhs.matrix().rc(i, j))
+      EXPECT_FLOAT_EQ(lhs.rc(i, j), rhs.rc(i, j))
           << "(i, j) = (" << i << ", " << j << "), error count: " << ++errors;
     }
   }
@@ -54,13 +54,12 @@ bool WaitForNextFrameToBePresented(ui::Compositor* compositor,
                                    absl::optional<base::TimeDelta> timeout) {
   bool frames_presented = false;
   base::RunLoop runloop;
-  base::CancelableOnceCallback<void(const gfx::PresentationFeedback&)>
-      cancelable_callback(base::BindLambdaForTesting(
-          [&](const gfx::PresentationFeedback& feedback) {
-            frames_presented = true;
-            runloop.Quit();
-          }));
-  compositor->RequestPresentationTimeForNextFrame(
+  base::CancelableOnceCallback<void(base::TimeTicks)> cancelable_callback(
+      base::BindLambdaForTesting([&](base::TimeTicks presentation_timestamp) {
+        frames_presented = true;
+        runloop.Quit();
+      }));
+  compositor->RequestSuccessfulPresentationTimeForNextFrame(
       cancelable_callback.callback());
 
   absl::optional<base::OneShotTimer> timer;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
@@ -71,8 +71,8 @@ void GcmInternalsUIMessageHandler::ReturnResults(
     Profile* profile,
     gcm::GCMProfileService* profile_service,
     const gcm::GCMClient::GCMStatistics* stats) {
-  base::Value results = gcm_driver::SetGCMInternalsInfo(stats, profile_service,
-                                                        profile->GetPrefs());
+  base::Value::Dict results = gcm_driver::SetGCMInternalsInfo(
+      stats, profile_service, profile->GetPrefs());
   FireWebUIListener(gcm_driver::kSetGcmInternalsInfo, results);
 }
 
@@ -93,7 +93,7 @@ void GcmInternalsUIMessageHandler::RequestAllInfo(
     gcm::GCMProfileServiceFactory::GetForProfile(profile);
 
   if (!profile_service || !profile_service->driver()) {
-    ReturnResults(profile, NULL, NULL);
+    ReturnResults(profile, nullptr, nullptr);
   } else {
     profile_service->driver()->GetGCMStatistics(
         base::BindOnce(
@@ -115,7 +115,7 @@ void GcmInternalsUIMessageHandler::SetRecording(const base::Value::List& list) {
       gcm::GCMProfileServiceFactory::GetForProfile(profile);
 
   if (!profile_service) {
-    ReturnResults(profile, NULL, NULL);
+    ReturnResults(profile, nullptr, nullptr);
     return;
   }
   // Get fresh stats after changing recording setting.
@@ -165,7 +165,8 @@ GCMInternalsUI::GCMInternalsUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
   // Set up the chrome://gcm-internals source.
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(chrome::kChromeUIGCMInternalsHost);
+      content::WebUIDataSource::CreateAndAdd(Profile::FromWebUI(web_ui),
+                                             chrome::kChromeUIGCMInternalsHost);
 
   html_source->UseStringsJs();
 
@@ -175,9 +176,6 @@ GCMInternalsUI::GCMInternalsUI(content::WebUI* web_ui)
   html_source->AddResourcePath(gcm_driver::kGcmInternalsJS,
                                IDR_GCM_DRIVER_GCM_INTERNALS_JS);
   html_source->SetDefaultResource(IDR_GCM_DRIVER_GCM_INTERNALS_HTML);
-
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, html_source);
 
   web_ui->AddMessageHandler(std::make_unique<GcmInternalsUIMessageHandler>());
 }

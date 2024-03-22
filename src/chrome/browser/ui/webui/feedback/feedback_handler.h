@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,10 +26,11 @@ class FeedbackHandler : public content::WebUIMessageHandler {
   void HandleShowAssistantLogsInfo(const base::Value::List& args);
   void HandleShowBluetoothLogsInfo(const base::Value::List& args);
 #endif  // BUILDFLAG(IS_CHROMEOS)
+  void HandleShowAutofillMetadataInfo(const base::Value::List& args);
   void HandleShowMetrics(const base::Value::List& args);
   void HandleShowSystemInfo(const base::Value::List& args);
 
-  raw_ptr<const FeedbackDialog> dialog_;
+  raw_ptr<const FeedbackDialog, DanglingUntriaged> dialog_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_FEEDBACK_FEEDBACK_HANDLER_H_

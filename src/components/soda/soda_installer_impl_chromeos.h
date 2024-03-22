@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 #define COMPONENTS_SODA_SODA_INSTALLER_IMPL_CHROMEOS_H_
 
 #include "base/component_export.h"
+#include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
-#include "chromeos/dbus/dlcservice/dlcservice_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
 #include "components/soda/soda_installer.h"
 
 class PrefService;
@@ -36,6 +37,8 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstallerImplChromeOS
   // SodaInstaller:
   void InstallLanguage(const std::string& language,
                        PrefService* global_prefs) override;
+  void UninstallLanguage(const std::string& language,
+                         PrefService* global_prefs) override;
   std::vector<std::string> GetAvailableLanguages() const override;
 
  private:
@@ -50,20 +53,20 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstallerImplChromeOS
   void UninstallSoda(PrefService* global_prefs) override;
 
   void SetSodaBinaryPath(base::FilePath new_path);
-  void SetLanguagePath(base::FilePath new_path);
+  void SetLanguagePath(const LanguageCode language, base::FilePath new_path);
 
   // These functions are the InstallCallbacks for DlcserviceClient::Install().
   void OnSodaInstalled(
       const base::Time start_time,
-      const chromeos::DlcserviceClient::InstallResult& install_result);
+      const ash::DlcserviceClient::InstallResult& install_result);
   void OnLanguageInstalled(
       const LanguageCode language_code,
       const base::Time start_time,
-      const chromeos::DlcserviceClient::InstallResult& install_result);
+      const ash::DlcserviceClient::InstallResult& install_result);
 
   // These functions are the ProgressCallbacks for DlcserviceClient::Install().
   void OnSodaProgress(double progress);
-  void OnLanguageProgress(double progress);
+  void OnLanguageProgress(const LanguageCode language_code, double progress);
 
   void OnSodaCombinedProgress();
 
@@ -73,7 +76,16 @@ class COMPONENT_EXPORT(SODA_INSTALLER) SodaInstallerImplChromeOS
   double soda_progress_ = 0.0;
 
   base::FilePath soda_lib_path_;
-  base::FilePath language_path_;
+
+  base::flat_map<LanguageCode, base::FilePath> installed_language_paths_;
+
+  struct LanguageInfo {
+    std::string dlc_name;
+    LanguageCode language_code;
+  };
+  base::flat_map<std::string, LanguageInfo> ConstructAvailableLanguages() const;
+
+  base::flat_map<std::string, LanguageInfo> available_languages_;
 };
 
 }  // namespace speech

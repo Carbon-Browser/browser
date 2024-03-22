@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,10 +32,6 @@ namespace content {
 class PresentationScreenAvailabilityListener;
 class WebContents;
 }  // namespace content
-
-namespace url {
-class Origin;
-}  // namespace url
 
 namespace media_router {
 
@@ -115,9 +111,8 @@ class PresentationServiceDelegateImpl
           state_changed_cb) override;
 
   // WebContentsPresentationManager implementation.
-  void AddObserver(WebContentsPresentationManager::Observer* observer) override;
-  void RemoveObserver(
-      WebContentsPresentationManager::Observer* observer) override;
+  void AddObserver(content::PresentationObserver* observer) override;
+  void RemoveObserver(content::PresentationObserver* observer) override;
   bool HasDefaultPresentationRequest() const override;
   const content::PresentationRequest& GetDefaultPresentationRequest()
       const override;
@@ -204,11 +199,6 @@ class PresentationServiceDelegateImpl
       const content::GlobalRenderFrameHostId& render_frame_host_id,
       const std::string& presentation_id) const;
 
-#if !BUILDFLAG(IS_ANDROID)
-  // Returns true if auto-join requests should be cancelled for |origin|.
-  bool ShouldCancelAutoJoinForOrigin(const url::Origin& origin);
-#endif
-
   // Ensures that |connection| contains a valid pair of
   // blink::mojom::PresentationConnection{PtrInfo,Request} objects which will be
   // used for all Presentation API communication in a newly-connected
@@ -237,8 +227,7 @@ class PresentationServiceDelegateImpl
   // References to the observers listening for changes to the default
   // presentation and presentation MediaRoutes associated with the
   // WebContents.
-  base::ObserverList<WebContentsPresentationManager::Observer>
-      presentation_observers_;
+  base::ObserverList<content::PresentationObserver> presentation_observers_;
 
   // Default presentation request for the owning WebContents.
   absl::optional<content::PresentationRequest> default_presentation_request_;

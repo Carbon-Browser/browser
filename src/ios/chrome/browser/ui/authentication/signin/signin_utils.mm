@@ -1,39 +1,35 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/authentication/signin/signin_utils.h"
 
-#include "base/command_line.h"
+#import "base/command_line.h"
 #import "base/strings/sys_string_conversions.h"
-#include "base/time/time.h"
+#import "base/time/time.h"
 #import "base/version.h"
-#import "components/policy/core/common/policy_loader_ios_constants.h"
 #import "components/policy/policy_constants.h"
 #import "components/prefs/pref_service.h"
 #import "components/signin/ios/browser/features.h"
-#import "components/signin/public/base/signin_pref_names.h"
+#import "components/sync/base/features.h"
+#import "components/sync/service/sync_service.h"
+#import "components/sync/service/sync_user_settings.h"
 #import "ios/chrome/app/tests_hook.h"
-#include "ios/chrome/browser/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/policy/policy_util.h"
-#import "ios/chrome/browser/pref_names.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
-#import "ios/chrome/browser/sync/sync_setup_service.h"
-#import "ios/chrome/browser/sync/sync_setup_service_factory.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/public/features/system_flags.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/signin/model/system_identity.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
+#import "ios/chrome/browser/ui/authentication/history_sync/history_sync_coordinator.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 #import "ios/chrome/browser/ui/authentication/signin/user_signin/user_signin_constants.h"
-#import "ios/public/provider/chrome/browser/chrome_browser_provider.h"
-#import "ios/public/provider/chrome/browser/signin/chrome_identity.h"
 #import "net/base/network_change_notifier.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -46,9 +42,9 @@ constexpr base::TimeDelta kShowSigninUpgradePromoMaxDelay =
 
 // Converts an array of identities to a set of gaia ids.
 NSSet<NSString*>* GaiaIdSetWithIdentities(
-    NSArray<ChromeIdentity*>* identities) {
+    NSArray<id<SystemIdentity>>* identities) {
   NSMutableSet* gaia_id_set = [NSMutableSet set];
-  for (ChromeIdentity* identity in identities) {
+  for (id<SystemIdentity> identity in identities) {
     [gaia_id_set addObject:identity.gaiaID];
   }
   return [gaia_id_set copy];
@@ -58,7 +54,7 @@ NSSet<NSString*>* GaiaIdSetWithIdentities(
 // current `identities` (i.e. all the gaia ids are in identities but there is
 // at least one new identity).
 bool IsStrictSubset(NSArray<NSString*>* recorded_gaia_ids,
-                    NSArray<ChromeIdentity*>* identities) {
+                    NSArray<id<SystemIdentity>>* identities) {
   // Optimisation for the case of a nil or empty `recorded_gaia_ids`.
   // This allow not special casing the construction of the NSSet (as
   // -[NSSet setWithArray:] does not support nil for the array).
@@ -111,27 +107,61 @@ bool ShouldPresentUserSigninUpgrade(ChromeBrowserState* browser_state,
     return false;
 
   // Sign-in can be disabled by policy or through user Settings.
-  if (!signin::IsSigninAllowed(browser_state->GetPrefs()))
-    return false;
+  AuthenticationService* authentication_service =
+      AuthenticationServiceFactory::GetForBrowserState(browser_state);
+  switch (authentication_service->GetServiceStatus()) {
+    case AuthenticationService::ServiceStatus::SigninDisabledByUser:
+    case AuthenticationService::ServiceStatus::SigninDisabledByInternal:
+    case AuthenticationService::ServiceStatus::SigninDisabledByPolicy:
+      return false;
+    case AuthenticationService::ServiceStatus::SigninForcedByPolicy:
+    case AuthenticationService::ServiceStatus::SigninAllowed:
+      break;
+  }
 
   AuthenticationService* auth_service =
       AuthenticationServiceFactory::GetForBrowserState(browser_state);
-  // Do not show the SSO promo if the user is already logged in.
-  if (auth_service->HasPrimaryIdentity(signin::ConsentLevel::kSignin))
+  if (auth_service->HasPrimaryIdentity(signin::ConsentLevel::kSync)) {
     return false;
+  }
+  if (base::FeatureList::IsEnabled(
+          syncer::kReplaceSyncPromosWithSignInPromos) &&
+      auth_service->HasPrimaryIdentity(signin::ConsentLevel::kSignin)) {
+    syncer::SyncService* sync_service =
+        SyncServiceFactory::GetForBrowserState(browser_state);
+    HistorySyncSkipReason skip_reason = [HistorySyncCoordinator
+        getHistorySyncOptInSkipReason:sync_service
+                authenticationService:auth_service
+                          prefService:browser_state->GetPrefs()
+                isHistorySyncOptional:YES];
+    switch (skip_reason) {
+      case HistorySyncSkipReason::kNone:
+        // Need to show the upgrade promo, to show the history sync opt-in.
+        break;
+      case HistorySyncSkipReason::kNotSignedIn:
+        NOTREACHED_NORETURN();
+      case HistorySyncSkipReason::kAlreadyOptedIn:
+      case HistorySyncSkipReason::kSyncForbiddenByPolicies:
+      case HistorySyncSkipReason::kDeclinedTooOften:
+        return false;
+    }
+  }
 
   // Don't show the promo if there are no identities. This should be tested
   // before ForceStartupSigninPromo() to avoid any DCHECK failures if
   // ForceStartupSigninPromo() returns true.
   ChromeAccountManagerService* account_manager_service =
       ChromeAccountManagerServiceFactory::GetForBrowserState(browser_state);
-  NSArray* identities = account_manager_service->GetAllIdentities();
+  NSArray<id<SystemIdentity>>* identities =
+      account_manager_service->GetAllIdentities();
   if (identities.count == 0)
     return false;
 
   // Used for testing purposes only.
-  if (signin::ForceStartupSigninPromo())
+  if (signin::ForceStartupSigninPromo() ||
+      experimental_flags::AlwaysDisplayUpgradePromo()) {
     return true;
+  }
 
   // Show the promo at most every two major versions.
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
@@ -164,6 +194,53 @@ bool ShouldPresentUserSigninUpgrade(ChromeBrowserState* browser_state,
   return IsStrictSubset(last_known_gaia_id_list, identities);
 }
 
+bool ShouldPresentWebSignin(ChromeBrowserState* browser_state) {
+  AuthenticationService* authentication_service =
+      AuthenticationServiceFactory::GetForBrowserState(browser_state);
+  if (authentication_service->HasPrimaryIdentity(
+          signin::ConsentLevel::kSignin)) {
+    // For some reasons, Gaia might ask for the web sign-in while the user is
+    // already signed in. It might be a race conditions with a token already
+    // disabled on Gaia, and Chrome not aware of it yet?
+    // To avoid a crash (hitting CHECK() to sign-in while already being signed
+    // in), we need to skip the web sign-in dialog.
+    // Related to crbug.com/1308448.
+    RecordConsistencyPromoUserAction(
+        signin_metrics::AccountConsistencyPromoAction::
+            SUPPRESSED_ALREADY_SIGNED_IN,
+        signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN);
+    return false;
+  }
+  signin_metrics::AccessPoint web_signin_access_point =
+      signin_metrics::AccessPoint::ACCESS_POINT_WEB_SIGNIN;
+  // Skip the bottom sheet sign-in dialog if the user cannot sign-in.
+  switch (authentication_service->GetServiceStatus()) {
+    case AuthenticationService::ServiceStatus::SigninForcedByPolicy:
+    case AuthenticationService::ServiceStatus::SigninDisabledByUser:
+    case AuthenticationService::ServiceStatus::SigninDisabledByPolicy:
+    case AuthenticationService::ServiceStatus::SigninDisabledByInternal:
+      RecordConsistencyPromoUserAction(
+          signin_metrics::AccountConsistencyPromoAction::
+              SUPPRESSED_SIGNIN_NOT_ALLOWED,
+          web_signin_access_point);
+      return false;
+    case AuthenticationService::ServiceStatus::SigninAllowed:
+      break;
+  }
+  // Show the sign-in dialog less than `kSigninWebSignDismissalCount` times.
+  PrefService* user_pref_service = browser_state->GetPrefs();
+  const int current_dismissal_count =
+      user_pref_service->GetInteger(prefs::kSigninWebSignDismissalCount);
+  if (current_dismissal_count >= kDefaultWebSignInDismissalCount) {
+    RecordConsistencyPromoUserAction(
+        signin_metrics::AccountConsistencyPromoAction::
+            SUPPRESSED_CONSECUTIVE_DISMISSALS,
+        web_signin_access_point);
+    return false;
+  }
+  return true;
+}
+
 void RecordUpgradePromoSigninStarted(
     ChromeAccountManagerService* account_manager_service,
     const base::Version& current_version) {
@@ -173,7 +250,7 @@ void RecordUpgradePromoSigninStarted(
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
   [defaults setObject:base::SysUTF8ToNSString(current_version.GetString())
                forKey:kDisplayedSSORecallForMajorVersionKey];
-  NSArray<ChromeIdentity*>* identities =
+  NSArray<id<SystemIdentity>>* identities =
       account_manager_service->GetAllIdentities();
   NSSet<NSString*>* gaia_id_set = GaiaIdSetWithIdentities(identities);
   [defaults setObject:gaia_id_set.allObjects
@@ -184,35 +261,16 @@ void RecordUpgradePromoSigninStarted(
   [defaults setInteger:display_count forKey:kSigninPromoViewDisplayCountKey];
 }
 
-bool IsSigninAllowed(const PrefService* prefs) {
-  ios::ChromeIdentityService* identityService =
-      ios::GetChromeBrowserProvider().GetChromeIdentityService();
-  return identityService->IsServiceSupported() &&
-         prefs->GetBoolean(prefs::kSigninAllowed) && IsSigninAllowedByPolicy();
-}
-
-bool IsSigninAllowedByPolicy() {
-  BrowserSigninMode policy_mode = static_cast<BrowserSigninMode>(
-      GetApplicationContext()->GetLocalState()->GetInteger(
-          prefs::kBrowserSigninPolicy));
-
-  switch (policy_mode) {
-    case BrowserSigninMode::kDisabled:
-      return false;
-    case BrowserSigninMode::kEnabled:
-    case BrowserSigninMode::kForced:
-      return true;
-  }
-}
-
 IdentitySigninState GetPrimaryIdentitySigninState(
     ChromeBrowserState* browser_state) {
   AuthenticationService* auth_service =
       AuthenticationServiceFactory::GetForBrowserState(browser_state);
-  SyncSetupService* syncSetupService =
-      SyncSetupServiceFactory::GetForBrowserState(browser_state);
+  syncer::SyncService* syncService =
+      SyncServiceFactory::GetForBrowserState(browser_state);
+  // TODO(crbug.com/1462552): After phase 3 migration of kSync users, Remove
+  // this usage.
   if (auth_service->HasPrimaryIdentity(signin::ConsentLevel::kSync) &&
-      syncSetupService->IsFirstSetupComplete()) {
+      syncService->GetUserSettings()->IsInitialSyncFeatureSetupComplete()) {
     return IdentitySigninStateSignedInWithSyncEnabled;
   } else if (auth_service->HasPrimaryIdentity(signin::ConsentLevel::kSignin)) {
     return IdentitySigninStateSignedInWithSyncDisabled;

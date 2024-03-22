@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/declarative_content/declarative_content_is_bookmarked_condition_tracker.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
@@ -219,7 +219,8 @@ void DeclarativeContentIsBookmarkedConditionTracker::BookmarkModelChanged() {}
 void DeclarativeContentIsBookmarkedConditionTracker::BookmarkNodeAdded(
     bookmarks::BookmarkModel* model,
     const bookmarks::BookmarkNode* parent,
-    size_t index) {
+    size_t index,
+    bool added_by_user) {
   if (!extensive_bookmark_changes_in_progress_) {
     for (const auto& web_contents_tracker_pair : per_web_contents_tracker_) {
       web_contents_tracker_pair.second->BookmarkAddedForUrl(

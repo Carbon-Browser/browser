@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_POLICY_REPORTING_ARC_APP_INSTALL_EVENT_LOG_UPLOADER_H_
 #define CHROME_BROWSER_ASH_POLICY_REPORTING_ARC_APP_INSTALL_EVENT_LOG_UPLOADER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/policy/reporting/install_event_log_uploader_base.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
@@ -66,7 +67,7 @@ class ArcAppInstallEventLogUploader : public InstallEventLogUploaderBase {
       const enterprise_management::AppInstallReportRequest* report);
 
   // The delegate that provides serialized logs to be uploaded.
-  Delegate* delegate_ = nullptr;
+  raw_ptr<Delegate, ExperimentalAsh> delegate_ = nullptr;
 
   // Weak pointer factory for invalidating callbacks passed to the delegate and
   // scheduled retries when the upload request is canceled or |this| is

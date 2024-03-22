@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -92,13 +92,6 @@ class VIEWS_EXPORT ImageView : public ImageViewBase {
 
   // Caches the scaled image reps.
   gfx::ImageSkia scaled_image_;
-
-  // Scale last painted at.
-  float last_paint_scale_ = 0.f;
-
-  // Address of bytes we last painted. This is used only for comparison, so its
-  // safe to cache.
-  raw_ptr<void> last_painted_bitmap_pixels_ = nullptr;
 };
 
 BEGIN_VIEW_BUILDER(VIEWS_EXPORT, ImageView, ImageViewBase)

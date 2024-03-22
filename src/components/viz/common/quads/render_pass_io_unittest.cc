@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,10 +33,10 @@ namespace {
 
 TEST(RenderPassIOTest, Default) {
   auto render_pass0 = CompositorRenderPass::Create();
-  base::Value dict0 = CompositorRenderPassToDict(*render_pass0);
+  base::Value::Dict dict0 = CompositorRenderPassToDict(*render_pass0);
   auto render_pass1 = CompositorRenderPassFromDict(dict0);
   EXPECT_TRUE(render_pass1);
-  base::Value dict1 = CompositorRenderPassToDict(*render_pass1);
+  base::Value::Dict dict1 = CompositorRenderPassToDict(*render_pass1);
   EXPECT_EQ(dict0, dict1);
 }
 
@@ -68,7 +68,7 @@ TEST(RenderPassIOTest, FilterOperations) {
     ASSERT_EQ(gfx::RRectF::Type::kSingle, rrect.GetType());
     render_pass0->backdrop_filter_bounds = rrect;
   }
-  base::Value dict0 = CompositorRenderPassToDict(*render_pass0);
+  base::Value::Dict dict0 = CompositorRenderPassToDict(*render_pass0);
   auto render_pass1 = CompositorRenderPassFromDict(dict0);
   EXPECT_TRUE(render_pass1);
   {
@@ -91,7 +91,7 @@ TEST(RenderPassIOTest, FilterOperations) {
     EXPECT_EQ(SkColors::kYellow,
               render_pass1->backdrop_filters.at(0).drop_shadow_color());
     EXPECT_EQ(gfx::Point(1.0f, 2.0f),
-              render_pass1->backdrop_filters.at(0).drop_shadow_offset());
+              render_pass1->backdrop_filters.at(0).offset());
     EXPECT_EQ(cc::FilterOperation::INVERT,
               render_pass1->backdrop_filters.at(1).type());
     EXPECT_EQ(0.64f, render_pass1->backdrop_filters.at(1).amount());
@@ -111,7 +111,7 @@ TEST(RenderPassIOTest, FilterOperations) {
     EXPECT_EQ(gfx::RectF(2.f, 3.f, 4.f, 5.f),
               render_pass1->backdrop_filter_bounds->rect());
   }
-  base::Value dict1 = CompositorRenderPassToDict(*render_pass1);
+  base::Value::Dict dict1 = CompositorRenderPassToDict(*render_pass1);
   EXPECT_EQ(dict0, dict1);
 }
 
@@ -126,17 +126,17 @@ TEST(RenderPassIOTest, SharedQuadStateList) {
     gfx::Transform transform;
     transform.MakeIdentity();
     gfx::LinearGradient gradient_mask(40);
-    gradient_mask.AddStep(/*percent=*/0, /*alpha=*/0);
-    gradient_mask.AddStep(100, 255);
+    gradient_mask.AddStep(/*fraction=*/0, /*alpha=*/0);
+    gradient_mask.AddStep(1, 255);
     sqs1->SetAll(
         transform, gfx::Rect(0, 0, 640, 480), gfx::Rect(10, 10, 600, 400),
         gfx::MaskFilterInfo(gfx::RRectF(gfx::RectF(2.f, 3.f, 4.f, 5.f), 1.5f),
                             gradient_mask),
-        gfx::Rect(5, 20, 1000, 200), false, 0.5f, SkBlendMode::kDstOver, 101);
-    sqs1->is_fast_rounded_corner = true;
-    sqs1->de_jelly_delta_y = 0.7f;
+        gfx::Rect(5, 20, 1000, 200), /*contents_opaque=*/false,
+        /*opacity_f=*/0.5f, SkBlendMode::kDstOver, /*sorting_context=*/101,
+        /*layer_id=*/0u, /*fast_rounded_corner=*/true);
   }
-  base::Value dict0 = CompositorRenderPassToDict(*render_pass0);
+  base::Value::Dict dict0 = CompositorRenderPassToDict(*render_pass0);
   auto render_pass1 = CompositorRenderPassFromDict(dict0);
   ASSERT_TRUE(render_pass1);
   {
@@ -156,7 +156,6 @@ TEST(RenderPassIOTest, SharedQuadStateList) {
     EXPECT_EQ(SkBlendMode::kSrcOver, sqs0->blend_mode);
     EXPECT_EQ(0, sqs0->sorting_context_id);
     EXPECT_FALSE(sqs0->is_fast_rounded_corner);
-    EXPECT_EQ(0.0f, sqs0->de_jelly_delta_y);
 
     const SharedQuadState* sqs1 =
         render_pass1->shared_quad_state_list.ElementAt(1);
@@ -173,7 +172,7 @@ TEST(RenderPassIOTest, SharedQuadStateList) {
     EXPECT_EQ(2u, sqs1->mask_filter_info.gradient_mask()->step_count());
     EXPECT_EQ(gfx::LinearGradient::Step({0, 0}),
               sqs1->mask_filter_info.gradient_mask()->steps()[0]);
-    EXPECT_EQ(gfx::LinearGradient::Step({100, 255}),
+    EXPECT_EQ(gfx::LinearGradient::Step({1, 255}),
               sqs1->mask_filter_info.gradient_mask()->steps()[1]);
     EXPECT_EQ(gfx::RectF(2.f, 3.f, 4.f, 5.f), sqs1->mask_filter_info.bounds());
     EXPECT_EQ(gfx::Rect(5, 20, 1000, 200), sqs1->clip_rect);
@@ -182,9 +181,8 @@ TEST(RenderPassIOTest, SharedQuadStateList) {
     EXPECT_EQ(SkBlendMode::kDstOver, sqs1->blend_mode);
     EXPECT_EQ(101, sqs1->sorting_context_id);
     EXPECT_TRUE(sqs1->is_fast_rounded_corner);
-    EXPECT_EQ(0.7f, sqs1->de_jelly_delta_y);
   }
-  base::Value dict1 = CompositorRenderPassToDict(*render_pass1);
+  base::Value::Dict dict1 = CompositorRenderPassToDict(*render_pass1);
   EXPECT_EQ(dict0, dict1);
 }
 
@@ -260,9 +258,8 @@ TEST(RenderPassIOTest, QuadList) {
       quad->SetAll(
           render_pass0->shared_quad_state_list.ElementAt(sqs_index),
           gfx::Rect(0, 0, 800, 600), gfx::Rect(10, 15, 780, 570), false,
-          gfx::RectF(0.f, 0.f, 0.5f, 0.6f), gfx::RectF(0.1f, 0.2f, 0.7f, 0.8f),
-          gfx::Size(400, 200), gfx::Size(800, 400), ResourceId(1u),
-          ResourceId(2u), ResourceId(3u), ResourceId(4u),
+          gfx::Size(800, 400), gfx::Rect(10, 20, 300, 400), gfx::Size(2, 2),
+          ResourceId(1u), ResourceId(2u), ResourceId(3u), ResourceId(4u),
           gfx::ColorSpace::CreateCustom(primary_matrix, transfer_func), 3.f,
           1.1f, 12u, gfx::ProtectedVideoType::kClear, gfx::HDRMetadata());
       ++sqs_index;
@@ -327,7 +324,7 @@ TEST(RenderPassIOTest, QuadList) {
     }
     DCHECK_EQ(kSharedQuadStateCount, sqs_index + 1);
   }
-  base::Value dict0 = CompositorRenderPassToDict(*render_pass0);
+  base::Value::Dict dict0 = CompositorRenderPassToDict(*render_pass0);
   auto render_pass1 = CompositorRenderPassFromDict(dict0);
   EXPECT_TRUE(render_pass1);
   EXPECT_EQ(kSharedQuadStateCount, render_pass1->shared_quad_state_list.size());
@@ -336,7 +333,7 @@ TEST(RenderPassIOTest, QuadList) {
     EXPECT_EQ(kQuadMaterials[ii],
               render_pass1->quad_list.ElementAt(ii)->material);
   }
-  base::Value dict1 = CompositorRenderPassToDict(*render_pass1);
+  base::Value::Dict dict1 = CompositorRenderPassToDict(*render_pass1);
   EXPECT_EQ(dict0, dict1);
 }
 
@@ -357,23 +354,20 @@ TEST(RenderPassIOTest, CompositorRenderPassList) {
   EXPECT_TRUE(dict0.has_value());
   CompositorRenderPassList render_pass_list;
   EXPECT_TRUE(
-      CompositorRenderPassListFromDict(dict0.value(), &render_pass_list));
-  base::Value dict1 = CompositorRenderPassListToDict(render_pass_list);
+      CompositorRenderPassListFromDict(dict0->GetDict(), &render_pass_list));
+  base::Value::Dict dict1 = CompositorRenderPassListToDict(render_pass_list);
   // Since the test file doesn't contain the field
   // 'intersects_damage_under' in its CompositorRenderPassDrawQuad, I'm
   // removing the field on dict1 for the exact comparison to work.
-  base::Value* list = dict1.FindListKey("render_pass_list");
-  for (size_t i = 0; i < list->GetListDeprecated().size(); ++i) {
-    base::Value* quad_list =
-        list->GetListDeprecated()[i].FindListKey("quad_list");
+  base::Value::List* list = dict1.FindList("render_pass_list");
+  for (auto& entry : *list) {
+    base::Value::List* quad_list = entry.GetDict().FindList("quad_list");
 
-    for (size_t ii = 0; ii < quad_list->GetListDeprecated().size(); ++ii) {
-      if (const base::Value* extra_value =
-              quad_list->GetListDeprecated()[ii].FindKey(
-                  "intersects_damage_under")) {
+    for (auto& quad_entry : *quad_list) {
+      if (base::Value* extra_value =
+              quad_entry.GetDict().Find("intersects_damage_under")) {
         EXPECT_FALSE(extra_value->GetBool());
-        ASSERT_TRUE(quad_list->GetListDeprecated()[ii].RemoveKey(
-            "intersects_damage_under"));
+        ASSERT_TRUE(quad_entry.GetDict().Remove("intersects_damage_under"));
       }
     }
   }
@@ -398,10 +392,10 @@ TEST(RenderPassIOTest, CompositorFrameData) {
   absl::optional<base::Value> list0 = base::JSONReader::Read(json_text);
   EXPECT_TRUE(list0.has_value());
   std::vector<FrameData> frame_data_list;
-  EXPECT_TRUE(FrameDataFromList(list0.value(), &frame_data_list));
-  base::Value list1 = FrameDataToList(frame_data_list);
+  EXPECT_TRUE(FrameDataFromList(list0->GetList(), &frame_data_list));
+  base::Value::List list1 = FrameDataToList(frame_data_list);
 
-  EXPECT_EQ(list0, list1);
+  EXPECT_EQ(list0->GetList(), list1);
 }
 
 }  // namespace

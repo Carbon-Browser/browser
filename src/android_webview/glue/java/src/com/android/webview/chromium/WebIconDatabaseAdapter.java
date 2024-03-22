@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import android.content.ContentResolver;
 
 import org.chromium.android_webview.AwContents;
 
-/**
- * Chromium implementation of WebIconDatabase -- big old no-op (base class is deprecated).
- */
+/** Chromium implementation of WebIconDatabase -- big old no-op (base class is deprecated). */
 @SuppressWarnings("deprecation")
 final class WebIconDatabaseAdapter extends android.webkit.WebIconDatabase {
     @Override

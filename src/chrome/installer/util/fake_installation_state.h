@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class FakeInstallationState : public InstallationState {
   void AddChrome(bool system_install, base::Version* version) {
     FakeProductState chrome_state;
     chrome_state.set_version(version);
-    base::FilePath setup_exe(GetChromeInstallPath(system_install));
+    base::FilePath setup_exe(GetDefaultChromeInstallPath(system_install));
     setup_exe = setup_exe.AppendASCII(version->GetString())
                     .Append(kInstallerDir)
                     .Append(kSetupExe);

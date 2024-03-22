@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,8 @@ void V8ContextSnapshot::EnsureInterfaceTemplates(v8::Isolate* isolate) {
   return g_ensure_interface_templates_func(isolate);
 }
 
-v8::StartupData V8ContextSnapshot::TakeSnapshot() {
-  return g_take_snapshot_func();
+v8::StartupData V8ContextSnapshot::TakeSnapshot(v8::Isolate* isolate) {
+  return g_take_snapshot_func(isolate);
 }
 
 const intptr_t* V8ContextSnapshot::GetReferenceTable() {

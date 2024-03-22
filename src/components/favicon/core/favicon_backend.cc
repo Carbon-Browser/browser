@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "components/favicon_base/select_favicon_frames.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "url/origin.h"
 
 namespace favicon {
 
@@ -185,7 +186,7 @@ FaviconBackend::GetFaviconsForUrl(const GURL& page_url,
 
   if (desired_sizes.size() == 1 && !bitmap_results.empty()) {
     bitmap_results.assign(1, favicon_base::ResizeFaviconBitmapResult(
-                                 bitmap_results, desired_sizes[0]));
+                                 desired_sizes[0], bitmap_results));
   }
   return bitmap_results;
 }
@@ -199,7 +200,7 @@ FaviconBackend::GetFaviconForId(favicon_base::FaviconID favicon_id,
       GetFaviconBitmapResultsForBestMatch({favicon_id}, {desired_size});
   if (!bitmap_results.empty()) {
     bitmap_results.assign(1, favicon_base::ResizeFaviconBitmapResult(
-                                 bitmap_results, desired_size));
+                                 desired_size, bitmap_results));
   }
 
   return bitmap_results;
@@ -211,20 +212,31 @@ UpdateFaviconMappingsResult FaviconBackend::UpdateFaviconMappingsAndFetch(
     favicon_base::IconType icon_type,
     const std::vector<int>& desired_sizes) {
   UpdateFaviconMappingsResult result;
-  const favicon_base::FaviconID favicon_id =
-      db_->GetFaviconIDForFaviconURL(icon_url, icon_type);
+  const auto favicon_id = db_->GetFaviconIDForFaviconURL(icon_url, icon_type);
   if (!favicon_id)
     return result;
+  bool per_origin_favicon_id_found = false;
 
   for (const GURL& page_url : page_urls) {
-    bool mappings_updated =
-        SetFaviconMappingsForPageAndRedirects(page_url, icon_type, favicon_id);
+    // We check per-origin so that we don't cross-origin load from the cache.
+    // See crbug.com/1300214 for more context.
+    const auto per_origin_favicon_id = db_->GetFaviconIDForFaviconURL(
+        icon_url, icon_type, url::Origin::Create(page_url));
+    if (!per_origin_favicon_id)
+      continue;
+    per_origin_favicon_id_found = true;
+    bool mappings_updated = SetFaviconMappingsForPageAndRedirects(
+        page_url, icon_type, per_origin_favicon_id);
     if (mappings_updated)
       result.updated_page_urls.insert(page_url);
   }
 
-  result.bitmap_results =
-      GetFaviconBitmapResultsForBestMatch({favicon_id}, desired_sizes);
+  // We add the favicon if at least one origin saw it *or* if this was loaded
+  // without linking the favicon to any page url (used by history service).
+  if (per_origin_favicon_id_found || page_urls.empty()) {
+    result.bitmap_results =
+        GetFaviconBitmapResultsForBestMatch({favicon_id}, desired_sizes);
+  }
   return result;
 }
 
@@ -432,6 +444,16 @@ std::set<GURL> FaviconBackend::CloneFaviconMappingsForPages(
   return changed_page_urls;
 }
 
+std::vector<GURL> FaviconBackend::GetFaviconUrlsForUrl(const GURL& page_url) {
+  std::vector<IconMapping> icon_mappings;
+  db_->GetIconMappingsForPageURL(page_url, &icon_mappings);
+  std::vector<GURL> urls;
+  for (const IconMapping& icon_mapping : icon_mappings) {
+    urls.push_back(icon_mapping.icon_url);
+  }
+  return urls;
+}
+
 bool FaviconBackend::CanSetOnDemandFavicons(const GURL& page_url,
                                             favicon_base::IconType icon_type) {
   // We allow writing an on demand favicon of type |icon_type| only if there is
@@ -608,9 +630,6 @@ FaviconBackend::GetFaviconsFromDB(const GURL& page_url,
                                   const favicon_base::IconTypeSet& icon_types,
                                   const std::vector<int>& desired_sizes,
                                   bool fallback_to_host) {
-  // Time the query.
-  base::TimeTicks beginning_time = base::TimeTicks::Now();
-
   // Get FaviconIDs for |page_url| and one of |icon_types|.
   std::vector<IconMapping> icon_mappings;
   db_->GetIconMappingsForPageURL(page_url, icon_types, &icon_mappings);
@@ -634,11 +653,7 @@ FaviconBackend::GetFaviconsFromDB(const GURL& page_url,
   for (size_t i = 0; i < icon_mappings.size(); ++i)
     favicon_ids.push_back(icon_mappings[i].icon_id);
 
-  auto results =
-      GetFaviconBitmapResultsForBestMatch(favicon_ids, desired_sizes);
-  UMA_HISTOGRAM_TIMES("History.GetFavIconFromDB",  // historical name
-                      base::TimeTicks::Now() - beginning_time);
-  return results;
+  return GetFaviconBitmapResultsForBestMatch(favicon_ids, desired_sizes);
 }
 
 std::vector<favicon_base::FaviconRawBitmapResult>

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class USBIsochronousInTransferPacket final : public ScriptWrappable {
   ~USBIsochronousInTransferPacket() override = default;
 
   String status() const { return status_; }
-  DOMDataView* data() const { return data_; }
+  DOMDataView* data() const { return data_.Get(); }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(data_);

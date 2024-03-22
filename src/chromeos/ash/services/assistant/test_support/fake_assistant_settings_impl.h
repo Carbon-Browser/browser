@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@
 
 #include "chromeos/ash/services/assistant/public/cpp/assistant_settings.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 // TODO(jeroendh): Can be removed once FakeAssistantManagerServiceImpl is gone.
 class FakeAssistantSettingsImpl : public AssistantSettings {
@@ -33,7 +32,6 @@ class FakeAssistantSettingsImpl : public AssistantSettings {
   void SyncSpeakerIdEnrollmentStatus() override {}
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_TEST_SUPPORT_FAKE_ASSISTANT_SETTINGS_IMPL_H_

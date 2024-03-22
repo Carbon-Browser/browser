@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,18 +58,18 @@ class SendTabToSelfBridge : public syncer::ModelTypeSyncBridge,
   // syncer::ModelTypeSyncBridge overrides.
   std::unique_ptr<syncer::MetadataChangeList> CreateMetadataChangeList()
       override;
-  absl::optional<syncer::ModelError> MergeSyncData(
+  absl::optional<syncer::ModelError> MergeFullSyncData(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_data) override;
-  absl::optional<syncer::ModelError> ApplySyncChanges(
+  absl::optional<syncer::ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
   void GetAllDataForDebugging(DataCallback callback) override;
   std::string GetClientTag(const syncer::EntityData& entity_data) override;
   std::string GetStorageKey(const syncer::EntityData& entity_data) override;
-  void ApplyStopSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
-                                delete_metadata_change_list) override;
+  void ApplyDisableSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
+                                   delete_metadata_change_list) override;
 
   // SendTabToSelfModel overrides.
   std::vector<std::string> GetAllGuids() const override;
@@ -171,7 +171,7 @@ class SendTabToSelfBridge : public syncer::ModelTypeSyncBridge,
   std::unique_ptr<syncer::ModelTypeStore> store_;
 
   // A pointer to the most recently used entry used for deduplication.
-  raw_ptr<const SendTabToSelfEntry> mru_entry_;
+  raw_ptr<const SendTabToSelfEntry, DanglingUntriaged> mru_entry_;
 
   // The list of target devices, deduplicated and sorted by most recently used.
   std::vector<TargetDeviceInfo> target_device_info_sorted_list_;

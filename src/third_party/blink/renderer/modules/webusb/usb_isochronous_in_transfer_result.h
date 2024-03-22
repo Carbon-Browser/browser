@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ class USBIsochronousInTransferResult final : public ScriptWrappable {
 
   ~USBIsochronousInTransferResult() override = default;
 
-  DOMDataView* data() const { return data_; }
+  DOMDataView* data() const { return data_.Get(); }
   const HeapVector<Member<USBIsochronousInTransferPacket>>& packets() const {
     return packets_;
   }

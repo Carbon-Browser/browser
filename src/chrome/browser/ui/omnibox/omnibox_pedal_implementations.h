@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ struct VectorIcon;
 
 // Returns the full set of encapsulated OmniboxPedal implementations.
 std::unordered_map<OmniboxPedalId, scoped_refptr<OmniboxPedal>>
-GetPedalImplementations(bool incognito, bool testing);
+GetPedalImplementations(bool incognito, bool guest, bool testing);
 
 // This utility method is used by `SharingHubIconView` and its related Pedal
 // (Chrome Action button) in the omnibox. It returns the sharing hub icon,

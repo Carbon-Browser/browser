@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,13 +28,14 @@ namespace {
 
 class PinTextfield : public views::Textfield {
  public:
+  METADATA_HEADER(PinTextfield);
   PinTextfield(views::TextfieldController* controller, views::View* label) {
     SetTextInputType(ui::TextInputType::TEXT_INPUT_TYPE_PASSWORD);
     SetMinimumWidthInChars(6);
     SetDefaultWidthInChars(20);
 
     set_controller(controller);
-    SetAssociatedLabel(label);
+    SetAccessibleName(label);
   }
   PinTextfield(const PinTextfield&) = delete;
   PinTextfield& operator=(const PinTextfield&) = delete;
@@ -48,6 +49,9 @@ class PinTextfield : public views::Textfield {
         GetColorProvider()->GetColor(kColorWebAuthnPinTextfieldBottomBorder)));
   }
 };
+
+BEGIN_METADATA(PinTextfield, views::Textfield)
+END_METADATA
 
 }  // namespace
 

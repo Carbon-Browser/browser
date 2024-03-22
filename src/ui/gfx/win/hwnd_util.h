@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,11 @@ GFX_EXPORT void* GetWindowUserData(HWND hwnd);
 // Returns true if the specified window is the current active top window or one
 // of its children.
 GFX_EXPORT bool DoesWindowBelongToActiveWindow(HWND window);
+
+// Returns true if the specified window is cloaked.  Windows 10 and later
+// have cloaked windows which are windows with WS_VISIBLE attribute but not
+// displayed.
+GFX_EXPORT bool IsWindowCloaked(HWND hwnd);
 
 // Returns true if `window` is on the current virtual desktop, false if isn't,
 // and absl::nullopt if a COM method fails. Since this calls COM methods,

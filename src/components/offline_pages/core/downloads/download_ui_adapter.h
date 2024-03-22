@@ -1,11 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_OFFLINE_PAGES_CORE_DOWNLOADS_DOWNLOAD_UI_ADAPTER_H_
 #define COMPONENTS_OFFLINE_PAGES_CORE_DOWNLOADS_DOWNLOAD_UI_ADAPTER_H_
 
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -19,7 +18,6 @@
 #include "components/offline_pages/core/offline_page_model.h"
 #include "components/offline_pages/core/offline_page_types.h"
 #include "components/offline_pages/core/offline_page_visuals.h"
-#include "url/gurl.h"
 
 using ContentId = offline_items_collection::ContentId;
 using OpenParams = offline_items_collection::OpenParams;
@@ -27,7 +25,6 @@ using OfflineContentProvider = offline_items_collection::OfflineContentProvider;
 using OfflineContentAggregator =
     offline_items_collection::OfflineContentAggregator;
 using OfflineItem = offline_items_collection::OfflineItem;
-using OfflineItemSchedule = offline_items_collection::OfflineItemSchedule;
 using OfflineItemShareInfo = offline_items_collection::OfflineItemShareInfo;
 using UpdateDelta = offline_items_collection::UpdateDelta;
 

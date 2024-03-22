@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/policy/dlp/dlp_content_manager_lacros.h"
 
 #include "base/test/bind.h"
-#include "chrome/browser/chromeos/policy/dlp/dlp_content_manager_test_helper.h"
+#include "chrome/browser/chromeos/policy/dlp/test/dlp_content_manager_test_helper.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chromeos/crosapi/mojom/dlp.mojom.h"
 #include "chromeos/lacros/lacros_service.h"

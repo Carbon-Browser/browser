@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -225,10 +225,16 @@ views::Widget* SubtleNotificationView::CreatePopupWidget(
   // Initialize the popup.
   views::Widget* popup = new views::Widget;
   views::Widget::InitParams params(views::Widget::InitParams::TYPE_POPUP);
+#if !BUILDFLAG(IS_WIN)
+  // On Windows, this widget isn't parented on purpose to avoid it being
+  // obscured by other topmost widgets. See crbug.com/1431043.
+  // TODO(crbug.com/1459121): Aura should respect the fine-grained levels of
+  // topmost windows defined in ZOrderLevel.
+  params.parent = parent_view;
+#endif
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.z_order = ui::ZOrderLevel::kSecuritySurface;
-  params.parent = parent_view;
   params.accept_events = false;
   popup->Init(std::move(params));
   popup->SetContentsView(std::move(view));
@@ -248,7 +254,7 @@ void SubtleNotificationView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   std::u16string accessible_name;
   base::RemoveChars(instruction_view_->GetText(), kKeyNameDelimiter,
                     &accessible_name);
-  node_data->SetName(accessible_name);
+  node_data->SetNameChecked(accessible_name);
 }
 
 BEGIN_METADATA(SubtleNotificationView, views::View)

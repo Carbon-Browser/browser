@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,17 @@
 
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/models/menu_separator_types.h"
-#include "ui/color/color_provider_manager.h"
+#include "ui/color/color_provider_key.h"
+#include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
@@ -113,6 +116,19 @@ class NATIVE_THEME_EXPORT NativeTheme {
     kNumStates = kPressed + 1,
   };
 
+  // Enum used for kPageColors pref. Page Colors is a browser setting that can
+  // be used to simulate forced colors mode. This enum should match its React
+  // counterpart.
+  enum PageColors {
+    kOff = 0,
+    kDusk = 1,
+    kDesert = 2,
+    kBlack = 3,
+    kWhite = 4,
+    kHighContrast = 5,
+    kMaxValue = kHighContrast,
+  };
+
   // OS-level preferred color scheme. (Ex. high contrast or dark mode color
   // preference.)
   enum class PreferredColorScheme {
@@ -130,10 +146,6 @@ class NATIVE_THEME_EXPORT NativeTheme {
     kMaxValue = kCustom,
   };
 
-  // IMPORTANT!
-  // This enum is reporting in metrics. Do not reorder; add additional values at
-  // the end.
-  //
   // This represents the OS-level high contrast theme. kNone unless the default
   // system color scheme is kPlatformHighContrast.
   enum class PlatformHighContrastColorScheme {
@@ -156,97 +168,123 @@ class NATIVE_THEME_EXPORT NativeTheme {
   // part.
 
   struct ButtonExtraParams {
-    bool checked;
-    bool indeterminate;  // Whether the button state is indeterminate.
-    bool is_default;  // Whether the button is default button.
-    bool is_focused;
-    bool has_border;
-    int classic_state;  // Used on Windows when uxtheme is not available.
-    SkColor background_color;
-    float zoom;
+    bool checked = false;
+    bool indeterminate = false;  // Whether the button state is indeterminate.
+    bool is_default = false;     // Whether the button is default button.
+    bool is_focused = false;
+    bool has_border = false;
+    int classic_state = 0;  // Used on Windows when uxtheme is not available.
+    SkColor background_color = gfx::kPlaceholderColor;
+    float zoom = 0;
   };
 
   struct FrameTopAreaExtraParams {
     // Distinguishes between active (foreground) and inactive
     // (background) window frame styles.
-    bool is_active;
+    bool is_active = false;
     // True when Chromium renders the titlebar.  False when the window
     // manager renders the titlebar.
-    bool use_custom_frame;
+    bool use_custom_frame = false;
     // If the NativeTheme will paint a solid color, it should use
     // |default_background_color|.
-    SkColor default_background_color;
+    SkColor default_background_color = gfx::kPlaceholderColor;
+  };
+
+  enum class SpinArrowsDirection : int {
+    kLeftRight,
+    kUpDown,
   };
 
   struct InnerSpinButtonExtraParams {
-    bool spin_up;
-    bool read_only;
-    int classic_state;  // Used on Windows when uxtheme is not available.
+    bool spin_up = false;
+    bool read_only = false;
+    SpinArrowsDirection spin_arrows_direction = SpinArrowsDirection::kUpDown;
+    int classic_state = 0;  // Used on Windows when uxtheme is not available.
   };
 
   struct MenuArrowExtraParams {
-    bool pointing_right;
+    bool pointing_right = false;
     // Used for the disabled state to indicate if the item is both disabled and
     // selected.
-    bool is_selected;
+    bool is_selected = false;
   };
 
   struct MenuCheckExtraParams {
-    bool is_radio;
+    bool is_radio = false;
     // Used for the disabled state to indicate if the item is both disabled and
     // selected.
-    bool is_selected;
+    bool is_selected = false;
   };
 
   struct MenuSeparatorExtraParams {
-    const gfx::Rect* paint_rect;
-    MenuSeparatorType type;
+    raw_ptr<const gfx::Rect> paint_rect = nullptr;
+    MenuSeparatorType type = MenuSeparatorType::NORMAL_SEPARATOR;
   };
 
   struct MenuItemExtraParams {
-    bool is_selected;
-    int corner_radius;
+    bool is_selected = false;
+    int corner_radius = 0;
   };
 
-  struct MenuListExtraParams {
-    bool has_border;
-    bool has_border_radius;
-    int arrow_x;
-    int arrow_y;
-    int arrow_size;
-    SkColor arrow_color;
-    SkColor background_color;
-    int classic_state;  // Used on Windows when uxtheme is not available.
-    float zoom;
+  enum class ArrowDirection : int {
+    kDown,
+    kLeft,
+    kRight,
+  };
+
+  struct NATIVE_THEME_EXPORT MenuListExtraParams {
+    bool has_border = false;
+    bool has_border_radius = false;
+    int arrow_x = 0;
+    int arrow_y = 0;
+    int arrow_size = 0;
+    ArrowDirection arrow_direction = ArrowDirection::kDown;
+    SkColor arrow_color = gfx::kPlaceholderColor;
+    SkColor background_color = gfx::kPlaceholderColor;
+    int classic_state = 0;  // Used on Windows when uxtheme is not available.
+    float zoom = 0;
+
+    MenuListExtraParams();
+    MenuListExtraParams(const MenuListExtraParams&);
+    MenuListExtraParams& operator=(const MenuListExtraParams&);
   };
 
   struct MenuBackgroundExtraParams {
-    int corner_radius;
+    int corner_radius = 0;
   };
 
   struct ProgressBarExtraParams {
-    double animated_seconds;
-    bool determinate;
-    int value_rect_x;
-    int value_rect_y;
-    int value_rect_width;
-    int value_rect_height;
-    float zoom;
+    double animated_seconds = 0;
+    bool determinate = false;
+    int value_rect_x = 0;
+    int value_rect_y = 0;
+    int value_rect_width = 0;
+    int value_rect_height = 0;
+    float zoom = 0;
+    bool is_horizontal = false;
   };
 
   struct ScrollbarArrowExtraParams {
-    bool is_hovering;
-    float zoom;
-    bool right_to_left;
+    bool is_hovering = false;
+    float zoom = 0;
+    bool needs_rounded_corner = false;
+    bool right_to_left = false;
+    // These allow clients to directly override the color values to support
+    // element-specific web platform CSS.
+    absl::optional<SkColor> thumb_color;
+    absl::optional<SkColor> track_color;
   };
 
   struct ScrollbarTrackExtraParams {
-    bool is_upper;
-    int track_x;
-    int track_y;
-    int track_width;
-    int track_height;
-    int classic_state;  // Used on Windows when uxtheme is not available.
+    bool is_upper = false;
+    int track_x = 0;
+    int track_y = 0;
+    int track_width = 0;
+    int track_height = 0;
+    int classic_state = 0;  // Used on Windows when uxtheme is not available.
+    // This allows clients to directly override the color values to support
+    // element-specific web platform CSS.
+    absl::optional<SkColor> track_color;
   };
 
   enum class ScrollbarOverlayColorTheme {
@@ -256,8 +294,12 @@ class NATIVE_THEME_EXPORT NativeTheme {
   };
 
   struct ScrollbarThumbExtraParams {
-    bool is_hovering;
-    ScrollbarOverlayColorTheme scrollbar_theme;
+    bool is_hovering = false;
+    ScrollbarOverlayColorTheme scrollbar_theme =
+        ScrollbarOverlayColorTheme::kDefault;
+    // This allows clients to directly override the color values to support
+    // element-specific web platform CSS.
+    absl::optional<SkColor> thumb_color;
   };
 
 #if BUILDFLAG(IS_APPLE)
@@ -272,66 +314,72 @@ class NATIVE_THEME_EXPORT NativeTheme {
 
   // A unique set of scrollbar params. Currently needed for Mac.
   struct ScrollbarExtraParams {
-    bool is_hovering;
-    bool is_overlay;
-    ScrollbarOverlayColorTheme scrollbar_theme;
-    ScrollbarOrientation orientation;  // Used on Mac for drawing gradients.
-    float scale_from_dip;
+    bool is_hovering = false;
+    bool is_overlay = false;
+    ScrollbarOverlayColorTheme scrollbar_theme =
+        ScrollbarOverlayColorTheme::kDefault;
+    ScrollbarOrientation orientation =
+        ScrollbarOrientation::kVerticalOnRight;  // Used on Mac for drawing
+                                                 // gradients.
+    float scale_from_dip = 0;
+    // These allow clients to directly override the color values to support
+    // element-specific web platform CSS.
+    absl::optional<SkColor> thumb_color;
+    absl::optional<SkColor> track_color;
   };
 #endif
 
   struct SliderExtraParams {
-    bool vertical;
-    bool in_drag;
-    int thumb_x;
-    int thumb_y;
-    float zoom;
-    bool right_to_left;
+    bool vertical = false;
+    bool in_drag = false;
+    int thumb_x = 0;
+    int thumb_y = 0;
+    float zoom = 0;
+    bool right_to_left = false;
   };
 
-  struct TextFieldExtraParams {
-    bool is_text_area;
-    bool is_listbox;
-    SkColor background_color;
-    bool is_read_only;
-    bool is_focused;
-    bool fill_content_area;
-    bool draw_edges;
-    int classic_state;  // Used on Windows when uxtheme is not available.
-    bool has_border;
-    bool auto_complete_active;
-    float zoom;
+  struct NATIVE_THEME_EXPORT TextFieldExtraParams {
+    bool is_text_area = false;
+    bool is_listbox = false;
+    SkColor background_color = gfx::kPlaceholderColor;
+    bool is_read_only = false;
+    bool is_focused = false;
+    bool fill_content_area = false;
+    bool draw_edges = false;
+    int classic_state = 0;  // Used on Windows when uxtheme is not available.
+    bool has_border = false;
+    bool auto_complete_active = false;
+    float zoom = 0;
+
+    TextFieldExtraParams();
+    TextFieldExtraParams(const TextFieldExtraParams&);
+    TextFieldExtraParams& operator=(const TextFieldExtraParams&);
   };
 
   struct TrackbarExtraParams {
-    bool vertical;
-    int classic_state;  // Used on Windows when uxtheme is not available.
+    bool vertical = false;
+    int classic_state = 0;  // Used on Windows when uxtheme is not available.
   };
 
-  union NATIVE_THEME_EXPORT ExtraParams {
-    ExtraParams();
-    ExtraParams(const ExtraParams& other);
-
-    ButtonExtraParams button;
-    FrameTopAreaExtraParams frame_top_area;
-    InnerSpinButtonExtraParams inner_spin;
-    MenuArrowExtraParams menu_arrow;
-    MenuCheckExtraParams menu_check;
-    MenuItemExtraParams menu_item;
-    MenuSeparatorExtraParams menu_separator;
-    MenuListExtraParams menu_list;
-    MenuBackgroundExtraParams menu_background;
-    ProgressBarExtraParams progress_bar;
-    ScrollbarArrowExtraParams scrollbar_arrow;
+  using ExtraParams = absl::variant<ButtonExtraParams,
+                                    FrameTopAreaExtraParams,
+                                    InnerSpinButtonExtraParams,
+                                    MenuArrowExtraParams,
+                                    MenuCheckExtraParams,
+                                    MenuItemExtraParams,
+                                    MenuSeparatorExtraParams,
+                                    MenuListExtraParams,
+                                    MenuBackgroundExtraParams,
+                                    ProgressBarExtraParams,
+                                    ScrollbarArrowExtraParams,
 #if BUILDFLAG(IS_APPLE)
-    ScrollbarExtraParams scrollbar_extra;
+                                    ScrollbarExtraParams,
 #endif
-    ScrollbarTrackExtraParams scrollbar_track;
-    ScrollbarThumbExtraParams scrollbar_thumb;
-    SliderExtraParams slider;
-    TextFieldExtraParams text_field;
-    TrackbarExtraParams trackbar;
-  };
+                                    ScrollbarTrackExtraParams,
+                                    ScrollbarThumbExtraParams,
+                                    SliderExtraParams,
+                                    TextFieldExtraParams,
+                                    TrackbarExtraParams>;
 
   NativeTheme(const NativeTheme&) = delete;
   NativeTheme& operator=(const NativeTheme&) = delete;
@@ -340,6 +388,7 @@ class NATIVE_THEME_EXPORT NativeTheme {
   virtual gfx::Size GetPartSize(Part part,
                                 State state,
                                 const ExtraParams& extra) const = 0;
+  virtual int GetPaintedScrollbarTrackInset() const;
 
   virtual float GetBorderRadiusForPart(Part part,
                                        float width,
@@ -388,9 +437,8 @@ class NATIVE_THEME_EXPORT NativeTheme {
   // Returns the key corresponding to this native theme object.
   // Use `use_custom_frame` == true when Chromium renders the titlebar.
   // False when the window manager renders the titlebar (currently GTK only).
-  ColorProviderManager::Key GetColorProviderKey(
-      scoped_refptr<ColorProviderManager::ThemeInitializerSupplier>
-          custom_theme,
+  ColorProviderKey GetColorProviderKey(
+      scoped_refptr<ColorProviderKey::ThemeInitializerSupplier> custom_theme,
       bool use_custom_frame = true) const;
 
   // Returns a shared instance of the native theme that should be used for web
@@ -420,6 +468,9 @@ class NATIVE_THEME_EXPORT NativeTheme {
   // Notify observers of caption style changes.
   virtual void NotifyOnCaptionStyleUpdated();
 
+  // Notify observers of preferred contrast changes.
+  virtual void NotifyOnPreferredContrastUpdated();
+
   // Returns whether the user has an explicit contrast preference.
   virtual bool UserHasContrastPreference() const;
 
@@ -435,8 +486,16 @@ class NATIVE_THEME_EXPORT NativeTheme {
 
   // Returns true when the NativeTheme uses a light-on-dark color scheme. If
   // you're considering using this function to choose between two hard-coded
-  // colors, you probably shouldn't. Instead, use GetSystemColor().
+  // colors, you probably shouldn't. Instead, use ColorProvider::GetColor().
   virtual bool ShouldUseDarkColors() const;
+
+  // Returns the user's current page colors.
+  virtual PageColors GetPageColors() const;
+
+  // Calculates and returns the current user preferred color scheme. The
+  // base behavior is to set preferred color scheme to light or dark depending
+  // on the state of dark mode.
+  virtual PreferredColorScheme CalculatePreferredColorScheme() const;
 
   // Returns the OS-level user preferred color scheme. See the comment for
   // CalculatePreferredColorScheme() for details on how preferred color scheme
@@ -445,6 +504,13 @@ class NATIVE_THEME_EXPORT NativeTheme {
 
   // Returns the OS-level user preferred contrast.
   virtual PreferredContrast GetPreferredContrast() const;
+
+  // Returns the OS-level user preferred transparency.
+  virtual bool GetPrefersReducedTransparency() const;
+
+  // Returns the OS-level inverted colors setting. (Classic invert NOT smart
+  // invert)
+  virtual bool GetInvertedColors() const;
 
   // Returns the system's caption style.
   virtual absl::optional<CaptionStyle> GetSystemCaptionStyle() const;
@@ -463,18 +529,39 @@ class NATIVE_THEME_EXPORT NativeTheme {
     should_use_dark_colors_ = should_use_dark_colors;
   }
   void set_forced_colors(bool forced_colors) { forced_colors_ = forced_colors; }
+  void set_page_colors(PageColors page_colors) { page_colors_ = page_colors; }
   void set_preferred_color_scheme(PreferredColorScheme preferred_color_scheme) {
     preferred_color_scheme_ = preferred_color_scheme;
   }
-  void set_preferred_contrast(PreferredContrast preferred_contrast) {
-    preferred_contrast_ = preferred_contrast;
+  void set_prefers_reduced_transparency(bool prefers_reduced_transparency) {
+    prefers_reduced_transparency_ = prefers_reduced_transparency;
   }
+  void set_inverted_colors(bool inverted_colors) {
+    inverted_colors_ = inverted_colors;
+  }
+  void SetPreferredContrast(PreferredContrast preferred_contrast);
   void set_system_colors(const std::map<SystemThemeColor, SkColor>& colors);
-  bool is_custom_system_theme() const { return is_custom_system_theme_; }
+  ui::SystemTheme system_theme() const { return system_theme_; }
 
-  // Set the user_color for ColorProviderManager::Key.
+  // Set the user_color for ColorProviderKey.
   void set_user_color(absl::optional<SkColor> user_color) {
     user_color_ = user_color;
+  }
+  absl::optional<SkColor> user_color() const { return user_color_; }
+
+  void set_scheme_variant(
+      absl::optional<ui::ColorProviderKey::SchemeVariant> scheme_variant) {
+    scheme_variant_ = scheme_variant;
+  }
+  absl::optional<ui::ColorProviderKey::SchemeVariant> scheme_variant() const {
+    return scheme_variant_;
+  }
+
+  void set_should_use_system_accent_color(bool should_use_system_accent_color) {
+    should_use_system_accent_color_ = should_use_system_accent_color;
+  }
+  bool should_use_system_accent_color() const {
+    return should_use_system_accent_color_;
   }
 
   // Updates the state of dark mode, forced colors mode, and the map of system
@@ -490,7 +577,7 @@ class NATIVE_THEME_EXPORT NativeTheme {
   virtual SkColor GetSystemButtonPressedColor(SkColor base_color) const;
 
   // Assign the focus-ring-appropriate alpha value to the provided base_color.
-  virtual SkColor FocusRingColorForBaseColor(SkColor base_color) const;
+  virtual SkColor4f FocusRingColorForBaseColor(SkColor4f base_color) const;
 
   float AdjustBorderWidthByZoom(float border_width, float zoom_level) const;
 
@@ -498,27 +585,17 @@ class NATIVE_THEME_EXPORT NativeTheme {
                                  float border_width,
                                  float zoom_level) const;
 
- protected:
-  explicit NativeTheme(bool should_only_use_dark_colors,
-                       bool is_custom_system_theme = false);
-  virtual ~NativeTheme();
-
   // Whether high contrast is forced via command-line flag.
-  bool IsForcedHighContrast() const;
-  // Whether dark mode is forced via command-line flag.
-  bool IsForcedDarkMode() const;
+  static bool IsForcedHighContrast();
 
-  // Calculates and returns the current user preferred color scheme. The
-  // base behavior is to set preferred color scheme to light or dark depending
-  // on the state of dark mode.
-  //
-  // Some platforms override this behavior. On Windows, for example, we also
-  // look at the high contrast setting. If high contrast is enabled, the
-  // preferred color scheme calculation will ignore the state of dark mode.
-  // Instead, preferred color scheme will be light, or dark depending on the OS
-  // high contrast theme. If high contrast is off, the preferred color scheme
-  // calculation will follow the default behavior.
-  virtual PreferredColorScheme CalculatePreferredColorScheme() const;
+  // Whether dark mode is forced via command-line flag.
+  static bool IsForcedDarkMode();
+
+ protected:
+  explicit NativeTheme(
+      bool should_only_use_dark_colors,
+      ui::SystemTheme system_theme = ui::SystemTheme::kDefault);
+  virtual ~NativeTheme();
 
   // Calculates and returns the current user preferred contrast.
   virtual PreferredContrast CalculatePreferredContrast() const;
@@ -558,12 +635,24 @@ class NATIVE_THEME_EXPORT NativeTheme {
   // Observers to notify when the native theme changes.
   base::ObserverList<NativeThemeObserver>::Unchecked native_theme_observers_;
 
-  // User's primary color. Included in the ColorProvider Key.
+  // User's primary color. Included in the `ColorProvider::Key` as the basis of
+  // all generated colors.
   absl::optional<SkColor> user_color_;
 
+  // System color scheme variant. Used in `ColorProvider::Key` to specify the
+  // transforms of `user_color_` which generate colors.
+  absl::optional<ui::ColorProviderKey::SchemeVariant> scheme_variant_;
+
+  // Determines whether generated colors should express the system's accent
+  // color if present.
+  bool should_use_system_accent_color_ = true;
+
   bool should_use_dark_colors_ = false;
-  const bool is_custom_system_theme_;
+  const ui::SystemTheme system_theme_;
   bool forced_colors_ = false;
+  PageColors page_colors_ = PageColors::kOff;
+  bool prefers_reduced_transparency_ = false;
+  bool inverted_colors_ = false;
   PreferredColorScheme preferred_color_scheme_ = PreferredColorScheme::kLight;
   PreferredContrast preferred_contrast_ = PreferredContrast::kNoPreference;
 

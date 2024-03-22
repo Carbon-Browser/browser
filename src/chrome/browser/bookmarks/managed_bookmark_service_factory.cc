@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/memory/singleton.h"
+#include "base/functional/bind.h"
+#include "base/no_destructor.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "chrome/browser/ui/managed_ui.h"
 #include "components/bookmarks/managed/managed_bookmark_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/policy/policy_constants.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 
@@ -40,7 +40,8 @@ bookmarks::ManagedBookmarkService* ManagedBookmarkServiceFactory::GetForProfile(
 
 // static
 ManagedBookmarkServiceFactory* ManagedBookmarkServiceFactory::GetInstance() {
-  return base::Singleton<ManagedBookmarkServiceFactory>::get();
+  static base::NoDestructor<ManagedBookmarkServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -65,20 +66,27 @@ std::string ManagedBookmarkServiceFactory::GetManagedBookmarksManager(
 }
 
 ManagedBookmarkServiceFactory::ManagedBookmarkServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ManagedBookmarkService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // Use OTR profile for Guest session.
+              // (Bookmarks can be enabled in Guest sessions under some
+              // enterprise policies.)
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              // No service for system profile.
+              .WithSystem(ProfileSelection::kNone)
+              // ChromeOS creates various profiles (login, lock screen...) that
+              // do not have/need access to bookmarks.
+              .WithAshInternals(ProfileSelection::kNone)
+              .Build()) {}
 
-ManagedBookmarkServiceFactory::~ManagedBookmarkServiceFactory() {}
+ManagedBookmarkServiceFactory::~ManagedBookmarkServiceFactory() = default;
 
-KeyedService* ManagedBookmarkServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ManagedBookmarkServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return BuildManagedBookmarkService(context).release();
-}
-
-content::BrowserContext* ManagedBookmarkServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return BuildManagedBookmarkService(context);
 }
 
 bool ManagedBookmarkServiceFactory::ServiceIsNULLWhileTesting() const {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/values.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/common/extensions/api/cookies.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
@@ -24,6 +24,7 @@
 #include "net/cookies/cookie_access_result.h"
 #include "net/cookies/cookie_change_dispatcher.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 class Profile;
@@ -79,7 +80,7 @@ class CookiesEventRouter : public BrowserListObserver {
   void DispatchEvent(content::BrowserContext* context,
                      events::HistogramValue histogram_value,
                      const std::string& event_name,
-                     std::unique_ptr<base::ListValue> event_args,
+                     base::Value::List event_args,
                      const GURL& cookie_domain);
 
   raw_ptr<Profile> profile_;
@@ -113,9 +114,12 @@ class CookiesGetFunction : public ExtensionFunction {
       const net::CookieAccessResultList& cookie_list,
       const net::CookieAccessResultList& excluded_cookies);
 
+  // Notify the extension telemetry service when API is called.
+  void NotifyExtensionTelemetry();
+
   GURL url_;
   mojo::Remote<network::mojom::CookieManager> store_browser_cookie_manager_;
-  std::unique_ptr<api::cookies::Get::Params> parsed_args_;
+  absl::optional<api::cookies::Get::Params> parsed_args_;
 };
 
 // Implements the cookies.getAll() extension function.
@@ -139,9 +143,12 @@ class CookiesGetAllFunction : public ExtensionFunction {
       const net::CookieAccessResultList& cookie_list,
       const net::CookieAccessResultList& excluded_cookies);
 
+  // Notify the extension telemetry service when API is called.
+  void NotifyExtensionTelemetry();
+
   GURL url_;
   mojo::Remote<network::mojom::CookieManager> store_browser_cookie_manager_;
-  std::unique_ptr<api::cookies::GetAll::Params> parsed_args_;
+  absl::optional<api::cookies::GetAll::Params> parsed_args_;
 };
 
 // Implements the cookies.set() extension function.
@@ -165,7 +172,7 @@ class CookiesSetFunction : public ExtensionFunction {
   GURL url_;
   bool success_;
   mojo::Remote<network::mojom::CookieManager> store_browser_cookie_manager_;
-  std::unique_ptr<api::cookies::Set::Params> parsed_args_;
+  absl::optional<api::cookies::Set::Params> parsed_args_;
 };
 
 // Implements the cookies.remove() extension function.
@@ -186,7 +193,7 @@ class CookiesRemoveFunction : public ExtensionFunction {
 
   GURL url_;
   mojo::Remote<network::mojom::CookieManager> store_browser_cookie_manager_;
-  std::unique_ptr<api::cookies::Remove::Params> parsed_args_;
+  absl::optional<api::cookies::Remove::Params> parsed_args_;
 };
 
 // Implements the cookies.getAllCookieStores() extension function.

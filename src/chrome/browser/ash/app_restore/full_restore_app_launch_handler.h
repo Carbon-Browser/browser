@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,15 +15,14 @@
 #include "components/app_restore/restore_data.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 
+class Profile;
+
 namespace apps {
 class AppUpdate;
 enum class AppTypeName;
 }  // namespace apps
 
-class Profile;
-
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 
 // This is used for logging, so do not remove or reorder existing entries.
 enum class RestoreTabResult {
@@ -166,7 +165,7 @@ class FullRestoreAppLaunchHandler : public AppLaunchHandler,
   // Specifies whether init FullRestoreService.
   bool should_init_service_ = false;
 
-  // Restored browser window count. This is used for debug only.
+  // Restored browser window count. This is used for debugging and metrics.
   int browser_app_window_count_ = 0;
   int browser_window_count_ = 0;
 
@@ -186,7 +185,6 @@ class ScopedLaunchBrowserForTesting {
   ~ScopedLaunchBrowserForTesting();
 };
 
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore
 
 #endif  // CHROME_BROWSER_ASH_APP_RESTORE_FULL_RESTORE_APP_LAUNCH_HANDLER_H_

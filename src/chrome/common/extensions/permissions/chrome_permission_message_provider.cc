@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <tuple>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/ranges/algorithm.h"
 #include "base/stl_util.h"
@@ -41,7 +42,7 @@ class ComparablePermission {
   }
 
  private:
-  const PermissionMessage* msg_;
+  raw_ptr<const PermissionMessage> msg_;
 };
 using ComparablePermissions = std::vector<ComparablePermission>;
 

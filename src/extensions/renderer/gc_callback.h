@@ -1,12 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_RENDERER_GC_CALLBACK_H_
 #define EXTENSIONS_RENDERER_GC_CALLBACK_H_
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "v8/include/v8-forward.h"
@@ -49,7 +50,7 @@ class GCCallback {
   void OnContextInvalidated();
 
   // The context which owns |object_|.
-  ScriptContext* context_;
+  raw_ptr<ScriptContext, ExperimentalRenderer> context_;
 
   // A task runner associated with the frame for the context.
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "ash/app_list/app_list_metrics.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/app_menu_constants.h"
 #include "base/metrics/histogram_macros.h"
@@ -87,32 +86,7 @@ void AppListMenuModelAdapter::RecordHistogramOnMenuClosed() {
             user_journey_time);
       }
       break;
-    case PEEKING_SUGGESTED:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Apps.ContextMenuShowSourceV2.SuggestedAppPeeking", source_type(),
-          ui::MenuSourceType::MENU_SOURCE_TYPE_LAST);
-      UMA_HISTOGRAM_TIMES(
-          "Apps.ContextMenuUserJourneyTimeV2.SuggestedAppPeeking",
-          user_journey_time);
-      if (is_tablet_mode()) {
-        UMA_HISTOGRAM_ENUMERATION(
-            "Apps.ContextMenuShowSourceV2.SuggestedAppPeeking.TabletMode",
-            source_type(), ui::MenuSourceType::MENU_SOURCE_TYPE_LAST);
-        UMA_HISTOGRAM_TIMES(
-            "Apps.ContextMenuUserJourneyTimeV2.SuggestedAppPeeking.TabletMode",
-            user_journey_time);
-      } else {
-        UMA_HISTOGRAM_ENUMERATION(
-            "Apps.ContextMenuShowSourceV2.SuggestedAppPeeking.ClamshellMode",
-            source_type(), ui::MenuSourceType::MENU_SOURCE_TYPE_LAST);
-        UMA_HISTOGRAM_TIMES(
-            "Apps.ContextMenuUserJourneyTimeV2.SuggestedAppPeeking."
-            "ClamshellMode",
-            user_journey_time);
-      }
-      break;
     case PRODUCTIVITY_LAUNCHER_RECENT_APP:
-      DCHECK(features::IsProductivityLauncherEnabled());
       if (is_tablet_mode()) {
         UMA_HISTOGRAM_ENUMERATION(
             "Apps.ContextMenuShowSourceV2.ProductivityLauncherRecentApp."
@@ -134,7 +108,6 @@ void AppListMenuModelAdapter::RecordHistogramOnMenuClosed() {
       }
       break;
     case PRODUCTIVITY_LAUNCHER_APP_GRID:
-      DCHECK(features::IsProductivityLauncherEnabled());
       if (is_tablet_mode()) {
         UMA_HISTOGRAM_ENUMERATION(
             "Apps.ContextMenuShowSourceV2.ProductivityLauncherAppGrid."
@@ -155,7 +128,6 @@ void AppListMenuModelAdapter::RecordHistogramOnMenuClosed() {
             user_journey_time);
       }
       break;
-    case HALF_SEARCH_RESULT:
     case FULLSCREEN_SEARCH_RESULT:
       UMA_HISTOGRAM_ENUMERATION("Apps.ContextMenuShowSourceV2.SearchResult",
                                 source_type(),
@@ -233,9 +205,10 @@ void AppListMenuModelAdapter::MaybeRecordAppLaunched(int command_id) {
                                         metric_params_.is_tablet_mode,
                                         metric_params_.launcher_show_timestamp);
           break;
-        case AppListLaunchedFrom::kLaunchedFromSuggestionChip:
+        case AppListLaunchedFrom::DEPRECATED_kLaunchedFromSuggestionChip:
         case AppListLaunchedFrom::kLaunchedFromContinueTask:
         case AppListLaunchedFrom::kLaunchedFromShelf:
+        case AppListLaunchedFrom::kLaunchedFromQuickAppAccess:
           NOTREACHED();
           break;
       }

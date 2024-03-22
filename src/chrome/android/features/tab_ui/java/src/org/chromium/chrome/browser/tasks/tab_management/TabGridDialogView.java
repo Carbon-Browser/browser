@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.util.AttributeSet;
 import android.view.View;
@@ -34,12 +33,14 @@ import androidx.core.widget.ImageViewCompat;
 
 import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.Callback;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.tab_ui.R;
-import org.chromium.components.browser_ui.widget.animation.Interpolators;
 import org.chromium.components.browser_ui.widget.scrim.ScrimCoordinator;
 import org.chromium.components.browser_ui.widget.scrim.ScrimProperties;
 import org.chromium.ui.KeyboardVisibilityDelegate;
-import org.chromium.ui.interpolators.BakedBezierInterpolator;
+import org.chromium.ui.base.DeviceFormFactor;
+import org.chromium.ui.base.ViewUtils;
+import org.chromium.ui.interpolators.Interpolators;
 import org.chromium.ui.modelutil.PropertyModel;
 
 import java.lang.annotation.Retention;
@@ -47,14 +48,15 @@ import java.lang.annotation.RetentionPolicy;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Parent for TabGridDialog component.
- */
+/** Parent for TabGridDialog component. */
 public class TabGridDialogView extends FrameLayout {
-    private static final int DIALOG_ANIMATION_DURATION = 300;
+    private static final int DIALOG_ANIMATION_DURATION = 400;
     private static final int DIALOG_UNGROUP_ALPHA_ANIMATION_DURATION = 200;
-    private static final int DIALOG_ALPHA_ANIMATION_DURATION = 150;
+    private static final int DIALOG_ALPHA_ANIMATION_DURATION = DIALOG_ANIMATION_DURATION >> 1;
     private static final int CARD_FADE_ANIMATION_DURATION = 50;
+    private static final int Y_TRANSLATE_DURATION_MS = 300;
+    private static final int SCRIM_FADE_DURATION_MS = 350;
+
     private static Callback<RectF> sSourceRectCallbackForTesting;
 
     @IntDef({UngroupBarStatus.SHOW, UngroupBarStatus.HIDE, UngroupBarStatus.HOVERED})
@@ -64,6 +66,12 @@ public class TabGridDialogView extends FrameLayout {
         int HIDE = 1;
         int HOVERED = 2;
         int NUM_ENTRIES = 3;
+    }
+
+    /** An interface to listen to visibility related changes on this {@link TabGridDialogView}. */
+    interface VisibilityListener {
+        /** Called when the animation to hide the tab grid dialog is finished. */
+        void finishedHidingDialogView();
     }
 
     private final Context mContext;
@@ -81,10 +89,12 @@ public class TabGridDialogView extends FrameLayout {
     private ScrimCoordinator mScrimCoordinator;
     private FrameLayout.LayoutParams mContainerParams;
     private ViewTreeObserver.OnGlobalLayoutListener mParentGlobalLayoutListener;
+    private VisibilityListener mVisibilityListener;
     private Animator mCurrentDialogAnimator;
     private Animator mCurrentUngroupBarAnimator;
     private AnimatorSet mBasicFadeInAnimation;
     private AnimatorSet mBasicFadeOutAnimation;
+    private ObjectAnimator mYTranslateAnimation;
     private ObjectAnimator mUngroupBarShow;
     private ObjectAnimator mUngroupBarHide;
     private AnimatorSet mShowDialogAnimation;
@@ -101,10 +111,9 @@ public class TabGridDialogView extends FrameLayout {
     private int mUngroupBarStatus = UngroupBarStatus.HIDE;
     private int mUngroupBarBackgroundColor;
     private int mUngroupBarHoveredBackgroundColor;
-    @ColorInt
-    private int mUngroupBarTextColor;
-    @ColorInt
-    private int mUngroupBarHoveredTextColor;
+    @ColorInt private int mUngroupBarTextColor;
+    @ColorInt private int mUngroupBarHoveredTextColor;
+    private Integer mBindingToken;
 
     public TabGridDialogView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -133,12 +142,15 @@ public class TabGridDialogView extends FrameLayout {
         mParent = (ViewGroup) getParent();
         mParentHeight = mParent.getHeight();
         mParentWidth = mParent.getWidth();
-        mParentGlobalLayoutListener = () -> {
-            // Skip updating the parent view size caused by keyboard showing.
-            if (KeyboardVisibilityDelegate.getInstance().isKeyboardShowing(mContext, this)) return;
-            mParentWidth = mParent.getWidth();
-            mParentHeight = mParent.getHeight();
-        };
+        mParentGlobalLayoutListener =
+                () -> {
+                    // Skip updating the parent view size caused by keyboard showing.
+                    if (!KeyboardVisibilityDelegate.getInstance()
+                            .isKeyboardShowing(mContext, this)) {
+                        mParentWidth = mParent.getWidth();
+                        mParentHeight = mParent.getHeight();
+                    }
+                };
         mParent.getViewTreeObserver().addOnGlobalLayoutListener(mParentGlobalLayoutListener);
         setVisibility(GONE);
     }
@@ -159,8 +171,9 @@ public class TabGridDialogView extends FrameLayout {
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
-        mContainerParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        mContainerParams =
+                new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         mDialogContainerView = findViewById(R.id.dialog_container_view);
         mDialogContainerView.setLayoutParams(mContainerParams);
         mUngroupBar = findViewById(R.id.dialog_ungroup_bar);
@@ -182,83 +195,116 @@ public class TabGridDialogView extends FrameLayout {
         ObjectAnimator dialogFadeInAnimator =
                 ObjectAnimator.ofFloat(mDialogContainerView, View.ALPHA, 0f, 1f);
         mBasicFadeInAnimation.play(dialogFadeInAnimator);
-        mBasicFadeInAnimation.setInterpolator(BakedBezierInterpolator.FADE_IN_CURVE);
+        mBasicFadeInAnimation.setInterpolator(Interpolators.EMPHASIZED);
         mBasicFadeInAnimation.setDuration(DIALOG_ANIMATION_DURATION);
 
         mBasicFadeOutAnimation = new AnimatorSet();
         ObjectAnimator dialogFadeOutAnimator =
                 ObjectAnimator.ofFloat(mDialogContainerView, View.ALPHA, 1f, 0f);
         mBasicFadeOutAnimation.play(dialogFadeOutAnimator);
-        mBasicFadeOutAnimation.setInterpolator(BakedBezierInterpolator.FADE_OUT_CURVE);
+        mBasicFadeOutAnimation.setInterpolator(Interpolators.EMPHASIZED);
         mBasicFadeOutAnimation.setDuration(DIALOG_ANIMATION_DURATION);
-        mBasicFadeOutAnimation.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                // Restore the original card.
-                if (mItemView == null) return;
-                mItemView.setAlpha(1f);
-            }
-        });
+        mBasicFadeOutAnimation.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        updateItemViewAlpha();
+                    }
+                });
 
-        mShowDialogAnimationListener = new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                mCurrentDialogAnimator = null;
-                mDialogContainerView.requestFocus();
-                mDialogContainerView.sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_FOCUSED);
-                // TODO(crbug.com/1101561): Move clear/restore accessibility importance logic to
-                // ScrimView so that it can be shared by all components using ScrimView.
-                clearBackgroundViewAccessibilityImportance();
-            }
-        };
-        mHideDialogAnimationListener = new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                setVisibility(View.GONE);
-                mCurrentDialogAnimator = null;
-                mDialogContainerView.clearFocus();
-                restoreBackgroundViewAccessibilityImportance();
-            }
-        };
+        final int screenHeightPx =
+                ViewUtils.dpToPx(
+                        getContext(),
+                        getContext().getResources().getConfiguration().screenHeightDp);
+        final float mDialogInitYPos = mDialogContainerView.getY();
+        mYTranslateAnimation =
+                ObjectAnimator.ofFloat(
+                        mDialogContainerView, View.TRANSLATION_Y, mDialogInitYPos, screenHeightPx);
+        mYTranslateAnimation.setInterpolator(Interpolators.EMPHASIZED_ACCELERATE);
+        mYTranslateAnimation.setDuration(Y_TRANSLATE_DURATION_MS);
+        mYTranslateAnimation.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        updateItemViewAlpha();
+                        mDialogContainerView.setY(mDialogInitYPos);
+                    }
+                });
+
+        mShowDialogAnimationListener =
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        mCurrentDialogAnimator = null;
+                        mDialogContainerView.requestFocus();
+                        mDialogContainerView.sendAccessibilityEvent(
+                                AccessibilityEvent.TYPE_VIEW_FOCUSED);
+                        // TODO(crbug.com/1101561): Move clear/restore accessibility importance
+                        // logic to ScrimView so that it can be shared by all components using
+                        // ScrimView.
+                        clearBackgroundViewAccessibilityImportance();
+                    }
+                };
+        mHideDialogAnimationListener =
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        setVisibility(View.GONE);
+                        mCurrentDialogAnimator = null;
+                        mDialogContainerView.clearFocus();
+                        restoreBackgroundViewAccessibilityImportance();
+                        if (mVisibilityListener != null) {
+                            mVisibilityListener.finishedHidingDialogView();
+                        }
+                    }
+                };
 
         mUngroupBarShow = ObjectAnimator.ofFloat(mUngroupBar, View.ALPHA, 0f, 1f);
         mUngroupBarShow.setDuration(DIALOG_UNGROUP_ALPHA_ANIMATION_DURATION);
-        mUngroupBarShow.setInterpolator(Interpolators.LINEAR_OUT_SLOW_IN_INTERPOLATOR);
-        mUngroupBarShow.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationStart(Animator animation) {
-                if (mCurrentUngroupBarAnimator != null) {
-                    mCurrentUngroupBarAnimator.end();
-                }
-                mCurrentUngroupBarAnimator = mUngroupBarShow;
-                mUngroupBar.setVisibility(View.VISIBLE);
-                mUngroupBar.setAlpha(0f);
-            }
+        mUngroupBarShow.setInterpolator(Interpolators.EMPHASIZED);
+        mUngroupBarShow.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationStart(Animator animation) {
+                        if (mCurrentUngroupBarAnimator != null) {
+                            mCurrentUngroupBarAnimator.end();
+                        }
+                        mCurrentUngroupBarAnimator = mUngroupBarShow;
+                        mUngroupBar.setVisibility(View.VISIBLE);
+                        mUngroupBar.setAlpha(0f);
+                    }
 
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                mCurrentUngroupBarAnimator = null;
-            }
-        });
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        mCurrentUngroupBarAnimator = null;
+                    }
+                });
 
         mUngroupBarHide = ObjectAnimator.ofFloat(mUngroupBar, View.ALPHA, 1f, 0f);
         mUngroupBarHide.setDuration(DIALOG_UNGROUP_ALPHA_ANIMATION_DURATION);
-        mUngroupBarHide.setInterpolator(Interpolators.FAST_OUT_LINEAR_IN_INTERPOLATOR);
-        mUngroupBarHide.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationStart(Animator animation) {
-                if (mCurrentUngroupBarAnimator != null) {
-                    mCurrentUngroupBarAnimator.end();
-                }
-                mCurrentUngroupBarAnimator = mUngroupBarHide;
-            }
+        mUngroupBarHide.setInterpolator(Interpolators.EMPHASIZED);
+        mUngroupBarHide.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationStart(Animator animation) {
+                        if (mCurrentUngroupBarAnimator != null) {
+                            mCurrentUngroupBarAnimator.end();
+                        }
+                        mCurrentUngroupBarAnimator = mUngroupBarHide;
+                    }
 
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                mUngroupBar.setVisibility(View.INVISIBLE);
-                mCurrentUngroupBarAnimator = null;
-            }
-        });
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        mUngroupBar.setVisibility(View.INVISIBLE);
+                        mCurrentUngroupBarAnimator = null;
+                    }
+                });
+    }
+
+    private void updateItemViewAlpha() {
+        // Restore the original card.
+        if (mItemView == null) return;
+        mItemView.setAlpha(1f);
     }
 
     private void clearBackgroundViewAccessibilityImportance() {
@@ -290,6 +336,10 @@ public class TabGridDialogView extends FrameLayout {
         mAccessibilityImportanceMap.clear();
     }
 
+    void setVisibilityListener(VisibilityListener visibilityListener) {
+        mVisibilityListener = visibilityListener;
+    }
+
     void setupDialogAnimation(View sourceView) {
         // In case where user jumps to a new page from dialog, clean existing animations in
         // mHideDialogAnimation and play basic fade out instead of zooming back to corresponding tab
@@ -301,9 +351,15 @@ public class TabGridDialogView extends FrameLayout {
             mShowDialogAnimation.addListener(mShowDialogAnimationListener);
 
             mHideDialogAnimation = new AnimatorSet();
-            mHideDialogAnimation.play(mBasicFadeOutAnimation);
+            Animator hideAnimator =
+                    DeviceFormFactor.isNonMultiDisplayContextOnTablet(getContext())
+                            ? mYTranslateAnimation
+                            : mBasicFadeOutAnimation;
+            mHideDialogAnimation.play(hideAnimator);
             mHideDialogAnimation.removeAllListeners();
             mHideDialogAnimation.addListener(mHideDialogAnimationListener);
+
+            updateAnimationCardView(null);
             return;
         }
 
@@ -314,7 +370,7 @@ public class TabGridDialogView extends FrameLayout {
         Rect parentRect = new Rect();
         mParent.getGlobalVisibleRect(parentRect);
         rect.offset(0, -parentRect.top);
-        // Setup a dummy animation card that looks the same as the original tab grid card for
+        // Setup a stand-in animation card that looks the same as the original tab grid card for
         // animation.
         updateAnimationCardView(mItemView);
 
@@ -328,8 +384,12 @@ public class TabGridDialogView extends FrameLayout {
         float sourceHeight = rect.height() - 2 * mTabGridCardPadding;
         float sourceWidth = rect.width() - 2 * mTabGridCardPadding;
         if (sSourceRectCallbackForTesting != null) {
-            sSourceRectCallbackForTesting.onResult(new RectF(
-                    sourceLeft, sourceTop, sourceLeft + sourceWidth, sourceTop + sourceHeight));
+            sSourceRectCallbackForTesting.onResult(
+                    new RectF(
+                            sourceLeft,
+                            sourceTop,
+                            sourceLeft + sourceWidth,
+                            sourceTop + sourceHeight));
         }
 
         // Setup animation position info and scale ratio of the background frame.
@@ -340,9 +400,10 @@ public class TabGridDialogView extends FrameLayout {
 
         // Setup scale ratio of card and dialog. Height and Width for both dialog and card scale at
         // the same rate during scaling animations.
-        float cardScale = mOrientation == Configuration.ORIENTATION_PORTRAIT
-                ? (float) dialogWidth / rect.width()
-                : (float) dialogHeight / rect.height();
+        float cardScale =
+                mOrientation == Configuration.ORIENTATION_PORTRAIT
+                        ? (float) dialogWidth / rect.width()
+                        : (float) dialogHeight / rect.height();
         float dialogScale = frameScaleX;
 
         // Setup animation position info of the animation card.
@@ -358,10 +419,18 @@ public class TabGridDialogView extends FrameLayout {
 
         // In the first half of the dialog showing animation, the animation card scales up and moves
         // towards where the dialog should be.
-        final ObjectAnimator cardZoomOutMoveYAnimator = ObjectAnimator.ofFloat(
-                mAnimationCardView, View.TRANSLATION_Y, cardInitYPosition, cardScaledYPosition);
-        final ObjectAnimator cardZoomOutMoveXAnimator = ObjectAnimator.ofFloat(
-                mAnimationCardView, View.TRANSLATION_X, cardInitXPosition, cardScaledXPosition);
+        final ObjectAnimator cardZoomOutMoveYAnimator =
+                ObjectAnimator.ofFloat(
+                        mAnimationCardView,
+                        View.TRANSLATION_Y,
+                        cardInitYPosition,
+                        cardScaledYPosition);
+        final ObjectAnimator cardZoomOutMoveXAnimator =
+                ObjectAnimator.ofFloat(
+                        mAnimationCardView,
+                        View.TRANSLATION_X,
+                        cardInitXPosition,
+                        cardScaledXPosition);
         final ObjectAnimator cardZoomOutScaleXAnimator =
                 ObjectAnimator.ofFloat(mAnimationCardView, View.SCALE_X, 1f, cardScale);
         final ObjectAnimator cardZoomOutScaleYAnimator =
@@ -369,8 +438,9 @@ public class TabGridDialogView extends FrameLayout {
 
         AnimatorSet cardZoomOutAnimatorSet = new AnimatorSet();
         cardZoomOutAnimatorSet.setDuration(DIALOG_ANIMATION_DURATION);
-        cardZoomOutAnimatorSet.setInterpolator(Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR);
-        cardZoomOutAnimatorSet.play(cardZoomOutMoveYAnimator)
+        cardZoomOutAnimatorSet.setInterpolator(Interpolators.EMPHASIZED);
+        cardZoomOutAnimatorSet
+                .play(cardZoomOutMoveYAnimator)
                 .with(cardZoomOutMoveXAnimator)
                 .with(cardZoomOutScaleYAnimator)
                 .with(cardZoomOutScaleXAnimator);
@@ -380,14 +450,16 @@ public class TabGridDialogView extends FrameLayout {
         final ObjectAnimator cardZoomOutAlphaAnimator =
                 ObjectAnimator.ofFloat(mAnimationCardView, View.ALPHA, 1f, 0f);
         cardZoomOutAlphaAnimator.setDuration(DIALOG_ALPHA_ANIMATION_DURATION);
-        cardZoomOutAlphaAnimator.setInterpolator(Interpolators.LINEAR_INTERPOLATOR);
+        cardZoomOutAlphaAnimator.setInterpolator(Interpolators.EMPHASIZED);
 
         // In the second half of the dialog showing animation, the dialog zooms out from where the
         // card stops at the end of the first half and moves towards where the dialog should be.
-        final ObjectAnimator dialogZoomOutMoveYAnimator = ObjectAnimator.ofFloat(
-                mDialogContainerView, View.TRANSLATION_Y, dialogInitYPosition, 0f);
-        final ObjectAnimator dialogZoomOutMoveXAnimator = ObjectAnimator.ofFloat(
-                mDialogContainerView, View.TRANSLATION_X, dialogInitXPosition, 0f);
+        final ObjectAnimator dialogZoomOutMoveYAnimator =
+                ObjectAnimator.ofFloat(
+                        mDialogContainerView, View.TRANSLATION_Y, dialogInitYPosition, 0f);
+        final ObjectAnimator dialogZoomOutMoveXAnimator =
+                ObjectAnimator.ofFloat(
+                        mDialogContainerView, View.TRANSLATION_X, dialogInitXPosition, 0f);
         final ObjectAnimator dialogZoomOutScaleYAnimator =
                 ObjectAnimator.ofFloat(mDialogContainerView, View.SCALE_Y, dialogScale, 1f);
         final ObjectAnimator dialogZoomOutScaleXAnimator =
@@ -395,8 +467,9 @@ public class TabGridDialogView extends FrameLayout {
 
         AnimatorSet dialogZoomOutAnimatorSet = new AnimatorSet();
         dialogZoomOutAnimatorSet.setDuration(DIALOG_ANIMATION_DURATION);
-        dialogZoomOutAnimatorSet.setInterpolator(Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR);
-        dialogZoomOutAnimatorSet.play(dialogZoomOutMoveYAnimator)
+        dialogZoomOutAnimatorSet.setInterpolator(Interpolators.EMPHASIZED);
+        dialogZoomOutAnimatorSet
+                .play(dialogZoomOutMoveYAnimator)
                 .with(dialogZoomOutMoveXAnimator)
                 .with(dialogZoomOutScaleYAnimator)
                 .with(dialogZoomOutScaleXAnimator);
@@ -407,14 +480,16 @@ public class TabGridDialogView extends FrameLayout {
                 ObjectAnimator.ofFloat(mDialogContainerView, View.ALPHA, 0f, 1f);
         dialogZoomOutAlphaAnimator.setDuration(DIALOG_ALPHA_ANIMATION_DURATION);
         dialogZoomOutAlphaAnimator.setStartDelay(DIALOG_ALPHA_ANIMATION_DURATION);
-        dialogZoomOutAlphaAnimator.setInterpolator(Interpolators.LINEAR_INTERPOLATOR);
+        dialogZoomOutAlphaAnimator.setInterpolator(Interpolators.EMPHASIZED);
 
         // During the whole dialog showing animation, the frame background scales up and moves so
         // that it looks like the card zooms out and becomes the dialog.
-        final ObjectAnimator frameZoomOutMoveYAnimator = ObjectAnimator.ofFloat(
-                mBackgroundFrame, View.TRANSLATION_Y, frameInitYPosition, 0f);
-        final ObjectAnimator frameZoomOutMoveXAnimator = ObjectAnimator.ofFloat(
-                mBackgroundFrame, View.TRANSLATION_X, frameInitXPosition, 0f);
+        final ObjectAnimator frameZoomOutMoveYAnimator =
+                ObjectAnimator.ofFloat(
+                        mBackgroundFrame, View.TRANSLATION_Y, frameInitYPosition, 0f);
+        final ObjectAnimator frameZoomOutMoveXAnimator =
+                ObjectAnimator.ofFloat(
+                        mBackgroundFrame, View.TRANSLATION_X, frameInitXPosition, 0f);
         final ObjectAnimator frameZoomOutScaleYAnimator =
                 ObjectAnimator.ofFloat(mBackgroundFrame, View.SCALE_Y, frameScaleY, 1f);
         final ObjectAnimator frameZoomOutScaleXAnimator =
@@ -422,8 +497,9 @@ public class TabGridDialogView extends FrameLayout {
 
         AnimatorSet frameZoomOutAnimatorSet = new AnimatorSet();
         frameZoomOutAnimatorSet.setDuration(DIALOG_ANIMATION_DURATION);
-        frameZoomOutAnimatorSet.setInterpolator(Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR);
-        frameZoomOutAnimatorSet.play(frameZoomOutMoveYAnimator)
+        frameZoomOutAnimatorSet.setInterpolator(Interpolators.EMPHASIZED);
+        frameZoomOutAnimatorSet
+                .play(frameZoomOutMoveYAnimator)
                 .with(frameZoomOutMoveXAnimator)
                 .with(frameZoomOutScaleYAnimator)
                 .with(frameZoomOutScaleXAnimator);
@@ -434,40 +510,43 @@ public class TabGridDialogView extends FrameLayout {
                 ObjectAnimator.ofFloat(mItemView, View.ALPHA, 1f, 0f);
         tabFadeOutAnimator.setDuration(CARD_FADE_ANIMATION_DURATION);
 
-        dialogZoomOutAnimatorSet.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationStart(Animator animation) {
-                // At the beginning of the first half of the showing animation, the white frame and
-                // the animation card should be above the the dialog view, and their alpha should be
-                // set to 1.
-                mBackgroundFrame.bringToFront();
-                mAnimationCardView.bringToFront();
-                mDialogContainerView.setAlpha(0f);
-                mBackgroundFrame.setAlpha(1f);
-                mAnimationCardView.setAlpha(1f);
-            }
+        dialogZoomOutAnimatorSet.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationStart(Animator animation) {
+                        // At the beginning of the first half of the showing animation, the white
+                        // frame and the animation card should be above the the dialog view, and
+                        // their alpha should be set to 1.
+                        mBackgroundFrame.bringToFront();
+                        mAnimationCardView.bringToFront();
+                        mDialogContainerView.setAlpha(0f);
+                        mBackgroundFrame.setAlpha(1f);
+                        mAnimationCardView.setAlpha(1f);
+                    }
 
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                // At the end of the showing animation, reset the alpha of animation related views
-                // to 0.
-                mBackgroundFrame.setAlpha(0f);
-                mAnimationCardView.setAlpha(0f);
-            }
-        });
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        // At the end of the showing animation, reset the alpha of animation related
+                        // views to 0.
+                        mBackgroundFrame.setAlpha(0f);
+                        mAnimationCardView.setAlpha(0f);
+                    }
+                });
 
-        dialogZoomOutAlphaAnimator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationStart(Animator animation) {
-                // At the beginning of the second half of the showing animation, the dialog should
-                // be above the white frame and the animation card.
-                mDialogContainerView.bringToFront();
-            }
-        });
+        dialogZoomOutAlphaAnimator.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationStart(Animator animation) {
+                        // At the beginning of the second half of the showing animation, the dialog
+                        // should be above the white frame and the animation card.
+                        mDialogContainerView.bringToFront();
+                    }
+                });
 
         // Setup the dialog showing animation.
         mShowDialogAnimation = new AnimatorSet();
-        mShowDialogAnimation.play(cardZoomOutAnimatorSet)
+        mShowDialogAnimation
+                .play(cardZoomOutAnimatorSet)
                 .with(cardZoomOutAlphaAnimator)
                 .with(frameZoomOutAnimatorSet)
                 .with(dialogZoomOutAnimatorSet)
@@ -477,58 +556,71 @@ public class TabGridDialogView extends FrameLayout {
 
         // In the first half of the dialog hiding animation, the dialog scales down and moves
         // towards where the tab grid card should be.
-        final ObjectAnimator dialogZoomInMoveYAnimator = ObjectAnimator.ofFloat(
-                mDialogContainerView, View.TRANSLATION_Y, 0f, dialogInitYPosition);
-        final ObjectAnimator dialogZoomInMoveXAnimator = ObjectAnimator.ofFloat(
-                mDialogContainerView, View.TRANSLATION_X, 0f, dialogInitXPosition);
+        final ObjectAnimator dialogZoomInMoveYAnimator =
+                ObjectAnimator.ofFloat(
+                        mDialogContainerView, View.TRANSLATION_Y, 0f, dialogInitYPosition);
+        final ObjectAnimator dialogZoomInMoveXAnimator =
+                ObjectAnimator.ofFloat(
+                        mDialogContainerView, View.TRANSLATION_X, 0f, dialogInitXPosition);
         final ObjectAnimator dialogZoomInScaleYAnimator =
                 ObjectAnimator.ofFloat(mDialogContainerView, View.SCALE_Y, 1f, dialogScale);
         final ObjectAnimator dialogZoomInScaleXAnimator =
                 ObjectAnimator.ofFloat(mDialogContainerView, View.SCALE_X, 1f, dialogScale);
 
         AnimatorSet dialogZoomInAnimatorSet = new AnimatorSet();
-        dialogZoomInAnimatorSet.play(dialogZoomInMoveYAnimator)
+        dialogZoomInAnimatorSet
+                .play(dialogZoomInMoveYAnimator)
                 .with(dialogZoomInMoveXAnimator)
                 .with(dialogZoomInScaleYAnimator)
                 .with(dialogZoomInScaleXAnimator);
         dialogZoomInAnimatorSet.setDuration(DIALOG_ANIMATION_DURATION);
-        dialogZoomInAnimatorSet.setInterpolator(Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR);
+        dialogZoomInAnimatorSet.setInterpolator(Interpolators.EMPHASIZED);
 
-        dialogZoomInAnimatorSet.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                mDialogContainerView.setTranslationX(0f);
-                mDialogContainerView.setTranslationY(0f);
-                mDialogContainerView.setScaleX(1f);
-                mDialogContainerView.setScaleY(1f);
-            }
-        });
+        dialogZoomInAnimatorSet.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        mDialogContainerView.setTranslationX(0f);
+                        mDialogContainerView.setTranslationY(0f);
+                        mDialogContainerView.setScaleX(1f);
+                        mDialogContainerView.setScaleY(1f);
+                    }
+                });
 
         // In the first half of the dialog hiding animation, the dialog fades out while it moves and
         // scales down.
         final ObjectAnimator dialogZoomInAlphaAnimator =
                 ObjectAnimator.ofFloat(mDialogContainerView, View.ALPHA, 1f, 0f);
         dialogZoomInAlphaAnimator.setDuration(DIALOG_ALPHA_ANIMATION_DURATION);
-        dialogZoomInAlphaAnimator.setInterpolator(Interpolators.LINEAR_INTERPOLATOR);
+        dialogZoomInAlphaAnimator.setInterpolator(Interpolators.EMPHASIZED);
 
         // In the second half of the dialog hiding animation, the animation card zooms in from where
         // the dialog stops at the end of the first half and moves towards where the card should be.
-        final ObjectAnimator cardZoomInMoveYAnimator = ObjectAnimator.ofFloat(
-                mAnimationCardView, View.TRANSLATION_Y, cardScaledYPosition, cardInitYPosition);
-        final ObjectAnimator cardZoomInMoveXAnimator = ObjectAnimator.ofFloat(
-                mAnimationCardView, View.TRANSLATION_X, cardScaledXPosition, cardInitXPosition);
+        final ObjectAnimator cardZoomInMoveYAnimator =
+                ObjectAnimator.ofFloat(
+                        mAnimationCardView,
+                        View.TRANSLATION_Y,
+                        cardScaledYPosition,
+                        cardInitYPosition);
+        final ObjectAnimator cardZoomInMoveXAnimator =
+                ObjectAnimator.ofFloat(
+                        mAnimationCardView,
+                        View.TRANSLATION_X,
+                        cardScaledXPosition,
+                        cardInitXPosition);
         final ObjectAnimator cardZoomInScaleXAnimator =
                 ObjectAnimator.ofFloat(mAnimationCardView, View.SCALE_X, cardScale, 1f);
         final ObjectAnimator cardZoomInScaleYAnimator =
                 ObjectAnimator.ofFloat(mAnimationCardView, View.SCALE_Y, cardScale, 1f);
 
         AnimatorSet cardZoomInAnimatorSet = new AnimatorSet();
-        cardZoomInAnimatorSet.play(cardZoomInMoveYAnimator)
+        cardZoomInAnimatorSet
+                .play(cardZoomInMoveYAnimator)
                 .with(cardZoomInMoveXAnimator)
                 .with(cardZoomInScaleXAnimator)
                 .with(cardZoomInScaleYAnimator);
         cardZoomInAnimatorSet.setDuration(DIALOG_ANIMATION_DURATION);
-        cardZoomInAnimatorSet.setInterpolator(Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR);
+        cardZoomInAnimatorSet.setInterpolator(Interpolators.EMPHASIZED);
 
         // In the second half of the dialog hiding animation, the tab grid card fades in while it
         // scales down and moves.
@@ -536,53 +628,59 @@ public class TabGridDialogView extends FrameLayout {
                 ObjectAnimator.ofFloat(mAnimationCardView, View.ALPHA, 0f, 1f);
         cardZoomInAlphaAnimator.setDuration(DIALOG_ALPHA_ANIMATION_DURATION);
         cardZoomInAlphaAnimator.setStartDelay(DIALOG_ALPHA_ANIMATION_DURATION);
-        cardZoomInAlphaAnimator.setInterpolator(Interpolators.LINEAR_INTERPOLATOR);
+        cardZoomInAlphaAnimator.setInterpolator(Interpolators.EMPHASIZED);
 
-        cardZoomInAlphaAnimator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationStart(Animator animation) {
-                // At the beginning of the second half of the hiding animation, the white frame and
-                // the animation card should be above the the dialog view.
-                mBackgroundFrame.bringToFront();
-                mAnimationCardView.bringToFront();
-            }
+        cardZoomInAlphaAnimator.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationStart(Animator animation) {
+                        // At the beginning of the second half of the hiding animation, the white
+                        // frame and the animation card should be above the the dialog view.
+                        mBackgroundFrame.bringToFront();
+                        mAnimationCardView.bringToFront();
+                    }
 
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                // At the end of the hiding animation, reset the alpha of animation related views to
-                // 0.
-                mBackgroundFrame.setAlpha(0f);
-                mAnimationCardView.setAlpha(0f);
-            }
-        });
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        // At the end of the hiding animation, reset the alpha of animation related
+                        // views to
+                        // 0.
+                        mBackgroundFrame.setAlpha(0f);
+                        mAnimationCardView.setAlpha(0f);
+                    }
+                });
 
         // During the whole dialog hiding animation, the frame background scales down and moves so
         // that it looks like the dialog zooms in and becomes the card.
-        final ObjectAnimator frameZoomInMoveYAnimator = ObjectAnimator.ofFloat(
-                mBackgroundFrame, View.TRANSLATION_Y, 0f, frameInitYPosition);
-        final ObjectAnimator frameZoomInMoveXAnimator = ObjectAnimator.ofFloat(
-                mBackgroundFrame, View.TRANSLATION_X, 0f, frameInitXPosition);
+        final ObjectAnimator frameZoomInMoveYAnimator =
+                ObjectAnimator.ofFloat(
+                        mBackgroundFrame, View.TRANSLATION_Y, 0f, frameInitYPosition);
+        final ObjectAnimator frameZoomInMoveXAnimator =
+                ObjectAnimator.ofFloat(
+                        mBackgroundFrame, View.TRANSLATION_X, 0f, frameInitXPosition);
         final ObjectAnimator frameZoomInScaleYAnimator =
                 ObjectAnimator.ofFloat(mBackgroundFrame, View.SCALE_Y, 1f, frameScaleY);
         final ObjectAnimator frameZoomInScaleXAnimator =
                 ObjectAnimator.ofFloat(mBackgroundFrame, View.SCALE_X, 1f, frameScaleX);
 
         AnimatorSet frameZoomInAnimatorSet = new AnimatorSet();
-        frameZoomInAnimatorSet.play(frameZoomInMoveYAnimator)
+        frameZoomInAnimatorSet
+                .play(frameZoomInMoveYAnimator)
                 .with(frameZoomInMoveXAnimator)
                 .with(frameZoomInScaleYAnimator)
                 .with(frameZoomInScaleXAnimator);
         frameZoomInAnimatorSet.setDuration(DIALOG_ANIMATION_DURATION);
-        frameZoomInAnimatorSet.setInterpolator(Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR);
+        frameZoomInAnimatorSet.setInterpolator(Interpolators.EMPHASIZED);
 
-        frameZoomInAnimatorSet.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationStart(Animator animation) {
-                // At the beginning of the hiding animation, the alpha of white frame needs to be
-                // restored to 1.
-                mBackgroundFrame.setAlpha(1f);
-            }
-        });
+        frameZoomInAnimatorSet.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationStart(Animator animation) {
+                        // At the beginning of the hiding animation, the alpha of white frame needs
+                        // to be restored to 1.
+                        mBackgroundFrame.setAlpha(1f);
+                    }
+                });
 
         // At the end of the dialog hiding animation, the original tab grid card fades in.
         final ObjectAnimator tabFadeInAnimator =
@@ -592,7 +690,8 @@ public class TabGridDialogView extends FrameLayout {
 
         // Setup the dialog hiding animation.
         mHideDialogAnimation = new AnimatorSet();
-        mHideDialogAnimation.play(dialogZoomInAnimatorSet)
+        mHideDialogAnimation
+                .play(dialogZoomInAnimatorSet)
                 .with(dialogZoomInAlphaAnimator)
                 .with(frameZoomInAnimatorSet)
                 .with(cardZoomInAnimatorSet)
@@ -619,7 +718,18 @@ public class TabGridDialogView extends FrameLayout {
     }
 
     private void updateAnimationCardView(View view) {
-        // Update the dummy animation card view with the actual item view from grid tab switcher
+        if (view == null) {
+            ((ImageView) mAnimationCardView.findViewById(R.id.tab_favicon)).setImageDrawable(null);
+            ((TextView) (mAnimationCardView.findViewById(R.id.tab_title))).setText("");
+            ((ImageView) (mAnimationCardView.findViewById(R.id.tab_thumbnail)))
+                    .setImageDrawable(null);
+            ((ImageView) mAnimationCardView.findViewById(R.id.action_button))
+                    .setImageDrawable(null);
+            mAnimationCardView.findViewById(R.id.background_view).setBackground(null);
+            return;
+        }
+
+        // Update the stand-in animation card view with the actual item view from grid tab switcher
         // recyclerView.
         FrameLayout.LayoutParams params =
                 (FrameLayout.LayoutParams) mAnimationCardView.getLayoutParams();
@@ -627,7 +737,8 @@ public class TabGridDialogView extends FrameLayout {
         params.height = view.getHeight();
         if (view.findViewById(R.id.tab_title) == null) return;
 
-        mAnimationCardView.findViewById(R.id.card_view)
+        mAnimationCardView
+                .findViewById(R.id.card_view)
                 .setBackground(view.findViewById(R.id.card_view).getBackground());
 
         ImageView sourceCardFavicon = view.findViewById(R.id.tab_favicon);
@@ -648,19 +759,24 @@ public class TabGridDialogView extends FrameLayout {
         ((TextView) (mAnimationCardView.findViewById(R.id.tab_title)))
                 .setTextColor(((TextView) (view.findViewById(R.id.tab_title))).getTextColors());
 
-        ((ImageView) (mAnimationCardView.findViewById(R.id.tab_thumbnail)))
-                .setImageDrawable(
-                        ((ImageView) (view.findViewById(R.id.tab_thumbnail))).getDrawable());
+        TabThumbnailView originalThumbnailView =
+                (TabThumbnailView) view.findViewById(R.id.tab_thumbnail);
+        TabThumbnailView animationThumbnailView =
+                (TabThumbnailView) mAnimationCardView.findViewById(R.id.tab_thumbnail);
+        if (originalThumbnailView.isPlaceholder()) {
+            animationThumbnailView.setImageDrawable(null);
+        } else {
+            animationThumbnailView.setImageDrawable(originalThumbnailView.getDrawable());
+            animationThumbnailView.setImageMatrix(originalThumbnailView.getImageMatrix());
+            animationThumbnailView.setScaleType(originalThumbnailView.getScaleType());
+        }
 
         ImageView actionButton = mAnimationCardView.findViewById(R.id.action_button);
         actionButton.setImageDrawable(
                 ((ImageView) (view.findViewById(R.id.action_button))).getDrawable());
-        ApiCompatibilityUtils.setImageTintList(actionButton,
+        ImageViewCompat.setImageTintList(
+                actionButton,
                 ImageViewCompat.getImageTintList((view.findViewById(R.id.action_button))));
-
-        View dividerView = mAnimationCardView.findViewById(R.id.divider_view);
-        dividerView.setBackgroundColor(
-                ((ColorDrawable) view.findViewById(R.id.divider_view).getBackground()).getColor());
 
         mAnimationCardView.findViewById(R.id.background_view).setBackground(null);
     }
@@ -671,14 +787,15 @@ public class TabGridDialogView extends FrameLayout {
      * @param scrimClickRunnable The {@link Runnable} that runs when scrim view is clicked.
      */
     void setScrimClickRunnable(Runnable scrimClickRunnable) {
-        mScrimPropertyModel = new PropertyModel.Builder(ScrimProperties.ALL_KEYS)
-                                      .with(ScrimProperties.ANCHOR_VIEW, mDialogContainerView)
-                                      .with(ScrimProperties.SHOW_IN_FRONT_OF_ANCHOR_VIEW, false)
-                                      .with(ScrimProperties.AFFECTS_STATUS_BAR, true)
-                                      .with(ScrimProperties.TOP_MARGIN, 0)
-                                      .with(ScrimProperties.CLICK_DELEGATE, scrimClickRunnable)
-                                      .with(ScrimProperties.AFFECTS_NAVIGATION_BAR, true)
-                                      .build();
+        mScrimPropertyModel =
+                new PropertyModel.Builder(ScrimProperties.ALL_KEYS)
+                        .with(ScrimProperties.ANCHOR_VIEW, mDialogContainerView)
+                        .with(ScrimProperties.SHOW_IN_FRONT_OF_ANCHOR_VIEW, false)
+                        .with(ScrimProperties.AFFECTS_STATUS_BAR, true)
+                        .with(ScrimProperties.TOP_MARGIN, 0)
+                        .with(ScrimProperties.CLICK_DELEGATE, scrimClickRunnable)
+                        .with(ScrimProperties.AFFECTS_NAVIGATION_BAR, true)
+                        .build();
     }
 
     void setupScrimCoordinator(ScrimCoordinator scrimCoordinator) {
@@ -703,9 +820,7 @@ public class TabGridDialogView extends FrameLayout {
         recyclerView.setVisibility(View.VISIBLE);
     }
 
-    /**
-     * Show {@link PopupWindow} for dialog with animation.
-     */
+    /** Show {@link PopupWindow} for dialog with animation. */
     void showDialog() {
         if (mCurrentDialogAnimator != null && mCurrentDialogAnimator != mShowDialogAnimation) {
             mCurrentDialogAnimator.end();
@@ -717,19 +832,22 @@ public class TabGridDialogView extends FrameLayout {
         mShowDialogAnimation.start();
     }
 
-    /**
-     * Hide {@link PopupWindow} for dialog with animation.
-     */
+    /** Hide {@link PopupWindow} for dialog with animation. */
     void hideDialog() {
         // Skip the hideDialog call caused by initializing the dialog visibility as false.
         if (getVisibility() != VISIBLE) return;
+
         assert mScrimCoordinator != null && mScrimPropertyModel != null;
         if (mCurrentDialogAnimator != null && mCurrentDialogAnimator != mHideDialogAnimation) {
             mCurrentDialogAnimator.end();
         }
         mCurrentDialogAnimator = mHideDialogAnimation;
         if (mScrimCoordinator.isShowingScrim()) {
-            mScrimCoordinator.hideScrim(true);
+            if (DeviceFormFactor.isNonMultiDisplayContextOnTablet(mContext)) {
+                mScrimCoordinator.hideScrim(true, SCRIM_FADE_DURATION_MS);
+            } else {
+                mScrimCoordinator.hideScrim(true);
+            }
         }
         mHideDialogAnimation.start();
     }
@@ -816,65 +934,66 @@ public class TabGridDialogView extends FrameLayout {
         mUngroupBarHoveredTextColor = colorInt;
     }
 
-    /**
-     * Return the container view for undo closure snack bar.
-     */
+    /** Return the container view for undo closure snack bar. */
     ViewGroup getSnackBarContainer() {
         return mSnackBarContainer;
     }
 
-    @VisibleForTesting
+    void setBindingToken(Integer bindingToken) {
+        assert mBindingToken == null || bindingToken == null;
+        mBindingToken = bindingToken;
+    }
+
+    Integer getBindingToken() {
+        return mBindingToken;
+    }
+
     Animator getCurrentDialogAnimatorForTesting() {
         return mCurrentDialogAnimator;
     }
 
-    @VisibleForTesting
     Animator getCurrentUngroupBarAnimatorForTesting() {
         return mCurrentUngroupBarAnimator;
     }
 
-    @VisibleForTesting
     int getUngroupBarStatusForTesting() {
         return mUngroupBarStatus;
     }
 
-    @VisibleForTesting
     AnimatorSet getShowDialogAnimationForTesting() {
         return mShowDialogAnimation;
     }
 
-    @VisibleForTesting
     int getBackgroundColorForTesting() {
         return mBackgroundDrawableColor;
     }
 
-    @VisibleForTesting
     int getUngroupBarBackgroundColorForTesting() {
         return mUngroupBarBackgroundColor;
     }
 
-    @VisibleForTesting
     int getUngroupBarHoveredBackgroundColorForTesting() {
         return mUngroupBarHoveredBackgroundColor;
     }
 
-    @VisibleForTesting
     int getUngroupBarTextColorForTesting() {
         return mUngroupBarTextColor;
     }
 
-    @VisibleForTesting
     int getUngroupBarHoveredTextColorForTesting() {
         return mUngroupBarHoveredTextColor;
     }
 
-    @VisibleForTesting
     static void setSourceRectCallbackForTesting(Callback<RectF> callback) {
         sSourceRectCallbackForTesting = callback;
+        ResettersForTesting.register(() -> sSourceRectCallbackForTesting = null);
     }
 
-    @VisibleForTesting
     ScrimCoordinator getScrimCoordinatorForTesting() {
         return mScrimCoordinator;
+    }
+
+    VisibilityListener getVisibilityListenerForTesting() {
+        return mVisibilityListener;
     }
 }

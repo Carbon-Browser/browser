@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/pickle.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -217,8 +217,7 @@ bool FileSystemUsageCache::Write(const base::FilePath& usage_file_path,
   write_pickle.WriteUInt32(dirty);
   write_pickle.WriteInt64(usage);
 
-  if (!WriteBytes(usage_file_path,
-                  static_cast<const char*>(write_pickle.data()),
+  if (!WriteBytes(usage_file_path, write_pickle.data_as_char(),
                   write_pickle.size())) {
     Delete(usage_file_path);
     return false;

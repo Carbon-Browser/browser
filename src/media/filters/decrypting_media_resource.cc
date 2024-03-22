@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/cdm_context.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/media_log.h"
@@ -28,7 +29,7 @@ DecryptingMediaResource::DecryptingMediaResource(
       media_log_(media_log),
       task_runner_(task_runner) {
   DCHECK(media_resource);
-  DCHECK_EQ(MediaResource::STREAM, media_resource->GetType());
+  DCHECK_EQ(MediaResource::Type::kStream, media_resource->GetType());
   DCHECK(cdm_context_);
   DCHECK(cdm_context_->GetDecryptor());
   DCHECK(cdm_context_->GetDecryptor()->CanAlwaysDecrypt());
@@ -39,8 +40,8 @@ DecryptingMediaResource::DecryptingMediaResource(
 DecryptingMediaResource::~DecryptingMediaResource() = default;
 
 MediaResource::Type DecryptingMediaResource::GetType() const {
-  DCHECK_EQ(MediaResource::STREAM, media_resource_->GetType());
-  return MediaResource::STREAM;
+  DCHECK_EQ(MediaResource::Type::kStream, media_resource_->GetType());
+  return MediaResource::Type::kStream;
 }
 
 std::vector<DemuxerStream*> DecryptingMediaResource::GetAllStreams() {

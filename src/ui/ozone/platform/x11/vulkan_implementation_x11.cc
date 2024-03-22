@@ -1,12 +1,12 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/x11/vulkan_implementation_x11.h"
 
 #include "base/base_paths.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/scoped_environment_variable_override.h"
@@ -124,28 +124,9 @@ std::unique_ptr<gfx::GpuFence> VulkanImplementationX11::ExportVkFenceToGpuFence(
   return nullptr;
 }
 
-VkSemaphore VulkanImplementationX11::CreateExternalSemaphore(
-    VkDevice vk_device) {
-  return gpu::CreateExternalVkSemaphore(
-      vk_device, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT);
-}
-
-VkSemaphore VulkanImplementationX11::ImportSemaphoreHandle(
-    VkDevice vk_device,
-    gpu::SemaphoreHandle sync_handle) {
-  return ImportVkSemaphoreHandle(vk_device, std::move(sync_handle));
-}
-
-gpu::SemaphoreHandle VulkanImplementationX11::GetSemaphoreHandle(
-    VkDevice vk_device,
-    VkSemaphore vk_semaphore) {
-  return gpu::GetVkSemaphoreHandle(
-      vk_device, vk_semaphore, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT);
-}
-
-VkExternalMemoryHandleTypeFlagBits
-VulkanImplementationX11::GetExternalImageHandleType() {
-  return VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+VkExternalSemaphoreHandleTypeFlagBits
+VulkanImplementationX11::GetExternalSemaphoreHandleType() {
+  return VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
 }
 
 bool VulkanImplementationX11::CanImportGpuMemoryBuffer(
@@ -164,7 +145,8 @@ VulkanImplementationX11::CreateImageFromGpuMemoryHandle(
     gpu::VulkanDeviceQueue* device_queue,
     gfx::GpuMemoryBufferHandle gmb_handle,
     gfx::Size size,
-    VkFormat vk_format) {
+    VkFormat vk_format,
+    const gfx::ColorSpace& color_space) {
   constexpr auto kUsage =
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;

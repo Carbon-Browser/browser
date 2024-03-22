@@ -1,14 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/invalidation/impl/fcm_invalidation_service.h"
 
-#include "base/i18n/time_formatting.h"
+#include "base/sequence_checker.h"
 #include "build/build_config.h"
-#include "components/invalidation/public/invalidator_state.h"
 #include "components/prefs/scoped_user_pref_update.h"
-#include "google_apis/gaia/gaia_constants.h"
 
 namespace invalidation {
 
@@ -42,21 +40,7 @@ void FCMInvalidationService::Init() {
   identity_provider_->AddObserver(this);
 }
 
-void FCMInvalidationService::RequestDetailedStatus(
-    base::RepeatingCallback<void(base::Value::Dict)> return_callback) const {
-  FCMInvalidationServiceBase::RequestDetailedStatus(return_callback);
-
-  if (identity_provider_) {
-    identity_provider_->RequestDetailedStatus(return_callback);
-  }
-}
-
 void FCMInvalidationService::OnActiveAccountLogin() {
-  diagnostic_info_.active_account_login = base::Time::Now();
-  diagnostic_info_.was_already_started_on_login = IsStarted();
-  diagnostic_info_.was_ready_to_start_on_login = IsReadyToStart();
-  diagnostic_info_.active_account_id = identity_provider_->GetActiveAccountId();
-
   if (IsStarted()) {
     return;
   }
@@ -66,41 +50,15 @@ void FCMInvalidationService::OnActiveAccountLogin() {
 }
 
 void FCMInvalidationService::OnActiveAccountRefreshTokenUpdated() {
-  diagnostic_info_.active_account_token_updated = base::Time::Now();
   if (!IsStarted() && IsReadyToStart()) {
     StartInvalidator();
   }
 }
 
 void FCMInvalidationService::OnActiveAccountLogout() {
-  diagnostic_info_.active_account_logged_out = base::Time::Now();
-  diagnostic_info_.active_account_id = CoreAccountId();
   if (IsStarted()) {
     StopInvalidatorPermanently();
   }
-}
-
-base::Value::Dict FCMInvalidationService::CollectDebugData() const {
-  base::Value::Dict status = FCMInvalidationServiceBase::CollectDebugData();
-
-  status.SetByDottedPath(
-      "InvalidationService.Active-account-login",
-      base::TimeFormatShortDateAndTime(diagnostic_info_.active_account_login));
-  status.SetByDottedPath("InvalidationService.Active-account-token-updated",
-                         base::TimeFormatShortDateAndTime(
-                             diagnostic_info_.active_account_token_updated));
-  status.SetByDottedPath("InvalidationService.Active-account-logged-out",
-                         base::TimeFormatShortDateAndTime(
-                             diagnostic_info_.active_account_logged_out));
-  status.SetByDottedPath("InvalidationService.Started-on-active-account-login",
-                         diagnostic_info_.was_already_started_on_login);
-  status.SetByDottedPath(
-      "InvalidationService.Ready-to-start-on-active-account-login",
-      diagnostic_info_.was_ready_to_start_on_login);
-  status.SetByDottedPath("InvalidationService.Active-account-id",
-                         diagnostic_info_.active_account_id.ToString());
-
-  return status;
 }
 
 bool FCMInvalidationService::IsReadyToStart() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,14 +48,6 @@ TEST(ECPrivateKeyUnitTest, InitRandomTest) {
   EXPECT_TRUE(keypair->ExportPrivateKey(&privkey));
   std::unique_ptr<crypto::ECPrivateKey> keypair_copy =
       crypto::ECPrivateKey::CreateFromPrivateKeyInfo(privkey);
-  ASSERT_TRUE(keypair_copy);
-  ExpectKeysEqual(keypair.get(), keypair_copy.get());
-
-  // Re-import as an EncryptedPrivateKeyInfo with kPassword1.
-  std::vector<uint8_t> encrypted_privkey;
-  EXPECT_TRUE(keypair->ExportEncryptedPrivateKey(&encrypted_privkey));
-  keypair_copy = crypto::ECPrivateKey::CreateFromEncryptedPrivateKeyInfo(
-      encrypted_privkey);
   ASSERT_TRUE(keypair_copy);
   ExpectKeysEqual(keypair.get(), keypair_copy.get());
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,7 @@ import org.chromium.base.test.UiThreadTest;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Tests for {@link GarbageCollectionTestUtils}.
- */
+/** Tests for {@link GarbageCollectionTestUtils}. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class GarbageCollectionTestUtilsTest {
     @Test

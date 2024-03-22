@@ -6,30 +6,35 @@
       "contentsOpaque": true,
       "backgroundColor": "#FFFFFF",
       "invalidations": [
-        [9, 9, 277, 59]
+        [9, 9, 276, 58]
       ]
     },
     {
-      "name": "LayoutNGTextControlMultiLine TEXTAREA id='editor'",
-      "position": [2, 2],
+      "name": "LayoutTextControlMultiLine TEXTAREA id='editor'",
+      "position": [1, 1],
       "bounds": [268, 28],
       "drawsContent": false,
       "transform": 1
     },
     {
-      "name": "Scroll corner of LayoutNGTextControlMultiLine TEXTAREA id='editor'",
+      "name": "Scroll corner of LayoutTextControlMultiLine TEXTAREA id='editor'",
       "position": [225, 7],
       "bounds": [44, 44],
-      "contentsOpaqueForText": true,
-      "drawsContent": false,
       "invalidations": [
         [0, 0, 44, 44]
       ],
       "transform": 1
     },
     {
-      "name": "LayoutNGTextControlMultiLine TEXTAREA id='editor'",
-      "position": [2, 2],
+      "name": "HorizontalScrollbar",
+      "position": [1, 29],
+      "bounds": [246, 22],
+      "contentsOpaque": true,
+      "transform": 1
+    },
+    {
+      "name": "LayoutTextControlMultiLine TEXTAREA id='editor'",
+      "position": [1, 1],
       "bounds": [723, 28],
       "backgroundColor": "#FFFFFF",
       "invalidations": [
@@ -38,38 +43,18 @@
       "transform": 2
     },
     {
-      "name": "HorizontalScrollbar",
-      "position": [1, 30],
-      "bounds": [246, 22],
-      "transform": 1
-    },
-    {
-      "name": "Scroll corner of LayoutNGTextControlMultiLine TEXTAREA id='editor'",
-      "position": [247, 29],
-      "bounds": [22, 22],
-      "contentsOpaque": true,
-      "invalidations": [
-        [0, 0, 22, 22]
-      ],
-      "transform": 1
-    },
-    {
       "name": "Caret",
-      "position": [723, 5],
-      "bounds": [1, 22],
+      "position": [722, 4],
+      "bounds": [2, 22],
       "contentsOpaque": true,
-      "invalidations": [
-        [0, 0, 1, 22]
-      ],
       "transform": 2
     },
     {
-      "name": "LayoutNGTextControlMultiLine TEXTAREA id='editor'",
+      "name": "LayoutTextControlMultiLine TEXTAREA id='editor'",
       "position": [-3, -3],
-      "bounds": [277, 59],
-      "contentsOpaqueForText": true,
+      "bounds": [276, 58],
       "invalidations": [
-        [0, 0, 277, 59]
+        [0, 0, 276, 58]
       ],
       "transform": 1
     }

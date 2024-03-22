@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "apps/test/app_window_waiter.h"
 
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "extensions/browser/app_window/app_window.h"
 #include "extensions/browser/app_window/native_app_window.h"
 
@@ -52,7 +52,7 @@ extensions::AppWindow* AppWindowWaiter::WaitForShownWithTimeout(
 
   wait_type_ = WAIT_FOR_SHOWN;
   run_loop_ = std::make_unique<base::RunLoop>();
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop_->QuitClosure(), timeout);
   run_loop_->Run();
 

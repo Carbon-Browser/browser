@@ -1,25 +1,23 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 namespace web {
 class WebState;
 }
 
-@class ContentSuggestionsHeaderViewController;
+@protocol ContentSuggestionsDelegate;
+@class ContentSuggestionsMediator;
 @class ContentSuggestionsViewController;
-@protocol FeedDelegate;
 @protocol NewTabPageControllerDelegate;
 @protocol NewTabPageDelegate;
-class NotificationPromoWhatsNew;
-@class NTPHomeMediator;
-@protocol ThumbStripSupporting;
-@class ViewRevealingVerticalPanHandler;
+@protocol NewTabPageMetricsDelegate;
+@protocol NewTabPageViewDelegate;
 
 // Coordinator to manage the Suggestions UI via a
 // ContentSuggestionsViewController.
@@ -33,57 +31,33 @@ class NotificationPromoWhatsNew;
 // YES if the coordinator has started. If YES, start is a no-op.
 @property(nonatomic, readonly) BOOL started;
 
-@property(nonatomic, strong, readonly)
-    ContentSuggestionsHeaderViewController* headerController;
-
-// The CollectionView that this coordinator manages.
-@property(nonatomic, strong, readonly)
-    UICollectionViewController* contentSuggestionsCollectionViewController;
-
-// The ViewController that this coordinator managers if
-// kContentSuggestionsUIViewControllerMigration is enabled.
-// TODO(crbug.com/1285378): remove `contentSuggestionsCollectionViewController`
-// once migration is finished.
+// The ViewController that this coordinator managers.
 @property(nonatomic, strong, readonly)
     ContentSuggestionsViewController* viewController;
 
-// Allows for the in-flight enabling/disabling of the thumb strip.
-@property(nonatomic, weak, readonly) id<ThumbStripSupporting>
-    thumbStripSupporting;
-
-// NTP Mediator used by this Coordinator.
-// TODO(crbug.com/1114792): Move all usage of this mediator to NTPCoordinator.
-// It might also be necessary to split it and create a ContentSuggestions
-// mediator for non NTP logic.
-@property(nonatomic, strong) NTPHomeMediator* ntpMediator;
+// The mediator used by this coordinator.
+// TODO(crbug.com/1403298): Replace this with a delegate to avoid exposing this.
+@property(nonatomic, strong, readonly)
+    ContentSuggestionsMediator* contentSuggestionsMediator;
 
 // Delegate for NTP related actions.
-@property(nonatomic, weak) id<NewTabPageDelegate> ntpDelegate;
+@property(nonatomic, weak) id<NewTabPageDelegate> NTPDelegate;
 
-// Delegate used to communicate to communicate events to the feed.
-@property(nonatomic, weak) id<FeedDelegate> feedDelegate;
+// Delegate used to communicate Content Suggestions events to the delegate.
+@property(nonatomic, weak) id<ContentSuggestionsDelegate> delegate;
 
-// Stop any scrolling in the scroll view.
-- (void)stopScrolling;
+// Delegate for reporting content suggestions actions to the NTP metrics
+// recorder.
+@property(nonatomic, weak) id<NewTabPageMetricsDelegate> NTPMetricsDelegate;
 
-// The content inset and offset of the scroll view.
-- (UIEdgeInsets)contentInset;
-- (CGPoint)contentOffset;
+// Delegate for getting information about NTP views.
+@property(nonatomic, weak) id<NewTabPageViewDelegate> NTPViewDelegate;
 
-// Reloads the suggestions.
-- (void)reload;
-
-// The location bar has lost focus.
-- (void)locationBarDidResignFirstResponder;
-
-// Tell location bar has taken focus.
-- (void)locationBarDidBecomeFirstResponder;
-
-// Configure Content Suggestions if showing the Start Surface.
+// Configure Content Suggestions if showing the Start Surface. NOTE: this should
+// only be called once for every Start configuration. Calling it multiple times
+// in sequence can lead to unpredictable outcomes.
 - (void)configureStartSurfaceIfNeeded;
 
-// The notification promo.
-- (NotificationPromoWhatsNew*)notificationPromo;
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_COORDINATOR_H_

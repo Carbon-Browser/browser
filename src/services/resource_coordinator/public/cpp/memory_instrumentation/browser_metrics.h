@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/metrics/histogram_functions.h"
+#include "build/build_config.h"
 
 // Macro used for logging memory related metrics in mb.
 #define MEMORY_METRICS_HISTOGRAM_MB(name, value) \
@@ -26,8 +27,12 @@ extern const char kMemoryHistogramPrefix[];
 enum class HistogramProcessType {
   kAudioService,
   kBrowser,
+  kCdmService,
   kExtension,
   kGpu,
+#if BUILDFLAG(IS_WIN)
+  kMediaFoundationService,
+#endif
   kNetworkService,
   kPaintPreviewCompositor,
   kRenderer,

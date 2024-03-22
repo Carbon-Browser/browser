@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,13 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "device/bluetooth/bluetooth_common.h"
@@ -102,6 +103,12 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDevice {
     ERROR_INPROGRESS = 5,
     ERROR_UNKNOWN = 6,
     ERROR_UNSUPPORTED_DEVICE = 7,
+    ERROR_DEVICE_NOT_READY = 8,
+    ERROR_ALREADY_CONNECTED = 9,
+    ERROR_DEVICE_ALREADY_EXISTS = 10,
+    ERROR_DEVICE_UNCONNECTED = 11,
+    ERROR_DOES_NOT_EXIST = 12,
+    ERROR_INVALID_ARGS = 13,
     NUM_CONNECT_ERROR_CODES,  // Keep as last enum.
   };
 
@@ -148,7 +155,8 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDevice {
                              BluetoothUUIDHash>
       ServiceDataMap;
   typedef uint16_t ManufacturerId;
-  typedef std::unordered_map<ManufacturerId, std::vector<uint8_t>>
+  typedef std::vector<uint8_t> ManufacturerData;
+  typedef std::unordered_map<ManufacturerId, ManufacturerData>
       ManufacturerDataMap;
   typedef std::unordered_set<ManufacturerId> ManufacturerIDSet;
 
@@ -694,6 +702,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDevice {
  protected:
   // BluetoothGattConnection is a friend to call Add/RemoveGattConnection.
   friend BluetoothGattConnection;
+  FRIEND_TEST_ALL_PREFIXES(BluetoothDeviceTest, GattConnectionErrorReentrancy);
   FRIEND_TEST_ALL_PREFIXES(
       BluetoothTest,
       BluetoothGattConnection_DisconnectGatt_SimulateConnect);
@@ -709,14 +718,14 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDevice {
   FRIEND_TEST_ALL_PREFIXES(BluetoothTest, RemoveOutdatedDeviceGattConnect);
 
   FRIEND_TEST_ALL_PREFIXES(
-      BluetoothTestWinrtOnly,
+      BluetoothTestWinrt,
       BluetoothGattConnection_DisconnectGatt_SimulateConnect);
   FRIEND_TEST_ALL_PREFIXES(
-      BluetoothTestWinrtOnly,
+      BluetoothTestWinrt,
       BluetoothGattConnection_DisconnectGatt_SimulateDisconnect);
-  FRIEND_TEST_ALL_PREFIXES(BluetoothTestWinrtOnly,
+  FRIEND_TEST_ALL_PREFIXES(BluetoothTestWinrt,
                            BluetoothGattConnection_ErrorAfterConnection);
-  FRIEND_TEST_ALL_PREFIXES(BluetoothTestWinrtOnly,
+  FRIEND_TEST_ALL_PREFIXES(BluetoothTestWinrt,
                            BluetoothGattConnection_DisconnectGatt_Cleanup);
 
   // Helper class to easily update the sets of UUIDs and keep them in sync with
@@ -797,7 +806,10 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDevice {
 
   // Raw pointer to adapter owning this device object. Subclasses use platform
   // specific pointers via adapter_.
-  BluetoothAdapter* const adapter_;
+  // This field is not a raw_ptr<> because problems related to passing to a
+  // templated && parameter, which is later forwarded to something that doesn't
+  // vibe with raw_ptr<T>.
+  RAW_PTR_EXCLUSION BluetoothAdapter* const adapter_;
 
   // Indicates whether this device supports limited discovery of a specific
   // service. This is configured by the constructor of subclasses. If false,

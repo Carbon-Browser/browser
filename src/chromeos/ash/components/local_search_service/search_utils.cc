@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,11 @@
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromeos/ash/components/local_search_service/shared_structs.h"
-#include "chromeos/components/string_matching/sequence_matcher.h"
-#include "chromeos/components/string_matching/tokenized_string.h"
+#include "chromeos/ash/components/string_matching/sequence_matcher.h"
+#include "chromeos/ash/components/string_matching/tokenized_string.h"
 #include "third_party/icu/source/i18n/unicode/translit.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 float ExactPrefixMatchScore(const std::u16string& query,
                             const std::u16string& text) {
@@ -41,9 +40,8 @@ float ExactPrefixMatchScore(const std::u16string& query,
 }
 
 float BlockMatchScore(const std::u16string& query, const std::u16string& text) {
-  return chromeos::string_matching::SequenceMatcher(
-             query, text, false /* use_edit_distance */,
-             0.1 /*num_matching_blocks_penalty*/)
+  return string_matching::SequenceMatcher(query, text,
+                                          0.1 /*num_matching_blocks_penalty*/)
       .Ratio();
 }
 
@@ -62,5 +60,4 @@ bool CompareResults(const Result& r1, const Result& r2) {
   return r1.score > r2.score;
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

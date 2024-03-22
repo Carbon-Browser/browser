@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include "ash/components/arc/mojom/audio.mojom.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "ash/components/audio/cras_audio_handler.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -45,6 +46,8 @@ class ArcAudioBridge : public KeyedService,
   void ShowVolumeControls() override;
   void OnSystemVolumeUpdateRequest(int32_t percent) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   // ash::CrasAudioHandler::AudioObserver overrides.
   void OnAudioNodesChanged() override;
@@ -54,9 +57,11 @@ class ArcAudioBridge : public KeyedService,
   void SendSwitchState(bool headphone_inserted, bool microphone_inserted);
   void SendVolumeState();
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService, ExperimentalAsh>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
-  ash::CrasAudioHandler* cras_audio_handler_;
+  raw_ptr<ash::CrasAudioHandler, DanglingUntriaged | ExperimentalAsh>
+      cras_audio_handler_;
 
   int volume_ = 0;  // Volume range: 0-100.
   bool muted_ = false;

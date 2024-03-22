@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
+#include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
 #include "media/audio/audio_device_description.h"
@@ -28,6 +28,7 @@ class AudioManagerPowerUser;
 
 namespace media {
 
+class AecdumpRecordingManager;
 class AudioDebugRecordingManager;
 class AudioInputStream;
 class AudioManager;
@@ -170,11 +171,25 @@ class MEDIA_EXPORT AudioManager {
   // thread (GetTaskRunner()).
   virtual AudioDebugRecordingManager* GetAudioDebugRecordingManager() = 0;
 
+  // Set aecdump recording manager. This can only be called on AudioManager's
+  // thread (GetTaskRunner()).
+  virtual void SetAecDumpRecordingManager(
+      base::WeakPtr<AecdumpRecordingManager> aecdump_recording_manager) = 0;
+
   // Gets the name of the audio manager (e.g., Windows, Mac, PulseAudio).
   virtual const char* GetName() = 0;
 
   // Limits the number of streams that can be created for testing purposes.
   virtual void SetMaxStreamCountForTesting(int max_input, int max_output);
+
+  // Starts or stops tracing when a peak in Audio signal amplitude is detected.
+  // Does nothing if a call to stop tracing is made without first starting the
+  // trace. Aborts the current trace if a call to start tracing is made without
+  // stopping the existing trace.
+  // Note: tracing is intended to be started from exactly one input stream and
+  // stopped from exactly one output stream. If multiple streams are starting
+  // and stopping traces, the latency measurements will not be valid.
+  void TraceAmplitudePeak(bool trace_start);
 
  protected:
   FRIEND_TEST_ALL_PREFIXES(AudioManagerTest, AudioDebugRecording);
@@ -254,6 +269,10 @@ class MEDIA_EXPORT AudioManager {
 
  private:
   friend class AudioSystemHelper;
+
+  base::Lock tracing_lock_;
+  int current_trace_id_ GUARDED_BY(tracing_lock_) = 0;
+  bool is_trace_started_ GUARDED_BY(tracing_lock_) = false;
 
   std::unique_ptr<AudioThread> audio_thread_;
   bool shutdown_ = false;  // True after |this| has been shutdown.

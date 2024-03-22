@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ class WebAppNotificationsBrowserTest : public WebAppControllerBrowserTest {
     return *display_service_tester_;
   }
 
-  void SetAppBrowserForAppId(const AppId& app_id) {
+  void SetAppBrowserForAppId(const webapps::AppId& app_id) {
     Browser* app_browser = FindWebAppBrowser(profile(), app_id);
     ASSERT_TRUE(app_browser);
     app_browser_ = app_browser;
@@ -98,7 +98,7 @@ class WebAppNotificationsBrowserTest : public WebAppControllerBrowserTest {
   std::unique_ptr<NotificationDisplayServiceTester> display_service_tester_;
 
   // Can be different from browser();
-  raw_ptr<Browser> app_browser_ = nullptr;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> app_browser_ = nullptr;
 };
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -110,7 +110,7 @@ IN_PROC_BROWSER_TEST_F(WebAppNotificationsBrowserTest_IconAndTitleEnabled,
   const GURL app_url =
       https_server()->GetURL("/web_app_notifications/index.html");
 
-  const AppId app_id = InstallWebAppFromPage(browser(), app_url);
+  const webapps::AppId app_id = InstallWebAppFromPage(browser(), app_url);
   // The installation opens a new Browser window: |user_display_mode| is
   // kStandalone.
   SetAppBrowserForAppId(app_id);
@@ -191,7 +191,7 @@ IN_PROC_BROWSER_TEST_F(WebAppNotificationsBrowserTest_IconAndTitleDisabled,
   const GURL app_url =
       https_server()->GetURL("/web_app_notifications/index.html");
 
-  const AppId app_id = InstallWebAppFromPage(browser(), app_url);
+  const webapps::AppId app_id = InstallWebAppFromPage(browser(), app_url);
   // The installation opens a new Browser window: |user_display_mode| is
   // kStandalone.
   SetAppBrowserForAppId(app_id);

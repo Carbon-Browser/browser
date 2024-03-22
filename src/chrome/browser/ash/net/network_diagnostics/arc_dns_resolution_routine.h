@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "ash/components/arc/mojom/net.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_routine.h"
 
@@ -54,7 +55,8 @@ class ArcDnsResolutionRoutine : public NetworkDiagnosticsRoutine {
   bool successfully_resolved_hostnames_ = true;
   bool failed_to_get_arc_service_manager_ = false;
   bool failed_to_get_net_instance_service_for_dns_resolution_test_ = false;
-  arc::mojom::NetInstance* net_instance_ = nullptr;
+  raw_ptr<arc::mojom::NetInstance, DanglingUntriaged | ExperimentalAsh>
+      net_instance_ = nullptr;
   int64_t max_latency_ = 0;
   base::WeakPtrFactory<ArcDnsResolutionRoutine> weak_ptr_factory_{this};
 };

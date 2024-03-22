@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <memory>
 #include <vector>
 
-#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/sessions/core/session_id.h"
 #include "components/tab_groups/tab_group_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Browser;
 class GURL;
+struct DetachedWebContents;
 
 namespace content {
 class WebContents;
@@ -153,6 +153,9 @@ class TabStripModelDelegate {
   // Adds the specified WebContents to read later.
   virtual void AddToReadLater(content::WebContents* web_contents) = 0;
 
+  // Returns whether the tabstrip supports the read later feature.
+  virtual bool SupportsReadLater() = 0;
+
   // Gives the delegate an opportunity to cache (take ownership) of
   // WebContents before they are destroyed. The delegate takes ownership by way
   // of using std::move() on the `owned_contents` and resetting `remove_reason`
@@ -162,7 +165,7 @@ class TabStripModelDelegate {
   // WebContents.
   // TODO(https://crbug.com/1234332): Provide active web contents.
   virtual void CacheWebContents(
-      const std::vector<std::unique_ptr<TabStripModel::DetachedWebContents>>&
+      const std::vector<std::unique_ptr<DetachedWebContents>>&
           web_contents) = 0;
 
   // Follows a web feed for the specified WebContents.
@@ -170,6 +173,18 @@ class TabStripModelDelegate {
 
   // Unfollows a web feed for the specified WebContents.
   virtual void UnfollowSite(content::WebContents* web_contents) = 0;
+
+  // Returns whether this tab strip model is for a web app.
+  virtual bool IsForWebApp() = 0;
+
+  // Copies the URL of the given WebContents.
+  virtual void CopyURL(content::WebContents* web_contents) = 0;
+
+  // Navigates the web_contents back to the previous page.
+  virtual void GoBack(content::WebContents* web_contents) = 0;
+
+  // Returns whether the web_contents can be navigated back.
+  virtual bool CanGoBack(content::WebContents* web_contents) = 0;
 };
 
 #endif  // CHROME_BROWSER_UI_TABS_TAB_STRIP_MODEL_DELEGATE_H_

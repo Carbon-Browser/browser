@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """This script automatically disables tests, given an ID and a set of
@@ -31,12 +31,17 @@ def main(argv: List[str]) -> int:
       description='Disables tests.',
       epilog=f"Valid conditions are:\n{valid_conds}")
 
-  parser.add_argument('test_id',
+  parser.add_argument(
+      'build',
+      type=str,
+      help='the Buildbucket build ID to search for tests to disable ')
+  parser.add_argument('test_regex',
                       type=str,
-                      help='the test to disable. For example: ' +
-                      'ninja://chrome/test:browser_tests/Suite.Name. You can ' +
-                      'also just pass Suite.Name, and the tool will search ' +
-                      'for a test with a matching ID')
+                      help='the regex for the test to disable. For example: ' +
+                      '".*CompressionUtilsTest.GzipCompression.*". Currently' +
+                      'we assume that there is at most one test matching' +
+                      'the regex. Disabling multiple tests at the same time' +
+                      'is not currently supported (crbug.com/1364416)')
   parser.add_argument('conditions',
                       type=str,
                       nargs='*',
@@ -50,16 +55,17 @@ def main(argv: List[str]) -> int:
                       action='store_true',
                       help='cache ResultDB rpc results, useful for testing.')
 
-  group = parser.add_mutually_exclusive_group()
-  group.add_argument('-b',
-                     '--bug',
-                     help="write a TODO referencing this bug in a comment " +
-                     "next to the disabled test. Bug can be given as just the" +
-                     " ID or a URL (e.g. 123456, crbug.com/v8/654321).")
-  group.add_argument('-m',
-                     '--message',
-                     help="write a comment containing this message next to " +
-                     "the disabled test.")
+  # group = parser.add_mutually_exclusive_group()
+  parser.add_argument(
+      '-b',
+      '--bug',
+      help="write a TODO referencing this bug in a comment " +
+      "next to the disabled test. Bug can be given as just the" +
+      " ID or a URL (e.g. 123456, crbug.com/v8/654321).")
+  parser.add_argument('-m',
+                      '--message',
+                      help="write a comment containing this message next to " +
+                      "the disabled test.")
 
   args = parser.parse_args(argv[1:])
 
@@ -70,7 +76,7 @@ def main(argv: List[str]) -> int:
   message = args.message
   if args.bug is not None:
     try:
-      message = make_bug_message(args.bug)
+      message = make_bug_message(args.bug, message)
     except Exception:
       print(
           'Invalid value for --bug. Should have one of the following forms:\n' +
@@ -81,7 +87,7 @@ def main(argv: List[str]) -> int:
       return 1
 
   try:
-    disable_test(args.test_id, args.conditions, message)
+    disable_test(args.build, args.test_regex, args.conditions, message)
     return 0
   except errors.UserError as e:
     print(e, file=sys.stderr)
@@ -100,11 +106,14 @@ def main(argv: List[str]) -> int:
     return 1
 
 
-def make_bug_message(bug: str) -> str:
+def make_bug_message(bug: str, message: str) -> str:
   bug_id, project = parse_bug(bug)
   project_component = '' if project == 'chromium' else f'{project}/'
   bug_url = f"crbug.com/{project_component}{bug_id}"
-  return f"TODO({bug_url}): Re-enable this test"
+  if not message:
+    # if no message given, set default message for TODO.
+    message = "Re-enable this test"
+  return f"TODO({bug_url}): {message}"
 
 
 def parse_bug(bug: str) -> Tuple[int, str]:
@@ -153,16 +162,11 @@ def parse_bug(bug: str) -> Tuple[int, str]:
 #   * Printing out all valid configs.
 #   * Overwrite the existing state rather than adding to it. Probably leave this
 #     until it's requested.
-def disable_test(test_id: str, cond_strs: List[str], message: Optional[str]):
+def disable_test(build: str, test_regex: str, cond_strs: List[str],
+                 message: Optional[str]):
   conds = conditions.parse(cond_strs)
-
-  #  If the given ID starts with "ninja:", then it's a full test ID. If not,
-  #  assume it's a test name, and transform it into a query that will match the
-  #  full ID.
-  if not test_id.startswith('ninja:'):
-    test_id = f'ninja://.*/{extract_name_and_suite(test_id)}(/.*)?'
-
-  test_name, filename = resultdb.get_test_metadata(test_id)
+  invocation = "invocations/build-" + build
+  test_name, filename = resultdb.get_test_metadata(invocation, test_regex)
   test_name = extract_name_and_suite(test_name)
 
   # Paths returned from ResultDB look like //foo/bar, where // refers to the

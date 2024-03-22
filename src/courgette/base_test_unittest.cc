@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "base/path_service.h"
 
 void BaseTest::SetUp() {
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_dir_));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_dir_));
   test_dir_ = test_dir_.AppendASCII("courgette");
   test_dir_ = test_dir_.AppendASCII("testdata");
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@ class Layer;
 
 namespace blink {
 
+class ContentLayerClientImpl;
 class JSONArray;
 class JSONObject;
 class TransformPaintPropertyNode;
@@ -38,20 +39,13 @@ enum {
 };
 typedef unsigned LayerTreeFlags;
 
-class PLATFORM_EXPORT LayerAsJSONClient {
- public:
-  virtual void AppendAdditionalInfoAsJSON(LayerTreeFlags,
-                                          const cc::Layer&,
-                                          JSONObject&) const = 0;
-};
-
 class PLATFORM_EXPORT LayersAsJSON {
  public:
   LayersAsJSON(LayerTreeFlags);
 
   void AddLayer(const cc::Layer& layer,
                 const TransformPaintPropertyNode& transform,
-                const LayerAsJSONClient* json_client);
+                const ContentLayerClientImpl* content_layer_client);
 
   std::unique_ptr<JSONObject> Finalize();
 

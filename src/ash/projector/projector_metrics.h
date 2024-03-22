@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -87,10 +87,52 @@ enum class ProjectorCreationFlow {
 enum class ProjectorCreationFlowError {
   kSaveError = 0,
   kTranscriptionError = 1,
+  kSessionAbortedByAudioPolicyDisabled = 2,
   // Add future entries above this comment, in sync with
   // "ProjectorCreationFlowError" in src/tools/metrics/histograms/enums.xml.
   // Update kMaxValue to the last value.
-  kMaxValue = kTranscriptionError
+  kMaxValue = kSessionAbortedByAudioPolicyDisabled
+};
+
+// These enum values represent potential error that occurs at policy value
+// change handling and log to UMA. Entries should not be renumbered and numeric
+// values should never be reused. Please keep in sync with
+// "OnDeviceToServerSpeechRecognitionFallbackReason" in
+// src/tools/metrics/histograms/enums.xml.
+// This enum is the smiliar to the `OnDeviceRecognitionAvailability` because
+// all fallback reasons are related to on device recognition is not supported.
+enum class OnDeviceToServerSpeechRecognitionFallbackReason : int {
+  // Device does not support SODA (Speech on Device API)
+  kSodaNotAvailable = 0,
+  // User's language is not supported by SODA.
+  kUserLanguageNotAvailableForSoda = 1,
+  // SODA binary is not yet installed.
+  kSodaNotInstalled = 2,
+  // SODA binary and language packs are downloading.
+  kSodaInstalling = 3,
+  // SODA installation failed.
+  kSodaInstallationErrorUnspecified = 4,
+  // SODA installation error needs reboot
+  kSodaInstallationErrorNeedsReboot = 5,
+  // Server based speech recognition is enforced by flag for dev purpose.
+  kEnforcedByFlag = 6,
+
+  kMaxValue = kEnforcedByFlag,
+};
+
+// Enum class to record metric for speech recognition status.
+// This enum should never be reused as it is being logged into UMA.
+enum class SpeechRecognitionEndState {
+  // Speech recognition successfully stopped.
+  kSpeechRecognitionSuccessfullyStopped = 0,
+  // Speech recognition encountered error while recording was taking place.
+  kSpeechRecognitionEnounteredError = 1,
+  // Speech recognition encountered error while attempting to stop.
+  kSpeechRecognitionEncounteredErrorWhileStopping = 2,
+  // Speech recognition has been forced stopped.
+  kSpeechRecognitionForcedStopped = 3,
+
+  kMaxValue = kSpeechRecognitionForcedStopped,
 };
 
 // Records the buttons the user presses on the Projector toolbar.
@@ -114,6 +156,12 @@ void RecordPendingScreencastBatchIOTaskDuration(const base::TimeDelta duration);
 
 // Records the interval between the UI changes of pending screencasts.
 void RecordPendingScreencastChangeInterval(const base::TimeDelta interval);
+
+void RecordOnDeviceToServerSpeechRecognitionFallbackReason(
+    OnDeviceToServerSpeechRecognitionFallbackReason reason);
+
+void RecordSpeechRecognitionEndState(SpeechRecognitionEndState state,
+                                     bool is_on_device);
 
 }  // namespace ash
 

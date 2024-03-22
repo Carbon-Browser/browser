@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,7 @@
 #include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget_delegate.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 namespace {
 
 // This class can be used as a deleter for std::unique_ptr<Widget>
@@ -101,15 +100,12 @@ class ViewBlurObserver : public ViewObserver {
     observation_.Observe(view);
   }
 
-  // This is fired while the view is being destroyed, after the cache entry is
-  // removed by the AXWidgetObjWrapper. Re-create the cache entry so we can
-  // test that it will also be removed.
   void OnViewBlurred(View* view) override {
     ASSERT_FALSE(was_called());
     observation_.Reset();
 
-    ASSERT_EQ(cache_->GetID(view), ui::kInvalidAXNodeID);
-    cache_->GetOrCreate(view);
+    // The cache entry gets deleted in
+    // AXViewObjWrapper::OnViewIsDeleting which occurs later in ~View.
   }
 
   bool was_called() { return !observation_.IsObserving(); }
@@ -220,7 +216,8 @@ TEST_F(AXAuraObjCacheTest, ValidTree) {
   ui::AXTreeID tree_id = ui::AXTreeID::CreateNewAXTreeID();
   AXTreeSourceViews tree_source(
       cache.GetOrCreate(parent_widget->GetNativeWindow()), tree_id, &cache);
-  ui::AXTreeSerializer<AXAuraObjWrapper*> serializer(&tree_source);
+  ui::AXTreeSerializer<AXAuraObjWrapper*, std::vector<AXAuraObjWrapper*>>
+      serializer(&tree_source);
   ui::AXTreeUpdate serialized_tree;
   serializer.SerializeChanges(tree_source.GetRoot(), &serialized_tree);
 
@@ -371,7 +368,7 @@ TEST_F(AXAuraObjCacheTest, VirtualViews) {
   auto* parent = widget->GetRootView()->AddChildView(std::make_unique<View>());
   AXVirtualView* virtual_label = new AXVirtualView;
   virtual_label->GetCustomData().role = ax::mojom::Role::kStaticText;
-  virtual_label->GetCustomData().SetName("Label");
+  virtual_label->GetCustomData().SetNameChecked("Label");
   parent->GetViewAccessibility().AddVirtualChildView(
       base::WrapUnique(virtual_label));
 
@@ -385,5 +382,4 @@ TEST_F(AXAuraObjCacheTest, VirtualViews) {
 }
 
 }  // namespace
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

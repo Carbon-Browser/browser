@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ class TestClient : public PDFEngine::Client {
  private:
   // Not owned. Expected to dangle briefly, as the engine usually is destroyed
   // before the client.
-  raw_ptr<PDFEngine> engine_ = nullptr;
+  raw_ptr<PDFEngine, DisableDanglingPtrDetection> engine_ = nullptr;
 };
 
 }  // namespace chrome_pdf

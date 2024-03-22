@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/segmentation_internals/segmentation_internals_page_handler_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/segmentation_platform/segmentation_platform_service_factory.h"
 #include "components/optimization_guide/core/model_util.h"
@@ -73,8 +73,12 @@ void SegmentationInternalsPageHandlerImpl::OnClientInfoAvailable(
   for (const auto& info : client_info) {
     auto client = segmentation_internals::mojom::ClientInfo::New();
     client->segmentation_key = info.segmentation_key;
-    client->selected_segment =
-        segmentation_platform::proto::SegmentId_Name(info.selected_segment);
+    if (info.selected_segment) {
+      client->selected_segment =
+          segmentation_platform::proto::SegmentId_Name(*info.selected_segment);
+    } else {
+      client->selected_segment = "Not Ready";
+    }
     for (const auto& status : info.segment_status) {
       auto segment_data = segmentation_internals::mojom::SegmentInfo::New();
       segment_data->segment_name =

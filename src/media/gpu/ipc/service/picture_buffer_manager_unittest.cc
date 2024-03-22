@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,8 @@ class PictureBufferManagerImplTest : public testing::Test {
     // TODO(sandersd): Use a separate thread for the GPU task runner.
     cbh_ = base::MakeRefCounted<FakeCommandBufferHelper>(
         environment_.GetMainThreadTaskRunner());
-    pbm_ = PictureBufferManager::Create(reuse_cb_.Get());
+    pbm_ = PictureBufferManager::Create(/*allocate_gpu_memory_buffers=*/false,
+                                        reuse_cb_.Get());
   }
 
   PictureBufferManagerImplTest(const PictureBufferManagerImplTest&) = delete;
@@ -47,8 +48,21 @@ class PictureBufferManagerImplTest : public testing::Test {
       uint32_t count,
       VideoDecodeAccelerator::TextureAllocationMode mode =
           VideoDecodeAccelerator::TextureAllocationMode::kAllocateGLTextures) {
-    return pbm_->CreatePictureBuffers(count, PIXEL_FORMAT_ARGB, 1,
-                                      gfx::Size(320, 240), GL_TEXTURE_2D, mode);
+#if BUILDFLAG(IS_APPLE)
+    // Allocation of GL textures is not supported on Apple platforms; tests of
+    // that mode do not run on those platforms.
+    CHECK_EQ(mode, VideoDecodeAccelerator::TextureAllocationMode::
+                       kDoNotAllocateGLTextures);
+#endif
+    std::vector<std::pair<PictureBuffer, gfx::GpuMemoryBufferHandle>>
+        picture_buffers_and_gmbs = pbm_->CreatePictureBuffers(
+            count, PIXEL_FORMAT_ARGB, 1, gfx::Size(320, 240), GL_TEXTURE_2D,
+            mode);
+    std::vector<PictureBuffer> picture_buffers;
+    for (const auto& picture_buffer_and_gmb : picture_buffers_and_gmbs) {
+      picture_buffers.push_back(picture_buffer_and_gmb.first);
+    }
+    return picture_buffers;
   }
 
   PictureBuffer CreateARGBPictureBuffer(
@@ -97,11 +111,13 @@ TEST_F(PictureBufferManagerImplTest, Initialize) {
   Initialize();
 }
 
-TEST_F(PictureBufferManagerImplTest, CreatePictureBuffer) {
+#if !BUILDFLAG(IS_APPLE)
+TEST_F(PictureBufferManagerImplTest, CreatePictureBuffer_GLTextures) {
   Initialize();
   PictureBuffer pb = CreateARGBPictureBuffer();
   EXPECT_TRUE(cbh_->HasTexture(pb.client_texture_ids()[0]));
 }
+#endif
 
 TEST_F(PictureBufferManagerImplTest, CreatePictureBuffer_SharedImage) {
   Initialize();
@@ -109,11 +125,17 @@ TEST_F(PictureBufferManagerImplTest, CreatePictureBuffer_SharedImage) {
       VideoDecodeAccelerator::TextureAllocationMode::kDoNotAllocateGLTextures);
   EXPECT_EQ(pb1.client_texture_ids().size(), 0u);
 
+#if !BUILDFLAG(IS_APPLE)
   PictureBuffer pb2 = CreateARGBPictureBuffer(
       VideoDecodeAccelerator::TextureAllocationMode::kAllocateGLTextures);
   EXPECT_TRUE(cbh_->HasTexture(pb2.client_texture_ids()[0]));
+#endif
 }
 
+// The below tests rely on creation of picture buffers via allocation of GL
+// textures, which is not supported on Apple platforms.
+#if !BUILDFLAG(IS_APPLE)
+// Tests that allocation of GL textures fails without a GL context.
 TEST_F(PictureBufferManagerImplTest, CreatePictureBuffer_ContextLost) {
   Initialize();
   cbh_->ContextLost();
@@ -254,5 +276,6 @@ TEST_F(PictureBufferManagerImplTest, CanReadWithoutStalling) {
   pbm_->DismissPictureBuffer(pb.id());
   EXPECT_TRUE(pbm_->CanReadWithoutStalling());
 }
+#endif  // !BUILDFLAG(IS_APPLE)
 
 }  // namespace media

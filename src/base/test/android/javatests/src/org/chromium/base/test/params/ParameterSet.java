@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,18 +68,21 @@ public class ParameterSet {
             if (o == null) {
                 tempValues.add(null);
             } else {
-                if (o.getClass().isPrimitive() || ACCEPTABLE_TYPES.contains(o.getClass())
+                if (o.getClass().isPrimitive()
+                        || ACCEPTABLE_TYPES.contains(o.getClass())
                         || o instanceof Callable) {
                     tempValues.add(o);
                 } else {
                     // TODO(yolandyan): maybe come up with way to support
                     // complex object while handling immutability at the
                     // same time
-                    throw new IllegalArgumentException("Type \"%s\" is not supported in"
-                            + " parameterized testing at this time. Accepted types include"
-                            + " all primitive types along with "
-                            + Arrays.toString(
-                                    ACCEPTABLE_TYPES.toArray(new Class[ACCEPTABLE_TYPES.size()])));
+                    throw new IllegalArgumentException(
+                            "Type \"%s\" is not supported in"
+                                    + " parameterized testing at this time. Accepted types include"
+                                    + " all primitive types along with "
+                                    + Arrays.toString(
+                                            ACCEPTABLE_TYPES.toArray(
+                                                    new Class[ACCEPTABLE_TYPES.size()])));
                 }
             }
         }
@@ -104,9 +107,7 @@ public class ParameterSet {
 
     private static final Set<Class<?>> ACCEPTABLE_TYPES = getAcceptableTypes();
 
-    /**
-     * Any immutable class is acceptable.
-     */
+    /** Any immutable class is acceptable. */
     private static Set<Class<?>> getAcceptableTypes() {
         Set<Class<?>> ret = new HashSet<Class<?>>();
         ret.add(Boolean.class);

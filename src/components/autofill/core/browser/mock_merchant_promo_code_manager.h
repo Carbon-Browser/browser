@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,34 +16,27 @@ class MockMerchantPromoCodeManager : public MerchantPromoCodeManager {
   MockMerchantPromoCodeManager();
   ~MockMerchantPromoCodeManager() override;
 
-  MOCK_METHOD(
-      void,
-      OnGetSingleFieldSuggestions,
-      (int query_id,
-       bool is_autocomplete_enabled,
-       bool autoselect_first_suggestion,
-       const std::u16string& name,
-       const std::u16string& prefix,
-       const std::string& form_control_type,
-       base::WeakPtr<MerchantPromoCodeManager::SuggestionsHandler> handler,
-       const SuggestionsContext& context),
-      (override));
+  MOCK_METHOD(bool,
+              OnGetSingleFieldSuggestions,
+              (AutofillSuggestionTriggerSource trigger_source,
+               const FormFieldData& field,
+               const AutofillClient& client,
+               SingleFieldFormFiller::OnSuggestionsReturnedCallback callback,
+               const SuggestionsContext& context),
+              (override));
   MOCK_METHOD(void,
               OnWillSubmitFormWithFields,
               (const std::vector<FormFieldData>& fields,
                bool is_autocomplete_enabled),
               (override));
-  MOCK_METHOD(void,
-              CancelPendingQueries,
-              (const MerchantPromoCodeManager::SuggestionsHandler*),
-              (override));
+  MOCK_METHOD(void, CancelPendingQueries, (), (override));
   MOCK_METHOD(void,
               OnRemoveCurrentSingleFieldSuggestion,
-              (const std::u16string&, const std::u16string&, int),
+              (const std::u16string&, const std::u16string&, PopupItemId),
               (override));
   MOCK_METHOD(void,
               OnSingleFieldSuggestionSelected,
-              (const std::u16string&, int),
+              (const std::u16string&, PopupItemId),
               (override));
 };
 

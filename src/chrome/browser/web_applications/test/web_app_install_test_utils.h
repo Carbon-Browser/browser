@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,12 @@
 
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/common/buildflags.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
+#include "components/webapps/common/web_app_id.h"
 
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || \
-    (BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS_LACROS))
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 #include "components/services/app_service/public/cpp/url_handler_info.h"
 #endif
 
@@ -38,23 +37,33 @@ void AwaitStartWebAppProviderAndSubsystems(Profile* profile);
 // Wait until the provided WebAppProvider is ready.
 void WaitUntilReady(WebAppProvider* provider);
 
-AppId InstallDummyWebApp(Profile* profile,
-                         const std::string& app_name,
-                         const GURL& app_url,
-                         const webapps::WebappInstallSource install_source =
-                             webapps::WebappInstallSource::EXTERNAL_DEFAULT);
+// Wait until the provided WebAppProvider is ready and its subsystems startup
+// is complete.
+void WaitUntilWebAppProviderAndSubsystemsReady(WebAppProvider* provider);
+
+webapps::AppId InstallDummyWebApp(
+    Profile* profile,
+    const std::string& app_name,
+    const GURL& app_url,
+    const webapps::WebappInstallSource install_source =
+        webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON);
 
 // Synchronous version of WebAppInstallManager::InstallWebAppFromInfo. May be
 // used in unit tests and browser tests.
-AppId InstallWebApp(Profile* profile,
-                    std::unique_ptr<WebAppInstallInfo> web_app_info,
-                    bool overwrite_existing_manifest_fields = false,
-                    webapps::WebappInstallSource install_source =
-                        webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON);
+webapps::AppId InstallWebApp(
+    Profile* profile,
+    std::unique_ptr<WebAppInstallInfo> web_app_info,
+    bool overwrite_existing_manifest_fields = false,
+    webapps::WebappInstallSource install_source =
+        webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON);
 
 // Synchronously uninstall a web app. May be used in unit tests and browser
 // tests.
-void UninstallWebApp(Profile* profile, const AppId& app_id);
+void UninstallWebApp(Profile* profile, const webapps::AppId& app_id);
+
+// Synchronously uninstall all web apps for the given profile. May be used in
+// unit tests and browser tests. Returns `false` if there was a failure.
+bool UninstallAllWebApps(Profile* profile);
 
 }  // namespace test
 }  // namespace web_app

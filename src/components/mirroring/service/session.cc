@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/cpu.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/strings/strcat.h"
@@ -24,10 +24,12 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -36,17 +38,16 @@
 #include "components/mirroring/service/udp_socket_client.h"
 #include "components/mirroring/service/video_capture_client.h"
 #include "crypto/random.h"
-#include "gpu/config/gpu_feature_info.h"
-#include "gpu/ipc/client/gpu_channel_host.h"
 #include "media/audio/audio_input_device.h"
 #include "media/base/audio_capturer_source.h"
-#include "media/base/bind_to_current_loop.h"
-#include "media/cast/encoding/external_video_encoder.h"
+#include "media/cast/encoding/encoding_support.h"
 #include "media/cast/net/cast_transport.h"
 #include "media/cast/sender/audio_sender.h"
 #include "media/cast/sender/video_sender.h"
 #include "media/gpu/gpu_video_accelerator_util.h"
 #include "media/mojo/clients/mojo_video_encode_accelerator.h"
+#include "media/mojo/clients/mojo_video_encoder_metrics_provider.h"
+#include "media/remoting/device_capability_checker.h"
 #include "media/video/video_encode_accelerator.h"
 #include "mojo/public/cpp/system/platform_handle.h"
 #include "net/base/ip_endpoint.h"
@@ -83,6 +84,10 @@ constexpr base::TimeDelta kOfferAnswerExchangeTimeout = base::Seconds(15);
 // Amount of time to wait before assuming the Cast Receiver does not support
 // querying for capabilities via GET_CAPABILITIES.
 constexpr base::TimeDelta kGetCapabilitiesTimeout = base::Seconds(30);
+
+// The maximum time that Session will wait for Remoter to start Remoting. If
+// timeout occurs, the session is terminated.
+constexpr base::TimeDelta kStartRemotePlaybackTimeOut = base::Seconds(5);
 
 // Used for OFFER/ANSWER message exchange. Some receivers will error out on
 // payloadType values other than the ones hard-coded here.
@@ -152,9 +157,8 @@ void AddSenderConfig(int32_t sender_ssrc,
   config.aes_iv_mask = aes_iv;
   config.sender_ssrc = sender_ssrc;
   if (session_params.target_playout_delay) {
-    config.animated_playout_delay = session_params.target_playout_delay.value();
-    config.min_playout_delay = session_params.target_playout_delay.value();
-    config.max_playout_delay = session_params.target_playout_delay.value();
+    config.min_playout_delay = *session_params.target_playout_delay;
+    config.max_playout_delay = *session_params.target_playout_delay;
   }
   config_list->emplace_back(config);
 }
@@ -169,13 +173,12 @@ void AddStreamObject(int stream_index,
   stream.Set("index", stream_index);
   stream.Set("codecName", base::ToLowerASCII(codec_name));
   stream.Set("rtpProfile", "cast");
-  const bool is_audio =
-      (config.rtp_payload_type <= media::cast::RtpPayloadType::AUDIO_LAST);
+  const bool is_audio = config.is_audio();
   stream.Set("rtpPayloadType",
              is_audio ? kAudioPayloadType : kVideoPayloadType);
   stream.Set("ssrc", static_cast<int>(config.sender_ssrc));
   stream.Set("targetDelay",
-             static_cast<int>(config.animated_playout_delay.InMilliseconds()));
+             static_cast<int>(config.max_playout_delay.InMilliseconds()));
   stream.Set("aesKey",
              base::HexEncode(config.aes_key.data(), config.aes_key.size()));
   stream.Set("aesIvMask", base::HexEncode(config.aes_iv_mask.data(),
@@ -220,11 +223,9 @@ void AddStreamObject(int stream_index,
 // Convert the sink capabilities to media::mojom::RemotingSinkMetadata.
 media::mojom::RemotingSinkMetadata ToRemotingSinkMetadata(
     const std::vector<std::string>& capabilities,
-    const std::string& receiver_name,
-    const mojom::SessionParameters& params,
-    const std::string& receiver_build_version) {
+    const mojom::SessionParameters& params) {
   media::mojom::RemotingSinkMetadata sink_metadata;
-  sink_metadata.friendly_name = receiver_name;
+  sink_metadata.friendly_name = params.receiver_friendly_name;
 
   for (const auto& capability : capabilities) {
     if (capability == "audio") {
@@ -278,27 +279,36 @@ media::mojom::RemotingSinkMetadata ToRemotingSinkMetadata(
   return sink_metadata;
 }
 
+// TODO(crbug.com/1198616): Remove this.
 bool ShouldQueryForRemotingCapabilities(
     const std::string& receiver_model_name) {
-  if (base::FeatureList::IsEnabled(features::kCastForceEnableRemotingQuery)) {
+  if (base::FeatureList::IsEnabled(features::kCastDisableModelNameCheck))
     return true;
-  }
 
-  if (base::FeatureList::IsEnabled(
-          features::kCastUseBlocklistForRemotingQuery)) {
-    // The blocklist has not yet been fully determined.
-    // TODO(b/224993260): Implement this blocklist.
-    NOTREACHED();
-    return false;
-  }
+  return media::remoting::IsKnownToSupportRemoting(receiver_model_name);
+}
 
-  // This is a workaround for Nest Hub devices, which do not support remoting.
-  // TODO(crbug.com/1198616): filtering hack should be removed. See
-  // issuetracker.google.com/135725157 for more information.
-  return base::StartsWith(receiver_model_name, "Chromecast",
-                          base::CompareCase::SENSITIVE) ||
-         base::StartsWith(receiver_model_name, "Eureka Dongle",
-                          base::CompareCase::SENSITIVE);
+const std::string ToString(const media::VideoCaptureParams& params) {
+  return base::StringPrintf(
+      "requested_format = %s, buffer_type = %d, resolution_policy = %d",
+      media::VideoCaptureFormat::ToString(params.requested_format).c_str(),
+      static_cast<int>(params.buffer_type),
+      static_cast<int>(params.resolution_change_policy));
+}
+
+void RecordRemotePlaybackSessionLoadTime(
+    absl::optional<base::Time> start_time) {
+  if (!start_time) {
+    return;
+  }
+  base::TimeDelta time_delta = base::Time::Now() - start_time.value();
+  base::UmaHistogramTimes("MediaRouter.RemotePlayback.SessionLoadTime",
+                          time_delta);
+}
+
+void RecordRemotePlaybackSessionStartsBeforeTimeout(bool started) {
+  base::UmaHistogramBoolean(
+      "MediaRouter.RemotePlayback.SessionStartsBeforeTimeout", started);
 }
 
 }  // namespace
@@ -308,7 +318,7 @@ class Session::AudioCapturingCallback final
  public:
   using AudioDataCallback =
       base::RepeatingCallback<void(std::unique_ptr<media::AudioBus> audio_bus,
-                                   const base::TimeTicks& recorded_time)>;
+                                   base::TimeTicks recorded_time)>;
   AudioCapturingCallback(AudioDataCallback audio_data_callback,
                          base::OnceClosure error_callback)
       : audio_data_callback_(std::move(audio_data_callback)),
@@ -359,18 +369,17 @@ Session::Session(
     mojo::PendingReceiver<mojom::CastMessageChannel> inbound_channel,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
     : session_params_(*session_params),
-      state_(MIRRORING),
       observer_(std::move(observer)),
       resource_provider_(std::move(resource_provider)),
       message_dispatcher_(std::make_unique<MessageDispatcher>(
           std::move(outbound_channel),
           std::move(inbound_channel),
           base::BindRepeating(&Session::OnResponseParsingError,
-                              base::Unretained(this)))),
-      gpu_channel_host_(nullptr) {
+                              base::Unretained(this)))) {
   DCHECK(resource_provider_);
   mirror_settings_.SetResolutionConstraints(max_resolution.width(),
                                             max_resolution.height());
+
   resource_provider_->GetNetworkContext(
       network_context_.BindNewPipeAndPassReceiver());
 
@@ -380,37 +389,41 @@ Session::Session(
     resource_provider_->BindGpu(remote_gpu.InitWithNewPipeAndPassReceiver());
     gpu_ = viz::Gpu::Create(std::move(remote_gpu), io_task_runner);
   }
+}
 
-  network::mojom::URLLoaderFactoryParamsPtr params =
-      network::mojom::URLLoaderFactoryParams::New();
-  params->process_id = network::mojom::kBrowserProcessId;
-  params->is_corb_enabled = false;
-  mojo::PendingRemote<network::mojom::URLLoaderFactory> url_loader_factory;
-  network_context_->CreateURLLoaderFactory(
-      url_loader_factory.InitWithNewPipeAndPassReceiver(), std::move(params));
-
-  setup_querier_ = std::make_unique<ReceiverSetupQuerier>(
-      session_params_.receiver_address, std::move(url_loader_factory));
-
-  if (gpu_) {
-    gpu_channel_host_ = gpu_->EstablishGpuChannelSync();
-    if (gpu_channel_host_ &&
-        gpu_channel_host_->gpu_feature_info().status_values
-                [gpu::GPU_FEATURE_TYPE_ACCELERATED_VIDEO_ENCODE] ==
-            gpu::kGpuFeatureStatusEnabled) {
-      supported_profiles_ =
-          media::GpuVideoAcceleratorUtil::ConvertGpuToMediaEncodeProfiles(
-              gpu_channel_host_->gpu_info()
-                  .video_encode_accelerator_supported_profiles);
-    }
+void Session::AsyncInitialize(AsyncInitializeDoneCB done_cb) {
+  init_done_cb_ = std::move(done_cb);
+  if (!gpu_) {
+    // Post OnAsyncInitializeDone() instead of calling it directly to make sure
+    // that CreateAndSendOffer() is always called asynchronously. This kind of
+    // consistency is good for testing and reliability.
+    auto runner = base::SingleThreadTaskRunner::GetCurrentDefault();
+    SupportedProfiles empty_profiles;
+    runner->PostTask(FROM_HERE, base::BindOnce(&Session::OnAsyncInitializeDone,
+                                               weak_factory_.GetWeakPtr(),
+                                               std::move(empty_profiles)));
+    return;
   }
 
-  if (supported_profiles_.empty()) {
+  gpu_->CreateVideoEncodeAcceleratorProvider(
+      vea_provider_.BindNewPipeAndPassReceiver());
+  vea_provider_->GetVideoEncodeAcceleratorSupportedProfiles(base::BindOnce(
+      &Session::OnAsyncInitializeDone, weak_factory_.GetWeakPtr()));
+}
+
+void Session::OnAsyncInitializeDone(const SupportedProfiles& profiles) {
+  if (profiles.empty()) {
     // HW encoding is not supported.
-    gpu_channel_host_ = nullptr;
     gpu_.reset();
+  } else {
+    supported_profiles_ = profiles;
   }
+  DCHECK_EQ(state_, INITIALIZING);
+  state_ = MIRRORING;
+
   CreateAndSendOffer();
+  if (!init_done_cb_.is_null())
+    std::move(init_done_cb_).Run();
 }
 
 Session::~Session() {
@@ -418,7 +431,8 @@ Session::~Session() {
 }
 
 void Session::ReportError(SessionError error) {
-  UMA_HISTOGRAM_ENUMERATION("MediaRouter.MirroringService.SessionError", error);
+  base::UmaHistogramEnumeration("MediaRouter.MirroringService.SessionError",
+                                error);
   if (state_ == REMOTING) {
     media_remoter_->OnRemotingFailed();  // Try to fallback on mirroring.
     return;
@@ -441,6 +455,7 @@ void Session::LogErrorMessage(const std::string& message) {
     observer_->LogErrorMessage(message);
   }
 }
+
 void Session::StopStreaming() {
   DVLOG(2) << __func__ << " state=" << state_;
   if (!cast_environment_)
@@ -451,6 +466,7 @@ void Session::StopStreaming() {
     audio_input_device_ = nullptr;
   }
   audio_capturing_callback_.reset();
+  session_logger_.reset();
   audio_stream_.reset();
   video_stream_.reset();
   cast_transport_.reset();
@@ -470,13 +486,12 @@ void Session::StopSession() {
   // provider.
   media_remoter_.reset();
   message_dispatcher_.reset();
-  setup_querier_.reset();
+  rpc_dispatcher_.reset();
   weak_factory_.InvalidateWeakPtrs();
   audio_encode_thread_ = nullptr;
   video_encode_thread_ = nullptr;
   video_capture_client_.reset();
   resource_provider_.reset();
-  gpu_channel_host_ = nullptr;
   gpu_.reset();
   if (observer_) {
     observer_->DidStop();
@@ -512,17 +527,13 @@ void Session::OnEncoderStatusChange(OperationalStatus status) {
   }
 }
 
-media::VideoEncodeAccelerator::SupportedProfiles
-Session::GetSupportedVeaProfiles() {
-  return supported_profiles_;
-}
-
 void Session::CreateVideoEncodeAccelerator(
     media::cast::ReceiveVideoEncodeAcceleratorCallback callback) {
+  DCHECK_NE(state_, INITIALIZING);
   if (callback.is_null())
     return;
   std::unique_ptr<media::VideoEncodeAccelerator> mojo_vea;
-  if (gpu_ && gpu_channel_host_ && !supported_profiles_.empty()) {
+  if (gpu_ && !supported_profiles_.empty()) {
     if (!vea_provider_) {
       gpu_->CreateVideoEncodeAcceleratorProvider(
           vea_provider_.BindNewPipeAndPassReceiver());
@@ -534,7 +545,7 @@ void Session::CreateVideoEncodeAccelerator(
     mojo_vea = base::WrapUnique<media::VideoEncodeAccelerator>(
         new media::MojoVideoEncodeAccelerator(std::move(vea)));
   }
-  std::move(callback).Run(base::ThreadTaskRunnerHandle::Get(),
+  std::move(callback).Run(base::SingleThreadTaskRunner::GetCurrentDefault(),
                           std::move(mojo_vea));
 }
 
@@ -559,9 +570,10 @@ void Session::OnLoggingEventsReceived(
                                                      std::move(packet_events));
 }
 
-void Session::SetConstraints(const openscreen::cast::Answer& answer,
-                             FrameSenderConfig* audio_config,
-                             FrameSenderConfig* video_config) {
+void Session::ApplyConstraintsToConfigs(
+    const openscreen::cast::Answer& answer,
+    absl::optional<FrameSenderConfig>& audio_config,
+    absl::optional<FrameSenderConfig>& video_config) {
   const auto recommendations =
       openscreen::cast::capture_recommendations::GetRecommendations(answer);
   const auto& audio = recommendations.audio;
@@ -592,8 +604,18 @@ void Session::SetConstraints(const openscreen::cast::Answer& answer,
         std::min(video_config->max_frame_rate,
                  static_cast<double>(video.maximum.frame_rate));
 
-    // We only do sender-side letterboxing if the receiver doesn't support it.
-    mirror_settings_.SetSenderSideLetterboxingEnabled(!video.supports_scaling);
+    // TODO(crbug.com/1363512): Remove support for sender side letterboxing.
+    if (session_params_.force_letterboxing) {
+      mirror_settings_.SetSenderSideLetterboxingEnabled(true);
+    } else if (base::FeatureList::IsEnabled(
+                   features::kCastDisableLetterboxing)) {
+      mirror_settings_.SetSenderSideLetterboxingEnabled(false);
+    } else {
+      // Enable sender-side letterboxing if the receiver specifically does not
+      // opt-in to variable aspect ratio video.
+      mirror_settings_.SetSenderSideLetterboxingEnabled(
+          !video.supports_scaling);
+    }
   }
 
   if (audio_config) {
@@ -635,8 +657,8 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
   // Select Audio/Video config from ANSWER.
   bool has_audio = false;
   bool has_video = false;
-  FrameSenderConfig audio_config;
-  FrameSenderConfig video_config;
+  absl::optional<FrameSenderConfig> audio_config;
+  absl::optional<FrameSenderConfig> video_config;
   const int video_start_idx = audio_configs.size();
   const int video_idx_bound = video_configs.size() + video_start_idx;
   for (size_t i = 0; i < answer.send_indexes.size(); ++i) {
@@ -652,7 +674,7 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
         return;
       }
       audio_config = audio_configs[answer.send_indexes[i]];
-      audio_config.receiver_ssrc = answer.ssrcs[i];
+      audio_config->receiver_ssrc = answer.ssrcs[i];
       has_audio = true;
     } else {
       // Video
@@ -661,8 +683,8 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
         return;
       }
       video_config = video_configs[answer.send_indexes[i] - video_start_idx];
-      video_config.receiver_ssrc = answer.ssrcs[i];
-      video_config.video_codec_params.number_of_encode_threads =
+      video_config->receiver_ssrc = answer.ssrcs[i];
+      video_config->video_codec_params.number_of_encode_threads =
           NumberOfEncodeThreads();
       has_video = true;
     }
@@ -673,8 +695,7 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
   }
 
   // Set constraints from ANSWER message.
-  SetConstraints(answer, has_audio ? &audio_config : nullptr,
-                 has_video ? &video_config : nullptr);
+  ApplyConstraintsToConfigs(answer, audio_config, video_config);
 
   // Start streaming.
   const bool initially_starting_session =
@@ -691,7 +712,7 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
   }
   cast_environment_ = new media::cast::CastEnvironment(
       base::DefaultTickClock::GetInstance(),
-      base::ThreadTaskRunnerHandle::Get(), audio_encode_thread_,
+      base::SingleThreadTaskRunner::GetCurrentDefault(), audio_encode_thread_,
       video_encode_thread_);
   auto udp_client = std::make_unique<UdpSocketClient>(
       net::IPEndPoint(session_params_.receiver_address, answer.udp_port),
@@ -701,18 +722,32 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
   cast_transport_ = media::cast::CastTransport::Create(
       cast_environment_->Clock(), kSendEventsInterval,
       std::make_unique<TransportClient>(this), std::move(udp_client),
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
+
+  if (session_params_.enable_rtcp_reporting) {
+    session_logger_ = std::make_unique<SessionLogger>(cast_environment_);
+  }
 
   if (state_ == REMOTING) {
     DCHECK(media_remoter_);
-    DCHECK(audio_config.rtp_payload_type == RtpPayloadType::REMOTE_AUDIO ||
-           video_config.rtp_payload_type == RtpPayloadType::REMOTE_VIDEO);
+    DCHECK(!audio_config ||
+           audio_config->rtp_payload_type == RtpPayloadType::REMOTE_AUDIO);
+    DCHECK(!video_config ||
+           video_config->rtp_payload_type == RtpPayloadType::REMOTE_VIDEO);
     media_remoter_->StartRpcMessaging(cast_environment_, cast_transport_.get(),
                                       audio_config, video_config);
+    if (session_params_.is_remote_playback) {
+      RecordRemotePlaybackSessionLoadTime(remote_playback_start_time_);
+      RecordRemotePlaybackSessionStartsBeforeTimeout(true);
+      remote_playback_start_timer_.Stop();
+    }
   } else /* MIRRORING */ {
     if (has_audio) {
+      base::UmaHistogramEnumeration(
+          "CastStreaming.Sender.Audio.NegotiatedCodec",
+          ToAudioCodec(audio_config->codec));
       auto audio_sender = std::make_unique<media::cast::AudioSender>(
-          cast_environment_, audio_config,
+          cast_environment_, *audio_config,
           base::BindOnce(&Session::OnEncoderStatusChange,
                          weak_factory_.GetWeakPtr()),
           cast_transport_.get());
@@ -723,7 +758,7 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
       // thread-hopped from the audio thread, and later thread-hopped again to
       // the encoding thread.
       audio_capturing_callback_ = std::make_unique<AudioCapturingCallback>(
-          media::BindToCurrentLoop(base::BindRepeating(
+          base::BindPostTaskToCurrentDefault(base::BindRepeating(
               &AudioRtpStream::InsertAudio, audio_stream_->AsWeakPtr())),
           base::BindOnce(&Session::ReportError, weak_factory_.GetWeakPtr(),
                          SessionError::AUDIO_CAPTURE_ERROR));
@@ -732,29 +767,55 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
               &Session::CreateAudioStream, base::Unretained(this))),
           media::AudioInputDevice::Purpose::kLoopback,
           media::AudioInputDevice::DeadStreamDetection::kEnabled);
-      audio_input_device_->Initialize(mirror_settings_.GetAudioCaptureParams(),
+      const media::AudioParameters& capture_params =
+          mirror_settings_.GetAudioCaptureParams();
+      LogInfoMessage(base::StrCat({"Creating AudioInputDevice with params ",
+                                   capture_params.AsHumanReadableString()}));
+      audio_input_device_->Initialize(capture_params,
                                       audio_capturing_callback_.get());
       audio_input_device_->Start();
     }
 
     if (has_video) {
+      base::UmaHistogramEnumeration(
+          "CastStreaming.Sender.Video.NegotiatedCodec",
+          ToVideoCodec(video_config->codec));
+      mojo::PendingRemote<media::mojom::VideoEncoderMetricsProvider>
+          metrics_provider_pending_remote;
+      resource_provider_->GetVideoEncoderMetricsProvider(
+          metrics_provider_pending_remote.InitWithNewPipeAndPassReceiver());
       auto video_sender = std::make_unique<media::cast::VideoSender>(
-          cast_environment_, video_config,
+          cast_environment_, *video_config,
           base::BindRepeating(&Session::OnEncoderStatusChange,
                               weak_factory_.GetWeakPtr()),
           base::BindRepeating(&Session::CreateVideoEncodeAccelerator,
                               weak_factory_.GetWeakPtr()),
           cast_transport_.get(),
+          base::MakeRefCounted<media::MojoVideoEncoderMetricsProviderFactory>(
+              media::mojom::VideoEncoderUseCase::kCastMirroring,
+              std::move(metrics_provider_pending_remote))
+              ->CreateVideoEncoderMetricsProvider(),
           base::BindRepeating(&Session::SetTargetPlayoutDelay,
                               weak_factory_.GetWeakPtr()),
           base::BindRepeating(&Session::ProcessFeedback,
                               weak_factory_.GetWeakPtr()));
+
       video_stream_ = std::make_unique<VideoRtpStream>(
-          std::move(video_sender), weak_factory_.GetWeakPtr());
+          std::move(video_sender), weak_factory_.GetWeakPtr(),
+          mirror_settings_.refresh_interval());
+      LogInfoMessage(base::StringPrintf(
+          "Created video stream with refresh interval of %d ms",
+          static_cast<int>(
+              mirror_settings_.refresh_interval().InMilliseconds())));
+
       if (!video_capture_client_) {
         mojo::PendingRemote<media::mojom::VideoCaptureHost> video_host;
         resource_provider_->GetVideoCaptureHost(
             video_host.InitWithNewPipeAndPassReceiver());
+        const media::VideoCaptureParams& capture_params =
+            mirror_settings_.GetVideoCaptureParams();
+        LogInfoMessage(base::StrCat({"Starting VideoCaptureHost with params ",
+                                     ToString(capture_params)}));
         video_capture_client_ = std::make_unique<VideoCaptureClient>(
             mirror_settings_.GetVideoCaptureParams(), std::move(video_host));
         video_capture_client_->Start(
@@ -768,12 +829,27 @@ void Session::OnAnswer(const std::vector<FrameSenderConfig>& audio_configs,
       }
     }
     if (media_remoter_)
-      media_remoter_->OnMirroringResumed();
+      media_remoter_->OnMirroringResumed(switching_tab_source_);
+
+    switching_tab_source_ = false;
   }
 
-  if (initially_starting_session &&
-      ShouldQueryForRemotingCapabilities(session_params_.receiver_model_name)) {
-    QueryCapabilitiesForRemoting();
+  if (initially_starting_session) {
+    if (session_params_.is_remote_playback) {
+      InitMediaRemoter({});
+      // Hold off video and audio streaming while waiting for the session to
+      // switch to Remoting.
+      video_capture_client_->Pause();
+      audio_input_device_->Stop();
+      remote_playback_start_time_ = base::Time::Now();
+      remote_playback_start_timer_.Start(
+          FROM_HERE, kStartRemotePlaybackTimeOut,
+          base::BindOnce(&Session::OnRemotingStartTimeout,
+                         weak_factory_.GetWeakPtr()));
+    } else if (ShouldQueryForRemotingCapabilities(
+                   session_params_.receiver_model_name)) {
+      QueryCapabilitiesForRemoting();
+    }
   }
 
   if (initially_starting_session && observer_)
@@ -808,7 +884,8 @@ void Session::ProcessFeedback(const media::VideoCaptureFeedback& feedback) {
 // TODO(issuetracker.google.com/159352836): Refactor to use libcast's
 // OFFER message format.
 void Session::CreateAndSendOffer() {
-  DCHECK(state_ != STOPPED);
+  DCHECK_NE(state_, STOPPED);
+  DCHECK_NE(state_, INITIALIZING);
 
   // The random AES key and initialization vector pair used by all streams in
   // this session.
@@ -824,14 +901,14 @@ void Session::CreateAndSendOffer() {
     const int32_t audio_ssrc = base::RandInt(kAudioSsrcMin, kAudioSsrcMax);
     if (state_ == MIRRORING) {
       FrameSenderConfig config = MirrorSettings::GetDefaultAudioConfig(
-          RtpPayloadType::AUDIO_OPUS, Codec::CODEC_AUDIO_OPUS);
+          RtpPayloadType::AUDIO_OPUS, Codec::kAudioOpus);
       AddSenderConfig(audio_ssrc, config, aes_key, aes_iv, session_params_,
                       &audio_configs);
       AddStreamObject(stream_index++, "OPUS", audio_configs.back(),
                       mirror_settings_, stream_list);
     } else /* REMOTING */ {
       FrameSenderConfig config = MirrorSettings::GetDefaultAudioConfig(
-          RtpPayloadType::REMOTE_AUDIO, Codec::CODEC_AUDIO_REMOTE);
+          RtpPayloadType::REMOTE_AUDIO, Codec::kAudioRemote);
       AddSenderConfig(audio_ssrc, config, aes_key, aes_iv, session_params_,
                       &audio_configs);
       AddStreamObject(stream_index++, "REMOTE_AUDIO", audio_configs.back(),
@@ -842,23 +919,25 @@ void Session::CreateAndSendOffer() {
     const int32_t video_ssrc = base::RandInt(kVideoSsrcMin, kVideoSsrcMax);
     if (state_ == MIRRORING) {
       // First, check if hardware VP8 and H264 are available.
-      if (media::cast::ExternalVideoEncoder::IsRecommended(
-              Codec::CODEC_VIDEO_VP8, session_params_.receiver_model_name,
-              GetSupportedVeaProfiles())) {
+      const bool should_offer_hardware_vp8 =
+          media::cast::encoding_support::IsHardwareEnabled(Codec::kVideoVp8,
+                                                           supported_profiles_);
+
+      if (should_offer_hardware_vp8) {
         FrameSenderConfig config = MirrorSettings::GetDefaultVideoConfig(
-            RtpPayloadType::VIDEO_VP8, Codec::CODEC_VIDEO_VP8);
-        config.use_external_encoder = true;
+            RtpPayloadType::VIDEO_VP8, Codec::kVideoVp8);
+        config.use_hardware_encoder = true;
         AddSenderConfig(video_ssrc, config, aes_key, aes_iv, session_params_,
                         &video_configs);
         AddStreamObject(stream_index++, "VP8", video_configs.back(),
                         mirror_settings_, stream_list);
       }
-      if (media::cast::ExternalVideoEncoder::IsRecommended(
-              Codec::CODEC_VIDEO_H264, session_params_.receiver_model_name,
-              GetSupportedVeaProfiles())) {
+
+      if (media::cast::encoding_support::IsHardwareEnabled(
+              Codec::kVideoH264, supported_profiles_)) {
         FrameSenderConfig config = MirrorSettings::GetDefaultVideoConfig(
-            RtpPayloadType::VIDEO_H264, Codec::CODEC_VIDEO_H264);
-        config.use_external_encoder = true;
+            RtpPayloadType::VIDEO_H264, Codec::kVideoH264);
+        config.use_hardware_encoder = true;
         AddSenderConfig(video_ssrc, config, aes_key, aes_iv, session_params_,
                         &video_configs);
         AddStreamObject(stream_index++, "H264", video_configs.back(),
@@ -866,28 +945,29 @@ void Session::CreateAndSendOffer() {
       }
 
       // Then add software AV1 and VP9 if enabled.
-      // TODO(https://crbug.com/1311770): hardware VP9 encoding should be added.
-      if (mirroring::features::IsCastStreamingAV1Enabled()) {
+      if (media::cast::encoding_support::IsSoftwareEnabled(Codec::kVideoAv1)) {
         FrameSenderConfig config = MirrorSettings::GetDefaultVideoConfig(
-            RtpPayloadType::VIDEO_AV1, Codec::CODEC_VIDEO_AV1);
+            RtpPayloadType::VIDEO_AV1, Codec::kVideoAv1);
         AddSenderConfig(video_ssrc, config, aes_key, aes_iv, session_params_,
                         &video_configs);
         AddStreamObject(stream_index++, "AV1", video_configs.back(),
                         mirror_settings_, stream_list);
       }
-      if (base::FeatureList::IsEnabled(features::kCastStreamingVp9)) {
+
+      if (media::cast::encoding_support::IsSoftwareEnabled(Codec::kVideoVp9)) {
         FrameSenderConfig config = MirrorSettings::GetDefaultVideoConfig(
-            RtpPayloadType::VIDEO_VP9, Codec::CODEC_VIDEO_VP9);
+            RtpPayloadType::VIDEO_VP9, Codec::kVideoVp9);
         AddSenderConfig(video_ssrc, config, aes_key, aes_iv, session_params_,
                         &video_configs);
         AddStreamObject(stream_index++, "VP9", video_configs.back(),
                         mirror_settings_, stream_list);
       }
 
-      // Worst case, default to offering software VP8.
-      if (video_configs.empty()) {
+      // Finally, offer software VP8 if hardware VP8 was not offered.
+      if (!should_offer_hardware_vp8 &&
+          media::cast::encoding_support::IsSoftwareEnabled(Codec::kVideoVp8)) {
         FrameSenderConfig config = MirrorSettings::GetDefaultVideoConfig(
-            RtpPayloadType::VIDEO_VP8, Codec::CODEC_VIDEO_VP8);
+            RtpPayloadType::VIDEO_VP8, Codec::kVideoVp8);
         AddSenderConfig(video_ssrc, config, aes_key, aes_iv, session_params_,
                         &video_configs);
         AddStreamObject(stream_index++, "VP8", video_configs.back(),
@@ -896,7 +976,7 @@ void Session::CreateAndSendOffer() {
 
     } else /* REMOTING */ {
       FrameSenderConfig config = MirrorSettings::GetDefaultVideoConfig(
-          RtpPayloadType::REMOTE_VIDEO, Codec::CODEC_VIDEO_REMOTE);
+          RtpPayloadType::REMOTE_VIDEO, Codec::kVideoRemote);
       AddSenderConfig(video_ssrc, config, aes_key, aes_iv, session_params_,
                       &video_configs);
       AddStreamObject(stream_index++, "REMOTE_VIDEO", video_configs.back(),
@@ -928,6 +1008,10 @@ void Session::CreateAndSendOffer() {
       kOfferAnswerExchangeTimeout,
       base::BindOnce(&Session::OnAnswer, base::Unretained(this), audio_configs,
                      video_configs));
+
+  if (observer_) {
+    observer_->OnRemotingStateChanged(state_ == REMOTING);
+  }
 }
 
 void Session::ConnectToRemotingSource(
@@ -950,9 +1034,48 @@ void Session::RequestRemotingStreaming() {
 void Session::RestartMirroringStreaming() {
   if (state_ != REMOTING)
     return;
+
+  // Stop session instead of switching to mirroring when in Remote Playback
+  // mode.
+  if (session_params_.is_remote_playback) {
+    StopSession();
+    return;
+  }
+
   StopStreaming();
   state_ = MIRRORING;
   CreateAndSendOffer();
+}
+
+void Session::SwitchSourceTab() {
+  if (observer_)
+    observer_->OnSourceChanged();
+
+  if (state_ == REMOTING) {
+    switching_tab_source_ = true;
+    video_capture_client_.reset();
+    media_remoter_->Stop(media::mojom::RemotingStopReason::LOCAL_PLAYBACK);
+    return;
+  }
+
+  DCHECK_EQ(state_, MIRRORING);
+
+  // Switch video source tab.
+  if (video_capture_client_) {
+    mojo::PendingRemote<media::mojom::VideoCaptureHost> video_host;
+    resource_provider_->GetVideoCaptureHost(
+        video_host.InitWithNewPipeAndPassReceiver());
+    video_capture_client_->SwitchVideoCaptureHost(std::move(video_host));
+  }
+
+  // Switch audio source tab.
+  if (audio_input_device_) {
+    audio_input_device_->Stop();
+    audio_input_device_->Start();
+  }
+
+  if (media_remoter_)
+    media_remoter_->OnMirroringResumed(true);
 }
 
 void Session::QueryCapabilitiesForRemoting() {
@@ -971,6 +1094,13 @@ void Session::QueryCapabilitiesForRemoting() {
       std::move(query_message), ResponseType::CAPABILITIES_RESPONSE,
       sequence_number, kGetCapabilitiesTimeout,
       base::BindOnce(&Session::OnCapabilitiesResponse, base::Unretained(this)));
+}
+
+void Session::InitMediaRemoter(const std::vector<std::string>& caps) {
+  DCHECK(!media_remoter_);
+  rpc_dispatcher_ = std::make_unique<RpcDispatcherImpl>(*message_dispatcher_);
+  media_remoter_ = std::make_unique<MediaRemoter>(
+      *this, ToRemotingSinkMetadata(caps, session_params_), *rpc_dispatcher_);
 }
 
 void Session::OnCapabilitiesResponse(const ReceiverResponse& response) {
@@ -1007,19 +1137,19 @@ void Session::OnCapabilitiesResponse(const ReceiverResponse& response) {
     return;
   }
 
-  const std::vector<std::string>& caps = response.capabilities().media_caps;
+  InitMediaRemoter(response.capabilities().media_caps);
+}
 
-  std::string build_version;
-  std::string friendly_name;
-  if (setup_querier_) {
-    build_version = setup_querier_->build_version();
-    friendly_name = setup_querier_->friendly_name();
+void Session::OnRemotingStartTimeout() {
+  if (state_ == REMOTING) {
+    return;
   }
-  media_remoter_ = std::make_unique<MediaRemoter>(
-      this,
-      ToRemotingSinkMetadata(caps, friendly_name, session_params_,
-                             build_version),
-      message_dispatcher_.get());
+  StopSession();
+  RecordRemotePlaybackSessionStartsBeforeTimeout(false);
+}
+
+base::Value::Dict Session::GetMirroringStats() const {
+  return session_logger_ ? session_logger_->GetStats() : base::Value::Dict();
 }
 
 }  // namespace mirroring

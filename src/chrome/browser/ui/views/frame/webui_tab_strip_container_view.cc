@@ -1,15 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/webui_tab_strip_container_view.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
 #include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/feature_list.h"
 #include "base/i18n/message_formatter.h"
 #include "base/i18n/number_formatting.h"
@@ -278,14 +278,14 @@ class WebUITabStripContainerView::AutoCloser : public ui::EventHandler,
 
   void OnViewIsDeleting(views::View* observed_view) override {
     view_observations_.RemoveObservation(observed_view);
-    if (observed_view == content_area_)
+    if (observed_view == content_area_) {
       content_area_ = nullptr;
-    else if (observed_view == omnibox_)
+    } else if (observed_view == omnibox_) {
       omnibox_ = nullptr;
-    else if (observed_view == top_container_)
+    } else {
+      CHECK_EQ(observed_view, top_container_);
       top_container_ = nullptr;
-    else
-      NOTREACHED();
+    }
   }
 
   void OnViewAddedToWidget(views::View* observed_view) override {
@@ -469,7 +469,6 @@ WebUITabStripContainerView::~WebUITabStripContainerView() {
   DeinitializeWebView();
   // The TabCounter button uses |this| as a listener. We need to make
   // sure we outlive it.
-  delete new_tab_button_;
   delete tab_counter_;
 }
 
@@ -513,16 +512,17 @@ bool WebUITabStripContainerView::IsDraggedTab(const ui::OSExchangeData& data) {
   base::Pickle pickle;
   if (data.GetPickledData(ui::ClipboardFormatType::WebCustomDataType(),
                           &pickle)) {
-    std::u16string result;
-    ui::ReadCustomDataForType(pickle.data(), pickle.size(),
-                              base::ASCIIToUTF16(kWebUITabIdDataType), &result);
-    if (result.size())
+    if (absl::optional<std::u16string> result =
+            ui::ReadCustomDataForType(pickle, kWebUITabIdDataType);
+        result && !result->empty()) {
       return true;
-    ui::ReadCustomDataForType(pickle.data(), pickle.size(),
-                              base::ASCIIToUTF16(kWebUITabGroupIdDataType),
-                              &result);
-    if (result.size())
+    }
+
+    if (absl::optional<std::u16string> result =
+            ui::ReadCustomDataForType(pickle, kWebUITabGroupIdDataType);
+        result && !result->empty()) {
       return true;
+    }
   }
 
   return false;
@@ -538,24 +538,6 @@ void WebUITabStripContainerView::OpenForTabDrag() {
 
 views::NativeViewHost* WebUITabStripContainerView::GetNativeViewHost() {
   return web_view_->holder();
-}
-
-std::unique_ptr<views::View> WebUITabStripContainerView::CreateNewTabButton() {
-  DCHECK_EQ(nullptr, new_tab_button_);
-  auto new_tab_button = std::make_unique<ToolbarButton>(
-      base::BindRepeating(&WebUITabStripContainerView::NewTabButtonPressed,
-                          base::Unretained(this)));
-
-  new_tab_button->SetTooltipText(
-      l10n_util::GetStringUTF16(IDS_TOOLTIP_NEW_TAB));
-  const int button_height = GetLayoutConstant(TOOLBAR_BUTTON_HEIGHT);
-  new_tab_button->SetPreferredSize(gfx::Size(button_height, button_height));
-  new_tab_button->SetHorizontalAlignment(gfx::ALIGN_CENTER);
-  new_tab_button->SetVectorIcon(kNewTabToolbarButtonIcon);
-
-  new_tab_button_ = new_tab_button.get();
-  view_observations_.AddObservation(new_tab_button_.get());
-  return new_tab_button;
 }
 
 std::unique_ptr<views::View> WebUITabStripContainerView::CreateTabCounter() {
@@ -618,7 +600,7 @@ void WebUITabStripContainerView::UpdateHeightForDragToOpen(float height_delta) {
   }
 
   current_drag_height_ =
-      base::clamp(*current_drag_height_ + height_delta, 0.0f,
+      std::clamp(*current_drag_height_ + height_delta, 0.0f,
                   static_cast<float>(GetPreferredSize().height()));
   PreferredSizeChanged();
 }
@@ -656,13 +638,6 @@ void WebUITabStripContainerView::EndDragToOpen(
       opening, fling_direction.has_value()
                    ? WebUITabStripOpenCloseReason::kFling
                    : WebUITabStripOpenCloseReason::kDragRelease);
-}
-
-void WebUITabStripContainerView::NewTabButtonPressed(const ui::Event& event) {
-  chrome::ExecuteCommand(browser_view_->browser(), IDC_NEW_TAB);
-  UMA_HISTOGRAM_ENUMERATION("Tab.NewTab",
-                            TabStripModel::NEW_TAB_BUTTON_IN_TOOLBAR_FOR_TOUCH,
-                            TabStripModel::NEW_TAB_ENUM_COUNT);
 }
 
 void WebUITabStripContainerView::TabCounterPressed(const ui::Event& event) {
@@ -718,7 +693,8 @@ void WebUITabStripContainerView::SetContainerTargetVisibility(
     time_at_open_ = base::TimeTicks::Now();
 
     browser_view_->CloseFeaturePromo(
-        feature_engagement::kIPHWebUITabStripFeature);
+        feature_engagement::kIPHWebUITabStripFeature,
+        user_education::EndFeaturePromoReason::kFeatureEngaged);
   } else {
     if (time_at_open_) {
       RecordTabStripUIOpenDurationHistogram(base::TimeTicks::Now() -
@@ -892,12 +868,11 @@ void WebUITabStripContainerView::OnViewBoundsChanged(View* observed_view) {
 void WebUITabStripContainerView::OnViewIsDeleting(View* observed_view) {
   view_observations_.RemoveObservation(observed_view);
 
-  if (observed_view == new_tab_button_)
-    new_tab_button_ = nullptr;
-  else if (observed_view == tab_counter_)
+  if (observed_view == tab_counter_) {
     tab_counter_ = nullptr;
-  else if (observed_view == tab_contents_container_)
+  } else if (observed_view == tab_contents_container_) {
     tab_contents_container_ = nullptr;
+  }
 }
 
 void WebUITabStripContainerView::OnWidgetDestroying(views::Widget* widget) {
@@ -950,3 +925,6 @@ void WebUITabStripContainerView::DeinitializeWebView() {
     tab_strip_ui->Deinitialize();
   }
 }
+
+BEGIN_METADATA(WebUITabStripContainerView, views::AccessiblePaneView)
+END_METADATA

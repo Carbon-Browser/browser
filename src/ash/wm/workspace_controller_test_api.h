@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_WM_WORKSPACE_CONTROLLER_TEST_API_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 
 namespace aura {
 class Window;
@@ -27,7 +28,7 @@ class ASH_EXPORT WorkspaceControllerTestApi {
   aura::Window* GetBackdropWindow();
 
  private:
-  WorkspaceController* controller_;
+  raw_ptr<WorkspaceController, ExperimentalAsh> controller_;
 };
 
 }  // namespace ash

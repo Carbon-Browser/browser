@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_DNS_DNS_CONFIG_WATCHER_MAC_H_
 #define NET_DNS_DNS_CONFIG_WATCHER_MAC_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "net/dns/notify_watcher_mac.h"
 
 namespace net::internal {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,25 +9,64 @@
 
 #import "ios/chrome/common/ui/promo_style/promo_style_view_controller_delegate.h"
 
+enum class PromoStyleImageType {
+  kNone,
+  kAvatar,
+  kImage,
+  kImageWithShadow,
+};
+
+enum class BannerImageSizeType {
+  kStandard,
+  kTall,
+  kExtraTall,
+};
+
 // A base view controller for the common UI controls in the new Promo
 // Style screens.
 @interface PromoStyleViewController : UIViewController <UITextViewDelegate>
 
+- (instancetype)initWithNibName:(NSString*)nibNameOrNil
+                         bundle:(NSBundle*)nibBundleOrNil
+    NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)initWithCoder:(NSCoder*)coder NS_UNAVAILABLE;
+
 // The name of the banner image. Must be set before the view is loaded.
 @property(nonatomic, strong) NSString* bannerName;
 
-// When set to YES, the banner will be tall (35% of view height). When set to
-// NO, the banner will be of normal height (25% of view height). Defaults to NO.
-@property(nonatomic, assign) BOOL isTallBanner;
+// The ratio of the view covered by the banner.
+// - kStandard: 25%,
+// - kTall: 35%,
+// - kExtraTall: 50%.
+@property(nonatomic, assign) BannerImageSizeType bannerSize;
 
 // When set to NO, the top of the banner will be constrained to the top of the
 // view and its height will be 25% or 35% of the view height depending on the
 // value of `isTallBanner`. When set to YES, the banner will be constrained so
 // as to fill the top space (horizontally and vertically) while preserving
-// aspect ratio and constraining the bottom of the image so as to ensure 25% or
-// 35% of the top space of the view is covered. Defaults to NO.
-// Must be set before the view is loaded.
+// aspect ratio and constraining the bottom of the image so as to ensure the
+// correct ratio of the view is covered. Defaults to NO.
 @property(nonatomic, assign) BOOL shouldBannerFillTopSpace;
+
+// When set to YES, the banner is hidden. Defaults to NO.
+@property(nonatomic, assign) BOOL shouldHideBanner;
+
+// The type of image to display in the header. This value has to be set before
+// the view is loaded. Defaults to kNone.
+// See `headerImage` to set the actual image.
+@property(nonatomic, assign) PromoStyleImageType headerImageType;
+
+// Sets the header image. Needs to `headerImageType` to the correct type before.
+@property(nonatomic, strong) UIImage* headerImage;
+
+// Sets a background image for the header image. Must be set before the view is
+// loaded.
+@property(nonatomic, strong) UIImage* headerBackgroundImage;
+
+// Sets the header image accessibility label. Needs to `headerImageType` to not
+// kNone. before.
+@property(nonatomic, copy) NSString* headerAccessibilityLabel;
 
 // The label of the headline below the image. Must be set before the view is
 // loaded. This is declared public so the accessibility can be enabled.
@@ -36,8 +75,17 @@
 // The headline below the image. Must be set before the view is loaded.
 @property(nonatomic, copy) NSString* titleText;
 
+// The margin on leading and trailing ends of the title label.
+// Must be set before the view is loaded. Defaults to `kTitleHorizontalMargin`.
+@property(nonatomic, assign) CGFloat titleHorizontalMargin;
+
 // The subtitle below the title. Must be set before the view is loaded.
 @property(nonatomic, copy) NSString* subtitleText;
+
+// The margin between the subtitle and the specificContentView. In cases where
+// subtitle is blank, views may want to set this to zero to avoid adding extra
+// spacing.
+@property(nonatomic, assign) CGFloat subtitleBottomMargin;
 
 // The disclaimer that shows at the bottom of the view, above the action items.
 // The disclaimer does not move on scroll.
@@ -51,6 +99,9 @@
 // The container view for the screen-specific content. Derived view controllers
 // should add their UI elements to it.
 @property(nonatomic, strong) UIView* specificContentView;
+
+// Indicates that the specificContentView will not be used and must be hidden.
+@property(nonatomic, assign) BOOL hideSpecificContentView;
 
 // The text for the primary action. Must be set before the view is loaded.
 @property(nonatomic, copy) NSString* primaryActionString;
@@ -87,6 +138,12 @@
 // Whether the bottom of the view controller is reached. This value will always
 // be YES when `self.scrollToEndMandatory` is NO.
 @property(nonatomic, assign, readonly) BOOL didReachBottom;
+
+// Adds a rounded corner limit to the banner view to mimic a two card view.
+@property(nonatomic, assign) BOOL bannerLimitWithRoundedCorner;
+
+// Aligns the elements to the top of the view.
+@property(nonatomic, assign) BOOL topAlignedLayout;
 
 @end
 

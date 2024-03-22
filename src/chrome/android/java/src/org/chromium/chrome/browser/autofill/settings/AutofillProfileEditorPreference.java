@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@ import android.content.Context;
 
 import androidx.preference.DialogPreference;
 
-/**
- * Launches the UI to edit, create or delete an Autofill profile entry.
- */
+import org.chromium.chrome.browser.autofill.AutofillEditorBase;
+
+/** Launches the UI to edit, create or delete an Autofill profile entry. */
 public class AutofillProfileEditorPreference extends DialogPreference {
     public AutofillProfileEditorPreference(Context context) {
         super(context);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,12 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include "base/check.h"
 #include "base/logging.h"
 #include "base/win/static_constants.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/src/win_utils.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sandbox {
 
@@ -148,14 +147,8 @@ bool HandleCloserAgent::CloseHandles() {
   // avoid invalid-handle exceptions.
   if (base::win::IsAppVerifierLoaded())
     return true;
-  // If the accurate handle enumeration fails then fallback to the old brute
-  // force approach. This should only happen on Windows 7 and 8.0.
-  absl::optional<ProcessHandleMap> handle_map = GetCurrentProcessHandles();
-  if (!handle_map) {
-    DCHECK(base::win::GetVersion() < base::win::Version::WIN8_1);
-    handle_map = GetCurrentProcessHandlesWin7();
-  }
 
+  std::optional<ProcessHandleMap> handle_map = GetCurrentProcessHandles();
   if (!handle_map)
     return false;
 
@@ -167,10 +160,9 @@ bool HandleCloserAgent::CloseHandles() {
     for (HANDLE handle : result->second) {
       // Empty set means close all handles of this type; otherwise check name.
       if (!names.empty()) {
-        std::wstring handle_name;
+        auto handle_name = GetPathFromHandle(handle);
         // Move on to the next handle if this name doesn't match.
-        if (!GetPathFromHandle(handle, &handle_name) ||
-            !names.count(handle_name)) {
+        if (!handle_name || !names.count(handle_name.value())) {
           continue;
         }
       }

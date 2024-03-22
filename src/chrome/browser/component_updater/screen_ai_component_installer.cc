@@ -1,29 +1,24 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/component_updater/screen_ai_component_installer.h"
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/time/time.h"
-#include "chrome/browser/browser_process.h"
+#include "base/logging.h"
+#include "base/values.h"
+#include "chrome/browser/screen_ai/screen_ai_install_state.h"
 #include "components/component_updater/component_updater_service.h"
 #include "components/crx_file/id_util.h"
-#include "components/services/screen_ai/public/cpp/pref_names.h"
 #include "components/services/screen_ai/public/cpp/utilities.h"
 #include "components/update_client/update_client_errors.h"
 #include "content/public/browser/browser_thread.h"
 #include "crypto/sha2.h"
-#include "ui/accessibility/accessibility_features.h"
 
 using content::BrowserThread;
 
 namespace {
-
-const int kScreenAICleanUpDelayInDays = 30;
 
 // The SHA256 of the SubjectPublicKeyInfo used to sign the component.
 // The component id is: mfhmdacoffpmifoibamicehhklffanao
@@ -58,7 +53,7 @@ bool ScreenAIComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 ScreenAIComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(update_client::InstallError::NONE);
 }
@@ -68,22 +63,38 @@ void ScreenAIComponentInstallerPolicy::OnCustomUninstall() {}
 void ScreenAIComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
+  screen_ai::ScreenAIInstallState::GetInstance()->SetComponentFolder(
+      install_dir);
   VLOG(1) << "Screen AI Component ready, version " << version.GetString()
           << " in " << install_dir.value();
 }
 
 bool ScreenAIComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
-  // TODO(https://crbug.com/1278249): Consider trying to open and initialize the
-  // library.
-  VLOG(1) << "Verifying Screen AI Library in " << install_dir.value();
-  return screen_ai::GetLatestLibraryFilePath().DirName() == install_dir;
+  VLOG(1) << "Verifying Screen AI component in " << install_dir.value();
+
+  const base::Value* version_value = manifest.Find("version");
+  if (!version_value || !version_value->is_string()) {
+    VLOG(0) << "Cannot verify Screen AI library version.";
+    return false;
+  }
+  if (!screen_ai::ScreenAIInstallState::VerifyLibraryVersion(
+          version_value->GetString())) {
+    return false;
+  }
+
+  return screen_ai::ScreenAIInstallState::VerifyLibraryAvailablity(install_dir);
 }
 
 base::FilePath ScreenAIComponentInstallerPolicy::GetRelativeInstallDir() const {
   return screen_ai::GetRelativeInstallDir();
+}
+
+// static
+std::string ScreenAIComponentInstallerPolicy::GetOmahaId() {
+  return crx_file::id_util::GenerateIdFromHash(kScreenAIPublicKeySHA256);
 }
 
 void ScreenAIComponentInstallerPolicy::GetHash(
@@ -102,47 +113,40 @@ ScreenAIComponentInstallerPolicy::GetInstallerAttributes() const {
 }
 
 // static
-void ScreenAIComponentInstallerPolicy::DeleteLibraryOrScheduleDeletionIfNeeded(
-    PrefService* global_prefs) {
-  base::FilePath library_path = screen_ai::GetLatestLibraryFilePath();
-  if (library_path.empty())
-    return;
-
-  base::Time deletion_time =
-      global_prefs->GetTime(prefs::kScreenAIScheduledDeletionTimePrefName);
-
-  // Set deletion time if it is not set yet.
-  if (deletion_time.is_null()) {
-    global_prefs->SetTime(
-        prefs::kScreenAIScheduledDeletionTimePrefName,
-        base::Time::Now() + base::Days(kScreenAICleanUpDelayInDays));
+void ScreenAIComponentInstallerPolicy::DeleteComponent() {
+  if (screen_ai::GetLatestComponentBinaryPath().empty()) {
     return;
   }
 
-  if (deletion_time <= base::Time::Now()) {
-    // If there are more than one instance of the library, delete them as well.
-    do {
-      base::DeletePathRecursively(library_path.DirName());
-      library_path = screen_ai::GetLatestLibraryFilePath();
-    } while (!library_path.empty());
-    global_prefs->SetTime(prefs::kScreenAIScheduledDeletionTimePrefName,
-                          base::Time());
+  base::DeletePathRecursively(screen_ai::GetComponentDir());
+  screen_ai::ScreenAIInstallState::RecordComponentInstallationResult(
+      /*install=*/false,
+      /*successful=*/true);
+}
+
+void ManageScreenAIComponentRegistration(ComponentUpdateService* cus,
+                                         PrefService* local_state) {
+  if (screen_ai::ScreenAIInstallState::ShouldInstall(local_state)) {
+    RegisterScreenAIComponent(cus);
+    return;
+  }
+
+  // Clean up.
+  if (!screen_ai::GetLatestComponentBinaryPath().empty()) {
+    ScreenAIComponentInstallerPolicy::DeleteComponent();
   }
 }
 
-void RegisterScreenAIComponent(ComponentUpdateService* cus,
-                               PrefService* global_prefs) {
+void RegisterScreenAIComponent(ComponentUpdateService* cus) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  if (!features::IsScreenAIServiceNeeded()) {
-    ScreenAIComponentInstallerPolicy::DeleteLibraryOrScheduleDeletionIfNeeded(
-        global_prefs);
+  // Only register once.
+  if (screen_ai::ScreenAIInstallState::GetInstance()->get_state() !=
+      screen_ai::ScreenAIInstallState::State::kNotDownloaded) {
     return;
   }
-
-  // Remove scheduled time for deletion as feature is enabled.
-  global_prefs->SetTime(prefs::kScreenAIScheduledDeletionTimePrefName,
-                        base::Time());
+  screen_ai::ScreenAIInstallState::GetInstance()->SetState(
+      screen_ai::ScreenAIInstallState::State::kDownloading);
 
   auto installer = base::MakeRefCounted<ComponentInstaller>(
       std::make_unique<ScreenAIComponentInstallerPolicy>());

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,30 +11,29 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <openssl/aes.h>
+#include <openssl/evp.h>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
+#include "base/types/cxx23_to_underlying.h"
+#include "crypto/openssl_util.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/encryption_pattern.h"
 #include "media/base/media_track.h"
 #include "media/base/media_tracks.h"
 #include "media/base/media_util.h"
+#include "media/base/stream_parser.h"
 #include "media/base/stream_parser_buffer.h"
 #include "media/base/test_data_util.h"
-#include "media/base/text_track_config.h"
 #include "media/base/video_decoder_config.h"
 #include "media/media_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
-#include <openssl/aes.h>
-#include <openssl/evp.h>
-#include "crypto/openssl_util.h"
-#endif
 
 namespace media {
 namespace mp2t {
@@ -60,7 +59,6 @@ bool IsAlmostEqual(DecodeTimestamp t0, DecodeTimestamp t1) {
   return (diff >= -kMaxDeviation && diff <= kMaxDeviation);
 }
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 class ScopedCipherCTX {
  public:
   explicit ScopedCipherCTX() { EVP_CIPHER_CTX_init(&ctx_); }
@@ -153,7 +151,6 @@ std::string DecryptBuffer(const StreamParserBuffer& buffer,
   }
   return result;
 }
-#endif
 
 }  // namespace
 
@@ -213,22 +210,39 @@ class Mp2tStreamParserTest : public testing::Test {
     video_max_dts_ = kNoDecodeTimestamp;
   }
 
-  bool AppendData(const uint8_t* data, size_t length) {
-    return parser_->Parse(data, length);
-  }
-
-  bool AppendDataInPieces(const uint8_t* data,
-                          size_t length,
-                          size_t piece_size) {
-    const uint8_t* start = data;
-    const uint8_t* end = data + length;
-    while (start < end) {
-      size_t append_size = std::min(piece_size,
-                                    static_cast<size_t>(end - start));
-      if (!AppendData(start, append_size))
-        return false;
-      start += append_size;
+  // Note this is similar to a StreamParserTestBase method, so may benefit from
+  // utility method or inheritance if they don't diverge.
+  bool AppendAllDataThenParseInPieces(const uint8_t* data,
+                                      size_t length,
+                                      size_t piece_size) {
+    if (!parser_->AppendToParseBuffer(data, length)) {
+      return false;
     }
+
+    // Also verify that the expected number of pieces is needed to fully parse
+    // `data`.
+    size_t expected_remaining_data = length;
+    bool has_more_data = true;
+
+    // A zero-length append still needs a single iteration of parse.
+    while (has_more_data) {
+      StreamParser::ParseStatus parse_result = parser_->Parse(piece_size);
+      if (parse_result == StreamParser::ParseStatus::kFailed) {
+        return false;
+      }
+
+      has_more_data =
+          parse_result == StreamParser::ParseStatus::kSuccessHasMoreData;
+
+      EXPECT_EQ(piece_size < expected_remaining_data, has_more_data);
+
+      if (has_more_data) {
+        expected_remaining_data -= piece_size;
+      } else {
+        EXPECT_EQ(parse_result, StreamParser::ParseStatus::kSuccess);
+      }
+    }
+
     return true;
   }
 
@@ -236,31 +250,33 @@ class Mp2tStreamParserTest : public testing::Test {
     DVLOG(1) << "OnInit: dur=" << params.duration.InMilliseconds();
   }
 
-  bool OnNewConfig(std::unique_ptr<MediaTracks> tracks,
-                   const StreamParser::TextTrackConfigMap& tc) {
+  bool OnNewConfig(std::unique_ptr<MediaTracks> tracks) {
     DVLOG(1) << "OnNewConfig: got " << tracks->tracks().size() << " tracks";
-    bool found_audio_track = false;
-    bool found_video_track = false;
+    size_t audio_track_count = 0;
+    size_t video_track_count = 0;
     for (const auto& track : tracks->tracks()) {
       const auto& track_id = track->bytestream_track_id();
-      if (track->type() == MediaTrack::Audio) {
+      if (track->type() == MediaTrack::Type::kAudio) {
         audio_track_id_ = track_id;
-        found_audio_track = true;
+        audio_track_count++;
         EXPECT_TRUE(tracks->getAudioConfig(track_id).IsValidConfig());
         current_audio_config_ = tracks->getAudioConfig(track_id);
-      } else if (track->type() == MediaTrack::Video) {
+      } else if (track->type() == MediaTrack::Type::kVideo) {
         video_track_id_ = track_id;
-        found_video_track = true;
+        video_track_count++;
         EXPECT_TRUE(tracks->getVideoConfig(track_id).IsValidConfig());
         current_video_config_ = tracks->getVideoConfig(track_id);
       } else {
         // Unexpected track type.
-        LOG(ERROR) << "Unexpected track type " << track->type();
+        LOG(ERROR) << "Unexpected track type "
+                   << base::to_underlying(track->type());
         EXPECT_TRUE(false);
       }
     }
-    EXPECT_EQ(has_audio_, found_audio_track);
-    EXPECT_EQ(has_video_, found_video_track);
+    EXPECT_EQ(has_audio_, audio_track_count > 0);
+    EXPECT_EQ(has_video_, video_track_count > 0);
+    EXPECT_EQ(tracks->GetAudioConfigs().size(), audio_track_count);
+    EXPECT_EQ(tracks->GetVideoConfigs().size(), video_track_count);
     config_count_++;
     return true;
   }
@@ -339,12 +355,7 @@ class Mp2tStreamParserTest : public testing::Test {
   }
 
   void OnKeyNeeded(EmeInitDataType type,
-                   const std::vector<uint8_t>& init_data) {
-#if !BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
-    LOG(ERROR) << "OnKeyNeeded not expected in the Mpeg2 TS parser";
-    EXPECT_TRUE(false);
-#endif
-  }
+                   const std::vector<uint8_t>& init_data) {}
 
   void OnNewSegment() {
     DVLOG(1) << "OnNewSegment";
@@ -363,7 +374,6 @@ class Mp2tStreamParserTest : public testing::Test {
                             base::Unretained(this)),
         base::BindRepeating(&Mp2tStreamParserTest::OnNewBuffers,
                             base::Unretained(this)),
-        true,
         base::BindRepeating(&Mp2tStreamParserTest::OnKeyNeeded,
                             base::Unretained(this)),
         base::BindRepeating(&Mp2tStreamParserTest::OnNewSegment,
@@ -373,11 +383,23 @@ class Mp2tStreamParserTest : public testing::Test {
         &media_log_);
   }
 
+  // Note this is also similar to a StreamParserTestBase method.
   bool ParseMpeg2TsFile(const std::string& filename, int append_bytes) {
+    CHECK_GE(append_bytes, 0);
     scoped_refptr<DecoderBuffer> buffer = ReadTestDataFile(filename);
-    EXPECT_TRUE(AppendDataInPieces(buffer->data(),
-                                   buffer->data_size(),
-                                   append_bytes));
+
+    const uint8_t* start = buffer->data();
+    const uint8_t* end = start + buffer->data_size();
+    do {
+      size_t chunk_size = std::min(static_cast<size_t>(append_bytes),
+                                   static_cast<size_t>(end - start));
+      // Attempt to incrementally parse each appended chunk to test out the
+      // parser's internal management of input queue and pending data bytes.
+      EXPECT_TRUE(AppendAllDataThenParseInPieces(
+          start, chunk_size, (chunk_size > 7) ? (chunk_size - 7) : chunk_size));
+      start += chunk_size;
+    } while (start < end);
+
     return true;
   }
 };
@@ -488,7 +510,6 @@ TEST_F(Mp2tStreamParserTest, DisableAudioStream) {
   EXPECT_EQ(config_count_, 1);
 }
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 TEST_F(Mp2tStreamParserTest, HLSSampleAES) {
   std::vector<std::string> decrypted_video_buffers;
   std::vector<std::string> decrypted_audio_buffers;
@@ -551,8 +572,6 @@ TEST_F(Mp2tStreamParserTest, PrepareForHLSSampleAES) {
       current_audio_config_.encryption_scheme();
   EXPECT_NE(audio_encryption_scheme, EncryptionScheme::kUnencrypted);
 }
-
-#endif
 
 }  // namespace mp2t
 }  // namespace media

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,19 +9,19 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/speech/audio_buffer.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/browser/media/media_internals.h"
-#include "content/browser/speech/audio_buffer.h"
 #include "content/public/browser/audio_service.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/speech_recognition_event_listener.h"
 #include "media/audio/audio_system.h"
 #include "media/base/audio_converter.h"
+#include "media/base/audio_parameters.h"
 #include "media/mojo/mojom/audio_logging.mojom.h"
 #include "services/audio/public/cpp/device_factory.h"
 
@@ -31,6 +31,7 @@
 
 using media::AudioBus;
 using media::AudioConverter;
+using media::AudioGlitchInfo;
 using media::AudioParameters;
 using media::ChannelLayout;
 
@@ -59,7 +60,9 @@ class SpeechRecognizerImpl::OnDataConverter
 
  private:
   // media::AudioConverter::InputCallback implementation.
-  double ProvideInput(AudioBus* dest, uint32_t frames_delayed) override;
+  double ProvideInput(AudioBus* dest,
+                      uint32_t frames_delayed,
+                      const AudioGlitchInfo& glitch_info) override;
 
   // Handles resampling, buffering, and channel mixing between input and output
   // parameters.
@@ -163,7 +166,8 @@ scoped_refptr<AudioChunk> SpeechRecognizerImpl::OnDataConverter::Convert(
 
 double SpeechRecognizerImpl::OnDataConverter::ProvideInput(
     AudioBus* dest,
-    uint32_t frames_delayed) {
+    uint32_t frames_delayed,
+    const AudioGlitchInfo& glitch_info) {
   // Read from the input bus to feed the converter.
   input_bus_->CopyTo(dest);
   // Indicate that the recorded audio has in fact been used by the converter.
@@ -574,17 +578,21 @@ SpeechRecognizerImpl::StartRecording(const FSMEventArgs&) {
   int chunk_duration_ms = recognition_engine_->GetDesiredAudioChunkDurationMs();
 
   if (!device_params_.IsValid()) {
-    DLOG(ERROR) << "Audio input device not found";
-    return Abort(blink::mojom::SpeechRecognitionError(
-        blink::mojom::SpeechRecognitionErrorCode::kAudioCapture,
-        blink::mojom::SpeechAudioErrorDetails::kNoMic));
+    DLOG(WARNING) << "Audio input device not found, but one should exist -- "
+                     "using fake audio input parameters.";
+
+    // It's okay to try with fake parameters since we've already been given
+    // permission from SpeechRecognitionManagerImpl. If no device exists, this
+    // will just result in an OnCaptureError().
+    device_params_ = media::AudioParameters::UnavailableDeviceParams();
   }
 
   // Audio converter shall provide audio based on these parameters as output.
   // Hard coded, WebSpeech specific parameters are utilized here.
   int frames_per_buffer = (kAudioSampleRate * chunk_duration_ms) / 1000;
   AudioParameters output_parameters =
-      AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY, kChannelLayout,
+      AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY,
+                      media::ChannelLayoutConfig::FromLayout<kChannelLayout>(),
                       kAudioSampleRate, frames_per_buffer);
   DVLOG(1) << "SRI::output_parameters: "
            << output_parameters.AsHumanReadableString();
@@ -852,14 +860,14 @@ void SpeechRecognizerImpl::UpdateSignalAndNoiseLevels(const float& rms,
   // Perhaps it might be quite expensive on mobile.
   float level = (rms - kAudioMeterMinDb) /
       (kAudioMeterDbRange / kAudioMeterRangeMaxUnclipped);
-  level = base::clamp(level, 0.0f, kAudioMeterRangeMaxUnclipped);
+  level = std::clamp(level, 0.0f, kAudioMeterRangeMaxUnclipped);
   const float smoothing_factor = (level > audio_level_) ? kUpSmoothingFactor :
                                                           kDownSmoothingFactor;
   audio_level_ += (level - audio_level_) * smoothing_factor;
 
   float noise_level = (endpointer_.NoiseLevelDb() - kAudioMeterMinDb) /
       (kAudioMeterDbRange / kAudioMeterRangeMaxUnclipped);
-  noise_level = base::clamp(noise_level, 0.0f, kAudioMeterRangeMaxUnclipped);
+  noise_level = std::clamp(noise_level, 0.0f, kAudioMeterRangeMaxUnclipped);
 
   listener()->OnAudioLevelsChange(
       session_id(), clip_detected ? 1.0f : audio_level_, noise_level);
@@ -885,7 +893,7 @@ void SpeechRecognizerImpl::CreateAudioCapturerSource() {
       std::move(stream_factory), device_id_,
       audio::DeadStreamDetection::kEnabled,
       MediaInternals::GetInstance()->CreateMojoAudioLog(
-          media::AudioLogFactory::AUDIO_INPUT_CONTROLLER,
+          media::AudioLogFactory::AudioComponent::kAudioInputController,
           0 /* component_id */));
 }
 

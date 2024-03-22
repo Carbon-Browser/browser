@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ const std::map<S2LatLng, std::string> GetData(int rank) {
 
   std::string data;
   base::FilePath source_dir;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &source_dir));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_dir));
   base::FilePath data_dir =
       source_dir.AppendASCII("components/test/data/language/");
   base::FilePath data_filepath = data_dir.AppendASCII(

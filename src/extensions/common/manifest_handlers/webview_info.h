@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ class WebviewInfo : public Extension::ManifestData {
   void AddPartitionItem(std::unique_ptr<PartitionItem> item);
 
  private:
-  std::string extension_id_;
+  ExtensionId extension_id_;
   std::vector<std::unique_ptr<PartitionItem>> partition_items_;
 };
 

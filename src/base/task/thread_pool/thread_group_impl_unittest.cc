@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,14 +15,12 @@
 
 #include "base/atomicops.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/metrics/histogram.h"
-#include "base/metrics/histogram_samples.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/synchronization/condition_variable.h"
@@ -40,7 +38,7 @@
 #include "base/task/thread_pool/worker_thread_observer.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
-#include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/test/test_timeouts.h"
 #include "base/test/test_waitable_event.h"
@@ -49,7 +47,6 @@
 #include "base/threading/simple_thread.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker_impl.h"
-#include "base/threading/thread_local_storage.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
@@ -81,10 +78,12 @@ class ThreadGroupImplImplTestBase : public ThreadGroup::Delegate {
         tracked_ref_factory_(this) {}
 
   void CommonTearDown() {
+    delayed_task_manager_.Shutdown();
     service_thread_.Stop();
     task_tracker_.FlushForTesting();
     if (thread_group_)
       thread_group_->JoinForTesting();
+    mock_pooled_task_runner_delegate_.SetThreadGroup(nullptr);
     thread_group_.reset();
   }
 
@@ -320,13 +319,7 @@ TEST_F(ThreadGroupImplImplTest, ShouldYieldFloodedUserVisible) {
   scoped_refptr<JobTaskSource> task_source =
       job_task->GetJobTaskSource(FROM_HERE, {TaskPriority::USER_VISIBLE},
                                  &mock_pooled_task_runner_delegate_);
-
-  auto registered_task_source = task_tracker_.RegisterTaskSource(task_source);
-  ASSERT_TRUE(registered_task_source);
-  static_cast<ThreadGroup*>(thread_group_.get())
-      ->PushTaskSourceAndWakeUpWorkers(
-          TransactionWithRegisteredTaskSource::FromTaskSource(
-              std::move(registered_task_source)));
+  task_source->NotifyConcurrencyIncrease();
 
   threads_running.Wait();
 
@@ -594,222 +587,6 @@ TEST_F(BackgroundThreadGroupImplTest, UpdatePriorityBlockingStarted) {
 
 namespace {
 
-constexpr size_t kMagicTlsValue = 42;
-
-class ThreadGroupImplCheckTlsReuse : public ThreadGroupImplImplTest {
- public:
-  ThreadGroupImplCheckTlsReuse(const ThreadGroupImplCheckTlsReuse&) = delete;
-  ThreadGroupImplCheckTlsReuse& operator=(const ThreadGroupImplCheckTlsReuse&) =
-      delete;
-
-  void SetTlsValueAndWait() {
-    slot_.Set(reinterpret_cast<void*>(kMagicTlsValue));
-    waiter_.Wait();
-  }
-
-  void CountZeroTlsValuesAndWait(TestWaitableEvent* count_waiter) {
-    if (!slot_.Get())
-      subtle::NoBarrier_AtomicIncrement(&zero_tls_values_, 1);
-
-    count_waiter->Signal();
-    waiter_.Wait();
-  }
-
- protected:
-  ThreadGroupImplCheckTlsReuse() = default;
-
-  void SetUp() override {
-    CreateAndStartThreadGroup(kReclaimTimeForCleanupTests, kMaxTasks);
-  }
-
-  subtle::Atomic32 zero_tls_values_ = 0;
-
-  TestWaitableEvent waiter_;
-
- private:
-  ThreadLocalStorage::Slot slot_;
-};
-
-}  // namespace
-
-// Checks that at least one worker has been cleaned up by checking the TLS.
-TEST_F(ThreadGroupImplCheckTlsReuse, CheckCleanupWorkers) {
-  // Saturate the workers and mark each worker's thread with a magic TLS value.
-  std::vector<std::unique_ptr<test::TestTaskFactory>> factories;
-  for (size_t i = 0; i < kMaxTasks; ++i) {
-    factories.push_back(std::make_unique<test::TestTaskFactory>(
-        test::CreatePooledTaskRunner({WithBaseSyncPrimitives()},
-                                     &mock_pooled_task_runner_delegate_),
-        TaskSourceExecutionMode::kParallel));
-    ASSERT_TRUE(factories.back()->PostTask(
-        PostNestedTask::NO,
-        BindOnce(&ThreadGroupImplCheckTlsReuse::SetTlsValueAndWait,
-                 Unretained(this))));
-    factories.back()->WaitForAllTasksToRun();
-  }
-
-  // Release tasks waiting on |waiter_|.
-  waiter_.Signal();
-  thread_group_->WaitForAllWorkersIdleForTesting();
-
-  // All workers should be done running by now, so reset for the next phase.
-  waiter_.Reset();
-
-  // Wait for the thread group to clean up at least one worker.
-  thread_group_->WaitForWorkersCleanedUpForTesting(1U);
-
-  // Saturate and count the worker threads that do not have the magic TLS value.
-  // If the value is not there, that means we're at a new worker.
-  std::vector<std::unique_ptr<TestWaitableEvent>> count_waiters;
-  for (auto& factory : factories) {
-    count_waiters.push_back(std::make_unique<TestWaitableEvent>());
-    ASSERT_TRUE(factory->PostTask(
-        PostNestedTask::NO,
-        BindOnce(&ThreadGroupImplCheckTlsReuse::CountZeroTlsValuesAndWait,
-                 Unretained(this), count_waiters.back().get())));
-    factory->WaitForAllTasksToRun();
-  }
-
-  // Wait for all counters to complete.
-  for (auto& count_waiter : count_waiters)
-    count_waiter->Wait();
-
-  EXPECT_GT(subtle::NoBarrier_Load(&zero_tls_values_), 0);
-
-  // Release tasks waiting on |waiter_|.
-  waiter_.Signal();
-}
-
-namespace {
-
-class ThreadGroupImplHistogramTest : public ThreadGroupImplImplTest {
- public:
-  ThreadGroupImplHistogramTest() = default;
-  ThreadGroupImplHistogramTest(const ThreadGroupImplHistogramTest&) = delete;
-  ThreadGroupImplHistogramTest& operator=(const ThreadGroupImplHistogramTest&) =
-      delete;
-
- protected:
-  // Override SetUp() to allow every test case to initialize a thread group with
-  // its own arguments.
-  void SetUp() override {}
-
- private:
-  std::unique_ptr<StatisticsRecorder> statistics_recorder_ =
-      StatisticsRecorder::CreateTemporaryForTesting();
-};
-
-}  // namespace
-
-TEST_F(ThreadGroupImplHistogramTest, NumTasksBeforeCleanup) {
-  CreateThreadGroup();
-  auto histogrammed_thread_task_runner = test::CreatePooledSequencedTaskRunner(
-      {WithBaseSyncPrimitives()}, &mock_pooled_task_runner_delegate_);
-
-  // Post 3 tasks and hold the thread for idle thread stack ordering.
-  // This test assumes |histogrammed_thread_task_runner| gets assigned the same
-  // thread for each of its tasks.
-  PlatformThreadRef thread_ref;
-  histogrammed_thread_task_runner->PostTask(
-      FROM_HERE, BindOnce(
-                     [](PlatformThreadRef* thread_ref) {
-                       ASSERT_TRUE(thread_ref);
-                       *thread_ref = PlatformThread::CurrentRef();
-                     },
-                     Unretained(&thread_ref)));
-  histogrammed_thread_task_runner->PostTask(
-      FROM_HERE, BindOnce(
-                     [](PlatformThreadRef* thread_ref) {
-                       ASSERT_FALSE(thread_ref->is_null());
-                       EXPECT_EQ(*thread_ref, PlatformThread::CurrentRef());
-                     },
-                     Unretained(&thread_ref)));
-
-  TestWaitableEvent cleanup_thread_running;
-  TestWaitableEvent cleanup_thread_continue;
-  histogrammed_thread_task_runner->PostTask(
-      FROM_HERE,
-      BindOnce(
-          [](PlatformThreadRef* thread_ref,
-             TestWaitableEvent* cleanup_thread_running,
-             TestWaitableEvent* cleanup_thread_continue) {
-            ASSERT_FALSE(thread_ref->is_null());
-            EXPECT_EQ(*thread_ref, PlatformThread::CurrentRef());
-            cleanup_thread_running->Signal();
-            cleanup_thread_continue->Wait();
-          },
-          Unretained(&thread_ref), Unretained(&cleanup_thread_running),
-          Unretained(&cleanup_thread_continue)));
-
-  // Start the thread group with 2 workers, to avoid depending on the internal
-  // logic to always keep one extra idle worker.
-  //
-  // The thread group is started after the 3 initial tasks have been posted to
-  // ensure that they are scheduled on the same worker. If the tasks could run
-  // as they are posted, there would be a chance that:
-  // 1. Worker #1:        Runs a tasks and empties the sequence, without adding
-  //                      itself to the idle stack yet.
-  // 2. Posting thread:   Posts another task to the now empty sequence.
-  //                      Wakes up a new worker, since worker #1 isn't on the
-  //                      idle stack yet.
-  // 3: Worker #2:        Runs the tasks, violating the expectation that the 3
-  //                      initial tasks run on the same worker.
-  constexpr size_t kTwoWorkers = 2;
-  StartThreadGroup(kReclaimTimeForCleanupTests, kTwoWorkers);
-
-  // Wait until the 3rd task is scheduled.
-  cleanup_thread_running.Wait();
-
-  // To allow the WorkerThread associated with
-  // |histogrammed_thread_task_runner| to cleanup, make sure it isn't on top of
-  // the idle stack by waking up another WorkerThread via
-  // |task_runner_for_top_idle|. |histogrammed_thread_task_runner| should
-  // release and go idle first and then |task_runner_for_top_idle| should
-  // release and go idle. This allows the WorkerThread associated with
-  // |histogrammed_thread_task_runner| to cleanup.
-  TestWaitableEvent top_idle_thread_running;
-  TestWaitableEvent top_idle_thread_continue;
-  auto task_runner_for_top_idle = test::CreatePooledSequencedTaskRunner(
-      {WithBaseSyncPrimitives()}, &mock_pooled_task_runner_delegate_);
-  task_runner_for_top_idle->PostTask(
-      FROM_HERE,
-      BindOnce(
-          [](PlatformThreadRef thread_ref,
-             TestWaitableEvent* top_idle_thread_running,
-             TestWaitableEvent* top_idle_thread_continue) {
-            ASSERT_FALSE(thread_ref.is_null());
-            EXPECT_NE(thread_ref, PlatformThread::CurrentRef())
-                << "Worker reused. Worker will not cleanup and the "
-                   "histogram value will be wrong.";
-            top_idle_thread_running->Signal();
-            top_idle_thread_continue->Wait();
-          },
-          thread_ref, Unretained(&top_idle_thread_running),
-          Unretained(&top_idle_thread_continue)));
-  top_idle_thread_running.Wait();
-  EXPECT_EQ(0U, thread_group_->NumberOfIdleWorkersForTesting());
-  cleanup_thread_continue.Signal();
-  // Wait for the cleanup thread to also become idle.
-  thread_group_->WaitForWorkersIdleForTesting(1U);
-  top_idle_thread_continue.Signal();
-  // Allow the thread processing the |histogrammed_thread_task_runner| work to
-  // cleanup.
-  thread_group_->WaitForWorkersCleanedUpForTesting(1U);
-
-  // Verify that counts were recorded to the histogram as expected.
-  const auto* histogram = thread_group_->num_tasks_before_detach_histogram();
-  EXPECT_EQ(0, histogram->SnapshotSamples()->GetCount(0));
-  EXPECT_EQ(0, histogram->SnapshotSamples()->GetCount(1));
-  EXPECT_EQ(0, histogram->SnapshotSamples()->GetCount(2));
-  EXPECT_EQ(1, histogram->SnapshotSamples()->GetCount(3));
-  EXPECT_EQ(0, histogram->SnapshotSamples()->GetCount(4));
-  EXPECT_EQ(0, histogram->SnapshotSamples()->GetCount(5));
-  EXPECT_EQ(0, histogram->SnapshotSamples()->GetCount(6));
-  EXPECT_EQ(0, histogram->SnapshotSamples()->GetCount(10));
-}
-
-namespace {
-
 class ThreadGroupImplStandbyPolicyTest : public ThreadGroupImplImplTestBase,
                                          public testing::Test {
  public:
@@ -829,139 +606,6 @@ class ThreadGroupImplStandbyPolicyTest : public ThreadGroupImplImplTestBase,
 }  // namespace
 
 TEST_F(ThreadGroupImplStandbyPolicyTest, InitOne) {
-  EXPECT_EQ(1U, thread_group_->NumberOfWorkersForTesting());
-}
-
-// Verify that the ThreadGroupImpl keeps at least one idle standby
-// thread, capacity permitting.
-TEST_F(ThreadGroupImplStandbyPolicyTest, VerifyStandbyThread) {
-  auto task_runner = test::CreatePooledTaskRunner(
-      {WithBaseSyncPrimitives()}, &mock_pooled_task_runner_delegate_);
-
-  TestWaitableEvent thread_running(WaitableEvent::ResetPolicy::AUTOMATIC);
-  TestWaitableEvent threads_continue;
-
-  RepeatingClosure thread_blocker = BindLambdaForTesting([&]() {
-    thread_running.Signal();
-    threads_continue.Wait();
-  });
-
-  // There should be one idle thread until we reach capacity
-  for (size_t i = 0; i < kMaxTasks; ++i) {
-    EXPECT_EQ(i + 1, thread_group_->NumberOfWorkersForTesting());
-    task_runner->PostTask(FROM_HERE, thread_blocker);
-    thread_running.Wait();
-  }
-
-  // There should not be an extra idle thread if it means going above capacity
-  EXPECT_EQ(kMaxTasks, thread_group_->NumberOfWorkersForTesting());
-
-  threads_continue.Signal();
-  // Wait long enough for all but one worker to clean up.
-  thread_group_->WaitForWorkersCleanedUpForTesting(kMaxTasks - 1);
-  EXPECT_EQ(1U, thread_group_->NumberOfWorkersForTesting());
-  // Give extra time for a worker to cleanup : none should as the thread group
-  // is expected to keep a worker ready regardless of how long it was idle for.
-  PlatformThread::Sleep(kReclaimTimeForCleanupTests);
-  EXPECT_EQ(1U, thread_group_->NumberOfWorkersForTesting());
-}
-
-// Verify that being "the" idle thread counts as being active (i.e. won't be
-// reclaimed even if not on top of the idle stack when reclaim timeout expires).
-// Regression test for https://crbug.com/847501.
-TEST_F(ThreadGroupImplStandbyPolicyTest, InAndOutStandbyThreadIsActive) {
-  auto sequenced_task_runner = test::CreatePooledSequencedTaskRunner(
-      {}, &mock_pooled_task_runner_delegate_);
-
-  TestWaitableEvent timer_started;
-
-  RepeatingTimer recurring_task;
-  sequenced_task_runner->PostTask(
-      FROM_HERE, BindLambdaForTesting([&]() {
-        recurring_task.Start(FROM_HERE, kReclaimTimeForCleanupTests / 2,
-                             DoNothing());
-        timer_started.Signal();
-      }));
-
-  timer_started.Wait();
-
-  // Running a task should have brought up a new standby thread.
-  EXPECT_EQ(2U, thread_group_->NumberOfWorkersForTesting());
-
-  // Give extra time for a worker to cleanup : none should as the two workers
-  // are both considered "active" per the timer ticking faster than the reclaim
-  // timeout.
-  PlatformThread::Sleep(kReclaimTimeForCleanupTests * 2);
-  EXPECT_EQ(2U, thread_group_->NumberOfWorkersForTesting());
-
-  sequenced_task_runner->PostTask(FROM_HERE, BindLambdaForTesting([&]() {
-                                    recurring_task.AbandonAndStop();
-                                  }));
-
-  // Stopping the recurring task should let the second worker be reclaimed per
-  // not being "the" standby thread for a full reclaim timeout.
-  thread_group_->WaitForWorkersCleanedUpForTesting(1);
-  EXPECT_EQ(1U, thread_group_->NumberOfWorkersForTesting());
-}
-
-// Verify that being "the" idle thread counts as being active but isn't sticky.
-// Regression test for https://crbug.com/847501.
-TEST_F(ThreadGroupImplStandbyPolicyTest, OnlyKeepActiveStandbyThreads) {
-  auto sequenced_task_runner = test::CreatePooledSequencedTaskRunner(
-      {}, &mock_pooled_task_runner_delegate_);
-
-  // Start this test like
-  // ThreadGroupImplStandbyPolicyTest.InAndOutStandbyThreadIsActive and
-  // give it some time to stabilize.
-  RepeatingTimer recurring_task;
-  sequenced_task_runner->PostTask(
-      FROM_HERE, BindLambdaForTesting([&]() {
-        recurring_task.Start(FROM_HERE, kReclaimTimeForCleanupTests / 2,
-                             DoNothing());
-      }));
-
-  PlatformThread::Sleep(kReclaimTimeForCleanupTests * 2);
-  EXPECT_EQ(2U, thread_group_->NumberOfWorkersForTesting());
-
-  // Then also flood the thread group (cycling the top of the idle stack).
-  {
-    auto task_runner = test::CreatePooledTaskRunner(
-        {WithBaseSyncPrimitives()}, &mock_pooled_task_runner_delegate_);
-
-    TestWaitableEvent thread_running(WaitableEvent::ResetPolicy::AUTOMATIC);
-    TestWaitableEvent threads_continue;
-
-    RepeatingClosure thread_blocker = BindLambdaForTesting([&]() {
-      thread_running.Signal();
-      threads_continue.Wait();
-    });
-
-    for (size_t i = 0; i < kMaxTasks; ++i) {
-      task_runner->PostTask(FROM_HERE, thread_blocker);
-      thread_running.Wait();
-    }
-
-    EXPECT_EQ(kMaxTasks, thread_group_->NumberOfWorkersForTesting());
-    threads_continue.Signal();
-
-    // Flush to ensure all references to |threads_continue| are gone before it
-    // goes out of scope.
-    task_tracker_.FlushForTesting();
-  }
-
-  // All workers should clean up but two (since the timer is still running).
-  thread_group_->WaitForWorkersCleanedUpForTesting(kMaxTasks - 2);
-  EXPECT_EQ(2U, thread_group_->NumberOfWorkersForTesting());
-
-  // Extra time shouldn't change this.
-  PlatformThread::Sleep(kReclaimTimeForCleanupTests * 2);
-  EXPECT_EQ(2U, thread_group_->NumberOfWorkersForTesting());
-
-  // Stopping the timer should let the number of active threads go down to one.
-  sequenced_task_runner->PostTask(FROM_HERE, BindLambdaForTesting([&]() {
-                                    recurring_task.AbandonAndStop();
-                                  }));
-  thread_group_->WaitForWorkersCleanedUpForTesting(1);
   EXPECT_EQ(1U, thread_group_->NumberOfWorkersForTesting());
 }
 
@@ -1552,11 +1196,15 @@ TEST_F(ThreadGroupImplBlockingTest, ThreadBusyShutdown) {
   task_tracker_.FlushForTesting();
   thread_group_->JoinForTesting();
   EXPECT_EQ(thread_group_->GetMaxTasksForTesting(), kMaxTasks);
+  mock_pooled_task_runner_delegate_.SetThreadGroup(nullptr);
   thread_group_.reset();
 }
 
-class ThreadGroupImplOverCapacityTest : public ThreadGroupImplImplTestBase,
-                                        public testing::Test {
+enum class ReclaimType { DELAYED_RECLAIM, NO_RECLAIM };
+
+class ThreadGroupImplOverCapacityTest
+    : public ThreadGroupImplImplTestBase,
+      public testing::TestWithParam<ReclaimType> {
  public:
   ThreadGroupImplOverCapacityTest() = default;
   ThreadGroupImplOverCapacityTest(const ThreadGroupImplOverCapacityTest&) =
@@ -1565,7 +1213,10 @@ class ThreadGroupImplOverCapacityTest : public ThreadGroupImplImplTestBase,
       const ThreadGroupImplOverCapacityTest&) = delete;
 
   void SetUp() override {
-    CreateAndStartThreadGroup(kReclaimTimeForCleanupTests, kLocalMaxTasks);
+    if (GetParam() == ReclaimType::NO_RECLAIM) {
+      feature_list.InitAndEnableFeature(kNoWorkerThreadReclaim);
+    }
+    CreateThreadGroup();
     task_runner_ =
         test::CreatePooledTaskRunner({MayBlock(), WithBaseSyncPrimitives()},
                                      &mock_pooled_task_runner_delegate_);
@@ -1574,6 +1225,7 @@ class ThreadGroupImplOverCapacityTest : public ThreadGroupImplImplTestBase,
   void TearDown() override { ThreadGroupImplImplTestBase::CommonTearDown(); }
 
  protected:
+  base::test::ScopedFeatureList feature_list;
   scoped_refptr<TaskRunner> task_runner_;
   static constexpr size_t kLocalMaxTasks = 3;
 
@@ -1585,12 +1237,15 @@ class ThreadGroupImplOverCapacityTest : public ThreadGroupImplImplTestBase,
         "OverCapacityTestThreadGroup", "A", ThreadType::kDefault,
         task_tracker_.GetTrackedRef(), tracked_ref_factory_.GetTrackedRef());
     ASSERT_TRUE(thread_group_);
+
+    mock_pooled_task_runner_delegate_.SetThreadGroup(thread_group_.get());
   }
 };
 
 // Verify that workers that become idle due to the thread group being over
 // capacity will eventually cleanup.
-TEST_F(ThreadGroupImplOverCapacityTest, VerifyCleanup) {
+TEST_P(ThreadGroupImplOverCapacityTest, VerifyCleanup) {
+  StartThreadGroup(kReclaimTimeForCleanupTests, kLocalMaxTasks);
   TestWaitableEvent threads_running;
   TestWaitableEvent threads_continue;
   RepeatingClosure threads_running_barrier = BarrierClosure(
@@ -1651,14 +1306,28 @@ TEST_F(ThreadGroupImplOverCapacityTest, VerifyCleanup) {
                                   kReclaimTimeForCleanupTests * i * 0.5);
   }
 
-  // Note: one worker above capacity will not get cleaned up since it's on the
-  // top of the idle stack.
-  thread_group_->WaitForWorkersCleanedUpForTesting(kLocalMaxTasks - 1);
-  EXPECT_EQ(kLocalMaxTasks + 1, thread_group_->NumberOfWorkersForTesting());
+  if (GetParam() == ReclaimType::DELAYED_RECLAIM) {
+    // Note: one worker above capacity will not get cleaned up since it's on the
+    // front of the idle set.
+    thread_group_->WaitForWorkersCleanedUpForTesting(kLocalMaxTasks - 1);
+    EXPECT_EQ(kLocalMaxTasks + 1, thread_group_->NumberOfWorkersForTesting());
+    threads_continue.Signal();
+  } else {
+    // When workers are't automatically reclaimed after a delay, blocking tasks
+    // need to return for extra workers to be cleaned up.
+    threads_continue.Signal();
+    thread_group_->WaitForWorkersCleanedUpForTesting(kLocalMaxTasks);
+    EXPECT_EQ(kLocalMaxTasks, thread_group_->NumberOfWorkersForTesting());
+  }
 
   threads_continue.Signal();
   task_tracker_.FlushForTesting();
 }
+
+INSTANTIATE_TEST_SUITE_P(ReclaimType,
+                         ThreadGroupImplOverCapacityTest,
+                         ::testing::Values(ReclaimType::DELAYED_RECLAIM,
+                                           ReclaimType::NO_RECLAIM));
 
 // Verify that the maximum number of workers is 256 and that hitting the max
 // leaves the thread group in a valid state with regards to max tasks.
@@ -2012,6 +1681,7 @@ TEST_F(ThreadGroupImplImplStartInBodyTest, RacyCleanup) {
 
   // Unwinding this test will be racy if worker cleanup can race with
   // ThreadGroupImpl destruction : https://crbug.com/810464.
+  mock_pooled_task_runner_delegate_.SetThreadGroup(nullptr);
   thread_group_.reset();
 }
 

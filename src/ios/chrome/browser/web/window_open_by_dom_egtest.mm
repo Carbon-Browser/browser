@@ -1,27 +1,23 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/format_macros.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
+#import "base/format_macros.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/content_settings/core/common/content_settings.h"
+#import "components/content_settings/core/common/content_settings.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_constants.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
-#include "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
-#include "ios/net/url_test_util.h"
+#import "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
+#import "ios/net/url_test_util.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ios/web/public/test/element_selector.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/test/element_selector.h"
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "ui/base/l10n/l10n_util.h"
 
 using chrome_test_util::OmniboxText;
 
@@ -29,10 +25,10 @@ namespace {
 // URL of the file-based page supporting these tests.
 const char kTestURL[] = "/window_open.html";
 
-// Returns matcher for Blocked Popup infobar.
+// Returns matcher for Blocked Popup infobar labels.
 id<GREYMatcher> PopupBlocker() {
   return grey_allOf(
-      grey_accessibilityID(kInfobarBannerViewIdentifier),
+      grey_accessibilityID(kInfobarBannerLabelsStackViewIdentifier),
       grey_accessibilityLabel(base::SysUTF16ToNSString(
           l10n_util::GetStringFUTF16(IDS_IOS_POPUPS_BLOCKED_MOBILE, u"1"))),
       nil);
@@ -190,10 +186,14 @@ id<GREYMatcher> PopupBlocker() {
   // edge case in the bug. TODO(crbug.com/885249): Change back to '#'.
   // Since about scheme URLs are also trimmed to about:blank, check the url
   // directly instead.
-  DCHECK_EQ(GURL("about:blank%23hash"),
+  //
+  // TODO(crbug.com/1484452): Confirm the expected behavir of [ChromeEarlGrey
+  // webStateLastCommittedURL] here. After https://crrev.com/c/4823237, this
+  // returns empty URL ("").
+  DCHECK_EQ("",
             [ChromeEarlGrey webStateLastCommittedURL]);
-  // And confirm the location bar only shows about:blank.
-  [[EarlGrey selectElementWithMatcher:OmniboxText("about:blank")]
+  // And confirm the location bar only shows "".
+  [[EarlGrey selectElementWithMatcher:OmniboxText("")]
       assertWithMatcher:grey_notNil()];
 }
 

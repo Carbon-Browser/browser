@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,6 +62,8 @@ class TestHooks : public AnimationDelegate {
       LayerTreeHostImpl::FrameData* frame_data,
       DrawResult draw_result);
   virtual void DrawLayersOnThread(LayerTreeHostImpl* host_impl) {}
+  virtual void WillSubmitCompositorFrame(LayerTreeHostImpl* host_impl,
+                                         const viz::CompositorFrame& frame) {}
   virtual void WillNotifyReadyToActivateOnThread(LayerTreeHostImpl* host_impl) {
   }
   virtual void NotifyReadyToActivateOnThread(LayerTreeHostImpl* host_impl) {}
@@ -109,6 +111,7 @@ class TestHooks : public AnimationDelegate {
   // Main thread hooks.
   virtual void ApplyViewportChanges(const ApplyViewportChangesArgs& args) {}
   virtual void BeginMainFrameNotExpectedSoon() {}
+  virtual void WillApplyCompositorChanges() {}
   virtual void BeginMainFrame(const viz::BeginFrameArgs& args) {}
   virtual void WillBeginMainFrame() {}
   virtual void DidBeginMainFrame() {}
@@ -139,7 +142,7 @@ class TestHooks : public AnimationDelegate {
       base::TimeTicks animation_start_time,
       std::unique_ptr<gfx::AnimationCurve> curve) override {}
   void NotifyLocalTimeUpdated(
-      absl::optional<base::TimeDelta> local_time) override {}
+      std::optional<base::TimeDelta> local_time) override {}
 
   // OutputSurface indirections to the LayerTreeTest, that can be further
   // overridden.

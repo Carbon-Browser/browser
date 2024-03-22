@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,17 +7,15 @@ import copy
 import json
 import subprocess
 import sys
-import typing
+from typing import List, Tuple
 import unittest
 
-if sys.version_info[0] == 2:
-  import mock
-else:
-  import unittest.mock as mock
+import unittest.mock as mock
 
 from unexpected_passes_common import builders
 from unexpected_passes_common import constants
 from unexpected_passes_common import data_types
+from unexpected_passes_common import expectations
 from unexpected_passes_common import multiprocessing_utils
 from unexpected_passes_common import queries
 from unexpected_passes_common import unittest_utils
@@ -75,7 +73,9 @@ class QueryBuilderUnittest(unittest.TestCase):
     self.addCleanup(self._patcher.stop)
 
     builders.ClearInstance()
+    expectations.ClearInstance()
     unittest_utils.RegisterGenericBuildersImplementation()
+    unittest_utils.RegisterGenericExpectationsImplementation()
     self._querier = unittest_utils.CreateGenericQuerier()
 
     self._relevant_file_patcher = mock.patch.object(
@@ -99,6 +99,11 @@ class QueryBuilderUnittest(unittest.TestCase):
     """Tests that the number of samples is validated."""
     with self.assertRaises(AssertionError):
       unittest_utils.CreateGenericQuerier(num_samples=-1)
+
+  def testInvalidNumJobs(self) -> None:
+    """Tests that the number of jobs is validated."""
+    with self.assertRaises(AssertionError):
+      unittest_utils.CreateGenericQuerier(num_jobs=0)
 
   def testNoResults(self) -> None:
     """Tests functionality if the query returns no results."""
@@ -126,6 +131,7 @@ class QueryBuilderUnittest(unittest.TestCase):
             'typ_tags': [
                 'win',
                 'intel',
+                'unknown_tag',  # This is expected to be removed.
             ],
             'step_name':
             'step_name',
@@ -202,7 +208,7 @@ class QueryBuilderUnittest(unittest.TestCase):
   def testValidResultsMultipleSteps(self) -> None:
     """Tests functionality when results from multiple steps are present."""
 
-    def SideEffect(result: queries.QueryResult) -> typing.List[str]:
+    def SideEffect(result: queries.QueryResult) -> List[str]:
       if result['step_name'] == 'a step name':
         return ['foo_expectations']
       if result['step_name'] == 'another step name':
@@ -220,7 +226,7 @@ class QueryBuilderUnittest(unittest.TestCase):
             ],
             'typ_tags': [
                 'linux',
-                'release',
+                'intel',
             ],
             'step_name': 'a step name',
         },
@@ -233,7 +239,7 @@ class QueryBuilderUnittest(unittest.TestCase):
             ],
             'typ_tags': [
                 'linux',
-                'debug',
+                'amd',
             ],
             'step_name': 'another step name',
         },
@@ -244,10 +250,10 @@ class QueryBuilderUnittest(unittest.TestCase):
         data_types.BuilderEntry('builder', constants.BuilderTypes.CI, False))
     self.assertEqual(len(results), 2)
     self.assertIn(
-        data_types.Result('test_name', ['linux', 'release'], 'Failure',
+        data_types.Result('test_name', ['linux', 'intel'], 'Failure',
                           'a step name', '1234'), results)
     self.assertIn(
-        data_types.Result('test_name', ['linux', 'debug'], 'Failure',
+        data_types.Result('test_name', ['linux', 'amd'], 'Failure',
                           'another step name', '1234'), results)
     self.assertEqual(len(expectation_files), 2)
     self.assertEqual(set(expectation_files),
@@ -348,7 +354,7 @@ class FillExpectationMapForBuildersUnittest(unittest.TestCase):
     """Tests functionality when valid results are returned by the query."""
 
     def SideEffect(builder: data_types.BuilderEntry,
-                   *args) -> typing.Tuple[data_types.ResultListType, None]:
+                   *args) -> Tuple[data_types.ResultListType, None]:
       del args
       if builder.name == 'matched_builder':
         return ([
@@ -390,7 +396,7 @@ class FillExpectationMapForBuildersUnittest(unittest.TestCase):
     unmatched_results = self._querier.FillExpectationMapForBuilders(
         expectation_map, builders_to_fill)
     stats = data_types.BuildStats()
-    stats.AddPassedBuild()
+    stats.AddPassedBuild(frozenset(['win']))
     expected_expectation_map = {
         'foo': {
             expectation: {
@@ -560,6 +566,28 @@ class RunBigQueryCommandsForJsonOutputUnittest(unittest.TestCase):
     with self.assertRaises(RuntimeError):
       self._querier._RunBigQueryCommandsForJsonOutput([''], {})
     self.assertEqual(self._popen_mock.call_count, queries.MAX_QUERY_TRIES)
+
+  def testBatching(self) -> None:
+    """Tests that batching preferences are properly forwarded."""
+    query_output = [{'foo': 'bar'}]
+    self._popen_mock.return_value = unittest_utils.FakeProcess(
+        stdout=json.dumps(query_output))
+
+    self._querier._RunBigQueryCommandsForJsonOutput([''], {})
+    self._popen_mock.assert_called_once()
+    args, _ = unittest_utils.GetArgsForMockCall(self._popen_mock.call_args_list,
+                                                0)
+    cmd = args[0]
+    self.assertIn('--batch', cmd)
+
+    self._querier = unittest_utils.CreateGenericQuerier(use_batching=False)
+    self._popen_mock.reset_mock()
+    self._querier._RunBigQueryCommandsForJsonOutput([''], {})
+    self._popen_mock.assert_called_once()
+    args, _ = unittest_utils.GetArgsForMockCall(self._popen_mock.call_args_list,
+                                                0)
+    cmd = args[0]
+    self.assertNotIn('--batch', cmd)
 
 
 class GenerateBigQueryCommandUnittest(unittest.TestCase):

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,9 @@ class COMPONENT_EXPORT(UI_LOTTIE) AnimationObserver
   //
   // |t| is the normalized timestamp in range [0, 1] of the frame just painted.
   virtual void AnimationFramePainted(const Animation* animation, float t) {}
+
+  // Called when the animation is `Stop()`ed.
+  virtual void AnimationStopped(const Animation* animation) {}
 
   // Called in the Animation's destructor. Observers may remove themselves
   // within their implementation.

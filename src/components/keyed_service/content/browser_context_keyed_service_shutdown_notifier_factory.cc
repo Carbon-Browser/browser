@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,10 +24,10 @@ BrowserContextKeyedServiceShutdownNotifierFactory::Get(
       GetServiceForBrowserContext(context, true));
 }
 
-KeyedService*
-BrowserContextKeyedServiceShutdownNotifierFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+  BrowserContextKeyedServiceShutdownNotifierFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new KeyedServiceShutdownNotifier;
+  return std::make_unique <KeyedServiceShutdownNotifier>();
 }
 
 content::BrowserContext*

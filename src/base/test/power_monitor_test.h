@@ -1,10 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_TEST_POWER_MONITOR_TEST_H_
 #define BASE_TEST_POWER_MONITOR_TEST_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/power_monitor/power_monitor_source.h"
 #include "base/power_monitor/power_observer.h"
@@ -53,7 +54,8 @@ class ScopedPowerMonitorTestSource {
 
  private:
   // Owned by PowerMonitor.
-  PowerMonitorTestSource* power_monitor_test_source_ = nullptr;
+  raw_ptr<PowerMonitorTestSource, DanglingUntriaged>
+      power_monitor_test_source_ = nullptr;
 };
 
 class PowerMonitorTestObserver : public PowerSuspendObserver,

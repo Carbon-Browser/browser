@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/hash.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_simple_task_runner.h"
@@ -340,9 +340,7 @@ TEST_F(SubresourceFilterVerifiedRulesetDealerTest,
 // the corrupted file is detected as invalid.
 TEST_F(SubresourceFilterVerifiedRulesetDealerTest,
        OpenAndSetRulesetFileInvalidChecksum) {
-  int expected_checksum =
-      base::PersistentHash(&(rulesets().indexed_1().contents[0]),
-                           rulesets().indexed_1().contents.size());
+  int expected_checksum = base::PersistentHash(rulesets().indexed_1().contents);
   // See also SubresourceFilterBrowserTest.InvalidRuleset_Checksum, corrupting
   // in this manner doesn't invalidate the Flatbuffer Verifier check.
   testing::TestRuleset::CorruptByFilling(rulesets().indexed_1(), 28246, 28247,

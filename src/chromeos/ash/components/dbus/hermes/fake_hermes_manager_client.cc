@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,15 @@
 #include "base/command_line.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_euicc_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_manager_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_profile_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_response_status.h"
+#include "chromeos/ash/components/dbus/shill/shill_profile_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
-#include "chromeos/dbus/shill/shill_profile_client.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "dbus/object_path.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
@@ -45,7 +45,7 @@ void FakeHermesManagerClient::AddEuicc(const dbus::ObjectPath& path,
   properties->physical_slot().ReplaceValue(physical_slot);
   available_euiccs_.push_back(path);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeHermesManagerClient::NotifyAvailableEuiccListChanged,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -95,6 +95,9 @@ void FakeHermesManagerClient::ParseCommandLineSwitch() {
 }
 
 void FakeHermesManagerClient::NotifyAvailableEuiccListChanged() {
+  HermesEuiccClient::TestInterface* euicc_client_test =
+      HermesEuiccClient::Get()->GetTestInterface();
+  euicc_client_test->UpdateShillDeviceSimSlotInfo();
   for (auto& observer : observers()) {
     observer.OnAvailableEuiccListChanged();
   }

@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_EXTENSIONS_API_NOTIFICATIONS_EXTENSION_NOTIFICATION_HANDLER_H_
 #define CHROME_BROWSER_EXTENSIONS_API_NOTIFICATIONS_EXTENSION_NOTIFICATION_HANDLER_H_
 
+#include "base/values.h"
 #include "chrome/browser/notifications/notification_handler.h"
 #include "extensions/browser/event_router.h"
 
@@ -49,7 +50,7 @@ class ExtensionNotificationHandler : public NotificationHandler {
                          events::HistogramValue histogram_value,
                          const std::string& name,
                          EventRouter::UserGestureState user_gesture,
-                         std::unique_ptr<base::ListValue> args);
+                         base::Value::List args);
 };
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ const int64_t kTicksResolutionMs = 1;  // Assume 1ms for non-windows platforms.
 #endif
 
 // Feature that enables network time service querying.
-extern const base::Feature kNetworkTimeServiceQuerying;
+BASE_DECLARE_FEATURE(kNetworkTimeServiceQuerying);
 
 // A class that receives network time updates and can provide the network time
 // for a corresponding local time. This class is not thread safe.
@@ -95,8 +95,6 @@ class NetworkTimeTracker {
   enum class ClockDriftSamples : uint8_t {
     NO_SAMPLES = 0,
     TWO_SAMPLES = 2,
-    FOUR_SAMPLES = 4,
-    SIX_SAMPLES = 6,
   };
 
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -178,6 +176,13 @@ class NetworkTimeTracker {
   enum class CheckTimeType {
     ON_DEMAND,
     BACKGROUND,
+  };
+
+  // Clock drift measurement infrastructure.
+  struct ClockDriftSample {
+    base::TimeDelta latency;
+    base::TimeDelta skew;
+    base::Time timestamp;
   };
 
   // Checks whether a network time query should be issued, and issues one if so.
@@ -279,9 +284,8 @@ class NetworkTimeTracker {
   // Flag keeping track of whether clock drift measurements were triggered.
   bool clock_drift_measurement_triggered_ = false;
 
-  // Containers for recording clock drift metrics.
-  std::vector<base::TimeDelta> clock_drift_latencies_;
-  std::vector<base::TimeDelta> clock_drift_skews_;
+  // Container for recording clock drift metrics.
+  std::vector<ClockDriftSample> clock_drift_samples_;
 
   base::ThreadChecker thread_checker_;
 };

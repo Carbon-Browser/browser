@@ -102,7 +102,7 @@ void ChooserOnlyTemporalInputTypeView::CreateShadowSubtree() {
 }
 
 void ChooserOnlyTemporalInputTypeView::UpdateView() {
-  Node* node = GetElement().UserAgentShadowRoot()->firstChild();
+  Node* node = GetElement().EnsureShadowSubtree()->firstChild();
   auto* html_element = DynamicTo<HTMLElement>(node);
   if (!html_element)
     return;
@@ -111,7 +111,7 @@ void ChooserOnlyTemporalInputTypeView::UpdateView() {
     display_value = GetElement().SuggestedValue();
   else
     display_value = input_type_->VisibleValue();
-  if (display_value.IsEmpty()) {
+  if (display_value.empty()) {
     // Need to put something to keep text baseline.
     display_value = " ";
   }

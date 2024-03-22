@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "ash/quick_pair/common/device.h"
 #include "ash/quick_pair/common/protocol.h"
 #include "ash/quick_pair/ui/actions.h"
 #include "ash/quick_pair/ui/fast_pair/fast_pair_presenter.h"
 #include "ash/quick_pair/ui/fast_pair/fast_pair_presenter_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/message_center/message_center.h"
 
 namespace ash {
@@ -32,7 +33,7 @@ void UIBrokerImpl::RemoveObserver(Observer* observer) {
 }
 
 void UIBrokerImpl::ShowDiscovery(scoped_refptr<Device> device) {
-  switch (device->protocol) {
+  switch (device->protocol()) {
     case Protocol::kFastPairInitial:
     case Protocol::kFastPairSubsequent:
       fast_pair_presenter_->ShowDiscovery(
@@ -47,7 +48,7 @@ void UIBrokerImpl::ShowDiscovery(scoped_refptr<Device> device) {
 }
 
 void UIBrokerImpl::ShowPairing(scoped_refptr<Device> device) {
-  switch (device->protocol) {
+  switch (device->protocol()) {
     case Protocol::kFastPairInitial:
     case Protocol::kFastPairRetroactive:
     case Protocol::kFastPairSubsequent:
@@ -57,7 +58,7 @@ void UIBrokerImpl::ShowPairing(scoped_refptr<Device> device) {
 }
 
 void UIBrokerImpl::ShowPairingFailed(scoped_refptr<Device> device) {
-  switch (device->protocol) {
+  switch (device->protocol()) {
     case Protocol::kFastPairInitial:
     case Protocol::kFastPairSubsequent:
       fast_pair_presenter_->ShowPairingFailed(
@@ -74,7 +75,7 @@ void UIBrokerImpl::ShowPairingFailed(scoped_refptr<Device> device) {
 }
 
 void UIBrokerImpl::ShowAssociateAccount(scoped_refptr<Device> device) {
-  switch (device->protocol) {
+  switch (device->protocol()) {
     case Protocol::kFastPairInitial:
     case Protocol::kFastPairRetroactive:
       fast_pair_presenter_->ShowAssociateAccount(
@@ -88,12 +89,29 @@ void UIBrokerImpl::ShowAssociateAccount(scoped_refptr<Device> device) {
   }
 }
 
-void UIBrokerImpl::ShowCompanionApp(scoped_refptr<Device> device) {
-  switch (device->protocol) {
+void UIBrokerImpl::ShowInstallCompanionApp(scoped_refptr<Device> device) {
+  CHECK(features::IsFastPairPwaCompanionEnabled());
+
+  switch (device->protocol()) {
     case Protocol::kFastPairInitial:
     case Protocol::kFastPairRetroactive:
     case Protocol::kFastPairSubsequent:
-      fast_pair_presenter_->ShowCompanionApp(
+      fast_pair_presenter_->ShowInstallCompanionApp(
+          device,
+          base::BindRepeating(&UIBrokerImpl::NotifyCompanionAppAction,
+                              weak_pointer_factory_.GetWeakPtr(), device));
+      break;
+  }
+}
+
+void UIBrokerImpl::ShowLaunchCompanionApp(scoped_refptr<Device> device) {
+  CHECK(features::IsFastPairPwaCompanionEnabled());
+
+  switch (device->protocol()) {
+    case Protocol::kFastPairInitial:
+    case Protocol::kFastPairRetroactive:
+    case Protocol::kFastPairSubsequent:
+      fast_pair_presenter_->ShowLaunchCompanionApp(
           device,
           base::BindRepeating(&UIBrokerImpl::NotifyCompanionAppAction,
                               weak_pointer_factory_.GetWeakPtr(), device));
@@ -103,6 +121,10 @@ void UIBrokerImpl::ShowCompanionApp(scoped_refptr<Device> device) {
 
 void UIBrokerImpl::RemoveNotifications() {
   fast_pair_presenter_->RemoveNotifications();
+}
+
+void UIBrokerImpl::ExtendNotification() {
+  fast_pair_presenter_->ExtendNotification();
 }
 
 void UIBrokerImpl::NotifyDiscoveryAction(scoped_refptr<Device> device,

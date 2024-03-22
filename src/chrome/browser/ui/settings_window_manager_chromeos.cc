@@ -1,14 +1,15 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
 
 #include "ash/constants/app_types.h"
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/resources/grit/ash_public_unscaled_resources.h"
+#include "ash/webui/system_apps/public/system_web_app_type.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/ash/window_properties.h"
@@ -56,11 +57,18 @@ void SettingsWindowManager::ForceDeprecatedSettingsWindowForTesting() {
 }
 
 // static
-bool SettingsWindowManager::UseDeprecatedSettingsWindow(
-    const Profile* profile) {
-  return !web_app::AreWebAppsEnabled(profile) ||
-         chrome::IsRunningInForcedAppMode() ||
-         g_force_deprecated_settings_window_for_testing;
+bool SettingsWindowManager::UseDeprecatedSettingsWindow(Profile* profile) {
+  if (g_force_deprecated_settings_window_for_testing) {
+    return true;
+  }
+
+  // Use deprecated settings window in Kiosk session only if SWA is disabled.
+  if (chrome::IsRunningInForcedAppMode() &&
+      !base::FeatureList::IsEnabled(ash::features::kKioskEnableSystemWebApps)) {
+    return true;
+  }
+
+  return !web_app::AreWebAppsEnabled(profile);
 }
 
 void SettingsWindowManager::AddObserver(

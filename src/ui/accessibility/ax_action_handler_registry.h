@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 #include "ui/accessibility/ax_tree_id.h"
 
 namespace base {
-template <typename T, typename O>
+template <typename T>
 class NoDestructor;
 }  // namespace base
 
@@ -30,7 +30,10 @@ class AXActionHandlerObserver : public base::CheckedObserver {
   // routing is asynchronous and we do not know which observers intend to
   // respond to which actions -- so we forward all actions to all observers.
   // Only the observer that owns the unique |tree_id| will perform the action.
-  virtual void PerformAction(const ui::AXActionData& action_data) = 0;
+  virtual void PerformAction(const ui::AXActionData& action_data) {}
+
+  // Informs the observer that a tree has been removed.
+  virtual void TreeRemoved(AXTreeID tree_id) {}
 };
 
 // This class generates and saves a runtime id for an accessibility tree.
@@ -76,7 +79,7 @@ class AX_BASE_EXPORT AXActionHandlerRegistry final {
   void PerformAction(const ui::AXActionData& action_data);
 
  private:
-  friend base::NoDestructor<AXActionHandlerRegistry, std::nullptr_t>;
+  friend base::NoDestructor<AXActionHandlerRegistry>;
 
   // Allows registration of tree ids meant to be internally by AXActionHandler*.
   // These typically involve the creation of a new tree id.

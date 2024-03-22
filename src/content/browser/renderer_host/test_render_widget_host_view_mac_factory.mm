@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,12 @@ RenderWidgetHostViewBase* CreateRenderWidgetHostViewMacForTesting(
 BrowserCompositorMac* GetBrowserCompositorMacForTesting(
     const RenderWidgetHostView* rwhv) {
   return static_cast<const RenderWidgetHostViewMac*>(rwhv)->BrowserCompositor();
+}
+
+void SetScreenInfosForTesting(RenderWidgetHostView* rwhv,
+                              const display::ScreenInfos& screen_infos) {
+  return static_cast<RenderWidgetHostViewMac*>(rwhv)->OnScreenInfosChanged(
+      screen_infos);
 }
 
 }  // namespace content

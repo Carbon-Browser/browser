@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 
 namespace safe_browsing {
 
@@ -33,6 +34,8 @@ void AllowlistCheckerClient::StartCheckCsdAllowlist(
   }
 
   AsyncMatch match = database_manager->CheckCsdAllowlistUrl(url, client.get());
+  base::UmaHistogramEnumeration(
+      "SafeBrowsing.ClientSidePhishingDetection.AllowlistMatchResult", match);
   InvokeCallbackOrRelease(match, std::move(client));
 }
 
@@ -99,11 +102,6 @@ AllowlistCheckerClient::~AllowlistCheckerClient() {
 
 // SafeBrowsingDatabaseMananger::Client impl
 void AllowlistCheckerClient::OnCheckAllowlistUrlResult(
-    bool did_match_allowlist) {
-  OnCheckUrlResult(did_match_allowlist);
-}
-
-void AllowlistCheckerClient::OnCheckUrlForHighConfidenceAllowlist(
     bool did_match_allowlist) {
   OnCheckUrlResult(did_match_allowlist);
 }

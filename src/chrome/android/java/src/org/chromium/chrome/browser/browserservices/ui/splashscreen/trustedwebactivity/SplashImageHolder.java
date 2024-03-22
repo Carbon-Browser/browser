@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,11 +39,8 @@ public class SplashImageHolder {
         mBitmaps.put(token, bitmap);
     }
 
-    /**
-     * Takes the bitmap out of the cache.
-     */
-    @Nullable
-    public Bitmap takeImage(CustomTabsSessionToken token) {
+    /** Takes the bitmap out of the cache. */
+    public @Nullable Bitmap takeImage(CustomTabsSessionToken token) {
         return mBitmaps.remove(token);
     }
 }

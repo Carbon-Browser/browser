@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,7 @@ DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityListItemPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityLiveRegionPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityMainPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityMediaPredicate);
+DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityParagraphPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityRadioButtonPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityRadioGroupPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilitySectionPredicate);

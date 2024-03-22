@@ -14,8 +14,8 @@
   }
 
   :host([modules-fre-shown]) #freAndModulesContainer {
-    background-color: var(--ntp-background-override-color);
-    border: 1px solid var(--ntp-border-color);
+    background-color: var(--color-new-tab-page-first-run-background);
+    border: 1px solid var(--color-new-tab-page-border);
     border-radius: 4px;
     padding: 20px;
   }
@@ -28,7 +28,7 @@
   }
 
   #firstRunExperienceTitle {
-    color: var(--cr-primary-text-color);
+    color: var(--color-new-tab-page-primary-foreground);
     display: inline-block;
     font-size: 22px;
     line-height: 22px;
@@ -37,9 +37,9 @@
   }
 
   #newTag {
-    background: var(--ntp-chip-background-color);
+    background: var(--color-new-tab-page-chip-background);
     border-radius: 4px;
-    color: var(--ntp-chip-text-color);
+    color: var(--color-new-tab-page-chip-foreground);
     display: inline-block;
     font-size: 10px;
     height: 12px;
@@ -48,30 +48,30 @@
   }
 
   .first-run-experience-body {
-    color: var(--cr-primary-text-color);
+    color: var(--color-new-tab-page-primary-foreground);
     font-size: 13px;
     line-height: 20px;
   }
 
   #customizeChromeLink {
-    color: var(--ntp-chip-background-color);
+    color: var(--color-new-tab-page-button-foreground);
     cursor: pointer;
     font-weight: 700;
   }
 
   .action-button {
+    --text-color-action: var(--color-new-tab-page-action-button-foreground);
+    background-color: var(--color-new-tab-page-action-button-background);
     margin-inline-end: 8px;
     margin-top: 18px;
   }
 
-  ntp-module-wrapper {
-    width: var(--ntp-module-width);
+  .cancel-button {
+    --text-color: var(--color-new-tab-page-button-foreground);
   }
 
-  :host([modules-redesigned-layout-enabled_]) .module-container {
-    --ntp-module-container-padding-top: 0;
-    margin-bottom: 30px;
-    margin-inline-end: 30px;
+  ntp-module-wrapper {
+    width: var(--ntp-module-width);
   }
 
   .module-container + .module-container {
@@ -81,11 +81,6 @@
   #modules {
     max-width: 100%;
     width: fit-content;
-  }
-
-  :host([modules-redesigned-layout-enabled_]) #modules {
-    display: flex;
-    flex-flow: row wrap;
   }
 
   #removeModuleToastMessage {
@@ -131,11 +126,13 @@
 </div>
 <cr-toast id="removeModuleToast" duration="10000">
   <div id="removeModuleToastMessage">[[removedModuleData_.message]]</div>
-  <cr-button id="undoRemoveModuleButton"
-      aria-label="$i18n{undoDescription}"
-      on-click="onUndoRemoveModuleButtonClick_">
-    $i18n{undo}
-  </cr-button>
+  <template is="dom-if" if="[[removedModuleData_.undo]]">
+    <cr-button id="undoRemoveModuleButton"
+        aria-label="$i18n{undoDescription}"
+        on-click="onUndoRemoveModuleButtonClick_">
+      $i18n{undo}
+    </cr-button>
+  </template>
 </cr-toast>
 <cr-toast id="removeModuleFreToast" duration="10000">
   <div id="removeModuleFreToastMessage">

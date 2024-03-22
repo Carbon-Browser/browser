@@ -137,7 +137,7 @@ TEST_F(DrawingBufferTestMultisample, verifyMultisampleResolve) {
   EXPECT_TRUE(drawing_buffer_->ExplicitResolveOfMultisampleData());
 
   // Resolve the multisample buffer
-  drawing_buffer_->ResolveAndBindForReadAndDraw();
+  EXPECT_TRUE(drawing_buffer_->ResolveAndBindForReadAndDraw());
 
   // After resolve, acknowledge new content
   EXPECT_TRUE(drawing_buffer_->MarkContentsChanged());
@@ -681,13 +681,14 @@ TEST(DrawingBufferDepthStencilTest, packedDepthStencilSupported) {
     bool want_stencil_buffer = cases[i].request_stencil;
     bool want_antialiasing = false;
     bool using_swap_chain = false;
+    bool desynchronized = false;
     scoped_refptr<DrawingBuffer> drawing_buffer = DrawingBuffer::Create(
         std::move(provider), graphics_info, using_swap_chain, nullptr,
         gfx::Size(10, 10), premultiplied_alpha, want_alpha_channel,
-        want_depth_buffer, want_stencil_buffer, want_antialiasing, preserve,
-        DrawingBuffer::kWebGL1, DrawingBuffer::kAllowChromiumImage,
-        cc::PaintFlags::FilterQuality::kLow, PredefinedColorSpace::kSRGB,
-        CanvasPixelFormat::kUint8, gl::GpuPreference::kHighPerformance);
+        want_depth_buffer, want_stencil_buffer, want_antialiasing,
+        desynchronized, preserve, DrawingBuffer::kWebGL1,
+        DrawingBuffer::kAllowChromiumImage, cc::PaintFlags::FilterQuality::kLow,
+        PredefinedColorSpace::kSRGB, gl::GpuPreference::kHighPerformance);
 
     // When we request a depth or a stencil buffer, we will get both.
     EXPECT_EQ(cases[i].request_depth || cases[i].request_stencil,
@@ -751,15 +752,25 @@ TEST_F(DrawingBufferTest, VerifySetIsHiddenProperlyAffectsMailboxes) {
 
 TEST_F(DrawingBufferTest,
        VerifyTooBigDrawingBufferExceedingV8MaxSizeFailsToCreate) {
-  gfx::Size too_big_size(1, (v8::TypedArray::kMaxLength / 4) + 1);
+  constexpr size_t kBytesPerPixel = 4;
+  constexpr size_t kMaxSize = v8::TypedArray::kMaxByteLength / kBytesPerPixel;
+
+  // Statically compute a width and height such that the product is above
+  // kMaxSize.
+  constexpr int kWidth = 1 << 30;
+  constexpr int kHeight = (kMaxSize / kWidth) + 1;
+  static_assert(size_t{kWidth} * (kHeight - 1) <= kMaxSize);
+  static_assert(size_t{kWidth} * kHeight > kMaxSize);
+
+  gfx::Size too_big_size(kWidth, kHeight);
   Platform::GraphicsInfo graphics_info;
   graphics_info.using_gpu_compositing = true;
   scoped_refptr<DrawingBuffer> too_big_drawing_buffer = DrawingBuffer::Create(
       nullptr, graphics_info, false /* using_swap_chain */, nullptr,
-      too_big_size, false, false, false, false, false, DrawingBuffer::kDiscard,
-      DrawingBuffer::kWebGL1, DrawingBuffer::kAllowChromiumImage,
-      cc::PaintFlags::FilterQuality::kLow, PredefinedColorSpace::kSRGB,
-      CanvasPixelFormat::kUint8, gl::GpuPreference::kHighPerformance);
+      too_big_size, false, false, false, false, false,
+      /*desynchronized=*/false, DrawingBuffer::kDiscard, DrawingBuffer::kWebGL1,
+      DrawingBuffer::kAllowChromiumImage, cc::PaintFlags::FilterQuality::kLow,
+      PredefinedColorSpace::kSRGB, gl::GpuPreference::kHighPerformance);
   EXPECT_EQ(too_big_drawing_buffer, nullptr);
   drawing_buffer_->BeginDestruction();
 }

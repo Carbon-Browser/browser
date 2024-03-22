@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
@@ -25,6 +25,19 @@
 namespace em = enterprise_management;
 
 namespace policy {
+
+const char kPolicyDescriptionKey[] = "policyDescriptionKey";
+const char kFlexOrgWarningKey[] = "flexOrgWarning";
+
+const char kAssetIdKey[] = "assetId";
+const char kLocationKey[] = "location";
+const char kDirectoryApiIdKey[] = "directoryApiId";
+const char kGaiaIdKey[] = "gaiaId";
+const char kClientIdKey[] = "clientId";
+const char kUsernameKey[] = "username";
+const char kEnterpriseDomainManagerKey[] = "enterpriseDomainManager";
+const char kDomainKey[] = "domain";
+const char kEnrollmentTokenKey[] = "enrollmentToken";
 
 namespace {
 
@@ -63,12 +76,14 @@ PolicyStatusProvider::PolicyStatusProvider() = default;
 
 PolicyStatusProvider::~PolicyStatusProvider() = default;
 
-void PolicyStatusProvider::SetStatusChangeCallback(
-    const base::RepeatingClosure& callback) {
-  callback_ = callback;
+void PolicyStatusProvider::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
 }
 
-// static
+void PolicyStatusProvider::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
 base::Value::Dict PolicyStatusProvider::GetStatus() {
   // This method is called when the client is not enrolled.
   // Thus return an empty dictionary.
@@ -76,8 +91,8 @@ base::Value::Dict PolicyStatusProvider::GetStatus() {
 }
 
 void PolicyStatusProvider::NotifyStatusChange() {
-  if (callback_)
-    callback_.Run();
+  for (auto& observer : observers_)
+    observer.OnPolicyStatusChanged();
 }
 
 // static
@@ -101,7 +116,7 @@ base::Value::Dict PolicyStatusProvider::GetStatusFromCore(
       refresh_scheduler && refresh_scheduler->invalidations_available();
 
   bool no_error = store->status() == CloudPolicyStore::STATUS_OK && client &&
-                  client->status() == DM_STATUS_SUCCESS;
+                  client->last_dm_status() == DM_STATUS_SUCCESS;
   dict.Set("error", !no_error);
   dict.Set("policiesPushAvailable", is_push_available);
   dict.Set("status", status);
@@ -115,7 +130,7 @@ base::Value::Dict PolicyStatusProvider::GetStatusFromCore(
   }
   base::Time last_refresh_time =
       policy && policy->has_timestamp()
-          ? base::Time::FromJavaTime(policy->timestamp())
+          ? base::Time::FromMillisecondsSinceUnixEpoch(policy->timestamp())
           : base::Time();
   dict.Set("timeSinceLastRefresh",
            GetTimeSinceLastActionString(last_refresh_time));
@@ -132,29 +147,36 @@ base::Value::Dict PolicyStatusProvider::GetStatusFromCore(
 // static
 base::Value::Dict PolicyStatusProvider::GetStatusFromPolicyData(
     const em::PolicyData* policy) {
-  std::string client_id = policy ? policy->device_id() : std::string();
-  std::string username = policy ? policy->username() : std::string();
-
   base::Value::Dict dict;
-  if (policy && policy->has_annotated_asset_id())
-    dict.Set("assetId", policy->annotated_asset_id());
-  if (policy && policy->has_annotated_location())
-    dict.Set("location", policy->annotated_location());
-  if (policy && policy->has_directory_api_id())
-    dict.Set("directoryApiId", policy->directory_api_id());
-  if (policy && policy->has_gaia_id())
-    dict.Set("gaiaId", policy->gaia_id());
+  if (!policy) {
+    dict.Set(kClientIdKey, std::string());
+    dict.Set(kUsernameKey, std::string());
+    return dict;
+  }
 
-  dict.Set("clientId", client_id);
-  dict.Set("username", username);
+  dict.Set(kClientIdKey, policy->device_id());
+  dict.Set(kUsernameKey, policy->username());
+
+  if (policy->has_annotated_asset_id()) {
+    dict.Set(kAssetIdKey, policy->annotated_asset_id());
+  }
+  if (policy->has_annotated_location()) {
+    dict.Set(kLocationKey, policy->annotated_location());
+  }
+  if (policy->has_directory_api_id()) {
+    dict.Set(kDirectoryApiIdKey, policy->directory_api_id());
+  }
+  if (policy->has_gaia_id()) {
+    dict.Set(kGaiaIdKey, policy->gaia_id());
+  }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // Include the "Managed by:" attribute for the user policy legend.
   if (policy->state() == enterprise_management::PolicyData::ACTIVE) {
     if (policy->has_managed_by())
-      dict.Set("enterpriseDomainManager", policy->managed_by());
+      dict.Set(kEnterpriseDomainManagerKey, policy->managed_by());
     else if (policy->has_display_domain())
-      dict.Set("enterpriseDomainManager", policy->display_domain());
+      dict.Set(kEnterpriseDomainManagerKey, policy->display_domain());
   }
 #endif
   return dict;
@@ -168,8 +190,8 @@ std::u16string PolicyStatusProvider::GetPolicyStatusFromStore(
     const CloudPolicyStore* store,
     const CloudPolicyClient* client) {
   if (store->status() == CloudPolicyStore::STATUS_OK) {
-    if (client && client->status() != DM_STATUS_SUCCESS)
-      return FormatDeviceManagementStatus(client->status());
+    if (client && client->last_dm_status() != DM_STATUS_SUCCESS)
+      return FormatDeviceManagementStatus(client->last_dm_status());
     else if (!store->is_managed())
       return FormatAssociationState(store->policy());
   }

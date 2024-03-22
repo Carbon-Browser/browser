@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/image_decoder/image_decoder.h"
+#include "url/gurl.h"
 
 namespace base {
 class SequencedTaskRunner;
@@ -49,12 +50,20 @@ void StartWithData(
     int pixels_per_side,
     LoadedCallback loaded_cb);
 
+// Loads user image from |file_path|. If the image is animated, encode with WebP
+// encoder, otherwise encode with PNG encoder.
+// TODO(b/251083485): Add support for external image from file.
+void StartWithFilePathAnimated(
+    scoped_refptr<base::SequencedTaskRunner> background_task_runner,
+    const base::FilePath& file_path,
+    LoadedCallback loaded_cb);
+
+// Loads the default image fetched from |default_image_url|. If the image is
+// animated, encode with WebP encoder, otherwise encode with PNG encoder.
+void StartWithGURLAnimated(const GURL& default_image_url,
+                           LoadedCallback loaded_cb);
+
 }  // namespace user_image_loader
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-namespace user_image_loader = ::ash::user_image_loader;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_USERS_AVATAR_USER_IMAGE_LOADER_H_

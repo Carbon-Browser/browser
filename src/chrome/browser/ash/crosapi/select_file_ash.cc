@@ -1,20 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/select_file_ash.h"
 
+#include <algorithm>
 #include <utility>
 #include <vector>
 
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "ash/wm/desks/desks_util.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/ash/crosapi/window_util.h"
 #include "chrome/browser/ui/views/select_file_dialog_extension.h"
+#include "chromeos/crosapi/mojom/select_file.mojom-shared.h"
 #include "chromeos/crosapi/mojom/select_file.mojom.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "ui/shell_dialogs/select_file_policy.h"
@@ -73,6 +74,9 @@ class SelectFileDialogHolder : public ui::SelectFileDialog::Listener {
     owner.is_lacros = true;
     owner.window = owner_window;
     owner.lacros_window_id = options->owning_shell_window_id;
+    if (options->caller.has_value()) {
+      owner.dialog_caller.emplace(options->caller.value());
+    }
 
     int file_type_index = 0;
     if (options->file_types) {
@@ -87,7 +91,7 @@ class SelectFileDialogHolder : public ui::SelectFileDialog::Listener {
       // Index is 1-based (hence range 1 to size()), but 0 is allowed because it
       // means "no selection". See ui::SelectFileDialog::SelectFile().
       file_type_index =
-          base::clamp(options->file_types->default_file_type_index, 0,
+          std::clamp(options->file_types->default_file_type_index, 0,
                       static_cast<int>(file_types_->extensions.size()));
       file_types_->include_all_files = options->file_types->include_all_files;
       file_types_->allowed_paths =
@@ -105,7 +109,9 @@ class SelectFileDialogHolder : public ui::SelectFileDialog::Listener {
 
   SelectFileDialogHolder(const SelectFileDialogHolder&) = delete;
   SelectFileDialogHolder& operator=(const SelectFileDialogHolder&) = delete;
-  ~SelectFileDialogHolder() override = default;
+  ~SelectFileDialogHolder() override {
+    select_file_dialog_->ListenerDestroyed();
+  }
 
  private:
   // ui::SelectFileDialog::Listener:

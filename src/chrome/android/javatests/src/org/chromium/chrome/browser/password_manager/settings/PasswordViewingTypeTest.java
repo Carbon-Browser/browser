@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,15 +22,16 @@ import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.settings.MainSettings;
 import org.chromium.chrome.browser.settings.SettingsActivityTestRule;
-import org.chromium.chrome.browser.sync.SyncService;
+import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.chrome.test.ChromeBrowserTestRule;
 import org.chromium.components.browser_ui.settings.ChromeBasePreference;
+import org.chromium.components.sync.SyncService;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 /**
- * Tests for verifying whether users are presented with the correct option of viewing
- * passwords according to the user group they belong to (syncing with sync passphrase,
- * syncing without sync passsphrase, non-syncing).
+ * Tests for verifying whether users are presented with the correct option of viewing passwords
+ * according to the user group they belong to (syncing with sync passphrase, syncing without sync
+ * passsphrase, non-syncing).
  */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class PasswordViewingTypeTest {
@@ -45,12 +46,10 @@ public class PasswordViewingTypeTest {
     public final RuleChain mRuleChain =
             RuleChain.outerRule(mChromeBrowserTestRule).around(mSettingsActivityTestRule);
 
-    @Rule
-    public final MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
     private ChromeBasePreference mPasswordsPref;
-    @Mock
-    private SyncService mSyncService;
+    @Mock private SyncService mSyncService;
 
     @Before
     public void setUp() {
@@ -59,7 +58,8 @@ public class PasswordViewingTypeTest {
         MainSettings mainSettings = mSettingsActivityTestRule.getFragment();
         mPasswordsPref =
                 (ChromeBasePreference) mainSettings.findPreference(MainSettings.PREF_PASSWORDS);
-        TestThreadUtils.runOnUiThreadBlocking(() -> SyncService.overrideForTests(mSyncService));
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> SyncServiceFactory.setInstanceForTesting(mSyncService));
     }
 
     /**
@@ -70,7 +70,7 @@ public class PasswordViewingTypeTest {
     @SmallTest
     @Feature({"Sync"})
     public void testUserRedirectSyncSettings() {
-        when(mSyncService.isSyncRequested()).thenReturn(true);
+        when(mSyncService.isSyncFeatureEnabled()).thenReturn(true);
         when(mSyncService.isEngineInitialized()).thenReturn(true);
         when(mSyncService.isUsingExplicitPassphrase()).thenReturn(false);
 
@@ -79,13 +79,12 @@ public class PasswordViewingTypeTest {
     }
 
     /**
-     * Verifies that syncing users with a custom passphrase are allowed to
-     * natively view passwords.
+     * Verifies that syncing users with a custom passphrase are allowed to natively view passwords.
      */
     @Test
     @SmallTest
     public void testSyncingNativePasswordView() {
-        when(mSyncService.isSyncRequested()).thenReturn(true);
+        when(mSyncService.isSyncFeatureEnabled()).thenReturn(true);
         when(mSyncService.isEngineInitialized()).thenReturn(true);
         when(mSyncService.isUsingExplicitPassphrase()).thenReturn(true);
 
@@ -94,13 +93,11 @@ public class PasswordViewingTypeTest {
         Assert.assertNotNull(mSettingsActivityTestRule.getActivity().getIntent());
     }
 
-    /**
-     * Verifies that non-syncing users are allowed to natively view passwords.
-     */
+    /** Verifies that non-syncing users are allowed to natively view passwords. */
     @Test
     @SmallTest
     public void testNonSyncingNativePasswordView() {
-        when(mSyncService.isSyncRequested()).thenReturn(false);
+        when(mSyncService.isSyncFeatureEnabled()).thenReturn(false);
         when(mSyncService.isEngineInitialized()).thenReturn(false);
         when(mSyncService.isUsingExplicitPassphrase()).thenReturn(false);
 

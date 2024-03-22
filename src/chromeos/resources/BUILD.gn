@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -23,15 +23,10 @@ grit("resources") {
   ]
 
   deps = [
-    "//chromeos/ash/services/auth_factor_config/public/mojom:mojom_js",
-    "//chromeos/language/public/mojom:mojom_js",
-    "//chromeos/services/bluetooth_config/public/mojom:mojom_js",
-
     # Generated ml service js bindings are required by external clients, the
     # clients are not found within Chromium. The clients pull the generated
     # js bindings as part of their build process.
     "//chromeos/services/machine_learning/public/mojom:mojom_js",
-    "//chromeos/services/network_config/public/mojom:mojom_js",
     "//chromeos/services/network_health/public/mojom:mojom_js",
   ]
 }

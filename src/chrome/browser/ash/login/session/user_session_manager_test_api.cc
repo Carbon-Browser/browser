@@ -1,10 +1,10 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 
-#include "ash/components/login/auth/stub_authenticator_builder.h"
+#include "chromeos/ash/components/login/auth/stub_authenticator_builder.h"
 
 namespace ash {
 namespace test {
@@ -20,7 +20,7 @@ void UserSessionManagerTestApi::InjectStubUserContext(
 }
 
 void UserSessionManagerTestApi::InjectAuthenticatorBuilder(
-    std::unique_ptr<StubAuthenticatorBuilder> builder) {
+    std::unique_ptr<AuthenticatorBuilder> builder) {
   session_manager_->InjectAuthenticatorBuilder(std::move(builder));
 }
 
@@ -32,6 +32,14 @@ void UserSessionManagerTestApi::SetShouldLaunchBrowserInTests(
 void UserSessionManagerTestApi::SetShouldObtainTokenHandleInTests(
     bool should_obtain_handle) {
   session_manager_->SetShouldObtainHandleInTests(should_obtain_handle);
+}
+
+void UserSessionManagerTestApi::InitializeDeviceId(
+    bool is_ephemeral_user,
+    user_manager::KnownUser& known_user) {
+  session_manager_->InitializeDeviceId(
+      is_ephemeral_user, *session_manager_->mutable_user_context_for_testing(),
+      known_user);
 }
 
 void UserSessionManagerTestApi::SetAttemptRestartClosureInTests(

@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -42,14 +42,16 @@ source_set("app_shell_lib") {
     "//components/feedback",
     "//components/feedback/content:factory",
     "//components/guest_view/browser",
+    "//components/guest_view/common:mojom",
     "//components/guest_view/renderer",
     "//components/keep_alive_registry",
     "//components/keyed_service/content:content",
     "//components/nacl/common:buildflags",
     "//components/network_session_configurator/common",
+    "//components/origin_trials:browser",
+    "//components/origin_trials:common",
     "//components/pref_registry",
     "//components/prefs",
-    "//components/services/app_service/public/mojom",
     "//components/sessions",
     "//components/storage_monitor",
     "//components/update_client",
@@ -61,9 +63,6 @@ source_set("app_shell_lib") {
     "//extensions:extensions_resources",
     "//extensions:shell_and_test_pak",
     "//extensions/browser",
-    "//extensions/browser:core_api_provider",
-    "//extensions/browser/api",
-    "//extensions/browser/api/messaging",
     "//extensions/browser/kiosk",
     "//extensions/browser/updater",
     "//extensions/common",
@@ -230,15 +229,16 @@ source_set("app_shell_lib") {
       "browser/shell_screen.h",
     ]
     deps += [
-      "//ash/components/audio",
-      "//ash/components/disks",
       "//ash/constants",
+      "//chromeos/ash/components/audio",
+      "//chromeos/ash/components/dbus",
       "//chromeos/ash/components/dbus/audio",
       "//chromeos/ash/components/dbus/cros_disks",
       "//chromeos/ash/components/dbus/hermes",
+      "//chromeos/ash/components/dbus/shill",
+      "//chromeos/ash/components/disks",
+      "//chromeos/ash/components/login/login_state",
       "//chromeos/ash/components/network",
-      "//chromeos/dbus",
-      "//chromeos/login/login_state",
       "//ui/chromeos",
       "//ui/display/manager",
     ]
@@ -261,8 +261,9 @@ source_set("app_shell_lib") {
       "//ppapi/shared_impl:shared_impl",
     ]
 
-    # TODO(https://crbug.com/1299021): Implement building these NaCl targets
-    # as ARM32 when Chrome is built for ARM64 (for Linux/Chrome OS).
+    # TODO(https://crbug.com/1299021): These dependencies might be
+    # redundant given that we were able to disable them, apparently without
+    # negative consequences, for the ARM32-NaCl-on-ARM64 case.
     if (target_cpu != "arm64") {
       deps += [ "//components/nacl/loader" ]
       if (is_linux || is_chromeos) {
@@ -367,9 +368,9 @@ test("app_shell_unittests") {
       "browser/shell_screen_unittest.cc",
     ]
     deps += [
-      "//ash/components/audio",
+      "//chromeos/ash/components/audio",
+      "//chromeos/ash/components/dbus:test_support",
       "//chromeos/ash/components/dbus/audio",
-      "//chromeos/dbus:test_support",
     ]
   }
 
@@ -424,7 +425,10 @@ source_set("browser_tests") {
   ]
 
   if (is_chromeos_lacros) {
-    deps += [ "//chromeos/lacros" ]
+    deps += [
+      "//chromeos/lacros",
+      "//ui/gfx/linux:gbm",
+    ]
   }
 
   if (use_aura) {

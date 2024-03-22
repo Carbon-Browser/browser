@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
@@ -18,6 +18,7 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
+#include "chrome/browser/privacy_sandbox/tracking_protection_settings_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/themes/theme_service.h"
@@ -33,8 +34,8 @@
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/browser_resources.h"
-#include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/content_settings/core/common/cookie_controls_enforcement.h"
@@ -42,6 +43,7 @@
 #include "components/policy/core/common/policy_service.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
+#include "components/privacy_sandbox/tracking_protection_settings.h"
 #include "components/reading_list/features/reading_list_switches.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/browser_thread.h"
@@ -192,9 +194,8 @@ base::RefCountedMemory* NTPResourceCache::GetNewTabHTML(
 
     case NON_PRIMARY_OTR:
       if (!new_tab_non_primary_otr_html_) {
-        std::string empty_html;
         new_tab_non_primary_otr_html_ =
-            base::RefCountedString::TakeString(&empty_html);
+            base::MakeRefCounted<base::RefCountedString>(std::string());
       }
       return new_tab_non_primary_otr_html_.get();
 
@@ -270,9 +271,12 @@ void NTPResourceCache::CreateNewTabIncognitoHTML(
       CookieControlsServiceFactory::GetForProfile(incognito_profile);
 
   replacements["incognitoTabDescription"] =
-      l10n_util::GetStringUTF8(reading_list::switches::IsReadingListEnabled()
-                                   ? IDS_NEW_TAB_OTR_SUBTITLE_WITH_READING_LIST
-                                   : IDS_NEW_TAB_OTR_SUBTITLE);
+      l10n_util::GetStringUTF8(IDS_NEW_TAB_OTR_SUBTITLE_WITH_READING_LIST);
+
+  privacy_sandbox::TrackingProtectionSettings* tracking_protection_settings =
+      TrackingProtectionSettingsFactory::GetForProfile(incognito_profile);
+  bool is_tracking_protection_3pcd_enabled =
+      tracking_protection_settings->IsTrackingProtection3pcdEnabled();
 
   bool use_revamped_ui =
       base::FeatureList::IsEnabled(features::kIncognitoNtpRevamp);
@@ -309,15 +313,29 @@ void NTPResourceCache::CreateNewTabIncognitoHTML(
   }
 
   replacements["learnMoreLink"] = kLearnMoreIncognitoUrl;
-  replacements["title"] = l10n_util::GetStringUTF8(
-      base::FeatureList::IsEnabled(
-          features::kUpdateHistoryEntryPointsInIncognito)
-          ? IDS_NEW_INCOGNITO_TAB_TITLE
-          : IDS_NEW_TAB_TITLE);
+  replacements["learnMoreA11yLabel"] = l10n_util::GetStringUTF8(
+      IDS_INCOGNITO_TAB_LEARN_MORE_ACCESSIBILITY_LABEL);
+  replacements["title"] = l10n_util::GetStringUTF8(IDS_NEW_INCOGNITO_TAB_TITLE);
+
+  if (is_tracking_protection_3pcd_enabled) {
+    replacements["hideBlockCookiesToggle"] = "hidden";
+    replacements["hideTooltipIcon"] = "hidden";
+
+    // Overwrite the cookies control title and description if 3pcd enabled.
+    replacements["cookieControlsTitle"] =
+        l10n_util::GetStringUTF8(IDS_NEW_TAB_OTR_THIRD_PARTY_BLOCKED_COOKIE);
+    replacements["cookieControlsDescription"] = l10n_util::GetStringFUTF8(
+        IDS_NEW_TAB_OTR_THIRD_PARTY_BLOCKED_COOKIE_SUBLABEL,
+        chrome::kUserBypassHelpCenterURL);
+
+  } else {
+    replacements["hideBlockCookiesToggle"] = "";
+    replacements["hideTooltipIcon"] =
+        cookie_controls_service->ShouldEnforceCookieControls() ? "" : "hidden";
+  }
+
   replacements["cookieControlsToggleChecked"] =
       cookie_controls_service->GetToggleCheckedValue() ? "checked" : "";
-  replacements["hideTooltipIcon"] =
-      cookie_controls_service->ShouldEnforceCookieControls() ? "" : "hidden";
   replacements["cookieControlsToolTipIcon"] =
       CookieControlsHandler::GetEnforcementIcon(
           cookie_controls_service->GetCookieControlsEnforcement());
@@ -341,11 +359,8 @@ void NTPResourceCache::CreateNewTabIncognitoHTML(
           ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytes(
               incognito_tab_html_resource_id));
   CHECK(*incognito_tab_html);
-
-  std::string full_html =
-      ReplaceTemplateExpressions(*incognito_tab_html, replacements);
-
-  new_tab_incognito_html_ = base::RefCountedString::TakeString(&full_html);
+  new_tab_incognito_html_ = base::MakeRefCounted<base::RefCountedString>(
+      ReplaceTemplateExpressions(*incognito_tab_html, replacements));
 }
 
 void NTPResourceCache::CreateNewTabGuestHTML() {
@@ -376,9 +391,6 @@ void NTPResourceCache::CreateNewTabGuestHTML() {
       enterprise_info = l10n_util::GetStringFUTF16(
           IDS_ASH_ENTERPRISE_DEVICE_MANAGED_BY, ui::GetChromeOSDeviceName(),
           base::UTF8ToUTF16(enterprise_domain_manager));
-    } else if (connector->IsActiveDirectoryManaged()) {
-      enterprise_info = l10n_util::GetStringFUTF16(
-          IDS_ASH_ENTERPRISE_DEVICE_MANAGED, ui::GetChromeOSDeviceName());
     } else {
       NOTREACHED() << "Unknown management type";
     }
@@ -398,6 +410,10 @@ void NTPResourceCache::CreateNewTabGuestHTML() {
   localized_strings.Set("learnMore",
                         l10n_util::GetStringUTF16(guest_tab_link_ids));
   localized_strings.Set("learnMoreLink", guest_tab_link);
+  localized_strings.Set(
+      "learnMoreA11yLabel",
+      l10n_util::GetStringUTF16(
+          IDS_NEW_TAB_GUEST_SESSION_LEARN_MORE_ACCESSIBILITY_TEXT));
 
   const std::string& app_locale = g_browser_process->GetApplicationLocale();
   webui::SetLoadTimeDataDefaults(app_locale, &localized_strings);
@@ -409,10 +425,8 @@ void NTPResourceCache::CreateNewTabGuestHTML() {
   CHECK(*guest_tab_html);
   ui::TemplateReplacements replacements;
   ui::TemplateReplacementsFromDictionaryValue(localized_strings, &replacements);
-  std::string full_html =
-      ReplaceTemplateExpressions(*guest_tab_html, replacements);
-
-  new_tab_guest_html_ = base::RefCountedString::TakeString(&full_html);
+  new_tab_guest_html_ = base::MakeRefCounted<base::RefCountedString>(
+      ReplaceTemplateExpressions(*guest_tab_html, replacements));
 }
 
 void NTPResourceCache::CreateNewTabIncognitoCSS(
@@ -444,12 +458,8 @@ void NTPResourceCache::CreateNewTabIncognitoCSS(
           ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytes(
               IDR_INCOGNITO_TAB_THEME_CSS));
   CHECK(*new_tab_theme_css);
-
-  // Create the string from our template and the replacements.
-  std::string full_css =
-      ReplaceTemplateExpressions(*new_tab_theme_css, substitutions);
-
-  new_tab_incognito_css_ = base::RefCountedString::TakeString(&full_css);
+  new_tab_incognito_css_ = base::MakeRefCounted<base::RefCountedString>(
+      ReplaceTemplateExpressions(*new_tab_theme_css, substitutions));
 }
 
 void NTPResourceCache::CreateNewTabCSS(
@@ -516,11 +526,8 @@ void NTPResourceCache::CreateNewTabCSS(
           ui::ResourceBundle::GetSharedInstance().LoadDataResourceBytes(
               IDR_NEW_TAB_4_THEME_CSS));
   CHECK(*new_tab_theme_css);
-
-  // Create the string from our template and the replacements.
-  std::string css_string =
-      ReplaceTemplateExpressions(*new_tab_theme_css, substitutions);
-  new_tab_css_ = base::RefCountedString::TakeString(&css_string);
+  new_tab_css_ = base::MakeRefCounted<base::RefCountedString>(
+      ReplaceTemplateExpressions(*new_tab_theme_css, substitutions));
 }
 
 void NTPResourceCache::OnPolicyChanged(const base::Value* previous,

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <iosfwd>
 #include <string>
+
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -56,6 +58,20 @@ struct StaticOobeScreenId {
   OobeScreenId AsId() const;
 };
 
+struct ScreenSummary {
+  ScreenSummary();
+  ~ScreenSummary();
+  ScreenSummary(const ScreenSummary& summary);
+
+  StaticOobeScreenId screen_id;
+  std::string icon_id;
+  std::string title_id;
+  absl::optional<std::string> subtitle_resource;
+  bool is_synced;
+  bool is_revisitable;
+  absl::optional<bool> is_completed;
+};
+
 /* Keep it as `inline constexpr` (do not add `static`) so it exists as `inline
  * variable` and have the same address in every translation unit (more at
  * https://en.cppreference.com/w/cpp/language/inline).
@@ -63,12 +79,5 @@ struct StaticOobeScreenId {
 inline constexpr StaticOobeScreenId OOBE_SCREEN_UNKNOWN{"unknown"};
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OobeScreenId;
-using ::ash::StaticOobeScreenId;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_OOBE_SCREEN_H_

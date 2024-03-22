@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,6 @@
 #include "components/value_store/testing_value_store.h"
 #include "extensions/browser/api/storage/settings_storage_quota_enforcer.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-using base::DictionaryValue;
 
 namespace extensions {
 
@@ -33,7 +31,7 @@ class ExtensionSettingsQuotaTest : public testing::Test {
         byte_value_256_(base::Value(base::Value::Type::LIST)),
         delegate_(new value_store::TestingValueStore()) {
     for (int i = 1; i < 89; ++i) {
-      byte_value_256_.Append(i);
+      byte_value_256_.GetList().Append(i);
     }
     ValidateByteValues();
   }
@@ -48,13 +46,13 @@ class ExtensionSettingsQuotaTest : public testing::Test {
     ASSERT_EQ(256u, validate_sizes.size());
   }
 
-  void TearDown() override { ASSERT_TRUE(storage_.get() != NULL); }
+  void TearDown() override { ASSERT_TRUE(storage_.get() != nullptr); }
 
  protected:
   // Creates |storage_|.  Must only be called once.
   void CreateStorage(
       size_t quota_bytes, size_t quota_bytes_per_item, size_t max_items) {
-    ASSERT_TRUE(storage_.get() == NULL);
+    ASSERT_TRUE(storage_.get() == nullptr);
     SettingsStorageQuotaEnforcer::Limits limits =
         { quota_bytes, quota_bytes_per_item, max_items };
     storage_ = std::make_unique<SettingsStorageQuotaEnforcer>(

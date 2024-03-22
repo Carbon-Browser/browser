@@ -103,7 +103,8 @@ class CORE_EXPORT InspectorNetworkAgent final
                       ResourceRequest&,
                       ResourceLoaderOptions&,
                       ResourceType);
-  void WillSendRequest(DocumentLoader*,
+  void WillSendRequest(ExecutionContext*,
+                       DocumentLoader*,
                        const KURL& fetch_context_url,
                        const ResourceRequest&,
                        const ResourceResponse& redirect_response,
@@ -135,8 +136,7 @@ class CORE_EXPORT InspectorNetworkAgent final
                         DocumentLoader*,
                         base::TimeTicks monotonic_finish_time,
                         int64_t encoded_data_length,
-                        int64_t decoded_body_length,
-                        bool should_report_corb_blocking);
+                        int64_t decoded_body_length);
   void DidReceiveCorsRedirectResponse(uint64_t identifier,
                                       DocumentLoader*,
                                       const ResourceResponse&,
@@ -263,7 +263,8 @@ class CORE_EXPORT InspectorNetworkAgent final
   bool FetchResourceContent(Document*,
                             const KURL&,
                             String* content,
-                            bool* base64_encoded);
+                            bool* base64_encoded,
+                            bool* loadingFailed);
   String NavigationInitiatorInfo(LocalFrame*);
 
  private:

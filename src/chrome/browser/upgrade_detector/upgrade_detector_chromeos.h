@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,6 +73,11 @@ class UpgradeDetectorChromeos : public UpgradeDetector,
   // elapsed) that lets the rest of the UI know we should start notifying the
   // user that a new version is available.
   void NotifyOnUpgrade();
+
+  // The function that sends out a notification (after a certain time has
+  // elapsed) that lets the rest of the UI know we should start notifying the
+  // user that an update is available but deferred.
+  void NotifyOnDeferredUpgrade();
 
   absl::optional<InstalledVersionUpdater> installed_version_updater_;
 

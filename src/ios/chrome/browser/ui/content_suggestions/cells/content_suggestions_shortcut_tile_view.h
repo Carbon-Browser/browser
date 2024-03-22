@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@
 - (instancetype)initWithConfiguration:
     (ContentSuggestionsMostVisitedActionItem*)config;
 
-// Update the number shown in badge.
-- (void)updateCount:(NSInteger)count;
+// Updates the configuration for this view to the new `config`.
+- (void)updateConfiguration:(ContentSuggestionsMostVisitedActionItem*)config;
 
 // View for action icon.
 @property(nonatomic, strong, readonly) UIImageView* iconView;

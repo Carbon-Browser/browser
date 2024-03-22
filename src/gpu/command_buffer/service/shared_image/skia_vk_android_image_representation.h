@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class VulkanImplementation;
 
 // A generic Skia vulkan representation which can be used by any backing on
 // Android.
-class SkiaVkAndroidImageRepresentation : public SkiaImageRepresentation {
+class SkiaVkAndroidImageRepresentation : public SkiaGaneshImageRepresentation {
  public:
   SkiaVkAndroidImageRepresentation(
       SharedImageManager* manager,
@@ -30,21 +30,22 @@ class SkiaVkAndroidImageRepresentation : public SkiaImageRepresentation {
 
   ~SkiaVkAndroidImageRepresentation() override;
 
-  sk_sp<SkSurface> BeginWriteAccess(
+  std::vector<sk_sp<SkSurface>> BeginWriteAccess(
       int final_msaa_count,
       const SkSurfaceProps& surface_props,
+      const gfx::Rect& update_rect,
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
-  sk_sp<SkPromiseImageTexture> BeginWriteAccess(
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginWriteAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
-  void EndWriteAccess(sk_sp<SkSurface> surface) override;
-  sk_sp<SkPromiseImageTexture> BeginReadAccess(
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
+  void EndWriteAccess() override;
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginReadAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
   void EndReadAccess() override;
 
  protected:
@@ -58,7 +59,7 @@ class SkiaVkAndroidImageRepresentation : public SkiaImageRepresentation {
 
   // Initial read fence to wait on before reading |vulkan_image_|.
   base::ScopedFD init_read_fence_;
-  sk_sp<SkPromiseImageTexture> promise_texture_;
+  sk_sp<GrPromiseImageTexture> promise_texture_;
 
  private:
   bool BeginAccess(bool readonly,
@@ -66,7 +67,7 @@ class SkiaVkAndroidImageRepresentation : public SkiaImageRepresentation {
                    std::vector<GrBackendSemaphore>* end_semaphores,
                    base::ScopedFD init_read_fence);
   void EndAccess(bool readonly);
-  std::unique_ptr<GrBackendSurfaceMutableState> GetEndAccessState();
+  std::unique_ptr<skgpu::MutableTextureState> GetEndAccessState();
 
   VkDevice vk_device();
   VulkanImplementation* vk_implementation();

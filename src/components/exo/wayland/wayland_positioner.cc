@@ -1,40 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/exo/wayland/wayland_positioner.h"
 
-#include <xdg-shell-unstable-v6-server-protocol.h>
+#include <ostream>
 
 namespace exo::wayland {
 
 namespace {
 
 std::pair<WaylandPositioner::Direction, WaylandPositioner::Direction>
-DecomposeUnstableAnchor(uint32_t anchor) {
-  WaylandPositioner::Direction x, y;
-
-  if (anchor & ZXDG_POSITIONER_V6_ANCHOR_LEFT) {
-    x = WaylandPositioner::Direction::kNegative;
-  } else if (anchor & ZXDG_POSITIONER_V6_ANCHOR_RIGHT) {
-    x = WaylandPositioner::Direction::kPositive;
-  } else {
-    x = WaylandPositioner::Direction::kNeutral;
-  }
-
-  if (anchor & ZXDG_POSITIONER_V6_ANCHOR_TOP) {
-    y = WaylandPositioner::Direction::kNegative;
-  } else if (anchor & ZXDG_POSITIONER_V6_ANCHOR_BOTTOM) {
-    y = WaylandPositioner::Direction::kPositive;
-  } else {
-    y = WaylandPositioner::Direction::kNeutral;
-  }
-
-  return std::make_pair(x, y);
-}
-
-std::pair<WaylandPositioner::Direction, WaylandPositioner::Direction>
-DecomposeStableAnchor(uint32_t anchor) {
+DecomposeAnchor(uint32_t anchor) {
   switch (anchor) {
     default:
     case XDG_POSITIONER_ANCHOR_NONE:
@@ -68,30 +45,7 @@ DecomposeStableAnchor(uint32_t anchor) {
 }
 
 std::pair<WaylandPositioner::Direction, WaylandPositioner::Direction>
-DecomposeUnstableGravity(uint32_t gravity) {
-  WaylandPositioner::Direction x, y;
-
-  if (gravity & ZXDG_POSITIONER_V6_GRAVITY_LEFT) {
-    x = WaylandPositioner::Direction::kNegative;
-  } else if (gravity & ZXDG_POSITIONER_V6_GRAVITY_RIGHT) {
-    x = WaylandPositioner::Direction::kPositive;
-  } else {
-    x = WaylandPositioner::Direction::kNeutral;
-  }
-
-  if (gravity & ZXDG_POSITIONER_V6_GRAVITY_TOP) {
-    y = WaylandPositioner::Direction::kNegative;
-  } else if (gravity & ZXDG_POSITIONER_V6_GRAVITY_BOTTOM) {
-    y = WaylandPositioner::Direction::kPositive;
-  } else {
-    y = WaylandPositioner::Direction::kNeutral;
-  }
-
-  return std::make_pair(x, y);
-}
-
-std::pair<WaylandPositioner::Direction, WaylandPositioner::Direction>
-DecomposeStableGravity(uint32_t gravity) {
+DecomposeGravity(uint32_t gravity) {
   switch (gravity) {
     default:
     case XDG_POSITIONER_GRAVITY_NONE:
@@ -133,6 +87,8 @@ struct ConstraintAdjustment {
   bool flip;
   bool slide;
   bool resize;
+
+  bool allows_all() const { return flip && slide && resize; }
 };
 
 // Decodes an adjustment bit field into the structure.
@@ -263,6 +219,7 @@ std::pair<Range1D, ConstraintAdjustment> DetermineBestConstraintAdjustment(
                                      /*visibility=*/0},
                                     /*position=*/{0, 0},
                                     /*adjustment=*/ConstraintAdjustment{}};
+  bool found_solution = false;
   for (uint32_t adjustment_bit_field = 0; adjustment_bit_field < 8;
        ++adjustment_bit_field) {
     // When several options tie for visibility, we preference based on the
@@ -302,10 +259,28 @@ std::pair<Range1D, ConstraintAdjustment> DetermineBestConstraintAdjustment(
     }
 
     if (is_better) {
+      found_solution = true;
       best = IntermediateAdjustmentResult{
           {preferred, constrained, visibility}, position, adjustment};
     }
   }
+
+  // If no solution can be found, allow all transformations. Unfortunately the
+  // default setting is not valid, because it has a 0x0 dimension.
+  if (!found_solution && !valid_adjustments.allows_all()) {
+    ConstraintAdjustment allow_all = {
+        .flip = true,
+        .slide = true,
+        .resize = true,
+    };
+    return DetermineBestConstraintAdjustment(work_area, anchor_range, size,
+                                             offset, anchor, gravity, allow_all,
+                                             avoid_occlusion);
+  }
+
+  DCHECK(found_solution)
+      << "Computation is returning without a valid solution. This will result "
+         "in undefined placement.";
   return {best.position, best.adjustment};
 }
 
@@ -314,11 +289,7 @@ std::pair<Range1D, ConstraintAdjustment> DetermineBestConstraintAdjustment(
 void WaylandPositioner::SetAnchor(uint32_t anchor) {
   std::pair<WaylandPositioner::Direction, WaylandPositioner::Direction>
       decompose;
-  if (version_ == UNSTABLE) {
-    decompose = DecomposeUnstableAnchor(anchor);
-  } else {
-    decompose = DecomposeStableAnchor(anchor);
-  }
+  decompose = DecomposeAnchor(anchor);
   anchor_x_ = decompose.first;
   anchor_y_ = decompose.second;
 }
@@ -326,11 +297,7 @@ void WaylandPositioner::SetAnchor(uint32_t anchor) {
 void WaylandPositioner::SetGravity(uint32_t gravity) {
   std::pair<WaylandPositioner::Direction, WaylandPositioner::Direction>
       decompose;
-  if (version_ == UNSTABLE) {
-    decompose = DecomposeUnstableGravity(gravity);
-  } else {
-    decompose = DecomposeStableGravity(gravity);
-  }
+  decompose = DecomposeGravity(gravity);
   gravity_x_ = decompose.first;
   gravity_y_ = decompose.second;
 }

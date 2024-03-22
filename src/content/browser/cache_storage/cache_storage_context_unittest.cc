@@ -1,14 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_expected_support.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
+#include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "components/services/storage/public/cpp/buckets/constants.h"
 #include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/storage_usage_info.mojom.h"
@@ -40,10 +43,11 @@ class CacheStorageContextTest : public testing::Test {
     ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         /*is_incognito=*/false, data_dir_.GetPath(),
-        base::ThreadTaskRunnerHandle::Get().get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
         /*special storage policy=*/nullptr);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     cache_storage_context_ =
         std::make_unique<CacheStorageContextImpl>(quota_manager_proxy());
 
@@ -60,7 +64,8 @@ class CacheStorageContextTest : public testing::Test {
       const blink::StorageKey& storage_key) {
     network::CrossOriginEmbedderPolicy cross_origin_embedder_policy;
     cache_storage_context_->AddReceiver(
-        cross_origin_embedder_policy, mojo::NullRemote(), storage_key,
+        cross_origin_embedder_policy, mojo::NullRemote(),
+        storage::BucketLocator::ForDefaultBucket(storage_key),
         storage::mojom::CacheStorageOwner::kCacheAPI,
         std::move(cache_storage_receiver));
   }
@@ -112,25 +117,26 @@ TEST_F(CacheStorageContextTest, DefaultBucketCreatedOnAddReceiver) {
   loop.Run();
 
   // Check default bucket exists for https://example.com.
-  storage::QuotaErrorOr<storage::BucketInfo> result =
+  ASSERT_OK_AND_ASSIGN(
+      storage::BucketInfo result,
       quota_manager_proxy_sync.GetBucket(
           blink::StorageKey::CreateFromStringForTesting(kExampleStorageKey),
-          storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary);
-  EXPECT_TRUE(result.ok());
-  EXPECT_EQ(result->name, storage::kDefaultBucketName);
-  EXPECT_EQ(result->storage_key,
+          storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary));
+  EXPECT_EQ(result.name, storage::kDefaultBucketName);
+  EXPECT_EQ(result.storage_key,
             blink::StorageKey::CreateFromStringForTesting(kExampleStorageKey));
-  EXPECT_GT(result->id.value(), 0);
+  EXPECT_GT(result.id.value(), 0);
 
   // Check default bucket exists for https://google.com.
-  result = quota_manager_proxy_sync.GetBucket(
-      blink::StorageKey::CreateFromStringForTesting(kGoogleStorageKey),
-      storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary);
-  EXPECT_TRUE(result.ok());
-  EXPECT_EQ(result->name, storage::kDefaultBucketName);
-  EXPECT_EQ(result->storage_key,
+  ASSERT_OK_AND_ASSIGN(
+      result,
+      quota_manager_proxy_sync.GetBucket(
+          blink::StorageKey::CreateFromStringForTesting(kGoogleStorageKey),
+          storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary));
+  EXPECT_EQ(result.name, storage::kDefaultBucketName);
+  EXPECT_EQ(result.storage_key,
             blink::StorageKey::CreateFromStringForTesting(kGoogleStorageKey));
-  EXPECT_GT(result->id.value(), 0);
+  EXPECT_GT(result.id.value(), 0);
 }
 
 TEST_F(CacheStorageContextTest, GetDefaultBucketError) {

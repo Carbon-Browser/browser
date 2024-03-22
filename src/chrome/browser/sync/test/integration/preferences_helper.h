@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@
 #include "chrome/browser/sync/test/integration/status_change_checker.h"
 #include "components/prefs/json_pref_store.h"
 #include "components/sync/protocol/preference_specifics.pb.h"
-#include "components/sync/test/fake_server/fake_server.h"
+#include "components/sync/test/fake_server.h"
 
 class PrefChangeRegistrar;
 class PrefService;
@@ -62,7 +62,7 @@ void ClearPref(int index, const char* pref_name);
 // profile with index |index| to |new_value|.
 void ChangeListPref(int index,
                     const char* pref_name,
-                    const base::ListValue& new_value);
+                    const base::Value::List& new_value);
 
 // Used to verify that the boolean preference with name |pref_name| has the
 // same value across all profiles.
@@ -103,7 +103,7 @@ class BooleanPrefValueChecker : public StatusChangeChecker {
   const char* path_;
   const bool expected_value_;
 
-  const base::raw_ptr<PrefService> pref_service_;
+  const raw_ptr<PrefService> pref_service_;
   PrefChangeRegistrar pref_change_registrar_;
 };
 

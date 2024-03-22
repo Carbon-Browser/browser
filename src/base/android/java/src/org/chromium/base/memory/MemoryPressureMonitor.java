@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,8 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.MemoryPressureLevel;
 import org.chromium.base.MemoryPressureListener;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.TimeUtils;
-import org.chromium.base.TimeUtils.ElapsedRealtimeNanosTimer;
-import org.chromium.base.annotations.MainDex;
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.supplier.Supplier;
 
 /**
@@ -73,7 +70,6 @@ import org.chromium.base.supplier.Supplier;
  * NOTE: This class should only be used on UiThread as defined by ThreadUtils (which is
  *       Android main thread for Chrome, but can be some other thread for WebView).
  */
-@MainDex
 public class MemoryPressureMonitor {
     private static final int DEFAULT_THROTTLING_INTERVAL_MS = 60 * 1000;
 
@@ -91,15 +87,10 @@ public class MemoryPressureMonitor {
 
     private boolean mPollingEnabled;
 
-    // Changed by tests.
-    private Supplier<Integer> mCurrentPressureSupplier =
-            MemoryPressureMonitor::getCurrentMemoryPressure;
+    private Supplier<Integer> mCurrentPressureSupplierForTesting;
+    private MemoryPressureCallback mReportingCallbackForTesting;
 
-    // Changed by tests.
-    private MemoryPressureCallback mReportingCallback =
-            MemoryPressureListener::notifyMemoryPressure;
-
-    private final Runnable mThrottlingIntervalTask = this ::onThrottlingIntervalFinished;
+    private final Runnable mThrottlingIntervalTask = this::onThrottlingIntervalFinished;
 
     // The only instance.
     public static final MemoryPressureMonitor INSTANCE =
@@ -110,29 +101,29 @@ public class MemoryPressureMonitor {
         mThrottlingIntervalMs = throttlingIntervalMs;
     }
 
-    /**
-     * Starts listening to ComponentCallbacks2.
-     */
+    /** Starts listening to ComponentCallbacks2. */
     public void registerComponentCallbacks() {
         ThreadUtils.assertOnUiThread();
 
-        ContextUtils.getApplicationContext().registerComponentCallbacks(new ComponentCallbacks2() {
-            @Override
-            public void onTrimMemory(int level) {
-                Integer pressure = memoryPressureFromTrimLevel(level);
-                if (pressure != null) {
-                    notifyPressure(pressure);
-                }
-            }
+        ContextUtils.getApplicationContext()
+                .registerComponentCallbacks(
+                        new ComponentCallbacks2() {
+                            @Override
+                            public void onTrimMemory(int level) {
+                                Integer pressure = memoryPressureFromTrimLevel(level);
+                                if (pressure != null) {
+                                    notifyPressure(pressure);
+                                }
+                            }
 
-            @Override
-            public void onLowMemory() {
-                notifyPressure(MemoryPressureLevel.CRITICAL);
-            }
+                            @Override
+                            public void onLowMemory() {
+                                notifyPressure(MemoryPressureLevel.CRITICAL);
+                            }
 
-            @Override
-            public void onConfigurationChanged(Configuration configuration) {}
-        });
+                            @Override
+                            public void onConfigurationChanged(Configuration configuration) {}
+                        });
     }
 
     /**
@@ -150,9 +141,7 @@ public class MemoryPressureMonitor {
         }
     }
 
-    /**
-     * Disables memory pressure polling.
-     */
+    /** Disables memory pressure polling. */
     public void disablePolling() {
         ThreadUtils.assertOnUiThread();
         if (!mPollingEnabled) return;
@@ -193,7 +182,11 @@ public class MemoryPressureMonitor {
         startThrottlingInterval();
 
         mLastReportedPressure = pressure;
-        mReportingCallback.onPressure(pressure);
+        if (mReportingCallbackForTesting != null) {
+            mReportingCallbackForTesting.onPressure(pressure);
+        } else {
+            MemoryPressureListener.notifyMemoryPressure(pressure);
+        }
     }
 
     private void onThrottlingIntervalFinished() {
@@ -215,7 +208,10 @@ public class MemoryPressureMonitor {
     }
 
     private void reportCurrentPressure() {
-        Integer pressure = mCurrentPressureSupplier.get();
+        Integer pressure =
+                mCurrentPressureSupplierForTesting != null
+                        ? mCurrentPressureSupplierForTesting.get()
+                        : MemoryPressureMonitor.getCurrentMemoryPressure();
         if (pressure != null) {
             reportPressure(pressure);
         }
@@ -226,14 +222,14 @@ public class MemoryPressureMonitor {
         mIsInsideThrottlingInterval = true;
     }
 
-    @VisibleForTesting
     public void setCurrentPressureSupplierForTesting(Supplier<Integer> supplier) {
-        mCurrentPressureSupplier = supplier;
+        mCurrentPressureSupplierForTesting = supplier;
+        ResettersForTesting.register(() -> mCurrentPressureSupplierForTesting = null);
     }
 
-    @VisibleForTesting
     public void setReportingCallbackForTesting(MemoryPressureCallback callback) {
-        mReportingCallback = callback;
+        mReportingCallbackForTesting = callback;
+        ResettersForTesting.register(() -> mReportingCallbackForTesting = null);
     }
 
     /**
@@ -241,32 +237,18 @@ public class MemoryPressureMonitor {
      * Returns null if the pressure couldn't be determined.
      */
     private static @MemoryPressureLevel Integer getCurrentMemoryPressure() {
-        ElapsedRealtimeNanosTimer timer = new ElapsedRealtimeNanosTimer();
+        // We used to have a histogram here to measure the duration of each successful
+        // ActivityManager.getMyMemoryState() call called
+        // Android.MemoryPressureMonitor.GetMyMemoryState.Succeeded.Time. 50th percentile was 0.8ms.
         try {
             ActivityManager.RunningAppProcessInfo processInfo =
                     new ActivityManager.RunningAppProcessInfo();
             ActivityManager.getMyMemoryState(processInfo);
-            // ActivityManager.getMyMemoryState() time histograms, recorded by
-            // getCurrentMemoryPressure(). Using recordCustomCountHistogram because
-            // recordTimesHistogram doesn't support microsecond precision.
-            RecordHistogram.recordCustomCountHistogram(
-                    "Android.MemoryPressureMonitor.GetMyMemoryState.Succeeded.Time",
-                    elapsedDurationSample(timer), 1, 1_000_000, 50);
             return memoryPressureFromTrimLevel(processInfo.lastTrimLevel);
         } catch (Exception e) {
             // Defensively catch all exceptions, just in case.
-            RecordHistogram.recordCustomCountHistogram(
-                    "Android.MemoryPressureMonitor.GetMyMemoryState.Failed.Time",
-                    elapsedDurationSample(timer), 1, 1_000_000, 50);
             return null;
         }
-    }
-
-    private static int elapsedDurationSample(ElapsedRealtimeNanosTimer timer) {
-        // We're using Count1MHistogram, so we need to calculate duration in microseconds
-        long durationUs = timer.getElapsedNanos() / TimeUtils.NANOSECONDS_PER_MICROSECOND;
-        // record() takes int, so we need to clamp.
-        return (int) Math.min(durationUs, Integer.MAX_VALUE);
     }
 
     /**

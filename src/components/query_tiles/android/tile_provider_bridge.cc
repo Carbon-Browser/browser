@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include "base/android/callback_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/query_tiles/android/tile_conversion_bridge.h"
 #include "components/query_tiles/jni_headers/TileProviderBridge_jni.h"
 #include "ui/gfx/android/java_bitmap.h"
@@ -82,7 +82,7 @@ void TileProviderBridge::GetQueryTiles(JNIEnv* env,
         &RunGetTilesCallback, ScopedJavaGlobalRef<jobject>(jcallback)));
   } else {
     tile_service_->GetTile(
-        ConvertJavaStringToUTF8(env, j_tile_id),
+        base::android::ConvertJavaStringToUTF8(env, j_tile_id),
         base::BindOnce(&RunGetTileCallback,
                        ScopedJavaGlobalRef<jobject>(jcallback)));
   }
@@ -90,7 +90,8 @@ void TileProviderBridge::GetQueryTiles(JNIEnv* env,
 
 void TileProviderBridge::OnTileClicked(JNIEnv* env,
                                        const JavaParamRef<jstring>& j_tile_id) {
-  tile_service_->OnTileClicked(ConvertJavaStringToUTF8(env, j_tile_id));
+  tile_service_->OnTileClicked(
+      base::android::ConvertJavaStringToUTF8(env, j_tile_id));
 }
 
 }  // namespace query_tiles

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/values.h"
 #include "google_apis/gaia/gaia_oauth_client.h"
@@ -36,7 +36,7 @@ class CredentialProviderSigninInfoFetcher
   // is finished successfully or with an error.
   // The single argument should always be a dictionary value and will be empty
   // if there was an error during the fetch.
-  using FetchCompletionCallback = base::OnceCallback<void(base::Value)>;
+  using FetchCompletionCallback = base::OnceCallback<void(base::Value::Dict)>;
 
   CredentialProviderSigninInfoFetcher(
       const std::string& refresh_token,
@@ -54,10 +54,8 @@ class CredentialProviderSigninInfoFetcher
       FetchCompletionCallback completion_callback);
 
   // gaia::GaiaOAuthClient::Delegate:
-  void OnGetTokenInfoResponse(
-      std::unique_ptr<base::DictionaryValue> token_info) override;
-  void OnGetUserInfoResponse(
-      std::unique_ptr<base::DictionaryValue> user_info) override;
+  void OnGetTokenInfoResponse(const base::Value::Dict& token_info) override;
+  void OnGetUserInfoResponse(const base::Value::Dict& user_info) override;
   void OnOAuthError() override;
   void OnNetworkError(int response_code) override;
 

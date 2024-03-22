@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,15 +33,15 @@ static void TestBitmapGlyphsBlockListed(AtomicString windows_family_name,
 }
 
 TEST_F(BlockListBitmapGlyphsTest, Simsun) {
-  TestBitmapGlyphsBlockListed("Simsun", false);
+  TestBitmapGlyphsBlockListed(AtomicString("Simsun"), false);
 }
 
 TEST_F(BlockListBitmapGlyphsTest, Arial) {
-  TestBitmapGlyphsBlockListed("Arial", false);
+  TestBitmapGlyphsBlockListed(AtomicString("Arial"), false);
 }
 
 TEST_F(BlockListBitmapGlyphsTest, Calibri) {
-  TestBitmapGlyphsBlockListed("Calibri", true);
+  TestBitmapGlyphsBlockListed(AtomicString("Calibri"), true);
 }
 
 #endif

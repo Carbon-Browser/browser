@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import androidx.annotation.Nullable;
 
 import java.util.Map;
 
-/**
- * Used by various components to provide a set of feedback that can be gathered synchronously.
- */
+/** Used by various components to provide a set of feedback that can be gathered synchronously. */
 public interface FeedbackSource {
     /**
      * Called to get all relevant feedback for this source.

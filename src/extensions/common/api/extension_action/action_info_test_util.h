@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,6 @@
 
 namespace extensions {
 class Extension;
-
-// Retrieves the manifest key for the given action |type|.
-const char* GetManifestKeyForActionType(ActionInfo::Type type);
 
 // Given an |action_type|, returns the corresponding API name to be referenced
 // from JavaScript.

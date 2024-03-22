@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,8 @@ class WebUIBubbleDialogView : public views::WidgetObserver,
   WebUIBubbleDialogView(
       views::View* anchor_view,
       BubbleContentsWrapper* contents_wrapper,
-      const absl::optional<gfx::Rect>& anchor_rect = absl::nullopt);
+      const absl::optional<gfx::Rect>& anchor_rect = absl::nullopt,
+      views::BubbleBorder::Arrow arrow = views::BubbleBorder::TOP_RIGHT);
   WebUIBubbleDialogView(const WebUIBubbleDialogView&) = delete;
   WebUIBubbleDialogView& operator=(const WebUIBubbleDialogView&) = delete;
   ~WebUIBubbleDialogView() override;

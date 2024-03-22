@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,8 @@
 #include "content/public/browser/navigation_handle.h"
 
 namespace android_webview {
+
+using safe_browsing::ThreatSeverity;
 
 // static
 std::unique_ptr<AwSafeBrowsingNavigationThrottle>
@@ -47,9 +49,16 @@ AwSafeBrowsingNavigationThrottle::WillFailRequest() {
   AwSafeBrowsingUIManager* manager =
       AwBrowserProcess::GetInstance()->GetSafeBrowsingUIManager();
   if (manager) {
+    // Goes over |RedirectChain| to get the severest threat information
     security_interstitials::UnsafeResource resource;
     content::NavigationHandle* handle = navigation_handle();
-    if (manager->PopUnsafeResourceForURL(handle->GetURL(), &resource)) {
+    ThreatSeverity severity =
+        manager->GetSeverestThreatForNavigation(handle, resource);
+
+    // Unsafe resource will show a blocking page
+    if (severity != std::numeric_limits<ThreatSeverity>::max() &&
+        resource.threat_type !=
+            safe_browsing::SBThreatType::SB_THREAT_TYPE_SAFE) {
       std::unique_ptr<AwWebResourceRequest> request =
           std::make_unique<AwWebResourceRequest>(
               handle->GetURL().spec(), handle->IsPost() ? "POST" : "GET",

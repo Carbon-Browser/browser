@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,13 @@
 
 #include <memory>
 
+#include "base/command_line.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
+#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sharesheet/sharesheet_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/profiles/profile_helper.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#include "content/public/common/content_switches.h"
 
 namespace sharesheet {
 
@@ -28,42 +25,40 @@ SharesheetService* SharesheetServiceFactory::GetForProfile(Profile* profile) {
 
 // static
 SharesheetServiceFactory* SharesheetServiceFactory::GetInstance() {
-  return base::Singleton<SharesheetServiceFactory>::get();
+  static base::NoDestructor<SharesheetServiceFactory> instance;
+  return instance.get();
 }
 
 SharesheetServiceFactory::SharesheetServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SharesheetService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // Some tests need the service to exist in guest profiles.
+              .WithGuest(ProfileSelection::kOffTheRecordOnly)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {
   DependsOn(apps::AppServiceProxyFactory::GetInstance());
 }
 
 SharesheetServiceFactory::~SharesheetServiceFactory() = default;
 
-KeyedService* SharesheetServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SharesheetServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SharesheetService(Profile::FromBrowserContext(context));
-}
+  Profile* profile = Profile::FromBrowserContext(context);
 
-content::BrowserContext* SharesheetServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  Profile* const profile = Profile::FromBrowserContext(context);
-  if (!profile || profile->IsSystemProfile()) {
+  // When Ash is launched in guest mode, regular profiles are also guest
+  // sessions. Do not create the service in this case.
+  if (profile->IsRegularProfile() && profile->IsGuestSession()) {
     return nullptr;
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   if (ash::ProfileHelper::IsSigninProfile(profile)) {
     return nullptr;
   }
 
-  // We allow sharing in guest mode or incognito mode..
-  if (profile->IsGuestSession()) {
-    return chrome::GetBrowserContextOwnInstanceInIncognito(context);
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return std::make_unique<SharesheetService>(profile);
 }
 
 bool SharesheetServiceFactory::ServiceIsCreatedWithBrowserContext() const {

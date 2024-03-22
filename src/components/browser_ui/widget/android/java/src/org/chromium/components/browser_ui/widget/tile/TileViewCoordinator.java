@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.components.browser_ui.widget.tile;
@@ -14,9 +14,7 @@ import androidx.annotation.LayoutRes;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
-/**
- * Coordinator for the TileView.
- */
+/** Coordinator for the TileView. */
 public class TileViewCoordinator {
     private final TileView mView;
     private final TileViewMediator mMediator;

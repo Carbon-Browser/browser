@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,8 +47,6 @@ std::string TestResultPart::TypeAsString() const {
       return "fatal_failure";
     case kSkip:
       return "skip";
-    default:
-      NOTREACHED();
   }
   return "unknown";
 }
@@ -103,9 +101,19 @@ std::string TestResult::GetTestCaseName() const {
 }
 
 void TestResult::AddLink(const std::string& name, const std::string& url) {
-  DCHECK(links.find(name) == links.end())
-      << name << " is already used as a link name. Ignoring...";
-  links[name] = url;
+  auto [it, inserted] = links.insert({name, url});
+  DCHECK(inserted) << name << " is already used as a link name. Ignoring...";
+}
+
+void TestResult::AddTag(const std::string& name, const std::string& value) {
+  tags[name].push_back(value);
+}
+
+void TestResult::AddProperty(const std::string& name,
+                             const std::string& value) {
+  auto [it, inserted] = properties.insert({name, value});
+  DCHECK(inserted) << name
+                   << " is already used as a property name. Ignoring...";
 }
 
 }  // namespace base

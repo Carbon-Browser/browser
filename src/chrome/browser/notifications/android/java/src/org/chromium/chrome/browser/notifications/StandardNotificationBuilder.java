@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import org.chromium.components.browser_ui.notifications.NotificationMetadata;
 import org.chromium.components.browser_ui.notifications.NotificationWrapper;
 import org.chromium.components.browser_ui.notifications.NotificationWrapperBuilder;
 
-/**
- * Builds a notification using the standard Notification.BigTextStyle layout.
- */
+/** Builds a notification using the standard Notification.BigTextStyle layout. */
 public class StandardNotificationBuilder extends NotificationBuilderBase {
     private final Context mContext;
 

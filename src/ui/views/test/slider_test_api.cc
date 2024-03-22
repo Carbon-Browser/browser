@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 
 #include "ui/views/controls/slider.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 SliderTestApi::SliderTestApi(Slider* slider) : slider_(slider) {}
 
@@ -20,5 +19,4 @@ int SliderTestApi::initial_button_offset() const {
   return slider_->initial_button_offset_;
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

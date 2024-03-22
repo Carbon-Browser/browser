@@ -85,9 +85,10 @@ configure some new behavior. The implementation may be inadvertently relying on
 this message arriving *before* some other tangentially related message sent to
 the same frame shortly after the same navigation event.
 
-Mojo does not (and in fact cannot) make any strict ordering guarantees between
-separate message pipes, as message pipes may be freely moved across process
-boundaries and thus cannot necessarily share a common FIFO at all times.
+While Mojo guarantees strict ordering within each message pipe, Mojo does not
+(and in fact cannot) make any strict ordering guarantees between separate
+message pipes, as message pipes may be freely moved across process boundaries
+and thus cannot necessarily share a common FIFO at all times.
 
 If the two messages described above were moved to separate Mojo interfaces on
 separate message pipes, renderer behavior could break as the first message may
@@ -420,7 +421,7 @@ documentation.
 ### Binding callbacks
 
 Mojo methods that return a value take an instance of `base::OnceCallback`.
-Use `WTF::Bind()` and an appropriate wrapper function depending on the type of
+Use `WTF::BindOnce()` and an appropriate wrapper function depending on the type of
 object and the callback.
 
 For garbage-collected (Oilpan) classes owning the `mojo::Remote`, it is recommended
@@ -433,11 +434,11 @@ the response is received, use `WrapWeakPersistent(this)` for binding the respons
 
 ``` cpp
 // src/third_party/blink/renderer/modules/device_orientation/device_sensor_entry.cc
-sensor_.set_connection_error_handler(WTF::Bind(
+sensor_.set_connection_error_handler(WTF::BindOnce(
     &DeviceSensorEntry::HandleSensorError, WrapWeakPersistent(this)));
 sensor_->ConfigureReadingChangeNotifications(/*enabled=*/false);
 sensor_->AddConfiguration(
-    std::move(config), WTF::Bind(&DeviceSensorEntry::OnSensorAddConfiguration,
+    std::move(config), WTF::BindOnce(&DeviceSensorEntry::OnSensorAddConfiguration,
                                  WrapWeakPersistent(this)));
 ```
 
@@ -448,7 +449,7 @@ use `WrapPersistent(this)` to keep the object alive:
 // src/third_party/blink/renderer/modules/nfc/nfc.cc
 ScriptPromiseResolver* resolver = ScriptPromiseResolver::Create(script_state);
 ... 
-nfc_->CancelAllWatches(WTF::Bind(&NFC::OnRequestCompleted,
+nfc_->CancelAllWatches(WTF::BindOnce(&NFC::OnRequestCompleted,
                                  WrapPersistent(this),
                                  WrapPersistent(resolver)));
 ```

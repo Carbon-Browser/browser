@@ -1,20 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_accessory_view_controller.h"
 
-#include "base/metrics/user_metrics.h"
-#include "components/password_manager/core/common/password_manager_features.h"
+#import "base/ios/ios_util.h"
+#import "base/metrics/user_metrics.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/device_form_factor.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/device_form_factor.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace manual_fill {
 
@@ -45,6 +44,9 @@ constexpr CGFloat ManualFillIconsSpacing = 10;
 
 // iPad override for the icons' spacing.
 constexpr CGFloat ManualFillIconsIPadSpacing = 15;
+
+// Size of the symbols.
+constexpr CGFloat kSymbolSize = 18;
 
 // Color to use for the buttons while enabled.
 UIColor* IconActiveTintColor() {
@@ -104,7 +106,16 @@ static NSTimeInterval MFAnimationDuration = 0.2;
   }
 }
 
-#pragma mark - Setters
+#pragma mark - Accessors
+
+- (BOOL)allButtonsHidden {
+  BOOL manualFillButtonsHidden = self.addressButtonHidden &&
+                                 self.creditCardButtonHidden &&
+                                 self.passwordButtonHidden;
+  return ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET
+             ? manualFillButtonsHidden
+             : self.keyboardButton.hidden && manualFillButtonsHidden;
+}
 
 - (void)setAddressButtonHidden:(BOOL)addressButtonHidden {
   if (addressButtonHidden == _addressButtonHidden) {
@@ -135,11 +146,26 @@ static NSTimeInterval MFAnimationDuration = 0.2;
 // Helper to create a system button with the passed data and `self` as the
 // target. Such button has been configured to have some preset properties
 - (UIButton*)manualFillButtonWithAction:(SEL)selector
-                             ImageNamed:(NSString*)imageName
+                            symbolNamed:(NSString*)symbolName
+                          defaultSymbol:(BOOL)defaultSymbol
                 accessibilityIdentifier:(NSString*)accessibilityIdentifier
                      accessibilityLabel:(NSString*)accessibilityLabel {
   UIButton* button = [UIButton buttonWithType:UIButtonTypeSystem];
-  UIImage* image = [UIImage imageNamed:imageName];
+  UIImageConfiguration* imageConfiguration = [UIImageSymbolConfiguration
+      configurationWithPointSize:kSymbolSize
+                          weight:UIImageSymbolWeightBold
+                           scale:UIImageSymbolScaleMedium];
+  UIImage* image =
+      defaultSymbol
+          ? DefaultSymbolWithConfiguration(symbolName, imageConfiguration)
+          : CustomSymbolWithConfiguration(symbolName, imageConfiguration);
+  if (IsUIButtonConfigurationEnabled()) {
+    UIButtonConfiguration* buttonConfiguration =
+        [UIButtonConfiguration plainButtonConfiguration];
+    buttonConfiguration.contentInsets = NSDirectionalEdgeInsetsMake(0, 0, 0, 0);
+    button.configuration = buttonConfiguration;
+  }
+
   [button setImage:image forState:UIControlStateNormal];
   button.tintColor = IconActiveTintColor();
   button.translatesAutoresizingMaskIntoConstraints = NO;
@@ -161,7 +187,8 @@ static NSTimeInterval MFAnimationDuration = 0.2;
   if (ui::GetDeviceFormFactor() != ui::DEVICE_FORM_FACTOR_TABLET) {
     self.keyboardButton = [self
         manualFillButtonWithAction:@selector(keyboardButtonPressed)
-                        ImageNamed:@"mf_keyboard"
+                       symbolNamed:kKeyboardSymbol
+                     defaultSymbol:YES
            accessibilityIdentifier:manual_fill::
                                        AccessoryKeyboardAccessibilityIdentifier
                 accessibilityLabel:l10n_util::GetNSString(
@@ -171,27 +198,33 @@ static NSTimeInterval MFAnimationDuration = 0.2;
     self.keyboardButton.alpha = 0.0;
   }
 
-  NSString* imageName =
-      base::FeatureList::IsEnabled(
-          password_manager::features::kIOSEnablePasswordManagerBrandingUpdate)
-          ? @"password_key"
-          : @"ic_vpn_key";
-
   self.passwordButton = [self
       manualFillButtonWithAction:@selector(passwordButtonPressed:)
-                      ImageNamed:imageName
+                     symbolNamed:kPasswordSymbol
+                   defaultSymbol:NO
          accessibilityIdentifier:manual_fill::
                                      AccessoryPasswordAccessibilityIdentifier
               accessibilityLabel:l10n_util::GetNSString(
                                      IDS_IOS_MANUAL_FALLBACK_SHOW_PASSWORDS)];
 
   self.passwordButton.hidden = self.isPasswordButtonHidden;
-  self.passwordButton.contentEdgeInsets = UIEdgeInsetsMake(0, 2, 0, 2);
+
+  if (IsUIButtonConfigurationEnabled()) {
+    UIButtonConfiguration* buttonConfiguration =
+        self.passwordButton.configuration;
+    buttonConfiguration.contentInsets = NSDirectionalEdgeInsetsMake(0, 2, 0, 2);
+    self.passwordButton.configuration = buttonConfiguration;
+  } else {
+    UIEdgeInsets contentEdgeInsets = UIEdgeInsetsMake(0, 2, 0, 2);
+    SetContentEdgeInsets(self.passwordButton, contentEdgeInsets);
+  }
+
   [icons addObject:self.passwordButton];
 
   self.cardsButton =
       [self manualFillButtonWithAction:@selector(cardButtonPressed:)
-                            ImageNamed:@"ic_credit_card"
+                           symbolNamed:kCreditCardSymbol
+                         defaultSymbol:YES
                accessibilityIdentifier:
                    manual_fill::AccessoryCreditCardAccessibilityIdentifier
                     accessibilityLabel:
@@ -202,7 +235,8 @@ static NSTimeInterval MFAnimationDuration = 0.2;
 
   self.accountButton = [self
       manualFillButtonWithAction:@selector(accountButtonPressed:)
-                      ImageNamed:@"ic_place"
+                     symbolNamed:kLocationSymbol
+                   defaultSymbol:NO
          accessibilityIdentifier:manual_fill::
                                      AccessoryAddressAccessibilityIdentifier
               accessibilityLabel:l10n_util::GetNSString(

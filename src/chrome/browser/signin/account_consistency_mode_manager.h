@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@ class PrefRegistrySyncable;
 }
 
 class Profile;
+class ProfileAttributesEntry;
 
 // Manages the account consistency mode for each profile.
 class AccountConsistencyModeManager : public KeyedService {
@@ -45,7 +46,11 @@ class AccountConsistencyModeManager : public KeyedService {
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
   // This is a pre-requisite of IsDiceEnabledForProfile(), independent of
   // particular profile type or profile prefs.
-  static bool IsDiceSignInAllowed();
+  // `entry` should be nullptr for profiles that are not registered in the
+  // `ProfileAttributesStorage` (e.g. the system profile). Profiles with a
+  // managed using a profile-level management token are not allowed to sign in
+  // with a Google account.
+  static bool IsDiceSignInAllowed(ProfileAttributesEntry* entry = nullptr);
 #endif
 
   // If true, then account management is done through Gaia webpages.

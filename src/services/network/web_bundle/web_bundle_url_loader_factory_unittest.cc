@@ -1,15 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/web_bundle/web_bundle_url_loader_factory.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "components/web_package/web_bundle_builder.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
+#include "mojo/public/cpp/system/functions.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
@@ -207,11 +208,11 @@ class WebBundleURLLoaderFactoryTest : public ::testing::Test {
   StartRequestResult StartRequest(const ResourceRequest& request) {
     StartRequestResult result;
     result.client = std::make_unique<network::TestURLLoaderClient>();
-    factory_->StartSubresourceRequest(
+    factory_->StartLoader(WebBundleURLLoaderFactory::CreateURLLoader(
         result.loader.BindNewPipeAndPassReceiver(), request,
         result.client->CreateRemote(),
         mojo::Remote<mojom::TrustedHeaderClient>(), base::Time::Now(),
-        base::TimeTicks::Now());
+        base::TimeTicks::Now(), base::DoNothing()));
     return result;
   }
 
@@ -263,6 +264,8 @@ TEST_F(WebBundleURLLoaderFactoryTest, Basic) {
   histogram_tester.ExpectUniqueSample(
       "SubresourceWebBundles.LoadResult",
       WebBundleURLLoaderFactory::SubresourceWebBundleLoadResult::kSuccess, 1);
+  histogram_tester.ExpectUniqueSample("SubresourceWebBundles.ResourceCount", 1,
+                                      1);
 }
 
 TEST_F(WebBundleURLLoaderFactoryTest, MetadataParseError) {
@@ -432,6 +435,7 @@ TEST_F(WebBundleURLLoaderFactoryTest, StartRequestBeforeReadingBundle) {
 }
 
 TEST_F(WebBundleURLLoaderFactoryTest, MultipleRequests) {
+  base::HistogramTester histogram_tester;
   auto request1 = StartRequest(GURL(kResourceUrl), kResourceRequestId);
   auto request2 = StartRequest(GURL(kResourceUrl2), kResourceRequestId2);
 
@@ -451,6 +455,8 @@ TEST_F(WebBundleURLLoaderFactoryTest, MultipleRequests) {
   request2.client->RunUntilComplete();
 
   EXPECT_EQ(net::OK, request2.client->completion_status().error_code);
+  histogram_tester.ExpectUniqueSample("SubresourceWebBundles.ResourceCount", 3,
+                                      1);
 }
 
 TEST_F(WebBundleURLLoaderFactoryTest, CancelRequest) {

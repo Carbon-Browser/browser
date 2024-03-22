@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/no_destructor.h"
 #include "base/trace_event/trace_event.h"
@@ -239,8 +240,7 @@ ForwardingAudioStreamFactory::~ForwardingAudioStreamFactory() {
   // causes issues in unit tests where the UI thread and the IO thread are the
   // same.
   GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce([](std::unique_ptr<Core>) {}, std::move(core_)));
+      FROM_HERE, base::DoNothingWithBoundArgs(std::move(core_)));
 }
 
 void ForwardingAudioStreamFactory::LoopbackStreamStarted() {

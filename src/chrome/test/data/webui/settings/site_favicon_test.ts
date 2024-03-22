@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ suite('SiteFavicon', function() {
   let siteFavicon: SiteFaviconElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     siteFavicon = document.createElement('site-favicon');
     document.body.appendChild(siteFavicon);
   });
@@ -22,7 +22,7 @@ suite('SiteFavicon', function() {
   }
 
   function formExpected(url: string): string {
-    return '-webkit-image-set(' +
+    return 'image-set(' +
         'url("chrome://favicon2/?size=16&scaleFactor=1x&pageUrl=' +
         encodeURIComponent(url) + '&allowGoogleServerFallback=0") 1x, ' +
         'url("chrome://favicon2/?size=16&scaleFactor=2x&pageUrl=' +

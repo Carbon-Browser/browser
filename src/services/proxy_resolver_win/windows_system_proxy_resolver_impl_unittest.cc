@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,14 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/net_errors.h"
 #include "net/base/proxy_server.h"
@@ -203,7 +203,7 @@ class MockWinHttpAPIWrapper final : public WinHttpAPIWrapper {
     if (!get_proxy_for_url_success_)
       return false;
 
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&MockWinHttpAPIWrapper::RunCallback,
                        base::Unretained(this), resolver_handle, context));
@@ -407,6 +407,7 @@ class WindowsSystemProxyResolverImplTest : public testing::Test {
   // WindowsSystemProxyResolverImpl.
   void DoFailedGetProxyForUrlTest(net::WinHttpStatus winhttp_status,
                                   int windows_error) {
+    ::SetLastError(windows_error);
     PerformGetProxyForUrlAndValidateResult(net::ProxyList(), winhttp_status,
                                            windows_error);
   }
@@ -427,7 +428,7 @@ class WindowsSystemProxyResolverImplTest : public testing::Test {
     std::wstring proxy;
     if (!proxy_config.proxy_rules().single_proxies.IsEmpty()) {
       proxy = base::UTF8ToWide(
-          proxy_config.proxy_rules().single_proxies.ToPacString());
+          proxy_config.proxy_rules().single_proxies.ToDebugString());
     }
 
     std::wstring proxy_bypass;

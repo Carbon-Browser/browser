@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/sync/base/model_type.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -29,14 +29,24 @@ class SyncInvalidationsService : public KeyedService {
   using InterestedDataTypesAppliedCallback =
       base::RepeatingCallback<void(const ModelTypeSet&)>;
 
-  // Start or stop listening to invalidations.
-  virtual void SetActive(bool active) = 0;
+  // Starts handling incoming invalidations and obtains an FCM token if it
+  // doesn't have one.
+  virtual void StartListening() = 0;
+
+  // Stop listening to invalidations and doesn't remove FCM registration token.
+  virtual void StopListening() = 0;
+
+  // Stop listening to invalidations and removes FCM registration token.
+  virtual void StopListeningPermanently() = 0;
 
   // Add a new |listener| which will be notified on each new incoming
   // invalidation. |listener| must not be nullptr. Does nothing if the
   // |listener| has already been added before. When a new |listener| is added,
   // previously received messages will be immediately replayed.
   virtual void AddListener(InvalidationsListener* listener) = 0;
+
+  // Returns whether `listener` was added.
+  virtual bool HasListener(InvalidationsListener* listener) = 0;
 
   // Removes |listener|, does nothing if it wasn't added before. |listener| must
   // not be nullptr.

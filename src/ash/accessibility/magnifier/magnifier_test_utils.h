@@ -1,10 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_ACCESSIBILITY_MAGNIFIER_MAGNIFIER_TEST_UTILS_H_
 #define ASH_ACCESSIBILITY_MAGNIFIER_MAGNIFIER_TEST_UTILS_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace aura {
@@ -51,7 +53,7 @@ class MagnifierFocusTestHelper {
   gfx::Rect GetSecondButtonBoundsInRoot() const;
 
  private:
-  TestFocusView* focus_test_view_ = nullptr;
+  raw_ptr<TestFocusView, ExperimentalAsh> focus_test_view_ = nullptr;
 };
 
 // Defines a test helper for magnifiers unit tests that wants to verify their
@@ -86,7 +88,9 @@ class MagnifierTextInputTestHelper {
  private:
   ui::InputMethod* GetInputMethod();
 
-  TestTextInputView* text_input_view_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION TestTextInputView* text_input_view_ = nullptr;
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,6 @@ namespace android_startup {
 void LoadFullBrowser() {
   if (g_browser_process)
     return;
-  UMA_HISTOGRAM_BOOLEAN("Android.NativeStartupBridge.LoadFullBrowser",
-                        true /*requested*/);
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NativeStartupBridge_loadFullBrowser(env);
 }

@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/test_support/graph_test_harness.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 
 namespace performance_manager {
@@ -16,9 +16,27 @@ TestNodeWrapper<FrameNodeImpl> TestGraphImpl::CreateFrameNodeAutoId(
     ProcessNodeImpl* process_node,
     PageNodeImpl* page_node,
     FrameNodeImpl* parent_frame_node) {
-  return TestNodeWrapper<FrameNodeImpl>::Create(this, process_node, page_node,
-                                                parent_frame_node,
-                                                ++next_frame_routing_id_);
+  return TestNodeWrapper<FrameNodeImpl>::Create(
+      this, process_node, page_node, parent_frame_node,
+      /*outer_document_for_fenced_frame=*/nullptr, ++next_frame_routing_id_);
+}
+
+TestNodeWrapper<ProcessNodeImpl> TestGraphImpl::CreateProcessNodeAutoId(
+    content::ProcessType process_type) {
+  switch (process_type) {
+    case content::PROCESS_TYPE_BROWSER:
+      return TestNodeWrapper<ProcessNodeImpl>::Create(this,
+                                                      BrowserProcessNodeTag{});
+    case content::PROCESS_TYPE_RENDERER:
+      return TestNodeWrapper<ProcessNodeImpl>::Create(
+          this,
+          RenderProcessHostProxy::CreateForTesting(NextRenderProcessHostId()));
+    default:
+      return TestNodeWrapper<ProcessNodeImpl>::Create(
+          this, process_type,
+          BrowserChildProcessHostProxy::CreateForTesting(
+              NextBrowserChildProcessHostId()));
+  }
 }
 
 GraphTestHarness::GraphTestHarness()

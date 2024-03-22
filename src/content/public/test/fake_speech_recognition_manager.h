@@ -1,11 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_TEST_FAKE_SPEECH_RECOGNITION_MANAGER_H_
 #define CONTENT_PUBLIC_TEST_FAKE_SPEECH_RECOGNITION_MANAGER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/speech_recognition_event_listener.h"
 #include "content/public/browser/speech_recognition_manager.h"
@@ -98,7 +98,8 @@ class FakeSpeechRecognitionManager : public SpeechRecognitionManager,
   void OnFakeErrorSent();
 
   int session_id_;
-  raw_ptr<SpeechRecognitionEventListener> listener_;
+  raw_ptr<SpeechRecognitionEventListener, AcrossTasksDanglingUntriaged>
+      listener_;
   SpeechRecognitionSessionConfig session_config_;
   SpeechRecognitionSessionContext session_ctx_;
   std::string fake_result_;

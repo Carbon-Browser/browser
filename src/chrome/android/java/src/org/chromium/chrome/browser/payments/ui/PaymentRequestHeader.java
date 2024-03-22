@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,9 @@ import android.widget.TextView;
 import androidx.annotation.ColorInt;
 
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.ChromeSemanticColorUtils;
 import org.chromium.chrome.browser.omnibox.ChromeAutocompleteSchemeClassifier;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.ui.theme.ChromeSemanticColorUtils;
 import org.chromium.components.browser_ui.widget.TintedDrawable;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.omnibox.OmniboxUrlEmphasizer;
@@ -68,9 +68,13 @@ public class PaymentRequestHeader extends FrameLayout {
                 !ColorUtils.shouldUseLightForegroundOnBackground(mBackgroundColor);
         ChromeAutocompleteSchemeClassifier chromeAutocompleteSchemeClassifier =
                 new ChromeAutocompleteSchemeClassifier(profile);
-        OmniboxUrlEmphasizer.emphasizeUrl(url, mContext, chromeAutocompleteSchemeClassifier,
-                securityLevel, false /* isInternalPage */, useDarkColors,
-                true /* emphasizeHttpsScheme */);
+        OmniboxUrlEmphasizer.emphasizeUrl(
+                url,
+                mContext,
+                chromeAutocompleteSchemeClassifier,
+                securityLevel,
+                useDarkColors,
+                /* emphasizeHttpsScheme= */ true);
         chromeAutocompleteSchemeClassifier.destroy();
         hostName.setText(url);
 
@@ -79,7 +83,9 @@ public class PaymentRequestHeader extends FrameLayout {
             hostName.setCompoundDrawablesRelativeWithIntrinsicBounds(
                     TintedDrawable.constructTintedDrawable(
                             mContext, R.drawable.omnibox_https_valid, R.color.default_green),
-                    null, null, null);
+                    null,
+                    null,
+                    null);
 
             // Remove left padding to align left compound drawable with the title. Note that the
             // left compound drawable has transparent boundary.

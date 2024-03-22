@@ -1,17 +1,19 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module blink.mojom;
 
-import "services/device/public/mojom/screen_orientation_lock_types.mojom";
 import "mojo/public/mojom/base/string16.mojom";
-import "third_party/blink/public/mojom/manifest/display_mode.mojom";
+import "services/device/public/mojom/screen_orientation_lock_types.mojom";
 import "third_party/blink/public/mojom/manifest/capture_links.mojom";
+import "third_party/blink/public/mojom/manifest/display_mode.mojom";
+import "third_party/blink/public/mojom/manifest/manifest_launch_handler.mojom";
 import "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom";
+import "third_party/blink/public/mojom/safe_url_pattern.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
-import "url/mojom/url.mojom";
 import "url/mojom/origin.mojom";
+import "url/mojom/url.mojom";
 
 
 // The Manifest structure is an internal representation of the Manifest file
@@ -27,9 +29,17 @@ struct Manifest {
 
   mojo_base.mojom.String16? description;
 
-  // Defaults to start_url with origin stripped when id field is not present.
-  mojo_base.mojom.String16? id;
+  // This is empty if the start_url is empty.
+  url.mojom.Url id;
 
+  // Set to true if the json specified a specific value for the id.
+  bool has_custom_id;
+
+  // TODO(crbug.com/1466730): Investigate if this should return the
+  // document_url_ if ManifestParser fails to parse the start_url as per
+  // the spec. This can sometimes be an empty KURL, which can be
+  // intentional so that the non existence of a start URL can be handled
+  // further down the callstack.
   url.mojom.Url start_url;
 
   DisplayMode display;
@@ -40,7 +50,7 @@ struct Manifest {
 
   array<ManifestImageResource> icons;
 
-  array<ManifestImageResource> screenshots;
+  array<ManifestScreenshot> screenshots;
 
   array<ManifestShortcutItem> shortcuts;
 
@@ -60,6 +70,11 @@ struct Manifest {
   // experiment. See:
   // https://github.com/WICG/pwa-url-handler/blob/main/explainer.md
   array<ManifestUrlHandler> url_handlers;
+
+  // TODO(crbug.com/1250011): This field is non-standard and part of an
+  // experiment. See:
+  // https://github.com/WICG/manifest-incubations/blob/gh-pages/scope_extensions-explainer.md
+  array<ManifestScopeExtension> scope_extensions;
 
   // TODO(crbug.com/1006642): This field is non-standard and part of an
   // experiment. See:
@@ -94,20 +109,15 @@ struct Manifest {
 
   // TODO(crbug.com/1163398): This field is non-standard and part of a Chrome
   // experiment. See:
-  // https://github.com/WICG/sw-launch/blob/main/declarative_link_capturing.md#proposal
+  // https://github.com/WICG/web-app-launch/blob/main/declarative_link_capturing.md#proposal
   // As such, this field should not be exposed by default.
   CaptureLinks capture_links;
-
-  // TODO(crbug.com/1212263): This field is non-standard and part of a Chrome
-  // experiment. See:
-  // https://github.com/robbiemc/pwa-isolated-storage/blob/main/explainer.md
-  bool isolated_storage;
 
   array<ParsedPermissionsPolicyDeclaration> permissions_policy;
 
   // TODO(crbug.com/1231886): This field is non-standard and part of a Chrome
   // experiment. See:
-  // https://github.com/WICG/sw-launch/blob/main/launch_handler.md
+  // https://github.com/WICG/web-app-launch/blob/main/launch_handler.md
   ManifestLaunchHandler? launch_handler;
 
   // TODO(crbug.com/1259777): This field is non-standard and part of a Chrome
@@ -121,10 +131,21 @@ struct Manifest {
   // https://github.com/WICG/manifest-incubations/blob/gh-pages/user-preferences-explainer.md
   ManifestUserPreferences? user_preferences;
 
+  // TODO(crbug.com/1318305): This field is non-standard and part of a Chrome
+  // experiment. See: https://github.com/w3c/manifest/issues/1045
+  bool has_dark_theme_color;
+  uint32 dark_theme_color;
+  bool has_dark_background_color;
+  uint32 dark_background_color;
+
   // TODO(crbug.com/897314): This field is non-standard and part of a Chrome
   // experiment. See:
   // https://github.com/WICG/manifest-incubations/blob/gh-pages/tabbed-mode-explainer.md
   ManifestTabStrip? tab_strip;
+
+  // TODO(crbug.com/1444407): This field is non-standard and part of an
+  // experiment. See: https://github.com/WICG/isolated-web-apps
+  mojo_base.mojom.String16? version;
 };
 
 // Structure representing a Shortcut Item per the Manifest specification, see:
@@ -171,6 +192,25 @@ struct ManifestImageResource {
   array<Purpose> purpose;
 };
 
+// Structure representing a screenshot as per the Manifest specification, see:
+// https://www.w3.org/TR/manifest-app-info/#screenshots-member. This includes
+// a ImageResource with some additional members.
+struct ManifestScreenshot {
+  enum FormFactor {
+    kUnknown = 0,
+    kWide,
+    kNarrow,
+  };
+
+  ManifestImageResource image;
+
+  // The form factor for which a given screenshot applies.
+  FormFactor form_factor;
+
+  // This serves as the accessible name of the screenshot.
+  mojo_base.mojom.String16? label;
+};
+
 // Structure representing a share target file.
 struct ManifestFileFilter {
   mojo_base.mojom.String16? name;
@@ -190,6 +230,15 @@ struct ManifestUrlHandler {
   // A boolean that is used to show if a wildcard is present for the origin.
   // If true, the application indicates that it wants to handle all subdomains
   // of |origin|. If false, the application only wants to handle |origin|.
+  bool has_origin_wildcard;
+};
+
+struct ManifestScopeExtension {
+  url.mojom.Origin origin;
+  // A boolean that is used to show if a wildcard is present for the origin.
+  // If true, the application indicates that it wants to extend its scope to all
+  // subdomains of |origin|. If false, the application only wants to extend its
+  // scope to |origin|.
   bool has_origin_wildcard;
 };
 
@@ -288,27 +337,6 @@ struct ManifestFileHandler {
   LaunchType launch_type;
 };
 
-// Represents how web app launches should be handled with regard to opening
-// windows or recycling existing ones.
-// Spec: https://github.com/WICG/sw-launch/blob/main/launch_handler.md
-struct ManifestLaunchHandler {
-  // The client to use for app launches.
-  enum RouteTo {
-    // Use whatever the platform would do by default.
-    kAuto,
-    // Create a new client for each app launch.
-    kNewClient,
-    // Use an existing client if available, otherwise create a new one to use.
-    // Navigate the existing client to the launch URL.
-    kExistingClientNavigate,
-    // Use an existing client if available, otherwise create a new one to use.
-    // Do not navigate the client and just enqueue a LaunchParams in the
-    // document's LaunchQueue.
-    kExistingClientRetain,
-  };
-  RouteTo route_to;
-};
-
 // Structure representing the translated manifest fields. Each field corresponds
 // to a translatable field in the Web App Manifest and contains a translation of
 // that field. Each field is optional as there is no mandatory field which must
@@ -339,7 +367,7 @@ struct ManifestUserPreferenceOverrides {
 // Structure representing customizations to the tab strip.
 struct ManifestTabStrip {
   HomeTabUnion home_tab;
-  NewTabButtonUnion new_tab_button;
+  NewTabButtonParams new_tab_button;
 };
 
 // Represents whether a particular tab strip customization is present or not.
@@ -354,16 +382,14 @@ union HomeTabUnion {
   HomeTabParams params;
 };
 
-union NewTabButtonUnion {
-  TabStripMemberVisibility visibility;
-  NewTabButtonParams params;
-};
-
 // Structure representing the home tab customization to the tab strip.
 struct HomeTabParams {
   // If the array is empty, the platform can choose what icon to use. This is
   // the same as setting 'auto' on the icons field.
   array<ManifestImageResource> icons;
+
+  // TODO(crbug.com/1381374): Use URLPatternList once available.
+  array<SafeUrlPattern> scope_patterns;
 };
 
 // Structure representing the new tab button customization to the tab strip.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -130,7 +130,7 @@ bool IsWellKnownPort(int port) {
   return port >= 0 && port < 1024;
 }
 
-bool IsPortAllowedForScheme(int port, base::StringPiece url_scheme) {
+bool IsPortAllowedForScheme(int port, std::string_view url_scheme) {
   // Reject invalid ports.
   if (!IsPortValid(port))
     return false;

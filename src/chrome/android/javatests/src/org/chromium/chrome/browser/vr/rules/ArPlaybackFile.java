@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
 /**
  * An annotation for specifying which playback file ArCore should use for the test.
  *
- * The specified path must be relative to the Chromium src directory, typically in
+ * <p>The specified path must be relative to the Chromium src directory, typically in
  * //chrome/test/data/xr/ar_playback_datasets/.
  */
 @Target({ElementType.METHOD})

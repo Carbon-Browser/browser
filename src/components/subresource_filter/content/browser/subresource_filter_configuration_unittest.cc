@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class SubresourceFilterConfigurationTest
 // Do not configure the URL with Safe Browsing to be part of any list. The only
 // time we should filter subresources is if we have ALL_SITES scope.
 TEST_P(SubresourceFilterConfigurationTest,
-       DISABLED_NoList_UsuallyNoActivation) {
+       NoList_UsuallyNoActivation) {
   auto [scope, activation_list, level] = GetParam();
   SCOPED_TRACE(::testing::Message("ActivationScope: ") << scope);
   SCOPED_TRACE(::testing::Message("ActivationList: ") << activation_list);
@@ -39,7 +39,7 @@ TEST_P(SubresourceFilterConfigurationTest,
   }
 }
 
-TEST_P(SubresourceFilterConfigurationTest, DISABLED_OneListActivation) {
+TEST_P(SubresourceFilterConfigurationTest, OneListActivation) {
   auto [scope, activation_list, level] = GetParam();
   SCOPED_TRACE(::testing::Message("ActivationScope: ") << scope);
   SCOPED_TRACE(::testing::Message("ActivationList: ") << activation_list);

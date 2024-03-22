@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,14 +68,14 @@ class TestPageActionIconView : public PageActionIconView {
                            command_id,
                            parent_delegate,
                            delegate,
+                           "TestName",
+                           true,
                            font_list) {
     SetUpForInOutAnimation();
+    SetAccessibilityProperties(/*role*/ absl::nullopt, u"TestTooltip");
   }
 
   views::BubbleDialogDelegate* GetBubble() const override { return nullptr; }
-  std::u16string GetTextForTooltipAndAccessibleName() const override {
-    return u"TestTooltip";
-  }
 
   bool IsLabelVisible() const { return label()->GetVisible(); }
 
@@ -128,9 +128,12 @@ class PageActionIconViewTest : public ChromeViewsTestBase {
     widget_->Show();
   }
   void TearDown() override {
+    ClearView();
     widget_.reset();
     ChromeViewsTestBase::TearDown();
   }
+
+  void ClearView() { view_ = nullptr; }
 
   TestPageActionIconView* view() { return view_; }
   views::Widget* widget() { return widget_.get(); }
@@ -138,7 +141,7 @@ class PageActionIconViewTest : public ChromeViewsTestBase {
 
  private:
   TestPageActionIconDelegate delegate_;
-  raw_ptr<TestPageActionIconView> view_;
+  raw_ptr<TestPageActionIconView> view_ = nullptr;
   std::unique_ptr<views::Widget> widget_;
 };
 
@@ -169,6 +172,11 @@ TEST_F(PageActionIconViewTest, ShouldNotResetSlideAnimationWhenShowIcons) {
 
 TEST_F(PageActionIconViewTest, UsesIconImageIfAvailable) {
   auto delegate = TestPageActionIconDelegate();
+
+  // We're about to reset the 'ContentsView' of the Widget. As such
+  // we need to clear the reference to |view_| beforehand, otherwise
+  // it will become dangling.
+  ClearView();
   auto* icon_view = widget()->SetContentsView(
       std::make_unique<TestPageActionIconViewWithIconImage>(
           /*command_updater=*/nullptr,
@@ -191,4 +199,9 @@ TEST_F(PageActionIconViewTest, UsesIconImageIfAvailable) {
   icon_view->UpdateIconImageForTesting();
   EXPECT_FALSE(image_previous.BackedBySameObjectAs(
       icon_view->GetImage(views::Button::STATE_NORMAL)));
+}
+
+TEST_F(PageActionIconViewTest, IconViewAccessibleName) {
+  EXPECT_EQ(view()->GetAccessibleName(),
+            view()->GetTextForTooltipAndAccessibleName());
 }

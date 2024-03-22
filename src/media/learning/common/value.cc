@@ -1,10 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/learning/common/value.h"
-
-#include <cstring>
 
 #include "base/hash/hash.h"
 
@@ -18,7 +16,7 @@ Value::Value(const char* x) {
   // different instances of the class.  In other words, Value("foo") !=
   // Value("foo") necessarily.
   if (x)
-    value_ = base::PersistentHash(x, strlen(x));
+    value_ = base::PersistentHash(x);
 }
 
 Value::Value(const std::string& x) : value_(base::PersistentHash(x)) {}

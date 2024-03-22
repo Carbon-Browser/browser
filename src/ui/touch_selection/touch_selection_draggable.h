@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class UI_TOUCH_SELECTION_EXPORT TouchSelectionDraggable {
 
   // Offers a touch sequence to the draggable target. Returns true if the event
   // was consumed, in which case the caller should cease further handling.
-  virtual bool WillHandleTouchEvent(const ui::MotionEvent& event) = 0;
+  virtual bool WillHandleTouchEvent(const MotionEvent& event) = 0;
 
   // Whether a drag is active OR being detected for the current touch sequence.
   virtual bool IsActive() const = 0;

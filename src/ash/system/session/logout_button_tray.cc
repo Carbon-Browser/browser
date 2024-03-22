@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "ash/constants/ash_pref_names.h"
+#include "ash/constants/tray_background_view_catalog.h"
 #include "ash/public/cpp/ash_typography.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
@@ -18,12 +19,13 @@
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_container.h"
 #include "ash/system/user/login_status.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/controls/button/md_text_button.h"
@@ -31,7 +33,8 @@
 
 namespace ash {
 
-LogoutButtonTray::LogoutButtonTray(Shelf* shelf) : TrayBackgroundView(shelf) {
+LogoutButtonTray::LogoutButtonTray(Shelf* shelf)
+    : TrayBackgroundView(shelf, TrayBackgroundViewCatalogName::kLogoutButton) {
   DCHECK(shelf);
   Shell::Get()->session_controller()->AddObserver(this);
 
@@ -85,10 +88,6 @@ void LogoutButtonTray::OnActiveUserPrefServiceChanged(PrefService* prefs) {
   UpdateLogoutDialogDuration();
 }
 
-const char* LogoutButtonTray::GetClassName() const {
-  return "LogoutButtonTray";
-}
-
 void LogoutButtonTray::OnThemeChanged() {
   TrayBackgroundView::OnThemeChanged();
   auto* color_provider = AshColorProvider::Get();
@@ -118,6 +117,8 @@ void LogoutButtonTray::ClickedOutsideBubble() {}
 
 void LogoutButtonTray::HideBubbleWithView(const TrayBubbleView* bubble_view) {}
 
+void LogoutButtonTray::HideBubble(const TrayBubbleView* bubble_view) {}
+
 std::u16string LogoutButtonTray::GetAccessibleNameForTray() {
   return button_->GetText();
 }
@@ -139,14 +140,14 @@ void LogoutButtonTray::UpdateButtonTextAndImage() {
       user::GetLocalizedSignOutStringForStatus(login_status, false);
   if (shelf()->IsHorizontalAlignment()) {
     button_->SetText(title);
-    button_->SetImage(views::Button::STATE_NORMAL, gfx::ImageSkia());
+    button_->SetImageModel(views::Button::STATE_NORMAL, ui::ImageModel());
     button_->SetMinSize(gfx::Size(0, kTrayItemSize));
   } else {
     button_->SetText(std::u16string());
     button_->SetAccessibleName(title);
-    button_->SetImage(
+    button_->SetImageModel(
         views::Button::STATE_NORMAL,
-        gfx::CreateVectorIcon(
+        ui::ImageModel::FromVectorIcon(
             kShelfLogoutIcon,
             AshColorProvider::Get()->GetContentLayerColor(
                 AshColorProvider::ContentLayerType::kIconColorPrimary)));
@@ -167,5 +168,8 @@ void LogoutButtonTray::ButtonPressed() {
         LogoutConfirmationController::Source::kShelfExitButton);
   }
 }
+
+BEGIN_METADATA(LogoutButtonTray)
+END_METADATA
 
 }  // namespace ash

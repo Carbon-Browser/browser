@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/web_request/web_request_info.h"
 
 #include <memory>
+#include <optional>
 #include <string>
-
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/websocket_handshake_request_info.h"
@@ -22,7 +22,6 @@
 #include "net/base/upload_bytes_element_reader.h"
 #include "net/base/upload_data_stream.h"
 #include "net/base/upload_file_element_reader.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -111,14 +110,14 @@ bool CreateUploadDataSourcesFromResourceRequest(
   return true;
 }
 
-std::unique_ptr<base::DictionaryValue> CreateRequestBodyData(
+std::optional<base::Value::Dict> CreateRequestBodyData(
     const std::string& method,
     const net::HttpRequestHeaders& request_headers,
     const std::vector<std::unique_ptr<UploadDataSource>>& data_sources) {
   if (method != "POST" && method != "PUT")
-    return nullptr;
+    return std::nullopt;
 
-  auto request_body_data = std::make_unique<base::DictionaryValue>();
+  base::Value::Dict request_body_data;
 
   // Get the data presenters, ordered by how specific they are.
   ParsedDataPresenter parsed_data_presenter(request_headers);
@@ -136,7 +135,7 @@ std::unique_ptr<base::DictionaryValue> CreateRequestBodyData(
       for (auto& source : data_sources)
         source->FeedToPresenter(presenters[i]);
       if (presenters[i]->Succeeded()) {
-        request_body_data->Set(kKeys[i], presenters[i]->Result());
+        request_body_data.Set(kKeys[i], presenters[i]->TakeResult().value());
         some_succeeded = true;
         break;
       }
@@ -144,8 +143,7 @@ std::unique_ptr<base::DictionaryValue> CreateRequestBodyData(
   }
 
   if (!some_succeeded) {
-    request_body_data->SetStringKey(keys::kRequestBodyErrorKey,
-                                    "Unknown error.");
+    request_body_data.Set(keys::kRequestBodyErrorKey, "Unknown error.");
   }
 
   return request_body_data;
@@ -164,8 +162,7 @@ WebRequestInfoInitParams::WebRequestInfoInitParams(
     bool is_download,
     bool is_async,
     bool is_service_worker_script,
-    absl::optional<int64_t> navigation_id,
-    ukm::SourceIdObj ukm_source_id)
+    std::optional<int64_t> navigation_id)
     : id(request_id),
       url(request.url),
       render_process_id(render_process_id),
@@ -176,8 +173,7 @@ WebRequestInfoInitParams::WebRequestInfoInitParams(
       is_async(is_async),
       extra_request_headers(request.headers),
       is_service_worker_script(is_service_worker_script),
-      navigation_id(std::move(navigation_id)),
-      ukm_source_id(ukm_source_id) {
+      navigation_id(std::move(navigation_id)) {
   web_request_type = ToWebRequestResourceType(request, is_download);
 
   DCHECK_EQ(is_navigation_request, this->navigation_id.has_value());
@@ -219,12 +215,11 @@ void WebRequestInfoInitParams::InitializeWebViewAndFrameData(
       web_view_embedder_process_id = web_view_info.embedder_process_id;
     }
 
-    // For subresource loads we attempt to resolve the FrameData immediately.
-    frame_data = ExtensionApiFrameIdMap::Get()->GetFrameData(
-        content::GlobalRenderFrameHostId(render_process_id, frame_routing_id));
-
     parent_routing_id =
         content::GlobalRenderFrameHostId(render_process_id, frame_routing_id);
+
+    // For subresource loads we attempt to resolve the FrameData immediately.
+    frame_data = ExtensionApiFrameIdMap::Get()->GetFrameData(parent_routing_id);
   }
 }
 
@@ -247,7 +242,6 @@ WebRequestInfo::WebRequestInfo(WebRequestInfoInitParams params)
       web_view_embedder_process_id(params.web_view_embedder_process_id),
       is_service_worker_script(params.is_service_worker_script),
       navigation_id(std::move(params.navigation_id)),
-      ukm_source_id(params.ukm_source_id),
       parent_routing_id(params.parent_routing_id) {}
 
 WebRequestInfo::~WebRequestInfo() = default;

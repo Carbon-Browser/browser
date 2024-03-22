@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,9 +105,8 @@ std::u16string CertificateSelector::CertificateTableModel::GetText(
     case IDS_CERT_SELECTOR_SERIAL_COLUMN:
       return row.serial;
     default:
-      NOTREACHED();
+      NOTREACHED_NORETURN();
   }
-  return std::u16string();
 }
 
 void CertificateSelector::CertificateTableModel::SetObserver(

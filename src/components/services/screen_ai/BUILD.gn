@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,22 +6,33 @@ import("//third_party/protobuf/proto_library.gni")
 
 source_set("screen_ai") {
   sources = [
+    "screen_ai_ax_tree_serializer.cc",
+    "screen_ai_ax_tree_serializer.h",
+    "screen_ai_library_wrapper.cc",
+    "screen_ai_library_wrapper.h",
     "screen_ai_service_impl.cc",
     "screen_ai_service_impl.h",
   ]
 
+  public_deps = [ "//components/services/screen_ai/proto:proto_convertors" ]
+
   deps = [
-    "//base",
-    "//components/services/screen_ai/proto:proto_convertors",
+    "//components/services/screen_ai/proto",
     "//components/services/screen_ai/public/cpp:utilities",
-    "//components/services/screen_ai/public/mojom",
+    "//components/services/screen_ai/public/mojom:factory",
+    "//components/services/screen_ai/public/mojom:mojom",
+    "//content/public/browser",
     "//mojo/public/cpp/bindings",
     "//sandbox/policy",
-    "//ui/accessibility:ax_base",
+    "//services/metrics/public/cpp:ukm_builders",
+    "//skia",
+    "//ui/accessibility:accessibility",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
-if (!is_mac) {
+if (is_linux || is_chromeos) {
   source_set("screen_ai_sandbox_hook") {
     sources = [
       "sandbox/screen_ai_sandbox_hook_linux.cc",
@@ -37,17 +48,17 @@ if (!is_mac) {
     ]
 
     public_deps = [ "//sandbox/policy" ]
+
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
   }
 }
 
-group("unit_tests_data") {
+group("test_support_data") {
   visibility = [ ":unit_tests" ]
   testonly = true
-  data = [
-    "$root_gen_dir/components/services/screen_ai/proto/view_hierarchy.descriptor",
-    "//components/test/data/screen_ai/sample_01_ax_tree.json",
-    "//components/test/data/screen_ai/sample_01_expected_proto.pbtxt",
-  ]
+
+  data = [ "$root_gen_dir/components/services/screen_ai/proto/view_hierarchy.descriptor" ]
+
   deps = [
     "//components/services/screen_ai/proto:view_hierarchy_proto_descriptor",
   ]
@@ -55,19 +66,39 @@ group("unit_tests_data") {
 
 source_set("unit_tests") {
   testonly = true
+
   sources = [
-    "proto/proto_convertor_unittest.cc",
-    "proto/test_proto_loader.cc",
-    "proto/test_proto_loader.h",
+    "proto/main_content_extractor_proto_convertor_unittest.cc",
+    "proto/visual_annotator_proto_convertor_unittest.cc",
+    "screen_ai_ax_tree_serializer_unittest.cc",
+    "screen_ai_service_impl_unittest.cc",
   ]
 
-  data_deps = [ ":unit_tests_data" ]
+  data = [ "//components/test/data/screen_ai/" ]
+  deps = [
+    ":screen_ai",
+    "//base/test:proto_test_support",
+    "//base/test:test_support",
+    "//components/services/screen_ai/proto",
+    "//components/ukm:test_support",
+    "//testing/gtest",
+    "//ui/accessibility:test_support",
+  ]
+
+  data_deps = [ ":test_support_data" ]
+}
+
+source_set("test_support") {
+  testonly = true
+
+  sources = [
+    "public/test/fake_screen_ai_annotator.cc",
+    "public/test/fake_screen_ai_annotator.h",
+  ]
 
   deps = [
-    "//components/services/screen_ai/proto",
-    "//components/services/screen_ai/proto:proto_convertors",
-    "//testing/gtest",
-    "//third_party/protobuf:protobuf_full",
+    "//base/test:test_support",
+    "//components/services/screen_ai/public/mojom",
     "//ui/accessibility:test_support",
   ]
 }

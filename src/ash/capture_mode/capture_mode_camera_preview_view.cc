@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 #include "ash/capture_mode/capture_mode_constants.h"
 #include "ash/capture_mode/capture_mode_controller.h"
 #include "ash/capture_mode/capture_mode_session.h"
+#include "ash/capture_mode/capture_mode_types.h"
 #include "ash/capture_mode/capture_mode_util.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
+#include "ash/style/ash_color_id.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -39,10 +40,6 @@ constexpr base::TimeDelta kResizeButtonFadeInDuration = base::Milliseconds(150);
 // The duration for the reize button fading out process.
 constexpr base::TimeDelta kResizeButtonFadeOutDuration = base::Milliseconds(50);
 
-gfx::PointF GetEventScreenLocation(const ui::LocatedEvent& event) {
-  return event.target()->GetScreenLocationF(event);
-}
-
 const gfx::VectorIcon& GetIconOfResizeButton(
     const bool is_camera_preview_collapsed) {
   return is_camera_preview_collapsed ? kCaptureModeCameraPreviewExpandIcon
@@ -64,10 +61,21 @@ CameraPreviewResizeButton::CameraPreviewResizeButton(
     CameraPreviewView* camera_preview_view,
     views::Button::PressedCallback callback,
     const gfx::VectorIcon& icon)
-    : CaptureModeButton(std::move(callback), icon),
+    : IconButton(std::move(callback),
+                 IconButton::Type::kMediumFloating,
+                 &icon,
+                 // the tooltip depends on the current expanded state of the
+                 // button and will be updated by `CameraPreviewView`.
+                 /*accessible_name=*/u"",
+                 /*is_togglable=*/false,
+                 /*has_border=*/true),
       camera_preview_view_(camera_preview_view) {}
 
 CameraPreviewResizeButton::~CameraPreviewResizeButton() = default;
+
+views::View* CameraPreviewResizeButton::GetView() {
+  return this;
+}
 
 void CameraPreviewResizeButton::PseudoFocus() {
   DCHECK(camera_preview_view_->is_collapsible());
@@ -81,7 +89,7 @@ void CameraPreviewResizeButton::PseudoBlur() {
   camera_preview_view_->ScheduleRefreshResizeButtonVisibility();
 }
 
-BEGIN_METADATA(CameraPreviewResizeButton, CaptureModeButton)
+BEGIN_METADATA(CameraPreviewResizeButton, IconButton)
 END_METADATA
 
 // -----------------------------------------------------------------------------
@@ -115,20 +123,23 @@ CameraPreviewView::CameraPreviewView(
 
   resize_button_->SetPaintToLayer();
   resize_button_->layer()->SetFillsBoundsOpaquely(false);
-  resize_button_->SetBackground(views::CreateRoundedRectBackground(
-      AshColorProvider::Get()->GetBaseLayerColor(
-          AshColorProvider::BaseLayerType::kTransparent80),
+  resize_button_->SetBackground(views::CreateThemedRoundedRectBackground(
+      kColorAshShieldAndBase80,
       resize_button_->GetPreferredSize().height() / 2.f));
 
   accessibility_observation_.Observe(Shell::Get()->accessibility_controller());
   RefreshResizeButtonVisibility();
   UpdateResizeButtonTooltip();
+  capture_mode_util::MaybeUpdateCaptureModePrivacyIndicators();
+  CaptureModeController::Get()->MaybeUpdateVcPanel();
 }
 
 CameraPreviewView::~CameraPreviewView() {
   auto* controller = CaptureModeController::Get();
   if (controller->IsActive() && !controller->is_recording_in_progress())
     controller->capture_mode_session()->OnCameraPreviewDestroyed();
+  capture_mode_util::MaybeUpdateCaptureModePrivacyIndicators();
+  controller->MaybeUpdateVcPanel();
 }
 
 void CameraPreviewView::SetIsCollapsible(bool value) {
@@ -245,22 +256,26 @@ void CameraPreviewView::AddedToWidget() {
 }
 
 bool CameraPreviewView::OnMousePressed(const ui::MouseEvent& event) {
-  camera_controller_->StartDraggingPreview(GetEventScreenLocation(event));
+  camera_controller_->StartDraggingPreview(
+      capture_mode_util::GetEventScreenLocation(event));
   return true;
 }
 
 bool CameraPreviewView::OnMouseDragged(const ui::MouseEvent& event) {
-  camera_controller_->ContinueDraggingPreview(GetEventScreenLocation(event));
+  camera_controller_->ContinueDraggingPreview(
+      capture_mode_util::GetEventScreenLocation(event));
   return true;
 }
 
 void CameraPreviewView::OnMouseReleased(const ui::MouseEvent& event) {
-  camera_controller_->EndDraggingPreview(GetEventScreenLocation(event),
-                                         /*is_touch=*/false);
+  camera_controller_->EndDraggingPreview(
+      capture_mode_util::GetEventScreenLocation(event),
+      /*is_touch=*/false);
 }
 
 void CameraPreviewView::OnGestureEvent(ui::GestureEvent* event) {
-  const gfx::PointF screen_location = GetEventScreenLocation(*event);
+  const gfx::PointF screen_location =
+      capture_mode_util::GetEventScreenLocation(*event);
 
   switch (event->type()) {
     case ui::ET_GESTURE_SCROLL_BEGIN:
@@ -338,9 +353,9 @@ void CameraPreviewView::Layout() {
 
 void CameraPreviewView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   views::View::GetAccessibleNodeData(node_data);
+  node_data->role = ax::mojom::Role::kVideo;
   node_data->SetName(
       l10n_util::GetStringUTF16(IDS_ASH_SCREEN_CAPTURE_CAMERA_PREVIEW_FOCUSED));
-  node_data->role = ax::mojom::Role::kVideo;
 }
 
 views::View* CameraPreviewView::GetView() {
@@ -367,13 +382,12 @@ void CameraPreviewView::OnResizeButtonPressed() {
 }
 
 void CameraPreviewView::UpdateResizeButton() {
-  resize_button_->SetImage(
+  resize_button_->SetImageModel(
       views::Button::STATE_NORMAL,
-      gfx::CreateVectorIcon(
+      ui::ImageModel::FromVectorIcon(
           GetIconOfResizeButton(
               camera_controller_->is_camera_preview_collapsed()),
-          AshColorProvider::Get()->GetContentLayerColor(
-              AshColorProvider::ContentLayerType::kIconColorPrimary)));
+          kColorAshIconColorPrimary));
   UpdateResizeButtonTooltip();
 }
 

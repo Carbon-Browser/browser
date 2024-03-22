@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,13 +13,13 @@
 // Class that configures a SigninPromoView instance.
 @interface SigninPromoViewConfigurator : NSObject
 
-- (instancetype)init NS_UNAVAILABLE;
-
 // Initializes the instance.
 // If `viewMode` is SigninPromoViewModeNoAccounts, then `userEmail`,
 // `userGivenName` and `userImage` have to be nil.
 // Otherwise `userEmail` and `userImage` can't be nil. `userImage` has to be to
 // the size of IdentityAvatarSize::SmallSize.
+// `hasSignInSpinner` shows a spinner on top of the primary button, and disables
+// other buttons if set YES.
 // TODO(crbug.com/1328877): Consider adding a parameter for
 // SigninPromoViewStyle.
 - (instancetype)initWithSigninPromoViewMode:(SigninPromoViewMode)viewMode
@@ -27,12 +27,13 @@
                               userGivenName:(NSString*)userGivenName
                                   userImage:(UIImage*)userImage
                              hasCloseButton:(BOOL)hasCloseButton
+                           hasSignInSpinner:(BOOL)hasSignInSpinner
     NS_DESIGNATED_INITIALIZER;
+- (instancetype)init NS_UNAVAILABLE;
 
-// Configures a sign-in promo view with the default standard style.
-// TODO(crbug.com/1328877): Remove this method and replace usages with the
-// `configureSigninPromoView:WithStyle:`.
-- (void)configureSigninPromoView:(SigninPromoView*)signinPromoView;
+// Overrides the default primary button title in signin promo. If unset/`nil`
+// the default text is used.
+@property(nonatomic, copy) NSString* primaryButtonTitleOverride;
 
 // Configure `signinPromoView` with the given `promoViewStyle` style.
 - (void)configureSigninPromoView:(SigninPromoView*)signinPromoView

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,9 @@ class InfoBarContainerView : public views::AccessiblePaneView,
   InfoBarContainerView(const InfoBarContainerView&) = delete;
   InfoBarContainerView& operator=(const InfoBarContainerView&) = delete;
   ~InfoBarContainerView() override;
+
+  // Returns true if there are no infobars.
+  bool IsEmpty() const;
 
   // views::AccessiblePaneView:
   void Layout() override;

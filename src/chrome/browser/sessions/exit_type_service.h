@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -64,6 +64,7 @@ class ExitTypeService : public KeyedService {
     raw_ptr<ExitTypeService> service_;
   };
 
+  explicit ExitTypeService(Profile* profile);
   ExitTypeService(const ExitTypeService&) = delete;
   ExitTypeService& operator=(const ExitTypeService&) = delete;
   ~ExitTypeService() override;
@@ -114,8 +115,6 @@ class ExitTypeService : public KeyedService {
  private:
   friend class ExitTypeServiceFactory;
   class BrowserTabObserverImpl;
-
-  explicit ExitTypeService(Profile* profile);
 
   // Checks if the user acknowledged the crash.
   void CheckUserAckedCrash();

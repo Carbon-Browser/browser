@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <wrl/implements.h>
 #include <wrl/module.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/win/com_init_util.h"
 #include "base/win/core_winrt_util.h"
@@ -41,8 +41,6 @@ class ShowShareUIForWindowOperationTest : public ::testing::Test {
   enum TestCallbackState { NotRun = 0, RunWithoutValue, RunWithValue };
 
   void SetUp() override {
-    if (!ScopedFakeDataTransferManagerInterop::IsSupportedEnvironment())
-      GTEST_SKIP();
     ASSERT_NO_FATAL_FAILURE(scoped_interop_.SetUp());
     operation_ = std::make_unique<ShowShareUIForWindowOperation>(hwnd_);
     auto weak_ptr = weak_factory_.GetWeakPtr();

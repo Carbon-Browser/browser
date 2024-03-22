@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,13 @@ class VIEWS_EXPORT WidgetObserver : public base::CheckedObserver {
                                      const gfx::Rect& new_bounds) {}
 
   virtual void OnWidgetThemeChanged(Widget* widget) {}
+
+  virtual void OnWidgetSizeConstraintsChanged(Widget* widget) {}
+
+  // Invoked when a display-state affecting change happens. This can happen when
+  // either `ui::WindowShowState` or `ui::PlatformWindowState` changes depending
+  // on the platform in question.
+  virtual void OnWidgetShowStateChanged(Widget* widget) {}
 
  protected:
   ~WidgetObserver() override = default;

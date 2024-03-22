@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@
 #include "third_party/webrtc_overrides/rtc_base/logging.h"
 
 #if defined(WEBRTC_MAC)
-#include "base/mac/mac_logging.h"
+#include "base/apple/osstatus_logging.h"
 #endif
 
 // Disable logging when fuzzing, for performance reasons.
@@ -46,13 +46,6 @@
 #define LOG_LAZY_STREAM_DIRECT(file_name, line_number, sev)              \
   LAZY_STREAM(logging::LogMessage(file_name, line_number, sev).stream(), \
               WEBRTC_ENABLE_LOGGING)
-
-namespace blink {
-
-const base::Feature kSuppressAllWebRtcLogs{"SuppressAllWebRtcLogs",
-                                           base::FEATURE_DISABLED_BY_DEFAULT};
-
-}  // namespace blink
 
 namespace rtc {
 
@@ -174,10 +167,6 @@ DiagnosticLogMessage::DiagnosticLogMessage(const char* file,
       log_to_chrome_(CheckVlogIsOnHelper(severity, file, strlen(file) + 1)) {}
 
 DiagnosticLogMessage::~DiagnosticLogMessage() {
-  // Suppress RTC_LOG which are forwarded both to Chrome logs and WebRTC logs.
-  if (base::FeatureList::IsEnabled(blink::kSuppressAllWebRtcLogs))
-    return;
-
   const bool call_delegate =
       g_logging_delegate_function && severity_ <= LS_INFO;
 

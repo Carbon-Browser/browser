@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,7 @@ bool FakeSuggestionHandler::AcceptSuggestionCandidate(
     int context_id,
     const std::u16string& candidate,
     size_t delete_previous_utf16_len,
+    bool use_replace_surrounding_text,
     std::string* error) {
   showing_suggestion_ = false;
   accepted_suggestion_ = true;
@@ -81,6 +82,10 @@ bool FakeSuggestionHandler::SetAssistiveWindowProperties(
     int context_id,
     const AssistiveWindowProperties& assistive_window,
     std::string* error) {
+  if (!assistive_window.announce_string.empty()) {
+    announcements_.push_back(assistive_window.announce_string);
+  }
+
   if (assistive_window.visible) {
     context_id_ = context_id;
     showing_suggestion_ = true;

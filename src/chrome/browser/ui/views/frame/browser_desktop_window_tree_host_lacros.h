@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 class BrowserView;
 class BrowserFrame;
+class DesktopBrowserFrameLacros;
 enum class TabDragKind;
 
 namespace views {
@@ -58,8 +59,12 @@ class BrowserDesktopWindowTreeHostLacros
   void OnBoundsChanged(const BoundsChange& change) override;
   void OnWindowStateChanged(ui::PlatformWindowState old_state,
                             ui::PlatformWindowState new_state) override;
+  void OnImmersiveModeChanged(bool enabled) override;
+  void OnFullscreenModeChanged() override;
+  void OnOverviewModeChanged(bool in_overview) override;
 
   const raw_ptr<BrowserView> browser_view_;
+  raw_ptr<DesktopBrowserFrameLacros> native_frame_ = nullptr;
   raw_ptr<views::DesktopNativeWidgetAura> desktop_native_widget_aura_ = nullptr;
 };
 

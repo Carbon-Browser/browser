@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,12 @@
 #include <ios>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <tuple>
 
 #include "base/base64.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/logging.h"
@@ -93,7 +95,7 @@ TEST(SetupUtilTest, DeleteFileFromTempProcess) {
   base::FilePath test_file;
   base::CreateTemporaryFileInDir(test_dir.GetPath(), &test_file);
   ASSERT_TRUE(base::PathExists(test_file));
-  base::WriteFile(test_file, "foo", 3);
+  base::WriteFile(test_file, "foo");
   EXPECT_TRUE(installer::DeleteFileFromTempProcess(test_file, 0));
   base::PlatformThread::Sleep(TestTimeouts::tiny_timeout() * 3);
   EXPECT_FALSE(base::PathExists(test_file)) << test_file.value();
@@ -134,10 +136,10 @@ TEST(SetupUtilTest, RegisterEventLogProvider) {
             key.Open(HKEY_LOCAL_MACHINE, reg_path.c_str(), KEY_READ));
 }
 
-const char kAdjustProcessPriority[] = "adjust-process-priority";
+const char kAdjustThreadPriority[] = "adjust-thread-priority";
 
-PriorityClassChangeResult DoProcessPriorityAdjustment() {
-  return installer::AdjustProcessPriority() ? PCCR_CHANGED : PCCR_UNCHANGED;
+PriorityClassChangeResult DoThreadPriorityAdjustment() {
+  return installer::AdjustThreadPriority() ? PCCR_CHANGED : PCCR_UNCHANGED;
 }
 
 namespace {
@@ -184,9 +186,9 @@ ScopedPriorityClass::~ScopedPriorityClass() {
   EXPECT_NE(FALSE, result);
 }
 
-PriorityClassChangeResult RelaunchAndDoProcessPriorityAdjustment() {
+PriorityClassChangeResult RelaunchAndDoThreadPriorityAdjustment() {
   base::CommandLine cmd_line(*base::CommandLine::ForCurrentProcess());
-  cmd_line.AppendSwitch(kAdjustProcessPriority);
+  cmd_line.AppendSwitch(kAdjustThreadPriority);
   base::Process process = base::LaunchProcess(cmd_line, base::LaunchOptions());
   int exit_code = 0;
   if (!process.IsValid()) {
@@ -210,7 +212,7 @@ TEST(SetupUtilTest, AdjustFromNormalPriority) {
                  << std::hex << priority_class;
     return;
   }
-  EXPECT_EQ(PCCR_UNCHANGED, RelaunchAndDoProcessPriorityAdjustment());
+  EXPECT_EQ(PCCR_UNCHANGED, RelaunchAndDoThreadPriorityAdjustment());
 }
 
 // Launching a subprocess below normal priority class drops it to bg mode for
@@ -222,7 +224,7 @@ TEST(SetupUtilTest, AdjustFromBelowNormalPriority) {
     below_normal = ScopedPriorityClass::Create(BELOW_NORMAL_PRIORITY_CLASS);
     ASSERT_TRUE(below_normal);
   }
-  EXPECT_EQ(PCCR_CHANGED, RelaunchAndDoProcessPriorityAdjustment());
+  EXPECT_EQ(PCCR_CHANGED, RelaunchAndDoThreadPriorityAdjustment());
 }
 
 TEST(SetupUtilTest, GetInstallAge) {
@@ -424,9 +426,9 @@ class FindArchiveToPatchTest : public testing::Test {
     // Create archives in the two version dirs.
     ASSERT_TRUE(
         base::CreateDirectory(GetProductVersionArchivePath().DirName()));
-    ASSERT_EQ(1, base::WriteFile(GetProductVersionArchivePath(), "a", 1));
+    ASSERT_TRUE(base::WriteFile(GetProductVersionArchivePath(), "a"));
     ASSERT_TRUE(base::CreateDirectory(GetMaxVersionArchivePath().DirName()));
-    ASSERT_EQ(1, base::WriteFile(GetMaxVersionArchivePath(), "b", 1));
+    ASSERT_TRUE(base::WriteFile(GetMaxVersionArchivePath(), "b"));
   }
 
   void TearDown() override { original_state_.reset(); }
@@ -536,12 +538,6 @@ TEST(SetupUtilTest, ContainsUnsupportedSwitch) {
       base::CommandLine::FromString(L"foo.exe")));
   EXPECT_TRUE(installer::ContainsUnsupportedSwitch(
       base::CommandLine::FromString(L"foo.exe --chrome-frame")));
-}
-
-TEST(SetupUtilTest, GetRegistrationDataCommandKey) {
-  const std::wstring key = installer::GetCommandKey(L"test_name");
-  EXPECT_TRUE(base::EndsWith(key, L"\\Commands\\test_name",
-                             base::CompareCase::SENSITIVE));
 }
 
 TEST(SetupUtilTest, GetConsoleSessionStartTime) {
@@ -859,13 +855,10 @@ TEST_F(DeleteRegistryKeyPartialTest, NonEmptyKeyWithPreserve) {
   {
     base::win::RegistryKeyIterator it(root_, path_.c_str());
     ASSERT_EQ(to_preserve_.size(), it.SubkeyCount());
+    std::wstring (*to_lower)(std::wstring_view) = &base::ToLowerASCII;
     for (; it.Valid(); ++it) {
-      ASSERT_NE(to_preserve_.end(),
-                std::find_if(to_preserve_.begin(), to_preserve_.end(),
-                             [&it](const std::wstring& key_name) {
-                               return base::ToLowerASCII(it.Name()) ==
-                                      base::ToLowerASCII(key_name);
-                             }))
+      ASSERT_TRUE(
+          base::Contains(to_preserve_, base::ToLowerASCII(it.Name()), to_lower))
           << it.Name();
     }
   }
@@ -891,12 +884,14 @@ class LegacyCleanupsTest : public ::testing::Test {
     installer_state_ =
         std::make_unique<FakeInstallerState>(temp_dir_.GetPath());
     // Create the state to be cleared.
+#if !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
     ASSERT_TRUE(base::win::RegKey(HKEY_CURRENT_USER, kBinariesClientsKeyPath,
                                   KEY_WRITE | KEY_WOW64_32KEY)
                     .Valid());
     ASSERT_TRUE(base::win::RegKey(HKEY_CURRENT_USER, kCommandExecuteImplClsid,
                                   KEY_WRITE)
                     .Valid());
+#endif
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
     ASSERT_TRUE(base::win::RegKey(HKEY_CURRENT_USER, kAppLauncherClientsKeyPath,
                                   KEY_WRITE | KEY_WOW64_32KEY)
@@ -911,6 +906,7 @@ class LegacyCleanupsTest : public ::testing::Test {
 
   const InstallerState& installer_state() const { return *installer_state_; }
 
+#if !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
   bool HasBinariesVersionKey() const {
     return base::win::RegKey(HKEY_CURRENT_USER, kBinariesClientsKeyPath,
                              KEY_QUERY_VALUE | KEY_WOW64_32KEY)
@@ -922,6 +918,7 @@ class LegacyCleanupsTest : public ::testing::Test {
                              KEY_QUERY_VALUE)
         .Valid();
   }
+#endif  // !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   bool HasAppLauncherVersionKey() const {
@@ -961,8 +958,10 @@ class LegacyCleanupsTest : public ::testing::Test {
   }
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
+#if !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
   static const wchar_t kBinariesClientsKeyPath[];
   static const wchar_t kCommandExecuteImplClsid[];
+#endif
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   static const wchar_t kAppLauncherClientsKeyPath[];
 #endif
@@ -981,7 +980,8 @@ const wchar_t LegacyCleanupsTest::kCommandExecuteImplClsid[] =
 const wchar_t LegacyCleanupsTest::kAppLauncherClientsKeyPath[] =
     L"SOFTWARE\\Google\\Update\\Clients\\"
     L"{FDA71E6F-AC4C-4a00-8B70-9958A68906BF}";
-#else   // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#elif BUILDFLAG(CHROMIUM_BRANDING) && \
+    !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
 const wchar_t LegacyCleanupsTest::kBinariesClientsKeyPath[] =
     L"SOFTWARE\\Chromium Binaries";
 const wchar_t LegacyCleanupsTest::kCommandExecuteImplClsid[] =
@@ -990,22 +990,26 @@ const wchar_t LegacyCleanupsTest::kCommandExecuteImplClsid[] =
 
 TEST_F(LegacyCleanupsTest, NoOpOnFailedUpdate) {
   DoLegacyCleanups(installer_state(), INSTALL_FAILED);
+#if !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
   EXPECT_TRUE(HasBinariesVersionKey());
   EXPECT_TRUE(HasCommandExecuteImplClassKey());
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   EXPECT_TRUE(HasAppLauncherVersionKey());
   EXPECT_TRUE(HasInstallExtensionCommand());
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#endif  // !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
 }
 
 TEST_F(LegacyCleanupsTest, Do) {
   DoLegacyCleanups(installer_state(), NEW_VERSION_UPDATED);
+#if !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
   EXPECT_FALSE(HasBinariesVersionKey());
   EXPECT_FALSE(HasCommandExecuteImplClassKey());
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   EXPECT_FALSE(HasAppLauncherVersionKey());
   EXPECT_FALSE(HasInstallExtensionCommand());
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#endif  // !BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
 }
 
 }  // namespace installer

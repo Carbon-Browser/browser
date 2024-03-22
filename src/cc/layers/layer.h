@@ -1,4 +1,4 @@
-// Copyright 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,25 +14,27 @@
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "cc/base/protected_sequence_synchronizer.h"
 #include "cc/base/region.h"
 #include "cc/benchmarks/micro_benchmark.h"
 #include "cc/cc_export.h"
+#include "cc/input/hit_test_opaqueness.h"
 #include "cc/input/scroll_snap_data.h"
 #include "cc/layers/layer_collections.h"
 #include "cc/layers/touch_action_region.h"
 #include "cc/paint/element_id.h"
 #include "cc/paint/filter_operations.h"
+#include "cc/paint/node_id.h"
 #include "cc/paint/paint_record.h"
 #include "cc/trees/effect_node.h"
 #include "cc/trees/property_tree.h"
 #include "cc/trees/target_property.h"
-#include "components/viz/common/shared_element_resource_id.h"
 #include "components/viz/common/surfaces/region_capture_bounds.h"
 #include "components/viz/common/surfaces/subtree_capture_id.h"
+#include "components/viz/common/view_transition_element_resource_id.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/linear_gradient.h"
 #include "ui/gfx/geometry/point3_f.h"
@@ -169,8 +171,9 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
     return layer_tree_inputs() && !layer_tree_inputs()->copy_requests.empty();
   }
 
-  // Set and get the background color for the layer. This color is not used by
-  // basic Layers, but subclasses may make use of it.
+  // Set and get the background color for the layer. This color is used to
+  // calculate the safe opaque background color. Subclasses may also use the
+  // color for other purposes.
   virtual void SetBackgroundColor(SkColor4f background_color);
   SkColor4f background_color() const {
     return inputs_.Read(*this).background_color;
@@ -185,17 +188,14 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
   // contents_opaque().
   // If the layer says contents_opaque() is true, in layer tree mode, this
   // returns the value set by SetSafeOpaqueBackgroundColor() which should be an
-  // opaque color, and in layer list mode, returns an opaque color calculated
-  // from background_color() and the argument host_background_color.
+  // opaque color, and in layer list mode, returns background_color() which
+  // should be opaque (otherwise SetBackgroundColor() should have set
+  // contents_opaque to false).
   // Otherwise, it returns something non-opaque. It prefers to return the
   // background_color(), but if the background_color() is opaque (and this layer
   // claims to not be), then SkColors::kTransparent is returned to avoid
   // intrusive checkerboard where the layer is not covered by the
   // background_color().
-  SkColor4f SafeOpaqueBackgroundColor(SkColor4f host_background_color) const;
-
-  // Same as the one-argument version, except that host_background_color is
-  // layer_tree_host()->pending_commit_state()->background_color.
   SkColor4f SafeOpaqueBackgroundColor() const;
 
   // For layer tree mode only.
@@ -272,6 +272,10 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
   // Returns the union of previous calls to SetNeedsDisplayRect() and
   // SetNeedsDisplay() that have not been committed to the compositor thread.
   const gfx::Rect& update_rect() const { return update_rect_.Read(*this); }
+
+  // If this returns true, then `SetNeedsDisplay` will be called in response to
+  // the HDR headroom of the display that the content is rendering to changing.
+  virtual bool RequiresSetNeedsDisplayOnHdrHeadroomChange() const;
 
   void ResetUpdateRectForTesting() { update_rect_.Write(*this) = gfx::Rect(); }
 
@@ -367,9 +371,9 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
   // For layer tree mode only.
   void SetBackdropFilterBounds(const gfx::RRectF& backdrop_filter_bounds);
   void ClearBackdropFilterBounds();
-  absl::optional<gfx::RRectF> backdrop_filter_bounds() const {
+  std::optional<gfx::RRectF> backdrop_filter_bounds() const {
     return layer_tree_inputs() ? layer_tree_inputs()->backdrop_filter_bounds
-                               : absl::nullopt;
+                               : std::nullopt;
   }
 
   // For layer tree mode only.
@@ -402,9 +406,12 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
     return inputs_.Read(*this).contents_opaque_for_text;
   }
 
-  // Set or get whether this layer should be a hit test target
-  void SetHitTestable(bool should_hit_test);
-  virtual bool HitTestable() const;
+  void SetHitTestOpaqueness(HitTestOpaqueness opaqueness);
+  // For callers that don't know the HitTestOpaqueness::kOpaque concept.
+  void SetHitTestable(bool hit_testable);
+  HitTestOpaqueness hit_test_opaqueness() const {
+    return inputs_.Read(*this).hit_test_opaqueness;
+  }
 
   // For layer tree mode only.
   // Set or get the transform to be used when compositing this layer into its
@@ -600,7 +607,6 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
   // the layer itself has no content to contribute, even though the layer was
   // given SetIsDrawable(true).
   bool draws_content() const { return GetBitFlag(kDrawsContentFlagMask); }
-  void SetDrawsContent(bool value);
 
   // Returns the number of layers in this layers subtree (excluding itself) for
   // which DrawsContent() is true.
@@ -659,7 +665,7 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
     return GetBitFlag(kMayContainVideoFlagMask);
   }
 
-  // Stable identifier for clients. See comment in cc/trees/element_id.h.
+  // Stable identifier for clients. See comment in cc/paint/element_id.h.
   void SetElementId(ElementId id);
   ElementId element_id() const { return inputs_.Read(*this).element_id; }
 
@@ -694,6 +700,8 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
   // display.
   virtual sk_sp<const SkPicture> GetPicture() const;
 
+  virtual bool IsSolidColorLayerForTesting() const;
+
   const LayerDebugInfo* debug_info() const { return debug_info_.Read(*this); }
   LayerDebugInfo& EnsureDebugInfo();
   void ClearDebugInfo();
@@ -722,7 +730,7 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
 
   // Internal method to be overridden by Layer subclasses that need to do work
   // during a main frame. The method should compute any state that will need to
-  // propogated to the compositor thread for the next commit, and return true
+  // propagated to the compositor thread for the next commit, and return true
   // if there is anything new to commit. If all layers return false, the commit
   // may be aborted.
   virtual bool Update();
@@ -844,7 +852,7 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
 
   // If the content of this layer is provided by a cached or live render
   // surface, returns the ID of that resource.
-  virtual viz::SharedElementResourceId DocumentTransitionResourceId() const;
+  virtual viz::ViewTransitionElementResourceId ViewTransitionResourceId() const;
 
  protected:
   friend class LayerImpl;
@@ -866,6 +874,10 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
   // false if there is no content to be displayed. If they do have content, then
   // they should return the value from this base class method.
   virtual bool HasDrawableContent() const;
+
+  // Updates draws_content() according to the current HasDrawableContent().
+  // This should be called when HasDrawableContent() changes.
+  void UpdateDrawsContent();
 
   // Called when the layer's number of drawable descendants changes.
   void AddDrawableDescendants(int num);
@@ -993,14 +1005,14 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
 
     gfx::Size bounds;
 
-    // Hit testing depends on this bit.
-    bool hit_testable : 1;
-    bool contents_opaque : 1;
-    bool contents_opaque_for_text : 1;
-    bool is_drawable : 1;
-    bool double_sided : 1;
+    HitTestOpaqueness hit_test_opaqueness = HitTestOpaqueness::kTransparent;
 
-    SkColor4f background_color;
+    bool contents_opaque : 1 = false;
+    bool contents_opaque_for_text : 1 = false;
+    bool is_drawable : 1 = false;
+    bool double_sided : 1 = true;
+
+    SkColor4f background_color = SkColors::kTransparent;
     TouchActionRegion touch_action_region;
 
     ElementId element_id;
@@ -1026,23 +1038,23 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
     float opacity = 1.0f;
     SkBlendMode blend_mode = SkBlendMode::kSrcOver;
 
-    bool masks_to_bounds : 1;
+    bool masks_to_bounds : 1 = false;
 
     // If set, disables this layer's rounded corner from triggering a render
     // surface on itself if possible.
-    bool is_fast_rounded_corner : 1;
+    bool is_fast_rounded_corner : 1 = false;
 
-    bool user_scrollable_horizontal : 1;
-    bool user_scrollable_vertical : 1;
+    bool user_scrollable_horizontal : 1 = true;
+    bool user_scrollable_vertical : 1 = true;
 
-    bool trilinear_filtering : 1;
+    bool trilinear_filtering : 1 = false;
 
-    bool hide_layer_and_subtree : 1;
+    bool hide_layer_and_subtree : 1 = false;
 
     // Indicates that this layer will need a scroll property node and that this
     // layer's bounds correspond to the scroll node's bounds (both |bounds| and
     // |scroll_container_bounds|).
-    bool scrollable : 1;
+    bool scrollable : 1 = false;
 
     gfx::PointF position;
     gfx::Transform transform;
@@ -1058,7 +1070,7 @@ class CC_EXPORT Layer : public base::RefCounted<Layer>,
 
     FilterOperations filters;
     FilterOperations backdrop_filters;
-    absl::optional<gfx::RRectF> backdrop_filter_bounds;
+    std::optional<gfx::RRectF> backdrop_filter_bounds;
     float backdrop_filter_quality = 1.0f;
 
     int mirror_count = 0;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,6 @@ class SecurePaymentConfirmationDialogView
 
   class ObserverForTest {
    public:
-    virtual void OnDialogOpened() = 0;
     virtual void OnDialogClosed() = 0;
     virtual void OnConfirmButtonPressed() = 0;
     virtual void OnCancelButtonPressed() = 0;
@@ -72,9 +71,6 @@ class SecurePaymentConfirmationDialogView
   bool ShouldShowCloseButton() const override;
   bool Accept() override;
 
-  // views::View:
-  void OnThemeChanged() override;
-
   base::WeakPtr<SecurePaymentConfirmationDialogView> GetWeakPtr();
 
  private:
@@ -107,7 +103,8 @@ class SecurePaymentConfirmationDialogView
 
   // Cache the instrument icon pointer so we don't needlessly update it in
   // OnModelUpdated().
-  raw_ptr<const SkBitmap> instrument_icon_ = nullptr;
+  raw_ptr<const SkBitmap, AcrossTasksDanglingUntriaged> instrument_icon_ =
+      nullptr;
   // Cache the instrument icon generation ID to check if the instrument_icon_
   // has changed pixels.
   uint32_t instrument_icon_generation_id_ = 0;
@@ -115,11 +112,6 @@ class SecurePaymentConfirmationDialogView
   // The opt-out view stored in the dialog footnote. This is always created in
   // InitChildViews, but is only marked visible if opt-out was requested.
   raw_ptr<views::StyledLabel> opt_out_view_ = nullptr;
-
-  // Tracks whether or not the user clicked the 'Opt Out' button to close the
-  // transaction dialog. Necessary to distinguish between a cancellation and
-  // opt-out in OnDialogClosed.
-  bool opt_out_clicked_ = false;
 
   base::WeakPtrFactory<SecurePaymentConfirmationDialogView> weak_ptr_factory_{
       this};

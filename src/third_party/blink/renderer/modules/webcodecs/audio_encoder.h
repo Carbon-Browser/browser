@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,7 @@ class MODULES_EXPORT AudioEncoder final
 
   ParsedConfig* ParseConfig(const AudioEncoderConfig* opts,
                             ExceptionState&) override;
-  bool VerifyCodecSupport(ParsedConfig*, ExceptionState&) override;
+  bool VerifyCodecSupport(ParsedConfig*, String* js_error_message) override;
 
   bool CanReconfigure(ParsedConfig& original_config,
                       ParsedConfig& new_config) override;

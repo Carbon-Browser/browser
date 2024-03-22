@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/user_prefs/user_prefs.h"
@@ -43,13 +43,15 @@ PolicyBlocklistFactory::PolicyBlocklistFactory()
 
 PolicyBlocklistFactory::~PolicyBlocklistFactory() = default;
 
-KeyedService* PolicyBlocklistFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PolicyBlocklistFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   PrefService* pref_service = user_prefs::UserPrefs::Get(context);
   auto url_blocklist_manager = std::make_unique<policy::URLBlocklistManager>(
       pref_service, policy::policy_prefs::kUrlBlocklist,
       policy::policy_prefs::kUrlAllowlist);
-  return new PolicyBlocklistService(std::move(url_blocklist_manager));
+  return std::make_unique<PolicyBlocklistService>(
+      std::move(url_blocklist_manager));
 }
 
 content::BrowserContext* PolicyBlocklistFactory::GetBrowserContextToUse(

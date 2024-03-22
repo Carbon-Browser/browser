@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/observer_list.h"
 #include "components/password_manager/core/browser/form_fetcher.h"
 #include "components/password_manager/core/browser/password_form.h"
-#include "components/password_manager/core/browser/statistics_table.h"
+#include "components/password_manager/core/browser/password_store/interactions_stats.h"
 
 namespace password_manager {
 
@@ -46,7 +46,7 @@ class FakeFormFetcher : public FormFetcher {
   std::vector<const PasswordForm*> GetNonFederatedMatches() const override;
   std::vector<const PasswordForm*> GetFederatedMatches() const override;
   bool IsBlocklisted() const override;
-  bool IsMovingBlocked(const autofill::GaiaIdHash& destination,
+  bool IsMovingBlocked(const signin::GaiaIdHash& destination,
                        const std::u16string& username) const override;
   const std::vector<const PasswordForm*>& GetAllRelevantMatches()
       const override;
@@ -54,6 +54,10 @@ class FakeFormFetcher : public FormFetcher {
   const PasswordForm* GetPreferredMatch() const override;
   // Returns a new FakeFormFetcher.
   std::unique_ptr<FormFetcher> Clone() override;
+  std::optional<PasswordStoreBackendError> GetProfileStoreBackendError()
+      const override;
+  absl::optional<PasswordStoreBackendError> GetAccountStoreBackendError()
+      const override;
 
   void set_stats(const std::vector<InteractionsStats>& stats) {
     state_ = State::NOT_WAITING;
@@ -78,6 +82,12 @@ class FakeFormFetcher : public FormFetcher {
 
   void NotifyFetchCompleted();
 
+  void SetProfileStoreBackendError(
+      std::optional<PasswordStoreBackendError> error);
+
+  void SetAccountStoreBackendError(
+      std::optional<PasswordStoreBackendError> error);
+
  private:
   base::ObserverList<Consumer> consumers_;
   State state_ = State::NOT_WAITING;
@@ -88,8 +98,9 @@ class FakeFormFetcher : public FormFetcher {
   std::vector<const PasswordForm*> non_federated_same_scheme_;
   std::vector<const PasswordForm*> best_matches_;
   std::vector<const PasswordForm*> insecure_credentials_;
-  const PasswordForm* preferred_match_ = nullptr;
   bool is_blocklisted_ = false;
+  std::optional<PasswordStoreBackendError> profile_store_backend_error_;
+  std::optional<PasswordStoreBackendError> account_store_backend_error_;
 };
 
 }  // namespace password_manager

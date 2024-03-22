@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,9 @@ struct WebPageMetadata {
 
   // Extracted from a <meta name="application-url" ...> tag if any.
   url.mojom.Url application_url;
+
+  // Extracted from document.title if any.
+  mojo_base.mojom.String16 title;
 
   // Extracted from all <link rel="icon"...> tags and other such tags that
   // specify icons.

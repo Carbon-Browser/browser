@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/logging.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "build/build_config.h"
+#include "mojo/buildflags.h"
 #include "mojo/core/broker_messages.h"
 #include "mojo/core/channel.h"
 #include "mojo/core/platform_handle_utils.h"
@@ -43,7 +44,7 @@ Channel::MessagePtr WaitForBrokerMessage(
     LOG(ERROR) << "Invalid node channel message";
     error = true;
   } else if (incoming_fds.size() != expected_num_handles) {
-    LOG(ERROR) << "Received unexpected number of handles";
+    DLOG(ERROR) << "Received unexpected number of handles";
     error = true;
   }
 
@@ -115,7 +116,8 @@ base::WritableSharedMemoryRegion Broker::GetWritableSharedMemoryRegion(
     return base::WritableSharedMemoryRegion();
   }
 
-#if !BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   // Non-POSIX systems, as well as Android and Mac, only use a single handle to
   // represent a writable region.
   constexpr size_t kNumExpectedHandles = 1;
@@ -131,7 +133,11 @@ base::WritableSharedMemoryRegion Broker::GetWritableSharedMemoryRegion(
     const BufferResponseData* data;
     if (!GetBrokerMessageData(message.get(), &data))
       return base::WritableSharedMemoryRegion();
-
+    std::optional<base::UnguessableToken> guid =
+        base::UnguessableToken::Deserialize(data->guid_high, data->guid_low);
+    if (!guid.has_value()) {
+      return base::WritableSharedMemoryRegion();
+    }
     if (handles.size() == 1)
       handles.emplace_back();
     return base::WritableSharedMemoryRegion::Deserialize(
@@ -139,9 +145,7 @@ base::WritableSharedMemoryRegion Broker::GetWritableSharedMemoryRegion(
             CreateSharedMemoryRegionHandleFromPlatformHandles(
                 std::move(handles[0]), std::move(handles[1])),
             base::subtle::PlatformSharedMemoryRegion::Mode::kWritable,
-            num_bytes,
-            base::UnguessableToken::Deserialize(data->guid_high,
-                                                data->guid_low)));
+            num_bytes, guid.value()));
   }
 
   return base::WritableSharedMemoryRegion();

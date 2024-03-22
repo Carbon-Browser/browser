@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "components/download/public/common/download_url_parameters.h"
@@ -118,9 +118,8 @@ void DownloadTestObserver::OnDownloadCreated(DownloadManager* manager,
   // created as well as in DownloadTestObserver::Init() for downloads that
   // existed before |this| was created.
   OnDownloadUpdated(item);
-  DownloadSet::const_iterator finished_it(finished_downloads_.find(item));
   // If it isn't finished, start observing it.
-  if (finished_it == finished_downloads_.end()) {
+  if (!base::Contains(finished_downloads_, item)) {
     item->AddObserver(this);
     downloads_observed_.insert(item);
   }
@@ -128,10 +127,9 @@ void DownloadTestObserver::OnDownloadCreated(DownloadManager* manager,
 
 void DownloadTestObserver::OnDownloadDestroyed(
     download::DownloadItem* download) {
-  // Stop observing.  Do not do anything with it, as it is about to be gone.
-  DownloadSet::iterator it = downloads_observed_.find(download);
-  ASSERT_TRUE(it != downloads_observed_.end());
-  downloads_observed_.erase(it);
+  // Stop observing. Do not do anything with it, as it is about to be gone.
+  CHECK(base::Contains(downloads_observed_, download));
+  downloads_observed_.erase(download);
   download->RemoveObserver(this);
 }
 
@@ -199,7 +197,7 @@ size_t DownloadTestObserver::NumDownloadsSeenInState(
 
 void DownloadTestObserver::DownloadInFinalState(
     download::DownloadItem* download) {
-  if (finished_downloads_.find(download) != finished_downloads_.end()) {
+  if (base::Contains(finished_downloads_, download)) {
     // We've already seen the final state on this download.
     return;
   }
@@ -352,10 +350,9 @@ void DownloadTestFlushObserver::ManagerGoingDown(DownloadManager* manager) {
 
 void DownloadTestFlushObserver::OnDownloadDestroyed(
     download::DownloadItem* download) {
-  // Stop observing.  Do not do anything with it, as it is about to be gone.
-  DownloadSet::iterator it = downloads_observed_.find(download);
-  ASSERT_TRUE(it != downloads_observed_.end());
-  downloads_observed_.erase(it);
+  // Stop observing. Do not do anything with it, as it is about to be gone.
+  CHECK(base::Contains(downloads_observed_, download));
+  downloads_observed_.erase(download);
   download->RemoveObserver(this);
 }
 
@@ -391,7 +388,7 @@ void DownloadTestFlushObserver::CheckDownloadsInProgress(
       if ((*it)->GetState() == download::DownloadItem::IN_PROGRESS)
         count++;
       if (observe_downloads) {
-        if (downloads_observed_.find(*it) == downloads_observed_.end()) {
+        if (!base::Contains(downloads_observed_, *it)) {
           (*it)->AddObserver(this);
           downloads_observed_.insert(*it);
         }
@@ -406,9 +403,8 @@ void DownloadTestFlushObserver::CheckDownloadsInProgress(
       // Stop observing download::DownloadItems.  We maintain the observation
       // of DownloadManager so that we don't have to independently track
       // whether we are observing it for conditional destruction.
-      for (DownloadSet::iterator it = downloads_observed_.begin();
-           it != downloads_observed_.end(); ++it) {
-        (*it)->RemoveObserver(this);
+      for (download::DownloadItem* item : downloads_observed_) {
+        item->RemoveObserver(this);
       }
       downloads_observed_.clear();
 

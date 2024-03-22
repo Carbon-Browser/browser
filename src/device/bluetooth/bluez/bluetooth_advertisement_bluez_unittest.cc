@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -19,6 +19,7 @@
 #include "device/bluetooth/dbus/bluez_dbus_manager.h"
 #include "device/bluetooth/dbus/fake_bluetooth_le_advertisement_service_provider.h"
 #include "device/bluetooth/dbus/fake_bluetooth_le_advertising_manager_client.h"
+#include "device/bluetooth/floss/floss_features.h"
 #include "device/bluetooth/test/test_bluetooth_advertisement_observer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -32,6 +33,10 @@ namespace bluez {
 class BluetoothAdvertisementBlueZTest : public testing::Test {
  public:
   void SetUp() override {
+    // TODO(b/266989920) Remove when Floss fake implementation is completed.
+    if (floss::features::IsFlossEnabled()) {
+      GTEST_SKIP();
+    }
     bluez::BluezDBusManager::GetSetterForTesting();
 
     callback_count_ = 0;
@@ -46,6 +51,9 @@ class BluetoothAdvertisementBlueZTest : public testing::Test {
   }
 
   void TearDown() override {
+    if (floss::features::IsFlossEnabled()) {
+      return;
+    }
     observer_.reset();
     // The adapter should outlive the advertisement.
     advertisement_ = nullptr;
@@ -73,16 +81,11 @@ class BluetoothAdvertisementBlueZTest : public testing::Test {
     std::unique_ptr<BluetoothAdvertisement::Data> data =
         std::make_unique<BluetoothAdvertisement::Data>(
             BluetoothAdvertisement::ADVERTISEMENT_TYPE_BROADCAST);
-    data->set_service_uuids(
-        std::make_unique<BluetoothAdvertisement::UUIDList>());
-    data->set_manufacturer_data(
-        std::make_unique<BluetoothAdvertisement::ManufacturerData>());
-    data->set_solicit_uuids(
-        std::make_unique<BluetoothAdvertisement::UUIDList>());
-    data->set_service_data(
-        std::make_unique<BluetoothAdvertisement::ServiceData>());
-    data->set_scan_response_data(
-        std::make_unique<BluetoothAdvertisement::ScanResponseData>());
+    data->set_service_uuids(BluetoothAdvertisement::UUIDList());
+    data->set_manufacturer_data(BluetoothAdvertisement::ManufacturerData());
+    data->set_solicit_uuids(BluetoothAdvertisement::UUIDList());
+    data->set_service_data(BluetoothAdvertisement::ServiceData());
+    data->set_scan_response_data(BluetoothAdvertisement::ScanResponseData());
     return data;
   }
 

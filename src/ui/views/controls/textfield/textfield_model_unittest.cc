@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -1259,9 +1259,9 @@ TEST_F(TextfieldModelTest, CompositionTextTest) {
 
   ui::CompositionText composition;
   composition.text = u"678";
-  composition.ime_text_spans.push_back(
-      ui::ImeTextSpan(ui::ImeTextSpan::Type::kComposition, 0, 3,
-                      ui::ImeTextSpan::Thickness::kThin));
+  composition.ime_text_spans.emplace_back(ui::ImeTextSpan::Type::kComposition,
+                                          0, 3,
+                                          ui::ImeTextSpan::Thickness::kThin);
 
   // Cursor should be at the end of composition when characters are just typed.
   composition.selection = gfx::Range(3, 3);
@@ -1276,12 +1276,12 @@ TEST_F(TextfieldModelTest, CompositionTextTest) {
   // Restart composition with targeting "67" in "678".
   composition.selection = gfx::Range(1, 3);
   composition.ime_text_spans.clear();
-  composition.ime_text_spans.push_back(
-      ui::ImeTextSpan(ui::ImeTextSpan::Type::kComposition, 0, 2,
-                      ui::ImeTextSpan::Thickness::kThick));
-  composition.ime_text_spans.push_back(
-      ui::ImeTextSpan(ui::ImeTextSpan::Type::kComposition, 2, 3,
-                      ui::ImeTextSpan::Thickness::kThin));
+  composition.ime_text_spans.emplace_back(ui::ImeTextSpan::Type::kComposition,
+                                          0, 2,
+                                          ui::ImeTextSpan::Thickness::kThick);
+  composition.ime_text_spans.emplace_back(ui::ImeTextSpan::Type::kComposition,
+                                          2, 3,
+                                          ui::ImeTextSpan::Thickness::kThin);
   model.SetCompositionText(composition);
   EXPECT_TRUE(model.HasCompositionText());
   EXPECT_TRUE(model.HasSelection());
@@ -1931,9 +1931,9 @@ TEST_F(TextfieldModelTest, UndoRedo_CompositionText) {
 
   ui::CompositionText composition;
   composition.text = u"abc";
-  composition.ime_text_spans.push_back(
-      ui::ImeTextSpan(ui::ImeTextSpan::Type::kComposition, 0, 3,
-                      ui::ImeTextSpan::Thickness::kThin));
+  composition.ime_text_spans.emplace_back(ui::ImeTextSpan::Type::kComposition,
+                                          0, 3,
+                                          ui::ImeTextSpan::Thickness::kThin);
   composition.selection = gfx::Range(2, 3);
 
   model.SetText(u"ABCDE", 0);
@@ -1947,8 +1947,8 @@ TEST_F(TextfieldModelTest, UndoRedo_CompositionText) {
   EXPECT_EQ(u"ABCDEabc", model.text());
 
   // Confirm the composition.
-  uint32_t composition_text_length = model.ConfirmCompositionText();
-  EXPECT_EQ(composition_text_length, static_cast<uint32_t>(3));
+  size_t composition_text_length = model.ConfirmCompositionText();
+  EXPECT_EQ(composition_text_length, 3u);
   EXPECT_EQ(u"ABCDEabc", model.text());
   EXPECT_TRUE(model.Undo());
   EXPECT_EQ(u"ABCDE", model.text());

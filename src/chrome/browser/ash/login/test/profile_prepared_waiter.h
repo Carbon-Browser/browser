@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_TEST_PROFILE_PREPARED_WAITER_H_
 #define CHROME_BROWSER_ASH_LOGIN_TEST_PROFILE_PREPARED_WAITER_H_
 
-#include "ash/components/login/auth/auth_status_consumer.h"
 #include "base/run_loop.h"
+#include "chromeos/ash/components/login/auth/auth_status_consumer.h"
 #include "components/account_id/account_id.h"
 
 namespace ash {
@@ -36,13 +36,5 @@ class ProfilePreparedWaiter : public AuthStatusConsumer {
 
 }  // namespace test
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace test {
-using ::ash::test::ProfilePreparedWaiter;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_PROFILE_PREPARED_WAITER_H_

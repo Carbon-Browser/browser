@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "base/memory/safe_ref.h"
+#include "components/viz/common/surfaces/frame_sink_id.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
@@ -32,6 +33,7 @@ class RenderWidgetHostFactory {
   static std::unique_ptr<RenderWidgetHostImpl> Create(
       FrameTree* frame_tree,
       RenderWidgetHostDelegate* delegate,
+      viz::FrameSinkId frame_sink_id,
       base::SafeRef<SiteInstanceGroup> site_instance_group,
       int32_t routing_id,
       bool hidden,
@@ -49,6 +51,7 @@ class RenderWidgetHostFactory {
   virtual std::unique_ptr<RenderWidgetHostImpl> CreateRenderWidgetHost(
       FrameTree* frame_tree,
       RenderWidgetHostDelegate* delegate,
+      viz::FrameSinkId frame_sink_id,
       base::SafeRef<SiteInstanceGroup> site_instance_group,
       int32_t routing_id,
       bool hidden) = 0;

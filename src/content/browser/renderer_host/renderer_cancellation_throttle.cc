@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@ namespace content {
 
 namespace {
 
-// Default timeout for the cancellation window. Chosen initially based on the
-// default commit timeout for navigation requests. Will be updated based on the
+// Default timeout for the cancellation window. From gathering data through the
 // "Navigation.RendererInitiatedCancellation.DeferStartToCancellationWindowEnd"
-// UMA after.
-constexpr base::TimeDelta kDefaultCancellationTimeout = base::Seconds(30);
+// UMA, 99% of navigations' cancellation window ends in under 2000ms, and all
+// cancellation windows end in under 10000ms, so setting this to 11000ms.
+constexpr base::TimeDelta kDefaultCancellationTimeout = base::Seconds(11);
 base::TimeDelta g_cancellation_timeout = kDefaultCancellationTimeout;
 
 }  // namespace
@@ -48,7 +48,6 @@ RendererCancellationThrottle::~RendererCancellationThrottle() = default;
 
 NavigationThrottle::ThrottleCheckResult
 RendererCancellationThrottle::WillProcessResponse() {
-  will_process_response_time_ = base::TimeTicks::Now();
   NavigationRequest* request = NavigationRequest::From(navigation_handle());
   DCHECK(request);
   if (request->renderer_cancellation_window_ended()) {
@@ -80,10 +79,6 @@ RendererCancellationThrottle::WillProcessResponse() {
 void RendererCancellationThrottle::NavigationCancellationWindowEnded() {
   CHECK(NavigationRequest::From(navigation_handle())
             ->renderer_cancellation_window_ended());
-  base::UmaHistogramTimes(
-      "Navigation.RendererInitiatedCancellation."
-      "DeferStartToCancellationWindowEnd",
-      base::TimeTicks::Now() - will_process_response_time_);
   // Stop the timeout and notify that renderer is responsive if necessary.
   renderer_cancellation_timeout_timer_.Stop();
   NavigationRequest* request = NavigationRequest::From(navigation_handle());
@@ -96,7 +91,14 @@ void RendererCancellationThrottle::OnTimeout() {
   // Warn that the renderer is unresponsive.
   NavigationRequest* request = NavigationRequest::From(navigation_handle());
   DCHECK(request);
-  request->GetRenderFrameHost()->GetRenderWidgetHost()->RendererIsUnresponsive(
+
+  auto* previous_rfh =
+      RenderFrameHostImpl::FromID(request->GetPreviousRenderFrameHostId());
+  if (!previous_rfh) {
+    return;
+  }
+
+  previous_rfh->GetRenderWidgetHost()->RendererIsUnresponsive(
       base::BindRepeating(&RendererCancellationThrottle::RestartTimeout,
                           weak_factory_.GetWeakPtr()));
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,10 +68,7 @@ class MODULES_EXPORT RemoteObjectGatewayImpl
   void InjectNamed(const WTF::String& object_name, int32_t object_id);
 
   HashMap<String, int32_t> named_objects_;
-  HashMap<int32_t,
-          RemoteObject*,
-          WTF::IntHash<int32_t>,
-          WTF::UnsignedWithZeroKeyHashTraits<int32_t>>
+  HashMap<int32_t, RemoteObject*, IntWithZeroKeyHashTraits<int32_t>>
       remote_objects_;
 
   HeapMojoReceiver<mojom::blink::RemoteObjectGateway,

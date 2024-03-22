@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@ package org.chromium.ui.base;
 import android.graphics.Rect;
 import android.view.Window;
 
-/**
- * This is a delegate that handles communication about a window's current state and properties.
- */
+/** This is a delegate that handles communication about a window's current state and properties. */
 public class WindowDelegate {
     private final Window mWindow;
 

@@ -15,7 +15,7 @@
  */
 
 // Modifications are owned by the Chromium Authors.
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,6 @@ import com.android.tools.r8.ResourceShrinker.ReferenceChecker;
 import com.android.tools.r8.origin.PathOrigin;
 import com.android.utils.XmlUtils;
 import com.google.common.base.Charsets;
-import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Closeables;
@@ -70,7 +69,7 @@ import javax.xml.parsers.ParserConfigurationException;
 
 /**
   Copied with modifications from gradle core source
-  https://android.googlesource.com/platform/tools/base/+/master/build-system/gradle-core/src/main/groovy/com/android/build/gradle/tasks/ResourceUsageAnalyzer.java
+  https://cs.android.com/search?q=f:build-system.*ResourceUsageAnalyzer.java
 
   Modifications are mostly to:
     - Remove unused code paths to reduce complexity.
@@ -251,6 +250,10 @@ public class UnusedResources {
         final String resourceString = ".R$";
         Map<String, String> nameMap = null;
         for (String line : Files.readLines(mapping, UTF_8)) {
+            // Ignore R8's mapping comments.
+            if (line.startsWith("#")) {
+                continue;
+            }
             if (line.startsWith(" ") || line.startsWith("\t")) {
                 if (nameMap != null) {
                     // We're processing the members of a resource class: record names into the map
@@ -377,6 +380,10 @@ public class UnusedResources {
         }
     }
 
+    private String stringifyResource(Resource resource) {
+        return String.format("%s:%s:0x%08x", resource.type, resource.name, resource.value);
+    }
+
     private void recordClassUsages(File file, String name, byte[] bytes) {
         assert name.endsWith(DOT_DEX);
         ReferenceChecker callback = new ReferenceChecker() {
@@ -404,7 +411,7 @@ public class UnusedResources {
                 if (resource != null) {
                     ResourceUsageModel.markReachable(resource);
                     if (mDebugPrinter != null) {
-                        mDebugPrinter.println("Marking " + resource
+                        mDebugPrinter.println("Marking " + stringifyResource(resource)
                                 + " reachable: referenced from dex"
                                 + " in " + file + ":" + name + " (static field access "
                                 + internalName + "." + fieldName + ")");
@@ -492,6 +499,12 @@ public class UnusedResources {
                         mModel.addResource(symbol.getResourceType(), symbol.getName(), null);
                     }
                 } else {
+                    if (mDebugPrinter != null) {
+                        mDebugPrinter.println("Extracted R.txt resource: "
+                                + symbol.getResourceType() + ":" + symbol.getName() + ":"
+                                + String.format(
+                                        "0x%08x", Integer.parseInt(symbolValue.substring(2), 16)));
+                    }
                     mModel.addResource(symbol.getResourceType(), symbol.getName(), symbolValue);
                 }
             }
@@ -507,8 +520,9 @@ public class UnusedResources {
     private void referencedInt(String context, int value, File file, String currentClass) {
         Resource resource = mModel.getResource(value);
         if (ResourceUsageModel.markReachable(resource) && mDebugPrinter != null) {
-            mDebugPrinter.println("Marking " + resource + " reachable: referenced from " + context
-                    + " in " + file + ":" + currentClass);
+            mDebugPrinter.println("Marking " + stringifyResource(resource)
+                    + " reachable: referenced from " + context + " in " + file + ":"
+                    + currentClass);
         }
     }
 
@@ -533,8 +547,10 @@ public class UnusedResources {
         @Override
         protected void onRootResourcesFound(List<Resource> roots) {
             if (mDebugPrinter != null) {
-                mDebugPrinter.println(
-                        "\nThe root reachable resources are:\n" + Joiner.on(",\n   ").join(roots));
+                mDebugPrinter.println("\nThe root reachable resources are:");
+                for (Resource root : roots) {
+                    mDebugPrinter.println("   " + stringifyResource(root) + ",");
+                }
             }
         }
 

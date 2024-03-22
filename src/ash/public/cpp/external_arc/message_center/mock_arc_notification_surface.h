@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_PUBLIC_CPP_EXTERNAL_ARC_MESSAGE_CENTER_MOCK_ARC_NOTIFICATION_SURFACE_H_
 
 #include "ash/public/cpp/external_arc/message_center/arc_notification_surface.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -34,7 +35,7 @@ class MockArcNotificationSurface : public ArcNotificationSurface {
  private:
   const std::string notification_key_;
   ui::AXTreeID ax_tree_id_;
-  views::NativeViewHost* native_view_host_;
+  raw_ptr<views::NativeViewHost, ExperimentalAsh> native_view_host_;
   const std::unique_ptr<aura::Window> window_;
   const std::unique_ptr<aura::Window> content_window_;
 };

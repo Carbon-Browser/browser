@@ -1,16 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
 
-#include <algorithm>
 #include <string>
 #include <vector>
 
 #include "base/files/file_path.h"
 #include "base/files/memory_mapped_file.h"
 #include "base/path_service.h"
+#include "base/ranges/algorithm.h"
 #include "components/zucchini/buffer_view.h"
 #include "components/zucchini/patch_reader.h"
 #include "components/zucchini/patch_writer.h"
@@ -22,7 +22,7 @@ namespace zucchini {
 
 base::FilePath MakeTestPath(const std::string& filename) {
   base::FilePath path;
-  DCHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &path));
+  DCHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path));
   return path.AppendASCII("components")
       .AppendASCII("zucchini")
       .AppendASCII("testdata")
@@ -77,8 +77,7 @@ void TestGenApply(const std::string& old_filename,
                                                  patched_new_buffer.size()}));
 
   // Note that |new_region| and |patched_new_buffer| are the same size.
-  EXPECT_TRUE(std::equal(new_region.begin(), new_region.end(),
-                         patched_new_buffer.begin()));
+  EXPECT_TRUE(base::ranges::equal(new_region, patched_new_buffer));
 }
 
 TEST(EndToEndTest, GenApplyRaw) {

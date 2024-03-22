@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/models/simple_menu_model.h"
 #include "ui/views/context_menu_controller.h"
 
@@ -67,7 +68,7 @@ class ASH_EXPORT AppsGridContextMenu : public ui::SimpleMenuModel::Delegate,
   std::unique_ptr<views::MenuRunner> menu_runner_;
 
   // The root menu item view of `context_menu_model_`. Cached for testing.
-  views::MenuItemView* root_menu_item_view_ = nullptr;
+  raw_ptr<views::MenuItemView, ExperimentalAsh> root_menu_item_view_ = nullptr;
 
   // Whether the owner view is currently touch dragging, in which case touch
   // events will be forwarded from the context menu to the owner view (so the

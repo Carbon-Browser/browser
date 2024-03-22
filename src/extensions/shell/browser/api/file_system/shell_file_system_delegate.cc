@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/shell/browser/api/file_system/shell_file_system_delegate.h"
 
 #include "apps/saved_files_service.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "extensions/browser/api/file_system/saved_files_service_interface.h"
 #include "extensions/browser/extension_function.h"
@@ -15,7 +15,7 @@ namespace extensions {
 
 ShellFileSystemDelegate::ShellFileSystemDelegate() = default;
 
-ShellFileSystemDelegate::~ShellFileSystemDelegate() {}
+ShellFileSystemDelegate::~ShellFileSystemDelegate() = default;
 
 base::FilePath ShellFileSystemDelegate::GetDefaultDirectory() {
   NOTIMPLEMENTED();
@@ -62,6 +62,23 @@ int ShellFileSystemDelegate::GetDescriptionIdForAcceptType(
   NOTIMPLEMENTED();
   return 0;
 }
+
+#if BUILDFLAG(IS_CHROMEOS)
+void ShellFileSystemDelegate::RequestFileSystem(
+    content::BrowserContext* browser_context,
+    scoped_refptr<ExtensionFunction> requester,
+    ConsentProvider* consent_provider,
+    const Extension& extension,
+    std::string volume_id,
+    bool writable,
+    FileSystemCallback success_callback,
+    ErrorCallback error_callback) {}
+
+void ShellFileSystemDelegate::GetVolumeList(
+    content::BrowserContext* browser_context,
+    VolumeListCallback success_callback,
+    ErrorCallback error_callback) {}
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 SavedFilesServiceInterface* ShellFileSystemDelegate::GetSavedFilesService(
     content::BrowserContext* browser_context) {

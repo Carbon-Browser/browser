@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/accelerator_configuration.h"
+#include "ash/public/mojom/accelerator_configuration.mojom.h"
+#include "ash/public/mojom/accelerator_info.mojom.h"
 #include "ui/base/accelerators/accelerator.h"
 
 #include <vector>
@@ -29,24 +31,27 @@ class ASH_EXPORT BrowserAcceleratorConfiguration
   ~BrowserAcceleratorConfiguration() override;
 
   // AcceleratorConfiguration:
-  const std::vector<AcceleratorInfo>& GetConfigForAction(
-      AcceleratorAction actionId) override;
+  const std::vector<ui::Accelerator>& GetAcceleratorsForAction(
+      AcceleratorActionId action_id) override;
   bool IsMutable() const override;
-  AcceleratorConfigResult AddUserAccelerator(
-      AcceleratorAction action,
+  bool IsDeprecated(const ui::Accelerator& accelerator) const override;
+  mojom::AcceleratorConfigResult AddUserAccelerator(
+      AcceleratorActionId action_id,
       const ui::Accelerator& accelerator) override;
-  AcceleratorConfigResult RemoveAccelerator(
-      AcceleratorAction action,
+  mojom::AcceleratorConfigResult RemoveAccelerator(
+      AcceleratorActionId action_id,
       const ui::Accelerator& accelerator) override;
-  AcceleratorConfigResult ReplaceAccelerator(
-      AcceleratorAction action,
+  mojom::AcceleratorConfigResult ReplaceAccelerator(
+      AcceleratorActionId action_id,
       const ui::Accelerator& old_acc,
       const ui::Accelerator& new_acc) override;
-  AcceleratorConfigResult RestoreDefault(AcceleratorAction action) override;
-  AcceleratorConfigResult RestoreAllDefaults() override;
+  mojom::AcceleratorConfigResult RestoreDefault(
+      AcceleratorActionId action_id) override;
+  mojom::AcceleratorConfigResult RestoreAllDefaults() override;
 
  private:
-  std::vector<AcceleratorInfo> accelerator_infos_;
+  std::vector<ui::Accelerator> accelerators_;
+  std::vector<mojom::AcceleratorLayoutInfoPtr> layout_infos_;
 };
 
 }  // namespace ash

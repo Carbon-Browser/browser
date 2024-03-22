@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/command_line.h"
 #include "base/debug/leak_annotations.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
@@ -43,9 +44,14 @@ const char* OperationToString(InstallerState::Operation operation) {
   return "";
 }
 
-// Retrieve the SYSTEM version of TEMP. We do this instead of GetTempPath so
-// that both elevated and SYSTEM runs share the same directory.
+// Returns the path returned by `base::GetSecureSystemTemp` if available.
+// Otherwise, retrieves the SYSTEM version of TEMP. We do this instead of
+// GetTempPath so that both elevated and SYSTEM runs share the same directory.
 bool GetSystemTemp(base::FilePath* temp) {
+  if (base::GetSecureSystemTemp(temp)) {
+    return true;
+  }
+
   base::win::RegKey reg_key(
       HKEY_LOCAL_MACHINE,
       L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",

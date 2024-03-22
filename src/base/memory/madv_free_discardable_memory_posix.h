@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/discardable_memory.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
@@ -112,7 +112,8 @@ class BASE_EXPORT MadvFreeDiscardableMemoryPosix : public DiscardableMemory {
   // destruction.
   raw_ptr<std::atomic<size_t>> allocator_byte_count_;
 
-  raw_ptr<void> data_;
+  // Data comes from mmap() and we manage its poisioning.
+  RAW_PTR_EXCLUSION void* data_;
   bool is_locked_ = true;
 
   // If true, MADV_FREE will not be set on Unlock().

@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_ASSISTANT_UI_MAIN_STAGE_ELEMENT_ANIMATOR_H_
 #define ASH_ASSISTANT_UI_MAIN_STAGE_ELEMENT_ANIMATOR_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 
 namespace ui {
@@ -63,7 +64,7 @@ class ElementAnimator {
  private:
   // The parent |AnimatedContainerView| owns both |view_| and |this| and will
   // delete |this| when |view_| is removed.
-  views::View* const view_;
+  const raw_ptr<views::View, ExperimentalAsh> view_;
 };
 
 }  // namespace ash

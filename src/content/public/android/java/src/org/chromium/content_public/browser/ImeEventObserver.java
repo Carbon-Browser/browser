@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,9 @@ package org.chromium.content_public.browser;
 
 import android.view.KeyEvent;
 
-/**
- * Interface for the classes that need to be notified of IME changes.
- */
+/** Interface for the classes that need to be notified of IME changes. */
 public interface ImeEventObserver {
-    /**
-     * Called to notify the delegate about synthetic/real key events before sending to renderer.
-     */
+    /** Called to notify the delegate about synthetic/real key events before sending to renderer. */
     default void onImeEvent() {}
 
     /**

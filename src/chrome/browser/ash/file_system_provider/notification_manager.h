@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/file_system_provider/notification_manager_interface.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
@@ -48,8 +49,11 @@ class NotificationManager : public NotificationManagerInterface,
   void HideUnresponsiveNotification(int id) override;
 
   // AppIconLoaderDelegate overrides:
-  void OnAppImageUpdated(const std::string& id,
-                         const gfx::ImageSkia& image) override;
+  void OnAppImageUpdated(
+      const std::string& id,
+      const gfx::ImageSkia& image,
+      bool is_placeholder_icon,
+      const absl::optional<gfx::ImageSkia>& badge_image) override;
 
   // message_center::NotificationObserver overrides:
   void Click(const absl::optional<int>& button_index,
@@ -70,7 +74,7 @@ class NotificationManager : public NotificationManagerInterface,
   // clearing the list.
   void OnNotificationResult(NotificationResult result);
 
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
   ProvidedFileSystemInfo file_system_info_;
   CallbackMap callbacks_;
   std::unique_ptr<AppIconLoader> icon_loader_;

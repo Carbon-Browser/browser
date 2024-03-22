@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "components/media_router/common/discovery/media_sink_internal.h"
+#include "components/media_router/common/providers/cast/channel/cast_device_capability.h"
 
 namespace media_router {
 
@@ -18,7 +19,8 @@ static constexpr char kCastServiceType[] = "_googlecast._tcp.local";
 
 // Returns the icon type to use according to |capabilities|. |capabilities| is
 // a bit set of cast_channel::CastDeviceCapabilities in CastSinkExtraData.
-SinkIconType GetCastSinkIconType(uint8_t capabilities);
+SinkIconType GetCastSinkIconType(
+    cast_channel::CastDeviceCapabilitySet capabilities);
 
 enum CreateCastMediaSinkResult {
   kOk,

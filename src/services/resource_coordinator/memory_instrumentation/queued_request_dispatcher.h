@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,8 +63,7 @@ class QueuedRequestDispatcher {
   // dispatching to the appropriate callback. Also adds to tracing using
   // |tracing_observer| if the |request| requires it.
   static void Finalize(QueuedRequest* request,
-                       TracingObserver* tracing_observer,
-                       bool use_proto_writer);
+                       TracingObserver* tracing_observer);
 
   static void SetUpAndDispatchVmRegionRequest(
       QueuedVmRegionRequest* request,
@@ -78,10 +77,7 @@ class QueuedRequestDispatcher {
       const base::trace_event::MemoryDumpRequestArgs& args,
       base::ProcessId pid,
       const base::trace_event::ProcessMemoryDump& raw_chrome_dump,
-      const perfetto::trace_processor::GlobalNodeGraph& global_graph,
-      const std::map<base::ProcessId, mojom::ProcessType>& pid_to_process_type,
       TracingObserver* tracing_observer,
-      bool use_proto_writer,
       const base::TimeTicks& timestamp);
 };
 

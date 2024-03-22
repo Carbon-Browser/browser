@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/memory_mapped_file.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/threading/sequence_local_storage_slot.h"
 #include "content/common/content_export.h"

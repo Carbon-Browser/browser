@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,12 @@ import './crostini.js';
 import './directory_tree.js';
 import './directory_tree_context_menu.js';
 import './dlp.js';
+import './dlp_enterprise_connectors.js';
 import './drive_specific.js';
 import './file_dialog.js';
 import './file_display.js';
 import './file_list.js';
+import './file_transfer_connector.js';
 import './files_tooltip.js';
 import './folder_shortcuts.js';
 import './format_dialog.js';
@@ -27,17 +29,19 @@ import './keyboard_operations.js';
 import './metadata.js';
 import './metrics.js';
 import './my_files.js';
+import './navigation.js';
 import './office.js';
 import './open_audio_media_app.js';
+import './open_files_in_web_drive.js';
 import './open_image_media_app.js';
 import './open_sniffed_files.js';
 import './open_video_media_app.js';
 import './providers.js';
 import './quick_view.js';
 import './recents.js';
-import './restore_geometry.js';
 import './restore_prefs.js';
 import './search.js';
+import './share.js';
 import './share_and_manage_dialog.js';
 import './sort_columns.js';
 import './tab_index.js';
@@ -49,11 +53,12 @@ import './traverse.js';
 import './zip_files.js';
 
 import {FilesAppState} from '../files_app_state.js';
-import {RemoteCall, RemoteCallFilesApp} from '../remote_call.js';
-import {addEntries, checkIfNoErrorsOccuredOnApp, ENTRIES, getCaller, getRootPathsResult, pending, repeatUntil, RootPath, sendBrowserTestCommand, sendTestMessage, TestEntryInfo, testPromiseAndApps} from '../test_util.js';
+import {RemoteCallFilesApp} from '../remote_call.js';
+import {addEntries, getCaller, getRootPathsResult, pending, repeatUntil, RootPath, sendBrowserTestCommand, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
 import {CHOOSE_ENTRY_PROPERTY} from './choose_entry_const.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_CROSTINI_ENTRY_SET, BASIC_DRIVE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET, FILE_MANAGER_EXTENSIONS_ID} from './test_data.js';
 
 /**
@@ -69,15 +74,6 @@ export {FILE_MANAGER_EXTENSIONS_ID};
  * @type {!RemoteCallFilesApp}
  */
 export let remoteCall;
-
-/**
- * Extension ID of Audio Player.
- * @type {string}
- * @const
- */
-export const AUDIO_PLAYER_APP_ID = 'cjbfomnbifhcdnihkgipgfcihmgjfhbf';
-
-export const audioPlayerApp = new RemoteCall(AUDIO_PLAYER_APP_ID);
 
 /**
  * Opens a Files app's main window.
@@ -96,29 +92,20 @@ export async function openNewWindow(initialRoot, appState = {}) {
   // file_manager_browser_test.cc.
   if (initialRoot) {
     const tail = `external${initialRoot}`;
-    if (remoteCall.isSwaMode()) {
-      appState.currentDirectoryURL =
-          `filesystem:${FILE_MANAGER_SWA_ID}/${tail}`;
-    } else {
-      appState.currentDirectoryURL =
-          `filesystem:chrome-extension://${FILE_MANAGER_EXTENSIONS_ID}/${tail}`;
-    }
+    appState.currentDirectoryURL = `filesystem:${FILE_MANAGER_SWA_ID}/${tail}`;
   }
 
-  let appId;
-
-  if (remoteCall.isSwaMode()) {
-    const launchDir = appState ? appState.currentDirectoryURL : undefined;
-    const type = appState ? appState.type : undefined;
-    appId = await sendTestMessage({
-      name: 'launchFileManagerSwa',
-      launchDir: launchDir,
-      type: type,
-    });
-  } else {
-    appId =
-        await remoteCall.callRemoteTestUtil('openMainWindow', null, [appState]);
-  }
+  const launchDir = appState ? appState.currentDirectoryURL : undefined;
+  const type = appState ? appState.type : undefined;
+  const volumeFilter = appState ? appState.volumeFilter : undefined;
+  const searchQuery = appState ? appState.searchQuery : undefined;
+  const appId = await sendTestMessage({
+    name: 'launchFileManager',
+    launchDir,
+    type,
+    volumeFilter,
+    searchQuery,
+  });
 
   return appId;
 }
@@ -150,8 +137,8 @@ export async function openEntryChoosingWindow(params) {
 /**
  * Companion function to openEntryChoosingWindow function. This function waits
  * until entry selected in a dialog shown by chooseEntry() is set.
- * @return {!Promise<?Entry>} the entry set by the dialog shown via
- *     chooseEntry().
+ * @return {!Promise<?(Entry|Array<Entry>)>} the entry set by the dialog shown
+ *     via chooseEntry().
  */
 export async function pollForChosenEntry(caller) {
   await repeatUntil(() => {
@@ -159,7 +146,8 @@ export async function pollForChosenEntry(caller) {
       return pending(caller, 'Waiting for chooseEntry() result');
     }
   });
-  return /** @type{FileEntry} */ (window[CHOOSE_ENTRY_PROPERTY]);
+  return /** @type{FileEntry|Array<FileEntry>} */ (
+      window[CHOOSE_ENTRY_PROPERTY]);
 }
 
 /**
@@ -167,34 +155,39 @@ export async function pollForChosenEntry(caller) {
  *
  * @param {chrome.fileSystem.AcceptsOption} dialogParams Dialog parameters to be
  *     passed to openEntryChoosingWindow() function.
- * @param {string} volumeName Volume name passed to the selectVolume remote
- *     function.
+ * @param {string} volumeType Volume icon type passed to the directory page
+ *     object's selectItemByType function.
  * @param {!Array<!TestEntryInfo>} expectedSet Expected set of the entries.
  * @param {function(string):Promise} closeDialog Function to close the
  *     dialog.
  * @param {boolean} useBrowserOpen Whether to launch the select file dialog via
  *     a browser OpenFile() call.
+ * @param {boolean=} debug Whether to debug the waitForWindow().
  * @return {Promise} Promise to be fulfilled with the result entry of the
  *     dialog.
  */
 export async function openAndWaitForClosingDialog(
-    dialogParams, volumeName, expectedSet, closeDialog,
-    useBrowserOpen = false) {
+    dialogParams, volumeType, expectedSet, closeDialog, useBrowserOpen = false,
+    debug = false) {
   const caller = getCaller();
   let resultPromise;
   if (useBrowserOpen) {
-    resultPromise = sendTestMessage({name: 'runSelectFileDialog'});
+    await sendTestMessage({name: 'runSelectFileDialog'});
+    resultPromise = async () => {
+      return await sendTestMessage({name: 'waitForSelectFileDialogNavigation'});
+    };
   } else {
     await openEntryChoosingWindow(dialogParams);
-    resultPromise = pollForChosenEntry(caller);
+    resultPromise = () => {
+      return pollForChosenEntry(caller);
+    };
   }
 
-  const appId = await remoteCall.waitForWindow('dialog#');
+  const appId = await remoteCall.waitForWindow(debug);
   await remoteCall.waitForElement(appId, '#file-list');
   await remoteCall.waitFor('isFileManagerLoaded', appId, true);
-  chrome.test.assertTrue(
-      await remoteCall.callRemoteTestUtil('selectVolume', appId, [volumeName]),
-      'selectVolume failed');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType(volumeType);
   await remoteCall.waitForFiles(
       appId, TestEntryInfo.getExpectedRows(expectedSet));
   await closeDialog(appId);
@@ -204,7 +197,7 @@ export async function openAndWaitForClosingDialog(
       return pending(caller, 'Waiting for Window %s to hide.', appId);
     }
   });
-  return resultPromise;
+  return await resultPromise();
 }
 
 /**
@@ -289,11 +282,7 @@ export async function awaitAsyncTestResult(resultPromise) {
   const passCallback = chrome.test.callbackPass();
 
   try {
-    const result = await resultPromise;
-    // SWA doesn't have background page so we can't always check for errors.
-    if (result !== IGNORE_APP_ERRORS && !remoteCall.isSwaMode()) {
-      await checkIfNoErrorsOccuredOnApp(remoteCall);
-    }
+    await resultPromise;
   } catch (error) {
     // If the test has failed, ignore the exception and return.
     if (error == 'chrome.test.failure') {
@@ -316,22 +305,14 @@ export async function awaitAsyncTestResult(resultPromise) {
 /**
  * When the FileManagerBrowserTest harness loads this test extension, request
  * configuration and other details from that harness, including the test case
- * name to run. Use the configuration/details to setup the test ennvironment,
+ * name to run. Use the configuration/details to setup the test environment,
  * then run the test case using chrome.test.RunTests.
  */
 window.addEventListener('load', () => {
   const steps = [
-    // Check if we are running in Files SWA mode.
-    () => {
-      sendBrowserTestCommand({name: 'isFilesAppSwa'}, steps.shift());
-    },
     // Request the guest mode state.
-    (swaMode) => {
-      if (swaMode === 'true') {
-        remoteCall = new RemoteCallFilesApp(FILE_MANAGER_SWA_ID);
-      } else {
-        remoteCall = new RemoteCallFilesApp(FILE_MANAGER_EXTENSIONS_ID);
-      }
+    () => {
+      remoteCall = new RemoteCallFilesApp(FILE_MANAGER_SWA_ID);
       sendBrowserTestCommand({name: 'isInGuestMode'}, steps.shift());
     },
     // Request the root entry paths.
@@ -345,6 +326,7 @@ window.addEventListener('load', () => {
     paths => {
       const roots = /** @type {getRootPathsResult} */ (JSON.parse(paths));
       RootPath.DOWNLOADS = roots.downloads;
+      RootPath.MY_FILES = roots.my_files;
       RootPath.DRIVE = roots.drive;
       RootPath.ANDROID_FILES = roots.android_files;
       sendBrowserTestCommand({name: 'getTestName'}, steps.shift());
@@ -382,8 +364,7 @@ window.addEventListener('load', () => {
  * @return {Promise} Promise fulfilled on success.
  */
 export async function createShortcut(appId, directoryName) {
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [directoryName]));
+  await remoteCall.waitUntilSelected(appId, directoryName);
 
   await remoteCall.waitForElement(appId, ['.table-row[selected]']);
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -396,94 +377,8 @@ export async function createShortcut(appId, directoryName) {
       'fakeMouseClick', appId,
       ['[command="#pin-folder"]:not([hidden]):not([disabled])']));
 
-  await remoteCall.waitForElement(
-      appId, `.tree-item[entry-label="${directoryName}"]`);
-}
-
-/**
- * Expands a single tree item by clicking on its expand icon.
- *
- * @param {string} appId Files app windowId.
- * @param {string} treeItem Query to the tree item that should be expanded.
- * @return {Promise} Promise fulfilled on success.
- */
-export async function expandTreeItem(appId, treeItem) {
-  const expandIcon = treeItem + '> .tree-row[has-children=true] .expand-icon';
-  await remoteCall.waitAndClickElement(appId, expandIcon);
-
-  const expandedSubtree = treeItem + '> .tree-children[expanded]';
-  await remoteCall.waitForElement(appId, expandedSubtree);
-}
-
-/**
- * Uses directory tree to expand each directory in the breadcrumbs path.
- *
- * @param {string} appId Files app windowId.
- * @param {string} breadcrumbsPath Path based in the entry labels like:
- *    /My files/Downloads/photos
- * @return {Promise<string>} Promise fulfilled on success with the selector
- *    query of the last directory expanded.
- */
-export async function recursiveExpand(appId, breadcrumbsPath) {
-  const paths = breadcrumbsPath.split('/').filter(path => path);
-  const hasChildren = ' > .tree-row[has-children=true]';
-
-  // Expand each directory in the breadcrumb.
-  let query = '#directory-tree';
-  for (const parentLabel of paths) {
-    // Wait for parent element to be displayed.
-    query += ` [entry-label="${parentLabel}"]`;
-    await remoteCall.waitForElement(appId, query);
-
-    // Only expand if element isn't expanded yet.
-    const elements = await remoteCall.callRemoteTestUtil(
-        'queryAllElements', appId, [query + '[expanded]']);
-    if (!elements.length) {
-      await remoteCall.waitForElement(appId, query + hasChildren);
-      await expandTreeItem(appId, query);
-    }
-  }
-
-  return query;
-}
-
-/**
- * Focus the directory tree and navigates using mouse clicks.
- *
- * @param {!string} appId
- * @param {!string} breadcrumbsPath Path based on the entry labels like:
- *     /My files/Downloads/photos to item that should navigate to.
- * @param {string=} shortcutToPath For shortcuts it navigates to a different
- *   breadcrumbs path, like /My Drive/ShortcutName.
- *   @return {!Promise<string>} the final selector used to click on the desired
- * tree item.
- */
-export async function navigateWithDirectoryTree(
-    appId, breadcrumbsPath, shortcutToPath) {
-  // Focus the directory tree.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'focus', appId, ['#directory-tree']),
-      'focus failed: #directory-tree');
-
-  const paths = breadcrumbsPath.split('/');
-  const leaf = paths.pop();
-
-  // Expand all parents of the leaf entry.
-  let query = await recursiveExpand(appId, paths.join('/'));
-
-  // Navigate to the final entry.
-  query += ` [entry-label="${leaf}"]`;
-  await remoteCall.waitAndClickElement(appId, query);
-
-  // Wait directory to finish scanning its content.
-  await remoteCall.waitForElement(appId, `[scan-completed="${leaf}"]`);
-
-  // Wait to navigation to final entry to finish.
-  await remoteCall.waitUntilCurrentDirectoryIsChanged(
-      appId, (shortcutToPath || breadcrumbsPath));
-
-  return query;
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForShortcutItemByLabel(directoryName);
 }
 
 /**
@@ -494,19 +389,48 @@ export async function navigateWithDirectoryTree(
  */
 export async function mountCrostini(
     appId, initialEntries = BASIC_CROSTINI_ENTRY_SET) {
-  const fakeLinuxFiles = '#directory-tree [root-type-icon="crostini"]';
-  const realLinxuFiles = '#directory-tree [volume-type-icon="crostini"]';
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
 
   // Add entries to crostini volume, but do not mount.
   await addEntries(['crostini'], initialEntries);
 
   // Linux files fake root is shown.
-  await remoteCall.waitForElement(appId, fakeLinuxFiles);
+  await directoryTree.waitForPlaceholderItemByType('crostini');
 
   // Mount crostini, and ensure real root and files are shown.
-  remoteCall.callRemoteTestUtil('fakeMouseClick', appId, [fakeLinuxFiles]);
-  await remoteCall.waitForElement(appId, realLinxuFiles);
+  await directoryTree.selectPlaceholderItemByType('crostini');
+  await directoryTree.waitForItemByType('crostini');
   const files = TestEntryInfo.getExpectedRows(BASIC_CROSTINI_ENTRY_SET);
+  await remoteCall.waitForFiles(appId, files);
+}
+
+/**
+ * Registers a GuestOS, mounts the volume, and populates it with tbe specified
+ * entries.
+ * @param {string} appId Files app windowId.
+ * @param {!Array<!TestEntryInfo>} initialEntries List of initial entries to
+ *     load in the volume.
+ */
+export async function mountGuestOs(appId, initialEntries) {
+  await sendTestMessage({
+    name: 'registerMountableGuest',
+    displayName: 'Bluejohn',
+    canMount: true,
+    vmType: 'bruschetta',
+  });
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+
+  // Wait for the GuestOS fake root then click it.
+  await directoryTree.selectPlaceholderItemByType('bruschetta');
+
+  // Wait for the volume to get mounted.
+  await directoryTree.waitForItemByType('bruschetta');
+
+  // Add entries to GuestOS volume
+  await addEntries(['guest_os_0'], initialEntries);
+
+  // Ensure real root and files are shown.
+  const files = TestEntryInfo.getExpectedRows(initialEntries);
   await remoteCall.waitForFiles(appId, files);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -139,6 +139,10 @@ TEST(ArcFileSystemWatcherUtilTest, HasAndroidSupportedMediaExtension) {
       base::FilePath(FILE_PATH_LITERAL("/tmp/kitten.xmf"))));
   EXPECT_TRUE(HasAndroidSupportedMediaExtension(
       base::FilePath(FILE_PATH_LITERAL("/tmp/kitten.nef"))));
+  EXPECT_TRUE(HasAndroidSupportedMediaExtension(
+      base::FilePath(FILE_PATH_LITERAL("/tmp/kitten.txt"))));
+  EXPECT_TRUE(HasAndroidSupportedMediaExtension(
+      base::FilePath(FILE_PATH_LITERAL("/tmp/kitten.pdf"))));
 
   EXPECT_TRUE(HasAndroidSupportedMediaExtension(
       base::FilePath(FILE_PATH_LITERAL("/tmp/kitten.JPEG"))));
@@ -148,7 +152,7 @@ TEST(ArcFileSystemWatcherUtilTest, HasAndroidSupportedMediaExtension) {
       base::FilePath(FILE_PATH_LITERAL("/tmp/.kitten.jpg"))));
 
   EXPECT_FALSE(HasAndroidSupportedMediaExtension(
-      base::FilePath(FILE_PATH_LITERAL("/tmp/kitten.txt"))));
+      base::FilePath(FILE_PATH_LITERAL("/tmp/kitten.zip"))));
   EXPECT_FALSE(HasAndroidSupportedMediaExtension(
       base::FilePath(FILE_PATH_LITERAL("/tmp/kitten.jpg.exe"))));
   EXPECT_FALSE(HasAndroidSupportedMediaExtension(

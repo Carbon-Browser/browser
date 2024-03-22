@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/providers/wired_display/wired_display_media_route_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/media/router/providers/wired_display/wired_display_presentation_receiver.h"
@@ -33,6 +33,8 @@ using testing::WithArg;
 namespace media_router {
 
 namespace {
+
+static constexpr int kFrameTreeNodeId = 1;
 
 class MockCallback {
  public:
@@ -108,7 +110,7 @@ class MockReceiverCreator {
 
   // Retains a reference to |unique_receiver_| even after |this| loses its
   // ownership.
-  const raw_ptr<MockPresentationReceiver> receiver_;
+  const raw_ptr<MockPresentationReceiver, DanglingUntriaged> receiver_;
 };
 
 const char kPresentationSource[] = "https://www.example.com/presentation";
@@ -331,8 +333,8 @@ TEST_F(WiredDisplayMediaRouteProviderTest, CreateAndTerminateRoute) {
               Start(presentation_id, GURL(kPresentationSource)));
   provider_remote_->CreateRoute(
       kPresentationSource, GetSinkId(secondary_display1_), presentation_id,
-      url::Origin::Create(GURL(kPresentationSource)), 0, base::Seconds(100),
-      false,
+      url::Origin::Create(GURL(kPresentationSource)), kFrameTreeNodeId,
+      base::Seconds(100),
       base::BindOnce(&MockCallback::CreateRoute, base::Unretained(&callback)));
   base::RunLoop().RunUntilIdle();
 
@@ -367,8 +369,8 @@ TEST_F(WiredDisplayMediaRouteProviderTest, SendMediaStatusUpdate) {
   // Create a route for |presentation_id|.
   provider_remote_->CreateRoute(
       kPresentationSource, GetSinkId(secondary_display1_), presentation_id,
-      url::Origin::Create(GURL(kPresentationSource)), 0, base::Seconds(100),
-      false,
+      url::Origin::Create(GURL(kPresentationSource)), kFrameTreeNodeId,
+      base::Seconds(100),
       base::BindOnce(&MockCallback::CreateRoute, base::Unretained(&callback)));
   base::RunLoop().RunUntilIdle();
 
@@ -396,8 +398,8 @@ TEST_F(WiredDisplayMediaRouteProviderTest, ExitFullscreenOnDisplayRemoved) {
 
   provider_remote_->CreateRoute(
       kPresentationSource, GetSinkId(secondary_display1_), "presentationId",
-      url::Origin::Create(GURL(kPresentationSource)), 0, base::Seconds(100),
-      false,
+      url::Origin::Create(GURL(kPresentationSource)), kFrameTreeNodeId,
+      base::Seconds(100),
       base::BindOnce(&MockCallback::CreateRoute, base::Unretained(&callback)));
   base::RunLoop().RunUntilIdle();
 

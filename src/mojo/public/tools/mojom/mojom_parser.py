@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright 2020 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Parses mojom IDL files.
@@ -61,7 +61,7 @@ def _ResolveRelativeImportPath(path, roots):
   raise ValueError('"%s" does not exist in any of %s' % (path, roots))
 
 
-def _RebaseAbsolutePath(path, roots):
+def RebaseAbsolutePath(path, roots):
   """Rewrites an absolute file path as relative to an absolute directory path in
   roots.
 
@@ -294,7 +294,7 @@ def _ParseMojoms(mojom_files,
   loaded_modules = {}
   input_dependencies = defaultdict(set)
   mojom_files_to_parse = dict((os.path.normcase(abs_path),
-                               _RebaseAbsolutePath(abs_path, input_root_paths))
+                               RebaseAbsolutePath(abs_path, input_root_paths))
                               for abs_path in mojom_files)
   abs_paths = dict(
       (path, abs_path) for abs_path, path in mojom_files_to_parse.items())
@@ -495,5 +495,8 @@ already present in the provided output root.""")
 if __name__ == '__main__':
   Run(sys.argv[1:])
   # Exit without running GC, which can save multiple seconds due to the large
-  # number of object created.
+  # number of object created. But flush is necessary as os._exit doesn't do
+  # that.
+  sys.stdout.flush()
+  sys.stderr.flush()
   os._exit(0)

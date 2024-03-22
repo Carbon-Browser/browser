@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,8 +86,28 @@ void ChromeBrowserMainPartsLacros::PreProfileInit() {
   content::TtsPlatform::GetInstance();
 }
 
+void ChromeBrowserMainPartsLacros::PostProfileInit(Profile* profile,
+                                                   bool is_initial_profile) {
+  ChromeBrowserMainPartsLinux::PostProfileInit(profile, is_initial_profile);
+  prefs_ash_observer_->InitPostProfileInitialized(profile);
+}
+
+void ChromeBrowserMainPartsLacros::PostMainMessageLoopRun() {
+  // Reset MetricsReportingObserver here to guarantee it's destroyed before
+  // `g_browser_process->metrics_service()` is destructed as
+  // MetricsReportingObserver depends on metrics service.
+  metrics_reporting_observer_.reset();
+
+  ChromeBrowserMainParts::PostMainMessageLoopRun();
+}
+
 void ChromeBrowserMainPartsLacros::PostDestroyThreads() {
   chromeos::LacrosShutdownDBus();
+
+  // Reset PrefsAshObserver here to guarantee it's destroyed before
+  // `g_browser_process->local_state()` is destructed as PrefsAshObserver
+  // depends on local state.
+  prefs_ash_observer_.reset();
 
   ChromeBrowserMainPartsLinux::PostDestroyThreads();
 }

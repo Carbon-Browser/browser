@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,11 @@ class ExtensionIdForTracing;
 namespace content {
 
 class CONTENT_EXPORT PseudonymizationUtil {
+ public:
+  // This is a test only interface that is identical to the public interface,
+  // but does not require friending.
+  static uint32_t PseudonymizeStringForTesting(base::StringPiece string);
+
  private:
   // Pseudonymizes the input `string` by passing it through a one-way hash
   // function (e.g. SHA1) and salting with an pseudonymization salt (randomly

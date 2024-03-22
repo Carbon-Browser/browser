@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_OVERLAY_PROCESSOR_SURFACE_CONTROL_H_
 
 #include "components/viz/service/display/overlay_processor_using_strategy.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace viz {
 
@@ -15,6 +16,8 @@ class VIZ_SERVICE_EXPORT OverlayProcessorSurfaceControl
  public:
   OverlayProcessorSurfaceControl();
   ~OverlayProcessorSurfaceControl() override;
+
+  static absl::optional<gfx::ColorSpace> GetOverrideColorSpace();
 
   bool IsOverlaySupported() const override;
 
@@ -32,9 +35,6 @@ class VIZ_SERVICE_EXPORT OverlayProcessorSurfaceControl
       const OverlayCandidate& overlay) const override;
 
  private:
-  // Historically, android media was hardcoding color space to srgb. This
-  // indicates that we going to use real one.
-  const bool use_real_color_space_;
   gfx::OverlayTransform display_transform_ = gfx::OVERLAY_TRANSFORM_NONE;
   gfx::Size viewport_size_;
 };

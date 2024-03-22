@@ -14,9 +14,10 @@ dictionary USBDeviceFilter {
 
 dictionary USBDeviceRequestOptions {
   required sequence<USBDeviceFilter> filters;
+  sequence<USBDeviceFilter> exclusionFilters = [];
 };
 
-[Exposed=(DedicatedWorker,SharedWorker,Window), SecureContext]
+[Exposed=(Worker,Window), SecureContext]
 interface USB : EventTarget {
   attribute EventHandler onconnect;
   attribute EventHandler ondisconnect;
@@ -29,7 +30,7 @@ partial interface Navigator {
   [SameObject] readonly attribute USB usb;
 };
 
-[Exposed=(DedicatedWorker,SharedWorker), SecureContext]
+[Exposed=Worker, SecureContext]
 partial interface WorkerNavigator {
   [SameObject] readonly attribute USB usb;
 };
@@ -229,8 +230,16 @@ interface USBEndpoint {
   readonly attribute unsigned long packetSize;
 };
 
+// USBBlocklistEntry is never exposed.
+dictionary USBBlocklistEntry {
+  required unsigned short idVendor;
+  required unsigned short idProduct;
+  required unsigned short bcdDevice;
+};
+
 dictionary USBPermissionDescriptor : PermissionDescriptor {
   sequence<USBDeviceFilter> filters;
+  sequence<USBDeviceFilter> exclusionFilters;
 };
 
 dictionary AllowedUSBDevice {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,17 +48,7 @@ class VIZ_COMMON_EXPORT FrameDeadline {
       absl::optional<uint32_t> default_deadline_in_frames =
           absl::nullopt) const;
 
-  bool operator==(const FrameDeadline& other) const {
-    return other.frame_start_time_ == frame_start_time_ &&
-           other.deadline_in_frames_ == deadline_in_frames_ &&
-           other.frame_interval_ == frame_interval_ &&
-           other.use_default_lower_bound_deadline_ ==
-               use_default_lower_bound_deadline_;
-  }
-
-  bool operator!=(const FrameDeadline& other) const {
-    return !(*this == other);
-  }
+  friend bool operator==(const FrameDeadline&, const FrameDeadline&) = default;
 
   base::TimeTicks frame_start_time() const { return frame_start_time_; }
 

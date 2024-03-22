@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,6 @@
 
 // Logs metrics for Chrome first-run operations.
 @interface FirstRunSigninLogger : UserSigninLogger
-
-- (instancetype)initWithAccessPoint:(signin_metrics::AccessPoint)accessPoint
-                        promoAction:(signin_metrics::PromoAction)promoAction
-              accountManagerService:
-                  (ChromeAccountManagerService*)accountManagerService
-    NS_UNAVAILABLE;
-
-// The designated initializer.
-- (instancetype)initWithPromoAction:(signin_metrics::PromoAction)promoAction
-              accountManagerService:
-                  (ChromeAccountManagerService*)accountManagerService
-    NS_DESIGNATED_INITIALIZER;
 
 @end
 

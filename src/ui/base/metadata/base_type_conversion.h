@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/models/menu_separator_types.h"
+#include "ui/base/ui_base_types.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/point_f.h"
@@ -379,5 +380,6 @@ EXPORT_ENUM_CONVERTERS(gfx::VerticalAlignment,
 EXPORT_ENUM_CONVERTERS(gfx::ElideBehavior, COMPONENT_EXPORT(UI_BASE_METADATA))
 EXPORT_ENUM_CONVERTERS(ui::MenuSeparatorType,
                        COMPONENT_EXPORT(UI_BASE_METADATA))
+EXPORT_ENUM_CONVERTERS(ui::ButtonStyle, COMPONENT_EXPORT(UI_BASE_METADATA))
 
 #endif  // UI_BASE_METADATA_BASE_TYPE_CONVERSION_H_

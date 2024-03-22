@@ -1,10 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory;
 
-import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.contrib.RecyclerViewActions.actionOnItem;
 import static androidx.test.espresso.contrib.RecyclerViewActions.scrollTo;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
@@ -15,7 +14,6 @@ import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHe
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingTestHelper.whenDisplayed;
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabTestHelper.isKeyboardAccessoryTabLayout;
 
-import androidx.recyclerview.widget.RecyclerView;
 import androidx.test.filters.MediumTest;
 
 import org.junit.After;
@@ -24,15 +22,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.test.ScreenShooter;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.browser_ui.widget.RecyclerViewTestUtils;
 
 import java.util.concurrent.TimeoutException;
@@ -43,15 +37,13 @@ import java.util.concurrent.TimeoutException;
  * components belong into {@link ManualFillingIntegrationTest}.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
-@EnableFeatures({ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY})
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class ManualFillingUiCaptureTest {
     @Rule
     public final ChromeTabbedActivityTestRule mActivityTestRule =
             new ChromeTabbedActivityTestRule();
 
-    @Rule
-    public final ScreenShooter mScreenShooter = new ScreenShooter();
+    @Rule public final ScreenShooter mScreenShooter = new ScreenShooter();
 
     private final ManualFillingTestHelper mHelper = new ManualFillingTestHelper(mActivityTestRule);
 
@@ -62,64 +54,7 @@ public class ManualFillingUiCaptureTest {
 
     @Test
     @MediumTest
-    @DisableFeatures(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
-    @Feature({"KeyboardAccessory", "LTR", "UiCatalogue"})
-    @DisabledTest(message = "Flaky, see https://crbug.com/1095672")
-    public void testCaptureKeyboardAccessoryWithPasswords()
-            throws InterruptedException, TimeoutException {
-        mHelper.loadTestPage(false);
-        mHelper.cacheTestCredentials();
-        mHelper.addGenerationButton();
-
-        mHelper.focusPasswordField();
-        mHelper.waitForKeyboardAccessoryToBeShown();
-
-        waitForActionsInAccessory();
-        waitForUnrelatedChromeUi();
-        mScreenShooter.shoot("AccessoryBar");
-
-        whenDisplayed(withId(R.id.tabs)).perform(selectTabAtPosition(0));
-        waitForSuggestionsInSheet();
-        waitForUnrelatedChromeUi();
-        mScreenShooter.shoot("AccessorySheetPasswords");
-
-        whenDisplayed(withId(R.id.passwords_sheet)).perform(scrollToLastElement());
-        waitForUnrelatedChromeUi();
-        mScreenShooter.shoot("AccessorySheetPasswordsScrolled");
-    }
-
-    @Test
-    @MediumTest
-    @DisableFeatures(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
-    @Feature({"KeyboardAccessory", "RTL", "UiCatalogue"})
-    @DisabledTest(message = "Flaky, see https://crbug.com/1095672")
-    public void testCaptureKeyboardAccessoryWithPasswordsRTL()
-            throws InterruptedException, TimeoutException {
-        mHelper.loadTestPage(true);
-        mHelper.cacheTestCredentials();
-        mHelper.focusPasswordField();
-        mHelper.waitForKeyboardAccessoryToBeShown();
-        mHelper.addGenerationButton();
-
-        waitForActionsInAccessory();
-        waitForUnrelatedChromeUi();
-        mScreenShooter.shoot("AccessoryBarRTL");
-
-        whenDisplayed(withId(R.id.tabs)).perform(selectTabAtPosition(0));
-        waitForSuggestionsInSheet();
-        waitForUnrelatedChromeUi();
-        mScreenShooter.shoot("AccessorySheetPasswordsRTL");
-
-        whenDisplayed(withId(R.id.passwords_sheet)).perform(scrollToLastElement());
-        waitForUnrelatedChromeUi();
-        mScreenShooter.shoot("AccessorySheetPasswordsScrolledRTL");
-    }
-
-    @Test
-    @MediumTest
-    @EnableFeatures(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
     @Feature({"KeyboardAccessoryModern", "LTR", "UiCatalogue"})
-    @DisabledTest(message = "Flaky, see https://crbug.com/1095672")
     public void testCaptureKeyboardAccessoryV2WithPasswords()
             throws InterruptedException, TimeoutException {
         mHelper.loadTestPage(false);
@@ -134,7 +69,8 @@ public class ManualFillingUiCaptureTest {
         mScreenShooter.shoot("AccessoryBarV2");
 
         whenDisplayed(withId(R.id.bar_items_view))
-                .perform(scrollTo(isKeyboardAccessoryTabLayout()),
+                .perform(
+                        scrollTo(isKeyboardAccessoryTabLayout()),
                         actionOnItem(isKeyboardAccessoryTabLayout(), selectTabAtPosition(0)));
 
         waitForSuggestionsInSheet();
@@ -148,9 +84,7 @@ public class ManualFillingUiCaptureTest {
 
     @Test
     @MediumTest
-    @EnableFeatures(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
     @Feature({"KeyboardAccessoryModern", "RTL", "UiCatalogue"})
-    @DisabledTest(message = "Flaky, see https://crbug.com/1095672")
     public void testCaptureKeyboardAccessoryV2WithPasswordsRTL()
             throws InterruptedException, TimeoutException {
         mHelper.loadTestPage(true);
@@ -165,7 +99,8 @@ public class ManualFillingUiCaptureTest {
         mScreenShooter.shoot("AccessoryBarV2RTL");
 
         whenDisplayed(withId(R.id.bar_items_view))
-                .perform(scrollTo(isKeyboardAccessoryTabLayout()),
+                .perform(
+                        scrollTo(isKeyboardAccessoryTabLayout()),
                         actionOnItem(isKeyboardAccessoryTabLayout(), selectTabAtPosition(0)));
 
         waitForSuggestionsInSheet();
@@ -183,17 +118,12 @@ public class ManualFillingUiCaptureTest {
 
     private void waitForActionsInAccessory() {
         whenDisplayed(withId(R.id.bar_items_view));
-        onView(withId(R.id.bar_items_view)).check((view, noViewFound) -> {
-            if (noViewFound != null) throw noViewFound;
-            RecyclerViewTestUtils.waitForStableRecyclerView((RecyclerView) view);
-        });
+        RecyclerViewTestUtils.waitForStableRecyclerView(mHelper.getAccessoryBarView());
     }
 
     private void waitForSuggestionsInSheet() {
-        whenDisplayed(withId(R.id.keyboard_accessory_sheet));
-        onView(withId(R.id.passwords_sheet)).check((view, noViewFound) -> {
-            if (noViewFound != null) throw noViewFound;
-            RecyclerViewTestUtils.waitForStableRecyclerView((RecyclerView) view);
-        });
+        whenDisplayed(withId(R.id.keyboard_accessory_sheet_frame));
+        RecyclerViewTestUtils.waitForStableRecyclerView(
+                mActivityTestRule.getActivity().findViewById(R.id.passwords_sheet));
     }
 }

@@ -1,32 +1,34 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/web/web_state_delegate_browser_agent.h"
 
 #import "base/strings/sys_string_conversions.h"
-#import "components/url_param_filter/core/url_param_filterer.h"
-#import "ios/chrome/browser/overlays/public/overlay_callback_manager.h"
-#import "ios/chrome/browser/overlays/public/overlay_modality.h"
-#import "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/overlay_request_queue.h"
-#import "ios/chrome/browser/overlays/public/overlay_response.h"
-#import "ios/chrome/browser/overlays/public/web_content_area/http_auth_overlay.h"
-#import "ios/chrome/browser/snapshots/snapshot_tab_helper.h"
+#import "components/content_settings/core/browser/host_content_settings_map.h"
+#import "components/content_settings/core/common/content_settings.h"
+#import "components/supervised_user/core/browser/supervised_user_preferences.h"
+#import "ios/chrome/browser/content_settings/model/host_content_settings_map_factory.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_callback_manager.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_modality.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request_queue.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_response.h"
+#import "ios/chrome/browser/overlays/model/public/web_content_area/http_auth_overlay.h"
+#import "ios/chrome/browser/permissions/model/permissions_tab_helper.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/snapshots/model/snapshot_tab_helper.h"
+#import "ios/chrome/browser/tab_insertion/model/tab_insertion_browser_agent.h"
 #import "ios/chrome/browser/ui/context_menu/context_menu_configuration_provider.h"
 #import "ios/chrome/browser/ui/dialogs/nsurl_protection_space_util.h"
-#import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
 #import "ios/chrome/browser/web/blocked_popup_tab_helper.h"
 #import "ios/chrome/browser/web/repost_form_tab_helper.h"
 #import "ios/chrome/browser/web/web_state_container_view_provider.h"
-#import "ios/chrome/browser/web_state_list/tab_insertion_browser_agent.h"
 #import "ios/components/security_interstitials/ios_blocking_page_tab_helper.h"
+#import "ios/web/public/permissions/permissions.h"
 #import "ios/web/public/ui/context_menu_params.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 BROWSER_USER_DATA_KEY_IMPL(WebStateDelegateBrowserAgent)
 
@@ -47,20 +49,36 @@ void OnHTTPAuthOverlayFinished(web::WebStateDelegate::AuthCallback callback,
   }
   std::move(callback).Run(nil, nil);
 }
-}  // namespace
 
-// static
-void WebStateDelegateBrowserAgent::CreateForBrowser(
-    Browser* browser,
-    TabInsertionBrowserAgent* tab_insertion_agent) {
-  DCHECK(browser);
-
-  if (!FromBrowser(browser)) {
-    browser->SetUserData(UserDataKey(),
-                         base::WrapUnique(new WebStateDelegateBrowserAgent(
-                             browser, tab_insertion_agent)));
+// Returns true if a supervised user attempts to access the microphone or camera
+// content setting when a parent has explicitly set site settings controls to
+// block permissions.
+bool IsMicOrCameraAccessSubjectToParentalControls(
+    ChromeBrowserState* browser_state,
+    NSArray<NSNumber*>* permissions) {
+  if (!browser_state || !supervised_user::IsSubjectToParentalControls(
+                            *browser_state->GetPrefs())) {
+    return false;
   }
+
+  HostContentSettingsMap* host_content_settings_map =
+      ios::HostContentSettingsMapFactory::GetForBrowserState(browser_state);
+  CHECK(host_content_settings_map);
+
+  ContentSetting default_mic_setting =
+      host_content_settings_map->GetDefaultContentSetting(
+          ContentSettingsType::MEDIASTREAM_MIC, /*provider_id=*/nullptr);
+  ContentSetting default_camera_setting =
+      host_content_settings_map->GetDefaultContentSetting(
+          ContentSettingsType::MEDIASTREAM_CAMERA, /*provider_id=*/nullptr);
+
+  return ([permissions containsObject:@(web::PermissionMicrophone)] &&
+          default_mic_setting == ContentSetting::CONTENT_SETTING_BLOCK) ||
+         ([permissions containsObject:@(web::PermissionCamera)] &&
+          default_camera_setting == ContentSetting::CONTENT_SETTING_BLOCK);
 }
+
+}  // namespace
 
 WebStateDelegateBrowserAgent::WebStateDelegateBrowserAgent(
     Browser* browser,
@@ -96,32 +114,43 @@ void WebStateDelegateBrowserAgent::ClearUIProviders() {
   container_view_provider_ = nil;
 }
 
-// WebStateListObserver::
-void WebStateDelegateBrowserAgent::WebStateInsertedAt(
+#pragma mark - WebStateListObserver
+
+void WebStateDelegateBrowserAgent::WebStateListDidChange(
     WebStateList* web_state_list,
-    web::WebState* web_state,
-    int index,
-    bool activating) {
-  SetWebStateDelegate(web_state);
+    const WebStateListChange& change,
+    const WebStateListStatus& status) {
+  switch (change.type()) {
+    case WebStateListChange::Type::kStatusOnly:
+      // Do nothing when a WebState is selected and its status is updated.
+      break;
+    case WebStateListChange::Type::kDetach: {
+      const WebStateListChangeDetach& detach_change =
+          change.As<WebStateListChangeDetach>();
+      ClearWebStateDelegate(detach_change.detached_web_state());
+      break;
+    }
+    case WebStateListChange::Type::kMove:
+      // Do nothing when a WebState is moved.
+      break;
+    case WebStateListChange::Type::kReplace: {
+      const WebStateListChangeReplace& replace_change =
+          change.As<WebStateListChangeReplace>();
+      ClearWebStateDelegate(replace_change.replaced_web_state());
+      SetWebStateDelegate(replace_change.inserted_web_state());
+      break;
+    }
+    case WebStateListChange::Type::kInsert: {
+      const WebStateListChangeInsert& insert_change =
+          change.As<WebStateListChangeInsert>();
+      SetWebStateDelegate(insert_change.inserted_web_state());
+      break;
+    }
+  }
 }
 
-void WebStateDelegateBrowserAgent::WebStateReplacedAt(
-    WebStateList* web_state_list,
-    web::WebState* old_web_state,
-    web::WebState* new_web_state,
-    int index) {
-  ClearWebStateDelegate(old_web_state);
-  SetWebStateDelegate(new_web_state);
-}
+#pragma mark - BrowserObserver
 
-void WebStateDelegateBrowserAgent::WebStateDetachedAt(
-    WebStateList* web_state_list,
-    web::WebState* web_state,
-    int index) {
-  ClearWebStateDelegate(web_state);
-}
-
-// BrowserObserver::
 void WebStateDelegateBrowserAgent::BrowserDestroyed(Browser* browser) {
   DCHECK(browser_observation_.IsObservingSource(browser));
 
@@ -138,7 +167,8 @@ void WebStateDelegateBrowserAgent::BrowserDestroyed(Browser* browser) {
   browser_observation_.Reset();
 }
 
-// WebStateObserver::
+#pragma mark - WebStateObserver
+
 void WebStateDelegateBrowserAgent::WebStateRealized(web::WebState* web_state) {
   SetWebStateDelegate(web_state);
   web_state_observations_.RemoveObservation(web_state);
@@ -200,25 +230,25 @@ web::WebState* WebStateDelegateBrowserAgent::OpenURLFromWebState(
   load_params.is_renderer_initiated = params.is_renderer_initiated;
   load_params.virtual_url = params.virtual_url;
 
+  TabInsertion::Params insertion_params;
+  insertion_params.parent = source;
+
   switch (params.disposition) {
     case WindowOpenDisposition::NEW_FOREGROUND_TAB:
     case WindowOpenDisposition::NEW_BACKGROUND_TAB: {
-      return tab_insertion_agent_->InsertWebState(
-          load_params, source, false, TabInsertion::kPositionAutomatically,
-          (params.disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB),
-          /*inherit_opener=*/false, /*should_show_start_surface=*/false,
-          url_param_filter::FilterResult());
+      insertion_params.in_background =
+          params.disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB;
+      return tab_insertion_agent_->InsertWebState(load_params,
+                                                  insertion_params);
     }
     case WindowOpenDisposition::CURRENT_TAB: {
       source->GetNavigationManager()->LoadURLWithParams(load_params);
       return source;
     }
     case WindowOpenDisposition::NEW_POPUP: {
-      return tab_insertion_agent_->InsertWebState(
-          load_params, source, true, TabInsertion::kPositionAutomatically,
-          /*in_background=*/false, /*inherit_opener=*/false,
-          /*should_show_start_surface=*/false,
-          url_param_filter::FilterResult());
+      insertion_params.opened_by_dom = true;
+      return tab_insertion_agent_->InsertWebState(load_params,
+                                                  insertion_params);
     }
     default:
       NOTIMPLEMENTED();
@@ -228,7 +258,9 @@ web::WebState* WebStateDelegateBrowserAgent::OpenURLFromWebState(
 
 void WebStateDelegateBrowserAgent::ShowRepostFormWarningDialog(
     web::WebState* source,
+    web::FormWarningType warning_type,
     base::OnceCallback<void(bool)> callback) {
+  CHECK_EQ(warning_type, web::FormWarningType::kRepost);
   if (!container_view_provider_) {
     // There's no way to show the dialog so treat it as if the user said no.
     std::move(callback).Run(false);
@@ -237,12 +269,33 @@ void WebStateDelegateBrowserAgent::ShowRepostFormWarningDialog(
   // TODO(crbug.com/1266052) : Clean up this API.
   RepostFormTabHelper::FromWebState(source)->PresentDialog(
       [container_view_provider_ dialogLocation], std::move(callback));
+
+  // TODO(crbug.com/1501150): Handle FormWarningType::kInsecureForm.
 }
 
 web::JavaScriptDialogPresenter*
 WebStateDelegateBrowserAgent::GetJavaScriptDialogPresenter(
     web::WebState* source) {
   return &java_script_dialog_presenter_;
+}
+
+void WebStateDelegateBrowserAgent::HandlePermissionsDecisionRequest(
+    web::WebState* source,
+    NSArray<NSNumber*>* permissions,
+    web::WebStatePermissionDecisionHandler handler) API_AVAILABLE(ios(15.0)) {
+  ChromeBrowserState* chrome_browser_state =
+      ChromeBrowserState::FromBrowserState(source->GetBrowserState());
+  // For supervised users, sites can be denied permission to access camera or
+  // mic by default. In this case, we do not show the dialog.
+  if (IsMicOrCameraAccessSubjectToParentalControls(chrome_browser_state,
+                                                   permissions)) {
+    handler(web::PermissionDecisionDeny);
+    return;
+  }
+
+  PermissionsTabHelper::FromWebState(source)
+      ->PresentPermissionsDecisionDialogWithCompletionHandler(permissions,
+                                                              handler);
 }
 
 void WebStateDelegateBrowserAgent::OnAuthRequired(

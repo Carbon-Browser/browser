@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "storage/browser/file_system/file_system_url.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -17,11 +17,23 @@
 class GURL;
 class Profile;
 
+namespace base {
+class Pickle;
+}  // namespace base
+
+namespace ui {
+class DataTransferEndpoint;
+struct FileInfo;
+}  // namespace ui
+
 namespace file_manager {
 namespace util {
 
-// Absolute path for FuseBox media mount point.
+// Absolute path for FuseBox media mount point (sans a trailing slash).
 extern const base::FilePath::CharType kFuseBoxMediaPath[];
+
+// Absolute path for FuseBox media mount point (with a trailing slash).
+extern const base::FilePath::CharType kFuseBoxMediaSlashPath[];
 
 // Absolute base path for removable media on Chrome OS. Exposed here so it can
 // be used by tests.
@@ -38,6 +50,24 @@ extern const base::FilePath::CharType kArchiveMountPath[];
 
 // FuseBox as a named constant string: "fusebox".
 extern const char kFuseBox[];
+
+// The storage::FileSystemURL mount name prefix for FuseBox mounts.
+extern const char kFuseBoxMountNamePrefix[];
+
+// The "foo." in "/media/fuse/fusebox/foo.bar/x/y.z" FuseBox filenames, per
+// volume type (Android Documents Provider, File System Provider, Media
+// Transfer Protocol, etc). The "foo.bar" component as a whole is also known as
+// the FuseBox subdir.
+//
+// They end in a "." to clearly separate the "foo" and the "bar". This is not a
+// "-" or a "_", to avoid any ambiguity when "bar" is the base64url encoding of
+// something. This is not a ":", since /bin/bash tab completion would otherwise
+// backslash-escape the colon (which works but it's avoidable complexity) and
+// e.g. $PATH-like environment variables are colon separated.
+extern const char kFuseBoxSubdirPrefixADP[];
+extern const char kFuseBoxSubdirPrefixFSP[];
+extern const char kFuseBoxSubdirPrefixMTP[];
+extern const char kFuseBoxSubdirPrefixTMP[];
 
 // Name of the mount point used to store temporary files for sharing.
 extern const char kShareCacheMountPointName[];
@@ -117,12 +147,6 @@ base::FilePath GetCrostiniMountDirectory(Profile* profile);
 
 // The actual directory the Guest OS with `mountPointName` is mounted in.
 base::FilePath GetGuestOsMountDirectory(std::string mountPointName);
-
-// The sshfs mount options for crostini "Linux files" mount.
-std::vector<std::string> GetCrostiniMountOptions(
-    const std::string& hostname,
-    const std::string& host_private_key,
-    const std::string& container_public_key);
 
 // Convert a cracked |file_system_url| to a path inside a VM mounted at
 // |vm_mount| (e.g. /mnt/chromeos). If |map_crostini_home| is set, paths under
@@ -221,6 +245,12 @@ absl::optional<base::FilePath> GetDisplayablePath(Profile* profile,
 absl::optional<base::FilePath> GetDisplayablePath(
     Profile* profile,
     storage::FileSystemURL file_url);
+
+// Reads pickle for FilesApp fs/sources with newline-separated filesystem
+// URLs. Validates that |source| is FilesApp.
+std::vector<ui::FileInfo> ParseFileSystemSources(
+    const ui::DataTransferEndpoint* source,
+    const base::Pickle& pickle);
 
 }  // namespace util
 }  // namespace file_manager

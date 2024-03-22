@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class SeparatorTest : public ViewsTestBase {
   void ExpectDrawAtLeastOnePixel(float image_scale);
 
   std::unique_ptr<Widget> widget_;
-  raw_ptr<Separator> separator_;
+  raw_ptr<Separator> separator_ = nullptr;
 
   SkColor expected_foreground_color_ = gfx::kPlaceholderColor;
 
@@ -57,6 +57,7 @@ void SeparatorTest::SetUp() {
 }
 
 void SeparatorTest::TearDown() {
+  separator_ = nullptr;
   widget_.reset();
   ViewsTestBase::TearDown();
 }

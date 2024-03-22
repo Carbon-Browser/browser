@@ -1,18 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/devtools/devtools_renderer_channel.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/browser/devtools/devtools_agent_host_impl.h"
 #include "content/browser/devtools/devtools_session.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
 #include "content/browser/devtools/worker_devtools_agent_host.h"
 #include "content/browser/devtools/worker_devtools_manager.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/common/child_process_host.h"
 #include "third_party/blink/public/common/features.h"
 #include "ui/gfx/geometry/point.h"
 
@@ -114,6 +114,13 @@ void DevToolsRendererChannel::InspectElement(const gfx::Point& point) {
     associated_agent_remote_->InspectElement(point);
 }
 
+void DevToolsRendererChannel::GetUniqueFormControlId(
+    int node_id,
+    GetUniqueFormCallback callback) {
+  associated_agent_remote_->GetUniqueFormControlId(node_id,
+                                                   std::move(callback));
+}
+
 void DevToolsRendererChannel::SetReportChildTargets(
     ChildTargetCreatedCallback report_callback,
     bool wait_for_debugger,
@@ -178,6 +185,12 @@ void DevToolsRendererChannel::ChildTargetCreated(
     scoped_refptr<WorkerDevToolsAgentHost> agent_host =
         WorkerDevToolsManager::GetInstance().GetDevToolsHostFromToken(
             devtools_worker_token);
+    if (!agent_host) {
+      // If `agent_host` is nullptr, we can assume that `DedicatedWorkerHost`
+      // has been destructed while handling `DedicatedWorker::ContinueStart`.
+      // We do not need to continue in that case.
+      return;
+    }
     agent_host->ChildWorkerCreated(
         url, name,
         base::BindOnce(&DevToolsRendererChannel::ChildTargetDestroyed,
@@ -212,6 +225,14 @@ void DevToolsRendererChannel::ChildTargetCreated(
 void DevToolsRendererChannel::ChildTargetDestroyed(
     DevToolsAgentHostImpl* host) {
   child_targets_.erase(host);
+}
+
+void DevToolsRendererChannel::MainThreadDebuggerPaused() {
+  owner_->MainThreadDebuggerPaused();
+}
+
+void DevToolsRendererChannel::MainThreadDebuggerResumed() {
+  owner_->MainThreadDebuggerResumed();
 }
 
 }  // namespace content

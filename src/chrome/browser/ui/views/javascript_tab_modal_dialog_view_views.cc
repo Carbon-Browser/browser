@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/javascript_tab_modal_dialog_view_views.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ui/javascript_dialogs/javascript_tab_modal_dialog_manager_delegate_desktop.h"
 #include "chrome/browser/ui/views/title_origin_label.h"
 #include "components/constrained_window/constrained_window_views.h"

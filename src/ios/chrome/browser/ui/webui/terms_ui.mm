@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,13 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/mac/bundle_locations.h"
-#include "base/memory/ref_counted_memory.h"
+#import "base/apple/bundle_locations.h"
+#import "base/memory/ref_counted_memory.h"
 #import "base/strings/sys_string_conversions.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/ui/util/terms_util.h"
-#include "ios/web/public/webui/url_data_source_ios.h"
-#include "ios/web/public/webui/web_ui_ios.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/ui/util/terms_util.h"
+#import "ios/web/public/webui/url_data_source_ios.h"
+#import "ios/web/public/webui/web_ui_ios.h"
 
 namespace {
 
@@ -62,7 +58,7 @@ void TermsUIHTMLSource::StartDataRequest(
     web::URLDataSourceIOS::GotDataCallback callback) {
   NSString* terms_of_service_path =
       base::SysUTF8ToNSString(GetTermsOfServicePath());
-  NSString* bundle_path = [base::mac::FrameworkBundle() bundlePath];
+  NSString* bundle_path = [base::apple::FrameworkBundle() bundlePath];
   NSString* full_path =
       [bundle_path stringByAppendingPathComponent:terms_of_service_path];
   DCHECK(full_path);
@@ -78,8 +74,7 @@ void TermsUIHTMLSource::StartDataRequest(
 void TermsUIHTMLSource::FinishDataRequest(
     const std::string& html,
     web::URLDataSourceIOS::GotDataCallback callback) {
-  std::string html_copy(html);
-  std::move(callback).Run(base::RefCountedString::TakeString(&html_copy));
+  std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>(html));
 }
 
 std::string TermsUIHTMLSource::GetMimeType(const std::string& path) const {

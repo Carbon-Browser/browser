@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,16 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_callback_support.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "components/file_access/test/mock_scoped_file_access_delegate.h"
 #include "content/public/test/browser_task_environment.h"
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
@@ -77,6 +79,7 @@ class MockMultipartUploadDataPipeRequest : public MultipartUploadRequest {
                                GURL(),
                                "metadata",
                                path,
+                               123,
                                TRAFFIC_ANNOTATION_FOR_TESTS,
                                std::move(callback)) {}
 
@@ -179,127 +182,6 @@ TEST_F(MultipartUploadRequestTest, RetriesCorrectly) {
         }));
     mock_request.Start();
     task_environment_.FastForwardUntilNoTasksRemain();
-  }
-}
-
-TEST_F(MultipartUploadRequestTest,
-       EmitsNetworkRequestResponseCodeOrErrorHistogram) {
-  {
-    base::HistogramTester histograms;
-    MockMultipartUploadRequest mock_request;
-
-    EXPECT_CALL(mock_request, SendRequest())
-        .WillRepeatedly(Invoke([&mock_request]() {
-          mock_request.RetryOrFinish(net::OK, net::HTTP_OK,
-                                     std::make_unique<std::string>("response"));
-        }));
-    mock_request.Start();
-    task_environment_.FastForwardUntilNoTasksRemain();
-
-    histograms.ExpectUniqueSample(
-        "SBMultipartUploader.NetworkRequestResponseCodeOrError", net::HTTP_OK,
-        1);
-  }
-
-  {
-    base::HistogramTester histograms;
-    MockMultipartUploadRequest mock_request;
-
-    EXPECT_CALL(mock_request, SendRequest())
-        .WillRepeatedly(Invoke([&mock_request]() {
-          mock_request.RetryOrFinish(net::OK, net::HTTP_FORBIDDEN,
-                                     std::make_unique<std::string>("response"));
-        }));
-    mock_request.Start();
-    task_environment_.FastForwardUntilNoTasksRemain();
-
-    histograms.ExpectUniqueSample(
-        "SBMultipartUploader.NetworkRequestResponseCodeOrError",
-        net::HTTP_FORBIDDEN, 1);
-  }
-
-  {
-    base::HistogramTester histograms;
-    MockMultipartUploadRequest mock_request;
-
-    EXPECT_CALL(mock_request, SendRequest())
-        .WillRepeatedly(Invoke([&mock_request]() {
-          mock_request.RetryOrFinish(net::ERR_FAILED, net::HTTP_OK,
-                                     std::make_unique<std::string>("response"));
-        }));
-    mock_request.Start();
-    task_environment_.FastForwardUntilNoTasksRemain();
-
-    histograms.ExpectUniqueSample(
-        "SBMultipartUploader.NetworkRequestResponseCodeOrError",
-        net::ERR_FAILED, 1);
-  }
-
-  {
-    base::HistogramTester histograms;
-    MockMultipartUploadRequest mock_request;
-
-    EXPECT_CALL(mock_request, SendRequest())
-        .WillRepeatedly(Invoke([&mock_request]() {
-          mock_request.RetryOrFinish(net::OK, net::HTTP_INTERNAL_SERVER_ERROR,
-                                     std::make_unique<std::string>("response"));
-        }));
-    mock_request.Start();
-    task_environment_.FastForwardUntilNoTasksRemain();
-
-    histograms.ExpectUniqueSample(
-        "SBMultipartUploader.NetworkRequestResponseCodeOrError",
-        net::HTTP_INTERNAL_SERVER_ERROR, 3);
-  }
-}
-
-TEST_F(MultipartUploadRequestTest, EmitsUploadSuccessHistogram) {
-  {
-    base::HistogramTester histograms;
-    MockMultipartUploadRequest mock_request;
-
-    EXPECT_CALL(mock_request, SendRequest())
-        .WillRepeatedly(Invoke([&mock_request]() {
-          mock_request.RetryOrFinish(net::OK, net::HTTP_OK,
-                                     std::make_unique<std::string>("response"));
-        }));
-    mock_request.Start();
-    task_environment_.FastForwardUntilNoTasksRemain();
-
-    histograms.ExpectUniqueSample("SBMultipartUploader.UploadSuccess", true, 1);
-  }
-
-  {
-    base::HistogramTester histograms;
-    MockMultipartUploadRequest mock_request;
-
-    EXPECT_CALL(mock_request, SendRequest())
-        .WillRepeatedly(Invoke([&mock_request]() {
-          mock_request.RetryOrFinish(net::OK, net::HTTP_FORBIDDEN,
-                                     std::make_unique<std::string>("response"));
-        }));
-    mock_request.Start();
-    task_environment_.FastForwardUntilNoTasksRemain();
-
-    histograms.ExpectUniqueSample("SBMultipartUploader.UploadSuccess", false,
-                                  1);
-  }
-}
-
-TEST_F(MultipartUploadRequestTest, EmitsRetriesNeededHistogram) {
-  {
-    base::HistogramTester histograms;
-    MockMultipartUploadRequest mock_request;
-
-    EXPECT_CALL(mock_request, SendRequest())
-        .WillRepeatedly(Invoke([&mock_request]() {
-          mock_request.RetryOrFinish(net::OK, net::HTTP_OK,
-                                     std::make_unique<std::string>("response"));
-        }));
-    mock_request.Start();
-    task_environment_.FastForwardUntilNoTasksRemain();
-
-    histograms.ExpectUniqueSample("SBMultipartUploader.RetriesNeeded", 0, 1);
   }
 }
 
@@ -407,6 +289,53 @@ TEST_P(MultipartUploadDataPipeRequestTest, MAYBE_Retries) {
   }
 }
 
+TEST_P(MultipartUploadDataPipeRequestTest, DataControls) {
+  std::string expected_body =
+      "--boundary\r\n"
+      "Content-Type: application/octet-stream\r\n"
+      "\r\n"
+      "metadata\r\n"
+      "--boundary\r\n"
+      "Content-Type: application/octet-stream\r\n"
+      "\r\n"
+      "file content\r\n"
+      "--boundary--\r\n";
+  file_access::MockScopedFileAccessDelegate scoped_files_access_delegate;
+
+  if (is_file_request()) {
+    EXPECT_CALL(scoped_files_access_delegate, RequestFilesAccessForSystem)
+        .WillOnce(base::test::RunOnceCallback<1>(
+            file_access::ScopedFileAccess::Allowed()));
+  } else {
+    EXPECT_CALL(scoped_files_access_delegate, RequestFilesAccessForSystem)
+        .Times(0);
+  }
+
+  base::RunLoop run_loop;
+  std::unique_ptr<MockMultipartUploadDataPipeRequest> mock_request =
+      CreateRequest("file content",
+                    base::BindLambdaForTesting(
+                        [&run_loop](bool success, int http_status,
+                                    const std::string& response_data) {
+                          EXPECT_TRUE(success);
+                          EXPECT_EQ(net::HTTP_OK, http_status);
+                          EXPECT_EQ("response", response_data);
+                          run_loop.Quit();
+                        }));
+  mock_request->set_boundary("boundary");
+
+  EXPECT_CALL(*mock_request, CompleteSendRequest(_))
+      .WillOnce([&mock_request, &expected_body](
+                    std::unique_ptr<network::ResourceRequest> request) {
+        EXPECT_EQ(expected_body, mock_request->GetBodyFromFileOrPageRequest());
+        mock_request->RetryOrFinish(net::OK, net::HTTP_OK,
+                                    std::make_unique<std::string>("response"));
+      });
+  mock_request->Start();
+  task_environment_.FastForwardUntilNoTasksRemain();
+  run_loop.Run();
+}
+
 TEST_P(MultipartUploadDataPipeRequestTest, EquivalentToStringRequest) {
   // The request body should be identical when obtained through a string request
   // and a data pipe request with equivalent content.
@@ -438,6 +367,67 @@ TEST_P(MultipartUploadDataPipeRequestTest, EquivalentToStringRequest) {
   EXPECT_EQ(expected_body,
             string_request.GenerateRequestBody("metadata", "data"));
   EXPECT_EQ(expected_body, data_pipe_request->GetBodyFromFileOrPageRequest());
+}
+
+TEST_F(MultipartUploadRequestTest, GeneratesCorrectHeaders_StringRequest) {
+  network::ResourceRequest resource_request;
+  std::string header_value;
+
+  std::unique_ptr<MultipartUploadRequest> request =
+      MultipartUploadRequest::CreateStringRequest(
+          nullptr, GURL(), "metadata", "data", TRAFFIC_ANNOTATION_FOR_TESTS,
+          base::DoNothing());
+  request->SetRequestHeaders(&resource_request);
+  ASSERT_TRUE(resource_request.headers.HasHeader("X-Goog-Upload-Protocol"));
+  ASSERT_TRUE(resource_request.headers.GetHeader("X-Goog-Upload-Protocol",
+                                                 &header_value));
+  ASSERT_EQ(header_value, "multipart");
+  ASSERT_TRUE(resource_request.headers.HasHeader(
+      "X-Goog-Upload-Header-Content-Length"));
+  ASSERT_TRUE(resource_request.headers.GetHeader(
+      "X-Goog-Upload-Header-Content-Length", &header_value));
+  ASSERT_EQ(header_value, "4");
+}
+
+TEST_F(MultipartUploadRequestTest, GeneratesCorrectHeaders_FileRequest) {
+  network::ResourceRequest resource_request;
+  std::string header_value;
+
+  std::unique_ptr<MultipartUploadRequest> request =
+      MultipartUploadRequest::CreateFileRequest(
+          nullptr, GURL(), "metadata",
+          CreateFile("my_file_name.foo", "file_data"), 9,
+          TRAFFIC_ANNOTATION_FOR_TESTS, base::DoNothing());
+  request->SetRequestHeaders(&resource_request);
+  ASSERT_TRUE(resource_request.headers.HasHeader("X-Goog-Upload-Protocol"));
+  ASSERT_TRUE(resource_request.headers.GetHeader("X-Goog-Upload-Protocol",
+                                                 &header_value));
+  ASSERT_EQ(header_value, "multipart");
+  ASSERT_TRUE(resource_request.headers.HasHeader(
+      "X-Goog-Upload-Header-Content-Length"));
+  ASSERT_TRUE(resource_request.headers.GetHeader(
+      "X-Goog-Upload-Header-Content-Length", &header_value));
+  ASSERT_EQ(header_value, "9");
+}
+
+TEST_F(MultipartUploadRequestTest, GeneratesCorrectHeaders_PageRequest) {
+  network::ResourceRequest resource_request;
+  std::string header_value;
+
+  std::unique_ptr<MultipartUploadRequest> request =
+      MultipartUploadRequest::CreatePageRequest(
+          nullptr, GURL(), "metadata", CreatePage("print_data"),
+          TRAFFIC_ANNOTATION_FOR_TESTS, base::DoNothing());
+  request->SetRequestHeaders(&resource_request);
+  ASSERT_TRUE(resource_request.headers.HasHeader("X-Goog-Upload-Protocol"));
+  ASSERT_TRUE(resource_request.headers.GetHeader("X-Goog-Upload-Protocol",
+                                                 &header_value));
+  ASSERT_EQ(header_value, "multipart");
+  ASSERT_TRUE(resource_request.headers.HasHeader(
+      "X-Goog-Upload-Header-Content-Length"));
+  ASSERT_TRUE(resource_request.headers.GetHeader(
+      "X-Goog-Upload-Header-Content-Length", &header_value));
+  ASSERT_EQ(header_value, "10");
 }
 
 }  // namespace safe_browsing

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,10 +44,7 @@ class LocalWebMemoryMeasurer : public v8::MeasureMemoryDelegate {
 
   // v8::MeasureMemoryDelegate overrides.
   bool ShouldMeasure(v8::Local<v8::Context> context) override;
-  void MeasurementComplete(
-      const std::vector<std::pair<v8::Local<v8::Context>, size_t>>&
-          context_sizes,
-      size_t unattributed_size) override;
+  void MeasurementComplete(v8::MeasureMemoryDelegate::Result result) override;
 
  private:
   LocalWebMemoryMeasurer(MeasureMemoryController*,

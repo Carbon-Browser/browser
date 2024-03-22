@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "chrome/browser/safe_browsing/download_protection/check_client_download_request_base.h"
@@ -39,6 +39,8 @@ class CheckFileSystemAccessWriteRequest
 
   ~CheckFileSystemAccessWriteRequest() override;
 
+  download::DownloadItem* item() const override;
+
  private:
   // CheckClientDownloadRequestBase overrides:
   bool IsSupportedDownload(DownloadCheckResultReason* reason) override;
@@ -47,7 +49,10 @@ class CheckFileSystemAccessWriteRequest
   base::WeakPtr<CheckClientDownloadRequestBase> GetWeakPtr() override;
 
   void NotifySendRequest(const ClientDownloadRequest* request) override;
-  void SetDownloadPingToken(const std::string& token) override;
+  void SetDownloadProtectionData(
+      const std::string& token,
+      const ClientDownloadResponse::Verdict& verdict,
+      const ClientDownloadResponse::TailoredVerdict& tailored_verdict) override;
   void MaybeStorePingsForDownload(DownloadCheckResult result,
                                   bool upload_requested,
                                   const std::string& request_data,
@@ -58,9 +63,14 @@ class CheckFileSystemAccessWriteRequest
                     DownloadCheckResultReason reason,
                     enterprise_connectors::AnalysisSettings settings) override;
   bool ShouldPromptForDeepScanning(bool server_requests_prompt) const override;
+  bool ShouldPromptForLocalDecryption(
+      bool server_requests_prompt) const override;
+  bool ShouldPromptForIncorrectPassword() const override;
+  bool ShouldShowScanFailure() const override;
   void NotifyRequestFinished(DownloadCheckResult result,
                              DownloadCheckResultReason reason) override;
   bool IsAllowlistedByPolicy() const override;
+  void LogDeepScanningPrompt() const override;
 
   const std::unique_ptr<content::FileSystemAccessWriteItem> item_;
   std::unique_ptr<ReferrerChainData> referrer_chain_data_;

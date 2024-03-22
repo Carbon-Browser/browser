@@ -1,16 +1,16 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
 #include <utility>
 
-#include "ash/components/disks/disk.h"
-#include "ash/components/disks/disk_mount_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/extensions/api/image_writer_private/error_constants.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation.h"
 #include "chromeos/ash/components/dbus/image_burner/image_burner_client.h"
+#include "chromeos/ash/components/disks/disk.h"
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -37,7 +37,7 @@ void ClearImageBurner() {
 
 void Operation::Write(base::OnceClosure continuation) {
   DCHECK(IsRunningInCorrectSequence());
-  SetStage(image_writer_api::STAGE_WRITE);
+  SetStage(image_writer_api::Stage::kWrite);
 
   // Note this has to be run on the FILE thread to avoid concurrent access.
   AddCleanUpFunction(base::BindOnce(&ClearImageBurner));
@@ -62,19 +62,19 @@ void Operation::UnmountVolumes(base::OnceClosure continuation) {
 }
 
 void Operation::UnmountVolumesCallback(base::OnceClosure continuation,
-                                       chromeos::MountError error_code) {
+                                       ash::MountError error_code) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  if (error_code != chromeos::MOUNT_ERROR_NONE) {
+  if (error_code != ash::MountError::kSuccess) {
     LOG(ERROR) << "Volume unmounting failed with error code " << error_code;
     PostTask(
         base::BindOnce(&Operation::Error, this, error::kUnmountVolumesError));
     return;
   }
 
-  const DiskMountManager::DiskMap& disks =
+  const DiskMountManager::Disks& disks =
       DiskMountManager::GetInstance()->disks();
-  DiskMountManager::DiskMap::const_iterator iter =
+  DiskMountManager::Disks::const_iterator iter =
       disks.find(device_path_.value());
 
   if (iter == disks.end()) {
@@ -84,7 +84,7 @@ void Operation::UnmountVolumesCallback(base::OnceClosure continuation,
     return;
   }
 
-  StartWriteOnUIThread(iter->second->file_path(), std::move(continuation));
+  StartWriteOnUIThread(iter->get()->file_path(), std::move(continuation));
 }
 
 void Operation::StartWriteOnUIThread(const std::string& target_path,

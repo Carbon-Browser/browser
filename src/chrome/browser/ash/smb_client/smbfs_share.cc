@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/smb_client/smbfs_share.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
@@ -15,7 +15,7 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/smb_client/smb_service_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/webui/chromeos/smb_shares/smb_credentials_dialog.h"
+#include "chrome/browser/ui/webui/ash/smb_shares/smb_credentials_dialog.h"
 #include "crypto/sha2.h"
 #include "storage/browser/file_system/external_mount_points.h"
 
@@ -146,7 +146,7 @@ void SmbFsShare::OnDeleteRecursivelyDone(base::File::Error error) {
 void SmbFsShare::Unmount(SmbFsShare::UnmountCallback callback) {
   if (unmount_pending_) {
     LOG(WARNING) << "Cannot unmount a shared that is being unmounted";
-    std::move(callback).Run(chromeos::MountError::MOUNT_ERROR_INTERNAL);
+    std::move(callback).Run(MountError::kInternalError);
     return;
   }
 
@@ -157,7 +157,7 @@ void SmbFsShare::Unmount(SmbFsShare::UnmountCallback callback) {
 
   if (!host_) {
     LOG(WARNING) << "Cannot unmount as the share is already unmounted";
-    std::move(callback).Run(chromeos::MountError::MOUNT_ERROR_PATH_NOT_MOUNTED);
+    std::move(callback).Run(MountError::kPathNotMounted);
     return;
   }
 
@@ -183,7 +183,7 @@ void SmbFsShare::Unmount(SmbFsShare::UnmountCallback callback) {
 }
 
 void SmbFsShare::OnUnmountDone(SmbFsShare::UnmountCallback callback,
-                               chromeos::MountError result) {
+                               MountError result) {
   host_.reset();
 
   // Must do this *after* destroying SmbFsHost so that reentrant calls to

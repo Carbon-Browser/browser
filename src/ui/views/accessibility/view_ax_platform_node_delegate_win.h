@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,13 +19,16 @@ class ViewAXPlatformNodeDelegateWin : public ViewAXPlatformNodeDelegate {
       const ViewAXPlatformNodeDelegateWin&) = delete;
   ~ViewAXPlatformNodeDelegateWin() override;
 
-  // |ViewAXPlatformNodeDelegate| overrides:
+  // ViewAXPlatformNodeDelegate overrides.
   gfx::NativeViewAccessible GetParent() const override;
   gfx::AcceleratedWidget GetTargetForNativeAccessibilityEvent() override;
   gfx::Rect GetBoundsRect(
       const ui::AXCoordinateSystem coordinate_system,
       const ui::AXClippingBehavior clipping_behavior,
       ui::AXOffscreenResult* offscreen_result) const override;
+
+  // ViewAccessibility overrides.
+  void EnsureAtomicViewAXTreeManager() override;
 };
 
 }  // namespace views

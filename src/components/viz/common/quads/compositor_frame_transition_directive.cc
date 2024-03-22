@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,28 +10,44 @@
 #include "base/time/time.h"
 
 namespace viz {
-namespace {
 
-constexpr base::TimeDelta kDefaultTransitionDuration = base::Milliseconds(250);
-constexpr base::TimeDelta kDefaultTransitionDelay = base::Milliseconds(0);
+// static
+CompositorFrameTransitionDirective
+CompositorFrameTransitionDirective::CreateSave(
+    NavigationID navigation_id,
+    uint32_t sequence_id,
+    std::vector<SharedElement> shared_elements) {
+  return CompositorFrameTransitionDirective(
+      navigation_id, sequence_id, Type::kSave, std::move(shared_elements));
+}
 
-}  // namespace
+// static
+CompositorFrameTransitionDirective
+CompositorFrameTransitionDirective::CreateAnimate(NavigationID navigation_id,
+                                                  uint32_t sequence_id) {
+  return CompositorFrameTransitionDirective(navigation_id, sequence_id,
+                                            Type::kAnimateRenderer);
+}
+
+// static
+CompositorFrameTransitionDirective
+CompositorFrameTransitionDirective::CreateRelease(NavigationID navigation_id,
+                                                  uint32_t sequence_id) {
+  return CompositorFrameTransitionDirective(navigation_id, sequence_id,
+                                            Type::kRelease);
+}
 
 CompositorFrameTransitionDirective::CompositorFrameTransitionDirective() =
     default;
 
 CompositorFrameTransitionDirective::CompositorFrameTransitionDirective(
+    NavigationID navigation_id,
     uint32_t sequence_id,
     Type type,
-    bool is_renderer_driven_animation,
-    Effect effect,
-    const TransitionConfig& root_config,
     std::vector<SharedElement> shared_elements)
-    : sequence_id_(sequence_id),
+    : navigation_id_(navigation_id),
+      sequence_id_(sequence_id),
       type_(type),
-      is_renderer_driven_animation_(is_renderer_driven_animation),
-      effect_(effect),
-      root_config_(root_config),
       shared_elements_(std::move(shared_elements)) {}
 
 CompositorFrameTransitionDirective::CompositorFrameTransitionDirective(
@@ -43,29 +59,6 @@ CompositorFrameTransitionDirective::~CompositorFrameTransitionDirective() =
 CompositorFrameTransitionDirective&
 CompositorFrameTransitionDirective::operator=(
     const CompositorFrameTransitionDirective&) = default;
-
-CompositorFrameTransitionDirective::TransitionConfig::TransitionConfig()
-    : duration(kDefaultTransitionDuration), delay(kDefaultTransitionDelay) {}
-
-bool CompositorFrameTransitionDirective::TransitionConfig::IsValid(
-    std::string* error) const {
-  constexpr base::TimeDelta kMinValue = base::Seconds(0);
-  constexpr base::TimeDelta kMaxValue = base::Seconds(5);
-
-  if (duration < kMinValue || duration > kMaxValue) {
-    if (error)
-      *error = "Duration must be between 0 and 5 seconds (inclusive)";
-    return false;
-  }
-
-  if (delay < kMinValue || delay > kMaxValue) {
-    if (error)
-      *error = "Delay must be between 0 and 5 seconds (inclusive)";
-    return false;
-  }
-
-  return true;
-}
 
 CompositorFrameTransitionDirective::SharedElement::SharedElement() = default;
 CompositorFrameTransitionDirective::SharedElement::~SharedElement() = default;
@@ -81,5 +74,17 @@ CompositorFrameTransitionDirective::SharedElement::SharedElement(
 CompositorFrameTransitionDirective::SharedElement&
 CompositorFrameTransitionDirective::SharedElement::operator=(SharedElement&&) =
     default;
+
+bool CompositorFrameTransitionDirective::SharedElement::operator==(
+    const SharedElement& other) const {
+  return render_pass_id == other.render_pass_id &&
+         view_transition_element_resource_id ==
+             other.view_transition_element_resource_id;
+}
+
+bool CompositorFrameTransitionDirective::SharedElement::operator!=(
+    const SharedElement& other) const {
+  return !(other == *this);
+}
 
 }  // namespace viz

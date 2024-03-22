@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 
 #include "chrome/browser/apps/app_discovery_service/app_discovery_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace {
 static constexpr const char* kAppDiscoveryService = "AppDiscoveryService";
@@ -26,26 +25,27 @@ AppDiscoveryService* AppDiscoveryServiceFactory::GetForProfile(
 
 // static
 AppDiscoveryServiceFactory* AppDiscoveryServiceFactory::GetInstance() {
-  return base::Singleton<AppDiscoveryServiceFactory>::get();
+  static base::NoDestructor<AppDiscoveryServiceFactory> instance;
+  return instance.get();
 }
 
 AppDiscoveryServiceFactory::AppDiscoveryServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           kAppDiscoveryService,
-          BrowserContextDependencyManager::GetInstance()) {}
+          // Service is available in all modes (kiosk, guest, incognito,
+          // all profile types, etc.).
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 AppDiscoveryServiceFactory::~AppDiscoveryServiceFactory() = default;
 
-KeyedService* AppDiscoveryServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AppDiscoveryServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new AppDiscoveryService(Profile::FromBrowserContext(context));
-}
-
-content::BrowserContext* AppDiscoveryServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  // Service is available in all modes (kiosk, guest, incognito,
-  // all profile types, etc.).
-  return context;
+  return std::make_unique<AppDiscoveryService>(
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace apps

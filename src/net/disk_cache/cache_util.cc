@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,21 @@
 
 #include <limits>
 
-#include "base/bind.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/safe_base_name.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/numerics/clamped_math.h"
 #include "base/numerics/ostream_operators.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 
@@ -34,9 +34,15 @@ const int kMaxOldFolders = 100;
 base::FilePath GetPrefixedName(const base::FilePath& path,
                                const base::SafeBaseName& basename,
                                int index) {
-  const base::FilePath::StringType filename =
-      base::StringPrintf(FILE_PATH_LITERAL("old_%" PRFilePath "_%03d"),
-                         basename.path().value().c_str(), index);
+  const std::string index_str = base::StringPrintf("_%03d", index);
+  const base::FilePath::StringType filename = base::StrCat({
+    FILE_PATH_LITERAL("old_"), basename.path().value(),
+#if BUILDFLAG(IS_WIN)
+        base::ASCIIToWide(index_str)
+#else
+        index_str
+#endif
+  });
   return path.Append(filename);
 }
 
@@ -128,8 +134,9 @@ namespace disk_cache {
 
 const int kDefaultCacheSize = 80 * 1024 * 1024;
 
-const base::Feature kChangeDiskCacheSizeExperiment{
-    "ChangeDiskCacheSize", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kChangeDiskCacheSizeExperiment,
+             "ChangeDiskCacheSize",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 void DeleteCache(const base::FilePath& path, bool remove_folder) {
   if (remove_folder) {

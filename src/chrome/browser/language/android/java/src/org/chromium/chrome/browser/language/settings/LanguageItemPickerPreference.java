@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import android.util.AttributeSet;
 import org.chromium.chrome.browser.language.AppLocaleUtils;
 import org.chromium.components.browser_ui.settings.ChromeBasePreference;
 
-/**
- * Chrome Preference that enables selecting a single LanguageItem.
- */
+/** Chrome Preference that enables selecting a single LanguageItem. */
 public class LanguageItemPickerPreference extends ChromeBasePreference {
     private LanguageItem mLanguageItem;
     private boolean mUseLanguageItemForTitle;
@@ -64,9 +62,7 @@ public class LanguageItemPickerPreference extends ChromeBasePreference {
         updateDisplay();
     }
 
-    /**
-     * Update the title and summary to display
-     */
+    /** Update the title and summary to display */
     private void updateDisplay() {
         if (mLanguageItem == null) {
             return;

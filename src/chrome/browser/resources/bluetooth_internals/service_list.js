@@ -1,15 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './service_list_item.js';
 import './expandable_list.js';
 
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
 import {connectToDevice} from './device_broker.js';
 import {ExpandableListElement} from './expandable_list.js';
-import {Snackbar, SnackbarType} from './snackbar.js';
+import {showSnackbar, SnackbarType} from './snackbar.js';
 
 /**
  * A list that displays ServiceListItems.
@@ -42,7 +42,8 @@ export class ServiceListElement extends ExpandableListElement {
   /** @override */
   createItem(data) {
     const item = document.createElement('service-list-item');
-    item.initialize(data, assert(this.deviceAddress_));
+    assert(this.deviceAddress_);
+    item.initialize(data, this.deviceAddress_);
     return item;
   }
 
@@ -73,7 +74,7 @@ export class ServiceListElement extends ExpandableListElement {
         }.bind(this))
         .catch(function(error) {
           this.servicesRequested_ = false;
-          Snackbar.show(
+          showSnackbar(
               deviceAddress + ': ' + error.message, SnackbarType.ERROR, 'Retry',
               function() {
                 this.load(deviceAddress);

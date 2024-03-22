@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,17 +17,15 @@ import org.junit.runners.BlockJUnit4ClassRunner;
 
 import org.chromium.chrome.test.util.browser.Features;
 
-/**
- * Java unit tests for ChannelDefinitions.
- */
+/** Java unit tests for ChannelDefinitions. */
 @RunWith(BlockJUnit4ClassRunner.class)
 public class ChromeChannelDefinitionsTest {
-    @Rule
-    public TestRule processor = new Features.JUnitProcessor();
+    @Rule public TestRule processor = new Features.JUnitProcessor();
 
     @Test
     public void testNoOverlapBetweenStartupAndLegacyChannelIds() {
-        assertThat(ChromeChannelDefinitions.getInstance().getStartupChannelIds(),
+        assertThat(
+                ChromeChannelDefinitions.getInstance().getStartupChannelIds(),
                 everyItem(not(isIn(ChromeChannelDefinitions.getInstance().getLegacyChannelIds()))));
     }
 }

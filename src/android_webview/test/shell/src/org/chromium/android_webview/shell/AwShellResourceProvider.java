@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import android.content.Context;
 
 import org.chromium.android_webview.common.AwResource;
 
-/**
- * Registers resources for the Android webview shell.
- */
+/** Registers resources for the Android webview shell. */
 public class AwShellResourceProvider {
     private static boolean sInitialized;
 

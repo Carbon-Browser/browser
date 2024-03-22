@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/child_accounts/time_limit_consistency_test/consistency_golden_loader.h"
 
+#include "base/containers/contains.h"
 #include "base/files/dir_reader_posix.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
@@ -19,7 +20,7 @@ namespace {
 
 base::FilePath GetGoldensPath() {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
 
   return path.Append(
       FILE_PATH_LITERAL("chrome/browser/ash/child_accounts/"
@@ -51,8 +52,7 @@ std::vector<GoldenParam> LoadGoldenCasesFromPath(
 
     // Ignore suites that don't include CHROME_OS as a supported platform.
     bool chromeos_supported =
-        std::count(golden_suite.supported_platforms().begin(),
-                   golden_suite.supported_platforms().end(), CHROME_OS) > 0;
+        base::Contains(golden_suite.supported_platforms(), CHROME_OS);
     if (!chromeos_supported)
       continue;
 

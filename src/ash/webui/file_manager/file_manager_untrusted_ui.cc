@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,8 @@ FileManagerUntrustedUIConfig::FileManagerUntrustedUIConfig()
 FileManagerUntrustedUIConfig::~FileManagerUntrustedUIConfig() = default;
 
 std::unique_ptr<content::WebUIController>
-FileManagerUntrustedUIConfig::CreateWebUIController(content::WebUI* web_ui) {
+FileManagerUntrustedUIConfig::CreateWebUIController(content::WebUI* web_ui,
+                                                    const GURL& url) {
   return std::make_unique<FileManagerUntrustedUI>(web_ui);
 }
 

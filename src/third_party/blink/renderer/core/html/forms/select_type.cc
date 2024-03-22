@@ -44,12 +44,14 @@
 #include "third_party/blink/renderer/core/events/mouse_event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/frame/visual_viewport.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_select_element.h"
 #include "third_party/blink/renderer/core/html/forms/menu_list_inner_element.h"
 #include "third_party/blink/renderer/core/html/forms/popup_menu.h"
 #include "third_party/blink/renderer/core/input/event_handler.h"
 #include "third_party/blink/renderer/core/input/input_device_capabilities.h"
+#include "third_party/blink/renderer/core/keywords.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/page/autoscroll_controller.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
@@ -92,7 +94,7 @@ class MenuListSelectType final : public SelectType {
   void UpdateTextStyleAndContent() override;
   HTMLOptionElement* OptionToBeShown() const override;
   const ComputedStyle* OptionStyle() const override {
-    return option_style_.get();
+    return option_style_.Get();
   }
   void MaximumOptionWidthMightBeChanged() const override;
 
@@ -104,6 +106,7 @@ class MenuListSelectType final : public SelectType {
   bool PopupIsVisible() const override;
   PopupMenu* PopupForTesting() const override;
   AXObject* PopupRootAXObject() const override;
+  void ShowPicker() override;
 
   void DidMutateSubtree();
 
@@ -121,7 +124,7 @@ class MenuListSelectType final : public SelectType {
 
   Member<PopupMenu> popup_;
   Member<PopupUpdater> popup_updater_;
-  scoped_refptr<const ComputedStyle> option_style_;
+  Member<const ComputedStyle> option_style_;
   int ax_menulist_last_active_index_ = -1;
   bool has_updated_menulist_active_option_ = false;
   bool popup_is_visible_ = false;
@@ -131,6 +134,7 @@ class MenuListSelectType final : public SelectType {
 void MenuListSelectType::Trace(Visitor* visitor) const {
   visitor->Trace(popup_);
   visitor->Trace(popup_updater_);
+  visitor->Trace(option_style_);
   SelectType::Trace(visitor);
 }
 
@@ -234,7 +238,8 @@ bool MenuListSelectType::DefaultEventHandler(const Event& event) {
             ->FiresTouchEvents(mouse_event->FromTouch());
     select_->Focus(FocusParams(SelectionBehaviorOnFocus::kRestore,
                                mojom::blink::FocusType::kMouse,
-                               source_capabilities));
+                               source_capabilities, FocusOptions::Create(),
+                               FocusTrigger::kUserGesture));
     if (select_->GetLayoutObject() && !will_be_destroyed_ &&
         !select_->IsDisabledFormControl()) {
       if (PopupIsVisible()) {
@@ -281,7 +286,7 @@ bool MenuListSelectType::ShouldOpenPopupForKeyPressEvent(
 }
 
 bool MenuListSelectType::HandlePopupOpenKeyboardEvent() {
-  select_->Focus();
+  select_->Focus(FocusParams(FocusTrigger::kUserGesture));
   // Calling focus() may cause us to lose our LayoutObject. Return true so
   // that our caller doesn't process the event further, but don't set
   // the event as handled.
@@ -300,7 +305,7 @@ bool MenuListSelectType::HandlePopupOpenKeyboardEvent() {
 void MenuListSelectType::CreateShadowSubtree(ShadowRoot& root) {
   Document& doc = select_->GetDocument();
   Element* inner_element = MakeGarbageCollected<MenuListInnerElement>(doc);
-  inner_element->setAttribute(html_names::kAriaHiddenAttr, "true");
+  inner_element->setAttribute(html_names::kAriaHiddenAttr, keywords::kTrue);
   // Make sure InnerElement() always has a Text node.
   inner_element->appendChild(Text::Create(doc, g_empty_string));
   root.insertBefore(inner_element, root.firstChild());
@@ -321,8 +326,25 @@ void MenuListSelectType::ShowPopup(PopupMenu::ShowEventType type) {
     return;
   if (!select_->GetLayoutObject())
     return;
-  if (select_->VisibleBoundsInVisualViewport().IsEmpty())
-    return;
+
+  gfx::Rect local_root_rect = select_->VisibleBoundsInLocalRoot();
+
+  if (document.GetFrame()->LocalFrameRoot().IsOutermostMainFrame()) {
+    gfx::Rect visual_viewport_rect =
+        document.GetPage()->GetVisualViewport().RootFrameToViewport(
+            local_root_rect);
+    visual_viewport_rect.Intersect(
+        gfx::Rect(document.GetPage()->GetVisualViewport().Size()));
+    if (visual_viewport_rect.IsEmpty())
+      return;
+  } else {
+    // TODO(bokan): If we're in a remote frame, we cannot access the active
+    // visual viewport. VisibleBoundsInLocalRoot will clip to the outermost
+    // main frame but if the user is pinch-zoomed this won't be accurate.
+    // https://crbug.com/840944.
+    if (local_root_rect.IsEmpty())
+      return;
+  }
 
   if (!popup_) {
     popup_ = document.GetPage()->GetChromeClient().OpenPopupMenu(
@@ -371,6 +393,19 @@ PopupMenu* MenuListSelectType::PopupForTesting() const {
 
 AXObject* MenuListSelectType::PopupRootAXObject() const {
   return popup_ ? popup_->PopupRootAXObject() : nullptr;
+}
+
+void MenuListSelectType::ShowPicker() {
+  // We need to make the layout tree up-to-date to have GetLayoutObject() give
+  // the correct result below. An author event handler may have set display to
+  // some element to none which will cause a layout tree detach.
+  select_->GetDocument().UpdateStyleAndLayoutTree();
+  // Save the selection so it can be compared to the new selection
+  // when we call onChange during selectOption, which gets called
+  // from selectOptionByPopup, which gets called after the user
+  // makes a selection from the menu.
+  SaveLastSelection();
+  ShowPopup(PopupMenu::kOther);
 }
 
 void MenuListSelectType::DidSelectOption(
@@ -492,16 +527,16 @@ String MenuListSelectType::UpdateTextStyleInternal() {
       ((option_style->Direction() != inner_style->Direction() ||
         option_style->GetUnicodeBidi() != inner_style->GetUnicodeBidi() ||
         option_style->GetTextAlign(true) != inner_style->GetTextAlign(true)))) {
-    scoped_refptr<ComputedStyle> cloned_style =
-        ComputedStyle::Clone(*inner_style);
-    cloned_style->SetDirection(option_style->Direction());
-    cloned_style->SetUnicodeBidi(option_style->GetUnicodeBidi());
-    cloned_style->SetTextAlign(option_style->GetTextAlign(true));
+    ComputedStyleBuilder builder(*inner_style);
+    builder.SetDirection(option_style->Direction());
+    builder.SetUnicodeBidi(option_style->GetUnicodeBidi());
+    builder.SetTextAlign(option_style->GetTextAlign(true));
+    const ComputedStyle* new_style = builder.TakeStyle();
     if (auto* inner_layout = inner_element.GetLayoutObject()) {
       inner_layout->SetModifiedStyleOutsideStyleRecalc(
-          std::move(cloned_style), LayoutObject::ApplyStyleChanges::kYes);
+          new_style, LayoutObject::ApplyStyleChanges::kYes);
     } else {
-      inner_element.SetComputedStyle(std::move(cloned_style));
+      inner_element.SetComputedStyle(std::move(new_style));
     }
   }
   if (select_->GetLayoutObject())
@@ -543,12 +578,12 @@ HTMLOptionElement* MenuListSelectType::OptionToBeShown() const {
           select_->OptionAtListIndex(select_->index_to_select_on_cancel_))
     return option;
   if (select_->suggested_option_)
-    return select_->suggested_option_;
+    return select_->suggested_option_.Get();
   // TODO(tkent): We should not call OptionToBeShown() in IsMultiple() case.
   if (select_->IsMultiple())
     return select_->SelectedOption();
   DCHECK_EQ(select_->SelectedOption(), select_->last_on_change_option_);
-  return select_->last_on_change_option_;
+  return select_->last_on_change_option_.Get();
 }
 
 void MenuListSelectType::MaximumOptionWidthMightBeChanged() const {
@@ -699,7 +734,7 @@ bool ListBoxSelectType::DefaultEventHandler(const Event& event) {
   const auto* mouse_event = DynamicTo<MouseEvent>(event);
   const auto* gesture_event = DynamicTo<GestureEvent>(event);
   if (event.type() == event_type_names::kGesturetap && gesture_event) {
-    select_->Focus();
+    select_->Focus(FocusParams(FocusTrigger::kUserGesture));
     // Calling focus() may cause us to lose our layoutObject or change the
     // layoutObject type, in which case do not want to handle the event.
     if (!select_->GetLayoutObject() || will_be_destroyed_)
@@ -721,7 +756,7 @@ bool ListBoxSelectType::DefaultEventHandler(const Event& event) {
   if (event.type() == event_type_names::kMousedown && mouse_event &&
       mouse_event->button() ==
           static_cast<int16_t>(WebPointerProperties::Button::kLeft)) {
-    select_->Focus();
+    select_->Focus(FocusParams(FocusTrigger::kUserGesture));
     // Calling focus() may cause us to lose our layoutObject, in which case
     // do not want to handle the event.
     if (!select_->GetLayoutObject() || will_be_destroyed_ ||
@@ -768,7 +803,7 @@ bool ListBoxSelectType::DefaultEventHandler(const Event& event) {
       }
     }
     // Mousedown didn't happen in this element.
-    if (last_on_change_selection_.IsEmpty())
+    if (last_on_change_selection_.empty())
       return false;
 
     if (HTMLOptionElement* option = EventTargetOption(*mouse_event)) {
@@ -811,21 +846,31 @@ bool ListBoxSelectType::DefaultEventHandler(const Event& event) {
 
     bool handled = false;
     HTMLOptionElement* end_option = nullptr;
+    char const* key_next = "ArrowDown";
+    char const* key_previous = "ArrowUp";
+    const ComputedStyle* style = select_->GetComputedStyle();
+    if (style->GetWritingMode() == WritingMode::kVerticalLr) {
+      key_next = "ArrowRight";
+      key_previous = "ArrowLeft";
+    } else if (style->GetWritingMode() == WritingMode::kVerticalRl) {
+      key_next = "ArrowLeft";
+      key_previous = "ArrowRight";
+    }
     if (!active_selection_end_) {
       // Initialize the end index
-      if (key == "ArrowDown" || key == "PageDown") {
+      if (key == key_next || key == "PageDown") {
         HTMLOptionElement* start_option = select_->LastSelectedOption();
         handled = true;
-        if (key == "ArrowDown") {
+        if (key == key_next) {
           end_option = NextSelectableOption(start_option);
         } else {
           end_option =
               NextSelectableOptionPageAway(start_option, kSkipForwards);
         }
-      } else if (key == "ArrowUp" || key == "PageUp") {
+      } else if (key == key_previous || key == "PageUp") {
         HTMLOptionElement* start_option = select_->SelectedOption();
         handled = true;
-        if (key == "ArrowUp") {
+        if (key == key_previous) {
           end_option = PreviousSelectableOption(start_option);
         } else {
           end_option =
@@ -834,10 +879,10 @@ bool ListBoxSelectType::DefaultEventHandler(const Event& event) {
       }
     } else {
       // Set the end index based on the current end index.
-      if (key == "ArrowDown") {
+      if (key == key_next) {
         end_option = NextSelectableOption(active_selection_end_);
         handled = true;
-      } else if (key == "ArrowUp") {
+      } else if (key == key_previous) {
         end_option = PreviousSelectableOption(active_selection_end_);
         handled = true;
       } else if (key == "PageDown") {
@@ -1039,7 +1084,7 @@ void ListBoxSelectType::SetActiveSelectionEnd(HTMLOptionElement* option) {
 
 HTMLOptionElement* ListBoxSelectType::ActiveSelectionEnd() const {
   if (active_selection_end_)
-    return active_selection_end_;
+    return active_selection_end_.Get();
   return select_->LastSelectedOption();
 }
 
@@ -1054,7 +1099,7 @@ void ListBoxSelectType::ScrollToSelection() {
 void ListBoxSelectType::ScrollToOption(HTMLOptionElement* option) {
   if (!option)
     return;
-  bool has_pending_task = option_to_scroll_to_;
+  bool has_pending_task = option_to_scroll_to_ != nullptr;
   // We'd like to keep an HTMLOptionElement reference rather than the index of
   // the option because the task should work even if unselected option is
   // inserted before executing ScrollToOptionTask().
@@ -1062,8 +1107,9 @@ void ListBoxSelectType::ScrollToOption(HTMLOptionElement* option) {
   if (!has_pending_task) {
     select_->GetDocument()
         .GetTaskRunner(TaskType::kUserInteraction)
-        ->PostTask(FROM_HERE, WTF::Bind(&ListBoxSelectType::ScrollToOptionTask,
-                                        WrapPersistent(this)));
+        ->PostTask(FROM_HERE,
+                   WTF::BindOnce(&ListBoxSelectType::ScrollToOptionTask,
+                                 WrapPersistent(this)));
   }
 }
 
@@ -1087,7 +1133,7 @@ void ListBoxSelectType::ScrollToOptionTask() {
   DCHECK(box->Layer());
   DCHECK(box->Layer()->GetScrollableArea());
   box->Layer()->GetScrollableArea()->ScrollIntoView(
-      bounds,
+      bounds, PhysicalBoxStrut(),
       ScrollAlignment::CreateScrollIntoViewParams(
           ScrollAlignment::ToEdgeIfNeeded(), ScrollAlignment::ToEdgeIfNeeded(),
           mojom::blink::ScrollType::kProgrammatic, false,
@@ -1243,7 +1289,7 @@ void ListBoxSelectType::SaveListboxActiveSelection() {
 
 void ListBoxSelectType::HandleMouseRelease() {
   // We didn't start this click/drag on any options.
-  if (last_on_change_selection_.IsEmpty())
+  if (last_on_change_selection_.empty())
     return;
   ListBoxOnChange();
 }
@@ -1254,7 +1300,7 @@ void ListBoxSelectType::ListBoxOnChange() {
   // If the cached selection list is empty, or the size has changed, then fire
   // 'change' event, and return early.
   // FIXME: Why? This looks unreasonable.
-  if (last_on_change_selection_.IsEmpty() ||
+  if (last_on_change_selection_.empty() ||
       last_on_change_selection_.size() != items.size()) {
     select_->DispatchChangeEvent();
     return;
@@ -1355,6 +1401,8 @@ Element& SelectType::InnerElement() const {
   // to compile this source. This function must not be called.
   return *select_;
 }
+
+void SelectType::ShowPicker() {}
 
 void SelectType::ShowPopup(PopupMenu::ShowEventType) {
   NOTREACHED();

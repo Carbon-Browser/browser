@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,8 +47,7 @@ std::string BrowserDMTokenStorageAndroid::InitEnrollmentToken() {
   // When a DMToken is available, it's possible that this method was called
   // very early in the initialization process, even before `g_browser_process`
   // be initialized.
-  if (!g_browser_process || !g_browser_process->browser_policy_connector() ||
-      !g_browser_process->browser_policy_connector()->HasPolicyService()) {
+  if (!CanInitEnrollmentToken()) {
     DCHECK(!android::ReadDmTokenFromSharedPreferences().empty());
     return std::string();
   }
@@ -68,6 +67,11 @@ std::string BrowserDMTokenStorageAndroid::InitDMToken() {
 
 bool BrowserDMTokenStorageAndroid::InitEnrollmentErrorOption() {
   return false;
+}
+
+bool BrowserDMTokenStorageAndroid::CanInitEnrollmentToken() const {
+  return g_browser_process && g_browser_process->browser_policy_connector() &&
+         g_browser_process->browser_policy_connector()->HasPolicyService();
 }
 
 BrowserDMTokenStorage::StoreTask BrowserDMTokenStorageAndroid::SaveDMTokenTask(

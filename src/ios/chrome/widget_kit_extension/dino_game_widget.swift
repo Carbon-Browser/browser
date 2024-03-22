@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,9 @@ struct DinoGameWidget: Widget {
     )
     .description(Text("IDS_IOS_WIDGET_KIT_EXTENSION_GAME_DESCRIPTION"))
     .supportedFamilies([.systemSmall])
+    .crDisfavoredLocations()
+    .crContentMarginsDisabled()
+    .crContainerBackgroundRemovable(false)
   }
 }
 
@@ -53,6 +56,9 @@ struct DinoGameWidgetEntryView: View {
     }
     .widgetURL(WidgetConstants.DinoGameWidget.url)
     .accessibility(
-      label: Text("IDS_IOS_WIDGET_KIT_EXTENSION_GAME_A11Y_LABEL"))
+      label: Text("IDS_IOS_WIDGET_KIT_EXTENSION_GAME_A11Y_LABEL")
+    )
+    // Background is not used as the image takes the whole widget.
+    .crContainerBackground(Color("widget_background_color").unredacted())
   }
 }

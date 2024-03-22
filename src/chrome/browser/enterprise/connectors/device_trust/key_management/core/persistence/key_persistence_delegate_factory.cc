@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/key_persistence_delegate_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/key_persistence_delegate.h"
@@ -35,7 +35,8 @@ KeyPersistenceDelegateFactory* KeyPersistenceDelegateFactory::GetInstance() {
   if (test_instance.has_value() && test_instance.value()) {
     return test_instance.value();
   }
-  return base::Singleton<KeyPersistenceDelegateFactory>::get();
+  static base::NoDestructor<KeyPersistenceDelegateFactory> instance;
+  return instance.get();
 }
 
 std::unique_ptr<KeyPersistenceDelegate>

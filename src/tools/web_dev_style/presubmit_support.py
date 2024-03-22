@@ -1,12 +1,12 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 
-from . import css_checker
 from . import html_checker
 from . import js_checker
 from . import resource_checker
+from . import added_js_files_check
 
 
 def IsResource(f):
@@ -17,7 +17,6 @@ def CheckStyle(input_api, output_api, file_filter=lambda f: True):
   apis = input_api, output_api
   wrapped_filter = lambda f: file_filter(f) and IsResource(f)
   checkers = [
-      css_checker.CSSChecker(*apis, file_filter=wrapped_filter),
       html_checker.HtmlChecker(*apis, file_filter=wrapped_filter),
       js_checker.JSChecker(*apis, file_filter=wrapped_filter),
       resource_checker.ResourceChecker(*apis, file_filter=wrapped_filter),
@@ -41,3 +40,9 @@ def CheckStyleESLint(input_api, output_api):
 def DisallowIncludes(input_api, output_api, msg):
   return resource_checker.ResourceChecker(
       input_api, output_api, file_filter=IsResource).DisallowIncludes(msg)
+
+
+def DisallowNewJsFiles(input_api, output_api, file_filter=lambda f: True):
+  return added_js_files_check.AddedJsFilesCheck(input_api,
+                                                output_api,
+                                                file_filter=file_filter)

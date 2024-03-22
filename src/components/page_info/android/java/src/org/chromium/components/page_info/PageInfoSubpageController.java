@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-/**
- * Interface for a page info subpage controller.
- */
+/** Interface for a page info subpage controller. */
 public interface PageInfoSubpageController {
     /** Returns a title string for the page info subpage. */
     @NonNull
@@ -33,9 +31,4 @@ public interface PageInfoSubpageController {
      * since the last time.
      */
     void updateRowIfNeeded();
-
-    /**
-     * Called when the native counterpart of PageInfoController is initialized.
-     */
-    void onNativeInitialized();
 }

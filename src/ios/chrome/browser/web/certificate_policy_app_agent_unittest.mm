@@ -1,25 +1,23 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/web/certificate_policy_app_agent.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/memory/scoped_refptr.h"
 #import "base/run_loop.h"
 #import "base/test/ios/wait_util.h"
 #import "base/time/time.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
-#import "ios/chrome/app/application_delegate/browser_launcher.h"
 #import "ios/chrome/app/application_delegate/startup_information.h"
-#import "ios/chrome/app/main_application_delegate.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser_list.h"
-#import "ios/chrome/browser/main/browser_list_factory.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list_factory.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
 #import "ios/chrome/test/block_cleanup_test.h"
 #import "ios/web/public/security/certificate_policy_cache.h"
 #import "ios/web/public/session/session_certificate_policy_cache.h"
@@ -32,10 +30,6 @@
 #import "net/test/test_data_directory.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::kWaitForActionTimeout;
 using base::test::ios::SpinRunLoopWithMaxDelay;
@@ -53,13 +47,9 @@ class CertificatePolicyAppStateAgentTest : public BlockCleanupTest {
         cert_(net::ImportCertFromFile(net::GetTestCertsDirectory(),
                                       "ok_cert.pem")),
         status_(net::CERT_STATUS_REVOKED) {
-    // Mocks for AppState dependencies.
-    browser_launcher_mock_ =
-        [OCMockObject mockForProtocol:@protocol(BrowserLauncher)];
+    // Mock for AppState dependencies.
     startup_information_mock_ =
         [OCMockObject mockForProtocol:@protocol(StartupInformation)];
-    main_application_delegate_ =
-        [OCMockObject mockForClass:[MainApplicationDelegate class]];
 
     TestChromeBrowserState::Builder test_cbs_builder;
     chrome_browser_state_ = test_cbs_builder.Build();
@@ -68,9 +58,7 @@ class CertificatePolicyAppStateAgentTest : public BlockCleanupTest {
         BrowserListFactory::GetForBrowserState(chrome_browser_state_.get());
 
     app_state_ =
-        [[AppState alloc] initWithBrowserLauncher:browser_launcher_mock_
-                               startupInformation:startup_information_mock_
-                              applicationDelegate:main_application_delegate_];
+        [[AppState alloc] initWithStartupInformation:startup_information_mock_];
     app_state_.mainBrowserState = chrome_browser_state_.get();
 
     // Create two regular and one OTR browsers.
@@ -90,7 +78,7 @@ class CertificatePolicyAppStateAgentTest : public BlockCleanupTest {
     [app_state_ addAgent:app_agent_];
   }
 
-  // Adds a web state with |host| as the active URL to |browser|.
+  // Adds a web state with `host` as the active URL to `browser`.
   void AddWebStateToBrowser(std::string host, Browser* browser) {
     auto test_web_state = std::make_unique<web::FakeWebStateWithPolicyCache>(
         browser->GetBrowserState());
@@ -102,8 +90,8 @@ class CertificatePolicyAppStateAgentTest : public BlockCleanupTest {
         WebStateList::INSERT_NO_FLAGS, WebStateOpener());
   }
 
-  // Adds a web state with |host| as the active URL, and with |host| registered
-  // as having a valid certificate to |browser|.
+  // Adds a web state with `host` as the active URL, and with `host` registered
+  // as having a valid certificate to `browser`.
   void AddCertifiedWebStateToBrowser(std::string host, Browser* browser) {
     auto test_web_state = std::make_unique<web::FakeWebStateWithPolicyCache>(
         browser->GetBrowserState());
@@ -158,9 +146,9 @@ class CertificatePolicyAppStateAgentTest : public BlockCleanupTest {
     }));
   }
 
-  // Checks |cache| to see if the policy for |host| is "allowed". For the
-  // purposes of this test, that's effectively testing if |host| is "in"
-  // |cache|. Checking the cache is async, so this method handles synchronous
+  // Checks `cache` to see if the policy for `host` is "allowed". For the
+  // purposes of this test, that's effectively testing if `host` is "in"
+  // `cache`. Checking the cache is async, so this method handles synchronous
   // waiting for the result.
   bool IsHostCertAllowed(
       const scoped_refptr<web::CertificatePolicyCache>& cache,
@@ -179,7 +167,7 @@ class CertificatePolicyAppStateAgentTest : public BlockCleanupTest {
     return judgement == web::CertPolicy::Judgment::ALLOWED;
   }
 
-  // Clears all entries from |cache|. This is posted to the IO thread and this
+  // Clears all entries from `cache`. This is posted to the IO thread and this
   // method sync-waits for this to complete.
   void ClearPolicyCache(
       const scoped_refptr<web::CertificatePolicyCache>& cache) {
@@ -214,7 +202,7 @@ class CertificatePolicyAppStateAgentTest : public BlockCleanupTest {
     return IsHostCertAllowed(IncognitoPolicyCache(), host);
   }
 
-  // Populates |cache| with allowed certs for the hosts in |hosts|. This is done
+  // Populates `cache` with allowed certs for the hosts in `hosts`. This is done
   // in a single async call, and this method sync-waits on it completing.
   void PopulatePolicyCache(std::vector<std::string> hosts,
                            scoped_refptr<web::CertificatePolicyCache> cache) {
@@ -244,10 +232,8 @@ class CertificatePolicyAppStateAgentTest : public BlockCleanupTest {
   scoped_refptr<net::X509Certificate> cert_;
   net::CertStatus status_;
 
-  // Mocks for AppState dependencies.
-  id browser_launcher_mock_;
+  // Mock for AppState dependencies.
   id startup_information_mock_;
-  id main_application_delegate_;
 };
 
 // Test that updating an empty cache with no webstates results in an empty

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 #include <map>
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/types/strong_alias.h"
-#include "net/http/http_response_info.h"
+#include "net/http/http_connection_info.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource.h"
@@ -67,6 +69,13 @@ class PLATFORM_EXPORT ResourceLoadSchedulerClient
 //    be throttleable when there are more active throttleable requests loading
 //    activities more than its internal threshold (i.e., what
 //    GetOutstandingLimit() returns)".
+//  - Resource loading requests are not throttled when the frame is in the
+//    foreground tab.
+//  - Resource loading requests are throttled when the frame is in a
+//    background tab. It has different thresholds for the main frame
+//    and sub frames. When the frame has been background for more than five
+//    minutes, all throttleable resource loading requests are throttled
+//    indefinitely (i.e., threshold is zero in such a circumstance).
 //
 //  ResourceLoadScheduler has two modes each of which has its own threshold.
 //   - Tight mode (used until the frame sees a <body> element):
@@ -76,20 +85,21 @@ class PLATFORM_EXPORT ResourceLoadSchedulerClient
 //     ResourceLoadScheduler considers a request throttleable if its priority
 //     is less than |kMedium|.
 //
-// Here are running experiments (as of M65):
-//  - "ResourceLoadScheduler"
-//   - Resource loading requests are not at throttled when the frame is in
-//     the foreground tab.
-//   - Resource loading requests are throttled when the frame is in a
-//     background tab. It has different thresholds for the main frame
-//     and sub frames. When the frame has been background for more than five
-//     minutes, all throttleable resource loading requests are throttled
-//     indefinitely (i.e., threshold is zero in such a circumstance).
+// Here is an running experiment:
 //   - (As of M86): Low-priority requests are delayed behind "important"
 //     requests before some general loading milestone has been reached.
 //     "Important", for the experiment means either kHigh or kMedium priority,
 //     and the milestones being experimented with are first paint and first
 //     contentful paint so far.
+//
+// Here is a planned experiment (not started yet):
+//   - network::VisibilityAwareResourceScheduler
+//     An experimental feature with the goal of integrating
+//     blink::ResourceLoadScheduler into network::ResourceScheduler for better
+//     resource scheduling across multiple frames.
+//     TODO(https://crbug.com/1457817): Disable or relax throttling/stopping
+//     requests in this class once network::ResoureceScheduler implements
+//     similar capabilities.
 class PLATFORM_EXPORT ResourceLoadScheduler final
     : public GarbageCollected<ResourceLoadScheduler> {
  public:
@@ -222,7 +232,9 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
   void SetOutstandingLimitForTesting(size_t limit) {
     SetOutstandingLimitForTesting(limit, limit);
   }
-  void SetOutstandingLimitForTesting(size_t tight_limit, size_t normal_limit);
+  void SetOutstandingLimitForTesting(size_t tight_limit,
+                                     size_t normal_limit,
+                                     size_t tight_medium_limit = 0);
 
   // FrameOrWorkerScheduler lifecycle observer callback.
   void OnLifecycleStateChanged(scheduler::SchedulingLifecycleState);
@@ -238,8 +250,7 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
 
   // Updates the connection info of the given client. This function may initiate
   // a new resource loading.
-  void SetConnectionInfo(ClientId id,
-                         net::HttpResponseInfo::ConnectionInfo connection_info);
+  void SetConnectionInfo(ClientId id, net::HttpConnectionInfo connection_info);
 
   // Sets the HTTP RTT for testing.
   void SetHttpRttForTesting(base::TimeDelta http_rtt) {
@@ -314,14 +325,18 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
   void MaybeRun();
 
   // Grants a client to run,
-  void Run(ClientId, ResourceLoadSchedulerClient*, bool throttleable);
+  void Run(ClientId,
+           ResourceLoadSchedulerClient*,
+           bool throttleable,
+           ResourceLoadPriority priority);
 
   size_t GetOutstandingLimit(ResourceLoadPriority priority) const;
 
   void ShowConsoleMessageIfNeeded();
 
   bool IsRunningThrottleableRequestsLessThanOutStandingLimit(
-      size_t out_standing_limit);
+      size_t out_standing_limit,
+      ResourceLoadPriority priority);
 
   bool CanRequestForMultiplexedConnectionsInTight() const;
 
@@ -339,6 +354,7 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
 
   // Used when |policy_| is |kTight|.
   size_t tight_outstanding_limit_ = kOutstandingUnlimited;
+  size_t tight_medium_limit_ = 0u;
 
   // Used when |policy_| is |kNormal|.
   size_t normal_outstanding_limit_ = kOutstandingUnlimited;
@@ -357,6 +373,7 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
   HashMap<ClientId, IsMultiplexedConnection> running_requests_;
 
   HashSet<ClientId> running_throttleable_requests_;
+  HashSet<ClientId> running_medium_requests_;
 
   // Holds a flag to omit repeating console messages.
   bool is_console_info_shown_ = false;
@@ -371,11 +388,12 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
   // This tracks two sets of requests, throttleable and stoppable.
   std::map<ThrottleOption,
            std::set<ClientIdWithPriority, ClientIdWithPriority::Compare>>
-      pending_requests_;
+      pending_requests_ ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)");
 
   // Remembers elapsed times in seconds when the top request in each queue is
   // processed.
-  std::map<ThrottleOption, base::Time> pending_queue_update_times_;
+  std::map<ThrottleOption, base::Time> pending_queue_update_times_
+      ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)");
 
   // Handle to throttling observer.
   std::unique_ptr<FrameOrWorkerScheduler::LifecycleObserverHandle>
@@ -383,7 +401,7 @@ class PLATFORM_EXPORT ResourceLoadScheduler final
 
   const Member<DetachableConsoleLogger> console_logger_;
 
-  const base::Clock* clock_;
+  raw_ptr<const base::Clock, ExperimentalRenderer> clock_;
 
   ThrottleOptionOverride throttle_option_override_;
 

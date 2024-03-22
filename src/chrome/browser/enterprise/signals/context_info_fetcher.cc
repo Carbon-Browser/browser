@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -15,6 +16,7 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/enterprise/connectors/connectors_service.h"
+#include "chrome/browser/enterprise/identifiers/profile_id_service_factory.h"
 #include "chrome/browser/enterprise/signals/signals_utils.h"
 #include "chrome/browser/enterprise/util/affiliation.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
@@ -22,6 +24,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/component_updater/pref_names.h"
+#include "components/enterprise/browser/identifiers/profile_id_service.h"
 #include "components/policy/content/policy_blocklist_service.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/site_isolation_policy.h"
@@ -52,6 +55,14 @@ namespace enterprise_signals {
 
 namespace {
 
+absl::optional<std::string> GetEnterpriseProfileId(Profile* profile) {
+  auto* profile_id_service =
+      enterprise::ProfileIdServiceFactory::GetForProfile(profile);
+  if (profile_id_service)
+    return profile_id_service->GetProfileId();
+  return absl::nullopt;
+}
+
 #if BUILDFLAG(IS_LINUX)
 const char** GetUfwConfigPath() {
   static const char* path = "/etc/ufw/ufw.conf";
@@ -68,9 +79,8 @@ SettingValue GetUfwStatus() {
     return SettingValue::UNKNOWN;
   }
   base::SplitStringIntoKeyValuePairs(file_content, '=', '\n', &values);
-  auto is_ufw_enabled = std::find_if(values.begin(), values.end(), [](auto v) {
-    return v.first == "ENABLED";
-  });
+  auto is_ufw_enabled = base::ranges::find(
+      values, "ENABLED", &std::pair<std::string, std::string>::first);
   if (is_ufw_enabled == values.end())
     return SettingValue::UNKNOWN;
 
@@ -125,6 +135,12 @@ SettingValue GetMacOSFirewall() {
   // status of the firewall (System Preferences> Security & Privacy> Firewall).
   // Reading globalstate from com.apple.alf is the closest way to get such an
   // API in Chrome without delegating to potentially unstable commands.
+  // Values of "globalstate":
+  //   0 = de-activated
+  //   1 = on for specific services
+  //   2 = on for essential services
+  // You can get 2 by, e.g., enabling the "Block all incoming connections"
+  // firewall functionality.
 
   Boolean key_exists_with_valid_format = false;
   CFIndex globalstate = CFPreferencesGetAppIntegerValue(
@@ -138,6 +154,7 @@ SettingValue GetMacOSFirewall() {
     case 0:
       return SettingValue::DISABLED;
     case 1:
+    case 2:
       return SettingValue::ENABLED;
     default:
       return SettingValue::UNKNOWN;
@@ -177,8 +194,6 @@ ContextInfoFetcher::~ContextInfoFetcher() = default;
 std::unique_ptr<ContextInfoFetcher> ContextInfoFetcher::CreateInstance(
     content::BrowserContext* browser_context,
     enterprise_connectors::ConnectorsService* connectors_service) {
-  // TODO(domfc): Add platform overrides of the class once they are needed for
-  // an attribute.
   return std::make_unique<ContextInfoFetcher>(browser_context,
                                               connectors_service);
 }
@@ -204,6 +219,8 @@ void ContextInfoFetcher::Fetch(ContextInfoCallback callback) {
       GetAnalysisConnectorProviders(enterprise_connectors::FILE_DOWNLOADED);
   info.on_bulk_data_entry_providers =
       GetAnalysisConnectorProviders(enterprise_connectors::BULK_DATA_ENTRY);
+  info.on_print_providers =
+      GetAnalysisConnectorProviders(enterprise_connectors::PRINT);
   info.realtime_url_check_mode = GetRealtimeUrlCheckMode();
   info.on_security_event_providers = GetOnSecurityEventProviders();
   info.browser_version = version_info::GetVersionNumber();
@@ -211,8 +228,6 @@ void ContextInfoFetcher::Fetch(ContextInfoCallback callback) {
       content::SiteIsolationPolicy::UseDedicatedProcessesForAllSites();
   info.built_in_dns_client_enabled =
       utils::GetBuiltInDnsClientEnabled(g_browser_process->local_state());
-  info.chrome_cleanup_enabled =
-      utils::GetChromeCleanupEnabled(g_browser_process->local_state());
   info.chrome_remote_desktop_app_blocked =
       utils::GetChromeRemoteDesktopAppBlocked(
           PolicyBlocklistFactory::GetForBrowserContext(browser_context_));
@@ -224,6 +239,7 @@ void ContextInfoFetcher::Fetch(ContextInfoCallback callback) {
       utils::GetSafeBrowsingProtectionLevel(profile->GetPrefs());
   info.password_protection_warning_trigger =
       utils::GetPasswordProtectionWarningTrigger(profile->GetPrefs());
+  info.enterprise_profile_id = GetEnterpriseProfileId(profile);
 
 #if BUILDFLAG(IS_WIN)
   base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()})

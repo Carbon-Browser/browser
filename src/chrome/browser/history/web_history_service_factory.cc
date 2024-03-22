@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "components/history/core/browser/web_history_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/storage_partition.h"
 
@@ -25,7 +24,8 @@ bool IsHistorySyncEnabled(Profile* profile) {
 
 // static
 WebHistoryServiceFactory* WebHistoryServiceFactory::GetInstance() {
-  return base::Singleton<WebHistoryServiceFactory>::get();
+  static base::NoDestructor<WebHistoryServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -38,7 +38,8 @@ history::WebHistoryService* WebHistoryServiceFactory::GetForProfile(
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
 
-KeyedService* WebHistoryServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+WebHistoryServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = static_cast<Profile*>(context);
   // Ensure that the service is not instantiated or used if the user is not
@@ -46,18 +47,23 @@ KeyedService* WebHistoryServiceFactory::BuildServiceInstanceFor(
   if (!IsHistorySyncEnabled(profile))
     return nullptr;
 
-  return new history::WebHistoryService(
+  return std::make_unique<history::WebHistoryService>(
       IdentityManagerFactory::GetForProfile(profile),
       profile->GetDefaultStoragePartition()
           ->GetURLLoaderFactoryForBrowserProcess());
 }
 
 WebHistoryServiceFactory::WebHistoryServiceFactory()
-    : BrowserContextKeyedServiceFactory(
-        "WebHistoryServiceFactory",
-        BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory(
+          "WebHistoryServiceFactory",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
+  DependsOn(SyncServiceFactory::GetInstance());
 }
 
-WebHistoryServiceFactory::~WebHistoryServiceFactory() {
-}
+WebHistoryServiceFactory::~WebHistoryServiceFactory() = default;

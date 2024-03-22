@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -403,7 +403,7 @@ TEST_F(WebSocketEncoderCompressionTest, LongFrame) {
   frame.reserve(length);
   for (int i = 0; i < length; ++i) {
     int64_t j = i;
-    frame += temp.data()[(j * j) % length];
+    frame += temp[(j * j) % length];
   }
 
   int mask = 0;
@@ -497,6 +497,17 @@ TEST_F(WebSocketEncoderCompressionTest, CheckPongFrameNotCompressed) {
   std::string encoded;
 
   server_->EncodePongFrame(kOriginalText, kMask, &encoded);
+  EXPECT_FALSE(encoded[1] & kReserved1Bit);
+  EXPECT_EQ(kOriginalText, encoded.substr(2));
+}
+
+TEST_F(WebSocketEncoderCompressionTest, CheckCloseFrameNotCompressed) {
+  constexpr uint8_t kReserved1Bit = 0x40;
+  const std::string kOriginalText = "\x03\xe8";
+  constexpr int kMask = 0;
+  std::string encoded;
+
+  server_->EncodeCloseFrame(kOriginalText, kMask, &encoded);
   EXPECT_FALSE(encoded[1] & kReserved1Bit);
   EXPECT_EQ(kOriginalText, encoded.substr(2));
 }

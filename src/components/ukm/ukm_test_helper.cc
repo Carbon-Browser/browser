@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,9 @@
 #include "base/feature_list.h"
 #include "base/run_loop.h"
 #include "components/metrics/log_decoder.h"
+#include "components/metrics/metrics_logs_event_manager.h"
 #include "components/metrics/unsent_log_store.h"
+#include "ukm_test_helper.h"
 
 namespace ukm {
 
@@ -19,16 +21,16 @@ UkmTestHelper::UkmTestHelper(UkmService* ukm_service)
     : ukm_service_(ukm_service) {}
 
 bool UkmTestHelper::IsExtensionRecordingEnabled() const {
-  return ukm_service_ ? ukm_service_->extensions_enabled_ : false;
+  return ukm_service_ ? ukm_service_->recording_enabled(EXTENSIONS) : false;
 }
 
 bool UkmTestHelper::IsRecordingEnabled() const {
-  return ukm_service_ ? ukm_service_->recording_enabled_ : false;
+  return ukm_service_ ? ukm_service_->recording_enabled() : false;
 }
 
 bool UkmTestHelper::IsReportUserNoisedUserBirthYearAndGenderEnabled() {
   return base::FeatureList::IsEnabled(
-      ukm::UkmService::kReportUserNoisedUserBirthYearAndGender);
+      ukm::kReportUserNoisedUserBirthYearAndGender);
 }
 
 uint64_t UkmTestHelper::GetClientId() {
@@ -36,8 +38,9 @@ uint64_t UkmTestHelper::GetClientId() {
 }
 
 std::unique_ptr<Report> UkmTestHelper::GetUkmReport() {
-  if (!HasUnsentLogs())
+  if (!HasUnsentLogs()) {
     return nullptr;
+  }
 
   metrics::UnsentLogStore* log_store =
       ukm_service_->reporting_service_.ukm_log_store();
@@ -48,19 +51,22 @@ std::unique_ptr<Report> UkmTestHelper::GetUkmReport() {
   }
 
   log_store->StageNextLog();
-  if (!log_store->has_staged_log())
+  if (!log_store->has_staged_log()) {
     return nullptr;
+  }
 
   std::unique_ptr<ukm::Report> report = std::make_unique<ukm::Report>();
-  if (!metrics::DecodeLogDataToProto(log_store->staged_log(), report.get()))
+  if (!metrics::DecodeLogDataToProto(log_store->staged_log(), report.get())) {
     return nullptr;
+  }
 
   return report;
 }
 
 UkmSource* UkmTestHelper::GetSource(SourceId source_id) {
-  if (!ukm_service_)
+  if (!ukm_service_) {
     return nullptr;
+  }
 
   auto it = ukm_service_->sources().find(source_id);
   return it == ukm_service_->sources().end() ? nullptr : it->second.get();
@@ -77,8 +83,9 @@ bool UkmTestHelper::IsSourceObsolete(SourceId source_id) {
 }
 
 void UkmTestHelper::RecordSourceForTesting(SourceId source_id) {
-  if (ukm_service_)
+  if (ukm_service_) {
     ukm_service_->UpdateSourceURL(source_id, GURL("http://example.com"));
+  }
 }
 
 void UkmTestHelper::BuildAndStoreLog() {
@@ -88,12 +95,22 @@ void UkmTestHelper::BuildAndStoreLog() {
       run_loop.QuitClosure());
   run_loop.Run();
 
-  ukm_service_->Flush();
+  ukm_service_->Flush(metrics::MetricsLogsEventManager::CreateReason::kUnknown);
 }
 
 bool UkmTestHelper::HasUnsentLogs() {
   return ukm_service_ &&
          ukm_service_->reporting_service_.ukm_log_store()->has_unsent_logs();
+}
+
+void UkmTestHelper::SetMsbbConsent() {
+  DCHECK(ukm_service_);
+  ukm_service_->UpdateRecording({ukm::MSBB});
+}
+
+void UkmTestHelper::PurgeData() {
+  DCHECK(ukm_service_);
+  ukm_service_->Purge();
 }
 
 }  // namespace ukm

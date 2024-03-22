@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ struct EventTraceData {
   int thread_id = 0;
 
   // The original timestamp from when the event was logged.
-  base::Time::Exploded time_stamp = {};
+  base::Time time_stamp;
 
   // The name of the file which logged the event.  Note that this may not be
   // present in all builds (it depends on the logging params).

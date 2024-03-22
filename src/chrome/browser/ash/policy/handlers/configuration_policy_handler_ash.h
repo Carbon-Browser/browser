@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "chromeos/ash/components/network/network_ui_data.h"
 #include "components/onc/onc_constants.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
+#include "components/policy/core/common/policy_map.h"
 
 namespace policy {
 
@@ -27,6 +28,10 @@ class ExternalDataPolicyHandler : public TypeCheckingPolicyHandler {
       delete;
 
   ~ExternalDataPolicyHandler() override;
+
+  static bool CheckPolicySettings(const char* policy,
+                                  const PolicyMap::Entry* entry,
+                                  PolicyErrorMap* errors);
 
   // TypeCheckingPolicyHandler:
   bool CheckPolicySettings(const PolicyMap& policies,
@@ -100,7 +105,22 @@ class PinnedLauncherAppsPolicyHandler : public ListPolicyHandler {
 
   // Converts the list of strings |filtered_list| to a list of dictionaries and
   // sets the pref.
-  void ApplyList(base::Value filtered_list, PrefValueMap* prefs) override;
+  void ApplyList(base::Value::List filtered_list, PrefValueMap* prefs) override;
+};
+
+// Maps the DefaultHandlersForFileExtensions policy to the corresponding pref.
+class DefaultHandlersForFileExtensionsPolicyHandler
+    : public SchemaValidatingPolicyHandler {
+ public:
+  explicit DefaultHandlersForFileExtensionsPolicyHandler(const policy::Schema&);
+
+  // SchemaValidatingPolicyHandler:
+  bool CheckPolicySettings(const PolicyMap& policies,
+                           PolicyErrorMap* errors) override;
+  void ApplyPolicySettings(const PolicyMap& policies,
+                           PrefValueMap* prefs) override;
+
+  bool IsValidPolicyId(base::StringPiece policy_id) const;
 };
 
 class ScreenMagnifierPolicyHandler : public IntRangePolicyHandlerBase {

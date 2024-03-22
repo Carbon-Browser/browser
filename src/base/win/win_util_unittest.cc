@@ -1,10 +1,12 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/win/win_util.h"
 
 #include <objbase.h>
+
+#include <string_view>
 
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
@@ -79,7 +81,7 @@ TEST(BaseWinUtilTest, WStringFromGUID) {
                       0xf5b0,
                       0x4328,
                       {0x92, 0x38, 0xbd, 0x70, 0x8a, 0x6d, 0xc9, 0x63}};
-  const base::WStringPiece kGuidStr = L"{7698F759-F5B0-4328-9238-BD708A6DC963}";
+  const std::wstring_view kGuidStr = L"{7698F759-F5B0-4328-9238-BD708A6DC963}";
   auto guid_wstring = WStringFromGUID(kGuid);
   EXPECT_EQ(guid_wstring, kGuidStr);
   wchar_t guid_wchar[39];

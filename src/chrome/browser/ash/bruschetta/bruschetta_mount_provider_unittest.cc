@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/bruschetta/bruschetta_mount_provider.h"
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "chrome/browser/ash/bruschetta/bruschetta_launcher.h"
 #include "chrome/browser/ash/bruschetta/bruschetta_service.h"
@@ -36,8 +37,8 @@ class BruschettaMountProviderTest : public testing::Test {
   TestingProfile profile_;
   guest_os::GuestId id_{guest_os::VmType::BRUSCHETTA, "vm_name", ""};
   guest_os::GuestInfo info_{id_, 32, "username", base::FilePath("/home/dir"),
-                            ""};
-  FakeBruschettaLauncher* launcher_;
+                            "",  123};
+  raw_ptr<FakeBruschettaLauncher, ExperimentalAsh> launcher_;
   BruschettaMountProvider provider_{&profile_, id_};
 };
 
@@ -59,7 +60,7 @@ TEST_F(BruschettaMountProviderTest, TestPrepare) {
       [this, &called](bool result, int cid, int port, base::FilePath path) {
         EXPECT_TRUE(result);
         EXPECT_EQ(cid, info_.cid);
-        EXPECT_EQ(port, 1234);
+        EXPECT_EQ(port, 123);
         EXPECT_EQ(path, info_.homedir);
         called = true;
       }));

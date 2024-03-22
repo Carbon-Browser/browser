@@ -1,10 +1,10 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/network_connection_observer.h"
 
-namespace chromeos {
+namespace ash {
 
 NetworkConnectionObserver::NetworkConnectionObserver() = default;
 
@@ -26,4 +26,4 @@ void NetworkConnectionObserver::DisconnectRequested(
 
 NetworkConnectionObserver::~NetworkConnectionObserver() = default;
 
-}  // namespace chromeos
+}  // namespace ash

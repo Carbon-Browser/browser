@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2021 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2021 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="MenuFooterChip" parent="Chip">
@@ -25,11 +27,6 @@
         <item name="solidColorChip">false</item>
     </style>
 
-    <style name="FeedHorizontalDivider" parent="HorizontalDivider">
-        <item name="android:layout_height">@dimen/feed_divider_height</item>
-        <item name="android:background">@drawable/rectangle_surface_1</item>
-    </style>
-
     <style name="NtpHeaderTabLayoutStyle" parent="TabLayoutStyle">
         <item name="tabTextAppearance">@style/TextAppearance.TabLayout</item>
         <item name="tabGravity">center</item>
@@ -41,6 +38,14 @@
 
     <style name="TextAppearance.TabLayout" parent="TextAppearance.TextAccentMediumThick">
         <item name="android:textColor">@color/tab_layout_text_color_list</item>
+    </style>
+
+    <style name="TextAppearance.ClickableButton" parent="TextAppearance.Button.Text.Filled">
+        <item name="android:textColor">@macro/default_text_color_on_accent1</item>
+    </style>
+
+    <style name="TextAppearance.ClickableButtonInverse" parent="TextAppearance.Button.Text.Filled">
+        <item name="android:textColor">@macro/default_text_color_accent1</item>
     </style>
 
     <style name="TextAppearance.HeaderTitle" parent="TextAppearance.TextAccentMediumThick">

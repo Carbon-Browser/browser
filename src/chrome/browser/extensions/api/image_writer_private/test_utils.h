@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,8 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/disks/disk_mount_manager.h"
-#include "ash/components/disks/mock_disk_mount_manager.h"
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
+#include "chromeos/ash/components/disks/mock_disk_mount_manager.h"
 #endif
 
 namespace extensions {
@@ -39,9 +39,9 @@ const char kDummyExtensionId[] = "DummyExtension";
 // Default file size to use in tests.  Currently 32kB.
 const int kTestFileSize = 32 * 1024;
 // Pattern to use in the image file.
-const int kImagePattern = 0x55555555; // 01010101
+const uint8_t kImagePattern = 0x55;  // 01010101
 // Pattern to use in the device file.
-const int kDevicePattern = 0xAAAAAAAA; // 10101010
+const uint8_t kDevicePattern = 0xAA;  // 10101010
 // Disk file system type
 const char kTestFileSystemType[] = "vfat";
 
@@ -78,7 +78,7 @@ class FakeDiskMountManager : public ash::disks::MockDiskMountManager {
       UnmountDeviceRecursivelyCallbackType callback) override;
 
  private:
-  DiskMap disks_;
+  Disks disks_;
 };
 #endif
 
@@ -165,19 +165,10 @@ class ImageWriterTestUtils {
 
   // Fills |file| with |length| bytes of |pattern|, overwriting any existing
   // data.
-  bool FillFile(const base::FilePath& file,
-                const int pattern,
-                const int length);
+  bool FillFile(const base::FilePath& file, uint8_t pattern, size_t length);
 
   // Set up the test utils, creating temporary folders and such.
-  // Note that browser tests should use the alternate form and pass "true" as an
-  // argument.
   virtual void SetUp();
-  // Set up the test utils, creating temporary folders and such.  If
-  // |is_browser_test| is true then it will use alternate initialization
-  // appropriate for a browser test.  This should be run in
-  // |SetUpInProcessBrowserTestFixture|.
-  virtual void SetUp(bool is_browser_test);
 
   virtual void TearDown();
 
@@ -192,6 +183,7 @@ class ImageWriterTestUtils {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::unique_ptr<ImageWriterFakeImageBurnerClient> image_burner_client_;
+  bool concierge_client_initialized_ = false;
 #else
   scoped_refptr<FakeImageWriterClient> client_;
   ImageWriterUtilityClient::ImageWriterUtilityClientFactory

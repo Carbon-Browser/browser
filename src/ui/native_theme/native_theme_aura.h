@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,8 @@ class NATIVE_THEME_EXPORT NativeThemeAura : public NativeThemeBase {
 
   NativeThemeAura(bool use_overlay_scrollbars,
                   bool should_only_use_dark_colors,
-                  bool is_custom_system_theme = false);
+                  ui::SystemTheme system_theme = ui::SystemTheme::kDefault,
+                  bool configure_web_instance = false);
 
   NativeThemeAura(const NativeThemeAura&) = delete;
   NativeThemeAura& operator=(const NativeThemeAura&) = delete;
@@ -29,7 +30,8 @@ class NATIVE_THEME_EXPORT NativeThemeAura : public NativeThemeBase {
   static NativeThemeAura* web_instance();
 
   // Overridden from NativeTheme:
-  SkColor FocusRingColorForBaseColor(SkColor base_color) const override;
+  SkColor4f FocusRingColorForBaseColor(SkColor4f base_color) const override;
+  void ConfigureWebInstance() override;
 
   // NativeThemeBase:
   void PaintMenuPopupBackground(
@@ -45,12 +47,14 @@ class NATIVE_THEME_EXPORT NativeThemeAura : public NativeThemeBase {
                                const MenuItemExtraParams& menu_item,
                                ColorScheme color_scheme) const override;
   void PaintArrowButton(cc::PaintCanvas* gc,
+                        const ColorProvider* color_provider,
                         const gfx::Rect& rect,
                         Part direction,
                         State state,
                         ColorScheme color_scheme,
                         const ScrollbarArrowExtraParams& arrow) const override;
   void PaintScrollbarTrack(cc::PaintCanvas* canvas,
+                           const ColorProvider* color_provider,
                            Part part,
                            State state,
                            const ScrollbarTrackExtraParams& extra_params,
@@ -61,11 +65,13 @@ class NATIVE_THEME_EXPORT NativeThemeAura : public NativeThemeBase {
                            Part part,
                            State state,
                            const gfx::Rect& rect,
-                           ScrollbarOverlayColorTheme theme,
+                           const ScrollbarThumbExtraParams& extra_params,
                            ColorScheme color_scheme) const override;
   void PaintScrollbarCorner(cc::PaintCanvas* canvas,
+                            const ColorProvider* color_provider,
                             State state,
                             const gfx::Rect& rect,
+                            const ScrollbarTrackExtraParams& extra_params,
                             ColorScheme color_scheme) const override;
   gfx::Size GetPartSize(Part part,
                         State state,
@@ -84,6 +90,11 @@ class NATIVE_THEME_EXPORT NativeThemeAura : public NativeThemeBase {
                                      const cc::PaintFlags& flags);
 
   bool use_overlay_scrollbars_;
+
+  // Used to notify the web native theme of changes to dark mode, high
+  // contrast, preferred color scheme, and preferred contrast.
+  std::unique_ptr<NativeTheme::ColorSchemeNativeThemeObserver>
+      color_scheme_observer_;
 };
 
 }  // namespace ui

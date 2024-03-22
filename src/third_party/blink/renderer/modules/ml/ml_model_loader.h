@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class MLContext;
 class ScriptState;
 class ScriptPromiseResolver;
 
-class MLModelLoader final : public ScriptWrappable {
+class MODULES_EXPORT MLModelLoader final : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -47,11 +47,21 @@ class MLModelLoader final : public ScriptWrappable {
 
   void Trace(Visitor* visitor) const override;
 
+  // The callback of loading model is used to bind the pending remote of `Model`
+  // interface if the model is loaded successfully.
+  using ModelLoadedCallback = base::OnceCallback<void(
+      ml::model_loader::mojom::blink::LoadModelResult result,
+      mojo::PendingRemote<ml::model_loader::mojom::blink::Model> pending_remote,
+      ml::model_loader::mojom::blink::ModelInfoPtr model_info)>;
+  void Load(ScriptState* script_state,
+            DOMArrayBuffer* buffer,
+            ModelLoadedCallback callback);
+
  private:
   void OnRemoteLoaderCreated(
       ScriptState* script_state,
-      ScriptPromiseResolver* resolver,
       DOMArrayBuffer* buffer,
+      ModelLoadedCallback callback,
       ml::model_loader::mojom::blink::CreateModelLoaderResult result,
       mojo::PendingRemote<ml::model_loader::mojom::blink::ModelLoader>
           pending_remote);

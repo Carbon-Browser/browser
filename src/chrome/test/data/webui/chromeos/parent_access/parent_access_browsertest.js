@@ -1,107 +1,43 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /** @fileoverview Runs the Parent Access flow tests. */
 
-GEN_INCLUDE(['//chrome/test/data/webui/polymer_browser_test_base.js']);
+GEN_INCLUDE(['//chrome/test/data/webui/chromeos/polymer_browser_test_base.js']);
 
-GEN('#include "chrome/browser/ui/webui/chromeos/parent_access/parent_access_browsertest_base.h"');
+GEN('#include "chrome/browser/ui/webui/ash/parent_access/parent_access_browsertest_base.h"');
 GEN('#include "content/public/test/browser_test.h"');
 
+this.ParentAccessBrowserTest = class extends PolymerTest {};
 
-var ParentAccessAppTest = class extends PolymerTest {
-  /** @override */
-  get browsePreload() {
-    return 'chrome://parent-access/test_loader.html?module=' +
-        'chromeos/parent_access/parent_access_app_test.js&host=test';
-  }
+const tests = [
+  ['ExtensionApprovals', 'extension_approvals_test.js'],
+  ['ParentAccessAfter', 'parent_access_after_test.js'],
+  ['ParentAccessApp', 'parent_access_app_test.js'],
+  ['ParentAccessController', 'parent_access_controller_test.js'],
+  ['ParentAccessDisabled', 'parent_access_disabled_test.js'],
+  ['ParentAccessUi', 'parent_access_ui_test.js'],
+  ['ParentAccessUiHandler', 'parent_access_ui_handler_test.js'],
+  ['WebviewManager', 'webview_manager_test.js'],
+];
 
-  /** @param {string} testName The name of the test to run. */
-  runMochaTest(testName) {
-    runMochaTest(parent_access_app_tests.suiteName, testName);
-  }
-};
+tests.forEach(test => registerTest(...test));
 
-TEST_F('ParentAccessAppTest', 'TestShowAfterFlow', function() {
-  this.runMochaTest(parent_access_app_tests.TestNames.TestShowAfterFlow);
-});
-
-var ParentAccessControllerTest = class extends testing.Test {
-  /** @override */
-  get browsePreload() {
-    return 'chrome://parent-access/test_loader.html?module=' +
-        'chromeos/parent_access/parent_access_controller_test.js&host=test';
-  }
-
-  /** @override */
-  get isAsync() {
-    return true;
-  }
-
-  /** @param {string} testName The name of the test to run. */
-  runMochaTest(testName) {
-    runMochaTest(parent_access_controller_tests.suiteName, testName);
-  }
-};
-
-TEST_F('ParentAccessControllerTest', 'ParentAccessResultFnCalled', function() {
-  this.runMochaTest(
-      parent_access_controller_tests.TestNames.ParentAccessResultFnCalled);
-});
-
-var ParentAccessUITest = class extends PolymerTest {
-  /** @override */
-  get browsePreload() {
-    return 'chrome://parent-access/test_loader.html?module=' +
-        'chromeos/parent_access/parent_access_ui_test.js&host=test';
-  }
-
-  /** @override */
-  get isAsync() {
-    return true;
-  }
-
-  /** @param {string} testName The name of the test to run. */
-  runMochaTest(testName) {
-    runMochaTest(parent_access_ui_tests.suiteName, testName);
-  }
-};
-
-TEST_F('ParentAccessUITest', 'TestIsAllowedRequest', function() {
-  this.runMochaTest(parent_access_ui_tests.TestNames.TestIsAllowedRequest);
-});
-
-TEST_F('ParentAccessUITest', 'TestShouldReceiveAuthHeader', function() {
-  this.runMochaTest(
-      parent_access_ui_tests.TestNames.TestShouldReceiveAuthHeader);
-});
-
-
-var ParentAccessUIHandlerTest = class extends testing.Test {
-  /** @override */
-  get typedefCppFixture() {
-    return 'MojoWebUIBrowserTest';
-  }
-
-  /** @override */
-  get browsePreload() {
-    return 'chrome://parent-access/test_loader.html?module=' +
-        'chromeos/parent_access/parent_access_ui_handler_test.js&host=test';
-  }
-
-  /** @override */
-  get isAsync() {
-    return true;
-  }
-
-  /** @param {string} testName The name of the test to run. */
-  runMochaTest(testName) {
-    runMochaTest(parent_access_ui_handler_tests.suiteName, testName);
-  }
-};
-
-TEST_F('ParentAccessUIHandlerTest', 'TestOnParentAccessResult', function() {
-  this.runMochaTest(
-      parent_access_ui_handler_tests.TestNames.TestOnParentAccessResult);
-});
+/*
+ * Add a `caseName` to a specific test to disable it i.e. 'DISABLED_All'
+ * @param {string} testName
+ * @param {string} module
+ * @param {string} caseName
+ */
+function registerTest(testName, module, caseName) {
+  const className = `ParentAccess${testName}`;
+  this[className] = class extends ParentAccessBrowserTest {
+    /** @override */
+    get browsePreload() {
+      return `chrome://parent-access/test_loader.html` +
+          `?module=chromeos/parent_access/${module}`;
+    }
+  };
+  TEST_F(className, caseName || 'All', () => mocha.run());
+}

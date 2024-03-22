@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,8 @@ class BrowserContext;
 namespace permissions {
 
 // This class records and stores notification engagement per origin for the
-// past 90 days. Engagements per origin are bucketed by week: A notification
-// engagement or display is assigned to the last Monday midnight in local time.
+// past 30 days. Engagements per origin are bucketed daily: A notification
+// engagement or display is assigned to the midnight in local time.
 class NotificationsEngagementService : public KeyedService {
  public:
   explicit NotificationsEngagementService(content::BrowserContext* context,
@@ -38,13 +38,10 @@ class NotificationsEngagementService : public KeyedService {
   void Shutdown() override;
 
   void RecordNotificationDisplayed(const GURL& url);
+  void RecordNotificationDisplayed(const GURL& url, int display_count);
   void RecordNotificationInteraction(const GURL& url);
 
-  // ISO8601 defines Monday as the first day of the week. Additionally, in most
-  // of the world the workweek starts with Monday, so Monday is used
-  // specifically here, as notification usage is a function of work/personal
-  // settings.
-  static std::string GetBucketLabelForLastMonday(base::Time time);
+  static std::string GetBucketLabel(base::Time time);
   static absl::optional<base::Time> ParsePeriodBeginFromBucketLabel(
       const std::string& label);
 

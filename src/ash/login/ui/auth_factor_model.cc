@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,15 +27,17 @@ void AuthFactorModel::SetVisible(bool visible) {
 }
 
 void AuthFactorModel::OnThemeChanged() {
-  if (icon_)
+  if (icon_) {
     UpdateIcon(icon_);
+  }
 }
 
 void AuthFactorModel::HandleTapOrClick() {
   // If an auth factor icon is clicked while the auth factor has a permanent
   // error, then show the error again by marking it as not timed out.
-  if (GetAuthFactorState() == AuthFactorState::kErrorPermanent)
+  if (GetAuthFactorState() == AuthFactorState::kErrorPermanent) {
     has_permanent_error_display_timed_out_ = false;
+  }
 
   DoHandleTapOrClick();
 
@@ -47,8 +49,9 @@ void AuthFactorModel::HandleTapOrClick() {
 }
 
 void AuthFactorModel::HandleErrorTimeout() {
-  if (GetAuthFactorState() == AuthFactorState::kErrorPermanent)
+  if (GetAuthFactorState() == AuthFactorState::kErrorPermanent) {
     has_permanent_error_display_timed_out_ = true;
+  }
 
   DoHandleErrorTimeout();
 

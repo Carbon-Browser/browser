@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ import java.util.HashMap;
 public final class AccountCapabilitiesBuilder {
     private final HashMap<String, Boolean> mCapabilities = new HashMap<>();
 
-    /**
-     * Sets the canOfferExtendedSyncPromos capability value.
-     */
+    /** Sets the canOfferExtendedSyncPromos capability value. */
     public AccountCapabilitiesBuilder setCanOfferExtendedSyncPromos(boolean value) {
         mCapabilities.put(
                 AccountCapabilitiesConstants.CAN_OFFER_EXTENDED_CHROME_SYNC_PROMOS_CAPABILITY_NAME,
@@ -27,9 +25,7 @@ public final class AccountCapabilitiesBuilder {
         return this;
     }
 
-    /**
-     * @return {@link AccountCapabilities} object with the capabilities set up with the builder.
-     */
+    /** @return {@link AccountCapabilities} object with the capabilities set up with the builder. */
     public AccountCapabilities build() {
         return new AccountCapabilities((HashMap<String, Boolean>) mCapabilities.clone());
     }

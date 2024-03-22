@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include <optional>
+#include "base/clang_profiling_buildflags.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/span.h"
 #include "base/time/time.h"
@@ -21,8 +23,8 @@
 #include "gpu/config/dx_diag_node.h"
 #include "gpu/gpu_export.h"
 #include "gpu/vulkan/buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gl/gl_implementation.h"
 #include "ui/gl/gpu_preference.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -61,8 +63,8 @@ enum class IntelGpuSeriesType {
   kApollolake = 7,
   kSkylake = 8,
   kGeminilake = 9,
-  kAmberlake = 23,
   kKabylake = 10,
+  kAmberlake = 23,
   kCoffeelake = 11,
   kWhiskeylake = 12,
   kCometlake = 13,
@@ -78,8 +80,10 @@ enum class IntelGpuSeriesType {
   kDG1 = 25,
   kAlderlake = 22,
   kAlchemist = 26,
+  kRaptorlake = 27,
+  kMeteorlake = 28,
   // Please also update |gpu_series_map| in process_json.py.
-  kMaxValue = kAlchemist,
+  kMaxValue = kMeteorlake,
 };
 
 // Video profile.  This *must* match media::VideoCodecProfile.
@@ -123,7 +127,22 @@ enum VideoCodecProfile {
   HEVCPROFILE_SCREEN_EXTENDED,
   HEVCPROFILE_SCALABLE_REXT,
   HEVCPROFILE_HIGH_THROUGHPUT_SCREEN_EXTENDED,
-  VIDEO_CODEC_PROFILE_MAX = HEVCPROFILE_HIGH_THROUGHPUT_SCREEN_EXTENDED,
+  VVCPROFILE_MAIN10,
+  VVCPROFILE_MAIN12,
+  VVCPROFILE_MAIN12_INTRA,
+  VVCPROIFLE_MULTILAYER_MAIN10,
+  VVCPROFILE_MAIN10_444,
+  VVCPROFILE_MAIN12_444,
+  VVCPROFILE_MAIN16_444,
+  VVCPROFILE_MAIN12_444_INTRA,
+  VVCPROFILE_MAIN16_444_INTRA,
+  VVCPROFILE_MULTILAYER_MAIN10_444,
+  VVCPROFILE_MAIN10_STILL_PICTURE,
+  VVCPROFILE_MAIN12_STILL_PICTURE,
+  VVCPROFILE_MAIN10_444_STILL_PICTURE,
+  VVCPROFILE_MAIN12_444_STILL_PICTURE,
+  VVCPROFILE_MAIN16_444_STILL_PICTURE,
+  VIDEO_CODEC_PROFILE_MAX = VVCPROFILE_MAIN16_444_STILL_PICTURE,
 };
 
 // Specification of a decoding profile supported by a hardware decoder.
@@ -153,6 +172,7 @@ struct GPU_EXPORT VideoEncodeAcceleratorSupportedProfile {
   gfx::Size max_resolution;
   uint32_t max_framerate_numerator;
   uint32_t max_framerate_denominator;
+  bool is_software_codec;
 };
 using VideoEncodeAcceleratorSupportedProfiles =
     std::vector<VideoEncodeAcceleratorSupportedProfile>;
@@ -209,6 +229,8 @@ enum class OverlaySupport {
 GPU_EXPORT const char* OverlaySupportToString(OverlaySupport support);
 
 struct GPU_EXPORT OverlayInfo {
+  OverlayInfo() = default;
+  OverlayInfo(const OverlayInfo& other) = default;
   OverlayInfo& operator=(const OverlayInfo& other) = default;
   bool operator==(const OverlayInfo& other) const {
     return direct_composition == other.direct_composition &&
@@ -274,11 +296,11 @@ struct GPU_EXPORT GPUInfo {
     CHROME_LUID luid;
 #endif  // BUILDFLAG(IS_WIN)
 
-#if BUILDFLAG(IS_MAC)
-    // The registry ID of an IOGraphicsAccelerator2 or AGXAccelerator matches
-    // the ID used for GPU selection by ANGLE_platform_angle_device_id.
-    uint64_t register_id = 0ULL;
-#endif  // BUILDFLAG(IS_MAC)
+    // The 64-bit ID used for GPU selection by ANGLE_platform_angle_device_id.
+    // On Mac this matches the registry ID of an IOGraphicsAccelerator2 or
+    // AGXAccelerator.
+    // On Windows this matches the concatenated LUID.
+    uint64_t system_device_id = 0ULL;
 
     // Whether this GPU is the currently used one.
     // Currently this field is only supported and meaningful on OS X and on
@@ -317,7 +339,7 @@ struct GPU_EXPORT GPUInfo {
 
   unsigned int GpuCount() const;
 
-  GPUDevice* GetGpuByPreference(gl::GpuPreference preference);
+  const GPUDevice* GetGpuByPreference(gl::GpuPreference preference) const;
 
 #if BUILDFLAG(IS_WIN)
   GPUDevice* FindGpuByLuid(DWORD low_part, LONG high_part);
@@ -361,6 +383,9 @@ struct GPU_EXPORT GPUInfo {
   // See machine_model_name's comment.
   std::string machine_model_version;
 
+  // The DisplayType requested from ANGLE.
+  std::string display_type;
+
   // The GL_VERSION string.
   std::string gl_version;
 
@@ -386,7 +411,7 @@ struct GPU_EXPORT GPUInfo {
   // reset detection or notification not available.
   uint32_t gl_reset_notification_strategy;
 
-  bool software_rendering;
+  gl::GLImplementationParts gl_implementation_parts;
 
   // Empty means unknown. Defined on X11 as
   // - "1" means indirect (versions can't be all zero)
@@ -416,6 +441,21 @@ struct GPU_EXPORT GPUInfo {
   bool is_asan = false;
 #endif
 
+// Whether the browser was built with Clang coverage enabled or not.
+#if BUILDFLAG(USE_CLANG_COVERAGE) || BUILDFLAG(CLANG_PROFILING)
+  bool is_clang_coverage = true;
+#else
+  bool is_clang_coverage = false;
+#endif
+
+#if defined(ARCH_CPU_64_BITS)
+  uint32_t target_cpu_bits = 64;
+#elif defined(ARCH_CPU_32_BITS)
+  uint32_t target_cpu_bits = 32;
+#elif defined(ARCH_CPU_31_BITS)
+  uint32_t target_cpu_bits = 31;
+#endif
+
 #if BUILDFLAG(IS_MAC)
   // Enum describing which texture target is used for native GpuMemoryBuffers on
   // MacOS. Valid values are GL_TEXTURE_2D and GL_TEXTURE_RECTANGLE_ARB.
@@ -434,10 +474,15 @@ struct GPU_EXPORT GPUInfo {
 
   // The GPU hardware overlay info.
   OverlayInfo overlay_info;
+
+  // Are d3d shared images supported.
+  bool shared_image_d3d = false;
 #endif
   VideoDecodeAcceleratorSupportedProfiles
       video_decode_accelerator_supported_profiles;
 
+  // DO NOT use for anything but diagnostics/metrics like chrome://gpu,
+  // it's not populated at start up and can be unreliable for a while.
   VideoEncodeAcceleratorSupportedProfiles
       video_encode_accelerator_supported_profiles;
   bool jpeg_decode_accelerator_supported;
@@ -450,7 +495,7 @@ struct GPU_EXPORT GPUInfo {
   uint32_t visibility_callback_call_count = 0;
 
 #if BUILDFLAG(ENABLE_VULKAN)
-  absl::optional<VulkanInfo> vulkan_info;
+  std::optional<VulkanInfo> vulkan_info;
 #endif
 
   // Note: when adding new members, please remember to update EnumerateFields

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
 #include "content/browser/background_fetch/background_fetch_job_controller.h"
@@ -23,7 +23,7 @@
 #include "content/common/background_fetch/background_fetch_types.h"
 #include "content/public/browser/background_fetch_delegate.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "storage/browser/blob/blob_data_handle.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
@@ -37,9 +37,9 @@ BackgroundFetchContext::BackgroundFetchContext(
     base::WeakPtr<StoragePartitionImpl> storage_partition,
     const scoped_refptr<ServiceWorkerContextWrapper>& service_worker_context,
     scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy,
-    scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context)
+    DevToolsBackgroundServicesContextImpl& devtools_context)
     : service_worker_context_(service_worker_context),
-      devtools_context_(std::move(devtools_context)),
+      devtools_context_(&devtools_context),
       registration_notifier_(
           std::make_unique<BackgroundFetchRegistrationNotifier>()),
       delegate_proxy_(storage_partition) {
@@ -52,7 +52,7 @@ BackgroundFetchContext::BackgroundFetchContext(
       std::move(quota_manager_proxy));
   scheduler_ = std::make_unique<BackgroundFetchScheduler>(
       this, data_manager_.get(), registration_notifier_.get(), &delegate_proxy_,
-      devtools_context_.get(), service_worker_context_);
+      *devtools_context_, service_worker_context_);
 }
 
 BackgroundFetchContext::~BackgroundFetchContext() {
@@ -81,8 +81,6 @@ void BackgroundFetchContext::DidGetInitializationData(
 
   if (error != blink::mojom::BackgroundFetchError::NONE)
     return;
-
-  background_fetch::RecordRegistrationsOnStartup(initialization_data.size());
 
   for (auto& data : initialization_data) {
     for (auto& observer : data_manager_->observers()) {
@@ -303,16 +301,19 @@ void BackgroundFetchContext::DidGetMatchingRequests(
 void BackgroundFetchContext::Shutdown() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   data_manager_->Shutdown();
+  scheduler_->Shutdown();
+  devtools_context_ = nullptr;
 }
 
 void BackgroundFetchContext::SetDataManagerForTesting(
     std::unique_ptr<BackgroundFetchDataManager> data_manager) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(data_manager);
+  CHECK(devtools_context_);
   data_manager_ = std::move(data_manager);
   scheduler_ = std::make_unique<BackgroundFetchScheduler>(
       this, data_manager_.get(), registration_notifier_.get(), &delegate_proxy_,
-      devtools_context_.get(), service_worker_context_);
+      *devtools_context_, service_worker_context_);
 }
 
 }  // namespace content

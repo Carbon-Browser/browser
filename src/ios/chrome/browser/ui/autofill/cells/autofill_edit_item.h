@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_edit_item.h"
 #import "ios/chrome/browser/ui/autofill/autofill_ui_type.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_edit_item.h"
 
 // Item to represent and configure an AutofillEditItem.
 @interface AutofillEditItem : TableViewTextEditItem

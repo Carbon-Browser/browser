@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,13 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/browser/attribution_reporting/attribution_report.h"
+#include "content/common/content_export.h"
+#include "content/public/browser/attribution_data_model.h"
 #include "content/public/browser/storage_partition.h"
+#include "services/network/public/mojom/attribution.mojom-forward.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class Time;
@@ -20,17 +24,27 @@ namespace content {
 class AttributionDataHostManager;
 class AttributionObserver;
 class AttributionTrigger;
+class BrowserContext;
+class BrowsingDataFilterBuilder;
 class StorableSource;
 class StoredSource;
 class WebContents;
 
+struct GlobalRenderFrameHostId;
+struct OsRegistration;
+
 // Interface that mediates data flow between the network, storage layer, and
 // blink.
-class AttributionManager {
+class CONTENT_EXPORT AttributionManager : public AttributionDataModel {
  public:
   static AttributionManager* FromWebContents(WebContents* web_contents);
 
-  virtual ~AttributionManager() = default;
+  static AttributionManager* FromBrowserContext(BrowserContext*);
+
+  static network::mojom::AttributionSupport GetAttributionSupport(
+      WebContents* web_contents);
+
+  ~AttributionManager() override = default;
 
   virtual void AddObserver(AttributionObserver* observer) = 0;
 
@@ -41,11 +55,15 @@ class AttributionManager {
 
   // Persists the given |source| to storage. Called when a navigation
   // originating from a source tag finishes.
-  virtual void HandleSource(StorableSource source) = 0;
+  virtual void HandleSource(StorableSource source,
+                            GlobalRenderFrameHostId render_frame_id) = 0;
 
   // Process a newly registered trigger. Will create and log any new
   // reports to storage.
-  virtual void HandleTrigger(AttributionTrigger trigger) = 0;
+  virtual void HandleTrigger(AttributionTrigger trigger,
+                             GlobalRenderFrameHostId render_frame_id) = 0;
+
+  virtual void HandleOsRegistration(OsRegistration) = 0;
 
   // Get all sources that are currently stored in this partition. Used for
   // populating WebUI.
@@ -55,7 +73,6 @@ class AttributionManager {
   // Get all pending reports that are currently stored in this partition. Used
   // for populating WebUI and simulator.
   virtual void GetPendingReportsForInternalUse(
-      AttributionReport::ReportTypes report_types,
       int limit,
       base::OnceCallback<void(std::vector<AttributionReport>)> callback) = 0;
 
@@ -69,11 +86,26 @@ class AttributionManager {
   // `delete_begin` and `delete_end` time.
   //
   // If `filter` is null, then consider all storage keys in storage as matching.
+  //
+  // Precondition: `filter` should be built from the `filter_builder`, as well
+  // as any check that requires inspecting the `SpecialStoragePolicy` which
+  // isn't covered by `BrowsingDataFilterBuilder`.
+  //
+  // The only reason `filter_builder` needs to be passed here is for
+  // communication with the Android system of the raw data in the filter. Caller
+  // maintains ownership of `filter_builder`.
   virtual void ClearData(base::Time delete_begin,
                          base::Time delete_end,
                          StoragePartition::StorageKeyMatcherFunction filter,
+                         BrowsingDataFilterBuilder* filter_builder,
                          bool delete_rate_limit_data,
                          base::OnceClosure done) = 0;
+
+  // If debug mode is enabled, noise and delays are disabled to facilitate
+  // testing, whether automated or manual. If `enabled` is `absl::nullopt`,
+  // falls back to `switches::kAttributionReportingDebugMode`.
+  virtual void SetDebugMode(absl::optional<bool> enabled,
+                            base::OnceClosure done) = 0;
 };
 
 }  // namespace content

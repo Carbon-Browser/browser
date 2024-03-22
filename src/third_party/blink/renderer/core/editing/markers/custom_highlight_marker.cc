@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,14 @@ PseudoId CustomHighlightMarker::GetPseudoId() const {
 
 const AtomicString& CustomHighlightMarker::GetPseudoArgument() const {
   return GetHighlightName();
+}
+
+void CustomHighlightMarker::SetHasVisualOverflow(bool has_overflow) {
+  highlight_has_visual_overflow_ = has_overflow;
+}
+
+bool CustomHighlightMarker::HasVisualOverflow() const {
+  return highlight_has_visual_overflow_;
 }
 
 void CustomHighlightMarker::Trace(blink::Visitor* visitor) const {

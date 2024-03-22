@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace media {
 
 class MEDIA_EXPORT MediaTrack {
  public:
-  enum Type { Text, Audio, Video };
+  enum class Type { kAudio, kVideo };
   using Id = base::StrongAlias<class IdTag, std::string>;
   using Kind = base::StrongAlias<class KindTag, std::string>;
   using Label = base::StrongAlias<class LabelTag, std::string>;

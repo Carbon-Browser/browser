@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@
 #include "ash/app_list/views/apps_grid_view_folder_delegate.h"
 #include "ash/app_list/views/folder_header_view.h"
 #include "ash/app_list/views/folder_header_view_delegate.h"
-#include "ash/app_list/views/paged_apps_grid_view.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -36,35 +36,28 @@ class AppListViewDelegate;
 class AppsContainerView;
 class AppsGridView;
 class FolderHeaderView;
-class PageSwitcher;
 class ScrollViewGradientHelper;
 class SystemShadow;
 
 // Displays folder contents via an AppsGridView. App items can be dragged out
 // of the folder to the main apps grid.
-class ASH_EXPORT AppListFolderView
-    : public views::View,
-      public FolderHeaderViewDelegate,
-      public AppListModelProvider::Observer,
-      public AppListModelObserver,
-      public views::ViewObserver,
-      public AppsGridViewFolderDelegate,
-      public PagedAppsGridView::ContainerDelegate {
+class ASH_EXPORT AppListFolderView : public views::View,
+                                     public FolderHeaderViewDelegate,
+                                     public AppListModelProvider::Observer,
+                                     public AppListModelObserver,
+                                     public views::ViewObserver,
+                                     public AppsGridViewFolderDelegate {
  public:
   METADATA_HEADER(AppListFolderView);
 
   // The maximum number of columns a folder can have.
   static constexpr int kMaxFolderColumns = 4;
 
-  // When using paged folder item grid, the maximum number of rows a folder
-  // items grid can have.
-  static constexpr int kMaxPagedFolderRows = 4;
-
   AppListFolderView(AppListFolderController* folder_controller,
                     AppsGridView* root_apps_grid_view,
-                    ContentsView* contents_view,
                     AppListA11yAnnouncer* a11y_announcer,
-                    AppListViewDelegate* view_delegate);
+                    AppListViewDelegate* view_delegate,
+                    bool tablet_mode);
   AppListFolderView(const AppListFolderView&) = delete;
   AppListFolderView& operator=(const AppListFolderView&) = delete;
   ~AppListFolderView() override;
@@ -114,6 +107,7 @@ class ASH_EXPORT AppListFolderView
   void FocusFirstItem(bool silently);
 
   // views::View
+  void AddedToWidget() override;
   void Layout() override;
   void ChildPreferredSizeChanged(View* child) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
@@ -137,6 +131,9 @@ class ASH_EXPORT AppListFolderView
   // Virtual keyboard
   int GetYOffsetForFolder();
 
+  // Recalculates and updates the bounds of the folder `shadow_`  .
+  void UpdateShadowBounds();
+
   // Returns true if this view's child views are in animation for opening or
   // closing the folder.
   bool IsAnimationRunning() const;
@@ -145,10 +142,6 @@ class ASH_EXPORT AppListFolderView
   // to be in the parent view's coordinate system.
   void SetBoundingBox(const gfx::Rect& bounding_box);
 
-  // Updates the highlight border of the folder view according to the folder
-  // animation.
-  void UpdateHighlightBorder(bool show);
-
   // Sets the callback that runs when the folder animation ends.
   void SetAnimationDoneTestCallback(base::OnceClosure animation_done_callback);
 
@@ -156,7 +149,7 @@ class ASH_EXPORT AppListFolderView
 
   FolderHeaderView* folder_header_view() { return folder_header_view_; }
 
-  views::View* background_view() { return background_view_; }
+  views::View* animating_background() { return animating_background_; }
 
   views::View* contents_container() { return contents_container_; }
 
@@ -174,9 +167,6 @@ class ASH_EXPORT AppListFolderView
   // BackgroundAnimation, FolderItemTitleAnimation, TopIconAnimation, and
   // ContentsContainerAnimation.
   void RecordAnimationSmoothness();
-
-  // Called when tablet mode starts and ends.
-  void OnTabletModeChanged(bool started);
 
   // views::View:
   void OnScrollEvent(ui::ScrollEvent* event) override;
@@ -196,15 +186,11 @@ class ASH_EXPORT AppListFolderView
       bool events_forwarded_to_drag_drop_host,
       bool cancel_drag,
       std::unique_ptr<AppDragIconProxy> drag_icon_proxy) override;
+  void Close() override;
   bool IsDragPointOutsideOfFolder(const gfx::Point& drag_point) override;
   bool IsOEMFolder() const override;
   void HandleKeyboardReparent(AppListItemView* reparented_view,
                               ui::KeyboardCode key_code) override;
-
-  // PagedAppsGridView::ContainerDelegate:
-  bool IsPointWithinPageFlipBuffer(const gfx::Point& point) const override;
-  bool IsPointWithinBottomDragBuffer(const gfx::Point& point,
-                                     int page_flip_zone_size) const override;
 
   const AppListConfig* GetAppListConfig() const;
 
@@ -212,11 +198,8 @@ class ASH_EXPORT AppListFolderView
   views::ScrollView* scroll_view_for_test() { return scroll_view_; }
 
  private:
-  // Creates an apps grid view with fixed-size pages.
-  void CreatePagedAppsGrid(ContentsView* contents_view);
-
   // Creates a vertically scrollable apps grid view.
-  void CreateScrollableAppsGrid();
+  void CreateScrollableAppsGrid(bool tablet_mode);
 
   // Returns the compositor associated to the widget containing this view.
   // Returns nullptr if there isn't one associated with this widget.
@@ -225,19 +208,6 @@ class ASH_EXPORT AppListFolderView
   // Called from the root apps grid view to cancel reparent drag from the root
   // apps grid.
   void CancelReparentDragFromRootGrid();
-
-  // Calculates whether the folder would fit in the bounding box if it had the
-  // max allowed number of rows, and condenses the margins between grid items if
-  // this is not the case. The goal is to prevent a portion of folder UI from
-  // getting laid out outside the bounding box. Tile size scaling done for the
-  // top level apps grid should ensure the folder UI reasonably fits within the
-  // bounding box with no item margins. At certain screen sizes, this approach
-  // also fails, but at that point the top level apps grid doesn't work too well
-  // either.
-  // No-op if the productivity launcher is enabled, in which case folder grid is
-  // scrollable, and should handle the case where grid bounds overflow bounding
-  // box size gracefully.
-  void ShrinkGridTileMarginsWhenNeeded();
 
   // Resets the folder view state. Called when the folder view gets hidden (and
   // hide animations finish) to disassociate the folder view with the current
@@ -255,41 +225,39 @@ class ASH_EXPORT AppListFolderView
   // the root grid view.
   void OnHideAnimationDone(bool hide_for_reparent);
 
-  // Caches the feature flag to check if the productivity launcher is enabled.
-  bool is_productivity_launcher_enabled_ = false;
-
   // Controller interface implemented by the container for this view.
-  AppListFolderController* const folder_controller_;
+  const raw_ptr<AppListFolderController, ExperimentalAsh> folder_controller_;
 
   // The root (non-folder) apps grid view.
-  AppsGridView* const root_apps_grid_view_;
+  const raw_ptr<AppsGridView, ExperimentalAsh> root_apps_grid_view_;
 
   // Used to send accessibility alerts. Owned by the parent apps container.
-  AppListA11yAnnouncer* const a11y_announcer_;
+  const raw_ptr<AppListA11yAnnouncer, ExperimentalAsh> a11y_announcer_;
 
   // The view is used to draw a background with corner radius.
-  views::View* background_view_;  // Owned by views hierarchy.
+  raw_ptr<views::View, ExperimentalAsh> background_view_;
+  raw_ptr<views::View, ExperimentalAsh> animating_background_;
 
   // The view is used as a container for all following views.
-  views::View* contents_container_;  // Owned by views hierarchy.
+  raw_ptr<views::View, ExperimentalAsh>
+      contents_container_;  // Owned by views hierarchy.
 
-  FolderHeaderView* folder_header_view_;  // Owned by views hierarchy.
-  AppsGridView* items_grid_view_;         // Owned by views hierarchy.
+  raw_ptr<FolderHeaderView, ExperimentalAsh>
+      folder_header_view_;  // Owned by views hierarchy.
+  raw_ptr<AppsGridView, ExperimentalAsh>
+      items_grid_view_;  // Owned by views hierarchy.
 
-  // Only used for non-ProductivityLauncher. Owned by views hierarchy.
-  PageSwitcher* page_switcher_ = nullptr;
-
-  // Only used for ProductivityLauncher. Owned by views hierarchy.
-  views::ScrollView* scroll_view_ = nullptr;
+  // Owned by views hierarchy.
+  raw_ptr<views::ScrollView, ExperimentalAsh> scroll_view_ = nullptr;
 
   std::unique_ptr<SystemShadow> shadow_;
 
   // Adds fade in/out gradients to `scroll_view_`.
-  // Only used for ProductivityLauncher.
   std::unique_ptr<ScrollViewGradientHelper> gradient_helper_;
 
-  AppListViewDelegate* const view_delegate_;
-  AppListFolderItem* folder_item_ = nullptr;  // Not owned.
+  const raw_ptr<AppListViewDelegate, ExperimentalAsh> view_delegate_;
+  raw_ptr<AppListFolderItem, ExperimentalAsh> folder_item_ =
+      nullptr;  // Not owned.
 
   // Whether the folder view is currently shown, or showing.
   bool shown_ = false;
@@ -299,7 +267,7 @@ class ASH_EXPORT AppListFolderView
   base::OnceClosure hide_callback_;
 
   // The folder item in the root apps grid associated with this folder.
-  AppListItemView* folder_item_view_ = nullptr;
+  raw_ptr<AppListItemView, ExperimentalAsh> folder_item_view_ = nullptr;
 
   // The bounds of the activated folder item icon relative to this view.
   gfx::Rect folder_item_icon_bounds_;
@@ -314,7 +282,7 @@ class ASH_EXPORT AppListFolderView
   std::vector<std::unique_ptr<Animation>> folder_visibility_animations_;
 
   // Records smoothness of the folder show/hide animation.
-  absl::optional<ui::ThroughputTracker> show_hide_metrics_tracker_;
+  std::optional<ui::ThroughputTracker> show_hide_metrics_tracker_;
 
   base::ScopedObservation<AppListModel, AppListModelObserver>
       model_observation_{this};

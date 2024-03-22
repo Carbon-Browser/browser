@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/devtools/worker_devtools_manager.h"
 
+#include "base/containers/contains.h"
 #include "content/browser/devtools/devtools_instrumentation.h"
 #include "content/browser/devtools/worker_devtools_agent_host.h"
 #include "content/browser/worker_host/dedicated_worker_host.h"
@@ -47,7 +48,7 @@ void WorkerDevToolsManager::WorkerCreated(
     const GlobalRenderFrameHostId& ancestor_render_frame_host_id,
     scoped_refptr<DevToolsThrottleHandle> throttle_handle) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(hosts_.find(host) == hosts_.end());
+  DCHECK(!base::Contains(hosts_, host));
 
   hosts_[host] = base::MakeRefCounted<WorkerDevToolsAgentHost>(
       process_id, /*agent_remote=*/mojo::NullRemote(),

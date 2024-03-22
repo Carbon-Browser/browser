@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "base/format_macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "cc/animation/animation_host.h"
 #include "cc/layers/layer.h"
 #include "cc/layers/layer_impl.h"
@@ -125,8 +125,9 @@ class TreeSynchronizerTest : public testing::Test {
     host_.reset();
     host_ = FakeLayerTreeHost::Create(&client_, &task_graph_runner_,
                                       animation_host_.get(), settings);
-    host_->InitializeSingleThreaded(&single_thread_client_,
-                                    base::ThreadTaskRunnerHandle::Get());
+    host_->InitializeSingleThreaded(
+        &single_thread_client_,
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     host_->host_impl()->CreatePendingTree();
   }
 
@@ -158,7 +159,8 @@ class TreeSynchronizerTest : public testing::Test {
 
  protected:
   TreeSynchronizerTest()
-      : animation_host_(AnimationHost::CreateForTesting(ThreadInstance::MAIN)) {
+      : animation_host_(
+            AnimationHost::CreateForTesting(ThreadInstance::kMain)) {
     LayerTreeSettings settings;
     ResetLayerTreeHost(settings);
   }
@@ -699,7 +701,8 @@ TEST_F(TreeSynchronizerTest, SynchronizeScrollTreeScrollOffsetMap) {
   std::unique_ptr<CompositorCommitData> commit_data(new CompositorCommitData());
   scroll_tree.CollectScrollDeltas(
       commit_data.get(), ElementId(), settings.commit_fractional_scroll_deltas,
-      base::flat_map<ElementId, TargetSnapAreaElementIds>());
+      base::flat_map<ElementId, TargetSnapAreaElementIds>(),
+      /* main_thread_mutator_host */ nullptr);
   host_->proxy()->SetNeedsCommit();
   host_->ApplyCompositorChanges(commit_data.get());
   EXPECT_EQ(gfx::PointF(20, 30), scroll_layer->scroll_offset());
@@ -723,7 +726,7 @@ TEST_F(TreeSynchronizerTest, SynchronizeScrollTreeScrollOffsetMap) {
   EXPECT_EQ(scroll_layer->scroll_tree_index(),
             host_impl->active_tree()->CurrentlyScrollingNode()->id);
   scroll_layer_offset->SetCurrent(gfx::PointF(20, 30));
-  scroll_layer_offset->PullDeltaForMainThread();
+  scroll_layer_offset->PullDeltaForMainThread(/* next_bmf */ false);
   scroll_layer_offset->SetCurrent(gfx::PointF(40, 50));
   scroll_layer_offset->PushMainToPending(gfx::PointF(100, 100));
   scroll_layer_offset->PushPendingToActive();
@@ -815,7 +818,8 @@ TEST_F(TreeSynchronizerTest, RoundedScrollDeltasOnCommit) {
   // When we collect the scroll deltas, we should have truncated the fractional
   // part because the commit_fractional_scroll_deltas setting is enabled.
   std::unique_ptr<CompositorCommitData> commit_data =
-      host_impl->ProcessCompositorDeltas();
+      host_impl->ProcessCompositorDeltas(
+          /* main_thread_mutator_host */ nullptr);
   ASSERT_EQ(1u, commit_data->scrolls.size());
   EXPECT_EQ(2.f, commit_data->scrolls[0].scroll_delta.y());
 }
@@ -841,7 +845,8 @@ TEST_F(TreeSynchronizerTest, PreserveFractionalScrollDeltasOnCommit) {
   // When we collect the scroll deltas, we should keep the fractional part
   // because the commit_fractional_scroll_deltas setting is disabled.
   std::unique_ptr<CompositorCommitData> commit_data =
-      host_impl->ProcessCompositorDeltas();
+      host_impl->ProcessCompositorDeltas(
+          /* main_thread_mutator_host */ nullptr);
   ASSERT_EQ(1u, commit_data->scrolls.size());
   EXPECT_EQ(1.75f, commit_data->scrolls[0].scroll_delta.y());
 }

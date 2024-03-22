@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include "ash/components/arc/arc_prefs.h"
 #include "ash/components/arc/test/fake_app_instance.h"
 #include "base/values.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
@@ -103,18 +103,16 @@ class ArcKeyPermissionsManagerDelegateTest : public testing::Test {
 
   void SetCorporateUsageInPolicyForPackage(const std::string& package_name,
                                            bool allowed) {
-    auto corporate_key_usage = std::make_unique<base::DictionaryValue>();
-    corporate_key_usage->SetPath("allowCorporateKeyUsage",
-                                 base::Value(allowed));
+    base::Value::Dict corporate_key_usage;
+    corporate_key_usage.SetByDottedPath("allowCorporateKeyUsage", allowed);
 
-    base::DictionaryValue policy_value;
-    policy_value.SetKey(package_name, base::Value::FromUniquePtrValue(
-                                          std::move(corporate_key_usage)));
+    base::Value::Dict policy_value;
+    policy_value.Set(package_name, base::Value(std::move(corporate_key_usage)));
 
     policy::PolicyMap policy_map;
     policy_map.Set(policy::key::kKeyPermissions, policy::POLICY_LEVEL_MANDATORY,
                    policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_PLATFORM,
-                   policy_value.Clone(), nullptr);
+                   base::Value(policy_value.Clone()), nullptr);
 
     policy_provider_->UpdateChromePolicy(policy_map);
   }

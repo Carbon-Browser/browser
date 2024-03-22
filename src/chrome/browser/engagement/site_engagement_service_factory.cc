@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@
 #include "chrome/browser/engagement/history_aware_site_engagement_service.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace site_engagement {
 
@@ -36,9 +34,14 @@ SiteEngagementServiceFactory* SiteEngagementServiceFactory::GetInstance() {
 }
 
 SiteEngagementServiceFactory::SiteEngagementServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SiteEngagementService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(HostContentSettingsMapFactory::GetInstance());
   DependsOn(prerender::NoStatePrefetchManagerFactory::GetInstance());
@@ -49,16 +52,12 @@ SiteEngagementServiceFactory::~SiteEngagementServiceFactory() {
   SiteEngagementService::ClearServiceProvider(this);
 }
 
-KeyedService* SiteEngagementServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SiteEngagementServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   history::HistoryService* history = HistoryServiceFactory::GetForProfile(
       Profile::FromBrowserContext(context), ServiceAccessType::IMPLICIT_ACCESS);
-  return new HistoryAwareSiteEngagementService(context, history);
-}
-
-content::BrowserContext* SiteEngagementServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return std::make_unique<HistoryAwareSiteEngagementService>(context, history);
 }
 
 SiteEngagementService* SiteEngagementServiceFactory::GetSiteEngagementService(

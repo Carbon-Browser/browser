@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -106,11 +106,11 @@ class StopTestOnCallback {
     ASSERT_EQ(2u, local_storage_info.size());
     bool origin1_found = false, origin2_found = false;
     for (const auto& info : local_storage_info) {
-      if (info.origin.Serialize() == kOrigin1) {
+      if (info.storage_key.origin().Serialize() == kOrigin1) {
         EXPECT_FALSE(origin1_found);
         origin1_found = true;
       } else {
-        ASSERT_EQ(info.origin.Serialize(), kOrigin2);
+        ASSERT_EQ(info.storage_key.origin().Serialize(), kOrigin2);
         EXPECT_FALSE(origin2_found);
         origin2_found = true;
       }
@@ -126,7 +126,7 @@ class StopTestOnCallback {
 
 IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CallbackCompletes) {
   auto local_storage_helper = base::MakeRefCounted<LocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   CreateLocalStorageDataForTest();
   StopTestOnCallback stop_test_on_callback(local_storage_helper.get());
   local_storage_helper->StartFetching(base::BindOnce(
@@ -137,7 +137,7 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CallbackCompletes) {
 
 IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, DeleteSingleOrigin) {
   auto local_storage_helper = base::MakeRefCounted<LocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   CreateLocalStorageDataForTest();
   base::RunLoop delete_run_loop;
   local_storage_helper->DeleteStorageKey(
@@ -160,11 +160,11 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, DeleteSingleOrigin) {
   ASSERT_EQ(2u, usage_infos.size());
   bool origin2_found = false, origin3_found = false;
   for (const auto& info : usage_infos) {
-    if (info->origin.Serialize() == kOrigin2) {
+    if (info->storage_key.origin().Serialize() == kOrigin2) {
       EXPECT_FALSE(origin2_found);
       origin2_found = true;
     } else {
-      ASSERT_EQ(info->origin.Serialize(), kOrigin3);
+      ASSERT_EQ(info->storage_key.origin().Serialize(), kOrigin3);
       EXPECT_FALSE(origin3_found);
       origin3_found = true;
     }
@@ -180,7 +180,7 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedAddLocalStorage) {
       blink::StorageKey::CreateFromStringForTesting("http://host2:1/");
 
   auto helper = base::MakeRefCounted<CannedLocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   helper->Add(storage_key1);
   helper->Add(storage_key2);
 
@@ -192,9 +192,9 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedAddLocalStorage) {
 
   ASSERT_EQ(2u, result.size());
   auto info = result.begin();
-  EXPECT_EQ(storage_key1.origin(), info->origin);
+  EXPECT_EQ(storage_key1, info->storage_key);
   info++;
-  EXPECT_EQ(storage_key2.origin(), info->origin);
+  EXPECT_EQ(storage_key2, info->storage_key);
 }
 
 IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedUnique) {
@@ -202,7 +202,7 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedUnique) {
       blink::StorageKey::CreateFromStringForTesting("http://host1:1/");
 
   auto helper = base::MakeRefCounted<CannedLocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   helper->Add(storage_key);
   helper->Add(storage_key);
 
@@ -213,7 +213,7 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedUnique) {
   std::list<content::StorageUsageInfo> result = callback.result();
 
   ASSERT_EQ(1u, result.size());
-  EXPECT_EQ(storage_key.origin(), result.begin()->origin);
+  EXPECT_EQ(storage_key, result.begin()->storage_key);
 }
 
 IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedEmptyIgnored) {
@@ -229,12 +229,12 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedEmptyIgnored) {
 
   // Add all three of our storage keys to our canned local storage helpers.
   auto helper = base::MakeRefCounted<CannedLocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   helper->Add(storage_key1);
   helper->Add(storage_key2);
   helper->Add(storage_key3);
   auto helper_auto_ignore = base::MakeRefCounted<CannedLocalStorageHelper>(
-      shell()->web_contents()->GetBrowserContext(),
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition(),
       /*update_ignored_empty_keys_on_fetch=*/true);
   helper_auto_ignore->Add(storage_key1);
   helper_auto_ignore->Add(storage_key2);
@@ -266,11 +266,11 @@ IN_PROC_BROWSER_TEST_F(LocalStorageHelperTest, CannedEmptyIgnored) {
   result = callback2.result();
   ASSERT_EQ(2u, result.size());
 
-  // Sanity check the origins are as expected.
+  // Sanity check the storage keys are as expected.
   auto info = result.begin();
-  EXPECT_EQ(storage_key1.origin(), info->origin);
+  EXPECT_EQ(storage_key1, info->storage_key);
   info++;
-  EXPECT_EQ(storage_key2.origin(), info->origin);
+  EXPECT_EQ(storage_key2, info->storage_key);
 }
 
 }  // namespace

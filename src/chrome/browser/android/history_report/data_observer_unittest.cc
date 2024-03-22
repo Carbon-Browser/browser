@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "chrome/browser/android/history_report/delta_file_service.h"
 #include "chrome/browser/android/history_report/usage_reports_buffer_service.h"
@@ -105,9 +105,10 @@ TEST_F(DataObserverTest, VisitLinkShouldBeLogged) {
   EXPECT_CALL(*(delta_file_service_.get()), PageAdded(GURL()));
   EXPECT_CALL(*(usage_report_service_.get()), AddVisit(_, _, _));
 
-  data_observer_->OnURLVisited(history_service_.get(),
-                               ui::PageTransition::PAGE_TRANSITION_LINK,
-                               history::URLRow(GURL()), Time::Now());
+  auto visit_row = history::VisitRow();
+  visit_row.transition = ui::PageTransition::PAGE_TRANSITION_LINK;
+  data_observer_->OnURLVisited(history_service_.get(), history::URLRow(GURL()),
+                               visit_row);
 }
 
 TEST_F(DataObserverTest, VisitRedirectShouldNotBeLogged) {
@@ -115,10 +116,10 @@ TEST_F(DataObserverTest, VisitRedirectShouldNotBeLogged) {
   EXPECT_CALL(*(delta_file_service_.get()), PageAdded(_)).Times(0);
   EXPECT_CALL(*(usage_report_service_.get()), AddVisit(_, _, _)).Times(0);
 
-  data_observer_->OnURLVisited(
-      history_service_.get(),
-      ui::PageTransition::PAGE_TRANSITION_CLIENT_REDIRECT,
-      history::URLRow(GURL()), Time::Now());
+  auto visit_row = history::VisitRow();
+  visit_row.transition = ui::PageTransition::PAGE_TRANSITION_CLIENT_REDIRECT;
+  data_observer_->OnURLVisited(history_service_.get(), history::URLRow(GURL()),
+                               visit_row);
 }
 
 }  // namespace history_report

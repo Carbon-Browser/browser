@@ -1,20 +1,50 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 /**
  * @fileoverview Polymer element for theme selection screen.
  */
-/* #js_imports_placeholder */
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
+import '//resources/cr_elements/cr_radio_button/cr_radio_button.js';
+import '//resources/cr_elements/cr_radio_group/cr_radio_group.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/polymer/v3_0/iron-iconset-svg/iron-iconset-svg.js';
+import '../../components/buttons/oobe_next_button.js';
+import '../../components/buttons/oobe_text_button.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/cr_card_radio_group_styles.css.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
+
 
 /**
  * @constructor
  * @extends {PolymerElement}
  * @implements {LoginScreenBehaviorInterface}
  * @implements {OobeI18nBehaviorInterface}
+ * @implements {MultiStepBehaviorInterface}
  */
-const ThemeSelectionScreenElementBase = Polymer.mixinBehaviors(
-    [OobeDialogHostBehavior, OobeI18nBehavior, LoginScreenBehavior],
-    Polymer.Element);
+const ThemeSelectionScreenElementBase = mixinBehaviors(
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
+
+/**
+ * Enum to represent steps on the theme selection screen.
+ * Currently there is only one step, but we still use
+ * MultiStepBehavior because it provides implementation of
+ * things like processing 'focus-on-show' class
+ * @enum {string}
+ */
+const ThemeSelectionStep = {
+  OVERVIEW: 'overview',
+};
 
 /**
  * Available themes. The values should be in sync with the enum
@@ -34,7 +64,17 @@ const SelectedTheme = {
 const UserAction = {
   SELECT: 'select',
   NEXT: 'next',
+  RETURN: 'return',
 };
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   selectedTheme: string,
+ *   shouldShowReturn: boolean,
+ * }}
+ */
+let ThemeSelectionScreenData;
 
 /**
  * @polymer
@@ -44,7 +84,9 @@ class ThemeSelectionScreen extends ThemeSelectionScreenElementBase {
     return 'theme-selection-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -62,15 +104,24 @@ class ThemeSelectionScreen extends ThemeSelectionScreenElementBase {
         type: Boolean,
         value: false,
       },
+
+      /**
+       * Whether the button to return to CHOOBE screen should be shown.
+       * @private
+       */
+      shouldShowReturn_: {
+        type: Boolean,
+        value: false,
+      },
     };
   }
 
-  constructor() {
-    super();
+  get UI_STEPS() {
+    return ThemeSelectionStep;
   }
 
-  get EXTERNAL_API() {
-    return [];
+  defaultUIStep() {
+    return ThemeSelectionStep.OVERVIEW;
   }
 
   /**
@@ -85,11 +136,16 @@ class ThemeSelectionScreen extends ThemeSelectionScreenElementBase {
   ready() {
     super.ready();
     this.initializeLoginScreen('ThemeSelectionScreen');
-    this.selectedTheme = 'auto';
   }
 
+  /**
+   * @param {ThemeSelectionScreenData} data Screen init payload.
+   */
   onBeforeShow(data) {
-    this.selectedTheme = 'selectedTheme' in data && data.selectedTheme;
+    if ('selectedTheme' in data) {
+      this.selectedTheme = data.selectedTheme;
+    }
+    this.shouldShowReturn_ = data['shouldShowReturn'];
   }
 
   getOobeUIInitialState() {
@@ -113,6 +169,10 @@ class ThemeSelectionScreen extends ThemeSelectionScreenElementBase {
     if (themeSelect === 'dark') {
       this.userActed([UserAction.SELECT, SelectedTheme.DARK]);
     }
+  }
+
+  onReturnClicked_() {
+    this.userActed(UserAction.RETURN);
   }
 }
 customElements.define(ThemeSelectionScreen.is, ThemeSelectionScreen);

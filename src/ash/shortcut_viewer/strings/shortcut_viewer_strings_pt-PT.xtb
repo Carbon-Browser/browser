@@ -7,21 +7,17 @@
 <translation id="1195667586424773550">Arraste o link para a barra de endereço do separador.</translation>
 <translation id="1251638888133819822">Ativar ou desativar a lupa de ecrã inteiro</translation>
 <translation id="1290373024480130896"><ph name="MODIFIER1" /><ph name="SEPARATOR1" /><ph name="MODIFIER2" /><ph name="SEPARATOR2" /><ph name="MODIFIER3" /><ph name="SEPARATOR3" /><ph name="KEY" /></translation>
-<translation id="1293699935367580298">Esc</translation>
 <translation id="1299858300159559687">Imprimir a página atual</translation>
-<translation id="1383876407941801731">Pesquisar</translation>
 <translation id="1454364489140280055"><ph name="CTRL" /><ph name="SEPARATOR1" /><ph name="SHIFT1" /><ph name="SEPARATOR2" /><ph name="G" /> ou <ph name="SHIFT2" /><ph name="SEPARATOR3" /><ph name="ENTER" />.</translation>
 <translation id="1477442857810932985">Ir para o fim da linha</translation>
 <translation id="1499072997694708844">Feche todas as janelas abertas ou pare o carregamento da página atual.</translation>
-<translation id="1510238584712386396">Iniciador</translation>
 <translation id="1516966594427080024">Abra uma nova janela no Modo de navegação anónima</translation>
 <translation id="152892567002884378">Aumentar o volume</translation>
 <translation id="1560480564179555003"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="ALT" /><ph name="SEPARATOR2" /><ph name="L" />, em seguida, <ph name="ESC" />.</translation>
 <translation id="1586324912145647027">Aceda ao espaço de trabalho de 1 a 8</translation>
 <translation id="1652741121070700329">Ir para o início da palavra anterior</translation>
 <translation id="1679841710523778799">Aumentar o brilho</translation>
-<translation id="168356808214100546">Prima sem soltar <ph name="ALT" /> e, em seguida, toque em <ph name="TAB" /> até alcançar a janela que pretende abrir. Em seguida, solte.</translation>
-<translation id="169515659049020177">Shift</translation>
+<translation id="168356808214100546">Prima sem soltar <ph name="ALT" /> e, em seguida, toque em <ph name="TAB" /> até alcançar a janela que quer abrir. Em seguida, solte.</translation>
 <translation id="1732295673545939435"><ph name="MODIFIER1" /><ph name="SEPARATOR1" /><ph name="MODIFIER2" /><ph name="SEPARATOR2" /><ph name="KEY" /></translation>
 <translation id="1733525068429116555">Adicionar www. e .com à informação introduzida na barra de endereço e, em seguida, abrir a página</translation>
 <translation id="1768987374400973299">Crie uma gravação/captura de ecrã</translation>
@@ -48,7 +44,6 @@
 <translation id="2478303094958140141">Ativar ou desativar o ChromeVox (feedback de voz)</translation>
 <translation id="2480851840841871861">Abrir o Assistente Google</translation>
 <translation id="2488661730534396940">Ative o espaço de trabalho à esquerda.</translation>
-<translation id="2515586267016047495">Alt</translation>
 <translation id="2516999188535378855">Abrir app Diagnósticos</translation>
 <translation id="2530339807289914946">Deslocar-se para baixo na página Web</translation>
 <translation id="2530896289327917474">Ativar ou desativar a navegação por cursor</translation>
@@ -62,12 +57,11 @@
 <translation id="2830827904629746450">Ancorar uma janela à direita</translation>
 <translation id="2840766858109427815">Avançar para a página seguinte</translation>
 <translation id="2872353916818027657">Trocar monitor principal</translation>
-<translation id="2914313326123580426">Mostrar ou ocultar o painel Ferramentas do programador</translation>
+<translation id="2914313326123580426">Mostrar ou ocultar o painel Ferramentas para programadores</translation>
 <translation id="292495055542441795">Ativar/desativar ecrã inteiro</translation>
 <translation id="3020183492814296499">Atalhos</translation>
 <translation id="3084301071537457911">Realçar o item seguinte na prateleira</translation>
 <translation id="309173601632226815">Realçar o botão do iniciador na prateleira</translation>
-<translation id="3126026824346185272">Ctrl</translation>
 <translation id="3140353188828248647">Focar barra de endereço</translation>
 <translation id="3256109297135787951">Remover o realce de um item na prateleira</translation>
 <translation id="3288816184963444640">Fechar a janela atual</translation>
@@ -93,16 +87,18 @@
 <translation id="3949671998904569433">vírgula</translation>
 <translation id="3976863468609830880">Clicar no último ícone da prateleira</translation>
 <translation id="3994783594793697310">Repor o nível de zoom do ecrã</translation>
+<translation id="4026837045671473537">Ative o modo de inversão de cores</translation>
 <translation id="4026843240379844265">Mova a janela ativa entre ecrãs.</translation>
 <translation id="4035482366624727273">Selecionar tudo na página</translation>
 <translation id="4060703249685950734">Reabrir o último separador ou a última janela que fechou</translation>
-<translation id="4090342722461256974">Prima sem soltar <ph name="ALT" /><ph name="SEPARATOR" /><ph name="SHIFT" /> e, em seguida, toque em <ph name="TAB" /> até alcançar a janela que pretende abrir. Em seguida, solte.</translation>
+<translation id="4090342722461256974">Prima sem soltar <ph name="ALT" /><ph name="SEPARATOR" /><ph name="SHIFT" /> e, em seguida, toque em <ph name="TAB" /> até alcançar a janela que quer abrir. Em seguida, solte.</translation>
 <translation id="4092538597492297615">Copiar o conteúdo selecionado para a área de transferência</translation>
 <translation id="4101772068965291327">Abrir página inicial</translation>
 <translation id="4123108089450197101">Guardar o link como um marcador</translation>
 <translation id="4141203561740478845">Realçar a linha com a barra de endereço</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> ou <ph name="ENTER" />.</translation>
 <translation id="4240486403425279990">Modo de vista geral</translation>
+<translation id="4275283744500212192">Abra as opções do esquema de janelas</translation>
 <translation id="4382340674111381977">Voltar à página anterior</translation>
 <translation id="4458670250301149821">Mova o ícone de uma aplicação para dentro/fora de uma pasta na grelha de aplicações.</translation>
 <translation id="4472417192667361414">Definições de sistema e de visualização</translation>
@@ -114,10 +110,8 @@
 <translation id="4801989101741319327">Ir para o fim da palavra seguinte</translation>
 <translation id="4866066940972151697">Ative o espaço de trabalho à direita.</translation>
 <translation id="4916163929714267752">Abrir o link numa nova janela</translation>
-<translation id="492453977506755176">Tecla do modo de captura</translation>
 <translation id="5030659775136592441">Mostrar o gestor de marcadores</translation>
 <translation id="5034421018520995080">Ir para a parte superior da página</translation>
-<translation id="5042305953558921026">Tecla de Modo de vista geral</translation>
 <translation id="5104462712192763270">Guardar a página atual</translation>
 <translation id="5121628974188116412">Ir para a parte inferior da página</translation>
 <translation id="5222676887888702881">Terminar sessão</translation>
@@ -136,14 +130,12 @@
 <translation id="5757111373163288447">Abrir o link no separador</translation>
 <translation id="5757474750054631686">Diminuir o brilho do teclado (apenas para teclados retroiluminados)</translation>
 <translation id="587531134027443617">Eliminar a palavra anterior</translation>
-<translation id="5899919361772749550">Mostrar ou ocultar a consola das Ferramentas do programador</translation>
+<translation id="5899919361772749550">Mostrar ou ocultar a consola das Ferramentas para programadores</translation>
 <translation id="5919628958418675842">Ative ou desative o ecrã de privacidade.</translation>
 <translation id="5921745308587794300">Rodar janela</translation>
 <translation id="5926306472221400972">Tire uma captura de ecrã inteiro</translation>
 <translation id="6022924867608035986">Limpar texto da caixa de pesquisa</translation>
-<translation id="6045998054441862242">Ativar o modo de alto contraste</translation>
 <translation id="6052614013050385269">Clicar com o botão direito num link</translation>
-<translation id="6129953537138746214">Espaço</translation>
 <translation id="6143669479988153888">Ampliar a página</translation>
 <translation id="6185696379715117369">Página para cima</translation>
 <translation id="6228457605945141550">Diminuir o brilho</translation>
@@ -197,19 +189,18 @@
 <translation id="8147954207400281792"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="K" /> ou <ph name="E" /></translation>
 <translation id="8234414138295101081">Rodar o ecrã 90 graus</translation>
 <translation id="8241665785394195545">parêntese reto direito</translation>
-<translation id="8264941229485248811">Mostrar ou ocultar o inspetor das Ferramentas do programador</translation>
+<translation id="8264941229485248811">Mostrar ou ocultar o inspetor das Ferramentas para programadores</translation>
 <translation id="836869401750819675">Abrir a página Transferências</translation>
 <translation id="8388247778047144397">Arraste o link para uma área em branco na Faixa de separadores.</translation>
 <translation id="8389638407792712197">Abrir nova janela</translation>
-<translation id="8429696719963529183">Utilizar as teclas F (F1 a F12)</translation>
-<translation id="8537650670971624753">Sair do modo de pesquisa</translation>
+<translation id="8429696719963529183">Usar as teclas F (F1 a F12)</translation>
+<translation id="8539396513118402548">Lista de atalhos</translation>
 <translation id="85690795166292698">Abrir o link num novo separador</translation>
 <translation id="8609384513243082612">Abrir novo separador</translation>
 <translation id="8644639153978066712">Apresentar ficheiros ocultos na aplicação Ficheiros</translation>
 <translation id="8717459106217102612">Selecionar a palavra ou letra anterior</translation>
 <translation id="8727232706774971183">Ver as suas notificações</translation>
 <translation id="8855548128280178372"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="SEARCH" /><ph name="SEPARATOR2" /> 1 a 8</translation>
-<translation id="8855885154700222542">Tecla de ecrã inteiro</translation>
 <translation id="8881584919399569791">Mova a janela ativa para o espaço de trabalho à esquerda.</translation>
 <translation id="88986195241502842">Página para baixo</translation>
 <translation id="8924883688469390268">Mudar para o utilizador anterior</translation>

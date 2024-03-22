@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 WebAppInfoImageSource::WebAppInfoImageSource(
     int dip_size,
-    std::map<SquareSizePx, SkBitmap> icons)
+    std::map<web_app::SquareSizePx, SkBitmap> icons)
     : dip_size_(dip_size), icons_(std::move(icons)) {}
 
 WebAppInfoImageSource::~WebAppInfoImageSource() {}

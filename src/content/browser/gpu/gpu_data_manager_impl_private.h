@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,9 +85,9 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
   void UpdateVulkanRequestStatus(bool request_continues);
   bool Dx12Requested() const;
   bool VulkanRequested() const;
-  void PostCreateThreads();
   void TerminateInfoCollectionGpuProcess();
 #endif
+  void PostCreateThreads();
   void UpdateDawnInfo(const std::vector<std::string>& dawn_info_list);
 
   void UpdateGpuFeatureInfo(const gpu::GpuFeatureInfo& gpu_feature_info,
@@ -121,11 +121,12 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
 
   void ProcessCrashed();
 
-  std::unique_ptr<base::ListValue> GetLogMessages() const;
+  base::Value::List GetLogMessages() const;
 
   void HandleGpuSwitch();
 
-  void BlockDomainFrom3DAPIs(const GURL& url, gpu::DomainGuilt guilt);
+  void BlockDomainsFrom3DAPIs(const std::set<GURL>& urls,
+                              gpu::DomainGuilt guilt);
   bool Are3DAPIsBlocked(const GURL& top_origin_url,
                         ThreeDAPIType requester);
 
@@ -150,21 +151,36 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
   void OnDisplayMetricsChanged(const display::Display& display,
                                uint32_t changed_metrics);
 
+#if BUILDFLAG(IS_LINUX)
+  bool IsGpuMemoryBufferNV12Supported();
+  void SetGpuMemoryBufferNV12Supported(bool supported);
+#endif  // BUILDFLAG(IS_LINUX)
+
  private:
   friend class GpuDataManagerImplPrivateTest;
+  friend class GpuDataManagerImplPrivateTestP;
 
   FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTest,
                            GpuInfoUpdate);
-  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTest,
-                           BlockAllDomainsFrom3DAPIs);
-  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTest,
-                           UnblockGuiltyDomainFrom3DAPIs);
-  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTest,
-                           UnblockDomainOfUnknownGuiltFrom3DAPIs);
-  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTest,
-                           UnblockOtherDomainFrom3DAPIs);
-  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTest,
-                           UnblockThisDomainFrom3DAPIs);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP,
+                           SingleContextLossDoesNotBlockDomain);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP,
+                           TwoContextLossesBlockDomain);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP,
+                           TwoSimultaneousContextLossesDoNotBlockDomain);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP, DomainBlockExpires);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP, UnblockDomain);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP,
+                           Domain1DoesNotBlockDomain2);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP,
+                           UnblockingDomain1DoesNotUnblockDomain2);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP,
+                           SimultaneousContextLossDoesNotBlock);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP,
+                           MultipleTDRsBlockAll);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP, MultipleTDRsExpire);
+  FRIEND_TEST_ALL_PREFIXES(GpuDataManagerImplPrivateTestP,
+                           MultipleTDRsCanBeUnblocked);
 
   // Indicates the reason that access to a given client API (like
   // WebGL or Pepper 3D) was blocked or not. This state is distinct
@@ -174,8 +190,6 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
     kAllDomainsBlocked,
     kNotBlocked,
   };
-
-  using DomainGuiltMap = std::map<std::string, gpu::DomainGuilt>;
 
   using GpuDataManagerObserverList =
       base::ObserverListThreadSafe<GpuDataManagerObserver>;
@@ -206,20 +220,21 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
 
   // Implementation functions for blocking of 3D graphics APIs, used
   // for unit testing.
-  void BlockDomainFrom3DAPIsAtTime(const GURL& url,
-                                   gpu::DomainGuilt guilt,
-                                   base::Time at_time);
+  void BlockDomainsFrom3DAPIsAtTime(const std::set<GURL>& url,
+                                    gpu::DomainGuilt guilt,
+                                    base::Time at_time);
+  void ExpireOldBlockedDomainsAtTime(base::Time at_time) const;
   DomainBlockStatus Are3DAPIsBlockedAtTime(const GURL& url,
                                            base::Time at_time) const;
-  int64_t GetBlockAllDomainsDurationInMs() const;
+  base::TimeDelta GetDomainBlockingExpirationPeriod() const;
 
   // Notify all observers whenever there is a GPU info update.
   void NotifyGpuInfoUpdate();
 
-  void RequestDxDiagNodeData();
+  void RequestDxDiagNodeData(bool delayed);
   void RequestGpuSupportedDx12Version(bool delayed);
   void RequestGpuSupportedVulkanVersion(bool delayed);
-  void RequestDawnInfo();
+  void RequestDawnInfo(bool delayed, bool collect_metrics);
   void RequestMojoMediaVideoCapabilities();
 
   void RecordCompositingMode();
@@ -239,7 +254,6 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
   bool gpu_info_vulkan_requested_ = false;
   bool gpu_info_vulkan_request_failed_ = false;
 #endif
-  bool gpu_info_dawn_toggles_requested_ = false;
   // The Dawn info queried from the GPU process.
   std::vector<std::string> dawn_info_list_;
 
@@ -277,13 +291,24 @@ class CONTENT_EXPORT GpuDataManagerImplPrivate {
   // they cause random failures.
   bool update_histograms_ = true;
 
-  DomainGuiltMap blocked_domains_;
-  mutable std::list<base::Time> timestamps_of_gpu_resets_;
+  struct DomainBlockingEntry {
+    DomainBlockingEntry(const std::string& domain, gpu::DomainGuilt guilt)
+        : domain(domain), guilt(guilt) {}
+
+    std::string domain;
+    gpu::DomainGuilt guilt;
+  };
+
+  // Implicitly sorted by increasing timestamp.
+  mutable std::multimap<base::Time, DomainBlockingEntry> blocked_domains_;
   bool domain_blocking_enabled_ = true;
 
   bool application_is_visible_ = true;
 
   bool disable_gpu_compositing_ = false;
+#if BUILDFLAG(IS_LINUX)
+  bool is_gpu_memory_buffer_NV12_supported_ = false;
+#endif  // BUILDFLAG(IS_LINUX)
 };
 
 }  // namespace content

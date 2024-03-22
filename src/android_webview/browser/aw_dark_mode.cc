@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -175,7 +175,7 @@ void AwDarkMode::NavigationEntryCommitted(
 }
 
 void AwDarkMode::InferredColorSchemeUpdated(
-    absl::optional<blink::mojom::PreferredColorScheme> color_scheme) {
+    std::optional<blink::mojom::PreferredColorScheme> color_scheme) {
   if (prefers_dark_from_theme_ && color_scheme.has_value()) {
     UMA_HISTOGRAM_BOOLEAN(
         "Android.WebView.DarkMode.PageDarkenedAccordingToAppTheme",

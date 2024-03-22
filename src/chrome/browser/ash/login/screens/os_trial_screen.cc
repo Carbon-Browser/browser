@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/os_trial_screen.h"
 
-#include "chrome/browser/ui/webui/chromeos/login/os_trial_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/os_trial_screen_handler.h"
 
 namespace ash {
 
@@ -15,11 +15,11 @@ constexpr const char kUserActionBackClicked[] = "os-trial-back";
 // static
 std::string OsTrialScreen::GetResultString(Result result) {
   switch (result) {
-    case Result::NEXT_TRY:
+    case Result::kNextTry:
       return "NextTry";
-    case Result::NEXT_INSTALL:
+    case Result::kNextInstall:
       return "NextInstall";
-    case Result::BACK:
+    case Result::kBack:
       return "Back";
   }
 }
@@ -44,11 +44,11 @@ void OsTrialScreen::HideImpl() {}
 void OsTrialScreen::OnUserAction(const base::Value::List& args) {
   const std::string& action_id = args[0].GetString();
   if (action_id == kUserActionTryNextClicked) {
-    exit_callback_.Run(Result::NEXT_TRY);
+    exit_callback_.Run(Result::kNextTry);
   } else if (action_id == kUserActionInstallNextClicked) {
-    exit_callback_.Run(Result::NEXT_INSTALL);
+    exit_callback_.Run(Result::kNextInstall);
   } else if (action_id == kUserActionBackClicked) {
-    exit_callback_.Run(Result::BACK);
+    exit_callback_.Run(Result::kBack);
   } else {
     BaseScreen::OnUserAction(args);
   }

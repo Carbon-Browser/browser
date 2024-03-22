@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 #include <algorithm>
 
 #include "base/check_op.h"
-#include "base/guid.h"
+#include "base/uuid.h"
 
 namespace blink {
 
 SessionStorageNamespaceId AllocateSessionStorageNamespaceId() {
-  std::string guid = base::GenerateGUID();
+  std::string guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   std::replace(guid.begin(), guid.end(), '-', '_');
   // The database deserialization code makes assumptions based on this length.
   DCHECK_EQ(guid.size(), kSessionStorageNamespaceIdLength);

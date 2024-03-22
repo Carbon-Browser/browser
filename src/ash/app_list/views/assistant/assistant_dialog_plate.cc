@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,16 +17,17 @@
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_interaction_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
-#include "ash/public/cpp/style/color_provider.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
@@ -63,12 +64,17 @@ using keyboard::KeyboardUIController;
 
 // Textfield used for inputting text based Assistant queries.
 class AssistantTextfield : public views::Textfield {
+  METADATA_HEADER(AssistantTextfield, views::Textfield)
+
  public:
   AssistantTextfield() { SetID(AssistantViewID::kTextQueryField); }
 
   // views::Textfield overrides:
   const char* GetClassName() const override { return "AssistantTextfield"; }
 };
+
+BEGIN_METADATA(AssistantTextfield)
+END_METADATA
 
 void ShowKeyboardIfEnabled() {
   auto* keyboard_controller = KeyboardUIController::Get();
@@ -269,8 +275,8 @@ void AssistantDialogPlate::OnCommittedQueryChanged(
 void AssistantDialogPlate::OnUiVisibilityChanged(
     AssistantVisibility new_visibility,
     AssistantVisibility old_visibility,
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   switch (new_visibility) {
     case AssistantVisibility::kVisible:
       UpdateModalityVisibility();
@@ -297,13 +303,10 @@ void AssistantDialogPlate::RequestFocus() {
 void AssistantDialogPlate::OnThemeChanged() {
   views::View::OnThemeChanged();
 
-  ScopedAssistantLightModeAsDefault scoped_light_mode_as_default;
-
-  textfield_->SetTextColor(ColorProvider::Get()->GetContentLayerColor(
-      ColorProvider::ContentLayerType::kTextColorPrimary));
+  textfield_->SetTextColor(
+      GetColorProvider()->GetColor(cros_tokens::kColorPrimary));
   textfield_->set_placeholder_text_color(
-      ColorProvider::Get()->GetContentLayerColor(
-          ColorProvider::ContentLayerType::kTextColorSecondary));
+      GetColorProvider()->GetColor(cros_tokens::kColorSecondary));
 }
 
 views::View* AssistantDialogPlate::FindFirstFocusableView() {
@@ -448,7 +451,7 @@ void AssistantDialogPlate::InitVoiceLayoutContainer() {
   AssistantButton::InitParams params;
   params.size_in_dip = kButtonSizeDip;
   params.icon_size_in_dip = kIconSizeDip;
-  params.icon_color_type = ColorProvider::ContentLayerType::kIconColorPrimary;
+  params.icon_color_type = cros_tokens::kColorPrimary;
   params.accessible_name_id = IDS_ASH_ASSISTANT_DIALOG_PLATE_KEYBOARD_ACCNAME;
   params.tooltip_id = IDS_ASH_ASSISTANT_DIALOG_PLATE_KEYBOARD_TOOLTIP;
   keyboard_input_toggle_ =

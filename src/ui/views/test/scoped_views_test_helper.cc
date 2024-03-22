@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,11 @@
 
 #if defined(USE_AURA)
 #include "ui/aura/window.h"
+#endif
+
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+#include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
+#include "ui/views/widget/desktop_aura/desktop_window_tree_host.h"
 #endif
 
 namespace views {
@@ -42,6 +47,14 @@ gfx::NativeWindow ScopedViewsTestHelper::GetContext() {
 void ScopedViewsTestHelper::SimulateNativeDestroy(Widget* widget) {
   delete widget->GetNativeView();
 }
-#endif
+
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+void ScopedViewsTestHelper::SimulateDesktopNativeDestroy(Widget* widget) {
+  static_cast<DesktopNativeWidgetAura*>(widget->native_widget())
+      ->desktop_window_tree_host_for_testing()
+      ->Close();
+}
+#endif  // BUILDFLAG(ENABLE_DESKTOP_AURA)
+#endif  // defined(USE_AURA)
 
 }  // namespace views

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/containers/span.h"
-#include "base/memory/weak_ptr.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 
@@ -56,9 +55,6 @@ class PasswordFormManagerForUI {
 
   // Determines if the user opted to 'never remember' passwords for this form.
   virtual bool IsBlocklisted() const = 0;
-
-  // Checks if the user unblocklisted the origin of the form for saving.
-  virtual bool WasUnblocklisted() const = 0;
 
   // Determines whether the submitted credentials returned by
   // GetPendingCredentials() can be moved to the signed in account store.

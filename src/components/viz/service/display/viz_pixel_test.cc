@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,10 @@ cc::PixelTest::GraphicsBackend VizPixelTest::RenderTypeToBackend(
     RendererType renderer_type) {
   if (renderer_type == RendererType::kSkiaVk) {
     return GraphicsBackend::kSkiaVulkan;
-  } else if (renderer_type == RendererType::kSkiaDawn) {
-    return GraphicsBackend::kSkiaDawn;
+  } else if (renderer_type == RendererType::kSkiaGraphiteDawn) {
+    return GraphicsBackend::kSkiaGraphiteDawn;
+  } else if (renderer_type == RendererType::kSkiaGraphiteMetal) {
+    return GraphicsBackend::kSkiaGraphiteMetal;
   }
 
   return GraphicsBackend::kDefault;
@@ -32,7 +34,8 @@ void VizPixelTest::SetUp() {
       break;
     case RendererType::kSkiaGL:
     case RendererType::kSkiaVk:
-    case RendererType::kSkiaDawn:
+    case RendererType::kSkiaGraphiteDawn:
+    case RendererType::kSkiaGraphiteMetal:
       SetUpSkiaRenderer(GetSurfaceOrigin());
       break;
   }

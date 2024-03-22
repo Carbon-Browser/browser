@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,29 +6,25 @@
 
 #import <UIKit/UIKit.h>
 
-#include "base/containers/adapters.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#include "base/strings/stringprintf.h"
+#import "base/containers/adapters.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/strings/stringprintf.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/values.h"
-#include "components/google/core/common/google_util.h"
-#include "components/pref_registry/pref_registry_syncable.h"
-#include "components/prefs/pref_service.h"
-#include "components/prefs/scoped_user_pref_update.h"
-#include "components/ukm/ios/ukm_url_recorder.h"
-#include "ios/chrome/browser/application_context.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/pref_names.h"
-#include "ios/chrome/browser/web/features.h"
+#import "components/google/core/common/google_util.h"
+#import "components/pref_registry/pref_registry_syncable.h"
+#import "components/prefs/pref_service.h"
+#import "components/prefs/scoped_user_pref_update.h"
+#import "components/ukm/ios/ukm_url_recorder.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/web/features.h"
 #import "ios/chrome/browser/web/font_size/font_size_java_script_feature.h"
-#include "ios/components/ui_util/dynamic_type_util.h"
+#import "ios/components/ui_util/dynamic_type_util.h"
 #import "ios/public/provider/chrome/browser/text_zoom/text_zoom_api.h"
-#include "services/metrics/public/cpp/ukm_builders.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "services/metrics/public/cpp/ukm_builders.h"
 
 namespace {
 
@@ -102,26 +98,26 @@ IOSContentSizeCategory IOSContentSizeCategoryForCurrentUIContentSizeCategory() {
 
 }  // namespace
 
-FontSizeTabHelper::~FontSizeTabHelper() {
-  // Remove observer in destructor because |this| is captured by the usingBlock
-  // in calling [NSNotificationCenter.defaultCenter
-  // addObserverForName:object:queue:usingBlock] in constructor.
-  [NSNotificationCenter.defaultCenter
-      removeObserver:content_size_did_change_observer_];
-}
-
 FontSizeTabHelper::FontSizeTabHelper(web::WebState* web_state)
-    : web_state_(web_state) {
+    : web_state_(web_state), weak_factory_(this) {
   DCHECK(ios::provider::IsTextZoomEnabled());
   web_state->AddObserver(this);
-  content_size_did_change_observer_ = [NSNotificationCenter.defaultCenter
+  FontSizeJavaScriptFeature* feature = FontSizeJavaScriptFeature::GetInstance();
+  feature->GetWebFramesManager(web_state)->AddObserver(this);
+
+  base::WeakPtr<FontSizeTabHelper> weak_this = weak_factory_.GetWeakPtr();
+  [NSNotificationCenter.defaultCenter
       addObserverForName:UIContentSizeCategoryDidChangeNotification
                   object:nil
                    queue:nil
               usingBlock:^(NSNotification* note) {
-                SetPageFontSize(GetFontSize());
+                if (weak_this) {
+                  weak_this->SetPageFontSize(GetFontSize());
+                }
               }];
 }
+
+FontSizeTabHelper::~FontSizeTabHelper() {}
 
 // static
 void FontSizeTabHelper::RegisterBrowserStatePrefs(
@@ -179,7 +175,7 @@ void FontSizeTabHelper::LogZoomEvent(Zoom zoom) const {
   }
 }
 
-absl::optional<double> FontSizeTabHelper::NewMultiplierAfterZoom(
+std::optional<double> FontSizeTabHelper::NewMultiplierAfterZoom(
     Zoom zoom) const {
   static const std::vector<double> kZoomMultipliers = {
       0.5, 2.0 / 3.0, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0,
@@ -195,7 +191,7 @@ absl::optional<double> FontSizeTabHelper::NewMultiplierAfterZoom(
           return multiplier;
         }
       }
-      return absl::nullopt;
+      return std::nullopt;
     }
     case ZOOM_OUT: {
       double current_multiplier = GetCurrentUserZoomMultiplier();
@@ -205,7 +201,7 @@ absl::optional<double> FontSizeTabHelper::NewMultiplierAfterZoom(
           return multiplier;
         }
       }
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 }
@@ -219,7 +215,7 @@ bool FontSizeTabHelper::CanUserZoomOut() const {
 }
 
 bool FontSizeTabHelper::CanUserResetZoom() const {
-  absl::optional<double> new_multiplier = NewMultiplierAfterZoom(ZOOM_RESET);
+  std::optional<double> new_multiplier = NewMultiplierAfterZoom(ZOOM_RESET);
   return new_multiplier.has_value() &&
          new_multiplier.value() != GetCurrentUserZoomMultiplier();
 }
@@ -248,6 +244,8 @@ int FontSizeTabHelper::GetFontSize() const {
 
 void FontSizeTabHelper::WebStateDestroyed(web::WebState* web_state) {
   web_state->RemoveObserver(this);
+  FontSizeJavaScriptFeature* feature = FontSizeJavaScriptFeature::GetInstance();
+  feature->GetWebFramesManager(web_state)->RemoveObserver(this);
 }
 
 void FontSizeTabHelper::PageLoaded(
@@ -266,10 +264,10 @@ void FontSizeTabHelper::DidFinishNavigation(web::WebState* web_state,
   }
 }
 
-void FontSizeTabHelper::WebFrameDidBecomeAvailable(web::WebState* web_state,
-                                                   web::WebFrame* web_frame) {
+void FontSizeTabHelper::WebFrameBecameAvailable(
+    web::WebFramesManager* web_frames_manager,
+    web::WebFrame* web_frame) {
   // Make sure that any new web frame starts with the correct zoom level.
-  DCHECK_EQ(web_state, web_state_);
   int size = GetFontSize();
   // Prevent any zooming errors by only zooming when necessary. This is mostly
   // when size != 100, but if zooming has happened before, then zooming to 100
@@ -316,20 +314,21 @@ std::string FontSizeTabHelper::GetUserZoomMultiplierKeyUrlPart() const {
 }
 
 double FontSizeTabHelper::GetCurrentUserZoomMultiplier() const {
-  const base::Value* pref =
-      GetPrefService()->Get(prefs::kIosUserZoomMultipliers);
+  const base::Value::Dict& pref =
+      GetPrefService()->GetDict(prefs::kIosUserZoomMultipliers);
 
-  return pref->FindDoublePath(GetCurrentUserZoomMultiplierKey()).value_or(1);
+  return pref.FindDoubleByDottedPath(GetCurrentUserZoomMultiplierKey())
+      .value_or(1);
 }
 
 void FontSizeTabHelper::StoreCurrentUserZoomMultiplier(double multiplier) {
-  DictionaryPrefUpdate update(GetPrefService(), prefs::kIosUserZoomMultipliers);
+  ScopedDictPrefUpdate update(GetPrefService(), prefs::kIosUserZoomMultipliers);
 
   // Don't bother to store all the ones. This helps keep the pref dict clean.
   if (multiplier == 1) {
-    update->RemovePath(GetCurrentUserZoomMultiplierKey());
+    update->RemoveByDottedPath(GetCurrentUserZoomMultiplierKey());
   } else {
-    update->SetDoublePath(GetCurrentUserZoomMultiplierKey(), multiplier);
+    update->SetByDottedPath(GetCurrentUserZoomMultiplierKey(), multiplier);
   }
 }
 

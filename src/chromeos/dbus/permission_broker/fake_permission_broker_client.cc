@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,16 @@
 #include <stdint.h>
 #include <sys/ioctl.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/unguessable_token.h"
 
 namespace chromeos {
@@ -127,7 +127,7 @@ void FakePermissionBrokerClient::OpenPath(const std::string& path,
       {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
       base::BindOnce(&chromeos::OpenPath, path, std::move(callback),
                      std::move(error_callback),
-                     base::ThreadTaskRunnerHandle::Get()));
+                     base::SingleThreadTaskRunner::GetCurrentDefault()));
 }
 
 void FakePermissionBrokerClient::ClaimDevicePath(
@@ -148,7 +148,7 @@ void FakePermissionBrokerClient::OpenPathAndRegisterClient(
   std::string client_id;
   do {
     client_id = base::UnguessableToken::Create().ToString();
-  } while (base::Contains(clients, client_id));
+  } while (base::Contains(clients_, client_id));
 
   base::ScopedFD dup_lifeline_fd(HANDLE_EINTR(dup(lifeline_fd)));
   if (!dup_lifeline_fd.is_valid()) {
@@ -172,8 +172,8 @@ void FakePermissionBrokerClient::OpenPathAndRegisterClient(
                                 dup_lifeline_fd.get()));
     return;
   }
-  clients.emplace(client_id, UsbInterfaces(path, std::move(controller),
-                                           std::move(dup_lifeline_fd)));
+  clients_.emplace(client_id, UsbInterfaces(path, std::move(dup_lifeline_fd),
+                                            std::move(controller)));
 
   // No concern of OpenPath failure causing orphan client record here, as the
   // inserted client's record will still be removed when requester does error
@@ -185,8 +185,8 @@ void FakePermissionBrokerClient::OpenPathAndRegisterClient(
 void FakePermissionBrokerClient::DetachInterface(const std::string& client_id,
                                                  uint8_t iface_num,
                                                  ResultCallback callback) {
-  auto client_it = clients.find(client_id);
-  if (client_it == clients.end()) {
+  auto client_it = clients_.find(client_id);
+  if (client_it == clients_.end()) {
     LOG(ERROR) << "Unknown client_id: " << client_id;
     std::move(callback).Run(false);
     return;
@@ -203,8 +203,8 @@ void FakePermissionBrokerClient::DetachInterface(const std::string& client_id,
 void FakePermissionBrokerClient::ReattachInterface(const std::string& client_id,
                                                    uint8_t iface_num,
                                                    ResultCallback callback) {
-  auto client_it = clients.find(client_id);
-  if (client_it == clients.end()) {
+  auto client_it = clients_.find(client_id);
+  if (client_it == clients_.end()) {
     LOG(ERROR) << "Unknown client_id: " << client_id;
     std::move(callback).Run(false);
     return;
@@ -223,6 +223,10 @@ void FakePermissionBrokerClient::RequestTcpPortAccess(
     const std::string& interface,
     int lifeline_fd,
     ResultCallback callback) {
+  if (tcp_deny_all_) {
+    std::move(callback).Run(false);
+    return;
+  }
   std::move(callback).Run(
       RequestPortImpl(port, interface, tcp_deny_rule_set_, &tcp_hole_set_));
 }
@@ -232,6 +236,10 @@ void FakePermissionBrokerClient::RequestUdpPortAccess(
     const std::string& interface,
     int lifeline_fd,
     ResultCallback callback) {
+  if (udp_deny_all_) {
+    std::move(callback).Run(false);
+    return;
+  }
   std::move(callback).Run(
       RequestPortImpl(port, interface, udp_deny_rule_set_, &udp_hole_set_));
 }
@@ -240,12 +248,18 @@ void FakePermissionBrokerClient::ReleaseTcpPort(uint16_t port,
                                                 const std::string& interface,
                                                 ResultCallback callback) {
   std::move(callback).Run(tcp_hole_set_.erase(std::make_pair(port, interface)));
+  if (delegate_) {
+    delegate_->OnTcpPortReleased(port, interface);
+  }
 }
 
 void FakePermissionBrokerClient::ReleaseUdpPort(uint16_t port,
                                                 const std::string& interface,
                                                 ResultCallback callback) {
   std::move(callback).Run(udp_hole_set_.erase(std::make_pair(port, interface)));
+  if (delegate_) {
+    delegate_->OnUdpPortReleased(port, interface);
+  }
 }
 
 void FakePermissionBrokerClient::AddTcpDenyRule(uint16_t port,
@@ -253,9 +267,17 @@ void FakePermissionBrokerClient::AddTcpDenyRule(uint16_t port,
   tcp_deny_rule_set_.insert(std::make_pair(port, interface));
 }
 
+void FakePermissionBrokerClient::SetTcpDenyAll() {
+  tcp_deny_all_ = true;
+}
+
 void FakePermissionBrokerClient::AddUdpDenyRule(uint16_t port,
                                                 const std::string& interface) {
   udp_deny_rule_set_.insert(std::make_pair(port, interface));
+}
+
+void FakePermissionBrokerClient::SetUdpDenyAll() {
+  udp_deny_all_ = true;
 }
 
 bool FakePermissionBrokerClient::HasTcpHole(uint16_t port,
@@ -327,6 +349,10 @@ void FakePermissionBrokerClient::ReleaseUdpPortForward(
   std::move(callback).Run(true);
 }
 
+void FakePermissionBrokerClient::AttachDelegate(Delegate* delegate) {
+  delegate_ = delegate;
+}
+
 bool FakePermissionBrokerClient::RequestPortImpl(uint16_t port,
                                                  const std::string& interface,
                                                  const RuleSet& deny_rule_set,
@@ -347,11 +373,11 @@ bool FakePermissionBrokerClient::RequestPortImpl(uint16_t port,
 
 FakePermissionBrokerClient::UsbInterfaces::UsbInterfaces(
     const std::string& path,
-    std::unique_ptr<base::FileDescriptorWatcher::Controller> controller,
-    base::ScopedFD lifeline_fd)
+    base::ScopedFD lifeline_fd,
+    std::unique_ptr<base::FileDescriptorWatcher::Controller> controller)
     : path(std::move(path)),
-      controller(std::move(controller)),
-      lifeline_fd(std::move(lifeline_fd)) {}
+      lifeline_fd(std::move(lifeline_fd)),
+      controller(std::move(controller)) {}
 
 FakePermissionBrokerClient::UsbInterfaces::~UsbInterfaces() = default;
 

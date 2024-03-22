@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "dbus/object_path.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
+namespace ash {
 
 // Metadata representing an eSIM profile.
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfile {
@@ -38,7 +38,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfile {
   // properties. Should be provided a dictionary created via
   // ToDictionaryValue().
   static absl::optional<CellularESimProfile> FromDictionaryValue(
-      const base::Value& value);
+      const base::Value::Dict& value);
 
   CellularESimProfile(State state,
                       const dbus::ObjectPath& path,
@@ -61,7 +61,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfile {
   const std::u16string& service_provider() const { return service_provider_; }
   const std::string& activation_code() const { return activation_code_; }
 
-  base::Value ToDictionaryValue() const;
+  base::Value::Dict ToDictionaryValue() const;
 
   bool operator==(const CellularESimProfile& other) const;
   bool operator!=(const CellularESimProfile& other) const;
@@ -92,11 +92,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfile {
   std::string activation_code_;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace ash {
-using ::chromeos::CellularESimProfile;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_ESIM_PROFILE_H_

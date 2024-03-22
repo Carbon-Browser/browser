@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,26 @@
 
 #include <utility>
 
+#include "ash/public/cpp/holding_space/holding_space_client.h"
 #include "ash/public/cpp/new_window_delegate.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "ash/public/cpp/window_properties.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "chromeos/utils/pdf_conversion.h"
 #include "content/public/browser/web_contents.h"
 #include "net/base/url_util.h"
 #include "ui/aura/window.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
 
 namespace ash {
+
 namespace {
 
 using camera_app::mojom::DocumentOutputFormat;
+using camera_app::mojom::ToteMetricFormat;
 using chromeos::machine_learning::mojom::Rotation;
 
 camera_app::mojom::ScreenState ToMojoScreenState(ScreenBacklightState s) {
@@ -51,6 +55,22 @@ camera_app::mojom::FileMonitorResult ToMojoFileMonitorResult(
   }
 }
 
+camera_app::mojom::StorageMonitorStatus ToMojoStorageMonitorStatus(
+    CameraAppUIDelegate::StorageMonitorStatus status) {
+  switch (status) {
+    case CameraAppUIDelegate::StorageMonitorStatus::NORMAL:
+      return camera_app::mojom::StorageMonitorStatus::NORMAL;
+    case CameraAppUIDelegate::StorageMonitorStatus::LOW:
+      return camera_app::mojom::StorageMonitorStatus::LOW;
+    case CameraAppUIDelegate::StorageMonitorStatus::CRITICALLY_LOW:
+      return camera_app::mojom::StorageMonitorStatus::CRITICALLY_LOW;
+    case CameraAppUIDelegate::StorageMonitorStatus::CANCELED:
+      return camera_app::mojom::StorageMonitorStatus::CANCELED;
+    case CameraAppUIDelegate::StorageMonitorStatus::ERROR:
+      return camera_app::mojom::StorageMonitorStatus::ERROR;
+  }
+}
+
 bool HasExternalScreen() {
   for (const auto& display : display::Screen::GetScreen()->GetAllDisplays()) {
     if (!display.IsInternal()) {
@@ -60,15 +80,15 @@ bool HasExternalScreen() {
   return false;
 }
 
-absl::optional<uint32_t> ParseIntentIdFromUrl(const GURL& url) {
+std::optional<uint32_t> ParseIntentIdFromUrl(const GURL& url) {
   std::string id_str;
   if (!net::GetValueForKeyInQuery(url, "intentId", &id_str)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   uint32_t intent_id;
   if (!base::StringToUint(id_str, &intent_id)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return intent_id;
 }
@@ -92,23 +112,23 @@ CameraAppHelperImpl::CameraAppHelperImpl(
     CameraAppUI* camera_app_ui,
     CameraResultCallback camera_result_callback,
     SendBroadcastCallback send_broadcast_callback,
-    aura::Window* window)
+    aura::Window* window,
+    HoldingSpaceClient* holding_space_client)
     : camera_app_ui_(camera_app_ui),
       camera_result_callback_(std::move(camera_result_callback)),
       send_broadcast_callback_(std::move(send_broadcast_callback)),
       has_external_screen_(HasExternalScreen()),
-      pending_intent_id_(absl::nullopt),
+      pending_intent_id_(std::nullopt),
       window_(window),
-      document_scanner_service_(DocumentScannerServiceClient::Create()) {
+      document_scanner_service_(DocumentScannerServiceClient::Create()),
+      holding_space_client_(holding_space_client) {
   DCHECK(camera_app_ui);
   DCHECK(window);
   window->SetProperty(kCanConsumeSystemKeysKey, true);
-  TabletMode::Get()->AddObserver(this);
   ScreenBacklight::Get()->AddObserver(this);
 }
 
 CameraAppHelperImpl::~CameraAppHelperImpl() {
-  TabletMode::Get()->RemoveObserver(this);
   ScreenBacklight::Get()->RemoveObserver(this);
 
   if (pending_intent_id_.has_value()) {
@@ -133,28 +153,30 @@ void CameraAppHelperImpl::HandleCameraResult(
   if (pending_intent_id_.has_value() && *pending_intent_id_ == intent_id &&
       (action == arc::mojom::CameraIntentAction::FINISH ||
        action == arc::mojom::CameraIntentAction::CANCEL)) {
-    pending_intent_id_ = absl::nullopt;
+    pending_intent_id_ = std::nullopt;
   }
   camera_result_callback_.Run(intent_id, action, data, std::move(callback));
 }
 
 void CameraAppHelperImpl::IsTabletMode(IsTabletModeCallback callback) {
-  std::move(callback).Run(TabletMode::Get()->InTabletMode());
+  std::move(callback).Run(display::Screen::GetScreen()->InTabletMode());
 }
 
 void CameraAppHelperImpl::StartPerfEventTrace(const std::string& event) {
-  TRACE_EVENT_BEGIN0("camera", event.c_str());
+  TRACE_EVENT_BEGIN("camera", nullptr, [&](perfetto::EventContext ctx) {
+    ctx.event()->set_name(event);
+  });
 }
 
 void CameraAppHelperImpl::StopPerfEventTrace(const std::string& event) {
-  TRACE_EVENT_END0("camera", event.c_str());
+  TRACE_EVENT_END("camera");
 }
 
 void CameraAppHelperImpl::SetTabletMonitor(
     mojo::PendingRemote<TabletModeMonitor> monitor,
     SetTabletMonitorCallback callback) {
   tablet_mode_monitor_ = mojo::Remote<TabletModeMonitor>(std::move(monitor));
-  std::move(callback).Run(TabletMode::Get()->InTabletMode());
+  std::move(callback).Run(display::Screen::GetScreen()->InTabletMode());
 }
 
 void CameraAppHelperImpl::SetScreenStateMonitor(
@@ -218,7 +240,7 @@ void CameraAppHelperImpl::OnConvertedToDocument(
       return;
     case DocumentOutputFormat::PDF: {
       std::vector<uint8_t> pdf_data;
-      if (!chromeos::ConvertJpgImageToPdf(processed_jpeg_image, &pdf_data)) {
+      if (!chromeos::ConvertJpgImagesToPdf({processed_jpeg_image}, &pdf_data)) {
         LOG(ERROR) << "Failed to convert jpeg image to PDF format";
         std::move(callback).Run({});
         return;
@@ -241,14 +263,8 @@ void CameraAppHelperImpl::OpenFeedbackDialog(const std::string& placeholder) {
 
 void CameraAppHelperImpl::OpenUrlInBrowser(const GURL& url) {
   NewWindowDelegate::GetPrimary()->OpenUrl(
-      url, NewWindowDelegate::OpenUrlFrom::kUserInteraction);
-}
-
-void CameraAppHelperImpl::SetCameraUsageMonitor(
-    mojo::PendingRemote<CameraUsageOwnershipMonitor> usage_monitor,
-    SetCameraUsageMonitorCallback callback) {
-  camera_app_ui_->app_window_manager()->SetCameraUsageMonitor(
-      window_, std::move(usage_monitor), std::move(callback));
+      url, NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+      NewWindowDelegate::Disposition::kNewForegroundTab);
 }
 
 void CameraAppHelperImpl::GetWindowStateController(
@@ -276,6 +292,37 @@ void CameraAppHelperImpl::SendNewCaptureBroadcast(bool is_video,
   send_broadcast_callback_.Run(is_video, file_path);
 }
 
+void CameraAppHelperImpl::NotifyTote(const ToteMetricFormat format,
+                                     const std::string& name) {
+  CHECK(holding_space_client_);
+  base::FilePath file_path =
+      camera_app_ui_->delegate()->GetFilePathByName(name);
+  switch (format) {
+    case ToteMetricFormat::PHOTO:
+      holding_space_client_->AddItemOfType(
+          HoldingSpaceItem::Type::kCameraAppPhoto, file_path);
+      return;
+    case ToteMetricFormat::SCAN_JPG:
+      holding_space_client_->AddItemOfType(
+          HoldingSpaceItem::Type::kCameraAppScanJpg, file_path);
+      return;
+    case ToteMetricFormat::SCAN_PDF:
+      holding_space_client_->AddItemOfType(
+          HoldingSpaceItem::Type::kCameraAppScanPdf, file_path);
+      return;
+    case ToteMetricFormat::VIDEO_GIF:
+      holding_space_client_->AddItemOfType(
+          HoldingSpaceItem::Type::kCameraAppVideoGif, file_path);
+      return;
+    case ToteMetricFormat::VIDEO_MP4:
+      holding_space_client_->AddItemOfType(
+          HoldingSpaceItem::Type::kCameraAppVideoMp4, file_path);
+      return;
+    default:
+      NOTREACHED() << "Unexpected new metric format.";
+  }
+}
+
 void CameraAppHelperImpl::MonitorFileDeletion(
     const std::string& name,
     MonitorFileDeletionCallback callback) {
@@ -288,30 +335,18 @@ void CameraAppHelperImpl::MonitorFileDeletion(
                 std::move(callback)));
 }
 
-void CameraAppHelperImpl::GetDocumentScannerReadyState(
-    GetDocumentScannerReadyStateCallback callback) {
-  if (document_scanner_service_ == nullptr) {
-    std::move(callback).Run(
-        camera_app::mojom::DocumentScannerReadyState::NOT_SUPPORTED);
-    return;
-  }
-  if (document_scanner_service_->IsLoaded()) {
-    std::move(callback).Run(
-        camera_app::mojom::DocumentScannerReadyState::SUPPORTED_AND_READY);
-    return;
-  }
-  std::move(callback).Run(
-      camera_app::mojom::DocumentScannerReadyState::SUPPORTED_BUT_NOT_READY);
+void CameraAppHelperImpl::IsDocumentScannerSupported(
+    IsDocumentScannerSupportedCallback callback) {
+  std::move(callback).Run(document_scanner_service_ != nullptr);
 }
 
-void CameraAppHelperImpl::RegisterDocumentScannerReadyCallback(
-    RegisterDocumentScannerReadyCallbackCallback callback) {
+void CameraAppHelperImpl::CheckDocumentModeReadiness(
+    CheckDocumentModeReadinessCallback callback) {
   if (document_scanner_service_ == nullptr) {
     std::move(callback).Run(false);
     return;
   }
-  document_scanner_service_->RegisterDocumentScannerReadyCallback(
-      std::move(callback));
+  document_scanner_service_->CheckDocumentModeReadiness(std::move(callback));
 }
 
 void CameraAppHelperImpl::ScanDocumentCorners(
@@ -368,10 +403,11 @@ void CameraAppHelperImpl::ConvertToDocument(
                      std::move(callback)));
 }
 
-void CameraAppHelperImpl::ConvertToPdf(const std::vector<uint8_t>& jpeg_data,
-                                       ConvertToPdfCallback callback) {
+void CameraAppHelperImpl::ConvertToPdf(
+    const std::vector<std::vector<uint8_t>>& jpegs_data,
+    ConvertToPdfCallback callback) {
   std::vector<uint8_t> pdf_data;
-  if (!chromeos::ConvertJpgImageToPdf(jpeg_data, &pdf_data)) {
+  if (!chromeos::ConvertJpgImagesToPdf(jpegs_data, &pdf_data)) {
     LOG(ERROR) << "Failed to convert jpeg image to PDF format";
     std::move(callback).Run({});
     return;
@@ -379,14 +415,54 @@ void CameraAppHelperImpl::ConvertToPdf(const std::vector<uint8_t>& jpeg_data,
   std::move(callback).Run(std::move(pdf_data));
 }
 
-void CameraAppHelperImpl::OnTabletModeStarted() {
-  if (tablet_mode_monitor_.is_bound())
-    tablet_mode_monitor_->Update(true);
+void CameraAppHelperImpl::MaybeTriggerSurvey() {
+  camera_app_ui_->delegate()->MaybeTriggerSurvey();
 }
 
-void CameraAppHelperImpl::OnTabletModeEnded() {
-  if (tablet_mode_monitor_.is_bound())
-    tablet_mode_monitor_->Update(false);
+void CameraAppHelperImpl::StartStorageMonitor(
+    mojo::PendingRemote<StorageMonitor> monitor,
+    StartStorageMonitorCallback callback) {
+  // If there is an existing callback from previous call, cancel it first.
+  if (storage_monitor_.is_bound()) {
+    StopStorageMonitor();
+  }
+
+  storage_monitor_ = mojo::Remote<StorageMonitor>(std::move(monitor));
+  storage_callback_ = std::move(callback);
+
+  camera_app_ui_->delegate()->StartStorageMonitor(
+      base::BindRepeating(&CameraAppHelperImpl::OnStorageStatusUpdated,
+                          weak_factory_.GetWeakPtr()));
+}
+
+void CameraAppHelperImpl::StopStorageMonitor() {
+  camera_app_ui_->delegate()->StopStorageMonitor();
+  if (!storage_callback_.is_null()) {
+    std::move(storage_callback_)
+        .Run(camera_app::mojom::StorageMonitorStatus::CANCELED);
+  }
+  if (storage_monitor_.is_bound()) {
+    storage_monitor_.reset();
+  }
+}
+
+void CameraAppHelperImpl::OnDisplayTabletStateChanged(
+    display::TabletState state) {
+  switch (state) {
+    case display::TabletState::kEnteringTabletMode:
+    case display::TabletState::kExitingTabletMode:
+      break;
+    case display::TabletState::kInClamshellMode:
+      if (tablet_mode_monitor_.is_bound()) {
+        tablet_mode_monitor_->Update(false);
+      }
+      break;
+    case display::TabletState::kInTabletMode:
+      if (tablet_mode_monitor_.is_bound()) {
+        tablet_mode_monitor_->Update(true);
+      }
+      break;
+  }
 }
 
 void CameraAppHelperImpl::OnScreenBacklightStateChanged(
@@ -402,6 +478,21 @@ void CameraAppHelperImpl::OnDisplayAdded(const display::Display& new_display) {
 void CameraAppHelperImpl::OnDisplayRemoved(
     const display::Display& old_display) {
   CheckExternalScreenState();
+}
+
+void CameraAppHelperImpl::OnStorageStatusUpdated(
+    CameraAppUIDelegate::StorageMonitorStatus status) {
+  auto mojo_status = ToMojoStorageMonitorStatus(status);
+  // Send initial status back, otherwise update through monitor.
+  if (!storage_callback_.is_null()) {
+    std::move(storage_callback_).Run(mojo_status);
+  } else if (storage_monitor_.is_bound()) {
+    storage_monitor_->Update(mojo_status);
+  }
+}
+
+void CameraAppHelperImpl::OpenStorageManagement() {
+  camera_app_ui_->delegate()->OpenStorageManagement();
 }
 
 }  // namespace ash

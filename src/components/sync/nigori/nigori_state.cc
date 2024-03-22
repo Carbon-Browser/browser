@@ -1,19 +1,23 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/nigori/nigori_state.h"
 
+#include <cstdint>
 #include <vector>
 
 #include "base/base64.h"
 #include "base/notreached.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/time.h"
+#include "components/sync/engine/nigori/cross_user_sharing_public_key.h"
+#include "components/sync/engine/nigori/key_derivation_params.h"
 #include "components/sync/engine/sync_encryption_handler.h"
 #include "components/sync/nigori/cryptographer_impl.h"
 #include "components/sync/nigori/keystore_keys_cryptographer.h"
 #include "components/sync/protocol/nigori_local_data.pb.h"
+#include "components/sync/protocol/nigori_specifics.pb.h"
 
 namespace syncer {
 
@@ -32,68 +36,64 @@ CustomPassphraseKeyDerivationParamsToProto(const KeyDerivationParams& params) {
 
 KeyDerivationParams CustomPassphraseKeyDerivationParamsFromProto(
     const sync_pb::CustomPassphraseKeyDerivationParams& proto) {
-  switch (ProtoKeyDerivationMethodToEnum(
-      proto.custom_passphrase_key_derivation_method())) {
-    case KeyDerivationMethod::PBKDF2_HMAC_SHA1_1003:
+  switch (proto.custom_passphrase_key_derivation_method()) {
+    case sync_pb::NigoriSpecifics::UNSPECIFIED:
+      [[fallthrough]];
+    case sync_pb::NigoriSpecifics::PBKDF2_HMAC_SHA1_1003:
       return KeyDerivationParams::CreateForPbkdf2();
-    case KeyDerivationMethod::SCRYPT_8192_8_11:
+    case sync_pb::NigoriSpecifics::SCRYPT_8192_8_11:
       return KeyDerivationParams::CreateForScrypt(
           proto.custom_passphrase_key_derivation_salt());
-    case KeyDerivationMethod::UNSUPPORTED:
-      break;
   }
+
   NOTREACHED();
-  return KeyDerivationParams::CreateWithUnsupportedMethod();
+  return KeyDerivationParams::CreateForPbkdf2();
 }
 
 // |encrypted| must not be null.
-bool EncryptKeyBag(const CryptographerImpl& cryptographer,
-                   sync_pb::EncryptedData* encrypted) {
+bool EncryptEncryptionKeys(const CryptographerImpl& cryptographer,
+                           sync_pb::EncryptedData* encrypted) {
   DCHECK(encrypted);
   DCHECK(cryptographer.CanEncrypt());
 
   sync_pb::CryptographerData proto = cryptographer.ToProto();
   DCHECK(!proto.key_bag().key().empty());
 
+  sync_pb::EncryptionKeys keys_for_encryption;
+
+  keys_for_encryption.mutable_key()->CopyFrom(proto.key_bag().key());
+  keys_for_encryption.mutable_cross_user_sharing_private_key()->CopyFrom(
+      proto.cross_user_sharing_keys().private_key());
+
   // Encrypt the bag with the default Nigori.
-  return cryptographer.Encrypt(proto.key_bag(), encrypted);
+  return cryptographer.Encrypt(keys_for_encryption, encrypted);
 }
 
-// Updates |specifics|'s individual datatypes encryption state based on
-// |encrypted_types|.
-void UpdateNigoriSpecificsFromEncryptedTypes(
-    ModelTypeSet encrypted_types,
+// Writes deprecated per-type encryption fields. Can be removed once <M82
+// clients aren't supported.
+void WriteDeprecatedPerTypeEncryptionFields(
     sync_pb::NigoriSpecifics* specifics) {
-  static_assert(40 == GetNumModelTypes(),
-                "If adding an encryptable type, update handling below.");
-  specifics->set_encrypt_bookmarks(encrypted_types.Has(BOOKMARKS));
-  specifics->set_encrypt_preferences(encrypted_types.Has(PREFERENCES));
-  specifics->set_encrypt_autofill_profile(
-      encrypted_types.Has(AUTOFILL_PROFILE));
-  specifics->set_encrypt_autofill(encrypted_types.Has(AUTOFILL));
-  specifics->set_encrypt_autofill_wallet_metadata(
-      encrypted_types.Has(AUTOFILL_WALLET_METADATA));
-  specifics->set_encrypt_themes(encrypted_types.Has(THEMES));
-  specifics->set_encrypt_typed_urls(encrypted_types.Has(TYPED_URLS));
-  specifics->set_encrypt_extensions(encrypted_types.Has(EXTENSIONS));
-  specifics->set_encrypt_search_engines(encrypted_types.Has(SEARCH_ENGINES));
-  specifics->set_encrypt_sessions(encrypted_types.Has(SESSIONS));
-  specifics->set_encrypt_apps(encrypted_types.Has(APPS));
-  specifics->set_encrypt_app_settings(encrypted_types.Has(APP_SETTINGS));
-  specifics->set_encrypt_extension_settings(
-      encrypted_types.Has(EXTENSION_SETTINGS));
-  specifics->set_encrypt_dictionary(encrypted_types.Has(DICTIONARY));
-  specifics->set_encrypt_app_list(encrypted_types.Has(APP_LIST));
-  specifics->set_encrypt_arc_package(encrypted_types.Has(ARC_PACKAGE));
-  specifics->set_encrypt_printers(encrypted_types.Has(PRINTERS));
-  specifics->set_encrypt_printers_authorization_servers(
-      encrypted_types.Has(PRINTERS_AUTHORIZATION_SERVERS));
-  specifics->set_encrypt_reading_list(encrypted_types.Has(READING_LIST));
-  specifics->set_encrypt_send_tab_to_self(
-      encrypted_types.Has(SEND_TAB_TO_SELF));
-  specifics->set_encrypt_web_apps(encrypted_types.Has(WEB_APPS));
-  specifics->set_encrypt_os_preferences(encrypted_types.Has(OS_PREFERENCES));
-  specifics->set_encrypt_workspace_desk(encrypted_types.Has(WORKSPACE_DESK));
+  specifics->set_encrypt_bookmarks(true);
+  specifics->set_encrypt_preferences(true);
+  specifics->set_encrypt_autofill_profile(true);
+  specifics->set_encrypt_autofill(true);
+  specifics->set_encrypt_autofill_wallet_metadata(true);
+  specifics->set_encrypt_themes(true);
+  specifics->set_encrypt_typed_urls(true);
+  specifics->set_encrypt_extensions(true);
+  specifics->set_encrypt_search_engines(true);
+  specifics->set_encrypt_sessions(true);
+  specifics->set_encrypt_apps(true);
+  specifics->set_encrypt_app_settings(true);
+  specifics->set_encrypt_extension_settings(true);
+  specifics->set_encrypt_dictionary(true);
+  specifics->set_encrypt_app_list(true);
+  specifics->set_encrypt_arc_package(true);
+  specifics->set_encrypt_printers(true);
+  specifics->set_encrypt_reading_list(true);
+  specifics->set_encrypt_send_tab_to_self(true);
+  specifics->set_encrypt_web_apps(true);
+  specifics->set_encrypt_os_preferences(true);
 }
 
 void UpdateSpecificsFromKeyDerivationParams(
@@ -101,15 +101,30 @@ void UpdateSpecificsFromKeyDerivationParams(
     sync_pb::NigoriSpecifics* specifics) {
   DCHECK_EQ(specifics->passphrase_type(),
             sync_pb::NigoriSpecifics::CUSTOM_PASSPHRASE);
-  DCHECK_NE(params.method(), KeyDerivationMethod::UNSUPPORTED);
   specifics->set_custom_passphrase_key_derivation_method(
       EnumKeyDerivationMethodToProto(params.method()));
   if (params.method() == KeyDerivationMethod::SCRYPT_8192_8_11) {
     // Persist the salt used for key derivation in Nigori if we're using scrypt.
-    std::string encoded_salt;
-    base::Base64Encode(params.scrypt_salt(), &encoded_salt);
+    std::string encoded_salt = base::Base64Encode(params.scrypt_salt());
     specifics->set_custom_passphrase_key_derivation_salt(encoded_salt);
   }
+}
+
+absl::optional<CrossUserSharingPublicKey> PublicKeyFromProto(
+    const sync_pb::CrossUserSharingPublicKey& public_key) {
+  std::vector<uint8_t> key(public_key.x25519_public_key().begin(),
+                           public_key.x25519_public_key().end());
+  return CrossUserSharingPublicKey::CreateByImport(key);
+}
+
+sync_pb::CrossUserSharingPublicKey PublicKeyToProto(
+    const CrossUserSharingPublicKey& public_key,
+    uint32_t key_pair_version) {
+  sync_pb::CrossUserSharingPublicKey output;
+  const auto key = public_key.GetRawPublicKey();
+  output.set_x25519_public_key(std::string(key.begin(), key.end()));
+  output.set_version(key_pair_version);
+  return output;
 }
 
 }  // namespace
@@ -121,6 +136,11 @@ NigoriState NigoriState::CreateFromLocalProto(
 
   state.cryptographer =
       CryptographerImpl::FromProto(proto.cryptographer_data());
+
+  if (proto.has_cross_user_sharing_public_key()) {
+    state.cryptographer->SelectDefaultCrossUserSharingKey(
+        proto.cross_user_sharing_public_key().version());
+  }
 
   if (proto.has_pending_keys()) {
     state.pending_keys = proto.pending_keys();
@@ -163,6 +183,12 @@ NigoriState NigoriState::CreateFromLocalProto(
 
   state.trusted_vault_debug_info = proto.trusted_vault_debug_info();
 
+  if (proto.has_cross_user_sharing_public_key()) {
+    state.cross_user_sharing_public_key =
+        PublicKeyFromProto(proto.cross_user_sharing_public_key());
+    state.cross_user_sharing_key_pair_version =
+        proto.cross_user_sharing_public_key().version();
+  }
   return state;
 }
 
@@ -226,13 +252,20 @@ sync_pb::NigoriModel NigoriState::ToLocalProto() const {
         *last_default_trusted_vault_key_name);
   }
   *proto.mutable_trusted_vault_debug_info() = trusted_vault_debug_info;
+  if (cross_user_sharing_public_key.has_value() &&
+      cross_user_sharing_key_pair_version.has_value()) {
+    *proto.mutable_cross_user_sharing_public_key() =
+        PublicKeyToProto(cross_user_sharing_public_key.value(),
+                         cross_user_sharing_key_pair_version.value());
+  }
   return proto;
 }
 
 sync_pb::NigoriSpecifics NigoriState::ToSpecificsProto() const {
   sync_pb::NigoriSpecifics specifics;
   if (cryptographer->CanEncrypt()) {
-    EncryptKeyBag(*cryptographer, specifics.mutable_encryption_keybag());
+    EncryptEncryptionKeys(*cryptographer,
+                          specifics.mutable_encryption_keybag());
   } else {
     DCHECK(pending_keys.has_value());
     // This case is reachable only from processor's GetAllNodesForDebugging(),
@@ -244,7 +277,7 @@ sync_pb::NigoriSpecifics NigoriState::ToSpecificsProto() const {
   specifics.set_keybag_is_frozen(true);
   specifics.set_encrypt_everything(encrypt_everything);
   if (encrypt_everything) {
-    UpdateNigoriSpecificsFromEncryptedTypes(GetEncryptedTypes(), &specifics);
+    WriteDeprecatedPerTypeEncryptionFields(&specifics);
   }
   specifics.set_passphrase_type(passphrase_type);
   if (passphrase_type == sync_pb::NigoriSpecifics::CUSTOM_PASSPHRASE) {
@@ -252,19 +285,15 @@ sync_pb::NigoriSpecifics NigoriState::ToSpecificsProto() const {
     UpdateSpecificsFromKeyDerivationParams(
         *custom_passphrase_key_derivation_params, &specifics);
   }
-  // TODO(crbug.com/1020084): populate |keystore_decryptor_token| for trusted
-  // vault passphrase to allow rollbacks.
   if (passphrase_type == sync_pb::NigoriSpecifics::KEYSTORE_PASSPHRASE) {
-    // TODO(crbug.com/922900): it seems possible to have corrupted
-    // |pending_keystore_decryptor_token| and an ability to recover it in case
-    // |pending_keys| isn't set and |keystore_keys| contains some keys.
     if (pending_keystore_decryptor_token.has_value()) {
+      DCHECK(pending_keys.has_value());
       *specifics.mutable_keystore_decryptor_token() =
           *pending_keystore_decryptor_token;
     } else {
-      // TODO(crbug.com/922900): error handling (crypto errors, which could
-      // cause empty |keystore_keys_cryptographer| or can occur during
-      // encryption).
+      // TODO(crbug.com/1368018): ensure correct error handling, e.g. in case
+      // of empty |keystore_keys_cryptographer| or crypto errors (should be
+      // impossible, but code doesn't yet guarantee that).
       keystore_keys_cryptographer->EncryptKeystoreDecryptorToken(
           cryptographer->ExportDefaultKey(),
           specifics.mutable_keystore_decryptor_token());
@@ -279,6 +308,14 @@ sync_pb::NigoriSpecifics NigoriState::ToSpecificsProto() const {
         TimeToProtoTime(custom_passphrase_time));
   }
   *specifics.mutable_trusted_vault_debug_info() = trusted_vault_debug_info;
+
+  if (cross_user_sharing_public_key.has_value() &&
+      cross_user_sharing_key_pair_version.has_value()) {
+    *specifics.mutable_cross_user_sharing_public_key() =
+        PublicKeyToProto(cross_user_sharing_public_key.value(),
+                         cross_user_sharing_key_pair_version.value());
+  }
+
   return specifics;
 }
 
@@ -297,6 +334,12 @@ NigoriState NigoriState::Clone() const {
   result.last_default_trusted_vault_key_name =
       last_default_trusted_vault_key_name;
   result.trusted_vault_debug_info = trusted_vault_debug_info;
+  if (cross_user_sharing_public_key.has_value()) {
+    result.cross_user_sharing_public_key =
+        cross_user_sharing_public_key->Clone();
+  }
+  result.cross_user_sharing_key_pair_version =
+      cross_user_sharing_key_pair_version;
   return result;
 }
 

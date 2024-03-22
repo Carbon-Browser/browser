@@ -93,8 +93,7 @@ static void AutoExpandSearchableHiddenElementsUpFrameTree(Range* range) {
 
   // If the active match is hidden inside a <details> element, then we should
   // expand it so find-in-page can scroll to it.
-  if (RuntimeEnabledFeatures::AutoExpandDetailsElementEnabled() &&
-      HTMLDetailsElement::ExpandDetailsAncestors(first_node)) {
+  if (HTMLDetailsElement::ExpandDetailsAncestors(first_node)) {
     needs_layout_shift_allowance = true;
     UseCounter::Count(first_node.GetDocument(),
                       WebFeature::kAutoExpandedDetailsForFindInPage);
@@ -102,9 +101,7 @@ static void AutoExpandSearchableHiddenElementsUpFrameTree(Range* range) {
 
   // If the active match is hidden inside a hidden=until-found element, then we
   // should reveal it so find-in-page can scroll to it.
-  if (RuntimeEnabledFeatures::BeforeMatchEventEnabled(
-          first_node.GetExecutionContext()) &&
-      DisplayLockUtilities::RevealHiddenUntilFoundAncestors(first_node)) {
+  if (DisplayLockUtilities::RevealHiddenUntilFoundAncestors(first_node)) {
     needs_layout_shift_allowance = true;
     UseCounter::Count(first_node.GetDocument(),
                       WebFeature::kBeforematchRevealedHiddenMatchable);
@@ -136,11 +133,8 @@ static void AutoExpandSearchableHiddenElementsUpFrameTree(Range* range) {
       DCHECK(frame_element);
       bool frame_needs_style_and_layout = false;
       frame_needs_style_and_layout |=
-          RuntimeEnabledFeatures::AutoExpandDetailsElementEnabled() &&
           HTMLDetailsElement::ExpandDetailsAncestors(*frame_element);
       frame_needs_style_and_layout |=
-          RuntimeEnabledFeatures::BeforeMatchEventEnabled(
-              frame_element->GetExecutionContext()) &&
           DisplayLockUtilities::RevealHiddenUntilFoundAncestors(*frame_element);
       if (frame_needs_style_and_layout) {
         frame_element->GetDocument().UpdateStyleAndLayoutForNode(
@@ -168,7 +162,7 @@ static void ScrollToVisible(Range* match) {
       settings ? settings->GetSmoothScrollForFindEnabled() : false;
   mojom::blink::ScrollBehavior scroll_behavior =
       smooth_find_enabled ? mojom::blink::ScrollBehavior::kSmooth
-                          : mojom::blink::ScrollBehavior::kAuto;
+                          : mojom::blink::ScrollBehavior::kInstant;
   scroll_into_view_util::ScrollRectToVisible(
       *first_node.GetLayoutObject(), PhysicalRect(match->BoundingBox()),
       ScrollAlignment::CreateScrollIntoViewParams(
@@ -304,8 +298,9 @@ bool TextFinder::FindInternal(int identifier,
   if (options.run_synchronously_for_testing) {
     Scroll(std::move(scroll_context));
   } else {
-    scroll_task_.Reset(WTF::Bind(&TextFinder::Scroll, WrapWeakPersistent(this),
-                                 std::move(scroll_context)));
+    scroll_task_.Reset(WTF::BindOnce(&TextFinder::Scroll,
+                                     WrapWeakPersistent(this),
+                                     std::move(scroll_context)));
     GetFrame()->GetDocument()->EnqueueAnimationFrameTask(
         scroll_task_.callback());
   }
@@ -652,7 +647,7 @@ void TextFinder::ResetMatchCount() {
 }
 
 void TextFinder::ClearFindMatchesCache() {
-  if (!find_matches_cache_.IsEmpty())
+  if (!find_matches_cache_.empty())
     ++find_match_markers_version_;
 
   find_matches_cache_.clear();
@@ -662,7 +657,7 @@ void TextFinder::ClearFindMatchesCache() {
 void TextFinder::InvalidateFindMatchRects() {
   // Increase version number is required to trigger FindMatchRects update when
   // next find.
-  if (!find_matches_cache_.IsEmpty())
+  if (!find_matches_cache_.empty())
     ++find_match_markers_version_;
 
   // For subframes, we need to recalculate the FindMatchRects when the
@@ -696,7 +691,7 @@ void TextFinder::UpdateFindMatchRects() {
   // Remove any invalid matches from the cache.
   if (dead_matches) {
     HeapVector<FindMatch> filtered_matches;
-    filtered_matches.ReserveCapacity(find_matches_cache_.size() - dead_matches);
+    filtered_matches.reserve(find_matches_cache_.size() - dead_matches);
 
     for (const FindMatch& match : find_matches_cache_) {
       if (!match.rect_.IsEmpty())
@@ -721,7 +716,7 @@ Vector<gfx::RectF> TextFinder::FindMatchRects() {
   UpdateFindMatchRects();
 
   Vector<gfx::RectF> match_rects;
-  match_rects.ReserveCapacity(match_rects.size() + find_matches_cache_.size());
+  match_rects.reserve(match_rects.size() + find_matches_cache_.size());
   for (const FindMatch& match : find_matches_cache_) {
     DCHECK(!match.rect_.IsEmpty());
     match_rects.push_back(match.rect_);

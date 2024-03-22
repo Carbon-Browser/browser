@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/page_node.h"
@@ -39,10 +40,8 @@ mojom::WebMemoryMeasurementPtr BuildMemoryUsageResult(
     const blink::LocalFrameToken& frame_token,
     const ProcessNode* process_node) {
   const auto& frame_nodes = process_node->GetFrameNodes();
-  const auto it = std::find_if(frame_nodes.begin(), frame_nodes.end(),
-                               [frame_token](const FrameNode* node) {
-                                 return node->GetFrameToken() == frame_token;
-                               });
+  const auto it =
+      base::ranges::find(frame_nodes, frame_token, &FrameNode::GetFrameToken);
 
   if (it == frame_nodes.end()) {
     // The frame no longer exists.
@@ -79,7 +78,7 @@ void CheckIsCrossOriginIsolatedOnUISeq(
     return;
   }
   if (rfh->GetWebExposedIsolationLevel() ==
-          content::RenderFrameHost::WebExposedIsolationLevel::kNotIsolated &&
+          content::WebExposedIsolationLevel::kNotIsolated &&
       !base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kDisableWebSecurity)) {
     std::move(bad_message_callback)

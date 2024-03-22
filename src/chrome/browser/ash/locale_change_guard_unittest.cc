@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,15 +19,19 @@ namespace {
 // switched between different regions within the same language.
 const char* const kShowNotificationLanguages[] = {
     "af",   // Afrikaans
+    "ak",   // Twi
     "am",   // Amharic
     "an",   // Aragonese
     "ar",   // Arabic
     "as",   // Assamese
     "ast",  // Asturian
+    "ay",   // Aymara
     "az",   // Azerbaijani
     "be",   // Belarusian
     "bg",   // Bulgarian
     "bh",   // Bihari
+    "bho",  // Bhojpuri
+    "bm",   // Bambara
     "bn",   // Bengali
     "br",   // Breton
     "bs",   // Bosnian
@@ -39,6 +43,9 @@ const char* const kShowNotificationLanguages[] = {
     "cs",   // Czech
     "cy",   // Welsh
     "da",   // Danish
+    "doi",  // Dogri
+    "dv",   // Dhivehi
+    "ee",   // Ewe
     "el",   // Greek
     "eo",   // Esperanto
     "es",   // Spanish
@@ -66,6 +73,7 @@ const char* const kShowNotificationLanguages[] = {
     "ia",   // Interlingua
     "id",   // Indonesian
     "ig",   // Igbo
+    "ilo",  // Ilocano
     "is",   // Icelandic
     "ja",   // Japanese
     "jv",   // Javanese
@@ -75,19 +83,24 @@ const char* const kShowNotificationLanguages[] = {
     "kn",   // Kannada
     "ko",   // Korean
     "kok",  // Konkani
+    "kri",  // Krio
     "ku",   // Kurdish
     "ky",   // Kyrgyz
     "la",   // Latin
     "lb",   // Luxembourgish
+    "lg",   // Luganda
     "ln",   // Lingala
     "lo",   // Laothian
     "lt",   // Lithuanian
+    "lus",  // Mizo
     "lv",   // Latvian
+    "mai",  // Maithili
     "mg",   // Malagasy
     "mi",   // Maori
     "mk",   // Macedonian
     "ml",   // Malayalam
     "mn",   // Mongolian
+    "mni",  // Manipuri (Meitei Mayek)
     "mo",   // Moldavian
     "mr",   // Marathi
     "ms",   // Malay
@@ -98,6 +111,7 @@ const char* const kShowNotificationLanguages[] = {
     "nl",   // Dutch
     "nn",   // Norwegian (Nynorsk)
     "no",   // Norwegian
+    "nso",  // Sepedi
     "ny",   // Nyanja
     "oc",   // Occitan
     "om",   // Oromo
@@ -111,6 +125,7 @@ const char* const kShowNotificationLanguages[] = {
     "ro",   // Romanian
     "ru",   // Russian
     "rw",   // Kinyarwanda
+    "sa",   // Sanskrit
     "sd",   // Sindhi
     "sh",   // Serbo-Croatian
     "si",   // Sinhalese
@@ -134,6 +149,7 @@ const char* const kShowNotificationLanguages[] = {
     "tn",   // Tswana
     "to",   // Tonga
     "tr",   // Turkish
+    "ts",   // Tsonga
     "tt",   // Tatar
     "tw",   // Twi
     "ug",   // Uighur

@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {BrowserProxyImpl} from './browser_proxy.js';
-import {Annotation, ClusterAction, RelatedSearchAction, URLVisit, VisitAction, VisitType} from './history_clusters.mojom-webui.js';
+import {Annotation, URLVisit} from './history_cluster_types.mojom-webui.js';
+import {ClusterAction, RelatedSearchAction, VisitAction, VisitType} from './history_clusters.mojom-webui.js';
 
 /**
  * @fileoverview This file provides an abstraction layer for logging metrics for

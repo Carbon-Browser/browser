@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,26 +7,30 @@
 #include <algorithm>
 
 #include "ash/bubble/bubble_utils.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/holding_space/holding_space_client.h"
 #include "ash/public/cpp/holding_space/holding_space_constants.h"
 #include "ash/public/cpp/holding_space/holding_space_controller.h"
+#include "ash/public/cpp/holding_space/holding_space_image.h"
 #include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
+#include "ash/public/cpp/holding_space/holding_space_util.h"
 #include "ash/public/cpp/rounded_image_view.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
+#include "ash/style/typography.h"
 #include "ash/system/holding_space/holding_space_item_view.h"
 #include "ash/system/holding_space/holding_space_progress_indicator_util.h"
 #include "ash/system/holding_space/holding_space_view_delegate.h"
 #include "ash/system/progress_indicator/progress_indicator.h"
+#include "ash/system/progress_indicator/progress_indicator_animation_registry.h"
 #include "ash/system/progress_indicator/progress_ring_animation.h"
-#include "base/bind.h"
-#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/chromeos/styles/cros_styles.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_owner.h"
@@ -66,12 +70,6 @@ constexpr float kInProgressImageScaleFactor = 0.7f;
 
 // Helpers ---------------------------------------------------------------------
 
-template <typename... T>
-base::RepeatingCallback<void(T...)> IgnoreArgs(
-    base::RepeatingCallback<void()> callback) {
-  return base::BindRepeating([](T...) {}).Then(std::move(callback));
-}
-
 void ToCenteredSize(gfx::Rect* rect, const gfx::Size& size) {
   rect->Outset(gfx::Outsets::VH(size.height(), size.width()));
   rect->ClampToCenteredSize(size);
@@ -80,6 +78,8 @@ void ToCenteredSize(gfx::Rect* rect, const gfx::Size& size) {
 // ObservableRoundedImageView --------------------------------------------------
 
 class ObservableRoundedImageView : public RoundedImageView {
+  METADATA_HEADER(ObservableRoundedImageView, RoundedImageView)
+
  public:
   ObservableRoundedImageView() = default;
   ObservableRoundedImageView(const ObservableRoundedImageView&) = delete;
@@ -103,6 +103,9 @@ class ObservableRoundedImageView : public RoundedImageView {
   BoundsChangedCallback bounds_changed_callback_;
 };
 
+BEGIN_METADATA(ObservableRoundedImageView, RoundedImageView)
+END_METADATA
+
 BEGIN_VIEW_BUILDER(/*no export*/, ObservableRoundedImageView, RoundedImageView)
 VIEW_BUILDER_PROPERTY(ObservableRoundedImageView::BoundsChangedCallback,
                       BoundsChangedCallback)
@@ -111,6 +114,8 @@ END_VIEW_BUILDER
 // PaintCallbackLabel ----------------------------------------------------------
 
 class PaintCallbackLabel : public views::Label {
+  METADATA_HEADER(PaintCallbackLabel, views::Label)
+
  public:
   PaintCallbackLabel() = default;
   PaintCallbackLabel(const PaintCallbackLabel&) = delete;
@@ -125,7 +130,7 @@ class PaintCallbackLabel : public views::Label {
     layer()->SetFillsBoundsOpaquely(fills_bounds_opaquely);
   }
 
-  void SetStyle(bubble_utils::LabelStyle style) {
+  void SetStyle(TypographyToken style) {
     bubble_utils::ApplyStyle(this, style);
   }
 
@@ -144,9 +149,12 @@ class PaintCallbackLabel : public views::Label {
   Callback callback_;
 };
 
+BEGIN_METADATA(PaintCallbackLabel, views::Label)
+END_METADATA
+
 BEGIN_VIEW_BUILDER(/*no export*/, PaintCallbackLabel, views::Label)
 VIEW_BUILDER_PROPERTY(PaintCallbackLabel::Callback, Callback)
-VIEW_BUILDER_PROPERTY(bubble_utils::LabelStyle, Style)
+VIEW_BUILDER_PROPERTY(TypographyToken, Style)
 VIEW_BUILDER_PROPERTY(bool, PaintToLayer)
 VIEW_BUILDER_PROPERTY(bool, ViewAccessibilityIsIgnored)
 END_VIEW_BUILDER
@@ -154,6 +162,8 @@ END_VIEW_BUILDER
 // ProgressIndicatorView -------------------------------------------------------
 
 class ProgressIndicatorView : public views::View {
+  METADATA_HEADER(ProgressIndicatorView, views::View)
+
  public:
   ProgressIndicatorView() = default;
   ProgressIndicatorView(const ProgressIndicatorView&) = delete;
@@ -162,7 +172,8 @@ class ProgressIndicatorView : public views::View {
 
   // Copies the address of `progress_indicator_` to the specified `ptr`.
   // NOTE: This method should only be invoked after `SetHoldingSpaceItem()`.
-  void CopyProgressIndicatorAddressTo(ProgressIndicator** ptr) {
+  void CopyProgressIndicatorAddressTo(
+      raw_ptr<ProgressIndicator, ExperimentalAsh>* ptr) {
     DCHECK(progress_indicator_);
     *ptr = progress_indicator_.get();
   }
@@ -176,7 +187,11 @@ class ProgressIndicatorView : public views::View {
 
     SetPaintToLayer();
     layer()->SetFillsBoundsOpaquely(false);
-    layer()->Add(progress_indicator_->CreateLayer());
+    layer()->Add(progress_indicator_->CreateLayer(base::BindRepeating(
+        [](const ProgressIndicatorView* self, ui::ColorId color_id) {
+          return self->GetColorProvider()->GetColor(color_id);
+        },
+        base::Unretained(this))));
   }
 
  private:
@@ -199,8 +214,12 @@ class ProgressIndicatorView : public views::View {
   std::unique_ptr<ProgressIndicator> progress_indicator_;
 };
 
+BEGIN_METADATA(ProgressIndicatorView, views::View)
+END_METADATA
+
 BEGIN_VIEW_BUILDER(/*no export*/, ProgressIndicatorView, views::View)
-VIEW_BUILDER_METHOD(CopyProgressIndicatorAddressTo, ProgressIndicator**)
+VIEW_BUILDER_METHOD(CopyProgressIndicatorAddressTo,
+                    raw_ptr<ProgressIndicator, ExperimentalAsh>*)
 VIEW_BUILDER_PROPERTY(const HoldingSpaceItem*, HoldingSpaceItem)
 END_VIEW_BUILDER
 
@@ -235,14 +254,6 @@ views::Builder<views::ImageButton> CreateSecondaryActionBuilder() {
       .SetImageHorizontalAlignment(HorizontalAlignment::ALIGN_CENTER)
       .SetImageVerticalAlignment(VerticalAlignment::ALIGN_MIDDLE);
   return secondary_action;
-}
-
-// TODO(crbug.com/1202796): Create ash colors.
-// Returns the theme color to use for text in multiselect.
-SkColor GetMultiSelectTextColor() {
-  return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
-             ? gfx::kGoogleBlue100
-             : gfx::kGoogleBlue800;
 }
 
 }  // namespace
@@ -294,17 +305,29 @@ HoldingSpaceItemChipView::HoldingSpaceItemChipView(
                       .SetID(kHoldingSpaceItemSecondaryActionContainerId)
                       .SetUseDefaultFillLayout(true)
                       .SetVisible(false)
-                      .AddChild(CreateSecondaryActionBuilder()
-                                    .CopyAddressTo(&secondary_action_pause_)
-                                    .SetID(kHoldingSpaceItemPauseButtonId)
-                                    .SetCallback(secondary_action_callback)
-                                    .SetVisible(false))
-                      .AddChild(CreateSecondaryActionBuilder()
-                                    .CopyAddressTo(&secondary_action_resume_)
-                                    .SetID(kHoldingSpaceItemResumeButtonId)
-                                    .SetCallback(secondary_action_callback)
-                                    .SetFlipCanvasOnPaintForRTLUI(false)
-                                    .SetVisible(false))))
+                      .AddChild(
+                          CreateSecondaryActionBuilder()
+                              .CopyAddressTo(&secondary_action_pause_)
+                              .SetID(kHoldingSpaceItemPauseButtonId)
+                              .SetCallback(secondary_action_callback)
+                              .SetVisible(false)
+                              .SetImageModel(
+                                  views::Button::STATE_NORMAL,
+                                  ui::ImageModel::FromVectorIcon(
+                                      kPauseIcon, kColorAshButtonIconColor,
+                                      kSecondaryActionIconSize)))
+                      .AddChild(
+                          CreateSecondaryActionBuilder()
+                              .CopyAddressTo(&secondary_action_resume_)
+                              .SetID(kHoldingSpaceItemResumeButtonId)
+                              .SetCallback(secondary_action_callback)
+                              .SetFlipCanvasOnPaintForRTLUI(false)
+                              .SetVisible(false)
+                              .SetImageModel(
+                                  views::Button::STATE_NORMAL,
+                                  ui::ImageModel::FromVectorIcon(
+                                      kResumeIcon, kColorAshButtonIconColor,
+                                      kSecondaryActionIconSize)))))
       .AddChild(
           views::Builder<views::View>()
               .SetUseDefaultFillLayout(true)
@@ -318,26 +341,35 @@ HoldingSpaceItemChipView::HoldingSpaceItemChipView(
                       .SetMainAxisAlignment(MainAxisAlignment::kCenter)
                       .SetCrossAxisAlignment(CrossAxisAlignment::kStretch)
                       .SetInsideBorderInsets(kLabelMargins)
-                      .AddChild(
-                          CreateLabelBuilder()
-                              .CopyAddressTo(&primary_label_)
-                              .SetID(kHoldingSpaceItemPrimaryChipLabelId)
-                              .SetStyle(bubble_utils::LabelStyle::kChipTitle)
-                              .SetElideBehavior(gfx::ELIDE_MIDDLE)
-                              .SetCallback(paint_label_mask_callback))
+                      .AddChild(CreateLabelBuilder()
+                                    .CopyAddressTo(&primary_label_)
+                                    .SetID(kHoldingSpaceItemPrimaryChipLabelId)
+                                    .SetStyle(TypographyToken::kCrosBody2)
+                                    .SetElideBehavior(gfx::ELIDE_MIDDLE)
+                                    .SetCallback(paint_label_mask_callback))
                       .AddChild(
                           CreateLabelBuilder()
                               .CopyAddressTo(&secondary_label_)
                               .SetID(kHoldingSpaceItemSecondaryChipLabelId)
-                              .SetStyle(bubble_utils::LabelStyle::kChipBody)
+                              .SetStyle(TypographyToken::kCrosLabel1)
                               .SetElideBehavior(gfx::FADE_TAIL)
-                              .SetCallback(paint_label_mask_callback)))
+                              .SetCallback(paint_label_mask_callback))
+                      .AfterBuild(base::BindOnce(
+                          [](HoldingSpaceItemChipView* self,
+                             views::BoxLayoutView* box_layout_view) {
+                            // Synchronize line heights between primary and
+                            // secondary labels so that text will be vertically
+                            // centered when both are shown despite differences
+                            // in font sizes.
+                            self->secondary_label_->SetLineHeight(
+                                self->primary_label_->GetLineHeight());
+                          },
+                          base::Unretained(this))))
               .AddChild(views::Builder<views::BoxLayoutView>()
                             .SetOrientation(Orientation::kHorizontal)
                             .SetMainAxisAlignment(MainAxisAlignment::kEnd)
                             .SetCrossAxisAlignment(CrossAxisAlignment::kCenter)
-                            .AddChild(CreatePrimaryActionBuilder(
-                                /*min_size=*/gfx::Size()))))
+                            .AddChild(CreatePrimaryActionBuilder())))
       .BuildChildren();
 
   // Subscribe to be notified of changes to `item`'s image.
@@ -349,9 +381,10 @@ HoldingSpaceItemChipView::HoldingSpaceItemChipView(
   progress_ring_animation_changed_subscription_ =
       HoldingSpaceAnimationRegistry::GetInstance()
           ->AddProgressRingAnimationChangedCallbackForKey(
-              item, IgnoreArgs<ProgressRingAnimation*>(base::BindRepeating(
-                        &HoldingSpaceItemChipView::UpdateImageTransform,
-                        base::Unretained(this))));
+              ProgressIndicatorAnimationRegistry::AsAnimationKey(item),
+              base::IgnoreArgs<ProgressRingAnimation*>(base::BindRepeating(
+                  &HoldingSpaceItemChipView::UpdateImageTransform,
+                  base::Unretained(this))));
 
   UpdateImage();
   UpdateImageAndProgressIndicatorVisibility();
@@ -439,18 +472,6 @@ void HoldingSpaceItemChipView::OnThemeChanged() {
 
   UpdateImage();
   UpdateLabels();
-
-  // Pause.
-  const SkColor icon_color = AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kButtonIconColor);
-  secondary_action_pause_->SetImage(
-      views::Button::STATE_NORMAL,
-      gfx::CreateVectorIcon(kPauseIcon, kSecondaryActionIconSize, icon_color));
-
-  // Resume.
-  secondary_action_resume_->SetImage(
-      views::Button::STATE_NORMAL,
-      gfx::CreateVectorIcon(kResumeIcon, kSecondaryActionIconSize, icon_color));
 }
 
 void HoldingSpaceItemChipView::OnPaintLabelMask(views::Label* label,
@@ -491,14 +512,13 @@ void HoldingSpaceItemChipView::OnSecondaryActionPressed() {
   if (delegate())
     delegate()->OnHoldingSpaceItemViewSecondaryActionPressed(this);
 
-  // Pause.
-  if (secondary_action_pause_->GetVisible()) {
-    HoldingSpaceController::Get()->client()->PauseItems({item()});
-    return;
-  }
-
-  // Resume.
-  HoldingSpaceController::Get()->client()->ResumeItems({item()});
+  // Pause/Resume.
+  const HoldingSpaceCommandId command_id =
+      secondary_action_pause_->GetVisible()
+          ? HoldingSpaceCommandId::kPauseItem
+          : HoldingSpaceCommandId::kResumeItem;
+  if (!holding_space_util::ExecuteInProgressCommand(item(), command_id))
+    NOTREACHED();
 }
 
 void HoldingSpaceItemChipView::UpdateImage() {
@@ -560,7 +580,8 @@ void HoldingSpaceItemChipView::UpdateImageTransform() {
 
   const ProgressRingAnimation* progress_ring_animation =
       HoldingSpaceAnimationRegistry::GetInstance()
-          ->GetProgressRingAnimationForKey(item());
+          ->GetProgressRingAnimationForKey(
+              ProgressIndicatorAnimationRegistry::AsAnimationKey(item()));
 
   gfx::Transform transform;
   if (is_item_visibly_in_progress || progress_ring_animation) {
@@ -603,26 +624,20 @@ void HoldingSpaceItemChipView::UpdateLabels() {
   // Primary.
   const std::u16string last_primary_text = primary_label_->GetText();
   primary_label_->SetText(item()->GetText());
-  primary_label_->SetEnabledColor(
-      selected() && multiselect
-          ? GetMultiSelectTextColor()
-          : AshColorProvider::Get()->GetContentLayerColor(
-                AshColorProvider::ContentLayerType::kTextColorPrimary));
+  primary_label_->SetEnabledColorId(selected() && multiselect
+                                        ? kColorAshMultiSelectTextColor
+                                        : kColorAshTextColorPrimary);
 
   // Secondary.
   const std::u16string last_secondary_text = secondary_label_->GetText();
   secondary_label_->SetText(
       item()->secondary_text().value_or(base::EmptyString16()));
-  secondary_label_->SetEnabledColor(
-      selected() && multiselect ? GetMultiSelectTextColor()
-      : item()->secondary_text_color()
-          ? cros_styles::ResolveColor(
-                item()->secondary_text_color().value(),
-                DarkLightModeControllerImpl::Get()->IsDarkModeEnabled(),
-                base::FeatureList::IsEnabled(
-                    features::kSemanticColorsDebugOverride))
-          : AshColorProvider::Get()->GetContentLayerColor(
-                AshColorProvider::ContentLayerType::kTextColorSecondary));
+
+  secondary_label_->SetEnabledColorId(
+      selected() && multiselect ? kColorAshMultiSelectTextColor
+      : item()->secondary_text_color_id()
+          ? item()->secondary_text_color_id().value()
+          : kColorAshTextColorSecondary);
   secondary_label_->SetVisible(!secondary_label_->GetText().empty());
 
   // Tooltip.
@@ -639,10 +654,14 @@ void HoldingSpaceItemChipView::UpdateSecondaryAction() {
   if (!item())
     return;
 
-  // NOTE: Only download type items currently support secondary actions.
+  // NOTE: Only in-progress items currently support secondary actions.
   const bool has_secondary_action =
       !checkmark()->GetVisible() && !item()->progress().IsComplete() &&
-      HoldingSpaceItem::IsDownload(item()->type()) && IsMouseHovered();
+      (holding_space_util::SupportsInProgressCommand(
+           item(), HoldingSpaceCommandId::kPauseItem) ||
+       holding_space_util::SupportsInProgressCommand(
+           item(), HoldingSpaceCommandId::kResumeItem)) &&
+      IsMouseHovered();
 
   if (!has_secondary_action) {
     secondary_action_container_->SetVisible(false);
@@ -651,7 +670,8 @@ void HoldingSpaceItemChipView::UpdateSecondaryAction() {
   }
 
   // Pause/resume.
-  const bool is_item_paused = item()->IsPaused();
+  const bool is_item_paused = holding_space_util::SupportsInProgressCommand(
+      item(), HoldingSpaceCommandId::kResumeItem);
   secondary_action_pause_->SetVisible(!is_item_paused);
   secondary_action_resume_->SetVisible(is_item_paused);
 

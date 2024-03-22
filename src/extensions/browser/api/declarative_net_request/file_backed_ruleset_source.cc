@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/memory/ptr_util.h"
@@ -102,18 +102,15 @@ ReadJSONRulesResult ParseRulesFromJSON(const RulesetID& ruleset_id,
   }
 
   for (size_t i = 0; i < rules_list.size(); i++) {
-    dnr_api::Rule parsed_rule;
-    std::u16string parse_error;
-
-    if (dnr_api::Rule::Populate(rules_list[i], &parsed_rule, &parse_error)) {
-      DCHECK(parse_error.empty());
+    auto parsed_rule = dnr_api::Rule::FromValue(rules_list[i]);
+    if (parsed_rule.has_value()) {
       if (result.rules.size() == rule_limit) {
         result.rule_parse_warnings.push_back(
             CreateInstallWarning(json_path, kRuleCountExceeded));
         break;
       }
 
-      const bool is_regex_rule = !!parsed_rule.condition.regex_filter;
+      const bool is_regex_rule = !!parsed_rule->condition.regex_filter;
       if (is_regex_rule && ++regex_rule_count > GetRegexRuleLimit()) {
         // Only add the install warning once.
         if (!regex_rule_count_exceeded) {
@@ -125,25 +122,24 @@ ReadJSONRulesResult ParseRulesFromJSON(const RulesetID& ruleset_id,
         continue;
       }
 
-      result.rules.push_back(std::move(parsed_rule));
+      result.rules.push_back(std::move(*parsed_rule));
       continue;
     }
 
     std::string rule_location;
 
     // If possible use the rule ID in the install warning.
-    if (auto* id_val =
-            rules_list[i].FindKeyOfType(kIDKey, base::Value::Type::INTEGER)) {
-      rule_location = base::StringPrintf("id %d", id_val->GetInt());
+    if (auto id = rules_list[i].GetDict().FindInt(kIDKey)) {
+      rule_location = base::StringPrintf("id %d", *id);
     } else {
       // Use one-based indices.
       rule_location = base::StringPrintf("index %zu", i + 1);
     }
 
     result.rule_parse_warnings.push_back(CreateInstallWarning(
-        json_path,
-        ErrorUtils::FormatErrorMessage(kRuleNotParsedWarning, rule_location,
-                                       base::UTF16ToUTF8(parse_error))));
+        json_path, ErrorUtils::FormatErrorMessage(
+                       kRuleNotParsedWarning, rule_location,
+                       base::UTF16ToUTF8(parsed_rule.error()))));
   }
 
   DCHECK_LE(result.rules.size(), rule_limit);
@@ -333,7 +329,7 @@ FileBackedRulesetSource FileBackedRulesetSource::CreateDynamic(
   return FileBackedRulesetSource(
       dynamic_ruleset_directory.AppendASCII(kDynamicRulesJSONFilename),
       dynamic_ruleset_directory.AppendASCII(kDynamicIndexedRulesFilename),
-      kDynamicRulesetID, GetDynamicAndSessionRuleLimit(), extension_id,
+      kDynamicRulesetID, GetDynamicRuleLimit(), extension_id,
       true /* enabled_by_default */);
 }
 
@@ -428,14 +424,12 @@ bool FileBackedRulesetSource::SerializeRulesToJSON(
     std::string* json) const {
   DCHECK_LE(rules.size(), rule_count_limit());
 
-  std::unique_ptr<base::Value> rules_value =
+  base::Value::List rules_value =
       json_schema_compiler::util::CreateValueFromArray(rules);
-  DCHECK(rules_value);
-  DCHECK(rules_value->is_list());
 
   JSONStringValueSerializer serializer(json);
   serializer.set_pretty_print(false);
-  return serializer.Serialize(*rules_value);
+  return serializer.Serialize(rules_value);
 }
 
 LoadRulesetResult FileBackedRulesetSource::CreateVerifiedMatcher(

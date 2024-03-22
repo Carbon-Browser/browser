@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,10 @@ namespace gfx {
 
 namespace {
 
-// The height of the primary display, which OSX defines as the monitor with the
-// menubar. This is always at index 0.
+// The height of the primary display, which macOS defines as the monitor with
+// the menubar. This is always at index 0.
 CGFloat PrimaryDisplayHeight() {
-  return NSMaxY([[[NSScreen screens] firstObject] frame]);
+  return NSMaxY(NSScreen.screens.firstObject.frame);
 }
 
 }  // namespace

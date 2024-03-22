@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -125,6 +125,11 @@ void ArcDigitalGoodsBridge::Consume(const std::string& package_name,
   }
   digital_goods->Consume(package_name, scope, purchase_token,
                          std::move(callback));
+}
+
+// static
+void ArcDigitalGoodsBridge::EnsureFactoryBuilt() {
+  ArcDigitalGoodsBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

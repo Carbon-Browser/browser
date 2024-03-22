@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,19 @@
 
 #include "base/feature_list.h"
 
-// Feature to download Calendar files.
-extern const base::Feature kDownloadCalendar;
+// Kill switch for Calendar support.
+BASE_DECLARE_FEATURE(kCalendarKillSwitch);
 
 // Kill switch for Vcard support.
-extern const base::Feature kVCardKillSwitch;
+BASE_DECLARE_FEATURE(kVCardKillSwitch);
 
 // Kill switch for AR support.
-extern const base::Feature kARKillSwitch;
+BASE_DECLARE_FEATURE(kARKillSwitch);
+
+// Kill switch for the PassKit support.
+BASE_DECLARE_FEATURE(kPassKitKillSwitch);
+
+// Feature flag to add Incognito downloads warning.
+BASE_DECLARE_FEATURE(kIOSIncognitoDownloadsWarning);
 
 #endif  // IOS_CHROME_BROWSER_UI_DOWNLOAD_FEATURES_H_

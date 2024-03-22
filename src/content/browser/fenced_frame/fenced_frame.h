@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,16 +27,14 @@ class RenderFrameProxyHost;
 class WebContentsImpl;
 
 // This is the browser-side host object for the <fencedframe> element
-// implemented in Blink. This is only used for the MPArch version of fenced
-// frames, not the ShadowDOM implementation. It is owned by and stored directly
-// on `RenderFrameHostImpl`.
+// implemented in Blink. It is owned by and stored directly on
+// `RenderFrameHostImpl`.
 class CONTENT_EXPORT FencedFrame : public blink::mojom::FencedFrameOwnerHost,
                                    public FrameTree::Delegate,
                                    public NavigationControllerDelegate {
  public:
-  explicit FencedFrame(
-      base::SafeRef<RenderFrameHostImpl> owner_render_frame_host,
-      blink::mojom::FencedFrameMode mode);
+  FencedFrame(base::SafeRef<RenderFrameHostImpl> owner_render_frame_host,
+              bool was_discarded);
   ~FencedFrame() override;
 
   void Bind(mojo::PendingAssociatedReceiver<blink::mojom::FencedFrameOwnerHost>
@@ -48,23 +46,28 @@ class CONTENT_EXPORT FencedFrame : public blink::mojom::FencedFrameOwnerHost,
   // renderer. This creates a proxy representing the main frame of the inner
   // `FrameTree`, for use by the embedding RenderFrameHostImpl.
   // `remote_frame_interfaces` must not be null.
-  RenderFrameProxyHost* CreateProxyAndAttachToOuterFrameTree(
-      mojom::RemoteFrameInterfacesFromRendererPtr remote_frame_interfaces);
+  RenderFrameProxyHost* InitInnerFrameTreeAndReturnProxyToOuterFrameTree(
+      blink::mojom::RemoteFrameInterfacesFromRendererPtr
+          remote_frame_interfaces,
+      const blink::RemoteFrameToken& frame_token,
+      const base::UnguessableToken& devtools_frame_token);
 
   // blink::mojom::FencedFrameOwnerHost implementation.
   void Navigate(const GURL& url,
-                base::TimeTicks navigation_start_time) override;
+                base::TimeTicks navigation_start_time,
+                const absl::optional<std::u16string>&
+                    embedder_shared_storage_context) override;
+  void DidChangeFramePolicy(const blink::FramePolicy& frame_policy) override;
 
   // FrameTree::Delegate.
-  void DidStartLoading(FrameTreeNode* frame_tree_node,
-                       bool should_show_loading_ui) override {}
+  void LoadingStateChanged(LoadingState new_state) override {}
+  void DidStartLoading(FrameTreeNode* frame_tree_node) override {}
   void DidStopLoading() override {}
-  void DidChangeLoadProgress() override {}
   bool IsHidden() override;
-  void NotifyPageChanged(PageImpl& page) override {}
   int GetOuterDelegateFrameTreeNodeId() override;
-  bool IsPortal() override;
+  RenderFrameHostImpl* GetProspectiveOuterDocument() override;
   FrameTree* LoadingTree() override;
+  void SetFocusedFrame(FrameTreeNode* node, SiteInstanceGroup* source) override;
 
   // Returns the devtools frame token of the fenced frame's inner FrameTree's
   // main frame.
@@ -72,11 +75,10 @@ class CONTENT_EXPORT FencedFrame : public blink::mojom::FencedFrameOwnerHost,
 
   RenderFrameHostImpl* GetInnerRoot() { return frame_tree_->GetMainFrame(); }
 
-  blink::mojom::FencedFrameMode mode() const { return mode_; }
-
  private:
   // NavigationControllerDelegate
-  void NotifyNavigationStateChanged(InvalidateTypes changed_flags) override;
+  void NotifyNavigationStateChangedFromController(
+      InvalidateTypes changed_flags) override {}
   void NotifyBeforeFormRepostWarningShow() override;
   void NotifyNavigationEntryCommitted(
       const LoadCommittedDetails& load_details) override;
@@ -103,20 +105,13 @@ class CONTENT_EXPORT FencedFrame : public blink::mojom::FencedFrameOwnerHost,
   // frame FrameTree. It is a "dummy" child FrameTreeNode that `this` is
   // responsible for adding as a child of `owner_render_frame_host_`; it is
   // initially null, and only set in the constructor (indirectly via
-  // `CreateProxyAndAttachToOuterFrameTree()`).
+  // `InitInnerFrameTreeAndReturnProxyToOuterFrameTree()`).
   // Furthermore, the lifetime of `this` is directly tied to it (see
   // `OnFrameTreeNodeDestroyed()`).
   raw_ptr<FrameTreeNode> outer_delegate_frame_tree_node_ = nullptr;
 
   // The FrameTree that we create to host the "inner" fenced frame contents.
   std::unique_ptr<FrameTree> frame_tree_;
-
-  // The `mode` attribute set on the fenced frame. The mode will stay the same
-  // across navigations to avoid privacy leak. Since each mode might have
-  // different access constraints, privacy leak might occur if the mode is
-  // mutable as a fenced frame can pass the information it learned in one mode
-  // to the other mode if mode was changed across navigations.
-  const blink::mojom::FencedFrameMode mode_;
 
   // Receives messages from the frame owner element in Blink.
   mojo::AssociatedReceiver<blink::mojom::FencedFrameOwnerHost> receiver_{this};

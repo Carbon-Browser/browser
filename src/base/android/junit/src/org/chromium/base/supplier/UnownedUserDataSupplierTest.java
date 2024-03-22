@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ import org.chromium.base.UnownedUserDataHost;
 import org.chromium.base.UnownedUserDataKey;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Unit tests for {@link ObservableSupplierImpl}.
- */
+/** Unit tests for {@link ObservableSupplierImpl}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class UnownedUserDataSupplierTest {
@@ -102,11 +100,11 @@ public class UnownedUserDataSupplierTest {
         TestUnownedUserDataSupplier secondarySupplier = new TestUnownedUserDataSupplier();
         secondarySupplier.attach(mHost);
         Assert.assertFalse(
-                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting().isAttachedToAnyHost(
-                        mSupplier));
+                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting()
+                        .isAttachedToAnyHost(mSupplier));
         Assert.assertTrue(
-                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting().isAttachedToAnyHost(
-                        secondarySupplier));
+                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting()
+                        .isAttachedToAnyHost(secondarySupplier));
         secondarySupplier.destroy();
     }
 
@@ -115,26 +113,26 @@ public class UnownedUserDataSupplierTest {
         UnownedUserDataHost secondaryHost = new UnownedUserDataHost();
         mSupplier.attach(secondaryHost);
         Assert.assertTrue(
-                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting().isAttachedToAnyHost(
-                        mSupplier));
+                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting()
+                        .isAttachedToAnyHost(mSupplier));
         mSupplier.destroy();
         mIsDestroyed = true;
         Assert.assertFalse(
-                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting().isAttachedToAnyHost(
-                        mSupplier));
+                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting()
+                        .isAttachedToAnyHost(mSupplier));
     }
 
     @Test
     public void testDestroy() {
         Assert.assertTrue(
-                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting().isAttachedToAnyHost(
-                        mSupplier));
+                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting()
+                        .isAttachedToAnyHost(mSupplier));
 
         mSupplier.destroy();
         Assert.assertNull(TestUnownedUserDataSupplier.from(mHost));
         Assert.assertFalse(
-                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting().isAttachedToAnyHost(
-                        mSupplier));
+                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting()
+                        .isAttachedToAnyHost(mSupplier));
         mIsDestroyed = true;
     }
 
@@ -145,13 +143,13 @@ public class UnownedUserDataSupplierTest {
 
         TestUnownedUserDataSupplier secondarySupplier = new TestUnownedUserDataSupplier();
         Assert.assertFalse(
-                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting().isAttachedToHost(
-                        mHost));
+                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting()
+                        .isAttachedToHost(mHost));
 
         secondarySupplier.destroy();
         Assert.assertFalse(
-                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting().isAttachedToHost(
-                        mHost));
+                TestUnownedUserDataSupplier.getUnownedUserDataKeyForTesting()
+                        .isAttachedToHost(mHost));
         mIsDestroyed = true;
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,15 @@ class Compositor;
 
 namespace ash {
 
+class Desk;
 namespace desks_util {
 
-constexpr size_t kMaxNumberOfDesks = 8;
+// Note: the max number of desks depends on a runtime flag and the function
+// `GetMaxNumberOfDesks` below will return that value. The value returned from
+// that function will not be more than this constant.
+constexpr size_t kDesksUpperLimit = 16;
+
+ASH_EXPORT size_t GetMaxNumberOfDesks();
 
 ASH_EXPORT std::vector<int> GetDesksContainersIds();
 
@@ -50,9 +56,17 @@ ASH_EXPORT aura::Window* GetActiveDeskContainerForRoot(aura::Window* root);
 
 ASH_EXPORT bool BelongsToActiveDesk(aura::Window* window);
 
-// If |context| is a descendent window of a desk container, return that desk
-// container, otherwise return nullptr.
+// If `context` is a descendent window of a desk container, return that desk
+// container, otherwise return nullptr. Note that this will return nullptr if
+// `context` is a descendent of the float container, even if it is associated
+// with a desk container.
 ASH_EXPORT aura::Window* GetDeskContainerForContext(aura::Window* context);
+
+// If `context` belong to a desk, return the desk pointer, otherwise return
+// nullptr. Note that floated window is not in the desk container but still
+// considered as "belonging" to the desk, as it's only visible on a particular
+// desk.
+ASH_EXPORT const Desk* GetDeskForContext(aura::Window* context);
 
 // Returns true if the DesksBar widget should be created in overview mode.
 ASH_EXPORT bool ShouldDesksBarBeCreated();
@@ -65,6 +79,17 @@ ASH_EXPORT bool IsDraggingAnyDesk();
 
 // Returns whether a |window| is visible on all workspaces.
 ASH_EXPORT bool IsWindowVisibleOnAllWorkspaces(const aura::Window* window);
+
+// Returns true for windows that are interesting from an all-desk z-order
+// tracking perspective.
+ASH_EXPORT bool IsZOrderTracked(aura::Window* window);
+
+// Get the position of `window` in `windows` (as filtered by `IsZOrderTracked`)
+// in reverse order. If `window` is not in the list (or isn't z-order tracked),
+// then nullopt is returned.
+ASH_EXPORT std::optional<size_t> GetWindowZOrder(
+    const std::vector<aura::Window*>& windows,
+    aura::Window* window);
 
 // Move an item at |old_index| to |new_index|.
 template <typename T>

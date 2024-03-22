@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,11 +67,13 @@ std::string ReadString() {
   const int kMaxLen = 1024;
   std::string str(kMaxLen, 0);
   char* result = fgets(&str[0], kMaxLen, stdin);
-  if (!result)
+  if (!result) {
     return std::string();
+  }
   size_t newline_index = str.find('\n');
-  if (newline_index != std::string::npos)
+  if (newline_index != std::string::npos) {
     str[newline_index] = '\0';
+  }
   str.resize(strlen(&str[0]));
   return str;
 }

@@ -1,13 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_ACCESSIBILITY_PUMPKIN_INSTALLER_H_
 #define CHROME_BROWSER_ASH_ACCESSIBILITY_PUMPKIN_INSTALLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
-#include "chromeos/dbus/dlcservice/dlcservice_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
 
 namespace ash {
 
@@ -33,13 +33,14 @@ class PumpkinInstaller {
                     ProgressCallback on_progress,
                     ErrorCallback on_error);
 
+  bool IsPumpkinInstalled() const { return is_pumpkin_installed_; }
+
  private:
   // A helper function that is run once we've grabbed the state of the Pumpkin
   // DLC from the DLC service.
   void MaybeInstallHelper(const std::string& error,
                           const dlcservice::DlcState& dlc_state);
-  void OnInstalled(
-      const chromeos::DlcserviceClient::InstallResult& install_result);
+  void OnInstalled(const DlcserviceClient::InstallResult& install_result);
   void OnProgress(double progress);
   void OnError(const std::string& error);
   base::WeakPtr<PumpkinInstaller> GetWeakPtr();
@@ -53,6 +54,7 @@ class PumpkinInstaller {
   // Requests to DlcserviceClient are async. This is true if we've made a
   // request and are still waiting for a response.
   bool pending_dlc_request_ = false;
+  bool is_pumpkin_installed_ = false;
 
   base::WeakPtrFactory<PumpkinInstaller> weak_ptr_factory_{this};
 };

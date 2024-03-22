@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -87,6 +87,7 @@ class CC_EXPORT AnimatedPaintWorkletTracker {
     // value of the animation, after it finishes on the impl thread, until the
     // next commit.
     PaintWorkletInput::PropertyValue animation_value;
+    PaintWorkletInput::PropertyValue last_animation_value;
     base::flat_set<PictureLayerImpl*> associated_layers;
   };
 

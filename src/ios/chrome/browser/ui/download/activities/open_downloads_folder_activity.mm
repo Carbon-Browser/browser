@@ -1,20 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/download/activities/open_downloads_folder_activity.h"
 
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#import "ios/chrome/browser/ui/commands/browser_coordinator_commands.h"
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
-#import "ios/chrome/browser/ui/icons/download_icon.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 
@@ -36,7 +31,11 @@ NSString* const kOpenDownloadsFolderActivityType =
 }
 
 - (UIImage*)activityImage {
-  return DefaultSymbolTemplateWithPointSize(kOpenInDownloadsSymbol,
+  if (@available(iOS 15, *)) {
+    return DefaultSymbolTemplateWithPointSize(kOpenInDownloadsSymbol,
+                                              kSymbolDownloadInfobarPointSize);
+  }
+  return DefaultSymbolTemplateWithPointSize(kOpenInDownloadsiOS14Symbol,
                                             kSymbolDownloadInfobarPointSize);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,9 +105,12 @@ void FakeRenderWidgetHost::ImeCancelComposition() {}
 
 void FakeRenderWidgetHost::ImeCompositionRangeChanged(
     const gfx::Range& range,
-    const std::vector<gfx::Rect>& bounds) {
+    const absl::optional<std::vector<gfx::Rect>>& character_bounds,
+    const absl::optional<std::vector<gfx::Rect>>& line_bounds) {
   last_composition_range_ = range;
-  last_composition_bounds_ = bounds;
+  if (character_bounds.has_value()) {
+    last_composition_bounds_ = character_bounds.value();
+  }
 }
 
 void FakeRenderWidgetHost::SetMouseCapture(bool capture) {}
@@ -122,13 +125,6 @@ void FakeRenderWidgetHost::AutoscrollStart(const gfx::PointF& position) {}
 void FakeRenderWidgetHost::AutoscrollFling(const gfx::Vector2dF& position) {}
 
 void FakeRenderWidgetHost::AutoscrollEnd() {}
-
-void FakeRenderWidgetHost::StartDragging(
-    blink::mojom::DragDataPtr drag_data,
-    blink::DragOperationsMask operations_allowed,
-    const SkBitmap& bitmap,
-    const gfx::Vector2d& bitmap_offset_in_dip,
-    blink::mojom::DragEventSourceInfoPtr event_info) {}
 
 blink::mojom::WidgetInputHandler*
 FakeRenderWidgetHost::GetWidgetInputHandler() {

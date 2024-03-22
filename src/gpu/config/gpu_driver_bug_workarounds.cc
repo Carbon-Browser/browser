@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,7 @@ void IntSetToWorkarounds(const std::vector<int32_t>& enabled_workarounds,
         NOTIMPLEMENTED();
     }
   }
-  // TODO(crbug.com/1319451): Rename workaround.
-  if (workarounds->max_texture_size_limit_4096)
+  if (workarounds->webgl_or_caps_max_texture_size_limit_4096)
     workarounds->webgl_or_caps_max_texture_size = 4096;
 
   if (workarounds->max_copy_texture_chromium_size_1048576)

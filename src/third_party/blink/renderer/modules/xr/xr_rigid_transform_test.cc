@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,8 @@ static void AssertDOMPointsEqualForTest(const DOMPointReadOnly* a,
   ASSERT_NEAR(a->w(), b->w(), kEpsilon);
 }
 
-static void AssertMatricesEqualForTest(const TransformationMatrix& a,
-                                       const TransformationMatrix& b) {
+static void AssertMatricesEqualForTest(const gfx::Transform& a,
+                                       const gfx::Transform& b) {
   const Vector<double> a_data = GetMatrixDataForTest(a);
   const Vector<double> b_data = GetMatrixDataForTest(b);
   for (int i = 0; i < 16; ++i) {
@@ -75,8 +75,9 @@ TEST(XRRigidTransformTest, Compose) {
 }
 
 TEST(XRRigidTransformTest, Decompose) {
-  TransformationMatrix matrix(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0,
-                              0.0, 0.0, 1.0, 2.0, 3.0, 1.0);
+  auto matrix =
+      gfx::Transform::ColMajor(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+                               -1.0, 0.0, 0.0, 1.0, 2.0, 3.0, 1.0);
   XRRigidTransform transform(matrix);
   const DOMPointReadOnly expected_position(1.0, 2.0, 3.0, 1.0);
   const DOMPointReadOnly expected_orientation(0.7071068, 0.0, 0.0, 0.7071068);

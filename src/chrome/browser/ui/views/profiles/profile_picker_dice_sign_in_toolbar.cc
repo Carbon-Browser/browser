@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,12 @@
 
 #include "base/check.h"
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
-#include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_provider.h"
 #include "ui/views/background.h"
 #include "ui/views/layout/flex_layout.h"
@@ -27,6 +26,7 @@ constexpr gfx::Insets kToolbarPadding = gfx::Insets(8);
 
 class SimpleBackButton : public ToolbarButton {
  public:
+  METADATA_HEADER(SimpleBackButton);
   explicit SimpleBackButton(PressedCallback callback)
       : ToolbarButton(std::move(callback)) {
     SetTriggerableEventFlags(ui::EF_LEFT_MOUSE_BUTTON |
@@ -43,6 +43,9 @@ class SimpleBackButton : public ToolbarButton {
   SimpleBackButton& operator=(const SimpleBackButton&) = delete;
   ~SimpleBackButton() override = default;
 };
+
+BEGIN_METADATA(SimpleBackButton, ToolbarButton)
+END_METADATA
 
 }  // namespace
 
@@ -69,10 +72,6 @@ void ProfilePickerDiceSignInToolbar::BuildToolbar(
   UpdateToolbarColor();
 }
 
-void ProfilePickerDiceSignInToolbar::ClearToolbar() {
-  RemoveAllChildViews();
-}
-
 void ProfilePickerDiceSignInToolbar::OnThemeChanged() {
   UpdateToolbarColor();
   View::OnThemeChanged();
@@ -89,3 +88,6 @@ void ProfilePickerDiceSignInToolbar::UpdateToolbarColor() {
   // main view as well.
   parent()->SetBackground(views::CreateSolidBackground(background_color));
 }
+
+BEGIN_METADATA(ProfilePickerDiceSignInToolbar, views::View)
+END_METADATA

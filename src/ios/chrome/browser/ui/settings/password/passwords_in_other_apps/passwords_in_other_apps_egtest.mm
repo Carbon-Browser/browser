@@ -1,32 +1,46 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <UIKit/UIKit.h>
 
+#import "components/password_manager/core/common/password_manager_features.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/ui/settings/password/password_manager_egtest_utils.h"
+#import "ios/chrome/browser/ui/settings/password/password_manager_ui_features.h"
+#import "ios/chrome/browser/ui/settings/password/password_settings/password_settings_constants.h"
+#import "ios/chrome/browser/ui/settings/password/password_settings_app_interface.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/constants.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/passwords_in_other_apps_app_interface.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_table_view_constants.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
-#include "ios/chrome/grit/ios_google_chrome_strings.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/browser/ui/settings/settings_root_table_constants.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/chrome/test/earl_grey/earl_grey_scoped_block_swizzler.h"
+#import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ui/base/device_form_factor.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 using chrome_test_util::SettingsDoneButton;
 using chrome_test_util::SettingsMenuBackButton;
 
 namespace {
+
+// Checks if the current device is running iOS 16 and above. This may seem
+// overly verbose, but the @available guard needs to be wrapped in an if() or
+// else the compiler complains.
+bool isIOS16AndAbove() {
+  if (@available(iOS 16, *)) {
+    return true;
+  }
+  return false;
+}
+
 // Matcher for view
 id<GREYMatcher> PasswordsInOtherAppsViewMatcher() {
   return grey_accessibilityID(kPasswordsInOtherAppsViewAccessibilityIdentifier);
@@ -52,14 +66,15 @@ id<GREYMatcher> PasswordsInOtherAppsImageMatcher() {
 
 // Matcher for the cell item in Password Settings page.
 id<GREYMatcher> PasswordsInOtherAppsListItemMatcher() {
-  return grey_accessibilityID(kSettingsPasswordsInOtherAppsCellId);
+  return grey_accessibilityID(kPasswordSettingsPasswordsInOtherAppsRowId);
 }
 
 // Matcher for turn off instructions.
 id<GREYMatcher> PasswordsInOtherAppsTurnOffInstruction() {
-  NSString* turnOffInstructionText =
-      @"To turn off, open Settings and go to AutoFill Passwords.";
-  return grey_text(turnOffInstructionText);
+  return grey_text(
+      isIOS16AndAbove()
+          ? @"To turn off, open Settings and go to Password Options."
+          : @"To turn off, open Settings and go to AutoFill Passwords.");
 }
 
 // Matcher for the Show password button in Password Details view.
@@ -73,6 +88,10 @@ void OpensPasswordsInOtherApps() {
   [ChromeEarlGreyUI openSettingsMenu];
   [ChromeEarlGreyUI
       tapSettingsMenuButton:chrome_test_util::SettingsMenuPasswordsButton()];
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kSettingsToolbarSettingsButtonId)]
+      performAction:grey_tap()];
+
   [[EarlGrey selectElementWithMatcher:PasswordsInOtherAppsListItemMatcher()]
       performAction:grey_tap()];
 }
@@ -95,12 +114,28 @@ void OpensPasswordsInOtherApps() {
           @"PasswordAutoFillStatusManager", @"sharedManager",
           [PasswordsInOtherAppsAppInterface
               swizzlePasswordAutoFillStatusManagerWithFake]);
+
+  // Mock successful reauth when opening the Password Manager.
+  [PasswordSettingsAppInterface setUpMockReauthenticationModule];
+  [PasswordSettingsAppInterface mockReauthenticationModuleExpectedResult:
+                                    ReauthenticationResult::kSuccess];
 }
 
 - (void)tearDown {
   [super tearDown];
   [PasswordsInOtherAppsAppInterface resetManager];
   _passwordAutoFillStatusSwizzler.reset();
+  // Remove mock to keep the app in the same state as before running the test.
+  [PasswordSettingsAppInterface removeMockReauthenticationModule];
+}
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config;
+
+  config.features_enabled.push_back(
+      password_manager::features::kIOSPasswordAuthOnEntryV2);
+
+  return config;
 }
 
 #pragma mark - helper functions
@@ -124,7 +159,10 @@ void OpensPasswordsInOtherApps() {
         : l10n_util::GetNSString(
               IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_1_IPHONE),
     l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_2),
-    l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3),
+    l10n_util::GetNSString(
+        isIOS16AndAbove()
+            ? IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3_IOS16
+            : IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3),
     l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_4)
   ];
   for (NSString* step in steps) {
@@ -144,7 +182,10 @@ void OpensPasswordsInOtherApps() {
         : l10n_util::GetNSString(
               IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_1_IPHONE),
     l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_2),
-    l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3),
+    l10n_util::GetNSString(
+        isIOS16AndAbove()
+            ? IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3_IOS16
+            : IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_3),
     l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_STEP_4)
   ];
   for (NSString* step in steps) {
@@ -231,7 +272,9 @@ void OpensPasswordsInOtherApps() {
   // Check backup instructions are visible.
   NSArray<NSString*>* steps = @[
     l10n_util::GetNSString(
-        IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SHORTENED_STEP_1),
+        isIOS16AndAbove()
+            ? IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SHORTENED_STEP_1_IOS16
+            : IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SHORTENED_STEP_1),
     l10n_util::GetNSString(
         IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SHORTENED_STEP_2)
   ];
@@ -251,14 +294,18 @@ void OpensPasswordsInOtherApps() {
   [self checkThatCommonElementsAreVisible];
   [self checkThatTurnOffInstructionsAreNotVisible];
   [[EarlGrey
-      selectElementWithMatcher:grey_kindOfClassName(@"UIActivityIndicatorView")]
-      assertWithMatcher:grey_sufficientlyVisible()];
+      selectElementWithMatcher:grey_allOf(grey_kindOfClassName(
+                                              @"UIActivityIndicatorView"),
+                                          grey_sufficientlyVisible(), nil)]
+      assertWithMatcher:grey_notNil()];
 
   // Simulate status retrieved.
   [PasswordsInOtherAppsAppInterface startFakeManagerWithAutoFillStatus:NO];
   [[EarlGrey
-      selectElementWithMatcher:grey_kindOfClassName(@"UIActivityIndicatorView")]
-      assertWithMatcher:grey_notVisible()];
+      selectElementWithMatcher:grey_allOf(grey_kindOfClassName(
+                                              @"UIActivityIndicatorView"),
+                                          grey_sufficientlyVisible(), nil)]
+      assertWithMatcher:grey_nil()];
 }
 
 // Tests Passwords In Other Apps dismisses itself when top right "done" button
@@ -267,7 +314,9 @@ void OpensPasswordsInOtherApps() {
   OpensPasswordsInOtherApps();
   [self checkThatCommonElementsAreVisible];
   // Taps done button and check settings dismissed.
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::SettingsDoneButton()]
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(SettingsDoneButton(),
+                                          grey_sufficientlyVisible(), nil)]
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:PasswordsInOtherAppsViewMatcher()]
       assertWithMatcher:grey_notVisible()];
@@ -302,6 +351,39 @@ void OpensPasswordsInOtherApps() {
   [EarlGrey rotateDeviceToOrientation:UIDeviceOrientationPortrait error:nil];
   [[EarlGrey selectElementWithMatcher:PasswordsInOtherAppsImageMatcher()]
       assertWithMatcher:grey_minimumVisiblePercent(0.2)];
+}
+
+// Tests that the Password Manager UI is dismissed after failed local
+// authentication while in Passwords In Other Apps.
+- (void)testTapPasswordsInOtherAppsWithFailedAuth {
+  OpensPasswordsInOtherApps();
+
+  [PasswordSettingsAppInterface mockReauthenticationModuleExpectedResult:
+                                    ReauthenticationResult::kFailure];
+  [PasswordSettingsAppInterface
+      mockReauthenticationModuleShouldReturnSynchronously:NO];
+
+  [[AppLaunchManager sharedManager] backgroundAndForegroundApp];
+
+  // Passwords in Other Apps should be covered by Reauthentication UI.
+  [[EarlGrey selectElementWithMatcher:PasswordsInOtherAppsViewMatcher()]
+      assertWithMatcher:grey_notVisible()];
+  [[EarlGrey selectElementWithMatcher:password_manager_test_utils::
+                                          ReauthenticationController()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  [PasswordSettingsAppInterface mockReauthenticationModuleReturnMockedResult];
+
+  // The Password Manager UI should have been dismissed leaving Settings
+  // visible.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::SettingsCollectionView()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:PasswordsInOtherAppsViewMatcher()]
+      assertWithMatcher:grey_notVisible()];
+  [[EarlGrey selectElementWithMatcher:password_manager_test_utils::
+                                          ReauthenticationController()]
+      assertWithMatcher:grey_notVisible()];
 }
 
 @end

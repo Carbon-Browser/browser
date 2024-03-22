@@ -1,15 +1,17 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/android/synchronous_compositor_host.h"
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/shared_memory_mapping.h"
@@ -23,11 +25,11 @@
 #include "content/browser/renderer_host/render_widget_host_view_android.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/common/android/sync_compositor_statics.h"
+#include "content/common/features.h"
 #include "content/public/browser/android/synchronous_compositor_client.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_view_host.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
 #include "ipc/ipc_sender.h"
@@ -201,12 +203,27 @@ bool SynchronousCompositorHost::IsReadyForSynchronousCall() {
   return res;
 }
 
+void SynchronousCompositorHost::OnCompositorVisible() {
+  if (base::FeatureList::IsEnabled(
+          features::kSynchronousCompositorBackgroundSignal)) {
+    CompositorDependenciesAndroid::Get().OnSynchronousCompositorVisible();
+  }
+}
+
+void SynchronousCompositorHost::OnCompositorHidden() {
+  if (base::FeatureList::IsEnabled(
+          features::kSynchronousCompositorBackgroundSignal)) {
+    CompositorDependenciesAndroid::Get().OnSynchronousCompositorHidden();
+  }
+}
+
 scoped_refptr<SynchronousCompositor::FrameFuture>
 SynchronousCompositorHost::DemandDrawHwAsync(
     const gfx::Size& viewport_size,
     const gfx::Rect& viewport_rect_for_tile_priority,
     const gfx::Transform& transform_for_tile_priority) {
   invalidate_needs_draw_ = false;
+  num_invalidates_since_last_draw_ = 0u;
   scoped_refptr<FrameFuture> frame_future = new FrameFuture();
   if (!allow_async_draw_) {
     allow_async_draw_ = allow_async_draw_ || IsReadyForSynchronousCall();
@@ -374,6 +391,7 @@ struct SynchronousCompositorHost::SharedMemoryWithSize {
 
 bool SynchronousCompositorHost::DemandDrawSw(SkCanvas* canvas,
                                              bool software_canvas) {
+  num_invalidates_since_last_draw_ = 0u;
   if (use_in_process_zero_copy_software_draw_)
     return DemandDrawSwInProc(canvas);
 
@@ -383,7 +401,7 @@ bool SynchronousCompositorHost::DemandDrawSw(SkCanvas* canvas,
                            canvas->getBaseLayerSize().height());
   SkIRect canvas_clip = canvas->getDeviceClipBounds();
   params->clip = gfx::SkIRectToRect(canvas_clip);
-  params->transform = gfx::Transform(canvas->getTotalMatrix());
+  params->transform = gfx::SkMatrixToTransform(canvas->getTotalMatrix());
   if (params->size.IsEmpty())
     return true;
 
@@ -434,9 +452,9 @@ bool SynchronousCompositorHost::DemandDrawSw(SkCanvas* canvas,
       auto mark_bool = [](const void* pixels, void* context) {
         *static_cast<bool*>(context) = true;
       };
-      image = SkImage::MakeFromRaster(pixmap, mark_bool, &pixels_released);
+      image = SkImages::RasterFromPixmap(pixmap, mark_bool, &pixels_released);
     } else {
-      image = SkImage::MakeRasterCopy(pixmap);
+      image = SkImages::RasterFromPixmapCopy(pixmap);
     }
     canvas->drawImage(image, 0, 0);
     canvas->restore();
@@ -518,7 +536,7 @@ void SynchronousCompositorHost::OnCompositorFrameTransitionDirectiveProcessed(
 void SynchronousCompositorHost::DidPresentCompositorFrames(
     viz::FrameTimingDetailsMap timing_details,
     uint32_t frame_token) {
-  timing_details_ = timing_details;
+  timing_details_.insert(timing_details.begin(), timing_details.end());
   if (!timing_details_.empty())
     AddBeginFrameRequest(BEGIN_FRAME);
 }
@@ -620,6 +638,7 @@ void SynchronousCompositorHost::UpdateState(
   if (need_invalidate_count_ != params->need_invalidate_count) {
     need_invalidate_count_ = params->need_invalidate_count;
     if (invalidate_needs_draw_) {
+      num_invalidates_since_last_draw_++;
       client_->PostInvalidate(this);
     } else {
       GetSynchronousCompositor()->WillSkipDraw();
@@ -715,12 +734,33 @@ void SynchronousCompositorHost::SendBeginFramePaused() {
 }
 
 void SynchronousCompositorHost::SendBeginFrame(viz::BeginFrameArgs args) {
+  if (num_invalidates_since_last_draw_ > 5u) {
+    // Throttle begin frames if there has been no draws in response to
+    // invalidates. This can happen if webview is detached or offscreen. There
+    // are cases where renderer is still expected to make progress. In this
+    // case renderer receives no back pressure so reduce the frequency of begin
+    // frames to avoid unnecessary work.
+    if (num_begin_frames_to_skip_) {
+      TRACE_EVENT_INSTANT0("cc",
+                           "SynchronousCompositorHost::SendBeginFrame_skipped",
+                           TRACE_EVENT_SCOPE_THREAD);
+      num_begin_frames_to_skip_--;
+      return;
+    } else {
+      num_begin_frames_to_skip_ =
+          std::min(num_invalidates_since_last_draw_ / 5, 250u);
+    }
+  } else {
+    num_begin_frames_to_skip_ = 0u;
+  }
+
   TRACE_EVENT2("cc", "SynchronousCompositorHost::SendBeginFrame",
                "frame_number", args.frame_id.sequence_number, "frame_time_us",
                args.frame_time);
 
   if (!bridge_->WaitAfterVSyncOnUIThread())
     return;
+
   blink::mojom::SynchronousCompositor* compositor = GetSynchronousCompositor();
   DCHECK(compositor);
   compositor->BeginFrame(args, timing_details_);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Methods used for testing Chrome at the Application-level.
- */
+/** Methods used for testing Chrome at the Application-level. */
 public class ChromeApplicationTestUtils {
     private static final String TAG = "ApplicationTestUtils";
     private static final float FLOAT_EPSILON = 0.001f;
+
+    // Increase the default timeout, as it can take a long time for Android to
+    // fully stop/start Chrome.
+    private static final long CHROME_STOP_START_TIMEOUT_MS =
+            Math.max(10000L, CriteriaHelper.DEFAULT_MAX_TIME_TO_POLL);
 
     private static PowerManager.WakeLock sWakeLock;
 
@@ -44,9 +47,12 @@ public class ChromeApplicationTestUtils {
     public static void setUp(Context context) {
         // Make sure the screen is on during test runs.
         PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
-        sWakeLock = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK
-                        | PowerManager.ACQUIRE_CAUSES_WAKEUP | PowerManager.ON_AFTER_RELEASE,
-                "Chromium:" + TAG);
+        sWakeLock =
+                pm.newWakeLock(
+                        PowerManager.SCREEN_DIM_WAKE_LOCK
+                                | PowerManager.ACQUIRE_CAUSES_WAKEUP
+                                | PowerManager.ON_AFTER_RELEASE,
+                        "Chromium:" + TAG);
         sWakeLock.acquire();
 
         // Disable Omaha related activities.
@@ -86,8 +92,7 @@ public class ChromeApplicationTestUtils {
     private static String getVisibleActivitiesError() {
         List<Pair<Activity, Integer>> visibleActivities = new ArrayList<>();
         for (Activity activity : ApplicationStatus.getRunningActivities()) {
-            @ActivityState
-            int activityState = ApplicationStatus.getStateForActivity(activity);
+            @ActivityState int activityState = ApplicationStatus.getStateForActivity(activity);
             if (activityState != ActivityState.DESTROYED
                     && activityState != ActivityState.STOPPED) {
                 visibleActivities.add(Pair.create(activity, activityState));
@@ -99,9 +104,13 @@ public class ChromeApplicationTestUtils {
             StringBuilder error = new StringBuilder("Unexpected visible activities: ");
             for (Pair<Activity, Integer> visibleActivityState : visibleActivities) {
                 Activity activity = visibleActivityState.first;
-                error.append(String.format(Locale.US, "\n\tActivity: %s, State: %d, Intent: %s",
-                        activity.getClass().getSimpleName(), visibleActivityState.second,
-                        activity.getIntent()));
+                error.append(
+                        String.format(
+                                Locale.US,
+                                "\n\tActivity: %s, State: %d, Intent: %s",
+                                activity.getClass().getSimpleName(),
+                                visibleActivityState.second,
+                                activity.getIntent()));
             }
             return error.toString();
         }
@@ -109,20 +118,30 @@ public class ChromeApplicationTestUtils {
 
     /** Waits until Chrome is in the background. */
     public static void waitUntilChromeInBackground() {
-        CriteriaHelper.pollUiThread(() -> {
-            int state = ApplicationStatus.getStateForApplication();
-            Criteria.checkThat(getVisibleActivitiesError(), state,
-                    Matchers.anyOf(Matchers.equalTo(ApplicationState.HAS_STOPPED_ACTIVITIES),
-                            Matchers.equalTo(ApplicationState.HAS_DESTROYED_ACTIVITIES)));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    int state = ApplicationStatus.getStateForApplication();
+                    Criteria.checkThat(
+                            getVisibleActivitiesError(),
+                            state,
+                            Matchers.anyOf(
+                                    Matchers.equalTo(ApplicationState.HAS_STOPPED_ACTIVITIES),
+                                    Matchers.equalTo(ApplicationState.HAS_DESTROYED_ACTIVITIES)));
+                },
+                CHROME_STOP_START_TIMEOUT_MS,
+                CriteriaHelper.DEFAULT_POLLING_INTERVAL);
     }
 
     /** Waits until Chrome is in the foreground. */
     public static void waitUntilChromeInForeground() {
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat(ApplicationStatus.getStateForApplication(),
-                    Matchers.is(ApplicationState.HAS_RUNNING_ACTIVITIES));
-        });
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(
+                            ApplicationStatus.getStateForApplication(),
+                            Matchers.is(ApplicationState.HAS_RUNNING_ACTIVITIES));
+                },
+                CHROME_STOP_START_TIMEOUT_MS,
+                CriteriaHelper.DEFAULT_POLLING_INTERVAL);
     }
 
     /**
@@ -134,15 +153,17 @@ public class ChromeApplicationTestUtils {
      */
     public static void assertWaitForPageScaleFactorMatch(
             final ChromeActivity activity, final float expectedScale) {
-        CriteriaHelper.pollUiThread(() -> {
-            Tab tab = activity.getActivityTab();
-            Criteria.checkThat(tab, Matchers.notNullValue());
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Tab tab = activity.getActivityTab();
+                    Criteria.checkThat(tab, Matchers.notNullValue());
 
-            Coordinates coord = Coordinates.createFor(tab.getWebContents());
-            float scale = coord.getPageScaleFactor();
-            Criteria.checkThat(
-                    (double) scale, Matchers.is(Matchers.closeTo(expectedScale, FLOAT_EPSILON)));
-        });
+                    Coordinates coord = Coordinates.createFor(tab.getWebContents());
+                    float scale = coord.getPageScaleFactor();
+                    Criteria.checkThat(
+                            (double) scale,
+                            Matchers.is(Matchers.closeTo(expectedScale, FLOAT_EPSILON)));
+                });
     }
 
     /**
@@ -151,14 +172,16 @@ public class ChromeApplicationTestUtils {
      */
     public static void assertWaitForPageScaleFactorChange(
             final ChromeActivity activity, final float initialScale) {
-        CriteriaHelper.pollUiThread(() -> {
-            Tab tab = activity.getActivityTab();
-            Criteria.checkThat(tab, Matchers.notNullValue());
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Tab tab = activity.getActivityTab();
+                    Criteria.checkThat(tab, Matchers.notNullValue());
 
-            Coordinates coord = Coordinates.createFor(tab.getWebContents());
-            float scale = coord.getPageScaleFactor();
-            Criteria.checkThat(
-                    (double) scale, Matchers.not(Matchers.closeTo(initialScale, FLOAT_EPSILON)));
-        });
+                    Coordinates coord = Coordinates.createFor(tab.getWebContents());
+                    float scale = coord.getPageScaleFactor();
+                    Criteria.checkThat(
+                            (double) scale,
+                            Matchers.not(Matchers.closeTo(initialScale, FLOAT_EPSILON)));
+                });
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ enum class ExportState {
 
 // Displays a dialog informing the user that they must set up a passcode
 // in order to export passwords.
-- (void)showSetPasscodeDialog;
+- (void)showSetPasscodeForPasswordExportDialog;
 
 // Displays an alert which informs the user that the passwords are being
 // prepared to be exported and gives them the option of cancelling the export.

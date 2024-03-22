@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "chromeos/ash/components/network/cellular_utils.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 TestCellularESimProfileHandler::TestCellularESimProfileHandler()
     : enable_notify_profile_list_update_(true),
@@ -59,7 +59,7 @@ void TestCellularESimProfileHandler::SetDevicePrefs(PrefService* device_prefs) {
 
 void TestCellularESimProfileHandler::OnHermesPropertiesUpdated() {
   std::vector<CellularESimProfile> new_profile_states =
-      GenerateProfilesFromHermes();
+      cellular_utils::GenerateProfilesFromHermes();
   if (new_profile_states == esim_profile_states_)
     return;
   esim_profile_states_ = new_profile_states;
@@ -72,4 +72,4 @@ void TestCellularESimProfileHandler::OnHermesPropertiesUpdated() {
   NotifyESimProfileListUpdated();
 }
 
-}  // namespace chromeos
+}  // namespace ash

@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,13 +14,6 @@ source_set("lib") {
     "cert_verifier_service_factory.cc",
     "cert_verifier_service_factory.h",
   ]
-
-  if (trial_comparison_cert_verifier_supported) {
-    sources += [
-      "trial_comparison_cert_verifier_mojo.cc",
-      "trial_comparison_cert_verifier_mojo.h",
-    ]
-  }
 
   deps = [
     "//base",
@@ -45,12 +38,7 @@ source_set("tests") {
     "cert_verifier_service_unittest.cc",
     "integration_tests/network_context_unittest.cc",
     "integration_tests/network_service_unittest.cc",
-    "integration_tests/ssl_config_service_mojo_unittest.cc",
   ]
-
-  if (trial_comparison_cert_verifier_supported) {
-    sources += [ "trial_comparison_cert_verifier_mojo_unittest.cc" ]
-  }
 
   deps = [
     ":lib",
@@ -68,20 +56,5 @@ source_set("tests") {
     "//services/network/public/cpp/cert_verifier:mojo_cert_verifier",
     "//services/network/public/mojom",
     "//testing/gtest",
-  ]
-}
-
-source_set("test_support") {
-  testonly = true
-
-  sources = [
-    "test_cert_verifier_service_factory.cc",
-    "test_cert_verifier_service_factory.h",
-  ]
-
-  deps = [
-    ":lib",
-    "//base",
-    "//net",
   ]
 }

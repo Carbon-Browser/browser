@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "components/media_router/common/media_source.h"
@@ -71,27 +72,25 @@ void TestMediaRouteProvider::CreateRoute(const std::string& media_source,
                                          const std::string& sink_id,
                                          const std::string& presentation_id,
                                          const url::Origin& origin,
-                                         int32_t tab_id,
+                                         int32_t frame_tree_node_id,
                                          base::TimeDelta timeout,
-                                         bool incognito,
                                          CreateRouteCallback callback) {
   if (!route_error_message_.empty()) {
     std::move(callback).Run(absl::nullopt, nullptr, route_error_message_,
                             mojom::RouteRequestResultCode::UNKNOWN_ERROR);
   } else if (!delay_.is_zero()) {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&TestMediaRouteProvider::CreateRouteTimeOut,
                        GetWeakPtr(), std::move(callback)),
         delay_);
   } else {
-    DVLOG(2) << "CreateRoute with origin: " << origin << " and tab ID "
-             << tab_id;
+    DVLOG(2) << "CreateRoute with origin: " << origin
+             << " and FrameTreeNode ID " << frame_tree_node_id;
     MediaRoute route(presentation_id, MediaSource(media_source), sink_id,
                      std::string("Test Route"), true);
     route.set_presentation_id(presentation_id);
     route.set_controller_type(RouteControllerType::kGeneric);
-    route.set_off_the_record(incognito);
     if (Is1UAPresentationSource(media_source)) {
       route.set_local_presentation(true);
     }
@@ -115,9 +114,8 @@ void TestMediaRouteProvider::CreateRouteTimeOut(CreateRouteCallback callback) {
 void TestMediaRouteProvider::JoinRoute(const std::string& media_source,
                                        const std::string& presentation_id,
                                        const url::Origin& origin,
-                                       int32_t tab_id,
+                                       int32_t frame_tree_node_id,
                                        base::TimeDelta timeout,
-                                       bool incognito,
                                        JoinRouteCallback callback) {
   if (!route_error_message_.empty()) {
     std::move(callback).Run(absl::nullopt, nullptr, route_error_message_,
@@ -134,10 +132,6 @@ void TestMediaRouteProvider::JoinRoute(const std::string& media_source,
   if (pos == presentation_ids_to_routes_.end()) {
     std::move(callback).Run(absl::nullopt, nullptr,
                             std::string("Presentation does not exist."),
-                            mojom::RouteRequestResultCode::UNKNOWN_ERROR);
-  } else if (pos->second.is_off_the_record() != incognito) {
-    std::move(callback).Run(absl::nullopt, nullptr,
-                            std::string("Off-the-record mismatch."),
                             mojom::RouteRequestResultCode::UNKNOWN_ERROR);
   } else {
     MediaRoute& existing_route = pos->second;
@@ -202,12 +196,6 @@ void TestMediaRouteProvider::StopObservingMediaSinks(
 
 void TestMediaRouteProvider::StartObservingMediaRoutes() {}
 
-void TestMediaRouteProvider::StartListeningForRouteMessages(
-    const std::string& route_id) {}
-
-void TestMediaRouteProvider::StopListeningForRouteMessages(
-    const std::string& route_id) {}
-
 void TestMediaRouteProvider::DetachRoute(const std::string& route_id) {
   media_router_->OnPresentationConnectionClosed(
       route_id, blink::mojom::PresentationConnectionCloseReason::CLOSED,
@@ -216,8 +204,7 @@ void TestMediaRouteProvider::DetachRoute(const std::string& route_id) {
 
 void TestMediaRouteProvider::EnableMdnsDiscovery() {}
 
-void TestMediaRouteProvider::UpdateMediaSinks(const std::string& media_source) {
-}
+void TestMediaRouteProvider::DiscoverSinksNow() {}
 
 void TestMediaRouteProvider::CreateMediaRouteController(
     const std::string& route_id,

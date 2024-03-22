@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ class PLATFORM_EXPORT PaintArtifact final : public RefCounted<PaintArtifact> {
   PaintArtifact(PaintArtifact&& other) = delete;
   PaintArtifact& operator=(PaintArtifact&& other) = delete;
 
-  bool IsEmpty() const { return chunks_.IsEmpty(); }
+  bool IsEmpty() const { return chunks_.empty(); }
 
   DisplayItemList& GetDisplayItemList() { return display_item_list_; }
   const DisplayItemList& GetDisplayItemList() const {
@@ -54,8 +54,8 @@ class PLATFORM_EXPORT PaintArtifact final : public RefCounted<PaintArtifact> {
   // shared with the embedder after copying to cc::DisplayItemList.
   size_t ApproximateUnsharedMemoryUsage() const;
 
-  sk_sp<PaintRecord> GetPaintRecord(
-      const PropertyTreeState& replay_state) const;
+  PaintRecord GetPaintRecord(const PropertyTreeState& replay_state,
+                             const gfx::Rect* cull_rect = nullptr) const;
 
   void RecordDebugInfo(DisplayItemClientId, const String&, DOMNodeId);
   // Note that ClientDebugName() returns the debug name at the time the client
@@ -67,10 +67,17 @@ class PLATFORM_EXPORT PaintArtifact final : public RefCounted<PaintArtifact> {
   DOMNodeId ClientOwnerNodeId(DisplayItemClientId) const;
   String IdAsString(const DisplayItem::Id& id) const;
 
+  std::unique_ptr<JSONArray> ToJSON() const;
+  void AppendChunksAsJSON(wtf_size_t start_chunk_index,
+                          wtf_size_t end_chunk_index,
+                          JSONArray&,
+                          unsigned flags) const;
+
  private:
   struct ClientDebugInfo {
     String name;
     DOMNodeId owner_node_id;
+    DISALLOW_NEW();
   };
 
   using DebugInfo = HashMap<DisplayItemClientId, ClientDebugInfo>;
@@ -79,6 +86,8 @@ class PLATFORM_EXPORT PaintArtifact final : public RefCounted<PaintArtifact> {
   Vector<PaintChunk> chunks_;
   DebugInfo debug_info_;
 };
+
+PLATFORM_EXPORT std::ostream& operator<<(std::ostream&, const PaintArtifact&);
 
 }  // namespace blink
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,16 +33,19 @@ IdleManagerFactory::IdleManagerFactory()
 IdleManagerFactory::~IdleManagerFactory() {
 }
 
-KeyedService* IdleManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+IdleManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  IdleManager* idle_manager = new IdleManager(context);
+  std::unique_ptr<IdleManager> idle_manager =
+      std::make_unique<IdleManager>(context);
   idle_manager->Init();
   return idle_manager;
 }
 
 content::BrowserContext* IdleManagerFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+  return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+      context, /*force_guest_profile=*/true);
 }
 
 bool IdleManagerFactory::ServiceIsCreatedWithBrowserContext() const {

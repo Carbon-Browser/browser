@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "base/component_export.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
 #include "build/build_config.h"
@@ -34,11 +36,15 @@ struct AXNodeData;
 
 // TODO(nektar): Move this struct over to AXNode so that it can be accessed by
 // AXPosition.
-struct AX_EXPORT AXLegacyHypertext {
+struct COMPONENT_EXPORT(AX_PLATFORM) AXLegacyHypertext {
+  using OffsetToIndex = std::map<int32_t, int32_t>;
+
   AXLegacyHypertext();
   ~AXLegacyHypertext();
   AXLegacyHypertext(const AXLegacyHypertext& other);
   AXLegacyHypertext& operator=(const AXLegacyHypertext& other);
+  AXLegacyHypertext(AXLegacyHypertext&& other) noexcept;
+  AXLegacyHypertext& operator=(AXLegacyHypertext&& other);
 
   // A flag that should be set if the hypertext information in this struct is
   // out-of-date and needs to be updated. This flag should always be set upon
@@ -48,7 +54,7 @@ struct AX_EXPORT AXLegacyHypertext {
 
   // Maps an embedded character offset in |hypertext| to an index in
   // |hyperlinks|.
-  std::map<int32_t, int32_t> hyperlink_offset_to_index;
+  OffsetToIndex hyperlink_offset_to_index;
 
   // The unique id of a AXPlatformNodes for each hyperlink.
   // TODO(nektar): Replace object IDs with child indices if we decide that
@@ -59,7 +65,7 @@ struct AX_EXPORT AXLegacyHypertext {
   std::u16string hypertext;
 };
 
-class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
+class COMPONENT_EXPORT(AX_PLATFORM) AXPlatformNodeBase : public AXPlatformNode {
  public:
   using AXPosition = AXNodePosition::AXPositionInstance;
 
@@ -98,7 +104,8 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   void NotifyAccessibilityEvent(ax::mojom::Event event_type) override;
 
 #if BUILDFLAG(IS_APPLE)
-  void AnnounceText(const std::u16string& text) override;
+  void AnnounceTextAs(const std::u16string& text,
+                      AnnouncementType announcement_type) override;
 #endif
 
   AXPlatformNodeDelegate* GetDelegate() const override;
@@ -125,7 +132,7 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   AXPlatformNodeChildIterator AXPlatformNodeChildrenBegin() const;
   AXPlatformNodeChildIterator AXPlatformNodeChildrenEnd() const;
 
-  ax::mojom::Role GetRole() const;
+  virtual ax::mojom::Role GetRole() const;
   bool HasBoolAttribute(ax::mojom::BoolAttribute attribute) const;
   bool GetBoolAttribute(ax::mojom::BoolAttribute attribute) const;
   bool GetBoolAttribute(ax::mojom::BoolAttribute attribute, bool* value) const;
@@ -267,13 +274,8 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   // Returns the font size converted to points, if available.
   absl::optional<float> GetFontSizeInPoints() const;
 
-  // Returns true if either a descendant has selection (sel_focus_object_id) or
-  // if this node is a simple text element and has text selection attributes.
-  // Optionally accepts a selection, which can be useful if checking the
-  // unignored selection is required. If not provided, uses the selection from
-  // the tree data, which is safe and fast but does not take ignored nodes into
-  // account.
-  bool HasCaret(const AXTree::Selection* selection = nullptr);
+  // See `AXNode::HasVisibleCaretOrSelection`.
+  bool HasVisibleCaretOrSelection() const;
 
   // See AXPlatformNodeDelegate::IsChildOfLeaf().
   bool IsChildOfLeaf() const;
@@ -286,6 +288,11 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
 
   // Returns true if this node is currently focused.
   bool IsFocused() const;
+
+  // Returns true if this node is focusable.
+  // This does more than just use HasState(ax::mojom::State::kFocusable) -- it
+  // also checks whether the object is a likely activedescendant.
+  bool IsFocusable() const;
 
   // Returns true if this node can be scrolled either in the horizontal or the
   // vertical direction.
@@ -518,8 +525,8 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   // First they check for a local selection found on the current control, e.g.
   // when querying the selection on a textarea.
   // If not found they retrieve the global selection found on the current frame.
-  int GetSelectionAnchor(const AXTree::Selection* selection);
-  int GetSelectionFocus(const AXTree::Selection* selection);
+  int GetSelectionAnchor(const AXSelection* selection);
+  int GetSelectionFocus(const AXSelection* selection);
 
   // Retrieves the selection offsets in the way required by the IA2 APIs.
   // selection_start and selection_end are -1 when there is no selection active
@@ -527,10 +534,10 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   // The greatest of the two offsets is one past the last character of the
   // selection.)
   void GetSelectionOffsets(int* selection_start, int* selection_end);
-  void GetSelectionOffsets(const AXTree::Selection* selection,
+  void GetSelectionOffsets(const AXSelection* selection,
                            int* selection_start,
                            int* selection_end);
-  void GetSelectionOffsetsFromTree(const AXTree::Selection* selection,
+  void GetSelectionOffsetsFromTree(const AXSelection* selection,
                                    int* selection_start,
                                    int* selection_end);
 
@@ -543,6 +550,7 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   int32_t GetHyperlinkIndexFromChild(AXPlatformNodeBase* child);
   int32_t GetHypertextOffsetFromHyperlinkIndex(int32_t hyperlink_index);
   int32_t GetHypertextOffsetFromChild(AXPlatformNodeBase* child);
+  int HypertextOffsetFromChildIndex(int child_index) const;
   int32_t GetHypertextOffsetFromDescendant(AXPlatformNodeBase* descendant);
 
   // If the selection endpoint is either equal to or an ancestor of this object,
@@ -588,6 +596,8 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
 
   friend AXPlatformNode* AXPlatformNode::Create(
       AXPlatformNodeDelegate* delegate);
+
+  FRIEND_TEST_ALL_PREFIXES(AXPlatformNodeTest, HypertextOffsetFromEndpoint);
 };
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -200,10 +200,14 @@ void AutoplayPolicy::StartAutoplayMutedWhenVisible() {
     return;
 
   autoplay_intersection_observer_ = IntersectionObserver::Create(
-      {}, {IntersectionObserver::kMinimumThreshold}, &element_->GetDocument(),
+      /* (root) margin */ Vector<Length>(),
+      /* scroll_margin */ Vector<Length>(),
+      /* thresholds */ {IntersectionObserver::kMinimumThreshold},
+      /* document */ &element_->GetDocument(),
+      /* callback */
       WTF::BindRepeating(&AutoplayPolicy::OnIntersectionChangedForAutoplay,
                          WrapWeakPersistent(this)),
-      LocalFrameUkmAggregator::kMediaIntersectionObserver);
+      /* ukm_metric_id */ LocalFrameUkmAggregator::kMediaIntersectionObserver);
   autoplay_intersection_observer_->observe(element_);
 }
 
@@ -263,9 +267,27 @@ bool AutoplayPolicy::RequestAutoplayByAttribute() {
   return false;
 }
 
+bool AutoplayPolicy::HasTransientUserActivation() const {
+  LocalFrame* frame = element_->GetDocument().GetFrame();
+  if (!frame) {
+    return false;
+  }
+
+  if (LocalFrame::HasTransientUserActivation(frame)) {
+    return true;
+  }
+
+  Frame* opener = frame->Opener();
+  if (opener && opener->IsLocalFrame() &&
+      LocalFrame::HasTransientUserActivation(To<LocalFrame>(opener))) {
+    return true;
+  }
+
+  return false;
+}
+
 absl::optional<DOMExceptionCode> AutoplayPolicy::RequestPlay() {
-  if (!LocalFrame::HasTransientUserActivation(
-          element_->GetDocument().GetFrame())) {
+  if (!HasTransientUserActivation()) {
     autoplay_uma_helper_->OnAutoplayInitiated(AutoplaySource::kMethod);
     if (IsGestureNeededForPlayback())
       return DOMExceptionCode::kNotAllowedError;
@@ -355,8 +377,8 @@ void AutoplayPolicy::OnIntersectionChangedForAutoplay(
 
     element_->GetDocument()
         .GetTaskRunner(TaskType::kInternalMedia)
-        ->PostTask(FROM_HERE, WTF::Bind(pause_and_preserve_autoplay,
-                                        WrapWeakPersistent(this)));
+        ->PostTask(FROM_HERE, WTF::BindOnce(pause_and_preserve_autoplay,
+                                            WrapWeakPersistent(this)));
     return;
   }
 
@@ -377,7 +399,7 @@ void AutoplayPolicy::OnIntersectionChangedForAutoplay(
   element_->GetDocument()
       .GetTaskRunner(TaskType::kInternalMedia)
       ->PostTask(FROM_HERE,
-                 WTF::Bind(maybe_autoplay, WrapWeakPersistent(this)));
+                 WTF::BindOnce(maybe_autoplay, WrapWeakPersistent(this)));
 }
 
 bool AutoplayPolicy::IsUsingDocumentUserActivationRequiredPolicy() const {

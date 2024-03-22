@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,6 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/browser/navigation_entry.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
@@ -238,15 +236,12 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, WindowOpenExtension) {
                      url::kStandardSchemeSeparator +
                      last_loaded_extension_id() + "/test.html");
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), start_url));
-  WebContents* newtab = NULL;
+  WebContents* newtab = nullptr;
   ASSERT_NO_FATAL_FAILURE(
       OpenWindow(browser()->tab_strip_model()->GetActiveWebContents(),
                  start_url.Resolve("newtab.html"), true, true, &newtab));
 
-  bool result = false;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(newtab, "testExtensionApi()",
-                                                   &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true, content::EvalJs(newtab, "testExtensionApi()"));
 }
 
 // Tests that if an extension page calls window.open to an invalid extension
@@ -282,7 +277,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, WindowOpenNoPrivileges) {
       test_data_dir_.AppendASCII("uitest").AppendASCII("window_open")));
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GURL("about:blank")));
-  WebContents* newtab = NULL;
+  WebContents* newtab = nullptr;
   ASSERT_NO_FATAL_FAILURE(
       OpenWindow(browser()->tab_strip_model()->GetActiveWebContents(),
                  GURL(std::string(extensions::kExtensionScheme) +
@@ -291,10 +286,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest, WindowOpenNoPrivileges) {
                  false, true, &newtab));
 
   // Extension API should succeed.
-  bool result = false;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(newtab, "testExtensionApi()",
-                                                   &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true, content::EvalJs(newtab, "testExtensionApi()"));
 }
 
 // Tests that calling window.open for an extension URL from a non-HTTP or HTTPS
@@ -311,9 +303,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest,
   // test.html is not web-accessible and should not be loaded.
   GURL extension_url(extension->GetResourceURL("test.html"));
   content::CreateAndLoadWebContentsObserver windowed_observer;
-  ASSERT_TRUE(content::ExecuteScript(
-      browser()->tab_strip_model()->GetActiveWebContents(),
-      "window.open('" + extension_url.spec() + "');"));
+  ASSERT_TRUE(
+      content::ExecJs(browser()->tab_strip_model()->GetActiveWebContents(),
+                      "window.open('" + extension_url.spec() + "');"));
   content::WebContents* newtab = windowed_observer.Wait();
   ASSERT_TRUE(newtab);
 
@@ -347,14 +339,11 @@ IN_PROC_BROWSER_TEST_F(ExtensionBrowserTest,
   EXPECT_EQ(history_url, tab->GetPrimaryMainFrame()->GetLastCommittedURL());
 
   content::TestNavigationObserver observer(tab);
-  ASSERT_TRUE(content::ExecuteScript(
-      tab, "location.href = '" + extension_url.spec() + "';"));
+  ASSERT_TRUE(
+      content::ExecJs(tab, "location.href = '" + extension_url.spec() + "';"));
   observer.Wait();
   EXPECT_EQ(extension_url, tab->GetPrimaryMainFrame()->GetLastCommittedURL());
-  std::string result;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      tab, "domAutomationController.send(document.body.innerText)", &result));
-  EXPECT_EQ("HOWDIE!!!", result);
+  EXPECT_EQ("HOWDIE!!!", content::EvalJs(tab, "document.body.innerText"));
 }
 
 #if BUILDFLAG(IS_CHROMEOS)

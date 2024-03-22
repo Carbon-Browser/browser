@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,11 @@
 namespace viz {
 
 DisplaySchedulerBase::DisplaySchedulerBase() = default;
+
 DisplaySchedulerBase::~DisplaySchedulerBase() {
-  if (damage_tracker_)
-    damage_tracker_->RemoveObserver(this);
+  if (damage_tracker_) {
+    damage_tracker_->SetDelegate(nullptr);
+  }
 }
 
 void DisplaySchedulerBase::SetClient(DisplaySchedulerClient* client) {
@@ -21,7 +23,7 @@ void DisplaySchedulerBase::SetDamageTracker(
   DCHECK(!damage_tracker_);
   DCHECK(damage_tracker);
   damage_tracker_ = damage_tracker;
-  damage_tracker_->AddObserver(this);
+  damage_tracker_->SetDelegate(this);
 }
 
 }  // namespace viz

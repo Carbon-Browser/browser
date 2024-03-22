@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <string>
 
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/i18n/icu_util.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
@@ -39,7 +39,7 @@
 #include "ui/display/screen.h"
 #include "ui/gfx/font_util.h"
 #include "ui/gfx/image/image.h"
-#include "ui/gl/gl_switches.h"
+#include "ui/gl/gl_utils.h"
 #include "ui/gl/init/gl_factory.h"
 #include "ui/views/buildflags.h"
 #include "ui/views/examples/example_base.h"
@@ -67,7 +67,7 @@
 #include "ui/views/examples/examples_skia_gold_pixel_diff.h"
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -89,9 +89,9 @@ ExamplesExitCode ExamplesMainProc(bool under_test) {
   // Disabling Direct Composition works around the limitation that
   // InProcessContextFactory doesn't work with Direct Composition, causing the
   // window to not render. See http://crbug.com/936249.
-  command_line->AppendSwitch(switches::kDisableDirectComposition);
+  gl::SetGlWorkarounds(gl::GlWorkarounds{.disable_direct_composition = true});
 
-  base::FeatureList::InitializeInstance(
+  base::FeatureList::InitInstance(
       command_line->GetSwitchValueASCII(switches::kEnableFeatures),
       command_line->GetSwitchValueASCII(switches::kDisableFeatures));
 
@@ -100,13 +100,13 @@ ExamplesExitCode ExamplesMainProc(bool under_test) {
 
   mojo::core::Init();
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   ui::OzonePlatform::InitParams params;
   params.single_process = true;
   ui::OzonePlatform::InitializeForGPU(params);
 #endif
 
-  gl::init::InitializeGLOneOff(/*system_device_id=*/0);
+  gl::init::InitializeGLOneOff(/*gpu_preference=*/gl::GpuPreference::kDefault);
 
   // Viz depends on the task environment to correctly tear down.
   base::test::TaskEnvironment task_environment(

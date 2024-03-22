@@ -37,8 +37,8 @@ a number of signals. One example:
 1. The component is in the HIDDEN state.
 1. The signal `showWhenKeyboardIsVisible()` sets the state to `FLOATING_BAR`.
 1. The component checks in `meetsStatePreconditions()` whether the set state
-   fulfills all state-dependent preconditions (e.g. "is VR mode active?" if so,
-   it would transition into the `HIDDEN` state instead.)
+   fulfills all state-dependent preconditions (if so, it would transition into
+   the `HIDDEN` state instead.)
 1. In `enforceStateProperties`, the filling component modifies the subcomponents
    according to the new state which means it:
    1. shows the keyboard accessory bar
@@ -70,14 +70,14 @@ since these untethered states either:
 * couldn't show a keyboard anyway (because multi-window/hardware suppresses it
   but Chrome doesn't know that beforehand)
 
-|   ID   | State              | Accessory Bar            | Fallback Sheet                          | Floats  | Transition into*
-|--------|--------------------|--------------------------|-----------------------------------------|---------|-
-| 0x0100 | HIDDEN             | Hidden                   | Hidden                                  | N/A     | FLOATING_BAR, REPLACING_KEYBOARD
-| 0x0101 | EXTENDING_KEYBOARD | **Visible**              | Hidden                                  | No      | WAITING_TO_REPLACE
-| 0x0001 | WAITING_TO_REPLACE | **Visible**              | N/A — waits for keyboard to (dis)appear | No      | REPLACING_KEYBOARD
-| 0x0011 | REPLACING_KEYBOARD | **Visible** as title bar | **Visible**                             | No      | FLOATING_SHEET
-| 0x1101 | FLOATING_BAR       | **Visible**              | Hidden                                  | **Yes** |FLOATING_SHEET
-| 0x1011 | FLOATING_SHEET     | **Visible** as title bar | **Visible**                             | **Yes** | FLOATING_BAR
+|   ID   | State                 | Accessory Bar            | Fallback Sheet                          | Floats  | Transition into*
+|--------|-----------------------|--------------------------|-----------------------------------------|---------|-
+| 0x0100 | HIDDEN                | Hidden                   | Hidden                                  | N/A     | FLOATING_BAR, REPLACING_KEYBOARD
+| 0x0101 | EXTENDING_KEYBOARD    | **Visible**              | Hidden                                  | No      | WAITING_TO_REPLACE
+| 0x0000 | WAITING_TO_REPLACE    | Hidden                   | N/A — waits for keyboard to (dis)appear | No      | REPLACING_KEYBOARD
+| 0x0010 | REPLACING_KEYBOARD    | Hidden                   | **Visible**                             | No      | FLOATING_SHEET
+| 0x1101 | FLOATING_BAR          | **Visible**              | Hidden                                  | **Yes** | FLOATING_SHEET
+| 0x1010 | FLOATING_SHEET        | Hidden                   | **Visible**                             | **Yes** | FLOATING_BAR
 
 \* Excluding HIDDEN and EXTENDING_KEYBOARD which can be entered from any state.
 

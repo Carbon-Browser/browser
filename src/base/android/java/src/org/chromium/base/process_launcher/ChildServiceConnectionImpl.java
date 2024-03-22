@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,13 @@ import java.util.concurrent.Executor;
     private final String mInstanceName;
     private boolean mBound;
 
-    /* package */ ChildServiceConnectionImpl(Context context, Intent bindIntent, int bindFlags,
-            Handler handler, Executor executor, ChildServiceConnectionDelegate delegate,
+    /* package */ ChildServiceConnectionImpl(
+            Context context,
+            Intent bindIntent,
+            int bindFlags,
+            Handler handler,
+            Executor executor,
+            ChildServiceConnectionDelegate delegate,
             String instanceName) {
         mContext = context;
         mBindIntent = bindIntent;
@@ -47,8 +52,15 @@ import java.util.concurrent.Executor;
     public boolean bindServiceConnection() {
         try {
             TraceEvent.begin("ChildServiceConnectionImpl.bindServiceConnection");
-            mBound = BindService.doBindService(
-                    mContext, mBindIntent, this, mBindFlags, mHandler, mExecutor, mInstanceName);
+            mBound =
+                    BindService.doBindService(
+                            mContext,
+                            mBindIntent,
+                            this,
+                            mBindFlags,
+                            mHandler,
+                            mExecutor,
+                            mInstanceName);
         } finally {
             TraceEvent.end("ChildServiceConnectionImpl.bindServiceConnection");
         }

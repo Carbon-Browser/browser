@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -130,6 +130,8 @@ class AXRange {
   //   nullopt - If positions are not comparable (see AXPosition::CompareTo).
   static absl::optional<int> CompareEndpoints(const AXPositionType* first,
                                               const AXPositionType* second) {
+    DCHECK(first->IsValid());
+    DCHECK(second->IsValid());
     absl::optional<int> tree_position_comparison =
         first->AsTreePosition()->CompareTo(*second->AsTreePosition());
 
@@ -299,10 +301,10 @@ class AXRange {
       AXTextConcatenationBehavior concatenation_behavior =
           AXTextConcatenationBehavior::kWithoutParagraphBreaks,
       AXEmbeddedObjectBehavior embedded_object_behavior =
-          AXEmbeddedObjectBehavior::kExposeCharacter,
+          AXEmbeddedObjectBehavior::kExposeCharacterForHypertext,
       int max_count = -1,
       bool include_ignored = false,
-      size_t* appended_newlines_count = nullptr) const {
+      std::vector<size_t>* appended_newlines_indices = nullptr) const {
     if (max_count == 0 || IsNull())
       return std::u16string();
 
@@ -319,7 +321,6 @@ class AXRange {
                                  : anchor_->AsLeafTextPosition();
 
     std::u16string range_text;
-    size_t computed_newlines_count = 0;
     bool is_first_non_whitespace_leaf = true;
     bool crossed_paragraph_boundary = false;
     bool is_first_included_leaf = true;
@@ -353,7 +354,9 @@ class AXRange {
           // previous leaf position was a <br> (already ending with a newline).
           if (crossed_paragraph_boundary && !found_trailing_newline) {
             range_text += u"\n";
-            computed_newlines_count++;
+            if (appended_newlines_indices) {
+              appended_newlines_indices->push_back(range_text.length() - 1);
+            }
           }
 
           is_first_non_whitespace_leaf = false;
@@ -398,16 +401,19 @@ class AXRange {
         break;
       }
 
+      ax::mojom::Role prev_role = start->GetAnchor()->GetRole();
       start = start->CreateNextLeafTextPosition();
+      // We should not mark `cross_paragraph_boundary` as true if the start
+      // anchor is a `kListMarker` since there should be no newline added
+      // by default after the `kListMarker` node.
       if (concatenation_behavior ==
               AXTextConcatenationBehavior::kWithParagraphBreaks &&
-          !crossed_paragraph_boundary && !is_first_non_whitespace_leaf) {
+          !crossed_paragraph_boundary && !is_first_non_whitespace_leaf &&
+          prev_role != ax::mojom::Role::kListMarker) {
         crossed_paragraph_boundary = start->AtStartOfParagraph();
       }
     }
 
-    if (appended_newlines_count)
-      *appended_newlines_count = computed_newlines_count;
     return range_text;
   }
 

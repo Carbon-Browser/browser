@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,13 +18,15 @@ class FakeCSSStyleImageValue : public CSSStyleImageValue {
 
   // CSSStyleImageValue
   absl::optional<gfx::Size> IntrinsicSize() const final {
-    if (cache_pending_)
+    if (cache_pending_) {
       return absl::nullopt;
+    }
     return size_;
   }
 
   // CanvasImageSource
   scoped_refptr<Image> GetSourceImageForCanvas(
+      FlushReason,
       SourceImageStatus*,
       const gfx::SizeF&,
       const AlphaDisposition alpha_disposition = kPremultiplyAlpha) final {
@@ -33,8 +35,9 @@ class FakeCSSStyleImageValue : public CSSStyleImageValue {
     return nullptr;
   }
   ResourceStatus Status() const final {
-    if (cache_pending_)
+    if (cache_pending_) {
       return ResourceStatus::kNotStarted;
+    }
     return ResourceStatus::kCached;
   }
   bool IsAccelerated() const final { return false; }

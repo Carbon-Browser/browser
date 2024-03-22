@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/json/values_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "components/account_id/account_id.h"
@@ -59,7 +60,7 @@ class KnownUserTest : public testing::Test {
 
   PrefService* local_state() { return &local_state_; }
 
-  const base::Value* FindPrefs(const AccountId& account_id) {
+  const base::Value::Dict* FindPrefs(const AccountId& account_id) {
     return KnownUser(local_state()).FindPrefs(account_id);
   }
 
@@ -68,7 +69,8 @@ class KnownUserTest : public testing::Test {
       base::test::TaskEnvironment::MainThreadType::UI};
 
   // Owned by |scoped_user_manager_|.
-  FakeUserManager* fake_user_manager_ = nullptr;
+  raw_ptr<FakeUserManager, DanglingUntriaged | ExperimentalAsh>
+      fake_user_manager_ = nullptr;
   std::unique_ptr<ScopedUserManager> scoped_user_manager_;
   TestingPrefServiceSimple local_state_;
 };
@@ -82,10 +84,10 @@ TEST_F(KnownUserTest, FindPrefsExisting) {
   const std::string kCustomPrefName = "custom_pref";
   known_user.SetStringPref(kDefaultAccountId, kCustomPrefName, "value");
 
-  const base::Value* value = FindPrefs(kDefaultAccountId);
+  const base::Value::Dict* value = FindPrefs(kDefaultAccountId);
   ASSERT_TRUE(value);
 
-  const std::string* pref_value = value->FindStringKey(kCustomPrefName);
+  const std::string* pref_value = value->FindString(kCustomPrefName);
   ASSERT_TRUE(pref_value);
   EXPECT_EQ(*pref_value, "value");
 }
@@ -144,9 +146,6 @@ TEST_F(KnownUserTest, FindPrefsMatchForGaiaAccountWithEmail) {
   // TODO(https://crbug.com/1190902): This should likely be EXPECT_FALSE going
   // forward.
   EXPECT_TRUE(FindPrefs(AccountId::FromUserEmailGaiaId(kEmailA, kGaiaIdB)));
-  // Finding by just gaia id without any e-mail doesn't work (because the
-  // resulting AccountId is not considered valid).
-  EXPECT_FALSE(FindPrefs(AccountId::FromGaiaId(kGaiaIdA)));
 
   // An unrelated gaia AccountId with the same Account Type doesn't find
   // anything.
@@ -173,9 +172,6 @@ TEST_F(KnownUserTest, FindPrefsMatchForAdAccountWithEmail) {
   EXPECT_TRUE(FindPrefs(AccountId::AdFromUserEmailObjGuid(kEmailB, "a")));
   // Finding by e-mail should also work even if the guid doesn't match.
   EXPECT_TRUE(FindPrefs(AccountId::AdFromUserEmailObjGuid(kEmailA, "b")));
-  // Finding by just AD guid  without any e-mail doesn't work (because the
-  // resulting AccountId is not considered valid).
-  EXPECT_FALSE(FindPrefs(AccountId::AdFromObjGuid("a")));
 
   // An unrelated AD AccountId with the same Account Type doesn't find
   // anything.
@@ -423,10 +419,10 @@ TEST_F(KnownUserTest, ReauthReason) {
 
 TEST_F(KnownUserTest, ChallengeResponseKeys) {
   KnownUser known_user(local_state());
-  EXPECT_TRUE(known_user.GetChallengeResponseKeys(kDefaultAccountId).is_none());
+  EXPECT_TRUE(known_user.GetChallengeResponseKeys(kDefaultAccountId).empty());
 
-  base::Value challenge_response_keys(base::Value::Type::LIST);
-  challenge_response_keys.Append(base::Value("key1"));
+  base::Value::List challenge_response_keys;
+  challenge_response_keys.Append("key1");
   known_user.SetChallengeResponseKeys(kDefaultAccountId,
                                       challenge_response_keys.Clone());
 

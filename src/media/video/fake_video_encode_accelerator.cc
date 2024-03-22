@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/video/fake_video_encode_accelerator.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
@@ -66,6 +66,9 @@ bool FakeVideoEncodeAccelerator::Initialize(
       base::BindOnce(&FakeVideoEncodeAccelerator::DoRequireBitstreamBuffers,
                      weak_this_factory_.GetWeakPtr(), kMinimumInputCount,
                      config.input_visible_size, kMinimumOutputBufferSize));
+  VideoEncoderInfo encoder_info;
+  encoder_info.supports_frame_size_change = true;
+  NotifyEncoderInfoChange(encoder_info);
   return true;
 }
 
@@ -87,18 +90,26 @@ void FakeVideoEncodeAccelerator::UseOutputBitstreamBuffer(
 
 void FakeVideoEncodeAccelerator::RequestEncodingParametersChange(
     const Bitrate& bitrate,
-    uint32_t framerate) {
+    uint32_t framerate,
+    const absl::optional<gfx::Size>& size) {
   // Reject bitrate mode changes.
   if (stored_bitrates_.empty() ||
       stored_bitrates_.back().mode() == bitrate.mode()) {
     stored_bitrates_.push_back(bitrate);
   }
+  if (size.has_value()) {
+    stored_frame_sizes_.push_back(size.value());
+  }
 }
 
 void FakeVideoEncodeAccelerator::RequestEncodingParametersChange(
     const VideoBitrateAllocation& bitrate,
-    uint32_t framerate) {
+    uint32_t framerate,
+    const absl::optional<gfx::Size>& size) {
   stored_bitrate_allocations_.push_back(bitrate);
+  if (size.has_value()) {
+    stored_frame_sizes_.push_back(size.value());
+  }
 }
 
 void FakeVideoEncodeAccelerator::Destroy() {
@@ -113,6 +124,19 @@ void FakeVideoEncodeAccelerator::SetWillInitializationSucceed(
 void FakeVideoEncodeAccelerator::SetWillEncodingSucceed(
     bool will_encoding_succeed) {
   will_encoding_succeed_ = will_encoding_succeed;
+}
+
+void FakeVideoEncodeAccelerator::NotifyEncoderInfoChange(
+    const VideoEncoderInfo& info) {
+  task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(&FakeVideoEncodeAccelerator::DoNotifyEncoderInfoChange,
+                     weak_this_factory_.GetWeakPtr(), info));
+}
+
+void FakeVideoEncodeAccelerator::DoNotifyEncoderInfoChange(
+    const VideoEncoderInfo& info) {
+  client_->NotifyEncoderInfoChange(info);
 }
 
 void FakeVideoEncodeAccelerator::DoRequireBitstreamBuffers(
@@ -147,7 +171,7 @@ void FakeVideoEncodeAccelerator::DoBitstreamBufferReady(
     BitstreamBuffer buffer,
     FrameToEncode frame_to_encode) const {
   if (!will_encoding_succeed_) {
-    client_->NotifyError(VideoEncodeAccelerator::kPlatformFailureError);
+    client_->NotifyErrorStatus(EncoderStatus::Codes::kEncoderFailedEncode);
     return;
   }
 

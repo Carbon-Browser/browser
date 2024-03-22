@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,7 @@
 
 @protocol SavedPasswordsPresenterObserver
 
-- (void)savedPasswordsDidChanged:
-    (password_manager::SavedPasswordsPresenter::SavedPasswordsView)passwords;
+- (void)savedPasswordsDidChange;
 
 @end
 
@@ -27,8 +26,7 @@ class SavedPasswordsPresenterObserverBridge
   ~SavedPasswordsPresenterObserverBridge() override;
 
   void OnSavedPasswordsChanged(
-      password_manager::SavedPasswordsPresenter::SavedPasswordsView passwords)
-      override;
+      const password_manager::PasswordStoreChangeList& changes) override;
 
  private:
   __weak id<SavedPasswordsPresenterObserver> delegate_ = nil;

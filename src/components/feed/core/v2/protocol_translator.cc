@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,10 @@
 #include "components/feed/core/proto/v2/wire/stream_structure.pb.h"
 #include "components/feed/core/proto/v2/wire/token.pb.h"
 #include "components/feed/core/v2/feedstore_util.h"
+#include "components/feed/core/v2/ios_shared_experiments_translator.h"
 #include "components/feed/core/v2/metrics_reporter.h"
 #include "components/feed/core/v2/proto_util.h"
+#include "components/feed/feed_feature_list.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace feed {
@@ -52,8 +54,8 @@ feedstore::StreamStructure::Type TranslateNodeType(
       return feedstore::StreamStructure::STREAM;
     case feedwire::Feature::CONTENT:
       return feedstore::StreamStructure::CONTENT;
-    case feedwire::Feature::CLUSTER:
-      return feedstore::StreamStructure::CLUSTER;
+    case feedwire::Feature::GROUP:
+      return feedstore::StreamStructure::GROUP;
     default:
       return feedstore::StreamStructure::UNKNOWN_TYPE;
   }
@@ -227,6 +229,35 @@ absl::optional<ConvertedDataOperation> TranslateDataOperationInternal(
   return result;
 }
 
+// Returns StreamStructure to append a feature.
+feedstore::StreamStructure FeatureStreamStructure(int id) {
+  feedstore::StreamStructure feature;
+  feature.set_type(feedstore::StreamStructure::CONTENT);
+  feature.set_operation(feedstore::StreamStructure::UPDATE_OR_APPEND);
+
+  feedwire::ContentId content;
+  content.set_id(id);
+  content.set_type(ContentId::FEATURE);
+
+  *feature.mutable_content_id() = content;
+  return feature;
+}
+
+// Returns StreamStructure to append a root stream.
+feedstore::StreamStructure RootStreamStructure(int id) {
+  feedstore::StreamStructure root;
+  root.set_type(feedstore::StreamStructure::STREAM);
+  root.set_operation(feedstore::StreamStructure::UPDATE_OR_APPEND);
+  root.set_is_root(true);
+
+  feedwire::ContentId content_id;
+  content_id.set_id(id);
+  content_id.set_type(ContentId::TYPE_UNDEFINED);
+
+  *root.mutable_content_id() = content_id;
+  return root;
+}
+
 }  // namespace
 
 StreamModelUpdateRequest::StreamModelUpdateRequest() = default;
@@ -339,8 +370,13 @@ RefreshResponseData TranslateWireResponse(
       chrome_response_metadata.privacy_notice_fulfilled());
 
   for (const feedstore::Content& content : result->content) {
+    feedstore::StreamContentHashList* hash_list = nullptr;
     for (auto& metadata : content.prefetch_metadata()) {
-      result->stream_data.add_content_hashes(
+      if (!metadata.has_uri())
+        continue;
+      if (hash_list == nullptr)
+        hash_list = result->stream_data.add_content_hashes();
+      hash_list->add_hashes(
           feedstore::ContentHashFromPrefetchMetadata(metadata));
     }
   }
@@ -357,14 +393,8 @@ RefreshResponseData TranslateWireResponse(
     session_id = chrome_response_metadata.session_id();
   }
 
-  absl::optional<Experiments> experiments = absl::nullopt;
-  if (chrome_response_metadata.experiments_size() > 0) {
-    Experiments e;
-    for (feedwire::Experiment exp : chrome_response_metadata.experiments()) {
-      e[exp.trial_name()] = exp.group_name();
-    }
-    experiments = std::move(e);
-  }
+  absl::optional<Experiments> experiments =
+      TranslateExperiments(chrome_response_metadata.experiments());
 
   MetricsReporter::ActivityLoggingEnabled(
       chrome_response_metadata.logging_enabled());
@@ -388,6 +418,42 @@ RefreshResponseData TranslateWireResponse(
   response_data.discover_personalization_enabled =
       chrome_response_metadata.discover_personalization_enabled();
 
+  return response_data;
+}
+
+RefreshResponseData TranslateWireResponse(
+    supervised_user::GetDiscoverFeedResponse response,
+    StreamModelUpdateRequest::Source source,
+    const AccountInfo& account_info,
+    base::Time current_time) {
+  auto result = std::make_unique<StreamModelUpdateRequest>();
+  result->source = source;
+
+  feedstore::StreamStructure root = RootStreamStructure(/*id=*/1);
+  feedwire::ContentId root_content_id = root.content_id();
+  result->stream_structures.push_back(std::move(root));
+  // TODO(b/306594797): Use unique identifier sent by the server once this has
+  // been configured.
+  int result_id = 2;
+  for (supervised_user::RenderedResult supervised_result :
+       response.discover_feed().rendered_result()) {
+    feedstore::StreamStructure stream_structure =
+        FeatureStreamStructure(result_id);
+    *stream_structure.mutable_parent_id() = root_content_id;
+
+    feedstore::Content content;
+    content.set_allocated_frame(supervised_result.release_elements_output());
+    *content.mutable_content_id() = stream_structure.content_id();
+
+    result->stream_structures.push_back(std::move(stream_structure));
+    result->content.push_back(std::move(content));
+    result_id++;
+  }
+
+  RefreshResponseData response_data;
+  response_data.model_update_request = std::move(result);
+  response_data.last_fetch_timestamp = current_time;
+  response_data.discover_personalization_enabled = false;
   return response_data;
 }
 

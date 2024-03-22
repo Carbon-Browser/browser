@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 chrome.runtime.onConnect.addListener(function onConnect(port) {
   console.log('connected');
   port.onMessage.addListener(function(msg) {
-    console.log('got ' + msg);
+    console.log('got ' + JSON.stringify(msg));
     if (msg.testPostMessage) {
       port.postMessage({success: true});
     } else if (msg.testPostMessageFromTab) {
@@ -147,6 +147,8 @@ function testConnectFromTabError() {
 
 // For test sendMessage.
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  chrome.test.assertEq({id: chrome.runtime.id, origin: 'null'}, sender);
+  const extensionOrigin = new URL(chrome.runtime.getURL('')).origin;
+  chrome.test.assertEq(
+      { id: chrome.runtime.id, origin: extensionOrigin }, sender);
   sendResponse({success: (request.step2 == 1)});
 });

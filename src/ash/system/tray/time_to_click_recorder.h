@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SYSTEM_TRAY_TIME_TO_CLICK_RECORDER_H_
 #define ASH_SYSTEM_TRAY_TIME_TO_CLICK_RECORDER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/events/event_handler.h"
 
 namespace views {
@@ -37,7 +38,7 @@ class TimeToClickRecorder : public ui::EventHandler {
   // ui::EventHandler:
   void OnEvent(ui::Event* event) override;
 
-  Delegate* const delegate_;
+  const raw_ptr<Delegate, ExperimentalAsh> delegate_;
 };
 
 }  // namespace ash

@@ -1,3 +1,6 @@
+// Copyright 2022 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 {
     include: [
         "syslog/client.shard.cml",
@@ -7,7 +10,6 @@
         runner: "elf",
         binary: "chrome",
         args: [
-            "--enable-cfv2",
             "--enable-features=Vulkan,CanvasOopRasterization",
         ],
         lifecycle: { stop_event: "notify" },
@@ -17,10 +19,6 @@
         // now.
         forward_stdout_to: "log",
         forward_stderr_to: "log",
-
-        // Required to allow JIT in child processes such as renderers.
-        // Known as 'deprecated-ambient-replace-as-executable' in CFv1.
-        job_policy_ambient_mark_vmo_exec: "true",
     },
     capabilities: [
         {
@@ -54,10 +52,13 @@
                 "fuchsia.camera3.DeviceWatcher",
                 "fuchsia.device.NameProvider",
                 "fuchsia.element.GraphicalPresenter",
+                "fuchsia.feedback.ComponentDataRegister",
+                "fuchsia.feedback.CrashReportingProductRegister",
                 "fuchsia.fonts.Provider",
                 "fuchsia.hwinfo.Product",
                 "fuchsia.input.virtualkeyboard.ControllerCreator",
                 "fuchsia.intl.PropertyProvider",
+                "fuchsia.kernel.VmexResource",
                 "fuchsia.media.Audio",
                 "fuchsia.media.AudioDeviceEnumerator",
                 "fuchsia.media.ProfileProvider",
@@ -71,8 +72,13 @@
                 "fuchsia.ui.composition.Flatland",
                 "fuchsia.ui.composition.ScreenCapture",
                 "fuchsia.ui.input3.Keyboard",
-                "fuchsia.ui.scenic.Scenic",
             ],
+        },
+        {
+            protocol: [
+                "fuchsia.tracing.perfetto.ProducerConnector",
+            ],
+            availability: "optional",
         },
     ],
     expose: [

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,7 @@ XRSpace* XRAnchor::anchorSpace(ExceptionState& exception_state) const {
         MakeGarbageCollected<XRObjectSpace<XRAnchor>>(session_, this);
   }
 
-  return anchor_space_;
+  return anchor_space_.Get();
 }
 
 device::mojom::blink::XRNativeOriginInformationPtr XRAnchor::NativeOrigin()
@@ -69,7 +69,7 @@ device::mojom::blink::XRNativeOriginInformationPtr XRAnchor::NativeOrigin()
       this->id());
 }
 
-absl::optional<TransformationMatrix> XRAnchor::MojoFromObject() const {
+absl::optional<gfx::Transform> XRAnchor::MojoFromObject() const {
   DVLOG(3) << __func__ << ": id_=" << id_;
 
   if (!mojo_from_anchor_) {
@@ -77,7 +77,7 @@ absl::optional<TransformationMatrix> XRAnchor::MojoFromObject() const {
     return absl::nullopt;
   }
 
-  return TransformationMatrix(mojo_from_anchor_->ToTransform());
+  return mojo_from_anchor_->ToTransform();
 }
 
 void XRAnchor::Delete() {

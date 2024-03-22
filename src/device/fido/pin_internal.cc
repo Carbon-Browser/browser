@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -284,10 +284,11 @@ class ProtocolV2 : public ProtocolV1 {
     static_assert(kSharedKeyLength == 2 * SHA256_DIGEST_LENGTH, "");
     DCHECK_GE(*out_len, static_cast<size_t>(kSharedKeyLength));
     auto hmac_key_out =
-        base::make_span(reinterpret_cast<uint8_t*>(out), SHA256_DIGEST_LENGTH);
+        base::make_span(reinterpret_cast<uint8_t*>(out),
+                        static_cast<size_t>(SHA256_DIGEST_LENGTH));
     auto aes_key_out =
         base::make_span(reinterpret_cast<uint8_t*>(out) + SHA256_DIGEST_LENGTH,
-                        SHA256_DIGEST_LENGTH);
+                        static_cast<size_t>(SHA256_DIGEST_LENGTH));
 
     constexpr uint8_t kHMACKeyInfo[] = "CTAP2 HMAC key";
     constexpr uint8_t kAESKeyInfo[] = "CTAP2 AES key";

@@ -1,4 +1,4 @@
-// Copyright 2020 The Crashpad Authors. All rights reserved.
+// Copyright 2020 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 #include "snapshot/ios/thread_snapshot_ios_intermediate_dump.h"
 
-#include "base/mac/mach_logging.h"
+#include "base/apple/mach_logging.h"
 #include "snapshot/ios/intermediate_dump_reader_util.h"
 #include "snapshot/mac/cpu_context_mac.h"
 #include "util/ios/ios_intermediate_dump_data.h"

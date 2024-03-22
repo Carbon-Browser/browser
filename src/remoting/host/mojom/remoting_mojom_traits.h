@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,20 @@
 #include <memory>
 #include <string>
 
+#include <optional>
 #include "base/containers/span.h"
+#include "base/files/file_path.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/numerics/safe_math.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/base/byte_string_mojom_traits.h"
+#include "mojo/public/cpp/base/file_path_mojom_traits.h"
 #include "mojo/public/cpp/bindings/array_traits.h"
 #include "mojo/public/cpp/bindings/array_traits_protobuf.h"
 #include "mojo/public/cpp/bindings/enum_traits.h"
 #include "mojo/public/cpp/bindings/map_traits_protobuf.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
+#include "remoting/base/result.h"
 #include "remoting/host/base/desktop_environment_options.h"
 #include "remoting/host/base/screen_resolution.h"
 #include "remoting/host/mojom/desktop_session.mojom-shared.h"
@@ -27,9 +32,10 @@
 #include "remoting/proto/audio.pb.h"
 #include "remoting/proto/control.pb.h"
 #include "remoting/proto/event.pb.h"
+#include "remoting/proto/file_transfer.pb.h"
+#include "remoting/protocol/file_transfer_helpers.h"
 #include "remoting/protocol/transport.h"
 #include "services/network/public/cpp/ip_endpoint_mojom_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_geometry.h"
 #include "third_party/webrtc/modules/desktop_capture/mouse_cursor.h"
 #include "ui/gfx/geometry/mojom/geometry_mojom_traits.h"
@@ -37,7 +43,7 @@
 namespace mojo {
 
 template <>
-class mojo::StructTraits<remoting::mojom::BoolDataView, bool> {
+class StructTraits<remoting::mojom::BoolDataView, bool> {
  public:
   static bool value(bool value) { return value; }
 
@@ -48,7 +54,7 @@ class mojo::StructTraits<remoting::mojom::BoolDataView, bool> {
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::FloatDataView, float> {
+class StructTraits<remoting::mojom::FloatDataView, float> {
  public:
   static float value(float value) { return value; }
 
@@ -59,7 +65,7 @@ class mojo::StructTraits<remoting::mojom::FloatDataView, float> {
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::Int32DataView, int32_t> {
+class StructTraits<remoting::mojom::Int32DataView, int32_t> {
  public:
   static int32_t value(int32_t value) { return value; }
 
@@ -71,7 +77,7 @@ class mojo::StructTraits<remoting::mojom::Int32DataView, int32_t> {
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::UInt32DataView, uint32_t> {
+class StructTraits<remoting::mojom::UInt32DataView, uint32_t> {
  public:
   static uint32_t value(uint32_t value) { return value; }
 
@@ -83,8 +89,8 @@ class mojo::StructTraits<remoting::mojom::UInt32DataView, uint32_t> {
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::DesktopCaptureOptionsDataView,
-                         ::webrtc::DesktopCaptureOptions> {
+class StructTraits<remoting::mojom::DesktopCaptureOptionsDataView,
+                   ::webrtc::DesktopCaptureOptions> {
  public:
   static bool use_update_notifications(
       const ::webrtc::DesktopCaptureOptions& options) {
@@ -108,8 +114,8 @@ class mojo::StructTraits<remoting::mojom::DesktopCaptureOptionsDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::DesktopEnvironmentOptionsDataView,
-                         ::remoting::DesktopEnvironmentOptions> {
+class StructTraits<remoting::mojom::DesktopEnvironmentOptionsDataView,
+                   ::remoting::DesktopEnvironmentOptions> {
  public:
   static bool enable_curtaining(
       const ::remoting::DesktopEnvironmentOptions& options) {
@@ -146,10 +152,10 @@ class mojo::StructTraits<remoting::mojom::DesktopEnvironmentOptionsDataView,
     return options.enable_remote_webauthn();
   }
 
-  static absl::optional<uint32_t> clipboard_size(
+  static std::optional<uint32_t> clipboard_size(
       const ::remoting::DesktopEnvironmentOptions& options) {
     if (!options.clipboard_size().has_value()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     size_t clipboard_size = options.clipboard_size().value();
@@ -205,8 +211,8 @@ struct EnumTraits<remoting::mojom::DesktopCaptureResult,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::DesktopRectDataView,
-                         ::webrtc::DesktopRect> {
+class StructTraits<remoting::mojom::DesktopRectDataView,
+                   ::webrtc::DesktopRect> {
  public:
   static int32_t left(const ::webrtc::DesktopRect& rect) { return rect.left(); }
 
@@ -225,8 +231,8 @@ class mojo::StructTraits<remoting::mojom::DesktopRectDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::DesktopSizeDataView,
-                         ::webrtc::DesktopSize> {
+class StructTraits<remoting::mojom::DesktopSizeDataView,
+                   ::webrtc::DesktopSize> {
  public:
   static int32_t width(const ::webrtc::DesktopSize& size) {
     return size.width();
@@ -241,8 +247,8 @@ class mojo::StructTraits<remoting::mojom::DesktopSizeDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::DesktopVectorDataView,
-                         ::webrtc::DesktopVector> {
+class StructTraits<remoting::mojom::DesktopVectorDataView,
+                   ::webrtc::DesktopVector> {
  public:
   static int32_t x(const ::webrtc::DesktopVector& vector) { return vector.x(); }
 
@@ -253,8 +259,8 @@ class mojo::StructTraits<remoting::mojom::DesktopVectorDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::MouseCursorDataView,
-                         ::webrtc::MouseCursor> {
+class StructTraits<remoting::mojom::MouseCursorDataView,
+                   ::webrtc::MouseCursor> {
  public:
   static const webrtc::DesktopSize& image_size(
       const ::webrtc::MouseCursor& cursor) {
@@ -264,9 +270,12 @@ class mojo::StructTraits<remoting::mojom::MouseCursorDataView,
   static base::span<const uint8_t> image_data(
       const ::webrtc::MouseCursor& cursor) {
     auto& image_size = cursor.image()->size();
-    auto buffer_size = ::webrtc::DesktopFrame::kBytesPerPixel *
-                       image_size.width() * image_size.height();
-    return base::span<const uint8_t>(cursor.image()->data(), buffer_size);
+    base::CheckedNumeric<size_t> buffer_size(
+        ::webrtc::DesktopFrame::kBytesPerPixel);
+    buffer_size *= image_size.width();
+    buffer_size *= image_size.height();
+    return base::span<const uint8_t>(cursor.image()->data(),
+                                     buffer_size.ValueOrDie());
   }
 
   static const webrtc::DesktopVector& hotspot(
@@ -506,8 +515,8 @@ struct EnumTraits<remoting::mojom::AudioPacket_SamplingRate,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::AudioPacketDataView,
-                         ::std::unique_ptr<::remoting::AudioPacket>> {
+class StructTraits<remoting::mojom::AudioPacketDataView,
+                   ::std::unique_ptr<::remoting::AudioPacket>> {
  public:
   static int32_t timestamp(
       const ::std::unique_ptr<::remoting::AudioPacket>& packet) {
@@ -544,8 +553,8 @@ class mojo::StructTraits<remoting::mojom::AudioPacketDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::ClipboardEventDataView,
-                         ::remoting::protocol::ClipboardEvent> {
+class StructTraits<remoting::mojom::ClipboardEventDataView,
+                   ::remoting::protocol::ClipboardEvent> {
  public:
   static const std::string& mime_type(
       const ::remoting::protocol::ClipboardEvent& event) {
@@ -562,8 +571,186 @@ class mojo::StructTraits<remoting::mojom::ClipboardEventDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::KeyboardLayoutDataView,
-                         ::remoting::protocol::KeyboardLayout> {
+class UnionTraits<
+    remoting::mojom::ReadChunkResultDataView,
+    ::remoting::Result<std::vector<uint8_t>,
+                       ::remoting::protocol::FileTransfer_Error>> {
+ public:
+  static remoting::mojom::ReadChunkResultDataView::Tag GetTag(
+      const ::remoting::Result<std::vector<uint8_t>,
+                               ::remoting::protocol::FileTransfer_Error>&
+          result) {
+    if (result.is_success())
+      return remoting::mojom::ReadChunkResultDataView::Tag::kData;
+    else if (result.is_error())
+      return remoting::mojom::ReadChunkResultDataView::Tag::kError;
+
+    NOTREACHED();
+    return remoting::mojom::ReadChunkResultDataView::Tag::kError;
+  }
+
+  static const std::vector<uint8_t>& data(
+      const ::remoting::Result<std::vector<uint8_t>,
+                               ::remoting::protocol::FileTransfer_Error>&
+          result) {
+    return result.success();
+  }
+
+  static const ::remoting::protocol::FileTransfer_Error& error(
+      const ::remoting::Result<std::vector<uint8_t>,
+                               ::remoting::protocol::FileTransfer_Error>&
+          result) {
+    return result.error();
+  }
+
+  static bool Read(
+      remoting::mojom::ReadChunkResultDataView data_view,
+      ::remoting::Result<std::vector<uint8_t>,
+                         ::remoting::protocol::FileTransfer_Error>* out_result);
+};
+
+template <>
+class StructTraits<remoting::mojom::FileTransferErrorDataView,
+                   ::remoting::protocol::FileTransfer_Error> {
+ public:
+  static ::remoting::protocol::FileTransfer_Error_Type type(
+      const ::remoting::protocol::FileTransfer_Error& error) {
+    return error.type();
+  }
+
+  static std::optional<int32_t> api_error_code(
+      const ::remoting::protocol::FileTransfer_Error& error) {
+    if (error.has_api_error_code()) {
+      return error.api_error_code();
+    }
+    return std::nullopt;
+  }
+
+  static const std::string& function(
+      const ::remoting::protocol::FileTransfer_Error& error) {
+    return error.function();
+  }
+
+  static const std::string& source_file(
+      const ::remoting::protocol::FileTransfer_Error& error) {
+    return error.source_file();
+  }
+
+  static uint32_t line_number(
+      const ::remoting::protocol::FileTransfer_Error& error) {
+    return error.line_number();
+  }
+
+  static bool Read(remoting::mojom::FileTransferErrorDataView data_view,
+                   ::remoting::protocol::FileTransfer_Error* out_error);
+};
+
+template <>
+struct EnumTraits<remoting::mojom::FileTransferError_Type,
+                  ::remoting::protocol::FileTransfer_Error_Type> {
+  static remoting::mojom::FileTransferError_Type ToMojom(
+      ::remoting::protocol::FileTransfer_Error_Type input) {
+    switch (input) {
+      case ::remoting::protocol::FileTransfer_Error::UNSPECIFIED:
+        return remoting::mojom::FileTransferError_Type::kUnknown;
+      case ::remoting::protocol::FileTransfer_Error::CANCELED:
+        return remoting::mojom::FileTransferError_Type::kCanceled;
+      case ::remoting::protocol::FileTransfer_Error::UNEXPECTED_ERROR:
+        return remoting::mojom::FileTransferError_Type::kUnexpectedError;
+      case ::remoting::protocol::FileTransfer_Error::PROTOCOL_ERROR:
+        return remoting::mojom::FileTransferError_Type::kProtocolError;
+      case ::remoting::protocol::FileTransfer_Error::PERMISSION_DENIED:
+        return remoting::mojom::FileTransferError_Type::kPermissionDenied;
+      case ::remoting::protocol::FileTransfer_Error::OUT_OF_DISK_SPACE:
+        return remoting::mojom::FileTransferError_Type::kOutOfDiskSpace;
+      case ::remoting::protocol::FileTransfer_Error::IO_ERROR:
+        return remoting::mojom::FileTransferError_Type::kIoError;
+      case ::remoting::protocol::FileTransfer_Error::NOT_LOGGED_IN:
+        return remoting::mojom::FileTransferError_Type::kNotLoggedIn;
+    }
+
+    NOTREACHED();
+    return remoting::mojom::FileTransferError_Type::kUnknown;
+  }
+
+  static bool FromMojom(remoting::mojom::FileTransferError_Type input,
+                        ::remoting::protocol::FileTransfer_Error_Type* out) {
+    switch (input) {
+      case remoting::mojom::FileTransferError_Type::kUnknown:
+        *out = ::remoting::protocol::FileTransfer_Error::UNSPECIFIED;
+        return true;
+      case remoting::mojom::FileTransferError_Type::kCanceled:
+        *out = ::remoting::protocol::FileTransfer_Error::CANCELED;
+        return true;
+      case remoting::mojom::FileTransferError_Type::kUnexpectedError:
+        *out = ::remoting::protocol::FileTransfer_Error::UNEXPECTED_ERROR;
+        return true;
+      case remoting::mojom::FileTransferError_Type::kProtocolError:
+        *out = ::remoting::protocol::FileTransfer_Error::PROTOCOL_ERROR;
+        return true;
+      case remoting::mojom::FileTransferError_Type::kPermissionDenied:
+        *out = ::remoting::protocol::FileTransfer_Error::PERMISSION_DENIED;
+        return true;
+      case remoting::mojom::FileTransferError_Type::kOutOfDiskSpace:
+        *out = ::remoting::protocol::FileTransfer_Error::OUT_OF_DISK_SPACE;
+        return true;
+      case remoting::mojom::FileTransferError_Type::kIoError:
+        *out = ::remoting::protocol::FileTransfer_Error::IO_ERROR;
+        return true;
+      case remoting::mojom::FileTransferError_Type::kNotLoggedIn:
+        *out = ::remoting::protocol::FileTransfer_Error::NOT_LOGGED_IN;
+        return true;
+    }
+
+    NOTREACHED();
+    return false;
+  }
+};
+
+#if BUILDFLAG(IS_WIN)
+template <>
+class UnionTraits<
+    remoting::mojom::FileChooserResultDataView,
+    ::remoting::Result<base::FilePath,
+                       ::remoting::protocol::FileTransfer_Error>> {
+ public:
+  static remoting::mojom::FileChooserResultDataView::Tag GetTag(
+      const ::remoting::Result<base::FilePath,
+                               ::remoting::protocol::FileTransfer_Error>&
+          result) {
+    if (result.is_success())
+      return remoting::mojom::FileChooserResultDataView::Tag::kFilepath;
+    else if (result.is_error())
+      return remoting::mojom::FileChooserResultDataView::Tag::kError;
+
+    NOTREACHED();
+    return remoting::mojom::FileChooserResultDataView::Tag::kError;
+  }
+
+  static const base::FilePath& filepath(
+      const ::remoting::Result<base::FilePath,
+                               ::remoting::protocol::FileTransfer_Error>&
+          result) {
+    return result.success();
+  }
+
+  static const ::remoting::protocol::FileTransfer_Error& error(
+      const ::remoting::Result<base::FilePath,
+                               ::remoting::protocol::FileTransfer_Error>&
+          result) {
+    return result.error();
+  }
+
+  static bool Read(
+      remoting::mojom::FileChooserResultDataView data_view,
+      ::remoting::Result<base::FilePath,
+                         ::remoting::protocol::FileTransfer_Error>* out_result);
+};
+#endif  // BUILDFLAG(IS_WIN)
+
+template <>
+class StructTraits<remoting::mojom::KeyboardLayoutDataView,
+                   ::remoting::protocol::KeyboardLayout> {
  public:
   static const ::google::protobuf::
       Map<uint32_t, ::remoting::protocol::KeyboardLayout_KeyBehavior>&
@@ -576,8 +763,8 @@ class mojo::StructTraits<remoting::mojom::KeyboardLayoutDataView,
 };
 
 template <>
-class mojo::UnionTraits<remoting::mojom::KeyActionDataView,
-                        ::remoting::protocol::KeyboardLayout_KeyAction> {
+class UnionTraits<remoting::mojom::KeyActionDataView,
+                  ::remoting::protocol::KeyboardLayout_KeyAction> {
  public:
   static remoting::mojom::KeyActionDataView::Tag GetTag(
       const ::remoting::protocol::KeyboardLayout_KeyAction& value) {
@@ -609,8 +796,8 @@ class mojo::UnionTraits<remoting::mojom::KeyActionDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::KeyBehaviorDataView,
-                         ::remoting::protocol::KeyboardLayout_KeyBehavior> {
+class StructTraits<remoting::mojom::KeyBehaviorDataView,
+                   ::remoting::protocol::KeyboardLayout_KeyBehavior> {
  public:
   static const ::google::protobuf::Map<
       uint32_t,
@@ -967,8 +1154,8 @@ struct EnumTraits<remoting::mojom::LayoutKeyFunction,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::KeyEventDataView,
-                         ::remoting::protocol::KeyEvent> {
+class StructTraits<remoting::mojom::KeyEventDataView,
+                   ::remoting::protocol::KeyEvent> {
  public:
   static bool pressed(const ::remoting::protocol::KeyEvent& event) {
     return event.pressed();
@@ -982,20 +1169,20 @@ class mojo::StructTraits<remoting::mojom::KeyEventDataView,
     return event.lock_states();
   }
 
-  static absl::optional<bool> caps_lock_state(
+  static std::optional<bool> caps_lock_state(
       const ::remoting::protocol::KeyEvent& event) {
     if (event.has_caps_lock_state()) {
       return event.caps_lock_state();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  static absl::optional<bool> num_lock_state(
+  static std::optional<bool> num_lock_state(
       const ::remoting::protocol::KeyEvent& event) {
     if (event.has_num_lock_state()) {
       return event.num_lock_state();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   static bool Read(remoting::mojom::KeyEventDataView data_view,
@@ -1003,23 +1190,23 @@ class mojo::StructTraits<remoting::mojom::KeyEventDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::MouseEventDataView,
-                         ::remoting::protocol::MouseEvent> {
+class StructTraits<remoting::mojom::MouseEventDataView,
+                   ::remoting::protocol::MouseEvent> {
  public:
-  static absl::optional<int32_t> x(
+  static std::optional<int32_t> x(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.has_x()) {
       return event.x();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  static absl::optional<int32_t> y(
+  static std::optional<int32_t> y(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.has_y()) {
       return event.y();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   static ::remoting::protocol::MouseEvent::MouseButton button(
@@ -1030,61 +1217,61 @@ class mojo::StructTraits<remoting::mojom::MouseEventDataView,
     return ::remoting::protocol::MouseEvent::BUTTON_UNDEFINED;
   }
 
-  static absl::optional<bool> button_down(
+  static std::optional<bool> button_down(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.has_button_down()) {
       DCHECK(event.has_button());
       return event.button_down();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  static absl::optional<float> wheel_delta_x(
+  static std::optional<float> wheel_delta_x(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.has_wheel_delta_x()) {
       return event.wheel_delta_x();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  static absl::optional<float> wheel_delta_y(
+  static std::optional<float> wheel_delta_y(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.has_wheel_delta_y()) {
       return event.wheel_delta_y();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  static absl::optional<float> wheel_ticks_x(
+  static std::optional<float> wheel_ticks_x(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.wheel_ticks_x()) {
       return event.wheel_ticks_x();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  static absl::optional<float> wheel_ticks_y(
+  static std::optional<float> wheel_ticks_y(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.wheel_ticks_y()) {
       return event.wheel_ticks_y();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  static absl::optional<int32_t> delta_x(
+  static std::optional<int32_t> delta_x(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.has_delta_x()) {
       return event.delta_x();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  static absl::optional<int32_t> delta_y(
+  static std::optional<int32_t> delta_y(
       const ::remoting::protocol::MouseEvent& event) {
     if (event.has_delta_y()) {
       return event.delta_y();
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   static bool Read(remoting::mojom::MouseEventDataView data_view,
@@ -1092,8 +1279,8 @@ class mojo::StructTraits<remoting::mojom::MouseEventDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::ScreenResolutionDataView,
-                         ::remoting::ScreenResolution> {
+class StructTraits<remoting::mojom::ScreenResolutionDataView,
+                   ::remoting::ScreenResolution> {
  public:
   static const ::webrtc::DesktopSize& dimensions(
       const ::remoting::ScreenResolution& resolution) {
@@ -1110,8 +1297,8 @@ class mojo::StructTraits<remoting::mojom::ScreenResolutionDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::TextEventDataView,
-                         ::remoting::protocol::TextEvent> {
+class StructTraits<remoting::mojom::TextEventDataView,
+                   ::remoting::protocol::TextEvent> {
  public:
   static const std::string& text(const ::remoting::protocol::TextEvent& event) {
     return event.text();
@@ -1122,8 +1309,8 @@ class mojo::StructTraits<remoting::mojom::TextEventDataView,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::TouchEventPointDataView,
-                         ::remoting::protocol::TouchEventPoint> {
+class StructTraits<remoting::mojom::TouchEventPointDataView,
+                   ::remoting::protocol::TouchEventPoint> {
  public:
   static uint32_t id(const ::remoting::protocol::TouchEventPoint& event) {
     return event.id();
@@ -1199,8 +1386,8 @@ struct EnumTraits<remoting::mojom::TouchEventType,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::TouchEventDataView,
-                         ::remoting::protocol::TouchEvent> {
+class StructTraits<remoting::mojom::TouchEventDataView,
+                   ::remoting::protocol::TouchEvent> {
  public:
   static ::remoting::protocol::TouchEvent::TouchEventType event_type(
       const ::remoting::protocol::TouchEvent& event) {
@@ -1259,8 +1446,8 @@ struct EnumTraits<remoting::mojom::TransportRouteType,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::TransportRouteDataView,
-                         ::remoting::protocol::TransportRoute> {
+class StructTraits<remoting::mojom::TransportRouteDataView,
+                   ::remoting::protocol::TransportRoute> {
  public:
   static ::remoting::protocol::TransportRoute::RouteType type(
       const ::remoting::protocol::TransportRoute& transport_route) {
@@ -1328,6 +1515,8 @@ struct EnumTraits<remoting::mojom::ProtocolErrorCode,
       case ::remoting::protocol::ErrorCode::LOCATION_AUTHZ_POLICY_CHECK_FAILED:
         return remoting::mojom::ProtocolErrorCode::
             kLocationAuthzPolicyCheckFailed;
+      case ::remoting::protocol::ErrorCode::UNAUTHORIZED_ACCOUNT:
+        return remoting::mojom::ProtocolErrorCode::kUnauthorizedAccount;
     }
 
     NOTREACHED();
@@ -1398,6 +1587,9 @@ struct EnumTraits<remoting::mojom::ProtocolErrorCode,
         *out =
             ::remoting::protocol::ErrorCode::LOCATION_AUTHZ_POLICY_CHECK_FAILED;
         return true;
+      case remoting::mojom::ProtocolErrorCode::kUnauthorizedAccount:
+        *out = ::remoting::protocol::ErrorCode::UNAUTHORIZED_ACCOUNT;
+        return true;
     }
 
     NOTREACHED();
@@ -1406,8 +1598,8 @@ struct EnumTraits<remoting::mojom::ProtocolErrorCode,
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::VideoLayoutDataView,
-                         ::remoting::protocol::VideoLayout> {
+class StructTraits<remoting::mojom::VideoLayoutDataView,
+                   ::remoting::protocol::VideoLayout> {
  public:
   static const ::google::protobuf::RepeatedPtrField<
       ::remoting::protocol::VideoTrackLayout>&
@@ -1420,13 +1612,18 @@ class mojo::StructTraits<remoting::mojom::VideoLayoutDataView,
     return layout.supports_full_desktop_capture();
   }
 
+  static int64_t primary_screen_id(
+      const ::remoting::protocol::VideoLayout& layout) {
+    return layout.primary_screen_id();
+  }
+
   static bool Read(remoting::mojom::VideoLayoutDataView data_view,
                    ::remoting::protocol::VideoLayout* out_layout);
 };
 
 template <>
-class mojo::StructTraits<remoting::mojom::VideoTrackLayoutDataView,
-                         ::remoting::protocol::VideoTrackLayout> {
+class StructTraits<remoting::mojom::VideoTrackLayoutDataView,
+                   ::remoting::protocol::VideoTrackLayout> {
  public:
   static int64_t screen_id(
       const ::remoting::protocol::VideoTrackLayout& track) {

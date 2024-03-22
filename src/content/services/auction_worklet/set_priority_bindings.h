@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_SERVICES_AUCTION_WORKLET_SET_PRIORITY_BINDINGS_H_
 #define CONTENT_SERVICES_AUCTION_WORKLET_SET_PRIORITY_BINDINGS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
 #include "content/services/auction_worklet/context_recycler.h"
@@ -17,8 +17,8 @@ namespace auction_worklet {
 
 // Class to manage bindings for setting interest group priority. Expected to be
 // used for a for a context managed by ContextRecycler. Allows only a single
-// call for to set a priority. On any subequent calls, clears the set priority
-// and throws an exception.
+// call to set a priority. On any subsequent calls, clears the set priority and
+// throws an exception.
 class SetPriorityBindings : public Bindings {
  public:
   explicit SetPriorityBindings(AuctionV8Helper* v8_helper);
@@ -26,10 +26,9 @@ class SetPriorityBindings : public Bindings {
   SetPriorityBindings& operator=(const SetPriorityBindings&) = delete;
   ~SetPriorityBindings() override;
 
-  // Add report method to `global_template`. The ReportBindings must outlive
-  // the template.
-  void FillInGlobalTemplate(
-      v8::Local<v8::ObjectTemplate> global_template) override;
+  // Add report method to the global context. The ReportBindings must outlive
+  // the context.
+  void AttachToContext(v8::Local<v8::Context> context) override;
   void Reset() override;
 
   const absl::optional<double>& set_priority() const { return set_priority_; }
@@ -39,12 +38,11 @@ class SetPriorityBindings : public Bindings {
 
   const raw_ptr<AuctionV8Helper> v8_helper_;
 
-  // This cleared if an exception is thrown.
+  // This is cleared if an exception is thrown.
   absl::optional<double> set_priority_;
 
-  // Once an exception has been thrown, `set_priority_` will be permanently
-  // cleared.
-  bool exception_thrown_ = false;
+  // setPriority() can only be called once.
+  bool already_called_ = false;
 };
 
 }  // namespace auction_worklet

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,31 +9,8 @@
 
 namespace apps {
 
-AppCapabilityAccessCache::Observer::Observer(AppCapabilityAccessCache* cache) {
-  Observe(cache);
-}
-
-AppCapabilityAccessCache::Observer::Observer() = default;
-
 AppCapabilityAccessCache::Observer::~Observer() {
-  if (cache_) {
-    cache_->RemoveObserver(this);
-  }
-}
-
-void AppCapabilityAccessCache::Observer::Observe(
-    AppCapabilityAccessCache* cache) {
-  if (cache == cache_) {
-    // Early exit to avoid infinite loops if we're in the middle of a callback.
-    return;
-  }
-  if (cache_) {
-    cache_->RemoveObserver(this);
-  }
-  cache_ = cache;
-  if (cache_) {
-    cache_->AddObserver(this);
-  }
+  CHECK(!IsInObserverList());
 }
 
 AppCapabilityAccessCache::AppCapabilityAccessCache()
@@ -61,8 +38,10 @@ void AppCapabilityAccessCache::SetAccountId(const AccountId& account_id) {
 std::set<std::string> AppCapabilityAccessCache::GetAppsAccessingCamera() {
   std::set<std::string> app_ids;
   ForEachApp([&app_ids](const apps::CapabilityAccessUpdate& update) {
-    if (update.Camera() == apps::mojom::OptionalBool::kTrue)
+    auto camera = update.Camera();
+    if (camera.value_or(false)) {
       app_ids.insert(update.AppId());
+    }
   });
   return app_ids;
 }
@@ -70,14 +49,26 @@ std::set<std::string> AppCapabilityAccessCache::GetAppsAccessingCamera() {
 std::set<std::string> AppCapabilityAccessCache::GetAppsAccessingMicrophone() {
   std::set<std::string> app_ids;
   ForEachApp([&app_ids](const apps::CapabilityAccessUpdate& update) {
-    if (update.Microphone() == apps::mojom::OptionalBool::kTrue)
+    auto microphone = update.Microphone();
+    if (microphone.value_or(false)) {
       app_ids.insert(update.AppId());
+    }
+  });
+  return app_ids;
+}
+
+std::set<std::string> AppCapabilityAccessCache::GetAppsAccessingCapabilities() {
+  std::set<std::string> app_ids;
+  ForEachApp([&app_ids](const apps::CapabilityAccessUpdate& update) {
+    if (update.IsAccessingAnyCapability()) {
+      app_ids.insert(update.AppId());
+    }
   });
   return app_ids;
 }
 
 void AppCapabilityAccessCache::OnCapabilityAccesses(
-    std::vector<apps::mojom::CapabilityAccessPtr> deltas) {
+    std::vector<CapabilityAccessPtr> deltas) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(my_sequence_checker_);
 
   if (!deltas_in_progress_.empty()) {
@@ -88,14 +79,14 @@ void AppCapabilityAccessCache::OnCapabilityAccesses(
 
   DoOnCapabilityAccesses(std::move(deltas));
   while (!deltas_pending_.empty()) {
-    std::vector<apps::mojom::CapabilityAccessPtr> pending;
+    std::vector<CapabilityAccessPtr> pending;
     pending.swap(deltas_pending_);
     DoOnCapabilityAccesses(std::move(pending));
   }
 }
 
 void AppCapabilityAccessCache::DoOnCapabilityAccesses(
-    std::vector<apps::mojom::CapabilityAccessPtr> deltas) {
+    std::vector<CapabilityAccessPtr> deltas) {
   // Merge any deltas elements that have the same app_id. If an observer's
   // OnCapabilityAccessUpdate calls back into this AppCapabilityAccessCache then
   // we can therefore present a single delta for any given app_id.
@@ -115,9 +106,9 @@ void AppCapabilityAccessCache::DoOnCapabilityAccesses(
   // Notify the observers for every de-duplicated delta.
   for (const auto& d_iter : deltas_in_progress_) {
     auto s_iter = states_.find(d_iter.first);
-    apps::mojom::CapabilityAccess* state =
+    CapabilityAccess* state =
         (s_iter != states_.end()) ? s_iter->second.get() : nullptr;
-    apps::mojom::CapabilityAccess* delta = d_iter.second;
+    CapabilityAccess* delta = d_iter.second;
 
     for (auto& obs : observers_) {
       obs.OnCapabilityAccessUpdate(
@@ -128,9 +119,9 @@ void AppCapabilityAccessCache::DoOnCapabilityAccesses(
   // Update the states for every de-duplicated delta.
   for (const auto& d_iter : deltas_in_progress_) {
     auto s_iter = states_.find(d_iter.first);
-    apps::mojom::CapabilityAccess* state =
+    CapabilityAccess* state =
         (s_iter != states_.end()) ? s_iter->second.get() : nullptr;
-    apps::mojom::CapabilityAccess* delta = d_iter.second;
+    CapabilityAccess* delta = d_iter.second;
 
     if (state) {
       CapabilityAccessUpdate::Merge(state, delta);

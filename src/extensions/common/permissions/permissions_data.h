@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
 #include "extensions/common/extension_id.h"
@@ -325,7 +324,7 @@ class PermissionsData {
   bool IsPolicyBlockedHostUnsafe(const GURL& url) const;
 
   // The associated extension's id.
-  std::string extension_id_;
+  ExtensionId extension_id_;
 
   // The associated extension's manifest type.
   Manifest::Type manifest_type_;
@@ -364,7 +363,7 @@ class PermissionsData {
   // default policy-level and user-level settings.
   // If empty, these settings are ignored. This should mostly only be the case
   // in unittests.
-  mutable absl::optional<int> context_id_;
+  mutable std::optional<int> context_id_;
 
   // Whether the extension uses the default policy host restrictions.
   mutable bool uses_default_policy_host_restrictions_ = true;

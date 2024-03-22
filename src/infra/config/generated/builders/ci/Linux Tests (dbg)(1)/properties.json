@@ -7,7 +7,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux Builder (dbg)",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-linux-archive",
@@ -22,9 +22,6 @@
                 "target_bits": 64
               },
               "legacy_gclient_config": {
-                "apply_configs": [
-                  "enable_reclient"
-                ],
                 "config": "chromium"
               }
             }
@@ -33,7 +30,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux Tests (dbg)(1)",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-linux-archive",
@@ -48,15 +45,12 @@
                 "target_bits": 64
               },
               "legacy_gclient_config": {
-                "apply_configs": [
-                  "enable_reclient"
-                ],
                 "config": "chromium"
               },
               "parent": {
                 "bucket": "ci",
                 "builder": "Linux Builder (dbg)",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           }
@@ -66,7 +60,7 @@
         {
           "bucket": "ci",
           "builder": "Linux Tests (dbg)(1)",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "mirroring_builder_group_and_names": [

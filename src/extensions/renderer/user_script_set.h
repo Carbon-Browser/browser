@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,9 +82,9 @@ class UserScriptSet {
 
   // Returns the contents of a script file.
   // Note that copying is cheap as this uses WebString.
-  blink::WebString GetJsSource(const UserScript::File& file,
+  blink::WebString GetJsSource(const UserScript::Content& file,
                                bool emulate_greasemonkey);
-  blink::WebString GetCssSource(const UserScript::File& file);
+  blink::WebString GetCssSource(const UserScript::Content& file);
 
  private:
   // Returns a new ScriptInjection for the given |script| to execute in the

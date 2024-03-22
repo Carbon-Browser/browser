@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,15 @@
 #include "components/services/app_service/public/cpp/macros.h"
 #include "components/services/app_service/public/cpp/permission.h"
 #include "components/services/app_service/public/cpp/run_on_os_login_types.h"
-#include "components/services/app_service/public/cpp/shortcut.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
+#include "components/services/app_service/public/protos/app_types.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace apps {
 
-// When adding a new item, update
-//   components/services/app_service/public/cpp/macros.h
-// macros if necessary.
+// When updating the enum below, update
+// //components/services/app_service/public/cpp/macros.h
+// macros if necessary, as well as the ApplicationType enum in
+// //components/services/app_service/public/protos/app_types.proto.
 ENUM(AppType,
      kUnknown,
      kArc,                         // Android app.
@@ -40,7 +40,8 @@ ENUM(AppType,
      kSystemWeb,                   // System web app.
      kStandaloneBrowserChromeApp,  // Chrome app hosted in Lacros.
      kExtension,                   // Browser extension.
-     kStandaloneBrowserExtension   // Extension hosted in Lacros.
+     kStandaloneBrowserExtension,  // Extension hosted in Lacros.
+     kBruschetta                   // Bruschetta app, see go/bruschetta.
 )
 
 // Whether an app is ready to launch, i.e. installed.
@@ -59,11 +60,14 @@ ENUM(Readiness,
      // apps, so publishers must set the app as uninstalled before
      // removing it.
      kRemoved,
-     kUninstalledByMigration)
+     // This is used for all non-user initiated uninstallation.
+     kUninstalledByNonUser)
 
 // How the app was installed.
-// This should be kept in sync with histograms.xml, and InstallReason in
-// enums.xml.
+// This should be kept in sync with histograms.xml, InstallReason in
+// enums.xml as well as ApplicationInstallReason in
+// //components/services/app_service/public/protos/app_types.proto.
+//
 // Note the enumeration is used in UMA histogram so entries should not be
 // re-ordered or removed. New entries should be added at the bottom.
 ENUM(InstallReason,
@@ -74,12 +78,16 @@ ENUM(InstallReason,
      kDefault,  // Preinstalled by default, but is not considered a system app.
      kSync,     // Installed by sync.
      kUser,     // Installed by user action.
-     kSubApp    // Installed by the SubApp API call.
+     kSubApp,   // Installed by the SubApp API call.
+     kKiosk,    // Installed by Kiosk on Chrome OS.
+     kCommandLine  // Installed by command line argument.
 )
 
 // Where the app was installed from.
-// This should be kept in sync with histograms.xml, and InstallSource in
-// enums.xml.
+// This should be kept in sync with histograms.xml, InstallSource in
+// enums.xml as well as ApplicationInstallSource in
+// //components/services/app_service/public/protos/app_types.proto.
+//
 // Note the enumeration is used in UMA histogram so entries should not be
 // re-ordered or removed. New entries should be added at the bottom.
 ENUM(InstallSource,
@@ -89,6 +97,20 @@ ENUM(InstallSource,
      kPlayStore,       // Installed from Play store.
      kChromeWebStore,  // Installed from Chrome web store.
      kBrowser          // Installed from browser.
+)
+
+// What caused the app to be uninstalled.
+// This should be kept in sync with UninstallSource in enums.xml as well as
+// ApplicationUninstallSource in
+// //components/services/app_service/public/protos/app_types.proto, so entries
+// should not be re-ordered or removed. New entries should be added at the
+// bottom.
+ENUM(UninstallSource,
+     kUnknown,
+     kAppList,        // Uninstall by the user from the App List (Launcher)
+     kAppManagement,  // Uninstall by the user from the App Management page
+     kShelf,          // Uninstall by the user from the Shelf
+     kMigration       // Uninstall by app migration.
 )
 
 // The window mode that each app will open in.
@@ -110,13 +132,23 @@ struct COMPONENT_EXPORT(APP_TYPES) App {
 
   ~App();
 
+  bool operator==(const App& other) const;
+  bool operator!=(const App& other) const;
+
   std::unique_ptr<App> Clone() const;
 
   AppType app_type;
   std::string app_id;
 
   Readiness readiness = Readiness::kUnknown;
+
+  // The full name of the app. Will be used in most UIs.
   absl::optional<std::string> name;
+  // A shortened version of the app name. May omit branding (e.g.
+  // "Google" prefixes) or rely on abbreviations (e.g. "YT Music"). If no
+  // `short_name` is supplied, the `name` will be used instead.
+  // The `short_name` may be used in UIs where space is limited and/or we want
+  // to optimize for scannability.
   absl::optional<std::string> short_name;
 
   // An optional, publisher-specific ID for this app, e.g. for Android apps,
@@ -147,9 +179,9 @@ struct COMPONENT_EXPORT(APP_TYPES) App {
   // Store, etc.
   InstallSource install_source = InstallSource::kUnknown;
 
-  // An optional ID used for policy to identify the app.
-  // For web apps, it contains the install URL.
-  absl::optional<std::string> policy_id;
+  // IDs used for policy to identify the app.
+  // For web apps, it contains the install URL(s).
+  std::vector<std::string> policy_ids;
 
   // Whether the app is an extensions::Extensions where is_platform_app()
   // returns true.
@@ -192,76 +224,49 @@ struct COMPONENT_EXPORT(APP_TYPES) App {
   // Whether the app runs on os login in a new window or not.
   absl::optional<RunOnOsLogin> run_on_os_login;
 
-  // Shortcuts help users perform specific actions easily.
-  // This vector must be treated atomically, if there is a shortcut
-  // change, the publisher must send through the entire list of shortcuts.
-  // Should contain no duplicate IDs.
-  // If empty during updates, Subscriber can assume no changes.
-  // There is no guarantee that this is sorted by any criteria.
-  Shortcuts shortcuts;
+  // Whether the app can be closed by the user.
+  absl::optional<bool> allow_close;
 
   // Storage space size for app and associated data.
   absl::optional<uint64_t> app_size_in_bytes;
   absl::optional<uint64_t> data_size_in_bytes;
 
-  // When adding new fields to the App type, the `Clone` function and the
-  // `AppUpdate` class should also be updated.
+  // App-specified supported locales.
+  std::vector<std::string> supported_locales;
+  // Currently selected locale, empty string means system language is used.
+  // ARC-specific note: Based on Android implementation, `selected_locale`
+  //  is not necessarily part of `supported_locales`.
+  absl::optional<std::string> selected_locale;
+
+  // When adding new fields to the App type, the `Clone` function, the
+  // `operator==` function, and the `AppUpdate` class should also be updated. If
+  // the new fields should be saved, below functions should be updated:
+  // `AppStorage::IsAppChanged`
+  // `AppStorageFileHandler::ConvertAppsToValue`
+  // `AppStorageFileHandler::ConvertValueToApps`
 };
 
 using AppPtr = std::unique_ptr<App>;
 
-// TODO(crbug.com/1253250): Remove these functions after migrating to non-mojo
-// AppService.
 COMPONENT_EXPORT(APP_TYPES)
-AppType ConvertMojomAppTypToAppType(apps::mojom::AppType mojom_app_type);
+bool IsEqual(const std::vector<AppPtr>& source,
+             const std::vector<AppPtr>& target);
 
 COMPONENT_EXPORT(APP_TYPES)
-mojom::AppType ConvertAppTypeToMojomAppType(AppType app_type);
+ApplicationType ConvertAppTypeToProtoApplicationType(AppType app_type);
 
 COMPONENT_EXPORT(APP_TYPES)
-Readiness ConvertMojomReadinessToReadiness(
-    apps::mojom::Readiness mojom_readiness);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::Readiness ConvertReadinessToMojomReadiness(Readiness readiness);
-
-COMPONENT_EXPORT(APP_TYPES)
-InstallReason ConvertMojomInstallReasonToInstallReason(
-    apps::mojom::InstallReason mojom_install_reason);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::InstallReason ConvertInstallReasonToMojomInstallReason(
+ApplicationInstallReason ConvertInstallReasonToProtoApplicationInstallReason(
     InstallReason install_reason);
 
 COMPONENT_EXPORT(APP_TYPES)
-InstallSource ConvertMojomInstallSourceToInstallSource(
-    apps::mojom::InstallSource mojom_install_source);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::InstallSource ConvertInstallSourceToMojomInstallSource(
+ApplicationInstallSource ConvertInstallSourceToProtoApplicationInstallSource(
     InstallSource install_source);
 
 COMPONENT_EXPORT(APP_TYPES)
-WindowMode ConvertMojomWindowModeToWindowMode(
-    apps::mojom::WindowMode mojom_window_mode);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::WindowMode ConvertWindowModeToMojomWindowMode(
-    WindowMode mojom_window_mode);
-
-COMPONENT_EXPORT(APP_TYPES)
-absl::optional<bool> GetOptionalBool(
-    const apps::mojom::OptionalBool& mojom_optional_bool);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::OptionalBool GetMojomOptionalBool(
-    const absl::optional<bool>& mojom_optional_bool);
-
-COMPONENT_EXPORT(APP_TYPES)
-AppPtr ConvertMojomAppToApp(const apps::mojom::AppPtr& mojom_app);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::AppPtr ConvertAppToMojomApp(const AppPtr& app);
+ApplicationUninstallSource
+ConvertUninstallSourceToProtoApplicationUninstallSource(
+    UninstallSource uninstall_source);
 
 }  // namespace apps
 

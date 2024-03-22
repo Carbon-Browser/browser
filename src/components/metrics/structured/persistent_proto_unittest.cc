@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,9 @@ class PersistentProtoTest : public testing::Test {
  public:
   void SetUp() override { ASSERT_TRUE(temp_dir_.CreateUniqueTempDir()); }
 
-  base::FilePath GetPath() { return temp_dir_.GetPath().Append("proto"); }
+  base::FilePath GetPath() {
+    return temp_dir_.GetPath().Append(FILE_PATH_LITERAL("proto"));
+  }
 
   void ClearDisk() {
     base::DeleteFile(GetPath());

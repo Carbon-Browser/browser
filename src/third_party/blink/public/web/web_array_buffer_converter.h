@@ -33,24 +33,19 @@
 
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/web/web_array_buffer.h"
+#include "v8/include/v8-local-handle.h"
 
 namespace v8 {
 class Isolate;
-class Object;
 class Value;
-template <class T>
-class Local;
 }
 
 namespace blink {
 
-class WebArrayBufferConverter {
+class BLINK_EXPORT WebArrayBufferConverter {
  public:
-  BLINK_EXPORT static v8::Local<v8::Value> ToV8Value(WebArrayBuffer*,
-                                                     v8::Local<v8::Object>,
-                                                     v8::Isolate*);
-  BLINK_EXPORT static WebArrayBuffer* CreateFromV8Value(v8::Local<v8::Value>,
-                                                        v8::Isolate*);
+  static v8::Local<v8::Value> ToV8Value(WebArrayBuffer*, v8::Isolate*);
+  static WebArrayBuffer* CreateFromV8Value(v8::Local<v8::Value>, v8::Isolate*);
 };
 
 }  // namespace blink

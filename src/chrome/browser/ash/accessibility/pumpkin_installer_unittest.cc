@@ -1,14 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/accessibility/pumpkin_installer.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/dlcservice/fake_dlcservice_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/fake_dlcservice_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/accessibility_features.h"
@@ -22,22 +21,9 @@ namespace ash {
 
 class PumpkinInstallerTest : public testing::Test {
  protected:
-  void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        ::features::kExperimentalAccessibilityDictationWithPumpkin);
-    installer_ = std::make_unique<PumpkinInstaller>();
+  void SetUp() override { installer_ = std::make_unique<PumpkinInstaller>(); }
 
-    chromeos::DBusThreadManager::Initialize();
-    chromeos::DlcserviceClient::InitializeFake();
-    fake_dlcservice_client_ = static_cast<chromeos::FakeDlcserviceClient*>(
-        chromeos::DlcserviceClient::Get());
-  }
-
-  void TearDown() override {
-    installer_.reset();
-    chromeos::DBusThreadManager::Shutdown();
-    chromeos::DlcserviceClient::Shutdown();
-  }
+  void TearDown() override { installer_.reset(); }
 
   void MaybeInstall() {
     installer_->MaybeInstall(
@@ -66,23 +52,23 @@ class PumpkinInstallerTest : public testing::Test {
   }
 
   void SetInstallError() {
-    fake_dlcservice_client_->set_install_error(dlcservice::kErrorNeedReboot);
+    fake_dlcservice_client_.set_install_error(dlcservice::kErrorNeedReboot);
   }
 
   void SetPumpkinAlreadyInstalled() {
     dlcservice::DlcState dlc_state;
     dlc_state.set_state(dlcservice::DlcState_State_INSTALLED);
-    fake_dlcservice_client_->set_dlc_state(dlc_state);
+    fake_dlcservice_client_.set_dlc_state(dlc_state);
   }
 
   void SetPumpkinCurrentlyInstalling() {
     dlcservice::DlcState dlc_state;
     dlc_state.set_state(dlcservice::DlcState_State_INSTALLING);
-    fake_dlcservice_client_->set_dlc_state(dlc_state);
+    fake_dlcservice_client_.set_dlc_state(dlc_state);
   }
 
   void SetGetDlcStateError() {
-    fake_dlcservice_client_->set_get_dlc_state_error("Test error");
+    fake_dlcservice_client_.set_get_dlc_state_error("Test error");
   }
 
   void ExpectSuccessHistogramCount(int expected_count) {
@@ -105,12 +91,11 @@ class PumpkinInstallerTest : public testing::Test {
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   std::unique_ptr<PumpkinInstaller> installer_;
-  chromeos::FakeDlcserviceClient* fake_dlcservice_client_;
+  FakeDlcserviceClient fake_dlcservice_client_;
   base::HistogramTester histogram_tester_;
   bool install_succeeded_ = false;
   bool install_failed_ = false;
   std::string last_error_ = std::string();
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // Verifies that PumpkinInstaller can successfully download the Pumpkin DLC.
@@ -144,11 +129,12 @@ TEST_F(PumpkinInstallerTest, AlreadyInstalled) {
   ASSERT_FALSE(install_succeeded());
   SetPumpkinAlreadyInstalled();
   MaybeInstallAndWait();
-  ASSERT_FALSE(install_succeeded());
-  ASSERT_TRUE(install_failed());
-  EXPECT_EQ("Pumpkin already installed.", last_error());
+  ASSERT_TRUE(install_succeeded());
+  ASSERT_FALSE(install_failed());
+  EXPECT_EQ("", last_error());
 
-  // No metrics are recorded because a download was never attempted.
+  // Pumpkin was already installed, so we shouldn't record any additional
+  // metrics.
   ExpectSuccessHistogramCount(0);
   ExpectFailureHistogramCount(0);
 }

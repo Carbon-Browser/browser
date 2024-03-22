@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/aligned_memory.h"
 #include "media/base/audio_sample_types.h"
 #include "media/base/media_shmem_export.h"
@@ -29,7 +29,7 @@ class MEDIA_SHMEM_EXPORT AudioBus {
  public:
   // Guaranteed alignment of each channel's data; use 16-byte alignment for easy
   // SSE optimizations.
-  enum { kChannelAlignment = 16 };
+  static constexpr size_t kChannelAlignment = 16;
 
   // Creates a new AudioBus and allocates |channels| of length |frames|.  Uses
   // channels() and frames_per_buffer() from AudioParameters if given.
@@ -69,6 +69,9 @@ class MEDIA_SHMEM_EXPORT AudioBus {
   // Uses channels() and frames_per_buffer() from AudioParameters if given.
   static int CalculateMemorySize(int channels, int frames);
   static int CalculateMemorySize(const AudioParameters& params);
+
+  // Checks if buffer is properly aligned to be used in `SetChannelData()`
+  static bool IsAligned(void* ptr);
 
   // Methods that are expected to be called after AudioBus::CreateWrapper() in
   // order to wrap externally allocated memory. Note: It is illegal to call

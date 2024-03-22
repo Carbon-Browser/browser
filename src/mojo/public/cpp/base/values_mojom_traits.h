@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,15 @@ struct ArrayTraits<base::Value::List> {
   static const base::Value& GetAt(const base::Value::List& in, size_t index) {
     return in[index];
   }
+
+  static base::Value& GetAt(base::Value::List& in, size_t index) {
+    return in[index];
+  }
+
+  static bool Resize(base::Value::List& in, size_t size) {
+    in.resize(size);
+    return true;
+  }
 };
 
 template <>
@@ -65,44 +74,6 @@ struct COMPONENT_EXPORT(MOJO_BASE_SHARED_TRAITS)
 
   static bool Read(mojo_base::mojom::ListValueDataView data,
                    base::Value::List* out);
-};
-
-template <>
-struct MapTraits<base::Value> {
-  using Key = std::string;
-  using Value = base::Value;
-  using Iterator = base::Value::const_dict_iterator_proxy::const_iterator;
-
-  static size_t GetSize(const base::Value& input) {
-    DCHECK(input.is_dict());
-    return static_cast<const base::DictionaryValue&>(input).DictSize();
-  }
-
-  static Iterator GetBegin(const base::Value& input) {
-    DCHECK(input.is_dict());
-    return input.DictItems().cbegin();
-  }
-
-  static void AdvanceIterator(Iterator& iterator) { ++iterator; }
-
-  static const Key& GetKey(const Iterator& iterator) { return iterator->first; }
-
-  static const Value& GetValue(const Iterator& iterator) {
-    return iterator->second;
-  }
-};
-
-template <>
-struct COMPONENT_EXPORT(MOJO_BASE_SHARED_TRAITS)
-    StructTraits<mojo_base::mojom::DeprecatedDictionaryValueDataView,
-                 base::Value> {
-  static const base::Value& storage(const base::Value& value) {
-    DCHECK(value.is_dict());
-    return value;
-  }
-
-  static bool Read(mojo_base::mojom::DeprecatedDictionaryValueDataView data,
-                   base::Value* value);
 };
 
 template <>
@@ -122,7 +93,7 @@ struct COMPONENT_EXPORT(MOJO_BASE_SHARED_TRAITS)
         return mojo_base::mojom::ValueDataView::Tag::kStringValue;
       case base::Value::Type::BINARY:
         return mojo_base::mojom::ValueDataView::Tag::kBinaryValue;
-      case base::Value::Type::DICTIONARY:
+      case base::Value::Type::DICT:
         return mojo_base::mojom::ValueDataView::Tag::kDictionaryValue;
       case base::Value::Type::LIST:
         return mojo_base::mojom::ValueDataView::Tag::kListValue;
@@ -141,7 +112,7 @@ struct COMPONENT_EXPORT(MOJO_BASE_SHARED_TRAITS)
     return value.GetDouble();
   }
 
-  static base::StringPiece string_value(const base::Value& value) {
+  static std::string_view string_value(const base::Value& value) {
     return value.GetString();
   }
 

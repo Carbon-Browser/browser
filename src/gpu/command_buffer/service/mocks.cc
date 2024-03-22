@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/command_buffer/service/mocks.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
+#include "gpu/command_buffer/service/command_buffer_direct.h"
 #include "gpu/command_buffer/service/command_buffer_service.h"
 
 using testing::Invoke;
@@ -13,8 +14,10 @@ using testing::_;
 namespace gpu {
 
 AsyncAPIMock::AsyncAPIMock(bool default_do_commands,
+                           CommandBufferDirect* command_buffer,
                            CommandBufferServiceBase* command_buffer_service)
-    : command_buffer_service_(command_buffer_service) {
+    : command_buffer_(command_buffer),
+      command_buffer_service_(command_buffer_service) {
   testing::DefaultValue<error::Error>::Set(
       error::kNoError);
 
@@ -22,9 +25,16 @@ AsyncAPIMock::AsyncAPIMock(bool default_do_commands,
     ON_CALL(*this, DoCommands(_, _, _, _))
         .WillByDefault(Invoke(this, &AsyncAPIMock::FakeDoCommands));
   }
+  if (command_buffer_) {
+    command_buffer_->set_handler(this);
+  }
 }
 
-AsyncAPIMock::~AsyncAPIMock() = default;
+AsyncAPIMock::~AsyncAPIMock() {
+  if (command_buffer_) {
+    command_buffer_->set_handler(nullptr);
+  }
+}
 
 error::Error AsyncAPIMock::FakeDoCommands(unsigned int num_commands,
                                           const volatile void* buffer,
@@ -70,6 +80,12 @@ void AsyncAPIMock::SetToken(unsigned int command,
   command_buffer_service_->SetToken(args->token);
 }
 
+MockDecoderClient::MockDecoderClient() = default;
+MockDecoderClient::~MockDecoderClient() = default;
+
+MockIsolationKeyProvider::MockIsolationKeyProvider() = default;
+MockIsolationKeyProvider::~MockIsolationKeyProvider() = default;
+
 namespace gles2 {
 
 MockShaderTranslator::MockShaderTranslator() = default;
@@ -84,5 +100,3 @@ MockMemoryTracker::~MockMemoryTracker() = default;
 
 }  // namespace gles2
 }  // namespace gpu
-
-

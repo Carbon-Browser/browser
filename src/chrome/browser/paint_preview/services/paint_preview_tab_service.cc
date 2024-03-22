@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/memory_pressure_monitor.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "build/build_config.h"
 #include "chrome/browser/paint_preview/services/paint_preview_tab_service_file_mixin.h"
@@ -172,7 +173,7 @@ void PaintPreviewTabService::TabClosed(int tab_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Defer deletions until the cache is ready.
   if (!CacheInitialized()) {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&PaintPreviewTabService::TabClosed,
                        weak_ptr_factory_.GetWeakPtr(), tab_id),
@@ -198,7 +199,7 @@ void PaintPreviewTabService::AuditArtifacts(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Defer deletions until the cache is ready.
   if (!CacheInitialized()) {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&PaintPreviewTabService::AuditArtifacts,
                        weak_ptr_factory_.GetWeakPtr(), active_tab_ids),
@@ -307,7 +308,6 @@ void PaintPreviewTabService::CaptureTabInternal(
                        base::BindOnce(&PaintPreviewTabService::OnAXTreeWritten,
                                       weak_ptr_factory_.GetWeakPtr(), task)),
         ui::kAXModeWebContentsOnly,
-        /* exclude_offscreen= */ false,
         /* max_nodes= */ 5000,
         /* timeout= */ {});
   }

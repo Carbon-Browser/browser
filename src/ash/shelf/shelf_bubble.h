@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,10 @@ namespace ash {
 class ASH_EXPORT ShelfBubble : public views::BubbleDialogDelegateView,
                                public ShelfBackgroundAnimatorObserver {
  public:
-  ShelfBubble(views::View* anchor, ShelfAlignment alignment);
+  ShelfBubble(views::View* anchor,
+              ShelfAlignment alignment,
+              bool for_tooltip,
+              std::optional<views::BubbleBorder::Arrow> arrow_position);
 
   ShelfBubble(const ShelfBubble&) = delete;
   ShelfBubble& operator=(const ShelfBubble&) = delete;
@@ -47,7 +50,13 @@ class ASH_EXPORT ShelfBubble : public views::BubbleDialogDelegateView,
   // ShelfBackgroundAnimatorObserver:
   void UpdateShelfBackground(SkColor color) override;
 
+  // views::BubbleDialogDelegateView:
+  std::unique_ptr<views::NonClientFrameView> CreateNonClientFrameView(
+      views::Widget* widget) override;
+
   int border_radius_ = 0;
+
+  const bool for_tooltip_;
 
   ShelfBackgroundAnimator background_animator_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ ScriptResultQueue::ScriptResultQueue() {
 ScriptResultQueue::~ScriptResultQueue() = default;
 
 void ScriptResultQueue::OnScriptResult(const base::Value& script_result) {
-  results_.push_back(script_result.Clone());
+  results_.Append(script_result.Clone());
   if (quit_closure_)
     std::move(quit_closure_).Run();
 }

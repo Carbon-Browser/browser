@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "build/chromeos_buildflags.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_scheme_classifier.h"
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
@@ -23,7 +24,6 @@
 
 TestOmniboxClient::TestOmniboxClient()
     : session_id_(SessionID::FromSerializedValue(1)),
-      bookmark_model_(nullptr),
       autocomplete_classifier_(
           std::make_unique<AutocompleteController>(
               CreateAutocompleteProviderClient(),
@@ -31,6 +31,7 @@ TestOmniboxClient::TestOmniboxClient()
           std::make_unique<TestSchemeClassifier>()) {}
 
 TestOmniboxClient::~TestOmniboxClient() {
+  template_url_service_ = nullptr;
   autocomplete_classifier_.Shutdown();
 }
 
@@ -45,7 +46,11 @@ TestOmniboxClient::CreateAutocompleteProviderClient() {
   auto template_url_service = std::make_unique<TemplateURLService>(
       nullptr /* PrefService */, std::make_unique<SearchTermsData>(),
       nullptr /* KeywordWebDataService */,
-      std::unique_ptr<TemplateURLServiceClient>(), base::RepeatingClosure());
+      std::unique_ptr<TemplateURLServiceClient>(), base::RepeatingClosure()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+      , false /* for_lacros_main_profile */
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+  );
 
   // Save a reference to the created TemplateURLService for test use.
   template_url_service_ = template_url_service.get();
@@ -59,17 +64,13 @@ bool TestOmniboxClient::IsPasteAndGoEnabled() const {
   return true;
 }
 
-const SessionID& TestOmniboxClient::GetSessionID() const {
+SessionID TestOmniboxClient::GetSessionID() const {
   return session_id_;
 }
 
-void TestOmniboxClient::SetBookmarkModel(
-    bookmarks::BookmarkModel* bookmark_model) {
-  bookmark_model_ = bookmark_model;
-}
-
-bookmarks::BookmarkModel* TestOmniboxClient::GetBookmarkModel() {
-  return bookmark_model_;
+AutocompleteControllerEmitter*
+TestOmniboxClient::GetAutocompleteControllerEmitter() {
+  return nullptr;
 }
 
 TemplateURLService* TestOmniboxClient::GetTemplateURLService() {
@@ -104,15 +105,4 @@ gfx::Image TestOmniboxClient::GetSizedIcon(
   SkBitmap bitmap;
   bitmap.allocN32Pixels(16, 16);
   return gfx::Image(gfx::ImageSkia::CreateFrom1xBitmap(bitmap));
-}
-
-gfx::Image TestOmniboxClient::GetFaviconForPageUrl(
-    const GURL& page_url,
-    FaviconFetchedCallback on_favicon_fetched) {
-  page_url_for_last_favicon_request_ = page_url;
-  return gfx::Image();
-}
-
-GURL TestOmniboxClient::GetPageUrlForLastFaviconRequest() const {
-  return page_url_for_last_favicon_request_;
 }

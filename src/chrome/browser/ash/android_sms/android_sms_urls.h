@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,13 +34,5 @@ GURL GetAndroidMessagesURL(bool use_install_url = false,
 
 }  // namespace android_sms
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-namespace android_sms {
-using ::ash::android_sms::GetAndroidMessagesURL;
-using ::ash::android_sms::PwaDomain;
-}  // namespace android_sms
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_ANDROID_SMS_ANDROID_SMS_URLS_H_

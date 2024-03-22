@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ const double kPresetZoomFactors[] = {0.25, 1 / 3.0, 0.5, 2 / 3.0, 0.75, 0.8,
 const std::size_t kPresetZoomFactorsSize = std::size(kPresetZoomFactors);
 
 std::string GetPresetZoomFactorsAsJSON() {
-  base::Value zoom_factors(base::Value::Type::LIST);
+  base::Value::List zoom_factors;
   for (double zoom_value : kPresetZoomFactors) {
     zoom_factors.Append(zoom_value);
   }

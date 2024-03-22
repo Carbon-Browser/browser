@@ -1,14 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/ash/wallpaper_controller_client_impl.h"
 
 #include "ash/webui/personalization_app/mojom/personalization_app.mojom.h"
+#include "base/containers/contains.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/ash/wallpaper_handlers/test_wallpaper_fetcher_delegate.h"
 #include "chrome/browser/ui/ash/test_wallpaper_controller.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -58,7 +60,8 @@ class WallpaperControllerClientImplTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_;
   TestWallpaperController controller_;
-  WallpaperControllerClientImpl client_;
+  WallpaperControllerClientImpl client_{
+      std::make_unique<wallpaper_handlers::TestWallpaperFetcherDelegate>()};
 };
 
 TEST_F(WallpaperControllerClientImplTest, Construction) {
@@ -103,8 +106,7 @@ TEST_F(WallpaperControllerClientImplTest, DailyGooglePhotosDoNotRepeat) {
   auto handle_photo = [&last_ten](GooglePhotosPhotoPtr photo, bool success) {
     ASSERT_TRUE(success);
 
-    auto it = std::find(last_ten.begin(), last_ten.end(), photo->id);
-    EXPECT_TRUE(it == last_ten.end());
+    EXPECT_FALSE(base::Contains(last_ten, photo->id));
 
     last_ten.push_back(photo->id);
 

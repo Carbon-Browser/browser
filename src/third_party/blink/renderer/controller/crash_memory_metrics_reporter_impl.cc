@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/allocator/partition_allocator/oom_callback.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/oom_callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/process/memory.h"
 #include "third_party/blink/public/platform/platform.h"

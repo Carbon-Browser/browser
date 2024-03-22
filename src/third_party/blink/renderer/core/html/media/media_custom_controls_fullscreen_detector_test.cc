@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,12 +21,13 @@ class MediaCustomControlsFullscreenDetectorTest : public testing::Test {
   }
 
   HTMLVideoElement* VideoElement() const {
-    return To<HTMLVideoElement>(GetDocument().QuerySelector("video"));
+    return To<HTMLVideoElement>(
+        GetDocument().QuerySelector(AtomicString("video")));
   }
 
   static MediaCustomControlsFullscreenDetector* FullscreenDetectorFor(
       HTMLVideoElement* video_element) {
-    return video_element->custom_controls_fullscreen_detector_;
+    return video_element->custom_controls_fullscreen_detector_.Get();
   }
 
   MediaCustomControlsFullscreenDetector* FullscreenDetector() const {
@@ -44,8 +45,9 @@ class MediaCustomControlsFullscreenDetectorTest : public testing::Test {
       return false;
 
     for (const auto& registered_listener : *listeners) {
-      if (registered_listener.Callback() == listener)
+      if (registered_listener->Callback() == listener) {
         return true;
+      }
     }
     return false;
   }

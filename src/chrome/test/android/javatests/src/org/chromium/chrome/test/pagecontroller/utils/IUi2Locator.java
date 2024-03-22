@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import androidx.test.uiautomator.UiObject2;
 
 import java.util.List;
 
-/**
- * This interface unifies the various ways to find a UI node.
- */
+/** This interface unifies the various ways to find a UI node. */
 public interface IUi2Locator {
     /**
      * Locates a single node among all nodes found by the locator.

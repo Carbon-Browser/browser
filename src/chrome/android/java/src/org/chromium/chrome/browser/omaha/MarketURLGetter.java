@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@ package org.chromium.chrome.browser.omaha;
 
 import android.content.SharedPreferences;
 
-import androidx.annotation.VisibleForTesting;
-
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
 
 /**
@@ -27,14 +26,14 @@ public class MarketURLGetter {
         return instance.getMarketUrlInternal();
     }
 
-    @VisibleForTesting
     static void setInstanceForTests(MarketURLGetter getter) {
         sInstanceForTests = getter;
+        ResettersForTesting.register(() -> sInstanceForTests = null);
     }
 
     private static MarketURLGetter sInstanceForTests;
 
-    protected MarketURLGetter() { }
+    protected MarketURLGetter() {}
 
     /** Returns the Play Store URL that points to Chrome. */
     protected String getMarketUrlInternal() {

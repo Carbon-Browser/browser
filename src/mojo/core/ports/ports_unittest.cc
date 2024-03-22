@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,10 @@
 #include <sstream>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/containers/contains.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -44,7 +45,7 @@ class TestMessage : public UserMessage {
  public:
   static const TypeInfo kUserMessageTypeInfo;
 
-  TestMessage(const base::StringPiece& payload)
+  TestMessage(const std::string_view& payload)
       : UserMessage(&kUserMessageTypeInfo), payload_(payload) {}
   ~TestMessage() override = default;
 
@@ -56,14 +57,14 @@ class TestMessage : public UserMessage {
 
 const UserMessage::TypeInfo TestMessage::kUserMessageTypeInfo = {};
 
-ScopedMessage NewUserMessageEvent(const base::StringPiece& payload,
+ScopedMessage NewUserMessageEvent(const std::string_view& payload,
                                   size_t num_ports) {
   auto event = std::make_unique<UserMessageEvent>(num_ports);
   event->AttachMessage(std::make_unique<TestMessage>(payload));
   return event;
 }
 
-bool MessageEquals(const ScopedMessage& message, const base::StringPiece& s) {
+bool MessageEquals(const ScopedMessage& message, const std::string_view& s) {
   return message->GetMessage<TestMessage>()->payload() == s;
 }
 
@@ -402,7 +403,7 @@ class PortsTest : public testing::Test, public MessageRouter {
     base::AutoLock global_lock(global_lock_);
     base::AutoLock lock(lock_);
     // Drop messages from nodes that have been removed.
-    if (nodes_.find(from_node->name()) == nodes_.end()) {
+    if (!base::Contains(nodes_, from_node->name())) {
       from_node->ClosePortsInEvent(event.get());
       return;
     }
@@ -441,8 +442,9 @@ class PortsTest : public testing::Test, public MessageRouter {
     base::AutoLock lock(lock_);
 
     // Drop messages from nodes that have been removed.
-    if (nodes_.find(from_node->name()) == nodes_.end())
+    if (!base::Contains(nodes_, from_node->name())) {
       return;
+    }
 
     for (const auto& entry : nodes_) {
       TestNode* node = entry.second;

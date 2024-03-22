@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@ package org.chromium.chrome.browser.content_creation.notes;
  * subcomponents.
  */
 public interface NoteCreationCoordinator {
-    /**
-     * Displays the main dialog for note creation.
-     */
+    /** Displays the main dialog for note creation. */
     void showDialog();
 }

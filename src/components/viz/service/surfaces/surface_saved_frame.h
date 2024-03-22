@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,20 +25,14 @@ class Surface;
 class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
  public:
   using TransitionDirectiveCompleteCallback =
-      base::OnceCallback<void(uint32_t)>;
+      base::OnceCallback<void(const CompositorFrameTransitionDirective&)>;
 
   struct RenderPassDrawData {
     RenderPassDrawData();
-    RenderPassDrawData(const CompositorRenderPass& render_pass, float opacity);
+    explicit RenderPassDrawData(const CompositorRenderPass& render_pass);
 
     // This represents the size of the copied texture.
     gfx::Size size;
-    // This is a transform that takes `rect` into a root render pass space. Note
-    // that this makes this result dependent on the structure of the compositor
-    // frame render pass list used to request the copy output.
-    gfx::Transform target_transform;
-    // Opacity accumulated from the original frame.
-    float opacity = 1.f;
   };
 
   struct OutputCopyResult {
@@ -74,8 +68,8 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
 
     FrameResult& operator=(FrameResult&& other);
 
-    OutputCopyResult root_result;
     std::vector<absl::optional<OutputCopyResult>> shared_results;
+    base::flat_set<ViewTransitionElementResourceId> empty_resource_ids;
   };
 
   SurfaceSavedFrame(CompositorFrameTransitionDirective directive,
@@ -90,49 +84,25 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
   // Appends copy output requests to the needed render passes in the active
   // frame.
   void RequestCopyOfOutput(Surface* surface);
-  void ReleaseSurface();
 
   [[nodiscard]] absl::optional<FrameResult> TakeResult();
 
   // For testing functionality that ensures that we have a valid frame.
   void CompleteSavedFrameForTesting();
 
-  base::flat_set<SharedElementResourceId> GetEmptyResourceIds() const;
+  base::flat_set<ViewTransitionElementResourceId> GetEmptyResourceIds() const;
 
  private:
-  enum class ResultType { kRoot, kShared };
-
-  // Replaced the CompositorFrame on the |surface| with a copy that places
-  // shared elements in individual render passes. This effectively allows them
-  // to be in independent layers that can be cached as textures.
-  class ScopedCleanSurface {
-   public:
-    ScopedCleanSurface(Surface* surface, CompositorFrame clean_frame);
-    ~ScopedCleanSurface();
-
-   private:
-    Surface* surface_;
-  };
-
-  // Queues copy requests by creating a copy of the CompositorFrame as specified
-  // in ScopedCleanSurface.
-  void CopyUsingCleanFrame(Surface* surface);
-
-  // Queues copy requests from the original CompositorFrame. This mode is used
-  // when the frame produced by the renderer already has independent render
-  // passes for each shared element.
-  void CopyUsingOriginalFrame(Surface* surface);
-
   std::unique_ptr<CopyOutputRequest> CreateCopyRequestIfNeeded(
       const CompositorRenderPass& render_pass,
       const CompositorRenderPassList& render_pass_list) const;
 
-  void NotifyCopyOfOutputComplete(ResultType type,
-                                  size_t shared_index,
+  void NotifyCopyOfOutputComplete(size_t shared_index,
                                   const RenderPassDrawData& info,
                                   std::unique_ptr<CopyOutputResult> result);
 
   size_t ExpectedResultCount() const;
+  void InitFrameResult();
 
   // Collects metadata to create a copy of the source CompositorFrame for shared
   // element snapshots.
@@ -176,11 +146,6 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
   // smaller than the number of requests we made. This is used to determine
   // whether the SurfaceSavedFrame is "valid".
   size_t valid_result_count_ = 0;
-
-  // Tracks whether the root render pass should be copied.
-  bool copy_root_render_pass_ = true;
-
-  absl::optional<ScopedCleanSurface> clean_surface_;
 
   base::WeakPtrFactory<SurfaceSavedFrame> weak_factory_{this};
 };

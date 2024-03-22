@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/span.h"
-#include "base/lazy_instance.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/no_destructor.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "components/webcrypto/algorithm_dispatch.h"
 #include "components/webcrypto/generate_key_result.h"
@@ -92,12 +91,10 @@ class CryptoThreadPool {
   base::Thread worker_thread_;
 };
 
-base::LazyInstance<CryptoThreadPool>::Leaky crypto_thread_pool =
-    LAZY_INSTANCE_INITIALIZER;
-
 bool CryptoThreadPool::PostTask(const base::Location& from_here,
                                 base::OnceClosure task) {
-  return crypto_thread_pool.Get().worker_thread_.task_runner()->PostTask(
+  static base::NoDestructor<CryptoThreadPool> crypto_thread_pool;
+  return crypto_thread_pool->worker_thread_.task_runner()->PostTask(
       from_here, std::move(task));
 }
 
@@ -583,6 +580,7 @@ void DoUnwrapKey(std::unique_ptr<UnwrapKeyState> passed_state) {
 void DoDeriveBitsReply(std::unique_ptr<DeriveBitsState> state) {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                "DoDeriveBitsReply");
+  state->result.SetWarning(state->status.warning_type());
   CompleteWithBufferOrError(state->status, state->derived_bytes,
                             &state->result);
 }

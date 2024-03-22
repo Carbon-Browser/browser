@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -238,12 +238,17 @@ TEST_F(SubresourceFilterIndexedRulesetTest, NonAsciiDomain) {
 }
 
 // Ensure patterns with percent encoded hosts match correctly.
+//
+// Warning: This test depends on the standard non-compliant URL behavior in
+// Chrome. Currently, Chrome escapes '*' (%2A) character in URL host, but this
+// behavior is non-compliant. See https://crbug.com/1416013 for details. We
+// probably no longer need this test once https://crbug.com/1416013 is fixed.
 TEST_F(SubresourceFilterIndexedRulesetTest, PercentEncodedHostPattern) {
-  const char* kPercentEncodedHost = "http://%2C.com/";
+  const char* kPercentEncodedHost = "http://%2A.com/";
   ASSERT_TRUE(AddSimpleRule(kPercentEncodedHost));
   Finish();
 
-  EXPECT_EQ(LoadPolicy::DISALLOW, GetLoadPolicy("http://,.com/"));
+  EXPECT_EQ(LoadPolicy::DISALLOW, GetLoadPolicy("http://*.com/"));
   EXPECT_EQ(LoadPolicy::DISALLOW, GetLoadPolicy(kPercentEncodedHost));
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
@@ -30,6 +30,22 @@ namespace views {
 class AnimationAbortHandle;
 
 // Provides an unfinalized animation sequence block if any to build animations.
+
+// Usage notes for callbacks set on AnimationBuilder:
+// When setting callbacks for the animations note that the AnimationBuilder’s
+// observer that calls these callbacks may outlive the callback's parameters.
+
+// The OnEnded callback runs when all animations created on the AnimationBuilder
+// have finished. The OnAborted callback runs when any one animation created on
+// the AnimationBuilder has been aborted. Therefore, these callbacks and every
+// object the callback accesses needs to outlive all the Layers/LayerOwners
+// being animated on since the Layers ultimately own the objects that run the
+// animation. Otherwise, developers may need to use weak pointers or force
+// animations to be cancelled in the object’s destructor to prevent accessing
+// destroyed objects. Note that aborted notifications can be sent during the
+// destruction process. Therefore subclasses that own the Layers may actually be
+// destroyed before the OnAborted callback is run.
+
 class VIEWS_EXPORT AnimationBuilder {
  public:
   class Observer : public ui::LayerAnimationObserver {
@@ -78,8 +94,7 @@ class VIEWS_EXPORT AnimationBuilder {
     // reliable way of tracking when all sequences have ended since IsFinished
     // can return true before a sequence is started if the duration is zero.
     int sequences_to_run_ = 0;
-
-    raw_ptr<AnimationAbortHandle> abort_handle_ = nullptr;
+    raw_ptr<AnimationAbortHandle, DanglingUntriaged> abort_handle_ = nullptr;
   };
 
   AnimationBuilder();
@@ -177,7 +192,7 @@ class VIEWS_EXPORT AnimationBuilder {
   // Each vector is kept in sorted order.
   std::map<AnimationKey, std::vector<Value>> values_;
 
-  raw_ptr<AnimationAbortHandle> abort_handle_ = nullptr;
+  raw_ptr<AnimationAbortHandle, DanglingUntriaged> abort_handle_ = nullptr;
 
   // An unfinalized sequence block currently used to build animations. NOTE: the
   // animation effects carried by `current_sequence_` attach to a layer only

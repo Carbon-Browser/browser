@@ -1,19 +1,24 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/core/common/policy_map.h"
 
-#include <algorithm>
 #include <utility>
 
-#include "base/callback.h"
-#include "base/stl_util.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/types/optional_util.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "components/policy/core/common/cloud/affiliation.h"
+#include "components/policy/core/common/policy_details.h"
+#include "components/policy/core/common/policy_logger.h"
 #include "components/policy/core/common/policy_merger.h"
 #include "components/policy/policy_constants.h"
 #include "components/strings/grit/components_strings.h"
@@ -88,8 +93,6 @@ PolicyPriorityBrowser GetPriority(
                    : POLICY_PRIORITY_BROWSER_CLOUD_USER_RAISED;
       }
       return POLICY_PRIORITY_BROWSER_CLOUD_USER;
-    case POLICY_SOURCE_PRIORITY_CLOUD_DEPRECATED:
-      return POLICY_PRIORITY_BROWSER_CLOUD_MACHINE_RAISED;
     case POLICY_SOURCE_PLATFORM:
       return scope == POLICY_SCOPE_MACHINE
                  ? POLICY_PRIORITY_BROWSER_PLATFORM_MACHINE
@@ -102,6 +105,12 @@ PolicyPriorityBrowser GetPriority(
   }
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+// Helper function used in the invocation of `PolicyMap::CloneIf` from
+// `PolicyMap::Clone`.
+bool AllowAllPolicies(PolicyMap::const_reference unused) {
+  return true;
+}
 
 }  // namespace
 
@@ -151,11 +160,11 @@ base::Value* PolicyMap::Entry::value(base::Value::Type value_type) {
 }
 
 const base::Value* PolicyMap::Entry::value_unsafe() const {
-  return base::OptionalOrNullptr(value_);
+  return base::OptionalToPtr(value_);
 }
 
 base::Value* PolicyMap::Entry::value_unsafe() {
-  return base::OptionalOrNullptr(value_);
+  return base::OptionalToPtr(value_);
 }
 
 void PolicyMap::Entry::set_value(absl::optional<base::Value> val) {
@@ -227,6 +236,10 @@ void PolicyMap::Entry::ClearConflicts() {
   conflicts.clear();
   ClearMessage(MessageType::kInfo, IDS_POLICY_CONFLICT_SAME_VALUE);
   ClearMessage(MessageType::kWarning, IDS_POLICY_CONFLICT_DIFF_VALUE);
+}
+
+bool PolicyMap::Entry::HasConflicts() {
+  return !conflicts.empty();
 }
 
 bool PolicyMap::Entry::HasMessage(MessageType type) const {
@@ -302,7 +315,8 @@ const PolicyMap::Entry& PolicyMap::EntryConflict::entry() const {
   return entry_;
 }
 
-PolicyMap::PolicyMap() = default;
+PolicyMap::PolicyMap()
+    : details_callback_{base::BindRepeating(&GetChromePolicyDetails)} {}
 PolicyMap::PolicyMap(PolicyMap&&) noexcept = default;
 PolicyMap& PolicyMap::operator=(PolicyMap&&) noexcept = default;
 PolicyMap::~PolicyMap() = default;
@@ -410,24 +424,22 @@ PolicyMap::iterator PolicyMap::EraseIt(const_iterator it) {
   return map_.erase(it);
 }
 
-void PolicyMap::EraseMatching(
-    const base::RepeatingCallback<bool(const const_iterator)>& filter) {
-  FilterErase(filter, true);
-}
-
-void PolicyMap::EraseNonmatching(
-    const base::RepeatingCallback<bool(const const_iterator)>& filter) {
-  FilterErase(filter, false);
-}
-
 void PolicyMap::Swap(PolicyMap* other) {
   map_.swap(other->map_);
 }
 
 PolicyMap PolicyMap::Clone() const {
+  return CloneIf(base::BindRepeating(&AllowAllPolicies));
+}
+
+PolicyMap PolicyMap::CloneIf(
+    const base::RepeatingCallback<bool(const_reference)>& filter) const {
   PolicyMap clone;
-  for (const auto& it : map_)
-    clone.Set(it.first, it.second.DeepCopy());
+  for (const_reference it : map_) {
+    if (filter.Run(it)) {
+      clone.Set(it.first, it.second.DeepCopy());
+    }
+  }
 
   clone.cloud_policy_overrides_platform_policy_ =
       cloud_policy_overrides_platform_policy_;
@@ -492,6 +504,7 @@ void PolicyMap::MergeFrom(const PolicyMap& other) {
   SetDeviceAffiliationIds(
       CombineIds(GetDeviceAffiliationIds(), other.GetDeviceAffiliationIds()));
 
+#if !BUILDFLAG(IS_CHROMEOS)
   // Precedence metapolicies are merged before all other policies, including
   // merging metapolicies, because their value affects policy overriding.
   for (auto* policy : metapolicy::kPrecedence) {
@@ -501,15 +514,16 @@ void PolicyMap::MergeFrom(const PolicyMap& other) {
   }
 
   UpdateStoredComputedMetapolicies();
+#endif
 
   for (const auto& policy_and_entry : other) {
+#if !BUILDFLAG(IS_CHROMEOS)
     // Skip precedence metapolicies since they have already been merged into the
     // current PolicyMap.
-    if (std::find(std::begin(metapolicy::kPrecedence),
-                  std::end(metapolicy::kPrecedence), policy_and_entry.first) !=
-        std::end(metapolicy::kPrecedence)) {
+    if (base::Contains(metapolicy::kPrecedence, policy_and_entry.first)) {
       continue;
     }
+#endif
 
     // External factors, such as the values of metapolicies, are considered.
     MergePolicy(policy_and_entry.first, other, false);
@@ -521,19 +535,34 @@ void PolicyMap::MergeValues(const std::vector<PolicyMerger*>& mergers) {
     it->Merge(this);
 }
 
-void PolicyMap::LoadFrom(const base::DictionaryValue* policies,
+void PolicyMap::set_chrome_policy_details_callback_for_test(
+    const GetChromePolicyDetailsCallback& details_callback) {
+  details_callback_ = details_callback;
+}
+
+bool PolicyMap::IsPolicyExternal(const std::string& policy) {
+  const PolicyDetails* policy_details = details_callback_.Run(policy);
+  if (policy_details && policy_details->max_external_data_size > 0)
+    return true;
+  return false;
+}
+
+void PolicyMap::LoadFrom(const base::Value::Dict& policies,
                          PolicyLevel level,
                          PolicyScope scope,
                          PolicySource source) {
-  for (base::DictionaryValue::Iterator it(*policies); !it.IsAtEnd();
-       it.Advance()) {
-    Set(it.key(), level, scope, source, it.value().Clone(), nullptr);
+  for (auto it : policies) {
+    if (IsPolicyExternal(it.first)) {
+      LOG_POLICY(WARNING, POLICY_PROCESSING)
+          << "Ignoring external policy: " << it.first;
+      continue;
+    }
+    Set(it.first, level, scope, source, it.second.Clone(), nullptr);
   }
 }
 
 bool PolicyMap::Equals(const PolicyMap& other) const {
-  return other.size() == size() &&
-         std::equal(begin(), end(), other.begin(), MapEntryEquals);
+  return base::ranges::equal(*this, other, MapEntryEquals);
 }
 
 bool PolicyMap::empty() const {
@@ -565,23 +594,9 @@ void PolicyMap::Clear() {
 }
 
 // static
-bool PolicyMap::MapEntryEquals(const PolicyMap::PolicyMapType::value_type& a,
-                               const PolicyMap::PolicyMapType::value_type& b) {
+bool PolicyMap::MapEntryEquals(const_reference a, const_reference b) {
   bool equals = a.first == b.first && a.second.Equals(b.second);
   return equals;
-}
-
-void PolicyMap::FilterErase(
-    const base::RepeatingCallback<bool(const const_iterator)>& filter,
-    bool deletion_value) {
-  auto iter(map_.begin());
-  while (iter != map_.end()) {
-    if (filter.Run(iter) == deletion_value) {
-      map_.erase(iter++);
-    } else {
-      ++iter;
-    }
-  }
 }
 
 bool PolicyMap::EntryHasHigherPriority(const PolicyMap::Entry& lhs,
@@ -602,14 +617,14 @@ bool PolicyMap::EntryHasHigherPriority(const PolicyMap::Entry& lhs,
           : GetPriority(lhs.source, lhs.scope,
                         cloud_policy_overrides_platform_policy_,
                         cloud_user_policy_overrides_cloud_machine_policy_,
-                        is_user_affiliated_);
+                        IsUserAffiliated());
   PolicyPriorityBrowser rhs_priority =
       using_default_precedence
           ? GetPriority(rhs.source, rhs.scope, false, false, false)
           : GetPriority(rhs.source, rhs.scope,
                         cloud_policy_overrides_platform_policy_,
                         cloud_user_policy_overrides_cloud_machine_policy_,
-                        is_user_affiliated_);
+                        IsUserAffiliated());
   return std::tie(lhs.level, lhs_priority) > std::tie(rhs.level, rhs_priority);
 #endif  // BUILDFLAG(IS_CHROMEOS)
 }
@@ -638,6 +653,7 @@ const base::flat_set<std::string>& PolicyMap::GetDeviceAffiliationIds() const {
   return device_affiliation_ids_;
 }
 
+#if !BUILDFLAG(IS_CHROMEOS)
 void PolicyMap::UpdateStoredComputedMetapolicies() {
   cloud_policy_overrides_platform_policy_ =
       GetValue(key::kCloudPolicyOverridesPlatformPolicy,
@@ -653,6 +669,7 @@ void PolicyMap::UpdateStoredComputedMetapolicies() {
                base::Value::Type::BOOLEAN)
           ->GetBool();
 }
+#endif
 
 void PolicyMap::UpdateStoredUserAffiliation() {
   is_user_affiliated_ =

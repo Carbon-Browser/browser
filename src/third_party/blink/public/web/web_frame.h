@@ -154,11 +154,11 @@ class BLINK_EXPORT WebFrame {
   // Scripting ----------------------------------------------------------
 
   // Returns the global proxy object.
-  virtual v8::Local<v8::Object> GlobalProxy() const = 0;
+  virtual v8::Local<v8::Object> GlobalProxy(v8::Isolate* isolate) const = 0;
 
   // Returns true if the WebFrame currently executing JavaScript has access
   // to the given WebFrame, or false otherwise.
-  static bool ScriptCanAccess(WebFrame*);
+  static bool ScriptCanAccess(v8::Isolate* isolate, WebFrame*);
 
   // Navigation ----------------------------------------------------------
 
@@ -170,7 +170,7 @@ class BLINK_EXPORT WebFrame {
 
   // True if the frame is thought (heuristically) to be created for
   // advertising purposes.
-  virtual bool IsAdSubframe() const = 0;
+  virtual bool IsAdFrame() const = 0;
 
   // Utility -------------------------------------------------------------
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_function.h"
-#include "extensions/browser/extension_prefs_scope.h"
+#include "extensions/common/api/types.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chromeos/crosapi/mojom/prefs.mojom-shared.h"
@@ -29,7 +29,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #endif
 
-class ExtensionPrefValueMap;
 class PrefService;
 
 namespace base {
@@ -37,7 +36,6 @@ class Value;
 }
 
 namespace extensions {
-class ExtensionPrefs;
 
 class PreferenceEventRouter : public ProfileObserver {
  public:
@@ -95,56 +93,11 @@ class PreferenceEventRouter : public ProfileObserver {
 #endif
 };
 
-// The class containing the implementation for extension-controlled preference
-// manipulation. This implementation is separate from PreferenceAPI, since
-// we need to be able to use these methods in testing, where we use
-// TestExtensionPrefs and don't construct a profile.
-//
-// See also PreferenceAPI and TestPreferenceAPI.
-class PreferenceAPIBase {
- public:
-  // Functions for manipulating preference values that are controlled by the
-  // extension. In other words, these are not pref values *about* the extension,
-  // but rather about something global the extension wants to override.
-
-  // Set a new extension-controlled preference value.
-  void SetExtensionControlledPref(const std::string& extension_id,
-                                  const std::string& pref_key,
-                                  ExtensionPrefsScope scope,
-                                  base::Value value);
-
-  // Remove an extension-controlled preference value.
-  void RemoveExtensionControlledPref(const std::string& extension_id,
-                                     const std::string& pref_key,
-                                     ExtensionPrefsScope scope);
-
-  // Returns true if currently no extension with higher precedence controls the
-  // preference.
-  bool CanExtensionControlPref(const std::string& extension_id,
-                               const std::string& pref_key,
-                               bool incognito);
-
-  // Returns true if extension |extension_id| currently controls the
-  // preference. If |from_incognito| is not NULL, looks at incognito preferences
-  // first, and |from_incognito| is set to true if the effective pref value is
-  // coming from the incognito preferences, false if it is coming from the
-  // normal ones.
-  bool DoesExtensionControlPref(const std::string& extension_id,
-                                const std::string& pref_key,
-                                bool* from_incognito);
-
- protected:
-  // Virtual for testing.
-  virtual ExtensionPrefs* extension_prefs() = 0;
-  virtual ExtensionPrefValueMap* extension_pref_value_map() = 0;
-  virtual scoped_refptr<ContentSettingsStore> content_settings_store() = 0;
-};
-
-class PreferenceAPI : public PreferenceAPIBase,
-                      public BrowserContextKeyedAPI,
+class PreferenceAPI : public BrowserContextKeyedAPI,
                       public EventRouter::Observer,
                       public ContentSettingsStore::Observer {
  public:
+  using ChromeSettingScope = extensions::api::types::ChromeSettingScope;
   explicit PreferenceAPI(content::BrowserContext* context);
 
   PreferenceAPI(const PreferenceAPI&) = delete;
@@ -177,10 +130,7 @@ class PreferenceAPI : public PreferenceAPIBase,
   // Clears incognito session-only content settings for all extensions.
   void ClearIncognitoSessionOnlyContentSettings();
 
-  // PreferenceAPIBase implementation.
-  ExtensionPrefs* extension_prefs() override;
-  ExtensionPrefValueMap* extension_pref_value_map() override;
-  scoped_refptr<ContentSettingsStore> content_settings_store() override;
+  scoped_refptr<ContentSettingsStore> content_settings_store();
 
   raw_ptr<Profile> profile_;
 
@@ -193,30 +143,6 @@ class PreferenceAPI : public PreferenceAPIBase,
 
   // Created lazily upon OnListenerAdded.
   std::unique_ptr<PreferenceEventRouter> preference_event_router_;
-};
-
-class PrefTransformerInterface {
- public:
-  virtual ~PrefTransformerInterface() = default;
-
-  // Converts the representation of a preference as seen by the extension
-  // into a representation that is used in the pref stores of the browser.
-  // Returns the pref store representation in case of success or sets
-  // |error| and returns NULL otherwise. |bad_message| is passed to simulate
-  // the behavior of EXTENSION_FUNCTION_VALIDATE. It is never NULL.
-  // The ownership of the returned value is passed to the caller.
-  virtual std::unique_ptr<base::Value> ExtensionToBrowserPref(
-      const base::Value* extension_pref,
-      std::string* error,
-      bool* bad_message) = 0;
-
-  // Converts the representation of the preference as stored in the browser
-  // into a representation that is used by the extension.
-  // Returns the extension representation in case of success or NULL otherwise.
-  // The ownership of the returned value is passed to the caller.
-  virtual std::unique_ptr<base::Value> BrowserToExtensionPref(
-      const base::Value* browser_pref,
-      bool is_incognito_profile) = 0;
 };
 
 // A base class to provide functionality common to the other *PreferenceFunction
@@ -244,7 +170,7 @@ class GetPreferenceFunction : public PreferenceFunction {
   ResponseAction Run() override;
 
  private:
-  void ProduceGetResult(base::Value* result,
+  void ProduceGetResult(base::Value::Dict* result,
                         const base::Value* pref_value,
                         const std::string& level_of_control,
                         const std::string& browser_pref,

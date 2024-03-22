@@ -1,17 +1,26 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ANDROID_WEBVIEW_BROWSER_AW_BROWSER_CONTEXT_H_
 #define ANDROID_WEBVIEW_BROWSER_AW_BROWSER_CONTEXT_H_
 
+#include <map>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <vector>
 
+#include "android_webview/browser/aw_contents_io_thread_client.h"
+#include "android_webview/browser/aw_contents_origin_matcher.h"
+#include "android_webview/browser/aw_permission_manager.h"
 #include "android_webview/browser/aw_ssl_host_state_delegate.h"
 #include "android_webview/browser/network_service/aw_proxy_config_monitor.h"
+#include "base/android/jni_weak_ref.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/lazy_instance.h"
 #include "base/memory/ref_counted.h"
 #include "components/keyed_service/core/simple_factory_key.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -28,7 +37,7 @@ class AutocompleteHistoryManager;
 }
 
 namespace content {
-class PermissionControllerDelegate;
+class ClientHintsControllerDelegate;
 class ResourceContext;
 class SSLHostStateDelegate;
 class WebContents;
@@ -44,20 +53,26 @@ class VisitedLinkWriter;
 
 namespace android_webview {
 
+class AwBrowserContextIoThreadHandle;
+class AwContentsOriginMatcher;
 class AwFormDatabaseService;
 class AwQuotaManagerBridge;
+class CookieManager;
 
+// Lifetime: Profile
 class AwBrowserContext : public content::BrowserContext,
                          public visitedlink::VisitedLinkDelegate {
  public:
-  AwBrowserContext();
+  explicit AwBrowserContext(std::string name,
+                            base::FilePath relative_path,
+                            bool is_default);
 
   AwBrowserContext(const AwBrowserContext&) = delete;
   AwBrowserContext& operator=(const AwBrowserContext&) = delete;
 
   ~AwBrowserContext() override;
 
-  // Currently only one instance per process is supported.
+  // Return the default context. The default context must be initialized.
   static AwBrowserContext* GetDefault();
 
   // Convenience method to returns the AwBrowserContext corresponding to the
@@ -65,11 +80,15 @@ class AwBrowserContext : public content::BrowserContext,
   static AwBrowserContext* FromWebContents(
       content::WebContents* web_contents);
 
-  base::FilePath GetCacheDir();
+  base::FilePath GetHttpCachePath();
   base::FilePath GetPrefStorePath();
   base::FilePath GetCookieStorePath();
-  static base::FilePath GetContextStoragePath();
+  static base::FilePath BuildStoragePath(const base::FilePath& relative_path);
 
+  // Set up the paths and other data storage for a new context.
+  static void PrepareNewContext(const base::FilePath& relative_path);
+  // Delete all files and other stored data for a given context.
+  static void DeleteContext(const base::FilePath& relative_path);
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
   // Get the list of authentication schemes to support.
@@ -86,8 +105,15 @@ class AwBrowserContext : public content::BrowserContext,
   autofill::AutocompleteHistoryManager* GetAutocompleteHistoryManager();
   CookieManager* GetCookieManager();
 
-  // TODO(amalova): implement for non-default browser context
-  bool IsDefaultBrowserContext() { return true; }
+  bool IsDefaultBrowserContext() const;
+
+  base::android::ScopedJavaLocalRef<jobjectArray>
+  UpdateServiceWorkerXRequestedWithAllowListOriginMatcher(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobjectArray>& rules);
+  void SetServiceWorkerIoThreadClient(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& io_thread_client);
 
   // content::BrowserContext implementation.
   base::FilePath GetPath() override;
@@ -101,15 +127,18 @@ class AwBrowserContext : public content::BrowserContext,
   content::PushMessagingService* GetPushMessagingService() override;
   content::StorageNotificationService* GetStorageNotificationService() override;
   content::SSLHostStateDelegate* GetSSLHostStateDelegate() override;
-  content::PermissionControllerDelegate* GetPermissionControllerDelegate()
-      override;
+  AwPermissionManager* GetPermissionControllerDelegate() override;
   content::ClientHintsControllerDelegate* GetClientHintsControllerDelegate()
       override;
   content::BackgroundFetchDelegate* GetBackgroundFetchDelegate() override;
   content::BackgroundSyncController* GetBackgroundSyncController() override;
   content::BrowsingDataRemoverDelegate* GetBrowsingDataRemoverDelegate()
       override;
-  download::InProgressDownloadManager* RetriveInProgressDownloadManager()
+  content::ReduceAcceptLanguageControllerDelegate*
+  GetReduceAcceptLanguageControllerDelegate() override;
+  std::unique_ptr<download::InProgressDownloadManager>
+  RetrieveInProgressDownloadManager() override;
+  content::OriginTrialsControllerDelegate* GetOriginTrialsControllerDelegate()
       override;
   std::unique_ptr<content::ZoomLevelDelegate> CreateZoomLevelDelegate(
       const base::FilePath& partition_path) override;
@@ -130,12 +159,35 @@ class AwBrowserContext : public content::BrowserContext,
 
   base::android::ScopedJavaLocalRef<jobject> GetJavaBrowserContext();
 
+  void ClearPersistentOriginTrialStorageForTesting(JNIEnv* env);
+
+  jboolean HasFormData(JNIEnv* env);
+  void ClearFormData(JNIEnv* env);
+
+  scoped_refptr<AwContentsOriginMatcher> service_worker_xrw_allowlist_matcher();
+
+  void SetExtraHeaders(const GURL& url, const std::string& headers);
+  std::string GetExtraHeaders(const GURL& url);
+
  private:
+  friend class AwBrowserContextIoThreadHandle;
   void CreateUserPrefService();
   void MigrateLocalStatePrefs();
+  void MigrateEyeoLocalStatePrefs();
+
+  // Return the IO thread client for this browser context that should be used
+  // by service workers. This method should never be called except by
+  // AwBrowserContextIoThreadHandle#GetServiceWorkerIoThreadClient().
+  std::unique_ptr<AwContentsIoThreadClient>
+  GetServiceWorkerIoThreadClientThreadSafe();
+
+  const std::string name_;
+  const base::FilePath relative_path_;
+  const bool is_default_;
 
   // The file path where data for this context is persisted.
   base::FilePath context_storage_path_;
+  base::FilePath http_cache_path_;
 
   scoped_refptr<AwQuotaManagerBridge> quota_manager_bridge_;
   std::unique_ptr<AwFormDatabaseService> form_database_service_;
@@ -147,11 +199,31 @@ class AwBrowserContext : public content::BrowserContext,
 
   std::unique_ptr<PrefService> user_pref_service_;
   std::unique_ptr<AwSSLHostStateDelegate> ssl_host_state_delegate_;
-  std::unique_ptr<content::PermissionControllerDelegate> permission_manager_;
+  std::unique_ptr<AwPermissionManager> permission_manager_;
+  std::unique_ptr<content::ClientHintsControllerDelegate>
+      client_hints_controller_delegate_;
+  std::unique_ptr<content::OriginTrialsControllerDelegate>
+      origin_trials_controller_delegate_;
 
   SimpleFactoryKey simple_factory_key_;
 
+  scoped_refptr<AwContentsOriginMatcher> service_worker_xrw_allowlist_matcher_;
+
+  std::map<std::string, std::string> extra_headers_;
+
   base::android::ScopedJavaGlobalRef<jobject> obj_;
+
+  // For non-default profiles, the context owns its CookieManager in
+  // cookie_manager_ (and it will not be null after construction). But if this
+  // is the default profile then cookie_manager_ will be null, as the default
+  // context does not own the default cookie manager (it is instead obtained via
+  // CookieManager::GetDefaultInstance()).
+  //
+  // In generally, use GetCookieManager() rather than using this directly.
+  std::unique_ptr<CookieManager> cookie_manager_;
+
+  // The IO thread client that should be used by service workers.
+  base::android::ScopedJavaGlobalRef<jobject> sw_io_thread_client_;
 };
 
 }  // namespace android_webview

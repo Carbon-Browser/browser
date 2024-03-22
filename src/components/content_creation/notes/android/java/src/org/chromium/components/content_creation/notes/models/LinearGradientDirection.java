@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.components.content_creation.notes.models;
 
 import android.graphics.drawable.GradientDrawable.Orientation;
 
-/**
- * Enum with values corresponding to the C++ LinearGradientDirection enum class.
- */
+/** Enum with values corresponding to the C++ LinearGradientDirection enum class. */
 public enum LinearGradientDirection {
     INVALID,
     TOP_TO_BOTTOM,
@@ -33,7 +31,7 @@ public enum LinearGradientDirection {
 
     public static Orientation toOrientation(LinearGradientDirection direction) {
         switch (direction) {
-            // Invalid will default to top-bottom.
+                // Invalid will default to top-bottom.
             case INVALID:
             case TOP_TO_BOTTOM:
                 return Orientation.TOP_BOTTOM;

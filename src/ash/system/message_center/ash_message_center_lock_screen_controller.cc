@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@
 namespace ash {
 
 // static private
-absl::optional<AshMessageCenterLockScreenController::Mode>
+std::optional<AshMessageCenterLockScreenController::Mode>
     AshMessageCenterLockScreenController::overridden_mode_for_testing_;
 
 // static
@@ -69,7 +69,7 @@ AshMessageCenterLockScreenController::GetMode() {
 
 // static, only for testing
 void AshMessageCenterLockScreenController::OverrideModeForTest(
-    absl::optional<AshMessageCenterLockScreenController::Mode> new_mode) {
+    std::optional<AshMessageCenterLockScreenController::Mode> new_mode) {
   overridden_mode_for_testing_ = new_mode;
 }
 
@@ -141,10 +141,9 @@ void AshMessageCenterLockScreenController::EncourageUserToUnlock(
                   base::UTF8ToUTF16(active_account_id_.GetUserEmail()));
   }
 
-  // TODO(yoshiki): Update UI after the UX finalizes.
   Shell::Get()->toast_manager()->Show(
       ToastData(kToastId, ToastCatalogName::kEncourageUnlock, message,
-                ToastData::kInfiniteDuration,
+                ToastData::kDefaultToastDuration,
                 /*visible_on_lock_screen=*/true));
 }
 

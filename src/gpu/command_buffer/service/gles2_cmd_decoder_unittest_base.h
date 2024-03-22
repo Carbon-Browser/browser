@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,9 @@ class GLES2DecoderTestBase : public ::testing::TestWithParam<bool>,
   ~GLES2DecoderTestBase() override;
 
   void OnConsoleMessage(int32_t id, const std::string& message) override;
-  void CacheShader(const std::string& key, const std::string& shader) override;
+  void CacheBlob(gpu::GpuDiskCacheType type,
+                 const std::string& key,
+                 const std::string& blob) override;
   void OnFenceSyncRelease(uint64_t release) override;
   void OnDescheduleUntilFinished() override;
   void OnRescheduleAfterFinished() override;
@@ -788,7 +790,6 @@ class GLES2DecoderTestBase : public ::testing::TestWithParam<bool>,
     GLuint bound_vertex_array_object_;
   };  // class MockGLStates
 
-  void AddExpectationsForVertexAttribManager();
   void SetupMockGLBehaviors();
 
   GpuPreferences gpu_preferences_;
@@ -801,8 +802,9 @@ class GLES2DecoderTestBase : public ::testing::TestWithParam<bool>,
   MockGLStates gl_states_;
   base::test::SingleThreadTaskEnvironment task_environment_;
 
-  raw_ptr<MockCopyTextureResourceManager> copy_texture_manager_;  // not owned
-  raw_ptr<MockCopyTexImageResourceManager>
+  raw_ptr<MockCopyTextureResourceManager, DanglingUntriaged>
+      copy_texture_manager_;  // not owned
+  raw_ptr<MockCopyTexImageResourceManager, DanglingUntriaged>
       copy_tex_image_blitter_;  // not owned
 };
 
@@ -836,7 +838,9 @@ class GLES2DecoderPassthroughTestBase : public testing::Test,
   ~GLES2DecoderPassthroughTestBase() override;
 
   void OnConsoleMessage(int32_t id, const std::string& message) override;
-  void CacheShader(const std::string& key, const std::string& shader) override;
+  void CacheBlob(gpu::GpuDiskCacheType type,
+                 const std::string& key,
+                 const std::string& blob) override;
   void OnFenceSyncRelease(uint64_t release) override;
   void OnDescheduleUntilFinished() override;
   void OnRescheduleAfterFinished() override;

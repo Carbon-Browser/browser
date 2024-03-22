@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,10 @@ extern const char kV8SnapshotDataDescriptor[];
 extern const char kV8Snapshot32DataDescriptor[];
 extern const char kV8Snapshot64DataDescriptor[];
 extern const char kV8ContextSnapshotDataDescriptor[];
+
+// A list of directories the network service needs (recursive) access to in
+// order to function.
+extern const char kNetworkContextParentDirsDescriptor[];
 
 }  // namespace content
 

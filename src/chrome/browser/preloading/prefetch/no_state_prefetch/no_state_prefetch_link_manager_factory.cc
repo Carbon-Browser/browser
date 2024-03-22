@@ -1,12 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_link_manager_factory.h"
 
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_link_manager.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
 
@@ -23,31 +21,30 @@ NoStatePrefetchLinkManagerFactory::GetForBrowserContext(
 // static
 NoStatePrefetchLinkManagerFactory*
 NoStatePrefetchLinkManagerFactory::GetInstance() {
-  return base::Singleton<NoStatePrefetchLinkManagerFactory>::get();
+  static base::NoDestructor<NoStatePrefetchLinkManagerFactory> instance;
+  return instance.get();
 }
 
 NoStatePrefetchLinkManagerFactory::NoStatePrefetchLinkManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "NoStatePrefetchLinkManager",
-          BrowserContextDependencyManager::GetInstance()) {
-  DependsOn(prerender::NoStatePrefetchManagerFactory::GetInstance());
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
+  DependsOn(NoStatePrefetchManagerFactory::GetInstance());
 }
 
-KeyedService* NoStatePrefetchLinkManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NoStatePrefetchLinkManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   NoStatePrefetchManager* no_state_prefetch_manager =
       NoStatePrefetchManagerFactory::GetForBrowserContext(context);
   if (!no_state_prefetch_manager)
     return nullptr;
-  NoStatePrefetchLinkManager* no_state_prefetch_link_manager =
-      new NoStatePrefetchLinkManager(no_state_prefetch_manager);
-  return no_state_prefetch_link_manager;
-}
-
-content::BrowserContext*
-NoStatePrefetchLinkManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return std::make_unique<NoStatePrefetchLinkManager>(no_state_prefetch_manager);
 }
 
 }  // namespace prerender

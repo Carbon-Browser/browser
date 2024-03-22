@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/check_op.h"
 #include "base/i18n/rtl.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/trace_event/trace_event.h"
 #include "cc/paint/paint_flags.h"
 #include "skia/ext/image_operations.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -19,16 +20,6 @@
 
 namespace views {
 
-namespace {
-
-// Returns the pixels for the bitmap in |image| at scale |image_scale|.
-void* GetBitmapPixels(const gfx::ImageSkia& image, float image_scale) {
-  DCHECK_NE(0.0f, image_scale);
-  return image.GetRepresentation(image_scale).GetBitmap().getPixels();
-}
-
-}  // namespace
-
 ImageView::ImageView() = default;
 
 ImageView::ImageView(const ui::ImageModel& image_model) {
@@ -38,9 +29,6 @@ ImageView::ImageView(const ui::ImageModel& image_model) {
 ImageView::~ImageView() = default;
 
 void ImageView::SetImage(const ui::ImageModel& image_model) {
-  if (IsImageEqual(image_model))
-    return;
-
   const gfx::Size pref_size = GetPreferredSize();
   image_model_ = image_model;
   scaled_image_ = gfx::ImageSkia();
@@ -57,36 +45,18 @@ ui::ImageModel ImageView::GetImageModel() const {
   return image_model_;
 }
 
-bool ImageView::IsImageEqual(const ui::ImageModel& image_model) const {
-  if (image_model != image_model_)
-    return false;
-
-  // It's not feasible to run the old and new generators and compare output
-  // here, so for safety, simply assume the new generator's output differs.
-  if (image_model.IsImageGenerator())
-    return false;
-
-  if (!image_model.IsImage())
-    return true;
-
-  // An ImageModel's Image holds a handle to a backing store, which may have
-  // changed since the last call to SetImage(). The expectation is that
-  // SetImage() with different pixels is treated as though the image changed.
-  // For this reason we compare not only the Image but also the pixels we last
-  // painted.
-  return last_paint_scale_ != 0.0f &&
-         last_painted_bitmap_pixels_ ==
-             GetBitmapPixels(image_model.GetImage().AsImageSkia(),
-                             last_paint_scale_);
-}
-
 gfx::Size ImageView::GetImageSize() const {
   return image_size_.value_or(image_model_.Size());
 }
 
 void ImageView::OnPaint(gfx::Canvas* canvas) {
-  View::OnPaint(canvas);
+  // This inlines View::OnPaint in order to OnPaintBorder() after OnPaintImage
+  // so the border can paint over content (for rounded corners that overlap
+  // content).
+  TRACE_EVENT1("views", "ImageView::OnPaint", "class", GetClassName());
+  OnPaintBackground(canvas);
   OnPaintImage(canvas);
+  OnPaintBorder(canvas);
 }
 
 void ImageView::OnThemeChanged() {
@@ -100,10 +70,7 @@ void ImageView::OnThemeChanged() {
 }
 
 void ImageView::OnPaintImage(gfx::Canvas* canvas) {
-  last_paint_scale_ = canvas->image_scale();
-  last_painted_bitmap_pixels_ = nullptr;
-
-  gfx::ImageSkia image = GetPaintImage(last_paint_scale_);
+  gfx::ImageSkia image = GetPaintImage(canvas->image_scale());
   if (image.isNull())
     return;
 
@@ -122,7 +89,6 @@ void ImageView::OnPaintImage(gfx::Canvas* canvas) {
   } else {
     canvas->DrawImageInt(image, image_bounds.x(), image_bounds.y());
   }
-  last_painted_bitmap_pixels_ = GetBitmapPixels(image, last_paint_scale_);
 }
 
 gfx::ImageSkia ImageView::GetPaintImage(float scale) {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/desktop_media_id.h"
@@ -28,7 +28,7 @@ struct CONTENT_EXPORT MediaStreamRequest {
   MediaStreamRequest(int render_process_id,
                      int render_frame_id,
                      int page_request_id,
-                     const GURL& security_origin,
+                     const url::Origin& url_origin,
                      bool user_gesture,
                      blink::MediaStreamRequestType request_type,
                      const std::string& requested_audio_device_id,
@@ -56,8 +56,12 @@ struct CONTENT_EXPORT MediaStreamRequest {
   // identifying this request. This is used for cancelling request.
   int page_request_id;
 
+  // TODO(crbug.com/1503955): Remove security_origin.
   // The WebKit security origin for the current request (e.g. "html5rocks.com").
   GURL security_origin;
+
+  // The Origin of the current request.
+  url::Origin url_origin;
 
   // Set to true if the call was made in the context of a user gesture.
   bool user_gesture;
@@ -82,9 +86,29 @@ struct CONTENT_EXPORT MediaStreamRequest {
   // audio being played out locally.
   bool disable_local_echo;
 
+  // Flag for desktop or tab share to indicate whether to prevent the captured
+  // audio being played out locally.
+  // This flag is distinct from |disable_local_echo|, because the former
+  // hooks into an old non-standard constraint that should be deprecated,
+  // whereas this flag hooks into a standardized option.
+  bool suppress_local_audio_playback = false;
+
   // If audio is requested, |exclude_system_audio| can indicate that
   // system-audio should nevertheless not be offered to the user.
   bool exclude_system_audio = false;
+
+  // Flag to indicate that the current tab should be excluded from the list of
+  // tabs offered to the user.
+  bool exclude_self_browser_surface = false;
+
+  // Flag to indicate whether monitor type surfaces (screens) should be offered
+  // to the user.
+  bool exclude_monitor_type_surfaces = false;
+
+  // Flag to indicate a preference for which display surface type (screen,
+  // windows, or tabs) should be most prominently offered to the user.
+  blink::mojom::PreferredDisplaySurface preferred_display_surface =
+      blink::mojom::PreferredDisplaySurface::NO_PREFERENCE;
 
   // Flag to indicate whether the request is for PTZ use.
   bool request_pan_tilt_zoom_permission;

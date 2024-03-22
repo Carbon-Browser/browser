@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,15 @@
 
 #import "ios/chrome/browser/ui/commerce/price_card/price_card_item.h"
 
+namespace web {
+class WebStateID;
+}  // namespace web
+
 @protocol PriceCardDataSource
 // Returns data which powers PriceCardView given a tab identifier. The
 // PriceCardView will be displayed on top of the screenshot in the Tab
 // Switching UI for the corresponding Tab.
-- (void)priceCardForIdentifier:(NSString*)identifier
+- (void)priceCardForIdentifier:(web::WebStateID)identifier
                     completion:(void (^)(PriceCardItem*))completion;
 @end
 

@@ -1,13 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
  * @fileoverview The driver for the UI for incremental search.
  */
+import {constants} from '../../common/constants.js';
+import {BackgroundBridge} from '../common/background_bridge.js';
+
 import {PanelInterface} from './panel_interface.js';
 
-const AutomationNode = chrome.automation.AutomationNode;
 const Dir = constants.Dir;
 
 export class ISearchUI {
@@ -16,8 +18,8 @@ export class ISearchUI {
     this.input_ = input;
     this.dir_ = Dir.FORWARD;
 
-    this.onKeyDown = this.onKeyDown.bind(this);
-    this.onTextInput = this.onTextInput.bind(this);
+    this.onKeyDown = event => this.onKeyDown_(event);
+    this.onTextInput = event => this.onTextInput_(event);
 
     input.addEventListener('keydown', this.onKeyDown, true);
     input.addEventListener('textInput', this.onTextInput, false);
@@ -28,23 +30,24 @@ export class ISearchUI {
    * @return {!Promise<ISearchUI>}
    */
   static async init(input) {
-    if (ISearchUI.instance_) {
-      ISearchUI.instance_.destroy();
+    if (ISearchUI.instance) {
+      ISearchUI.instance.destroy();
     }
 
     await BackgroundBridge.PanelBackground.createNewISearch();
-    ISearchUI.instance_ = new ISearchUI(input);
+    ISearchUI.instance = new ISearchUI(input);
     input.focus();
     input.select();
-    return ISearchUI.instance_;
+    return ISearchUI.instance;
   }
 
   /**
    * Listens to key down events.
    * @param {Event} evt
    * @return {boolean}
+   * @private
    */
-  onKeyDown(evt) {
+  onKeyDown_(evt) {
     switch (evt.key) {
       case 'ArrowUp':
         this.dir_ = Dir.BACKWARD;
@@ -75,8 +78,9 @@ export class ISearchUI {
    * Listens to text input events.
    * @param {Event} evt
    * @return {boolean}
+   * @private
    */
-  onTextInput(evt) {
+  onTextInput_(evt) {
     const searchStr = evt.target.value + evt.data;
     BackgroundBridge.PanelBackground.incrementalSearch(searchStr, this.dir_);
     return true;
@@ -91,3 +95,6 @@ export class ISearchUI {
     input.removeEventListener('textInput', this.onTextInput, false);
   }
 }
+
+/** @type {ISearchUI} */
+ISearchUI.instance;

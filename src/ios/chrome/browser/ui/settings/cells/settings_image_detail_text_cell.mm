@@ -1,17 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/cells/settings_image_detail_text_cell.h"
 
-#include "base/check.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "base/check.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+namespace {
+
+// Value of the constant used to provide an alignment on the X center of the
+// images in different rows.
+const CGFloat kImageXCenterAlignmentOffset = 14;
+
+}  // namespace
 
 @interface SettingsImageDetailTextCell ()
 
@@ -32,6 +36,11 @@
 // firstBaselineAnchor.
 @property(nonatomic, strong)
     NSLayoutConstraint* alignImageWithContentViewFirstBaselineAnchorConstraint;
+
+// Constraint between the image and the text that is used to center the images
+// in different rows. Only active when there is an image.
+@property(nonatomic, strong) NSLayoutConstraint* imageTextAlignmentConstraint;
+
 @end
 
 @implementation SettingsImageDetailTextCell
@@ -74,7 +83,7 @@
   _detailTextLabel = [[UILabel alloc] init];
   _detailTextLabel.numberOfLines = 0;
   _detailTextLabel.font =
-      [UIFont preferredFontForTextStyle:kTableViewSublabelFontStyle];
+      [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
   _detailTextLabel.adjustsFontForContentSizeCategory = YES;
 }
 
@@ -93,8 +102,8 @@
                      constant:kTableViewHorizontalSpacing];
 
   _textWithImageConstraint = [textStackView.leadingAnchor
-      constraintEqualToAnchor:_imageView.trailingAnchor
-                     constant:kTableViewImagePadding];
+      constraintGreaterThanOrEqualToAnchor:_imageView.trailingAnchor
+                                  constant:kTableViewImagePadding];
 
   _alignImageWithContentViewCenterYConstraint = [_imageView.centerYAnchor
       constraintEqualToAnchor:contentView.centerYAnchor];
@@ -103,10 +112,26 @@
       [_imageView.firstBaselineAnchor
           constraintEqualToAnchor:contentView.firstBaselineAnchor];
 
+  // To ensure the images are aligned in different rows even if they have
+  // different width.
+  NSLayoutConstraint* imageLeadingAlignmentConstraint =
+      [_imageView.centerXAnchor
+          constraintEqualToAnchor:contentView.leadingAnchor
+                         constant:kTableViewHorizontalSpacing +
+                                  kImageXCenterAlignmentOffset];
+  imageLeadingAlignmentConstraint.priority = UILayoutPriorityDefaultHigh + 1;
+  imageLeadingAlignmentConstraint.active = YES;
+
+  _imageTextAlignmentConstraint = [_imageView.centerXAnchor
+      constraintEqualToAnchor:contentView.leadingAnchor
+                     constant:kTableViewHorizontalSpacing +
+                              kImageXCenterAlignmentOffset];
+  _imageTextAlignmentConstraint.priority = UILayoutPriorityDefaultHigh + 1;
+
   [NSLayoutConstraint activateConstraints:@[
     [_imageView.leadingAnchor
-        constraintEqualToAnchor:contentView.leadingAnchor
-                       constant:kTableViewHorizontalSpacing],
+        constraintGreaterThanOrEqualToAnchor:contentView.leadingAnchor
+                                    constant:kTableViewHorizontalSpacing],
     _alignImageWithContentViewCenterYConstraint,
     [_imageView.topAnchor
         constraintGreaterThanOrEqualToAnchor:contentView.topAnchor
@@ -141,16 +166,22 @@
   self.imageView.hidden = hidden;
   // Update the leading text constraint based on `image` being provided.
   if (hidden) {
+    self.imageTextAlignmentConstraint.active = NO;
     self.textWithImageConstraint.active = NO;
     self.textNoImageConstraint.active = YES;
   } else {
     self.textNoImageConstraint.active = NO;
+    self.imageTextAlignmentConstraint.active = YES;
     self.textWithImageConstraint.active = YES;
   }
 }
 
 - (UIImage*)image {
   return self.imageView.image;
+}
+
+- (void)setImageViewAlpha:(CGFloat)alpha {
+  _imageView.alpha = alpha;
 }
 
 - (void)setImageViewTintColor:(UIColor*)color {
@@ -169,6 +200,7 @@
 - (void)prepareForReuse {
   [super prepareForReuse];
   [self alignImageWithFirstLineOfText:NO];
+  _imageView.alpha = 1.0f;
 }
 
 #pragma mark - UIAccessibility

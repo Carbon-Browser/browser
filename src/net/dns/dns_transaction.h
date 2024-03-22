@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "net/base/request_priority.h"
+#include "net/dns/opt_record_rdata.h"
 #include "net/dns/public/secure_dns_mode.h"
 #include "net/dns/record_rdata.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -124,7 +125,7 @@ class NET_EXPORT_PRIVATE DnsTransactionFactory {
 
   // The given EDNS0 option will be included in all DNS queries performed by
   // transactions from this factory.
-  virtual void AddEDNSOption(const OptRecordRdata::Opt& opt) = 0;
+  virtual void AddEDNSOption(std::unique_ptr<OptRecordRdata::Opt> opt) = 0;
 
   // Returns the default SecureDnsMode in the config.
   virtual SecureDnsMode GetSecureDnsModeForTest() = 0;

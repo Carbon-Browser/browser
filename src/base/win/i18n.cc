@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include <ostream>
+#include <string_view>
 
 #include "base/check_op.h"
 #include "base/strings/string_piece.h"
@@ -17,7 +18,7 @@ namespace {
 
 using GetPreferredUILanguages_Fn = decltype(::GetSystemPreferredUILanguages)*;
 
-constexpr base::WStringPiece kNullTerminator{L"\0", 1};
+constexpr std::wstring_view kNullTerminator{L"\0", 1};
 
 bool GetPreferredUILanguageList(GetPreferredUILanguages_Fn function,
                                 ULONG flags,

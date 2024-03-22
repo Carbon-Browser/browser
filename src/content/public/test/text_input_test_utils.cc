@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -112,7 +112,9 @@ class TextInputManagerTester::InternalObserver
 
   void OnImeCompositionRangeChanged(
       TextInputManager* text_input_manager,
-      RenderWidgetHostViewBase* updated_view) override {
+      RenderWidgetHostViewBase* updated_view,
+      bool character_bounds_changed,
+      const absl::optional<std::vector<gfx::Rect>>& line_bounds) override {
     updated_view_ = updated_view;
     const gfx::Range* range =
         text_input_manager_->GetCompositionRangeForTesting();
@@ -247,6 +249,13 @@ ui::TextInputType GetTextInputTypeFromWebContents(WebContents* web_contents) {
   return !!state ? state->type : ui::TEXT_INPUT_TYPE_NONE;
 }
 
+const ui::mojom::TextInputState* GetTextInputStateFromWebContents(
+    WebContents* web_contents) {
+  return static_cast<WebContentsImpl*>(web_contents)
+      ->GetTextInputManager()
+      ->GetTextInputState();
+}
+
 bool GetTextInputTypeForView(WebContents* web_contents,
                              RenderWidgetHostView* view,
                              ui::TextInputType* type) {
@@ -300,6 +309,11 @@ void SendImeSetCompositionTextToWidget(
       text, ime_text_spans, replacement_range, selection_start, selection_end);
 }
 
+void SendTextInputStateChangedToWidget(RenderWidgetHost* rwh,
+                                       ui::mojom::TextInputStatePtr state) {
+  RenderWidgetHostImpl::From(rwh)->TextInputStateChanged(std::move(state));
+}
+
 bool DestroyRenderWidgetHost(int32_t process_id,
                              int32_t local_root_routing_id) {
   RenderFrameHostImpl* rfh =
@@ -310,11 +324,13 @@ bool DestroyRenderWidgetHost(int32_t process_id,
   while (!rfh->is_local_root())
     rfh = rfh->GetParent();
 
+  DCHECK(rfh->GetPage().IsPrimary())
+      << "Only implemented for frames in a primary page";
   FrameTreeNode* ftn = rfh->frame_tree_node();
-  if (rfh->is_main_frame()) {
+  if (rfh->IsOutermostMainFrame()) {
     WebContents::FromRenderFrameHost(rfh)->Close();
   } else {
-    ftn->frame_tree()->RemoveFrame(ftn);
+    ftn->frame_tree().RemoveFrame(ftn);
   }
   return true;
 }

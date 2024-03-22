@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -30,7 +30,8 @@ class CssToWrapperTest(unittest.TestCase):
                 css_file,
                 wrapper_file,
                 wrapper_file_expected,
-                minify=False):
+                minify=False,
+                use_js=False):
     assert not self._out_folder
     self._out_folder = tempfile.mkdtemp(dir=_HERE_DIR)
     args = [
@@ -41,6 +42,9 @@ class CssToWrapperTest(unittest.TestCase):
 
     if minify:
       args.append('--minify')
+
+    if use_js:
+      args.append('--use_js')
 
     css_to_wrapper.main(args)
 
@@ -71,6 +75,17 @@ class CssToWrapperTest(unittest.TestCase):
                    'css_to_wrapper/foo_style.css.ts',
                    'css_to_wrapper/foo_style_expected.min.css.ts',
                    minify=True)
+
+  def testCssToWrapperUseJs(self):
+    self._run_test('css_to_wrapper/foo_style.css',
+                   'css_to_wrapper/foo_style.css.js',
+                   'css_to_wrapper/foo_style_expected.css.ts',
+                   use_js=True)
+
+  def testCssToWrapperSchemeRelative(self):
+    self._run_test('css_to_wrapper/foo_relative_style.css',
+                   'css_to_wrapper/foo_relative_style.css.ts',
+                   'css_to_wrapper/foo_relative_style_expected.css.ts')
 
 
 if __name__ == '__main__':

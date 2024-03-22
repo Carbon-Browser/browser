@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
+#include "third_party/blink/renderer/platform/bindings/exception_context.h"
 #include "third_party/blink/renderer/platform/bindings/scoped_persistent.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
@@ -81,7 +82,7 @@ class CORE_EXPORT ScriptPromiseResolver
   template <class ScriptPromiseResolver, typename... Args>
   base::OnceCallback<void(Args...)> WrapCallbackInScriptScope(
       base::OnceCallback<void(ScriptPromiseResolver*, Args...)> callback) {
-    return WTF::Bind(
+    return WTF::BindOnce(
         [](ScriptPromiseResolver* resolver,
            base::OnceCallback<void(ScriptPromiseResolver*, Args...)> callback,
            Args... args) {
@@ -115,7 +116,11 @@ class CORE_EXPORT ScriptPromiseResolver
   // Reject with WebAssembly Error object.
   void RejectWithWasmCompileError(const String& message);
 
-  ScriptState* GetScriptState() const { return script_state_; }
+  ScriptState* GetScriptState() const { return script_state_.Get(); }
+
+  const ExceptionContext& GetExceptionContext() const {
+    return exception_context_;
+  }
 
   // Note that an empty ScriptPromise will be returned after resolve or
   // reject is called.
@@ -167,7 +172,7 @@ class CORE_EXPORT ScriptPromiseResolver
     DCHECK(new_state == kResolving || new_state == kRejecting);
     state_ = new_state;
 
-    ScriptState::Scope scope(script_state_);
+    ScriptState::Scope scope(script_state_.Get());
 
     // Calling ToV8 in a ScriptForbiddenScope will trigger a CHECK and
     // cause a crash. ToV8 just invokes a constructor for wrapper creation,
@@ -179,7 +184,8 @@ class CORE_EXPORT ScriptPromiseResolver
       ScriptForbiddenScope::AllowUserAgentScript allow_script;
       v8::Isolate* isolate = script_state_->GetIsolate();
       v8::MicrotasksScope microtasks_scope(
-          isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+          isolate, ToMicrotaskQueue(script_state_.Get()),
+          v8::MicrotasksScope::kDoNotRunMicrotasks);
       value_.Reset(isolate, ToV8(value, script_state_->GetContext()->Global(),
                                  script_state_->GetIsolate()));
     }
@@ -210,7 +216,8 @@ class CORE_EXPORT ScriptPromiseResolver
   TaskHandle deferred_resolve_task_;
   Resolver resolver_;
   TraceWrapperV8Reference<v8::Value> value_;
-  ExceptionContext exception_context_;
+  const ExceptionContext exception_context_;
+  String script_url_;
 
   // To support keepAliveWhilePending(), this object needs to keep itself
   // alive while in that state.

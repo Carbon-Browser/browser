@@ -1,16 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {ConfirmationPageElement} from 'chrome://os-feedback/confirmation_page.js';
 import {FakeFeedbackServiceProvider} from 'chrome://os-feedback/fake_feedback_service_provider.js';
 import {FeedbackFlowState} from 'chrome://os-feedback/feedback_flow.js';
-import {SendReportStatus} from 'chrome://os-feedback/feedback_types.js';
 import {setFeedbackServiceProviderForTesting} from 'chrome://os-feedback/mojo_interface_provider.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import {FeedbackAppPostSubmitAction, SendReportStatus} from 'chrome://os-feedback/os_feedback_ui.mojom-webui.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {eventToPromise, flushTasks, isVisible} from '../../test_util.js';
+import {eventToPromise, isVisible} from '../test_util.js';
 
 /** @type {string} */
 const ONLINE_TITLE = 'Thanks for your feedback';
@@ -19,16 +22,17 @@ const OFFLINE_TITLE = 'You\'re offline. Feedback will be sent later.';
 
 /** @type {string} */
 const ONLINE_MESSAGE =
-    'Your feedback helps improve Chrome OS and will be reviewed by ' +
-    'our team. Because of the large number of reports, we won\’t be able ' +
-    'to send a reply.';
+    'Your feedback helps us improve the Chromebook experience and will be ' +
+    'reviewed by our team. Because of the large number of reports, ' +
+    'we won’t be able to send a reply.';
+
 /** @type {string} */
 const OFFLINE_MESSAGE =
-    'Thanks for the feedback. Your feedback helps improve Chrome OS ' +
-    'and will be reviewed by the Chrome OS team. Because of the number ' +
-    'of reports submitted, you won’t receive a direct reply.';
+    'Thanks for your feedback. Your feedback helps us improve the Chromebook ' +
+    'experience and will be reviewed by our team. Because of the large ' +
+    'number of reports, we won’t be able to send a reply.';
 
-export function confirmationPageTest() {
+suite('confirmationPageTest', () => {
   /** @type {?ConfirmationPageElement} */
   let page = null;
 
@@ -36,7 +40,7 @@ export function confirmationPageTest() {
   let feedbackServiceProvider = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
 
     feedbackServiceProvider = new FakeFeedbackServiceProvider();
     setFeedbackServiceProviderForTesting(feedbackServiceProvider);
@@ -52,6 +56,7 @@ export function confirmationPageTest() {
     page = /** @type {!ConfirmationPageElement} */ (
         document.createElement('confirmation-page'));
     assertTrue(!!page);
+    page.isUserLoggedIn = true;
     document.body.appendChild(page);
     return flushTasks();
   }
@@ -75,6 +80,19 @@ export function confirmationPageTest() {
   function getElementContent(host, selector) {
     const element = getElement(host, selector);
     return element.textContent.trim();
+  }
+
+  /**
+   * @param {boolean} isCalled
+   * @param {FeedbackAppPostSubmitAction} action
+   * @private
+   */
+  function verifyRecordPostSubmitActionCalled(isCalled, action) {
+    isCalled ?
+        assertTrue(
+            feedbackServiceProvider.isRecordPostSubmitActionCalled(action)) :
+        assertFalse(
+            feedbackServiceProvider.isRecordPostSubmitActionCalled(action));
   }
 
   /**
@@ -131,7 +149,7 @@ export function confirmationPageTest() {
 
     // Verify the community link.
     const communityLink = helpLinks[2];
-    if (isOnline) {
+    if (isOnline && page.isUserLoggedIn) {
       assertTrue(isVisible(communityLink));
     } else {
       assertFalse(isVisible(communityLink));
@@ -186,11 +204,37 @@ export function confirmationPageTest() {
   });
 
   /**
+   * Test that when the user is not logged in, the help resources section should
+   * be invisible.
+   */
+  test('userNotLoggedIn_ShouldHideHelpResourcesSection', async () => {
+    await initializePage();
+    page.isUserLoggedIn = false;
+
+    const helpResourcesSection = getElement(page, '#helpResources');
+    assertFalse(isVisible(helpResourcesSection));
+  });
+
+  /**
+   * Test that when the user is logged in, the help resources section should be
+   * visible.
+   */
+  test('userLoggedIn_ShouldShowHelpResourcesSection', async () => {
+    await initializePage();
+    page.isUserLoggedIn = true;
+
+    const helpResourcesSection = getElement(page, '#helpResources');
+    assertTrue(isVisible(helpResourcesSection));
+  });
+
+  /**
    * Test that when send-new-report button is clicked, an on-go-back-click
    * is fired.
    */
   test('SendNewReport', async () => {
     await initializePage();
+    verifyRecordPostSubmitActionCalled(
+        false, FeedbackAppPostSubmitAction.kSendNewReport);
 
     const clickPromise =
         eventToPromise('go-back-click', /**@type {!Element} */ (page));
@@ -206,11 +250,16 @@ export function confirmationPageTest() {
     await clickPromise;
     assertTrue(!!actualCurrentState);
     assertEquals(FeedbackFlowState.CONFIRMATION, actualCurrentState);
+    verifyRecordPostSubmitActionCalled(
+        true, FeedbackAppPostSubmitAction.kSendNewReport);
   });
 
   // Test clicking done button should close the window.
   test('ClickDoneButtonShouldCloseWindow', async () => {
     await initializePage();
+    verifyRecordPostSubmitActionCalled(
+        false, FeedbackAppPostSubmitAction.kClickDoneButton);
+
     const resolver = new PromiseResolver();
     let windowCloseCalled = 0;
 
@@ -225,11 +274,15 @@ export function confirmationPageTest() {
     await flushTasks();
 
     assertEquals(1, windowCloseCalled);
+    verifyRecordPostSubmitActionCalled(
+        true, FeedbackAppPostSubmitAction.kClickDoneButton);
   });
 
   // Test clicking diagnostics app link.
   test('openDiagnosticsApp', async () => {
     await initializePage();
+    verifyRecordPostSubmitActionCalled(
+        false, FeedbackAppPostSubmitAction.kOpenDiagnosticsApp);
 
     assertEquals(0, feedbackServiceProvider.getOpenDiagnosticsAppCallCount());
 
@@ -237,11 +290,24 @@ export function confirmationPageTest() {
     link.click();
 
     assertEquals(1, feedbackServiceProvider.getOpenDiagnosticsAppCallCount());
+    verifyRecordPostSubmitActionCalled(
+        true, FeedbackAppPostSubmitAction.kOpenDiagnosticsApp);
+
+    // Make sure that the label and the sub-label are clickable too.
+    const label = link.querySelector('.label');
+    label.click();
+    assertEquals(2, feedbackServiceProvider.getOpenDiagnosticsAppCallCount());
+
+    const subLabel = link.querySelector('.sub-label');
+    subLabel.click();
+    assertEquals(3, feedbackServiceProvider.getOpenDiagnosticsAppCallCount());
   });
 
   // Test clicking explore app link.
   test('openExploreApp', async () => {
     await initializePage();
+    verifyRecordPostSubmitActionCalled(
+        false, FeedbackAppPostSubmitAction.kOpenExploreApp);
 
     assertEquals(0, feedbackServiceProvider.getOpenExploreAppCallCount());
 
@@ -249,11 +315,24 @@ export function confirmationPageTest() {
     link.click();
 
     assertEquals(1, feedbackServiceProvider.getOpenExploreAppCallCount());
+    verifyRecordPostSubmitActionCalled(
+        true, FeedbackAppPostSubmitAction.kOpenExploreApp);
+
+    // Make sure that the label and the sub-label are clickable too.
+    const label = link.querySelector('.label');
+    label.click();
+    assertEquals(2, feedbackServiceProvider.getOpenExploreAppCallCount());
+
+    const subLabel = link.querySelector('.sub-label');
+    subLabel.click();
+    assertEquals(3, feedbackServiceProvider.getOpenExploreAppCallCount());
   });
 
   // Test clicking openChromebookHelp link.
   test('openChromebookHelp', async () => {
     await initializePage();
+    verifyRecordPostSubmitActionCalled(
+        false, FeedbackAppPostSubmitAction.kOpenChromebookCommunity);
     const resolver = new PromiseResolver();
     let windowOpenCalled = 0;
     let url = '';
@@ -277,5 +356,39 @@ export function confirmationPageTest() {
     assertEquals(target, '_blank');
     assertEquals(
         url, 'https://support.google.com/chromebook/?hl=en#topic=3399709');
+    verifyRecordPostSubmitActionCalled(
+        true, FeedbackAppPostSubmitAction.kOpenChromebookCommunity);
+
+    // Make sure that the label and the sub-label are clickable too.
+    const label = link.querySelector('.label');
+    label.click();
+    assertEquals(2, windowOpenCalled);
+
+    const subLabel = link.querySelector('.sub-label');
+    subLabel.click();
+    assertEquals(3, windowOpenCalled);
   });
-}
+
+  // Test that we only record the user's first action on confirmation page.
+  test('recordFirstPostCompleteAction', async () => {
+    await initializePage();
+
+    verifyRecordPostSubmitActionCalled(
+        false, FeedbackAppPostSubmitAction.kOpenExploreApp);
+    verifyRecordPostSubmitActionCalled(
+        false, FeedbackAppPostSubmitAction.kOpenDiagnosticsApp);
+
+    // Open explore app first then open diagnostics app, should only record
+    // the first user action.
+    const exploreLink = getElement(page, '#explore');
+    exploreLink.click();
+    const diagnosticsLink = getElement(page, '#diagnostics');
+    diagnosticsLink.click();
+    await flushTasks();
+
+    verifyRecordPostSubmitActionCalled(
+        true, FeedbackAppPostSubmitAction.kOpenExploreApp);
+    verifyRecordPostSubmitActionCalled(
+        false, FeedbackAppPostSubmitAction.kOpenDiagnosticsApp);
+  });
+});

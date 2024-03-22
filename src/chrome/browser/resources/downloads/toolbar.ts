@@ -1,23 +1,23 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/js/util.m.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/js/util.js';
 import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
 import './strings.m.js';
 
 import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
+import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import {getToastManager} from 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
 import {CrToolbarElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BrowserProxy} from './browser_proxy.js';
@@ -93,12 +93,12 @@ export class DownloadsToolbarElement extends PolymerElement {
     return this.$.toolbar.getSearchField().isSearchFocused();
   }
 
-  private onClearAllTap_(e: Event) {
+  private onClearAllClick_(e: Event) {
     assert(this.canClearAll());
     this.mojoHandler_!.clearAll();
     this.$.moreActionsMenu.close();
     const canUndo =
-        this.items.some(data => !data.isDangerous && !data.isMixedContent);
+        this.items.some(data => !data.isDangerous && !data.isInsecure);
     getToastManager().show(
         loadTimeData.getString('toastClearedAll'),
         /* hideSlotted= */ !canUndo);
@@ -107,7 +107,7 @@ export class DownloadsToolbarElement extends PolymerElement {
     e.preventDefault();
   }
 
-  private onMoreActionsTap_() {
+  private onMoreActionsClick_() {
     this.$.moreActionsMenu.showAt(this.$.moreActions);
   }
 
@@ -119,7 +119,7 @@ export class DownloadsToolbarElement extends PolymerElement {
     this.updateClearAll_();
   }
 
-  private onOpenDownloadsFolderTap_() {
+  private onOpenDownloadsFolderClick_() {
     this.mojoHandler_!.openDownloadsFolderRequiringGesture();
     this.$.moreActionsMenu.close();
   }

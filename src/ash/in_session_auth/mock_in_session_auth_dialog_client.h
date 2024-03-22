@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define ASH_IN_SESSION_AUTH_MOCK_IN_SESSION_AUTH_DIALOG_CLIENT_H_
 
 #include "ash/public/cpp/in_session_auth_dialog_client.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
@@ -20,6 +20,13 @@ class MockInSessionAuthDialogClient : public InSessionAuthDialogClient {
   ~MockInSessionAuthDialogClient() override;
 
   // InSessionAuthDialogClient:
+  MOCK_METHOD(void,
+              StartAuthSession,
+              (base::OnceCallback<void(bool)>),
+              (override));
+
+  MOCK_METHOD(void, InvalidateAuthSession, (), (override));
+
   MOCK_METHOD(void,
               AuthenticateUserWithPasswordOrPin,
               (const std::string& password,
@@ -38,7 +45,10 @@ class MockInSessionAuthDialogClient : public InSessionAuthDialogClient {
                base::OnceCallback<void(bool)> callback),
               (override));
 
-  MOCK_METHOD(void, EndFingerprintAuthSession, (), (override));
+  MOCK_METHOD(void,
+              EndFingerprintAuthSession,
+              (base::OnceClosure callback),
+              (override));
 
   MOCK_METHOD(void,
               CheckPinAuthAvailability,

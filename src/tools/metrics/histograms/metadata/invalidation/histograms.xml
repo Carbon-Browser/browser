@@ -1,5 +1,5 @@
 <!--
-Copyright 2020 The Chromium Authors. All rights reserved.
+Copyright 2020 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -110,16 +110,6 @@ chromium-metrics-reviews@google.com.
   <summary>
     Status of unsubscription request to the Per User Topic server. Recorded upon
     receiving response from server.
-  </summary>
-</histogram>
-
-<histogram name="Invalidations.GCMUpstreamRequest"
-    enum="GCMUpstreamMessageStatus" expires_after="M76">
-  <owner>nyquist@chromium.org</owner>
-  <owner>khushalsagar@chromium.org</owner>
-  <owner>melandory@chromium.org</owner>
-  <summary>
-    Status of sending outgoing invalidation message through GCM upsteam.
   </summary>
 </histogram>
 

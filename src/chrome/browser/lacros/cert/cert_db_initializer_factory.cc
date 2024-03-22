@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,8 @@
 #include "base/no_destructor.h"
 #include "base/system/sys_info.h"
 #include "chrome/browser/lacros/cert/cert_db_initializer_impl.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/signin/identity_manager_factory.h"
 #include "chromeos/lacros/lacros_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 class CertDbInitializer;
 
@@ -29,11 +26,14 @@ CertDbInitializer* CertDbInitializerFactory::GetForBrowserContext(
 }
 
 CertDbInitializerFactory::CertDbInitializerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "CertDbInitializerFactory",
-          BrowserContextDependencyManager::GetInstance()) {
-  DependsOn(IdentityManagerFactory::GetInstance());
-}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
 bool CertDbInitializerFactory::ServiceIsCreatedWithBrowserContext() const {
   return should_create_with_browser_context_;
@@ -44,20 +44,17 @@ void CertDbInitializerFactory::SetCreateWithBrowserContextForTesting(
   should_create_with_browser_context_ = should_create;
 }
 
-KeyedService* CertDbInitializerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CertDbInitializerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
 
-  CertDbInitializerImpl* result = new CertDbInitializerImpl(profile);
+  std::unique_ptr<CertDbInitializerImpl> result =
+      std::make_unique<CertDbInitializerImpl>(profile);
   result->Start();
   return result;
 }
 
 bool CertDbInitializerFactory::ServiceIsNULLWhileTesting() const {
   return true;
-}
-
-content::BrowserContext* CertDbInitializerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
 }

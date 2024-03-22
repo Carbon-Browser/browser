@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@
 
 #include "base/atomicops.h"
 #include "base/base_export.h"
-#include "base/debug/debugging_buildflags.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "base/time/time_override.h"
@@ -41,14 +40,6 @@
 // TRACE_EVENT_NESTABLE_ASYNC_BEGIN0(
 //     "network", "ResourceLoad",
 //     TRACE_ID_WITH_SCOPE("BlinkResourceID", resourceID));
-//
-// Also, it is possible to prepend the ID with another number, like the process
-// ID. This is useful in creating IDs that are unique among all processes. To do
-// that, pass two numbers after the scope string instead of one. For example,
-//
-// TRACE_EVENT_NESTABLE_ASYNC_BEGIN0(
-//     "network", "ResourceLoad",
-//     TRACE_ID_WITH_SCOPE("BlinkResourceID", pid, resourceID));
 #define TRACE_ID_WITH_SCOPE(scope, ...) \
   trace_event_internal::TraceID::WithScope(scope, ##__VA_ARGS__)
 
@@ -705,10 +696,10 @@ inline base::trace_event::TraceEventHandle AddTraceEvent(
 }
 
 template <class ARG1_TYPE>
-static void AddMetadataEvent(const unsigned char* category_group_enabled,
-                             const char* event_name,
-                             const char* arg_name,
-                             ARG1_TYPE&& arg_val) {
+void AddMetadataEvent(const unsigned char* category_group_enabled,
+                      const char* event_name,
+                      const char* arg_name,
+                      ARG1_TYPE&& arg_val) {
   base::trace_event::TraceArguments args(arg_name,
                                          std::forward<ARG1_TYPE>(arg_val));
   trace_event_internal::AddMetadataEvent(category_group_enabled, event_name,

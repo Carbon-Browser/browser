@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,12 +24,13 @@ public class ParameterizedRunnerDelegateCommonTest {
     private static Object createTest(TestClass testClass, ParameterSet classParameterSet)
             throws ParameterizedTestInstantiationException {
         return new ParameterizedRunnerDelegateCommon(
-                testClass, classParameterSet, Collections.emptyList())
+                        testClass, classParameterSet, Collections.emptyList())
                 .createTest();
     }
 
     static class BadTestClassWithMoreThanOneConstructor {
         public BadTestClassWithMoreThanOneConstructor() {}
+
         @SuppressWarnings("unused")
         public BadTestClassWithMoreThanOneConstructor(String argument) {}
     }

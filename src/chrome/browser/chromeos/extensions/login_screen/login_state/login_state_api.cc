@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/extensions/login_screen/login_state/login_state_api.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/api/login_state.h"
@@ -53,20 +53,20 @@ namespace extensions {
 api::login_state::SessionState ToApiEnum(crosapi::mojom::SessionState state) {
   switch (state) {
     case crosapi::mojom::SessionState::kUnknown:
-      return api::login_state::SessionState::SESSION_STATE_UNKNOWN;
+      return api::login_state::SessionState::kUnknown;
     case crosapi::mojom::SessionState::kInOobeScreen:
-      return api::login_state::SessionState::SESSION_STATE_IN_OOBE_SCREEN;
+      return api::login_state::SessionState::kInOobeScreen;
     case crosapi::mojom::SessionState::kInLoginScreen:
-      return api::login_state::SessionState::SESSION_STATE_IN_LOGIN_SCREEN;
+      return api::login_state::SessionState::kInLoginScreen;
     case crosapi::mojom::SessionState::kInSession:
-      return api::login_state::SessionState::SESSION_STATE_IN_SESSION;
+      return api::login_state::SessionState::kInSession;
     case crosapi::mojom::SessionState::kInLockScreen:
-      return api::login_state::SessionState::SESSION_STATE_IN_LOCK_SCREEN;
+      return api::login_state::SessionState::kInLockScreen;
     case crosapi::mojom::SessionState::kInRmaScreen:
-      return api::login_state::SessionState::SESSION_STATE_IN_RMA_SCREEN;
+      return api::login_state::SessionState::kInRmaScreen;
   }
   NOTREACHED();
-  return api::login_state::SessionState::SESSION_STATE_UNKNOWN;
+  return api::login_state::SessionState::kUnknown;
 }
 
 crosapi::mojom::LoginState* GetLoginStateApi() {
@@ -83,11 +83,9 @@ ExtensionFunction::ResponseAction LoginStateGetProfileTypeFunction::Run() {
   bool is_signin_profile =
       IsSigninProfile(Profile::FromBrowserContext(browser_context()));
   api::login_state::ProfileType profile_type =
-      is_signin_profile
-          ? api::login_state::ProfileType::PROFILE_TYPE_SIGNIN_PROFILE
-          : api::login_state::ProfileType::PROFILE_TYPE_USER_PROFILE;
-  return RespondNow(
-      OneArgument(base::Value(api::login_state::ToString(profile_type))));
+      is_signin_profile ? api::login_state::ProfileType::kSigninProfile
+                        : api::login_state::ProfileType::kUserProfile;
+  return RespondNow(WithArguments(api::login_state::ToString(profile_type)));
 }
 
 ExtensionFunction::ResponseAction LoginStateGetSessionStateFunction::Run() {
@@ -115,8 +113,7 @@ void LoginStateGetSessionStateFunction::OnResult(
     case Result::Tag::kSessionState:
       api::login_state::SessionState session_state =
           ToApiEnum(result->get_session_state());
-      Respond(
-          OneArgument(base::Value(api::login_state::ToString(session_state))));
+      Respond(WithArguments(api::login_state::ToString(session_state)));
       return;
   }
 }

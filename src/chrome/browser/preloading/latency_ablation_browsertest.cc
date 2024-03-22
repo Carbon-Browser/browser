@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,9 @@ constexpr static char kSuggestionDomain[] = "a.test";
 constexpr static char16_t kSearchDomain16[] = u"a.test";
 
 // Copy of the feature here to test the actual feature string.
-const base::Feature kNavigationLatencyAblation{
-    "NavigationLatencyAblation", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kNavigationLatencyAblation,
+             "NavigationLatencyAblation",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 }  // namespace
 
 class LatencyAblationBrowserTest : public InProcessBrowserTest {
@@ -48,7 +49,7 @@ class LatencyAblationBrowserTest : public InProcessBrowserTest {
         net::EmbeddedTestServer::TYPE_HTTPS);
     https_server_->SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
     https_server_->ServeFilesFromSourceDirectory("chrome/test/data");
-    prerender_helper_->SetUp(https_server_.get());
+    prerender_helper_->RegisterServerRequestMonitor(https_server_.get());
     ASSERT_TRUE(https_server_->Start());
 
     TemplateURLService* model = TemplateURLServiceFactory::GetForProfile(

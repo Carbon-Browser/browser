@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/common/buildflags.h"
+#include "chrome/browser/extensions/cws_info_service.h"
 #include "chrome/common/extensions/api/developer_private.h"
-
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-class SupervisedUserService;
-#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
+#include "components/supervised_user/core/common/buildflags.h"
+#include "extensions/browser/blocklist_state.h"
+#include "extensions/common/url_pattern.h"
+#include "extensions/common/url_pattern_set.h"
 
 namespace content {
 class BrowserContext;
@@ -64,6 +64,18 @@ class ExtensionInfoGenerator {
                             bool include_terminated,
                             ExtensionInfosCallback callback);
 
+  // Returns a list of URLPatterns where no pattern is completely contained by
+  // another pattern in the list.
+  static std::vector<URLPattern> GetDistinctHosts(
+      const URLPatternSet& patterns);
+
+  // Construct the needed strings for the safety check on the
+  // extensions page.
+  static api::developer_private::SafetyCheckStrings
+  CreateSafetyCheckDisplayString(const CWSInfoService::CWSInfo& cws_info,
+                                 api::developer_private::ExtensionState state,
+                                 BitMapBlocklistState blocklist_state);
+
  private:
   // Creates an ExtensionInfo for the given |extension| and |state|, and
   // asynchronously adds it to the |list|.
@@ -84,15 +96,13 @@ class ExtensionInfoGenerator {
   // Various systems, cached for convenience.
   raw_ptr<content::BrowserContext> browser_context_;
   raw_ptr<CommandService> command_service_;
+  raw_ptr<CWSInfoService> cws_info_service_;
   raw_ptr<ExtensionSystem> extension_system_;
   raw_ptr<ExtensionPrefs> extension_prefs_;
   raw_ptr<ExtensionActionAPI> extension_action_api_;
   raw_ptr<WarningService> warning_service_;
   raw_ptr<ErrorConsole> error_console_;
   raw_ptr<ImageLoader> image_loader_;
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-  raw_ptr<SupervisedUserService> supervised_user_service_;
-#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
 
   // The number of pending image loads.
   size_t pending_image_loads_;
@@ -104,6 +114,8 @@ class ExtensionInfoGenerator {
   ExtensionInfosCallback callback_;
 
   base::WeakPtrFactory<ExtensionInfoGenerator> weak_factory_{this};
+
+  friend class ExtensionInfoGeneratorUnitTest;
 };
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "tools/json_schema_compiler/test/idl_basics.h"
 #include "tools/json_schema_compiler/test/idl_object_types.h"
 #include "tools/json_schema_compiler/test/idl_properties.h"
+#include "tools/json_schema_compiler/test/test_util.h"
 
 using test::api::idl_basics::MyType1;
 using test::api::idl_object_types::BarType;
@@ -30,34 +31,37 @@ namespace ObjectFunction1 = test::api::idl_object_types::ObjectFunction1;
 
 TEST(IdlCompiler, Basics) {
   // Test MyType1.
+  static_assert(!std::is_copy_constructible_v<MyType1>);
+  static_assert(!std::is_copy_assignable_v<MyType1>);
+  static_assert(std::is_move_constructible_v<MyType1>);
+  static_assert(std::is_move_assignable_v<MyType1>);
+
   MyType1 a;
   a.x = 5;
   a.y = std::string("foo");
-  std::unique_ptr<base::DictionaryValue> serialized = a.ToValue();
-  MyType1 b;
-  EXPECT_TRUE(MyType1::Populate(*serialized.get(), &b));
-  EXPECT_EQ(a.x, b.x);
-  EXPECT_EQ(a.y, b.y);
+  auto b = MyType1::FromValue(a.ToValue());
+  ASSERT_TRUE(b);
+  EXPECT_EQ(a.x, b->x);
+  EXPECT_EQ(a.y, b->y);
+  EXPECT_EQ(a.Clone().ToValue(), a.ToValue());
 
   // Test Function2, which takes an integer parameter.
   base::Value::List list;
   list.Append(5);
-  std::unique_ptr<Function2::Params> f2_params =
-      Function2::Params::Create(list);
+  std::optional<Function2::Params> f2_params = Function2::Params::Create(list);
   EXPECT_EQ(5, f2_params->x);
 
   // Test Function3, which takes a MyType1 parameter.
   list.clear();
-  base::DictionaryValue tmp;
-  tmp.SetInteger("x", 17);
-  tmp.SetString("y", "hello");
-  tmp.SetString("z", "zstring");
-  tmp.SetString("a", "astring");
-  tmp.SetString("b", "bstring");
-  tmp.SetString("c", "cstring");
-  list.Append(std::move(tmp));
-  std::unique_ptr<Function3::Params> f3_params =
-      Function3::Params::Create(list);
+  base::Value::Dict tmp;
+  tmp.Set("x", 17);
+  tmp.Set("y", "hello");
+  tmp.Set("z", "zstring");
+  tmp.Set("a", "astring");
+  tmp.Set("b", "bstring");
+  tmp.Set("c", "cstring");
+  list.Append(base::Value(std::move(tmp)));
+  std::optional<Function3::Params> f3_params = Function3::Params::Create(list);
   EXPECT_EQ(17, f3_params->arg.x);
   EXPECT_EQ("hello", f3_params->arg.y);
 
@@ -73,19 +77,18 @@ TEST(IdlCompiler, Basics) {
 
   base::Value::List f6_results = Function6::Results::Create(a);
   ASSERT_EQ(1u, f6_results.size());
-  MyType1 c;
-  EXPECT_TRUE(MyType1::Populate(f6_results[0], &c));
-  EXPECT_EQ(a.x, c.x);
-  EXPECT_EQ(a.y, c.y);
+  auto c = MyType1::FromValue(f6_results[0]);
+  ASSERT_TRUE(c);
+  EXPECT_EQ(a.x, c->x);
+  EXPECT_EQ(a.y, c->y);
 }
 
 TEST(IdlCompiler, OptionalArguments) {
   // Test a function that takes one optional argument, both without and with
   // that argument.
   base::Value::List list;
-  std::unique_ptr<Function7::Params> f7_params =
-      Function7::Params::Create(list);
-  EXPECT_EQ(nullptr, f7_params->arg.get());
+  std::optional<Function7::Params> f7_params = Function7::Params::Create(list);
+  EXPECT_FALSE(f7_params->arg.has_value());
   list.Append(7);
   f7_params = Function7::Params::Create(list);
   EXPECT_EQ(7, *(f7_params->arg));
@@ -94,10 +97,9 @@ TEST(IdlCompiler, OptionalArguments) {
   // argument.
   list.clear();
   list.Append(8);
-  std::unique_ptr<Function8::Params> f8_params =
-      Function8::Params::Create(list);
+  std::optional<Function8::Params> f8_params = Function8::Params::Create(list);
   EXPECT_EQ(8, f8_params->arg1);
-  EXPECT_EQ(nullptr, f8_params->arg2.get());
+  EXPECT_FALSE(f8_params->arg2.has_value());
   list.Append("foo");
   f8_params = Function8::Params::Create(list);
   EXPECT_EQ(8, f8_params->arg1);
@@ -105,23 +107,22 @@ TEST(IdlCompiler, OptionalArguments) {
 
   // Test a function with an optional argument of custom type.
   list.clear();
-  std::unique_ptr<Function9::Params> f9_params =
-      Function9::Params::Create(list);
-  EXPECT_EQ(nullptr, f9_params->arg.get());
+  std::optional<Function9::Params> f9_params = Function9::Params::Create(list);
+  EXPECT_FALSE(f9_params->arg.has_value());
   list.clear();
-  base::DictionaryValue tmp;
-  tmp.SetInteger("x", 17);
-  tmp.SetString("y", "hello");
-  tmp.SetString("z", "zstring");
-  tmp.SetString("a", "astring");
-  tmp.SetString("b", "bstring");
-  tmp.SetString("c", "cstring");
-  list.Append(std::move(tmp));
+  base::Value::Dict tmp;
+  tmp.Set("x", 17);
+  tmp.Set("y", "hello");
+  tmp.Set("z", "zstring");
+  tmp.Set("a", "astring");
+  tmp.Set("b", "bstring");
+  tmp.Set("c", "cstring");
+  list.Append(base::Value(std::move(tmp)));
   f9_params = Function9::Params::Create(list);
-  ASSERT_TRUE(f9_params->arg.get() != nullptr);
-  MyType1* t1 = f9_params->arg.get();
-  EXPECT_EQ(17, t1->x);
-  EXPECT_EQ("hello", t1->y);
+  ASSERT_TRUE(f9_params->arg);
+  const MyType1& t1 = *f9_params->arg;
+  EXPECT_EQ(17, t1.x);
+  EXPECT_EQ("hello", t1.y);
 }
 
 TEST(IdlCompiler, ArrayTypes) {
@@ -130,9 +131,9 @@ TEST(IdlCompiler, ArrayTypes) {
   base::Value::List list;
   list.Append(33);
   list.Append(base::Value::List());
-  std::unique_ptr<Function10::Params> f10_params =
+  std::optional<Function10::Params> f10_params =
       Function10::Params::Create(list);
-  ASSERT_TRUE(f10_params != nullptr);
+  ASSERT_TRUE(f10_params != std::nullopt);
   EXPECT_EQ(33, f10_params->x);
   EXPECT_TRUE(f10_params->y.empty());
 
@@ -144,7 +145,7 @@ TEST(IdlCompiler, ArrayTypes) {
   sublist.Append(35);
   list.Append(std::move(sublist));
   f10_params = Function10::Params::Create(list);
-  ASSERT_TRUE(f10_params != nullptr);
+  ASSERT_TRUE(f10_params != std::nullopt);
   EXPECT_EQ(33, f10_params->x);
   ASSERT_EQ(2u, f10_params->y.size());
   EXPECT_EQ(34, f10_params->y[0]);
@@ -159,12 +160,12 @@ TEST(IdlCompiler, ArrayTypes) {
   a.y = std::string("foo");
   b.y = std::string("bar");
   base::Value::List sublist2;
-  sublist2.Append(base::Value::FromUniquePtrValue(a.ToValue()));
-  sublist2.Append(base::Value::FromUniquePtrValue(b.ToValue()));
+  sublist2.Append(base::Value(a.ToValue()));
+  sublist2.Append(base::Value(b.ToValue()));
   list.Append(std::move(sublist2));
-  std::unique_ptr<Function11::Params> f11_params =
+  std::optional<Function11::Params> f11_params =
       Function11::Params::Create(list);
-  ASSERT_TRUE(f11_params != nullptr);
+  ASSERT_TRUE(f11_params != std::nullopt);
   ASSERT_EQ(2u, f11_params->arg.size());
   EXPECT_EQ(5, f11_params->arg[0].x);
   EXPECT_EQ("foo", f11_params->arg[0].y);
@@ -176,33 +177,32 @@ TEST(IdlCompiler, ObjectTypes) {
   // Test the FooType type.
   FooType f1;
   f1.x = 3;
-  std::unique_ptr<base::DictionaryValue> serialized_foo = f1.ToValue();
-  FooType f2;
-  EXPECT_TRUE(FooType::Populate(*serialized_foo.get(), &f2));
-  EXPECT_EQ(f1.x, f2.x);
+  auto f2 = FooType::FromValue(f1.ToValue());
+  ASSERT_TRUE(f2);
+  EXPECT_EQ(f1.x, f2->x);
 
   // Test the BarType type.
   BarType b1;
-  b1.x = std::make_unique<base::Value>(7);
-  std::unique_ptr<base::DictionaryValue> serialized_bar = b1.ToValue();
-  BarType b2;
-  EXPECT_TRUE(BarType::Populate(*serialized_bar.get(), &b2));
-  ASSERT_TRUE(b2.x->is_int());
-  EXPECT_EQ(7, b2.x->GetInt());
+  b1.x = base::Value(7);
+  auto b2 = BarType::FromValue(b1.ToValue());
+  ASSERT_TRUE(b2);
+  ASSERT_TRUE(b2->x.is_int());
+  EXPECT_EQ(7, b2->x.GetInt());
+  EXPECT_FALSE(b2->y.has_value());
 
   // Test the params to the ObjectFunction1 function.
-  base::DictionaryValue icon_props;
-  icon_props.SetString("hello", "world");
-  ObjectFunction1::Params::Icon icon;
-  EXPECT_TRUE(ObjectFunction1::Params::Icon::Populate(icon_props, &icon));
+  base::Value::Dict icon_props;
+  icon_props.Set("hello", "world");
+  ASSERT_TRUE(ObjectFunction1::Params::Icon::FromValue(icon_props));
   base::Value::List list;
   list.Append(std::move(icon_props));
-  std::unique_ptr<ObjectFunction1::Params> params =
+  std::optional<ObjectFunction1::Params> params =
       ObjectFunction1::Params::Create(list);
-  ASSERT_TRUE(params.get() != nullptr);
-  std::string tmp;
-  EXPECT_TRUE(params->icon.additional_properties.GetString("hello", &tmp));
-  EXPECT_EQ("world", tmp);
+  ASSERT_TRUE(params != std::nullopt);
+  const std::string* tmp =
+      params->icon.additional_properties.FindString("hello");
+  ASSERT_TRUE(tmp);
+  EXPECT_EQ("world", *tmp);
 }
 
 TEST(IdlCompiler, PropertyValues) {

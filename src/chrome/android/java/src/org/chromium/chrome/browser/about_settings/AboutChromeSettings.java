@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,9 @@ import org.chromium.ui.widget.Toast;
 
 import java.util.Calendar;
 
-/**
- * Settings fragment that displays information about Chrome.
- */
-public class AboutChromeSettings
-        extends PreferenceFragmentCompat implements Preference.OnPreferenceClickListener {
+/** Settings fragment that displays information about Chrome. */
+public class AboutChromeSettings extends PreferenceFragmentCompat
+        implements Preference.OnPreferenceClickListener {
     private static final int TAPS_FOR_DEVELOPER_SETTINGS = 7;
 
     private static final String PREF_APPLICATION_VERSION = "application_version";
@@ -51,7 +49,7 @@ public class AboutChromeSettings
         SettingsUtils.addPreferencesFromResource(this, R.xml.about_chrome_preferences);
 
         Preference p = findPreference(PREF_APPLICATION_VERSION);
-        p.setSummary("v7.3");
+        p.setSummary("v7.4");
         p.setOnPreferenceClickListener(this);
         p = findPreference(PREF_OS_VERSION);
         p.setSummary(AboutSettingsBridge.getOSVersion());
@@ -76,8 +74,9 @@ public class AboutChromeSettings
         } catch (NameNotFoundException e) {
             return version;
         }
-        CharSequence updateTimeString = DateUtils.getRelativeTimeSpanString(
-                info.lastUpdateTime, System.currentTimeMillis(), 0);
+        CharSequence updateTimeString =
+                DateUtils.getRelativeTimeSpanString(
+                        info.lastUpdateTime, System.currentTimeMillis(), 0);
         return context.getString(R.string.version_with_update_time, version, updateTimeString);
     }
 

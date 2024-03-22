@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,6 @@ class TokenServiceTable : public WebDatabaseTable {
 
   WebDatabaseTable::TypeKey GetTypeKey() const override;
   bool CreateTablesIfNecessary() override;
-  bool IsSyncable() override;
   bool MigrateToVersion(int version, bool* update_compatible_version) override;
 
   // Remove all tokens previously set with SetTokenForService.

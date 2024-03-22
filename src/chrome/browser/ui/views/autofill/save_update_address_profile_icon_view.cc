@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/autofill/save_address_profile_view.h"
 #include "chrome/browser/ui/views/autofill/update_address_profile_view.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 
 namespace autofill {
 
@@ -22,7 +24,11 @@ SaveUpdateAddressProfileIconView::SaveUpdateAddressProfileIconView(
     : PageActionIconView(command_updater,
                          IDC_SAVE_AUTOFILL_ADDRESS,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate) {}
+                         page_action_icon_delegate,
+                         "SaveAutofillAddress") {
+  SetAccessibilityProperties(/*role*/ absl::nullopt,
+                             GetTextForTooltipAndAccessibleName());
+}
 
 SaveUpdateAddressProfileIconView::~SaveUpdateAddressProfileIconView() = default;
 
@@ -45,6 +51,7 @@ void SaveUpdateAddressProfileIconView::UpdateImpl() {
   bool command_enabled =
       SetCommandEnabled(controller && controller->IsBubbleActive());
   SetVisible(command_enabled);
+  SetAccessibleName(GetTextForTooltipAndAccessibleName());
 }
 
 std::u16string
@@ -64,12 +71,17 @@ void SaveUpdateAddressProfileIconView::OnExecuting(
 
 const gfx::VectorIcon& SaveUpdateAddressProfileIconView::GetVectorIcon() const {
   // TODO(crbug.com/1167060): Update the icon upon having final mocks.
-  return vector_icons::kLocationOnIcon;
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? vector_icons::kLocationOnChromeRefreshIcon
+             : vector_icons::kLocationOnIcon;
 }
 
 SaveUpdateAddressProfileIconController*
 SaveUpdateAddressProfileIconView::GetController() const {
   return SaveUpdateAddressProfileIconController::Get(GetWebContents());
 }
+
+BEGIN_METADATA(SaveUpdateAddressProfileIconView, PageActionIconView)
+END_METADATA
 
 }  // namespace autofill

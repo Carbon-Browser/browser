@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -103,9 +103,10 @@ class AdsInterventionManager {
  private:
   // The SubresourceFilterContentSettingsManager is guaranteed to outlive the
   // AdsInterventionManager. Both are bound to the profile.
-  raw_ptr<SubresourceFilterContentSettingsManager> settings_manager_ = nullptr;
+  raw_ptr<SubresourceFilterContentSettingsManager, AcrossTasksDanglingUntriaged>
+      settings_manager_ = nullptr;
 
-  raw_ptr<base::Clock> clock_;
+  raw_ptr<base::Clock, DanglingUntriaged> clock_;
 };
 
 }  // namespace subresource_filter

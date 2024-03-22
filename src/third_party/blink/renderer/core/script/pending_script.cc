@@ -61,7 +61,8 @@ WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
 // See the comment about |is_in_document_write| in ScriptLoader::PrepareScript()
 // about IsInDocumentWrite() use here.
 PendingScript::PendingScript(ScriptElementBase* element,
-                             const TextPosition& starting_position)
+                             const TextPosition& starting_position,
+                             scheduler::TaskAttributionInfo* parent_task)
     : element_(element),
       starting_position_(starting_position),
       virtual_time_pauser_(CreateWebScopedVirtualTimePauser(element)),
@@ -69,7 +70,8 @@ PendingScript::PendingScript(ScriptElementBase* element,
       original_element_document_(&element->GetDocument()),
       original_execution_context_(element->GetExecutionContext()),
       created_during_document_write_(
-          element->GetDocument().IsInDocumentWrite()) {}
+          element->GetDocument().IsInDocumentWrite()),
+      parent_task_(parent_task) {}
 
 PendingScript::~PendingScript() {}
 
@@ -133,7 +135,7 @@ void PendingScript::MarkParserBlockingLoadStartTime() {
 }
 
 // <specdef href="https://html.spec.whatwg.org/C/#execute-the-script-block">
-void PendingScript::ExecuteScriptBlock(const KURL& document_url) {
+void PendingScript::ExecuteScriptBlock() {
   TRACE_EVENT0("blink", "PendingScript::ExecuteScriptBlock");
   ExecutionContext* context = element_->GetExecutionContext();
   if (!context) {
@@ -166,12 +168,13 @@ void PendingScript::ExecuteScriptBlock(const KURL& document_url) {
     DCHECK(ThreadScheduler::Current());
     if (auto* tracker =
             ThreadScheduler::Current()->GetTaskAttributionTracker()) {
-      task_attribution_scope =
-          tracker->CreateTaskScope(script_state, absl::nullopt);
+      task_attribution_scope = tracker->CreateTaskScope(
+          script_state, parent_task_,
+          scheduler::TaskAttributionTracker::TaskScopeType::kScriptExecution);
     }
   }
 
-  Script* script = GetSource(document_url);
+  Script* script = GetSource();
 
   const bool was_canceled = WasCanceled();
   const bool is_external = IsExternal();
@@ -247,6 +250,9 @@ void PendingScript::ExecuteScriptBlockInternal(
     IgnoreDestructiveWriteCountIncrementer incrementer(
         needs_increment ? context_document : nullptr);
 
+    if (script->GetScriptType() == mojom::blink::ScriptType::kModule)
+      context_document->IncrementIgnoreDestructiveWriteModuleScriptCount();
+
     // <spec step="4.A.1">Let old script element be the value to which the
     // script element's node document's currentScript object was most recently
     // set.</spec>
@@ -318,6 +324,7 @@ void PendingScript::Trace(Visitor* visitor) const {
   visitor->Trace(client_);
   visitor->Trace(original_execution_context_);
   visitor->Trace(original_element_document_);
+  visitor->Trace(parent_task_);
 }
 
 bool PendingScript::IsControlledByScriptRunner() const {
@@ -335,6 +342,7 @@ bool PendingScript::IsControlledByScriptRunner() const {
 
     case ScriptSchedulingType::kInOrder:
     case ScriptSchedulingType::kAsync:
+    case ScriptSchedulingType::kForceInOrder:
       return true;
   }
   NOTREACHED();

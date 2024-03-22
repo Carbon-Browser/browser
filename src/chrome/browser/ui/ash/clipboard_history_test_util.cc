@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,8 +46,7 @@ ScopedClipboardHistoryListUpdateWaiter::
   run_loop_.Run();
 }
 
-void ScopedClipboardHistoryListUpdateWaiter::
-    OnClipboardHistoryItemListAddedOrRemoved() {
+void ScopedClipboardHistoryListUpdateWaiter::OnClipboardHistoryItemsUpdated() {
   run_loop_.Quit();
 }
 

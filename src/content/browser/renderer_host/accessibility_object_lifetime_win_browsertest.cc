@@ -1,16 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/command_line.h"
 #include "base/memory/raw_ptr.h"
+#include "base/test/scoped_feature_list.h"
 #include "content/browser/renderer_host/legacy_render_widget_host_win.h"
 #include "content/browser/renderer_host/render_widget_host_view_aura.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
+#include "content/public/test/scoped_accessibility_mode_override.h"
 #include "content/shell/browser/shell.h"
-#include "ui/accessibility/accessibility_switches.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
 #include "ui/accessibility/platform/ax_system_caret_win.h"
 #include "ui/base/win/hwnd_subclass.h"
@@ -58,6 +59,8 @@ class AccessibilityObjectLifetimeWinBrowserTest
 
 IN_PROC_BROWSER_TEST_F(AccessibilityObjectLifetimeWinBrowserTest,
                        RootDoesNotLeak) {
+  ScopedAccessibilityModeOverride ax_mode_override(ui::kAXModeBasic.flags());
+
   EXPECT_TRUE(NavigateToURL(shell(), GURL(url::kAboutBlankURL)));
 
   // Cache a pointer to the root node we return to Windows.
@@ -136,7 +139,8 @@ class AccessibilityTeardownTestMessageFilter : public ui::HWNDMessageFilter {
   }
 
  private:
-  raw_ptr<LegacyRenderWidgetHostHWND> legacy_render_widget_host_HWND_;
+  raw_ptr<LegacyRenderWidgetHostHWND, DanglingUntriaged>
+      legacy_render_widget_host_HWND_;
 };
 
 IN_PROC_BROWSER_TEST_F(AccessibilityObjectLifetimeWinBrowserTest,
@@ -161,14 +165,14 @@ class AccessibilityObjectLifetimeUiaWinBrowserTest
 
   ~AccessibilityObjectLifetimeUiaWinBrowserTest() override = default;
 
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    base::CommandLine::ForCurrentProcess()->AppendSwitch(
-        ::switches::kEnableExperimentalUIAutomation);
-  }
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_{::features::kUiaProvider};
 };
 
 IN_PROC_BROWSER_TEST_F(AccessibilityObjectLifetimeUiaWinBrowserTest,
                        RootDoesNotLeak) {
+  ScopedAccessibilityModeOverride ax_mode_override(ui::kAXModeBasic.flags());
+
   EXPECT_TRUE(NavigateToURL(shell(), GURL(url::kAboutBlankURL)));
 
   // Cache a pointer to the root node we return to Windows.

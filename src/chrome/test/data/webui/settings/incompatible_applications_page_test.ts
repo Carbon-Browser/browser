@@ -1,9 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {ActionTypes, IncompatibleApplication, IncompatibleApplicationItemElement, IncompatibleApplicationsBrowserProxy, IncompatibleApplicationsBrowserProxyImpl, SettingsIncompatibleApplicationsPageElement} from 'chrome://settings/lazy_load.js';
 import {loadTimeData} from 'chrome://settings/settings.js';
@@ -20,7 +20,7 @@ class TestIncompatibleApplicationsBrowserProxy extends TestBrowserProxy
     super([
       'requestIncompatibleApplicationsList',
       'startApplicationUninstallation',
-      'openURL',
+      'openUrl',
       'getSubtitlePluralString',
       'getSubtitleNoAdminRightsPluralString',
       'getListTitlePluralString',
@@ -36,8 +36,8 @@ class TestIncompatibleApplicationsBrowserProxy extends TestBrowserProxy
     this.methodCalled('startApplicationUninstallation', applicationName);
   }
 
-  openURL(url: string) {
-    this.methodCalled('openURL', url);
+  openUrl(url: string) {
+    this.methodCalled('openUrl', url);
   }
 
   getSubtitlePluralString(numApplications: number) {
@@ -124,7 +124,7 @@ suite('incompatibleApplicationsHandler', function() {
 
   async function initPage(hasAdminRights: boolean): Promise<void> {
     incompatibleApplicationsBrowserProxy.reset();
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     loadTimeData.overrideValues({
       hasAdminRights: hasAdminRights,
@@ -197,7 +197,7 @@ suite('incompatibleApplicationsHandler', function() {
     item.shadowRoot!.querySelector<HTMLElement>('.action-button')!.click();
 
     const url =
-        await incompatibleApplicationsBrowserProxy.whenCalled('openURL');
+        await incompatibleApplicationsBrowserProxy.whenCalled('openUrl');
     assertEquals(updateIncompatibleApplication.url, url);
   });
 

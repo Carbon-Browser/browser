@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,15 @@
 #include <string>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/webapps/browser/android/add_to_homescreen_installer.h"
+#include "components/webapps/browser/android/ambient_badge_manager.h"
+#include "components/webapps/browser/android/ambient_badge_metrics.h"
 #include "components/webapps/browser/android/installable/installable_ambient_badge_client.h"
 #include "components/webapps/browser/android/installable/installable_ambient_badge_message_controller.h"
 #include "components/webapps/browser/banners/app_banner_manager.h"
+#include "components/webapps/browser/installable/installable_data.h"
 #include "url/gurl.h"
 
 class SkBitmap;
@@ -46,8 +49,7 @@ struct AddToHomescreenParams;
 //
 // TODO(crbug.com/1147268): remove remaining Chrome-specific functionality and
 // move to //components/webapps.
-class AppBannerManagerAndroid : public AppBannerManager,
-                                public InstallableAmbientBadgeClient {
+class AppBannerManagerAndroid : public AppBannerManager {
  public:
   explicit AppBannerManagerAndroid(content::WebContents* web_contents);
   AppBannerManagerAndroid(const AppBannerManagerAndroid&) = delete;
@@ -62,6 +64,9 @@ class AppBannerManagerAndroid : public AppBannerManager,
   base::android::ScopedJavaLocalRef<jstring> GetInstallableWebAppName(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& java_web_contents);
+  base::android::ScopedJavaLocalRef<jstring> GetInstallableWebAppManifestId(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& java_web_contents);
 
   // Returns true if the banner pipeline is currently running.
   bool IsRunningForTesting(JNIEnv* env,
@@ -69,6 +74,8 @@ class AppBannerManagerAndroid : public AppBannerManager,
 
   // Returns the state of the processing pipeline for testing purposes.
   int GetPipelineStatusForTesting(JNIEnv* env);
+
+  int GetBadgeStatusForTesting(JNIEnv* env);
 
   // Called when the Java-side has retrieved information for the app.
   // Returns |false| if an icon fetch couldn't be kicked off.
@@ -81,11 +88,9 @@ class AppBannerManagerAndroid : public AppBannerManager,
       const base::android::JavaParamRef<jstring>& jicon_url);
 
   // AppBannerManager overrides.
-  void RequestAppBanner(const GURL& validated_url) override;
+  void RequestAppBanner() override;
 
-  // InstallableAmbientBadgeClient overrides.
-  void AddToHomescreenFromBadge() override;
-  void BadgeDismissed() override;
+  void ShowBannerFromBadge();
 
   // Installs the app referenced by the data in |a2hs_params|.
   // |a2hs_event_callback| will be run to inform the caller of the progress of
@@ -103,6 +108,12 @@ class AppBannerManagerAndroid : public AppBannerManager,
   bool MaybeShowPwaBottomSheetController(bool expand_sheet,
                                          WebappInstallSource install_source);
 
+  // Run before showing the ambient badge. This calls back to the
+  // InstallableManager to continue checking service worker criteria for showing
+  // ambient badge.
+  void PerformWorkerCheckForAmbientBadge(InstallableParams params,
+                                         InstallableCallback callback);
+
  protected:
   // AppBannerManager overrides.
   std::string GetAppIdentifier() override;
@@ -112,19 +123,27 @@ class AppBannerManagerAndroid : public AppBannerManager,
   void PerformInstallableWebAppCheck() override;
   void ResetCurrentPageData() override;
   void ShowBannerUi(WebappInstallSource install_source) override;
-  void MaybeShowAmbientBadge() override;
-  base::WeakPtr<AppBannerManager> GetWeakPtr() override;
-  void InvalidateWeakPtrs() override;
+  base::WeakPtr<AppBannerManager> GetWeakPtrForThisNavigation() override;
+  void InvalidateWeakPtrsForThisNavigation() override;
   bool IsSupportedNonWebAppPlatform(
       const std::u16string& platform) const override;
   bool IsRelatedNonWebAppInstalled(
       const blink::Manifest::RelatedApplication& related_app) const override;
   bool IsWebAppConsideredInstalled() const override;
+  bool IsAppFullyInstalledForSiteUrl(const GURL& site_url) const override;
+  // Non-locally installed apps do not exist on Android.
+  bool IsAppPartiallyInstalledForSiteUrl(const GURL& site_url) const override;
+  bool IsInAppBrowsingContext() const override;
+  void SaveInstallationDismissedForMl(const GURL& manifest_id) override;
+  void SaveInstallationIgnoredForMl(const GURL& manifest_id) override;
+  void SaveInstallationAcceptedForMl(const GURL& manifest_id) override;
+  void OnMlInstallPrediction(base::PassKey<MLInstallabilityPromoter>,
+                             std::string result_label) override;
+  bool IsMlPromotionBlockedByHistoryGuardrail(const GURL& manifest_id) override;
+  segmentation_platform::SegmentationPlatformService*
+  GetSegmentationPlatformService() override;
 
-  // Called to show UI that promotes installation of a PWA. This is normally the
-  // mini-infobar ("banner") but clients can override it by providing a
-  // specialization of this class.
-  virtual void ShowAmbientBadge();
+  void CheckEngagementForAmbientBadge();
 
   // Called when an install event occurs, allowing specializations to record
   // additional metrics.
@@ -145,6 +164,8 @@ class AppBannerManagerAndroid : public AppBannerManager,
 
   // Java-side object containing data about a native app.
   base::android::ScopedJavaGlobalRef<jobject> native_app_data_;
+
+  std::unique_ptr<AmbientBadgeManager> ambient_badge_manager_;
 
  private:
   // Creates the Java-side AppBannerManager.
@@ -177,14 +198,8 @@ class AppBannerManagerAndroid : public AppBannerManager,
   // showing where not deemed adequate.
   bool MaybeShowInProductHelp() const;
 
-  // Hides the ambient badge if it is showing.
-  void HideAmbientBadge();
-
   // The Java-side AppBannerManager.
   base::android::ScopedJavaGlobalRef<jobject> java_banner_manager_;
-
-  // Message controller for the ambient badge.
-  InstallableAmbientBadgeMessageController message_controller_{this};
 
   // App package name for a native app banner.
   std::string native_app_package_;

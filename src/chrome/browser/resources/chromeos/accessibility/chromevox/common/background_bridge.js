@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,18 @@
  * panel, etc.) to communicate with the background.
  */
 
-goog.provide('BackgroundBridge');
+import {constants} from '../../common/constants.js';
 
-goog.require('BridgeConstants');
-goog.require('BridgeHelper');
+import {BridgeConstants} from './bridge_constants.js';
+import {BridgeHelper} from './bridge_helper.js';
+import {Command} from './command.js';
+import {EarconId} from './earcon_id.js';
+import {SerializableLog} from './log_types.js';
+import {QueueMode, TtsSpeechProperties} from './tts_types.js';
 
-BackgroundBridge.BrailleBackground = {
+export const BackgroundBridge = {};
+
+BackgroundBridge.Braille = {
   /**
    * Translate braille cells into text.
    * @param {!ArrayBuffer} cells Cells to be translated.
@@ -20,43 +26,43 @@ BackgroundBridge.BrailleBackground = {
    */
   async backTranslate(cells) {
     return BridgeHelper.sendMessage(
-        BridgeConstants.BrailleBackground.TARGET,
-        BridgeConstants.BrailleBackground.Action.BACK_TRANSLATE, cells);
+        BridgeConstants.Braille.TARGET,
+        BridgeConstants.Braille.Action.BACK_TRANSLATE, cells);
   },
 
-  /**
-   * @param {string} brailleTable The table for this translator to use.
-   * @return {!Promise<boolean>}
-   */
-  async refreshBrailleTable(brailleTable) {
+  /** @return {!Promise} */
+  async panLeft() {
     return BridgeHelper.sendMessage(
-        BridgeConstants.BrailleBackground.TARGET,
-        BridgeConstants.BrailleBackground.Action.REFRESH_BRAILLE_TABLE,
-        brailleTable);
+        BridgeConstants.Braille.TARGET,
+        BridgeConstants.Braille.Action.PAN_LEFT);
   },
-};
 
-BackgroundBridge.BrailleCommandHandler = {
+  /** @return {!Promise} */
+  async panRight() {
+    return BridgeHelper.sendMessage(
+        BridgeConstants.Braille.TARGET,
+        BridgeConstants.Braille.Action.PAN_RIGHT);
+  },
+
   /**
-   * @param {boolean} enabled
+   * Enables or disables processing of braille commands.
+   * @param {boolean} bypassed
    * @return {!Promise}
    */
-  async setEnabled(enabled) {
+  async setBypass(bypassed) {
     return BridgeHelper.sendMessage(
-        BridgeConstants.BrailleCommandHandler.TARGET,
-        BridgeConstants.BrailleCommandHandler.Action.SET_ENABLED, enabled);
+        BridgeConstants.Braille.TARGET,
+        BridgeConstants.Braille.Action.SET_BYPASS, bypassed);
   },
-};
 
-BackgroundBridge.ChromeVoxBackground = {
   /**
-   * Gets the voice currently used by ChromeVox when calling tts.
-   * @return {!Promise<string>}
+   * @param {!string} text The text to write in Braille.
+   * @returns {!Promise<boolean>}
    */
-  async getCurrentVoice() {
+  async write(text) {
     return BridgeHelper.sendMessage(
-        BridgeConstants.ChromeVoxBackground.TARGET,
-        BridgeConstants.ChromeVoxBackground.Action.GET_CURRENT_VOICE);
+        BridgeConstants.Braille.TARGET, BridgeConstants.Braille.Action.WRITE,
+        text);
   },
 };
 
@@ -64,12 +70,19 @@ BackgroundBridge.ChromeVoxPrefs = {
   /**
    * Get the prefs (not including keys).
    * @return {!Promise<Object<string, string>>} A map of all prefs except the
-   *     key map from localStorage.
+   *     key map from LocalStorage.
    */
   async getPrefs() {
     return BridgeHelper.sendMessage(
         BridgeConstants.ChromeVoxPrefs.TARGET,
         BridgeConstants.ChromeVoxPrefs.Action.GET_PREFS);
+  },
+
+  /** @return {!Promise<boolean>} */
+  async getStickyPref() {
+    return BridgeHelper.sendMessage(
+        BridgeConstants.ChromeVoxPrefs.TARGET,
+        BridgeConstants.ChromeVoxPrefs.Action.GET_STICKY_PREF);
   },
 
   /**
@@ -81,7 +94,7 @@ BackgroundBridge.ChromeVoxPrefs = {
   async setLoggingPrefs(key, value) {
     return BridgeHelper.sendMessage(
         BridgeConstants.ChromeVoxPrefs.TARGET,
-        BridgeConstants.ChromeVoxPrefs.Action.SET_LOGGING_PREFS, {key, value});
+        BridgeConstants.ChromeVoxPrefs.Action.SET_LOGGING_PREFS, key, value);
   },
 
   /**
@@ -93,37 +106,23 @@ BackgroundBridge.ChromeVoxPrefs = {
   async setPref(key, value) {
     return BridgeHelper.sendMessage(
         BridgeConstants.ChromeVoxPrefs.TARGET,
-        BridgeConstants.ChromeVoxPrefs.Action.SET_PREF, {key, value});
+        BridgeConstants.ChromeVoxPrefs.Action.SET_PREF, key, value);
   },
 };
 
-BackgroundBridge.ChromeVoxState = {
+BackgroundBridge.ChromeVoxRange = {
   /** @return {!Promise} */
   async clearCurrentRange() {
     return BridgeHelper.sendMessage(
-        BridgeConstants.ChromeVoxState.TARGET,
-        BridgeConstants.ChromeVoxState.Action.CLEAR_CURRENT_RANGE);
-  },
-
-  /**
-   * Method that updates the punctuation echo level, and also persists setting
-   * to local storage.
-   * @param {number} punctuationEcho The index of the desired punctuation echo
-   *     level in AbstractTts.PUNCTUATION_ECHOES.
-   * @return {!Promise}
-   */
-  async updatePunctuationEcho(punctuationEcho) {
-    return BridgeHelper.sendMessage(
-        BridgeConstants.ChromeVoxState.TARGET,
-        BridgeConstants.ChromeVoxState.Action.UPDATE_PUNCTUATION_ECHO,
-        punctuationEcho);
+        BridgeConstants.ChromeVoxRange.TARGET,
+        BridgeConstants.ChromeVoxRange.Action.CLEAR_CURRENT_RANGE);
   },
 };
 
 BackgroundBridge.CommandHandler = {
   /**
    * Handles ChromeVox commands.
-   * @param {string} command
+   * @param {!Command} command
    * @return {!Promise<boolean>} True if the command should propagate.
    */
   async onCommand(command) {
@@ -133,7 +132,29 @@ BackgroundBridge.CommandHandler = {
   },
 };
 
-BackgroundBridge.EventSourceState = {
+BackgroundBridge.Earcons = {
+  /**
+   * @param {!EarconId} earconId
+   * @return {!Promise}
+   */
+  async cancelEarcon(earconId) {
+    return BridgeHelper.sendMessage(
+        BridgeConstants.Earcons.TARGET,
+        BridgeConstants.Earcons.Action.CANCEL_EARCON, earconId);
+  },
+
+  /**
+   * @param {!EarconId} earconId
+   * @return {!Promise}
+   */
+  async playEarcon(earconId) {
+    return BridgeHelper.sendMessage(
+        BridgeConstants.Earcons.TARGET,
+        BridgeConstants.Earcons.Action.PLAY_EARCON, earconId);
+  },
+};
+
+BackgroundBridge.EventSource = {
   /**
    * Gets the current event source.
    * TODO(accessibility): this type is ES6; replace once possible.
@@ -141,20 +162,20 @@ BackgroundBridge.EventSourceState = {
    */
   async get() {
     return BridgeHelper.sendMessage(
-        BridgeConstants.EventSourceState.TARGET,
-        BridgeConstants.EventSourceState.Action.GET);
+        BridgeConstants.EventSource.TARGET,
+        BridgeConstants.EventSource.Action.GET);
   },
 };
 
 BackgroundBridge.GestureCommandHandler = {
   /**
-   * @param {boolean} enabled
+   * @param {boolean} bypassed
    * @return {!Promise}
    */
-  async setEnabled(enabled) {
+  async setBypass(bypassed) {
     return BridgeHelper.sendMessage(
         BridgeConstants.GestureCommandHandler.TARGET,
-        BridgeConstants.GestureCommandHandler.Action.SET_ENABLED);
+        BridgeConstants.GestureCommandHandler.Action.SET_BYPASS, bypassed);
   },
 };
 
@@ -169,7 +190,42 @@ BackgroundBridge.EventStreamLogger = {
         BridgeConstants.EventStreamLogger.TARGET,
         BridgeConstants.EventStreamLogger.Action
             .NOTIFY_EVENT_STREAM_FILTER_CHANGED,
-        {name, enabled});
+        name, enabled);
+  },
+};
+
+BackgroundBridge.ForcedActionPath = {
+  /**
+   * Creates a new user action monitor.
+   * Resolves after all actions in |actions| have been observed.
+   * @param {!Array<{
+   *     type: string,
+   *     value: (string|Object),
+   *     beforeActionMsg: (string|undefined),
+   *     afterActionMsg: (string|undefined)}>} actions
+   * @return {!Promise}
+   */
+  async create(actions) {
+    return BridgeHelper.sendMessage(
+        BridgeConstants.ForcedActionPath.TARGET,
+        BridgeConstants.ForcedActionPath.Action.CREATE, actions);
+  },
+
+  /**
+   * Destroys the user action monitor.
+   * @return {!Promise}
+   */
+  async destroy() {
+    return BridgeHelper.sendMessage(
+        BridgeConstants.ForcedActionPath.TARGET,
+        BridgeConstants.ForcedActionPath.Action.DESTROY);
+  },
+
+  /** @return {!Promise<boolean>} */
+  async onKeyDown(event) {
+    return BridgeHelper.sendMessage(
+        BridgeConstants.ForcedActionPath.TARGET,
+        BridgeConstants.ForcedActionPath.Action.ON_KEY_DOWN, event);
   },
 };
 
@@ -187,7 +243,7 @@ BackgroundBridge.LogStore = {
   /**
    * Create logs in order.
    * This function is not currently optimized for speed.
-   * @return {!Promise<!Array<BaseLog>>}
+   * @return {!Promise<!Array<!SerializableLog>>}
    */
   async getLogs() {
     return BridgeHelper.sendMessage(
@@ -234,17 +290,6 @@ BackgroundBridge.PanelBackground = {
   },
 
   /**
-   * @param {number} windowId
-   * @param {number} tabId
-   * @return {!Promise}
-   */
-  async focusTab(windowId, tabId) {
-    return BridgeHelper.sendMessage(
-        BridgeConstants.PanelBackground.TARGET,
-        BridgeConstants.PanelBackground.Action.FOCUS_TAB, {windowId, tabId});
-  },
-
-  /**
    * @return {!Promise<{
    *     standardActions: !Array<!chrome.automation.ActionType>,
    *     customActions: !Array<!chrome.automation.CustomAction>
@@ -256,13 +301,6 @@ BackgroundBridge.PanelBackground = {
         BridgeConstants.PanelBackground.Action.GET_ACTIONS_FOR_CURRENT_NODE);
   },
 
-  /** @return {!Promise<!Array<!PanelTabMenuItemData>>} */
-  async getTabMenuData() {
-    return BridgeHelper.sendMessage(
-        BridgeConstants.PanelBackground.TARGET,
-        BridgeConstants.PanelBackground.Action.GET_TAB_MENU_DATA);
-  },
-
   /**
    * @param {string} searchStr
    * @param {constants.Dir} dir
@@ -272,19 +310,15 @@ BackgroundBridge.PanelBackground = {
   async incrementalSearch(searchStr, dir, opt_nextObject) {
     return BridgeHelper.sendMessage(
         BridgeConstants.PanelBackground.TARGET,
-        BridgeConstants.PanelBackground.Action.INCREMENTAL_SEARCH,
-        {searchStr, dir, opt_nextObject});
+        BridgeConstants.PanelBackground.Action.INCREMENTAL_SEARCH, searchStr,
+        dir, opt_nextObject);
   },
 
-  /**
-   * @param {number} callbackNodeIndex
-   * @return {!Promise}
-   */
-  async nodeMenuCallback(callbackNodeIndex) {
+  /** @return {!Promise} */
+  async onTutorialReady() {
     return BridgeHelper.sendMessage(
         BridgeConstants.PanelBackground.TARGET,
-        BridgeConstants.PanelBackground.Action.NODE_MENU_CALLBACK,
-        callbackNodeIndex);
+        BridgeConstants.PanelBackground.Action.ON_TUTORIAL_READY);
   },
 
   /**
@@ -319,6 +353,15 @@ BackgroundBridge.PanelBackground = {
   },
 
   /**
+   * Adds an event listener to detect panel collapse.
+   */
+  async setPanelCollapseWatcher() {
+    return BridgeHelper.sendMessage(
+        BridgeConstants.PanelBackground.TARGET,
+        BridgeConstants.PanelBackground.Action.SET_PANEL_COLLAPSE_WATCHER);
+  },
+
+  /**
    * Sets the current ChromeVox focus to the current ISearch node.
    * @return {!Promise}
    */
@@ -329,7 +372,7 @@ BackgroundBridge.PanelBackground = {
   },
 
   /**
-   * Listens for focus events, and returns once the target is not the panel.
+   * Wait for the promise to notify panel collapse to resolved
    */
   async waitForPanelCollapse() {
     return BridgeHelper.sendMessage(
@@ -338,37 +381,40 @@ BackgroundBridge.PanelBackground = {
   },
 };
 
-BackgroundBridge.UserActionMonitor = {
+BackgroundBridge.TtsBackground = {
   /**
-   * Creates a new user action monitor.
-   * Resolves after all actions in |actions| have been observed.
-   * @param {!Array<{
-   *     type: string,
-   *     value: (string|Object),
-   *     beforeActionMsg: (string|undefined),
-   *     afterActionMsg: (string|undefined)}>} actions
-   * @return {!Promise}
+   * Gets the voice currently used by ChromeVox when calling tts.
+   * @return {!Promise<string>}
    */
-  async create(actions) {
+  async getCurrentVoice() {
     return BridgeHelper.sendMessage(
-        BridgeConstants.UserActionMonitor.TARGET,
-        BridgeConstants.UserActionMonitor.Action.CREATE, actions);
+        BridgeConstants.TtsBackground.TARGET,
+        BridgeConstants.TtsBackground.Action.GET_CURRENT_VOICE);
   },
 
   /**
-   * Destroys the user action monitor.
-   * @return {!Promise}
+   * @param {string} textString The string of text to be spoken.
+   * @param {QueueMode} queueMode The queue mode to use for speaking.
+   * @param {TtsSpeechProperties=} properties Speech properties to use for
+   *     this utterance.
    */
-  async destroy() {
+  async speak(textString, queueMode, properties) {
     return BridgeHelper.sendMessage(
-        BridgeConstants.UserActionMonitor.TARGET,
-        BridgeConstants.UserActionMonitor.Action.DESTROY);
+        BridgeConstants.TtsBackground.TARGET,
+        BridgeConstants.TtsBackground.Action.SPEAK, textString, queueMode,
+        properties);
   },
 
-  /** @return {!Promise<boolean>} */
-  async onKeyDown(event) {
+  /**
+   * Method that updates the punctuation echo level, and also persists setting.
+   * @param {number} punctuationEcho The index of the desired punctuation echo
+   *     level in PunctuationEchoes.
+   * @return {!Promise}
+   */
+  async updatePunctuationEcho(punctuationEcho) {
     return BridgeHelper.sendMessage(
-        BridgeConstants.UserActionMonitor.TARGET,
-        BridgeConstants.UserActionMonitor.Action.ON_KEY_DOWN, event);
+        BridgeConstants.TtsBackground.TARGET,
+        BridgeConstants.TtsBackground.Action.UPDATE_PUNCTUATION_ECHO,
+        punctuationEcho);
   },
 };

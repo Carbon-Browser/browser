@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,7 +88,7 @@ class TestObserver : public ExtensionRegistryObserver {
 };
 
 TEST_F(ExtensionRegistryTest, FillAndClearRegistry) {
-  ExtensionRegistry registry(NULL);
+  ExtensionRegistry registry(nullptr);
   scoped_refptr<const Extension> extension1 = ExtensionBuilder("one").Build();
   scoped_refptr<const Extension> extension2 = ExtensionBuilder("two").Build();
   scoped_refptr<const Extension> extension3 = ExtensionBuilder("three").Build();
@@ -122,7 +122,7 @@ TEST_F(ExtensionRegistryTest, FillAndClearRegistry) {
 
 // A simple test of adding and removing things from sets.
 TEST_F(ExtensionRegistryTest, AddAndRemoveExtensionFromRegistry) {
-  ExtensionRegistry registry(NULL);
+  ExtensionRegistry registry(nullptr);
 
   // Adding an extension works.
   scoped_refptr<const Extension> extension = ExtensionBuilder("Test").Build();
@@ -143,7 +143,7 @@ TEST_F(ExtensionRegistryTest, AddAndRemoveExtensionFromRegistry) {
 }
 
 TEST_F(ExtensionRegistryTest, AddExtensionToRegistryTwice) {
-  ExtensionRegistry registry(NULL);
+  ExtensionRegistry registry(nullptr);
   scoped_refptr<const Extension> extension = ExtensionBuilder("Test").Build();
 
   // An extension can exist in two sets at once. It would be nice to eliminate
@@ -158,7 +158,7 @@ TEST_F(ExtensionRegistryTest, AddExtensionToRegistryTwice) {
 }
 
 TEST_F(ExtensionRegistryTest, GetExtensionById) {
-  ExtensionRegistry registry(NULL);
+  ExtensionRegistry registry(nullptr);
 
   // Trying to get an extension fails cleanly when the sets are empty.
   EXPECT_FALSE(
@@ -181,8 +181,7 @@ TEST_F(ExtensionRegistryTest, GetExtensionById) {
   // Enabled is part of everything and the enabled list.
   EXPECT_TRUE(
       registry.GetExtensionById(enabled->id(), ExtensionRegistry::EVERYTHING));
-  EXPECT_TRUE(
-      registry.GetExtensionById(enabled->id(), ExtensionRegistry::ENABLED));
+  EXPECT_TRUE(registry.enabled_extensions().GetByID(enabled->id()));
   EXPECT_FALSE(
       registry.GetExtensionById(enabled->id(), ExtensionRegistry::DISABLED));
   EXPECT_FALSE(
@@ -193,8 +192,7 @@ TEST_F(ExtensionRegistryTest, GetExtensionById) {
   // Disabled is part of everything and the disabled list.
   EXPECT_TRUE(
       registry.GetExtensionById(disabled->id(), ExtensionRegistry::EVERYTHING));
-  EXPECT_FALSE(
-      registry.GetExtensionById(disabled->id(), ExtensionRegistry::ENABLED));
+  EXPECT_FALSE(registry.enabled_extensions().GetByID(disabled->id()));
   EXPECT_TRUE(
       registry.GetExtensionById(disabled->id(), ExtensionRegistry::DISABLED));
   EXPECT_FALSE(
@@ -205,8 +203,7 @@ TEST_F(ExtensionRegistryTest, GetExtensionById) {
   // Terminated is part of everything and the terminated list.
   EXPECT_TRUE(registry.GetExtensionById(terminated->id(),
                                         ExtensionRegistry::EVERYTHING));
-  EXPECT_FALSE(
-      registry.GetExtensionById(terminated->id(), ExtensionRegistry::ENABLED));
+  EXPECT_FALSE(registry.enabled_extensions().GetByID(terminated->id()));
   EXPECT_FALSE(
       registry.GetExtensionById(terminated->id(), ExtensionRegistry::DISABLED));
   EXPECT_TRUE(registry.GetExtensionById(terminated->id(),
@@ -217,8 +214,7 @@ TEST_F(ExtensionRegistryTest, GetExtensionById) {
   // Blocklisted is part of everything and the blocklisted list.
   EXPECT_TRUE(registry.GetExtensionById(blocklisted->id(),
                                         ExtensionRegistry::EVERYTHING));
-  EXPECT_FALSE(
-      registry.GetExtensionById(blocklisted->id(), ExtensionRegistry::ENABLED));
+  EXPECT_FALSE(registry.enabled_extensions().GetByID(blocklisted->id()));
   EXPECT_FALSE(registry.GetExtensionById(blocklisted->id(),
                                          ExtensionRegistry::DISABLED));
   EXPECT_FALSE(registry.GetExtensionById(blocklisted->id(),
@@ -238,7 +234,7 @@ TEST_F(ExtensionRegistryTest, GetExtensionById) {
 }
 
 TEST_F(ExtensionRegistryTest, Observer) {
-  ExtensionRegistry registry(NULL);
+  ExtensionRegistry registry(nullptr);
   TestObserver observer;
   registry.AddObserver(&observer);
 
@@ -280,11 +276,10 @@ TEST_F(ExtensionRegistryTest, TerminatedExtensionStoredVersion) {
   ExtensionRegistry registry(nullptr);
   scoped_refptr<const Extension> extension =
       ExtensionBuilder()
-          .SetManifest(DictionaryBuilder()
+          .SetManifest(base::Value::Dict()
                            .Set("name", "Test")
                            .Set("version", kVersionString)
-                           .Set("manifest_version", 2)
-                           .Build())
+                           .Set("manifest_version", 2))
           .Build();
   const ExtensionId extension_id = extension->id();
 

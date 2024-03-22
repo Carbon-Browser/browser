@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ class TestVirtualCardEnrollmentManager : public VirtualCardEnrollmentManager {
  public:
   TestVirtualCardEnrollmentManager(
       TestPersonalDataManager* personal_data_manager,
-      payments::TestPaymentsClient* payments_client,
+      payments::TestPaymentsNetworkInterface* payments_network_interface,
       TestAutofillClient* autofill_client);
   TestVirtualCardEnrollmentManager(const TestVirtualCardEnrollmentManager&) =
       delete;
@@ -56,6 +56,10 @@ class TestVirtualCardEnrollmentManager : public VirtualCardEnrollmentManager {
     return &state_;
   }
 
+  void ResetVirtualCardEnrollmentProcessState() {
+    state_ = VirtualCardEnrollmentProcessState();
+  }
+
   void SetAutofillClient(AutofillClient* autofill_client) {
     autofill_client_ = autofill_client;
   }
@@ -78,6 +82,8 @@ class TestVirtualCardEnrollmentManager : public VirtualCardEnrollmentManager {
       AutofillClient::PaymentsRpcResult result) override;
   void Reset() override;
   void ShowVirtualCardEnrollBubble() override;
+
+  void OnVirtualCardEnrollmentBubbleCancelled();
 
  private:
   AutofillClient::PaymentsRpcResult result_;

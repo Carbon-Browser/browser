@@ -1,18 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/contents_web_view.h"
 
-#include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/status_bubble_views.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/base/theme_provider.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_tree_owner.h"
@@ -49,6 +46,13 @@ void ContentsWebView::SetBackgroundVisible(bool background_visible) {
     UpdateBackgroundColor();
 }
 
+void ContentsWebView::SetBackgroundRadii(const gfx::RoundedCornersF& radii) {
+  background_radii_ = radii;
+  if (GetWidget()) {
+    UpdateBackgroundColor();
+  }
+}
+
 bool ContentsWebView::GetNeedsNotificationWhenVisibleBoundsChange() const {
   return true;
 }
@@ -72,7 +76,8 @@ void ContentsWebView::UpdateBackgroundColor() {
   SkColor color = GetColorProvider()->GetColor(
       is_letterboxing() ? kColorWebContentsBackgroundLetterboxing
                         : kColorWebContentsBackground);
-  SetBackground(background_visible_ ? views::CreateSolidBackground(color)
+  SetBackground(background_visible_ ? views::CreateRoundedRectBackground(
+                                          color, background_radii_)
                                     : nullptr);
 
   if (web_contents()) {

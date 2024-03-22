@@ -61,8 +61,7 @@ void SVGDocumentExtensions::ServiceWebAnimationsOnAnimationFrame(
 
 bool SVGDocumentExtensions::ServiceSmilAnimations() {
   bool did_schedule_animation_frame = false;
-  HeapVector<Member<SVGSVGElement>> time_containers;
-  CopyToVector(time_containers_, time_containers);
+  HeapVector<Member<SVGSVGElement>> time_containers(time_containers_);
   for (const auto& container : time_containers) {
     did_schedule_animation_frame |=
         container->TimeContainer()->ServiceAnimations();
@@ -81,7 +80,7 @@ void SVGDocumentExtensions::ServiceWebAnimations() {
   for (auto& svg_element : web_animations_pending_svg_elements)
     svg_element->ApplyActiveWebAnimations();
 
-  DCHECK(web_animations_pending_svg_elements_.IsEmpty());
+  DCHECK(web_animations_pending_svg_elements_.empty());
 }
 
 void SVGDocumentExtensions::StartAnimations() {
@@ -91,8 +90,7 @@ void SVGDocumentExtensions::StartAnimations() {
   // FIXME: We hold a ref pointers to prevent a shadow tree from getting removed
   // out from underneath us.  In the future we should refactor the use-element
   // to avoid this. See https://webkit.org/b/53704
-  HeapVector<Member<SVGSVGElement>> time_containers;
-  CopyToVector(time_containers_, time_containers);
+  HeapVector<Member<SVGSVGElement>> time_containers(time_containers_);
   for (const auto& container : time_containers) {
     SMILTimeContainer* time_container = container->TimeContainer();
     if (!time_container->IsStarted())
@@ -114,8 +112,7 @@ bool SVGDocumentExtensions::HasSmilAnimations() const {
 }
 
 void SVGDocumentExtensions::DispatchSVGLoadEventToOutermostSVGElements() {
-  HeapVector<Member<SVGSVGElement>> time_containers;
-  CopyToVector(time_containers_, time_containers);
+  HeapVector<Member<SVGSVGElement>> time_containers(time_containers_);
   for (const auto& container : time_containers) {
     SVGSVGElement* outer_svg = container.Get();
     if (!outer_svg->IsOutermostSVGSVGElement())
@@ -145,8 +142,7 @@ void SVGDocumentExtensions::RemoveSVGRootWithRelativeLengthDescendents(
   relative_length_svg_roots_.erase(svg_root);
 }
 
-void SVGDocumentExtensions::InvalidateSVGRootsWithRelativeLengthDescendents(
-    SubtreeLayoutScope* scope) {
+void SVGDocumentExtensions::InvalidateSVGRootsWithRelativeLengthDescendents() {
 #if DCHECK_IS_ON()
   DCHECK(!in_relative_length_svg_roots_invalidation_);
   base::AutoReset<bool> in_relative_length_svg_roots_change(
@@ -154,7 +150,7 @@ void SVGDocumentExtensions::InvalidateSVGRootsWithRelativeLengthDescendents(
 #endif
 
   for (SVGSVGElement* element : relative_length_svg_roots_)
-    element->InvalidateRelativeLengthClients(scope);
+    element->InvalidateRelativeLengthClients();
 }
 
 bool SVGDocumentExtensions::ZoomAndPanEnabled() const {

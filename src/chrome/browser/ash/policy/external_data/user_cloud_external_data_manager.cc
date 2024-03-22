@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ UserCloudExternalDataManager::UserCloudExternalDataManager(
 
 UserCloudExternalDataManager::~UserCloudExternalDataManager() {
   SetExternalDataStore(nullptr);
-  backend_task_runner_->DeleteSoon(FROM_HERE, resource_cache_);
+  backend_task_runner_->DeleteSoon(FROM_HERE, resource_cache_.get());
 }
 
 }  // namespace policy

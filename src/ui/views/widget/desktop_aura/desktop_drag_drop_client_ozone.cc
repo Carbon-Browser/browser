@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/client/cursor_client.h"
@@ -19,7 +19,6 @@
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/drop_target_event.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
-#include "ui/base/layout.h"
 #include "ui/compositor/layer.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/platform_window/platform_window_delegate.h"
@@ -74,7 +73,7 @@ std::unique_ptr<views::Widget> CreateDragWidget(
 
   std::unique_ptr<views::ImageView> image_view =
       std::make_unique<views::ImageView>();
-  image_view->SetImage(image);
+  image_view->SetImage(ui::ImageModel::FromImageSkia(image));
   widget->SetContentsView(std::move(image_view));
   widget->Show();
   widget->GetNativeWindow()->layer()->SetFillsBoundsOpaquely(false);
@@ -91,7 +90,7 @@ void DropIfAllowed(const ui::OSExchangeData* drag_data,
                    base::OnceClosure drop_cb) {
   if (ui::DataTransferPolicyController::HasInstance()) {
     ui::DataTransferPolicyController::Get()->DropIfAllowed(
-        drag_data->GetSource(), &drag_info.data_endpoint, std::move(drop_cb));
+        drag_data, &drag_info.data_endpoint, std::move(drop_cb));
   } else {
     std::move(drop_cb).Run();
   }
@@ -105,7 +104,8 @@ void PerformDrop(aura::client::DragDropDelegate::DropCallback drop_cb,
                  base::ScopedClosureRunner drag_cancel) {
   if (drop_cb) {
     auto output_drag_op = ui::mojom::DragOperation::kNone;
-    std::move(drop_cb).Run(std::move(data_to_drop), output_drag_op);
+    std::move(drop_cb).Run(std::move(data_to_drop), output_drag_op,
+                           /*drag_image_layer_owner=*/nullptr);
   }
 
   base::IgnoreResult(drag_cancel.Release());
@@ -193,6 +193,14 @@ DragOperation DesktopDragDropClientOzone::StartDragAndDrop(
 
   return drag_operation_;
 }
+
+#if BUILDFLAG(IS_LINUX)
+void DesktopDragDropClientOzone::UpdateDragImage(const gfx::ImageSkia& image,
+                                                 const gfx::Vector2d& offset) {
+  DCHECK(drag_handler_);
+  drag_handler_->UpdateDragImage(image, offset);
+}
+#endif  // BUILDFLAG(LINUX)
 
 void DesktopDragDropClientOzone::DragCancel() {
   ResetDragDropTarget(true);
@@ -290,8 +298,9 @@ void DesktopDragDropClientOzone::OnDragDrop(
             base::BindOnce(&DesktopDragDropClientOzone::DragCancel,
                            weak_factory_.GetWeakPtr()));
 
+        auto* data_to_drop_raw = data_to_drop_.get();
         DropIfAllowed(
-            data_to_drop_.get(), current_drag_info_,
+            data_to_drop_raw, current_drag_info_,
             base::BindOnce(&PerformDrop, std::move(drop_cb),
                            std::move(data_to_drop_), std::move(drag_cancel)));
       }

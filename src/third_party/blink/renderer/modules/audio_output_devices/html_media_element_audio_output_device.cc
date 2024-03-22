@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_set_sink_id_callbacks.h"
 #include "third_party/blink/public/web/web_local_frame_client.h"
@@ -95,8 +95,8 @@ void SetSinkIdResolver::StartAsync() {
   if (!context)
     return;
   context->GetTaskRunner(TaskType::kInternalMedia)
-      ->PostTask(FROM_HERE, WTF::Bind(&SetSinkIdResolver::DoSetSinkId,
-                                      WrapWeakPersistent(this)));
+      ->PostTask(FROM_HERE, WTF::BindOnce(&SetSinkIdResolver::DoSetSinkId,
+                                          WrapWeakPersistent(this)));
 }
 
 void SetSinkIdResolver::Start() {
@@ -107,9 +107,16 @@ void SetSinkIdResolver::Start() {
   if (LocalDOMWindow* window = DynamicTo<LocalDOMWindow>(context)) {
     if (window->document()->IsPrerendering()) {
       window->document()->AddPostPrerenderingActivationStep(
-          WTF::Bind(&SetSinkIdResolver::Start, WrapWeakPersistent(this)));
+          WTF::BindOnce(&SetSinkIdResolver::Start, WrapWeakPersistent(this)));
       return;
     }
+  }
+
+  // Validate that sink_id_ is a valid UTF8 - see https://crbug.com/1420170.
+  if (sink_id_.Utf8(WTF::kStrictUTF8Conversion).empty() != sink_id_.empty()) {
+    Reject(MakeGarbageCollected<DOMException>(
+        DOMExceptionCode::kInvalidCharacterError, "Invalid sink id."));
+    return;
   }
 
   if (sink_id_ == HTMLMediaElementAudioOutputDevice::sinkId(*element_))
@@ -119,8 +126,8 @@ void SetSinkIdResolver::Start() {
 }
 
 void SetSinkIdResolver::DoSetSinkId() {
-  auto set_sink_id_completion_callback =
-      WTF::Bind(&SetSinkIdResolver::OnSetSinkIdComplete, WrapPersistent(this));
+  auto set_sink_id_completion_callback = WTF::BindOnce(
+      &SetSinkIdResolver::OnSetSinkIdComplete, WrapPersistent(this));
   WebMediaPlayer* web_media_player = element_->GetWebMediaPlayer();
   if (web_media_player) {
     if (web_media_player->SetSinkId(

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,10 @@ class MockCreditCardAccessoryController
               OnFillingTriggered,
               (autofill::FieldGlobalId, const autofill::AccessorySheetField&),
               (override));
+  MOCK_METHOD((void),
+              OnPasskeySelected,
+              (const std::vector<uint8_t>& credential_id),
+              (override));
   MOCK_METHOD(void, OnOptionSelected, (autofill::AccessoryAction), (override));
   MOCK_METHOD(void,
               OnToggleChanged,
@@ -39,12 +43,14 @@ class MockCreditCardAccessoryController
               (override));
   MOCK_METHOD(void, RefreshSuggestions, (), (override));
   MOCK_METHOD(void, OnPersonalDataChanged, (), (override));
-  MOCK_METHOD(void,
-              OnCreditCardFetched,
-              (autofill::CreditCardFetchResult,
-               const autofill::CreditCard*,
-               const std::u16string&),
-              (override));
+
+  base::WeakPtr<CreditCardAccessoryController> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<MockCreditCardAccessoryController> weak_ptr_factory_{
+      this};
 };
 
 #endif  // CHROME_BROWSER_AUTOFILL_MOCK_CREDIT_CARD_ACCESSORY_CONTROLLER_H_

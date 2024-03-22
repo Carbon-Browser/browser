@@ -1,18 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/account_manager/account_manager_edu_coexistence_controller.h"
 
-#include <algorithm>
-
 #include "ash/constants/ash_pref_names.h"
 #include "base/containers/contains.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/ash/account_manager/account_manager_util.h"
 #include "chrome/browser/ash/child_accounts/edu_coexistence_tos_store_utils.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/webui/chromeos/edu_coexistence/edu_coexistence_login_handler_chromeos.h"
+#include "chrome/browser/ui/webui/ash/edu_coexistence/edu_coexistence_login_handler.h"
 #include "components/account_manager_core/account_manager_facade.h"
 #include "components/account_manager_core/chromeos/account_manager.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -27,14 +26,13 @@ void EduCoexistenceConsentInvalidationController::RegisterProfilePrefs(
   // new ToS version. We use string data here for the ToS version to be more
   // future proof. In the future we might add a prefix to indicate the flow
   // where the ToS were accepted (OOBE or Settings flow).
-  registry->RegisterStringPref(chromeos::prefs::kEduCoexistenceToSVersion,
+  registry->RegisterStringPref(prefs::kEduCoexistenceToSVersion,
                                edu_coexistence::kMinTOSVersionNumber);
 
   // |kEduCoexistenceToSAcceptedVersion| is a dictionary associating the
   // edu accounts present in account manager to the accepted terms of service
   // version.
-  registry->RegisterDictionaryPref(
-      chromeos::prefs::kEduCoexistenceToSAcceptedVersion);
+  registry->RegisterDictionaryPref(prefs::kEduCoexistenceToSAcceptedVersion);
 }
 
 EduCoexistenceConsentInvalidationController::
@@ -63,7 +61,7 @@ void EduCoexistenceConsentInvalidationController::Init() {
 
   pref_change_registrar_.Init(profile_->GetPrefs());
   pref_change_registrar_.Add(
-      chromeos::prefs::kEduCoexistenceToSVersion,
+      prefs::kEduCoexistenceToSVersion,
       base::BindRepeating(&EduCoexistenceConsentInvalidationController::
                               TermsOfServicePrefChanged,
                           weak_factory_.GetWeakPtr()));
@@ -90,12 +88,9 @@ void EduCoexistenceConsentInvalidationController::
       continue;
     }
 
-    auto iterator =
-        std::find_if(current_edu_account_consent_list.begin(),
-                     current_edu_account_consent_list.end(),
-                     [&account](const edu_coexistence::UserConsentInfo& info) {
-                       return info.edu_account_gaia_id == account.key.id();
-                     });
+    auto iterator = base::ranges::find(
+        current_edu_account_consent_list, account.key.id(),
+        &edu_coexistence::UserConsentInfo::edu_account_gaia_id);
 
     // If account exists in |current_edu_account_consent_list| copy the entry
     // over.
@@ -119,8 +114,8 @@ void EduCoexistenceConsentInvalidationController::
 }
 
 void EduCoexistenceConsentInvalidationController::TermsOfServicePrefChanged() {
-  std::string new_version = profile_->GetPrefs()->GetString(
-      chromeos::prefs::kEduCoexistenceToSVersion);
+  std::string new_version =
+      profile_->GetPrefs()->GetString(prefs::kEduCoexistenceToSVersion);
 
   std::vector<edu_coexistence::UserConsentInfo> infos =
       edu_coexistence::GetUserConsentInfoListForProfile(profile_);

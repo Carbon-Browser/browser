@@ -1,26 +1,21 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_favicon_mediator.h"
 
-#include "base/bind.h"
-#include "components/favicon/core/large_icon_service.h"
-#include "ios/chrome/browser/application_context.h"
+#import "base/functional/bind.h"
+#import "components/favicon/core/large_icon_service.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_item.h"
-#import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_parent_item.h"
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_collection_consumer.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_constants.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_consumer.h"
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_feature.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_metrics_recorder.h"
 #import "ios/chrome/browser/ui/content_suggestions/identifier/content_suggestions_section_information.h"
 #import "ios/chrome/browser/ui/favicon/favicon_attributes_provider.h"
 #import "ios/chrome/browser/ui/favicon/favicon_attributes_with_payload.h"
-#include "ios/chrome/browser/ui/ntp/metrics.h"
-#include "ui/gfx/image/image.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/gfx/image/image.h"
 
 namespace {
 
@@ -28,6 +23,7 @@ namespace {
 const CGFloat kMostVisitedFaviconSize = 48;
 // Size below which the provider returns a colored tile instead of an image.
 const CGFloat kMostVisitedFaviconMinimalSize = 32;
+const CGFloat kMagicStackMostVisitedFaviconMinimalSize = 18;
 
 }  // namespace
 
@@ -54,8 +50,11 @@ const CGFloat kMostVisitedFaviconMinimalSize = 32;
   self = [super init];
   if (self) {
     _mostVisitedAttributesProvider = [[FaviconAttributesProvider alloc]
-        initWithFaviconSize:kMostVisitedFaviconSize
-             minFaviconSize:kMostVisitedFaviconMinimalSize
+        initWithFaviconSize:IsMagicStackEnabled() ? kMagicStackFaviconWidth
+                                                  : kMostVisitedFaviconSize
+             minFaviconSize:IsMagicStackEnabled()
+                                ? kMagicStackMostVisitedFaviconMinimalSize
+                                : kMostVisitedFaviconMinimalSize
            largeIconService:largeIconService];
     // Set a cache only for the Most Visited provider, as the cache is
     // overwritten for every new results and the size of the favicon fetched for
@@ -71,39 +70,6 @@ const CGFloat kMostVisitedFaviconMinimalSize = 32;
   _mostVisitedDataForLogging = mostVisitedData;
 }
 
-- (void)fetchFaviconForMostVisited:(ContentSuggestionsMostVisitedItem*)item
-                        parentItem:(ContentSuggestionsParentItem*)parentItem {
-  DCHECK(IsSingleCellContentSuggestionsEnabled());
-  __weak ContentSuggestionsFaviconMediator* weakSelf = self;
-  __weak ContentSuggestionsMostVisitedItem* weakItem = item;
-  __weak ContentSuggestionsParentItem* weakParentItem = parentItem;
-
-  void (^completion)(FaviconAttributes*) = ^(FaviconAttributes* attributes) {
-    ContentSuggestionsFaviconMediator* strongSelf = weakSelf;
-    ContentSuggestionsMostVisitedItem* strongItem = weakItem;
-    ContentSuggestionsParentItem* strongParentItem = weakParentItem;
-    if (!strongSelf || !strongItem) {
-      return;
-    }
-
-    strongItem.attributes = attributes;
-    if (!parentItem) {
-      return;
-    }
-    for (__strong ContentSuggestionsMostVisitedItem* mvtItem in strongParentItem
-             .mostVisitedItems) {
-      if (mvtItem.index == strongItem.index) {
-        mvtItem = strongItem;
-      }
-    }
-    [strongSelf logFaviconFetchedForItem:strongItem];
-    [strongSelf.collectionConsumer itemHasChanged:strongParentItem];
-  };
-
-  [self.mostVisitedAttributesProvider fetchFaviconAttributesForURL:item.URL
-                                                        completion:completion];
-}
-
 - (void)fetchFaviconForMostVisited:(ContentSuggestionsMostVisitedItem*)item {
   __weak ContentSuggestionsFaviconMediator* weakSelf = self;
   __weak ContentSuggestionsMostVisitedItem* weakItem = item;
@@ -116,11 +82,7 @@ const CGFloat kMostVisitedFaviconMinimalSize = 32;
 
     strongItem.attributes = attributes;
     [strongSelf logFaviconFetchedForItem:strongItem];
-    if (IsContentSuggestionsUIViewControllerMigrationEnabled()) {
-      [strongSelf.consumer updateMostVisitedTileConfig:strongItem];
-    } else {
-      [strongSelf.collectionConsumer itemHasChanged:strongItem];
-    }
+    [strongSelf.consumer updateMostVisitedTileConfig:strongItem];
   };
 
   [self.mostVisitedAttributesProvider fetchFaviconAttributesForURL:item.URL
@@ -140,8 +102,8 @@ const CGFloat kMostVisitedFaviconMinimalSize = 32;
   for (size_t i = 0; i < _mostVisitedDataForLogging.size(); ++i) {
     ntp_tiles::NTPTile& ntpTile = _mostVisitedDataForLogging[i];
     if (ntpTile.url == item.URL) {
-      RecordNTPTileImpression(i, ntpTile.source, ntpTile.title_source,
-                              item.attributes, ntpTile.url);
+      [self.contentSuggestionsMetricsRecorder recordMostVisitedTileShown:item
+                                                                 atIndex:i];
       // Reset the URL to be sure to log the impression only once.
       ntpTile.url = GURL();
       break;

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,15 +21,12 @@ import org.chromium.base.test.util.Feature;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer.OnEvaluateJavaScriptResultHelper;
 
-/**
- * Common functionality for testing the Java Bridge.
- */
+/** Common functionality for testing the Java Bridge. */
 @RunWith(ParameterizedRunner.class)
 @UseRunnerDelegate(BaseJUnit4RunnerDelegate.class)
 @Batch(JavaBridgeActivityTestRule.BATCH)
 public class JavaBridgeBareboneTest {
-    @Rule
-    public JavaBridgeActivityTestRule mActivityTestRule = new JavaBridgeActivityTestRule();
+    @Rule public JavaBridgeActivityTestRule mActivityTestRule = new JavaBridgeActivityTestRule();
 
     private TestCallbackHelperContainer mTestCallbackHelperContainer;
     private boolean mUseMojo;
@@ -41,13 +38,15 @@ public class JavaBridgeBareboneTest {
     }
 
     private void injectDummyObject(final String name) throws Throwable {
-        mActivityTestRule.runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                mActivityTestRule.getJavascriptInjector(mUseMojo).addPossiblyUnsafeInterface(
-                        new Object(), name, null);
-            }
-        });
+        mActivityTestRule.runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        mActivityTestRule
+                                .getJavascriptInjector(mUseMojo)
+                                .addPossiblyUnsafeInterface(new Object(), name, null);
+                    }
+                });
     }
 
     private String evaluateJsSync(String jsCode) throws Exception {

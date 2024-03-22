@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,15 +12,18 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "device/vr/openxr/openxr_hand_tracker.h"
 #include "device/vr/openxr/openxr_interaction_profiles.h"
 #include "device/vr/openxr/openxr_path_helper.h"
-#include "device/vr/openxr/openxr_util.h"
+#include "device/vr/public/mojom/openxr_interaction_profile_type.mojom.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/openxr/src/include/openxr/openxr.h"
 #include "ui/gfx/geometry/transform.h"
 
 namespace device {
+
+class OpenXrExtensionHelper;
 
 class OpenXrController {
  public:
@@ -44,8 +47,8 @@ class OpenXrController {
 
   XrActionSet action_set() const { return action_set_; }
   uint32_t GetId() const;
-  device::mojom::XRHandedness GetHandness() const;
-  OpenXrInteractionProfileType interaction_profile() const {
+  mojom::XRHandedness GetHandness() const;
+  mojom::OpenXrInteractionProfileType interaction_profile() const {
     return interaction_profile_;
   }
 
@@ -150,26 +153,27 @@ class OpenXrController {
     return xrGetActionStatePose(session_, &get_info, action_state);
   }
 
-  device::mojom::XRInputSourceDescriptionPtr description_;
+  mojom::XRInputSourceDescriptionPtr description_;
 
   OpenXrHandednessType type_;
   XrInstance instance_;
   XrSession session_;
-  XrHandTrackerEXT hand_tracker_{XR_NULL_HANDLE};
   XrActionSet action_set_;
   XrAction grip_pose_action_;
   XrSpace grip_pose_space_;
   XrAction pointer_pose_action_;
   XrSpace pointer_pose_space_;
 
-  OpenXrInteractionProfileType interaction_profile_;
+  std::unique_ptr<OpenXrHandTracker> hand_tracker_;
+
+  mojom::OpenXrInteractionProfileType interaction_profile_;
 
   std::unordered_map<OpenXrButtonType,
                      std::unordered_map<OpenXrButtonActionType, XrAction>>
       button_action_map_;
   std::unordered_map<OpenXrAxisType, XrAction> axis_action_map_;
 
-  raw_ptr<const OpenXRPathHelper> path_helper_;
+  raw_ptr<const OpenXRPathHelper, DanglingUntriaged> path_helper_;
   raw_ptr<const OpenXrExtensionHelper> extension_helper_;
 };
 

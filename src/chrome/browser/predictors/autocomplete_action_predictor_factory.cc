@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/predictors/autocomplete_action_predictor.h"
 #include "chrome/browser/predictors/predictor_database_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace predictors {
 
@@ -23,28 +21,31 @@ AutocompleteActionPredictor* AutocompleteActionPredictorFactory::GetForProfile(
 // static
 AutocompleteActionPredictorFactory*
     AutocompleteActionPredictorFactory::GetInstance() {
-  return base::Singleton<AutocompleteActionPredictorFactory>::get();
+  static base::NoDestructor<AutocompleteActionPredictorFactory> instance;
+  return instance.get();
 }
 
 AutocompleteActionPredictorFactory::AutocompleteActionPredictorFactory()
-    : BrowserContextKeyedServiceFactory(
-        "AutocompleteActionPredictor",
-        BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory(
+          "AutocompleteActionPredictor",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(PredictorDatabaseFactory::GetInstance());
 }
 
-AutocompleteActionPredictorFactory::~AutocompleteActionPredictorFactory() {}
+AutocompleteActionPredictorFactory::~AutocompleteActionPredictorFactory() =
+    default;
 
-content::BrowserContext*
-AutocompleteActionPredictorFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
-}
-
-KeyedService* AutocompleteActionPredictorFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AutocompleteActionPredictorFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-  return new AutocompleteActionPredictor(static_cast<Profile*>(profile));
+  return std::make_unique<AutocompleteActionPredictor>(
+      static_cast<Profile*>(profile));
 }
 
 }  // namespace predictors

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 #include <set>
 #include <utility>
 
-#include "base/trace_event/trace_event.h"
 #include "net/base/connection_endpoint_metadata.h"
 #include "net/base/net_errors.h"
 #include "net/base/trace_constants.h"
-#include "net/dns/host_resolver_results.h"
+#include "net/base/tracing.h"
+#include "net/dns/public/host_resolver_results.h"
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/http/http_auth_controller.h"
 #include "net/http/http_proxy_connect_job.h"
@@ -41,7 +41,11 @@ CommonConnectJobParams::CommonConnectJobParams(
     SocketPerformanceWatcherFactory* socket_performance_watcher_factory,
     NetworkQualityEstimator* network_quality_estimator,
     NetLog* net_log,
-    WebSocketEndpointLockManager* websocket_endpoint_lock_manager)
+    WebSocketEndpointLockManager* websocket_endpoint_lock_manager,
+    HttpServerProperties* http_server_properties,
+    const NextProtoVector* alpn_protos,
+    const SSLConfig::ApplicationSettings* application_settings,
+    const bool* ignore_certificate_errors)
     : client_socket_factory(client_socket_factory),
       host_resolver(host_resolver),
       http_auth_cache(http_auth_cache),
@@ -55,7 +59,11 @@ CommonConnectJobParams::CommonConnectJobParams(
       socket_performance_watcher_factory(socket_performance_watcher_factory),
       network_quality_estimator(network_quality_estimator),
       net_log(net_log),
-      websocket_endpoint_lock_manager(websocket_endpoint_lock_manager) {}
+      websocket_endpoint_lock_manager(websocket_endpoint_lock_manager),
+      http_server_properties(http_server_properties),
+      alpn_protos(alpn_protos),
+      application_settings(application_settings),
+      ignore_certificate_errors(ignore_certificate_errors) {}
 
 CommonConnectJobParams::CommonConnectJobParams(
     const CommonConnectJobParams& other) = default;
@@ -148,7 +156,8 @@ ConnectJob::GetHostResolverEndpointResult() const {
 void ConnectJob::SetSocket(std::unique_ptr<StreamSocket> socket,
                            absl::optional<std::set<std::string>> dns_aliases) {
   if (socket) {
-    net_log().AddEvent(NetLogEventType::CONNECT_JOB_SET_SOCKET);
+    net_log().AddEventReferencingSource(NetLogEventType::CONNECT_JOB_SET_SOCKET,
+                                        socket->NetLog().source());
     if (dns_aliases)
       socket->SetDnsAliases(std::move(dns_aliases.value()));
   }

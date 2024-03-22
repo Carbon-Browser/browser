@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -149,7 +149,7 @@ std::unique_ptr<SessionCommand> CreateSetWindowUserTitleCommand(
 
 std::unique_ptr<SessionCommand> CreateAddExtraDataCommand(
     SessionCommand::id_type command,
-    const SessionID& session_id,
+    SessionID session_id,
     const std::string& key,
     const std::string& data) {
   base::Pickle pickle;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "ash/services/chromebox_for_meetings/public/cpp/fake_service_connection.h"
-#include "ash/services/chromebox_for_meetings/public/cpp/fake_service_context.h"
-#include "ash/services/chromebox_for_meetings/public/cpp/service_connection.h"
-#include "ash/services/chromebox_for_meetings/public/mojom/cfm_service_manager.mojom.h"
-#include "ash/services/chromebox_for_meetings/public/mojom/meet_devices_info.mojom.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -25,7 +20,12 @@
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/fake_cfm_hotline_client.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/cpp/fake_service_connection.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/cpp/fake_service_context.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/cpp/service_connection.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/mojom/cfm_service_manager.mojom.h"
+#include "chromeos/ash/services/chromebox_for_meetings/public/mojom/meet_devices_info.mojom.h"
 #include "components/ownership/mock_owner_key_util.h"
 #include "content/public/test/test_utils.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -38,7 +38,8 @@
 namespace ash::cfm {
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 constexpr char kReleaseVersion[] = "13671.0.2020";
@@ -61,8 +62,7 @@ class CfmDeviceInfoServiceTest : public ::testing::Test {
     ServiceConnection::UseFakeServiceConnectionForTesting(
         &fake_service_connection_);
     DeviceInfoService::Initialize();
-    chromeos::system::StatisticsProvider::SetTestProvider(
-        &fake_statistics_provider_);
+    system::StatisticsProvider::SetTestProvider(&fake_statistics_provider_);
   }
 
   void TearDown() override {
@@ -139,7 +139,7 @@ class CfmDeviceInfoServiceTest : public ::testing::Test {
   FakeServiceConnectionImpl fake_service_connection_;
   ScopedTestDeviceSettingsService scoped_device_settings_service_;
   FakeSessionManagerClient session_manager_client_;
-  chromeos::system::FakeStatisticsProvider fake_statistics_provider_;
+  system::FakeStatisticsProvider fake_statistics_provider_;
   mojo::ReceiverSet<mojom::CfmServiceContext> context_receiver_set_;
   mojo::Remote<mojom::CfmServiceAdaptor> adaptor_remote_;
   mojo::Remote<mojom::MeetDevicesInfo> device_info_remote_;
@@ -219,8 +219,8 @@ TEST_F(CfmDeviceInfoServiceTest, TestSysInfo) {
 TEST_F(CfmDeviceInfoServiceTest, DISABLED_TestMachineStatisticsInfo) {
   const std::string kExpectedHwid = "kExpectedHwid";
 
-  fake_statistics_provider_.SetMachineStatistic(
-      chromeos::system::kHardwareClassKey, kExpectedHwid);
+  fake_statistics_provider_.SetMachineStatistic(system::kHardwareClassKey,
+                                                kExpectedHwid);
 
   const auto& details_remote = GetDeviceInfoRemote();
   base::RunLoop().RunUntilIdle();

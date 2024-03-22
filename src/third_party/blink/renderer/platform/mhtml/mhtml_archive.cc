@@ -33,8 +33,10 @@
 #include <stddef.h>
 
 #include "base/containers/contains.h"
+#include "base/i18n/time_formatting.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "third_party/blink/public/mojom/loader/mhtml_load_result.mojom-blink.h"
@@ -93,7 +95,7 @@ void QuotedPrintableEncode(const char* input,
                            bool is_header,
                            Vector<char>& out) {
   out.clear();
-  out.ReserveCapacity(input_length);
+  out.reserve(input_length);
   if (is_header)
     out.Append(kRFC2047EncodingPrefix, kRFC2047EncodingPrefixLength);
   size_t current_line_length = 0;
@@ -228,7 +230,7 @@ MHTMLArchive* MHTMLArchive::CreateArchive(
   archive->archive_url_ = url;
 
   // |data| may be null if archive file is empty.
-  if (!data || data->IsEmpty()) {
+  if (!data || data->empty()) {
     archive->load_result_ = MHTMLLoadResult::kEmptyFile;
     return archive;
   }
@@ -243,7 +245,7 @@ MHTMLArchive* MHTMLArchive::CreateArchive(
 
   MHTMLParser parser(std::move(data));
   HeapVector<Member<ArchiveResource>> resources = parser.ParseArchive();
-  if (resources.IsEmpty()) {
+  if (resources.empty()) {
     archive->load_result_ = MHTMLLoadResult::kInvalidArchive;
     return archive;
   }
@@ -307,10 +309,8 @@ void MHTMLArchive::GenerateMHTMLHeader(const String& boundary,
                                        const String& mime_type,
                                        base::Time date,
                                        Vector<char>& output_buffer) {
-  DCHECK(!boundary.IsEmpty());
-  DCHECK(!mime_type.IsEmpty());
-
-  String date_string = MakeRFC2822DateString(date, 0);
+  DCHECK(!boundary.empty());
+  DCHECK(!mime_type.empty());
 
   StringBuilder string_builder;
   string_builder.Append("From: <Saved by Blink>\r\n");
@@ -323,7 +323,10 @@ void MHTMLArchive::GenerateMHTMLHeader(const String& boundary,
   string_builder.Append("\r\nSubject: ");
   string_builder.Append(ConvertToPrintableCharacters(title));
   string_builder.Append("\r\nDate: ");
-  string_builder.Append(date_string);
+  string_builder.Append(
+      // See http://tools.ietf.org/html/rfc2822#section-3.3.
+      String(base::UnlocalizedTimeFormatWithPattern(date,
+                                                    "E, d MMM y HH:mm:ss xx")));
   string_builder.Append("\r\nMIME-Version: 1.0\r\n");
   string_builder.Append("Content-Type: multipart/related;\r\n");
   string_builder.Append("\ttype=\"");
@@ -347,8 +350,8 @@ void MHTMLArchive::GenerateMHTMLPart(const String& boundary,
                                      EncodingPolicy encoding_policy,
                                      const SerializedResource& resource,
                                      Vector<char>& output_buffer) {
-  DCHECK(!boundary.IsEmpty());
-  DCHECK(content_id.IsEmpty() || content_id[0] == '<');
+  DCHECK(!boundary.empty());
+  DCHECK(content_id.empty() || content_id[0] == '<');
 
   StringBuilder string_builder;
   // Per the spec, the boundary must occur at the beginning of a line.
@@ -360,7 +363,7 @@ void MHTMLArchive::GenerateMHTMLPart(const String& boundary,
   string_builder.Append(resource.mime_type);
   string_builder.Append("\r\n");
 
-  if (!content_id.IsEmpty()) {
+  if (!content_id.empty()) {
     string_builder.Append("Content-ID: ");
     string_builder.Append(content_id);
     string_builder.Append("\r\n");
@@ -429,7 +432,7 @@ void MHTMLArchive::GenerateMHTMLPart(const String& boundary,
 
 void MHTMLArchive::GenerateMHTMLFooterForTesting(const String& boundary,
                                                  Vector<char>& output_buffer) {
-  DCHECK(!boundary.IsEmpty());
+  DCHECK(!boundary.empty());
   std::string utf8_string = String("\r\n--" + boundary + "--\r\n").Utf8();
   output_buffer.Append(utf8_string.c_str(),
                        static_cast<wtf_size_t>(utf8_string.length()));

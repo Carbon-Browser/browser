@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,7 +10,8 @@ import("//third_party/protobuf/proto_library.gni")
 
 blink_modules_sources("webcodecs") {
   sources = [
-    "allow_shared_buffer_source_util.h",
+    "array_buffer_util.cc",
+    "array_buffer_util.h",
     "audio_data.cc",
     "audio_data.h",
     "audio_data_attachment.cc",
@@ -23,6 +24,8 @@ blink_modules_sources("webcodecs") {
     "audio_decoder_broker.h",
     "audio_encoder.cc",
     "audio_encoder.h",
+    "background_readback.cc",
+    "background_readback.h",
     "codec_config_eval.h",
     "codec_logger.cc",
     "codec_logger.h",
@@ -41,6 +44,8 @@ blink_modules_sources("webcodecs") {
     "decoder_selector.h",
     "decoder_template.cc",
     "decoder_template.h",
+    "decrypt_config_util.cc",
+    "decrypt_config_util.h",
     "encoded_audio_chunk.cc",
     "encoded_audio_chunk.h",
     "encoded_video_chunk.cc",
@@ -67,6 +72,8 @@ blink_modules_sources("webcodecs") {
     "video_decoder.h",
     "video_decoder_broker.cc",
     "video_decoder_broker.h",
+    "video_decoder_helper.cc",
+    "video_decoder_helper.h",
     "video_encoder.cc",
     "video_encoder.h",
     "video_frame.cc",
@@ -107,6 +114,9 @@ blink_modules_sources("webcodecs") {
   if (media_use_openh264) {
     deps += [ "//third_party/openh264:encoder" ]
   }
+  if (is_fuchsia) {
+    deps += [ "//media/fuchsia/video" ]
+  }
   public_deps = [ "//third_party/blink/renderer/modules/webaudio:webaudio" ]
 }
 
@@ -119,10 +129,14 @@ source_set("unit_tests") {
     "codec_pressure_manager_test.cc",
     "decoder_selector_test.cc",
     "decoder_template_test.cc",
+    "decrypt_config_util_test.cc",
+    "encoded_audio_chunk_test.cc",
     "encoded_video_chunk_test.cc",
     "image_decoder_core_test.cc",
     "image_decoder_external_test.cc",
     "reclaimable_codec_test.cc",
+    "test_helpers.cc",
+    "test_helpers.h",
     "video_decoder_broker_test.cc",
     "video_decoder_test.cc",
     "video_encoder_test.cc",

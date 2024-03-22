@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -125,7 +125,7 @@ SkeletonGenerator::SkeletonGenerator(const USpoofChecker* checker)
           icu::UnicodeString::fromUTF8(
               "[æӕ] > ae; [ϼҏ] > p; [ħнћңҥӈӊԋԧԩ] > h;"
               "[ĸκкқҝҟҡӄԟ] > k; [ŋпԥกח] > n;"
-              "[ŧтҭԏ七丅丆丁] > t; [ƅьҍв] > b;  [ωшщพฟພຟ] > w;"
+              "[ŧтҭԏ七丅丆丁] > t; [ƅьҍвß] > b;  [ωшщพฟພຟ] > w;"
               "[мӎ] > m; [єҽҿၔ] > e; ґ > r; [ғӻ] > f;"
               "[ҫင] > c; [ұ丫] > y; [χҳӽӿ乂] > x;"
               "[ԃძ]  > d; [ԍဌ] > g; [ടรຣຮ] > s; ၂ > j;"

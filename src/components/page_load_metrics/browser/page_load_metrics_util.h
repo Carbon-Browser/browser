@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PAGE_LOAD_METRICS_BROWSER_PAGE_LOAD_METRICS_UTIL_H_
 #define COMPONENTS_PAGE_LOAD_METRICS_BROWSER_PAGE_LOAD_METRICS_UTIL_H_
 
-#include "base/metrics/histogram_macros.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer.h"
 #include "components/page_load_metrics/common/page_load_metrics_util.h"
@@ -14,24 +14,29 @@
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
 
 // Up to 10 minutes, with 100 buckets.
-#define PAGE_LOAD_HISTOGRAM(name, sample)                          \
-  UMA_HISTOGRAM_CUSTOM_TIMES(name, sample, base::Milliseconds(10), \
-                             base::Minutes(10), 100)
+#define PAGE_LOAD_HISTOGRAM(name, sample)                             \
+  base::UmaHistogramCustomTimes(name, sample, base::Milliseconds(10), \
+                                base::Minutes(10), 100)
+
+// 1 ms to 1 minute, with 100 buckets.
+#define PAGE_LOAD_SHORT_HISTOGRAM(name, sample)                      \
+  base::UmaHistogramCustomTimes(name, sample, base::Milliseconds(1), \
+                                base::Minutes(1), 100)
 
 // Up to 1 hour, with 100 buckets.
-#define PAGE_LOAD_LONG_HISTOGRAM(name, sample)                     \
-  UMA_HISTOGRAM_CUSTOM_TIMES(name, sample, base::Milliseconds(10), \
-                             base::Hours(1), 100)
+#define PAGE_LOAD_LONG_HISTOGRAM(name, sample)                        \
+  base::UmaHistogramCustomTimes(name, sample, base::Milliseconds(10), \
+                                base::Hours(1), 100)
 
 // Records |bytes| to |histogram_name| in kilobytes (i.e., bytes / 1024).
 #define PAGE_BYTES_HISTOGRAM(histogram_name, bytes) \
-  UMA_HISTOGRAM_CUSTOM_COUNTS(                      \
+  base::UmaHistogramCustomCounts(                   \
       histogram_name, static_cast<int>((bytes) / 1024), 1, 500 * 1024, 50)
 
 // Up to 1 minute with 50 buckets.
-#define INPUT_DELAY_HISTOGRAM(name, sample)                       \
-  UMA_HISTOGRAM_CUSTOM_TIMES(name, sample, base::Milliseconds(1), \
-                             base::Seconds(60), 50)
+#define INPUT_DELAY_HISTOGRAM(name, sample)                          \
+  base::UmaHistogramCustomTimes(name, sample, base::Milliseconds(1), \
+                                base::Seconds(60), 50)
 
 #define PAGE_RESOURCE_COUNT_HISTOGRAM UMA_HISTOGRAM_COUNTS_10000
 
@@ -146,6 +151,46 @@ bool WasStartedInBackgroundOptionalEventInForeground(
 // at some point in time.
 bool WasInForeground(const PageLoadMetricsObserverDelegate& delegate);
 
+// Returns (navigation start origined) "non prerendering background start" if
+// it exists, or nullopt. Here, "non prerendering background start" is the
+// minimum timing `x` satisfying:
+//
+// - The page is background at `x`; and
+// - `x` as TimeDelta is greater than or equal to navigation start (resp.
+//   activation start) if the page is not prerendered (resp. is prerendered).
+//
+// Note that this can be different from the return value of
+// `PageLoadMetricsObserverDelegate::GetTimeToFirstBackground`.
+absl::optional<base::TimeDelta> GetNonPrerenderingBackgroundStartTiming(
+    const PageLoadMetricsObserverDelegate& delegate);
+
+// Returns true iff event occurred in prerendered before activation or before
+// background start.
+//
+// Precondition: `HasInvalidActivationStart` must not hold.
+// In this case, arbitrary value will be returned.
+bool EventOccurredBeforeNonPrerenderingBackgroundStart(
+    const PageLoadMetricsObserverDelegate& delegate,
+    const base::TimeDelta& event);
+bool EventOccurredBeforeNonPrerenderingBackgroundStart(
+    const PageLoadMetricsObserverDelegate& delegate,
+    const page_load_metrics::mojom::PageLoadTiming& timing,
+    const base::TimeDelta& event);
+
+// Corrects an event with navigation start origin as navigation/activation
+// start origin.
+//
+// If the page is not prerendered, returns the event as is. If the page is
+// prerendered, returns activation start origined time delta. Negative values
+// are truncated as zero.
+base::TimeDelta CorrectEventAsNavigationOrActivationOrigined(
+    const PageLoadMetricsObserverDelegate& delegate,
+    const base::TimeDelta& event);
+base::TimeDelta CorrectEventAsNavigationOrActivationOrigined(
+    const PageLoadMetricsObserverDelegate& delegate,
+    const page_load_metrics::mojom::PageLoadTiming& timing,
+    const base::TimeDelta& event);
+
 PageAbortInfo GetPageAbortInfo(const PageLoadMetricsObserverDelegate& delegate);
 
 // Get the duration of time that the page spent in the foreground, from
@@ -180,6 +225,10 @@ bool IsGoogleSearchResultUrl(const GURL& url);
 
 // Whether the given url is a Google Search redirector URL.
 bool IsGoogleSearchRedirectorUrl(const GURL& url);
+
+// Whether the given url has a domain from a known list that can serve
+// zstd content-coded responses.
+bool IsZstdUrl(const GURL& url);
 
 // Whether the given query string contains the given component. The query
 // parameter should contain the query string of a URL (the portion following

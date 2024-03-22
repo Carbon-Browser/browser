@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,14 +19,10 @@ bool IsHardwareEnforcedShadowStacksEnabled() {
   if (base::win::GetVersion() < base::win::Version::WIN10_20H1)
     return false;
 
-  auto get_process_mitigation_policy =
-      reinterpret_cast<decltype(&GetProcessMitigationPolicy)>(::GetProcAddress(
-          ::GetModuleHandleA("kernel32.dll"), "GetProcessMitigationPolicy"));
-
   PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY uss_policy;
-  if (!get_process_mitigation_policy(GetCurrentProcess(),
-                                     ProcessUserShadowStackPolicy, &uss_policy,
-                                     sizeof(uss_policy))) {
+  if (!::GetProcessMitigationPolicy(GetCurrentProcess(),
+                                    ProcessUserShadowStackPolicy, &uss_policy,
+                                    sizeof(uss_policy))) {
     return false;
   }
 

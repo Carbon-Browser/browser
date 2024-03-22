@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,13 @@
 #include "media/base/timestamp_constants.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_util.h"
+#include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/graphics/bitmap_image_metrics.h"
 #include "third_party/blink/renderer/platform/graphics/video_frame_image_util.h"
 #include "third_party/blink/renderer/platform/image-decoders/segment_reader.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
+#include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkYUVAPixmaps.h"
 
 namespace blink {
@@ -86,12 +88,10 @@ ImageDecoderCore::ImageDecoderCore(
     String mime_type,
     scoped_refptr<SegmentReader> data,
     bool data_complete,
-    ImageDecoder::AlphaOption alpha_option,
-    const ColorBehavior& color_behavior,
+    ColorBehavior color_behavior,
     const SkISize& desired_size,
     ImageDecoder::AnimationOption animation_option)
     : mime_type_(mime_type),
-      alpha_option_(alpha_option),
       color_behavior_(color_behavior),
       desired_size_(desired_size),
       animation_option_(animation_option),
@@ -215,7 +215,7 @@ std::unique_ptr<ImageDecoderCore::ImageDecodeResult> ImageDecoderCore::Decode(
   // Prefer FinalizePixelsAndGetImage() since that will mark the underlying
   // bitmap as immutable, which allows copies to be avoided.
   auto sk_image = is_complete ? image->FinalizePixelsAndGetImage()
-                              : SkImage::MakeFromBitmap(image->Bitmap());
+                              : SkImages::RasterFromBitmap(image->Bitmap());
   if (!sk_image) {
     NOTREACHED() << "Failed to retrieve SkImage for decoded image.";
     result->status = Status::kDecodeError;
@@ -242,16 +242,17 @@ std::unique_ptr<ImageDecoderCore::ImageDecodeResult> ImageDecoderCore::Decode(
 
   // This is zero copy; the VideoFrame points into the SkBitmap.
   const gfx::Size coded_size(sk_image->width(), sk_image->height());
-  auto frame = media::CreateFromSkImage(sk_image, gfx::Rect(coded_size),
-                                        coded_size, media::kNoTimestamp);
+  auto frame =
+      media::CreateFromSkImage(sk_image, gfx::Rect(coded_size), coded_size,
+                               GetTimestampForFrame(frame_index));
   if (!frame) {
     NOTREACHED() << "Failed to create VideoFrame from SkImage.";
     result->status = Status::kDecodeError;
     return result;
   }
 
-  frame->metadata().transformation = ImageOrientationToVideoTransformation(
-      decoder_->Orientation().Orientation());
+  frame->metadata().transformation =
+      ImageOrientationToVideoTransformation(decoder_->Orientation());
 
   // Only animated images have frame durations.
   if (decoder_->FrameCount() > 1 ||
@@ -305,6 +306,8 @@ void ImageDecoderCore::Clear() {
   have_completed_yuv_decode_ = false;
   last_decoded_frame_ = 0u;
   is_decoding_in_order_ = true;
+  timestamp_cache_.clear();
+  timestamp_cache_.emplace_back();
 }
 
 void ImageDecoderCore::Reinitialize(
@@ -312,9 +315,11 @@ void ImageDecoderCore::Reinitialize(
   Clear();
   animation_option_ = animation_option;
   decoder_ = ImageDecoder::CreateByMimeType(
-      mime_type_, segment_reader_, data_complete_, alpha_option_,
+      mime_type_, segment_reader_, data_complete_,
+      ImageDecoder::kAlphaNotPremultiplied,
       ImageDecoder::HighBitDepthDecodingOption::kDefaultBitDepth,
-      color_behavior_, desired_size_, animation_option_);
+      color_behavior_, Platform::GetMaxDecodedImageBytes(), desired_size_,
+      animation_option_);
   DCHECK(decoder_);
 }
 
@@ -358,8 +363,9 @@ void ImageDecoderCore::MaybeDecodeToYuv() {
       return;
   }
 
-  void* planes[cc::kNumYUVPlanes] = {yuv_frame_->data(0), yuv_frame_->data(1),
-                                     yuv_frame_->data(2)};
+  void* planes[cc::kNumYUVPlanes] = {yuv_frame_->writable_data(0),
+                                     yuv_frame_->writable_data(1),
+                                     yuv_frame_->writable_data(2)};
   wtf_size_t row_bytes[cc::kNumYUVPlanes] = {
       static_cast<wtf_size_t>(yuv_frame_->stride(0)),
       static_cast<wtf_size_t>(yuv_frame_->stride(1)),
@@ -395,8 +401,9 @@ void ImageDecoderCore::MaybeDecodeToYuv() {
     }
   }
 
-  yuv_frame_->metadata().transformation = ImageOrientationToVideoTransformation(
-      decoder_->Orientation().Orientation());
+  yuv_frame_->set_timestamp(GetTimestampForFrame(0));
+  yuv_frame_->metadata().transformation =
+      ImageOrientationToVideoTransformation(decoder_->Orientation());
 
   if (gfx_cs.IsValid()) {
     yuv_frame_->set_color_space(YUVColorSpaceToGfxColorSpace(
@@ -423,6 +430,33 @@ void ImageDecoderCore::MaybeDecodeToYuv() {
 
   yuv_frame_->set_color_space(YUVColorSpaceToGfxColorSpace(
       skyuv_cs, gfx::ColorSpace::PrimaryID::BT2020, transfer_id));
+}
+
+base::TimeDelta ImageDecoderCore::GetTimestampForFrame(uint32_t index) const {
+  // The zero entry is always populated by this point.
+  DCHECK_GE(timestamp_cache_.size(), 1u);
+
+  auto ts = decoder_->FrameTimestampAtIndex(index);
+  if (ts.has_value())
+    return *ts;
+
+  if (index < timestamp_cache_.size())
+    return timestamp_cache_[index];
+
+  // Calling FrameCount() ensures duration information is populated for every
+  // frame up to the current count. DecodeFrameBufferAtIndex() or DecodeToYUV()
+  // have also been called this point, so index is always valid.
+  DCHECK_LT(index, decoder_->FrameCount());
+  DCHECK(!decoder_->Failed());
+
+  const auto old_size = timestamp_cache_.size();
+  timestamp_cache_.resize(decoder_->FrameCount());
+  for (auto i = old_size; i < timestamp_cache_.size(); ++i) {
+    timestamp_cache_[i] =
+        timestamp_cache_[i - 1] + decoder_->FrameDurationAtIndex(i - 1);
+  }
+
+  return timestamp_cache_[index];
 }
 
 }  // namespace blink

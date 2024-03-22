@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
  * of these tests fail, please be sure to edit that file and regenerate the test cases here and also
  * in net/proxy_resolution/proxy_config_service_android_unittests.cc if required.
  */
-
 package org.chromium.net;
 
 import android.os.Build;

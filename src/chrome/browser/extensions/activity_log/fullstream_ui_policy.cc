@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,16 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
 #include "chrome/browser/extensions/activity_log/activity_action_constants.h"
 #include "chrome/browser/extensions/activity_log/activity_database.h"
 #include "chrome/browser/extensions/activity_log/activity_log_task_runner.h"
@@ -80,29 +79,28 @@ bool FullStreamUIPolicy::FlushDatabase(sql::Database* db) {
   sql::Statement statement(db->GetCachedStatement(
       sql::StatementID(SQL_FROM_HERE), sql_str.c_str()));
 
-  for (size_t i = 0; i != queued_actions_.size(); ++i) {
-    const Action& action = *queued_actions_[i];
+  for (const auto& action : queued_actions_) {
     statement.Reset(true);
-    statement.BindString(0, action.extension_id());
-    statement.BindInt64(1, action.time().ToInternalValue());
-    statement.BindInt(2, static_cast<int>(action.action_type()));
-    statement.BindString(3, action.api_name());
-    if (action.args()) {
-      statement.BindString(4, Util::Serialize(action.args()));
+    statement.BindString(0, action->extension_id());
+    statement.BindTime(1, action->time());
+    statement.BindInt(2, static_cast<int>(action->action_type()));
+    statement.BindString(3, action->api_name());
+    if (action->args()) {
+      statement.BindString(4, Util::Serialize(action->args()));
     }
-    std::string page_url_string = action.SerializePageUrl();
+    std::string page_url_string = action->SerializePageUrl();
     if (!page_url_string.empty()) {
       statement.BindString(5, page_url_string);
     }
-    if (!action.page_title().empty()) {
-      statement.BindString(6, action.page_title());
+    if (!action->page_title().empty()) {
+      statement.BindString(6, action->page_title());
     }
-    std::string arg_url_string = action.SerializeArgUrl();
+    std::string arg_url_string = action->SerializeArgUrl();
     if (!arg_url_string.empty()) {
       statement.BindString(7, arg_url_string);
     }
-    if (action.other()) {
-      statement.BindString(8, Util::Serialize(action.other()));
+    if (action->other()) {
+      statement.BindString(8, Util::Serialize(action->other()));
     }
 
     if (!statement.Run()) {
@@ -197,7 +195,7 @@ std::unique_ptr<Action::ActionVector> FullStreamUIPolicy::DoReadFilteredData(
       absl::optional<base::Value> parsed_value =
           base::JSONReader::Read(query.ColumnString(4));
       if (parsed_value && parsed_value->is_list()) {
-        action->set_args(std::move(parsed_value->GetList()));
+        action->set_args(std::move(*parsed_value).TakeList());
       }
     }
 
@@ -209,7 +207,7 @@ std::unique_ptr<Action::ActionVector> FullStreamUIPolicy::DoReadFilteredData(
       absl::optional<base::Value> parsed_value =
           base::JSONReader::Read(query.ColumnString(8));
       if (parsed_value && parsed_value->is_dict()) {
-        action->set_other(std::move(parsed_value->GetDict()));
+        action->set_other(std::move(*parsed_value).TakeDict());
       }
     }
     actions->push_back(action);
@@ -240,9 +238,9 @@ void FullStreamUIPolicy::DoRemoveActions(
       base::StringPrintf("DELETE FROM %s WHERE rowid = ?", kTableName);
   sql::Statement statement(db->GetCachedStatement(
       sql::StatementID(SQL_FROM_HERE), statement_str.c_str()));
-  for (size_t i = 0; i < action_ids.size(); i++) {
+  for (long action_id : action_ids) {
     statement.Reset(true);
-    statement.BindInt64(0, action_ids[i]);
+    statement.BindInt64(0, action_id);
     if (!statement.Run()) {
       LOG(ERROR) << "Removing activities from database failed: "
                  << statement.GetSQLStatement();
@@ -282,8 +280,8 @@ void FullStreamUIPolicy::DoRemoveURLs(const std::vector<GURL>& restrict_urls) {
   }
 
   // If URLs are specified then restrict to only those URLs.
-  for (size_t i = 0; i < restrict_urls.size(); ++i) {
-    if (!restrict_urls[i].is_valid()) {
+  for (const auto& url : restrict_urls) {
+    if (!url.is_valid()) {
       continue;
     }
 
@@ -294,7 +292,7 @@ void FullStreamUIPolicy::DoRemoveURLs(const std::vector<GURL>& restrict_urls) {
       kTableName);
     statement.Assign(db->GetCachedStatement(
         sql::StatementID(SQL_FROM_HERE), sql_str.c_str()));
-    statement.BindString(0, restrict_urls[i].spec());
+    statement.BindString(0, url.spec());
 
     if (!statement.Run()) {
       LOG(ERROR) << "Removing page URL from database failed: "
@@ -307,7 +305,7 @@ void FullStreamUIPolicy::DoRemoveURLs(const std::vector<GURL>& restrict_urls) {
                                  kTableName);
     statement.Assign(db->GetCachedStatement(
         sql::StatementID(SQL_FROM_HERE), sql_str.c_str()));
-    statement.BindString(0, restrict_urls[i].spec());
+    statement.BindString(0, url.spec());
 
     if (!statement.Run()) {
       LOG(ERROR) << "Removing arg URL from database failed: "
@@ -392,8 +390,8 @@ void FullStreamUIPolicy::ReadFilteredData(
     const std::string& arg_url,
     const int days_ago,
     base::OnceCallback<void(std::unique_ptr<Action::ActionVector>)> callback) {
-  base::PostTaskAndReplyWithResult(
-      GetActivityLogTaskRunner().get(), FROM_HERE,
+  GetActivityLogTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&FullStreamUIPolicy::DoReadFilteredData,
                      base::Unretained(this), extension_id, type, api_name,
                      page_url, arg_url, days_ago),

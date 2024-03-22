@@ -1,19 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/navigation/crw_error_page_helper.h"
 
-#include "base/strings/sys_string_conversions.h"
+#import "base/apple/bundle_locations.h"
+#import "base/strings/sys_string_conversions.h"
 #import "net/base/mac/url_conversions.h"
-#include "testing/gtest/include/gtest/gtest.h"
+#import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
+#import "url/gurl.h"
 
 using CRWErrorPageHelperTest = PlatformTest;
 
@@ -76,7 +73,7 @@ TEST_F(CRWErrorPageHelperTest, IsErrorPageFileURLWrong) {
 // URL.
 TEST_F(CRWErrorPageHelperTest, FailedNavigationURLFromErrorPageFileURLCorrect) {
   std::string expected_url = "http://expected-url.com";
-  std::string path = base::SysNSStringToUTF8([NSBundle.mainBundle
+  std::string path = base::SysNSStringToUTF8([base::apple::FrameworkBundle()
       pathForResource:@"error_page_loaded"
                ofType:@"html"]);
 
@@ -88,11 +85,11 @@ TEST_F(CRWErrorPageHelperTest, FailedNavigationURLFromErrorPageFileURLCorrect) {
   EXPECT_TRUE([CRWErrorPageHelper isErrorPageFileURL:url]);
 }
 
-// Tests that the extract failed navigation URL is empty if the |url| query
+// Tests that the extract failed navigation URL is empty if the `url` query
 // isn't present in the page URL.
 TEST_F(CRWErrorPageHelperTest, FailedNavigationURLFromErrorPageFileURLNoQuery) {
   std::string expected_url = "http://expected-url.com";
-  std::string path = base::SysNSStringToUTF8([NSBundle.mainBundle
+  std::string path = base::SysNSStringToUTF8([base::apple::FrameworkBundle()
       pathForResource:@"error_page_loaded"
                ofType:@"html"]);
 
@@ -120,7 +117,7 @@ TEST_F(CRWErrorPageHelperTest,
 // current page isn't file://.
 TEST_F(CRWErrorPageHelperTest,
        FailedNavigationURLFromErrorPageFileURLWrongScheme) {
-  std::string path = base::SysNSStringToUTF8([NSBundle.mainBundle
+  std::string path = base::SysNSStringToUTF8([base::apple::FrameworkBundle()
       pathForResource:@"error_page_loaded"
                ofType:@"html"]);
 

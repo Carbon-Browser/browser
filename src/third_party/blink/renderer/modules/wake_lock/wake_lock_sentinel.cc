@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ namespace blink {
 WakeLockSentinel::WakeLockSentinel(ScriptState* script_state,
                                    V8WakeLockType::Enum type,
                                    WakeLockManager* manager)
-    : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
+    : ActiveScriptWrappable<WakeLockSentinel>({}),
+      ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
       manager_(manager),
       type_(type) {}
 
@@ -51,7 +52,7 @@ const AtomicString& WakeLockSentinel::InterfaceName() const {
 
 void WakeLockSentinel::Trace(Visitor* visitor) const {
   visitor->Trace(manager_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 

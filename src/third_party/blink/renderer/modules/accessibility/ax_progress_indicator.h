@@ -27,11 +27,10 @@ namespace blink {
 
 class AXObjectCacheImpl;
 class HTMLProgressElement;
-class LayoutProgress;
 
 class AXProgressIndicator final : public AXLayoutObject {
  public:
-  AXProgressIndicator(LayoutProgress*, AXObjectCacheImpl&);
+  AXProgressIndicator(LayoutObject*, AXObjectCacheImpl&);
 
   AXProgressIndicator(const AXProgressIndicator&) = delete;
   AXProgressIndicator& operator=(const AXProgressIndicator&) = delete;
@@ -46,7 +45,6 @@ class AXProgressIndicator final : public AXLayoutObject {
   bool MinValueForRange(float* out_value) const override;
 
   HTMLProgressElement* GetProgressElement() const;
-  bool ComputeAccessibilityIsIgnored(IgnoredReasons* = nullptr) const override;
 };
 
 }  // namespace blink

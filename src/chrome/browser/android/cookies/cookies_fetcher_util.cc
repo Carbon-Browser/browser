@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/android/jni_headers/CookiesFetcher_jni.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -55,7 +55,7 @@ void OnCookiesFetchFinished(const net::CookieList& cookies) {
         i->LastAccessDate().ToDeltaSinceWindowsEpoch().InMicroseconds(),
         i->LastUpdateDate().ToDeltaSinceWindowsEpoch().InMicroseconds(),
         i->IsSecure(), i->IsHttpOnly(), static_cast<int>(i->SameSite()),
-        i->Priority(), i->IsSameParty(),
+        i->Priority(), /*sameParty=*/false,
         base::android::ConvertUTF8ToJavaString(env, pk),
         static_cast<int>(i->SourceScheme()), i->SourcePort());
     env->SetObjectArrayElement(joa.obj(), index++, java_cookie.obj());
@@ -126,7 +126,7 @@ static void JNI_CookiesFetcher_RestoreCookies(
           base::Time::FromDeltaSinceWindowsEpoch(
               base::Microseconds(last_update)),
           secure, httponly, static_cast<net::CookieSameSite>(same_site),
-          static_cast<net::CookiePriority>(priority), same_party, pk,
+          static_cast<net::CookiePriority>(priority), pk,
           static_cast<net::CookieSourceScheme>(source_scheme), source_port);
   // FromStorage() uses a less strict version of IsCanonical(), we need to check
   // the stricter version as well here. This is safe because this function is

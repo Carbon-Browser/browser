@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/gtest_util.h"
 #include "media/audio/audio_device_description.h"
@@ -49,12 +49,12 @@ media::AudioParameters Params() {
 
 media::AudioSourceParameters SourceParams() {
   return media::AudioSourceParameters(
-      base::UnguessableToken::Deserialize(1234, 5678));
+      base::UnguessableToken::CreateForTesting(1234, 5678));
 }
 
 media::AudioSourceParameters SourceParamsWithProcessing() {
   media::AudioSourceParameters params(
-      base::UnguessableToken::Deserialize(1234, 5678));
+      base::UnguessableToken::CreateForTesting(1234, 5678));
   params.processing = media::AudioProcessingSettings();
   return params;
 }

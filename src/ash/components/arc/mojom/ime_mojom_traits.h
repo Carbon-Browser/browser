@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ struct EnumTraits<arc::mojom::TextInputType, ui::TextInputType> {
   static bool FromMojom(MojoType input, ui::TextInputType* out) {
     switch (input) {
       case MojoType::NONE:
-        *out = ui::TEXT_INPUT_TYPE_NULL;
+        *out = ui::TEXT_INPUT_TYPE_NONE;
         return true;
       case MojoType::TEXT:
         *out = ui::TEXT_INPUT_TYPE_TEXT;
@@ -101,6 +101,9 @@ struct EnumTraits<arc::mojom::TextInputType, ui::TextInputType> {
         return true;
       case MojoType::DATETIME:
         *out = ui::TEXT_INPUT_TYPE_DATE_TIME_LOCAL;
+        return true;
+      case MojoType::ANDROID_NULL:
+        *out = ui::TEXT_INPUT_TYPE_NULL;
         return true;
     }
     NOTREACHED();
@@ -134,6 +137,9 @@ struct StructTraits<arc::mojom::KeyEventDataDataView, KeyEventUniquePtr> {
   }
   static bool is_alt_gr_down(const KeyEventUniquePtr& key_event) {
     return key_event->IsAltGrDown();
+  }
+  static bool is_repeat(const KeyEventUniquePtr& key_event) {
+    return key_event->is_repeat();
   }
 
   static bool Read(arc::mojom::KeyEventDataDataView data,

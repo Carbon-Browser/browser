@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace base {
 
 template <typename T>
 constexpr bool IsApproximatelyEqual(T lhs, T rhs, T tolerance) {
-  static_assert(std::is_arithmetic<T>::value, "Argument must be arithmetic");
+  static_assert(std::is_arithmetic_v<T>, "Argument must be arithmetic");
   return std::abs(rhs - lhs) <= tolerance;
 }
 

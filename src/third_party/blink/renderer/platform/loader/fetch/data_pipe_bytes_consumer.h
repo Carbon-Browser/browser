@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,7 +62,7 @@ class PLATFORM_EXPORT DataPipeBytesConsumer final : public BytesConsumer {
   void Cancel() override;
   PublicState GetPublicState() const override;
   Error GetError() const override {
-    DCHECK(state_ == InternalState::kErrored);
+    DCHECK_EQ(InternalState::kErrored, state_);
     return error_;
   }
   String DebugName() const override { return "DataPipeBytesConsumer"; }
@@ -70,7 +70,7 @@ class PLATFORM_EXPORT DataPipeBytesConsumer final : public BytesConsumer {
   void Trace(Visitor*) const override;
 
  private:
-  bool IsReadableOrWaiting() const;
+  bool IsWaiting() const;
   void MaybeClose();
   void SetError(const Error& error);
   void Notify(MojoResult);

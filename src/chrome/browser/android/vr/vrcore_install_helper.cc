@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "chrome/android/features/vr/jni_headers/VrCoreInstallUtils_jni.h"
+#include "base/functional/bind.h"
+#include "chrome/android/features/vr/split_jni_headers/VrCoreInstallUtils_jni.h"
 #include "chrome/browser/android/vr/vr_module_provider.h"
 #include "components/webxr/android/webxr_utils.h"
 

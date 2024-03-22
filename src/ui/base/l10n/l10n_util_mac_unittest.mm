@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 
-typedef PlatformTest L10nUtilMacTest;
+using L10nUtilMacTest = PlatformTest;
 
 TEST_F(L10nUtilMacTest, FixUpWindowsStyleLabel) {
   struct TestData {
@@ -48,25 +48,4 @@ TEST_F(L10nUtilMacTest, FixUpWindowsStyleLabel) {
         << "For idx " << idx << ", expected '" << [data[idx].output UTF8String]
         << "', got '" << [result UTF8String] << "'";
   }
-}
-
-TEST_F(L10nUtilMacTest, GetDisplayNameForLocale) {
-  // Test documented error cases and return values of GetDisplayNameForLocale.
-  std::u16string result = l10n_util::GetDisplayNameForLocale("xyz", "en");
-  EXPECT_EQ(base::SysNSStringToUTF16(@"xyz"), result);
-
-  result = l10n_util::GetDisplayNameForLocale("Xyz", "en");
-  EXPECT_EQ(base::SysNSStringToUTF16(@"xyz"), result);
-
-  result = l10n_util::GetDisplayNameForLocale("Xyz-Xyz", "en");
-  EXPECT_EQ(base::SysNSStringToUTF16(@"xyz (XYZ)"), result);
-
-  result = l10n_util::GetDisplayNameForLocale("Xyz-", "en");
-  EXPECT_EQ(base::SysNSStringToUTF16(@"xyz"), result);
-
-  result = l10n_util::GetDisplayNameForLocale("xyz-xyz-xyz", "en");
-  EXPECT_EQ(base::SysNSStringToUTF16(@"xyz-xyz (XYZ)"), result);
-
-  result = l10n_util::GetDisplayNameForLocale("", "en");
-  EXPECT_EQ(base::SysNSStringToUTF16(@""), result);
 }

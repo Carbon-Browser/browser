@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
@@ -18,6 +18,7 @@
 #include "media/base/audio_processing.h"
 #include "media/base/audio_push_fifo.h"
 #include "media/webrtc/audio_delay_stats_reporter.h"
+#include "media/webrtc/webrtc_features.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/webrtc/modules/audio_processing/include/audio_processing.h"
 #include "third_party/webrtc/modules/audio_processing/include/audio_processing_statistics.h"
@@ -68,7 +69,7 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
   // |settings|.NeedWebrtcAudioProcessing() is true, then the output must be in
   // 10 ms chunks: the formats must specify |sample rate|/100 samples per buffer
   // (rounded down). Sample rates which are not divisible by 100 are supported
-  // on a best-effort basis, audio quality and stability may suffer.
+  // on a best-effort basis, audio quality may suffer.
   static std::unique_ptr<AudioProcessor> Create(
       DeliverProcessedAudioCallback deliver_processed_audio_callback,
       LogCallback log_callback,
@@ -83,14 +84,15 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
       const media::AudioParameters& input_format,
       const media::AudioParameters& output_format,
       rtc::scoped_refptr<webrtc::AudioProcessing> webrtc_audio_processing,
-      bool stereo_mirroring);
+      bool stereo_mirroring,
+      bool needs_playout_reference);
 
   ~AudioProcessor();
 
   AudioProcessor(const AudioProcessor&) = delete;
   AudioProcessor& operator=(const AudioProcessor&) = delete;
 
-  // Processes and delivers capture audio in chunks of <= 10 ms to
+  // Processes capture audio and delivers in chunks of <= 10 ms to
   // |deliver_processed_audio_callback_|: Each call to ProcessCapturedAudio()
   // method triggers zero or more calls to |deliver_processed_audio_callback_|,
   // depending on internal FIFO size and content. |num_preferred_channels| is
@@ -162,6 +164,9 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
       const AudioParameters& input_format,
       const AudioProcessingSettings& settings);
 
+  // Returns true if `OnPlayoutData()` should be called.
+  bool needs_playout_reference() const { return needs_playout_reference_; }
+
  private:
   friend class AudioProcessorTest;
 
@@ -201,6 +206,9 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
   // captured stereo audio.
   const bool stereo_mirroring_;
 
+  // If true, `OnPlayoutData()` should be called.
+  const bool needs_playout_reference_;
+
   // Members accessed only by the owning sequence:
 
   // Used by SendLogMessage.
@@ -219,7 +227,8 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
   // Members configured on the owning sequence in the constructor and
   // used on the capture thread:
 
-  // FIFO to provide capture audio in chunks of up to 10 ms.
+  // FIFO to provide capture audio in chunks that can be processed by
+  // webrtc::AudioProcessing.
   std::unique_ptr<AudioProcessorCaptureFifo> capture_fifo_;
 
   // Receives APM processing output.
@@ -247,7 +256,8 @@ class COMPONENT_EXPORT(MEDIA_WEBRTC) AudioProcessor {
 
   // Members accessed only on the playout thread:
 
-  // FIFO to provide playout audio in 10 ms chunks.
+  // FIFO to provide playout audio in chunks that can be processed by
+  // webrtc::AudioProcessing.
   AudioPushFifo playout_fifo_;
 
   // Cached value of the playout delay before adjusting for delay introduced by

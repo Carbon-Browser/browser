@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory.tab_layout_component;
 
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.ACTIVE_TAB;
+import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.BUTTON_SELECTION_CALLBACKS;
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.TABS;
 import static org.chromium.chrome.browser.keyboard_accessory.tab_layout_component.KeyboardAccessoryTabLayoutProperties.TAB_SELECTION_CALLBACKS;
 
@@ -22,25 +23,35 @@ import org.chromium.ui.modelutil.PropertyModel;
  * a {@link KeyboardAccessoryTabLayoutView}.
  */
 class KeyboardAccessoryTabLayoutViewBinder
-        implements ListModelChangeProcessor.ViewBinder<ListModel<KeyboardAccessoryData.Tab>,
-                KeyboardAccessoryTabLayoutView, Void> {
+        implements ListModelChangeProcessor.ViewBinder<
+                ListModel<KeyboardAccessoryData.Tab>, KeyboardAccessoryTabLayoutView, Void> {
     @Override
-    public void onItemsInserted(ListModel<KeyboardAccessoryData.Tab> model,
-            KeyboardAccessoryTabLayoutView view, int index, int count) {
+    public void onItemsInserted(
+            ListModel<KeyboardAccessoryData.Tab> model,
+            KeyboardAccessoryTabLayoutView view,
+            int index,
+            int count) {
         // More fine-grained implementations showed artifacts when adding in quick succession.
         updateAllTabs(view, model);
     }
 
     @Override
-    public void onItemsRemoved(ListModel<KeyboardAccessoryData.Tab> model,
-            KeyboardAccessoryTabLayoutView view, int index, int count) {
+    public void onItemsRemoved(
+            ListModel<KeyboardAccessoryData.Tab> model,
+            KeyboardAccessoryTabLayoutView view,
+            int index,
+            int count) {
         // More fine-grained implementations showed artifacts when removing in quick succession.
         updateAllTabs(view, model);
     }
 
     @Override
-    public void onItemsChanged(ListModel<KeyboardAccessoryData.Tab> model,
-            KeyboardAccessoryTabLayoutView view, int index, int count, Void payload) {
+    public void onItemsChanged(
+            ListModel<KeyboardAccessoryData.Tab> model,
+            KeyboardAccessoryTabLayoutView view,
+            int index,
+            int count,
+            Void payload) {
         updateAllTabs(view, model);
     }
 
@@ -58,9 +69,11 @@ class KeyboardAccessoryTabLayoutViewBinder
             KeyboardAccessoryTabLayoutView view, ListModel<KeyboardAccessoryData.Tab> model) {
         for (int i = 0; i < model.size(); i++) {
             final int observedIconIndex = i;
-            model.get(i).addIconObserver((unusedTypeId, unusedDrawable) -> {
-                onItemsChanged(model, view, observedIconIndex, 1, null);
-            });
+            model.get(i)
+                    .addIconObserver(
+                            (unusedTypeId, unusedDrawable) -> {
+                                onItemsChanged(model, view, observedIconIndex, 1, null);
+                            });
         }
     }
 
@@ -78,6 +91,8 @@ class KeyboardAccessoryTabLayoutViewBinder
             // Don't add null as listener. It's a valid state but an invalid argument.
             TabLayout.OnTabSelectedListener listener = model.get(TAB_SELECTION_CALLBACKS);
             if (listener != null) view.setTabSelectionAdapter(listener);
+        } else if (propertyKey == BUTTON_SELECTION_CALLBACKS) {
+            // Do nothing.
         } else {
             assert false : "Every possible property update needs to be handled!";
         }

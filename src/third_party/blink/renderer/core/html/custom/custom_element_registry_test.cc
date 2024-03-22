@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@
 #include "third_party/blink/renderer/core/html/custom/custom_element_descriptor.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_test_helpers.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
-#include "third_party/blink/renderer/core/testing/page_test_base.h"
+#include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -31,24 +31,26 @@
 
 namespace blink {
 
-class CustomElementRegistryTest : public PageTestBase {
- protected:
-  void SetUp() override { PageTestBase::SetUp(gfx::Size(1, 1)); }
-
+class CustomElementRegistryTest : public ::testing::Test {
+ public:
   CustomElementRegistry& Registry() {
-    return *GetFrame().DomWindow()->customElements();
-  }
-
-  CustomElementDefinition* Define(const AtomicString& name,
-                                  CustomElementDefinitionBuilder& builder,
-                                  const ElementDefinitionOptions* options,
-                                  ExceptionState& exception_state) {
-    return Registry().DefineInternal(GetScriptState(), name, builder, options,
-                                     exception_state);
+    return CustomElementTestingScope::GetInstance().Registry();
   }
 
   ScriptState* GetScriptState() {
-    return ToScriptStateForMainWorld(&GetFrame());
+    return CustomElementTestingScope::GetInstance().GetScriptState();
+  }
+
+  Document& GetDocument() {
+    return CustomElementTestingScope::GetInstance().GetDocument();
+  }
+
+  CustomElementDefinition* Define(const char* name,
+                                  CustomElementDefinitionBuilder& builder,
+                                  const ElementDefinitionOptions* options,
+                                  ExceptionState& exception_state) {
+    return Registry().DefineInternal(GetScriptState(), AtomicString(name),
+                                     builder, options, exception_state);
   }
 
   void CollectCandidates(const CustomElementDescriptor& desc,
@@ -59,13 +61,17 @@ class CustomElementRegistryTest : public PageTestBase {
 
 TEST_F(CustomElementRegistryTest,
        collectCandidates_shouldNotIncludeElementsRemovedFromDocument) {
-  Element& element = *CreateElement("a-a").InDocument(&GetDocument());
+  CustomElementTestingScope testing_scope;
+  Element& element =
+      *CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
   Registry().AddCandidate(element);
 
   HeapVector<Member<Element>> elements;
-  CollectCandidates(CustomElementDescriptor("a-a", "a-a"), &elements);
+  CollectCandidates(
+      CustomElementDescriptor(AtomicString("a-a"), AtomicString("a-a")),
+      &elements);
 
-  EXPECT_TRUE(elements.IsEmpty())
+  EXPECT_TRUE(elements.empty())
       << "no candidates should have been found, but we have "
       << elements.size();
   EXPECT_FALSE(elements.Contains(element))
@@ -74,18 +80,24 @@ TEST_F(CustomElementRegistryTest,
 
 TEST_F(CustomElementRegistryTest,
        collectCandidates_shouldNotIncludeElementsInDifferentDocument) {
-  Element* element = CreateElement("a-a").InDocument(&GetDocument());
+  CustomElementTestingScope testing_scope;
+  Element* element =
+      CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
   Registry().AddCandidate(*element);
 
-  auto* other_document = HTMLDocument::CreateForTest();
+  ScopedNullExecutionContext execution_context;
+  auto* other_document =
+      HTMLDocument::CreateForTest(execution_context.GetExecutionContext());
   other_document->AppendChild(element);
   EXPECT_EQ(other_document, element->ownerDocument())
       << "sanity: another document should have adopted an element on append";
 
   HeapVector<Member<Element>> elements;
-  CollectCandidates(CustomElementDescriptor("a-a", "a-a"), &elements);
+  CollectCandidates(
+      CustomElementDescriptor(AtomicString("a-a"), AtomicString("a-a")),
+      &elements);
 
-  EXPECT_TRUE(elements.IsEmpty())
+  EXPECT_TRUE(elements.empty())
       << "no candidates should have been found, but we have "
       << elements.size();
   EXPECT_FALSE(elements.Contains(element))
@@ -94,18 +106,22 @@ TEST_F(CustomElementRegistryTest,
 
 TEST_F(CustomElementRegistryTest,
        collectCandidates_shouldOnlyIncludeCandidatesMatchingDescriptor) {
-  CustomElementDescriptor descriptor("hello-world", "hello-world");
+  CustomElementTestingScope testing_scope;
+  CustomElementDescriptor descriptor(AtomicString("hello-world"),
+                                     AtomicString("hello-world"));
 
   // Does not match: namespace is not HTML
-  Element& element_a = *CreateElement("hello-world")
-                            .InDocument(&GetDocument())
-                            .InNamespace("data:text/date,1981-03-10");
+  Element& element_a =
+      *CreateElement(AtomicString("hello-world"))
+           .InDocument(&GetDocument())
+           .InNamespace(AtomicString("data:text/date,1981-03-10"));
   // Matches
-  Element& element_b = *CreateElement("hello-world").InDocument(&GetDocument());
+  Element& element_b =
+      *CreateElement(AtomicString("hello-world")).InDocument(&GetDocument());
   // Does not match: local name is not hello-world
-  Element& element_c = *CreateElement("button")
+  Element& element_c = *CreateElement(AtomicString("button"))
                             .InDocument(&GetDocument())
-                            .WithIsValue("hello-world");
+                            .WithIsValue(AtomicString("hello-world"));
   GetDocument().documentElement()->AppendChild(&element_a);
   element_a.AppendChild(&element_b);
   element_a.AppendChild(&element_c);
@@ -124,12 +140,16 @@ TEST_F(CustomElementRegistryTest,
 }
 
 TEST_F(CustomElementRegistryTest, collectCandidates_oneCandidate) {
-  Element& element = *CreateElement("a-a").InDocument(&GetDocument());
+  CustomElementTestingScope testing_scope;
+  Element& element =
+      *CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
   Registry().AddCandidate(element);
   GetDocument().documentElement()->AppendChild(&element);
 
   HeapVector<Member<Element>> elements;
-  CollectCandidates(CustomElementDescriptor("a-a", "a-a"), &elements);
+  CollectCandidates(
+      CustomElementDescriptor(AtomicString("a-a"), AtomicString("a-a")),
+      &elements);
 
   EXPECT_EQ(1u, elements.size())
       << "exactly one candidate should have been found";
@@ -138,11 +158,12 @@ TEST_F(CustomElementRegistryTest, collectCandidates_oneCandidate) {
 }
 
 TEST_F(CustomElementRegistryTest, collectCandidates_shouldBeInDocumentOrder) {
-  CreateElement factory = CreateElement("a-a");
+  CustomElementTestingScope testing_scope;
+  CreateElement factory = CreateElement(AtomicString("a-a"));
   factory.InDocument(&GetDocument());
-  Element* element_a = factory.WithId("a");
-  Element* element_b = factory.WithId("b");
-  Element* element_c = factory.WithId("c");
+  Element* element_a = factory.WithId(AtomicString("a"));
+  Element* element_b = factory.WithId(AtomicString("b"));
+  Element* element_c = factory.WithId(AtomicString("c"));
 
   Registry().AddCandidate(*element_b);
   Registry().AddCandidate(*element_a);
@@ -153,7 +174,9 @@ TEST_F(CustomElementRegistryTest, collectCandidates_shouldBeInDocumentOrder) {
   GetDocument().documentElement()->AppendChild(element_c);
 
   HeapVector<Member<Element>> elements;
-  CollectCandidates(CustomElementDescriptor("a-a", "a-a"), &elements);
+  CollectCandidates(
+      CustomElementDescriptor(AtomicString("a-a"), AtomicString("a-a")),
+      &elements);
 
   EXPECT_EQ(element_a, elements[0].Get());
   EXPECT_EQ(element_b, elements[1].Get());
@@ -164,11 +187,15 @@ TEST_F(CustomElementRegistryTest, collectCandidates_shouldBeInDocumentOrder) {
 // traceImpl template.
 class LogUpgradeDefinition : public TestCustomElementDefinition {
  public:
-  LogUpgradeDefinition(const CustomElementDescriptor& descriptor)
+  LogUpgradeDefinition(const CustomElementDescriptor& descriptor,
+                       V8CustomElementConstructor* constructor)
       : TestCustomElementDefinition(
             descriptor,
+            constructor,
             {
-                "attr1", "attr2", html_names::kContenteditableAttr.LocalName(),
+                AtomicString("attr1"),
+                AtomicString("attr2"),
+                html_names::kContenteditableAttr.LocalName(),
             },
             {}) {}
   LogUpgradeDefinition(const LogUpgradeDefinition&) = delete;
@@ -264,18 +291,22 @@ class LogUpgradeBuilder final : public TestCustomElementDefinitionBuilder {
   LogUpgradeBuilder(const LogUpgradeBuilder&) = delete;
   LogUpgradeBuilder& operator=(const LogUpgradeBuilder&) = delete;
 
-  CustomElementDefinition* Build(const CustomElementDescriptor& descriptor,
-                                 CustomElementDefinition::Id) override {
-    return MakeGarbageCollected<LogUpgradeDefinition>(descriptor);
+  CustomElementDefinition* Build(
+      const CustomElementDescriptor& descriptor) override {
+    return MakeGarbageCollected<LogUpgradeDefinition>(descriptor,
+                                                      Constructor());
   }
 };
 
 TEST_F(CustomElementRegistryTest, define_upgradesInDocumentElements) {
+  CustomElementTestingScope testing_scope;
   ScriptForbiddenScope do_not_rely_on_script;
 
-  Element* element = CreateElement("a-a").InDocument(&GetDocument());
-  element->setAttribute(
-      QualifiedName(g_null_atom, "attr1", html_names::xhtmlNamespaceURI), "v1");
+  Element* element =
+      CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
+  element->setAttribute(QualifiedName(g_null_atom, AtomicString("attr1"),
+                                      html_names::xhtmlNamespaceURI),
+                        AtomicString("v1"));
   element->SetBooleanAttribute(html_names::kContenteditableAttr, true);
   GetDocument().documentElement()->AppendChild(element);
 
@@ -286,8 +317,8 @@ TEST_F(CustomElementRegistryTest, define_upgradesInDocumentElements) {
     Define("a-a", builder, ElementDefinitionOptions::Create(),
            should_not_throw);
   }
-  LogUpgradeDefinition* definition =
-      static_cast<LogUpgradeDefinition*>(Registry().DefinitionForName("a-a"));
+  LogUpgradeDefinition* definition = static_cast<LogUpgradeDefinition*>(
+      Registry().DefinitionForName(AtomicString("a-a")));
   EXPECT_EQ(LogUpgradeDefinition::kConstructor, definition->logs_[0])
       << "defining the element should have 'upgraded' the existing element";
   EXPECT_EQ(element, definition->element_)
@@ -296,14 +327,15 @@ TEST_F(CustomElementRegistryTest, define_upgradesInDocumentElements) {
   EXPECT_EQ(LogUpgradeDefinition::kAttributeChangedCallback,
             definition->logs_[1])
       << "Upgrade should invoke attributeChangedCallback for all attributes";
-  EXPECT_EQ("attr1", definition->attribute_changed_[0].name);
+  EXPECT_EQ("attr1", definition->attribute_changed_[0].name.LocalName());
   EXPECT_EQ(g_null_atom, definition->attribute_changed_[0].old_value);
   EXPECT_EQ("v1", definition->attribute_changed_[0].new_value);
 
   EXPECT_EQ(LogUpgradeDefinition::kAttributeChangedCallback,
             definition->logs_[2])
       << "Upgrade should invoke attributeChangedCallback for all attributes";
-  EXPECT_EQ("contenteditable", definition->attribute_changed_[1].name);
+  EXPECT_EQ("contenteditable",
+            definition->attribute_changed_[1].name.LocalName());
   EXPECT_EQ(g_null_atom, definition->attribute_changed_[1].old_value);
   EXPECT_EQ(g_empty_atom, definition->attribute_changed_[1].new_value);
   EXPECT_EQ(2u, definition->attribute_changed_.size())
@@ -317,9 +349,11 @@ TEST_F(CustomElementRegistryTest, define_upgradesInDocumentElements) {
 }
 
 TEST_F(CustomElementRegistryTest, attributeChangedCallback) {
+  CustomElementTestingScope testing_scope;
   ScriptForbiddenScope do_not_rely_on_script;
 
-  Element* element = CreateElement("a-a").InDocument(&GetDocument());
+  Element* element =
+      CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
   GetDocument().documentElement()->AppendChild(element);
 
   LogUpgradeBuilder builder;
@@ -329,22 +363,22 @@ TEST_F(CustomElementRegistryTest, attributeChangedCallback) {
     Define("a-a", builder, ElementDefinitionOptions::Create(),
            should_not_throw);
   }
-  LogUpgradeDefinition* definition =
-      static_cast<LogUpgradeDefinition*>(Registry().DefinitionForName("a-a"));
+  LogUpgradeDefinition* definition = static_cast<LogUpgradeDefinition*>(
+      Registry().DefinitionForName(AtomicString("a-a")));
 
   definition->Clear();
   {
     CEReactionsScope reactions;
-    element->setAttribute(
-        QualifiedName(g_null_atom, "attr2", html_names::xhtmlNamespaceURI),
-        "v2");
+    element->setAttribute(QualifiedName(g_null_atom, AtomicString("attr2"),
+                                        html_names::xhtmlNamespaceURI),
+                          AtomicString("v2"));
   }
   EXPECT_EQ(LogUpgradeDefinition::kAttributeChangedCallback,
             definition->logs_[0])
       << "Adding an attribute should invoke attributeChangedCallback";
   EXPECT_EQ(1u, definition->attribute_changed_.size())
       << "Adding an attribute should invoke attributeChangedCallback";
-  EXPECT_EQ("attr2", definition->attribute_changed_[0].name);
+  EXPECT_EQ("attr2", definition->attribute_changed_[0].name.LocalName());
   EXPECT_EQ(g_null_atom, definition->attribute_changed_[0].old_value);
   EXPECT_EQ("v2", definition->attribute_changed_[0].new_value);
 
@@ -353,9 +387,11 @@ TEST_F(CustomElementRegistryTest, attributeChangedCallback) {
 }
 
 TEST_F(CustomElementRegistryTest, disconnectedCallback) {
+  CustomElementTestingScope testing_scope;
   ScriptForbiddenScope do_not_rely_on_script;
 
-  Element* element = CreateElement("a-a").InDocument(&GetDocument());
+  Element* element =
+      CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
   GetDocument().documentElement()->AppendChild(element);
 
   LogUpgradeBuilder builder;
@@ -365,8 +401,8 @@ TEST_F(CustomElementRegistryTest, disconnectedCallback) {
     Define("a-a", builder, ElementDefinitionOptions::Create(),
            should_not_throw);
   }
-  LogUpgradeDefinition* definition =
-      static_cast<LogUpgradeDefinition*>(Registry().DefinitionForName("a-a"));
+  LogUpgradeDefinition* definition = static_cast<LogUpgradeDefinition*>(
+      Registry().DefinitionForName(AtomicString("a-a")));
 
   definition->Clear();
   {
@@ -381,9 +417,11 @@ TEST_F(CustomElementRegistryTest, disconnectedCallback) {
 }
 
 TEST_F(CustomElementRegistryTest, adoptedCallback) {
+  CustomElementTestingScope testing_scope;
   ScriptForbiddenScope do_not_rely_on_script;
 
-  Element* element = CreateElement("a-a").InDocument(&GetDocument());
+  Element* element =
+      CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
   GetDocument().documentElement()->AppendChild(element);
 
   LogUpgradeBuilder builder;
@@ -393,11 +431,12 @@ TEST_F(CustomElementRegistryTest, adoptedCallback) {
     Define("a-a", builder, ElementDefinitionOptions::Create(),
            should_not_throw);
   }
-  LogUpgradeDefinition* definition =
-      static_cast<LogUpgradeDefinition*>(Registry().DefinitionForName("a-a"));
+  LogUpgradeDefinition* definition = static_cast<LogUpgradeDefinition*>(
+      Registry().DefinitionForName(AtomicString("a-a")));
 
   definition->Clear();
-  auto* other_document = HTMLDocument::CreateForTest();
+  auto* other_document =
+      HTMLDocument::CreateForTest(*GetDocument().GetExecutionContext());
   {
     CEReactionsScope reactions;
     other_document->adoptNode(element, ASSERT_NO_EXCEPTION);
@@ -408,7 +447,7 @@ TEST_F(CustomElementRegistryTest, adoptedCallback) {
   EXPECT_EQ(LogUpgradeDefinition::kAdoptedCallback, definition->logs_[1])
       << "adoptNode() should invoke adoptedCallback";
 
-  EXPECT_EQ(&GetDocument(), definition->adopted_[0]->old_owner_.Get())
+  EXPECT_EQ(GetDocument(), definition->adopted_[0]->old_owner_.Get())
       << "adoptedCallback should have been passed the old owner document";
   EXPECT_EQ(other_document, definition->adopted_[0]->new_owner_.Get())
       << "adoptedCallback should have been passed the new owner document";
@@ -418,36 +457,44 @@ TEST_F(CustomElementRegistryTest, adoptedCallback) {
 }
 
 TEST_F(CustomElementRegistryTest, lookupCustomElementDefinition) {
+  CustomElementTestingScope testing_scope;
   NonThrowableExceptionState should_not_throw;
-  TestCustomElementDefinitionBuilder builder;
+  TestCustomElementDefinitionBuilder builder_a;
   CustomElementDefinition* definition_a = Define(
-      "a-a", builder, ElementDefinitionOptions::Create(), should_not_throw);
+      "a-a", builder_a, ElementDefinitionOptions::Create(), should_not_throw);
+  TestCustomElementDefinitionBuilder builder_b;
   ElementDefinitionOptions* options = ElementDefinitionOptions::Create();
   options->setExtends("div");
   CustomElementDefinition* definition_b =
-      Define("b-b", builder, options, should_not_throw);
+      Define("b-b", builder_b, options, should_not_throw);
   // look up defined autonomous custom element
-  CustomElementDefinition* definition = Registry().DefinitionFor(
-      CustomElementDescriptor(CustomElementDescriptor("a-a", "a-a")));
+  CustomElementDefinition* definition =
+      Registry().DefinitionFor(CustomElementDescriptor(
+          CustomElementDescriptor(AtomicString("a-a"), AtomicString("a-a"))));
   EXPECT_NE(nullptr, definition) << "a-a, a-a should be registered";
   EXPECT_EQ(definition_a, definition);
   // look up undefined autonomous custom element
-  definition = Registry().DefinitionFor(CustomElementDescriptor("a-a", "div"));
+  definition = Registry().DefinitionFor(
+      CustomElementDescriptor(AtomicString("a-a"), AtomicString("div")));
   EXPECT_EQ(nullptr, definition) << "a-a, div should not be registered";
   // look up defined customized built-in element
-  definition = Registry().DefinitionFor(CustomElementDescriptor("b-b", "div"));
+  definition = Registry().DefinitionFor(
+      CustomElementDescriptor(AtomicString("b-b"), AtomicString("div")));
   EXPECT_NE(nullptr, definition) << "b-b, div should be registered";
   EXPECT_EQ(definition_b, definition);
   // look up undefined customized built-in element
-  definition = Registry().DefinitionFor(CustomElementDescriptor("a-a", "div"));
+  definition = Registry().DefinitionFor(
+      CustomElementDescriptor(AtomicString("a-a"), AtomicString("div")));
   EXPECT_EQ(nullptr, definition) << "a-a, div should not be registered";
 }
 
 // The embedder may define its own elements via the CustomElementRegistry
-// whose names are not valid custom element names. Ensure that such a
-// definition may be done.
+// whose names are not valid custom element names. Ensure that such a definition
+// may be done.
 TEST_F(CustomElementRegistryTest, DefineEmbedderCustomElements) {
-  CustomElement::AddEmbedderCustomElementName("embeddercustomelement");
+  CustomElementTestingScope testing_scope;
+  CustomElement::AddEmbedderCustomElementName(
+      AtomicString("embeddercustomelement"));
 
   WebCustomElement::EmbedderNamesAllowedScope embedder_names_scope;
 
@@ -456,9 +503,9 @@ TEST_F(CustomElementRegistryTest, DefineEmbedderCustomElements) {
   CustomElementDefinition* definition_embedder =
       Define("embeddercustomelement", builder,
              ElementDefinitionOptions::Create(), should_not_throw);
-  CustomElementDefinition* definition =
-      Registry().DefinitionFor(CustomElementDescriptor(
-          "embeddercustomelement", "embeddercustomelement"));
+  CustomElementDefinition* definition = Registry().DefinitionFor(
+      CustomElementDescriptor(AtomicString("embeddercustomelement"),
+                              AtomicString("embeddercustomelement")));
   EXPECT_NE(nullptr, definition)
       << "embeddercustomelement, embeddercustomelement should be registered";
   EXPECT_EQ(definition_embedder, definition);
@@ -469,7 +516,9 @@ TEST_F(CustomElementRegistryTest, DefineEmbedderCustomElements) {
 // the use of the invalid name (so that we don't expose the ability to use such
 // a name to the web).
 TEST_F(CustomElementRegistryTest, DisallowedEmbedderCustomElements) {
-  CustomElement::AddEmbedderCustomElementName("embeddercustomelement");
+  CustomElementTestingScope testing_scope;
+  CustomElement::AddEmbedderCustomElementName(
+      AtomicString("embeddercustomelement"));
 
   // Without a WebCustomElement::EmbedderNamesAllowedScope, this registration
   // is disallowed.
@@ -478,9 +527,9 @@ TEST_F(CustomElementRegistryTest, DisallowedEmbedderCustomElements) {
   CustomElementDefinition* definition_embedder =
       Define("embeddercustomelement", builder,
              ElementDefinitionOptions::Create(), IGNORE_EXCEPTION_FOR_TESTING);
-  CustomElementDefinition* definition =
-      Registry().DefinitionFor(CustomElementDescriptor(
-          "embeddercustomelement", "embeddercustomelement"));
+  CustomElementDefinition* definition = Registry().DefinitionFor(
+      CustomElementDescriptor(AtomicString("embeddercustomelement"),
+                              AtomicString("embeddercustomelement")));
   EXPECT_EQ(nullptr, definition) << "embeddercustomelement, "
                                     "embeddercustomelement should not be "
                                     "registered";

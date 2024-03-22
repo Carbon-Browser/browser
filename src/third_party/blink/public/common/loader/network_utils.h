@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,12 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "net/http/http_response_headers.h"
+#include "services/network/public/mojom/fetch_api.mojom-forward.h"
 #include "third_party/blink/public/common/common_export.h"
+
+namespace net {
+class HttpRequestHeaders;
+}  // namespace net
 
 namespace blink {
 namespace network_utils {
@@ -19,6 +24,11 @@ BLINK_COMMON_EXPORT bool AlwaysAccessNetwork(
 
 // Returns the accept header for image resources.
 BLINK_COMMON_EXPORT const char* ImageAcceptHeader();
+
+// Sets or update Accept header based on `request_destination`.
+BLINK_COMMON_EXPORT void SetAcceptHeader(
+    net::HttpRequestHeaders& headers,
+    network::mojom::RequestDestination request_destination);
 
 }  // namespace network_utils
 }  // namespace blink

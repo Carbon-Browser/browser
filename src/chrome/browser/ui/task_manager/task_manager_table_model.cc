@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/i18n/rtl.h"
 #include "base/i18n/time_formatting.h"
 #include "base/process/process_handle.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -310,7 +311,6 @@ TaskManagerTableModel::TaskManagerTableModel(TableViewDelegate* delegate)
     : TaskManagerObserver(base::Milliseconds(kRefreshTimeMS),
                           REFRESH_TYPE_NONE),
       table_view_delegate_(delegate),
-      columns_settings_(new base::DictionaryValue),
       table_model_observer_(nullptr),
       stringifier_(new TaskManagerValuesStringifier),
 #if BUILDFLAG(ENABLE_NACL)
@@ -630,7 +630,11 @@ int TaskManagerTableModel::CompareValues(size_t row1,
       return ValueCompare(proc1_fd_count, proc2_fd_count);
     }
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
-
+    case IDS_TASK_MANAGER_KEEPALIVE_COUNT_COLUMN: {
+      return ValueCompare(
+          observed_task_manager()->GetKeepaliveCount(tasks_[row1]),
+          observed_task_manager()->GetKeepaliveCount(tasks_[row2]));
+    }
     default:
       NOTREACHED();
       return 0;
@@ -671,13 +675,13 @@ void TaskManagerTableModel::OnTaskAdded(TaskId id) {
 
   if (table_model_observer_) {
     std::vector<TaskId>::difference_type index =
-        std::find(tasks_.begin(), tasks_.end(), id) - tasks_.begin();
+        base::ranges::find(tasks_, id) - tasks_.begin();
     table_model_observer_->OnItemsAdded(index, 1);
   }
 }
 
 void TaskManagerTableModel::OnTaskToBeRemoved(TaskId id) {
-  auto index = std::find(tasks_.begin(), tasks_.end(), id);
+  auto index = base::ranges::find(tasks_, id);
   if (index == tasks_.end())
     return;
   auto removed_index = static_cast<size_t>(index - tasks_.begin());
@@ -820,18 +824,15 @@ void TaskManagerTableModel::RetrieveSavedColumnsSettingsAndUpdateTable() {
   if (!g_browser_process->local_state())
     return;
 
-  const base::Value* dictionary =
-      g_browser_process->local_state()->GetDictionary(
+  const base::Value::Dict& dictionary =
+      g_browser_process->local_state()->GetDict(
           prefs::kTaskManagerColumnVisibility);
-  if (!dictionary)
-    return;
 
   // Do a best effort of retrieving the correct settings from the local state.
   // Use the default settings of the value if it fails to be retrieved.
-  const std::string* sorted_col_id =
-      dictionary->GetDict().FindString(kSortColumnIdKey);
+  const std::string* sorted_col_id = dictionary.FindString(kSortColumnIdKey);
   bool sort_is_ascending =
-      dictionary->GetDict().FindBool(kSortIsAscendingKey).value_or(true);
+      dictionary.FindBool(kSortIsAscendingKey).value_or(true);
 
   for (size_t i = 0; i < kColumnsSize; ++i) {
     const int col_id = kColumns[i].id;
@@ -840,12 +841,12 @@ void TaskManagerTableModel::RetrieveSavedColumnsSettingsAndUpdateTable() {
     if (col_id_key.empty())
       continue;
 
-    bool col_visibility = dictionary->FindBoolPath(col_id_key)
+    bool col_visibility = dictionary.FindBoolByDottedPath(col_id_key)
                               .value_or(kColumns[i].default_visibility);
 
-    // If the above FindBoolPath() fails, the |col_visibility| remains at the
-    // default visibility.
-    columns_settings_->SetBoolPath(col_id_key, col_visibility);
+    // If the above FindBoolByDottedPath() fails, the |col_visibility| remains
+    // at the default visibility.
+    columns_settings_.SetByDottedPath(col_id_key, col_visibility);
     table_view_delegate_->SetColumnVisibility(col_id, col_visibility);
     UpdateRefreshTypes(col_id, col_visibility);
 
@@ -863,41 +864,38 @@ void TaskManagerTableModel::StoreColumnsSettings() {
   if (!local_state)
     return;
 
-  DictionaryPrefUpdate dict_update(local_state,
+  ScopedDictPrefUpdate dict_update(local_state,
                                    prefs::kTaskManagerColumnVisibility);
 
-  base::DictionaryValue::Iterator it(*columns_settings_);
-  while (!it.IsAtEnd()) {
-    dict_update->SetPath(it.key(), it.value().Clone());
-    it.Advance();
+  for (const auto item : columns_settings_) {
+    dict_update->SetByDottedPath(item.first, item.second.Clone());
   }
 
   // Store the current sort status to be restored again at startup.
   if (!table_view_delegate_->IsTableSorted()) {
-    dict_update->GetDict().Set(kSortColumnIdKey, "");
+    dict_update->Set(kSortColumnIdKey, "");
   } else {
     const auto& sort_descriptor = table_view_delegate_->GetSortDescriptor();
-    dict_update->GetDict().Set(
-        kSortColumnIdKey,
-        GetColumnIdAsString(sort_descriptor.sorted_column_id));
-    dict_update->GetDict().Set(kSortIsAscendingKey,
-                               sort_descriptor.is_ascending);
+    dict_update->Set(kSortColumnIdKey,
+                     GetColumnIdAsString(sort_descriptor.sorted_column_id));
+    dict_update->Set(kSortIsAscendingKey, sort_descriptor.is_ascending);
   }
 }
 
 void TaskManagerTableModel::ToggleColumnVisibility(int column_id) {
   bool new_visibility = !table_view_delegate_->IsColumnVisible(column_id);
-  table_view_delegate_->SetColumnVisibility(column_id, new_visibility);
-  columns_settings_->SetBoolPath(GetColumnIdAsString(column_id),
-                                 new_visibility);
-  UpdateRefreshTypes(column_id, new_visibility);
+  if (table_view_delegate_->SetColumnVisibility(column_id, new_visibility)) {
+    columns_settings_.SetByDottedPath(GetColumnIdAsString(column_id),
+                                      new_visibility);
+    UpdateRefreshTypes(column_id, new_visibility);
+  }
 }
 
 absl::optional<size_t> TaskManagerTableModel::GetRowForWebContents(
     content::WebContents* web_contents) {
   TaskId task_id =
       observed_task_manager()->GetTaskIdForWebContents(web_contents);
-  auto index = std::find(tasks_.begin(), tasks_.end(), task_id);
+  auto index = base::ranges::find(tasks_, task_id);
   if (index == tasks_.end())
     return absl::nullopt;
   return static_cast<size_t>(index - tasks_.begin());

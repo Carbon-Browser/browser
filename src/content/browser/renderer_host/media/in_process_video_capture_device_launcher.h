@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,13 +38,16 @@ class InProcessVideoCaptureDeviceLauncher : public VideoCaptureDeviceLauncher {
       media::VideoCaptureSystem* video_capture_system);
   ~InProcessVideoCaptureDeviceLauncher() override;
 
-  void LaunchDeviceAsync(const std::string& device_id,
-                         blink::mojom::MediaStreamType stream_type,
-                         const media::VideoCaptureParams& params,
-                         base::WeakPtr<media::VideoFrameReceiver> receiver,
-                         base::OnceClosure connection_lost_cb,
-                         Callbacks* callbacks,
-                         base::OnceClosure done_cb) override;
+  void LaunchDeviceAsync(
+      const std::string& device_id,
+      blink::mojom::MediaStreamType stream_type,
+      const media::VideoCaptureParams& params,
+      base::WeakPtr<media::VideoFrameReceiver> receiver,
+      base::OnceClosure connection_lost_cb,
+      Callbacks* callbacks,
+      base::OnceClosure done_cb,
+      mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+          video_effects_manager) override;
 
   void AbortLaunch() override;
 
@@ -111,7 +114,8 @@ class InProcessVideoCaptureDeviceLauncher : public VideoCaptureDeviceLauncher {
       std::vector<media::VideoCaptureDeviceInfo> devices_info);
 
   const scoped_refptr<base::SingleThreadTaskRunner> device_task_runner_;
-  const raw_ptr<media::VideoCaptureSystem> video_capture_system_;
+  const raw_ptr<media::VideoCaptureSystem, DanglingUntriaged>
+      video_capture_system_;
   State state_;
   std::unique_ptr<media::FakeVideoCaptureDeviceFactory> fake_device_factory_;
 };

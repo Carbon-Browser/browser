@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,8 @@
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/label_button.h"
+#include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 
 AuthenticatorPaaskSheetView::AuthenticatorPaaskSheetView(
     std::unique_ptr<AuthenticatorPaaskSheetModel> sheet_model)
@@ -26,15 +28,8 @@ class LinkLabelButton : public views::LabelButton {
       : LabelButton(std::move(callback), text, views::style::CONTEXT_BUTTON) {
     SetBorder(views::CreateEmptyBorder(0));
     label()->SetTextStyle(views::style::STYLE_LINK);
-  }
-
-  // views::LabelButton:
-  void OnThemeChanged() override {
-    LabelButton::OnThemeChanged();
-    // LabelButton sets its own colours on the label and thus the colour from
-    // STYLE_LINK must be set explicitly at the LabelButton level too.
-    SetEnabledTextColors(views::style::GetColor(
-        *label(), label()->GetTextContext(), views::style::STYLE_LINK));
+    SetEnabledTextColorIds(views::TypographyProvider::Get().GetColorId(
+        label()->GetTextContext(), views::style::STYLE_LINK));
   }
 };
 
@@ -48,27 +43,11 @@ AuthenticatorPaaskSheetView::BuildStepSpecificContent() {
     return std::make_pair(nullptr, AutoFocus::kNo);
   }
 
-  std::u16string link_text;
-  switch (dialog_model->experiment_server_link_sheet_) {
-    case AuthenticatorRequestDialogModel::ExperimentServerLinkSheet::CONTROL:
-    case AuthenticatorRequestDialogModel::ExperimentServerLinkSheet::ARM_2:
-    case AuthenticatorRequestDialogModel::ExperimentServerLinkSheet::ARM_3:
-    case AuthenticatorRequestDialogModel::ExperimentServerLinkSheet::ARM_5:
-    case AuthenticatorRequestDialogModel::ExperimentServerLinkSheet::ARM_6:
-      link_text =
-          l10n_util::GetStringUTF16(IDS_WEBAUTHN_CABLEV2_SERVERLINK_TROUBLE);
-      break;
-    case AuthenticatorRequestDialogModel::ExperimentServerLinkSheet::ARM_4:
-      link_text = l10n_util::GetStringUTF16(
-          IDS_WEBAUTHN_CABLEV2_SERVERLINK_TROUBLE_ALT);
-      break;
-  }
-
   return std::make_pair(
       std::make_unique<LinkLabelButton>(
           base::BindRepeating(&AuthenticatorPaaskSheetView::OnLinkClicked,
                               base::Unretained(this)),
-          link_text),
+          l10n_util::GetStringUTF16(IDS_WEBAUTHN_CABLEV2_SERVERLINK_TROUBLE)),
       AutoFocus::kNo);
 }
 

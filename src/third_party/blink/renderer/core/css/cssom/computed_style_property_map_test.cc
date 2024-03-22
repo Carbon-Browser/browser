@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,9 @@ class ComputedStylePropertyMapTest : public PageTestBase {
   ComputedStylePropertyMapTest() = default;
 
  protected:
-  ComputedStylePropertyMap* SetBodyStyle(const AtomicString& style) {
-    GetDocument().body()->setAttribute(html_names::kStyleAttr, style);
+  ComputedStylePropertyMap* SetBodyStyle(const char* style) {
+    GetDocument().body()->setAttribute(html_names::kStyleAttr,
+                                       AtomicString(style));
     UpdateAllLifecyclePhasesForTest();
     return MakeGarbageCollected<ComputedStylePropertyMap>(GetDocument().body());
   }

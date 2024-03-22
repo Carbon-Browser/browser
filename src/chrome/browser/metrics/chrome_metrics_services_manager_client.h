@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,9 @@ class MetricsStateManager;
 // Used only for testing.
 namespace internal {
 // TODO(crbug.com/1068796): Replace kMetricsReportingFeature with a better name.
-extern const base::Feature kMetricsReportingFeature;
+BASE_DECLARE_FEATURE(kMetricsReportingFeature);
 #if BUILDFLAG(IS_ANDROID)
-extern const base::Feature kPostFREFixMetricsReportingFeature;
+BASE_DECLARE_FEATURE(kPostFREFixMetricsReportingFeature);
 #endif  // BUILDFLAG(IS_ANDROID)
 extern const char kRateParamName[];
 }  // namespace internal
@@ -57,6 +57,11 @@ class ChromeMetricsServicesManagerClient
   // Determines if this client is eligible to send metrics. If they are, and
   // there was user consent, then metrics and crashes would be reported.
   static bool IsClientInSample();
+
+#if BUILDFLAG(IS_WIN)
+  // Same as above, but specifically just for crash reporting.
+  static bool IsClientInSampleForCrash();
+#endif  // BUILDFLAG(IS_WIN)
 
   // Gets the sample rate for in-sample clients. If the sample rate is not
   // defined, returns false, and |rate| is unchanged, otherwise returns true,
@@ -93,12 +98,14 @@ class ChromeMetricsServicesManagerClient
   void UpdateRunningServices(bool may_record, bool may_upload) override;
 #endif  // BUILDFLAG(IS_WIN)
 
-  // MetricsStateManager which is passed as a parameter to service constructors.
-  std::unique_ptr<metrics::MetricsStateManager> metrics_state_manager_;
-
   // EnabledStateProvider to communicate if the client has consented to metrics
   // reporting, and if it's enabled.
+  // Dangling Pointer Prevention: enabled_state_provider_ must be listed before
+  // metrics_state_manager_ to avoid a dangling pointer.
   std::unique_ptr<metrics::EnabledStateProvider> enabled_state_provider_;
+
+  // MetricsStateManager which is passed as a parameter to service constructors.
+  std::unique_ptr<metrics::MetricsStateManager> metrics_state_manager_;
 
   // Ensures that all functions are called from the same thread.
   THREAD_CHECKER(thread_checker_);

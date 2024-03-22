@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@ std::unique_ptr<NearbyShareCertificateManager>
 FakeNearbyShareCertificateManager::Factory::CreateInstance(
     NearbyShareLocalDeviceDataManager* local_device_data_manager,
     NearbyShareContactManager* contact_manager,
+    NearbyShareProfileInfoProvider* profile_info_provider,
     PrefService* pref_service,
     leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
     const base::FilePath& profile_path,

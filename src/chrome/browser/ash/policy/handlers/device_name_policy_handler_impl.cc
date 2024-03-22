@@ -1,19 +1,23 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/handlers/device_name_policy_handler_impl.h"
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
-#include "ash/components/tpm/install_attributes.h"
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/strings/string_piece.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/handlers/device_name_policy_handler_name_generator.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
 #include "chromeos/ash/components/network/device_state.h"
+#include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 
 namespace policy {
 
@@ -38,13 +42,13 @@ DeviceNamePolicyHandlerImpl::DeviceNamePolicyHandlerImpl(
     ash::CrosSettings* cros_settings)
     : DeviceNamePolicyHandlerImpl(
           cros_settings,
-          chromeos::system::StatisticsProvider::GetInstance(),
-          chromeos::NetworkHandler::Get()->network_state_handler()) {}
+          ash::system::StatisticsProvider::GetInstance(),
+          ash::NetworkHandler::Get()->network_state_handler()) {}
 
 DeviceNamePolicyHandlerImpl::DeviceNamePolicyHandlerImpl(
     ash::CrosSettings* cros_settings,
-    chromeos::system::StatisticsProvider* statistics_provider,
-    chromeos::NetworkStateHandler* handler)
+    ash::system::StatisticsProvider* statistics_provider,
+    ash::NetworkStateHandler* handler)
     : cros_settings_(cros_settings),
       statistics_provider_(statistics_provider),
       handler_(handler),
@@ -61,7 +65,7 @@ DeviceNamePolicyHandlerImpl::DeviceNamePolicyHandlerImpl(
           weak_factory_.GetWeakPtr()));
 
   network_state_handler_observer_.Observe(
-      chromeos::NetworkHandler::Get()->network_state_handler());
+      ash::NetworkHandler::Get()->network_state_handler());
 
   // Fire it once so we're sure we get an invocation on startup.
   OnDeviceHostnamePropertyChanged();
@@ -83,7 +87,7 @@ DeviceNamePolicyHandlerImpl::GetHostnameChosenByAdministrator() const {
 }
 
 void DeviceNamePolicyHandlerImpl::DefaultNetworkChanged(
-    const chromeos::NetworkState* network) {
+    const ash::NetworkState* network) {
   OnDeviceHostnamePropertyChanged();
 }
 
@@ -149,8 +153,8 @@ DeviceNamePolicyHandlerImpl::ComputePolicy(std::string* hostname_template_out) {
 
 std::string DeviceNamePolicyHandlerImpl::GenerateHostname(
     const std::string& hostname_template) const {
-  const std::string serial = chromeos::system::StatisticsProvider::GetInstance()
-                                 ->GetEnterpriseMachineID();
+  const base::StringPiece serial =
+      statistics_provider_->GetMachineID().value_or(base::StringPiece());
 
   const std::string asset_id = g_browser_process->platform_part()
                                    ->browser_policy_connector_ash()
@@ -164,9 +168,9 @@ std::string DeviceNamePolicyHandlerImpl::GenerateHostname(
                                    ->browser_policy_connector_ash()
                                    ->GetDeviceAnnotatedLocation();
   std::string mac = "MAC_unknown";
-  const chromeos::NetworkState* network = handler_->DefaultNetwork();
+  const ash::NetworkState* network = handler_->DefaultNetwork();
   if (network) {
-    const chromeos::DeviceState* device =
+    const ash::DeviceState* device =
         handler_->GetDeviceState(network->device_path());
     if (device) {
       mac = device->mac_address();
@@ -180,7 +184,7 @@ std::string DeviceNamePolicyHandlerImpl::GenerateHostname(
 
 void DeviceNamePolicyHandlerImpl::SetDeviceNamePolicy(
     DeviceNamePolicy policy,
-    std::string& new_hostname) {
+    const std::string& new_hostname) {
   if (device_name_policy_ == policy && hostname_ == new_hostname)
     return;
 

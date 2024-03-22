@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NEARBY_SHARING_CERTIFICATES_NEARBY_SHARE_CERTIFICATE_STORAGE_H_
 #define CHROME_BROWSER_NEARBY_SHARING_CERTIFICATES_NEARBY_SHARE_CERTIFICATE_STORAGE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_private_certificate.h"
 #include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Stores local-device private certificates and remote-device public
@@ -25,9 +25,6 @@ class NearbyShareCertificateStorage {
 
   NearbyShareCertificateStorage() = default;
   virtual ~NearbyShareCertificateStorage() = default;
-
-  // Returns the secret ids of all stored public certificates
-  virtual std::vector<std::string> GetPublicCertificateIds() const = 0;
 
   // Returns all public certificates currently in storage. No RPC call is made.
   virtual void GetPublicCertificates(PublicCertificateCallback callback) = 0;
@@ -49,13 +46,6 @@ class NearbyShareCertificateStorage {
   virtual void ReplacePrivateCertificates(
       const std::vector<NearbySharePrivateCertificate>&
           private_certificates) = 0;
-
-  // Deletes existing public certificates and replaces them with
-  // |public_certificates|.
-  virtual void ReplacePublicCertificates(
-      const std::vector<nearbyshare::proto::PublicCertificate>&
-          public_certificates,
-      ResultCallback callback) = 0;
 
   // Overwrites an existing record with |private_certificate| if that records
   // has the same ID . If no such record exists in storage, no action is taken.
@@ -87,9 +77,6 @@ class NearbyShareCertificateStorage {
   // storage.
   void ClearPrivateCertificatesOfVisibility(
       nearby_share::mojom::Visibility visibility);
-
-  // Delete all public certificates from memory and persistent storage.
-  virtual void ClearPublicCertificates(ResultCallback callback) = 0;
 };
 
 #endif  // CHROME_BROWSER_NEARBY_SHARING_CERTIFICATES_NEARBY_SHARE_CERTIFICATE_STORAGE_H_

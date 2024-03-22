@@ -1,9 +1,10 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/test/chromedriver/server/http_server.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_interfaces.h"
 #include "net/base/sys_addrinfo.h"
@@ -89,8 +90,8 @@ bool HostIsSafeToServe(GURL host_url,
     net::NetworkInterfaceList list;
     if (net::GetNetworkList(&list,
                             net::INCLUDE_HOST_SCOPE_VIRTUAL_INTERFACES)) {
-      for (const auto& networkInterface : list) {
-        if (networkInterface.address == host_address) {
+      for (const auto& network_interface : list) {
+        if (network_interface.address == host_address) {
           return true;
         }
       }
@@ -232,18 +233,23 @@ void HttpServer::OnWebSocketRequest(int connection_id,
 }
 
 void HttpServer::OnWebSocketMessage(int connection_id, std::string data) {
-  // TODO: Make use of WebSocket data
-  VLOG(0) << "HttpServer::OnWebSocketMessage received: " << data;
-  // https://crbug.com/chromedriver/3974
-  // Response "not supported" to avoid WebSocket tests timeout.
-  server_->SendOverWebSocket(connection_id, "not supported",
-                             TRAFFIC_ANNOTATION_FOR_TESTS);
+  cmd_runner_->PostTask(
+      FROM_HERE, base::BindOnce(&HttpHandler::OnWebSocketMessage, handler_,
+                                this, connection_id, data));
 }
 
 void HttpServer::OnClose(int connection_id) {
   cmd_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&HttpHandler::OnClose, handler_, this, connection_id));
+}
+
+void HttpServer::Close(int connection_id) {
+  server_->Close(connection_id);
+}
+
+void HttpServer::SendOverWebSocket(int connection_id, const std::string& data) {
+  server_->SendOverWebSocket(connection_id, data, TRAFFIC_ANNOTATION_FOR_TESTS);
 }
 
 void HttpServer::AcceptWebSocket(int connection_id,

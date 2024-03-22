@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,23 +13,20 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/prefs/pref_service.h"
 
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 
 // static
 bool FullRestoreServiceFactory::IsFullRestoreAvailableForProfile(
     const Profile* profile) {
-  if (chrome::IsRunningInForcedAppMode() ||
-      ash::DemoSession::IsDeviceInDemoMode())
+  if (chrome::IsRunningInForcedAppMode() || DemoSession::IsDeviceInDemoMode())
     return false;
 
   // No service for non-regular user profile, or ephemeral user profile, system
   // profile.
   if (!profile || profile->IsSystemProfile() ||
-      !ProfileHelper::IsRegularProfile(profile) ||
+      !ProfileHelper::IsUserProfile(profile) ||
       ProfileHelper::IsEphemeralUserProfile(profile)) {
     return false;
   }
@@ -50,22 +47,26 @@ FullRestoreService* FullRestoreServiceFactory::GetForProfile(Profile* profile) {
 }
 
 FullRestoreServiceFactory::FullRestoreServiceFactory()
-    : BrowserContextKeyedServiceFactory(
-          "FullRestoreService",
-          BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory("FullRestoreService",
+                                 ProfileSelections::Builder()
+                                     .WithGuest(ProfileSelection::kOriginalOnly)
+                                     .WithSystem(ProfileSelection::kNone)
+                                     .WithAshInternals(ProfileSelection::kNone)
+                                     .Build()) {
   DependsOn(NotificationDisplayServiceFactory::GetInstance());
   DependsOn(apps::AppServiceProxyFactory::GetInstance());
 }
 
 FullRestoreServiceFactory::~FullRestoreServiceFactory() = default;
 
-KeyedService* FullRestoreServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FullRestoreServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  if (!IsFullRestoreAvailableForProfile(Profile::FromBrowserContext(context)))
+  Profile* profile = Profile::FromBrowserContext(context);
+  if (!IsFullRestoreAvailableForProfile(profile))
     return nullptr;
 
-  return new FullRestoreService(Profile::FromBrowserContext(context));
+  return std::make_unique<FullRestoreService>(profile);
 }
 
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2018 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2018 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <org.chromium.chrome.browser.download.dialogs.DownloadLocationCustomView
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -53,7 +55,8 @@
                     android:layout_height="wrap_content"
                     app:srcCompat="@drawable/ic_drive_file_24dp"
                     app:tint="@macro/default_icon_color"
-                    style="@style/ListItemStartIcon" />
+                    style="@style/ListItemStartIcon"
+                    android:importantForAccessibility="no" />
 
                 <org.chromium.components.browser_ui.widget.text.AlertDialogEditText
                     android:id="@+id/file_name"
@@ -89,7 +92,8 @@
                     android:layout_height="wrap_content"
                     android:src="@drawable/ic_folder_blue_24dp"
                     app:tint="@macro/default_icon_color"
-                    style="@style/ListItemStartIcon" />
+                    style="@style/ListItemStartIcon"
+                    android:importantForAccessibility="no" />
 
                 <Spinner
                     android:id="@+id/file_location"

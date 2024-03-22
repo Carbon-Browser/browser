@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class PushSubscriptionOptions final : public ScriptWrappable {
 
   // Mutable by web developer. See https://github.com/w3c/push-api/issues/198.
   DOMArrayBuffer* applicationServerKey() const {
-    return application_server_key_;
+    return application_server_key_.Get();
   }
 
   void Trace(Visitor* visitor) const override;

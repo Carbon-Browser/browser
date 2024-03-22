@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,9 @@ const char kEnableGpuBenchmarking[] = "enable-gpu-benchmarking";
 // Disables LayerTreeHost::OnMemoryPressure
 const char kDisableLayerTreeHostMemoryPressure[] =
     "disable-layer-tree-host-memory-pressure";
+
+// Controls the number of threads to use for raster tasks.
+const char kNumRasterThreads[] = "num-raster-threads";
 
 // Renders a border around compositor layers to help debug and study
 // layer compositing.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,9 @@ TEST(ChromePaths, DefaultUserDataDir) {
   base::PathService::Get(base::DIR_HOME, &home_dir);
 
   std::string expected_branding;
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#if BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+  std::string data_dir_basename = "google-chrome-for-testing";
+#elif BUILDFLAG(GOOGLE_CHROME_BRANDING)
   // TODO(skobes): Test channel suffixes with $CHROME_VERSION_EXTRA.
   expected_branding = "google-chrome";
 #else

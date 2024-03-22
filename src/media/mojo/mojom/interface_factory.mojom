@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,8 +35,9 @@ interface InterfaceFactory {
   // Creates an AudioEncoder bound to a given receiver.
   CreateAudioEncoder(pending_receiver<AudioEncoder> audio_encoder);
 
-  // Creates a regular media::Renderer (DefaultRendererFactory).
+  // Creates a regular media::Renderer (RendererImplFactory).
   // TODO(guohuideng): remove |audio_device_id|, it's not used.
+  // TODO(crbug.com/1374532): Rename this call.
   CreateDefaultRenderer(string audio_device_id,
                         pending_receiver<Renderer> renderer);
 

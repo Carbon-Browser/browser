@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,6 +46,15 @@ inline constexpr PhysicalAxes operator&(PhysicalAxes a, PhysicalAxes b) {
 
 inline constexpr PhysicalAxes operator&=(PhysicalAxes& a, PhysicalAxes b) {
   a.value() &= b.value();
+  return a;
+}
+
+inline constexpr PhysicalAxes operator^(PhysicalAxes a, PhysicalAxes b) {
+  return PhysicalAxes(a.value() ^ b.value());
+}
+
+inline constexpr PhysicalAxes operator^=(PhysicalAxes& a, PhysicalAxes b) {
+  a.value() ^= b.value();
   return a;
 }
 

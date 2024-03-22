@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -98,7 +98,7 @@ class FakeFileSystemInstance : public mojom::FileSystemInstance {
     Seekable seekable;
 
     // Override of |content| length in bytes.
-    absl::optional<int64_t> size_override;
+    std::optional<int64_t> size_override;
 
     // The thumbnail of a file, which can be read by OpenThumbnail().
     std::string thumbnail_content;
@@ -371,7 +371,7 @@ class FakeFileSystemInstance : public mojom::FileSystemInstance {
   void OpenUrlsWithPermissionAndWindowInfo(
       mojom::OpenUrlsRequestPtr request,
       mojom::WindowInfoPtr window_info,
-      DEPRECATED_OpenUrlsWithPermissionCallback callback) override;
+      OpenUrlsWithPermissionAndWindowInfoCallback callback) override;
 
  private:
   // A pair of an authority and a document ID which identifies the location

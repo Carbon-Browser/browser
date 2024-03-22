@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,9 @@ class WaitableEvent;
 
 namespace gpu {
 class GpuInit;
-class SyncPointManager;
+class Scheduler;
 class SharedImageManager;
+class SyncPointManager;
 }  // namespace gpu
 
 namespace ukm {
@@ -93,6 +94,7 @@ class VizMainImpl : public mojom::VizMain {
     mutable std::unique_ptr<base::PowerMonitorSource> power_monitor_source;
     raw_ptr<gpu::SyncPointManager> sync_point_manager = nullptr;
     raw_ptr<gpu::SharedImageManager> shared_image_manager = nullptr;
+    raw_ptr<gpu::Scheduler> scheduler = nullptr;
     raw_ptr<base::WaitableEvent> shutdown_event = nullptr;
     scoped_refptr<base::SingleThreadTaskRunner> io_thread_task_runner;
     std::unique_ptr<ukm::MojoUkmRecorder> ukm_recorder;
@@ -118,7 +120,7 @@ class VizMainImpl : public mojom::VizMain {
       mojo::PendingRemote<
           discardable_memory::mojom::DiscardableSharedMemoryManager>
           discardable_memory_manager,
-      base::UnsafeSharedMemoryRegion activity_flags_region,
+      base::UnsafeSharedMemoryRegion use_shader_cache_shm_region,
       gfx::FontRenderParams::SubpixelRendering subpixel_rendering) override;
 #if BUILDFLAG(IS_WIN)
   void CreateInfoCollectionGpuService(
@@ -130,7 +132,7 @@ class VizMainImpl : public mojom::VizMain {
 #endif
   void CreateFrameSinkManager(mojom::FrameSinkManagerParamsPtr params) override;
 #if BUILDFLAG(USE_VIZ_DEBUGGER)
-  void FilterDebugStream(base::Value filter_data) override;
+  void FilterDebugStream(base::Value::Dict filter_data) override;
   void StartDebugStream(
       mojo::PendingRemote<mojom::VizDebugOutput> debug_output) override;
   void StopDebugStream() override;

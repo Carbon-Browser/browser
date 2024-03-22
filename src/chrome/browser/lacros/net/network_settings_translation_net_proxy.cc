@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,41 @@
 
 namespace {
 
+crosapi::mojom::ProxyLocation::Scheme NetSchemeToCrosapiScheme(
+    net::ProxyServer::Scheme in) {
+  switch (in) {
+    case net::ProxyServer::Scheme::SCHEME_INVALID:
+      return crosapi::mojom::ProxyLocation::Scheme::kInvalid;
+    case net::ProxyServer::Scheme::SCHEME_DIRECT:
+      return crosapi::mojom::ProxyLocation::Scheme::kDirect;
+    case net::ProxyServer::Scheme::SCHEME_HTTP:
+      return crosapi::mojom::ProxyLocation::Scheme::kHttp;
+    case net::ProxyServer::Scheme::SCHEME_SOCKS4:
+      return crosapi::mojom::ProxyLocation::Scheme::kSocks4;
+    case net::ProxyServer::Scheme::SCHEME_SOCKS5:
+      return crosapi::mojom::ProxyLocation::Scheme::kSocks5;
+    case net::ProxyServer::Scheme::SCHEME_HTTPS:
+      return crosapi::mojom::ProxyLocation::Scheme::kHttps;
+    case net::ProxyServer::Scheme::SCHEME_QUIC:
+      return crosapi::mojom::ProxyLocation::Scheme::kQuic;
+  }
+
+  return crosapi::mojom::ProxyLocation::Scheme::kUnknown;
+}
+
 std::vector<crosapi::mojom::ProxyLocationPtr> TranslateProxyLocations(
     const net::ProxyList& proxy_list) {
-  std::vector<net::ProxyServer> proxies = proxy_list.GetAll();
   std::vector<crosapi::mojom::ProxyLocationPtr> ptr_list;
   crosapi::mojom::ProxyLocationPtr ptr;
-  for (const auto& proxy : proxies) {
+  for (const auto& proxy_chain : proxy_list.AllChains()) {
+    // TODO(crbug.com/1491092): Remove single hop check when multi-hop proxy
+    // chains are supported.
+    CHECK(proxy_chain.is_single_proxy());
+    net::ProxyServer proxy = proxy_chain.GetProxyServer(/*chain_index=*/0);
     ptr = crosapi::mojom::ProxyLocation::New();
     ptr->host = proxy.host_port_pair().host();
     ptr->port = proxy.host_port_pair().port();
+    ptr->scheme = NetSchemeToCrosapiScheme(proxy.scheme());
     ptr_list.push_back(std::move(ptr));
   }
   return ptr_list;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,9 +64,6 @@ class MODULES_EXPORT AudioDecoderTraits {
   static void UpdateDecoderLog(const MediaDecoderType& decoder,
                                const MediaConfigType& media_config,
                                media::MediaLog* media_log);
-  static media::DecoderStatus::Or<OutputType*> MakeOutput(
-      scoped_refptr<MediaOutputType>,
-      ExecutionContext*);
   static const char* GetName();
 };
 
@@ -95,14 +92,21 @@ class MODULES_EXPORT AudioDecoder : public DecoderTemplate<AudioDecoderTraits> {
   AudioDecoder(ScriptState*, const AudioDecoderInit*, ExceptionState&);
   ~AudioDecoder() override = default;
 
+  // EventTarget interface
+  const AtomicString& InterfaceName() const override;
+
  protected:
   bool IsValidConfig(const ConfigType& config,
                      String* js_error_message) override;
   absl::optional<media::AudioDecoderConfig> MakeMediaConfig(
       const ConfigType& config,
       String* js_error_message) override;
-  media::DecoderStatus::Or<scoped_refptr<media::DecoderBuffer>>
-  MakeDecoderBuffer(const InputType& chunk, bool verify_key_frame) override;
+  media::DecoderStatus::Or<scoped_refptr<media::DecoderBuffer>> MakeInput(
+      const InputType& chunk,
+      bool verify_key_frame) override;
+  media::DecoderStatus::Or<OutputType*> MakeOutput(
+      scoped_refptr<MediaOutputType> output,
+      ExecutionContext* context) override;
 };
 
 }  // namespace blink

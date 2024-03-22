@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,9 @@
 #include "android_webview/browser/gfx/compositor_frame_consumer.h"
 #include "android_webview/browser/gfx/render_thread_manager.h"
 #include "android_webview/browser/gfx/test/rendering_test.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "content/public/test/test_synchronous_compositor_android.h"
@@ -207,7 +206,7 @@ class TestAnimateInAndOutOfScreen : public RenderingTest {
     if (draw_gl_count_on_rt_ == 0)
       transform = new_constraints_.transform;
 
-    transform.matrix().getColMajor(params->transform);
+    transform.GetColMajorF(params->transform);
     return true;
   }
 
@@ -359,7 +358,7 @@ RENDERING_TEST_F(CompositorNoFrameTest);
 class ClientIsVisibleOnConstructionTest : public RenderingTest {
   void SetUpTestHarness() override {
     browser_view_renderer_ = std::make_unique<BrowserViewRenderer>(
-        this, base::ThreadTaskRunnerHandle::Get());
+        this, base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   void StartTest() override {
@@ -627,8 +626,9 @@ class RenderThreadManagerSwitchTest : public ResourceRenderingTest {
       case 1: {
         // Switch to new RTM.
         std::unique_ptr<FakeFunctor> functor(new FakeFunctor);
-        functor->Init(window_.get(), std::make_unique<RenderThreadManager>(
-                                         base::ThreadTaskRunnerHandle::Get()));
+        functor->Init(window_.get(),
+                      std::make_unique<RenderThreadManager>(
+                          base::SingleThreadTaskRunner::GetCurrentDefault()));
         browser_view_renderer_->SetCurrentCompositorFrameConsumer(
             functor->GetCompositorFrameConsumer());
         saved_functor_ = std::move(functor_);

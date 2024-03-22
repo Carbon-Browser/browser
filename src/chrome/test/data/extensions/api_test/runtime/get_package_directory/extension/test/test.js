@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ function checkTree(root, expectedEntries) {
         // Ignore files or directories like .svn.
         if (entries[i].name[0] == '.')
           continue;
-        chrome.test.assertTrue(expectedEntries[entries[i].name] != null);
+        chrome.test.assertNe(null, expectedEntries[entries[i].name]);
         if (entries[i].isDirectory) {
           chrome.test.assertEq(typeof expectedEntries[entries[i].name],
                                'object');

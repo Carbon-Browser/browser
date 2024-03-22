@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "components/ukm/test_ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "third_party/blink/renderer/core/loader/interactive_detector.h"
@@ -153,6 +154,11 @@ class InteractiveDetectorTest : public testing::Test,
 
   base::TimeDelta GetTotalBlockingTime() {
     return detector_->ComputeTotalBlockingTime();
+  }
+
+  scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner() {
+    return dummy_page_holder_->GetDocument().GetTaskRunner(
+        TaskType::kUserInteraction);
   }
 
   ScopedTestingPlatformSupport<TestingPlatformSupportWithMockScheduler>
@@ -495,9 +501,9 @@ TEST_F(InteractiveDetectorTest, TaskLongerThan5sBlocksTTI) {
   SimulateFCPDetected(t0 + base::Seconds(3), t0 + base::Seconds(4));
 
   // Post a task with 6 seconds duration.
-  Thread::Current()->GetTaskRunner()->PostTask(
-      FROM_HERE, WTF::Bind(&InteractiveDetectorTest::DummyTaskWithDuration,
-                           WTF::Unretained(this), 6.0));
+  GetTaskRunner()->PostTask(
+      FROM_HERE, WTF::BindOnce(&InteractiveDetectorTest::DummyTaskWithDuration,
+                               WTF::Unretained(this), 6.0));
 
   platform_->RunUntilIdle();
 
@@ -514,9 +520,9 @@ TEST_F(InteractiveDetectorTest, LongTaskAfterTTIDoesNothing) {
   SimulateFCPDetected(t0 + base::Seconds(3), t0 + base::Seconds(4));
 
   // Long task 1.
-  Thread::Current()->GetTaskRunner()->PostTask(
-      FROM_HERE, WTF::Bind(&InteractiveDetectorTest::DummyTaskWithDuration,
-                           WTF::Unretained(this), 0.1));
+  GetTaskRunner()->PostTask(
+      FROM_HERE, WTF::BindOnce(&InteractiveDetectorTest::DummyTaskWithDuration,
+                               WTF::Unretained(this), 0.1));
 
   platform_->RunUntilIdle();
 
@@ -526,9 +532,9 @@ TEST_F(InteractiveDetectorTest, LongTaskAfterTTIDoesNothing) {
   EXPECT_EQ(GetInteractiveTime(), long_task_1_end_time);
 
   // Long task 2.
-  Thread::Current()->GetTaskRunner()->PostTask(
-      FROM_HERE, WTF::Bind(&InteractiveDetectorTest::DummyTaskWithDuration,
-                           WTF::Unretained(this), 0.1));
+  GetTaskRunner()->PostTask(
+      FROM_HERE, WTF::BindOnce(&InteractiveDetectorTest::DummyTaskWithDuration,
+                               WTF::Unretained(this), 0.1));
 
   platform_->RunUntilIdle();
   // Wait 5 seconds to see if TTI time changes.

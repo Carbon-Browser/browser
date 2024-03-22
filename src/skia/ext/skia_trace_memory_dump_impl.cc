@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ SkiaTraceMemoryDumpImpl::SkiaTraceMemoryDumpImpl(
     : dump_name_prefix_(dump_name_prefix),
       process_memory_dump_(process_memory_dump),
       request_level_(
-          level_of_detail == base::trace_event::MemoryDumpLevelOfDetail::LIGHT
+          level_of_detail == base::trace_event::MemoryDumpLevelOfDetail::kLight
               ? SkTraceMemoryDump::kLight_LevelOfDetail
               : SkTraceMemoryDump::kObjectsBreakdowns_LevelOfDetail) {}
 

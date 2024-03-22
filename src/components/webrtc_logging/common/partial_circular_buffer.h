@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,7 +58,7 @@ class PartialCircularBuffer {
   void DoWrite(const uint8_t* input, uint32_t input_size);
 
   // Used for reading and writing.
-  raw_ptr<BufferData> buffer_data_;
+  raw_ptr<BufferData, DanglingUntriaged> buffer_data_;
   uint32_t memory_buffer_size_;
   uint32_t data_size_;
   uint32_t position_;

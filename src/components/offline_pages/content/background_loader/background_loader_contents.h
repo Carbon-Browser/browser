@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,7 @@ class BackgroundLoaderContents : public content::WebContentsDelegate {
   bool IsNeverComposited(content::WebContents* web_contents) override;
   void CloseContents(content::WebContents* source) override;
   bool ShouldSuppressDialogs(content::WebContents* source) override;
-  bool ShouldFocusPageAfterCrash() override;
+  bool ShouldFocusPageAfterCrash(content::WebContents* source) override;
   void CanDownload(const GURL& url,
                    const std::string& request_method,
                    base::OnceCallback<void(bool)> callback) override;
@@ -73,7 +73,7 @@ class BackgroundLoaderContents : public content::WebContentsDelegate {
                       std::unique_ptr<content::WebContents> new_contents,
                       const GURL& target_url,
                       WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
+                      const blink::mojom::WindowFeatures& window_features,
                       bool user_gesture,
                       bool* was_blocked) override;
 
@@ -86,7 +86,7 @@ class BackgroundLoaderContents : public content::WebContentsDelegate {
       const content::MediaStreamRequest& request,
       content::MediaResponseCallback callback) override;
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) override;
   bool ShouldAllowLazyLoad() override;
 

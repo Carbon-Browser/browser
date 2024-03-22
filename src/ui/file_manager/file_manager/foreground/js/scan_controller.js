@@ -1,9 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {metrics} from '../../common/js/metrics.js';
-import {VolumeManagerCommon} from '../../common/js/volume_manager_types.js';
+import {recordDirectoryListLoadWithTolerance, startInterval} from '../../common/js/metrics.js';
+import {RootType, VolumeType} from '../../common/js/volume_manager_types.js';
+import {updateDirectoryContent} from '../../state/ducks/current_directory.js';
+import {getStore} from '../../state/store.js';
 
 import {DirectoryModel} from './directory_model.js';
 import {FileSelectionHandler} from './file_selection.js';
@@ -22,32 +24,36 @@ export class ScanController {
    */
   constructor(
       directoryModel, listContainer, spinnerController, selectionHandler) {
-    /** @private @const {!DirectoryModel} */
+    /** @private @const @type {!DirectoryModel} */
     this.directoryModel_ = directoryModel;
 
-    /** @private @const {!ListContainer} */
+    /** @private @const @type {!ListContainer} */
     this.listContainer_ = listContainer;
 
-    /** @private @const {!SpinnerController} */
+    /** @private @const @type {!SpinnerController} */
     this.spinnerController_ = spinnerController;
 
-    /** @private @const {!FileSelectionHandler} */
+    /** @private @const @type {!FileSelectionHandler} */
     this.selectionHandler_ = selectionHandler;
+
+    // @ts-ignore: error TS2304: Cannot find name 'Store'.
+    /** @private @const @type {!Store} */
+    this.store_ = getStore();
 
     /**
      * Whether a scan is in progress.
-     * @private {boolean}
+     * @private @type {boolean}
      */
     this.scanInProgress_ = false;
 
     /**
      * Timer ID to delay UI refresh after a scan is updated.
-     * @private {number}
+     * @private @type {number}
      */
     this.scanUpdatedTimer_ = 0;
 
     /**
-     * @private {?function()}
+     * @private @type {?function():void}
      */
     this.spinnerHideCallback_ = null;
 
@@ -79,7 +85,12 @@ export class ScanController {
           'scan-started', this.directoryModel_.getCurrentDirName());
     }
 
-    metrics.startInterval('DirectoryListLoad');
+    const volumeInfo = this.directoryModel_.getCurrentVolumeInfo();
+    if (volumeInfo &&
+        (volumeInfo.volumeType === VolumeType.DOWNLOADS ||
+         volumeInfo.volumeType === VolumeType.MY_FILES)) {
+      startInterval(`DirectoryListLoad.${RootType.MY_FILES}`);
+    }
 
     this.listContainer_.startBatchUpdates();
     this.scanInProgress_ = true;
@@ -109,6 +120,9 @@ export class ScanController {
           'scan-completed', this.directoryModel_.getCurrentDirName());
     }
 
+    // Update the store with the new entries before hiding the spinner.
+    this.updateStore_();
+
     this.hideSpinner_();
 
     if (this.scanUpdatedTimer_) {
@@ -124,14 +138,24 @@ export class ScanController {
     if (this.directoryModel_.getCurrentDirEntry()) {
       const volumeInfo = this.directoryModel_.getCurrentVolumeInfo();
       if (volumeInfo &&
-          (volumeInfo.volumeType === VolumeManagerCommon.VolumeType.DOWNLOADS ||
-           volumeInfo.volumeType === VolumeManagerCommon.VolumeType.MY_FILES)) {
-        metrics.recordDirectoryListLoadWithTolerance(
-            'DirectoryListLoad', this.directoryModel_.getFileList().length,
-            VolumeManagerCommon.RootType.MY_FILES, [10, 100, 1000],
-            /*tolerance=*/ 0.2);
+          (volumeInfo.volumeType === VolumeType.DOWNLOADS ||
+           volumeInfo.volumeType === VolumeType.MY_FILES)) {
+        const metricName = `DirectoryListLoad.${RootType.MY_FILES}`;
+        recordDirectoryListLoadWithTolerance(
+            metricName, this.directoryModel_.getFileList().length,
+            [10, 100, 1000], /*tolerance=*/ 0.2);
       }
     }
+  }
+
+  /**
+   * Sends the scanned directory content to the Store.
+   * @private
+   */
+  updateStore_() {
+    const entries = /** @type {!Array<!Entry>} */ (
+        this.directoryModel_.getFileList().slice());
+    this.store_.dispatch(updateDirectoryContent({entries}));
   }
 
   /**
@@ -142,6 +166,12 @@ export class ScanController {
       console.warn('Scan-updated event received. But scan is not started.');
       return;
     }
+
+      // Call this immediately (instead of debouncing it with
+      // `scanUpdatedTimer_`) so the current directory entries don't get
+      // accidentally removed from the store by `clearCachedEntries` in
+      // `state/reducers/all_entries.ts`.
+    this.updateStore_();
 
     if (this.scanUpdatedTimer_) {
       return;
@@ -186,6 +216,7 @@ export class ScanController {
    * @private
    */
   onRescanCompleted_() {
+    this.updateStore_();
     this.selectionHandler_.onFileSelectionChanged();
   }
 

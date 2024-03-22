@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "base/memory/raw_ptr.h"
 
 #ifndef IS_X11_IMPL
-#error "This file should only be included by //ui/gfx/x:xprotos"
+#error "This file should only be included by //ui/gfx/x"
 #endif
 
 #include <bitset>
@@ -55,9 +55,16 @@ class COMPONENT_EXPORT(X11) MallocedRefCountedMemory
   size_t size() const override;
 
  private:
+  struct deleter {
+    void operator()(uint8_t* data) {
+      if (data) {
+        free(data);
+      }
+    }
+  };
   ~MallocedRefCountedMemory() override;
 
-  const raw_ptr<uint8_t, DanglingUntriaged> data_;
+  std::unique_ptr<uint8_t, deleter> data_;
 };
 
 // Wraps another RefCountedMemory, giving a view into it.  Similar to
@@ -117,8 +124,9 @@ void Read(T* t, ReadBuffer* buf) {
 
 inline void Pad(WriteBuffer* buf, size_t amount) {
   uint8_t zero = 0;
-  for (size_t i = 0; i < amount; i++)
+  for (size_t i = 0; i < amount; i++) {
     buf->Write(&zero);
+  }
 }
 
 inline void Pad(ReadBuffer* buf, size_t amount) {
@@ -145,8 +153,9 @@ size_t PopCount(T t) {
 template <typename F, typename T>
 auto SumOf(F&& f, T& t) {
   decltype(f(t[0])) sum = 0;
-  for (auto& v : t)
+  for (auto& v : t) {
     sum += f(v);
+  }
   return sum;
 }
 
@@ -182,13 +191,14 @@ auto BitNot(T t) {
 template <typename T>
 auto SwitchVar(T enum_val, bool condition, bool is_bitcase, T* switch_var) {
   using EnumInt = EnumBaseType<T>;
-  if (!condition)
+  if (!condition) {
     return;
+  }
   EnumInt switch_int = static_cast<EnumInt>(*switch_var);
   if (is_bitcase) {
     *switch_var = static_cast<T>(switch_int | static_cast<EnumInt>(enum_val));
   } else {
-    DCHECK(!switch_int);
+    DUMP_WILL_BE_CHECK(!switch_int);
     *switch_var = enum_val;
   }
 }

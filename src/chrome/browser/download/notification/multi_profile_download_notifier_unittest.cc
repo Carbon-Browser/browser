@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
@@ -122,7 +123,9 @@ class MultiProfileDownloadNotifierTest : public BrowserWithTestWindowTest {
   }
 
   testing::NiceMock<MockNotifierClient> client_;
-  testing::NiceMock<MockDownloadManager>* manager_;
+  raw_ptr<testing::NiceMock<MockDownloadManager>,
+          DanglingUntriaged | ExperimentalAsh>
+      manager_;
   testing::NiceMock<download::MockDownloadItem> item_;
   std::unique_ptr<MultiProfileDownloadNotifier> notifier_;
 };

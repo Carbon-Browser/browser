@@ -1,17 +1,17 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/vulkan/vulkan_swap_chain.h"
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
 #include "base/debug/crash_logging.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "gpu/vulkan/vulkan_device_queue.h"
 #include "gpu/vulkan/vulkan_fence_helper.h"
 #include "gpu/vulkan/vulkan_function_pointers.h"
@@ -58,6 +58,7 @@ bool VulkanSwapChain::Initialize(
     uint32_t min_image_count,
     VkImageUsageFlags image_usage_flags,
     VkSurfaceTransformFlagBitsKHR pre_transform,
+    VkCompositeAlphaFlagBitsKHR composite_alpha,
     std::unique_ptr<VulkanSwapChain> old_swap_chain) {
   base::AutoLock auto_lock(lock_);
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -70,7 +71,7 @@ bool VulkanSwapChain::Initialize(
   device_queue_->GetFenceHelper()->ProcessCleanupTasks();
   return InitializeSwapChain(surface, surface_format, image_size,
                              min_image_count, image_usage_flags, pre_transform,
-                             std::move(old_swap_chain)) &&
+                             composite_alpha, std::move(old_swap_chain)) &&
          InitializeSwapImages(surface_format) && AcquireNextImage();
 }
 
@@ -128,7 +129,7 @@ void VulkanSwapChain::PostSubBufferAsync(
   DCHECK(!has_pending_post_sub_buffer_);
 
   if (UNLIKELY(!PresentBuffer(rect))) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), gfx::SwapResult::SWAP_FAILED));
     return;
@@ -153,7 +154,8 @@ void VulkanSwapChain::PostSubBufferAsync(
             self->has_pending_post_sub_buffer_ = false;
             self->condition_variable_.Signal();
           },
-          base::Unretained(this), base::ThreadTaskRunnerHandle::Get(),
+          base::Unretained(this),
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
           std::move(callback)));
 }
 
@@ -164,6 +166,7 @@ bool VulkanSwapChain::InitializeSwapChain(
     uint32_t min_image_count,
     VkImageUsageFlags image_usage_flags,
     VkSurfaceTransformFlagBitsKHR pre_transform,
+    VkCompositeAlphaFlagBitsKHR composite_alpha,
     std::unique_ptr<VulkanSwapChain> old_swap_chain) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
@@ -183,7 +186,7 @@ bool VulkanSwapChain::InitializeSwapChain(
       .imageUsage = image_usage_flags,
       .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .preTransform = pre_transform,
-      .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+      .compositeAlpha = composite_alpha,
       .presentMode = VK_PRESENT_MODE_FIFO_KHR,
       .clipped = VK_TRUE,
       .oldSwapchain = VK_NULL_HANDLE,

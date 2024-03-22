@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -59,7 +59,7 @@ class PolicyGenerationTest(unittest.TestCase):
               "type": "boolean"
           },
           "supported_on":
-          ["chrome_os:1-", "chrome.*:1-", "android:1-", "ios:1-"],
+          ["chrome_os:1-", "chrome.*:1-", "android:1-", "ios:1-", "fuchsia:1-"],
           "features": {
               "metapolicy_type": "merge",
           },
@@ -134,7 +134,8 @@ class PolicyGenerationTest(unittest.TestCase):
               "type": "string"
           },
           "supported_on": ["chrome_os:1-93", "android:1-93", "chrome.*:1-93"],
-          "id": 7,
+          "id":
+          7,
           "tags": [],
           "caption":
           "DeprecatedButGenerated caption",
@@ -169,7 +170,7 @@ class PolicyGenerationTest(unittest.TestCase):
               "type": "boolean"
           },
           "supported_on": ["chrome_os:1-", "chrome.*:1-"],
-          "id": 1015,
+          "id": 1040,
           "tags": [],
           "caption": "ChunkZeroLastFieldBooleanPolicy caption",
           "desc": "ChunkZeroLastFieldBooleanPolicy desc.",
@@ -180,7 +181,7 @@ class PolicyGenerationTest(unittest.TestCase):
               "type": "boolean"
           },
           "supported_on": ["chrome_os:1-", "chrome.*:1-"],
-          "id": 1016,
+          "id": 1041,
           "tags": [],
           "caption": "ChunkOneFirstFieldBooleanPolicy caption",
           "desc": "ChunkOneFirstFieldBooleanPolicy desc.",
@@ -191,7 +192,7 @@ class PolicyGenerationTest(unittest.TestCase):
               "type": "boolean"
           },
           "supported_on": ["chrome_os:1-", "chrome.*:1-"],
-          "id": 1815,
+          "id": 1840,
           "tags": [],
           "caption": "ChunkOneLastFieldBooleanPolicy caption",
           "desc": "ChunkOneLastFieldBooleanPolicy desc.",
@@ -202,7 +203,7 @@ class PolicyGenerationTest(unittest.TestCase):
               "type": "string"
           },
           "supported_on": ["chrome_os:1-", "chrome.*:1-"],
-          "id": 1816,
+          "id": 1841,
           "tags": [],
           "caption": "ChunkTwoFirstFieldStringPolicy caption",
           "desc": "ChunkTwoFirstFieldStringPolicy desc"
@@ -213,7 +214,7 @@ class PolicyGenerationTest(unittest.TestCase):
               "type": "string"
           },
           "supported_on": ["chrome_os:1-", "chrome.*:1-"],
-          "id": 2615,
+          "id": 2640,
           "tags": [],
           "caption": "ChunkTwoLastFieldStringPolicy caption",
           "desc": "ChunkTwoLastFieldStringPolicy desc"
@@ -266,18 +267,17 @@ class PolicyGenerationTest(unittest.TestCase):
 
     # Empty list
     stmts, expr = generate_policy_source._GenerateDefaultValue([])
-    self.assertListEqual(
-        ['base::Value default_value(base::Value::Type::LIST);'], stmts)
-    self.assertEqual('std::move(default_value)', expr)
+    self.assertListEqual(['base::Value::List default_value;'], stmts)
+    self.assertEqual('base::Value(std::move(default_value))', expr)
 
     # List with values
     stmts, expr = generate_policy_source._GenerateDefaultValue([1, '2'])
     self.assertListEqual([
-        'base::Value default_value(base::Value::Type::LIST);',
+        'base::Value::List default_value;',
         'default_value.Append(base::Value(1));',
         'default_value.Append(base::Value("2"));'
     ], stmts)
-    self.assertEqual('std::move(default_value)', expr)
+    self.assertEqual('base::Value(std::move(default_value))', expr)
 
     # Recursive lists are not supported.
     stmts, expr = generate_policy_source._GenerateDefaultValue([1, []])
@@ -303,62 +303,77 @@ class PolicyGenerationTest(unittest.TestCase):
     self.assertEqual(expected_output.strip(), actual_output.strip())
 
   def testWriteCloudPolicyProtobuf(self):
-    is_full_runtime_values = [False, True]
     output_path = 'mock_cloud_policy_proto'
 
-    for is_full_runtime in is_full_runtime_values:
-      with patch('codecs.open', mock_open()) as mocked_file:
-        with codecs.open(output_path, 'w', encoding='utf-8') as f:
-          generate_policy_source._WriteCloudPolicyProtobuf(
-              self.policies,
-              self.policy_atomic_groups,
-              self.target_platform,
-              f,
-              self.risk_tags,
-              is_full_runtime=is_full_runtime)
+    with patch('codecs.open', mock_open()) as mocked_file:
+      with codecs.open(output_path, 'w', encoding='utf-8') as f:
+        generate_policy_source._WriteCloudPolicyProtobuf(
+            self.policies,
+            self.policy_atomic_groups,
+            self.target_platform,
+            f,
+            self.risk_tags,
+            chunking=True)
 
-      full_runtime_comment = '//' if is_full_runtime else ''
-      full_runtime_suffix = '_full_runtime' if is_full_runtime else ''
+    mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
 
-      with self.subTest(is_full_runtime=is_full_runtime):
-        mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
+    self._assertCallsEqual(test_data.EXPECTED_CLOUD_POLICY_PROTOBUF,
+                           mocked_file().write.call_args_list)
 
-        expected_formatted = test_data.EXPECTED_CLOUD_POLICY_PROTOBUF % {
-            "full_runtime_comment": full_runtime_comment,
-            "full_runtime_suffix": full_runtime_suffix,
-        }
+  def testWriteCloudPolicyProtobufNoChunking(self):
+    output_path = 'mock_cloud_policy_proto'
 
-        self._assertCallsEqual(expected_formatted,
-                               mocked_file().write.call_args_list)
+    with patch('codecs.open', mock_open()) as mocked_file:
+      with codecs.open(output_path, 'w', encoding='utf-8') as f:
+        generate_policy_source._WriteCloudPolicyProtobuf(
+            self.policies,
+            self.policy_atomic_groups,
+            self.target_platform,
+            f,
+            self.risk_tags,
+            chunking=False)
+
+    mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
+
+    self._assertCallsEqual(test_data.EXPECTED_CLOUD_POLICY_PROTOBUF_NO_CHUNKING,
+                           mocked_file().write.call_args_list)
 
   def testWriteChromeSettingsProtobuf(self):
-    is_full_runtime_values = [False, True]
     output_path = 'mock_chrome_settings_proto'
 
-    for is_full_runtime in is_full_runtime_values:
-      with patch('codecs.open', mock_open()) as mocked_file:
-        with codecs.open(output_path, 'w', encoding='utf-8') as f:
-          generate_policy_source._WriteChromeSettingsProtobuf(
-              self.policies,
-              self.policy_atomic_groups,
-              self.target_platform,
-              f,
-              self.risk_tags,
-              is_full_runtime=is_full_runtime)
+    with patch('codecs.open', mock_open()) as mocked_file:
+      with codecs.open(output_path, 'w', encoding='utf-8') as f:
+        generate_policy_source._WriteChromeSettingsProtobuf(
+            self.policies,
+            self.policy_atomic_groups,
+            self.target_platform,
+            f,
+            self.risk_tags,
+            chunking=True)
 
-      full_runtime_comment = '//' if is_full_runtime else ''
-      full_runtime_suffix = '_full_runtime' if is_full_runtime else ''
+      mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
 
-      with self.subTest(is_full_runtime=is_full_runtime):
-        mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
+      self._assertCallsEqual(test_data.EXPECTED_CHROME_SETTINGS_PROTOBUF,
+                             mocked_file().write.call_args_list)
 
-        expected_formatted = test_data.EXPECTED_CHROME_SETTINGS_PROTOBUF % {
-            "full_runtime_comment": full_runtime_comment,
-            "full_runtime_suffix": full_runtime_suffix,
-        }
+  def testWriteChromeSettingsProtobufNoChunking(self):
+    output_path = 'mock_chrome_settings_proto'
 
-        self._assertCallsEqual(expected_formatted,
-                               mocked_file().write.call_args_list)
+    with patch('codecs.open', mock_open()) as mocked_file:
+      with codecs.open(output_path, 'w', encoding='utf-8') as f:
+        generate_policy_source._WriteChromeSettingsProtobuf(
+            self.policies,
+            self.policy_atomic_groups,
+            self.target_platform,
+            f,
+            self.risk_tags,
+            chunking=False)
+
+      mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
+
+      self._assertCallsEqual(
+          test_data.EXPECTED_CHROME_SETTINGS_PROTOBUF_NO_CHUNKING,
+          mocked_file().write.call_args_list)
 
   def testWritePolicyProto(self):
     output_path = 'mock_write_policy_proto'
@@ -399,6 +414,7 @@ class PolicyGenerationTest(unittest.TestCase):
               target_platform,
               f,
               self.risk_tags,
+              chunking=True,
           )
       with self.subTest(target_platform=target_platform):
         mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
@@ -427,6 +443,7 @@ class PolicyGenerationTest(unittest.TestCase):
               target_platform,
               f,
               self.risk_tags,
+              chunking=True,
           )
       with self.subTest(target_platform=target_platform):
         mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
@@ -452,6 +469,7 @@ class PolicyGenerationTest(unittest.TestCase):
             self.target_platform,
             f,
             self.risk_tags,
+            chunking=True,
         )
     mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
     self._assertCallsEqual(test_data.EXPECTED_CROS_POLICY_CONSTANTS_HEADER,
@@ -467,6 +485,7 @@ class PolicyGenerationTest(unittest.TestCase):
             self.target_platform,
             f,
             self.risk_tags,
+            chunking=True,
         )
     mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
     self._assertCallsEqual(test_data.EXPECTED_CROS_POLICY_CONSTANTS_SOURCE,
@@ -483,6 +502,7 @@ class PolicyGenerationTest(unittest.TestCase):
             self.target_platform,
             f,
             self.risk_tags,
+            chunking=True,
         )
     mocked_file.assert_called_once_with(output_path, 'w', encoding='utf-8')
     self._assertCallsEqual(test_data.EXPECTED_APP_RESTRICTIONS_XML,
@@ -492,41 +512,51 @@ class PolicyGenerationTest(unittest.TestCase):
   def testChunkNumberAndFieldNumber(self):
     test_data = [
         # Last top-level policy
-        PolicyData(policy_id=1015, chunk_number=0, field_number=1017),
+        PolicyData(policy_id=1040, chunk_number=0, field_number=1042),
         # First policy in chunk 1
-        PolicyData(policy_id=1016, chunk_number=1, field_number=1),
+        PolicyData(policy_id=1041, chunk_number=1, field_number=1),
         # Last policy in chunk 1
-        PolicyData(policy_id=1815, chunk_number=1, field_number=800),
+        PolicyData(policy_id=1840, chunk_number=1, field_number=800),
         # First policy in chunk 2
-        PolicyData(policy_id=1816, chunk_number=2, field_number=1),
+        PolicyData(policy_id=1841, chunk_number=2, field_number=1),
         # Last policy in chunk 2
-        PolicyData(policy_id=2615, chunk_number=2, field_number=800),
+        PolicyData(policy_id=2640, chunk_number=2, field_number=800),
         # First policy in chunk 3
-        PolicyData(policy_id=2616, chunk_number=3, field_number=1),
+        PolicyData(policy_id=2641, chunk_number=3, field_number=1),
         # Last policy in chunk 3
-        PolicyData(policy_id=3415, chunk_number=3, field_number=800),
+        PolicyData(policy_id=3440, chunk_number=3, field_number=800),
         # First policy in chunk 501
-        PolicyData(policy_id=401016, chunk_number=501, field_number=1),
+        PolicyData(policy_id=401041, chunk_number=501, field_number=1),
         # Last policy in chunk 501
-        PolicyData(policy_id=401815, chunk_number=501, field_number=800),
+        PolicyData(policy_id=401840, chunk_number=501, field_number=800),
         # First policy in chunk 502
-        PolicyData(policy_id=401816, chunk_number=502, field_number=1),
+        PolicyData(policy_id=401841, chunk_number=502, field_number=1),
         # Last policy in chunk 502
-        PolicyData(policy_id=402615, chunk_number=502, field_number=800),
+        PolicyData(policy_id=402640, chunk_number=502, field_number=800),
         # First policy in chunk 503
-        PolicyData(policy_id=402616, chunk_number=503, field_number=1),
+        PolicyData(policy_id=402641, chunk_number=503, field_number=1),
         # Last policy in chunk 503
-        PolicyData(policy_id=403415, chunk_number=503, field_number=800),
+        PolicyData(policy_id=403440, chunk_number=503, field_number=800),
     ]
 
     for policy_data in test_data:
+      # With chunking:
       self.assertEqual(
-          generate_policy_source._ChunkNumber(policy_data.policy_id),
+          generate_policy_source._ChunkNumber(policy_data.policy_id,
+                                              chunking=True),
           policy_data.chunk_number)
       self.assertEqual(
           generate_policy_source._FieldNumber(policy_data.policy_id,
                                               policy_data.chunk_number),
           policy_data.field_number)
+
+      # Without chunking:
+      self.assertEqual(
+          generate_policy_source._ChunkNumber(policy_data.policy_id,
+                                              chunking=False), 0)
+      self.assertEqual(
+          generate_policy_source._FieldNumber(policy_data.policy_id, 0),
+          policy_data.policy_id + 2)
 
 
 if __name__ == '__main__':

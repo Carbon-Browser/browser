@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/component_export.h"
 #include "components/device_event_log/device_event_log.h"
 
-namespace chromeos {
+namespace ash {
 
 class NetworkState;
 
@@ -29,12 +29,6 @@ std::string NetworkPathId(const std::string& service_path);
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
 std::string NetworkGuidId(const std::string& guid);
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-using ::chromeos::NetworkGuidId;
-using ::chromeos::NetworkPathId;
 }  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_EVENT_LOG_H_

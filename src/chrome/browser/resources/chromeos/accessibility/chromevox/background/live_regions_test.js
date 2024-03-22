@@ -1,24 +1,32 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE([
-  '//chrome/browser/resources/chromeos/accessibility/chromevox/testing/chromevox_next_e2e_test_base.js',
-]);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Test fixture for Live Regions.
  */
-ChromeVoxLiveRegionsTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxLiveRegionsTest = class extends ChromeVoxE2ETest {
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'ChromeVoxState', '/chromevox/background/chromevox_state.js');
-    await importModule('LiveRegions', '/chromevox/background/live_regions.js');
-    await importModule('Output', '/chromevox/background/output/output.js');
 
-    window.TreeChangeType = chrome.automation.TreeChangeType;
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'ChromeVoxState', '/chromevox/background/chromevox_state.js'),
+      importModule(
+          'DesktopAutomationInterface',
+          '/chromevox/background/event/desktop_automation_interface.js'),
+      importModule('LiveRegions', '/chromevox/background/live_regions.js'),
+      importModule('Output', '/chromevox/background/output/output.js'),
+      importModule('QueueMode', '/chromevox/common/tts_types.js'),
+    ]);
+
+    globalThis.EventType = chrome.automation.EventType;
+    globalThis.RoleType = chrome.automation.RoleType;
+    globalThis.TreeChangeType = chrome.automation.TreeChangeType;
   }
 
   /**
@@ -46,7 +54,7 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'LiveRegionAddElement', async function() {
   const go = rootNode.find({role: RoleType.BUTTON});
   mockFeedback.call(go.doDefault.bind(go))
       .expectCategoryFlushSpeech('Hello, world');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -66,7 +74,7 @@ AX_TEST_F(
       go.doDefault();
       mockFeedback.expectCategoryFlushSpeech('removed:')
           .expectQueuedSpeech('Hello, world');
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -88,7 +96,7 @@ AX_TEST_F(
       const go = rootNode.find({role: RoleType.BUTTON});
       mockFeedback.call(go.doDefault.bind(go))
           .expectCategoryFlushSpeech('Alpha Bravo Charlie');
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -107,7 +115,7 @@ AX_TEST_F(
       const go = rootNode.find({role: RoleType.BUTTON});
       mockFeedback.call(go.doDefault.bind(go))
           .expectCategoryFlushSpeech('bar', 'Heading 1');
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -133,7 +141,7 @@ AX_TEST_F(
       const go = rootNode.find({role: RoleType.BUTTON});
       mockFeedback.call(go.doDefault.bind(go))
           .expectCategoryFlushSpeech('After');
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxLiveRegionsTest', 'LiveRegionThenFocus', async function() {
@@ -145,7 +153,7 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'LiveRegionThenFocus', async function() {
       <script>
         document.getElementById('go').addEventListener('click', function() {
           document.getElementById('live').textContent = 'Live';
-   window.setTimeout(function() {
+   setTimeout(function() {
             document.getElementById('focus').focus();
           }, 50);
         }, false);
@@ -169,11 +177,11 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'LiveRegionThenFocus', async function() {
     }
   };
   const go = rootNode.find({role: RoleType.BUTTON});
-  mockFeedback.call(this.simulateUserInteraction.bind(this))
+  mockFeedback.call(this.simulateUserInteraction)
       .call(go.doDefault.bind(go))
       .expectSpeech(focusOrLive)
       .expectSpeech(focusOrLive);
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxLiveRegionsTest', 'FocusThenLiveRegion', async function() {
@@ -185,14 +193,14 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'FocusThenLiveRegion', async function() {
       <script>
         document.getElementById('go').addEventListener('click', function() {
           document.getElementById('focus').focus();
-   window.setTimeout(function() {
+   setTimeout(function() {
             document.getElementById('live').textContent = 'Live';
           }, 200);
         }, false);
       </script>
     `);
   const go = rootNode.find({role: RoleType.BUTTON});
-  mockFeedback.call(this.simulateUserInteraction.bind(this))
+  mockFeedback.call(this.simulateUserInteraction)
       .call(go.doDefault.bind(go))
       .expectSpeech('Focus')
       .expectSpeech(candidate => {
@@ -200,7 +208,7 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'FocusThenLiveRegion', async function() {
             (candidate.queueMode === QueueMode.CATEGORY_FLUSH ||
              candidate.queueMode === QueueMode.QUEUE);
       });
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -217,7 +225,7 @@ AX_TEST_F(
       <script>
         document.getElementById('go').addEventListener('click', function() {
           document.getElementById('live1').textContent = 'Live1';
-          window.setTimeout(function() {
+          setTimeout(function() {
             document.getElementById('live2').textContent = 'Live2';
           }, 1000);
         }, false);
@@ -227,7 +235,7 @@ AX_TEST_F(
       mockFeedback.call(go.doDefault.bind(go))
           .expectCategoryFlushSpeech('Live1')
           .expectCategoryFlushSpeech('Live2');
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxLiveRegionsTest', 'SilentOnNodeChange', async function() {
@@ -247,14 +255,14 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'SilentOnNodeChange', async function() {
       }, 50);
     </script>
   `);
-  const focusAfterNodeChange = window.setTimeout.bind(window, function() {
+  const focusAfterNodeChange = setTimeout.bind(window, function() {
     root.firstChild.nextSibling.focus();
   }, 1000);
   mockFeedback.call(focusAfterNodeChange)
       .expectSpeech('hello!')
       .expectNextSpeechUtteranceIsNot('hello!')
       .expectNextSpeechUtteranceIsNot('hello!');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxLiveRegionsTest', 'SimulateTreeChanges', async function() {
@@ -286,7 +294,7 @@ AX_TEST_F('ChromeVoxLiveRegionsTest', 'SimulateTreeChanges', async function() {
       })
       .expectSpeech('hello')
       .expectSpeech('there');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 // Flaky: https://crbug.com/945199
@@ -321,8 +329,8 @@ AX_TEST_F(
           .clearPendingOutput()
           .call(clickInput)
           .expectNextSpeechUtteranceIsNot('bba')
-          .expectSpeech('a')
-          .replay();
+          .expectSpeech('a');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -345,8 +353,8 @@ AX_TEST_F(
   `);
       const button = root.find({role: chrome.automation.RoleType.BUTTON});
       mockFeedback.call(button.doDefault.bind(button))
-          .expectSpeech('Alert', 'hi')
-          .replay();
+          .expectSpeech('Alert', 'hi');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxLiveRegionsTest', 'ShouldIgnoreLiveRegion', function() {
@@ -394,6 +402,43 @@ AX_TEST_F(
       mockFeedback.call(button.doDefault.bind(button))
           .expectSpeech('hello')
           .call(button.doDefault.bind(button))
-          .expectSpeech('there')
-          .replay();
+          .expectSpeech('there');
+      await mockFeedback.replay();
+    });
+
+AX_TEST_F(
+    'ChromeVoxLiveRegionsTest', 'AnnounceDesktopLiveRegionChanged',
+    async function() {
+      const mockFeedback = this.createMockFeedback();
+      await this.runWithLoadedTree(``);
+
+      const fakeEvent = containerLiveStatus => {
+        return {
+          target: {
+            containerLiveStatus,
+            name: containerLiveStatus,
+            root: this.desktop_,
+            children: [],
+            standardActions: [],
+            htmlAttributes: {},
+            state: {},
+            unclippedLocation: {},
+            addEventListener() {},
+            makeVisible() {},
+            removeEventListener() {},
+            setAccessibilityFocus() {},
+          },
+          type: EventType.LIVE_REGION_CHANGED,
+        };
+      };
+
+      const onLiveRegionChanged = status => () =>
+          DesktopAutomationInterface.instance.onLiveRegionChanged_(
+              fakeEvent(status));
+
+      mockFeedback.call(onLiveRegionChanged('assertive'))
+          .expectSpeechWithQueueMode('assertive', QueueMode.CATEGORY_FLUSH)
+          .call(onLiveRegionChanged('polite'))
+          .expectSpeechWithQueueMode('polite', QueueMode.QUEUE);
+      await mockFeedback.replay();
     });

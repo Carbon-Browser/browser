@@ -1,20 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/broadcaster/chrome_broadcaster.h"
 
 #import <objc/runtime.h>
-#include <memory>
+#import <memory>
 
-#include "base/check.h"
+#import "base/apple/foundation_util.h"
+#import "base/check.h"
 #import "base/ios/crb_protocol_observers.h"
-#import "base/mac/foundation_util.h"
-#include "base/notreached.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/notreached.h"
 
 namespace {
 
@@ -272,9 +268,9 @@ NSInvocation* InvocationForBroadcasterSelector(SEL selector) {
   // If strings or other non-value types are being broadcast, then this will
   // need to change. Either value will be nil if they aren't actually NSValues.
   NSValue* newValue =
-      base::mac::ObjCCast<NSValue>(change[NSKeyValueChangeNewKey]);
+      base::apple::ObjCCast<NSValue>(change[NSKeyValueChangeNewKey]);
   NSValue* oldValue =
-      base::mac::ObjCCast<NSValue>(change[NSKeyValueChangeOldKey]);
+      base::apple::ObjCCast<NSValue>(change[NSKeyValueChangeOldKey]);
 
   // If the value is unchanged -- if the old and new values are equal -- then
   // return without notifying observers.
@@ -299,7 +295,7 @@ NSInvocation* InvocationForBroadcasterSelector(SEL selector) {
   NSInvocation* invocation = self.observerInvocations[name];
   // Attempt to cast `value` into an NSNumber; ObjCCast will instead return
   // nil if this isn't possible.
-  NSNumber* valueAsNumber = base::mac::ObjCCast<NSNumber>(value);
+  NSNumber* valueAsNumber = base::apple::ObjCCast<NSNumber>(value);
   std::string type([invocation.methodSignature getArgumentTypeAtIndex:2]);
 
   if (type == @encode(BOOL)) {

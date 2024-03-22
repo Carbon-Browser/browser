@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/mojom/tray_action.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -87,7 +88,8 @@ class ASH_EXPORT TrayAction : public mojom::TrayAction,
   // updated.
   void NotifyLockScreenNoteStateChanged();
 
-  BacklightsForcedOffSetter* const backlights_forced_off_setter_;
+  const raw_ptr<BacklightsForcedOffSetter, ExperimentalAsh>
+      backlights_forced_off_setter_;
 
   // Last known state for lock screen note action.
   mojom::TrayActionState lock_screen_note_state_ =

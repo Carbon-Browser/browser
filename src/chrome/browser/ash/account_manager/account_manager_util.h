@@ -1,18 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_ACCOUNT_MANAGER_ACCOUNT_MANAGER_UTIL_H_
 #define CHROME_BROWSER_ASH_ACCOUNT_MANAGER_ACCOUNT_MANAGER_UTIL_H_
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 
 class Profile;
 
 namespace ash {
 
-bool IsAccountManagerAvailable(const Profile* const profile);
+bool IsAccountManagerAvailable(Profile* profile);
 
 // Initializes account manager if it has not been initialized yet. Safe to call
 // multiple times. |cryptohome_root_dir| is root of user's home partition (same

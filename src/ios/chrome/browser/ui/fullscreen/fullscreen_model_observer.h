@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,19 @@
 
 #include <CoreGraphics/CoreGraphics.h>
 
+#include "base/observer_list_types.h"
+
 class FullscreenModel;
 
 // Interface for listening to FullscreenModel changes.
-class FullscreenModelObserver {
+class FullscreenModelObserver : public base::CheckedObserver {
  public:
   FullscreenModelObserver() = default;
 
   FullscreenModelObserver(const FullscreenModelObserver&) = delete;
   FullscreenModelObserver& operator=(const FullscreenModelObserver&) = delete;
 
-  virtual ~FullscreenModelObserver() = default;
+  ~FullscreenModelObserver() override;
 
   // Invoked when `model`'s toolbar heights have been updated.
   virtual void FullscreenModelToolbarHeightsUpdated(FullscreenModel* model) {}

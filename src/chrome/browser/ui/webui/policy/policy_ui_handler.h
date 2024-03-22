@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,43 +10,25 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "base/memory/weak_ptr.h"
-#include "base/scoped_multi_source_observation.h"
+#include "base/scoped_observation.h"
 #include "base/values.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/policy/value_provider/policy_value_provider.h"
-#include "components/policy/core/browser/policy_error_map.h"
-#include "components/policy/core/common/policy_map.h"
-#include "components/policy/core/common/policy_namespace.h"
-#include "components/policy/core/common/policy_service.h"
-#include "components/policy/core/common/schema_registry.h"
-#include "content/public/browser/web_ui.h"
+#include "chrome/browser/policy/policy_value_and_status_aggregator.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "content/public/browser/web_ui_message_handler.h"
 #include "extensions/buildflags/buildflags.h"
-#include "ui/shell_dialogs/select_file_dialog.h"
-
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-#include "chrome/browser/policy/value_provider/extension_policies_value_provider.h"
-#endif
 
 class PrefChangeRegistrar;
-struct GoogleUpdatePoliciesAndState;
-
-namespace policy {
-class PolicyMap;
-class PolicyStatusProvider;
-}
 
 // The JavaScript message handler for the chrome://policy page.
-class PolicyUIHandler : public content::WebUIMessageHandler,
-                        public policy::PolicyService::Observer,
-                        public policy::SchemaRegistry::Observer,
-                        public policy::PolicyValueProvider::Observer,
-                        public ui::SelectFileDialog::Listener {
+class PolicyUIHandler
+    : public content::WebUIMessageHandler,
+      public policy::PolicyValueAndStatusAggregator::Observer {
  public:
   PolicyUIHandler();
 
@@ -61,99 +43,65 @@ class PolicyUIHandler : public content::WebUIMessageHandler,
   // content::WebUIMessageHandler implementation.
   void RegisterMessages() override;
 
-  // policy::PolicyService::Observer implementation.
-  void OnPolicyUpdated(const policy::PolicyNamespace& ns,
-                       const policy::PolicyMap& previous,
-                       const policy::PolicyMap& current) override;
+  // policy::PolicyValueAndStatusAggregator::Observer implementation.
+  void OnPolicyValueAndStatusChanged() override;
 
-  // policy::SchemaRegistry::Observer implementation.
-  void OnSchemaRegistryUpdated(bool has_new_schemas) override;
-
-  // policy::PolicyValueProvider::Observer implementation.
-  void OnPolicyValueChanged() override;
-
- protected:
-  // ui::SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
-                    int index,
-                    void* params) override;
-  void FileSelectionCanceled(void* params) override;
+  void set_web_ui_for_test(content::WebUI* web_ui) { set_web_ui(web_ui); }
 
  private:
-  base::Value::Dict GetPolicyNames();
-  base::Value::List GetPolicyValues();
-
   void HandleExportPoliciesJson(const base::Value::List& args);
   void HandleListenPoliciesUpdates(const base::Value::List& args);
   void HandleReloadPolicies(const base::Value::List& args);
   void HandleCopyPoliciesJson(const base::Value::List& args);
+  void HandleSetLocalTestPolicies(const base::Value::List& args);
+  void HandleRevertLocalTestPolicies(const base::Value::List& args);
+  void HandleRestartBrowser(const base::Value::List& args);
+  void HandleSetUserAffiliated(const base::Value::List& args);
+  void HandleGetAppliedTestPolicies(const base::Value::List& args);
 
-  // Send information about the current policy values to the UI. For each policy
-  // whose value has been set, a dictionary containing the value and additional
-  // metadata is sent.
+#if !BUILDFLAG(IS_CHROMEOS)
+  void HandleUploadReport(const base::Value::List& args);
+#endif
+
+  // Handler functions for chrome://policy/logs.
+  void HandleGetPolicyLogs(const base::Value::List& args);
+
+  // Send information about the current policy values to the UI. Information is
+  // sent in two parts to the UI:
+  // - A dictionary containing all available policy names
+  // - A dictionary containing the value and additional metadata for each
+  // policy whose value has been set and the list of available policy IDs.
+  // Policy values and names are sent separately because the UI displays the
+  // policies that has their values set and the policies without value
+  // separately.
   void SendPolicies();
 
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  // Sets |updater_policies_| in this instance, updates
-  // |updater_status_provider_| with a new state and refreshes the UI via
-  // SendPolicies.
-  void SetUpdaterPoliciesAndState(
-      std::unique_ptr<GoogleUpdatePoliciesAndState> updater_policies_and_state);
-
-  void ReloadUpdaterPoliciesAndState();
-#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-
-  // Send the status of cloud policy to the UI.
+  // Send the status of cloud policy to the UI. For each scope that has cloud
+  // policy enabled (device and/or user), a dictionary containing status
+  // information.
   void SendStatus();
 
-  // Get the status of cloud policy. For each scope that has cloud policy
-  // enabled (device and/or user), a dictionary containing status information.
-  // If |for_webui| is true, values needed for webui will be included
-  // additionally.
-  base::Value GetStatusValue(bool for_webui) const;
+#if !BUILDFLAG(IS_CHROMEOS)
+  // Called when report has been uploaded, successfully or not.
+  void OnReportUploaded(const std::string& callback_id);
+#endif
 
   // Build a JSON string of all the policies.
   std::string GetPoliciesAsJson();
 
-  void WritePoliciesToJSONFile(const base::FilePath& path);
+  std::unique_ptr<policy::PolicyValueAndStatusAggregator>
+      policy_value_and_status_aggregator_;
 
-  void OnRefreshPoliciesDone();
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  void OnGotDevicePolicy(base::Value::Dict device_policy,
-                         base::Value::Dict legend_data);
-  void OnGotDevicePolicyDeprecated(base::Value device_policy,
-                                   base::Value legend_data);
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-
-  scoped_refptr<ui::SelectFileDialog> export_policies_select_file_dialog_;
-
-  // Providers that supply status dictionaries for user and device policy,
-  // respectively. These are created on initialization time as appropriate for
-  // the platform (Chrome OS / desktop) and type of policy that is in effect.
-  std::unique_ptr<policy::PolicyStatusProvider> user_status_provider_;
-  std::unique_ptr<policy::PolicyStatusProvider> device_status_provider_;
-  std::unique_ptr<policy::PolicyStatusProvider> machine_status_provider_;
-  std::unique_ptr<policy::PolicyStatusProvider> updater_status_provider_;
-
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  std::unique_ptr<ExtensionPoliciesValueProvider>
-      extension_policies_value_provider_;
-#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  std::unique_ptr<policy::PolicyMap> updater_policies_;
-#endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  base::Value::Dict device_policy_;
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+  base::ScopedObservation<policy::PolicyValueAndStatusAggregator,
+                          policy::PolicyValueAndStatusAggregator::Observer>
+      policy_value_and_status_observation_{this};
 
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
 
-  base::ScopedMultiSourceObservation<policy::PolicyValueProvider,
-                                     policy::PolicyValueProvider::Observer>
-      policy_value_provider_observations_{this};
+  uint32_t reload_policies_count_ = 0;
+  uint32_t export_to_json_count_ = 0;
+  uint32_t copy_to_json_count_ = 0;
+  uint32_t upload_report_count_ = 0;
 
   base::WeakPtrFactory<PolicyUIHandler> weak_factory_{this};
 };

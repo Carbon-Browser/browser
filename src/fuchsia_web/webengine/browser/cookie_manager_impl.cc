@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -189,7 +189,7 @@ void CookieManagerImpl::ObserveCookieChanges(
                           std::move(changes));
 
   if (url) {
-    absl::optional<std::string> maybe_name;
+    std::optional<std::string> maybe_name;
     if (name)
       maybe_name = *name;
     cookie_manager_->AddCookieChangeListener(GURL(*url), maybe_name,

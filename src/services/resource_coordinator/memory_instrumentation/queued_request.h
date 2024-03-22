@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,13 +88,13 @@ struct QueuedRequest {
 
   mojom::MemoryMapOption memory_map_option() const {
     return args.level_of_detail ==
-                   base::trace_event::MemoryDumpLevelOfDetail::DETAILED
+                   base::trace_event::MemoryDumpLevelOfDetail::kDetailed
                ? mojom::MemoryMapOption::FULL
                : mojom::MemoryMapOption::NONE;
   }
 
   bool should_return_summaries() const {
-    return args.dump_type == base::trace_event::MemoryDumpType::SUMMARY_ONLY;
+    return args.dump_type == base::trace_event::MemoryDumpType::kSummaryOnly;
   }
 
   const Args args;

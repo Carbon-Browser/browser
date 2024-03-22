@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
 #include "url/gurl.h"
-#include "url/origin.h"
 
 namespace ui {
 
@@ -22,7 +21,6 @@ namespace {
 
 // JSON Keys
 constexpr char kEndpointTypeKey[] = "endpoint_type";
-constexpr char kUrlOriginKey[] = "url_origin";
 constexpr char kUrlKey[] = "url";
 
 // Endpoint Type Strings
@@ -92,18 +90,14 @@ absl::optional<EndpointType> EndpointStringToType(
 }  // namespace
 
 std::string ConvertDataTransferEndpointToJson(const DataTransferEndpoint& dte) {
-  base::Value encoded_dte(base::Value::Type::DICTIONARY);
+  base::Value::Dict encoded_dte;
 
-  encoded_dte.SetStringKey(kEndpointTypeKey, EndpointTypeToString(dte.type()));
+  encoded_dte.Set(kEndpointTypeKey, EndpointTypeToString(dte.type()));
 
   const GURL* url = dte.GetURL();
 
-  if (url && url->is_valid()) {
-    encoded_dte.SetStringKey(kUrlKey, url->spec());
-    // TODO(crbug.com/1300476): remove |kUrlOriginKey| after M102.
-    encoded_dte.SetStringKey(kUrlOriginKey,
-                             url::Origin::Create(*url).Serialize());
-  }
+  if (url && url->is_valid())
+    encoded_dte.Set(kUrlKey, url->spec());
 
   std::string json;
   base::JSONWriter::Write(encoded_dte, &json);
@@ -118,12 +112,8 @@ std::unique_ptr<DataTransferEndpoint> ConvertJsonToDataTransferEndpoint(
     return nullptr;
 
   const std::string* endpoint_type =
-      dte_dictionary->FindStringKey(kEndpointTypeKey);
-  const std::string* url_string = dte_dictionary->FindStringKey(kUrlKey);
-
-  // TODO(crbug.com/1300476): remove |kUrlOriginKey| after M102.
-  if (!url_string)
-    url_string = dte_dictionary->FindStringKey(kUrlOriginKey);
+      dte_dictionary->GetDict().FindString(kEndpointTypeKey);
+  const std::string* url_string = dte_dictionary->GetDict().FindString(kUrlKey);
 
   if (url_string) {
     GURL url = GURL(*url_string);

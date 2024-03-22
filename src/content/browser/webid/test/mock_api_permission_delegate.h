@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,8 @@ class MockApiPermissionDelegate
                    const url::Origin&));
   MOCK_METHOD1(RecordDismissAndEmbargo, void(const url::Origin&));
   MOCK_METHOD1(RemoveEmbargoAndResetCounts, void(const url::Origin&));
+  MOCK_CONST_METHOD3(HasThirdPartyCookiesAccess,
+                     bool(RenderFrameHost&, const GURL&, const url::Origin&));
 };
 
 }  // namespace content

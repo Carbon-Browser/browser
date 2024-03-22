@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
@@ -23,8 +24,6 @@
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_message_loop.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/version.h"
 #include "chromeos/printing/fake_printer_config_cache.h"
 #include "chromeos/printing/ppd_cache.h"
@@ -88,9 +87,12 @@ const char kDefaultManufacturersJson[] = R"({
 // PpdProvider at construct time. Used throughout to activate testing
 // codepaths.
 struct PpdProviderComposedMembers {
-  FakePrinterConfigCache* config_cache = nullptr;
-  FakePrinterConfigCache* manager_config_cache = nullptr;
-  PpdMetadataManager* metadata_manager = nullptr;
+  raw_ptr<FakePrinterConfigCache, DanglingUntriaged | ExperimentalAsh>
+      config_cache = nullptr;
+  raw_ptr<FakePrinterConfigCache, DanglingUntriaged | ExperimentalAsh>
+      manager_config_cache = nullptr;
+  raw_ptr<PpdMetadataManager, DanglingUntriaged | ExperimentalAsh>
+      metadata_manager = nullptr;
 };
 
 class PpdProviderTest : public ::testing::Test {
@@ -153,8 +155,9 @@ class PpdProviderTest : public ::testing::Test {
     auto manager_config_cache = std::make_unique<FakePrinterConfigCache>();
     provider_backdoor_.manager_config_cache = manager_config_cache.get();
 
-    auto manager = PpdMetadataManager::Create(options.browser_locale, &clock_,
-                                              std::move(manager_config_cache));
+    auto manager = PpdMetadataManager::Create(
+        options.browser_locale, PpdIndexChannel::kProduction, &clock_,
+        std::move(manager_config_cache));
     provider_backdoor_.metadata_manager = manager.get();
 
     switch (options.propagate_locale) {
@@ -357,6 +360,16 @@ class PpdProviderTest : public ::testing::Test {
              R"({
                 "ppdIndex": {
                   "Some other canonical reference": {
+                    "ppdMetadata": [ {
+                      "name": "unused.ppd"
+                    } ]
+                  }
+                }
+            })"},
+            {"metadata_v3/index-15.json",
+             R"({
+                "ppdIndex": {
+                  "zebra zpl label printer": {
                     "ppdMetadata": [ {
                       "name": "unused.ppd"
                     } ]
@@ -1138,6 +1151,39 @@ TEST_F(PpdProviderTest, ResolveUsbManufacturer) {
                PpdProvider::SUCCESS);
   // Unknown vendor id should result in an empty manufacturer string.
   EXPECT_TRUE(captured_resolve_ppd_references_[1].usb_manufacturer.empty());
+}
+
+TEST_F(PpdProviderTest, GenericZebraPpdResolution) {
+  auto provider =
+      CreateProvider({"en", PpdCacheRunLocation::kInBackgroundThreads,
+                      PropagateLocaleToMetadataManager::kDoPropagate});
+  StartFakePpdServer();
+
+  PrinterSearchData search_data;
+  search_data.discovery_type = PrinterDiscoveryType::kManual;
+  // Zebra and ZPL tell the resolver to search for the generic PPD, which
+  // should be found.
+  search_data.printer_id.set_make("Zebra");
+  search_data.printer_id.set_model("ZTC label printer 2000 ZPL");
+
+  provider->ResolvePpdReference(
+      search_data, base::BindOnce(&PpdProviderTest::CaptureResolvePpdReference,
+                                  base::Unretained(this)));
+
+  task_environment_.RunUntilIdle();
+
+  // No ZPL in the model name, so this PPD will not be found.
+  search_data.printer_id.set_model("ZTC label printer 4000");
+  provider->ResolvePpdReference(
+      search_data, base::BindOnce(&PpdProviderTest::CaptureResolvePpdReference,
+                                  base::Unretained(this)));
+
+  task_environment_.RunUntilIdle();
+
+  ASSERT_EQ(2UL, captured_resolve_ppd_references_.size());
+
+  EXPECT_EQ(PpdProvider::SUCCESS, captured_resolve_ppd_references_[0].code);
+  EXPECT_EQ(PpdProvider::NOT_FOUND, captured_resolve_ppd_references_[1].code);
 }
 
 }  // namespace

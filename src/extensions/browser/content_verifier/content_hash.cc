@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <set>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -37,10 +37,7 @@ bool CreateDirAndWriteFile(const base::FilePath& destination,
   if (!base::CreateDirectory(dir))
     return false;
 
-  int write_result =
-      base::WriteFile(destination, content.data(), content.size());
-  return write_result >= 0 &&
-         base::checked_cast<size_t>(write_result) == content.size();
+  return base::WriteFile(destination, content);
 }
 
 std::unique_ptr<VerifiedContents> ReadVerifiedContents(
@@ -52,7 +49,9 @@ std::unique_ptr<VerifiedContents> ReadVerifiedContents(
   std::unique_ptr<VerifiedContents> verified_contents =
       VerifiedContents::CreateFromFile(key.verifier_key,
                                        verified_contents_path);
-  if (!verified_contents) {
+  if (!verified_contents ||
+      verified_contents->extension_id() != key.extension_id ||
+      verified_contents->version() != key.extension_version) {
     if (delete_invalid_file && !base::DeleteFile(verified_contents_path)) {
       LOG(WARNING) << "Failed to delete " << verified_contents_path.value();
     }
@@ -215,10 +214,13 @@ std::unique_ptr<VerifiedContents> ContentHash::StoreAndRetrieveVerifiedContents(
   // can be a login redirect html, xml file, etc. if you aren't logged in with
   // the right cookies).  TODO(asargent) - It would be a nice enhancement to
   // move to parsing this in a sandboxed helper (https://crbug.com/372878).
-  absl::optional<base::Value> parsed =
-      base::JSONReader::Read(*fetched_contents);
-  if (!parsed)
+  std::optional<base::Value> parsed = base::JSONReader::Read(*fetched_contents);
+  if (!parsed) {
+    LOG(ERROR)
+        << "Failed to parse fetched verified_contents.json for extension id: "
+        << key.extension_id << " version: " << key.extension_version;
     return nullptr;
+  }
 
   VLOG(1) << "JSON parsed ok for " << key.extension_id;
   parsed.reset();  // no longer needed
@@ -245,16 +247,23 @@ void ContentHash::DidFetchVerifiedContents(
     FetchKey key,
     std::unique_ptr<std::string> fetched_contents,
     FetchErrorCode fetch_error) {
+  size_t json_size = fetched_contents ? fetched_contents->size() : 0;
   std::unique_ptr<VerifiedContents> verified_contents =
       StoreAndRetrieveVerifiedContents(std::move(fetched_contents), key);
 
   if (!verified_contents) {
+    LOG(ERROR) << "Fetching verified_contents.json for extension id: "
+               << key.extension_id << " version: " << key.extension_version
+               << " failed with error code " << fetch_error;
     std::move(verified_contents_callback)
         .Run(std::move(key), nullptr, /*did_attempt_fetch=*/true,
              /*fetch_error=*/fetch_error);
     return;
   }
 
+  LOG(WARNING) << "Fetched verified_contents.json with size: " << json_size
+               << " bytes for extension id: " << key.extension_id
+               << " version: " << key.extension_version;
   RecordFetchResult(true, fetch_error);
   std::move(verified_contents_callback)
       .Run(std::move(key), std::move(verified_contents),
@@ -358,7 +367,7 @@ bool ContentHash::CreateHashes(const base::FilePath& hashes_file,
   base::ElapsedTimer timer;
   did_attempt_creating_computed_hashes_ = true;
 
-  absl::optional<ComputedHashes::Data> computed_hashes_data =
+  std::optional<ComputedHashes::Data> computed_hashes_data =
       ComputedHashes::Compute(
           extension_root_, block_size_, is_cancelled,
           // Using base::Unretained is safe here as
@@ -417,7 +426,7 @@ void ContentHash::BuildComputedHashes(bool attempted_fetching_verified_contents,
   if (!will_create) {
     // Note: Tolerate for existing implementation.
     // Try to read and initialize the file first. On failure, continue creating.
-    absl::optional<ComputedHashes> computed_hashes =
+    std::optional<ComputedHashes> computed_hashes =
         ComputedHashes::CreateFromFile(computed_hashes_path,
                                        &computed_hashes_status_);
     DCHECK_EQ(computed_hashes_status_ == ComputedHashes::Status::SUCCESS,
@@ -443,7 +452,7 @@ void ContentHash::BuildComputedHashes(bool attempted_fetching_verified_contents,
   if (!base::PathExists(computed_hashes_path))
     return;
 
-  absl::optional<ComputedHashes> computed_hashes =
+  std::optional<ComputedHashes> computed_hashes =
       ComputedHashes::CreateFromFile(computed_hashes_path,
                                      &computed_hashes_status_);
   DCHECK_EQ(computed_hashes_status_ == ComputedHashes::Status::SUCCESS,

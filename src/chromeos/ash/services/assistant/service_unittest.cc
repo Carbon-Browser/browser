@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "ash/components/audio/cras_audio_handler.h"
 #include "ash/public/cpp/assistant/test_support/mock_assistant_controller.h"
 #include "base/check.h"
 #include "base/memory/scoped_refptr.h"
@@ -18,6 +17,7 @@
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/assistant/test_support/fake_assistant_manager_service_impl.h"
@@ -29,30 +29,36 @@
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "net/base/backoff_entry.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
+
 constexpr base::TimeDelta kDefaultTokenExpirationDelay =
     base::Milliseconds(60000);
+
+constexpr base::TimeDelta kAutoRecoverTime = base::Seconds(60);
 
 #define EXPECT_STATE(_state) EXPECT_EQ(_state, assistant_manager()->GetState())
 
 const char* kAccessToken = "fake access token";
 const char* kGaiaId = "gaia_id_for_user_gmail.com";
 const char* kEmailAddress = "user@gmail.com";
+
+// Should be the same value as the one in service.cc.
+constexpr int kMaxStartServiceRetries = 1;
+
 }  // namespace
 
 class ScopedFakeAssistantBrowserDelegate
     : public ScopedAssistantBrowserDelegate {
  public:
-  explicit ScopedFakeAssistantBrowserDelegate(
-      ash::AssistantState* assistant_state)
+  explicit ScopedFakeAssistantBrowserDelegate(AssistantState* assistant_state)
       : status_(AssistantStatus::NOT_READY) {}
 
   AssistantStatus status() { return status_; }
@@ -74,11 +80,9 @@ class AssistantServiceTest : public testing::Test {
   ~AssistantServiceTest() override = default;
 
   void SetUp() override {
-    chromeos::CrasAudioHandler::InitializeForTesting();
-
-    PowerManagerClient::InitializeFake();
-    FakePowerManagerClient::Get()->SetTabletMode(
-        PowerManagerClient::TabletMode::OFF, base::TimeTicks());
+    chromeos::PowerManagerClient::InitializeFake();
+    chromeos::FakePowerManagerClient::Get()->SetTabletMode(
+        chromeos::PowerManagerClient::TabletMode::OFF, base::TimeTicks());
 
     shared_url_loader_factory_ =
         base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
@@ -95,21 +99,25 @@ class AssistantServiceTest : public testing::Test {
         kEmailAddress, signin::ConsentLevel::kSignin);
 
     service_ = std::make_unique<Service>(shared_url_loader_factory_->Clone(),
-                                         identity_test_env_.identity_manager());
+                                         identity_test_env_.identity_manager(),
+                                         pref_service());
     service_->SetAssistantManagerServiceForTesting(
         std::make_unique<FakeAssistantManagerServiceImpl>());
+    service_->SetAutoRecoverTimeForTesting(kAutoRecoverTime);
 
     service_->Init();
     // Wait for AssistantManagerService to be set.
     base::RunLoop().RunUntilIdle();
 
     IssueAccessToken(kAccessToken);
+    // Simulate that the DLC library is loaded.
+    service_->OnLibassistantLoaded(/*success=*/true);
   }
 
   void TearDown() override {
     service_.reset();
-    PowerManagerClient::Shutdown();
-    chromeos::CrasAudioHandler::Shutdown();
+    chromeos::PowerManagerClient::Shutdown();
+    CrasAudioHandler::Shutdown();
   }
 
   void StartAssistantAndWait() {
@@ -146,11 +154,29 @@ class AssistantServiceTest : public testing::Test {
 
   PrefService* pref_service() { return &pref_service_; }
 
-  ash::AssistantState* assistant_state() { return &assistant_state_; }
+  AssistantState* assistant_state() { return &assistant_state_; }
 
   ScopedFakeAssistantBrowserDelegate* client() { return &fake_delegate_; }
 
   base::test::TaskEnvironment* task_environment() { return &task_environment_; }
+
+  net::BackoffEntry* GetRestartServiceBackoff() {
+    return &service_->start_service_retry_backoff_;
+  }
+
+  void DecreaseStartServiceBackoff() {
+    service_->DecreaseStartServiceBackoff();
+  }
+
+  int GetNumberOfFailuresSinceLastServiceRun() {
+    return pref_service()->GetInteger(
+        prefs::kAssistantNumFailuresSinceLastServiceRun);
+  }
+
+  void SetNumberOfFailuresSinceLastServiceRun(int number) {
+    pref_service()->SetInteger(prefs::kAssistantNumFailuresSinceLastServiceRun,
+                               number);
+  }
 
  private:
   base::test::TaskEnvironment task_environment_{
@@ -160,11 +186,12 @@ class AssistantServiceTest : public testing::Test {
 
   std::unique_ptr<Service> service_;
 
+  ScopedCrasAudioHandlerForTesting cras_audio_handler_;
   FullyInitializedAssistantState assistant_state_;
   signin::IdentityTestEnvironment identity_test_env_;
   ScopedFakeAssistantBrowserDelegate fake_delegate_{&assistant_state_};
   ScopedDeviceActions fake_device_actions_;
-  testing::NiceMock<ash::MockAssistantController> mock_assistant_controller;
+  testing::NiceMock<MockAssistantController> mock_assistant_controller;
 
   network::TestURLLoaderFactory url_loader_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
@@ -206,7 +233,7 @@ TEST_F(AssistantServiceTest, RetryRefreshTokenAfterFailure) {
 TEST_F(AssistantServiceTest, RetryRefreshTokenAfterDeviceWakeup) {
   ASSERT_FALSE(identity_test_env()->IsAccessTokenRequestPending());
 
-  FakePowerManagerClient::Get()->SendSuspendDone();
+  chromeos::FakePowerManagerClient::Get()->SendSuspendDone();
   // Token requested immediately after suspend done.
   EXPECT_TRUE(identity_test_env()->IsAccessTokenRequestPending());
 }
@@ -309,5 +336,415 @@ TEST_F(AssistantServiceTest, ShouldSetClientStatusToNotReadyWhenStopped) {
   EXPECT_EQ(client()->status(), AssistantStatus::NOT_READY);
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+TEST_F(AssistantServiceTest, StopImmediatelyIfAssistantIsDisconnected) {
+  // Test is set up as |State::STARTED|.
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(client()->status(), AssistantStatus::NOT_READY);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+}
+
+TEST_F(AssistantServiceTest,
+       IncreaseBackoffIfAssistantIsDisconnectedAfterStarting) {
+  StartAssistantAndWait();
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 1);
+}
+
+TEST_F(AssistantServiceTest,
+       IncreaseBackoffIfAssistantIsDisconnectedAfterStarted) {
+  assistant_manager()->SetStateAndInformObservers(
+      AssistantManagerService::State::STARTED);
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 1);
+}
+
+TEST_F(AssistantServiceTest,
+       IncreaseBackoffIfAssistantIsDisconnectedAfterRunning) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 1);
+}
+
+TEST_F(AssistantServiceTest, WillRetryIfAssistantIsDisconnectedAfterRunning) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 1);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+}
+
+TEST_F(AssistantServiceTest,
+       WillNotRetryIfAssistantIsDisconnectedAfterRunning) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+
+  // Will retry start for the first `kMaxStartServiceRetries` times.
+  for (int i = 1; i <= kMaxStartServiceRetries; ++i) {
+    assistant_manager()->Disconnected();
+    EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+    EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), i);
+
+    task_environment()->FastForwardBy(
+        GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+    EXPECT_STATE(AssistantManagerService::State::STARTING);
+  }
+
+  // Will not retry start after disconnected `kMaxStartServiceRetries` times.
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries + 1);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+}
+
+TEST_F(AssistantServiceTest, DecreaseBackoff) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+
+  for (int i = 1; i <= kMaxStartServiceRetries; ++i) {
+    GetRestartServiceBackoff()->InformOfRequest(/*succeeded=*/false);
+  }
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries + 1);
+
+  for (int i = kMaxStartServiceRetries; i >= 0; --i) {
+    task_environment()->FastForwardBy(kAutoRecoverTime);
+    EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), i);
+  }
+
+  // The `failure_count` will not be less than 0.
+  task_environment()->FastForwardBy(kAutoRecoverTime);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+}
+
+TEST_F(AssistantServiceTest, WillRetryAfterDecreaseBackoff) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+
+  for (int i = 1; i <= kMaxStartServiceRetries; ++i) {
+    GetRestartServiceBackoff()->InformOfRequest(/*succeeded=*/false);
+  }
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries + 1);
+
+  task_environment()->FastForwardBy(kAutoRecoverTime);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+}
+
+TEST_F(AssistantServiceTest, NoOpWhenRetryStartAfterDecreaseBackoff) {
+  for (int i = 1; i <= kMaxStartServiceRetries; ++i) {
+    GetRestartServiceBackoff()->InformOfRequest(/*succeeded=*/false);
+  }
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries);
+
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+
+  DecreaseStartServiceBackoff();
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries - 1);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+}
+
+TEST_F(AssistantServiceTest, ResetBackoffAfterReEnableSettings) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+
+  for (int i = 1; i <= kMaxStartServiceRetries; ++i) {
+    GetRestartServiceBackoff()->InformOfRequest(/*succeeded=*/false);
+  }
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries + 1);
+
+  StopAssistantAndWait();
+  StartAssistantAndWait();
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+}
+
+TEST_F(AssistantServiceTest, WillStartAfterReEnableSettings) {
+  for (int i = 1; i <= kMaxStartServiceRetries + 1; ++i) {
+    GetRestartServiceBackoff()->InformOfRequest(/*succeeded=*/false);
+  }
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries + 1);
+
+  StopAssistantAndWait();
+  StartAssistantAndWait();
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+}
+
+TEST_F(AssistantServiceTest, WillNotStartAfterMaxRetry_OnTokenRefreshed) {
+  ResetFakeAssistantManager();
+  // Now force an access token refresh.
+  task_environment()->FastForwardBy(kDefaultTokenExpirationDelay);
+  IssueAccessToken("new token");
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+
+  // Now force an access token refresh.
+  task_environment()->FastForwardBy(kDefaultTokenExpirationDelay);
+  for (int i = 1; i <= kMaxStartServiceRetries; ++i) {
+    GetRestartServiceBackoff()->InformOfRequest(/*succeeded=*/false);
+  }
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries + 1);
+
+  IssueAccessToken("new token");
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+}
+
+TEST_F(AssistantServiceTest,
+       IncreaseFailuresPrefIfAssistantIsDisconnectedAfterStarting) {
+  StartAssistantAndWait();
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 0);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 1);
+}
+
+TEST_F(AssistantServiceTest,
+       IncreaseFailuresPrefIfAssistantIsDisconnectedAfterStarted) {
+  assistant_manager()->SetStateAndInformObservers(
+      AssistantManagerService::State::STARTED);
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 0);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 1);
+}
+
+TEST_F(AssistantServiceTest,
+       IncreaseFailuresPrefIfAssistantIsDisconnectedAfterRunning) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 0);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 1);
+}
+
+TEST_F(AssistantServiceTest, ShouldRetryBasedOnNumberOfFailures) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 0);
+
+  // Set pref kNumFailuresSinceLastServiceRun to `kMaxStartServiceRetries - 1`,
+  // disconnect will retry.
+  SetNumberOfFailuresSinceLastServiceRun(kMaxStartServiceRetries - 1);
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 1);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), kMaxStartServiceRetries);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+
+  // Pref kNumFailuresSinceLastServiceRun is kMaxStartServiceRetries now,
+  // disconnect will not retry.
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 2);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 1);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+}
+
+TEST_F(AssistantServiceTest,
+       DecreaseBackoffRetryWillNotBasedOnNumberOfFailures) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 0);
+
+  for (int i = 1; i <= kMaxStartServiceRetries; ++i) {
+    GetRestartServiceBackoff()->InformOfRequest(/*succeeded=*/false);
+  }
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries + 1);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 1);
+
+  // Decreasing backoff will retry.
+  task_environment()->FastForwardBy(kAutoRecoverTime);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+
+  // Set pref kNumFailuresSinceLastServiceRun to > `kMaxStartServiceRetries`,
+  // decreasing backoff still will retry.
+  SetNumberOfFailuresSinceLastServiceRun(kMaxStartServiceRetries + 1);
+  task_environment()->FastForwardBy(kAutoRecoverTime);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(),
+            kMaxStartServiceRetries - 1);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 1);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+}
+
+TEST_F(AssistantServiceTest,
+       WillNotResetNumberOfFailuresAfterReEnableSettings) {
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 0);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 1);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 1);
+
+  StopAssistantAndWait();
+  StartAssistantAndWait();
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 1);
+}
+
+TEST_F(AssistantServiceTest,
+       WillStartAfterReEnableSettingsWithMaxNumberOfFailures) {
+  SetNumberOfFailuresSinceLastServiceRun(kMaxStartServiceRetries + 1);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 1);
+
+  StopAssistantAndWait();
+  StartAssistantAndWait();
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 1);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+}
+
+TEST_F(AssistantServiceTest, ResetNumberOfFailuresAfterRunning) {
+  SetNumberOfFailuresSinceLastServiceRun(kMaxStartServiceRetries + 1);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 1);
+
+  assistant_manager()->FinishStart();
+  EXPECT_STATE(AssistantManagerService::State::RUNNING);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(), 0);
+}
+
+TEST_F(AssistantServiceTest,
+       WillStartAfterMaxNumberOfFailures_OnTokenRefreshed) {
+  ResetFakeAssistantManager();
+  // Now force an access token refresh.
+  task_environment()->FastForwardBy(kDefaultTokenExpirationDelay);
+  IssueAccessToken("new token");
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+
+  // Now force an access token refresh.
+  task_environment()->FastForwardBy(kDefaultTokenExpirationDelay);
+  GetRestartServiceBackoff()->InformOfRequest(/*succeeded=*/false);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 1);
+  SetNumberOfFailuresSinceLastServiceRun(kMaxStartServiceRetries + 1);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 1);
+
+  assistant_manager()->Disconnected();
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 2);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 2);
+
+  IssueAccessToken("new token");
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+
+  // First decreasing backoff will not restart service.
+  task_environment()->FastForwardBy(kAutoRecoverTime);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 1);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 2);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::DISCONNECTED);
+
+  // Second decreasing backoff will not restart service.
+  task_environment()->FastForwardBy(kAutoRecoverTime);
+  EXPECT_EQ(GetRestartServiceBackoff()->failure_count(), 0);
+  EXPECT_EQ(GetNumberOfFailuresSinceLastServiceRun(),
+            kMaxStartServiceRetries + 2);
+
+  task_environment()->FastForwardBy(
+      GetRestartServiceBackoff()->GetTimeUntilRelease() * 1.2);
+  EXPECT_STATE(AssistantManagerService::State::STARTING);
+}
+
+}  // namespace ash::assistant

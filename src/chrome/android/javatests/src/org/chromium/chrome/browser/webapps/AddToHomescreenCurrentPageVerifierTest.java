@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@ import org.junit.runner.RunWith;
 import org.chromium.base.CommandLine;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
-import org.chromium.base.test.util.FlakyTest;
 import org.chromium.chrome.browser.browserservices.intents.WebappConstants;
 import org.chromium.chrome.browser.browserservices.ui.controller.CurrentPageVerifier.VerificationStatus;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
@@ -28,9 +27,7 @@ import org.chromium.chrome.browser.test.MockCertVerifierRuleAndroid;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.content_public.common.ContentSwitches;
 
-/**
- * Tests the {@link CurrentPageVerifier} integration with PWAs added to the homescreen.
- */
+/** Tests the {@link CurrentPageVerifier} integration with PWAs added to the homescreen. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public final class AddToHomescreenCurrentPageVerifierTest {
@@ -40,17 +37,17 @@ public final class AddToHomescreenCurrentPageVerifierTest {
             new MockCertVerifierRuleAndroid(0 /* net::OK */);
 
     @Rule
-    public RuleChain mRuleChain = RuleChain.emptyRuleChain()
-                                          .around(mActivityTestRule)
-                                          .around(mCertVerifierRule);
+    public RuleChain mRuleChain =
+            RuleChain.emptyRuleChain().around(mActivityTestRule).around(mCertVerifierRule);
 
     @Before
     public void setUp() {
         mActivityTestRule.getEmbeddedTestServerRule().setServerUsesHttps(true);
         Uri mapToUri =
                 Uri.parse(mActivityTestRule.getEmbeddedTestServerRule().getServer().getURL("/"));
-        CommandLine.getInstance().appendSwitchWithValue(
-                ContentSwitches.HOST_RESOLVER_RULES, "MAP * " + mapToUri.getAuthority());
+        CommandLine.getInstance()
+                .appendSwitchWithValue(
+                        ContentSwitches.HOST_RESOLVER_RULES, "MAP * " + mapToUri.getAuthority());
     }
 
     private void launchWebapp(String url) {
@@ -71,7 +68,6 @@ public final class AddToHomescreenCurrentPageVerifierTest {
     @Test
     @LargeTest
     @Feature({"Webapps"})
-    @FlakyTest(message = "http://crbug.com/1283235")
     public void testInScope() {
         String page = "https://foo.com/chrome/test/data/android/customtabs/cct_header.html";
         String otherPageInScope = "https://foo.com/chrome/test/data/android/simple.html";
@@ -82,8 +78,8 @@ public final class AddToHomescreenCurrentPageVerifierTest {
     }
 
     /**
-     * Tests that {@link CurrentPageVerifier} verification fails if the webapp navigates to a
-     * page with a different origin than the webapp.
+     * Tests that {@link CurrentPageVerifier} verification fails if the webapp navigates to a page
+     * with a different origin than the webapp.
      */
     @Test
     @LargeTest
@@ -93,7 +89,7 @@ public final class AddToHomescreenCurrentPageVerifierTest {
         String pageDifferentOrigin = "https://bar.com/chrome/test/data/android/simple.html";
         launchWebapp(page);
 
-        mActivityTestRule.loadUrl(pageDifferentOrigin, 10 /* secondsToWait */);
+        mActivityTestRule.loadUrl(pageDifferentOrigin, /* secondsToWait= */ 10);
         assertEquals(VerificationStatus.FAILURE, getCurrentPageVerifierStatus());
     }
 }

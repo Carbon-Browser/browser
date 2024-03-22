@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 #include "extensions/common/constants.h"
 #include "url/url_constants.h"
 
-namespace extensions {
-namespace declarative_net_request {
+namespace extensions::declarative_net_request {
 
 const char* const kAllowedTransformSchemes[4] = {
     url::kHttpScheme, url::kHttpsScheme, url::kFtpScheme,
@@ -62,22 +61,33 @@ const char kErrorRegexTooLarge[] =
 const char kErrorNoHeaderListsSpecified[] =
     "Rule with id * does not specify a value for \"*\" or \"*\" key. At least "
     "one of these keys must be specified with a non-empty list.";
-const char kErrorInvalidHeaderName[] =
+const char kErrorInvalidModifyHeaderName[] =
     "Rule with id * must specify a valid header name to be modified.";
-const char kErrorInvalidHeaderValue[] =
-    "Rule with id * specifies an invalid header value.";
+const char kErrorInvalidModifyHeaderValue[] =
+    "Rule with id * must provide a valid header value to be appended/set.";
 const char kErrorNoHeaderValueSpecified[] =
     "Rule with id * must provide a value for a header to be appended/set.";
 const char kErrorHeaderValuePresent[] =
     "Rule with id * must not provide a header value for a header to be "
     "removed.";
-const char kErrorCannotAppendRequestHeader[] =
-    "Rule with id * must not specify a request header to be appended.";
+const char kErrorAppendInvalidRequestHeader[] =
+    "Rule with id * specifies an invalid request header to be appended. Only "
+    "standard HTTP request headers that can specify multiple values for a "
+    "single entry are supported.";
 const char kErrorTabIdsOnNonSessionRule[] =
     "Rule with id * specifies a value for \"*\" or \"*\" key. These are only "
     "supported for session-scoped rules.";
 const char kErrorTabIdDuplicated[] =
     "Rule with id * includes and excludes the same tab ID.";
+const char kErrorInvalidMatchingHeaderName[] =
+    "Rule with id * must specify a valid header name for \"*\" key";
+const char kErrorInvalidMatchingHeaderValue[] =
+    "Rule with id * must specify a valid header value for \"*\" key";
+const char kErrorResponseHeaderDuplicated[] =
+    "Rule with id * includes and excludes the same response header.";
+const char kErrorResponseHeaderRuleCannotModifyRequestHeaders[] =
+    "Rule with id * which matches on response headers cannot modify request "
+    "headers.";
 
 const char kErrorListNotPassed[] = "Rules file must contain a list.";
 
@@ -102,10 +112,20 @@ const char kInternalErrorUpdatingDynamicRules[] =
 const char kInternalErrorGettingDynamicRules[] =
     "Internal error while getting dynamic rules.";
 const char kDynamicRuleCountExceeded[] = "Dynamic rule count exceeded.";
+
+// TODO(crbug.com/1485747): Once the documentation is updated, add a link to the
+// page detailing what safe/unsafe rules are.
+const char kDynamicUnsafeRuleCountExceeded[] =
+    "Dynamic unsafe rule count exceeded.";
 const char kDynamicRegexRuleCountExceeded[] =
     "Dynamic rule count for regex rules exceeded.";
 
 const char kSessionRuleCountExceeded[] = "Session rule count exceeded.";
+
+// TODO(crbug.com/1485747): Once the documentation is updated, add a link to the
+// page detailing what safe/unsafe rules are.
+const char kSessionUnsafeRuleCountExceeded[] =
+    "Session unsafe rule count exceeded.";
 const char kSessionRegexRuleCountExceeded[] =
     "Session rule count for regex rules exceeded.";
 
@@ -118,6 +138,10 @@ const char kEnabledRulesetsRegexRuleCountExceeded[] =
 const char kInternalErrorUpdatingEnabledRulesets[] = "Internal error.";
 const char kEnabledRulesetCountExceeded[] =
     "The number of enabled static rulesets exceeds the enabled ruleset count "
+    "limit.";
+
+const char kDisabledStaticRuleCountExceeded[] =
+    "The number of disabled static rules exceeds the disabled rule count "
     "limit.";
 
 const char kTabNotFoundError[] = "No tab with id: *.";
@@ -139,6 +163,8 @@ const char kReadDynamicRulesJSONStatusHistogram[] =
     "Extensions.DeclarativeNetRequest.ReadDynamicRulesJSONStatus";
 const char kIsLargeRegexHistogram[] =
     "Extensions.DeclarativeNetRequest.IsLargeRegexRule";
+const char kRegexRuleSizeHistogram[] =
+    "Extensions.DeclarativeNetRequest.RegexRuleSize";
 const char kLoadRulesetResultHistogram[] =
     "Extensions.DeclarativeNetRequest.LoadRulesetResult";
 
@@ -152,5 +178,4 @@ const char kErrorGetMatchedRulesMissingPermissions[] =
 
 const char kEmbedderConditionsBufferIdentifier[] = "EMBR";
 
-}  // namespace declarative_net_request
-}  // namespace extensions
+}  // namespace extensions::declarative_net_request

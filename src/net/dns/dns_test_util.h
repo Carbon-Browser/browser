@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,14 @@
 #include <utility>
 #include <vector>
 
+#include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
-#include "net/base/address_list.h"
+#include "base/values.h"
 #include "net/base/connection_endpoint_metadata.h"
+#include "net/base/ip_endpoint.h"
 #include "net/dns/dns_client.h"
 #include "net/dns/dns_config.h"
 #include "net/dns/dns_response.h"
@@ -335,7 +337,7 @@ struct MockDnsClientRule {
   uint16_t qtype;
   bool secure;
   bool delay;
-  raw_ptr<URLRequestContext> context;
+  raw_ptr<URLRequestContext, DanglingUntriaged> context;
 };
 
 typedef std::vector<MockDnsClientRule> MockDnsClientRuleList;
@@ -358,7 +360,7 @@ class MockDnsTransactionFactory : public DnsTransactionFactory {
   std::unique_ptr<DnsProbeRunner> CreateDohProbeRunner(
       ResolveContext* resolve_context) override;
 
-  void AddEDNSOption(const OptRecordRdata::Opt& opt) override;
+  void AddEDNSOption(std::unique_ptr<OptRecordRdata::Opt> opt) override;
 
   SecureDnsMode GetSecureDnsModeForTest() override;
 
@@ -412,12 +414,12 @@ class MockDnsClient : public DnsClient {
   AddressSorter* GetAddressSorter() override;
   void IncrementInsecureFallbackFailures() override;
   void ClearInsecureFallbackFailures() override;
-  base::Value GetDnsConfigAsValueForNetLog() const override;
+  base::Value::Dict GetDnsConfigAsValueForNetLog() const override;
   absl::optional<DnsConfig> GetSystemConfigForTesting() const override;
   DnsConfigOverrides GetConfigOverridesForTesting() const override;
   void SetTransactionFactoryForTesting(
       std::unique_ptr<DnsTransactionFactory> factory) override;
-  absl::optional<AddressList> GetPresetAddrs(
+  absl::optional<std::vector<IPEndPoint>> GetPresetAddrs(
       const url::SchemeHostPort& endpoint) const override;
 
   // Completes all DnsTransactions that were delayed by a rule.
@@ -438,7 +440,7 @@ class MockDnsClient : public DnsClient {
     preset_endpoint_ = std::move(endpoint);
   }
 
-  void set_preset_addrs(AddressList preset_addrs) {
+  void set_preset_addrs(std::vector<IPEndPoint> preset_addrs) {
     preset_addrs_ = std::move(preset_addrs);
   }
 
@@ -470,7 +472,7 @@ class MockDnsClient : public DnsClient {
   std::unique_ptr<MockDnsTransactionFactory> factory_;
   std::unique_ptr<AddressSorter> address_sorter_;
   absl::optional<url::SchemeHostPort> preset_endpoint_;
-  absl::optional<AddressList> preset_addrs_;
+  absl::optional<std::vector<IPEndPoint>> preset_addrs_;
 };
 
 }  // namespace net

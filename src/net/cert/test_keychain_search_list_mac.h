@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <CoreServices/CoreServices.h>
 #include <Security/Security.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "net/base/net_export.h"
 
 namespace net {
@@ -40,7 +40,7 @@ class NET_EXPORT TestKeychainSearchList {
  private:
   TestKeychainSearchList();
 
-  base::ScopedCFTypeRef<CFMutableArrayRef> scoped_keychain_search_list;
+  base::apple::ScopedCFTypeRef<CFMutableArrayRef> scoped_keychain_search_list;
 };
 
 }  // namespace net

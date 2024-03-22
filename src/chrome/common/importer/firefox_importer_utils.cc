@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,14 +27,15 @@
 namespace {
 
 // Retrieves the file system path of the profile name.
-base::FilePath GetProfilePath(const base::DictionaryValue& root,
+base::FilePath GetProfilePath(const base::Value::Dict& root,
                               const std::string& profile_name) {
   std::string path_str;
   const std::string* is_relative =
-      root.FindStringPath(profile_name + ".IsRelative");
+      root.FindStringByDottedPath(profile_name + ".IsRelative");
   if (!is_relative)
     return base::FilePath();
-  if (const std::string* ptr = root.FindStringPath(profile_name + ".Path"))
+  if (const std::string* ptr =
+          root.FindStringByDottedPath(profile_name + ".Path"))
     path_str = *ptr;
   else
     return base::FilePath();
@@ -66,26 +67,26 @@ std::vector<FirefoxDetail> GetFirefoxDetails(
 }
 
 std::vector<FirefoxDetail> GetFirefoxDetailsFromDictionary(
-    const base::DictionaryValue& root,
+    const base::Value::Dict& root,
     const std::string& firefox_install_id) {
   std::vector<FirefoxDetail> profile_details;
 
   for (int i = 0; ; ++i) {
     std::string current_profile = base::StringPrintf("Profile%d", i);
-    if (!root.FindKey(current_profile)) {
+    if (!root.Find(current_profile)) {
       // Profiles are contiguously numbered. So we exit when we can't
       // find the i-th one.
       break;
     }
 
-    if (!root.FindPath(current_profile + ".Path"))
+    if (!root.FindByDottedPath(current_profile + ".Path"))
       continue;
 
     FirefoxDetail details;
     details.path = GetProfilePath(root, current_profile);
     std::u16string name;
     if (const std::string* name_utf8 =
-            root.FindStringPath(current_profile + ".Name")) {
+            root.FindStringByDottedPath(current_profile + ".Name")) {
       name = base::UTF8ToUTF16(*name_utf8);
     }
     // Make the profile name more presentable by replacing dashes with spaces.
@@ -178,7 +179,7 @@ bool GetFirefoxVersionAndPathFromProfile(const base::FilePath& profile_path,
 }
 
 bool ReadPrefFile(const base::FilePath& path, std::string* content) {
-  if (content == NULL)
+  if (content == nullptr)
     return false;
 
   base::ReadFileToString(path, content);

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "extensions/renderer/extensions_renderer_client.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
 #include "ui/base/page_transition_types.h"
+#include "v8/include/v8-local-handle.h"
 
 class GURL;
 
@@ -21,6 +22,7 @@ class WebFrame;
 class WebLocalFrame;
 struct WebPluginParams;
 class WebURL;
+class WebView;
 }
 
 namespace content {
@@ -48,8 +50,6 @@ class MojoUkmRecorder;
 
 namespace v8 {
 class Isolate;
-template <typename T>
-class Local;
 class Object;
 }  // namespace v8
 
@@ -82,6 +82,8 @@ class ChromeExtensionsRendererClient
 
   // See ChromeContentRendererClient methods with the same names.
   void RenderThreadStarted();
+  void WebViewCreated(blink::WebView* web_view,
+                      const url::Origin* outermost_origin);
   void RenderFrameCreated(content::RenderFrame* render_frame,
                           service_manager::BinderRegistry* registry);
   bool OverrideCreatePlugin(content::RenderFrame* render_frame,

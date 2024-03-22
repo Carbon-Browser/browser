@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/speech/speech_recognition_test_helper.h"
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/speech/cros_speech_recognition_service_factory.h"
@@ -119,15 +119,17 @@ void SpeechRecognitionTestHelper::SendErrorAndWait() {
   }
 }
 
-std::vector<base::Feature> SpeechRecognitionTestHelper::GetEnabledFeatures() {
-  std::vector<base::Feature> features;
+std::vector<base::test::FeatureRef>
+SpeechRecognitionTestHelper::GetEnabledFeatures() {
+  std::vector<base::test::FeatureRef> features;
   if (type_ == speech::SpeechRecognitionType::kOnDevice)
     features.push_back(ash::features::kOnDeviceSpeechRecognition);
   return features;
 }
 
-std::vector<base::Feature> SpeechRecognitionTestHelper::GetDisabledFeatures() {
-  std::vector<base::Feature> features;
+std::vector<base::test::FeatureRef>
+SpeechRecognitionTestHelper::GetDisabledFeatures() {
+  std::vector<base::test::FeatureRef> features;
   if (type_ == speech::SpeechRecognitionType::kNetwork)
     features.push_back(ash::features::kOnDeviceSpeechRecognition);
   return features;

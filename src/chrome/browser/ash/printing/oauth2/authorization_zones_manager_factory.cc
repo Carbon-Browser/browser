@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@
 
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/printing/oauth2/authorization_zones_manager.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace ash {
 namespace printing {
@@ -30,22 +28,22 @@ AuthorizationZonesManagerFactory::GetForBrowserContext(
 }
 
 AuthorizationZonesManagerFactory::AuthorizationZonesManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AuthorizationZonesManagerFactory",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
 AuthorizationZonesManagerFactory::~AuthorizationZonesManagerFactory() = default;
 
-KeyedService* AuthorizationZonesManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AuthorizationZonesManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return AuthorizationZonesManager::Create(Profile::FromBrowserContext(context))
-      .release();
-}
-
-content::BrowserContext*
-AuthorizationZonesManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return AuthorizationZonesManager::Create(
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace oauth2

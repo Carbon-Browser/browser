@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,8 @@ class AwVariationsServiceClient : public variations::VariationsServiceClient {
   version_info::Channel GetChannel() override;
   bool OverridesRestrictParameter(std::string* parameter) override;
   bool IsEnterprise() override;
+  void RemoveGoogleGroupsFromPrefsForDeletedProfiles(
+      PrefService* local_state) override;
 };
 
 }  // namespace android_webview

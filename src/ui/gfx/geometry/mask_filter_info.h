@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 
 namespace gfx {
 
+class AxisTransform2d;
 class Transform;
 
 // This class defines a mask filter to be applied to the given rect.
@@ -57,9 +58,11 @@ class GEOMETRY_SKIA_EXPORT MaskFilterInfo {
   // True if this contains no effective mask information.
   bool IsEmpty() const { return rounded_corner_bounds_.IsEmpty(); }
 
-  // Transform the mask information. Returns false if the transform
-  // cannot be applied.
-  bool Transform(const gfx::Transform& transform);
+  // Transform the mask filter information. If the transform cannot be applied
+  // (e.g. it would make rounded_corner_bounds_ invalid), rounded_corner_bounds_
+  // will be set to empty.
+  void ApplyTransform(const Transform& transform);
+  void ApplyTransform(const AxisTransform2d& transform);
 
   std::string ToString() const;
 
@@ -73,12 +76,18 @@ class GEOMETRY_SKIA_EXPORT MaskFilterInfo {
 };
 
 inline bool operator==(const MaskFilterInfo& lhs, const MaskFilterInfo& rhs) {
-  return lhs.rounded_corner_bounds() == rhs.rounded_corner_bounds();
+  return (lhs.rounded_corner_bounds() == rhs.rounded_corner_bounds()) &&
+         (lhs.gradient_mask() == rhs.gradient_mask());
 }
 
 inline bool operator!=(const MaskFilterInfo& lhs, const MaskFilterInfo& rhs) {
   return !(lhs == rhs);
 }
+
+// This is declared here for use in gtest-based unit tests but is defined in
+// the //ui/gfx:test_support target. Depend on that to use this in your unit
+// test. This should not be used in production code - call ToString() instead.
+void PrintTo(const MaskFilterInfo&, ::std::ostream* os);
 
 }  // namespace gfx
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,15 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
+#include "base/memory/weak_ptr.h"
 #include "components/segmentation_platform/internal/database/ukm_types.h"
+#include "components/segmentation_platform/public/trigger.h"
 
 namespace segmentation_platform::processing {
 class FeatureProcessorState;
+struct Data;
 
 // Interface that converts aribitrary data to a list of tensor in asynchronous
 // callback, which can be fed into machine learning model as training data or
@@ -26,15 +29,11 @@ class QueryProcessor {
   using IndexedTensors = segmentation_platform::processing::IndexedTensors;
   using FeatureIndex = segmentation_platform::processing::FeatureIndex;
 
-  // TODO(haileywang): Maybe use a unique_ptr<> here.
-  using QueryProcessorCallback =
-      base::OnceCallback<void(std::unique_ptr<FeatureProcessorState>,
-                              IndexedTensors)>;
+  using QueryProcessorCallback = base::OnceCallback<void(IndexedTensors)>;
 
   // Processes the data and return the tensor values in |callback|.
-  virtual void Process(
-      std::unique_ptr<FeatureProcessorState> feature_processor_state,
-      QueryProcessorCallback callback) = 0;
+  virtual void Process(FeatureProcessorState& feature_processor_state,
+                       QueryProcessorCallback callback) = 0;
 
   // Disallow copy/assign.
   QueryProcessor(const QueryProcessor&) = delete;

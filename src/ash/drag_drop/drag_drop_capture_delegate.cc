@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,6 @@ bool DragDropCaptureDelegate::TakeCapture(
   if (!tracker.Contains(capture_window)) {
     // This means the drag was cancelled during event transfer.
     // See: crbug.com/1297209.
-    gesture_recognizer->CleanupStateForConsumer(capture_window);
     return false;
   }
   drag_drop_tracker_->TakeCapture();

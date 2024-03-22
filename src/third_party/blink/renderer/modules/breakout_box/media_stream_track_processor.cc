@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,9 +58,9 @@ MediaStreamTrackProcessor::MediaStreamTrackProcessor(
 
 ReadableStream* MediaStreamTrackProcessor::readable(ScriptState* script_state) {
   if (source_stream_)
-    return source_stream_;
+    return source_stream_.Get();
 
-  if (input_track_->Component()->Source()->GetType() ==
+  if (input_track_->Component()->GetSourceType() ==
       MediaStreamSource::kTypeVideo) {
     CreateVideoSourceStream(script_state);
   } else {
@@ -71,7 +71,7 @@ ReadableStream* MediaStreamTrackProcessor::readable(ScriptState* script_state) {
       MakeGarbageCollected<UnderlyingSourceCloser>(input_track_, this);
   input_track_->AddObserver(source_closer_);
 
-  return source_stream_;
+  return source_stream_.Get();
 }
 
 void MediaStreamTrackProcessor::CreateVideoSourceStream(

@@ -1,40 +1,41 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
-export type DataCollectorItem = {
-  name: string,
-  isIncluded: boolean,
-  protoEnum: number,
-};
+export interface DataCollectorItem {
+  name: string;
+  isIncluded: boolean;
+  protoEnum: number;
+}
 
-export type IssueDetails = {
-  caseId: string,
-  emailAddress: string,
-  issueDescription: string,
-};
+export interface IssueDetails {
+  caseId: string;
+  emailAddress: string;
+  issueDescription: string;
+}
 
-export type PIIDataItem = {
-  piiTypeDescription: string,
-  piiType: number,
-  detectedData: string,
-  count: number,
-  keep: boolean,
-  expandDetails: boolean,
-};
+export interface PiiDataItem {
+  piiTypeDescription: string;
+  piiType: number;
+  detectedData: string;
+  count: number;
+  keep: boolean;
+  expandDetails: boolean;
+}
 
-export type StartDataCollectionResult = {
-  success: boolean,
-  errorMessage: string,
-};
+export interface StartDataCollectionResult {
+  success: boolean;
+  errorMessage: string;
+}
 
-export type UrlGenerationResult = {
-  success: boolean,
-  url: string,
-  errorMessage: string,
-};
+export interface SupportTokenGenerationResult {
+  success: boolean;
+  // It will be filled only if `success` is true.
+  token: string;
+  errorMessage: string;
+}
 
 export interface BrowserProxy {
   /**
@@ -47,17 +48,22 @@ export interface BrowserProxy {
   getAllDataCollectors(): Promise<DataCollectorItem[]>;
 
   startDataCollection(
-      issueDetails: IssueDetails, selectedDataCollectors: DataCollectorItem[]):
-      Promise<StartDataCollectionResult>;
+      issueDetails: IssueDetails, selectedDataCollectors: DataCollectorItem[],
+      screenshotBase64: string): Promise<StartDataCollectionResult>;
+
+  takeScreenshot(): void;
 
   cancelDataCollection(): void;
 
-  startDataExport(piiItems: PIIDataItem[]): void;
+  startDataExport(piiItems: PiiDataItem[]): void;
 
   showExportedDataInFolder(): void;
 
-  generateCustomizedURL(caseId: string, dataCollectors: DataCollectorItem[]):
-      Promise<UrlGenerationResult>;
+  generateCustomizedUrl(caseId: string, dataCollectors: DataCollectorItem[]):
+      Promise<SupportTokenGenerationResult>;
+
+  generateSupportToken(dataCollectors: DataCollectorItem[]):
+      Promise<SupportTokenGenerationResult>;
 }
 
 export class BrowserProxyImpl implements BrowserProxy {
@@ -73,16 +79,22 @@ export class BrowserProxyImpl implements BrowserProxy {
     return sendWithPromise('getAllDataCollectors');
   }
 
+  takeScreenshot() {
+    chrome.send('takeScreenshot');
+  }
+
   startDataCollection(
-      issueDetails: IssueDetails, dataCollectors: DataCollectorItem[]) {
-    return sendWithPromise('startDataCollection', issueDetails, dataCollectors);
+      issueDetails: IssueDetails, dataCollectors: DataCollectorItem[],
+      screenshotBase64: string) {
+    return sendWithPromise(
+        'startDataCollection', issueDetails, dataCollectors, screenshotBase64);
   }
 
   cancelDataCollection() {
     chrome.send('cancelDataCollection');
   }
 
-  startDataExport(piiItems: PIIDataItem[]) {
+  startDataExport(piiItems: PiiDataItem[]) {
     chrome.send('startDataExport', [piiItems]);
   }
 
@@ -90,8 +102,12 @@ export class BrowserProxyImpl implements BrowserProxy {
     chrome.send('showExportedDataInFolder');
   }
 
-  generateCustomizedURL(caseId: string, dataCollectors: DataCollectorItem[]) {
-    return sendWithPromise('generateCustomizedURL', caseId, dataCollectors);
+  generateCustomizedUrl(caseId: string, dataCollectors: DataCollectorItem[]) {
+    return sendWithPromise('generateCustomizedUrl', caseId, dataCollectors);
+  }
+
+  generateSupportToken(dataCollectors: DataCollectorItem[]) {
+    return sendWithPromise('generateSupportToken', dataCollectors);
   }
 
   static getInstance(): BrowserProxy {

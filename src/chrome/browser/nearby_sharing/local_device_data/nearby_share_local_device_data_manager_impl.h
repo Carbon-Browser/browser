@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,22 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager.h"
 #include "chrome/browser/nearby_sharing/proto/device_rpc.pb.h"
 #include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class NearbyShareClientFactory;
 class NearbyShareDeviceDataUpdater;
 class NearbyShareProfileInfoProvider;
-class NearbyShareScheduler;
 class PrefService;
+
+namespace ash::nearby {
+class NearbyScheduler;
+}  // namespace ash::nearby
 
 // Implementation of NearbyShareLocalDeviceDataManager that persists device data
 // in prefs. All RPC-related calls are guarded by a timeout, so callbacks are
@@ -95,10 +99,11 @@ class NearbyShareLocalDeviceDataManagerImpl
   void HandleUpdateDeviceResponse(
       const absl::optional<nearbyshare::proto::UpdateDeviceResponse>& response);
 
-  PrefService* pref_service_ = nullptr;
-  NearbyShareProfileInfoProvider* profile_info_provider_ = nullptr;
+  raw_ptr<PrefService, ExperimentalAsh> pref_service_ = nullptr;
+  raw_ptr<NearbyShareProfileInfoProvider, ExperimentalAsh>
+      profile_info_provider_ = nullptr;
   std::unique_ptr<NearbyShareDeviceDataUpdater> device_data_updater_;
-  std::unique_ptr<NearbyShareScheduler> download_device_data_scheduler_;
+  std::unique_ptr<ash::nearby::NearbyScheduler> download_device_data_scheduler_;
   std::string default_device_name_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,10 +45,7 @@ constexpr float kSliderRoundedRadius = 2.f;
 // The padding used to hide the slider underneath the thumb.
 constexpr int kSliderPadding = 2;
 
-// The radius of the thumb and the highlighted thumb of the slider,
-// respectively.
-constexpr float kThumbRadius = 4.f;
-constexpr float kThumbWidth = 2 * kThumbRadius;
+// The radius of the highlighted thumb of the slider
 constexpr float kThumbHighlightRadius = 12.f;
 
 float GetNearestAllowedValue(const base::flat_set<float>& allowed_values,
@@ -76,6 +73,8 @@ float GetNearestAllowedValue(const base::flat_set<float>& allowed_values,
 Slider::Slider(SliderListener* listener) : listener_(listener) {
   highlight_animation_.SetSlideDuration(base::Milliseconds(150));
   SetFlipCanvasOnPaintForRTLUI(true);
+  SetAccessibilityProperties(ax::mojom::Role::kSlider);
+
 #if BUILDFLAG(IS_MAC)
   SetFocusBehavior(FocusBehavior::ACCESSIBLE_ONLY);
 #else
@@ -93,6 +92,14 @@ float Slider::GetValue() const {
 
 void Slider::SetValue(float value) {
   SetValueInternal(value, SliderChangeReason::kByApi);
+}
+
+float Slider::GetValueIndicatorRadius() const {
+  return value_indicator_radius_;
+}
+
+void Slider::SetValueIndicatorRadius(float radius) {
+  value_indicator_radius_ = radius;
 }
 
 bool Slider::GetEnableAccessibilityEvents() const {
@@ -212,12 +219,13 @@ void Slider::PrepareForMove(const int new_x) {
   gfx::Rect content = GetContentsBounds();
   float value = GetAnimatingValue();
 
-  const int thumb_x = value * (content.width() - kThumbWidth);
+  const int thumb_x = value * (content.width() - 2 * value_indicator_radius_);
   const int candidate_x = GetMirroredXInView(new_x - inset.left()) - thumb_x;
-  if (candidate_x >= 0 && candidate_x < kThumbWidth)
+  if (candidate_x >= value_indicator_radius_ - kThumbRadius &&
+      candidate_x < value_indicator_radius_ + kThumbRadius)
     initial_button_offset_ = candidate_x;
   else
-    initial_button_offset_ = kThumbRadius;
+    initial_button_offset_ = value_indicator_radius_;
 }
 
 void Slider::MoveButtonTo(const gfx::Point& point) {
@@ -226,9 +234,9 @@ void Slider::MoveButtonTo(const gfx::Point& point) {
   int amount = base::i18n::IsRTL()
                    ? width() - inset.left() - point.x() - initial_button_offset_
                    : point.x() - inset.left() - initial_button_offset_;
-  SetValueInternal(
-      static_cast<float>(amount) / (width() - inset.width() - kThumbWidth),
-      SliderChangeReason::kByUser);
+  SetValueInternal(static_cast<float>(amount) /
+                       (width() - inset.width() - 2 * value_indicator_radius_),
+                   SliderChangeReason::kByUser);
 }
 
 void Slider::OnSliderDragStarted() {
@@ -314,7 +322,7 @@ bool Slider::OnKeyPressed(const ui::KeyEvent& event) {
 }
 
 void Slider::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kSlider;
+  View::GetAccessibleNodeData(node_data);
   node_data->SetValue(base::UTF8ToUTF16(
       base::StringPrintf("%d%%", static_cast<int>(value_ * 100 + 0.5))));
   node_data->AddAction(ax::mojom::Action::kIncrement);
@@ -466,6 +474,7 @@ int Slider::GetSliderExtraPadding() const {
 BEGIN_METADATA(Slider, View)
 ADD_PROPERTY_METADATA(float, Value)
 ADD_PROPERTY_METADATA(bool, EnableAccessibilityEvents)
+ADD_PROPERTY_METADATA(float, ValueIndicatorRadius)
 END_METADATA
 
 }  // namespace views

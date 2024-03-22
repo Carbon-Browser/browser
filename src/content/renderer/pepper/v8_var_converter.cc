@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/stack.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
@@ -155,7 +155,7 @@ bool GetOrCreateV8Value(v8::Local<v8::Context> context,
       HostArrayBufferVar* host_buffer =
           static_cast<HostArrayBufferVar*>(buffer);
       *result = blink::WebArrayBufferConverter::ToV8Value(
-          &host_buffer->webkit_buffer(), context->Global(), isolate);
+          &host_buffer->webkit_buffer(), isolate);
       break;
     }
     case PP_VARTYPE_ARRAY:
@@ -330,7 +330,8 @@ bool V8VarConverter::ToV8Value(const PP_Var& var,
   v8::Isolate* isolate = context->GetIsolate();
   v8::EscapableHandleScope handle_scope(isolate);
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, context->GetMicrotaskQueue(),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   VarHandleMap visited_ids;
   ParentVarSet parent_ids;
@@ -486,7 +487,8 @@ bool V8VarConverter::FromV8ValueInternal(
   v8::Isolate* isolate = context->GetIsolate();
   v8::HandleScope handle_scope(isolate);
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, context->GetMicrotaskQueue(),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   HandleVarMap visited_handles;
   ParentHandleSet parent_handles;

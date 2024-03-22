@@ -1,7 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "cc/base/features.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -22,7 +23,11 @@ class ScrollSnapTest : public SimTest {
   void SetUpForDiv();
   // The following x, y, hint_x, hint_y, delta_x, delta_y are represents
   // the pointer/finger's location on touch screen.
-  void GestureScroll(double x, double y, double delta_x, double delta_y);
+  void GestureScroll(double x,
+                     double y,
+                     double delta_x,
+                     double delta_y,
+                     bool composited = false);
   void ScrollBegin(double x, double y, double hint_x, double hint_y);
   void ScrollUpdate(double x,
                     double y,
@@ -34,7 +39,8 @@ class ScrollSnapTest : public SimTest {
 };
 
 void ScrollSnapTest::SetUpForDiv() {
-  v8::HandleScope HandleScope(v8::Isolate::GetCurrent());
+  v8::HandleScope HandleScope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
   WebView().MainFrameViewWidget()->Resize(gfx::Size(400, 400));
   SimRequest request("https://example.com/test.html", "text/html");
   LoadURL("https://example.com/test.html");
@@ -76,14 +82,16 @@ void ScrollSnapTest::SetUpForDiv() {
 void ScrollSnapTest::GestureScroll(double x,
                                    double y,
                                    double delta_x,
-                                   double delta_y) {
+                                   double delta_y,
+                                   bool composited) {
   ScrollBegin(x, y, delta_x, delta_y);
   ScrollUpdate(x, y, delta_x, delta_y);
   ScrollEnd(x + delta_x, y + delta_y);
 
   // Wait for animation to finish.
-  Compositor().BeginFrame();  // update run_state_.
-  Compositor().BeginFrame();  // Set start_time = now.
+  // Pass raster = true to reach LayerTreeHostImpl::UpdateAnimationState,
+  // which will set start time and transition to KeyframeModel::RUNNING.
+  Compositor().BeginFrame(0.016, true);
   Compositor().BeginFrame(0.3);
 }
 
@@ -100,7 +108,7 @@ void ScrollSnapTest::ScrollBegin(double x,
   event.data.scroll_begin.delta_y_hint = hint_y;
   event.data.scroll_begin.pointer_count = 1;
   event.SetFrameScale(1);
-  GetDocument().GetFrame()->GetEventHandler().HandleGestureScrollEvent(event);
+  GetWebFrameWidget().DispatchThroughCcInputHandler(event);
 }
 
 void ScrollSnapTest::ScrollUpdate(double x,
@@ -121,7 +129,7 @@ void ScrollSnapTest::ScrollUpdate(double x,
     event.SetTimeStamp(Compositor().LastFrameTime());
   }
   event.SetFrameScale(1);
-  GetDocument().GetFrame()->GetEventHandler().HandleGestureScrollEvent(event);
+  GetWebFrameWidget().DispatchThroughCcInputHandler(event);
 }
 
 void ScrollSnapTest::ScrollEnd(double x, double y, bool is_in_inertial_phase) {
@@ -133,11 +141,11 @@ void ScrollSnapTest::ScrollEnd(double x, double y, bool is_in_inertial_phase) {
   event.data.scroll_end.inertial_phase =
       is_in_inertial_phase ? WebGestureEvent::InertialPhaseState::kMomentum
                            : WebGestureEvent::InertialPhaseState::kNonMomentum;
-  GetDocument().GetFrame()->GetEventHandler().HandleGestureScrollEvent(event);
+  GetWebFrameWidget().DispatchThroughCcInputHandler(event);
 }
 
 void ScrollSnapTest::SetInitialScrollOffset(double x, double y) {
-  Element* scroller = GetDocument().getElementById("scroller");
+  Element* scroller = GetDocument().getElementById(AtomicString("scroller"));
   scroller->GetLayoutBoxForScrolling()
       ->GetScrollableArea()
       ->ScrollToAbsolutePosition(gfx::PointF(x, y),
@@ -149,9 +157,11 @@ void ScrollSnapTest::SetInitialScrollOffset(double x, double y) {
 TEST_F(ScrollSnapTest, ScrollSnapOnX) {
   SetUpForDiv();
   SetInitialScrollOffset(50, 150);
+  Compositor().BeginFrame();
+
   GestureScroll(100, 100, -50, 0);
 
-  Element* scroller = GetDocument().getElementById("scroller");
+  Element* scroller = GetDocument().getElementById(AtomicString("scroller"));
   // Snaps to align the area at start.
   ASSERT_EQ(scroller->scrollLeft(), 200);
   // An x-locked scroll ignores snap points on y.
@@ -161,9 +171,11 @@ TEST_F(ScrollSnapTest, ScrollSnapOnX) {
 TEST_F(ScrollSnapTest, ScrollSnapOnY) {
   SetUpForDiv();
   SetInitialScrollOffset(150, 50);
+  Compositor().BeginFrame();
+
   GestureScroll(100, 100, 0, -50);
 
-  Element* scroller = GetDocument().getElementById("scroller");
+  Element* scroller = GetDocument().getElementById(AtomicString("scroller"));
   // A y-locked scroll ignores snap points on x.
   ASSERT_EQ(scroller->scrollLeft(), 150);
   // Snaps to align the area at start.
@@ -173,9 +185,11 @@ TEST_F(ScrollSnapTest, ScrollSnapOnY) {
 TEST_F(ScrollSnapTest, ScrollSnapOnBoth) {
   SetUpForDiv();
   SetInitialScrollOffset(50, 50);
+  Compositor().BeginFrame();
+
   GestureScroll(100, 100, -50, -50);
 
-  Element* scroller = GetDocument().getElementById("scroller");
+  Element* scroller = GetDocument().getElementById(AtomicString("scroller"));
   // A scroll gesture that has move in both x and y would snap on both axes.
   ASSERT_EQ(scroller->scrollLeft(), 200);
   ASSERT_EQ(scroller->scrollTop(), 200);
@@ -185,16 +199,21 @@ TEST_F(ScrollSnapTest, AnimateFlingToArriveAtSnapPoint) {
   SetUpForDiv();
   // Vertically align with the area.
   SetInitialScrollOffset(0, 200);
-  Element* scroller = GetDocument().getElementById("scroller");
+  Compositor().BeginFrame();
+
+  Element* scroller = GetDocument().getElementById(AtomicString("scroller"));
   ASSERT_EQ(scroller->scrollLeft(), 0);
   ASSERT_EQ(scroller->scrollTop(), 200);
 
   ScrollBegin(100, 100, -5, 0);
   // Starts with a non-inertial GSU.
   ScrollUpdate(100, 100, -5, 0);
+  Compositor().BeginFrame();
+
   // Fling with an inertial GSU.
   ScrollUpdate(95, 100, -5, 0, true);
   ScrollEnd(90, 100);
+
   // Animate halfway through the fling.
   Compositor().BeginFrame(0.25);
   ASSERT_GT(scroller->scrollLeft(), 150);
@@ -208,7 +227,8 @@ TEST_F(ScrollSnapTest, AnimateFlingToArriveAtSnapPoint) {
 }
 
 TEST_F(ScrollSnapTest, SnapWhenBodyViewportDefining) {
-  v8::HandleScope HandleScope(v8::Isolate::GetCurrent());
+  v8::HandleScope HandleScope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
   WebView().MainFrameViewWidget()->Resize(gfx::Size(300, 300));
   SimRequest request("https://example.com/test.html", "text/html");
   LoadURL("https://example.com/test.html");
@@ -262,7 +282,7 @@ TEST_F(ScrollSnapTest, SnapWhenBodyViewportDefining) {
   // The scroll delta needs to be large enough such that the closer snap area
   // will be the one at (200,200).
   // i.e. distance((200,200), (110,110)) <  distance((0,0), (110,110))
-  GestureScroll(100, 100, -110, -110);
+  GestureScroll(100, 100, -110, -110, true);
 
   // Sanity check that body is the viewport defining element
   ASSERT_EQ(GetDocument().body(), GetDocument().ViewportDefiningElement());
@@ -274,7 +294,8 @@ TEST_F(ScrollSnapTest, SnapWhenBodyViewportDefining) {
 }
 
 TEST_F(ScrollSnapTest, SnapWhenHtmlViewportDefining) {
-  v8::HandleScope HandleScope(v8::Isolate::GetCurrent());
+  v8::HandleScope HandleScope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
   WebView().MainFrameViewWidget()->Resize(gfx::Size(300, 300));
   SimRequest request("https://example.com/test.html", "text/html");
   LoadURL("https://example.com/test.html");
@@ -328,7 +349,7 @@ TEST_F(ScrollSnapTest, SnapWhenHtmlViewportDefining) {
   // The scroll delta needs to be large enough such that the closer snap area
   // will be the one at (200,200).
   // i.e. distance((200,200), (110,110)) <  distance((0,0), (110,110))
-  GestureScroll(100, 100, -110, -110);
+  GestureScroll(100, 100, -110, -110, true);
 
   // Sanity check that document element is the viewport defining element
   ASSERT_EQ(GetDocument().documentElement(),
@@ -341,7 +362,8 @@ TEST_F(ScrollSnapTest, SnapWhenHtmlViewportDefining) {
 }
 
 TEST_F(ScrollSnapTest, SnapWhenBodyOverflowHtmlViewportDefining) {
-  v8::HandleScope HandleScope(v8::Isolate::GetCurrent());
+  v8::HandleScope HandleScope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
   WebView().MainFrameViewWidget()->Resize(gfx::Size(300, 300));
   SimRequest request("https://example.com/test.html", "text/html");
   LoadURL("https://example.com/test.html");
@@ -408,6 +430,60 @@ TEST_F(ScrollSnapTest, SnapWhenBodyOverflowHtmlViewportDefining) {
   // should capture snap points defined on it as opposed to layout view.
   ASSERT_EQ(body->scrollLeft(), 200);
   ASSERT_EQ(body->scrollTop(), 200);
+}
+
+TEST_F(ScrollSnapTest, ResizeDuringGesture) {
+  ResizeView(gfx::Size(400, 400));
+  SimRequest request("https://example.com/test.html", "text/html");
+  LoadURL("https://example.com/test.html");
+  request.Complete(R"HTML(
+    <!DOCTYPE html>
+    <style>
+    ::-webkit-scrollbar { display: none; }
+    html { scroll-snap-type: both mandatory; }
+    body { margin: 0; width: 600px; height: 600px; }
+    #a1 { position: absolute; left: 0; top: 0; background: blue;
+          width: 100px; height: 100px; scroll-snap-align: start; }
+    #a2 { position: absolute; left: 400px; top: 400px; background: blue;
+          width: 100px; height: 100px; scroll-snap-align: end; }
+    </style>
+    <div id='a1'></div>
+    <div id='a2'></div>
+  )HTML");
+
+  Compositor().BeginFrame();
+
+  Element* viewport = GetDocument().scrollingElement();
+  ASSERT_EQ(viewport->scrollLeft(), 0);
+  ASSERT_EQ(viewport->scrollTop(), 0);
+
+  ScrollBegin(10, 10, -75, -75);
+  ScrollUpdate(10, 10, -75, -75);
+
+  Compositor().BeginFrame();
+
+  ASSERT_EQ(viewport->scrollLeft(), 75);
+  ASSERT_EQ(viewport->scrollTop(), 75);
+
+  ResizeView(gfx::Size(450, 450));
+  Compositor().BeginFrame();
+
+  // After mid-gesture resize, we should still be at 75.
+  ASSERT_EQ(viewport->scrollLeft(), 75);
+  ASSERT_EQ(viewport->scrollTop(), 75);
+
+  ScrollEnd(10, 10);
+
+  // The scrollend is deferred for the snap animation in cc::InputHandler; wait
+  // for the animation to finish.  (We pss raster = true to ensure that we call
+  // LayerTreeHostImpl::UpdateAnimationState, which will set start time and
+  // transition to KeyframeModel::RUNNING.)
+  Compositor().BeginFrame(0.016, true);
+  Compositor().BeginFrame(0.3);
+
+  // Once the snap animation is finished, we run a deferred SnapAfterLayout.
+  ASSERT_EQ(viewport->scrollLeft(), 50);
+  ASSERT_EQ(viewport->scrollTop(), 50);
 }
 
 }  // namespace blink

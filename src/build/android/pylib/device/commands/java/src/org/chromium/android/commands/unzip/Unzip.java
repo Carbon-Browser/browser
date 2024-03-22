@@ -1,8 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android.commands.unzip;
+
+import android.system.ErrnoException;
+import android.system.Os;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -15,9 +18,7 @@ import java.io.PrintStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-/**
- *  Minimal implementation of the command-line unzip utility for Android.
- */
+/** Minimal implementation of the command-line unzip utility for Android. */
 public class Unzip {
 
     private static final String TAG = "Unzip";
@@ -66,11 +67,12 @@ public class Unzip {
                         total_bytes += actual_bytes;
                     }
                     out.close();
+                    Os.chmod(ze.getName(), 0777);
                 }
                 zis.closeEntry();
             }
 
-        } catch (IOException e) {
+        } catch (IOException | ErrnoException e) {
             throw new RuntimeException("Error while unzipping", e);
         } finally {
             try {
@@ -90,4 +92,3 @@ public class Unzip {
         unzip(args);
     }
 }
-

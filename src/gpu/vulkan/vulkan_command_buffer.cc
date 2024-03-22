@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -244,9 +244,10 @@ void VulkanCommandBuffer::CopyBufferToImage(VkBuffer buffer,
                                             uint32_t buffer_width,
                                             uint32_t buffer_height,
                                             uint32_t width,
-                                            uint32_t height) {
+                                            uint32_t height,
+                                            uint64_t buffer_offset) {
   VkBufferImageCopy region = {};
-  region.bufferOffset = 0;
+  region.bufferOffset = buffer_offset;
   region.bufferRowLength = buffer_width;
   region.bufferImageHeight = buffer_height;
   region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -264,9 +265,10 @@ void VulkanCommandBuffer::CopyImageToBuffer(VkBuffer buffer,
                                             uint32_t buffer_width,
                                             uint32_t buffer_height,
                                             uint32_t width,
-                                            uint32_t height) {
+                                            uint32_t height,
+                                            uint64_t buffer_offset) {
   VkBufferImageCopy region = {};
-  region.bufferOffset = 0;
+  region.bufferOffset = buffer_offset;
   region.bufferRowLength = buffer_width;
   region.bufferImageHeight = buffer_height;
   region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

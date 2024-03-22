@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,10 @@ namespace ash {
 namespace file_system_provider {
 namespace operations {
 
-Unmount::Unmount(extensions::EventRouter* event_router,
+Unmount::Unmount(RequestDispatcher* dispatcher,
                  const ProvidedFileSystemInfo& file_system_info,
                  storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
-      callback_(std::move(callback)) {}
+    : Operation(dispatcher, file_system_info), callback_(std::move(callback)) {}
 
 Unmount::~Unmount() {
 }
@@ -35,14 +34,14 @@ bool Unmount::Execute(int request_id) {
 }
 
 void Unmount::OnSuccess(int /* request_id */,
-                        std::unique_ptr<RequestValue> /* result */,
+                        const RequestValue& /* result */,
                         bool /* has_more */) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
 void Unmount::OnError(int /* request_id */,
-                      std::unique_ptr<RequestValue> /* result */,
+                      const RequestValue& /* result */,
                       base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);

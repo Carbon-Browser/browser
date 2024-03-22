@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,7 @@ class ModelTypeStoreServiceImpl : public ModelTypeStoreService {
   // ModelTypeStoreService:
   const base::FilePath& GetSyncDataPath() const override;
   RepeatingModelTypeStoreFactory GetStoreFactory() override;
+  RepeatingModelTypeStoreFactory GetStoreFactoryForAccountStorage() override;
   scoped_refptr<base::SequencedTaskRunner> GetBackendTaskRunner() override;
 
  private:

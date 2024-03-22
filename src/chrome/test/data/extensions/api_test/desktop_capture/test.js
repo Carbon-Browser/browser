@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 function onPickerResult(audio_track_num, id, options) {
   chrome.test.assertEq("string", typeof id);
-  chrome.test.assertTrue(id != "");
+  chrome.test.assertNe("", id);
   var video_constraint = { mandatory: { chromeMediaSource: "desktop",
                                         chromeMediaSourceId: id } };
   var audio_constraint =
@@ -55,7 +55,7 @@ chrome.test.runTests([
         ["screen", "window"],
         chrome.test.callbackPass(function(id) {
           chrome.test.assertEq("string", typeof id);
-          chrome.test.assertTrue(id != "");
+          chrome.test.assertNe("", id);
         }));
   },
 

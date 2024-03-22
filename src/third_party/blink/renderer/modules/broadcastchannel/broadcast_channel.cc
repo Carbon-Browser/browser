@@ -1,10 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/broadcastchannel/broadcast_channel.h"
 
 #include "base/notreached.h"
+#include "mojo/public/cpp/bindings/pending_associated_receiver.h"
+#include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
@@ -15,7 +17,6 @@
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
-#include "third_party/blink/renderer/platform/mojo/mojo_helper.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
@@ -100,25 +101,30 @@ void BroadcastChannel::postMessage(const ScriptValue& message,
     Document* document = To<LocalDOMWindow>(execution_context)->document();
     if (document->IsPrerendering()) {
       document->AddPostPrerenderingActivationStep(
-          WTF::Bind(&BroadcastChannel::PostMessageInternal,
-                    WrapWeakPersistent(this), std::move(value),
-                    execution_context->GetSecurityOrigin()->IsolatedCopy()));
+          WTF::BindOnce(&BroadcastChannel::PostMessageInternal,
+                        WrapWeakPersistent(this), std::move(value),
+                        execution_context->GetSecurityOrigin()->IsolatedCopy(),
+                        execution_context->GetAgentClusterID()));
       return;
     }
   }
 
   PostMessageInternal(std::move(value),
-                      execution_context->GetSecurityOrigin()->IsolatedCopy());
+                      execution_context->GetSecurityOrigin()->IsolatedCopy(),
+                      execution_context->GetAgentClusterID());
 }
 
 void BroadcastChannel::PostMessageInternal(
     scoped_refptr<SerializedScriptValue> value,
-    scoped_refptr<SecurityOrigin> sender_origin) {
+    scoped_refptr<SecurityOrigin> sender_origin,
+    const base::UnguessableToken sender_agent_cluster_id) {
   if (!receiver_.is_bound())
     return;
   BlinkCloneableMessage msg;
   msg.message = std::move(value);
   msg.sender_origin = std::move(sender_origin);
+  msg.sender_agent_cluster_id = sender_agent_cluster_id;
+  msg.locked_to_sender_agent_cluster = msg.message->IsLockedToAgentCluster();
   remote_client_->OnMessage(std::move(msg));
 }
 
@@ -150,21 +156,24 @@ void BroadcastChannel::ContextDestroyed() {
 
 void BroadcastChannel::Trace(Visitor* visitor) const {
   ExecutionContextLifecycleObserver::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
+  visitor->Trace(receiver_);
+  visitor->Trace(remote_client_);
+  visitor->Trace(associated_remote_);
 }
 
 void BroadcastChannel::OnMessage(BlinkCloneableMessage message) {
+  auto* context = GetExecutionContext();
+
   // Queue a task to dispatch the event.
   MessageEvent* event;
-  if (!message.locked_agent_cluster_id ||
-      GetExecutionContext()->IsSameAgentCluster(
-          *message.locked_agent_cluster_id)) {
-    event = MessageEvent::Create(
-        nullptr, std::move(message.message),
-        GetExecutionContext()->GetSecurityOrigin()->ToString());
+  if ((!message.locked_to_sender_agent_cluster ||
+       context->IsSameAgentCluster(message.sender_agent_cluster_id)) &&
+      message.message->CanDeserializeIn(context)) {
+    event = MessageEvent::Create(nullptr, std::move(message.message),
+                                 context->GetSecurityOrigin()->ToString());
   } else {
-    event = MessageEvent::CreateError(
-        GetExecutionContext()->GetSecurityOrigin()->ToString());
+    event = MessageEvent::CreateError(context->GetSecurityOrigin()->ToString());
   }
   // <specdef
   // href="https://html.spec.whatwg.org/multipage/web-messaging.html#dom-broadcastchannel-postmessage">
@@ -183,12 +192,63 @@ void BroadcastChannel::OnError() {
 
 BroadcastChannel::BroadcastChannel(ExecutionContext* execution_context,
                                    const String& name)
-    : ExecutionContextLifecycleObserver(execution_context),
+    : BroadcastChannel(execution_context,
+                       name,
+                       mojo::NullAssociatedReceiver(),
+                       mojo::NullAssociatedRemote()) {}
+
+BroadcastChannel::BroadcastChannel(
+    base::PassKey<StorageAccessHandle>,
+    ExecutionContext* execution_context,
+    const String& name,
+    mojom::blink::BroadcastChannelProvider* provider)
+    : ActiveScriptWrappable<BroadcastChannel>({}),
+      ExecutionContextLifecycleObserver(execution_context),
       name_(name),
+      receiver_(this, execution_context),
+      remote_client_(execution_context),
       feature_handle_for_scheduler_(
           execution_context->GetScheduler()->RegisterFeature(
               SchedulingPolicy::Feature::kBroadcastChannel,
-              {SchedulingPolicy::DisableBackForwardCache()})) {
+              {SchedulingPolicy::DisableBackForwardCache()})),
+      associated_remote_(execution_context) {
+  provider->ConnectToChannel(
+      name_,
+      receiver_.BindNewEndpointAndPassRemote(
+          execution_context->GetTaskRunner(TaskType::kInternalDefault)),
+      remote_client_.BindNewEndpointAndPassReceiver(
+          execution_context->GetTaskRunner(TaskType::kInternalDefault)));
+  SetupDisconnectHandlers();
+}
+
+BroadcastChannel::BroadcastChannel(
+    base::PassKey<BroadcastChannelTester>,
+    ExecutionContext* execution_context,
+    const String& name,
+    mojo::PendingAssociatedReceiver<mojom::blink::BroadcastChannelClient>
+        receiver,
+    mojo::PendingAssociatedRemote<mojom::blink::BroadcastChannelClient> remote)
+    : BroadcastChannel(execution_context,
+                       name,
+                       std::move(receiver),
+                       std::move(remote)) {}
+
+BroadcastChannel::BroadcastChannel(
+    ExecutionContext* execution_context,
+    const String& name,
+    mojo::PendingAssociatedReceiver<mojom::blink::BroadcastChannelClient>
+        receiver,
+    mojo::PendingAssociatedRemote<mojom::blink::BroadcastChannelClient> remote)
+    : ActiveScriptWrappable<BroadcastChannel>({}),
+      ExecutionContextLifecycleObserver(execution_context),
+      name_(name),
+      receiver_(this, execution_context),
+      remote_client_(execution_context),
+      feature_handle_for_scheduler_(
+          execution_context->GetScheduler()->RegisterFeature(
+              SchedulingPolicy::Feature::kBroadcastChannel,
+              {SchedulingPolicy::DisableBackForwardCache()})),
+      associated_remote_(execution_context) {
   // Note: We cannot associate per-frame task runner here, but postTask
   //       to it manually via EnqueueEvent, since the current expectation
   //       is to receive messages even after close for which queued before
@@ -212,44 +272,46 @@ BroadcastChannel::BroadcastChannel(ExecutionContext* execution_context,
   //    shared remote for all BroadcastChannel objects created on that thread to
   //    ensure in-order delivery of messages to the appropriate *WorkerHost
   //    object.
-  if (execution_context->IsWindow()) {
-    LocalDOMWindow* window = DynamicTo<LocalDOMWindow>(execution_context);
-    DCHECK(window);
-
+  auto receiver_task_runner =
+      execution_context->GetTaskRunner(TaskType::kInternalDefault);
+  auto client_task_runner =
+      execution_context->GetTaskRunner(TaskType::kInternalDefault);
+  if (receiver.is_valid() && remote.is_valid()) {
+    receiver_.Bind(std::move(receiver), receiver_task_runner);
+    remote_client_.Bind(std::move(remote), client_task_runner);
+  } else if (auto* window = DynamicTo<LocalDOMWindow>(execution_context)) {
     LocalFrame* frame = window->GetFrame();
-    if (!frame) {
+    if (!frame)
       return;
-    }
 
     frame->GetRemoteNavigationAssociatedInterfaces()->GetInterface(
-        associated_remote_.BindNewEndpointAndPassReceiver());
-
+        associated_remote_.BindNewEndpointAndPassReceiver(
+            execution_context->GetTaskRunner(TaskType::kInternalDefault)));
     associated_remote_->ConnectToChannel(
-        name_, receiver_.BindNewEndpointAndPassRemote(),
-        remote_client_.BindNewEndpointAndPassReceiver());
-
-  } else if (execution_context->IsWorkerGlobalScope()) {
-    WorkerGlobalScope* worker_global_scope =
-        DynamicTo<WorkerGlobalScope>(execution_context);
-    DCHECK(worker_global_scope);
-
-    if (worker_global_scope->IsClosing()) {
+        name_, receiver_.BindNewEndpointAndPassRemote(receiver_task_runner),
+        remote_client_.BindNewEndpointAndPassReceiver(client_task_runner));
+  } else if (auto* worker_global_scope =
+                 DynamicTo<WorkerGlobalScope>(execution_context)) {
+    if (worker_global_scope->IsClosing())
       return;
-    }
 
     mojo::Remote<mojom::blink::BroadcastChannelProvider>& provider =
         GetWorkerThreadSpecificProvider(*worker_global_scope);
-
-    provider->ConnectToChannel(name_, receiver_.BindNewEndpointAndPassRemote(),
-                               remote_client_.BindNewEndpointAndPassReceiver());
+    provider->ConnectToChannel(
+        name_, receiver_.BindNewEndpointAndPassRemote(receiver_task_runner),
+        remote_client_.BindNewEndpointAndPassReceiver(client_task_runner));
   } else {
     NOTREACHED();
   }
 
+  SetupDisconnectHandlers();
+}
+
+void BroadcastChannel::SetupDisconnectHandlers() {
   receiver_.set_disconnect_handler(
-      WTF::Bind(&BroadcastChannel::OnError, WrapWeakPersistent(this)));
+      WTF::BindOnce(&BroadcastChannel::OnError, WrapWeakPersistent(this)));
   remote_client_.set_disconnect_handler(
-      WTF::Bind(&BroadcastChannel::OnError, WrapWeakPersistent(this)));
+      WTF::BindOnce(&BroadcastChannel::OnError, WrapWeakPersistent(this)));
 }
 
 }  // namespace blink

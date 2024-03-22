@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/extensions/active_install_data.h"
+#include "chrome/browser/extensions/crx_installer.h"
 #include "chrome/browser/extensions/install_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
@@ -62,8 +63,11 @@ class InstallTracker : public KeyedService, public ExtensionRegistryObserver {
   void OnBeginExtensionDownload(const std::string& extension_id);
   void OnDownloadProgress(const std::string& extension_id,
                           int percent_downloaded);
-  void OnBeginCrxInstall(const std::string& extension_id);
-  void OnFinishCrxInstall(const std::string& extension_id, bool success);
+  void OnBeginCrxInstall(const CrxInstaller& installer,
+                         const std::string& extension_id);
+  void OnFinishCrxInstall(const CrxInstaller& installer,
+                          const std::string& extension_id,
+                          bool success);
   void OnInstallFailure(const std::string& extension_id);
 
   // NOTE(limasdf): For extension [un]load and [un]installed, use
@@ -87,6 +91,10 @@ class InstallTracker : public KeyedService, public ExtensionRegistryObserver {
   // Maps extension id to the details of an active install.
   typedef std::map<std::string, ActiveInstallData> ActiveInstallsMap;
   ActiveInstallsMap active_installs_;
+
+  // Safe: |this| belongs to |browser_context_| via KeyedService, and this
+  // pointer is nulled in Shutdown().
+  raw_ptr<content::BrowserContext> browser_context_;
 
   base::ObserverList<InstallObserver>::Unchecked observers_;
   PrefChangeRegistrar pref_change_registrar_;

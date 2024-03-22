@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,7 @@ VIEWS_EXPORT extern const ui::ClassProperty<HighlightPathGenerator*>* const
     kHighlightPathGeneratorKey;
 
 // A property to store how a view should flex when placed in a layout.
-// Currently only supported by FlexLayout.
+// Currently only fully supported by FlexLayout. BoxLayout supports weight.
 VIEWS_EXPORT extern const ui::ClassProperty<FlexSpecification*>* const
     kFlexBehaviorKey;
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,10 @@ enum SecurityInterstitialCommand {
   CMD_REPORT_PHISHING_ERROR = 12,
   // Open enhanced protection settings.
   CMD_OPEN_ENHANCED_PROTECTION_SETTINGS = 13,
+  // User closes interstitial without making decision through UI.
+  CMD_CLOSE_INTERSTITIAL_WITHOUT_UI = 14,
+  // Request permission to blocked website.
+  CMD_REQUEST_SITE_ACCESS_PERMISSION = 15,
 };
 
 // Provides methods for handling commands from the user, which requires some

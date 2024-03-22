@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@ class Vector2d;
 namespace blink {
 
 class CullRect;
+class FragmentData;
 class GraphicsContext;
 class Scrollbar;
 struct PaintInfo;
@@ -31,18 +32,13 @@ class ScrollableAreaPainter {
   ScrollableAreaPainter(const ScrollableAreaPainter&) = delete;
   ScrollableAreaPainter& operator=(const ScrollableAreaPainter&) = delete;
 
-  void PaintOverflowControls(const PaintInfo&,
-                             const gfx::Vector2d& paint_offset);
-  void PaintScrollbar(GraphicsContext&,
-                      Scrollbar&,
-                      const gfx::Vector2d& paint_offset,
-                      const CullRect&);
+  // Returns true if the overflow controls are painted.
+  bool PaintOverflowControls(const PaintInfo&,
+                             const gfx::Vector2d& paint_offset,
+                             const FragmentData*);
   void PaintResizer(GraphicsContext&,
                     const gfx::Vector2d& paint_offset,
                     const CullRect&);
-  void PaintScrollCorner(GraphicsContext&,
-                         const gfx::Vector2d& paint_offset,
-                         const CullRect&);
 
   // Records a scroll hit test data to force main thread handling of events
   // in the expanded resizer touch area.
@@ -50,6 +46,14 @@ class ScrollableAreaPainter {
                                       const PhysicalOffset& paint_offset);
 
  private:
+  void PaintScrollbar(GraphicsContext&,
+                      Scrollbar&,
+                      const gfx::Vector2d& paint_offset,
+                      const CullRect&);
+  void PaintScrollCorner(GraphicsContext&,
+                         const gfx::Vector2d& paint_offset,
+                         const CullRect&);
+
   void DrawPlatformResizerImage(GraphicsContext&,
                                 const gfx::Rect& resizer_corner_rect);
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,6 @@ class CORE_EXPORT ListItemOrdinal {
   void SetExplicitValue(int, const Node&);
   void ClearExplicitValue(const Node&);
 
-  static bool IsList(const Node&);
   static bool IsListItem(const Node&);
   static bool IsListItem(const LayoutObject*);
   static bool IsInReversedOrderedList(const Node&);
@@ -59,6 +58,10 @@ class CORE_EXPORT ListItemOrdinal {
   ValueType Type() const { return static_cast<ValueType>(type_); }
   void SetType(ValueType type) const { type_ = type; }
   bool HasExplicitValue() const { return type_ == kExplicit; }
+
+  static bool IsList(const Node&);
+  // https://drafts.csswg.org/css-contain-2/#containment-style
+  static bool HasStyleContainment(const Node&);
 
   static Node* EnclosingList(const Node*);
   struct NodeAndOrdinal {

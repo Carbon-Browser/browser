@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,14 @@
 
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/session/session_activation_observer.h"
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/services/assistant/assistant_manager_service.h"
@@ -23,9 +25,11 @@
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "net/base/backoff_entry.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GoogleServiceAuthError;
+class PrefService;
 
 namespace base {
 class OneShotTimer;
@@ -45,8 +49,7 @@ struct AccessTokenInfo;
 class IdentityManager;
 }  // namespace signin
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 class AssistantInteractionLogger;
 class ScopedAshSessionObserver;
@@ -60,14 +63,15 @@ constexpr auto kUpdateAssistantManagerDelay = base::Seconds(1);
 class COMPONENT_EXPORT(ASSISTANT_SERVICE) Service
     : public AssistantService,
       public chromeos::PowerManagerClient::Observer,
-      public ash::SessionActivationObserver,
-      public ash::AssistantStateObserver,
+      public SessionActivationObserver,
+      public AssistantStateObserver,
       public AssistantManagerService::StateObserver,
       public AuthenticationStateObserver {
  public:
   Service(std::unique_ptr<network::PendingSharedURLLoaderFactory>
               pending_url_loader_factory,
-          signin::IdentityManager* identity_manager);
+          signin::IdentityManager* identity_manager,
+          PrefService* pref_service);
 
   Service(const Service&) = delete;
   Service& operator=(const Service&) = delete;
@@ -102,11 +106,11 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) Service
   void PowerChanged(const power_manager::PowerSupplyProperties& prop) override;
   void SuspendDone(base::TimeDelta sleep_duration) override;
 
-  // ash::SessionActivationObserver overrides:
+  // SessionActivationObserver overrides:
   void OnSessionActivated(bool activated) override;
   void OnLockStateChanged(bool locked) override;
 
-  // ash::AssistantStateObserver overrides:
+  // AssistantStateObserver overrides:
   void OnAssistantConsentStatusChanged(int consent_status) override;
   void OnAssistantContextEnabled(bool enabled) override;
   void OnAssistantHotwordAlwaysOn(bool hotword_always_on) override;
@@ -123,6 +127,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) Service
   void OnStateChanged(AssistantManagerService::State new_state) override;
 
   void UpdateAssistantManagerState();
+  void ScheduleUpdateAssistantManagerState(bool should_backoff);
 
   CoreAccountInfo RetrievePrimaryAccountInfo() const;
   void RequestAccessToken();
@@ -138,6 +143,10 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) Service
 
   void StopAssistantManagerService();
 
+  void OnLibassistantServiceRunning();
+  void OnLibassistantServiceStopped();
+  void OnLibassistantServiceDisconnected();
+
   void AddAshSessionObserver();
 
   void UpdateListeningState();
@@ -151,13 +160,30 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) Service
   // for the device.
   bool ShouldEnableHotword();
 
+  void LoadLibassistant();
+  void OnLibassistantLoaded(bool success);
+
+  void ClearAfterStop();
+
+  void DecreaseStartServiceBackoff();
+
+  base::TimeDelta GetAutoRecoverTime();
+  void SetAutoRecoverTimeForTesting(base::TimeDelta delay) {
+    auto_recover_time_for_testing_ = delay;
+  }
+
+  bool CanStartService() const;
+
+  void OnDataDeleted();
+
   // |ServiceContext| object passed to child classes so they can access some of
   // our functionality without depending on us.
   // Note: this is used by the other members here, so it must be defined first
   // so it is destroyed last.
   std::unique_ptr<ServiceContext> context_;
 
-  signin::IdentityManager* const identity_manager_;
+  const raw_ptr<signin::IdentityManager, ExperimentalAsh> identity_manager_;
+  const raw_ptr<PrefService, ExperimentalAsh> pref_service_;
   std::unique_ptr<ScopedAshSessionObserver> scoped_ash_session_observer_;
   std::unique_ptr<AssistantManagerService> assistant_manager_service_;
   std::unique_ptr<base::OneShotTimer> token_refresh_timer_;
@@ -175,6 +201,10 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) Service
   bool locked_ = false;
   // Whether the power source is connected.
   bool power_source_connected_ = false;
+  // Whether the libassistant library is loaded.
+  bool libassistant_loaded_ = false;
+  // Whether is deleting data.
+  bool is_deleting_data_ = false;
 
   // The value passed into |SetAssistantManagerServiceForTesting|.
   // Will be moved into |assistant_manager_service_| when the service is
@@ -188,6 +218,16 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) Service
   std::unique_ptr<network::PendingSharedURLLoaderFactory>
       pending_url_loader_factory_;
 
+  // If Libassistant service is disconnected, will use this backoff entry to
+  // restart the service.
+  net::BackoffEntry start_service_retry_backoff_;
+
+  // A timer used to slowly recover from previous crashes by reducing the
+  // `start_service_retry_backoff_` failure_count by one for every
+  // `kAutoRecoverTime`.
+  std::unique_ptr<base::OneShotTimer> auto_service_recover_timer_;
+  base::TimeDelta auto_recover_time_for_testing_;
+
   base::CancelableOnceClosure update_assistant_manager_callback_;
 
   std::unique_ptr<signin::AccessTokenFetcher> access_token_fetcher_;
@@ -199,7 +239,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) Service
   base::WeakPtrFactory<Service> weak_ptr_factory_{this};
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_SERVICE_H_

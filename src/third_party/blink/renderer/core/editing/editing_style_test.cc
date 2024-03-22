@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,9 @@ TEST_F(EditingStyleTest, mergeInlineStyleOfElement) {
   UpdateAllLifecyclePhasesForTest();
 
   EditingStyle* editing_style = MakeGarbageCollected<EditingStyle>(
-      To<HTMLElement>(GetDocument().getElementById("s2")));
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("s2"))));
   editing_style->MergeInlineStyleOfElement(
-      To<HTMLElement>(GetDocument().getElementById("s1")),
+      To<HTMLElement>(GetDocument().getElementById(AtomicString("s1"))),
       EditingStyle::kOverrideValues);
 
   EXPECT_FALSE(editing_style->Style()->HasProperty(CSSPropertyID::kFloat))
@@ -44,7 +44,7 @@ TEST_F(EditingStyleTest, RemoveStyleFromRulesAndContext_TextAlignEffective) {
   Element& target = *GetElementById("target");
   EditingStyle& style = *MakeGarbageCollected<EditingStyle>(
       CSSPropertyID::kTextAlign, "left", SecureContextMode::kInsecureContext);
-  style.RemoveStyleFromRulesAndContext(&target, target.parentNode());
+  style.RemoveStyleFromRulesAndContext(&target, target.parentElement());
 
   EXPECT_EQ(CSSValueID::kLeft, style.GetProperty(CSSPropertyID::kTextAlign));
 }
@@ -57,7 +57,7 @@ TEST_F(EditingStyleTest, RemoveStyleFromRulesAndContext_TextAlignRedundant) {
   Element& target = *GetElementById("target");
   EditingStyle& style = *MakeGarbageCollected<EditingStyle>(
       CSSPropertyID::kTextAlign, "right", SecureContextMode::kInsecureContext);
-  style.RemoveStyleFromRulesAndContext(&target, target.parentNode());
+  style.RemoveStyleFromRulesAndContext(&target, target.parentElement());
 
   EXPECT_EQ(CSSValueID::kInvalid, style.GetProperty(CSSPropertyID::kTextAlign));
 }

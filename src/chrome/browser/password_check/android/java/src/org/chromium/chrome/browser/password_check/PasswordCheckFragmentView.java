@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,11 @@ import android.view.MenuItem;
 
 import androidx.fragment.app.DialogFragment;
 import androidx.preference.PreferenceFragmentCompat;
-import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 
 import org.chromium.chrome.browser.password_manager.PasswordCheckReferrer;
+import org.chromium.components.browser_ui.util.TraceEventVectorDrawableCompat;
 
-/**
- * This class is responsible for rendering the check passwords view in the settings menu.
- */
+/** This class is responsible for rendering the check passwords view in the settings menu. */
 public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
     // Key for the argument with which the PasswordsCheck fragment will be launched. The value for
     // this argument should be part of the PasswordCheckReferrer enum, which contains
@@ -41,16 +39,6 @@ public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
         getActivity().setTitle(R.string.passwords_check_title);
         setPreferenceScreen(getPreferenceManager().createPreferenceScreen(getStyledContext()));
         mPasswordCheckReferrer = getReferrerFromInstanceStateOrLaunchBundle(savedInstanceState);
-        setHasOptionsMenu(true);
-    }
-
-    @Override
-    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
-        menu.clear();
-        MenuItem help =
-                menu.add(Menu.NONE, R.id.menu_id_targeted_help, Menu.NONE, R.string.menu_help);
-        help.setIcon(VectorDrawableCompat.create(
-                getResources(), R.drawable.ic_help_and_feedback, getActivity().getTheme()));
     }
 
     @Override
@@ -72,8 +60,8 @@ public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
         }
         Bundle extras = getArguments();
         assert extras.containsKey(PASSWORD_CHECK_REFERRER)
-            : "PasswordCheckFragmentView must be launched with a password-check-referrer fragment "
-                + "argument, but none was provided.";
+                : "PasswordCheckFragmentView must be launched with a password-check-referrer fragment "
+                        + "argument, but none was provided.";
         return extras.getInt(PASSWORD_CHECK_REFERRER);
     }
 
@@ -91,15 +79,11 @@ public class PasswordCheckFragmentView extends PreferenceFragmentCompat {
             mComponentDelegate.destroy();
         }
     }
+
     @Override
     public void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putInt(PASSWORD_CHECK_REFERRER, mPasswordCheckReferrer);
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        return mComponentDelegate.handleHelp(item);
     }
 
     private Context getStyledContext() {

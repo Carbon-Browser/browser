@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,9 @@ ExtensionFunction::ResponseAction IdentityRemoveCachedAuthTokenFunction::Run() {
   if (Profile::FromBrowserContext(browser_context())->IsOffTheRecord())
     return RespondNow(Error(identity_constants::kOffTheRecord));
 
-  std::unique_ptr<api::identity::RemoveCachedAuthToken::Params> params(
-      api::identity::RemoveCachedAuthToken::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::identity::RemoveCachedAuthToken::Params> params =
+      api::identity::RemoveCachedAuthToken::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   IdentityAPI::GetFactoryInstance()
       ->Get(browser_context())
       ->token_cache()

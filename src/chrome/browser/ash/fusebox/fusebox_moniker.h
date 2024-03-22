@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 #define CHROME_BROWSER_ASH_FUSEBOX_FUSEBOX_MONIKER_H_
 
 #include <map>
+#include <utility>
 
 #include "base/token.h"
+#include "base/values.h"
 #include "storage/browser/file_system/file_system_url.h"
 
 namespace fusebox {
@@ -42,10 +44,9 @@ namespace fusebox {
 // that a b::UT). But an all-zero-bits b::UT is not just invalid,
 // b::UT::Deserialize(0, 0) will actually DCHECK-crash. The design assumption
 // is that b::UT values are only shared between trusted processes via trusted
-// channels. Here, the token is parsed from the FUSE filename and all manner of
-// processes (of various trustworthiness) can walk the file system. We don't
-// want "ls /media/fuse/fusebox/moniker/00000000000000000000000000000000" to
-// crash the Chrome process. So we use base::Token, a more forgiving type than
+// channels. Here, the token is parsed from the FUSE filename and we don't want
+// "ls /media/fuse/fusebox/moniker/00000000000000000000000000000000" to crash
+// the Chrome process. So we use base::Token, a more forgiving type than
 // base::UnguessableToken.
 //
 // See also the crrev.com/c/3645173 code review discussion.
@@ -58,8 +59,8 @@ class MonikerMap {
  public:
   struct ExtractTokenResult {
     enum class ResultType {
-      // The fs_url_as_string was a Moniker FileSystemURL (it started with the
-      // fusebox::kMonikerFileSystemURL prefix) and held a well-formed token.
+      // The fs_url_as_string was a Moniker FileSystemURL (it started with
+      // "moniker/") and held a well-formed token.
       OK = 0,
       // The fs_url_as_string was not a Moniker FileSystemURL.
       NOT_A_MONIKER_FS_URL = 1,
@@ -74,9 +75,14 @@ class MonikerMap {
     base::Token token;
   };
 
-  // Returns the 1234etc base::Token from a storage::FileSystemURL in its
-  // string form (like "dummy://moniker/1234etc"), where "dummy://moniker" is
-  // the fusebox::kMonikerFileSystemURL prefix.
+  using FSURLAndReadOnlyState = std::pair<storage::FileSystemURL, bool>;
+
+  // Returns the 1234etc base::Token from a Fusebox relative path (like
+  // "moniker/1234etc"), where "moniker" is the fusebox::kMonikerSubdir prefix.
+  //
+  // The argument name is "fs_url_etc", as in storage::FileSystemURL, for
+  // historical reasons, even though it is a relative path, not a FileSystemURL
+  // (in string form) any more.
   //
   // This function does not resolve the base::Token (for that, use the Resolve
   // function instead). It does not confirm the token's *validity* (that the
@@ -96,19 +102,24 @@ class MonikerMap {
   // string form) for the target. It is the caller's responsibility to call
   // DestroyMoniker when the moniker is no longer required but also to keep the
   // FileSystemURL's backing content alive until that DestroyMoniker call.
-  Moniker CreateMoniker(storage::FileSystemURL target);
+  Moniker CreateMoniker(const storage::FileSystemURL& target, bool read_only);
 
   // Tears down the link, so that Resolve will return invalid FileSystemURL
   // values.
   void DestroyMoniker(const Moniker& moniker);
 
   // Returns the target for the previously created moniker, as identified by
-  // its base::Token. The return value's is_valid() will be false if there was
-  // no such moniker or if it was destroyed.
-  storage::FileSystemURL Resolve(const Moniker& moniker);
+  // its base::Token. The return value's storage::FileSystemURL element
+  // is_valid() will be false if there was no such moniker or if it was
+  // destroyed. If valid, the bool element is the read_only argument passed to
+  // CreateMoniker.
+  FSURLAndReadOnlyState Resolve(const Moniker& moniker) const;
+
+  // Returns human-readable debugging information as a JSON value.
+  base::Value GetDebugJSON();
 
  private:
-  std::map<base::Token, storage::FileSystemURL> map_;
+  std::map<base::Token, FSURLAndReadOnlyState> map_;
 };
 
 }  // namespace fusebox

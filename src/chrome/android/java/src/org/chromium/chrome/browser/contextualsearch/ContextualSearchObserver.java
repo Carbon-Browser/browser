@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import org.chromium.chrome.browser.gsa.GSAContextDisplaySelection;
  * An interface to be notified when contextual searches are performed or are no longer active.
  * Used to report context to the system for features like conversational search.
  */
-interface ContextualSearchObserver {
+public interface ContextualSearchObserver {
     /**
      * Notifies that a contextual search was performed, and provides the selection context if
      * the feature is fully enabled (and {@code null} otherwise).

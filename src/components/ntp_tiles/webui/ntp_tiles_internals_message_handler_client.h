@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/values.h"
 #include "components/ntp_tiles/tile_source.h"
 
@@ -43,18 +43,19 @@ class NTPTilesInternalsMessageHandlerClient {
 
   // Registers a callback in Javascript. See content::WebUI and web::WebUIIOS.
   virtual void RegisterMessageCallback(
-      const std::string& message,
+      base::StringPiece message,
       base::RepeatingCallback<void(const base::Value::List&)> callback) = 0;
 
   // Invokes a function in Javascript. See content::WebUI and web::WebUIIOS.
-  virtual void CallJavascriptFunctionVector(
-      const std::string& name,
-      const std::vector<const base::Value*>& values) = 0;
+  virtual void CallJavascriptFunctionSpan(
+      base::StringPiece name,
+      base::span<const base::ValueView> values) = 0;
 
-  // Convenience function for CallJavascriptFunctionVector().
+  // Convenience function for CallJavascriptFunctionSpan().
   template <typename... Arg>
-  void CallJavascriptFunction(const std::string& name, const Arg&... arg) {
-    CallJavascriptFunctionVector(name, {&arg...});
+  void CallJavascriptFunction(base::StringPiece name, const Arg&... arg) {
+    base::ValueView args[] = {arg...};
+    CallJavascriptFunctionSpan(name, args);
   }
 
  protected:

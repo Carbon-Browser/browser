@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include <optional>
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "cc/paint/paint_image.h"
@@ -17,7 +18,6 @@
 #include "cc/test/skia_common.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/modules/skresources/include/SkResources.h"
 #include "ui/gfx/geometry/size.h"
@@ -43,7 +43,7 @@ class FrameDataStub {
     asset_to_frame_data_[HashSkottieResourceId(asset_id)] =
         std::move(current_frame_data);
     asset_to_result_[HashSkottieResourceId(asset_id)] =
-        SkottieWrapper::FrameDataFetchResult::NEW_DATA_AVAILABLE;
+        SkottieWrapper::FrameDataFetchResult::kNewDataAvailable;
   }
 
   void SetAssetResult(base::StringPiece asset_id,
@@ -62,7 +62,7 @@ class FrameDataStub {
     }
     return asset_to_result_.contains(asset_id)
                ? asset_to_result_.at(asset_id)
-               : SkottieWrapper::FrameDataFetchResult::NO_UPDATE;
+               : SkottieWrapper::FrameDataFetchResult::kNoUpdate;
   }
 
  private:
@@ -83,7 +83,7 @@ class SkottieMRUResourceProviderTest : public ::testing::Test {
 
   FrameDataStub frame_data_stub_;
   sk_sp<SkottieMRUResourceProvider> provider_;
-  raw_ptr<skresources::ResourceProvider> provider_base_;
+  raw_ptr<skresources::ResourceProvider, DanglingUntriaged> provider_base_;
 };
 
 TEST_F(SkottieMRUResourceProviderTest, ProvidesMostRecentFrameDataForAsset) {
@@ -102,7 +102,7 @@ TEST_F(SkottieMRUResourceProviderTest, ProvidesMostRecentFrameDataForAsset) {
   EXPECT_THAT(asset->getFrameData(/*t=*/0).image, Eq(image_1.GetSwSkImage()));
   // The same image should be re-used for the next timestamp.
   frame_data_stub_.SetAssetResult(
-      "test-resource-id", SkottieWrapper::FrameDataFetchResult::NO_UPDATE);
+      "test-resource-id", SkottieWrapper::FrameDataFetchResult::kNoUpdate);
   EXPECT_THAT(asset->getFrameData(/*t=*/0.1).image, Eq(image_1.GetSwSkImage()));
   // Now the new image should be used.
   PaintImage image_2 = CreateBitmapImage(gfx::Size(20, 20));
@@ -189,7 +189,7 @@ TEST_F(SkottieMRUResourceProviderTest, HandlesMissingAssetDimensions) {
           FieldsAre(base::FilePath(FILE_PATH_LITERAL(
                                        "test-resource-path/test-resource-name"))
                         .NormalizePathSeparators(),
-                    Eq(absl::nullopt)))));
+                    Eq(std::nullopt)))));
 }
 
 TEST_F(SkottieMRUResourceProviderTest, HandlesIncompleteDimensions) {
@@ -210,7 +210,7 @@ TEST_F(SkottieMRUResourceProviderTest, HandlesIncompleteDimensions) {
           FieldsAre(base::FilePath(FILE_PATH_LITERAL(
                                        "test-resource-path/test-resource-name"))
                         .NormalizePathSeparators(),
-                    Eq(absl::nullopt)))));
+                    Eq(std::nullopt)))));
 
   Init(R"({
       "assets": [
@@ -229,7 +229,7 @@ TEST_F(SkottieMRUResourceProviderTest, HandlesIncompleteDimensions) {
           FieldsAre(base::FilePath(FILE_PATH_LITERAL(
                                        "test-resource-path/test-resource-name"))
                         .NormalizePathSeparators(),
-                    Eq(absl::nullopt)))));
+                    Eq(std::nullopt)))));
 }
 
 TEST_F(SkottieMRUResourceProviderTest, HandlesInvalidDimensions) {
@@ -250,7 +250,7 @@ TEST_F(SkottieMRUResourceProviderTest, HandlesInvalidDimensions) {
           FieldsAre(base::FilePath(FILE_PATH_LITERAL(
                                        "test-resource-path/test-resource-name"))
                         .NormalizePathSeparators(),
-                    Eq(absl::nullopt)))));
+                    Eq(std::nullopt)))));
 
   Init(R"({
       "assets": [
@@ -269,7 +269,22 @@ TEST_F(SkottieMRUResourceProviderTest, HandlesInvalidDimensions) {
           FieldsAre(base::FilePath(FILE_PATH_LITERAL(
                                        "test-resource-path/test-resource-name"))
                         .NormalizePathSeparators(),
-                    Eq(absl::nullopt)))));
+                    Eq(std::nullopt)))));
+}
+
+TEST_F(SkottieMRUResourceProviderTest, GracefullyHandlesInvalidJson) {
+  // No expectations needed. Just make sure the code doesn't crash.
+  Init("invalid-json");
+  // Lottie animation json is expected to be a dictionary.
+  Init(R"(["valid", "json", "list"])");
+  // Assets are expected to be a list.
+  Init(R"({"assets": "invalid-asset-set"})");
+  // Each asset is expected to be a dictionary.
+  Init(R"({
+      "assets": [
+        "invalid-asset-value"
+      ]
+    })");
 }
 
 }  // namespace

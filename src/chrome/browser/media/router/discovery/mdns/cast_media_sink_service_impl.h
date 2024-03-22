@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,9 @@
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service_impl.h"
 #include "chrome/browser/media/router/discovery/discovery_network_monitor.h"
 #include "chrome/browser/media/router/discovery/media_sink_discovery_metrics.h"
-#include "components/cast_channel/cast_channel_enum.h"
-#include "components/cast_channel/cast_socket.h"
 #include "components/media_router/common/discovery/media_sink_service_base.h"
+#include "components/media_router/common/providers/cast/channel/cast_channel_enum.h"
+#include "components/media_router/common/providers/cast/channel/cast_socket.h"
 #include "net/base/backoff_entry.h"
 #include "third_party/openscreen/src/cast/common/channel/proto/cast_channel.pb.h"
 
@@ -98,8 +98,6 @@ class CastMediaSinkServiceImpl : public MediaSinkServiceBase,
 
   // Called by CastMediaSinkService to set |allow_all_ips_|.
   void SetCastAllowAllIPs(bool allow_all_ips);
-
-  void BindLogger(mojo::PendingRemote<mojom::Logger> pending_remote);
 
   // Opens cast channel. This method will not open a channel if there is already
   // a pending request for |ip_endpoint|, or if a channel for |ip_endpoint|
@@ -183,6 +181,10 @@ class CastMediaSinkServiceImpl : public MediaSinkServiceBase,
   FRIEND_TEST_ALL_PREFIXES(CastMediaSinkServiceImplTest,
                            TestOnSinkAddedOrUpdatedSkipsIfNonCastDevice);
   FRIEND_TEST_ALL_PREFIXES(CastMediaSinkServiceImplTest,
+                           IgnoreDialSinkIfSameIdAsCast);
+  FRIEND_TEST_ALL_PREFIXES(CastMediaSinkServiceImplTest,
+                           IgnoreDialSinkIfSameIpAddressAsCast);
+  FRIEND_TEST_ALL_PREFIXES(CastMediaSinkServiceImplTest,
                            TestSuccessOnChannelErrorRetry);
   FRIEND_TEST_ALL_PREFIXES(CastMediaSinkServiceImplTest,
                            TestFailureOnChannelErrorRetry);
@@ -227,7 +229,7 @@ class CastMediaSinkServiceImpl : public MediaSinkServiceBase,
 
   // MediaSinkServiceBase implementation.
   void RecordDeviceCounts() override;
-  void OnUserGesture() override;
+  void DiscoverSinksNow() override;
 
   // MediaSinkServiceBase::Observer implementation.
   void OnSinkAddedOrUpdated(const MediaSinkInternal& sink) override;
@@ -246,6 +248,7 @@ class CastMediaSinkServiceImpl : public MediaSinkServiceBase,
                cast_channel::ChannelError error_state) override;
   void OnMessage(const cast_channel::CastSocket& socket,
                  const cast::channel::CastMessage& message) override;
+  void OnReadyStateChanged(const cast_channel::CastSocket& socket) override;
 
   // DiscoveryNetworkMonitor::Observer implementation
   void OnNetworksChanged(const std::string& network_id) override;
@@ -322,6 +325,8 @@ class CastMediaSinkServiceImpl : public MediaSinkServiceBase,
   // long term solution for restricting dual discovery.
   bool IsProbablyNonCastDevice(const MediaSinkInternal& sink) const;
 
+  bool HasSinkWithIPAddress(const net::IPAddress& ip_address) const;
+
   base::WeakPtr<CastMediaSinkServiceImpl> GetWeakPtr() {
     return weak_ptr_factory_.GetWeakPtr();
   }
@@ -372,11 +377,6 @@ class CastMediaSinkServiceImpl : public MediaSinkServiceBase,
   // Non-owned pointer to DIAL MediaSinkService. Observed by |this| for dual
   // discovery.  May be nullptr if the DIAL Media Route Provider is disabled.
   const raw_ptr<MediaSinkServiceBase> dial_media_sink_service_;
-
-  // Mojo Remote to the logger owned by the Media Router. The Remote is not
-  // bound until |BindLogger()| is called. Always check if |logger_.is_bound()|
-  // is true before using.
-  mojo::Remote<mojom::Logger> logger_;
 
   // The SequencedTaskRunner on which methods are run. This shares the
   // same SequencedTaskRunner as the one used by |cast_socket_service_|.

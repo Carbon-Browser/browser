@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,18 +14,14 @@ NavigationLoaderInterceptor::MaybeCreateSubresourceLoaderParams() {
 }
 
 bool NavigationLoaderInterceptor::MaybeCreateLoaderForResponse(
+    const network::URLLoaderCompletionStatus& status,
     const network::ResourceRequest& request,
     network::mojom::URLResponseHeadPtr* response,
     mojo::ScopedDataPipeConsumerHandle* response_body,
     mojo::PendingRemote<network::mojom::URLLoader>* loader,
     mojo::PendingReceiver<network::mojom::URLLoaderClient>* client_receiver,
     blink::ThrottlingURLLoader* url_loader,
-    bool* skip_other_interceptors,
-    bool* will_return_unsafe_redirect) {
-  return false;
-}
-
-bool NavigationLoaderInterceptor::ShouldBypassRedirectChecks() {
+    bool* skip_other_interceptors) {
   return false;
 }
 

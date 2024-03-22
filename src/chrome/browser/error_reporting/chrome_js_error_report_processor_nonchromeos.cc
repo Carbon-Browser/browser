@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
@@ -121,13 +121,14 @@ void ChromeJsErrorReportProcessor::SendReport(
         sender: "JavaScript error reporter"
         description:
           "Chrome can send JavaScript errors that occur within built-in "
-          "component extensions and chrome:// webpages. If enabled, the error "
-          "message, along with information about Chrome and the operating "
-          "system, is sent to Google for debugging."
+          "component extensions, chrome:// webpages and DevTools. If enabled, "
+          "the error message, along with information about Chrome and the "
+          "operating system, is sent to Google for debugging."
         trigger:
           "A JavaScript error occurs in a Chrome component extension (an "
           "extension bundled with the Chrome browser, not downloaded "
-          "separately) or in certain chrome:// webpages."
+          "separately) or in certain chrome:// webpages or "
+          "in Chrome DevTools (devtools:// pages)."
         data:
           "The JavaScript error message, the version and channel of Chrome, "
           "the URL of the extension or webpage, the line and column number of "

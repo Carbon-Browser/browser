@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "content/browser/payments/payment_app.pb.h"
@@ -17,7 +17,6 @@
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/common/content_features.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/manifest/manifest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -84,10 +83,6 @@ PaymentInstrumentPtr ToPaymentInstrumentForMojo(const std::string& input) {
     instrument->icons.emplace_back(icon);
   }
   instrument->method = instrument_proto.method();
-  if (base::FeatureList::IsEnabled(::features::kPaymentRequestBasicCard)) {
-    instrument->stringified_capabilities =
-        instrument_proto.stringified_capabilities();
-  }
 
   return instrument;
 }
@@ -179,7 +174,7 @@ void PaymentAppDatabase::DeletePaymentInstrument(
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(
           &PaymentAppDatabase::DidFindRegistrationToDeletePaymentInstrument,
           weak_ptr_factory_.GetWeakPtr(), instrument_key, std::move(callback)));
@@ -194,7 +189,7 @@ void PaymentAppDatabase::ReadPaymentInstrument(
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(
           &PaymentAppDatabase::DidFindRegistrationToReadPaymentInstrument,
           weak_ptr_factory_.GetWeakPtr(), instrument_key, std::move(callback)));
@@ -208,7 +203,7 @@ void PaymentAppDatabase::KeysOfPaymentInstruments(
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(&PaymentAppDatabase::DidFindRegistrationToGetKeys,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
@@ -222,7 +217,7 @@ void PaymentAppDatabase::HasPaymentInstrument(
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(
           &PaymentAppDatabase::DidFindRegistrationToHasPaymentInstrument,
           weak_ptr_factory_.GetWeakPtr(), instrument_key, std::move(callback)));
@@ -242,14 +237,14 @@ void PaymentAppDatabase::WritePaymentInstrument(
     PaymentInstrumentIconFetcher::Start(
         scope,
         service_worker_context_->GetWindowClientFrameRoutingIds(
-            blink::StorageKey(url::Origin::Create(scope))),
+            blink::StorageKey::CreateFirstParty(url::Origin::Create(scope))),
         icons,
         base::BindOnce(&PaymentAppDatabase::DidFetchedPaymentInstrumentIcon,
                        weak_ptr_factory_.GetWeakPtr(), scope, instrument_key,
                        std::move(instrument), std::move(callback)));
   } else {
     service_worker_context_->FindReadyRegistrationForScope(
-        scope, blink::StorageKey(url::Origin::Create(scope)),
+        scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
         base::BindOnce(
             &PaymentAppDatabase::DidFindRegistrationToWritePaymentInstrument,
             weak_ptr_factory_.GetWeakPtr(), instrument_key,
@@ -273,7 +268,7 @@ void PaymentAppDatabase::DidFetchedPaymentInstrumentIcon(
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(
           &PaymentAppDatabase::DidFindRegistrationToWritePaymentInstrument,
           weak_ptr_factory_.GetWeakPtr(), instrument_key, std::move(instrument),
@@ -302,7 +297,7 @@ void PaymentAppDatabase::FetchPaymentAppInfoCallback(
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(
           &PaymentAppDatabase::DidFindRegistrationToUpdatePaymentAppInfo,
           weak_ptr_factory_.GetWeakPtr(), std::move(callback),
@@ -400,7 +395,7 @@ void PaymentAppDatabase::ClearPaymentInstruments(
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(
           &PaymentAppDatabase::DidFindRegistrationToClearPaymentInstruments,
           weak_ptr_factory_.GetWeakPtr(), scope, std::move(callback)));
@@ -413,7 +408,7 @@ void PaymentAppDatabase::SetPaymentAppUserHint(const GURL& scope,
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(
           &PaymentAppDatabase::DidFindRegistrationToSetPaymentAppUserHint,
           weak_ptr_factory_.GetWeakPtr(), user_hint));
@@ -428,7 +423,7 @@ void PaymentAppDatabase::EnablePaymentAppDelegations(
   // TODO(crbug.com/1199077): Update this when PaymentManager
   // implements StorageKey.
   service_worker_context_->FindReadyRegistrationForScope(
-      scope, blink::StorageKey(url::Origin::Create(scope)),
+      scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
       base::BindOnce(
           &PaymentAppDatabase::DidFindRegistrationToEnablePaymentAppDelegations,
           weak_ptr_factory_.GetWeakPtr(), delegations, std::move(callback)));
@@ -745,13 +740,6 @@ void PaymentAppDatabase::DidReadAllPaymentInstruments(
       continue;
 
     apps[id]->enabled_methods.emplace_back(instrument_proto.method());
-    if (base::FeatureList::IsEnabled(::features::kPaymentRequestBasicCard)) {
-      apps[id]->capabilities.emplace_back(StoredCapabilities());
-      for (const auto& network : instrument_proto.supported_card_networks()) {
-        apps[id]->capabilities.back().supported_card_networks.emplace_back(
-            network);
-      }
-    }
   }
 
   std::move(callback).Run(std::move(apps));
@@ -937,14 +925,6 @@ void PaymentAppDatabase::DidFindRegistrationToWritePaymentInstrument(
       ImageSizeProto* size_proto = image_object_proto->add_sizes();
       size_proto->set_width(size.width());
       size_proto->set_height(size.height());
-    }
-  }
-  if (base::FeatureList::IsEnabled(::features::kPaymentRequestBasicCard)) {
-    instrument_proto.set_stringified_capabilities(
-        instrument->stringified_capabilities);
-    for (const auto& network : instrument->supported_networks) {
-      instrument_proto.add_supported_card_networks(
-          static_cast<int32_t>(network));
     }
   }
 

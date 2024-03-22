@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,10 @@
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/unguessable_token.h"
-#include "chrome/browser/web_applications/app_registrar_observer.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_install_manager_observer.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -35,18 +34,23 @@ class WebAppTabHelper : public content::WebContentsUserData<WebAppTabHelper>,
 
   // Retrieves the WebAppTabHelper's app ID off |web_contents|, returns nullptr
   // if there is no tab helper or app ID.
-  static const AppId* GetAppId(content::WebContents* web_contents);
+  static const webapps::AppId* GetAppId(content::WebContents* web_contents);
 
   explicit WebAppTabHelper(content::WebContents* web_contents);
   WebAppTabHelper(const WebAppTabHelper&) = delete;
   WebAppTabHelper& operator=(const WebAppTabHelper&) = delete;
   ~WebAppTabHelper() override;
 
-  void SetAppId(absl::optional<AppId> app_id);
+  void SetAppId(absl::optional<webapps::AppId> app_id);
   const base::UnguessableToken& GetAudioFocusGroupIdForTesting() const;
 
   bool acting_as_app() const { return acting_as_app_; }
   void set_acting_as_app(bool acting_as_app) { acting_as_app_ = acting_as_app; }
+
+  bool is_pinned_home_tab() const { return is_pinned_home_tab_; }
+  void set_is_pinned_home_tab(bool is_pinned_home_tab) {
+    is_pinned_home_tab_ = is_pinned_home_tab;
+  }
 
   WebAppLaunchQueue& EnsureLaunchQueue();
 
@@ -66,15 +70,17 @@ class WebAppTabHelper : public content::WebContentsUserData<WebAppTabHelper>,
   bool IsInAppWindow() const;
 
   // WebAppInstallManagerObserver:
-  void OnWebAppInstalled(const AppId& installed_app_id) override;
-  void OnWebAppWillBeUninstalled(const AppId& uninstalled_app_id) override;
+  void OnWebAppInstalled(const webapps::AppId& installed_app_id) override;
+  void OnWebAppWillBeUninstalled(
+      const webapps::AppId& uninstalled_app_id) override;
   void OnWebAppInstallManagerDestroyed() override;
 
   void ResetAppId();
 
-  // Runs any logic when the associated app either changes or is removed.
-  void OnAssociatedAppChanged(const absl::optional<AppId>& previous_app_id,
-                              const absl::optional<AppId>& new_app_id);
+  // Runs any logic when the associated app is added, changed or removed.
+  void OnAssociatedAppChanged(
+      const absl::optional<webapps::AppId>& previous_app_id,
+      const absl::optional<webapps::AppId>& new_app_id);
 
   // Updates the audio focus group id based on the current web app.
   void UpdateAudioFocusGroupId();
@@ -82,10 +88,10 @@ class WebAppTabHelper : public content::WebContentsUserData<WebAppTabHelper>,
   // Triggers a reinstall of a placeholder app for |url|.
   void ReinstallPlaceholderAppIfNecessary(const GURL& url);
 
-  absl::optional<AppId> FindAppWithUrlInScope(const GURL& url) const;
+  absl::optional<webapps::AppId> FindAppWithUrlInScope(const GURL& url) const;
 
   // WebApp associated with this tab.
-  absl::optional<AppId> app_id_;
+  absl::optional<webapps::AppId> app_id_;
 
   // True when the associated `WebContents` is acting as an app. Specifically,
   // this should only be true if `app_id_` is non empty, and the WebContents was
@@ -93,6 +99,9 @@ class WebAppTabHelper : public content::WebContentsUserData<WebAppTabHelper>,
   // when an app is first installed and reparented from tab to window. It should
   // be false if a user types the app's URL into a normal browser window.
   bool acting_as_app_ = false;
+
+  // True when this tab is the pinned home tab of a tabbed web app.
+  bool is_pinned_home_tab_ = false;
 
   // The audio focus group id is used to group media sessions together for apps.
   // We store the applied group id locally on the helper for testing.

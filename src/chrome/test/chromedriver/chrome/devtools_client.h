@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
-
-namespace base {
-class Value;
-class DictionaryValue;
-}
+#include "base/functional/callback_forward.h"
+#include "base/values.h"
 
 class DevToolsEventListener;
 class Timeout;
@@ -30,48 +26,62 @@ class DevToolsClient {
 
   virtual const std::string& GetId() = 0;
 
+  // Session id used to annotate the CDP commands.
+  virtual const std::string& SessionId() const = 0;
+
+  // Session id used for CDP traffic tunneling
+  virtual const std::string& TunnelSessionId() const = 0;
+
+  // Set the session id used for CDP traffic tunneling
+  virtual Status SetTunnelSessionId(std::string session_id) = 0;
+
+  // Start a BiDi Server in the connected target
+  // Precondition: IsMainPage()
+  // Precondition: IsConnected()
+  // Precondition: BiDi tunnel for CDP traffic is not set.
+  virtual Status StartBidiServer(std::string bidi_mapper_script) = 0;
+
   virtual bool WasCrashed() = 0;
 
-  // Connect to DevTools if the DevToolsClient is disconnected.
-  virtual Status ConnectIfNecessary() = 0;
+  virtual bool IsNull() const = 0;
 
-  virtual Status SetUpDevTools() = 0;
+  virtual bool IsConnected() const = 0;
 
-  virtual Status SendCommand(
-      const std::string& method,
-      const base::DictionaryValue& params) = 0;
+  virtual Status PostBidiCommand(base::Value::Dict command) = 0;
+
+  virtual Status SendCommand(const std::string& method,
+                             const base::Value::Dict& params) = 0;
 
   virtual Status SendCommandFromWebSocket(const std::string& method,
-                                          const base::DictionaryValue& params,
+                                          const base::Value::Dict& params,
                                           const int client_command_id) = 0;
 
-  virtual Status SendCommandWithTimeout(
-      const std::string& method,
-      const base::DictionaryValue& params,
-      const Timeout* timeout) = 0;
+  virtual Status SendCommandWithTimeout(const std::string& method,
+                                        const base::Value::Dict& params,
+                                        const Timeout* timeout) = 0;
 
-  virtual Status SendAsyncCommand(
-      const std::string& method,
-      const base::DictionaryValue& params) = 0;
+  virtual Status SendAsyncCommand(const std::string& method,
+                                  const base::Value::Dict& params) = 0;
 
-  // A base::Value(base::Value::Type::DICTIONARY) gets assigned to |result|.
   virtual Status SendCommandAndGetResult(const std::string& method,
-                                         const base::DictionaryValue& params,
-                                         base::Value* result) = 0;
+                                         const base::Value::Dict& params,
+                                         base::Value::Dict* result) = 0;
 
-  // A base::Value(base::Value::Type::DICTIONARY) gets assigned to |result|.
   virtual Status SendCommandAndGetResultWithTimeout(
       const std::string& method,
-      const base::DictionaryValue& params,
+      const base::Value::Dict& params,
       const Timeout* timeout,
-      base::Value* result) = 0;
+      base::Value::Dict* result) = 0;
 
   virtual Status SendCommandAndIgnoreResponse(
       const std::string& method,
-      const base::DictionaryValue& params) = 0;
+      const base::Value::Dict& params) = 0;
 
   // Adds a listener. This must only be done when the client is disconnected.
   virtual void AddListener(DevToolsEventListener* listener) = 0;
+
+  // Remove a listener added by AddListener().
+  virtual void RemoveListener(DevToolsEventListener* listener) = 0;
 
   // Handles events until the given function reports the condition is met
   // and there are no more received events to handle. If the given
@@ -94,7 +104,9 @@ class DevToolsClient {
 
   virtual DevToolsClient* GetRootClient() = 0;
 
-  virtual bool IsMainPage();
+  virtual DevToolsClient* GetParentClient() const = 0;
+
+  virtual bool IsMainPage() const = 0;
 };
 
 #endif  // CHROME_TEST_CHROMEDRIVER_CHROME_DEVTOOLS_CLIENT_H_

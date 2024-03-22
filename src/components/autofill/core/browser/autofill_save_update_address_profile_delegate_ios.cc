@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/stl_util.h"
+#include "base/containers/contains.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/types/optional_util.h"
 #include "components/autofill/core/browser/autofill_address_util.h"
 #include "components/autofill/core/common/autofill_constants.h"
 #include "components/grit/components_scaled_resources.h"
@@ -22,23 +23,29 @@ AutofillSaveUpdateAddressProfileDelegateIOS::
     AutofillSaveUpdateAddressProfileDelegateIOS(
         const AutofillProfile& profile,
         const AutofillProfile* original_profile,
+        absl::optional<std::u16string> user_email,
         const std::string& locale,
+        AutofillClient::SaveAddressProfilePromptOptions options,
         AutofillClient::AddressProfileSavePromptCallback callback)
     : locale_(locale),
       profile_(profile),
       original_profile_(base::OptionalFromPtr(original_profile)),
-      address_profile_save_prompt_callback_(std::move(callback)) {}
+      address_profile_save_prompt_callback_(std::move(callback)),
+      is_migration_to_account_(options.is_migration_to_account),
+      user_email_(user_email) {}
 
 AutofillSaveUpdateAddressProfileDelegateIOS::
     ~AutofillSaveUpdateAddressProfileDelegateIOS() {
   // If the user has navigated away without saving the modal, then the
   // |address_profile_save_prompt_callback_| is run here.
   if (!address_profile_save_prompt_callback_.is_null()) {
-    DCHECK(
-        user_decision_ !=
-            AutofillClient::SaveAddressProfileOfferUserDecision::kAccepted &&
-        user_decision_ !=
-            AutofillClient::SaveAddressProfileOfferUserDecision::kEditAccepted);
+    DCHECK(user_decision_ !=
+               AutofillClient::SaveAddressProfileOfferUserDecision::kAccepted &&
+           user_decision_ !=
+               AutofillClient::SaveAddressProfileOfferUserDecision::
+                   kEditAccepted &&
+           user_decision_ !=
+               AutofillClient::SaveAddressProfileOfferUserDecision::kNever);
     RunSaveAddressProfilePromptCallback();
   }
 }
@@ -71,8 +78,23 @@ std::u16string AutofillSaveUpdateAddressProfileDelegateIOS::GetEmailAddress()
   return GetProfileInfo(EMAIL_ADDRESS);
 }
 
+std::u16string AutofillSaveUpdateAddressProfileDelegateIOS::
+    GetProfileDescriptionForMigrationPrompt() const {
+  return ::autofill::GetProfileSummaryForMigrationPrompt(profile_, locale_);
+}
+
 std::u16string AutofillSaveUpdateAddressProfileDelegateIOS::GetDescription()
     const {
+  if (is_migration_to_account_) {
+    return l10n_util::GetStringUTF16(
+        IDS_IOS_AUTOFILL_MIGRATE_ADDRESS_IN_ACCOUNT_MESSAGE_SUBTITLE);
+  }
+  if (IsProfileAnAccountProfile() && !original_profile_.has_value()) {
+    DCHECK(user_email_);
+    return l10n_util::GetStringFUTF16(
+        IDS_IOS_AUTOFILL_SAVE_ADDRESS_IN_ACCOUNT_MESSAGE_SUBTITLE,
+        *user_email_);
+  }
   return GetProfileDescription(
       original_profile_ ? *original_profile_ : profile_, locale_,
       /*include_address_and_contacts=*/true);
@@ -82,11 +104,8 @@ std::u16string AutofillSaveUpdateAddressProfileDelegateIOS::GetSubtitle() {
   DCHECK(original_profile_);
   std::vector<ProfileValueDifference> differences =
       GetProfileDifferenceForUi(original_profile_.value(), profile_, locale_);
-  bool address_updated =
-      std::find_if(differences.begin(), differences.end(),
-                   [](const ProfileValueDifference& diff) {
-                     return diff.type == ADDRESS_HOME_ADDRESS;
-                   }) != differences.end();
+  bool address_updated = base::Contains(differences, ADDRESS_HOME_ADDRESS,
+                                        &ProfileValueDifference::type);
   return GetProfileDescription(
       original_profile_.value(), locale_,
       /*include_address_and_contacts=*/!address_updated);
@@ -106,7 +125,7 @@ const AutofillProfile* AutofillSaveUpdateAddressProfileDelegateIOS::GetProfile()
 
 const AutofillProfile*
 AutofillSaveUpdateAddressProfileDelegateIOS::GetOriginalProfile() const {
-  return base::OptionalOrNullptr(original_profile_);
+  return base::OptionalToPtr(original_profile_);
 }
 
 std::u16string AutofillSaveUpdateAddressProfileDelegateIOS::GetProfileInfo(
@@ -121,6 +140,13 @@ AutofillSaveUpdateAddressProfileDelegateIOS::GetProfileDiff() const {
 }
 
 void AutofillSaveUpdateAddressProfileDelegateIOS::EditAccepted() {
+  if (address_profile_save_prompt_callback_.is_null()) {
+    // From the crash logs in crbug.com/1408890, it appears that there are
+    // multiple calls to this method when the edit button is pressed so return
+    // early if the callback has already been executed.
+    return;
+  }
+
   user_decision_ =
       AutofillClient::SaveAddressProfileOfferUserDecision::kEditAccepted;
   RunSaveAddressProfilePromptCallback();
@@ -141,20 +167,39 @@ void AutofillSaveUpdateAddressProfileDelegateIOS::MessageDeclined() {
       AutofillClient::SaveAddressProfileOfferUserDecision::kMessageDeclined);
 }
 
+void AutofillSaveUpdateAddressProfileDelegateIOS::AutoDecline() {
+  SetUserDecision(
+      AutofillClient::SaveAddressProfileOfferUserDecision::kAutoDeclined);
+}
+
+bool AutofillSaveUpdateAddressProfileDelegateIOS::Never() {
+  SetUserDecision(AutofillClient::SaveAddressProfileOfferUserDecision::kNever);
+  RunSaveAddressProfilePromptCallback();
+  return true;
+}
+
 void AutofillSaveUpdateAddressProfileDelegateIOS::SetProfileInfo(
     const ServerFieldType& type,
     const std::u16string& value) {
-  // Since the country field is a text field, we should use SetInfo() to make
-  // sure they get converted to country codes.
-  if (type == ADDRESS_HOME_COUNTRY) {
-    profile_.SetInfoWithVerificationStatus(
-        type, value, locale_,
-        structured_address::VerificationStatus::kUserVerified);
+  // Since the countries combobox contains the country names, not the country
+  // codes, and hence we should use `SetInfo()` to make sure they get converted
+  // to country codes. Also use `SetInfo()` for `NAME_FULL` so that its
+  // dependent nodes (NAME_FIRST, NAME_LAST, etc) are also updated. This does
+  // not need to be done for addresses because it is handled internally inside
+  // `SetRawInfo()`.
+  if (type == ADDRESS_HOME_COUNTRY || type == NAME_FULL) {
+    profile_.SetInfoWithVerificationStatus(type, value, locale_,
+                                           VerificationStatus::kUserVerified);
     return;
   }
 
-  profile_.SetRawInfoWithVerificationStatus(
-      type, value, structured_address::VerificationStatus::kUserVerified);
+  profile_.SetRawInfoWithVerificationStatus(type, value,
+                                            VerificationStatus::kUserVerified);
+}
+
+void AutofillSaveUpdateAddressProfileDelegateIOS::SetProfile(
+    AutofillProfile* profile) {
+  profile_ = *profile;
 }
 
 bool AutofillSaveUpdateAddressProfileDelegateIOS::Accept() {
@@ -182,6 +227,10 @@ int AutofillSaveUpdateAddressProfileDelegateIOS::GetIconId() const {
 
 std::u16string AutofillSaveUpdateAddressProfileDelegateIOS::GetMessageText()
     const {
+  if (is_migration_to_account_) {
+    return l10n_util::GetStringUTF16(
+        IDS_IOS_AUTOFILL_SAVE_ADDRESS_IN_ACCOUNT_MESSAGE_TITLE);
+  }
   return l10n_util::GetStringUTF16(
       original_profile_ ? IDS_IOS_AUTOFILL_UPDATE_ADDRESS_MESSAGE_TITLE
                         : IDS_IOS_AUTOFILL_SAVE_ADDRESS_MESSAGE_TITLE);
@@ -204,7 +253,12 @@ bool AutofillSaveUpdateAddressProfileDelegateIOS::ShouldExpire(
 void AutofillSaveUpdateAddressProfileDelegateIOS::
     RunSaveAddressProfilePromptCallback() {
   std::move(address_profile_save_prompt_callback_)
-      .Run(user_decision_, profile_);
+      .Run(user_decision_,
+           user_decision_ ==
+                   AutofillClient::SaveAddressProfileOfferUserDecision::
+                       kEditAccepted
+               ? base::optional_ref(profile_)
+               : std::nullopt);
 }
 
 void AutofillSaveUpdateAddressProfileDelegateIOS::SetUserDecision(
@@ -226,6 +280,9 @@ void AutofillSaveUpdateAddressProfileDelegateIOS::SetUserDecision(
     // |user_decision_| now.
     return;
   }
+
+  DCHECK(user_decision_ !=
+         AutofillClient::SaveAddressProfileOfferUserDecision::kNever);
   user_decision_ = user_decision;
 }
 

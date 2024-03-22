@@ -1,6 +1,7 @@
 include_rules = [
     "+base/containers/circular_deque.h",
     "+base/task/task_traits.h",
+    "+base/task/post_job.h",
     "+base/task/thread_pool/thread_pool_instance.h",
     "+cc",
     "+components/viz/client",
@@ -14,7 +15,6 @@ specific_include_rules = {
   ],
   "layer_tree_settings\.cc": [
     "+base/base_switches.h",
-    "+base/strings/string_number_conversions.h",
     "+gpu/config/gpu_finch_features.h",
     "+gpu/command_buffer/service/gpu_switches.h",
     "+media/base/media_switches.h",
@@ -22,12 +22,5 @@ specific_include_rules = {
     "+ui/base/ui_base_switches.h",
     "+ui/native_theme/native_theme_features.h",
     "+ui/native_theme/overlay_scrollbar_constants_aura.h",
-  ],
-  "categorized_worker_pool\.h": [
-    "+base/task/task_runner.h",
-    "+base/threading/simple_thread.h",
-  ],
-  "categorized_worker_pool_unittest\.cc": [
-    "+base/threading/simple_thread.h",
   ],
 }

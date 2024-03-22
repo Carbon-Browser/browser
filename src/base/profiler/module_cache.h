@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,9 @@
 
 namespace base {
 
-// Converts module id to match the id that Breakpad outputs.
-BASE_EXPORT std::string TransformModuleIDToBreakpadFormat(
+// Converts module id to match the id that the Google-internal symbol server
+// expects.
+BASE_EXPORT std::string TransformModuleIDToSymbolServerFormat(
     StringPiece module_id);
 
 // Supports cached lookup of modules by address, with caching based on module

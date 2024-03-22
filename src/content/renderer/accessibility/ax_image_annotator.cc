@@ -1,10 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/accessibility/ax_image_annotator.h"
 
-#include <ctype.h>
 #include <utility>
 #include <vector>
 
@@ -15,6 +14,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
+#include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "content/public/common/content_client.h"
@@ -140,10 +140,6 @@ AXImageAnnotator::AXImageAnnotator(
 
 AXImageAnnotator::~AXImageAnnotator() {}
 
-void AXImageAnnotator::Destroy() {
-  MarkAllImagesDirty();
-}
-
 std::string AXImageAnnotator::GetImageAnnotation(
     blink::WebAXObject& image) const {
   DCHECK(!image.IsDetached());
@@ -210,12 +206,8 @@ void AXImageAnnotator::OnImageUpdated(blink::WebAXObject& image) {
 
 void AXImageAnnotator::OnImageRemoved(blink::WebAXObject& image) {
   DCHECK(!image.IsDetached());
-  auto lookup = image_annotations_.find(image.AxID());
-  if (lookup == image_annotations_.end()) {
-    NOTREACHED() << "Removing an image that has not been added.";
-    return;
-  }
-  image_annotations_.erase(lookup);
+  DCHECK(base::Contains(image_annotations_, image.AxID()));
+  image_annotations_.erase(image.AxID());
 }
 
 // static
@@ -229,11 +221,13 @@ int AXImageAnnotator::GetLengthAfterRemovingStopwords(
       image_name, separators, base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
   int remaining_codepoints = 0;
   for (const std::string& word : words) {
-    if (AXImageStopwords::GetInstance().IsImageStopword(word.c_str()))
+    if (AXImageStopwords::GetInstance().IsImageStopword(word.c_str())) {
       continue;
+    }
 
-    for (base::i18n::UTF8CharIterator iter(word); !iter.end(); iter.Advance())
+    for (base::i18n::UTF8CharIterator iter(word); !iter.end(); iter.Advance()) {
       remaining_codepoints++;
+    }
   }
 
   return remaining_codepoints;
@@ -291,16 +285,6 @@ std::string AXImageAnnotator::GenerateImageSourceId(
   std::string source_id;
   base::Base64Encode(crypto::SHA256HashString(content), &source_id);
   return source_id;
-}
-
-void AXImageAnnotator::MarkAllImagesDirty() {
-  for (auto& key_value : image_annotations_) {
-    blink::WebAXObject image = blink::WebAXObject::FromWebDocumentByID(
-        render_accessibility_->GetMainDocument(), key_value.first);
-    if (!image.IsDetached())
-      MarkDirty(image);
-  }
-  image_annotations_.clear();
 }
 
 void AXImageAnnotator::MarkDirty(const blink::WebAXObject& image) const {
@@ -378,10 +362,8 @@ SkBitmap AXImageAnnotator::GetImageData(const blink::WebAXObject& image) {
 void AXImageAnnotator::OnImageAnnotated(
     const blink::WebAXObject& image,
     image_annotation::mojom::AnnotateImageResultPtr result) {
-  if (!blink::WebAXObject::MaybeUpdateLayoutAndCheckValidity(
-          image.GetDocument())) {
-    return;
-  }
+  DCHECK(render_accessibility_->GetAXContext());
+  render_accessibility_->GetAXContext()->UpdateAXForAllDocuments();
 
   if (!base::Contains(image_annotations_, image.AxID()))
     return;
@@ -503,6 +485,10 @@ void AXImageAnnotator::OnImageAnnotated(
       case image_annotation::mojom::AnnotationType::kIcon: {
         int icon_message_id = GetMessageIdForIconEnum(annotation->text);
 
+        // Skip unrecognized icon annotation enum.
+        if (icon_message_id == 0)
+          continue;
+
         DCHECK(GetContentClient());
         contextualized_strings.push_back(base::UTF16ToUTF8(
             GetContentClient()->GetLocalizedString(icon_message_id)));
@@ -517,10 +503,11 @@ void AXImageAnnotator::OnImageAnnotated(
     int last_meaningful_char = annotation->text.length() - 1;
     while (last_meaningful_char >= 0) {
       bool is_whitespace_or_punct =
-          isspace(annotation->text[last_meaningful_char]) ||
-          ispunct(annotation->text[last_meaningful_char]);
-      if (!is_whitespace_or_punct)
+          base::IsAsciiWhitespace(annotation->text[last_meaningful_char]) ||
+          base::IsAsciiPunctuation(annotation->text[last_meaningful_char]);
+      if (!is_whitespace_or_punct) {
         break;
+      }
       last_meaningful_char--;
     }
 

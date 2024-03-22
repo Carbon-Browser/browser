@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,16 +27,26 @@ const char* g_preinstalled_app_for_testing = nullptr;
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
     BUILDFLAG(IS_FUCHSIA)
-base::Feature kChromeAppsDeprecationExcludeForceInstalls(
-    "ChromeAppsDeprecationExcludeForceInstalls",
-    base::FEATURE_DISABLED_BY_DEFAULT);
+// TODO(b/268221237): Remove this allow-list.
+const char kDefaultAllowedExtensionIds[] =
+    "alhngdkjgnedakdlnamimgfihgkmenbh,"
+    "gnddkmpjjjcimefninepfmmddpgaaado,"
+    "jdfhpkjeckflbbleddjlpimecpbjdeep";
+
+BASE_FEATURE(kChromeAppsDeprecationExcludeForceInstalls,
+             "ChromeAppsDeprecationExcludeForceInstalls",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 base::FeatureParam<std::string> kChromeAppAllowlist{
-    &features::kChromeAppsDeprecation, "allow_list", ""};
+    &features::kChromeAppsDeprecation, "allow_list",
+    kDefaultAllowedExtensionIds};
 #endif
 
 }  // namespace
 
 namespace extensions {
+namespace testing {
+bool g_enable_chrome_apps_for_testing = false;
+}
 
 bool IsExtensionBlockedByPolicy(content::BrowserContext* context,
                                 const std::string& extension_id) {
@@ -99,18 +109,21 @@ bool IsExternalExtensionUninstalled(content::BrowserContext* context,
   return prefs && prefs->IsExternalExtensionUninstalled(extension_id);
 }
 
+bool ClearExternalExtensionUninstalled(content::BrowserContext* context,
+                                       const std::string& extension_id) {
+  return ExtensionPrefs::Get(context)->ClearExternalExtensionUninstalled(
+      extension_id);
+}
+
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
     BUILDFLAG(IS_FUCHSIA)
 bool IsExtensionUnsupportedDeprecatedApp(content::BrowserContext* context,
                                          const std::string& extension_id) {
-  if (!base::FeatureList::IsEnabled(features::kChromeAppsDeprecation))
+  if (testing::g_enable_chrome_apps_for_testing) {
     return false;
+  }
 
   if (extension_id == extensions::kWebStoreAppId)
-    return false;
-
-  const auto* prefs = Profile::FromBrowserContext(context)->GetPrefs();
-  if (prefs->GetBoolean(pref_names::kChromeAppsEnabled))
     return false;
 
   auto* registry = ExtensionRegistry::Get(context);

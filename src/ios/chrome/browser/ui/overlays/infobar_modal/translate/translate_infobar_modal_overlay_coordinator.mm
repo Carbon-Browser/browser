@@ -1,30 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/overlays/infobar_modal/translate/translate_infobar_modal_overlay_coordinator.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-#include "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "ios/chrome/browser/infobars/infobar_type.h"
-#import "ios/chrome/browser/overlays/public/infobar_modal/translate_infobar_modal_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/default/default_infobar_overlay_request_config.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_translate_language_selection_delegate.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_translate_language_selection_table_view_controller.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_translate_table_view_controller.h"
 #import "ios/chrome/browser/ui/overlays/infobar_modal/infobar_modal_overlay_coordinator+modal_configuration.h"
 #import "ios/chrome/browser/ui/overlays/infobar_modal/translate/translate_infobar_modal_overlay_mediator.h"
 #import "ios/chrome/browser/ui/overlays/infobar_modal/translate/translate_infobar_modal_overlay_mediator_delegate.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using translate_infobar_overlays::TranslateModalRequestConfig;
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 
 @interface TranslateInfobarModalOverlayCoordinator () <
     TranslateInfobarModalOverlayMediatorDelegate>
@@ -32,22 +24,23 @@ using translate_infobar_overlays::TranslateModalRequestConfig;
 @property(nonatomic, readwrite) OverlayRequestMediator* modalMediator;
 @property(nonatomic, readwrite) UIViewController* modalViewController;
 // The request's config.
-@property(nonatomic, readonly) TranslateModalRequestConfig* config;
+@property(nonatomic, readonly) DefaultInfobarOverlayRequestConfig* config;
 @end
 
 @implementation TranslateInfobarModalOverlayCoordinator
 
 #pragma mark - Accessors
 
-- (TranslateModalRequestConfig*)config {
-  return self.request ? self.request->GetConfig<TranslateModalRequestConfig>()
-                      : nullptr;
+- (DefaultInfobarOverlayRequestConfig*)config {
+  return self.request
+             ? self.request->GetConfig<DefaultInfobarOverlayRequestConfig>()
+             : nullptr;
 }
 
 #pragma mark - Public
 
 + (const OverlayRequestSupport*)requestSupport {
-  return TranslateModalRequestConfig::RequestSupport();
+  return DefaultInfobarOverlayRequestConfig::RequestSupport();
 }
 
 #pragma mark - TranslateInfobarModalOverlayMediatorDelegate
@@ -85,7 +78,7 @@ using translate_infobar_overlays::TranslateModalRequestConfig;
 #pragma mark - Private
 
 - (TranslateInfobarModalOverlayMediator*)translateModalOverlayMediator {
-  return base::mac::ObjCCastStrict<TranslateInfobarModalOverlayMediator>(
+  return base::apple::ObjCCastStrict<TranslateInfobarModalOverlayMediator>(
       self.modalMediator);
 }
 
@@ -101,7 +94,8 @@ using translate_infobar_overlays::TranslateModalRequestConfig;
           initWithRequest:self.request];
   InfobarTranslateTableViewController* modalViewController =
       [[InfobarTranslateTableViewController alloc]
-          initWithDelegate:modalMediator];
+          initWithDelegate:modalMediator
+               prefService:self.browser->GetBrowserState()->GetPrefs()];
   modalMediator.consumer = modalViewController;
   modalMediator.translateMediatorDelegate = self;
   self.modalMediator = modalMediator;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,10 @@
 #include "ash/shell.h"
 #include "ash/system/time/calendar_event_fetch.h"
 #include "ash/system/time/calendar_utils.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_set.h"
-#include "base/logging.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
 #include "google_apis/calendar/calendar_api_response_types.h"
@@ -42,8 +41,6 @@ constexpr auto kAllowedResponseStatuses =
          CalendarEvent::ResponseStatus::kNeedsAction,
          CalendarEvent::ResponseStatus::kTentative});
 
-// Methods for debugging and gathering of metrics.
-
 [[maybe_unused]] size_t GetEventMapSize(
     const ash::CalendarModel::SingleMonthEventMap& event_map) {
   size_t total_bytes = 0;
@@ -57,13 +54,114 @@ constexpr auto kAllowedResponseStatuses =
   return total_bytes;
 }
 
-[[maybe_unused]] size_t GetTotalCacheSize(
-    const ash::CalendarModel::MonthToEventsMap& event_map) {
-  size_t total_bytes = 0;
-  for (auto& month : event_map)
-    total_bytes += sizeof(month) + GetEventMapSize(month.second);
+auto SplitEventsIntoMultiDayAndSameDay(const ash::SingleDayEventList& list) {
+  std::list<CalendarEvent> multi_day_events;
+  std::list<CalendarEvent> same_day_events;
 
-  return total_bytes;
+  for (const CalendarEvent& event : list) {
+    if (event.all_day_event() || ash::calendar_utils::IsMultiDayEvent(&event))
+      multi_day_events.push_back(std::move(event));
+    else
+      same_day_events.push_back(std::move(event));
+  }
+
+  return std::make_tuple(std::move(multi_day_events),
+                         std::move(same_day_events));
+}
+
+void SortByDateAscending(
+    std::list<google_apis::calendar::CalendarEvent>& events) {
+  events.sort([](google_apis::calendar::CalendarEvent& a,
+                 google_apis::calendar::CalendarEvent& b) {
+    if (a.start_time().date_time() == b.start_time().date_time()) {
+      return a.end_time().date_time() < b.end_time().date_time();
+    }
+    return a.start_time().date_time() < b.start_time().date_time();
+  });
+}
+
+bool EventStartsInTenMins(const CalendarEvent& event,
+                          const base::Time& now_local) {
+  const int start_time_difference_in_mins =
+      (ash::calendar_utils::GetStartTimeAdjusted(&event) - now_local)
+          .InMinutes();
+
+  return (0 <= start_time_difference_in_mins &&
+          start_time_difference_in_mins <= 10);
+}
+
+bool EventStartedLessThanOneHourAgo(const CalendarEvent& event,
+                                    const base::Time& now_local) {
+  const int start_time_difference_in_mins =
+      (ash::calendar_utils::GetStartTimeAdjusted(&event) - now_local)
+          .InMinutes();
+  const int end_time_difference_in_mins =
+      (ash::calendar_utils::GetEndTimeAdjusted(&event) - now_local).InMinutes();
+
+  return (0 <= end_time_difference_in_mins &&
+          0 > start_time_difference_in_mins &&
+          start_time_difference_in_mins >= -60);
+}
+
+// Returns events that start in 10 minutes time, or events that are in progress
+// and started less than one hour ago.
+auto FilterEventsStartingSoonOrRecentlyInProgress(
+    const ash::SingleDayEventList& list,
+    const base::Time& now_local) {
+  std::list<CalendarEvent> result;
+
+  for (const CalendarEvent& event : list) {
+    if (EventStartsInTenMins(event, now_local) ||
+        EventStartedLessThanOneHourAgo(event, now_local)) {
+      result.emplace_back(event);
+    }
+  }
+
+  return result;
+}
+
+auto FilterTheNextEventsOrEventsRecentlyInProgress(
+    const ash::SingleDayEventList& list,
+    const base::Time& now_local) {
+  std::list<CalendarEvent> result;
+  int min_start_time_difference_in_mins = INT_MAX;
+  for (const CalendarEvent& event : list) {
+    if (event.all_day_event()) {
+      continue;
+    }
+
+    if (EventStartedLessThanOneHourAgo(event, now_local)) {
+      result.emplace_back(event);
+      continue;
+    }
+
+    const int start_time_difference_in_mins =
+        (ash::calendar_utils::GetStartTimeAdjusted(&event) - now_local)
+            .InMinutes();
+
+    // If the event has already started, don't add it and go to the next event,
+    // because this event should have started over an hour ago since we have
+    // already added events started less than an hour ago earlier.
+    if (start_time_difference_in_mins < 0) {
+      continue;
+    }
+
+    // If the event start time was more than
+    // `min_start_time_difference_in_mins`, then don't show it, and don't
+    // consider the rest of the events because they are sorted in chronnological
+    // order.
+    if (start_time_difference_in_mins > min_start_time_difference_in_mins) {
+      return result;
+    }
+
+    // This event starts later than `now_local` and is either the first event
+    // happening next or the event happening at the same time as the next
+    // event, add it into `result`.
+    min_start_time_difference_in_mins = start_time_difference_in_mins;
+    result.emplace_back(event);
+  }
+
+  return result;
 }
 
 }  // namespace
@@ -94,8 +192,9 @@ void CalendarModel::RemoveObserver(Observer* observer) {
 
 void CalendarModel::PromoteMonth(base::Time start_of_month) {
   // If this month is non-prunable, nothing to do.
-  if (non_prunable_months_.find(start_of_month) != non_prunable_months_.end())
+  if (base::Contains(non_prunable_months_, start_of_month)) {
     return;
+  }
 
   // If start_of_month is already most-recently-used, nothing to do.
   if (!mru_months_.empty() && mru_months_.front() == start_of_month)
@@ -165,7 +264,7 @@ void CalendarModel::UploadLifetimeMetrics() {
 
 void CalendarModel::FetchEvents(base::Time start_of_month) {
   // Early return if it's not a valid user/user-session.
-  if (!calendar_utils::IsActiveUser())
+  if (!calendar_utils::ShouldFetchEvents())
     return;
 
   // Bail out early if there is no CalendarClient.  This will be the case in
@@ -175,8 +274,8 @@ void CalendarModel::FetchEvents(base::Time start_of_month) {
     return;
 
   // Bail out early if this is a prunable month that's already been fetched.
-  if (non_prunable_months_.find(start_of_month) == non_prunable_months_.end() &&
-      months_fetched_.find(start_of_month) != months_fetched_.end()) {
+  if (!base::Contains(non_prunable_months_, start_of_month) &&
+      base::Contains(months_fetched_, start_of_month)) {
     PromoteMonth(start_of_month);
     return;
   }
@@ -233,13 +332,16 @@ void CalendarModel::OnEventsFetched(
   if (error != google_apis::HTTP_SUCCESS) {
     // Request is no longer outstanding, so it can be destroyed.
     pending_fetches_.erase(start_of_month);
+    // Notify observers that we had an error with the events fetched.
+    // Right now the `kError` status isn't handled in any way so we just emit
+    // `kNever` to stop the loading animation displaying.
     // TODO(https://crbug.com/1298187): Possibly respond further based on the
-    // specific error code, retry in some cases, etc. Or notify observers e.g.
-    // observer.OnEventsFetched(kError, start_of_month, events);
+    // specific error code, retry in some cases, etc.
+    for (auto& observer : observers_)
+      observer.OnEventsFetched(kNever, start_of_month, events);
+
     return;
   }
-
-  DebugDumpOnEventFetched(events, start_of_month);
 
   // Keep us within storage limits.
   PruneEventCache();
@@ -256,11 +358,11 @@ void CalendarModel::OnEventsFetched(
   } else {
     // Store the incoming events.
     for (const auto& event : events->items()) {
-      if (IsMultiDayEvent(event.get()))
+      if (calendar_utils::IsMultiDayEvent(event.get()))
         InsertMultiDayEvent(event.get(), start_of_month);
       else {
         base::Time start_time_midnight =
-            GetStartTimeMidnightAdjusted(event.get());
+            calendar_utils::GetStartTimeMidnightAdjusted(event.get());
         InsertEventInMonth(
             event.get(),
             calendar_utils::GetStartOfMonthUTC(start_time_midnight),
@@ -289,8 +391,13 @@ void CalendarModel::OnEventFetchFailedInternalError(
     CalendarEventFetchInternalErrorCode error) {
   // Request is no longer outstanding, so it can be destroyed.
   pending_fetches_.erase(start_of_month);
+  // Notify observers of timeout fetching events for given `start_of_month`.
+  // Right now timeouts aren't handled in any way so we just emit `onTimeout` to
+  // stop the loading animation displaying.
   // TODO(https://crbug.com/1298187): May need to respond further based on the
   // specific error code, retry in some cases, etc.
+  for (auto& observer : observers_)
+    observer.OnTimeout(start_of_month);
 }
 
 bool CalendarModel::ShouldInsertEvent(const CalendarEvent* event) const {
@@ -302,21 +409,42 @@ bool CalendarModel::ShouldInsertEvent(const CalendarEvent* event) const {
                         event->self_response_status());
 }
 
-bool CalendarModel::IsMultiDayEvent(
-    const google_apis::calendar::CalendarEvent* event) const {
-  DCHECK(event);
-  return (GetStartTimeMidnightAdjusted(event) <
-          GetEndTimeMidnightAdjusted(event));
-}
-
 void CalendarModel::InsertMultiDayEvent(
     const google_apis::calendar::CalendarEvent* event,
     const base::Time start_of_month) {
   DCHECK(event);
 
-  base::Time start_time_midnight = GetStartTimeMidnightAdjusted(event);
-  base::Time end_time_midnight = GetEndTimeMidnightAdjusted(event);
-  base::Time end_time = GetEndTimeAdjusted(event);
+  if (event->all_day_event()) {
+    auto current_day_utc = calendar_utils::GetMaxTime(
+                               start_of_month, event->start_time().date_time())
+                               .UTCMidnight();
+    base::Time start_of_next_month =
+        calendar_utils::GetStartOfNextMonthUTC(current_day_utc);
+    // Don't go into the next month.
+    auto last_day_utc = calendar_utils::GetMinTime(
+                            start_of_next_month, event->end_time().date_time())
+                            .UTCMidnight();
+
+    // In the Calendar API, the end `base::Time` of an "all day" event will be
+    // the following day at midnight. For example for a single "all day" event
+    // on 1st October, the start `base::Time` will be 2022-10-01 00:00:00.000
+    // UTC and the end `base::Time` will be 2022-10-02 00:00:00.000 UTC, so we
+    // iterate until the day before the `last_day_utc` to ensure we don't show
+    // the all day event incorrectly going on to the next day. As we are going
+    // to always show these events by day rather than time, we don't care about
+    // timezone here.
+    while (current_day_utc < last_day_utc) {
+      InsertEventInMonth(event, start_of_month, current_day_utc);
+      current_day_utc = calendar_utils::GetNextDayMidnight(current_day_utc);
+    }
+    return;
+  }
+
+  base::Time start_time_midnight =
+      calendar_utils::GetStartTimeMidnightAdjusted(event);
+  base::Time end_time_midnight =
+      calendar_utils::GetEndTimeMidnightAdjusted(event);
+  base::Time end_time = calendar_utils::GetEndTimeAdjusted(event);
 
   base::Time current_day_midnight =
       calendar_utils::GetMaxTime(start_of_month, start_time_midnight)
@@ -333,12 +461,6 @@ void CalendarModel::InsertMultiDayEvent(
         (last_day_midnight - calendar_utils::kDurationForGettingPreviousDay)
             .UTCMidnight();
 
-  if (ash::features::IsCalendarModelDebugModeEnabled()) {
-    VLOG(1) << __FUNCTION__
-            << " current_day_midnight: " << current_day_midnight;
-    VLOG(1) << __FUNCTION__ << " last_day_midnight: " << last_day_midnight;
-  }
-
   while (current_day_midnight <= last_day_midnight) {
     InsertEventInMonth(event, start_of_month, current_day_midnight);
     current_day_midnight =
@@ -353,16 +475,13 @@ void CalendarModel::InsertEventInMonth(
   DCHECK(event);
 
   // Check the event is in the month we're trying to insert it into.
-  if (start_of_month != calendar_utils::GetStartOfMonthUTC(start_time_midnight))
+  if (start_of_month !=
+      calendar_utils::GetStartOfMonthUTC(start_time_midnight)) {
     return;
+  }
 
   // Month is now the most-recently-used.
   PromoteMonth(start_of_month);
-
-  if (ash::features::IsCalendarModelDebugModeEnabled()) {
-    VLOG(1) << __FUNCTION__ << " start_of_month " << start_of_month;
-    DebugDumpEventLarge(__FUNCTION__, event);
-  }
 
   auto it = event_months_.find(start_of_month);
   if (it == event_months_.end()) {
@@ -399,54 +518,68 @@ void CalendarModel::InsertEventInMonthEventList(
   }
 }
 
-base::Time CalendarModel::GetStartTimeAdjusted(
-    const google_apis::calendar::CalendarEvent* event) const {
-  base::Time start_time = event->start_time().date_time();
-  return start_time + calendar_utils::GetTimeDifference(start_time);
-}
-
-base::Time CalendarModel::GetEndTimeAdjusted(
-    const google_apis::calendar::CalendarEvent* event) const {
-  base::Time end_time = event->end_time().date_time();
-  return end_time + calendar_utils::GetTimeDifference(end_time);
-}
-
-base::Time CalendarModel::GetStartTimeMidnightAdjusted(
-    const google_apis::calendar::CalendarEvent* event) const {
-  return GetStartTimeAdjusted(event).UTCMidnight();
-}
-
-base::Time CalendarModel::GetEndTimeMidnightAdjusted(
-    const google_apis::calendar::CalendarEvent* event) const {
-  return GetEndTimeAdjusted(event).UTCMidnight();
-}
-
 SingleDayEventList CalendarModel::FindEvents(base::Time day) const {
   SingleDayEventList event_list;
 
   // Early return if there are no events for this month.
   base::Time start_of_month = calendar_utils::GetStartOfMonthUTC(day);
   auto it = event_months_.find(start_of_month);
-  if (it == event_months_.end())
+  if (it == event_months_.end()) {
     return event_list;
+  }
 
   // Early return if there are no events for this day.
   base::Time midnight = day.UTCMidnight();
   const SingleMonthEventMap& month = it->second;
   auto it2 = month.find(midnight);
-  if (it2 == month.end())
+  if (it2 == month.end()) {
     return event_list;
+  }
 
-  return it2->second;
+  auto events = it2->second;
+  SortByDateAscending(events);
+  return events;
+}
+
+std::tuple<SingleDayEventList, SingleDayEventList>
+CalendarModel::FindEventsSplitByMultiDayAndSameDay(base::Time day) const {
+  return SplitEventsIntoMultiDayAndSameDay(FindEvents(day));
+}
+
+std::list<CalendarEvent> CalendarModel::FindUpcomingEvents(
+    base::Time now_local) const {
+  // First get today's events for `now_local`.
+  auto upcoming_events = FindEvents(now_local);
+
+  // For Glanceables, the candidate event list should be today's event list.
+  if (features::AreGlanceablesV2Enabled() &&
+      features::IsGlanceablesV2CalendarViewEnabled()) {
+    return FilterTheNextEventsOrEventsRecentlyInProgress(upcoming_events,
+                                                         now_local);
+  }
+
+  const base::Time now_in_ten_mins = now_local + base::Minutes(10);
+  // If `now_in_ten_mins` is the subsequent day, include its events.
+  if (now_in_ten_mins.UTCMidnight() != now_local.UTCMidnight()) {
+    auto tomorrows_events = FindEvents(now_local + base::Days(1));
+    upcoming_events.splice(upcoming_events.end(), tomorrows_events);
+  }
+
+  return FilterEventsStartingSoonOrRecentlyInProgress(upcoming_events,
+                                                      now_local);
 }
 
 CalendarModel::FetchingStatus CalendarModel::FindFetchingStatus(
     base::Time start_time) const {
-  if (!calendar_utils::IsActiveUser())
+  if (!calendar_utils::ShouldFetchEvents())
     return kNa;
 
-  if (pending_fetches_.count(start_time))
+  if (pending_fetches_.count(start_time)) {
+    if (event_months_.count(start_time))
+      return kRefetching;
+
     return kFetching;
+  }
 
   if (event_months_.count(start_time))
     return kSuccess;
@@ -473,7 +606,7 @@ void CalendarModel::RedistributeEvents() {
   event_months_.clear();
   for (const google_apis::calendar::CalendarEvent& event :
        to_be_redistributed_events) {
-    if (IsMultiDayEvent(&event)) {
+    if (calendar_utils::IsMultiDayEvent(&event)) {
       // Only redistributes the multi-day events within the non-prunable months
       // scope. 1, This can avoid some coroner cases, e.g. some events that are
       // across several years. 2, we only cache the events for non-prunable
@@ -482,26 +615,13 @@ void CalendarModel::RedistributeEvents() {
         InsertMultiDayEvent(&event, month);
       }
     } else {
-      base::Time start_time_midnight = GetStartTimeMidnightAdjusted(&event);
+      base::Time start_time_midnight =
+          calendar_utils::GetStartTimeMidnightAdjusted(&event);
       InsertEventInMonth(
           &event, calendar_utils::GetStartOfMonthUTC(start_time_midnight),
           start_time_midnight);
     }
   }
-}
-
-void CalendarModel::DebugDump() {
-  std::ostringstream out;
-  const char* kDebugDumpPrefix = "CalendarModelDump: ";
-  out << __FUNCTION__ << " START"
-      << "\n";
-  DebugDumpEvents(&out, kDebugDumpPrefix);
-  DebugDumpMruMonths(&out, kDebugDumpPrefix);
-  DebugDumpNonPrunableMonths(&out, kDebugDumpPrefix);
-  DebugDumpMonthsFetched(&out, kDebugDumpPrefix);
-  out << __FUNCTION__ << " END"
-      << "\n";
-  VLOG(1) << out.str();
 }
 
 void CalendarModel::PruneEventCache() {
@@ -513,134 +633,6 @@ void CalendarModel::PruneEventCache() {
     months_fetched_.erase(lru_month);
     mru_months_.pop_back();
   }
-}
-
-void CalendarModel::InsertPendingFetchesForTesting(base::Time start_of_month) {
-  pending_fetches_.emplace(start_of_month, nullptr);
-}
-
-void CalendarModel::DeletePendingFetchesForTesting(base::Time start_of_month) {
-  pending_fetches_.erase(start_of_month);
-}
-
-void CalendarModel::DebugDumpOnEventFetched(
-    const google_apis::calendar::EventList* events,
-    base::Time start_of_month) {
-  if (!ash::features::IsCalendarModelDebugModeEnabled() || !events)
-    return;
-
-  VLOG(1) << __FUNCTION__ << " month " << start_of_month << " num events "
-          << events->items().size();
-
-  if (events->items().size() == 0)
-    return;
-
-  // It is possible for incoming events to have a start date (adjusted for
-  // timezone differences) that's not in `start_of_month`. The code below
-  // outputs a breakdown of the events by month.
-  std::map<base::Time, int> included_months;
-  for (auto& event : events->items()) {
-    base::Time adjusted_start = GetStartTimeAdjusted(event.get());
-    base::Time adjusted_start_of_month =
-        calendar_utils::GetStartOfMonthUTC(adjusted_start);
-    if (included_months.find(adjusted_start_of_month) ==
-        included_months.end()) {
-      included_months[adjusted_start_of_month] = 1;
-    } else {
-      included_months[adjusted_start_of_month]++;
-    }
-  }
-
-  if (included_months.size() <= 1)
-    return;
-
-  VLOG(1) << __FUNCTION__ << " breakdown:";
-  for (auto& included_month : included_months) {
-    VLOG(1) << __FUNCTION__ << "   " << included_month.first << " ("
-            << included_month.second << ")";
-  }
-}
-
-void CalendarModel::DebugDumpEventSmall(
-    std::ostringstream* out,
-    const char* prefix,
-    const google_apis::calendar::CalendarEvent* event) {
-  if (!event)
-    return;
-
-  *out << prefix << "      "
-       << calendar_utils::GetTwelveHourClockTime(
-              event->start_time().date_time())
-       << " -> "
-       << calendar_utils::GetTwelveHourClockTime(event->end_time().date_time())
-       << " (" << event->summary().substr(0, 6) << "...)"
-       << "\n";
-}
-
-void CalendarModel::DebugDumpEventLarge(
-    const char* prefix,
-    const google_apis::calendar::CalendarEvent* event) {
-  if (!event)
-    return;
-
-  VLOG(1) << prefix << " ID: " << event->id();
-  VLOG(1) << prefix << "  summary: \"" << event->summary().substr(0, 6)
-          << "...\"";
-  VLOG(1) << prefix << "  st/et: " << event->start_time().date_time() << " => "
-          << event->end_time().date_time();
-  VLOG(1) << prefix << "  (adj): " << GetStartTimeAdjusted(event) << " => "
-          << GetEndTimeAdjusted(event);
-}
-
-void CalendarModel::DebugDumpEvents(std::ostringstream* out,
-                                    const char* prefix) {
-  *out << prefix << " event_months_ START size: " << event_months_.size()
-       << "\n";
-  for (auto& month : event_months_) {
-    *out << prefix << " month: " << month.first << "\n";
-    for (auto& day : month.second) {
-      *out << prefix << "   day: " << day.first << "\n";
-      for (auto it = day.second.begin(); it != day.second.end(); ++it) {
-        google_apis::calendar::CalendarEvent event = *it;
-        DebugDumpEventSmall(out, prefix, &event);
-      }
-    }
-  }
-  *out << prefix << " event_months_ END"
-       << "\n";
-}
-
-void CalendarModel::DebugDumpMruMonths(std::ostringstream* out,
-                                       const char* prefix) {
-  *out << prefix << " mru_months_ START size: " << mru_months_.size() << "\n";
-  for (auto& month : mru_months_) {
-    *out << prefix << "   " << month << "\n";
-  }
-  *out << prefix << " mru_months_ END"
-       << "\n";
-}
-
-void CalendarModel::DebugDumpNonPrunableMonths(std::ostringstream* out,
-                                               const char* prefix) {
-  *out << prefix
-       << " non_prunable_months_ START size: " << non_prunable_months_.size()
-       << "\n";
-  for (auto& month : non_prunable_months_) {
-    *out << prefix << "   " << month << "\n";
-  }
-  *out << prefix << " non_prunable_months_ END"
-       << "\n";
-}
-
-void CalendarModel::DebugDumpMonthsFetched(std::ostringstream* out,
-                                           const char* prefix) {
-  *out << prefix << " months_fetched_ START size: " << months_fetched_.size()
-       << "\n";
-  for (auto& month : months_fetched_) {
-    *out << prefix << "   " << month << "\n";
-  }
-  *out << prefix << " months_fetched_ END"
-       << "\n";
 }
 
 }  // namespace ash

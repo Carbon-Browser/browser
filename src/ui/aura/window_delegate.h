@@ -1,11 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_AURA_WINDOW_DELEGATE_H_
 #define UI_AURA_WINDOW_DELEGATE_H_
 
-#include "base/memory/ref_counted.h"
 #include "ui/aura/aura_export.h"
 #include "ui/aura/window.h"
 #include "ui/events/event_constants.h"
@@ -87,10 +86,10 @@ class AURA_EXPORT WindowDelegate : public ui::EventHandler {
   virtual void OnWindowTargetVisibilityChanged(bool visible) = 0;
 
   // Called when the occlusion state or occluded region of the Window changes
-  // while tracked (see WindowOcclusionTracker::Track). |occlusion_state| is
-  // the new occlusion state of the Window.
+  // while tracked (see WindowOcclusionTracker::Track).
   virtual void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) {}
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) {}
 
   // Called from Window::HitTest to check if the window has a custom hit test
   // mask. It works similar to the views counterparts. That is, if the function

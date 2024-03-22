@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,17 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "mojo/public/cpp/bindings/associated_group.h"
 #include "mojo/public/cpp/bindings/lib/thread_safe_forwarder_base.h"
 #include "mojo/public/cpp/bindings/message.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "mojo/public/cpp/bindings/runtime_features.h"
 
 namespace mojo {
 
@@ -311,12 +312,17 @@ class SharedRemote {
   // affected and will retain their reference to the original Remote.
   void Bind(PendingRemote<Interface> pending_remote,
             scoped_refptr<base::SequencedTaskRunner> bind_task_runner) {
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+      remote_.reset();
+      return;
+    }
     if (bind_task_runner && pending_remote) {
       remote_ = SharedRemoteBase<Remote<Interface>>::Create(
           std::move(pending_remote), std::move(bind_task_runner));
     } else if (pending_remote) {
       remote_ = SharedRemoteBase<Remote<Interface>>::Create(
-          std::move(pending_remote), base::SequencedTaskRunnerHandle::Get());
+          std::move(pending_remote),
+          base::SequencedTaskRunner::GetCurrentDefault());
     }
   }
 
@@ -324,6 +330,9 @@ class SharedRemote {
   // `bind_task_runner` and returning the other end as a PendingReceiver.
   PendingReceiver<Interface> BindNewPipeAndPassReceiver(
       scoped_refptr<base::SequencedTaskRunner> bind_task_runner = nullptr) {
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+      return PendingReceiver<Interface>();
+    }
     PendingRemote<Interface> remote;
     auto receiver = remote.InitWithNewPipeAndPassReceiver();
     Bind(std::move(remote), std::move(bind_task_runner));

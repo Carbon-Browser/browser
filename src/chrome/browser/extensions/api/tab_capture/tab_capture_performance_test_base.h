@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -151,7 +151,7 @@ class TabCapturePerformanceTestBase : public InProcessBrowserTest {
   std::unique_ptr<net::test_server::HttpResponse> HandleRequest(
       const net::test_server::HttpRequest& request);
 
-  raw_ptr<const extensions::Extension> extension_ = nullptr;
+  raw_ptr<const extensions::Extension, DanglingUntriaged> extension_ = nullptr;
 
   // Manages the Audio Service feature set, enabled for these performance tests.
   base::test::ScopedFeatureList feature_list_;

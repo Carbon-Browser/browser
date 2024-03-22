@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,6 +97,15 @@ const char kPaymentManifestCrossSiteRedirectNotAllowed[] =
 const char kPaymentManifestDownloadFailed[] =
     "Unable to download payment manifest \"$1\".";
 
+const char kPaymentManifestDownloadFailedWithNetworkError[] =
+    "Unable to download payment manifest \"$1\". $2 ($3)";
+
+const char kPaymentManifestDownloadFailedWithHttpStatusCode[] =
+    "Unable to download payment manifest \"$1\". HTTP $2 $3.";
+
+const char kPaymentManifestCSPDenied[] =
+    "Content Security Policy denied the download of payment manifest \"$1\".";
+
 const char kPaymentDetailsNotObject[] =
     "Payment app returned invalid response. \"details\" field is not a "
     "dictionary.";
@@ -183,6 +192,9 @@ const char kCanMakePaymentEventNoExplicitlyVerifiedMethods[] =
 const char kGenericPaymentMethodNotSupportedMessage[] =
     "Payment method not supported.";
 
+const char kNoLinkHeader[] =
+    "No \"Link: rel=payment-method-manifest\" HTTP header found at \"$1\".";
+
 const char kNoContentAndNoLinkHeader[] =
     "No content and no \"Link: rel=payment-method-manifest\" HTTP header found "
     "at \"$1\".";
@@ -225,6 +237,18 @@ const char kValidInstrumentIconRequired[] =
 
 const char kInvalidIcon[] =
     "The \"instrument.icon\" either could not be downloaded or decoded.";
+
+const char kRpIdRequired[] =
+    "The \"secure-payment-confirmation\" method requires a valid domain in the "
+    "\"rpId\" field.";
+
+const char kPayeeOriginOrPayeeNameRequired[] =
+    "The \"secure-payment-confirmation\" method requires a non-empty "
+    "\"payeeOrigin\" or \"payeeName\" field.";
+
+const char kPayeeOriginMustBeHttps[] =
+    "The \"secure-payment-confirmation\" method requires that the "
+    "\"payeeOrigin\" field must be https.";
 
 }  // namespace errors
 }  // namespace payments

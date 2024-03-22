@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@
 #include "ash/ash_export.h"
 #include "ash/public/cpp/notifier_settings_observer.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/button/image_button.h"
@@ -29,6 +31,8 @@ namespace ash {
 // users to customize the settings.
 class ASH_EXPORT NotifierSettingsView : public views::View,
                                         public NotifierSettingsObserver {
+  METADATA_HEADER(NotifierSettingsView, views::View)
+
  public:
   NotifierSettingsView();
 
@@ -49,7 +53,6 @@ class ASH_EXPORT NotifierSettingsView : public views::View,
 
   // views::View:
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-  const char* GetClassName() const override;
 
   views::ScrollView* get_scroller_view_for_test() { return scroller_; }
   views::Label* get_notification_settings_lable_for_test() {
@@ -67,6 +70,8 @@ class ASH_EXPORT NotifierSettingsView : public views::View,
   FRIEND_TEST_ALL_PREFIXES(NotifierSettingsViewTest, TestEmptyNotifierView);
 
   class ASH_EXPORT NotifierButton : public views::Button {
+    METADATA_HEADER(NotifierButton, views::Button)
+
    public:
     explicit NotifierButton(const NotifierMetadata& notifier);
 
@@ -82,9 +87,6 @@ class ASH_EXPORT NotifierSettingsView : public views::View,
       return notifier_id_;
     }
 
-    // views::Button:
-    const char* GetClassName() const override;
-
    private:
     // views::Button:
     void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
@@ -94,9 +96,9 @@ class ASH_EXPORT NotifierSettingsView : public views::View,
     void GridChanged();
 
     message_center::NotifierId notifier_id_;
-    views::ImageView* icon_view_ = nullptr;
-    views::Label* name_view_ = nullptr;
-    views::Checkbox* checkbox_ = nullptr;
+    raw_ptr<views::ImageView, ExperimentalAsh> icon_view_ = nullptr;
+    raw_ptr<views::Label, ExperimentalAsh> name_view_ = nullptr;
+    raw_ptr<views::Checkbox, ExperimentalAsh> checkbox_ = nullptr;
   };
 
   // Overridden from views::View:
@@ -117,15 +119,15 @@ class ASH_EXPORT NotifierSettingsView : public views::View,
   void QuietModeTogglePressed();
   void NotifierButtonPressed(NotifierButton* button);
 
-  views::ToggleButton* app_badging_toggle_ = nullptr;
-  views::ImageView* quiet_mode_icon_ = nullptr;
-  views::ToggleButton* quiet_mode_toggle_ = nullptr;
-  views::View* header_view_ = nullptr;
-  views::Label* notification_settings_label_ = nullptr;
-  views::Label* top_label_ = nullptr;
-  views::ScrollBar* scroll_bar_ = nullptr;
-  views::ScrollView* scroller_ = nullptr;
-  views::View* no_notifiers_view_ = nullptr;
+  raw_ptr<views::ToggleButton, ExperimentalAsh> app_badging_toggle_ = nullptr;
+  raw_ptr<views::ImageView, ExperimentalAsh> quiet_mode_icon_ = nullptr;
+  raw_ptr<views::ToggleButton, ExperimentalAsh> quiet_mode_toggle_ = nullptr;
+  raw_ptr<views::View, ExperimentalAsh> header_view_ = nullptr;
+  raw_ptr<views::Label, ExperimentalAsh> notification_settings_label_ = nullptr;
+  raw_ptr<views::Label, ExperimentalAsh> top_label_ = nullptr;
+  raw_ptr<views::ScrollBar, ExperimentalAsh> scroll_bar_ = nullptr;
+  raw_ptr<views::ScrollView, ExperimentalAsh> scroller_ = nullptr;
+  raw_ptr<views::View, ExperimentalAsh> no_notifiers_view_ = nullptr;
   // TODO(crbug/1194632): remove |buttons_| and all related views.
   std::set<NotifierButton*> buttons_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,8 @@ TestDevToolsAgentClient::TestDevToolsAgentClient(
                                 session_.BindNewEndpointAndPassReceiver(),
                                 io_session_.BindNewPipeAndPassReceiver(),
                                 nullptr, use_binary_protocol_,
-                                /*client_is_trusted=*/true, session_id_);
+                                /*client_is_trusted=*/true, session_id_,
+                                /*session_waits_for_debugger=*/false);
 }
 
 TestDevToolsAgentClient::~TestDevToolsAgentClient() = default;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -57,7 +58,7 @@ class BASE_EXPORT PickleIterator {
   [[nodiscard]] bool ReadData(const char** data, size_t* length);
 
   // Similar, but using base::span for convenience.
-  [[nodiscard]] bool ReadData(base::span<const uint8_t>* data);
+  [[nodiscard]] absl::optional<base::span<const uint8_t>> ReadData();
 
   // A pointer to the data will be placed in |*data|. The caller specifies the
   // number of bytes to read, and ReadBytes will validate this length. The
@@ -159,16 +160,17 @@ class BASE_EXPORT Pickle {
   // instead the data is merely referenced by this Pickle.  Only const methods
   // should be used on the Pickle when initialized this way.  The header
   // padding size is deduced from the data length.
+  explicit Pickle(span<const uint8_t> data);
+  // TODO(crbug.com/1490484): Migrate callers of this overload to the span
+  // version.
   Pickle(const char* data, size_t data_len);
 
   // Initializes a Pickle as a deep copy of another Pickle.
   Pickle(const Pickle& other);
 
-  // Note: There are no virtual methods in this class.  This destructor is
-  // virtual as an element of defensive coding.  Other classes have derived from
-  // this class, and there is a *chance* that they will cast into this base
-  // class before destruction.  At least one such class does have a virtual
-  // destructor, suggesting at least some need to call more derived destructors.
+  // Note: Other classes are derived from this class, and they may well
+  // delete through this parent class, e.g. std::uniuqe_ptr<Pickle> exists
+  // in several places the code.
   virtual ~Pickle();
 
   // Performs a deep copy.
@@ -180,7 +182,14 @@ class BASE_EXPORT Pickle {
   }
 
   // Returns the data for this Pickle.
-  const void* data() const { return header_; }
+  const uint8_t* data() const {
+    return reinterpret_cast<const uint8_t*>(header_);
+  }
+
+  // Handy method to simplify calling data() with a reinterpret_cast.
+  const char* data_as_char() const {
+    return reinterpret_cast<const char*>(data());
+  }
 
   // Returns the effective memory capacity of this Pickle, that is, the total
   // number of bytes currently dynamically allocated or 0 in the case of a

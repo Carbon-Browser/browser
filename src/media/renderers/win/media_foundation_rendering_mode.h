@@ -1,9 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_RENDERERS_WIN_MEDIA_FOUNDATION_RENDERING_MODE_H_
 #define MEDIA_RENDERERS_WIN_MEDIA_FOUNDATION_RENDERING_MODE_H_
+
+#include "media/base/media_export.h"
 
 #include <ostream>
 
@@ -16,8 +18,9 @@ enum class MediaFoundationRenderingMode : int32_t {
   kMaxValue = 1,
 };
 
-std::ostream& operator<<(std::ostream& os,
-                         const MediaFoundationRenderingMode& render_mode);
+MEDIA_EXPORT std::ostream& operator<<(
+    std::ostream& os,
+    const MediaFoundationRenderingMode& render_mode);
 
 }  // namespace media
 

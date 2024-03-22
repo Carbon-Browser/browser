@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,9 @@ extern const char kMoreThanOneActivity[];
 // Used when the merchant invokes the Trusted Web Activity with more than set of
 // payment method specific data.
 extern const char kMoreThanOneMethodData[];
+
+// Used if Lacros service is down and cannot connect to Ash.
+extern const char kUnableToConnectToAsh[];
 
 }  // namespace errors
 }  // namespace payments

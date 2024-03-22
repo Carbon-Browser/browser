@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <memory>
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/json_pref_store.h"
-#include "ios/chrome/browser/pref_names.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #include "ios/web/public/thread/web_thread.h"
 #include "net/http/http_server_properties.h"
 
@@ -32,17 +33,18 @@ class PrefServiceAdapter : public net::HttpServerProperties::PrefDelegate,
   }
 
   // PrefDelegate implementation.
-  const base::Value* GetServerProperties() const override {
+  const base::Value::Dict& GetServerProperties() const override {
     const base::Value* value;
     if (pref_store_->GetValue(path_, &value) && value->is_dict()) {
-      return value;
+      return value->GetDict();
     }
 
-    return nullptr;
+    static const base::NoDestructor<base::Value::Dict> empty_dict;
+    return *empty_dict;
   }
-  void SetServerProperties(const base::Value& value,
+  void SetServerProperties(base::Value::Dict dict,
                            base::OnceClosure callback) override {
-    pref_store_->SetValue(path_, value.CreateDeepCopy(),
+    pref_store_->SetValue(path_, base::Value(std::move(dict)),
                           WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
     if (callback)
       pref_store_->CommitPendingWrite(std::move(callback));
@@ -56,8 +58,8 @@ class PrefServiceAdapter : public net::HttpServerProperties::PrefDelegate,
     }
 
     // If prefs have already loaded, invoke the pref observer asynchronously.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(callback));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
   }
 
   // PrefStore::Observer implementation.
@@ -73,8 +75,8 @@ class PrefServiceAdapter : public net::HttpServerProperties::PrefDelegate,
   scoped_refptr<JsonPrefStore> pref_store_;
   const std::string path_;
 
-  // Only non-null while waiting for initial pref load. |this| is observes the
-  // |pref_store_| exactly when non-null.
+  // Only non-null while waiting for initial pref load. `this` is observes the
+  // `pref_store_` exactly when non-null.
   base::OnceClosure on_pref_load_callback_;
 };
 

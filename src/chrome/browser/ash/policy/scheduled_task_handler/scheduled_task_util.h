@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,8 @@ namespace scheduled_task_util {
 // |task_time_field_name| - time of the day when the task should occur. The name
 // of the field is passed as an argument to ParseScheduledTask method.
 // |frequency| - frequency of reccurring task. Can be daily, weekly or monthly.
-// |day_of_week| - optional field, used for policies that recurr weekly.
-// |day_of_month| - optional field, used for policies that recurr monthly.
+// |day_of_week| - optional field, used for policies that recur weekly.
+// |day_of_month| - optional field, used for policies that recur monthly.
 absl::optional<ScheduledTaskExecutor::ScheduledTaskData> ParseScheduledTask(
     const base::Value& value,
     const std::string& task_time_field_name);
@@ -53,9 +53,13 @@ std::unique_ptr<icu::Calendar> CalculateNextScheduledTimeAfter(
     const ScheduledTaskExecutor::ScheduledTaskData& data,
     const icu::Calendar& time);
 
-// Calculates random small delay in milliseconds in range [0,
-// max_delay_in_seconds).
-base::TimeDelta GenerateRandomDelay(int max_delay_in_seconds);
+// Returns grace period from commandline if present and valid. Returns default
+// grace time otherwise.
+base::TimeDelta GetScheduledRebootGracePeriod();
+
+// Returns true if `reboot_time` is within grace time period.
+bool ShouldSkipRebootDueToGracePeriod(base::Time boot_time,
+                                      base::Time reboot_time);
 
 }  // namespace scheduled_task_util
 

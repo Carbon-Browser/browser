@@ -54,9 +54,9 @@ using blink::mojom::FetchCacheMode;
 
 namespace blink {
 
-// This is complementary to ConvertNetPriorityToWebKitPriority, defined in
-// service_worker_context_client.cc.
-net::RequestPriority ConvertWebKitPriorityToNetPriority(
+// This is complementary to ConvertRequestPriorityToResourceLoadPriority,
+// defined in third_party/blink/renderer/core/fetch/fetch_request_data.cc.
+net::RequestPriority WebURLRequest::ConvertToNetPriority(
     WebURLRequest::Priority priority) {
   switch (priority) {
     case WebURLRequest::Priority::kVeryHigh:
@@ -164,14 +164,6 @@ WebSecurityOrigin WebURLRequest::IsolatedWorldOrigin() const {
 void WebURLRequest::SetRequestorOrigin(
     const WebSecurityOrigin& requestor_origin) {
   resource_request_->SetRequestorOrigin(requestor_origin);
-}
-
-bool WebURLRequest::AllowStoredCredentials() const {
-  return resource_request_->AllowStoredCredentials();
-}
-
-void WebURLRequest::SetAllowStoredCredentials(bool allow_stored_credentials) {
-  resource_request_->SetAllowStoredCredentials(allow_stored_credentials);
 }
 
 mojom::FetchCacheMode WebURLRequest::GetCacheMode() const {
@@ -293,10 +285,6 @@ void WebURLRequest::SetRequestContext(
 void WebURLRequest::SetRequestDestination(
     network::mojom::RequestDestination destination) {
   resource_request_->SetRequestDestination(destination);
-}
-
-bool WebURLRequest::PassResponsePipeToClient() const {
-  return resource_request_->DownloadToBlob();
 }
 
 bool WebURLRequest::UseStreamOnResponse() const {
@@ -513,10 +501,6 @@ absl::optional<WebString> WebURLRequest::GetDevToolsId() const {
 
 bool WebURLRequest::IsFromOriginDirtyStyleSheet() const {
   return resource_request_->IsFromOriginDirtyStyleSheet();
-}
-
-bool WebURLRequest::IsSignedExchangePrefetchCacheEnabled() const {
-  return resource_request_->IsSignedExchangePrefetchCacheEnabled();
 }
 
 absl::optional<base::UnguessableToken> WebURLRequest::RecursivePrefetchToken()

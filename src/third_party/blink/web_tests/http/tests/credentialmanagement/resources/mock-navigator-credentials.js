@@ -124,11 +124,13 @@ export class MockAuthenticator {
             rawId: this.rawId_,
             clientDataJson: this.clientDataJson_,
           };
+      let extensions = { echoAppidExtension: false,
+            appidExtension: false,
+          };
       response = { info: info,
             signature: this.signature_,
             userHandle: this.userHandle_,
-            echoAppidExtension: false,
-            appidExtension: false,
+            extensions: extensions,
           };
     }
     let status = this.status_;
@@ -137,6 +139,10 @@ export class MockAuthenticator {
   }
 
   async isUserVerifyingPlatformAuthenticatorAvailable() {
+    return false;
+  }
+
+  async isConditionalMediationAvailable() {
     return false;
   }
 

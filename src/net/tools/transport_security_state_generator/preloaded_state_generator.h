@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,9 +35,6 @@ class PreloadedStateGenerator {
 
  private:
   void ProcessSPKIHashes(const Pinsets& pinset, std::string* tpl);
-  void ProcessExpectCTURIs(const TransportSecurityStateEntries& entries,
-                           NameIDMap* expect_ct_report_uri_map,
-                           std::string* tpl);
   void ProcessPinsets(const Pinsets& pinset,
                       NameIDMap* pinset_map,
                       std::string* tpl);

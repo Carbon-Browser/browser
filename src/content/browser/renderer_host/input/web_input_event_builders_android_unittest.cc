@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -175,13 +175,6 @@ TEST(WebInputEventBuilderAndroidTest, DomKeySyntheticEvent) {
 TEST(WebInputEventBuilderAndroidTest, CutCopyPasteKey) {
   JNIEnv* env = AttachCurrentThread();
 
-  // The minimum Android NDK does not provide values for these yet:
-  enum {
-    AKEYCODE_CUT = 277,
-    AKEYCODE_COPY = 278,
-    AKEYCODE_PASTE = 279,
-  };
-
   struct DomKeyTestCase {
     int key_code;
     ui::DomKey key;
@@ -199,9 +192,9 @@ TEST(WebInputEventBuilderAndroidTest, CutCopyPasteKey) {
 }
 
 TEST(WebInputEventBuilderAndroidTest, WebMouseEventCoordinates) {
-  constexpr int kEventTimeMs = 5;
+  constexpr int kEventTimeNs = 5'000'000;
   const base::TimeTicks event_time =
-      base::TimeTicks() + base::Milliseconds(kEventTimeMs);
+      base::TimeTicks() + base::Nanoseconds(kEventTimeNs);
 
   ui::test::ScopedEventTestTickClock clock;
   clock.SetNowTicks(event_time);
@@ -214,7 +207,8 @@ TEST(WebInputEventBuilderAndroidTest, WebMouseEventCoordinates) {
   const float kPixToDip = 0.5f;
 
   ui::MotionEventAndroid motion_event(
-      AttachCurrentThread(), nullptr, kPixToDip, 0.f, 0.f, 0.f, kEventTimeMs,
+      AttachCurrentThread(), nullptr, kPixToDip, 0.f, 0.f, 0.f,
+      base::TimeTicks() + base::Nanoseconds(kEventTimeNs),
       AMOTION_EVENT_ACTION_DOWN, 1, 0, -1, 0, 0, 1, AMETA_ALT_ON, raw_offset_x,
       raw_offset_y, false, &p0, nullptr);
 

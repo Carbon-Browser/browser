@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,14 +80,14 @@ void ServicesDelegateAndroid::RegisterDelayedAnalysisCallback(
 void ServicesDelegateAndroid::AddDownloadManager(
     content::DownloadManager* download_manager) {}
 
-void ServicesDelegateAndroid::StartOnIOThread(
+void ServicesDelegateAndroid::StartOnSBThread(
     scoped_refptr<network::SharedURLLoaderFactory> browser_url_loader_factory,
     const V4ProtocolConfig& v4_config) {
-  database_manager_->StartOnIOThread(browser_url_loader_factory, v4_config);
+  database_manager_->StartOnSBThread(browser_url_loader_factory, v4_config);
 }
 
-void ServicesDelegateAndroid::StopOnIOThread(bool shutdown) {
-  database_manager_->StopOnIOThread(shutdown);
+void ServicesDelegateAndroid::StopOnSBThread(bool shutdown) {
+  database_manager_->StopOnSBThread(shutdown);
 }
 
 void ServicesDelegateAndroid::CreateTelemetryService(Profile* profile) {

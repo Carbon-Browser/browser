@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "net/http/http_util.h"
 #include "services/network/public/cpp/cors/cors.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
@@ -148,8 +149,8 @@ PLATFORM_EXPORT Vector<String> PrivilegedNoCorsHeaderNames() {
   return header_names;
 }
 
-bool IsForbiddenHeaderName(const String& name) {
-  return !net::HttpUtil::IsSafeHeader(name.Latin1());
+bool IsForbiddenRequestHeader(const String& name, const String& value) {
+  return !net::HttpUtil::IsSafeHeader(name.Latin1(), value.Latin1());
 }
 
 bool ContainsOnlyCorsSafelistedHeaders(const HTTPHeaderMap& header_map) {
@@ -160,10 +161,6 @@ bool ContainsOnlyCorsSafelistedHeaders(const HTTPHeaderMap& header_map) {
   }
 
   return network::cors::CorsUnsafeRequestHeaderNames(in).empty();
-}
-
-bool IsOkStatus(int status) {
-  return network::cors::IsOkStatus(status);
 }
 
 bool CalculateCorsFlag(const KURL& url,
@@ -208,7 +205,7 @@ HTTPHeaderSet ExtractCorsExposedHeaderNamesList(
   parser.Parse(header_set);
 
   if (credentials_mode != network::mojom::CredentialsMode::kInclude &&
-      header_set.find("*") != header_set.end()) {
+      base::Contains(header_set, "*")) {
     header_set.clear();
     for (const auto& header : response.HttpHeaderFields())
       header_set.insert(header.key.Ascii());
@@ -230,8 +227,7 @@ bool IsCorsSafelistedResponseHeader(const String& name) {
                                       "last-modified",
                                       "pragma",
                                   }));
-  return allowed_cross_origin_response_headers.find(name.Ascii()) !=
-         allowed_cross_origin_response_headers.end();
+  return base::Contains(allowed_cross_origin_response_headers, name.Ascii());
 }
 
 // In the spec, https://fetch.spec.whatwg.org/#ref-for-concept-request-mode,

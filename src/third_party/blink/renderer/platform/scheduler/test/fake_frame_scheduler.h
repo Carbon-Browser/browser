@@ -1,10 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FAKE_FRAME_SCHEDULER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FAKE_FRAME_SCHEDULER_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
@@ -13,30 +15,6 @@
 
 namespace blink {
 namespace scheduler {
-
-class MainThreadTaskQueueForTest : public MainThreadTaskQueue {
- public:
-  using MainThreadTaskQueue::SetFrameSchedulerForTest;
-
-  explicit MainThreadTaskQueueForTest(
-      QueueTraits::PrioritisationType prioritisation_type)
-      : MainThreadTaskQueue(
-            nullptr,
-            base::sequence_manager::TaskQueue::Spec(
-                MainThreadTaskQueue::NameForQueueType(
-                    MainThreadTaskQueue::QueueType::kTest)),
-            QueueCreationParams(MainThreadTaskQueue::QueueType::kTest)
-                .SetQueueTraits(
-                    QueueTraits().SetPrioritisationType(prioritisation_type)),
-            nullptr) {}
-  explicit MainThreadTaskQueueForTest(QueueType queue_type)
-      : MainThreadTaskQueue(nullptr,
-                            base::sequence_manager::TaskQueue::Spec(
-                                MainThreadTaskQueue::NameForQueueType(
-                                    MainThreadTaskQueue::QueueType::kTest)),
-                            QueueCreationParams(queue_type),
-                            nullptr) {}
-};
 
 // A dummy FrameScheduler for tests.
 class FakeFrameScheduler : public FrameSchedulerImpl {
@@ -59,14 +37,14 @@ class FakeFrameScheduler : public FrameSchedulerImpl {
       : FrameSchedulerImpl(/*main_thread_scheduler=*/nullptr,
                            /*parent_page_scheduler=*/nullptr,
                            /*delegate=*/delegate,
-                           /*blame_context=*/nullptr,
                            /*is_in_embedded_frame_tree=*/false,
                            /*frame_type=*/frame_type),
         page_scheduler_(page_scheduler),
         is_page_visible_(is_page_visible),
         is_frame_visible_(is_frame_visible),
         frame_type_(frame_type),
-        is_cross_origin_to_nearest_main_frame_(is_cross_origin_to_nearest_main_frame),
+        is_cross_origin_to_nearest_main_frame_(
+            is_cross_origin_to_nearest_main_frame),
         is_exempt_from_throttling_(is_exempt_from_throttling) {
     DCHECK(frame_type_ != FrameType::kMainFrame ||
            !is_cross_origin_to_nearest_main_frame);
@@ -160,12 +138,22 @@ class FakeFrameScheduler : public FrameSchedulerImpl {
   void DidStartProvisionalLoad() override {}
   void DidCommitProvisionalLoad(
       bool is_web_history_inert_commit,
-      FrameScheduler::NavigationType navigation_type) override {}
-  void OnFirstMeaningfulPaint() override {}
-  void OnStartedUsingFeature(SchedulingPolicy::Feature feature,
-                             const SchedulingPolicy& policy) override {}
-  void OnStoppedUsingFeature(SchedulingPolicy::Feature feature,
-                             const SchedulingPolicy& policy) override {}
+      FrameScheduler::NavigationType navigation_type,
+      DidCommitProvisionalLoadParams params) override {}
+  void OnFirstMeaningfulPaint(base::TimeTicks timestamp) override {}
+  // |source_location| is nullptr when JS is not running.
+  // |handle| is nullptr when sticky feature starts to be used.
+  void OnStartedUsingNonStickyFeature(
+      SchedulingPolicy::Feature feature,
+      const SchedulingPolicy& policy,
+      std::unique_ptr<SourceLocation> source_location,
+      SchedulingAffectingFeatureHandle* handle) override {}
+  void OnStartedUsingStickyFeature(
+      SchedulingPolicy::Feature feature,
+      const SchedulingPolicy& policy,
+      std::unique_ptr<SourceLocation> source_location) override {}
+  void OnStoppedUsingNonStickyFeature(
+      SchedulingAffectingFeatureHandle* handle) override {}
   bool IsExemptFromBudgetBasedThrottling() const override {
     return is_exempt_from_throttling_;
   }
@@ -176,9 +164,12 @@ class FakeFrameScheduler : public FrameSchedulerImpl {
   GetPauseSubresourceLoadingHandle() override {
     return nullptr;
   }
+  scoped_refptr<base::SingleThreadTaskRunner> CompositorTaskRunner() override {
+    return nullptr;
+  }
 
  private:
-  PageScheduler* page_scheduler_;  // NOT OWNED
+  raw_ptr<PageScheduler, ExperimentalRenderer> page_scheduler_;  // NOT OWNED
 
   bool is_page_visible_;
   bool is_frame_visible_;

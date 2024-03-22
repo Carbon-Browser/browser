@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,30 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/path_service.h"
 #include "build/build_config.h"
-#include "headless/app/headless_shell_switches.h"
+#include "content/public/common/content_switches.h"
+#include "headless/lib/browser/headless_web_contents_impl.h"
+#include "headless/public/switches.h"
+#include "headless/test/headless_browser_test_utils.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "services/network/public/cpp/network_switches.h"
 
 namespace headless {
 
-namespace {
+namespace switches {
 static const char kResetResults[] = "reset-results";
+static const char kDumpConsoleMessages[] = "dump-console-messages";
 static const char kDumpDevToolsProtocol[] = "dump-devtools-protocol";
+static const char kDumpTestResult[] = "dump-test-result";
+}  // namespace switches
+
+namespace {
+
+static const base::FilePath kTestsDirectory(
+    FILE_PATH_LITERAL("headless/test/data/protocol"));
+
 }  // namespace
 
 HeadlessProtocolBrowserTest::HeadlessProtocolBrowserTest() {
@@ -29,44 +42,71 @@ HeadlessProtocolBrowserTest::HeadlessProtocolBrowserTest() {
   EXPECT_TRUE(embedded_test_server()->Start());
 }
 
+HeadlessProtocolBrowserTest::~HeadlessProtocolBrowserTest() = default;
+
 void HeadlessProtocolBrowserTest::SetUpCommandLine(
     base::CommandLine* command_line) {
   command_line->AppendSwitchASCII(::network::switches::kHostResolverRules,
                                   "MAP *.test 127.0.0.1");
-  HeadlessAsyncDevTooledBrowserTest::SetUpCommandLine(command_line);
+  HeadlessDevTooledBrowserTest::SetUpCommandLine(command_line);
 
-  // Make sure the navigations spawn new processes. We run test harness
-  // in one process (harness.test) and tests in another.
-  command_line->AppendSwitch(::switches::kSitePerProcess);
-
+  if (RequiresSitePerProcess()) {
+    // Make sure the navigations spawn new processes. We run test harness
+    // in one process (harness.test) and tests in another.
+    command_line->AppendSwitch(::switches::kSitePerProcess);
+  }
   // Make sure proxy related tests are not affected by a platform specific
   // system proxy configuration service.
   command_line->AppendSwitch(switches::kNoSystemProxyConfigService);
 }
 
-std::vector<std::string> HeadlessProtocolBrowserTest::GetPageUrlExtraParams() {
-  return {};
+bool HeadlessProtocolBrowserTest::RequiresSitePerProcess() {
+  return true;
+}
+
+base::Value::Dict HeadlessProtocolBrowserTest::GetPageUrlExtraParams() {
+  return base::Value::Dict();
 }
 
 void HeadlessProtocolBrowserTest::RunDevTooledTest() {
-  browser_devtools_client_->SetRawProtocolListener(this);
-  devtools_client_->GetRuntime()->GetExperimental()->AddObserver(this);
-  devtools_client_->GetRuntime()->Enable();
-  devtools_client_->GetRuntime()->GetExperimental()->AddBinding(
-      headless::runtime::AddBindingParams::Builder()
-          .SetName("sendProtocolMessage")
-          .Build(),
-      base::BindOnce(&HeadlessProtocolBrowserTest::BindingCreated,
-                     base::Unretained(this)));
+  scoped_refptr<content::DevToolsAgentHost> agent_host =
+      content::DevToolsAgentHost::GetOrCreateFor(
+          HeadlessWebContentsImpl::From(web_contents_)->web_contents());
+
+  // Set up Page domain.
+  devtools_client_.AddEventHandler(
+      "Page.loadEventFired",
+      base::BindRepeating(&HeadlessProtocolBrowserTest::OnLoadEventFired,
+                          base::Unretained(this)));
+  devtools_client_.SendCommand("Page.enable");
+
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDumpConsoleMessages)) {
+    // Set up Runtime domain to intercept console messages.
+    devtools_client_.AddEventHandler(
+        "Runtime.consoleAPICalled",
+        base::BindRepeating(&HeadlessProtocolBrowserTest::OnConsoleAPICalled,
+                            base::Unretained(this)));
+    devtools_client_.SendCommand("Runtime.enable");
+  }
+
+  // Expose DevTools protocol to the target.
+  browser_devtools_client_.SendCommand("Target.exposeDevToolsProtocol",
+                                       Param("targetId", agent_host->GetId()));
+
+  // Navigate to test harness page
+  GURL page_url = embedded_test_server()->GetURL(
+      "harness.test", "/protocol/inspector-protocol-test.html");
+  devtools_client_.SendCommand("Page.navigate", Param("url", page_url.spec()));
 }
 
-void HeadlessProtocolBrowserTest::BindingCreated(
-    std::unique_ptr<headless::runtime::AddBindingResult>) {
+void HeadlessProtocolBrowserTest::OnLoadEventFired(
+    const base::Value::Dict& params) {
+  ASSERT_THAT(params, DictHasValue("method", "Page.loadEventFired"));
+
   base::ScopedAllowBlockingForTesting allow_blocking;
   base::FilePath src_dir;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir));
-  static const base::FilePath kTestsDirectory(
-      FILE_PATH_LITERAL("headless/test/data/protocol"));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir));
   base::FilePath test_path =
       src_dir.Append(kTestsDirectory).AppendASCII(script_name_);
   std::string script;
@@ -80,96 +120,87 @@ void HeadlessProtocolBrowserTest::BindingCreated(
   GURL target_url =
       embedded_test_server()->GetURL("127.0.0.1", "/protocol/" + script_name_);
 
-  std::string extra_params;
-  for (const auto& param : GetPageUrlExtraParams()) {
-    extra_params += "&" + param;
+  base::Value::Dict test_params;
+  test_params.Set("test", test_url.spec());
+  test_params.Set("target", target_url.spec());
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDumpDevToolsProtocol)) {
+    test_params.Set("dumpDevToolsProtocol", true);
   }
+  test_params.Merge(GetPageUrlExtraParams());
 
-  GURL page_url = embedded_test_server()->GetURL(
-      "harness.test",
-      "/protocol/inspector-protocol-test.html?test=" + test_url.spec() +
-          "&target=" + target_url.spec() + extra_params);
-  devtools_client_->GetPage()->Navigate(page_url.spec());
+  std::string json_test_params;
+  base::JSONWriter::Write(test_params, &json_test_params);
+  std::string evaluate_script = "runTest(" + json_test_params + ")";
+
+  base::Value::Dict evaluate_params;
+  evaluate_params.Set("expression", evaluate_script);
+  evaluate_params.Set("awaitPromise", true);
+  evaluate_params.Set("returnByValue", true);
+  devtools_client_.SendCommand(
+      "Runtime.evaluate", std::move(evaluate_params),
+      base::BindOnce(&HeadlessProtocolBrowserTest::OnEvaluateResult,
+                     base::Unretained(this)));
 }
 
-void HeadlessProtocolBrowserTest::OnBindingCalled(
-    const runtime::BindingCalledParams& params) {
-  std::string json_message = params.GetPayload();
-  std::unique_ptr<base::Value> message =
-      base::JSONReader::ReadDeprecated(json_message);
-  const base::DictionaryValue* message_dict;
-  const base::DictionaryValue* params_dict;
-  std::string method;
-  int id;
-  if (!message || !message->GetAsDictionary(&message_dict) ||
-      !message_dict->GetString("method", &method) ||
-      !message_dict->GetDictionary("params", &params_dict) ||
-      !message_dict->GetInteger("id", &id)) {
-    LOG(ERROR) << "Poorly formed message " << json_message;
-    FinishTest();
-    return;
+void HeadlessProtocolBrowserTest::OnEvaluateResult(base::Value::Dict params) {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDumpTestResult)) {
+    LOG(ERROR) << "Test result:\n" << params.DebugString();
   }
 
-  if (method != "DONE") {
-    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-            kDumpDevToolsProtocol)) {
-      LOG(INFO) << "FromJS: " << json_message;
-    }
-    // Pass unhandled commands onto the inspector.
-    browser_devtools_client_->SendRawDevToolsMessage(json_message);
-    return;
-  }
+  ProcessTestResult(DictString(params, "result.result.value"));
 
-  std::string test_result;
-  message_dict->GetString("result", &test_result);
-  static const base::FilePath kTestsDirectory(
-      FILE_PATH_LITERAL("headless/test/data/protocol"));
+  FinishTest();
+}
 
+void HeadlessProtocolBrowserTest::ProcessTestResult(
+    const std::string& test_result) {
   base::ScopedAllowBlockingForTesting allow_blocking;
 
   base::FilePath src_dir;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir));
   base::FilePath expectation_path =
       src_dir.Append(kTestsDirectory)
           .AppendASCII(script_name_.substr(0, script_name_.length() - 3) +
                        "-expected.txt");
 
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(kResetResults)) {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kResetResults)) {
     LOG(INFO) << "Updating expectations at " << expectation_path;
-    int result = base::WriteFile(expectation_path, test_result.data(),
-                                 static_cast<int>(test_result.size()));
-    CHECK(test_result.size() == static_cast<size_t>(result));
+    bool succcess = base::WriteFile(expectation_path, test_result);
+    CHECK(succcess);
   }
 
   std::string expectation;
   if (!base::ReadFileToString(expectation_path, &expectation)) {
     ADD_FAILURE() << "Unable to read expectations at " << expectation_path;
   }
-  EXPECT_EQ(test_result, expectation);
-  FinishTest();
+
+  EXPECT_EQ(expectation, test_result);
 }
 
-bool HeadlessProtocolBrowserTest::OnProtocolMessage(
-    base::span<const uint8_t> json_message,
-    const base::DictionaryValue& parsed_message) {
-  SendMessageToJS(base::StringPiece(
-      reinterpret_cast<const char*>(json_message.data()), json_message.size()));
-  return true;
-}
+void HeadlessProtocolBrowserTest::OnConsoleAPICalled(
+    const base::Value::Dict& params) {
+  ASSERT_THAT(params, DictHasValue("method", "Runtime.consoleAPICalled"));
 
-void HeadlessProtocolBrowserTest::SendMessageToJS(base::StringPiece message) {
-  if (test_finished_)
+  const base::Value::List* args = params.FindListByDottedPath("params.args");
+  if (!args || args->empty())
     return;
 
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          kDumpDevToolsProtocol)) {
-    LOG(INFO) << "ToJS: " << message;
+  const base::Value* value = args->front().GetDict().Find("value");
+  switch (value->type()) {
+    case base::Value::Type::NONE:
+    case base::Value::Type::BOOLEAN:
+    case base::Value::Type::INTEGER:
+    case base::Value::Type::DOUBLE:
+    case base::Value::Type::STRING:
+      LOG(INFO) << value->DebugString();
+      return;
+    default:
+      LOG(INFO) << "Unhandled value type: " << value->type();
+      return;
   }
-
-  std::string encoded;
-  base::Base64Encode(message, &encoded);
-  devtools_client_->GetRuntime()->Evaluate("onmessage(atob(\"" + encoded +
-                                           "\"))");
 }
 
 void HeadlessProtocolBrowserTest::FinishTest() {
@@ -229,12 +260,39 @@ HEADLESS_PROTOCOL_TEST(DISABLED_VirtualTimeErrorLoop,
                        "emulation/virtual-time-error-loop.js")
 HEADLESS_PROTOCOL_TEST(VirtualTimeFetchStream,
                        "emulation/virtual-time-fetch-stream.js")
+HEADLESS_PROTOCOL_TEST(VirtualTimeFetchReadBody,
+                       "emulation/virtual-time-fetch-read-body.js")
+HEADLESS_PROTOCOL_TEST(VirtualTimeFetchBlobReadBodyBlob,
+                       "emulation/virtual-time-fetch-read-body-blob.js")
 HEADLESS_PROTOCOL_TEST(VirtualTimeDialogWhileLoading,
                        "emulation/virtual-time-dialog-while-loading.js")
 HEADLESS_PROTOCOL_TEST(VirtualTimeHistoryNavigation,
                        "emulation/virtual-time-history-navigation.js")
 HEADLESS_PROTOCOL_TEST(VirtualTimeHistoryNavigationSameDoc,
                        "emulation/virtual-time-history-navigation-same-doc.js")
+HEADLESS_PROTOCOL_TEST(VirtualTimeSVG, "emulation/virtual-time-svg.js")
+
+// Flaky on Mac. TODO(crbug.com/1419801): Re-enable.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_VirtualTimeWorkerBasic DISABLED_VirtualTimeWorkerBasic
+#else
+#define MAYBE_VirtualTimeWorkerBasic VirtualTimeWorkerBasic
+#endif
+HEADLESS_PROTOCOL_TEST(MAYBE_VirtualTimeWorkerBasic,
+                       "emulation/virtual-time-worker-basic.js")
+HEADLESS_PROTOCOL_TEST(VirtualTimeWorkerLockstep,
+                       "emulation/virtual-time-worker-lockstep.js")
+
+// Flaky on Mac. TODO(crbug.com/1419801): Re-enable.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_VirtualTimeWorkerFetch DISABLED_VirtualTimeWorkerFetch
+#else
+#define MAYBE_VirtualTimeWorkerFetch VirtualTimeWorkerFetch
+#endif
+HEADLESS_PROTOCOL_TEST(MAYBE_VirtualTimeWorkerFetch,
+                       "emulation/virtual-time-worker-fetch.js")
+HEADLESS_PROTOCOL_TEST(VirtualTimeWorkerTerminate,
+                       "emulation/virtual-time-worker-terminate.js")
 
 // Flaky on Mac. TODO(crbug.com/1164173): Re-enable.
 #if BUILDFLAG(IS_MAC)
@@ -270,13 +328,19 @@ HEADLESS_PROTOCOL_TEST(Geolocation, "emulation/geolocation-crash.js")
 
 HEADLESS_PROTOCOL_TEST(DragStarted, "input/dragIntercepted.js")
 
-// https://crbug.com/1204620
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+// https://crbug.com/1414190
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 #define MAYBE_InputClipboardOps DISABLED_InputClipboardOps
 #else
 #define MAYBE_InputClipboardOps InputClipboardOps
 #endif
 HEADLESS_PROTOCOL_TEST(MAYBE_InputClipboardOps, "input/input-clipboard-ops.js")
+
+HEADLESS_PROTOCOL_TEST(ClipboardApiCopyPaste,
+                       "input/clipboard-api-copy-paste.js")
+
+HEADLESS_PROTOCOL_TEST(FocusBlurNotifications,
+                       "input/focus-blur-notifications.js")
 
 HEADLESS_PROTOCOL_TEST(HeadlessSessionBasicsTest,
                        "sessions/headless-session-basics.js")
@@ -295,6 +359,14 @@ HEADLESS_PROTOCOL_TEST(ShowDirectoryPickerNoCrash,
 
 HEADLESS_PROTOCOL_TEST(ShowFilePickerInterception,
                        "sanity/show-file-picker-interception.js")
+
+HEADLESS_PROTOCOL_TEST(WindowSizeOnStart, "sanity/window-size-on-start.js")
+
+HEADLESS_PROTOCOL_TEST(LargeBrowserWindowSize,
+                       "sanity/large-browser-window-size.js")
+
+HEADLESS_PROTOCOL_TEST(ScreencastBasics, "sanity/screencast-basics.js")
+HEADLESS_PROTOCOL_TEST(ScreencastViewport, "sanity/screencast-viewport.js")
 
 class HeadlessProtocolBrowserTestWithProxy
     : public HeadlessProtocolBrowserTest {
@@ -318,9 +390,11 @@ class HeadlessProtocolBrowserTestWithProxy
   net::EmbeddedTestServer* proxy_server() { return &proxy_server_; }
 
  protected:
-  std::vector<std::string> GetPageUrlExtraParams() override {
+  base::Value::Dict GetPageUrlExtraParams() override {
     std::string proxy = proxy_server()->host_port_pair().ToString();
-    return {"&proxy=" + proxy};
+    base::Value::Dict dict;
+    dict.Set("proxy", proxy);
+    return dict;
   }
 
  private:
@@ -336,5 +410,66 @@ class HeadlessProtocolBrowserTestWithProxy
 
 HEADLESS_PROTOCOL_TEST_WITH_PROXY(BrowserSetProxyConfig,
                                   "sanity/browser-set-proxy-config.js")
+
+// TODO(crbug.com/1086872): The whole test suite is flaky on Mac ASAN.
+#if (BUILDFLAG(IS_MAC) && defined(ADDRESS_SANITIZER))
+#define MAYBE_IN_PROC_BROWSER_TEST_F(CLASS, TEST_NAME) \
+  IN_PROC_BROWSER_TEST_F(CLASS, DISABLED_##TEST_NAME)
+#else
+#define MAYBE_IN_PROC_BROWSER_TEST_F(CLASS, TEST_NAME) \
+  IN_PROC_BROWSER_TEST_F(CLASS, TEST_NAME)
+#endif
+
+#define HEADLESS_PROTOCOL_TEST_WITHOUT_SITE_ISOLATION(TEST_NAME, SCRIPT_NAME) \
+  MAYBE_IN_PROC_BROWSER_TEST_F(                                               \
+      HeadlessProtocolBrowserTestWithoutSiteIsolation, TEST_NAME) {           \
+    test_folder_ = "/protocol/";                                              \
+    script_name_ = SCRIPT_NAME;                                               \
+    RunTest();                                                                \
+  }
+
+class HeadlessProtocolBrowserTestWithoutSiteIsolation
+    : public HeadlessProtocolBrowserTest {
+ public:
+  HeadlessProtocolBrowserTestWithoutSiteIsolation() = default;
+
+ protected:
+  bool RequiresSitePerProcess() override { return false; }
+};
+
+HEADLESS_PROTOCOL_TEST_WITHOUT_SITE_ISOLATION(
+    VirtualTimeLocalStorageDetachedFrame,
+    "emulation/virtual-time-local-storage-detached-frame.js")
+
+class HeadlessProtocolBrowserTestWithDataPath
+    : public HeadlessProtocolBrowserTest {
+ protected:
+  base::Value::Dict GetPageUrlExtraParams() override {
+    base::FilePath src_dir;
+    CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir));
+    base::FilePath path =
+        src_dir.Append(kTestsDirectory).AppendASCII(data_path_);
+    base::Value::Dict dict;
+    dict.Set("data_path", path.AsUTF8Unsafe());
+    return dict;
+  }
+
+  std::string data_path_;
+};
+
+#define HEADLESS_PROTOCOL_TEST_WITH_DATA_PATH(TEST_NAME, SCRIPT_NAME, PATH) \
+  MAYBE_IN_PROC_BROWSER_TEST_F(HeadlessProtocolBrowserTestWithDataPath,     \
+                               TEST_NAME) {                                 \
+    test_folder_ = "/protocol/";                                            \
+    script_name_ = SCRIPT_NAME;                                             \
+    data_path_ = PATH;                                                      \
+    RunTest();                                                              \
+  }
+
+// TODO(crbug.com/1399463)  Re-enable after resolving flaky failures.
+HEADLESS_PROTOCOL_TEST_WITH_DATA_PATH(
+    FileInputDirectoryUpload,
+    "sanity/file-input-directory-upload.js",
+    "sanity/resources/file-input-directory-upload")
 
 }  // namespace headless

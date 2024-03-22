@@ -1,13 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/omnibox/popup/pedal_suggestion_wrapper.h"
+#import "base/notreached.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation PedalSuggestionWrapper
 
@@ -21,7 +18,7 @@
 
 #pragma mark - AutocompleteSuggestion
 
-// Do not expose any pedal, pretend that this is a normal suggestion.
+/// Do not expose any pedal, pretend that this is a normal suggestion.
 - (id<OmniboxPedal>)pedal {
   return nil;
 }
@@ -42,8 +39,11 @@
 - (BOOL)isTabMatch {
   return NO;
 }
-- (BOOL)isClipboardMatch {
-  return NO;
+- (NSNumber*)suggestionGroupId {
+  return nil;
+}
+- (NSNumber*)suggestionSectionId {
+  return nil;
 }
 - (BOOL)isTailSuggestion {
   return NO;
@@ -60,7 +60,10 @@
       initWithString:self.innerPedal.title
           attributes:@{
             NSForegroundColorAttributeName :
-                [UIColor colorNamed:kTextPrimaryColor]
+                [UIColor colorNamed:kTextPrimaryColor],
+            NSFontAttributeName :
+                [UIFont preferredFontForTextStyle:UIFontTextStyleBody],
+
           }];
 }
 
@@ -69,7 +72,10 @@
       initWithString:self.innerPedal.subtitle
           attributes:@{
             NSForegroundColorAttributeName :
-                [UIColor colorNamed:kTextSecondaryColor]
+                [UIColor colorNamed:kTextSecondaryColor],
+            NSFontAttributeName :
+                [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote]
+
           }];
 }
 
@@ -81,8 +87,17 @@
   return nil;
 }
 
+- (NSString*)matchTypeIconAccessibilityIdentifier {
+  NOTREACHED();
+  return nil;
+}
+
 - (BOOL)isMatchTypeSearch {
-  return true;
+  return YES;
+}
+
+- (BOOL)isWrapping {
+  return YES;
 }
 
 - (CrURL*)destinationUrl {

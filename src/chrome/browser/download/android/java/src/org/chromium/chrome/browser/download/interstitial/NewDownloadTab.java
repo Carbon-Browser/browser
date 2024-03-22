@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,8 @@ import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
 
 /** Represents the page shown when a CCT is created to download a file. */
-public class NewDownloadTab
-        extends EmptyTabObserver implements UserData, UnownedUserData, TabViewProvider {
+public class NewDownloadTab extends EmptyTabObserver
+        implements UserData, UnownedUserData, TabViewProvider {
     private static final Class<NewDownloadTab> USER_DATA_KEY = NewDownloadTab.class;
 
     private final Tab mTab;
@@ -41,8 +41,10 @@ public class NewDownloadTab
         assert tab.isInitialized();
         NewDownloadTab newDownloadTab = get(tab);
         if (newDownloadTab == null) {
-            newDownloadTab = tab.getUserDataHost().setUserData(
-                    USER_DATA_KEY, new NewDownloadTab(tab, coordinator, activity));
+            newDownloadTab =
+                    tab.getUserDataHost()
+                            .setUserData(
+                                    USER_DATA_KEY, new NewDownloadTab(tab, coordinator, activity));
         }
         return newDownloadTab;
     }
@@ -103,9 +105,10 @@ public class NewDownloadTab
     public void onActivityAttachmentChanged(Tab tab, @Nullable WindowAndroid window) {
         if (window == null) {
             removeIfPresent();
-        } else {
-            attachView();
+            return;
         }
+        attachView();
+        mCoordinator.onTabReparented(tab.getContext());
     }
 
     // UserData implementation.

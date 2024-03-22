@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <ForceFeedback/ForceFeedback.h>
 #include <IOKit/hid/IOHIDManager.h>
+
+#include <string_view>
 
 #include "base/memory/weak_ptr.h"
 #include "device/gamepad/abstract_haptic_gamepad.h"
@@ -32,7 +34,7 @@ class GamepadDeviceMac final : public AbstractHapticGamepad {
  public:
   GamepadDeviceMac(int location_id,
                    IOHIDDeviceRef device_ref,
-                   base::StringPiece product_name,
+                   std::string_view product_name,
                    int vendor_id,
                    int product_id);
   ~GamepadDeviceMac() override;

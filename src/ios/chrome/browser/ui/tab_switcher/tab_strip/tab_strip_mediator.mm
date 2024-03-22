@@ -1,89 +1,46 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/tab_switcher/tab_strip/tab_strip_mediator.h"
 
 #import "components/favicon/ios/web_favicon_driver.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/chrome_url_constants.h"
-#import "ios/chrome/browser/chrome_url_util.h"
-#import "ios/chrome/browser/tabs/tab_title_util.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_strip/tab_strip_consumer.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_switcher_item.h"
-#import "ios/chrome/browser/web_state_list/all_web_state_observation_forwarder.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_list_observer_bridge.h"
-#import "ios/chrome/browser/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_util.h"
+#import "ios/chrome/browser/policy/policy_util.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/url/url_util.h"
+#import "ios/chrome/browser/shared/model/web_state_list/all_web_state_observation_forwarder.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer_bridge.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_strip/tab_strip_swift.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_utils.h"
+#import "ios/chrome/browser/ui/tab_switcher/web_state_tab_switcher_item.h"
+#import "ios/chrome/browser/web_state_list/model/web_state_list_favicon_driver_observer.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
 #import "ui/gfx/image/image.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-// Constructs a TabSwitcherItem from a `web_state`.
-TabSwitcherItem* CreateItem(web::WebState* web_state) {
-  TabSwitcherItem* item = [[TabSwitcherItem alloc]
-      initWithIdentifier:web_state->GetStableIdentifier()];
-  // chrome://newtab (NTP) tabs have no title.
-  if (IsURLNtp(web_state->GetVisibleURL())) {
-    item.hidesTitle = YES;
-  }
-  item.title = tab_util::GetTabTitle(web_state);
-  return item;
-}
 
 // Constructs an array of TabSwitcherItems from a `web_state_list`.
-NSArray* CreateItems(WebStateList* web_state_list) {
-  NSMutableArray* items = [[NSMutableArray alloc] init];
+NSArray<TabSwitcherItem*>* CreateItems(WebStateList* web_state_list) {
+  NSMutableArray<TabSwitcherItem*>* items = [[NSMutableArray alloc] init];
   for (int i = 0; i < web_state_list->count(); i++) {
     web::WebState* web_state = web_state_list->GetWebStateAt(i);
-    [items addObject:CreateItem(web_state)];
+    [items
+        addObject:[[WebStateTabSwitcherItem alloc] initWithWebState:web_state]];
   }
-  return [items copy];
-}
-
-// Returns the ID of the active tab in `web_state_list`.
-NSString* GetActiveTabId(WebStateList* web_state_list) {
-  if (!web_state_list)
-    return nil;
-
-  web::WebState* web_state = web_state_list->GetActiveWebState();
-  if (!web_state)
-    return nil;
-  return web_state->GetStableIdentifier();
-}
-
-// Returns the WebState with `identifier` in `web_state_list`. Returns `nullptr`
-// if not found.
-web::WebState* GetWebStateWithId(WebStateList* web_state_list,
-                                 NSString* identifier) {
-  for (int i = 0; i < web_state_list->count(); i++) {
-    web::WebState* web_state = web_state_list->GetWebStateAt(i);
-    if ([identifier isEqualToString:web_state->GetStableIdentifier()])
-      return web_state;
-  }
-  return nullptr;
-}
-
-// Returns the index of the tab with `identifier` in `web_state_list`. Returns
-// -1 if not found.
-int GetIndexOfTabWithId(WebStateList* web_state_list, NSString* identifier) {
-  for (int i = 0; i < web_state_list->count(); i++) {
-    web::WebState* web_state = web_state_list->GetWebStateAt(i);
-    if ([identifier isEqualToString:web_state->GetStableIdentifier()])
-      return i;
-  }
-  return -1;
+  return items;
 }
 
 }  // namespace
 
-@interface TabStripMediator () <CRWWebStateObserver, WebStateListObserving> {
+@interface TabStripMediator () <CRWWebStateObserver,
+                                WebStateFaviconDriverObserver,
+                                WebStateListObserving> {
   // Bridge C++ WebStateListObserver methods to this TabStripController.
   std::unique_ptr<WebStateListObserverBridge> _webStateListObserver;
   // Bridge C++ WebStateObserver methods to this TabStripController.
@@ -92,6 +49,10 @@ int GetIndexOfTabWithId(WebStateList* web_state_list, NSString* identifier) {
   // by the TabStripMediator.
   std::unique_ptr<AllWebStateObservationForwarder>
       _allWebStateObservationForwarder;
+  // Bridges FaviconDriverObservers methods to this mediator, and maintains a
+  // FaviconObserver for each all webstates.
+  std::unique_ptr<WebStateListFaviconDriverObserver>
+      _webStateListFaviconObserver;
 }
 
 // The consumer for this object.
@@ -110,7 +71,8 @@ int GetIndexOfTabWithId(WebStateList* web_state_list, NSString* identifier) {
 
 - (void)disconnect {
   if (_webStateList) {
-    _allWebStateObservationForwarder.reset();
+    [self removeWebStateObservations];
+    _webStateListFaviconObserver.reset();
     _webStateList->RemoveObserver(_webStateListObserver.get());
     _webStateListObserver = nullptr;
     _webStateList = nullptr;
@@ -121,7 +83,8 @@ int GetIndexOfTabWithId(WebStateList* web_state_list, NSString* identifier) {
 
 - (void)setWebStateList:(WebStateList*)webStateList {
   if (_webStateList) {
-    _allWebStateObservationForwarder.reset();
+    [self removeWebStateObservations];
+    _webStateListFaviconObserver.reset();
     _webStateList->RemoveObserver(_webStateListObserver.get());
   }
 
@@ -132,83 +95,94 @@ int GetIndexOfTabWithId(WebStateList* web_state_list, NSString* identifier) {
     _webStateListObserver = std::make_unique<WebStateListObserverBridge>(self);
     _webStateList->AddObserver(_webStateListObserver.get());
 
+    _webStateListFaviconObserver =
+        std::make_unique<WebStateListFaviconDriverObserver>(_webStateList,
+                                                            self);
+
     _webStateObserver = std::make_unique<web::WebStateObserverBridge>(self);
-    // Observe all webStates of this `_webStateList`.
-    _allWebStateObservationForwarder =
-        std::make_unique<AllWebStateObservationForwarder>(
-            _webStateList, _webStateObserver.get());
+    [self addWebStateObservations];
   }
+
   [self populateConsumerItems];
 }
 
 #pragma mark - WebStateListObserving
 
-- (void)webStateList:(WebStateList*)webStateList
-    didDetachWebState:(web::WebState*)webState
-              atIndex:(int)atIndex {
-  [self populateConsumerItems];
-}
-
-- (void)webStateList:(WebStateList*)webStateList
-    didInsertWebState:(web::WebState*)webState
-              atIndex:(int)index
-           activating:(BOOL)activating {
-  [self populateConsumerItems];
-}
-
-- (void)webStateList:(WebStateList*)webStateList
-    didChangeActiveWebState:(web::WebState*)newWebState
-                oldWebState:(web::WebState*)oldWebState
-                    atIndex:(int)atIndex
-                     reason:(ActiveWebStateChangeReason)reason {
+- (void)didChangeWebStateList:(WebStateList*)webStateList
+                       change:(const WebStateListChange&)change
+                       status:(const WebStateListStatus&)status {
   DCHECK_EQ(_webStateList, webStateList);
-  if (webStateList->IsBatchInProgress())
-    return;
-  // If the selected index changes as a result of the last webstate being
-  // detached, atIndex will be -1.
-  if (atIndex == -1) {
-    [self.consumer selectItemWithID:nil];
+  if (webStateList->IsBatchInProgress()) {
     return;
   }
 
-  [self.consumer selectItemWithID:newWebState->GetStableIdentifier()];
+  switch (change.type()) {
+    case WebStateListChange::Type::kStatusOnly:
+      // The activation is handled after this switch statement.
+      break;
+    case WebStateListChange::Type::kDetach:
+    case WebStateListChange::Type::kInsert:
+      [self populateConsumerItems];
+      break;
+    case WebStateListChange::Type::kMove:
+      // Do nothing when a WebState is moved.
+      break;
+    case WebStateListChange::Type::kReplace: {
+      const WebStateListChangeReplace& replaceChange =
+          change.As<WebStateListChangeReplace>();
+      TabSwitcherItem* oldItem = [[WebStateTabSwitcherItem alloc]
+          initWithWebState:replaceChange.replaced_web_state()];
+      TabSwitcherItem* newItem = [[WebStateTabSwitcherItem alloc]
+          initWithWebState:replaceChange.inserted_web_state()];
+
+      [self.consumer replaceItem:oldItem withItem:newItem];
+      break;
+    }
+  }
+
+  if (status.active_web_state_change()) {
+    // If the selected index changes as a result of the last webstate being
+    // detached, the active index will be -1.
+    if (webStateList->active_index() == WebStateList::kInvalidIndex) {
+      [self.consumer selectItem:nil];
+      return;
+    }
+
+    TabSwitcherItem* item = [[WebStateTabSwitcherItem alloc]
+        initWithWebState:status.new_active_web_state];
+    [self.consumer selectItem:item];
+  }
 }
 
-#pragma mark - TabFaviconDataSource
+- (void)webStateListWillBeginBatchOperation:(WebStateList*)webStateList {
+  DCHECK_EQ(_webStateList, webStateList);
 
-- (void)faviconForIdentifier:(NSString*)identifier
-                  completion:(void (^)(UIImage*))completion {
-  web::WebState* webState = GetWebStateWithId(_webStateList, identifier);
-  if (!webState) {
-    return;
-  }
-  // NTP tabs get no favicon.
-  if (IsURLNtp(webState->GetVisibleURL())) {
-    return;
-  }
-  UIImage* defaultFavicon =
-      webState->GetBrowserState()->IsOffTheRecord()
-          ? [UIImage imageNamed:@"default_world_favicon_incognito"]
-          : [UIImage imageNamed:@"default_world_favicon_regular"];
-  completion(defaultFavicon);
-
-  favicon::FaviconDriver* faviconDriver =
-      favicon::WebFaviconDriver::FromWebState(webState);
-  if (faviconDriver) {
-    gfx::Image favicon = faviconDriver->GetFavicon();
-    if (!favicon.IsEmpty())
-      completion(favicon.ToUIImage());
-  }
+  [self removeWebStateObservations];
 }
 
-#pragma mark - TabStripConsumerDelegate
+- (void)webStateListBatchOperationEnded:(WebStateList*)webStateList {
+  DCHECK_EQ(_webStateList, webStateList);
+
+  [self addWebStateObservations];
+  [self populateConsumerItems];
+}
+
+#pragma mark - TabStripMutator
 
 - (void)addNewItem {
   if (!self.webStateList)
     return;
 
-  web::WebState::CreateParams params(
-      self.webStateList->GetActiveWebState()->GetBrowserState());
+  if (!self.browserState) {
+    return;
+  }
+
+  if (!IsAddNewTabAllowedByPolicy(self.browserState->GetPrefs(),
+                                  self.browserState->IsOffTheRecord())) {
+    return;
+  }
+
+  web::WebState::CreateParams params(self.browserState);
   std::unique_ptr<web::WebState> webState = web::WebState::Create(params);
 
   GURL url(kChromeUINewTabURL);
@@ -220,42 +194,104 @@ int GetIndexOfTabWithId(WebStateList* web_state_list, NSString* identifier) {
       base::checked_cast<int>(self.webStateList->count()), std::move(webState),
       (WebStateList::INSERT_FORCE_INDEX | WebStateList::INSERT_ACTIVATE),
       WebStateOpener());
-  [self.consumer selectItemWithID:GetActiveTabId(self.webStateList)];
+  TabSwitcherItem* item;
+  if (self.webStateList->GetActiveWebState()) {
+    item = [[WebStateTabSwitcherItem alloc]
+        initWithWebState:self.webStateList->GetActiveWebState()];
+  }
+  [self.consumer selectItem:item];
 }
 
-- (void)selectTab:(int)index {
-  if (!self.webStateList)
+- (void)activateItem:(TabSwitcherItem*)item {
+  if (!self.webStateList) {
     return;
+  }
+  int index =
+      GetWebStateIndex(self.webStateList, WebStateSearchCriteria{
+                                              .identifier = item.identifier,
+                                          });
 
   _webStateList->ActivateWebStateAt(index);
 }
 
-- (void)closeItemWithID:(NSString*)itemID {
-  int index = GetIndexOfTabWithId(self.webStateList, itemID);
+- (void)closeItem:(TabSwitcherItem*)item {
+  if (!self.webStateList) {
+    return;
+  }
+
+  int index = GetWebStateIndex(
+      self.webStateList,
+      WebStateSearchCriteria{
+          .identifier = item.identifier,
+          .pinned_state = WebStateSearchCriteria::PinnedState::kNonPinned,
+      });
   if (index >= 0)
     self.webStateList->CloseWebStateAt(index, WebStateList::CLOSE_USER_ACTION);
 }
 
+- (void)closeAllItemsExcept:(TabSwitcherItem*)item {
+  // TODO.
+}
+
 #pragma mark - Private
 
-// Calls `-populateItems:selectedItemID:` on the consumer.
+// Adds an observation to every WebState of the current WebSateList.
+- (void)addWebStateObservations {
+  _allWebStateObservationForwarder =
+      std::make_unique<AllWebStateObservationForwarder>(
+          _webStateList, _webStateObserver.get());
+}
+
+// Removes an observation from every WebState of the current WebSateList.
+- (void)removeWebStateObservations {
+  _allWebStateObservationForwarder.reset();
+}
+
+// Updates the consumer with the list of all items and the selected one.
 - (void)populateConsumerItems {
-  if (!self.webStateList)
+  if (!self.webStateList || self.webStateList->count() == 0) {
     return;
-  if (self.webStateList->count() > 0) {
-    [self.consumer populateItems:CreateItems(self.webStateList)
-                  selectedItemID:GetActiveTabId(self.webStateList)];
-    self.consumer.isOffTheRecord = self.webStateList->GetWebStateAt(0)
-                                       ->GetBrowserState()
-                                       ->IsOffTheRecord();
   }
+  TabSwitcherItem* item;
+  if (self.webStateList->GetActiveWebState()) {
+    item = [[WebStateTabSwitcherItem alloc]
+        initWithWebState:self.webStateList->GetActiveWebState()];
+  }
+  [self.consumer populateWithItems:CreateItems(self.webStateList)
+                      selectedItem:item];
 }
 
 #pragma mark - CRWWebStateObserver
 
+- (void)webStateDidStartLoading:(web::WebState*)webState {
+  if (IsVisibleURLNewTabPage(webState)) {
+    return;
+  }
+
+  TabSwitcherItem* item =
+      [[WebStateTabSwitcherItem alloc] initWithWebState:webState];
+  [self.consumer reloadItem:item];
+}
+
+- (void)webStateDidStopLoading:(web::WebState*)webState {
+  TabSwitcherItem* item =
+      [[WebStateTabSwitcherItem alloc] initWithWebState:webState];
+  [self.consumer reloadItem:item];
+}
+
 - (void)webStateDidChangeTitle:(web::WebState*)webState {
-  [self.consumer replaceItemID:webState->GetStableIdentifier()
-                      withItem:CreateItem(webState)];
+  TabSwitcherItem* item =
+      [[WebStateTabSwitcherItem alloc] initWithWebState:webState];
+  [self.consumer reloadItem:item];
+}
+
+#pragma mark - WebStateFaviconDriverObserver
+
+- (void)faviconDriver:(favicon::FaviconDriver*)driver
+    didUpdateFaviconForWebState:(web::WebState*)webState {
+  TabSwitcherItem* item =
+      [[WebStateTabSwitcherItem alloc] initWithWebState:webState];
+  [self.consumer reloadItem:item];
 }
 
 @end

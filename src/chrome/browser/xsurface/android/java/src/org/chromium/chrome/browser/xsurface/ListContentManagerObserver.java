@@ -1,10 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.xsurface;
 
-/** Interface to observe a list. */
+/**
+ * Implemented in Chromium.
+ *
+ * Interface to observe a list.
+ */
 public interface ListContentManagerObserver {
     /** Called when range from startIndex to startIndex+count has been inserted. */
     default void onItemRangeInserted(int startIndex, int count) {}

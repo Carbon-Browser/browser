@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
-#include "base/cxx17_backports.h"
 #include "ui/accessibility/accessibility_switches.h"
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/window.h"
@@ -67,13 +66,6 @@ constexpr int kCursorPanningMargin = 100;
 // MoveMagnifierWindowFollowPoint() when |reduce_bottom_margin| is true.
 constexpr int kKeyboardBottomPanningMargin = 10;
 
-void MoveCursorTo(aura::WindowTreeHost* host, const gfx::Point& root_location) {
-  auto host_location_3f = gfx::Point3F(gfx::PointF(root_location));
-  host->GetRootTransform().TransformPoint(&host_location_3f);
-  host->MoveCursorToLocationInPixels(
-      gfx::ToCeiledPoint(host_location_3f.AsPointF()));
-}
-
 }  // namespace
 
 class FullscreenMagnifierController::GestureProviderClient
@@ -103,8 +95,9 @@ FullscreenMagnifierController::FullscreenMagnifierController()
     : root_window_(Shell::GetPrimaryRootWindow()),
       scale_(kNonMagnifiedScale),
       original_scale_(kNonMagnifiedScale) {
-  Shell::Get()->AddPreTargetHandler(this,
-                                    ui::EventTarget::Priority::kAccessibility);
+  Shell::Get()->AddAccessibilityEventHandler(
+      this,
+      AccessibilityEventHandlerManager::HandlerType::kFullscreenMagnifier);
   root_window_->AddObserver(this);
   root_window_->GetHost()->GetEventSource()->AddEventRewriter(this);
 
@@ -121,7 +114,7 @@ FullscreenMagnifierController::~FullscreenMagnifierController() {
   root_window_->GetHost()->GetEventSource()->RemoveEventRewriter(this);
   root_window_->RemoveObserver(this);
 
-  Shell::Get()->RemovePreTargetHandler(this);
+  Shell::Get()->RemoveAccessibilityEventHandler(this);
 }
 
 void FullscreenMagnifierController::SetEnabled(bool enabled) {
@@ -274,7 +267,7 @@ gfx::Transform FullscreenMagnifierController::GetMagnifierTransform() const {
 
 void FullscreenMagnifierController::OnImplicitAnimationsCompleted() {
   if (move_cursor_after_animation_) {
-    MoveCursorTo(root_window_->GetHost(), position_after_animation_);
+    MoveCursorTo(position_after_animation_);
     move_cursor_after_animation_ = false;
 
     aura::client::CursorClient* cursor_client =
@@ -410,7 +403,8 @@ ui::EventDispatchDetails FullscreenMagnifierController::RewriteEvent(
     touch_points_++;
     press_event_map_[touch_event->pointer_details().id] =
         std::make_unique<ui::TouchEvent>(*touch_event);
-  } else if (touch_event->type() == ui::ET_TOUCH_RELEASED) {
+  } else if (touch_event->type() == ui::ET_TOUCH_RELEASED ||
+             touch_event->type() == ui::ET_TOUCH_CANCELLED) {
     touch_points_--;
     press_event_map_.erase(touch_event->pointer_details().id);
   }
@@ -524,7 +518,9 @@ bool FullscreenMagnifierController::RedrawDIP(
     y = max_y;
 
   // Does nothing if both the origin and the scale are not changed.
-  if (origin_.x() == x && origin_.y() == y && scale == scale_) {
+  // Cast origin points back to int, as viewport can only be integer values.
+  if (static_cast<int>(origin_.x()) == static_cast<int>(x) &&
+      static_cast<int>(origin_.y()) == static_cast<int>(y) && scale == scale_) {
     return false;
   }
 
@@ -650,7 +646,6 @@ void FullscreenMagnifierController::OnMouseMove(
   int margin = kCursorPanningMargin / scale_;  // No need to consider DPI.
 
   // Edge mouse following mode.
-  // TODO(https://crbug.com/1178027): Add continuous mouse following mode.
   int x_margin = margin;
   int y_margin = margin;
 
@@ -673,17 +668,42 @@ void FullscreenMagnifierController::OnMouseMove(
     // calculates where the center point of the magnified region should be,
     // such that where the cursor is located in the magnified region corresponds
     // in proportion to where the cursor is located on the screen overall.
+
+    // Screen size.
     const gfx::Size host_size_in_dip = GetHostSizeDIP();
-    const gfx::SizeF window_size_in_dip = GetWindowRectDIP(scale_).size();
+
+    // Mouse position.
     const float x = location_in_dip.x();
     const float y = location_in_dip.y();
 
-    const int center_point_in_dip_x =
-        x - x * window_size_in_dip.width() / host_size_in_dip.width() +
-        window_size_in_dip.width() / 2;
-    const int center_point_in_dip_y =
-        y - y * window_size_in_dip.height() / host_size_in_dip.height() +
-        window_size_in_dip.height() / 2;
+    // Viewport dimensions for calculation, increased by variable padding:
+    // The cursor can never reach the bottom or right of the screen, it's always
+    // at least one DIP away so that you can see it. (Note the cursor can reach
+    // the top left at (0, 0)). Calculate the viewport size, adding some scaled
+    // viewport padding as we move down and right so that the padding 0 in the
+    // top/left and greater in the bottom right to account for the cursor not
+    // being able to access the bottom corner.
+    const float height =
+        host_size_in_dip.height() / scale_ + 4 * y / host_size_in_dip.height();
+    const float width =
+        host_size_in_dip.width() / scale_ + 4 * x / host_size_in_dip.width();
+
+    // The viewport center point is the mouse center point, minus the scaled
+    // mouse center point to get to the viewport left/top edge, plus half
+    // the viewport size.
+    // In the example below, the host size is 12 units in width, the
+    // mouse point x is at 7, and the viewport width is 3 (scale is 4.0).
+    // The center_point_in_dip_x should be 6, with some integer rounding.
+    // 6 = int(7 - (7 / 4.0) + (3 / 2.0))
+    //  ____________
+    // |            | host
+    // |     ___    |
+    // |    |  *|   |  <-- mouse x = 7, viewport width = 3
+    // |    |___|   |
+    // |____________|
+    //  012345678901   <-- Indexes
+    const int center_point_in_dip_x = x - x / scale_ + width / 2.0;
+    const int center_point_in_dip_y = y - y / scale_ + height / 2.0;
     center_point_in_dip = {center_point_in_dip_x, center_point_in_dip_y};
   }
 
@@ -692,7 +712,7 @@ void FullscreenMagnifierController::OnMouseMove(
       keyboard::KeyboardUIController::Get()->IsKeyboardVisible();
 
   MoveMagnifierWindowFollowPoint(center_point_in_dip, x_margin, y_margin,
-                                 x_margin, y_margin, reduce_bottom_margin);
+                                 reduce_bottom_margin);
 }
 
 void FullscreenMagnifierController::AfterAnimationMoveCursorTo(
@@ -717,7 +737,7 @@ bool FullscreenMagnifierController::IsMagnified() const {
 }
 
 gfx::RectF FullscreenMagnifierController::GetWindowRectDIP(float scale) const {
-  const gfx::Size size_in_dip = root_window_->bounds().size();
+  const gfx::Size size_in_dip = GetHostSizeDIP();
   const float width = size_in_dip.width() / scale;
   const float height = size_in_dip.height() / scale;
 
@@ -729,7 +749,7 @@ gfx::Size FullscreenMagnifierController::GetHostSizeDIP() const {
 }
 
 void FullscreenMagnifierController::ValidateScale(float* scale) {
-  *scale = base::clamp(*scale, kNonMagnifiedScale, kMaxMagnifiedScale);
+  *scale = std::clamp(*scale, kNonMagnifiedScale, kMaxMagnifiedScale);
   DCHECK(kNonMagnifiedScale <= *scale && *scale <= kMaxMagnifiedScale);
 }
 
@@ -762,8 +782,9 @@ bool FullscreenMagnifierController::ProcessGestures() {
       // Root transform does dip scaling, screen magnification scaling and
       // translation. Apply inverse transform to convert non-dip screen
       // coordinate to dip logical coordinate.
-      root_window_->GetHost()->GetInverseRootTransform().TransformPoint(
-          &gesture_center);
+      gesture_center =
+          root_window_->GetHost()->GetInverseRootTransform().MapPoint(
+              gesture_center);
 
       // Calcualte new origin to keep the distance between |gesture_center|
       // and |origin| same in screen coordinate. This means the following
@@ -794,12 +815,10 @@ bool FullscreenMagnifierController::ProcessGestures() {
           display::Screen::GetScreen()->GetDisplayNearestWindow(root_window_);
       gfx::Transform rotation_transform;
       rotation_transform.Rotate(display.PanelRotationAsDegree());
-      gfx::Transform rotation_inverse_transform;
-      const bool result =
-          rotation_transform.GetInverse(&rotation_inverse_transform);
-      DCHECK(result);
-      gfx::PointF scroll(details.scroll_x(), details.scroll_y());
-      rotation_inverse_transform.TransformPoint(&scroll);
+      gfx::Transform rotation_inverse_transform =
+          rotation_transform.GetCheckedInverse();
+      gfx::PointF scroll = rotation_inverse_transform.MapPoint(
+          gfx::PointF(details.scroll_x(), details.scroll_y()));
 
       // Divide by scale to keep scroll speed same at any scale.
       float new_x = origin_.x() + (-scroll.x() / scale_);
@@ -815,50 +834,45 @@ bool FullscreenMagnifierController::ProcessGestures() {
 
 void FullscreenMagnifierController::MoveMagnifierWindowFollowPoint(
     const gfx::Point& point,
-    int x_panning_margin,
-    int y_panning_margin,
-    int x_target_margin,
-    int y_target_margin,
+    int x_margin,
+    int y_margin,
     bool reduce_bottom_margin) {
   DCHECK(root_window_);
   bool start_zoom = false;
 
+  // Current position.
   const gfx::Rect window_rect = GetViewportRect();
-  const int left = window_rect.x();
-  const int right = window_rect.right();
-
-  int x_diff = 0;
-  if (point.x() < left + x_panning_margin) {
-    // Panning left.
-    x_diff = point.x() - (left + x_target_margin);
-    start_zoom = true;
-  } else if (right - x_panning_margin < point.x()) {
-    // Panning right.
-    x_diff = point.x() - (right - x_target_margin);
-    start_zoom = true;
-  }
-  int x = left + x_diff;
-
   const int top = window_rect.y();
   const int bottom = window_rect.bottom();
 
+  int x_diff = 0;
+  if (point.x() < window_rect.x() + x_margin) {
+    // Panning left.
+    x_diff = point.x() - (window_rect.x() + x_margin);
+    start_zoom = true;
+  } else if (point.x() > window_rect.right() - x_margin) {
+    // Panning right.
+    x_diff = point.x() - (window_rect.right() - x_margin);
+    start_zoom = true;
+  }
+  int x = window_rect.x() + x_diff;
+
   // If |reduce_bottom_margin| is true, use kKeyboardBottomPanningMargin instead
-  // of |y_panning_margin|. This is to prevent the magnifier from panning when
+  // of |y_margin|. This is to prevent the magnifier from panning when
   // the user is trying to interact with the bottom of the keyboard.
-  const int bottom_panning_margin = reduce_bottom_margin
-                                        ? kKeyboardBottomPanningMargin / scale_
-                                        : y_panning_margin;
+  const int bottom_panning_margin =
+      reduce_bottom_margin ? kKeyboardBottomPanningMargin / scale_ : y_margin;
 
   int y_diff = 0;
-  if (point.y() < top + y_panning_margin) {
+  if (point.y() < top + y_margin) {
     // Panning up.
-    y_diff = point.y() - (top + y_target_margin);
+    y_diff = point.y() - (top + y_margin);
     start_zoom = true;
   } else if (bottom - bottom_panning_margin < point.y()) {
     // Panning down.
     const int bottom_target_margin =
-        reduce_bottom_margin ? std::min(bottom_panning_margin, y_target_margin)
-                             : y_target_margin;
+        reduce_bottom_margin ? std::min(bottom_panning_margin, y_margin)
+                             : y_margin;
     y_diff = point.y() - (bottom - bottom_target_margin);
     start_zoom = true;
   }
@@ -874,7 +888,7 @@ void FullscreenMagnifierController::MoveMagnifierWindowFollowPoint(
       // good already).
       if ((x_diff != 0 || y_diff != 0) &&
           mouse_following_mode_ != MagnifierMouseFollowingMode::kContinuous) {
-        MoveCursorTo(root_window_->GetHost(), point);
+        MoveCursorTo(point);
       }
     }
   }
@@ -946,6 +960,17 @@ void FullscreenMagnifierController::MoveMagnifierWindowFollowRect(
     RedrawDIP(gfx::PointF(x, y), scale_,
               0,  // No animation on panning.
               kDefaultAnimationTweenType);
+  }
+}
+
+void FullscreenMagnifierController::MoveCursorTo(
+    const gfx::Point& root_location) {
+  aura::WindowTreeHost* host = root_window_->GetHost();
+  host->MoveCursorToLocationInPixels(gfx::ToCeiledPoint(
+      host->GetRootTransform().MapPoint(gfx::PointF(root_location))));
+
+  if (cursor_moved_callback_for_testing_) {
+    cursor_moved_callback_for_testing_.Run(root_location);
   }
 }
 

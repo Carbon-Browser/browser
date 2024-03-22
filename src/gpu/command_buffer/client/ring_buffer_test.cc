@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -59,9 +59,9 @@ class BaseRingBufferTest : public testing::Test {
 
   void SetUp() override {
     delay_set_token_ = false;
-    command_buffer_.reset(new CommandBufferDirect());
-    api_mock_.reset(new AsyncAPIMock(true, command_buffer_->service()));
-    command_buffer_->set_handler(api_mock_.get());
+    command_buffer_ = std::make_unique<CommandBufferDirect>();
+    api_mock_ = std::make_unique<AsyncAPIMock>(true, command_buffer_.get(),
+                                               command_buffer_->service());
 
     // ignore noops in the mock - we don't want to inspect the internals of the
     // helper.
@@ -85,7 +85,7 @@ class BaseRingBufferTest : public testing::Test {
   bool delay_set_token_;
 
   std::unique_ptr<int8_t[]> buffer_;
-  raw_ptr<int8_t> buffer_start_;
+  raw_ptr<int8_t, DanglingUntriaged> buffer_start_;
   base::test::SingleThreadTaskEnvironment task_environment_;
 };
 

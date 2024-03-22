@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -324,8 +324,8 @@ class PasswordProtectionServiceBase : public history::HistoryServiceObserver {
       LoginReputationClientRequest::TriggerType trigger_type,
       ReusedPasswordAccountType password_type) = 0;
 
-  // If primary account is syncing.
-  virtual bool IsPrimaryAccountSyncing() const = 0;
+  // If primary account is syncing history.
+  virtual bool IsPrimaryAccountSyncingHistory() const = 0;
 
   // If primary account is signed in.
   virtual bool IsPrimaryAccountSignedIn() const = 0;

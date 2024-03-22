@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,10 +28,10 @@ bool NativeMessagingHostListPolicyHandler::CheckListEntry(
   return NativeMessagingHostManifest::IsValidName(str);
 }
 
-void NativeMessagingHostListPolicyHandler::ApplyList(base::Value filtered_list,
-                                                     PrefValueMap* prefs) {
-  DCHECK(filtered_list.is_list());
-  prefs->SetValue(pref_path_, std::move(filtered_list));
+void NativeMessagingHostListPolicyHandler::ApplyList(
+    base::Value::List filtered_list,
+    PrefValueMap* prefs) {
+  prefs->SetValue(pref_path_, base::Value(std::move(filtered_list)));
 }
 
 }  // namespace extensions

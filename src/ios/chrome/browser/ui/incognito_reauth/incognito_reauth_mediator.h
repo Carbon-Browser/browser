@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,13 @@
 // the source of truth for reauth state.
 @interface IncognitoReauthMediator : NSObject
 
-- (instancetype)initWithConsumer:(id<IncognitoReauthConsumer>)consumer
-                     reauthAgent:(IncognitoReauthSceneAgent*)reauthAgent
+- (instancetype)initWithReauthAgent:(IncognitoReauthSceneAgent*)reauthAgent
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
+
+// Consumer for this mediator.
+@property(nonatomic, weak) id<IncognitoReauthConsumer> consumer;
 
 @end
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,8 +82,7 @@ class WebUIAllowlist : public base::RefCountedThreadSafe<WebUIAllowlist> {
 
   THREAD_CHECKER(thread_checker_);
 
-  mutable base::Lock lock_;
-  content_settings::OriginIdentifierValueMap value_map_ GUARDED_BY(lock_);
+  content_settings::OriginIdentifierValueMap value_map_;
 
   raw_ptr<WebUIAllowlistProvider> provider_
       GUARDED_BY_CONTEXT(thread_checker_) = nullptr;

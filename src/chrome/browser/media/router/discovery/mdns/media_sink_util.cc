@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/media/router/discovery/mdns/dns_sd_delegate.h"
-#include "components/cast_channel/cast_socket.h"
 #include "components/media_router/common/mojom/media_router.mojom.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/ip_address.h"
@@ -20,11 +19,13 @@
 
 namespace media_router {
 
-SinkIconType GetCastSinkIconType(uint8_t capabilities) {
-  if (capabilities & cast_channel::CastDeviceCapability::VIDEO_OUT)
+SinkIconType GetCastSinkIconType(
+    cast_channel::CastDeviceCapabilitySet capabilities) {
+  if (capabilities.Has(cast_channel::CastDeviceCapability::kVideoOut)) {
     return SinkIconType::CAST;
+  }
 
-  return capabilities & cast_channel::CastDeviceCapability::MULTIZONE_GROUP
+  return capabilities.Has(cast_channel::CastDeviceCapability::kMultizoneGroup)
              ? SinkIconType::CAST_AUDIO_GROUP
              : SinkIconType::CAST_AUDIO;
 }
@@ -63,14 +64,17 @@ CreateCastMediaSinkResult CreateCastMediaSink(const DnsSdService& service,
   extra_data.ip_endpoint =
       net::IPEndPoint(ip_address, service.service_host_port.port());
   extra_data.model_name = service_data["md"];
-  extra_data.capabilities = cast_channel::CastDeviceCapability::NONE;
 
-  unsigned capacities;
-  if (base::StringToUint(service_data["ca"], &capacities))
-    extra_data.capabilities = capacities;
+  {
+    uint64_t capabilities = 0;
+    if (base::StringToUint64(service_data["ca"], &capabilities)) {
+      extra_data.capabilities =
+          cast_channel::CastDeviceCapabilitySet::FromEnumBitmask(capabilities);
+    }
+  }
 
   std::string processed_uuid = MediaSinkInternal::ProcessDeviceUUID(unique_id);
-  std::string sink_id = base::StringPrintf("cast:<%s>", processed_uuid.c_str());
+  std::string sink_id = base::StringPrintf("cast:%s", processed_uuid.c_str());
   MediaSink sink(sink_id, friendly_name,
                  GetCastSinkIconType(extra_data.capabilities),
                  mojom::MediaRouteProviderId::CAST);

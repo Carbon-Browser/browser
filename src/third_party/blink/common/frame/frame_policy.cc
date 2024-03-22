@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,7 @@ FramePolicy::~FramePolicy() = default;
 bool operator==(const FramePolicy& lhs, const FramePolicy& rhs) {
   return (lhs.sandbox_flags == rhs.sandbox_flags) &&
          (lhs.container_policy == rhs.container_policy) &&
-         (lhs.required_document_policy == rhs.required_document_policy) &&
-         (lhs.is_fenced == rhs.is_fenced);
+         (lhs.required_document_policy == rhs.required_document_policy);
 }
 
 bool operator!=(const FramePolicy& lhs, const FramePolicy& rhs) {

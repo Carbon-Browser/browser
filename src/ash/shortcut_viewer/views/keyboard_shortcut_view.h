@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "ash/search_box/search_box_view_delegate.h"
-#include "ash/style/ash_color_provider.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/widget/widget_delegate.h"
 
 namespace aura {
@@ -34,9 +34,9 @@ class KeyboardShortcutItemView;
 class KSVSearchBoxView;
 
 // The UI container for Ash and Chrome keyboard shortcuts.
-class KeyboardShortcutView : public views::WidgetDelegateView,
-                             public ash::SearchBoxViewDelegate {
+class KeyboardShortcutView : public views::WidgetDelegateView {
  public:
+  METADATA_HEADER(KeyboardShortcutView);
   KeyboardShortcutView(const KeyboardShortcutView&) = delete;
   KeyboardShortcutView& operator=(const KeyboardShortcutView&) = delete;
 
@@ -50,7 +50,6 @@ class KeyboardShortcutView : public views::WidgetDelegateView,
   static views::Widget* Toggle(aura::Window* context);
 
   // views::View:
-  const char* GetClassName() const override;
   std::u16string GetAccessibleWindowTitle() const override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
   void Layout() override;
@@ -58,14 +57,8 @@ class KeyboardShortcutView : public views::WidgetDelegateView,
   void OnPaint(gfx::Canvas* canvas) override;
   void OnThemeChanged() override;
 
-  // SearchBoxViewDelegate:
-  void QueryChanged(ash::SearchBoxViewBase* sender) override;
-  void AssistantButtonPressed() override {}
-  void BackButtonPressed() override;
-  void CloseButtonPressed() override;
-  void ActiveChanged(ash::SearchBoxViewBase* sender) override;
-  void OnSearchBoxKeyEvent(ui::KeyEvent* event) override {}
-  bool CanSelectSearchResults() override;
+  // Handles search box query changes.
+  void QueryChanged(const std::u16string& query);
 
  private:
   friend class KeyboardShortcutViewTest;
@@ -79,10 +72,10 @@ class KeyboardShortcutView : public views::WidgetDelegateView,
   // If |initial_category| has value, we will initialize the specified category,
   // otherwise all the categories will be intialized.
   void InitCategoriesTabbedPane(
-      absl::optional<ash::ShortcutCategory> initial_category);
+      std::optional<ash::ShortcutCategory> initial_category);
 
   // Update views' layout based on search box status.
-  void UpdateViewsLayout(bool is_search_box_active);
+  void UpdateViewsLayout();
 
   // Show search results in |search_results_container_|.
   void ShowSearchResults(const std::u16string& search_query);
@@ -104,12 +97,12 @@ class KeyboardShortcutView : public views::WidgetDelegateView,
 
   // Owned by views hierarchy.
   // The container for category tabs and lists of KeyboardShortcutItemViews.
-  views::TabbedPane* categories_tabbed_pane_ = nullptr;
+  raw_ptr<views::TabbedPane, ExperimentalAsh> categories_tabbed_pane_ = nullptr;
   // The container for KeyboardShortcutItemViews matching a user's query.
-  views::View* search_results_container_ = nullptr;
+  raw_ptr<views::View, ExperimentalAsh> search_results_container_ = nullptr;
 
   // Owned by views hierarchy.
-  KSVSearchBoxView* search_box_view_ = nullptr;
+  raw_ptr<KSVSearchBoxView, ExperimentalAsh> search_box_view_ = nullptr;
 
   // Contains all the shortcut item views from all categories. This list is also
   // used for searching. The views are not owned by the Views hierarchy to avoid
@@ -140,8 +133,6 @@ class KeyboardShortcutView : public views::WidgetDelegateView,
   // Indicates if recieved the first OnPaint event. Used to schedule
   // initialization of background panes in the following frame.
   bool did_first_paint_ = false;
-
-  ash::AshColorProvider* color_provider_;
 
   base::WeakPtrFactory<KeyboardShortcutView> weak_factory_{this};
 };

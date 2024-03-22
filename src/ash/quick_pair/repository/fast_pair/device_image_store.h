@@ -1,18 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_QUICK_PAIR_REPOSITORY_FAST_PAIR_DEVICE_IMAGE_STORE_H_
 #define ASH_QUICK_PAIR_REPOSITORY_FAST_PAIR_DEVICE_IMAGE_STORE_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/quick_pair/repository/fast_pair/device_metadata.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
-#include "chromeos/services/bluetooth_config/public/cpp/device_image_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/services/bluetooth_config/public/cpp/device_image_info.h"
 #include "ui/gfx/image/image.h"
 
 class PrefRegistrySimple;
@@ -85,16 +87,21 @@ class DeviceImageStore {
 
   // Returns a DeviceImageInfo of device images belonging to |model_id|, if
   // found.
-  absl::optional<chromeos::bluetooth_config::DeviceImageInfo>
-  GetImagesForDeviceModel(const std::string& model_id);
+  std::optional<bluetooth_config::DeviceImageInfo> GetImagesForDeviceModel(
+      const std::string& model_id);
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(FastPairRepositoryImplTest, PersistDeviceImages);
+  FRIEND_TEST_ALL_PREFIXES(FastPairRepositoryImplTest,
+                           PersistDeviceImagesNoMacAddress);
+  FRIEND_TEST_ALL_PREFIXES(FastPairRepositoryImplTest, EvictDeviceImages);
+
   // Loads device images stored in prefs to model_id_to_images_.
   void LoadPersistedImagesFromPrefs();
 
   // Returns true if |images| contains at least one image, false otherwise.
   bool DeviceImageInfoHasImages(
-      const chromeos::bluetooth_config::DeviceImageInfo& images) const;
+      const bluetooth_config::DeviceImageInfo& images) const;
 
   // Wrapper around a call to FastPairImageDecoder's DecodeImage. Downloads
   // and decodes the image at |image_url|, then passes the |model_id|,
@@ -114,12 +121,15 @@ class DeviceImageStore {
                          FetchDeviceImagesCallback on_images_saved_callback,
                          gfx::Image image);
 
+  // Clears the in-memory map and reloads from prefs. Used by tests.
+  void RefreshCacheForTest();
+
   // Maps from model IDs to images stored in DeviceImageInfo.
-  base::flat_map<std::string, chromeos::bluetooth_config::DeviceImageInfo>
+  base::flat_map<std::string, bluetooth_config::DeviceImageInfo>
       model_id_to_images_;
   // Used to lazily load images from prefs.
   bool loaded_images_from_prefs_ = false;
-  FastPairImageDecoder* image_decoder_;
+  raw_ptr<FastPairImageDecoder, ExperimentalAsh> image_decoder_;
   base::WeakPtrFactory<DeviceImageStore> weak_ptr_factory_{this};
 };
 

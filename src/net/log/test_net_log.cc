@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,7 +85,7 @@ void RecordingNetLogObserver::Clear() {
 }
 
 void RecordingNetLogObserver::OnAddEntry(const NetLogEntry& entry) {
-  base::Value params = entry.params.Clone();
+  base::Value::Dict params = entry.params.Clone();
   base::RepeatingClosure add_entry_callback;
   {
     // Only need to acquire the lock when accessing class variables.

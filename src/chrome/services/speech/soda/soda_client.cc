@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,6 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
-
-#if BUILDFLAG(IS_MAC)
-#include "base/mac/mac_util.h"
-#endif
 
 namespace soda {
 
@@ -71,16 +67,6 @@ SodaClient::~SodaClient() {
 
   if (IsInitialized())
     delete_soda_func_(soda_async_handle_);
-
-#if BUILDFLAG(IS_MAC)
-  // Intentionally do not unload the libsoda.so library after the SodaClient
-  // is destroyed to prevent global destructor functions from running on an
-  // unloaded library. This only applies to older versions of MacOS since
-  // there have been no crashes on 10.15+, likely due to a change in the
-  // __cxa_atexit implementation.
-  if (base::mac::IsAtMostOS10_14())
-    std::ignore = lib_.release();
-#endif  // BUILDFLAG(IS_MAC)
 }
 
 NO_SANITIZE("cfi-icall")

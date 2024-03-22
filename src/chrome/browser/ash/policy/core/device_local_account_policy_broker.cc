@@ -1,17 +1,28 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/core/device_local_account_policy_broker.h"
+#include <memory>
 
 #include "ash/constants/ash_paths.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/values.h"
+#include "chrome/browser/ash/policy/core/device_local_account.h"
+#include "chrome/browser/ash/policy/core/device_local_account_external_cache.h"
+#include "chrome/browser/ash/policy/core/file_util.h"
+#include "chrome/browser/extensions/policy_handlers.h"
 #include "components/policy/core/common/chrome_schema.h"
 #include "components/policy/core/common/cloud/cloud_policy_refresh_scheduler.h"
 #include "components/policy/core/common/cloud/resource_cache.h"
 #include "components/policy/policy_constants.h"
+#include "components/prefs/pref_value_map.h"
 #include "content/public/browser/network_service_instance.h"
+#include "extensions/browser/pref_names.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace policy {
@@ -52,11 +63,11 @@ std::unique_ptr<CloudPolicyClient> CreateClient(
   return client;
 }
 
-// Get the subdirectory of the force-installed extension cache and the component
-// policy cache used for |account_id|.
-std::string GetCacheSubdirectoryForAccountID(const std::string& account_id) {
-  return base::HexEncode(account_id.c_str(), account_id.size());
+base::Value::Dict GetPrefsFromPolicy(const policy::PolicyMap& policy_map) {
+  extensions::ExtensionInstallForceListPolicyHandler policy_handler;
+  return policy_handler.GetPolicyDict(policy_map);
 }
+
 }  // namespace
 
 DeviceLocalAccountPolicyBroker::DeviceLocalAccountPolicyBroker(
@@ -86,10 +97,10 @@ DeviceLocalAccountPolicyBroker::DeviceLocalAccountPolicyBroker(
     extension_tracker_ = std::make_unique<DeviceLocalAccountExtensionTracker>(
         account, store_.get(), &schema_registry_);
   }
-  extension_loader_ = new chromeos::DeviceLocalAccountExternalPolicyLoader(
-      store_.get(),
+  external_cache_ = std::make_unique<chromeos::DeviceLocalAccountExternalCache>(
+      user_id_,
       base::PathService::CheckedGet(ash::DIR_DEVICE_LOCAL_ACCOUNT_EXTENSIONS)
-          .Append(GetCacheSubdirectoryForAccountID(account.account_id)));
+          .Append(GetUniqueSubDirectoryForAccountID(account.account_id)));
   store_->AddObserver(this);
 
   // Unblock the |schema_registry_| so that the |component_policy_service_|
@@ -121,13 +132,15 @@ void DeviceLocalAccountPolicyBroker::ConnectIfPossible(
     ash::DeviceSettingsService* device_settings_service,
     DeviceManagementService* device_management_service,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
-  if (core_.client())
+  if (core_.client()) {
     return;
+  }
 
   std::unique_ptr<CloudPolicyClient> client(CreateClient(
       device_settings_service, device_management_service, url_loader_factory));
-  if (!client)
+  if (!client) {
     return;
+  }
 
   CreateComponentCloudPolicyService(client.get());
   core_.Connect(std::move(client));
@@ -143,21 +156,24 @@ void DeviceLocalAccountPolicyBroker::UpdateRefreshDelay() {
   if (core_.refresh_scheduler()) {
     const base::Value* policy_value = store_->policy_map().GetValue(
         key::kPolicyRefreshRate, base::Value::Type::INTEGER);
-    if (policy_value)
+    if (policy_value) {
       core_.refresh_scheduler()->SetDesiredRefreshDelay(policy_value->GetInt());
+    }
   }
 }
 
 std::string DeviceLocalAccountPolicyBroker::GetDisplayName() const {
   const base::Value* display_name_value = store_->policy_map().GetValue(
       key::kUserDisplayName, base::Value::Type::STRING);
-  if (display_name_value)
+  if (display_name_value) {
     return display_name_value->GetString();
+  }
   return std::string();
 }
 
 void DeviceLocalAccountPolicyBroker::OnStoreLoaded(CloudPolicyStore* store) {
   UpdateRefreshDelay();
+  UpdateExtensionListFromStore();
   policy_update_callback_.Run();
 }
 
@@ -178,6 +194,31 @@ void DeviceLocalAccountPolicyBroker::CreateComponentCloudPolicyService(
   component_policy_service_ = std::make_unique<ComponentCloudPolicyService>(
       dm_protocol::kChromeExtensionPolicyType, this, &schema_registry_, core(),
       client, std::move(resource_cache), resource_cache_task_runner_);
+}
+
+void DeviceLocalAccountPolicyBroker::StartCache(
+    const scoped_refptr<base::SequencedTaskRunner>& cache_task_runner) {
+  external_cache_->StartCache(cache_task_runner);
+  if (store_->is_initialized()) {
+    UpdateExtensionListFromStore();
+  }
+}
+
+void DeviceLocalAccountPolicyBroker::StopCache(base::OnceClosure callback) {
+  external_cache_->StopCache(std::move(callback));
+}
+
+bool DeviceLocalAccountPolicyBroker::IsCacheRunning() const {
+  return external_cache_->IsCacheRunning();
+}
+
+void DeviceLocalAccountPolicyBroker::UpdateExtensionListFromStore() {
+  external_cache_->UpdateExtensionsList(
+      GetPrefsFromPolicy(store_->policy_map()));
+}
+
+base::Value::Dict DeviceLocalAccountPolicyBroker::GetCachedExtensions() const {
+  return external_cache_->GetCachedExtensions();
 }
 
 }  // namespace policy

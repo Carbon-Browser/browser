@@ -1,25 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/ui/webui/autofill_and_password_manager_internals/internals_ui_handler.h"
+#import "ios/chrome/browser/ui/webui/autofill_and_password_manager_internals/internals_ui_handler.h"
 
-#include "components/autofill/core/browser/logging/log_router.h"
-#include "components/grit/dev_ui_components_resources.h"
-#include "components/version_info/version_info.h"
-#include "components/version_ui/version_handler_helper.h"
-#include "components/version_ui/version_ui_constants.h"
-#import "ios/chrome/browser/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#import "components/autofill/core/browser/logging/log_router.h"
+#import "components/grit/dev_ui_components_resources.h"
+#import "components/version_info/version_info.h"
+#import "components/version_ui/version_handler_helper.h"
+#import "components/version_ui/version_ui_constants.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/common/channel_info.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/webui/web_ui_ios.h"
 #import "ios/web/public/webui/web_ui_ios_data_source.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using autofill::LogRouter;
 
@@ -34,13 +30,15 @@ web::WebUIIOSDataSource* CreateInternalsHTMLSource(
                           IDR_AUTOFILL_AND_PASSWORD_MANAGER_INTERNALS_JS);
   source->SetDefaultResource(IDR_AUTOFILL_AND_PASSWORD_MANAGER_INTERNALS_HTML);
   // Data strings:
-  source->AddString(version_ui::kVersion, version_info::GetVersionNumber());
+  source->AddString(version_ui::kVersion,
+                    std::string(version_info::GetVersionNumber()));
   source->AddString(version_ui::kOfficial, version_info::IsOfficialBuild()
                                                ? "official"
                                                : "Developer build");
   source->AddString(version_ui::kVersionModifier,
-                    GetChannelString(GetChannel()));
-  source->AddString(version_ui::kCL, version_info::GetLastChange());
+                    std::string(GetChannelString(GetChannel())));
+  source->AddString(version_ui::kCL,
+                    std::string(version_info::GetLastChange()));
   source->AddString(version_ui::kUserAgent, web::GetWebClient()->GetUserAgent(
                                                 web::UserAgentType::MOBILE));
   source->AddString("app_locale",
@@ -67,20 +65,20 @@ void InternalsUIHandler::RegisterMessages() {
 void InternalsUIHandler::OnLoaded(const base::Value::List& args) {
   base::Value load_event(call_on_load_);
   base::Value empty;
-  web_ui()->CallJavascriptFunction("cr.webUIListenerCallback",
-                                   {&load_event, &empty});
+  base::ValueView load_args[] = {load_event, empty};
+  web_ui()->CallJavascriptFunction("cr.webUIListenerCallback", load_args);
 
   ChromeBrowserState* browser_state =
       ChromeBrowserState::FromWebUIIOS(web_ui());
   base::Value is_incognito(browser_state->IsOffTheRecord());
   base::Value incognito_event("notify-about-incognito");
-  web_ui()->CallJavascriptFunction("cr.webUIListenerCallback",
-                                   {&incognito_event, &is_incognito});
+  base::ValueView incognito_args[] = {incognito_event, is_incognito};
+  web_ui()->CallJavascriptFunction("cr.webUIListenerCallback", incognito_args);
 
   base::Value variations_event("notify-about-variations");
-  base::Value variations_list = version_ui::GetVariationsList();
-  web_ui()->CallJavascriptFunction("cr.webUIListenerCallback",
-                                   {&variations_event, &variations_list});
+  base::Value::List variations_list = version_ui::GetVariationsList();
+  base::ValueView variations_args[] = {variations_event, variations_list};
+  web_ui()->CallJavascriptFunction("cr.webUIListenerCallback", variations_args);
   StartSubscription();
 }
 
@@ -104,13 +102,13 @@ void InternalsUIHandler::EndSubscription() {
     log_router->UnregisterReceiver(this);
 }
 
-void InternalsUIHandler::LogEntry(const base::Value& entry) {
-  if (!registered_with_log_router_ || entry.is_none())
+void InternalsUIHandler::LogEntry(const base::Value::Dict& entry) {
+  if (!registered_with_log_router_)
     return;
 
   base::Value log_event("add-structured-log");
-  web_ui()->CallJavascriptFunction("cr.webUIListenerCallback",
-                                   {&log_event, &entry});
+  base::ValueView args[] = {log_event, entry};
+  web_ui()->CallJavascriptFunction("cr.webUIListenerCallback", args);
 }
 
 }  //  namespace autofill

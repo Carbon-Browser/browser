@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,10 +31,8 @@ void TestStartupRuleExists(const BackgroundTracingConfigImpl& config,
       BackgroundStartupTracingObserver::FindStartupRuleInConfig(config);
   if (exists) {
     ASSERT_TRUE(rule);
-    EXPECT_EQ(BackgroundTracingConfigImpl::CategoryPreset::BENCHMARK_STARTUP,
-              rule->category_preset());
-    EXPECT_EQ(30, rule->GetTraceDelay());
-    EXPECT_FALSE(rule->stop_tracing_on_repeated_reactive());
+    EXPECT_EQ("org.chromium.background_tracing.startup", rule->rule_id());
+    EXPECT_EQ(base::Seconds(30), rule->GetTraceDelay());
   } else {
     EXPECT_FALSE(rule);
   }
@@ -90,16 +88,15 @@ TEST(BackgroundStartupTracingObserverTest, IncludeStartupConfigIfNeeded) {
 
   // A custom config without preference set should not set preference and keep
   // config same.
-  base::Value rules_dict(base::Value::Type::DICTIONARY);
-  rules_dict.SetStringKey("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED");
-  rules_dict.SetStringKey("trigger_name", "test");
-  base::Value dict(base::Value::Type::DICTIONARY);
-  base::Value rules_list(base::Value::Type::LIST);
-  rules_list.Append(std::move(rules_dict));
-  dict.SetKey("configs", std::move(rules_list));
-  dict.SetStringKey("custom_categories",
-                    tracing::TraceStartupConfig::kDefaultStartupCategories);
-  config_impl = BackgroundTracingConfigImpl::ReactiveFromDict(dict);
+  config_impl = BackgroundTracingConfigImpl::ReactiveFromDict(
+      base::Value::Dict()
+          .Set("configs",
+               base::Value::List().Append(
+                   base::Value::Dict()
+                       .Set("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED")
+                       .Set("trigger_name", "test")))
+          .Set("custom_categories",
+               tracing::TraceStartupConfig::kDefaultStartupCategories));
   ASSERT_TRUE(config_impl);
 
   preferences->SetBackgroundStartupTracingEnabled(false);

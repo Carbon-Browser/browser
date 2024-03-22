@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,14 +40,14 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
   void SetReadyState(const String& ready_state) { ready_state_ = ready_state; }
 
   MediaTrackCapabilities* getCapabilities() const override {
-    return capabilities_;
+    return capabilities_.Get();
   }
   void SetCapabilities(MediaTrackCapabilities* capabilities) {
     capabilities_ = capabilities;
   }
 
   MediaTrackConstraints* getConstraints() const override {
-    return constraints_;
+    return constraints_.Get();
   }
   void SetConstraints(MediaTrackConstraints* constraints) {
     constraints_ = constraints;
@@ -62,10 +62,12 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
     applyConstraintsResolver(resolver, constraints);
   }
 
-  MediaTrackSettings* getSettings() const override { return settings_; }
+  MediaTrackSettings* getSettings() const override { return settings_.Get(); }
   void SetSettings(MediaTrackSettings* settings) { settings_ = settings; }
 
-  CaptureHandle* getCaptureHandle() const override { return capture_handle_; }
+  CaptureHandle* getCaptureHandle() const override {
+    return capture_handle_.Get();
+  }
   void SetCaptureHandle(CaptureHandle* capture_handle) {
     capture_handle_ = capture_handle;
   }
@@ -77,7 +79,7 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
     ready_state_enum_ = ready_state_enum;
   }
 
-  MediaStreamComponent* Component() const override { return component_; }
+  MediaStreamComponent* Component() const override { return component_.Get(); }
   void SetComponent(MediaStreamComponent* component) { component_ = component; }
 
   bool Ended() const override { return ended_; }
@@ -85,8 +87,10 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
 
   const AtomicString& InterfaceName() const override;
 
-  ExecutionContext* GetExecutionContext() const override { return context_; };
-  void SetExecutionContext(ExecutionContext* context) { context_ = context; };
+  ExecutionContext* GetExecutionContext() const override {
+    return context_.Get();
+  }
+  void SetExecutionContext(ExecutionContext* context) { context_ = context; }
 
   bool HasPendingActivity() const override { return false; }
 
@@ -97,28 +101,34 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
 
   ImageCapture* GetImageCapture() override { return nullptr; }
 
-  absl::optional<base::UnguessableToken> serializable_session_id()
-      const override {
-    return serializable_session_id_;
+  absl::optional<const MediaStreamDevice> device() const override {
+    return device_;
   }
-  void SetSerializableSessionId(
-      absl::optional<base::UnguessableToken> serializable_session_id) {
-    serializable_session_id_ = serializable_session_id;
-  }
+  void SetDevice(const MediaStreamDevice& device) { device_ = device; }
 
   MOCK_METHOD1(stopTrack, void(ExecutionContext*));
-  MOCK_METHOD1(clone, MediaStreamTrack*(ScriptState*));
+  MOCK_METHOD1(clone, MediaStreamTrack*(ExecutionContext*));
+  MOCK_METHOD0(stats, MediaStreamTrackVideoStats*());
   MOCK_METHOD2(applyConstraintsScriptState,
                ScriptPromise(ScriptState*, const MediaTrackConstraints*));
   MOCK_METHOD2(applyConstraintsResolver,
                void(ScriptPromiseResolver*, const MediaTrackConstraints*));
+  MOCK_METHOD1(SetInitialConstraints, void(const MediaConstraints&));
   MOCK_METHOD1(SetConstraints, void(const MediaConstraints&));
   MOCK_METHOD1(RegisterMediaStream, void(MediaStream*));
   MOCK_METHOD1(UnregisterMediaStream, void(MediaStream*));
   MOCK_METHOD2(AddedEventListener,
                void(const AtomicString&, RegisteredEventListener&));
+  MOCK_METHOD1(BeingTransferred, void(const base::UnguessableToken&));
+  MOCK_CONST_METHOD1(TransferAllowed, bool(String&));
 
 #if !BUILDFLAG(IS_ANDROID)
+  MOCK_METHOD2(SendWheel,
+               void(CapturedWheelAction*,
+                    base::OnceCallback<void(bool, const String&)>));
+  MOCK_METHOD1(
+      GetZoomLevel,
+      void(base::OnceCallback<void(absl::optional<int>, const String&)>));
   MOCK_METHOD0(CloseFocusWindowOfOpportunity, void());
 #endif
 
@@ -149,7 +159,7 @@ class MockMediaStreamTrack : public blink::MediaStreamTrack {
   MediaStreamSource::ReadyState ready_state_enum_;
   Member<MediaStreamComponent> component_;
   bool ended_;
-  absl::optional<base::UnguessableToken> serializable_session_id_;
+  absl::optional<MediaStreamDevice> device_;
   WeakMember<ExecutionContext> context_;
 };
 

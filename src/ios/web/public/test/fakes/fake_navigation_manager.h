@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_PUBLIC_TEST_FAKES_FAKE_NAVIGATION_MANAGER_H_
 #define IOS_WEB_PUBLIC_TEST_FAKES_FAKE_NAVIGATION_MANAGER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #include "ui/base/page_transition_types.h"
@@ -66,12 +66,15 @@ class FakeNavigationManager : public NavigationManager {
   // GetItemAtIndex(), and GetCurrentItemIndex().
   void AddItem(const GURL& url, ui::PageTransition transition);
 
-  // Sets the index to be returned by GetLastCommittedItemIndex(). |index| must
+  // Sets the index to be returned by GetLastCommittedItemIndex(). `index` must
   // be either -1 or between 0 and GetItemCount()-1, inclusively.
   void SetLastCommittedItemIndex(const int index);
 
   // Sets the index to be returned by GetBrowserState().
   void SetBrowserState(web::BrowserState* browser_state);
+
+  // Sets whether a restore session is in progress.
+  void SetIsRestoreSessionInProgress(bool in_progress);
 
   // Returns whether LoadURLWithParams has been called.
   bool LoadURLWithParamsWasCalled();
@@ -91,18 +94,19 @@ class FakeNavigationManager : public NavigationManager {
  private:
   // A list of items constructed by calling AddItem().
   std::vector<std::unique_ptr<NavigationItem>> items_;
-  int items_index_;
+  int items_index_ = -1;
   // Individual backing instance variables for Set* test set up methods.
-  NavigationItem* pending_item_;
-  int pending_item_index_;
-  NavigationItem* last_committed_item_;
-  NavigationItem* visible_item_;
-  web::BrowserState* browser_state_;
-  bool load_url_with_params_was_called_;
-  bool load_if_necessary_was_called_;
-  bool reload_was_called_;
-  bool request_desktop_site_was_called_;
-  bool request_mobile_site_was_called_;
+  NavigationItem* pending_item_ = nullptr;
+  int pending_item_index_ = -1;
+  NavigationItem* last_committed_item_ = nullptr;
+  NavigationItem* visible_item_ = nullptr;
+  web::BrowserState* browser_state_ = nullptr;
+  bool load_url_with_params_was_called_ = false;
+  bool load_if_necessary_was_called_ = false;
+  bool reload_was_called_ = false;
+  bool request_desktop_site_was_called_ = false;
+  bool request_mobile_site_was_called_ = false;
+  bool restore_session_in_progress_ = false;
 };
 
 }  // namespace web

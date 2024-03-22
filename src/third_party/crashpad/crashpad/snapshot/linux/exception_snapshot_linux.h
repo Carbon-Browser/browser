@@ -1,4 +1,4 @@
-// Copyright 2017 The Crashpad Authors. All rights reserved.
+// Copyright 2017 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,6 +89,8 @@ class ExceptionSnapshotLinux final : public ExceptionSnapshot {
 #elif defined(ARCH_CPU_MIPS_FAMILY)
     CPUContextMIPS mipsel;
     CPUContextMIPS64 mips64;
+#elif defined(ARCH_CPU_RISCV64)
+    CPUContextRISCV64 riscv64;
 #endif
   } context_union_;
   CPUContext context_;

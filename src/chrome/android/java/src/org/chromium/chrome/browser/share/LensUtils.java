@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,13 @@ import android.content.Context;
 import android.os.Build;
 import android.text.TextUtils;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.IntentHandler;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.gsa.GSAState;
-import org.chromium.chrome.browser.lens.LensController;
 import org.chromium.components.externalauth.ExternalAuthUtils;
 
-/**
- * This class provides utilities for intenting into Google Lens.
- */
+/** This class provides utilities for intenting into Google Lens. */
 // TODO(crbug/1157496): Consolidate param-checks into a single function.
 public class LensUtils {
     private static final String MIN_AGSA_VERSION_FEATURE_PARAM_NAME = "minAgsaVersionName";
@@ -25,11 +23,10 @@ public class LensUtils {
     private static final String DISABLE_ON_INCOGNITO_PARAM_NAME = "disableOnIncognito";
     private static final String ORDER_SHARE_IMAGE_BEFORE_LENS_PARAM_NAME =
             "orderShareImageBeforeLens";
+
     private static final String MIN_AGSA_VERSION_NAME_FOR_LENS_POSTCAPTURE = "10.65";
 
-    /**
-     * See function for details.
-     */
+    /** See function for details. */
     private static boolean sFakePassableLensEnvironmentForTesting;
 
     /*
@@ -40,6 +37,7 @@ public class LensUtils {
      */
     public static void setFakePassableLensEnvironmentForTesting(final boolean shouldFake) {
         sFakePassableLensEnvironmentForTesting = shouldFake;
+        ResettersForTesting.register(() -> sFakePassableLensEnvironmentForTesting = false);
     }
 
     /**
@@ -51,13 +49,13 @@ public class LensUtils {
      *         available.
      */
     public static String getLensActivityVersionNameIfAvailable(final Context context) {
-        if (Boolean.TRUE.equals(sFakePassableLensEnvironmentForTesting)) {
+        if (sFakePassableLensEnvironmentForTesting) {
             return MIN_AGSA_VERSION_NAME_FOR_LENS_POSTCAPTURE;
         } else {
             if (context == null) {
                 return "";
             }
-            String agsaVersion = GSAState.getInstance(context).getAgsaVersionName();
+            String agsaVersion = GSAState.getInstance().getAgsaVersionName();
             if (agsaVersion == null) {
                 return "";
             } else {
@@ -121,44 +119,20 @@ public class LensUtils {
         return externalAuthUtils.isGoogleSigned(IntentHandler.PACKAGE_GSA);
     }
 
-    /**
-     * Start an early Lens AGSA connection if feature parameter is enabled and client is not
-     * incognito. Eligibity checks happen in LensController.
-     *
-     * @param isIncognito Whether the client is incognito
-     */
-    public static void startLensConnectionIfNecessary(boolean isIncognito) {
-        // TODO(crbug/1157543): Pass isIncognito through to LensController.
-        if (!isIncognito) {
-            LensController.getInstance().startLensConnection();
-        }
-    }
-
-    /**
-     * Terminate an early Lens AGSA connection if feature parameter is enabled and client is not
-     * incognito. Eligibity checks happen in LensController.
-     *
-     * @param isIncognito Whether the client is incognito
-     */
-    public static void terminateLensConnectionsIfNecessary(boolean isIncognito) {
-        // TODO(crbug/1157543): Pass isIncognito through to LensController.
-        if (!isIncognito) {
-            LensController.getInstance().terminateLensConnections();
-        }
-    }
-
     public static boolean isGoogleLensFeatureEnabled(boolean isIncognito) {
         return ChromeFeatureList.isEnabled(ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS)
                 && !(isIncognito
                         && ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
                                 ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS,
-                                DISABLE_ON_INCOGNITO_PARAM_NAME, true));
+                                DISABLE_ON_INCOGNITO_PARAM_NAME,
+                                true));
     }
 
     public static boolean isGoogleLensFeatureEnabledOnTablet() {
         return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS, ENABLE_ON_TABLET_PARAM_NAME,
-                false);
+                ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS,
+                ENABLE_ON_TABLET_PARAM_NAME,
+                true);
     }
 
     /**
@@ -169,12 +143,12 @@ public class LensUtils {
     public static boolean orderShareImageBeforeLens() {
         return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
                 ChromeFeatureList.CONTEXT_MENU_GOOGLE_LENS_CHIP,
-                ORDER_SHARE_IMAGE_BEFORE_LENS_PARAM_NAME, false);
+                ORDER_SHARE_IMAGE_BEFORE_LENS_PARAM_NAME,
+                false);
     }
 
     public static boolean shouldLogUkmForLensContextMenuFeatures() {
         return shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS)
-                || shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_SHOP_WITH_GOOGLE_LENS)
                 || shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_GOOGLE_LENS_CHIP)
                 || shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_TRANSLATE_WITH_GOOGLE_LENS);
     }

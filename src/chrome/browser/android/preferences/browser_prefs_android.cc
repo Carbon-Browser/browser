@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,11 @@ void RegisterPrefs(PrefRegistrySimple* registry) {
 
 void RegisterUserProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   NotificationPlatformBridgeAndroid::RegisterProfilePrefs(registry);
-  // TODO(shuyng): Use PrefRegistrySimple for RDS prefs registration.
   registry->RegisterBooleanPref(prefs::kDesktopSitePeripheralSettingEnabled,
                                 false);
   registry->RegisterBooleanPref(prefs::kDesktopSiteDisplaySettingEnabled,
                                 false);
+  registry->RegisterBooleanPref(prefs::kDesktopSiteWindowSettingEnabled, false);
 }
 
 }  // namespace android

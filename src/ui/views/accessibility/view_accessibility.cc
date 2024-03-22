@@ -1,24 +1,24 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/accessibility/view_accessibility.h"
 
-#include <algorithm>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_tree_manager_map.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
 #include "ui/base/buildflags.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
+#include "ui/views/accessibility/atomic_view_ax_tree_manager.h"
 #include "ui/views/accessibility/views_ax_tree_manager.h"
 #include "ui/views/accessibility/widget_ax_tree_id_map.h"
 #include "ui/views/view.h"
@@ -60,10 +60,7 @@ std::unique_ptr<ViewAccessibility> ViewAccessibility::Create(View* view) {
 #endif
 
 ViewAccessibility::ViewAccessibility(View* view)
-    : view_(view),
-      focused_virtual_child_(nullptr),
-      is_leaf_(false),
-      is_ignored_(false) {
+    : view_(view), focused_virtual_child_(nullptr) {
 #if defined(USE_AURA) && !BUILDFLAG(IS_CHROMEOS_ASH)
   if (features::IsAccessibilityTreeForViewsEnabled()) {
     Widget* widget = view_->GetWidget();
@@ -100,7 +97,8 @@ void ViewAccessibility::AddVirtualChildViewAt(
                                                   "AXVirtualView parent. Call "
                                                   "RemoveChildView first.";
   virtual_view->set_parent_view(this);
-  auto insert_iterator = virtual_children_.begin() + index;
+  auto insert_iterator =
+      virtual_children_.begin() + static_cast<ptrdiff_t>(index);
   virtual_children_.insert(insert_iterator, std::move(virtual_view));
 }
 
@@ -113,7 +111,8 @@ std::unique_ptr<AXVirtualView> ViewAccessibility::RemoveVirtualChildView(
 
   std::unique_ptr<AXVirtualView> child =
       std::move(virtual_children_[cur_index.value()]);
-  virtual_children_.erase(virtual_children_.begin() + cur_index.value());
+  virtual_children_.erase(virtual_children_.begin() +
+                          static_cast<ptrdiff_t>(cur_index.value()));
   child->set_parent_view(nullptr);
   child->UnsetPopulateDataCallback();
   if (focused_virtual_child_ && child->Contains(focused_virtual_child_))
@@ -140,11 +139,8 @@ bool ViewAccessibility::Contains(const AXVirtualView* virtual_view) const {
 absl::optional<size_t> ViewAccessibility::GetIndexOf(
     const AXVirtualView* virtual_view) const {
   DCHECK(virtual_view);
-  const auto iter =
-      std::find_if(virtual_children_.begin(), virtual_children_.end(),
-                   [virtual_view](const auto& child) {
-                     return child.get() == virtual_view;
-                   });
+  const auto iter = base::ranges::find(virtual_children_, virtual_view,
+                                       &std::unique_ptr<AXVirtualView>::get);
   return iter != virtual_children_.end()
              ? absl::make_optional(
                    static_cast<size_t>(iter - virtual_children_.begin()))
@@ -198,15 +194,22 @@ void ViewAccessibility::GetAccessibleNodeData(ui::AXNodeData* data) const {
     data->AddStringAttribute(ax::mojom::StringAttribute::kRole, "alertdialog");
   }
 
-  if (custom_data_.HasStringAttribute(ax::mojom::StringAttribute::kName)) {
-    data->SetName(
-        custom_data_.GetStringAttribute(ax::mojom::StringAttribute::kName));
+  std::string name;
+  if (custom_data_.GetStringAttribute(ax::mojom::StringAttribute::kName,
+                                      &name)) {
+    if (!name.empty())
+      data->SetNameChecked(name);
+    else
+      data->SetNameExplicitlyEmpty();
   }
 
-  if (custom_data_.HasStringAttribute(
-          ax::mojom::StringAttribute::kDescription)) {
-    data->SetDescription(custom_data_.GetStringAttribute(
-        ax::mojom::StringAttribute::kDescription));
+  std::string description;
+  if (custom_data_.GetStringAttribute(ax::mojom::StringAttribute::kDescription,
+                                      &description)) {
+    if (!description.empty())
+      data->SetDescription(description);
+    else
+      data->SetDescriptionExplicitlyEmpty();
   }
 
   if (custom_data_.GetHasPopup() != ax::mojom::HasPopup::kFalse)
@@ -226,6 +229,9 @@ void ViewAccessibility::GetAccessibleNodeData(ui::AXNodeData* data) const {
   static constexpr ax::mojom::IntListAttribute kOverridableIntListAttributes[]{
       ax::mojom::IntListAttribute::kLabelledbyIds,
       ax::mojom::IntListAttribute::kDescribedbyIds,
+      ax::mojom::IntListAttribute::kCharacterOffsets,
+      ax::mojom::IntListAttribute::kWordStarts,
+      ax::mojom::IntListAttribute::kWordEnds,
   };
   for (auto attribute : kOverridableIntListAttributes) {
     if (custom_data_.HasIntListAttribute(attribute))
@@ -239,10 +245,16 @@ void ViewAccessibility::GetAccessibleNodeData(ui::AXNodeData* data) const {
     // accessible name. Only use the tooltip as the accessible description if
     // it's different from the name, otherwise users might be puzzled as to why
     // their screen reader is announcing the same thing twice.
-    if (tooltip !=
-        data->GetString16Attribute(ax::mojom::StringAttribute::kName)) {
+    if (!tooltip.empty() && tooltip != data->GetString16Attribute(
+                                           ax::mojom::StringAttribute::kName)) {
       data->SetDescription(base::UTF16ToUTF8(tooltip));
     }
+  }
+
+  if (custom_data_.HasBoolAttribute(ax::mojom::BoolAttribute::kSelected)) {
+    data->AddBoolAttribute(
+        ax::mojom::BoolAttribute::kSelected,
+        custom_data_.GetBoolAttribute(ax::mojom::BoolAttribute::kSelected));
   }
 
   data->relative_bounds.bounds = gfx::RectF(view_->GetBoundsInScreen());
@@ -359,8 +371,18 @@ void ViewAccessibility::OverrideName(const std::string& name,
             name_from == ax::mojom::NameFrom::kAttributeExplicitlyEmpty)
       << "If the name is being removed to improve the user experience, "
          "|name_from| should be set to |kAttributeExplicitlyEmpty|.";
-  custom_data_.SetName(name);
+
+  // |AXNodeData::SetName| expects a valid role. Some Views call |OverrideRole|
+  // prior to overriding the name. For those that don't, see if we can get the
+  // default role from the View.
+  if (custom_data_.role == ax::mojom::Role::kUnknown) {
+    ui::AXNodeData data;
+    view_->GetAccessibleNodeData(&data);
+    custom_data_.role = data.role;
+  }
+
   custom_data_.SetNameFrom(name_from);
+  custom_data_.SetNameChecked(name);
 }
 
 void ViewAccessibility::OverrideName(const std::u16string& name,
@@ -388,17 +410,22 @@ void ViewAccessibility::OverrideLabelledBy(
   // the two sources.
   ui::AXNodeData label_data;
   const_cast<View*>(labelled_by_view)->GetAccessibleNodeData(&label_data);
-  custom_data_.SetName(
+  const std::string& label =
       label_data.GetStringAttribute(ax::mojom::StringAttribute::kName).empty()
           ? labelled_by_view->GetViewAccessibility()
                 .custom_data_.GetStringAttribute(
                     ax::mojom::StringAttribute::kName)
-          : label_data.GetStringAttribute(ax::mojom::StringAttribute::kName));
+          : label_data.GetStringAttribute(ax::mojom::StringAttribute::kName);
+
+  // |OverrideName| includes logic to populate custom_data_.role with the
+  // View's default role in cases where |OverrideRole| was not called (yet).
+  // This ensures |AXNodeData::SetName| is not called with |Role::kUnknown|.
+  OverrideName(label, name_from);
+
   int32_t labelled_by_id =
       labelled_by_view->GetViewAccessibility().GetUniqueId().Get();
   custom_data_.AddIntListAttribute(ax::mojom::IntListAttribute::kLabelledbyIds,
                                    {labelled_by_id});
-  custom_data_.SetNameFrom(name_from);
 }
 
 void ViewAccessibility::OverrideDescription(
@@ -409,49 +436,14 @@ void ViewAccessibility::OverrideDescription(
       description_from == ax::mojom::DescriptionFrom::kAttributeExplicitlyEmpty)
       << "If the description is being removed to improve the user experience, "
          "|description_from| should be set to |kAttributeExplicitlyEmpty|.";
-  custom_data_.SetDescription(description);
   custom_data_.SetDescriptionFrom(description_from);
+  custom_data_.SetDescription(description);
 }
 
 void ViewAccessibility::OverrideDescription(
     const std::u16string& description,
     const ax::mojom::DescriptionFrom description_from) {
   OverrideDescription(base::UTF16ToUTF8(description), description_from);
-}
-
-void ViewAccessibility::OverrideDescribedBy(
-    const View* described_by_view,
-    const ax::mojom::DescriptionFrom description_from) {
-  DCHECK_NE(described_by_view, view_);
-  // |OverrideDescription| might have been used before |OverrideDescribedBy|.
-  // We don't want to keep an old/incorrect description. In addition, some ATs
-  // might expect the description to be provided by us from the describing View.
-  // So try to get the name from the describing View and use the result as the
-  // description string.
-  //
-  // |ViewAccessibility::GetAccessibleNodeData| gets properties from: 1) The
-  // View's implementation of |View::GetAccessibleNodeData| and 2) the
-  // custom_data_ set via ViewAccessibility's various Override functions.
-  // HOWEVER, it returns early prior to checking either of those sources if the
-  // Widget does not exist or is closed. Thus given a View whose Widget is about
-  // to be created, we cannot use |ViewAccessibility::GetAccessibleNodeData| to
-  // obtain the name. If |OverrideDescribedBy| is being called, presumably the
-  // labelling View is not in the process of being destroyed. So manually check
-  // the two sources.
-  ui::AXNodeData data;
-  const_cast<View*>(described_by_view)->GetAccessibleNodeData(&data);
-  custom_data_.SetDescription(
-      data.GetStringAttribute(ax::mojom::StringAttribute::kName).empty()
-          ? described_by_view->GetViewAccessibility()
-                .custom_data_.GetStringAttribute(
-                    ax::mojom::StringAttribute::kName)
-          : data.GetStringAttribute(ax::mojom::StringAttribute::kName));
-
-  int32_t described_by_id =
-      described_by_view->GetViewAccessibility().GetUniqueId().Get();
-  custom_data_.AddIntListAttribute(ax::mojom::IntListAttribute::kDescribedbyIds,
-                                   {described_by_id});
-  custom_data_.SetDescriptionFrom(description_from);
 }
 
 void ViewAccessibility::OverrideNativeWindowTitle(const std::string& title) {
@@ -527,6 +519,15 @@ void ViewAccessibility::OverridePosInSet(int pos_in_set, int set_size) {
   custom_data_.AddIntAttribute(ax::mojom::IntAttribute::kSetSize, set_size);
 }
 
+void ViewAccessibility::ClearPosInSetOverride() {
+  custom_data_.RemoveIntAttribute(ax::mojom::IntAttribute::kPosInSet);
+  custom_data_.RemoveIntAttribute(ax::mojom::IntAttribute::kSetSize);
+}
+
+void ViewAccessibility::OverrideIsSelected(bool selected) {
+  custom_data_.AddBoolAttribute(ax::mojom::BoolAttribute::kSelected, selected);
+}
+
 void ViewAccessibility::OverrideNextFocus(Widget* widget) {
   if (widget)
     next_focus_ = widget->GetWeakPtr();
@@ -541,11 +542,11 @@ void ViewAccessibility::OverridePreviousFocus(Widget* widget) {
     previous_focus_ = nullptr;
 }
 
-Widget* ViewAccessibility::GetNextFocus() const {
+Widget* ViewAccessibility::GetNextWindowFocus() const {
   return next_focus_.get();
 }
 
-Widget* ViewAccessibility::GetPreviousFocus() const {
+Widget* ViewAccessibility::GetPreviousWindowFocus() const {
   return previous_focus_.get();
 }
 
@@ -560,25 +561,66 @@ ui::AXTreeID ViewAccessibility::GetChildTreeID() const {
   return child_tree_id_ ? *child_tree_id_ : ui::AXTreeIDUnknown();
 }
 
+void ViewAccessibility::OverrideCharacterOffsets(
+    const std::vector<int32_t>& offsets) {
+  custom_data_.AddIntListAttribute(
+      ax::mojom::IntListAttribute::kCharacterOffsets, offsets);
+}
+
+void ViewAccessibility::OverrideWordStarts(
+    const std::vector<int32_t>& offsets) {
+  custom_data_.AddIntListAttribute(ax::mojom::IntListAttribute::kWordStarts,
+                                   offsets);
+}
+
+void ViewAccessibility::OverrideWordEnds(const std::vector<int32_t>& offsets) {
+  custom_data_.AddIntListAttribute(ax::mojom::IntListAttribute::kWordEnds,
+                                   offsets);
+}
+
+void ViewAccessibility::ClearTextOffsets() {
+  custom_data_.RemoveIntListAttribute(
+      ax::mojom::IntListAttribute::kCharacterOffsets);
+  custom_data_.RemoveIntListAttribute(ax::mojom::IntListAttribute::kWordStarts);
+  custom_data_.RemoveIntListAttribute(ax::mojom::IntListAttribute::kWordEnds);
+}
+
 gfx::NativeViewAccessible ViewAccessibility::GetNativeObject() const {
   return nullptr;
 }
 
 void ViewAccessibility::NotifyAccessibilityEvent(ax::mojom::Event event_type) {
+  Widget* const widget = view_->GetWidget();
+  if (!widget || widget->IsClosed()) {
+    return;
+  }
   // Used for unit testing.
   if (accessibility_events_callback_)
     accessibility_events_callback_.Run(nullptr, event_type);
 }
 
+void ViewAccessibility::AnnounceAlert(const std::u16string& text) {
+  if (auto* const widget = view_->GetWidget()) {
+    if (auto* const root_view =
+            static_cast<internal::RootView*>(widget->GetRootView())) {
+      root_view->AnnounceTextAs(text,
+                                ui::AXPlatformNode::AnnouncementType::kAlert);
+    }
+  }
+}
+
+void ViewAccessibility::AnnouncePolitely(const std::u16string& text) {
+  if (auto* const widget = view_->GetWidget()) {
+    if (auto* const root_view =
+            static_cast<internal::RootView*>(widget->GetRootView())) {
+      root_view->AnnounceTextAs(text,
+                                ui::AXPlatformNode::AnnouncementType::kPolite);
+    }
+  }
+}
+
 void ViewAccessibility::AnnounceText(const std::u16string& text) {
-  Widget* const widget = view_->GetWidget();
-  if (!widget)
-    return;
-  auto* const root_view =
-      static_cast<internal::RootView*>(widget->GetRootView());
-  if (!root_view)
-    return;
-  root_view->AnnounceText(text);
+  AnnounceAlert(text);
 }
 
 const ui::AXUniqueId& ViewAccessibility::GetUniqueId() const {
@@ -603,10 +645,15 @@ ViewsAXTreeManager* ViewAccessibility::AXTreeManager() const {
         WidgetAXTreeIDMap::GetInstance().GetWidgetTreeID(widget);
     DCHECK_NE(tree_id, ui::AXTreeIDUnknown());
     manager = static_cast<views::ViewsAXTreeManager*>(
-        ui::AXTreeManagerMap::GetInstance().GetManager(tree_id));
+        ui::AXTreeManager::FromID(tree_id));
   }
 #endif
   return manager;
+}
+
+AtomicViewAXTreeManager*
+ViewAccessibility::GetAtomicViewAXTreeManagerForTesting() const {
+  return nullptr;
 }
 
 gfx::NativeViewAccessible ViewAccessibility::GetFocusedDescendant() {

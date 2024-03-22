@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,14 @@
   flags_ui::FeatureEntry::FEATURE_WITH_PARAMS_VALUE, {                    \
     .feature = { &feature_entry, feature_variations, feature_trial }      \
   }
+#define STRING_VALUE_TYPE(command_line_switch, switch_value)            \
+  flags_ui::FeatureEntry::STRING_VALUE, {                               \
+    .switches = { command_line_switch, switch_value, nullptr, nullptr } \
+  }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+// The platform feature name may need to satisfy prefix requirement if
+// ENABLE_BANNED_BASE_FEATURE_PREFIX enabled.
 #define PLATFORM_FEATURE_NAME_TYPE(name)                 \
   flags_ui::FeatureEntry::PLATFORM_FEATURE_NAME_VALUE, { \
     .platform_feature_name = { name, {}, nullptr }       \

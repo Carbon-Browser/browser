@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "components/performance_manager/persistence/site_data/site_data_impl.h"
-#include "components/performance_manager/persistence/site_data/unittest_utils.h"
+#include "components/performance_manager/test_support/persistence/unittest_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -28,7 +28,7 @@ class MockSiteDataStore : public testing::NoopSiteDataStore {
   MockSiteDataStore(const MockSiteDataStore&) = delete;
   MockSiteDataStore& operator=(const MockSiteDataStore&) = delete;
 
-  ~MockSiteDataStore() = default;
+  ~MockSiteDataStore() override = default;
 
   // Note: As move-only parameters (e.g. OnceCallback) aren't supported by mock
   // methods, add On... methods to pass a non-const reference to OnceCallback.

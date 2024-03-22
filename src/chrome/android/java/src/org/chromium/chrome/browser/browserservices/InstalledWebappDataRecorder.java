@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,13 +70,18 @@ public class InstalledWebappDataRecorder {
             String appLabel = mPackageManager.getApplicationLabel(ai).toString();
 
             if (TextUtils.isEmpty(appLabel) || ai.uid == -1) {
-                Log.e(TAG, "Invalid details for client package %s: %d, %s", packageName, ai.uid,
+                Log.e(
+                        TAG,
+                        "Invalid details for client package %s: %d, %s",
+                        packageName,
+                        ai.uid,
                         appLabel);
                 return;
             }
 
-            String domain = UrlUtilities.getDomainAndRegistry(
-                    origin.toString(), true /*includePrivateRegistries*/);
+            String domain =
+                    UrlUtilities.getDomainAndRegistry(
+                            origin.toString(), /* includePrivateRegistries= */ true);
 
             Log.d(TAG, "Registering %d (%s) for %s", ai.uid, appLabel, origin);
             mDataRegister.registerPackageForOrigin(ai.uid, appLabel, packageName, domain, origin);

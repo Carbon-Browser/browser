@@ -1,12 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_BASE_RESOURCE_MOCK_RESOURCE_BUNDLE_DELEGATE_H_
 #define UI_BASE_RESOURCE_MOCK_RESOURCE_BUNDLE_DELEGATE_H_
 
+#include <string>
+
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/resource/resource_scale_factor.h"
 
 namespace ui {
 

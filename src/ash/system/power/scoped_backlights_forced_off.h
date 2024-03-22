@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define ASH_SYSTEM_POWER_SCOPED_BACKLIGHTS_FORCED_OFF_H_
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace ash {
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 
 #include "apps/browser_context_keyed_service_factories.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -19,7 +19,7 @@
 #include "components/sessions/core/session_id_generator.h"
 #include "components/storage_monitor/storage_monitor.h"
 #include "components/update_client/update_query_params.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/context_factory.h"
 #include "content/public/browser/devtools_agent_host.h"
@@ -60,14 +60,15 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/audio/audio_devices_pref_handler_impl.h"
-#include "ash/components/audio/cras_audio_handler.h"
-#include "ash/components/disks/disk_mount_manager.h"
+#include "chromeos/ash/components/audio/audio_devices_pref_handler_impl.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/components/dbus/audio/cras_audio_client.h"
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_clients.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "chromeos/ash/components/network/network_handler.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "extensions/shell/browser/shell_audio_controller_chromeos.h"
 #include "extensions/shell/browser/shell_network_controller_chromeos.h"
@@ -107,8 +108,8 @@ void ShellBrowserMainParts::PostCreateMainMessageLoop() {
   // Perform initialization of D-Bus objects here rather than in the below
   // helper classes so those classes' tests can initialize stub versions of the
   // D-Bus objects.
-  chromeos::DBusThreadManager::Initialize();
-  dbus::Bus* bus = chromeos::DBusThreadManager::Get()->GetSystemBus();
+  ash::DBusThreadManager::Initialize();
+  dbus::Bus* bus = ash::DBusThreadManager::Get()->GetSystemBus();
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
   chromeos::LacrosDBusThreadManager::Initialize();
   dbus::Bus* bus = chromeos::LacrosDBusThreadManager::Get()->GetSystemBus();
@@ -124,21 +125,23 @@ void ShellBrowserMainParts::PostCreateMainMessageLoop() {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (bus) {
+    ash::shill_clients::Initialize(bus);
     ash::hermes_clients::Initialize(bus);
     ash::CrasAudioClient::Initialize(bus);
-    chromeos::CrosDisksClient::Initialize(bus);
+    ash::CrosDisksClient::Initialize(bus);
     chromeos::PowerManagerClient::Initialize(bus);
   } else {
+    ash::shill_clients::InitializeFakes();
     ash::hermes_clients::InitializeFakes();
     ash::CrasAudioClient::InitializeFake();
-    chromeos::CrosDisksClient::InitializeFake();
+    ash::CrosDisksClient::InitializeFake();
     chromeos::PowerManagerClient::InitializeFake();
   }
 
   // Depends on CrosDisksClient.
   ash::disks::DiskMountManager::Initialize();
 
-  chromeos::NetworkHandler::Initialize();
+  ash::NetworkHandler::Initialize();
   network_controller_ = std::make_unique<ShellNetworkController>(
       base::CommandLine::ForCurrentProcess()->GetSwitchValueNative(
           switches::kAppShellPreferredNetwork));
@@ -303,15 +306,16 @@ void ShellBrowserMainParts::PostDestroyThreads() {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   network_controller_.reset();
-  chromeos::NetworkHandler::Shutdown();
+  ash::NetworkHandler::Shutdown();
   ash::disks::DiskMountManager::Shutdown();
   chromeos::PowerManagerClient::Shutdown();
-  chromeos::CrosDisksClient::Shutdown();
+  ash::CrosDisksClient::Shutdown();
   ash::CrasAudioClient::Shutdown();
+  ash::shill_clients::Shutdown();
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::DBusThreadManager::Shutdown();
+  ash::DBusThreadManager::Shutdown();
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
   chromeos::LacrosDBusThreadManager::Shutdown();
 #endif

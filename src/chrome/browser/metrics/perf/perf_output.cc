@@ -1,13 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/perf/perf_output.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/task/thread_pool.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_path.h"
@@ -16,7 +16,7 @@
 
 namespace metrics {
 
-PerfOutputCall::PerfOutputCall(chromeos::DebugDaemonClient* debug_daemon_client,
+PerfOutputCall::PerfOutputCall(ash::DebugDaemonClient* debug_daemon_client,
                                const std::vector<std::string>& quipper_args,
                                bool disable_cpu_idle,
                                DoneCallback callback)

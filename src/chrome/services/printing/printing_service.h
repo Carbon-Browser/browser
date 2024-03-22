@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,12 @@
 #include "chrome/services/printing/public/mojom/printing_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_WIN)
+namespace discardable_memory {
+class ClientDiscardableSharedMemoryManager;
+}
+#endif
 
 namespace printing {
 
@@ -40,8 +46,12 @@ class PrintingService : public mojom::PrintingService {
 #if BUILDFLAG(IS_WIN)
   void BindPdfToEmfConverterFactory(
       mojo::PendingReceiver<mojom::PdfToEmfConverterFactory> receiver) override;
-#endif
+#endif  // BUILDFLAG(IS_WIN)
 
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_WIN)
+  scoped_refptr<discardable_memory::ClientDiscardableSharedMemoryManager>
+      discardable_shared_memory_manager_;
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_WIN)
   mojo::Receiver<mojom::PrintingService> receiver_;
 };
 

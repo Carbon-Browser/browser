@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,9 @@ const base::FilePath::CharType kMachineHardwareInfoFileName[] =
 
 const base::FilePath::CharType kVpdFileName[] = FILE_PATH_LITERAL(
     "/mnt/stateful_partition/unencrypted/cache/vpd/filtered.txt");
+
+const base::FilePath::CharType kVpdStatusFileName[] = FILE_PATH_LITERAL(
+    "/mnt/stateful_partition/unencrypted/cache/vpd/status.txt");
 
 const base::FilePath::CharType kUptimeFileName[] =
     FILE_PATH_LITERAL("/proc/uptime");
@@ -66,6 +69,9 @@ const base::FilePath::CharType kPreinstalledComponents[] =
 const base::FilePath::CharType kDevicePolicyExternalDataDir[] =
     FILE_PATH_LITERAL("/var/cache/device_policy_external_data");
 
+const base::FilePath::CharType kDevicePolicyScreensaverDataDir[] =
+    FILE_PATH_LITERAL("/var/cache/managed_screensaver");
+
 bool PathProvider(int key, base::FilePath* result) {
   switch (key) {
     case FILE_DEFAULT_APP_ORDER:
@@ -76,6 +82,9 @@ bool PathProvider(int key, base::FilePath* result) {
       break;
     case FILE_VPD:
       *result = base::FilePath(kVpdFileName);
+      break;
+    case FILE_VPD_STATUS:
+      *result = base::FilePath(kVpdStatusFileName);
       break;
     case FILE_UPTIME:
       *result = base::FilePath(kUptimeFileName);
@@ -116,6 +125,10 @@ bool PathProvider(int key, base::FilePath* result) {
     case DIR_DEVICE_POLICY_EXTERNAL_DATA:
       *result = base::FilePath(kDevicePolicyExternalDataDir);
       break;
+    case DIR_DEVICE_POLICY_SCREENSAVER_DATA:
+      *result = base::FilePath(kDevicePolicyScreensaverDataDir);
+      break;
+
     default:
       return false;
   }
@@ -164,6 +177,9 @@ void RegisterStubPathOverrides(const base::FilePath& stubs_dir) {
   base::PathService::Override(
       DIR_DEVICE_POLICY_EXTERNAL_DATA,
       parent.AppendASCII("stub_device_policy_external_data"));
+  base::PathService::Override(
+      DIR_DEVICE_POLICY_SCREENSAVER_DATA,
+      parent.AppendASCII("stub_device_policy_screensaver_data"));
 }
 
 }  // namespace ash

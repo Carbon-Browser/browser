@@ -1,14 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/reporting/login_logout_reporter_test_delegate.h"
 
-#include "ash/components/login/auth/public/auth_failure.h"
-#include "ash/components/login/session/session_termination_manager.h"
-#include "base/test/scoped_feature_list.h"
+#include <string_view>
+
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/simple_test_clock.h"
-#include "base/test/task_environment.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/reporting/user_event_reporter_helper_testing.h"
@@ -16,8 +16,9 @@
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/login/auth/public/auth_failure.h"
+#include "chromeos/ash/components/login/session/session_termination_manager.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
-#include "components/policy/core/common/cloud/dm_token.h"
 #include "components/reporting/client/mock_report_queue.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_names.h"
@@ -42,39 +43,27 @@ class LoginLogoutTestHelper {
   ~LoginLogoutTestHelper() = default;
 
   void Init() {
-    PowerManagerClient::InitializeFake();
+    chromeos::PowerManagerClient::InitializeFake();
     session_termination_manager_ =
         std::make_unique<SessionTerminationManager>();
-    auto user_manager = std::make_unique<FakeChromeUserManager>();
-    user_manager_ = user_manager.get();
-    user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(user_manager));
-    scoped_feature_list_.InitAndEnableFeature(
-        LoginLogoutReporter::kEnableKioskAndGuestLoginLogoutReporting);
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
   }
 
-  void Shutdown() { PowerManagerClient::Shutdown(); }
-
-  void DisableKioskAndGuestLoginLogoutReporting() {
-    scoped_feature_list_.Reset();
-    scoped_feature_list_.InitAndDisableFeature(
-        LoginLogoutReporter::kEnableKioskAndGuestLoginLogoutReporting);
-  }
+  void Shutdown() { chromeos::PowerManagerClient::Shutdown(); }
 
   std::unique_ptr<TestingProfile> CreateProfile(user_manager::User* user) {
     TestingProfile::Builder profile_builder;
     profile_builder.SetProfileName(user->GetAccountId().GetUserEmail());
     auto profile = profile_builder.Build();
-    ProfileHelper::Get()->SetProfileToUserMappingForTesting(user);
     ProfileHelper::Get()->SetUserToProfileMappingForTesting(user,
                                                             profile.get());
-    user_manager_->LoginUser(user->GetAccountId(), true);
+    fake_user_manager_->LoginUser(user->GetAccountId(), true);
     return profile;
   }
 
   std::unique_ptr<TestingProfile> CreateRegularUserProfile() {
     AccountId account_id = AccountId::FromUserEmail(user_email);
-    auto* const user = user_manager_->AddUser(account_id);
+    auto* const user = fake_user_manager_->AddUser(account_id);
     return CreateProfile(user);
   }
 
@@ -82,12 +71,12 @@ class LoginLogoutTestHelper {
     AccountId account_id =
         AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
             "managed_guest", policy::DeviceLocalAccount::TYPE_PUBLIC_SESSION));
-    auto* const user = user_manager_->AddPublicAccountUser(account_id);
+    auto* const user = fake_user_manager_->AddPublicAccountUser(account_id);
     return CreateProfile(user);
   }
 
   std::unique_ptr<TestingProfile> CreateGuestProfile() {
-    auto* const user = user_manager_->AddGuestUser();
+    auto* const user = fake_user_manager_->AddGuestUser();
     return CreateProfile(user);
   }
 
@@ -95,7 +84,7 @@ class LoginLogoutTestHelper {
     AccountId account_id =
         AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
             "kiosk", policy::DeviceLocalAccount::TYPE_KIOSK_APP));
-    auto* const user = user_manager_->AddKioskAppUser(account_id);
+    auto* const user = fake_user_manager_->AddKioskAppUser(account_id);
     return CreateProfile(user);
   }
 
@@ -103,7 +92,7 @@ class LoginLogoutTestHelper {
     AccountId account_id =
         AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
             "arc_kiosk", policy::DeviceLocalAccount::TYPE_ARC_KIOSK_APP));
-    auto* const user = user_manager_->AddArcKioskAppUser(account_id);
+    auto* const user = fake_user_manager_->AddArcKioskAppUser(account_id);
     return CreateProfile(user);
   }
 
@@ -111,7 +100,7 @@ class LoginLogoutTestHelper {
     AccountId account_id =
         AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
             "webkiosk", policy::DeviceLocalAccount::TYPE_WEB_KIOSK_APP));
-    auto* const user = user_manager_->AddWebKioskAppUser(account_id);
+    auto* const user = fake_user_manager_->AddWebKioskAppUser(account_id);
     return CreateProfile(user);
   }
 
@@ -145,18 +134,19 @@ class LoginLogoutTestHelper {
     auto mock_queue = std::unique_ptr<::reporting::MockReportQueue,
                                       base::OnTaskRunnerDeleter>(
         new ::reporting::MockReportQueue(),
-        base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+        base::OnTaskRunnerDeleter(
+            base::SequencedTaskRunner::GetCurrentDefault()));
 
     ON_CALL(*mock_queue, AddRecord(_, ::reporting::Priority::SECURITY, _))
-        .WillByDefault([this, status](
-                           base::StringPiece record_string,
+        .WillByDefault(
+            [this, status](std::string_view record_string,
                            ::reporting::Priority event_priority,
                            ::reporting::ReportQueue::EnqueueCallback cb) {
-          ++report_count_;
-          EXPECT_TRUE(record_.ParseFromArray(record_string.data(),
-                                             record_string.size()));
-          std::move(cb).Run(status);
-        });
+              ++report_count_;
+              EXPECT_TRUE(record_.ParseFromArray(record_string.data(),
+                                                 record_string.size()));
+              std::move(cb).Run(status);
+            });
 
     auto reporter_helper =
         std::make_unique<::reporting::UserEventReporterHelperTesting>(
@@ -170,10 +160,9 @@ class LoginLogoutTestHelper {
   int GetReportCount() { return report_count_; }
 
  private:
-  FakeChromeUserManager* user_manager_;
-  std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   content::BrowserTaskEnvironment task_environment_;
-  base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<SessionTerminationManager> session_termination_manager_;
 
   LoginLogoutRecord record_;
@@ -318,34 +307,6 @@ TEST_P(LoginLogoutReporterTest, ReportUnaffiliatedLogout) {
   EXPECT_FALSE(record.has_affiliated_user());
   ASSERT_TRUE(record.has_session_type());
   EXPECT_THAT(record.session_type(), Eq(test_case.expected_session_type));
-}
-
-TEST_P(LoginLogoutReporterTest, KioskAndGuestLoginLogoutReportingDisabled) {
-  test_helper_.DisableKioskAndGuestLoginLogoutReporting();
-  const auto test_case = GetParam();
-  policy::ManagedSessionService managed_session_service;
-  auto reporter_helper = test_helper_.GetReporterHelper(
-      /*reporting_enabled=*/true,
-      /*should_report_user=*/false);
-
-  auto reporter = LoginLogoutReporter::CreateForTest(
-      std::move(reporter_helper),
-      std::make_unique<LoginLogoutReporterTestDelegate>(),
-      &managed_session_service);
-
-  auto profile = test_helper_.CreateProfileByType(test_case.user_type);
-  auto* const user = ProfileHelper::Get()->GetUserByProfile(profile.get());
-  managed_session_service.OnUserProfileLoaded(user->GetAccountId());
-  managed_session_service.OnSessionWillBeTerminated();
-
-  int expected_report_count =
-      test_case.user_type == user_manager::USER_TYPE_GUEST ||
-              test_case.user_type == user_manager::USER_TYPE_KIOSK_APP ||
-              test_case.user_type == user_manager::USER_TYPE_ARC_KIOSK_APP ||
-              test_case.user_type == user_manager::USER_TYPE_WEB_KIOSK_APP
-          ? 0
-          : 2;
-  ASSERT_THAT(test_helper_.GetReportCount(), Eq(expected_report_count));
 }
 
 TEST_P(LoginLogoutReporterTest, ReportLoginLogoutDisabled) {
@@ -587,26 +548,6 @@ TEST_F(LoginFailureReporterTest, ReportGuestLoginFailure_MissingCryptohome) {
               Eq(LoginFailureReason::MISSING_CRYPTOHOME));
 }
 
-TEST_F(LoginFailureReporterTest, GuestLoginLogoutReportingDisabled) {
-  test_helper_.DisableKioskAndGuestLoginLogoutReporting();
-
-  policy::ManagedSessionService managed_session_service;
-  auto delegate = std::make_unique<LoginLogoutReporterTestDelegate>(
-      user_manager::GuestAccountId());
-  auto reporter_helper = test_helper_.GetReporterHelper(
-      /*reporting_enabled=*/true,
-      /*should_report_user=*/false);
-
-  auto reporter = LoginLogoutReporter::CreateForTest(std::move(reporter_helper),
-                                                     std::move(delegate),
-                                                     &managed_session_service);
-
-  managed_session_service.OnAuthFailure(
-      AuthFailure(AuthFailure::MISSING_CRYPTOHOME));
-
-  ASSERT_THAT(test_helper_.GetReportCount(), Eq(0));
-}
-
 TEST_F(LoginFailureReporterTest, ReportLoginLogoutDisabled) {
   policy::ManagedSessionService managed_session_service;
   auto delegate = std::make_unique<LoginLogoutReporterTestDelegate>(
@@ -800,50 +741,6 @@ TEST_F(LoginFailureReporterTest, ReportKioskLoginFailure_ReportingDisabled) {
     test_clock.SetNow(failure_time + base::Hours(10));
     policy::ManagedSessionService managed_session_service;
     // Only |reporting_enabled| value at the time of kiosk login failure matter.
-    auto reporter_helper = test_helper_.GetReporterHelper(
-        /*reporting_enabled=*/true,
-        /*should_report_user=*/false);
-
-    auto reporter = LoginLogoutReporter::CreateForTest(
-        std::move(reporter_helper),
-        std::make_unique<LoginLogoutReporterTestDelegate>(),
-        &managed_session_service, &test_clock);
-    base::RunLoop().RunUntilIdle();
-
-    ASSERT_THAT(test_helper_.GetReportCount(), Eq(0));
-  }
-}
-
-TEST_F(LoginFailureReporterTest,
-       ReportKioskLoginFailure_KioskLoginLogoutReportingDisabled) {
-  test_helper_.DisableKioskAndGuestLoginLogoutReporting();
-
-  const base::Time failure_time = base::Time::Now();
-  // Kiosk login failure session.
-  {
-    base::SimpleTestClock test_clock;
-    test_clock.SetNow(failure_time);
-    policy::ManagedSessionService managed_session_service;
-    auto reporter_helper = test_helper_.GetReporterHelper(
-        /*reporting_enabled=*/true,
-        /*should_report_user=*/false);
-
-    auto reporter = LoginLogoutReporter::CreateForTest(
-        std::move(reporter_helper),
-        std::make_unique<LoginLogoutReporterTestDelegate>(),
-        &managed_session_service, &test_clock);
-    base::RunLoop().RunUntilIdle();
-
-    managed_session_service.OnKioskProfileLoadFailed();
-
-    ASSERT_THAT(test_helper_.GetReportCount(), Eq(0));
-  }
-
-  // Next session after kiosk login failure session.
-  {
-    base::SimpleTestClock test_clock;
-    test_clock.SetNow(failure_time + base::Hours(10));
-    policy::ManagedSessionService managed_session_service;
     auto reporter_helper = test_helper_.GetReporterHelper(
         /*reporting_enabled=*/true,
         /*should_report_user=*/false);

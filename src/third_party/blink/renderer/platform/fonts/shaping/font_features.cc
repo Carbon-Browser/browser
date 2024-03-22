@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/fonts/shaping/font_features.h"
 
 #include "third_party/blink/renderer/platform/fonts/font.h"
+#include "third_party/blink/renderer/platform/fonts/font_description.h"
 
 namespace blink {
 
@@ -196,7 +197,8 @@ void FontFeatures::Initialize(const FontDescription& description) {
 
   const hb_tag_t chws_or_vchw =
       is_horizontal ? HB_TAG('c', 'h', 'w', 's') : HB_TAG('v', 'c', 'h', 'w');
-  bool default_enable_chws = true;
+  bool default_enable_chws =
+      description.GetTextSpacingTrim() == TextSpacingTrim::kSpaceFirst;
 
   const FontFeatureSettings* settings = description.FeatureSettings();
   if (UNLIKELY(settings)) {
@@ -222,6 +224,19 @@ void FontFeatures::Initialize(const FontDescription& description) {
 
   if (default_enable_chws)
     Append(CreateFeature(chws_or_vchw, 1));
+
+  if (RuntimeEnabledFeatures::FontVariantPositionEnabled()) {
+    const FontDescription::FontVariantPosition variant_position =
+        description.VariantPosition();
+    if (variant_position == FontDescription::kSubVariantPosition) {
+      const hb_feature_t feature = CreateFeature('s', 'u', 'b', 's', 1);
+      Append(feature);
+    }
+    if (variant_position == FontDescription::kSuperVariantPosition) {
+      const hb_feature_t feature = CreateFeature('s', 'u', 'p', 's', 1);
+      Append(feature);
+    }
+  }
 }
 
 }  // namespace blink

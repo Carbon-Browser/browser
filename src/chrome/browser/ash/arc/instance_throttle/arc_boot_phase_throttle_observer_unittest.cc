@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,6 @@
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "components/arc/test/fake_intent_helper_host.h"
 #include "components/arc/test/fake_intent_helper_instance.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
@@ -38,10 +37,7 @@ namespace {
 class ArcBootPhaseThrottleObserverTest : public testing::Test {
  public:
   ArcBootPhaseThrottleObserverTest()
-      : scoped_user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {
-    // Need to initialize DBusThreadManager before ArcSessionManager's
-    // constructor calls DBusThreadManager::Get().
-    chromeos::DBusThreadManager::Initialize();
+      : fake_user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {
     ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
     arc_session_manager_ =
         CreateTestArcSessionManager(std::make_unique<ArcSessionRunner>(
@@ -53,13 +49,12 @@ class ArcBootPhaseThrottleObserverTest : public testing::Test {
         base::CommandLine::ForCurrentProcess());
     const AccountId account_id(AccountId::FromUserEmailGaiaId(
         testing_profile_->GetProfileUserName(), ""));
-    auto* user_manager = static_cast<ash::FakeChromeUserManager*>(
-        user_manager::UserManager::Get());
-    user_manager->AddUser(account_id);
-    user_manager->LoginUser(account_id);
+    fake_user_manager_->AddUser(account_id);
+    fake_user_manager_->LoginUser(account_id);
 
     // By default, ARC is not started for opt-in.
-    arc_session_manager()->set_directly_started_for_testing(true);
+    arc_session_manager()->set_skipped_terms_of_service_negotiation_for_testing(
+        true);
 
     observer()->StartObserving(
         testing_profile_.get(),
@@ -83,7 +78,6 @@ class ArcBootPhaseThrottleObserverTest : public testing::Test {
     testing_profile_.reset();
     arc_session_manager_.reset();
     ash::ConciergeClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
  protected:
@@ -127,7 +121,8 @@ class ArcBootPhaseThrottleObserverTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
-  user_manager::ScopedUserManager scoped_user_manager_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   ArcServiceManager arc_service_manager_;
   std::unique_ptr<ArcSessionManager> arc_session_manager_;
   ArcBootPhaseThrottleObserver observer_;
@@ -212,7 +207,8 @@ TEST_F(ArcBootPhaseThrottleObserverTest, TestEnabledByEnterprise) {
 // Lock is enabled during session restore because ARC was started for opt-in.
 TEST_F(ArcBootPhaseThrottleObserverTest, TestOptInBoot) {
   EXPECT_FALSE(observer()->active());
-  arc_session_manager()->set_directly_started_for_testing(false);
+  arc_session_manager()->set_skipped_terms_of_service_negotiation_for_testing(
+      false);
   observer()->OnArcStarted();
   EXPECT_TRUE(observer()->active());
   observer()->OnSessionRestoreStartedLoadingTabs();

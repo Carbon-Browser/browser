@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <map>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/cache_storage/cache_storage_scheduler_types.h"
 #include "content/common/content_export.h"
 
@@ -19,7 +20,7 @@ namespace content {
 
 class CacheStorageOperation;
 
-CONTENT_EXPORT extern const base::Feature kCacheStorageParallelOps;
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kCacheStorageParallelOps);
 
 // TODO(jkarlin): Support operation identification so that ops can be checked in
 // DCHECKs.

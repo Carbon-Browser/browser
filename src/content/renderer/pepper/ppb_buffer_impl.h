@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
@@ -72,7 +73,7 @@ class BufferAutoMapper {
   size_t size() const { return size_; }
 
  private:
-  ppapi::thunk::PPB_Buffer_API* api_;
+  raw_ptr<ppapi::thunk::PPB_Buffer_API, ExperimentalRenderer> api_;
 
   bool needs_unmap_;
 

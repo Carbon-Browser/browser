@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/test/video_encoder/video_encoder.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "media/base/video_bitrate_allocation.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/test/bitstream_helpers.h"
-#include "media/gpu/test/video.h"
+#include "media/gpu/test/raw_video.h"
 #include "media/gpu/test/video_encoder/video_encoder_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -104,7 +104,7 @@ void VideoEncoder::SetEventWaitTimeout(base::TimeDelta timeout) {
   event_timeout_ = timeout;
 }
 
-bool VideoEncoder::Initialize(const Video* video) {
+bool VideoEncoder::Initialize(const RawVideo* video) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(video_encoder_state_ == EncoderState::kUninitialized ||
          video_encoder_state_ == EncoderState::kIdle);
@@ -127,7 +127,6 @@ bool VideoEncoder::Initialize(const Video* video) {
 
 void VideoEncoder::Encode() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_EQ(video_encoder_state_.load(), EncoderState::kIdle);
   DVLOGF(4);
 
   // Encode until the end of the video.
@@ -136,7 +135,11 @@ void VideoEncoder::Encode() {
 
 void VideoEncoder::EncodeUntil(EncoderEvent event, size_t event_count) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_EQ(video_encoder_state_.load(), EncoderState::kIdle);
+  if (video_encoder_state_.load() != EncoderState::kIdle) {
+    LOG(ERROR) << "VideoEncoder state is not idle: "
+               << static_cast<int>(video_encoder_state_.load());
+    return;
+  }
   DCHECK(encode_until_ == kInvalidEncodeUntil);
   DCHECK(video_);
   DVLOGF(4);
@@ -188,9 +191,13 @@ bool VideoEncoder::WaitForEvent(EncoderEvent event, size_t times) {
     // Go through the list of events since last wait, looking for the event
     // we're interested in.
     while (next_unprocessed_event_ < video_encoder_events_.size()) {
-      if (video_encoder_events_[next_unprocessed_event_++] == event) {
+      EncoderEvent cur_event = video_encoder_events_[next_unprocessed_event_++];
+      if (cur_event == event) {
         if (--times == 0)
           return true;
+      } else if (cur_event == EncoderEvent::kError) {
+        LOG(ERROR) << "Got error event";
+        return false;
       }
     }
 
@@ -213,6 +220,10 @@ bool VideoEncoder::WaitUntilIdle() {
   while (true) {
     if (video_encoder_state_.load() == EncoderState::kIdle)
       return true;
+    if (video_encoder_state_.load() == EncoderState::kError) {
+      LOG(ERROR) << "Encoder in error state";
+      return false;
+    }
 
     // Check whether we've exceeded the maximum time we're allowed to wait.
     if (time_waiting >= event_timeout_) {
@@ -264,9 +275,10 @@ size_t VideoEncoder::GetFrameReleasedCount() const {
 
 bool VideoEncoder::NotifyEvent(EncoderEvent event) {
   base::AutoLock auto_lock(event_lock_);
-  if (event == EncoderEvent::kFlushDone) {
+  if (event == EncoderEvent::kFlushDone)
     video_encoder_state_ = EncoderState::kIdle;
-  }
+  else if (event == EncoderEvent::kError)
+    video_encoder_state_ = EncoderState::kError;
 
   video_encoder_events_.push_back(event);
   video_encoder_event_counts_[event]++;

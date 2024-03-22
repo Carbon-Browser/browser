@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/time/time.h"
+#include "media/base/mock_filters.h"
 #include "media/cast/cast_config.h"
 #include "media/cast/common/sender_encoded_frame.h"
 #include "media/cast/encoding/vpx_encoder.h"
@@ -16,6 +17,7 @@
 #include "media/cast/test/utility/default_config.h"
 #include "media/cast/test/utility/video_utility.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/openscreen/src/cast/streaming/encoded_frame.h"
 
 namespace media {
 namespace cast {
@@ -28,8 +30,8 @@ const int kQp = 20;
 
 FrameSenderConfig GetVideoConfigForTest() {
   FrameSenderConfig config = GetDefaultVideoSenderConfig();
-  config.codec = CODEC_VIDEO_VP8;
-  config.use_external_encoder = false;
+  config.codec = Codec::kVideoVp8;
+  config.use_hardware_encoder = false;
   config.max_frame_rate = kFrameRate;
   config.video_codec_params.min_qp = kQp;
   config.video_codec_params.max_qp = kQp;
@@ -74,7 +76,9 @@ class VpxQuantizerParserTest : public ::testing::Test {
   // Reconstruct a vp8 encoder with new config since the Vp8Encoder
   // class has no interface to update the config.
   void RecreateVp8Encoder() {
-    vp8_encoder_ = std::make_unique<VpxEncoder>(video_config_);
+    vp8_encoder_ = std::make_unique<VpxEncoder>(
+        video_config_,
+        std::make_unique<media::MockVideoEncoderMetricsProvider>());
     vp8_encoder_->Initialize();
   }
 
@@ -104,7 +108,8 @@ TEST_F(VpxQuantizerParserTest, InsufficientData) {
     unsigned int first_partition_size =
         (encoded_data[0] | (encoded_data[1] << 8) | (encoded_data[2] << 16)) >>
         5;
-    if (encoded_frame->dependency == EncodedFrame::KEY) {
+    if (encoded_frame->dependency ==
+        openscreen::cast::EncodedFrame::Dependency::kKeyFrame) {
       // Ten bytes should not be enough to decode the quanitizer value
       // for a Key frame.
       decoded_quantizer = ParseVpxHeaderQuantizer(encoded_data, 10);

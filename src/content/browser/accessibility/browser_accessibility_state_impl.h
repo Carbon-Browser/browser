@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_ACCESSIBILITY_BROWSER_ACCESSIBILITY_STATE_IMPL_H_
 #define CONTENT_BROWSER_ACCESSIBILITY_BROWSER_ACCESSIBILITY_STATE_IMPL_H_
 
+#include <memory>
 #include <vector>
 
 #include "base/time/time.h"
@@ -40,15 +41,18 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
     : public BrowserAccessibilityState,
       public ui::AXModeObserver {
  public:
-  BrowserAccessibilityStateImpl();
-
   BrowserAccessibilityStateImpl(const BrowserAccessibilityStateImpl&) = delete;
   BrowserAccessibilityStateImpl& operator=(
       const BrowserAccessibilityStateImpl&) = delete;
 
   ~BrowserAccessibilityStateImpl() override;
 
+  // Returns the single process-wide instance.
   static BrowserAccessibilityStateImpl* GetInstance();
+
+  // Returns a new instance. Only one instance may be live in the process at any
+  // time.
+  static std::unique_ptr<BrowserAccessibilityStateImpl> Create();
 
   // This needs to be called explicitly by content::BrowserMainLoop during
   // initialization, in order to schedule tasks that need to be done, but
@@ -68,12 +72,15 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
   void RemoveAccessibilityModeFlags(ui::AXMode mode) override;
   void ResetAccessibilityMode() override;
   void OnScreenReaderDetected() override;
+  void OnScreenReaderStopped() override;
   bool IsAccessibleBrowser() override;
   void AddUIThreadHistogramCallback(base::OnceClosure callback) override;
   void AddOtherThreadHistogramCallback(base::OnceClosure callback) override;
   void UpdateUniqueUserHistograms() override;
   void UpdateHistogramsForTesting() override;
   void SetCaretBrowsingState(bool enabled) override;
+  void SetPerformanceFilteringAllowed(bool enabled) override;
+  bool IsPerformanceFilteringAllowed() override;
 #if BUILDFLAG(IS_ANDROID)
   void SetImageLabelsModeForProfile(bool enabled,
                                     BrowserContext* profile) override;
@@ -114,7 +121,12 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
   // Notifies listeners that the focused element changed inside a WebContents.
   void OnFocusChangedInPage(const FocusedNodeDetails& details);
 
+  // Do not allow further changes to the AXMode.
+  void DisallowAXModeChanges();
+
  protected:
+  BrowserAccessibilityStateImpl();
+
   // Called a short while after startup to allow time for the accessibility
   // state to be determined. Updates histograms with the current state.
   // Two variants - one for things that must be run on the UI thread, and
@@ -125,6 +137,11 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
  private:
   // Resets accessibility_mode_ to the default value.
   void ResetAccessibilityModeValue();
+
+  // Called by `OnScreenReaderStopped` as a delayed task. If accessibility
+  // support has not been re-enabled by the time the delay has expired, we reset
+  // `accessibility_mode_` to the default value and notify all web contents.
+  void MaybeResetAccessibilityMode();
 
   void OnOtherThreadDone();
 
@@ -144,10 +161,10 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
   // Whether there is a pending task to run UpdateAccessibilityActivityTask.
   bool accessibility_update_task_pending_ = false;
 
-  // Whether the force-renderer-accessibility flag is enabled.
-  // Cached here so that we don't have to check base::CommandLine in
-  // a function that's called frequently.
-  bool force_renderer_accessibility_ = false;
+  // Whether changes to the AXMode are disallowed.
+  // Changes are disallowed while running tests or when
+  // --force-renderer-accessibility is used on the command line.
+  bool disallow_ax_mode_changes_ = false;
 
   // Disable hot tracking, i.e. hover state - needed just to avoid flaky tests.
   bool disable_hot_tracking_ = false;
@@ -155,6 +172,11 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
   // Keeps track of whether caret browsing is enabled for the most
   // recently used profile.
   bool caret_browsing_enabled_ = false;
+
+  // Keeps track of whether performance filtering is allowed for the device.
+  // Default is true to defer to feature flag. Value may be set to false by
+  // prefs.
+  bool performance_filtering_allowed_ = true;
 
   // The time of the first user input event; if we receive multiple
   // user input events within a 30-second period and no
@@ -176,8 +198,16 @@ class CONTENT_EXPORT BrowserAccessibilityStateImpl
   // The time accessibility was auto-disabled, for statistics.
   base::TimeTicks accessibility_disabled_time_;
 
+  // The time of the most-recent, explicit request to disable accessibility
+  // support. This is set in `OnScreenReaderStopped`. We keep track of this
+  // in order to prevent destroying and/or (re)creating large accessibility
+  // trees in response to an assistive technology being toggled.
+  base::TimeTicks disable_accessibility_request_time_;
+
   base::RepeatingCallbackList<void(const FocusedNodeDetails&)>
       focus_changed_callbacks_;
+
+  base::WeakPtrFactory<BrowserAccessibilityStateImpl> weak_factory_{this};
 };
 
 }  // namespace content

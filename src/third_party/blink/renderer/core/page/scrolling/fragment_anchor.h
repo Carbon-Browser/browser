@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,6 @@ class CORE_EXPORT FragmentAnchor : public GarbageCollected<FragmentAnchor> {
   virtual void Installed() = 0;
 
   virtual void DidScroll(mojom::blink::ScrollType type) = 0;
-  virtual void PerformScriptableActions() = 0;
 
   virtual void Trace(Visitor*) const;
 
@@ -62,6 +61,10 @@ class CORE_EXPORT FragmentAnchor : public GarbageCollected<FragmentAnchor> {
 
   virtual void ScrollElementIntoViewWithOptions(Element* element_to_scroll,
                                                 ScrollIntoViewOptions* options);
+
+  // Called when additional searchable content may have become available in the
+  // document.
+  virtual void NewContentMayBeAvailable() {}
 
   Member<LocalFrame> frame_;
 };

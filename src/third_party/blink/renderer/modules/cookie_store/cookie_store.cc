@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_cookie_store_get_options.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/modules/cookie_store/cookie_change_event.h"
 #include "third_party/blink/renderer/modules/event_modules.h"
@@ -67,23 +68,23 @@ std::unique_ptr<net::CanonicalCookie> ToCanonicalCookie(
     const KURL& cookie_url,
     const CookieInit* options,
     ExceptionState& exception_state,
-    bool partitioned_cookies_runtime_feature_enabled,
     net::CookieInclusionStatus& status_out) {
   const String& name = options->name();
   const String& value = options->value();
-  if (name.IsEmpty() && value.Contains('=')) {
+  if (name.empty() && value.Contains('=')) {
     exception_state.ThrowTypeError(
         "Cookie value cannot contain '=' if the name is empty");
     return nullptr;
   }
-  if (name.IsEmpty() && value.IsEmpty()) {
+  if (name.empty() && value.empty()) {
     exception_state.ThrowTypeError(
         "Cookie name and value both cannot be empty");
     return nullptr;
   }
 
   base::Time expires = options->hasExpiresNonNull()
-                           ? base::Time::FromJavaTime(options->expiresNonNull())
+                           ? base::Time::FromMillisecondsSinceUnixEpoch(
+                                 options->expiresNonNull())
                            : base::Time();
 
   String cookie_url_host = cookie_url.Host();
@@ -112,7 +113,7 @@ std::unique_ptr<net::CanonicalCookie> ToCanonicalCookie(
   }
 
   String path = options->path();
-  if (!path.IsEmpty()) {
+  if (!path.empty()) {
     if (name.StartsWith("__Host-") && path != "/") {
       exception_state.ThrowTypeError(
           "Cookies with \"__Host-\" prefix cannot have a non-\"/\" path");
@@ -154,10 +155,7 @@ std::unique_ptr<net::CanonicalCookie> ToCanonicalCookie(
   }
 
   absl::optional<net::CookiePartitionKey> cookie_partition_key = absl::nullopt;
-  if (options->partitioned() &&
-      (partitioned_cookies_runtime_feature_enabled ||
-       base::FeatureList::IsEnabled(
-           net::features::kPartitionedCookiesBypassOriginTrial))) {
+  if (options->partitioned()) {
     // We don't trust the renderer to determine the cookie partition key, so we
     // use this factory to indicate we are using a temporary value here.
     cookie_partition_key = net::CookiePartitionKey::FromScript();
@@ -169,7 +167,7 @@ std::unique_ptr<net::CanonicalCookie> ToCanonicalCookie(
           path.Utf8(), base::Time() /*creation*/, expires,
           base::Time() /*last_access*/, true /*secure*/, false /*http_only*/,
           same_site, net::CookiePriority::COOKIE_PRIORITY_DEFAULT,
-          options->sameParty(), cookie_partition_key, &status_out);
+          cookie_partition_key, &status_out);
 
   // TODO(crbug.com/1310444): Improve serialization validation comments and
   // associate them with ExceptionState codes.
@@ -234,10 +232,14 @@ net::SiteForCookies DefaultSiteForCookies(ExecutionContext* execution_context) {
     return window->document()->SiteForCookies();
 
   auto* scope = To<ServiceWorkerGlobalScope>(execution_context);
-  return net::SiteForCookies::FromUrl(GURL(scope->Url()));
+  const blink::BlinkStorageKey& key = scope->storage_key();
+  if (key.IsFirstPartyContext()) {
+    return net::SiteForCookies::FromUrl(GURL(scope->Url()));
+  }
+  return net::SiteForCookies();
 }
 
-scoped_refptr<SecurityOrigin> DefaultTopFrameOrigin(
+const scoped_refptr<const SecurityOrigin> DefaultTopFrameOrigin(
     ExecutionContext* execution_context) {
   DCHECK(execution_context);
 
@@ -247,20 +249,21 @@ scoped_refptr<SecurityOrigin> DefaultTopFrameOrigin(
     return window->document()->TopFrameOrigin()->IsolatedCopy();
   }
 
-  // TODO(crbug.com/1225444): This is a temporary solution until we can plumb
-  // BlinkStorageKey to ServiceWorkerGlobalScope. Once we do the top-frame
-  // origin should be BlinkStorageKey's top-frame site.
-  auto* scope = To<ServiceWorkerGlobalScope>(execution_context);
-  return SecurityOrigin::CreateFromUrlOrigin(url::Origin::Create(
-      net::SchemefulSite(scope->GetSecurityOrigin()->ToUrlOrigin()).GetURL()));
+  const BlinkStorageKey& key =
+      To<ServiceWorkerGlobalScope>(execution_context)->storage_key();
+  if (key.IsFirstPartyContext()) {
+    return key.GetSecurityOrigin();
+  }
+  return SecurityOrigin::CreateFromUrlOrigin(
+      url::Origin::Create(net::SchemefulSite(key.GetTopLevelSite()).GetURL()));
 }
 
 }  // namespace
 
 CookieStore::CookieStore(
     ExecutionContext* execution_context,
-    mojo::Remote<network::mojom::blink::RestrictedCookieManager> backend)
-    : ExecutionContextLifecycleObserver(execution_context),
+    HeapMojoRemote<network::mojom::blink::RestrictedCookieManager> backend)
+    : ExecutionContextClient(execution_context),
       backend_(std::move(backend)),
       change_listener_receiver_(this, execution_context),
       default_cookie_url_(DefaultCookieURL(execution_context)),
@@ -360,12 +363,9 @@ ScriptPromise CookieStore::Delete(ScriptState* script_state,
 
 void CookieStore::Trace(Visitor* visitor) const {
   visitor->Trace(change_listener_receiver_);
-  EventTargetWithInlineData::Trace(visitor);
-  ExecutionContextLifecycleObserver::Trace(visitor);
-}
-
-void CookieStore::ContextDestroyed() {
-  backend_.reset();
+  visitor->Trace(backend_);
+  EventTarget::Trace(visitor);
+  ExecutionContextClient::Trace(visitor);
 }
 
 const AtomicString& CookieStore::InterfaceName() const {
@@ -373,11 +373,11 @@ const AtomicString& CookieStore::InterfaceName() const {
 }
 
 ExecutionContext* CookieStore::GetExecutionContext() const {
-  return ExecutionContextLifecycleObserver::GetExecutionContext();
+  return ExecutionContextClient::GetExecutionContext();
 }
 
 void CookieStore::RemoveAllEventListeners() {
-  EventTargetWithInlineData::RemoveAllEventListeners();
+  EventTarget::RemoveAllEventListeners();
   DCHECK(!HasEventListeners());
   StopObserving();
 }
@@ -386,7 +386,7 @@ void CookieStore::OnCookieChange(
     network::mojom::blink::CookieChangeInfoPtr change) {
   HeapVector<Member<CookieListItem>> changed, deleted;
   CookieChangeEvent::ToEventInfo(change, changed, deleted);
-  if (changed.IsEmpty() && deleted.IsEmpty()) {
+  if (changed.empty() && deleted.empty()) {
     // The backend only reported OVERWRITE events, which are dropped.
     return;
   }
@@ -397,16 +397,14 @@ void CookieStore::OnCookieChange(
 void CookieStore::AddedEventListener(
     const AtomicString& event_type,
     RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  EventTarget::AddedEventListener(event_type, registered_listener);
   StartObserving();
 }
 
 void CookieStore::RemovedEventListener(
     const AtomicString& event_type,
     const RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::RemovedEventListener(event_type,
-                                                  registered_listener);
+  EventTarget::RemovedEventListener(event_type, registered_listener);
   if (!HasEventListeners())
     StopObserving();
 }
@@ -438,12 +436,19 @@ ScriptPromise CookieStore::DoRead(
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  bool is_ad_tagged = false;
+  if (auto* window = DynamicTo<LocalDOMWindow>(context)) {
+    if (auto* local_frame = window->GetFrame()) {
+      is_ad_tagged = local_frame->IsAdFrame();
+    }
+  }
+
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   backend_->GetAllForUrl(
       cookie_url, default_site_for_cookies_, default_top_frame_origin_,
-      std::move(backend_options),
-      RuntimeEnabledFeatures::PartitionedCookiesEnabled(GetExecutionContext()),
-      WTF::Bind(backend_result_converter, WrapPersistent(resolver)));
+      context->HasStorageAccess(), std::move(backend_options), is_ad_tagged,
+      WTF::BindOnce(backend_result_converter, WrapPersistent(resolver)));
   return resolver->Promise();
 }
 
@@ -479,7 +484,7 @@ void CookieStore::GetAllForUrlToGetResult(
     return;
   ScriptState::Scope scope(script_state);
 
-  if (backend_cookies.IsEmpty()) {
+  if (backend_cookies.empty()) {
     resolver->Resolve(v8::Null(script_state->GetIsolate()));
     return;
   }
@@ -503,10 +508,8 @@ ScriptPromise CookieStore::DoWrite(ScriptState* script_state,
   }
 
   net::CookieInclusionStatus status;
-  std::unique_ptr<net::CanonicalCookie> canonical_cookie = ToCanonicalCookie(
-      default_cookie_url_, options, exception_state,
-      RuntimeEnabledFeatures::PartitionedCookiesEnabled(GetExecutionContext()),
-      status);
+  std::unique_ptr<net::CanonicalCookie> canonical_cookie =
+      ToCanonicalCookie(default_cookie_url_, options, exception_state, status);
 
   if (!canonical_cookie) {
     DCHECK(exception_state.HadException());
@@ -522,12 +525,14 @@ ScriptPromise CookieStore::DoWrite(ScriptState* script_state,
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   backend_->SetCanonicalCookie(
       *std::move(canonical_cookie), default_cookie_url_,
-      default_site_for_cookies_, default_top_frame_origin_, status,
-      WTF::Bind(&CookieStore::OnSetCanonicalCookieResult,
-                WrapPersistent(resolver)));
+      default_site_for_cookies_, default_top_frame_origin_,
+      context->HasStorageAccess(), status,
+      WTF::BindOnce(&CookieStore::OnSetCanonicalCookieResult,
+                    WrapPersistent(resolver)));
   return resolver->Promise();
 }
 
@@ -542,7 +547,7 @@ void CookieStore::OnSetCanonicalCookieResult(ScriptPromiseResolver* resolver,
   if (!backend_success) {
     resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
         script_state->GetIsolate(), DOMExceptionCode::kUnknownError,
-        "An unknown error occured while writing the cookie."));
+        "An unknown error occurred while writing the cookie."));
     return;
   }
   resolver->Resolve();
@@ -557,6 +562,7 @@ void CookieStore::StartObserving() {
       GetExecutionContext()->GetTaskRunner(TaskType::kDOMManipulation);
   backend_->AddChangeListener(
       default_cookie_url_, default_site_for_cookies_, default_top_frame_origin_,
+      GetExecutionContext()->HasStorageAccess(),
       change_listener_receiver_.BindNewPipeAndPassRemote(task_runner), {});
 }
 

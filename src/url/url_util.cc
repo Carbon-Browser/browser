@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
+#include "base/containers/contains.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_util.h"
 #include "url/url_canon_internal.h"
@@ -56,7 +57,6 @@ struct SchemeRegistry {
        SCHEME_WITH_HOST_PORT_AND_USER_INFORMATION},  // WebSocket secure.
       {kWsScheme, SCHEME_WITH_HOST_PORT_AND_USER_INFORMATION},  // WebSocket.
       {kFileSystemScheme, SCHEME_WITHOUT_AUTHORITY},
-      {kQuicTransportScheme, SCHEME_WITH_HOST_AND_PORT},
   };
 
   // Schemes that are allowed for referrers.
@@ -73,7 +73,10 @@ struct SchemeRegistry {
 
   // Schemes that do not trigger mixed content warning.
   std::vector<std::string> secure_schemes = {
-      kHttpsScheme, kAboutScheme, kDataScheme, kQuicTransportScheme, kWssScheme,
+      kHttpsScheme,
+      kWssScheme,
+      kDataScheme,
+      kAboutScheme,
   };
 
   // Schemes that normal pages cannot link to or access (i.e., with the same
@@ -144,29 +147,16 @@ enum WhitespaceRemovalPolicy {
   DO_NOT_REMOVE_WHITESPACE,
 };
 
-// This template converts a given character type to the corresponding
-// StringPiece type.
-template<typename CHAR> struct CharToStringPiece {
-};
-template<> struct CharToStringPiece<char> {
-  typedef base::StringPiece Piece;
-};
-template <>
-struct CharToStringPiece<char16_t> {
-  typedef base::StringPiece16 Piece;
-};
-
 // Given a string and a range inside the string, compares it to the given
 // lower-case |compare_to| buffer.
 template<typename CHAR>
 inline bool DoCompareSchemeComponent(const CHAR* spec,
                                      const Component& component,
                                      const char* compare_to) {
-  if (!component.is_nonempty())
+  if (component.is_empty())
     return compare_to[0] == 0;  // When component is empty, match empty scheme.
   return base::EqualsCaseInsensitiveASCII(
-      typename CharToStringPiece<CHAR>::Piece(&spec[component.begin],
-                                              component.len),
+      std::basic_string_view(&spec[component.begin], component.len),
       compare_to);
 }
 
@@ -177,13 +167,12 @@ bool DoIsInSchemes(const CHAR* spec,
                    const Component& scheme,
                    SchemeType* type,
                    const std::vector<SchemeWithType>& schemes) {
-  if (!scheme.is_nonempty())
+  if (scheme.is_empty())
     return false;  // Empty or invalid schemes are non-standard.
 
   for (const SchemeWithType& scheme_with_type : schemes) {
     if (base::EqualsCaseInsensitiveASCII(
-            typename CharToStringPiece<CHAR>::Piece(&spec[scheme.begin],
-                                                    scheme.len),
+            std::basic_string_view(&spec[scheme.begin], scheme.len),
             scheme_with_type.scheme)) {
       *type = scheme_with_type.type;
       return true;
@@ -522,10 +511,7 @@ void DoAddSchemeWithHandler(const char* new_scheme,
   DCHECK(strlen(new_scheme) > 0);
   DCHECK(strlen(handler) > 0);
   DCHECK_EQ(base::ToLowerASCII(new_scheme), new_scheme);
-  DCHECK(std::find_if(schemes->begin(), schemes->end(),
-                      [&new_scheme](const SchemeWithHandler& scheme) {
-                        return scheme.scheme == new_scheme;
-                      }) == schemes->end());
+  DCHECK(!base::Contains(*schemes, new_scheme, &SchemeWithHandler::scheme));
   schemes->push_back({new_scheme, handler});
 }
 
@@ -534,8 +520,7 @@ void DoAddScheme(const char* new_scheme, std::vector<std::string>* schemes) {
   DCHECK(schemes);
   DCHECK(strlen(new_scheme) > 0);
   DCHECK_EQ(base::ToLowerASCII(new_scheme), new_scheme);
-  DCHECK(std::find(schemes->begin(), schemes->end(), new_scheme) ==
-         schemes->end());
+  DCHECK(!base::Contains(*schemes, new_scheme));
   schemes->push_back(new_scheme);
 }
 
@@ -546,10 +531,7 @@ void DoAddSchemeWithType(const char* new_scheme,
   DCHECK(schemes);
   DCHECK(strlen(new_scheme) > 0);
   DCHECK_EQ(base::ToLowerASCII(new_scheme), new_scheme);
-  DCHECK(std::find_if(schemes->begin(), schemes->end(),
-                      [&new_scheme](const SchemeWithType& scheme) {
-                        return scheme.scheme == new_scheme;
-                      }) == schemes->end());
+  DCHECK(!base::Contains(*schemes, new_scheme, &SchemeWithType::scheme));
   schemes->push_back({new_scheme, type});
 }
 
@@ -739,8 +721,8 @@ bool FindAndCompareScheme(const char16_t* str,
   return DoFindAndCompareScheme(str, str_len, compare, found_scheme);
 }
 
-bool DomainIs(base::StringPiece canonical_host,
-              base::StringPiece canonical_domain) {
+bool DomainIs(std::string_view canonical_host,
+              std::string_view canonical_domain) {
   if (canonical_host.empty() || canonical_domain.empty())
     return false;
 
@@ -758,7 +740,7 @@ bool DomainIs(base::StringPiece canonical_host,
   const char* host_first_pos =
       canonical_host.data() + host_len - canonical_domain.length();
 
-  if (base::StringPiece(host_first_pos, canonical_domain.length()) !=
+  if (std::string_view(host_first_pos, canonical_domain.length()) !=
       canonical_domain) {
     return false;
   }
@@ -775,7 +757,7 @@ bool DomainIs(base::StringPiece canonical_host,
   return true;
 }
 
-bool HostIsIPAddress(base::StringPiece host) {
+bool HostIsIPAddress(std::string_view host) {
   STACK_UNINITIALIZED url::RawCanonOutputT<char, 128> ignored_output;
   url::CanonHostInfo host_info;
   url::CanonicalizeIPAddress(host.data(), Component(0, host.length()),
@@ -851,19 +833,18 @@ bool ReplaceComponents(const char* spec,
                              charset_converter, output, out_parsed);
 }
 
-void DecodeURLEscapeSequences(const char* input,
-                              int length,
+void DecodeURLEscapeSequences(std::string_view input,
                               DecodeURLMode mode,
                               CanonOutputW* output) {
-  if (length <= 0)
+  if (input.empty()) {
     return;
+  }
 
   STACK_UNINITIALIZED RawCanonOutputT<char> unescaped_chars;
-  size_t length_size_t = static_cast<size_t>(length);
-  for (size_t i = 0; i < length_size_t; i++) {
+  for (size_t i = 0; i < input.length(); i++) {
     if (input[i] == '%') {
       unsigned char ch;
-      if (DecodeEscaped(input, &i, length_size_t, &ch)) {
+      if (DecodeEscaped(input.data(), &i, input.length(), &ch)) {
         unescaped_chars.push_back(ch);
       } else {
         // Invalid escape sequence, copy the percent literal.
@@ -878,10 +859,9 @@ void DecodeURLEscapeSequences(const char* input,
   int output_initial_length = output->length();
   // Convert that 8-bit to UTF-16. It's not clear IE does this at all to
   // JavaScript URLs, but Firefox and Safari do.
-  size_t unescaped_length = static_cast<size_t>(unescaped_chars.length());
+  size_t unescaped_length = unescaped_chars.length();
   for (size_t i = 0; i < unescaped_length; i++) {
-    unsigned char uch =
-        static_cast<unsigned char>(unescaped_chars.at(static_cast<int>(i)));
+    unsigned char uch = static_cast<unsigned char>(unescaped_chars.at(i));
     if (uch < 0x80) {
       // Non-UTF-8, just append directly
       output->push_back(uch);
@@ -890,8 +870,8 @@ void DecodeURLEscapeSequences(const char* input,
       // character.
       size_t next_character = i;
       base_icu::UChar32 code_point;
-      if (ReadUTFChar(unescaped_chars.data(), &next_character, unescaped_length,
-                      &code_point)) {
+      if (ReadUTFCharLossy(unescaped_chars.data(), &next_character,
+                           unescaped_length, &code_point)) {
         // Valid UTF-8 character, convert to UTF-16.
         AppendUTF16Value(code_point, output);
         i = next_character;
@@ -905,7 +885,7 @@ void DecodeURLEscapeSequences(const char* input,
         // copy all characters from the beginning to the end of the
         // identified sequence.
         output->set_length(output_initial_length);
-        for (int j = 0; j < unescaped_chars.length(); ++j)
+        for (size_t j = 0; j < unescaped_chars.length(); ++j)
           output->push_back(static_cast<unsigned char>(unescaped_chars.at(j)));
         break;
       }
@@ -913,14 +893,18 @@ void DecodeURLEscapeSequences(const char* input,
   }
 }
 
-void EncodeURIComponent(const char* input, int length, CanonOutput* output) {
-  for (int i = 0; i < length; ++i) {
-    unsigned char c = static_cast<unsigned char>(input[i]);
-    if (IsComponentChar(c))
+void EncodeURIComponent(std::string_view input, CanonOutput* output) {
+  for (unsigned char c : input) {
+    if (IsComponentChar(c)) {
       output->push_back(c);
-    else
+    } else {
       AppendEscapedChar(c, output);
+    }
   }
+}
+
+bool IsURIComponentChar(char c) {
+  return IsComponentChar(c);
 }
 
 bool CompareSchemeComponent(const char* spec,
@@ -933,6 +917,18 @@ bool CompareSchemeComponent(const char16_t* spec,
                             const Component& component,
                             const char* compare_to) {
   return DoCompareSchemeComponent(spec, component, compare_to);
+}
+
+bool HasInvalidURLEscapeSequences(std::string_view input) {
+  for (size_t i = 0; i < input.size(); i++) {
+    if (input[i] == '%') {
+      unsigned char ch;
+      if (!DecodeEscaped(input.data(), &i, input.size(), &ch)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 }  // namespace url

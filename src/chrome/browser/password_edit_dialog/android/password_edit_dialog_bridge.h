@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace content {
 class WebContents;
@@ -36,7 +36,7 @@ class WebContents;
 // Here is how typically dialog bridge is created:
 //   m_dialog_bridge = PasswordEditDialogBridge::Create(web_contents,
 //       base::BindOnce(&OnDialogAccepted),base::BindOnce(&OnDialogDismissed));
-//   if (m_dialog_bridge) m_dialog_bridge->Show(...);
+//   if (m_dialog_bridge) m_dialog_bridge->ShowUpdatePasswordDialog(...);
 //
 // The owning class should dismiss displayed dialog during its own destruction:
 //   if (m_dialog_bridge) m_dialog_bridge->Dismiss();
@@ -57,11 +57,12 @@ class PasswordEditDialog {
   virtual ~PasswordEditDialog();
 
   // Calls Java side of the bridge to display password edit modal dialog.
-  virtual void Show(const std::vector<std::u16string>& usernames,
-                    int selected_username_index,
-                    const std::u16string& password,
-                    const std::u16string& origin,
-                    const std::string& account_email) = 0;
+  // Called when PasswordEditDialogWithDetails feature is enabled.
+  virtual void ShowPasswordEditDialog(
+      const std::vector<std::u16string>& usernames,
+      const std::u16string& username,
+      const std::u16string& password,
+      const std::string& account_email) = 0;
 
   // Dismisses displayed dialog. The owner of PassworDeidtDialogBridge should
   // call this function to correctly dismiss and destroy the dialog. The object
@@ -86,11 +87,11 @@ class PasswordEditDialogBridge : public PasswordEditDialog {
   PasswordEditDialogBridge& operator=(const PasswordEditDialogBridge&) = delete;
 
   // Calls Java side of the bridge to display password edit modal dialog.
-  void Show(const std::vector<std::u16string>& usernames,
-            int selected_username_index,
-            const std::u16string& password,
-            const std::u16string& origin,
-            const std::string& account_email) override;
+  // Called when PasswordEditDialogWithDetails feature is enabled.
+  void ShowPasswordEditDialog(const std::vector<std::u16string>& usernames,
+                              const std::u16string& username,
+                              const std::u16string& password,
+                              const std::string& account_email) override;
 
   // Dismisses displayed dialog. The owner of PassworDeidtDialogBridge should
   // call this function to correctly dismiss and destroy the dialog. The object
@@ -100,9 +101,15 @@ class PasswordEditDialogBridge : public PasswordEditDialog {
   // Called from Java to indicate that the user tapped the positive button with
   // |username| and
   // |password| which are going to be saved.
+  // Used when PasswordEditDialogWithDetails flag is on.
   void OnDialogAccepted(JNIEnv* env,
                         const base::android::JavaParamRef<jstring>& username,
                         const base::android::JavaParamRef<jstring>& password);
+
+  // Called from Java to indicate that the user tapped the positive button with
+  // |username_index|.
+  // Used when PasswordEditDialogWithDetails flag is off.
+  void OnLegacyDialogAccepted(JNIEnv* env, jint username_index);
 
   // Called from Java when the modal dialog is dismissed.
   void OnDialogDismissed(JNIEnv* env, jboolean dialogAccepted);

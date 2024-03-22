@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/strings/abseil_string_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/cronet/android/cronet_context_adapter.h"
 #include "components/cronet/android/cronet_jni_headers/CronetBidirectionalStream_jni.h"
@@ -29,7 +28,7 @@
 #include "net/http/http_util.h"
 #include "net/ssl/ssl_info.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 #include "net/url_request/url_request_context.h"
 #include "url/gurl.h"
 
@@ -107,7 +106,7 @@ CronetBidirectionalStreamAdapter::CronetBidirectionalStreamAdapter(
     int32_t traffic_stats_tag,
     bool traffic_stats_uid_set,
     int32_t traffic_stats_uid,
-    net::NetworkChangeNotifier::NetworkHandle network)
+    net::handles::NetworkHandle network)
     : context_(context),
       owner_(env, jbidi_stream),
       send_request_headers_automatically_(send_request_headers_automatically),
@@ -235,8 +234,8 @@ jboolean CronetBidirectionalStreamAdapter::WritevData(
                            i, 1, &limit);
     DCHECK_LE(pos, limit);
     scoped_refptr<net::WrappedIOBuffer> write_buffer =
-        base::MakeRefCounted<net::WrappedIOBuffer>(static_cast<char*>(data) +
-                                                   pos);
+        base::MakeRefCounted<net::WrappedIOBuffer>(
+            static_cast<char*>(data) + pos, limit - pos);
     pending_write_data->write_buffer_list.push_back(write_buffer);
     pending_write_data->write_buffer_len_list.push_back(limit - pos);
   }
@@ -279,9 +278,9 @@ void CronetBidirectionalStreamAdapter::OnHeadersReceived(
   // Get http status code from response headers.
   jint http_status_code = 0;
   const auto http_status_header = response_headers.find(":status");
-  if (http_status_header != response_headers.end())
-    base::StringToInt(base::StringViewToStringPiece(http_status_header->second),
-                      &http_status_code);
+  if (http_status_header != response_headers.end()) {
+    base::StringToInt(http_status_header->second, &http_status_code);
+  }
 
   std::string protocol;
   switch (bidi_stream_->GetProtocol()) {
@@ -481,10 +480,12 @@ void CronetBidirectionalStreamAdapter::MaybeReportMetrics() {
   cronet::Java_CronetBidirectionalStream_onMetricsCollected(
       env, owner_,
       metrics_util::ConvertTime(start_ticks, start_ticks, start_time),
-      metrics_util::ConvertTime(load_timing_info.connect_timing.dns_start,
-                                start_ticks, start_time),
-      metrics_util::ConvertTime(load_timing_info.connect_timing.dns_end,
-                                start_ticks, start_time),
+      metrics_util::ConvertTime(
+          load_timing_info.connect_timing.domain_lookup_start, start_ticks,
+          start_time),
+      metrics_util::ConvertTime(
+          load_timing_info.connect_timing.domain_lookup_end, start_ticks,
+          start_time),
       metrics_util::ConvertTime(load_timing_info.connect_timing.connect_start,
                                 start_ticks, start_time),
       metrics_util::ConvertTime(load_timing_info.connect_timing.connect_end,

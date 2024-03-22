@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,8 +50,8 @@ public class OneShotCallback<E> {
         public void onResult(E result) {
             mCallback.onResult(result);
             ObservableSupplier<E> supplier = mWeakSupplier.get();
-            assert supplier
-                    != null : "This can only be called by supplier, which should not be null.";
+            assert supplier != null
+                    : "This can only be called by supplier, which should not be null.";
             supplier.removeObserver(mCallbackWrapper);
         }
     }

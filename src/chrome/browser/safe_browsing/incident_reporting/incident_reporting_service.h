@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class TrackedPreferenceValidationDelegate;
 
 namespace safe_browsing {
 
-extern const base::Feature kIncidentReportingEnableUpload;
+BASE_DECLARE_FEATURE(kIncidentReportingEnableUpload);
 
 class ClientDownloadRequest;
 class ClientIncidentReport;
@@ -294,15 +294,6 @@ class IncidentReportingService : public ProfileManagerObserver,
 
   // The time at which the initial incident is reported.
   base::Time first_incident_time_;
-
-  // The time at which the last incident is reported.
-  base::TimeTicks last_incident_time_;
-
-  // The time at which environmental data collection was initiated.
-  base::TimeTicks environment_collection_begin_;
-
-  // The time at which download collection was initiated.
-  base::TimeTicks last_download_begin_;
 
   // Context data for all on-the-record profiles plus the process-wide (NULL)
   // context. A mapping of profiles to contexts holding state about received

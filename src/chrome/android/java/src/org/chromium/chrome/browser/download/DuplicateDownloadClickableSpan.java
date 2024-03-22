@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,12 @@ public class DuplicateDownloadClickableSpan extends ClickableSpan {
      * @param otrProfileID Off the record profile ID.
      * @param source Enum for UMA reporting.
      */
-    public DuplicateDownloadClickableSpan(Context context, String filePath, Runnable runnable,
-            OTRProfileID otrProfileID, @DownloadOpenSource int source) {
+    public DuplicateDownloadClickableSpan(
+            Context context,
+            String filePath,
+            Runnable runnable,
+            OTRProfileID otrProfileID,
+            @DownloadOpenSource int source) {
         mContext = context;
         mRunnable = runnable;
         mOTRProfileID = otrProfileID;
@@ -65,9 +69,9 @@ public class DuplicateDownloadClickableSpan extends ClickableSpan {
         @Override
         protected void onPostExecute(String filePath) {
             if (mRunnable != null) mRunnable.run();
-            if (mFilePath != null) {
+            if (filePath != null) {
                 DownloadUtils.openDownload(
-                        mFilePath, mMimeType, null, mOTRProfileID, null, null, mSource);
+                        filePath, mMimeType, null, mOTRProfileID, null, null, mSource);
             } else {
                 DownloadManagerService.openDownloadsPage(mOTRProfileID, mSource);
             }

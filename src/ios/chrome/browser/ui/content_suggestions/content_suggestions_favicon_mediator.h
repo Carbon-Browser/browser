@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,8 @@ class LargeIconService;
 
 @protocol ContentSuggestionsCollectionConsumer;
 @protocol ContentSuggestionsConsumer;
+@class ContentSuggestionsMetricsRecorder;
 @class ContentSuggestionsMostVisitedItem;
-@class ContentSuggestionsParentItem;
 @class FaviconAttributesProvider;
 class LargeIconCache;
 
@@ -33,12 +33,6 @@ class LargeIconCache;
 
 - (instancetype)init NS_UNAVAILABLE;
 
-// The consumer that will be notified when the data change. `consumer` is used
-// if kContentSuggestionsUIViewControllerMigration is enabled.
-// TODO(crbug.com/1285378): remove after completion of UIViewController
-// migration.
-@property(nonatomic, weak) id<ContentSuggestionsCollectionConsumer>
-    collectionConsumer;
 @property(nonatomic, weak) id<ContentSuggestionsConsumer> consumer;
 
 // FaviconAttributesProvider to fetch the favicon for the most visited tiles.
@@ -51,11 +45,10 @@ class LargeIconCache;
 
 // Fetches the favicon for this `item`.
 - (void)fetchFaviconForMostVisited:(ContentSuggestionsMostVisitedItem*)item;
-// Fetches the favicon for `item` within `parentItem`.
-// TODO(crbug.com/1285378): Remove this after fully migrating ContentSuggestions
-// to UIViewController.
-- (void)fetchFaviconForMostVisited:(ContentSuggestionsMostVisitedItem*)item
-                        parentItem:(ContentSuggestionsParentItem*)parentItem;
+
+// Recorder for content suggestions metrics.
+@property(nonatomic, weak)
+    ContentSuggestionsMetricsRecorder* contentSuggestionsMetricsRecorder;
 
 @end
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,14 +26,17 @@ import org.chromium.base.Log;
 public class VariationsSeedServer extends Service {
     private static final String TAG = "VariationsSeedServer";
 
-    private final IVariationsSeedServer.Stub mBinder = new IVariationsSeedServer.Stub() {
-        @Override
-        public void getSeed(ParcelFileDescriptor newSeedFile, long oldSeedDate,
-                IVariationsSeedServerCallback callback) {
-            maybeReportMetrics(callback);
-            VariationsSeedHolder.getInstance().writeSeedIfNewer(newSeedFile, oldSeedDate);
-        }
-    };
+    private final IVariationsSeedServer.Stub mBinder =
+            new IVariationsSeedServer.Stub() {
+                @Override
+                public void getSeed(
+                        ParcelFileDescriptor newSeedFile,
+                        long oldSeedDate,
+                        IVariationsSeedServerCallback callback) {
+                    maybeReportMetrics(callback);
+                    VariationsSeedHolder.getInstance().writeSeedIfNewer(newSeedFile, oldSeedDate);
+                }
+            };
 
     @Override
     public IBinder onBind(Intent intent) {

@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_MEDIA_ANDROID_MEDIA_PLAYER_RENDERER_H_
 #define CONTENT_BROWSER_MEDIA_ANDROID_MEDIA_PLAYER_RENDERER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -74,6 +74,7 @@ class CONTENT_EXPORT MediaPlayerRenderer
   void SetPlaybackRate(double playback_rate) override;
   void SetVolume(float volume) override;
   base::TimeDelta GetMediaTime() override;
+  media::RendererType GetRendererType() override;
 
   // media::MediaPlayerBridge::Client implementation
   media::MediaResourceGetter* GetMediaResourceGetter() override;

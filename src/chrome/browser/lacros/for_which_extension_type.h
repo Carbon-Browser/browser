@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,13 +38,14 @@ class ForWhichExtensionType {
   }
 
   template <class T>
-  const T& ChooseIntentFilter(bool is_quick_office,
+  const T& ChooseIntentFilter(bool is_legacy_quick_office,
                               const T& val_for_chrome_apps,
                               const T& val_for_extensions) const {
-    if (is_quick_office || for_chrome_apps_)
+    if (is_legacy_quick_office || for_chrome_apps_) {
       return val_for_chrome_apps;
-    else
-      return val_for_extensions;
+    }
+
+    return val_for_extensions;
   }
 
  private:

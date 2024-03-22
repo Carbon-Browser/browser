@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,10 @@
 #include "ui/base/interaction/element_tracker.h"
 #include "ui/base/interaction/framework_specific_implementation.h"
 
+namespace content {
+class WebContents;
+}
+
 namespace user_education {
 
 class HelpBubbleHandlerBase;
@@ -23,6 +27,10 @@ class HelpBubbleHandlerBase;
 class HelpBubbleWebUI : public HelpBubble {
  public:
   ~HelpBubbleWebUI() override;
+
+  // Retrieves the `WebContents` that hosts this help bubble, if any, or null if
+  // none. Will return null if the bubble is closed.
+  content::WebContents* GetWebContents();
 
   // HelpBubble:
   bool ToggleFocusForAccessibility() override;
@@ -40,7 +48,7 @@ class HelpBubbleWebUI : public HelpBubble {
   // HelpBubble:
   void CloseBubbleImpl() override;
 
-  const base::raw_ptr<HelpBubbleHandlerBase> handler_;
+  const raw_ptr<HelpBubbleHandlerBase, AcrossTasksDanglingUntriaged> handler_;
   const ui::ElementIdentifier anchor_id_;
 };
 

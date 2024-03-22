@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
                               IpczDriverHandle transport,
                               uint32_t flags,
                               const void* options,
-                              void* data,
+                              volatile void* data,
                               size_t* num_bytes,
                               IpczDriverHandle* handles,
                               size_t* num_handles) {
@@ -39,7 +39,7 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
                                num_bytes, handles, num_handles);
 }
 
-IpczResult IPCZ_API Deserialize(const void* data,
+IpczResult IPCZ_API Deserialize(const volatile void* data,
                                 size_t num_bytes,
                                 const IpczDriverHandle* handles,
                                 size_t num_handles,
@@ -74,6 +74,14 @@ IpczResult IPCZ_API DeactivateTransport(IpczDriverHandle driver_transport,
                                         uint32_t flags,
                                         const void* options) {
   return GetDriver().DeactivateTransport(driver_transport, flags, options);
+}
+
+IpczResult IPCZ_API ReportBadTransportActivity(IpczDriverHandle transport,
+                                               uintptr_t context,
+                                               uint32_t flags,
+                                               const void* options) {
+  return GetDriver().ReportBadTransportActivity(transport, context, flags,
+                                                options);
 }
 
 IpczResult IPCZ_API Transmit(IpczDriverHandle driver_transport,
@@ -113,7 +121,7 @@ IpczResult IPCZ_API DuplicateSharedMemory(IpczDriverHandle driver_memory,
 IpczResult IPCZ_API MapSharedMemory(IpczDriverHandle driver_memory,
                                     uint32_t flags,
                                     const void* options,
-                                    void** address,
+                                    volatile void** address,
                                     IpczDriverHandle* driver_mapping) {
   return GetDriver().MapSharedMemory(driver_memory, flags, options, address,
                                      driver_mapping);
@@ -149,6 +157,7 @@ const IpczDriver kMockDriver = {
     ActivateTransport,
     DeactivateTransport,
     Transmit,
+    ReportBadTransportActivity,
     AllocateSharedMemory,
     GetSharedMemoryInfo,
     DuplicateSharedMemory,

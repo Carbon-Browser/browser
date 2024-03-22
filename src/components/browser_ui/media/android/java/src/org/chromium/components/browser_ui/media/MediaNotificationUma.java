@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,7 @@ public class MediaNotificationUma {
      */
     public static void recordClickSource(Intent intent) {
         if (intent == null) return;
-        @Source
-        int source = intent.getIntExtra(INTENT_EXTRA_NAME, Source.INVALID);
+        @Source int source = intent.getIntExtra(INTENT_EXTRA_NAME, Source.INVALID);
         if (source == Source.INVALID || source >= Source.NUM_ENTRIES) return;
         RecordHistogram.recordEnumeratedHistogram(
                 "Media.Notification.Click", source, Source.NUM_ENTRIES);

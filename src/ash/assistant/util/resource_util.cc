@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -161,9 +161,9 @@ const gfx::VectorIcon& ToVectorIcon(const std::string& name) {
   return ToVectorIcon(ToIconName(name));
 }
 
-absl::optional<std::string> GetParam(const GURL& url, ResourceLinkParam param) {
+std::optional<std::string> GetParam(const GURL& url, ResourceLinkParam param) {
   if (!url.has_query())
-    return absl::nullopt;
+    return std::nullopt;
 
   const std::string param_key = ToString(param);
 
@@ -179,7 +179,7 @@ absl::optional<std::string> GetParam(const GURL& url, ResourceLinkParam param) {
       return ToString(value);
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace
@@ -192,7 +192,7 @@ GURL AppendOrReplaceColorParam(const GURL& resource_link, SkColor color) {
       resource_link, ToString(ResourceLinkParam::kColor), ToString(color));
 }
 
-GURL CreateIconResourceLink(IconName name, absl::optional<SkColor> color) {
+GURL CreateIconResourceLink(IconName name, std::optional<SkColor> color) {
   GURL icon_resource_link(kResourceLinkPrefix);
   icon_resource_link = net::AppendOrReplaceQueryParameter(
       icon_resource_link, ToString(ResourceLinkParam::kType),

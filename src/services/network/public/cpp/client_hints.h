@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,36 @@ class Origin;
 }  // namespace url
 
 namespace network {
+
+// The "Sec-CH-Prefers-Color-Scheme" header values.
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrefersColorSchemeDark[];
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrefersColorSchemeLight[];
+
+// The "Sec-CH-Prefers-Reduced-Motion" header values.
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrefersReducedMotionNoPreference[];
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrefersReducedMotionReduce[];
+
+// The "Sec-CH-Prefers-Reduced-Transparency" header values.
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrefersReducedTransparencyNoPreference[];
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrefersReducedTransparencyReduce[];
+
+// Mapping from WebEffectiveConnectionType to the header value. This value is
+// sent to the origins and is returned by the JavaScript API. The ordering
+// should match the ordering in //net/nqe/effective_connection_type.h and
+// public/platform/WebEffectiveConnectionType.h.
+// This array should be updated if either of the enums in
+// effective_connection_type.h or WebEffectiveConnectionType.h are updated.
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char* const kWebEffectiveConnectionTypeMapping[];
+
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const size_t kWebEffectiveConnectionTypeMappingCount;
 
 using ClientHintToNameMap =
     base::flat_map<network::mojom::WebClientHintsType, std::string>;
@@ -53,10 +83,6 @@ enum class MetaCHType {
   // Introduced in M69.
   HttpEquivAcceptCH,
   // This syntax can activate and delegate client hints to any origin.
-  // <meta name="accept-ch" content="Sec-CH-DPR=(https://foo.com/)">
-  // Introduced in M100.
-  NameAcceptCH,
-  // This syntax can activate and delegate client hints to any origin.
   // <meta http-equiv="delegate-ch" content="Sec-CH-DPR https://foo.com/">
   // Introduced in M105.
   HttpEquivDelegateCH,
@@ -69,6 +95,12 @@ enum class MetaCHType {
 const ClientHintToDelegatedThirdPartiesHeader COMPONENT_EXPORT(NETWORK_CPP)
     ParseClientHintToDelegatedThirdPartiesHeader(const std::string& header,
                                                  MetaCHType type);
+
+// This is used by subclassed of ClientHintsControllerDelegate to track the
+// amount of time that persisting client hints takes.
+void COMPONENT_EXPORT(NETWORK_CPP)
+    LogClientHintsPersistenceMetrics(const base::TimeTicks& persistence_started,
+                                     std::size_t hints_stored);
 
 }  // namespace network
 

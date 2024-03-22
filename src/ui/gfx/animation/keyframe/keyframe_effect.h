@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ class GFX_KEYFRAME_ANIMATION_EXPORT KeyframeEffect {
   void RemoveKeyframeModel(int keyframe_model_id);
   void RemoveKeyframeModels(int target_property);
 
-  virtual void Tick(base::TimeTicks monotonic_time);
+  virtual bool Tick(base::TimeTicks monotonic_time);
 
   // This ticks all keyframe models until they are complete.
   void FinishAll();
@@ -116,7 +116,7 @@ class GFX_KEYFRAME_ANIMATION_EXPORT KeyframeEffect {
                          KeyframeModel* keyframe_model);
 
  private:
-  void TickInternal(base::TimeTicks monotonic_time,
+  bool TickInternal(base::TimeTicks monotonic_time,
                     bool include_infinite_animations);
   void StartKeyframeModels(base::TimeTicks monotonic_time,
                            bool include_infinite_animations);

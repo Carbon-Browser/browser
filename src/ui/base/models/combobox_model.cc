@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ bool ComboboxModel::IsItemSeparatorAt(size_t index) const {
 }
 
 absl::optional<size_t> ComboboxModel::GetDefaultIndex() const {
-  return 0;
+  return size_t{0};
 }
 
 bool ComboboxModel::IsItemEnabledAt(size_t index) const {
@@ -50,6 +50,21 @@ void ComboboxModel::AddObserver(ComboboxModelObserver* observer) {
 
 void ComboboxModel::RemoveObserver(ComboboxModelObserver* observer) {
   observers_.RemoveObserver(observer);
+}
+
+absl::optional<ui::ColorId> ComboboxModel::GetDropdownForegroundColorIdAt(
+    size_t index) const {
+  return absl::nullopt;
+}
+
+absl::optional<ui::ColorId> ComboboxModel::GetDropdownBackgroundColorIdAt(
+    size_t index) const {
+  return absl::nullopt;
+}
+
+absl::optional<ui::ColorId>
+ComboboxModel::GetDropdownSelectedBackgroundColorIdAt(size_t index) const {
+  return absl::nullopt;
 }
 
 }  // namespace ui

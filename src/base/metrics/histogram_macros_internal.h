@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,12 @@ struct EnumSizeTraits {
 template <typename Enum>
 struct EnumSizeTraits<
     Enum,
-    std::enable_if_t<std::is_enum<decltype(Enum::kMaxValue)>::value>> {
+    std::enable_if_t<std::is_enum_v<decltype(Enum::kMaxValue)>>> {
   static constexpr Enum Count() {
+    // If you're getting
+    //   note: integer value X is outside the valid range of values [0, X] for
+    //         this enumeration type
+    // Then you need to give your enum a fixed underlying type.
     return static_cast<Enum>(
         static_cast<std::underlying_type_t<Enum>>(Enum::kMaxValue) + 1);
   }
@@ -137,9 +141,9 @@ struct EnumSizeTraits<
 #define INTERNAL_HISTOGRAM_EXACT_LINEAR_WITH_FLAG(name, sample, boundary,  \
                                                   flag)                    \
   do {                                                                     \
-    static_assert(!std::is_enum<std::decay_t<decltype(sample)>>::value,    \
+    static_assert(!std::is_enum_v<std::decay_t<decltype(sample)>>,         \
                   "|sample| should not be an enum type!");                 \
-    static_assert(!std::is_enum<std::decay_t<decltype(boundary)>>::value,  \
+    static_assert(!std::is_enum_v<std::decay_t<decltype(boundary)>>,       \
                   "|boundary| should not be an enum type!");               \
     STATIC_HISTOGRAM_POINTER_BLOCK(                                        \
         name, Add(sample),                                                 \
@@ -153,9 +157,9 @@ struct EnumSizeTraits<
 #define INTERNAL_HISTOGRAM_SCALED_EXACT_LINEAR_WITH_FLAG(                      \
     name, sample, count, boundary, scale, flag)                                \
   do {                                                                         \
-    static_assert(!std::is_enum<std::decay_t<decltype(sample)>>::value,        \
+    static_assert(!std::is_enum_v<std::decay_t<decltype(sample)>>,             \
                   "|sample| should not be an enum type!");                     \
-    static_assert(!std::is_enum<std::decay_t<decltype(boundary)>>::value,      \
+    static_assert(!std::is_enum_v<std::decay_t<decltype(boundary)>>,           \
                   "|boundary| should not be an enum type!");                   \
     class ScaledLinearHistogramInstance : public base::ScaledLinearHistogram { \
      public:                                                                   \
@@ -167,8 +171,9 @@ struct EnumSizeTraits<
                                   scale,                                       \
                                   flag) {}                                     \
     };                                                                         \
-    static base::LazyInstance<ScaledLinearHistogramInstance>::Leaky scaled;    \
-    scaled.Get().AddScaledCount(sample, count);                                \
+    static base::LazyInstance<ScaledLinearHistogramInstance>::Leaky            \
+        scaled_leaky;                                                          \
+    scaled_leaky.Get().AddScaledCount(sample, count);                          \
   } while (0)
 
 // Helper for 'overloading' UMA_HISTOGRAM_ENUMERATION with a variable number of
@@ -201,12 +206,12 @@ struct EnumSizeTraits<
   do {                                                                         \
     using decayed_sample = std::decay<decltype(sample)>::type;                 \
     using decayed_boundary = std::decay<decltype(boundary)>::type;             \
-    static_assert(!std::is_enum<decayed_boundary>::value ||                    \
-                      std::is_enum<decayed_sample>::value,                     \
-                  "Unexpected: |boundary| is enum, but |sample| is not.");     \
-    static_assert(!std::is_enum<decayed_sample>::value ||                      \
-                      !std::is_enum<decayed_boundary>::value ||                \
-                      std::is_same<decayed_sample, decayed_boundary>::value,   \
+    static_assert(                                                             \
+        !std::is_enum_v<decayed_boundary> || std::is_enum_v<decayed_sample>,   \
+        "Unexpected: |boundary| is enum, but |sample| is not.");               \
+    static_assert(!std::is_enum_v<decayed_sample> ||                           \
+                      !std::is_enum_v<decayed_boundary> ||                     \
+                      std::is_same_v<decayed_sample, decayed_boundary>,        \
                   "|sample| and |boundary| shouldn't be of different enums");  \
     static_assert(                                                             \
         static_cast<uintmax_t>(boundary) <                                     \
@@ -222,7 +227,7 @@ struct EnumSizeTraits<
                                                         scale, flag)         \
   do {                                                                       \
     using decayed_sample = std::decay<decltype(sample)>::type;               \
-    static_assert(std::is_enum<decayed_sample>::value,                       \
+    static_assert(std::is_enum_v<decayed_sample>,                            \
                   "Unexpected: |sample| is not at enum.");                   \
     constexpr auto boundary = base::internal::EnumSizeTraits<                \
         std::decay_t<decltype(sample)>>::Count();                            \

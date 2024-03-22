@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,13 +58,11 @@ class DeleteOldVersionsTest : public testing::Test {
     return base::CreateDirectory(install_dir().Append(name)) &&
            base::CreateDirectory(version_dir_path.Append(L"Installer")) &&
            base::WriteFile(version_dir_path.Append(L"chrome.dll"),
-                           kDummyContent, sizeof(kDummyContent)) &&
-           base::WriteFile(version_dir_path.Append(L"nacl64.exe"),
-                           kDummyContent, sizeof(kDummyContent)) &&
+                           kDummyContent) &&
            base::WriteFile(version_dir_path.Append(L"icudtl.dat"),
-                           kDummyContent, sizeof(kDummyContent)) &&
+                           kDummyContent) &&
            base::WriteFile(version_dir_path.Append(L"Installer\\setup.exe"),
-                           kDummyContent, sizeof(kDummyContent));
+                           kDummyContent);
   }
 
   // Returns the relative paths of all files and directories in |install_dir_|.
@@ -90,7 +88,6 @@ class DeleteOldVersionsTest : public testing::Test {
                        FilePathSet* file_path_set) {
     file_path_set->insert(base::FilePath(version));
     file_path_set->insert(base::FilePath(version).Append(L"chrome.dll"));
-    file_path_set->insert(base::FilePath(version).Append(L"nacl64.exe"));
     file_path_set->insert(base::FilePath(version).Append(L"icudtl.dat"));
     file_path_set->insert(base::FilePath(version).Append(L"Installer"));
     file_path_set->insert(

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,22 +17,23 @@ namespace features {
 // The following features are declared alphabetically. The features should be
 // documented with descriptions of their behaviors in the .cc file.
 
+#if BUILDFLAG(IS_CHROMEOS)
+COMPONENT_EXPORT(PRINTING_BASE) BASE_DECLARE_FEATURE(kEnableBorderlessPrinting);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 #if BUILDFLAG(IS_MAC)
-COMPONENT_EXPORT(PRINTING_BASE)
-extern const base::Feature kCupsIppPrintingBackend;
+COMPONENT_EXPORT(PRINTING_BASE) BASE_DECLARE_FEATURE(kCupsIppPrintingBackend);
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_WIN)
 COMPONENT_EXPORT(PRINTING_BASE)
-extern const base::Feature kPrintWithPostScriptType42Fonts;
+BASE_DECLARE_FEATURE(kPrintWithPostScriptType42Fonts);
 COMPONENT_EXPORT(PRINTING_BASE)
-extern const base::Feature kPrintWithReducedRasterization;
+BASE_DECLARE_FEATURE(kPrintWithReducedRasterization);
 COMPONENT_EXPORT(PRINTING_BASE)
-extern const base::Feature kReadPrinterCapabilitiesWithXps;
-COMPONENT_EXPORT(PRINTING_BASE)
-extern const base::Feature kUseXpsForPrinting;
-COMPONENT_EXPORT(PRINTING_BASE)
-extern const base::Feature kUseXpsForPrintingFromPdf;
+BASE_DECLARE_FEATURE(kReadPrinterCapabilitiesWithXps);
+COMPONENT_EXPORT(PRINTING_BASE) BASE_DECLARE_FEATURE(kUseXpsForPrinting);
+COMPONENT_EXPORT(PRINTING_BASE) BASE_DECLARE_FEATURE(kUseXpsForPrintingFromPdf);
 
 // Helper function to determine if there is any print path which could require
 // the use of XPS print capabilities.
@@ -45,17 +46,34 @@ bool ShouldPrintUsingXps(bool source_is_pdf);
 #endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
-COMPONENT_EXPORT(PRINTING_BASE)
-extern const base::Feature kEnableOopPrintDrivers;
+COMPONENT_EXPORT(PRINTING_BASE) BASE_DECLARE_FEATURE(kEnableOopPrintDrivers);
 COMPONENT_EXPORT(PRINTING_BASE)
 extern const base::FeatureParam<bool> kEnableOopPrintDriversJobPrint;
 COMPONENT_EXPORT(PRINTING_BASE)
 extern const base::FeatureParam<bool> kEnableOopPrintDriversSandbox;
+#if BUILDFLAG(IS_WIN)
+COMPONENT_EXPORT(PRINTING_BASE)
+extern const base::FeatureParam<bool> kEnableOopPrintDriversSingleProcess;
+#endif
 #endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
 #if BUILDFLAG(ENABLE_PRINT_CONTENT_ANALYSIS)
+// Enterprise code gated by the following two features is handled almost
+// identically through the print stack, but the underlying enterprise behavior
+// changes significantly depending on which service provider is set by the
+// OnPrintEnterpriseConnector policy. As such, using two features allows both
+// workflows to be tested and ramped up/down independently.
+//
+// Since the policy can only ever be enabled with a cloud provider or a local
+// provider, both flags being enabled at once shouldn't impact either workflows
+// in an unexpected way since administrators will select a policy value that
+// interacts with at most one of these two features.
+
+// Allows the scanning to happen post-print-preview when
+// OnPrintEnterpriseConnector has the "google" service_provider instead of doing
+// a pre-print-preview snapshot and sending it to the cloud for analysis.
 COMPONENT_EXPORT(PRINTING_BASE)
-extern const base::Feature kEnablePrintContentAnalysis;
+BASE_DECLARE_FEATURE(kEnableCloudScanAfterPreview);
 #endif  // BUILDFLAG(ENABLE_PRINT_CONTENT_ANALYSIS)
 
 }  // namespace features

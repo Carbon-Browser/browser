@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
-#include "base/memory/ref_counted.h"
 #include "chromeos/ash/components/network/onc/onc_certificate_pattern.h"
 #include "components/onc/onc_constants.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
@@ -177,21 +176,8 @@ void OncToClientCertConfig(::onc::ONCSource onc_source,
 // `resolved_cert`.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
 void SetResolvedCertInOnc(const ResolvedCert& resolved_cert,
-                          base::Value& network_config);
+                          base::Value::Dict& network_config);
 
 }  // namespace ash::client_cert
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::client_cert {
-using ::ash::client_cert::ClientCertConfig;
-using ::ash::client_cert::ConfigType;
-using ::ash::client_cert::GetClientCertFromShillProperties;
-using ::ash::client_cert::kDefaultTPMPin;
-using ::ash::client_cert::OncToClientCertConfig;
-using ::ash::client_cert::ResolvedCert;
-using ::ash::client_cert::SetEmptyShillProperties;
-using ::ash::client_cert::SetResolvedCertInOnc;
-using ::ash::client_cert::SetShillProperties;
-}  // namespace chromeos::client_cert
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_CLIENT_CERT_UTIL_H_

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 
 function addItem() {
   chrome.history.addUrl({url: 'http://www.a.com/'}, function() {
-    window.domAutomationController.send('success');
+    chrome.test.sendScriptResult('success');
   });
 }
 
 function countItemsInHistory() {
   var query = {'text': ''};
   chrome.history.search(query, function(results) {
-    window.domAutomationController.send(results.length.toString());
+    chrome.test.sendScriptResult(results.length.toString());
   });
 }
 

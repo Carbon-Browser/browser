@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,6 +46,10 @@ class MediaSession : public media_session::mojom::MediaSession {
 
   CONTENT_EXPORT static const base::UnguessableToken&
   GetRequestIdFromWebContents(WebContents* web_contents);
+
+  // Test method to flush all MediaSessionObservers for synchronization during
+  // tests.  Static so that it can be optimized away outside of tests.
+  CONTENT_EXPORT static void FlushObserversForTesting(WebContents* contents);
 
   // Tell the media session a user action has performed.
   virtual void DidReceiveAction(

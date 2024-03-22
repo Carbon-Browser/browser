@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/ash/device_scheduled_reboot/reboot_notification_controller.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
@@ -25,26 +26,18 @@ constexpr char kEmailId[] = "test@example.com";
 constexpr char kGaiaId[] = "12345";
 constexpr char kKioskEmailId[] = "test-kiosk@example.com";
 constexpr char kKioskGaiaId[] = "6789";
-const base::Time::Exploded kRebootTime2022Feb2At1520 = {
-    2022,  // year
-    2,     // month
-    4,     // day_of_week
-    2,     // day_of_month
-    15,    // hour
-    20,    // minute
-    0,     // second
-    0      // millisecond
-};
-const base::Time::Exploded kRebootTime2023May15At1115 = {
-    2023,  // year
-    5,     // month
-    4,     // day_of_week
-    15,    // day_of_month
-    11,    // hour
-    15,    // minute
-    0,     // second
-    0      // millisecond
-};
+constexpr base::Time::Exploded kRebootTime2022Feb2At1520 = {.year = 2022,
+                                                            .month = 2,
+                                                            .day_of_week = 4,
+                                                            .day_of_month = 2,
+                                                            .hour = 15,
+                                                            .minute = 20};
+constexpr base::Time::Exploded kRebootTime2023May15At1115 = {.year = 2023,
+                                                             .month = 5,
+                                                             .day_of_week = 4,
+                                                             .day_of_month = 15,
+                                                             .hour = 11,
+                                                             .minute = 15};
 
 class ClickCounter {
  public:
@@ -112,9 +105,10 @@ class RebootNotificationControllerTest : public testing::Test {
   content::BrowserTaskEnvironment test_environment_{
       base::test::TaskEnvironment::MainThreadType::UI};
   TestingProfileManager profile_manager_{TestingBrowserProcess::GetGlobal()};
-  TestingProfile* profile_ = nullptr;
+  raw_ptr<TestingProfile, ExperimentalAsh> profile_ = nullptr;
 
-  ash::FakeChromeUserManager* fake_user_manager_ = nullptr;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged | ExperimentalAsh>
+      fake_user_manager_ = nullptr;
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_tester_;
   RebootNotificationController notification_controller_;
@@ -139,9 +133,9 @@ TEST_F(RebootNotificationControllerTest, UserSessionShowsNotification) {
   notification_controller_.MaybeShowPendingRebootNotification(
       reboot_time, base::NullCallback());
   EXPECT_NE(absl::nullopt, GetPendingRebootNotification());
-  EXPECT_EQ(
-      GetPendingRebootNotification()->message(),
-      u"Your administrator will restart your device at 3:20 PM on Feb 2, 2022");
+  EXPECT_EQ(GetPendingRebootNotification()->message(),
+            u"Your administrator will restart your device at 3:20\u202fPM on "
+            u"Feb 2, 2022");
 
   // Show post reboot notification.
   notification_controller_.MaybeShowPostRebootNotification();
@@ -170,18 +164,19 @@ TEST_F(RebootNotificationControllerTest, UserSessionNotificationChanged) {
   notification_controller_.MaybeShowPendingRebootNotification(
       reboot_time1, base::NullCallback());
   EXPECT_NE(absl::nullopt, GetPendingRebootNotification());
-  EXPECT_EQ(
-      GetPendingRebootNotification()->message(),
-      u"Your administrator will restart your device at 3:20 PM on Feb 2, 2022");
+  EXPECT_EQ(GetPendingRebootNotification()->message(),
+            u"Your administrator will restart your device at 3:20\u202fPM on "
+            u"Feb 2, 2022");
   EXPECT_EQ(GetTransientNotificationCount(), 1);
 
   // Change reboot time. Close old notification and show new one.
   notification_controller_.MaybeShowPendingRebootNotification(
       reboot_time2, base::NullCallback());
   EXPECT_NE(absl::nullopt, GetPendingRebootNotification());
-  EXPECT_EQ(GetPendingRebootNotification()->message(),
-            u"Your administrator will restart your device at 11:15 AM on May "
-            u"15, 2023");
+  EXPECT_EQ(
+      GetPendingRebootNotification()->message(),
+      u"Your administrator will restart your device at 11:15\u202fAM on May "
+      u"15, 2023");
   EXPECT_EQ(GetTransientNotificationCount(), 1);
 }
 
@@ -204,9 +199,9 @@ TEST_F(RebootNotificationControllerTest, ManagedGuestSessionShowsNotification) {
   notification_controller_.MaybeShowPendingRebootNotification(
       reboot_time, base::NullCallback());
   EXPECT_NE(absl::nullopt, GetPendingRebootNotification());
-  EXPECT_EQ(
-      GetPendingRebootNotification()->message(),
-      u"Your administrator will restart your device at 3:20 PM on Feb 2, 2022");
+  EXPECT_EQ(GetPendingRebootNotification()->message(),
+            u"Your administrator will restart your device at 3:20\u202fPM on "
+            u"Feb 2, 2022");
 
   // Show post reboot notification.
   notification_controller_.MaybeShowPostRebootNotification();

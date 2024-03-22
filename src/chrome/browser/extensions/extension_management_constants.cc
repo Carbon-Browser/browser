@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,8 @@ const char kBlockedInstallMessage[] = "blocked_install_message";
 const char kToolbarPin[] = "toolbar_pin";
 const char kForcePinned[] = "force_pinned";
 const char kDefaultUnpinned[] = "default_unpinned";
+
+const char kFileUrlNavigationAllowed[] = "file_url_navigation_allowed";
 
 const AllowedTypesMapEntry kAllowedTypesMap[] = {
     {"extension", Manifest::TYPE_EXTENSION},

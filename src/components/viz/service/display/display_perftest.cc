@@ -1,11 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <limits>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/null_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/lap_timer.h"
@@ -80,9 +81,11 @@ class RemoveOverdrawQuadPerfTest : public testing::Test {
     // TODO(weiliangc): Figure out a better way to set up test without passing
     // in nullptr.
     auto display = std::make_unique<Display>(
-        &bitmap_manager_, RendererSettings(), &debug_settings_, frame_sink_id,
-        nullptr /* gpu::GpuTaskSchedulerHelper */, std::move(output_surface),
-        std::move(overlay_processor), std::move(scheduler), task_runner_.get());
+        &bitmap_manager_, /*shared_image_manager=*/nullptr,
+        /*sync_point_manager=*/nullptr, RendererSettings(), &debug_settings_,
+        frame_sink_id, nullptr /* gpu::GpuTaskSchedulerHelper */,
+        std::move(output_surface), std::move(overlay_processor),
+        std::move(scheduler), task_runner_.get());
     return display;
   }
 
@@ -97,9 +100,10 @@ class RemoveOverdrawQuadPerfTest : public testing::Test {
 
     SharedQuadState* state = render_pass->CreateAndAppendSharedQuadState();
     state->SetAll(quad_transform, rect, rect,
-                  /*mask_filter_info=*/gfx::MaskFilterInfo(),
-                  /*clip_rect=*/absl::nullopt, are_contents_opaque, opacity,
-                  blend_mode, sorting_context_id);
+                  /*filter_info=*/gfx::MaskFilterInfo(),
+                  /*clip=*/absl::nullopt, are_contents_opaque, opacity,
+                  blend_mode, sorting_context_id, /*layer_id=*/0u,
+                  /*fast_rounded_corner=*/false);
     return state;
   }
 

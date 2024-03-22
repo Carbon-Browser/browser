@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -184,9 +184,10 @@ TEST_P(SpellingServiceClientTest, RequestTextCheck) {
                                      test_case.sanitized_request_text,
                                      test_case.corrected_text);
 
-  base::ListValue dictionary;
+  base::Value::List dictionary;
   dictionary.Append(test_case.language);
-  pref->Set(spellcheck::prefs::kSpellCheckDictionaries, dictionary);
+  pref->SetList(spellcheck::prefs::kSpellCheckDictionaries,
+                std::move(dictionary));
 
   client_.RequestTextCheck(
       &profile_, test_case.request_type,
@@ -206,30 +207,27 @@ TEST_P(SpellingServiceClientTest, RequestTextCheck) {
   EXPECT_EQ("application/json", request_content_type);
 
   // Parse the JSON sent to the service, and verify its parameters.
-  std::unique_ptr<base::DictionaryValue> value(
-      static_cast<base::DictionaryValue*>(
-          base::JSONReader::ReadDeprecated(intercepted_body,
-                                           base::JSON_ALLOW_TRAILING_COMMAS)
-              .release()));
-  ASSERT_TRUE(value.get());
+  absl::optional<base::Value> value = base::JSONReader::Read(
+      intercepted_body, base::JSON_ALLOW_TRAILING_COMMAS);
+  ASSERT_TRUE(value);
+  ASSERT_TRUE(value->is_dict());
+  const base::Value::Dict& dict = value->GetDict();
 
-  std::string method;
-  EXPECT_FALSE(value->GetString("method", &method));
-  std::string version;
-  EXPECT_FALSE(value->GetString("apiVersion", &version));
-  std::string sanitized_text;
-  EXPECT_TRUE(value->GetString("text", &sanitized_text));
-  EXPECT_EQ(test_case.sanitized_request_text, sanitized_text);
-  std::string language;
-  EXPECT_TRUE(value->GetString("language", &language));
+  EXPECT_FALSE(dict.FindString("method"));
+  EXPECT_FALSE(dict.FindString("apiVersion"));
+  const std::string* sanitized_text = dict.FindString("text");
+  EXPECT_TRUE(sanitized_text);
+  EXPECT_EQ(test_case.sanitized_request_text, *sanitized_text);
+  const std::string* language = dict.FindString("language");
+  EXPECT_TRUE(language);
   std::string expected_language =
       test_case.language.empty() ? std::string("en") : test_case.language;
-  EXPECT_EQ(expected_language, language);
+  EXPECT_EQ(expected_language, *language);
   std::string expected_country;
-  ASSERT_TRUE(GetExpectedCountry(language, &expected_country));
-  std::string country;
-  EXPECT_TRUE(value->GetString("originCountry", &country));
-  EXPECT_EQ(expected_country, country);
+  ASSERT_TRUE(GetExpectedCountry(*language, &expected_country));
+  const std::string* country = dict.FindString("originCountry");
+  EXPECT_TRUE(country);
+  EXPECT_EQ(expected_country, *country);
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -360,20 +358,22 @@ TEST_F(SpellingServiceClientTest, AvailableServices) {
   // SpellingServiceClient::IsAvailable() describes why this function returns
   // false for suggestions.) If there is no language set, then we
   // do not allow any remote.
-  pref->Set(spellcheck::prefs::kSpellCheckDictionaries, base::ListValue());
+  pref->SetList(spellcheck::prefs::kSpellCheckDictionaries,
+                base::Value::List());
 
   EXPECT_FALSE(client_.IsAvailable(&profile_, kSuggest));
   EXPECT_FALSE(client_.IsAvailable(&profile_, kSpellcheck));
 
-  static const char* kSupported[] = {
+  static constexpr const char* kSupported[] = {
       "en-AU", "en-CA", "en-GB", "en-US", "da-DK", "es-ES",
   };
   // If spellcheck is allowed, then suggest is not since spellcheck is a
   // superset of suggest.
   for (size_t i = 0; i < std::size(kSupported); ++i) {
-    base::ListValue dictionary;
+    base::Value::List dictionary;
     dictionary.Append(kSupported[i]);
-    pref->Set(spellcheck::prefs::kSpellCheckDictionaries, dictionary);
+    pref->SetList(spellcheck::prefs::kSpellCheckDictionaries,
+                  std::move(dictionary));
 
     EXPECT_FALSE(client_.IsAvailable(&profile_, kSuggest));
     EXPECT_TRUE(client_.IsAvailable(&profile_, kSpellcheck));
@@ -381,7 +381,7 @@ TEST_F(SpellingServiceClientTest, AvailableServices) {
 
   // This function returns true for suggestions for all and false for
   // spellcheck for unsupported locales.
-  static const char* kUnsupported[] = {
+  static constexpr const char* kUnsupported[] = {
       "af-ZA", "bg-BG", "ca-ES", "cs-CZ", "de-DE", "el-GR", "et-EE", "fo-FO",
       "fr-FR", "he-IL", "hi-IN", "hr-HR", "hu-HU", "id-ID", "it-IT", "lt-LT",
       "lv-LV", "nb-NO", "nl-NL", "pl-PL", "pt-BR", "pt-PT", "ro-RO", "ru-RU",
@@ -389,9 +389,10 @@ TEST_F(SpellingServiceClientTest, AvailableServices) {
   };
   for (size_t i = 0; i < std::size(kUnsupported); ++i) {
     SCOPED_TRACE(std::string("Expected language ") + kUnsupported[i]);
-    base::ListValue dictionary;
+    base::Value::List dictionary;
     dictionary.Append(kUnsupported[i]);
-    pref->Set(spellcheck::prefs::kSpellCheckDictionaries, dictionary);
+    pref->SetList(spellcheck::prefs::kSpellCheckDictionaries,
+                  std::move(dictionary));
 
     EXPECT_TRUE(client_.IsAvailable(&profile_, kSuggest));
     EXPECT_FALSE(client_.IsAvailable(&profile_, kSpellcheck));

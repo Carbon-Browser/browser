@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/extensions/api/virtual_keyboard_private/lacros_virtual_keyboard_delegate.h"
@@ -27,19 +27,19 @@ void PopulateFeatureRestrictions(
   for (auto feature : features) {
     switch (feature) {
       case crosapi::mojom::VirtualKeyboardFeature::AUTOCOMPLETE:
-        update->auto_complete_enabled = std::make_unique<bool>(enabled);
+        update->auto_complete_enabled = enabled;
         break;
       case crosapi::mojom::VirtualKeyboardFeature::AUTOCORRECT:
-        update->auto_correct_enabled = std::make_unique<bool>(enabled);
+        update->auto_correct_enabled = enabled;
         break;
       case crosapi::mojom::VirtualKeyboardFeature::HANDWRITING:
-        update->handwriting_enabled = std::make_unique<bool>(enabled);
+        update->handwriting_enabled = enabled;
         break;
       case crosapi::mojom::VirtualKeyboardFeature::SPELL_CHECK:
-        update->spell_check_enabled = std::make_unique<bool>(enabled);
+        update->spell_check_enabled = enabled;
         break;
       case crosapi::mojom::VirtualKeyboardFeature::VOICE_INPUT:
-        update->voice_input_enabled = std::make_unique<bool>(enabled);
+        update->voice_input_enabled = enabled;
         break;
       case crosapi::mojom::VirtualKeyboardFeature::NONE:
         NOTREACHED();
@@ -111,7 +111,7 @@ bool LacrosVirtualKeyboardDelegate::IsSettingsEnabled() {
 }
 
 bool LacrosVirtualKeyboardDelegate::SetVirtualKeyboardMode(
-    int mode_enum,
+    api::virtual_keyboard_private::KeyboardMode mode,
     gfx::Rect target_bounds,
     OnSetModeCallback on_set_mode_callback) {
   NOTIMPLEMENTED_LOG_ONCE();
@@ -124,7 +124,8 @@ bool LacrosVirtualKeyboardDelegate::SetDraggableArea(
   return false;
 }
 
-bool LacrosVirtualKeyboardDelegate::SetRequestedKeyboardState(int state_enum) {
+bool LacrosVirtualKeyboardDelegate::SetRequestedKeyboardState(
+    api::virtual_keyboard_private::KeyboardState state) {
   NOTIMPLEMENTED_LOG_ONCE();
   return false;
 }
@@ -154,7 +155,6 @@ bool LacrosVirtualKeyboardDelegate::SetWindowBoundsInScreen(
 }
 
 void LacrosVirtualKeyboardDelegate::GetClipboardHistory(
-    const std::set<std::string>& item_ids_filter,
     OnGetClipboardHistoryCallback get_history_callback) {
   NOTIMPLEMENTED_LOG_ONCE();
 }

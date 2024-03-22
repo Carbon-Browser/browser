@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/common/media/webrtc_logging.mojom.h"
 #include "chrome/services/speech/buildflags/buildflags.h"
@@ -71,6 +72,10 @@ namespace subresource_filter {
 class UnverifiedRulesetDealer;
 }
 
+namespace url {
+class Origin;
+}
+
 namespace web_cache {
 class WebCacheImpl;
 }
@@ -91,7 +96,8 @@ class ChromeContentRendererClient
   void ExposeInterfacesToBrowser(mojo::BinderMap* binders) override;
   void RenderFrameCreated(content::RenderFrame* render_frame) override;
   void WebViewCreated(blink::WebView* web_view,
-                      bool was_created_by_renderer) override;
+                      bool was_created_by_renderer,
+                      const url::Origin* outermost_origin) override;
   SkBitmap* GetSadPluginBitmap() override;
   SkBitmap* GetSadWebViewBitmap() override;
   bool IsPluginHandledExternally(content::RenderFrame* render_frame,
@@ -126,14 +132,17 @@ class ChromeContentRendererClient
   bool DeferMediaLoad(content::RenderFrame* render_frame,
                       bool has_played_media_before,
                       base::OnceClosure closure) override;
+  void PostSandboxInitialized() override;
   void PostIOThreadCreated(
       base::SingleThreadTaskRunner* io_thread_task_runner) override;
   void PostCompositorThreadCreated(
       base::SingleThreadTaskRunner* compositor_thread_task_runner) override;
   bool RunIdleHandlerWhenWidgetsHidden() override;
   bool AllowPopup() override;
-  blink::ProtocolHandlerSecurityLevel GetProtocolHandlerSecurityLevel()
-      override;
+  bool ShouldNotifyServiceWorkerOnWebSocketActivity(
+      v8::Local<v8::Context> context) override;
+  blink::ProtocolHandlerSecurityLevel GetProtocolHandlerSecurityLevel(
+      const url::Origin& origin) override;
   void WillSendRequest(blink::WebLocalFrame* frame,
                        ui::PageTransition transition_type,
                        const blink::WebURL& url,
@@ -156,8 +165,7 @@ class ChromeContentRendererClient
       content::RenderFrame* render_frame) override;
 #if BUILDFLAG(ENABLE_SPEECH_SERVICE)
   std::unique_ptr<media::SpeechRecognitionClient> CreateSpeechRecognitionClient(
-      content::RenderFrame* render_frame,
-      media::SpeechRecognitionClient::OnReadyCallback callback) override;
+      content::RenderFrame* render_frame) override;
 #endif  // BUILDFLAG(ENABLE_SPEECH_SERVICE)
   void GetSupportedKeySystems(media::GetSupportedKeySystemsCB cb) override;
   bool IsPluginAllowedToUseCameraDeviceAPI(const GURL& url) override;
@@ -201,9 +209,6 @@ class ChromeContentRendererClient
       blink::WebVector<blink::WebContentSecurityPolicyHeader>* csp) override;
 
 #if BUILDFLAG(ENABLE_PLUGINS)
-  static mojo::AssociatedRemote<chrome::mojom::PluginInfoHost>&
-  GetPluginInfoHost();
-
   static blink::WebPlugin* CreatePlugin(
       content::RenderFrame* render_frame,
       const blink::WebPluginParams& params,
@@ -250,8 +255,7 @@ class ChromeContentRendererClient
                                   bool is_nacl_unrestricted,
                                   const extensions::Extension* extension);
   static void ReportNaClAppType(bool is_pnacl,
-                                bool is_extension_or_app,
-                                bool is_hosted_app);
+                                const extensions::Extension* extension);
 #endif
 
 #if BUILDFLAG(IS_WIN)

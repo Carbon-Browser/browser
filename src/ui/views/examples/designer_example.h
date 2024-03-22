@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_types.h"
@@ -21,6 +22,7 @@
 #include "ui/views/examples/example_base.h"
 #include "ui/views/masked_targeter_delegate.h"
 #include "ui/views/view.h"
+#include "ui/views/view_tracker.h"
 
 namespace ui {
 class Event;
@@ -101,7 +103,7 @@ class VIEWS_EXAMPLES_EXPORT DesignerExample : public ExampleBase,
     static bool IsRight(GrabHandlePosition position);
 
     GrabHandlePosition position_;
-    raw_ptr<GrabHandles> grab_handles_;
+    raw_ptr<GrabHandles, DanglingUntriaged> grab_handles_;
     raw_ptr<View> attached_view_ = nullptr;
     gfx::Point mouse_drag_pos_;
   };
@@ -148,12 +150,12 @@ class VIEWS_EXAMPLES_EXPORT DesignerExample : public ExampleBase,
   std::u16string GetItemAt(size_t index) const override;
   absl::optional<size_t> GetDefaultIndex() const override;
 
-  BoxLayoutView* designer_container_ = nullptr;
-  DesignerSurface* designer_panel_ = nullptr;
-  View* palette_panel_ = nullptr;
+  raw_ptr<BoxLayoutView> designer_container_ = nullptr;
+  raw_ptr<DesignerSurface> designer_panel_ = nullptr;
+  raw_ptr<View> palette_panel_ = nullptr;
 
-  Combobox* view_type_ = nullptr;
-  TableView* inspector_ = nullptr;
+  raw_ptr<Combobox> view_type_ = nullptr;
+  raw_ptr<TableView> inspector_ = nullptr;
   raw_ptr<ui::TableModelObserver> model_observer_ = nullptr;
 
   raw_ptr<View> selected_ = nullptr;
@@ -164,6 +166,8 @@ class VIEWS_EXAMPLES_EXPORT DesignerExample : public ExampleBase,
   GrabHandles grab_handles_;
 
   std::vector<std::unique_ptr<BaseClassRegistration>> class_registrations_;
+
+  views::ViewTracker tracker_;
 };
 
 }  // namespace examples

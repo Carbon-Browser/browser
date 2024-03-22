@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,32 +6,30 @@
 
 #import <utility>
 
-#include "base/check.h"
+#import "base/apple/foundation_util.h"
+#import "base/check.h"
 #import "base/feature_list.h"
-#include "base/mac/foundation_util.h"
-#include "base/strings/string_number_conversions.h"
-#include "base/strings/sys_string_conversions.h"
-#include "components/send_tab_to_self/features.h"
-#include "components/send_tab_to_self/send_tab_to_self_model.h"
-#include "components/send_tab_to_self/target_device_info.h"
+#import "base/strings/string_number_conversions.h"
+#import "base/strings/sys_string_conversions.h"
+#import "components/send_tab_to_self/features.h"
+#import "components/send_tab_to_self/send_tab_to_self_model.h"
+#import "components/send_tab_to_self/target_device_info.h"
+#import "components/sync_device_info/device_info.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_icon_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_url_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/send_tab_to_self/send_tab_to_self_image_detail_text_item.h"
 #import "ios/chrome/browser/ui/send_tab_to_self/send_tab_to_self_manage_devices_item.h"
 #import "ios/chrome/browser/ui/send_tab_to_self/send_tab_to_self_modal_delegate.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_icon_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
-#include "ios/chrome/browser/ui/table_view/cells/table_view_url_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
 
@@ -41,6 +39,8 @@ NSString* const kSendTabToSelfModalCancelButton =
 // Accessibility identifier of the Modal Cancel Button.
 NSString* const kSendTabToSelfModalSendButton =
     @"kSendTabToSelfModalSendButton";
+
+CGFloat kSymbolSize = 22;
 
 }  // namespace
 
@@ -142,6 +142,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
           initWithType:ItemTypeManageDevices];
   manageDevicesItem.accountAvatar = self.accountAvatar;
   manageDevicesItem.accountEmail = self.accountEmail;
+  manageDevicesItem.showManageDevicesLink = !_targetDeviceList.empty();
   manageDevicesItem.delegate = self.delegate;
   [model addItem:manageDevicesItem
       toSectionWithIdentifier:kSectionIdentifierEnumZero];
@@ -175,7 +176,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   if (itemType == ItemTypeSend) {
     TableViewTextButtonCell* tableViewTextButtonCell =
-        base::mac::ObjCCastStrict<TableViewTextButtonCell>(cell);
+        base::apple::ObjCCastStrict<TableViewTextButtonCell>(cell);
     [tableViewTextButtonCell.button addTarget:self
                                        action:@selector(sendTabWhenPressed:)
                              forControlEvents:UIControlEventTouchUpInside];
@@ -198,7 +199,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   DCHECK(item);
   if (item.type == ItemTypeDevice) {
     SendTabToSelfImageDetailTextItem* imageDetailTextItem =
-        base::mac::ObjCCastStrict<SendTabToSelfImageDetailTextItem>(item);
+        base::apple::ObjCCastStrict<SendTabToSelfImageDetailTextItem>(item);
     if (imageDetailTextItem == self.selectedItem) {
       [self.tableView deselectRowAtIndexPath:indexPath animated:YES];
       return;
@@ -249,21 +250,23 @@ typedef NS_ENUM(NSInteger, ItemType) {
     deviceItem.text = base::SysUTF8ToNSString(iter->device_name);
     deviceItem.detailText =
         [self sendTabToSelfdaysSinceLastUpdate:daysSinceLastUpdate];
-    switch (iter->device_type) {
-      case sync_pb::SyncEnums::TYPE_TABLET:
-        deviceItem.iconImageName = @"send_tab_to_self_tablet";
+    switch (iter->form_factor) {
+      case syncer::DeviceInfo::FormFactor::kTablet:
+        deviceItem.iconImage = MakeSymbolMonochrome(
+            DefaultSymbolWithPointSize(kIPadSymbol, kSymbolSize));
         break;
-      case sync_pb::SyncEnums::TYPE_PHONE:
-        deviceItem.iconImageName = @"send_tab_to_self_smartphone";
+      case syncer::DeviceInfo::FormFactor::kPhone:
+        deviceItem.iconImage = MakeSymbolMonochrome(
+            DefaultSymbolWithPointSize(kIPhoneSymbol, kSymbolSize));
         break;
-      case sync_pb::SyncEnums::TYPE_WIN:
-      case sync_pb::SyncEnums::TYPE_MAC:
-      case sync_pb::SyncEnums::TYPE_LINUX:
-      case sync_pb::SyncEnums::TYPE_CROS:
-        deviceItem.iconImageName = @"send_tab_to_self_laptop";
+      case syncer::DeviceInfo::FormFactor::kDesktop:
+        deviceItem.iconImage = MakeSymbolMonochrome(
+            DefaultSymbolWithPointSize(kLaptopSymbol, kSymbolSize));
         break;
       default:
-        deviceItem.iconImageName = @"send_tab_to_self_devices";
+        deviceItem.iconImage = MakeSymbolMonochrome(
+            DefaultSymbolWithPointSize(kLaptopSymbol, kSymbolSize));
+        break;
     }
 
     if (iter == _targetDeviceList.begin()) {

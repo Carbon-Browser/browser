@@ -1,8 +1,8 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assertEquals, assertFalse, assertThrows, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {assertEquals, assertFalse, assertThrows, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
 import {MetadataCacheItem} from './metadata_cache_item.js';
 import {MetadataItem} from './metadata_item.js';
@@ -124,7 +124,7 @@ export function testMetadataCacheItemError() {
   item.storeProperties(1, metadataWithError);
   const property = item.get(['contentThumbnailUrl']);
   assertEquals(undefined, property.contentThumbnailUrl);
-  assertEquals('Error', property.contentThumbnailUrlError.message);
+  assertEquals('Error', property.contentThumbnailUrlError?.message);
 }
 
 export function testMetadataCacheItemErrorShouldNotFetchedDirectly() {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/media/router/providers/wired_display/wired_display_presentation_receiver.h"
@@ -97,7 +97,7 @@ class PresentationReceiverWindowController final
   void CloseContents(content::WebContents* source) final;
   bool ShouldSuppressDialogs(content::WebContents* source) final;
   bool ShouldFocusLocationBarByDefault(content::WebContents* source) final;
-  bool ShouldFocusPageAfterCrash() final;
+  bool ShouldFocusPageAfterCrash(content::WebContents* source) final;
   void CanDownload(const GURL& url,
                    const std::string& request_method,
                    base::OnceCallback<void(bool)> callback) final;
@@ -109,7 +109,7 @@ class PresentationReceiverWindowController final
       const GURL& target_url) override;
 
   // The profile used for the presentation.
-  raw_ptr<Profile> otr_profile_;
+  raw_ptr<Profile, DanglingUntriaged> otr_profile_;
   base::ScopedObservation<Profile, ProfileObserver> otr_profile_observation_{
       this};
 
@@ -117,7 +117,7 @@ class PresentationReceiverWindowController final
   std::unique_ptr<content::WebContents> web_contents_;
 
   // The actual UI window for displaying the receiver page.
-  raw_ptr<PresentationReceiverWindow> window_;
+  raw_ptr<PresentationReceiverWindow, DanglingUntriaged> window_;
 
   base::OnceClosure termination_callback_;
 

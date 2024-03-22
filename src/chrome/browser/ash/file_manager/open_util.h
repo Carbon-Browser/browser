@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -8,7 +8,7 @@
 #ifndef CHROME_BROWSER_ASH_FILE_MANAGER_OPEN_UTIL_H_
 #define CHROME_BROWSER_ASH_FILE_MANAGER_OPEN_UTIL_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/browser/platform_util.h"
 
 class Profile;
@@ -17,8 +17,7 @@ namespace base {
 class FilePath;
 }
 
-namespace file_manager {
-namespace util {
+namespace file_manager::util {
 
 // If |item_type| is OPEN_FILE: Opens an item using a file handler, a file
 // browser handler, or the browser (open in a tab). The default handler has
@@ -48,7 +47,6 @@ void ShowItemInFolder(Profile* profile,
 // extensions including a file browser.
 void DisableShellOperationsForTesting();
 
-}  // namespace util
-}  // namespace file_manager
+}  // namespace file_manager::util
 
 #endif  // CHROME_BROWSER_ASH_FILE_MANAGER_OPEN_UTIL_H_

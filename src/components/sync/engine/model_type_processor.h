@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,13 @@
 #define COMPONENTS_SYNC_ENGINE_MODEL_TYPE_PROCESSOR_H_
 
 #include <memory>
+#include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "components/sync/engine/commit_and_get_updates_types.h"
+#include "components/sync/protocol/data_type_progress_marker.pb.h"
 #include "components/sync/protocol/model_type_state.pb.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace syncer {
 class CommitQueue;
@@ -52,8 +55,16 @@ class ModelTypeProcessor {
 
   // Informs this object that there are some incoming updates it should
   // handle.
-  virtual void OnUpdateReceived(const sync_pb::ModelTypeState& type_state,
-                                UpdateResponseDataList updates) = 0;
+  virtual void OnUpdateReceived(
+      const sync_pb::ModelTypeState& type_state,
+      UpdateResponseDataList updates,
+      absl::optional<sync_pb::GarbageCollectionDirective> gc_directive) = 0;
+
+  // Informs this object that it should handle new invalidations to store,
+  // replacing any previously-stored invalidations.
+  virtual void StorePendingInvalidations(
+      std::vector<sync_pb::ModelTypeState::Invalidation>
+          invalidations_to_store) = 0;
 };
 
 }  // namespace syncer

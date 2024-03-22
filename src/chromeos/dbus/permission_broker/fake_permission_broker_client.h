@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,16 @@ namespace chromeos {
 class COMPONENT_EXPORT(PERMISSION_BROKER) FakePermissionBrokerClient
     : public PermissionBrokerClient {
  public:
+  class Delegate {
+   public:
+    virtual ~Delegate() = default;
+
+    virtual void OnTcpPortReleased(uint16_t port,
+                                   const std::string& interface) {}
+    virtual void OnUdpPortReleased(uint16_t port,
+                                   const std::string& interface) {}
+  };
+
   FakePermissionBrokerClient();
 
   FakePermissionBrokerClient(const FakePermissionBrokerClient&) = delete;
@@ -90,8 +100,14 @@ class COMPONENT_EXPORT(PERMISSION_BROKER) FakePermissionBrokerClient
   // Add a rule to have RequestTcpPortAccess fail.
   void AddTcpDenyRule(uint16_t port, const std::string& interface);
 
-  // Add a rule to have RequestTcpPortAccess fail.
+  // Unconditionally fail all RequestTcpPortAccess calls.
+  void SetTcpDenyAll();
+
+  // Add a rule to have RequestUdpPortAccess fail.
   void AddUdpDenyRule(uint16_t port, const std::string& interface);
+
+  // Unconditionally fail all RequestUdpPortAccess calls.
+  void SetUdpDenyAll();
 
   // Returns true if TCP port has a hole.
   bool HasTcpHole(uint16_t port, const std::string& interface);
@@ -105,6 +121,8 @@ class COMPONENT_EXPORT(PERMISSION_BROKER) FakePermissionBrokerClient
   // Returns true if UDP port is being forwarded.
   bool HasUdpPortForward(uint16_t port, const std::string& interface);
 
+  void AttachDelegate(Delegate* delegate);
+
  private:
   using RuleSet =
       std::set<std::pair<uint16_t /* port */, std::string /* interface */>>;
@@ -112,8 +130,8 @@ class COMPONENT_EXPORT(PERMISSION_BROKER) FakePermissionBrokerClient
   struct UsbInterfaces {
     UsbInterfaces(
         const std::string& path,
-        std::unique_ptr<base::FileDescriptorWatcher::Controller> controller,
-        base::ScopedFD lifeline_fd);
+        base::ScopedFD lifeline_fd,
+        std::unique_ptr<base::FileDescriptorWatcher::Controller> controller);
     ~UsbInterfaces();
     UsbInterfaces(UsbInterfaces&&);
     UsbInterfaces& operator=(UsbInterfaces&&);
@@ -122,8 +140,11 @@ class COMPONENT_EXPORT(PERMISSION_BROKER) FakePermissionBrokerClient
     UsbInterfaces& operator=(const UsbInterfaces&) = delete;
 
     std::string path;
-    std::unique_ptr<base::FileDescriptorWatcher::Controller> controller;
+
+    // NOTE: The ordering of these fields is important: `controller` must be
+    // destroyed before `lifetime_fd` is closed.
     base::ScopedFD lifeline_fd;
+    std::unique_ptr<base::FileDescriptorWatcher::Controller> controller;
   };
 
   bool RequestPortImpl(uint16_t port,
@@ -132,7 +153,7 @@ class COMPONENT_EXPORT(PERMISSION_BROKER) FakePermissionBrokerClient
                        RuleSet* hole_set);
 
   void HandleClosedClient(const std::string& client_id) {
-    clients.erase(client_id);
+    clients_.erase(client_id);
   }
 
   RuleSet tcp_hole_set_;
@@ -144,7 +165,12 @@ class COMPONENT_EXPORT(PERMISSION_BROKER) FakePermissionBrokerClient
   RuleSet tcp_deny_rule_set_;
   RuleSet udp_deny_rule_set_;
 
-  std::map<std::string, UsbInterfaces> clients;
+  bool tcp_deny_all_ = false;
+  bool udp_deny_all_ = false;
+
+  std::map<std::string, UsbInterfaces> clients_;
+
+  raw_ptr<Delegate, DanglingUntriaged> delegate_ = nullptr;
 
   base::WeakPtrFactory<FakePermissionBrokerClient> weak_factory_{this};
 };

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -99,7 +99,6 @@ class WebApkUpdateDataFetcher : public content::WebContentsObserver {
   bool is_primary_icon_maskable_;
 
   SkBitmap splash_icon_;
-  bool is_splash_icon_maskable_;
 
   base::WeakPtrFactory<WebApkUpdateDataFetcher> weak_ptr_factory_{this};
 };

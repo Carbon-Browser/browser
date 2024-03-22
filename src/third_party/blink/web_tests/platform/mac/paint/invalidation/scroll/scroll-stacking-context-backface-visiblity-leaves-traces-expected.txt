@@ -10,7 +10,6 @@
     {
       "name": "LayoutNGBlockFlow (relative positioned) HEADER",
       "bounds": [769, 20],
-      "contentsOpaqueForText": true,
       "drawsContent": false,
       "backfaceVisibility": "hidden",
       "transform": 2
@@ -25,7 +24,8 @@
     {
       "name": "VerticalScrollbar",
       "position": [785, 0],
-      "bounds": [15, 600]
+      "bounds": [15, 600],
+      "contentsOpaque": true
     }
   ],
   "transforms": [

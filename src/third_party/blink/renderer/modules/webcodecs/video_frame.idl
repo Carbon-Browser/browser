@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@ typedef ([AllowShared] ArrayBuffer or [AllowShared] ArrayBufferView) AllowShared
 
 [
     Exposed=(Window,DedicatedWorker),
-    Serializable,
-    RuntimeEnabled=WebCodecs
+    Serializable
 ] interface VideoFrame {
   [CallWith=ScriptState, RaisesException, MeasureAs=WebCodecsVideoFrameFromImage]
   constructor(CanvasImageSource source, optional VideoFrameInit init = {});
@@ -20,7 +19,7 @@ typedef ([AllowShared] ArrayBuffer or [AllowShared] ArrayBufferView) AllowShared
   readonly attribute VideoPixelFormat? format;
 
   // Presentation timestamp, in microseconds.
-  readonly attribute long long? timestamp;
+  readonly attribute long long timestamp;
   // Presentation duration, in microseconds.
   readonly attribute unsigned long long? duration;
 

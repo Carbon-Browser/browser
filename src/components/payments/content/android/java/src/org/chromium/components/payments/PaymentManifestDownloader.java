@@ -1,15 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.payments;
 
-import androidx.annotation.VisibleForTesting;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.url.GURL;
 import org.chromium.url.Origin;
@@ -55,17 +54,22 @@ public class PaymentManifestDownloader {
     }
 
     private long mNativeObject;
+    private CSPCheckerBridge mCSPCheckerBridge;
 
     /**
      * Initializes the native downloader.
      *
      * @param webContents The web contents to use as the context for the downloads. If this goes
      *                    away, pending downloads are cancelled.
+     * @param cspChecker The Content-Security-Policy (CSP) checker.
      */
-    public void initialize(WebContents webContents) {
+    public void initialize(WebContents webContents, CSPChecker cspChecker) {
         ThreadUtils.assertOnUiThread();
         assert mNativeObject == 0;
-        mNativeObject = PaymentManifestDownloaderJni.get().init(webContents);
+        mCSPCheckerBridge = new CSPCheckerBridge(cspChecker);
+        mNativeObject =
+                PaymentManifestDownloaderJni.get()
+                        .init(webContents, mCSPCheckerBridge.getNativeCSPChecker());
     }
 
     /** @return Whether the native downloader is initialized. */
@@ -86,8 +90,13 @@ public class PaymentManifestDownloader {
         ThreadUtils.assertOnUiThread();
         assert mNativeObject != 0;
         assert merchantOrigin != null;
-        PaymentManifestDownloaderJni.get().downloadPaymentMethodManifest(mNativeObject,
-                PaymentManifestDownloader.this, merchantOrigin, methodName, callback);
+        PaymentManifestDownloaderJni.get()
+                .downloadPaymentMethodManifest(
+                        mNativeObject,
+                        PaymentManifestDownloader.this,
+                        merchantOrigin,
+                        methodName,
+                        callback);
     }
 
     /**
@@ -98,14 +107,20 @@ public class PaymentManifestDownloader {
      * @param webAppManifestUrl           The web app manifest URL with HTTPS scheme.
      * @param callback                    The callback to invoke when finished downloading.
      */
-    public void downloadWebAppManifest(Origin paymentMethodManifestOrigin, GURL webAppManifestUrl,
+    public void downloadWebAppManifest(
+            Origin paymentMethodManifestOrigin,
+            GURL webAppManifestUrl,
             ManifestDownloadCallback callback) {
         ThreadUtils.assertOnUiThread();
         assert mNativeObject != 0;
         assert paymentMethodManifestOrigin != null;
-        PaymentManifestDownloaderJni.get().downloadWebAppManifest(mNativeObject,
-                PaymentManifestDownloader.this, paymentMethodManifestOrigin, webAppManifestUrl,
-                callback);
+        PaymentManifestDownloaderJni.get()
+                .downloadWebAppManifest(
+                        mNativeObject,
+                        PaymentManifestDownloader.this,
+                        paymentMethodManifestOrigin,
+                        webAppManifestUrl,
+                        callback);
     }
 
     /** Destroys the native downloader. */
@@ -114,24 +129,34 @@ public class PaymentManifestDownloader {
         assert mNativeObject != 0;
         PaymentManifestDownloaderJni.get().destroy(mNativeObject, PaymentManifestDownloader.this);
         mNativeObject = 0;
+        if (mCSPCheckerBridge != null) mCSPCheckerBridge.destroy();
     }
 
     /** @return An opaque origin to be used in tests. */
-    @VisibleForTesting
     public static Origin createOpaqueOriginForTest() {
         return PaymentManifestDownloaderJni.get().createOpaqueOriginForTest();
     }
 
     @NativeMethods
     interface Natives {
-        long init(WebContents webContents);
-        void downloadPaymentMethodManifest(long nativePaymentManifestDownloaderAndroid,
-                PaymentManifestDownloader caller, Origin merchantOrigin, GURL methodName,
+        long init(WebContents webContents, long nativeCSPCheckerAndroid);
+
+        void downloadPaymentMethodManifest(
+                long nativePaymentManifestDownloaderAndroid,
+                PaymentManifestDownloader caller,
+                Origin merchantOrigin,
+                GURL methodName,
                 ManifestDownloadCallback callback);
-        void downloadWebAppManifest(long nativePaymentManifestDownloaderAndroid,
-                PaymentManifestDownloader caller, Origin paymentMethodManifestOrigin,
-                GURL webAppManifestUri, ManifestDownloadCallback callback);
+
+        void downloadWebAppManifest(
+                long nativePaymentManifestDownloaderAndroid,
+                PaymentManifestDownloader caller,
+                Origin paymentMethodManifestOrigin,
+                GURL webAppManifestUri,
+                ManifestDownloadCallback callback);
+
         void destroy(long nativePaymentManifestDownloaderAndroid, PaymentManifestDownloader caller);
+
         Origin createOpaqueOriginForTest();
     }
 }

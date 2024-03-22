@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <Carbon/Carbon.h>
 #include <stdint.h>
 
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/memory/ptr_util.h"
+#include "base/notreached.h"
 #include "remoting/base/logging.h"
 
 namespace {
@@ -35,6 +36,7 @@ class DesktopResizerMac : public DesktopResizer {
                      webrtc::ScreenId screen_id) override;
   void RestoreResolution(const ScreenResolution& original,
                          webrtc::ScreenId screen_id) override;
+  void SetVideoLayout(const protocol::VideoLayout& layout) override;
 
  private:
   // If there is a single display, get its id and return true, otherwise return
@@ -42,7 +44,7 @@ class DesktopResizerMac : public DesktopResizer {
   bool GetSoleDisplayId(CGDirectDisplayID* display);
 
   void GetSupportedModesAndResolutions(
-      base::ScopedCFTypeRef<CFMutableArrayRef>* modes,
+      base::apple::ScopedCFTypeRef<CFMutableArrayRef>* modes,
       std::list<ScreenResolution>* resolutions);
 };
 
@@ -61,7 +63,7 @@ ScreenResolution DesktopResizerMac::GetCurrentResolution(
 std::list<ScreenResolution> DesktopResizerMac::GetSupportedResolutions(
     const ScreenResolution& preferred,
     webrtc::ScreenId screen_id) {
-  base::ScopedCFTypeRef<CFMutableArrayRef> modes;
+  base::apple::ScopedCFTypeRef<CFMutableArrayRef> modes;
   std::list<ScreenResolution> resolutions;
   GetSupportedModesAndResolutions(&modes, &resolutions);
   return resolutions;
@@ -74,7 +76,7 @@ void DesktopResizerMac::SetResolution(const ScreenResolution& resolution,
     return;
   }
 
-  base::ScopedCFTypeRef<CFMutableArrayRef> modes;
+  base::apple::ScopedCFTypeRef<CFMutableArrayRef> modes;
   std::list<ScreenResolution> resolutions;
   GetSupportedModesAndResolutions(&modes, &resolutions);
   // There may be many modes with the requested resolution. Pick the one with
@@ -84,22 +86,26 @@ void DesktopResizerMac::SetResolution(const ScreenResolution& resolution,
   for (std::list<ScreenResolution>::const_iterator i = resolutions.begin();
        i != resolutions.end(); ++i, ++index) {
     if (i->Equals(resolution)) {
-      CGDisplayModeRef mode = const_cast<CGDisplayModeRef>(
-          static_cast<const CGDisplayMode*>(
-              CFArrayGetValueAtIndex(modes, index)));
+      CGDisplayModeRef mode =
+          const_cast<CGDisplayModeRef>(static_cast<const CGDisplayMode*>(
+              CFArrayGetValueAtIndex(modes.get(), index)));
       int depth = 0;
-      base::ScopedCFTypeRef<CFStringRef> encoding(
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+      // TODO(https://crbug.com/1394415): Find non-deprecated replacement.
+      base::apple::ScopedCFTypeRef<CFStringRef> encoding(
           CGDisplayModeCopyPixelEncoding(mode));
-      if (CFStringCompare(encoding, CFSTR(IO32BitDirectPixels),
+#pragma clang diagnostic pop
+      if (CFStringCompare(encoding.get(), CFSTR(IO32BitDirectPixels),
                           kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
         depth = 32;
-      } else if (CFStringCompare(
-          encoding, CFSTR(IO16BitDirectPixels),
-          kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
+      } else if (CFStringCompare(encoding.get(), CFSTR(IO16BitDirectPixels),
+                                 kCFCompareCaseInsensitive) ==
+                 kCFCompareEqualTo) {
         depth = 16;
-      } else if(CFStringCompare(
-          encoding, CFSTR(IO8BitIndexedPixels),
-          kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
+      } else if (CFStringCompare(encoding.get(), CFSTR(IO8BitIndexedPixels),
+                                 kCFCompareCaseInsensitive) ==
+                 kCFCompareEqualTo) {
         depth = 8;
       }
       if (depth > best_depth) {
@@ -110,10 +116,10 @@ void DesktopResizerMac::SetResolution(const ScreenResolution& resolution,
   }
   if (best_mode) {
     HOST_LOG << "Changing mode to " << best_mode << " ("
-              << resolution.dimensions().width() << "x"
-              << "x" << resolution.dimensions().height() << "x"
-              << best_depth << " @ "
-              << resolution.dpi().x() << "x" << resolution.dpi().y() << " dpi)";
+             << resolution.dimensions().width() << "x"
+             << "x" << resolution.dimensions().height() << "x" << best_depth
+             << " @ " << resolution.dpi().x() << "x" << resolution.dpi().y()
+             << " dpi)";
     CGDisplaySetDisplayMode(display, best_mode, nullptr);
   }
 }
@@ -123,26 +129,30 @@ void DesktopResizerMac::RestoreResolution(const ScreenResolution& original,
   SetResolution(original, screen_id);
 }
 
+void DesktopResizerMac::SetVideoLayout(const protocol::VideoLayout& layout) {
+  NOTIMPLEMENTED();
+}
+
 void DesktopResizerMac::GetSupportedModesAndResolutions(
-    base::ScopedCFTypeRef<CFMutableArrayRef>* modes,
+    base::apple::ScopedCFTypeRef<CFMutableArrayRef>* modes,
     std::list<ScreenResolution>* resolutions) {
   CGDirectDisplayID display;
   if (!GetSoleDisplayId(&display)) {
     return;
   }
 
-  base::ScopedCFTypeRef<CFArrayRef> all_modes(
+  base::apple::ScopedCFTypeRef<CFArrayRef> all_modes(
       CGDisplayCopyAllDisplayModes(display, nullptr));
   if (!all_modes) {
     return;
   }
 
-  modes->reset(CFArrayCreateMutableCopy(nullptr, 0, all_modes));
-  CFIndex count = CFArrayGetCount(*modes);
+  modes->reset(CFArrayCreateMutableCopy(nullptr, 0, all_modes.get()));
+  CFIndex count = CFArrayGetCount(modes->get());
   for (CFIndex i = 0; i < count; ++i) {
-    CGDisplayModeRef mode = const_cast<CGDisplayModeRef>(
-        static_cast<const CGDisplayMode*>(
-            CFArrayGetValueAtIndex(*modes, i)));
+    CGDisplayModeRef mode =
+        const_cast<CGDisplayModeRef>(static_cast<const CGDisplayMode*>(
+            CFArrayGetValueAtIndex(modes->get(), i)));
     if (CGDisplayModeIsUsableForDesktopGUI(mode)) {
       // TODO(jamiewalch): Get the correct DPI: http://crbug.com/172405.
       ScreenResolution resolution(
@@ -151,7 +161,7 @@ void DesktopResizerMac::GetSupportedModesAndResolutions(
           webrtc::DesktopVector(kDefaultDPI, kDefaultDPI));
       resolutions->push_back(resolution);
     } else {
-      CFArrayRemoveValueAtIndex(*modes, i);
+      CFArrayRemoveValueAtIndex(modes->get(), i);
       --count;
       --i;
     }

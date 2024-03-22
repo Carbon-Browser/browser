@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ enum class NonModalPromoTriggerType {
 // promo.
 void LogNonModalPromoAction(NonModalPromoAction action,
                             NonModalPromoTriggerType type,
-                            int impression_number);
+                            NSInteger impression_number);
 
 // Logs the time a non modal promo was on screen.
 void LogNonModalTimeOnScreen(base::TimeTicks initial_time);

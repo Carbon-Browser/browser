@@ -1,11 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync_device_info/local_device_info_provider_impl.h"
 
-#include "base/bind.h"
-#include "components/sync/base/sync_prefs.h"
+#include "base/trace_event/trace_event.h"
 #include "components/sync/base/sync_util.h"
 #include "components/sync_device_info/device_info_sync_client.h"
 #include "components/sync_device_info/device_info_util.h"
@@ -57,10 +56,20 @@ const DeviceInfo* LocalDeviceInfoProviderImpl::GetLocalDeviceInfo() const {
     local_device_info_->set_interested_data_types(*interested_data_types);
   }
 
-  absl::optional<DeviceInfo::PhoneAsASecurityKeyInfo> paask_info =
+  DeviceInfo::PhoneAsASecurityKeyInfo::StatusOrInfo paask_status =
       sync_client_->GetPhoneAsASecurityKeyInfo();
-  if (paask_info) {
-    local_device_info_->set_paask_info(std::move(*paask_info));
+  if (absl::get_if<DeviceInfo::PhoneAsASecurityKeyInfo::NotReady>(
+          &paask_status)) {
+    // `sync_client_` will call `RefreshLocalDeviceInfo` when it's ready.
+  } else if (absl::get_if<DeviceInfo::PhoneAsASecurityKeyInfo::NoSupport>(
+                 &paask_status)) {
+    local_device_info_->set_paask_info(absl::nullopt);
+  } else if (DeviceInfo::PhoneAsASecurityKeyInfo* info =
+                 absl::get_if<DeviceInfo::PhoneAsASecurityKeyInfo>(
+                     &paask_status)) {
+    local_device_info_->set_paask_info(std::move(*info));
+  } else {
+    NOTREACHED_NORETURN();
   }
 
   // This check is required to ensure user's who toggle UMA have their
@@ -96,6 +105,7 @@ void LocalDeviceInfoProviderImpl::Initialize(
     const std::string& model_name,
     const std::string& full_hardware_class,
     std::unique_ptr<DeviceInfo> device_info_restored_from_store) {
+  TRACE_EVENT0("sync", "LocalDeviceInfoProviderImpl::Initialize");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!cache_guid.empty());
 
@@ -118,8 +128,9 @@ void LocalDeviceInfoProviderImpl::Initialize(
   // the specifics when it will be synced up.
   local_device_info_ = std::make_unique<DeviceInfo>(
       cache_guid, client_name, version_, MakeUserAgentForSync(channel_),
-      GetLocalDeviceType(), sync_client_->GetSigninScopedDeviceId(),
-      manufacturer_name, model_name, full_hardware_class,
+      GetLocalDeviceType(), GetLocalDeviceOSType(), GetLocalDeviceFormFactor(),
+      sync_client_->GetSigninScopedDeviceId(), manufacturer_name, model_name,
+      full_hardware_class,
       /*last_updated_timestamp=*/base::Time(),
       DeviceInfoUtil::GetPulseInterval(),
       sync_client_->GetSendTabToSelfReceivingEnabled(),
@@ -128,6 +139,8 @@ void LocalDeviceInfoProviderImpl::Initialize(
 
   full_hardware_class_ = full_hardware_class;
 
+  TRACE_EVENT0("ui",
+               "LocalDeviceInfoProviderImpl::Initialize::NotifyObservers");
   // Notify observers.
   closure_list_.Notify();
 }

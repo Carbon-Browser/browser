@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,7 @@ class WorkingSetTrimmer {
   // Returns true if the WorkingSetTrimmer is supported on the current platform.
   virtual bool PlatformSupportsWorkingSetTrim() = 0;
 
-  // Returns true if working set trim succeeded for the provided ProcessNode.
-  virtual bool TrimWorkingSet(const ProcessNode* process_node) = 0;
+  virtual void TrimWorkingSet(const ProcessNode* process_node) = 0;
 
  protected:
   // A WorkingSetTrimmer should never be created directly it should only be

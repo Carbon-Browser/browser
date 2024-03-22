@@ -1,14 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/extensions/login_screen/login/login_api.h"
 
-#include <memory>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
@@ -58,8 +57,8 @@ absl::optional<std::string> ValidateCrosapi(int min_version = 0) {
 
   if (min_version == 0)
     return absl::nullopt;
-  int interface_version = chromeos::LacrosService::Get()->GetInterfaceVersion(
-      crosapi::mojom::Login::Uuid_);
+  int interface_version = chromeos::LacrosService::Get()
+                              ->GetInterfaceVersion<crosapi::mojom::Login>();
   if (interface_version < min_version)
     return kUnsupportedByAsh;
 
@@ -86,7 +85,7 @@ ExtensionFunctionWithStringResult::~ExtensionFunctionWithStringResult() =
     default;
 
 void ExtensionFunctionWithStringResult::OnResult(const std::string& result) {
-  Respond(OneArgument(base::Value(result)));
+  Respond(WithArguments(result));
 }
 
 ExtensionFunctionWithVoidResult::~ExtensionFunctionWithVoidResult() = default;

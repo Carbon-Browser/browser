@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -33,6 +34,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/bookmarks/test/bookmark_test_helpers.h"
 #include "components/prefs/pref_service.h"
@@ -43,9 +45,11 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
+#include "ui/compositor/layer_tree_owner.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/button/menu_button.h"
+#include "ui/views/test/views_test_utils.h"
 #include "ui/views/view_utils.h"
 #include "url/gurl.h"
 
@@ -57,6 +61,8 @@ namespace {
 class BookmarkBarViewBaseTest : public ChromeViewsTestBase {
  public:
   BookmarkBarViewBaseTest() {
+    feature_list_.InitAndEnableFeature(features::kTabGroupsSave);
+
     TestingProfile::Builder profile_builder;
     profile_builder.AddTestingFactory(
         TemplateURLServiceFactory::GetInstance(),
@@ -108,7 +114,7 @@ class BookmarkBarViewBaseTest : public ChromeViewsTestBase {
                      !test_helper_->GetBookmarkButton(count - 1)->GetVisible());
          ++i) {
       bookmark_bar_view()->SetBounds(0, 0, start_width + i * 10, height);
-      bookmark_bar_view()->Layout();
+      views::test::RunScheduledLayout(bookmark_bar_view());
     }
   }
 
@@ -147,12 +153,16 @@ class BookmarkBarViewBaseTest : public ChromeViewsTestBase {
 
  private:
   static std::unique_ptr<KeyedService> CreateTemplateURLService(
-      content::BrowserContext* profile) {
+      content::BrowserContext* context) {
+    Profile* profile = Profile::FromBrowserContext(context);
     return std::make_unique<TemplateURLService>(
-        static_cast<Profile*>(profile)->GetPrefs(),
-        std::make_unique<SearchTermsData>(),
+        profile->GetPrefs(), std::make_unique<SearchTermsData>(),
         nullptr /* KeywordWebDataService */,
-        nullptr /* TemplateURLServiceClient */, base::RepeatingClosure());
+        nullptr /* TemplateURLServiceClient */, base::RepeatingClosure()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        , profile->IsMainProfile()
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+    );
   }
 };
 
@@ -214,7 +224,7 @@ class BookmarkBarViewInWidgetTest : public BookmarkBarViewBaseTest {
 
  private:
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<BookmarkBarView> bookmark_bar_view_ = nullptr;
+  raw_ptr<BookmarkBarView, DanglingUntriaged> bookmark_bar_view_ = nullptr;
 };
 
 // Verify that in instant extended mode the visibility of the apps shortcut
@@ -255,13 +265,13 @@ TEST_F(BookmarkBarViewTest, OverflowVisibility) {
   // Go really big, which should force all buttons to be added.
   bookmark_bar_view()->SetBounds(0, 0, 5000,
                                  bookmark_bar_view()->bounds().height());
-  bookmark_bar_view()->Layout();
+  views::test::RunScheduledLayout(bookmark_bar_view());
   EXPECT_EQ(6u, test_helper_->GetBookmarkButtonCount());
   EXPECT_FALSE(test_helper_->overflow_button()->GetVisible());
 
   bookmark_bar_view()->SetBounds(0, 0, width_for_one,
                                  bookmark_bar_view()->bounds().height());
-  bookmark_bar_view()->Layout();
+  views::test::RunScheduledLayout(bookmark_bar_view());
   EXPECT_TRUE(test_helper_->overflow_button()->GetVisible());
 }
 
@@ -277,7 +287,7 @@ TEST_F(BookmarkBarViewTest, ButtonsDynamicallyAddedAfterModelHasNodes) {
   // Go really big, which should force all buttons to be added.
   bookmark_bar_view()->SetBounds(0, 0, 5000,
                                  bookmark_bar_view()->bounds().height());
-  bookmark_bar_view()->Layout();
+  views::test::RunScheduledLayout(bookmark_bar_view());
   EXPECT_EQ(6u, test_helper_->GetBookmarkButtonCount());
 
   // Ensure buttons were added in the correct place.
@@ -300,7 +310,7 @@ TEST_F(BookmarkBarViewTest, ButtonsDynamicallyAdded) {
   // Go really big, which should force all buttons to be added.
   bookmark_bar_view()->SetBounds(0, 0, 5000,
                                  bookmark_bar_view()->bounds().height());
-  bookmark_bar_view()->Layout();
+  views::test::RunScheduledLayout(bookmark_bar_view());
   EXPECT_EQ(6u, test_helper_->GetBookmarkButtonCount());
   // Ensure buttons were added in the correct place.
   auto button_iter =
@@ -316,7 +326,7 @@ TEST_F(BookmarkBarViewTest, AddNodesWhenBarAlreadySized) {
   bookmark_bar_view()->SetBounds(0, 0, 5000,
                                  bookmark_bar_view()->bounds().height());
   AddNodesToBookmarkBarFromModelString("a b c d e f ");
-  bookmark_bar_view()->Layout();
+  views::test::RunScheduledLayout(bookmark_bar_view());
   EXPECT_EQ("a b c d e f", GetStringForVisibleButtons());
 }
 
@@ -329,11 +339,13 @@ TEST_F(BookmarkBarViewTest, RemoveNode) {
   EXPECT_EQ(2u, test_helper_->GetBookmarkButtonCount());
 
   // Remove the 2nd node, should still only have 1 visible.
-  model()->Remove(bookmark_bar_node->children()[1].get());
+  model()->Remove(bookmark_bar_node->children()[1].get(),
+                  bookmarks::metrics::BookmarkEditSource::kOther);
   EXPECT_EQ("a", GetStringForVisibleButtons());
 
   // Remove the first node, should force a new button (for the 'c' node).
-  model()->Remove(bookmark_bar_node->children()[0].get());
+  model()->Remove(bookmark_bar_node->children()[0].get(),
+                  bookmarks::metrics::BookmarkEditSource::kOther);
   ASSERT_EQ("c", GetStringForVisibleButtons());
 }
 
@@ -373,40 +385,46 @@ TEST_F(BookmarkBarViewTest, ChangeTitle) {
   AddNodesToBookmarkBarFromModelString("a b c d e f ");
   EXPECT_EQ(0u, test_helper_->GetBookmarkButtonCount());
 
-  model()->SetTitle(bookmark_bar_node->children()[0].get(), u"a1");
+  model()->SetTitle(bookmark_bar_node->children()[0].get(), u"a1",
+                    bookmarks::metrics::BookmarkEditSource::kUser);
   EXPECT_EQ(0u, test_helper_->GetBookmarkButtonCount());
 
   // Make enough room for 1 node.
   SizeUntilButtonsVisible(1);
   EXPECT_EQ("a1", GetStringForVisibleButtons());
 
-  model()->SetTitle(bookmark_bar_node->children()[1].get(), u"b1");
+  model()->SetTitle(bookmark_bar_node->children()[1].get(), u"b1",
+                    bookmarks::metrics::BookmarkEditSource::kUser);
   EXPECT_EQ("a1", GetStringForVisibleButtons());
 
-  model()->SetTitle(bookmark_bar_node->children()[5].get(), u"f1");
+  model()->SetTitle(bookmark_bar_node->children()[5].get(), u"f1",
+                    bookmarks::metrics::BookmarkEditSource::kUser);
   EXPECT_EQ("a1", GetStringForVisibleButtons());
 
-  model()->SetTitle(bookmark_bar_node->children()[3].get(), u"d1");
+  model()->SetTitle(bookmark_bar_node->children()[3].get(), u"d1",
+                    bookmarks::metrics::BookmarkEditSource::kUser);
 
   // Make the second button visible, changes the title of the first to something
   // really long and make sure the second button hides.
   SizeUntilButtonsVisible(2);
   EXPECT_EQ("a1 b1", GetStringForVisibleButtons());
   model()->SetTitle(bookmark_bar_node->children()[0].get(),
-                    u"a_really_long_title");
+                    u"a_really_long_title",
+                    bookmarks::metrics::BookmarkEditSource::kUser);
   EXPECT_LE(1u, test_helper_->GetBookmarkButtonCount());
 
   // Change the title back and make sure the 2nd button is visible again. Don't
   // use GetStringForVisibleButtons() here as more buttons may have been
   // created.
-  model()->SetTitle(bookmark_bar_node->children()[0].get(), u"a1");
+  model()->SetTitle(bookmark_bar_node->children()[0].get(), u"a1",
+                    bookmarks::metrics::BookmarkEditSource::kUser);
   ASSERT_LE(2u, test_helper_->GetBookmarkButtonCount());
   EXPECT_TRUE(test_helper_->GetBookmarkButton(0)->GetVisible());
   EXPECT_TRUE(test_helper_->GetBookmarkButton(1)->GetVisible());
 
   bookmark_bar_view()->SetBounds(0, 0, 5000,
                                  bookmark_bar_view()->bounds().height());
-  bookmark_bar_view()->Layout();
+  views::test::RunScheduledLayout(bookmark_bar_view());
   EXPECT_EQ("a1 b1 c d1 e f1", GetStringForVisibleButtons());
 }
 
@@ -430,7 +448,8 @@ TEST_F(BookmarkBarViewTest, DropCallbackTest) {
   EXPECT_EQ("a b c d e f", GetStringForVisibleButtons());
 
   ui::mojom::DragOperation output_drag_op;
-  std::move(cb).Run(target_event, output_drag_op);
+  std::move(cb).Run(target_event, output_drag_op,
+                    /*drag_image_layer_owner=*/nullptr);
   EXPECT_EQ("z a b c d e f", GetStringForVisibleButtons());
   EXPECT_EQ(output_drag_op, ui::mojom::DragOperation::kCopy);
 }
@@ -451,7 +470,8 @@ TEST_F(BookmarkBarViewTest, MutateModelDuringDrag) {
   ASSERT_TRUE(bookmark_bar_view()->CanDrop(drop_data));
   bookmark_bar_view()->OnDragUpdated(target_event);
   EXPECT_NE(-1, test_helper_->GetDropLocationModelIndexForTesting());
-  model()->Remove(model()->bookmark_bar_node()->children()[4].get());
+  model()->Remove(model()->bookmark_bar_node()->children()[4].get(),
+                  bookmarks::metrics::BookmarkEditSource::kOther);
   EXPECT_EQ(-1, test_helper_->GetDropLocationModelIndexForTesting());
 }
 
@@ -474,7 +494,8 @@ TEST_F(BookmarkBarViewTest, DropCallback_InvalidatePtrTest) {
   EXPECT_EQ(6u, test_helper_->GetBookmarkButtonCount());
 
   ui::mojom::DragOperation output_drag_op = ui::mojom::DragOperation::kNone;
-  std::move(cb).Run(target_event, output_drag_op);
+  std::move(cb).Run(target_event, output_drag_op,
+                    /*drag_image_layer_owner=*/nullptr);
   EXPECT_EQ("a b c d e f", GetStringForVisibleButtons());
   EXPECT_EQ(output_drag_op, ui::mojom::DragOperation::kNone);
 }
@@ -527,19 +548,22 @@ TEST_F(BookmarkBarViewTest, OnSavedTabGroupUpdateBookmarkBarCallsLayout) {
   ASSERT_TRUE(keyed_service->model());
 
   // Add 3 saved tab groups.
-  keyed_service->model()->Add(SavedTabGroup(
-      std::u16string(u"tab group 1"), tab_groups::TabGroupColorId::kGrey, {}));
+  keyed_service->model()->Add(SavedTabGroup(std::u16string(u"tab group 1"),
+                                            tab_groups::TabGroupColorId::kGrey,
+                                            {}, absl::nullopt));
 
-  base::GUID button_2_id = base::GUID::GenerateRandomV4();
+  base::Uuid button_2_id = base::Uuid::GenerateRandomV4();
   keyed_service->model()->Add(SavedTabGroup(std::u16string(u"tab group 2"),
                                             tab_groups::TabGroupColorId::kGrey,
-                                            {}, button_2_id));
+                                            {}, absl::nullopt, button_2_id));
 
-  keyed_service->model()->Add(SavedTabGroup(
-      std::u16string(u"tab group 3"), tab_groups::TabGroupColorId::kGrey, {}));
+  keyed_service->model()->Add(SavedTabGroup(std::u16string(u"tab group 3"),
+                                            tab_groups::TabGroupColorId::kGrey,
+                                            {}, absl::nullopt));
 
-  // Save the position of the 3rd button.
-  ASSERT_EQ(3u, test_helper_->saved_tab_group_bar()->children().size());
+  // Save the position of the 3rd button. The 4th button is an overflow menu
+  // that is only visible when there are more than 4 groups saved.
+  ASSERT_EQ(4u, test_helper_->saved_tab_group_bar()->children().size());
   const auto* button_3 = test_helper_->saved_tab_group_bar()->children()[2];
   gfx::Rect bounds_in_screen = button_3->GetBoundsInScreen();
 

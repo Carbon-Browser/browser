@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,30 +11,20 @@ import org.chromium.ui.modelutil.PropertyModel.WritableBooleanPropertyKey;
 import org.chromium.ui.modelutil.PropertyModel.WritableObjectPropertyKey;
 
 /** The properties associated with the header suggestions. */
-public class HeaderViewProperties {
-    /** Interface that receives events from Header view. */
-    interface Delegate {
-        /** Invoked whenever header view is selected. */
-        void onHeaderSelected();
-
-        /** Invoked whenever header view is clicked. */
-        void onHeaderClicked();
-    }
-
-    /** The runnable object that is executed whenever user taps the header suggestion. */
-    public static final WritableObjectPropertyKey<Delegate> DELEGATE =
-            new WritableObjectPropertyKey<>();
-    /** The collapsed state of the header suggestion. */
-    public static final WritableBooleanPropertyKey IS_COLLAPSED = new WritableBooleanPropertyKey();
+@interface HeaderViewProperties {
     /** The text content to be displayed as a header text. */
-    public static final WritableObjectPropertyKey<String> TITLE = new WritableObjectPropertyKey<>();
-    /** The flag to state whether to remove the header chevron. */
-    public static final WritableBooleanPropertyKey SHOULD_REMOVE_CHEVRON =
+    static final WritableObjectPropertyKey<String> TITLE = new WritableObjectPropertyKey<>();
+
+    /**
+     * The flag to state whether to use the updated padding on suggestion header for omnibox revamp
+     * phase 2.
+     */
+    static final WritableBooleanPropertyKey USE_MODERNIZED_HEADER_PADDING =
             new WritableBooleanPropertyKey();
 
-    public static final PropertyKey[] ALL_UNIQUE_KEYS =
-            new PropertyKey[] {DELEGATE, IS_COLLAPSED, TITLE, SHOULD_REMOVE_CHEVRON};
+    static final PropertyKey[] ALL_UNIQUE_KEYS =
+            new PropertyKey[] {TITLE, USE_MODERNIZED_HEADER_PADDING};
 
-    public static final PropertyKey[] ALL_KEYS =
+    static final PropertyKey[] ALL_KEYS =
             PropertyModel.concatKeys(ALL_UNIQUE_KEYS, SuggestionCommonProperties.ALL_KEYS);
 }

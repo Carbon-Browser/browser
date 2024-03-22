@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,7 @@ import java.util.Set;
 public abstract class MediaSessionObserver {
     private MediaSessionImpl mMediaSession;
 
-    /**
-     * Construct a MediaSessionObserver and start observing |mediaSession|.
-     */
+    /** Construct a MediaSessionObserver and start observing |mediaSession|. */
     protected MediaSessionObserver(MediaSession mediaSession) {
         // In tests, the MediaSession might be a mocked object which is not instance of
         // MediaSessionImpl.

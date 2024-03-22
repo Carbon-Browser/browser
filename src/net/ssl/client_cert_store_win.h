@@ -1,11 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_SSL_CLIENT_CERT_STORE_WIN_H_
 #define NET_SSL_CLIENT_CERT_STORE_WIN_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/win/wincrypt_shim.h"
 #include "crypto/scoped_capi_types.h"
 #include "net/base/net_export.h"

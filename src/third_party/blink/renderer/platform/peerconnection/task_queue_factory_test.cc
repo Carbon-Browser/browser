@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,11 @@
 #include "base/test/task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/webrtc/api/field_trials_view.h"
 #include "third_party/webrtc/api/task_queue/task_queue_test.h"
 #include "third_party/webrtc_overrides/metronome_source.h"
 #include "third_party/webrtc_overrides/test/metronome_like_task_queue_test.h"
+#include "third_party/webrtc_overrides/timer_based_tick_provider.h"
 
 namespace blink {
 
@@ -37,12 +39,16 @@ class TestTaskQueueFactory final : public webrtc::TaskQueueFactory {
   std::unique_ptr<webrtc::TaskQueueFactory> factory_;
 };
 
+std::unique_ptr<webrtc::TaskQueueFactory> CreateTaskQueueFactory(
+    const webrtc::FieldTrialsView*) {
+  return std::make_unique<TestTaskQueueFactory>();
+}
+
 // Instantiate suite to run all tests defined in
 // third_party/webrtc/api/task_queue/task_queue_test.h.
-INSTANTIATE_TEST_SUITE_P(
-    WebRtcTaskQueue,
-    TaskQueueTest,
-    ::testing::Values(std::make_unique<TestTaskQueueFactory>));
+INSTANTIATE_TEST_SUITE_P(WebRtcTaskQueue,
+                         TaskQueueTest,
+                         ::testing::Values(CreateTaskQueueFactory));
 
 // Provider needed for the MetronomeLikeTaskQueueTest suite.
 class TaskQueueProvider : public MetronomeLikeTaskQueueProvider {
@@ -54,10 +60,12 @@ class TaskQueueProvider : public MetronomeLikeTaskQueueProvider {
 
   base::TimeDelta DeltaToNextTick() const override {
     base::TimeTicks now = base::TimeTicks::Now();
-    return MetronomeSource::TimeSnappedToNextTick(now) - now;
+    return TimerBasedTickProvider::TimeSnappedToNextTick(
+               now, TimerBasedTickProvider::kDefaultPeriod) -
+           now;
   }
   base::TimeDelta MetronomeTick() const override {
-    return MetronomeSource::Tick();
+    return TimerBasedTickProvider::kDefaultPeriod;
   }
   webrtc::TaskQueueBase* TaskQueue() const override {
     return task_queue_.get();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,29 +34,12 @@ class COMPONENT_EXPORT(MOJO_CPP_PLATFORM) PlatformChannel {
   // command line when the relevant methods are used on this class.
   static const char kHandleSwitch[];
 
-// Unfortunately base process support code has no unified handle-passing
-// data pipe, so we have this.
-#if BUILDFLAG(IS_WIN)
-  using HandlePassingInfo = base::HandlesToInheritVector;
-#elif BUILDFLAG(IS_FUCHSIA)
-  using HandlePassingInfo = base::HandlesToTransferVector;
-#elif BUILDFLAG(IS_MAC)
-  using HandlePassingInfo = base::MachPortsForRendezvous;
-#elif BUILDFLAG(IS_POSIX)
-  using HandlePassingInfo = base::FileHandleMappingVector;
-#else
-#error "Unsupported platform."
-#endif
+  using HandlePassingInfo = PlatformChannelEndpoint::HandlePassingInfo;
 
   PlatformChannel();
   PlatformChannel(PlatformChannel&& other);
-
-  PlatformChannel(const PlatformChannel&) = delete;
-  PlatformChannel& operator=(const PlatformChannel&) = delete;
-
-  ~PlatformChannel();
-
   PlatformChannel& operator=(PlatformChannel&& other);
+  ~PlatformChannel();
 
   const PlatformChannelEndpoint& local_endpoint() const {
     return local_endpoint_;
@@ -103,7 +86,7 @@ class COMPONENT_EXPORT(MOJO_CPP_PLATFORM) PlatformChannel {
   // its creator. |value| is a string returned by
   // |PrepareToPassRemoteEndpoint()| in the creator's process.
   [[nodiscard]] static PlatformChannelEndpoint RecoverPassedEndpointFromString(
-      base::StringPiece value);
+      std::string_view value);
 
   // Like above but extracts the input string from |command_line| via the
   // |kHandleSwitch| flag.

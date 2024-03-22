@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ namespace ash {
 // saves desks, and we need to add extra information such as the app title.
 std::unique_ptr<app_restore::WindowInfo> BuildWindowInfo(
     aura::Window* window,
-    absl::optional<int> activation_index,
+    std::optional<int> activation_index,
     bool for_saved_desks,
     const std::vector<aura::Window*>& mru_windows);
 

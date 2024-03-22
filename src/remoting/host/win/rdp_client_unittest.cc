@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
+#include "base/uuid.h"
 #include "base/win/atl.h"
 #include "base/win/scoped_com_initializer.h"
 #include "remoting/base/auto_thread_task_runner.h"
@@ -46,7 +46,7 @@ class MockRdpClientEventHandler : public RdpClient::EventHandler {
   MockRdpClientEventHandler& operator=(const MockRdpClientEventHandler&) =
       delete;
 
-  virtual ~MockRdpClientEventHandler() {}
+  ~MockRdpClientEventHandler() override {}
 
   MOCK_METHOD0(OnRdpConnected, void());
   MOCK_METHOD0(OnRdpClosed, void());
@@ -154,7 +154,7 @@ void RdpClientTest::CloseRdpClient() {
 
 // Creates a loopback RDP connection.
 TEST_F(RdpClientTest, Basic) {
-  terminal_id_ = base::GenerateGUID();
+  terminal_id_ = base::Uuid::GenerateRandomV4().AsLowercaseString();
 
   // An ability to establish a loopback RDP connection depends on many factors
   // including OS SKU and having RDP enabled. Accept both successful connection

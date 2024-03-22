@@ -1,9 +1,9 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
@@ -90,7 +90,8 @@ class SSLClientCertificateSelectorTest : public InProcessBrowserTest {
   scoped_refptr<net::SSLCertRequestInfo> cert_request_info_;
   scoped_refptr<StrictMock<SSLClientAuthRequestorMock>> auth_requestor_;
   // The selector will be deleted when a cert is selected or the tab is closed.
-  raw_ptr<SSLClientCertificateSelector> selector_ = nullptr;
+  raw_ptr<SSLClientCertificateSelector, AcrossTasksDanglingUntriaged>
+      selector_ = nullptr;
 };
 
 class SSLClientCertificateSelectorMultiTabTest
@@ -118,9 +119,9 @@ class SSLClientCertificateSelectorMultiTabTest
         AddTabAtIndex(1, GURL("about:blank"), ui::PAGE_TRANSITION_LINK));
     ASSERT_TRUE(
         AddTabAtIndex(2, GURL("about:blank"), ui::PAGE_TRANSITION_LINK));
-    ASSERT_TRUE(NULL != browser()->tab_strip_model()->GetWebContentsAt(0));
-    ASSERT_TRUE(NULL != browser()->tab_strip_model()->GetWebContentsAt(1));
-    ASSERT_TRUE(NULL != browser()->tab_strip_model()->GetWebContentsAt(2));
+    ASSERT_TRUE(nullptr != browser()->tab_strip_model()->GetWebContentsAt(0));
+    ASSERT_TRUE(nullptr != browser()->tab_strip_model()->GetWebContentsAt(1));
+    ASSERT_TRUE(nullptr != browser()->tab_strip_model()->GetWebContentsAt(2));
     EXPECT_TRUE(content::WaitForLoadStop(
         browser()->tab_strip_model()->GetWebContentsAt(1)));
     EXPECT_TRUE(content::WaitForLoadStop(
@@ -166,8 +167,10 @@ class SSLClientCertificateSelectorMultiTabTest
   scoped_refptr<net::SSLCertRequestInfo> cert_request_info_2_;
   scoped_refptr<StrictMock<SSLClientAuthRequestorMock>> auth_requestor_1_;
   scoped_refptr<StrictMock<SSLClientAuthRequestorMock>> auth_requestor_2_;
-  raw_ptr<SSLClientCertificateSelector> selector_1_;
-  raw_ptr<SSLClientCertificateSelector> selector_2_;
+  raw_ptr<SSLClientCertificateSelector, AcrossTasksDanglingUntriaged>
+      selector_1_;
+  raw_ptr<SSLClientCertificateSelector, AcrossTasksDanglingUntriaged>
+      selector_2_;
 };
 
 class SSLClientCertificateSelectorMultiProfileTest
@@ -224,10 +227,11 @@ class SSLClientCertificateSelectorMultiProfileTest
   }
 
  protected:
-  raw_ptr<Browser> browser_1_;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser_1_;
   scoped_refptr<net::SSLCertRequestInfo> cert_request_info_1_;
   scoped_refptr<StrictMock<SSLClientAuthRequestorMock> > auth_requestor_1_;
-  raw_ptr<SSLClientCertificateSelector> selector_1_;
+  raw_ptr<SSLClientCertificateSelector, AcrossTasksDanglingUntriaged>
+      selector_1_;
 };
 
 IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorTest, SelectNone) {
@@ -279,14 +283,7 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorTest, CloseTab) {
   Mock::VerifyAndClear(auth_requestor_.get());
 }
 
-// TODO(https://crbug.com/1287764): Fails on the linux-wayland-rel bot.
-#if defined(OZONE_PLATFORM_WAYLAND)
-#define MAYBE_EscapeTest DISABLED_Escape
-#else
-#define MAYBE_EscapeTest Escape
-#endif
-IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
-                       MAYBE_EscapeTest) {
+IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest, EscapeTest) {
   // auth_requestor_1_ should get selected automatically by the
   // SSLClientAuthObserver when selector_2_ is accepted, since both 1 & 2 have
   // the same host:port.
@@ -307,14 +304,7 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
   EXPECT_CALL(*auth_requestor_, CancelCertificateSelection());
 }
 
-// TODO(https://crbug.com/1287784): Fails on the linux-wayland-rel bot.
-#if defined(OZONE_PLATFORM_WAYLAND)
-#define MAYBE_SelectSecond DISABLED_SelectSecond
-#else
-#define MAYBE_SelectSecond SelectSecond
-#endif
-IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
-                       MAYBE_SelectSecond) {
+IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest, SelectSecond) {
   // auth_requestor_1_ should get selected automatically by the
   // SSLClientAuthObserver when selector_2_ is accepted, since both 1 & 2 have
   // the same host:port.
@@ -352,14 +342,7 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
   EXPECT_CALL(*auth_requestor_, CancelCertificateSelection());
 }
 
-// TODO(crbug.com/1249827): Test is flaky on Mac, Linux and Lacros.
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-#define MAYBE_Escape DISABLED_Escape
-#else
-#define MAYBE_Escape Escape
-#endif
-IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiProfileTest,
-                       MAYBE_Escape) {
+IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiProfileTest, Escape) {
   EXPECT_CALL(*auth_requestor_1_, CertificateSelected(nullptr, nullptr));
 
   EXPECT_TRUE(ui_test_utils::SendKeyPressSync(
@@ -374,14 +357,8 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiProfileTest,
   EXPECT_CALL(*auth_requestor_, CancelCertificateSelection());
 }
 
-// TODO(crbug.com/1249705): Test is flaky on Mac, Linux and Lacros.
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-#define MAYBE_SelectDefault DISABLED_SelectDefault
-#else
-#define MAYBE_SelectDefault SelectDefault
-#endif
 IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiProfileTest,
-                       MAYBE_SelectDefault) {
+                       SelectDefault) {
   EXPECT_CALL(*auth_requestor_1_,
               CertificateSelected(cert_identity_1_->certificate(),
                                   cert_identity_1_->ssl_private_key()));

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 #define COMPONENTS_PERFORMANCE_MANAGER_GRAPH_PROCESS_NODE_IMPL_DESCRIBER_H_
 
 #include "base/values.h"
-#include "components/performance_manager/graph/process_node_impl.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/node_data_describer.h"
 
 namespace performance_manager {
+
+class ProcessNode;
 
 // Describes the state of of a ProcessNodeImpl for human consumption.
 class ProcessNodeImplDescriber : public GraphOwned,
@@ -26,7 +27,8 @@ class ProcessNodeImplDescriber : public GraphOwned,
   void OnTakenFromGraph(Graph* graph) override;
 
   // NodeDataDescriber implementation:
-  base::Value DescribeProcessNodeData(const ProcessNode* node) const override;
+  base::Value::Dict DescribeProcessNodeData(
+      const ProcessNode* node) const override;
 };
 
 }  // namespace performance_manager

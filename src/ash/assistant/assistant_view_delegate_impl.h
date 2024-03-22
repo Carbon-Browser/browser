@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/assistant/ui/assistant_view_delegate.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -44,9 +45,10 @@ class AssistantViewDelegateImpl : public AssistantViewDelegate {
   void OnSuggestionPressed(
       const base::UnguessableToken& suggestion_id) override;
   bool ShouldShowOnboarding() const override;
+  void OnLauncherSearchChipPressed(const std::u16string& query) override;
 
  private:
-  AssistantControllerImpl* const assistant_controller_;
+  const raw_ptr<AssistantControllerImpl, ExperimentalAsh> assistant_controller_;
   base::ObserverList<AssistantViewDelegateObserver> view_delegate_observers_;
 };
 

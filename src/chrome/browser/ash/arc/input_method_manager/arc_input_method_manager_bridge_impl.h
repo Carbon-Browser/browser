@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ash/components/arc/session/connection_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/arc/input_method_manager/arc_input_method_manager_bridge.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
@@ -52,8 +53,9 @@ class ArcInputMethodManagerBridgeImpl
   void OnImeInfoChanged(std::vector<mojom::ImeInfoPtr> ime_info_array) override;
 
  private:
-  Delegate* const delegate_;
-  ArcBridgeService* const bridge_service_;  // Owned by ArcServiceManager
+  const raw_ptr<Delegate, ExperimentalAsh> delegate_;
+  const raw_ptr<ArcBridgeService, ExperimentalAsh>
+      bridge_service_;  // Owned by ArcServiceManager
 };
 
 }  // namespace arc

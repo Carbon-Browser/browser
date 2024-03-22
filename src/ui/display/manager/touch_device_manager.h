@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ struct TouchscreenDevice;
 }  // namespace ui
 
 namespace display {
+
 class ManagedDisplayInfo;
 
 namespace test {
@@ -261,6 +262,7 @@ DISPLAY_MANAGER_EXPORT std::ostream& operator<<(
 
 // Returns true if the device has any external touch devices attached.
 DISPLAY_MANAGER_EXPORT bool HasExternalTouchscreenDevice();
+
 }  // namespace display
 
 #endif  // UI_DISPLAY_MANAGER_TOUCH_DEVICE_MANAGER_H_

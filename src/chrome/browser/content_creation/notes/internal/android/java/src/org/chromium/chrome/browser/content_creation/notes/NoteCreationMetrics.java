@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,19 +9,19 @@ import android.content.ComponentName;
 import androidx.annotation.IntDef;
 
 import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.share.share_sheet.ChromeProvidedSharingOptionsProvider;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Responsible for recording metrics related to note creation.
- */
+/** Responsible for recording metrics related to note creation. */
 public final class NoteCreationMetrics {
     // Constants used to log the Note Creation Funnel enum histogram.
-    @IntDef({NoteCreationFunnel.NOTE_CREATION_SELECTED, NoteCreationFunnel.TEMPLATE_SELECTED,
-            NoteCreationFunnel.NOTE_SHARED})
+    @IntDef({
+        NoteCreationFunnel.NOTE_CREATION_SELECTED,
+        NoteCreationFunnel.TEMPLATE_SELECTED,
+        NoteCreationFunnel.NOTE_SHARED
+    })
     @Retention(RetentionPolicy.SOURCE)
     private @interface NoteCreationFunnel {
         int NOTE_CREATION_SELECTED = 0;
@@ -58,11 +58,8 @@ public final class NoteCreationMetrics {
     }
 
     // Max expected number of dynamically loaded templates.
-    private static final int MAX_NUMBER_OF_TEMPLATES = 50;
 
-    /**
-     * Records metrics related to the user starting the creation flow.
-     */
+    /** Records metrics related to the user starting the creation flow. */
     public static void recordNoteCreationSelected() {
         recordNoteCreationFunnel(NoteCreationFunnel.NOTE_CREATION_SELECTED);
     }
@@ -78,10 +75,9 @@ public final class NoteCreationMetrics {
         RecordHistogram.recordMediumTimesHistogram("NoteCreation.TimeTo.SelectTemplate", duration);
 
         recordNoteCreationFunnel(NoteCreationFunnel.TEMPLATE_SELECTED);
-        recordNoteCreated(/*created=*/true);
+        recordNoteCreated(/* created= */ true);
         recordNbTemplateChanges(nbChanges);
         recordSelectedTemplateId(selectedTemplateId);
-        recordSelectedTemplateIndex(selectedTemplateIndex);
     }
 
     /**
@@ -94,7 +90,7 @@ public final class NoteCreationMetrics {
         RecordHistogram.recordMediumTimesHistogram(
                 "NoteCreation.TimeTo.DismissCreationDialog", duration);
 
-        recordNoteCreated(/*created=*/false);
+        recordNoteCreated(/* created= */ false);
         recordNbTemplateChanges(nbChanges);
     }
 
@@ -108,12 +104,14 @@ public final class NoteCreationMetrics {
     public static void recordNoteShared(long duration, ComponentName chosenComponent) {
         RecordHistogram.recordMediumTimesHistogram("NoteCreation.TimeTo.ShareCreation", duration);
 
-        recordNoteShared(/*shared=*/true);
+        recordNoteShared(/* shared= */ true);
         recordNoteCreationFunnel(NoteCreationFunnel.NOTE_SHARED);
 
-        RecordHistogram.recordEnumeratedHistogram("NoteCreation.ShareDestination",
+        RecordHistogram.recordEnumeratedHistogram(
+                "NoteCreation.ShareDestination",
                 chosenComponent.equals(
-                        ChromeProvidedSharingOptionsProvider.CHROME_PROVIDED_FEATURE_COMPONENT_NAME)
+                                ChromeProvidedSharingOptionsProvider
+                                        .CHROME_PROVIDED_FEATURE_COMPONENT_NAME)
                         ? NoteShareDestination.FIRST_PARTY
                         : NoteShareDestination.THIRD_PARTY,
                 NoteShareDestination.NUM_ENTRIES);
@@ -128,7 +126,7 @@ public final class NoteCreationMetrics {
     public static void recordNoteNotShared(long duration) {
         RecordHistogram.recordMediumTimesHistogram("NoteCreation.TimeTo.DismissShare", duration);
 
-        recordNoteShared(/*shared=*/false);
+        recordNoteShared(/* shared= */ false);
     }
 
     /**
@@ -178,33 +176,15 @@ public final class NoteCreationMetrics {
      * @param selectedTemplateId The id of the selected template.
      */
     private static void recordSelectedTemplateId(@NoteTemplateIds int selectedTemplateId) {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.WEBNOTES_DYNAMIC_TEMPLATES)) {
-            assert selectedTemplateId < NoteTemplateIds.NUM_ENTRIES;
-            assert selectedTemplateId >= 0;
+        assert selectedTemplateId < NoteTemplateIds.NUM_ENTRIES;
+        assert selectedTemplateId >= 0;
 
-            if (selectedTemplateId >= NoteTemplateIds.NUM_ENTRIES) {
-                selectedTemplateId = NoteTemplateIds.UNKNOWN;
-            }
-
-            RecordHistogram.recordEnumeratedHistogram("NoteCreation.SelectedTemplate",
-                    selectedTemplateId, NoteTemplateIds.NUM_ENTRIES);
-            return;
+        if (selectedTemplateId >= NoteTemplateIds.NUM_ENTRIES) {
+            selectedTemplateId = NoteTemplateIds.UNKNOWN;
         }
-        RecordHistogram.recordExactLinearHistogram("NoteCreation.SelectedDynamicTemplateID",
-                selectedTemplateId, MAX_NUMBER_OF_TEMPLATES);
-    }
 
-    /**
-     * Records the index of the template that was selected by the user.
-     *
-     * @param selectedTemplateIndex The index of the selected template.
-     */
-    private static void recordSelectedTemplateIndex(int selectedTemplateIndex) {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.WEBNOTES_DYNAMIC_TEMPLATES)) {
-            return;
-        }
-        RecordHistogram.recordExactLinearHistogram("NoteCreation.SelectedDynamicTemplateIndex",
-                selectedTemplateIndex, MAX_NUMBER_OF_TEMPLATES);
+        RecordHistogram.recordEnumeratedHistogram(
+                "NoteCreation.SelectedTemplate", selectedTemplateId, NoteTemplateIds.NUM_ENTRIES);
     }
 
     // Empty private constructor for the "static" class.

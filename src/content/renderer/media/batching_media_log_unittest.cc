@@ -1,9 +1,10 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/media/batching_media_log.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
@@ -32,7 +33,7 @@ class TestEventHandler : public BatchingMediaLog::EventHandler {
   }
 
  private:
-  BatchingMediaLogTest* test_cls_;
+  raw_ptr<BatchingMediaLogTest, ExperimentalRenderer> test_cls_;
 };
 
 class BatchingMediaLogTest : public testing::Test {

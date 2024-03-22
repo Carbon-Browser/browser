@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,4 +50,14 @@ message AppWithLocaleList {
 message IconInfo {
   optional string icon_path = 1;
   optional bool is_masking_allowed = 2;
+}
+
+// A group of apps that are considered to be duplicated.
+message DuplicateGroup {
+  repeated App app = 1;
+}
+
+// List of duplicated app groups.
+message DuplicatedGroupList {
+  repeated DuplicateGroup duplicate_group = 1;
 }

@@ -1,9 +1,10 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//ash/ambient/resources/resources.gni")
 import("//build/config/chromeos/ui_mode.gni")
+import("//chromeos/ash/components/scalable_iph/scalable_iph.gni")
 import("//tools/grit/repack.gni")
 import("//ui/base/ui_features.gni")
 
@@ -24,6 +25,11 @@ repack("ash_test_resources_unscaled") {
     ]
     deps += [ "//ash/ambient/resources:lottie_resources" ]
   }
+
+  if (enable_cros_scalable_iph) {
+    sources += [ "$root_gen_dir/chromeos/ash/ash_resources.pak" ]
+    deps += [ "//chromeos/ash/resources" ]
+  }
 }
 
 # Repacks resources needed for ash_unittests, etc. at a given scale.
@@ -35,7 +41,6 @@ template("ash_test_resources") {
     output = "$root_build_dir/${target_name}.pak"
 
     sources = [
-      "$root_gen_dir/ash/app_list/resources/app_list_resources_${percent}_percent.pak",
       "$root_gen_dir/ash/login/resources/login_resources_${percent}_percent.pak",
       "$root_gen_dir/ui/chromeos/resources/ui_chromeos_resources_${percent}_percent.pak",
       "$root_gen_dir/ui/resources/ui_resources_${percent}_percent.pak",
@@ -45,7 +50,7 @@ template("ash_test_resources") {
     if (percent == "100") {
       sources += [
         "$root_gen_dir/mojo/public/js/mojo_bindings_resources.pak",
-        "$root_gen_dir/ui/resources/webui_generated_resources.pak",
+        "$root_gen_dir/ui/resources/webui_resources.pak",
       ]
     }
 
@@ -54,7 +59,6 @@ template("ash_test_resources") {
     }
 
     deps = [
-      "//ash/app_list/resources",
       "//ash/login/resources",
       "//mojo/public/js:resources",
       "//ui/chromeos/resources",

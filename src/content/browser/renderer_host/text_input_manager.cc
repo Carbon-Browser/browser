@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ bool ShouldUpdateTextInputState(const ui::mojom::TextInputState& old_state,
          old_state.type != new_state.type || old_state.mode != new_state.mode ||
          old_state.flags != new_state.flags ||
          old_state.can_compose_inline != new_state.can_compose_inline;
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   return old_state.type != new_state.type ||
          old_state.flags != new_state.flags ||
          old_state.can_compose_inline != new_state.can_compose_inline;
@@ -343,25 +343,42 @@ void TextInputManager::NotifySelectionBoundsChanged(
 // TODO(ekaramad): We use |range| only on Mac OS; but we still track its value
 // here for other platforms. See if there is a nice way around this with minimal
 // #ifdefs for platform specific code (https://crbug.com/602427).
+// This also applies to |line_bounds| which are only used on Android.
 void TextInputManager::ImeCompositionRangeChanged(
     RenderWidgetHostViewBase* view,
     const gfx::Range& range,
-    const std::vector<gfx::Rect>& character_bounds) {
+    const absl::optional<std::vector<gfx::Rect>>& character_bounds,
+    const absl::optional<std::vector<gfx::Rect>>& line_bounds) {
   DCHECK(IsRegistered(view));
-  composition_range_info_map_[view].character_bounds.clear();
 
-  // The values for the bounds should be converted to root view's coordinates
-  // before being stored.
-  for (auto rect : character_bounds) {
-    composition_range_info_map_[view].character_bounds.emplace_back(gfx::Rect(
-        view->TransformPointToRootCoordSpace(rect.origin()), rect.size()));
+  if (character_bounds.has_value()) {
+    composition_range_info_map_[view].character_bounds.clear();
+
+    // The values for the bounds should be converted to root view's coordinates
+    // before being stored.
+    for (auto& rect : character_bounds.value()) {
+      composition_range_info_map_[view].character_bounds.emplace_back(
+          view->TransformPointToRootCoordSpace(rect.origin()), rect.size());
+    }
+
+    composition_range_info_map_[view].range.set_start(range.start());
+    composition_range_info_map_[view].range.set_end(range.end());
+  }
+  // Transform the values in line bounds to the root coordinate space if they
+  // exist.
+  absl::optional<std::vector<gfx::Rect>> transformed_line_bounds;
+  if (line_bounds.has_value()) {
+    transformed_line_bounds.emplace();
+    for (auto& rect : line_bounds.value()) {
+      transformed_line_bounds->emplace_back(
+          view->TransformPointToRootCoordSpace(rect.origin()), rect.size());
+    }
   }
 
-  composition_range_info_map_[view].range.set_start(range.start());
-  composition_range_info_map_[view].range.set_end(range.end());
-
-  for (auto& observer : observer_list_)
-    observer.OnImeCompositionRangeChanged(this, view);
+  for (auto& observer : observer_list_) {
+    observer.OnImeCompositionRangeChanged(
+        this, view, character_bounds.has_value(), transformed_line_bounds);
+  }
 }
 
 void TextInputManager::SelectionChanged(RenderWidgetHostViewBase* view,

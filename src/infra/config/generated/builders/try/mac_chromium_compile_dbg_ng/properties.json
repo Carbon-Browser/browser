@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/mac_chromium_compile_dbg_ng/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac Builder (dbg)",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-mac-archive",
@@ -30,8 +33,8 @@
           {
             "builder_id": {
               "bucket": "ci",
-              "builder": "Mac12 Tests (dbg)",
-              "project": "chromium"
+              "builder": "Mac13 Tests (dbg)",
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-mac-archive",
@@ -52,7 +55,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "Mac Builder (dbg)",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           }
@@ -62,24 +65,28 @@
         {
           "bucket": "ci",
           "builder": "Mac Builder (dbg)",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "builder_ids_in_scope_for_testing": [
         {
           "bucket": "ci",
-          "builder": "Mac12 Tests (dbg)",
-          "project": "chromium"
+          "builder": "Mac13 Tests (dbg)",
+          "project": "chromium-m121"
         }
       ],
       "is_compile_only": true
     }
   },
-  "$build/goma": {
+  "$build/flakiness": {
+    "check_for_flakiness": true,
+    "check_for_flakiness_with_resultdb": true
+  },
+  "$build/reclient": {
+    "instance": "rbe-chromium-untrusted",
     "jobs": 150,
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org",
-    "use_luci_auth": true
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -89,5 +96,6 @@
     ]
   },
   "builder_group": "tryserver.chromium.mac",
+  "cq": "required",
   "recipe": "chromium_trybot"
 }

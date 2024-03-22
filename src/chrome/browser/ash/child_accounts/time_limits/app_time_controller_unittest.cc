@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,11 @@
 
 #include "ash/components/arc/mojom/app.mojom.h"
 #include "ash/components/arc/test/fake_app_instance.h"
-#include "ash/components/settings/timezone_settings.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
@@ -20,17 +18,18 @@
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/app_service_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_activity_registry.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limits_policy_builder.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_test_utils.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/system_clock/system_clock_client.h"
+#include "chromeos/ash/components/settings/timezone_settings.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/services/app_service/public/cpp/app_types.h"
@@ -86,8 +85,7 @@ class AppTimeControllerTest : public testing::Test {
     ~FakeIconLoader() override = default;
 
     std::unique_ptr<apps::IconLoader::Releaser> LoadIconFromIconKey(
-        apps::AppType app_type,
-        const std::string& app_id,
+        const std::string& id,
         const apps::IconKey& icon_key,
         apps::IconType icon_type,
         int32_t size_hint_in_dip,
@@ -113,8 +111,6 @@ class AppTimeControllerTest : public testing::Test {
 
   void SetUp() override;
   void TearDown() override;
-
-  void DisableWebTimeLimit();
 
   void CreateActivityForApp(const AppId& app_id,
                             base::TimeDelta active_time,
@@ -159,7 +155,6 @@ class AppTimeControllerTest : public testing::Test {
 
   std::unique_ptr<AppTimeController> controller_;
   std::unique_ptr<AppTimeController::TestApi> test_api_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 void AppTimeControllerTest::SetUp() {
@@ -193,16 +188,6 @@ void AppTimeControllerTest::TearDown() {
   arc_test_.TearDown();
   SystemClockClient::Shutdown();
   testing::Test::TearDown();
-}
-
-void AppTimeControllerTest::DisableWebTimeLimit() {
-  scoped_feature_list_.InitWithFeatures(
-      /* enabled_features */ {},
-      /* disabled_features */ {{features::kWebTimeLimits}});
-
-  // Recreate app time controller.
-  DeleteController();
-  InstantiateController();
 }
 
 void AppTimeControllerTest::CreateActivityForApp(const AppId& app_id,
@@ -463,10 +448,8 @@ TEST_F(AppTimeControllerTest, RestoreLastResetTime) {
     builder.AddAppLimit(kApp2, AppLimit(AppRestriction::kTimeLimit,
                                         kOneHour / 2, base::Time::Now()));
     builder.SetResetTime(6, 0);
-    DictionaryPrefUpdate update(profile().GetPrefs(),
-                                prefs::kPerAppTimeLimitsPolicy);
-    base::Value* value = update.Get();
-    *value = builder.value().Clone();
+    profile().GetPrefs()->SetDict(prefs::kPerAppTimeLimitsPolicy,
+                                  builder.value().Clone());
   }
 
   // If there was no valid last reset time stored in user pref,
@@ -547,10 +530,8 @@ TEST_F(AppTimeControllerTest, MetricsTest) {
     builder.AddAppLimit(absent_app, app_limit);
     builder.AddAppLimit(kApp2, blocked_app);
     builder.SetResetTime(6, 0);
-    DictionaryPrefUpdate update(profile().GetPrefs(),
-                                prefs::kPerAppTimeLimitsPolicy);
-    base::Value* value = update.Get();
-    *value = builder.value().Clone();
+    profile().GetPrefs()->SetDict(prefs::kPerAppTimeLimitsPolicy,
+                                  builder.value().Clone());
   }
 
   // Enagagement is recorded at the beginning of the session when

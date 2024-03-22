@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/scoped_refptr.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_export.h"
 #include "net/log/net_log_with_source.h"
@@ -23,6 +24,8 @@ namespace net {
 
 class WebSocketDeflateParameters;
 class WebSocketDeflatePredictor;
+class IOBufferWithSize;
+class NetLogWithSource;
 
 // WebSocketDeflateStream is a WebSocketStream subclass.
 // WebSocketDeflateStream is for permessage-deflate WebSocket extension[1].

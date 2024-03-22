@@ -1,11 +1,12 @@
 Name: FlatBuffers
 Short Name: flatbuffers
 URL: https://github.com/google/flatbuffers
-Version: 0fe13cb28ce5a3fb81f654b21cb37c9821194962
-Date: 2022-05-10
+Version: bcb9ef187628fe07514e57756d05e6a6296f7dc5
+Date: 2023-10-03
 License: Apache 2.0
 License File: LICENSE
 Security Critical: yes
+Shipped: yes
 
 Description:
 FlatBuffers is an efficient cross platform serialization library for games and

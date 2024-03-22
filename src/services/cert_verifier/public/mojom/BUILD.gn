@@ -1,7 +1,8 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//crypto/features.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
 import("//net/features.gni")
 
@@ -14,16 +15,14 @@ mojom("mojom") {
 
   enabled_features = []
 
-  if (trial_comparison_cert_verifier_supported) {
-    enabled_features += [ "is_trial_comparison_cert_verifier_supported" ]
-    sources += [ "trial_comparison_cert_verifier.mojom" ]
+  if (chrome_root_store_optional) {
+    enabled_features += [ "is_chrome_root_store_optional" ]
   }
-
-  if (builtin_cert_verifier_feature_supported) {
-    enabled_features += [ "is_builtin_cert_verifier_feature_supported" ]
-  }
-
   if (chrome_root_store_supported) {
     enabled_features += [ "is_chrome_root_store_supported" ]
+  }
+
+  if (use_nss_certs) {
+    enabled_features += [ "use_nss_certs" ]
   }
 }

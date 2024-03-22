@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "base/compiler_specific.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_native_library.h"
+#include "base/task/sequenced_task_runner.h"
 #include "device/gamepad/gamepad_data_fetcher.h"
 #include "device/gamepad/gamepad_standard_mappings.h"
 #include "device/gamepad/public/cpp/gamepads.h"
@@ -45,11 +46,22 @@ struct XInputStateEx {
   XInputGamepadEx Gamepad;
 };
 
-class XInputDataFetcherWin : public GamepadDataFetcher {
+class DEVICE_GAMEPAD_EXPORT XInputDataFetcherWin : public GamepadDataFetcher {
  public:
-  typedef GamepadDataFetcherFactoryImpl<XInputDataFetcherWin,
-                                        GAMEPAD_SOURCE_WIN_XINPUT>
-      Factory;
+  using Factory = GamepadDataFetcherFactoryImpl<XInputDataFetcherWin,
+                                                GamepadSource::kWinXinput>;
+
+  // The function types we use from XInput DLL (either xinput1_4.dll or
+  // xinput9_1_0.dll).
+  typedef void(WINAPI* XInputEnableFunc)(BOOL enable);
+  typedef DWORD(WINAPI* XInputGetCapabilitiesFunc)(
+      DWORD dwUserIndex,
+      DWORD dwFlags,
+      XINPUT_CAPABILITIES* pCapabilities);
+  typedef DWORD(WINAPI* XInputGetStateFunc)(DWORD dwUserIndex,
+                                            XINPUT_STATE* pState);
+  typedef DWORD(WINAPI* XInputGetStateExFunc)(DWORD dwUserIndex,
+                                              XInputStateEx* pState);
 
   XInputDataFetcherWin();
 
@@ -74,27 +86,40 @@ class XInputDataFetcherWin : public GamepadDataFetcher {
       mojom::GamepadHapticsManager::ResetVibrationActuatorCallback,
       scoped_refptr<base::SequencedTaskRunner>) override;
 
+  // Hooks to set fake implementations of the XInput OS functions for testing
+  using XInputGetCapabilitiesFunctionCallback =
+      base::RepeatingCallback<XInputGetCapabilitiesFunc()>;
+  static void OverrideXInputGetCapabilitiesFuncForTesting(
+      XInputGetCapabilitiesFunctionCallback callback);
+
+  using XInputGetStateExFunctionCallback =
+      base::RepeatingCallback<XInputGetStateExFunc()>;
+  static void OverrideXInputGetStateExFuncForTesting(
+      XInputGetStateExFunctionCallback callback);
+
+  void InitializeForWgiDataFetcher();
+
+  bool IsAnyMetaButtonPressed();
+
  private:
   void OnAddedToProvider() override;
-
-  // The function types we use from xinput1_3.dll.
-  typedef void(WINAPI* XInputEnableFunc)(BOOL enable);
-  typedef DWORD(WINAPI* XInputGetCapabilitiesFunc)(
-      DWORD dwUserIndex,
-      DWORD dwFlags,
-      XINPUT_CAPABILITIES* pCapabilities);
-  typedef DWORD(WINAPI* XInputGetStateFunc)(DWORD dwUserIndex,
-                                            XINPUT_STATE* pState);
-  typedef DWORD(WINAPI* XInputGetStateExFunc)(DWORD dwUserIndex,
-                                              XInputStateEx* pState);
 
   // Get functions from dynamically loading the xinput dll.
   // Returns true if loading was successful.
   bool GetXInputDllFunctions();
+  // Same as `GetXInputDllFunctions` but loads only the functions required by
+  // WgiDataFetcher and also checks for test hooks.
+  bool GetXInputDllFunctionsForWgiDataFetcher();
 
   // Scan for connected XInput and DirectInput gamepads.
   void EnumerateDevices();
   void GetXInputPadData(int i);
+
+  static XInputGetCapabilitiesFunctionCallback&
+  GetXInputGetCapabilitiesFunctionCallback();
+
+  static XInputGetStateExFunctionCallback&
+  GetXInputGetStateExFunctionCallback();
 
   base::ScopedNativeLibrary xinput_dll_;
   bool xinput_available_;

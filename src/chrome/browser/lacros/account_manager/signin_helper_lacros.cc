@@ -1,13 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/lacros/account_manager/signin_helper_lacros.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/lacros/account_manager/account_manager_util.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "google_apis/gaia/core_account_id.h"
 

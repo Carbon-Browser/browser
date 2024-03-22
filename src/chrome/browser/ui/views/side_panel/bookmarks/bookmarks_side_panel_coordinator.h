@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,6 @@ class BookmarksSidePanelCoordinator
     : public BrowserUserData<BookmarksSidePanelCoordinator> {
  public:
   explicit BookmarksSidePanelCoordinator(Browser* browser);
-  BookmarksSidePanelCoordinator(const BookmarksSidePanelCoordinator&) = delete;
-  BookmarksSidePanelCoordinator& operator=(
-      const BookmarksSidePanelCoordinator&) = delete;
   ~BookmarksSidePanelCoordinator() override;
 
   void CreateAndRegisterEntry(SidePanelRegistry* global_registry);

@@ -1,14 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/enterprise/signals/system_signals_service_host_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/services/system_signals/public/cpp/browser/system_signals_service_host_impl.h"
 #include "components/device_signals/core/browser/system_signals_service_host.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/browser_context.h"
 
@@ -17,7 +16,8 @@ namespace enterprise_signals {
 // static
 SystemSignalsServiceHostFactory*
 SystemSignalsServiceHostFactory::GetInstance() {
-  return base::Singleton<SystemSignalsServiceHostFactory>::get();
+  static base::NoDestructor<SystemSignalsServiceHostFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -28,9 +28,12 @@ SystemSignalsServiceHostFactory::GetForProfile(Profile* profile) {
 }
 
 SystemSignalsServiceHostFactory::SystemSignalsServiceHostFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SystemSignalsServiceHost",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              .WithGuest(ProfileSelection::kOffTheRecordOnly)
+              .Build()) {}
 
 SystemSignalsServiceHostFactory::~SystemSignalsServiceHostFactory() = default;
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,10 @@
 #include "ui/ozone/demo/skia/skia_renderer_factory.h"
 #include "ui/ozone/demo/window_manager.h"
 #include "ui/ozone/public/ozone_platform.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/gfx/linux/gbm_util.h"  // nogncheck
+#endif
 
 int main(int argc, char** argv) {
   base::CommandLine::Init(argc, argv);
@@ -54,6 +58,17 @@ int main(int argc, char** argv) {
   ui::OzonePlatform::InitializeForUI(params);
   ui::KeyboardLayoutEngineManager::GetKeyboardLayoutEngine()
       ->SetCurrentLayoutByName("us");
+
+#if BUILDFLAG(IS_CHROMEOS)
+  ui::EnsureIntelMediaCompressionEnvVarIsSet();
+#endif
+
+  auto shutdown_cb =
+      base::BindOnce([] { LOG(FATAL) << "Failed to shutdown."; });
+
+  ui::OzonePlatform::GetInstance()->PostCreateMainMessageLoop(
+      std::move(shutdown_cb),
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 
   ui::OzonePlatform::InitializeForGPU(params);
 

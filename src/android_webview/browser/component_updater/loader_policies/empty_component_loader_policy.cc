@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ const uint8_t kFakePublicKeySHA256[32] = {
 void EmptyComponentLoaderPolicy::ComponentLoaded(
     const base::Version& /*version*/,
     base::flat_map<std::string, base::ScopedFD>& /*fd_map*/,
-    std::unique_ptr<base::DictionaryValue> /*manifest*/) {}
+    base::Value::Dict /*manifest*/) {}
 
 void EmptyComponentLoaderPolicy::ComponentLoadFailed(
     component_updater::ComponentLoadResult /*error*/) {}

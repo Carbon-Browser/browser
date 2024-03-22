@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/freezing/freezing_vote_aggregator.h"
 
-#include <algorithm>
-
+#include "base/containers/contains.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "components/performance_manager/public/freezing/freezing.h"
 #include "components/performance_manager/public/graph/node_data_describer_registry.h"
@@ -116,14 +116,14 @@ void FreezingVoteAggregator::UnregisterNodeDataDescriber(Graph* graph) {
   graph->GetNodeDataDescriberRegistry()->UnregisterDescriber(this);
 }
 
-base::Value FreezingVoteAggregator::DescribePageNodeData(
+base::Value::Dict FreezingVoteAggregator::DescribePageNodeData(
     const PageNode* node) const {
   auto votes_for_page = vote_data_map_.find(node);
   if (votes_for_page == vote_data_map_.end())
-    return base::Value();
+    return base::Value::Dict();
 
-  base::Value ret(base::Value::Type::DICTIONARY);
-  votes_for_page->second.DescribeVotes(&ret);
+  base::Value::Dict ret;
+  votes_for_page->second.DescribeVotes(ret);
   return ret;
 }
 
@@ -165,13 +165,12 @@ const FreezingVote& FreezingVoteAggregator::FreezingVoteData::GetChosenVote() {
 }
 
 void FreezingVoteAggregator::FreezingVoteData::DescribeVotes(
-    base::Value* ret) const {
+    base::Value::Dict& ret) const {
   size_t i = 0;
   for (const auto& it : votes_) {
-    ret->SetStringKey(
-        base::StringPrintf("Vote %zu (%s)", i++,
-                           FreezingVoteValueToString(it.second.value())),
-        it.second.reason());
+    ret.Set(base::StringPrintf("Vote %zu (%s)", i++,
+                               FreezingVoteValueToString(it.second.value())),
+            it.second.reason());
   }
 }
 
@@ -181,8 +180,7 @@ FreezingVoteAggregator::FreezingVoteData::FindVote(FreezingVoterId voter_id) {
   // a normal one for kCannotFreeze votes.
 
   auto it =
-      std::find_if(votes_.begin(), votes_.end(),
-                   [voter_id](const auto& e) { return e.first == voter_id; });
+      base::ranges::find(votes_, voter_id, &VotesDeque::value_type::first);
   DCHECK(it != votes_.end());
   return it;
 }
@@ -190,9 +188,7 @@ FreezingVoteAggregator::FreezingVoteData::FindVote(FreezingVoterId voter_id) {
 void FreezingVoteAggregator::FreezingVoteData::AddVoteToDeque(
     FreezingVoterId voter_id,
     const FreezingVote& vote) {
-  DCHECK(std::find_if(votes_.begin(), votes_.end(), [voter_id](const auto& e) {
-           return e.first == voter_id;
-         }) == votes_.end());
+  DCHECK(!base::Contains(votes_, voter_id, &VotesDeque::value_type::first));
   if (vote.value() == FreezingVoteValue::kCannotFreeze) {
     votes_.emplace_front(voter_id, vote);
   } else {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/prefs/pref_value_map.h"
 #include "components/strings/grit/components_strings.h"
-#include "ios/chrome/browser/pref_names.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #include "url/gurl.h"
 
 class GURL;
@@ -26,16 +26,15 @@ NewTabPageLocationPolicyHandler::NewTabPageLocationPolicyHandler()
 NewTabPageLocationPolicyHandler::~NewTabPageLocationPolicyHandler() {}
 
 std::string NewTabPageLocationPolicyHandler::FormatNewTabPageLocationURL(
-    const std::string ntp_location) {
+    const std::string& ntp_location) {
   url::Component scheme;
-  std::string new_ntp_location = ntp_location;
   if (!ntp_location.empty() &&
       !url::ExtractScheme(ntp_location.data(),
                           static_cast<int>(ntp_location.length()), &scheme)) {
-    new_ntp_location = base::StrCat(
+    return base::StrCat(
         {url::kHttpsScheme, url::kStandardSchemeSeparator, ntp_location});
   }
-  return new_ntp_location;
+  return ntp_location;
 }
 
 bool NewTabPageLocationPolicyHandler::ValidateNewTabPageLocationURL(
@@ -56,13 +55,13 @@ bool NewTabPageLocationPolicyHandler::CheckPolicySettings(
     policy::PolicyErrorMap* errors) {
   if (!TypeCheckingPolicyHandler::CheckPolicySettings(policies, errors))
     return false;
-  // |GetValueUnsafe| is used to differentiate between the policy value being
+  // `GetValueUnsafe` is used to differentiate between the policy value being
   // unset vs being set with an incorrect type.
   const base::Value* value = policies.GetValueUnsafe(policy_name());
   if (NewTabPageLocationPolicyHandler::ValidateNewTabPageLocationURL(value)) {
     return true;
   }
-  errors->AddError(policy_name(), IDS_POLICY_VALUE_FORMAT_ERROR);
+  errors->AddError(policy_name(), IDS_POLICY_INVALID_URL_ERROR);
   return false;
 }
 

@@ -1,24 +1,28 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/services/auction_worklet/trusted_signals_request_manager.h"
 
+#include <cmath>
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "content/services/auction_worklet/auction_v8_helper.h"
+#include "content/services/auction_worklet/public/cpp/auction_network_events_delegate.h"
 #include "content/services/auction_worklet/trusted_signals.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
@@ -29,10 +33,13 @@ namespace auction_worklet {
 TrustedSignalsRequestManager::TrustedSignalsRequestManager(
     Type type,
     network::mojom::URLLoaderFactory* url_loader_factory,
+    mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+        auction_network_events_handler,
     bool automatically_send_requests,
     const url::Origin& top_level_origin,
     const GURL& trusted_signals_url,
     absl::optional<uint16_t> experiment_group_id,
+    const std::string& trusted_bidding_signals_slot_size_param,
     AuctionV8Helper* v8_helper)
     : type_(type),
       url_loader_factory_(url_loader_factory),
@@ -40,7 +47,16 @@ TrustedSignalsRequestManager::TrustedSignalsRequestManager(
       top_level_origin_(top_level_origin),
       trusted_signals_url_(trusted_signals_url),
       experiment_group_id_(experiment_group_id),
-      v8_helper_(v8_helper) {}
+      trusted_bidding_signals_slot_size_param_(
+          trusted_bidding_signals_slot_size_param),
+      v8_helper_(v8_helper),
+      auction_network_events_handler_(
+          std::move(auction_network_events_handler)) {
+  // `trusted_bidding_signals_slot_size_param` are only supported for
+  // Type::kBiddingSignals.
+  DCHECK(trusted_bidding_signals_slot_size_param.empty() ||
+         type_ == Type::kBiddingSignals);
+}
 
 TrustedSignalsRequestManager::~TrustedSignalsRequestManager() {
   // All outstanding Requests should have been destroyed before `this`.
@@ -50,12 +66,15 @@ TrustedSignalsRequestManager::~TrustedSignalsRequestManager() {
 
 std::unique_ptr<TrustedSignalsRequestManager::Request>
 TrustedSignalsRequestManager::RequestBiddingSignals(
-    const std::vector<std::string>& keys,
+    const std::string& interest_group_name,
+    const absl::optional<std::vector<std::string>>& keys,
     LoadSignalsCallback load_signals_callback) {
   DCHECK_EQ(Type::kBiddingSignals, type_);
 
   std::unique_ptr<RequestImpl> request = std::make_unique<RequestImpl>(
-      this, std::set<std::string>(keys.begin(), keys.end()),
+      this, interest_group_name,
+      keys ? std::set<std::string>(keys->begin(), keys->end())
+           : std::set<std::string>(),
       std::move(load_signals_callback));
   QueueRequest(request.get());
   return request;
@@ -93,19 +112,27 @@ void TrustedSignalsRequestManager::StartBatchedTrustedSignalsRequest() {
           .first->get();
   batched_request->requests = std::move(queued_requests_);
   if (type_ == Type::kBiddingSignals) {
-    // Append all keys into a single set, and clear each request's list of keys,
-    // as it's no longer needed. Consumers provide their own list of keys again
-    // when they request v8 objects from the TrustedSignals::Results returned by
-    // `this`.
+    // Append all interest group names and keys into a single set, and clear
+    // them from each request, as they're no longer needed. Consumers provide
+    // their own values again when they request data from the
+    // TrustedSignals::Results returned by `this`.
+    std::set<std::string> interest_group_names;
     std::set<std::string> keys;
     for (RequestImpl* request : batched_request->requests) {
+      interest_group_names.emplace(
+          std::move(request->interest_group_name_).value());
       keys.insert(request->bidder_keys_->begin(), request->bidder_keys_->end());
       request->bidder_keys_.reset();
       request->batched_request_ = batched_request;
     }
+
     batched_request->trusted_signals = TrustedSignals::LoadBiddingSignals(
-        url_loader_factory_, std::move(keys), top_level_origin_.host(),
-        trusted_signals_url_, experiment_group_id_, v8_helper_,
+        url_loader_factory_, /*auction_network_events_handler=*/
+        CreateNewAuctionNetworkEventsHandlerRemote(
+            auction_network_events_handler_),
+        std::move(interest_group_names), std::move(keys),
+        top_level_origin_.host(), trusted_signals_url_, experiment_group_id_,
+        trusted_bidding_signals_slot_size_param_, v8_helper_,
         base::BindOnce(&TrustedSignalsRequestManager::OnSignalsLoaded,
                        base::Unretained(this), batched_request));
     return;
@@ -125,22 +152,26 @@ void TrustedSignalsRequestManager::StartBatchedTrustedSignalsRequest() {
     request->batched_request_ = batched_request;
   }
   batched_request->trusted_signals = TrustedSignals::LoadScoringSignals(
-      url_loader_factory_, std::move(render_urls),
-      std::move(ad_component_render_urls), top_level_origin_.host(),
-      trusted_signals_url_, experiment_group_id_, v8_helper_,
+      url_loader_factory_,
+      /*auction_network_events_handler=*/
+      CreateNewAuctionNetworkEventsHandlerRemote(
+          auction_network_events_handler_),
+      std::move(render_urls), std::move(ad_component_render_urls),
+      top_level_origin_.host(), trusted_signals_url_, experiment_group_id_,
+      v8_helper_,
       base::BindOnce(&TrustedSignalsRequestManager::OnSignalsLoaded,
                      base::Unretained(this), batched_request));
 }
 
 TrustedSignalsRequestManager::RequestImpl::RequestImpl(
     TrustedSignalsRequestManager* trusted_signals_request_manager,
+    const std::string& interest_group_name,
     std::set<std::string> bidder_keys,
     LoadSignalsCallback load_signals_callback)
-    : bidder_keys_(std::move(bidder_keys)),
+    : interest_group_name_(interest_group_name),
+      bidder_keys_(std::move(bidder_keys)),
       load_signals_callback_(std::move(load_signals_callback)),
-      trusted_signals_request_manager_(trusted_signals_request_manager) {
-  DCHECK(!bidder_keys_->empty());
-}
+      trusted_signals_request_manager_(trusted_signals_request_manager) {}
 
 TrustedSignalsRequestManager::RequestImpl::RequestImpl(
     TrustedSignalsRequestManager* trusted_signals_request_manager,
@@ -153,8 +184,9 @@ TrustedSignalsRequestManager::RequestImpl::RequestImpl(
       trusted_signals_request_manager_(trusted_signals_request_manager) {}
 
 TrustedSignalsRequestManager::RequestImpl::~RequestImpl() {
-  if (trusted_signals_request_manager_)
+  if (trusted_signals_request_manager_) {
     trusted_signals_request_manager_->OnRequestDestroyed(this);
+  }
 }
 
 TrustedSignalsRequestManager::BatchedTrustedSignalsRequest::
@@ -192,8 +224,9 @@ void TrustedSignalsRequestManager::OnRequestDestroyed(RequestImpl* request) {
     size_t removed = queued_requests_.erase(request);
     DCHECK_EQ(removed, 1u);
     // If there are no more requests, stop the timer.
-    if (queued_requests_.empty())
+    if (queued_requests_.empty()) {
       timer_.Stop();
+    }
     return;
   }
 
@@ -207,9 +240,11 @@ void TrustedSignalsRequestManager::OnRequestDestroyed(RequestImpl* request) {
 
   // Cancel and delete the corresponding BatchedTrustedSignalsRequest if it's
   // no longer associated with any live requests.
-  if (request->batched_request_->requests.empty())
-    batched_requests_.erase(
-        batched_requests_.find(request->batched_request_.get()));
+  if (request->batched_request_->requests.empty()) {
+    BatchedTrustedSignalsRequest* batched_request = request->batched_request_;
+    request->batched_request_ = nullptr;
+    batched_requests_.erase(batched_requests_.find(batched_request));
+  }
 }
 
 void TrustedSignalsRequestManager::QueueRequest(RequestImpl* request) {

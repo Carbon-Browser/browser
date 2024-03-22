@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
@@ -24,7 +24,6 @@
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
 #include "chrome/browser/ui/ash/shelf/standalone_browser_extension_app_context_menu.h"
 #include "components/services/app_service/public/cpp/app_types.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "components/services/app_service/public/cpp/instance_registry.h"
 #include "ui/base/models/simple_menu_model.h"
 #include "ui/views/widget/widget.h"
@@ -41,13 +40,14 @@ StandaloneBrowserExtensionAppShelfItemController::
     activation_client_observation_.Observe(activation_client);
 
   // Lacros is mutually exclusive with multi-signin. As such, there can only be
-  // a single ash profile active. We grab it from the shelf.
+  // a single ash profile active. We grab it from the profile manager.
   apps::AppServiceProxy* proxy = apps::AppServiceProxyFactory::GetForProfile(
-      ChromeShelfController::instance()->profile());
+      ProfileManager::GetPrimaryUserProfile());
 
-  icon_loader_releaser_ = proxy->LoadIconFromIconKey(
+  icon_loader_releaser_ = proxy->LoadIconWithIconEffects(
       apps::AppType::kStandaloneBrowserChromeApp, shelf_id.app_id,
-      apps::IconKey(), apps::IconType::kStandard, /*size_hint_in_dip=*/48,
+      apps::IconEffects::kNone, apps::IconType::kStandard,
+      /*size_hint_in_dip=*/48,
       /*allow_placeholder_icon=*/false,
       base::BindOnce(
           &StandaloneBrowserExtensionAppShelfItemController::OnLoadIcon,
@@ -97,23 +97,17 @@ void StandaloneBrowserExtensionAppShelfItemController::ItemSelected(
 
   std::vector<aura::Window*> filtered_windows;
   for (aura::Window* window : windows_) {
-    if (filter_predicate.Run(window))
+    if (filter_predicate.is_null() || filter_predicate.Run(window)) {
       filtered_windows.push_back(window);
+    }
   }
 
   if (filtered_windows.size() == 0) {
     apps::AppServiceProxy* proxy = apps::AppServiceProxyFactory::GetForProfile(
         ProfileManager::GetPrimaryUserProfile());
-    if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-      proxy->Launch(app_id(), event->flags(),
-                    ShelfLaunchSourceToAppsLaunchSource(source),
-                    /*window_info=*/nullptr);
-    } else {
-      proxy->Launch(app_id(), event->flags(),
-                    apps::ConvertLaunchSourceToMojomLaunchSource(
-                        ShelfLaunchSourceToAppsLaunchSource(source)),
-                    /*window_info=*/nullptr);
-    }
+    proxy->Launch(app_id(), event->flags(),
+                  ShelfLaunchSourceToAppsLaunchSource(source),
+                  /*window_info=*/nullptr);
 
     std::move(callback).Run(ash::SHELF_ACTION_NEW_WINDOW_CREATED, {});
     return;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "base/metrics/histogram_functions.h"
 #include "chrome/services/sharing/nearby/platform/bluetooth_device.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -169,7 +168,7 @@ bool BleMedium::StartScanning(
   // A different DiscoveredPeripheralCallback is being passed on each call, so
   // each must be captured and associated with its service UUID.
   discovered_peripheral_callbacks_map_.insert(
-      {service_uuid, discovered_peripheral_callback});
+      {service_uuid, std::move(discovered_peripheral_callback)});
 
   discovery_service_id_to_fast_advertisement_service_uuid_map_.insert(
       {service_id, service_uuid});
@@ -289,10 +288,10 @@ void BleMedium::DeviceAdded(bluetooth::mojom::DeviceInfoPtr device) {
   // BlePeripherals are passed by reference to NearbyConnections, if a
   // BlePeripheral already exists with the given address, the reference should
   // not be invalidated, the update functions should be called instead.
-  std::string address = device->address;
-  auto* ble_peripheral = GetDiscoveredBlePeripheral(address);
-  if (ble_peripheral) {
-    ble_peripheral->UpdateDeviceInfo(std::move(device));
+  const std::string address = device->address;
+  auto* existing_ble_peripheral = GetDiscoveredBlePeripheral(address);
+  if (existing_ble_peripheral) {
+    existing_ble_peripheral->UpdateDeviceInfo(std::move(device));
   } else {
     discovered_ble_peripherals_map_.emplace(
         address,
@@ -314,8 +313,9 @@ void BleMedium::DeviceAdded(bluetooth::mojom::DeviceInfoPtr device) {
     if (it == discovered_peripheral_callbacks_map_.end())
       continue;
 
-    // Fetch |ble_peripheral| again because it might have since been invalidated
-    // while we were iterating through IDs.
+    // Fetch the BlePeripheral with the same `address` again because
+    // previously fetched pointers may have been invalidated while iterating
+    // through the IDs.
     auto* ble_peripheral = GetDiscoveredBlePeripheral(address);
     if (!ble_peripheral)
       continue;
@@ -399,4 +399,3 @@ chrome::BlePeripheral* BleMedium::GetDiscoveredBlePeripheral(
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

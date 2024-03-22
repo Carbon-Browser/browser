@@ -1,63 +1,29 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_FORM_PROCESSING_NAME_PROCESSING_UTIL_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_FORM_PROCESSING_NAME_PROCESSING_UTIL_H_
 
-#include <vector>
-
+#include "base/containers/span.h"
 #include "base/strings/string_piece.h"
-#include "base/strings/utf_string_conversions.h"
-#include "components/autofill/core/browser/autofill_regexes.h"
-#include "components/autofill/core/browser/form_structure.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace autofill {
 
-#ifdef UNIT_TEST
+// Returns the length of the longest common affix of the `strings`. If `prefix`
+// is true, the prefixes are considered, otherwise the suffixes.
+// The runtime is O(strings.size() * length-of-longest-common-affix).
 size_t FindLongestCommonAffixLength(
-    const std::vector<base::StringPiece16>& strings,
-    bool findCommonSuffix);
+    base::span<const base::StringPiece16> strings,
+    bool prefix);
 
-bool IsValidParseableName(const base::StringPiece16 parseable_name);
-
-absl::optional<std::vector<base::StringPiece16>> RemoveCommonAffixesIfPossible(
-    const std::vector<base::StringPiece16>& field_names);
-
-size_t FindLongestCommonPrefixLengthInStringsWithMinimalLength(
-    const std::vector<base::StringPiece16>& strings,
-    size_t minimal_length);
-
-absl::optional<std::vector<base::StringPiece16>>
-GetStrippedParseableNamesIfValid(
-    const std::vector<base::StringPiece16>& field_names,
-    size_t offset_left,
-    size_t offset_right,
-    size_t minimal_string_length_to_strip);
-
-absl::optional<std::vector<base::StringPiece16>> RemoveCommonPrefixIfPossible(
-    const std::vector<base::StringPiece16>& field_names);
-
-absl::optional<std::vector<base::StringPiece16>>
-RemoveCommonPrefixForNamesWithMinimalLengthIfPossible(
-    const std::vector<base::StringPiece16>& field_names);
-#endif
-
-// Determines and returns the parseable names for |field_names|.
-// With the |kAutofillLabelAffixRemoval| feature enabled, first it is tried to
-// remove a common affix from all names in |field_names|. If this is not
-// possible, it is attempted to remove long prefixes from a subset of names in
-// |field_names| which exceed a given length. If the
-// |kAutofillLabelAffixRemoval| is disabled, a prefix removal is attempted. In
-// any case, if a affix/prefix removal is not possible, the original names in
-// |field_names| are returned.
-//
-// Beware, this function works on string pieces and therefore, it should not be
-// called with temporary objects. Also, the underlying strings should not be
-// modified before the last usage of the result.
-std::vector<std::u16string> GetParseableNames(
-    const std::vector<base::StringPiece16>& field_names);
+// Removes long common prefixes from `field_names`. If the common prefix is too
+// short or empty, `field_names` are left unmodified.
+// While this function works on a general set of strings, it is solely used for
+// the purpose of "rationalizing" the names of `FormFieldData::name`. The result
+// is then referred to as the "parseable name" of the field. Hence the
+// terminology here.
+void ComputeParseableNames(base::span<base::StringPiece16> field_names);
 
 }  // namespace autofill
 

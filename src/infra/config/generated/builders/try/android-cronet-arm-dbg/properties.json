@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/android-cronet-arm-dbg/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "android-cronet-arm-dbg",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-android-archive",
@@ -28,8 +31,7 @@
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "android",
-                  "enable_reclient"
+                  "android"
                 ],
                 "config": "chromium"
               }
@@ -41,16 +43,20 @@
         {
           "bucket": "ci",
           "builder": "android-cronet-arm-dbg",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ]
     }
   },
-  "$build/goma": {
-    "enable_ats": true,
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org",
-    "use_luci_auth": true
+  "$build/flakiness": {
+    "check_for_flakiness": true,
+    "check_for_flakiness_with_resultdb": true
+  },
+  "$build/reclient": {
+    "instance": "rbe-chromium-untrusted",
+    "jobs": 150,
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -60,5 +66,6 @@
     ]
   },
   "builder_group": "tryserver.chromium.android",
+  "cq": "path-based",
   "recipe": "chromium_trybot"
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,20 +19,17 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.BlockJUnit4ClassRunner;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.JniMocker;
 
-/**
- * Tests parts of the ContextualSearchContext class.
- */
-@RunWith(BlockJUnit4ClassRunner.class)
+/** Tests parts of the ContextualSearchContext class. */
+@RunWith(BaseRobolectricTestRunner.class)
 public class ContextualSearchContextTest {
     private static final int INVALID = ContextualSearchContext.INVALID_OFFSET;
-    private static final String UTF_8 = "UTF-8";
     private static final String SAMPLE_TEXT =
             "Now Barack Obama is not the best example.  And Clinton is ambiguous.";
     private static final String HOME_COUNTRY = "unused";
@@ -48,11 +45,9 @@ public class ContextualSearchContextTest {
         }
     }
 
-    @Rule
-    public JniMocker mocker = new JniMocker();
+    @Rule public JniMocker mocker = new JniMocker();
 
-    @Mock
-    private ContextualSearchContext.Natives mContextJniMock;
+    @Mock private ContextualSearchContext.Natives mContextJniMock;
 
     @Before
     public void setup() {
@@ -139,7 +134,8 @@ public class ContextualSearchContextTest {
         assertFalse(mDidSelectionChange);
 
         simulateSelectWordAroundCaret(-"Ba".length(), "rack".length());
-        assertEquals("Barack".length(),
+        assertEquals(
+                "Barack".length(),
                 mContext.getSelectionEndOffset() - mContext.getSelectionStartOffset());
         assertTrue(mDidSelectionChange);
         assertTrue(mContext.hasValidSelection());
@@ -155,7 +151,8 @@ public class ContextualSearchContextTest {
         assertTrue(mContext.canResolve());
 
         simulateResolve(0, " Obama".length());
-        assertEquals("Barack Obama".length(),
+        assertEquals(
+                "Barack Obama".length(),
                 mContext.getSelectionEndOffset() - mContext.getSelectionStartOffset());
     }
 

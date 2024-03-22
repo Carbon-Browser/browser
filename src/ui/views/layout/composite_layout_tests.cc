@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/animation/animation_container.h"
 #include "ui/gfx/animation/animation_test_api.h"
 #include "ui/gfx/geometry/point.h"
@@ -52,6 +54,8 @@ constexpr gfx::Size kDefaultToolbarSize(400, kIconDimension);
 // Base class for elements in the toolbar that animate; a stand-in for e.g.
 // ToolbarIconContainer.
 class SimulatedToolbarElement : public View {
+  METADATA_HEADER(SimulatedToolbarElement, View)
+
  public:
   AnimatingLayoutManager* layout() {
     return static_cast<AnimatingLayoutManager*>(GetLayoutManager());
@@ -82,9 +86,14 @@ class SimulatedToolbarElement : public View {
   }
 };
 
+BEGIN_METADATA(SimulatedToolbarElement)
+END_METADATA
+
 // Simulates an avatar button on the Chrome toolbar, with a fixed-size icon and
 // a label that can animate in and out.
 class SimulatedAvatarButton : public SimulatedToolbarElement {
+  METADATA_HEADER(SimulatedAvatarButton, SimulatedToolbarElement)
+
  public:
   SimulatedAvatarButton() {
     AddChildView(std::make_unique<StaticSizedView>(kIconSize));
@@ -145,10 +154,15 @@ class SimulatedAvatarButton : public SimulatedToolbarElement {
   bool showing_label_ = false;
 };
 
+BEGIN_METADATA(SimulatedAvatarButton)
+END_METADATA
+
 // Simulates extensions buttons in the new toolbar extensions view, with a fixed
 // button on the right and buttons to the left that can animate in and out and
 // be hidden if there is insufficient space.
 class SimulatedExtensionsContainer : public SimulatedToolbarElement {
+  METADATA_HEADER(SimulatedExtensionsContainer, SimulatedToolbarElement)
+
  public:
   SimulatedExtensionsContainer() {
     auto* const main_button =
@@ -199,12 +213,10 @@ class SimulatedExtensionsContainer : public SimulatedToolbarElement {
     }
   }
 
-  void MoveIcon(int from, int to) {
-    DCHECK_GE(from, 0);
-    DCHECK_GE(to, 0);
+  void MoveIcon(size_t from, size_t to) {
     DCHECK_NE(from, to);
-    DCHECK_LT(from, static_cast<int>(children().size()) - 1);
-    DCHECK_LT(to, static_cast<int>(children().size()) - 1);
+    DCHECK_LT(from, children().size() - 1);
+    DCHECK_LT(to, children().size() - 1);
     ReorderChildView(children()[from], to);
   }
 
@@ -294,9 +306,14 @@ class SimulatedExtensionsContainer : public SimulatedToolbarElement {
   std::set<const View*> visible_views_;
 };
 
+BEGIN_METADATA(SimulatedExtensionsContainer)
+END_METADATA
+
 // Simulates a toolbar with buttons on either side, a "location bar", and mock
 // versions of the extensions container and avatar button.
 class SimulatedToolbar : public View {
+  METADATA_HEADER(SimulatedToolbar, View)
+
  public:
   SimulatedToolbar() {
     AddChildView(std::make_unique<StaticSizedView>(kIconSize));
@@ -371,6 +388,9 @@ class SimulatedToolbar : public View {
   raw_ptr<SimulatedExtensionsContainer> extensions_;
   raw_ptr<SimulatedAvatarButton> avatar_;
 };
+
+BEGIN_METADATA(SimulatedToolbar)
+END_METADATA
 
 }  // anonymous namespace
 
@@ -462,8 +482,7 @@ class CompositeLayoutTest : public testing::Test {
   std::unique_ptr<gfx::AnimationContainerTestApi> extensions_test_api_;
   std::unique_ptr<gfx::AnimationContainerTestApi> avatar_test_api_;
   std::unique_ptr<SimulatedToolbar> toolbar_;
-  std::unique_ptr<base::AutoReset<gfx::Animation::RichAnimationRenderMode>>
-      animation_lock_;
+  gfx::AnimationTestApi::RenderModeResetter animation_lock_;
 };
 
 // ------------

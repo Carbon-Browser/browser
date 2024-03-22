@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,47 +38,6 @@
 namespace ui {
 
 namespace {
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-template <DomKey::Base T>
-using DomKeyConst = typename ui::DomKey::Constant<T>;
-
-// ChromeOS has several shortcuts that uses ASCII punctuation key as a main key
-// to triger them (e.g. ctrl+shift+alt+/). However, many of these keys have
-// different VKEY on different keyboard layouts, (some require shift or altgr
-// to type in), so using these keys combined with shift may not work well on
-// non-US layouts.  Instead of using VKEY, the new mapping uses DomKey as a key
-// to trigger and maps to VKEY+modifier that would have generated the same key
-// on US-keyboard.  See crbug.com/1067269 for more details.
-struct {
-  KeyboardCode vkey;
-  const DomKey::Base dom_key;
-  const DomKey::Base shifted_dom_key;
-} kAccelConversionMap[] = {
-    {VKEY_1, DomKeyConst<'1'>::Character, DomKeyConst<'!'>::Character},
-    {VKEY_2, DomKeyConst<'2'>::Character, DomKeyConst<'@'>::Character},
-    {VKEY_3, DomKeyConst<'3'>::Character, DomKeyConst<'#'>::Character},
-    {VKEY_4, DomKeyConst<'4'>::Character, DomKeyConst<'$'>::Character},
-    {VKEY_5, DomKeyConst<'5'>::Character, DomKeyConst<'%'>::Character},
-    {VKEY_6, DomKeyConst<'6'>::Character, DomKeyConst<'&'>::Character},
-    {VKEY_7, DomKeyConst<'7'>::Character, DomKeyConst<'^'>::Character},
-    {VKEY_8, DomKeyConst<'8'>::Character, DomKeyConst<'*'>::Character},
-    {VKEY_9, DomKeyConst<'9'>::Character, DomKeyConst<'('>::Character},
-    {VKEY_0, DomKeyConst<'0'>::Character, DomKeyConst<')'>::Character},
-    {VKEY_OEM_MINUS, DomKeyConst<'-'>::Character, DomKeyConst<'_'>::Character},
-    {VKEY_OEM_PLUS, DomKeyConst<'='>::Character, DomKeyConst<'+'>::Character},
-    {VKEY_OEM_4, DomKeyConst<'['>::Character, DomKeyConst<'{'>::Character},
-    {VKEY_OEM_6, DomKeyConst<']'>::Character, DomKeyConst<'}'>::Character},
-    {VKEY_OEM_5, DomKeyConst<'\\'>::Character, DomKeyConst<'|'>::Character},
-    {VKEY_OEM_1, DomKeyConst<';'>::Character, DomKeyConst<':'>::Character},
-    {VKEY_OEM_7, DomKeyConst<'\''>::Character, DomKeyConst<'\"'>::Character},
-    {VKEY_OEM_3, DomKeyConst<'`'>::Character, DomKeyConst<'~'>::Character},
-    {VKEY_OEM_COMMA, DomKeyConst<','>::Character, DomKeyConst<'<'>::Character},
-    {VKEY_OEM_PERIOD, DomKeyConst<'.'>::Character, DomKeyConst<'>'>::Character},
-    {VKEY_OEM_2, DomKeyConst<'/'>::Character, DomKeyConst<'?'>::Character},
-};
-
-#endif
 
 const int kModifierMask = EF_SHIFT_DOWN | EF_CONTROL_DOWN | EF_ALT_DOWN |
                           EF_COMMAND_DOWN | EF_FUNCTION_DOWN | EF_ALTGR_DOWN;
@@ -134,28 +93,6 @@ Accelerator::Accelerator(const KeyEvent& key_event)
 #if BUILDFLAG(IS_CHROMEOS)
   if (features::IsImprovedKeyboardShortcutsEnabled()) {
     code_ = key_event.code();
-  }
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (features::IsNewShortcutMappingEnabled()) {
-    DCHECK(!features::IsImprovedKeyboardShortcutsEnabled());
-    DomKey dom_key = key_event.GetDomKey();
-    if (!dom_key.IsCharacter())
-      return;
-    for (auto entry : kAccelConversionMap) {
-      // ALTGR is always canceled because it's not required on US Keyboard.
-      if (entry.dom_key == dom_key) {
-        // No shift punctuation key on US keyboard.
-        key_code_ = entry.vkey;
-        modifiers_ &= ~(ui::EF_SHIFT_DOWN | ui::EF_ALTGR_DOWN);
-      }
-      if (entry.shifted_dom_key == dom_key) {
-        // Punctuation key with shift on US keyboard.
-        key_code_ = entry.vkey;
-        modifiers_ = (modifiers_ | ui::EF_SHIFT_DOWN) & ~ui::EF_ALTGR_DOWN;
-      }
-    }
   }
 #endif
 }
@@ -300,12 +237,10 @@ std::u16string Accelerator::GetShortcutText() const {
   // intended to be removed when the menu system moved to MenuItemView. That was
   // crbug.com/2822, closed in 2010. Can we finally remove all of this?
   if (adjust_shortcut_for_rtl) {
-    int key_length = static_cast<int>(shortcut_rtl.length());
-    DCHECK_GT(key_length, 0);
+    DCHECK_GT(shortcut_rtl.length(), 0u);
     shortcut_rtl.append(u"+");
 
-    // Subtracting the size of the shortcut key and 1 for the '+' sign.
-    shortcut_rtl.append(shortcut, 0, shortcut.length() - key_length - 1);
+    shortcut_rtl.append(shortcut, 0, shortcut.length() - shortcut_rtl.length());
     shortcut.swap(shortcut_rtl);
   }
 #endif  // BUILDFLAG(IS_MAC)
@@ -451,7 +386,7 @@ std::u16string Accelerator::ApplyLongFormModifiers(
     result = ApplyModifierToAcceleratorString(result, IDS_APP_SHIFT_KEY);
 
   // Note that we use 'else-if' in order to avoid using Ctrl+Alt as a shortcut.
-  // See http://blogs.msdn.com/oldnewthing/archive/2004/03/29/101121.aspx for
+  // See https://devblogs.microsoft.com/oldnewthing/20040329-00/?p=40003 for
   // more information.
   if (IsCtrlDown())
     result = ApplyModifierToAcceleratorString(result, IDS_APP_CTRL_KEY);
@@ -487,13 +422,27 @@ std::u16string Accelerator::ApplyShortFormModifiers(
   if (IsCmdDown())
     result.push_back(u'⌘');  // U+2318, PLACE OF INTEREST SIGN
   if (IsFunctionDown()) {
-    // There's no Unicode symbol for the function key so fake it with
-    // characters. It's likely a special character in a special Apple
-    // font. Also on newer Macs the function key has a globe symbol, and a
-    // globe appears as the modifier key in the menus. Unfortunately it's not
-    // clear how to determine if a Mac has one of these newer keyboards. See
-    // https://crbug.com/1263737 which tracks finding and displaying these
-    // glyphs.
+    // The real "fn" used by menus is actually U+E23E in the Private Use Area in
+    // the keyboard font obtained with CTFontCreateUIFontForLanguage, with key
+    // kCTFontUIFontMenuItemCmdKey. Because this function must return a raw
+    // Unicode string with no specified font, return a string of characters.
+    //
+    // Newer Mac keyboards have a globe symbol on the fn key that is used in
+    // menus instead of "fn". That globe symbol is actually U+1F310 + U+FE0E,
+    // the emoji globe + the variation selector that indicates the text-style
+    // presentation. (🌐︎)
+    //
+    // Whether or not "fn" or the globe is displayed as the menu shortcut
+    // modifier depends on whether there is an attached keyboard with a globe
+    // symbol on it. Rather than rummaging around in the IORegistry, where the
+    // HID driver for the keyboard has a SupportsGlobeKey = True property, it's
+    // probably best to just make a call to the HIServices function
+    // HIS_XPC_GetGlobeKeyAvailability() and let it do the magic. See AppKit's
+    // -[NSKeyboardShortcut localizedModifierMaskDisplayName] for an example of
+    // this.
+    //
+    // TODO(https://crbug.com/1263737): Implement all of this when text-style
+    // presentations are implemented for Views in https://crbug.com/1099591.
     result.append(u"(fn) ");
   }
 

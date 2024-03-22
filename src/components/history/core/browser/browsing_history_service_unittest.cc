@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -20,8 +20,8 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/fake_web_history_service.h"
 #include "components/history/core/test/history_service_test_util.h"
-#include "components/sync/driver/fake_sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "components/sync/service/sync_service_observer.h"
+#include "components/sync/test/fake_sync_service.h"
 #include "net/http/http_status_code.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -314,7 +314,7 @@ class BrowsingHistoryServiceTest : public ::testing::Test {
   TestWebHistoryService web_history_;
   TestSyncService sync_service_;
   TestBrowsingHistoryDriver driver_;
-  raw_ptr<base::MockOneShotTimer> timer_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> timer_;
   std::unique_ptr<TestBrowsingHistoryService> browsing_history_service_;
 };
 

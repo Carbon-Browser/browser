@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <stdarg.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+
+#include "base/component_export.h"
 
 #if !defined(USE_UDEV)
 #error "USE_UDEV not defined"
@@ -27,7 +29,7 @@ namespace device {
 //
 // All the methods have the same signatures as libudev's functions. e.g.
 // udev_monitor_get_fd(mon) simply becomes device::udev_monitor_get_fd(mon).
-class UdevLoader {
+class COMPONENT_EXPORT(DEVICE_UDEV_LINUX) UdevLoader {
  public:
   static UdevLoader* Get();
 

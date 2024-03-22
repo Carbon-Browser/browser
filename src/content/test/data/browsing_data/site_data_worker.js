@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,25 +66,6 @@ async function hasCacheStorage() {
     let keys = await cache.keys()
     return keys.length > 0;
   } catch {
-    return false;
-  }
-}
-
-async function setStorageFoundation() {
-  try {
-    let f = await storageFoundation.open('worker');
-    await f.close();
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-async function hasStorageFoundation() {
-  try {
-    let dir = await storageFoundation.getAll();
-    return dir.indexOf('worker') != -1;
-  } catch (e) {
     return false;
   }
 }

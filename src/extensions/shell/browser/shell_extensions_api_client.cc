@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,9 @@
 
 namespace extensions {
 
-ShellExtensionsAPIClient::ShellExtensionsAPIClient() {}
+ShellExtensionsAPIClient::ShellExtensionsAPIClient() = default;
 
-ShellExtensionsAPIClient::~ShellExtensionsAPIClient() {}
+ShellExtensionsAPIClient::~ShellExtensionsAPIClient() = default;
 
 void ShellExtensionsAPIClient::AttachWebContentsHelpers(
     content::WebContents* web_contents) const {

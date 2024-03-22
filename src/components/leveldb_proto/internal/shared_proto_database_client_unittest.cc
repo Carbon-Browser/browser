@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/debug/stack_trace.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/test/task_environment.h"
@@ -322,10 +322,6 @@ TEST_F(SharedProtoDatabaseClientTest, InitSuccess) {
   auto client = GetClientAndWait(ProtoDbType::TEST_DATABASE0,
                                  true /* create_if_missing */, &status);
   ASSERT_EQ(status, Enums::InitStatus::kOK);
-
-  client->Init("client", base::BindOnce([](Enums::InitStatus status) {
-                 ASSERT_EQ(status, Enums::InitStatus::kOK);
-               }));
 }
 
 TEST_F(SharedProtoDatabaseClientTest, InitFail) {
@@ -333,10 +329,6 @@ TEST_F(SharedProtoDatabaseClientTest, InitFail) {
   auto client = GetClientAndWait(ProtoDbType::TEST_DATABASE0,
                                  false /* create_if_missing */, &status);
   ASSERT_EQ(status, Enums::InitStatus::kInvalidOperation);
-
-  client->Init("client", base::BindOnce([](Enums::InitStatus status) {
-                 ASSERT_EQ(status, Enums::InitStatus::kError);
-               }));
 }
 
 // Ensure that our LevelDB contains the properly prefixed entries and also

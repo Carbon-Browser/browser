@@ -1,13 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result_view.h"
 
-#include <algorithm>
 #include <iterator>
 #include <numeric>
+
 #include "base/containers/adapters.h"
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/glyph_bounds_accumulator.h"
@@ -259,12 +260,11 @@ struct ShapeResultView::InitData {
   template <typename ShapeResultType>
   static unsigned CountRunInfoParts(const ShapeResultType& result,
                                     const Segment& segment) {
-    return static_cast<unsigned>(
-        std::count_if(result.RunsOrParts().begin(), result.RunsOrParts().end(),
-                      [&result, &segment](const auto& run_or_part) {
-                        return RunInfoPart::ComputeStartEnd(*run_or_part.get(),
-                                                            result, segment);
-                      }));
+    return static_cast<unsigned>(base::ranges::count_if(
+        result.RunsOrParts(), [&result, &segment](const auto& run_or_part) {
+          return !!RunInfoPart::ComputeStartEnd(*run_or_part.get(), result,
+                                                segment);
+        }));
   }
 };
 
@@ -286,7 +286,7 @@ scoped_refptr<ShapeResult> ShapeResultView::CreateShapeResult() const {
   ShapeResult* new_result =
       new ShapeResult(primary_font_, start_index_ + char_index_offset_,
                       num_characters_, Direction());
-  new_result->runs_.ReserveCapacity(num_parts_);
+  new_result->runs_.reserve(num_parts_);
   for (const auto& part : RunsOrParts()) {
     auto new_run = ShapeResult::RunInfo::Create(
         part.run_->font_data_.get(), part.run_->direction_,
@@ -729,7 +729,7 @@ void ShapeResultView::ComputePartInkBounds(
   auto glyph_offsets = part.GetGlyphOffsets<has_non_zero_glyph_offsets>();
   const SimpleFontData& current_font_data = *part.run_->font_data_;
   unsigned num_glyphs = part.NumGlyphs();
-#if !BUILDFLAG(IS_MAC)
+#if !BUILDFLAG(IS_APPLE)
   Vector<Glyph, 256> glyphs(num_glyphs);
   unsigned i = 0;
   for (const auto& glyph_data : part)
@@ -741,7 +741,7 @@ void ShapeResultView::ComputePartInkBounds(
   GlyphBoundsAccumulator bounds(run_advance);
   for (unsigned j = 0; j < num_glyphs; ++j) {
     const HarfBuzzRunGlyphData& glyph_data = part.GlyphAt(j);
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
     gfx::RectF glyph_bounds =
         current_font_data.BoundsForGlyph(glyph_data.glyph);
 #else

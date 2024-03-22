@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include "media/capture/content/screen_enumerator.h"
 
+#include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -20,7 +21,10 @@ namespace aura {
 class Window;
 }
 
-void SetRootWindowsForTesting(std::vector<aura::Window*>* root_windows);
+#elif BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+namespace webrtc {
+class DesktopCapturer;
+}
 
 #endif
 
@@ -35,6 +39,13 @@ class ChromeScreenEnumerator : public media::ScreenEnumerator {
   using ScreensCallback = base::OnceCallback<void(
       const blink::mojom::StreamDevicesSet& stream_devices_set,
       blink::mojom::MediaStreamRequestResult result)>;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  static void SetRootWindowsForTesting(std::vector<aura::Window*> root_windows);
+#elif BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+  static void SetDesktopCapturerForTesting(
+      std::unique_ptr<webrtc::DesktopCapturer> capturer);
+#endif
 
   void EnumerateScreens(blink::mojom::MediaStreamType stream_type,
                         ScreensCallback screens_callback) const override;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "ash/components/arc/arc_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/string_escape.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
@@ -20,6 +20,9 @@
 #include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
+#include "chrome/browser/ash/policy/dlp/dlp_files_controller_ash.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_file_destination.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
@@ -37,44 +40,9 @@
 #include "url/gurl.h"
 
 namespace arc {
-
-// Script for clicking OK button on the selector.
-const char kScriptClickOk[] =
-    "(function() { document.querySelector('#ok-button').click(); })();";
-
-// Script for clicking Cancel button on the selector.
-const char kScriptClickCancel[] =
-    "(function() { document.querySelector('#cancel-button').click(); })();";
-
-// Script for clicking a directory element in the left pane of the selector.
-// %s should be replaced by the target directory name wrapped by double-quotes.
-const char kScriptClickDirectory[] =
-    "(function() {"
-    "  var dirs = document.querySelectorAll('#directory-tree .entry-name');"
-    "  Array.from(dirs).filter(a => a.innerText === %s)[0].click();"
-    "})();";
-
-// Script for clicking a file element in the right pane of the selector.
-// %s should be replaced by the target file name wrapped by double-quotes.
-const char kScriptClickFile[] =
-    "(function() {"
-    "  var evt = document.createEvent('MouseEvents');"
-    "  evt.initMouseEvent('mousedown', true, false);"
-    "  var files = document.querySelectorAll('#file-list .file');"
-    "  Array.from(files).filter(a => a.getAttribute('file-name') === %s)[0]"
-    "      .dispatchEvent(evt);"
-    "})();";
-
-// Script for querying UI elements (directories and files) shown on the selector.
-const char kScriptGetElements[] =
-    "(function() {"
-    "  var dirs = document.querySelectorAll('#directory-tree .entry-name');"
-    "  var files = document.querySelectorAll('#file-list .file');"
-    "  return {dirNames: Array.from(dirs, a => a.innerText),"
-    "          fileNames: Array.from(files, a => a.getAttribute('file-name'))};"
-    "})();";
-
 namespace {
+
+constexpr char kRecentAllFakePath[] = "/.fake-entry/recent/all";
 
 void ConvertToElementVector(
     const base::Value* list_value,
@@ -82,7 +50,7 @@ void ConvertToElementVector(
   if (!list_value || !list_value->is_list())
     return;
 
-  for (const base::Value& value : list_value->GetListDeprecated()) {
+  for (const base::Value& value : list_value->GetList()) {
     mojom::FileSelectorElementPtr element = mojom::FileSelectorElement::New();
     element->name = value.GetString();
     elements->push_back(std::move(element));
@@ -94,9 +62,10 @@ void OnGetElementsScriptResults(
     base::Value value) {
   mojom::FileSelectorElementsPtr result = mojom::FileSelectorElements::New();
   if (value.is_dict()) {
-    ConvertToElementVector(value.FindKey("dirNames"),
+    ConvertToElementVector(value.GetDict().Find("dirNames"),
                            &result->directory_elements);
-    ConvertToElementVector(value.FindKey("fileNames"), &result->file_elements);
+    ConvertToElementVector(value.GetDict().Find("fileNames"),
+                           &result->file_elements);
     // TODO(niwa): Fill result->search_query.
   }
   std::move(callback).Run(std::move(result));
@@ -131,11 +100,11 @@ ui::SelectFileDialog::Type GetDialogType(
 base::FilePath GetInitialFilePath(const mojom::SelectFilesRequestPtr& request) {
   const mojom::DocumentPathPtr& document_path = request->initial_document_path;
   if (!document_path)
-    return base::FilePath();
+    return base::FilePath(kRecentAllFakePath);
 
   if (document_path->path.empty()) {
     LOG(ERROR) << "path should at least contain root Document ID.";
-    return base::FilePath();
+    return base::FilePath(kRecentAllFakePath);
   }
 
   const std::string& root_document_id = document_path->path[0];
@@ -148,16 +117,16 @@ void BuildFileTypeInfo(const mojom::SelectFilesRequestPtr& request,
                        ui::SelectFileDialog::FileTypeInfo* file_type_info) {
   file_type_info->allowed_paths = ui::SelectFileDialog::FileTypeInfo::ANY_PATH;
   for (const std::string& mime_type : request->mime_types) {
-    std::vector<base::FilePath::StringType> extensions;
-    net::GetExtensionsForMimeType(mime_type, &extensions);
+    const std::vector<base::FilePath::StringType> extensions =
+        GetExtensionsForArcMimeType(mime_type);
     if (!extensions.empty()) {
       file_type_info->extensions.push_back(extensions);
     }
 
-    // Enable "Select from all files" option if GetExtensionsForMimeType
+    // Enable "Select from all files" option if GetExtensionsForArcMimeType
     // can't find any matching extensions or specified MIME type contains an
-    // asterisk. This is because some extensions used in Android (e.g. .DNG) are
-    // not covered by GetExtensionsForMimeType. (crbug.com/1034874)
+    // asterisk. This is to support extensions that are not covered by
+    // GetExtensionsForArcMimeType. (crbug.com/1034874)
     if (extensions.empty() ||
         base::EndsWith(mime_type, "/*", base::CompareCase::SENSITIVE)) {
       file_type_info->include_all_files = true;
@@ -404,10 +373,11 @@ bool SelectFileDialogHolder::SelectFile(
     return false;
   }
 
-  // TODO(niwa): Pass search query as well.
   SelectFileDialogExtension::Owner owner;
   owner.window = owner_window;
   owner.android_task_id = task_id;
+  owner.dialog_caller =
+      policy::DlpFileDestination(data_controls::Component::kArc);
   select_file_dialog_->SelectFileWithFileManagerParams(
       type,
       /*title=*/std::u16string(), default_path, file_types,

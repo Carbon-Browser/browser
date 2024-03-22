@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,6 +33,16 @@ class WebGPUInterfaceStub : public WebGPUInterface {
       const WGPUTextureDescriptor* optionalDesc) override;
 
   WGPUDevice DeprecatedEnsureDefaultDeviceSync() override;
+
+  void AssociateMailbox(GLuint device_id,
+                        GLuint device_generation,
+                        GLuint id,
+                        GLuint generation,
+                        GLuint usage,
+                        const WGPUTextureFormat* view_formats,
+                        GLuint view_format_count,
+                        MailboxFlags flags,
+                        const Mailbox& mailbox) override;
 
 // Include the auto-generated part of this class. We split this because
 // it means we can easily edit the non-auto generated parts right here in

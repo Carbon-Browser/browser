@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,4 +38,13 @@ std::unique_ptr<OutputSurface> TestOutputSurfaceProvider::CreateOutputSurface(
         std::make_unique<SoftwareOutputDevice>());
   }
 }
+
+gpu::SharedImageManager* TestOutputSurfaceProvider::GetSharedImageManager() {
+  return nullptr;
+}
+
+gpu::SyncPointManager* TestOutputSurfaceProvider::GetSyncPointManager() {
+  return nullptr;
+}
+
 }  // namespace viz

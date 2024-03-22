@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,13 @@
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/string_split.h"
+#include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
 #include "base/third_party/xdg_user_dirs/xdg_user_dir_lookup.h"
+#include "base/threading/scoped_blocking_call.h"
 
 namespace {
 
@@ -56,6 +59,30 @@ FilePath GetXDGUserDirectory(const char* dir_name, const char* fallback_dir) {
   return path.StripTrailingSeparators();
 }
 
+FilePath GetXDGDataWriteLocation(Environment* env) {
+  return GetXDGDirectory(env, "XDG_DATA_HOME", ".local/share");
+}
+
+std::vector<FilePath> GetXDGDataSearchLocations(Environment* env) {
+  ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
+
+  std::vector<FilePath> search_paths;
+  search_paths.push_back(GetXDGDataWriteLocation(env));
+
+  std::string xdg_data_dirs;
+  if (env->GetVar("XDG_DATA_DIRS", &xdg_data_dirs) && !xdg_data_dirs.empty()) {
+    StringTokenizer tokenizer(xdg_data_dirs, ":");
+    while (tokenizer.GetNext()) {
+      search_paths.emplace_back(tokenizer.token_piece());
+    }
+  } else {
+    search_paths.emplace_back("/usr/local/share");
+    search_paths.emplace_back("/usr/share");
+  }
+
+  return search_paths;
+}
+
 DesktopEnvironment GetDesktopEnvironment(Environment* env) {
   // kXdgCurrentDesktopEnvVar is the newest standard circa 2012.
   std::string xdg_current_desktop;
@@ -85,6 +112,9 @@ DesktopEnvironment GetDesktopEnvironment(Environment* env) {
           if (kde_session == "5") {
             return DESKTOP_ENVIRONMENT_KDE5;
           }
+          if (kde_session == "6") {
+            return DESKTOP_ENVIRONMENT_KDE6;
+          }
         }
         return DESKTOP_ENVIRONMENT_KDE4;
       }
@@ -94,6 +124,8 @@ DesktopEnvironment GetDesktopEnvironment(Environment* env) {
         return DESKTOP_ENVIRONMENT_XFCE;
       if (value == "UKUI")
         return DESKTOP_ENVIRONMENT_UKUI;
+      if (value == "LXQt")
+        return DESKTOP_ENVIRONMENT_LXQT;
     }
   }
 
@@ -149,6 +181,8 @@ const char* GetDesktopEnvironmentName(DesktopEnvironment env) {
       return "KDE4";
     case DESKTOP_ENVIRONMENT_KDE5:
       return "KDE5";
+    case DESKTOP_ENVIRONMENT_KDE6:
+      return "KDE6";
     case DESKTOP_ENVIRONMENT_PANTHEON:
       return "PANTHEON";
     case DESKTOP_ENVIRONMENT_UNITY:
@@ -157,12 +191,41 @@ const char* GetDesktopEnvironmentName(DesktopEnvironment env) {
       return "XFCE";
     case DESKTOP_ENVIRONMENT_UKUI:
       return "UKUI";
+    case DESKTOP_ENVIRONMENT_LXQT:
+      return "LXQT";
   }
   return nullptr;
 }
 
 const char* GetDesktopEnvironmentName(Environment* env) {
   return GetDesktopEnvironmentName(GetDesktopEnvironment(env));
+}
+
+SessionType GetSessionType(Environment& env) {
+  std::string xdg_session_type;
+  if (!env.GetVar(kXdgSessionTypeEnvVar, &xdg_session_type))
+    return SessionType::kUnset;
+
+  TrimWhitespaceASCII(ToLowerASCII(xdg_session_type), TrimPositions::TRIM_ALL,
+                      &xdg_session_type);
+
+  if (xdg_session_type == "wayland")
+    return SessionType::kWayland;
+
+  if (xdg_session_type == "x11")
+    return SessionType::kX11;
+
+  if (xdg_session_type == "tty")
+    return SessionType::kTty;
+
+  if (xdg_session_type == "mir")
+    return SessionType::kMir;
+
+  if (xdg_session_type == "unspecified")
+    return SessionType::kUnspecified;
+
+  LOG(ERROR) << "Unknown XDG_SESSION_TYPE: " << xdg_session_type;
+  return SessionType::kOther;
 }
 
 }  // namespace nix

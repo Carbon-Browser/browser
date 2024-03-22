@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,12 @@
 #define REMOTING_PROTOCOL_CLIENT_CONTROL_DISPATCHER_H_
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "remoting/protocol/channel_dispatcher_base.h"
 #include "remoting/protocol/clipboard_stub.h"
 #include "remoting/protocol/cursor_shape_stub.h"
 #include "remoting/protocol/host_stub.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class ClientStub;
 
@@ -45,6 +43,7 @@ class ClientControlDispatcher : public ChannelDispatcherBase,
       const SelectDesktopDisplayRequest& select_display) override;
   void ControlPeerConnection(
       const protocol::PeerConnectionParameters& parameters) override;
+  void SetVideoLayout(const VideoLayout& video_layout) override;
 
   // Sets the ClientStub that will be called for each incoming control
   // message. |client_stub| must outlive this object.
@@ -63,7 +62,6 @@ class ClientControlDispatcher : public ChannelDispatcherBase,
   raw_ptr<ClipboardStub> clipboard_stub_ = nullptr;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_CLIENT_CONTROL_DISPATCHER_H_

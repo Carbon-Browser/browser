@@ -1,8 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 /**
  * Contains the possible states a ServiceEntry can be in.
@@ -51,32 +51,33 @@ export enum ServiceRequestResult {
   INTERNAL_ERROR = 'INTERNAL_ERROR',
 }
 
-export type ServiceStatus = {
-  serviceState: string,
-  modelStatus: string,
-  driverStatus: string,
-  fileMonitorStatus: string,
-};
+export interface ServiceStatus {
+  serviceState: string;
+  modelStatus: string;
+  driverStatus: string;
+  fileMonitorStatus: string;
+}
 
-export type ServiceEntry = {
-  client: string,
-  guid: string,
-  state: ServiceEntryState,
-  url: string,
-  bytes_downloaded: number,
-  time_downloaded: string,
-  result?: ServiceEntryResult, driver: {
+export interface ServiceEntry {
+  client: string;
+  guid: string;
+  state: ServiceEntryState;
+  url: string;
+  bytes_downloaded: number;
+  time_downloaded: string;
+  result?: ServiceEntryResult;
+  driver: {
     state: DriverEntryState,
     paused: boolean,
     done: boolean,
-  },
-};
+  };
+}
 
-export type ServiceRequest = {
-  client: string,
-  guid: string,
-  result: ServiceRequestResult,
-};
+export interface ServiceRequest {
+  client: string;
+  guid: string;
+  result: ServiceRequestResult;
+}
 
 export interface DownloadInternalsBrowserProxy {
   /**

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -110,7 +110,6 @@ do_package() {
   log_cmd echo "Packaging ${ARCHITECTURE}..."
   PREDEPENDS="$COMMON_PREDEPS"
   DEPENDS="${COMMON_DEPS}"
-  RECOMMENDS="${COMMON_RECOMMENDS}"
   PROVIDES="www-browser"
   gen_changelog
   process_template "${SCRIPTDIR}/control.template" "${DEB_CONTROL}"
@@ -118,12 +117,17 @@ do_package() {
   if [ -f "${DEB_CONTROL}" ]; then
     gen_control
   fi
+  log_cmd fakeroot dpkg-deb -Znone -b "${STAGEDIR}" "${TMPFILEDIR}"
+  local PACKAGEFILE="${PACKAGE}-${CHANNEL}_${VERSIONFULL}_${ARCHITECTURE}.deb"
   if [ ${IS_OFFICIAL_BUILD} -ne 0 ]; then
-    local COMPRESSION_OPTS="-Zxz -z9"
-  else
-    local COMPRESSION_OPTS="-Znone"
+    (cd "${TMPFILEDIR}" && ar -x "${TMPFILEDIR}/${PACKAGEFILE}")
+    xz -z9 -T0 --lzma2='dict=256MiB' "${TMPFILEDIR}/data.tar"
+    xz -z0 "${TMPFILEDIR}/control.tar"
+    ar -d "${TMPFILEDIR}/${PACKAGEFILE}" control.tar data.tar
+    ar -r "${TMPFILEDIR}/${PACKAGEFILE}" "${TMPFILEDIR}/control.tar.xz" \
+      "${TMPFILEDIR}/data.tar.xz"
   fi
-  log_cmd fakeroot dpkg-deb ${COMPRESSION_OPTS} -b "${STAGEDIR}" .
+  mv "${TMPFILEDIR}/${PACKAGEFILE}" .
   verify_package "$DEPENDS"
 }
 
@@ -258,9 +262,6 @@ export ARCHITECTURE="${ARCHITECTURE}"
 DEB_COMMON_DEPS="${OUTPUTDIR}/deb_common.deps"
 COMMON_DEPS=$(sed ':a;N;$!ba;s/\n/, /g' "${DEB_COMMON_DEPS}")
 COMMON_PREDEPS="dpkg (>= 1.14.0)"
-MANUAL_RECOMMENDS="${SCRIPTDIR}/manual_recommends"
-COMMON_RECOMMENDS=$(grep -v ^$ "${MANUAL_RECOMMENDS}" | grep -v ^# |
-                        sed ':a;N;$!ba;s/\n/, /g')
 
 # Make everything happen in the OUTPUTDIR.
 cd "${OUTPUTDIR}"

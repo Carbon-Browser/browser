@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,10 @@
 #include "third_party/blink/renderer/core/html/forms/html_form_control_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_select_element.h"
 #include "third_party/blink/renderer/core/html/forms/text_control_element.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_node.h"
+#include "third_party/blink/renderer/core/layout/inline/offset_mapping.h"
 #include "third_party/blink/renderer/core/layout/layout_block_flow.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_offset_mapping.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/text/unicode_utilities.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
@@ -41,7 +41,7 @@ bool ShouldIgnoreContents(const Node& node) {
   return (!element->ShouldSerializeEndTag() &&
           !IsA<HTMLInputElement>(*element)) ||
          (IsA<TextControlElement>(*element) &&
-          !To<TextControlElement>(*element).SuggestedValue().IsEmpty()) ||
+          !To<TextControlElement>(*element).SuggestedValue().empty()) ||
          IsA<HTMLIFrameElement>(*element) || IsA<HTMLImageElement>(*element) ||
          IsA<HTMLMeterElement>(*element) || IsA<HTMLObjectElement>(*element) ||
          IsA<HTMLProgressElement>(*element) ||
@@ -77,6 +77,17 @@ Node* GetOutermostNonSearchableAncestor(const Node& node) {
   return nullptr;
 }
 
+const ComputedStyle* EnsureComputedStyleForFind(Node& node) {
+  Element* element = DynamicTo<Element>(node);
+  if (!element) {
+    element = FlatTreeTraversal::ParentElement(node);
+  }
+  if (element) {
+    return element->EnsureComputedStyle();
+  }
+  return nullptr;
+}
+
 // Returns the next/previous node after |start_node| (including start node) that
 // is a text node and is searchable and visible.
 template <class Direction>
@@ -92,7 +103,7 @@ Node* GetVisibleTextNode(Node& start_node) {
   }
   // Move to first text node that's visible.
   while (node) {
-    const ComputedStyle* style = node->EnsureComputedStyle();
+    const ComputedStyle* style = EnsureComputedStyleForFind(*node);
     if (ShouldIgnoreContents(*node) ||
         (style && style->Display() == EDisplay::kNone)) {
       // This element and its descendants are not visible, skip it.
@@ -246,11 +257,10 @@ bool FindBuffer::IsInSameUninterruptedBlock(const Node& start_node,
     return false;
 
   LayoutBlockFlow& start_block_flow =
-      *NGOffsetMapping::GetInlineFormattingContextOf(
+      *OffsetMapping::GetInlineFormattingContextOf(
           *start_node.GetLayoutObject());
   LayoutBlockFlow& end_block_flow =
-      *NGOffsetMapping::GetInlineFormattingContextOf(
-          *end_node.GetLayoutObject());
+      *OffsetMapping::GetInlineFormattingContextOf(*end_node.GetLayoutObject());
   if (start_block_flow != end_block_flow)
     return false;
 
@@ -265,9 +275,10 @@ bool FindBuffer::IsInSameUninterruptedBlock(const Node& start_node,
       continue;
 
     if (node->GetLayoutObject() &&
-        *NGOffsetMapping::GetInlineFormattingContextOf(
-            *node->GetLayoutObject()) != start_block_flow)
+        *OffsetMapping::GetInlineFormattingContextOf(
+            *node->GetLayoutObject()) != start_block_flow) {
       return false;
+    }
   }
 
   return true;
@@ -304,7 +315,7 @@ FindBuffer::Results FindBuffer::FindMatches(const WebString& search_text,
   // We should return empty result if it's impossible to get a match (buffer is
   // empty or too short), or when something went wrong in layout, in which case
   // |offset_mapping_| is null.
-  if (buffer_.IsEmpty() || search_text.length() > buffer_.size() ||
+  if (buffer_.empty() || search_text.length() > buffer_.size() ||
       !offset_mapping_)
     return Results();
   String search_text_16_bit = search_text;
@@ -360,7 +371,7 @@ void FindBuffer::CollectTextUntilBlockBoundary(
       node = FlatTreeTraversal::NextSkippingChildren(*node);
       continue;
     }
-    const ComputedStyle* style = node->EnsureComputedStyle();
+    const ComputedStyle* style = EnsureComputedStyleForFind(*node);
     if (style->Display() == EDisplay::kNone) {
       // This element and its descendants are not visible, skip it.
       // We can safely just check the computed style of this node since
@@ -388,7 +399,7 @@ void FindBuffer::CollectTextUntilBlockBoundary(
       if (text_node) {
         last_added_text_node = node;
         LayoutBlockFlow& block_flow =
-            *NGOffsetMapping::GetInlineFormattingContextOf(
+            *OffsetMapping::GetInlineFormattingContextOf(
                 *text_node->GetLayoutObject());
         AddTextToBuffer(*text_node, block_flow, range);
       }
@@ -470,14 +481,12 @@ void FindBuffer::AddTextToBuffer(const Text& text_node,
                                  LayoutBlockFlow& block_flow,
                                  const EphemeralRangeInFlatTree& range) {
   if (!offset_mapping_) {
-    offset_mapping_ = NGInlineNode::GetOffsetMapping(&block_flow);
+    offset_mapping_ = InlineNode::GetOffsetMapping(&block_flow);
 
     if (UNLIKELY(!offset_mapping_)) {
       // TODO(crbug.com/955678): There are certain cases where we fail to
-      // compute // |NGOffsetMapping| due to failures in layout. As the root
-      // cause is hard to fix at the moment, we work around it here so that the
-      // production build doesn't crash.
-      NOTREACHED();
+      // compute the |OffsetMapping| due to failures in layout. As the root
+      // cause is hard to fix at the moment, we just work around it here.
       return;
     }
   }
@@ -493,7 +502,7 @@ void FindBuffer::AddTextToBuffer(const Text& text_node,
   unsigned last_unit_end = 0;
   bool first_unit = true;
   const String mapped_text = offset_mapping_->GetText();
-  for (const NGOffsetMappingUnit& unit :
+  for (const OffsetMappingUnit& unit :
        offset_mapping_->GetMappingUnitsForDOMRange(
            EphemeralRange(node_start, node_end))) {
     if (first_unit || last_unit_end != unit.TextContentStart()) {
@@ -536,7 +545,7 @@ FindBuffer::Results::Iterator FindBuffer::Results::begin() const {
   if (empty_result_)
     return end();
   text_searcher_->SetOffset(0);
-  return Iterator(*find_buffer_, text_searcher_, search_text_);
+  return Iterator(*find_buffer_, text_searcher_);
 }
 
 FindBuffer::Results::Iterator FindBuffer::Results::end() const {
@@ -569,8 +578,7 @@ unsigned FindBuffer::Results::CountForTesting() const {
 
 // Findbuffer::Results::Iterator implementation.
 FindBuffer::Results::Iterator::Iterator(const FindBuffer& find_buffer,
-                                        TextSearcherICU* text_searcher,
-                                        const String& search_text)
+                                        TextSearcherICU* text_searcher)
     : find_buffer_(&find_buffer),
       text_searcher_(text_searcher),
       has_match_(true) {

@@ -1,10 +1,9 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import itertools
 
-from .code_generator_info import CodeGeneratorInfo
 from .composition_parts import WithCodeGeneratorInfo
 from .composition_parts import WithComponent
 from .composition_parts import WithDebugInfo
@@ -58,8 +57,8 @@ class CallbackInterface(UserDefinedType, WithExtendedAttributes,
             self.constants = constants
             self.constructors = []
             self.constructor_groups = []
-            self.named_constructors = []
-            self.named_constructor_groups = []
+            self.legacy_factory_functions = []
+            self.legacy_factory_function_groups = []
             self.operations = operations
             self.operation_groups = []
 
@@ -121,13 +120,13 @@ class CallbackInterface(UserDefinedType, WithExtendedAttributes,
         return ()
 
     @property
-    def named_constructors(self):
-        """Returns named constructors."""
+    def legacy_factory_functions(self):
+        """Returns legacy factory functions."""
         return ()
 
     @property
-    def named_constructor_groups(self):
-        """Returns groups of overloaded named constructors."""
+    def legacy_factory_function_groups(self):
+        """Returns groups of overloaded legacy factory functions."""
         return ()
 
     @property

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,18 +62,18 @@ void AutomationAsh::DispatchAccessibilityLocationChange(
     const base::UnguessableToken& tree_id,
     int32_t node_id,
     const ui::AXRelativeBounds& bounds) {
-  ExtensionMsg_AccessibilityLocationChangeParams params;
-  params.tree_id = ui::AXTreeID::FromToken(tree_id);
-  params.id = node_id;
-  params.new_location = bounds;
+  content::AXLocationChangeNotificationDetails details;
+  details.ax_tree_id = ui::AXTreeID::FromToken(tree_id);
+  details.id = node_id;
+  details.new_location = bounds;
   extensions::AutomationEventRouter::GetInstance()
-      ->DispatchAccessibilityLocationChange(params);
+      ->DispatchAccessibilityLocationChange(details);
 }
 
 void AutomationAsh::DispatchTreeDestroyedEvent(
     const base::UnguessableToken& tree_id) {
   extensions::AutomationEventRouter::GetInstance()->DispatchTreeDestroyedEvent(
-      ui::AXTreeID::FromToken(tree_id), nullptr);
+      ui::AXTreeID::FromToken(tree_id));
 }
 
 void AutomationAsh::DispatchActionResult(

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "chromeos/ash/components/network/network_activation_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
 
-namespace chromeos {
+namespace ash {
 
 // Fake NetworkActivationHandler implementation for tests.
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) FakeNetworkActivationHandler
@@ -61,11 +61,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) FakeNetworkActivationHandler
   std::vector<ActivationParams> complete_activation_calls_;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace ash {
-using ::chromeos::FakeNetworkActivationHandler;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_FAKE_NETWORK_ACTIVATION_HANDLER_H_

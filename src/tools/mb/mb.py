@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,29 +9,23 @@ MB is a wrapper script for GN that can be used to generate build files
 for sets of canned configurations and analyze them.
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
-
 import argparse
 import ast
 import collections
 import errno
 import json
 import os
-import pipes
+import shlex
 import platform
 import re
 import shutil
-import sys
 import subprocess
+import sys
 import tempfile
 import traceback
+import urllib.request
 import zipfile
 
-if sys.version_info.major == 2:
-  from urllib2 import urlopen
-else:
-  from urllib.request import urlopen
 
 CHROMIUM_SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
@@ -93,13 +87,12 @@ class MetaBuildWrapper:
     self.args = argparse.Namespace()
     self.configs = {}
     self.public_artifact_builders = None
+    self.gn_args_locations_files = []
     self.builder_groups = {}
     self.mixins = {}
     self.isolate_exe = 'isolate.exe' if self.platform.startswith(
         'win') else 'isolate'
     self.use_luci_auth = False
-    self.rts_out_dir = self.PathJoin('gen', 'rts')
-    self.banned_from_rts = set()
 
   def PostArgsInit(self):
     self.use_luci_auth = getattr(self.args, 'luci_auth', False)
@@ -110,16 +103,6 @@ class MetaBuildWrapper:
     if 'expectations_dir' in self.args and self.args.expectations_dir is None:
       self.args.expectations_dir = os.path.join(
           os.path.dirname(self.args.config_file), 'mb_config_expectations')
-
-    banned_from_rts_map = json.loads(
-        self.ReadFile(
-            self.PathJoin(self.chromium_src_dir, 'tools', 'mb',
-                          'rts_banned_suites.json')))
-    self.banned_from_rts.update(banned_from_rts_map.get('*', set()))
-
-    if getattr(self.args, 'builder', None):
-      self.banned_from_rts.update(
-          banned_from_rts_map.get(self.args.builder, set()))
 
   def Main(self, args):
     self.ParseArgs(args)
@@ -181,15 +164,6 @@ class MetaBuildWrapper:
                         help='Sets GN arg android_default_version_code')
       subp.add_argument('--android-version-name',
                         help='Sets GN arg android_default_version_name')
-      subp.add_argument('--rts',
-                        default=None,
-                        help='which regression test selection model to use'
-                        ' For more info about RTS, please see'
-                        ' //docs/testing/regression-test-selection.md')
-      subp.add_argument('--use-rts',
-                        action='store_true',
-                        default=False,
-                        help='Deprecated argument for enabling RTS')
 
       # TODO(crbug.com/1060857): Remove this once swarming task templates
       # support command prefixes.
@@ -288,10 +262,6 @@ class MetaBuildWrapper:
                            'newline.')
     subp.add_argument('--json-output',
                       help='Write errors to json.output')
-    subp.add_argument('--rts-target-change-recall',
-                      type=float,
-                      help='how much safety is needed when selecting tests. '
-                      '0.0 is the lowest and 1.0 is the highest')
     subp.add_argument('path',
                       help='path to generate build into')
     subp.set_defaults(func=self.CmdGen)
@@ -331,17 +301,6 @@ class MetaBuildWrapper:
                            'implies --quiet')
     subp.set_defaults(func=self.CmdLookup)
 
-    subp = subps.add_parser('try',
-                            description='Try your change on a remote builder')
-    AddCommonOptions(subp)
-    subp.add_argument('target',
-                      help='ninja target to build and run')
-    subp.add_argument('--force', default=False, action='store_true',
-                      help='Force the job to run. Ignores local checkout state;'
-                      ' by default, the tool doesn\'t trigger jobs if there are'
-                      ' local changes which are not present on Gerrit.')
-    subp.set_defaults(func=self.CmdTry)
-
     subp = subps.add_parser(
       'run', formatter_class=argparse.RawDescriptionHelpFormatter)
     subp.description = (
@@ -376,6 +335,40 @@ class MetaBuildWrapper:
     subp.add_argument('-d', '--dimension', default=[], action='append', nargs=2,
                       dest='dimensions', metavar='FOO bar',
                       help='dimension to filter on')
+    subp.add_argument('--internal',
+                      action='store_true',
+                      help=('Run under the internal swarming server '
+                            '(chrome-swarming) instead of the public server '
+                            '(chromium-swarm).'))
+    subp.add_argument('--no-bot-mode',
+                      dest='bot_mode',
+                      action='store_false',
+                      default=True,
+                      help='Do not run the test with bot mode.')
+    subp.add_argument('--realm',
+                      default=None,
+                      help=('Optional realm used when triggering swarming '
+                            'tasks.'))
+    subp.add_argument('--service-account',
+                      default=None,
+                      help=('Optional service account to run the swarming '
+                            'tasks as.'))
+    subp.add_argument('--named-cache',
+                      default=[],
+                      dest='named_cache',
+                      action='append',
+                      metavar='{NAME}={VALUE}',
+                      help=('Additional named cache for test, example: '
+                            '"runtime_ios_16_4=Runtime-ios-16.4"'))
+    subp.add_argument(
+        '--cipd-package',
+        default=[],
+        dest='cipd_package',
+        action='append',
+        metavar='{LOCATION}:{CIPD_PACKAGE}:{REVISION}',
+        help=("Additional cipd packages to fetch for test, example: "
+              "'.:infra/tools/mac_toolchain/${platform}="
+              "git_revision:32d81d877ee07af07bf03b7f70ce597e323b80ce'"))
     subp.add_argument('--tags', default=[], action='append', metavar='FOO:BAR',
                       help='Tags to assign to the swarming task')
     subp.add_argument('--no-default-dimensions', action='store_false',
@@ -471,39 +464,7 @@ class MetaBuildWrapper:
       self.WriteFile(expectation_file, json_s)
     return 0
 
-  def RtsSelect(self):
-    if self.args.rts == 'rts-ml-chromium':
-      model_dir = self.PathJoin(self.chromium_src_dir, 'testing', 'rts',
-                                self.args.rts, self._CipdPlatform())
-      exe = self.PathJoin(model_dir, self.args.rts)
-    else:
-      model_dir = self.PathJoin(self.chromium_src_dir, 'testing', 'rts',
-                                self._CipdPlatform())
-      exe = self.PathJoin(model_dir, self.args.rts)
-
-    if self.platform == 'win32':
-      exe += '.exe'
-
-    args = [
-       exe, 'select',
-      '-model-dir', model_dir, \
-      '-out', self.PathJoin(self.ToAbsPath(self.args.path), self.rts_out_dir),
-      '-checkout', self.chromium_src_dir,
-    ]
-    if self.args.rts_target_change_recall:
-      if (self.args.rts_target_change_recall < 0
-          or self.args.rts_target_change_recall > 1):
-        self.WriteFailureAndRaise(
-            'rts-target-change-recall must be between (0 and 1]', None)
-      args += ['-target-change-recall', str(self.args.rts_target_change_recall)]
-
-    ret, _, err = self.Run(args, force_verbose=True)
-    if ret != 0:
-      self.WriteFailureAndRaise(err, None)
-
   def CmdGen(self):
-    if self.args.rts:
-      self.RtsSelect()
     vals = self.Lookup()
     return self.RunGNGen(vals)
 
@@ -547,73 +508,6 @@ class MetaBuildWrapper:
       self.PrintCmd(cmd)
     return 0
 
-  def CmdTry(self):
-    ninja_target = self.args.target
-    if ninja_target.startswith('//'):
-      self.Print("Expected a ninja target like base_unittests, got %s" % (
-        ninja_target))
-      return 1
-
-    _, out, _ = self.Run(['git', 'cl', 'diff', '--stat'], force_verbose=False)
-    if out:
-      self.Print("Your checkout appears to local changes which are not uploaded"
-                 " to Gerrit. Changes must be committed and uploaded to Gerrit"
-                 " to be tested using this tool.")
-      if not self.args.force:
-        return 1
-
-    json_path = self.PathJoin(self.chromium_src_dir, 'out.json')
-    try:
-      ret, out, err = self.Run(
-        ['git', 'cl', 'issue', '--json=out.json'], force_verbose=False)
-      if ret != 0:
-        self.Print(
-          "Unable to fetch current issue. Output and error:\n%s\n%s" % (
-            out, err
-        ))
-        return ret
-      with open(json_path) as f:
-        issue_data = json.load(f)
-    finally:
-      if self.Exists(json_path):
-        os.unlink(json_path)
-
-    if not issue_data['issue']:
-      self.Print("Missing issue data. Upload your CL to Gerrit and try again.")
-      return 1
-
-    class LedException(Exception):
-      pass
-
-    def run_cmd(previous_res, cmd):
-      if self.args.verbose:
-        self.Print(('| ' if previous_res else '') + ' '.join(cmd))
-
-      res, out, err = self.Call(cmd, stdin=previous_res)
-      if res != 0:
-        self.Print("Err while running '%s'. Output:\n%s\nstderr:\n%s" % (
-          ' '.join(cmd), out, err))
-        raise LedException()
-      return out
-
-    try:
-      result = LedResult(None, run_cmd).then(
-        # TODO(martiniss): maybe don't always assume the bucket?
-        'led', 'get-builder', 'luci.chromium.try:%s' % self.args.builder).then(
-        'led', 'edit', '-r', 'chromium_trybot_experimental',
-          '-p', 'tests=["%s"]' % ninja_target).then(
-        'led', 'edit-system', '--tag=purpose:user-debug-mb-try').then(
-        'led', 'edit-cr-cl', issue_data['issue_url']).then(
-        'led', 'launch').result
-    except LedException:
-      self.Print("If this is an unexpected error message, please file a bug"
-                 " with https://goto.google.com/mb-try-bug")
-      raise
-
-    swarming_data = json.loads(result)['swarming']
-    self.Print("Launched task at https://%s/task?id=%s" % (
-      swarming_data['host_name'], swarming_data['task_id']))
-
   def CmdRun(self):
     vals = self.GetConfig()
     if not vals:
@@ -632,7 +526,8 @@ class MetaBuildWrapper:
     self.Print('')
     if self.args.swarmed:
       cmd, _ = self.GetSwarmingCommand(self.args.target, vals)
-      return self._RunUnderSwarming(self.args.path, self.args.target, cmd)
+      return self._RunUnderSwarming(self.args.path, self.args.target, cmd,
+                                    self.args.internal)
     return self._RunLocallyIsolated(self.args.path, self.args.target)
 
   def CmdZip(self):
@@ -665,9 +560,19 @@ class MetaBuildWrapper:
       if zip_dir:
         self.RemoveDirectory(zip_dir)
 
-  def _RunUnderSwarming(self, build_dir, target, isolate_cmd):
-    cas_instance = 'chromium-swarm'
-    swarming_server = 'chromium-swarm.appspot.com'
+  def _RunUnderSwarming(self, build_dir, target, isolate_cmd, internal):
+    if internal:
+      cas_instance = 'chrome-swarming'
+      swarming_server = 'chrome-swarming.appspot.com'
+      realm = 'chrome:try' if not self.args.realm else self.args.realm
+      account = 'chrome-tester@chops-service-accounts.iam.gserviceaccount.com'
+    else:
+      cas_instance = 'chromium-swarm'
+      swarming_server = 'chromium-swarm.appspot.com'
+      realm = self.args.realm
+      account = 'chromium-tester@chops-service-accounts.iam.gserviceaccount.com'
+    account = (self.args.service_account
+               if self.args.service_account else account)
     # TODO(dpranke): Look up the information for the target in
     # the //testing/buildbot.json file, if possible, so that we
     # can determine the isolate target, command line, and additional
@@ -730,16 +635,28 @@ class MetaBuildWrapper:
           cas_digest,
           '-server',
           swarming_server,
+          # 30 is try level. So use the same here.
+          '-priority',
+          '30',
+          '-service-account',
+          account,
           '-tag=purpose:user-debug-mb',
           '-relative-cwd',
           self.ToSrcRelPath(build_dir),
           '-dump-json',
           json_file,
-      ] + tags + dimensions + ['--'] + list(isolate_cmd)
+      ]
+      for cipd_package in self.args.cipd_package:
+        cmd.extend(['-cipd-package', cipd_package])
+      for named_cache in self.args.named_cache:
+        cmd.extend(['-named-cache', named_cache])
+      if realm:
+        cmd += ['--realm', realm]
+      cmd += tags + dimensions + ['--'] + list(isolate_cmd)
       if self.args.extra_args:
         cmd += self.args.extra_args
       self.Print('')
-      ret, _, _ = self.Run(cmd, force_verbose=True, buffer_output=False)
+      ret, _, _ = self.Run(cmd, force_verbose=True, capture_output=False)
       if ret:
         return ret
       task_json = self.ReadFile(json_file)
@@ -755,7 +672,7 @@ class MetaBuildWrapper:
           collect_output,
           task_id,
       ]
-      ret, _, _ = self.Run(cmd, force_verbose=True, buffer_output=False)
+      ret, _, _ = self.Run(cmd, force_verbose=True, capture_output=False)
       if ret != 0:
         return ret
       collect_json = json.loads(self.ReadFile(collect_output))
@@ -777,7 +694,7 @@ class MetaBuildWrapper:
     ]
     if self.args.extra_args:
       cmd += ['--'] + self.args.extra_args
-    ret, _, _ = self.Run(cmd, force_verbose=True, buffer_output=False)
+    ret, _, _ = self.Run(cmd, force_verbose=True, capture_output=False)
     return ret
 
   def _DefaultDimensions(self):
@@ -863,10 +780,6 @@ class MetaBuildWrapper:
     validation.CheckAllConfigsAndMixinsReferenced(errs, all_configs,
                                                   self.configs, self.mixins)
 
-    if self.args.config_file == self.default_config:
-      validation.EnsureNoProprietaryMixins(errs, self.builder_groups,
-                                           self.configs, self.mixins)
-
     validation.CheckDuplicateConfigs(errs, self.configs, self.mixins,
                                      self.builder_groups, FlattenConfig)
 
@@ -883,7 +796,7 @@ class MetaBuildWrapper:
     if self.Exists(expectations_dir):
       jsonish_blob = self._ToJsonish()
       if not validation.CheckExpectations(self, jsonish_blob, expectations_dir):
-        raise MBErr("Expectations out of date. Please run 'mb.py train'.")
+        raise MBErr("Expectations out of date. Run 'tools/mb/mb.py train'.")
 
     validation.CheckKeyOrdering(errs, self.builder_groups, self.configs,
                                 self.mixins)
@@ -980,11 +893,18 @@ class MetaBuildWrapper:
 
     args_contents = ReplaceImports(args_contents)
     args_dict = gn_helpers.FromGNArgs(args_contents)
-    # Re-add the quotes around strings so they show up as they would in the
-    # args.gn file.
+    return self._convert_args_dict_to_args_string(args_dict)
+
+  def _convert_args_dict_to_args_string(self, args_dict):
+    """Format a dict of GN args into a single string."""
     for k, v in args_dict.items():
       if isinstance(v, str):
+        # Re-add the quotes around strings so they show up as they would in the
+        # args.gn file.
         args_dict[k] = '"%s"' % v
+      elif isinstance(v, bool):
+        # Convert boolean values to lower case strings.
+        args_dict[k] = str(v).lower()
     return ' '.join(['%s=%s' % (k, v) for (k, v) in args_dict.items()])
 
   def Lookup(self):
@@ -1000,6 +920,11 @@ class MetaBuildWrapper:
       if not vals:
         raise e
       return vals
+
+    # "config" would be a dict if the GN args are loaded from a
+    # starlark-generated file.
+    if isinstance(config, dict):
+      return config
 
     # TODO(crbug.com/912681) Some iOS bots have a definition, with ios_error
     # as an indicator that it's incorrect. We utilize this to check the
@@ -1053,6 +978,7 @@ class MetaBuildWrapper:
 
     self.configs = contents['configs']
     self.mixins = contents['mixins']
+    self.gn_args_locations_files = contents.get('gn_args_locations_files', [])
     self.builder_groups = contents.get('builder_groups')
     self.public_artifact_builders = contents.get('public_artifact_builders')
 
@@ -1089,6 +1015,46 @@ class MetaBuildWrapper:
     if not self.args.builder_group or not self.args.builder:
       raise MBErr('Must specify either -c/--config or '
                   '(--builder-group and -b/--builder)')
+
+    # Try finding gn-args.json generated by starlark definition.
+    for gn_args_locations_file in self.gn_args_locations_files:
+      locations_file_abs_path = os.path.join(
+          os.path.dirname(self.args.config_file),
+          os.path.normpath(gn_args_locations_file))
+      if not self.Exists(locations_file_abs_path):
+        continue
+      gn_args_locations = json.loads(self.ReadFile(locations_file_abs_path))
+      gn_args_file = gn_args_locations.get(self.args.builder_group,
+                                           {}).get(self.args.builder, None)
+      if gn_args_file:
+        gn_args_dict = json.loads(
+            self.ReadFile(
+                os.path.join(os.path.dirname(locations_file_abs_path),
+                             os.path.normpath(gn_args_file))))
+
+        if 'phases' in gn_args_dict:
+          # The builder has phased GN config.
+          if self.args.phase is None:
+            raise MBErr('Must specify a build --phase for %s on %s' %
+                        (self.args.builder, self.args.builder_group))
+          phase = str(self.args.phase)
+          phase_configs = gn_args_dict['phases']
+          if phase not in phase_configs:
+            raise MBErr('Phase %s doesn\'t exist for %s on %s' %
+                        (phase, self.args.builder, self.args.builder_group))
+          gn_args_dict = phase_configs[phase]
+        else:
+          # Non-phased GN config.
+          if self.args.phase is not None:
+            raise MBErr('Must not specify a build --phase for %s on %s' %
+                        (self.args.builder, self.args.builder_group))
+        return {
+            'args_file':
+            gn_args_dict.get('args_file', ''),
+            'gn_args':
+            self._convert_args_dict_to_args_string(
+                gn_args_dict.get('gn_args', {})) or ''
+        }
 
     if not self.args.builder_group in self.builder_groups:
       raise MBErr('Builder group name "%s" not found in "%s"' %
@@ -1155,6 +1121,11 @@ class MetaBuildWrapper:
       gn_runtime_deps_path = self.ToAbsPath(build_dir, 'runtime_deps')
       self.WriteFile(gn_runtime_deps_path, '\n'.join(labels) + '\n')
       cmd.append('--runtime-deps-list-file=%s' % gn_runtime_deps_path)
+
+    # Write all generated targets to a JSON file called project.json
+    # in the build dir.
+    cmd.append('--ide=json')
+    cmd.append('--json-file-name=project.json')
 
     ret, output, _ = self.Run(cmd)
     if ret != 0:
@@ -1251,26 +1222,6 @@ class MetaBuildWrapper:
         if self.Exists(path):
           self.RemoveFile(path)
 
-  def _FilterOutUnneededSkylabDeps(self, deps):
-    """Filter out the runtime dependencies not used by Skylab.
-
-    Skylab is CrOS infra facilities for us to run hardware tests. These files
-    may appear in the test target's runtime_deps but unnecessary for our tests
-    to execute in a CrOS device.
-    """
-    file_ignore_list = [
-        re.compile(r'.*build/android.*'),
-        re.compile(r'.*build/chromeos.*'),
-        re.compile(r'.*build/cros_cache.*'),
-        # The following matches anything under //testing/ that isn't under
-        # //testing/buildbot/filters/.
-        re.compile(r'.*testing/(?!buildbot/filters).*'),
-        re.compile(r'.*third_party/chromite.*'),
-        # No test target should rely on files in [output_dir]/gen.
-        re.compile(r'^gen/.*'),
-    ]
-    return [f for f in deps if not any(r.match(f) for r in file_ignore_list)]
-
   def _DedupDependencies(self, deps):
     """Remove the deps already contained by other paths."""
 
@@ -1331,13 +1282,6 @@ class MetaBuildWrapper:
       command, extra_files = self.GetSwarmingCommand(target, vals)
       runtime_deps = self.ReadFile(path_to_use).splitlines()
       runtime_deps = self._DedupDependencies(runtime_deps)
-      if 'is_skylab=true' in vals['gn_args']:
-        runtime_deps = self._FilterOutUnneededSkylabDeps(runtime_deps)
-
-      # For more info about RTS, please see
-      # //docs/testing/regression-test-selection.md
-      if self.args.rts:
-        self.AddFilterFileArg(target, build_dir, command)
 
       canonical_target = target.replace(':','_').replace('/','_')
       ret = self.WriteIsolateFiles(build_dir, command, canonical_target,
@@ -1345,18 +1289,6 @@ class MetaBuildWrapper:
       if ret != 0:
         return ret
     return 0
-
-  def AddFilterFileArg(self, target, build_dir, command):
-    if target in self.banned_from_rts:
-      self.Print('%s is banned for RTS on this builder' % target)
-    else:
-      filter_file = target + '.filter'
-      filter_file_path = self.PathJoin(self.rts_out_dir, filter_file)
-      abs_filter_file_path = self.ToAbsPath(build_dir, filter_file_path)
-
-      if self.Exists(abs_filter_file_path):
-        command.append('--test-launcher-filter-file=%s' % filter_file_path)
-        self.Print('added RTS filter file to command: %s' % filter_file)
 
   def PossibleRuntimeDepsPaths(self, vals, ninja_targets, isolate_map):
     """Returns a map of targets to possible .runtime_deps paths.
@@ -1446,7 +1378,11 @@ class MetaBuildWrapper:
         self.Print(out)
       return ret
 
-    runtime_deps = out.splitlines()
+    runtime_deps = []
+    for l in out.splitlines():
+      # FIXME: Can remove this check if/when use_goma is removed.
+      if 'The gn arg use_goma=true will be deprecated by EOY 2023' not in l:
+        runtime_deps.append(l)
 
     ret = self.WriteIsolateFiles(build_dir, command, target, runtime_deps, vals,
                                  extra_files)
@@ -1460,7 +1396,7 @@ class MetaBuildWrapper:
         '-i',
         self.ToSrcRelPath('%s/%s.isolate' % (build_dir, target)),
     ],
-                         buffer_output=False)
+                         capture_output=False)
 
     return ret
 
@@ -1556,13 +1492,14 @@ class MetaBuildWrapper:
                  'list files in directory instead for:' + err)
       return 1
 
-    self.WriteFile(isolate_path,
-      json.dumps({
+    isolate = {
         'variables': {
-          'command': command,
-          'files': files,
+            'command': command,
+            'files': files,
         }
-      }, sort_keys=True) + '\n')
+    }
+
+    self.WriteFile(isolate_path, json.dumps(isolate, sort_keys=True) + '\n')
 
     self.WriteJSON(
       {
@@ -1635,9 +1572,6 @@ class MetaBuildWrapper:
     if android_version_name:
       gn_args += ' android_default_version_name="%s"' % android_version_name
 
-    if self.args.rts:
-      gn_args += ' use_rts=true'
-
     args_gn_lines = []
     parsed_gn_args = {}
 
@@ -1672,12 +1606,37 @@ class MetaBuildWrapper:
     is_win = self.platform == 'win32' or 'target_os="win"' in vals['gn_args']
     is_lacros = 'chromeos_is_browser_only=true' in vals['gn_args']
 
+    # This should be true if tests with type='windowed_test_launcher' are
+    # expected to run using xvfb. For example, Linux Desktop, X11 CrOS and
+    # Ozone CrOS builds on Linux (xvfb is not used on CrOS HW or VMs). Note
+    # that one Ozone build can be used to run different backends. Currently,
+    # tests are executed for the headless and X11 backends and both can run
+    # under Xvfb on Linux.
+    use_xvfb = (self.platform.startswith('linux') and not is_android
+                and not is_fuchsia and not is_cros_device)
+
+    asan = 'is_asan=true' in vals['gn_args']
+    lsan = 'is_lsan=true' in vals['gn_args']
+    msan = 'is_msan=true' in vals['gn_args']
+    tsan = 'is_tsan=true' in vals['gn_args']
+    cfi_diag = 'use_cfi_diag=true' in vals['gn_args']
+    # Treat sanitizer warnings as test case failures (crbug/1442587).
+    fail_on_san_warnings = 'fail_on_san_warnings=true' in vals['gn_args']
+    clang_coverage = 'use_clang_coverage=true' in vals['gn_args']
+    java_coverage = 'use_jacoco_coverage=true' in vals['gn_args']
+    javascript_coverage = 'use_javascript_coverage=true' in vals['gn_args']
+
     test_type = isolate_map[target]['type']
 
     if self.use_luci_auth:
       cmdline = ['luci-auth.exe' if is_win else 'luci-auth', 'context', '--']
     else:
       cmdline = []
+
+    if getattr(self.args, 'bot_mode', True):
+      bot_mode = ('--test-launcher-bot-mode', )
+    else:
+      bot_mode = ()
 
     if test_type == 'generated_script' or is_ios or is_lacros:
       assert 'script' not in isolate_map[target], (
@@ -1692,29 +1651,14 @@ class MetaBuildWrapper:
       # generated_scripts.
       cmdline += [script] + isolate_map[target].get('args', [])
 
+      if java_coverage:
+        cmdline += ['--coverage-dir', '${ISOLATED_OUTDIR}/coverage']
+
       return cmdline, []
 
 
     # TODO(crbug.com/816629): Convert all targets to generated_scripts
     # and delete the rest of this function.
-
-    # This should be true if tests with type='windowed_test_launcher' are
-    # expected to run using xvfb. For example, Linux Desktop, X11 CrOS and
-    # Ozone CrOS builds on Linux (xvfb is not used on CrOS HW or VMs). Note
-    # that one Ozone build can be used to run different backends. Currently,
-    # tests are executed for the headless and X11 backends and both can run
-    # under Xvfb on Linux.
-    use_xvfb = (self.platform.startswith('linux') and not is_android
-                and not is_fuchsia and not is_cros_device)
-
-    asan = 'is_asan=true' in vals['gn_args']
-    msan = 'is_msan=true' in vals['gn_args']
-    tsan = 'is_tsan=true' in vals['gn_args']
-    cfi_diag = 'use_cfi_diag=true' in vals['gn_args']
-    clang_coverage = 'use_clang_coverage=true' in vals['gn_args']
-    java_coverage = 'use_jacoco_coverage=true' in vals['gn_args']
-    javascript_coverage = 'use_javascript_coverage=true' in vals['gn_args']
-
     executable = isolate_map[target].get('executable', target)
     executable_suffix = isolate_map[target].get(
         'executable_suffix', '.exe' if is_win else '')
@@ -1749,7 +1693,7 @@ class MetaBuildWrapper:
           vpython_exe,
           '../../testing/test_env.py',
           os.path.join('bin', 'run_%s' % target),
-          '--test-launcher-bot-mode',
+          *bot_mode,
           '--logs-dir=${ISOLATED_OUTDIR}',
       ]
     elif is_cros_device and test_type != 'script':
@@ -1763,13 +1707,16 @@ class MetaBuildWrapper:
           vpython_exe,
           '../../testing/xvfb.py',
           './' + str(executable) + executable_suffix,
-          '--test-launcher-bot-mode',
+          *bot_mode,
           '--asan=%d' % asan,
           '--lsan=%d' % asan,  # Enable lsan when asan is enabled.
           '--msan=%d' % msan,
           '--tsan=%d' % tsan,
           '--cfi-diag=%d' % cfi_diag,
       ]
+
+      if fail_on_san_warnings:
+        cmdline += ['--fail-san=1']
 
       if javascript_coverage:
         cmdline += ['--devtools-code-coverage=${ISOLATED_OUTDIR}']
@@ -1778,17 +1725,22 @@ class MetaBuildWrapper:
           vpython_exe,
           '../../testing/test_env.py',
           './' + str(executable) + executable_suffix,
-          '--test-launcher-bot-mode',
+          *bot_mode,
           '--asan=%d' % asan,
           # Enable lsan when asan is enabled except on Windows where LSAN isn't
           # supported.
-          # TODO(https://crbug.com/948939): Enable on Mac once things pass.
+          # TODO(https://crbug.com/1320449): Enable on Mac inside asan once
+          # things pass.
           # TODO(https://crbug.com/974478): Enable on ChromeOS once things pass.
-          '--lsan=%d' % (asan and not is_mac and not is_win and not is_cros),
+          '--lsan=%d' % lsan
+          or (asan and not is_mac and not is_win and not is_cros),
           '--msan=%d' % msan,
           '--tsan=%d' % tsan,
           '--cfi-diag=%d' % cfi_diag,
       ]
+
+      if fail_on_san_warnings:
+        cmdline += ['--fail-san=1']
     elif test_type == 'script':
       # If we're testing a CrOS simplechrome build, assume we need to prepare a
       # DUT for testing. So prepend the command to run with the test wrapper.
@@ -1796,7 +1748,6 @@ class MetaBuildWrapper:
         cmdline += [
             os.path.join('bin', 'cros_test_wrapper'),
             '--logs-dir=${ISOLATED_OUTDIR}',
-            '--',
         ]
       if is_android:
         extra_files.append('../../build/android/test_wrapper/logdog_wrapper.py')
@@ -2013,7 +1964,7 @@ class MetaBuildWrapper:
     if self.platform == 'win32':
       shell_quoter = QuoteForCmd
     else:
-      shell_quoter = pipes.quote
+      shell_quoter = shlex.quote
 
     if cmd[0] == self.executable:
       cmd = ['python'] + cmd[1:]
@@ -2032,17 +1983,17 @@ class MetaBuildWrapper:
     if self.args.jobs:
       ninja_cmd.extend(['-j', '%d' % self.args.jobs])
     ninja_cmd.append(target)
-    ret, _, _ = self.Run(ninja_cmd, buffer_output=False)
+    ret, _, _ = self.Run(ninja_cmd, capture_output=False)
     return ret
 
-  def Run(self, cmd, env=None, force_verbose=True, buffer_output=True):
+  def Run(self, cmd, env=None, force_verbose=True, capture_output=True):
     # This function largely exists so it can be overridden for testing.
     if self.args.dryrun or self.args.verbose or force_verbose:
       self.PrintCmd(cmd)
     if self.args.dryrun:
       return 0, '', ''
 
-    ret, out, err = self.Call(cmd, env=env, buffer_output=buffer_output)
+    ret, out, err = self.Call(cmd, env=env, capture_output=capture_output)
     if self.args.verbose or force_verbose:
       if ret != 0:
         self.Print('  -> returned %d' % ret)
@@ -2053,35 +2004,25 @@ class MetaBuildWrapper:
         self.Print(err, end='', file=sys.stderr)
     return ret, out, err
 
-  def Call(self, cmd, env=None, buffer_output=True, stdin=None):
-    if buffer_output:
-      p = subprocess.Popen(cmd, shell=False, cwd=self.chromium_src_dir,
-                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                           env=env, stdin=subprocess.PIPE)
-      out, err = p.communicate(input=stdin)
-      out = out.decode('utf-8')
-      err = err.decode('utf-8')
-    else:
-      p = subprocess.Popen(cmd, shell=False, cwd=self.chromium_src_dir,
-                           env=env)
-      p.wait()
-      out = err = ''
-    return p.returncode, out, err
-
-  def _CipdPlatform(self):
-    """Returns current CIPD platform, e.g. linux-amd64.
-
-    Assumes AMD64.
-    """
-    if self.platform == 'win32':
-      return 'windows-amd64'
-    if self.platform == 'darwin':
-      return 'mac-amd64'
-    return 'linux-amd64'
-
-  def ExpandUser(self, path):
-    # This function largely exists so it can be overridden for testing.
-    return os.path.expanduser(path)
+  # Call has argument input to match subprocess.run
+  def Call(
+      self,
+      cmd,
+      env=None,
+      capture_output=True,
+      input='',
+  ):  # pylint: disable=redefined-builtin
+    # We are returning the exit code, we don't want an exception thrown
+    # for non-zero exit code
+    # pylint: disable=subprocess-run-check
+    p = subprocess.run(cmd,
+                       shell=False,
+                       capture_output=capture_output,
+                       cwd=self.chromium_src_dir,
+                       env=env,
+                       text=True,
+                       input=input)
+    return p.returncode, p.stdout, p.stderr
 
   def Exists(self, path):
     # This function largely exists so it can be overridden for testing.
@@ -2089,7 +2030,7 @@ class MetaBuildWrapper:
 
   def Fetch(self, url):
     # This function largely exists so it can be overridden for testing.
-    f = urlopen(url)
+    f = urllib.request.urlopen(url)
     contents = f.read()
     f.close()
     return contents
@@ -2151,29 +2092,8 @@ class MetaBuildWrapper:
     # This function largely exists so it can be overriden for testing.
     if self.args.dryrun or self.args.verbose or force_verbose:
       self.Print('\nWriting """\\\n%s""" to %s.\n' % (contents, path))
-    with open(path, 'w') as fp:
+    with open(path, 'w', encoding='utf-8', newline='') as fp:
       return fp.write(contents)
-
-
-class LedResult:
-  """Holds the result of a led operation. Can be chained using |then|."""
-
-  def __init__(self, result, run_cmd):
-    self._result = result
-    self._run_cmd = run_cmd
-
-  @property
-  def result(self):
-    """The mutable result data of the previous led call as decoded JSON."""
-    return self._result
-
-  def then(self, *cmd):
-    """Invoke led, passing it the current `result` data as input.
-
-    Returns another LedResult object with the output of the command.
-    """
-    return self.__class__(
-        self._run_cmd(self._result, cmd), self._run_cmd)
 
 
 def FlattenConfig(config_pool, mixin_pool, config):

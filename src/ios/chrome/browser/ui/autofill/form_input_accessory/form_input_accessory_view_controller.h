@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #import "ios/chrome/browser/ui/autofill/form_input_accessory/form_input_accessory_consumer.h"
 
+@class BrandingViewController;
 @protocol FormSuggestionClient;
 @class LayoutGuideCenter;
 @class ManualFillAccessoryViewController;
@@ -21,6 +22,9 @@
 
 // Client in charge of handling actions in suggestions.
 @property(nonatomic, weak) id<FormSuggestionClient> formSuggestionClient;
+
+// The view controller to show the branding logo.
+@property(nonatomic, strong) BrandingViewController* brandingViewController;
 
 // The layout guide center to use to refer to the first suggestion label.
 @property(nonatomic, strong) LayoutGuideCenter* layoutGuideCenter;

@@ -1,11 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_BUBBLE_BUBBLE_VIEW_CONTROLLER_H_
 #define IOS_CHROME_BROWSER_UI_BUBBLE_BUBBLE_VIEW_CONTROLLER_H_
 
-#import "ios/chrome/browser/ui/bubble/bubble_view.h"
+#import <UIKit/UIKit.h>
+
+typedef NS_ENUM(NSInteger, BubbleAlignment);
+typedef NS_ENUM(NSInteger, BubbleArrowDirection);
+typedef NS_ENUM(NSInteger, BubbleViewType);
+
+@protocol BubbleViewDelegate;
 
 // View controller that manages a BubbleView, which points to a UI element of
 // interest.

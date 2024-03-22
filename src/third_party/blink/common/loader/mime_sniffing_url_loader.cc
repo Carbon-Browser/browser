@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/public/common/loader/mime_sniffing_url_loader.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/mime_sniffer.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/blink/public/common/loader/mime_sniffing_throttle.h"
@@ -94,7 +96,8 @@ void MimeSniffingURLLoader::OnReceiveEarlyHints(
 
 void MimeSniffingURLLoader::OnReceiveResponse(
     network::mojom::URLResponseHeadPtr response_head,
-    mojo::ScopedDataPipeConsumerHandle body) {
+    mojo::ScopedDataPipeConsumerHandle body,
+    absl::optional<mojo_base::BigBuffer> cached_metadata) {
   // OnReceiveResponse() shouldn't be called because MimeSniffingURLLoader is
   // created by MimeSniffingThrottle::WillProcessResponse(), which is equivalent
   // to OnReceiveResponse().
@@ -118,11 +121,9 @@ void MimeSniffingURLLoader::OnUploadProgress(
                                                    std::move(ack_callback));
 }
 
-void MimeSniffingURLLoader::OnReceiveCachedMetadata(mojo_base::BigBuffer data) {
-  destination_url_loader_client_->OnReceiveCachedMetadata(std::move(data));
-}
-
 void MimeSniffingURLLoader::OnTransferSizeUpdated(int32_t transfer_size_diff) {
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kMimeSniffingURLLoader);
   destination_url_loader_client_->OnTransferSizeUpdated(transfer_size_diff);
 }
 
@@ -212,6 +213,7 @@ void MimeSniffingURLLoader::OnBodyReadable(MojoResult) {
       CompleteSniffing();
       return;
     case MOJO_RESULT_SHOULD_WAIT:
+      buffered_body_.resize(start_size);
       body_consumer_watcher_.ArmOrNotify();
       return;
     default:

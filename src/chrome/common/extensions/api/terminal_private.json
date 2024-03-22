@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -238,16 +238,12 @@
               "name": "info",
               "type": "object",
               "properties": {
-                "alternative_renderer": {
-                  "description": "True if alternative renderer flag is enabled.",
+                "alternative_emulator": {
+                  "description": "True if alternative emulator flag is enabled.",
                   "type": "boolean"
                 },
-                "multi_profile": {
-                  "description": "True if multi profile settings is enabled.",
-                  "type": "boolean"
-                },
-                "tmux_integration": {
-                  "description": "True if tmux control mode integration is enabled.",
+                "tast": {
+                  "description": "True if tast extension is installed.",
                   "type": "boolean"
                 }
               },

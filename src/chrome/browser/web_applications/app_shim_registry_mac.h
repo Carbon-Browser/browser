@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_WEB_APPLICATIONS_APP_SHIM_REGISTRY_MAC_H_
 #define CHROME_BROWSER_WEB_APPLICATIONS_APP_SHIM_REGISTRY_MAC_H_
 
+#include <map>
 #include <set>
 #include <string>
 
@@ -55,15 +56,67 @@ class AppShimRegistry {
   bool OnAppUninstalledForProfile(const std::string& app_id,
                                   const base::FilePath& profile);
 
-  // Called when an app quits, providing a list of the profiles that were
-  // in use at the time of quitting.
-  void OnAppQuit(const std::string& app_id,
-                 std::set<base::FilePath> active_profiles);
+  // Called to save a list of the profiles that were last in use for an app.
+  // This is called for example when an app quits, providing the profiles that
+  // were in use at that time.
+  void SaveLastActiveProfilesForApp(const std::string& app_id,
+                                    std::set<base::FilePath> active_profiles);
 
   // Return all apps installed for the specified profile. Used to delete apps
   // when a profile is removed.
   std::set<std::string> GetInstalledAppsForProfile(
       const base::FilePath& profile) const;
+
+  // Returns all apps installed in multiple profiles. Used for metrics.
+  std::set<std::string> GetAppsInstalledInMultipleProfiles() const;
+
+  // Called when the file and/or protocol handlers for an app are updated in a
+  // specific profile. Used to calculate the union of all handlers for a app
+  // when updating the app shim.
+  void SaveFileHandlersForAppAndProfile(
+      const std::string& app_id,
+      const base::FilePath& profile,
+      std::set<std::string> file_handler_extensions,
+      std::set<std::string> file_handler_mime_types);
+  void SaveProtocolHandlersForAppAndProfile(
+      const std::string& app_id,
+      const base::FilePath& profile,
+      std::set<std::string> protocol_handlers);
+
+  struct HandlerInfo {
+    HandlerInfo();
+    ~HandlerInfo();
+    HandlerInfo(HandlerInfo&&);
+    HandlerInfo(const HandlerInfo&);
+    HandlerInfo& operator=(HandlerInfo&&);
+    HandlerInfo& operator=(const HandlerInfo&);
+
+    bool IsEmpty() const {
+      return file_handler_extensions.empty() &&
+             file_handler_mime_types.empty() && protocol_handlers.empty();
+    }
+
+    std::set<std::string> file_handler_extensions;
+    std::set<std::string> file_handler_mime_types;
+    std::set<std::string> protocol_handlers;
+  };
+
+  // Returns all the file and protocol handlers for the given app, keyed by
+  // profile path.
+  std::map<base::FilePath, HandlerInfo> GetHandlersForApp(
+      const std::string& app_id);
+
+  // Return whether a code directory hash has ever been associated with any app.
+  bool HasSavedAnyCdHashes() const;
+
+  // Associate the given code directory hash with a given app.
+  void SaveCdHashForApp(const std::string& app_id,
+                        base::span<const uint8_t> cd_hash);
+
+  // Verify that the given code directory hash matches the one previously
+  // associated with the given app.
+  bool VerifyCdHashForApp(const std::string& app_id,
+                          base::span<const uint8_t> cd_hash);
 
   // Helper functions for testing.
   void SetPrefServiceAndUserDataDirForTesting(
@@ -71,7 +124,7 @@ class AppShimRegistry {
       const base::FilePath& user_data_dir);
 
   // For logging and debug purposes.
-  base::Value AsDebugValue() const;
+  base::Value::Dict AsDebugDict() const;
 
  protected:
   friend class base::NoDestructor<AppShimRegistry>;
@@ -88,13 +141,32 @@ class AppShimRegistry {
                             const std::string& profiles_key,
                             std::set<base::FilePath>* profiles) const;
 
+  using HmacKey = std::vector<uint8_t>;
+  static constexpr size_t kHmacKeySize = 32;
+
+  // Retrieve the key used to create HMACs of app's code directory hashes,
+  // generating a new key if needed.
+  HmacKey GetCdHashHmacKey();
+
+  // Helper function used by GetCdHashHmacKey
+  // Retrieve the existing key used to create HMACs of app's code directory
+  // hashes. Returns nullopt if no key was found or the existing key could not
+  // be decoded or decrypted.
+  absl::optional<HmacKey> GetExistingCdHashHmacKey();
+
+  // Helper function used by GetCdHashHmacKey
+  // Encode and encrypt the given HMAC key and save it to preferences.
+  void SaveCdHashHmacKey(const HmacKey& key);
+
   // Update the local storage for |app_id|. Update |installed_profiles| and
   // |last_active_profiles| only if they are non-nullptr. If
   // |installed_profiles| is non-nullptr and empty, remove the entry for
   // |app_id|.
   void SetAppInfo(const std::string& app_id,
                   const std::set<base::FilePath>* installed_profiles,
-                  const std::set<base::FilePath>* last_active_profiles);
+                  const std::set<base::FilePath>* last_active_profiles,
+                  const std::map<base::FilePath, HandlerInfo>* handlers,
+                  const std::string* cd_hash_hmac_base64);
 
   raw_ptr<PrefService> override_pref_service_ = nullptr;
   base::FilePath override_user_data_dir_;

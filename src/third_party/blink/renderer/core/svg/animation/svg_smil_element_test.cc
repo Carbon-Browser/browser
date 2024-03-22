@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -132,9 +132,10 @@ TEST(SVGSMILElementTest, RepeatNEventListenerUseCounted) {
   WebFeature feature = WebFeature::kSMILElementHasRepeatNEventListener;
   EXPECT_FALSE(document.IsUseCounted(feature));
   document.documentElement()->setInnerHTML("<svg><set/></svg>");
-  Element* set = document.QuerySelector("set");
+  Element* set = document.QuerySelector(AtomicString("set"));
   ASSERT_TRUE(set);
-  set->addEventListener("repeatn", MakeGarbageCollected<EmptyEventListener>());
+  set->addEventListener(AtomicString("repeatn"),
+                        MakeGarbageCollected<EmptyEventListener>());
   EXPECT_TRUE(document.IsUseCounted(feature));
 }
 

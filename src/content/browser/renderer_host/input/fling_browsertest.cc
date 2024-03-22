@@ -1,17 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "content/browser/renderer_host/input/synthetic_smooth_scroll_gesture.h"
 #include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/input/synthetic_smooth_scroll_gesture.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
@@ -266,7 +267,7 @@ class BrowserSideFlingBrowserTest : public ContentBrowserTest {
 
   void GiveItSomeTime(int64_t time_delta_ms = 10) {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(time_delta_ms));
     run_loop.Run();
   }
@@ -351,17 +352,12 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(GetWidgetHost()->GetView()->view_stopped_flinging_for_test());
 }
 
-// TODO(1269960): Fix flakiness on Linux.
-#if BUILDFLAG(IS_LINUX)
-#define MAYBE_FlingingStopsAfterNavigation DISABLED_FlingingStopsAfterNavigation
-#else
-#define MAYBE_FlingingStopsAfterNavigation FlingingStopsAfterNavigation
-#endif
+// TODO(crbug.com/1347271,crbug.com/269960): TODO: Re-enable this test.
 
 // Tests that flinging does not continue after navigating to a page that uses
 // the same renderer.
 IN_PROC_BROWSER_TEST_F(BrowserSideFlingBrowserTest,
-                       MAYBE_FlingingStopsAfterNavigation) {
+                       DISABLED_FlingingStopsAfterNavigation) {
   GURL first_url(embedded_test_server()->GetURL(
       "b.a.com", "/scrollable_page_with_iframe.html"));
   EXPECT_TRUE(NavigateToURL(shell(), first_url));
@@ -389,7 +385,14 @@ IN_PROC_BROWSER_TEST_F(BrowserSideFlingBrowserTest,
       0, EvalJs(root->current_frame_host(), "window.scrollY").ExtractDouble());
 }
 
-IN_PROC_BROWSER_TEST_F(BrowserSideFlingBrowserTest, TouchscreenFlingInOOPIF) {
+// TODO(crbug.com/1352412): Re-enable on Linux MSAN once not flaky.
+#if BUILDFLAG(IS_LINUX) && defined(MEMORY_SANITIZER)
+#define MAYBE_TouchscreenFlingInOOPIF DISABLED_TouchscreenFlingInOOPIF
+#else
+#define MAYBE_TouchscreenFlingInOOPIF TouchscreenFlingInOOPIF
+#endif
+IN_PROC_BROWSER_TEST_F(BrowserSideFlingBrowserTest,
+                       MAYBE_TouchscreenFlingInOOPIF) {
   LoadPageWithOOPIF();
   SimulateTouchscreenFling(child_view_->host());
   WaitForFrameScroll(GetChildNode());
@@ -482,8 +485,10 @@ IN_PROC_BROWSER_TEST_F(BrowserSideFlingBrowserTest,
 
 // Checks that the fling controller of the oopif stops the fling when the
 // bubbled inertial GSUs are not consumed by the parent's renderer.
-IN_PROC_BROWSER_TEST_F(BrowserSideFlingBrowserTest,
-                       InertialGSUBubblingStopsWhenParentCannotScroll) {
+// Flaky test https://crbug.com/1344075
+IN_PROC_BROWSER_TEST_F(
+    BrowserSideFlingBrowserTest,
+    DISABLED_InertialGSUBubblingStopsWhenParentCannotScroll) {
   LoadPageWithOOPIF();
   // Scroll the parent down so that it is scrollable upward.
 

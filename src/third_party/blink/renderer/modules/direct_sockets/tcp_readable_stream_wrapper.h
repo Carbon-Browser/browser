@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_DIRECT_SOCKETS_TCP_READABLE_STREAM_WRAPPER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_DIRECT_SOCKETS_TCP_READABLE_STREAM_WRAPPER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/handle_signals_state.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
@@ -25,7 +25,7 @@ namespace blink {
 // Helper class to read from a mojo consumer handle
 class MODULES_EXPORT TCPReadableStreamWrapper
     : public GarbageCollected<TCPReadableStreamWrapper>,
-      public ReadableStreamWrapper {
+      public ReadableByteStreamWrapper {
   USING_PRE_FINALIZER(TCPReadableStreamWrapper, Dispose);
 
  public:
@@ -35,8 +35,6 @@ class MODULES_EXPORT TCPReadableStreamWrapper
 
   // ReadableStreamWrapper:
   void Pull() override;
-  bool Push(base::span<const uint8_t> data,
-            const absl::optional<net::IPEndPoint>&) override;
   void CloseStream() override;
   void ErrorStream(int32_t error_code) override;
   void Trace(Visitor*) const override;
@@ -67,7 +65,8 @@ class MODULES_EXPORT TCPReadableStreamWrapper
   // Indicates whether peer closed gracefully (EOF).
   bool graceful_peer_shutdown_ = false;
 
-  Member<DOMException> pending_exception_;
+  // Stores a v8::Local<v8::Value> V8DOMException inside.
+  ScriptValue pending_exception_;
 };
 
 }  // namespace blink

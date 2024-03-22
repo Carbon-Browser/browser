@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,15 @@
 
 #import "ios/chrome/browser/ui/screen/screen_provider.h"
 
+class ChromeBrowserState;
+
 // The class that provides a list of first run screens.
 @interface FirstRunScreenProvider : ScreenProvider
 
-- (instancetype)init NS_DESIGNATED_INITIALIZER;
+- (instancetype)initForBrowserState:(ChromeBrowserState*)browserState
+    NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)init NS_UNAVAILABLE;
 
 @end
 

@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """
@@ -13,7 +13,7 @@ import stat
 import subprocess
 import tempfile
 
-from . import logger
+from signing import logger
 
 
 def file_exists(path):
@@ -70,6 +70,10 @@ def read_file(path):
         return f.read()
 
 
+def zip(out, path):
+    run_command(['zip', '-9ry', out, '.'], cwd=path)
+
+
 def set_executable(path):
     """Makes the file at the specified path executable.
 
@@ -89,19 +93,6 @@ def run_command(args, **kwargs):
 def run_command_output(args, **kwargs):
     logger.info('Running command: %s', args)
     return subprocess.check_output(args, **kwargs)
-
-
-def run_password_command_output(args, password, **kwargs):
-    """Runs a command that expects a password on stdin. This function feeds
-    |password| to that command and returns the output like
-    run_command_output().
-    """
-    assert 'stdin' not in kwargs
-    return run_command_output(
-        args,
-        start_new_session=True,
-        input=(password + '\n').encode('utf8'),
-        **kwargs)
 
 
 def lenient_run_command_output(args, **kwargs):

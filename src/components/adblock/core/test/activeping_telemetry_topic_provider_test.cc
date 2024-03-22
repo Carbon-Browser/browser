@@ -19,14 +19,19 @@
 
 #include <string>
 
-#include "base/guid.h"
 #include "base/json/json_reader.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/system/sys_info.h"
+#include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
+#include "base/uuid.h"
+#include "components/adblock/core/common/adblock_constants.h"
 #include "components/adblock/core/common/adblock_prefs.h"
+#include "components/adblock/core/configuration/test/mock_filtering_configuration.h"
+#include "components/adblock/core/subscription/subscription_config.h"
+#include "components/adblock/core/subscription/test/mock_subscription_service.h"
 #include "components/prefs/pref_value_store.h"
 #include "components/prefs/testing_pref_service.h"
+#include "gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace adblock {
@@ -40,9 +45,14 @@ class AdblockActivepingTelemetryTopicProviderTest
     app_info_.name = "MyApp";
     app_info_.version = "1234";
     app_info_.client_os = "UNUSED";  // base/sys_info.h used instead.
-    prefs::RegisterProfilePrefs(pref_service_.registry());
-    pref_service_.SetBoolean(prefs::kEnableAcceptableAds,
-                             AcceptableAdsEnabled());
+    common::prefs::RegisterProfilePrefs(pref_service_.registry());
+    EXPECT_CALL(subscription_service_,
+                GetFilteringConfiguration(kAdblockFilteringConfigurationName))
+        .WillRepeatedly(testing::Return(&adblock_configuration_));
+    EXPECT_CALL(adblock_configuration_, GetFilterLists())
+        .WillRepeatedly(testing::Return(
+            AcceptableAdsEnabled() ? std::vector<GURL>{AcceptableAdsUrl()}
+                                   : std::vector<GURL>{}));
     RecreateProvider();
   }
 
@@ -52,34 +62,45 @@ class AdblockActivepingTelemetryTopicProviderTest
 
   void RecreateProvider() {
     provider_ = std::make_unique<ActivepingTelemetryTopicProvider>(
-        app_info_, &pref_service_, kBaseUrl, kAuthToken);
+        app_info_, &pref_service_, &subscription_service_, kBaseUrl,
+        kAuthToken);
   }
 
   void ExpectPayloadAndTimeConsistentAfterRestart() {
-    // Current state of provider_ is stored persistently and remains consitent
+    // Current state of provider_ is stored persistently and remains consistent
     // after recreating the provider_.
-    const auto time_to_next_request = provider_->GetTimeToNextRequest();
-    const auto payload = provider_->GetPayload();
+    const auto time_of_next_request = provider_->GetTimeOfNextRequest();
+    const auto payload = GetPayload();
     RecreateProvider();
-    EXPECT_EQ(time_to_next_request, provider_->GetTimeToNextRequest());
-    EXPECT_EQ(payload, provider_->GetPayload());
+    EXPECT_EQ(time_of_next_request, provider_->GetTimeOfNextRequest());
+    EXPECT_EQ(payload, GetPayload());
+  }
+
+  std::string GetPayload() {
+    base::MockCallback<ActivepingTelemetryTopicProvider::PayloadCallback>
+        callback;
+    std::string payload;
+    EXPECT_CALL(callback, Run(testing::_))
+        .WillOnce(testing::SaveArg<0>(&payload));
+    provider_->GetPayload(callback.Get());
+    return payload;
   }
 
   void ExpectPayloadContainsValue(const std::string& json,
                                   std::string key,
                                   base::Value expected_value) {
-    auto root = base::JSONReader::Read(json);
+    auto root = base::JSONReader::ReadDict(json);
     ASSERT_TRUE(root) << "JSON is invalid";
-    auto* value = root->FindPath("payload." + key);
+    auto* value = root->FindByDottedPath("payload." + key);
     ASSERT_TRUE(value);
     EXPECT_EQ(*value, expected_value);
   }
 
   void ExpectPayloadDoesNotContainValue(const std::string& json,
                                         std::string key) {
-    auto value = base::JSONReader::Read(json);
+    auto value = base::JSONReader::ReadDict(json);
     ASSERT_TRUE(value) << "JSON is invalid";
-    EXPECT_FALSE(value->FindPath("payload." + key));
+    EXPECT_FALSE(value->FindByDottedPath("payload." + key));
   }
 
   void ExpectPayloadContainsRequiredStaticValues(const std::string& json) {
@@ -100,33 +121,35 @@ class AdblockActivepingTelemetryTopicProviderTest
   }
 
   void ExpectLastPingTagValid(const std::string& json,
-                              base::GUID* parsed_tag = nullptr) {
-    auto root = base::JSONReader::Read(json);
+                              base::Uuid* parsed_tag = nullptr) {
+    auto root = base::JSONReader::ReadDict(json);
     ASSERT_TRUE(root);
-    const std::string* tag = root->FindStringPath("payload.last_ping_tag");
+    const std::string* tag =
+        root->FindStringByDottedPath("payload.last_ping_tag");
     ASSERT_TRUE(tag);
-    const auto uuid = base::GUID::ParseLowercase(*tag);
+    const auto uuid = base::Uuid::ParseLowercase(*tag);
     EXPECT_TRUE(uuid.is_valid());
-    if (parsed_tag)
+    if (parsed_tag) {
       *parsed_tag = uuid;
+    }
   }
 
   void ExpectFailureAndRetryForResponse(
       std::unique_ptr<std::string> bad_response_contents) {
-    const std::string first_attempt_payload = provider_->GetPayload();
+    const std::string first_attempt_payload = GetPayload();
     provider_->ParseResponse(std::move(bad_response_contents));
 
     // Next ping after shorter delay, since the previous one failed:
-    EXPECT_EQ(provider_->GetTimeToNextRequest(), kRetryPingInterval);
+    EXPECT_EQ(provider_->GetTimeOfNextRequest(),
+              base::Time::Now() + kRetryPingInterval);
 
     // Payload is the same as after first ping.
-    const std::string retry_payload = provider_->GetPayload();
+    const std::string retry_payload = GetPayload();
     EXPECT_EQ(first_attempt_payload, retry_payload);
     ExpectPayloadAndTimeConsistentAfterRestart();
   }
 
-  static constexpr base::TimeDelta kInitialDelay = base::Seconds(10);
-  static constexpr base::TimeDelta kNormalPingInterval = base::Hours(8);
+  static constexpr base::TimeDelta kNormalPingInterval = base::Hours(12);
   static constexpr base::TimeDelta kRetryPingInterval = base::Hours(1);
   const GURL kBaseUrl{"https://telemetry.com/"};
   const std::string kAuthToken{"AUTH_TOKEN"};
@@ -134,6 +157,8 @@ class AdblockActivepingTelemetryTopicProviderTest
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   utils::AppInfo app_info_;
   TestingPrefServiceSimple pref_service_;
+  MockSubscriptionService subscription_service_;
+  MockFilteringConfiguration adblock_configuration_;
   std::unique_ptr<ActivepingTelemetryTopicProvider> provider_;
 };
 
@@ -158,12 +183,12 @@ TEST_P(AdblockActivepingTelemetryTopicProviderTest, DefaultAuthToken) {
 }
 
 TEST_P(AdblockActivepingTelemetryTopicProviderTest, FirstRun) {
-  // On first run, next ping should happen after an initial delay.
-  EXPECT_EQ(provider_->GetTimeToNextRequest(), kInitialDelay);
+  // On first run, next ping should happen ASAP.
+  EXPECT_EQ(provider_->GetTimeOfNextRequest(), base::Time::Now());
 
   // There are no values for "last_ping", "previous_last_ping", "last_ping_tag"
   // and "first_ping". But there are values for other required fields:
-  const std::string payload = provider_->GetPayload();
+  const std::string payload = GetPayload();
   ExpectPayloadContainsRequiredStaticValues(payload);
   ExpectPayloadDoesNotContainValue(payload, "last_ping");
   ExpectPayloadDoesNotContainValue(payload, "previous_last_ping");
@@ -178,11 +203,12 @@ TEST_P(AdblockActivepingTelemetryTopicProviderTest, FirstRunSucceeded) {
   provider_->ParseResponse(std::move(response));
 
   // Next ping after normal delay, since the previous one succeeded:
-  EXPECT_EQ(provider_->GetTimeToNextRequest(), kNormalPingInterval);
+  EXPECT_EQ(provider_->GetTimeOfNextRequest(),
+            base::Time::Now() + kNormalPingInterval);
 
   // Payload now contains "first_ping" and "last_ping" set to "Monday", as this
   // was the "token" received from server:
-  const std::string payload = provider_->GetPayload();
+  const std::string payload = GetPayload();
   ExpectPayloadContainsRequiredStaticValues(payload);
   ExpectPayloadContainsValue(payload, "last_ping", base::Value("Monday"));
   ExpectPayloadContainsValue(payload, "first_ping", base::Value("Monday"));
@@ -228,11 +254,12 @@ TEST_P(AdblockActivepingTelemetryTopicProviderTest, SecondRunSucceeded) {
       std::make_unique<std::string>(R"({"token":"Monday"})"));
 
   // Store first last_ping_tag to compare against the next one:
-  base::GUID first_response_uuid;
-  ExpectLastPingTagValid(provider_->GetPayload(), &first_response_uuid);
+  base::Uuid first_response_uuid;
+  ExpectLastPingTagValid(GetPayload(), &first_response_uuid);
 
   // Next ping after normal delay, since the previous one succeeded:
-  EXPECT_EQ(provider_->GetTimeToNextRequest(), kNormalPingInterval);
+  EXPECT_EQ(provider_->GetTimeOfNextRequest(),
+            base::Time::Now() + kNormalPingInterval);
 
   task_environment_.FastForwardBy(kNormalPingInterval);
 
@@ -242,14 +269,14 @@ TEST_P(AdblockActivepingTelemetryTopicProviderTest, SecondRunSucceeded) {
   ExpectPayloadAndTimeConsistentAfterRestart();
 
   // Payload now contains all ping dates set.
-  const std::string payload = provider_->GetPayload();
+  const std::string payload = GetPayload();
   ExpectPayloadContainsRequiredStaticValues(payload);
   ExpectPayloadContainsValue(payload, "last_ping", base::Value("Tuesday"));
   ExpectPayloadContainsValue(payload, "previous_last_ping",
                              base::Value("Monday"));
   ExpectPayloadContainsValue(payload, "first_ping", base::Value("Monday"));
 
-  base::GUID second_response_uuid;
+  base::Uuid second_response_uuid;
   ExpectLastPingTagValid(payload, &second_response_uuid);
 
   // Different tag was generated:
@@ -268,7 +295,7 @@ TEST_P(AdblockActivepingTelemetryTopicProviderTest,
   provider_->ParseResponse(
       std::make_unique<std::string>(R"({"token":"Thursday"})"));
 
-  const std::string payload = provider_->GetPayload();
+  const std::string payload = GetPayload();
   ExpectPayloadContainsRequiredStaticValues(payload);
   // "last_ping" is the one received most recently.
   ExpectPayloadContainsValue(payload, "last_ping", base::Value("Thursday"));
@@ -283,23 +310,15 @@ TEST_P(AdblockActivepingTelemetryTopicProviderTest,
 }
 
 TEST_P(AdblockActivepingTelemetryTopicProviderTest, TimeToNextPingAfterDelay) {
-  // At first, require next request to happen after an initial delay.
-  EXPECT_EQ(provider_->GetTimeToNextRequest(), kInitialDelay);
-  task_environment_.FastForwardBy(kInitialDelay);
+  // At first, require next request to happen ASAP.
+  EXPECT_EQ(provider_->GetTimeOfNextRequest(), base::Time::Now());
+  task_environment_.FastForwardBy(base::Seconds(30));
   provider_->ParseResponse(
       std::make_unique<std::string>(R"({"token":"Monday"})"));
   // After a success, next ping should happen after a normal delay.
-  EXPECT_EQ(provider_->GetTimeToNextRequest(), kNormalPingInterval);
+  EXPECT_EQ(provider_->GetTimeOfNextRequest(),
+            base::Time::Now() + kNormalPingInterval);
 
-  // After half of the time passes, another half remains:
-  const auto kHalfInterval = kNormalPingInterval / 2;
-  task_environment_.FastForwardBy(kHalfInterval);
-  EXPECT_EQ(provider_->GetTimeToNextRequest(), kHalfInterval);
-
-  // Too much time passed, "negative" remaining delay is clamped to initial
-  // delay.
-  task_environment_.FastForwardBy(kNormalPingInterval * 3);
-  EXPECT_EQ(provider_->GetTimeToNextRequest(), kInitialDelay);
   ExpectPayloadAndTimeConsistentAfterRestart();
 }
 

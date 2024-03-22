@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,11 @@
 #include "base/strings/string_piece.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
+#include "net/base/net_errors.h"
 #include "net/base/net_export.h"
 #include "net/base/request_priority.h"
 #include "net/log/net_log_with_source.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 #include "net/websockets/websocket_basic_stream_adapters.h"
 #include "net/websockets/websocket_handshake_stream_base.h"
 #include "net/websockets/websocket_stream.h"
@@ -28,20 +29,22 @@
 
 namespace net {
 
-struct LoadTimingInfo;
-class SSLInfo;
-class IOBuffer;
-class SSLCertRequestInfo;
-class IPEndPoint;
 class HttpNetworkSession;
-struct NetErrorDetails;
-class HttpStream;
+class HttpRequestHeaders;
 class HttpResponseHeaders;
-struct HttpRequestInfo;
 class HttpResponseInfo;
+class HttpStream;
+class IOBuffer;
+class IPEndPoint;
+class SSLCertRequestInfo;
+class SSLInfo;
 class SpdySession;
-struct AlternativeService;
+class SpdyStream;
 class SpdyStreamRequest;
+struct AlternativeService;
+struct HttpRequestInfo;
+struct LoadTimingInfo;
+struct NetErrorDetails;
 struct WebSocketExtensionParams;
 
 class NET_EXPORT_PRIVATE WebSocketHttp2HandshakeStream
@@ -104,6 +107,8 @@ class NET_EXPORT_PRIVATE WebSocketHttp2HandshakeStream
   // Upgrade() has been called and should be disposed of as soon as possible.
   std::unique_ptr<WebSocketStream> Upgrade() override;
 
+  bool CanReadFromStream() const override;
+
   base::WeakPtr<WebSocketHandshakeStreamBase> GetWeakPtr() override;
 
   // WebSocketSpdyStreamAdapter::Delegate methods.
@@ -134,7 +139,8 @@ class NET_EXPORT_PRIVATE WebSocketHttp2HandshakeStream
 
   // Owned by another object.
   // |connect_delegate| will live during the lifetime of this object.
-  const raw_ptr<WebSocketStream::ConnectDelegate> connect_delegate_;
+  const raw_ptr<WebSocketStream::ConnectDelegate, DanglingUntriaged>
+      connect_delegate_;
 
   raw_ptr<HttpResponseInfo> http_response_info_ = nullptr;
 
@@ -146,9 +152,9 @@ class NET_EXPORT_PRIVATE WebSocketHttp2HandshakeStream
   // The extensions we requested.
   std::vector<std::string> requested_extensions_;
 
-  const raw_ptr<WebSocketStreamRequestAPI> stream_request_;
+  const raw_ptr<WebSocketStreamRequestAPI, DanglingUntriaged> stream_request_;
 
-  raw_ptr<const HttpRequestInfo> request_info_ = nullptr;
+  raw_ptr<const HttpRequestInfo, DanglingUntriaged> request_info_ = nullptr;
 
   RequestPriority priority_;
 

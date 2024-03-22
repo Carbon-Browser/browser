@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ class TrafficCountersLogSource : public SystemLogsSource {
       remote_cros_network_config_;
 
   int total_guids_ = 0;
-  base::Value traffic_counters_;
+  base::Value::Dict traffic_counters_;
 
   base::WeakPtrFactory<TrafficCountersLogSource> weak_factory_{this};
 };

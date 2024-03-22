@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,6 @@
 
 #import "ios/web/public/ui/context_menu_params.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation CRWFakeWebStateDelegate {
   // Backs up the property with the same name.
@@ -22,6 +18,7 @@
 @synthesize webStateCreationRequested = _webStateCreationRequested;
 @synthesize webStateClosingRequested = _webStateClosingRequested;
 @synthesize repostFormWarningRequested = _repostFormWarningRequested;
+@synthesize permissionsRequestHandled = _permissionsRequestHandled;
 @synthesize authenticationRequested = _authenticationRequested;
 @synthesize isAppLaunchingAllowedForWebStateReturnValue =
     _isAppLaunchingAllowedForWebStateReturnValue;
@@ -58,6 +55,15 @@
   _webState = webState;
   _javaScriptDialogPresenterRequested = YES;
   return nil;
+}
+
+- (void)webState:(web::WebState*)webState
+    handlePermissions:(NSArray<NSNumber*>*)permissions
+      decisionHandler:(web::WebStatePermissionDecisionHandler)decisionHandler
+    API_AVAILABLE(ios(15.0)) {
+  _webState = webState;
+  _permissionsRequestHandled = YES;
+  decisionHandler(web::PermissionDecisionGrant);
 }
 
 - (void)webState:(web::WebState*)webState

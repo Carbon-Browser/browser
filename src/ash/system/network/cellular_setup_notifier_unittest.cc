@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,16 @@
 #include "ash/shell.h"
 #include "ash/system/system_notification_controller.h"
 #include "ash/test/ash_test_base.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/timer/mock_timer.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_clients.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
 #include "chromeos/ash/components/network/network_cert_loader.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
-#include "chromeos/dbus/shill/shill_clients.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "components/prefs/pref_service.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
@@ -43,13 +44,13 @@ class CellularSetupNotifierTest : public NoSessionAshTestBase {
   ~CellularSetupNotifierTest() override = default;
 
   void SetUp() override {
-    chromeos::SystemTokenCertDbStorage::Initialize();
-    chromeos::NetworkCertLoader::Initialize();
-    chromeos::shill_clients::InitializeFakes();
+    SystemTokenCertDbStorage::Initialize();
+    NetworkCertLoader::Initialize();
+    shill_clients::InitializeFakes();
     hermes_clients::InitializeFakes();
-    chromeos::NetworkHandler::Initialize();
-    network_config_helper_ = std::make_unique<
-        chromeos::network_config::CrosNetworkConfigTestHelper>();
+    NetworkHandler::Initialize();
+    network_config_helper_ =
+        std::make_unique<network_config::CrosNetworkConfigTestHelper>();
 
     AshTestBase::SetUp();
 
@@ -66,11 +67,11 @@ class CellularSetupNotifierTest : public NoSessionAshTestBase {
   void TearDown() override {
     AshTestBase::TearDown();
     network_config_helper_.reset();
-    chromeos::NetworkHandler::Shutdown();
+    NetworkHandler::Shutdown();
     hermes_clients::Shutdown();
-    chromeos::shill_clients::Shutdown();
-    chromeos::NetworkCertLoader::Shutdown();
-    chromeos::SystemTokenCertDbStorage::Shutdown();
+    shill_clients::Shutdown();
+    NetworkCertLoader::Shutdown();
+    SystemTokenCertDbStorage::Shutdown();
   }
 
   // Returns the cellular setup notification if it is shown, and null if it is
@@ -107,9 +108,10 @@ class CellularSetupNotifierTest : public NoSessionAshTestBase {
   }
 
   // Ownership passed to Shell owned CellularSetupNotifier instance.
-  base::MockOneShotTimer* mock_notification_timer_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged | ExperimentalAsh>
+      mock_notification_timer_;
 
-  std::unique_ptr<chromeos::network_config::CrosNetworkConfigTestHelper>
+  std::unique_ptr<network_config::CrosNetworkConfigTestHelper>
       network_config_helper_;
 };
 

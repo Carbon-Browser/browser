@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,9 +50,7 @@ public abstract class Flags<F extends Flags<F>> {
         return f;
     }
 
-    /**
-     * Makes this flag immutable. This is a non-reversable operation.
-     */
+    /** Makes this flag immutable. This is a non-reversable operation. */
     protected F immutable() {
         mImmutable = true;
         @SuppressWarnings("unchecked")

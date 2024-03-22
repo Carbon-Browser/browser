@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,9 +79,10 @@ class CC_ANIMATION_EXPORT ScrollOffsetAnimationsImpl
       base::TimeTicks animation_start_time,
       std::unique_ptr<gfx::AnimationCurve> curve) override {}
   void NotifyLocalTimeUpdated(
-      absl::optional<base::TimeDelta> local_time) override {}
+      std::optional<base::TimeDelta> local_time) override {}
 
   bool IsAnimating() const;
+  bool IsAutoScrolling() const;
   ElementId GetElementId() const;
 
  private:
@@ -98,6 +99,7 @@ class CC_ANIMATION_EXPORT ScrollOffsetAnimationsImpl
   // I.e. only one element can have an impl-only scroll offset animation at
   // any given time.
   scoped_refptr<Animation> scroll_offset_animation_;
+  bool animation_is_autoscroll_ = false;
 };
 
 }  // namespace cc

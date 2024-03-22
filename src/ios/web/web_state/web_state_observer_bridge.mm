@@ -1,12 +1,8 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/public/web_state_observer_bridge.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
@@ -134,24 +130,6 @@ void WebStateObserverBridge::PermissionStateChanged(
   }
 }
 
-void WebStateObserverBridge::WebFrameDidBecomeAvailable(
-    web::WebState* web_state,
-    web::WebFrame* web_frame) {
-  SEL selector = @selector(webState:frameDidBecomeAvailable:);
-  if ([observer_ respondsToSelector:selector]) {
-    [observer_ webState:web_state frameDidBecomeAvailable:web_frame];
-  }
-}
-
-void WebStateObserverBridge::WebFrameWillBecomeUnavailable(
-    web::WebState* web_state,
-    web::WebFrame* web_frame) {
-  SEL selector = @selector(webState:frameWillBecomeUnavailable:);
-  if ([observer_ respondsToSelector:selector]) {
-    [observer_ webState:web_state frameWillBecomeUnavailable:web_frame];
-  }
-}
-
 void WebStateObserverBridge::RenderProcessGone(web::WebState* web_state) {
   if ([observer_ respondsToSelector:@selector(renderProcessGoneForWebState:)]) {
     [observer_ renderProcessGoneForWebState:web_state];
@@ -167,7 +145,7 @@ void WebStateObserverBridge::WebStateRealized(web::WebState* web_state) {
 void WebStateObserverBridge::WebStateDestroyed(web::WebState* web_state) {
   SEL selector = @selector(webStateDestroyed:);
   if ([observer_ respondsToSelector:selector]) {
-    // |webStateDestroyed:| may delete |this|, so don't expect |this| to be
+    // `webStateDestroyed:` may delete `this`, so don't expect `this` to be
     // valid afterwards.
     [observer_ webStateDestroyed:web_state];
   }

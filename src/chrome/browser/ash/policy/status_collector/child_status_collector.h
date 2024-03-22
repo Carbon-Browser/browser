@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
@@ -25,11 +26,9 @@
 
 class Profile;
 
-namespace chromeos {
-namespace system {
+namespace ash::system {
 class StatisticsProvider;
 }
-}  // namespace chromeos
 
 class PrefService;
 
@@ -54,7 +53,7 @@ class ChildStatusCollector : public StatusCollector,
   // distance from midnight.
   ChildStatusCollector(PrefService* pref_service,
                        Profile* profile,
-                       chromeos::system::StatisticsProvider* provider,
+                       ash::system::StatisticsProvider* provider,
                        const AndroidStatusFetcher& android_status_fetcher,
                        base::TimeDelta activity_day_start);
 
@@ -90,7 +89,7 @@ class ChildStatusCollector : public StatusCollector,
 
  private:
   // Callbacks from chromeos::VersionLoader.
-  void OnOSVersion(const std::string& version);
+  void OnOSVersion(const absl::optional<std::string>& version);
 
   // Fetches all child data that is necessary to fill ChildStatusReportRequest.
   void FillChildStatusReportRequest(
@@ -120,10 +119,10 @@ class ChildStatusCollector : public StatusCollector,
   void OnAppActivityReportSubmitted();
 
   // Mainly used to store activity periods for reporting. Not owned.
-  PrefService* const pref_service_;
+  const raw_ptr<PrefService, ExperimentalAsh> pref_service_;
 
   // Profile of the user that the status is collected for.
-  Profile* const profile_;
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
 
   // The last time an active state check was performed.
   base::Time last_active_check_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,9 @@
 #include "net/log/net_log_source.h"
 #include "net/spdy/header_coalescer.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/http2_frame_decoder_adapter.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_alt_svc_wire_format.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_framer.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_protocol.h"
 
 namespace net {
@@ -188,7 +188,7 @@ class NET_EXPORT_PRIVATE BufferedSpdyFramer
                      spdy::SpdyStreamId promised_stream_id,
                      bool end) override;
   void OnAltSvc(spdy::SpdyStreamId stream_id,
-                absl::string_view origin,
+                std::string_view origin,
                 const spdy::SpdyAltSvcWireFormat::AlternativeServiceVector&
                     altsvc_vector) override;
   void OnDataFrameHeader(spdy::SpdyStreamId stream_id,
@@ -202,9 +202,15 @@ class NET_EXPORT_PRIVATE BufferedSpdyFramer
                   int weight,
                   bool exclusive) override {}
   void OnPriorityUpdate(spdy::SpdyStreamId prioritized_stream_id,
-                        absl::string_view priority_field_value) override {}
+                        std::string_view priority_field_value) override {}
   bool OnUnknownFrame(spdy::SpdyStreamId stream_id,
                       uint8_t frame_type) override;
+  void OnUnknownFrameStart(spdy::SpdyStreamId stream_id,
+                           size_t length,
+                           uint8_t type,
+                           uint8_t flags) override {}
+  void OnUnknownFramePayload(spdy::SpdyStreamId stream_id,
+                             std::string_view payload) override {}
 
   // spdy::SpdyFramer methods.
   size_t ProcessInput(const char* data, size_t len);

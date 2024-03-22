@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,14 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "remoting/base/constants.h"
 #include "remoting/protocol/token_validator.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 ThirdPartyHostAuthenticator::ThirdPartyHostAuthenticator(
     const CreateBaseAuthenticatorCallback& create_base_authenticator_callback,
@@ -34,7 +33,7 @@ void ThirdPartyHostAuthenticator::ProcessTokenMessage(
   if (token.empty()) {
     LOG(ERROR) << "Third-party authentication protocol error: missing token.";
     token_state_ = REJECTED;
-    rejection_reason_ = PROTOCOL_ERROR;
+    rejection_reason_ = RejectionReason::PROTOCOL_ERROR;
     std::move(resume_callback).Run();
     return;
   }
@@ -59,12 +58,12 @@ void ThirdPartyHostAuthenticator::AddTokenElements(
   DCHECK(token_validator_->token_url().is_valid());
   DCHECK(!token_validator_->token_scope().empty());
 
-  jingle_xmpp::XmlElement* token_url_tag = new jingle_xmpp::XmlElement(
-      kTokenUrlTag);
+  jingle_xmpp::XmlElement* token_url_tag =
+      new jingle_xmpp::XmlElement(kTokenUrlTag);
   token_url_tag->SetBodyText(token_validator_->token_url().spec());
   message->AddElement(token_url_tag);
-  jingle_xmpp::XmlElement* token_scope_tag = new jingle_xmpp::XmlElement(
-      kTokenScopeTag);
+  jingle_xmpp::XmlElement* token_scope_tag =
+      new jingle_xmpp::XmlElement(kTokenScopeTag);
   token_scope_tag->SetBodyText(token_validator_->token_scope());
   message->AddElement(token_scope_tag);
   token_state_ = WAITING_MESSAGE;
@@ -89,5 +88,4 @@ void ThirdPartyHostAuthenticator::OnThirdPartyTokenValidated(
   underlying_->ProcessMessage(message, std::move(resume_callback));
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

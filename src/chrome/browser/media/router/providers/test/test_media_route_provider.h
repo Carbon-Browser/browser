@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/media/offscreen_tab.h"
 #include "components/media_router/common/media_route.h"
@@ -36,16 +36,14 @@ class TestMediaRouteProvider : public mojom::MediaRouteProvider,
                    const std::string& sink_id,
                    const std::string& presentation_id,
                    const url::Origin& origin,
-                   int32_t tab_id,
+                   int32_t frame_tree_node_id,
                    base::TimeDelta timeout,
-                   bool incognito,
                    CreateRouteCallback callback) override;
   void JoinRoute(const std::string& media_source,
                  const std::string& presentation_id,
                  const url::Origin& origin,
-                 int32_t tab_id,
+                 int32_t frame_tree_node_id,
                  base::TimeDelta timeout,
-                 bool incognito,
                  JoinRouteCallback callback) override;
   void TerminateRoute(const std::string& route_id,
                       TerminateRouteCallback callback) override;
@@ -56,11 +54,9 @@ class TestMediaRouteProvider : public mojom::MediaRouteProvider,
   void StartObservingMediaSinks(const std::string& media_source) override;
   void StopObservingMediaSinks(const std::string& media_source) override;
   void StartObservingMediaRoutes() override;
-  void StartListeningForRouteMessages(const std::string& route_id) override;
-  void StopListeningForRouteMessages(const std::string& route_id) override;
   void DetachRoute(const std::string& route_id) override;
   void EnableMdnsDiscovery() override;
-  void UpdateMediaSinks(const std::string& media_source) override;
+  void DiscoverSinksNow() override;
   void CreateMediaRouteController(
       const std::string& route_id,
       mojo::PendingReceiver<mojom::MediaController> media_controller,

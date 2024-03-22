@@ -1,21 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/passwords/password_suggestion_view_controller.h"
 
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "components/strings/grit/components_strings.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
+#import "components/strings/grit/components_strings.h"
 #import "ios/chrome/browser/ui/passwords/password_constants.h"
-#include "ios/chrome/grit/ios_google_chrome_strings.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/branded_images/branded_images_api.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 @interface PasswordSuggestionViewController ()
 
@@ -28,7 +24,7 @@
 @end
 
 namespace {
-constexpr CGFloat customSpacingBeforeImageIfNoToolbar = 24;
+constexpr CGFloat customSpacingBeforeImageIfNoNavigationBar = 24;
 constexpr CGFloat customSpacingAfterImage = 1;
 }  // namespace
 
@@ -38,7 +34,7 @@ constexpr CGFloat customSpacingAfterImage = 1;
 
 - (instancetype)initWithPasswordSuggestion:(NSString*)passwordSuggestion
                                  userEmail:(NSString*)userEmail {
-  if (self = [super initWithNibName:nil bundle:nil]) {
+  if (self = [super init]) {
     _userEmail = userEmail;
     _passwordSuggestion = passwordSuggestion;
   }
@@ -50,8 +46,8 @@ constexpr CGFloat customSpacingAfterImage = 1;
       ios::provider::BrandedImage::kPasswordSuggestionKey);
   self.imageHasFixedSize = YES;
   self.showDismissBarButton = NO;
-  self.customSpacingBeforeImageIfNoToolbar =
-      customSpacingBeforeImageIfNoToolbar;
+  self.customSpacingBeforeImageIfNoNavigationBar =
+      customSpacingBeforeImageIfNoNavigationBar;
   self.customSpacingAfterImage = customSpacingAfterImage;
   self.titleTextStyle = UIFontTextStyleTitle2;
   self.topAlignedLayout = YES;

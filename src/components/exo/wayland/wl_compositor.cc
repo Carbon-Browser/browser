@@ -1,26 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/exo/wayland/wl_compositor.h"
 
-#include <wayland-server-protocol-core.h>
-
 #include <memory>
 
-#include "base/bind.h"
-#include "build/chromeos_buildflags.h"
+#include "base/functional/bind.h"
 #include "components/exo/buffer.h"
 #include "components/exo/display.h"
 #include "components/exo/surface.h"
 #include "components/exo/wayland/server.h"
 #include "components/exo/wayland/server_util.h"
+#include "components/exo/wayland/zwp_linux_explicit_synchronization.h"
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/display/types/display_constants.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "components/exo/wayland/zwp_linux_explicit_synchronization.h"
-#endif
 
 namespace exo {
 class Server;
@@ -133,10 +127,8 @@ void surface_set_input_region(wl_client* client,
 void surface_commit(wl_client* client, wl_resource* resource) {
   Surface* surface = GetUserDataAs<Surface>(resource);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   if (!linux_surface_synchronization_validate_commit(surface))
     return;
-#endif
 
   surface->Commit();
 }
@@ -248,6 +240,11 @@ void compositor_create_surface(wl_client* client,
 
   // Set the surface resource property for type-checking downcast support.
   SetSurfaceResource(surface.get(), surface_resource);
+
+  // Notify after the surface is initialized.
+  if (display->seat()) {
+    display->seat()->NotifySurfaceCreated(surface.get());
+  }
 
   SetImplementation(surface_resource, &surface_implementation,
                     std::move(surface));

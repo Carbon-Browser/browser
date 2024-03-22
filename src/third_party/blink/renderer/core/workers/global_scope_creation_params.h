@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
@@ -15,8 +16,9 @@
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
+#include "third_party/blink/public/mojom/blob/blob_url_store.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/browser_interface_broker.mojom-blink-forward.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
+#include "third_party/blink/public/mojom/loader/code_cache.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
@@ -59,14 +61,16 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
       HttpsState starter_https_state,
       WorkerClients*,
       std::unique_ptr<WebContentSettingsClient>,
-      const Vector<OriginTrialFeature>* inherited_trial_features,
+      const Vector<mojom::blink::OriginTrialFeature>* inherited_trial_features,
       const base::UnguessableToken& parent_devtools_token,
       std::unique_ptr<WorkerSettings>,
       mojom::blink::V8CacheOptions,
       WorkletModuleResponsesMap*,
       mojo::PendingRemote<mojom::blink::BrowserInterfaceBroker>
           browser_interface_broker = mojo::NullRemote(),
-      mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cahe_host =
+      mojo::PendingRemote<mojom::blink::CodeCacheHost> code_cahe_host =
+          mojo::NullRemote(),
+      mojo::PendingRemote<mojom::blink::BlobURLStore> blob_url_store =
           mojo::NullRemote(),
       BeginFrameProviderParams begin_frame_provider_params = {},
       const PermissionsPolicy* parent_permissions_policy = nullptr,
@@ -75,8 +79,12 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
       const absl::optional<ExecutionContextToken>& parent_context_token =
           absl::nullopt,
       bool parent_cross_origin_isolated_capability = false,
-      bool parent_direct_socket_capability = false,
-      InterfaceRegistry* interface_registry = nullptr);
+      bool parent_is_isolated_context = false,
+      InterfaceRegistry* interface_registry = nullptr,
+      scoped_refptr<base::SingleThreadTaskRunner>
+          agent_group_scheduler_compositor_task_runner = nullptr,
+      const SecurityOrigin* top_level_frame_security_origin = nullptr,
+      bool parent_has_storage_access = false);
   GlobalScopeCreationParams(const GlobalScopeCreationParams&) = delete;
   GlobalScopeCreationParams& operator=(const GlobalScopeCreationParams&) =
       delete;
@@ -120,7 +128,8 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
 
   // Origin trial features to be inherited by worker/worklet from the document
   // loading it.
-  std::unique_ptr<Vector<OriginTrialFeature>> inherited_trial_features;
+  std::unique_ptr<Vector<mojom::blink::OriginTrialFeature>>
+      inherited_trial_features;
 
   // The SecurityOrigin of the Document creating a Worker/Worklet.
   //
@@ -171,7 +180,9 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
   mojo::PendingRemote<mojom::blink::BrowserInterfaceBroker>
       browser_interface_broker;
 
-  mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cache_host_interface;
+  mojo::PendingRemote<mojom::blink::CodeCacheHost> code_cache_host_interface;
+
+  mojo::PendingRemote<mojom::blink::BlobURLStore> blob_url_store;
 
   BeginFrameProviderParams begin_frame_provider_params;
 
@@ -197,10 +208,24 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
   // Governs whether Direct Sockets are available in a worker context, false
   // when no parent exists.
   //
-  // TODO(mkwst): We need a specification for this capability.
-  const bool parent_direct_socket_capability;
+  // TODO(crbug.com/1206150): We need a specification for this capability.
+  const bool parent_is_isolated_context;
 
   InterfaceRegistry* const interface_registry;
+
+  // The compositor task runner associated with the |AgentGroupScheduler| this
+  // worker belongs to.
+  scoped_refptr<base::SingleThreadTaskRunner>
+      agent_group_scheduler_compositor_task_runner;
+
+  // The security origin of the top level frame associated with the worker. This
+  // can be used, for instance, to check if the top level frame has an opaque
+  // origin.
+  scoped_refptr<const SecurityOrigin> top_level_frame_security_origin;
+
+  // Whether the parent ExecutionContext has storage access (via the Storage
+  // Access API).
+  const bool parent_has_storage_access;
 };
 
 }  // namespace blink

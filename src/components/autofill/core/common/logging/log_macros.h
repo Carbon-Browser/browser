@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ namespace autofill::internal {
 
 // Traits for targets of LOG_AF(). There are currently specializations for
 // `LogManager*` and `LogBuffer*`.
-template <typename T, typename Enable = void>
+template <typename T>
 struct LoggerTraits {
   // Returns true iff logging to should be enabled.
   static bool active(const T& logger) { return false; }

@@ -1,26 +1,26 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/extensions/echo_private/echo_private_api.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/notifications/echo_dialog_view.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/browser/extensions/extension_apitest.h"
-#include "chrome/browser/extensions/extension_function_test_utils.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "content/public/test/browser_test.h"
+#include "extensions/browser/api_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace utils = extension_function_test_utils;
+namespace utils = extensions::api_test_utils;
 
 namespace chromeos {
 
@@ -54,10 +54,11 @@ class ExtensionEchoPrivateApiTest : public extensions::ExtensionApiTest {
     const std::string arguments = base::StringPrintf(
         R"([{"serviceName": "name", "origin": "https://test.com", "tabId": %d}])",
         tab_id);
-    std::unique_ptr<base::Value> result(utils::RunFunctionAndReturnSingleResult(
-        function.get(), arguments, browser()));
+    absl::optional<base::Value> result =
+        utils::RunFunctionAndReturnSingleResult(function.get(), arguments,
+                                                profile());
 
-    ASSERT_TRUE(result.get());
+    ASSERT_TRUE(result);
     ASSERT_EQ(base::Value::Type::BOOLEAN, result->type());
 
     EXPECT_EQ(expected_result, result->GetBool());
@@ -82,12 +83,12 @@ class ExtensionEchoPrivateApiTest : public extensions::ExtensionApiTest {
     // The dialog should stay around until AcceptWindow or CancelWindow is
     // called, so base::Unretained is safe.
     if (dialog_action == DIALOG_TEST_ACTION_ACCEPT) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(base::IgnoreResult(&ash::EchoDialogView::Accept),
                          base::Unretained(dialog)));
     } else if (dialog_action == DIALOG_TEST_ACTION_CANCEL) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(base::IgnoreResult(&ash::EchoDialogView::Cancel),
                          base::Unretained(dialog)));
@@ -120,13 +121,15 @@ class ExtensionEchoPrivateApiTest : public extensions::ExtensionApiTest {
       return false;
     }
 
-    return tab_strip->CloseWebContentsAt(tab_index, 0);
+    int previous_tab_count = tab_strip->count();
+    tab_strip->CloseWebContentsAt(tab_index, 0);
+    return (previous_tab_count - 1) == tab_strip->count();
   }
 
  protected:
   int expected_dialog_buttons_;
   DialogTestAction dialog_action_;
-  ScopedTestingCrosSettings scoped_testing_cros_settings_;
+  ash::ScopedTestingCrosSettings scoped_testing_cros_settings_;
 
  private:
   int dialog_invocation_count_;
@@ -152,7 +155,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionEchoPrivateApiTest,
       base::StringPrintf(
           R"([{"serviceName": "name", "origin": "invalid", "tabId": %d}])",
           tab_id),
-      browser());
+      profile());
 
   EXPECT_EQ("Invalid origin.", error);
   EXPECT_EQ(0, dialog_invocation_count());
@@ -166,7 +169,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionEchoPrivateApiTest, GetUserConsent_NoTabIdSet) {
 
   std::string error = utils::RunFunctionAndReturnError(
       function.get(),
-      R"([{"serviceName": "name", "origin": "https://test.com"}])", browser());
+      R"([{"serviceName": "name", "origin": "https://test.com"}])", profile());
 
   EXPECT_EQ("Not called from an app window - the tabId is required.", error);
   EXPECT_EQ(0, dialog_invocation_count());
@@ -187,7 +190,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionEchoPrivateApiTest,
       R"([{"serviceName": "name", "origin": "https://test.com", "tabId": %d}])",
       tab_id);
   std::string error =
-      utils::RunFunctionAndReturnError(function.get(), arguments, browser());
+      utils::RunFunctionAndReturnError(function.get(), arguments, profile());
 
   EXPECT_EQ("Consent requested from an inactive tab.", error);
   EXPECT_EQ(0, dialog_invocation_count());
@@ -206,7 +209,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionEchoPrivateApiTest, GetUserConsent_ClosedTab) {
       R"([{"serviceName": "name", "origin": "https://test.com", "tabId": %d}])",
       tab_id);
   std::string error =
-      utils::RunFunctionAndReturnError(function.get(), arguments, browser());
+      utils::RunFunctionAndReturnError(function.get(), arguments, profile());
 
   EXPECT_EQ("Tab not found.", error);
   EXPECT_EQ(0, dialog_invocation_count());
@@ -263,6 +266,26 @@ IN_PROC_BROWSER_TEST_F(ExtensionEchoPrivateApiTest,
   RunDefaultGetUserFunctionAndExpectResultEquals(tab_id, false);
 
   EXPECT_EQ(1, dialog_invocation_count());
+}
+
+IN_PROC_BROWSER_TEST_F(ExtensionEchoPrivateApiTest, RemoveEmptyValueDicts) {
+  auto dict = base::Value::Dict()
+                  .Set("a", "b")
+                  .Set("empty", base::Value::Dict())
+                  .Set("nested", base::Value::Dict().Set("c", "d").Set(
+                                     "empty_value", base::Value::Dict()))
+                  .Set("nested_empty", base::Value::Dict().Set(
+                                           "empty_value", base::Value::Dict()));
+
+  // Remove nested dictionaries.
+  chromeos::echo_offer::RemoveEmptyValueDicts(dict);
+
+  // After removing empty nested dicts, we  are left with:
+  //   {"a" : "b", "nested" : {"c" : "d"}}
+  EXPECT_EQ(2u, dict.size());
+  EXPECT_EQ(1u, dict.FindDict("nested")->size());
+  EXPECT_EQ("b", *dict.FindString("a"));
+  EXPECT_EQ("d", *dict.FindStringByDottedPath("nested.c"));
 }
 
 }  // namespace chromeos

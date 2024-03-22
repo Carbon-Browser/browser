@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,13 @@
 
 #include <algorithm>
 
-#include "base/cxx17_backports.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/single_thread_task_runner.h"
 #include "skia/ext/image_operations.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
+#include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/public/platform/web_data.h"
+#include "third_party/blink/public/web/web_image.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_decoder.h"
@@ -17,8 +20,8 @@
 #include "third_party/blink/renderer/platform/image-decoders/segment_reader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loader_options.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/worker_pool.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
@@ -28,6 +31,27 @@
 namespace blink {
 
 namespace {
+
+void DecodeSVGOnMainThread(
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    scoped_refptr<SegmentReader> data,
+    gfx::Size resize_dimensions,
+    CrossThreadOnceFunction<void(SkBitmap, double)> done_callback) {
+  DCHECK(IsMainThread());
+  blink::WebData buffer(
+      reinterpret_cast<const char*>(std::move(data->GetAsSkData()->bytes())),
+      data->size());
+  SkBitmap icon = blink::WebImage::DecodeSVG(buffer, resize_dimensions);
+  if (icon.drawsNothing()) {
+    PostCrossThreadTask(
+        *task_runner, FROM_HERE,
+        CrossThreadBindOnce(std::move(done_callback), SkBitmap(), -1.0));
+    return;
+  }
+  PostCrossThreadTask(
+      *task_runner, FROM_HERE,
+      CrossThreadBindOnce(std::move(done_callback), std::move(icon), 1.0));
+}
 
 void DecodeAndResizeImage(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
@@ -43,9 +67,9 @@ void DecodeAndResizeImage(
   };
 
   std::unique_ptr<ImageDecoder> decoder = ImageDecoder::Create(
-      std::move(data), /* data_complete= */ true,
+      std::move(data), /*data_complete=*/true,
       ImageDecoder::kAlphaPremultiplied, ImageDecoder::kDefaultBitDepth,
-      ColorBehavior::TransformToSRGB());
+      ColorBehavior::kTransformToSRGB, Platform::GetMaxDecodedImageBytes());
 
   if (!decoder) {
     notify_complete(SkBitmap(), -1.0);
@@ -77,12 +101,11 @@ void DecodeAndResizeImage(
     return;
   }
 
-  int resized_width =
-      base::clamp(static_cast<int>(scale * decoded_icon.width()), 1,
-                  resize_dimensions.width());
+  int resized_width = std::clamp(static_cast<int>(scale * decoded_icon.width()),
+                                 1, resize_dimensions.width());
   int resized_height =
-      base::clamp(static_cast<int>(scale * decoded_icon.height()), 1,
-                  resize_dimensions.height());
+      std::clamp(static_cast<int>(scale * decoded_icon.height()), 1,
+                 resize_dimensions.height());
 
   // Use the RESIZE_GOOD quality allowing the implementation to pick an
   // appropriate method for the resize. Can be increased to RESIZE_BETTER
@@ -121,8 +144,6 @@ void ThreadedIconLoader::Start(
       *execution_context, this, resource_loader_options);
   threadable_loader_->SetTimeout(resource_request.TimeoutInterval());
   threadable_loader_->Start(ResourceRequest(resource_request));
-
-  start_time_ = base::TimeTicks::Now();
 }
 
 void ThreadedIconLoader::Stop() {
@@ -131,6 +152,11 @@ void ThreadedIconLoader::Stop() {
     threadable_loader_->Cancel();
     threadable_loader_ = nullptr;
   }
+}
+
+void ThreadedIconLoader::DidReceiveResponse(uint64_t,
+                                            const ResourceResponse& response) {
+  response_mime_type_ = response.MimeType();
 }
 
 void ThreadedIconLoader::DidReceiveData(const char* data, unsigned length) {
@@ -148,11 +174,21 @@ void ThreadedIconLoader::DidFinishLoading(uint64_t resource_identifier) {
     return;
   }
 
-  UMA_HISTOGRAM_MEDIUM_TIMES("Blink.ThreadedIconLoader.LoadTime",
-                             base::TimeTicks::Now() - start_time_);
-
   scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      Thread::Current()->GetTaskRunner();
+      threadable_loader_->GetTaskRunner();
+
+  if (response_mime_type_ == "image/svg+xml") {
+    PostCrossThreadTask(
+        *Thread::MainThread()->GetTaskRunner(MainThreadTaskRunnerRestricted()),
+        FROM_HERE,
+        CrossThreadBindOnce(
+            &DecodeSVGOnMainThread, std::move(task_runner),
+            SegmentReader::CreateFromSharedBuffer(std::move(data_)),
+            resize_dimensions_ ? *resize_dimensions_ : gfx::Size(),
+            CrossThreadBindOnce(&ThreadedIconLoader::OnBackgroundTaskComplete,
+                                WrapCrossThreadWeakPersistent(this))));
+    return;
+  }
 
   worker_pool::PostTask(
       FROM_HERE,

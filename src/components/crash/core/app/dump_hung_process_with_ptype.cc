@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,8 +49,13 @@ bool DumpHungProcessWithPtypeImpl(const base::Process& process,
   if (channel_name.find("canary") == 0 || channel_name.find("dev") == 0)
     minidump_type |= MiniDumpWithIndirectlyReferencedMemory;
 
+  auto crashpad_path = crash_reporter::GetCrashpadDatabasePath();
+  if (!crashpad_path) {
+    return false;
+  }
+
   return DumpAndReportProcess(process, minidump_type, nullptr, annotations,
-                              crash_reporter::GetCrashpadDatabasePath());
+                              *crashpad_path);
 }
 
 }  // namespace crash_reporter

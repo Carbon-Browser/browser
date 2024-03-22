@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,6 +53,12 @@ void MockAppClient::AddSecondaryAccount(const std::string& account_email) {
   const auto& account_info =
       identity_test_environment_.MakeAccountAvailable(account_email);
   identity_test_environment_.SetRefreshTokenForAccount(account_info.account_id);
+}
+
+void MockAppClient::MakeFetchTokenFailWithError(
+    const GoogleServiceAuthError& error) {
+  identity_test_environment_
+      .WaitForAccessTokenRequestIfNecessaryAndRespondWithError(error);
 }
 
 }  // namespace ash

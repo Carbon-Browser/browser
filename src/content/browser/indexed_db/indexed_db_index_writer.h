@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class IndexWriter {
       int64_t index_id,
       bool* can_add_keys,
       const blink::IndexedDBKey& primary_key,
-      std::u16string* error_message) const;
+      std::string* error_message) const;
 
   leveldb::Status WriteIndexKeys(
       const IndexedDBBackingStore::RecordIdentifier& record,
@@ -77,7 +77,7 @@ class IndexWriter {
     bool key_was_generated,
     const std::vector<blink::IndexedDBIndexKeys>& index_keys,
     std::vector<std::unique_ptr<IndexWriter>>* index_writers,
-    std::u16string* error_message,
+    std::string* error_message,
     bool* completed);
 
 }  // namespace content

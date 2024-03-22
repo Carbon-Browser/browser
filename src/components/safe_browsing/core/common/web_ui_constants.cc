@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,5 +16,12 @@ const char kChromeUISafeBrowsingMatchPhishingUrl[] =
     "chrome://safe-browsing/match?type=phishing";
 const char kChromeUISafeBrowsingMatchUnwantedUrl[] =
     "chrome://safe-browsing/match?type=unwanted";
+
+bool IsSafeBrowsingWebUIUrl(const GURL& url) {
+  return url == kChromeUISafeBrowsingMatchMalwareUrl ||
+         url == kChromeUISafeBrowsingMatchPhishingUrl ||
+         url == kChromeUISafeBrowsingMatchBillingUrl ||
+         url == kChromeUISafeBrowsingMatchUnwantedUrl;
+}
 
 }  // namespace safe_browsing

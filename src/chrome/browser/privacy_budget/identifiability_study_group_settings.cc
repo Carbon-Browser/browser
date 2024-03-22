@@ -1,14 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/privacy_budget/identifiability_study_group_settings.h"
 
+#include <algorithm>
 #include <numeric>
 
 #include "base/containers/flat_map.h"
-#include "base/cxx17_backports.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/common/privacy_budget/privacy_budget_features.h"
 #include "chrome/common/privacy_budget/types.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
@@ -77,11 +78,11 @@ IdentifiabilityStudyGroupSettings::IdentifiabilityStudyGroupSettings(
     std::vector<int> reid_blocks_bits,
     std::vector<double> reid_blocks_noise_probabilities)
     : enabled_(enabled),
-      expected_surface_count_(base::clamp<int>(
+      expected_surface_count_(std::clamp<int>(
           expected_surface_count,
           0,
           features::kMaxIdentifiabilityStudyExpectedSurfaceCount)),
-      surface_budget_(base::clamp<int>(
+      surface_budget_(std::clamp<int>(
           surface_budget,
           0,
           features::kMaxIdentifiabilityStudyActiveSurfaceBudget)),

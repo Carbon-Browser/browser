@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/offline_pages/offliner_helper.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
@@ -97,7 +97,7 @@ class MockOfflinePageModel : public StubOfflinePageModel {
   void CompleteSavingAsArchiveCreationFailed() {
     DCHECK(mock_saving_);
     mock_saving_ = false;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(save_page_callback_),
                                   SavePageResult::ARCHIVE_CREATION_FAILED, 0));
   }
@@ -105,7 +105,7 @@ class MockOfflinePageModel : public StubOfflinePageModel {
   void CompleteSavingAsSuccess() {
     DCHECK(mock_saving_);
     mock_saving_ = false;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(save_page_callback_),
                                   SavePageResult::SUCCESS, 123456));
   }
@@ -113,7 +113,7 @@ class MockOfflinePageModel : public StubOfflinePageModel {
   void CompleteSavingAsAlreadyExists() {
     DCHECK(mock_saving_);
     mock_saving_ = false;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(save_page_callback_),
                                   SavePageResult::ALREADY_EXISTS, 123456));
   }
@@ -258,7 +258,7 @@ class BackgroundLoaderOfflinerTest : public testing::Test {
   void CompleteLoading() {
     // Reset snapshot controller.
     auto snapshot_controller = std::make_unique<BackgroundSnapshotController>(
-        base::ThreadTaskRunnerHandle::Get(), offliner_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), offliner_.get(),
         false /* RenovationsEnabled */);
     offliner_->SetBackgroundSnapshotControllerForTest(
         std::move(snapshot_controller));

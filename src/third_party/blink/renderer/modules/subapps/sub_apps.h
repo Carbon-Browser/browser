@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ class ExceptionState;
 class Navigator;
 class ScriptPromise;
 class ScriptState;
-class SubAppsAddOptions;
+class SubAppsAddParams;
 
 class SubApps : public ScriptWrappable, public Supplement<Navigator> {
   DEFINE_WRAPPERTYPEINFO();
@@ -37,11 +37,12 @@ class SubApps : public ScriptWrappable, public Supplement<Navigator> {
   // SubApps API.
   ScriptPromise add(
       ScriptState*,
-      const HeapVector<std::pair<String, Member<SubAppsAddOptions>>>& sub_apps,
+      const HeapVector<std::pair<String, Member<SubAppsAddParams>>>&
+          sub_apps_to_add,
       ExceptionState&);
   ScriptPromise list(ScriptState*, ExceptionState&);
   ScriptPromise remove(ScriptState*,
-                       const String& unhashed_app_id,
+                       const Vector<String>& manifest_id_paths,
                        ExceptionState&);
 
  private:

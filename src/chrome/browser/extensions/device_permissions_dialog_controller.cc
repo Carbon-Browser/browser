@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,8 @@
 DevicePermissionsDialogController::DevicePermissionsDialogController(
     content::RenderFrameHost* owner,
     scoped_refptr<extensions::DevicePermissionsPrompt::Prompt> prompt)
-    : ChooserController(CreateExtensionAwareChooserTitle(
+    : ChooserController(CreateChooserTitle(
           owner,
-          prompt->multiple() ? IDS_DEVICE_PERMISSIONS_PROMPT_MULTIPLE_SELECTION
-                             : IDS_DEVICE_PERMISSIONS_PROMPT_SINGLE_SELECTION,
           prompt->multiple() ? IDS_DEVICE_PERMISSIONS_PROMPT_MULTIPLE_SELECTION
                              : IDS_DEVICE_PERMISSIONS_PROMPT_SINGLE_SELECTION)),
       prompt_(prompt) {

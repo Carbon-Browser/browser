@@ -24,12 +24,14 @@
  */
 
 #include "third_party/blink/renderer/core/timing/performance_user_timing.h"
+#include "base/trace_event/typed_macros.h"
 
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-shared.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_performance_mark_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_double_string.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/performance_entry_names.h"
+#include "third_party/blink/renderer/core/timing/performance.h"
 #include "third_party/blink/renderer/core/timing/performance_mark.h"
 #include "third_party/blink/renderer/core/timing/performance_measure.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -39,31 +41,6 @@
 namespace blink {
 
 namespace {
-
-void InsertPerformanceEntry(PerformanceEntryMap& performance_entry_map,
-                            PerformanceEntry& entry) {
-  PerformanceEntryMap::iterator it = performance_entry_map.find(entry.name());
-  if (it != performance_entry_map.end()) {
-    DCHECK(it->value);
-    it->value->push_back(&entry);
-  } else {
-    PerformanceEntryVector* vector =
-        MakeGarbageCollected<PerformanceEntryVector>();
-    vector->push_back(&entry);
-    performance_entry_map.Set(entry.name(), vector);
-  }
-}
-
-void ClearPeformanceEntries(PerformanceEntryMap& performance_entry_map,
-                            const AtomicString& name) {
-  if (name.IsNull()) {
-    performance_entry_map.clear();
-    return;
-  }
-
-  if (performance_entry_map.Contains(name))
-    performance_entry_map.erase(name);
-}
 
 bool IsTracingEnabled() {
   bool enabled;
@@ -76,24 +53,30 @@ bool IsTracingEnabled() {
 UserTiming::UserTiming(Performance& performance) : performance_(&performance) {}
 
 void UserTiming::AddMarkToPerformanceTimeline(PerformanceMark& mark) {
-  InsertPerformanceEntry(marks_map_, mark);
+  InsertPerformanceEntry(marks_map_, marks_buffer_, mark);
   if (!IsTracingEnabled()) {
     return;
   }
 
-  std::unique_ptr<TracedValue> traced_value;
-  if (performance_->timing()) {
-    traced_value = performance_->timing()->GetNavigationTracingData();
-  } else {
-    traced_value = std::make_unique<TracedValue>();
-  }
-  traced_value->SetDouble("startTime", mark.startTime());
-  TRACE_EVENT_COPY_MARK1("blink.user_timing", mark.name().Utf8().c_str(),
-                         "data", std::move(traced_value));
+  const auto trace_event_details = [&](perfetto::EventContext ctx) {
+    ctx.event()->set_name(mark.name().Utf8().c_str());
+    ctx.AddDebugAnnotation("data", [&](perfetto::TracedValue trace_context) {
+      auto dict = std::move(trace_context).WriteDictionary();
+      dict.Add("startTime", mark.startTime());
+      // Only set when performance_ is a WindowPerformance.
+      // performance_->timing() returns null when performance_ is a
+      // WorkerPerformance.
+      if (performance_->timing()) {
+        performance_->timing()->WriteInto(dict);
+      }
+    });
+  };
+  TRACE_EVENT_INSTANT("blink.user_timing", nullptr, mark.UnsafeTimeForTraces(),
+                      trace_event_details);
 }
 
 void UserTiming::ClearMarks(const AtomicString& mark_name) {
-  ClearPeformanceEntries(marks_map_, mark_name);
+  ClearPerformanceEntries(marks_map_, marks_buffer_, mark_name);
 }
 
 const PerformanceMark* UserTiming::FindExistingMark(
@@ -199,7 +182,8 @@ PerformanceMeasure* UserTiming::Measure(ScriptState* script_state,
                                         const absl::optional<double>& duration,
                                         const V8UnionDoubleOrString* end,
                                         const ScriptValue& detail,
-                                        ExceptionState& exception_state) {
+                                        ExceptionState& exception_state,
+                                        DOMWindow* source) {
   double start_time =
       start ? GetTimeOrFindMarkTime(measure_name, start, exception_state) : 0;
   if (exception_state.HadException())
@@ -229,73 +213,132 @@ PerformanceMeasure* UserTiming::Measure(ScriptState* script_state,
         GetPerformanceMarkUnsafeTimeForTraces(start_time, start);
     base::TimeTicks unsafe_end_time =
         GetPerformanceMarkUnsafeTimeForTraces(end_time, end);
-    unsigned hash = WTF::StringHash::GetHash(measure_name);
+    unsigned hash = WTF::GetHash(measure_name);
     WTF::AddFloatToHash(hash, start_time);
     WTF::AddFloatToHash(hash, end_time);
 
-    TRACE_EVENT_COPY_NESTABLE_ASYNC_BEGIN_WITH_TIMESTAMP1(
-        "blink.user_timing", measure_name.Utf8().c_str(), hash,
-        unsafe_start_time, "startTime", start_time);
-    TRACE_EVENT_COPY_NESTABLE_ASYNC_END_WITH_TIMESTAMP0(
-        "blink.user_timing", measure_name.Utf8().c_str(), hash,
-        unsafe_end_time);
+    String serialized_detail = "";
+    if (ExecutionContext* execution_context =
+            performance_->GetExecutionContext()) {
+      v8::Isolate* isolate = execution_context->GetIsolate();
+      v8::Local<v8::Context> context = isolate->GetCurrentContext();
+      if (!(detail.IsEmpty() || detail.V8Value()->IsNullOrUndefined())) {
+        v8::Local<v8::String> v8_string;
+        if (v8::JSON::Stringify(context, detail.V8Value())
+                .ToLocal(&v8_string)) {
+          serialized_detail = ToCoreString(isolate, v8_string);
+        }
+      }
+    }
+
+    if (serialized_detail.length()) {
+      TRACE_EVENT_BEGIN("blink.user_timing", nullptr, perfetto::Track(hash),
+                        unsafe_start_time, "startTime", start_time, "detail",
+                        serialized_detail, [&](perfetto::EventContext ctx) {
+                          ctx.event()->set_name(measure_name.Utf8().c_str());
+                        });
+    } else {
+      TRACE_EVENT_BEGIN("blink.user_timing", nullptr, perfetto::Track(hash),
+                        unsafe_start_time, "startTime", start_time,
+                        [&](perfetto::EventContext ctx) {
+                          ctx.event()->set_name(measure_name.Utf8().c_str());
+                        });
+    }
+    TRACE_EVENT_END("blink.user_timing", perfetto::Track(hash),
+                    unsafe_end_time);
   }
 
   PerformanceMeasure* measure =
       PerformanceMeasure::Create(script_state, measure_name, start_time,
-                                 end_time, detail, exception_state);
+                                 end_time, detail, exception_state, source);
   if (!measure)
     return nullptr;
-  InsertPerformanceEntry(measures_map_, *measure);
+  InsertPerformanceEntry(measures_map_, measures_buffer_, *measure);
   return measure;
 }
 
 void UserTiming::ClearMeasures(const AtomicString& measure_name) {
-  ClearPeformanceEntries(measures_map_, measure_name);
-}
-
-static PerformanceEntryVector ConvertToEntrySequence(
-    const PerformanceEntryMap& performance_entry_map) {
-  PerformanceEntryVector entries;
-
-  for (const auto& entry : performance_entry_map)
-    entries.AppendVector(*entry.value);
-
-  return entries;
-}
-
-static PerformanceEntryVector GetEntrySequenceByName(
-    const PerformanceEntryMap& performance_entry_map,
-    const AtomicString& name) {
-  PerformanceEntryVector entries;
-
-  PerformanceEntryMap::const_iterator it = performance_entry_map.find(name);
-  if (it != performance_entry_map.end())
-    entries.AppendVector(*it->value);
-
-  return entries;
+  ClearPerformanceEntries(measures_map_, measures_buffer_, measure_name);
 }
 
 PerformanceEntryVector UserTiming::GetMarks() const {
-  return ConvertToEntrySequence(marks_map_);
+  return marks_buffer_;
 }
 
 PerformanceEntryVector UserTiming::GetMarks(const AtomicString& name) const {
-  return GetEntrySequenceByName(marks_map_, name);
+  PerformanceEntryMap::const_iterator it = marks_map_.find(name);
+  if (it != marks_map_.end()) {
+    return *it->value;
+  }
+  return {};
 }
 
 PerformanceEntryVector UserTiming::GetMeasures() const {
-  return ConvertToEntrySequence(measures_map_);
+  return measures_buffer_;
 }
 
 PerformanceEntryVector UserTiming::GetMeasures(const AtomicString& name) const {
-  return GetEntrySequenceByName(measures_map_, name);
+  PerformanceEntryMap::const_iterator it = measures_map_.find(name);
+  if (it != measures_map_.end()) {
+    return *it->value;
+  }
+  return {};
+}
+
+void UserTiming::InsertPerformanceEntry(
+    PerformanceEntryMap& performance_entry_map,
+    PerformanceEntryVector& performance_entry_buffer,
+    PerformanceEntry& entry) {
+  performance_->InsertEntryIntoSortedBuffer(performance_entry_buffer, entry,
+                                            Performance::kDoNotRecordSwaps);
+
+  auto it = performance_entry_map.find(entry.name());
+  if (it == performance_entry_map.end()) {
+    PerformanceEntryVector* entries =
+        MakeGarbageCollected<PerformanceEntryVector>();
+    entries->push_back(&entry);
+    performance_entry_map.Set(entry.name(), entries);
+    return;
+  }
+
+  DCHECK(it->value);
+  performance_->InsertEntryIntoSortedBuffer(*it->value.Get(), entry,
+                                            Performance::kDoNotRecordSwaps);
+}
+
+void UserTiming::ClearPerformanceEntries(
+    PerformanceEntryMap& performance_entry_map,
+    PerformanceEntryVector& performance_entry_buffer,
+    const AtomicString& name) {
+  if (name.IsNull()) {
+    performance_entry_map.clear();
+    performance_entry_buffer.clear();
+    return;
+  }
+
+  if (performance_entry_map.Contains(name)) {
+    UseCounter::Count(performance_->GetExecutionContext(),
+                      WebFeature::kClearPerformanceEntries);
+
+    // Remove key/value pair from the map.
+    performance_entry_map.erase(name);
+
+    // In favor of quicker getEntries() calls, we tradeoff performance here to
+    // linearly 'clear' entries in the vector.
+    performance_entry_buffer.erase(
+        std::remove_if(performance_entry_buffer.begin(),
+                       performance_entry_buffer.end(),
+                       [name](auto& entry) { return entry->name() == name; }),
+        performance_entry_buffer.end());
+  }
 }
 
 void UserTiming::Trace(Visitor* visitor) const {
   visitor->Trace(performance_);
   visitor->Trace(marks_map_);
   visitor->Trace(measures_map_);
+  visitor->Trace(marks_buffer_);
+  visitor->Trace(measures_buffer_);
 }
 
 }  // namespace blink

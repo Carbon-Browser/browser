@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <unordered_map>
 
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/common/gles2_cmd_copy_texture_chromium_utils.h"
 #include "gpu/command_buffer/service/context_state.h"
@@ -44,6 +44,7 @@ enum {
   S_FORMAT_RGBA8,
   S_FORMAT_BGRA_EXT,
   S_FORMAT_BGRA8_EXT,
+  S_FORMAT_RGB_YCRCB_420_CHROMIUM,
   S_FORMAT_RGB_YCBCR_420V_CHROMIUM,
   S_FORMAT_RGB_YCBCR_422_CHROMIUM,
   S_FORMAT_COMPRESSED,
@@ -175,6 +176,9 @@ ShaderId GetFragmentShaderId(unsigned glslVersion,
       break;
     case GL_BGRA8_EXT:
       sourceFormatIndex = S_FORMAT_BGRA8_EXT;
+      break;
+    case GL_RGB_YCRCB_420_CHROMIUM:
+      sourceFormatIndex = S_FORMAT_RGB_YCRCB_420_CHROMIUM;
       break;
     case GL_RGB_YCBCR_420V_CHROMIUM:
       sourceFormatIndex = S_FORMAT_RGB_YCBCR_420V_CHROMIUM;
@@ -1022,10 +1026,8 @@ void CopyTextureResourceManagerImpl::Destroy() {
   glDeleteFramebuffersEXT(1, &framebuffer_);
   framebuffer_ = 0;
 
-  std::for_each(
-      vertex_shaders_.begin(), vertex_shaders_.end(), DeleteShader);
-  std::for_each(
-      fragment_shaders_.begin(), fragment_shaders_.end(), DeleteShader);
+  base::ranges::for_each(vertex_shaders_, DeleteShader);
+  base::ranges::for_each(fragment_shaders_, DeleteShader);
 
   for (ProgramMap::const_iterator it = programs_.begin(); it != programs_.end();
        ++it) {

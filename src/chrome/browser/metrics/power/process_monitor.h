@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_METRICS_POWER_PROCESS_MONITOR_H_
 #define CHROME_BROWSER_METRICS_POWER_PROCESS_MONITOR_H_
 
+#include <array>
 #include <map>
 #include <memory>
 
@@ -29,11 +30,15 @@ enum MonitoredProcessType {
   kExtensionPersistent,
   kExtensionEvent,
   kGpu,
-  kPPAPIPlugin,
   kUtility,
   kNetwork,
+  kOther,  // Contains all other process types that are not explicitly tracked.
   kCount,
 };
+
+MonitoredProcessType
+GetMonitoredProcessTypeForNonRendererChildProcessForTesting(
+    const content::ChildProcessData& data);
 
 struct ProcessInfo {
   ProcessInfo(MonitoredProcessType type,
@@ -81,10 +86,6 @@ class ProcessMonitor : public content::BrowserChildProcessObserver,
     // time the metric was sampled. See base/process/process_metrics.h for a
     // more detailed explanation.
     int package_idle_wakeups = 0;
-
-    // "Energy Impact" is a synthetic power estimation metric displayed by macOS
-    // in Activity Monitor and the battery menu.
-    double energy_impact = 0.0;
 #endif
   };
 
@@ -130,6 +131,19 @@ class ProcessMonitor : public content::BrowserChildProcessObserver,
       const content::ChildProcessData& data) override;
   void BrowserChildProcessHostDisconnected(
       const content::ChildProcessData& data) override;
+  void BrowserChildProcessCrashed(
+      const content::ChildProcessData& data,
+      const content::ChildProcessTerminationInfo& info) override;
+  void BrowserChildProcessKilled(
+      const content::ChildProcessData& data,
+      const content::ChildProcessTerminationInfo& info) override;
+  void BrowserChildProcessExitedNormally(
+      const content::ChildProcessData& data,
+      const content::ChildProcessTerminationInfo& info) override;
+
+  void OnBrowserChildProcessExited(
+      const content::ChildProcessData& data,
+      const content::ChildProcessTerminationInfo& info);
 
   base::ScopedMultiSourceObservation<content::RenderProcessHost,
                                      content::RenderProcessHostObserver>
@@ -140,6 +154,10 @@ class ProcessMonitor : public content::BrowserChildProcessObserver,
   std::map<content::RenderProcessHost*, ProcessInfo> render_process_infos_;
 
   std::map<int, ProcessInfo> browser_child_process_infos_;
+
+  // The metrics for the processes that exited during the last interval. Added
+  // to the current interval's sample and then reset to zero.
+  std::array<Metrics, MonitoredProcessType::kCount> exited_processes_metrics_;
 };
 
 #endif  // CHROME_BROWSER_METRICS_POWER_PROCESS_MONITOR_H_

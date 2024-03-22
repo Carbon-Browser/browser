@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/unified/detailed_view_controller.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -40,11 +41,11 @@ class ASH_EXPORT UserChooserDetailedViewController
   void HandleAddUserAction();
 
   // DetailedViewController:
-  views::View* CreateView() override;
+  std::unique_ptr<views::View> CreateView() override;
   std::u16string GetAccessibleName() const override;
 
  private:
-  UnifiedSystemTrayController* tray_controller_;
+  raw_ptr<UnifiedSystemTrayController, ExperimentalAsh> tray_controller_;
 };
 
 }  // namespace ash

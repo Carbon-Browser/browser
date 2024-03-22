@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -87,7 +87,7 @@ class InheritedOffsetRotationChecker
 
 InterpolationValue ConvertOffsetRotate(const StyleOffsetRotation& rotation) {
   return InterpolationValue(
-      std::make_unique<InterpolableNumber>(rotation.angle),
+      MakeGarbageCollected<InterpolableNumber>(rotation.angle),
       CSSOffsetRotationNonInterpolableValue::Create(rotation.type));
 }
 
@@ -174,7 +174,7 @@ void CSSOffsetRotateInterpolationType::ApplyStandardPropertyValue(
     const InterpolableValue& interpolable_value,
     const NonInterpolableValue* non_interpolable_value,
     StyleResolverState& state) const {
-  state.Style()->SetOffsetRotate(StyleOffsetRotation(
+  state.StyleBuilder().SetOffsetRotate(StyleOffsetRotation(
       CSSValueClampingUtils::ClampAngle(
           To<InterpolableNumber>(interpolable_value).Value()),
       To<CSSOffsetRotationNonInterpolableValue>(*non_interpolable_value)

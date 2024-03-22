@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "chrome/browser/ui/views/chrome_typography.h"
 #include "components/autofill/core/browser/ui/payments/local_card_migration_bubble_controller.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_id.h"
@@ -88,15 +89,15 @@ void LocalCardMigrationBubbleViews::Hide() {
 }
 
 void LocalCardMigrationBubbleViews::OnDialogAccepted() {
-  // TODO(https://crbug.com/1046793): Maybe delete this.
-  if (controller_)
+  if (controller_) {
     controller_->OnConfirmButtonClicked();
+  }
 }
 
 void LocalCardMigrationBubbleViews::OnDialogCancelled() {
-  // TODO(https://crbug.com/1046793): Maybe delete this.
-  if (controller_)
+  if (controller_) {
     controller_->OnCancelButtonClicked();
+  }
 }
 
 void LocalCardMigrationBubbleViews::AddedToWidget() {
@@ -110,7 +111,7 @@ void LocalCardMigrationBubbleViews::AddedToWidget() {
   // setting the icon size would rescale it incorrectly.
   gfx::ImageSkia image = gfx::ImageSkiaOperations::CreateTiledImage(
       gfx::CreateVectorIcon(
-          kGooglePayLogoIcon,
+          vector_icons::kGooglePayLogoIcon,
           GetColorProvider()->GetColor(kColorPaymentsGooglePayLogo)),
       /*x=*/0, /*y=*/0, kMigrationBubbleGooglePayLogoWidth,
       kMigrationBubbleGooglePayLogoHeight);
@@ -120,7 +121,7 @@ void LocalCardMigrationBubbleViews::AddedToWidget() {
       GetColorProvider()->GetColor(ui::kColorIcon));
 #endif
   views::ImageView* icon_view = new views::ImageView();
-  icon_view->SetImage(image);
+  icon_view->SetImage(ui::ImageModel::FromImageSkia(image));
   icon_view->SetHorizontalAlignment(views::ImageView::Alignment::kLeading);
   icon_view->SetAccessibleName(
       l10n_util::GetStringUTF16(IDS_AUTOFILL_GOOGLE_PAY_LOGO_ACCESSIBLE_NAME));

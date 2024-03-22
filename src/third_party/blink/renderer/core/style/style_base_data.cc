@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 namespace blink {
 
-StyleBaseData::StyleBaseData(scoped_refptr<const ComputedStyle> style,
+StyleBaseData::StyleBaseData(const ComputedStyle* style,
                              std::unique_ptr<CSSBitset> set)
     : computed_style_(style), important_set_(std::move(set)) {}
 

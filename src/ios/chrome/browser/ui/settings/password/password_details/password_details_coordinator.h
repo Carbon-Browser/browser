@@ -1,21 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORD_DETAILS_PASSWORD_DETAILS_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORD_DETAILS_PASSWORD_DETAILS_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
+#import "ios/chrome/browser/ui/settings/password/password_details/password_details.h"
 
 namespace password_manager {
-struct PasswordForm;
+class AffiliatedGroup;
+struct CredentialUIEntry;
 }  // namespace password_manager
 
 @protocol ApplicationCommands;
 class Browser;
-class IOSChromePasswordCheckManager;
 @protocol PasswordDetailsCoordinatorDelegate;
-@class ReauthenticationModule;
+@protocol ReauthenticationProtocol;
 
 // This coordinator presents a password details for the user.
 @interface PasswordDetailsCoordinator : ChromeCoordinator
@@ -24,10 +25,21 @@ class IOSChromePasswordCheckManager;
     initWithBaseNavigationController:
         (UINavigationController*)navigationController
                              browser:(Browser*)browser
-                            password:
-                                (const password_manager::PasswordForm&)password
-                        reauthModule:(ReauthenticationModule*)reauthModule
-                passwordCheckManager:(IOSChromePasswordCheckManager*)manager
+                          credential:
+                              (const password_manager::CredentialUIEntry&)
+                                  credential
+                        reauthModule:(id<ReauthenticationProtocol>)reauthModule
+                             context:(DetailsContext)context
+    NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)
+    initWithBaseNavigationController:
+        (UINavigationController*)navigationController
+                             browser:(Browser*)browser
+                     affiliatedGroup:(const password_manager::AffiliatedGroup&)
+                                         affiliatedGroup
+                        reauthModule:(id<ReauthenticationProtocol>)reauthModule
+                             context:(DetailsContext)context
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
@@ -38,6 +50,10 @@ class IOSChromePasswordCheckManager;
 
 // Delegate.
 @property(nonatomic, weak) id<PasswordDetailsCoordinatorDelegate> delegate;
+
+// Determine if we need to setup a cancel button on the navigation's left bar
+// button.
+@property(nonatomic) BOOL showCancelButton;
 
 @end
 

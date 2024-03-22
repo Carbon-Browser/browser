@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ TEST_F(HTMLEmbedElementTest, FallbackState) {
 
   UpdateAllLifecyclePhasesForTest();
 
-  scoped_refptr<ComputedStyle> initial_style =
+  const ComputedStyle* initial_style =
       GetDocument().GetStyleResolver().InitialStyleForElement();
 
   // We should get |true| as a result and don't trigger a DCHECK.

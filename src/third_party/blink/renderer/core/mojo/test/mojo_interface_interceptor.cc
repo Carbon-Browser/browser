@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -132,7 +132,7 @@ void MojoInterfaceInterceptor::stop() {
 }
 
 void MojoInterfaceInterceptor::Trace(Visitor* visitor) const {
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 
@@ -155,7 +155,8 @@ void MojoInterfaceInterceptor::ContextDestroyed() {
 MojoInterfaceInterceptor::MojoInterfaceInterceptor(ExecutionContext* context,
                                                    const String& interface_name,
                                                    Scope::Enum scope)
-    : ExecutionContextLifecycleObserver(context),
+    : ActiveScriptWrappable<MojoInterfaceInterceptor>({}),
+      ExecutionContextLifecycleObserver(context),
       interface_name_(interface_name),
       scope_(scope) {}
 
@@ -168,10 +169,10 @@ void MojoInterfaceInterceptor::OnInterfaceRequest(
   // request is being satisfied by another process.
   GetExecutionContext()
       ->GetTaskRunner(TaskType::kMicrotask)
-      ->PostTask(
-          FROM_HERE,
-          WTF::Bind(&MojoInterfaceInterceptor::DispatchInterfaceRequestEvent,
-                    WrapPersistent(this), std::move(handle)));
+      ->PostTask(FROM_HERE,
+                 WTF::BindOnce(
+                     &MojoInterfaceInterceptor::DispatchInterfaceRequestEvent,
+                     WrapPersistent(this), std::move(handle)));
 }
 
 void MojoInterfaceInterceptor::DispatchInterfaceRequestEvent(

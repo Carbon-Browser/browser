@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,14 +14,18 @@ import os.path
 import random
 import re
 import signal
+import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
 import psutil
 
 import test_env
+
+DEFAULT_XVFB_WHD = '1280x800x24'
 
 # pylint: disable=useless-object-inheritance
 
@@ -39,14 +43,20 @@ def kill(proc, name, timeout_in_seconds=10):
   if not proc:
     return
 
-  proc.terminate()
   thread = threading.Thread(target=proc.wait)
-  thread.start()
+  try:
+    proc.terminate()
+    thread.start()
 
-  thread.join(timeout_in_seconds)
-  if thread.is_alive():
-    print('%s running after SIGTERM, trying SIGKILL.\n' % name, file=sys.stderr)
-    proc.kill()
+    thread.join(timeout_in_seconds)
+    if thread.is_alive():
+      print('%s running after SIGTERM, trying SIGKILL.\n' % name,
+        file=sys.stderr)
+      proc.kill()
+  except OSError as e:
+    # proc.terminate()/kill() can raise, not sure if only ProcessLookupError
+    # which is explained in https://bugs.python.org/issue40550#msg382427
+    print('Exception while killing process %s: %s' % (name, e), file=sys.stderr)
 
   thread.join(timeout_in_seconds)
   if thread.is_alive():
@@ -90,7 +100,8 @@ def launch_dbus(env): # pylint: disable=inconsistent-return-statements
 
 # TODO(crbug.com/949194): Encourage setting flags to False.
 def run_executable(
-    cmd, env, stdoutfile=None, use_openbox=True, use_xcompmgr=True):
+    cmd, env, stdoutfile=None, use_openbox=True, use_xcompmgr=True,
+    xvfb_whd=None, cwd=None):
   """Runs an executable within Weston or Xvfb on Linux or normally on other
      platforms.
 
@@ -108,6 +119,8 @@ def run_executable(
       Some ChromeOS tests need a window manager.
     use_xcompmgr: A flag to use xcompmgr process.
       Some tests need a compositing wm to make use of transparent visuals.
+    xvfb_whd: WxHxD to pass to xvfb or DEFAULT_XVFB_WHD if None
+    cwd: Current working directory.
 
   Returns:
     the exit code of the specified commandline, or 1 on failure.
@@ -135,13 +148,15 @@ def run_executable(
     cmd.remove('--use-weston')
 
   if sys.platform.startswith('linux') and use_xvfb:
-    return _run_with_xvfb(cmd, env, stdoutfile, use_openbox, use_xcompmgr)
+    return _run_with_xvfb(cmd, env, stdoutfile, use_openbox, use_xcompmgr,
+      xvfb_whd or DEFAULT_XVFB_WHD, cwd)
   if use_weston:
-    return _run_with_weston(cmd, env, stdoutfile)
-  return test_env.run_executable(cmd, env, stdoutfile)
+    return _run_with_weston(cmd, env, stdoutfile, cwd)
+  return test_env.run_executable(cmd, env, stdoutfile, cwd)
 
 
-def _run_with_xvfb(cmd, env, stdoutfile, use_openbox, use_xcompmgr):
+def _run_with_xvfb(cmd, env, stdoutfile, use_openbox,
+                   use_xcompmgr, xvfb_whd, cwd):
   openbox_proc = None
   openbox_ready = MutableBoolean()
   def set_openbox_ready(*_):
@@ -178,7 +193,7 @@ def _run_with_xvfb(cmd, env, stdoutfile, use_openbox, use_xcompmgr):
       xvfb_ready.setvalue(False)
       display = find_display()
 
-      xvfb_cmd = ['Xvfb', display, '-screen', '0', '1280x800x24', '-ac',
+      xvfb_cmd = ['Xvfb', display, '-screen', '0', xvfb_whd, '-ac',
                   '-nolisten', 'tcp', '-dpi', '96', '+extension', 'RANDR']
       if '-maxclients' in xvfb_help:
         xvfb_cmd += ['-maxclients', '512']
@@ -190,13 +205,16 @@ def _run_with_xvfb(cmd, env, stdoutfile, use_openbox, use_xcompmgr):
       signal.signal(signal.SIGUSR1, signal.SIG_IGN)
       xvfb_proc = subprocess.Popen(xvfb_cmd, stderr=subprocess.STDOUT, env=env)
       signal.signal(signal.SIGUSR1, set_xvfb_ready)
-      for _ in range(10):
+      for _ in range(30):
         time.sleep(.1)  # gives Xvfb time to start or fail.
         if xvfb_ready.getvalue() or xvfb_proc.poll() is not None:
           break  # xvfb sent ready signal, or already failed and stopped.
 
       if xvfb_proc.poll() is None:
-        break  # xvfb is running, can proceed.
+        if xvfb_ready.getvalue():
+          break  # xvfb is ready
+        kill(xvfb_proc, 'Xvfb')  # still not ready, give up and retry
+
     if xvfb_proc.poll() is not None:
       raise _XvfbProcessError('Failed to start after 10 tries')
 
@@ -220,19 +238,19 @@ def _run_with_xvfb(cmd, env, stdoutfile, use_openbox, use_xcompmgr):
           ['openbox', '--sm-disable', '--startup',
            openbox_startup_cmd], stderr=subprocess.STDOUT, env=env)
 
-      for _ in range(10):
+      for _ in range(30):
         time.sleep(.1)  # gives Openbox time to start or fail.
         if openbox_ready.getvalue() or openbox_proc.poll() is not None:
           break  # openbox sent ready signal, or failed and stopped.
 
-      if openbox_proc.poll() is not None:
+      if openbox_proc.poll() is not None or not openbox_ready.getvalue():
         raise _XvfbProcessError('Failed to start OpenBox.')
 
     if use_xcompmgr:
       xcompmgr_proc = subprocess.Popen(
           'xcompmgr', stderr=subprocess.STDOUT, env=env)
 
-    return test_env.run_executable(cmd, env, stdoutfile)
+    return test_env.run_executable(cmd, env, stdoutfile, cwd)
   except OSError as e:
     print('Failed to start Xvfb or Openbox: %s\n' % str(e), file=sys.stderr)
     return 1
@@ -252,7 +270,7 @@ def _run_with_xvfb(cmd, env, stdoutfile, use_openbox, use_xcompmgr):
 
 
 # TODO(https://crbug.com/1060466): Write tests.
-def _run_with_weston(cmd, env, stdoutfile):
+def _run_with_weston(cmd, env, stdoutfile, cwd):
   weston_proc = None
 
   try:
@@ -274,10 +292,16 @@ def _run_with_weston(cmd, env, stdoutfile):
     # TODO(https://1178788): find a better solution.
     if not os.path.isfile("./weston"):
       print('Weston is not available. Starting without Wayland compositor')
-      return test_env.run_executable(cmd, env, stdoutfile)
+      return test_env.run_executable(cmd, env, stdoutfile, cwd)
 
     # Set $XDG_RUNTIME_DIR if it is not set.
     _set_xdg_runtime_dir(env)
+
+    # Write options that can't be passed via CLI flags to the config file.
+    # 1) panel-position=none - disables the panel, which might interfere with
+    # the tests by blocking mouse input.
+    with open(_weston_config_file_path(), 'w') as weston_config_file:
+      weston_config_file.write('[shell]\npanel-position=none')
 
     # Weston is compiled along with the Ozone/Wayland platform, and is
     # fetched as data deps. Thus, run it from the current directory.
@@ -289,15 +313,18 @@ def _run_with_weston(cmd, env, stdoutfile):
     # to enter idle state. Otherwise, Weston stops to send frame callbacks,
     # and tests start to time out (this typically happens after 300 seconds -
     # the default time after which Weston enters the idle state).
-    # 3) --width && --height set size of a virtual display: we need to set
+    # 3) --modules=ui-controls.so,systemd-notify.so - enables support for the
+    # ui-controls Wayland protocol extension and the systemd-notify protocol.
+    # 4) --width && --height set size of a virtual display: we need to set
     # an adequate size so that tests can have more room for managing size
     # of windows.
-    # 4) --use-gl - Runs Weston using hardware acceleration instead of
-    # SwiftShader.
+    # 5) --config=... - tells Weston to use our custom config.
     weston_cmd = ['./weston', '--backend=headless-backend.so', '--idle-time=0',
-          '--width=1024', '--height=768', '--modules=test-plugin.so']
+          '--modules=ui-controls.so,systemd-notify.so', '--width=1280',
+          '--height=800', '--config=' + _weston_config_file_path()]
 
     if '--weston-use-gl' in cmd:
+      # Runs Weston using hardware acceleration instead of SwiftShader.
       weston_cmd.append('--use-gl')
       cmd.remove('--weston-use-gl')
 
@@ -306,24 +333,65 @@ def _run_with_weston(cmd, env, stdoutfile):
       env = copy.deepcopy(env)
       env['WAYLAND_DEBUG'] = '1'
 
-    weston_proc_display = None
-    for _ in range(10):
-      weston_proc = subprocess.Popen(
-         weston_cmd,
-         stderr=subprocess.STDOUT, env=env)
+    # We use the systemd-notify protocol to detect whether weston has launched
+    # successfully. We listen on a unix socket and set the NOTIFY_SOCKET
+    # environment variable to the socket's path. If we tell it to load its
+    # systemd-notify module, weston will send a 'READY=1' message to the socket
+    # once it has loaded that module.
+    # See the sd_notify(3) man page and weston's compositor/systemd-notify.c for
+    # more details.
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM
+                       | socket.SOCK_NONBLOCK) as notify_socket:
+      notify_socket.bind(_weston_notify_socket_address())
+      env['NOTIFY_SOCKET'] = _weston_notify_socket_address()
 
-      # Get the $WAYLAND_DISPLAY set by Weston and pass it to the test launcher.
-      # Please note that this env variable is local for the process. That's the
-      # reason we have to read it from Weston separately.
-      weston_proc_display = _get_display_from_weston(weston_proc.pid)
-      if weston_proc_display is not None:
-        break # Weston could launch and we found the display.
+      weston_proc_display = None
+      for _ in range(10):
+        weston_proc = subprocess.Popen(
+          weston_cmd,
+          stderr=subprocess.STDOUT, env=env)
+
+        for _ in range(25):
+          time.sleep(0.1)  # Gives weston some time to start.
+          try:
+            if notify_socket.recv(512) == b'READY=1':
+              break
+          except BlockingIOError:
+            continue
+
+        for _ in range(25):
+          # The 'READY=1' message is sent as soon as weston loads the
+          # systemd-notify module. This happens shortly before spawning its
+          # subprocesses (e.g. desktop-shell). Wait some more to ensure they
+          # have been spawned.
+          time.sleep(0.1)
+
+          # Get the $WAYLAND_DISPLAY set by Weston and pass it to the test
+          # launcher. Please note that this env variable is local for the
+          # process. That's the reason we have to read it from Weston
+          # separately.
+          weston_proc_display = _get_display_from_weston(weston_proc.pid)
+          if weston_proc_display is not None:
+            break # Weston could launch and we found the display.
+
+        # Also break from the outer loop.
+        if weston_proc_display is not None:
+          break
 
     # If we couldn't find the display after 10 tries, raise an exception.
     if weston_proc_display is None:
       raise _WestonProcessError('Failed to start Weston.')
+
+    env.pop('NOTIFY_SOCKET')
+
     env['WAYLAND_DISPLAY'] = weston_proc_display
-    return test_env.run_executable(cmd, env, stdoutfile)
+    if '--chrome-wayland-debugging' in cmd:
+      cmd.remove('--chrome-wayland-debugging')
+      env['WAYLAND_DEBUG'] = '1'
+    else:
+      env['WAYLAND_DEBUG'] = '0'
+
+    return test_env.run_executable(cmd, env, stdoutfile, cwd)
   except OSError as e:
     print('Failed to start Weston: %s\n' % str(e), file=sys.stderr)
     return 1
@@ -333,52 +401,56 @@ def _run_with_weston(cmd, env, stdoutfile):
   finally:
     kill(weston_proc, 'weston')
 
+    if os.path.exists(_weston_notify_socket_address()):
+      os.remove(_weston_notify_socket_address())
+
+    if os.path.exists(_weston_config_file_path()):
+      os.remove(_weston_config_file_path())
+
     # dbus-daemon is not a subprocess, so we can't SIGTERM+waitpid() on it.
     # To ensure it exits, use SIGKILL which should be safe since all other
     # processes that it would have been servicing have exited.
     if dbus_pid:
       os.kill(dbus_pid, signal.SIGKILL)
 
+def _weston_notify_socket_address():
+  return os.path.join(tempfile.gettempdir(), '.xvfb.py-weston-notify.sock')
+
+def _weston_config_file_path():
+  return os.path.join(tempfile.gettempdir(), '.xvfb.py-weston.ini')
+
 def _get_display_from_weston(weston_proc_pid):
   """Retrieves $WAYLAND_DISPLAY set by Weston.
 
-  Searches for the child "weston-desktop-shell" process, takes its
-  environmental variables, and returns $WAYLAND_DISPLAY variable set
-  by that process. If the variable is not set, tries up to 10 times
-  and then gives up.
+  Returns the $WAYLAND_DISPLAY variable from one of weston's subprocesses.
+
+  Weston updates this variable early in its startup in the main process, but we
+  can only read the environment variables as they were when the process was
+  created. Therefore we must use one of weston's subprocesses, which are all
+  spawned with the new value for $WAYLAND_DISPLAY. Any of them will do, as they
+  all have the same value set.
 
   Args:
     weston_proc_pid: The process of id of the main Weston process.
 
   Returns:
     the display set by Wayland, which clients can use to connect to.
-
-  TODO(https://crbug.com/1060469): This is potentially error prone
-  function. See the bug for further details.
   """
 
-  # Try 100 times as it is not known when Weston spawn child desktop shell
-  # process. The most seen so far is ~50 checks/~2.5 seconds, but startup
-  # is usually almost instantaneous.
-  for _ in range(100):
-    # gives weston time to start or fail.
-    time.sleep(.05)
-    # Take the parent process.
-    parent = psutil.Process(weston_proc_pid)
-    if parent is None:
-      break # The process is not found. Give up.
+  # Take the parent process.
+  parent = psutil.Process(weston_proc_pid)
+  if parent is None:
+    return None # The process is not found. Give up.
 
-    # Traverse through all the children processes and find the
-    # "weston-desktop-shell" process that sets local to process env variables
-    # including the $WAYLAND_DISPLAY.
-    children = parent.children(recursive=True)
-    for process in children:
-      if process.name() == "weston-desktop-shell":
-        weston_proc_display = process.environ().get('WAYLAND_DISPLAY')
-        # If display is set, Weston could start successfully and we can use
-        # that display for Wayland connection in Chromium.
-        if weston_proc_display is not None:
-          return weston_proc_display
+  # Traverse through all the children processes and find one that has
+  # $WAYLAND_DISPLAY set.
+  children = parent.children(recursive=True)
+  for process in children:
+    weston_proc_display = process.environ().get('WAYLAND_DISPLAY')
+    # If display is set, Weston could start successfully and we can use
+    # that display for Wayland connection in Chromium.
+    if weston_proc_display is not None:
+      return weston_proc_display
   return None
 
 

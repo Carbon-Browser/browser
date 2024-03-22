@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,12 @@
 #include <memory>
 
 #include "ash/public/cpp/resize_shadow_type.h"
+#include "ash/style/ash_color_id.h"
+#include "base/memory/raw_ptr.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/hit_test.h"
+#include "ui/color/color_provider_source_observer.h"
 
 namespace aura {
 class Window;
@@ -26,7 +30,7 @@ namespace ash {
 // A class to render the resize edge effect when the user moves their mouse
 // over a sizing edge. This is just a visual effect; the actual resize is
 // handled by the EventFilter.
-class ResizeShadow {
+class ResizeShadow : public ui::ColorProviderSourceObserver {
  public:
   // Resize shadow parameters. Default params values are unresizable window
   // shadow.
@@ -38,9 +42,9 @@ class ResizeShadow {
     // The corner radius of the window.
     int window_corner_radius = 2;
     // The opacity of the resize shadow.
-    float opacity = 0.5f;
+    float opacity = 0.6f;
     // The color of the resize shadow.
-    SkColor color = SK_ColorBLACK;
+    absl::variant<SkColor, ui::ColorId> color = kColorAshResizeShadowColor;
     // Controls whether the resize shadow shall respond to hit testing or not.
     bool hit_test_enabled = true;
     int hide_duration_ms = 100;
@@ -51,14 +55,23 @@ class ResizeShadow {
                ResizeShadowType type);
   ResizeShadow(const ResizeShadow&) = delete;
   ResizeShadow& operator=(const ResizeShadow&) = delete;
-  ~ResizeShadow();
+  ~ResizeShadow() override;
 
+  bool visible() const { return visible_; }
   int GetLastHitTestForTest() const { return last_hit_test_; }
   const ui::Layer* GetLayerForTest() const { return layer_.get(); }
   ResizeShadowType GetResizeShadowTypeForTest() const { return type_; }
 
  private:
   friend class ResizeShadowController;
+
+  // ui::ColorProviderSourceObserver:
+  void OnColorProviderChanged() override;
+
+  // Called when the observed window is parented to a root window.
+  void OnWindowParentToRootWindow();
+
+  void UpdateShadowLayer();
 
   // Shows resize effects for one or more edges based on a |hit_test| code, such
   // as HTRIGHT or HTBOTTOMRIGHT.
@@ -79,7 +92,7 @@ class ResizeShadow {
 
   // The window associated with this shadow. Guaranteed to be alive for the
   // lifetime of `this`.
-  aura::Window* window_;
+  raw_ptr<aura::Window, ExperimentalAsh> window_;
 
   // The layer to which the shadow is drawn. The layer is stacked beneath the
   // layer of |window_|.

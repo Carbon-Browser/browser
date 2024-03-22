@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,13 @@
 #include <windows.h>
 #include <shellapi.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/path_service.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "base/win/windows_version.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/profiles/profile.h"
@@ -32,7 +30,7 @@ namespace {
 // Shows a Windows certificate management dialog on the dialog thread.
 class ManageCertificatesDialog : public ui::BaseShellDialogImpl {
  public:
-  ManageCertificatesDialog() {}
+  ManageCertificatesDialog() = default;
 
   ManageCertificatesDialog(const ManageCertificatesDialog&) = delete;
   ManageCertificatesDialog& operator=(const ManageCertificatesDialog&) = delete;
@@ -41,8 +39,8 @@ class ManageCertificatesDialog : public ui::BaseShellDialogImpl {
   // must ensure the ManageCertificatesDialog remains valid until then.
   void Show(HWND parent, base::OnceClosure callback) {
     if (IsRunningDialogForOwner(parent)) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                    std::move(callback));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(callback));
       return;
     }
 
@@ -103,18 +101,10 @@ void OpenConnectionDialogCallback() {
                SW_SHOWNORMAL);
 }
 
-void ShowNetworkProxySettings(content::WebContents* web_contents) {
-  if (base::win::GetVersion() >= base::win::Version::WIN10) {
-    // See
-    // https://docs.microsoft.com/en-us/windows/uwp/launch-resume/launch-settings-app#network--internet
-    platform_util::OpenExternal(
-        Profile::FromBrowserContext(web_contents->GetBrowserContext()),
-        GURL("ms-settings:network-proxy"));
-  } else {
-    base::ThreadPool::PostTask(
-        FROM_HERE, {base::TaskPriority::USER_VISIBLE, base::MayBlock()},
-        base::BindOnce(&OpenConnectionDialogCallback));
-  }
+void ShowNetworkProxySettings(content::WebContents* /*web_contents*/) {
+  // See
+  // https://docs.microsoft.com/en-us/windows/uwp/launch-resume/launch-settings-app#network--internet
+  platform_util::OpenExternal(GURL("ms-settings:network-proxy"));
 }
 
 void ShowManageSSLCertificates(content::WebContents* web_contents) {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_SYSTEM_ACCESSIBILITY_SWITCH_ACCESS_SWITCH_ACCESS_BACK_BUTTON_BUBBLE_CONTROLLER_H_
 
 #include "ash/system/tray/tray_bubble_view.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -36,6 +37,7 @@ class ASH_EXPORT SwitchAccessBackButtonBubbleController
 
   // TrayBubbleView::Delegate:
   void BubbleViewDestroyed() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
  private:
   friend class SwitchAccessBackButtonBubbleControllerTest;
@@ -46,10 +48,11 @@ class ASH_EXPORT SwitchAccessBackButtonBubbleController
   bool for_menu_ = false;
 
   // Owned by views hierarchy.
-  SwitchAccessBackButtonView* back_button_view_ = nullptr;
-  TrayBubbleView* bubble_view_ = nullptr;
+  raw_ptr<SwitchAccessBackButtonView, ExperimentalAsh> back_button_view_ =
+      nullptr;
+  raw_ptr<TrayBubbleView, ExperimentalAsh> bubble_view_ = nullptr;
 
-  views::Widget* widget_ = nullptr;
+  raw_ptr<views::Widget, ExperimentalAsh> widget_ = nullptr;
 };
 
 }  // namespace ash

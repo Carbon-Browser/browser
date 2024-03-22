@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,18 @@
 #include "ash/shell.h"
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/window_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/exo/buffer.h"
+#include "components/exo/shell_surface.h"
+#include "components/exo/shell_surface_util.h"
 #include "components/exo/test/exo_test_base.h"
+#include "components/exo/test/shell_surface_builder.h"
 #include "components/exo/wayland/scoped_wl.h"
+#include "components/exo/wayland/wayland_display_observer.h"
+#include "components/exo/wayland/wayland_display_output.h"
 #include "components/exo/wayland/wayland_display_util.h"
+#include "components/exo/wayland/wl_output.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/window_occlusion_tracker.h"
@@ -28,7 +35,12 @@
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/compositor/test/layer_animator_test_controller.h"
+#include "ui/display/screen.h"
+#include "ui/events/base_event_utils.h"
+#include "ui/events/event.h"
+#include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/size_f.h"
+#include "ui/views/corewm/tooltip_aura.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/window_util.h"
 #include "ui/wm/public/activation_change_observer.h"
@@ -40,6 +52,7 @@ namespace wayland {
 namespace {
 
 constexpr auto kTransitionDuration = base::Seconds(3);
+constexpr int kTooltipExpectedHeight = 28;
 
 class TestAuraSurface : public AuraSurface {
  public:
@@ -56,6 +69,17 @@ class TestAuraSurface : public AuraSurface {
     return last_sent_occlusion_state_;
   }
   int num_occlusion_updates() const { return num_occlusion_updates_; }
+  bool send_occlusion_state_called() const {
+    return send_occlusion_state_called_;
+  }
+
+  MOCK_METHOD(void,
+              OnTooltipShown,
+              (Surface * surface,
+               const std::u16string& text,
+               const gfx::Rect& bounds),
+              (override));
+  MOCK_METHOD(void, OnTooltipHidden, (Surface * surface), (override));
 
  protected:
   void SendOcclusionFraction(float occlusion_fraction) override {
@@ -66,6 +90,7 @@ class TestAuraSurface : public AuraSurface {
   void SendOcclusionState(
       const aura::Window::OcclusionState occlusion_state) override {
     last_sent_occlusion_state_ = occlusion_state;
+    send_occlusion_state_called_ = true;
   }
 
  private:
@@ -73,6 +98,7 @@ class TestAuraSurface : public AuraSurface {
   aura::Window::OcclusionState last_sent_occlusion_state_ =
       aura::Window::OcclusionState::UNKNOWN;
   int num_occlusion_updates_ = 0;
+  bool send_occlusion_state_called_ = false;
 };
 
 class MockSurfaceDelegate : public SurfaceDelegate {
@@ -101,13 +127,17 @@ class MockSurfaceDelegate : public SurfaceDelegate {
   MOCK_METHOD(void, ShowSnapPreviewToPrimary, (), (override));
   MOCK_METHOD(void, ShowSnapPreviewToSecondary, (), (override));
   MOCK_METHOD(void, HideSnapPreview, (), (override));
-  MOCK_METHOD(void, SetSnappedToSecondary, (), (override));
-  MOCK_METHOD(void, SetSnappedToPrimary, (), (override));
+  MOCK_METHOD(void, SetSnapPrimary, (float snap_ratio), (override));
+  MOCK_METHOD(void, SetSnapSecondary, (float snap_ratio), (override));
   MOCK_METHOD(void, UnsetSnap, (), (override));
   MOCK_METHOD(void, SetCanGoBack, (), (override));
   MOCK_METHOD(void, UnsetCanGoBack, (), (override));
   MOCK_METHOD(void, SetPip, (), (override));
   MOCK_METHOD(void, UnsetPip, (), (override));
+  MOCK_METHOD(void,
+              SetFloatToLocation,
+              (chromeos::FloatStartLocation),
+              (override));
   MOCK_METHOD(void,
               SetAspectRatio,
               (const gfx::SizeF& aspect_ratio),
@@ -121,6 +151,7 @@ class MockSurfaceDelegate : public SurfaceDelegate {
   MOCK_METHOD(void, Pin, (bool trusted), (override));
   MOCK_METHOD(void, Unpin, (), (override));
   MOCK_METHOD(void, SetSystemModal, (bool modal), (override));
+  MOCK_METHOD(void, SetTopInset, (int height), (override));
   MOCK_METHOD(SecurityDelegate*, GetSecurityDelegate, (), (override));
 };
 
@@ -206,7 +237,8 @@ class ZAuraSurfaceTest : public test::ExoTestBase,
 };
 
 TEST_F(ZAuraSurfaceTest, OcclusionTrackingStartsAfterCommit) {
-  surface().OnWindowOcclusionChanged();
+  surface().OnWindowOcclusionChanged(aura::Window::OcclusionState::UNKNOWN,
+                                     aura::Window::OcclusionState::UNKNOWN);
 
   EXPECT_EQ(-1.0f, aura_surface().last_sent_occlusion_fraction());
   EXPECT_EQ(aura::Window::OcclusionState::UNKNOWN,
@@ -351,7 +383,8 @@ TEST_F(ZAuraSurfaceTest, OcclusionIncludesOffScreenArea) {
   surface().Attach(buffer.get());
   surface().Commit();
 
-  surface().OnWindowOcclusionChanged();
+  surface().OnWindowOcclusionChanged(aura::Window::OcclusionState::UNKNOWN,
+                                     aura::Window::OcclusionState::VISIBLE);
 
   EXPECT_EQ(0.75f, aura_surface().last_sent_occlusion_fraction());
   EXPECT_EQ(aura::Window::OcclusionState::VISIBLE,
@@ -362,20 +395,11 @@ TEST_F(ZAuraSurfaceTest, ZeroSizeWindowSendsZeroOcclusionFraction) {
   // Zero sized window should not be occluded.
   surface().window()->SetBounds(gfx::Rect(0, 0, 0, 0));
   surface().Commit();
-  surface().OnWindowOcclusionChanged();
+  surface().OnWindowOcclusionChanged(aura::Window::OcclusionState::UNKNOWN,
+                                     aura::Window::OcclusionState::VISIBLE);
   EXPECT_EQ(0.0f, aura_surface().last_sent_occlusion_fraction());
   EXPECT_EQ(aura::Window::OcclusionState::VISIBLE,
             aura_surface().last_sent_occlusion_state());
-}
-
-TEST_F(ZAuraSurfaceTest, CanSetFullscreenModeToPlain) {
-  MockSurfaceDelegate delegate;
-  wl_resource resource;
-  resource.data = &aura_surface();
-  surface().SetSurfaceDelegate(&delegate);
-  EXPECT_CALL(delegate, SetUseImmersiveForFullscreen(false));
-
-  aura_surface().SetFullscreenMode(ZAURA_SURFACE_FULLSCREEN_MODE_PLAIN);
 }
 
 TEST_F(ZAuraSurfaceTest, CanPin) {
@@ -398,6 +422,16 @@ TEST_F(ZAuraSurfaceTest, CanUnpin) {
   aura_surface().Unpin();
 }
 
+TEST_F(ZAuraSurfaceTest, CanSetFullscreenModeToPlain) {
+  MockSurfaceDelegate delegate;
+  wl_resource resource;
+  resource.data = &aura_surface();
+  surface().SetSurfaceDelegate(&delegate);
+  EXPECT_CALL(delegate, SetUseImmersiveForFullscreen(false));
+
+  aura_surface().SetFullscreenMode(ZAURA_SURFACE_FULLSCREEN_MODE_PLAIN);
+}
+
 TEST_F(ZAuraSurfaceTest, CanSetFullscreenModeToImmersive) {
   MockSurfaceDelegate delegate;
   surface().SetSurfaceDelegate(&delegate);
@@ -406,12 +440,234 @@ TEST_F(ZAuraSurfaceTest, CanSetFullscreenModeToImmersive) {
   aura_surface().SetFullscreenMode(ZAURA_SURFACE_FULLSCREEN_MODE_IMMERSIVE);
 }
 
+TEST_F(ZAuraSurfaceTest, CanSetAccessibilityId) {
+  aura_surface().SetAccessibilityId(123);
+
+  EXPECT_EQ(123, exo::GetShellClientAccessibilityId(surface().window()));
+}
+
+TEST_F(ZAuraSurfaceTest, CanUnsetAccessibilityId) {
+  aura_surface().SetAccessibilityId(-1);
+
+  EXPECT_FALSE(
+      exo::GetShellClientAccessibilityId(surface().window()).has_value());
+}
+
+using ZAuraSurfaceOcclusionTest = test::ExoTestBase;
+
+TEST_F(ZAuraSurfaceOcclusionTest, SkipFirstHidden) {
+  Surface surface;
+  TestAuraSurface aura_surface(&surface);
+
+  surface.SetOcclusionTracking(true);
+  surface.Commit();
+  EXPECT_TRUE(surface.IsTrackingOcclusion());
+
+  // Skip sending occlusion state change if its from UNKNOWN to HIDDEN because
+  // the first state is calculated without a buffer attached to the surface.
+  surface.OnWindowOcclusionChanged(aura::Window::OcclusionState::UNKNOWN,
+                                   aura::Window::OcclusionState::HIDDEN);
+  EXPECT_FALSE(aura_surface.send_occlusion_state_called());
+
+  surface.OnWindowOcclusionChanged(aura::Window::OcclusionState::UNKNOWN,
+                                   aura::Window::OcclusionState::VISIBLE);
+  EXPECT_TRUE(aura_surface.send_occlusion_state_called());
+}
+
+// Test without setting surfaces on SetUp().
+using ZAuraSurfaceCustomTest = test::ExoTestBase;
+
+class MockSurfaceObserver : public SurfaceObserver {
+ public:
+  MockSurfaceObserver() = default;
+  MockSurfaceObserver(const MockSurfaceObserver&) = delete;
+  MockSurfaceObserver& operator=(const MockSurfaceObserver&) = delete;
+  ~MockSurfaceObserver() override = default;
+
+  MOCK_METHOD(void, OnSurfaceDestroying, (Surface * surface), (override));
+  MOCK_METHOD(void,
+              OnTooltipShown,
+              (Surface * surface,
+               const std::u16string& text,
+               const gfx::Rect& bounds),
+              (override));
+  MOCK_METHOD(void, OnTooltipHidden, (Surface * surface), (override));
+};
+
+TEST_F(ZAuraSurfaceCustomTest, ShowTooltipFromCursor) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({10, 10}).BuildShellSurface();
+
+  Surface* surface = shell_surface->root_surface();
+  auto aura_surface = std::make_unique<TestAuraSurface>(surface);
+
+  shell_surface->GetWidget()->GetNativeWindow()->SetBounds(
+      gfx::Rect(0, 0, 10, 10));
+  shell_surface->GetWidget()->GetNativeWindow()->Show();
+  surface->window()->SetBounds(gfx::Rect(5, 5, 10, 10));
+  surface->window()->Show();
+  surface->window()->SetCapture();
+
+  MockSurfaceObserver observer;
+  surface->AddSurfaceObserver(&observer);
+
+  // Move mouse over the window to show tooltip.
+  // This is required since Ash needs to know which window is targeted for a
+  // given tooltip.
+  gfx::Point mouse_position = gfx::Point(6, 6);
+  auto* generator = GetEventGenerator();
+  generator->MoveMouseTo(mouse_position);
+
+  const char* text = "my tooltip";
+  gfx::Rect expected_tooltip_position =
+      gfx::Rect(mouse_position, gfx::Size(77, kTooltipExpectedHeight));
+  views::corewm::TooltipAura::AdjustToCursor(&expected_tooltip_position);
+  aura::Window::ConvertRectToTarget(surface->window(),
+                                    surface->window()->GetToplevelWindow(),
+                                    &expected_tooltip_position);
+
+  EXPECT_CALL(observer, OnTooltipShown(surface, base::UTF8ToUTF16(text),
+                                       expected_tooltip_position));
+  aura_surface->ShowTooltip(text, gfx::Point(),
+                            ZAURA_SURFACE_TOOLTIP_TRIGGER_CURSOR,
+                            base::TimeDelta(), base::TimeDelta());
+
+  surface->RemoveSurfaceObserver(&observer);
+}
+
+TEST_F(ZAuraSurfaceCustomTest, ShowTooltipFromKeyboard) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({10, 10}).BuildShellSurface();
+
+  Surface* surface = shell_surface->root_surface();
+  auto aura_surface = std::make_unique<TestAuraSurface>(surface);
+
+  shell_surface->GetWidget()->GetNativeWindow()->SetBounds(
+      gfx::Rect(0, 0, 10, 10));
+  shell_surface->GetWidget()->GetNativeWindow()->Show();
+  surface->window()->SetBounds(gfx::Rect(0, 0, 10, 10));
+  surface->window()->Show();
+
+  MockSurfaceObserver observer;
+  surface->AddSurfaceObserver(&observer);
+
+  const char* text = "my tooltip";
+  gfx::Point anchor_point = surface->window()->bounds().bottom_center();
+  gfx::Size expected_tooltip_size = gfx::Size(77, kTooltipExpectedHeight);
+  // Calculate expected tooltip position. For keyboard tooltip, it should be
+  // shown right below and in the center of tooltip target window while it must
+  // fit inside the display bounds.
+  gfx::Rect expected_tooltip_position =
+      gfx::Rect(anchor_point, expected_tooltip_size);
+  expected_tooltip_position.Offset(-expected_tooltip_size.width() / 2, 0);
+  gfx::Rect display_bounds(display::Screen::GetScreen()
+                               ->GetDisplayNearestPoint(anchor_point)
+                               .bounds());
+  expected_tooltip_position.AdjustToFit(display_bounds);
+  aura::Window::ConvertRectToTarget(surface->window(),
+                                    surface->window()->GetToplevelWindow(),
+                                    &expected_tooltip_position);
+
+  EXPECT_CALL(observer, OnTooltipShown(surface, base::UTF8ToUTF16(text),
+                                       expected_tooltip_position));
+  aura_surface->ShowTooltip(text, anchor_point,
+                            ZAURA_SURFACE_TOOLTIP_TRIGGER_KEYBOARD,
+                            base::TimeDelta(), base::TimeDelta());
+
+  surface->RemoveSurfaceObserver(&observer);
+}
+
+TEST_F(ZAuraSurfaceCustomTest, ShowTooltipOnMenuFromCursor) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({10, 10}).SetAsMenu().BuildShellSurface();
+
+  Surface* surface = shell_surface->root_surface();
+  auto aura_surface = std::make_unique<TestAuraSurface>(surface);
+
+  shell_surface->GetWidget()->GetNativeWindow()->SetBounds(
+      gfx::Rect(0, 0, 10, 10));
+  shell_surface->GetWidget()->GetNativeWindow()->Show();
+  surface->window()->SetBounds(gfx::Rect(5, 5, 10, 10));
+  surface->window()->Show();
+  surface->window()->SetCapture();
+
+  MockSurfaceObserver observer;
+  surface->AddSurfaceObserver(&observer);
+
+  // Move mouse over the window to show tooltip.
+  // This is required since Ash needs to know which window is targeted for a
+  // given tooltip.
+  gfx::Point mouse_position = gfx::Point(6, 6);
+  auto* generator = GetEventGenerator();
+  generator->MoveMouseTo(mouse_position);
+
+  const char* text = "my tooltip";
+  // Size of the tooltip depends on the text to show.
+  gfx::Rect expected_tooltip_position =
+      gfx::Rect(mouse_position, gfx::Size(77, kTooltipExpectedHeight));
+  views::corewm::TooltipAura::AdjustToCursor(&expected_tooltip_position);
+  aura::Window::ConvertRectToTarget(surface->window(),
+                                    surface->window()->GetToplevelWindow(),
+                                    &expected_tooltip_position);
+
+  EXPECT_CALL(observer, OnTooltipShown(surface, base::UTF8ToUTF16(text),
+                                       expected_tooltip_position));
+  aura_surface->ShowTooltip(text, gfx::Point(),
+                            ZAURA_SURFACE_TOOLTIP_TRIGGER_CURSOR,
+                            base::TimeDelta(), base::TimeDelta());
+
+  surface->RemoveSurfaceObserver(&observer);
+}
+
+TEST_F(ZAuraSurfaceCustomTest, ShowTooltipOnMenuFromKeyboard) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({10, 10}).SetAsMenu().BuildShellSurface();
+
+  Surface* surface = shell_surface->root_surface();
+  auto aura_surface = std::make_unique<TestAuraSurface>(surface);
+
+  shell_surface->GetWidget()->GetNativeWindow()->SetBounds(
+      gfx::Rect(0, 0, 10, 10));
+  shell_surface->GetWidget()->GetNativeWindow()->Show();
+  surface->window()->SetBounds(gfx::Rect(0, 0, 10, 10));
+  surface->window()->Show();
+
+  MockSurfaceObserver observer;
+  surface->AddSurfaceObserver(&observer);
+
+  const char* text = "my tooltip";
+  gfx::Point anchor_point = surface->window()->bounds().bottom_center();
+  gfx::Size expected_tooltip_size = gfx::Size(77, kTooltipExpectedHeight);
+  // Calculate expected tooltip position. For keyboard tooltip, it should be
+  // shown right below and in the center of tooltip target window while it must
+  // fit inside the display bounds.
+  gfx::Rect expected_tooltip_position =
+      gfx::Rect(anchor_point, expected_tooltip_size);
+  expected_tooltip_position.Offset(-expected_tooltip_size.width() / 2, 0);
+  gfx::Rect display_bounds(display::Screen::GetScreen()
+                               ->GetDisplayNearestPoint(anchor_point)
+                               .bounds());
+  expected_tooltip_position.AdjustToFit(display_bounds);
+  aura::Window::ConvertRectToTarget(surface->window(),
+                                    surface->window()->GetToplevelWindow(),
+                                    &expected_tooltip_position);
+
+  EXPECT_CALL(observer, OnTooltipShown(surface, base::UTF8ToUTF16(text),
+                                       expected_tooltip_position));
+  aura_surface->ShowTooltip(text, anchor_point,
+                            ZAURA_SURFACE_TOOLTIP_TRIGGER_KEYBOARD,
+                            base::TimeDelta(), base::TimeDelta());
+
+  surface->RemoveSurfaceObserver(&observer);
+}
+
 class MockAuraOutput : public AuraOutput {
  public:
   using AuraOutput::AuraOutput;
 
   MOCK_METHOD(void, SendInsets, (const gfx::Insets&), (override));
   MOCK_METHOD(void, SendLogicalTransform, (int32_t), (override));
+  MOCK_METHOD(void, SendActiveDisplay, (), (override));
 };
 
 class ZAuraOutputTest : public test::ExoTestBase {
@@ -429,19 +685,102 @@ class ZAuraOutputTest : public test::ExoTestBase {
     ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds), 0);
     wayland_display_.reset(wl_display_create());
     client_ = wl_client_create(wayland_display_.get(), fds[0]);
+
+    UpdateDisplayOutput();
   }
 
-  std::unique_ptr<MockAuraOutput> CreateAuraOutput(int version) {
-    return std::make_unique<::testing::NiceMock<MockAuraOutput>>(
-        wl_resource_create(client_, &zaura_output_interface, version, 0));
+  void TearDown() override {
+    output_holder_list_.clear();
+    test::ExoTestBase::TearDown();
   }
 
+  void ResetDisplayOutput() {
+    for (auto& holder : output_holder_list_) {
+      holder->aura_output.reset();
+      holder->output.reset();
+    }
+  }
+
+  void UpdateDisplayOutput() {
+    auto display_list = display::Screen::GetScreen()->GetAllDisplays();
+    auto iter = output_holder_list_.begin();
+    while (iter != output_holder_list_.end()) {
+      auto* out_ptr = (*iter)->output.get();
+      bool erased = base::EraseIf(display_list,
+                                  [out_ptr](const display::Display& display) {
+                                    return display.id() == out_ptr->id();
+                                  });
+      if (erased)
+        ++iter;
+      else
+        iter = output_holder_list_.erase(iter);
+    }
+
+    for (auto& display : display_list) {
+      auto output_holder = std::make_unique<OutputHolder>();
+      output_holder->client = client_;
+      output_holder->output =
+          std::make_unique<WaylandDisplayOutput>(display.id());
+
+      wl_resource* output_resource = wl_resource_create(
+          client_, &wl_output_interface, kWlOutputVersion, 0);
+      output_holder->handler = std::make_unique<WaylandDisplayHandler>(
+          output_holder->output.get(), output_resource);
+      output_holder->handler->Initialize();
+      output_holder->CreateAuraOutput();
+
+      output_holder_list_.push_back(std::move(output_holder));
+    }
+  }
+
+  MockAuraOutput* GetPrimaryAuraOutput() {
+    return GetAuraOutput(
+        display::Screen::GetScreen()->GetPrimaryDisplay().id());
+  }
+
+  MockAuraOutput* GetAuraOutput(int64_t display_id) {
+    return GetOutputHolder(display_id)->aura_output.get();
+  }
+
+  WaylandDisplayHandler* GetPrimaryDisplayHandler() {
+    return GetOutputHolder(
+               display::Screen::GetScreen()->GetPrimaryDisplay().id())
+        ->handler.get();
+  }
+
+  struct OutputHolder {
+    std::unique_ptr<MockAuraOutput> aura_output;
+    std::unique_ptr<WaylandDisplayOutput> output;
+    std::unique_ptr<WaylandDisplayHandler> handler;
+
+    raw_ptr<wl_client, ExperimentalAsh> client;
+
+    void CreateAuraOutput() {
+      DCHECK(!aura_output);
+      aura_output = std::make_unique<::testing::NiceMock<MockAuraOutput>>(
+          wl_resource_create(client, &zaura_output_interface,
+                             kZAuraShellVersion, 0),
+          handler.get());
+    }
+  };
+
+  OutputHolder* GetOutputHolder(int64_t display_id) {
+    auto iter = base::ranges::find_if(
+        output_holder_list_,
+        [display_id](const std::unique_ptr<OutputHolder>& holder) {
+          return holder->output->id() == display_id;
+        });
+    return iter == output_holder_list_.end() ? nullptr : iter->get();
+  }
+
+ private:
+  std::vector<std::unique_ptr<OutputHolder>> output_holder_list_;
   std::unique_ptr<wl_display, WlDisplayDeleter> wayland_display_;
-  wl_client* client_ = nullptr;
+  raw_ptr<wl_client, ExperimentalAsh> client_ = nullptr;
 };
 
 TEST_F(ZAuraOutputTest, SendInsets) {
-  auto mock_aura_output = CreateAuraOutput(ZAURA_OUTPUT_INSETS_SINCE_VERSION);
+  auto* mock_aura_output = GetPrimaryAuraOutput();
 
   UpdateDisplay("800x600");
   display::Display display =
@@ -459,8 +798,7 @@ TEST_F(ZAuraOutputTest, SendInsets) {
 }
 
 TEST_F(ZAuraOutputTest, SendLogicalTransform) {
-  auto mock_aura_output =
-      CreateAuraOutput(ZAURA_OUTPUT_LOGICAL_TRANSFORM_SINCE_VERSION);
+  auto* mock_aura_output = GetPrimaryAuraOutput();
 
   UpdateDisplay("800x600");
   display::Display display =
@@ -500,6 +838,68 @@ TEST_F(ZAuraOutputTest, SendLogicalTransform) {
       .Times(1);
   mock_aura_output->SendDisplayMetrics(
       display, display::DisplayObserver::DISPLAY_METRIC_ROTATION);
+}
+
+// Make sure that data associated with wl/aura outputs are destroyed
+// properly regardless of which one is destroyed first.
+TEST_F(ZAuraOutputTest, DestroyAuraOutput) {
+  auto* output_holder =
+      GetOutputHolder(display::Screen::GetScreen()->GetPrimaryDisplay().id());
+
+  EXPECT_EQ(1u, GetPrimaryDisplayHandler()->CountObserversForTesting());
+  output_holder->aura_output.reset();
+  EXPECT_EQ(0u, GetPrimaryDisplayHandler()->CountObserversForTesting());
+  output_holder->CreateAuraOutput();
+
+  EXPECT_EQ(1u, GetPrimaryDisplayHandler()->CountObserversForTesting());
+  EXPECT_TRUE(output_holder->aura_output->HasDisplayHandlerForTesting());
+  output_holder->handler.reset();
+  EXPECT_FALSE(output_holder->aura_output->HasDisplayHandlerForTesting());
+}
+
+// Make sure that data associated with wl/aura outputs are destroyed
+// properly regardless of which one is destroyed first.
+TEST_F(ZAuraOutputTest, ActiveDisplay) {
+  UpdateDisplay("800x600, 800x600");
+  UpdateDisplayOutput();
+  auto* screen = display::Screen::GetScreen();
+  int64_t primary_id = screen->GetAllDisplays()[0].id();
+  int64_t secondary_id = screen->GetAllDisplays()[1].id();
+
+  auto* primary_output_holder = GetOutputHolder(primary_id);
+  auto* secondary_output_holder = GetOutputHolder(secondary_id);
+
+  auto shell_surface =
+      test::ShellSurfaceBuilder({100, 100}).BuildShellSurface();
+
+  auto test_widget = CreateTestWidget();
+  test_widget->SetBounds({800, 0, 100, 100});
+
+  ASSERT_EQ(screen->GetDisplayNearestWindow(shell_surface->host_window()).id(),
+            primary_id);
+  ASSERT_EQ(
+      screen->GetDisplayNearestWindow(test_widget->GetNativeWindow()).id(),
+      secondary_id);
+
+  EXPECT_CALL(*(primary_output_holder->aura_output), SendActiveDisplay())
+      .Times(1);
+  EXPECT_CALL(*(secondary_output_holder->aura_output), SendActiveDisplay())
+      .Times(0);
+  shell_surface->GetWidget()->Activate();
+  testing::Mock::VerifyAndClearExpectations(
+      primary_output_holder->aura_output.get());
+  testing::Mock::VerifyAndClearExpectations(
+      secondary_output_holder->aura_output.get());
+
+  EXPECT_CALL(*(primary_output_holder->aura_output), SendActiveDisplay())
+      .Times(0);
+  EXPECT_CALL(*(secondary_output_holder->aura_output), SendActiveDisplay())
+      .Times(1);
+  test_widget->Activate();
+  testing::Mock::VerifyAndClearExpectations(
+      primary_output_holder->aura_output.get());
+  testing::Mock::VerifyAndClearExpectations(
+      secondary_output_holder->aura_output.get());
 }
 
 }  // namespace wayland

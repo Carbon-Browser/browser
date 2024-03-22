@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,8 @@ enum VideoCodecProfile {
   // Keep the values in this enum unique, as they imply format (h.264 vs. VP8,
   // for example), and keep the values for a particular format grouped
   // together for clarity.
-  // Next version: 2
-  // Next value: 37
+  // Next version: 3
+  // Next value: 52
   [Default] kVideoCodecProfileUnknown = -1,
   kH264ProfileMin = 0,
   kH264ProfileBaseline = kH264ProfileMin,
@@ -91,6 +91,23 @@ enum VideoCodecProfile {
   [MinVersion=1] kHEVCProfileScalableRext = 35,
   [MinVersion=1] kHEVCProfileHighThroughputScreenExtended = 36,
   [MinVersion=1] kHEVCProfileExtMax = kHEVCProfileHighThroughputScreenExtended,
+  [MinVersion=2] kVVCProfileMin = 37,
+  [MinVersion=2] kVVCProfileMain10 = kVVCProfileMin,
+  [MinVersion=2] kVVCProfileMain12 = 38,
+  [MinVersion=2] kVVCProfileMain12Intra = 39,
+  [MinVersion=2] kVVCProfileMultilayerMain10 = 40,
+  [MinVersion=2] kVVCProfileMain10444 = 41,
+  [MinVersion=2] kVVCProfileMain12444 = 42,
+  [MinVersion=2] kVVCProfileMain16444 = 43,
+  [MinVersion=2] kVVCProfileMain12444Intra = 44,
+  [MinVersion=2] kVVCProfileMain16444Intra = 45,
+  [MinVersion=2] kVVCProfileMultilayerMain10444 = 46,
+  [MinVersion=2] kVVCProfileMain10Still = 47,
+  [MinVersion=2] kVVCProfileMain12Still = 48,
+  [MinVersion=2] kVVCProfileMain10444Still = 49,
+  [MinVersion=2] kVVCProfileMain12444Still = 50,
+  [MinVersion=2] kVVCProfileMain16444Still = 51,
+  [MinVersion=2] kVVCProileMax = kVVCProfileMain16444Still,
 };
 
 // Based on |media.mojom.SubsampleEntry|.
@@ -185,7 +202,7 @@ struct SupportedVideoDecoderConfig {
 
 [Stable, Extensible]
 enum StatusCode {
-  kOk,
+  kOk_DEPRECATED,
   kAborted,
   [Default] kError,
 };
@@ -197,6 +214,8 @@ struct StatusData {
   string group@0;
   StatusCode code@1;
   string message@2;
+  // This should ideally be a `mojo_base.mojom.ListValue`, but changing the wire
+  // format here is too twisted.
   array<mojo_base.mojom.Value> frames@3;
   StatusData? cause@4;
   mojo_base.mojom.Value data@5;
@@ -209,9 +228,19 @@ struct Status {
   StatusData? internal@0;
 };
 
+// Based on |media.mojom.DecoderBufferSideData|.
+// Next min field ID: 3
+[Stable]
+struct DecoderBufferSideData {
+  array<uint32> spatial_layers@0;
+  array<uint8> alpha_data@1;
+  uint64 secure_handle@2;
+};
+
 // Based on |media.mojom.DecoderBuffer| but does not depend on
 // |media.mojom.DecryptConfig|.
-// Next min field ID: 9
+// Next min field ID: 10
+// Next version: 2
 [Stable]
 struct DecoderBuffer {
   mojo_base.mojom.TimeDelta timestamp@0;
@@ -223,12 +252,15 @@ struct DecoderBuffer {
 
   bool is_key_frame@4;
 
-  array<uint8> side_data@5;
+  // TODO(b/269383891): Deprecate |raw_side_data| in M120.
+  array<uint8> raw_side_data@5;
 
   DecryptConfig? decrypt_config@6;
 
   mojo_base.mojom.TimeDelta front_discard@7;
   mojo_base.mojom.TimeDelta back_discard@8;
+
+  [MinVersion=1] DecoderBufferSideData? side_data@9;
 };
 
 // Maps to |media.mojom.VideoDecoderType|.
@@ -400,11 +432,9 @@ enum VideoPixelFormat {
   [MinVersion=1] kPixelFormatYUV420AP10 = 36,
   [MinVersion=1] kPixelFormatYUV422AP10 = 37,
   [MinVersion=1] kPixelFormatYUV444AP10 = 38,
-};
 
-// Based on |media.mojom.EosVideoFrameData|.
-[Stable]
-struct EosVideoFrameData {
+  // 20bpp YUVA planar 1x1 Y, 2x2 interleaved UV, 1x1 A samples.
+  [MinVersion=2] kPixelFormatNV12A = 39,
 };
 
 // Based on |gfx.mojom.GpuMemoryBufferHandle| but does not depend on
@@ -416,40 +446,13 @@ struct NativeGpuMemoryBufferHandle {
   NativePixmapHandle platform_handle@1;
 };
 
-// Based on |media.mojom.GpuMemoryBufferVideoFrameData| but does not depend
-// on |gfx.mojom.GpuMemoryBufferHandle| or |gpu.mojom.MailboxHolder|.
-// Next min field ID: 1
-[Stable]
-struct GpuMemoryBufferVideoFrameData {
-  NativeGpuMemoryBufferHandle gpu_memory_buffer_handle@0;
-};
-
 // Based on |media.mojom.VideoFrameMetadata| but does not depend on
 // |media.mojom.VideoTransformation|.
-// Next min field ID: 6
+// Next min field ID: 2
 [Stable]
 struct VideoFrameMetadata {
-  bool allow_overlay@0;
-
-  bool end_of_stream@1;
-
-  bool read_lock_fences_enabled@2;
-
-  bool protected_video@3;
-
-  bool hw_protected@4;
-
-  bool power_efficient@5;
-};
-
-// Based on |media.mojom.VideoFrameData| but does not depend on
-// |media.mojom.EosVideoFrameData|, |media.mojom.SharedBufferVideoFrameData|,
-// |media.mojom.GpuMemoryBufferVideoFrameData| or
-// |media.mojom.MailboxVideoFrameData|.
-[Stable]
-union VideoFrameData {
-  EosVideoFrameData eos_data;
-  GpuMemoryBufferVideoFrameData gpu_memory_buffer_data;
+  bool protected_video@0;
+  bool hw_protected@1;
 };
 
 // Based on |media.mojom.VideoFrame| but does not depend on
@@ -474,8 +477,8 @@ struct VideoFrame {
   // Timestamp in microseconds of the associated frame.
   mojo_base.mojom.TimeDelta timestamp@4;
 
-  // Contents of the video frame (or EOS marker).
-  VideoFrameData data@5;
+  // Contents of the video frame.
+  NativeGpuMemoryBufferHandle gpu_memory_buffer_handle@5;
 
   // Extra properties associated with the VideoFrame.
   VideoFrameMetadata metadata@6;
@@ -503,6 +506,10 @@ enum WaitingReason {
   // decoders. To recover from this state, reset the decoder and start decoding
   // from a key frame, which can typically be accomplished by a pipeline seek.
   kDecoderStateLost,
+
+  // The playback cannot proceed because the secure output surface is gone. This
+  // can happen when user backgrounds the page when it's playing secure content.
+  [MinVersion=1] kSecureSurfaceLost,
 };
 
 // Based on |media.mojom.MediaLogRecord|.
@@ -525,6 +532,24 @@ struct MediaLogRecord {
 
   int32 id@0;
   Type type@1;
-  mojo_base.mojom.DeprecatedDictionaryValue params@2;
+  mojo_base.mojom.DictionaryValue params@2;
   mojo_base.mojom.TimeTicks time@3;
+};
+
+[Stable, Extensible]
+enum DecryptStatus {
+  kSuccess,
+  kNoKey,
+  [Default] kFailure,
+};
+
+[Stable, Extensible]
+enum CdmContextEvent {
+  // We use |kHasAdditionalUsableKey| as the default since this maps to an
+  // existing enum in Chrome that only has the two values below. Receiving an
+  // event for |kHasAdditionalUsableKey| is always safe because it is a benign
+  // indicator that if something was waiting for a key, it should check again.
+  // It is not an indicator that the key it actually wanted is ready.
+  [Default] kHasAdditionalUsableKey,
+  kHardwareContextReset,
 };

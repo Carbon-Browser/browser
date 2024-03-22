@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -31,6 +31,7 @@ def PrecheckBadMessage(input_api,
 
   START_MARKER='^enum (class )?BadMessageReason {'
   presubmit_error = update_histogram_enum.CheckPresubmitErrors(
+      'tools/metrics/histograms/metadata/stability/enums.xml',
       histogram_enum_name=histogram_name,
       update_script_name='update_bad_message_reasons.py',
       source_enum_path=source_path,

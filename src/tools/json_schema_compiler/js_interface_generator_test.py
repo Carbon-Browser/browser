@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,7 +13,7 @@ import unittest
 
 # The contents of a fake idl file.
 fake_idl = """
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,6 +59,7 @@ namespace fakeApi {
     // |callback| : The callback which will most assuredly in all cases be
     // called; that is, of course, iff such a callback was provided and is
     // not at all null.
+    [doesNotSupportPromises="Multi-parameter callback"]
     static void bazGreek(optional BazGreekCallback callback);
 
     [deprecated="Use a new method."] static DOMString returnString();
@@ -72,7 +73,7 @@ namespace fakeApi {
 """
 
 # The output we expect from our fake idl file.
-fake_idl_output = ("""// Copyright %s The Chromium Authors. All rights reserved.
+fake_idl_output = ("""// Copyright %s The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -30,7 +30,7 @@
 #include "net/http/http_transaction_factory.h"
 #include "net/http/http_util.h"
 #include "net/ssl/ssl_info.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
+#include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 #include "net/url_request/url_request_context.h"
 #include "url/gurl.h"
 
@@ -124,7 +124,8 @@ class BidirectionalStreamAdapter
 
   // None of these objects are owned by |this|.
   raw_ptr<net::URLRequestContextGetter> request_context_getter_;
-  raw_ptr<grpc_support::BidirectionalStream> bidirectional_stream_;
+  raw_ptr<grpc_support::BidirectionalStream, AcrossTasksDanglingUntriaged>
+      bidirectional_stream_;
   // C side
   std::unique_ptr<bidirectional_stream> c_stream_;
   raw_ptr<bidirectional_stream_callback> c_callback_;

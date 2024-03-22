@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,6 +7,11 @@ angle_root = "//third_party/angle"
 
 # True if ANGLE can access build/, testing/ and other Chrome folders.
 angle_has_build = true
+
+# Declares the maximum supported VulkanMemoryAllocator version by the client
+# in format AAABBBCCC, where AAA = major, BBB = minor, CCC = patch.
+# The VulkanMemoryAllocator version may be found in its CHANGELOG.md.
+angle_vma_version = 3000000
 
 # Overrides for ANGLE's dependencies
 angle_glslang_dir = "//third_party/vulkan-deps/glslang/src"

@@ -1,19 +1,20 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/android/video_frame_factory_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "gpu/command_buffer/service/mock_texture_owner.h"
+#include "gpu/command_buffer/service/ref_counted_lock_for_test.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
+#include "gpu/config/gpu_finch_features.h"
 #include "gpu/config/gpu_preferences.h"
 #include "media/base/android/test_destruction_observable.h"
 #include "media/base/limits.h"
@@ -27,6 +28,7 @@
 
 using base::test::RunOnceCallback;
 using testing::_;
+using testing::Return;
 using testing::SaveArg;
 
 namespace gpu {
@@ -53,12 +55,14 @@ class MockFrameInfoHelper : public FrameInfoHelper,
 
     std::move(cb).Run(std::move(buffer_renderer), info);
   }
+
+  MOCK_CONST_METHOD0(IsStalled, bool());
 };
 
 class VideoFrameFactoryImplTest : public testing::Test {
  public:
   VideoFrameFactoryImplTest()
-      : task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
     auto image_provider = std::make_unique<MockSharedImageVideoProvider>();
     image_provider_raw_ = image_provider.get();
 
@@ -66,15 +70,22 @@ class VideoFrameFactoryImplTest : public testing::Test {
     mre_manager_raw_ = mre_manager.get();
 
     auto info_helper = std::make_unique<MockFrameInfoHelper>();
+    info_helper_raw_ = info_helper.get();
 
     impl_ = std::make_unique<VideoFrameFactoryImpl>(
         task_runner_, gpu_preferences_, std::move(image_provider),
-        std::move(mre_manager), std::move(info_helper), /*lock=*/nullptr);
+        std::move(mre_manager), std::move(info_helper),
+        features::NeedThreadSafeAndroidMedia()
+            ? base::MakeRefCounted<gpu::RefCountedLockForTest>()
+            : nullptr);
     auto texture_owner = base::MakeRefCounted<NiceMock<gpu::MockTextureOwner>>(
         0, nullptr, nullptr, true);
     auto codec_buffer_wait_coordinator =
         base::MakeRefCounted<CodecBufferWaitCoordinator>(
-            std::move(texture_owner), /*lock=*/nullptr);
+            std::move(texture_owner),
+            features::NeedThreadSafeAndroidMedia()
+                ? base::MakeRefCounted<gpu::RefCountedLockForTest>()
+                : nullptr);
 
     // Provide a non-null |codec_buffer_wait_coordinator| to |impl_|.
     impl_->SetCodecBufferWaitCorrdinatorForTesting(
@@ -92,7 +103,8 @@ class VideoFrameFactoryImplTest : public testing::Test {
 
   void RequestVideoFrame() {
     auto output_buffer = CodecOutputBuffer::CreateForTesting(
-        0, video_frame_params_.coded_size, video_frame_params_.color_space);
+        0, video_frame_params_.coded_size, video_frame_params_.color_space,
+        absl::nullopt);
     ASSERT_TRUE(VideoFrame::IsValidConfig(
         PIXEL_FORMAT_ARGB, VideoFrame::STORAGE_OPAQUE,
         video_frame_params_.coded_size, video_frame_params_.visible_rect,
@@ -120,7 +132,7 @@ class VideoFrameFactoryImplTest : public testing::Test {
   SharedImageVideoProvider::ImageRecord MakeImageRecord(
       bool* release_cb_called_flag = nullptr) {
     SharedImageVideoProvider::ImageRecord record;
-    record.mailbox = gpu::Mailbox::Generate();
+    record.mailbox = gpu::Mailbox::GenerateForSharedImage();
     if (release_cb_called_flag)
       *release_cb_called_flag = false;
     record.release_cb = base::BindOnce(
@@ -131,8 +143,11 @@ class VideoFrameFactoryImplTest : public testing::Test {
         base::Unretained(release_cb_called_flag));
     auto codec_image =
         base::MakeRefCounted<MockCodecImage>(gfx::Size(100, 100));
-    record.codec_image_holder =
-        base::MakeRefCounted<CodecImageHolder>(task_runner_, codec_image);
+    record.codec_image_holder = base::MakeRefCounted<CodecImageHolder>(
+        task_runner_, codec_image,
+        features::NeedThreadSafeAndroidMedia()
+            ? base::MakeRefCounted<gpu::RefCountedLockForTest>()
+            : nullptr);
     return record;
   }
 
@@ -143,6 +158,7 @@ class VideoFrameFactoryImplTest : public testing::Test {
 
   raw_ptr<MockMaybeRenderEarlyManager> mre_manager_raw_ = nullptr;
   raw_ptr<MockSharedImageVideoProvider> image_provider_raw_ = nullptr;
+  raw_ptr<MockFrameInfoHelper> info_helper_raw_ = nullptr;
 
   // Most recently created CodecOutputBuffer.
   raw_ptr<CodecOutputBuffer> output_buffer_raw_ = nullptr;
@@ -180,7 +196,9 @@ TEST_F(VideoFrameFactoryImplTest,
       base::MakeRefCounted<CodecSurfaceBundle>(
           base::MakeRefCounted<NiceMock<gpu::MockTextureOwner>>(0, nullptr,
                                                                 nullptr, true),
-          /*lock=*/nullptr);
+          features::NeedThreadSafeAndroidMedia()
+              ? base::MakeRefCounted<gpu::RefCountedLockForTest>()
+              : nullptr);
   EXPECT_CALL(*mre_manager_raw_, SetSurfaceBundle(surface_bundle));
   impl_->SetSurfaceBundle(surface_bundle);
   base::RunLoop().RunUntilIdle();
@@ -192,8 +210,8 @@ TEST_F(VideoFrameFactoryImplTest, CreateVideoFrameFailsIfUnsupportedFormat) {
   gfx::Size coded_size(limits::kMaxDimension + 1, limits::kMaxDimension + 1);
   gfx::Rect visible_rect(coded_size);
   gfx::Size natural_size(0, 0);
-  auto output_buffer =
-      CodecOutputBuffer::CreateForTesting(0, coded_size, gfx::ColorSpace());
+  auto output_buffer = CodecOutputBuffer::CreateForTesting(
+      0, coded_size, gfx::ColorSpace(), absl::nullopt);
   ASSERT_FALSE(VideoFrame::IsValidConfig(PIXEL_FORMAT_ARGB,
                                          VideoFrame::STORAGE_OPAQUE, coded_size,
                                          visible_rect, natural_size));
@@ -251,4 +269,12 @@ TEST_F(VideoFrameFactoryImplTest,
   impl_ = nullptr;
   base::RunLoop().RunUntilIdle();
 }
+
+TEST_F(VideoFrameFactoryImplTest, IsStalled) {
+  EXPECT_CALL(*info_helper_raw_, IsStalled()).WillOnce(Return(false));
+  EXPECT_FALSE(impl_->IsStalled());
+  EXPECT_CALL(*info_helper_raw_, IsStalled()).WillOnce(Return(true));
+  EXPECT_TRUE(impl_->IsStalled());
+}
+
 }  // namespace media

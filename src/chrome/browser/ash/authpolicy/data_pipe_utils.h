@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,13 +17,5 @@ base::ScopedFD GetDataReadPipe(const std::string& data);
 
 }  // namespace data_pipe_utils
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace data_pipe_utils {
-using ::ash::data_pipe_utils::GetDataReadPipe;
-}  // namespace data_pipe_utils
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_AUTHPOLICY_DATA_PIPE_UTILS_H_

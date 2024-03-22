@@ -1,12 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_POLICY_NETWORKING_EUICC_STATUS_UPLOADER_H_
 #define CHROME_BROWSER_ASH_POLICY_NETWORKING_EUICC_STATUS_UPLOADER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/values.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_euicc_client.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_manager_client.h"
 #include "chromeos/ash/components/network/managed_cellular_pref_handler.h"
@@ -30,12 +32,11 @@ namespace policy {
 
 // Class responsible for uploading the information about the current ESim
 // profiles to DMServer.
-class EuiccStatusUploader
-    : public chromeos::NetworkPolicyObserver,
-      public ash::HermesManagerClient::Observer,
-      public ash::HermesEuiccClient::Observer,
-      public chromeos::ManagedCellularPrefHandler::Observer,
-      public CloudPolicyClient::Observer {
+class EuiccStatusUploader : public ash::NetworkPolicyObserver,
+                            public ash::HermesManagerClient::Observer,
+                            public ash::HermesEuiccClient::Observer,
+                            public ash::ManagedCellularPrefHandler::Observer,
+                            public CloudPolicyClient::Observer {
  public:
   EuiccStatusUploader(CloudPolicyClient* client, PrefService* local_state);
   ~EuiccStatusUploader() override;
@@ -52,6 +53,11 @@ class EuiccStatusUploader
                       PrefService* local_state,
                       IsDeviceActiveCallback is_device_managed_callback);
 
+  // TODO(b/281904820): Remove once the SM-DS Support feature is fully launched.
+  //
+  // WARNING: This format is deprecated as part of the SM-DS Support feature and
+  // is being replaced with |kLastUploadedEuiccStatusPref|.
+  //
   // A local state preference that stores the last uploaded Euicc status in such
   // format:
   // {
@@ -62,7 +68,23 @@ class EuiccStatusUploader
   //    ]
   // }
   //
+  static const char kLastUploadedEuiccStatusPrefLegacy[];
+
+  // A local state preference that stores the last uploaded Euicc status in the
+  // following format:
+  // {
+  //    euicc_count: integer
+  //    esim_profiles: [
+  //      iccid : string,
+  //      network_name : string,
+  //      smdp_activation_code : string,
+  //      smds_activation_code : string,
+  //    ]
+  // }
+  // Please note that the |smdp_activation_code| and |smds_activation_code|
+  // fields are mutually exclusive.
   static const char kLastUploadedEuiccStatusPref[];
+
   // A local state boolean preference which determines whether we should set
   // UploadEuiccInfoRequest.clear_profile_list to true. This is set to true when
   // clear EUICC remote command was run on the client.
@@ -70,10 +92,10 @@ class EuiccStatusUploader
 
   // Constructs the proto for the EUICC status request.
   static std::unique_ptr<enterprise_management::UploadEuiccInfoRequest>
-  ConstructRequestFromStatus(const base::Value& status,
+  ConstructRequestFromStatus(const base::Value::Dict& status,
                              bool clear_profile_list);
 
-  // chromeos::NetworkPolicyObserver:
+  // ash::NetworkPolicyObserver:
   void PoliciesApplied(const std::string& userhash) override;
   void OnManagedNetworkConfigurationHandlerShuttingDown() override;
 
@@ -90,25 +112,25 @@ class EuiccStatusUploader
   // ash::HermesEuiccClient:
   void OnEuiccReset(const dbus::ObjectPath& euicc_path) override;
 
-  // chromeos::ManagedCellularPrefHandler:
+  // ash::ManagedCellularPrefHandler:
   void OnManagedCellularPrefChanged() override;
 
-  base::Value GetCurrentEuiccStatus() const;
+  base::Value::Dict GetCurrentEuiccStatus() const;
   void MaybeUploadStatus();
   void MaybeUploadStatusWithDelay();
-  void UploadStatus(base::Value status);
+  void UploadStatus(base::Value::Dict status);
   void OnStatusUploaded(bool success);
   void RetryUpload();
 
   // Used in tests. Fires |retry_timer_| to avoid flakiness.
   void FireRetryTimerIfExistsForTesting();
 
-  CloudPolicyClient* client_;
-  PrefService* local_state_;
+  raw_ptr<CloudPolicyClient, ExperimentalAsh> client_;
+  raw_ptr<PrefService, ExperimentalAsh> local_state_;
 
   bool currently_uploading_ = false;
   // The status that is being uploaded right now.
-  base::Value attempted_upload_status_{base::Value::Type::DICTIONARY};
+  base::Value::Dict attempted_upload_status_;
   bool is_policy_fetched_ = false;
   IsDeviceActiveCallback is_device_managed_callback_;
 
@@ -125,7 +147,7 @@ class EuiccStatusUploader
   base::ScopedObservation<CloudPolicyClient, CloudPolicyClient::Observer>
       cloud_policy_client_observation_{this};
 
-  chromeos::ManagedNetworkConfigurationHandler*
+  raw_ptr<ash::ManagedNetworkConfigurationHandler, ExperimentalAsh>
       managed_network_configuration_handler_ = nullptr;
 
   base::WeakPtrFactory<EuiccStatusUploader> weak_ptr_factory_{this};

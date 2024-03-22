@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
@@ -85,6 +85,7 @@ class CommonNameMismatchHandler {
   void OnSimpleLoaderHandler(const GURL& final_url,
                              const network::mojom::URLResponseHead* head);
   void OnSimpleLoaderRedirect(
+      const GURL& url_before_redirect,
       const net::RedirectInfo& redirect_info,
       const network::mojom::URLResponseHead& response_head,
       std::vector<std::string>* to_be_removed_headers);

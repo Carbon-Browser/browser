@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,7 @@ class FullCardRequestResultDelegateBridge
       const autofill::CreditCard& card,
       const std::u16string& cvc) override;
   void OnFullCardRequestFailed(
+      autofill::CreditCard::RecordType card_type,
       autofill::payments::FullCardRequest::FailureType failure_type) override;
 
   __weak id<FullCardRequestResultDelegateObserving> delegate_ = nil;

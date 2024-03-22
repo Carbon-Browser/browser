@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {BindingsTestRunner} from 'bindings_test_runner';
+
 (async function () {
   TestRunner.addResult(`Verify that SourceMap bindings are generating UISourceCodes properly.\n`);
-  await TestRunner.loadTestModule('bindings_test_runner');
 
   TestRunner.markStep('initialWorkspace');
   var snapshot = BindingsTestRunner.dumpWorkspace();

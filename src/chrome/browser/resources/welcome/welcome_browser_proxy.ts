@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ export interface WelcomeBrowserProxy {
 
   handleUserDecline(): void;
   goToNewTabPage(replace?: boolean): void;
-  goToURL(url: string): void;
+  goToUrl(url: string): void;
 }
 
 export class WelcomeBrowserProxyImpl implements WelcomeBrowserProxy {
@@ -32,7 +32,7 @@ export class WelcomeBrowserProxyImpl implements WelcomeBrowserProxy {
     }
   }
 
-  goToURL(url: string): void {
+  goToUrl(url: string): void {
     window.location.assign(url);
   }
 

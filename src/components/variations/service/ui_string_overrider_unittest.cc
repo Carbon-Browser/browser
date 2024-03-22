@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,8 +32,7 @@ const int kResourceIndices[] = {
 
 class UIStringOverriderTest : public ::testing::Test {
  public:
-  UIStringOverriderTest()
-      : provider_(kResourceHashes, kResourceIndices, kNumResources) {}
+  UIStringOverriderTest() : provider_(kResourceHashes, kResourceIndices) {}
 
   UIStringOverriderTest(const UIStringOverriderTest&) = delete;
   UIStringOverriderTest& operator=(const UIStringOverriderTest&) = delete;

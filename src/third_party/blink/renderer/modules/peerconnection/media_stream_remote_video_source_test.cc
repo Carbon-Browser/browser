@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
@@ -177,7 +178,8 @@ class MediaStreamRemoteVideoSourceTest : public ::testing::Test {
   scoped_refptr<webrtc::VideoTrackSourceInterface> webrtc_video_source_;
   scoped_refptr<webrtc::VideoTrackInterface> webrtc_video_track_;
   // |remote_source_| is owned by |source_|.
-  MediaStreamRemoteVideoSourceUnderTest* remote_source_ = nullptr;
+  raw_ptr<MediaStreamRemoteVideoSourceUnderTest, DanglingUntriaged>
+      remote_source_ = nullptr;
   Persistent<MediaStreamSource> source_;
   int number_of_successful_track_starts_ = 0;
   int number_of_failed_track_starts_ = 0;
@@ -396,9 +398,9 @@ TEST_F(MediaStreamRemoteVideoSourceTest,
 
   webrtc::RtpPacketInfos::vector_type packet_infos;
   for (int i = 0; i < 4; ++i) {
-    packet_infos.emplace_back(
-        kSsrc, kCsrcs, kRtpTimestamp, absl::nullopt, absl::nullopt,
-        kProcessingStart - webrtc::TimeDelta::Micros(10000 - i * 30));
+    webrtc::Timestamp receive_time =
+        kProcessingStart - webrtc::TimeDelta::Micros(10000 - i * 30);
+    packet_infos.emplace_back(kSsrc, kCsrcs, kRtpTimestamp, receive_time);
   }
   // Expected receive time should be the same as the last arrival time.
   base::TimeTicks kExpectedReceiveTime =

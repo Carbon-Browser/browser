@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/test_support/fake_service_controller.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 // A macro which ensures we are running on the mojom thread.
 #define ENSURE_MOJOM_THREAD(method, ...)                                    \
@@ -34,9 +34,9 @@ void FakeServiceController::SetState(State new_state) {
 }
 
 void FakeServiceController::Bind(
-    mojo::PendingReceiver<chromeos::libassistant::mojom::ServiceController>
+    mojo::PendingReceiver<libassistant::mojom::ServiceController>
         service_receiver,
-    mojo::PendingReceiver<chromeos::libassistant::mojom::SettingsController>
+    mojo::PendingReceiver<libassistant::mojom::SettingsController>
         settings_receiver) {
   service_receiver_.Bind(std::move(service_receiver));
   settings_receiver_.Bind(std::move(settings_receiver));
@@ -74,9 +74,9 @@ std::string FakeServiceController::gaia_id() {
 }
 
 void FakeServiceController::Initialize(
-    chromeos::libassistant::mojom::BootupConfigPtr config,
+    libassistant::mojom::BootupConfigPtr config,
     mojo::PendingRemote<network::mojom::URLLoaderFactory> url_loader_factory) {
-  mojom_task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  mojom_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
   libassistant_config_ = std::move(config);
 
   authentication_tokens_ =
@@ -92,7 +92,13 @@ void FakeServiceController::Start() {
 }
 
 void FakeServiceController::Stop() {
-  SetState(State::kStopped);
+  // Post a delayed task to make it possible to set other state between
+  // kStopping and kStopped.
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&FakeServiceController::SetState,
+                     weak_factory_.GetWeakPtr(), State::kStopped),
+      base::Milliseconds(1));
 }
 
 void FakeServiceController::ResetAllDataAndStop() {
@@ -101,9 +107,8 @@ void FakeServiceController::ResetAllDataAndStop() {
 }
 
 void FakeServiceController::AddAndFireStateObserver(
-    mojo::PendingRemote<chromeos::libassistant::mojom::StateObserver>
-        pending_observer) {
-  mojo::Remote<chromeos::libassistant::mojom::StateObserver> observer(
+    mojo::PendingRemote<libassistant::mojom::StateObserver> pending_observer) {
+  mojo::Remote<libassistant::mojom::StateObserver> observer(
       std::move(pending_observer));
 
   observer->OnStateChanged(state_);
@@ -112,7 +117,7 @@ void FakeServiceController::AddAndFireStateObserver(
 }
 
 void FakeServiceController::SetAuthenticationTokens(
-    std::vector<chromeos::libassistant::mojom::AuthenticationTokenPtr> tokens) {
+    std::vector<libassistant::mojom::AuthenticationTokenPtr> tokens) {
   authentication_tokens_ = std::move(tokens);
 }
 
@@ -133,6 +138,4 @@ void FakeServiceController::GetSettings(const std::string& selector,
   std::move(callback).Run(std::string());
 }
 
-}  // namespace assistant
-
-}  // namespace chromeos
+}  // namespace ash::assistant

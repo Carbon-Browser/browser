@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,7 @@ package org.chromium.chrome.browser.password_manager;
 
 import org.chromium.ui.modelutil.PropertyModel;
 
-/**
- * Data model for the password generation modal dialog.
- */
-
+/** Data model for the password generation modal dialog. */
 class PasswordGenerationDialogModel extends PropertyModel {
     /** The generated password to be displayed in the dialog. */
     public static final WritableObjectPropertyKey<String> GENERATED_PASSWORD =

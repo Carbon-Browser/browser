@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -93,6 +93,26 @@ class GitTestWithRealFilesystemAndExecutive(unittest.TestCase):
         git.add_list(['added_dir/added_file'])
         self.assertIn('added_dir/added_file', git.added_files())
 
+    def test_added_files(self):
+        self._chdir(self.untracking_checkout_path)
+        git = self.untracking_git
+        self._write_text_file('cat_file', 'new stuff')
+        git.add_list(['cat_file'])
+        self.assertIn('cat_file', git.added_files())
+
+    def test_deleted_files(self):
+        self._chdir(self.untracking_checkout_path)
+        git = self.untracking_git
+        git.delete_list(['foo_file'])
+        self.assertIn('foo_file', git.deleted_files())
+
+    def test_added_deleted_files_with_rename(self):
+        self._chdir(self.untracking_checkout_path)
+        git = self.untracking_git
+        git.move('foo_file', 'bar_file')
+        self.assertIn('foo_file', git.deleted_files())
+        self.assertIn('bar_file', git.added_files())
+
     def test_delete_recursively(self):
         self._chdir(self.untracking_checkout_path)
         git = self.untracking_git
@@ -128,6 +148,17 @@ class GitTestWithRealFilesystemAndExecutive(unittest.TestCase):
         git.delete_list(['foo.txt'])
         git.commit_locally_with_message('deleting foo')
         self.assertFalse(git.exists('foo.txt'))
+
+    def test_show_blob(self):
+        self._chdir(self.untracking_checkout_path)
+        git = self.untracking_git
+        self._chdir(git.checkout_root)
+        self.filesystem.write_binary_file('foo.txt',
+                                          b'some stuff, possibly binary \xff')
+        git.add_list(['foo.txt'])
+        git.commit_locally_with_message('adding foo')
+        self.assertEqual(git.show_blob('foo.txt', ref='HEAD'),
+                         b'some stuff, possibly binary \xff')
 
     def test_move(self):
         self._chdir(self.untracking_checkout_path)
@@ -232,3 +263,29 @@ class GitTestWithMock(unittest.TestCase):
                 'd/untracked.txt': '?',
                 'a': '?',
             })
+
+    def test_uncommitted_changes(self):
+        git = self.make_git()
+        status_lines = [
+            ' M d/modified.txt',
+            ' D d/deleted.txt',
+            '?? d/untracked.txt',
+            '?? a',
+            'D  d/deleted.txt',
+            'M  d/modified-staged.txt',
+            'A  d/added-staged.txt',
+            'AM d/added-then-modified.txt',
+            'MM d/modified-then-modified.txt',
+        ]
+        git.run = lambda args: '\x00'.join(status_lines) + '\x00'
+        self.assertEqual(git.uncommitted_changes(), [
+            'd/modified.txt',
+            'd/deleted.txt',
+            'd/untracked.txt',
+            'a',
+            'd/deleted.txt',
+            'd/modified-staged.txt',
+            'd/added-staged.txt',
+            'd/added-then-modified.txt',
+            'd/modified-then-modified.txt',
+        ])

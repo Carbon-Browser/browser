@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,8 @@
 namespace base {
 namespace internal {
 
-// Assert that the memory priority of |thread| is |memory_priority|. No-op on
-// Windows 7 because ::GetThreadInformation() is not available. Exposed for unit
-// tests.
+// Assert that the memory priority of `thread` is `memory_priority`. Exposed
+// for unit tests.
 BASE_EXPORT void AssertMemoryPriority(HANDLE thread, int memory_priority);
 
 }  // namespace internal

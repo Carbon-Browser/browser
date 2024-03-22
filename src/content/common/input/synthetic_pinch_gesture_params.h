@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,6 @@ struct CONTENT_EXPORT SyntheticPinchGestureParams
   float scale_factor;
   gfx::PointF anchor;
   float relative_pointer_speed_in_pixels_s;
-
-  static const SyntheticPinchGestureParams* Cast(
-      const SyntheticGestureParams* gesture_params);
 };
 
 }  // namespace content

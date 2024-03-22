@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 
 #include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/notreached.h"
 #include "content/browser/renderer_host/overscroll_controller_delegate.h"
 #include "content/public/browser/overscroll_configuration.h"
@@ -46,7 +45,7 @@ bool IsGestureScrollUpdateInertialEvent(const blink::WebInputEvent& event) {
 
 float ClampAbsoluteValue(float value, float max_abs) {
   DCHECK_LT(0.f, max_abs);
-  return base::clamp(value, -max_abs, max_abs);
+  return std::clamp(value, -max_abs, max_abs);
 }
 
 }  // namespace

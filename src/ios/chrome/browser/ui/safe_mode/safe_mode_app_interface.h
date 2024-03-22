@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,9 @@
 
 // Presents the SafeModeViewController UI.
 + (void)presentSafeMode;
+
+//  Set the failed startup attempt counter to `count`.
++ (void)setFailedStartupAttemptCount:(int)count;
 
 @end
 

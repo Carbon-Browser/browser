@@ -1,40 +1,40 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/page_info/page_info_view_controller.h"
 
-#include "base/mac/foundation_util.h"
-#include "base/notreached.h"
-#include "base/strings/sys_string_conversions.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/chrome/browser/net/crurl.h"
-#import "ios/chrome/browser/ui/commands/page_info_commands.h"
+#import "base/apple/foundation_util.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/notreached.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/chrome/browser/net/crurl.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/public/commands/page_info_commands.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_attributed_string_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_icon_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_link_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_multi_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_cell.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_link_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/ui/keyboard/UIKeyCommand+Chrome.h"
 #import "ios/chrome/browser/ui/page_info/page_info_constants.h"
 #import "ios/chrome/browser/ui/permissions/permission_info.h"
 #import "ios/chrome/browser/ui/permissions/permissions_constants.h"
 #import "ios/chrome/browser/ui/permissions/permissions_delegate.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_attributed_string_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_icon_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_multi_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_cell.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_link_item.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#include "ios/chrome/common/string_util.h"
+#import "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/permissions/permissions.h"
-#include "ui/base/l10n/l10n_util.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
+#import "url/gurl.h"
 
 namespace {
 
@@ -91,6 +91,8 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
       [self titleViewLabelForURL:self.pageInfoSecurityDescription.siteURL];
   self.title = l10n_util::GetNSString(IDS_IOS_PAGE_INFO_SITE_INFORMATION);
   self.tableView.accessibilityIdentifier = kPageInfoViewAccessibilityIdentifier;
+  self.navigationController.navigationBar.accessibilityIdentifier =
+      kPageInfoViewNavigationBarAccessibilityIdentifier;
 
   UIBarButtonItem* dismissButton = [[UIBarButtonItem alloc]
       initWithBarButtonSystemItem:UIBarButtonSystemItemDone
@@ -112,7 +114,7 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
   [self loadModel];
 }
 
-#pragma mark - ChromeTableViewController
+#pragma mark - LegacyChromeTableViewController
 
 - (void)loadModel {
   [super loadModel];
@@ -125,7 +127,11 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
       [[TableViewDetailIconItem alloc] initWithType:ItemTypeSecurityHeader];
   securityHeader.text = l10n_util::GetNSString(IDS_IOS_PAGE_INFO_SITE_SECURITY);
   securityHeader.detailText = self.pageInfoSecurityDescription.status;
-  securityHeader.iconImageName = self.pageInfoSecurityDescription.iconImageName;
+  securityHeader.iconImage = self.pageInfoSecurityDescription.iconImage;
+  securityHeader.iconTintColor = UIColor.whiteColor;
+  securityHeader.iconBackgroundColor =
+      self.pageInfoSecurityDescription.iconBackgroundColor;
+  securityHeader.iconCornerRadius = kColorfulBackgroundSymbolCornerRadius;
   [self.tableViewModel addItem:securityHeader
        toSectionWithIdentifier:SectionIdentifierSecurityContent];
 
@@ -139,10 +145,8 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
         forSectionWithIdentifier:SectionIdentifierSecurityContent];
 
   // Permissions section.
-  if (@available(iOS 15.0, *)) {
-    if ([self.permissionsInfo count]) {
-      [self loadPermissionsModel];
-    }
+  if ([self.permissionsInfo count]) {
+    [self loadPermissionsModel];
   }
 }
 
@@ -171,8 +175,7 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
   NSMutableAttributedString* descriptionAttributedString =
       [[NSMutableAttributedString alloc]
           initWithAttributedString:PutBoldPartInString(
-                                       description,
-                                       kTableViewSublabelFontStyle)];
+                                       description, UIFontTextStyleFootnote)];
   [descriptionAttributedString
       addAttributes:@{
         NSForegroundColorAttributeName :
@@ -201,7 +204,7 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
   switch (sectionIdentifier) {
     case SectionIdentifierSecurityContent: {
       TableViewLinkHeaderFooterView* linkView =
-          base::mac::ObjCCastStrict<TableViewLinkHeaderFooterView>(view);
+          base::apple::ObjCCastStrict<TableViewLinkHeaderFooterView>(view);
       linkView.delegate = self;
     } break;
   }
@@ -220,7 +223,7 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
     case ItemTypePermissionsCamera:
     case ItemTypePermissionsMicrophone: {
       TableViewSwitchCell* switchCell =
-          base::mac::ObjCCastStrict<TableViewSwitchCell>(cell);
+          base::apple::ObjCCastStrict<TableViewSwitchCell>(cell);
       switchCell.switchView.tag = itemType;
       [switchCell.switchView addTarget:self
                                 action:@selector(permissionSwitchToggled:)
@@ -249,6 +252,23 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
 
 - (void)presentationControllerDidDismiss:
     (UIPresentationController*)presentationController {
+  [self.pageInfoCommandsHandler hidePageInfo];
+}
+
+#pragma mark - UIResponder
+
+// To always be able to register key commands via -keyCommands, the VC must be
+// able to become first responder.
+- (BOOL)canBecomeFirstResponder {
+  return YES;
+}
+
+- (NSArray*)keyCommands {
+  return @[ UIKeyCommand.cr_close ];
+}
+
+- (void)keyCommand_close {
+  base::RecordAction(base::UserMetricsAction("MobileKeyCommandClose"));
   [self.pageInfoCommandsHandler hidePageInfo];
 }
 
@@ -288,25 +308,23 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
 
 // Invoked when a permission switch is toggled.
 - (void)permissionSwitchToggled:(UISwitch*)sender {
-  if (@available(iOS 15.0, *)) {
-    web::Permission permission;
-    switch (sender.tag) {
-      case ItemTypePermissionsCamera:
-        permission = web::PermissionCamera;
-        break;
-      case ItemTypePermissionsMicrophone:
-        permission = web::PermissionMicrophone;
-        break;
-      case ItemTypePermissionsDescription:
-        NOTREACHED();
-        return;
-    }
-    PermissionInfo* permissionsDescription = [[PermissionInfo alloc] init];
-    permissionsDescription.permission = permission;
-    permissionsDescription.state =
-        sender.isOn ? web::PermissionStateAllowed : web::PermissionStateBlocked;
-    [self.permissionsDelegate updateStateForPermission:permissionsDescription];
+  web::Permission permission;
+  switch (sender.tag) {
+    case ItemTypePermissionsCamera:
+      permission = web::PermissionCamera;
+      break;
+    case ItemTypePermissionsMicrophone:
+      permission = web::PermissionMicrophone;
+      break;
+    case ItemTypePermissionsDescription:
+      NOTREACHED();
+      return;
   }
+  PermissionInfo* permissionsDescription = [[PermissionInfo alloc] init];
+  permissionsDescription.permission = permission;
+  permissionsDescription.state =
+      sender.isOn ? web::PermissionStateAllowed : web::PermissionStateBlocked;
+  [self.permissionsDelegate updateStateForPermission:permissionsDescription];
 }
 
 // Adds or removes a switch depending on the value of the PermissionState.
@@ -325,10 +343,10 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
                             withRowAnimation:UITableViewRowAnimationAutomatic];
     } else {
       TableViewSwitchItem* currentItem =
-          base::mac::ObjCCastStrict<TableViewSwitchItem>(
+          base::apple::ObjCCastStrict<TableViewSwitchItem>(
               [self.tableViewModel itemAtIndexPath:index]);
       TableViewSwitchCell* currentCell =
-          base::mac::ObjCCastStrict<TableViewSwitchCell>(
+          base::apple::ObjCCastStrict<TableViewSwitchCell>(
               [self.tableView cellForRowAtIndexPath:index]);
       currentItem.on = state == web::PermissionStateAllowed;
       // Reload the switch cell if its value is outdated.
@@ -384,19 +402,17 @@ float kTitleLabelMinimumScaleFactor = 0.7f;
 }
 
 - (void)permissionStateChanged:(PermissionInfo*)permissionInfo {
-  if (@available(iOS 15.0, *)) {
-    // Add the Permissions section if it doesn't exist.
-    if (![self.tableViewModel
-            hasSectionForSectionIdentifier:SectionIdentifierPermissions]) {
-      [self loadPermissionsModel];
-      NSUInteger index = [self.tableViewModel
-          sectionForSectionIdentifier:SectionIdentifierPermissions];
-      [self.tableView insertSections:[NSIndexSet indexSetWithIndex:index]
-                    withRowAnimation:UITableViewRowAnimationAutomatic];
-    }
-
-    [self updateSwitchForPermission:permissionInfo tableViewLoaded:YES];
+  // Add the Permissions section if it doesn't exist.
+  if (![self.tableViewModel
+          hasSectionForSectionIdentifier:SectionIdentifierPermissions]) {
+    [self loadPermissionsModel];
+    NSUInteger index = [self.tableViewModel
+        sectionForSectionIdentifier:SectionIdentifierPermissions];
+    [self.tableView insertSections:[NSIndexSet indexSetWithIndex:index]
+                  withRowAnimation:UITableViewRowAnimationAutomatic];
   }
+
+  [self updateSwitchForPermission:permissionInfo tableViewLoaded:YES];
 }
 
 @end

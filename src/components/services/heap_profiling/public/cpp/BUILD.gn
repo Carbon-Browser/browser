@@ -1,8 +1,9 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//base/allocator/allocator.gni")
+import("//build/config/features.gni")
 
 static_library("cpp") {
   sources = [
@@ -34,7 +35,7 @@ static_library("cpp") {
     ]
   }
 
-  if (!is_ios) {
+  if (use_blink) {
     sources += [
       "heap_profiling_trace_source.cc",
       "heap_profiling_trace_source.h",
@@ -58,7 +59,7 @@ source_set("unit_tests") {
     sources += [ "merge_samples_unittests.cc" ]
   }
 
-  if (!is_ios) {
+  if (use_blink) {
     sources += [ "heap_profiling_trace_source_unittest.cc" ]
     deps += [
       "//services/tracing:test_utils",

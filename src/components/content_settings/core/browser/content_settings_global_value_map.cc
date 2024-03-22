@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,12 +24,12 @@ class RuleIteratorSimple : public RuleIterator {
 
   bool HasNext() const override { return !is_done_; }
 
-  Rule Next() override {
+  std::unique_ptr<Rule> Next() override {
     DCHECK(HasNext());
     is_done_ = true;
-    return Rule(ContentSettingsPattern::Wildcard(),
-                ContentSettingsPattern::Wildcard(), base::Value(setting_),
-                base::Time(), SessionModel::Durable);
+    return std::make_unique<OwnedRule>(ContentSettingsPattern::Wildcard(),
+                                       ContentSettingsPattern::Wildcard(),
+                                       base::Value(setting_), RuleMetaData{});
   }
 
  private:

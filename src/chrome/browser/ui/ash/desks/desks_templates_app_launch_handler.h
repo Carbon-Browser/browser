@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/app_restore/app_launch_handler.h"
 
@@ -63,8 +64,12 @@ class DesksTemplatesAppLaunchHandler : public ash::AppLaunchHandler {
   // chromeos::AppLaunchHandler:
   void RecordRestoredAppLaunch(apps::AppTypeName app_type_name) override;
 
+  // Checks to see if the browser app with `app_name` is installed.
+  bool IsBrowserAppInstalled(const std::string& app_name);
+
   // Cached convenience pointer to the desk template read handler.
-  app_restore::DeskTemplateReadHandler* const read_handler_;
+  const raw_ptr<app_restore::DeskTemplateReadHandler, ExperimentalAsh>
+      read_handler_;
 
   // The ID of the specific launch this handler deals with.
   int32_t launch_id_ = 0;

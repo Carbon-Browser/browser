@@ -1,16 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/infobars/infobar_metrics_recorder.h"
+#import "ios/chrome/browser/infobars/infobar_metrics_recorder.h"
 
-#include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
-#import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/metrics/histogram_functions.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/notreached.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
 
 namespace {
 
@@ -92,19 +89,6 @@ const char kInfobarAutofillAddressModalEventHistogram[] =
 const char kInfobarAutofillAddressBadgeTappedHistogram[] =
     "Mobile.Messages.Badge.Tapped.InfobarTypeAutofillAddressProfile";
 
-// Histogram names for InfobarTypeReadingList.
-// Banner.
-const char kInfobarReadingListBannerEventHistogram[] =
-    "Mobile.Messages.Banner.Event.InfobarTypeReadingList";
-const char kInfobarReadingListBannerDismissTypeHistogram[] =
-    "Mobile.Messages.Banner.Dismiss.InfobarTypeReadingList";
-// Modal.
-const char kInfobarReadingListModalEventHistogram[] =
-    "Mobile.Messages.Modal.Event.InfobarTypeReadingList";
-// Badge.
-const char kInfobarReadingListBadgeTappedHistogram[] =
-    "Mobile.Messages.Badge.Tapped.InfobarTypeReadingList";
-
 // Histogram names for InfobarTypePermissions.
 // Banner.
 const char kInfobarPermissionsBannerEventHistogram[] =
@@ -117,6 +101,52 @@ const char kInfobarPermissionsModalEventHistogram[] =
 // Badge.
 const char kInfobarPermissionsBadgeTappedHistogram[] =
     "Mobile.Messages.Badge.Tapped.InfobarTypePermissions";
+
+// Histogram names for InfobarTypeTailoredSecurityService.
+const char kInfobarTailoredSecurityServiceBannerEventHistogram[] =
+    "Mobile.Messages.Banner.Event.InfobarTypeTailoredSecurityService";
+const char kInfobarTailoredSecurityServiceBannerDismissTypeHistogram[] =
+    "Mobile.Messages.Banner.Dismiss.InfobarTypeTailoredSecurityService";
+// Modal.
+const char kInfobarTailoredSecurityServiceModalEventHistogram[] =
+    "Mobile.Messages.Modal.Event.InfobarTypeTailoredSecurityService";
+
+// Histogram names for InfobarTypeSyncError.
+// Banner.
+const char kInfobarSyncErrorBannerEventHistogram[] =
+    "Mobile.Messages.Banner.Event.InfobarTypeSyncError";
+const char kInfobarSyncErrorBannerDismissTypeHistogram[] =
+    "Mobile.Messages.Banner.Dismiss.InfobarTypeSyncError";
+// Modal.
+const char kInfobarSyncErrorModalEventHistogram[] =
+    "Mobile.Messages.Modal.Event.InfobarTypeSyncError";
+// Badge.
+const char kInfobarSyncErrorBadgeTappedHistogram[] =
+    "Mobile.Messages.Badge.Tapped.InfobarTypeSyncError";
+
+// Histogram names for the Tabpickup banner.
+const char kInfobarTabPickupBannerEventHistogram[] =
+    "Mobile.Messages.Banner.Event.InfobarTypeTabPickup";
+const char kInfobarTabPickupBannerDismissTypeHistogram[] =
+    "Mobile.Messages.Banner.Dismiss.InfobarTypeTabPickup";
+// Modal.
+const char kInfobarTabPickupModalEventHistogram[] =
+    "Mobile.Messages.Modal.Event.InfobarTypeTabPickup";
+// Badge.
+const char kInfobarTabPickupBadgeTappedHistogram[] =
+    "Mobile.Messages.Badge.Tapped.InfobarTypeTabPickup";
+
+// Histogram names for the Parcel Tracking banner.
+const char kInfobarParcelTrackingBannerEventHistogram[] =
+    "Mobile.Messages.Banner.Event.InfobarTypeParcelTracking";
+const char kInfobarParcelTrackingBannerDismissTypeHistogram[] =
+    "Mobile.Messages.Banner.Dismiss.InfobarTypeParcelTracking";
+// Modal.
+const char kInfobarParcelTrackingModalEventHistogram[] =
+    "Mobile.Messages.Modal.Event.InfobarTypeParcelTracking";
+// Badge.
+const char kInfobarParcelTrackingBadgeTappedHistogram[] =
+    "Mobile.Messages.Badge.Tapped.InfobarTypeParcelTracking";
 
 }  // namespace
 
@@ -166,13 +196,23 @@ const char kInfobarPermissionsBadgeTappedHistogram[] =
       UMA_HISTOGRAM_ENUMERATION(kInfobarAutofillAddressBannerEventHistogram,
                                 event);
       break;
-    case InfobarType::kInfobarTypeAddToReadingList:
-      base::UmaHistogramEnumeration(kInfobarReadingListBannerEventHistogram,
-                                    event);
-      break;
     case InfobarType::kInfobarTypePermissions:
       base::UmaHistogramEnumeration(kInfobarPermissionsBannerEventHistogram,
                                     event);
+      break;
+    case InfobarType::kInfobarTypeTailoredSecurityService:
+      base::UmaHistogramEnumeration(
+          kInfobarTailoredSecurityServiceBannerEventHistogram, event);
+      break;
+    case InfobarType::kInfobarTypeSyncError:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarSyncErrorBannerEventHistogram, event);
+      break;
+    case InfobarType::kInfobarTypeTabPickup:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarTabPickupBannerEventHistogram, event);
+      break;
+    case InfobarType::kInfobarTypeParcelTracking:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarParcelTrackingBannerEventHistogram,
+                                event);
       break;
   }
 }
@@ -203,20 +243,32 @@ const char kInfobarPermissionsBadgeTappedHistogram[] =
       UMA_HISTOGRAM_ENUMERATION(
           kInfobarAutofillAddressBannerDismissTypeHistogram, dismissType);
       break;
-    case InfobarType::kInfobarTypeAddToReadingList:
-      base::UmaHistogramEnumeration(
-          kInfobarReadingListBannerDismissTypeHistogram, dismissType);
-      break;
     case InfobarType::kInfobarTypePermissions:
       base::UmaHistogramEnumeration(
           kInfobarPermissionsBannerDismissTypeHistogram, dismissType);
       break;
+    case InfobarType::kInfobarTypeTailoredSecurityService:
+      base::UmaHistogramEnumeration(
+          kInfobarTailoredSecurityServiceBannerDismissTypeHistogram,
+          dismissType);
+      break;
+    case InfobarType::kInfobarTypeSyncError:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarSyncErrorBannerDismissTypeHistogram,
+                                dismissType);
+      break;
+    case InfobarType::kInfobarTypeTabPickup:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarTabPickupBannerDismissTypeHistogram,
+                                dismissType);
+      break;
+    case InfobarType::kInfobarTypeParcelTracking:
+      UMA_HISTOGRAM_ENUMERATION(
+          kInfobarParcelTrackingBannerDismissTypeHistogram, dismissType);
+      break;
   }
 }
 
-- (void)recordBannerOnScreenDuration:(double)duration {
-  base::TimeDelta timeDelta = base::Seconds(duration);
-  UMA_HISTOGRAM_MEDIUM_TIMES("Mobile.Messages.Banner.OnScreenTime", timeDelta);
+- (void)recordBannerOnScreenDuration:(base::TimeDelta)duration {
+  UMA_HISTOGRAM_MEDIUM_TIMES("Mobile.Messages.Banner.OnScreenTime", duration);
 }
 
 - (void)recordModalEvent:(MobileMessagesModalEvent)event {
@@ -241,13 +293,23 @@ const char kInfobarPermissionsBadgeTappedHistogram[] =
       UMA_HISTOGRAM_ENUMERATION(kInfobarAutofillAddressModalEventHistogram,
                                 event);
       break;
-    case InfobarType::kInfobarTypeAddToReadingList:
-      base::UmaHistogramEnumeration(kInfobarReadingListModalEventHistogram,
-                                    event);
-      break;
     case InfobarType::kInfobarTypePermissions:
       base::UmaHistogramEnumeration(kInfobarPermissionsModalEventHistogram,
                                     event);
+      break;
+    case InfobarType::kInfobarTypeTailoredSecurityService:
+      base::UmaHistogramEnumeration(
+          kInfobarTailoredSecurityServiceModalEventHistogram, event);
+      break;
+    case InfobarType::kInfobarTypeSyncError:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarSyncErrorModalEventHistogram, event);
+      break;
+    case InfobarType::kInfobarTypeTabPickup:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarTabPickupModalEventHistogram, event);
+      break;
+    case InfobarType::kInfobarTypeParcelTracking:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarParcelTrackingModalEventHistogram,
+                                event);
       break;
   }
 }
@@ -275,13 +337,23 @@ const char kInfobarPermissionsBadgeTappedHistogram[] =
       UMA_HISTOGRAM_ENUMERATION(kInfobarAutofillAddressBadgeTappedHistogram,
                                 state);
       break;
-    case InfobarType::kInfobarTypeAddToReadingList:
-      base::UmaHistogramEnumeration(kInfobarReadingListBadgeTappedHistogram,
-                                    state);
-      break;
     case InfobarType::kInfobarTypePermissions:
       base::UmaHistogramEnumeration(kInfobarPermissionsBadgeTappedHistogram,
                                     state);
+      break;
+    case InfobarType::kInfobarTypeTailoredSecurityService:
+      // TailoredSecurityService infobar doesn't have a badge.
+      NOTREACHED();
+      break;
+    case InfobarType::kInfobarTypeSyncError:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarSyncErrorBadgeTappedHistogram, state);
+      break;
+    case InfobarType::kInfobarTypeTabPickup:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarTabPickupBadgeTappedHistogram, state);
+      break;
+    case InfobarType::kInfobarTypeParcelTracking:
+      UMA_HISTOGRAM_ENUMERATION(kInfobarParcelTrackingBadgeTappedHistogram,
+                                state);
       break;
   }
 }

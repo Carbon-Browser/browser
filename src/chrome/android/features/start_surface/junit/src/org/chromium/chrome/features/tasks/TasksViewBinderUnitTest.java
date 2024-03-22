@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@ package org.chromium.chrome.features.tasks;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.when;
 
+import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.BACKGROUND_COLOR;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.FAKE_SEARCH_BOX_CLICK_LISTENER;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.FAKE_SEARCH_BOX_TEXT_WATCHER;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.INCOGNITO_COOKIE_CONTROLS_MANAGER;
@@ -22,8 +24,10 @@ import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.IS_TAB_C
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.IS_VOICE_RECOGNITION_BUTTON_VISIBLE;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.LENS_BUTTON_CLICK_LISTENER;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.MORE_TABS_CLICK_LISTENER;
+import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.MV_TILES_CONTAINER_LEFT_RIGHT_MARGIN;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.MV_TILES_CONTAINER_TOP_MARGIN;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.MV_TILES_VISIBLE;
+import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.SINGLE_TAB_TOP_MARGIN;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.TAB_SWITCHER_TITLE_TOP_MARGIN;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.TASKS_SURFACE_BODY_TOP_MARGIN;
 import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.TOP_TOOLBAR_PLACEHOLDER_HEIGHT;
@@ -31,31 +35,42 @@ import static org.chromium.chrome.features.tasks.TasksSurfaceProperties.VOICE_SE
 
 import android.app.Activity;
 import android.graphics.drawable.ColorDrawable;
-import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
 import android.widget.EditText;
 
+import androidx.test.ext.junit.rules.ActivityScenarioRule;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.robolectric.Robolectric;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.ntp.IncognitoCookieControlsManager;
+import org.chromium.chrome.browser.preferences.Pref;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.test.util.browser.Features;
+import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.components.browser_ui.styles.ChromeColors;
+import org.chromium.components.prefs.PrefService;
+import org.chromium.components.user_prefs.UserPrefs;
+import org.chromium.components.user_prefs.UserPrefsJni;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.base.TestActivity;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
+import org.chromium.ui.text.EmptyTextWatcher;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -69,14 +84,31 @@ public class TasksViewBinderUnitTest {
     private TasksView mTasksView;
     private PropertyModel mTasksViewPropertyModel;
 
-    @Mock
-    private IncognitoCookieControlsManager mCookieControlsManager;
+    @Rule
+    public ActivityScenarioRule<TestActivity> mActivityScenarioRule =
+            new ActivityScenarioRule<>(TestActivity.class);
+
+    @Rule public JniMocker mJniMocker = new JniMocker();
+
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
+
+    @Mock private IncognitoCookieControlsManager mCookieControlsManager;
+
+    @Mock private Profile mProfile;
+
+    @Mock private PrefService mPrefService;
+
+    @Mock private UserPrefs.Natives mUserPrefsJniMock;
 
     @Before
     public void setUp() throws Exception {
-        mActivity = Robolectric.buildActivity(TestActivity.class).setup().get();
+        mActivityScenarioRule.getScenario().onActivity((activity) -> mActivity = activity);
         MockitoAnnotations.initMocks(this);
 
+        mJniMocker.mock(UserPrefsJni.TEST_HOOKS, mUserPrefsJniMock);
+        when(mProfile.getPrimaryOTRProfile(true)).thenReturn(mProfile);
+        Profile.setLastUsedProfileForTesting(mProfile);
+        when(mUserPrefsJniMock.get(mProfile)).thenReturn(mPrefService);
         mTasksView =
                 (TasksView) mActivity.getLayoutInflater().inflate(R.layout.tasks_view_layout, null);
         mActivity.setContentView(mTasksView);
@@ -87,17 +119,19 @@ public class TasksViewBinderUnitTest {
     }
 
     private boolean isViewVisible(int viewId) {
-        return mTasksView.findViewById(viewId).getVisibility() == View.VISIBLE;
+        View view = mTasksView.findViewById(viewId);
+        if (view == null) return false;
+        return view.getVisibility() == View.VISIBLE;
     }
 
     @Test
     @SmallTest
     public void testSetTabCarouselMode() {
         mTasksViewPropertyModel.set(IS_TAB_CAROUSEL_VISIBLE, true);
-        assertTrue(isViewVisible(R.id.carousel_tab_switcher_container));
+        assertTrue(isViewVisible(R.id.tab_switcher_module_container));
 
         mTasksViewPropertyModel.set(IS_TAB_CAROUSEL_VISIBLE, false);
-        assertFalse(isViewVisible(R.id.carousel_tab_switcher_container));
+        assertFalse(isViewVisible(R.id.tab_switcher_module_container));
     }
 
     @Test
@@ -118,27 +152,22 @@ public class TasksViewBinderUnitTest {
         assertTrue(isViewVisible(R.id.search_box));
 
         AtomicBoolean textChanged = new AtomicBoolean();
-        TextWatcher textWatcher = new TextWatcher() {
-            @Override
-            public void afterTextChanged(Editable s) {
-                // do nothing.
-            }
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-                // do nothing.
-            }
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                textChanged.set(true);
-            }
-        };
+        TextWatcher textWatcher =
+                new EmptyTextWatcher() {
+                    @Override
+                    public void onTextChanged(CharSequence s, int start, int before, int count) {
+                        textChanged.set(true);
+                    }
+                };
 
         mViewClicked.set(false);
         mTasksView.findViewById(R.id.search_box_text).performClick();
         assertFalse(mViewClicked.get());
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTasksViewPropertyModel.set(FAKE_SEARCH_BOX_CLICK_LISTENER, mViewOnClickListener);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(
+                            FAKE_SEARCH_BOX_CLICK_LISTENER, mViewOnClickListener);
+                });
         mTasksView.findViewById(R.id.search_box_text).performClick();
         assertTrue(mViewClicked.get());
 
@@ -161,18 +190,21 @@ public class TasksViewBinderUnitTest {
     @Test
     @SmallTest
     public void testSetVoiceSearchButtonVisibilityAndClickListener() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTasksViewPropertyModel.set(IS_FAKE_SEARCH_BOX_VISIBLE, true);
-            mTasksViewPropertyModel.set(IS_VOICE_RECOGNITION_BUTTON_VISIBLE, true);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(IS_FAKE_SEARCH_BOX_VISIBLE, true);
+                    mTasksViewPropertyModel.set(IS_VOICE_RECOGNITION_BUTTON_VISIBLE, true);
+                });
         assertTrue(isViewVisible(R.id.voice_search_button));
 
         mViewClicked.set(false);
         mTasksView.findViewById(R.id.voice_search_button).performClick();
         assertFalse(mViewClicked.get());
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTasksViewPropertyModel.set(VOICE_SEARCH_BUTTON_CLICK_LISTENER, mViewOnClickListener);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(
+                            VOICE_SEARCH_BUTTON_CLICK_LISTENER, mViewOnClickListener);
+                });
         mTasksView.findViewById(R.id.voice_search_button).performClick();
         assertTrue(mViewClicked.get());
 
@@ -184,18 +216,20 @@ public class TasksViewBinderUnitTest {
     @Test
     @SmallTest
     public void testSetLensButtonVisibilityAndClickListener() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTasksViewPropertyModel.set(IS_FAKE_SEARCH_BOX_VISIBLE, true);
-            mTasksViewPropertyModel.set(IS_LENS_BUTTON_VISIBLE, true);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(IS_FAKE_SEARCH_BOX_VISIBLE, true);
+                    mTasksViewPropertyModel.set(IS_LENS_BUTTON_VISIBLE, true);
+                });
         assertTrue(isViewVisible(R.id.lens_camera_button));
 
         mViewClicked.set(false);
         mTasksView.findViewById(R.id.lens_camera_button).performClick();
         assertFalse(mViewClicked.get());
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTasksViewPropertyModel.set(LENS_BUTTON_CLICK_LISTENER, mViewOnClickListener);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(LENS_BUTTON_CLICK_LISTENER, mViewOnClickListener);
+                });
         mTasksView.findViewById(R.id.lens_camera_button).performClick();
         assertTrue(mViewClicked.get());
 
@@ -235,32 +269,65 @@ public class TasksViewBinderUnitTest {
     @SmallTest
     public void testSetIncognitoMode() {
         mTasksViewPropertyModel.set(IS_INCOGNITO, true);
-        int backgroundColor = ChromeColors.getPrimaryBackgroundColor(mActivity, true);
-        ColorDrawable viewColor = (ColorDrawable) mTasksView.getBackground();
-        assertEquals(backgroundColor, viewColor.getColor());
+        assertTrue(mTasksView.getSearchBoxCoordinator().getIncognitoModeForTesting());
 
         mTasksViewPropertyModel.set(IS_INCOGNITO, false);
-        backgroundColor = ChromeColors.getPrimaryBackgroundColor(mActivity, false);
-        viewColor = (ColorDrawable) mTasksView.getBackground();
-        assertEquals(backgroundColor, viewColor.getColor());
+        assertFalse(mTasksView.getSearchBoxCoordinator().getIncognitoModeForTesting());
     }
 
     @Test
     @SmallTest
+    @DisableFeatures({
+        ChromeFeatureList.TRACKING_PROTECTION_3PCD,
+        ChromeFeatureList.INCOGNITO_NTP_REVAMP
+    })
     public void testSetIncognitoDescriptionVisibilityAndClickListener() {
+        when(mPrefService.getBoolean(Pref.TRACKING_PROTECTION3PCD_ENABLED)).thenReturn(false);
         assertFalse(isViewVisible(R.id.incognito_description_container_layout_stub));
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTasksViewPropertyModel.set(INCOGNITO_LEARN_MORE_CLICK_LISTENER, mViewOnClickListener);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(
+                            INCOGNITO_LEARN_MORE_CLICK_LISTENER, mViewOnClickListener);
+                });
         assertFalse(isViewVisible(R.id.incognito_description_container_layout_stub));
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mTasksViewPropertyModel.set(INCOGNITO_COOKIE_CONTROLS_MANAGER, mCookieControlsManager);
-            mTasksViewPropertyModel.set(IS_INCOGNITO_DESCRIPTION_INITIALIZED, true);
-            mTasksViewPropertyModel.set(IS_INCOGNITO_DESCRIPTION_VISIBLE, true);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(
+                            INCOGNITO_COOKIE_CONTROLS_MANAGER, mCookieControlsManager);
+                    mTasksViewPropertyModel.set(IS_INCOGNITO_DESCRIPTION_INITIALIZED, true);
+                    mTasksViewPropertyModel.set(IS_INCOGNITO_DESCRIPTION_VISIBLE, true);
+                });
         assertTrue(isViewVisible(R.id.new_tab_incognito_container));
+        assertTrue(isViewVisible(R.id.cookie_controls_card_toggle));
+        assertFalse(isViewVisible(R.id.tracking_protection_card_title));
+    }
+
+    @Test
+    @SmallTest
+    @DisableFeatures(ChromeFeatureList.INCOGNITO_NTP_REVAMP)
+    public void testSetIncognitoDescriptionVisibilityAndClickListenerTrackingProtection() {
+        when(mPrefService.getBoolean(Pref.TRACKING_PROTECTION3PCD_ENABLED)).thenReturn(true);
+        assertFalse(isViewVisible(R.id.incognito_description_container_layout_stub));
+
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(
+                            INCOGNITO_LEARN_MORE_CLICK_LISTENER, mViewOnClickListener);
+                });
+        assertFalse(isViewVisible(R.id.incognito_description_container_layout_stub));
+
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mTasksViewPropertyModel.set(
+                            INCOGNITO_COOKIE_CONTROLS_MANAGER, mCookieControlsManager);
+                    mTasksViewPropertyModel.set(IS_INCOGNITO_DESCRIPTION_INITIALIZED, true);
+                    mTasksViewPropertyModel.set(IS_INCOGNITO_DESCRIPTION_VISIBLE, true);
+                });
+        assertTrue(isViewVisible(R.id.new_tab_incognito_container));
+        assertTrue(isViewVisible(R.id.tracking_protection_card_title));
+        assertFalse(isViewVisible(R.id.cookie_controls_card_toggle));
     }
 
     @Test
@@ -279,8 +346,8 @@ public class TasksViewBinderUnitTest {
     @SmallTest
     public void testSetMVTilesContainerTopMargin() {
         ViewGroup.MarginLayoutParams params =
-                (ViewGroup.MarginLayoutParams) mTasksView.findViewById(R.id.mv_tiles_container)
-                        .getLayoutParams();
+                (ViewGroup.MarginLayoutParams)
+                        mTasksView.findViewById(R.id.mv_tiles_container).getLayoutParams();
         assertEquals(0, params.topMargin);
 
         mTasksViewPropertyModel.set(MV_TILES_CONTAINER_TOP_MARGIN, 16);
@@ -290,10 +357,49 @@ public class TasksViewBinderUnitTest {
 
     @Test
     @SmallTest
+    public void testSetMVTilesContainerLeftAndRightMargin() {
+        ViewGroup.MarginLayoutParams params =
+                (ViewGroup.MarginLayoutParams)
+                        mTasksView.findViewById(R.id.mv_tiles_container).getLayoutParams();
+        assertEquals(0, params.leftMargin);
+        assertEquals(0, params.rightMargin);
+
+        mTasksViewPropertyModel.set(MV_TILES_CONTAINER_LEFT_RIGHT_MARGIN, 16);
+
+        assertEquals(16, params.leftMargin);
+        assertEquals(16, params.rightMargin);
+    }
+
+    @Test
+    @SmallTest
+    public void testSetSingleTabTopMargin() {
+        SingleTabView singleTabView =
+                (SingleTabView)
+                        mActivity
+                                .getLayoutInflater()
+                                .inflate(
+                                        R.layout.single_tab_view_layout,
+                                        mTasksView.getCarouselTabSwitcherContainer(),
+                                        false);
+        mTasksView.getCarouselTabSwitcherContainer().addView(singleTabView);
+
+        ViewGroup.MarginLayoutParams params =
+                (ViewGroup.MarginLayoutParams)
+                        mTasksView.findViewById(R.id.single_tab_view).getLayoutParams();
+        // The initial top margin of single_tab_view_layout is 24.
+        assertEquals(24, params.topMargin);
+
+        mTasksViewPropertyModel.set(SINGLE_TAB_TOP_MARGIN, 16);
+
+        assertEquals(16, params.topMargin);
+    }
+
+    @Test
+    @SmallTest
     public void testSetTabSwitcherTitleTopMargin() {
         ViewGroup.MarginLayoutParams params =
-                (ViewGroup.MarginLayoutParams) mTasksView.findViewById(R.id.tab_switcher_title)
-                        .getLayoutParams();
+                (ViewGroup.MarginLayoutParams)
+                        mTasksView.findViewById(R.id.tab_switcher_title).getLayoutParams();
         assertEquals(0, params.topMargin);
 
         mTasksViewPropertyModel.set(TAB_SWITCHER_TITLE_TOP_MARGIN, 16);
@@ -311,5 +417,17 @@ public class TasksViewBinderUnitTest {
         mTasksViewPropertyModel.set(TOP_TOOLBAR_PLACEHOLDER_HEIGHT, 16);
 
         assertEquals(16, params.height);
+    }
+
+    @Test
+    @SmallTest
+    public void testSetBackgroundColor() {
+        int backgroundColor = ChromeColors.getPrimaryBackgroundColor(mActivity, true);
+        mTasksViewPropertyModel.set(BACKGROUND_COLOR, backgroundColor);
+        assertEquals(backgroundColor, ((ColorDrawable) mTasksView.getBackground()).getColor());
+
+        int newBackgroundColor = ChromeColors.getPrimaryBackgroundColor(mActivity, false);
+        mTasksViewPropertyModel.set(BACKGROUND_COLOR, newBackgroundColor);
+        assertEquals(newBackgroundColor, ((ColorDrawable) mTasksView.getBackground()).getColor());
     }
 }

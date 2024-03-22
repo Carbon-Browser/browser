@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,8 +53,7 @@ class DownloadControllerImpl : public DownloadController,
                                 const std::string& content_disposition,
                                 int64_t total_bytes,
                                 const std::string& mime_type,
-                                DownloadNativeTaskBridge* download) override
-      API_AVAILABLE(ios(15));
+                                DownloadNativeTaskBridge* download) override;
 
   void SetDelegate(DownloadControllerDelegate* delegate) override;
   DownloadControllerDelegate* GetDelegate() const override;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include "third_party/blink/public/mojom/service_worker/controller_service_worker_mode.mojom-forward.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_container.mojom-shared.h"
+#include "third_party/blink/public/mojom/service_worker/service_worker_fetch_handler_bypass_option.mojom-shared.h"
+#include "third_party/blink/public/mojom/service_worker/service_worker_fetch_handler_type.mojom-shared.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_provider.mojom-shared.h"
 #include "third_party/blink/public/platform/cross_variant_mojo_util.h"
 
@@ -36,6 +38,9 @@ class WebServiceWorkerProviderContext {
 
   virtual mojom::ControllerServiceWorkerMode GetControllerServiceWorkerMode()
       const = 0;
+  virtual mojom::ServiceWorkerFetchHandlerType GetFetchHandlerType() const = 0;
+  virtual mojom::ServiceWorkerFetchHandlerBypassOption
+  GetFetchHandlerBypassOption() const = 0;
 
   // The Client#id value of this context.
   virtual const WebString client_id() const = 0;

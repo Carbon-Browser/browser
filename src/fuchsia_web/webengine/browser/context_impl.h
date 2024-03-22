@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include <set>
 
 #include "base/containers/unique_ptr_adapters.h"
+#include "build/chromecast_buildflags.h"
 #include "fuchsia_web/webengine/browser/cookie_manager_impl.h"
 #include "fuchsia_web/webengine/web_engine_export.h"
 
@@ -54,7 +55,7 @@ class WEB_ENGINE_EXPORT ContextImpl final : public fuchsia::web::Context {
 
   // Creates a Frame with |params| for the |web_contents| and binds it to
   // |frame_request|. The Frame will self-delete when |frame_request|
-  // disconnects.
+  // disconnects. |params| must be clonable as required by FrameImpl.
   FrameImpl* CreateFrameForWebContents(
       std::unique_ptr<content::WebContents> web_contents,
       fuchsia::web::CreateFrameParams params,
@@ -65,10 +66,12 @@ class WEB_ENGINE_EXPORT ContextImpl final : public fuchsia::web::Context {
     return devtools_controller_;
   }
 
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
   // Controls whether the CastStreaming receiver is available in this instance.
   // At most one ContextImpl per-process may have CastStreaming enabled.
   void SetCastStreamingEnabled();
   bool has_cast_streaming_enabled() const { return cast_streaming_enabled_; }
+#endif
 
   // fuchsia::web::Context implementation.
   void CreateFrame(fidl::InterfaceRequest<fuchsia::web::Frame> frame) override;
@@ -108,8 +111,10 @@ class WEB_ENGINE_EXPORT ContextImpl final : public fuchsia::web::Context {
   // initialized at Context creation time.
   bool allow_javascript_injection_ = true;
 
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
   // True if this instance should allows Frames to use CastStreaming.
   bool cast_streaming_enabled_ = false;
+#endif
 
   // Tracks all active FrameImpl instances, so that we can request their
   // destruction when this ContextImpl is destroyed.

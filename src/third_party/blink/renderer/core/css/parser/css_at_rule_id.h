@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@ namespace blink {
 
 class CSSParserContext;
 
-enum CSSAtRuleID {
+enum class CSSAtRuleID {
   kCSSAtRuleInvalid,
+  kCSSAtRuleViewTransition,
   kCSSAtRuleCharset,
   kCSSAtRuleFontFace,
   kCSSAtRuleFontPaletteValues,
@@ -27,11 +28,18 @@ enum CSSAtRuleID {
   kCSSAtRuleContainer,
   kCSSAtRuleCounterStyle,
   kCSSAtRuleScope,
-  kCSSAtRuleScrollTimeline,
+  kCSSAtRuleStartingStyle,
   kCSSAtRuleSupports,
   kCSSAtRuleTry,
-  kCSSAtRuleViewport,
   kCSSAtRuleWebkitKeyframes,
+  // Font-feature-values related at-rule ids below:
+  kCSSAtRuleAnnotation,
+  kCSSAtRuleCharacterVariant,
+  kCSSAtRuleFontFeatureValues,
+  kCSSAtRuleOrnaments,
+  kCSSAtRuleStylistic,
+  kCSSAtRuleStyleset,
+  kCSSAtRuleSwash
 };
 
 CSSAtRuleID CssAtRuleID(StringView name);

@@ -1,15 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/profiles/profile_picker_force_signin_dialog_delegate.h"
 
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
+#include "chrome/browser/safe_browsing/chrome_password_reuse_detection_manager_client.h"
 #include "chrome/browser/ui/autofill/chrome_autofill_client.h"
 #include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_force_signin_dialog_host.h"
+#include "chrome/browser/ui/webui/signin/signin_url_utils.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/autofill/content/browser/content_autofill_client.h"
 #include "components/web_modal/modal_dialog_host.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -18,6 +21,7 @@
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/view.h"
+
 ProfilePickerForceSigninDialogDelegate::ProfilePickerForceSigninDialogDelegate(
     ProfilePickerForceSigninDialogHost* host,
     std::unique_ptr<views::WebView> web_view,
@@ -37,10 +41,13 @@ ProfilePickerForceSigninDialogDelegate::ProfilePickerForceSigninDialogDelegate(
 
   web_view_->GetWebContents()->SetDelegate(this);
 
-  ChromePasswordManagerClient::CreateForWebContentsWithAutofillClient(
-      web_view_->GetWebContents(),
-      autofill::ChromeAutofillClient::FromWebContents(
-          web_view_->GetWebContents()));
+  autofill::ChromeAutofillClient::CreateForWebContents(
+      web_view_->GetWebContents());
+  ChromePasswordManagerClient::CreateForWebContents(
+      web_view_->GetWebContents());
+
+  ChromePasswordReuseDetectionManagerClient::CreateForWebContents(
+      web_view_->GetWebContents());
 
   web_modal::WebContentsModalDialogManager::CreateForWebContents(
       web_view_->GetWebContents());
@@ -61,7 +68,9 @@ gfx::Size ProfilePickerForceSigninDialogDelegate::CalculatePreferredSize()
 }
 
 void ProfilePickerForceSigninDialogDelegate::DisplayErrorMessage() {
-  web_view_->LoadInitialURL(GURL(chrome::kChromeUISigninErrorURL));
+  GURL url(chrome::kChromeUISigninErrorURL);
+  url = AddFromProfilePickerURLParameter(url);
+  web_view_->LoadInitialURL(url);
 }
 
 bool ProfilePickerForceSigninDialogDelegate::HandleContextMenu(
@@ -115,6 +124,11 @@ void ProfilePickerForceSigninDialogDelegate::OnDialogDestroyed() {
     host_->OnDialogDestroyed();
     host_ = nullptr;
   }
+}
+
+content::WebContents*
+ProfilePickerForceSigninDialogDelegate::GetWebContentsForTesting() const {
+  return web_view_->web_contents();
 }
 
 BEGIN_METADATA(ProfilePickerForceSigninDialogDelegate,

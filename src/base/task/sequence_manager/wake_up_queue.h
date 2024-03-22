@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "base/check.h"
 #include "base/containers/intrusive_heap.h"
 #include "base/memory/raw_ptr.h"
-#include "base/task/sequence_manager/lazy_now.h"
+#include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -87,7 +87,7 @@ class BASE_EXPORT WakeUpQueue {
 
   struct ScheduledWakeUp {
     WakeUp wake_up;
-    internal::TaskQueueImpl* queue;
+    raw_ptr<internal::TaskQueueImpl> queue;
 
     bool operator>(const ScheduledWakeUp& other) const {
       return wake_up.latest_time() > other.wake_up.latest_time();

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -268,7 +268,7 @@ class Buffer {
   }
 
   // User-provided buffer that will receive the fully formatted output string.
-  raw_ptr<char> buffer_;
+  raw_ptr<char, AllowPtrArithmetic> buffer_;
 
   // Number of bytes that are available in the buffer excluding the trailing
   // NUL byte that will be added by the destructor.
@@ -418,18 +418,19 @@ bool Buffer::IToASCII(bool sign,
     }
   } while (num || padding || (reverse_prefix > prefix));
 
-  // Conversion to ASCII actually resulted in the digits being in reverse
-  // order. We can't easily generate them in forward order, as we can't tell
-  // the number of characters needed until we are done converting.
-  // So, now, we reverse the string (except for the possible '-' sign).
-  char* front = buffer_ + start;
-  char* back = GetInsertionPoint();
-  while (--back > front) {
-    char ch = *back;
-    *back = *front;
-    *front++ = ch;
+  if (start < size_) {
+    // Conversion to ASCII actually resulted in the digits being in reverse
+    // order. We can't easily generate them in forward order, as we can't tell
+    // the number of characters needed until we are done converting.
+    // So, now, we reverse the string (except for the possible '-' sign).
+    char* front = buffer_ + start;
+    char* back = GetInsertionPoint();
+    while (--back > front) {
+      char ch = *back;
+      *back = *front;
+      *front++ = ch;
+    }
   }
-
   IncrementCount(discarded);
   return !discarded;
 }

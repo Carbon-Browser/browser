@@ -1,6 +1,6 @@
 #!/usr/bin/env vpython3
 #
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -40,7 +40,6 @@ sys.path.append(os.path.join(
 import devil_chromium
 from devil.android import device_errors
 from devil.android import device_utils
-from devil.android.sdk import keyevent
 from devil.android.tools import script_common
 from devil.android.tools import system_app
 from devil.utils import logging_common
@@ -48,15 +47,13 @@ from devil.utils import logging_common
 WEBVIEW_PACKAGES = ['com.android.webview', 'com.google.android.webview']
 
 
-def _UnlockDevice(device):
-  device.SendKeyEvent(keyevent.KEYCODE_MENU)
-
-
 def UninstallWebViewSystemImages(device):
   """Uninstalls system images for known WebView packages."""
   print('Removing system images from %s...' % device.serial)
   system_app.RemoveSystemApps(device, WEBVIEW_PACKAGES)
-  _UnlockDevice(device)
+  # Removing system apps will reboot the device, so we try to unlock the device
+  # once that's done.
+  device.Unlock()
 
 
 def UninstallWebViewUpdates(device):

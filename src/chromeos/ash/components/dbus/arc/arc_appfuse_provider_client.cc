@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/arc/fake_arc_appfuse_provider_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -36,7 +37,7 @@ class ArcAppfuseProviderClientImpl : public ArcAppfuseProviderClient {
   // ArcAppfuseProviderClient override:
   void Mount(uint32_t uid,
              int32_t mount_id,
-             DBusMethodCallback<base::ScopedFD> callback) override {
+             chromeos::DBusMethodCallback<base::ScopedFD> callback) override {
     dbus::MethodCall method_call(arc::appfuse::kArcAppfuseProviderInterface,
                                  arc::appfuse::kMountMethod);
     dbus::MessageWriter writer(&method_call);
@@ -50,7 +51,7 @@ class ArcAppfuseProviderClientImpl : public ArcAppfuseProviderClient {
 
   void Unmount(uint32_t uid,
                int32_t mount_id,
-               VoidDBusMethodCallback callback) override {
+               chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(arc::appfuse::kArcAppfuseProviderInterface,
                                  arc::appfuse::kUnmountMethod);
     dbus::MessageWriter writer(&method_call);
@@ -62,11 +63,12 @@ class ArcAppfuseProviderClientImpl : public ArcAppfuseProviderClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  void OpenFile(uint32_t uid,
-                int32_t mount_id,
-                int32_t file_id,
-                int32_t flags,
-                DBusMethodCallback<base::ScopedFD> callback) override {
+  void OpenFile(
+      uint32_t uid,
+      int32_t mount_id,
+      int32_t file_id,
+      int32_t flags,
+      chromeos::DBusMethodCallback<base::ScopedFD> callback) override {
     dbus::MethodCall method_call(arc::appfuse::kArcAppfuseProviderInterface,
                                  arc::appfuse::kOpenFileMethod);
     dbus::MessageWriter writer(&method_call);
@@ -80,7 +82,7 @@ class ArcAppfuseProviderClientImpl : public ArcAppfuseProviderClient {
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
-  // DBusClient override.
+  // chromeos::DBusClient override.
   void Init(dbus::Bus* bus) override {
     proxy_ = bus->GetObjectProxy(
         arc::appfuse::kArcAppfuseProviderServiceName,
@@ -89,12 +91,12 @@ class ArcAppfuseProviderClientImpl : public ArcAppfuseProviderClient {
 
  private:
   // Runs the callback with the method call result.
-  void OnVoidDBusMethod(VoidDBusMethodCallback callback,
+  void OnVoidDBusMethod(chromeos::VoidDBusMethodCallback callback,
                         dbus::Response* response) {
     std::move(callback).Run(response != nullptr);
   }
 
-  void OnFDMethod(DBusMethodCallback<base::ScopedFD> callback,
+  void OnFDMethod(chromeos::DBusMethodCallback<base::ScopedFD> callback,
                   dbus::Response* response) {
     if (!response) {
       std::move(callback).Run(absl::nullopt);
@@ -110,7 +112,7 @@ class ArcAppfuseProviderClientImpl : public ArcAppfuseProviderClient {
     std::move(callback).Run(std::move(fd));
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> proxy_ = nullptr;
 
   base::WeakPtrFactory<ArcAppfuseProviderClientImpl> weak_ptr_factory_{this};
 };

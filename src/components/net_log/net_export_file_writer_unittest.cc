@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/strings/stringprintf.h"
@@ -40,6 +40,7 @@
 #include "services/network/test/fake_test_cert_verifier_params_factory.h"
 #include "services/network/test/test_network_context.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -107,14 +108,14 @@ bool SetPathToGivenAndReturnTrue(const base::FilePath& path_to_return,
 
 // Checks the "state" string of a NetExportFileWriter state.
 [[nodiscard]] ::testing::AssertionResult VerifyState(
-    std::unique_ptr<base::DictionaryValue> state,
+    base::Value::Dict state,
     const std::string& expected_state_string) {
-  std::string actual_state_string;
-  if (!state->GetString("state", &actual_state_string)) {
+  const std::string* actual_state_string = state.FindString("state");
+  if (!actual_state_string) {
     return ::testing::AssertionFailure()
            << "State is missing \"state\" string.";
   }
-  if (actual_state_string != expected_state_string) {
+  if (*actual_state_string != expected_state_string) {
     return ::testing::AssertionFailure()
            << "\"state\" string of state does not match expected." << std::endl
            << "    Actual: " << actual_state_string << std::endl
@@ -127,25 +128,23 @@ bool SetPathToGivenAndReturnTrue(const base::FilePath& path_to_return,
 // "captureMode" string; that field is only checked if
 // |expected_log_capture_mode_known| is true.
 [[nodiscard]] ::testing::AssertionResult VerifyState(
-    std::unique_ptr<base::DictionaryValue> state,
+    base::Value::Dict state,
     const std::string& expected_state_string,
     bool expected_log_exists,
     bool expected_log_capture_mode_known,
     const std::string& expected_log_capture_mode_string) {
-  base::DictionaryValue expected_state;
-  expected_state.SetStringKey("state", expected_state_string);
-  expected_state.SetBoolKey("logExists", expected_log_exists);
-  expected_state.SetBoolKey("logCaptureModeKnown",
-                            expected_log_capture_mode_known);
+  base::Value::Dict expected_state;
+  expected_state.Set("state", expected_state_string);
+  expected_state.Set("logExists", expected_log_exists);
+  expected_state.Set("logCaptureModeKnown", expected_log_capture_mode_known);
   if (expected_log_capture_mode_known) {
-    expected_state.SetStringKey("captureMode",
-                                expected_log_capture_mode_string);
+    expected_state.Set("captureMode", expected_log_capture_mode_string);
   } else {
-    state->RemoveKey("captureMode");
+    state.Remove("captureMode");
   }
 
   // Remove "file" field which is only added in debug mode.
-  state->RemoveKey("file");
+  state.Remove("file");
 
   std::string expected_state_json_string;
   JSONStringValueSerializer expected_state_serializer(
@@ -154,7 +153,7 @@ bool SetPathToGivenAndReturnTrue(const base::FilePath& path_to_return,
 
   std::string actual_state_json_string;
   JSONStringValueSerializer actual_state_serializer(&actual_state_json_string);
-  actual_state_serializer.Serialize(*state);
+  actual_state_serializer.Serialize(state);
 
   if (actual_state_json_string != expected_state_json_string) {
     return ::testing::AssertionFailure()
@@ -169,7 +168,7 @@ bool SetPathToGivenAndReturnTrue(const base::FilePath& path_to_return,
 
 [[nodiscard]] ::testing::AssertionResult ReadCompleteLogFile(
     const base::FilePath& log_path,
-    std::unique_ptr<base::DictionaryValue>* root) {
+    std::unique_ptr<base::Value::Dict>* root) {
   DCHECK(!log_path.empty());
 
   if (!base::PathExists(log_path)) {
@@ -213,23 +212,24 @@ bool SetPathToGivenAndReturnTrue(const base::FilePath& path_to_return,
     return ::testing::AssertionFailure()
            << log_path.value() << " could not be read.";
   }
-  *root =
-      base::DictionaryValue::From(base::JSONReader::ReadDeprecated(log_string));
-  if (!*root) {
+  absl::optional<base::Value> log_parsed = base::JSONReader::Read(log_string);
+  if (!log_parsed || !log_parsed->is_dict()) {
     return ::testing::AssertionFailure()
            << "Contents of " << log_path.value()
            << " do not form valid JSON dictionary.";
   }
+
+  *root = std::make_unique<base::Value::Dict>(std::move(log_parsed->GetDict()));
   // Make sure the "constants" section exists
-  base::DictionaryValue* constants;
-  if (!(*root)->GetDictionary("constants", &constants)) {
+  const base::Value::Dict* constants = (*root)->FindDict("constants");
+  if (!constants) {
     root->reset();
     return ::testing::AssertionFailure()
            << log_path.value() << " is missing constants.";
   }
   // Make sure the "events" section exists
-  base::ListValue* events;
-  if (!(*root)->GetList("events", &events)) {
+  base::Value::List* events = (*root)->FindList("events");
+  if (!events) {
     root->reset();
     return ::testing::AssertionFailure()
            << log_path.value() << " is missing events list.";
@@ -242,20 +242,19 @@ bool SetPathToGivenAndReturnTrue(const base::FilePath& path_to_return,
 class TestStateObserver : public NetExportFileWriter::StateObserver {
  public:
   // NetExportFileWriter::StateObserver implementation
-  void OnNewState(const base::DictionaryValue& state) override {
+  void OnNewState(const base::Value::Dict& state) override {
     test_closure_.closure().Run();
-    result_state_ = state.CreateDeepCopy();
+    result_state_ = state.Clone();
   }
 
-  std::unique_ptr<base::DictionaryValue> WaitForNewState() {
+  base::Value::Dict WaitForNewState() {
     test_closure_.WaitForResult();
-    DCHECK(result_state_);
     return std::move(result_state_);
   }
 
  private:
   net::TestClosure test_closure_;
-  std::unique_ptr<base::DictionaryValue> result_state_;
+  base::Value::Dict result_state_;
 };
 
 // A class that wraps around TestClosure. Provides the ability to wait on a
@@ -339,8 +338,7 @@ class NetExportFileWriterTest : public ::testing::Test {
       bool expected_initialize_success,
       bool expected_log_exists) {
     file_writer_.Initialize();
-    std::unique_ptr<base::DictionaryValue> state =
-        test_state_observer_.WaitForNewState();
+    base::Value::Dict state = test_state_observer_.WaitForNewState();
     ::testing::AssertionResult result =
         VerifyState(std::move(state), kStateInitializingString);
     if (!result) {
@@ -376,8 +374,7 @@ class NetExportFileWriterTest : public ::testing::Test {
     file_writer_.StartNetLog(custom_log_path, capture_mode, kMaxLogSizeBytes,
                              base::CommandLine::StringType(), kChannelString,
                              network_context);
-    std::unique_ptr<base::DictionaryValue> state =
-        test_state_observer_.WaitForNewState();
+    base::Value::Dict state = test_state_observer_.WaitForNewState();
     ::testing::AssertionResult result =
         VerifyState(std::move(state), kStateStartingLogString);
     if (!result) {
@@ -415,8 +412,7 @@ class NetExportFileWriterTest : public ::testing::Test {
       base::Value::Dict polled_data,
       const std::string& expected_capture_mode_string) {
     file_writer_.StopNetLog(std::move(polled_data));
-    std::unique_ptr<base::DictionaryValue> state =
-        test_state_observer_.WaitForNewState();
+    base::Value::Dict state = test_state_observer_.WaitForNewState();
     ::testing::AssertionResult result =
         VerifyState(std::move(state), kStateStoppingLogString);
     if (!result) {
@@ -450,7 +446,7 @@ class NetExportFileWriterTest : public ::testing::Test {
     }
 
     // Make sure the generated log file is valid.
-    std::unique_ptr<base::DictionaryValue> root;
+    std::unique_ptr<base::Value::Dict> root;
     result = ReadCompleteLogFile(expected_log_path, &root);
     if (!result) {
       return ::testing::AssertionFailure()
@@ -712,19 +708,21 @@ TEST_F(NetExportFileWriterTest, StopWithPolledData) {
                                             kCaptureModeDefaultString));
 
   // Read polledData from log file.
-  std::unique_ptr<base::DictionaryValue> root;
+  std::unique_ptr<base::Value::Dict> root;
   ASSERT_TRUE(ReadCompleteLogFile(default_log_path(), &root));
-  base::DictionaryValue* polled_data;
-  ASSERT_TRUE(root->GetDictionary("polledData", &polled_data));
+  const base::Value::Dict* polled_data = root->FindDict("polledData");
+  ASSERT_TRUE(polled_data);
 
   // Check that it contains the field from the polled data that was passed in.
-  std::string dummy_string;
-  ASSERT_TRUE(polled_data->GetString(kDummyPolledDataPath, &dummy_string));
-  EXPECT_EQ(kDummyPolledDataString, dummy_string);
+  const std::string* dummy_string =
+      polled_data->FindString(kDummyPolledDataPath);
+  ASSERT_TRUE(dummy_string);
+  EXPECT_EQ(kDummyPolledDataString, *dummy_string);
 
   // Check that it also contains something from net::GetNetInfo.
-  base::DictionaryValue* http_cache_info;
-  ASSERT_TRUE(polled_data->GetDictionary("httpCacheInfo", &http_cache_info));
+  const base::Value::Dict* http_cache_info =
+      polled_data->FindDict("httpCacheInfo");
+  ASSERT_TRUE(http_cache_info);
 }
 
 // Test with requests in flight. This is done by going through a sequence of a
@@ -771,7 +769,7 @@ TEST_F(NetExportFileWriterTest, StartWithNetworkContextActive) {
                                        TRAFFIC_ANNOTATION_FOR_TESTS);
   base::RunLoop run_loop, run_loop2;
   simple_loader->SetOnRedirectCallback(base::BindRepeating(
-      [](base::RepeatingClosure notify_log,
+      [](base::RepeatingClosure notify_log, const GURL& url_before_redirect,
          const net::RedirectInfo& redirect_info,
          const network::mojom::URLResponseHead& response_head,
          std::vector<std::string>* to_be_removed_headers) { notify_log.Run(); },
@@ -795,18 +793,18 @@ TEST_F(NetExportFileWriterTest, StartWithNetworkContextActive) {
   ASSERT_TRUE(StopThenVerifyNewStateAndFile(
       base::FilePath(), base::Value::Dict(), kCaptureModeDefaultString));
   // Read events from log file.
-  std::unique_ptr<base::DictionaryValue> root;
+  std::unique_ptr<base::Value::Dict> root;
   ASSERT_TRUE(ReadCompleteLogFile(default_log_path(), &root));
-  base::ListValue* events;
-  ASSERT_TRUE(root->GetList("events", &events));
+  const base::Value::List* events = root->FindList("events");
+  ASSERT_TRUE(events);
 
   // Check there is at least one event as a result of the ongoing request.
-  ASSERT_GE(events->GetListDeprecated().size(), 1u);
+  ASSERT_GE(events->size(), 1u);
 
   // Check the URL in the params of the first event.
-  base::Value::Dict* event = events->GetList()[0].GetIfDict();
+  const base::Value::Dict* event = (*events)[0].GetIfDict();
   EXPECT_TRUE(event);
-  base::Value::Dict* event_params = event->FindDict("params");
+  const base::Value::Dict* event_params = event->FindDict("params");
   EXPECT_TRUE(event_params);
   EXPECT_EQ(test_server.GetURL(kRedirectURL),
             *(event_params->FindString("url")));
@@ -831,8 +829,7 @@ TEST_F(NetExportFileWriterTest, ReceiveStartWhileInitializing) {
   // Now run the main message loop. Make sure StartNetLog() was ignored by
   // checking that the next two states are "initializing" followed by
   // "not-logging".
-  std::unique_ptr<base::DictionaryValue> state =
-      test_state_observer()->WaitForNewState();
+  base::Value::Dict state = test_state_observer()->WaitForNewState();
   ASSERT_TRUE(VerifyState(std::move(state), kStateInitializingString));
   state = test_state_observer()->WaitForNewState();
   ASSERT_TRUE(
@@ -863,8 +860,7 @@ TEST_F(NetExportFileWriterTest, ReceiveStartWhileStoppingLog) {
   // ignored by checking that the next two states are "stopping-log" followed by
   // "not-logging". Also make sure the capture mode matches that of the first
   // StartNetLog() call (called by StartThenVerifyState()).
-  std::unique_ptr<base::DictionaryValue> state =
-      test_state_observer()->WaitForNewState();
+  base::Value::Dict state = test_state_observer()->WaitForNewState();
   ASSERT_TRUE(VerifyState(std::move(state), kStateStoppingLogString));
   state = test_state_observer()->WaitForNewState();
   ASSERT_TRUE(VerifyState(std::move(state), kStateNotLoggingString, true, true,
@@ -882,8 +878,7 @@ TEST_F(NetExportFileWriterTest, HandleCrash) {
   // Break the pipe, as if network service crashed.
   fake_network_context.Disconnect();
 
-  std::unique_ptr<base::DictionaryValue> state =
-      test_state_observer()->WaitForNewState();
+  base::Value::Dict state = test_state_observer()->WaitForNewState();
   ASSERT_TRUE(VerifyState(std::move(state), kStateNotLoggingString));
 }
 

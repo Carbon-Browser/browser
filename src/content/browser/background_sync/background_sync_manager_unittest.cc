@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/check_deref.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
@@ -22,7 +23,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_entropy_provider.h"
 #include "base/test/simple_test_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/browser/background_sync/background_sync_launcher.h"
 #include "content/browser/background_sync/background_sync_network_observer.h"
@@ -134,8 +134,8 @@ class BackgroundSyncManagerTest
     ON_CALL(*mock_permission_manager,
             GetPermissionStatusForWorker(PermissionType::NOTIFICATIONS, _, _))
         .WillByDefault(Return(blink::mojom::PermissionStatus::DENIED));
-    helper_->browser_context()->SetPermissionControllerDelegate(
-        std::move(mock_permission_manager));
+    TestBrowserContext::FromBrowserContext(helper_->browser_context())
+        ->SetPermissionControllerDelegate(std::move(mock_permission_manager));
 
     // Create a StoragePartition with the correct BrowserContext so that the
     // BackgroundSyncManager can find the BrowserContext through it.
@@ -172,23 +172,27 @@ class BackgroundSyncManagerTest
     bool called_2 = false;
     blink::mojom::ServiceWorkerRegistrationOptions options1;
     options1.scope = GURL(kScope1);
-    blink::StorageKey key1(url::Origin::Create(GURL(kScope1)));
+    const blink::StorageKey key1 =
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(GURL(kScope1)));
     blink::mojom::ServiceWorkerRegistrationOptions options2;
     options2.scope = GURL(kScope2);
-    blink::StorageKey key2(url::Origin::Create(GURL(kScope2)));
+    const blink::StorageKey key2 =
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(GURL(kScope2)));
     helper_->context()->RegisterServiceWorker(
         GURL(kScript1), key1, options1,
         blink::mojom::FetchClientSettingsObject::New(),
         base::BindOnce(&RegisterServiceWorkerCallback, &called_1,
                        &sw_registration_id_1_),
-        /*requesting_frame_id=*/GlobalRenderFrameHostId());
+        /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+        PolicyContainerPolicies());
 
     helper_->context()->RegisterServiceWorker(
         GURL(kScript2), key2, options2,
         blink::mojom::FetchClientSettingsObject::New(),
         base::BindOnce(&RegisterServiceWorkerCallback, &called_2,
                        &sw_registration_id_2_),
-        /*requesting_frame_id=*/GlobalRenderFrameHostId());
+        /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+        PolicyContainerPolicies());
     base::RunLoop().RunUntilIdle();
     EXPECT_TRUE(called_1);
     EXPECT_TRUE(called_2);
@@ -309,8 +313,8 @@ class BackgroundSyncManagerTest
         base::MakeRefCounted<TestBackgroundSyncContext>();
     background_sync_context_->Init(
         helper_->context_wrapper(),
-        static_cast<DevToolsBackgroundServicesContextImpl*>(
-            storage_partition_impl_->GetDevToolsBackgroundServicesContext()));
+        CHECK_DEREF(static_cast<DevToolsBackgroundServicesContextImpl*>(
+            storage_partition_impl_->GetDevToolsBackgroundServicesContext())));
     base::RunLoop().RunUntilIdle();
 
     storage_partition_impl_->ShutdownBackgroundSyncContextForTesting();
@@ -548,7 +552,7 @@ class BackgroundSyncManagerTest
     bool called = false;
     const GURL scope = ScopeForSWId(sw_registration_id);
     helper_->context()->UnregisterServiceWorker(
-        scope, blink::StorageKey(url::Origin::Create(scope)),
+        scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
         /*is_immediate=*/false,
         base::BindOnce(&UnregisterServiceWorkerCallback, &called));
     base::RunLoop().RunUntilIdle();

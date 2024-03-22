@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <utility>
 
 #include "base/check.h"
-#include "base/scoped_observation.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_flags.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
-#include "ui/gfx/color_utils.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
+#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/views/painter.h"
 #include "ui/views/view.h"
 
@@ -42,34 +42,44 @@ class SolidBackground : public Background {
 // Shared class for RoundedRectBackground and ThemedRoundedRectBackground.
 class BaseRoundedRectBackground : public Background {
  public:
-  BaseRoundedRectBackground(float radius, int for_border_thickness)
-      : radius_(radius), half_thickness_(for_border_thickness / 2.0f) {}
+  BaseRoundedRectBackground(const gfx::RoundedCornersF& radii,
+                            int for_border_thickness)
+      : radii_(radii), half_thickness_(for_border_thickness / 2.0f) {}
 
   BaseRoundedRectBackground(const BaseRoundedRectBackground&) = delete;
   BaseRoundedRectBackground& operator=(const BaseRoundedRectBackground&) =
       delete;
 
   void Paint(gfx::Canvas* canvas, View* view) const override {
+    gfx::Rect rect(view->GetLocalBounds());
+    rect.Inset(half_thickness_);
+    SkPath path;
+    SkScalar radii[8] = {radii_.upper_left(),  radii_.upper_left(),
+                         radii_.upper_right(), radii_.upper_right(),
+                         radii_.lower_right(), radii_.lower_right(),
+                         radii_.lower_left(),  radii_.lower_left()};
+    path.addRoundRect(gfx::RectToSkRect(rect), radii);
+
     cc::PaintFlags flags;
     flags.setAntiAlias(true);
     flags.setStyle(cc::PaintFlags::kFill_Style);
     flags.setColor(get_color());
-    gfx::RectF bounds(view->GetLocalBounds());
-    bounds.Inset(half_thickness_);
-    canvas->DrawRoundRect(bounds, radius_ - half_thickness_, flags);
+    canvas->DrawPath(path, flags);
   }
 
  private:
-  float radius_;
-  float half_thickness_;
+  const gfx::RoundedCornersF radii_;
+  const float half_thickness_;
 };
 
 // RoundedRectBackground is a filled solid colored background that has
 // rounded corners.
 class RoundedRectBackground : public BaseRoundedRectBackground {
  public:
-  RoundedRectBackground(SkColor color, float radius, int for_border_thickness)
-      : BaseRoundedRectBackground(radius, for_border_thickness) {
+  RoundedRectBackground(SkColor color,
+                        const gfx::RoundedCornersF& radii,
+                        int for_border_thickness)
+      : BaseRoundedRectBackground(radii, for_border_thickness) {
     SetNativeControlColor(color);
   }
 
@@ -126,9 +136,9 @@ class ThemedSolidBackground : public SolidBackground {
 class ThemedRoundedRectBackground : public BaseRoundedRectBackground {
  public:
   ThemedRoundedRectBackground(ui::ColorId color_id,
-                              float radius,
+                              const gfx::RoundedCornersF& radii,
                               int for_border_thickness)
-      : BaseRoundedRectBackground(radius, for_border_thickness),
+      : BaseRoundedRectBackground(radii, for_border_thickness),
         color_id_(color_id) {}
 
   ThemedRoundedRectBackground(const ThemedRoundedRectBackground&) = delete;
@@ -184,7 +194,21 @@ std::unique_ptr<Background> CreateRoundedRectBackground(
     SkColor color,
     float radius,
     int for_border_thickness) {
-  return std::make_unique<RoundedRectBackground>(color, radius,
+  return CreateRoundedRectBackground(color, gfx::RoundedCornersF{radius},
+                                     for_border_thickness);
+}
+
+std::unique_ptr<Background> CreateRoundedRectBackground(
+    SkColor color,
+    const gfx::RoundedCornersF& radii,
+    int for_border_thickness) {
+  // If the radii is not set, fallback to SolidBackground since it results in
+  // more efficient tiling by cc. See crbug.com/1464128.
+  if (radii.IsEmpty() && for_border_thickness == 0) {
+    return CreateSolidBackground(color);
+  }
+
+  return std::make_unique<RoundedRectBackground>(color, radii,
                                                  for_border_thickness);
 }
 
@@ -192,7 +216,33 @@ std::unique_ptr<Background> CreateThemedRoundedRectBackground(
     ui::ColorId color_id,
     float radius,
     int for_border_thickness) {
-  return std::make_unique<ThemedRoundedRectBackground>(color_id, radius,
+  return CreateThemedRoundedRectBackground(
+      color_id, gfx::RoundedCornersF{radius}, for_border_thickness);
+}
+
+std::unique_ptr<Background> CreateThemedRoundedRectBackground(
+    ui::ColorId color_id,
+    float top_radius,
+    float bottom_radius,
+    int for_border_thickness) {
+  return CreateThemedRoundedRectBackground(
+      color_id,
+      gfx::RoundedCornersF{top_radius, top_radius, bottom_radius,
+                           bottom_radius},
+      for_border_thickness);
+}
+
+std::unique_ptr<Background> CreateThemedRoundedRectBackground(
+    ui::ColorId color_id,
+    const gfx::RoundedCornersF& radii,
+    int for_border_thickness) {
+  // If the radii is not set, fallback to SolidBackground since it results in
+  // more efficient tiling by cc. See crbug.com/1464128.
+  if (radii.IsEmpty() && for_border_thickness == 0) {
+    return CreateThemedSolidBackground(color_id);
+  }
+
+  return std::make_unique<ThemedRoundedRectBackground>(color_id, radii,
                                                        for_border_thickness);
 }
 

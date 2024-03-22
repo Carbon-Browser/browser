@@ -47,18 +47,18 @@
 
 namespace blink {
 
-WebDOMFileSystem WebDOMFileSystem::FromV8Value(v8::Local<v8::Value> value) {
-  if (!V8DOMFileSystem::HasInstance(value, v8::Isolate::GetCurrent()))
-    return WebDOMFileSystem();
-  v8::Local<v8::Object> object = v8::Local<v8::Object>::Cast(value);
-  DOMFileSystem* dom_file_system = V8DOMFileSystem::ToImpl(object);
-  DCHECK(dom_file_system);
-  return WebDOMFileSystem(dom_file_system);
+WebDOMFileSystem WebDOMFileSystem::FromV8Value(v8::Isolate* isolate,
+                                               v8::Local<v8::Value> value) {
+  if (DOMFileSystem* dom_file_system =
+          V8DOMFileSystem::ToWrappable(isolate, value)) {
+    return WebDOMFileSystem(dom_file_system);
+  }
+  return WebDOMFileSystem();
 }
 
-WebURL WebDOMFileSystem::CreateFileSystemURL(v8::Local<v8::Value> value) {
-  const Entry* const entry =
-      V8Entry::ToImplWithTypeCheck(v8::Isolate::GetCurrent(), value);
+WebURL WebDOMFileSystem::CreateFileSystemURL(v8::Isolate* isolate,
+                                             v8::Local<v8::Value> value) {
+  const Entry* const entry = V8Entry::ToWrappable(isolate, value);
   if (entry)
     return entry->filesystem()->CreateFileSystemURL(entry);
   return WebURL();
@@ -114,13 +114,7 @@ WebURL WebDOMFileSystem::RootURL() const {
   return private_->RootURL();
 }
 
-v8::Local<v8::Value> WebDOMFileSystem::ToV8Value(
-    v8::Local<v8::Object> creation_context,
-    v8::Isolate* isolate) {
-  // We no longer use |creationContext| because it's often misused and points
-  // to a context faked by user script.
-  DCHECK(creation_context->GetCreationContextChecked() ==
-         isolate->GetCurrentContext());
+v8::Local<v8::Value> WebDOMFileSystem::ToV8Value(v8::Isolate* isolate) {
   if (!private_.Get())
     return v8::Local<v8::Value>();
   return ToV8(private_.Get(), isolate->GetCurrentContext()->Global(), isolate);
@@ -129,12 +123,7 @@ v8::Local<v8::Value> WebDOMFileSystem::ToV8Value(
 v8::Local<v8::Value> WebDOMFileSystem::CreateV8Entry(
     const WebString& path,
     EntryType entry_type,
-    v8::Local<v8::Object> creation_context,
     v8::Isolate* isolate) {
-  // We no longer use |creationContext| because it's often misused and points
-  // to a context faked by user script.
-  DCHECK(creation_context->GetCreationContextChecked() ==
-         isolate->GetCurrentContext());
   if (!private_.Get())
     return v8::Local<v8::Value>();
   if (entry_type == kEntryTypeDirectory) {

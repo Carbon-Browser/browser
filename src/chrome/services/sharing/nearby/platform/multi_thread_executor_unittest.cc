@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@
 #include "base/unguessable_token.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -199,4 +198,3 @@ TEST_F(MultiThreadExecutorTest, ManyParallelTasks) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

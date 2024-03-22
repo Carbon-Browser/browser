@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,6 @@
 #define IOS_CHROME_BROWSER_UI_SETTINGS_SETTINGS_APP_INTERFACE_H_
 
 #import <Foundation/Foundation.h>
-
-#include "base/compiler_specific.h"
 
 // Test specific helpers for settings_egtest.mm.
 @interface SettingsAppInterface : NSObject
@@ -26,17 +24,11 @@
 // Allows turning on and off metrics reporting.
 + (void)setMetricsReportingEnabled:(BOOL)reportingEnabled;
 
-// YES if breakpad crash collection is enabled.
-+ (BOOL)isBreakpadEnabled;
+// YES if crashpad crash collection is enabled.
++ (BOOL)isCrashpadEnabled;
 
 // YES if collected crashes get uploaded.
-+ (BOOL)isBreakpadReportingEnabled;
-
-// Restores the first launch state to previous state.
-+ (void)resetFirstLaunchState;
-
-// Pass YES to simulate First Run experience.
-+ (void)setFirstLunchState:(BOOL)firstLaunch;
++ (BOOL)isCrashpadReportingEnabled;
 
 // Returns YES if keyboard commands were seen.
 + (BOOL)settingsRegisteredKeyboardCommands;

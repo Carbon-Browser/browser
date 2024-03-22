@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,12 @@
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 #include "storage/browser/blob/blob_data_handle.h"
 #endif
 
@@ -73,7 +74,7 @@ struct DriverEntry {
   // Will be empty file path in incognito mode.
   base::FilePath current_file_path;
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
   // The blob data handle that contains download data.
   // Will be available after the download is completed in incognito mode.
   absl::optional<storage::BlobDataHandle> blob_handle;

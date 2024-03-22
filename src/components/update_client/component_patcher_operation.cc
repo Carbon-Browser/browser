@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_util.h"
 #include "base/files/memory_mapped_file.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/update_client/patcher.h"
 #include "components/update_client/update_client.h"
 #include "components/update_client/update_client_errors.h"
@@ -57,14 +57,14 @@ DeltaUpdateOp::DeltaUpdateOp() = default;
 
 DeltaUpdateOp::~DeltaUpdateOp() = default;
 
-void DeltaUpdateOp::Run(const base::DictionaryValue* command_args,
+void DeltaUpdateOp::Run(const base::Value::Dict& command_args,
                         const base::FilePath& input_dir,
                         const base::FilePath& unpack_dir,
                         scoped_refptr<CrxInstaller> installer,
                         ComponentPatcher::Callback callback) {
   callback_ = std::move(callback);
-  const std::string* output_rel_path = command_args->FindStringKey(kOutput);
-  const std::string* sha256_value = command_args->FindStringKey(kSha256);
+  const std::string* output_rel_path = command_args.FindString(kOutput);
+  const std::string* sha256_value = command_args.FindString(kSha256);
   if (!output_rel_path || !sha256_value) {
     DoneRunning(UnpackerError::kDeltaBadCommands, 0);
     return;
@@ -95,7 +95,7 @@ void DeltaUpdateOp::Run(const base::DictionaryValue* command_args,
 void DeltaUpdateOp::DoneRunning(UnpackerError error, int extended_error) {
   if (error == UnpackerError::kNone)
     error = CheckHash();
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback_), error, extended_error));
 }
 
@@ -112,10 +112,10 @@ DeltaUpdateOpCopy::DeltaUpdateOpCopy() = default;
 DeltaUpdateOpCopy::~DeltaUpdateOpCopy() = default;
 
 UnpackerError DeltaUpdateOpCopy::DoParseArguments(
-    const base::DictionaryValue* command_args,
+    const base::Value::Dict& command_args,
     const base::FilePath& input_dir,
     scoped_refptr<CrxInstaller> installer) {
-  const std::string* input_rel_path = command_args->FindStringKey(kInput);
+  const std::string* input_rel_path = command_args.FindString(kInput);
   if (!input_rel_path)
     return UnpackerError::kDeltaBadCommands;
 
@@ -137,10 +137,10 @@ DeltaUpdateOpCreate::DeltaUpdateOpCreate() = default;
 DeltaUpdateOpCreate::~DeltaUpdateOpCreate() = default;
 
 UnpackerError DeltaUpdateOpCreate::DoParseArguments(
-    const base::DictionaryValue* command_args,
+    const base::Value::Dict& command_args,
     const base::FilePath& input_dir,
     scoped_refptr<CrxInstaller> installer) {
-  const std::string* patch_rel_path = command_args->FindStringKey(kPatch);
+  const std::string* patch_rel_path = command_args.FindString(kPatch);
   if (!patch_rel_path)
     return UnpackerError::kDeltaBadCommands;
 
@@ -160,17 +160,17 @@ void DeltaUpdateOpCreate::DoRun(ComponentPatcher::Callback callback) {
 DeltaUpdateOpPatch::DeltaUpdateOpPatch(const std::string& operation,
                                        scoped_refptr<Patcher> patcher)
     : operation_(operation), patcher_(patcher) {
-  DCHECK(operation == kBsdiff || operation == kCourgette);
+  CHECK(operation == kBsdiff || operation == kCourgette);
 }
 
 DeltaUpdateOpPatch::~DeltaUpdateOpPatch() = default;
 
 UnpackerError DeltaUpdateOpPatch::DoParseArguments(
-    const base::DictionaryValue* command_args,
+    const base::Value::Dict& command_args,
     const base::FilePath& input_dir,
     scoped_refptr<CrxInstaller> installer) {
-  const std::string* patch_rel_path = command_args->FindStringKey(kPatch);
-  const std::string* input_rel_path = command_args->FindStringKey(kInput);
+  const std::string* patch_rel_path = command_args.FindString(kPatch);
+  const std::string* input_rel_path = command_args.FindString(kInput);
   if (!patch_rel_path || !input_rel_path)
     return UnpackerError::kDeltaBadCommands;
 

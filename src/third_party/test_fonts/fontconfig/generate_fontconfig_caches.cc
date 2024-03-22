@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ int main() {
   FcFini();
 
   // Check existence of intended fontconfig cache file.
-  auto cache = fontconfig_caches + "/" + kCacheKey + "-le64.cache-7";
+  auto cache = fontconfig_caches + "/" + kCacheKey + "-le64.cache-9";
   bool cache_exists = access(cache.c_str(), F_OK) == 0;
   return !cache_exists;
 }

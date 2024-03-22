@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -140,8 +140,7 @@ enum ShortcutOperation {
 interface UtilWin {
   // Returns the pinned state of the current executable.
   IsPinnedToTaskbar() => (bool succeeded,
-                          bool is_pinned_to_taskbar,
-                          bool is_pinned_to_taskbar_verb_check);
+                          bool is_pinned_to_taskbar);
 
   // Unpins all shortcuts in `shortcut_paths`.
   UnpinShortcuts(array<mojo_base.mojom.FilePath> shortcut_paths)

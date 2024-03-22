@@ -1,14 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 /**
  * @fileoverview Tests opening files in the browser using content sniffing.
  */
 
-import {addEntries, ENTRIES, EntryType, getBrowserWindows, getCaller, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
+import {ENTRIES, getBrowserWindows, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {expandTreeItem, mountCrostini, navigateWithDirectoryTree, remoteCall, setupAndWaitUntilReady, waitForMediaApp} from './background.js';
+import {remoteCall, setupAndWaitUntilReady} from './background.js';
 
 /**
  * Tests opening a file with missing filename extension from Files app.
@@ -26,16 +26,13 @@ async function sniffedFileOpen(path, entry) {
   const appId = await setupAndWaitUntilReady(path, [entry], [entry]);
 
   // Open the file from Files app.
-  if (remoteCall.isSwaMode() && entry.mimeType === 'application/pdf') {
+  if (entry.mimeType === 'application/pdf') {
     // When SWA is enabled, Backlight is also enabled and becomes the default
     // handler for PDF files. So we have to use the "open with" option to open
     // in the browser.
 
     // Select the file.
-    chrome.test.assertTrue(
-        !!await remoteCall.callRemoteTestUtil(
-            'selectFile', appId, [entry.targetPath]),
-        'selectFile failed');
+    await remoteCall.waitUntilSelected(appId, entry.targetPath);
 
     // Right-click the selected file.
     await remoteCall.waitAndRightClick(appId, '.table-row[selected]');
@@ -60,9 +57,9 @@ async function sniffedFileOpen(path, entry) {
   }
 
   // The SWA window itself is detected by getBrowserWindows().
-  const initilWindowCount = remoteCall.isSwaMode() ? 1 : 0;
+  const initialWindowCount = 1;
   // Wait for a new browser window to appear.
-  const browserWindows = await getBrowserWindows(initilWindowCount);
+  const browserWindows = await getBrowserWindows(initialWindowCount);
 
   // Find the main (normal) browser window.
   let normalWindow = undefined;

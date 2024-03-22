@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 #define COMPONENTS_DEVICE_SIGNALS_CORE_COMMON_COMMON_TYPES_H_
 
 #include <string>
+#include <vector>
 
 #include "base/files/file_path.h"
+#include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device_signals {
@@ -24,23 +26,24 @@ struct ExecutableMetadata {
 
   ~ExecutableMetadata();
 
-  // Is true if the file for which this payload was generated is indeed an
-  // executable. If this is false, all of the other properties will be
-  // absl::nullopt.
-  bool is_executable = false;
-
   // Is true if a currently running process was spawned from this file.
-  absl::optional<bool> is_running = absl::nullopt;
+  bool is_running = false;
 
-  // SHA256 hash of the public key of the certificate used to sign the
-  // executable.
-  absl::optional<std::string> public_key_sha256 = absl::nullopt;
+  // Byte strings containing the SHA-256 hash of the DER-encoded SPKI structures
+  // of the certificates used to sign the executable.
+  absl::optional<std::vector<std::string>> public_keys_hashes = absl::nullopt;
 
   // Product name of this executable.
   absl::optional<std::string> product_name = absl::nullopt;
 
   // Version of this executable.
   absl::optional<std::string> version = absl::nullopt;
+
+  // Is true if the OS has verified the signing certificate.
+  bool is_os_verified = false;
+
+  // The subject name of the signing certificate.
+  absl::optional<std::string> subject_name = absl::nullopt;
 
   bool operator==(const ExecutableMetadata& other) const;
 };
@@ -59,9 +62,9 @@ struct FileSystemItem {
   // Value indicating whether the specific resource could be found or not.
   PresenceValue presence = PresenceValue::kUnspecified;
 
-  // SHA256 hash of a file’s bytes. Ignored when `path` points to a
-  // directory. Collected only when `compute_sha256` is set to true in the
-  // corresponding GetFileSystemInfoOptions parameter.
+  // Byte string containing the SHA256 hash of a file’s bytes. Ignored when
+  // `path` points to a directory. Collected only when `compute_sha256` is set
+  // to true in the corresponding GetFileSystemInfoOptions parameter.
   absl::optional<std::string> sha256_hash = absl::nullopt;
 
   // Set of properties only relevant for executable files. Will only be
@@ -84,9 +87,20 @@ struct GetFileSystemInfoOptions {
 
   bool compute_sha256 = false;
 
-  bool compute_is_executable = false;
+  bool compute_executable_metadata = false;
 
   bool operator==(const GetFileSystemInfoOptions& other) const;
+};
+
+struct CrowdStrikeSignals {
+  std::string customer_id{};
+  std::string agent_id{};
+
+  // Returns a Value with the non-empty values. Returns absl::nullopt if neither
+  // values are set.
+  absl::optional<base::Value> ToValue() const;
+
+  bool operator==(const CrowdStrikeSignals& other) const;
 };
 
 }  // namespace device_signals

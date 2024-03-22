@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 
 #include "base/component_export.h"
 
-namespace chromeos {
-namespace assistant {
-namespace switches {
+namespace ash::assistant::switches {
 
 // NOTE: Switches are reserved for developer-facing options. End-user facing
 // features should use base::Feature. See features.h.
@@ -29,8 +27,12 @@ extern const char kRedirectLibassistantLogging[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kDisableLibAssistantLogfile[];
 
-}  // namespace switches
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant::switches
+
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
+namespace chromeos::assistant {
+namespace switches = ::ash::assistant::switches;
+}
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_PUBLIC_CPP_SWITCHES_H_

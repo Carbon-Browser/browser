@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIA_CAPABILITIES_MEDIA_CAPABILITIES_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "media/base/video_codecs.h"  // for media::VideoCodecProfile
 #include "media/learning/mojo/public/cpp/mojo_learning_task_controller.h"
@@ -82,6 +83,7 @@ class MODULES_EXPORT MediaCapabilities final
     absl::optional<bool> db_is_smooth;
     absl::optional<bool> db_is_power_efficient;
     absl::optional<bool> is_gpu_factories_supported;
+    absl::optional<bool> is_builtin_video_codec;
     base::TimeTicks request_time;
     absl::optional<IdentifiableToken> input_token;
   };
@@ -157,7 +159,9 @@ class MODULES_EXPORT MediaCapabilities final
       const absl::optional<::media::learning::TargetHistogram>& histogram);
 
   // Callback for GetGpuFactoriesSupport().
-  void OnGpuFactoriesSupport(int callback_id, bool is_supported);
+  void OnGpuFactoriesSupport(int callback_id,
+                             bool is_supported,
+                             media::VideoCodec video_codec);
 
   // Resolves the callback with associated |callback_id| and removes it from the
   // |pending_callback_map_|.
@@ -212,10 +216,12 @@ class MODULES_EXPORT MediaCapabilities final
   HeapHashMap<int, Member<PendingCallbackState>> pending_cb_map_;
 
   // Makes it possible to override the WebrtcDecodingInfoHandler in tests.
-  WebrtcDecodingInfoHandler* webrtc_decoding_info_handler_for_test_ = nullptr;
+  raw_ptr<WebrtcDecodingInfoHandler, ExperimentalRenderer>
+      webrtc_decoding_info_handler_for_test_ = nullptr;
 
   // Makes it possible to override the WebrtcEncodingInfoHandler in tests.
-  WebrtcEncodingInfoHandler* webrtc_encoding_info_handler_for_test_ = nullptr;
+  raw_ptr<WebrtcEncodingInfoHandler, ExperimentalRenderer>
+      webrtc_encoding_info_handler_for_test_ = nullptr;
 };
 
 }  // namespace blink

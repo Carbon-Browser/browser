@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/scoped_refptr.h"
@@ -81,14 +81,14 @@ bool ParseURLParameters(const std::string& params_str,
   return true;
 }
 
-base::OnceCallback<void(StatusCode, const std::string&)> BindResult(
+base::OnceCallback<void(StatusCode, std::string)> BindResult(
     CallbackResult& target) {
   target.status = StatusCode::kUnexpectedError;
   target.data.clear();
   auto save_results = [](CallbackResult* target, StatusCode status,
-                         const std::string& data) {
+                         std::string data) {
     target->status = status;
-    target->data = data;
+    target->data = std::move(data);
   };
   return base::BindOnce(save_results, base::Unretained(&target));
 }
@@ -143,7 +143,7 @@ std::string FakeAuthorizationServer::ReceivePOSTWithJSON(
   auto content = base::JSONReader::Read(payload);
   out_params.clear();
   if (content && content->is_dict()) {
-    out_params = std::move(content->GetDict());
+    out_params = std::move(content).value().TakeDict();
   } else {
     msg += base::StrCat(
         {"Cannot parse the payload: \"", payload.substr(0, 256), "\""});

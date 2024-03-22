@@ -1,12 +1,12 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/vulkan/android/vulkan_implementation_android.h"
 
 #include "base/android/android_hardware_buffer_compat.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "gpu/ipc/common/vulkan_ycbcr_info.h"
 #include "gpu/vulkan/vulkan_device_queue.h"
@@ -86,6 +86,7 @@ VulkanImplementationAndroid::GetOptionalDeviceExtensions() {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
       VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME,
       VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME,
+      VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
   };
 }
 
@@ -102,30 +103,9 @@ VulkanImplementationAndroid::ExportVkFenceToGpuFence(VkDevice vk_device,
   return nullptr;
 }
 
-VkSemaphore VulkanImplementationAndroid::CreateExternalSemaphore(
-    VkDevice vk_device) {
-  return CreateExternalVkSemaphore(
-      vk_device, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT);
-}
-
-VkSemaphore VulkanImplementationAndroid::ImportSemaphoreHandle(
-    VkDevice vk_device,
-    SemaphoreHandle sync_handle) {
-  return ImportVkSemaphoreHandle(vk_device, std::move(sync_handle));
-}
-
-SemaphoreHandle VulkanImplementationAndroid::GetSemaphoreHandle(
-    VkDevice vk_device,
-    VkSemaphore vk_semaphore) {
-  // VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT specifies a POSIX file
-  // descriptor handle to a Linux Sync File or Android Fence object.
-  return GetVkSemaphoreHandle(vk_device, vk_semaphore,
-                              VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT);
-}
-
-VkExternalMemoryHandleTypeFlagBits
-VulkanImplementationAndroid::GetExternalImageHandleType() {
-  return VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
+VkExternalSemaphoreHandleTypeFlagBits
+VulkanImplementationAndroid::GetExternalSemaphoreHandleType() {
+  return VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT;
 }
 
 bool VulkanImplementationAndroid::CanImportGpuMemoryBuffer(
@@ -139,7 +119,8 @@ VulkanImplementationAndroid::CreateImageFromGpuMemoryHandle(
     VulkanDeviceQueue* device_queue,
     gfx::GpuMemoryBufferHandle gmb_handle,
     gfx::Size size,
-    VkFormat vk_format) {
+    VkFormat vk_format,
+    const gfx::ColorSpace& color_space) {
   // TODO(sergeyu): Move code from CreateVkImageAndImportAHB() here and remove
   // CreateVkImageAndImportAHB().
   NOTIMPLEMENTED();

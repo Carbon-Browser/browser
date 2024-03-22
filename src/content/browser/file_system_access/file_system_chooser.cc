@@ -1,27 +1,22 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/file_system_access/file_system_chooser.h"
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
-#include "base/files/file_util.h"
 #include "base/i18n/file_util_icu.h"
 #include "base/i18n/rtl.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "content/browser/file_system_access/file_system_access_directory_handle_impl.h"
 #include "content/browser/file_system_access/file_system_access_error.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_client.h"
-#include "net/base/filename_util.h"
 #include "net/base/mime_util.h"
+#include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/shell_dialogs/select_file_policy.h"
 #include "ui/shell_dialogs/selected_file_info.h"
@@ -36,28 +31,10 @@ namespace {
 // size and underlying platform all influence how many characters will actually
 // be visible. As such this can be adjusted as needed.
 constexpr int kMaxDescriptionLength = 64;
-
-std::string TypeToString(ui::SelectFileDialog::Type type) {
-  switch (type) {
-    case ui::SelectFileDialog::SELECT_OPEN_FILE:
-      return "OpenFile";
-    case ui::SelectFileDialog::SELECT_OPEN_MULTI_FILE:
-      return "OpenMultipleFiles";
-    case ui::SelectFileDialog::SELECT_SAVEAS_FILE:
-      return "SaveFile";
-    case ui::SelectFileDialog::SELECT_FOLDER:
-      return "OpenDirectory";
-    default:
-      NOTREACHED();
-      return std::string();
-  }
-}
-
-void RecordFileSelectionResult(ui::SelectFileDialog::Type type, int count) {
-  base::UmaHistogramCounts1000("NativeFileSystemAPI.FileChooserResult", count);
-  base::UmaHistogramCounts1000(
-      "NativeFileSystemAPI.FileChooserResult." + TypeToString(type), count);
-}
+// The maximum number of unicode code points the extension of a file is
+// allowed to be. Any longer extensions will be stripped. This value should be
+// kept in sync with the extension length checks in the renderer.
+constexpr int kMaxExtensionLength = 16;
 
 // Similar to base::FilePath::FinalExtension, but operates with the
 // understanding that the StringType passed in is an extension, not a path.
@@ -214,6 +191,12 @@ base::FilePath FileSystemChooser::Options::ResolveSuggestedNameExtension(
 
   auto suggested_extension = suggested_name.Extension();
 
+  if (suggested_extension.size() > kMaxExtensionLength) {
+    // Sanitize extensions longer than 16 characters.
+    file_types.include_all_files = true;
+    return suggested_name.RemoveExtension();
+  }
+
   if (file_types.extensions.empty() || suggested_extension.empty()) {
     file_types.include_all_files = true;
     return suggested_name;
@@ -262,8 +245,12 @@ void FileSystemChooser::CreateAndShow(
       options.type(), options.title(), options.default_path(),
       &options.file_type_info(), options.default_file_type_index(),
       /*default_extension=*/base::FilePath::StringType(),
-      web_contents ? web_contents->GetTopLevelNativeWindow() : nullptr,
-      /*params=*/nullptr);
+      web_contents ? web_contents->GetTopLevelNativeWindow()
+                   : gfx::NativeWindow(),
+      /*params=*/nullptr,
+      /*caller=*/
+      web_contents ? &web_contents->GetPrimaryMainFrame()->GetLastCommittedURL()
+                   : nullptr);
 }
 
 // static
@@ -354,14 +341,12 @@ void FileSystemChooser::MultiFilesSelectedWithExtraInfo(
     }
   }
 
-  RecordFileSelectionResult(type_, result.size());
   std::move(callback_).Run(file_system_access_error::Ok(), std::move(result));
   delete this;
 }
 
 void FileSystemChooser::FileSelectionCanceled(void* params) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  RecordFileSelectionResult(type_, 0);
   std::move(callback_).Run(
       file_system_access_error::FromStatus(
           blink::mojom::FileSystemAccessStatus::kOperationAborted),

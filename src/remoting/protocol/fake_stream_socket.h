@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,17 @@
 #include <memory>
 #include <string>
 
+#include <optional>
 #include "base/memory/weak_ptr.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "remoting/protocol/p2p_stream_socket.h"
 #include "remoting/protocol/stream_channel_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class SingleThreadTaskRunner;
 }
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // FakeStreamSocket implement P2PStreamSocket interface. All data written to
 // FakeStreamSocket is stored in a buffer returned by written_data(). Read()
@@ -94,7 +93,7 @@ class FakeStreamSocket : public P2PStreamSocket {
   int write_limit_ = 0;
   int next_write_error_ = 0;
 
-  absl::optional<int> next_read_error_;
+  std::optional<int> next_read_error_;
   scoped_refptr<net::IOBuffer> read_buffer_;
   int read_buffer_size_ = 0;
   net::CompletionOnceCallback read_callback_;
@@ -155,7 +154,6 @@ class FakeStreamChannelFactory : public StreamChannelFactory {
   base::WeakPtrFactory<FakeStreamChannelFactory> weak_factory_{this};
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_FAKE_STREAM_SOCKET_H_

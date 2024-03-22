@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,9 +108,8 @@ void LocalCardMigrationErrorDialogView::Init() {
       views::BoxLayout::MainAxisAlignment::kCenter);
   error_view->SetBorder(views::CreateEmptyBorder(kMigrationDialogInsets));
   auto* error_image = new views::ImageView();
-  error_image->SetImage(gfx::CreateVectorIcon(
-      kBrowserToolsErrorIcon,
-      GetColorProvider()->GetColor(ui::kColorAlertHighSeverity)));
+  error_image->SetImage(ui::ImageModel::FromVectorIcon(
+      kBrowserToolsErrorIcon, ui::kColorAlertHighSeverity));
   error_view->AddChildView(error_image);
 
   auto* error_message = new views::Label(

@@ -1,14 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android_webview.test.util;
 
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 import org.junit.Assert;
 
 import org.chromium.android_webview.common.variations.VariationsUtils;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.components.variations.firstrun.VariationsSeedFetcher.SeedInfo;
 
 import java.io.File;
@@ -16,22 +16,22 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 
-/**
- * Utilities for dealing with variations seeds.
- */
+/** Utilities for dealing with variations seeds. */
 @JNINamespace("android_webview")
 public class VariationsTestUtils {
     // This should match the Feature definition in variations_test_utils.cc.
     public static final String TEST_FEATURE_NAME = "WebViewTestFeature";
 
     public static void assertSeedsEqual(SeedInfo expected, SeedInfo actual) {
-        Assert.assertTrue("Expected " + expected + " but got " + actual,
-                seedsEqual(expected, actual));
+        Assert.assertTrue(
+                "Expected " + expected + " but got " + actual, seedsEqual(expected, actual));
     }
 
     public static boolean seedsEqual(SeedInfo a, SeedInfo b) {
-        return strEqual(a.signature, b.signature) && strEqual(a.country, b.country)
-                && (a.date == b.date) && (a.isGzipCompressed == b.isGzipCompressed)
+        return strEqual(a.signature, b.signature)
+                && strEqual(a.country, b.country)
+                && (a.date == b.date)
+                && (a.isGzipCompressed == b.isGzipCompressed)
                 && Arrays.equals(a.seedData, b.seedData);
     }
 

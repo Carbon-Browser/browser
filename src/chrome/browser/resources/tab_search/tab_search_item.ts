@@ -1,17 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_icons.css.js';
 import 'chrome://resources/cr_elements/mwb_shared_icons.html.js';
 import 'chrome://resources/cr_elements/mwb_shared_vars.css.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import './strings.m.js';
 
 import {MouseHoverableMixin} from 'chrome://resources/cr_elements/mouse_hoverable_mixin.js';
 import {getFaviconForPageURL} from 'chrome://resources/js/icon.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {get as deepGet, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ariaLabel, TabData, TabItemType} from './tab_data.js';
@@ -54,12 +54,18 @@ export class TabSearchItem extends TabSearchItemBase {
       },
 
       index: Number,
+
+      inSuggestedGroup: {
+        type: Boolean,
+        value: false,
+      },
     };
   }
 
   data: TabData;
   private buttonRipples_: boolean;
   index: number;
+  inSuggestedGroup: boolean;
 
   /**
    * @return Whether a close action can be performed on the item.
@@ -171,7 +177,17 @@ export class TabSearchItem extends TabSearchItemBase {
   }
 
   private ariaLabelForButton_(title: string): string {
+    if (this.inSuggestedGroup) {
+      return loadTimeData.getStringF('tabOrganizationCloseTabAriaLabel', title);
+    }
     return `${loadTimeData.getString('closeTab')} ${title}`;
+  }
+
+  private tooltipForButton_(): string {
+    if (this.inSuggestedGroup) {
+      return loadTimeData.getString('tabOrganizationCloseTabTooltip');
+    }
+    return loadTimeData.getString('closeTab');
   }
 }
 

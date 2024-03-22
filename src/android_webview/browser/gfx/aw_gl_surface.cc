@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,14 +49,15 @@ void AwGLSurface::Destroy() {
 }
 
 bool AwGLSurface::IsOffscreen() {
-  return false;
+  return true;
 }
 
 unsigned int AwGLSurface::GetBackingFramebufferObject() {
   return ScopedAppGLStateRestore::Current()->framebuffer_binding_ext();
 }
 
-gfx::SwapResult AwGLSurface::SwapBuffers(PresentationCallback callback) {
+gfx::SwapResult AwGLSurface::SwapBuffers(PresentationCallback callback,
+                                         gfx::FrameData data) {
   DCHECK(!pending_presentation_callback_);
   pending_presentation_callback_ = std::move(callback);
   return gfx::SwapResult::SWAP_ACK;

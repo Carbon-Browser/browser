@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,13 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/grit/generated_resources.h"
 #include "net/ssl/client_cert_identity.h"
 #include "net/ssl/ssl_private_key.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/font.h"
 #include "ui/views/controls/styled_label.h"
+#include "ui/views/style/typography.h"
 
 namespace chromeos {
 
@@ -36,7 +36,7 @@ class ClientCertIdentityPlatformKeys : public net::ClientCertIdentity {
   void AcquirePrivateKey(
       base::OnceCallback<void(scoped_refptr<net::SSLPrivateKey>)>
           private_key_callback) override {
-    NOTREACHED();
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -85,7 +85,7 @@ void PlatformKeysCertificateSelector::Init() {
       IDS_PLATFORM_KEYS_SELECT_CERT_DIALOG_TEXT, name, &offset));
 
   views::StyledLabel::RangeStyleInfo bold_style;
-  bold_style.text_style = STYLE_EMPHASIZED;
+  bold_style.text_style = views::style::STYLE_EMPHASIZED;
   label->AddStyleRange(gfx::Range(offset, offset + name.size()), bold_style);
   CertificateSelector::InitWithText(std::move(label));
 }

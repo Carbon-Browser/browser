@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include "base/scoped_observation.h"
 #include "chrome/browser/lacros/account_manager/account_profile_mapper.h"
 #include "components/account_manager_core/account.h"
-#include "components/account_manager_core/account_addition_result.h"
 #include "components/account_manager_core/account_manager_facade.h"
+#include "components/account_manager_core/account_upsertion_result.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 // This is a profile-scoped implementation of `AccountManagerFacade`, intended
@@ -52,6 +52,9 @@ class ProfileAccountManager : public KeyedService,
                          const account_manager::Account& account) override;
   void OnAccountRemoved(const base::FilePath& profile_path,
                         const account_manager::Account& account) override;
+  void OnAuthErrorChanged(const base::FilePath& profile_path,
+                          const account_manager::AccountKey& account,
+                          const GoogleServiceAuthError& error) override;
 
   // account_manager::AccountManagerFacade:
   void AddObserver(
@@ -68,15 +71,19 @@ class ProfileAccountManager : public KeyedService,
   void ShowAddAccountDialog(AccountAdditionSource source) override;
   void ShowAddAccountDialog(
       AccountAdditionSource source,
-      base::OnceCallback<void(const account_manager::AccountAdditionResult&
+      base::OnceCallback<void(const account_manager::AccountUpsertionResult&
                                   result)> callback) override;
-  void ShowReauthAccountDialog(AccountAdditionSource source,
-                               const std::string& email,
-                               base::OnceClosure callback) override;
+  void ShowReauthAccountDialog(
+      AccountAdditionSource source,
+      const std::string& email,
+      base::OnceCallback<void(const account_manager::AccountUpsertionResult&
+                                  result)> callback) override;
   void ShowManageAccountsSettings() override;
   std::unique_ptr<OAuth2AccessTokenFetcher> CreateAccessTokenFetcher(
       const account_manager::AccountKey& account,
       OAuth2AccessTokenConsumer* consumer) override;
+  void ReportAuthError(const account_manager::AccountKey& account,
+                       const GoogleServiceAuthError& error) override;
   void UpsertAccountForTesting(const account_manager::Account& account,
                                const std::string& token_value) override;
   void RemoveAccountForTesting(

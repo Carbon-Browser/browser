@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,12 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/process_handle.h"
-#include "base/strings/string_piece.h"
 #include "base/trace_event/memory_allocator_dump_guid.h"
 
 namespace memory_instrumentation {
@@ -44,12 +44,12 @@ class GlobalDumpGraph {
     // given |guid|, |path| and |weak|ness and returns it.
     GlobalDumpGraph::Node* CreateNode(
         base::trace_event::MemoryAllocatorDumpGuid guid,
-        base::StringPiece path,
+        std::string_view path,
         bool weak);
 
     // Returns the node in the graph at the given |path| or nullptr
     // if no such node exists in the provided |graph|.
-    GlobalDumpGraph::Node* FindNode(base::StringPiece path);
+    GlobalDumpGraph::Node* FindNode(std::string_view path);
 
     base::ProcessId pid() const { return pid_; }
     GlobalDumpGraph* global_graph() const { return global_graph_; }
@@ -102,14 +102,14 @@ class GlobalDumpGraph {
     ~Node();
 
     // Gets the direct child of a node for the given |subpath|.
-    Node* GetChild(base::StringPiece name);
+    Node* GetChild(std::string_view name);
 
     // Inserts the given |node| as a child of the current node
     // with the given |subpath| as the key.
-    void InsertChild(base::StringPiece name, Node* node);
+    void InsertChild(std::string_view name, Node* node);
 
     // Creates a child for this node with the given |name| as the key.
-    Node* CreateChild(base::StringPiece name);
+    Node* CreateChild(std::string_view name);
 
     // Checks if the current node is a descendent (i.e. exists as a child,
     // child of a child, etc.) of the given node |possible_parent|.
@@ -180,7 +180,7 @@ class GlobalDumpGraph {
     }
 
    private:
-    raw_ptr<GlobalDumpGraph::Process> dump_graph_;
+    raw_ptr<GlobalDumpGraph::Process, DanglingUntriaged> dump_graph_;
     const raw_ptr<Node> parent_;
     base::trace_event::MemoryAllocatorDumpGuid guid_;
     std::map<std::string, Entry> entries_;
@@ -194,7 +194,7 @@ class GlobalDumpGraph {
     double cumulative_owned_coefficient_ = 1;
     double cumulative_owning_coefficient_ = 1;
 
-    raw_ptr<GlobalDumpGraph::Edge> owns_edge_;
+    raw_ptr<GlobalDumpGraph::Edge, DanglingUntriaged> owns_edge_;
     std::vector<GlobalDumpGraph::Edge*> owned_by_edges_;
   };
 
@@ -211,8 +211,8 @@ class GlobalDumpGraph {
     int priority() const { return priority_; }
 
    private:
-    GlobalDumpGraph::Node* const source_;
-    GlobalDumpGraph::Node* const target_;
+    const raw_ptr<GlobalDumpGraph::Node> source_;
+    const raw_ptr<GlobalDumpGraph::Node> target_;
     const int priority_;
   };
 

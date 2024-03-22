@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef FUCHSIA_WEB_WEBENGINE_BROWSER_WEB_ENGINE_DEVTOOLS_CONTROLLER_H_
 #define FUCHSIA_WEB_WEBENGINE_BROWSER_WEB_ENGINE_DEVTOOLS_CONTROLLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/devtools_agent_host.h"
 
 namespace base {

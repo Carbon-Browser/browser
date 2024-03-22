@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,12 @@ void LogUpdatesReceivedByProcessorHistogram(ModelType model_type,
 // OnUpdateReceived().
 void LogNonReflectionUpdateFreshnessToUma(ModelType type,
                                           base::Time remote_modification_time);
+
+// Logs calls to processor's ClearMetadataWhileStopped(). `is_delayed_call` is
+// true if metadata is cleared from ModelReadyToSync() in the case that
+// ClearMetadataWhileStopped() was called before ModelReadyToSync().
+void LogClearMetadataWhileStoppedHistogram(ModelType model_type,
+                                           bool is_delayed_call);
 
 }  // namespace syncer
 

@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/mathml/mathml_radical_element.h"
 
-#include "third_party/blink/renderer/core/layout/ng/mathml/layout_ng_mathml_block_with_anonymous_mrow.h"
+#include "third_party/blink/renderer/core/layout/mathml/layout_mathml_block_with_anonymous_mrow.h"
 
 namespace blink {
 
@@ -17,14 +17,13 @@ bool MathMLRadicalElement::HasIndex() const {
 }
 
 LayoutObject* MathMLRadicalElement::CreateLayoutObject(
-    const ComputedStyle& style,
-    LegacyLayout legacy) {
-  if (!RuntimeEnabledFeatures::MathMLCoreEnabled() ||
-      !style.IsDisplayMathType() || legacy == LegacyLayout::kForce)
-    return MathMLElement::CreateLayoutObject(style, legacy);
+    const ComputedStyle& style) {
+  if (!style.IsDisplayMathType()) {
+    return MathMLElement::CreateLayoutObject(style);
+  }
   if (HasTagName(mathml_names::kMsqrtTag))
-    return MakeGarbageCollected<LayoutNGMathMLBlockWithAnonymousMrow>(this);
-  return MakeGarbageCollected<LayoutNGMathMLBlock>(this);
+    return MakeGarbageCollected<LayoutMathMLBlockWithAnonymousMrow>(this);
+  return MakeGarbageCollected<LayoutMathMLBlock>(this);
 }
 
 }  // namespace blink

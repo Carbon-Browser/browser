@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include "base/lazy_instance.h"
 #include "base/no_destructor.h"
 #include "base/trace_event/trace_event.h"
-#include "content/public/android/content_jni_headers/ContentMain_jni.h"
+#include "content/app/android/content_main_android.h"
+#include "content/public/android/content_main_dex_jni/ContentMain_jni.h"
 #include "content/public/app/content_main.h"
 #include "content/public/app/content_main_delegate.h"
 #include "content/public/app/content_main_runner.h"
@@ -60,7 +61,7 @@ void SetContentMainDelegate(ContentMainDelegate* delegate) {
     ContentClientCreator::Create(delegate);
 }
 
-ContentMainDelegate* GetContentMainDelegate() {
+ContentMainDelegate* GetContentMainDelegateForTesting() {
   DCHECK(g_content_main_delegate.Get().get());
   return g_content_main_delegate.Get().get();
 }

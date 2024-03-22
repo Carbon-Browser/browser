@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,10 @@
 
 #include <string>
 
+#include "base/scoped_observation.h"
 #include "chrome/browser/download/notification/multi_profile_download_notifier.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "chromeos/crosapi/mojom/download_controller.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -49,6 +51,7 @@ class DownloadControllerClientLacros
 
   // ProfileManagerObserver:
   void OnProfileAdded(Profile* profile) override;
+  void OnProfileManagerDestroying() override;
 
   // MultiProfileDownloadNotifier::Client:
   void OnManagerInitialized(content::DownloadManager* manager) override;
@@ -64,6 +67,8 @@ class DownloadControllerClientLacros
       this};
   MultiProfileDownloadNotifier download_notifier_{
       this, /*wait_for_manager_initialization=*/true};
+  base::ScopedObservation<ProfileManager, ProfileManagerObserver>
+      profile_manager_observation_{this};
 };
 
 #endif  // CHROME_BROWSER_LACROS_DOWNLOAD_CONTROLLER_CLIENT_LACROS_H_

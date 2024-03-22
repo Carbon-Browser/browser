@@ -1,19 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ssl/sct_reporting_service_factory.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #include "chrome/browser/ssl/sct_reporting_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 // static
 SCTReportingServiceFactory* SCTReportingServiceFactory::GetInstance() {
-  return base::Singleton<SCTReportingServiceFactory>::get();
+  static base::NoDestructor<SCTReportingServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -24,13 +24,19 @@ SCTReportingService* SCTReportingServiceFactory::GetForBrowserContext(
 }
 
 SCTReportingServiceFactory::SCTReportingServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "sct_reporting::Factory",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 SCTReportingServiceFactory::~SCTReportingServiceFactory() = default;
 
-KeyedService* SCTReportingServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SCTReportingServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
   safe_browsing::SafeBrowsingService* safe_browsing_service =
       g_browser_process->safe_browsing_service();
@@ -39,13 +45,8 @@ KeyedService* SCTReportingServiceFactory::BuildServiceInstanceFor(
   if (!safe_browsing_service)
     return nullptr;
 
-  return new SCTReportingService(safe_browsing_service,
-                                 static_cast<Profile*>(profile));
-}
-
-content::BrowserContext* SCTReportingServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return context;
+  return std::make_unique<SCTReportingService>(safe_browsing_service,
+                                               static_cast<Profile*>(profile));
 }
 
 // Force this to be created during BrowserContext creation, since we can't

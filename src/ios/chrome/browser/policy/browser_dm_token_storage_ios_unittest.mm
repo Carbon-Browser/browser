@@ -1,28 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/policy/browser_dm_token_storage_ios.h"
+#import "ios/chrome/browser/policy/browser_dm_token_storage_ios.h"
 
 #import <Foundation/Foundation.h>
 
-#include "base/base64url.h"
-#include "base/files/file_util.h"
-#include "base/files/scoped_temp_dir.h"
-#include "base/hash/sha1.h"
-#include "base/path_service.h"
-#include "base/run_loop.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/task/task_runner_util.h"
-#include "base/test/scoped_path_override.h"
-#include "base/test/task_environment.h"
+#import "base/base64url.h"
+#import "base/files/file_util.h"
+#import "base/files/scoped_temp_dir.h"
+#import "base/hash/sha1.h"
+#import "base/path_service.h"
+#import "base/run_loop.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/test/scoped_path_override.h"
+#import "base/test/task_environment.h"
 #import "components/policy/core/common/policy_loader_ios_constants.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/platform_test.h"
 
 namespace policy {
 
@@ -47,6 +42,11 @@ class BrowserDMTokenStorageIOSTest : public PlatformTest {
     // Cleanup any policies left from the test.
     [[NSUserDefaults standardUserDefaults]
         removeObjectForKey:kPolicyLoaderIOSConfigurationKey];
+
+    // Cleanup registerDefaults usage.
+    [[NSUserDefaults standardUserDefaults]
+        setVolatileDomain:@{}
+                  forName:NSRegistrationDomain];
   }
 
  private:
@@ -115,9 +115,8 @@ TEST_F(BrowserDMTokenStorageIOSTest, StoreAndLoadDMToken) {
                                                storage_delegate.InitClientId());
   auto reply = base::BindOnce(&TestStoreDMTokenDelegate::OnDMTokenUpdated,
                               base::Unretained(&callback_delegate));
-  base::PostTaskAndReplyWithResult(
-      storage_delegate.SaveDMTokenTaskRunner().get(), FROM_HERE,
-      std::move(task), std::move(reply));
+  storage_delegate.SaveDMTokenTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE, std::move(task), std::move(reply));
 
   callback_delegate.Wait();
   ASSERT_TRUE(callback_delegate.WasCalled());
@@ -168,9 +167,8 @@ TEST_F(BrowserDMTokenStorageIOSTest, DeleteDMToken) {
   auto delete_reply =
       base::BindOnce(&TestStoreDMTokenDelegate::OnDMTokenUpdated,
                      base::Unretained(&delete_callback_delegate));
-  base::PostTaskAndReplyWithResult(
-      storage_delegate.SaveDMTokenTaskRunner().get(), FROM_HERE,
-      std::move(delete_task), std::move(delete_reply));
+  storage_delegate.SaveDMTokenTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE, std::move(delete_task), std::move(delete_reply));
 
   delete_callback_delegate.Wait();
   ASSERT_TRUE(delete_callback_delegate.WasCalled());
@@ -204,9 +202,8 @@ TEST_F(BrowserDMTokenStorageIOSTest, DeleteEmptyDMToken) {
   auto delete_reply =
       base::BindOnce(&TestStoreDMTokenDelegate::OnDMTokenUpdated,
                      base::Unretained(&callback_delegate));
-  base::PostTaskAndReplyWithResult(
-      storage_delegate.SaveDMTokenTaskRunner().get(), FROM_HERE,
-      std::move(delete_task), std::move(delete_reply));
+  storage_delegate.SaveDMTokenTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE, std::move(delete_task), std::move(delete_reply));
 
   callback_delegate.Wait();
   ASSERT_TRUE(callback_delegate.WasCalled());

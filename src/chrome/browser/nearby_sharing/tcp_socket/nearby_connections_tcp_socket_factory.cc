@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/nearby_sharing/tcp_socket/nearby_connections_tcp_socket_factory.h"
 
-#include "ash/services/nearby/public/cpp/tcp_server_socket_port.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
+#include "chromeos/ash/services/nearby/public/cpp/tcp_server_socket_port.h"
 #include "net/base/ip_address.h"
 #include "net/base/net_errors.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -93,10 +93,11 @@ void NearbyConnectionsTcpSocketFactory::CreateTCPServerSocket(
     std::move(callback).Run(net::ERR_FAILED, /*local_addr=*/absl::nullopt);
     return;
   }
-
+  auto options = network::mojom::TCPServerSocketOptions::New();
+  options->backlog = backlog;
   network_context->CreateTCPServerSocket(
-      net::IPEndPoint(local_addr, port.port()), backlog, traffic_annotation,
-      std::move(receiver),
+      net::IPEndPoint(local_addr, port.port()), std::move(options),
+      traffic_annotation, std::move(receiver),
       base::BindOnce(
           &NearbyConnectionsTcpSocketFactory::OnTcpServerSocketCreated,
           weak_ptr_factory_.GetWeakPtr(), std::move(callback)));

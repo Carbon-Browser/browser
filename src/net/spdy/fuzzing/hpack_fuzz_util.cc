@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <cmath>
 #include <memory>
 
+#include "base/big_endian.h"
 #include "base/rand_util.h"
-#include "base/sys_byteorder.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/hpack/hpack_constants.h"
 
 namespace spdy {
@@ -102,12 +102,13 @@ Http2HeaderBlock HpackFuzzUtil::NextGeneratedHeaderSet(
 
 // static
 size_t HpackFuzzUtil::SampleExponential(size_t mean, size_t sanity_bound) {
-  return std::min(static_cast<size_t>(-std::log(base::RandDouble()) * mean),
+  // Use `1-base::RandDouble()` to avoid log(0).
+  return std::min(static_cast<size_t>(-std::log(1 - base::RandDouble()) * mean),
                   sanity_bound);
 }
 
 // static
-bool HpackFuzzUtil::NextHeaderBlock(Input* input, absl::string_view* out) {
+bool HpackFuzzUtil::NextHeaderBlock(Input* input, std::string_view* out) {
   // ClusterFuzz may truncate input files if the fuzzer ran out of allocated
   // disk space. Be tolerant of these.
   CHECK_LE(input->offset, input->input.size());
@@ -115,22 +116,23 @@ bool HpackFuzzUtil::NextHeaderBlock(Input* input, absl::string_view* out) {
     return false;
   }
 
-  size_t length =
-      base::NetToHost32(*reinterpret_cast<const uint32_t*>(input->ptr()));
+  uint32_t length;
+  base::ReadBigEndian(reinterpret_cast<const uint8_t*>(input->ptr()), &length);
   input->offset += sizeof(uint32_t);
 
   if (input->remaining() < length) {
     return false;
   }
-  *out = absl::string_view(input->ptr(), length);
+  *out = std::string_view(input->ptr(), length);
   input->offset += length;
   return true;
 }
 
 // static
 std::string HpackFuzzUtil::HeaderBlockPrefix(size_t block_size) {
-  uint32_t length = base::HostToNet32(static_cast<uint32_t>(block_size));
-  return std::string(reinterpret_cast<char*>(&length), sizeof(uint32_t));
+  char buf[4];
+  base::WriteBigEndian(buf, static_cast<uint32_t>(block_size));
+  return std::string(buf, sizeof(buf));
 }
 
 // static
@@ -143,7 +145,7 @@ void HpackFuzzUtil::InitializeFuzzerContext(FuzzerContext* context) {
 // static
 bool HpackFuzzUtil::RunHeaderBlockThroughFuzzerStages(
     FuzzerContext* context,
-    absl::string_view input_block) {
+    std::string_view input_block) {
   // First stage: Decode the input header block. This may fail on invalid input.
   if (!context->first_stage->HandleControlFrameHeadersData(
           input_block.data(), input_block.size())) {

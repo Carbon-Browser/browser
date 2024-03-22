@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,25 +28,21 @@ bool WebTestContentSettingsClient::AllowImage(bool enabled_per_settings,
   if (flags_->dump_web_content_settings_client_callbacks()) {
     test_runner_->PrintMessage(
         std::string("WebTestContentSettingsClient: allowImage(") +
-        web_test_string_util::NormalizeWebTestURL(
+        web_test_string_util::NormalizeWebTestURLForTextOutput(
             image_url.GetString().Utf8()) +
         "): " + (allowed ? "true" : "false") + "\n");
   }
   return allowed;
 }
 
-bool WebTestContentSettingsClient::AllowScript(bool enabled_per_settings) {
-  return enabled_per_settings && flags_->scripts_allowed();
-}
-
 bool WebTestContentSettingsClient::AllowScriptFromSource(
     bool enabled_per_settings,
     const blink::WebURL& script_url) {
-  bool allowed = enabled_per_settings && flags_->scripts_allowed();
+  bool allowed = enabled_per_settings;
   if (flags_->dump_web_content_settings_client_callbacks()) {
     test_runner_->PrintMessage(
         std::string("WebTestContentSettingsClient: allowScriptFromSource(") +
-        web_test_string_util::NormalizeWebTestURL(
+        web_test_string_util::NormalizeWebTestURLForTextOutput(
             script_url.GetString().Utf8()) +
         "): " + (allowed ? "true" : "false") + "\n");
   }
@@ -62,6 +58,12 @@ bool WebTestContentSettingsClient::AllowRunningInsecureContent(
     bool enabled_per_settings,
     const blink::WebURL& url) {
   return enabled_per_settings || flags_->running_insecure_content_allowed();
+}
+
+bool WebTestContentSettingsClient::IncreaseViewTransitionCallbackTimeout()
+    const {
+  // In tests we want larger timeout to account for slower running tests.
+  return true;
 }
 
 }  // namespace content

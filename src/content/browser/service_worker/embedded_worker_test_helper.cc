@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,17 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/test_future.h"
 #include "components/services/storage/service_worker/service_worker_storage_control_impl.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_test_utils.h"
 #include "content/public/test/mock_render_process_host.h"
+#include "content/public/test/policy_container_utils.h"
 #include "content/public/test/test_browser_context.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
@@ -28,12 +30,29 @@ EmbeddedWorkerTestHelper::EmbeddedWorkerTestHelper(
     const base::FilePath& user_data_directory)
     : EmbeddedWorkerTestHelper(
           user_data_directory,
-          base::MakeRefCounted<storage::MockSpecialStoragePolicy>()) {}
+          base::MakeRefCounted<storage::MockSpecialStoragePolicy>(),
+          std::make_unique<TestBrowserContext>()) {}
 
 EmbeddedWorkerTestHelper::EmbeddedWorkerTestHelper(
     const base::FilePath& user_data_directory,
     scoped_refptr<storage::SpecialStoragePolicy> special_storage_policy)
-    : browser_context_(std::make_unique<TestBrowserContext>()),
+    : EmbeddedWorkerTestHelper(user_data_directory,
+                               special_storage_policy,
+                               std::make_unique<TestBrowserContext>()) {}
+
+EmbeddedWorkerTestHelper::EmbeddedWorkerTestHelper(
+    const base::FilePath& user_data_directory,
+    std::unique_ptr<BrowserContext> browser_context)
+    : EmbeddedWorkerTestHelper(
+          user_data_directory,
+          base::MakeRefCounted<storage::MockSpecialStoragePolicy>(),
+          std::move(browser_context)) {}
+
+EmbeddedWorkerTestHelper::EmbeddedWorkerTestHelper(
+    const base::FilePath& user_data_directory,
+    scoped_refptr<storage::SpecialStoragePolicy> special_storage_policy,
+    std::unique_ptr<BrowserContext> browser_context)
+    : browser_context_(std::move(browser_context)),
       render_process_host_(
           std::make_unique<MockRenderProcessHost>(browser_context_.get())),
       new_render_process_host_(
@@ -41,11 +60,11 @@ EmbeddedWorkerTestHelper::EmbeddedWorkerTestHelper(
       quota_manager_(base::MakeRefCounted<storage::MockQuotaManager>(
           /*is_incognito=*/false,
           user_data_directory,
-          base::ThreadTaskRunnerHandle::Get(),
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
           special_storage_policy)),
       quota_manager_proxy_(base::MakeRefCounted<storage::MockQuotaManagerProxy>(
           quota_manager_.get(),
-          base::SequencedTaskRunnerHandle::Get())),
+          base::SequencedTaskRunner::GetCurrentDefault())),
       wrapper_(base::MakeRefCounted<ServiceWorkerContextWrapper>(
           browser_context_.get())),
       fake_loader_factory_("HTTP/1.1 200 OK\nContent-Type: text/javascript\n\n",
@@ -53,7 +72,7 @@ EmbeddedWorkerTestHelper::EmbeddedWorkerTestHelper(
                            /*network_accessed=*/true,
                            net::OK),
       user_data_directory_(user_data_directory),
-      database_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      database_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       next_thread_id_(0),
       mock_render_process_id_(render_process_host_->GetID()),
       new_mock_render_process_id_(new_render_process_host_->GetID()),
@@ -241,6 +260,97 @@ void EmbeddedWorkerTestHelper::BindStorageControl(
         receiver) {
   storage_control_ = std::make_unique<storage::ServiceWorkerStorageControlImpl>(
       user_data_directory_, database_task_runner_, std::move(receiver));
+}
+
+EmbeddedWorkerTestHelper::RegistrationAndVersionPair
+EmbeddedWorkerTestHelper::PrepareRegistrationAndVersion(
+    const GURL& scope,
+    const GURL& script_url) {
+  RegistrationAndVersionPair pair;
+  blink::mojom::ServiceWorkerRegistrationOptions options;
+  options.scope = scope;
+  pair.first = CreateNewServiceWorkerRegistration(
+      context()->registry(), options,
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)));
+  pair.second = CreateNewServiceWorkerVersion(
+      context()->registry(), pair.first, script_url,
+      blink::mojom::ScriptType::kClassic);
+  return pair;
+}
+
+// Calls worker->Start() and runs until the start IPC is sent.
+//
+// Expects success. For failure cases, call Start() manually.
+void EmbeddedWorkerTestHelper::StartWorkerUntilStartSent(
+    EmbeddedWorkerInstance* worker,
+    blink::mojom::EmbeddedWorkerStartParamsPtr params) {
+  base::test::TestFuture<blink::ServiceWorkerStatusCode> future;
+  worker->Start(std::move(params), future.GetCallback());
+  EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, future.Get());
+}
+
+// Calls worker->Start() and runs until startup finishes.
+//
+// Expects success. For failure cases, call Start() manually.
+void EmbeddedWorkerTestHelper::StartWorker(
+    EmbeddedWorkerInstance* worker,
+    blink::mojom::EmbeddedWorkerStartParamsPtr params) {
+  StartWorkerUntilStartSent(worker, std::move(params));
+  // TODO(falken): Listen for OnStarted() instead of this.
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(blink::EmbeddedWorkerStatus::kRunning, worker->status());
+}
+
+blink::mojom::EmbeddedWorkerStartParamsPtr
+EmbeddedWorkerTestHelper::CreateStartParams(
+    scoped_refptr<ServiceWorkerVersion> version) {
+  auto params = blink::mojom::EmbeddedWorkerStartParams::New();
+  params->service_worker_version_id = version->version_id();
+  params->scope = version->scope();
+  params->script_url = version->script_url();
+  params->is_installed = false;
+
+  params->service_worker_receiver = CreateServiceWorker(version);
+  params->controller_receiver = CreateController();
+  params->installed_scripts_info = GetInstalledScriptsInfoPtr();
+  params->provider_info = CreateProviderInfo(std::move(version));
+  params->policy_container = CreateStubPolicyContainer();
+  return params;
+}
+
+blink::mojom::ServiceWorkerProviderInfoForStartWorkerPtr
+EmbeddedWorkerTestHelper::CreateProviderInfo(
+    scoped_refptr<ServiceWorkerVersion> version) {
+  auto provider_info =
+      blink::mojom::ServiceWorkerProviderInfoForStartWorker::New();
+  version->worker_host_ = std::make_unique<ServiceWorkerHost>(
+      provider_info->host_remote.InitWithNewEndpointAndPassReceiver(),
+      version.get(), context()->AsWeakPtr());
+  return provider_info;
+}
+
+mojo::PendingReceiver<blink::mojom::ServiceWorker>
+EmbeddedWorkerTestHelper::CreateServiceWorker(
+    scoped_refptr<ServiceWorkerVersion> version) {
+  version->service_worker_remote_.reset();
+  return version->service_worker_remote_.BindNewPipeAndPassReceiver();
+}
+
+mojo::PendingReceiver<blink::mojom::ControllerServiceWorker>
+EmbeddedWorkerTestHelper::CreateController() {
+  controllers_.emplace_back();
+  return controllers_.back().BindNewPipeAndPassReceiver();
+}
+
+blink::mojom::ServiceWorkerInstalledScriptsInfoPtr
+EmbeddedWorkerTestHelper::GetInstalledScriptsInfoPtr() {
+  installed_scripts_managers_.emplace_back();
+  auto info = blink::mojom::ServiceWorkerInstalledScriptsInfo::New();
+  info->manager_receiver =
+      installed_scripts_managers_.back().BindNewPipeAndPassReceiver();
+  installed_scripts_manager_host_receivers_.push_back(
+      info->manager_host_remote.InitWithNewPipeAndPassReceiver());
+  return info;
 }
 
 }  // namespace content

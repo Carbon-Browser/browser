@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/test/base/fake_profile_manager.h"
 
 #include "base/files/file_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/test/base/testing_profile.h"
 
@@ -32,9 +33,9 @@ std::unique_ptr<Profile> FakeProfileManager::CreateProfileHelper(
 
 std::unique_ptr<Profile> FakeProfileManager::CreateProfileAsyncHelper(
     const base::FilePath& path) {
-  // ThreadTaskRunnerHandle::Get() is TestingProfile's "async" IOTaskRunner
-  // (ref. TestingProfile::GetIOTaskRunner()).
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  // SingleThreadTaskRunner::GetCurrentDefault() is TestingProfile's "async"
+  // IOTaskRunner (ref. TestingProfile::GetIOTaskRunner()).
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(base::IgnoreResult(&base::CreateDirectory), path));
 

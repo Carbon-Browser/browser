@@ -1,6 +1,8 @@
-# Copyright 2022 The Chromium Authors.All rights reserved.
-# Use of this source code is governed by a BSD - style license that can be
+# Copyright 2022 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
+import("//build/config/features.gni")
 
 source_set("lib") {
   sources = [
@@ -10,15 +12,17 @@ source_set("lib") {
 
   deps = [
     "//base",
-    "//components/password_manager/core/browser:csv",
+    "//components/password_manager/core/browser/import:csv",
     "//mojo/public/cpp/bindings",
   ]
 
   public_deps =
       [ "//components/password_manager/services/csv_password/public/mojom" ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
-if (!is_ios) {
+if (use_blink) {
   source_set("service") {
     sources = [
       "csv_password_parser_service.cc",
@@ -34,6 +38,8 @@ if (!is_ios) {
       "//components/password_manager/services/csv_password/public/mojom",
       "//mojo/public/cpp/bindings",
     ]
+
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,16 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
+#include "chrome/test/chromedriver/chrome/mobile_device.h"
 #include "chrome/test/chromedriver/chrome/web_view.h"
 
-namespace base {
-class DictionaryValue;
-class ListValue;
-class Value;
-}
-
 struct BrowserInfo;
-struct DeviceMetrics;
 class DevToolsClient;
 class DownloadDirectoryOverrideManager;
+class FedCmTracker;
 class FrameTracker;
 class GeolocationOverrideManager;
 class MobileEmulationOverrideManager;
@@ -46,7 +42,7 @@ class WebViewImpl : public WebView {
               const WebViewImpl* parent,
               const BrowserInfo* browser_info,
               std::unique_ptr<DevToolsClient> client,
-              const DeviceMetrics* device_metrics,
+              absl::optional<MobileDevice> mobile_device,
               std::string page_load_strategy);
   ~WebViewImpl() override;
   WebViewImpl* CreateChild(const std::string& session_id,
@@ -56,59 +52,53 @@ class WebViewImpl : public WebView {
   bool IsServiceWorker() const override;
   std::string GetId() override;
   bool WasCrashed() override;
-  Status ConnectIfNecessary() override;
-  Status SetUpDevTools() override;
+  Status AttachTo(DevToolsClient* parent);
+  Status AttachChildView(WebViewImpl* child);
+  Status HandleEventsUntil(const ConditionalFunc& conditional_func,
+                           const Timeout& timeout) override;
   Status HandleReceivedEvents() override;
   Status GetUrl(std::string* url) override;
   Status Load(const std::string& url, const Timeout* timeout) override;
   Status Reload(const Timeout* timeout) override;
   Status Freeze(const Timeout* timeout) override;
   Status Resume(const Timeout* timeout) override;
+  Status StartBidiServer(std::string bidi_mapper_script) override;
+  Status PostBidiCommand(base::Value::Dict command) override;
   Status SendCommand(const std::string& cmd,
-                     const base::DictionaryValue& params) override;
+                     const base::Value::Dict& params) override;
   Status SendCommandFromWebSocket(const std::string& cmd,
-                                  const base::DictionaryValue& params,
+                                  const base::Value::Dict& params,
                                   const int client_cmd_id) override;
   Status SendCommandAndGetResult(const std::string& cmd,
-                                 const base::DictionaryValue& params,
+                                 const base::Value::Dict& params,
                                  std::unique_ptr<base::Value>* value) override;
   Status TraverseHistory(int delta, const Timeout* timeout) override;
-  Status EvaluateScriptWithTimeout(const std::string& frame,
-                                   const std::string& expression,
-                                   const base::TimeDelta& timeout,
-                                   const bool awaitPromise,
-                                   std::unique_ptr<base::Value>* result);
   Status EvaluateScript(const std::string& frame,
                         const std::string& expression,
-                        const bool awaitPromise,
+                        const bool await_promise,
                         std::unique_ptr<base::Value>* result) override;
   Status CallFunctionWithTimeout(const std::string& frame,
                                  const std::string& function,
-                                 const base::ListValue& args,
+                                 const base::Value::List& args,
                                  const base::TimeDelta& timeout,
                                  std::unique_ptr<base::Value>* result);
   Status CallFunction(const std::string& frame,
                       const std::string& function,
-                      const base::ListValue& args,
+                      const base::Value::List& args,
                       std::unique_ptr<base::Value>* result) override;
-  Status CallAsyncFunction(const std::string& frame,
-                           const std::string& function,
-                           const base::ListValue& args,
-                           const base::TimeDelta& timeout,
-                           std::unique_ptr<base::Value>* result) override;
   Status CallUserSyncScript(const std::string& frame,
                             const std::string& script,
-                            const base::ListValue& args,
+                            const base::Value::List& args,
                             const base::TimeDelta& timeout,
                             std::unique_ptr<base::Value>* result) override;
   Status CallUserAsyncFunction(const std::string& frame,
                                const std::string& function,
-                               const base::ListValue& args,
+                               const base::Value::List& args,
                                const base::TimeDelta& timeout,
                                std::unique_ptr<base::Value>* result) override;
   Status GetFrameByFunction(const std::string& frame,
                             const std::string& function,
-                            const base::ListValue& args,
+                            const base::Value::List& args,
                             std::string* out_frame) override;
   Status DispatchMouseEvents(const std::vector<MouseEvent>& events,
                              const std::string& frame,
@@ -133,9 +123,9 @@ class WebViewImpl : public WebView {
                    const std::string& value,
                    const std::string& domain,
                    const std::string& path,
-                   const std::string& sameSite,
+                   const std::string& same_site,
                    bool secure,
-                   bool httpOnly,
+                   bool http_only,
                    double expiry) override;
   Status WaitForPendingNavigations(const std::string& frame_id,
                                    const Timeout& timeout,
@@ -150,11 +140,9 @@ class WebViewImpl : public WebView {
       const NetworkConditions& network_conditions) override;
   Status OverrideDownloadDirectoryIfNeeded(
       const std::string& download_directory) override;
-  Status CaptureScreenshot(
-      std::string* screenshot,
-      const base::DictionaryValue& params) override;
-  Status PrintToPDF(const base::DictionaryValue& params,
-                    std::string* pdf) override;
+  Status CaptureScreenshot(std::string* screenshot,
+                           const base::Value::Dict& params) override;
+  Status PrintToPDF(const base::Value::Dict& params, std::string* pdf) override;
   Status SetFileInputFiles(const std::string& frame,
                            const base::Value& element,
                            const std::vector<base::FilePath>& files,
@@ -174,6 +162,7 @@ class WebViewImpl : public WebView {
                                    const base::Value& element,
                                    int* backend_node_id) override;
   bool IsNonBlocking() const override;
+  Status GetFedCmTracker(FedCmTracker** out_tracker) override;
   FrameTracker* GetFrameTracker() const override;
   std::unique_ptr<base::Value> GetCastSinks() override;
   std::unique_ptr<base::Value> GetCastIssueMessage() override;
@@ -187,16 +176,44 @@ class WebViewImpl : public WebView {
   bool IsDetached() const;
 
  private:
-  Status TraverseHistoryWithJavaScript(int delta);
+  WebViewImpl* GetTargetForFrame(const std::string& frame);
+  Status GetLoaderId(const std::string& frame_id,
+                     std::string* loader_id,
+                     Timeout* timeout);
+  Status CallFunctionWithTimeoutInternal(std::string frame,
+                                         std::string function,
+                                         base::Value::List args,
+                                         const base::TimeDelta& timeout,
+                                         std::unique_ptr<base::Value>* result);
   Status CallAsyncFunctionInternal(const std::string& frame,
                                    const std::string& function,
-                                   const base::ListValue& args,
-                                   bool is_user_supplied,
+                                   const base::Value::List& args,
                                    const base::TimeDelta& timeout,
                                    std::unique_ptr<base::Value>* result);
   Status IsNotPendingNavigation(const std::string& frame_id,
                                 const Timeout* timeout,
                                 bool* is_not_pending);
+  Status ResolveElementReferences(base::Value* arg,
+                                  base::Value::List* nodes,
+                                  const std::string& context_id,
+                                  const std::string& object_group_name,
+                                  const std::string& expected_loader_id,
+                                  bool w3c_compliant);
+  Status ResolveElementReferences(base::Value::Dict* arg_dict,
+                                  base::Value::List* nodes,
+                                  const std::string& context_id,
+                                  const std::string& object_group_name,
+                                  const std::string& expected_loader_id,
+                                  bool w3c_compliant);
+  Status ResolveElementReferences(base::Value::List* arg_list,
+                                  base::Value::List* nodes,
+                                  const std::string& context_id,
+                                  const std::string& object_group_name,
+                                  const std::string& expected_loader_id,
+                                  bool w3c_compliant);
+  Status CreateElementReferences(base::Value* res,
+                                 const base::Value::List& nodes,
+                                 const std::string& loader_id);
 
   Status InitProfileInternal();
   Status StopProfileInternal();
@@ -226,6 +243,7 @@ class WebViewImpl : public WebView {
       download_directory_override_manager_;
   std::unique_ptr<HeapSnapshotTaker> heap_snapshot_taker_;
   std::unique_ptr<CastTracker> cast_tracker_;
+  std::unique_ptr<FedCmTracker> fedcm_tracker_;
   bool is_service_worker_;
 };
 
@@ -242,54 +260,27 @@ class WebViewImplHolder {
 
  private:
   struct Item {
-    WebViewImpl* web_view;
+    raw_ptr<WebViewImpl> web_view;
     bool was_locked;
   };
   std::vector<Item> items_;
 };
 
 namespace internal {
-
-enum EvaluateScriptReturnType {
-  ReturnByValue,
-  ReturnByObject
-};
 Status EvaluateScript(DevToolsClient* client,
                       const std::string& context_id,
                       const std::string& expression,
-                      EvaluateScriptReturnType return_type,
                       const base::TimeDelta& timeout,
-                      const bool awaitPromise,
-                      std::unique_ptr<base::DictionaryValue>* result);
-Status EvaluateScriptAndGetObject(DevToolsClient* client,
-                                  const std::string& context_id,
-                                  const std::string& expression,
-                                  const base::TimeDelta& timeout,
-                                  const bool awaitPromise,
-                                  bool* got_object,
-                                  std::string* object_id);
+                      const bool await_promise,
+                      base::Value::Dict& result);
 Status EvaluateScriptAndGetValue(DevToolsClient* client,
                                  const std::string& context_id,
                                  const std::string& expression,
                                  const base::TimeDelta& timeout,
-                                 const bool awaitPromise,
+                                 const bool await_promise,
                                  std::unique_ptr<base::Value>* result);
 Status ParseCallFunctionResult(const base::Value& temp_result,
                                std::unique_ptr<base::Value>* result);
-Status GetBackendNodeIdFromFunction(DevToolsClient* client,
-                                    const std::string& context_id,
-                                    const std::string& function,
-                                    const base::ListValue& args,
-                                    bool* found_node,
-                                    int* backend_node_id,
-                                    bool w3c_compliant);
-Status GetFrameIdFromFunction(DevToolsClient* client,
-                              const std::string& context_id,
-                              const std::string& function,
-                              const base::ListValue& args,
-                              bool* found_node,
-                              std::string* frame_id,
-                              bool w3c_compliant);
 }  // namespace internal
 
 #endif  // CHROME_TEST_CHROMEDRIVER_CHROME_WEB_VIEW_IMPL_H_

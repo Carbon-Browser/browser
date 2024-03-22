@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -86,6 +86,8 @@ class GalleryWatchManager
   // Return the set of galleries being watched for |extension_id|.
   MediaGalleryPrefIdSet GetWatchSet(content::BrowserContext* browser_context,
                                     const std::string& extension_id);
+
+  static void EnsureFactoryBuilt();
 
  private:
   class FileWatchManager;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -150,6 +150,9 @@ class POLICY_EXPORT CloudPolicyStore {
   // Removes the specified observer.
   void RemoveObserver(Observer* observer);
 
+  // Checks if `observer` was already added.
+  bool HasObserver(CloudPolicyStore::Observer* observer);
+
   // The invalidation version of the last policy stored. This value can be read
   // by observers to determine which version of the policy is now available.
   int64_t invalidation_version() {
@@ -169,6 +172,8 @@ class POLICY_EXPORT CloudPolicyStore {
   // Test helper to set |policy_|.
   void set_policy_data_for_testing(
       std::unique_ptr<enterprise_management::PolicyData> policy);
+
+  void set_policy_signature_public_key_for_testing(const std::string& key);
 
  protected:
   // Invokes the corresponding callback on all registered observers.

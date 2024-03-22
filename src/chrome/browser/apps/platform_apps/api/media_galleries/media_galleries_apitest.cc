@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 #include <memory>
 
 #include "base/auto_reset.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/values.h"
@@ -27,6 +28,7 @@
 #include "chrome/browser/apps/platform_apps/api/media_galleries/media_galleries_api.h"
 #include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/chrome_browser_main_extra_parts_nacl_deprecation.h"
 #include "chrome/browser/media_galleries/media_file_system_registry.h"
 #include "chrome/browser/media_galleries/media_galleries_preferences.h"
 #include "chrome/browser/media_galleries/media_galleries_test_util.h"
@@ -47,7 +49,7 @@
 #include "media/media_buildflags.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -129,7 +131,7 @@ class MediaGalleriesPlatformAppBrowserTest : public PlatformAppBrowserTest {
     if (!base::CopyFile(common_js_path, inject_js_path))
       return false;
 
-    const char* custom_arg = NULL;
+    const char* custom_arg = nullptr;
     std::string json_string;
     if (!custom_arg_value.empty()) {
       base::JSONWriter::Write(custom_arg_value, &json_string);
@@ -247,6 +249,11 @@ class MediaGalleriesPlatformAppBrowserTest : public PlatformAppBrowserTest {
 #if BUILDFLAG(ENABLE_NACL)
 class MediaGalleriesPlatformAppPpapiTest
     : public MediaGalleriesPlatformAppBrowserTest {
+ public:
+  MediaGalleriesPlatformAppPpapiTest() {
+    feature_list_.InitAndEnableFeature(kNaclAllow);
+  }
+
  protected:
   void SetUpCommandLine(base::CommandLine* command_line) override {
     MediaGalleriesPlatformAppBrowserTest::SetUpCommandLine(command_line);
@@ -268,6 +275,7 @@ class MediaGalleriesPlatformAppPpapiTest
 
  private:
   base::FilePath app_dir_;
+  base::test::ScopedFeatureList feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppPpapiTest, SendFilesystem) {
@@ -306,7 +314,7 @@ IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppPpapiTest, SendFilesystem) {
 #endif
 IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppBrowserTest,
                        MAYBE_MediaGalleriesNoAccess) {
-  MakeSingleFakeGallery(NULL);
+  MakeSingleFakeGallery(nullptr);
 
   base::Value::List custom_args;
   custom_args.Append(num_galleries() + 1);
@@ -327,7 +335,7 @@ IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppBrowserTest,
 IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppBrowserTest,
                        MediaGalleriesRead) {
   RemoveAllGalleries();
-  MakeSingleFakeGallery(NULL);
+  MakeSingleFakeGallery(nullptr);
   base::Value::List custom_args;
   custom_args.Append(test_jpg_size());
 
@@ -345,13 +353,13 @@ IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppBrowserTest,
 IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppBrowserTest,
                        MAYBE_MediaGalleriesCopyTo) {
   RemoveAllGalleries();
-  MakeSingleFakeGallery(NULL);
+  MakeSingleFakeGallery(nullptr);
   ASSERT_TRUE(RunMediaGalleriesTest("copy_to_access")) << message_;
 }
 
 IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppBrowserTest,
                        MediaGalleriesDelete) {
-  MakeSingleFakeGallery(NULL);
+  MakeSingleFakeGallery(nullptr);
   base::Value::List custom_args;
   custom_args.Append(num_galleries() + 1);
   ASSERT_TRUE(RunMediaGalleriesTestWithArg("delete_access", custom_args))
@@ -386,7 +394,7 @@ IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppBrowserTest, ToURL) {
 
 IN_PROC_BROWSER_TEST_F(MediaGalleriesPlatformAppBrowserTest, GetMetadata) {
   RemoveAllGalleries();
-  MakeSingleFakeGallery(NULL);
+  MakeSingleFakeGallery(nullptr);
 
   AddFileToSingleFakeGallery(media::GetTestDataFilePath("90rotation.mp4"));
   AddFileToSingleFakeGallery(media::GetTestDataFilePath("id3_png_test.mp3"));

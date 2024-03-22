@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,8 +10,6 @@ source_set("renderer") {
     "aw_content_renderer_client.h",
     "aw_content_settings_client.cc",
     "aw_content_settings_client.h",
-    "aw_key_systems.cc",
-    "aw_key_systems.h",
     "aw_print_render_frame_helper_delegate.cc",
     "aw_print_render_frame_helper_delegate.h",
     "aw_render_frame_ext.cc",
@@ -36,13 +34,14 @@ source_set("renderer") {
     "//base",
     "//components/android_system_error_page",
     "//components/autofill/content/renderer",
+    "//components/autofill/core/common:features",
     "//components/cdm/renderer",
     "//components/content_capture/common",
     "//components/content_capture/renderer",
     "//components/js_injection/common",
     "//components/js_injection/renderer",
+    "//components/network_hints/renderer",
     "//components/page_load_metrics/renderer",
-    "//components/power_scheduler",
     "//components/resources",
     "//components/safe_browsing/content/common:interfaces",
     "//components/safe_browsing/content/renderer:throttles",
@@ -62,7 +61,7 @@ source_set("renderer") {
     "//url",
   ]
 
-  if (enable_basic_printing) {
+  if (enable_printing) {
     deps += [
       "//components/printing/common",
       "//components/printing/renderer",

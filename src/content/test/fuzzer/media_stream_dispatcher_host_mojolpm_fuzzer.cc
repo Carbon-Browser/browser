@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/test/simple_test_tick_clock.h"
@@ -28,6 +29,7 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/media/media_internals.h"
 #include "content/browser/renderer_host/media/media_stream_dispatcher_host.h"
 #include "content/browser/renderer_host/media/media_stream_manager.h"
@@ -77,6 +79,7 @@ class MediaStreamDispatcherHostTestcase
  private:
   void SetUpOnUIThread(base::OnceClosure done_closure);
 
+  void TearDownOnIOThread();
   void TearDownOnUIThread(base::OnceClosure done_closure);
 
   void AddMediaStreamDispatcherHost(uint32_t id,
@@ -90,7 +93,7 @@ class MediaStreamDispatcherHostTestcase
   std::unique_ptr<media::AudioManager> audio_manager_ = nullptr;
   std::unique_ptr<media::AudioSystem> audio_system_ = nullptr;
   std::unique_ptr<content::MediaStreamManager> media_stream_manager_ = nullptr;
-  content::TestRenderFrameHost* render_frame_host_ = nullptr;
+  raw_ptr<content::TestRenderFrameHost> render_frame_host_ = nullptr;
 };
 
 MediaStreamDispatcherHostTestcase::MediaStreamDispatcherHostTestcase(
@@ -174,8 +177,8 @@ void MediaStreamDispatcherHostTestcase::SetUpOnUIThread(
   audio_system_ =
       std::make_unique<media::AudioSystemImpl>(audio_manager_.get());
 
-  media_stream_manager_ = std::make_unique<content::MediaStreamManager>(
-      audio_system_.get(), audio_manager_->GetTaskRunner());
+  media_stream_manager_ =
+      std::make_unique<content::MediaStreamManager>(audio_system_.get());
 
   GetFuzzerTaskRunner()->PostTask(FROM_HERE, std::move(done_closure));
 }
@@ -184,12 +187,19 @@ void MediaStreamDispatcherHostTestcase::TearDown(
     base::OnceClosure done_closure) {
   mojolpm::GetContext()->EndTestcase();
 
-  media_stream_manager_->WillDestroyCurrentMessageLoop();
+  content::GetIOThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(&MediaStreamDispatcherHostTestcase::TearDownOnIOThread,
+                     base::Unretained(this)));
 
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(&MediaStreamDispatcherHostTestcase::TearDownOnUIThread,
                      base::Unretained(this), std::move(done_closure)));
+}
+
+void MediaStreamDispatcherHostTestcase::TearDownOnIOThread() {
+  media_stream_manager_->WillDestroyCurrentMessageLoop();
 }
 
 void MediaStreamDispatcherHostTestcase::TearDownOnUIThread(
@@ -204,10 +214,9 @@ void MediaStreamDispatcherHostTestcase::AddMediaStreamDispatcherHostImpl(
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
 
   // MediaStreamDispatcherHost is a self-owned receiver.
-  content::MediaStreamDispatcherHost::Create(
-      render_frame_host_->GetProcess()->GetID(),
-      render_frame_host_->GetRoutingID(), media_stream_manager_.get(),
-      std::move(receiver));
+  content::MediaStreamDispatcherHost::Create(render_frame_host_->GetGlobalId(),
+                                             media_stream_manager_.get(),
+                                             std::move(receiver));
 }
 
 // Component(s) which we fuzz

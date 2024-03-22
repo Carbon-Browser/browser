@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,15 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-
-namespace base {
-namespace trace_event {
-class BlameContext;
-}
-}  // namespace base
 
 namespace blink {
 namespace scheduler {
@@ -91,8 +87,6 @@ class SingleThreadIdleTaskRunner
 
   bool RunsTasksInCurrentSequence() const;
 
-  void SetBlameContext(base::trace_event::BlameContext* blame_context);
-
  protected:
   virtual ~SingleThreadIdleTaskRunner();
 
@@ -113,9 +107,9 @@ class SingleThreadIdleTaskRunner
 
   scoped_refptr<base::SingleThreadTaskRunner> idle_priority_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> control_task_runner_;
-  std::multimap<base::TimeTicks, DelayedIdleTask> delayed_idle_tasks_;
-  Delegate* delegate_;                              // NOT OWNED
-  base::trace_event::BlameContext* blame_context_;  // Not owned.
+  std::multimap<base::TimeTicks, DelayedIdleTask> delayed_idle_tasks_
+      ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)");
+  raw_ptr<Delegate, DanglingUntriaged> delegate_;  // NOT OWNED
   base::WeakPtr<SingleThreadIdleTaskRunner> weak_scheduler_ptr_;
   base::WeakPtrFactory<SingleThreadIdleTaskRunner> weak_factory_{this};
 };

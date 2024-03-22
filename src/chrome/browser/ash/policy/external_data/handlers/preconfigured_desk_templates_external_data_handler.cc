@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,10 +49,12 @@ void PreconfiguredDeskTemplatesExternalDataHandler::OnExternalDataFetched(
 }
 
 void PreconfiguredDeskTemplatesExternalDataHandler::RemoveForAccountId(
-    const AccountId& account_id) {
+    const AccountId& account_id,
+    base::OnceClosure on_removed) {
   DesksClient* dc = DesksClient::Get();
   if (dc)
     dc->RemovePolicyPreconfiguredTemplate(account_id);
+  std::move(on_removed).Run();
 }
 
 }  // namespace policy

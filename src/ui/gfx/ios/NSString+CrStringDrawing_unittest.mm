@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #import "ui/gfx/ios/NSString+CrStringDrawing.h"
 
-#include "base/mac/scoped_nsobject.h"
+#import <UIKit/UIKit.h>
+
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -71,7 +72,7 @@ TEST_F(NSStringCrStringDrawing, SizeWithFont) {
     [UIFont boldSystemFontOfSize:10],
     [UIFont fontWithName:@"Helvetica" size:12.0],
   ];
-  for (UIFont* font in fonts) {
+  for (UIFont* __strong font in fonts) {
     if ([font isEqual:[NSNull null]])
       font = nil;
     std::string font_tag = "with font ";

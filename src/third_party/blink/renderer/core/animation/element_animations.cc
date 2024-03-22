@@ -32,6 +32,7 @@
 
 #include "third_party/blink/renderer/core/css/css_property_equality.h"
 #include "third_party/blink/renderer/core/css/properties/css_property.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 
 namespace blink {
@@ -39,7 +40,9 @@ namespace blink {
 ElementAnimations::ElementAnimations()
     : animation_style_change_(false),
       composited_background_color_status_(static_cast<unsigned>(
-          CompositedPaintStatus::kNeedsRepaintOrNoAnimation)){};
+          CompositedPaintStatus::kNeedsRepaintOrNoAnimation)),
+      composited_clip_path_status_(static_cast<unsigned>(
+          CompositedPaintStatus::kNeedsRepaintOrNoAnimation)) {}
 
 ElementAnimations::~ElementAnimations() = default;
 
@@ -53,6 +56,7 @@ void ElementAnimations::Trace(Visitor* visitor) const {
   visitor->Trace(effect_stack_);
   visitor->Trace(animations_);
   visitor->Trace(worklet_animations_);
+  ElementRareDataField::Trace(visitor);
 }
 
 bool ElementAnimations::UpdateBoxSizeAndCheckTransformAxisAlignment(
@@ -80,6 +84,28 @@ bool ElementAnimations::IsIdentityOrTranslation() const {
     }
   }
   return true;
+}
+
+void ElementAnimations::SetCompositedBackgroundColorStatus(
+    CompositedPaintStatus status) {
+  if (composited_background_color_status_ == static_cast<unsigned>(status))
+    return;
+
+  if (status == CompositedPaintStatus::kNotComposited) {
+    // Ensure that animation is cancelled on the compositor. We do this ahead
+    // of updating the status since the act of cancelling a background color
+    // animation forces it back into the kNeedsRepaintOrNoAnimation state,
+    // which we then need to stomp with a kNotComposited decision.
+    PropertyHandle background_color_property =
+        PropertyHandle(GetCSSPropertyBackgroundColor());
+    for (auto& entry : Animations()) {
+      KeyframeEffect* effect = DynamicTo<KeyframeEffect>(entry.key->effect());
+      if (effect && effect->Affects(background_color_property)) {
+        entry.key->CancelAnimationOnCompositor();
+      }
+    }
+  }
+  composited_background_color_status_ = static_cast<unsigned>(status);
 }
 
 }  // namespace blink

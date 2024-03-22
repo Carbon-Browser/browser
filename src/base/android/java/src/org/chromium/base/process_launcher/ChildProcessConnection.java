@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,33 +9,28 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.RemoteException;
 
-import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.BaseFeatureList;
-import org.chromium.base.BaseFeatures;
 import org.chromium.base.BuildInfo;
 import org.chromium.base.ChildBindingState;
-import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.base.MemoryPressureLevel;
 import org.chromium.base.MemoryPressureListener;
+import org.chromium.base.PackageUtils;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.memory.MemoryPressureCallback;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.build.BuildConfig;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -43,13 +38,12 @@ import java.util.concurrent.Executor;
 
 import javax.annotation.concurrent.GuardedBy;
 
-/**
- * Manages a connection between the browser activity and a child service.
- */
+/** Manages a connection between the browser activity and a child service. */
 public class ChildProcessConnection {
     private static final String TAG = "ChildProcessConn";
-    private static final int NUM_BINDING_STATES = ChildBindingState.MAX_VALUE + 1;
     private static final int FALLBACK_TIMEOUT_IN_SECONDS = 10;
+    private static final boolean SUPPORT_NOT_PERCEPTIBLE_BINDING =
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q;
 
     /**
      * Used to notify the consumer about the process start. These callbacks will be invoked before
@@ -77,9 +71,7 @@ public class ChildProcessConnection {
         void onChildProcessDied(ChildProcessConnection connection);
     }
 
-    /**
-     * Used to notify the consumer about the connection being established.
-     */
+    /** Used to notify the consumer about the connection being established. */
     public interface ConnectionCallback {
         /**
          * Called when the connection to the service is established.
@@ -113,16 +105,17 @@ public class ChildProcessConnection {
         }
     }
 
-    /**
-     * Run time check if variable number of connections is supported.
-     */
+    /** Run time check if variable number of connections is supported. */
     public static boolean supportVariableConnections() {
         return BindService.supportVariableConnections();
     }
 
-    /**
-     * The string passed to bindToCaller to identify this class loader.
-     */
+    /** Run time check if not perceptible binding is supported. */
+    public static boolean supportNotPerceptibleBinding() {
+        return SUPPORT_NOT_PERCEPTIBLE_BINDING;
+    }
+
+    /** The string passed to bindToCaller to identify this class loader. */
     @VisibleForTesting
     public static String getBindToCallerClazz() {
         // TODO(crbug.com/1057102): Have embedder explicitly set separate different strings since
@@ -229,10 +222,14 @@ public class ChildProcessConnection {
     // Strong binding will make the service priority equal to the priority of the activity.
     private ChildServiceConnection mStrongBinding;
 
-    // Moderate binding will make the service priority equal to the priority of a visible process
+    // Visible binding will make the service priority equal to the priority of a visible process
     // while the app is in the foreground.
     // This is also used as the initial binding before any priorities are set.
-    private ChildServiceConnection mModerateBinding;
+    private ChildServiceConnection mVisibleBinding;
+
+    // On Android Q+ a not perceptible binding will make the service priority below that of a
+    // perceptible process of a backgrounded app. Only created on Android Q+.
+    private ChildServiceConnection mNotPerceptibleBinding;
 
     // Low priority binding maintained in the entire lifetime of the connection, i.e. between calls
     // to start() and stop().
@@ -240,7 +237,8 @@ public class ChildProcessConnection {
 
     // Refcount of bindings.
     private int mStrongBindingCount;
-    private int mModerateBindingCount;
+    private int mVisibleBindingCount;
+    private int mNotPerceptibleBindingCount;
 
     private int mGroup;
     private int mImportanceInGroup;
@@ -271,28 +269,47 @@ public class ChildProcessConnection {
     @GuardedBy("mBindingStateLock")
     private boolean mCleanExit;
 
-    public ChildProcessConnection(Context context, ComponentName serviceName,
-            ComponentName fallbackServiceName, boolean bindToCaller, boolean bindAsExternalService,
-            Bundle serviceBundle, String instanceName) {
-        this(context, serviceName, fallbackServiceName, bindToCaller, bindAsExternalService,
-                serviceBundle, null /* connectionFactory */, instanceName);
+    public ChildProcessConnection(
+            Context context,
+            ComponentName serviceName,
+            ComponentName fallbackServiceName,
+            boolean bindToCaller,
+            boolean bindAsExternalService,
+            Bundle serviceBundle,
+            String instanceName) {
+        this(
+                context,
+                serviceName,
+                fallbackServiceName,
+                bindToCaller,
+                bindAsExternalService,
+                serviceBundle,
+                /* connectionFactory= */ null,
+                instanceName);
     }
 
     @VisibleForTesting
-    public ChildProcessConnection(final Context context, ComponentName serviceName,
-            ComponentName fallbackServiceName, boolean bindToCaller, boolean bindAsExternalService,
-            Bundle serviceBundle, ChildServiceConnectionFactory connectionFactory,
+    public ChildProcessConnection(
+            final Context context,
+            ComponentName serviceName,
+            ComponentName fallbackServiceName,
+            boolean bindToCaller,
+            boolean bindAsExternalService,
+            Bundle serviceBundle,
+            ChildServiceConnectionFactory connectionFactory,
             String instanceName) {
         mLauncherHandler = new Handler();
-        mLauncherExecutor = (Runnable runnable) -> {
-            mLauncherHandler.post(runnable);
-        };
+        mLauncherExecutor =
+                (Runnable runnable) -> {
+                    mLauncherHandler.post(runnable);
+                };
         assert isRunningOnLauncherThread();
         mServiceName = serviceName;
         mFallbackServiceName = fallbackServiceName;
         mServiceBundle = serviceBundle != null ? serviceBundle : new Bundle();
         mServiceBundle.putBoolean(ChildProcessConstants.EXTRA_BIND_TO_CALLER, bindToCaller);
-        mServiceBundle.putString(ChildProcessConstants.EXTRA_BROWSER_PACKAGE_NAME,
+        mServiceBundle.putString(
+                ChildProcessConstants.EXTRA_BROWSER_PACKAGE_NAME,
                 BuildInfo.getInstance().packageName);
         mBindToCaller = bindToCaller;
         mInstanceName = instanceName;
@@ -300,42 +317,55 @@ public class ChildProcessConnection {
         // isolatedProcess, so both need to be turned off for incremental install.
         mBindAsExternalService = bindAsExternalService && !BuildConfig.IS_INCREMENTAL_INSTALL;
         if (connectionFactory == null) {
-            mConnectionFactory = new ChildServiceConnectionFactory() {
-                @Override
-                public ChildServiceConnection createConnection(Intent bindIntent, int bindFlags,
-                        ChildServiceConnectionDelegate delegate, String instanceName) {
-                    return new ChildServiceConnectionImpl(context, bindIntent, bindFlags,
-                            mLauncherHandler, mLauncherExecutor, delegate, instanceName);
-                }
-            };
+            mConnectionFactory =
+                    new ChildServiceConnectionFactory() {
+                        @Override
+                        public ChildServiceConnection createConnection(
+                                Intent bindIntent,
+                                int bindFlags,
+                                ChildServiceConnectionDelegate delegate,
+                                String instanceName) {
+                            return new ChildServiceConnectionImpl(
+                                    context,
+                                    bindIntent,
+                                    bindFlags,
+                                    mLauncherHandler,
+                                    mLauncherExecutor,
+                                    delegate,
+                                    instanceName);
+                        }
+                    };
         } else {
             mConnectionFactory = connectionFactory;
         }
 
         // Methods on the delegate are can be called on launcher thread or UI thread, so need to
         // handle both cases. See BindService for details.
-        mConnectionDelegate = new ChildServiceConnectionDelegate() {
-            @Override
-            public void onServiceConnected(final IBinder service) {
-                if (mLauncherHandler.getLooper() == Looper.myLooper()) {
-                    onServiceConnectedOnLauncherThread(service);
-                    return;
-                }
-                mLauncherHandler.post(() -> onServiceConnectedOnLauncherThread(service));
-            }
+        mConnectionDelegate =
+                new ChildServiceConnectionDelegate() {
+                    @Override
+                    public void onServiceConnected(final IBinder service) {
+                        if (mLauncherHandler.getLooper() == Looper.myLooper()) {
+                            onServiceConnectedOnLauncherThread(service);
+                            return;
+                        }
+                        mLauncherHandler.post(() -> onServiceConnectedOnLauncherThread(service));
+                    }
 
-            @Override
-            public void onServiceDisconnected() {
-                if (mLauncherHandler.getLooper() == Looper.myLooper()) {
-                    onServiceDisconnectedOnLauncherThread();
-                    return;
-                }
-                mLauncherHandler.post(() -> onServiceDisconnectedOnLauncherThread());
-            }
-        };
+                    @Override
+                    public void onServiceDisconnected() {
+                        if (mLauncherHandler.getLooper() == Looper.myLooper()) {
+                            onServiceDisconnectedOnLauncherThread();
+                            return;
+                        }
+                        mLauncherHandler.post(() -> onServiceDisconnectedOnLauncherThread());
+                    }
+                };
 
-        createBindings(sAlwaysFallback && mFallbackServiceName != null ? mFallbackServiceName
-                                                                       : mServiceName);
+        createBindings(
+                sAlwaysFallback && mFallbackServiceName != null
+                        ? mFallbackServiceName
+                        : mServiceName);
     }
 
     private void createBindings(ComponentName serviceName) {
@@ -345,15 +375,34 @@ public class ChildProcessConnection {
             intent.putExtras(mServiceBundle);
         }
 
-        int defaultFlags = Context.BIND_AUTO_CREATE
-                | (mBindAsExternalService ? Context.BIND_EXTERNAL_SERVICE : 0);
+        int defaultFlags =
+                Context.BIND_AUTO_CREATE
+                        | (mBindAsExternalService ? Context.BIND_EXTERNAL_SERVICE : 0);
 
-        mModerateBinding = mConnectionFactory.createConnection(
-                intent, defaultFlags, mConnectionDelegate, mInstanceName);
-        mStrongBinding = mConnectionFactory.createConnection(
-                intent, defaultFlags | Context.BIND_IMPORTANT, mConnectionDelegate, mInstanceName);
-        mWaivedBinding = mConnectionFactory.createConnection(intent,
-                defaultFlags | Context.BIND_WAIVE_PRIORITY, mConnectionDelegate, mInstanceName);
+        mVisibleBinding =
+                mConnectionFactory.createConnection(
+                        intent, defaultFlags, mConnectionDelegate, mInstanceName);
+        if (supportNotPerceptibleBinding()) {
+            mNotPerceptibleBinding =
+                    mConnectionFactory.createConnection(
+                            intent,
+                            defaultFlags | Context.BIND_NOT_PERCEPTIBLE,
+                            mConnectionDelegate,
+                            mInstanceName);
+        }
+
+        mStrongBinding =
+                mConnectionFactory.createConnection(
+                        intent,
+                        defaultFlags | Context.BIND_IMPORTANT,
+                        mConnectionDelegate,
+                        mInstanceName);
+        mWaivedBinding =
+                mConnectionFactory.createConnection(
+                        intent,
+                        defaultFlags | Context.BIND_WAIVE_PRIORITY,
+                        mConnectionDelegate,
+                        mInstanceName);
     }
 
     public final IChildProcessService getService() {
@@ -400,8 +449,8 @@ public class ChildProcessConnection {
         try {
             TraceEvent.begin("ChildProcessConnection.start");
             assert isRunningOnLauncherThread();
-            assert mConnectionParams
-                    == null : "setupConnection() called before start() in ChildProcessConnection.";
+            assert mConnectionParams == null
+                    : "setupConnection() called before start() in ChildProcessConnection.";
 
             mServiceCallback = serviceCallback;
 
@@ -424,8 +473,8 @@ public class ChildProcessConnection {
         try {
             TraceEvent.begin("ChildProcessConnection.tryStart");
             assert isRunningOnLauncherThread();
-            assert mConnectionParams
-                    == null : "setupConnection() called before start() in ChildProcessConnection.";
+            assert mConnectionParams == null
+                    : "setupConnection() called before start() in ChildProcessConnection.";
 
             if (!bind(useStrongBinding)) {
                 return false;
@@ -450,16 +499,20 @@ public class ChildProcessConnection {
 
     /**
      * Sets-up the connection after it was started with start().
+     *
      * @param connectionBundle a bundle passed to the service that can be used to pass various
-     *         parameters to the service
+     *     parameters to the service
      * @param clientInterfaces optional client specified interfaces that the child can use to
-     *         communicate with the parent process
+     *     communicate with the parent process
      * @param connectionCallback will be called exactly once after the connection is set up or the
-     *                           setup fails
+     *     setup fails
      * @param zygoteInfoCallback will be called exactly once after the connection is set up
      */
-    public void setupConnection(Bundle connectionBundle, @Nullable List<IBinder> clientInterfaces,
-            ConnectionCallback connectionCallback, ZygoteInfoCallback zygoteInfoCallback) {
+    public void setupConnection(
+            Bundle connectionBundle,
+            @Nullable List<IBinder> clientInterfaces,
+            ConnectionCallback connectionCallback,
+            ZygoteInfoCallback zygoteInfoCallback) {
         assert isRunningOnLauncherThread();
         assert mConnectionParams == null;
         if (mServiceDisconnected) {
@@ -504,9 +557,7 @@ public class ChildProcessConnection {
         notifyChildProcessDied();
     }
 
-    /**
-     * Dumps the stack of the child process without crashing it.
-     */
+    /** Dumps the stack of the child process without crashing it. */
     public void dumpProcessStack() {
         assert isRunningOnLauncherThread();
         IChildProcessService service = mService;
@@ -515,28 +566,6 @@ public class ChildProcessConnection {
         } catch (RemoteException e) {
             Log.e(TAG, "Failed to dump process stack.", e);
         }
-    }
-
-    /**
-     * UMA histogram values for child app info mismatches.
-     * Note: this should stay in sync with ChildAppInfoError in enums.xml.
-     */
-    @IntDef({ChildAppInfoError.SUCCESS, ChildAppInfoError.SOURCE_DIR_MISMATCH,
-            ChildAppInfoError.SHARED_LIB_MISMATCH, ChildAppInfoError.REMOTE_EXCEPTION,
-            ChildAppInfoError.MAX_VALUE})
-    @Retention(RetentionPolicy.SOURCE)
-    public @interface ChildAppInfoError {
-        int SUCCESS = 0;
-        int SOURCE_DIR_MISMATCH = 1;
-        int SHARED_LIB_MISMATCH = 2;
-        int REMOTE_EXCEPTION = 3;
-        // New elements go above.
-        int MAX_VALUE = REMOTE_EXCEPTION;
-    }
-
-    private void recordChildAppInfoError(@ChildAppInfoError int error) {
-        RecordHistogram.recordEnumeratedHistogram(
-                "Android.ChildMismatch.AppInfoError2", error, ChildAppInfoError.MAX_VALUE);
     }
 
     @VisibleForTesting
@@ -570,54 +599,42 @@ public class ChildProcessConnection {
             }
 
             // Validate that the child process is running the same code as the parent process.
-            String childMismatchError = null;
+            boolean childMatches;
             try {
                 ApplicationInfo child = mService.getAppInfo();
                 ApplicationInfo parent = BuildInfo.getInstance().getBrowserApplicationInfo();
-
-                if (!Objects.equals(parent.sourceDir, child.sourceDir)) {
-                    recordChildAppInfoError(ChildAppInfoError.SOURCE_DIR_MISMATCH);
-                    childMismatchError = "sourceDir mismatch; parent=" + parent.sourceDir
-                            + " child=" + child.sourceDir;
-                } else if (!Arrays.equals(parent.sharedLibraryFiles, child.sharedLibraryFiles)) {
-                    recordChildAppInfoError(ChildAppInfoError.SHARED_LIB_MISMATCH);
-                    childMismatchError = "sharedLibraryFiles mismatch; parent="
-                            + Arrays.toString(parent.sharedLibraryFiles)
-                            + " child=" + Arrays.toString(child.sharedLibraryFiles);
-                }
                 // Don't compare splitSourceDirs as isolatedSplits/dynamic feature modules/etc make
                 // this potentially complicated.
+                childMatches =
+                        Objects.equals(parent.sourceDir, child.sourceDir)
+                                && Arrays.equals(
+                                        parent.sharedLibraryFiles, child.sharedLibraryFiles);
             } catch (RemoteException ex) {
-                recordChildAppInfoError(ChildAppInfoError.REMOTE_EXCEPTION);
-                childMismatchError = "child didn't handle getAppInfo()";
+                // If the child can't handle getAppInfo then it is old and doesn't match.
+                childMatches = false;
             }
-            if (childMismatchError != null) {
+            if (!childMatches) {
                 // Check if it looks like the browser's package version has been changed since the
                 // browser process launched (i.e. if the install somehow did not kill our process)
-                boolean versionHasChanged;
-                try {
-                    PackageInfo latestPackage =
-                            ContextUtils.getApplicationContext().getPackageManager().getPackageInfo(
-                                    BuildInfo.getInstance().packageName, 0);
-                    long latestVersionCode = BuildInfo.packageVersionCode(latestPackage);
-                    long loadedVersionCode = BuildInfo.getInstance().versionCode;
-                    versionHasChanged = latestVersionCode != loadedVersionCode;
-                } catch (PackageManager.NameNotFoundException e) {
-                    // Package uninstalled since we launched? Then the version has "changed"...
-                    versionHasChanged = true;
+                PackageInfo latestPackage = PackageUtils.getApplicationPackageInfo(0);
+                long latestVersionCode = BuildInfo.packageVersionCode(latestPackage);
+                long loadedVersionCode = BuildInfo.getInstance().versionCode;
+                if (latestVersionCode != loadedVersionCode) {
+                    // Crashing the process is likely to improve the situation - when we are next
+                    // launched, we should be running the new version and match new children.
+                    throw new ChildProcessMismatchException(
+                            "Child process's classpath doesn't match, and main process's package"
+                                    + " has been updated since process launch; process needs"
+                                    + " restarting!");
+                } else {
+                    // Crashing the process is unlikely to improve the situation - our classpath
+                    // will probably be the same on next launch and probably still won't match.
+                    // Log an error but just carry on and hope.
+                    Log.e(
+                            TAG,
+                            "Child process's classpath doesn't match, but main process's package"
+                                    + " hasn't changed; the child is likely to be broken!");
                 }
-                RecordHistogram.recordBooleanHistogram(
-                        "Android.ChildMismatch.BrowserVersionChanged2", versionHasChanged);
-                childMismatchError += "; browser version has changed: " + versionHasChanged;
-                Log.e(TAG, "Child process code mismatch: %s", childMismatchError);
-                boolean crashIfBrowserChanged = BaseFeatureList.isEnabled(
-                        BaseFeatures.CRASH_BROWSER_ON_CHILD_MISMATCH_IF_BROWSER_CHANGED);
-                if (BaseFeatureList.isEnabled(BaseFeatures.CRASH_BROWSER_ON_ANY_CHILD_MISMATCH)
-                        || (versionHasChanged && crashIfBrowserChanged)) {
-                    throw new ChildProcessMismatchException(childMismatchError);
-                }
-            } else {
-                recordChildAppInfoError(ChildAppInfoError.SUCCESS);
             }
 
             if (mServiceCallback != null) {
@@ -627,7 +644,7 @@ public class ChildProcessConnection {
             mServiceConnectComplete = true;
 
             if (mMemoryPressureCallback == null) {
-                final MemoryPressureCallback callback = this ::onMemoryPressure;
+                final MemoryPressureCallback callback = this::onMemoryPressure;
                 ThreadUtils.postOnUiThread(() -> MemoryPressureListener.addCallback(callback));
                 mMemoryPressureCallback = callback;
             }
@@ -651,7 +668,10 @@ public class ChildProcessConnection {
             return;
         }
         mServiceDisconnected = true;
-        Log.w(TAG, "onServiceDisconnected (crash or killed by oom): pid=%d %s", mPid,
+        Log.w(
+                TAG,
+                "onServiceDisconnected (crash or killed by oom): pid=%d %s",
+                mPid,
                 buildDebugStateString());
         stop(); // We don't want to auto-restart on crash. Let the browser do that.
 
@@ -667,7 +687,8 @@ public class ChildProcessConnection {
         StringBuilder s = new StringBuilder();
         s.append("bindings:");
         s.append(mWaivedBinding.isBound() ? "W" : " ");
-        s.append(mModerateBinding.isBound() ? "M" : " ");
+        s.append(mVisibleBinding.isBound() ? "V" : " ");
+        s.append(supportNotPerceptibleBinding() && mNotPerceptibleBinding.isBound() ? "N" : " ");
         s.append(mStrongBinding.isBound() ? "S" : " ");
         return s.toString();
     }
@@ -712,9 +733,7 @@ public class ChildProcessConnection {
         mConnectionCallback = null;
     }
 
-    /**
-     * Passes the zygote bundle to the service.
-     */
+    /** Passes the zygote bundle to the service. */
     public void consumeZygoteBundle(Bundle zygoteBundle) {
         if (mService == null) return;
         try {
@@ -735,43 +754,53 @@ public class ChildProcessConnection {
             assert mServiceConnectComplete && mService != null;
             assert mConnectionParams != null;
 
-            IParentProcess parentProcess = new IParentProcess.Stub() {
-                @Override
-                public void finishSetupConnection(
-                        int pid, int zygotePid, long zygoteStartupTimeMillis, Bundle relroBundle) {
-                    mLauncherHandler.post(() -> {
-                        onSetupConnectionResultOnLauncherThread(
-                                pid, zygotePid, zygoteStartupTimeMillis, relroBundle);
-                    });
-                }
-
-                @Override
-                public void reportExceptionInInit(String exception) {
-                    synchronized (mBindingStateLock) {
-                        mExceptionInServiceDuringInit = exception;
-                    }
-                    mLauncherHandler.post(createUnbindRunnable());
-                }
-
-                @Override
-                public void reportCleanExit() {
-                    synchronized (mBindingStateLock) {
-                        mCleanExit = true;
-                    }
-                    mLauncherHandler.post(createUnbindRunnable());
-                }
-
-                private Runnable createUnbindRunnable() {
-                    return new Runnable() {
+            IParentProcess parentProcess =
+                    new IParentProcess.Stub() {
                         @Override
-                        public void run() {
-                            unbind();
+                        public void finishSetupConnection(
+                                int pid,
+                                int zygotePid,
+                                long zygoteStartupTimeMillis,
+                                Bundle relroBundle) {
+                            mLauncherHandler.post(
+                                    () -> {
+                                        onSetupConnectionResultOnLauncherThread(
+                                                pid,
+                                                zygotePid,
+                                                zygoteStartupTimeMillis,
+                                                relroBundle);
+                                    });
+                        }
+
+                        @Override
+                        public void reportExceptionInInit(String exception) {
+                            synchronized (mBindingStateLock) {
+                                mExceptionInServiceDuringInit = exception;
+                            }
+                            mLauncherHandler.post(createUnbindRunnable());
+                        }
+
+                        @Override
+                        public void reportCleanExit() {
+                            synchronized (mBindingStateLock) {
+                                mCleanExit = true;
+                            }
+                            mLauncherHandler.post(createUnbindRunnable());
+                        }
+
+                        private Runnable createUnbindRunnable() {
+                            return new Runnable() {
+                                @Override
+                                public void run() {
+                                    unbind();
+                                }
+                            };
                         }
                     };
-                }
-            };
             try {
-                mService.setupConnection(mConnectionParams.mConnectionBundle, parentProcess,
+                mService.setupConnection(
+                        mConnectionParams.mConnectionBundle,
+                        parentProcess,
                         mConnectionParams.mClientInterfaces);
             } catch (RemoteException re) {
                 Log.e(TAG, "Failed to setup connection.", re);
@@ -786,32 +815,49 @@ public class ChildProcessConnection {
         assert isRunningOnLauncherThread();
         assert !mUnbound;
 
-        boolean success;
+        boolean success = bindUsingExistingBindings(useStrongBinding);
         boolean usedFallback = sAlwaysFallback && mFallbackServiceName != null;
-        if (useStrongBinding) {
-            success = mStrongBinding.bindServiceConnection();
-        } else {
-            mModerateBindingCount++;
-            success = mModerateBinding.bindServiceConnection();
-        }
-        if (!success) {
+        boolean canFallback = !sAlwaysFallback && mFallbackServiceName != null;
+        if (!success && !usedFallback && canFallback) {
             // Note this error condition is generally transient so `sAlwaysFallback` is
             // not set in this code path.
-            if (!usedFallback && mFallbackServiceName != null && retireBindingsAndBindFallback()) {
-                usedFallback = true;
-            } else {
-                return false;
-            }
+            retireAndCreateFallbackBindings();
+            success = bindUsingExistingBindings(useStrongBinding);
+            usedFallback = true;
+            canFallback = false;
         }
 
-        if (!usedFallback && mFallbackServiceName != null) {
+        if (success && !usedFallback && canFallback) {
             mLauncherHandler.postDelayed(
                     this::checkBindTimeOut, FALLBACK_TIMEOUT_IN_SECONDS * 1000);
         }
 
-        mWaivedBinding.bindServiceConnection();
-        updateBindingState();
-        return true;
+        return success;
+    }
+
+    private boolean bindUsingExistingBindings(boolean useStrongBinding) {
+        assert isRunningOnLauncherThread();
+
+        boolean success;
+        if (useStrongBinding) {
+            success = mStrongBinding.bindServiceConnection();
+            if (success) {
+                mStrongBindingCount++;
+            }
+        } else {
+            success = mVisibleBinding.bindServiceConnection();
+            if (success) {
+                mVisibleBindingCount++;
+            }
+        }
+
+        if (success) {
+            boolean result = mWaivedBinding.bindServiceConnection();
+            // One binding already succeeded. Waived binding should succeed too.
+            assert result;
+            updateBindingState();
+        }
+        return success;
     }
 
     private void checkBindTimeOut() {
@@ -829,14 +875,12 @@ public class ChildProcessConnection {
 
     private boolean retireBindingsAndBindFallback() {
         assert mFallbackServiceName != null;
-        Log.w(TAG, "Fallback to %s", mFallbackServiceName);
         boolean isStrongBindingBound = mStrongBinding.isBound();
-        boolean isModerateBindingBound = mModerateBinding.isBound();
+        boolean isVisibleBindingBound = mVisibleBinding.isBound();
+        boolean isNotPerceptibleBindingBound =
+                supportNotPerceptibleBinding() && mNotPerceptibleBinding.isBound();
         boolean isWaivedBindingBound = mWaivedBinding.isBound();
-        mStrongBinding.retire();
-        mModerateBinding.retire();
-        mWaivedBinding.retire();
-        createBindings(mFallbackServiceName);
+        retireAndCreateFallbackBindings();
         // Expect all bindings to succeed or fail together. So early out as soon as
         // one binding fails.
         if (isStrongBindingBound) {
@@ -844,8 +888,13 @@ public class ChildProcessConnection {
                 return false;
             }
         }
-        if (isModerateBindingBound) {
-            if (!mModerateBinding.bindServiceConnection()) {
+        if (isVisibleBindingBound) {
+            if (!mVisibleBinding.bindServiceConnection()) {
+                return false;
+            }
+        }
+        if (isNotPerceptibleBindingBound) {
+            if (!mNotPerceptibleBinding.bindServiceConnection()) {
                 return false;
             }
         }
@@ -857,6 +906,18 @@ public class ChildProcessConnection {
         return true;
     }
 
+    private void retireAndCreateFallbackBindings() {
+        assert mFallbackServiceName != null;
+        Log.w(TAG, "Fallback to %s", mFallbackServiceName);
+        mStrongBinding.retire();
+        mVisibleBinding.retire();
+        if (supportNotPerceptibleBinding()) {
+            mNotPerceptibleBinding.retire();
+        }
+        mWaivedBinding.retire();
+        createBindings(mFallbackServiceName);
+    }
+
     @VisibleForTesting
     protected void unbind() {
         assert isRunningOnLauncherThread();
@@ -865,7 +926,10 @@ public class ChildProcessConnection {
         mUnbound = true;
         mStrongBinding.unbindServiceConnection();
         mWaivedBinding.unbindServiceConnection();
-        mModerateBinding.unbindServiceConnection();
+        if (supportNotPerceptibleBinding()) {
+            mNotPerceptibleBinding.unbindServiceConnection();
+        }
+        mVisibleBinding.unbindServiceConnection();
         updateBindingState();
 
         if (mMemoryPressureCallback != null) {
@@ -877,8 +941,6 @@ public class ChildProcessConnection {
 
     public void updateGroupImportance(int group, int importanceInGroup) {
         assert isRunningOnLauncherThread();
-        assert !mUnbound;
-        assert mWaivedBinding.isBound();
         assert group != 0 || importanceInGroup == 0;
         if (mGroup != group || mImportanceInGroup != importanceInGroup) {
             mGroup = group;
@@ -930,39 +992,89 @@ public class ChildProcessConnection {
         }
     }
 
-    public boolean isModerateBindingBound() {
+    public boolean isVisibleBindingBound() {
         assert isRunningOnLauncherThread();
-        return mModerateBinding.isBound();
+        return mVisibleBinding.isBound();
     }
 
-    public int getModerateBindingCount() {
+    public int getVisibleBindingCount() {
         assert isRunningOnLauncherThread();
-        return mModerateBindingCount;
+        return mVisibleBindingCount;
     }
 
-    public void addModerateBinding() {
+    public void addVisibleBinding() {
         assert isRunningOnLauncherThread();
         if (!isConnected()) {
             Log.w(TAG, "The connection is not bound for %d", getPid());
             return;
         }
-        if (mModerateBindingCount == 0) {
-            mModerateBinding.bindServiceConnection();
+        if (mVisibleBindingCount == 0) {
+            mVisibleBinding.bindServiceConnection();
             updateBindingState();
         }
-        mModerateBindingCount++;
+        mVisibleBindingCount++;
     }
 
-    public void removeModerateBinding() {
+    public void removeVisibleBinding() {
         assert isRunningOnLauncherThread();
         if (!isConnected()) {
             return;
         }
-        assert mModerateBindingCount > 0;
-        mModerateBindingCount--;
-        if (mModerateBindingCount == 0) {
-            mModerateBinding.unbindServiceConnection();
+        assert mVisibleBindingCount > 0;
+        mVisibleBindingCount--;
+        if (mVisibleBindingCount == 0) {
+            mVisibleBinding.unbindServiceConnection();
             updateBindingState();
+        }
+    }
+
+    public boolean isNotPerceptibleBindingBound() {
+        assert isRunningOnLauncherThread();
+        return supportNotPerceptibleBinding() && mNotPerceptibleBinding.isBound();
+    }
+
+    public int getNotPerceptibleBindingCount() {
+        assert isRunningOnLauncherThread();
+        return mNotPerceptibleBindingCount;
+    }
+
+    public void addNotPerceptibleBinding() {
+        assert isRunningOnLauncherThread();
+        assert supportNotPerceptibleBinding();
+        if (!isConnected()) {
+            Log.w(TAG, "The connection is not bound for %d", getPid());
+            return;
+        }
+        if (mNotPerceptibleBindingCount == 0) {
+            mNotPerceptibleBinding.bindServiceConnection();
+            updateBindingState();
+        }
+        mNotPerceptibleBindingCount++;
+    }
+
+    public void removeNotPerceptibleBinding() {
+        assert isRunningOnLauncherThread();
+        assert supportNotPerceptibleBinding();
+        if (!isConnected()) {
+            return;
+        }
+        assert mNotPerceptibleBindingCount > 0;
+        mNotPerceptibleBindingCount--;
+        if (mNotPerceptibleBindingCount == 0) {
+            mNotPerceptibleBinding.unbindServiceConnection();
+            updateBindingState();
+        }
+    }
+
+    /**
+     * @return the current connection binding state.
+     */
+    public @ChildBindingState int bindingStateCurrent() {
+        // WARNING: this method can be called from a thread other than the launcher thread.
+        // Note that it returns the current waived bound only state and is racy. This not really
+        // preventable without changing the caller's API, short of blocking.
+        synchronized (mBindingStateLock) {
+            return mBindingState;
         }
     }
 
@@ -1017,8 +1129,10 @@ public class ChildProcessConnection {
             newBindingState = ChildBindingState.UNBOUND;
         } else if (mStrongBinding.isBound()) {
             newBindingState = ChildBindingState.STRONG;
-        } else if (mModerateBinding.isBound()) {
-            newBindingState = ChildBindingState.MODERATE;
+        } else if (mVisibleBinding.isBound()) {
+            newBindingState = ChildBindingState.VISIBLE;
+        } else if (supportNotPerceptibleBinding() && mNotPerceptibleBinding.isBound()) {
+            newBindingState = ChildBindingState.NOT_PERCEPTIBLE;
         } else {
             assert mWaivedBinding.isBound();
             newBindingState = ChildBindingState.WAIVED;
@@ -1045,7 +1159,6 @@ public class ChildProcessConnection {
         return mLauncherHandler.getLooper() == Looper.myLooper();
     }
 
-    @VisibleForTesting
     public void crashServiceForTesting() {
         try {
             mService.forceKill();
@@ -1054,7 +1167,6 @@ public class ChildProcessConnection {
         }
     }
 
-    @VisibleForTesting
     public boolean didOnServiceConnectedForTesting() {
         return mDidOnServiceConnected;
     }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -369,28 +369,6 @@ if (typeof(goog) != 'undefined' && goog.require) {
        return;
      }
      targetNode.setAttribute('cvoxnodedesc', JSON.stringify(nodeDescriptions));
-   };
-
-   /**
-    * Simulate a click on an element.
-    *
-    * @param {Element} targetElement The element that should be clicked.
-    * @param {boolean} shiftKey Specifies if shift is held down.
-    */
-   cvox.Api.click = function(targetElement, shiftKey) {
-     if (!cvox.Api.isChromeVoxActive() || !targetElement) {
-       return;
-     }
-
-     if (implementation) {
-       cvox.DomUtil.clickElem(targetElement, shiftKey, true);
-     } else {
-       var message = {
-         'cmd': 'clickNodeRef',
-         'args': [cvox.ApiUtils.makeNodeReference(targetElement), shiftKey]
-       };
-       channel.port1.postMessage(JSON.stringify(message));
-     }
    };
 
    /**

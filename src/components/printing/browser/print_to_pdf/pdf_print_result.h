@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,14 @@
 namespace print_to_pdf {
 
 enum class PdfPrintResult {
-  PRINT_SUCCESS,
-  PRINTING_FAILED,
-  INVALID_PRINTER_SETTINGS,
-  INVALID_MEMORY_HANDLE,
-  METAFILE_MAP_ERROR,
-  SIMULTANEOUS_PRINT_ACTIVE,
-  PAGE_RANGE_SYNTAX_ERROR,
-  PAGE_RANGE_INVALID_RANGE,
-  PAGE_COUNT_EXCEEDED,
-
+  kPrintSuccess,
+  kPrintFailure,
+  kInvalidSharedMemoryRegion,
+  kInvalidSharedMemoryMapping,
+  kPageRangeSyntaxError,
+  kPageRangeInvalidRange,
+  kPageCountExceeded,
+  kPrintingInProgress,
 };
 
 std::string PdfPrintResultToString(PdfPrintResult result);

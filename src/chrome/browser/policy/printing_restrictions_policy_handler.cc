@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/common/pref_names.h"
 #include "components/policy/core/browser/policy_error_map.h"
+#include "components/policy/core/common/schema.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_value_map.h"
 #include "components/strings/grit/components_strings.h"
@@ -61,7 +62,8 @@ bool PrintingEnumPolicyHandler<Mode>::GetValue(const PolicyMap& policies,
       return true;
     }
     if (errors)
-      errors->AddError(policy_name_, IDS_POLICY_VALUE_FORMAT_ERROR);
+      errors->AddError(policy_name_, IDS_POLICY_INVALID_SELECTION_ERROR,
+                       "printing mode");
   }
   return false;
 }
@@ -178,26 +180,28 @@ PrintingBackgroundGraphicsDefaultPolicyHandler::
 
 PrintingPaperSizeDefaultPolicyHandler::PrintingPaperSizeDefaultPolicyHandler()
     : TypeCheckingPolicyHandler(key::kPrintingPaperSizeDefault,
-                                base::Value::Type::DICTIONARY) {}
+                                base::Value::Type::DICT) {}
 
 PrintingPaperSizeDefaultPolicyHandler::
     ~PrintingPaperSizeDefaultPolicyHandler() = default;
 
 bool PrintingPaperSizeDefaultPolicyHandler::CheckIntSubkey(
-    const base::Value* dict,
+    const base::Value::Dict& dict,
     const std::string& key,
     PolicyErrorMap* errors) {
-  const base::Value* value = dict->FindKey(key);
+  const base::Value* value = dict.Find(key);
   if (!value) {
     if (errors) {
-      errors->AddError(policy_name(), key, IDS_POLICY_NOT_SPECIFIED_ERROR);
+      errors->AddError(policy_name(), IDS_POLICY_NOT_SPECIFIED_ERROR,
+                       PolicyErrorPath{key});
     }
     return false;
   }
   if (!value->is_int()) {
     if (errors) {
-      errors->AddError(policy_name(), key, IDS_POLICY_TYPE_ERROR,
-                       base::Value::GetTypeName(base::Value::Type::INTEGER));
+      errors->AddError(policy_name(), IDS_POLICY_TYPE_ERROR,
+                       base::Value::GetTypeName(base::Value::Type::INTEGER),
+                       PolicyErrorPath{key});
     }
     return false;
   }
@@ -220,17 +224,18 @@ bool PrintingPaperSizeDefaultPolicyHandler::GetValue(
   if (!value)
     return true;
 
-  const base::Value* name = value->FindKey(printing::kPaperSizeName);
+  const base::Value* name = value->GetDict().Find(printing::kPaperSizeName);
   if (!name) {
     if (errors)
-      errors->AddError(policy_name(), IDS_POLICY_VALUE_FORMAT_ERROR);
+      errors->AddError(policy_name(), IDS_POLICY_INVALID_SELECTION_ERROR,
+                       "paper size");
     return false;
   }
   if (!name->is_string()) {
     if (errors) {
-      errors->AddError(policy_name(), printing::kPaperSizeName,
-                       IDS_POLICY_TYPE_ERROR,
-                       base::Value::GetTypeName(base::Value::Type::STRING));
+      errors->AddError(policy_name(), IDS_POLICY_TYPE_ERROR,
+                       base::Value::GetTypeName(base::Value::Type::STRING),
+                       PolicyErrorPath{printing::kPaperSizeName});
     }
     return false;
   }
@@ -239,19 +244,20 @@ bool PrintingPaperSizeDefaultPolicyHandler::GetValue(
 
   bool custom_size_property_found = false;
   const base::Value* custom_size =
-      value->FindKey(printing::kPaperSizeCustomSize);
+      value->GetDict().Find(printing::kPaperSizeCustomSize);
   if (custom_size) {
     if (!custom_size->is_dict()) {
       if (errors) {
-        errors->AddError(
-            policy_name(), printing::kPaperSizeCustomSize,
-            IDS_POLICY_TYPE_ERROR,
-            base::Value::GetTypeName(base::Value::Type::DICTIONARY));
+        errors->AddError(policy_name(), IDS_POLICY_TYPE_ERROR,
+                         base::Value::GetTypeName(base::Value::Type::DICT),
+                         PolicyErrorPath{printing::kPaperSizeCustomSize});
       }
       return false;
     }
-    if (!CheckIntSubkey(custom_size, printing::kPaperSizeWidth, errors) ||
-        !CheckIntSubkey(custom_size, printing::kPaperSizeHeight, errors)) {
+    if (!CheckIntSubkey(custom_size->GetDict(), printing::kPaperSizeWidth,
+                        errors) ||
+        !CheckIntSubkey(custom_size->GetDict(), printing::kPaperSizeHeight,
+                        errors)) {
       return false;
     }
     custom_size_property_found = true;
@@ -259,7 +265,10 @@ bool PrintingPaperSizeDefaultPolicyHandler::GetValue(
 
   if (custom_option_specified != custom_size_property_found) {
     if (errors)
-      errors->AddError(policy_name(), IDS_POLICY_VALUE_FORMAT_ERROR);
+      errors->AddError(policy_name(),
+                       custom_option_specified
+                           ? IDS_POLICY_PAPER_SIZE_CUSTOM_NO_SIZE_ERROR
+                           : IDS_POLICY_PAPER_SIZE_NOT_CUSTOM_ERROR);
     return false;
   }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,9 @@ class NET_EXPORT NetworkChangeNotifierFactoryAndroid :
   ~NetworkChangeNotifierFactoryAndroid() override;
 
   // NetworkChangeNotifierFactory:
-  std::unique_ptr<NetworkChangeNotifier> CreateInstance() override;
+  std::unique_ptr<NetworkChangeNotifier> CreateInstanceWithInitialTypes(
+      NetworkChangeNotifier::ConnectionType /*initial_type*/,
+      NetworkChangeNotifier::ConnectionSubtype /*initial_subtype*/) override;
 
  private:
   // Delegate passed to the instances created by this class.

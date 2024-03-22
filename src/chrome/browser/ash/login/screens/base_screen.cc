@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/values.h"
+#include "chrome/browser/ash/login/wizard_context.h"
 
 namespace ash {
 
@@ -33,14 +34,13 @@ void BaseScreen::Hide() {
   wizard_context_ = nullptr;
 }
 
-bool BaseScreen::MaybeSkip(WizardContext* context) {
+bool BaseScreen::MaybeSkip(WizardContext& context) {
   return false;
 }
 
-void BaseScreen::HandleUserActionDeprecated(const std::string& action) {
-  base::Value::List args;
-  args.Append(action);
-  HandleUserAction(args);
+bool BaseScreen::ShouldBeSkipped(const WizardContext& context) const {
+  NOTIMPLEMENTED();
+  return false;
 }
 
 void BaseScreen::HandleUserAction(const base::Value::List& args) {
@@ -64,13 +64,14 @@ bool BaseScreen::HandleAccelerator(LoginAcceleratorAction action) {
   return false;
 }
 
-void BaseScreen::OnUserActionDeprecated(const std::string& action_id) {
-  NOTREACHED() << "Unhandled user action: action_id=" << action_id;
+void BaseScreen::OnUserAction(const base::Value::List& args) {
+  CHECK_GE(args.size(), 1u);
+  NOTREACHED() << "Unhandled user action: action_id=" << args[0];
 }
 
-void BaseScreen::OnUserAction(const base::Value::List& args) {
-  CHECK_EQ(args.size(), 1);
-  OnUserActionDeprecated(args[0].GetString());
+ScreenSummary BaseScreen::GetScreenSummary() {
+  NOTIMPLEMENTED();
+  return {};
 }
 
 }  // namespace ash

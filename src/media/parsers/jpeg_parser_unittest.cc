@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace media {
 
 TEST(JpegParserTest, Parsing) {
   base::FilePath data_dir;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &data_dir));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &data_dir));
 
   // This sample frame is captured from Chromebook Pixel
   base::FilePath file_path = data_dir.AppendASCII("media")
@@ -83,7 +83,7 @@ TEST(JpegParserTest, Parsing) {
 
 TEST(JpegParserTest, TrailingZerosShouldBeIgnored) {
   base::FilePath data_dir;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &data_dir));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &data_dir));
   base::FilePath file_path =
       data_dir.AppendASCII("media")
           .AppendASCII("test")
@@ -106,7 +106,7 @@ TEST(JpegParserTest, TrailingZerosShouldBeIgnored) {
 
 TEST(JpegParserTest, CodedSizeNotEqualVisibleSize) {
   base::FilePath data_dir;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &data_dir));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &data_dir));
 
   base::FilePath file_path = data_dir.AppendASCII("media")
                                  .AppendASCII("test")

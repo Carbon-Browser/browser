@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 
 namespace sync_pb {
@@ -16,12 +15,7 @@ class AutofillWalletSpecifics;
 
 namespace autofill {
 
-AutofillProfile CreateServerProfile(const std::string& server_id);
-
 CreditCard CreateServerCreditCard(const std::string& server_id);
-
-sync_pb::AutofillWalletSpecifics CreateAutofillWalletSpecificsForAddress(
-    const std::string& client_tag);
 
 sync_pb::AutofillWalletSpecifics CreateAutofillWalletSpecificsForCard(
     const std::string& client_tag,
@@ -34,6 +28,9 @@ CreateAutofillWalletSpecificsForPaymentsCustomerData(
 
 sync_pb::AutofillWalletSpecifics
 CreateAutofillWalletSpecificsForCreditCardCloudTokenData(
+    const std::string& client_tag);
+
+sync_pb::AutofillWalletSpecifics CreateAutofillWalletSpecificsForIban(
     const std::string& client_tag);
 
 }  // namespace autofill

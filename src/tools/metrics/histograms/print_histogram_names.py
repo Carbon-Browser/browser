@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -41,7 +41,7 @@ def get_names(xml_files):
 
 
 def histogram_xml_files():
-  return [open(f) for f in histogram_paths.ALL_XMLS]
+  return [open(f, encoding="utf-8") for f in histogram_paths.ALL_XMLS]
 
 
 def get_diff(revision):

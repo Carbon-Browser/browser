@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -141,4 +141,4 @@ TEST_F(NetworkTypePatternTest, ToDebugString) {
   EXPECT_EQ(vpn_.ToDebugString(), shill::kTypeVPN);
 }
 
-}  // namespace chromeos
+}  // namespace ash

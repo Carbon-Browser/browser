@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,6 @@ std::string GetCredits(bool include_scripts) {
       ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
           IDR_ABOUT_UI_CREDITS_HTML);
   if (include_scripts) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    response +=
-        "<script src=\"chrome://credits/keyboard_utils.js\"></script>\n";
-#endif
     response +=
         "<script src=\"chrome://credits/credits.js\"></script>\n";
   }

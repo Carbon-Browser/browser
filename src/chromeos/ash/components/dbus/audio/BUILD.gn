@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,6 +12,7 @@ component("audio") {
   defines = [ "IS_DBUS_AUDIO_IMPL" ]
 
   deps = [
+    "//ash/constants",
     "//base",
     "//chromeos/dbus/common",
     "//dbus",
@@ -24,6 +25,10 @@ component("audio") {
     "cras_audio_client.h",
     "fake_cras_audio_client.cc",
     "fake_cras_audio_client.h",
+    "fake_floss_media_client.cc",
+    "fake_floss_media_client.h",
+    "floss_media_client.cc",
+    "floss_media_client.h",
     "volume_state.cc",
     "volume_state.h",
   ]

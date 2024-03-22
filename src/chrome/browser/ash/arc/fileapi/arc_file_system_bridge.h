@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "ash/components/arc/mojom/file_system.mojom-forward.h"
 #include "ash/components/arc/session/connection_observer.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/arc/fileapi/arc_select_files_handler.h"
@@ -47,6 +48,14 @@ class ArcFileSystemBridge
    public:
     virtual void OnDocumentChanged(int64_t watcher_id,
                                    storage::WatcherManager::ChangeType type) {}
+
+    // Propagates `mojom::FileSystemHost::OnMediaStoreUriAdded()` events from
+    // ARC to observers. See payload details in mojo interface documentation:
+    // /ash/components/arc/mojom/file_system.mojom.
+    virtual void OnMediaStoreUriAdded(
+        const GURL& uri,
+        const mojom::MediaStoreMetadata& metadata) {}
+
     virtual void OnRootsChanged() {}
 
    protected:
@@ -111,6 +120,8 @@ class ArcFileSystemBridge
   void GetFileSelectorElements(
       mojom::GetFileSelectorElementsRequestPtr request,
       GetFileSelectorElementsCallback callback) override;
+  void OnMediaStoreUriAdded(const GURL& uri,
+                            mojom::MediaStoreMetadataPtr metadata) override;
 
   // ConnectionObserver<mojom::FileSystemInstance> overrides:
   void OnConnectionClosed() override;
@@ -130,7 +141,7 @@ class ArcFileSystemBridge
 
   // Used to implement GetFileSize() and GetLastModified().
   void GetMetadata(const GURL& url_decoded,
-                   int flags,
+                   storage::FileSystemOperation::GetMetadataFieldSet flags,
                    storage::FileSystemOperation::GetMetadataCallback callback);
 
   // Used to implement GetVirtualFileId().
@@ -185,8 +196,9 @@ class ArcFileSystemBridge
                               const std::string& file_system_id,
                               bool result);
 
-  Profile* const profile_;
-  ArcBridgeService* const bridge_service_;  // Owned by ArcServiceManager
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
+  const raw_ptr<ArcBridgeService, ExperimentalAsh>
+      bridge_service_;  // Owned by ArcServiceManager
   base::ObserverList<Observer>::Unchecked observer_list_;
 
   // Map from file descriptor IDs to requested URLs.

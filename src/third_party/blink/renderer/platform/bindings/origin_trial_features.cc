@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ InstallPropertiesPerFeatureFuncType g_install_properties_per_feature_func;
 }  // namespace
 
 void InstallPropertiesPerFeature(ScriptState* script_state,
-                                 OriginTrialFeature feature) {
+                                 mojom::blink::OriginTrialFeature feature) {
   return g_install_properties_per_feature_func(script_state, feature);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,14 +47,9 @@ class AppLaunchUtilsTest : public testing::Test {
     testing::Test::SetUp();
 
     const AccountId account_id = AccountId::FromUserEmail("lala@example.com");
-    auto fake_user_manager = std::make_unique<FakeChromeUserManager>();
-    // Stealing the pointer from unique ptr before it goes to the scoped user
-    // manager.
-    FakeChromeUserManager* user_manager = fake_user_manager.get();
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(fake_user_manager));
-    user_manager->AddWebKioskAppUser(account_id);
-    user_manager->LoginUser(account_id);
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
+    fake_user_manager_->AddWebKioskAppUser(account_id);
+    fake_user_manager_->LoginUser(account_id);
 
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     input_file_ = temp_dir_.GetPath().AppendASCII("prefs.json");
@@ -67,7 +62,7 @@ class AppLaunchUtilsTest : public testing::Test {
     PrefServiceFactory pref_service_factory;
     pref_store_ = new JsonPrefStore(input_file_);
     pref_service_factory.set_user_prefs(pref_store_);
-    return pref_service_factory.Create(registry_, /*delegate=*/nullptr);
+    return pref_service_factory.Create(registry_);
   }
 
  public:
@@ -79,7 +74,8 @@ class AppLaunchUtilsTest : public testing::Test {
   scoped_refptr<JsonPrefStore> pref_store_;
   scoped_refptr<PrefRegistrySimple> registry_;
 
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
 };
 
 TEST_F(AppLaunchUtilsTest, ClearUserPrefs) {

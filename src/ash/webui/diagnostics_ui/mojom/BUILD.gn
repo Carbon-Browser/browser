@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -15,24 +15,31 @@ mojom("mojom") {
     "system_routine_controller.mojom",
   ]
 
-  public_deps = [ "//mojo/public/mojom/base" ]
+  webui_module_path = "/ash/webui/diagnostics_ui"
+
+  # Generate WebUI bindings in JavaScript instead of TypeScript.
+  use_typescript_sources = false
+
+  public_deps = [
+    "//ash/system/diagnostics/mojom",
+    "//mojo/public/mojom/base",
+  ]
 
   cpp_typemaps = [
     {
       types = [
         {
           mojom = "ash.diagnostics.mojom.SecurityType"
-          cpp = "ash::diagnostics::mojom::SecurityType"
+          cpp = "::ash::diagnostics::mojom::SecurityType"
         },
         {
           mojom = "ash.diagnostics.mojom.AuthenticationType"
-          cpp = "ash::diagnostics::mojom::AuthenticationType"
+          cpp = "::ash::diagnostics::mojom::AuthenticationType"
         },
       ]
       traits_headers = [ "network_provider_mojom_traits.h" ]
       traits_sources = [ "network_provider_mojom_traits.cc" ]
-      traits_public_deps =
-          [ "//chromeos/services/network_config/public/mojom:mojom" ]
+      traits_public_deps = [ "//chromeos/services/network_config/public/mojom" ]
     },
   ]
 }
@@ -44,7 +51,7 @@ source_set("unit_tests") {
     ":mojom",
     "//base",
     "//base/test:test_support",
-    "//chromeos/services/network_config/public/mojom:mojom",
+    "//chromeos/services/network_config/public/mojom",
     "//mojo/public/cpp/test_support:test_utils",
     "//services/data_decoder/public/cpp:test_support",
     "//services/device/public/cpp:test_support",

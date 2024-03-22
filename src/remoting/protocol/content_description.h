@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,13 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "remoting/protocol/session_config.h"
 
 namespace jingle_xmpp {
 class XmlElement;
 }  // namespace jingle_xmpp
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // ContentDescription used for chromoting sessions. It contains the information
 // from the content description stanza in the session initialization handshake.
@@ -27,8 +25,9 @@ class ContentDescription {
  public:
   static const char kChromotingContentName[];
 
-  ContentDescription(std::unique_ptr<CandidateSessionConfig> config,
-                     std::unique_ptr<jingle_xmpp::XmlElement> authenticator_message);
+  ContentDescription(
+      std::unique_ptr<CandidateSessionConfig> config,
+      std::unique_ptr<jingle_xmpp::XmlElement> authenticator_message);
   ~ContentDescription();
 
   const CandidateSessionConfig* config() const {
@@ -56,7 +55,6 @@ class ContentDescription {
                                   std::list<ChannelConfig>* const configs);
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_CONTENT_DESCRIPTION_H_

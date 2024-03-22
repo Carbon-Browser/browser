@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -201,6 +201,14 @@ class NET_EXPORT_PRIVATE HttpTransaction {
   virtual void SetEarlyResponseHeadersCallback(
       ResponseHeadersCallback callback) = 0;
   virtual void SetResponseHeadersCallback(ResponseHeadersCallback callback) = 0;
+
+  // Sets the callback to modify the request header. The callback will be called
+  // just before sending the request to the network.
+  virtual void SetModifyRequestHeadersCallback(
+      base::RepeatingCallback<void(net::HttpRequestHeaders*)> callback) = 0;
+
+  virtual void SetIsSharedDictionaryReadAllowedCallback(
+      base::RepeatingCallback<bool()> callback) = 0;
 
   // Resumes the transaction after being deferred.
   virtual int ResumeNetworkStart() = 0;

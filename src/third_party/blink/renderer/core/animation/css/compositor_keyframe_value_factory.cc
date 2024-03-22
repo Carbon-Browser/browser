@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,7 +90,7 @@ CompositorKeyframeValue* CompositorKeyframeValueFactory::Create(
       if (const auto* color_value = DynamicTo<cssvalue::CSSColor>(value)) {
         Color color = color_value->Value();
         return MakeGarbageCollected<CompositorKeyframeColor>(SkColorSetARGB(
-            color.Alpha(), color.Red(), color.Green(), color.Blue()));
+            color.AlphaAsInteger(), color.Red(), color.Green(), color.Blue()));
       }
 
       return nullptr;

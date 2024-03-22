@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -152,10 +152,10 @@ class MetadataDatabase {
   bool HasSyncRoot() const;
 
   // Returns all file metadata for the given |app_id|.
-  std::unique_ptr<base::ListValue> DumpFiles(const std::string& app_id);
+  base::Value::List DumpFiles(const std::string& app_id);
 
   // Returns all database data.
-  std::unique_ptr<base::ListValue> DumpDatabase();
+  base::Value::List DumpDatabase();
 
   // TODO(tzik): Move GetLargestKnownChangeID() to private section, and hide its
   // handling in the class, instead of letting user do.
@@ -383,8 +383,8 @@ class MetadataDatabase {
 
   bool HasNewerFileMetadata(const std::string& file_id, int64_t change_id);
 
-  std::unique_ptr<base::ListValue> DumpTrackers();
-  std::unique_ptr<base::ListValue> DumpMetadata();
+  base::Value::List DumpTrackers();
+  base::Value::List DumpMetadata();
 
   void AttachSyncRoot(const google_apis::FileResource& sync_root_folder);
   void AttachInitialAppRoot(const google_apis::FileResource& app_root_folder);

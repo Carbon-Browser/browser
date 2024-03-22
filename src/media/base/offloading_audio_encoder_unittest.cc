@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
@@ -35,7 +35,8 @@ class OffloadingAudioEncoderTest : public testing::Test {
     auto mock_audio_encoder = std::make_unique<MockAudioEncoder>();
     mock_audio_encoder_ = mock_audio_encoder.get();
     work_runner_ = base::ThreadPool::CreateSequencedTaskRunner({});
-    callback_runner_ = base::SequencedTaskRunnerHandle::Get();
+    callback_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
+    EXPECT_CALL(*mock_audio_encoder_, DisablePostedCallbacks());
     offloading_encoder_ = std::make_unique<OffloadingAudioEncoder>(
         std::move(mock_audio_encoder), work_runner_, callback_runner_);
     EXPECT_CALL(*mock_audio_encoder_, OnDestruct()).WillOnce(Invoke([this]() {
@@ -48,7 +49,7 @@ class OffloadingAudioEncoderTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
   scoped_refptr<base::SequencedTaskRunner> work_runner_;
   scoped_refptr<base::SequencedTaskRunner> callback_runner_;
-  raw_ptr<MockAudioEncoder> mock_audio_encoder_;
+  raw_ptr<MockAudioEncoder, AcrossTasksDanglingUntriaged> mock_audio_encoder_;
   std::unique_ptr<OffloadingAudioEncoder> offloading_encoder_;
 };
 

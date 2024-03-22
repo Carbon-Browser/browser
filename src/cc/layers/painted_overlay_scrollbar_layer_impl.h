@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,8 +56,6 @@ class CC_EXPORT PaintedOverlayScrollbarLayerImpl
   void set_track_ui_resource_id(UIResourceId uid) {
     track_ui_resource_id_ = uid;
   }
-
-  bool HasFindInPageTickmarks() const override;
 
  protected:
   PaintedOverlayScrollbarLayerImpl(LayerTreeImpl* tree_impl,

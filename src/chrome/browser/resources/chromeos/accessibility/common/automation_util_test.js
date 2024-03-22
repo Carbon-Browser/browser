@@ -1,23 +1,25 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Include test fixture.
 GEN_INCLUDE([
-  '../select_to_speak/select_to_speak_e2e_test_base.js',
   'testing/assert_additions.js',
-  '../chromevox/testing/snippets.js',
+  'testing/common_e2e_test_base.js',
+  'testing/snippets.js',
 ]);
 
 /**
  * Test fixture for automation_util.js.
  */
-AccessibilityExtensionAutomationUtilE2ETest =
-    class extends SelectToSpeakE2ETest {
+AccessibilityExtensionAutomationUtilE2ETest = class extends CommonE2ETestBase {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule('RectUtil', '/common/rect_util.js');
+    await Promise.all([
+      importModule('RectUtil', '/common/rect_util.js'),
+      importModule('AutomationUtil', '/common/automation_util.js'),
+    ]);
 
     window.Dir = constants.Dir;
     window.RoleType = chrome.automation.RoleType;
@@ -111,7 +113,6 @@ AX_TEST_F(
       while (rightmost.lastChild) {
         rightmost = rightmost.lastChild;
       }
-
       const leftAncestors = getNonDesktopAncestors(leftmost);
       const rightAncestors = getNonDesktopAncestors(rightmost);
       assertEquals(RoleType.LINK, leftmost.role);

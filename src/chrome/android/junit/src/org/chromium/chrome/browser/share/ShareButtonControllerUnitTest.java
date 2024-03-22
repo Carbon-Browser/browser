@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -59,36 +58,23 @@ import org.chromium.url.GURL;
 public final class ShareButtonControllerUnitTest {
     private static final int WIDTH_DELTA = 50;
 
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
     private Context mContext;
 
-    @Mock
-    private UkmRecorder.Natives mUkmRecorderJniMock;
-    @Mock
-    private Resources mResources;
-    @Mock
-    private Tab mTab;
-    @Mock
-    private Drawable mDrawable;
-    @Mock
-    private ActivityTabProvider mTabProvider;
-    @Mock
-    private ObservableSupplier<ShareDelegate> mShareDelegateSupplier;
-    @Mock
-    private ShareDelegate mShareDelegate;
-    @Mock
-    private GURL mMockGurl;
-    @Mock
-    private ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
-    @Mock
-    private ModalDialogManager mModalDialogManager;
-    @Mock
-    private Tracker mTracker;
+    @Mock private UkmRecorder.Natives mUkmRecorderJniMock;
+    @Mock private Resources mResources;
+    @Mock private Tab mTab;
+    @Mock private Drawable mDrawable;
+    @Mock private ActivityTabProvider mTabProvider;
+    @Mock private ObservableSupplier<ShareDelegate> mShareDelegateSupplier;
+    @Mock private ShareDelegate mShareDelegate;
+    @Mock private GURL mMockGurl;
+    @Mock private ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
+    @Mock private ModalDialogManager mModalDialogManager;
+    @Mock private Tracker mTracker;
 
     private Configuration mConfiguration = new Configuration();
     private ShareButtonController mShareButtonController;
@@ -106,6 +92,7 @@ public final class ShareButtonControllerUnitTest {
         doReturn(mConfiguration).when(mResources).getConfiguration();
 
         doReturn(mock(WebContents.class)).when(mTab).getWebContents();
+        doReturn("https").when(mMockGurl).getScheme();
         doReturn(mMockGurl).when(mTab).getUrl();
 
         doReturn(mShareDelegate).when(mShareDelegateSupplier).get();
@@ -113,18 +100,24 @@ public final class ShareButtonControllerUnitTest {
         AdaptiveToolbarFeatures.clearParsedParamsForTesting();
 
         mShareButtonController =
-                new ShareButtonController(mContext, mDrawable, mTabProvider, mShareDelegateSupplier,
-                        ()
-                                -> mTracker,
-                        mShareUtils, mActivityLifecycleDispatcher, mModalDialogManager, () -> {});
+                new ShareButtonController(
+                        mContext,
+                        mDrawable,
+                        mTabProvider,
+                        mShareDelegateSupplier,
+                        () -> mTracker,
+                        mShareUtils,
+                        mModalDialogManager,
+                        () -> {});
 
         TrackerFactory.setTrackerForTests(mTracker);
     }
 
-    @EnableFeatures({ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2})
+    @EnableFeatures(ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2)
     @Test
     public void testIPHCommandHelper() {
-        assertNull(mShareButtonController.get(/*tab*/ null).getButtonSpec().getIPHCommandBuilder());
+        assertNull(
+                mShareButtonController.get(/* tab= */ null).getButtonSpec().getIPHCommandBuilder());
 
         // Verify that IPHCommandBuilder is set just once;
         IPHCommandBuilder builder =
@@ -138,10 +131,13 @@ public final class ShareButtonControllerUnitTest {
     }
 
     @Test
-    @EnableFeatures({ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2})
+    @EnableFeatures(ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2)
     public void testIPHEvent() {
-        doReturn(true).when(mTracker).shouldTriggerHelpUI(
-                FeatureConstants.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_SHARE_FEATURE);
+        doReturn(true)
+                .when(mTracker)
+                .shouldTriggerHelpUI(
+                        FeatureConstants
+                                .ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_SHARE_FEATURE);
 
         View view = mock(View.class);
         mShareButtonController.get(mTab).getButtonSpec().getOnClickListener().onClick(view);
@@ -151,30 +147,7 @@ public final class ShareButtonControllerUnitTest {
     }
 
     @Test
-    @EnableFeatures({ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2})
-    public void testDoNotShowWhenTooNarrow() {
-        mConfiguration.screenWidthDp = AdaptiveToolbarFeatures.DEFAULT_MIN_WIDTH_DP - 1;
-        mShareButtonController.onConfigurationChanged(mConfiguration);
-
-        ButtonData buttonData = mShareButtonController.get(mTab);
-
-        assertFalse(buttonData.canShow());
-    }
-
-    @Test
-    @EnableFeatures({ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2})
-    public void testDoShowWhenWideEnough() {
-        doReturn("https").when(mMockGurl).getScheme();
-        mConfiguration.screenWidthDp = AdaptiveToolbarFeatures.DEFAULT_MIN_WIDTH_DP;
-        mShareButtonController.onConfigurationChanged(mConfiguration);
-
-        ButtonData buttonData = mShareButtonController.get(mTab);
-
-        assertTrue(buttonData.canShow());
-    }
-
-    @Test
-    @EnableFeatures({ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2})
+    @EnableFeatures(ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2)
     public void testDoNotShowOnDataUrl() {
         doReturn("data").when(mMockGurl).getScheme();
         doReturn(mMockGurl).when(mTab).getUrl();

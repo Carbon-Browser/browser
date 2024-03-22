@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,6 @@ class SessionCrashedBubbleView : public SessionCrashedBubble {
   // Internal show method also used by SessionCrashedBubbleViewTest.
   // TODO(pbos): Mock conditions in test instead.
   static views::BubbleDialogDelegate* ShowBubble(Browser* browser,
-                                                 bool uma_opted_in_already,
                                                  bool offer_uma_optin);
 };
 

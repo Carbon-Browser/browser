@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,11 @@ let doCancel: (() => void)|null = null;
  */
 export function start(): Promise<void> {
   doCancel = null;
-  if (!state.get(state.State.TIMER)) {
+
+  const isTimerOptionShown =
+      getComputedStyle(dom.get('#open-timer-panel', HTMLElement)).display !==
+      'none';
+  if (!state.get(state.State.TIMER) || !isTimerOptionShown) {
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
@@ -36,18 +40,20 @@ export function start(): Promise<void> {
     };
 
     let tickCounter = state.get(state.State.TIMER_10SEC) ? 10 : 3;
-    const sounds = {
-      1: '#sound-tick-final',
-      2: '#sound-tick-inc',
-      3: '#sound-tick-inc',
-      [tickCounter]: '#sound-tick-start',
-    };
+    const sounds = new Map([
+      [1, 'tickFinal'],
+      [2, 'tickIncrement'],
+      [3, 'tickIncrement'],
+      [tickCounter, 'tickStart'],
+    ] as const);
+
     function onTimerTick() {
       if (tickCounter === 0) {
         resolve();
       } else {
-        if (sounds[tickCounter] !== undefined) {
-          play(dom.get(sounds[tickCounter], HTMLAudioElement));
+        const sound = sounds.get(tickCounter);
+        if (sound !== undefined) {
+          play(sound);
         }
         tickMsg.textContent = tickCounter + '';
         animate.play(tickMsg);
@@ -64,8 +70,6 @@ export function start(): Promise<void> {
  * Cancels active timer ticking if applicable.
  */
 export function cancel(): void {
-  if (doCancel) {
-    doCancel();
-    doCancel = null;
-  }
+  doCancel?.();
+  doCancel = null;
 }

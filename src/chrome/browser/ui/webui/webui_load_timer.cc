@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ void WebuiLoadTimer::DidStartNavigation(
 void WebuiLoadTimer::DOMContentLoaded(
     content::RenderFrameHost* render_frame_host) {
   // See comment in DocumentOnLoadCompletedInPrimaryMainFrame.
-  if (!timer_ || render_frame_host != web_contents()->GetPrimaryMainFrame())
+  if (!timer_ || !render_frame_host->IsInPrimaryMainFrame())
     return;
   CallUmaHistogramTimes(document_initial_load_uma_id_, timer_->Elapsed());
 }

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -30,7 +30,7 @@
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/single_thread_task_runner.h"
@@ -198,7 +198,7 @@ class MEDIA_EXPORT AlsaPcmOutputStream : public AudioOutputStream {
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
   // Handle to the actual PCM playback device.
-  raw_ptr<snd_pcm_t, DanglingUntriaged> playback_handle_;
+  raw_ptr<snd_pcm_t> playback_handle_;
 
   std::unique_ptr<SeekableBuffer> buffer_;
   uint32_t frames_per_packet_;

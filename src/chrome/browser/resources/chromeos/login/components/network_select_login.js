@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,18 @@
  * @fileoverview Polymer element wrapping network-select for login/oobe.
  */
 
-/* #js_imports_placeholder */
+import '//resources/ash/common/network/network_select.js';
+import './oobe_network_icons.html.js';
+
+import {assert} from '//resources/ash/common/assert.js';
+import {MojoInterfaceProviderImpl} from '//resources/ash/common/network/mojo_interface_provider.js';
+import {NetworkList} from '//resources/ash/common/network/network_list_types.js';
+import {OncMojo} from '//resources/ash/common/network/onc_mojo.js';
+import {StartConnectResult} from '//resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
+import {ConnectionStateType, NetworkType} from '//resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
+import {html, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {Oobe} from '../cr_ui.js';
 
 /**
  * Custom data that is stored with network element to trigger action.
@@ -14,12 +25,15 @@
  */
 let networkCustomItemCustomData;
 
-/* #export */ class NetworkSelectLogin extends Polymer.Element {
+/** @polymer */
+export class NetworkSelectLogin extends PolymerElement {
   static get is() {
     return 'network-select-login';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -30,6 +44,16 @@ let networkCustomItemCustomData;
       isNetworkConnected: {
         type: Boolean,
         notify: true,
+        value: false,
+      },
+
+      /**
+       * True when quick start is enabled.
+       * @private
+       */
+      isQuickStartVisible: {
+        type: Boolean,
+        value: false,
       },
 
       /**
@@ -39,6 +63,7 @@ let networkCustomItemCustomData;
        */
       configureConnected: {
         type: Boolean,
+        value: false,
       },
 
       /**
@@ -48,6 +73,7 @@ let networkCustomItemCustomData;
        */
       enableWifiScans: {
         type: Boolean,
+        value: true,
       },
 
       /**
@@ -56,18 +82,13 @@ let networkCustomItemCustomData;
        */
       showTechnologyBadge_: {
         type: Boolean,
+        value: false,
       },
     };
   }
 
   constructor() {
     super();
-    // Properties
-    this.isNetworkConnected = false;
-    this.configureConnected = false;
-    this.enableWifiScans = true;
-    this.showTechnologyBadge_ = false;
-    // Fields
     /**
      * GUID of the user-selected network. It is remembered after user taps on
      * network entry. After we receive event "connected" on this network,
@@ -116,6 +137,17 @@ let networkCustomItemCustomData;
    */
   getNetworkCustomItems_() {
     const items = [];
+    if (this.isQuickStartVisible) {
+      items.push({
+        customItemType: NetworkList.CustomItemType.OOBE,
+        customItemName: 'networkScreenQuickStart',
+        polymerIcon: 'oobe-20:quick-start-android-device',
+        showBeforeNetworksList: true,
+        customData: {
+          onTap: () => this.quickStartClicked_(),
+        },
+      });
+    }
     if (this.isNetworkConnected) {
       items.push({
         customItemType: NetworkList.CustomItemType.OOBE,
@@ -137,6 +169,16 @@ let networkCustomItemCustomData;
       },
     });
     return items;
+  }
+
+  /**
+   * Handle Network Setup screen "Quick Setup" button.
+   *
+   * @private
+   */
+  quickStartClicked_() {
+    this.dispatchEvent(new CustomEvent(
+        'quick-start-clicked', {bubbles: true, composed: true}));
   }
 
   /**
@@ -276,12 +318,10 @@ let networkCustomItemCustomData;
     const guid = networkState.guid;
 
     let shouldShowNetworkDetails = isNetworkConnected ||
-        networkState.connectionState ===
-            chromeos.networkConfig.mojom.ConnectionStateType.kConnecting;
+        networkState.connectionState === ConnectionStateType.kConnecting;
     // Cellular should normally auto connect. If it is selected, show the
     // details UI since there is no configuration UI for Cellular.
-    shouldShowNetworkDetails |= networkState.type ===
-        chromeos.networkConfig.mojom.NetworkType.kCellular;
+    shouldShowNetworkDetails |= networkState.type === NetworkType.kCellular;
 
     if (shouldShowNetworkDetails) {
       chrome.send('showNetworkDetails', [oncType, guid]);
@@ -293,28 +333,27 @@ let networkCustomItemCustomData;
       return;
     }
 
-    const networkConfig = network_config.MojoInterfaceProviderImpl.getInstance()
-                              .getMojoServiceRemote();
+    const networkConfig =
+        MojoInterfaceProviderImpl.getInstance().getMojoServiceRemote();
 
     networkConfig.startConnect(guid).then(response => {
-      const mojom = chromeos.networkConfig.mojom;
       switch (response.result) {
-        case mojom.StartConnectResult.kSuccess:
+        case StartConnectResult.kSuccess:
           return;
-        case mojom.StartConnectResult.kInvalidGuid:
-        case mojom.StartConnectResult.kInvalidState:
-        case mojom.StartConnectResult.kCanceled:
+        case StartConnectResult.kInvalidGuid:
+        case StartConnectResult.kInvalidState:
+        case StartConnectResult.kCanceled:
           // TODO(stevenjb/khorimoto): Consider handling these cases.
           return;
-        case mojom.StartConnectResult.kNotConfigured:
+        case StartConnectResult.kNotConfigured:
           if (!OncMojo.networkTypeIsMobile(networkState.type)) {
             chrome.send('showNetworkConfig', [guid]);
           } else {
             console.error('Cellular network is not configured: ' + guid);
           }
           return;
-        case mojom.StartConnectResult.kBlocked:
-        case mojom.StartConnectResult.kUnknown:
+        case StartConnectResult.kBlocked:
+        case StartConnectResult.kUnknown:
           console.error(
               'startConnect failed for: ' + guid + ': ' + response.message);
           return;

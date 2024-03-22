@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_color_selection_result.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/dom/scoped_abort_state.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
@@ -70,7 +71,7 @@ ScriptPromise EyeDropper::open(ScriptState* script_state,
     return ScriptPromise();
   }
 
-  if (!features::IsEyeDropperEnabled()) {
+  if (!::features::IsEyeDropperEnabled()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
                                       kNotAvailableMessage);
     return ScriptPromise();
@@ -82,13 +83,18 @@ ScriptPromise EyeDropper::open(ScriptState* script_state,
     return ScriptPromise();
   }
 
-  if (options->hasSignal()) {
-    signal_ = options->signal();
-    if (signal_->aborted()) {
-      return ScriptPromise::Reject(script_state, signal_->reason(script_state));
+  std::unique_ptr<ScopedAbortState> end_chooser_abort_state = nullptr;
+  std::unique_ptr<ScopedAbortState> response_handler_abort_state = nullptr;
+  if (auto* signal = options->getSignalOr(nullptr)) {
+    if (signal->aborted()) {
+      return ScriptPromise::Reject(script_state, signal->reason(script_state));
     }
-    signal_->AddAlgorithm(
-        MakeGarbageCollected<OpenAbortAlgorithm>(this, signal_));
+    auto* handle = signal->AddAlgorithm(
+        MakeGarbageCollected<OpenAbortAlgorithm>(this, signal));
+    end_chooser_abort_state =
+        std::make_unique<ScopedAbortState>(signal, handle);
+    response_handler_abort_state =
+        std::make_unique<ScopedAbortState>(signal, handle);
   }
 
   resolver_ = MakeGarbageCollected<ScriptPromiseResolver>(
@@ -100,32 +106,22 @@ ScriptPromise EyeDropper::open(ScriptState* script_state,
       eye_dropper_chooser_.BindNewPipeAndPassReceiver(
           frame->GetTaskRunner(TaskType::kUserInteraction)));
   eye_dropper_chooser_.set_disconnect_handler(
-      WTF::Bind(&EyeDropper::EndChooser, WrapWeakPersistent(this)));
-  eye_dropper_chooser_->Choose(resolver_->WrapCallbackInScriptScope(
-      WTF::Bind(&EyeDropper::EyeDropperResponseHandler, WrapPersistent(this))));
-
+      WTF::BindOnce(&EyeDropper::EndChooser, WrapWeakPersistent(this),
+                    std::move(end_chooser_abort_state)));
+  eye_dropper_chooser_->Choose(
+      resolver_->WrapCallbackInScriptScope(WTF::BindOnce(
+          &EyeDropper::EyeDropperResponseHandler, WrapPersistent(this),
+          std::move(response_handler_abort_state))));
   return promise;
 }
 
 void EyeDropper::AbortCallback(AbortSignal* signal) {
-  // There is no way to remove abort signal callbacks, so we need to
-  // perform null-check for `resolver_` to see if the promise has already
-  // been resolved.
-  // TODO(https://crbug.com/1296280): It should be possible to remove abort
-  // callbacks. This object can be reused for multiple eyedropper operations,
-  // and it might be possible for multiple abort signals to be mixed up.
-
-  // There is no RemoveAlgorithm() method on AbortSignal so compare the signal
-  // bound to this callback to the one last passed to open().
-  if (signal_ != signal)
-    return;
-
   if (resolver_) {
     ScriptState* script_state = resolver_->GetScriptState();
     if (IsInParallelAlgorithmRunnable(resolver_->GetExecutionContext(),
                                       script_state)) {
       ScriptState::Scope script_state_scope(script_state);
-      resolver_->Reject(signal_->reason(script_state));
+      resolver_->Reject(signal->reason(script_state));
     }
   }
 
@@ -133,9 +129,11 @@ void EyeDropper::AbortCallback(AbortSignal* signal) {
   resolver_ = nullptr;
 }
 
-void EyeDropper::EyeDropperResponseHandler(ScriptPromiseResolver* resolver,
-                                           bool success,
-                                           uint32_t color) {
+void EyeDropper::EyeDropperResponseHandler(
+    std::unique_ptr<ScopedAbortState> scoped_abort_state,
+    ScriptPromiseResolver* resolver,
+    bool success,
+    uint32_t color) {
   eye_dropper_chooser_.reset();
 
   // The abort callback resets the Mojo remote if an abort is signalled,
@@ -146,21 +144,26 @@ void EyeDropper::EyeDropperResponseHandler(ScriptPromiseResolver* resolver,
 
   if (success) {
     ColorSelectionResult* result = ColorSelectionResult::Create();
-    result->setSRGBHex(Color(color).Serialized());
+    // TODO(https://1351544): The EyeDropper should return a Color or an
+    // SkColor4f, instead of an SkColor.
+    result->setSRGBHex(Color::FromRGBA32(color).SerializeAsCanvasColor());
     resolver->Resolve(result);
+    resolver_ = nullptr;
   } else {
     RejectPromiseHelper(DOMExceptionCode::kAbortError,
                         "The user canceled the selection.");
   }
 }
 
-void EyeDropper::EndChooser() {
+void EyeDropper::EndChooser(
+    std::unique_ptr<ScopedAbortState> scoped_abort_state) {
   eye_dropper_chooser_.reset();
 
   if (!resolver_ ||
       !IsInParallelAlgorithmRunnable(resolver_->GetExecutionContext(),
-                                     resolver_->GetScriptState()))
+                                     resolver_->GetScriptState())) {
     return;
+  }
 
   ScriptState::Scope script_state_scope(resolver_->GetScriptState());
 
@@ -176,7 +179,6 @@ void EyeDropper::RejectPromiseHelper(DOMExceptionCode exception_code,
 void EyeDropper::Trace(Visitor* visitor) const {
   visitor->Trace(eye_dropper_chooser_);
   visitor->Trace(resolver_);
-  visitor->Trace(signal_);
   ScriptWrappable::Trace(visitor);
 }
 

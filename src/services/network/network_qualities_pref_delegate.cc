@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
@@ -46,7 +46,7 @@ class PrefDelegateImpl
   base::Value::Dict GetDictionaryValue() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     UMA_HISTOGRAM_EXACT_LINEAR("NQE.Prefs.ReadCount", 1, 2);
-    return pref_service_->GetDictionary(path_)->GetDict().Clone();
+    return pref_service_->GetDict(path_).Clone();
   }
 
  private:

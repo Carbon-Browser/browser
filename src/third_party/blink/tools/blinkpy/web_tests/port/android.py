@@ -67,14 +67,12 @@ perf_control = None
 _sanitize_android_tag = lambda t: t.replace('_', '-')
 
 # product constants used by the wpt runner.
-ANDROID_WEBLAYER = 'android_weblayer'
 ANDROID_WEBVIEW = 'android_webview'
 CHROME_ANDROID = 'chrome_android'
 
-PRODUCTS = [ANDROID_WEBLAYER, ANDROID_WEBVIEW, CHROME_ANDROID]
+PRODUCTS = [ANDROID_WEBVIEW, CHROME_ANDROID]
 
 PRODUCTS_TO_STEPNAMES = {
-    ANDROID_WEBLAYER: 'weblayer_shell_wpt',
     ANDROID_WEBVIEW: 'system_webview_wpt',
     CHROME_ANDROID: 'chrome_public_wpt',
 }
@@ -86,15 +84,6 @@ PRODUCTS_TO_BROWSER_TAGS = {
 # Android web tests directory, which contains override expectation files
 ANDROID_WEB_TESTS_DIR = os.path.join(get_blink_dir(), 'web_tests', 'android')
 
-PRODUCTS_TO_EXPECTATION_FILE_PATHS = {
-    ANDROID_WEBLAYER: os.path.join(
-        ANDROID_WEB_TESTS_DIR, 'WebLayerWPTOverrideExpectations'),
-    ANDROID_WEBVIEW: os.path.join(
-        ANDROID_WEB_TESTS_DIR, 'WebviewWPTExpectations'),
-    CHROME_ANDROID: os.path.join(
-        ANDROID_WEB_TESTS_DIR, 'ChromeWPTOverrideExpectations'),
-}
-
 # Disabled WPT tests on Android
 ANDROID_DISABLED_TESTS = os.path.join(
     ANDROID_WEB_TESTS_DIR, 'AndroidWPTNeverFixTests')
@@ -104,7 +93,6 @@ WPT_SMOKE_TESTS_FILE = os.path.join(
     ANDROID_WEB_TESTS_DIR, 'WPTSmokeTestCases')
 
 _friendly_browser_names = {
-    'weblayershell': 'weblayer',
     'systemwebviewshell': 'webview',
     'chromepublic': 'chromium'
 }
@@ -267,11 +255,18 @@ class AndroidDevices(object):
             return self._usable_devices
 
         devices = device_utils.DeviceUtils.HealthyDevices()
-        self._usable_devices = [
-            d for d in devices if
-            (battery_utils.BatteryUtils(d).GetBatteryInfo().get('level', 0) >=
-             AndroidDevices.MINIMUM_BATTERY_PERCENTAGE and d.IsScreenOn())
-        ]
+        usable_devices = []
+        for d in devices:
+            try:
+                battery_level = int(
+                    battery_utils.BatteryUtils(d).GetBatteryInfo().get(
+                        'level', '0'))
+            except ValueError:
+                battery_level = 0
+            if (battery_level >= AndroidDevices.MINIMUM_BATTERY_PERCENTAGE
+                    and d.IsScreenOn()):
+                usable_devices.append(d)
+        self._usable_devices = usable_devices
 
         return self._usable_devices
 
@@ -306,13 +301,21 @@ class AndroidPort(base.Port):
 
     BUILD_REQUIREMENTS_URL = 'https://www.chromium.org/developers/how-tos/android-build-instructions'
 
-    def __init__(self, host, port_name='', apk='', product='', options=None, **kwargs):
+    def __init__(self,
+                 host,
+                 port_name='',
+                 apk='',
+                 product='',
+                 options=None,
+                 prepared_devices=[],
+                 **kwargs):
         super(AndroidPort, self).__init__(
             host, port_name, options=options, **kwargs)
         self._operating_system = 'android'
         self._version = 'pie'
         fs = host.filesystem
         self._local_port = factory.PortFactory(host).get(**kwargs)
+        self._prepared_devices = prepared_devices
         if apk or product:
             self._driver_details = DriverDetails(apk)
             browser_type = fs.splitext(fs.basename(apk))[0].lower()
@@ -330,7 +333,7 @@ class AndroidPort(base.Port):
             self._wpt_product_arg = ''
 
             if not self.get_option('disable_breakpad'):
-                self._dump_reader = DumpReaderAndroid(host, self._build_path())
+                self._dump_reader = DumpReaderAndroid(host, self.build_path())
 
             # Initialize the AndroidDevices class which tracks available devices.
             default_devices = None
@@ -341,22 +344,20 @@ class AndroidPort(base.Port):
             self._devices = AndroidDevices(default_devices,
                                            self._debug_logging)
 
-            devil_chromium.Initialize(
-                output_directory=self._build_path(),
-                adb_path=self._path_from_chromium_base(
-                    'third_party', 'android_sdk', 'public', 'platform-tools',
-                    'adb'))
+            devil_chromium.Initialize(output_directory=self.build_path(),
+                                      adb_path=self._path_from_chromium_base(
+                                          'third_party', 'android_sdk',
+                                          'public', 'platform-tools', 'adb'))
 
             devil_env.config.InitializeLogging(
                 logging.DEBUG if self._debug_logging
                 and self.get_option('debug_rwt_logging') else logging.WARNING)
 
-            prepared_devices = self.get_option('prepared_devices', [])
-            for serial in prepared_devices:
+            for serial in self._prepared_devices:
                 self._devices.set_device_prepared(serial)
 
     def bot_expectations(self):
-        # TODO(rmhasan) Add bot expectations to WPT metadata.
+        # TODO(weizhong) Add bot expectations to WPT metadata.
         return {}
 
     def expected_test(self, _):
@@ -469,7 +470,7 @@ class AndroidPort(base.Port):
             device_path = lambda *p: posixpath.join(
                 self._driver_details.device_directory(), *p)
 
-            device.Install(self._path_to_driver())
+            device.Install(self.path_to_driver())
 
             # Build up a list of what we want to push, including:
             host_device_tuples = []
@@ -478,10 +479,10 @@ class AndroidPort(base.Port):
             # TODO(sergeyu): Rename these files, they can be used on platforms
             # other than Android.
             host_device_tuples.append(
-                (self._build_path('test_fonts/android_main_fonts.xml'),
+                (self.build_path('test_fonts/android_main_fonts.xml'),
                  device_path('android_main_fonts.xml')))
             host_device_tuples.append(
-                (self._build_path('test_fonts/android_fallback_fonts.xml'),
+                (self.build_path('test_fonts/android_fallback_fonts.xml'),
                  device_path('android_fallback_fonts.xml')))
             for font_file in self._get_font_files():
                 host_device_tuples.append((font_file,
@@ -544,16 +545,19 @@ class AndroidPort(base.Port):
         # By setting this on the options object, we can propagate the list
         # of prepared devices to the workers (it is read in __init__()).
         if self._devices._prepared_devices:
-            self._options.prepared_devices = self._devices.prepared_devices()
+            self._prepared_devices = self._devices.prepared_devices()
         else:
             # We were called with --no-build, so assume the devices are up to date.
-            self._options.prepared_devices = [
+            self._prepared_devices = [
                 d.get_serial()
                 for d in self._devices.usable_devices(self.host.executive)
             ]
 
+    def child_kwargs(self):
+        return {"prepared_devices": self._prepared_devices}
+
     def num_workers(self, requested_num_workers):
-        return min(len(self._options.prepared_devices), requested_num_workers)
+        return min(len(self._prepared_devices), requested_num_workers)
 
     def check_sys_deps(self):
         # _get_font_files() will throw if any of the required fonts is missing.
@@ -594,11 +598,11 @@ class AndroidPort(base.Port):
 
     # Overridden protected methods.
 
-    def _build_path(self, *comps):
-        return self._local_port._build_path(*comps)
+    def build_path(self, *comps):
+        return self._local_port.build_path(*comps)
 
-    def _build_path_with_target(self, target, *comps):
-        return self._local_port._build_path_with_target(target, *comps)
+    def build_path(self, *comps, target=None):
+        return self._local_port.build_path(*comps, target=target)
 
     def path_to_apache(self):
         return self._local_port.path_to_apache()
@@ -606,9 +610,8 @@ class AndroidPort(base.Port):
     def path_to_apache_config_file(self):
         return self._local_port.path_to_apache_config_file()
 
-    def _path_to_driver(self, target=None):
-        return self._build_path_with_target(target,
-                                            self._driver_details.apk_name())
+    def path_to_driver(self, target=None):
+        return self.build_path(self._driver_details.apk_name(), target=target)
 
     def _path_to_image_diff(self):
         return self._local_port._path_to_image_diff()
@@ -807,7 +810,7 @@ class ChromiumAndroidDriver(driver.Driver):
             kallsyms_path = self._update_kallsyms_cache(symfs_path)
             # FIXME: We should pass this some sort of "Bridge" object abstraction around ADB instead of a path/device pair.
             self._profiler = AndroidPerf(self._port.host,
-                                         self._port._path_to_driver(),
+                                         self._port.path_to_driver(),
                                          self._port.artifacts_directory(),
                                          self._device, symfs_path,
                                          kallsyms_path)
@@ -858,7 +861,7 @@ class ChromiumAndroidDriver(driver.Driver):
             symfs_path,
             'data/app-lib/%s-1/%s' % (self._driver_details.package_name(),
                                       self._driver_details.library_name()))
-        built_library_path = self._port._build_path(
+        built_library_path = self._port.build_path(
             'lib', self._driver_details.library_name())
         assert fs.exists(built_library_path)
 

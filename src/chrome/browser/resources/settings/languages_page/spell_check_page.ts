@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,23 @@
  * for spell check settings.
  */
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/js/action_link.js';
-import 'chrome://resources/cr_elements/action_link_css.m.js';
+import 'chrome://resources/cr_elements/action_link.css.js';
 // <if expr="_google_chrome or not is_macosx">
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 // </if>
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../controls/controlled_radio_button.js';
-import '../controls/settings_radio_group.js';
-import '../controls/settings_toggle_button.js';
+import '/shared/settings/controls/controlled_radio_button.js';
+import '/shared/settings/controls/settings_radio_group.js';
+import '/shared/settings/controls/settings_toggle_button.js';
 import '../icons.html.js';
 import '../settings_page/settings_animated_pages.js';
 import '../settings_page/settings_subpage.js';
@@ -31,18 +31,22 @@ import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 // <if expr="not is_macosx">
 import './edit_dictionary_page.js';
+
 // </if>
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+
+import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BaseMixin} from '../base_mixin.js';
 import {FocusConfig} from '../focus_config.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
+import {LanguageSettingsActionType, LanguageSettingsMetricsProxy, LanguageSettingsMetricsProxyImpl} from './languages_settings_metrics_proxy.js';
 import {LanguageHelper, LanguagesModel, LanguageState, SpellCheckLanguageState} from './languages_types.js';
 import {getTemplate} from './spell_check_page.html.js';
 
@@ -124,6 +128,22 @@ export class SettingsSpellCheckPageElement extends
   private spellCheckLanguages_: Array<LanguageState|SpellCheckLanguageState>;
   private hideSpellCheckLanguages_: boolean;
   private focusConfig_: FocusConfig;
+  private languageSettingsMetricsProxy_: LanguageSettingsMetricsProxy =
+      LanguageSettingsMetricsProxyImpl.getInstance();
+
+  private onSpellCheckToggleChange_(e: Event) {
+    this.languageSettingsMetricsProxy_.recordSettingsMetric(
+        (e.target as SettingsToggleButtonElement).checked ?
+            LanguageSettingsActionType.ENABLE_SPELL_CHECK_GLOBALLY :
+            LanguageSettingsActionType.DISABLE_SPELL_CHECK_GLOBALLY);
+  }
+
+  private onSelectedSpellingServiceChange_() {
+    this.languageSettingsMetricsProxy_.recordSettingsMetric(
+        this.prefs.spellcheck.use_spelling_service.value ?
+            LanguageSettingsActionType.SELECT_ENHANCED_SPELL_CHECK :
+            LanguageSettingsActionType.SELECT_BASIC_SPELL_CHECK);
+  }
 
   // <if expr="not is_macosx">
   /**
@@ -232,7 +252,7 @@ export class SettingsSpellCheckPageElement extends
   /**
    * Opens the Custom Dictionary page.
    */
-  private onEditDictionaryTap_() {
+  private onEditDictionaryClick_() {
     Router.getInstance().navigateTo(routes.EDIT_DICTIONARY);
   }
 
@@ -248,6 +268,11 @@ export class SettingsSpellCheckPageElement extends
 
     this.languageHelper.toggleSpellCheck(
         item.language.code, !item.spellCheckEnabled);
+
+    this.languageSettingsMetricsProxy_.recordSettingsMetric(
+        item.spellCheckEnabled ?
+            LanguageSettingsActionType.ENABLE_SPELL_CHECK_FOR_LANGUAGE :
+            LanguageSettingsActionType.DISABLE_SPELL_CHECK_FOR_LANGUAGE);
   }
 
   /**

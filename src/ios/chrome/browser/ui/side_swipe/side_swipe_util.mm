@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,12 @@
 
 #import <UIKit/UIKit.h>
 
-#include "ios/chrome/browser/chrome_url_constants.h"
-#import "ios/chrome/browser/chrome_url_util.h"
-#import "ios/chrome/browser/ui/ntp/ntp_util.h"
-#include "ios/chrome/browser/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_util.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/url/url_util.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
 #import "ios/web/public/navigation/navigation_item.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "url/gurl.h"
 
 BOOL IsSwipingBack(UISwipeGestureRecognizerDirection direction) {
   if (UseRTLLayout())

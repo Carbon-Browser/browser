@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,9 @@
 #include <string>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "media/base/stream_parser.h"
 #include "third_party/blink/public/platform/web_source_buffer.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 
@@ -38,9 +40,10 @@ class PLATFORM_EXPORT WebSourceBufferImpl : public WebSourceBuffer {
   double HighestPresentationTimestamp() override;
   bool EvictCodedFrames(double currentPlaybackTime,
                         size_t newDataSize) override;
-  bool Append(const unsigned char* data,
-              unsigned length,
-              double* timestamp_offset) override;
+  [[nodiscard]] bool AppendToParseBuffer(const unsigned char* data,
+                                         size_t length) override;
+  [[nodiscard]] media::StreamParser::ParseStatus RunSegmentParserLoop(
+      double* timestamp_offset) override;
   bool AppendChunks(
       std::unique_ptr<media::StreamParser::BufferQueue> buffer_queue,
       double* timestamp_offset) override;
@@ -64,9 +67,10 @@ class PLATFORM_EXPORT WebSourceBufferImpl : public WebSourceBuffer {
   void NotifyParseWarning(const media::SourceBufferParseWarning warning);
 
   std::string id_;
-  media::ChunkDemuxer* demuxer_;  // Owned by WebMediaPlayerImpl.
+  raw_ptr<media::ChunkDemuxer, ExperimentalRenderer>
+      demuxer_;  // Owned by WebMediaPlayerImpl.
 
-  WebSourceBufferClient* client_;
+  raw_ptr<WebSourceBufferClient, ExperimentalRenderer> client_;
 
   // Controls the offset applied to timestamps when processing appended media
   // segments. It is initially 0, which indicates that no offset is being

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,6 +61,10 @@ class GFX_EXPORT PlatformFontSkia : public PlatformFont {
   int GetFontSize() const override;
   const FontRenderParams& GetFontRenderParams() override;
   sk_sp<SkTypeface> GetNativeSkTypeface() const override;
+
+#if BUILDFLAG(IS_APPLE)
+  CTFontRef GetCTFont() const override;
+#endif
 
  private:
   // Create a new instance of this object with the specified properties. Called

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -141,7 +141,7 @@ void FillInDummyFormData(FormData* data) {
   field_data.label = u"label";
   field_data.name = u"name";
   field_data.value = u"value";
-  field_data.form_control_type = "password";
+  field_data.form_control_type = FormControlType::kInputPassword;
   field_data.autocomplete_attribute = "off";
   field_data.max_length = 200;
   field_data.is_autofilled = true;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,13 @@ namespace sync_test_utils_android {
 
 // Sets up the test account and signs in synchronously.
 void SetUpAccountAndSignInForTesting();
+
+// Sets up the test account, signs in, and enables Sync-the-feature
+// synchronously.
+void SetUpAccountAndSignInAndEnableSyncForTesting();
+
+// Signs out and clears the primary account.
+void SignOutForTesting();
 
 // Sets up the test authentication environment synchronously using a worker
 // thread.

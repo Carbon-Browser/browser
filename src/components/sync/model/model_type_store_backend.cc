@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/sync/protocol/model_type_store_schema_descriptor.pb.h"
 #include "third_party/leveldatabase/env_chromium.h"
 #include "third_party/leveldatabase/leveldb_chrome.h"
@@ -149,8 +149,8 @@ leveldb::Status ModelTypeStoreBackend::OpenDatabase(const std::string& path,
   // Make sure that the database is destroyed on the same sequence where it was
   // created.
   db_ = std::unique_ptr<leveldb::DB, CustomOnTaskRunnerDeleter>(
-      tmp_db.release(),
-      CustomOnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+      tmp_db.release(), CustomOnTaskRunnerDeleter(
+                            base::SequencedTaskRunner::GetCurrentDefault()));
   return status;
 }
 

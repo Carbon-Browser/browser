@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/system/input_device_settings.h"
 
 #include "chrome/browser/ash/policy/enrollment/enrollment_requisition_manager.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/prefs/pref_service.h"
 
 namespace ash {
@@ -471,13 +471,10 @@ bool InputDeviceSettings::ForceKeyboardDrivenUINavigation() {
     return true;
   }
 
-  bool keyboard_driven = false;
-  if (chromeos::system::StatisticsProvider::GetInstance()->GetMachineFlag(
-          chromeos::system::kOemKeyboardDrivenOobeKey, &keyboard_driven)) {
-    return keyboard_driven;
-  }
-
-  return false;
+  return StatisticsProvider::FlagValueToBool(
+      StatisticsProvider::GetInstance()->GetMachineFlag(
+          kOemKeyboardDrivenOobeKey),
+      /*default_value=*/false);
 }
 
 }  // namespace system

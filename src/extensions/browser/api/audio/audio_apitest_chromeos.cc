@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,12 @@
 
 #include <memory>
 
-#include "ash/components/audio/audio_devices_pref_handler_stub.h"
-#include "ash/components/audio/cras_audio_handler.h"
 #include "base/auto_reset.h"
-#include "base/command_line.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/components/dbus/audio/fake_cras_audio_client.h"
 #include "extensions/common/features/feature_session_type.h"
-#include "extensions/common/mojom/feature_session_type.mojom.h"
-#include "extensions/common/switches.h"
 #include "extensions/shell/test/shell_apitest.h"
 #include "extensions/test/extension_test_message_listener.h"
 #include "extensions/test/result_catcher.h"
@@ -57,6 +53,9 @@ const uint32_t kOutputMaxSupportedChannels = 2;
 const uint32_t kInputAudioEffect = 1;
 const uint32_t kOutputAudioEffect = 0;
 
+const int32_t kInputNumberOfVolumeSteps = 0;
+const int32_t kOutputNumberOfVolumeSteps = 25;
+
 const AudioNodeInfo kJabraSpeaker1 = {
     false, kJabraSpeaker1Id, kJabraSpeaker1StableDeviceId, "Jabra Speaker",
     "USB", "Jabra Speaker 1"};
@@ -90,7 +89,8 @@ AudioNode CreateAudioNode(const AudioNodeInfo& info, int version) {
       version == 2 ? info.stable_id ^ 0xFFFF : 0, info.device_name, info.type,
       info.name, false, 0,
       info.is_input ? kInputMaxSupportedChannels : kOutputMaxSupportedChannels,
-      info.is_input ? kInputAudioEffect : kOutputAudioEffect);
+      info.is_input ? kInputAudioEffect : kOutputAudioEffect,
+      info.is_input ? kInputNumberOfVolumeSteps : kOutputNumberOfVolumeSteps);
 }
 
 class AudioApiTest : public ShellApiTest {
@@ -205,7 +205,8 @@ IN_PROC_BROWSER_TEST_F(AudioApiTest, OnInputMuteChanged) {
   EXPECT_EQ(kJabraMic1.id, audio_handler()->GetPrimaryActiveInputNode());
 
   // Un-mute the input.
-  audio_handler()->SetInputMute(false);
+  audio_handler()->SetInputMute(
+      false, CrasAudioHandler::InputMuteChangeMethod::kOther);
   EXPECT_FALSE(audio_handler()->IsInputMuted());
 
   // Loads background app.
@@ -215,7 +216,8 @@ IN_PROC_BROWSER_TEST_F(AudioApiTest, OnInputMuteChanged) {
   ASSERT_TRUE(load_listener.WaitUntilSatisfied());
 
   // Mute the input.
-  audio_handler()->SetInputMute(true);
+  audio_handler()->SetInputMute(
+      true, CrasAudioHandler::InputMuteChangeMethod::kOther);
   EXPECT_TRUE(audio_handler()->IsInputMuted());
 
   // Verify the background app got the OnMuteChanged event

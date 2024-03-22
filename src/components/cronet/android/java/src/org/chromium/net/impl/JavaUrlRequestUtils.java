@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,17 @@ public final class JavaUrlRequestUtils {
      *
      *
      */
-    @IntDef({State.NOT_STARTED, State.STARTED, State.REDIRECT_RECEIVED,
-            State.AWAITING_FOLLOW_REDIRECT, State.AWAITING_READ, State.READING, State.ERROR,
-            State.COMPLETE, State.CANCELLED})
+    @IntDef({
+        State.NOT_STARTED,
+        State.STARTED,
+        State.REDIRECT_RECEIVED,
+        State.AWAITING_FOLLOW_REDIRECT,
+        State.AWAITING_READ,
+        State.READING,
+        State.ERROR,
+        State.COMPLETE,
+        State.CANCELLED
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface State {
         int NOT_STARTED = 0;
@@ -48,11 +56,11 @@ public final class JavaUrlRequestUtils {
      *  Interface used to run commands that could throw an exception. Specifically useful for
      *  calling {@link UrlRequest.Callback}s on a user-supplied executor.
      */
-    public interface CheckedRunnable { void run() throws Exception; }
+    public interface CheckedRunnable {
+        void run() throws Exception;
+    }
 
-    /**
-     * Executor that detects and throws if its mDelegate runs a submitted runnable inline.
-     */
+    /** Executor that detects and throws if its mDelegate runs a submitted runnable inline. */
     public static final class DirectPreventingExecutor implements Executor {
         private final Executor mDelegate;
 

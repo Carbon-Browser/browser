@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,10 @@ public final class RemoteObjectInjector extends WebContentsObserver {
         public RemoteObjectHostImpl host;
         public RemoteObjectRegistry registry;
 
-        public RemoteObjectGatewayHelper(RemoteObjectGateway.Proxy newGateway,
-                RemoteObjectHostImpl newHost, RemoteObjectRegistry newRegistry) {
+        public RemoteObjectGatewayHelper(
+                RemoteObjectGateway.Proxy newGateway,
+                RemoteObjectHostImpl newHost,
+                RemoteObjectRegistry newRegistry) {
             gateway = newGateway;
             host = newHost;
             registry = newRegistry;
@@ -133,7 +135,10 @@ public final class RemoteObjectInjector extends WebContentsObserver {
         }
     }
 
-    private void addInterfaceForFrame(RenderFrameHost frameHost, String name, Object object,
+    private void addInterfaceForFrame(
+            RenderFrameHost frameHost,
+            String name,
+            Object object,
             Class<? extends Annotation> requiredAnnotation) {
         RemoteObjectGatewayHelper helper = getRemoteObjectGatewayHelperForFrame(frameHost);
         helper.gateway.addNamedObject(
@@ -166,8 +171,9 @@ public final class RemoteObjectInjector extends WebContentsObserver {
             RemoteObjectRegistry registry = new RemoteObjectRegistry(mRetainingSet);
 
             // Construct a RemoteObjectHost implementation.
-            RemoteObjectHostImpl host = new RemoteObjectHostImpl(
-                    new RemoteObjectAuditorImpl(), registry, mAllowInspection);
+            RemoteObjectHostImpl host =
+                    new RemoteObjectHostImpl(
+                            new RemoteObjectAuditorImpl(), registry, mAllowInspection);
 
             RemoteObjectGatewayFactory factory =
                     frameHost.getInterfaceToRendererFrame(RemoteObjectGatewayFactory.MANAGER);

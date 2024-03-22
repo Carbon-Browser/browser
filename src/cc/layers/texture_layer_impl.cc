@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/logging.h"
 #include "cc/trees/layer_tree_frame_sink.h"
@@ -59,6 +60,7 @@ void TextureLayerImpl::PushPropertiesTo(LayerImpl* layer) {
   texture_layer->SetBlendBackgroundColor(blend_background_color_);
   texture_layer->SetForceTextureToOpaque(force_texture_to_opaque_);
   texture_layer->SetNearestNeighbor(nearest_neighbor_);
+  texture_layer->SetHdrMetadata(hdr_metadata_);
   if (own_resource_) {
     texture_layer->SetTransferableResource(transferable_resource_,
                                            std::move(release_callback_));
@@ -96,8 +98,17 @@ bool TextureLayerImpl::WillDraw(
   if (own_resource_) {
     DCHECK(!resource_id_);
     if (!transferable_resource_.mailbox_holder.mailbox.IsZero()) {
+      // Currently only Canvas supports releases resources in response to
+      // eviction. Other sources will be add once they can support this. Some
+      // complexity arises here from WebGL/WebGPU textures, as they do not
+      // necessarily maintain the data needed to rebuild the resources.
       resource_id_ = resource_provider->ImportResource(
-          transferable_resource_, std::move(release_callback_));
+          transferable_resource_, std::move(release_callback_),
+          transferable_resource_.resource_source ==
+                  viz::TransferableResource::ResourceSource::kCanvas
+              ? base::BindOnce(&TextureLayerImpl::OnResourceEvicted,
+                               base::Unretained(this))
+              : viz::ResourceEvictedCallback());
       DCHECK(resource_id_);
     }
     own_resource_ = false;
@@ -154,6 +165,7 @@ void TextureLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
                nearest_neighbor_, /*secure_output=*/false,
                gfx::ProtectedVideoType::kClear);
   quad->set_resource_size_in_pixels(transferable_resource_.size);
+  quad->hdr_metadata = hdr_metadata_;
   ValidateQuadResources(quad);
 }
 
@@ -198,6 +210,9 @@ void TextureLayerImpl::ReleaseResources() {
 }
 
 gfx::ContentColorUsage TextureLayerImpl::GetContentColorUsage() const {
+  if (hdr_metadata_.extended_range.has_value()) {
+    return gfx::ContentColorUsage::kHDR;
+  }
   return transferable_resource_.color_space.GetContentColorUsage();
 }
 
@@ -229,6 +244,10 @@ void TextureLayerImpl::SetUVBottomRight(const gfx::PointF& bottom_right) {
   uv_bottom_right_ = bottom_right;
 }
 
+void TextureLayerImpl::SetHdrMetadata(const gfx::HDRMetadata& hdr_metadata) {
+  hdr_metadata_ = hdr_metadata;
+}
+
 void TextureLayerImpl::SetTransferableResource(
     const viz::TransferableResource& resource,
     viz::ReleaseCallback release_callback) {
@@ -245,10 +264,10 @@ void TextureLayerImpl::RegisterSharedBitmapId(
   // If a TextureLayer leaves and rejoins a tree without the TextureLayerImpl
   // being destroyed, then it will re-request registration of ids that are still
   // registered on the impl side, so we can just ignore these requests.
-  if (registered_bitmaps_.find(id) == registered_bitmaps_.end()) {
-    // If this is a pending layer, these will be moved to the active layer when
-    // we PushPropertiesTo(). Otherwise, we don't need to notify these to the
-    // LayerTreeFrameSink until we're going to use them, so defer it until
+  if (!base::Contains(registered_bitmaps_, id)) {
+    // If this is a pending layer, these will be moved to the active layer
+    // when we PushPropertiesTo(). Otherwise, we don't need to notify these to
+    // the LayerTreeFrameSink until we're going to use them, so defer it until
     // AppendQuads().
     to_register_bitmaps_[id] = std::move(bitmap);
   }
@@ -258,8 +277,9 @@ void TextureLayerImpl::RegisterSharedBitmapId(
 void TextureLayerImpl::UnregisterSharedBitmapId(viz::SharedBitmapId id) {
   if (IsActive()) {
     LayerTreeFrameSink* sink = layer_tree_impl()->layer_tree_frame_sink();
-    if (sink && registered_bitmaps_.find(id) != registered_bitmaps_.end())
+    if (sink && base::Contains(registered_bitmaps_, id)) {
       sink->DidDeleteSharedBitmap(id);
+    }
     to_register_bitmaps_.erase(id);
     registered_bitmaps_.erase(id);
   } else {
@@ -290,6 +310,18 @@ void TextureLayerImpl::FreeTransferableResource() {
     resource_provider->RemoveImportedResource(resource_id_);
     resource_id_ = viz::kInvalidResourceId;
   }
+}
+
+void TextureLayerImpl::OnResourceEvicted() {
+  // Once we are evicted we want to remove it to unlock the memory. This will
+  // allow it to be released upon the next return. We also clear out the
+  // `resource_id_` so we don't attempt to delete it a second time when any
+  // future resource is pushed and ready to be imported.
+  if (resource_id_) {
+    auto* resource_provider = layer_tree_impl()->resource_provider();
+    resource_provider->RemoveImportedResource(resource_id_);
+  }
+  resource_id_ = viz::kInvalidResourceId;
 }
 
 }  // namespace cc

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,7 @@ String ToBase64URLWithoutPadding(DOMArrayBuffer* buffer) {
 absl::optional<blink::DOMTimeStamp> ToDOMTimeStamp(
     const absl::optional<base::Time>& time) {
   if (time)
-    return ConvertSecondsToDOMTimeStamp(time->ToDoubleT());
+    return ConvertSecondsToDOMTimeStamp(time->InSecondsFSinceUnixEpoch());
 
   return absl::nullopt;
 }
@@ -106,9 +106,9 @@ absl::optional<DOMTimeStamp> PushSubscription::expirationTime() const {
 
 DOMArrayBuffer* PushSubscription::getKey(const AtomicString& name) const {
   if (name == "p256dh")
-    return p256dh_;
+    return p256dh_.Get();
   if (name == "auth")
-    return auth_;
+    return auth_.Get();
 
   return nullptr;
 }

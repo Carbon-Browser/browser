@@ -1,62 +1,51 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/scoped_observation.h"
 #include "chrome/browser/apps/app_service/publishers/web_apps_crosapi.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/shelf_item_delegate.h"
 #include "ash/public/cpp/shelf_model.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "base/run_loop.h"
+#include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
+#include "chrome/browser/apps/app_service/app_registry_cache_waiter.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
-#include "chrome/browser/ash/crosapi/crosapi_ash.h"
-#include "chrome/browser/ash/crosapi/crosapi_manager.h"
-#include "chrome/browser/ash/crosapi/test_controller_ash.h"
+#include "chrome/browser/ash/crosapi/ash_requires_lacros_browsertestbase.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/apps/app_dialog/app_uninstall_dialog_view.h"
-#include "chrome/browser/web_applications/test/app_registration_waiter.h"
-#include "chrome/browser/web_applications/web_app_id.h"
-#include "chrome/common/chrome_features.h"
-#include "chrome/test/base/chromeos/ash_browser_test_starter.h"
-#include "chrome/test/base/in_process_browser_test.h"
-#include "chromeos/crosapi/mojom/test_controller.mojom-test-utils.h"
+#include "chrome/browser/web_applications/web_app_id_constants.h"
+#include "chromeos/crosapi/mojom/test_controller.mojom.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
+#include "components/services/app_service/public/cpp/instance_registry.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/test/browser_test.h"
 #include "ui/base/models/simple_menu_model.h"
+#include "ui/views/widget/any_widget_observer.h"
 
 namespace {
 
 class AppInstanceWaiter : public apps::InstanceRegistry::Observer {
  public:
   AppInstanceWaiter(apps::InstanceRegistry& instance_registry,
-                    const std::string& app_id)
-      : apps::InstanceRegistry::Observer(&instance_registry), app_id_(app_id) {}
+                    const std::string& app_id,
+                    apps::InstanceState state =
+                        apps::InstanceState(apps::kVisible | apps::kActive |
+                                            apps::kRunning | apps::kStarted))
+      : app_id_(app_id), state_(state) {
+    observation_.Observe(&instance_registry);
+  }
   ~AppInstanceWaiter() override = default;
 
-  void AwaitRunning() {
-    if (instance_registry()->ContainsAppId(app_id_))
-      return;
-
-    awaiting_running_ = true;
-    run_loop_.Run();
-  }
-
-  void AwaitStopped() {
-    if (!instance_registry()->ContainsAppId(app_id_))
-      return;
-
-    awaiting_stopped_ = true;
-    run_loop_.Run();
-  }
+  void Await() { run_loop_.Run(); }
 
  private:
-  void OnInstanceUpdate(const apps::InstanceUpdate&) override {
-    if ((awaiting_running_ && instance_registry()->ContainsAppId(app_id_)) ||
-        (awaiting_stopped_ && !instance_registry()->ContainsAppId(app_id_))) {
+  void OnInstanceUpdate(const apps::InstanceUpdate& update) override {
+    if (update.AppId() == app_id_ && update.State() == state_) {
       run_loop_.Quit();
     }
   }
@@ -66,101 +55,77 @@ class AppInstanceWaiter : public apps::InstanceRegistry::Observer {
   }
 
   const std::string app_id_;
+  const apps::InstanceState state_;
   base::RunLoop run_loop_;
-  bool awaiting_running_ = false;
-  bool awaiting_stopped_ = false;
+  base::ScopedObservation<apps::InstanceRegistry,
+                          apps::InstanceRegistry::Observer>
+      observation_{this};
 };
 
 std::vector<std::string> GetContextMenuForApp(const std::string& app_id) {
-  std::vector<std::string> items;
-  base::RunLoop run_loop;
   ash::ShelfItemDelegate* delegate =
       ash::ShelfModel::Get()->GetShelfItemDelegate(ash::ShelfID(app_id));
-  delegate->GetContextMenu(
-      /*display_id=*/0,
-      base::BindLambdaForTesting(
-          [&](std::unique_ptr<ui::SimpleMenuModel> model) {
-            items.reserve(model->GetItemCount());
-            for (size_t i = 0; i < model->GetItemCount(); ++i) {
-              items.push_back(base::UTF16ToUTF8(model->GetLabelAt(i)));
-            }
 
-            run_loop.Quit();
-          }));
-  run_loop.Run();
+  base::test::TestFuture<std::unique_ptr<ui::SimpleMenuModel>> future;
+  delegate->GetContextMenu(
+      /*display_id=*/0, future.GetCallback());
+
+  auto model = future.Take();
+  std::vector<std::string> items;
+  for (size_t i = 0; i < model->GetItemCount(); ++i) {
+    items.push_back(base::UTF16ToUTF8(model->GetLabelAt(i)));
+  }
   return items;
 }
 
 void SelectContextMenuForApp(const std::string& app_id, size_t index) {
-  base::RunLoop run_loop;
   ash::ShelfItemDelegate* delegate =
       ash::ShelfModel::Get()->GetShelfItemDelegate(ash::ShelfID(app_id));
+
+  base::test::TestFuture<std::unique_ptr<ui::SimpleMenuModel>> future;
   delegate->GetContextMenu(
-      /*display_id=*/0, base::BindLambdaForTesting(
-                            [&](std::unique_ptr<ui::SimpleMenuModel> model) {
-                              DCHECK(index < model->GetItemCount());
-                              model->ActivatedAt(index, /*event_flags=*/0);
-                              run_loop.Quit();
-                            }));
-  run_loop.Run();
+      /*display_id=*/0, future.GetCallback());
+  auto model = future.Take();
+  model->ActivatedAt(index, /*event_flags=*/0);
 }
 
 }  // namespace
 
-class WebAppsCrosapiBrowserTest : public InProcessBrowserTest {
+class WebAppsCrosapiBrowserTest
+    : public crosapi::AshRequiresLacrosBrowserTestBase {
  public:
-  WebAppsCrosapiBrowserTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {chromeos::features::kLacrosSupport, features::kWebAppsCrosapi}, {});
-  }
+  WebAppsCrosapiBrowserTest() = default;
   ~WebAppsCrosapiBrowserTest() override = default;
 
  protected:
-  void SetUpInProcessBrowserTestFixture() override {
-    if (!ash_starter_.HasLacrosArgument()) {
-      return;
-    }
-    ASSERT_TRUE(ash_starter_.PrepareEnvironmentForLacros());
-  }
-
   void SetUpOnMainThread() override {
-    if (!ash_starter_.HasLacrosArgument()) {
+    crosapi::AshRequiresLacrosBrowserTestBase::SetUpOnMainThread();
+    if (!HasLacrosArgument()) {
       return;
     }
-    auto* manager = crosapi::CrosapiManager::Get();
-    test_controller_ash_ = std::make_unique<crosapi::TestControllerAsh>();
-    manager->crosapi_ash()->SetTestControllerForTesting(
-        test_controller_ash_.get());
 
-    ash_starter_.StartLacros(this);
+    apps::AppTypeInitializationWaiter(GetAshProfile(), apps::AppType::kWeb)
+        .Await();
   }
 
   std::string InstallWebApp(const std::string& start_url,
                             apps::WindowMode mode) {
-    crosapi::mojom::StandaloneBrowserTestControllerAsyncWaiter waiter(
-        test_controller_ash_->GetStandaloneBrowserTestController().get());
-    std::string app_id;
-    waiter.InstallWebApp(start_url, mode, &app_id);
-    web_app::AppRegistrationWaiter(browser()->profile(), app_id).Await();
+    base::test::TestFuture<const std::string&> app_id_future;
+    GetStandaloneBrowserTestController()->InstallWebApp(
+        start_url, mode, app_id_future.GetCallback());
+    std::string app_id = app_id_future.Take();
+    CHECK(!app_id.empty());
+    apps::AppReadinessWaiter(GetAshProfile(), app_id).Await();
     return app_id;
   }
 
-  Profile* profile() { return browser()->profile(); }
-
   apps::AppServiceProxy* AppServiceProxy() {
-    return apps::AppServiceProxyFactory::GetForProfile(profile());
+    return apps::AppServiceProxyFactory::GetForProfile(GetAshProfile());
   }
-
-  const test::AshBrowserTestStarter& ash_starter() { return ash_starter_; }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-  test::AshBrowserTestStarter ash_starter_;
-  std::unique_ptr<crosapi::TestControllerAsh> test_controller_ash_;
 };
 
 IN_PROC_BROWSER_TEST_F(WebAppsCrosapiBrowserTest, PinUsingContextMenu) {
-  if (!ash_starter().HasLacrosArgument()) {
+  if (!HasLacrosArgument()) {
     return;
   }
 
@@ -169,14 +134,19 @@ IN_PROC_BROWSER_TEST_F(WebAppsCrosapiBrowserTest, PinUsingContextMenu) {
   const size_t kUnpinIndex = 1;
   const size_t kCloseIndex = 2;
 
-  const web_app::AppId app_id =
-      InstallWebApp("https://example.org/", apps::WindowMode::kBrowser);
-  EXPECT_EQ(ash::ShelfModel::Get()->ItemIndexByAppID(app_id), -1);
-  AppServiceProxy()->Launch(app_id, /*event_flags=*/0,
-                            apps::LaunchSource::kFromAppListGrid);
-  AppInstanceWaiter(AppServiceProxy()->InstanceRegistry(), app_id)
-      .AwaitRunning();
-  EXPECT_NE(ash::ShelfModel::Get()->ItemIndexByAppID(app_id), -1);
+  const webapps::AppId app_id =
+      InstallWebApp("https://example.org/", apps::WindowMode::kWindow);
+
+  EXPECT_FALSE(ash::ShelfModel::Get()->ItemByID(ash::ShelfID(app_id)));
+
+  {
+    AppInstanceWaiter waiter(AppServiceProxy()->InstanceRegistry(), app_id);
+    AppServiceProxy()->Launch(app_id, /*event_flags=*/0,
+                              apps::LaunchSource::kFromAppListGrid);
+    waiter.Await();
+  }
+
+  EXPECT_TRUE(ash::ShelfModel::Get()->ItemByID(ash::ShelfID(app_id)));
   {
     std::vector<std::string> items = GetContextMenuForApp(app_id);
     ASSERT_EQ(5u, items.size());
@@ -188,14 +158,17 @@ IN_PROC_BROWSER_TEST_F(WebAppsCrosapiBrowserTest, PinUsingContextMenu) {
   }
 
   SelectContextMenuForApp(app_id, kPinIndex);
-  SelectContextMenuForApp(app_id, kCloseIndex);
 
   // Note that Close sends an asynchronous command from Ash to Lacros, without
   // waiting for the Ash InstanceRegistry to be updated.
-  AppInstanceWaiter(AppServiceProxy()->InstanceRegistry(), app_id)
-      .AwaitStopped();
+  {
+    AppInstanceWaiter waiter(AppServiceProxy()->InstanceRegistry(), app_id,
+                             apps::kDestroyed);
+    SelectContextMenuForApp(app_id, kCloseIndex);
+    waiter.Await();
+  }
 
-  EXPECT_NE(ash::ShelfModel::Get()->ItemIndexByAppID(app_id), -1);
+  EXPECT_TRUE(ash::ShelfModel::Get()->ItemByID(ash::ShelfID(app_id)));
   {
     std::vector<std::string> items = GetContextMenuForApp(app_id);
     // Close is absent as there are no open windows.
@@ -206,11 +179,14 @@ IN_PROC_BROWSER_TEST_F(WebAppsCrosapiBrowserTest, PinUsingContextMenu) {
     EXPECT_EQ(items[3], "App info");
   }
 
-  SelectContextMenuForApp(app_id, kNewWindowIndex);
-  SelectContextMenuForApp(app_id, kUnpinIndex);
-  AppInstanceWaiter(AppServiceProxy()->InstanceRegistry(), app_id)
-      .AwaitRunning();
-  EXPECT_NE(ash::ShelfModel::Get()->ItemIndexByAppID(app_id), -1);
+  {
+    AppInstanceWaiter waiter(AppServiceProxy()->InstanceRegistry(), app_id);
+    SelectContextMenuForApp(app_id, kNewWindowIndex);
+    SelectContextMenuForApp(app_id, kUnpinIndex);
+    waiter.Await();
+  }
+
+  EXPECT_TRUE(ash::ShelfModel::Get()->ItemByID(ash::ShelfID(app_id)));
   {
     std::vector<std::string> items = GetContextMenuForApp(app_id);
     ASSERT_EQ(5u, items.size());
@@ -221,39 +197,190 @@ IN_PROC_BROWSER_TEST_F(WebAppsCrosapiBrowserTest, PinUsingContextMenu) {
     EXPECT_EQ(items[4], "App info");
   }
 
-  SelectContextMenuForApp(app_id, kCloseIndex);
-  AppInstanceWaiter(AppServiceProxy()->InstanceRegistry(), app_id)
-      .AwaitStopped();
-  EXPECT_EQ(ash::ShelfModel::Get()->ItemIndexByAppID(app_id), -1);
+  {
+    AppInstanceWaiter waiter(AppServiceProxy()->InstanceRegistry(), app_id,
+                             apps::kDestroyed);
+    SelectContextMenuForApp(app_id, kCloseIndex);
+    waiter.Await();
+  }
+
+  EXPECT_FALSE(ash::ShelfModel::Get()->ItemByID(ash::ShelfID(app_id)));
 }
 
 IN_PROC_BROWSER_TEST_F(WebAppsCrosapiBrowserTest, Uninstall) {
-  if (!ash_starter().HasLacrosArgument()) {
+  if (!HasLacrosArgument()) {
     return;
   }
 
   const size_t kPinIndex = 1;
   const size_t kUninstallIndex = 3;
 
-  const web_app::AppId app_id =
-      InstallWebApp("https://example.org/", apps::WindowMode::kBrowser);
-  AppServiceProxy()->Launch(app_id, /*event_flags=*/0,
-                            apps::LaunchSource::kFromAppListGrid);
-  AppInstanceWaiter(AppServiceProxy()->InstanceRegistry(), app_id)
-      .AwaitRunning();
-  EXPECT_NE(ash::ShelfModel::Get()->ItemIndexByAppID(app_id), -1);
+  const webapps::AppId app_id =
+      InstallWebApp("https://example.org/", apps::WindowMode::kWindow);
 
-  SelectContextMenuForApp(app_id, kUninstallIndex);
+  {
+    AppInstanceWaiter waiter(AppServiceProxy()->InstanceRegistry(), app_id);
+    AppServiceProxy()->Launch(app_id, /*event_flags=*/0,
+                              apps::LaunchSource::kFromAppListGrid);
+    waiter.Await();
+  }
+
+  EXPECT_TRUE(ash::ShelfModel::Get()->ItemByID(ash::ShelfID(app_id)));
+
+  {
+    base::test::TestFuture<void> signal;
+    views::AnyWidgetObserver observer(views::test::AnyWidgetTestPasskey{});
+    observer.set_initialized_callback(
+        base::BindLambdaForTesting([&](views::Widget* widget) {
+          if (widget->GetName() == "AppDialogView") {
+            signal.GetCallback().Run();
+          }
+        }));
+
+    SelectContextMenuForApp(app_id, kUninstallIndex);
+    EXPECT_TRUE(signal.Wait());
+  }
+
   AppUninstallDialogView::GetActiveViewForTesting()->CancelDialog();
-  EXPECT_NE(ash::ShelfModel::Get()->ItemIndexByAppID(app_id), -1);
+  EXPECT_TRUE(ash::ShelfModel::Get()->ItemByID(ash::ShelfID(app_id)));
 
   SelectContextMenuForApp(app_id, kPinIndex);
-  SelectContextMenuForApp(app_id, kUninstallIndex);
-  AppUninstallDialogView::GetActiveViewForTesting()->AcceptDialog();
-  AppInstanceWaiter(AppServiceProxy()->InstanceRegistry(), app_id)
-      .AwaitStopped();
-  web_app::AppRegistrationWaiter(profile(), app_id,
-                                 apps::Readiness::kUninstalledByUser)
-      .Await();
-  EXPECT_EQ(ash::ShelfModel::Get()->ItemIndexByAppID(app_id), -1);
+
+  {
+    base::test::TestFuture<void> signal;
+    views::AnyWidgetObserver observer(views::test::AnyWidgetTestPasskey{});
+    observer.set_initialized_callback(
+        base::BindLambdaForTesting([&](views::Widget* widget) {
+          if (widget->GetName() == "AppDialogView") {
+            signal.GetCallback().Run();
+          }
+        }));
+
+    SelectContextMenuForApp(app_id, kUninstallIndex);
+    EXPECT_TRUE(signal.Wait());
+  }
+
+  {
+    AppInstanceWaiter app_instance_waiter(AppServiceProxy()->InstanceRegistry(),
+                                          app_id, apps::kDestroyed);
+    AppUninstallDialogView::GetActiveViewForTesting()->AcceptDialog();
+    apps::AppReadinessWaiter(GetAshProfile(), app_id,
+                             apps::Readiness::kUninstalledByUser)
+        .Await();
+    app_instance_waiter.Await();
+  }
+
+  EXPECT_FALSE(ash::ShelfModel::Get()->ItemByID(ash::ShelfID(app_id)));
 }
+
+namespace {
+
+constexpr char kCalculatorAppUrl[] = "https://calculator.apps.chrome/";
+
+constexpr char kPreventCloseForCalculatorTemplate[] = R"([
+  {
+    "manifest_id": "https://calculator.apps.chrome/",
+    "run_on_os_login": "run_windowed",
+    "prevent_close_after_run_on_os_login": %s
+  }
+])";
+
+}  // namespace
+
+class WebAppsPreventCloseCrosapiBrowserTest
+    : public WebAppsCrosapiBrowserTest,
+      public ::testing::WithParamInterface<bool> {
+ public:
+  WebAppsPreventCloseCrosapiBrowserTest() = default;
+
+  WebAppsPreventCloseCrosapiBrowserTest(
+      const WebAppsPreventCloseCrosapiBrowserTest&) = delete;
+  WebAppsPreventCloseCrosapiBrowserTest& operator=(
+      const WebAppsPreventCloseCrosapiBrowserTest&) = delete;
+
+  ~WebAppsPreventCloseCrosapiBrowserTest() override = default;
+
+  bool IsPreventCloseEnabled() const { return GetParam(); }
+};
+
+IN_PROC_BROWSER_TEST_P(WebAppsPreventCloseCrosapiBrowserTest,
+                       CheckContextShelfMenu) {
+  if (!HasLacrosArgument()) {
+    return;
+  }
+
+  {
+    base::test::TestFuture<bool> waiter;
+    GetStandaloneBrowserTestController()->SetWebAppSettingsPref(
+        base::StringPrintf(kPreventCloseForCalculatorTemplate,
+                           IsPreventCloseEnabled() ? "true" : "false"),
+        waiter.GetCallback());
+    EXPECT_TRUE(waiter.Wait());
+  }
+
+  const auto app_id =
+      InstallWebApp(kCalculatorAppUrl, apps::WindowMode::kWindow);
+  EXPECT_EQ(app_id, web_app::kCalculatorAppId);
+
+  EXPECT_FALSE(ash::ShelfModel::Get()->ItemByID(
+      ash::ShelfID(web_app::kCalculatorAppId)));
+
+  {
+    AppInstanceWaiter waiter(AppServiceProxy()->InstanceRegistry(),
+                             web_app::kCalculatorAppId);
+    AppServiceProxy()->Launch(web_app::kCalculatorAppId, /*event_flags=*/0,
+                              apps::LaunchSource::kFromAppListGrid);
+    waiter.Await();
+  }
+
+  bool can_close = true;
+  AppServiceProxy()->AppRegistryCache().ForOneApp(
+      app_id, [&can_close](const apps::AppUpdate& update) {
+        can_close = update.AllowClose().value_or(true);
+      });
+
+  // Wait until prefs are propagated and App `allow_close` field is updated to
+  // expected value.
+  if (can_close == IsPreventCloseEnabled()) {
+    apps::AppUpdateWaiter waiter(
+        GetAshProfile(), web_app::kCalculatorAppId,
+        base::BindRepeating(
+            [](bool expected_allow_close, const apps::AppUpdate& update) {
+              return update.AllowClose().has_value() &&
+                     update.AllowClose().value() == expected_allow_close;
+            },
+            !IsPreventCloseEnabled()));
+    waiter.Wait();
+  }
+
+  EXPECT_TRUE(ash::ShelfModel::Get()->ItemByID(
+      ash::ShelfID(web_app::kCalculatorAppId)));
+
+  const std::vector<std::string> items =
+      GetContextMenuForApp(web_app::kCalculatorAppId);
+
+  if (!IsPreventCloseEnabled()) {
+    ASSERT_EQ(5u, items.size());
+    EXPECT_EQ(items[0], "New window");
+    EXPECT_EQ(items[1], "Pin");
+    EXPECT_EQ(items[2], "Close");
+    EXPECT_EQ(items[3], "Uninstall");
+    EXPECT_EQ(items[4], "App info");
+  } else {
+    ASSERT_EQ(3u, items.size());
+    EXPECT_EQ(items[0], "Pin");
+    EXPECT_EQ(items[1], "Uninstall");
+    EXPECT_EQ(items[2], "App info");
+  }
+
+  {
+    base::test::TestFuture<bool> waiter;
+    GetStandaloneBrowserTestController()->SetWebAppSettingsPref(
+        "", waiter.GetCallback());
+    EXPECT_TRUE(waiter.Wait());
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         WebAppsPreventCloseCrosapiBrowserTest,
+                         ::testing::Bool());

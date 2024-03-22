@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SEND_TAB_TO_SELF_SEND_TAB_TO_SELF_MODEL_TYPE_CONTROLLER_H_
 #define COMPONENTS_SEND_TAB_TO_SELF_SEND_TAB_TO_SELF_MODEL_TYPE_CONTROLLER_H_
 
-#include "components/sync/driver/model_type_controller.h"
+#include "components/sync/service/model_type_controller.h"
 
 namespace send_tab_to_self {
 
@@ -28,8 +28,7 @@ class SendTabToSelfModelTypeController : public syncer::ModelTypeController {
   ~SendTabToSelfModelTypeController() override;
 
   // DataTypeController overrides.
-  void Stop(syncer::ShutdownReason shutdown_reason,
-            StopCallback callback) override;
+  void Stop(syncer::SyncStopMetadataFate fate, StopCallback callback) override;
 };
 
 }  // namespace send_tab_to_self

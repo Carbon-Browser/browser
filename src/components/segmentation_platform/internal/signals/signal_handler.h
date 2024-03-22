@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 
 namespace history {
@@ -30,12 +31,13 @@ class SignalHandler {
   SignalHandler();
   ~SignalHandler();
 
-  SignalHandler(SignalHandler&) = delete;
-  SignalHandler& operator=(SignalHandler&) = delete;
+  SignalHandler(const SignalHandler&) = delete;
+  SignalHandler& operator=(const SignalHandler&) = delete;
 
   void Initialize(StorageService* storage_service,
                   history::HistoryService* history_service,
-                  const std::vector<proto::SegmentId>& segment_ids,
+                  const base::flat_set<proto::SegmentId>& segment_ids,
+                  const std::string& profile_id,
                   base::RepeatingClosure model_refresh_callback);
 
   void TearDown();
@@ -56,6 +58,9 @@ class SignalHandler {
   // this method.
   HistogramSignalHandler* deprecated_histogram_signal_handler() {
     return histogram_signal_handler_.get();
+  }
+  UserActionSignalHandler* user_action_signal_handler() {
+    return user_action_signal_handler_.get();
   }
 
  private:

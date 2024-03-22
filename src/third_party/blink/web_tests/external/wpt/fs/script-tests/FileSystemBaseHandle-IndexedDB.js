@@ -6,7 +6,6 @@ directory_test(async (t, root_dir) => {
     const db = await createDatabase(t, db => {
       const store = db.createObjectStore('store');
     });
-    t.add_cleanup(() => deleteAllDatabases(t));
 
     const value = handles;
 
@@ -28,7 +27,6 @@ directory_test(async (t, root_dir) => {
     const db = await createDatabase(t, db => {
       const store = db.createObjectStore('store');
     });
-    t.add_cleanup(() => deleteAllDatabases(t));
 
     const value = handles;
 
@@ -53,7 +51,6 @@ directory_test(async (t, root_dir) => {
     const db = await createDatabase(t, db => {
       const store = db.createObjectStore('store');
     });
-    t.add_cleanup(() => deleteAllDatabases(t));
 
     const value = {handles, blob: new Blob(["foobar"])};
 
@@ -80,7 +77,6 @@ directory_test(async (t, root_dir) => {
     const db = await createDatabase(t, db => {
       const store = db.createObjectStore('store');
     });
-    t.add_cleanup(() => deleteAllDatabases(t));
 
     const value = handles;
 
@@ -107,7 +103,6 @@ directory_test(async (t, root_dir) => {
     const db = await createDatabase(t, db => {
       const store = db.createObjectStore('store', {keyPath: 'key'});
     });
-    t.add_cleanup(() => deleteAllDatabases(t));
 
     const value = handles;
     let tx = db.transaction('store', 'readwrite');
@@ -124,3 +119,27 @@ directory_test(async (t, root_dir) => {
     assert_equals(result.value.length, value.length);
     await assert_equals_cloned_handles(result.value, value);
 }, 'Store handle in IndexedDB using inline keys.');
+
+directory_test(async (t, root_dir) => {
+  const expected_root_name = '';
+  assert_equals(root_dir.name, expected_root_name);
+
+  const db = await createDatabase(t, db => {
+    const store = db.createObjectStore('store', {keyPath: 'key'});
+  });
+
+  const value = [ root_dir ];
+  let tx = db.transaction('store', 'readwrite');
+  let store = tx.objectStore('store');
+  await promiseForRequest(t, store.put({key: 'key', value}));
+  await promiseForTransaction(t, tx);
+
+  tx = db.transaction('store', 'readonly');
+  store = tx.objectStore('store');
+  const result = await promiseForRequest(t, store.get('key'));
+  await promiseForTransaction(t, tx);
+
+  const actual = result.value[ 0 ];
+  assert_equals(actual.name, expected_root_name);
+  assert_true(await root_dir.isSameEntry(actual));
+}, 'Store and retrieve the root directory from IndexedDB.');

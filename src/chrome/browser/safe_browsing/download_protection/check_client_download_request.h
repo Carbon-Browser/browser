@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
@@ -39,7 +39,8 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
       CheckDownloadRepeatingCallback callback,
       DownloadProtectionService* service,
       scoped_refptr<SafeBrowsingDatabaseManager> database_manager,
-      scoped_refptr<BinaryFeatureExtractor> binary_feature_extractor);
+      scoped_refptr<BinaryFeatureExtractor> binary_feature_extractor,
+      base::optional_ref<const std::string> password = absl::nullopt);
 
   CheckClientDownloadRequest(const CheckClientDownloadRequest&) = delete;
   CheckClientDownloadRequest& operator=(const CheckClientDownloadRequest&) =
@@ -55,6 +56,8 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
                                   const base::FilePath& target_path,
                                   DownloadCheckResultReason* reason);
 
+  download::DownloadItem* item() const override;
+
  private:
   // CheckClientDownloadRequestBase overrides:
   bool IsSupportedDownload(DownloadCheckResultReason* reason) override;
@@ -63,11 +66,20 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
   base::WeakPtr<CheckClientDownloadRequestBase> GetWeakPtr() override;
 
   void NotifySendRequest(const ClientDownloadRequest* request) override;
-  void SetDownloadPingToken(const std::string& token) override;
+  void SetDownloadProtectionData(
+      const std::string& token,
+      const ClientDownloadResponse::Verdict& verdict,
+      const ClientDownloadResponse::TailoredVerdict& tailored_verdict) override;
   void MaybeStorePingsForDownload(DownloadCheckResult result,
                                   bool upload_requested,
                                   const std::string& request_data,
                                   const std::string& response_body) override;
+  bool ShouldPromptForDeepScanning(bool server_requests_prompt) const override;
+  bool ShouldPromptForLocalDecryption(
+      bool server_requests_prompt) const override;
+  bool ShouldPromptForIncorrectPassword() const override;
+  bool ShouldShowScanFailure() const override;
+  void LogDeepScanningPrompt() const override;
 
   // Uploads the binary for deep scanning if the reason and policies indicate
   // it should be. ShouldUploadBinary will returns the settings to apply for
@@ -83,9 +95,6 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
   void NotifyRequestFinished(DownloadCheckResult result,
                              DownloadCheckResultReason reason) override;
 
-  // Called when finishing the download, to decide whether to prompt the user
-  // for deep scanning or not.
-  bool ShouldPromptForDeepScanning(bool server_requests_prompt) const override;
 
   bool IsAllowlistedByPolicy() const override;
 
@@ -94,6 +103,7 @@ class CheckClientDownloadRequest : public CheckClientDownloadRequestBase,
   // The DownloadItem we are checking. Will be NULL if the request has been
   // canceled. Must be accessed only on UI thread.
   raw_ptr<download::DownloadItem> item_;
+  absl::optional<std::string> password_;
   CheckDownloadRepeatingCallback callback_;
 
   // Upload start time used for UMA duration histograms.

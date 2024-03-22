@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,8 @@ TEST(EnterpriseMemoryLimitEvaluatorTest, OnProcessMemoryMetricsAvailable) {
   base::test::TaskEnvironment task_environment;
 
   memory_pressure::MultiSourceMemoryPressureMonitor monitor;
-  monitor.ResetSystemEvaluatorForTesting();
   bool cb_called = false;
-  monitor.SetDispatchCallback(base::BindLambdaForTesting(
+  monitor.SetDispatchCallbackForTesting(base::BindLambdaForTesting(
       [&](base::MemoryPressureListener::MemoryPressureLevel level) {
         EXPECT_EQ(level,
                   base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);

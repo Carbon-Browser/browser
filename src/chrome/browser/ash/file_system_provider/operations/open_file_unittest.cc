@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/test_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -93,13 +93,10 @@ TEST_F(FileSystemProviderOperationsOpenFileTest, Execute) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   CallbackLogger callback_logger;
 
-  OpenFile open_file(NULL, file_system_info_, base::FilePath(kFilePath),
+  OpenFile open_file(&dispatcher, file_system_info_, base::FilePath(kFilePath),
                      OPEN_FILE_MODE_READ,
                      base::BindOnce(&CallbackLogger::OnOpenFile,
                                     base::Unretained(&callback_logger)));
-  open_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(open_file.Execute(kRequestId));
 
@@ -114,26 +111,24 @@ TEST_F(FileSystemProviderOperationsOpenFileTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  OpenFileRequestedOptions options;
-  ASSERT_TRUE(OpenFileRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  EXPECT_EQ(kFilePath, options.file_path);
-  EXPECT_EQ(extensions::api::file_system_provider::OPEN_FILE_MODE_READ,
-            options.mode);
+  auto options =
+      OpenFileRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  EXPECT_EQ(kFilePath, options->file_path);
+  EXPECT_EQ(extensions::api::file_system_provider::OpenFileMode::kRead,
+            options->mode);
 }
 
 TEST_F(FileSystemProviderOperationsOpenFileTest, Execute_NoListener) {
   util::LoggingDispatchEventImpl dispatcher(false /* dispatch_reply */);
   CallbackLogger callback_logger;
 
-  OpenFile open_file(NULL, file_system_info_, base::FilePath(kFilePath),
+  OpenFile open_file(&dispatcher, file_system_info_, base::FilePath(kFilePath),
                      OPEN_FILE_MODE_READ,
                      base::BindOnce(&CallbackLogger::OnOpenFile,
                                     base::Unretained(&callback_logger)));
-  open_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(open_file.Execute(kRequestId));
 }
@@ -149,26 +144,20 @@ TEST_F(FileSystemProviderOperationsOpenFileTest, Execute_ReadOnly) {
 
   // Opening for read on a read-only file system is allowed.
   {
-    OpenFile open_file(NULL, read_only_file_system_info,
+    OpenFile open_file(&dispatcher, read_only_file_system_info,
                        base::FilePath(kFilePath), OPEN_FILE_MODE_READ,
                        base::BindOnce(&CallbackLogger::OnOpenFile,
                                       base::Unretained(&callback_logger)));
-    open_file.SetDispatchEventImplForTesting(base::BindRepeating(
-        &util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-        base::Unretained(&dispatcher)));
 
     EXPECT_TRUE(open_file.Execute(kRequestId));
   }
 
   // Opening for write on a read-only file system is forbidden and must fail.
   {
-    OpenFile open_file(NULL, read_only_file_system_info,
+    OpenFile open_file(&dispatcher, read_only_file_system_info,
                        base::FilePath(kFilePath), OPEN_FILE_MODE_WRITE,
                        base::BindOnce(&CallbackLogger::OnOpenFile,
                                       base::Unretained(&callback_logger)));
-    open_file.SetDispatchEventImplForTesting(base::BindRepeating(
-        &util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-        base::Unretained(&dispatcher)));
 
     EXPECT_FALSE(open_file.Execute(kRequestId));
   }
@@ -178,18 +167,14 @@ TEST_F(FileSystemProviderOperationsOpenFileTest, OnSuccess) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   CallbackLogger callback_logger;
 
-  OpenFile open_file(NULL, file_system_info_, base::FilePath(kFilePath),
+  OpenFile open_file(&dispatcher, file_system_info_, base::FilePath(kFilePath),
                      OPEN_FILE_MODE_READ,
                      base::BindOnce(&CallbackLogger::OnOpenFile,
                                     base::Unretained(&callback_logger)));
-  open_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(open_file.Execute(kRequestId));
 
-  open_file.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                      false /* has_more */);
+  open_file.OnSuccess(kRequestId, RequestValue(), false /* has_more */);
   ASSERT_EQ(1u, callback_logger.events().size());
   CallbackLogger::Event* event = callback_logger.events()[0].get();
   EXPECT_EQ(base::File::FILE_OK, event->result());
@@ -200,17 +185,14 @@ TEST_F(FileSystemProviderOperationsOpenFileTest, OnError) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   CallbackLogger callback_logger;
 
-  OpenFile open_file(NULL, file_system_info_, base::FilePath(kFilePath),
+  OpenFile open_file(&dispatcher, file_system_info_, base::FilePath(kFilePath),
                      OPEN_FILE_MODE_READ,
                      base::BindOnce(&CallbackLogger::OnOpenFile,
                                     base::Unretained(&callback_logger)));
-  open_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(open_file.Execute(kRequestId));
 
-  open_file.OnError(kRequestId, std::make_unique<RequestValue>(),
+  open_file.OnError(kRequestId, RequestValue(),
                     base::File::FILE_ERROR_TOO_MANY_OPENED);
   ASSERT_EQ(1u, callback_logger.events().size());
   CallbackLogger::Event* event = callback_logger.events()[0].get();

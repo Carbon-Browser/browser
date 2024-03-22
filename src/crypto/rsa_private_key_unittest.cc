@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -353,7 +353,7 @@ TEST(RSAPrivateKeyUnitTest, ShortIntegers) {
 
 TEST(RSAPrivateKeyUnitTest, CreateFromKeyTest) {
   std::unique_ptr<crypto::RSAPrivateKey> key_pair(
-      crypto::RSAPrivateKey::Create(512));
+      crypto::RSAPrivateKey::Create(2048));
   ASSERT_TRUE(key_pair.get());
 
   std::unique_ptr<crypto::RSAPrivateKey> key_copy(

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,7 @@ class ExclusiveAccessBubbleViews : public ExclusiveAccessBubble,
       ExclusiveAccessBubbleViewsContext* context,
       const GURL& url,
       ExclusiveAccessBubbleType bubble_type,
+      bool notify_download,
       ExclusiveAccessBubbleHideCallback bubble_first_hide_callback);
 
   ExclusiveAccessBubbleViews(const ExclusiveAccessBubbleViews&) = delete;
@@ -48,11 +49,15 @@ class ExclusiveAccessBubbleViews : public ExclusiveAccessBubble,
   ~ExclusiveAccessBubbleViews() override;
 
   // |force_update| indicates the caller wishes to show the bubble contents
-  // regardless of whether the contents have changed.
+  // regardless of whether the contents have changed. |notify_download|
+  // indicates if the notification should be about a new download. Note that
+  // bubble_type may be an invalid one for notify_download, as we want to
+  // preserve the current type.
   void UpdateContent(
       const GURL& url,
       ExclusiveAccessBubbleType bubble_type,
       ExclusiveAccessBubbleHideCallback bubble_first_hide_callback,
+      bool notify_download,
       bool force_update);
 
   // Repositions |popup_| if it is visible.
@@ -69,6 +74,8 @@ class ExclusiveAccessBubbleViews : public ExclusiveAccessBubble,
 
   gfx::SlideAnimation* animation_for_test() { return animation_.get(); }
 
+  bool IsVisibleForTesting() const { return IsVisible(); }
+
  private:
   // Starts or stops polling the mouse location based on |popup_| and
   // |bubble_type_|.
@@ -79,13 +86,16 @@ class ExclusiveAccessBubbleViews : public ExclusiveAccessBubble,
 
   void UpdateViewContent(ExclusiveAccessBubbleType bubble_type);
 
+  // Returns whether the popup is visible.
+  bool IsVisible() const;
+
   // Returns the root view containing |browser_view_|.
   views::View* GetBrowserRootView() const;
 
   // ExclusiveAccessBubble:
   void AnimationProgressed(const gfx::Animation* animation) override;
   void AnimationEnded(const gfx::Animation* animation) override;
-  gfx::Rect GetPopupRect(bool ignore_animation_state) const override;
+  gfx::Rect GetPopupRect() const override;
   gfx::Point GetCursorScreenPoint() override;
   bool WindowContainsPoint(gfx::Point pos) override;
   bool IsWindowActive() override;

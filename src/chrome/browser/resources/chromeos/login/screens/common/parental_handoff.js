@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,20 @@
  * @fileoverview Polymer element for Parental Handoff screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/cr_shared_vars.css.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+
+import {afterNextRender, dom, flush, html, mixinBehaviors, Polymer, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeNextButton} from '../../components/buttons/oobe_next_button.js';
+import {OobeAdaptiveDialog} from '../../components/dialogs/oobe_adaptive_dialog.js';
+
 
 /**
  * @constructor
@@ -14,23 +27,36 @@
  * @implements {OobeI18nBehaviorInterface}
  * @implements {LoginScreenBehaviorInterface}
  */
-const ParentalHandoffElementBase = Polymer.mixinBehaviors(
+const ParentalHandoffElementBase = mixinBehaviors(
     [OobeI18nBehavior, OobeDialogHostBehavior, LoginScreenBehavior],
-    Polymer.Element);
+    PolymerElement);
 
 /**
  * @typedef {{
- *   parentalHandoffDialog:  OobeAdaptiveDialogElement,
+ *   parentalHandoffDialog:  OobeAdaptiveDialog,
  * }}
  */
 ParentalHandoffElementBase.$;
 
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   username: string,
+ * }}
+ */
+let ParentalHandoffScreenData;
+
+/**
+ * @polymer
+ */
 class ParentalHandoff extends ParentalHandoffElementBase {
   static get is() {
     return 'parental-handoff-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -55,7 +81,7 @@ class ParentalHandoff extends ParentalHandoffElementBase {
 
   /**
    * Event handler that is invoked just before the frame is shown.
-   * @param {Object} data Screen init payload
+   * @param {ParentalHandoffScreenData} data Screen init payload
    */
   onBeforeShow(data) {
     if ('username' in data) {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
@@ -18,24 +19,20 @@
 #include "base/values.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_thread.h"
-#include "content/public/renderer/v8_value_converter.h"
 #include "extensions/common/extension_features.h"
 #include "extensions/common/extension_messages.h"
-#include "extensions/common/identifiability_metrics.h"
 #include "extensions/common/mojom/host_id.mojom.h"
 #include "extensions/common/mojom/injection_type.mojom-shared.h"
 #include "extensions/renderer/dom_activity_logger.h"
 #include "extensions/renderer/extension_frame_helper.h"
 #include "extensions/renderer/extensions_renderer_client.h"
-#include "extensions/renderer/script_injection_callback.h"
+#include "extensions/renderer/isolated_world_manager.h"
 #include "extensions/renderer/scripts_run_info.h"
 #include "extensions/renderer/trace_util.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/blink/public/platform/web_isolated_world_info.h"
-#include "third_party/blink/public/platform/web_security_origin.h"
-#include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/public/web/web_script_execution_callback.h"
 #include "third_party/blink/public/web/web_script_source.h"
 #include "url/gurl.h"
 
@@ -45,85 +42,10 @@ namespace extensions {
 
 namespace {
 
-using IsolatedWorldMap = std::map<std::string, int>;
-base::LazyInstance<IsolatedWorldMap>::DestructorAtExit g_isolated_worlds =
-    LAZY_INSTANCE_INITIALIZER;
-
 const int64_t kInvalidRequestId = -1;
 
 // The id of the next pending injection.
 int64_t g_next_pending_id = 0;
-
-// Gets the isolated world ID to use for the given |injection_host|. If no
-// isolated world has been created for that |injection_host| one will be created
-// and initialized.
-int GetIsolatedWorldIdForInstance(const InjectionHost* injection_host) {
-  static int g_next_isolated_world_id =
-      ExtensionsRendererClient::Get()->GetLowestIsolatedWorldId();
-
-  IsolatedWorldMap& isolated_worlds = g_isolated_worlds.Get();
-
-  int id = 0;
-  const std::string& key = injection_host->id().id;
-  auto iter = isolated_worlds.find(key);
-  if (iter != isolated_worlds.end()) {
-    id = iter->second;
-  } else {
-    id = g_next_isolated_world_id++;
-    // This map will tend to pile up over time, but realistically, you're never
-    // going to have enough injection hosts for it to matter.
-    isolated_worlds[key] = id;
-  }
-
-  blink::WebIsolatedWorldInfo info;
-  info.security_origin =
-      blink::WebSecurityOrigin::Create(injection_host->url());
-  info.human_readable_name = blink::WebString::FromUTF8(injection_host->name());
-  info.stable_id = blink::WebString::FromUTF8(key);
-
-  const std::string* csp = injection_host->GetContentSecurityPolicy();
-  if (csp)
-    info.content_security_policy = blink::WebString::FromUTF8(*csp);
-
-  // Even though there may be an existing world for this |injection_host|'s key,
-  // the properties may have changed (e.g. due to an extension update).
-  // Overwrite any existing entries.
-  blink::SetIsolatedWorldInfo(id, info);
-
-  return id;
-}
-
-// This class manages its own lifetime.
-class TimedScriptInjectionCallback : public ScriptInjectionCallback {
- public:
-  TimedScriptInjectionCallback(base::WeakPtr<ScriptInjection> injection)
-      : ScriptInjectionCallback(
-            base::BindOnce(&TimedScriptInjectionCallback::OnCompleted,
-                           base::Unretained(this))),
-        injection_(injection) {}
-  ~TimedScriptInjectionCallback() override {}
-
-  void OnCompleted(const std::vector<v8::Local<v8::Value>>& result) {
-    if (injection_) {
-      base::TimeTicks timestamp(base::TimeTicks::Now());
-      absl::optional<base::TimeDelta> elapsed;
-      // If the script will never execute (such as if the context is destroyed),
-      // willExecute() will not be called, but OnCompleted() will. Only log a
-      // time for execution if the script, in fact, executed.
-      if (!start_time_.is_null())
-        elapsed = timestamp - start_time_;
-      injection_->OnJsInjectionCompleted(result, elapsed);
-    }
-  }
-
-  void WillExecute() override {
-    start_time_ = base::TimeTicks::Now();
-  }
-
- private:
-  base::WeakPtr<ScriptInjection> injection_;
-  base::TimeTicks start_time_;
-};
 
 }  // namespace
 
@@ -142,27 +64,13 @@ class ScriptInjection::FrameWatcher : public content::RenderFrameObserver {
   ~FrameWatcher() override {}
 
  private:
-  void WillDetach() override { injection_->invalidate_render_frame(); }
+  void WillDetach(blink::DetachReason detach_reason) override {
+    injection_->invalidate_render_frame();
+  }
   void OnDestruct() override { injection_->invalidate_render_frame(); }
 
-  ScriptInjection* injection_;
+  raw_ptr<ScriptInjection, ExperimentalRenderer> injection_;
 };
-
-// static
-std::string ScriptInjection::GetHostIdForIsolatedWorld(int isolated_world_id) {
-  const IsolatedWorldMap& isolated_worlds = g_isolated_worlds.Get();
-
-  for (const auto& iter : isolated_worlds) {
-    if (iter.second == isolated_world_id)
-      return iter.first;
-  }
-  return std::string();
-}
-
-// static
-void ScriptInjection::RemoveIsolatedWorld(const std::string& host_id) {
-  g_isolated_worlds.Get().erase(host_id);
-}
 
 ScriptInjection::ScriptInjection(
     std::unique_ptr<ScriptInjector> injector,
@@ -175,8 +83,6 @@ ScriptInjection::ScriptInjection(
       injection_host_(std::move(injection_host)),
       run_location_(run_location),
       request_id_(kInvalidRequestId),
-      ukm_source_id_(ukm::SourceIdObj::FromInt64(
-          render_frame_->GetWebFrame()->GetDocument().GetUkmSourceId())),
       complete_(false),
       did_inject_js_(false),
       log_activity_(log_activity),
@@ -184,7 +90,7 @@ ScriptInjection::ScriptInjection(
   CHECK(injection_host_.get());
   TRACE_EVENT_BEGIN(
       "extensions", "ScriptInjection", perfetto::Track::FromPointer(this),
-      ChromeTrackEvent::kRenderProcessHost, *content::RenderThread::Get(),
+      ChromeTrackEvent::kRenderProcessHost, content::RenderThread::Get(),
       ChromeTrackEvent::kChromeExtensionId,
       ExtensionIdForTracing(host_id().id));
 }
@@ -195,7 +101,7 @@ ScriptInjection::~ScriptInjection() {
 
   TRACE_EVENT_END("extensions", perfetto::Track::FromPointer(this),
                   ChromeTrackEvent::kRenderProcessHost,
-                  *content::RenderThread::Get(),
+                  content::RenderThread::Get(),
                   ChromeTrackEvent::kChromeExtensionId,
                   ExtensionIdForTracing(host_id().id));
 }
@@ -309,8 +215,6 @@ ScriptInjection::InjectionResult ScriptInjection::Inject(
   complete_ = did_inject_js_ || !should_inject_js;
 
   if (complete_) {
-    if (host_id().type == mojom::HostID::HostType::kExtensions)
-      RecordContentScriptInjection(ukm_source_id_, host_id().id);
     injector_->OnInjectionComplete(std::move(execution_result_), run_location_);
   } else {
     ++scripts_run_info->num_blocking_js;
@@ -327,10 +231,6 @@ void ScriptInjection::InjectJs(std::set<std::string>* executing_scripts,
   std::vector<blink::WebScriptSource> sources = injector_->GetJsSources(
       run_location_, executing_scripts, num_injected_js_scripts);
   DCHECK(!sources.empty());
-  bool is_user_gesture = injector_->IsUserGesture();
-
-  std::unique_ptr<blink::WebScriptExecutionCallback> callback(
-      new TimedScriptInjectionCallback(weak_ptr_factory_.GetWeakPtr()));
 
   base::ElapsedTimer exec_timer;
 
@@ -345,35 +245,48 @@ void ScriptInjection::InjectJs(std::set<std::string>* executing_scripts,
       injector_->script_type() == mojom::InjectionType::kContentScript &&
       (run_location_ == mojom::RunLocation::kDocumentEnd ||
        run_location_ == mojom::RunLocation::kDocumentIdle);
-  blink::WebLocalFrame::ScriptExecutionType execution_option =
+  blink::mojom::EvaluationTiming execution_option =
       should_execute_asynchronously
-          ? blink::WebLocalFrame::kAsynchronousBlockingOnload
-          : blink::WebLocalFrame::kSynchronous;
+          ? blink::mojom::EvaluationTiming::kAsynchronous
+          : blink::mojom::EvaluationTiming::kSynchronous;
 
-  mojom::ExecutionWorld execution_world = injector_->GetExecutionWorld();
   int32_t world_id = blink::kMainDOMWorldId;
-  if (execution_world == mojom::ExecutionWorld::kIsolated) {
-    world_id = GetIsolatedWorldIdForInstance(injection_host_.get());
-    if (injection_host_->id().type == mojom::HostID::HostType::kExtensions &&
-        log_activity_) {
-      DOMActivityLogger::AttachToWorld(world_id, injection_host_->id().id);
-    }
-  } else {
-    DCHECK_EQ(mojom::ExecutionWorld::kMain, execution_world);
+  const mojom::ExecutionWorld execution_world = injector_->GetExecutionWorld();
+  switch (execution_world) {
+    case mojom::ExecutionWorld::kIsolated:
+    case mojom::ExecutionWorld::kUserScript:
+      world_id =
+          IsolatedWorldManager::GetInstance().GetOrCreateIsolatedWorldForHost(
+              *injection_host_, execution_world);
+      if (injection_host_->id().type == mojom::HostID::HostType::kExtensions &&
+          log_activity_) {
+        DOMActivityLogger::AttachToWorld(world_id, injection_host_->id().id);
+      }
+      break;
+    case mojom::ExecutionWorld::kMain:
+      world_id = blink::kMainDOMWorldId;
+      break;
   }
-  auto promise_behavior =
-      injector_->ShouldWaitForPromise()
-          ? blink::WebLocalFrame::PromiseBehavior::kAwait
-          : blink::WebLocalFrame::PromiseBehavior::kDontWait;
   render_frame_->GetWebFrame()->RequestExecuteScript(
-      world_id, sources, is_user_gesture, execution_option, callback.release(),
-      blink::BackForwardCacheAware::kPossiblyDisallow, promise_behavior);
+      world_id, sources, injector_->IsUserGesture(), execution_option,
+      blink::mojom::LoadEventBlockingOption::kBlock,
+      base::BindOnce(&ScriptInjection::OnJsInjectionCompleted,
+                     weak_ptr_factory_.GetWeakPtr()),
+      blink::BackForwardCacheAware::kPossiblyDisallow,
+      injector_->ExpectsResults(), injector_->ShouldWaitForPromise());
 }
 
-void ScriptInjection::OnJsInjectionCompleted(
-    const std::vector<v8::Local<v8::Value>>& results,
-    absl::optional<base::TimeDelta> elapsed) {
+void ScriptInjection::OnJsInjectionCompleted(std::optional<base::Value> value,
+                                             base::TimeTicks start_time) {
   DCHECK(!did_inject_js_);
+
+  base::TimeTicks timestamp(base::TimeTicks::Now());
+  std::optional<base::TimeDelta> elapsed;
+  // If the script will never execute (such as if the context is destroyed),
+  // `start_time` is null. Only log a time for execution if the script, in fact,
+  // executed.
+  if (!start_time.is_null())
+    elapsed = timestamp - start_time;
 
   if (injection_host_->id().type == mojom::HostID::HostType::kExtensions &&
       elapsed) {
@@ -396,29 +309,8 @@ void ScriptInjection::OnJsInjectionCompleted(
     }
   }
 
-  bool expects_results = injector_->ExpectsResults();
-  if (expects_results) {
-    if (!results.empty() && !results.back().IsEmpty()) {
-      // Right now, we only support returning single results (per frame).
-      // It's safe to always use the main world context when converting
-      // here. V8ValueConverterImpl shouldn't actually care about the
-      // context scope, and it switches to v8::Object's creation context
-      // when encountered.
-      v8::Local<v8::Context> context =
-          render_frame_->GetWebFrame()->MainWorldScriptContext();
-      // We use the final result, since it is the most meaningful (the result
-      // after running all scripts). Additionally, the final script can
-      // reference values from the previous scripts, so could return them if
-      // desired.
-      execution_result_ = content::V8ValueConverter::Create()->FromV8Value(
-          results.back(), context);
-    }
-    if (!execution_result_.get())
-      execution_result_ = std::make_unique<base::Value>();
-  }
+  execution_result_ = std::move(value);
   did_inject_js_ = true;
-  if (host_id().type == mojom::HostID::HostType::kExtensions)
-    RecordContentScriptInjection(ukm_source_id_, host_id().id);
 
   // If |async_completion_callback_| is set, it means the script finished
   // asynchronously, and we should run it.

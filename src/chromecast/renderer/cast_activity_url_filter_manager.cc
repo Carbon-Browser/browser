@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "content/public/renderer/render_frame.h"
+#include "third_party/blink/public/web/web_local_frame.h"
 
 namespace chromecast {
 
@@ -20,10 +21,12 @@ CastActivityUrlFilterManager::UrlFilterReceiver::UrlFilterReceiver(
       on_removed_callback_(std::move(on_removed_callback)),
       weak_factory_(this) {
   weak_this_ = weak_factory_.GetWeakPtr();
-  render_frame->GetAssociatedInterfaceRegistry()->AddInterface(
-      base::BindRepeating(&CastActivityUrlFilterManager::UrlFilterReceiver::
-                              OnActivityUrlFilterConfigurationAssociatedRequest,
-                          weak_this_));
+  render_frame->GetAssociatedInterfaceRegistry()
+      ->AddInterface<chromecast::mojom::ActivityUrlFilterConfiguration>(
+          base::BindRepeating(
+              &CastActivityUrlFilterManager::UrlFilterReceiver::
+                  OnActivityUrlFilterConfigurationAssociatedRequest,
+              weak_this_));
 }
 
 CastActivityUrlFilterManager::UrlFilterReceiver::~UrlFilterReceiver() {
@@ -69,9 +72,9 @@ CastActivityUrlFilterManager::CastActivityUrlFilterManager()
 CastActivityUrlFilterManager::~CastActivityUrlFilterManager() = default;
 
 ActivityUrlFilter*
-CastActivityUrlFilterManager::GetActivityUrlFilterForRenderFrameID(
-    int render_frame_id) {
-  const auto& it = activity_url_filters_.find(render_frame_id);
+CastActivityUrlFilterManager::GetActivityUrlFilterForRenderFrameToken(
+    const blink::LocalFrameToken& frame_token) {
+  const auto& it = activity_url_filters_.find(frame_token);
   if (it == activity_url_filters_.end())
     return nullptr;
 
@@ -80,24 +83,25 @@ CastActivityUrlFilterManager::GetActivityUrlFilterForRenderFrameID(
 
 void CastActivityUrlFilterManager::OnRenderFrameCreated(
     content::RenderFrame* render_frame) {
-  int render_frame_id = render_frame->GetRoutingID();
+  auto frame_token = render_frame->GetWebFrame()->GetLocalFrameToken();
 
   // Lifetime is tied to |render_frame| via content::RenderFrameObserver.
   auto* filter_receiver = new CastActivityUrlFilterManager::UrlFilterReceiver(
       render_frame,
       base::BindOnce(&CastActivityUrlFilterManager::OnRenderFrameRemoved,
-                     weak_this_, render_frame->GetRoutingID()));
+                     weak_this_, frame_token));
 
-  auto result = activity_url_filters_.emplace(render_frame_id, filter_receiver);
+  auto result = activity_url_filters_.emplace(frame_token, filter_receiver);
 
   if (!result.second)
     LOG(ERROR)
-        << "A URL filter for Activity already exists for Render frame ID "
-        << render_frame_id;
+        << "A URL filter for Activity already exists for Render frame token "
+        << frame_token;
 }
 
-void CastActivityUrlFilterManager::OnRenderFrameRemoved(int render_frame_id) {
-  const auto& it = activity_url_filters_.find(render_frame_id);
+void CastActivityUrlFilterManager::OnRenderFrameRemoved(
+    const blink::LocalFrameToken& frame_token) {
+  const auto& it = activity_url_filters_.find(frame_token);
 
   if (it != activity_url_filters_.end())
     activity_url_filters_.erase(it);

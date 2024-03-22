@@ -1,7 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {AutomationPredicate} from '../../common/automation_predicate.js';
+import {ChromeEventHandler} from '../../common/chrome_event_handler.js';
+import {EventHandler} from '../../common/event_handler.js';
+import {FlagName, Flags} from '../../common/flags.js';
 import {RectUtil} from '../../common/rect_util.js';
 
 const EventType = chrome.automation.EventType;
@@ -31,19 +35,6 @@ export class Magnifier {
      * @private {boolean}
      */
     this.isInitializing_ = true;
-
-    /**
-     * Whether or not to draw a preview box around magnifier viewport area
-     * instead of magnifying the screen for debugging.
-     * @private {boolean}
-     */
-    this.magnifierDebugDrawRect_ = false;
-
-    /**
-     * Last seen mouse location (cached from event in onMouseMovedOrDragged).
-     * @private {{x: number, y: number}}
-     */
-    this.mouseLocation_;
 
     /**
      * Last time mouse has moved (from last onMouseMovedOrDragged).
@@ -90,6 +81,9 @@ export class Magnifier {
         [], chrome.automation.EventType.MOUSE_DRAGGED,
         event => this.onMouseMovedOrDragged_(event));
 
+    /** @private {?function()} */
+    this.onLoadDesktopCallbackForTest_ = null;
+
     this.init_();
   }
 
@@ -126,6 +120,10 @@ export class Magnifier {
       this.onMouseMovedHandler_.start();
       this.onMouseDraggedHandler_.setNodes(desktop);
       this.onMouseDraggedHandler_.start();
+      if (this.onLoadDesktopCallbackForTest_) {
+        this.onLoadDesktopCallbackForTest_();
+        this.onLoadDesktopCallbackForTest_ = null;
+      }
     });
 
     this.onMagnifierBoundsChangedHandler_.start();
@@ -137,13 +135,14 @@ export class Magnifier {
     setTimeout(() => {
       this.isInitializing_ = false;
     }, Magnifier.IGNORE_FOCUS_UPDATES_INITIALIZATION_MS);
+  }
 
-    chrome.commandLinePrivate.hasSwitch(
-        'enable-magnifier-debug-draw-rect', enabled => {
-          if (enabled) {
-            this.magnifierDebugDrawRect_ = true;
-          }
-        });
+  /**
+   * @return {boolean}
+   * @private
+   */
+  drawDebugRect_() {
+    return Flags.isEnabled(FlagName.MAGNIFIER_DEBUG_DRAW_RECT);
   }
 
   /**
@@ -151,12 +150,14 @@ export class Magnifier {
    * @private
    */
   onMagnifierBoundsChanged_(bounds) {
-    if (this.magnifierDebugDrawRect_) {
-      chrome.accessibilityPrivate.setFocusRings([{
-        rects: [bounds],
-        type: chrome.accessibilityPrivate.FocusType.GLOW,
-        color: '#22d',
-      }]);
+    if (this.drawDebugRect_()) {
+      chrome.accessibilityPrivate.setFocusRings(
+          [{
+            rects: [bounds],
+            type: chrome.accessibilityPrivate.FocusType.GLOW,
+            color: '#22d',
+          }],
+          chrome.accessibilityPrivate.AssistiveTechnologyType.MAGNIFIER);
     }
   }
 
@@ -224,8 +225,9 @@ export class Magnifier {
 
     // Skip trying to move magnifier to encompass whole webpage or pdf. It's too
     // big, and magnifier usually ends up in middle at left edge of page.
-    if (node.isRootNode || node.role === RoleType.WEB_VIEW ||
-        node.role === RoleType.EMBEDDED_OBJECT) {
+    const isTooBig = AutomationPredicate.roles(
+        [RoleType.WEB_VIEW, RoleType.EMBEDDED_OBJECT]);
+    if (node.isRootNode || isTooBig(node)) {
       return;
     }
 
@@ -289,7 +291,20 @@ export class Magnifier {
    */
   onMouseMovedOrDragged_(event) {
     this.lastMouseMovedTime_ = new Date();
-    this.mouseLocation_ = {x: event.mouseX, y: event.mouseY};
+  }
+
+  /**
+   * Used by C++ tests to ensure Magnifier load is competed.
+   * @param {!function()} callback Callback for when desktop is loaded from
+   * automation.
+   */
+  setOnLoadDesktopCallbackForTest(callback) {
+    if (!this.focusHandler_.listening()) {
+      this.onLoadDesktopCallbackForTest_ = callback;
+      return;
+    }
+    // Desktop already loaded.
+    callback();
   }
 }
 

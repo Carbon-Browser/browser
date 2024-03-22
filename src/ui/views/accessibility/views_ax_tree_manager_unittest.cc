@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -22,6 +22,8 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_tree.h"
 #include "ui/accessibility/ax_tree_data.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -32,18 +34,22 @@
 #include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
 class TestButton : public Button {
+  METADATA_HEADER(TestButton, Button)
+
  public:
   TestButton() : Button(Button::PressedCallback()) {}
   TestButton(const TestButton&) = delete;
   TestButton& operator=(const TestButton&) = delete;
   ~TestButton() override = default;
 };
+
+BEGIN_METADATA(TestButton)
+END_METADATA
 
 class ViewsAXTreeManagerTest : public ViewsTestBase,
                                public ::testing::WithParamInterface<bool> {
@@ -81,8 +87,8 @@ class ViewsAXTreeManagerTest : public ViewsTestBase,
                         ui::AXNodeID node_id);
 
   UniqueWidgetPtr widget_;
-  raw_ptr<Button> button_ = nullptr;
-  raw_ptr<Label> label_ = nullptr;
+  raw_ptr<Button, DanglingUntriaged> button_ = nullptr;
+  raw_ptr<Label, DanglingUntriaged> label_ = nullptr;
   absl::variant<TestOwnedManager, WidgetOwnedManager> manager_;
   ui::AXEventGenerator::Event event_to_wait_for_;
   std::unique_ptr<base::RunLoop> loop_runner_;
@@ -147,7 +153,7 @@ void ViewsAXTreeManagerTest::CloseWidget() {
 ui::AXNode* ViewsAXTreeManagerTest::FindNode(
     const ax::mojom::Role role,
     const std::string& name_or_value) const {
-  ui::AXNode* root = manager()->GetRootAsAXNode();
+  ui::AXNode* root = manager()->GetRoot();
 
   // If the manager has been closed, it will return nullptr as root.
   if (!root)
@@ -250,5 +256,4 @@ TEST_P(ViewsAXTreeManagerTest, MultipleTopLevelWidgets) {
   second_widget->Show();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

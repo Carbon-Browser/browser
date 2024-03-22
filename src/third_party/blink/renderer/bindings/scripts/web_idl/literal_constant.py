@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -49,7 +49,7 @@ class LiteralConstant(object):
         - []: list()
         - {}: dict()
         - true / false: True / False
-        - INTEGER_NUMERICS: an instance of long
+        - INTEGER_NUMERICS: an instance of int
         - FLOATING_POINTS: an instance of float
         - STRING: an instance of str
         """

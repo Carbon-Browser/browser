@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,10 @@ class DynamicInfoViewBottomSpacer extends RecyclerView.ItemDecoration {
         int previous = parent.indexOfChild(view) - 1;
         if (previous < 0) return;
         if (!isUserInfoView(parent.getChildAt(previous))) return;
-        outRect.top = view.getContext().getResources().getDimensionPixelSize(
-                R.dimen.keyboard_accessory_suggestion_padding);
+        outRect.top =
+                view.getContext()
+                        .getResources()
+                        .getDimensionPixelSize(R.dimen.keyboard_accessory_suggestion_padding);
     }
 
     private boolean isUserInfoView(View view) {

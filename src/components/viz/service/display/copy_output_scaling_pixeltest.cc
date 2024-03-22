@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "cc/test/pixel_test_utils.h"
 #include "cc/test/render_pass_test_utils.h"
@@ -68,6 +68,12 @@ class CopyOutputScalingPixelTest
   // The scene is drawn, which also causes the copy request to execute. Then,
   // the resulting bitmap is compared against an expected bitmap.
   void RunTest() {
+    // TODO(b/297344089): Enable these tests once Skia Graphite supports stale
+    // mipmap regeneration.
+    if (is_skia_graphite()) {
+      GTEST_SKIP();
+    }
+
     const char* result_format_as_str = "<unknown>";
 
     // Tests only issue requests for system-memory destinations, no need to
@@ -153,7 +159,8 @@ class CopyOutputScalingPixelTest
       // properly restored.
       request->SetUniformScaleRatio(1, 10);
       // Ensure the result callback is run on test main thread.
-      request->set_result_task_runner(base::SequencedTaskRunnerHandle::Get());
+      request->set_result_task_runner(
+          base::SequencedTaskRunner::GetCurrentDefault());
       list.front()->copy_requests.push_back(std::move(request));
 
       // Add a copy request to the root RenderPass, to capture the results of
@@ -174,10 +181,10 @@ class CopyOutputScalingPixelTest
           copy_output::ComputeResultRect(copy_rect, scale_from_, scale_to_));
       request->SetScaleRatio(scale_from_, scale_to_);
       // Ensure the result callback is run on test main thread.
-      request->set_result_task_runner(base::SequencedTaskRunnerHandle::Get());
+      request->set_result_task_runner(
+          base::SequencedTaskRunner::GetCurrentDefault());
       list.back()->copy_requests.push_back(std::move(request));
 
-      renderer()->DecideRenderPassAllocationsForFrame(list);
       SurfaceDamageRectList surface_damage_rect_list;
       renderer()->DrawFrame(&list, 1.0f, viewport_size,
                             gfx::DisplayColorSpaces(),
@@ -215,7 +222,7 @@ class CopyOutputScalingPixelTest
       gfx::Rect rect = smaller_pass_rects[i] - copy_rect.OffsetFromOrigin();
       rect = copy_output::ComputeResultRect(rect, scale_from_, scale_to_);
       expected_bitmap.erase(
-          smaller_pass_colors[i], nullptr /* SkColorSpace* colorSpace */,
+          smaller_pass_colors[i],
           SkIRect{rect.x(), rect.y(), rect.right(), rect.bottom()});
     }
 
@@ -299,7 +306,7 @@ class CopyOutputScalingPixelTest
 // Parameters common to all test instantiations. These are tuples consisting of
 // {scale_from, scale_to, i420_format}.
 const auto kParameters =
-    testing::Combine(testing::ValuesIn(GetRendererTypesNoDawn()),
+    testing::Combine(testing::ValuesIn(GetRendererTypes()),
                      testing::Values(gfx::Vector2d(1, 1),
                                      gfx::Vector2d(2, 1),
                                      gfx::Vector2d(1, 2),

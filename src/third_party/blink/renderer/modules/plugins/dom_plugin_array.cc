@@ -64,14 +64,14 @@ DOMPlugin* DOMPluginArray::item(unsigned index) {
         DomWindow(), *GetPluginData()->Plugins()[index]);
   }
 
-  return dom_plugins_[index];
+  return dom_plugins_[index].Get();
 }
 
 DOMPlugin* DOMPluginArray::namedItem(const AtomicString& property_name) {
   if (should_return_fixed_plugin_data_) {
     for (const auto& plugin : dom_plugins_) {
       if (plugin->name() == property_name)
-        return plugin;
+        return plugin.Get();
     }
     return nullptr;
   }
@@ -143,9 +143,10 @@ namespace {
 DOMPlugin* MakeFakePlugin(String plugin_name, LocalDOMWindow* window) {
   String description = "Portable Document Format";
   String filename = "internal-pdf-viewer";
-  auto* plugin_info = MakeGarbageCollected<PluginInfo>(
-      plugin_name, filename, description, /*background_color=*/0,
-      /*may_use_external_handler=*/false);
+  auto* plugin_info =
+      MakeGarbageCollected<PluginInfo>(plugin_name, filename, description,
+                                       /*background_color=*/Color::kTransparent,
+                                       /*may_use_external_handler=*/false);
   Vector<String> extensions{"pdf"};
   for (const char* mime_type : {"application/pdf", "text/pdf"}) {
     auto* mime_info = MakeGarbageCollected<MimeClassInfo>(
@@ -159,7 +160,7 @@ DOMPlugin* MakeFakePlugin(String plugin_name, LocalDOMWindow* window) {
 HeapVector<Member<DOMMimeType>> DOMPluginArray::GetFixedMimeTypeArray() {
   DCHECK(should_return_fixed_plugin_data_);
   HeapVector<Member<DOMMimeType>> mimetypes;
-  if (dom_plugins_.IsEmpty())
+  if (dom_plugins_.empty())
     return mimetypes;
   DCHECK_EQ(dom_plugins_[0]->length(), 2u);
   mimetypes.push_back(dom_plugins_[0]->item(0));

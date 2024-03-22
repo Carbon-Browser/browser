@@ -1,16 +1,16 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/wm/core/transient_window_manager.h"
 
-#include <algorithm>
 #include <functional>
 
 #include "base/auto_reset.h"
-#include "base/containers/adapters.h"
 #include "base/containers/contains.h"
+#include "base/memory/ptr_util.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "ui/aura/client/transient_window_client.h"
 #include "ui/aura/client/transient_window_client_observer.h"
 #include "ui/aura/window.h"
@@ -28,21 +28,21 @@ DEFINE_UI_CLASS_PROPERTY_TYPE(::wm::TransientWindowManager*)
 namespace wm {
 namespace {
 
-DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(TransientWindowManager, kPropertyKey, NULL)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(TransientWindowManager,
+                                   kPropertyKey,
+                                   nullptr)
 
 }  // namespace
 
-TransientWindowManager::~TransientWindowManager() {
-}
+TransientWindowManager::~TransientWindowManager() = default;
 
 // static
 TransientWindowManager* TransientWindowManager::GetOrCreate(Window* window) {
-  TransientWindowManager* manager = window->GetProperty(kPropertyKey);
-  if (!manager) {
-    manager = new TransientWindowManager(window);
-    window->SetProperty(kPropertyKey, manager);
-  }
-  return manager;
+  if (auto* manager = window->GetProperty(kPropertyKey))
+    return manager;
+  // Using WrapUnique due to private constructor.
+  return window->SetProperty(
+      kPropertyKey, base::WrapUnique(new TransientWindowManager(window)));
 }
 
 // static
@@ -91,8 +91,7 @@ void TransientWindowManager::AddTransientChild(Window* child) {
 }
 
 void TransientWindowManager::RemoveTransientChild(Window* child) {
-  auto i =
-      std::find(transient_children_.begin(), transient_children_.end(), child);
+  auto i = base::ranges::find(transient_children_, child);
   DCHECK(i != transient_children_.end());
   transient_children_.erase(i);
   TransientWindowManager* child_manager = GetOrCreate(child);
@@ -126,6 +125,7 @@ TransientWindowManager::TransientWindowManager(Window* window)
       transient_parent_(nullptr),
       stacking_target_(nullptr),
       parent_controls_visibility_(false),
+      parent_controls_lifetime_(true),
       show_on_parent_visible_(false),
       ignore_visibility_changed_event_(false) {
   window_->AddObserver(this);
@@ -142,8 +142,10 @@ void TransientWindowManager::RestackTransientDescendants() {
   // Stack any transient children that share the same parent to be in front of
   // |window_|. The existing stacking order is preserved by iterating backwards
   // and always stacking on top.
-  Window::Windows children(parent->children());
-  for (auto* child_window : base::Reversed(children)) {
+  aura::WindowTracker tracker(
+      Window::Windows(parent->children().rbegin(), parent->children().rend()));
+  while (!tracker.windows().empty()) {
+    auto* child_window = tracker.Pop();
     if (child_window != window_ &&
         HasTransientAncestor(child_window, window_)) {
       TransientWindowManager* descendant_manager = GetOrCreate(child_window);
@@ -238,8 +240,7 @@ void TransientWindowManager::OnWindowStackingChanged(Window* window) {
   // Do nothing if we initiated the stacking change.
   const TransientWindowManager* transient_manager = GetIfExists(window);
   if (transient_manager && transient_manager->stacking_target_) {
-    auto window_i = std::find(window->parent()->children().begin(),
-                              window->parent()->children().end(), window);
+    auto window_i = base::ranges::find(window->parent()->children(), window);
     DCHECK(window_i != window->parent()->children().end());
     if (window_i != window->parent()->children().begin() &&
         (*(window_i - 1) == transient_manager->stacking_target_))
@@ -260,10 +261,26 @@ void TransientWindowManager::OnWindowDestroying(Window* window) {
   // Destroy transient children, only after we've removed ourselves from our
   // parent, as destroying an active transient child may otherwise attempt to
   // refocus us.
-  Windows transient_children(transient_children_);
-  for (auto* child : transient_children)
-    delete child;
-  DCHECK(transient_children_.empty());
+  // WindowTracker is used because child window could be deleted while
+  // iterating.
+  aura::WindowTracker tracker(
+      Window::Windows(transient_children_.begin(), transient_children_.end()));
+  while (!tracker.windows().empty()) {
+    aura::Window* child = tracker.Pop();
+    auto* child_transient_manager = TransientWindowManager::GetIfExists(child);
+    CHECK(child_transient_manager);
+    if (child_transient_manager->parent_controls_lifetime_) {
+      delete child;
+    } else {
+      // This transient `child` window is set to outlive its transient parent
+      // (in this case, the about-to-be destroyed `window` whose transient
+      // manager is `this`). We need to remove it as a transient child from
+      // `this`.
+      RemoveTransientChild(child);
+    }
+  }
+
+  CHECK(tracker.windows().empty());
 }
 
 }  // namespace wm

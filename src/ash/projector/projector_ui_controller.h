@@ -1,15 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_PROJECTOR_PROJECTOR_UI_CONTROLLER_H_
 #define ASH_PROJECTOR_PROJECTOR_UI_CONTROLLER_H_
 
+#include <optional>
+
 #include "ash/ash_export.h"
 #include "ash/projector/projector_metrics.h"
 #include "ash/public/cpp/projector/projector_session.h"
+#include "ash/strings/grit/ash_strings.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 
 namespace aura {
@@ -26,7 +29,9 @@ class ASH_EXPORT ProjectorUiController : public ProjectorSessionObserver {
  public:
   // Shows a notification informing the user that a Projector error has
   // occurred.
-  static void ShowFailureNotification(int message_id);
+  static void ShowFailureNotification(
+      int message_id,
+      int title_id = IDS_ASH_PROJECTOR_FAILURE_TITLE);
 
   // Shows a notification informing the user that a Projector save error has
   // occurred.
@@ -69,12 +74,13 @@ class ASH_EXPORT ProjectorUiController : public ProjectorSessionObserver {
   bool annotator_enabled_ = false;
 
   // The current root window in which the video recording is happening.
-  aura::Window* current_root_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged | ExperimentalAsh> current_root_ =
+      nullptr;
 
   // True if the canvas is initialized successfully, false if it failed to
   // initialize. An absent value indicates that the initialization has not
   // completed.
-  absl::optional<bool> canvas_initialized_state_;
+  std::optional<bool> canvas_initialized_state_;
 
   base::ScopedObservation<ProjectorSession, ProjectorSessionObserver>
       projector_session_observation_{this};

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ class FeedServiceBridge {
  public:
   static std::string GetLanguageTag();
   static DisplayMetrics GetDisplayMetrics();
-  static bool IsAutoplayEnabled();
+  static TabGroupEnabledState GetTabGroupEnabledState();
   static void ClearAll();
   static bool IsEnabled();
   static void PrefetchImage(const GURL& url);

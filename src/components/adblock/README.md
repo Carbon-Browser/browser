@@ -58,7 +58,7 @@ Follow the [integration how-to](docs/integration-how-to.md) to configure the ad-
 
 Differences across versions are listed in [the changelog](components/adblock/CHANGELOG.md).
 
-You can also use our [interdiff script](/tools/adblock/interdiff.py) to compare two git revision ranges. You can find more information in the [integration how-to](docs/integration-how-to.md).
+You can also use our [interdiff script](tools/eyeo/generate_interdiffs.sh) to compare two git revision ranges. You can find more information in the [integration how-to](docs/integration-how-to.md).
 
 
 ## For eyeo Chromium SDK contributors

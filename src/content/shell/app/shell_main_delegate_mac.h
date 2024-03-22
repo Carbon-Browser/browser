@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace content {
 // the expected pixel results on retina capable displays.
 void EnsureCorrectResolutionSettings();
 
-// Sets up base::mac::BaseBundleID.
+// Sets up base::apple::BaseBundleID.
 void OverrideBundleID();
 
 // Initializes NSApplication.

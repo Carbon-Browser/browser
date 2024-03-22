@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/fido/device_response_converter.h"
+#include "device/fido/features.h"
 #include "device/fido/fido_constants.h"
 
 namespace device {
@@ -23,21 +24,6 @@ void FidoDevice::TryWink(base::OnceClosure callback) {
 
 std::string FidoDevice::GetDisplayName() const {
   return GetId();
-}
-
-bool FidoDevice::IsInPairingMode() const {
-  NOTREACHED();
-  return false;
-}
-
-bool FidoDevice::IsPaired() const {
-  NOTREACHED();
-  return false;
-}
-
-bool FidoDevice::RequiresBlePairingPin() const {
-  NOTREACHED();
-  return true;
 }
 
 void FidoDevice::DiscoverSupportedProtocolAndDeviceInfo(
@@ -89,7 +75,7 @@ void FidoDevice::SetDeviceInfo(AuthenticatorGetInfoResponse device_info) {
 bool FidoDevice::NoSilentRequests() const {
   // caBLE devices do not support silent requests.
   const auto transport = DeviceTransport();
-  return transport == FidoTransportProtocol::kCloudAssistedBluetoothLowEnergy ||
+  return transport == FidoTransportProtocol::kHybrid ||
          transport == FidoTransportProtocol::kAndroidAccessory;
 }
 
@@ -99,7 +85,10 @@ bool FidoDevice::IsStatusForUnrecognisedCredentialID(
   return status == CtapDeviceResponseCode::kCtap2ErrInvalidCredential ||
          status == CtapDeviceResponseCode::kCtap2ErrNoCredentials ||
          status == CtapDeviceResponseCode::kCtap2ErrLimitExceeded ||
-         status == CtapDeviceResponseCode::kCtap2ErrRequestTooLarge;
+         status == CtapDeviceResponseCode::kCtap2ErrRequestTooLarge ||
+         // Some alwaysUv devices return this, even for up=false. See
+         // crbug.com/1443039.
+         status == CtapDeviceResponseCode::kCtap2ErrPinRequired;
 }
 
 }  // namespace device

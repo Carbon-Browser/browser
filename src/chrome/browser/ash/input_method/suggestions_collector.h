@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <memory>
 #include <vector>
 
-#include "ash/services/ime/public/cpp/suggestions.h"
-#include "ash/services/ime/public/mojom/input_method_host.mojom.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/input_method/suggestions_source.h"
+#include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
+#include "chromeos/ash/services/ime/public/mojom/input_method_host.mojom.h"
 
 namespace ash {
 namespace input_method {
@@ -38,11 +39,11 @@ class SuggestionsCollector {
   // SuggestionsRequestor.
   void OnSuggestionsGathered(
       GatherSuggestionsCallback callback,
-      const std::vector<ime::TextSuggestion>& assistive_suggestions,
-      const std::vector<ime::TextSuggestion>& system_suggestions);
+      const std::vector<ime::AssistiveSuggestion>& assistive_suggestions,
+      const std::vector<ime::AssistiveSuggestion>& system_suggestions);
 
   // Not owned by this class
-  SuggestionsSource* assistive_suggester_;
+  raw_ptr<SuggestionsSource, ExperimentalAsh> assistive_suggester_;
 
   // Client used to request suggestions from the system
   std::unique_ptr<AsyncSuggestionsSource> suggestions_service_client_;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import org.chromium.components.minidump_uploader.util.CrashReportingPermissionMa
 
 import java.io.File;
 
-/**
- * Interface for embedder-specific implementations for uploading minidumps.
- */
+/** Interface for embedder-specific implementations for uploading minidumps. */
 public interface MinidumpUploaderDelegate {
     /**
      * Returns the parent directory in which the embedder will store the crash report directory and

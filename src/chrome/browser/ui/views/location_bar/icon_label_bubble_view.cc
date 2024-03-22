@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/omnibox/omnibox_theme.h"
-#include "ui/accessibility/ax_node_data.h"
+#include "chrome/browser/ui/views/location_bar/location_bar_util.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer_animator.h"
@@ -52,7 +53,15 @@ constexpr int kIconLabelBubbleSpaceBesideSeparator = 8;
 constexpr int kIconLabelBubbleFadeInDurationMs = 250;
 constexpr int kIconLabelBubbleFadeOutDurationMs = 175;
 
+// The length of the label fade in and out animations.
+constexpr int kIconLabelAnimationDurationMs = 600;
+
 }  // namespace
+
+SkAlpha IconLabelBubbleView::Delegate::GetIconLabelBubbleSeparatorAlpha()
+    const {
+  return 0x69;
+}
 
 SkColor IconLabelBubbleView::Delegate::GetIconLabelBubbleInkDropColor() const {
   return GetIconLabelBubbleSurroundingForegroundColor();
@@ -72,7 +81,8 @@ void IconLabelBubbleView::SeparatorView::OnPaint(gfx::Canvas* canvas) {
   // IconLabelBubbleView has been emphasized (e.g. red text for a security
   // error) the separator will still blend into the background.
   const SkColor separator_color = SkColorSetA(
-      owner_->delegate_->GetIconLabelBubbleSurroundingForegroundColor(), 0x69);
+      owner_->delegate_->GetIconLabelBubbleSurroundingForegroundColor(),
+      owner_->delegate_->GetIconLabelBubbleSeparatorAlpha());
   const float x = GetLocalBounds().right() -
                   owner_->GetEndPaddingWithSeparator() -
                   1.0f / canvas->image_scale();
@@ -119,9 +129,7 @@ void IconLabelBubbleView::SeparatorView::UpdateOpacity() {
   layer()->SetOpacity(opacity);
 }
 
-using SeparatorView = IconLabelBubbleView::SeparatorView;
-
-BEGIN_METADATA(SeparatorView, views::View)
+BEGIN_METADATA(IconLabelBubbleView, SeparatorView, views::View)
 END_METADATA
 
 class IconLabelBubbleView::HighlightPathGenerator
@@ -208,7 +216,17 @@ void IconLabelBubbleView::SetPaintLabelOverSolidBackground(
 }
 
 void IconLabelBubbleView::SetLabel(const std::u16string& label_text) {
-  SetAccessibleName(label_text);
+  SetLabel(label_text, label_text);
+}
+
+void IconLabelBubbleView::SetLabel(const std::u16string& label_text,
+                                   const std::u16string& accessible_name) {
+  // TODO(crbug.com/1411342): Under what conditions, if any, will the text be
+  // empty? Read the description of the bug and update accordingly.
+  SetAccessibleName(accessible_name,
+                    accessible_name.empty()
+                        ? ax::mojom::NameFrom::kAttributeExplicitlyEmpty
+                        : ax::mojom::NameFrom::kAttribute);
   label()->SetText(label_text);
   separator_view_->SetVisible(ShouldShowSeparator());
   separator_view_->UpdateOpacity();
@@ -230,14 +248,37 @@ void IconLabelBubbleView::UpdateLabelColors() {
 void IconLabelBubbleView::UpdateBackground() {
   // If the label is showing we must ensure the icon label is painted over a
   // solid background.
-  SetBackground(paint_label_over_solid_backround_ && ShouldShowLabel()
+  const bool painted_on_solid_background =
+      paint_label_over_solid_backround_ && ShouldShowLabel();
+  const ui::ColorId background_color = use_tonal_color_when_expanded_
+                                           ? kColorPageInfoBackgroundTonal
+                                           : kColorPageInfoBackground;
+  SetBackground(painted_on_solid_background
                     ? views::CreateThemedRoundedRectBackground(
-                          kColorToolbar, GetPreferredSize().height())
+                          background_color, GetPreferredSize().height())
                     : nullptr);
+  // TODO(pbos): Consider renaming kPageInfo/kPageAction color IDs to share the
+  // same prefix. Here PageInfo assumes to have a background and PageAction
+  // assumes to not have one.
+  if (OmniboxFieldTrial::IsChromeRefreshIconsEnabled()) {
+    ConfigureInkDropForRefresh2023(this,
+                                   painted_on_solid_background
+                                       ? kColorPageInfoIconHover
+                                       : kColorPageActionIconHover,
+                                   kColorPageInfoIconPressed);
+  }
+}
+
+void IconLabelBubbleView::SetUseTonalColorsWhenExpanded(bool use_tonal_colors) {
+  use_tonal_color_when_expanded_ = use_tonal_colors;
 }
 
 bool IconLabelBubbleView::ShouldShowSeparator() const {
   return ShouldShowLabel();
+}
+
+bool IconLabelBubbleView::ShouldShowLabelAfterAnimation() const {
+  return ShouldShowSeparator();
 }
 
 int IconLabelBubbleView::GetWidthBetween(int min, int max) const {
@@ -262,8 +303,10 @@ int IconLabelBubbleView::GetWidthBetween(int min, int max) const {
   if (progress <= (1 - open_state_fraction_))
     return max;
 
+  // Clamp value to 1.0 to handle floating arithmetic rounding errors.
   double state = gfx::Tween::CalculateValue(
-      kTween, (progress - (1 - open_state_fraction_)) / open_state_fraction_);
+      kTween, std::min(1.0, (progress - (1 - open_state_fraction_)) /
+                                open_state_fraction_));
   // Note |min| and |max| are reversed.
   return gfx::Tween::IntValueBetween(state, max, min);
 }
@@ -391,9 +434,11 @@ void IconLabelBubbleView::AnimationEnded(const gfx::Animation* animation) {
     return views::LabelButton::AnimationEnded(animation);
 
   if (!is_animation_paused_) {
-    // If there is no separator to show, then that means we want the text to
-    // disappear after animating.
-    ResetSlideAnimation(/*show_label=*/ShouldShowSeparator());
+    // In some cases we want the text to disappear even after animating.
+    // Subclasses override `ShouldShowLabelAfterAnimation` for custom behavior.
+    // Default behavior is when we do not show separator, the label should
+    // collapse.
+    ResetSlideAnimation(/*show_label=*/ShouldShowLabelAfterAnimation());
     PreferredSizeChanged();
   }
 
@@ -401,14 +446,19 @@ void IconLabelBubbleView::AnimationEnded(const gfx::Animation* animation) {
   views::InkDrop::Get(this)->GetInkDrop()->SetShowHighlightOnFocus(
       !views::FocusRing::Get(this));
   UpdateBackground();
+  UpdateBorder();
 }
 
 void IconLabelBubbleView::AnimationProgressed(const gfx::Animation* animation) {
-  if (animation != &slide_animation_)
+  if (animation != &slide_animation_) {
     return views::LabelButton::AnimationProgressed(animation);
+  }
 
-  if (!is_animation_paused_)
+  if (!is_animation_paused_) {
     PreferredSizeChanged();
+  }
+
+  UpdateBorder();
 }
 
 void IconLabelBubbleView::AnimationCanceled(const gfx::Animation* animation) {
@@ -416,12 +466,6 @@ void IconLabelBubbleView::AnimationCanceled(const gfx::Animation* animation) {
     return views::LabelButton::AnimationCanceled(animation);
 
   AnimationEnded(animation);
-}
-
-void IconLabelBubbleView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  LabelButton::GetAccessibleNodeData(node_data);
-  if (GetAccessibleName().empty())
-    node_data->SetNameExplicitlyEmpty();
 }
 
 void IconLabelBubbleView::SetImageModel(const ui::ImageModel& image_model) {
@@ -450,10 +494,29 @@ gfx::Size IconLabelBubbleView::GetSizeForLabelWidth(int label_width) const {
   return gfx::Size(GetWidthBetween(min_width, max_width), image_size.height());
 }
 
+void IconLabelBubbleView::UpdateBorder() {
+  // Bubbles are given the full internal height of the location bar so that all
+  // child views in the location bar have the same height. The visible height of
+  // the bubble should be smaller, so use an empty border to shrink down the
+  // content bounds so the background gets painted correctly.
+  SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(
+      GetLayoutConstant(LOCATION_BAR_CHILD_INTERIOR_PADDING),
+      GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left())));
+}
+
 int IconLabelBubbleView::GetInternalSpacing() const {
   if (image()->GetPreferredSize().IsEmpty())
     return 0;
-  return (ui::TouchUiController::Get()->touch_ui() ? 10 : 8) +
+
+  constexpr int kDefaultInternalSpacing = 8;
+  constexpr int kDefaultInternalSpacingTouchUI = 10;
+  constexpr int kDefaultInternalSpacingChromeRefresh = 4;
+
+  return (ui::TouchUiController::Get()->touch_ui()
+              ? kDefaultInternalSpacingTouchUI
+              : (OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+                     ? kDefaultInternalSpacingChromeRefresh
+                     : kDefaultInternalSpacing)) +
          GetExtraInternalSpacing();
 }
 
@@ -482,16 +545,18 @@ void IconLabelBubbleView::SetUpForAnimation() {
   open_state_fraction_ = 1.0;
 }
 
-void IconLabelBubbleView::SetUpForInOutAnimation() {
+void IconLabelBubbleView::SetUpForInOutAnimation(base::TimeDelta duration) {
   SetUpForAnimation();
   // The duration of the slide includes the appearance of the label (600ms),
   // statically showing the label (1800ms), and hiding the label (600ms). The
   // proportion of time spent in each portion of the animation is controlled by
-  // kIconLabelBubbleOpenTimeFraction.
-  slide_animation_.SetSlideDuration(base::Milliseconds(3000));
+  // open_state_fraction_.
+  slide_animation_.SetSlideDuration(
+      duration + 2 * base::Milliseconds(kIconLabelAnimationDurationMs));
   // The tween is calculated in GetWidthBetween().
   slide_animation_.SetTweenType(gfx::Tween::LINEAR);
-  open_state_fraction_ = 0.2;
+  open_state_fraction_ = static_cast<float>(kIconLabelAnimationDurationMs) /
+                         duration.InMilliseconds();
 }
 
 void IconLabelBubbleView::AnimateIn(absl::optional<int> string_id) {
@@ -510,7 +575,12 @@ void IconLabelBubbleView::AnimateIn(absl::optional<int> string_id) {
       // instance anyway.
       alert_virtual_view_->GetCustomData().RemoveState(
           ax::mojom::State::kInvisible);
-      alert_virtual_view_->GetCustomData().SetName(label);
+
+      // A valid role must be set prior to setting the name.
+      // TODO(crbug.com/1361281): Consider using AnnounceText instead of a
+      // virtual view.
+      alert_virtual_view_->GetCustomData().role = ax::mojom::Role::kAlert;
+      alert_virtual_view_->GetCustomData().SetNameChecked(label);
       alert_virtual_view_->NotifyAccessibilityEvent(ax::mojom::Event::kAlert);
     }
     label()->SetVisible(true);
@@ -592,16 +662,6 @@ SkPath IconLabelBubbleView::GetHighlightPath() const {
   const SkRect rect = RectToSkRect(highlight_bounds);
 
   return SkPath().addRoundRect(rect, corner_radius, corner_radius);
-}
-
-void IconLabelBubbleView::UpdateBorder() {
-  // Bubbles are given the full internal height of the location bar so that all
-  // child views in the location bar have the same height. The visible height of
-  // the bubble should be smaller, so use an empty border to shrink down the
-  // content bounds so the background gets painted correctly.
-  SetBorder(views::CreateEmptyBorder(gfx::Insets::VH(
-      GetLayoutConstant(LOCATION_BAR_CHILD_INTERIOR_PADDING),
-      GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left())));
 }
 
 BEGIN_METADATA(IconLabelBubbleView, views::LabelButton)

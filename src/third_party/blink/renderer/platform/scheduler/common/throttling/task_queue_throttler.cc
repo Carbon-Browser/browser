@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 
 #include "base/debug/stack_trace.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/common/lazy_now.h"
+#include "base/task/task_features.h"
 #include "base/time/tick_clock.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/budget_pool.h"
@@ -19,7 +21,7 @@
 namespace blink {
 namespace scheduler {
 
-using base::sequence_manager::LazyNow;
+using base::LazyNow;
 using base::sequence_manager::TaskQueue;
 
 TaskQueueThrottler::TaskQueueThrottler(
@@ -80,11 +82,13 @@ TaskQueueThrottler::GetNextAllowedWakeUpImpl(
     // for delayed tasks, see below). Otherwise, schedule a delayed wake up to
     // update the fence in the future.
     if (!allowed_run_time.is_null()) {
-      // WakeUpResolution::kLow is always used for throttled tasks since those
-      // tasks can tolerate having their execution being delayed.
+      // WakeUpResolution::kLow and DelayPolicy::kFlexibleNoSooner are always
+      // used for throttled tasks since those tasks can tolerate having their
+      // execution being delayed.
       return base::sequence_manager::WakeUp{
-          allowed_run_time, base::sequence_manager::WakeUp::kDefaultLeeway,
-          base::sequence_manager::WakeUpResolution::kLow};
+          allowed_run_time, base::GetTaskLeewayForCurrentThread(),
+          base::sequence_manager::WakeUpResolution::kLow,
+          base::subtle::DelayPolicy::kFlexibleNoSooner};
     }
   }
   if (!next_wake_up.has_value())
@@ -96,10 +100,14 @@ TaskQueueThrottler::GetNextAllowedWakeUpImpl(
   if (allowed_run_time.is_null())
     allowed_run_time = desired_run_time;
 
+  // Throttled tasks can tolerate having their execution being delayed, so
+  // transform "precise" delay policy into "flexible no sooner".
   return base::sequence_manager::WakeUp{
       allowed_run_time, next_wake_up->leeway,
       base::sequence_manager::WakeUpResolution::kLow,
-      next_wake_up->delay_policy};
+      next_wake_up->delay_policy == base::subtle::DelayPolicy::kPrecise
+          ? base::subtle::DelayPolicy::kFlexibleNoSooner
+          : next_wake_up->delay_policy};
 }
 
 void TaskQueueThrottler::OnHasImmediateTask() {
@@ -166,7 +174,7 @@ void TaskQueueThrottler::UpdateQueueState(base::TimeTicks now) {
   task_queue_->UpdateWakeUp(&lazy_now);
 }
 
-void TaskQueueThrottler::OnWakeUp(base::sequence_manager::LazyNow* lazy_now) {
+void TaskQueueThrottler::OnWakeUp(base::LazyNow* lazy_now) {
   DCHECK(IsThrottled());
   for (BudgetPool* budget_pool : budget_pools_)
     budget_pool->OnWakeUp(lazy_now->Now());

@@ -1,14 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/status_collector/managed_session_service.h"
 
 #include "base/logging.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_launch_error.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
+#include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/user_manager.h"
 
 namespace policy {
@@ -31,7 +34,7 @@ ManagedSessionService::ManagedSessionService(base::Clock* clock)
   SetLoginStatus();
   if (session_manager_) {
     // To alleviate tight coupling in unit tests to DeviceStatusCollector.
-    session_manager_observation_.Observe(session_manager_);
+    session_manager_observation_.Observe(session_manager_.get());
     is_session_locked_ = session_manager_->IsScreenLocked();
   }
   if (user_manager::UserManager::IsInitialized()) {
@@ -72,6 +75,7 @@ void ManagedSessionService::RemoveObserver(
 }
 
 void ManagedSessionService::OnSessionStateChanged() {
+  TRACE_EVENT0("ui", "ManagedSessionService::OnSessionStateChanged");
   bool is_session_locked = session_manager_->IsScreenLocked();
   if (is_session_locked_ == is_session_locked) {
     return;
@@ -102,6 +106,14 @@ void ManagedSessionService::OnUserProfileLoaded(const AccountId& account_id) {
   SetLoginStatus();
   for (auto& observer : observers_) {
     observer.OnLogin(profile);
+  }
+}
+
+void ManagedSessionService::OnUnlockScreenAttempt(
+    const bool success,
+    const session_manager::UnlockType unlock_type) {
+  for (auto& observer : observers_) {
+    observer.OnUnlockAttempt(success, unlock_type);
   }
 }
 

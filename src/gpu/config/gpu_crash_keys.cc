@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@ namespace crash_keys {
 #if !BUILDFLAG(IS_ANDROID)
 crash_reporter::CrashKeyString<16> gpu_vendor_id("gpu-venid");
 crash_reporter::CrashKeyString<16> gpu_device_id("gpu-devid");
+crash_reporter::CrashKeyString<16> gpu_count("gpu_count");
 #endif  // !BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(IS_WIN)
 crash_reporter::CrashKeyString<16> gpu_sub_sys_id("gpu-subid");

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -110,13 +110,14 @@ T CreateCallbackAbortOnDestruct(
 // the weak pointer is invalidated then we just return a default (success).
 template <typename T, typename Functor, typename... Args>
 IndexedDBTransaction::Operation BindWeakOperation(Functor&& functor,
-                                                  base::WeakPtr<T> ptr,
+                                                  base::WeakPtr<T> weak_ptr,
                                                   Args&&... args) {
-  DCHECK(ptr);
-  T* raw_ptr = ptr.get();
+  DCHECK(weak_ptr);
+  T* ptr = weak_ptr.get();
   return base::BindOnce(
-      &indexed_db_callback_helpers_internal::InvokeOrSucceed<T>, std::move(ptr),
-      base::BindOnce(std::forward<Functor>(functor), base::Unretained(raw_ptr),
+      &indexed_db_callback_helpers_internal::InvokeOrSucceed<T>,
+      std::move(weak_ptr),
+      base::BindOnce(std::forward<Functor>(functor), base::Unretained(ptr),
                      std::forward<Args>(args)...));
 }
 

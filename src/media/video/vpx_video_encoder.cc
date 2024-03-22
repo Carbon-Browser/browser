@@ -1,21 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/video/vpx_video_encoder.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "base/logging.h"
 #include "base/numerics/checked_math.h"
 #include "base/strings/stringprintf.h"
-#include "base/system/sys_info.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/svc_scalability_mode.h"
 #include "media/base/timestamp_constants.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_util.h"
+#include "media/video/video_encoder_info.h"
 #include "third_party/libvpx/source/libvpx/vpx/vp8cx.h"
 #include "third_party/libyuv/include/libyuv/convert.h"
 
@@ -61,27 +61,6 @@ vpx_enc_frame_flags_t vp8_3layers_temporal_flags[] = {
     VP8_UPDATE_NOTHING | VP8_EFLAG_NO_REF_ARF,
 };
 
-// Returns the number of threads.
-int GetNumberOfThreads(int width) {
-  // Default to 1 thread for less than VGA.
-  int desired_threads = 1;
-
-  if (width >= 3840)
-    desired_threads = 16;
-  else if (width >= 2560)
-    desired_threads = 8;
-  else if (width >= 1280)
-    desired_threads = 4;
-  else if (width >= 640)
-    desired_threads = 2;
-
-  // Clamp to the number of available logical processors/cores.
-  desired_threads =
-      std::min(desired_threads, base::SysInfo::NumberOfProcessors());
-
-  return desired_threads;
-}
-
 EncoderStatus SetUpVpxConfig(const VideoEncoder::Options& opts,
                              vpx_codec_enc_cfg_t* config) {
   if (opts.frame_size.width() <= 0 || opts.frame_size.height() <= 0)
@@ -102,7 +81,7 @@ EncoderStatus SetUpVpxConfig(const VideoEncoder::Options& opts,
   config->g_timebase.den = base::Time::kMicrosecondsPerSecond;
 
   // Set the number of threads based on the image width and num of cores.
-  config->g_threads = GetNumberOfThreads(opts.frame_size.width());
+  config->g_threads = GetNumberOfThreadsForSoftwareEncoding(opts.frame_size);
 
   // Insert keyframes at will with a given max interval
   if (opts.keyframe_interval.has_value()) {
@@ -111,9 +90,13 @@ EncoderStatus SetUpVpxConfig(const VideoEncoder::Options& opts,
     config->kf_max_dist = opts.keyframe_interval.value();
   }
 
+  uint32_t default_bitrate = GetDefaultVideoEncodeBitrate(
+      opts.frame_size, opts.framerate.value_or(30));
+  config->rc_end_usage = VPX_VBR;
+  // The unit of rc_target_bitrate is kilobits per second.
+  config->rc_target_bitrate = default_bitrate / 1000;
   if (opts.bitrate.has_value()) {
-    auto& bitrate = opts.bitrate.value();
-    config->rc_target_bitrate = bitrate.target_bps() / 1000;
+    const auto& bitrate = opts.bitrate.value();
     switch (bitrate.mode()) {
       case Bitrate::Mode::kVariable:
         config->rc_end_usage = VPX_VBR;
@@ -121,10 +104,19 @@ EncoderStatus SetUpVpxConfig(const VideoEncoder::Options& opts,
       case Bitrate::Mode::kConstant:
         config->rc_end_usage = VPX_CBR;
         break;
+      case Bitrate::Mode::kExternal:
+        // libvpx doesn't have a special rate control mode for per-frame
+        // quantizer. Instead we just set CBR and set
+        // VP9E_SET_QUANTIZER_ONE_PASS before each frame.
+        config->rc_end_usage = VPX_CBR;
+        // Let the whole AV1 quantizer range to be used.
+        config->rc_max_quantizer = 63;
+        config->rc_min_quantizer = 0;
+        break;
     }
-  } else {
-    config->rc_target_bitrate = GetDefaultVideoEncodeBitrate(
-        opts.frame_size, opts.framerate.value_or(30));
+    if (bitrate.target_bps() != 0) {
+      config->rc_target_bitrate = bitrate.target_bps() / 1000;
+    }
   }
 
   config->g_w = opts.frame_size.width();
@@ -134,6 +126,9 @@ EncoderStatus SetUpVpxConfig(const VideoEncoder::Options& opts,
     return EncoderStatus::Codes::kOk;
 
   switch (opts.scalability_mode.value()) {
+    case SVCScalabilityMode::kL1T1:
+      // Nothing to do
+      break;
     case SVCScalabilityMode::kL1T2:
       // Frame Pattern:
       // Layer Index 0: |0| |2| |4| |6| |8|
@@ -230,15 +225,26 @@ void FreeCodecCtx(vpx_codec_ctx_t* codec_ctx) {
   delete codec_ctx;
 }
 
+std::string LogVpxErrorMessage(vpx_codec_ctx_t* context,
+                               const char* message,
+                               vpx_codec_err_t status) {
+  auto formatted_msg = base::StringPrintf("%s: %s (%s)", message,
+                                          vpx_codec_err_to_string(status),
+                                          vpx_codec_error_detail(context));
+  DLOG(ERROR) << formatted_msg;
+  return formatted_msg;
+}
+
 }  // namespace
 
 VpxVideoEncoder::VpxVideoEncoder() : codec_(nullptr, FreeCodecCtx) {}
 
 void VpxVideoEncoder::Initialize(VideoCodecProfile profile,
                                  const Options& options,
+                                 EncoderInfoCB info_cb,
                                  OutputCB output_cb,
                                  EncoderStatusCB done_cb) {
-  done_cb = BindToCurrentLoop(std::move(done_cb));
+  done_cb = BindCallbackToCurrentLoopIfNeeded(std::move(done_cb));
   if (codec_) {
     std::move(done_cb).Run(EncoderStatus::Codes::kEncoderInitializeTwice);
     return;
@@ -261,6 +267,14 @@ void VpxVideoEncoder::Initialize(VideoCodecProfile profile,
     return;
   }
 
+  if (options.bitrate.has_value() &&
+      options.bitrate->mode() == Bitrate::Mode::kExternal && !is_vp9) {
+    std::move(done_cb).Run(
+        EncoderStatus(EncoderStatus::Codes::kEncoderUnsupportedConfig,
+                      "VP8 doesn't support per-frame quantizer"));
+    return;
+  }
+
   auto vpx_error = vpx_codec_enc_config_default(iface, &codec_config_, 0);
   if (vpx_error != VPX_CODEC_OK) {
     auto status =
@@ -272,7 +286,7 @@ void VpxVideoEncoder::Initialize(VideoCodecProfile profile,
   }
 
   vpx_img_fmt img_fmt = VPX_IMG_FMT_NONE;
-  unsigned int bits_for_storage = 8;
+  unsigned int bits_for_storage = 0;
   switch (profile) {
     case VP9PROFILE_PROFILE1:
       codec_config_.g_profile = 1;
@@ -308,10 +322,8 @@ void VpxVideoEncoder::Initialize(VideoCodecProfile profile,
       codec.get(), iface, &codec_config_,
       codec_config_.g_bit_depth == VPX_BITS_8 ? 0 : VPX_CODEC_USE_HIGHBITDEPTH);
   if (vpx_error != VPX_CODEC_OK) {
-    std::string msg = base::StringPrintf(
-        "VPX encoder initialization error: %s %s",
-        vpx_codec_err_to_string(vpx_error), codec->err_detail);
-    DLOG(ERROR) << msg;
+    auto msg = LogVpxErrorMessage(
+        codec.get(), "VPX encoder initialization error", vpx_error);
     std::move(done_cb).Run(
         EncoderStatus(EncoderStatus::Codes::kEncoderInitializationError, msg));
     return;
@@ -319,16 +331,14 @@ void VpxVideoEncoder::Initialize(VideoCodecProfile profile,
 
   // For VP9 the values used for real-time encoding mode are 5, 6, 7,
   // 8, 9. Higher means faster encoding, but lower quality.
-  // For VP8 typical values used for real-time encoding are -4, -6,
-  // -8, -10. Again larger magnitude means faster encoding but lower
+  // For VP8 typical values used for real-time encoding are -4, -6, -8,
+  // -10, -12. Again larger magnitude means faster encoding but lower
   // quality.
   int cpu_used = is_vp9 ? 7 : -6;
   vpx_error = vpx_codec_control(codec.get(), VP8E_SET_CPUUSED, cpu_used);
   if (vpx_error != VPX_CODEC_OK) {
-    std::string msg =
-        base::StringPrintf("VPX encoder VP8E_SET_CPUUSED error: %s",
-                           vpx_codec_err_to_string(vpx_error));
-    DLOG(ERROR) << msg;
+    auto msg = LogVpxErrorMessage(
+        codec.get(), "VPX encoder VP8E_SET_CPUUSED error", vpx_error);
     std::move(done_cb).Run(
         EncoderStatus(EncoderStatus::Codes::kEncoderInitializationError, msg));
     return;
@@ -362,10 +372,8 @@ void VpxVideoEncoder::Initialize(VideoCodecProfile profile,
       vpx_codec_control(codec.get(), VP9E_SET_SVC_PARAMETERS, &svc_conf);
       vpx_error = vpx_codec_control(codec.get(), VP9E_SET_SVC, 1);
       if (vpx_error != VPX_CODEC_OK) {
-        std::string msg =
-            base::StringPrintf("Can't activate SVC encoding: %s",
-                               vpx_codec_err_to_string(vpx_error));
-        DLOG(ERROR) << msg;
+        auto msg = LogVpxErrorMessage(codec.get(),
+                                      "Can't activate SVC encoding", vpx_error);
         status = EncoderStatus(
             EncoderStatus::Codes::kEncoderInitializationError, msg);
         std::move(done_cb).Run(status);
@@ -373,28 +381,45 @@ void VpxVideoEncoder::Initialize(VideoCodecProfile profile,
       }
     }
 
-    // In CBR mode use aq-mode=3 is enabled for quality improvement
-    if (codec_config_.rc_end_usage == VPX_CBR)
+    // In CBR mode aq-mode=3 (cyclic refresh) is enabled for quality
+    // improvement. Note: For VP8, cyclic refresh is internally done as
+    // default.
+    if (codec_config_.rc_end_usage == VPX_CBR) {
       vpx_codec_control(codec.get(), VP9E_SET_AQ_MODE, 3);
+    }
+
+    if (options.content_hint == ContentHint::Screen) {
+      vpx_codec_control(codec.get(), VP9E_SET_TUNE_CONTENT,
+                        VP9E_CONTENT_SCREEN);
+    }
   }
 
   options_ = options;
   originally_configured_size_ = options.frame_size;
-  output_cb_ = BindToCurrentLoop(std::move(output_cb));
+  output_cb_ = BindCallbackToCurrentLoopIfNeeded(std::move(output_cb));
   codec_ = std::move(codec);
+
+  if (info_cb) {
+    VideoEncoderInfo info;
+    info.implementation_name = "VpxVideoEncoder";
+    info.is_hardware_accelerated = false;
+    BindCallbackToCurrentLoopIfNeeded(std::move(info_cb)).Run(info);
+  }
+
   std::move(done_cb).Run(EncoderStatus::Codes::kOk);
 }
 
 void VpxVideoEncoder::Encode(scoped_refptr<VideoFrame> frame,
-                             bool key_frame,
+                             const EncodeOptions& encode_options,
                              EncoderStatusCB done_cb) {
-  done_cb = BindToCurrentLoop(std::move(done_cb));
+  done_cb = BindCallbackToCurrentLoopIfNeeded(std::move(done_cb));
   if (!codec_) {
     std::move(done_cb).Run(
         EncoderStatus::Codes::kEncoderInitializeNeverCompleted);
     return;
   }
 
+  bool key_frame = encode_options.key_frame;
   if (!frame) {
     std::move(done_cb).Run(
         EncoderStatus(EncoderStatus::Codes::kEncoderFailedEncode,
@@ -427,12 +452,20 @@ void VpxVideoEncoder::Encode(scoped_refptr<VideoFrame> frame,
     }
   }
 
-  const bool is_yuv = IsYuvPlanar(frame->format());
-  if (frame->visible_rect().size() != options_.frame_size || !is_yuv) {
+  // Unfortunately libyuv lacks direct NV12 to I010 conversion, and we
+  // have to do an extra conversion to I420.
+  // TODO(https://crbug.com/libyuv/954) Use NV12ToI010() when implemented
+  const bool vp9_p2_needs_nv12_to_i420 =
+      frame->format() == PIXEL_FORMAT_NV12 && profile_ == VP9PROFILE_PROFILE2;
+  const bool needs_conversion_to_i420 =
+      !IsYuvPlanar(frame->format()) || vp9_p2_needs_nv12_to_i420;
+  if (frame->visible_rect().size() != options_.frame_size ||
+      needs_conversion_to_i420) {
+    auto new_pixel_format =
+        needs_conversion_to_i420 ? PIXEL_FORMAT_I420 : frame->format();
     auto resized_frame = frame_pool_.CreateFrame(
-        is_yuv ? frame->format() : PIXEL_FORMAT_I420, options_.frame_size,
-        gfx::Rect(options_.frame_size), options_.frame_size,
-        frame->timestamp());
+        new_pixel_format, options_.frame_size, gfx::Rect(options_.frame_size),
+        options_.frame_size, frame->timestamp());
 
     if (!resized_frame) {
       std::move(done_cb).Run(
@@ -454,6 +487,7 @@ void VpxVideoEncoder::Encode(scoped_refptr<VideoFrame> frame,
 
   switch (profile_) {
     case VP9PROFILE_PROFILE2:
+      DCHECK_EQ(frame->format(), PIXEL_FORMAT_I420);
       // Profile 2 uses 10bit color,
       libyuv::I420ToI010(
           frame->visible_data(VideoFrame::kYPlane),
@@ -518,8 +552,9 @@ void VpxVideoEncoder::Encode(scoped_refptr<VideoFrame> frame,
   if (last_frame_color_space_ != frame->ColorSpace()) {
     last_frame_color_space_ = frame->ColorSpace();
     key_frame = true;
+    UpdateEncoderColorSpace();
   }
-  auto deadline = VPX_DL_REALTIME;
+  const unsigned long deadline = VPX_DL_REALTIME;
   vpx_codec_flags_t flags = key_frame ? VPX_EFLAG_FORCE_KF : 0;
 
   int temporal_id = 0;
@@ -540,15 +575,22 @@ void VpxVideoEncoder::Encode(scoped_refptr<VideoFrame> frame,
     }
   }
 
+  if (encode_options.quantizer.has_value()) {
+    DCHECK_EQ(options_.bitrate->mode(), Bitrate::Mode::kExternal);
+    // Convert double quantizer to an integer within codec's supported range.
+    int qp = static_cast<int>(std::lround(encode_options.quantizer.value()));
+    qp = std::clamp(qp, static_cast<int>(codec_config_.rc_min_quantizer),
+                    static_cast<int>(codec_config_.rc_max_quantizer));
+    vpx_codec_control(codec_.get(), VP9E_SET_QUANTIZER_ONE_PASS, qp);
+  }
+
   TRACE_EVENT1("media", "vpx_codec_encode", "timestamp", frame->timestamp());
   auto vpx_error = vpx_codec_encode(codec_.get(), &vpx_image_, timestamp_us,
                                     duration_us, flags, deadline);
 
   if (vpx_error != VPX_CODEC_OK) {
-    std::string msg = base::StringPrintf("VPX encoding error: %s (%s)",
-                                         vpx_codec_err_to_string(vpx_error),
-                                         vpx_codec_error_detail(codec_.get()));
-    DLOG(ERROR) << msg;
+    auto msg =
+        LogVpxErrorMessage(codec_.get(), "VPX encoding error", vpx_error);
     std::move(done_cb).Run(
         EncoderStatus(EncoderStatus::Codes::kEncoderFailedEncode, msg)
             .WithData("vpx_error", vpx_error));
@@ -562,7 +604,7 @@ void VpxVideoEncoder::Encode(scoped_refptr<VideoFrame> frame,
 void VpxVideoEncoder::ChangeOptions(const Options& options,
                                     OutputCB output_cb,
                                     EncoderStatusCB done_cb) {
-  done_cb = BindToCurrentLoop(std::move(done_cb));
+  done_cb = BindCallbackToCurrentLoopIfNeeded(std::move(done_cb));
   if (!codec_) {
     std::move(done_cb).Run(
         EncoderStatus::Codes::kEncoderInitializeNeverCompleted);
@@ -601,7 +643,7 @@ void VpxVideoEncoder::ChangeOptions(const Options& options,
         options.frame_size.height() > originally_configured_size_.height()) {
       auto status = EncoderStatus(
           EncoderStatus::Codes::kEncoderUnsupportedConfig,
-          "libvpx/VP9 doesn't support dynamically increasing frame dimentions");
+          "libvpx/VP9 doesn't support dynamically increasing frame dimensions");
       std::move(done_cb).Run(std::move(status));
       return;
     }
@@ -633,7 +675,7 @@ void VpxVideoEncoder::ChangeOptions(const Options& options,
     codec_config_ = new_config;
     options_ = options;
     if (!output_cb.is_null())
-      output_cb_ = BindToCurrentLoop(std::move(output_cb));
+      output_cb_ = BindCallbackToCurrentLoopIfNeeded(std::move(output_cb));
   } else {
     status = EncoderStatus(EncoderStatus::Codes::kEncoderUnsupportedConfig,
                            "Failed to set new VPX config")
@@ -657,7 +699,7 @@ base::TimeDelta VpxVideoEncoder::GetFrameDuration(const VideoFrame& frame) {
   constexpr auto min_duration = base::Seconds(1.0 / 60.0);
   constexpr auto max_duration = base::Seconds(1.0 / 24.0);
   auto duration = frame.timestamp() - last_frame_timestamp_;
-  return base::clamp(duration, min_duration, max_duration);
+  return std::clamp(duration, min_duration, max_duration);
 }
 
 VpxVideoEncoder::~VpxVideoEncoder() {
@@ -671,7 +713,7 @@ VpxVideoEncoder::~VpxVideoEncoder() {
 }
 
 void VpxVideoEncoder::Flush(EncoderStatusCB done_cb) {
-  done_cb = BindToCurrentLoop(std::move(done_cb));
+  done_cb = BindCallbackToCurrentLoopIfNeeded(std::move(done_cb));
   if (!codec_) {
     std::move(done_cb).Run(
         EncoderStatus::Codes::kEncoderInitializeNeverCompleted);
@@ -680,10 +722,8 @@ void VpxVideoEncoder::Flush(EncoderStatusCB done_cb) {
 
   auto vpx_error = vpx_codec_encode(codec_.get(), nullptr, -1, 0, 0, 0);
   if (vpx_error != VPX_CODEC_OK) {
-    std::string msg = base::StringPrintf("VPX flushing error: %s (%s)",
-                                         vpx_codec_err_to_string(vpx_error),
-                                         vpx_codec_error_detail(codec_.get()));
-    DLOG(ERROR) << msg;
+    auto msg =
+        LogVpxErrorMessage(codec_.get(), "VPX flushing error", vpx_error);
     auto status = EncoderStatus(EncoderStatus::Codes::kEncoderFailedEncode, msg)
                       .WithData("vpx_error", vpx_error);
     std::move(done_cb).Run(std::move(status));
@@ -720,6 +760,66 @@ void VpxVideoEncoder::DrainOutputs(int temporal_id,
       result.data = std::make_unique<uint8_t[]>(result.size);
       memcpy(result.data.get(), pkt->data.frame.buf, result.size);
       output_cb_.Run(std::move(result), {});
+    }
+  }
+}
+
+void VpxVideoEncoder::UpdateEncoderColorSpace() {
+  auto vpx_cs = VPX_CS_UNKNOWN;
+  switch (last_frame_color_space_.GetPrimaryID()) {
+    case gfx::ColorSpace::PrimaryID::BT709: {
+      const auto matrix_id = last_frame_color_space_.GetMatrixID();
+      if (matrix_id == gfx::ColorSpace::MatrixID::GBR ||
+          matrix_id == gfx::ColorSpace::MatrixID::RGB) {
+        vpx_cs = VPX_CS_SRGB;
+      } else {
+        vpx_cs = VPX_CS_BT_709;
+      }
+      break;
+    }
+    case gfx::ColorSpace::PrimaryID::BT2020:
+      vpx_cs = VPX_CS_BT_2020;
+      break;
+    case gfx::ColorSpace::PrimaryID::SMPTE170M:
+      vpx_cs = VPX_CS_SMPTE_170;
+      break;
+    case gfx::ColorSpace::PrimaryID::SMPTE240M:
+      vpx_cs = VPX_CS_SMPTE_240;
+      break;
+    case gfx::ColorSpace::PrimaryID::BT470BG:
+      vpx_cs = VPX_CS_BT_601;
+      break;
+    default:
+      break;
+  };
+
+  if (vpx_cs != VPX_CS_UNKNOWN) {
+    vpx_image_.cs = vpx_cs;
+    if (profile_ != VP8PROFILE_ANY) {
+      auto vpx_error =
+          vpx_codec_control(codec_.get(), VP9E_SET_COLOR_SPACE, vpx_cs);
+      if (vpx_error != VPX_CODEC_OK) {
+        LogVpxErrorMessage(codec_.get(), "Failed to set color space",
+                           vpx_error);
+      }
+    }
+  }
+
+  if (last_frame_color_space_.GetRangeID() == gfx::ColorSpace::RangeID::FULL ||
+      last_frame_color_space_.GetRangeID() ==
+          gfx::ColorSpace::RangeID::LIMITED) {
+    const auto vpx_range =
+        last_frame_color_space_.GetRangeID() == gfx::ColorSpace::RangeID::FULL
+            ? VPX_CR_FULL_RANGE
+            : VPX_CR_STUDIO_RANGE;
+    vpx_image_.range = vpx_range;
+    if (profile_ != VP8PROFILE_ANY) {
+      auto vpx_error =
+          vpx_codec_control(codec_.get(), VP9E_SET_COLOR_RANGE, vpx_range);
+      if (vpx_error != VPX_CODEC_OK) {
+        LogVpxErrorMessage(codec_.get(), "Failed to set color range",
+                           vpx_error);
+      }
     }
   }
 }

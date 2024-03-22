@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,11 @@
 namespace policy {
 
 // Checks and converts the strings in policy::key::kHttpsOnlyMode to the boolean
-// pref::kHttpsOnlyModeEnabled. This currently only sets the associated pref to
-// `false` if the policy is set to "disallowed". Otherwise, the policy has no
-// effect.
+// pref::kHttpsOnlyModeEnabled and the boolean pref::kHttpsFirstModeIncognito.
 class HttpsOnlyModePolicyHandler : public TypeCheckingPolicyHandler {
  public:
-  explicit HttpsOnlyModePolicyHandler(const char* const pref_name);
+  explicit HttpsOnlyModePolicyHandler(const char* const main_pref_name,
+                                      const char* const incognito_pref_name);
   ~HttpsOnlyModePolicyHandler() override;
   HttpsOnlyModePolicyHandler(const HttpsOnlyModePolicyHandler&) = delete;
   HttpsOnlyModePolicyHandler& operator=(const HttpsOnlyModePolicyHandler&) =
@@ -26,8 +25,10 @@ class HttpsOnlyModePolicyHandler : public TypeCheckingPolicyHandler {
                            PrefValueMap* prefs) override;
 
  private:
-  // Name of the HTTPS-Only pref.
-  const char* const pref_name_;
+  // Name of the HTTPS-First Mode pref.
+  const char* const main_pref_name_;
+  // Name of the HTTPS-First Mode in Incognito pref.
+  const char* const incognito_pref_name_;
 };
 
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,9 @@ package org.chromium.components.language;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Default implementation of language profile delegate.
- */
+/** Default implementation of language profile delegate. */
 public class LanguageProfileDelegateImpl implements LanguageProfileDelegate {
-    /**
-     * @return True if ULP is currently supported.
-     */
+    /** @return True if ULP is currently supported. */
     @Override
     public boolean isULPSupported() {
         // ULP is not supported in the default implementation.

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,10 @@ class CORE_EXPORT InspectedFrames final
   InspectedFrames(const InspectedFrames&) = delete;
   InspectedFrames& operator=(const InspectedFrames&) = delete;
 
-  LocalFrame* Root() { return root_; }
+  LocalFrame* Root() { return root_.Get(); }
   bool Contains(LocalFrame*) const;
   LocalFrame* FrameWithSecurityOrigin(const String& origin_raw_string);
+  LocalFrame* FrameWithStorageKey(const String& key_raw_string);
   Iterator begin();
   Iterator end();
 

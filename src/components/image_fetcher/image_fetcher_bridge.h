@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <string>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback.h"
 #include "components/image_fetcher/core/request_metadata.h"
 #include "ui/gfx/image/image.h"
 

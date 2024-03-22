@@ -1,10 +1,9 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/omnibox/browser/history_fuzzy_provider.h"
 
-#include <algorithm>
 #include <functional>
 #include <memory>
 #include <ostream>
@@ -15,12 +14,17 @@
 #include <vector>
 
 #include "base/check.h"
+#include "base/containers/contains.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/strings/stringprintf.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/system/sys_info.h"
+#include "base/time/time.h"
 #include "base/trace_event/memory_usage_estimator.h"
 #include "base/trace_event/trace_event.h"
+#include "build/build_config.h"
 #include "components/history/core/browser/history_database.h"
 #include "components/history/core/browser/history_db_task.h"
 #include "components/history/core/browser/history_service.h"
@@ -28,27 +32,37 @@
 #include "components/omnibox/browser/autocomplete_match_classification.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
-#include "components/omnibox/browser/autocomplete_result.h"
+#include "components/omnibox/browser/bookmark_provider.h"
+#include "components/omnibox/browser/history_quick_provider.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
-#include "components/search_engines/omnibox_focus_type.h"
+#include "components/omnibox/browser/omnibox_triggered_feature_service.h"
 #include "components/url_formatter/elide_url.h"
+#include "third_party/metrics_proto/omnibox_event.pb.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "url/gurl.h"
 
 namespace {
 
 // Histogram names for measuring sub-provider match conversion efficacy.
 // Reminder in case other sub-providers or metrics are added: update
-// the `Omnibox.FuzzyMatchConversion` entry in histograms.xml.
+// the `Omnibox.HistoryFuzzy.MatchConversion` entry in histograms.xml.
 const char kMetricMatchConversionHistoryQuick[] =
-    "Omnibox.FuzzyMatchConversion.HistoryQuick";
+    "Omnibox.HistoryFuzzy.MatchConversion.HistoryQuick";
 const char kMetricMatchConversionBookmark[] =
-    "Omnibox.FuzzyMatchConversion.Bookmark";
+    "Omnibox.HistoryFuzzy.MatchConversion.Bookmark";
+
+// Histogram name for time spent on the fuzzy search portion of provider time.
+const char kMetricSearchDuration[] = "Omnibox.HistoryFuzzy.SearchDuration";
+
+// Histogram name for whether a presented fuzzy match was the one taken by the
+// user at the moment a match was opened.
+const char kMetricPrecision[] = "Omnibox.HistoryFuzzy.Precision";
 
 // This cap ensures the search trie will not grow without bound. Up to half
 // the total capacity may be filled at startup from loaded significant URLs.
 // The enforced limit may be further constrained by
 // `MaxNumHQPUrlsIndexedAtStartup`.
-constexpr int kMaxTerminalCount = 1000;
+constexpr int kMaxTerminalCount = 256;
 
 // This utility function reduces a URL to the most meaningful and likely part
 // of the hostname to be matched against, i.e. the domain, the URL's TLD+1.
@@ -70,14 +84,13 @@ std::u16string UrlDomainReduction(const GURL& url) {
 // processing for input text that may not even be a URL seems like overkill,
 // so this simple direct method is used instead.
 std::u16string ReduceInputTextForMatching(const std::u16string& input) {
-  constexpr size_t kMaximumFuzzyMatchInputLength = 32;
+  constexpr size_t kMaximumFuzzyMatchInputLength = 24;
   constexpr size_t kPathCharacterCountToStopSearch = 6;
   constexpr size_t kPostDotCharacterCountHintingSubdomain = 4;
 
   // Long inputs are not fuzzy matched; doing so could be costly, and the
   // length of input itself is a signal that it may not have been typed but
   // simply pasted or edited in place.
-  // TODO(orinj): Consider tracking trie depth for use as maximum here.
   if (input.length() > kMaximumFuzzyMatchInputLength) {
     return std::u16string();
   }
@@ -131,29 +144,10 @@ std::u16string ReduceInputTextForMatching(const std::u16string& input) {
 
 namespace fuzzy {
 
-Correction::Correction(const Correction& other) {
-  kind = other.kind;
-  at = other.at;
-  new_char = other.new_char;
-  if (other.next) {
-    next = std::make_unique<Correction>(*other.next.get());
-  }
-}
+Edit::Edit(Kind kind, size_t at, char16_t new_char)
+    : kind(kind), new_char(new_char), at(at) {}
 
-Correction::Correction(Correction&&) = default;
-
-Correction::Correction(Kind kind, size_t at, char16_t new_char)
-    : kind(kind), at(at), new_char(new_char) {}
-
-Correction::Correction(Kind kind,
-                       size_t at,
-                       char16_t new_char,
-                       std::unique_ptr<Correction> next)
-    : kind(kind), at(at), new_char(new_char), next(std::move(next)) {}
-
-Correction::~Correction() = default;
-
-void Correction::ApplyTo(std::u16string& text) const {
+void Edit::ApplyTo(std::u16string& text) const {
   switch (kind) {
     case Kind::DELETE: {
       text.erase(at, 1);
@@ -167,59 +161,33 @@ void Correction::ApplyTo(std::u16string& text) const {
       text[at] = new_char;
       break;
     }
+    case Kind::TRANSPOSE: {
+      text[at] = text[at + 1];
+      text[at + 1] = new_char;
+      break;
+    }
     case Kind::KEEP:
     default: {
       NOTREACHED();
       break;
     }
   }
-  if (next) {
-    next->ApplyTo(text);
-  }
 }
 
-std::unique_ptr<Correction> Correction::GetApplicableCorrection() {
-  if (kind == Kind::KEEP) {
-    // Because this function eliminates KEEP corrections as the chain is built,
-    // it doesn't need to work recursively; a single elimination is sufficient.
-    DCHECK(!next || next->kind != Kind::KEEP);
-    return next ? std::make_unique<Correction>(*next) : nullptr;
-  } else {
-    // TODO(orinj): Consider a shared ownership model or preallocated pool to
-    //  eliminate lots of copy allocations. For now this is kept simple with
-    //  direct ownership of the full correction chain.
-    return std::make_unique<Correction>(*this);
-  }
+Correction Correction::WithEdit(Edit edit) const {
+  DCHECK(edit_count < Correction::kMaxEdits);
+  Correction correction = *this;
+  correction.edits[edit_count] = edit;
+  correction.edit_count++;
+  return correction;
 }
 
-// This operator implementation is for debugging.
-std::ostream& operator<<(std::ostream& os, const Correction& correction) {
-  os << '{';
-  switch (correction.kind) {
-    case Correction::Kind::KEEP: {
-      os << 'K';
-      break;
-    }
-    case Correction::Kind::DELETE: {
-      os << 'D';
-      break;
-    }
-    case Correction::Kind::INSERT: {
-      os << 'I';
-      break;
-    }
-    case Correction::Kind::REPLACE: {
-      os << 'R';
-      break;
-    }
-    default: {
-      NOTREACHED();
-      break;
-    }
+void Correction::ApplyTo(std::u16string& text) const {
+  size_t i = edit_count;
+  while (i > 0) {
+    i--;
+    edits[i].ApplyTo(text);
   }
-  os << "," << correction.at << "," << static_cast<char>(correction.new_char)
-     << "}";
-  return os;
 }
 
 Node::Node() = default;
@@ -269,9 +237,8 @@ void Node::Clear() {
 bool Node::FindCorrections(const std::u16string& text,
                            ToleranceSchedule tolerance_schedule,
                            std::vector<Correction>& corrections) const {
-  DVLOG(1) << "FindCorrections(" << text << ", " << tolerance_schedule.limit
-           << ")";
   DCHECK(corrections.empty());
+  DCHECK(tolerance_schedule.limit <= Correction::kMaxEdits);
 
   if (text.length() == 0) {
     return true;
@@ -297,7 +264,6 @@ bool Node::FindCorrections(const std::u16string& text,
 
     // Backtracking data to enable text correction (from end of string back
     // to beginning, i.e. correction chains are applied in reverse).
-    // TODO(orinj): This should be optimized in final algorithm; stop copying.
     Correction correction;
 
     // std::priority_queue keeps the greatest element on top, so we want this
@@ -320,23 +286,16 @@ bool Node::FindCorrections(const std::u16string& text,
   };
 
   std::priority_queue<Step> pq;
-  pq.push({this, 0, 0, 0, {Correction::Kind::KEEP, 0, '_'}});
+  pq.push({this, 0, 0, 0, Correction()});
 
-  Step best{
-      nullptr, INT_MAX, SIZE_MAX, INT_MAX, {Correction::Kind::KEEP, 0, '_'}};
-  int i = 0;
+  Step best{nullptr, INT_MAX, SIZE_MAX, INT_MAX, Correction()};
+
   // Find and return all equally-distant results as soon as distance increases
   // beyond that of first found results. Length is also considered to
   // avoid producing shorter substring texts.
   while (!pq.empty() && pq.top().distance <= best.distance) {
-    i++;
     Step step = pq.top();
     pq.pop();
-    DVLOG(1) << i << "(" << step.distance << "," << step.index << ","
-             << step.length << "," << step.correction << ")";
-    // TODO(orinj): Enforce a tolerance schedule with index versus distance;
-    //  this would allow more errors for longer inputs and prevents searching
-    //  through long corrections near start of input.
     // Strictly greater should not be possible for this comparison.
     if (step.index >= text.length()) {
       if (step.distance == 0) {
@@ -352,24 +311,22 @@ bool Node::FindCorrections(const std::u16string& text,
       // optimal or returns a first best result immediately.
       DCHECK(best.distance == INT_MAX || step.distance == best.distance);
       if (step.distance < best.distance || step.length > best.length) {
-        DVLOG(1) << "new best by "
-                 << (step.distance < best.distance ? "distance" : "length");
         best = std::move(step);
         corrections.clear();
         // Dereference is safe because nonzero distance implies presence of
         // nontrivial correction.
-        corrections.emplace_back(*best.correction.GetApplicableCorrection());
+        corrections.emplace_back(best.correction);
       } else {
         // Equal distance.
         // Strictly greater should not be possible for this comparison.
         if (step.length >= best.length) {
           // Dereference is safe because this is another equally
           // distant correction, necessarily discovered after the first.
-          corrections.emplace_back(*step.correction.GetApplicableCorrection());
+          corrections.emplace_back(step.correction);
         }
 #if DCHECK_ALWAYS_ON
         std::u16string corrected = text;
-        step.correction.GetApplicableCorrection()->ApplyTo(corrected);
+        step.correction.ApplyTo(corrected);
         DCHECK_EQ(corrected.length(), static_cast<size_t>(step.length))
             << corrected;
 #endif
@@ -379,47 +336,54 @@ bool Node::FindCorrections(const std::u16string& text,
     int tolerance = tolerance_schedule.ToleranceAt(step.index);
     if (step.distance < tolerance) {
       // Delete
-      pq.push({step.node,
-               step.distance + 1,
-               step.index + 1,
-               step.length,
-               {Correction::Kind::DELETE, step.index, '_',
-                step.correction.GetApplicableCorrection()}});
+      pq.push(
+          {step.node, step.distance + 1, step.index + 1, step.length,
+           step.correction.WithEdit({Edit::Kind::DELETE, step.index, '_'})});
     }
     for (const auto& entry : step.node->next) {
-      if (entry.first == text[step.index]) {
+      const char16_t step_text_char = text[step.index];
+      if (entry.first == step_text_char) {
         // Keep
-        pq.push({entry.second.get(),
-                 step.distance,
-                 step.index + 1,
-                 step.length + 1,
-                 {Correction::Kind::KEEP, step.index, '_',
-                  step.correction.GetApplicableCorrection()}});
+        pq.push({entry.second.get(), step.distance, step.index + 1,
+                 step.length + 1, step.correction});
       } else if (step.distance < tolerance) {
         // Insert
-        pq.push({entry.second.get(),
-                 step.distance + 1,
-                 step.index,
+        pq.push({entry.second.get(), step.distance + 1, step.index,
                  step.length + 1,
-                 {Correction::Kind::INSERT, step.index, entry.first,
-                  step.correction.GetApplicableCorrection()}});
+                 step.correction.WithEdit(
+                     {Edit::Kind::INSERT, step.index, entry.first})});
+
         // Replace. Note, we do not replace at the same position as a previous
         // insertion because doing so could produce unnecessary duplicates.
-        if (step.correction.kind != Correction::Kind::INSERT ||
-            step.correction.at != step.index) {
-          pq.push({entry.second.get(),
-                   step.distance + 1,
-                   step.index + 1,
+        const Edit& step_edit =
+            step.correction.edit_count > 0
+                ? step.correction.edits[step.correction.edit_count - 1]
+                : Edit(Edit::Kind::KEEP, 0, '_');
+
+        if (step_edit.kind != Edit::Kind::INSERT ||
+            step_edit.at != step.index) {
+          pq.push({entry.second.get(), step.distance + 1, step.index + 1,
                    step.length + 1,
-                   {Correction::Kind::REPLACE, step.index, entry.first,
-                    step.correction.GetApplicableCorrection()}});
+                   step.correction.WithEdit(
+                       {Edit::Kind::REPLACE, step.index, entry.first})});
+        }
+
+        // Transpose. Look ahead cost can be balanced by faster
+        // advancement through input text resulting in shorter search.
+        if (text.size() > step.index + 1 &&
+            text[step.index + 1] == entry.first) {
+          const auto it = entry.second->next.find(step_text_char);
+          if (it != entry.second->next.end()) {
+            pq.push({it->second.get(), step.distance + 1, step.index + 2,
+                     step.length + 2,
+                     step.correction.WithEdit(
+                         {Edit::Kind::TRANSPOSE, step.index, step_text_char})});
+          }
         }
       }
     }
   }
-  if (!pq.empty()) {
-    DVLOG(1) << "quit early on step with distance " << pq.top().distance;
-  }
+
   return false;
 }
 
@@ -445,19 +409,13 @@ class LoadSignificantUrls : public history::HistoryDBTask {
   using Callback = base::OnceCallback<void(Node)>;
 
   LoadSignificantUrls(base::WaitableEvent* event, Callback callback)
-      : wait_event_(event), callback_(std::move(callback)) {
-    DVLOG(1) << "LoadSignificantUrls ctor thread "
-             << base::PlatformThread::CurrentId();
-  }
+      : wait_event_(event), callback_(std::move(callback)) {}
   ~LoadSignificantUrls() override = default;
 
   bool RunOnDBThread(history::HistoryBackend* backend,
                      history::HistoryDatabase* db) override {
-    DVLOG(1) << "LoadSignificantUrls run on db thread "
-             << base::PlatformThread::CurrentId() << "; db: " << db;
     history::URLDatabase::URLEnumerator enumerator;
     if (db && db->InitURLEnumeratorForSignificant(&enumerator)) {
-      DVLOG(1) << "Got InMemoryDatabase";
       history::URLRow row;
       // The `MaxNumHQPUrlsIndexedAtStartup` dependency here is to ensure
       // that we keep a lower cap for mobile; it's much higher on desktop.
@@ -470,61 +428,86 @@ class LoadSignificantUrls : public history::HistoryDBTask {
           2;
       while (enumerator.GetNextURL(&row) &&
              node_.TerminalCount() < max_terminal_count) {
-        DVLOG(1) << "url #" << row.id() << ": " << row.url().host();
         node_.Insert(UrlDomainReduction(row.url()), 0);
       }
-    } else {
-      DVLOG(1) << "No significant InMemoryDatabase";
     }
     return true;
   }
 
   void DoneRunOnMainThread() override {
-    DVLOG(1) << "Done thread " << base::PlatformThread::CurrentId();
     std::move(callback_).Run(std::move(node_));
     wait_event_->Signal();
   }
 
  private:
   Node node_;
-  raw_ptr<base::WaitableEvent> wait_event_;
+  raw_ptr<base::WaitableEvent, AcrossTasksDanglingUntriaged> wait_event_;
   Callback callback_;
 };
 
 }  // namespace fuzzy
 
-HistoryFuzzyProvider::HistoryFuzzyProvider(
-    AutocompleteProviderClient* client,
-    HistoryQuickProvider* history_quick_provider,
-    BookmarkProvider* bookmark_provider)
-    : HistoryProvider(AutocompleteProvider::TYPE_HISTORY_FUZZY, client),
-      history_quick_provider_(history_quick_provider),
-      bookmark_provider_(bookmark_provider) {
-  history_service_observation_.Observe(client->GetHistoryService());
-  client->GetHistoryService()->ScheduleDBTask(
-      FROM_HERE,
-      std::make_unique<fuzzy::LoadSignificantUrls>(
-          &urls_loaded_event_,
-          base::BindOnce(&HistoryFuzzyProvider::OnUrlsLoaded,
-                         weak_ptr_factory_.GetWeakPtr())),
-      &task_tracker_);
+// static
+void HistoryFuzzyProvider::RecordOpenMatchMetrics(
+    const AutocompleteResult& result,
+    const AutocompleteMatch& match_opened) {
+  if (base::ranges::any_of(result, [](const AutocompleteMatch& match) {
+        return match.provider && match.provider->type() ==
+                                     AutocompleteProvider::TYPE_HISTORY_FUZZY;
+      })) {
+    const bool opened_fuzzy_match = match_opened.provider->type() ==
+                                    AutocompleteProvider::TYPE_HISTORY_FUZZY;
+    UMA_HISTOGRAM_BOOLEAN(kMetricPrecision, opened_fuzzy_match);
+  }
+}
+
+HistoryFuzzyProvider::HistoryFuzzyProvider(AutocompleteProviderClient* client)
+    : HistoryProvider(AutocompleteProvider::TYPE_HISTORY_FUZZY, client) {
+  // Set up tunable parameters. These can be used to affect fuzzy matching
+  // behavior and performance. Note, we use different `min_input_length_` values
+  // depending on desktop versus mobile platforms, determined by experiment.
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  min_input_length_ = 5;
+#else
+  min_input_length_ = 3;
+#endif
+  // These initial penalty values produce good results for most inputs:
+  // Using 10% reasonably took a 1334 relevance match down to 1200,
+  // but was harmful to HQP suggestions: as soon as a '.' was
+  // appended, a bunch of ~800 navsuggest results overtook a better
+  // HQP result that was bumped down to ~770. Using 5% lets this
+  // result compete in the navsuggest range.
+  penalty_low_ = 5;
+  penalty_high_ = 5;
+  // The default value of zero means "no taper", and only the lowest penalty
+  // will be applied.
+  penalty_taper_length_ = 0;
+
+  // In tests, history service is null and doesn't need to be observed.
+  if (client->GetHistoryService()) {
+    history_service_observation_.Observe(client->GetHistoryService());
+    client->GetHistoryService()->ScheduleDBTask(
+        FROM_HERE,
+        std::make_unique<fuzzy::LoadSignificantUrls>(
+            &urls_loaded_event_,
+            base::BindOnce(&HistoryFuzzyProvider::OnUrlsLoaded,
+                           weak_ptr_factory_.GetWeakPtr())),
+        &task_tracker_);
+  }
 }
 
 void HistoryFuzzyProvider::Start(const AutocompleteInput& input,
                                  bool minimal_changes) {
   TRACE_EVENT0("omnibox", "HistoryFuzzyProvider::Start");
   matches_.clear();
-  if (input.focus_type() != OmniboxFocusType::DEFAULT ||
+  if (input.focus_type() != metrics::OmniboxFocusType::INTERACTION_DEFAULT ||
       input.type() == metrics::OmniboxInputType::EMPTY) {
     return;
   }
 
+  // Note this will always return early when bypassing for low-end devices;
+  // see comment in constructor.
   if (!urls_loaded_event_.IsSignaled()) {
-    return;
-  }
-
-  // When there are no sub-providers, bypass fuzzy search completely.
-  if (history_quick_provider_ == nullptr && bookmark_provider_ == nullptr) {
     return;
   }
 
@@ -553,32 +536,59 @@ size_t HistoryFuzzyProvider::EstimateMemoryUsage() const {
 HistoryFuzzyProvider::~HistoryFuzzyProvider() = default;
 
 void HistoryFuzzyProvider::DoAutocomplete() {
-  // TODO(orinj): This schedule may want some measurement and tinkering.
   constexpr fuzzy::ToleranceSchedule kToleranceSchedule = {
-      .start_index = 1,
+      .start_index = 2,
       .step_length = 4,
       .limit = 3,
   };
 
   const std::u16string& text =
       ReduceInputTextForMatching(autocomplete_input_.text());
-  if (text.length() == 0) {
-    DVLOG(1) << "Skipping fuzzy for input '" << autocomplete_input_.text()
-             << "'";
+  const size_t input_length = text.length();
+  // Note: We can always return if `input_length` is zero, but
+  // `min_input_length_` is an experimental parameter for more control.
+  // So the second condition can be cleaned up if not needed, but
+  // the first condition should be kept regardless.
+  if (input_length == 0) {
+    return;
+  }
+  if (input_length < min_input_length_) {
     return;
   }
   std::vector<fuzzy::Correction> corrections;
-  DVLOG(1) << "FindCorrections: <" << text << "> ---> ?{";
-  if (root_.FindCorrections(text, kToleranceSchedule, corrections)) {
-    DVLOG(1) << "Trie contains input; no fuzzy results needed";
-  }
+  const base::TimeTicks time_start = base::TimeTicks::Now();
+  root_.FindCorrections(text, kToleranceSchedule, corrections);
+  const base::TimeTicks time_end = base::TimeTicks::Now();
+  UMA_HISTOGRAM_TIMES(kMetricSearchDuration, time_end - time_start);
   if (!corrections.empty()) {
+    // Relevance ranges are nuanced enough that this should be kept reasonably
+    // simple, but the experience of the feature is sensitive to the penalty so
+    // we support a range from highest penalty on short inputs to lowest penalty
+    // on longer inputs, with a linear taper in between.
+    int penalty = penalty_low_;
+
+    // Compute additional penalty for very short inputs.
+    if (penalty_taper_length_ > 0) {
+      DCHECK_GE(input_length, min_input_length_);
+      const size_t extra_length = input_length - min_input_length_;
+      if (extra_length <= penalty_taper_length_) {
+        DCHECK_GE(penalty_high_, penalty_low_);
+        penalty += ((penalty_taper_length_ - extra_length) *
+                    (penalty_high_ - penalty_low_)) /
+                   penalty_taper_length_;
+      }
+    }
+
+    // Use of `scoped_refptr` is required here because destructor is private.
+    scoped_refptr<HistoryQuickProvider> history_quick_provider =
+        new HistoryQuickProvider(client());
+    scoped_refptr<BookmarkProvider> bookmark_provider =
+        new BookmarkProvider(client());
     int count_history_quick = 0;
     int count_bookmark = 0;
     for (const auto& correction : corrections) {
       std::u16string fixed = text;
       correction.ApplyTo(fixed);
-      DVLOG(1) << ":  " << fixed;
 
       // Note the `cursor_position` could be changed by insert or delete
       // corrections, but this is easy to adapt since we only fuzzy
@@ -590,17 +600,15 @@ void HistoryFuzzyProvider::DoAutocomplete() {
           autocomplete_input_.current_page_classification(),
           client()->GetSchemeClassifier());
 
-      if (history_quick_provider_) {
-        history_quick_provider_->Start(corrected_input, false);
-        DCHECK(history_quick_provider_->done());
-        count_history_quick +=
-            AddConvertedMatches(history_quick_provider_->matches());
-      }
-      if (bookmark_provider_) {
-        bookmark_provider_->Start(corrected_input, false);
-        DCHECK(bookmark_provider_->done());
-        count_bookmark += AddConvertedMatches(bookmark_provider_->matches());
-      }
+      history_quick_provider->Start(corrected_input, false);
+      DCHECK(history_quick_provider->done());
+      bookmark_provider->Start(corrected_input, false);
+      DCHECK(bookmark_provider->done());
+
+      count_history_quick +=
+          AddConvertedMatches(history_quick_provider->matches(), penalty);
+      count_bookmark +=
+          AddConvertedMatches(bookmark_provider->matches(), penalty);
     }
     if (matches_.size() > provider_max_matches_) {
       // When too many matches are generated, take only the most relevant
@@ -609,11 +617,10 @@ void HistoryFuzzyProvider::DoAutocomplete() {
                         matches_.begin() + provider_max_matches_,
                         matches_.end(), AutocompleteMatch::MoreRelevant);
       for (size_t i = provider_max_matches_; i < matches_.size(); i++) {
-        DCHECK(matches_[i].provider != nullptr &&
-                   matches_[i].provider == history_quick_provider_ ||
-               matches_[i].provider == bookmark_provider_)
+        DCHECK(matches_[i].provider == history_quick_provider ||
+               matches_[i].provider == bookmark_provider)
             << matches_[i].provider->GetName();
-        if (matches_[i].provider == history_quick_provider_) {
+        if (matches_[i].provider == history_quick_provider) {
           count_history_quick--;
         } else {
           count_bookmark--;
@@ -624,11 +631,11 @@ void HistoryFuzzyProvider::DoAutocomplete() {
     RecordMatchConversion(kMetricMatchConversionHistoryQuick,
                           count_history_quick);
     RecordMatchConversion(kMetricMatchConversionBookmark, count_bookmark);
-    DVLOG(1) << "}?";
   }
 }
 
-int HistoryFuzzyProvider::AddConvertedMatches(const ACMatches& matches) {
+int HistoryFuzzyProvider::AddConvertedMatches(const ACMatches& matches,
+                                              int penalty) {
   if (matches.empty()) {
     return 0;
   }
@@ -643,27 +650,29 @@ int HistoryFuzzyProvider::AddConvertedMatches(const ACMatches& matches) {
   ACMatches::const_iterator it = std::min_element(
       matches.begin(), matches.end(), AutocompleteMatch::MoreRelevant);
   DCHECK(it != matches.end());
-  DVLOG(1) << "Converted match: " << it->contents;
   matches_.push_back(*it);
 
   // Update match in place. Note, `match.provider` will be reassigned after
   // `DoAutocomplete` because source sub-provider must be kept for metrics.
   AutocompleteMatch& match = matches_.back();
-  match.inline_autocompletion.clear();
+
+  // It's important that fuzzy matches do not try to become default and inline
+  // autocomplete because the input/match-data mismatch can cause problems
+  // with user interaction and omnibox text editing; see crbug/1347440.
   match.allowed_to_be_default_match = false;
+  match.inline_autocompletion.clear();
 
   // Apply relevance penalty; all corrections are equal and we only apply this
   // to the most relevant result, so edit distance isn't needed.
-  // Relevance range are nuanced enough that this should be kept simple.
-  // Using 9/10 reasonably took a 1334 relevance match down to 1200,
-  // but was harmful to HQP suggestions: as soon as a '.' was
-  // appended, a bunch of ~800 navsuggest results overtook a better
-  // HQP result that was bumped down to ~770. Using 95/100 lets this
-  // result compete in the navsuggest range.
-  match.relevance = match.relevance * 95 / 100;
-  match.contents_class.clear();
-  match.contents_class.push_back(
-      {0, AutocompleteMatch::ACMatchClassification::DIM});
+  DCHECK_GE(penalty, 0);
+  DCHECK_LE(penalty, 100);
+  match.relevance -= match.relevance * penalty / 100;
+
+  // Scoring signals are calculated in the history and bookmark providers using
+  // the corrected input. These scoring signals are inaccurate for the true
+  // input, so clear them to prevent the ml model assigning an
+  // artificially high confidence to this suggestion.
+  match.scoring_signals.reset();
 
   return 1;
 }
@@ -674,14 +683,12 @@ void HistoryFuzzyProvider::OnUrlsLoaded(fuzzy::Node node) {
 
 void HistoryFuzzyProvider::OnURLVisited(
     history::HistoryService* history_service,
-    ui::PageTransition transition,
-    const history::URLRow& row,
-    base::Time visit_time) {
-  DVLOG(1) << "URL Visit: " << row.url();
+    const history::URLRow& url_row,
+    const history::VisitRow& new_visit) {
   if (root_.TerminalCount() <
       std::min(OmniboxFieldTrial::MaxNumHQPUrlsIndexedAtStartup(),
                kMaxTerminalCount)) {
-    root_.Insert(UrlDomainReduction(row.url()), 0);
+    root_.Insert(UrlDomainReduction(url_row.url()), 0);
   }
 }
 

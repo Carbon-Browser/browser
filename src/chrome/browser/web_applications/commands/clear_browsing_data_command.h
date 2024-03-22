@@ -1,20 +1,22 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_CLEAR_BROWSING_DATA_COMMAND_H_
 #define CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_CLEAR_BROWSING_DATA_COMMAND_H_
 
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
-#include "chrome/browser/web_applications/web_app_provider.h"
 
 namespace web_app {
 
+class AllAppsLock;
+
 // Clears the browsing data for web app, given the inclusive time range.
-void ClearWebAppBrowsingData(base::Time begin_time,
-                             base::Time end_time,
-                             WebAppProvider* provider,
-                             base::OnceClosure done);
+void ClearWebAppBrowsingData(const base::Time& begin_time,
+                             const base::Time& end_time,
+                             base::OnceClosure done,
+                             AllAppsLock& lock);
 
 }  // namespace web_app
 

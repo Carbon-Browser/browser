@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "base/no_destructor.h"
 #include "base/strings/string_piece.h"
 #include "base/trace_event/trace_event.h"
+#include "skia/ext/font_utils.h"
 #include "third_party/icu/source/common/unicode/uchar.h"
 #include "third_party/icu/source/common/unicode/utf16.h"
 #include "third_party/skia/include/core/SkFontMgr.h"
@@ -92,7 +93,7 @@ sk_sp<SkTypeface> GetSkTypefaceFromPathAndIndex(const base::FilePath& font_path,
   if (entry != cache->end())
     return sk_sp<SkTypeface>(entry->second);
 
-  sk_sp<SkFontMgr> font_mgr = SkFontMgr::RefDefault();
+  sk_sp<SkFontMgr> font_mgr = skia::DefaultFontMgr();
   std::string filename = font_path.AsUTF8Unsafe();
   sk_sp<SkTypeface> typeface =
       font_mgr->makeFromFile(filename.c_str(), ttc_index);

@@ -19,25 +19,26 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/span.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/path_service.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "components/adblock/core/common/adblock_constants.h"
 #include "components/adblock/core/common/adblock_utils.h"
 #include "components/adblock/core/common/flatbuffer_data.h"
+#include "components/adblock/core/subscription/subscription_config.h"
 #include "components/adblock/core/subscription/test/mock_subscription_persistent_metadata.h"
 #include "components/grit/components_resources.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -49,19 +50,35 @@ namespace {
 class MockSubscriptionValidator : public SubscriptionValidator {
  public:
   MOCK_METHOD(bool,
-              IsSignatureValid,
+              MockIsSignatureValid,
               (const FlatbufferData& data, const base::FilePath& path),
-              (override, const));
+              (const));
   MOCK_METHOD(void,
-              StoreTrustedSignature,
+              MockStoreTrustedSignature,
               (const FlatbufferData& data, const base::FilePath& path),
-              (override));
+              ());
   MOCK_METHOD(void,
-              RemoveStoredSignature,
+              MockRemoveStoredSignature,
               (const base::FilePath& path),
-              (override));
+              ());
 
- protected:
+  IsSignatureValidThreadSafeCallback IsSignatureValid() const final {
+    return base::BindRepeating(&MockSubscriptionValidator::MockIsSignatureValid,
+                               base::Unretained(this));
+  }
+
+  StoreTrustedSignatureThreadSafeCallback StoreTrustedSignature() final {
+    return base::BindRepeating(
+        &MockSubscriptionValidator::MockStoreTrustedSignature,
+        base::Unretained(this));
+  }
+
+  RemoveStoredSignatureThreadSafeCallback RemoveStoredSignature() final {
+    return base::BindRepeating(
+        &MockSubscriptionValidator::MockRemoveStoredSignature,
+        base::Unretained(this));
+  }
+
   ~MockSubscriptionValidator() override = default;
 };
 
@@ -77,12 +94,22 @@ class AdblockSubscriptionPersistentStorageImplTest : public ::testing::Test {
  public:
   void SetUp() final {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
-    validator_ = base::MakeRefCounted<MockSubscriptionValidator>();
-    storage_ = std::make_unique<SubscriptionPersistentStorageImpl>(
-        temp_dir_.GetPath(), validator_, &metadata_);
+    RecreateStorage();
   }
 
-  base::FilePath PathRelativeToTemp(base::StringPiece file_name) const {
+  void TearDown() final {
+    // Avoid dangling pointers during destruction.
+    validator_ = nullptr;
+  }
+
+  void RecreateStorage() {
+    auto validator = std::make_unique<MockSubscriptionValidator>();
+    validator_ = validator.get();
+    storage_ = std::make_unique<SubscriptionPersistentStorageImpl>(
+        temp_dir_.GetPath(), std::move(validator), &metadata_);
+  }
+
+  base::FilePath PathRelativeToTemp(std::string_view file_name) const {
     return temp_dir_.GetPath().AppendASCII(file_name);
   }
 
@@ -101,7 +128,7 @@ class AdblockSubscriptionPersistentStorageImplTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   base::ScopedTempDir temp_dir_;
   MockSubscriptionPersistentMetadata metadata_;
-  scoped_refptr<MockSubscriptionValidator> validator_;
+  raw_ptr<MockSubscriptionValidator> validator_;
   std::unique_ptr<SubscriptionPersistentStorageImpl> storage_;
 };
 
@@ -136,20 +163,22 @@ TEST_F(AdblockSubscriptionPersistentStorageImplTest,
 
   // Subscriptions found on disk will be validated.
   // First two files are OK.
-  EXPECT_CALL(*validator_, IsSignatureValid(BufferMatches(kEasylistData),
-                                            PathRelativeToTemp("easylist.fb")))
+  EXPECT_CALL(*validator_,
+              MockIsSignatureValid(BufferMatches(kEasylistData),
+                                   PathRelativeToTemp("easylist.fb")))
       .WillOnce(testing::Return(true));
   EXPECT_CALL(*validator_,
-              IsSignatureValid(BufferMatches(kExceptionrulesData),
-                               PathRelativeToTemp("exceptionrules.fb")))
+              MockIsSignatureValid(BufferMatches(kExceptionrulesData),
+                                   PathRelativeToTemp("exceptionrules.fb")))
       .WillOnce(testing::Return(true));
   // The other two are invalid.
   EXPECT_CALL(*validator_,
-              IsSignatureValid(BufferMatches(std::string("some_data")),
-                               PathRelativeToTemp("invalid1.fb")))
+              MockIsSignatureValid(BufferMatches(std::string("some_data")),
+                                   PathRelativeToTemp("invalid1.fb")))
       .WillOnce(testing::Return(false));
-  EXPECT_CALL(*validator_, IsSignatureValid(BufferMatches(std::string("bogus")),
-                                            PathRelativeToTemp("invalid2.fb")))
+  EXPECT_CALL(*validator_,
+              MockIsSignatureValid(BufferMatches(std::string("bogus")),
+                                   PathRelativeToTemp("invalid2.fb")))
       .WillOnce(testing::Return(false));
 
   storage_->LoadSubscriptions(callback.Get());
@@ -188,8 +217,8 @@ TEST_F(AdblockSubscriptionPersistentStorageImplTest, StoreValidSubscription) {
       .WillOnce(testing::SaveArg<0>(&loaded_subscription));
   // The subscription will get its signature stored.
   base::FilePath signature_path;
-  EXPECT_CALL(*validator_,
-              StoreTrustedSignature(BufferMatches(kEasylistData), testing::_))
+  EXPECT_CALL(*validator_, MockStoreTrustedSignature(
+                               BufferMatches(kEasylistData), testing::_))
       .WillOnce(testing::SaveArg<1>(&signature_path));
 
   storage_->StoreSubscription(utils::MakeFlatbufferDataFromResourceBundle(
@@ -222,6 +251,9 @@ TEST_F(AdblockSubscriptionPersistentStorageImplTest, StoreValidSubscription) {
 
 TEST_F(AdblockSubscriptionPersistentStorageImplTest,
        StoreAndRemoveSubscription) {
+  // Temp directory is empty in the begining
+  EXPECT_TRUE(base::IsDirectoryEmpty(temp_dir_.GetPath()));
+
   storage_->LoadSubscriptions(base::DoNothing());
   task_environment_.RunUntilIdle();
 
@@ -233,8 +265,8 @@ TEST_F(AdblockSubscriptionPersistentStorageImplTest,
 
   // The subscription will get its signature stored.
   base::FilePath signature_path;
-  EXPECT_CALL(*validator_,
-              StoreTrustedSignature(BufferMatches(kEasylistData), testing::_))
+  EXPECT_CALL(*validator_, MockStoreTrustedSignature(
+                               BufferMatches(kEasylistData), testing::_))
       .WillOnce(testing::SaveArg<1>(&signature_path));
 
   storage_->StoreSubscription(utils::MakeFlatbufferDataFromResourceBundle(
@@ -247,14 +279,19 @@ TEST_F(AdblockSubscriptionPersistentStorageImplTest,
   EXPECT_FALSE(base::IsDirectoryEmpty(temp_dir_.GetPath()));
 
   // The subscription will get its signature removed.
-  EXPECT_CALL(*validator_, RemoveStoredSignature(signature_path));
+  EXPECT_CALL(*validator_, MockRemoveStoredSignature(signature_path));
 
   // Remove the subscription.
   storage_->RemoveSubscription(loaded_subscription);
+
+  // Reset the pointer to trigger the destructor of loaded_subscription
+  // This is done by FilteringConfigurationMaintainerImpl
+  loaded_subscription.reset();
+
   task_environment_.RunUntilIdle();
 
   // Directory is now empty again.
-  ASSERT_TRUE(loaded_subscription);
+  EXPECT_TRUE(base::IsDirectoryEmpty(temp_dir_.GetPath()));
 }
 
 TEST_F(AdblockSubscriptionPersistentStorageImplTest, StorageIsPersistent) {
@@ -270,13 +307,14 @@ TEST_F(AdblockSubscriptionPersistentStorageImplTest, StorageIsPersistent) {
 
   // Validator will be asked to store the signature.
   base::FilePath signature_path;
-  EXPECT_CALL(*validator_,
-              StoreTrustedSignature(BufferMatches(kEasylistData), testing::_))
+  EXPECT_CALL(*validator_, MockStoreTrustedSignature(
+                               BufferMatches(kEasylistData), testing::_))
       .WillOnce(testing::SaveArg<1>(&signature_path));
 
   // Metadata will be updated.
   EXPECT_CALL(metadata_,
               SetExpirationInterval(DefaultSubscriptionUrl(), base::Days(1)));
+  EXPECT_CALL(metadata_, SetLastInstallationTime(DefaultSubscriptionUrl()));
   EXPECT_CALL(metadata_, SetVersion(DefaultSubscriptionUrl(), testing::_));
   EXPECT_CALL(metadata_,
               IncrementDownloadSuccessCount(DefaultSubscriptionUrl()));
@@ -288,13 +326,12 @@ TEST_F(AdblockSubscriptionPersistentStorageImplTest, StorageIsPersistent) {
   task_environment_.RunUntilIdle();
 
   // Destroy and re-create storage.
-  storage_ = std::make_unique<SubscriptionPersistentStorageImpl>(
-      temp_dir_.GetPath(), validator_, &metadata_);
+  RecreateStorage();
 
   // Validator will be asked to check the signature of subscription on disk.
   // Will query the path passed to |StoreTrustedSignature| before.
-  EXPECT_CALL(*validator_,
-              IsSignatureValid(BufferMatches(kEasylistData), signature_path))
+  EXPECT_CALL(*validator_, MockIsSignatureValid(BufferMatches(kEasylistData),
+                                                signature_path))
       .WillOnce(testing::Return(true));
 
   // Load subscriptions.

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "components/sync/base/model_type.h"
-#include "components/sync/driver/backend_migrator.h"
+#include "components/sync/service/backend_migrator.h"
 
 class SyncServiceImplHarness;
 class MigrationWaiter;
@@ -39,7 +39,7 @@ class MigrationWatcher : public syncer::MigrationObserver {
 
  private:
   // The SyncServiceImplHarness to watch.
-  const raw_ptr<SyncServiceImplHarness> harness_;
+  const raw_ptr<SyncServiceImplHarness, DanglingUntriaged> harness_;
 
   // The set of data types currently undergoing migration.
   syncer::ModelTypeSet pending_types_;
@@ -49,7 +49,7 @@ class MigrationWatcher : public syncer::MigrationObserver {
   syncer::ModelTypeSet migrated_types_;
 
   // The MigrationWatier that is waiting for this migration to complete.
-  raw_ptr<MigrationWaiter> migration_waiter_;
+  raw_ptr<MigrationWaiter> migration_waiter_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_SYNC_TEST_INTEGRATION_MIGRATION_WATCHER_H_

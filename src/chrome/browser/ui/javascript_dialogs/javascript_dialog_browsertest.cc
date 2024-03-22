@@ -1,9 +1,9 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -13,6 +13,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -100,7 +101,7 @@ IN_PROC_BROWSER_TEST_F(JavaScriptDialogTest,
   // Tab two is closed while the dialog is up.
   int tab2_index = browser()->tab_strip_model()->GetIndexOfWebContents(tab2);
   browser()->tab_strip_model()->CloseWebContentsAt(tab2_index,
-                                                   TabStripModel::CLOSE_NONE);
+                                                   TabCloseTypes::CLOSE_NONE);
 
   // Try reloading tab one.
   tab1->GetController().Reload(content::ReloadType::NORMAL, false);
@@ -131,7 +132,7 @@ IN_PROC_BROWSER_TEST_F(JavaScriptDialogTest,
   // The tab is closed while the dialog is up.
   int tab_index = browser()->tab_strip_model()->GetIndexOfWebContents(tab);
   browser()->tab_strip_model()->CloseWebContentsAt(tab_index,
-                                                   TabStripModel::CLOSE_NONE);
+                                                   TabCloseTypes::CLOSE_NONE);
 
   // No crash is good news.
 }
@@ -269,9 +270,10 @@ class JavaScriptDialogDismissalCauseTester {
   void SetLastDismissalCause(DismissalCause cause) { dismissal_cause_ = cause; }
 
  private:
-  raw_ptr<content::WebContents> tab_;
-  raw_ptr<content::RenderFrameHost> frame_;
-  raw_ptr<javascript_dialogs::TabModalDialogManager> js_helper_;
+  raw_ptr<content::WebContents, DanglingUntriaged> tab_;
+  raw_ptr<content::RenderFrameHost, DanglingUntriaged> frame_;
+  raw_ptr<javascript_dialogs::TabModalDialogManager, DanglingUntriaged>
+      js_helper_;
 
   absl::optional<DismissalCause> dismissal_cause_;
 
@@ -442,7 +444,7 @@ class JavaScriptDialogForPrerenderTest : public JavaScriptDialogTest {
                                 base::Unretained(this))) {}
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     JavaScriptDialogTest::SetUp();
   }
 
@@ -454,7 +456,8 @@ class JavaScriptDialogForPrerenderTest : public JavaScriptDialogTest {
   content::WebContents* web_contents() { return web_contents_; }
 
  protected:
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
   content::test::PrerenderTestHelper prerender_helper_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,6 @@ std::unique_ptr<std::string> BuildProtoInBackground(
     const webapps::ShortcutInfo& shortcut_info,
     const GURL& app_key,
     const std::string& primary_icon_data,
-    bool is_primary_icon_maskable,
     const std::string& splash_icon_data,
     const std::string& package_name,
     const std::string& version,
@@ -46,7 +45,6 @@ void BuildProto(
     const webapps::ShortcutInfo& shortcut_info,
     const GURL& app_key,
     const std::string& primary_icon_data,
-    bool is_primary_icon_maskable,
     const std::string& splash_icon_data,
     const std::string& package_name,
     const std::string& version,
@@ -64,7 +62,6 @@ bool StoreUpdateRequestToFileInBackground(
     const webapps::ShortcutInfo& shortcut_info,
     const GURL& app_key,
     const std::string& primary_icon_data,
-    bool is_primary_icon_maskable,
     const std::string& splash_icon_data,
     const std::string& package_name,
     const std::string& version,

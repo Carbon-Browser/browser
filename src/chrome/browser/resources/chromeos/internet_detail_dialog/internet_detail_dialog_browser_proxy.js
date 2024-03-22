@@ -1,8 +1,7 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addSingletonGetter} from 'chrome://resources/js/cr.m.js';
 
 /**
  * @fileoverview A helper object used from the internet detail dialog
@@ -21,6 +20,12 @@ export class InternetDetailDialogBrowserProxy {
    * Signals C++ that the dialog is closed.
    */
   closeDialog() {}
+
+  /**
+   * Shows the Portal Signin.
+   * @param {string} guid
+   */
+  showPortalSignin(guid) {}
 }
 
 /**
@@ -33,11 +38,25 @@ export class InternetDetailDialogBrowserProxyImpl {
   }
 
   /** @override */
+  showPortalSignin(guid) {
+    chrome.send('showPortalSignin', [guid]);
+  }
+
+  /** @override */
   closeDialog() {
     chrome.send('dialogClose');
   }
+
+  /** @return {!InternetDetailDialogBrowserProxy} */
+  static getInstance() {
+    return instance || (instance = new InternetDetailDialogBrowserProxyImpl());
+  }
+
+  /** @param {!InternetDetailDialogBrowserProxy} obj */
+  static setInstance(obj) {
+    instance = obj;
+  }
 }
 
-// The singleton instance_ is replaced with a test version of this wrapper
-// during testing.
-addSingletonGetter(InternetDetailDialogBrowserProxyImpl);
+/** @type {?InternetDetailDialogBrowserProxy} */
+let instance = null;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
-
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
+#include "extensions/common/mojom/extra_response_data.mojom.h"
 #include "extensions/renderer/bindings/api_binding_types.h"
 #include "extensions/renderer/bindings/api_last_error.h"
 #include "extensions/renderer/bindings/interaction_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "v8/include/v8.h"
 
 namespace extensions {
@@ -40,7 +41,7 @@ class APIRequestHandler {
     std::string method_name;
     bool has_async_response_handler = false;
     bool has_user_gesture = false;
-    std::unique_ptr<base::Value> arguments_list;
+    base::Value::List arguments_list;
   };
 
   // Details about a newly-added request to provide as a return to callers.
@@ -74,7 +75,7 @@ class APIRequestHandler {
   v8::Local<v8::Promise> StartRequest(
       v8::Local<v8::Context> context,
       const std::string& method,
-      std::unique_ptr<base::Value> arguments_list,
+      base::Value::List arguments_list,
       binding::AsyncResponseType async_type,
       v8::Local<v8::Function> callback,
       v8::Local<v8::Function> custom_callback,
@@ -99,9 +100,10 @@ class APIRequestHandler {
   // invalidated after this!
   void CompleteRequest(int request_id,
                        const base::Value::List& response_list,
-                       const std::string& error);
+                       const std::string& error,
+                       mojom::ExtraResponseDataPtr extra_data = nullptr);
   void CompleteRequest(int request_id,
-                       const std::vector<v8::Local<v8::Value>>& response,
+                       const v8::LocalVector<v8::Value>& response,
                        const std::string& error);
 
   // Invalidates any requests that are associated with |context|.
@@ -133,13 +135,13 @@ class APIRequestHandler {
     PendingRequest(PendingRequest&&);
     PendingRequest& operator=(PendingRequest&&);
 
-    v8::Isolate* isolate;
+    raw_ptr<v8::Isolate, ExperimentalRenderer> isolate;
     v8::Global<v8::Context> context;
     std::string method_name;
 
     std::unique_ptr<AsyncResultHandler> async_handler;
 
-    // Note: We can't use absl::optional here for derived Token instances.
+    // Note: We can't use std::optional here for derived Token instances.
     std::unique_ptr<InteractionProvider::Token> user_gesture_token;
   };
 
@@ -160,7 +162,7 @@ class APIRequestHandler {
 
   // Common implementation for completing a request.
   void CompleteRequestImpl(int request_id,
-                           const ArgumentAdapter& arguments,
+                           ArgumentAdapter arguments,
                            const std::string& error);
 
   // The next available request identifier.
@@ -180,14 +182,15 @@ class APIRequestHandler {
 
   // The exception handler for the bindings system; guaranteed to be valid
   // during this object's lifetime.
-  ExceptionHandler* const exception_handler_;
+  const raw_ptr<ExceptionHandler, ExperimentalRenderer> exception_handler_;
 
   // The response validator used to check the responses for resolved requests.
   // Null if response validation is disabled.
   std::unique_ptr<APIResponseValidator> response_validator_;
 
   // Outlives |this|.
-  const InteractionProvider* const interaction_provider_;
+  const raw_ptr<const InteractionProvider, DanglingUntriaged>
+      interaction_provider_;
 };
 
 }  // namespace extensions

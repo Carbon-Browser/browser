@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,8 +32,7 @@ libyuv::FourCC GetFourccForPixelFormat(
     case fuchsia::sysmem::PixelFormatType::NV12:
       return libyuv::FourCC::FOURCC_NV12;
     default:
-      NOTREACHED();
-      return libyuv::FourCC::FOURCC_I420;
+      NOTREACHED_NORETURN();
   }
 }
 

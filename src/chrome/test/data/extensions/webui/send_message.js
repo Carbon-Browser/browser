@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 if (!chrome || !chrome.test || !chrome.test.sendMessage) {
   console.error('chrome.test.sendMessage is unavailable on ' +
                 document.location.href);
-  domAutomationController.send(false);
-  return;
+  return false;
 }
 
 chrome.test.sendMessage('ping', function(reply) {
@@ -20,4 +19,4 @@ chrome.test.sendMessage('ping', function(reply) {
   }
 });
 
-domAutomationController.send(true);
+return true;

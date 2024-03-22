@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,8 @@
 #include <sstream>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/demuxer_memory_limit.h"
 #include "media/base/media_switches.h"
@@ -81,8 +80,7 @@ std::string StatusToString(const SourceBufferStreamStatus& status) {
     case SourceBufferStreamStatus::kEndOfStream:
       return "kEndOfStream";
   }
-  NOTREACHED();
-  return "";
+  NOTREACHED_NORETURN();
 }
 
 // Helper method for logging, converts a range into a readable string.
@@ -142,19 +140,6 @@ std::string BufferQueueMetadataToLogString(
   return result.str();
 }
 
-SourceBufferRange::GapPolicy TypeToGapPolicy(SourceBufferStreamType type) {
-  switch (type) {
-    case SourceBufferStreamType::kAudio:
-    case SourceBufferStreamType::kVideo:
-      return SourceBufferRange::NO_GAPS_ALLOWED;
-    case SourceBufferStreamType::kText:
-      return SourceBufferRange::ALLOW_GAPS;
-  }
-
-  NOTREACHED();
-  return SourceBufferRange::NO_GAPS_ALLOWED;
-}
-
 }  // namespace
 
 SourceBufferStream::SourceBufferStream(const AudioDecoderConfig& audio_config,
@@ -188,19 +173,6 @@ SourceBufferStream::SourceBufferStream(const VideoDecoderConfig& video_config,
   video_configs_.push_back(video_config);
   DVLOG(2) << __func__ << ": video_buffer_size= " << memory_limit_;
 }
-
-SourceBufferStream::SourceBufferStream(const TextTrackConfig& text_config,
-                                       MediaLog* media_log)
-    : media_log_(media_log),
-      text_track_config_(text_config),
-      seek_buffer_timestamp_(kNoTimestamp),
-      coded_frame_group_start_pts_(kNoTimestamp),
-      range_for_next_append_(ranges_.end()),
-      highest_output_buffer_timestamp_(kNoTimestamp),
-      max_interbuffer_distance_(
-          base::Milliseconds(kMinimumInterbufferDistanceInMs)),
-      memory_limit_(
-          GetDemuxerStreamAudioMemoryLimit(nullptr /*audio_config*/)) {}
 
 SourceBufferStream::~SourceBufferStream() = default;
 
@@ -375,7 +347,7 @@ void SourceBufferStream::Append(const BufferQueue& buffers) {
     }
 
     range_for_next_append_ = AddToRanges(std::make_unique<SourceBufferRange>(
-        TypeToGapPolicy(GetType()), *buffers_for_new_range,
+        SourceBufferRange::NO_GAPS_ALLOWED, *buffers_for_new_range,
         new_range_start_time,
         base::BindRepeating(&SourceBufferStream::GetMaxInterbufferDistance,
                             base::Unretained(this))));
@@ -1074,7 +1046,7 @@ size_t SourceBufferStream::FreeBuffers(size_t total_bytes_to_free,
 
       // Create a new range containing these buffers.
       new_range_for_append = std::make_unique<SourceBufferRange>(
-          TypeToGapPolicy(GetType()), buffers, kNoTimestamp,
+          SourceBufferRange::NO_GAPS_ALLOWED, buffers, kNoTimestamp,
           base::BindRepeating(&SourceBufferStream::GetMaxInterbufferDistance,
                               base::Unretained(this)));
 
@@ -1332,9 +1304,7 @@ void SourceBufferStream::PrepareRangesForNextAppend(
   //      with incorrect timestamps. Removing a frame may break decode
   //      dependencies and there are no downsides to just keeping it (other than
   //      some throw-away decoder work).
-  //   B. Type is text. TODO(chcunningham): Implement text splicing. See
-  //      http://crbug.com/661408
-  //   C. Type is audio and overlapped duration is 0. We've encountered Vorbis
+  //   B. Type is audio and overlapped duration is 0. We've encountered Vorbis
   //      streams containing zero-duration buffers (i.e. no real overlap). For
   //      non-zero duration removing overlapped frames is important to preserve
   //      A/V sync (see AudioClock).
@@ -1342,7 +1312,6 @@ void SourceBufferStream::PrepareRangesForNextAppend(
       highest_timestamp_in_append_sequence_ ==
           new_buffers.front()->timestamp() &&
       (GetType() == SourceBufferStreamType::kVideo ||
-       GetType() == SourceBufferStreamType::kText ||
        last_appended_buffer_duration_ == base::TimeDelta());
 
   // Finally do the deletion of overlap.
@@ -1657,6 +1626,16 @@ void SourceBufferStream::WarnIfTrackBufferExhaustionSkipsForward(
   }
 }
 
+bool SourceBufferStream::IsNextBufferConfigChanged() {
+  if (!track_buffer_.empty())
+    return track_buffer_.front()->GetConfigId() != current_config_index_;
+
+  if (!selected_range_ || !selected_range_->HasNextBuffer())
+    return false;
+
+  return selected_range_->GetNextConfigId() != current_config_index_;
+}
+
 base::TimeDelta SourceBufferStream::GetNextBufferTimestamp() {
   if (!track_buffer_.empty())
     return track_buffer_.front()->timestamp();
@@ -1712,6 +1691,14 @@ Ranges<base::TimeDelta> SourceBufferStream::GetBufferedTime() const {
     ranges.Add((*itr)->GetStartTimestamp(), (*itr)->GetBufferedEndTimestamp());
   }
   return ranges;
+}
+
+base::TimeDelta SourceBufferStream::GetLowestPresentationTimestamp() const {
+  if (ranges_.empty()) {
+    return base::TimeDelta();
+  }
+
+  return ranges_.front()->GetStartTimestamp();
 }
 
 base::TimeDelta SourceBufferStream::GetHighestPresentationTimestamp() const {
@@ -1780,10 +1767,6 @@ const VideoDecoderConfig& SourceBufferStream::GetCurrentVideoDecoderConfig() {
   CHECK(current_config_index_ >= 0 &&
         static_cast<size_t>(current_config_index_) < video_configs_.size());
   return video_configs_[current_config_index_];
-}
-
-const TextTrackConfig& SourceBufferStream::GetCurrentTextTrackConfig() {
-  return text_track_config_;
 }
 
 base::TimeDelta SourceBufferStream::GetMaxInterbufferDistance() const {
@@ -1972,20 +1955,15 @@ std::string SourceBufferStream::GetStreamTypeName() const {
       return "AUDIO";
     case SourceBufferStreamType::kVideo:
       return "VIDEO";
-    case SourceBufferStreamType::kText:
-      return "TEXT";
   }
-  NOTREACHED();
-  return "";
+  NOTREACHED_NORETURN();
 }
 
 SourceBufferStreamType SourceBufferStream::GetType() const {
   if (!audio_configs_.empty())
     return SourceBufferStreamType::kAudio;
-  if (!video_configs_.empty())
-    return SourceBufferStreamType::kVideo;
-  DCHECK_NE(text_track_config_.kind(), kTextNone);
-  return SourceBufferStreamType::kText;
+  DCHECK(!video_configs_.empty());
+  return SourceBufferStreamType::kVideo;
 }
 
 void SourceBufferStream::DeleteAndRemoveRange(RangeList::iterator* itr) {

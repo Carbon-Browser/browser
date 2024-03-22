@@ -1,13 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <AppKit/AppKit.h>
 #include <MediaAccessibility/MediaAccessibility.h>
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "skia/ext/skia_utils_mac.h"
@@ -47,7 +46,7 @@ std::string MaybeAddCSSImportant(std::string css_string, bool important) {
 
 std::string GetMAForegroundColorAndOpacityAsCSSColor() {
   MACaptionAppearanceBehavior behavior;
-  base::ScopedCFTypeRef<CGColorRef> cg_color(
+  base::apple::ScopedCFTypeRef<CGColorRef> cg_color(
       MACaptionAppearanceCopyForegroundColor(kUserDomain, &behavior));
   bool important = behavior == kMACaptionAppearanceBehaviorUseValue;
   float opacity =
@@ -62,7 +61,7 @@ std::string GetMAForegroundColorAndOpacityAsCSSColor() {
 
 std::string GetMABackgroundColorAndOpacityAsCSSColor() {
   MACaptionAppearanceBehavior behavior;
-  base::ScopedCFTypeRef<CGColorRef> cg_color(
+  base::apple::ScopedCFTypeRef<CGColorRef> cg_color(
       MACaptionAppearanceCopyBackgroundColor(kUserDomain, &behavior));
   bool important = behavior == kMACaptionAppearanceBehaviorUseValue;
   float opacity =
@@ -128,26 +127,26 @@ std::string GetMATextEdgeStyleAsCSSShadow() {
 // each font face to be used in WebVTT captions, which is not implemented here.
 void GetMAFontAsCSSFontSpecifiers(std::string* font_family,
                                   std::string* font_variant) {
-  base::ScopedCFTypeRef<CTFontDescriptorRef> ct_font_desc(
+  base::apple::ScopedCFTypeRef<CTFontDescriptorRef> ct_font_desc(
       MACaptionAppearanceCopyFontDescriptorForStyle(
           kUserDomain, nullptr, kMACaptionAppearanceFontStyleDefault));
 
-  base::ScopedCFTypeRef<CFStringRef> ct_font_family_name(
-      base::mac::CFCast<CFStringRef>(CTFontDescriptorCopyAttribute(
-          ct_font_desc, kCTFontFamilyNameAttribute)));
+  base::apple::ScopedCFTypeRef<CFStringRef> ct_font_family_name(
+      base::apple::CFCast<CFStringRef>(CTFontDescriptorCopyAttribute(
+          ct_font_desc.get(), kCTFontFamilyNameAttribute)));
   if (ct_font_family_name)
-    *font_family = base::SysCFStringRefToUTF8(ct_font_family_name);
+    *font_family = base::SysCFStringRefToUTF8(ct_font_family_name.get());
 
-  base::ScopedCFTypeRef<CFStringRef> ct_font_face_name(
-      base::mac::CFCast<CFStringRef>(
-          CTFontDescriptorCopyAttribute(ct_font_desc, kCTFontNameAttribute)));
+  base::apple::ScopedCFTypeRef<CFStringRef> ct_font_face_name(
+      base::apple::CFCast<CFStringRef>(CTFontDescriptorCopyAttribute(
+          ct_font_desc.get(), kCTFontNameAttribute)));
   if (ct_font_face_name)
-    *font_variant = base::SysCFStringRefToUTF8(ct_font_face_name);
+    *font_variant = base::SysCFStringRefToUTF8(ct_font_face_name.get());
 }
 
 std::string GetMAWindowColorAsCSSColor() {
   MACaptionAppearanceBehavior behavior;
-  base::ScopedCFTypeRef<CGColorRef> cg_color(
+  base::apple::ScopedCFTypeRef<CGColorRef> cg_color(
       MACaptionAppearanceCopyWindowColor(kUserDomain, &behavior));
   bool important = behavior == kMACaptionAppearanceBehaviorUseValue;
   float opacity = MACaptionAppearanceGetWindowOpacity(kUserDomain, &behavior);
@@ -157,16 +156,6 @@ std::string GetMAWindowColorAsCSSColor() {
       SkColorSetA(skia::CGColorRefToSkColor(cg_color.get()), 0xff * opacity);
   return MaybeAddCSSImportant(color_utils::SkColorToRgbaString(rgba_color),
                               important);
-}
-
-// If the window is visible (its opacity is greater than 0), give it padding so
-// it surrounds the text track cue. If it is not visible, its padding should be
-// 0. Webkit uses 0.4em padding so we match that here.
-std::string GetMAWindowPaddingAsCSSNumberInEm() {
-  MACaptionAppearanceBehavior behavior;
-  float opacity = MACaptionAppearanceGetWindowOpacity(kUserDomain, &behavior);
-  bool important = behavior == kMACaptionAppearanceBehaviorUseValue;
-  return MaybeAddCSSImportant(opacity > 0 ? "0.4em" : "0em", important);
 }
 
 std::string GetMAWindowRadiusAsCSSNumberInPixels() {
@@ -191,7 +180,6 @@ absl::optional<CaptionStyle> CaptionStyle::FromSystemSettings() {
   style.text_size = GetMATextScaleAsCSSPercent();
   style.text_shadow = GetMATextEdgeStyleAsCSSShadow();
   style.window_color = GetMAWindowColorAsCSSColor();
-  style.window_padding = GetMAWindowPaddingAsCSSNumberInEm();
   style.window_radius = GetMAWindowRadiusAsCSSNumberInPixels();
 
   GetMAFontAsCSSFontSpecifiers(&style.font_family, &style.font_variant);

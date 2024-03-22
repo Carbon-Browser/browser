@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <set>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/supports_user_data.h"
 #include "extensions/common/extension_id.h"
 #include "ui/gfx/native_widget_types.h"
@@ -62,6 +62,11 @@ class TabDialogs : public base::SupportsUserData::Data {
       const extensions::ExtensionId& app_id,
       content::WebContents* web_contents,
       base::OnceClosure launch_anyways) = 0;
+
+  // Shows the force installed and deprecated app dialog.
+  virtual void ShowForceInstalledPreinstalledDeprecatedAppDialog(
+      const extensions::ExtensionId& extension_id,
+      content::WebContents* web_contents) = 0;
 
   // Shows or hides the ManagePasswords bubble.
   // Pass true for |user_action| if this is a user initiated action.

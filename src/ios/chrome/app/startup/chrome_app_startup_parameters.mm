@@ -1,27 +1,28 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/app/startup/chrome_app_startup_parameters.h"
 
-#include "base/mac/foundation_util.h"
-#include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
-#include "ios/chrome/common/app_group/app_group_constants.h"
-#include "ios/chrome/common/x_callback_url.h"
-#include "ios/components/webui/web_ui_url_constants.h"
+#import "base/apple/bundle_locations.h"
+#import "base/apple/foundation_util.h"
+#import "base/metrics/histogram_functions.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
+#import "components/password_manager/core/browser/manage_passwords_referrer.h"
+#import "ios/chrome/app/startup/app_launch_metrics.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/common/app_group/app_group_constants.h"
+#import "ios/chrome/common/x_callback_url.h"
+#import "ios/components/webui/web_ui_url_constants.h"
 #import "net/base/mac/url_conversions.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/base/url_util.h"
+#import "url/gurl.h"
 
 using base::UmaHistogramEnumeration;
 
@@ -33,6 +34,20 @@ const char kUMAMobileSessionStartActionHistogram[] =
 
 const char kApplicationGroupCommandDelay[] =
     "Startup.ApplicationGroupCommandDelay";
+
+// UMA histogram key for IOS.ExternalAction.
+const char kExternalActionHistogram[] = "IOS.ExternalAction";
+
+// Host string used to detect an "external action" scheme URL.
+NSString* const kExternalActionURLHost = @"ChromeExternalAction";
+
+// Action path string for launching the default browser settings using external
+// actions.
+NSString* const kExternalActionDefaultBrowserSettings =
+    @"DefaultBrowserSettings";
+
+// Action path string for Opening an NTP using external actions.
+NSString* const kExternalActionOpenNTP = @"OpenNTP";
 
 // URL Query String parameter to indicate that this openURL: request arrived
 // here due to a Smart App Banner presentation on a Google.com page.
@@ -52,6 +67,14 @@ NSString* const kWidgetKitHostSearchWidget = @"search-widget";
 NSString* const kWidgetKitHostQuickActionsWidget = @"quick-actions-widget";
 // Host used to identify Dino Game (small) widget.
 NSString* const kWidgetKitHostDinoGameWidget = @"dino-game-widget";
+// Host used to identify the Lockscreen Launcher widget.
+NSString* const kWidgetKitHostLockscreenLauncherWidget =
+    @"lockscreen-launcher-widget";
+// Host used to identify the Chrome Shortcuts widget.
+NSString* const kWidgetKitHostShortcutsWidget = @"shortcuts-widget";
+// Host used to identify the Search Passwords widget.
+NSString* const kWidgetKitHostSearchPasswordsWidget =
+    @"search-passwords-widget";
 // Path for search action.
 NSString* const kWidgetKitActionSearch = @"/search";
 // Path for incognito action.
@@ -60,14 +83,21 @@ NSString* const kWidgetKitActionIncognito = @"/incognito";
 NSString* const kWidgetKitActionVoiceSearch = @"/voicesearch";
 // Path for QR Reader action.
 NSString* const kWidgetKitActionQRReader = @"/qrreader";
+// Path for Lens action.
+NSString* const kWidgetKitActionLens = @"/lens";
 // Path for Game action.
 NSString* const kWidgetKitActionGame = @"/game";
+// Path for open URL action.
+NSString* const kWidgetKitActionOpenURL = @"/open";
+// Path for search passwords action.
+NSString* const kWidgetKitActionSearchPasswords = @"/search-passwords";
 
 const CGFloat kAppGroupTriggersVoiceSearchTimeout = 15.0;
 
 // Values of the UMA Startup.MobileSessionStartAction histogram.
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
+// LINT.IfChange
 enum MobileSessionStartAction {
   // Logged when an application passes an http URL to Chrome using the custom
   // registered scheme (f.e. googlechrome).
@@ -91,10 +121,14 @@ enum MobileSessionStartAction {
   // system from all other apps.
   START_ACTION_OPEN_HTTPS_FROM_OS = 8,
   START_ACTION_WIDGET_KIT_COMMAND = 9,
+  // Logged when Chrome is opened via the external action scheme.
+  START_EXTERNAL_ACTION = 10,
   MOBILE_SESSION_START_ACTION_COUNT
 };
+// LINT.ThenChange(//tools/metrics/histograms/metadata/ios/enums.xml)
 
 // Values of the UMA iOS.SearchExtension.Action histogram.
+// LINT.IfChange
 enum SearchExtensionAction {
   ACTION_NO_ACTION,
   ACTION_NEW_SEARCH,
@@ -104,12 +138,15 @@ enum SearchExtensionAction {
   ACTION_OPEN_URL,
   ACTION_SEARCH_TEXT,
   ACTION_SEARCH_IMAGE,
+  ACTION_LENS,
   SEARCH_EXTENSION_ACTION_COUNT,
 };
+// LINT.ThenChange(//tools/metrics/histograms/metadata/ios/enums.xml)
 
 // Values of the UMA IOS.WidgetKit.Action histogram.
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
+// LINT.IfChange
 enum class WidgetKitExtensionAction {
   ACTION_DINO_WIDGET_GAME = 0,
   ACTION_SEARCH_WIDGET_SEARCH = 1,
@@ -117,8 +154,32 @@ enum class WidgetKitExtensionAction {
   ACTION_QUICK_ACTIONS_INCOGNITO = 3,
   ACTION_QUICK_ACTIONS_VOICE_SEARCH = 4,
   ACTION_QUICK_ACTIONS_QR_READER = 5,
-  kMaxValue = ACTION_QUICK_ACTIONS_QR_READER,
+  ACTION_LOCKSCREEN_LAUNCHER_SEARCH = 6,
+  ACTION_LOCKSCREEN_LAUNCHER_INCOGNITO = 7,
+  ACTION_LOCKSCREEN_LAUNCHER_VOICE_SEARCH = 8,
+  ACTION_LOCKSCREEN_LAUNCHER_GAME = 9,
+  ACTION_QUICK_ACTIONS_LENS = 10,
+  ACTION_SHORTCUTS_SEARCH = 11,
+  ACTION_SHORTCUTS_OPEN = 12,
+  ACTION_SEARCH_PASSWORDS_WIDGET_SEARCH_PASSWORDS = 13,
+  kMaxValue = ACTION_SEARCH_PASSWORDS_WIDGET_SEARCH_PASSWORDS,
 };
+// LINT.ThenChange(//tools/metrics/histograms/metadata/ios/enums.xml)
+
+// Values of the UMA IOS.ExternalAction histogram.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+// LINT.IfChange
+enum class IOSExternalAction {
+  // Logged when Chrome is passed an invalid action.
+  ACTION_INVALID = 0,
+  // Logged when Chrome is passed a "OpenNTP" action.
+  ACTION_OPEN_NTP = 1,
+  // Logged when Chrome is passed a "DefaultBrowserSettings" action.
+  ACTION_DEFAULT_BROWSER_SETTINGS = 2,
+  kMaxValue = ACTION_DEFAULT_BROWSER_SETTINGS,
+};
+// LINT.ThenChange(//tools/metrics/histograms/metadata/ios/enums.xml)
 
 // Histogram helper to log the UMA IOS.WidgetKit.Action histogram.
 void LogWidgetKitAction(WidgetKitExtensionAction action) {
@@ -140,6 +201,7 @@ bool CallerAppIsFirstParty(MobileSessionCallerApp callerApp) {
     case CALLER_APP_GOOGLE_CHROME_SEARCH_EXTENSION:
     case CALLER_APP_GOOGLE_CHROME_CONTENT_EXTENSION:
     case CALLER_APP_GOOGLE_CHROME_SHARE_EXTENSION:
+    case CALLER_APP_GOOGLE_CHROME_OPEN_EXTENSION:
     case CALLER_APP_GOOGLE_CHROME:
       return true;
     case CALLER_APP_OTHER:
@@ -170,9 +232,11 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
 - (instancetype)initWithExternalURL:(const GURL&)externalURL
                   declaredSourceApp:(NSString*)declaredSourceApp
                     secureSourceApp:(NSString*)secureSourceApp
-                        completeURL:(NSURL*)completeURL {
+                        completeURL:(NSURL*)completeURL
+                    applicationMode:(ApplicationModeForTabOpening)mode {
   self = [super initWithExternalURL:externalURL
-                        completeURL:net::GURLWithNSURL(completeURL)];
+                        completeURL:net::GURLWithNSURL(completeURL)
+                    applicationMode:mode];
   if (self) {
     _declaredSourceApp = [declaredSourceApp copy];
     _secureSourceApp = [secureSourceApp copy];
@@ -187,39 +251,65 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
   if (!gurl.is_valid() || gurl.scheme().length() == 0)
     return nil;
 
-  if ([completeURL.scheme isEqual:kWidgetKitSchemeChrome]) {
+  // Log browser started indirectly for default browser promo experiment stats.
+  LogBrowserIndirectlylaunched();
+
+  if ([completeURL.scheme isEqualToString:kWidgetKitSchemeChrome]) {
     UMA_HISTOGRAM_ENUMERATION(kUMAMobileSessionStartActionHistogram,
                               START_ACTION_WIDGET_KIT_COMMAND,
                               MOBILE_SESSION_START_ACTION_COUNT);
 
+    base::UmaHistogramEnumeration(kAppLaunchSource, AppLaunchSource::WIDGET);
+
     const char* command = "";
     NSString* sourceWidget = completeURL.host;
+    NSString* externalText = nil;
 
-    if ([completeURL.path isEqual:kWidgetKitActionSearch]) {
+    if ([completeURL.path isEqualToString:kWidgetKitActionSearch]) {
       command = app_group::kChromeAppGroupFocusOmniboxCommand;
-    } else if ([completeURL.path isEqual:kWidgetKitActionIncognito]) {
+    } else if ([completeURL.path isEqualToString:kWidgetKitActionIncognito]) {
       command = app_group::kChromeAppGroupIncognitoSearchCommand;
-    } else if ([completeURL.path isEqual:kWidgetKitActionVoiceSearch]) {
+    } else if ([completeURL.path isEqualToString:kWidgetKitActionVoiceSearch]) {
       command = app_group::kChromeAppGroupVoiceSearchCommand;
-    } else if ([completeURL.path isEqual:kWidgetKitActionQRReader]) {
+    } else if ([completeURL.path isEqualToString:kWidgetKitActionQRReader]) {
       command = app_group::kChromeAppGroupQRScannerCommand;
-    } else if ([completeURL.path isEqual:kWidgetKitActionGame]) {
-      LogWidgetKitAction(WidgetKitExtensionAction::ACTION_DINO_WIDGET_GAME);
+    } else if ([completeURL.path isEqualToString:kWidgetKitActionLens]) {
+      command = app_group::kChromeAppGroupLensCommand;
+    } else if ([completeURL.path isEqual:kWidgetKitActionOpenURL]) {
+      command = app_group::kChromeAppGroupOpenURLCommand;
+      std::string urlQueryParam;
+      if (net::GetValueForKeyInQuery(net::GURLWithNSURL(completeURL), "url",
+                                     &urlQueryParam)) {
+        externalText = base::SysUTF8ToNSString(urlQueryParam);
+      }
+    } else if ([completeURL.path isEqual:kWidgetKitActionSearchPasswords]) {
+      command = app_group::kChromeAppGroupSearchPasswordsCommand;
+    } else if ([completeURL.path isEqualToString:kWidgetKitActionGame]) {
+      if ([sourceWidget isEqualToString:kWidgetKitHostDinoGameWidget]) {
+        LogWidgetKitAction(WidgetKitExtensionAction::ACTION_DINO_WIDGET_GAME);
+      } else if ([sourceWidget
+                     isEqualToString:kWidgetKitHostLockscreenLauncherWidget]) {
+        LogWidgetKitAction(
+            WidgetKitExtensionAction::ACTION_LOCKSCREEN_LAUNCHER_GAME);
+      }
 
       LogLikelyInterestedDefaultBrowserUserActivity(DefaultPromoTypeGeneral);
 
       GURL URL(
           base::StringPrintf("%s://%s", kChromeUIScheme, kChromeUIDinoHost));
-      return
-          [[ChromeAppStartupParameters alloc] initWithExternalURL:URL
-                                                declaredSourceApp:appId
-                                                  secureSourceApp:sourceWidget
-                                                      completeURL:completeURL];
+      ChromeAppStartupParameters* appStartupParameters =
+          [[ChromeAppStartupParameters alloc]
+              initWithExternalURL:URL
+                declaredSourceApp:appId
+                  secureSourceApp:sourceWidget
+                      completeURL:completeURL
+                  applicationMode:ApplicationModeForTabOpening::NORMAL];
+      return appStartupParameters;
     }
 
     NSString* commandString = base::SysUTF8ToNSString(command);
     return [self newAppStartupParametersForCommand:commandString
-                                  withExternalText:nil
+                                  withExternalText:externalText
                                   withExternalData:nil
                                          withIndex:0
                                            withURL:nil
@@ -227,6 +317,8 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
                        fromSecureSourceApplication:sourceWidget];
 
   } else if (IsXCallbackURL(gurl)) {
+    base::UmaHistogramEnumeration(kAppLaunchSource,
+                                  AppLaunchSource::X_CALLBACK);
     // TODO(crbug.com/228098): Temporary fix.
     NSString* action = [completeURL path];
     // Currently only "open" and "extension-command" are supported.
@@ -266,15 +358,29 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         XCallbackPoaToPostOpeningAction(parameters["poa"]);
 
     ChromeAppStartupParameters* startupParameters =
-        [[ChromeAppStartupParameters alloc] initWithExternalURL:url
-                                              declaredSourceApp:appId
-                                                secureSourceApp:nil
-                                                    completeURL:completeURL];
+        [[ChromeAppStartupParameters alloc]
+            initWithExternalURL:url
+              declaredSourceApp:appId
+                secureSourceApp:nil
+                    completeURL:completeURL
+                applicationMode:ApplicationModeForTabOpening::UNDETERMINED];
     // postOpeningAction can only be NO_ACTION or SHOW_DEFAULT_BROWSER_SETTINGS
     // (these are the only values returned by `XCallbackPoaToPostOpeningAction`)
     // so this assignment should not DCHECK, no matter what the URL is.
     startupParameters.postOpeningAction = postOpeningAction;
     return startupParameters;
+  } else if (IsExternalActionSchemeHandlingEnabled() &&
+             [self isChromeExternalActionURL:completeURL]) {
+    base::RecordAction(
+        base::UserMetricsAction("MobileExternalActionURLOpened"));
+    UMA_HISTOGRAM_ENUMERATION(kUMAMobileSessionStartActionHistogram,
+                              START_EXTERNAL_ACTION,
+                              MOBILE_SESSION_START_ACTION_COUNT);
+    base::UmaHistogramEnumeration(kAppLaunchSource,
+                                  AppLaunchSource::EXTERNAL_ACTION);
+
+    return [self getExternalActionStartupParameterWithAppId:appId
+                                                completeURL:completeURL];
   } else if (gurl.SchemeIsFile()) {
     UMA_HISTOGRAM_ENUMERATION(kUMAMobileSessionStartActionHistogram,
                               START_ACTION_OPEN_FILE,
@@ -289,10 +395,12 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
     GURL externalURL = gurl.ReplaceComponents(replacements);
     if (!externalURL.is_valid())
       return nil;
-    return [[ChromeAppStartupParameters alloc] initWithExternalURL:externalURL
-                                                 declaredSourceApp:appId
-                                                   secureSourceApp:nil
-                                                       completeURL:completeURL];
+    return [[ChromeAppStartupParameters alloc]
+        initWithExternalURL:externalURL
+          declaredSourceApp:appId
+            secureSourceApp:nil
+                completeURL:completeURL
+            applicationMode:ApplicationModeForTabOpening::NORMAL];
   } else {
     GURL externalURL = gurl;
     BOOL openedViaSpecificScheme = NO;
@@ -310,6 +418,8 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
       // `url` scheme ends with an 's'.
       BOOL useHttps = gurl.scheme()[gurl.scheme().length() - 1] == 's';
       action = useHttps ? START_ACTION_OPEN_HTTPS : START_ACTION_OPEN_HTTP;
+      base::UmaHistogramEnumeration(kAppLaunchSource,
+                                    AppLaunchSource::LINK_OPENED_FROM_APP);
       base::RecordAction(base::UserMetricsAction("MobileFirstPartyViewIntent"));
 
       GURL::Replacements replace_scheme;
@@ -323,28 +433,92 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
     UMA_HISTOGRAM_ENUMERATION(kUMAMobileSessionStartActionHistogram, action,
                               MOBILE_SESSION_START_ACTION_COUNT);
     // An HTTP(S) URL open that opened Chrome (e.g. default browser open) should
-    // be logged as siginficnat activity for a potential user that would want
+    // be logged as significant activity for a potential user that would want
     // Chrome as their default browser in case the user changes away from
     // Chrome. This will leave a trace of this activity for re-prompting.
     LogLikelyInterestedDefaultBrowserUserActivity(DefaultPromoTypeGeneral);
 
     if (action == START_ACTION_OPEN_HTTP_FROM_OS ||
         action == START_ACTION_OPEN_HTTPS_FROM_OS) {
-      [[NSUserDefaults standardUserDefaults] setObject:[NSDate date]
-                                                forKey:kLastHTTPURLOpenTime];
+      base::UmaHistogramEnumeration(kAppLaunchSource,
+                                    AppLaunchSource::LINK_OPENED_FROM_OS);
+      LogOpenHTTPURLFromExternalURL();
     }
 
     if (!externalURL.is_valid())
       return nil;
-    ChromeAppStartupParameters* params =
-        [[ChromeAppStartupParameters alloc] initWithExternalURL:externalURL
-                                              declaredSourceApp:appId
-                                                secureSourceApp:nil
-                                                    completeURL:completeURL];
+    ChromeAppStartupParameters* params = [[ChromeAppStartupParameters alloc]
+        initWithExternalURL:externalURL
+          declaredSourceApp:appId
+            secureSourceApp:nil
+                completeURL:completeURL
+            applicationMode:ApplicationModeForTabOpening::UNDETERMINED];
     params.openedViaFirstPartyScheme =
         openedViaSpecificScheme && CallerAppIsFirstParty(params.callerApp);
     return params;
   }
+}
+
+// Returns true if the URL passed is an external action URL, defined by having
+// the `kExternalActionURLHost` as host.
++ (BOOL)isChromeExternalActionURL:(NSURL*)URL {
+  return [URL.host isEqualToString:kExternalActionURLHost];
+}
+
+// Returns a new `ChromeAppStartupParameters` for a given `appId`, `completeURL`
+// and `externalURL`.
++ (ChromeAppStartupParameters*)
+    newExternalActionAppStartupParameters:(NSString*)appId
+                              completeURL:(NSURL*)completeURL
+                              externalURL:(const GURL&)externalURL {
+  return [[ChromeAppStartupParameters alloc]
+      initWithExternalURL:externalURL
+        declaredSourceApp:appId
+          secureSourceApp:nil
+              completeURL:completeURL
+          applicationMode:ApplicationModeForTabOpening::UNDETERMINED];
+}
+
+// Returns the correct startup parameters for a given external action passed as
+// path to the external action "scheme". Returns nil (no-op) if the action is
+// not recognized.
++ (instancetype)getExternalActionStartupParameterWithAppId:(NSString*)appId
+                                               completeURL:(NSURL*)completeURL {
+  ChromeAppStartupParameters* params;
+  IOSExternalAction action;
+  NSString* path;
+
+  // Separate the path into its components and ensure there is only one
+  // component after the first "/".
+  NSArray<NSString*>* pathComponents = completeURL.pathComponents;
+  if ([pathComponents count] == 2 && [pathComponents[0] isEqualToString:@"/"]) {
+    path = pathComponents[1];
+  }
+
+  if ([path isEqualToString:kExternalActionOpenNTP]) {
+    base::RecordAction(
+        base::UserMetricsAction("MobileExternalActionURLOpenedWithOpenNTP"));
+    action = IOSExternalAction::ACTION_OPEN_NTP;
+    params =
+        [self newExternalActionAppStartupParameters:appId
+                                        completeURL:completeURL
+                                        externalURL:GURL(kChromeUINewTabURL)];
+  } else if ([path isEqualToString:kExternalActionDefaultBrowserSettings]) {
+    base::RecordAction(base::UserMetricsAction(
+        "MobileExternalActionURLOpenedWithDefaultBrowserSettings"));
+    action = IOSExternalAction::ACTION_DEFAULT_BROWSER_SETTINGS;
+    params = [self newExternalActionAppStartupParameters:appId
+                                             completeURL:completeURL
+                                             externalURL:GURL()];
+    params.postOpeningAction = EXTERNAL_ACTION_SHOW_BROWSER_SETTINGS;
+  } else {
+    action = IOSExternalAction::ACTION_INVALID;
+    params = nil;
+  }
+
+  base::UmaHistogramEnumeration(kExternalActionHistogram, action);
+  params.openedViaFirstPartyScheme = CallerAppIsFirstParty(params.callerApp);
+  return params;
 }
 
 + (instancetype)newExtensionCommandAppStartupParametersFromWithURL:(NSURL*)url
@@ -354,7 +528,7 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
 
   NSString* commandDictionaryPreference =
       base::SysUTF8ToNSString(app_group::kChromeAppGroupCommandPreference);
-  NSDictionary* commandDictionary = base::mac::ObjCCast<NSDictionary>(
+  NSDictionary* commandDictionary = base::apple::ObjCCast<NSDictionary>(
       [sharedDefaults objectForKey:commandDictionaryPreference]);
 
   [sharedDefaults removeObjectForKey:commandDictionaryPreference];
@@ -369,32 +543,32 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
 
   NSString* commandCallerPreference =
       base::SysUTF8ToNSString(app_group::kChromeAppGroupCommandAppPreference);
-  NSString* commandCaller = base::mac::ObjCCast<NSString>(
+  NSString* commandCaller = base::apple::ObjCCast<NSString>(
       [commandDictionary objectForKey:commandCallerPreference]);
 
   NSString* commandPreference = base::SysUTF8ToNSString(
       app_group::kChromeAppGroupCommandCommandPreference);
-  NSString* command = base::mac::ObjCCast<NSString>(
+  NSString* command = base::apple::ObjCCast<NSString>(
       [commandDictionary objectForKey:commandPreference]);
 
   NSString* commandTimePreference =
       base::SysUTF8ToNSString(app_group::kChromeAppGroupCommandTimePreference);
-  id commandTime = base::mac::ObjCCast<NSDate>(
+  id commandTime = base::apple::ObjCCast<NSDate>(
       [commandDictionary objectForKey:commandTimePreference]);
 
   NSString* commandTextPreference =
       base::SysUTF8ToNSString(app_group::kChromeAppGroupCommandTextPreference);
-  NSString* externalText = base::mac::ObjCCast<NSString>(
+  NSString* externalText = base::apple::ObjCCast<NSString>(
       [commandDictionary objectForKey:commandTextPreference]);
 
   NSString* commandDataPreference =
       base::SysUTF8ToNSString(app_group::kChromeAppGroupCommandDataPreference);
-  NSData* externalData = base::mac::ObjCCast<NSData>(
+  NSData* externalData = base::apple::ObjCCast<NSData>(
       [commandDictionary objectForKey:commandDataPreference]);
 
   NSString* commandIndexPreference =
       base::SysUTF8ToNSString(app_group::kChromeAppGroupCommandIndexPreference);
-  NSNumber* index = base::mac::ObjCCast<NSNumber>(
+  NSNumber* index = base::apple::ObjCCast<NSNumber>(
       [commandDictionary objectForKey:commandIndexPreference]);
 
   if (!commandCaller || !command || !commandTimePreference) {
@@ -434,7 +608,8 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         initWithExternalURL:GURL(kChromeUINewTabURL)
           declaredSourceApp:appId
             secureSourceApp:secureSourceApp
-                completeURL:url];
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::NORMAL];
     [params setPostOpeningAction:START_VOICE_SEARCH];
     action = ACTION_NEW_VOICE_SEARCH;
   }
@@ -445,7 +620,8 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         initWithExternalURL:GURL(kChromeUINewTabURL)
           declaredSourceApp:appId
             secureSourceApp:secureSourceApp
-                completeURL:url];
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::NORMAL];
     action = ACTION_NO_ACTION;
   }
 
@@ -456,7 +632,8 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         initWithExternalURL:GURL(kChromeUINewTabURL)
           declaredSourceApp:appId
             secureSourceApp:secureSourceApp
-                completeURL:url];
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::NORMAL];
     [params setPostOpeningAction:FOCUS_OMNIBOX];
     action = ACTION_NEW_SEARCH;
   }
@@ -468,11 +645,12 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
     GURL externalGURL(base::SysNSStringToUTF8(externalText));
     if (!externalGURL.is_valid() || !externalGURL.SchemeIsHTTPOrHTTPS())
       return nil;
-    params =
-        [[ChromeAppStartupParameters alloc] initWithExternalURL:externalGURL
-                                              declaredSourceApp:appId
-                                                secureSourceApp:secureSourceApp
-                                                    completeURL:url];
+    params = [[ChromeAppStartupParameters alloc]
+        initWithExternalURL:externalGURL
+          declaredSourceApp:appId
+            secureSourceApp:secureSourceApp
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::UNDETERMINED];
     action = ACTION_OPEN_URL;
   }
 
@@ -487,7 +665,8 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         initWithExternalURL:GURL(kChromeUINewTabURL)
           declaredSourceApp:appId
             secureSourceApp:secureSourceApp
-                completeURL:url];
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::UNDETERMINED];
 
     params.textQuery = externalText;
 
@@ -505,7 +684,8 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         initWithExternalURL:GURL(kChromeUINewTabURL)
           declaredSourceApp:appId
             secureSourceApp:secureSourceApp
-                completeURL:url];
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::UNDETERMINED];
 
     params.imageSearchData = externalData;
 
@@ -519,9 +699,23 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         initWithExternalURL:GURL(kChromeUINewTabURL)
           declaredSourceApp:appId
             secureSourceApp:secureSourceApp
-                completeURL:url];
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::NORMAL];
     [params setPostOpeningAction:START_QR_CODE_SCANNER];
+
     action = ACTION_NEW_QR_CODE_SEARCH;
+  }
+
+  if ([command isEqualToString:base::SysUTF8ToNSString(
+                                   app_group::kChromeAppGroupLensCommand)]) {
+    params = [[ChromeAppStartupParameters alloc]
+        initWithExternalURL:GURL()
+          declaredSourceApp:appId
+            secureSourceApp:secureSourceApp
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::NORMAL];
+    [params setPostOpeningAction:START_LENS_FROM_HOME_SCREEN_WIDGET];
+    action = ACTION_LENS;
   }
 
   if ([command isEqualToString:
@@ -531,10 +725,23 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         initWithExternalURL:GURL(kChromeUINewTabURL)
           declaredSourceApp:appId
             secureSourceApp:secureSourceApp
-                completeURL:url];
-    [params setLaunchInIncognito:YES];
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::INCOGNITO];
     [params setPostOpeningAction:FOCUS_OMNIBOX];
     action = ACTION_NEW_INCOGNITO_SEARCH;
+  }
+
+  if ([command isEqualToString:
+                   base::SysUTF8ToNSString(
+                       app_group::kChromeAppGroupSearchPasswordsCommand)]) {
+    params = [[ChromeAppStartupParameters alloc]
+        initWithExternalURL:GURL()
+          declaredSourceApp:appId
+            secureSourceApp:secureSourceApp
+                completeURL:url
+            applicationMode:ApplicationModeForTabOpening::NORMAL];
+    [params setPostOpeningAction:SEARCH_PASSWORDS];
+    action = ACTION_NO_ACTION;
   }
 
   if (action != ACTION_NO_ACTION) {
@@ -542,6 +749,10 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
     // Search, search clipboard content) is activity that should indicate a user
     // that would be interested in setting Chrome as the default browser.
     LogLikelyInterestedDefaultBrowserUserActivity(DefaultPromoTypeGeneral);
+
+    // Log browser started indirectly for default browser promo experiment
+    // stats.
+    LogBrowserIndirectlylaunched();
   }
 
   if ([secureSourceApp
@@ -575,6 +786,10 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
             WidgetKitExtensionAction::ACTION_QUICK_ACTIONS_QR_READER);
         break;
 
+      case ACTION_LENS:
+        LogWidgetKitAction(WidgetKitExtensionAction::ACTION_QUICK_ACTIONS_LENS);
+        break;
+
       case ACTION_NEW_INCOGNITO_SEARCH:
         LogWidgetKitAction(
             WidgetKitExtensionAction::ACTION_QUICK_ACTIONS_INCOGNITO);
@@ -584,6 +799,51 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
         NOTREACHED();
         break;
     }
+  }
+  if ([secureSourceApp
+          isEqualToString:kWidgetKitHostLockscreenLauncherWidget]) {
+    switch (action) {
+      case ACTION_NEW_SEARCH:
+        LogWidgetKitAction(
+            WidgetKitExtensionAction::ACTION_LOCKSCREEN_LAUNCHER_SEARCH);
+        break;
+
+      case ACTION_NEW_INCOGNITO_SEARCH:
+        LogWidgetKitAction(
+            WidgetKitExtensionAction::ACTION_LOCKSCREEN_LAUNCHER_INCOGNITO);
+        break;
+
+      case ACTION_NEW_VOICE_SEARCH:
+        LogWidgetKitAction(
+            WidgetKitExtensionAction::ACTION_LOCKSCREEN_LAUNCHER_VOICE_SEARCH);
+        break;
+
+      default:
+        NOTREACHED();
+        break;
+    }
+  }
+  if ([secureSourceApp isEqualToString:kWidgetKitHostShortcutsWidget]) {
+    switch (action) {
+      case ACTION_NEW_SEARCH:
+        LogWidgetKitAction(WidgetKitExtensionAction::ACTION_SHORTCUTS_SEARCH);
+        break;
+      case ACTION_OPEN_URL:
+        LogWidgetKitAction(WidgetKitExtensionAction::ACTION_SHORTCUTS_OPEN);
+        break;
+      default:
+        NOTREACHED();
+        break;
+    }
+  }
+  if ([secureSourceApp isEqualToString:kWidgetKitHostSearchPasswordsWidget]) {
+    LogWidgetKitAction(WidgetKitExtensionAction::
+                           ACTION_SEARCH_PASSWORDS_WIDGET_SEARCH_PASSWORDS);
+    UMA_HISTOGRAM_ENUMERATION(
+        "PasswordManager.ManagePasswordsReferrer",
+        password_manager::ManagePasswordsReferrer::kSearchPasswordsWidget);
+    base::RecordAction(base::UserMetricsAction(
+        "MobileSearchPasswordsWidgetOpenPasswordManager"));
   }
   return params;
 }
@@ -601,6 +861,10 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
   if ([_secureSourceApp
           isEqualToString:app_group::kOpenCommandSourceShareExtension])
     return CALLER_APP_GOOGLE_CHROME_SHARE_EXTENSION;
+  if ([_secureSourceApp
+          isEqualToString:app_group::kOpenCommandSourceOpenExtension]) {
+    return CALLER_APP_GOOGLE_CHROME_OPEN_EXTENSION;
+  }
 
   if (![_declaredSourceApp length]) {
     if (self.completeURL.SchemeIs(url::kHttpScheme) ||
@@ -614,8 +878,9 @@ TabOpeningPostOpeningAction XCallbackPoaToPostOpeningAction(
   }
 
   if ([_declaredSourceApp
-          isEqualToString:[[NSBundle mainBundle] bundleIdentifier]])
+          isEqualToString:[base::apple::FrameworkBundle() bundleIdentifier]]) {
     return CALLER_APP_GOOGLE_CHROME;
+  }
   if ([_declaredSourceApp isEqualToString:@"com.google.GoogleMobile"])
     return CALLER_APP_GOOGLE_SEARCH;
   if ([_declaredSourceApp isEqualToString:@"com.google.Gmail"])

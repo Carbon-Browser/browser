@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/check.h"
 #include "base/notreached.h"
 #include "components/autofill/core/browser/form_parsing/regex_patterns_inl.h"
+#include "components/autofill/core/browser/heuristic_source.h"
 #include "components/autofill/core/common/autofill_features.h"
 
 namespace autofill {
@@ -29,7 +30,7 @@ base::span<const MatchPatternRef> GetMatchPatterns(
   if (!language_code.empty() && it == kPatternMap.end())
     it = kPatternMap.find(std::make_pair(name, ""));
   CHECK(it != kPatternMap.end());
-#if BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
+#if BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
   switch (pattern_source) {
     case PatternSource::kDefault:
       return it->second[0];
@@ -52,36 +53,8 @@ base::span<const MatchPatternRef> GetMatchPatterns(
 
 }  // namespace
 
-PatternSource GetActivePatternSource() {
-#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
-  return PatternSource::kLegacy;
-#else
-  if (!base::FeatureList::IsEnabled(features::kAutofillParsingPatternProvider))
-    return PatternSource::kLegacy;
-  const std::string& source =
-      features::kAutofillParsingPatternActiveSource.Get();
-  DCHECK(source == "default" || source == "experimental" ||
-         source == "nextgen" || source == "legacy");
-  return source == "default"        ? PatternSource::kDefault
-         : source == "experimental" ? PatternSource::kExperimental
-         : source == "nextgen"      ? PatternSource::kNextGen
-         : source == "legacy"       ? PatternSource::kLegacy
-                                    : PatternSource::kDefault;
-#endif
-}
-
-DenseSet<PatternSource> GetNonActivePatternSources() {
-#if !BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
-  return {};
-#else
-  if (!base::FeatureList::IsEnabled(features::kAutofillParsingPatternProvider))
-    return {};
-  DenseSet<PatternSource> sources{
-      PatternSource::kLegacy, PatternSource::kDefault,
-      PatternSource::kExperimental, PatternSource::kNextGen};
-  sources.erase(GetActivePatternSource());
-  return sources;
-#endif
+absl::optional<PatternSource> GetActivePatternSource() {
+  return HeuristicSourceToPatternSource(GetActiveHeuristicSource());
 }
 
 base::span<const MatchPatternRef> GetMatchPatterns(
@@ -96,8 +69,12 @@ base::span<const MatchPatternRef> GetMatchPatterns(
     ServerFieldType type,
     absl::optional<LanguageCode> language_code,
     PatternSource pattern_source) {
-  return GetMatchPatterns(FieldTypeToStringPiece(type), language_code,
+  return GetMatchPatterns(FieldTypeToStringView(type), language_code,
                           pattern_source);
+}
+
+bool IsSupportedLanguageCode(LanguageCode language_code) {
+  return kLanguages.contains(*language_code);
 }
 
 // The dereferencing operator implements the distinction between ordinary and

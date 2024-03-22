@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ class MEDIA_MOJO_EXPORT MojoCdmHelper final : public CdmAuxiliaryHelper,
 #if BUILDFLAG(IS_WIN)
   void GetMediaFoundationCdmData(GetMediaFoundationCdmDataCB callback) final;
   void SetCdmClientToken(const std::vector<uint8_t>& client_token) final;
-  void OnCdmEvent(CdmEvent event) final;
+  void OnCdmEvent(CdmEvent event, HRESULT hresult) final;
 #endif  // BUILDFLAG(IS_WIN)
 
   // MojoCdmFileIO::Delegate implementation.

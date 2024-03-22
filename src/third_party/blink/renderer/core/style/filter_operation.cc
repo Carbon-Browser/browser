@@ -42,8 +42,9 @@ void ReferenceFilterOperation::Trace(Visitor* visitor) const {
 
 gfx::RectF ReferenceFilterOperation::MapRect(const gfx::RectF& rect) const {
   const auto* last_effect = filter_ ? filter_->LastEffect() : nullptr;
-  if (!last_effect)
+  if (!last_effect) {
     return rect;
+  }
   return last_effect->MapRect(rect);
 }
 
@@ -54,13 +55,15 @@ ReferenceFilterOperation::ReferenceFilterOperation(const AtomicString& url,
       resource_(resource) {}
 
 void ReferenceFilterOperation::AddClient(SVGResourceClient& client) {
-  if (resource_)
+  if (resource_) {
     resource_->AddClient(client);
+  }
 }
 
 void ReferenceFilterOperation::RemoveClient(SVGResourceClient& client) {
-  if (resource_)
+  if (resource_) {
     resource_->RemoveClient(client);
+  }
 }
 
 bool ReferenceFilterOperation::IsEqualAssumingSameType(
@@ -78,7 +81,7 @@ gfx::RectF BlurFilterOperation::MapRect(const gfx::RectF& rect) const {
 gfx::RectF DropShadowFilterOperation::MapRect(const gfx::RectF& rect) const {
   float std_deviation = shadow_.Blur();
   return FEDropShadow::MapEffect(gfx::SizeF(std_deviation, std_deviation),
-                                 shadow_.Location(), rect);
+                                 shadow_.Offset(), rect);
 }
 
 gfx::RectF BoxReflectFilterOperation::MapRect(const gfx::RectF& rect) const {

@@ -1,13 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SYSTEM_POWER_PERIPHERAL_BATTERY_TESTS_H_
 #define ASH_SYSTEM_POWER_PERIPHERAL_BATTERY_TESTS_H_
 
+#include <optional>
+
 #include "ash/system/power/peripheral_battery_listener.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Constants common to peripheral battery listener and notifier tests.
 
@@ -80,9 +81,9 @@ inline constexpr char kStylusChargerDeviceName[] = "garaged-stylus-charger";
 // Provide pretty-printers in aid of EXPECT_CALL() diagnostics.
 namespace absl {
 
-inline void PrintTo(const absl::optional<uint8_t>& optional, std::ostream* os) {
+inline void PrintTo(const std::optional<uint8_t>& optional, std::ostream* os) {
   if (!optional.has_value()) {
-    *os << "absl::nullopt";
+    *os << "std::nullopt";
   } else {
     *os << (int)*optional;
   }

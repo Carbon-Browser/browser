@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 
 namespace blink {
 
-class Thread;
+class NonMainThread;
 
 class PLATFORM_EXPORT MemoryPressureListener : public GarbageCollectedMixin {
  public:
@@ -40,6 +40,15 @@ class PLATFORM_EXPORT MemoryPressureListenerRegistry final
   // Can be overridden in web tests via internals.
   static bool IsLowEndDevice();
 
+  // Returns true when IsLowEndDevice() returns true or when the feature
+  // PartialLowEndModeOnMidEndDevices is enabled on Android devices.
+  static bool IsLowEndDeviceOrPartialLowEndModeEnabled();
+
+  // Returns true when IsLowEndDevice() Or PartialLowEndModeOnMidEndDevices is
+  // enabled and canvas font cache is not excluded from the features.
+  static bool
+  IsLowEndDeviceOrPartialLowEndModeEnabledIncludingCanvasFontCache();
+
   // Returns true when available memory is low.
   // This is not cheap and should not be called repeatedly.
   static bool IsCurrentlyLowMemory();
@@ -56,8 +65,8 @@ class PLATFORM_EXPORT MemoryPressureListenerRegistry final
   MemoryPressureListenerRegistry& operator=(
       const MemoryPressureListenerRegistry&) = delete;
 
-  void RegisterThread(Thread*) LOCKS_EXCLUDED(threads_lock_);
-  void UnregisterThread(Thread*) LOCKS_EXCLUDED(threads_lock_);
+  void RegisterThread(NonMainThread*) LOCKS_EXCLUDED(threads_lock_);
+  void UnregisterThread(NonMainThread*) LOCKS_EXCLUDED(threads_lock_);
 
   void RegisterClient(MemoryPressureListener*);
   void UnregisterClient(MemoryPressureListener*);
@@ -78,7 +87,7 @@ class PLATFORM_EXPORT MemoryPressureListenerRegistry final
   static bool is_low_end_device_;
 
   HeapHashSet<WeakMember<MemoryPressureListener>> clients_;
-  HashSet<Thread*> threads_ GUARDED_BY(threads_lock_);
+  HashSet<NonMainThread*> threads_ GUARDED_BY(threads_lock_);
   base::Lock threads_lock_;
 };
 

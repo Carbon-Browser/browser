@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -126,6 +126,10 @@ std::unique_ptr<GeneratePredictionsRequest> GetPredictionRequestProto(
     default:
       NOTREACHED()
           << "CPSS only supports notifications and geolocation at the moment.";
+  }
+  if (!entity.url.is_empty()) {
+    SiteFeatures* site_features = proto_request->mutable_site_features();
+    site_features->set_origin(entity.url.spec());
   }
 
   return proto_request;

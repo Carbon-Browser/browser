@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <string>
 
+#include "base/strings/string_piece.h"
+#include "components/metrics/metrics_log.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace metrics {
@@ -43,21 +45,30 @@ class LogStore {
   // Will trigger a DCHECK if there is no staged log.
   virtual absl::optional<uint64_t> staged_log_user_id() const = 0;
 
+  // LogMetadata associated with the staged log.
+  virtual const LogMetadata staged_log_metadata() const = 0;
+
   // Populates staged_log() with the next stored log to send.
   // The order in which logs are staged is up to the implementor.
   // The staged_log must remain the same even if additional logs are added.
   // Should only be called if has_unsent_logs() is true.
   virtual void StageNextLog() = 0;
 
-  // Discards the staged log.
-  virtual void DiscardStagedLog() = 0;
+  // Discards the staged log. |reason| is the reason why the log was discarded
+  // (used for debugging through chrome://metrics-internals).
+  virtual void DiscardStagedLog(base::StringPiece reason = "") = 0;
 
   // Marks the staged log as sent, DiscardStagedLog() shall still be called if
   // the staged log needs discarded.
   virtual void MarkStagedLogAsSent() = 0;
 
-  // Trims saved logs and writes to persistent storage.
-  virtual void TrimAndPersistUnsentLogs() = 0;
+  // Trims saved logs and writes them to persistent storage. When
+  // |overwrite_in_memory_store| is false, we will still not persist logs that
+  // should be trimmed away, but they will still be available in memory
+  // (allowing them to still be eligible for upload this session).
+  // TODO(crbug/1171830): Revisit call sites and determine what value of
+  // |overwrite_in_memory_store| they should use.
+  virtual void TrimAndPersistUnsentLogs(bool overwrite_in_memory_store) = 0;
 
   // Loads unsent logs from persistent storage.
   virtual void LoadPersistedUnsentLogs() = 0;

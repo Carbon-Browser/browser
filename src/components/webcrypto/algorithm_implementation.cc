@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,16 +64,14 @@ Status AlgorithmImplementation::GenerateKey(
 Status AlgorithmImplementation::DeriveBits(
     const blink::WebCryptoAlgorithm& algorithm,
     const blink::WebCryptoKey& base_key,
-    bool has_optional_length_bits,
-    unsigned int optional_length_bits,
+    absl::optional<unsigned int> length_bits,
     std::vector<uint8_t>* derived_bytes) const {
   return Status::ErrorUnsupported();
 }
 
 Status AlgorithmImplementation::GetKeyLength(
     const blink::WebCryptoAlgorithm& key_length_algorithm,
-    bool* has_length_bits,
-    unsigned int* length_bits) const {
+    absl::optional<unsigned int>* length_bits) const {
   return Status::ErrorUnsupported();
 }
 

@@ -1,24 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/strings/sys_string_conversions.h"
+#import "base/containers/contains.h"
+#import "base/ios/ios_util.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/chrome/browser/ui/settings/settings_app_interface.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
-#include "ios/testing/earl_grey/disabled_test_macros.h"
+#import "ios/testing/earl_grey/disabled_test_macros.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "net/test/embedded_test_server/http_request.h"
-#include "net/test/embedded_test_server/http_response.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "net/test/embedded_test_server/http_request.h"
+#import "net/test/embedded_test_server/http_response.h"
 
 namespace {
 
@@ -44,9 +42,9 @@ std::unique_ptr<net::test_server::HttpResponse> SearchResponse(
   std::unique_ptr<net::test_server::BasicHttpResponse> http_response =
       std::make_unique<net::test_server::BasicHttpResponse>();
   http_response->set_code(net::HTTP_OK);
-  if (request.GetURL().path().find(kGoogleURL) != std::string::npos) {
+  if (base::Contains(request.GetURL().path(), kGoogleURL)) {
     http_response->set_content("<body>" + std::string(kGoogleURL) + "</body>");
-  } else if (request.GetURL().path().find(kYahooURL) != std::string::npos) {
+  } else if (base::Contains(request.GetURL().path(), kYahooURL)) {
     http_response->set_content("<body>" + std::string(kYahooURL) + "</body>");
   }
   return std::move(http_response);
@@ -114,6 +112,11 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // Tests that when changing the default search engine, the URL used for the
 // search is updated.
 - (void)testChangeSearchEngine {
+  // TODO(crbug.com/1469573): Test flaky on iOS 17.
+  if (base::ios::IsRunningOnIOS17OrLater()) {
+    EARL_GREY_TEST_DISABLED(@"Flaky on iOS 17.");
+  }
+
   self.testServer->RegisterRequestHandler(base::BindRepeating(&SearchResponse));
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
 
@@ -132,7 +135,10 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText([@"test" stringByAppendingString:@"\n"])];
+      performAction:grey_replaceText(@"test")];
+  // TODO(crbug.com/1454516): Use simulatePhysicalKeyboardEvent until
+  // replaceText can properly handle \n.
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\n" flags:0];
 
   [ChromeEarlGrey waitForWebStateContainingText:kGoogleURL];
 
@@ -160,7 +166,10 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
 
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText([@"test" stringByAppendingString:@"\n"])];
+      performAction:grey_replaceText(@"test")];
+  // TODO(crbug.com/1454516): Use simulatePhysicalKeyboardEvent until
+  // replaceText can properly handle \n.
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\n" flags:0];
 
   [ChromeEarlGrey waitForWebStateContainingText:kYahooURL];
 }
@@ -196,7 +205,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
                   }];
 
   bool matchedElement = [waitForDeleteToDisappear
-      waitWithTimeout:base::test::ios::kWaitForUIElementTimeout];
+      waitWithTimeout:base::test::ios::kWaitForUIElementTimeout.InSecondsF()];
 
   if (!matchedElement) {
     // Delete button is still on screen, tap it
@@ -274,9 +283,10 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
                                    return [weakSelf wasOpenSearchCalled];
                                  }];
   // Wait for the
-  GREYAssertTrue([openSearchQuery
-                     waitWithTimeout:base::test::ios::kWaitForPageLoadTimeout],
-                 @"The open search XML hasn't been queried.");
+  GREYAssertTrue(
+      [openSearchQuery waitWithTimeout:base::test::ios::kWaitForPageLoadTimeout
+                                           .InSecondsF()],
+      @"The open search XML hasn't been queried.");
 
   [ChromeEarlGrey loadURL:self.testServer->GetURL(GetSearchExample())];
 

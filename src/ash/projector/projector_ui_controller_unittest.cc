@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,18 +17,23 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/system/tray/tray_container.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
-#include "projector_ui_controller.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/models/image_model.h"
+#include "ui/events/gesture_detection/gesture_configuration.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/message_center_observer.h"
 #include "ui/message_center/message_center_types.h"
 #include "ui/message_center/notification_list.h"
+#include "ui/views/controls/image_view.h"
 
 namespace ash {
 
@@ -61,10 +66,7 @@ class MockMessageCenterObserver : public message_center::MessageCenterObserver {
 
 class ProjectorUiControllerTest : public AshTestBase {
  public:
-  ProjectorUiControllerTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {features::kProjector, features::kProjectorAnnotator}, {});
-  }
+  ProjectorUiControllerTest() = default;
 
   ProjectorUiControllerTest(const ProjectorUiControllerTest&) = delete;
   ProjectorUiControllerTest& operator=(const ProjectorUiControllerTest&) =
@@ -80,11 +82,9 @@ class ProjectorUiControllerTest : public AshTestBase {
   }
 
  protected:
-  ProjectorUiController* controller_;
+  raw_ptr<ProjectorUiController, DanglingUntriaged | ExperimentalAsh>
+      controller_;
   MockProjectorClient projector_client_;
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(ProjectorUiControllerTest, ShowAndHideTray) {
@@ -192,6 +192,12 @@ TEST_F(ProjectorUiControllerTest, SetAnnotatorTool) {
 
   controller_->ShowAnnotationTray(Shell::GetPrimaryRootWindow());
   controller_->OnCanvasInitialized(true);
+  // Assert that the icon image for the annotator is set.
+  ASSERT_EQ(projector_annotation_tray->tray_container()->children().size(), 1u);
+  const views::ImageView* image_view = static_cast<views::ImageView*>(
+      projector_annotation_tray->tray_container()->children()[0]);
+  EXPECT_FALSE(image_view->GetImageModel().IsEmpty());
+
   LeftClickOn(projector_annotation_tray);
   EXPECT_TRUE(controller_->is_annotator_enabled());
 
@@ -204,6 +210,78 @@ TEST_F(ProjectorUiControllerTest, SetAnnotatorTool) {
   histogram_tester.ExpectUniqueSample(kProjectorMarkerColorHistogramName,
                                       ProjectorMarkerColor::kMagenta,
                                       /*count=*/1);
+}
+
+// Tests that right clicking the ProjectorAnnotationTray shows a bubble.
+// Disabled for being flaky. crbug.com/1418409
+TEST_F(ProjectorUiControllerTest, DISABLED_RightClickShowsBubble) {
+  controller_->ShowAnnotationTray(Shell::GetPrimaryRootWindow());
+  controller_->OnCanvasInitialized(true);
+
+  auto* projector_annotation_tray = Shell::GetPrimaryRootWindowController()
+                                        ->GetStatusAreaWidget()
+                                        ->projector_annotation_tray();
+
+  // Right click the tray item, it should show a bubble.
+  RightClickOn(projector_annotation_tray);
+  EXPECT_TRUE(projector_annotation_tray->GetBubbleWidget());
+}
+
+// Tests that long pressing the ProjectorAnnotationTray shows a bubble.
+TEST_F(ProjectorUiControllerTest, LongPressShowsBubble) {
+  controller_->ShowAnnotationTray(Shell::GetPrimaryRootWindow());
+  controller_->OnCanvasInitialized(true);
+
+  auto* projector_annotation_tray = Shell::GetPrimaryRootWindowController()
+                                        ->GetStatusAreaWidget()
+                                        ->projector_annotation_tray();
+
+  // Long press the tray item, it should show a bubble.
+  gfx::Point location =
+      projector_annotation_tray->GetBoundsInScreen().CenterPoint();
+
+  // Temporarily reconfigure gestures so that the long press takes 2
+  // milliseconds.
+  ui::GestureConfiguration* gesture_config =
+      ui::GestureConfiguration::GetInstance();
+  const int old_long_press_time_in_ms = gesture_config->long_press_time_in_ms();
+  const base::TimeDelta old_short_press_time =
+      gesture_config->short_press_time();
+  const int old_show_press_delay_in_ms =
+      gesture_config->show_press_delay_in_ms();
+  gesture_config->set_long_press_time_in_ms(1);
+  gesture_config->set_short_press_time(base::Milliseconds(1));
+  gesture_config->set_show_press_delay_in_ms(1);
+
+  ui::test::EventGenerator* event_generator = GetEventGenerator();
+  event_generator->set_current_screen_location(location);
+  event_generator->PressTouch();
+
+  // Hold the press down for 2 ms, to trigger a long press.
+  base::RunLoop run_loop;
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(2));
+  run_loop.Run();
+
+  gesture_config->set_long_press_time_in_ms(old_long_press_time_in_ms);
+  gesture_config->set_short_press_time(old_short_press_time);
+  gesture_config->set_show_press_delay_in_ms(old_show_press_delay_in_ms);
+
+  event_generator->ReleaseTouch();
+
+  EXPECT_TRUE(projector_annotation_tray->GetBubbleWidget());
+}
+
+// Tests that tapping the ProjectorAnnotationTray enables annotation.
+TEST_F(ProjectorUiControllerTest, TapEnabledAnnotation) {
+  controller_->ShowAnnotationTray(Shell::GetPrimaryRootWindow());
+  controller_->OnCanvasInitialized(true);
+
+  GestureTapOn(Shell::GetPrimaryRootWindowController()
+                   ->GetStatusAreaWidget()
+                   ->projector_annotation_tray());
+
+  EXPECT_TRUE(controller_->is_annotator_enabled());
 }
 
 TEST_F(ProjectorUiControllerTest, ShowFailureNotification) {
@@ -250,6 +328,51 @@ TEST_F(ProjectorUiControllerTest, ShowFailureNotification) {
       /*count=*/1);
   histogram_tester.ExpectTotalCount(kProjectorCreationFlowErrorHistogramName,
                                     /*count=*/2);
+
+  message_center::MessageCenter::Get()->RemoveObserver(
+      &mock_message_center_observer);
+}
+
+TEST_F(ProjectorUiControllerTest, ShowFailureNotificationWithTitle) {
+  base::HistogramTester histogram_tester;
+
+  MockMessageCenterObserver mock_message_center_observer;
+  message_center::MessageCenter::Get()->AddObserver(
+      &mock_message_center_observer);
+
+  EXPECT_CALL(
+      mock_message_center_observer,
+      OnNotificationAdded(/*notification_id=*/"projector_error_notification"))
+      .Times(1);
+  EXPECT_CALL(mock_message_center_observer,
+              OnNotificationDisplayed(
+                  /*notification_id=*/"projector_error_notification",
+                  message_center::DisplaySource::DISPLAY_SOURCE_POPUP));
+
+  ProjectorUiController::ShowFailureNotification(
+      IDS_ASH_PROJECTOR_ABORT_BY_AUDIO_POLICY_TEXT,
+      IDS_ASH_PROJECTOR_ABORT_BY_AUDIO_POLICY_TITLE);
+
+  const message_center::NotificationList::Notifications& notifications =
+      message_center::MessageCenter::Get()->GetVisibleNotifications();
+  EXPECT_EQ(notifications.size(), 1u);
+  EXPECT_EQ((*notifications.begin())->id(), "projector_error_notification");
+  EXPECT_EQ(
+      (*notifications.begin())->message(),
+      l10n_util::GetStringUTF16(IDS_ASH_PROJECTOR_ABORT_BY_AUDIO_POLICY_TEXT));
+  EXPECT_EQ(
+      (*notifications.begin())->title(),
+      l10n_util::GetStringUTF16(IDS_ASH_PROJECTOR_ABORT_BY_AUDIO_POLICY_TITLE));
+
+  histogram_tester.ExpectBucketCount(
+      kProjectorCreationFlowErrorHistogramName,
+      ProjectorCreationFlowError::kSessionAbortedByAudioPolicyDisabled,
+      /*expected_count=*/1);
+  histogram_tester.ExpectTotalCount(kProjectorCreationFlowErrorHistogramName,
+                                    /*count=*/1);
+
+  message_center::MessageCenter::Get()->RemoveObserver(
+      &mock_message_center_observer);
 }
 
 TEST_F(ProjectorUiControllerTest, ShowSaveFailureNotification) {
@@ -288,6 +411,9 @@ TEST_F(ProjectorUiControllerTest, ShowSaveFailureNotification) {
   histogram_tester.ExpectUniqueSample(kProjectorCreationFlowErrorHistogramName,
                                       ProjectorCreationFlowError::kSaveError,
                                       /*count=*/2);
+
+  message_center::MessageCenter::Get()->RemoveObserver(
+      &mock_message_center_observer);
 }
 
 TEST_F(ProjectorUiControllerTest, OnCanvasInitialized) {

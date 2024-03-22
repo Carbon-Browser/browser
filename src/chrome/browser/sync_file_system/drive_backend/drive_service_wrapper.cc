@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,8 @@ DriveServiceWrapper::DriveServiceWrapper(
     : drive_service_(drive_service) {
   DCHECK(drive_service_);
 }
+
+DriveServiceWrapper::~DriveServiceWrapper() = default;
 
 void DriveServiceWrapper::AddNewDirectory(
     const std::string& parent_resource_id,

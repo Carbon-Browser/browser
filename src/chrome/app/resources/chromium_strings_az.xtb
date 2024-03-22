@@ -1,372 +1,469 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="az">
+<translation id="1001716830750249114">Carbon Browser versiyası ayarlarına keçin</translation>
 <translation id="1026101648481255140">Quraşdırmaya davam edin</translation>
-<translation id="1029669172902658969">&amp;Carbon Browser BrowserOS'i güncəlləmək üçün yenidən başladın</translation>
+<translation id="1029669172902658969">&amp;Carbon BrowserOS'i güncəlləmək üçün yenidən başladın</translation>
+<translation id="1040916596585577953">Carbon Browser bu artırmanı nəzərdən keçirməyi tövsiyə edir</translation>
+<translation id="1042552502243217427">Sayt səhifədə keçidləri məxfi qaydada əvvəlcədən yükləmək istədikdə Carbon Browser Google serverlərindən istifadə edir. Bu, kimliyinizi əvvəlcədən yüklənmiş saytdan gizlədir, lakin Google hansı saytların əvvəlcədən yükləndiyini öyrənir.</translation>
 <translation id="1065672644894730302">Tərcihləriniz oxuna bilmir.
 
 Bəzi funksiyalar əlçatmaz ola bilər ki, nəticədə tərcihlərə edilən dəyişikliklər saxlanmaya bilər.</translation>
-<translation id="1098170124587656448">Carbon Browser Browser Sizi data pozuntuları, xətalı artırmalar və digər güvənlik məsələlərinə qarşı qoruya bilər</translation>
-<translation id="1104942323762546749">Carbon Browser Browser parollarınızı eksport etmək istəyir. Buna icazə vermək üçün Windows parolunu yazın.</translation>
-<translation id="113122355610423240">Carbon Browser Browser defolt brauzerinizdir</translation>
-<translation id="1131805035311359397">Parollarınızın data pozuntuları və digər güvənlik məsələlərinə qarşı güvəndə olduğunu yoxlamaq üçün <ph name="BEGIN_LINK" />Carbon Browser Browser'a daxil olun<ph name="END_LINK" />.</translation>
-<translation id="1185134272377778587">Carbon Browser Browser haqqında</translation>
+<translation id="1083934481477628225">Valideyn Carbon Browser-da "Sayt, tətbiq və artırmalar üçün icazələr"i deaktiv edib</translation>
+<translation id="1098170124587656448">Carbon Browser Sizi data pozuntuları, xətalı artırmalar və digər güvənlik məsələlərinə qarşı qoruya bilər</translation>
+<translation id="1104942323762546749">Carbon Browser parollarınızı eksport etmək istəyir. Buna icazə vermək üçün Windows parolunu yazın.</translation>
+<translation id="113122355610423240">Carbon Browser defolt brauzerinizdir</translation>
+<translation id="1131805035311359397">Parollarınızın data pozuntuları və digər güvənlik məsələlərinə qarşı güvəndə olduğunu yoxlamaq üçün <ph name="BEGIN_LINK" />Carbon Browser'a daxil olun<ph name="END_LINK" />.</translation>
+<translation id="1153368717515616349">Carbon Browser menyusuna klikləyin</translation>
+<translation id="1185134272377778587">Carbon Browser haqqında</translation>
 <translation id="1203500561924088507">Quraşdırdığınız üçün təşəkkür edirik. <ph name="BUNDLE_NAME" /> istifadə etməzdən əvvəl brauzerinizi yenidən başlatmalısınız.</translation>
-<translation id="1315551408014407711">Yeni Carbon Browser Browser profilinizi ayarlayın</translation>
-<translation id="1385859895174722837">Google Assistent Carbon Browser Browser'da</translation>
-<translation id="1396446129537741364">Carbon Browser Browser parolları göstərməyə çalışır.</translation>
-<translation id="1414495520565016063">Carbon Browser Browser'a daxil oldunuz!</translation>
-<translation id="1524282610922162960">Carbon Browser Browser tabı paylaşın</translation>
-<translation id="1553461853655228091">Carbon Browser Browser ətrafınızın 3D xəritəsini yaratmaq üçün kameranıza giriş icazəsi tələb edir</translation>
-<translation id="1607715478322902680">{COUNT,plural, =0{Administrator güncəlləməni tətbiq etmək üçün Carbon Browser Browser'u yenidən başlatmanızı tələb edir}=1{Administrator güncəlləməni tətbiq etmək üçün Carbon Browser Browser'u yenidən başlatmanızı tələb edir. Anonim pəncərəniz yenidən açılmayacaq.}other{Administrator güncəlləməni tətbiq etmək üçün Carbon Browser Browser'u yenidən başlatmanızı tələb edir. # Anonim pəncərəniz yenidən açılmayacaq.}}</translation>
-<translation id="1625909126243026060">Carbon Browser Browser'da əsas məxfilik və təhlükəsizlik nəzarətlərini nəzərdən keçirin</translation>
-<translation id="1632539827495546968">Bu hesabı sadəcə bir dəfə istifadə etmək istəyirsinizsə, Carbon Browser Browser brauzerində <ph name="GUEST_LINK_BEGIN" />Qonaq rejimindən<ph name="GUEST_LINK_END" /> istifadə edə bilərsiniz. Başqa birisi üçün hesab əlavə etmək istəyirsinizsə, <ph name="DEVICE_TYPE" /> cihazınıza <ph name="LINK_BEGIN" />yeni şəxs əlavə edin<ph name="LINK_END" />.
+<translation id="1261119230216066228">Yaddaşa Qənaət Carbon Browser'u daha sürətli etdi</translation>
+<translation id="1262876892872089030">Bu tab deaktiv olduqda Carbon Browser-u sürətli saxlamaq üçün yaddaş boşaldıldı. Bu saytın deaktiv olmasını həmişə istisna edə bilərsiniz.</translation>
+<translation id="1265577313130862557">Bu fayl təhlükəli olduğu üçün Carbon Browser endirməni blokladı</translation>
+<translation id="1315551408014407711">Yeni Carbon Browser profilinizi ayarlayın</translation>
+<translation id="1342274909142618978">Datanı Carbon Browser-dan da silin (<ph name="URL" />)</translation>
+<translation id="1414495520565016063">Carbon Browser'a daxil oldunuz!</translation>
+<translation id="1478370723027452770">Sınaq üçün Carbon Browser ilə bağlı kömək alın</translation>
+<translation id="1497802159252041924">Quraşdırma xətası: <ph name="INSTALL_ERROR" /></translation>
+<translation id="1524282610922162960">Carbon Browser tabı paylaşın</translation>
+<translation id="1553461853655228091">Carbon Browser ətrafınızın 3D xəritəsini yaratmaq üçün kameranıza giriş icazəsi tələb edir</translation>
+<translation id="1574377791422810894">Carbon Browser-un güvənlik alətləri</translation>
+<translation id="1607715478322902680">{COUNT,plural, =0{Administrator güncəlləməni tətbiq etmək üçün Carbon Browser'u yenidən başlatmanızı tələb edir}=1{Administrator güncəlləməni tətbiq etmək üçün Carbon Browser'u yenidən başlatmanızı tələb edir. Anonim pəncərəniz yenidən açılmayacaq.}other{Administrator güncəlləməni tətbiq etmək üçün Carbon Browser'u yenidən başlatmanızı tələb edir. # Anonim pəncərəniz yenidən açılmayacaq.}}</translation>
+<translation id="1625909126243026060">Carbon Browser'da əsas məxfilik və təhlükəsizlik nəzarətlərini nəzərdən keçirin</translation>
+<translation id="1632539827495546968">Bu hesabı sadəcə bir dəfə istifadə etmək istəyirsinizsə, Carbon Browser brauzerində <ph name="GUEST_LINK_BEGIN" />Qonaq rejimindən<ph name="GUEST_LINK_END" /> istifadə edə bilərsiniz. Başqa birisi üçün hesab əlavə etmək istəyirsinizsə, <ph name="DEVICE_TYPE" /> cihazınıza <ph name="LINK_BEGIN" />yeni şəxs əlavə edin<ph name="LINK_END" />.
 
 Hazırda veb saytlar və tətbiqlərə verdiyiniz icazələr bu hesaba tətbiq oluna bilər. Google Hesablarınızı <ph name="SETTINGS_LINK_BEGIN" />Ayarlarda<ph name="SETTINGS_LINK_END" /> idarə edə bilərsiniz.</translation>
 <translation id="1640672724030957280">Endirilir...</translation>
-<translation id="1708666629004767631">Yeni, daha güvənli Carbon Browser Browser versiyası əlçatandır.</translation>
-<translation id="17264556997921157">Saytların sizə reklam göstərmək üçün istifadə etdiyi maraqlı mövzuları görə və silə bilərsiniz. Carbon Browser Browser son baxış tarixçənizə əsasən maraqlarınızı təxmin edir.</translation>
-<translation id="1774152462503052664">Carbon Browser Browser'a fonda işləməyə icazə verin</translation>
-<translation id="1779356040007214683">Carbon Browser Browser'u güvənli etmək üçün,  <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> siyahısında olmayan və xəbəriniz olmadan əlavə edilən bəzi artırmaları deaktiv etdik.</translation>
-<translation id="1808667845054772817">Carbon Browser Browser'u yenidən quraşdırın</translation>
-<translation id="185970820835152459">Daxil olunmuş Google Hesablarını idarə edə bilərsiniz. Google Hesablarınız Carbon Browser Browser brauzeri, Play Market, Gmail və digər xidmətlər üçün istifadə olunur. Ailə üzvü kimi başqası üçün bir hesab əlavə etmək istəyirsinizsə, əvəzində <ph name="DEVICE_TYPE" /> cihazınıza yeni bir şəxs əlavə edin. <ph name="LINK_BEGIN" />Ətraflı məlumat<ph name="LINK_END" /></translation>
-<translation id="1863308913976887472">Saytlar maraqlarınız haqqında Carbon Browser Browser ilə məlumat saxlaya bilər. Məsələn, marafona ayaqqabı almaq üçün sayta daxil olsanız, sayt marağınızı qaçış marafonu kimi müəyyən edə bilər. Sonra yarışa yazılmaq üçün başqa sayta daxil olsanız, həmin sayt maraqlarınız əsasında sizə qaçış ayaqqabısı reklamı göstərə bilər.</translation>
-<translation id="1881322772814446296">Nəzarət olunan hesabla daxil olursunuz və hesabın administratoruna Carbon Browser Browser profiliniz üzərində nəzarət etmək imkanı verirsiniz. Tətbiqləriniz, əlfəcinləriniz, tarixçəniz, parollarınız və digər ayarlarınız <ph name="USER_NAME" /> adına həmişəlik bağlı qalacaq. Bu datanı Google Hesab İdarə Paneli vasitəsilə silə biləcəksiniz, lakin bu datanı digər hesabla əlaqələndirə bilməyəcəksiniz. Mövcud Carbon Browser Browser datanızı ayrı saxlamaq üçün yeni profil yarada bilərsiniz. <ph name="LEARN_MORE" /></translation>
-<translation id="1911763535808217981">Bunu deaktiv etməklə Carbon Browser Browser'a giriş etmədən Gmail kimi Google saytlarına daxil ola bilərsiniz</translation>
-<translation id="1929939181775079593">Carbon Browser Browser cavab vermir. İndi yenidən başladılsın?</translation>
-<translation id="193439633299369377">Güncəlləşmənin tətbiq olunması üçün Carbon Browser BrowserOS yenidən başladılmalıdır.</translation>
-<translation id="1940680973325097484">Bu hesabı sadəcə bir dəfə istifadə etmək istəyirsinizsə, Carbon Browser Browser brauzerində Qonaq rejimindən istifadə edə bilərsiniz. Başqa birisi üçün hesab əlavə etmək istəyirsinizsə, <ph name="DEVICE_TYPE" /> cihazınıza <ph name="LINK_BEGIN" />yeni şəxs əlavə edin<ph name="LINK_END" />.
-
-Hazırda veb saytlar və tətbiqlərə verdiyiniz icazələr bu hesaba tətbiq oluna bilər. Google Hesablarınızı <ph name="SETTINGS_LINK_BEGIN" />Ayarlarda<ph name="SETTINGS_LINK_END" /> idarə edə bilərsiniz.</translation>
+<translation id="1708666629004767631">Yeni, daha güvənli Carbon Browser versiyası əlçatandır.</translation>
+<translation id="1715127912119967311">Bu funksiyaları təkmilləşdirmək üçün Carbon Browser interaksiyaları Google-a göndərir. Bu datanı insan redaktorlar oxuya, emal edə və ona annotasiya əlavə edə bilər.</translation>
+<translation id="17264556997921157">Saytların sizə reklam göstərmək üçün istifadə etdiyi maraqlı mövzuları görə və silə bilərsiniz. Carbon Browser son baxış tarixçənizə əsasən maraqlarınızı təxmin edir.</translation>
+<translation id="1733725117201708356">Carbon Browser tezliklə baxış datasını siləcək</translation>
+<translation id="1736443181683099871">Carbon Browser naviqasiyaları HTTPS-ə təkmilləşdirməyə cəhd edəcək</translation>
+<translation id="1745121272106313518">Carbon Browser <ph name="REMAINING_TIME" /> sonra yenidən başladılacaq</translation>
+<translation id="1749104137266986751">HTTPS əlçatan olmadıqda Carbon Browser xəbərdarlıq etmədən təhlükəli bağlantı istifadə edəcək</translation>
+<translation id="1774152462503052664">Carbon Browser'a fonda işləməyə icazə verin</translation>
+<translation id="1779356040007214683">Carbon Browser'u güvənli etmək üçün,  <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> siyahısında olmayan və xəbəriniz olmadan əlavə edilən bəzi artırmaları deaktiv etdik.</translation>
+<translation id="1808667845054772817">Carbon Browser'u yenidən quraşdırın</translation>
+<translation id="1820835682567584003">Carbon Browser cəhd edir: <ph name="AUTHENTICATION_PURPOSE" /></translation>
+<translation id="185970820835152459">Daxil olunmuş Google Hesablarını idarə edə bilərsiniz. Google Hesablarınız Carbon Browser brauzeri, Play Market, Gmail və digər xidmətlər üçün istifadə olunur. Ailə üzvü kimi başqası üçün bir hesab əlavə etmək istəyirsinizsə, əvəzində <ph name="DEVICE_TYPE" /> cihazınıza yeni bir şəxs əlavə edin. <ph name="LINK_BEGIN" />Ətraflı məlumat<ph name="LINK_END" /></translation>
+<translation id="1863308913976887472">Saytlar maraqlarınız haqqında Carbon Browser ilə məlumat saxlaya bilər. Məsələn, marafona ayaqqabı almaq üçün sayta daxil olsanız, sayt marağınızı qaçış marafonu kimi müəyyən edə bilər. Sonra yarışa yazılmaq üçün başqa sayta daxil olsanız, həmin sayt maraqlarınız əsasında sizə qaçış ayaqqabısı reklamı göstərə bilər.</translation>
+<translation id="1881322772814446296">Nəzarət olunan hesabla daxil olursunuz və hesabın administratoruna Carbon Browser profiliniz üzərində nəzarət etmək imkanı verirsiniz. Tətbiqləriniz, əlfəcinləriniz, tarixçəniz, parollarınız və digər ayarlarınız <ph name="USER_NAME" /> adına həmişəlik bağlı qalacaq. Bu datanı Google Hesab İdarə Paneli vasitəsilə silə biləcəksiniz, lakin bu datanı digər hesabla əlaqələndirə bilməyəcəksiniz. Mövcud Carbon Browser datanızı ayrı saxlamaq üçün yeni profil yarada bilərsiniz. <ph name="LEARN_MORE" /></translation>
+<translation id="1906696617298807388">Ünvan panelinə, yaxud axtarış xanasına yazdıqda element təklifləri almaq üçün Carbon Browser yazdıqlarınızı Google Diskə göndərir. Bu, Anonim rejimdə deaktivdir.</translation>
+<translation id="1911763535808217981">Bunu deaktiv etməklə Carbon Browser'a giriş etmədən Gmail kimi Google saytlarına daxil ola bilərsiniz</translation>
+<translation id="1929939181775079593">Carbon Browser cavab vermir. İndi yenidən başladılsın?</translation>
+<translation id="193439633299369377">Güncəlləşmənin tətbiq olunması üçün Carbon BrowserOS yenidən başladılmalıdır.</translation>
+<translation id="1951406923938785464">Bu fayl növü adətən endirilmədiyi və təhlükəli ola biləcəyi üçün Carbon Browser endirməni blokladı</translation>
 <translation id="1953553007165777902">Endirilir... <ph name="MINUTE" /> dəqiqə qalıb</translation>
-<translation id="1966382378801805537">Carbon Browser Browser defolt brauzeri müəyyən edə və ya ayarlaya bilmir</translation>
-<translation id="2008474315282236005">1 element cihazdan silinəcək. Sonradan datanızı bərpa etmək üçün <ph name="USER_EMAIL" /> kimi Carbon Browser Browser daxil olun.</translation>
+<translation id="1966382378801805537">Carbon Browser defolt brauzeri müəyyən edə və ya ayarlaya bilmir</translation>
+<translation id="2008474315282236005">1 element cihazdan silinəcək. Sonradan datanızı bərpa etmək üçün <ph name="USER_EMAIL" /> kimi Carbon Browser daxil olun.</translation>
 <translation id="2018879682492276940">Quraşdırma alınmadı. Yenidən sınayın.</translation>
-<translation id="2020032459870799438">Digər parollarınızın data pozuntuları və digər güvənlik məsələlərinə qarşı güvəndə olduğunu yoxlamaq üçün <ph name="BEGIN_LINK" />Carbon Browser Browser'a daxil olun<ph name="END_LINK" />.</translation>
-<translation id="2049376729098081731">Google xidmətlərində daha çox fərdiləşdirilmiş təcrübə üçün Carbon Browser Browser tarixçəsinin daxil edilib-edilməməsini seçin</translation>
-<translation id="2088953378266246249">Carbon Browser Browser'un kök sertifikatlarını necə idarə etməsi haqqında məlumat</translation>
-<translation id="2174178932569897599">Carbon Browser Browser'u fərdiləşdirin</translation>
+<translation id="2020032459870799438">Digər parollarınızın data pozuntuları və digər güvənlik məsələlərinə qarşı güvəndə olduğunu yoxlamaq üçün <ph name="BEGIN_LINK" />Carbon Browser'a daxil olun<ph name="END_LINK" />.</translation>
+<translation id="2049376729098081731">Google xidmətlərində daha çox fərdiləşdirilmiş təcrübə üçün Carbon Browser tarixçəsinin daxil edilib-edilməməsini seçin</translation>
+<translation id="2086476982681781442">Bu fayl aldadıcı olduğu və cihaza gözlənilməz dəyişikliklər edə biləcəyi üçün Carbon Browser endirməni blokladı</translation>
+<translation id="2088953378266246249">Carbon Browser'un kök sertifikatlarını necə idarə etməsi haqqında məlumat</translation>
+<translation id="2120965832000301375">{COUNT,plural, =1{Carbon Browser 1 dəqiqə istifadə edilmədikdə təşkilat baxış datasını avtomatik silir. Bura tarixçə, avtodoldurma və endirmələr daxil ola bilər. Tablar açıq qalacaq.}other{Carbon Browser # dəqiqə istifadə edilmədikdə təşkilat baxış datasını avtomatik silir. Bura tarixçə, avtodoldurma və endirmələr daxil ola bilər. Tablar açıq qalacaq.}}</translation>
+<translation id="2126108037660393668">Endirilmiş fayl doğrulanmadı.</translation>
+<translation id="2130870084309816036">İnternetə qoşulmaq olmur. Qoruyucu divar istifadə edirsinizsə, <ph name="PRODUCT_EXE_NAME" /> məhsulunu icazə verilənlər siyahısına əlavə edin.</translation>
+<translation id="215352261310130060">Sayt güvənli bağlantı istifadə etmədiyi və bu fayla müdaxilə edilmiş ola biləcəyi üçün Carbon Browser endirməni blokladı</translation>
+<translation id="2174178932569897599">Carbon Browser'u fərdiləşdirin</translation>
 <translation id="2174917724755363426">Quraşdırma tamamlanmayıb. Ləğv etmək istədiyinizə əminsiniz?</translation>
-<translation id="2185166961232948079">Carbon Browser Browser - Şəbəkəyə Giriş - <ph name="PAGE_TITLE" /></translation>
-<translation id="2241627712206172106">Paylaşılan kompüteriniz varsa, kompüterin paylaşıldığı şəxslər ayrı-ayrılıqda istifadə edə və Carbon Browser Browser'u istədikləri kimi quraşdıra bilər.</translation>
-<translation id="2313870531055795960">URL'ləri Carbon Browser Browser'da saxlanılan təhlükəli saytların siyahısı ilə yoxlayır Sayt parolunuzu oğurlamağa çalışdıqda və ya zərərli fayl endirdiyinizdə Carbon Browser Browser səhifə məzmunundan kiçik nümunələr də daxil olmaqla, URL'ləri Təhlükəsiz Baxışa göndərə bilər.</translation>
-<translation id="2343156876103232566">Buradan Android telefonunuza nömrə göndərmək üçün hər iki cihazda Carbon Browser Browser'a daxil olun.</translation>
-<translation id="2347108572062610441">Bu artırma Carbon Browser Browser'u başlatdığınız zaman hansı səhifənin göstərildiyini dəyişdi.</translation>
+<translation id="2185166961232948079">Carbon Browser - Şəbəkəyə Giriş - <ph name="PAGE_TITLE" /></translation>
+<translation id="2190166659037789668">Yeniləmə yoxlaması xətası: <ph name="UPDATE_CHECK_ERROR" />.</translation>
+<translation id="2241627712206172106">Paylaşılan kompüteriniz varsa, kompüterin paylaşıldığı şəxslər ayrı-ayrılıqda istifadə edə və Carbon Browser'u istədikləri kimi quraşdıra bilər.</translation>
+<translation id="2313870531055795960">URL'ləri Carbon Browser'da saxlanılan təhlükəli saytların siyahısı ilə yoxlayır Sayt parolunuzu oğurlamağa çalışdıqda və ya zərərli fayl endirdiyinizdə Carbon Browser səhifə məzmunundan kiçik nümunələr də daxil olmaqla, URL'ləri Təhlükəsiz Baxışa göndərə bilər.</translation>
+<translation id="2329088755516916767">Aktiv olduqda Carbon Browser səhifələri əvvəlcədən yükləyərək baxış və axtarışı sürətləndirir.</translation>
+<translation id="2343156876103232566">Buradan Android telefonunuza nömrə göndərmək üçün hər iki cihazda Carbon Browser'a daxil olun.</translation>
 <translation id="2359808026110333948">Davam edin</translation>
-<translation id="2384373936468275798">Carbon Browser BrowserOS datanızı sinxronizasiya edə bilmir, çünki hesaba giriş məlumatlarınız köhnədir.</translation>
-<translation id="2396765026452590966">"<ph name="EXTENSION_NAME" />" artırması Carbon Browser Browser'u başlatdığınız zaman hansı səhifənin göstərildiyini dəyişdi.</translation>
-<translation id="2401032172288869980">Carbon Browser Browser bu sayt üçün kamera və mikrofon icazəsi tələb edir</translation>
-<translation id="2483889755041906834">Carbon Browser Browser'da</translation>
+<translation id="2359920621792549529">Axtarış datasını bu cihazdan silib, Google Hesabında saxlamaq üçün <ph name="BEGIN_LINK" />Carbon Browser-dan çıxın<ph name="END_LINK" />.</translation>
+<translation id="2384373936468275798">Carbon BrowserOS datanızı sinxronizasiya edə bilmir, çünki hesaba giriş məlumatlarınız köhnədir.</translation>
+<translation id="2398377054246527950">{NUM_DEVICES,plural, =0{Bir və ya bir neçə Carbon Browser artırması 1 HID cihazına daxil olurdu}=1{Bir və ya bir neçə Carbon Browser artırması 1 HID cihazına daxil olur}other{Bir və ya bir neçə Carbon Browser artırması # HID cihazına daxil olur}}</translation>
+<translation id="2401032172288869980">Carbon Browser bu sayt üçün kamera və mikrofon icazəsi tələb edir</translation>
+<translation id="2440750600860946460"><ph name="BEGIN_LINK" />Carbon Browser alətləri ilə<ph name="END_LINK" /> təhlükəsiz nəzər sala və nəzarət edə bilərsiniz</translation>
+<translation id="2451727308784734061">Qısayol ilə Parol menecerinə tez daxil olun. Qısayolu kompüterin əsas ekranına və ya tətbiq işəsalanına köçürə bilərsiniz.</translation>
+<translation id="2478295928299953161">Carbon Browser tezliklə bağlanacaq</translation>
+<translation id="2483889755041906834">Carbon Browser'da</translation>
 <translation id="2485422356828889247">Sistemdən silin</translation>
-<translation id="2560420686485554789">Faylları endirmək üçün Carbon Browser Browser yaddaşa giriş tələb edir</translation>
-<translation id="2572494885440352020">Carbon Browser Browser Yardım</translation>
-<translation id="2583187216237139145">Bu profilin istifadəsi zamanı yaranan hər hansı bir Carbon Browser Browser datası (əlfəcinlər, tarixçələr, parolların yaradılması və digər ayarlar kimi) iş profili administratoru tərəfindən silinə bilər. <ph name="LEARN_MORE" /></translation>
-<translation id="2648074677641340862">Quraşdırma zamanı əməliyyat sistemi xətası baş verdi. Carbon Browser Browser'u yenidən endirin.</translation>
-<translation id="2661879430930417727">Cihaz paylaşsanız, dostlarınız və ailəniz ayrıca baxış keçirə bilər və Carbon Browser Browser'u istədikləri kimi ayarlaya bilər.</translation>
-<translation id="268602741124540128"><ph name="ACCOUNT_FIRST_NAME" />, Carbon Browser Browser'a xoş gəlmisiniz</translation>
-<translation id="2711502716910134313">Carbon Browser Browser Paneli</translation>
-<translation id="2718390899429598676">Əlavə təhlükəsizlik üçün, Carbon Browser Browser datanızı şifrələyəcək.</translation>
+<translation id="2513154137948333830">Yenidən yükləmə tələb edilir: <ph name="INSTALL_SUCCESS" /></translation>
+<translation id="2554739539410784893">Carbon Browser mövcud parolları əvəz etmək istəyir. İcazə vermək üçün Windows parolunu yazın.</translation>
+<translation id="2560420686485554789">Faylları endirmək üçün Carbon Browser yaddaşa giriş tələb edir</translation>
+<translation id="2572494885440352020">Carbon Browser Yardım</translation>
+<translation id="2583187216237139145">Bu profilin istifadəsi zamanı yaranan hər hansı bir Carbon Browser datası (əlfəcinlər, tarixçələr, parolların yaradılması və digər ayarlar kimi) iş profili administratoru tərəfindən silinə bilər. <ph name="LEARN_MORE" /></translation>
+<translation id="2592940277904433508">Carbon Browser istifadəsinə davam edin</translation>
+<translation id="259935314519650377">Endirilmiş quraşdırıcı keşlənmədi. Xəta: <ph name="UNPACK_CACHING_ERROR_CODE" />.</translation>
+<translation id="2648074677641340862">Quraşdırma zamanı əməliyyat sistemi xətası baş verdi. Carbon Browser'u yenidən endirin.</translation>
+<translation id="2661879430930417727">Cihaz paylaşsanız, dostlarınız və ailəniz ayrıca baxış keçirə bilər və Carbon Browser'u istədikləri kimi ayarlaya bilər.</translation>
+<translation id="268602741124540128"><ph name="ACCOUNT_FIRST_NAME" />, Carbon Browser'a xoş gəlmisiniz</translation>
+<translation id="2711502716910134313">Carbon Browser Paneli</translation>
+<translation id="2718390899429598676">Əlavə təhlükəsizlik üçün, Carbon Browser datanızı şifrələyəcək.</translation>
+<translation id="2738871930057338499">İnternetə qoşulmaq olmur. HTTP 403 qadağan edilib. Proksi konfiqurasiyasını yoxlayın.</translation>
 <translation id="2770231113462710648">Defolt brauzeri dəyişin:</translation>
+<translation id="2785438272836277133">Bu artırmada zərərli proqram var və təhlükəlidir. Onu Carbon Browser-dan silin ki, daxil olduğunuz saytlardakı dataya, o cümlədən şəxsi məlumatlara baxa və onları dəyişə bilməsin.</translation>
 <translation id="2799223571221894425">Yenidən başladın</translation>
-<translation id="2837693172913560447">Bununla <ph name="USER_EMAIL_ADDRESS" /> üçün yeni Carbon Browser Browser profili yaradılacaq</translation>
-<translation id="2847479871509788944">Carbon Browser Browser'dan silin...</translation>
-<translation id="2850691299438350830">Daxil olduğunuzda Carbon Browser Browser'da sizi qoruyur və digər Google tətbiqlərində təhlükəsizliyinizi artırmaq üçün istifadə edilə bilər</translation>
+<translation id="2837693172913560447">Bununla <ph name="USER_EMAIL_ADDRESS" /> üçün yeni Carbon Browser profili yaradılacaq</translation>
+<translation id="2846251086934905009">Quraşdırma xətası: Quraşdırıcı prosesi tamamlanmadı. Quraşdırma dayandırıldı.</translation>
+<translation id="2847479871509788944">Carbon Browser'dan silin...</translation>
+<translation id="2850691299438350830">Daxil olduğunuzda Carbon Browser'da sizi qoruyur və digər Google tətbiqlərində təhlükəsizliyinizi artırmaq üçün istifadə edilə bilər</translation>
 <translation id="2885378588091291677">Tapşırıq Meneceri</translation>
-<translation id="2910007522516064972">Carbon Browser Browser haqqında</translation>
+<translation id="2910007522516064972">Carbon Browser haqqında</translation>
 <translation id="2915996080311180594">Sonra yenidən başladın</translation>
 <translation id="2928420929544864228">Quraşdırma tamamlandı.</translation>
-<translation id="2977470724722393594">Carbon Browser Browser güncəldir</translation>
-<translation id="2977506796191543575">Sayt parolunuzu oğurlamağa çalışdıqda və ya zərərli fayl endirdiyinizdə Carbon Browser Browser səhifə məzmunundan kiçik nümunələr də daxil olmaqla, URL'ləri Təhlükəsiz Baxışa göndərə bilər</translation>
-<translation id="2983934633046890458">Carbon Browser Browser parolları redaktə etməyə çalışır.</translation>
-<translation id="3032706164202344641">Carbon Browser Browser parollarınızı yoxlaya bilmir. Sonra yenidən cəhd edin.</translation>
+<translation id="2945997411976714835">Quraşdırma xətası: Quraşdırıcı prosesini başlatmaq mümkün olmadı.</translation>
+<translation id="2977470724722393594">Carbon Browser güncəldir</translation>
+<translation id="2977506796191543575">Sayt parolunuzu oğurlamağa çalışdıqda və ya zərərli fayl endirdiyinizdə Carbon Browser səhifə məzmunundan kiçik nümunələr də daxil olmaqla, URL'ləri Təhlükəsiz Baxışa göndərə bilər</translation>
+<translation id="3032706164202344641">Carbon Browser parollarınızı yoxlaya bilmir. Sonra yenidən cəhd edin.</translation>
 <translation id="3032787606318309379">Xrom durub ...</translation>
 <translation id="3038232873781883849">Quraşdırılması gözlənilir...</translation>
-<translation id="3068515742935458733">Qəza raportlarını və <ph name="UMA_LINK" /> linkini Google'a göndərməklə Carbon Browser Browser'un daha keyfiyyətli olmasına yardım olun</translation>
-<translation id="3101560983689755071">Baxış tarixçəniz gördüyünüz reklamlara və aşağıda təxmin edilən maraqlara təsir edir. Məxfiliyinizi qorumaq üçün Carbon Browser Browser hər ay maraqlarınızı növbəlilik əsasında avtomatik olaraq silir. Silmədiyiniz təqdirdə maraqlar yenilənə bilər.</translation>
-<translation id="3103660991484857065">Quraşdırıcı arxivi dekompres edə bilmədi. Carbon Browser Browser'u yenidən endirməyiniz xahiş olunur.</translation>
-<translation id="3130323860337406239">Carbon Browser Browser mikrofonunuzu istifadə edir.</translation>
-<translation id="3155163173539279776">Carbon Browser Browser'u yenidən başladın</translation>
-<translation id="3179665906251668410">Linki Gizli Carbon Browser Browser Pəncərəsində açın</translation>
-<translation id="3185330573522821672">Yeni Carbon Browser Browser profilinizi fərdiləşdirin</translation>
-<translation id="3190315855212034486">Hoa! Carbon Browser Browser'da qəza oldu. Yenidən işə salınsın?</translation>
-<translation id="3229526316128325841">Carbon Browser Browser parollarınızı eksport etmək istəyir.</translation>
-<translation id="3258596308407688501">Carbon Browser Browser öz data direktivini oxuya və yaza bilməz:  <ph name="USER_DATA_DIRECTORY" /></translation>
-<translation id="3283186697780795848">Carbon Browser Browser versiyası <ph name="PRODUCT_VERSION" /> quraşdırılıb</translation>
+<translation id="3068515742935458733">Qəza raportlarını və <ph name="UMA_LINK" /> linkini Google'a göndərməklə Carbon Browser'un daha keyfiyyətli olmasına yardım olun</translation>
+<translation id="3079753320517721795">{NUM_DEVICES,plural, =0{Bir və ya bir neçə Carbon Browser artırması 1 USB cihazına daxil olurdu}=1{Bir və ya bir neçə Carbon Browser artırması 1 USB cihazına daxil olur}other{Bir və ya bir neçə Carbon Browser artırması # USB cihazına daxil olur}}</translation>
+<translation id="3101560983689755071">Baxış tarixçəniz gördüyünüz reklamlara və aşağıda təxmin edilən maraqlara təsir edir. Məxfiliyinizi qorumaq üçün Carbon Browser hər ay maraqlarınızı növbəlilik əsasında avtomatik olaraq silir. Silmədiyiniz təqdirdə maraqlar yenilənə bilər.</translation>
+<translation id="3103660991484857065">Quraşdırıcı arxivi dekompres edə bilmədi. Carbon Browser'u yenidən endirməyiniz xahiş olunur.</translation>
+<translation id="3130323860337406239">Carbon Browser mikrofonunuzu istifadə edir.</translation>
+<translation id="3155163173539279776">Carbon Browser'u yenidən başladın</translation>
+<translation id="3179665906251668410">Linki Gizli Carbon Browser Pəncərəsində açın</translation>
+<translation id="3185330573522821672">Yeni Carbon Browser profilinizi fərdiləşdirin</translation>
+<translation id="3190315855212034486">Hoa! Carbon Browser'da qəza oldu. Yenidən işə salınsın?</translation>
+<translation id="3258596308407688501">Carbon Browser öz data direktivini oxuya və yaza bilməz:  <ph name="USER_DATA_DIRECTORY" /></translation>
+<translation id="3283186697780795848">Carbon Browser versiyası <ph name="PRODUCT_VERSION" /> quraşdırılıb</translation>
 <translation id="3286538390144397061">İndi yenidən başladın</translation>
-<translation id="328888136576916638">Google API açarları çatışmır. Carbon Browser Browser'un bəzi funksionallığı deaktiv ediləcək.</translation>
-<translation id="3296368748942286671">Carbon Browser Browser bağlı olduqda arxa fon tətbiqləri işləsin?</translation>
-<translation id="3350761136195634146">Bu hesab ilə Carbon Browser Browser profili artıq mövcuddur</translation>
-<translation id="3387527074123400161">Carbon Browser BrowserOS</translation>
-<translation id="3406848076815591792">Mövcud Carbon Browser Browser profilinə keçirilsin?</translation>
+<translation id="328888136576916638">Google API açarları çatışmır. Carbon Browser'un bəzi funksionallığı deaktiv ediləcək.</translation>
+<translation id="3296368748942286671">Carbon Browser bağlı olduqda arxa fon tətbiqləri işləsin?</translation>
+<translation id="3313189106987092621">Carbon Browser təhlükəli bağlantı ilə sayt yükləməzdən əvvəl xəbərdarlıq edəcək</translation>
+<translation id="3350761136195634146">Bu hesab ilə Carbon Browser profili artıq mövcuddur</translation>
+<translation id="3387527074123400161">Carbon BrowserOS</translation>
+<translation id="3406848076815591792">Mövcud Carbon Browser profilinə keçirilsin?</translation>
 <translation id="3412460710772753638">Bu cihazda Parol Menecerində</translation>
-<translation id="3430503420100763906">Carbon Browser Browser profilləri ilə bütün Carbon Browser Browser elementlərinizi ayıra bilərsiniz. Dostlarınız və ailəniz üçün profillər yaradın və ya iş və əyləncə arasında bölün.</translation>
-<translation id="347328004046849135">Oğurlanmış parol ilə daxil olduqda Carbon Browser Browser sizə bildiriş göndərəcək</translation>
-<translation id="3474745554856756813"><ph name="ITEMS_COUNT" /> element bu cihazdan silinəcək. Sonradan datanızı bərpa etmək üçün Carbon Browser Browser <ph name="USER_EMAIL" /> kimi daxil olun.</translation>
-<translation id="3497319089134299931"><ph name="SHORTCUT" /> Carbon Browser Browser profilləri arasında keçid edə bilər</translation>
-<translation id="3509308970982693815">Bütün Carbon Browser Browser pəncərələrini bağlayın və yenidən cəhd edin.</translation>
-<translation id="3518180795744733843">Carbon Browser Browser'da Google Assistent sizin üçün vebsaytlarda əməliyyatlar icra edə bilər</translation>
-<translation id="3533435340678213462">Məxfiliyinizi qorumaq üçün 4 həftədən köhnə maraqlarınızı avtomatik silirik. Baxmağa davam etdikcə, maraq siyahıda yenidən görünə bilər. Və ya Carbon Browser Browser'un nəzərə almasını istəmədiyiniz maraqları silə bilərsiniz.</translation>
-<translation id="3567254597502212821">Baxış tarixçəniz, bu cihazda Carbon Browser Browser istifadə edərək ziyarət etdiyiniz saytların qeydi.</translation>
-<translation id="3575459661164320785">Kompüterdə zərərli proqram təminatı var. Brauzerin normal şəkldə işləməsi üçün Carbon Browser Browser onu silə, ayarları bərpa edə və artırmaları deaktiv edə bilər.</translation>
-<translation id="3593091352817399191">Başqa hesab artıq daxil olub. Baxışınızı ayrı saxlamaq üçün Carbon Browser Browser sizin üçün öz profilinizi yarada bilər.</translation>
-<translation id="3639635944603682591">Bu şəxsin axtarış datası bu cihazdan silinəcək. Datanı bərpa etmək üçün Carbon Browser Browser'a <ph name="USER_EMAIL" /> olaraq daxil olun.</translation>
-<translation id="364817392622123556">{COUNT,plural, =0{Carbon Browser Browser üçün yeni güncəlləmə əlçatandır. Carbon Browser Browser yenidən işə başladıqdan sonra tətbiq ediləcək.}=1{Carbon Browser Browser üçün yeni güncəlləmə əlçatandır. Carbon Browser Browser yenidən işə başladıqdan sonra tətbiq ediləcək. Anonim pəncərəniz yenidən açılmayacaq.}other{Carbon Browser Browser üçün yeni güncəlləmə əlçatandır. Carbon Browser Browser yenidən işə başladıqdan sonra tətbiq ediləcək. # Anonim pəncərəniz yenidən açılmayacaq.}}</translation>
-<translation id="3651803019964686660"><ph name="ORIGIN" /> cihazından Android telefonunuza nömrə göndərmək üçün hər iki cihazda Carbon Browser Browser'a daxil olun.</translation>
-<translation id="3685209450716071127">Carbon Browser Browser parollarınızı yoxlaya bilmir. İnternet bağlantınızı yoxlamağa cəhd edin.</translation>
-<translation id="3702352323269013324">Carbon Browser Browser'da reklam fərdiləşdirməsi haqqında ətraflı məlumat</translation>
-<translation id="370962675267501463">{COUNT,plural, =0{Administrator bu güncəlləməni tətbiq etmək üçün Carbon Browser Browser'u yenidən başlatmanızı tələb edir}=1{Administrator bu güncəlləməni tətbiq etmək üçün Carbon Browser Browser'u yenidən başlatmanızı tələb edir. Anonim pəncərəniz yenidən açılmayacaq.}other{Administrator bu güncəlləməni tətbiq etmək üçün Carbon Browser Browser'u yenidən başlatmanızı tələb edir. # Anonim pəncərəniz yenidən açılmayacaq.}}</translation>
-<translation id="3713809861844741608">Linki yeni Carbon Browser Browser tabında açın</translation>
-<translation id="3728336900324680424">Ünvan panelində təklif irəli sürmək üçün Carbon Browser Browser Diskinizə daxil olacaq</translation>
-<translation id="378917192836375108">Carbon Browser Browser Sizə imkan verir ki, telefon nömrənizə vebdə klikləyərək Skype-da zəng edəsiniz!</translation>
-<translation id="3830894615770080216">Carbon Browser BrowserOS sistemi</translation>
-<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - Carbon Browser Browser</translation>
-<translation id="386822487697155367">Carbon Browser BrowserOS üzrə yardım alın</translation>
-<translation id="3871664619793219264">Carbon Browser Browser brauzerinin elementlərini <ph name="ACCOUNT_EMAIL" /> hesabından əldə edin</translation>
-<translation id="388648406173476553">Carbon Browser Browser'u fərdiləşdirin və nəzarət edin. Buna baxmalısınız - ətraflı məlumat üçün klikləyin.</translation>
-<translation id="3889543394854987837">Carbon Browser Browser'u açmaq üçün adın üzərinə klikləyin və baxışa başlayın.</translation>
-<translation id="390528597099634151"><ph name="EXISTING_USER" /> artıq bu Carbon Browser Browser profilinə daxil olub. Baxışınızı ayrı saxlamaq üçün Carbon Browser Browser sizin üçün öz profilinizi yarada bilər.</translation>
-<translation id="391789666908693569">Hesabınızı <ph name="MANAGER_NAME" /> idarə edir. Administratorunuz bu Carbon Browser Browser brauzer profilini və onun əlfəcinlər, tarixçə və parollar kimi datasını görə və redaktə edə bilər.</translation>
-<translation id="3945058413678539331">Carbon Browser Browser parolları kopyalamağa çalışır. Buna icazə vermək üçün Windows parolunuzu yazın.</translation>
-<translation id="3962623956404948996">Carbon Browser Browser bu faylı skan etməyi tövsiyə edir, çünki o, təhlükəli ola bilər</translation>
-<translation id="3997429360543082038">Carbon Browser BrowserOS haqqında</translation>
-<translation id="4019629340646866719">Carbon Browser BrowserOS <ph name="BEGIN_LINK_LINUX_OSS" />Linux tərtibat mühiti<ph name="END_LINK_LINUX_OSS" /> kimi əlavə <ph name="BEGIN_LINK_CROS_OSS" />açıq mənbə proqram təminatı<ph name="END_LINK_CROS_OSS" /> ilə əlçatan edilib.</translation>
+<translation id="3430503420100763906">Carbon Browser profilləri ilə bütün Carbon Browser elementlərinizi ayıra bilərsiniz. Dostlarınız və ailəniz üçün profillər yaradın və ya iş və əyləncə arasında bölün.</translation>
+<translation id="347328004046849135">Oğurlanmış parol ilə daxil olduqda Carbon Browser sizə bildiriş göndərəcək</translation>
+<translation id="3474745554856756813"><ph name="ITEMS_COUNT" /> element bu cihazdan silinəcək. Sonradan datanızı bərpa etmək üçün Carbon Browser <ph name="USER_EMAIL" /> kimi daxil olun.</translation>
+<translation id="3497319089134299931"><ph name="SHORTCUT" /> Carbon Browser profilləri arasında keçid edə bilər</translation>
+<translation id="3509308970982693815">Bütün Carbon Browser pəncərələrini bağlayın və yenidən cəhd edin.</translation>
+<translation id="3533435340678213462">Məxfiliyinizi qorumaq üçün 4 həftədən köhnə maraqlarınızı avtomatik silirik. Baxmağa davam etdikcə, maraq siyahıda yenidən görünə bilər. Və ya Carbon Browser'un nəzərə almasını istəmədiyiniz maraqları silə bilərsiniz.</translation>
+<translation id="3567254597502212821">Baxış tarixçəniz, bu cihazda Carbon Browser istifadə edərək ziyarət etdiyiniz saytların qeydi.</translation>
+<translation id="3593091352817399191">Başqa hesab artıq daxil olub. Baxışınızı ayrı saxlamaq üçün Carbon Browser sizin üçün öz profilinizi yarada bilər.</translation>
+<translation id="363078681319665186">Carbon Browser güncəlləmələrini əldə etmək üçün macOS 10.15 və ya daha yeni versiya tələb olunur. Bu kompüter macOS 10.13 istifadə edir.</translation>
+<translation id="3639635944603682591">Bu şəxsin axtarış datası bu cihazdan silinəcək. Datanı bərpa etmək üçün Carbon Browser'a <ph name="USER_EMAIL" /> olaraq daxil olun.</translation>
+<translation id="364817392622123556">{COUNT,plural, =0{Carbon Browser üçün yeni güncəlləmə əlçatandır. Carbon Browser yenidən işə başladıqdan sonra tətbiq ediləcək.}=1{Carbon Browser üçün yeni güncəlləmə əlçatandır. Carbon Browser yenidən işə başladıqdan sonra tətbiq ediləcək. Anonim pəncərəniz yenidən açılmayacaq.}other{Carbon Browser üçün yeni güncəlləmə əlçatandır. Carbon Browser yenidən işə başladıqdan sonra tətbiq ediləcək. # Anonim pəncərəniz yenidən açılmayacaq.}}</translation>
+<translation id="3651803019964686660"><ph name="ORIGIN" /> cihazından Android telefonunuza nömrə göndərmək üçün hər iki cihazda Carbon Browser'a daxil olun.</translation>
+<translation id="3667616615096815454">Quraşdırmaq olmur. Tətbiq serverə məlum deyil.</translation>
+<translation id="3685209450716071127">Carbon Browser parollarınızı yoxlaya bilmir. İnternet bağlantınızı yoxlamağa cəhd edin.</translation>
+<translation id="3702352323269013324">Carbon Browser'da reklam fərdiləşdirməsi haqqında ətraflı məlumat</translation>
+<translation id="370962675267501463">{COUNT,plural, =0{Administrator bu güncəlləməni tətbiq etmək üçün Carbon Browser'u yenidən başlatmanızı tələb edir}=1{Administrator bu güncəlləməni tətbiq etmək üçün Carbon Browser'u yenidən başlatmanızı tələb edir. Anonim pəncərəniz yenidən açılmayacaq.}other{Administrator bu güncəlləməni tətbiq etmək üçün Carbon Browser'u yenidən başlatmanızı tələb edir. # Anonim pəncərəniz yenidən açılmayacaq.}}</translation>
+<translation id="3713809861844741608">Linki yeni Carbon Browser tabında açın</translation>
+<translation id="378917192836375108">Carbon Browser Sizə imkan verir ki, telefon nömrənizə vebdə klikləyərək Skype-da zəng edəsiniz!</translation>
+<translation id="3790262771324122253">Carbon Browser-un bəzi endirmələri bloklama səbəbini öyrənin</translation>
+<translation id="379589255253486813">Nəzərdən keçirilməli məqam olsa, Carbon Browser sizə bildirəcək</translation>
+<translation id="3802055581630249637">Tez yüklənməsi üçün Carbon Browser daxil ola biləcəyiniz səhifələri əvvəlcədən yükləyir</translation>
+<translation id="3830894615770080216">Carbon BrowserOS sistemi</translation>
+<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - Carbon Browser</translation>
+<translation id="386822487697155367">Carbon BrowserOS üzrə yardım alın</translation>
+<translation id="3871664619793219264">Carbon Browser brauzerinin elementlərini <ph name="ACCOUNT_EMAIL" /> hesabından əldə edin</translation>
+<translation id="387966568917439637">Carbon Browser güncəlləmələrini əldə etmək üçün macOS 10.15 və ya daha yeni versiya tələb olunur. Bu kompüter macOS 10.14 istifadə edir.</translation>
+<translation id="388648406173476553">Carbon Browser'u fərdiləşdirin və nəzarət edin. Buna baxmalısınız - ətraflı məlumat üçün klikləyin.</translation>
+<translation id="3889543394854987837">Carbon Browser'u açmaq üçün adın üzərinə klikləyin və baxışa başlayın.</translation>
+<translation id="390528597099634151"><ph name="EXISTING_USER" /> artıq bu Carbon Browser profilinə daxil olub. Baxışınızı ayrı saxlamaq üçün Carbon Browser sizin üçün öz profilinizi yarada bilər.</translation>
+<translation id="3909353120217047026">Bu artırma Carbon Browser Veb Dükanı siyasətini pozur və təhlükəli ola bilər. Onu Carbon Browser-dan silin ki, daxil olduğunuz saytlardakı dataya, o cümlədən şəxsi məlumatlara baxa və onları dəyişə bilməsin.</translation>
+<translation id="391789666908693569">Hesabınızı <ph name="MANAGER_NAME" /> idarə edir. Administratorunuz bu Carbon Browser brauzer profilini və onun əlfəcinlər, tarixçə və parollar kimi datasını görə və redaktə edə bilər.</translation>
+<translation id="3922825997980843979">Siz yazdıqca Carbon Browser ünvan paneli və ya axtarış xanasının kontentini standart axtarış mexanizminə göndərir</translation>
+<translation id="3941890832296813527">Quraşdırma xətası: Quraşdırıcı fayl adı yanlışdır və ya dəstəklənmir.</translation>
+<translation id="3945058413678539331">Carbon Browser parolları kopyalamağa çalışır. Buna icazə vermək üçün Windows parolunuzu yazın.</translation>
+<translation id="3962647064319009959">Carbon Browser-un təhlükəsizlik təminatı haqqında</translation>
+<translation id="3975724895399328945">Sınaq üçün Carbon Browser haqqında</translation>
+<translation id="3997429360543082038">Carbon BrowserOS haqqında</translation>
+<translation id="4019629340646866719">Carbon BrowserOS <ph name="BEGIN_LINK_LINUX_OSS" />Linux tərtibat mühiti<ph name="END_LINK_LINUX_OSS" /> kimi əlavə <ph name="BEGIN_LINK_CROS_OSS" />açıq mənbə proqram təminatı<ph name="END_LINK_CROS_OSS" /> ilə əlçatan edilib.</translation>
+<translation id="4028143804911941282">Deaktiv etsəniz də, Carbon Browser-un yerli axtarış təkliflərini görəcəksiniz</translation>
 <translation id="4036079820698952681"><ph name="BEGIN_LINK" />Cari ayarları<ph name="END_LINK" /> bildirməklə Chormium'u təkmilləşdirməyə kömək edin</translation>
 <translation id="4050175100176540509">Mühüm təhlükəsizlik təkmilləşdirilmələri və yeni funksiyalar son versiyada əlçatandır.</translation>
+<translation id="4055805654398742145">Parol Meneceri</translation>
+<translation id="4095980151185649725">{COUNT,plural, =1{Carbon Browser 1 dəqiqə istifadə edilmədikdə təşkilat onu avtomatik bağlayır. Baxış datası silinir. Bura tarixçə, avto doldurma və endirmələr daxil ola bilər.}other{Carbon Browser # dəqiqə istifadə edilmədikdə təşkilat onu avtomatik bağlayır. Baxış datası silinir. Bura tarixçə, avto doldurma və endirmələr daxil ola bilər.}}</translation>
+<translation id="4118474109249235144">Carbon Browser Anonim</translation>
 <translation id="4148957013307229264">Quraşdırılır...</translation>
-<translation id="419998258129752635"><ph name="PAGE_TITLE" /> - Şəbəkəyə Giriş - Carbon Browser Browser</translation>
-<translation id="421369550622382712">Carbon Browser Browser üçün möhtəşəm tətbiqlər, oyunlar, artırmalar və temalar kəşf edin.</translation>
-<translation id="4216212958613226427">Bu dil Carbon Browser Browser UI-ni göstərmək üçün istifadə edilir</translation>
+<translation id="419998258129752635"><ph name="PAGE_TITLE" /> - Şəbəkəyə Giriş - Carbon Browser</translation>
+<translation id="421369550622382712">Carbon Browser üçün möhtəşəm tətbiqlər, oyunlar, artırmalar və temalar kəşf edin.</translation>
+<translation id="4216212958613226427">Bu dil Carbon Browser UI-ni göstərmək üçün istifadə edilir</translation>
 <translation id="4222932583846282852">Ləğv edilir...</translation>
-<translation id="4230135487732243613">Carbon Browser Browser datanız bu hesab ilə birləşdirilsin?</translation>
-<translation id="4271805377592243930">Carbon Browser Browser ilə yardım alın</translation>
-<translation id="4285930937574705105">Naməlum xəta üzündən quraşdırmaq alınmadı. Əgər Carbon Browser Browser hazırda işləyirsə, lütfən, qapadın və yenidən cəhd edin.</translation>
+<translation id="4230135487732243613">Carbon Browser datanız bu hesab ilə birləşdirilsin?</translation>
+<translation id="4251772536351901305">Standart qoruma ilə müqayisədə saytlardan daha çox data təhlil edərək təhlükəli, hətta Google-un bilmədiyi saytlar haqqında xəbərdar edir. Carbon Browser xəbərdarlıqlarını ötürə bilərsiniz.</translation>
+<translation id="4271805377592243930">Carbon Browser ilə yardım alın</translation>
+<translation id="4281844954008187215">Xidmət Şərtləri</translation>
+<translation id="4285930937574705105">Naməlum xəta üzündən quraşdırmaq alınmadı. Əgər Carbon Browser hazırda işləyirsə, lütfən, qapadın və yenidən cəhd edin.</translation>
 <translation id="4304713468139749426">Parol Meneceri</translation>
 <translation id="4334294535648607276">Endirmə tamamlandı.</translation>
-<translation id="439358628917130594"><ph name="MANAGER" /> bu cihazı istifadə etməzdən əvvəl aşağıdakı Xidmət Şərtlərini oxumağınızı və qəbul etməyinizi tələb edir. Bu şərtlər Carbon Browser BrowserOS Şərtlərini artırmır, dəyişdirmir və ya məhdudlaşdırmır.</translation>
-<translation id="4407044323746248786">Carbon Browser Browser'dan istənilən halda çıxılsın?</translation>
-<translation id="4415566066719264597">Carbon Browser Browser'a Arxa Fonda İşləmək İcazəsi Verin</translation>
-<translation id="4423735387467980091">Fərdiləşdirin və Carbon Browser Browser'u kontrol edin</translation>
+<translation id="439358628917130594"><ph name="MANAGER" /> bu cihazı istifadə etməzdən əvvəl aşağıdakı Xidmət Şərtlərini oxumağınızı və qəbul etməyinizi tələb edir. Bu şərtlər Carbon BrowserOS Şərtlərini artırmır, dəyişdirmir və ya məhdudlaşdırmır.</translation>
+<translation id="4407044323746248786">Carbon Browser'dan istənilən halda çıxılsın?</translation>
+<translation id="4415566066719264597">Carbon Browser'a Arxa Fonda İşləmək İcazəsi Verin</translation>
+<translation id="4423735387467980091">Fərdiləşdirin və Carbon Browser'u kontrol edin</translation>
 <translation id="4427306783828095590">Təkmil qoruma ilə fişinq və zərərli proqramların bloklanması üçün daha çox iş görülür</translation>
-<translation id="4440114195512068100">Cihazınızın güncəl olub-olmadığına baxmaq üçün <ph name="LINK_BEGIN" />Carbon Browser BrowserOS Ayarlarına<ph name="LINK_END" /> keçin</translation>
-<translation id="452711251841752011">Carbon Browser Browser'a xoş gəlmisiniz; yeni brauzer pəncərəsi açılıb</translation>
-<translation id="4544142686420020088">Carbon Browser Browser güncəllənmədi, xəta baş verdi. <ph name="BEGIN_LINK" />Carbon Browser Browser'un güncəllənmə problemlərini və alınmayan güncəllənmələri həll edin.<ph name="END_LINK" /></translation>
-<translation id="454579500955453258">Yeni Carbon Browser Browser profilində davam edilsin?</translation>
+<translation id="4447409407328223819">Sınaq üçün Carbon Browser haqqında</translation>
+<translation id="4501471624619070934">Bu ölkədə giriş məhdudlaşdırıldığı üçün quraşdırma alınmadı.</translation>
+<translation id="452711251841752011">Carbon Browser'a xoş gəlmisiniz; yeni brauzer pəncərəsi açılıb</translation>
+<translation id="4544142686420020088">Carbon Browser güncəllənmədi, xəta baş verdi. <ph name="BEGIN_LINK" />Carbon Browser'un güncəllənmə problemlərini və alınmayan güncəllənmələri həll edin.<ph name="END_LINK" /></translation>
+<translation id="454579500955453258">Yeni Carbon Browser profilində davam edilsin?</translation>
 <translation id="4567424176335768812"><ph name="USER_EMAIL_ADDRESS" /> kimi daxil olmusunuz. İndi bütün daxil olan cihazlarınızdan əlfəcin, tarixçə və digər ayarlara daxil ola bilərsiniz.</translation>
+<translation id="4570813286784708942">Güvənli Baxış deaktiv olduğu və bu fayl doğrulanmadığı üçün Carbon Browser endirməni blokladı</translation>
 <translation id="4594305310729380060">Bu cihazda Parol Menecerinə</translation>
-<translation id="459535195905078186">Carbon Browser Browser Tətbiqləri</translation>
-<translation id="4613863813562375431">Carbon Browser BrowserOS versiyası</translation>
-<translation id="4621240073146040695">Güncəllənmək üzrədir. Güncəlləşməni tamamlamaq üçün Carbon Browser Browser'u yenidən işə salın.</translation>
-<translation id="4665829708273112819">Xəbərdarlıq: Carbon Browser Browser artırmaların brauzer tarixçənizi yazmasının qarşısını ala bilməz. Bu artırmanı Anonim rejimdə deaktiv etmək üçün bu seçimi ləğv edin.</translation>
-<translation id="4673151026126227699">Carbon Browser Browser istifadə hesabatlarını da paylaşırsınızsa, bu hesabatlara ziyarət etdiyiniz keçidlər daxil olacaq</translation>
-<translation id="4677944499843243528">Profil başqa kompüterdə başqa Carbon Browser Browser prosesi tərəfindən (<ph name="PROCESS_ID" />)istifadə olunur (<ph name="HOST_NAME" />). Carbon Browser Browser profili xəta almaması üçün qapadıb. Əgər bu profilin başqa proseslər tərəfindən istifadə olunmadığına əminsinizsə, profili blokdan çıxarın və Carbon Browser Browser'u yenidən başladın.</translation>
+<translation id="459535195905078186">Carbon Browser Tətbiqləri</translation>
+<translation id="4613863813562375431">Carbon BrowserOS versiyası</translation>
+<translation id="4621240073146040695">Güncəllənmək üzrədir. Güncəlləşməni tamamlamaq üçün Carbon Browser'u yenidən işə salın.</translation>
+<translation id="4665829708273112819">Xəbərdarlıq: Carbon Browser artırmaların brauzer tarixçənizi yazmasının qarşısını ala bilməz. Bu artırmanı Anonim rejimdə deaktiv etmək üçün bu seçimi ləğv edin.</translation>
+<translation id="4673151026126227699">Carbon Browser istifadə hesabatlarını da paylaşırsınızsa, bu hesabatlara ziyarət etdiyiniz keçidlər daxil olacaq</translation>
+<translation id="4677944499843243528">Profil başqa kompüterdə başqa Carbon Browser prosesi tərəfindən (<ph name="PROCESS_ID" />)istifadə olunur (<ph name="HOST_NAME" />). Carbon Browser profili xəta almaması üçün qapadıb. Əgər bu profilin başqa proseslər tərəfindən istifadə olunmadığına əminsinizsə, profili blokdan çıxarın və Carbon Browser'u yenidən başladın.</translation>
 <translation id="4680828127924988555">Quraşdırmanı ləğv edin</translation>
-<translation id="4708774505295300557">Kimsə bu kompüterdə <ph name="ACCOUNT_EMAIL_LAST" /> kimi Carbon Browser Browser'a daxil olub. Məlumatınızı ayrı saxlamaq üçün yeni Carbon Browser Browser istifadəçisi yaradın.</translation>
-<translation id="4746050847053251315">Carbon Browser Browser'dan istənilən halda çıxılsın?</translation>
-<translation id="4748217263233248895">Carbon Browser Browser üçün xüsusi güvənlik güncəllənməsi indicə tətbiq edildi. Yenidən başladaraq açıq qalmış tablarınızı bərpa edə bilərsiniz.</translation>
-<translation id="4765210420921718862">İstənilən vaxt Carbon Browser Browser ayarlarında fikrinizi dəyişə bilərsiniz. Sınaqlar reklamların cari təqdim olunma üsulu ilə yanaşı işləyir, beləliklə, dəyişiklikləri dərhal görməyəcəksiniz.</translation>
-<translation id="4788777615168560705">Carbon Browser Browser parollarınızı yoxlaya bilmir. 24 saatdan sonra yenidən cəhd edin və ya <ph name="BEGIN_LINK" />Google Hesabınızda parolları yoxlayın<ph name="END_LINK" />.</translation>
+<translation id="4708774505295300557">Kimsə bu kompüterdə <ph name="ACCOUNT_EMAIL_LAST" /> kimi Carbon Browser'a daxil olub. Məlumatınızı ayrı saxlamaq üçün yeni Carbon Browser istifadəçisi yaradın.</translation>
+<translation id="4724676981607797757">Dəstəklənməyən protokol xətası səbəbindən quraşdırma alınmadı.</translation>
+<translation id="4746050847053251315">Carbon Browser'dan istənilən halda çıxılsın?</translation>
+<translation id="4748217263233248895">Carbon Browser üçün xüsusi güvənlik güncəllənməsi indicə tətbiq edildi. Yenidən başladaraq açıq qalmış tablarınızı bərpa edə bilərsiniz.</translation>
+<translation id="4765210420921718862">İstənilən vaxt Carbon Browser ayarlarında fikrinizi dəyişə bilərsiniz. Sınaqlar reklamların cari təqdim olunma üsulu ilə yanaşı işləyir, beləliklə, dəyişiklikləri dərhal görməyəcəksiniz.</translation>
+<translation id="4788777615168560705">Carbon Browser parollarınızı yoxlaya bilmir. 24 saatdan sonra yenidən cəhd edin və ya <ph name="BEGIN_LINK" />Google Hesabınızda parolları yoxlayın<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Bu, Google axtarışda istifadə edilən eyni orfoqrafiya yoxlayandan istifadə edir. Brauzerdə yazdığınız mətn Google'a göndərilir. Bunu istənilən vaxt ayarlardan dəyişə bilərsiniz.</translation>
-<translation id="4888717733111232871">mDNS trafikinə imkan vermək üçün Carbon Browser Browser üçün daxil olan qayda.</translation>
-<translation id="4893347770495441059">&amp;Carbon Browser Browser'u Güncəlləmək üçün yenidən başladın</translation>
-<translation id="4943838377383847465">Carbon Browser Browser arxa fon rejimindədir.</translation>
-<translation id="4987820182225656817">Qonaqlar geridə heç nə buraxmadan Carbon Browser Browser istifadə edə bilər.</translation>
-<translation id="4994636714258228724">Özünüzü Carbon Browser Browser'a əlavə edin</translation>
-<translation id="5114678101347489141">Carbon Browser Browser saytlara məlumatlarınızdan daha az istifadə etməklə eyni baxış təcrübəsi təqdim etməyə imkan verən yeni funksiyaları araşdırır</translation>
-<translation id="5224391634244552924">Yadda saxlanmış parol yoxdur. Parollarınızı yadda saxladıqda Carbon Browser Browser onları yoxlaya bilər.</translation>
-<translation id="5252179775517634216"><ph name="EXISTING_USER" /> artıq bu Carbon Browser Browser profilinə daxil olub. Bununla <ph name="USER_EMAIL_ADDRESS" /> üçün yeni Carbon Browser Browser profili yaradılacaq</translation>
-<translation id="5277894862589591112">Dəyişiklikləri tətbiq etmək üçün Carbon Browser Browser'u yenidən başladın</translation>
-<translation id="5296845517486664001">Sınaqlar aktiv olduqda və Carbon Browser Browser təsadüfi olaraq sizi aktiv sınağa təyin edibsə, baxış tarixçəniz gördüyünüz reklamlara və aşağıda təxmin edilən maraqlara təsir edir. Məxfiliyinizi qorumaq üçün Carbon Browser Browser hər ay maraqlarınızı növbəlilik əsasında silir.</translation>
-<translation id="5358375970380395591">İdarə olunan hesabla daxil olursnuz və onun inzibati idarəetməsini Carbon Browser Browser profilinizə verirsiniz. Tətbiqləriniz, əlfəcinləriniz, tarixçəniz və digər ayarlarınız Chromimum datanızla birlikdə <ph name="USER_NAME" /> üzərinə həmişəlik bənd olacaq. Bu datanı Google Hesabları Paneli vasitəsilə silə bilərsiniz, lakin bu datanı digər hesabla əlaqəli edə bilməzsiniz. Mövcud Carbon Browser Browser datanızı ayrı saxlamaq üçün yeni profil yarada bilərsiniz. <ph name="LEARN_MORE" /></translation>
-<translation id="5386450000063123300">Carbon Browser Browser güncəllənir (<ph name="PROGRESS_PERCENT" />)</translation>
-<translation id="538767207339317086">Carbon Browser Browser girişinə icazə verin</translation>
-<translation id="5398878173008909840">Carbon Browser Browser'um yeni versiyası əlçatandır.</translation>
-<translation id="5427571867875391349">Carbon Browser Browser'u defolt brauzer təyin edin</translation>
-<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Beta</translation>
-<translation id="5473971139929175403">Carbon Browser Browser düzgün işləməyə bilər, çünki daha Linux sistemi üzərində dəstəklənmir</translation>
-<translation id="5480860683791598150">Carbon Browser Browser məkanı bu saytla paylaşmaq üçün ona giriş tələb edir</translation>
-<translation id="5487574057737591516">Məxfiliyinizi qorumaq üçün 4 həftədən köhnə maraqlarınızı avtomatik silirik. Baxmağa davam etdikcə, maraq siyahıda yenidən görünə bilər. Carbon Browser Browser səhv anlasa və ya müəyyən reklamları görmək istəmirsinizsə, marağı silə bilərsiniz.</translation>
-<translation id="549669000822060376">Carbon Browser Browser'um ən son sistem güncəlləşmələrini quraşdırmasını gözləyin.</translation>
-<translation id="5496810170689441661">Carbon Browser Browser parolları redaktə etməyə çalışır. Buna icazə vermək üçün Windows parolunuzu yazın.</translation>
-<translation id="5527463683072221100">PDF-ləri Carbon Browser Browser'da açın</translation>
-<translation id="5614091477838198795">Aktiv olduqda, Carbon Browser Browser'dan da çıxacaqsınız</translation>
-<translation id="5623402015214259806">{0,plural, =0{Carbon Browser Browser güncəlləməsi əlçatandır}=1{Carbon Browser Browser güncəlləməsi əlçatandır}other{Carbon Browser Browser güncəlləməsi # gün ərzində əlçatan olub}}</translation>
-<translation id="5634636535844844681">Carbon Browser Browser Windows 7 və ya daha yeni versiya tələb edir.</translation>
-<translation id="5653831366781983928">Carbon Browser Browser'u indi başladın</translation>
-<translation id="5698481217667032250">Carbon Browser Browser'u bu dildə görüntüləyin</translation>
-<translation id="5862307444128926510">Carbon Browser Browser'a xoş gəlmisiniz</translation>
-<translation id="5883558403894052917">Carbon Browser Browser bu elementlərdə zərərli proqram olduğunu aşkar edib:</translation>
+<translation id="4814736265800133385">Hesab olmadan Carbon Browser istifadə edin</translation>
+<translation id="4888717733111232871">mDNS trafikinə imkan vermək üçün Carbon Browser üçün daxil olan qayda.</translation>
+<translation id="4893347770495441059">&amp;Carbon Browser'u Güncəlləmək üçün yenidən başladın</translation>
+<translation id="4943838377383847465">Carbon Browser arxa fon rejimindədir.</translation>
+<translation id="4987820182225656817">Qonaqlar geridə heç nə buraxmadan Carbon Browser istifadə edə bilər.</translation>
+<translation id="4994636714258228724">Özünüzü Carbon Browser'a əlavə edin</translation>
+<translation id="5114678101347489141">Carbon Browser saytlara məlumatlarınızdan daha az istifadə etməklə eyni baxış təcrübəsi təqdim etməyə imkan verən yeni funksiyaları araşdırır</translation>
+<translation id="5224391634244552924">Yadda saxlanmış parol yoxdur. Parollarınızı yadda saxladıqda Carbon Browser onları yoxlaya bilər.</translation>
+<translation id="5252179775517634216"><ph name="EXISTING_USER" /> artıq bu Carbon Browser profilinə daxil olub. Bununla <ph name="USER_EMAIL_ADDRESS" /> üçün yeni Carbon Browser profili yaradılacaq</translation>
+<translation id="5277894862589591112">Dəyişiklikləri tətbiq etmək üçün Carbon Browser'u yenidən başladın</translation>
+<translation id="5294316920224716406">Anonim rejimdə nəzər saldıqda Carbon Browser təhlükəli bağlantı ilə sayt yükləməzdən əvvəl xəbərdarlıq edəcək</translation>
+<translation id="5296845517486664001">Sınaqlar aktiv olduqda və Carbon Browser təsadüfi olaraq sizi aktiv sınağa təyin edibsə, baxış tarixçəniz gördüyünüz reklamlara və aşağıda təxmin edilən maraqlara təsir edir. Məxfiliyinizi qorumaq üçün Carbon Browser hər ay maraqlarınızı növbəlilik əsasında silir.</translation>
+<translation id="5352264705793813212">Carbon Browser nəzərdən keçirilməli güvənlik tövsiyələri tapdı</translation>
+<translation id="5358375970380395591">İdarə olunan hesabla daxil olursnuz və onun inzibati idarəetməsini Carbon Browser profilinizə verirsiniz. Tətbiqləriniz, əlfəcinləriniz, tarixçəniz və digər ayarlarınız Chromimum datanızla birlikdə <ph name="USER_NAME" /> üzərinə həmişəlik bənd olacaq. Bu datanı Google Hesabları Paneli vasitəsilə silə bilərsiniz, lakin bu datanı digər hesabla əlaqəli edə bilməzsiniz. Mövcud Carbon Browser datanızı ayrı saxlamaq üçün yeni profil yarada bilərsiniz. <ph name="LEARN_MORE" /></translation>
+<translation id="5368118228313795342">Əlavə kod: <ph name="EXTRA_CODE" />.</translation>
+<translation id="5383439451358640070">Carbon Browser-un bəzi faylları bloklama səbəbini öyrənin</translation>
+<translation id="5386450000063123300">Carbon Browser güncəllənir (<ph name="PROGRESS_PERCENT" />)</translation>
+<translation id="538767207339317086">Carbon Browser girişinə icazə verin</translation>
+<translation id="5398878173008909840">Carbon Browser'um yeni versiyası əlçatandır.</translation>
+<translation id="5405650547142096840">Carbon Browser'dan silin</translation>
+<translation id="5427571867875391349">Carbon Browser'u defolt brauzer təyin edin</translation>
+<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> - Carbon Browser Beta</translation>
+<translation id="5473971139929175403">Carbon Browser düzgün işləməyə bilər, çünki daha Linux sistemi üzərində dəstəklənmir</translation>
+<translation id="5480860683791598150">Carbon Browser məkanı bu saytla paylaşmaq üçün ona giriş tələb edir</translation>
+<translation id="5487574057737591516">Məxfiliyinizi qorumaq üçün 4 həftədən köhnə maraqlarınızı avtomatik silirik. Baxmağa davam etdikcə, maraq siyahıda yenidən görünə bilər. Carbon Browser səhv anlasa və ya müəyyən reklamları görmək istəmirsinizsə, marağı silə bilərsiniz.</translation>
+<translation id="549669000822060376">Carbon Browser'um ən son sistem güncəlləşmələrini quraşdırmasını gözləyin.</translation>
+<translation id="5496810170689441661">Carbon Browser parolları redaktə etməyə çalışır. Buna icazə vermək üçün Windows parolunuzu yazın.</translation>
+<translation id="5527463683072221100">PDF-ləri Carbon Browser'da açın</translation>
+<translation id="5623402015214259806">{0,plural, =0{Carbon Browser güncəlləməsi əlçatandır}=1{Carbon Browser güncəlləməsi əlçatandır}other{Carbon Browser güncəlləməsi # gün ərzində əlçatan olub}}</translation>
+<translation id="5643865575100044307">Carbon Browser-u bağladıqda sayt datasını cihazdan silin</translation>
+<translation id="5653831366781983928">Carbon Browser'u indi başladın</translation>
+<translation id="5675598751761067447">Bu fayl təhlükəli ola bilər<ph name="LINE_BREAK" />Parol təmin etsəniz, Carbon Browser bu endirməni yoxlaya bilər (parol cihazda qalır)</translation>
+<translation id="5690427481109656848">Google MMC</translation>
+<translation id="5698481217667032250">Carbon Browser'u bu dildə görüntüləyin</translation>
+<translation id="569897634095159764">İnternetə qoşulmaq olmur. Proksi serveri identifikasiya tələb edir.</translation>
+<translation id="5809516625706423866">İnternetə qoşulmaq olmur. HTTP 401 üçün icazə verilməyib. Proksi konfiqurasiyasını yoxlayın.</translation>
+<translation id="5862307444128926510">Carbon Browser'a xoş gəlmisiniz</translation>
+<translation id="5883558403894052917">Carbon Browser bu elementlərdə zərərli proqram olduğunu aşkar edib:</translation>
+<translation id="5889361821821684993">Carbon Browser brauzerin ən təhlükəsiz ayarlara malik olub-olmadığını müntəzəm yoxlayır. Nəzərdən keçirilməli məqam olsa, sizə bildirəcəyik.</translation>
 <translation id="5895138241574237353">Yenidən başladın</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> - Şəbəkəyə Giriş</translation>
 <translation id="5924017743176219022">İnternetə qoşulur...</translation>
 <translation id="5941711191222866238">Minimallaşdırın</translation>
-<translation id="5972142260211327093">Carbon Browser Browser təsadüfi olaraq sizi aktiv sınağa təyin edibsə, baxış tarixçəniz gördüyünüz reklamlara və aşağıda təxmin edilən maraqlara təsir edir. Məxfiliyinizi qorumaq üçün Carbon Browser Browser hər ay maraqlarınızı növbəlilik əsasında silir. Silmədiyiniz təqdirdə maraqlar yenilənir.</translation>
-<translation id="5987687638152509985">Sinxronizasiyanı başlatmaq üçün Carbon Browser Browser'u güncəlləyin</translation>
-<translation id="5988505247484123880">Ziyarət etdiyiniz saytların təcrübənizi fərdiləşdirmək üçün maraqlarınızı xatırlaması normaldır. Saytlar həmçinin maraqlarınız haqqında Carbon Browser Browser ilə məlumat saxlaya bilər.</translation>
+<translation id="5972142260211327093">Carbon Browser təsadüfi olaraq sizi aktiv sınağa təyin edibsə, baxış tarixçəniz gördüyünüz reklamlara və aşağıda təxmin edilən maraqlara təsir edir. Məxfiliyinizi qorumaq üçün Carbon Browser hər ay maraqlarınızı növbəlilik əsasında silir. Silmədiyiniz təqdirdə maraqlar yenilənir.</translation>
+<translation id="5986585015444752010">{COUNT,plural, =1{Carbon Browser 1 dəqiqə istifadə edilmədikdə təşkilat onu avtomatik bağlayır.}other{Carbon Browser # dəqiqə istifadə edilmədikdə təşkilat onu avtomatik bağlayır.}}</translation>
+<translation id="5987687638152509985">Sinxronizasiyanı başlatmaq üçün Carbon Browser'u güncəlləyin</translation>
+<translation id="5988505247484123880">Ziyarət etdiyiniz saytların təcrübənizi fərdiləşdirmək üçün maraqlarınızı xatırlaması normaldır. Saytlar həmçinin maraqlarınız haqqında Carbon Browser ilə məlumat saxlaya bilər.</translation>
 <translation id="6003112304606738118">Endirilir... <ph name="HOURS" /> saat qalıb</translation>
 <translation id="6040143037577758943">Qapat</translation>
-<translation id="6055895534982063517">Carbon Browser Browser'um yeni versiyası əlçatandır və həmişəkindən daha sürətlidir.</translation>
-<translation id="6063093106622310249">Carbon Browser Browser'də açın</translation>
-<translation id="6072279588547424923"><ph name="EXTENSION_NAME" /> Carbon Browser Browser'a əlavə edildi</translation>
+<translation id="6055895534982063517">Carbon Browser'um yeni versiyası əlçatandır və həmişəkindən daha sürətlidir.</translation>
+<translation id="6058380562449900225">Datanı qorumaq üçün Carbon Browser-un son vaxtlar daxil olmadığınız saytlardan icazələri silməsinə icazə verin. Bildirişlər dayanmır.</translation>
+<translation id="6063093106622310249">Carbon Browser'də açın</translation>
+<translation id="6072279588547424923"><ph name="EXTENSION_NAME" /> Carbon Browser'a əlavə edildi</translation>
+<translation id="6072463441809498330">Carbon Browser'u sürətli edin</translation>
 <translation id="608006075545470555">Bu brauzerə İş Profili əlavə edin</translation>
-<translation id="6096348254544841612">Carbon Browser Browser'u fərdiləşdirin və idarə edin. Güncəlləmə əlçatandır.</translation>
-<translation id="6120345080069858279">Carbon Browser Browser bu parolu Google Hesabında yadda saxlayacaq. Onu yadda saxlamalı olmayacaqsınız.</translation>
-<translation id="6129621093834146363"><ph name="FILE_NAME" /> təklükəli olduğu üçün Carbon Browser Browser onu blok etdi.</translation>
-<translation id="6134968993075716475">Təhlükəsiz Baxış deaktivdir. Carbon Browser Browser onu aktiv etməyi tövsiyə edir.</translation>
-<translation id="6145820983052037069">Burada Carbon Browser Browser profilləri arasında keçid edə bilərsiniz</translation>
-<translation id="6183079672144801177"><ph name="TARGET_DEVICE_NAME" /> cihazınızda Carbon Browser Browser'a daxil olduğunuza əmin olun və sonra yenidən göndərin.</translation>
-<translation id="6212496753309875659">Bu kompüterdə Carbon Browser Browser'um daha son versiyası var. Proqram təminatı işləmirsə, Chroimum'u sistemdən silin və yenidən cəhd edin.</translation>
-<translation id="6219195342503754812">{0,plural, =0{Carbon Browser Browser indi yenidən başlayacaq}=1{Carbon Browser Browser 1 saniyəyə yenidən başlayacaq}other{Carbon Browser Browser # saniyəyə yenidən başlayacaq}}</translation>
-<translation id="6241367896540709610">Carbon Browser Browser faylları endirmək üçün yaddaşa giriş tələb edir</translation>
-<translation id="6245734527075554892">URL'ləri Carbon Browser Browser'da saxlanılan təhlükəli saytların siyahısı ilə yoxlayır</translation>
-<translation id="6248213926982192922">Carbon Browser Browser'u defolt brauzer edin</translation>
-<translation id="6266342355635466082">Carbon Browser Browser güncəlləmələri yoxlaya bilmir. İnternet bağlantınızı yoxlamağa cəhd edin.</translation>
-<translation id="6268381023930128611">Carbon Browser Browser'dan çıxılsın?</translation>
+<translation id="6096348254544841612">Carbon Browser'u fərdiləşdirin və idarə edin. Güncəlləmə əlçatandır.</translation>
+<translation id="6102072151902574948">Aktiv olduqda Carbon Browser arxa fon fəaliyyətini, habelə rahat sürüşdürmə və video kadr sürətləri kimi vizual effektləri məhdudlaşdırmaqla batareya enerjisinə qənaət edir.</translation>
+<translation id="6119438414301547735">Carbon Browser alətlər panelində artırmanın giriş sorğularını göstərməsinə icazə verin</translation>
+<translation id="6120345080069858279">Carbon Browser bu parolu Google Hesabında yadda saxlayacaq. Onu yadda saxlamalı olmayacaqsınız.</translation>
+<translation id="6129621093834146363"><ph name="FILE_NAME" /> təklükəli olduğu üçün Carbon Browser onu blok etdi.</translation>
+<translation id="6132897690380286411">Carbon Browser tezliklə bağlanacaq və datanı siləcək</translation>
+<translation id="6134968993075716475">Təhlükəsiz Baxış deaktivdir. Carbon Browser onu aktiv etməyi tövsiyə edir.</translation>
+<translation id="6144416395842701622">Carbon Browser-dan maksimum yararlanmaq üçün daxil olun</translation>
+<translation id="6145820983052037069">Burada Carbon Browser profilləri arasında keçid edə bilərsiniz</translation>
+<translation id="615103374448673771">Kukilərə icazə versəniz, əvvəlcədən yükləmə zamanı Carbon Browser onlardan istifadə edə bilər</translation>
+<translation id="6175304430031192654">Ayarlardan asılı olaraq Carbon Browser kukilər və cari URL-i də göndərə bilər</translation>
+<translation id="6182736845697986886">Yeniləmə serverində daxili xəta səbəbindən quraşdırma alınmadı.</translation>
+<translation id="6183079672144801177"><ph name="TARGET_DEVICE_NAME" /> cihazınızda Carbon Browser'a daxil olduğunuza əmin olun və sonra yenidən göndərin.</translation>
+<translation id="6212496753309875659">Bu kompüterdə Carbon Browser'um daha son versiyası var. Proqram təminatı işləmirsə, Chroimum'u sistemdən silin və yenidən cəhd edin.</translation>
+<translation id="6219195342503754812">{0,plural, =0{Carbon Browser indi yenidən başlayacaq}=1{Carbon Browser 1 saniyəyə yenidən başlayacaq}other{Carbon Browser # saniyəyə yenidən başlayacaq}}</translation>
+<translation id="6241367896540709610">Carbon Browser faylları endirmək üçün yaddaşa giriş tələb edir</translation>
+<translation id="6245734527075554892">URL'ləri Carbon Browser'da saxlanılan təhlükəli saytların siyahısı ilə yoxlayır</translation>
+<translation id="6248213926982192922">Carbon Browser'u defolt brauzer edin</translation>
+<translation id="6266342355635466082">Carbon Browser güncəlləmələri yoxlaya bilmir. İnternet bağlantınızı yoxlamağa cəhd edin.</translation>
+<translation id="6268381023930128611">Carbon Browser'dan çıxılsın?</translation>
 <translation id="6273793429163604305">Qeydlərinizdə...</translation>
-<translation id="6281746429495226318">Carbon Browser Browser profilinizi fərdiləşdirin</translation>
-<translation id="6290827346642914212">Carbon Browser Browser profilinizə ad verin</translation>
-<translation id="6295779123002464101"><ph name="FILE_NAME" /> təklükəli ola bilər, bu səbəbdən Carbon Browser Browser onu blok etdi.</translation>
-<translation id="6309712487085796862">Carbon Browser Browser kameranızı istifadə edir.</translation>
-<translation id="632355235628111698">Carbon Browser Browser bu faylı təhlükəli olduğu üçün blokladı</translation>
+<translation id="6281746429495226318">Carbon Browser profilinizi fərdiləşdirin</translation>
+<translation id="6290827346642914212">Carbon Browser profilinizə ad verin</translation>
+<translation id="6295779123002464101"><ph name="FILE_NAME" /> təklükəli ola bilər, bu səbəbdən Carbon Browser onu blok etdi.</translation>
+<translation id="6309712487085796862">Carbon Browser kameranızı istifadə edir.</translation>
+<translation id="632355235628111698">Carbon Browser bu faylı təhlükəli olduğu üçün blokladı</translation>
 <translation id="6327105987658262776">Güncəlləmə əlçatan deyil.</translation>
-<translation id="6333502561965082103">Carbon Browser Browser'da digər əməliyyat davam edir. Sonra yenidən cəhd edin.</translation>
-<translation id="6334986366598267305">Carbon Browser Browser'u Google Hesabınız ilə ə paylaşılmış kompüterlərdə istifadə etmək indi daha asandır.</translation>
-<translation id="6373523479360886564">Carbon Browser Browser'u silmək istəyirsiniz?</translation>
-<translation id="6384011394608460044"><ph name="BEGIN_BOLD" />Bu datanı necə istifadə edirik:<ph name="END_BOLD" /> Carbon Browser Browser maraqlarınızı təxmin edə bilər. Daha sonra ziyarət etdiyiniz sayt gördüyünüz reklamları fərdiləşdirmək üçün Carbon Browser Browser'dan maraqlarınızı görməyi tələb edə bilər.</translation>
-<translation id="6403826409255603130">Carbon Browser Browser veb səhifələri və tətbiqləri ildırım sürəti ilə işlədən veb brauzerdir. Carbon Browser Browser sürətlidir, stabildir və istifadəyə rahatdır. Carbon Browser Browser ilə internetdən fırıldaqlardan və viruslardan uzaq şəkildə istifadə edin.</translation>
-<translation id="6442900851116057561">Carbon Browser BrowserOS'i yenidən başladın</translation>
-<translation id="6455857529632101747">Carbon Browser Browser profillərinə xoş gəlmisiniz</translation>
-<translation id="6457450909262716557">{SECONDS,plural, =1{Carbon Browser Browser 1 saniyəyə yenidən başlayacaq}other{Carbon Browser Browser # saniyəyə yenidən başlayacaq}}</translation>
-<translation id="6475912303565314141">Həmçinin, Carbon Browser Browser açılanda hansı səhifənin göstərildiyini idarə edir.</translation>
-<translation id="6510925080656968729">Carbon Browser Browser'u sistemdən silin</translation>
-<translation id="6542839706527980775">Hər bir profil əlfəcinlər, tarixçələr, parollar və s. kimi öz Carbon Browser Browser məlumatlarını saxlayır</translation>
-<translation id="6570579332384693436">Carbon Browser Browser, yazı səhvlərini düzəltmək üçün mətn sahələrinə yazdığınız mətni Google'a göndərir</translation>
-<translation id="6598877126913850652">Carbon Browser Browser bildiriş ayarlarına keçin</translation>
-<translation id="6613594504749178791">Dəyişiklikləriniz gələn dəfə Carbon Browser Browser'u başlatdıqda qüvvəyə minəcək.</translation>
-<translation id="665732753414869868">Carbon Browser Browser ətrafınızın 3D xəritəsini yaratmaq üçün kameranıza giriş icazəsi tələb edir</translation>
+<translation id="6333502561965082103">Carbon Browser'da digər əməliyyat davam edir. Sonra yenidən cəhd edin.</translation>
+<translation id="6334986366598267305">Carbon Browser'u Google Hesabınız ilə ə paylaşılmış kompüterlərdə istifadə etmək indi daha asandır.</translation>
+<translation id="6366160072964553914">Bu fayl adətən endirilmədiyi və təhlükəli ola biləcəyi üçün Carbon Browser endirməni blokladı</translation>
+<translation id="6373523479360886564">Carbon Browser'u silmək istəyirsiniz?</translation>
+<translation id="6375219077595103062">Parol meneceri üçün qısayol əlavə edin</translation>
+<translation id="6384011394608460044"><ph name="BEGIN_BOLD" />Bu datanı necə istifadə edirik:<ph name="END_BOLD" /> Carbon Browser maraqlarınızı təxmin edə bilər. Daha sonra ziyarət etdiyiniz sayt gördüyünüz reklamları fərdiləşdirmək üçün Carbon Browser'dan maraqlarınızı görməyi tələb edə bilər.</translation>
+<translation id="6400112897226594999">Kompüter ekranında Carbon Browser loqosu.</translation>
+<translation id="6403826409255603130">Carbon Browser veb səhifələri və tətbiqləri ildırım sürəti ilə işlədən veb brauzerdir. Carbon Browser sürətlidir, stabildir və istifadəyə rahatdır. Carbon Browser ilə internetdən fırıldaqlardan və viruslardan uzaq şəkildə istifadə edin.</translation>
+<translation id="6442900851116057561">Carbon BrowserOS'i yenidən başladın</translation>
+<translation id="6443470774889161065">Tez yüklənməsi üçün Carbon Browser daxil ola biləcəyiniz digər səhifələri əvvəlcədən yükləyir</translation>
+<translation id="6455857529632101747">Carbon Browser profillərinə xoş gəlmisiniz</translation>
+<translation id="6475912303565314141">Həmçinin, Carbon Browser açılanda hansı səhifənin göstərildiyini idarə edir.</translation>
+<translation id="648319183876919572">Qabaqcıl Güvənli Baxış təhlükəli veb-sayt və endirmələrə qarşı daha yaxşı qoruyur</translation>
+<translation id="6510925080656968729">Carbon Browser'u sistemdən silin</translation>
+<translation id="6539122709674868420">Carbon Browser <ph name="TIMEOUT_DURATION" /> istifadə edilməsə, təşkilat onu bağlayır. Baxış datası silindi. Bura tarixçə, avto doldurma və endirmələr daxil ola bilər.</translation>
+<translation id="6542839706527980775">Hər bir profil əlfəcinlər, tarixçələr, parollar və s. kimi öz Carbon Browser məlumatlarını saxlayır</translation>
+<translation id="6563921047760808519"><ph name="BEGIN_LINK" />Carbon Browser-un datanı məxfi saxlaması<ph name="END_LINK" /> haqqında ətraflı</translation>
+<translation id="656935081669708576">Dəyişməklə parollara başqa Carbon Browser profilindən baxa bilərsiniz</translation>
+<translation id="6570579332384693436">Carbon Browser, yazı səhvlərini düzəltmək üçün mətn sahələrinə yazdığınız mətni Google'a göndərir</translation>
+<translation id="6598877126913850652">Carbon Browser bildiriş ayarlarına keçin</translation>
+<translation id="6613594504749178791">Dəyişiklikləriniz gələn dəfə Carbon Browser'u başlatdıqda qüvvəyə minəcək.</translation>
+<translation id="665732753414869868">Carbon Browser ətrafınızın 3D xəritəsini yaratmaq üçün kameranıza giriş icazəsi tələb edir</translation>
+<translation id="6663852025006259149">Saytlar yəqin ki, gözlədiyiniz kimi işləyəcək, lakin bütün Carbon Browser pəncərələrini bağladıqdan sonra sizi xatırlamayacaq</translation>
+<translation id="6669284030132180248">Carbon Browser-da məhsul qiymətlərini izləmək və qiymət enəndə bildiriş almaq üçün əlfəcinləri Google Hesabında da saxlayın</translation>
 <translation id="6676384891291319759">İnternet</translation>
-<translation id="668175097507315160">Giriş xətası səbəbindən Carbon Browser BrowserOS datanızı sinxronizasiya edə bilmədi.</translation>
-<translation id="6709350901466051922">Carbon Browser Browser bu sayt üçün mikrofon icazəsi tələb edir</translation>
-<translation id="6717134281241384636">Profiliniz yeni versiya Google Carbon Browser Browser'dan olduğu üçün istifadə edilə bilməz.
+<translation id="668175097507315160">Giriş xətası səbəbindən Carbon BrowserOS datanızı sinxronizasiya edə bilmədi.</translation>
+<translation id="6709350901466051922">Carbon Browser bu sayt üçün mikrofon icazəsi tələb edir</translation>
+<translation id="6712881677154121168">Endirmə xətası: <ph name="DOWNLOAD_ERROR" />.</translation>
+<translation id="6717134281241384636">Profiliniz yeni versiya Google Carbon Browser'dan olduğu üçün istifadə edilə bilməz.
 
-Bəzi funksiyalar əlçatmaz ola bilər. Xüsusi profil direktoriyası göstərin və ya yeni Carbon Browser Browser versiyası işlədin.</translation>
-<translation id="6734291798041940871">Carbon Browser Browser kompüterinizdəki bütün istifadəçilər üçün artıq quraşdırılıb.</translation>
-<translation id="673636774878526923">Bütün cihazlarınızda Carbon Browser Browser elementlərinə giriş etmək üçün daxil olun və sinxronizasiyanı aktiv edin.</translation>
-<translation id="6774082503108938489">Valideyniniz Carbon Browser Browser üçün "Saytlar, tətbiqlər və artırmalar üçün icazələri" deaktiv edib. Bu <ph name="EXTENSION_TYPE_PARAMETER" /> artırmasının aktiv edilməsinə icazə verilmir.</translation>
-<translation id="6779406956731413166">Carbon Browser BrowserOS əlavə <ph name="BEGIN_LINK_CROS_OSS" />açıq mənbə proqram təminatı ilə<ph name="END_LINK_CROS_OSS" /> mümkün oldu.</translation>
-<translation id="6847869444787758381">Carbon Browser Browser parollarınızın oğurlanıb-oğurlanmadığı haqqında Sizə məlumat verir</translation>
-<translation id="6852530923436401894">Carbon Browser Browser bu faylı zərərli proqram ehtiva etdiyinə görə bloklayıb</translation>
-<translation id="6857782730669500492">Carbon Browser Browser - <ph name="PAGE_TITLE" /></translation>
-<translation id="6863361426438995919">Google Pay (Carbon Browser Browser'a kopyalandı)</translation>
-<translation id="6873893289264747459">Carbon Browser Browser "<ph name="EXTENSION_NAME" />" artırmasında zərərli proqram olduğunu aşkar edib</translation>
+Bəzi funksiyalar əlçatmaz ola bilər. Xüsusi profil direktoriyası göstərin və ya yeni Carbon Browser versiyası işlədin.</translation>
+<translation id="6730677189742196061">Yaddaşa Qənaət Carbon Browser'u daha sürətli etdi</translation>
+<translation id="6734291798041940871">Carbon Browser kompüterinizdəki bütün istifadəçilər üçün artıq quraşdırılıb.</translation>
+<translation id="673636774878526923">Bütün cihazlarınızda Carbon Browser elementlərinə giriş etmək üçün daxil olun və sinxronizasiyanı aktiv edin.</translation>
+<translation id="67706546131546258">Carbon Browser bu faylı skan etməyi tövsiyə edir, çünki o, təhlükəli ola bilər.</translation>
+<translation id="6779406956731413166">Carbon BrowserOS əlavə <ph name="BEGIN_LINK_CROS_OSS" />açıq mənbə proqram təminatı ilə<ph name="END_LINK_CROS_OSS" /> mümkün oldu.</translation>
+<translation id="6847869444787758381">Carbon Browser parollarınızın oğurlanıb-oğurlanmadığı haqqında Sizə məlumat verir</translation>
+<translation id="6852530923436401894">Carbon Browser bu faylı zərərli proqram ehtiva etdiyinə görə bloklayıb</translation>
+<translation id="6857782730669500492">Carbon Browser - <ph name="PAGE_TITLE" /></translation>
+<translation id="6863361426438995919">Google Pay (Carbon Browser'a kopyalandı)</translation>
+<translation id="6873893289264747459">Carbon Browser "<ph name="EXTENSION_NAME" />" artırmasında zərərli proqram olduğunu aşkar edib</translation>
 <translation id="6893813176749746474">Xrom yeniləndi, lakin ən azı 30 gün üçün istifadə etməmişlər.</translation>
-<translation id="691026815377248078">Carbon Browser Browser birləşməyə davam etmək üçün Bluetooth'a giriş tələb edir. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
-<translation id="6929417474050522668">Sınaqlar aktiv olduqda, reklamın ölçülməsi ziyarət etdiyiniz saytlara Carbon Browser Browser'dan sayta reklamlarının performansını ölçməyə kömək edən məlumat tələb etməyə imkan verir. Reklamın ölçülməsi saytlar arasında mümkün qədər az məlumat ötürməklə saytlararası izləməni məhdudlaşdırır.</translation>
-<translation id="6940431691900807093">Daha sonra ziyarət etdiyiniz sayt gördüyünüz reklamları fərdiləşdirmək üçün Carbon Browser Browser'dan maraqlarınızı görməyi tələb edə bilər. Carbon Browser Browser 3-ə qədər marağı paylaşa bilər.</translation>
-<translation id="6964305034639999644">Linki gizli Carbon Browser Browser pəncərəsində açın</translation>
-<translation id="6978145336957848883">Zəif parolları tapmaq asandır. Carbon Browser Browser'un <ph name="BEGIN_LINK" />sizin üçün güclü parollar yaratmasına və yadda saxlamasına<ph name="END_LINK" /> imkan verin.</translation>
-<translation id="6985329841647292029">Carbon Browser BrowserOS şərtləri</translation>
-<translation id="6990124437352146030">Carbon Browser Browser bu sayt üçün mikrofona giriş tələb edir</translation>
+<translation id="691026815377248078">Carbon Browser birləşməyə davam etmək üçün Bluetooth'a giriş tələb edir. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="6929417474050522668">Sınaqlar aktiv olduqda, reklamın ölçülməsi ziyarət etdiyiniz saytlara Carbon Browser'dan sayta reklamlarının performansını ölçməyə kömək edən məlumat tələb etməyə imkan verir. Reklamın ölçülməsi saytlar arasında mümkün qədər az məlumat ötürməklə saytlararası izləməni məhdudlaşdırır.</translation>
+<translation id="6940431691900807093">Daha sonra ziyarət etdiyiniz sayt gördüyünüz reklamları fərdiləşdirmək üçün Carbon Browser'dan maraqlarınızı görməyi tələb edə bilər. Carbon Browser 3-ə qədər marağı paylaşa bilər.</translation>
+<translation id="6964305034639999644">Linki gizli Carbon Browser pəncərəsində açın</translation>
+<translation id="6978145336957848883">Zəif parolları tapmaq asandır. Carbon Browser'un <ph name="BEGIN_LINK" />sizin üçün güclü parollar yaratmasına və yadda saxlamasına<ph name="END_LINK" /> imkan verin.</translation>
+<translation id="6981396265751285733">Aktiv olduqda Carbon Browser qeyri-aktiv tablardan yaddaşı təmizləyir. Bu, aktiv tablara və digər tətbiqlərə daha çox kompüter resursu verir və Carbon Browser-u sürətləndirir. Qayıtdığınız zaman qeyri-aktiv tablar avtomatik olaraq yenidən aktivləşir.</translation>
+<translation id="6985329841647292029">Carbon BrowserOS şərtləri</translation>
+<translation id="6990124437352146030">Carbon Browser bu sayt üçün mikrofona giriş tələb edir</translation>
+<translation id="7011190694940573312">Əməliyyat sisteminin bu versiyası dəstəklənmədiyi üçün quraşdırma alınmadı.</translation>
+<translation id="7024536598735240744">Paketin açılması xətası: <ph name="UNPACK_ERROR" />.</translation>
 <translation id="7025789849649390912">Quraşdırma Dayandırılıb.</translation>
-<translation id="705851970750939768">Carbon Browser Browser'u güncəlləşdirin</translation>
-<translation id="7067091210845072982">Şəklin təsviri faydalı deyilsə, Carbon Browser Browser Sizin üçün təsviri təmin etməyə çalışacaq. Təsvir yaratmaq üçün şəkillər Google'a göndərilir.</translation>
-<translation id="718435575166326686">Carbon Browser Browser bu sayt üçün kamera icazəsi tələb edir</translation>
-<translation id="7196312274710523067">Carbon Browser Browser başlamadı. Yenidən sınayın.</translation>
-<translation id="7197677400338048821">Carbon Browser Browser parollarınızı yoxlaya bilmir. 24 saatdan sonra yenidən cəhd edin.</translation>
-<translation id="7218568399872925918">Ziyarət etdiyiniz saytlar Carbon Browser Browser'u bağlayana qədər məlumatlarınızı xatırlayır</translation>
-<translation id="7223968959479464213">Tapşırıq Meneceri - Carbon Browser Browser</translation>
-<translation id="7246575524853130370">Carbon Browser Browser tərəfindən təxmin edilən maraqlarınız</translation>
-<translation id="7309928523159922338">Reklamın ölçülməsi ziyarət etdiyiniz saytlara Carbon Browser Browser'dan sayta reklamlarının performansını ölçməyə kömək edən məlumat tələb etməyə imkan verir. Reklamın ölçülməsi saytlar arasında mümkün qədər az məlumat ötürməklə saytlararası izləməni məhdudlaşdırır.</translation>
-<translation id="731795002583552498">Carbon Browser Browser güncəlləşir</translation>
-<translation id="7318036098707714271">Tərcih faylınız zədələnib və ya yanlışdır.  Carbon Browser Browser ayarlarınızı bərpa edə bilmir.</translation>
-<translation id="7337881442233988129">Carbon Browser Browser</translation>
+<translation id="705851970750939768">Carbon Browser'u güncəlləşdirin</translation>
+<translation id="7067091210845072982">Şəklin təsviri faydalı deyilsə, Carbon Browser Sizin üçün təsviri təmin etməyə çalışacaq. Təsvir yaratmaq üçün şəkillər Google'a göndərilir.</translation>
+<translation id="7141270731789036260">Sınaq üçün Carbon Browser-u fərdiləşdirin</translation>
+<translation id="7173822816570314652">Carbon Browser datası <ph name="TIMEOUT_DURATION" /> istifadə edilməsə, təşkilat onu silir. Bura tarixçə, avto doldurma və endirmələr daxil ola bilər.</translation>
+<translation id="718435575166326686">Carbon Browser bu sayt üçün kamera icazəsi tələb edir</translation>
+<translation id="7196312274710523067">Carbon Browser başlamadı. Yenidən sınayın.</translation>
+<translation id="7197677400338048821">Carbon Browser parollarınızı yoxlaya bilmir. 24 saatdan sonra yenidən cəhd edin.</translation>
+<translation id="7213407614656404070">Mesaj, sənəd və digər tətbiqlərdə keçidlərə kliklədikdə Carbon Browser istifadə edin</translation>
+<translation id="7223968959479464213">Tapşırıq Meneceri - Carbon Browser</translation>
+<translation id="7246575524853130370">Carbon Browser tərəfindən təxmin edilən maraqlarınız</translation>
+<translation id="7309928523159922338">Reklamın ölçülməsi ziyarət etdiyiniz saytlara Carbon Browser'dan sayta reklamlarının performansını ölçməyə kömək edən məlumat tələb etməyə imkan verir. Reklamın ölçülməsi saytlar arasında mümkün qədər az məlumat ötürməklə saytlararası izləməni məhdudlaşdırır.</translation>
+<translation id="731795002583552498">Carbon Browser güncəlləşir</translation>
+<translation id="7318036098707714271">Tərcih faylınız zədələnib və ya yanlışdır.  Carbon Browser ayarlarınızı bərpa edə bilmir.</translation>
 <translation id="7339898014177206373">Yeni pəncərə</translation>
-<translation id="734373864078049451">Veb, əlfəcinlər və Carbon Browser Browser'a aid hər şeyiniz buradadır.</translation>
-<translation id="7349591376906416160">Sistem administratorunun konfiqurasiyasına əsasən Carbon Browser Browser <ph name="TARGET_URL_HOSTNAME" /> ünvanına daxil olmaq üçün <ph name="ALTERNATIVE_BROWSER_NAME" /> tətbiqini aça bilər.</translation>
-<translation id="7398989605938454041">Carbon Browser Browser profilləri ilə bütün Carbon Browser Browser elementlərinizi ayıra bilərsiniz. Bu, iş və əyləncə arasında ayırım etməyi asanlaşdırır.</translation>
-<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Dev</translation>
-<translation id="7451052299415159299">Carbon Browser Browser bu sayt üçün kameraya giriş tələb edir</translation>
-<translation id="7467949745582939695">Carbon Browser Browser yenidən başladılsın?</translation>
-<translation id="7483335560992089831">Hazırda istifadə olunan Carbon Browser Browser versiyasını quraşdıra bilməzsiniz. Lütfən, Carbon Browser Browser'u qapadın və yenidən cəhd edin.</translation>
-<translation id="753534427205733210">{0,plural, =1{Carbon Browser Browser 1 dəqiqəyə yenidən başlayacaq}other{Carbon Browser Browser # dəqiqəyə yenidən başlayacaq}}</translation>
-<translation id="7561906087460245826">Carbon Browser Browser'dan datanı silin (<ph name="URL" />)</translation>
-<translation id="7582945390259497898">Carbon Browser Browser maraqlarınızı təxmin edə bilər. Daha sonra ziyarət etdiyiniz sayt gördüyünüz reklamları fərdiləşdirmək üçün Carbon Browser Browser'dan maraqlarınızı görməyi tələb edə bilər.</translation>
+<translation id="734373864078049451">Veb, əlfəcinlər və Carbon Browser'a aid hər şeyiniz buradadır.</translation>
+<translation id="7349591376906416160">Sistem administratorunun konfiqurasiyasına əsasən Carbon Browser <ph name="TARGET_URL_HOSTNAME" /> ünvanına daxil olmaq üçün <ph name="ALTERNATIVE_BROWSER_NAME" /> tətbiqini aça bilər.</translation>
+<translation id="7398989605938454041">Carbon Browser profilləri ilə bütün Carbon Browser elementlərinizi ayıra bilərsiniz. Bu, iş və əyləncə arasında ayırım etməyi asanlaşdırır.</translation>
+<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> - Carbon Browser Dev</translation>
+<translation id="7451052299415159299">Carbon Browser bu sayt üçün kameraya giriş tələb edir</translation>
+<translation id="7461356015007898716">Carbon Browser güncəlləmələrini əldə etmək üçün Windows 10 və ya daha yeni versiya tələb olunur. Bu kompüter Windows 7 istifadə edir.</translation>
+<translation id="7467949745582939695">Carbon Browser yenidən başladılsın?</translation>
+<translation id="7483335560992089831">Hazırda istifadə olunan Carbon Browser versiyasını quraşdıra bilməzsiniz. Lütfən, Carbon Browser'u qapadın və yenidən cəhd edin.</translation>
+<translation id="753534427205733210">{0,plural, =1{Carbon Browser 1 dəqiqəyə yenidən başlayacaq}other{Carbon Browser # dəqiqəyə yenidən başlayacaq}}</translation>
+<translation id="7582945390259497898">Carbon Browser maraqlarınızı təxmin edə bilər. Daha sonra ziyarət etdiyiniz sayt gördüyünüz reklamları fərdiləşdirmək üçün Carbon Browser'dan maraqlarınızı görməyi tələb edə bilər.</translation>
 <translation id="7583399374488819119"><ph name="COMPANY_NAME" /> Quraşdırıcısı</translation>
-<translation id="7597596667193879455">Hesabınızda Qabaqcıl Güvənli Baxışı aktiv etdiniz. İndi onu Carbon Browser Browser üçün əldə edin.</translation>
-<translation id="761356813943268536">Carbon Browser Browser kameranızı və mikrofonunuzu işlədir.</translation>
-<translation id="7617377681829253106">Carbon Browser Browser daha da keyfiyyətli oldu</translation>
+<translation id="761356813943268536">Carbon Browser kameranızı və mikrofonunuzu işlədir.</translation>
+<translation id="7617377681829253106">Carbon Browser daha da keyfiyyətli oldu</translation>
 <translation id="7649070708921625228">Yardım</translation>
-<translation id="7682213815243802460">Carbon Browser Browser ayarlarında bu funksiyalar haqqında ətraflı öyrənə bilərsiniz.</translation>
-<translation id="7682601070171973634">Carbon Browser Browser saytlara datanızdan daha az istifadə etməklə eyni baxış təcrübəsi təqdim etməyə imkan verən yeni funksiyaları araşdırır</translation>
-<translation id="7686590090926151193">Carbon Browser Browser defolt brauzeriniz deyil</translation>
-<translation id="7689606757190482937">Carbon Browser Browser'u cihazlarda sinxronizasiya edin və fərdiləşdirin</translation>
-<translation id="7745317241717453663">Brauzinq datanız bu cihazdan silinəcək. Sonradan datanızı bərpa etmək üçün Carbon Browser Browser <ph name="USER_EMAIL" /> kimi daxil olun.</translation>
+<translation id="7682213815243802460">Carbon Browser ayarlarında bu funksiyalar haqqında ətraflı öyrənə bilərsiniz.</translation>
+<translation id="7682601070171973634">Carbon Browser saytlara datanızdan daha az istifadə etməklə eyni baxış təcrübəsi təqdim etməyə imkan verən yeni funksiyaları araşdırır</translation>
+<translation id="7686590090926151193">Carbon Browser defolt brauzeriniz deyil</translation>
+<translation id="7689606757190482937">Carbon Browser'u cihazlarda sinxronizasiya edin və fərdiləşdirin</translation>
+<translation id="7699779824407626136">Carbon Browser güncəllənməsi</translation>
+<translation id="7745317241717453663">Brauzinq datanız bu cihazdan silinəcək. Sonradan datanızı bərpa etmək üçün Carbon Browser <ph name="USER_EMAIL" /> kimi daxil olun.</translation>
 <translation id="7747138024166251722">Quraşdırıcı müvəqqəti direktoriya yarada bilmədi. Proqramı quraşdırmaq üçün boş disk yeri və icazə tapın.</translation>
-<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> - Carbon Browser Browser Canary</translation>
-<translation id="7828947555739565424">Bu hesab ilə Carbon Browser Browser profili artıq bu cihazda mövcuddur</translation>
+<translation id="7786760609782648049">Carbon Browser'u sürətli edin</translation>
+<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> - Carbon Browser Canary</translation>
+<translation id="7828947555739565424">Bu hesab ilə Carbon Browser profili artıq bu cihazda mövcuddur</translation>
 <translation id="7845233973568007926">Quraşdırdığınız üçün təşəkkür edirik. <ph name="BUNDLE_NAME" /> istifadə etməzdən əvvəl kompüterinizi yenidən başlatmalısınız.</translation>
-<translation id="7867198900892795913">Carbon Browser Browser ən son versiyaya güncəllənə bilmədi. Yeni funksiyaları və təhlükəsizlik həllərini əldən verirsiniz.</translation>
+<translation id="7859018312476869945">Ünvan panelinə və ya axtarış xanasına mətn daxil etdiyiniz zaman Carbon Browser sizə daha yaxşı təkliflər təqdim etmək üçün yazdıqlarınızı defolt axtarış sisteminizə göndərir. Bu, Anonim rejimdə deaktivdir.</translation>
+<translation id="7867198900892795913">Carbon Browser ən son versiyaya güncəllənə bilmədi. Yeni funksiyaları və təhlükəsizlik həllərini əldən verirsiniz.</translation>
 <translation id="7872446069773932638">Endirilir... <ph name="SECONDS" /> saniyə qalıb</translation>
-<translation id="7877292582355102282"><ph name="BEGIN_BOLD" />Datanızı necə idarə edə bilərsiniz:<ph name="END_BOLD" /> Məxfiliyinizi qorumaq üçün 4 həftədən köhnə maraqlarınızı avtomatik silirik. Baxmağa davam etdikcə, maraq siyahıda yenidən görünə bilər. Və ya Carbon Browser Browser'un nəzərə almasını istəmədiyiniz maraqları silə bilərsiniz.</translation>
-<translation id="7937630085815544518">Carbon Browser Browser'a <ph name="USER_EMAIL_ADDRESS" /> kimi daxil olmuşdunuz. Lütfən, yenidən daxil olmaq üçün eyni hesabdan istifadə edin.</translation>
-<translation id="7975919845073681630">Bu Carbon Browser Browser'un ikinci quraşdırmasıdır və defolt brauzer kimi ayarlana bilmir.</translation>
-<translation id="7982481011030453202">Ayar bu səhifədə göstərilməsə, <ph name="LINK_BEGIN" />
-      Carbon Browser BrowserOS ayarlarına<ph name="LINK_END" /> baxın</translation>
-<translation id="7997934263947464652">Naməlum mənbələrdən olan artırmalar, tətbiqlər və temalar cihazınıza zərər verə bilər. Carbon Browser Browser onları yalnız buradan quraşdırmağı tövsiyə edir: <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /></translation>
-<translation id="8013436988911883588">Carbon Browser Browser'un giriş imkanı olduqda veb saytlar giriş üçün Sizdən icazə istəyəcək.</translation>
+<translation id="7877292582355102282"><ph name="BEGIN_BOLD" />Datanızı necə idarə edə bilərsiniz:<ph name="END_BOLD" /> Məxfiliyinizi qorumaq üçün 4 həftədən köhnə maraqlarınızı avtomatik silirik. Baxmağa davam etdikcə, maraq siyahıda yenidən görünə bilər. Və ya Carbon Browser'un nəzərə almasını istəmədiyiniz maraqları silə bilərsiniz.</translation>
+<translation id="7937630085815544518">Carbon Browser'a <ph name="USER_EMAIL_ADDRESS" /> kimi daxil olmuşdunuz. Lütfən, yenidən daxil olmaq üçün eyni hesabdan istifadə edin.</translation>
+<translation id="7975919845073681630">Bu Carbon Browser'un ikinci quraşdırmasıdır və defolt brauzer kimi ayarlana bilmir.</translation>
+<translation id="7997934263947464652">Naməlum mənbələrdən olan artırmalar, tətbiqlər və temalar cihazınıza zərər verə bilər. Carbon Browser onları yalnız buradan quraşdırmağı tövsiyə edir: <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /></translation>
+<translation id="8013436988911883588">Carbon Browser'un giriş imkanı olduqda veb saytlar giriş üçün Sizdən icazə istəyəcək.</translation>
 <translation id="80471789339884597">Quraşdırdığınız üçün təşəkkür edirik. <ph name="BUNDLE_NAME" /> istifadə etməzdən əvvəl bütün brauzerlərinizi yenidən başlatmalısınız.</translation>
-<translation id="8105840573057009683">Carbon Browser Browser bu sayt üçün məkan icazəsi tələb edir</translation>
-<translation id="8133124826068723441">Carbon Browser BrowserOS datanızı sinxronizasiya edə bilmədi, çünki sinxronizasiya domeniniz üçün əlçatan deyil.</translation>
+<translation id="8086881907087796310">Kompüteriniz minimum avadanlıq tələblərinə cavab vermədiyi üçün quraşdırma alınmadı.</translation>
+<translation id="8096472344908884505"><ph name="PAGE_TITLE" /> - Google Sınaq üçün Carbon Browser</translation>
+<translation id="8105840573057009683">Carbon Browser bu sayt üçün məkan icazəsi tələb edir</translation>
+<translation id="8133124826068723441">Carbon BrowserOS datanızı sinxronizasiya edə bilmədi, çünki sinxronizasiya domeniniz üçün əlçatan deyil.</translation>
 <translation id="813913629614996137">Başladılır...</translation>
-<translation id="81770708095080097">Bu fayl təklükəlidir, bu səbəbdən Carbon Browser Browser onu blok etdi.</translation>
-<translation id="8213374284266571500">Carbon Browser Browser bu faylı bloklayıb, çünki bu fayl növü təhlükəlidir</translation>
-<translation id="8248265253516264921">Şəklin təsviri faydalı deyilsə, Carbon Browser Browser Sizin üçün təsviri təmin etməyə çalışacaq. Təsvir yaratmaq üçün şəkillər Google'a göndərilir. Bunu istənilən vaxt ayarlardan deaktiv edə bilərsiniz.</translation>
-<translation id="8266560134891435528">Hesaba daxil olmadığınız üçün Carbon Browser Browser parollarınızı yoxlaya bilmir</translation>
-<translation id="8276522524898344151">Carbon Browser Browser parolları kopyalamağa çalışır.</translation>
-<translation id="8290862415967981663">Bu fayl təklükəli ola bilər, bu səbəbdən Carbon Browser Browser onu blok etdi.</translation>
-<translation id="8330519371938183845">Carbon Browser Browser'u cihazlarda sinxronizasiya etmək və fərdiləşdirmək üçün daxil olun</translation>
-<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> əvvəl Carbon Browser Browser istifadə edirdi</translation>
-<translation id="8357820681460164151">Bütün cihazlarınızda Carbon Browser Browser brauzerinin elementlərinə giriş etmək üçün daxil olun və sinxronizasiyanı aktiv edin</translation>
-<translation id="8417404458978023919">{0,plural, =1{Carbon Browser Browser'u bir gün ərzində yenidən başladın}other{Carbon Browser Browser'u # gün ərzində yenidən başladın}}</translation>
-<translation id="8453117565092476964">Quraşdırıcı arxivi zədələnib və ya yanlışdır. Lütfən, Carbon Browser Browser'u yenidən endirin.</translation>
-<translation id="8463672209299734063">İstəyə görə: Diaqnostika və istifadəçi datasını avtomatik Google'a göndərməklə Carbon Browser BrowserOS funksiyalarını təkmilləşdirməyə yardım edin.</translation>
-<translation id="8493179195440786826">Carbon Browser Browser'um vaxtı keçib</translation>
+<translation id="81770708095080097">Bu fayl təklükəlidir, bu səbəbdən Carbon Browser onu blok etdi.</translation>
+<translation id="8213374284266571500">Carbon Browser bu faylı bloklayıb, çünki bu fayl növü təhlükəlidir</translation>
+<translation id="8248265253516264921">Şəklin təsviri faydalı deyilsə, Carbon Browser Sizin üçün təsviri təmin etməyə çalışacaq. Təsvir yaratmaq üçün şəkillər Google'a göndərilir. Bunu istənilən vaxt ayarlardan deaktiv edə bilərsiniz.</translation>
+<translation id="8266560134891435528">Hesaba daxil olmadığınız üçün Carbon Browser parollarınızı yoxlaya bilmir</translation>
+<translation id="8286943863733751221">Carbon Browser təhlükəli sayt və endirmələr haqqında <ph name="BEGIN_LINK" />xəbərdarlıq edir<ph name="END_LINK" /></translation>
+<translation id="8290862415967981663">Bu fayl təklükəli ola bilər, bu səbəbdən Carbon Browser onu blok etdi.</translation>
+<translation id="8318772038038596122">Carbon Browser <ph name="TIMEOUT_DURATION" /> istifadə edilməsə, təşkilat onu bağlayır.</translation>
+<translation id="8325404639443959713">Carbon Browser ilə daha çox iş görün</translation>
+<translation id="8330519371938183845">Carbon Browser'u cihazlarda sinxronizasiya etmək və fərdiləşdirmək üçün daxil olun</translation>
+<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> əvvəl Carbon Browser istifadə edirdi</translation>
+<translation id="8357820681460164151">Bütün cihazlarınızda Carbon Browser brauzerinin elementlərinə giriş etmək üçün daxil olun və sinxronizasiyanı aktiv edin</translation>
+<translation id="8360718212975266891">Carbon Browser güncəlləmələrini əldə etmək üçün Windows 10 və ya daha yeni versiya tələb olunur. Bu kompüter Windows 8 istifadə edir.</translation>
+<translation id="8370517070665726704">Müəllif hüquqları <ph name="YEAR" /> Google MMC. Bütün hüquqlar qorunur.</translation>
+<translation id="8401454788024434101">Bu artırmanın yayımı tərtibatçı tərəfindən ləğv edildi və təhlükəli ola bilər. Onu Carbon Browser-dan silin ki, daxil olduğunuz saytlardakı dataya, o cümlədən şəxsi məlumatlara baxa və onları dəyişə bilməsin.</translation>
+<translation id="8417404458978023919">{0,plural, =1{Carbon Browser'u bir gün ərzində yenidən başladın}other{Carbon Browser'u # gün ərzində yenidən başladın}}</translation>
+<translation id="8453117565092476964">Quraşdırıcı arxivi zədələnib və ya yanlışdır. Lütfən, Carbon Browser'u yenidən endirin.</translation>
+<translation id="8458614432758743027">Carbon Browser Windows 10 və ya daha yeni versiya tələb edir.</translation>
+<translation id="8463672209299734063">İstəyə görə: Diaqnostika və istifadəçi datasını avtomatik Google'a göndərməklə Carbon BrowserOS funksiyalarını təkmilləşdirməyə yardım edin.</translation>
+<translation id="8493179195440786826">Carbon Browser'um vaxtı keçib</translation>
+<translation id="8522801943730206384">Carbon Browser yadda saxlanan parolları yoxlaya bilər</translation>
 <translation id="8550334526674375523">Bu iş profili şəxsi profilinizdən tamamilə ayrıdır.</translation>
-<translation id="8558383651099478961">Valideyniniz Carbon Browser Browser üçün "Saytlar, tətbiqlər və artırmalar üçün icazələri" deaktiv edib. Bu <ph name="EXTENSION_TYPE_PARAMETER" /> artırmasının əlavə edilməsinə icazə verilmir.</translation>
-<translation id="8561285221328166383">Carbon Browser Browser güncəlləmələrini əldə etmək üçün macOS 10.13 və ya daha yeni versiya tələb olunur. Bu kompüter macOS 10.12 istifadə edir.</translation>
-<translation id="8568283329061645092">Google Hesabınız ilə daxil olduqda Carbon Browser Browser parollarınızı yoxlaya bilər</translation>
-<translation id="8586442755830160949">Müəlliflik Hüququ <ph name="YEAR" /> Carbon Browser Browser Müəllifləri. Bütün hüquqlar qorunur.</translation>
-<translation id="8608079656141766906"><ph name="BEGIN_BOLD" />Bu datanı necə istifadə edirik:<ph name="END_BOLD" /> Saytlar maraqlarınız haqqında Carbon Browser Browser ilə məlumat saxlaya bilər. Məsələn, marafona ayaqqabı almaq üçün sayta daxil olsanız, sayt marağınızı qaçış marafonu kimi müəyyən edə bilər. Sonra yarışa yazılmaq üçün başqa sayta daxil olsanız, həmin sayt maraqlarınız əsasında sizə qaçış ayaqqabısı reklamı göstərə bilər.</translation>
-<translation id="8619360774459241877">Carbon Browser Browser başlayır...</translation>
-<translation id="8621669128220841554">Naməlum xəta üzündən quraşdırmaq alınmadı. Carbon Browser Browser'u yenidən endirin.</translation>
-<translation id="8697124171261953979">O, həmçinin Carbon Browser Browser'u başlatdığınız zaman və ya Omnibox'dan axtarış etdiyiniz zaman göstərilən səhifəyə nəzarət edir.</translation>
-<translation id="8704119203788522458">Bu, Sizin Carbon Browser Browser'dur</translation>
-<translation id="8713679423359107094">Bütün Carbon Browser Browser pəncərələrini bağladığınız zaman kukilər və sayt datası avtomatik olaraq silinir</translation>
-<translation id="8796443464227412154">Carbon Browser Browser'u bağladıqda <ph name="BEGIN_BOLD" />əksər saytlardan<ph name="END_BOLD" /> çıxacaqsınız. Sinxronizasiya deaktivdirsə <ph name="BEGIN_BOLD" />Google xidmətlərindən və Carbon Browser Browser'dan da çıxacaqsınız<ph name="END_BOLD" />.</translation>
-<translation id="8796602469536043152">Carbon Browser Browser bu sayt üçün kamera və mikrofona giriş icazəsi tələb edir</translation>
-<translation id="8833697763442816810">Carbon Browser BrowserOS sistemi</translation>
-<translation id="8846118132221683440"><ph name="BEGIN_BOLD" />Hansı data istifadə olunur:<ph name="END_BOLD" /> Baxış tarixçəniz, bu cihazda Carbon Browser Browser istifadə edərək ziyarət etdiyiniz saytların qeydi.</translation>
+<translation id="8555465886620020932">Xidmət xətası: <ph name="SERVICE_ERROR" />.</translation>
+<translation id="8568283329061645092">Google Hesabınız ilə daxil olduqda Carbon Browser parollarınızı yoxlaya bilər</translation>
+<translation id="8586442755830160949">Müəlliflik Hüququ <ph name="YEAR" /> Carbon Browser Müəllifləri. Bütün hüquqlar qorunur.</translation>
+<translation id="8608079656141766906"><ph name="BEGIN_BOLD" />Bu datanı necə istifadə edirik:<ph name="END_BOLD" /> Saytlar maraqlarınız haqqında Carbon Browser ilə məlumat saxlaya bilər. Məsələn, marafona ayaqqabı almaq üçün sayta daxil olsanız, sayt marağınızı qaçış marafonu kimi müəyyən edə bilər. Sonra yarışa yazılmaq üçün başqa sayta daxil olsanız, həmin sayt maraqlarınız əsasında sizə qaçış ayaqqabısı reklamı göstərə bilər.</translation>
+<translation id="8619360774459241877">Carbon Browser başlayır...</translation>
+<translation id="8621669128220841554">Naməlum xəta üzündən quraşdırmaq alınmadı. Carbon Browser'u yenidən endirin.</translation>
+<translation id="8648201657708811153">Sınaq üçün Carbon Browser defolt brauzer ola bilməz.</translation>
+<translation id="8697124171261953979">O, həmçinin Carbon Browser'u başlatdığınız zaman və ya Omnibox'dan axtarış etdiyiniz zaman göstərilən səhifəyə nəzarət edir.</translation>
+<translation id="8704119203788522458">Bu, Sizin Carbon Browser'dur</translation>
+<translation id="8719993436687031146">Carbon Browser-a daxil olunsun?</translation>
+<translation id="878572486461146056">Quraşdırma xətası: Şəbəkə administratoru quraşdırmanın qarşısını alan Qrup Siyasəti tətbiq edib: <ph name="INSTALL_ERROR" /></translation>
+<translation id="8796602469536043152">Carbon Browser bu sayt üçün kamera və mikrofona giriş icazəsi tələb edir</translation>
+<translation id="8826492472752484139">"Parol meneceri" üzərinə klikləyin</translation>
+<translation id="8833697763442816810">Carbon BrowserOS sistemi</translation>
+<translation id="8846118132221683440"><ph name="BEGIN_BOLD" />Hansı data istifadə olunur:<ph name="END_BOLD" /> Baxış tarixçəniz, bu cihazda Carbon Browser istifadə edərək ziyarət etdiyiniz saytların qeydi.</translation>
 <translation id="8862326446509486874">Sistem səviyyəli quraşdırma üçün uyğun hüquqlarınız yoxdur. Quraşdırıcını yenidən Administrator olaraq işə salmağa cəhd edin.</translation>
-<translation id="8880203542552872219">Bu halda, Carbon Browser Browser'da saxlanmış parolları redaktə edərək yeni parola uyğunlaşdırın.</translation>
-<translation id="8897323336392112261">Həmçinin, əsas səhifə düyməsinə klikləyəndə göstəriləsi səhifəyə nəzarət edir.</translation>
-<translation id="8907580949721785412">Carbon Browser Browser parolları göstərməyə çalışır. buna icazə vermək üçün Windows parolunuzu yazın.</translation>
-<translation id="8931379085695076764">Carbon Browser Browser son bir neçə həftədəki baxış tarixçənizə əsasən maraqlarınızı təxmin edə bilər. Bu məlumat cihazınızda qalır.</translation>
-<translation id="8941642502866065432">Carbon Browser Browser'u güncəlləmək alınmadı</translation>
-<translation id="897581876605952338">Carbon Browser Browser Enterprise loqosu</translation>
+<translation id="8880203542552872219">Bu halda, Carbon Browser'da saxlanmış parolları redaktə edərək yeni parola uyğunlaşdırın.</translation>
+<translation id="8907580949721785412">Carbon Browser parolları göstərməyə çalışır. buna icazə vermək üçün Windows parolunuzu yazın.</translation>
+<translation id="8931379085695076764">Carbon Browser son bir neçə həftədəki baxış tarixçənizə əsasən maraqlarınızı təxmin edə bilər. Bu məlumat cihazınızda qalır.</translation>
+<translation id="8941642502866065432">Carbon Browser'u güncəlləmək alınmadı</translation>
+<translation id="897581876605952338">Carbon Browser Enterprise loqosu</translation>
 <translation id="8986207147630327271">Bu brauzerə iş profili əlavə edirsiniz və administratorunuza yalnız iş profili üzərində nəzarət verirsiniz.</translation>
-<translation id="9019929317751753759">Carbon Browser Browser'u təhlükəsiz etmək üçün, <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> siyahısında olmayan və xəbəriniz olmadan əlavə edilən artırmanı deaktiv etdik.</translation>
-<translation id="9022552996538154597">Carbon Browser Browser'a daxil olun</translation>
-<translation id="9089354809943900324">Carbon Browser Browser'un vaxtı keçib</translation>
-<translation id="9093206154853821181">{0,plural, =1{Carbon Browser Browser 1 saata yenidən başlayacaq}other{Carbon Browser Browser # saata yenidən başlayacaq}}</translation>
-<translation id="91086099826398415">Linki Yeni Carbon Browser Browser tabında açın</translation>
+<translation id="9019929317751753759">Carbon Browser'u təhlükəsiz etmək üçün, <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> siyahısında olmayan və xəbəriniz olmadan əlavə edilən artırmanı deaktiv etdik.</translation>
+<translation id="9022552996538154597">Carbon Browser'a daxil olun</translation>
+<translation id="907832235989677238">Carbon Browser-a daxil olun. Hesaba yalnız bir dəfə daxil olmaq istəyirsinizsə, <ph name="GUEST_LINK_BEGIN" />cihazı qonaq kimi istifadə edə<ph name="GUEST_LINK_END" /> bilərsiniz.</translation>
+<translation id="9078733879136747090">Carbon Browser avtomatik bağlandı</translation>
+<translation id="9089354809943900324">Carbon Browser'un vaxtı keçib</translation>
+<translation id="9093206154853821181">{0,plural, =1{Carbon Browser 1 saata yenidən başlayacaq}other{Carbon Browser # saata yenidən başlayacaq}}</translation>
+<translation id="9106612006984859720">Carbon Browser güncəlləmələrini əldə etmək üçün Windows 10 və ya daha yeni versiya tələb olunur. Bu kompüter Windows 8.1 istifadə edir.</translation>
+<translation id="91086099826398415">Linki Yeni Carbon Browser tabında açın</translation>
 <translation id="911206726377975832">Brauzinq datanız da silinsin?</translation>
-<translation id="9144490074902256427">Sınaqlar zamanı saytların sizə reklam göstərmək üçün istifadə etdiyi maraqlı mövzuları görə və silə bilərsiniz. Carbon Browser Browser son baxış tarixçənizə əsasən maraqlarınızı təxmin edir.</translation>
-<translation id="9158494823179993217">Sistem administratoru Carbon Browser Browser'u <ph name="TARGET_URL_HOSTNAME" /> ünvanına daxil olmaq məqsədilə alternativ brauzer açmaq üçün konfiqurasiya edib.</translation>
-<translation id="9185526690718004400">&amp;Carbon Browser Browser'u güncəlləmək üçün yenidən başladın</translation>
-<translation id="9190841055450128916">Carbon Browser Browser (mDNS-In)</translation>
-<translation id="93478295209880648">Carbon Browser Browser düzgün işləməyə bilər, çünki daha Windows XP və ya Windows Vista'da dəstəklənmir</translation>
-<translation id="942598560705308788">Carbon Browser Browser tərəfindən idarə olunan sertifikatlar</translation>
-<translation id="945990405696787151">Carbon Browser Browser güncəlləmələrini əldə etmək üçün macOS 10.13 və ya daha yeni versiya tələb olunur. Bu kompüter OS X 10.11 istifadə edir.</translation>
-<translation id="965162752251293939">Carbon Browser Browser'u kim istifadə edir?</translation>
-<translation id="967427899662692980">Carbon Browser Browser’un ən güclü güvənlik sistemini əldə edin</translation>
-<translation id="985602178874221306">Carbon Browser Browser Müəllifləri</translation>
+<translation id="9144490074902256427">Sınaqlar zamanı saytların sizə reklam göstərmək üçün istifadə etdiyi maraqlı mövzuları görə və silə bilərsiniz. Carbon Browser son baxış tarixçənizə əsasən maraqlarınızı təxmin edir.</translation>
+<translation id="9158494823179993217">Sistem administratoru Carbon Browser'u <ph name="TARGET_URL_HOSTNAME" /> ünvanına daxil olmaq məqsədilə alternativ brauzer açmaq üçün konfiqurasiya edib.</translation>
+<translation id="9185526690718004400">&amp;Carbon Browser'u güncəlləmək üçün yenidən başladın</translation>
+<translation id="9190841055450128916">Carbon Browser (mDNS-In)</translation>
+<translation id="924957577793602335">Carbon Browser-u fərdiləşdirin</translation>
+<translation id="93478295209880648">Carbon Browser düzgün işləməyə bilər, çünki daha Windows XP və ya Windows Vista'da dəstəklənmir</translation>
+<translation id="942598560705308788">Carbon Browser tərəfindən idarə olunan sertifikatlar</translation>
+<translation id="965162752251293939">Carbon Browser'u kim istifadə edir?</translation>
+<translation id="967427899662692980">Carbon Browser’un ən güclü güvənlik sistemini əldə edin</translation>
+<translation id="983803489796659991">Yeniləmə serverində tətbiq heş datası olmadığı üçün quraşdırma alınmadı.</translation>
+<translation id="985602178874221306">Carbon Browser Müəllifləri</translation>
 </translationbundle>

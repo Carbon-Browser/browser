@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,10 @@
 #include "components/google/core/common/google_util.h"
 #include "components/optimization_guide/core/hint_cache.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
+#include "components/optimization_guide/core/push_notification_manager.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-
-#if BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/optimization_guide/android/android_push_notification_manager.h"
-#endif
 
 namespace {
 
@@ -58,6 +56,7 @@ ChromeHintsManager::ChromeHintsManager(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     std::unique_ptr<optimization_guide::PushNotificationManager>
         push_notification_manager,
+    signin::IdentityManager* identity_manager,
     OptimizationGuideLogger* optimization_guide_logger)
     : HintsManager(profile->IsOffTheRecord(),
                    g_browser_process->GetApplicationLocale(),
@@ -67,8 +66,12 @@ ChromeHintsManager::ChromeHintsManager(
                    tab_url_provider,
                    url_loader_factory,
                    std::move(push_notification_manager),
+                   identity_manager,
                    optimization_guide_logger),
       profile_(profile) {
+  if (!optimization_guide::features::IsSRPFetchingEnabled()) {
+    return;
+  }
   NavigationPredictorKeyedService* navigation_predictor_service =
       NavigationPredictorKeyedServiceFactory::GetForProfile(profile);
   if (navigation_predictor_service)
@@ -101,10 +104,12 @@ void ChromeHintsManager::OnPredictionUpdated(
   // Per comments in NavigationPredictorKeyedService::Prediction, this pointer
   // should be valid while OnPredictionUpdated is on the call stack.
   content::WebContents* web_contents = prediction->web_contents();
-  DCHECK(web_contents);
+  CHECK(web_contents);
   auto* observer =
       OptimizationGuideWebContentsObserver::FromWebContents(web_contents);
-  DCHECK(observer);
+  if (!observer) {
+    return;
+  }
 
   std::vector<GURL> urls_to_fetch;
   for (const auto& url : prediction->sorted_predicted_urls()) {

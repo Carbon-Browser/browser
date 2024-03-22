@@ -1,30 +1,24 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_web_state_observer.h"
 
-#include "base/check_op.h"
-#include "base/ios/ios_util.h"
+#import "base/check_op.h"
+#import "base/ios/ios_util.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_content_adjustment_util.h"
-#import "ios/chrome/browser/ui/fullscreen/fullscreen_features.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_mediator.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_model.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_web_view_proxy_observer.h"
 #import "ios/chrome/browser/ui/fullscreen/scoped_fullscreen_disabler.h"
-#include "ios/chrome/browser/ui/util/ui_util.h"
-#include "ios/web/common/url_util.h"
+#import "ios/public/provider/chrome/browser/fullscreen/fullscreen_api.h"
+#import "ios/web/common/url_util.h"
 #import "ios/web/public/navigation/navigation_context.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/navigation/navigation_manager.h"
-#include "ios/web/public/security/ssl_status.h"
+#import "ios/web/public/security/ssl_status.h"
 #import "ios/web/public/ui/crw_web_view_proxy.h"
-#import "ios/web/public/ui/page_display_state.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 FullscreenWebStateObserver::FullscreenWebStateObserver(
     FullscreenController* controller,
@@ -84,12 +78,15 @@ void FullscreenWebStateObserver::DidFinishNavigation(
   web_view_proxy.shouldUseViewContentInset = is_pdf;
 
   model_->SetResizesScrollView(
-      !is_pdf && !fullscreen::features::ShouldUseSmoothScrolling());
+      !is_pdf && !ios::provider::IsFullscreenSmoothScrollingSupported());
+
+  model_->SetScrollViewHeight(web_state->GetView().bounds.size.height);
 
   // Only reset the model for document-changing navigations or same-document
   // navigations that update the visible URL.
-  if (!navigation_context->IsSameDocument() || url_changed)
+  if (!navigation_context->IsSameDocument() || url_changed) {
     model_->ResetForNavigation();
+  }
 }
 
 void FullscreenWebStateObserver::DidStartLoading(web::WebState* web_state) {

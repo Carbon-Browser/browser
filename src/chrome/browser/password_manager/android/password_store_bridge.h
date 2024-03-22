@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,12 @@
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/password_manager/password_store_factory.h"
+#include "chrome/browser/password_manager/account_password_store_factory.h"
+#include "chrome/browser/password_manager/affiliation_service_factory.h"
+#include "chrome/browser/password_manager/profile_password_store_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
 
 class PasswordStoreBridge
@@ -27,9 +29,12 @@ class PasswordStoreBridge
   PasswordStoreBridge& operator=(const PasswordStoreBridge&) = delete;
 
   // Called by Java to store a new credential into the password store.
-  void InsertPasswordCredential(
+  void InsertPasswordCredentialForTesting(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& credential);
+
+  void BlocklistForTesting(JNIEnv* env,
+                           const base::android::JavaParamRef<jstring>& jurl);
 
   // Called by Java to edit a credential.
   bool EditPassword(JNIEnv* env,
@@ -53,26 +58,27 @@ class PasswordStoreBridge
  private:
   // SavedPasswordsPresenter::Observer:
   void OnSavedPasswordsChanged(
-      password_manager::SavedPasswordsPresenter::SavedPasswordsView passwords)
-      override;
+      const password_manager::PasswordStoreChangeList& changes) override;
 
-  void OnEdited(const password_manager::PasswordForm& form) override;
-
-  // Callback executed after clearing the password store. It re-initializes
-  // `saved_passwords_presenter_`.
-  void OnPasswordStoreCleared(bool success);
+  void OnEdited(const password_manager::CredentialUIEntry& form) override;
 
   // The corresponding java object.
   base::android::ScopedJavaGlobalRef<jobject> java_bridge_;
 
-  // Handle to the password store, powering `saved_passwords_presenter_`.
-  scoped_refptr<password_manager::PasswordStoreInterface> password_store_ =
-      PasswordStoreFactory::GetForProfile(ProfileManager::GetLastUsedProfile(),
-                                          ServiceAccessType::EXPLICIT_ACCESS);
+  scoped_refptr<password_manager::PasswordStoreInterface> profile_store_ =
+      ProfilePasswordStoreFactory::GetForProfile(
+          ProfileManager::GetLastUsedProfile(),
+          ServiceAccessType::EXPLICIT_ACCESS);
 
   // Used to fetch and edit passwords.
+  // TODO(crbug.com/1442826): Use PasswordStore directly.
   password_manager::SavedPasswordsPresenter saved_passwords_presenter_{
-      password_store_};
+      AffiliationServiceFactory::GetForProfile(
+          ProfileManager::GetLastUsedProfile()),
+      profile_store_,
+      AccountPasswordStoreFactory::GetForProfile(
+          ProfileManager::GetLastUsedProfile(),
+          ServiceAccessType::EXPLICIT_ACCESS)};
 
   // A scoped observer for `saved_passwords_presenter_`.
   base::ScopedObservation<password_manager::SavedPasswordsPresenter,

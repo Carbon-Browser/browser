@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,8 @@ class IpcPacketSocketFactory : public rtc::PacketSocketFactory {
       const rtc::ProxyInfo& proxy_info,
       const std::string& user_agent,
       const rtc::PacketSocketTcpOptions& opts) override;
-  rtc::AsyncResolverInterface* CreateAsyncResolver() override;
+  std::unique_ptr<webrtc::AsyncDnsResolverInterface> CreateAsyncDnsResolver()
+      override;
 
  private:
   mojo::SharedRemote<network::mojom::P2PSocketManager> socket_manager_;

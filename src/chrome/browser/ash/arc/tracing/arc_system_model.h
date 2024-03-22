@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ class ArcSystemModel {
   void CloseRangeForValueEvents(uint64_t max_timestamp);
 
   void CopyFrom(const ArcSystemModel& other);
-  base::DictionaryValue Serialize() const;
+  base::Value::Dict Serialize() const;
   bool Load(const base::Value* root);
 
   bool operator==(const ArcSystemModel& other) const;

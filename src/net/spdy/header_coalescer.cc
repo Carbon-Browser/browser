@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/strings/abseil_string_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -27,19 +27,18 @@ void NetLogInvalidHeader(const NetLogWithSource& net_log,
                          const char* error_message) {
   net_log.AddEvent(NetLogEventType::HTTP2_SESSION_RECV_INVALID_HEADER,
                    [&](NetLogCaptureMode capture_mode) {
-                     base::Value::Dict dict;
-                     dict.Set("header_name", NetLogStringValue(header_name));
-                     dict.Set("header_value",
+                     return base::Value::Dict()
+                         .Set("header_name", NetLogStringValue(header_name))
+                         .Set("header_value",
                               NetLogStringValue(ElideHeaderValueForNetLog(
                                   capture_mode, std::string(header_name),
-                                  std::string(header_value))));
-                     dict.Set("error", error_message);
-                     return base::Value(std::move(dict));
+                                  std::string(header_value))))
+                         .Set("error", error_message);
                    });
 }
 
 bool ContainsUppercaseAscii(base::StringPiece str) {
-  return std::any_of(str.begin(), str.end(), base::IsAsciiUpper<char>);
+  return base::ranges::any_of(str, base::IsAsciiUpper<char>);
 }
 
 }  // namespace
@@ -48,12 +47,12 @@ HeaderCoalescer::HeaderCoalescer(uint32_t max_header_list_size,
                                  const NetLogWithSource& net_log)
     : max_header_list_size_(max_header_list_size), net_log_(net_log) {}
 
-void HeaderCoalescer::OnHeader(absl::string_view key, absl::string_view value) {
+void HeaderCoalescer::OnHeader(std::string_view key, absl::string_view value) {
   if (error_seen_)
     return;
-  if (!AddHeader(base::StringViewToStringPiece(key),
-                 base::StringViewToStringPiece(value)))
+  if (!AddHeader(key, value)) {
     error_seen_ = true;
+  }
 }
 
 spdy::Http2HeaderBlock HeaderCoalescer::release_headers() {
@@ -121,8 +120,7 @@ bool HeaderCoalescer::AddHeader(base::StringPiece key,
     }
   }
 
-  headers_.AppendValueOrAddHeader(base::StringPieceToStringView(key),
-                                  base::StringPieceToStringView(value));
+  headers_.AppendValueOrAddHeader(key, value);
   return true;
 }
 

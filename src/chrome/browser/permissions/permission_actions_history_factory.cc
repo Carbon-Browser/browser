@@ -1,12 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/permissions/permission_actions_history_factory.h"
 
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/permissions/permission_actions_history.h"
 
 // static
@@ -19,24 +17,26 @@ PermissionActionsHistoryFactory::GetForProfile(Profile* profile) {
 // static
 PermissionActionsHistoryFactory*
 PermissionActionsHistoryFactory::GetInstance() {
-  return base::Singleton<PermissionActionsHistoryFactory>::get();
+  static base::NoDestructor<PermissionActionsHistoryFactory> instance;
+  return instance.get();
 }
 
 PermissionActionsHistoryFactory::PermissionActionsHistoryFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "PermissionActionsHistory",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 PermissionActionsHistoryFactory::~PermissionActionsHistoryFactory() = default;
 
-KeyedService* PermissionActionsHistoryFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PermissionActionsHistoryFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new permissions::PermissionActionsHistory(profile->GetPrefs());
-}
-
-content::BrowserContext*
-PermissionActionsHistoryFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return std::make_unique<permissions::PermissionActionsHistory>(
+      profile->GetPrefs());
 }

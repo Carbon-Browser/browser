@@ -1,18 +1,20 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <Cocoa/Cocoa.h>
+
+#include <algorithm>
+
+#include "base/apple/owned_objc.h"
 #include "base/strings/sys_string_conversions.h"
 #include "content/browser/devtools/protocol/native_input_event_builder.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 
-namespace content {
-namespace protocol {
+namespace content::protocol {
 
 // Mac requires a native event to emulate key events. This method gives
 // only crude capabilities (see: crbug.com/667387).
-// The returned object has a retain count of 1.
 gfx::NativeEvent NativeInputEventBuilder::CreateEvent(
     const NativeWebKeyboardEvent& event) {
   NSEventType type = NSEventTypeKeyUp;
@@ -38,17 +40,17 @@ gfx::NativeEvent NativeInputEventBuilder::CreateEvent(
       (modifiers & blink::WebInputEvent::kMetaKey ? NSEventModifierFlagCommand
                                                   : 0);
 
-  return [[NSEvent keyEventWithType:type
-                           location:NSZeroPoint
-                      modifierFlags:flags
-                          timestamp:0
-                       windowNumber:0
-                            context:nil
-                         characters:character
-        charactersIgnoringModifiers:character
-                          isARepeat:NO
-                            keyCode:event.native_key_code] retain];
+  return base::apple::OwnedNSEvent([NSEvent
+                 keyEventWithType:type
+                         location:NSZeroPoint
+                    modifierFlags:flags
+                        timestamp:0
+                     windowNumber:0
+                          context:nil
+                       characters:character
+      charactersIgnoringModifiers:character
+                        isARepeat:NO
+                          keyCode:event.native_key_code]);
 }
 
-}  // namespace protocol
-}  // namespace content
+}  // namespace content::protocol

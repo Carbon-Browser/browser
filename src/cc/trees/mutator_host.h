@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -141,7 +141,9 @@ class MutatorHost {
   virtual bool HasCanvasInvalidation() const = 0;
   virtual bool HasJSAnimation() const = 0;
   virtual bool HasSmilAnimation() const = 0;
-  virtual bool HasSharedElementTransition() const = 0;
+  virtual bool HasViewTransition() const = 0;
+  virtual bool HasScrollLinkedAnimation(ElementId for_scroller) const = 0;
+  virtual bool IsAutoScrolling() const = 0;
 
   // Iterates through all animations and returns the minimum tick interval.
   // Returns 0 if there is a continuous animation which should be ticked

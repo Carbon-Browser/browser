@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,9 @@ namespace ash::hermes_constants {
 // very slow connection or to a very slow back-end.
 COMPONENT_EXPORT(HERMES_CLIENT) extern int kHermesNetworkOperationTimeoutMs;
 
+// The timeout, is ms, to be used for D-Bus calls made to Hermes for operations
+// which do not require network calls.
+COMPONENT_EXPORT(HERMES_CLIENT) extern int kHermesOperationTimeoutMs;
 }  // namespace ash::hermes_constants
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_HERMES_CONSTANTS_H_

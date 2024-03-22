@@ -1,12 +1,14 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "chrome/browser/ui/cocoa/bookmarks/bookmark_menu_cocoa_controller.h"
+#include "components/bookmarks/browser/bookmark_node.h"
 
 #include <string>
 
-#import "base/mac/scoped_nsobject.h"
+#include "base/containers/span.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/cocoa/test/cocoa_test_helper.h"
@@ -41,14 +43,21 @@ using bookmarks::BookmarkNode;
   return self;
 }
 
-- (const BookmarkNode*)nodeForIdentifier:(int)identifier {
+- (base::Uuid)guidForIdentifier:(int)identifier {
   if ((identifier < 0) || (identifier >= 2))
-    return NULL;
-  return _nodes[identifier];
+    return base::Uuid();
+  DCHECK(_nodes[identifier]);
+  return _nodes[identifier]->uuid();
 }
 
-- (void)openURLForNode:(const BookmarkNode*)node {
-  std::string url = node->url().possibly_invalid_spec();
+- (void)openURLForGUID:(base::Uuid)guid {
+  base::span<const BookmarkNode*> nodes = base::make_span(_nodes);
+  auto it = base::ranges::find_if(nodes, [&guid](const BookmarkNode* node) {
+    return node->uuid() == guid;
+  });
+  ASSERT_NE(it, nodes.end());
+
+  std::string url = (*it)->url().possibly_invalid_spec();
   if (url.find("http://0.com") != std::string::npos)
     _opened[0] = YES;
   if (url.find("http://1.com") != std::string::npos)
@@ -64,8 +73,8 @@ class BookmarkMenuCocoaControllerTest : public BrowserWithTestWindowTest {
 
     bookmarks::test::WaitForBookmarkModelToLoad(
         BookmarkModelFactory::GetForBrowserContext(profile()));
-    controller_.reset(
-        [[FakeBookmarkMenuController alloc] initWithProfile:profile()]);
+    controller_ =
+        [[FakeBookmarkMenuController alloc] initWithProfile:profile()];
   }
 
   TestingProfile::TestingFactories GetTestingFactories() override {
@@ -73,16 +82,16 @@ class BookmarkMenuCocoaControllerTest : public BrowserWithTestWindowTest {
              BookmarkModelFactory::GetDefaultFactory()}};
   }
 
-  FakeBookmarkMenuController* controller() { return controller_.get(); }
+  FakeBookmarkMenuController* controller() { return controller_; }
 
  private:
   CocoaTestHelper cocoa_test_helper_;
-  base::scoped_nsobject<FakeBookmarkMenuController> controller_;
+  FakeBookmarkMenuController* __strong controller_;
 };
 
 TEST_F(BookmarkMenuCocoaControllerTest, TestOpenItem) {
   FakeBookmarkMenuController* c = controller();
-  NSMenuItem *item = [[[NSMenuItem alloc] init] autorelease];
+  NSMenuItem* item = [[NSMenuItem alloc] init];
   for (int i = 0; i < 2; i++) {
     [item setTag:i];
     ASSERT_EQ(c->_opened[i], NO);

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -170,7 +170,7 @@ TEST(IPAddressSpaceTest, IPEndPointToIPAddressSpaceV4Localhost) {
             IPAddressSpace::kPublic);
 }
 
-IPAddress ParseIPAddress(base::StringPiece str) {
+IPAddress ParseIPAddress(std::string_view str) {
   IPAddress address;
   EXPECT_TRUE(address.AssignFromIPLiteral(str))
       << "Failed to parse IP address: " << str;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "google_apis/google_api_keys.h"
@@ -19,8 +19,7 @@
 #include "remoting/protocol/ice_config.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -39,17 +38,30 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
             "When a Chrome Remote Desktop session is being connected and "
             "periodically (less frequent than once per hour) while a session "
             "is active, if the configuration is expired."
+          user_data {
+            type: ACCESS_TOKEN
+          }
           data:
-            "None (anonymous request)."
+            "OAuth token for the following use cases:"
+            " 1) Human user (for consumer It2Me) "
+            " 2) ChromeOS Enterprise robot (for commercial It2Me) "
+            " 3) Chromoting robot (for remote access, aka Me2Me) "
           destination: GOOGLE_OWNED_SERVICE
+          internal {
+            contacts { owners: "//remoting/OWNERS" }
+          }
+          last_reviewed: "2023-07-28"
         }
         policy {
           cookies_allowed: NO
           setting:
             "This request cannot be stopped in settings, but will not be sent "
             "if the user does not use Chrome Remote Desktop."
-          policy_exception_justification:
-            "Not implemented."
+          chrome_policy {
+            RemoteAccessHostFirewallTraversal {
+              RemoteAccessHostFirewallTraversal: false
+            }
+          }
         })");
 
 constexpr char kGetIceConfigPath[] = "/v1/networktraversal:geticeconfig";
@@ -109,5 +121,4 @@ void RemotingIceConfigRequest::OnResponse(
   std::move(on_ice_config_callback_).Run(IceConfig::Parse(*response));
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

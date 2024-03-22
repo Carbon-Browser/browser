@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -60,7 +60,6 @@ def AugmentOptionsForV8Metrics(options, enable_runtime_call_stats=True):
       'webkit.console',
       # Blink categories.
       'blink.resource',
-      'blink_gc',
       'partition_alloc',
       # Needed for the metric reported by page.
       'blink.user_timing'
@@ -85,7 +84,6 @@ def AugmentOptionsForV8Metrics(options, enable_runtime_call_stats=True):
     options.config.chrome_trace_config.SetTraceBufferSizeInKb(400 * 1024)
 
   metrics = [
-      'blinkGcMetric',
       'blinkResourceMetric',
       'consoleErrorMetric',
       'expectedQueueingTimeMetric',

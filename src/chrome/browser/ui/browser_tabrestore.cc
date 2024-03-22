@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "chrome/browser/tab_contents/tab_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_group.h"
 #include "chrome/browser/ui/tabs/tab_group_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -141,23 +142,25 @@ WebContents* AddRestoredTabImpl(std::unique_ptr<WebContents> web_contents,
                                 bool from_session_restore) {
   TabStripModel* const tab_strip_model = browser->tab_strip_model();
 
-  int add_types = select ? TabStripModel::ADD_ACTIVE : TabStripModel::ADD_NONE;
+  int add_types = select ? AddTabTypes::ADD_ACTIVE : AddTabTypes::ADD_NONE;
   if (pin) {
     tab_index =
         std::min(tab_index, tab_strip_model->IndexOfFirstNonPinnedTab());
-    add_types |= TabStripModel::ADD_PINNED;
+    add_types |= AddTabTypes::ADD_PINNED;
   }
 
-  const absl::optional<tab_groups::TabGroupId> surrounding_group =
-      tab_strip_model->GetSurroundingTabGroup(tab_index);
+  if (tab_strip_model->group_model()) {
+    const absl::optional<tab_groups::TabGroupId> surrounding_group =
+        tab_strip_model->GetSurroundingTabGroup(tab_index);
 
-  // If inserting at |tab_index| would put the tab within a different
-  // group, adjust the index to put it outside.
-  if (surrounding_group && surrounding_group != group) {
-    tab_index = tab_strip_model->group_model()
-                    ->GetTabGroup(*surrounding_group)
-                    ->ListTabs()
-                    .end();
+    // If inserting at |tab_index| would put the tab within a different
+    // group, adjust the index to put it outside.
+    if (surrounding_group && surrounding_group != group) {
+      tab_index = tab_strip_model->group_model()
+                      ->GetTabGroup(*surrounding_group)
+                      ->ListTabs()
+                      .end();
+    }
   }
 
   WebContents* raw_web_contents = web_contents.get();
@@ -168,23 +171,25 @@ WebContents* AddRestoredTabImpl(std::unique_ptr<WebContents> web_contents,
     tab_strip_model->AddToGroupForRestore({actual_index}, group.value());
   }
 
+  // We set the size of the view here, before Blink does its initial layout.
+  // If we don't, the initial layout of background tabs will be performed
+  // with a view width of 0, which may cause script outputs and anchor link
+  // location calculations to be incorrect even after a new layout with
+  // proper view dimensions. TabStripModel::AddWebContents() contains similar
+  // logic.
+  //
+  // TODO(https://crbug.com/1040221): There should be a way to ask the browser
+  // to perform a layout so that size of the WebContents is right.
+  gfx::Size size = browser->window()->GetContentsSize();
+  // Fallback to the restore bounds if it's empty as the window is not shown
+  // yet and the bounds may not be available on all platforms.
+  if (size.IsEmpty()) {
+    size = browser->window()->GetRestoredBounds().size();
+  }
+  raw_web_contents->Resize(gfx::Rect(size));
+
   const bool initially_hidden = !select || browser->window()->IsMinimized();
   if (initially_hidden) {
-    // We set the size of the view here, before Blink does its initial layout.
-    // If we don't, the initial layout of background tabs will be performed
-    // with a view width of 0, which may cause script outputs and anchor link
-    // location calculations to be incorrect even after a new layout with
-    // proper view dimensions. TabStripModel::AddWebContents() contains similar
-    // logic.
-    //
-    // TODO(https://crbug.com/1040221): There should be a way to ask the browser
-    // to perform a layout so that size of the hidden WebContents is right.
-    gfx::Size size = browser->window()->GetContentsSize();
-    // Fallback to the restore bounds if it's empty as the window is not shown
-    // yet and the bounds may not be available on all platforms.
-    if (size.IsEmpty())
-      size = browser->window()->GetRestoredBounds().size();
-    raw_web_contents->Resize(gfx::Rect(size));
     raw_web_contents->WasHidden();
   } else {
     const bool should_activate =
@@ -209,7 +214,7 @@ WebContents* AddRestoredTabImpl(std::unique_ptr<WebContents> web_contents,
 
 // On OS_MAC, app restorations take longer than the normal browser window to
 // be restored and that will cause LoadRestoredTabIfVisible() to fail.
-// Skip LoadRestoreTabIfVisible if OS_MAC && the browser is an app browser.
+// Skip LoadRestoredTabIfVisible if OS_MAC && the browser is an app browser.
 #if BUILDFLAG(IS_MAC)
   if (browser->type() != Browser::Type::TYPE_APP)
 #endif  // BUILDFLAG(IS_MAC)
@@ -292,8 +297,8 @@ WebContents* ReplaceRestoredTab(
   int insertion_index = tab_strip->active_index();
   tab_strip->InsertWebContentsAt(
       insertion_index + 1, std::move(web_contents),
-      TabStripModel::ADD_ACTIVE | TabStripModel::ADD_INHERIT_OPENER);
-  tab_strip->CloseWebContentsAt(insertion_index, TabStripModel::CLOSE_NONE);
+      AddTabTypes::ADD_ACTIVE | AddTabTypes::ADD_INHERIT_OPENER);
+  tab_strip->CloseWebContentsAt(insertion_index, TabCloseTypes::CLOSE_NONE);
 
   LoadRestoredTabIfVisible(browser, raw_web_contents);
 

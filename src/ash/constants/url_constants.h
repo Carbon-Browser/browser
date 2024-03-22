@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,10 @@ namespace chrome {
 // The URL for the "Learn more" link for Android Messages.
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const char kAndroidMessagesLearnMoreURL[];
+
+// "Learn more" URL for APN settings.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char16_t kApnSettingsLearnMoreUrl[];
 
 // The URL for additional help that is given when Linux export/import fails.
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const char kLinuxExportImportHelpURL[];

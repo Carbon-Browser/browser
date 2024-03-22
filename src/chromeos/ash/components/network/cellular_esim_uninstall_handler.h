@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/queue.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_response_status.h"
@@ -21,14 +22,14 @@
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "dbus/object_path.h"
 
-namespace chromeos {
+namespace ash {
 
 class CellularESimProfileHandler;
 class CellularInhibitor;
 class ManagedCellularPrefHandler;
-class NetworkState;
 class NetworkConfigurationHandler;
 class NetworkConnectionHandler;
+class NetworkState;
 
 // Handles Uninstallation of an eSIM profile and it's corresponding network.
 //
@@ -52,6 +53,25 @@ class NetworkConnectionHandler;
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimUninstallHandler
     : public NetworkStateHandlerObserver {
  public:
+  // TODO(b/271854446): Make these private once the migration has landed.
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class UninstallESimResult {
+    kSuccess = 0,
+    kNetworkNotFound = 1,
+    kDisconnectFailed = 2,
+    kInhibitFailed = 3,
+    kRefreshProfilesFailed = 4,
+    kDisableProfileFailed = 5,
+    kUninstallProfileFailed = 6,
+    kRemoveServiceFailed = 7,
+    kMaxValue = kRemoveServiceFailed
+  };
+
+  // Timeout when waiting for network list change after removing network
+  // service. Service removal continues with next service.
+  static const base::TimeDelta kNetworkListWaitTimeout;
+
   CellularESimUninstallHandler();
   CellularESimUninstallHandler(const CellularESimUninstallHandler&) = delete;
   CellularESimUninstallHandler& operator=(const CellularESimUninstallHandler&) =
@@ -88,19 +108,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimUninstallHandler
   void OnShuttingDown() override;
 
   friend class CellularESimUninstallHandlerTest;
-  FRIEND_TEST_ALL_PREFIXES(CellularESimUninstallHandlerTest, Success);
-  FRIEND_TEST_ALL_PREFIXES(CellularESimUninstallHandlerTest,
-                           Success_AlreadyDisabled);
-  FRIEND_TEST_ALL_PREFIXES(CellularESimUninstallHandlerTest, DisconnectFailure);
-  FRIEND_TEST_ALL_PREFIXES(CellularESimUninstallHandlerTest, HermesFailure);
-  FRIEND_TEST_ALL_PREFIXES(CellularESimUninstallHandlerTest, MultipleRequests);
-  FRIEND_TEST_ALL_PREFIXES(CellularESimUninstallHandlerTest,
-                           StubCellularNetwork);
-  FRIEND_TEST_ALL_PREFIXES(CellularESimUninstallHandlerTest, ResetEuiccMemory);
-
-  // Timeout when waiting for network list change after removing network
-  // service. Service removal continues with next service.
-  static const base::TimeDelta kNetworkListWaitTimeout;
 
   enum class UninstallState {
     kIdle,
@@ -115,20 +122,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimUninstallHandler
   };
   friend std::ostream& operator<<(std::ostream& stream,
                                   const UninstallState& step);
-
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  enum class UninstallESimResult {
-    kSuccess = 0,
-    kNetworkNotFound = 1,
-    kDisconnectFailed = 2,
-    kInhibitFailed = 3,
-    kRefreshProfilesFailed = 4,
-    kDisableProfileFailed = 5,
-    kUninstallProfileFailed = 6,
-    kRemoveServiceFailed = 7,
-    kMaxValue = kRemoveServiceFailed
-  };
 
   // Represents ESim uninstallation request parameters. Requests are queued and
   // processed one at a time. |esim_profile_path| and |euicc_path| are nullopt
@@ -145,6 +138,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimUninstallHandler
     absl::optional<dbus::ObjectPath> esim_profile_path;
     absl::optional<dbus::ObjectPath> euicc_path;
     bool reset_euicc;
+    base::flat_set<std::string> removed_service_paths;
     UninstallRequestCallback callback;
     std::unique_ptr<CellularInhibitor::InhibitLock> inhibit_lock;
   };
@@ -180,7 +174,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimUninstallHandler
                           HermesResponseStatus status);
 
   void AttemptRemoveShillService();
-  void OnRemoveServiceSuccess();
+  void OnRemoveServiceSuccess(const std::string& removed_service_path);
   void OnRemoveServiceFailure(const std::string& error_name);
   void OnNetworkListWaitTimeout();
 
@@ -195,24 +189,24 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimUninstallHandler
 
   base::OneShotTimer network_list_wait_timer_;
 
-  CellularInhibitor* cellular_inhibitor_ = nullptr;
-  CellularESimProfileHandler* cellular_esim_profile_handler_ = nullptr;
-  ManagedCellularPrefHandler* managed_cellular_pref_handler_ = nullptr;
-  NetworkConfigurationHandler* network_configuration_handler_ = nullptr;
-  NetworkConnectionHandler* network_connection_handler_ = nullptr;
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
+  raw_ptr<CellularInhibitor, ExperimentalAsh> cellular_inhibitor_ = nullptr;
+  raw_ptr<CellularESimProfileHandler, ExperimentalAsh>
+      cellular_esim_profile_handler_ = nullptr;
+  raw_ptr<ManagedCellularPrefHandler, DanglingUntriaged | ExperimentalAsh>
+      managed_cellular_pref_handler_ = nullptr;
+  raw_ptr<NetworkConfigurationHandler, ExperimentalAsh>
+      network_configuration_handler_ = nullptr;
+  raw_ptr<NetworkConnectionHandler, ExperimentalAsh>
+      network_connection_handler_ = nullptr;
+  raw_ptr<NetworkStateHandler, ExperimentalAsh> network_state_handler_ =
+      nullptr;
+  size_t last_service_count_removal_for_testing_ = 0;
+  base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
 
   base::WeakPtrFactory<CellularESimUninstallHandler> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace ash {
-using ::chromeos::CellularESimUninstallHandler;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_ESIM_UNINSTALL_HANDLER_H_

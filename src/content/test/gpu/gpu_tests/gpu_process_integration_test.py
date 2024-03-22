@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 import time
-import typing
+from typing import Any, List, Optional, Tuple
 import unittest
 
 from devil.android.sdk import version_codes
@@ -28,7 +28,7 @@ test_harness_script = r"""
   domAutomationController._succeeded = false;
   domAutomationController.send = function(msg) {
     domAutomationController._finished = true;
-    if (msg.toLowerCase() == "finished") {
+    if (msg.toLowerCase() == "success") {
       domAutomationController._succeeded = true;
     } else {
       domAutomationController._succeeded = false;
@@ -38,12 +38,7 @@ test_harness_script = r"""
   window.domAutomationController = domAutomationController;
 
   function GetDriverBugWorkarounds() {
-    var query_result = document.querySelector('info-view').shadowRoot
-        .querySelector('.workarounds-list');
-    var browser_list = []
-    for (var i=0; i < query_result.childElementCount; i++)
-      browser_list.push(query_result.children[i].textContent);
-    return browser_list;
+    return getGPUInfo('workarounds');
   };
 """
 
@@ -71,8 +66,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     cls.SetStaticServerDirs([data_path])
 
   @classmethod
-  def GenerateBrowserArgs(cls, additional_args: typing.List[str]
-                          ) -> typing.List[str]:
+  def GenerateBrowserArgs(cls, additional_args: List[str]) -> List[str]:
     """Adds default arguments to |additional_args|.
 
     See the parent class' method documentation for additional information.
@@ -102,7 +96,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
 
     # Also note that since functional_video.html refers to files in
     # ../media/ , the serving dir must be the common parent directory.
-    tests: typing.Tuple[str, str] = (
+    tests = (
         ('GpuProcess_canvas2d', 'gpu/functional_canvas_demo.html'),
         ('GpuProcess_css3d', 'gpu/functional_3d_css.html'),
         ('GpuProcess_webgl', 'gpu/functional_webgl.html'),
@@ -186,9 +180,8 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
       self.fail('%s %s workarounds: %s' % (workaround_name, error_message,
                                            gpu_driver_bug_workarounds))
 
-  def _ValidateDriverBugWorkarounds(self,
-                                    expected_workaround: typing.Optional[str],
-                                    unexpected_workaround: typing.Optional[str]
+  def _ValidateDriverBugWorkarounds(self, expected_workaround: Optional[str],
+                                    unexpected_workaround: Optional[str]
                                     ) -> None:
     if not expected_workaround and not unexpected_workaround:
       return
@@ -209,7 +202,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     return True
 
   def _CompareAndCaptureDriverBugWorkarounds(
-      self) -> typing.Tuple[typing.List[str], typing.Optional[str]]:
+      self) -> Tuple[List[str], Optional[str]]:
     tab = self.tab
     if not tab.EvaluateJavaScript('chrome.gpuBenchmarking.hasGpuProcess()'):
       self.fail('No GPU process detected')
@@ -499,8 +492,6 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
         self.fail('Target machine must have a GPU')
       if not gpu.aux_attributes:
         self.fail('Browser must support GPU aux attributes')
-      if not gpu.aux_attributes['software_rendering']:
-        self.fail('Software rendering was disabled')
       if 'SwiftShader' not in gpu.aux_attributes['gl_renderer']:
         self.fail('Expected "SwiftShader" in GPU info GL renderer string')
       if 'Google' not in gpu.aux_attributes['gl_vendor']:
@@ -540,7 +531,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
 
   def _GpuProcess_mac_webgl_low_power(self, test_path: str) -> None:
     # Ensures that low-power WebGL content stays on the low-power GPU.
-    if not self._IsDualGPUMacLaptop():
+    if not self.IsDualGPUMacLaptop():
       logging.info('Skipping test because not running on dual-GPU Mac laptop')
       return
     # Start with a clean browser instance to ensure the GPU process is in a
@@ -560,7 +551,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
   def _GpuProcess_mac_webgl_high_performance(self, test_path: str) -> None:
     # Ensures that high-performance WebGL content activates the high-performance
     # GPU.
-    if not self._IsDualGPUMacLaptop():
+    if not self.IsDualGPUMacLaptop():
       logging.info('Skipping test because not running on dual-GPU Mac laptop')
       return
     # Start with a clean browser instance to ensure the GPU process is in a
@@ -580,7 +571,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
                                                           ) -> None:
     # Ensures that high-performance WebGL content in a background tab releases
     # the hold on the discrete GPU after 10 seconds.
-    if not self._IsDualGPUMacLaptop():
+    if not self.IsDualGPUMacLaptop():
       logging.info('Skipping test because not running on dual-GPU Mac laptop')
       return
     # Start with a clean browser instance to ensure the GPU process is in a
@@ -617,7 +608,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
                                                         test_path: str) -> None:
     # Ensures that high-performance WebGL content in a background tab releases
     # the hold on the discrete GPU after 10 seconds.
-    if not self._IsDualGPUMacLaptop():
+    if not self.IsDualGPUMacLaptop():
       logging.info('Skipping test because not running on dual-GPU Mac laptop')
       return
     # Start with a clean browser instance to ensure the GPU process is in a
@@ -650,13 +641,11 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
           'hold on the high-performance GPU')
 
   def _GpuProcess_webgpu_iframe_removed(self, test_path: str) -> None:
-    self.RestartBrowserIfNecessaryWithArgs([
-        '--enable-unsafe-webgpu',
-    ])
+    self.RestartBrowserIfNecessaryWithArgs(cba.ENABLE_WEBGPU_FOR_TESTING)
     self._NavigateAndWait(test_path)
 
   @classmethod
-  def ExpectationsFiles(cls) -> typing.List[str]:
+  def ExpectationsFiles(cls) -> List[str]:
     return [
         os.path.join(
             os.path.dirname(os.path.abspath(__file__)), 'test_expectations',
@@ -664,7 +653,7 @@ class GpuProcessIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     ]
 
 
-def load_tests(loader: unittest.TestLoader, tests: typing.Any,
-               pattern: typing.Any) -> unittest.TestSuite:
+def load_tests(loader: unittest.TestLoader, tests: Any,
+               pattern: Any) -> unittest.TestSuite:
   del loader, tests, pattern  # Unused.
   return gpu_integration_test.LoadAllTestsInModule(sys.modules[__name__])

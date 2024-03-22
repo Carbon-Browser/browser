@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -31,6 +31,9 @@ blink_platform_sources("heap") {
     "collection_support/heap_linked_stack.h",
     "collection_support/heap_vector.h",
     "collection_support/heap_vector_backing.h",
+    "cross_thread_handle.h",
+    "cross_thread_handle_internal.h",
+    "cross_thread_persistent.h",
     "custom_spaces.cc",
     "custom_spaces.h",
     "disallow_new_wrapper.h",
@@ -53,6 +56,7 @@ blink_platform_sources("heap") {
     "thread_state_storage.h",
     "trace_traits.h",
     "visitor.h",
+    "weak_cell.h",
     "write_barrier.h",
   ]
 
@@ -122,16 +126,13 @@ test("blink_heap_unittests") {
   }
 
   if (is_fuchsia) {
-    # TODO(https://crbug.com/1287051): Requires fuchsia.sys.Launcher.
-    use_cfv2 = false
+    additional_manifest_fragments = [
+      "//build/config/fuchsia/test/test_fonts.shard.test-cml",
 
-    # Oilpan reuses V8's v8::PageAllocator which generally requires JIT
-    # permissions.
-    additional_manifest_fragments =
-        [ "//build/config/fuchsia/test/jit_capabilities.test-cmx" ]
-
-    # Use the following when switching to CFv2:
-    # test_runner_shard = "//build/config/fuchsia/test/elf_test_ambient_exec_runner.shard.test-cml"
+      # Oilpan reuses V8's v8::PageAllocator which generally requires JIT
+      # permissions.
+      "//build/config/fuchsia/test/mark_vmo_executable.shard.test-cml",
+    ]
   }
 }
 
@@ -142,12 +143,14 @@ source_set("blink_heap_unittests_sources") {
     "../testing/run_all_tests.cc",
     "test/blink_gc_memory_dump_provider_test.cc",
     "test/concurrent_marking_test.cc",
+    "test/cross_thread_handle_test.cc",
     "test/heap_compact_test.cc",
     "test/heap_linked_stack_test.cc",
     "test/heap_test.cc",
     "test/heap_traits_test.cc",
     "test/incremental_marking_test.cc",
     "test/persistent_test.cc",
+    "test/weak_cell_test.cc",
     "test/weakness_marking_test.cc",
   ]
 
@@ -189,15 +192,10 @@ test("blink_heap_perftests") {
   }
 
   if (is_fuchsia) {
-    use_cfv2 = false
-
     # Oilpan reuses V8's v8::PageAllocator which generally requires JIT
     # permissions.
     additional_manifest_fragments =
-        [ "//build/config/fuchsia/test/jit_capabilities.test-cmx" ]
-
-    # Use the following when switching to CFv2:
-    # test_runner_shard = "//build/config/fuchsia/test/elf_test_ambient_exec_runner.shard.test-cml"
+        [ "//build/config/fuchsia/test/mark_vmo_executable.shard.test-cml" ]
   }
 }
 
@@ -219,6 +217,7 @@ source_set("blink_heap_perftests_sources") {
   ]
 
   deps = [
+    "//gin:gin",
     "//testing/gtest",
     "//testing/perf",
     "//third_party/blink/renderer/platform:test_support",

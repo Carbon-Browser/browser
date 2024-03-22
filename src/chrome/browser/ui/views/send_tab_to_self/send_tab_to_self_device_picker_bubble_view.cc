@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,11 @@
 #include "content/public/browser/browser_thread.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_types.h"
+#include "ui/color/color_id.h"
 #include "ui/views/accessibility/view_accessibility.h"
+#include "ui/views/background.h"
 #include "ui/views/controls/scroll_view.h"
+#include "ui/views/controls/separator.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/style/typography.h"
 #include "ui/views/view_class_properties.h"
@@ -74,7 +77,7 @@ bool SendTabToSelfDevicePickerBubbleView::ShouldShowCloseButton() const {
 }
 
 std::u16string SendTabToSelfDevicePickerBubbleView::GetWindowTitle() const {
-  return l10n_util::GetStringUTF16(IDS_CONTEXT_MENU_SEND_TAB_TO_SELF);
+  return l10n_util::GetStringUTF16(IDS_SEND_TAB_TO_SELF);
 }
 
 void SendTabToSelfDevicePickerBubbleView::WindowClosing() {
@@ -122,7 +125,11 @@ void SendTabToSelfDevicePickerBubbleView::Init() {
   CreateHintTextLabel();
   CreateDevicesScrollView();
 
-  AddChildView(BuildManageAccountDevicesLinkView(controller_));
+  AddChildView(std::make_unique<views::Separator>());
+  views::View* footer = AddChildView(
+      BuildManageAccountDevicesLinkView(/*show_link=*/true, controller_));
+  footer->SetBackground(views::CreateThemedSolidBackground(
+      ui::kColorMenuItemBackgroundHighlighted));
 }
 
 void SendTabToSelfDevicePickerBubbleView::AddedToWidget() {

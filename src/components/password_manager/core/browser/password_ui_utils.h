@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,26 +20,15 @@ class PasswordFormManagerForUI;
 struct PasswordForm;
 struct CredentialUIEntry;
 
-// Reverses order of labels in hostname.
-std::string SplitByDotAndReverse(base::StringPiece host);
-
-// Returns a human readable origin and a link URL for the provided
-// |password_form|.
-//
 // For Web credentials the returned origin is suitable for security display and
-// is stripped off common prefixes like "m.", "mobile." or "www.". Furthermore
-// the link URL is set to the full origin of the original form.
+// is stripped off common prefixes like "m.", "mobile." or "www.".
 //
 //  For Android credentials the returned origin is set to the Play Store name
 //  if available, otherwise it is the reversed package name (e.g.
 //  com.example.android gets transformed to android.example.com).
-// TODO(crbug.com/1330906) Replace the usage with GetShownOrigin and GetShownUrl
-std::pair<std::string, GURL> GetShownOriginAndLinkUrl(
-    const PasswordForm& password_form);
-
-// Together have the same result as |GetShownOriginAndLinkUrl| but works with
-// |CredentialUIEntry|.
 std::string GetShownOrigin(const CredentialUIEntry& credential);
+// Returns URL the full origin of the |credential|. For Android credential the
+// link pints to affiliated website or to the Play Store if missing.
 GURL GetShownUrl(const CredentialUIEntry& credential);
 
 // Returns a string suitable for security display to the user (just like
@@ -62,6 +51,14 @@ std::vector<std::u16string> GetUsernamesForRealm(
     const std::vector<password_manager::CredentialUIEntry>& credentials,
     const std::string& signon_realm,
     bool is_using_account_store);
+
+// Returns the resource identifier for the label describing the platform
+// authenticator, e.g. "Use TouchID".
+int GetPlatformAuthenticatorLabel();
+
+// Returns the username or a label appropriate for display if it is empty.
+std::u16string ToUsernameString(const std::u16string& username);
+std::u16string ToUsernameString(const std::string& username);
 
 }  // namespace password_manager
 

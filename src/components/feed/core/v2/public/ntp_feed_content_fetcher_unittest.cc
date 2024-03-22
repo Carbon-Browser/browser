@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,7 +90,7 @@ class NtpFeedContentFetcherTest : public testing::Test {
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   std::unique_ptr<NtpFeedContentFetcher> ntp_feed_content_fetcher_;
   signin::IdentityTestEnvironment identity_test_env_;
-  raw_ptr<TestFeedNetwork> feed_network_;
+  raw_ptr<TestFeedNetwork, DanglingUntriaged> feed_network_;
   network::TestURLLoaderFactory test_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
   TestingPrefServiceSimple profile_prefs_;

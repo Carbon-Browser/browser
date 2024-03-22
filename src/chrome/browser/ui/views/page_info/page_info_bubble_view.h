@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,8 @@ class PageInfoBubbleView : public PageInfoBubbleViewBase,
   void OpenMainPage(base::OnceClosure initialized_callback) override;
   void OpenSecurityPage() override;
   void OpenPermissionPage(ContentSettingsType type) override;
-  void OpenAboutThisSitePage(const page_info::proto::SiteInfo& info) override;
   void OpenAdPersonalizationPage() override;
+  void OpenCookiesPage() override;
   void CloseBubble() override;
 
   // WebContentsObserver:
@@ -69,18 +69,18 @@ class PageInfoBubbleView : public PageInfoBubbleViewBase,
 
   void AnnouncePageOpened(std::u16string announcement);
 
-  raw_ptr<PageSwitcherView> page_container_ = nullptr;
-
   // The presenter that controls the Page Info UI.
   std::unique_ptr<PageInfo> presenter_;
-
-  PageInfoClosingCallback closing_callback_;
 
   std::unique_ptr<ChromePageInfoUiDelegate> ui_delegate_;
 
   std::unique_ptr<PageInfoViewFactory> view_factory_;
 
   std::unique_ptr<PageInfoHistoryController> history_controller_;
+
+  raw_ptr<PageSwitcherView> page_container_ = nullptr;
+
+  PageInfoClosingCallback closing_callback_;
 
   base::WeakPtrFactory<PageInfoBubbleView> weak_factory_{this};
 };

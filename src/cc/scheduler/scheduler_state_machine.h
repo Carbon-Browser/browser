@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -176,6 +176,12 @@ class CC_EXPORT SchedulerStateMachine {
   // to make progress.
   bool BeginFrameNeeded() const;
 
+  // Indicates whether the compositor should continue to receive BeginFrame
+  // notifications. This is different from BeginFrameNeeded() for cases where we
+  // temporarily stop drawing. Unsubscribing and re-subscribing to BeginFrame
+  // notifications creates unnecessary overhead.
+  bool ShouldSubscribeToBeginFrames() const;
+
   // Indicates that the system has entered and left a BeginImplFrame callback.
   // The scheduler will not draw more than once in a given BeginImplFrame
   // callback nor send more than one BeginMainFrame message.
@@ -328,6 +334,7 @@ class CC_EXPORT SchedulerStateMachine {
   bool CouldSendBeginMainFrame() const;
 
   void SetDeferBeginMainFrame(bool defer_begin_main_frame);
+  void SetPauseRendering(bool pause_rendering);
 
   void SetVideoNeedsBeginFrames(bool video_needs_begin_frames);
   bool video_needs_begin_frames() const { return video_needs_begin_frames_; }
@@ -363,6 +370,13 @@ class CC_EXPORT SchedulerStateMachine {
   }
 
   bool resourceless_draw() const { return resourceless_draw_; }
+
+  bool processing_animation_worklets_for_pending_tree() const {
+    return processing_animation_worklets_for_pending_tree_;
+  }
+  bool processing_paint_worklets_for_pending_tree() const {
+    return processing_paint_worklets_for_pending_tree_;
+  }
 
  protected:
   bool BeginFrameRequiredForAction() const;
@@ -406,6 +420,9 @@ class CC_EXPORT SchedulerStateMachine {
       LayerTreeFrameSinkState::NONE;
   BeginImplFrameState begin_impl_frame_state_ = BeginImplFrameState::IDLE;
   BeginMainFrameState begin_main_frame_state_ = BeginMainFrameState::IDLE;
+  // This tracks a BMF sent to the main thread before we're finished processing
+  // the previous BMF (tracked by begin_main_frame_state_) on the impl thread.
+  BeginMainFrameState next_begin_main_frame_state_ = BeginMainFrameState::IDLE;
 
   // A redraw is forced when too many checkerboarded-frames are produced during
   // an animation.
@@ -467,6 +484,8 @@ class CC_EXPORT SchedulerStateMachine {
   bool critical_begin_main_frame_to_activate_is_fast_ = true;
   bool main_thread_missed_last_deadline_ = false;
   bool defer_begin_main_frame_ = false;
+  bool pause_rendering_ = false;
+  bool waiting_for_activation_after_rendering_resumed_ = false;
   bool video_needs_begin_frames_ = false;
   bool last_commit_had_no_updates_ = false;
   bool active_tree_is_ready_to_draw_ = true;
@@ -499,6 +518,10 @@ class CC_EXPORT SchedulerStateMachine {
 
   // Number of consecutive BeginMainFrames that were aborted without updates.
   int aborted_begin_main_frame_count_ = 0;
+
+  bool draw_aborted_for_paused_begin_frame_ = false;
+
+  unsigned consecutive_cant_draw_count_ = 0u;
 };
 
 }  // namespace cc

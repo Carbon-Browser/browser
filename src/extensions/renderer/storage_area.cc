@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -243,7 +243,7 @@ StorageArea::~StorageArea() = default;
 v8::Local<v8::Object> StorageArea::CreateStorageArea(
     v8::Isolate* isolate,
     const std::string& property_name,
-    const base::ListValue* property_values,
+    const base::Value::List*,
     APIRequestHandler* request_handler,
     APIEventHandler* event_handler,
     APITypeReferenceMap* type_refs,
@@ -289,7 +289,7 @@ void StorageArea::HandleFunctionCall(const std::string& method_name,
   if (!access_checker_->HasAccessOrThrowError(context, full_method_name))
     return;
 
-  std::vector<v8::Local<v8::Value>> argument_list = arguments->GetAll();
+  v8::LocalVector<v8::Value> argument_list = arguments->GetAll();
 
   const APISignature* signature = type_refs_->GetTypeMethodSignature(
       base::StringPrintf("%s.%s", "storage.StorageArea", method_name.c_str()));
@@ -303,11 +303,11 @@ void StorageArea::HandleFunctionCall(const std::string& method_name,
     return;
   }
 
-  parse_result.arguments_list->GetList().Insert(
-      parse_result.arguments_list->GetList().begin(), base::Value(name_));
+  parse_result.arguments_list->Insert(parse_result.arguments_list->begin(),
+                                      base::Value(name_));
 
   v8::Local<v8::Promise> promise = request_handler_->StartRequest(
-      context, full_method_name, std::move(parse_result.arguments_list),
+      context, full_method_name, std::move(*parse_result.arguments_list),
       parse_result.async_type, parse_result.callback, v8::Local<v8::Function>(),
       binding::ResultModifierFunction());
 

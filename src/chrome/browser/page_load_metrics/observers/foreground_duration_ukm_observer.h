@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,8 @@ class ForegroundDurationUKMObserver
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override;
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override;
   ObservePolicy FlushMetricsOnAppEnterBackground(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
   ObservePolicy OnHidden(
@@ -38,14 +40,17 @@ class ForegroundDurationUKMObserver
   ObservePolicy OnShown() override;
   void OnComplete(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
+  void DidActivatePrerenderedPage(
+      content::NavigationHandle* navigation_handle) override;
 
  private:
+  // True when the visibility of WebContents is Visibility::VISIBLE (not
+  // OCCLUDED or HIDDEN).
   bool currently_in_foreground_ = false;
+
   base::TimeTicks last_time_shown_;
   page_load_metrics::mojom::InputTimingPtr last_page_input_timing_;
   void RecordUkmIfInForeground(base::TimeTicks end_time);
-  void RecordInputTimingMetrics(
-      ukm::builders::PageForegroundSession* ukm_builder);
 };
 
 #endif  // CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_FOREGROUND_DURATION_UKM_OBSERVER_H_

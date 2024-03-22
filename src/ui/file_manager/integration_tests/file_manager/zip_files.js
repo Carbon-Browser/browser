@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {addEntries, ENTRIES, expectHistogramTotalCount, getCaller, pending, repeatUntil, RootPath, sendTestMessage} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {navigateWithDirectoryTree, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_ZIP_ENTRY_SET, COMPLEX_ZIP_ENTRY_SET} from './test_data.js';
 
 /**
@@ -50,10 +51,7 @@ testcase.zipFileOpenDownloads = async () => {
       RootPath.DOWNLOADS, [ENTRIES.zipArchive], []);
 
   // Select the zip file.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'selectFile', appId, ['archive.zip']),
-      'selectFile failed');
+  await remoteCall.waitUntilSelected(appId, ENTRIES.zipArchive.nameText);
 
   // Press the Enter key.
   const key = ['#file-list', 'Enter', false, false, false];
@@ -104,10 +102,7 @@ testcase.zipFileOpenDrive = async () => {
       await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.zipArchive]);
 
   // Select the zip file.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'selectFile', appId, ['archive.zip']),
-      'selectFile failed');
+  await remoteCall.waitUntilSelected(appId, ENTRIES.zipArchive.nameText);
 
   // Press the Enter key.
   const key = ['#file-list', 'Enter', false, false, false];
@@ -130,8 +125,6 @@ testcase.zipFileOpenUsb = async () => {
     openType: 'launch',
   });
 
-  const USB_VOLUME_QUERY = '#directory-tree [volume-type-icon="removable"]';
-
   // Open Files app on Drive.
   const appId =
       await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.beautiful]);
@@ -139,12 +132,9 @@ testcase.zipFileOpenUsb = async () => {
   // Mount empty USB volume in the Drive window.
   await sendTestMessage({name: 'mountFakeUsbEmpty'});
 
-  // Wait for the USB mount.
-  await remoteCall.waitForElement(appId, USB_VOLUME_QUERY);
-
-  // Click to open the USB volume.
-  await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, [USB_VOLUME_QUERY]);
+  // Wait for the USB mount and click to open the USB volume.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('removable');
 
   // Add zip file to the USB volume.
   await addEntries(['usb'], [ENTRIES.zipArchive]);
@@ -154,10 +144,7 @@ testcase.zipFileOpenUsb = async () => {
   await remoteCall.waitForFiles(appId, archive);
 
   // Select the zip file.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'selectFile', appId, ['archive.zip']),
-      'selectFile failed');
+  await remoteCall.waitUntilSelected(appId, ENTRIES.zipArchive.nameText);
 
   // Press the Enter key.
   const key = ['#file-list', 'Enter', false, false, false];
@@ -190,9 +177,7 @@ testcase.zipCreateFileDownloads = async () => {
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.photos], []);
 
   // Select the file.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil('selectFile', appId, ['photos']),
-      'selectFile failed');
+  await remoteCall.waitUntilSelected(appId, ENTRIES.photos.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -226,9 +211,7 @@ testcase.zipCreateFileDrive = async () => {
       await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.photos]);
 
   // Select the file.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil('selectFile', appId, ['photos']),
-      'selectFile failed');
+  await remoteCall.waitUntilSelected(appId, ENTRIES.photos.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -254,11 +237,75 @@ testcase.zipCreateFileDrive = async () => {
 };
 
 /**
+ * Tests creating a ZIP file containing an Office file on Drive.
+ */
+testcase.zipCreateFileDriveOffice = async () => {
+  // Open Files app on Drive containing ENTRIES.photos and ENTRIES.docxFile.
+  const appId = await setupAndWaitUntilReady(
+      RootPath.DRIVE, [], [ENTRIES.photos, ENTRIES.docxFile]);
+
+  // Select the files.
+  await remoteCall.waitAndClickElement(
+      appId, `#file-list [file-name="${ENTRIES.photos.nameText}"]`);
+  await remoteCall.waitAndClickElement(
+      appId, `#file-list [file-name="${ENTRIES.docxFile.nameText}"]`,
+      {shift: true});
+
+  // Right-click the selected file.
+  chrome.test.assertTrue(
+      !!await remoteCall.callRemoteTestUtil(
+          'fakeMouseRightClick', appId, ['.table-row[selected]']),
+      'fakeMouseRightClick failed');
+
+  // Check: the context menu should appear.
+  await remoteCall.waitForElement(appId, '#file-context-menu:not([hidden])');
+
+  // Click the 'Zip selection' menu command.
+  const zip = '[command="#zip-selection"]';
+  chrome.test.assertTrue(
+      !!await remoteCall.callRemoteTestUtil('fakeMouseClick', appId, [zip]),
+      'fakeMouseClick failed');
+
+  // Check: a zip file should be created.
+  await remoteCall.waitForElement(
+      appId, '#file-list [file-name="Archive.zip"]');
+
+  // Check: a zip time histogram value should have been recorded.
+  await expectHistogramTotalCount(ZipCreationTimeHistogramName, 1);
+};
+
+/**
+ * Tests that creating a ZIP file containing an encrypted file is disabled.
+ */
+testcase.zipDoesntCreateFileEncrypted = async () => {
+  // Open Files app on Drive containing a test CSE file.
+  const appId =
+      await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.testCSEFile]);
+
+  // Select the file.
+  await remoteCall.waitAndClickElement(
+      appId, `#file-list [file-name="${ENTRIES.testCSEFile.nameText}"]`);
+
+  // Right-click the selected file.
+  chrome.test.assertTrue(
+      !!await remoteCall.callRemoteTestUtil(
+          'fakeMouseRightClick', appId, ['.table-row[selected]']),
+      'fakeMouseRightClick failed');
+
+  // Check: the context menu should appear.
+  await remoteCall.waitForElement(appId, '#file-context-menu:not([hidden])');
+
+  // Get the zip menu item.
+  const element =
+      await remoteCall.waitForElement(appId, '[command="#zip-selection"]');
+
+  chrome.test.assertEq('disabled', element.attributes.disabled);
+};
+
+/**
  * Tests creating a ZIP file on a removable USB volume.
  */
 testcase.zipCreateFileUsb = async () => {
-  const USB_VOLUME_QUERY = '#directory-tree [volume-type-icon="removable"]';
-
   // Open Files app on Drive.
   const appId =
       await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.beautiful]);
@@ -266,12 +313,9 @@ testcase.zipCreateFileUsb = async () => {
   // Mount empty USB volume in the Drive window.
   await sendTestMessage({name: 'mountFakeUsbEmpty'});
 
-  // Wait for the USB mount.
-  await remoteCall.waitForElement(appId, USB_VOLUME_QUERY);
-
-  // Click to open the USB volume.
-  await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, [USB_VOLUME_QUERY]);
+  // Wait for the USB mount and click to open the USB volume.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('removable');
 
   // Add ENTRIES.photos to the USB volume.
   await addEntries(['usb'], [ENTRIES.photos]);
@@ -281,9 +325,7 @@ testcase.zipCreateFileUsb = async () => {
   await remoteCall.waitForFiles(appId, photos);
 
   // Select the photos file list entry.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil('selectFile', appId, ['photos']),
-      'selectFile failed');
+  await remoteCall.waitUntilSelected(appId, ENTRIES.photos.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -326,8 +368,7 @@ testcase.zipExtractShowPanel = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, [entry], []);
 
   // Select the file.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entry.nameText]));
+  await remoteCall.waitUntilSelected(appId, entry.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -453,8 +494,7 @@ testcase.zipExtractSelectionMenus = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, entries, []);
 
   // Select the first file (ENTRIES.hello).
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entries[0].nameText]));
+  await remoteCall.waitUntilSelected(appId, entries[0].nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -479,8 +519,7 @@ testcase.zipExtractSelectionMenus = async () => {
       'fakeMouseClick failed');
 
   // Select the third file (ENTRIES.zipArchive).
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entries[2].nameText]));
+  await remoteCall.waitUntilSelected(appId, entries[2].nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -574,8 +613,7 @@ testcase.zipExtractCheckContent = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, [entry], []);
 
   // Select the file.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entry.nameText]));
+  await remoteCall.waitUntilSelected(appId, entry.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -626,8 +664,7 @@ testcase.zipExtractCheckDuplicates = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, [entry], []);
 
   // Select the file.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entry.nameText]));
+  await remoteCall.waitUntilSelected(appId, entry.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -703,8 +740,7 @@ testcase.zipExtractCheckEncodings = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, [entry], []);
 
   // Select the file.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entry.nameText]));
+  await remoteCall.waitUntilSelected(appId, entry.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -749,8 +785,7 @@ testcase.zipExtractA11y = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, [entry], []);
 
   // Select the file.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entry.nameText]));
+  await remoteCall.waitUntilSelected(appId, entry.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -777,8 +812,7 @@ testcase.zipExtractNotEnoughSpace = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS, [entry], []);
 
   // Select the file.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entry.nameText]));
+  await remoteCall.waitUntilSelected(appId, entry.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -835,8 +869,8 @@ testcase.zipExtractFromReadOnly = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DRIVE, [], [entry]);
 
   // Navigate to Shared with me.
-  await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, ['[volume-type-icon=\'drive_shared_with_me\']']);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByLabel('Shared with me');
 
   // Wait for the navigation to complete.
   await remoteCall.waitUntilCurrentDirectoryIsChanged(appId, '/Shared with me');
@@ -844,9 +878,11 @@ testcase.zipExtractFromReadOnly = async () => {
   // Make sure read-only indicator on toolbar is visible.
   await remoteCall.waitForElement(appId, '#read-only-indicator:not([hidden])');
 
+  // Make sure the file we are about to select is present.
+  await remoteCall.waitForFiles(appId, [entry.getExpectedRow()]);
+
   // Select the ZIP file.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [entry.nameText]));
+  await remoteCall.waitUntilSelected(appId, entry.nameText);
 
   // Right-click the selected file.
   chrome.test.assertTrue(
@@ -864,7 +900,7 @@ testcase.zipExtractFromReadOnly = async () => {
       'fakeMouseClick failed');
 
   // Navigate to My Files.
-  await navigateWithDirectoryTree(appId, '/My files');
+  await directoryTree.navigateToPath('/My files');
 
   const directoryQuery = '#file-list [file-name="' + targetDirectoryName + '"]';
   // Check: the extract directory should appear.

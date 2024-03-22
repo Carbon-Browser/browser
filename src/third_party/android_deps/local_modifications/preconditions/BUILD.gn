@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -30,8 +30,9 @@ android_library("gms_stub_preconditions_java") {
   ]
 }
 
-android_library("guava_stub_preconditions_java") {
+java_library("guava_stub_preconditions_java") {
   sources = [
     "java/com/google/common/base/Preconditions.java",
   ]
+  supports_android = true
 }

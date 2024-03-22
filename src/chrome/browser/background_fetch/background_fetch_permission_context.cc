@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,6 @@ BackgroundFetchPermissionContext::BackgroundFetchPermissionContext(
     : PermissionContextBase(browser_context,
                             ContentSettingsType::BACKGROUND_FETCH,
                             blink::mojom::PermissionsPolicyFeature::kNotFound) {
-}
-
-bool BackgroundFetchPermissionContext::IsRestrictedToSecureOrigins() const {
-  return true;
 }
 
 ContentSetting BackgroundFetchPermissionContext::GetPermissionStatusInternal(
@@ -73,10 +69,7 @@ ContentSetting BackgroundFetchPermissionContext::GetPermissionStatusInternal(
 }
 
 void BackgroundFetchPermissionContext::DecidePermission(
-    const permissions::PermissionRequestID& id,
-    const GURL& requesting_origin,
-    const GURL& embedding_origin,
-    bool user_gesture,
+    permissions::PermissionRequestData request_data,
     permissions::BrowserPermissionCallback callback) {
   // The user should never be prompted to authorize Background Fetch
   // from BackgroundFetchPermissionContext.
@@ -92,9 +85,12 @@ void BackgroundFetchPermissionContext::NotifyPermissionSet(
     permissions::BrowserPermissionCallback callback,
     bool persist,
     ContentSetting content_setting,
-    bool is_one_time) {
+    bool is_one_time,
+    bool is_final_decision) {
   DCHECK(!persist);
+  DCHECK(is_final_decision);
+
   permissions::PermissionContextBase::NotifyPermissionSet(
       id, requesting_origin, embedding_origin, std::move(callback), persist,
-      content_setting, is_one_time);
+      content_setting, is_one_time, is_final_decision);
 }

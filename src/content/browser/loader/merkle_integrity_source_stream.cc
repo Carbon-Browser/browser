@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/base64.h"
 #include "base/big_endian.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "net/base/io_buffer.h"
 
@@ -26,7 +27,7 @@ constexpr size_t kMiSha256HeaderLength = sizeof(kMiSha256Header) - 1;
 // Copies as many bytes from |input| as will fit in |output| and advances both.
 size_t CopyClamped(base::span<const char>* input, base::span<char>* output) {
   size_t size = std::min(output->size(), input->size());
-  memcpy(output->data(), input->data(), size);
+  base::ranges::copy(input->first(size), output->data());
   *output = output->subspan(size);
   *input = input->subspan(size);
   return size;
@@ -52,29 +53,29 @@ MerkleIntegritySourceStream::MerkleIntegritySourceStream(
 
 MerkleIntegritySourceStream::~MerkleIntegritySourceStream() = default;
 
-int MerkleIntegritySourceStream::FilterData(net::IOBuffer* output_buffer,
-                                            int output_buffer_size,
-                                            net::IOBuffer* input_buffer,
-                                            int input_buffer_size,
-                                            int* consumed_bytes,
-                                            bool upstream_eof_reached) {
+base::expected<size_t, net::Error> MerkleIntegritySourceStream::FilterData(
+    net::IOBuffer* output_buffer,
+    size_t output_buffer_size,
+    net::IOBuffer* input_buffer,
+    size_t input_buffer_size,
+    size_t* consumed_bytes,
+    bool upstream_eof_reached) {
   if (failed_) {
-    return net::ERR_CONTENT_DECODING_FAILED;
+    return base::unexpected(net::ERR_CONTENT_DECODING_FAILED);
   }
 
-  base::span<const char> remaining_input = base::make_span(
-      input_buffer->data(), base::checked_cast<size_t>(input_buffer_size));
-  base::span<char> remaining_output = base::make_span(
-      output_buffer->data(), base::checked_cast<size_t>(output_buffer_size));
+  base::span<const char> remaining_input =
+      base::make_span(input_buffer->data(), input_buffer_size);
+  base::span<char> remaining_output =
+      base::make_span(output_buffer->data(), output_buffer_size);
   bool ok =
       FilterDataImpl(&remaining_output, &remaining_input, upstream_eof_reached);
-  *consumed_bytes =
-      input_buffer_size - base::checked_cast<int>(remaining_input.size());
+  *consumed_bytes = input_buffer_size - remaining_input.size();
   if (!ok) {
     failed_ = true;
-    return net::ERR_CONTENT_DECODING_FAILED;
+    return base::unexpected(net::ERR_CONTENT_DECODING_FAILED);
   }
-  return output_buffer_size - base::checked_cast<int>(remaining_output.size());
+  return output_buffer_size - remaining_output.size();
 }
 
 std::string MerkleIntegritySourceStream::GetTypeAsString() const {

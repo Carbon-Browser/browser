@@ -1,11 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.keyboard_accessory;
 
 import android.view.View;
-import android.view.ViewStub;
 
 import androidx.annotation.VisibleForTesting;
 
@@ -22,6 +21,7 @@ import org.chromium.components.autofill.AutofillDelegate;
 import org.chromium.components.autofill.AutofillSuggestion;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.content_public.browser.WebContents;
+import org.chromium.ui.AsyncViewStub;
 import org.chromium.ui.DropdownPopupWindow;
 import org.chromium.ui.base.WindowAndroid;
 
@@ -40,28 +40,48 @@ class ManualFillingCoordinator implements ManualFillingComponent {
     public ManualFillingCoordinator() {}
 
     @Override
-    public void initialize(WindowAndroid windowAndroid, BottomSheetController sheetController,
-            SoftKeyboardDelegate keyboardDelegate, BackPressManager backPressManager,
-            ViewStub sheetStub, ViewStub barStub) {
+    public void initialize(
+            WindowAndroid windowAndroid,
+            BottomSheetController sheetController,
+            SoftKeyboardDelegate keyboardDelegate,
+            BackPressManager backPressManager,
+            AsyncViewStub sheetStub,
+            AsyncViewStub barStub) {
         if (barStub == null || sheetStub == null) return; // The manual filling isn't needed.
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)) {
-            barStub.setLayoutResource(R.layout.keyboard_accessory_modern);
-        } else {
-            barStub.setLayoutResource(R.layout.keyboard_accessory);
-        }
+        barStub.setLayoutResource(
+                ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)
+                        ? R.layout.keyboard_accessory_modern
+                        : R.layout.keyboard_accessory);
         sheetStub.setLayoutResource(R.layout.keyboard_accessory_sheet);
-        initialize(windowAndroid, new KeyboardAccessoryCoordinator(mMediator, barStub),
-                new AccessorySheetCoordinator(sheetStub), sheetController, backPressManager,
-                keyboardDelegate, new ConfirmationDialogHelper(windowAndroid.getContext()));
+        barStub.setShouldInflateOnBackgroundThread(true);
+        sheetStub.setShouldInflateOnBackgroundThread(true);
+        initialize(
+                windowAndroid,
+                new KeyboardAccessoryCoordinator(mMediator, mMediator, barStub),
+                new AccessorySheetCoordinator(sheetStub, mMediator),
+                sheetController,
+                backPressManager,
+                keyboardDelegate,
+                new ConfirmationDialogHelper(windowAndroid.getContext()));
     }
 
     @VisibleForTesting
-    void initialize(WindowAndroid windowAndroid, KeyboardAccessoryCoordinator accessoryBar,
-            AccessorySheetCoordinator accessorySheet, BottomSheetController sheetController,
-            BackPressManager backPressManager, SoftKeyboardDelegate keyboardDelegate,
+    void initialize(
+            WindowAndroid windowAndroid,
+            KeyboardAccessoryCoordinator accessoryBar,
+            AccessorySheetCoordinator accessorySheet,
+            BottomSheetController sheetController,
+            BackPressManager backPressManager,
+            SoftKeyboardDelegate keyboardDelegate,
             ConfirmationDialogHelper confirmationHelper) {
-        mMediator.initialize(accessoryBar, accessorySheet, windowAndroid, sheetController,
-                backPressManager, keyboardDelegate, confirmationHelper);
+        mMediator.initialize(
+                accessoryBar,
+                accessorySheet,
+                windowAndroid,
+                sheetController,
+                backPressManager,
+                keyboardDelegate,
+                confirmationHelper);
     }
 
     @Override
@@ -76,8 +96,8 @@ class ManualFillingCoordinator implements ManualFillingComponent {
     }
 
     @Override
-    public void handleBackPress() {
-        mMediator.handleBackPress();
+    public @BackPressResult int handleBackPress() {
+        return mMediator.handleBackPress();
     }
 
     @Override
@@ -106,13 +126,16 @@ class ManualFillingCoordinator implements ManualFillingComponent {
     }
 
     @Override
-    public void registerActionProvider(WebContents webContents,
+    public void registerActionProvider(
+            WebContents webContents,
             PropertyProvider<KeyboardAccessoryData.Action[]> actionProvider) {
         mMediator.registerActionProvider(webContents, actionProvider);
     }
 
     @Override
-    public void registerSheetDataProvider(WebContents webContents, @AccessoryTabType int sheetType,
+    public void registerSheetDataProvider(
+            WebContents webContents,
+            @AccessoryTabType int sheetType,
             PropertyProvider<KeyboardAccessoryData.AccessorySheetData> sheetDataProvider) {
         mMediator.registerSheetDataProvider(webContents, sheetType, sheetDataProvider);
     }
@@ -130,8 +153,8 @@ class ManualFillingCoordinator implements ManualFillingComponent {
     }
 
     @Override
-    public void showWhenKeyboardIsVisible() {
-        mMediator.showWhenKeyboardIsVisible();
+    public void show(boolean waitForKeyboard) {
+        mMediator.show(waitForKeyboard);
     }
 
     @Override
@@ -179,8 +202,17 @@ class ManualFillingCoordinator implements ManualFillingComponent {
         mMediator.confirmOperation(title, message, confirmedCallback);
     }
 
-    @VisibleForTesting
     ManualFillingMediator getMediatorForTesting() {
         return mMediator;
+    }
+
+    @Override
+    public int getKeyboardExtensionHeight() {
+        return mMediator != null ? mMediator.getKeyboardExtensionHeight() : 0;
+    }
+
+    @Override
+    public void forceShowForTesting() {
+        mMediator.show(true);
     }
 }

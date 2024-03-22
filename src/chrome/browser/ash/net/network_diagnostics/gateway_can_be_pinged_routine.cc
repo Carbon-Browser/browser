@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/values.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
-#include "chromeos/services/network_config/in_process_instance.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/services/network_config/in_process_instance.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_util.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -19,12 +19,10 @@
 
 namespace ash {
 namespace network_diagnostics {
+
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
-namespace network_config = ::chromeos::network_config;
-
 using chromeos::network_config::mojom::CrosNetworkConfig;
 using chromeos::network_config::mojom::FilterType;
 using chromeos::network_config::mojom::ManagedPropertiesPtr;
@@ -34,7 +32,7 @@ using chromeos::network_config::mojom::NetworkType;
 
 void GetNetworkConfigService(
     mojo::PendingReceiver<CrosNetworkConfig> receiver) {
-  chromeos::network_config::BindToInProcessInstance(std::move(receiver));
+  network_config::BindToInProcessInstance(std::move(receiver));
 }
 
 // The maximum latency threshold (in milliseconds) for pinging the gateway.
@@ -43,7 +41,7 @@ constexpr base::TimeDelta kMaxAllowedLatencyMs = base::Milliseconds(1500);
 }  // namespace
 
 GatewayCanBePingedRoutine::GatewayCanBePingedRoutine(
-    chromeos::DebugDaemonClient* debug_daemon_client)
+    DebugDaemonClient* debug_daemon_client)
     : debug_daemon_client_(debug_daemon_client) {
   set_verdict(mojom::RoutineVerdict::kNotRun);
   GetNetworkConfigService(
@@ -108,7 +106,7 @@ void GatewayCanBePingedRoutine::FetchActiveNetworks() {
   DCHECK(remote_cros_network_config_);
   remote_cros_network_config_->GetNetworkStateList(
       NetworkFilter::New(FilterType::kActive, NetworkType::kAll,
-                         network_config::mojom::kNoLimit),
+                         chromeos::network_config::mojom::kNoLimit),
       base::BindOnce(&GatewayCanBePingedRoutine::OnNetworkStateListReceived,
                      base::Unretained(this)));
 }
@@ -144,25 +142,26 @@ bool GatewayCanBePingedRoutine::ParseICMPResult(const std::string& status,
   if (!parsed_value.has_value()) {
     return false;
   }
-  if (!parsed_value->is_dict() || parsed_value->DictSize() != 1) {
+  const base::Value::Dict* parsed_value_dict = parsed_value->GetIfDict();
+  if (!parsed_value_dict || parsed_value_dict->size() != 1) {
     return false;
   }
-  auto iter = parsed_value->DictItems().begin();
+  auto iter = parsed_value_dict->begin();
   const std::string& ip_addr = iter->first;
-  const base::Value& info = iter->second;
-  if (!info.is_dict()) {
+  const base::Value::Dict* info = iter->second.GetIfDict();
+  if (!info) {
     return false;
   }
-  const base::Value* recvd_value = info.FindKey("recvd");
-  if (!recvd_value || !recvd_value->is_int() || recvd_value->GetInt() < 1) {
+  const absl::optional<int> recvd_value = info->FindInt("recvd");
+  if (!recvd_value || recvd_value.value() < 1) {
     return false;
   }
 
-  const base::Value* avg_value = info.FindKey("avg");
-  if (!avg_value || !avg_value->is_double()) {
+  const absl::optional<double> avg_value = info->FindDouble("avg");
+  if (!avg_value) {
     return false;
   }
-  *latency = base::Milliseconds(avg_value->GetDouble());
+  *latency = base::Milliseconds(avg_value.value());
   *ip = ip_addr;
 
   return true;
@@ -174,7 +173,8 @@ void GatewayCanBePingedRoutine::OnNetworkStateListReceived(
   bool connected = false;
   std::vector<std::string> guids;
   for (const auto& network : networks) {
-    if (!network_config::StateIsConnected(network->connection_state)) {
+    if (!chromeos::network_config::StateIsConnected(
+            network->connection_state)) {
       continue;
     }
     connected = true;

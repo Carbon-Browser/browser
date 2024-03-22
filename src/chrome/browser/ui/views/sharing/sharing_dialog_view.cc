@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/sharing/sharing_dialog_view.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -15,9 +15,9 @@
 #include "chrome/browser/ui/views/accessibility/theme_tracking_non_accessible_image_view.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
-#include "chrome/browser/ui/views/hover_button.h"
 #include "components/sync/protocol/sync_enums.pb.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/url_formatter/elide_url.h"
@@ -89,6 +89,18 @@ std::unique_ptr<views::View> CreateOriginView(const SharingDialogData& data) {
   label->SetAllowCharacterBreak(true);
   label->SetMultiLine(true);
   return label;
+}
+
+const gfx::VectorIcon& GetIconType(
+    const syncer::DeviceInfo::FormFactor& device_form_factor) {
+  switch (device_form_factor) {
+    case syncer::DeviceInfo::FormFactor::kPhone:
+      return kHardwareSmartphoneIcon;
+    case syncer::DeviceInfo::FormFactor::kTablet:
+      return kTabletIcon;
+    default:
+      return kHardwareComputerIcon;
+  }
 }
 
 }  // namespace
@@ -246,12 +258,9 @@ void SharingDialogView::InitListView() {
   LogSharingDevicesToShow(data_.prefix, kSharingUiDialog, data_.devices.size());
   size_t index = 0;
   for (const auto& device : data_.devices) {
-    auto icon =
-        std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
-            device->device_type() == sync_pb::SyncEnums::TYPE_TABLET
-                ? kTabletIcon
-                : kHardwareSmartphoneIcon,
-            ui::kColorIcon, kPrimaryIconSize));
+    auto icon = std::make_unique<views::ImageView>(
+        ui::ImageModel::FromVectorIcon(GetIconType(device->form_factor()),
+                                       ui::kColorIcon, kPrimaryIconSize));
 
     auto* dialog_button =
         button_list->AddChildView(std::make_unique<HoverButton>(
@@ -273,7 +282,7 @@ void SharingDialogView::InitListView() {
           *app.vector_icon, ui::kColorIcon, kPrimaryIconSize));
     } else {
       icon = std::make_unique<views::ImageView>();
-      icon->SetImage(app.image.AsImageSkia());
+      icon->SetImage(ui::ImageModel::FromImage(app.image));
     }
 
     auto* dialog_button =

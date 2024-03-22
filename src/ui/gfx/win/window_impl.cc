@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 #include <list>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/debug/alias.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/lock.h"
+#include "base/win/resource_exhaustion.h"
 #include "base/win/win_util.h"
 #include "base/win/wrapped_window_proc.h"
 #include "ui/gfx/win/crash_id_helper.h"
@@ -35,18 +36,23 @@ const wchar_t* const WindowImpl::kBaseClassName = L"Chrome_WidgetWin_";
 
 // WindowImpl class information used for registering unique windows.
 struct ClassInfo {
-  ClassInfo(int style, HICON icon, HICON small_icon)
-      : style(style), icon(icon), small_icon(small_icon) {}
+  ClassInfo(int style, HICON icon, HICON small_icon, const wchar_t* class_name)
+      : style(style),
+        icon(icon),
+        small_icon(small_icon),
+        class_name(class_name) {}
 
   // Compares two ClassInfos. Returns true if all members match.
   bool Equals(const ClassInfo& other) const {
     return (other.style == style && other.icon == icon &&
-            other.small_icon == small_icon);
+            other.small_icon == small_icon &&
+            lstrcmp(other.class_name, class_name) == 0);
   }
 
   UINT style;
   HICON icon;
   HICON small_icon;
+  const wchar_t* class_name;
 };
 
 // WARNING: this class may be used on multiple threads.
@@ -127,8 +133,10 @@ ATOM ClassRegistrar::RetrieveClassAtom(const ClassInfo& class_info) {
   }
 
   // No class found, need to register one.
-  std::wstring name = std::wstring(WindowImpl::kBaseClassName) +
-                      base::NumberToWString(registered_count_++);
+  std::wstring name = class_info.class_name
+                          ? class_info.class_name
+                          : std::wstring(WindowImpl::kBaseClassName) +
+                                base::NumberToWString(registered_count_++);
 
   WNDCLASSEX window_class;
   base::win::InitializeWindowClass(
@@ -141,12 +149,7 @@ ATOM ClassRegistrar::RetrieveClassAtom(const ClassInfo& class_info) {
   if (!atom) {
     // Perhaps the Window session has run out of atoms; see
     // https://crbug.com/653493.
-    auto last_error = ::GetLastError();
-    base::debug::Alias(&last_error);
-    wchar_t name_copy[64];
-    base::wcslcpy(name_copy, name.c_str(), std::size(name_copy));
-    base::debug::Alias(name_copy);
-    PCHECK(atom);
+    base::win::OnResourceExhausted();
   }
 
   registered_classes_.push_back(RegisteredClass(
@@ -208,9 +211,8 @@ void WindowImpl::Init(HWND parent, const Rect& bounds) {
 
   ATOM atom = GetWindowClassAtom();
   auto weak_this = weak_factory_.GetWeakPtr();
-  HWND hwnd = CreateWindowEx(window_ex_style_,
-                             reinterpret_cast<wchar_t*>(atom), NULL,
-                             window_style_, x, y, width, height,
+  HWND hwnd = CreateWindowEx(window_ex_style_, reinterpret_cast<wchar_t*>(atom),
+                             window_name_, window_style_, x, y, width, height,
                              parent, NULL, NULL, this);
   const DWORD create_window_error = ::GetLastError();
 
@@ -271,6 +273,10 @@ LRESULT WindowImpl::OnWndProc(UINT message, WPARAM w_param, LPARAM l_param) {
   if (!ProcessWindowMessage(hwnd, message, w_param, l_param, result))
     result = DefWindowProc(hwnd, message, w_param, l_param);
 
+  if (message == WM_NCDESTROY) {
+    OnFinalMessage(hwnd);
+  }
+
   return result;
 }
 
@@ -309,7 +315,7 @@ LRESULT CALLBACK WindowImpl::WndProc(HWND hwnd,
 ATOM WindowImpl::GetWindowClassAtom() {
   HICON icon = GetDefaultWindowIcon();
   HICON small_icon = GetSmallWindowIcon();
-  ClassInfo class_info(initial_class_style(), icon, small_icon);
+  ClassInfo class_info(initial_class_style(), icon, small_icon, class_name_);
   return ClassRegistrar::GetInstance()->RetrieveClassAtom(class_info);
 }
 

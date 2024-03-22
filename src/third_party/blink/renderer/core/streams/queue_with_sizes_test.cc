@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,8 +52,8 @@ TEST_P(QueueWithSizesBadSizeTest, BadSizeThrowsException) {
   V8TestingScope scope;
   auto* queue = MakeGarbageCollected<QueueWithSizes>();
   auto* isolate = scope.GetIsolate();
-  ExceptionState exception_state(isolate, ExceptionState::kExecutionContext, "",
-                                 "");
+  ExceptionState exception_state(
+      isolate, ExceptionContextType::kOperationInvoke, "", "");
   queue->EnqueueValueWithSize(isolate, v8::Undefined(isolate), GetParam(),
                               exception_state);
   EXPECT_TRUE(exception_state.HadException());

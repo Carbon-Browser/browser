@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,16 @@ AmbientPhotoConfig CreateAmbientSlideshowPhotoConfig() {
   // initial topic, then immediately transition to another topic once the
   // new one is prepared.
   config.refresh_topic_markers = {AmbientPhotoConfig::Marker::kUiCycleEnded};
+  return config;
+}
+
+AmbientPhotoConfig CreateAmbientManagedSlideshowPhotoConfig() {
+  AmbientPhotoConfig config = CreateAmbientSlideshowPhotoConfig();
+  // Note: This isn't used by the managed code path right now, but for the
+  // sake of consistency this is being set to the correct value as we
+  // don't want image pairing in the managed screensaver code path.
+  config.should_split_topics = true;
+
   return config;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,19 @@
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/file_manager/file_tasks_notifier.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
 namespace file_manager {
 namespace file_tasks {
 
 FileTasksNotifierFactory ::FileTasksNotifierFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "FileTasksNotifier",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 FileTasksNotifierFactory* FileTasksNotifierFactory::GetInstance() {
   static base::NoDestructor<FileTasksNotifierFactory> instance;
@@ -28,9 +31,11 @@ FileTasksNotifier* FileTasksNotifierFactory::GetForProfile(Profile* profile) {
       GetServiceForBrowserContext(profile, true));
 }
 
-KeyedService* FileTasksNotifierFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FileTasksNotifierFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new FileTasksNotifier(Profile::FromBrowserContext(context));
+  return std::make_unique<FileTasksNotifier>(
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace file_tasks

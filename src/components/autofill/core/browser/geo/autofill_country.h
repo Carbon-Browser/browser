@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,11 @@
 #include <string>
 
 #include "base/containers/span.h"
+#include "base/feature_list.h"
 #include "base/strings/string_piece.h"
+#include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/geo/country_data.h"
+#include "components/autofill/core/common/autofill_features.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_field.h"
 
@@ -37,17 +40,17 @@ class AutofillCountry {
   // Autofill relies on libaddressinput for its address format.
   // AddressFormatExtensions are used to extend this format on a country-by-
   // country basis. This is needed because while some field types are not
-  // strictly required for a valid address, we nonetheless see them in practise
+  // strictly required for a valid address, we nonetheless see them in practice
   // and want to offer filling support.
   // This struct defines that a certain `type` is considered part of the address
-  // format in Autofill, specifies its `label` and placment after the existing
+  // format in Autofill, specifies its `label` and placement after the existing
   // type `placed_after` in the settings-UI.
   // `large_sized` indicates if the field stretches the entire line (true) or
   // half the line (false).
   struct AddressFormatExtension {
-    ::i18n::addressinput::AddressField type;
+    ServerFieldType type;
     int label_id;
-    ::i18n::addressinput::AddressField placed_after;
+    ServerFieldType placed_after;
     // Usually " " or "\n". Should not be empty.
     base::StringPiece separator_before_label;
     bool large_sized;
@@ -56,10 +59,14 @@ class AutofillCountry {
   // Gets all the `AddressFormatExtension`s available for `country_code()`.
   base::span<const AddressFormatExtension> address_format_extensions() const;
 
-  // Returns true if the given `address_field` is part of Autofill's address
+  // Returns true if the given `field_type` is part of Autofill's address
   // format for `country_code()`.
-  bool IsAddressFieldSettingAccessible(
-      ::i18n::addressinput::AddressField address_field) const;
+  bool IsAddressFieldSettingAccessible(ServerFieldType field_type) const;
+
+  // Returns true if the given `field_type` is considered required.
+  // Not to be confused with libaddressinput's requirements, it has its
+  // own set of required fields.
+  bool IsAddressFieldRequired(ServerFieldType field_type) const;
 
   // Returns the likely country code for |locale|, or "US" as a fallback if no
   // mapping from the locale is available.

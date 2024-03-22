@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_components/managed_footnote/managed_footnote.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
 import 'chrome://resources/cr_elements/cr_splitter/cr_splitter.js';
 import './folder_node.js';
@@ -18,17 +18,18 @@ import './toolbar.js';
 
 import {CrSplitterElement} from 'chrome://resources/cr_elements/cr_splitter/cr_splitter.js';
 import {FindShortcutMixin, FindShortcutMixinInterface} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {IronScrollTargetBehavior} from 'chrome://resources/polymer/v3_0/iron-scroll-target-behavior/iron-scroll-target-behavior.js';
 import {mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {setSearchResults} from './actions.js';
 import {destroy as destroyApiListener, init as initApiListener} from './api_listener.js';
 import {getTemplate} from './app.html.js';
+import {BookmarksApiProxyImpl} from './bookmarks_api_proxy.js';
 import {LOCAL_STORAGE_FOLDER_STATE_KEY, LOCAL_STORAGE_TREE_WIDTH_KEY, ROOT_NODE_ID} from './constants.js';
-import {DNDManager} from './dnd_manager.js';
-import {MouseFocusMixin} from './mouse_focus_behavior.js';
+import {DndManager} from './dnd_manager.js';
+import {MouseFocusMixin, MouseFocusMixinInterface} from './mouse_focus_behavior.js';
 import {Store} from './store.js';
 import {StoreClientMixin, StoreClientMixinInterface} from './store_client_mixin.js';
 import {BookmarksToolbarElement} from './toolbar.js';
@@ -41,7 +42,8 @@ const BookmarksAppElementBase =
         StoreClientMixin(MouseFocusMixin(FindShortcutMixin(PolymerElement)))) as
     {
       new (): PolymerElement & StoreClientMixinInterface &
-          FindShortcutMixinInterface & IronScrollTargetBehavior,
+          FindShortcutMixinInterface & IronScrollTargetBehavior &
+          MouseFocusMixinInterface,
     };
 
 export interface BookmarksAppElement {
@@ -82,7 +84,7 @@ export class BookmarksAppElement extends BookmarksAppElementBase {
   }
 
   private eventTracker_: EventTracker = new EventTracker();
-  private dndManager_: DNDManager|null = null;
+  private dndManager_: DndManager|null = null;
   private folderOpenState_: FolderOpenState;
   private searchTerm_: string;
   private sidebarWidth_: string;
@@ -113,7 +115,7 @@ export class BookmarksAppElement extends BookmarksAppElementBase {
       return state.folderOpenState;
     });
 
-    chrome.bookmarks.getTree((results) => {
+    BookmarksApiProxyImpl.getInstance().getTree().then((results) => {
       const nodeMap = normalizeNodes(results[0]!);
       const initialState = createEmptyState();
       initialState.nodes = nodeMap;
@@ -136,7 +138,7 @@ export class BookmarksAppElement extends BookmarksAppElementBase {
 
     this.initializeSplitter_();
 
-    this.dndManager_ = new DNDManager();
+    this.dndManager_ = new DndManager();
     this.dndManager_.init();
 
     this.scrollTarget = this.shadowRoot!.querySelector('bookmarks-list');
@@ -189,21 +191,21 @@ export class BookmarksAppElement extends BookmarksAppElementBase {
       return;
     }
 
-    chrome.bookmarks.search(this.searchTerm_, (results) => {
-      const ids = results.map(function(node) {
-        return node.id;
-      });
-      this.dispatch(setSearchResults(ids));
-      this.dispatchEvent(new CustomEvent('iron-announce', {
-        bubbles: true,
-        composed: true,
-        detail: {
-          text: ids.length > 0 ?
-              loadTimeData.getStringF('searchResults', this.searchTerm_) :
-              loadTimeData.getString('noSearchResults'),
-        },
-      }));
-    });
+    BookmarksApiProxyImpl.getInstance()
+        .search(this.searchTerm_)
+        .then(results => {
+          const ids = results.map(node => node.id);
+          this.dispatch(setSearchResults(ids));
+          this.dispatchEvent(new CustomEvent('iron-announce', {
+            bubbles: true,
+            composed: true,
+            detail: {
+              text: ids.length > 0 ?
+                  loadTimeData.getStringF('searchResults', this.searchTerm_) :
+                  loadTimeData.getString('noSearchResults'),
+            },
+          }));
+        });
   }
 
   private folderOpenStateChanged_(): void {
@@ -236,6 +238,10 @@ export class BookmarksAppElement extends BookmarksAppElementBase {
   /* eslint-disable-next-line @typescript-eslint/naming-convention */
   override _scrollHandler() {
     this.toolbarShadow_ = this.scrollTarget!.scrollTop !== 0;
+  }
+
+  getDndManagerForTesting(): DndManager|null {
+    return this.dndManager_;
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -111,7 +111,7 @@ var tests = [
       chrome.test.assertTrue(!!tab, 'tab');
       // Snag this opportunity to test bindings properties.
       chrome.test.assertTrue(!!chrome.tabs.TAB_ID_NONE);
-      chrome.test.assertTrue(tab.id != chrome.tabs.TAB_ID_NONE);
+      chrome.test.assertNe(chrome.tabs.TAB_ID_NONE, tab.id);
       chrome.test.assertEq(new URL(url).host, new URL(tab.pendingUrl).host);
       var code = 'document.title = "new title";';
       chrome.tabs.executeScript(tab.id, {code: code}, function(results) {
@@ -251,7 +251,7 @@ var tests = [
     var filtered = new Promise((resolve, reject) => {
       chrome.webNavigation.onBeforeNavigate.addListener(
           function listener(details) {
-        chrome.test.assertTrue(details.url.indexOf('unique') != -1);
+        chrome.test.assertNe(-1, details.url.indexOf('unique'));
         chrome.test.assertTrue(details.url.indexOf('simple2.html') != -1,
                                details.url);
         chrome.webNavigation.onBeforeNavigate.removeListener(listener);

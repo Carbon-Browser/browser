@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #include "components/feed/core/proto/v2/store.pb.h"
 #include "components/feed/core/v2/feed_store.h"
 #include "components/feed/core/v2/feed_stream.h"
+#include "components/feed/core/v2/feedstore_util.h"
+#include "components/feed/core/v2/test/proto_printer.h"
 
 namespace feed {
 
@@ -18,15 +20,15 @@ WaitForStoreInitializeTask::~WaitForStoreInitializeTask() = default;
 
 void WaitForStoreInitializeTask::Run() {
   // |this| stays alive as long as the |store_|, so Unretained is safe.
-  store_.Initialize(base::BindOnce(
+  store_->Initialize(base::BindOnce(
       &WaitForStoreInitializeTask::OnStoreInitialized, base::Unretained(this)));
 }
 
 void WaitForStoreInitializeTask::OnStoreInitialized() {
-  store_.ReadStartupData(
+  store_->ReadStartupData(
       base::BindOnce(&WaitForStoreInitializeTask::ReadStartupDataDone,
                      base::Unretained(this)));
-  store_.ReadWebFeedStartupData(
+  store_->ReadWebFeedStartupData(
       base::BindOnce(&WaitForStoreInitializeTask::WebFeedStartupDataDone,
                      base::Unretained(this)));
 }
@@ -34,13 +36,29 @@ void WaitForStoreInitializeTask::OnStoreInitialized() {
 void WaitForStoreInitializeTask::ReadStartupDataDone(
     FeedStore::StartupData startup_data) {
   if (startup_data.metadata &&
-      startup_data.metadata->gaia() != stream_.GetAccountInfo().gaia) {
-    store_.ClearAll(base::BindOnce(&WaitForStoreInitializeTask::ClearAllDone,
-                                   base::Unretained(this)));
+      startup_data.metadata->gaia() != stream_->GetAccountInfo().gaia) {
+    store_->ClearAll(base::BindOnce(&WaitForStoreInitializeTask::ClearAllDone,
+                                    base::Unretained(this)));
     return;
   }
+  // Single Web Feed Data is actively pruned and does not need to persist across
+  // startups, and is being removed proactively here in the case that there
+  // wasn't a chance to clean it up before the previous shutdown.
+  const auto orig_size = startup_data.stream_data.size();
+  base::EraseIf(startup_data.stream_data, [&](const feedstore::StreamData& e) {
+    return feedstore::StreamTypeFromKey(e.stream_key()).IsSingleWebFeed();
+  });
+
   result_.startup_data = std::move(startup_data);
-  MaybeUpgradeStreamSchema();
+
+  if (result_.startup_data.stream_data.size() != orig_size) {
+    store_->ClearAllStreamData(
+        StreamKind::kSingleWebFeed,
+        base::BindOnce(&WaitForStoreInitializeTask::ClearAllDone,
+                       base::Unretained(this)));
+  } else {
+    MaybeUpgradeStreamSchema();
+  }
 }
 
 void WaitForStoreInitializeTask::ClearAllDone(bool clear_ok) {
@@ -57,9 +75,9 @@ void WaitForStoreInitializeTask::MaybeUpgradeStreamSchema() {
   if (metadata.stream_schema_version() != 1) {
     result_.startup_data.stream_data.clear();
     if (metadata.gaia().empty()) {
-      metadata.set_gaia(stream_.GetAccountInfo().gaia);
+      metadata.set_gaia(stream_->GetAccountInfo().gaia);
     }
-    store_.UpgradeFromStreamSchemaV0(
+    store_->UpgradeFromStreamSchemaV0(
         std::move(metadata),
         base::BindOnce(&WaitForStoreInitializeTask::UpgradeDone,
                        base::Unretained(this)));

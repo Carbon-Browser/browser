@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,8 +80,12 @@ HRESULT DefaultAudioDeviceChangeDetector::OnPropertyValueChanged(
   return S_OK;
 }
 
-ULONG DefaultAudioDeviceChangeDetector::AddRef() { return 1; }
+ULONG DefaultAudioDeviceChangeDetector::AddRef() {
+  return 1;
+}
 
-ULONG DefaultAudioDeviceChangeDetector::Release() { return 1; }
+ULONG DefaultAudioDeviceChangeDetector::Release() {
+  return 1;
+}
 
 }  // namespace remoting

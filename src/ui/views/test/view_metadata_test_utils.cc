@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/metadata/metadata_types.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 void TestViewMetadata(View* view) {
   ui::metadata::ClassMetaData* meta_data = view->GetClassMetaData();
@@ -25,5 +24,4 @@ void TestViewMetadata(View* view) {
   }
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ bool RestoreOnStartupPolicyHandler::CheckPolicySettings(
         // session is not cleared so we have to warn the user in that case.
         const base::Value* cookies_policy = policies.GetValue(
             key::kCookiesSessionOnlyForUrls, base::Value::Type::LIST);
-        if (cookies_policy && !cookies_policy->GetListDeprecated().empty()) {
+        if (cookies_policy && !cookies_policy->GetList().empty()) {
           errors->AddError(key::kCookiesSessionOnlyForUrls,
                            IDS_POLICY_OVERRIDDEN,
                            key::kRestoreOnStartup);

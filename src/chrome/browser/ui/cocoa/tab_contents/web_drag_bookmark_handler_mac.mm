@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ void WebDragBookmarkHandlerMac::OnDrop() {
     }
 
     // Focus the target browser.
-    Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+    Browser* browser = chrome::FindBrowserWithTab(web_contents_);
     if (browser)
       browser->window()->Show();
   }

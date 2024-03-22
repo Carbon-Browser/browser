@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,24 @@
 #include <utility>
 
 #include "ash/public/cpp/network_config_service.h"
-#include "ash/services/nearby/public/cpp/fake_firewall_hole_factory.h"
-#include "ash/services/nearby/public/cpp/fake_tcp_socket_factory.h"
-#include "ash/services/nearby/public/mojom/firewall_hole.mojom.h"
-#include "ash/services/nearby/public/mojom/nearby_decoder.mojom.h"
-#include "ash/services/nearby/public/mojom/tcp_socket_factory.mojom.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "chrome/services/sharing/nearby/nearby_connections.h"
+#include "chrome/services/sharing/nearby/nearby_presence.h"
 #include "chrome/services/sharing/nearby/test_support/fake_adapter.h"
 #include "chrome/services/sharing/nearby/test_support/mock_webrtc_dependencies.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/nearby/public/cpp/fake_firewall_hole_factory.h"
+#include "chromeos/ash/services/nearby/public/cpp/fake_tcp_socket_factory.h"
+#include "chromeos/ash/services/nearby/public/mojom/firewall_hole.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_decoder.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/quick_start_decoder.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/sharing.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/tcp_socket_factory.mojom.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -40,8 +44,8 @@ class SharingImplTest : public testing::Test {
                                       /*io_task_runner=*/nullptr);
 
     // Set up CrosNetworkConfig mojo service.
-    cros_network_config_test_helper_ = std::make_unique<
-        chromeos::network_config::CrosNetworkConfigTestHelper>();
+    cros_network_config_test_helper_ =
+        std::make_unique<ash::network_config::CrosNetworkConfigTestHelper>();
     mojo::PendingRemote<chromeos::network_config::mojom::CrosNetworkConfig>
         cros_network_config_remote;
     ash::GetNetworkConfigService(
@@ -66,7 +70,9 @@ class SharingImplTest : public testing::Test {
 
     Connect(
         connections_.BindNewPipeAndPassReceiver(),
+        presence_.BindNewPipeAndPassReceiver(),
         decoder_.BindNewPipeAndPassReceiver(),
+        quick_start_decoder_.BindNewPipeAndPassReceiver(),
         bluetooth_adapter_.adapter_.BindNewPipeAndPassRemote(),
         webrtc_dependencies_.socket_manager_.BindNewPipeAndPassRemote(),
         webrtc_dependencies_.mdns_responder_factory_.BindNewPipeAndPassRemote(),
@@ -76,21 +82,25 @@ class SharingImplTest : public testing::Test {
         std::move(firewall_hole_factory_remote),
         std::move(tcp_socket_factory_remote));
 
-    ASSERT_TRUE(AreNearbyConnectionsAndDecoderInstancesActive());
+    ASSERT_TRUE(AreNearbyInstancesActive());
     ASSERT_TRUE(connections_.is_connected());
+    ASSERT_TRUE(presence_.is_connected());
     ASSERT_TRUE(decoder_.is_connected());
+    ASSERT_TRUE(quick_start_decoder_.is_connected());
   }
 
   void Connect(
-      mojo::PendingReceiver<
-          location::nearby::connections::mojom::NearbyConnections>
+      mojo::PendingReceiver<nearby::connections::mojom::NearbyConnections>
           connections_receiver,
+      mojo::PendingReceiver<ash::nearby::presence::mojom::NearbyPresence>
+          presence_receiver,
       mojo::PendingReceiver<sharing::mojom::NearbySharingDecoder>
           decoder_receiver,
+      mojo::PendingReceiver<ash::quick_start::mojom::QuickStartDecoder>
+          quick_start_decoder_receiver,
       mojo::PendingRemote<bluetooth::mojom::Adapter> bluetooth_adapter,
       mojo::PendingRemote<network::mojom::P2PSocketManager> socket_manager,
-      mojo::PendingRemote<
-          location::nearby::connections::mojom::MdnsResponderFactory>
+      mojo::PendingRemote<sharing::mojom::MdnsResponderFactory>
           mdns_responder_factory,
       mojo::PendingRemote<sharing::mojom::IceConfigFetcher> ice_config_fetcher,
       mojo::PendingRemote<sharing::mojom::WebRtcSignalingMessenger>
@@ -101,23 +111,20 @@ class SharingImplTest : public testing::Test {
           firewall_hole_factory,
       mojo::PendingRemote<sharing::mojom::TcpSocketFactory>
           tcp_socket_factory) {
-    auto webrtc_dependencies =
-        location::nearby::connections::mojom::WebRtcDependencies::New(
-            std::move(socket_manager), std::move(mdns_responder_factory),
-            std::move(ice_config_fetcher),
-            std::move(webrtc_signaling_messenger));
-    auto wifilan_dependencies =
-        location::nearby::connections::mojom::WifiLanDependencies::New(
-            std::move(cros_network_config), std::move(firewall_hole_factory),
-            std::move(tcp_socket_factory));
-    auto dependencies =
-        location::nearby::connections::mojom::NearbyConnectionsDependencies::
-            New(std::move(bluetooth_adapter), std::move(webrtc_dependencies),
-                std::move(wifilan_dependencies),
-                location::nearby::api::LogMessage::Severity::kInfo);
+    auto webrtc_dependencies = sharing::mojom::WebRtcDependencies::New(
+        std::move(socket_manager), std::move(mdns_responder_factory),
+        std::move(ice_config_fetcher), std::move(webrtc_signaling_messenger));
+    auto wifilan_dependencies = sharing::mojom::WifiLanDependencies::New(
+        std::move(cros_network_config), std::move(firewall_hole_factory),
+        std::move(tcp_socket_factory));
+    auto dependencies = sharing::mojom::NearbyDependencies::New(
+        std::move(bluetooth_adapter), std::move(webrtc_dependencies),
+        std::move(wifilan_dependencies),
+        nearby::api::LogMessage::Severity::kInfo);
     base::RunLoop run_loop;
     service_->Connect(std::move(dependencies), std::move(connections_receiver),
-                      std::move(decoder_receiver));
+                      std::move(presence_receiver), std::move(decoder_receiver),
+                      std::move(quick_start_decoder_receiver));
 
     // Run Mojo connection handlers.
     base::RunLoop().RunUntilIdle();
@@ -130,15 +137,16 @@ class SharingImplTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
-  bool AreNearbyConnectionsAndDecoderInstancesActive() {
-    return service_->nearby_connections_ && service_->nearby_decoder_;
+  bool AreNearbyInstancesActive() {
+    return service_->nearby_connections_ && service_->nearby_presence_ &&
+           service_->nearby_decoder_ && service_->quick_start_decoder_;
   }
 
   void EnsureDependenciesAreDisconnected() {
     // Run mojo disconnect handlers.
     base::RunLoop().RunUntilIdle();
 
-    EXPECT_FALSE(AreNearbyConnectionsAndDecoderInstancesActive());
+    EXPECT_FALSE(AreNearbyInstancesActive());
   }
 
  protected:
@@ -146,12 +154,13 @@ class SharingImplTest : public testing::Test {
   mojo::Remote<mojom::Sharing> remote_;
   std::unique_ptr<SharingImpl> service_;
 
-  mojo::Remote<location::nearby::connections::mojom::NearbyConnections>
-      connections_;
+  mojo::Remote<nearby::connections::mojom::NearbyConnections> connections_;
+  mojo::Remote<ash::nearby::presence::mojom::NearbyPresence> presence_;
   mojo::Remote<sharing::mojom::NearbySharingDecoder> decoder_;
+  mojo::Remote<ash::quick_start::mojom::QuickStartDecoder> quick_start_decoder_;
   bluetooth::FakeAdapter bluetooth_adapter_;
   sharing::MockWebRtcDependencies webrtc_dependencies_;
-  std::unique_ptr<chromeos::network_config::CrosNetworkConfigTestHelper>
+  std::unique_ptr<ash::network_config::CrosNetworkConfigTestHelper>
       cros_network_config_test_helper_;
   mojo::SelfOwnedReceiverRef<sharing::mojom::FirewallHoleFactory>
       firewall_hole_factory_self_owned_receiver_ref_;
@@ -202,6 +211,26 @@ TEST_F(SharingImplTest, NearbyConnections_FirewallHoleFactoryDisconnects) {
 
 TEST_F(SharingImplTest, NearbyConnections_TcpSocketFactoryDisconnects) {
   tcp_socket_factory_self_owned_receiver_ref_->Close();
+  EnsureDependenciesAreDisconnected();
+}
+
+TEST_F(SharingImplTest, NearbyConnections_ConnectionsReset) {
+  connections_.reset();
+  EnsureDependenciesAreDisconnected();
+}
+
+TEST_F(SharingImplTest, NearbyConnections_PresenceReset) {
+  presence_.reset();
+  EnsureDependenciesAreDisconnected();
+}
+
+TEST_F(SharingImplTest, NearbyConnections_DecoderReset) {
+  decoder_.reset();
+  EnsureDependenciesAreDisconnected();
+}
+
+TEST_F(SharingImplTest, NearbyConnections_QuickStartDecoderReset) {
+  quick_start_decoder_.reset();
   EnsureDependenciesAreDisconnected();
 }
 

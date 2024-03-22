@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -202,10 +202,6 @@ class FrameTreeData : public base::SupportsWeakPtr<FrameTreeData> {
 
   // Sets the display state of the frame and updates its visibility state.
   void SetDisplayState(bool is_display_none);
-
-  uint64_t v8_max_memory_bytes_used() const {
-    return memory_usage_.max_bytes_used();
-  }
 
   UserActivationStatus user_activation_status() const {
     return user_activation_status_;

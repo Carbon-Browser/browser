@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,4 +42,4 @@ class MockSystemSignalsService : public mojom::SystemSignalsService {
 
 }  // namespace device_signals
 
-#endif  // COMPONENTS_DEVICE_SIGNALS_CORE_COMMON_MOCK_SYSTEM_SIGNALS_SERVICE_HOST_H_
+#endif  // COMPONENTS_DEVICE_SIGNALS_CORE_BROWSER_MOCK_SYSTEM_SIGNALS_SERVICE_HOST_H_

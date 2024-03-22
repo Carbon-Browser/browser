@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,12 +35,12 @@ bool TopDomainTrieEntry::WriteEntry(
 
   if (entry_->skeleton == entry_->top_domain) {
     writer->WriteBit(1);
-    writer->WriteBit(entry_->is_top_500 ? 1 : 0);
+    writer->WriteBit(entry_->is_top_bucket ? 1 : 0);
     writer->WriteBits(entry_->skeleton_type, kSkeletonTypeBitLength);
     return true;
   }
   writer->WriteBit(0);
-  writer->WriteBit(entry_->is_top_500 ? 1 : 0);
+  writer->WriteBit(entry_->is_top_bucket ? 1 : 0);
   writer->WriteBits(entry_->skeleton_type, kSkeletonTypeBitLength);
 
   std::string top_domain = entry_->top_domain;
@@ -55,9 +55,9 @@ bool TopDomainTrieEntry::WriteEntry(
   }
 
   for (const auto& c : top_domain) {
-    writer->WriteChar(c, huffman_table_, huffman_builder_);
+    writer->WriteChar(c, *huffman_table_, huffman_builder_);
   }
-  writer->WriteChar(net::huffman_trie::kEndOfTableValue, huffman_table_,
+  writer->WriteChar(net::huffman_trie::kEndOfTableValue, *huffman_table_,
                     huffman_builder_);
   return true;
 }

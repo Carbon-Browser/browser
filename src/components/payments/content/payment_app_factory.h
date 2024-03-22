@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 #define COMPONENTS_PAYMENTS_CONTENT_PAYMENT_APP_FACTORY_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/payments/content/payment_app.h"
 #include "components/payments/content/service_worker_payment_app_finder.h"
@@ -15,10 +17,6 @@
 #include "third_party/blink/public/mojom/payments/payment_request.mojom.h"
 
 class GURL;
-
-namespace autofill {
-class AutofillProfile;
-}  // namespace autofill
 
 namespace content {
 class RenderFrameHost;
@@ -45,6 +43,7 @@ enum class AppCreationFailureReason {
 };
 
 class ContentPaymentRequestDelegate;
+class CSPChecker;
 class PaymentManifestWebDataService;
 class PaymentRequestSpec;
 
@@ -53,6 +52,9 @@ class PaymentAppFactory {
  public:
   class Delegate {
    public:
+    using GetTwaPackageNameCallback =
+        base::OnceCallback<void(const std::string& twa_package_name)>;
+
     virtual ~Delegate() = default;
 
     // Returns the WebContents that initiated the PaymentRequest API, or null if
@@ -78,25 +80,20 @@ class PaymentAppFactory {
     CreateInternalAuthenticator() const = 0;
     virtual scoped_refptr<PaymentManifestWebDataService>
     GetPaymentManifestWebDataService() const = 0;
-    virtual bool MayCrawlForInstallablePaymentApps() = 0;
     virtual bool IsOffTheRecord() const = 0;
 
     // Returns the merchant provided information, or null if the payment is
     // being aborted.
     virtual base::WeakPtr<PaymentRequestSpec> GetSpec() const = 0;
 
-    // Returns the Android package name of the Trusted Web Activity that invoked
-    // this browser, if any. Otherwise, an empty string.
-    virtual std::string GetTwaPackageName() const = 0;
+    // Obtains the Android package name of the Trusted Web Activity that invoked
+    // this browser, if any. Otherwise, calls `callback` with an empty string.
+    virtual void GetTwaPackageName(GetTwaPackageNameCallback callback) = 0;
 
     // Tells the UI to show the processing spinner. Only desktop UI needs this
     // notification.
     virtual void ShowProcessingSpinner() = 0;
 
-    // These parameters are only used to create the autofill payment app.
-    virtual const std::vector<autofill::AutofillProfile*>&
-    GetBillingProfiles() = 0;
-    virtual bool IsRequestedAutofillDataAvailable() = 0;
     virtual base::WeakPtr<ContentPaymentRequestDelegate>
     GetPaymentRequestDelegate() const = 0;
 
@@ -110,12 +107,6 @@ class PaymentAppFactory {
         AppCreationFailureReason failure_reason =
             AppCreationFailureReason::UNKNOWN) = 0;
 
-    // Whether the factory should early exit before creating platform-specific
-    // PaymentApp objects. This is used by PaymentAppServiceBridge to skip
-    // creating native AutofillPaymentApp, which currently cannot be used over
-    // JNI.
-    virtual bool SkipCreatingNativePaymentApps() const = 0;
-
     // Called when all apps of this factory have been created.
     virtual void OnDoneCreatingPaymentApps() = 0;
 
@@ -126,6 +117,25 @@ class PaymentAppFactory {
     // profile or the authenticator device, as long as a user-verifying platform
     // authenticator device is available.
     virtual void SetCanMakePaymentEvenWithoutApps() = 0;
+
+    // Return a Content Security Policy checker that should be used before
+    // downloading payment manifests and following their redirects.
+    virtual base::WeakPtr<CSPChecker> GetCSPChecker() = 0;
+
+    // Records that an Opt Out experience will be offered to the user in the
+    // current UI flow.
+    virtual void SetOptOutOffered() = 0;
+
+    // Return the app instance id for the TWA that invokes the payment request.
+    // The instance id is used to find the TWA window in the ash so that we can
+    // attach the payment dialog to it. This interface should only be used
+    // in ChromeOS.
+    // At the moment, this interface is only implemented in Lacros and for all
+    // other platforms this will return absl::nullopt. In addition to that, if
+    // for any reason, we failed to find the app instance, this method will
+    // also return absl::nullopt.
+    virtual absl::optional<base::UnguessableToken> GetChromeOSTWAInstanceId()
+        const = 0;
   };
 
   explicit PaymentAppFactory(PaymentApp::Type type);

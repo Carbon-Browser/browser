@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/model/tracing_model.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -36,7 +37,7 @@ class ASH_EXPORT TracingNotificationController : public TracingObserver {
   // OnTracingModeChanged was called.
   bool was_tracing_ = false;
 
-  TracingModel* const model_;
+  const raw_ptr<TracingModel, ExperimentalAsh> model_;
 };
 
 }  // namespace ash

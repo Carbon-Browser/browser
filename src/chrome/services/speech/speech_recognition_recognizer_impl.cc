@@ -1,17 +1,27 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/speech/speech_recognition_recognizer_impl.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/flat_map.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/strings/strcat.h"
+#include "base/strings/string_util.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_runner.h"
+#include "base/task/task_traits.h"
+#include "base/task/thread_pool.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/services/speech/soda/proto/soda_api.pb.h"
@@ -21,7 +31,6 @@
 #include "media/base/audio_buffer.h"
 #include "media/base/audio_sample_types.h"
 #include "media/base/audio_timestamp_helper.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/limits.h"
 #include "media/base/media_switches.h"
 #include "media/mojo/common/media_type_converters.h"
@@ -35,12 +44,12 @@ constexpr char kInvalidAudioDataError[] = "Invalid audio data received.";
 // static
 const char
     SpeechRecognitionRecognizerImpl::kCaptionBubbleVisibleHistogramName[] =
-        "Accessibility.LiveCaption.Duration.CaptionBubbleVisible2";
+        "Accessibility.LiveCaption.Duration.CaptionBubbleVisible3";
 
 // static
 const char
     SpeechRecognitionRecognizerImpl::kCaptionBubbleHiddenHistogramName[] =
-        "Accessibility.LiveCaption.Duration.CaptionBubbleHidden2";
+        "Accessibility.LiveCaption.Duration.CaptionBubbleHidden3";
 
 namespace {
 
@@ -89,7 +98,9 @@ void OnSodaResponse(const char* serialized_proto,
         ->language_identification_event_callback()
         .Run(std::string(event.language()),
              static_cast<media::mojom::ConfidenceLevel>(
-                 event.confidence_level()));
+                 event.confidence_level()),
+             static_cast<media::mojom::AsrSwitchResult>(
+                 event.asr_switch_result()));
   }
 
   if (response.soda_type() == soda::chrome::SodaResponse::STOP) {
@@ -115,21 +126,38 @@ GetSodaSpeechRecognitionMode(
 }  // namespace
 
 SpeechRecognitionRecognizerImpl::~SpeechRecognitionRecognizerImpl() {
+  base::UmaHistogramBoolean(
+      base::StrCat({"Accessibility.LiveCaption.", primary_language_name_,
+                    ".SessionContainsRecognizedSpeech"}),
+      session_contains_speech_);
   RecordDuration();
   soda_client_.reset();
+
+  if (speech_recognition_service_) {
+    speech_recognition_service_->RemoveObserver(this);
+  }
+}
+
+void SpeechRecognitionRecognizerImpl::OnLanguagePackInstalled(
+    base::flat_map<std::string, base::FilePath> config_paths) {
+  config_paths_ = config_paths;
+  ResetSoda();
 }
 
 void SpeechRecognitionRecognizerImpl::Create(
     mojo::PendingReceiver<media::mojom::SpeechRecognitionRecognizer> receiver,
     mojo::PendingRemote<media::mojom::SpeechRecognitionRecognizerClient> remote,
-    base::WeakPtr<SpeechRecognitionServiceImpl> speech_recognition_service_impl,
     media::mojom::SpeechRecognitionOptionsPtr options,
     const base::FilePath& binary_path,
-    const base::FilePath& config_path) {
+    const base::flat_map<std::string, base::FilePath>& config_paths,
+    const std::string& primary_language_name,
+    const bool mask_offensive_words,
+    base::WeakPtr<SpeechRecognitionServiceImpl> speech_recognition_service) {
   mojo::MakeSelfOwnedReceiver(
       std::make_unique<SpeechRecognitionRecognizerImpl>(
-          std::move(remote), std::move(speech_recognition_service_impl),
-          std::move(options), binary_path, config_path),
+          std::move(remote), std::move(options), binary_path, config_paths,
+          primary_language_name, mask_offensive_words,
+          speech_recognition_service),
       std::move(receiver));
 }
 
@@ -139,6 +167,10 @@ bool SpeechRecognitionRecognizerImpl::IsMultichannelSupported() {
 
 void SpeechRecognitionRecognizerImpl::OnRecognitionEvent(
     media::SpeechRecognitionResult event) {
+  if (!event.transcription.empty()) {
+    session_contains_speech_ = true;
+  }
+
   if (!client_remote_.is_bound())
     return;
 
@@ -156,11 +188,12 @@ void SpeechRecognitionRecognizerImpl::
 
 void SpeechRecognitionRecognizerImpl::OnLanguageIdentificationEvent(
     const std::string& language,
-    const media::mojom::ConfidenceLevel confidence_level) {
+    const media::mojom::ConfidenceLevel confidence_level,
+    const media::mojom::AsrSwitchResult asr_switch_result) {
   if (client_remote_.is_bound()) {
     client_remote_->OnLanguageIdentificationEvent(
-        media::mojom::LanguageIdentificationEvent::New(language,
-                                                       confidence_level));
+        media::mojom::LanguageIdentificationEvent::New(
+            language, confidence_level, asr_switch_result));
   }
 }
 
@@ -172,29 +205,37 @@ void SpeechRecognitionRecognizerImpl::OnRecognitionStoppedCallback() {
 
 SpeechRecognitionRecognizerImpl::SpeechRecognitionRecognizerImpl(
     mojo::PendingRemote<media::mojom::SpeechRecognitionRecognizerClient> remote,
-    base::WeakPtr<SpeechRecognitionServiceImpl> speech_recognition_service_impl,
     media::mojom::SpeechRecognitionOptionsPtr options,
     const base::FilePath& binary_path,
-    const base::FilePath& config_path)
+    const base::flat_map<std::string, base::FilePath>& config_paths,
+    const std::string& primary_language_name,
+    const bool mask_offensive_words,
+    base::WeakPtr<SpeechRecognitionServiceImpl> speech_recognition_service)
     : options_(std::move(options)),
       client_remote_(std::move(remote)),
-      config_path_(config_path) {
-  recognition_event_callback_ = media::BindToCurrentLoop(
+      config_paths_(config_paths),
+      primary_language_name_(primary_language_name),
+      mask_offensive_words_(mask_offensive_words),
+      speech_recognition_service_(speech_recognition_service) {
+  recognition_event_callback_ = base::BindPostTaskToCurrentDefault(
       base::BindRepeating(&SpeechRecognitionRecognizerImpl::OnRecognitionEvent,
                           weak_factory_.GetWeakPtr()));
   language_identification_event_callback_ =
-      media::BindToCurrentLoop(base::BindRepeating(
+      base::BindPostTaskToCurrentDefault(base::BindRepeating(
           &SpeechRecognitionRecognizerImpl::OnLanguageIdentificationEvent,
           weak_factory_.GetWeakPtr()));
   speech_recognition_stopped_callback_ =
-      media::BindToCurrentLoop(base::BindRepeating(
+      base::BindPostTaskToCurrentDefault(base::BindRepeating(
           &SpeechRecognitionRecognizerImpl::OnRecognitionStoppedCallback,
           weak_factory_.GetWeakPtr()));
 
-  // Unretained is safe because |this| owns the mojo::Remote.
   client_remote_.set_disconnect_handler(
       base::BindOnce(&SpeechRecognitionRecognizerImpl::OnClientHostDisconnected,
                      weak_factory_.GetWeakPtr()));
+
+  if (speech_recognition_service_) {
+    speech_recognition_service_->AddObserver(this);
+  }
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   // On Chrome OS Ash, soda_client_ is not used, so don't try to create it
@@ -221,13 +262,16 @@ void SpeechRecognitionRecognizerImpl::SendAudioToSpeechRecognitionService(
   size_t buffer_size = 0;
 
   // Update watch time durations.
-  base::TimeDelta duration =
-      media::AudioTimestampHelper::FramesToTime(frame_count, sample_rate);
-  if (is_client_requesting_speech_recognition_) {
-    caption_bubble_visible_duration_ += duration;
-  } else {
-    caption_bubble_hidden_duration_ += duration;
-    return;
+  if (options_->recognizer_client_type ==
+      media::mojom::RecognizerClientType::kLiveCaption) {
+    base::TimeDelta duration =
+        media::AudioTimestampHelper::FramesToTime(frame_count, sample_rate);
+    if (is_client_requesting_speech_recognition_) {
+      caption_bubble_visible_duration_ += duration;
+    } else {
+      caption_bubble_hidden_duration_ += duration;
+      return;
+    }
   }
 
   // Verify the channel count.
@@ -251,6 +295,21 @@ void SpeechRecognitionRecognizerImpl::SendAudioToSpeechRecognitionService(
     return;
   }
 
+  // Skip this buffer if there has been no nonzero data for several seconds.
+  if (options_->skip_continuously_empty_audio) {
+    const bool buffer_is_zero =
+        std::all_of(buffer->data.begin(), buffer->data.end(),
+                    [](int16_t x) { return x == 0; });
+    const base::Time now = base::Time::Now();
+    if (!buffer_is_zero) {
+      last_non_empty_audio_time_ = now;
+    }
+    if (now - last_non_empty_audio_time_ > base::Seconds(10)) {
+      // No nonzero data for several seconds. Don't send this buffer of zeroes.
+      return;
+    }
+  }
+
   // OK, everything is verified, let's send the audio.
   SendAudioToSpeechRecognitionServiceInternal(std::move(buffer));
 }
@@ -263,6 +322,17 @@ void SpeechRecognitionRecognizerImpl::OnSpeechRecognitionError() {
 
 void SpeechRecognitionRecognizerImpl::MarkDone() {
   soda_client_->MarkDone();
+}
+
+void SpeechRecognitionRecognizerImpl::AddAudio(
+    media::mojom::AudioDataS16Ptr buffer) {
+  SendAudioToSpeechRecognitionService(std::move(buffer));
+}
+void SpeechRecognitionRecognizerImpl::OnAudioCaptureEnd() {
+  MarkDone();
+}
+void SpeechRecognitionRecognizerImpl::OnAudioCaptureError() {
+  OnSpeechRecognitionError();
 }
 
 void SpeechRecognitionRecognizerImpl::
@@ -279,7 +349,6 @@ void SpeechRecognitionRecognizerImpl::
   }
 
   CHECK(soda_client_);
-  DCHECK(base::PathExists(config_path_));
   if (!soda_client_->IsInitialized() ||
       soda_client_->DidAudioPropertyChange(sample_rate_, channel_count_)) {
     ResetSoda();
@@ -297,21 +366,63 @@ void SpeechRecognitionRecognizerImpl::OnLanguageChanged(
     return;
 
   // Only reset SODA if the language changed.
-  LanguageCode language_code = language_component_config.value().language_code;
-  if (language_code == language_ || language_code == LanguageCode::kNone)
+  if (language_component_config.value().language_name ==
+          primary_language_name_ ||
+      language_component_config.value().language_code == LanguageCode::kNone) {
     return;
+  }
 
-  language_ = language_component_config.value().language_code;
-  base::FilePath config_path = GetLatestSodaLanguagePackDirectory(language);
-  if (base::PathExists(config_path)) {
-    config_path_ = config_path;
+  if (!task_runner_) {
+    task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
+        {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
+         base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN});
+  }
+
+  // Changing the language requires a blocking call to check if the language
+  // pack exists on the device.
+  scoped_refptr<base::SequencedTaskRunner> current_task_runner =
+      base::SequencedTaskRunner::GetCurrentDefault();
+
+  base::FilePath config_file_path =
+      GetLatestSodaLanguagePackDirectory(language);
+
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(
+          [](base::FilePath config_path) {
+            return base::PathExists(config_path);
+          },
+          config_file_path),
+      base::BindOnce(&SpeechRecognitionRecognizerImpl::ResetSodaWithNewLanguage,
+                     weak_factory_.GetWeakPtr(), config_file_path,
+                     language_component_config.value().language_name));
+}
+
+void SpeechRecognitionRecognizerImpl::OnMaskOffensiveWordsChanged(
+    bool mask_offensive_words) {
+  mask_offensive_words_ = mask_offensive_words;
+  ResetSoda();
+}
+
+void SpeechRecognitionRecognizerImpl::ResetSodaWithNewLanguage(
+    base::FilePath config_path,
+    std::string language_name,
+    bool config_exists) {
+  if (config_exists) {
+    config_paths_[language_name] = config_path;
+    primary_language_name_ = language_name;
     ResetSoda();
-  } else {
-    NOTREACHED();
   }
 }
 
 void SpeechRecognitionRecognizerImpl::RecordDuration() {
+  if (options_->recognizer_client_type !=
+      media::mojom::RecognizerClientType::kLiveCaption) {
+    return;
+  }
+
+  // TODO(b:245620092) Create metrics for other features using speech
+  // recognition.
   if (caption_bubble_visible_duration_.is_positive()) {
     base::UmaHistogramLongTimes100(kCaptionBubbleVisibleHistogramName,
                                    caption_bubble_visible_duration_);
@@ -331,7 +442,8 @@ void SpeechRecognitionRecognizerImpl::ResetSoda() {
   // to determine the appropriate language pack path. Note that
   // SodaInstaller::GetLanguagePath() is not implemented outside of Chrome OS,
   // and options_->language is not set for Live Caption.
-  std::string language_pack_directory = config_path_.AsUTF8Unsafe();
+  std::string language_pack_directory =
+      config_paths_[primary_language_name_].AsUTF8Unsafe();
 
   // Initialize the SODA instance with the serialized config.
   soda::chrome::ExtendedSodaConfigMsg config_msg;
@@ -346,6 +458,19 @@ void SpeechRecognitionRecognizerImpl::ResetSoda() {
   config_msg.set_enable_formatting(options_->enable_formatting);
   config_msg.set_enable_speaker_change_detection(
       base::FeatureList::IsEnabled(media::kSpeakerChangeDetection));
+  config_msg.set_mask_offensive_words(mask_offensive_words_);
+  if (base::FeatureList::IsEnabled(media::kLiveCaptionMultiLanguage) &&
+      config_paths_.size() > 0) {
+    auto* multilang_config = config_msg.mutable_multilang_config();
+    multilang_config->set_rewind_when_switching_language(true);
+    auto& multilang_language_pack_directory =
+        *(multilang_config->mutable_multilang_language_pack_directory());
+    for (const auto& config : config_paths_) {
+      multilang_language_pack_directory[base::ToLowerASCII(config.first)] =
+          config.second.AsUTF8Unsafe();
+    }
+  }
+
   auto serialized = config_msg.SerializeAsString();
 
   SerializedSodaConfig config;

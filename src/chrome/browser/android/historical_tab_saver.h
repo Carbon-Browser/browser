@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "chrome/browser/tab/web_contents_state.h"
 
 class TabAndroid;
 namespace content {
@@ -24,20 +25,24 @@ class ScopedWebContents {
   // temporary one will be created from the frozen tab's WebContentsState. If
   // the WebContents was created from a frozen tab it will be destroyed with the
   // returned object.
-  static std::unique_ptr<ScopedWebContents> CreateForTab(TabAndroid* tab);
+  static std::unique_ptr<ScopedWebContents> CreateForTab(
+      TabAndroid* tab,
+      const WebContentsStateByteBuffer* webContentsStateByteBuffer);
 
   ~ScopedWebContents();
 
   ScopedWebContents(const ScopedWebContents&) = delete;
   ScopedWebContents& operator=(const ScopedWebContents&) = delete;
 
-  content::WebContents* web_contents() const { return web_contents_; }
+  explicit ScopedWebContents(content::WebContents* unowned_web_contents);
+  explicit ScopedWebContents(
+      std::unique_ptr<content::WebContents> owned_web_contents);
+
+  content::WebContents* web_contents() const;
 
  private:
-  ScopedWebContents(content::WebContents* web_contents, bool was_frozen);
-
-  raw_ptr<content::WebContents> web_contents_;
-  bool was_frozen_;
+  raw_ptr<content::WebContents> unowned_web_contents_;
+  std::unique_ptr<content::WebContents> owned_web_contents_;
 };
 
 }  // namespace historical_tab_saver

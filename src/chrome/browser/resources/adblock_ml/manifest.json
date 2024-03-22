@@ -1,0 +1,37 @@
+// This file is part of eyeo Chromium SDK,
+// Copyright (C) 2006-present eyeo GmbH
+//
+// eyeo Chromium SDK is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 3 as
+// published by the Free Software Foundation.
+//
+// eyeo Chromium SDK is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
+{
+  // Extension ID: phhdcbipnceblbigdhhoahagpfdblied
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApqpEi2tVYEPrGTGjj68nOc059/awRN7NMMGIGYZbxVAr3xS2oujmawr5aVnQrA0NTsh79Gi/dxJWJ8mQ6qV6eXo9qXUHSz+WRTCpC3nvLc3o0ZLy/Yil4J+iZuflj7A7XE1ZOSJxZiTLjJFZwCDiOFMDe+zE+BXiOiqoVzPKZ+SIJqGSANgMs+RklDrXQb1719MTXOWIz1PXgMQTwIyBYa9HW1igf4kp9Tgq6PLGaihh2eEiTih52qLDueMmv6A6CYICIZ4Fdc9rH3yu2wv2D1MXWXNiENegQaml7z2StodtWaONDpiSmnTHCs+khNdZGLVYuDea+jpyapsytTNq3wIDAQAB",
+  "name": "Adblock ML",
+  // update version every time you change the code or wipe .config/chromium/Default/Service Worker
+  "version": "0.3.3",
+  "manifest_version": 3,
+  "background": {
+    "service_worker": "service.js"
+  },
+  "externally_connectable": {
+    "matches": [
+      "<all_urls>"
+    ]
+  },
+  "incognito": "spanning",
+  "host_permissions": [
+    // model download
+    "https://easylist-downloads.adblockplus.org/models/*",
+    // telemetry
+    "https://*.gcp.data.eyeo.it/*"
+  ]
+}

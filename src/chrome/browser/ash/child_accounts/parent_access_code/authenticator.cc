@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/big_endian.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
-#include "base/values.h"
 
 namespace ash {
 namespace parent_access {
@@ -32,18 +31,18 @@ constexpr char kClockDriftDictKey[] = "clock_drift_tolerance";
 
 // static
 absl::optional<AccessCodeConfig> AccessCodeConfig::FromDictionary(
-    const base::DictionaryValue& dict) {
-  const std::string* secret = dict.FindStringKey(kSharedSecretDictKey);
+    const base::Value::Dict& dict) {
+  const std::string* secret = dict.FindString(kSharedSecretDictKey);
   if (!secret || secret->empty())
     return absl::nullopt;
 
-  absl::optional<int> validity = dict.FindIntKey(kCodeValidityDictKey);
+  absl::optional<int> validity = dict.FindInt(kCodeValidityDictKey);
   if (!(validity.has_value() && *validity >= kMinCodeValidity.InSeconds() &&
         *validity <= kMaxCodeValidity.InSeconds())) {
     return absl::nullopt;
   }
 
-  absl::optional<int> clock_drift = dict.FindIntKey(kClockDriftDictKey);
+  absl::optional<int> clock_drift = dict.FindInt(kClockDriftDictKey);
   if (!(clock_drift.has_value() &&
         *clock_drift >= kMinClockDriftTolerance.InSeconds() &&
         *clock_drift <= kMaxClockDriftTolerance.InSeconds())) {
@@ -73,14 +72,13 @@ AccessCodeConfig& AccessCodeConfig::operator=(AccessCodeConfig&&) = default;
 
 AccessCodeConfig::~AccessCodeConfig() = default;
 
-base::Value AccessCodeConfig::ToDictionary() const {
-  base::Value config(base::Value::Type::DICTIONARY);
-  config.SetKey(kSharedSecretDictKey, base::Value(shared_secret_));
-  config.SetKey(kCodeValidityDictKey,
-                base::Value(static_cast<int>(code_validity_.InSeconds())));
-  config.SetKey(
-      kClockDriftDictKey,
-      base::Value(static_cast<int>(clock_drift_tolerance_.InSeconds())));
+base::Value::Dict AccessCodeConfig::ToDictionary() const {
+  base::Value::Dict config;
+  config.Set(kSharedSecretDictKey, base::Value(shared_secret_));
+  config.Set(kCodeValidityDictKey,
+             base::Value(static_cast<int>(code_validity_.InSeconds())));
+  config.Set(kClockDriftDictKey,
+             base::Value(static_cast<int>(clock_drift_tolerance_.InSeconds())));
   return config;
 }
 
@@ -129,8 +127,8 @@ absl::optional<AccessCode> Authenticator::Generate(base::Time timestamp) const {
 
   // We find the beginning of the interval for the given timestamp and adjust by
   // the granularity.
-  const int64_t interval =
-      timestamp.ToJavaTime() / config_.code_validity().InMilliseconds();
+  const int64_t interval = timestamp.InMillisecondsSinceUnixEpoch() /
+                           config_.code_validity().InMilliseconds();
   const int64_t interval_beginning_timestamp =
       interval * config_.code_validity().InMilliseconds();
   const int64_t adjusted_timestamp =
@@ -157,7 +155,7 @@ absl::optional<AccessCode> Authenticator::Generate(base::Time timestamp) const {
   result &= 0x7fffffff;
 
   const base::Time valid_from =
-      base::Time::FromJavaTime(interval_beginning_timestamp);
+      base::Time::FromMillisecondsSinceUnixEpoch(interval_beginning_timestamp);
   return AccessCode(base::StringPrintf("%06d", result % 1000000), valid_from,
                     valid_from + config_.code_validity());
 }
@@ -180,13 +178,14 @@ absl::optional<AccessCode> Authenticator::ValidateInRange(
   DCHECK_LE(base::Time::UnixEpoch(), valid_from);
   DCHECK_GE(valid_to, valid_from);
 
-  const int64_t start_interval =
-      valid_from.ToJavaTime() / kAccessCodeGranularity.InMilliseconds();
-  const int64_t end_interval =
-      valid_to.ToJavaTime() / kAccessCodeGranularity.InMilliseconds();
+  const int64_t start_interval = valid_from.InMillisecondsSinceUnixEpoch() /
+                                 kAccessCodeGranularity.InMilliseconds();
+  const int64_t end_interval = valid_to.InMillisecondsSinceUnixEpoch() /
+                               kAccessCodeGranularity.InMilliseconds();
   for (int i = start_interval; i <= end_interval; ++i) {
     const base::Time generation_timestamp =
-        base::Time::FromJavaTime(i * kAccessCodeGranularity.InMilliseconds());
+        base::Time::FromMillisecondsSinceUnixEpoch(
+            i * kAccessCodeGranularity.InMilliseconds());
     absl::optional<AccessCode> pac = Generate(generation_timestamp);
     if (pac.has_value() && pac->code() == code)
       return pac;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -176,7 +176,6 @@ class PLATFORM_EXPORT BytesConsumer : public GarbageCollected<BytesConsumer> {
   // This InternalState directly corresponds to the states in the class
   // comments. This enum is defined here for subclasses.
   enum class InternalState {
-    kReadable,
     kWaiting,
     kClosed,
     kErrored,
@@ -184,7 +183,6 @@ class PLATFORM_EXPORT BytesConsumer : public GarbageCollected<BytesConsumer> {
 
   static PublicState GetPublicStateFromInternalState(InternalState state) {
     switch (state) {
-      case InternalState::kReadable:
       case InternalState::kWaiting:
         return PublicState::kReadableOrWaiting;
       case InternalState::kClosed:
@@ -193,7 +191,6 @@ class PLATFORM_EXPORT BytesConsumer : public GarbageCollected<BytesConsumer> {
         return PublicState::kErrored;
     }
     NOTREACHED();
-    return PublicState::kReadableOrWaiting;
   }
 };
 

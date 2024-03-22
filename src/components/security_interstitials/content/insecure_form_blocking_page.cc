@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/security_interstitials/content/insecure_form_blocking_page.h"
+
+#include <ostream>
 
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"

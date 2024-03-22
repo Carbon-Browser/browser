@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,6 +81,9 @@ void UserActivityPowerManagerNotifier::OnAuthScanDone(
 void UserActivityPowerManagerNotifier::OnSessionFailed() {}
 
 void UserActivityPowerManagerNotifier::OnRestarted() {}
+
+void UserActivityPowerManagerNotifier::OnStatusChanged(
+    device::mojom::BiometricsManagerStatus status) {}
 
 void UserActivityPowerManagerNotifier::OnEnrollScanDone(
     device::mojom::ScanResult scan_result,

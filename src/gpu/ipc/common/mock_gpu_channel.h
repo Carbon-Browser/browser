@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,14 +29,15 @@ class MockGpuChannel : public mojom::GpuChannel {
                     mojo::PendingAssociatedReceiver<mojom::CommandBuffer>,
                     mojo::PendingAssociatedRemote<mojom::CommandBufferClient>,
                     CreateCommandBufferCallback));
-  MOCK_METHOD7(CreateCommandBuffer,
+  MOCK_METHOD8(CreateCommandBuffer,
                bool(mojom::CreateCommandBufferParamsPtr,
                     int32_t,
                     base::UnsafeSharedMemoryRegion,
                     mojo::PendingAssociatedReceiver<mojom::CommandBuffer>,
                     mojo::PendingAssociatedRemote<mojom::CommandBufferClient>,
                     ContextResult*,
-                    Capabilities*));
+                    Capabilities*,
+                    GLCapabilities*));
   MOCK_METHOD1(DestroyCommandBuffer, bool(int32_t));
   MOCK_METHOD2(DestroyCommandBuffer,
                void(int32_t, DestroyCommandBufferCallback));
@@ -44,6 +45,13 @@ class MockGpuChannel : public mojom::GpuChannel {
                void(mojom::ScheduleImageDecodeParamsPtr, uint64_t));
   MOCK_METHOD1(FlushDeferredRequests,
                void(std::vector<mojom::DeferredRequestPtr>));
+  MOCK_METHOD4(CreateGpuMemoryBuffer,
+               void(const gfx::Size&,
+                    const viz::SharedImageFormat&,
+                    gfx::BufferUsage,
+                    CreateGpuMemoryBufferCallback));
+  MOCK_METHOD2(GetGpuMemoryBufferHandleInfo,
+               void(const gpu::Mailbox&, GetGpuMemoryBufferHandleInfoCallback));
 #if BUILDFLAG(IS_ANDROID)
   MOCK_METHOD3(CreateStreamTexture,
                void(int32_t,
@@ -70,13 +78,11 @@ class MockGpuChannel : public mojom::GpuChannel {
                     WaitForGetOffsetInRangeCallback));
 #if BUILDFLAG(IS_FUCHSIA)
   MOCK_METHOD5(RegisterSysmemBufferCollection,
-               void(const base::UnguessableToken&,
+               void(mojo::PlatformHandle,
                     mojo::PlatformHandle,
                     gfx::BufferFormat,
                     gfx::BufferUsage,
                     bool));
-  MOCK_METHOD1(ReleaseSysmemBufferCollection,
-               void(const base::UnguessableToken&));
 #endif  // BUILDFLAG(IS_FUCHSIA)
 };
 

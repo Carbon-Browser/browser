@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ class SupplementaryBranding {
   static const std::string& GetBrand();
 
  private:
-  raw_ptr<ScopedRlzValueStoreLock> lock_;
+  raw_ptr<ScopedRlzValueStoreLock, DanglingUntriaged> lock_;
 };
 
 }  // namespace rlz_lib

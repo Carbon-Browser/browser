@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 
 #include "base/json/json_writer.h"
 #include "base/values.h"
-#include "chrome/browser/extensions/api/preference/preference_api.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_prefs.h"
+#include "extensions/browser/extension_prefs_helper.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_util.h"
 #include "extensions/common/manifest_handlers/incognito_info.h"
@@ -25,12 +25,14 @@ namespace preference_helpers {
 
 namespace {
 
-const char kIncognitoPersistent[] = "incognito_persistent";
-const char kIncognitoSessionOnly[] = "incognito_session_only";
-const char kRegular[] = "regular";
-const char kRegularOnly[] = "regular_only";
+constexpr char kNotControllable[] = "not_controllable";
+constexpr char kControlledByOtherExtensions[] =
+    "controlled_by_other_extensions";
+constexpr char kControllableByThisExtension[] =
+    "controllable_by_this_extension";
+constexpr char kControlledByThisExtension[] = "controlled_by_this_extension";
 
-const char kLevelOfControlKey[] = "levelOfControl";
+constexpr char kLevelOfControlKey[] = "levelOfControl";
 
 }  // namespace
 
@@ -39,21 +41,6 @@ using LevelOfControlGetter =
                                         const std::string& extension_id,
                                         const std::string& browser_pref,
                                         bool incognito)>;
-
-bool StringToScope(const std::string& s,
-                   ExtensionPrefsScope* scope) {
-  if (s == kRegular)
-    *scope = kExtensionPrefsScopeRegular;
-  else if (s == kRegularOnly)
-    *scope = kExtensionPrefsScopeRegularOnly;
-  else if (s == kIncognitoPersistent)
-    *scope = kExtensionPrefsScopeIncognitoPersistent;
-  else if (s == kIncognitoSessionOnly)
-    *scope = kExtensionPrefsScopeIncognitoSessionOnly;
-  else
-    return false;
-  return true;
-}
 
 PrefService* GetProfilePrefService(Profile* profile, bool incognito) {
   if (incognito) {
@@ -79,16 +66,13 @@ const char* GetLevelOfControl(
   if (!pref->IsExtensionModifiable())
     return kNotControllable;
 
-  if (PreferenceAPI::Get(profile)->DoesExtensionControlPref(
-          extension_id,
-          browser_pref,
-          from_incognito_ptr)) {
+  if (ExtensionPrefsHelper::Get(profile)->DoesExtensionControlPref(
+          extension_id, browser_pref, from_incognito_ptr)) {
     return kControlledByThisExtension;
   }
 
-  if (PreferenceAPI::Get(profile)->CanExtensionControlPref(extension_id,
-                                                           browser_pref,
-                                                           incognito)) {
+  if (ExtensionPrefsHelper::Get(profile)->CanExtensionControlPref(
+          extension_id, browser_pref, incognito)) {
     return kControllableByThisExtension;
   }
 
@@ -98,7 +82,7 @@ const char* GetLevelOfControl(
 void DispatchEventToExtensionsImpl(Profile* profile,
                                    events::HistogramValue histogram_value,
                                    const std::string& event_name,
-                                   base::ListValue* args,
+                                   base::Value::List args,
                                    mojom::APIPermissionID permission,
                                    bool incognito,
                                    const std::string& browser_pref,
@@ -114,14 +98,13 @@ void DispatchEventToExtensionsImpl(Profile* profile,
         extension->permissions_data()->HasAPIPermission(permission) &&
         (!incognito || util::IsIncognitoEnabled(extension->id(), profile))) {
       // Inject level of control key-value.
-      base::Value::ListView args_list = args->GetListDeprecated();
-      DCHECK(!args_list.empty());
-      DCHECK(args_list[0].is_dict());
+      DCHECK(!args.empty());
+      DCHECK(args[0].is_dict());
 
       std::string level_of_control =
           level_getter.Run(profile, extension->id(), browser_pref, incognito);
 
-      args_list[0].SetStringKey(kLevelOfControlKey, level_of_control);
+      args[0].GetDict().Set(kLevelOfControlKey, level_of_control);
 
       // If the extension is in incognito split mode,
       // a) incognito pref changes are visible only to the incognito tabs
@@ -144,14 +127,14 @@ void DispatchEventToExtensionsImpl(Profile* profile,
         } else {  // Handle case b).
           bool controlled_from_incognito = false;
           bool controlled_by_extension =
-              PreferenceAPI::Get(profile)->DoesExtensionControlPref(
+              ExtensionPrefsHelper::Get(profile)->DoesExtensionControlPref(
                   extension->id(), browser_pref, &controlled_from_incognito);
           if (controlled_by_extension && controlled_from_incognito)
             restrict_to_profile = profile;
         }
       }
 
-      base::Value::List args_copy = args->GetList().Clone();
+      base::Value::List args_copy = args.Clone();
       auto event =
           std::make_unique<Event>(histogram_value, event_name,
                                   std::move(args_copy), restrict_to_profile);
@@ -165,14 +148,14 @@ void DispatchEventToExtensionsWithAshControlState(
     Profile* profile,
     events::HistogramValue histogram_value,
     const std::string& event_name,
-    base::ListValue* args,
+    base::Value::List args,
     mojom::APIPermissionID permission,
     bool incognito,
     const std::string& browser_pref,
     crosapi::mojom::PrefControlState control_state) {
   DispatchEventToExtensionsImpl(
-      profile, histogram_value, event_name, args, permission, incognito,
-      browser_pref,
+      profile, histogram_value, event_name, std::move(args), permission,
+      incognito, browser_pref,
       base::BindRepeating(&GetLevelOfControlWithAshControlState,
                           control_state));
 }
@@ -194,19 +177,19 @@ const char* GetLevelOfControlWithAshControlState(
       return extensions::preference_helpers::GetLevelOfControl(
           profile, extension_id, browser_pref, incognito);
   }
-}  // BUILDFLAG(IS_CHROMEOS_LACROS)
-#endif
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 void DispatchEventToExtensions(Profile* profile,
                                events::HistogramValue histogram_value,
                                const std::string& event_name,
-                               base::ListValue* args,
+                               base::Value::List args,
                                mojom::APIPermissionID permission,
                                bool incognito,
                                const std::string& browser_pref) {
-  DispatchEventToExtensionsImpl(profile, histogram_value, event_name, args,
-                                permission, incognito, browser_pref,
-                                base::BindRepeating(GetLevelOfControl));
+  DispatchEventToExtensionsImpl(
+      profile, histogram_value, event_name, std::move(args), permission,
+      incognito, browser_pref, base::BindRepeating(GetLevelOfControl));
 }
 }  // namespace preference_helpers
 }  // namespace extensions

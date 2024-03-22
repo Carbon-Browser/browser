@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 
 #import "remoting/ios/app/remoting_theme.h"
 #import "remoting/ios/app/view_utils.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 static const CGFloat kNumberIconPadding = 16.f;
 static const CGFloat kNumberIconSize = 45.f;

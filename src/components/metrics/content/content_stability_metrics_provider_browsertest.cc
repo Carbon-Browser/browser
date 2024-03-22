@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"

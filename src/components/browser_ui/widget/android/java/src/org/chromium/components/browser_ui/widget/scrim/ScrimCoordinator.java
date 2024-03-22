@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,10 +29,19 @@ import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
  * {@link #hideScrim(boolean)} should be called.
  */
 public class ScrimCoordinator {
-    /**
-     * A delegate to expose functionality that changes the scrim over the system UI.
-     */
+    /** The duration for the scrim animation. */
+    private static final int ANIM_DURATION_MS = 300;
+
+    /** A delegate to expose functionality that changes the scrim over the system UI. */
     public interface SystemUiScrimDelegate {
+        /**
+         * Pass the current scrim color to the relevant system UI elements.
+         * @param scrimColor The current base color of the scrim.
+         */
+        default void setScrimColor(@ColorInt int scrimColor) {
+            // Default no-op, since we fallback to R.color.default_scrim_color if this isn't called.
+        }
+
         /**
          * Set the amount of scrim over the status bar. The implementor may choose to not respect
          * the value provided to this method.
@@ -59,9 +68,7 @@ public class ScrimCoordinator {
         boolean onTouchEvent(MotionEvent event);
     }
 
-    /**
-     * A supplier of new {@link ScrimView}s to use when {@link #showScrim(PropertyModel)} is called.
-     */
+    /** A supplier of new {@link ScrimView}s to use when {@link #showScrim(PropertyModel)} is called. */
     private final Supplier<ScrimView> mScrimViewBuilder;
 
     /** The component's mediator for handling animation and model management. */
@@ -83,18 +90,25 @@ public class ScrimCoordinator {
      * @param parent The {@link ViewGroup} the scrim should exist in.
      * @param defaultColor The default color of the scrim.
      */
-    public ScrimCoordinator(Context context, SystemUiScrimDelegate systemUiScrimDelegate,
-            ViewGroup parent, @ColorInt int defaultColor) {
-        mMediator = new ScrimMediator(() -> {
-            if (mChangeProcessor != null) mChangeProcessor.destroy();
-            if (mView != null) UiUtils.removeViewFromParent(mView);
-            mView = null;
-            mChangeProcessor = null;
-        }, systemUiScrimDelegate);
-        mScrimViewBuilder = () -> {
-            ScrimView view = new ScrimView(context, parent, defaultColor, mMediator);
-            return view;
-        };
+    public ScrimCoordinator(
+            Context context,
+            SystemUiScrimDelegate systemUiScrimDelegate,
+            ViewGroup parent,
+            @ColorInt int defaultColor) {
+        mMediator =
+                new ScrimMediator(
+                        () -> {
+                            if (mChangeProcessor != null) mChangeProcessor.destroy();
+                            if (mView != null) UiUtils.removeViewFromParent(mView);
+                            mView = null;
+                            mChangeProcessor = null;
+                        },
+                        systemUiScrimDelegate);
+        mScrimViewBuilder =
+                () -> {
+                    ScrimView view = new ScrimView(context, parent, defaultColor, mMediator);
+                    return view;
+                };
     }
 
     /**
@@ -107,13 +121,13 @@ public class ScrimCoordinator {
         // Ensure the previous scrim is hidden before showing the new one. This logic should be in
         // the mediator, but it depends on the old view and binder being available which are
         // replaced prior to mediator#showScrim being called.
-        if (mMediator.isActive()) mMediator.hideScrim(false);
+        if (mMediator.isActive()) mMediator.hideScrim(false, ANIM_DURATION_MS);
 
         if (mChangeProcessor != null) mChangeProcessor.destroy();
 
         mView = mScrimViewBuilder.get();
         mChangeProcessor = PropertyModelChangeProcessor.create(model, mView, ScrimViewBinder::bind);
-        mMediator.showScrim(model);
+        mMediator.showScrim(model, ANIM_DURATION_MS);
     }
 
     /**
@@ -121,12 +135,26 @@ public class ScrimCoordinator {
      * @param animate Whether the scrim should animate and fade out.
      */
     public void hideScrim(boolean animate) {
-        mMediator.hideScrim(animate);
+        hideScrim(animate, ANIM_DURATION_MS);
+    }
+
+    /**
+     * Hide the scrim.
+     * @param animate Whether the scrim should animate and fade out.
+     * @param duration Duration for animation.
+     */
+    public void hideScrim(boolean animate, int duration) {
+        mMediator.hideScrim(animate, duration);
     }
 
     /** @return Whether the scrim is being shown. */
     public boolean isShowingScrim() {
         return mMediator.isActive();
+    }
+
+    /** Forces the current scrim fade animation to complete if one is running. */
+    public void forceAnimationToFinish() {
+        mMediator.forceAnimationToFinish();
     }
 
     /**
@@ -142,17 +170,14 @@ public class ScrimCoordinator {
         mMediator.destroy();
     }
 
-    @VisibleForTesting
     public void disableAnimationForTesting(boolean disable) {
         mMediator.disableAnimationForTesting(disable);
     }
 
-    @VisibleForTesting
     public ScrimView getViewForTesting() {
         return mView;
     }
 
-    @VisibleForTesting
     ScrimMediator getMediatorForTesting() {
         return mMediator;
     }

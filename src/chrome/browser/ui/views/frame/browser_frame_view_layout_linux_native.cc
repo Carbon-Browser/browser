@@ -1,8 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/browser_frame_view_layout_linux_native.h"
+#include "chrome/browser/ui/views/frame/opaque_browser_frame_view_layout.h"
 
 #include "ui/linux/nav_button_provider.h"
 
@@ -25,7 +26,19 @@ int BrowserFrameViewLayoutLinuxNative::CaptionButtonY(
 
 gfx::Insets BrowserFrameViewLayoutLinuxNative::RestoredFrameBorderInsets()
     const {
-  return window_frame_provider_->GetFrameThicknessDip();
+  // Borderless mode only has a minimal frame to be able to resize it from the
+  // borders.
+  if (delegate_->GetBorderlessModeEnabled()) {
+    return gfx::Insets(
+        OpaqueBrowserFrameViewLayout::RestoredFrameBorderInsets());
+  }
+
+  const auto insets = window_frame_provider_->GetFrameThicknessDip();
+  const auto tiled_edges = delegate_->GetTiledEdges();
+  return gfx::Insets::TLBR(tiled_edges.top ? 0 : insets.top(),
+                           tiled_edges.left ? 0 : insets.left(),
+                           tiled_edges.bottom ? 0 : insets.bottom(),
+                           tiled_edges.right ? 0 : insets.right());
 }
 
 OpaqueBrowserFrameViewLayout::TopAreaPadding
@@ -67,7 +80,6 @@ BrowserFrameViewLayoutLinuxNative::GetButtonDisplayType(
     case views::FrameButton::kClose:
       return ui::NavButtonProvider::FrameButtonDisplayType::kClose;
     default:
-      NOTREACHED();
-      return ui::NavButtonProvider::FrameButtonDisplayType::kClose;
+      NOTREACHED_NORETURN();
   }
 }

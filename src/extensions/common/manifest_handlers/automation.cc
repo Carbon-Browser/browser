@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -110,7 +110,7 @@ PermissionIDSet AutomationManifestPermission::GetPermissions() const {
 bool AutomationManifestPermission::FromValue(const base::Value* value) {
   std::u16string error;
   automation_info_.reset(
-      AutomationInfo::FromValue(*value, NULL /* install_warnings */, &error)
+      AutomationInfo::FromValue(*value, nullptr /* install_warnings */, &error)
           .release());
   return error.empty();
 }
@@ -207,7 +207,7 @@ ManifestPermission* AutomationHandler::CreateInitialRequiredPermission(
         base::WrapUnique(new const AutomationInfo(info->desktop, info->matches,
                                                   info->interact)));
   }
-  return NULL;
+  return nullptr;
 }
 
 // static
@@ -221,9 +221,11 @@ std::unique_ptr<AutomationInfo> AutomationInfo::FromValue(
     const base::Value& value,
     std::vector<InstallWarning>* install_warnings,
     std::u16string* error) {
-  std::unique_ptr<Automation> automation = Automation::FromValue(value, error);
-  if (!automation)
+  auto automation = Automation::FromValue(value);
+  if (!automation.has_value()) {
+    *error = std::move(automation).error();
     return nullptr;
+  }
 
   if (automation->as_boolean) {
     if (*automation->as_boolean)
@@ -239,8 +241,8 @@ std::unique_ptr<AutomationInfo> AutomationInfo::FromValue(
     interact = true;
     if (automation_object.interact && !*automation_object.interact) {
       // TODO(aboxhall): Do we want to allow this?
-      install_warnings->push_back(
-          InstallWarning(automation_errors::kErrorDesktopTrueInteractFalse));
+      install_warnings->emplace_back(
+          automation_errors::kErrorDesktopTrueInteractFalse);
     }
   } else if (automation_object.interact && *automation_object.interact) {
     interact = true;
@@ -250,25 +252,23 @@ std::unique_ptr<AutomationInfo> AutomationInfo::FromValue(
   bool specified_matches = false;
   if (automation_object.matches) {
     if (desktop) {
-      install_warnings->push_back(
-          InstallWarning(automation_errors::kErrorDesktopTrueMatchesSpecified));
+      install_warnings->emplace_back(
+          automation_errors::kErrorDesktopTrueMatchesSpecified);
     } else {
       specified_matches = true;
 
-      for (auto it = automation_object.matches->begin();
-           it != automation_object.matches->end(); ++it) {
+      for (const auto& match : *automation_object.matches) {
         // TODO(aboxhall): Refactor common logic from content_scripts_handler,
         // manifest_url_handler and user_script.cc into a single location and
         // re-use here.
         URLPattern pattern(URLPattern::SCHEME_ALL &
                            ~URLPattern::SCHEME_CHROMEUI);
-        URLPattern::ParseResult parse_result = pattern.Parse(*it);
+        URLPattern::ParseResult parse_result = pattern.Parse(match);
 
         if (parse_result != URLPattern::ParseResult::kSuccess) {
-          install_warnings->push_back(
-              InstallWarning(ErrorUtils::FormatErrorMessage(
-                  automation_errors::kErrorInvalidMatch, *it,
-                  URLPattern::GetParseResultString(parse_result))));
+          install_warnings->emplace_back(ErrorUtils::FormatErrorMessage(
+              automation_errors::kErrorInvalidMatch, match,
+              URLPattern::GetParseResultString(parse_result)));
           continue;
         }
 
@@ -277,8 +277,7 @@ std::unique_ptr<AutomationInfo> AutomationInfo::FromValue(
     }
   }
   if (specified_matches && matches.is_empty()) {
-    install_warnings->push_back(
-        InstallWarning(automation_errors::kErrorNoMatchesProvided));
+    install_warnings->emplace_back(automation_errors::kErrorNoMatchesProvided);
   }
 
   return base::WrapUnique(new AutomationInfo(desktop, matches, interact));
@@ -287,7 +286,7 @@ std::unique_ptr<AutomationInfo> AutomationInfo::FromValue(
 // static
 std::unique_ptr<base::Value> AutomationInfo::ToValue(
     const AutomationInfo& info) {
-  return AsManifestType(info)->ToValue();
+  return base::Value::ToUniquePtrValue(AsManifestType(info)->ToValue());
 }
 
 // static
@@ -295,16 +294,16 @@ std::unique_ptr<Automation> AutomationInfo::AsManifestType(
     const AutomationInfo& info) {
   std::unique_ptr<Automation> automation(new Automation);
   if (!info.desktop && !info.interact && info.matches.size() == 0) {
-    automation->as_boolean = std::make_unique<bool>(true);
+    automation->as_boolean = true;
     return automation;
   }
 
-  Automation::Object* as_object = new Automation::Object;
-  as_object->desktop = std::make_unique<bool>(info.desktop);
-  as_object->interact = std::make_unique<bool>(info.interact);
+  automation->as_object.emplace();
+  automation->as_object->desktop = info.desktop;
+  automation->as_object->interact = info.interact;
   if (info.matches.size() > 0)
-    as_object->matches = info.matches.ToStringVector();
-  automation->as_object.reset(as_object);
+    automation->as_object->matches = info.matches.ToStringVector();
+
   return automation;
 }
 
@@ -315,6 +314,6 @@ AutomationInfo::AutomationInfo(bool desktop,
                                bool interact)
     : desktop(desktop), matches(matches.Clone()), interact(interact) {}
 
-AutomationInfo::~AutomationInfo() {}
+AutomationInfo::~AutomationInfo() = default;
 
 }  // namespace extensions

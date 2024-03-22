@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,6 +77,9 @@ class DesktopMediaSourceView : public views::View {
   // Returns true if the source is selected.
   bool GetSelected() const;
 
+  // Clears selection from this item, or no-ops if it is not selected.
+  void ClearSelection();
+
   // views::View interface.
   views::View* GetSelectedViewForGroup(int group) override;
   bool IsGroupFocusTraversable() const override;
@@ -94,9 +97,9 @@ class DesktopMediaSourceView : public views::View {
   raw_ptr<DesktopMediaListView> parent_;
   content::DesktopMediaID source_id_;
 
-  raw_ptr<views::ImageView> icon_view_ = new views::ImageView;
-  raw_ptr<views::ImageView> image_view_ = new views::ImageView;
-  raw_ptr<views::Label> label_ = new views::Label;
+  raw_ptr<views::ImageView> icon_view_;
+  raw_ptr<views::ImageView> image_view_;
+  raw_ptr<views::Label> label_;
 
   bool selected_;
 };

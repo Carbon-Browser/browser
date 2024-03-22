@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_WIDGET_DEVICE_EMULATION_PARAMS_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_WIDGET_DEVICE_EMULATION_PARAMS_H_
 
+#include "services/device/public/mojom/device_posture_provider.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/widget/device_emulation_params.mojom-shared.h"
 #include "ui/display/mojom/screen_orientation.mojom.h"
@@ -58,6 +59,10 @@ struct DeviceEmulationParams {
   // Screen window segments dimensions.
   std::vector<gfx::Rect> window_segments;
 
+  // Device posture, the default is "continuous".
+  device::mojom::DevicePostureType device_posture =
+      device::mojom::DevicePostureType::kContinuous;
+
   DeviceEmulationParams() = default;
 };
 
@@ -71,7 +76,8 @@ inline bool operator==(const DeviceEmulationParams& a,
          a.screen_orientation_angle == b.screen_orientation_angle &&
          a.viewport_offset == b.viewport_offset &&
          a.viewport_scale == b.viewport_scale &&
-         a.window_segments == b.window_segments;
+         a.window_segments == b.window_segments &&
+         a.device_posture == b.device_posture;
 }
 
 inline bool operator!=(const DeviceEmulationParams& a,

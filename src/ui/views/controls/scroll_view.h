@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/callback_list.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/color/color_id.h"
 #include "ui/compositor/layer_type.h"
@@ -24,6 +25,7 @@ struct ElementId;
 
 namespace gfx {
 class PointF;
+class RoundedCornersF;
 }
 
 namespace views {
@@ -122,6 +124,10 @@ class VIEWS_EXPORT ScrollView : public View, public ScrollBarController {
   // rects to visible, these margins will be added to the visible rect.
   void SetPreferredViewportMargins(const gfx::Insets& margins);
 
+  // You must be using layer scrolling for this method to work as it applies
+  // rounded corners to the `contents_viewport_` layer. See `ScrollWithLayers`.
+  void SetViewportRoundedCornerRadius(const gfx::RoundedCornersF& radii);
+
   // The background color can be configured in two distinct ways:
   // . By way of SetBackgroundThemeColorId(). This is the default and when
   //   called the background color comes from the theme (and changes if the
@@ -137,6 +143,12 @@ class VIEWS_EXPORT ScrollView : public View, public ScrollBarController {
 
   // Returns the visible region of the content View.
   gfx::Rect GetVisibleRect() const;
+
+  // Scrolls the `contents_` by an offset.
+  void ScrollByOffset(const gfx::PointF& offset);
+
+  // Scrolls the `contents_` to an offset.
+  void ScrollToOffset(const gfx::PointF& offset);
 
   bool GetUseColorId() const { return !!background_color_id_; }
 
@@ -259,12 +271,12 @@ class VIEWS_EXPORT ScrollView : public View, public ScrollBarController {
   void SetContentsImpl(std::unique_ptr<View> a_view);
   void SetHeaderImpl(std::unique_ptr<View> a_header);
 
-  // Used internally by SetHeaderImpl() and SetContentsImpl() to reset the view.
-  // Sets |member| to |new_view|. If |new_view| is non-null it is added to
-  // |parent|.
-  void SetHeaderOrContents(View* parent,
-                           std::unique_ptr<View> new_view,
-                           View** member);
+  // Used internally by SetHeaderImpl() and SetContentsImpl() to replace a
+  // child. If `old_view` is non-null it is removed as a child and destroyed; if
+  // `new_view` is non-null it is added to a child. Returns `new_view`.
+  View* ReplaceChildView(View* parent,
+                         raw_ptr<View>::DanglingType old_view,
+                         std::unique_ptr<View> new_view);
 
   // Scrolls the minimum amount necessary to make the specified rectangle
   // visible, in the coordinates of the contents view. The specified rectangle
@@ -286,10 +298,9 @@ class VIEWS_EXPORT ScrollView : public View, public ScrollBarController {
   // Update the scrollbars positions given viewport and content sizes.
   void UpdateScrollBarPositions();
 
-  // Helpers to get and set the current scroll offset (either from the ui::Layer
-  // or from the |contents_| origin offset).
+  // Get the current scroll offset either from the ui::Layer or from the
+  // |contents_| origin offset.
   gfx::PointF CurrentOffset() const;
-  void ScrollToOffset(const gfx::PointF& offset);
 
   // Whether the ScrollView scrolls using ui::Layer APIs.
   bool ScrollsWithLayers() const;
@@ -319,12 +330,16 @@ class VIEWS_EXPORT ScrollView : public View, public ScrollBarController {
 
   // The current contents and its viewport. |contents_| is contained in
   // |contents_viewport_|.
-  View* contents_ = nullptr;
+  // Can dangle in practice during out-of-order view tree destruction.
+  // TODO(https://crbug.com/1477838): fix that.
+  raw_ptr<View, DisableDanglingPtrDetection> contents_ = nullptr;
   raw_ptr<Viewport> contents_viewport_ = nullptr;
 
   // The current header and its viewport. |header_| is contained in
   // |header_viewport_|.
-  View* header_ = nullptr;
+  // Can dangle in practice during out-of-order view tree destruction.
+  // TODO(https://crbug.com/1477838): fix that.
+  raw_ptr<View, DisableDanglingPtrDetection> header_ = nullptr;
   raw_ptr<Viewport> header_viewport_ = nullptr;
 
   // Horizontal scrollbar.

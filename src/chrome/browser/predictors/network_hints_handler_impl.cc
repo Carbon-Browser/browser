@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,12 +22,12 @@ namespace {
 // Preconnects can be received from the renderer before commit messages, so
 // need to use the key from the pending navigation, and not the committed
 // navigation, unlike other consumers. This does mean on navigating away from a
-// site, preconnect is more likely to incorrectly use the NetworkIsolationKey of
-// the previous commit.
-net::NetworkIsolationKey GetPendingNetworkIsolationKey(
+// site, preconnect is more likely to incorrectly use the
+// NetworkAnonymizationKey of the previous commit.
+net::NetworkAnonymizationKey GetPendingNetworkAnonymizationKey(
     content::RenderFrameHost* render_frame_host) {
   return render_frame_host->GetPendingIsolationInfoForSubresources()
-      .network_isolation_key();
+      .network_anonymization_key();
 }
 
 }  // namespace
@@ -44,7 +44,7 @@ void NetworkHintsHandlerImpl::Create(
 }
 
 void NetworkHintsHandlerImpl::PrefetchDNS(
-    const std::vector<std::string>& names) {
+    const std::vector<url::SchemeHostPort>& urls) {
   if (!preconnect_manager_)
     return;
 
@@ -53,17 +53,20 @@ void NetworkHintsHandlerImpl::PrefetchDNS(
   if (!render_frame_host)
     return;
 
+  std::vector<GURL> gurls;
+  for (const auto& url : urls) {
+    gurls.emplace_back(url.GetURL());
+  }
   preconnect_manager_->StartPreresolveHosts(
-      names, GetPendingNetworkIsolationKey(render_frame_host));
+      gurls, GetPendingNetworkAnonymizationKey(render_frame_host));
 }
 
-void NetworkHintsHandlerImpl::Preconnect(const GURL& url,
+void NetworkHintsHandlerImpl::Preconnect(const url::SchemeHostPort& url,
                                          bool allow_credentials) {
   if (!preconnect_manager_)
     return;
 
-  if (!url.is_valid() || !url.has_host() || !url.has_scheme() ||
-      !url.SchemeIsHTTPOrHTTPS()) {
+  if (url.scheme() != url::kHttpScheme && url.scheme() != url::kHttpsScheme) {
     return;
   }
 
@@ -76,7 +79,8 @@ void NetworkHintsHandlerImpl::Preconnect(const GURL& url,
     return;
 
   preconnect_manager_->StartPreconnectUrl(
-      url, allow_credentials, GetPendingNetworkIsolationKey(render_frame_host));
+      url.GetURL(), allow_credentials,
+      GetPendingNetworkAnonymizationKey(render_frame_host));
 }
 
 NetworkHintsHandlerImpl::NetworkHintsHandlerImpl(

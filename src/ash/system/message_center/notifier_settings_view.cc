@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -19,21 +20,22 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
-#include "ash/system/machine_learning/user_settings_event_logger.h"
 #include "ash/system/message_center/message_center_controller.h"
 #include "ash/system/message_center/message_center_style.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/tray/tray_toggle_button.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/prefs/pref_service.h"
 #include "skia/ext/image_operations.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/paint_recorder.h"
@@ -103,13 +105,6 @@ constexpr auto kToggleButtonRowLabelPadding = gfx::Insets::TLBR(16, 0, 15, 0);
 constexpr SkColor kTopBorderColor = SkColorSetA(SK_ColorBLACK, 0x1F);
 const int kLabelFontSizeDelta = 1;
 
-void LogUserQuietModeEvent(const bool enabled) {
-  auto* logger = ml::UserSettingsEventLogger::Get();
-  if (logger) {
-    logger->LogQuietModeUkmEvent(enabled);
-  }
-}
-
 // NotifierButtonWrapperView ---------------------------------------------------
 
 // A wrapper view of NotifierButton to guarantee the fixed height
@@ -119,6 +114,8 @@ void LogUserQuietModeEvent(const bool enabled) {
 // (NotifierMetadata.enforced), it also applies filter to make the color of the
 // button dim.
 class NotifierButtonWrapperView : public views::View {
+  METADATA_HEADER(NotifierButtonWrapperView, views::View)
+
  public:
   explicit NotifierButtonWrapperView(views::View* contents);
 
@@ -139,14 +136,16 @@ class NotifierButtonWrapperView : public views::View {
   void OnMouseReleased(const ui::MouseEvent& event) override;
   void OnPaint(gfx::Canvas* canvas) override;
   void OnBlur() override;
-  const char* GetClassName() const override;
 
  private:
   std::unique_ptr<views::Painter> focus_painter_;
 
   // NotifierButton to wrap.
-  views::View* contents_;
+  raw_ptr<views::View, ExperimentalAsh> contents_;
 };
+
+BEGIN_METADATA(NotifierButtonWrapperView)
+END_METADATA
 
 NotifierButtonWrapperView::NotifierButtonWrapperView(views::View* contents)
     : focus_painter_(TrayPopupUtils::CreateFocusPainter()),
@@ -209,28 +208,24 @@ void NotifierButtonWrapperView::OnBlur() {
   SchedulePaint();
 }
 
-const char* NotifierButtonWrapperView::GetClassName() const {
-  return "NotifierButtonWrapperView";
-}
-
 // ScrollContentsView ----------------------------------------------------------
 
 class ScrollContentsView : public views::View {
+  METADATA_HEADER(ScrollContentsView, views::View)
+
  public:
   ScrollContentsView() = default;
 
   ScrollContentsView(const ScrollContentsView&) = delete;
   ScrollContentsView& operator=(const ScrollContentsView&) = delete;
 
-  // views::View:
-  const char* GetClassName() const override { return "ScrollContentsView"; }
-
  private:
   void PaintChildren(const views::PaintInfo& paint_info) override {
     views::View::PaintChildren(paint_info);
 
-    if (y() == 0)
+    if (y() == 0) {
       return;
+    }
 
     // Draw a shadow at the top of the viewport when scrolled.
     const ui::PaintContext& context = paint_info.context();
@@ -251,9 +246,14 @@ class ScrollContentsView : public views::View {
   }
 };
 
+BEGIN_METADATA(ScrollContentsView)
+END_METADATA
+
 // EmptyNotifierView -----------------------------------------------------------
 
 class EmptyNotifierView : public views::View {
+  METADATA_HEADER(EmptyNotifierView, views::View)
+
  public:
   EmptyNotifierView() {
     const SkColor text_color = AshColorProvider::Get()->GetContentLayerColor(
@@ -288,9 +288,6 @@ class EmptyNotifierView : public views::View {
   EmptyNotifierView(const EmptyNotifierView&) = delete;
   EmptyNotifierView& operator=(const EmptyNotifierView&) = delete;
 
-  // views::View:
-  const char* GetClassName() const override { return "EmptyNotifierView"; }
-
  private:
   void OnThemeChanged() override {
     views::View::OnThemeChanged();
@@ -298,10 +295,15 @@ class EmptyNotifierView : public views::View {
         ContentLayerType::kTextColorPrimary));
   }
 
-  views::Label* label_;
+  raw_ptr<views::Label, ExperimentalAsh> label_;
 };
 
+BEGIN_METADATA(EmptyNotifierView)
+END_METADATA
+
 class NotifierViewCheckbox : public views::Checkbox {
+  METADATA_HEADER(NotifierViewCheckbox, views::Checkbox)
+
  public:
   using views::Checkbox::Checkbox;
 
@@ -316,7 +318,12 @@ class NotifierViewCheckbox : public views::Checkbox {
   }
 };
 
+BEGIN_METADATA(NotifierViewCheckbox)
+END_METADATA
+
 class NotifierButtonNameView : public views::Label {
+  METADATA_HEADER(NotifierButtonNameView, views::Label)
+
  public:
   explicit NotifierButtonNameView(const std::u16string& text)
       : views::Label(text) {}
@@ -345,8 +352,13 @@ class NotifierButtonNameView : public views::Label {
   bool cached_notifier_enforced_ = false;
 };
 
+BEGIN_METADATA(NotifierButtonNameView)
+END_METADATA
+
 // PrimaryTextColorLabel should use kTextColorPrimary instead of system colors.
 class PrimaryTextColorLabel : public ::views::Label {
+  METADATA_HEADER(PrimaryTextColorLabel, views::Label)
+
  public:
   explicit PrimaryTextColorLabel(const std::u16string& text)
       : views::Label(text) {}
@@ -362,8 +374,13 @@ class PrimaryTextColorLabel : public ::views::Label {
   }
 };
 
+BEGIN_METADATA(PrimaryTextColorLabel)
+END_METADATA
+
 // App badging icon should use kIconColorPrimary instead of system colors.
 class AdaptiveBadgingIcon : public ::views::ImageView {
+  METADATA_HEADER(AdaptiveBadgingIcon, views::ImageView)
+
  public:
   AdaptiveBadgingIcon() = default;
   AdaptiveBadgingIcon(const AdaptiveBadgingIcon&) = delete;
@@ -379,6 +396,9 @@ class AdaptiveBadgingIcon : public ::views::ImageView {
                                   ContentLayerType::kIconColorPrimary)));
   }
 };
+
+BEGIN_METADATA(AdaptiveBadgingIcon)
+END_METADATA
 
 }  // namespace
 
@@ -461,10 +481,6 @@ bool NotifierSettingsView::NotifierButton::GetChecked() const {
   return checkbox_->GetChecked();
 }
 
-const char* NotifierSettingsView::NotifierButton::GetClassName() const {
-  return "NotifierButton";
-}
-
 void NotifierSettingsView::NotifierButton::GetAccessibleNodeData(
     ui::AXNodeData* node_data) {
   static_cast<views::View*>(checkbox_)->GetAccessibleNodeData(node_data);
@@ -524,6 +540,9 @@ void NotifierSettingsView::NotifierButton::GridChanged() {
 
   Layout();
 }
+
+BEGIN_METADATA(NotifierSettingsView, NotifierButton, views::Button)
+END_METADATA
 
 // NotifierSettingsView -------------------------------------------------------
 
@@ -638,7 +657,7 @@ NotifierSettingsView::NotifierSettingsView() {
     header_view_ = AddChildView(std::move(header_view));
 
     auto scroller = std::make_unique<views::ScrollView>();
-    scroller->SetBackgroundColor(absl::nullopt);
+    scroller->SetBackgroundColor(std::nullopt);
     scroll_bar_ = scroller->SetVerticalScrollBar(
         std::make_unique<views::OverlayScrollBar>(/*horizontal=*/false));
     scroller->SetDrawOverflowIndicator(false);
@@ -679,10 +698,6 @@ void NotifierSettingsView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
       IDS_ASH_MESSAGE_CENTER_SETTINGS_DIALOG_DESCRIPTION));
 }
 
-const char* NotifierSettingsView::GetClassName() const {
-  return "NotifierSettingsView";
-}
-
 void NotifierSettingsView::OnNotifiersUpdated(
     const std::vector<NotifierMetadata>& notifiers) {
   // We do not show notifier metadata when notifications settings are
@@ -690,8 +705,9 @@ void NotifierSettingsView::OnNotifiersUpdated(
   DCHECK(!features::IsSettingsAppNotificationSettingsEnabled());
   // TODO(tetsui): currently notifier settings list doesn't update after once
   // it's loaded, in order to retain scroll position.
-  if (scroller_->contents() && buttons_.size() > 0)
+  if (scroller_->contents() && buttons_.size() > 0) {
     return;
+  }
 
   buttons_.clear();
 
@@ -727,8 +743,9 @@ void NotifierSettingsView::OnNotifierIconUpdated(const NotifierId& notifier_id,
                                                  const gfx::ImageSkia& icon) {
   // Notifier icons are not shown when notification permissions splitting is
   // enabled.
-  if (features::IsSettingsAppNotificationSettingsEnabled())
+  if (features::IsSettingsAppNotificationSettingsEnabled()) {
     return;
+  }
   for (auto* button : buttons_) {
     if (button->notifier_id() == notifier_id) {
       button->UpdateIconImage(icon);
@@ -742,8 +759,9 @@ void NotifierSettingsView::Layout() {
   header_view_->SetBounds(0, 0, width(), header_height);
   // |scroller_| and |no_notifiers_view_| do not exist when notifications
   // settings are split out of the notifier_settings_view.
-  if (features::IsSettingsAppNotificationSettingsEnabled())
+  if (features::IsSettingsAppNotificationSettingsEnabled()) {
     return;
+  }
 
   views::View* contents_view = scroller_->contents();
   int original_scroll_position = scroller_->GetVisibleRect().y();
@@ -774,8 +792,9 @@ gfx::Size NotifierSettingsView::GetMinimumSize() const {
   }
   int total_height = header_view_->GetPreferredSize().height() +
                      scroller_->contents()->GetPreferredSize().height();
-  if (total_height > kMinimumHeight)
+  if (total_height > kMinimumHeight) {
     size.Enlarge(scroller_->GetScrollBarLayoutWidth(), 0);
+  }
   return size;
 }
 
@@ -790,8 +809,9 @@ gfx::Size NotifierSettingsView::CalculatePreferredSize() const {
 
   gfx::Size content_size = scroller_->contents()->GetPreferredSize();
   int no_notifiers_height = 0;
-  if (no_notifiers_view_->GetVisible())
+  if (no_notifiers_view_->GetVisible()) {
     no_notifiers_height = no_notifiers_view_->GetPreferredSize().height();
+  }
   return gfx::Size(
       std::max(header_size.width(), content_size.width()),
       std::max(kMinimumHeight, header_size.height() + content_size.height() +
@@ -806,16 +826,18 @@ bool NotifierSettingsView::OnKeyPressed(const ui::KeyEvent& event) {
 
   // |scroller_| does not exist when notifications settings are split out of the
   // notifier_settings_view so it cannot consume key events.
-  if (features::IsSettingsAppNotificationSettingsEnabled())
+  if (features::IsSettingsAppNotificationSettingsEnabled()) {
     return false;
+  }
   return scroller_->OnKeyPressed(event);
 }
 
 bool NotifierSettingsView::OnMouseWheel(const ui::MouseWheelEvent& event) {
   // |scroller_| does not exist when notifications settings are split out of the
   // notifier_settings_view so mouse wheel events are not consumed.
-  if (features::IsSettingsAppNotificationSettingsEnabled())
+  if (features::IsSettingsAppNotificationSettingsEnabled()) {
     return false;
+  }
   return scroller_->OnMouseWheel(event);
 }
 
@@ -862,7 +884,6 @@ void NotifierSettingsView::AppBadgingTogglePressed() {
 }
 
 void NotifierSettingsView::QuietModeTogglePressed() {
-  LogUserQuietModeEvent(quiet_mode_toggle_->GetIsOn());
   MessageCenter::Get()->SetQuietMode(quiet_mode_toggle_->GetIsOn());
 }
 
@@ -872,5 +893,8 @@ void NotifierSettingsView::NotifierButtonPressed(NotifierButton* button) {
                                                         button->GetChecked());
   NotifierSettingsController::Get()->GetNotifiers();
 }
+
+BEGIN_METADATA(NotifierSettingsView)
+END_METADATA
 
 }  // namespace ash

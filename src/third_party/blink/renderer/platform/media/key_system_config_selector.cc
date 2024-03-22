@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
@@ -33,7 +33,7 @@
 namespace blink {
 namespace {
 
-using ::media::EmeConfigRule;
+using ::media::EmeConfig;
 using ::media::EmeConfigRuleState;
 using ::media::EmeFeatureSupport;
 using ::media::EmeMediaType;
@@ -41,12 +41,12 @@ using ::media::EncryptionScheme;
 using EmeFeatureRequirement = WebMediaKeySystemConfiguration::Requirement;
 using EmeEncryptionScheme = WebMediaKeySystemMediaCapability::EncryptionScheme;
 
-absl::optional<EmeConfigRule> GetDistinctiveIdentifierConfigRule(
+EmeConfig::Rule GetDistinctiveIdentifierConfigRule(
     EmeFeatureSupport support,
     EmeFeatureRequirement requirement) {
   if (support == EmeFeatureSupport::INVALID) {
     NOTREACHED();
-    return absl::nullopt;
+    return EmeConfig::UnsupportedRule();
   }
 
   // For kNotAllowed and kRequired, the result is as expected. For kRecommended,
@@ -69,25 +69,25 @@ absl::optional<EmeConfigRule> GetDistinctiveIdentifierConfigRule(
        requirement == EmeFeatureRequirement::kRequired) ||
       (support == EmeFeatureSupport::ALWAYS_ENABLED &&
        requirement == EmeFeatureRequirement::kNotAllowed)) {
-    return absl::nullopt;
+    return EmeConfig::UnsupportedRule();
   }
   if (support == EmeFeatureSupport::REQUESTABLE &&
       requirement == EmeFeatureRequirement::kOptional) {
-    return EmeConfigRule();
+    return EmeConfig::SupportedRule();
   }
   if (support == EmeFeatureSupport::NOT_SUPPORTED ||
       requirement == EmeFeatureRequirement::kNotAllowed) {
-    return EmeConfigRule{.identifier = EmeConfigRuleState::kNotAllowed};
+    return EmeConfig{.identifier = EmeConfigRuleState::kNotAllowed};
   }
-  return EmeConfigRule{.identifier = EmeConfigRuleState::kRequired};
+  return EmeConfig{.identifier = EmeConfigRuleState::kRequired};
 }
 
-absl::optional<EmeConfigRule> GetPersistentStateConfigRule(
+EmeConfig::Rule GetPersistentStateConfigRule(
     EmeFeatureSupport support,
     EmeFeatureRequirement requirement) {
   if (support == EmeFeatureSupport::INVALID) {
     NOTREACHED();
-    return absl::nullopt;
+    return EmeConfig::UnsupportedRule();
   }
 
   // For kNotAllowed and kRequired, the result is as expected. For kRecommended,
@@ -113,17 +113,17 @@ absl::optional<EmeConfigRule> GetPersistentStateConfigRule(
        requirement == EmeFeatureRequirement::kRequired) ||
       (support == EmeFeatureSupport::ALWAYS_ENABLED &&
        requirement == EmeFeatureRequirement::kNotAllowed)) {
-    return absl::nullopt;
+    return EmeConfig::UnsupportedRule();
   }
   if (support == EmeFeatureSupport::REQUESTABLE &&
       requirement == EmeFeatureRequirement::kOptional) {
-    return EmeConfigRule();
+    return EmeConfig::SupportedRule();
   }
   if (support == EmeFeatureSupport::NOT_SUPPORTED ||
       requirement == EmeFeatureRequirement::kNotAllowed) {
-    return EmeConfigRule{.persistence = EmeConfigRuleState::kNotAllowed};
+    return EmeConfig{.persistence = EmeConfigRuleState::kNotAllowed};
   }
-  return EmeConfigRule{.persistence = EmeConfigRuleState::kRequired};
+  return EmeConfig{.persistence = EmeConfigRuleState::kRequired};
 }
 
 bool IsPersistentSessionType(WebEncryptedMediaSessionType sessionType) {
@@ -150,6 +150,35 @@ bool IsSupportedMediaType(const std::string& container_mime_type,
   std::vector<std::string> codec_vector;
   media::SplitCodecs(codecs, &codec_vector);
 
+#if BUILDFLAG(ENABLE_PLATFORM_ENCRYPTED_DOLBY_VISION)
+  // When build flag ENABLE_PLATFORM_ENCRYPTED_DOLBY_VISION and feature
+  // kPlatformEncryptedDolbyVision are both enabled, encrypted Dolby Vision is
+  // allowed when supported by the platform, but it is not supported for clear
+  // playback or when using ClearKey. Remove the DV codec strings to avoid
+  // asking IsSupported*MediaFormat() about DV. EME support for DV is described
+  // via KeySystemInfo::GetSupportedCodecs().
+  // TODO(crbug.com/1156282): Decouple the rest of clear vs EME codec support.
+  if (base::FeatureList::IsEnabled(media::kPlatformEncryptedDolbyVision) &&
+      !use_aes_decryptor &&
+      base::ToLowerASCII(container_mime_type) == "video/mp4" &&
+      !codec_vector.empty()) {
+    std::vector<std::string> filtered_codec_vector;
+    for (const auto& codec : codec_vector) {
+      media::VideoCodecProfile profile;
+      uint8_t level_idc;
+      if (!ParseDolbyVisionCodecId(codec, &profile, &level_idc))
+        filtered_codec_vector.push_back(codec);
+    }
+    codec_vector = std::move(filtered_codec_vector);
+
+    // Avoid calling IsSupported*MediaFormat() with an empty vector. For
+    // "video/mp4", this will return MaybeSupported, which we would otherwise
+    // consider "false" below.
+    if (codec_vector.empty())
+      return true;
+  }
+#endif  // BUILDFLAG(ENABLE_PLATFORM_ENCRYPTED_DOLBY_VISION)
+
   // AesDecryptor decrypts the stream in the demuxer before it reaches the
   // decoder so check whether the media format is supported when clear.
   media::SupportsType support_result =
@@ -157,7 +186,7 @@ bool IsSupportedMediaType(const std::string& container_mime_type,
           ? media::IsSupportedMediaFormat(container_mime_type, codec_vector)
           : media::IsSupportedEncryptedMediaFormat(container_mime_type,
                                                    codec_vector);
-  return (support_result == media::IsSupported);
+  return (support_result == media::SupportsType::kSupported);
 }
 
 }  // namespace
@@ -183,15 +212,24 @@ struct KeySystemConfigSelector::SelectionRequest {
   SelectConfigCB cb;
   bool was_permission_requested = false;
   bool is_permission_granted = false;
+  bool was_hardware_secure_decryption_preferences_requested = false;
+  bool is_hardware_secure_decryption_allowed = true;
 };
 
 // Accumulates configuration rules to determine if a feature (additional
 // configuration rule) can be added to an accumulated configuration.
 class KeySystemConfigSelector::ConfigState {
  public:
-  ConfigState(bool was_permission_requested, bool is_permission_granted)
+  ConfigState(bool was_permission_requested,
+              bool is_permission_granted,
+              bool was_hardware_secure_decryption_preferences_requested,
+              bool is_hardware_secure_decryption_allowed)
       : was_permission_requested_(was_permission_requested),
-        is_permission_granted_(is_permission_granted) {}
+        is_permission_granted_(is_permission_granted),
+        was_hardware_secure_decryption_preferences_requested_(
+            was_hardware_secure_decryption_preferences_requested),
+        is_hardware_secure_decryption_allowed_(
+            is_hardware_secure_decryption_allowed) {}
 
   bool IsPermissionGranted() const { return is_permission_granted_; }
 
@@ -216,8 +254,13 @@ class KeySystemConfigSelector::ConfigState {
     return rules.hw_secure_codecs == EmeConfigRuleState::kNotAllowed;
   }
 
+  bool IsHardwareSecureDecryptionAllowed() const {
+    return was_hardware_secure_decryption_preferences_requested_ &&
+           is_hardware_secure_decryption_allowed_;
+  }
+
   // Checks whether a rule is compatible with all previously added rules.
-  bool IsRuleSupported(absl::optional<EmeConfigRule> rule) const {
+  bool IsRuleSupported(EmeConfig::Rule rule) const {
     bool result = true;
 
     // NOT_SUPPORTED
@@ -284,7 +327,7 @@ class KeySystemConfigSelector::ConfigState {
   }
 
   // Add a rule to the accumulated configuration state.
-  void AddRule(absl::optional<EmeConfigRule> rule) {
+  void AddRule(EmeConfig::Rule rule) {
     DCHECK(IsRuleSupported(rule));
 
     // No rule specified, this should not happen
@@ -336,7 +379,16 @@ class KeySystemConfigSelector::ConfigState {
   // (Not changed by adding rules.)
   bool is_permission_granted_;
 
-  EmeConfigRule rules = EmeConfigRule();
+  // Whether hardware secure decryption preferences was requested. If set,
+  // |is_hardware_secure_decryption_preferences_allowed_| represents the final
+  // decision. (Not changed by adding rules.)
+  bool was_hardware_secure_decryption_preferences_requested_ = false;
+
+  // Whether hardware secure decryption is allowed. (Not changed by
+  // adding rules.)
+  bool is_hardware_secure_decryption_allowed_ = true;
+
+  EmeConfig rules = EmeConfig();
 };
 
 KeySystemConfigSelector::KeySystemConfigSelector(
@@ -394,9 +446,8 @@ bool KeySystemConfigSelector::IsSupportedContentType(
   media::SplitCodecs(codecs, &codec_vector);
 
   // Check that |container_lower| and |codec_vector| are supported by the CDM.
-  absl::optional<EmeConfigRule> codecs_rule =
-      key_systems_->GetContentTypeConfigRule(key_system, media_type,
-                                             container_lower, codec_vector);
+  EmeConfig::Rule codecs_rule = key_systems_->GetContentTypeConfigRule(
+      key_system, media_type, container_lower, codec_vector);
   if (!config_state->IsRuleSupported(codecs_rule)) {
     DVLOG(3) << "Container mime type and codecs are not supported by CDM";
     return false;
@@ -406,8 +457,7 @@ bool KeySystemConfigSelector::IsSupportedContentType(
   return true;
 }
 
-absl::optional<EmeConfigRule>
-KeySystemConfigSelector::GetEncryptionSchemeConfigRule(
+EmeConfig::Rule KeySystemConfigSelector::GetEncryptionSchemeConfigRule(
     const std::string& key_system,
     const EmeEncryptionScheme encryption_scheme) {
   switch (encryption_scheme) {
@@ -434,11 +484,11 @@ KeySystemConfigSelector::GetEncryptionSchemeConfigRule(
       // supported by implementation, continue to the next iteration."
       // The value provided was an empty string or some other value that is
       // not recognized, so treat it as a scheme that is not supported.
-      return absl::nullopt;
+      return EmeConfig::UnsupportedRule();
   }
 
   NOTREACHED();
-  return absl::nullopt;
+  return EmeConfig::UnsupportedRule();
 }
 
 bool KeySystemConfigSelector::GetSupportedCapabilities(
@@ -507,10 +557,9 @@ bool KeySystemConfigSelector::GetSupportedCapabilities(
       hw_secure_requirement = false;
     else
       hw_secure_requirement_ptr = nullptr;
-    absl::optional<EmeConfigRule> robustness_rule =
-        key_systems_->GetRobustnessConfigRule(key_system, media_type,
-                                              requested_robustness_ascii,
-                                              hw_secure_requirement_ptr);
+    EmeConfig::Rule robustness_rule = key_systems_->GetRobustnessConfigRule(
+        key_system, media_type, requested_robustness_ascii,
+        hw_secure_requirement_ptr);
 
     // 3.13. If the user agent and implementation definitely support playback of
     //       encrypted media data for the combination of container, media types,
@@ -524,7 +573,7 @@ bool KeySystemConfigSelector::GetSupportedCapabilities(
 
     // Check for encryption scheme support.
     // https://github.com/WICG/encrypted-media-encryption-scheme/blob/master/explainer.md.
-    absl::optional<EmeConfigRule> encryption_scheme_rule =
+    EmeConfig::Rule encryption_scheme_rule =
         GetEncryptionSchemeConfigRule(key_system, capability.encryption_scheme);
     if (!proposed_config_state.IsRuleSupported(encryption_scheme_rule)) {
       DVLOG(3) << "The current encryption scheme rule is not supported.";
@@ -620,8 +669,8 @@ KeySystemConfigSelector::GetSupportedConfiguration(
   //    Identifiers are not allowed according to restrictions, set distinctive
   //    identifier requirement to "not-allowed".
 
-  absl::optional<EmeConfigRule> identifier_required =
-      EmeConfigRule{.identifier = EmeConfigRuleState::kRequired};
+  EmeConfig::Rule identifier_required =
+      EmeConfig{.identifier = EmeConfigRuleState::kRequired};
   if (distinctive_identifier == EmeFeatureRequirement::kOptional &&
       !config_state->IsRuleSupported(identifier_required)) {
     distinctive_identifier = EmeFeatureRequirement::kNotAllowed;
@@ -653,7 +702,7 @@ KeySystemConfigSelector::GetSupportedConfiguration(
     distinctive_identifier_support = EmeFeatureSupport::NOT_SUPPORTED;
   }
 #endif  // !BUILDFLAG(IS_ANDROID)
-  absl::optional<EmeConfigRule> di_rule = GetDistinctiveIdentifierConfigRule(
+  EmeConfig::Rule di_rule = GetDistinctiveIdentifierConfigRule(
       distinctive_identifier_support, distinctive_identifier);
   if (!config_state->IsRuleSupported(di_rule)) {
     DVLOG(2) << "Rejecting requested configuration because "
@@ -673,8 +722,8 @@ KeySystemConfigSelector::GetSupportedConfiguration(
   // 9. If persistent state requirement is "optional" and persisting state is
   //    not allowed according to restrictions, set persistent state requirement
   //    to "not-allowed".
-  absl::optional<EmeConfigRule> persistence_required =
-      EmeConfigRule{.persistence = EmeConfigRuleState::kRequired};
+  EmeConfig::Rule persistence_required =
+      EmeConfig{.persistence = EmeConfigRuleState::kRequired};
   if (persistent_state == EmeFeatureRequirement::kOptional &&
       !config_state->IsRuleSupported(persistence_required)) {
     persistent_state = EmeFeatureRequirement::kNotAllowed;
@@ -691,15 +740,18 @@ KeySystemConfigSelector::GetSupportedConfiguration(
   //         return NotSupported.
   EmeFeatureSupport persistent_state_support =
       key_systems_->GetPersistentStateSupport(key_system);
-  // If preferences disallow local storage, then indicate persistent state is
-  // not supported.
+  // If preferences disallow storage access, then indicate persistent state is
+  // not supported. A quota managed storage type is used in lieu of a dedicated
+  // StorageType, as Media Licenses are a quota managed managed type.
+  // TODO(crbug.com/1465299): Simplify the WebContentSettingsClient::StorageType
+  // to remove unnecessary distinctions between storage types.
   if (!web_frame_delegate_->AllowStorageAccessSync(
-          WebContentSettingsClient::StorageType::kLocalStorage)) {
+          WebContentSettingsClient::StorageType::kIndexedDB)) {
     if (persistent_state_support == EmeFeatureSupport::ALWAYS_ENABLED)
       return CONFIGURATION_NOT_SUPPORTED;
     persistent_state_support = EmeFeatureSupport::NOT_SUPPORTED;
   }
-  absl::optional<EmeConfigRule> ps_rule =
+  EmeConfig::Rule ps_rule =
       GetPersistentStateConfigRule(persistent_state_support, persistent_state);
   if (!config_state->IsRuleSupported(ps_rule)) {
     DVLOG(2) << "Rejecting requested configuration because "
@@ -745,13 +797,13 @@ KeySystemConfigSelector::GetSupportedConfiguration(
     // 13.3. If the implementation does not support session type in combination
     //       with accumulated configuration and restrictions for other reasons,
     //       return NotSupported.
-    absl::optional<EmeConfigRule> session_type_rule = absl::nullopt;
+    EmeConfig::Rule session_type_rule = EmeConfig::UnsupportedRule();
     switch (session_type) {
       case WebEncryptedMediaSessionType::kUnknown:
         NOTREACHED();
         return CONFIGURATION_NOT_SUPPORTED;
       case WebEncryptedMediaSessionType::kTemporary:
-        session_type_rule = EmeConfigRule();
+        session_type_rule = EmeConfig::SupportedRule();
         break;
       case WebEncryptedMediaSessionType::kPersistentLicense:
         session_type_rule =
@@ -854,14 +906,12 @@ KeySystemConfigSelector::GetSupportedConfiguration(
   //         distinctiveIdentifier value to "not-allowed".
   if (accumulated_configuration->distinctive_identifier ==
       EmeFeatureRequirement::kOptional) {
-    absl::optional<EmeConfigRule> not_allowed_rule =
-        GetDistinctiveIdentifierConfigRule(
-            key_systems_->GetDistinctiveIdentifierSupport(key_system),
-            EmeFeatureRequirement::kNotAllowed);
-    absl::optional<EmeConfigRule> required_rule =
-        GetDistinctiveIdentifierConfigRule(
-            key_systems_->GetDistinctiveIdentifierSupport(key_system),
-            EmeFeatureRequirement::kRequired);
+    EmeConfig::Rule not_allowed_rule = GetDistinctiveIdentifierConfigRule(
+        key_systems_->GetDistinctiveIdentifierSupport(key_system),
+        EmeFeatureRequirement::kNotAllowed);
+    EmeConfig::Rule required_rule = GetDistinctiveIdentifierConfigRule(
+        key_systems_->GetDistinctiveIdentifierSupport(key_system),
+        EmeFeatureRequirement::kRequired);
     bool not_allowed_supported =
         config_state->IsRuleSupported(not_allowed_rule);
     bool required_supported = config_state->IsRuleSupported(required_rule);
@@ -896,11 +946,10 @@ KeySystemConfigSelector::GetSupportedConfiguration(
   //         value to "not-allowed".
   if (accumulated_configuration->persistent_state ==
       EmeFeatureRequirement::kOptional) {
-    absl::optional<EmeConfigRule> not_allowed_rule =
-        GetPersistentStateConfigRule(
-            key_systems_->GetPersistentStateSupport(key_system),
-            EmeFeatureRequirement::kNotAllowed);
-    absl::optional<EmeConfigRule> required_rule = GetPersistentStateConfigRule(
+    EmeConfig::Rule not_allowed_rule = GetPersistentStateConfigRule(
+        key_systems_->GetPersistentStateSupport(key_system),
+        EmeFeatureRequirement::kNotAllowed);
+    EmeConfig::Rule required_rule = GetPersistentStateConfigRule(
         key_systems_->GetPersistentStateSupport(key_system),
         EmeFeatureRequirement::kRequired);
     // |persistent_state| should not be affected after it is decided.
@@ -976,12 +1025,16 @@ void KeySystemConfigSelector::SelectConfig(
   //     agent, reject promise with a NotSupportedError. String comparison
   //     is case-sensitive.
   if (!key_system.ContainsOnlyASCII()) {
+    DVLOG(1) << "Rejecting requested configuration because "
+             << "key system contains unsupported characters.";
     std::move(cb).Run(Status::kUnsupportedKeySystem, nullptr, nullptr);
     return;
   }
 
   std::string key_system_ascii = key_system.Ascii();
   if (!key_systems_->IsSupportedKeySystem(key_system_ascii)) {
+    DVLOG(1) << "Rejecting requested configuration because "
+             << "key system " << key_system_ascii << " is not supported.";
     std::move(cb).Run(Status::kUnsupportedKeySystem, nullptr, nullptr);
     return;
   }
@@ -1014,6 +1067,7 @@ void KeySystemConfigSelector::SelectConfig(
   request->key_system = key_system_ascii;
   request->candidate_configurations = candidate_configurations;
   request->cb = std::move(cb);
+
   SelectConfigInternal(std::move(request));
 }
 
@@ -1034,8 +1088,10 @@ void KeySystemConfigSelector::SelectConfigInternal(
     //        configuration, and origin.
     // 6.3.3. If supported configuration is not NotSupported, [initialize
     //        and return a new MediaKeySystemAccess object.]
-    ConfigState config_state(request->was_permission_requested,
-                             request->is_permission_granted);
+    ConfigState config_state(
+        request->was_permission_requested, request->is_permission_granted,
+        request->was_hardware_secure_decryption_preferences_requested,
+        request->is_hardware_secure_decryption_allowed);
     WebMediaKeySystemConfiguration accumulated_configuration;
     media::CdmConfig cdm_config;
     ConfigurationSupport support = GetSupportedConfiguration(
@@ -1052,7 +1108,7 @@ void KeySystemConfigSelector::SelectConfigInternal(
         }
         DVLOG(3) << "Request permission.";
         media_permission_->RequestPermission(
-            media::MediaPermission::PROTECTED_MEDIA_IDENTIFIER,
+            media::MediaPermission::Type::kProtectedMediaIdentifier,
             base::BindOnce(&KeySystemConfigSelector::OnPermissionResult,
                            weak_factory_.GetWeakPtr(), std::move(request)));
         return;
@@ -1070,6 +1126,27 @@ void KeySystemConfigSelector::SelectConfigInternal(
              EmeFeatureRequirement::kRequired);
         cdm_config.use_hw_secure_codecs =
             config_state.AreHwSecureCodecsRequired();
+#if BUILDFLAG(IS_WIN)
+        // Check whether hardware secure decryption CDM should be disabled.
+        if (cdm_config.use_hw_secure_codecs &&
+            base::FeatureList::IsEnabled(
+                media::kHardwareSecureDecryptionFallback) &&
+            media::kHardwareSecureDecryptionFallbackPerSite.Get()) {
+          if (!request->was_hardware_secure_decryption_preferences_requested) {
+            media_permission_->IsHardwareSecureDecryptionAllowed(
+                base::BindOnce(&KeySystemConfigSelector::
+                                   OnHardwareSecureDecryptionAllowedResult,
+                               weak_factory_.GetWeakPtr(), std::move(request)));
+            return;
+          }
+
+          if (!config_state.IsHardwareSecureDecryptionAllowed()) {
+            DVLOG(2) << "Rejecting requested configuration because "
+                     << "Hardware secure decryption is not allowed.";
+            continue;
+          }
+        }
+#endif  // BUILDFLAG(IS_WIN)
 
         std::move(request->cb)
             .Run(Status::kSupported, &accumulated_configuration, &cdm_config);
@@ -1090,5 +1167,18 @@ void KeySystemConfigSelector::OnPermissionResult(
   request->is_permission_granted = is_permission_granted;
   SelectConfigInternal(std::move(request));
 }
+
+#if BUILDFLAG(IS_WIN)
+void KeySystemConfigSelector::OnHardwareSecureDecryptionAllowedResult(
+    std::unique_ptr<SelectionRequest> request,
+    bool is_hardware_secure_decryption_allowed) {
+  DVLOG(3) << __func__;
+
+  request->was_hardware_secure_decryption_preferences_requested = true;
+  request->is_hardware_secure_decryption_allowed =
+      is_hardware_secure_decryption_allowed;
+  SelectConfigInternal(std::move(request));
+}
+#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace blink

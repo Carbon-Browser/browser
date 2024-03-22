@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,13 +23,19 @@ AppLoadService* AppLoadServiceFactory::GetForBrowserContext(
 }
 
 AppLoadServiceFactory* AppLoadServiceFactory::GetInstance() {
-  return base::Singleton<AppLoadServiceFactory>::get();
+  static base::NoDestructor<AppLoadServiceFactory> instance;
+  return instance.get();
 }
 
 AppLoadServiceFactory::AppLoadServiceFactory()
     : ProfileKeyedServiceFactory(
           "AppLoadService",
-          ProfileSelections::BuildServicesRedirectedInOTR()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(extensions::AppWindowRegistry::Factory::GetInstance());
   DependsOn(extensions::ExtensionPrefsFactory::GetInstance());
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
@@ -38,11 +44,12 @@ AppLoadServiceFactory::AppLoadServiceFactory()
       extensions::ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
 }
 
-AppLoadServiceFactory::~AppLoadServiceFactory() {}
+AppLoadServiceFactory::~AppLoadServiceFactory() = default;
 
-KeyedService* AppLoadServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AppLoadServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new AppLoadService(context);
+  return std::make_unique<AppLoadService>(context);
 }
 
 bool AppLoadServiceFactory::ServiceIsCreatedWithBrowserContext() const {

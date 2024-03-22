@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 
 #include "base/base_export.h"
 #include "base/containers/intrusive_heap.h"
-#include "base/stl_util.h"
 #include "base/task/common/checked_lock.h"
 #include "base/task/thread_pool/task_source.h"
 #include "base/task/thread_pool/task_source_sort_key.h"
+#include "base/types/cxx23_to_underlying.h"
 
 namespace base {
 namespace internal {
@@ -74,6 +74,8 @@ class BASE_EXPORT PriorityQueue {
   // destroyed; needed to prevent memory leaks caused by a reference cycle
   // (TaskSource -> Task -> TaskRunner -> TaskSource...) during test teardown.
   void EnableFlushTaskSourcesOnDestroyForTesting();
+
+  void swap(PriorityQueue& other);
 
  private:
   // A class combining a TaskSource and the TaskSourceSortKey that determines

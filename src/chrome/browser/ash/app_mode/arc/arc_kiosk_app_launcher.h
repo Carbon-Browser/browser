@@ -1,11 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_LAUNCHER_H_
 #define CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_LAUNCHER_H_
 
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "components/exo/wm_helper.h"
 #include "ui/aura/env_observer.h"
 #include "ui/aura/window.h"
@@ -58,11 +59,11 @@ class ArcKioskAppLauncher : public ArcAppListPrefs::Observer,
   void StopObserving();
 
   const std::string app_id_;
-  ArcAppListPrefs* const prefs_;
+  const raw_ptr<ArcAppListPrefs, ExperimentalAsh> prefs_;
   int task_id_ = -1;
   std::set<aura::Window*> windows_;
   // Not owning the delegate, delegate owns this class.
-  Delegate* const delegate_;
+  const raw_ptr<Delegate, ExperimentalAsh> delegate_;
 };
 
 }  // namespace ash

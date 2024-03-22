@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/printing/cups_proxy_service_manager.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "components/user_manager/user_manager.h"
 
 namespace ash {
 
@@ -27,24 +26,29 @@ CupsProxyServiceManager* CupsProxyServiceManagerFactory::GetForBrowserContext(
 }
 
 CupsProxyServiceManagerFactory::CupsProxyServiceManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "CupsProxyServiceManagerFactory",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // We do not need an instance of CupsProxyServiceManager on the
+              // lockscreen.
+              .WithAshInternals(ProfileSelection::kNone)
+              .Build()) {}
 
 CupsProxyServiceManagerFactory::~CupsProxyServiceManagerFactory() = default;
 
-KeyedService* CupsProxyServiceManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CupsProxyServiceManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  // We do not need an instance of CupsProxyServiceManager on the lockscreen.
-  if (!ProfileHelper::IsRegularProfile(Profile::FromBrowserContext(context))) {
+  // Only create the service for the primary user.
+  Profile* profile = Profile::FromBrowserContext(context);
+  auto* user =
+      ash::BrowserContextHelper::Get()->GetUserByBrowserContext(profile);
+  if (!user_manager::UserManager::Get()->IsPrimaryUser(user)) {
     return nullptr;
   }
-  return new CupsProxyServiceManager();
-}
 
-content::BrowserContext* CupsProxyServiceManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return std::make_unique<CupsProxyServiceManager>(profile);
 }
 
 bool CupsProxyServiceManagerFactory::ServiceIsCreatedWithBrowserContext()

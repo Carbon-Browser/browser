@@ -1,8 +1,9 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/multi_user/multi_user_window_manager_impl.h"
+#include "base/memory/raw_ptr.h"
 
 #include <set>
 #include <vector>
@@ -10,13 +11,13 @@
 #include "ash/media/media_controller_impl.h"
 #include "ash/multi_user/user_switch_animator.h"
 #include "ash/public/cpp/multi_user_window_manager_delegate.h"
-#include "ash/public/cpp/multi_user_window_manager_observer.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/auto_reset.h"
+#include "base/containers/contains.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/base/ui_base_types.h"
@@ -82,7 +83,7 @@ class AnimationSetter {
 
  private:
   // The window which gets used.
-  aura::Window* window_;
+  raw_ptr<aura::Window, ExperimentalAsh> window_;
 
   // Previous animation type.
   const int previous_animation_type_;
@@ -131,11 +132,6 @@ MultiUserWindowManagerImpl::~MultiUserWindowManagerImpl() {
 // static
 MultiUserWindowManagerImpl* MultiUserWindowManagerImpl::Get() {
   return g_instance;
-}
-
-void MultiUserWindowManagerImpl::OnDidSwitchActiveAccount() {
-  for (MultiUserWindowManagerObserver& observer : observers_)
-    observer.OnUserSwitchAnimationFinished();
 }
 
 void MultiUserWindowManagerImpl::SetWindowOwner(aura::Window* window,
@@ -234,16 +230,6 @@ const AccountId& MultiUserWindowManagerImpl::CurrentAccountId() const {
   return current_account_id_;
 }
 
-void MultiUserWindowManagerImpl::AddObserver(
-    MultiUserWindowManagerObserver* observer) {
-  observers_.AddObserver(observer);
-}
-
-void MultiUserWindowManagerImpl::RemoveObserver(
-    MultiUserWindowManagerObserver* observer) {
-  observers_.RemoveObserver(observer);
-}
-
 bool MultiUserWindowManagerImpl::IsWindowOnDesktopOfUser(
     aura::Window* window,
     const AccountId& account_id) const {
@@ -312,17 +298,19 @@ void MultiUserWindowManagerImpl::OnWindowVisibilityChanging(
   if (suppress_visibility_changes_)
     return;
 
-  WindowToEntryMap::iterator it = window_to_entry_.find(window);
   // If the window is not owned by anyone it is shown on all desktops.
-  if (it != window_to_entry_.end()) {
+  if (WindowToEntryMap::iterator it = window_to_entry_.find(window);
+      it != window_to_entry_.end()) {
     // Remember what was asked for so that we can restore this when the user's
     // desktop gets restored.
     it->second->set_show(visible);
-  } else {
-    TransientWindowToVisibility::iterator it =
-        transient_window_to_visibility_.find(window);
-    if (it != transient_window_to_visibility_.end())
-      it->second = visible;
+    return;
+  }
+
+  if (TransientWindowToVisibility::iterator it =
+          transient_window_to_visibility_.find(window);
+      it != transient_window_to_visibility_.end()) {
+    it->second = visible;
   }
 }
 
@@ -495,8 +483,7 @@ void MultiUserWindowManagerImpl::AddTransientOwnerRecursive(
     return;
 
   // Remember the current visibility.
-  DCHECK(transient_window_to_visibility_.find(window) ==
-         transient_window_to_visibility_.end());
+  DCHECK(!base::Contains(transient_window_to_visibility_, window));
   transient_window_to_visibility_[window] = window->IsVisible();
 
   // Add observers to track state changes.

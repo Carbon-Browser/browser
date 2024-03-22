@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/socket/stream_socket.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/base/constants.h"
@@ -15,8 +15,7 @@
 #include "remoting/protocol/message_serialization.h"
 #include "remoting/protocol/video_feedback_stub.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 HostVideoDispatcher::HostVideoDispatcher()
     : ChannelDispatcherBase(kVideoChannelName) {}
@@ -31,11 +30,12 @@ void HostVideoDispatcher::ProcessVideoPacket(
 void HostVideoDispatcher::OnIncomingMessage(
     std::unique_ptr<CompoundBuffer> message) {
   std::unique_ptr<VideoAck> ack = ParseMessage<VideoAck>(message.get());
-  if (!ack)
+  if (!ack) {
     return;
-  if (video_feedback_stub_)
+  }
+  if (video_feedback_stub_) {
     video_feedback_stub_->ProcessVideoAck(std::move(ack));
+  }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,12 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsUtils;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.components.browser_ui.banners.SwipableOverlayView;
 import org.chromium.components.infobars.InfoBar;
 import org.chromium.components.infobars.InfoBarAnimationListener;
@@ -25,13 +27,10 @@ import org.chromium.components.infobars.InfoBarUiItem;
 import org.chromium.ui.display.DisplayAndroid;
 import org.chromium.ui.display.DisplayUtil;
 
-/**
- * The {@link View} for the {@link InfoBarContainer}.
- */
-public class InfoBarContainerView extends SwipableOverlayView {
-    /**
-     * Observes container view changes.
-     */
+/** The {@link View} for the {@link InfoBarContainer}. */
+public class InfoBarContainerView extends SwipableOverlayView
+        implements BrowserControlsStateProvider.Observer {
+    /** Observes container view changes. */
     public interface ContainerViewObserver extends InfoBarAnimationListener {
         /**
          * Called when the height of shown content changed.
@@ -43,6 +42,7 @@ public class InfoBarContainerView extends SwipableOverlayView {
 
     /** Top margin, including the toolbar and tabstrip height and 48dp of web contents. */
     private static final int TOP_MARGIN_PHONE_DP = 104;
+
     private static final int TOP_MARGIN_TABLET_DP = 144;
 
     /** Length of the animation to fade the InfoBarContainer back into View. */
@@ -75,12 +75,21 @@ public class InfoBarContainerView extends SwipableOverlayView {
      *                                browser control offsets.
      * @param isTablet Whether this view is displayed on tablet or not.
      */
-    InfoBarContainerView(@NonNull Context context,
+    InfoBarContainerView(
+            @NonNull Context context,
             @NonNull ContainerViewObserver containerViewObserver,
-            @NonNull BrowserControlsStateProvider browserControlsStateProvider, boolean isTablet) {
-        super(context, null);
+            @Nullable BrowserControlsStateProvider browserControlsStateProvider,
+            boolean isTablet) {
+        super(
+                context,
+                null,
+                !ChromeFeatureList.isEnabled(ChromeFeatureList.INFOBAR_SCROLL_OPTIMIZATION));
         mContainerViewObserver = containerViewObserver;
         mBrowserControlsStateProvider = browserControlsStateProvider;
+        if (mBrowserControlsStateProvider != null
+                && ChromeFeatureList.isEnabled(ChromeFeatureList.INFOBAR_SCROLL_OPTIMIZATION)) {
+            mBrowserControlsStateProvider.addObserver(this);
+        }
 
         // TODO(newt): move this workaround into the infobar views if/when they're scrollable.
         // Workaround for http://crbug.com/407149. See explanation in onMeasure() below.
@@ -89,25 +98,35 @@ public class InfoBarContainerView extends SwipableOverlayView {
         updateLayoutParams(context, isTablet);
 
         Runnable makeContainerVisibleRunnable = () -> runUpEventAnimation(true);
-        mLayout = new InfoBarContainerLayout(
-                context, makeContainerVisibleRunnable, new InfoBarAnimationListener() {
-                    @Override
-                    public void notifyAnimationFinished(int animationType) {
-                        mContainerViewObserver.notifyAnimationFinished(animationType);
-                    }
+        mLayout =
+                new InfoBarContainerLayout(
+                        context,
+                        makeContainerVisibleRunnable,
+                        new InfoBarAnimationListener() {
+                            @Override
+                            public void notifyAnimationFinished(int animationType) {
+                                mContainerViewObserver.notifyAnimationFinished(animationType);
+                            }
 
-                    @Override
-                    public void notifyAllAnimationsFinished(InfoBarUiItem frontInfoBar) {
-                        mContainerViewObserver.notifyAllAnimationsFinished(frontInfoBar);
-                    }
-                });
+                            @Override
+                            public void notifyAllAnimationsFinished(InfoBarUiItem frontInfoBar) {
+                                mContainerViewObserver.notifyAllAnimationsFinished(frontInfoBar);
+                            }
+                        });
 
-        addView(mLayout,
-                new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT,
+        addView(
+                mLayout,
+                new FrameLayout.LayoutParams(
+                        LayoutParams.MATCH_PARENT,
+                        LayoutParams.WRAP_CONTENT,
                         Gravity.CENTER_HORIZONTAL));
     }
 
     void destroy() {
+        if (mBrowserControlsStateProvider != null
+                && ChromeFeatureList.isEnabled(ChromeFeatureList.INFOBAR_SCROLL_OPTIMIZATION)) {
+            mBrowserControlsStateProvider.removeObserver(this);
+        }
         removeFromParentView();
     }
 
@@ -174,6 +193,24 @@ public class InfoBarContainerView extends SwipableOverlayView {
         mContainerViewObserver.onShownRatioChanged(shownFraction);
     }
 
+    // BrowserControlsStateProvider.Observer implementation.
+    @Override
+    public void onControlsOffsetChanged(
+            int topOffset,
+            int topControlsMinHeightOffset,
+            int bottomOffset,
+            int bottomControlsMinHeightOffset,
+            boolean needsAnimate) {
+        if (!isAllowedToAutoHide()) {
+            return;
+        }
+        setTranslationY(
+                getTotalHeight()
+                        * 1.0f
+                        * Math.abs(topOffset)
+                        / mBrowserControlsStateProvider.getTopControlsHeight());
+    }
+
     /**
      * Sets whether the InfoBarContainer is allowed to auto-hide when the user scrolls the page.
      * Expected to be called when Touch Exploration is enabled.
@@ -191,18 +228,14 @@ public class InfoBarContainerView extends SwipableOverlayView {
         mLayout.notifyInfoBarViewChanged();
     }
 
-    /**
-     * Sets the parent {@link ViewGroup} that contains the {@link InfoBarContainer}.
-     */
+    /** Sets the parent {@link ViewGroup} that contains the {@link InfoBarContainer}. */
     void setParentView(ViewGroup parent) {
         mParentView = parent;
         // Don't attach the container to the new parent if it is not previously attached.
         if (removeFromParentView()) addToParentView();
     }
 
-    /**
-     * Adds this class to the parent view {@link #mParentView}.
-     */
+    /** Adds this class to the parent view {@link #mParentView}. */
     void addToParentView() {
         super.addToParentView(mParentView);
     }
@@ -239,26 +272,26 @@ public class InfoBarContainerView extends SwipableOverlayView {
      */
     private void runDirectionChangeAnimation(boolean visible) {
         mScrollDirectionChangeAnimation = createVerticalSnapAnimation(visible);
-        mScrollDirectionChangeAnimation.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                mScrollDirectionChangeAnimation = null;
-            }
-        });
+        mScrollDirectionChangeAnimation.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        mScrollDirectionChangeAnimation = null;
+                    }
+                });
         mScrollDirectionChangeAnimation.start();
     }
 
     private void updateLayoutParams(Context context, boolean isTablet) {
-        LayoutParams lp = new LayoutParams(
-                LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        LayoutParams lp =
+                new LayoutParams(
+                        LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
         int topMarginDp = isTablet ? TOP_MARGIN_TABLET_DP : TOP_MARGIN_PHONE_DP;
         lp.topMargin = DisplayUtil.dpToPx(DisplayAndroid.getNonMultiDisplay(context), topMarginDp);
         setLayoutParams(lp);
     }
 
-    /**
-     * Returns true if any animations are pending or in progress.
-     */
+    /** Returns true if any animations are pending or in progress. */
     @VisibleForTesting
     public boolean isAnimating() {
         return mLayout.isAnimating();

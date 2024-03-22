@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <stdint.h>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chromecast/device/bluetooth/le/remote_descriptor.h"
 #include "device/bluetooth/bluetooth_gatt_service.h"
 #include "device/bluetooth/cast/bluetooth_remote_gatt_characteristic_cast.h"
@@ -77,7 +77,7 @@ void BluetoothRemoteGattDescriptorCast::OnReadRemoteDescriptor(
     std::move(callback).Run(/*error_code=*/absl::nullopt, result);
     return;
   }
-  std::move(callback).Run(BluetoothGattService::GATT_ERROR_FAILED,
+  std::move(callback).Run(BluetoothGattService::GattErrorCode::kFailed,
                           /*value=*/std::vector<uint8_t>());
 }
 
@@ -91,7 +91,7 @@ void BluetoothRemoteGattDescriptorCast::OnWriteRemoteDescriptor(
     std::move(callback).Run();
     return;
   }
-  std::move(error_callback).Run(BluetoothGattService::GATT_ERROR_FAILED);
+  std::move(error_callback).Run(BluetoothGattService::GattErrorCode::kFailed);
 }
 
 }  // namespace device

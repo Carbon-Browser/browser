@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,18 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/system/tray/view_click_listener.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+
+namespace ui {
+class GestureEvent;
+}  // namespace ui
+
+namespace views {
+class ImageView;
+class Widget;
+}  // namespace views
 
 namespace ash {
 
@@ -27,6 +38,8 @@ constexpr SkColor kProjectorDefaultPenColor = kProjectorMagentaPenColor;
 // Projector.
 class ProjectorAnnotationTray : public TrayBackgroundView,
                                 public SessionObserver {
+  METADATA_HEADER(ProjectorAnnotationTray, TrayBackgroundView)
+
  public:
   explicit ProjectorAnnotationTray(Shelf* shelf);
   ProjectorAnnotationTray(const ProjectorAnnotationTray&) = delete;
@@ -34,8 +47,9 @@ class ProjectorAnnotationTray : public TrayBackgroundView,
   ~ProjectorAnnotationTray() override;
 
   // TrayBackgroundView:
-  bool PerformAction(const ui::Event& event) override;
+  void OnGestureEvent(ui::GestureEvent* event) override;
   void ClickedOutsideBubble() override;
+  void UpdateTrayItemColor(bool is_active) override;
   std::u16string GetAccessibleNameForTray() override;
   void HandleLocaleChange() override;
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override;
@@ -43,13 +57,13 @@ class ProjectorAnnotationTray : public TrayBackgroundView,
   void ShowBubble() override;
   TrayBubbleView* GetBubbleView() override;
   views::Widget* GetBubbleWidget() const override;
-  void OnMouseEvent(ui::MouseEvent* event) override;
-  void OnGestureEvent(ui::GestureEvent* event) override;
   void OnThemeChanged() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
   // SessionObserver:
   void OnActiveUserPrefServiceChanged(PrefService* pref_service) override;
 
+  void OnTrayButtonPressed(const ui::Event& event);
   void HideAnnotationTray();
   void SetTrayEnabled(bool enabled);
   void ToggleAnnotator();
@@ -60,7 +74,7 @@ class ProjectorAnnotationTray : public TrayBackgroundView,
   // UI.
   void DeactivateActiveTool();
 
-  // Updates the icon in the status area.
+  // Updates the icon and tooltip of `image_view_` in the status area.
   void UpdateIcon();
 
   void OnPenColorPressed(SkColor color);
@@ -73,10 +87,13 @@ class ProjectorAnnotationTray : public TrayBackgroundView,
 
   std::u16string GetTooltip();
 
-  // Image view of the tray icon.
-  views::ImageView* const image_view_;
+  // Sets the image with the color that corresponds to the active state.
+  void SetIconImage(bool is_active);
 
-  HoverHighlightView* pen_view_;
+  // Image view of the tray icon.
+  const raw_ptr<views::ImageView, ExperimentalAsh> image_view_;
+
+  raw_ptr<HoverHighlightView, ExperimentalAsh> pen_view_;
 
   // The bubble that appears after clicking the annotation tools tray button.
   std::unique_ptr<TrayBubbleWrapper> bubble_;

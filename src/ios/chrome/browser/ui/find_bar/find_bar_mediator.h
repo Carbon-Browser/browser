@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/find_in_page/find_in_page_response_delegate.h"
+#import "ios/chrome/browser/find_in_page/model/find_in_page_response_delegate.h"
 
 @protocol FindBarConsumer;
 @protocol FindInPageCommands;
@@ -25,6 +25,9 @@ class WebState;
                   commandHandler:(id<FindInPageCommands>)commandHandler;
 
 @property(nonatomic, weak) id<FindBarConsumer> consumer;
+
+// Stops observing all objects.
+- (void)disconnect;
 
 @end
 

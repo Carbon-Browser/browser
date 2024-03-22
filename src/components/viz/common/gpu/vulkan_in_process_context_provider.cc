@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "gpu/vulkan/vulkan_instance.h"
 #include "gpu/vulkan/vulkan_util.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkDirectContext.h"
 #include "third_party/skia/include/gpu/vk/GrVkExtensions.h"
 
 namespace {
@@ -32,13 +33,14 @@ VulkanInProcessContextProvider::Create(
     gpu::VulkanImplementation* vulkan_implementation,
     uint32_t heap_memory_limit,
     uint32_t sync_cpu_memory_limit,
+    const bool is_thread_safe,
     const gpu::GPUInfo* gpu_info,
     base::TimeDelta cooldown_duration_at_memory_pressure_critical) {
   scoped_refptr<VulkanInProcessContextProvider> context_provider(
       new VulkanInProcessContextProvider(
           vulkan_implementation, heap_memory_limit, sync_cpu_memory_limit,
           cooldown_duration_at_memory_pressure_critical));
-  if (!context_provider->Initialize(gpu_info))
+  if (!context_provider->Initialize(gpu_info, is_thread_safe))
     return nullptr;
   return context_provider;
 }
@@ -81,8 +83,8 @@ VulkanInProcessContextProvider::~VulkanInProcessContextProvider() {
   Destroy();
 }
 
-bool VulkanInProcessContextProvider::Initialize(
-    const gpu::GPUInfo* gpu_info) {
+bool VulkanInProcessContextProvider::Initialize(const gpu::GPUInfo* gpu_info,
+                                                const bool is_thread_safe) {
   DCHECK(!device_queue_);
 
   const auto& instance_extensions = vulkan_implementation_->GetVulkanInstance()
@@ -99,8 +101,9 @@ bool VulkanInProcessContextProvider::Initialize(
     }
   }
 
-  device_queue_ = gpu::CreateVulkanDeviceQueue(vulkan_implementation_, flags,
-                                               gpu_info, heap_memory_limit_);
+  device_queue_ =
+      gpu::CreateVulkanDeviceQueue(vulkan_implementation_, flags, gpu_info,
+                                   heap_memory_limit_, is_thread_safe);
   if (!device_queue_)
     return false;
 
@@ -175,7 +178,7 @@ bool VulkanInProcessContextProvider::InitializeGrContext(
   backend_context.fGetProc = get_proc;
   backend_context.fProtectedContext = GrProtected::kNo;
 
-  gr_context_ = GrDirectContext::MakeVulkan(backend_context, context_options);
+  gr_context_ = GrDirectContexts::MakeVulkan(backend_context, context_options);
 
   return gr_context_ != nullptr;
 }

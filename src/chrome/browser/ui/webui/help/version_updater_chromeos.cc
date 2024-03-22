@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <optional>
 #include <string>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
@@ -18,6 +17,7 @@
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/enterprise/browser_management/management_service_factory.h"
 #include "chrome/browser/ui/webui/help/help_utils_chromeos.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
@@ -25,8 +25,10 @@
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
+#include "components/policy/core/common/management/management_service.h"
 #include "content/public/browser/web_contents.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -34,9 +36,9 @@
 
 namespace {
 
+using ::ash::OwnerSettingsServiceAsh;
+using ::ash::OwnerSettingsServiceAshFactory;
 using ::ash::UpdateEngineClient;
-using ::chromeos::OwnerSettingsServiceAsh;
-using ::chromeos::OwnerSettingsServiceAshFactory;
 
 // Network status in the context of device update.
 enum NetworkStatus {
@@ -51,7 +53,7 @@ enum NetworkStatus {
 const bool kDefaultAutoUpdateDisabled = false;
 
 NetworkStatus GetNetworkStatus(bool interactive,
-                               const chromeos::NetworkState* network,
+                               const ash::NetworkState* network,
                                bool metered) {
   if (!network || !network->IsConnectedState())  // Offline state.
     return NETWORK_STATUS_OFFLINE;
@@ -78,19 +80,19 @@ bool IsAutoUpdateDisabled() {
   return update_disabled;
 }
 
-std::u16string GetConnectionTypeAsUTF16(const chromeos::NetworkState* network,
+std::u16string GetConnectionTypeAsUTF16(const ash::NetworkState* network,
                                         bool metered) {
   const std::string type = network->type();
-  if (chromeos::NetworkTypePattern::WiFi().MatchesType(type)) {
+  if (ash::NetworkTypePattern::WiFi().MatchesType(type)) {
     if (metered)
       return l10n_util::GetStringUTF16(IDS_NETWORK_TYPE_METERED_WIFI);
     return l10n_util::GetStringUTF16(IDS_NETWORK_TYPE_WIFI);
   }
-  if (chromeos::NetworkTypePattern::Ethernet().MatchesType(type))
+  if (ash::NetworkTypePattern::Ethernet().MatchesType(type))
     return l10n_util::GetStringUTF16(IDS_NETWORK_TYPE_ETHERNET);
-  if (chromeos::NetworkTypePattern::Mobile().MatchesType(type))
+  if (ash::NetworkTypePattern::Mobile().MatchesType(type))
     return l10n_util::GetStringUTF16(IDS_NETWORK_TYPE_MOBILE_DATA);
-  if (chromeos::NetworkTypePattern::VPN().MatchesType(type))
+  if (ash::NetworkTypePattern::VPN().MatchesType(type))
     return l10n_util::GetStringUTF16(IDS_NETWORK_TYPE_VPN);
   NOTREACHED();
   return std::u16string();
@@ -108,10 +110,9 @@ bool EnsureCanUpdate(bool interactive,
     return false;
   }
 
-  chromeos::NetworkStateHandler* network_state_handler =
-      chromeos::NetworkHandler::Get()->network_state_handler();
-  const chromeos::NetworkState* network =
-      network_state_handler->DefaultNetwork();
+  ash::NetworkStateHandler* network_state_handler =
+      ash::NetworkHandler::Get()->network_state_handler();
+  const ash::NetworkState* network = network_state_handler->DefaultNetwork();
   const bool metered = network_state_handler->default_network_is_metered();
   // Don't allow an update if we're currently offline or connected
   // to a network for which updates are disallowed.
@@ -149,6 +150,16 @@ void VersionUpdaterCros::GetUpdateStatus(StatusCallback callback) {
     update_engine_client->AddObserver(this);
 
   this->UpdateStatusChanged(update_engine_client->GetLastStatus());
+}
+
+void VersionUpdaterCros::ApplyDeferredUpdate() {
+  UpdateEngineClient* update_engine_client = UpdateEngineClient::Get();
+
+  DCHECK(update_engine_client->GetLastStatus().current_operation() ==
+         update_engine::Operation::UPDATED_BUT_DEFERRED);
+
+  update_engine_client->ApplyDeferredUpdate(/*shutdown_after_update=*/false,
+                                            base::DoNothing());
 }
 
 void VersionUpdaterCros::CheckForUpdate(StatusCallback callback,
@@ -304,6 +315,7 @@ void VersionUpdaterCros::UpdateStatusChanged(
     case update_engine::Operation::ERROR:
     case update_engine::Operation::REPORTING_ERROR_EVENT:
     case update_engine::Operation::ATTEMPTING_ROLLBACK:
+    case update_engine::Operation::CLEANUP_PREVIOUS_UPDATE:
       // Update engine reports errors for some conditions that shouldn't
       // actually be displayed as errors to users so leave the status as
       // UPDATED. However for some specific errors use the specific FAILED
@@ -313,7 +325,16 @@ void VersionUpdaterCros::UpdateStatusChanged(
       if (status.last_attempt_error() ==
           static_cast<int32_t>(
               update_engine::ErrorCode::kOmahaUpdateIgnoredPerPolicy)) {
-        my_status = DISABLED_BY_ADMIN;
+        if (policy::ManagementServiceFactory::GetForPlatform()->IsManaged()) {
+          my_status = DISABLED_BY_ADMIN;
+        } else {
+          // Handle the special case where after a consumer rollback,
+          // updating to the previously installed version just rolledback from
+          // is disallowed.
+          // TODO(b/277962165) Update the platform side to expose a more
+          // specific error code for this case.
+          my_status = UPDATE_TO_ROLLBACK_VERSION_DISALLOWED;
+        }
       } else if (status.last_attempt_error() ==
                  static_cast<int32_t>(
                      update_engine::ErrorCode::kOmahaErrorInHTTPResponse)) {
@@ -346,8 +367,21 @@ void VersionUpdaterCros::UpdateStatusChanged(
     case update_engine::Operation::UPDATED_NEED_REBOOT:
       my_status = NEARLY_UPDATED;
       break;
+    case update_engine::Operation::UPDATED_BUT_DEFERRED:
+      my_status = DEFERRED;
+      break;
     default:
       NOTREACHED();
+  }
+
+  // If the current auto update is non-interactive and will be deferred, ignore
+  // update status change and show UPDATED instead. The NEARLY_UPDATED or
+  // DEFERRED status will still be shown, because user may need to interact with
+  // UI to apply the update and reboot the device.
+  if (my_status != NEARLY_UPDATED && my_status != DEFERRED &&
+      !status.is_interactive() && status.will_defer_update()) {
+    my_status = UPDATED;
+    progress = 0;
   }
 
   callback_.Run(my_status, progress, status.is_enterprise_rollback(),

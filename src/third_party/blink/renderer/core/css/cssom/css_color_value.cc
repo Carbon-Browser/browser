@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ CSSHWB* CSSColorValue::toHWB() const {
 }
 
 const CSSValue* CSSColorValue::ToCSSValue() const {
-  return cssvalue::CSSColor::Create(ToColor().Rgb());
+  return cssvalue::CSSColor::Create(ToColor());
 }
 
 CSSNumericValue* CSSColorValue::ToNumberOrPercentage(
@@ -61,15 +61,17 @@ CSSNumericValue* CSSColorValue::ToNumberOrPercentage(
 CSSNumericValue* CSSColorValue::ToPercentage(const V8CSSNumberish* input) {
   CSSNumericValue* value = CSSNumericValue::FromPercentish(input);
   DCHECK(value);
-  if (!CSSOMTypes::IsCSSStyleValuePercentage(*value))
+  if (!CSSOMTypes::IsCSSStyleValuePercentage(*value)) {
     return nullptr;
+  }
 
   return value;
 }
 
 float CSSColorValue::ComponentToColorInput(CSSNumericValue* input) {
-  if (CSSOMTypes::IsCSSStyleValuePercentage(*input))
+  if (CSSOMTypes::IsCSSStyleValuePercentage(*input)) {
     return input->to(CSSPrimitiveValue::UnitType::kPercentage)->value() / 100;
+  }
   return input->to(CSSPrimitiveValue::UnitType::kNumber)->value();
 }
 
@@ -139,7 +141,7 @@ V8UnionCSSColorValueOrCSSStyleValue* CSSColorValue::parse(
         return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
             CreateCSSRGBByNumbers(
                 result->Value().Red(), result->Value().Green(),
-                result->Value().Blue(), result->Value().Alpha()));
+                result->Value().Blue(), result->Value().AlphaAsInteger()));
       case CSSColorType::kHSL:
         return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
             MakeGarbageCollected<CSSHSL>(result->Value()));
@@ -157,11 +159,11 @@ V8UnionCSSColorValueOrCSSStyleValue* CSSColorValue::parse(
       getValueName(To<CSSIdentifierValue>(parsed_value)->GetValueID());
   if (const NamedColor* named_color =
           FindColor(value_name, static_cast<wtf_size_t>(strlen(value_name)))) {
-    Color color(named_color->argb_value);
+    Color color = Color::FromRGBA32(named_color->argb_value);
 
     return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
         CreateCSSRGBByNumbers(color.Red(), color.Green(), color.Blue(),
-                              color.Alpha()));
+                              color.AlphaAsInteger()));
   }
 
   return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(

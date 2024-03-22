@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/base64.h"
 #include "base/hash/sha1.h"
 #include "base/memory/ptr_util.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/trace_event/memory_usage_estimator.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/features.h"
@@ -18,6 +17,7 @@
 #include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/proto_memory_estimations.h"
+#include "components/version_info/version_info.h"
 
 namespace syncer {
 
@@ -25,10 +25,8 @@ namespace {
 
 std::string HashSpecifics(const sync_pb::EntitySpecifics& specifics) {
   DCHECK_GT(specifics.ByteSize(), 0);
-  std::string hash;
-  base::Base64Encode(base::SHA1HashString(specifics.SerializeAsString()),
-                     &hash);
-  return hash;
+  return base::Base64Encode(
+      base::SHA1HashString(specifics.SerializeAsString()));
 }
 
 }  // namespace
@@ -142,7 +140,7 @@ bool ProcessorEntity::CanClearMetadata() const {
   return metadata_.is_deleted() && !IsUnsynced();
 }
 
-bool ProcessorEntity::UpdateIsReflection(int64_t update_version) const {
+bool ProcessorEntity::IsVersionAlreadyKnown(int64_t update_version) const {
   return metadata_.server_version() >= update_version;
 }
 
@@ -172,10 +170,8 @@ void ProcessorEntity::RecordAcceptedRemoteUpdate(
   metadata_.set_modification_time(
       TimeToProtoTime(update.entity.modification_time));
   UpdateSpecificsHash(update.entity.specifics);
-  if (base::FeatureList::IsEnabled(kCacheBaseEntitySpecificsInMetadata)) {
-    *metadata_.mutable_possibly_trimmed_base_specifics() =
-        std::move(trimmed_specifics);
-  }
+  *metadata_.mutable_possibly_trimmed_base_specifics() =
+      std::move(trimmed_specifics);
 }
 
 void ProcessorEntity::RecordForcedRemoteUpdate(
@@ -203,12 +199,11 @@ void ProcessorEntity::RecordLocalUpdate(
   // it remembers specifics hash before the modifications.
   IncrementSequenceNumber(modification_time);
   UpdateSpecificsHash(data->specifics);
-  if (base::FeatureList::IsEnabled(kCacheBaseEntitySpecificsInMetadata)) {
-    *metadata_.mutable_possibly_trimmed_base_specifics() =
-        std::move(trimmed_specifics);
-  }
-  if (!data->creation_time.is_null())
+  *metadata_.mutable_possibly_trimmed_base_specifics() =
+      std::move(trimmed_specifics);
+  if (!data->creation_time.is_null()) {
     metadata_.set_creation_time(TimeToProtoTime(data->creation_time));
+  }
   metadata_.set_modification_time(TimeToProtoTime(modification_time));
   metadata_.set_is_deleted(false);
 
@@ -222,6 +217,13 @@ bool ProcessorEntity::RecordLocalDeletion() {
   metadata_.set_is_deleted(true);
   metadata_.clear_specifics_hash();
   metadata_.clear_possibly_trimmed_base_specifics();
+
+  if (base::FeatureList::IsEnabled(
+          syncer::kSyncEntityMetadataRecordDeletedByVersionOnLocalDeletion)) {
+    metadata_.set_deleted_by_version(
+        std::string(version_info::GetVersionNumber()));
+  }
+
   // Clear any cached pending commit data.
   commit_data_.reset();
   // Return true if server might know about this entity.
@@ -271,8 +273,10 @@ void ProcessorEntity::ReceiveCommitResponse(const CommitResponseData& data,
   DCHECK_GT(data.sequence_number, metadata_.acked_sequence_number());
   // Version is not valid for commit only types, as it's stripped before being
   // sent to the server, so it cannot behave correctly.
-  DCHECK(commit_only || data.response_version > metadata_.server_version())
-      << data.response_version << " vs " << metadata_.server_version();
+  // Ignore the response if the server responds with an unexpected version.
+  if (!commit_only && data.response_version <= metadata_.server_version()) {
+    return;
+  }
 
   // The server can assign us a new ID in a commit response.
   metadata_.set_server_id(data.id);

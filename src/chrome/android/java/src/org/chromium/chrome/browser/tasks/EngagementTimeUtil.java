@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.chrome.browser.tasks;
 
 import android.os.SystemClock;
 
-/**
- * Utility class to provide engagement time helper methods.
- */
+/** Utility class to provide engagement time helper methods. */
 public class EngagementTimeUtil {
     // This is the point at which a user has most likely started a clobber or "focused" the tab.
     private static final long TAB_CLOBBER_THRESHOLD_MS = 10000L;

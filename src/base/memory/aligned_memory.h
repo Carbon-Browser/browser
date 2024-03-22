@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,8 @@
 // A runtime sized aligned allocation can be created:
 //
 //   float* my_array = static_cast<float*>(AlignedAlloc(size, alignment));
+//   CHECK(reinterpret_cast<uintptr_t>(my_array) % alignment == 0);
+//   memset(my_array, 0, size);  // fills entire object.
 //
 //   // ... later, to release the memory:
 //   AlignedFree(my_array);

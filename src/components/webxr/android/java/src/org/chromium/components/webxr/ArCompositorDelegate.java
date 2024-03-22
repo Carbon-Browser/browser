@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,11 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 
 /**
- * Interface used by ArImmersiveOverlay to communicate with the underlying
+ * Interface used by ArOverlayDelegate to communicate with the underlying
  * compositor. Used to implement WebXR's DOM Overlay mode correctly.
  */
 public interface ArCompositorDelegate {
-    /**
-     * Enables/disables immersive AR mode in the compositor.
-     */
+    /** Enables/disables immersive AR mode in the compositor. */
     void setOverlayImmersiveArMode(boolean enabled, boolean domSurfaceNeedsConfiguring);
 
     /**

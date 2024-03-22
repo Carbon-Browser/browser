@@ -1,11 +1,11 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Utilies and constants specific to Chromium C++ code.
 """
 
-from code import Code
+from code_util import Code
 from datetime import datetime
 from model import PropertyType
 import os
@@ -13,7 +13,7 @@ import posixpath
 import re
 
 CHROMIUM_LICENSE = (
-"""// Copyright %d The Chromium Authors. All rights reserved.
+"""// Copyright %d The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.""" % datetime.now().year
 )
@@ -94,16 +94,35 @@ def GetValueType(type_):
   if type_.property_type == PropertyType.FUNCTION:
     if type_.is_serializable_function:
       return 'base::Value::Type::STRING'
-    return 'base::Value::Type::DICTIONARY'
+    return 'base::Value::Type::DICT'
   if type_.property_type == PropertyType.INTEGER:
     return 'base::Value::Type::INTEGER'
   if type_.property_type == PropertyType.OBJECT:
-    return 'base::Value::Type::DICTIONARY'
+    return 'base::Value::Type::DICT'
   if type_.property_type == PropertyType.STRING:
     return 'base::Value::Type::STRING'
 
   raise ValueError('Invalid type: %s' % type_.name)
 
+def ShouldUseStdOptional(type_):
+  """Called to validate whether or not an optional value should be represented
+  with std::optional. This function is a temporary utility, while optional
+  fields are gradually migrated away from using std::unique_ptr.
+  """
+
+  if type_.property_type in (PropertyType.ANY,
+                             PropertyType.ARRAY,
+                             PropertyType.BINARY,
+                             PropertyType.BOOLEAN,
+                             PropertyType.CHOICES,
+                             PropertyType.DOUBLE,
+                             PropertyType.FUNCTION,
+                             PropertyType.INTEGER,
+                             PropertyType.OBJECT,
+                             PropertyType.STRING):
+    return True
+
+  return False
 
 def GetParameterDeclaration(param, type_):
   """Gets a parameter declaration of a given model.Property and its C++
@@ -134,6 +153,7 @@ def GenerateIfndefName(file_path):
   return (('%s__' % file_path).upper()
       .replace('\\', '_')
       .replace('/', '_')
+      .replace('-', '_')
       .replace('.', '_'))
 
 

@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_COMPONENT_UPDATER_TIMER_UPDATE_SCHEDULER_H_
 #define COMPONENTS_COMPONENT_UPDATER_TIMER_UPDATE_SCHEDULER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/component_updater/timer.h"
 #include "components/component_updater/update_scheduler.h"
 

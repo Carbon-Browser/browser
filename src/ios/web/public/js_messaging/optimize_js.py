@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -21,7 +21,7 @@ def create_rollup_config(config_out_file, rollup_root_dir, path_mappings):
   """Generates a rollup config file to configure and use the path resolver
   plugin which enforces import path format."""
   plugin_path = os.path.join(os.path.abspath(_HERE_PATH),
-      'rollup_plugin_src_path_resolver.js')
+      'rollup_plugin_src_path_resolver.mjs')
 
   path_mappings_json = json.dumps(path_mappings, separators=(',', ':'))
 
@@ -65,7 +65,7 @@ def optimize_js(primary_script,
   with tempfile.TemporaryDirectory(dir = output_script_dir) as tmp_out_dir:
 
     rollup_config_file = \
-        os.path.join(tmp_out_dir, 'rollup.config.js')
+        os.path.join(tmp_out_dir, 'rollup.config.mjs')
     create_rollup_config(
         rollup_config_file,
         os.path.abspath(_SRC_PATH),

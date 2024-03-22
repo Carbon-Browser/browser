@@ -1,13 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/declarative_content/chrome_content_rules_registry.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -166,17 +165,23 @@ ChromeContentRulesRegistry::CreateRule(
     const api::events::Rule& api_rule,
     std::string* error) {
   std::vector<std::unique_ptr<const ContentCondition>> conditions;
-  for (const std::unique_ptr<base::Value>& value : api_rule.conditions) {
+  for (const base::Value& value : api_rule.conditions) {
     conditions.push_back(
-        CreateContentCondition(extension, predicate_factories, *value, error));
+        CreateContentCondition(extension, predicate_factories, value, error));
     if (!error->empty())
       return nullptr;
   }
 
   std::vector<std::unique_ptr<const ContentAction>> actions;
-  for (const std::unique_ptr<base::Value>& value : api_rule.actions) {
+  for (const base::Value& value : api_rule.actions) {
+    // TODO(crbug.com/1314149): Migrate api_rule to use base::Value::Dict to
+    // avoid conversion.
+    if (!value.is_dict()) {
+      return nullptr;
+    }
+
     actions.push_back(ContentAction::Create(browser_context(), extension,
-                                            *value, error));
+                                            value.GetDict(), error));
     if (!error->empty())
       return nullptr;
   }

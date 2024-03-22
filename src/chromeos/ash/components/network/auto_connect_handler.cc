@@ -1,30 +1,30 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/auto_connect_handler.h"
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/network/device_state.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "dbus/object_path.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -135,7 +135,7 @@ void AutoConnectHandler::Init(
 
   network_state_handler_ = network_state_handler;
   if (network_state_handler_) {
-    network_state_handler_observer_.Observe(network_state_handler_);
+    network_state_handler_observer_.Observe(network_state_handler_.get());
   }
 
   managed_configuration_handler_ = managed_network_configuration_handler;
@@ -279,7 +279,7 @@ void AutoConnectHandler::CheckBestConnection() {
 
   // Request ScanAndConnectToBestServices after processing any pending DBus
   // calls.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&AutoConnectHandler::CallShillScanAndConnectToBestServices,
                      weak_ptr_factory_.GetWeakPtr()));
@@ -363,20 +363,16 @@ void AutoConnectHandler::DisconnectAndRemoveConfigOrDisableAutoConnect(
       // Disconnect blocked network.
       if (network->IsConnectingOrConnected())
         DisconnectNetwork(network);
-      if (!network->IsInProfile())
-        continue;
 
-      // Remove configuration if it's in profile and it's either an eSIM
-      // Cellular network or WiFi network with
-      // AllowOnlyPolicyWiFiToConnectIfAvailable
-      const bool isESim = is_cellular_type && !network->eid().empty();
-      const bool isPSim = is_cellular_type && network->eid().empty();
-      if (isESim || (!is_cellular_type && !available_only)) {
-        RemoveNetworkConfigurationForNetwork(network->path());
-      } else if (isPSim) {
-        // Only disable auto-connect for pSIM cellular networks.
+      // Disable auto connect property for all unmanaged cellular networks.
+      // Otherwise if only removes its network configuration, turn off and on
+      // cellular device will enforce modem connect to unmanaged cellular
+      // network.
+      if (is_cellular_type) {
         DisableAutoconnectForNetwork(network->path(),
                                      ::onc::network_config::kCellular);
+      } else if (network->IsInProfile() && !available_only) {
+        RemoveNetworkConfigurationForNetwork(network->path());
       }
     } else if (only_managed_autoconnect) {
       // Disconnect & disable auto-connect.
@@ -414,7 +410,7 @@ void AutoConnectHandler::DisableAutoconnectForNetwork(
     const std::string& network_type) {
   NET_LOG(EVENT) << "Disable auto-connect forced by policy: "
                  << NetworkPathId(service_path);
-  base::Value properties(base::Value::Type::DICTIONARY);
+  base::Value::Dict properties;
 
   std::string autoconnect_path;
   if (network_type == ::onc::network_config::kWiFi) {
@@ -426,7 +422,7 @@ void AutoConnectHandler::DisableAutoconnectForNetwork(
   } else {
     NOTREACHED();
   }
-  properties.SetBoolPath(autoconnect_path, false);
+  properties.SetByDottedPath(autoconnect_path, false);
   managed_configuration_handler_->SetProperties(
       service_path, properties, base::DoNothing(),
       base::BindOnce(&SetPropertiesErrorCallback));
@@ -444,4 +440,4 @@ void AutoConnectHandler::CallShillScanAndConnectToBestServices() {
                      network_handler::ErrorCallback()));
 }
 
-}  // namespace chromeos
+}  // namespace ash

@@ -1,21 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/safety_check/safety_check_utils.h"
 
-#include "base/time/time.h"
-#include "ios/chrome/browser/ui/settings/safety_check/safety_check_constants.h"
-#include "ios/chrome/browser/upgrade/upgrade_utils.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/time/time.h"
+#import "ios/chrome/browser/ui/settings/safety_check/safety_check_constants.h"
+#import "ios/chrome/browser/upgrade/model/upgrade_utils.h"
 
 bool PreviousSafetyCheckIssueFound() {
   // Verify if the last safety check found issues.
   NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
-  base::Time lastCompletedCheck = base::Time::FromDoubleT(
+  base::Time lastCompletedCheck = base::Time::FromSecondsSinceUnixEpoch(
       [defaults doubleForKey:kTimestampOfLastIssueFoundKey]);
   return lastCompletedCheck != base::Time();
 }

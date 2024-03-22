@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -151,7 +151,7 @@
               "onclick": {
                 "type": "function",
                 "optional": true,
-                "description": "A function that is called back when the menu item is clicked. Event pages cannot use this; instead, they should register a listener for $(ref:contextMenus.onClicked).",
+                "description": "A function that is called back when the menu item is clicked. This is not available inside of a service worker; instead, they should register a listener for $(ref:contextMenus.onClicked).",
                 "parameters": [
                   {
                     "name": "info",

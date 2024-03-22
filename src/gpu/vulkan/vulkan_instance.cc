@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include <vector>
 
-#include "base/containers/flat_set.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "build/build_config.h"
@@ -22,7 +21,7 @@ namespace gpu {
 namespace {
 
 #if DCHECK_IS_ON()
-const char* kSkippedErrors[] = {
+constexpr const char* kSkippedErrors[] = {
     // http://anglebug.com/4583
     "VUID-VkGraphicsPipelineCreateInfo-blendEnable-02023",
 };
@@ -36,12 +35,13 @@ VulkanErrorCallback(VkDebugReportFlagsEXT flags,
                     const char* layer_prefix,
                     const char* message,
                     void* user_data) {
-  static base::flat_set<const char*> hitted_errors;
-  for (const char* error : kSkippedErrors) {
-    if (strstr(message, error) != nullptr) {
-      if (hitted_errors.find(error) != hitted_errors.end())
+  static bool encountered_errors[std::size(kSkippedErrors)];
+  for (size_t i = 0; i < std::size(kSkippedErrors); ++i) {
+    if (strstr(message, kSkippedErrors[i])) {
+      if (encountered_errors[i]) {
         return VK_FALSE;
-      hitted_errors.insert(error);
+      }
+      encountered_errors[i] = true;
     }
   }
   LOG(ERROR) << message;
@@ -78,7 +78,7 @@ bool VulkanInstance::Initialize(
     const std::vector<const char*>& required_layers) {
   if (!BindUnassignedFunctionPointers(vulkan_loader_library_path))
     return false;
-  return InitializeInstace(required_extensions, required_layers);
+  return InitializeInstance(required_extensions, required_layers);
 }
 
 bool VulkanInstance::BindUnassignedFunctionPointers(
@@ -112,7 +112,7 @@ bool VulkanInstance::BindUnassignedFunctionPointers(
   return true;
 }
 
-bool VulkanInstance::InitializeInstace(
+bool VulkanInstance::InitializeInstance(
     const std::vector<const char*>& required_extensions,
     const std::vector<const char*>& required_layers) {
   if (is_from_angle_)

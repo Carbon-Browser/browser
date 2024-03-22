@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
-#include "third_party/cros_system_api/constants/vm_tools.h"
+#include "chromeos/ui/base/window_properties.h"
+#include "ui/aura/window.h"
 
 namespace crostini {
 
@@ -27,8 +28,8 @@ void CrostiniSecurityDelegate::Build(
 
 CrostiniSecurityDelegate::~CrostiniSecurityDelegate() = default;
 
-std::string CrostiniSecurityDelegate::GetSecurityContext() const {
-  return vm_tools::kConciergeSecurityContext;
+bool CrostiniSecurityDelegate::CanLockPointer(aura::Window* window) const {
+  return window->GetProperty(chromeos::kUseOverviewToExitPointerLock);
 }
 
 }  // namespace crostini

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,7 @@ import org.chromium.content.R;
 
 import java.util.List;
 
-/**
- * Date/time suggestion adapter for the suggestion dialog.
- */
+/** Date/time suggestion adapter for the suggestion dialog. */
 class DateTimeSuggestionListAdapter extends ArrayAdapter<DateTimeSuggestion> {
     private final Context mContext;
 

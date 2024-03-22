@@ -1,53 +1,25 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.subscriptions;
 
-import androidx.annotation.VisibleForTesting;
-
+import org.chromium.base.ResettersForTesting;
+import org.chromium.chrome.browser.commerce.ShoppingServiceFactory;
 import org.chromium.chrome.browser.price_tracking.PriceDropNotificationManager;
 import org.chromium.chrome.browser.price_tracking.PriceDropNotificationManagerFactory;
 import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.browser.profiles.ProfileManager;
-import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
+import org.chromium.chrome.browser.profiles.ProfileKeyedMap;
 
-import java.util.HashMap;
-import java.util.Map;
-
-/**
- * {@link CommerceSubscriptionsService} cached by {@link Profile}.
- */
+/** {@link CommerceSubscriptionsService} cached by {@link Profile}. */
 public class CommerceSubscriptionsServiceFactory {
-    @VisibleForTesting
-    protected static final Map<Profile, CommerceSubscriptionsService>
-            sProfileToSubscriptionsService = new HashMap<>();
-    private static ProfileManager.Observer sProfileManagerObserver;
+    private static ProfileKeyedMap<CommerceSubscriptionsService> sProfileToSubscriptionsService;
     private static CommerceSubscriptionsService sSubscriptionsServiceForTesting;
 
     /** Creates new instance. */
     public CommerceSubscriptionsServiceFactory() {
-        if (sProfileManagerObserver == null) {
-            sProfileManagerObserver = new ProfileManager.Observer() {
-                @Override
-                public void onProfileAdded(Profile profile) {}
-
-                @Override
-                public void onProfileDestroyed(Profile destroyedProfile) {
-                    CommerceSubscriptionsService serviceToDestroy =
-                            sProfileToSubscriptionsService.get(destroyedProfile);
-                    if (serviceToDestroy != null) {
-                        serviceToDestroy.destroy();
-                        sProfileToSubscriptionsService.remove(destroyedProfile);
-                    }
-
-                    if (sProfileToSubscriptionsService.isEmpty()) {
-                        ProfileManager.removeObserver(sProfileManagerObserver);
-                        sProfileManagerObserver = null;
-                    }
-                }
-            };
-            ProfileManager.addObserver(sProfileManagerObserver);
+        if (sProfileToSubscriptionsService == null) {
+            sProfileToSubscriptionsService = ProfileKeyedMap.createMapOfDestroyables();
         }
     }
 
@@ -62,23 +34,21 @@ public class CommerceSubscriptionsServiceFactory {
     public CommerceSubscriptionsService getForLastUsedProfile() {
         if (sSubscriptionsServiceForTesting != null) return sSubscriptionsServiceForTesting;
         Profile profile = Profile.getLastUsedRegularProfile();
-        CommerceSubscriptionsService service = sProfileToSubscriptionsService.get(profile);
-        if (service == null) {
-            PriceDropNotificationManager priceDropNotificationManager =
-                    PriceDropNotificationManagerFactory.create();
-            service = new CommerceSubscriptionsService(
-                    new SubscriptionsManagerImpl(profile, priceDropNotificationManager),
-                    IdentityServicesProvider.get().getIdentityManager(profile),
-                    priceDropNotificationManager);
-            sProfileToSubscriptionsService.put(profile, service);
-        }
-        return service;
+        return sProfileToSubscriptionsService.getForProfile(
+                profile,
+                () -> {
+                    PriceDropNotificationManager priceDropNotificationManager =
+                            PriceDropNotificationManagerFactory.create();
+                    return new CommerceSubscriptionsService(
+                            ShoppingServiceFactory.getForProfile(profile),
+                            priceDropNotificationManager);
+                });
     }
 
     /** Sets the CommerceSubscriptionsService for testing. */
-    @VisibleForTesting
     public static void setSubscriptionsServiceForTesting(
             CommerceSubscriptionsService subscriptionsService) {
         sSubscriptionsServiceForTesting = subscriptionsService;
+        ResettersForTesting.register(() -> sSubscriptionsServiceForTesting = null);
     }
 }

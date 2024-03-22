@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,7 +8,19 @@ See http://dev.chromium.org/developers/how-tos/depottools/presubmit-scripts
 for more details on the presubmit API built into depot_tools.
 """
 
-USE_PYTHON3 = True
+import re
+
+def IsComponentsAutofillFile(f, name_suffix):
+  # The exact path can change. Only check the containing folder.
+  return (f.LocalPath().startswith('components/autofill/') and
+          f.LocalPath().endswith(name_suffix))
+
+def AnyAffectedFileMatches(input_api, matcher):
+  return any(matcher(f) for f in input_api.change.AffectedTestableFiles())
+
+def IsComponentsAutofillFileAffected(input_api, name_suffix):
+  return AnyAffectedFileMatches(
+      input_api, lambda f: IsComponentsAutofillFile(f, name_suffix))
 
 def _CheckNoBaseTimeCalls(input_api, output_api):
   """Checks that no files call base::Time::Now() or base::TimeTicks::Now()."""
@@ -60,7 +72,7 @@ def _CheckFeatureNames(input_api, output_api):
   """Checks that no features are enabled."""
 
   pattern = input_api.re.compile(
-          r'\bbase::Feature\s+k(\w*)\s*{\s*"(\w*)"',
+          r'\bBASE_FEATURE\s*\(\s*k(\w*)\s*,\s*"(\w*)"',
           input_api.re.MULTILINE)
   warnings = []
 
@@ -71,8 +83,7 @@ def _CheckFeatureNames(input_api, output_api):
     return False
 
   for f in input_api.AffectedSourceFiles(input_api.FilterSourceFile):
-    if (f.LocalPath().startswith('components/autofill/') and
-        f.LocalPath().endswith('features.cc')):
+    if IsComponentsAutofillFile(f, 'features.cc'):
       contents = input_api.ReadFile(f)
       mismatches = [(constant, feature)
               for (constant, feature) in pattern.findall(contents)
@@ -93,24 +104,72 @@ def _CheckWebViewExposedExperiments(input_api, output_api):
   _PRODUCTION_SUPPORT_FILE = ('android_webview/java/src/org/chromium/' +
       'android_webview/common/ProductionSupportedFlagList.java')
 
-  def is_autofill_features_file(f):
-    return (f.LocalPath().startswith('components/autofill/') and
-        f.LocalPath().endswith('features.cc'))
-
-  def is_webview_features_file(f):
-    return f.LocalPath() == _PRODUCTION_SUPPORT_FILE
-
-  def any_file_matches(matcher):
-    return any(matcher(f) for f in input_api.change.AffectedTestableFiles())
-
   warnings = []
-  if (any_file_matches(is_autofill_features_file)
-      and not any_file_matches(is_webview_features_file)):
-    warnings += [ output_api.PresubmitPromptWarning(
-        'You may need to modify {} if your feature affects WebView.'
-            .format(_PRODUCTION_SUPPORT_FILE)) ]
+  if (IsComponentsAutofillFileAffected(input_api, 'features.cc') and
+      not AnyAffectedFileMatches(
+          input_api, lambda f: f.LocalPath() == _PRODUCTION_SUPPORT_FILE)):
+    warnings += [
+        output_api.PresubmitPromptWarning(
+            (
+                'You may need to modify {} instructions if your feature affects'
+                ' WebView.'
+            ).format(_PRODUCTION_SUPPORT_FILE)
+        )
+    ]
 
   return warnings
+
+def _CheckModificationOfLegacyRegexPatterns(input_api, output_api):
+  """Reminds to update internal regex patterns when legacy ones are modified."""
+
+  if IsComponentsAutofillFileAffected(input_api, "legacy_regex_patterns.json"):
+    return [
+        output_api.PresubmitPromptWarning(
+            "You may need to modify the parsing patterns in src-internal. " +
+            "See go/autofill-internal-parsing-patterns for more details. " +
+            "Ideally, the legacy patterns should not be modified.")
+    ]
+
+  return []
+
+def _CheckModificationOfFormAutofillUtil(input_api, output_api):
+  """Reminds to keep form_autofill_util.cc and the iOS counterpart in sync."""
+
+  if (IsComponentsAutofillFileAffected(input_api, "fill.js") !=
+      IsComponentsAutofillFileAffected(input_api, "form_autofill_util.cc")):
+    return [
+        output_api.PresubmitPromptWarning(
+            'Form extraction/label inference has a separate iOS ' +
+            'implementation in components/autofill/ios/form_util/resources/' +
+            'fill.js. Try to keep it in sync with form_autofill_util.cc.')
+    ]
+
+  return []
+
+# Checks that UniqueRendererForm(Control)Id() is not used and suggests to use
+# form_util::Get(Form|Field)RendererId() instead.
+def _CheckNoUsageOfUniqueRendererId(
+        input_api, output_api):
+  autofill_files_pattern = re.compile(
+      r'(autofill|password_manager).*\.(mm|cc|h)')
+  special_file = re.compile(r'form_autofill_util.cc')
+  concerned_files = [(f, input_api.ReadFile(f))
+                     for f in input_api.AffectedFiles(include_deletes=False)
+                     if autofill_files_pattern.search(f.LocalPath())]
+
+  warning_files = []
+  unique_renderer_id_call = re.compile(
+      r'\.UniqueRendererForm(Control)?Id', re.MULTILINE)
+  for autofill_file, file_content in concerned_files:
+    allowed_matches = 2 if special_file.search(autofill_file.LocalPath()) else 0
+    matches = re.finditer(unique_renderer_id_call, file_content)
+    if (len(list(matches)) > allowed_matches):
+      warning_files.append(autofill_file)
+
+  return [output_api.PresubmitError(
+      'Do not use (Form|Field)RendererId(*.UniqueRendererForm(Control)?Id()). '
+      'Consider using form_util::Get(Form|Field)RendererId(*) instead.',
+      warning_files)] if len(warning_files) else []
 
 def _CommonChecks(input_api, output_api):
   """Checks common to both upload and commit."""
@@ -119,6 +178,9 @@ def _CommonChecks(input_api, output_api):
   results.extend(_CheckNoServerFieldTypeCasts(input_api, output_api))
   results.extend(_CheckFeatureNames(input_api, output_api))
   results.extend(_CheckWebViewExposedExperiments(input_api, output_api))
+  results.extend(_CheckModificationOfLegacyRegexPatterns(input_api, output_api))
+  results.extend(_CheckModificationOfFormAutofillUtil(input_api, output_api))
+  results.extend(_CheckNoUsageOfUniqueRendererId(input_api, output_api))
   return results
 
 def CheckChangeOnUpload(input_api, output_api):

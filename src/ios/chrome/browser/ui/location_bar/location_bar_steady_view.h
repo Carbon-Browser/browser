@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,6 +47,9 @@
 // Toggles `enabled` state of the trailing button and updates accessibility
 // appropriately.
 - (void)enableTrailingButton:(BOOL)enabled;
+
+// Sets whether the contents are centered or aligned to the leading side.
+- (void)setCentered:(BOOL)centered;
 
 // The tappable button representing the location bar.
 @property(nonatomic, strong) UIButton* locationButton;

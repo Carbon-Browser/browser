@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,11 +18,13 @@ import org.chromium.chrome.browser.ui.searchactivityutils.SearchActivityPreferen
 import org.chromium.components.browser_ui.styles.ChromeColors;
 import org.chromium.components.metrics.OmniboxEventProtos.OmniboxEventProto.PageClassification;
 import org.chromium.components.security_state.ConnectionSecurityLevel;
+import org.chromium.url.GURL;
 
 class SearchBoxDataProvider implements LocationBarDataProvider {
     private final @ColorInt int mPrimaryColor;
     private boolean mIsFromQuickActionSearchWidget;
     private Tab mTab;
+    private GURL mGurl;
 
     /**
      * @param context The {@link Context} for accessing colors.
@@ -35,6 +37,7 @@ class SearchBoxDataProvider implements LocationBarDataProvider {
 
     /**
      * Called when native library is loaded and a tab has been initialized.
+     *
      * @param tab The tab to use.
      */
     public void onNativeLibraryReady(Tab tab) {
@@ -99,8 +102,13 @@ class SearchBoxDataProvider implements LocationBarDataProvider {
     public void removeObserver(Observer observer) {}
 
     @Override
-    public String getCurrentUrl() {
-        return SearchActivityPreferencesManager.getCurrent().searchEngineUrl;
+    public GURL getCurrentGurl() {
+        if (mGurl == null) {
+            assert LibraryLoader.getInstance().isInitialized();
+            mGurl = new GURL(SearchActivityPreferencesManager.getCurrent().searchEngineUrl);
+        }
+
+        return mGurl;
     }
 
     @Override
@@ -114,7 +122,7 @@ class SearchBoxDataProvider implements LocationBarDataProvider {
     }
 
     @Override
-    public int getPageClassification(boolean isFocusedFromFakebox) {
+    public int getPageClassification(boolean isFocusedFromFakebox, boolean isPrefetch) {
         if (mIsFromQuickActionSearchWidget) {
             return PageClassification.ANDROID_SHORTCUTS_WIDGET_VALUE;
         } else {

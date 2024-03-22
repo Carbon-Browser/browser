@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/public/cpp/shelf_types.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/base_window.h"
 
 class AppWindowShelfItemController;
@@ -80,8 +81,8 @@ class AppWindowBase : public ui::BaseWindow {
 
  private:
   ash::ShelfID shelf_id_;
-  views::Widget* const widget_;
-  AppWindowShelfItemController* controller_ = nullptr;
+  const raw_ptr<views::Widget, ExperimentalAsh> widget_;
+  raw_ptr<AppWindowShelfItemController, ExperimentalAsh> controller_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_SHELF_APP_WINDOW_BASE_H_

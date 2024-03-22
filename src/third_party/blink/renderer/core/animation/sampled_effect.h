@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class SampledEffect final : public GarbageCollected<SampledEffect> {
     return interpolations_;
   }
 
-  KeyframeEffect* Effect() const { return effect_; }
+  KeyframeEffect* Effect() const { return effect_.Get(); }
   unsigned SequenceNumber() const { return sequence_number_; }
   KeyframeEffect::Priority GetPriority() const { return priority_; }
   bool WillNeverChange() const;

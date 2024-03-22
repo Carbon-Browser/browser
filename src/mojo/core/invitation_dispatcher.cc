@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ MojoResult InvitationDispatcher::Close() {
 }
 
 MojoResult InvitationDispatcher::AttachMessagePipe(
-    base::StringPiece name,
+    std::string_view name,
     ports::PortRef remote_peer_port) {
   base::AutoLock lock(lock_);
   auto result = attached_ports_.emplace(std::string(name), remote_peer_port);
@@ -43,7 +43,7 @@ MojoResult InvitationDispatcher::AttachMessagePipe(
 }
 
 MojoResult InvitationDispatcher::ExtractMessagePipe(
-    base::StringPiece name,
+    std::string_view name,
     MojoHandle* message_pipe_handle) {
   ports::PortRef remote_peer_port;
   {

@@ -1,14 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://os-settings/strings.m.js';
-import 'chrome://resources/cr_components/chromeos/cellular_setup/activation_code_page.m.js';
+import 'chrome://resources/ash/common/cellular_setup/activation_code_page.js';
 
+import {MojoInterfaceProviderImpl} from 'chrome://resources/ash/common/network/mojo_interface_provider.js';
+import {DeviceStateType, NetworkType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {eventToPromise, flushTasks, waitAfterNextRender} from 'chrome://test/test_util.js';
+import {FakeNetworkConfig} from 'chrome://webui-test/chromeos/fake_network_config_mojom.js';
+import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-import {assertTrue} from '../../../chai_assert.js';
+import {assertTrue} from '../../../chromeos/chai_assert.js';
 
 import {FakeBarcodeDetector, FakeImageCapture} from './fake_barcode_detector.js';
 import {FakeMediaDevices} from './fake_media_devices.js';
@@ -27,6 +31,8 @@ suite('CrComponentsActivationCodePageTest', function() {
 
   /** @type {function(Function, number)} */
   let intervalFunction = null;
+
+  let networkConfigRemote;
 
   function flushAsync() {
     flush();
@@ -48,19 +54,28 @@ suite('CrComponentsActivationCodePageTest', function() {
   function stopStreamFunction(stream) {}
 
   setup(async function() {
+    networkConfigRemote = new FakeNetworkConfig();
+    MojoInterfaceProviderImpl.getInstance().remote_ = networkConfigRemote;
+    loadTimeData.overrideValues({'isCellularCarrierLockEnabled': true});
+    networkConfigRemote.setDeviceStateForTest({
+      type: NetworkType.kCellular,
+      deviceState: DeviceStateType.kEnabled,
+      isCarrierLocked: true,
+    });
+    await flushAsync();
+
     activationCodePage = document.createElement('activation-code-page');
     await activationCodePage.setFakesForTesting(
         FakeBarcodeDetector, FakeImageCapture, setIntervalFunction,
         playVideoFunction, stopStreamFunction);
     document.body.appendChild(activationCodePage);
-    flush();
+    await flushAsync();
 
     mediaDevices = new FakeMediaDevices();
-    mediaDevices.addDevice();
     activationCodePage.setMediaDevices(mediaDevices);
-    mediaDevices.resolveEnumerateDevices();
-    await waitAfterNextRender(activationCodePage);
-    flush();
+    await flushAsync();
+
+    await addMediaDevice();
   });
 
   teardown(function() {
@@ -68,8 +83,48 @@ suite('CrComponentsActivationCodePageTest', function() {
     FakeBarcodeDetector.setShouldFail(false);
   });
 
-  test('UI states', async function() {
+  async function addMediaDevice() {
+    mediaDevices.addDevice();
     await flushAsync();
+
+    await resolveEnumeratedDevicesPromise();
+  }
+
+  async function resolveEnumeratedDevicesPromise() {
+    let resolver;
+    const enumerateDeviceResolvedPromise = new Promise((resolve, reject) => {
+      resolver = resolve;
+    });
+    mediaDevices.resolveEnumerateDevices(function() {
+      resolver();
+    });
+    await enumerateDeviceResolvedPromise;
+  }
+
+  test('Page description', async function () {
+    const description = activationCodePage.$$('#description');
+    assertTrue(!!description);
+
+    // Mock camera on
+    activationCodePage.showNoProfilesFound = true;
+    assertEquals(description.innerText.trim(),
+      loadTimeData.getString('scanQRCodeNoProfilesFound'));
+    activationCodePage.showNoProfilesFound = false;
+    assertEquals(description.innerText.trim(),
+      loadTimeData.getString('scanQRCode'));
+
+    // Clearing devices to test without camera
+    mediaDevices.removeDevice();
+    await resolveEnumeratedDevicesPromise();
+    activationCodePage.showNoProfilesFound = true;
+    assertEquals(description.innerText.trim(),
+      loadTimeData.getString('enterActivationCodeNoProfilesFound'));
+    activationCodePage.showNoProfilesFound = false;
+    assertEquals(description.innerText.trim(),
+      loadTimeData.getString('enterActivationCode'));
+  });
+
+  test('UI states', async function() {
     let qrCodeDetectorContainer = activationCodePage.$$('#esimQrCodeDetection');
     const activationCodeContainer =
         activationCodePage.$$('#activationCodeContainer');
@@ -108,7 +163,7 @@ suite('CrComponentsActivationCodePageTest', function() {
     // Click the start scanning button.
     startScanningButton.click();
     mediaDevices.resolveGetUserMedia();
-    await waitAfterNextRender(activationCodePage);
+    await flushAsync();
 
     // The video should be visible and start scanning UI hidden.
     assertFalse(video.hidden);
@@ -154,8 +209,7 @@ suite('CrComponentsActivationCodePageTest', function() {
 
     // Mock, no media devices present
     mediaDevices.removeDevice();
-    mediaDevices.resolveEnumerateDevices();
-    await waitAfterNextRender(activationCodePage);
+    await resolveEnumeratedDevicesPromise();
 
     // When no camera device is present qrCodeDetector container should
     // not be shown
@@ -165,7 +219,6 @@ suite('CrComponentsActivationCodePageTest', function() {
   });
 
   test('Switch camera button states', async function() {
-    await flushAsync();
     const video = activationCodePage.$$('#video');
     const startScanningButton = activationCodePage.$$('#startScanningButton');
     const switchCameraButton = activationCodePage.$$('#switchCameraButton');
@@ -181,7 +234,7 @@ suite('CrComponentsActivationCodePageTest', function() {
     // Click the start scanning button.
     startScanningButton.click();
     mediaDevices.resolveGetUserMedia();
-    await waitAfterNextRender(activationCodePage);
+    await flushAsync();
 
     // The video should be visible and switch camera button hidden.
     assertFalse(video.hidden);
@@ -189,9 +242,7 @@ suite('CrComponentsActivationCodePageTest', function() {
     assertTrue(mediaDevices.isStreamingUserFacingCamera);
 
     // Add a new video device.
-    mediaDevices.addDevice();
-    mediaDevices.resolveEnumerateDevices();
-    await waitAfterNextRender(activationCodePage);
+    await addMediaDevice();
 
     // The switch camera button should now be visible.
     assertFalse(switchCameraButton.hidden);
@@ -199,7 +250,7 @@ suite('CrComponentsActivationCodePageTest', function() {
 
     switchCameraButton.click();
     mediaDevices.resolveGetUserMedia();
-    await waitAfterNextRender(activationCodePage);
+    await flushAsync();
 
     // The second device should now be streaming.
     assertFalse(mediaDevices.isStreamingUserFacingCamera);
@@ -208,7 +259,7 @@ suite('CrComponentsActivationCodePageTest', function() {
     // Switch back.
     switchCameraButton.click();
     mediaDevices.resolveGetUserMedia();
-    await waitAfterNextRender(activationCodePage);
+    await flushAsync();
 
     // The first device should be streaming again.
     assertTrue(mediaDevices.isStreamingUserFacingCamera);
@@ -217,15 +268,14 @@ suite('CrComponentsActivationCodePageTest', function() {
     // Switch to the second device again.
     switchCameraButton.click();
     mediaDevices.resolveGetUserMedia();
-    await waitAfterNextRender(activationCodePage);
+    await flushAsync();
 
     assertFalse(mediaDevices.isStreamingUserFacingCamera);
     assertFalse(switchCameraButton.hidden);
 
     // Disconnect the second device.
     mediaDevices.removeDevice();
-    mediaDevices.resolveEnumerateDevices();
-    await waitAfterNextRender(activationCodePage);
+    await resolveEnumeratedDevicesPromise();
 
     // The first device should now be streaming and the switch camera button
     // hidden.
@@ -240,7 +290,6 @@ suite('CrComponentsActivationCodePageTest', function() {
   });
 
   test('UI is disabled when showBusy property is set', async function() {
-    await flushAsync();
     const startScanningButton = activationCodePage.$$('#startScanningButton');
     const switchCameraButton = activationCodePage.$$('#switchCameraButton');
     const tryAgainButton = activationCodePage.$$('#tryAgainButton');
@@ -267,7 +316,6 @@ suite('CrComponentsActivationCodePageTest', function() {
   test(
       'Do not show qrContainer when BarcodeDetector is not ready',
       async function() {
-        await flushAsync();
         let qrCodeDetectorContainer =
             activationCodePage.$$('#esimQrCodeDetection');
 
@@ -290,7 +338,6 @@ suite('CrComponentsActivationCodePageTest', function() {
       });
 
   test('Event is fired when enter is pressed on input', async function() {
-    await flushAsync();
     let eventFired = false;
     activationCodePage.addEventListener('forward-navigation-requested', () => {
       eventFired = true;
@@ -305,7 +352,6 @@ suite('CrComponentsActivationCodePageTest', function() {
   test(
       'Install error after manual entry should show error on input',
       async function() {
-        await flushAsync();
         const input = activationCodePage.$$('#activationCode');
         const startScanningContainer =
             activationCodePage.$$('#startScanningContainer');
@@ -328,7 +374,6 @@ suite('CrComponentsActivationCodePageTest', function() {
   test(
       'Install error after scanning should show error on camera',
       async function() {
-        await flushAsync();
         const input = activationCodePage.$$('#activationCode');
         const startScanningContainer =
             activationCodePage.$$('#startScanningContainer');
@@ -383,7 +428,6 @@ suite('CrComponentsActivationCodePageTest', function() {
       });
 
   test('Tabbing does not close video stream', async function() {
-    await flushAsync();
     const startScanningButton = activationCodePage.$$('#startScanningButton');
     const getVideo = () => activationCodePage.$$('#video');
     const input = activationCodePage.$$('#activationCode');
@@ -415,7 +459,6 @@ suite('CrComponentsActivationCodePageTest', function() {
 
   test(
       'Clear qr code detection timeout when video is hidden', async function() {
-        await flushAsync();
         const startScanningButton =
             activationCodePage.$$('#startScanningButton');
         const getVideo = () => activationCodePage.$$('#video');
@@ -440,7 +483,6 @@ suite('CrComponentsActivationCodePageTest', function() {
       });
 
   test('Input entered manually is validated', async function() {
-    await flushAsync();
     const input = activationCodePage.$$('#activationCode');
     assertTrue(!!input);
     assertFalse(input.invalid);
@@ -495,7 +537,6 @@ suite('CrComponentsActivationCodePageTest', function() {
   });
 
   test('Scanned code is validated', async function() {
-    await flushAsync();
     const input = activationCodePage.$$('#activationCode');
     const startScanningContainer =
         activationCodePage.$$('#startScanningContainer');
@@ -585,4 +626,35 @@ suite('CrComponentsActivationCodePageTest', function() {
         activationCodeUpdatedEvent.detail.activationCode,
         ACTIVATION_CODE_VALID);
   });
+
+  test('check carrier lock warning', async function() {
+    assertTrue(!!activationCodePage.$$('#carrierLockWarningContainer'));
+  });
+
+  test(
+      'check carrier lock warning not displayed for consumer devices',
+      async function() {
+        networkConfigRemote.setDeviceStateForTest({
+          type: NetworkType.kCellular,
+          deviceState: DeviceStateType.kEnabled,
+          isCarrierLocked: false,
+        });
+        await flushAsync();
+        const page = document.createElement('activation-code-page');
+        assertFalse(!!page.$$('#carrierLockWarningContainer'));
+      });
+
+  test(
+      'check carrier lock warning not displayed with feature flag disabled',
+      async function() {
+        loadTimeData.overrideValues({'isCellularCarrierLockEnabled': false});
+        networkConfigRemote.setDeviceStateForTest({
+          type: NetworkType.kCellular,
+          deviceState: DeviceStateType.kEnabled,
+          isCarrierLocked: true,
+        });
+        await flushAsync();
+        const page = document.createElement('activation-code-page');
+        assertFalse(!!page.$$('#carrierLockWarningContainer'));
+      });
 });

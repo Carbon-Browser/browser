@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PAINT_PREVIEW_PLAYER_BITMAP_REQUEST_H_
 #define COMPONENTS_PAINT_PREVIEW_PLAYER_BITMAP_REQUEST_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/unguessable_token.h"
 #include "components/services/paint_preview_compositor/public/mojom/paint_preview_compositor.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ class SessionRestoreJavaScriptFeature : public base::SupportsUserData::Data,
                                         public JavaScriptFeature {
  public:
   // Returns the SessionRestoreJavaScriptFeature associated with
-  // |browser_state|, creating one if necessary. |browser_state| must not be
+  // `browser_state`, creating one if necessary. `browser_state` must not be
   // null.
   static SessionRestoreJavaScriptFeature* FromBrowserState(
       BrowserState* browser_state);
@@ -45,7 +45,7 @@ class SessionRestoreJavaScriptFeature : public base::SupportsUserData::Data,
 
   // This feature uses ScopedWKScriptMessageHandler directly instead of the
   // message handling built into JavaScriptFeature because the WKWebView is used
-  // to message the WKWebView directly since windowID is not yet setup during
+  // to message the WKWebView directly since WebFrames are not yet setup during
   // session restoration. (The WKWebView is intentionally hidden from
   // JavaScriptFeature::ScriptMessageReceived).
   std::unique_ptr<ScopedWKScriptMessageHandler> session_restore_handler_;

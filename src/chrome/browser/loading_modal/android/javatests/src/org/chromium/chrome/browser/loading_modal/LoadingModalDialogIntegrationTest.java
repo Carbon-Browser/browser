@@ -1,11 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.loading_modal;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.assertThat;
 
 import static org.chromium.content_public.browser.test.util.TestThreadUtils.runOnUiThreadBlocking;
 import static org.chromium.content_public.browser.test.util.TestThreadUtils.runOnUiThreadBlockingNoException;
@@ -18,13 +19,10 @@ import android.view.View;
 import androidx.test.filters.MediumTest;
 
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.supplier.ObservableSupplier;
@@ -34,7 +32,6 @@ import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.chrome.browser.loading_modal.LoadingModalDialogCoordinator.State;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogManagerObserver;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -50,9 +47,6 @@ public class LoadingModalDialogIntegrationTest {
     @ClassRule
     public static BaseActivityTestRule<BlankUiTestActivity> sActivityTestRule =
             new BaseActivityTestRule<>(BlankUiTestActivity.class);
-
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
 
     private static BlankUiTestActivity sActivity;
 
@@ -78,6 +72,7 @@ public class LoadingModalDialogIntegrationTest {
             return mDialogDismissedCallbackHelper;
         }
     }
+
     private TestDialogManagerObserver mObserver = new TestDialogManagerObserver();
 
     @BeforeClass
@@ -85,17 +80,11 @@ public class LoadingModalDialogIntegrationTest {
         sActivityTestRule.launchActivity(null);
         sActivity = runOnUiThreadBlockingNoException(() -> sActivityTestRule.getActivity());
         Looper.prepare();
-
-        ObservableSupplierImpl.setIgnoreThreadChecksForTesting(true);
-    }
-
-    @AfterClass
-    public static void teardownSuite() {
-        ObservableSupplierImpl.setIgnoreThreadChecksForTesting(false);
     }
 
     @Before
     public void setupTest() throws Exception {
+        ObservableSupplierImpl.setIgnoreThreadChecksForTesting(true);
         mObserver = new TestDialogManagerObserver();
         runOnUiThreadBlocking(() -> sActivity.getModalDialogManager().addObserver(mObserver));
     }
@@ -108,10 +97,13 @@ public class LoadingModalDialogIntegrationTest {
     @Test
     @MediumTest
     public void testShownAndDismissed() throws TimeoutException {
-        LoadingModalDialogCoordinator coordinator = runOnUiThreadBlockingNoException(
-                ()
-                        -> LoadingModalDialogCoordinator.create(getDialogManager(), sActivity,
-                                new Handler(Looper.getMainLooper())));
+        LoadingModalDialogCoordinator coordinator =
+                runOnUiThreadBlockingNoException(
+                        () ->
+                                LoadingModalDialogCoordinator.create(
+                                        getDialogManager(),
+                                        sActivity,
+                                        new Handler(Looper.getMainLooper())));
         coordinator.skipDelayForTesting();
         coordinator.disableTimeoutForTesting();
 
@@ -127,10 +119,13 @@ public class LoadingModalDialogIntegrationTest {
     @Test
     @MediumTest
     public void testShownAndCancelled() throws TimeoutException, ExecutionException {
-        LoadingModalDialogCoordinator coordinator = runOnUiThreadBlockingNoException(
-                ()
-                        -> LoadingModalDialogCoordinator.create(getDialogManager(), sActivity,
-                                new Handler(Looper.getMainLooper())));
+        LoadingModalDialogCoordinator coordinator =
+                runOnUiThreadBlockingNoException(
+                        () ->
+                                LoadingModalDialogCoordinator.create(
+                                        getDialogManager(),
+                                        sActivity,
+                                        new Handler(Looper.getMainLooper())));
         coordinator.skipDelayForTesting();
         coordinator.disableTimeoutForTesting();
 
@@ -146,10 +141,13 @@ public class LoadingModalDialogIntegrationTest {
     @Test
     @MediumTest
     public void testShownAndDestroyed() throws TimeoutException {
-        LoadingModalDialogCoordinator coordinator = runOnUiThreadBlockingNoException(
-                ()
-                        -> LoadingModalDialogCoordinator.create(getDialogManager(), sActivity,
-                                new Handler(Looper.getMainLooper())));
+        LoadingModalDialogCoordinator coordinator =
+                runOnUiThreadBlockingNoException(
+                        () ->
+                                LoadingModalDialogCoordinator.create(
+                                        getDialogManager(),
+                                        sActivity,
+                                        new Handler(Looper.getMainLooper())));
         coordinator.skipDelayForTesting();
         coordinator.disableTimeoutForTesting();
 

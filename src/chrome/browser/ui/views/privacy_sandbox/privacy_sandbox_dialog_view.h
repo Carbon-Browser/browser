@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,7 @@ class PrivacySandboxDialogView : public views::View {
   void ResizeNativeView(int height);
   void ShowNativeView();
   void OpenPrivacySandboxSettings();
+  void OpenPrivacySandboxAdMeasurementSettings();
 
   raw_ptr<views::WebView> web_view_;
   raw_ptr<Browser> browser_;

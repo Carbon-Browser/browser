@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class MEDIA_EXPORT OffsetByteQueue {
 
   // These work like their underlying ByteQueue counterparts.
   void Reset();
-  void Push(const uint8_t* buf, int size);
+  [[nodiscard]] bool Push(const uint8_t* buf, int size);
   void Peek(const uint8_t** buf, int* size);
   void Pop(int count);
 

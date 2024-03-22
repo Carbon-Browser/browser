@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ namespace quick_unlock {
 class AuthToken {
  public:
   // How long the token lives.
-  static const int kTokenExpirationSeconds;
+  static const base::TimeDelta kTokenExpiration;
 
   explicit AuthToken(const UserContext& user_context);
 
@@ -47,6 +47,12 @@ class AuthToken {
 
   // The UserContext returned here can be null if Reset() was called.
   const UserContext* user_context() const { return user_context_.get(); }
+  UserContext* user_context() { return user_context_.get(); }
+
+  // Replace the user context that is stored with this token. If Reset() has
+  // been called earlier, the call is ignored, and the user context passed to
+  // this function is destroyed.
+  void ReplaceUserContext(std::unique_ptr<UserContext>);
 
  private:
   friend class QuickUnlockStorageUnitTest;
@@ -64,13 +70,5 @@ class AuthToken {
 
 }  // namespace quick_unlock
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace quick_unlock {
-using ::ash::quick_unlock::AuthToken;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_AUTH_TOKEN_H_

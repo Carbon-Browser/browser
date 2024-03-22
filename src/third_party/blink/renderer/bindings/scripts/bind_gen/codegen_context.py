@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,9 +6,7 @@ import copy
 
 import web_idl
 
-from . import name_style
 from .codegen_format import NonRenderable
-from .path_manager import PathManager
 
 
 class CodeGenContext(object):
@@ -80,6 +78,7 @@ class CodeGenContext(object):
         #   attribute name: default value
         cls._context_attrs = {
             # Top-level definition
+            "async_iterator": None,
             "callback_function": None,
             "callback_interface": None,
             "dictionary": None,
@@ -87,6 +86,7 @@ class CodeGenContext(object):
             "interface": None,
             "namespace": None,
             "observable_array": None,
+            "sync_iterator": None,
             "typedef": None,
             "union": None,
 
@@ -99,14 +99,16 @@ class CodeGenContext(object):
             "constructor_group": None,
             "dict_member": None,
             "exposed_construct": None,
-            "is_named_constructor": False,
+            "is_legacy_factory_function": False,
             "legacy_window_alias": None,
             "operation": None,
             "operation_group": None,
 
             # Special member-ish definition
+            "indexed_interceptor_kind": None,
             "indexed_property_getter": None,
             "indexed_property_setter": None,
+            "named_interceptor_kind": None,
             "named_property_getter": None,
             "named_property_setter": None,
             "named_property_deleter": None,
@@ -231,8 +233,9 @@ class CodeGenContext(object):
 
     @property
     def class_like(self):
-        return (self.callback_interface or self.dictionary or self.interface
-                or self.namespace)
+        return (self.async_iterator or self.callback_interface
+                or self.dictionary or self.interface or self.namespace
+                or self.sync_iterator)
 
     @property
     def does_override_idl_return_type(self):
@@ -286,6 +289,15 @@ class CodeGenContext(object):
         if self.operation_group:
             return self.operation_group[0].return_type.unwrap().is_promise
         return False
+
+    @property
+    def logging_target(self):
+        return (self.attribute or self.constant or self.constructor
+                or self.constructor_group or self.dict_member
+                or (self.legacy_window_alias or self.exposed_construct)
+                or self.operation or self.operation_group
+                or (self.stringifier and self.stringifier.operation)
+                or self._indexed_or_named_property)
 
     @property
     def may_throw_exception(self):

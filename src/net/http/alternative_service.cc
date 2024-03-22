@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -109,6 +109,8 @@ std::string AlternativeService::ToString() const {
 }
 
 std::string AlternativeServiceInfo::ToString() const {
+  // NOTE: Cannot use `base::UnlocalizedTimeFormatWithPattern()` since
+  // `net/DEPS` disallows `base/i18n`.
   base::Time::Exploded exploded;
   expiration_.LocalExplode(&exploded);
   return base::StringPrintf(

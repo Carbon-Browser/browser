@@ -1,13 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/events/event_target.h"
 
-#include <algorithm>
-
 #include "base/check.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/point_conversions.h"
 
@@ -64,8 +63,7 @@ void EventTarget::AddPostTargetHandler(EventHandler* handler) {
 }
 
 void EventTarget::RemovePostTargetHandler(EventHandler* handler) {
-  auto find =
-      std::find(post_target_list_.begin(), post_target_list_.end(), handler);
+  auto find = base::ranges::find(post_target_list_, handler);
   if (find != post_target_list_.end())
     post_target_list_.erase(find);
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@
 #include "base/scoped_observation.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_handler.h"
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
-#include "components/autofill/core/browser/personal_data_manager_observer.h"
 
 class Browser;
 class ToolbarButtonProvider;
@@ -23,10 +21,10 @@ namespace autofill {
 class AutofillBubbleBase;
 class LocalCardMigrationBubbleController;
 class SaveCardBubbleController;
-class SaveUPIBubble;
+class IbanBubbleController;
+enum class IbanBubbleType;
 
 class AutofillBubbleHandlerImpl : public AutofillBubbleHandler,
-                                  public PersonalDataManagerObserver,
                                   public AvatarToolbarButton::Observer {
  public:
   AutofillBubbleHandlerImpl(Browser* browser,
@@ -43,6 +41,11 @@ class AutofillBubbleHandlerImpl : public AutofillBubbleHandler,
       content::WebContents* web_contents,
       SaveCardBubbleController* controller,
       bool is_user_gesture) override;
+  AutofillBubbleBase* ShowIbanBubble(content::WebContents* web_contents,
+                                     IbanBubbleController* controller,
+                                     bool is_user_gesture,
+                                     IbanBubbleType bubble_type) override;
+
   AutofillBubbleBase* ShowLocalCardMigrationBubble(
       content::WebContents* web_contents,
       LocalCardMigrationBubbleController* controller,
@@ -51,9 +54,6 @@ class AutofillBubbleHandlerImpl : public AutofillBubbleHandler,
       content::WebContents* contents,
       OfferNotificationBubbleController* controller,
       bool is_user_gesture) override;
-  SaveUPIBubble* ShowSaveUPIBubble(
-      content::WebContents* web_contents,
-      SaveUPIBubbleController* controller) override;
   AutofillBubbleBase* ShowSaveAddressProfileBubble(
       content::WebContents* web_contents,
       SaveUpdateAddressProfileBubbleController* controller,
@@ -62,9 +62,6 @@ class AutofillBubbleHandlerImpl : public AutofillBubbleHandler,
       content::WebContents* web_contents,
       SaveUpdateAddressProfileBubbleController* controller,
       bool is_user_gesture) override;
-  AutofillBubbleBase* ShowEditAddressProfileDialog(
-      content::WebContents* web_contents,
-      EditAddressProfileDialogController* controller) override;
   AutofillBubbleBase* ShowVirtualCardManualFallbackBubble(
       content::WebContents* web_contents,
       VirtualCardManualFallbackBubbleController* controller,
@@ -73,11 +70,11 @@ class AutofillBubbleHandlerImpl : public AutofillBubbleHandler,
       content::WebContents* web_contents,
       VirtualCardEnrollBubbleController* controller,
       bool is_user_gesture) override;
-
-  void OnPasswordSaved() override;
-
-  // PersonalDataManagerObserver:
-  void OnCreditCardSaved(bool should_show_sign_in_promo_if_applicable) override;
+  AutofillBubbleBase* ShowMandatoryReauthBubble(
+      content::WebContents* web_contents,
+      MandatoryReauthBubbleController* controller,
+      bool is_user_gesture,
+      MandatoryReauthBubbleType bubble_type) override;
 
   // AvatarToolbarButton::Observer:
   void OnAvatarHighlightAnimationFinished() override;
@@ -94,8 +91,6 @@ class AutofillBubbleHandlerImpl : public AutofillBubbleHandler,
   // button after the highlight animation finishes.
   bool should_show_sign_in_promo_if_applicable_ = false;
 
-  base::ScopedObservation<PersonalDataManager, PersonalDataManagerObserver>
-      personal_data_manager_observation_{this};
   base::ScopedObservation<AvatarToolbarButton, AvatarToolbarButton::Observer>
       avatar_toolbar_button_observation_{this};
 };

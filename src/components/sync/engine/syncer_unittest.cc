@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/compiler_specific.h"
-#include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -36,7 +32,6 @@
 #include "components/sync/engine/active_devices_invalidation_info.h"
 #include "components/sync/engine/backoff_delay_provider.h"
 #include "components/sync/engine/cancelation_signal.h"
-#include "components/sync/engine/cycle/mock_debug_info_getter.h"
 #include "components/sync/engine/cycle/sync_cycle_context.h"
 #include "components/sync/engine/data_type_activation_response.h"
 #include "components/sync/engine/forwarding_model_type_processor.h"
@@ -50,10 +45,11 @@
 #include "components/sync/protocol/preference_specifics.pb.h"
 #include "components/sync/protocol/sync.pb.h"
 #include "components/sync/protocol/sync_enums.pb.h"
-#include "components/sync/test/engine/mock_connection_manager.h"
-#include "components/sync/test/engine/mock_model_type_processor.h"
-#include "components/sync/test/engine/mock_nudge_handler.h"
 #include "components/sync/test/fake_sync_encryption_handler.h"
+#include "components/sync/test/mock_connection_manager.h"
+#include "components/sync/test/mock_debug_info_getter.h"
+#include "components/sync/test/mock_model_type_processor.h"
+#include "components/sync/test/mock_nudge_handler.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -125,10 +121,6 @@ class SyncerTest : public testing::Test,
       last_bookmarks_commit_delay_ = iter->second;
   }
 
-  void OnReceivedClientInvalidationHintBufferSize(int size) override {
-    last_client_invalidation_hint_buffer_size_ = size;
-  }
-
   void OnReceivedGuRetryDelay(const base::TimeDelta& delay) override {}
   void OnReceivedMigrationRequest(ModelTypeSet types) override {}
   void OnReceivedQuotaParamsForExtensionTypes(
@@ -142,7 +134,7 @@ class SyncerTest : public testing::Test,
     DVLOG(1) << "HandleSyncEngineEvent in unittest " << event.what_happened;
   }
 
-  void OnActionableError(const SyncProtocolError& error) override {}
+  void OnActionableProtocolError(const SyncProtocolError& error) override {}
   void OnRetryTimeChanged(base::Time retry_time) override {}
   void OnThrottledTypesChanged(ModelTypeSet throttled_types) override {}
   void OnBackedOffTypesChanged(ModelTypeSet backed_off_types) override {}
@@ -189,15 +181,14 @@ class SyncerTest : public testing::Test,
     context_ = std::make_unique<SyncCycleContext>(
         mock_server_.get(), extensions_activity_.get(), listeners,
         debug_info_getter_.get(), model_type_registry_.get(),
-        "fake_invalidator_client_id", local_cache_guid(),
-        mock_server_->store_birthday(), "fake_bag_of_chips",
+        local_cache_guid(), mock_server_->store_birthday(), "fake_bag_of_chips",
         /*poll_interval=*/base::Minutes(30));
     auto syncer = std::make_unique<Syncer>(&cancelation_signal_);
     // The syncer is destroyed with the scheduler that owns it.
     syncer_ = syncer.get();
     scheduler_ = std::make_unique<SyncSchedulerImpl>(
         "TestSyncScheduler", BackoffDelayProvider::FromDefaults(),
-        context_.get(), std::move(syncer), false);
+        context_.get(), std::move(syncer), false, false);
 
     mock_server_->SetKeystoreKey("encryption_key");
   }
@@ -218,7 +209,8 @@ class SyncerTest : public testing::Test,
   std::unique_ptr<DataTypeActivationResponse> MakeFakeActivationResponse(
       ModelType model_type) {
     auto response = std::make_unique<DataTypeActivationResponse>();
-    response->model_type_state.set_initial_sync_done(true);
+    response->model_type_state.set_initial_sync_state(
+        sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
     response->model_type_state.mutable_progress_marker()->set_data_type_id(
         GetSpecificsFieldNumberFromModelType(model_type));
     response->type_processor = std::make_unique<ForwardingModelTypeProcessor>(
@@ -244,7 +236,7 @@ class SyncerTest : public testing::Test,
   // not preceeded by GetUpdates.
   void ConfigureNoGetUpdatesRequired() {
     nudge_tracker_.OnInvalidationsEnabled();
-    nudge_tracker_.RecordSuccessfulSyncCycle(ModelTypeSet::All());
+    nudge_tracker_.RecordSuccessfulSyncCycleIfNotBlocked(ModelTypeSet::All());
 
     ASSERT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
   }
@@ -259,7 +251,7 @@ class SyncerTest : public testing::Test,
   CancelationSignal cancelation_signal_;
   std::map<ModelType, MockModelTypeProcessor> mock_model_type_processors_;
 
-  raw_ptr<Syncer> syncer_ = nullptr;
+  raw_ptr<Syncer, DanglingUntriaged> syncer_ = nullptr;
 
   std::unique_ptr<SyncCycle> cycle_;
   MockNudgeHandler mock_nudge_handler_;
@@ -277,7 +269,7 @@ class SyncerTest : public testing::Test,
 };
 
 TEST_F(SyncerTest, CommitFiltersThrottledEntries) {
-  const ModelTypeSet throttled_types(BOOKMARKS);
+  const ModelTypeSet throttled_types = {BOOKMARKS};
 
   GetProcessor(BOOKMARKS)->AppendCommitRequest(
       ClientTagHash::FromHashed("tag1"), MakeBookmarkSpecificsToCommit(),
@@ -322,7 +314,7 @@ TEST_F(SyncerTest, GetUpdatesPartialThrottled) {
 
   // Set BOOKMARKS throttled but PREFERENCES not,
   // then BOOKMARKS should not get synced but PREFERENCES should.
-  ModelTypeSet throttled_types(BOOKMARKS);
+  ModelTypeSet throttled_types = {BOOKMARKS};
   mock_server_->set_throttling(true);
   mock_server_->SetPartialFailureTypes(throttled_types);
 
@@ -377,7 +369,7 @@ TEST_F(SyncerTest, GetUpdatesPartialFailure) {
 
   // Set BOOKMARKS failure but PREFERENCES not,
   // then BOOKMARKS should not get synced but PREFERENCES should.
-  ModelTypeSet failed_types(BOOKMARKS);
+  ModelTypeSet failed_types = {BOOKMARKS};
   mock_server_->set_partial_failure(true);
   mock_server_->SetPartialFailureTypes(failed_types);
 
@@ -502,18 +494,18 @@ TEST_F(SyncerTest, CommitManyItemsInOneGo_PostBufferFail) {
   EXPECT_FALSE(SyncShareNudge());
 
   EXPECT_EQ(1U, mock_server_->commit_messages().size());
-  EXPECT_EQ(
-      SyncerError::SYNC_SERVER_ERROR,
-      cycle_->status_controller().model_neutral_state().commit_result.value());
+  ASSERT_EQ(
+      cycle_->status_controller().model_neutral_state().commit_result.type(),
+      SyncerError::Type::kHttpError);
 
   // Since the second batch fails, the third one should not even be gathered.
   EXPECT_EQ(2, GetProcessor(PREFERENCES)->GetLocalChangesCallCount());
 
   histogram_tester.ExpectBucketCount("Sync.CommitResponse.PREFERENCE",
-                                     SyncerError::SYNC_SERVER_ERROR,
+                                     SyncerErrorValueForUma::kSyncServerError,
                                      /*expected_count=*/1);
   histogram_tester.ExpectBucketCount("Sync.CommitResponse",
-                                     SyncerError::SYNC_SERVER_ERROR,
+                                     SyncerErrorValueForUma::kSyncServerError,
                                      /*expected_count=*/1);
 }
 
@@ -621,7 +613,7 @@ TEST_F(SyncerTest, CommitFailureWithConflict) {
   EXPECT_FALSE(SyncShareNudge());
   EXPECT_TRUE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 
-  nudge_tracker_.RecordSuccessfulSyncCycle(ModelTypeSet::All());
+  nudge_tracker_.RecordSuccessfulSyncCycleIfNotBlocked(ModelTypeSet::All());
   EXPECT_FALSE(nudge_tracker_.IsGetUpdatesRequired(ModelTypeSet::All()));
 }
 
@@ -714,7 +706,6 @@ TEST_F(SyncerTest, TestClientCommandDuringUpdate) {
   bookmark_delay->set_datatype_id(
       GetSpecificsFieldNumberFromModelType(BOOKMARKS));
   bookmark_delay->set_delay_ms(950);
-  command->set_client_invalidation_hint_buffer_size(11);
   mock_server_->AddUpdateDirectory("1", "0", "in_root", 1, 1,
                                    foreign_cache_guid(), "-1");
   mock_server_->SetGUClientCommand(std::move(command));
@@ -723,7 +714,6 @@ TEST_F(SyncerTest, TestClientCommandDuringUpdate) {
   EXPECT_EQ(base::Seconds(8), last_poll_interval_received_);
   EXPECT_EQ(base::Seconds(3141), last_sessions_commit_delay_);
   EXPECT_EQ(base::Milliseconds(950), last_bookmarks_commit_delay_);
-  EXPECT_EQ(11, last_client_invalidation_hint_buffer_size_);
 
   command = std::make_unique<ClientCommand>();
   command->set_set_sync_poll_interval(180);
@@ -733,7 +723,6 @@ TEST_F(SyncerTest, TestClientCommandDuringUpdate) {
   bookmark_delay->set_datatype_id(
       GetSpecificsFieldNumberFromModelType(BOOKMARKS));
   bookmark_delay->set_delay_ms(1050);
-  command->set_client_invalidation_hint_buffer_size(9);
   mock_server_->AddUpdateDirectory("1", "0", "in_root", 1, 1,
                                    foreign_cache_guid(), "-1");
   mock_server_->SetGUClientCommand(std::move(command));
@@ -742,7 +731,6 @@ TEST_F(SyncerTest, TestClientCommandDuringUpdate) {
   EXPECT_EQ(base::Seconds(180), last_poll_interval_received_);
   EXPECT_EQ(base::Seconds(2718), last_sessions_commit_delay_);
   EXPECT_EQ(base::Milliseconds(1050), last_bookmarks_commit_delay_);
-  EXPECT_EQ(9, last_client_invalidation_hint_buffer_size_);
 }
 
 TEST_F(SyncerTest, TestClientCommandDuringCommit) {
@@ -757,7 +745,6 @@ TEST_F(SyncerTest, TestClientCommandDuringCommit) {
   bookmark_delay->set_datatype_id(
       GetSpecificsFieldNumberFromModelType(BOOKMARKS));
   bookmark_delay->set_delay_ms(950);
-  command->set_client_invalidation_hint_buffer_size(11);
   GetProcessor(BOOKMARKS)->AppendCommitRequest(
       ClientTagHash::FromHashed("tag1"), MakeBookmarkSpecificsToCommit(),
       "id1");
@@ -767,7 +754,6 @@ TEST_F(SyncerTest, TestClientCommandDuringCommit) {
   EXPECT_EQ(base::Seconds(8), last_poll_interval_received_);
   EXPECT_EQ(base::Seconds(3141), last_sessions_commit_delay_);
   EXPECT_EQ(base::Milliseconds(950), last_bookmarks_commit_delay_);
-  EXPECT_EQ(11, last_client_invalidation_hint_buffer_size_);
 
   command = std::make_unique<ClientCommand>();
   command->set_set_sync_poll_interval(180);
@@ -777,7 +763,6 @@ TEST_F(SyncerTest, TestClientCommandDuringCommit) {
   bookmark_delay->set_datatype_id(
       GetSpecificsFieldNumberFromModelType(BOOKMARKS));
   bookmark_delay->set_delay_ms(1050);
-  command->set_client_invalidation_hint_buffer_size(9);
   GetProcessor(BOOKMARKS)->AppendCommitRequest(
       ClientTagHash::FromHashed("tag2"), MakeBookmarkSpecificsToCommit(),
       "id2");
@@ -787,7 +772,6 @@ TEST_F(SyncerTest, TestClientCommandDuringCommit) {
   EXPECT_EQ(base::Seconds(180), last_poll_interval_received_);
   EXPECT_EQ(base::Seconds(2718), last_sessions_commit_delay_);
   EXPECT_EQ(base::Milliseconds(1050), last_bookmarks_commit_delay_);
-  EXPECT_EQ(9, last_client_invalidation_hint_buffer_size_);
 }
 
 TEST_F(SyncerTest, ShouldPopulateSingleClientFlag) {
@@ -800,7 +784,8 @@ TEST_F(SyncerTest, ShouldPopulateSingleClientFlag) {
       ActiveDevicesInvalidationInfo::Create(
           /*all_fcm_registration_tokens=*/{},
           /*all_interested_data_types=*/{PREFERENCES},
-          /*fcm_token_and_interested_data_types=*/{}));
+          /*fcm_token_and_interested_data_types=*/{},
+          /*old_invalidations_interested_data_types=*/{}));
   ASSERT_TRUE(SyncShareNudge());
   EXPECT_TRUE(
       mock_server_->last_request().commit().config_params().single_client());
@@ -808,6 +793,10 @@ TEST_F(SyncerTest, ShouldPopulateSingleClientFlag) {
                   .commit()
                   .config_params()
                   .single_client_with_standalone_invalidations());
+  EXPECT_TRUE(mock_server_->last_request()
+                  .commit()
+                  .config_params()
+                  .single_client_with_old_invalidations());
 }
 
 TEST_F(SyncerTest,
@@ -822,7 +811,8 @@ TEST_F(SyncerTest,
           /*all_fcm_registration_tokens=*/{"token_1"},
           /*all_interested_data_types=*/{BOOKMARKS, PREFERENCES},
           /*fcm_token_and_interested_data_types=*/
-          {{"token_1", {PREFERENCES}}}));
+          {{"token_1", {PREFERENCES}}},
+          /*old_invalidations_interested_data_types=*/{BOOKMARKS}));
   ASSERT_TRUE(SyncShareNudge());
   EXPECT_FALSE(
       mock_server_->last_request().commit().config_params().single_client());
@@ -830,6 +820,37 @@ TEST_F(SyncerTest,
                   .commit()
                   .config_params()
                   .single_client_with_standalone_invalidations());
+  EXPECT_FALSE(mock_server_->last_request()
+                   .commit()
+                   .config_params()
+                   .single_client_with_old_invalidations());
+}
+
+TEST_F(SyncerTest, ShouldPopulateSingleClientForOldInvalidations) {
+  GetProcessor(BOOKMARKS)->AppendCommitRequest(
+      ClientTagHash::FromHashed("tag1"), MakeBookmarkSpecificsToCommit(),
+      "id1");
+
+  // No other devices without standalone invalidations are interested in
+  // bookmarks.
+  context_->set_active_devices_invalidation_info(
+      ActiveDevicesInvalidationInfo::Create(
+          /*all_fcm_registration_tokens=*/{"token_1"},
+          /*all_interested_data_types=*/{BOOKMARKS, PREFERENCES},
+          /*fcm_token_and_interested_data_types=*/
+          {{"token_1", {BOOKMARKS, PREFERENCES}}},
+          /*old_invalidations_interested_data_types=*/{PREFERENCES}));
+  ASSERT_TRUE(SyncShareNudge());
+  EXPECT_FALSE(
+      mock_server_->last_request().commit().config_params().single_client());
+  EXPECT_FALSE(mock_server_->last_request()
+                   .commit()
+                   .config_params()
+                   .single_client_with_standalone_invalidations());
+  EXPECT_TRUE(mock_server_->last_request()
+                  .commit()
+                  .config_params()
+                  .single_client_with_old_invalidations());
 }
 
 TEST_F(SyncerTest, ShouldPopulateFcmRegistrationTokens) {
@@ -840,7 +861,8 @@ TEST_F(SyncerTest, ShouldPopulateFcmRegistrationTokens) {
   context_->set_active_devices_invalidation_info(
       ActiveDevicesInvalidationInfo::Create(
           {"token"}, /*all_interested_data_types=*/{BOOKMARKS},
-          /*fcm_token_and_interested_data_types=*/{{"token", {BOOKMARKS}}}));
+          /*fcm_token_and_interested_data_types=*/{{"token", {BOOKMARKS}}},
+          /*old_invalidations_interested_data_types=*/{}));
   ASSERT_TRUE(SyncShareNudge());
   EXPECT_FALSE(
       mock_server_->last_request().commit().config_params().single_client());
@@ -867,7 +889,8 @@ TEST_F(SyncerTest, ShouldPopulateFcmRegistrationTokensForInterestedTypesOnly) {
       ActiveDevicesInvalidationInfo::Create(
           {"token_1", "token_2"}, /*all_interested_data_types=*/{BOOKMARKS},
           /*fcm_token_and_interested_data_types=*/
-          {{"token_1", {BOOKMARKS}}, {"token_2", {PREFERENCES}}}));
+          {{"token_1", {BOOKMARKS}}, {"token_2", {PREFERENCES}}},
+          /*old_invalidations_interested_data_types=*/{}));
   ASSERT_TRUE(SyncShareNudge());
   EXPECT_FALSE(
       mock_server_->last_request().commit().config_params().single_client());
@@ -898,7 +921,8 @@ TEST_F(SyncerTest, ShouldNotPopulateTooManyFcmRegistrationTokens) {
   context_->set_active_devices_invalidation_info(
       ActiveDevicesInvalidationInfo::Create(
           {}, /*all_interested_data_types=*/{BOOKMARKS},
-          std::move(fcm_token_and_interested_data_types)));
+          std::move(fcm_token_and_interested_data_types),
+          /*old_invalidations_interested_data_types=*/{}));
   ASSERT_TRUE(SyncShareNudge());
   EXPECT_FALSE(
       mock_server_->last_request().commit().config_params().single_client());
@@ -935,7 +959,8 @@ TEST_F(SyncerTest,
   context_->set_active_devices_invalidation_info(
       ActiveDevicesInvalidationInfo::Create(
           {"token"}, /*all_interested_data_types=*/{PREFERENCES},
-          /*fcm_token_and_interested_data_types=*/{{"token", {PREFERENCES}}}));
+          /*fcm_token_and_interested_data_types=*/{{"token", {PREFERENCES}}},
+          /*old_invalidations_interested_data_types=*/{}));
   ASSERT_TRUE(SyncShareNudge());
 
   // All invalidation info should be ignored due to DeviceInfo update.
@@ -1105,7 +1130,7 @@ TEST_F(SyncerTest, ConfigureFailsDontApplyUpdates) {
 TEST_F(SyncerTest, ConfigureFailedUnregisteredType) {
   // Simulate type being unregistered before configuration by including type
   // that isn't registered with ModelTypeRegistry.
-  SyncShareConfigureTypes(ModelTypeSet(APPS));
+  SyncShareConfigureTypes({APPS});
 
   // No explicit verification, DCHECK shouldn't have been triggered.
 }
@@ -1117,8 +1142,7 @@ TEST_F(SyncerTest, GetKeySuccess) {
 
   SyncShareConfigure();
 
-  EXPECT_EQ(SyncerError::SYNCER_OK,
-            cycle_->status_controller().last_get_key_result().value());
+  EXPECT_FALSE(cycle_->status_controller().last_get_key_failed());
   EXPECT_FALSE(keystore_keys_handler->NeedKeystoreKey());
 }
 
@@ -1130,8 +1154,7 @@ TEST_F(SyncerTest, GetKeyEmpty) {
   mock_server_->SetKeystoreKey(std::string());
   SyncShareConfigure();
 
-  EXPECT_NE(SyncerError::SYNCER_OK,
-            cycle_->status_controller().last_get_key_result().value());
+  EXPECT_TRUE(cycle_->status_controller().last_get_key_failed());
   EXPECT_TRUE(keystore_keys_handler->NeedKeystoreKey());
 }
 
@@ -1140,7 +1163,7 @@ TEST_F(SyncerTest, GetKeyEmpty) {
 // are correctly removed before commit.
 TEST_F(SyncerTest, CommitOnlyTypes) {
   mock_server_->set_partial_failure(true);
-  mock_server_->SetPartialFailureTypes(ModelTypeSet(PREFERENCES));
+  mock_server_->SetPartialFailureTypes({PREFERENCES});
 
   EnableDatatype(USER_EVENTS);
 

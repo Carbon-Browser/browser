@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -19,7 +19,7 @@
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/common/extension.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "services/device/public/cpp/hid/fake_hid_manager.h"
+#include "services/device/public/cpp/test/fake_hid_manager.h"
 #include "services/device/public/cpp/test/fake_usb_device_manager.h"
 #include "services/device/public/mojom/hid.mojom.h"
 #include "services/device/public/mojom/usb_device.mojom.h"
@@ -44,15 +44,15 @@ class DevicePermissionsManagerTest : public testing::Test {
   void SetUp() override {
     testing::Test::SetUp();
     env_ = std::make_unique<extensions::TestExtensionEnvironment>();
-    extension_ = env_->MakeExtension(*base::test::ParseJsonDeprecated(
-        "{"
-        "  \"app\": {"
-        "    \"background\": {"
-        "      \"scripts\": [\"background.js\"]"
-        "    }"
-        "  },"
-        "  \"permissions\": [ \"hid\", \"usb\" ]"
-        "}"));
+    extension_ = env_->MakeExtension(
+        base::test::ParseJsonDict("{"
+                                  "  \"app\": {"
+                                  "    \"background\": {"
+                                  "      \"scripts\": [\"background.js\"]"
+                                  "    }"
+                                  "  },"
+                                  "  \"permissions\": [ \"hid\", \"usb\" ]"
+                                  "}"));
 
     // Set fake device manager for extensions::UsbDeviceManager.
     mojo::PendingRemote<device::mojom::UsbDeviceManager> usb_manager;
@@ -88,7 +88,7 @@ class DevicePermissionsManagerTest : public testing::Test {
   void TearDown() override { env_.reset(nullptr); }
 
   std::unique_ptr<extensions::TestExtensionEnvironment> env_;
-  raw_ptr<const extensions::Extension> extension_;
+  raw_ptr<const extensions::Extension, DanglingUntriaged> extension_;
   device::FakeUsbDeviceManager fake_usb_manager_;
   device::mojom::UsbDeviceInfoPtr device0_;
   device::mojom::UsbDeviceInfoPtr device1_;
@@ -290,7 +290,7 @@ TEST_F(DevicePermissionsManagerTest, UpdateLastUsed) {
 }
 
 TEST_F(DevicePermissionsManagerTest, LoadPrefs) {
-  std::unique_ptr<base::Value> prefs_value = base::test::ParseJsonDeprecated(
+  base::Value prefs_value = base::test::ParseJson(
       "["
       "  {"
       "    \"manufacturer_string\": \"Test Manufacturer\","

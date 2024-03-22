@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "base/time/time.h"
 #include "base/types/strong_alias.h"
 #include "content/common/content_export.h"
+#include "content/common/features.h"
 #include "mojo/public/cpp/base/big_buffer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 

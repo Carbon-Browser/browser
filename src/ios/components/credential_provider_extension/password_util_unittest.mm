@@ -1,21 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-#include "ios/components/credential_provider_extension/password_util.h"
+#import "ios/components/credential_provider_extension/password_util.h"
 
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
 
-#include "base/mac/scoped_cftyperef.h"
-#include "base/strings/sys_string_conversions.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
+#import "base/apple/scoped_cftyperef.h"
+#import "base/strings/sys_string_conversions.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
 
 namespace credential_provider_extension {
 
@@ -42,7 +38,7 @@ void RemovePasswordForKey(NSString* key) {
 
 void AddPasswordForKey(NSString* key, NSString* password) {
   std::string utf8_password = base::SysNSStringToUTF8(password);
-  base::ScopedCFTypeRef<CFDataRef> data(CFDataCreate(
+  base::apple::ScopedCFTypeRef<CFDataRef> data(CFDataCreate(
       nullptr, reinterpret_cast<const UInt8*>(utf8_password.data()),
       utf8_password.size()));
 
@@ -64,7 +60,7 @@ void VerifyKeyNotFound(NSString* key) {
     (__bridge NSString*)kSecAttrAccount : KeyWithPrefix(key),
     (__bridge NSString*)kSecReturnData : @YES,
   };
-  base::ScopedCFTypeRef<CFTypeRef> cf_result;
+  base::apple::ScopedCFTypeRef<CFTypeRef> cf_result;
   OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query,
                                         cf_result.InitializeInto());
   ASSERT_EQ(errSecItemNotFound, status);

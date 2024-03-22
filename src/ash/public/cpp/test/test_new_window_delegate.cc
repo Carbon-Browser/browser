@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,9 @@ void TestNewWindowDelegate::NewWindowForDetachingTab(
     NewWindowForDetachingTabCallback closure) {
   std::move(closure).Run(/*new_window=*/nullptr);
 }
-void TestNewWindowDelegate::OpenUrl(const GURL& url, OpenUrlFrom from) {}
+void TestNewWindowDelegate::OpenUrl(const GURL& url,
+                                    OpenUrlFrom from,
+                                    Disposition disposition) {}
 void TestNewWindowDelegate::OpenCalculator() {}
 void TestNewWindowDelegate::OpenFileManager() {}
 void TestNewWindowDelegate::OpenDownloadsFolder() {}
@@ -31,6 +33,7 @@ void TestNewWindowDelegate::OpenDiagnostics() {}
 void TestNewWindowDelegate::OpenGetHelp() {}
 void TestNewWindowDelegate::RestoreTab() {}
 void TestNewWindowDelegate::ShowKeyboardShortcutViewer() {}
+void TestNewWindowDelegate::ShowShortcutCustomizationApp() {}
 void TestNewWindowDelegate::ShowTaskManager() {}
 void TestNewWindowDelegate::OpenFeedbackPage(
     FeedbackSource source,

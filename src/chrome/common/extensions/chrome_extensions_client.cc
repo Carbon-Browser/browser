@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@
 #include "chrome/common/extensions/manifest_handlers/theme_handler.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "content/public/common/url_constants.h"
 #include "extensions/common/api/extension_action/action_info.h"
 #include "extensions/common/constants.h"
@@ -77,6 +77,7 @@ void ChromeExtensionsClient::InitializeWebStoreUrls(
         GURL(command_line->GetSwitchValueASCII(switches::kAppsGalleryURL));
   } else {
     webstore_base_url_ = GURL(extension_urls::kChromeWebstoreBaseURL);
+    new_webstore_base_url_ = GURL(extension_urls::kNewChromeWebstoreBaseURL);
   }
   if (command_line->HasSwitch(switches::kAppsGalleryUpdateURL)) {
     webstore_update_url_ = GURL(
@@ -145,10 +146,7 @@ bool ChromeExtensionsClient::IsScriptableURL(
   // The gallery is special-cased as a restricted URL for scripting to prevent
   // access to special JS bindings we expose to the gallery (and avoid things
   // like extensions removing the "report abuse" link).
-  // TODO(erikkay): This seems like the wrong test.  Shouldn't we we testing
-  // against the store app extent?
-  GURL store_url(extension_urls::GetWebstoreLaunchURL());
-  if (url.DomainIs(store_url.host())) {
+  if (extension_urls::IsWebstoreDomain(url)) {
     if (error)
       *error = manifest_errors::kCannotScriptGallery;
     return false;
@@ -158,6 +156,10 @@ bool ChromeExtensionsClient::IsScriptableURL(
 
 const GURL& ChromeExtensionsClient::GetWebstoreBaseURL() const {
   return webstore_base_url_;
+}
+
+const GURL& ChromeExtensionsClient::GetNewWebstoreBaseURL() const {
+  return new_webstore_base_url_;
 }
 
 const GURL& ChromeExtensionsClient::GetWebstoreUpdateURL() const {
@@ -183,13 +185,11 @@ std::set<base::FilePath> ChromeExtensionsClient::GetBrowserImagePaths(
       ExtensionsClient::GetBrowserImagePaths(extension);
 
   // Theme images
-  const base::DictionaryValue* theme_images = ThemeInfo::GetImages(extension);
+  const base::Value::Dict* theme_images = ThemeInfo::GetImages(extension);
   if (theme_images) {
-    for (base::DictionaryValue::Iterator it(*theme_images); !it.IsAtEnd();
-         it.Advance()) {
-      if (it.value().is_string())
-        image_paths.insert(
-            base::FilePath::FromUTF8Unsafe(it.value().GetString()));
+    for (const auto [key, value] : *theme_images) {
+      if (value.is_string())
+        image_paths.insert(base::FilePath::FromUTF8Unsafe(value.GetString()));
     }
   }
 

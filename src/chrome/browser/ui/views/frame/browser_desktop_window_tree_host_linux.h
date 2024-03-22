@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "build/build_config.h"
 #include "chrome/browser/ui/views/frame/browser_desktop_window_tree_host.h"
 #include "ui/linux/device_scale_factor_observer.h"
-#include "ui/linux/linux_ui.h"
 #include "ui/views/widget/desktop_aura/desktop_window_tree_host_linux.h"  // nogncheck
 
 #if defined(USE_DBUS_MENU)
@@ -23,7 +22,12 @@ enum class TabDragKind;
 
 namespace views {
 class DesktopNativeWidgetAura;
-}
+}  // namespace views
+
+namespace ui {
+class LinuxUi;
+class NativeTheme;
+}  // namespace ui
 
 class BrowserDesktopWindowTreeHostLinux
     : public BrowserDesktopWindowTreeHost,
@@ -57,6 +61,11 @@ class BrowserDesktopWindowTreeHostLinux
   void UpdateFrameHints();
 
  private:
+  // DesktopWindowTreeHostPlatform:
+  void AddAdditionalInitProperties(
+      const views::Widget::InitParams& params,
+      ui::PlatformWindowInitProperties* properties) override;
+
   // BrowserDesktopWindowTreeHost:
   DesktopWindowTreeHost* AsDesktopWindowTreeHost() override;
   int GetMinimizeButtonOffset() const override;
@@ -82,6 +91,7 @@ class BrowserDesktopWindowTreeHostLinux
   void OnBoundsChanged(const BoundsChange& change) override;
   void OnWindowStateChanged(ui::PlatformWindowState old_state,
                             ui::PlatformWindowState new_state) override;
+  void OnWindowTiledStateChanged(ui::WindowTiledEdges new_tiled_edges) override;
 
   // ui::NativeThemeObserver:
   void OnNativeThemeUpdated(ui::NativeTheme* observed_theme) override;
@@ -102,10 +112,7 @@ class BrowserDesktopWindowTreeHostLinux
 
   base::ScopedObservation<ui::NativeTheme, ui::NativeThemeObserver>
       theme_observation_{this};
-  base::ScopedObservation<ui::LinuxUi,
-                          ui::DeviceScaleFactorObserver,
-                          &ui::LinuxUi::AddDeviceScaleFactorObserver,
-                          &ui::LinuxUi::RemoveDeviceScaleFactorObserver>
+  base::ScopedObservation<ui::LinuxUi, ui::DeviceScaleFactorObserver>
       scale_observation_{this};
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,6 @@
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "cc/animation/animation_host.h"
 #include "cc/base/math_util.h"
 #include "cc/layers/append_quads_data.h"
@@ -1484,10 +1483,16 @@ TEST_F(LegacySWPictureLayerImplTest, ClampTilesToMaxTileSize) {
   ResetTilingsAndRasterScales();
 
   // Change the max texture size on the output surface context.
-  auto gl_owned = std::make_unique<viz::TestGLES2Interface>();
-  gl_owned->set_max_texture_size(140);
+  auto worker_context_provider = viz::TestContextProvider::CreateWorker();
+  {
+    viz::RasterContextProvider::ScopedRasterContextLock scoped_context(
+        worker_context_provider.get());
+    worker_context_provider->GetTestRasterInterface()->set_max_texture_size(
+        140);
+  }
   ResetLayerTreeFrameSink(
-      FakeLayerTreeFrameSink::Create3d(std::move(gl_owned)));
+      FakeLayerTreeFrameSink::Create3d(viz::TestContextProvider::CreateRaster(),
+                                       std::move(worker_context_provider)));
 
   SetupDrawPropertiesAndUpdateTiles(pending_layer(), 1.f, 1.f, 1.f);
   ASSERT_EQ(1u, pending_layer()->tilings()->num_tilings());
@@ -1518,10 +1523,16 @@ TEST_F(LegacySWPictureLayerImplTest, ClampSingleTileToToMaxTileSize) {
   ResetTilingsAndRasterScales();
 
   // Change the max texture size on the output surface context.
-  auto gl_owned = std::make_unique<viz::TestGLES2Interface>();
-  gl_owned->set_max_texture_size(140);
+  auto worker_context_provider = viz::TestContextProvider::CreateWorker();
+  {
+    viz::RasterContextProvider::ScopedRasterContextLock scoped_context(
+        worker_context_provider.get());
+    worker_context_provider->GetTestRasterInterface()->set_max_texture_size(
+        140);
+  }
   ResetLayerTreeFrameSink(
-      FakeLayerTreeFrameSink::Create3d(std::move(gl_owned)));
+      FakeLayerTreeFrameSink::Create3d(viz::TestContextProvider::CreateRaster(),
+                                       std::move(worker_context_provider)));
 
   SetupDrawPropertiesAndUpdateTiles(active_layer(), 1.f, 1.f, 1.f);
   ASSERT_LE(1u, active_layer()->tilings()->num_tilings());
@@ -1674,10 +1685,8 @@ TEST_F(LegacySWPictureLayerImplTest, FarScrolledQuadsShifted) {
     EXPECT_EQ(draw_quad->material, viz::DrawQuad::Material::kTiledContent);
 
     auto transform = [draw_quad](const gfx::Rect& rect) {
-      gfx::RectF result(rect);
-      draw_quad->shared_quad_state->quad_to_target_transform.TransformRect(
-          &result);
-      return result;
+      return draw_quad->shared_quad_state->quad_to_target_transform.MapRect(
+          gfx::RectF(rect));
     };
 
     gfx::RectF transformed_rect = transform(draw_quad->rect);
@@ -1752,10 +1761,8 @@ TEST_F(LegacySWPictureLayerImplTest, FarScrolledSolidColorQuadsShifted) {
     EXPECT_EQ(draw_quad->material, viz::DrawQuad::Material::kSolidColor);
 
     auto transform = [draw_quad](const gfx::Rect& rect) {
-      gfx::RectF result(rect);
-      draw_quad->shared_quad_state->quad_to_target_transform.TransformRect(
-          &result);
-      return result;
+      return draw_quad->shared_quad_state->quad_to_target_transform.MapRect(
+          gfx::RectF(rect));
     };
 
     gfx::RectF transformed_rect = transform(draw_quad->rect);
@@ -2808,7 +2815,7 @@ TEST_F(LegacySWPictureLayerImplTest, HighResTilingDuringAnimation) {
   // at a source scale that the rasterized layer will not be larger than the
   // viewport.
   contents_scale = 0.1f;
-  maximum_animation_scale = 11.f;
+  maximum_animation_scale = 12.f;
 
   SetContentsAndAnimationScalesOnBothLayers(contents_scale, device_scale,
                                             page_scale, maximum_animation_scale,
@@ -2903,7 +2910,7 @@ TEST_F(LegacySWPictureLayerImplTest, HighResTilingDuringAnimationWideLayer) {
   // at a source scale that the rasterized visible rect will not be larger than
   // the viewport.
   contents_scale = 0.1f;
-  maximum_animation_scale = 11.f;
+  maximum_animation_scale = 12.f;
 
   SetContentsAndAnimationScalesOnBothLayers(contents_scale, device_scale,
                                             page_scale, maximum_animation_scale,
@@ -4920,7 +4927,7 @@ void PictureLayerImplTest::TestQuadsForSolidColor(bool test_for_solid,
   scoped_refptr<PictureLayer> layer = PictureLayer::Create(&client);
   FakeLayerTreeHostClient host_client;
   TestTaskGraphRunner task_graph_runner;
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
   std::unique_ptr<FakeLayerTreeHost> host = FakeLayerTreeHost::Create(
       &host_client, &task_graph_runner, animation_host.get());
   host->SetRootLayer(layer);
@@ -5009,7 +5016,7 @@ TEST_F(LegacySWPictureLayerImplTest, NonSolidToSolidNoTilings) {
   scoped_refptr<PictureLayer> layer = PictureLayer::Create(&client);
   FakeLayerTreeHostClient host_client;
   TestTaskGraphRunner task_graph_runner;
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
   std::unique_ptr<FakeLayerTreeHost> host = FakeLayerTreeHost::Create(
       &host_client, &task_graph_runner, animation_host.get());
   host->SetRootLayer(layer);
@@ -5293,6 +5300,10 @@ TEST_F(LegacySWPictureLayerImplTest, ScrollPropagatesToPending) {
 TEST_F(LegacySWPictureLayerImplTest, UpdateLCDTextInvalidatesPendingTree) {
   gfx::Size layer_bounds(100, 100);
   SetupPendingTree(FakeRasterSource::CreateFilledWithText(layer_bounds));
+  // LCD text is disallowed before SetContentsOpaque(true).
+  EXPECT_FALSE(pending_layer()->can_use_lcd_text());
+  pending_layer()->SetContentsOpaque(true);
+  pending_layer()->UpdateTiles();
 
   EXPECT_TRUE(pending_layer()->can_use_lcd_text());
   EXPECT_TRUE(pending_layer()->HighResTiling()->has_tiles());
@@ -5334,6 +5345,10 @@ TEST_F(LegacySWPictureLayerImplTest, UpdateLCDTextPushToActiveTree) {
   float page_scale = 4.f;
   SetupDrawPropertiesAndUpdateTiles(pending_layer(), page_scale, 1.0f,
                                     page_scale);
+  // LCD text is disallowed before SetContentsOpaque(true).
+  EXPECT_FALSE(pending_layer()->can_use_lcd_text());
+  pending_layer()->SetContentsOpaque(true);
+  pending_layer()->UpdateTiles();
   EXPECT_TRUE(pending_layer()->can_use_lcd_text());
   EXPECT_TRUE(pending_layer()->HighResTiling()->can_use_lcd_text());
   ActivateTree();
@@ -5372,6 +5387,10 @@ TEST_F(LegacySWPictureLayerImplTest, UpdateLCDTextPushToActiveTreeWith2dScale) {
   float page_scale = 4.f;
   SetupDrawPropertiesAndUpdateTiles(pending_layer(), ideal_scale, 1.0f,
                                     page_scale);
+  // LCD text is disallowed before SetContentsOpaque(true).
+  EXPECT_FALSE(pending_layer()->can_use_lcd_text());
+  pending_layer()->SetContentsOpaque(true);
+  pending_layer()->UpdateTiles();
   EXPECT_TRUE(pending_layer()->can_use_lcd_text());
   EXPECT_TRUE(pending_layer()->HighResTiling()->can_use_lcd_text());
   ActivateTree();
@@ -5475,8 +5494,7 @@ TEST_F(LegacySWTileSizeTest, SWTileSizes) {
   gfx::Size result;
 
   host_impl()->CommitComplete();
-  EXPECT_EQ(host_impl()->gpu_rasterization_status(),
-            GpuRasterizationStatus::OFF_DEVICE);
+  EXPECT_FALSE(host_impl()->use_gpu_rasterization());
   host_impl()->NotifyReadyToActivate();
 
   // Default tile-size for large layers.
@@ -5506,8 +5524,7 @@ TEST_F(TileSizeTest, GPUTileSizes) {
 
   // Gpu-rasterization uses 25% viewport-height tiles.
   // The +2's below are for border texels.
-  EXPECT_EQ(host_impl()->gpu_rasterization_status(),
-            GpuRasterizationStatus::ON);
+  EXPECT_TRUE(host_impl()->use_gpu_rasterization());
   host_impl()->active_tree()->SetDeviceViewportRect(gfx::Rect(2000, 2000));
   host_impl()->NotifyReadyToActivate();
 
@@ -5551,8 +5568,7 @@ TEST_F(TileSizeTest, RawDrawTileSizes) {
   constexpr int kMaxTextureSize = 2048;
   // Gpu-RawDraw-rasterization uses 100%
   // std::max({viewport-width, viewport-height, 2280}) tiles.
-  EXPECT_EQ(host_impl()->gpu_rasterization_status(),
-            GpuRasterizationStatus::ON);
+  EXPECT_TRUE(host_impl()->use_gpu_rasterization());
   gfx::Rect viewport_rect(2000, 2000);
   host_impl()->active_tree()->SetDeviceViewportRect(viewport_rect);
   layer->set_gpu_raster_max_texture_size(viewport_rect.size());
@@ -5590,8 +5606,7 @@ TEST_F(HalfWidthTileTest, TileSizes) {
 
   gfx::Size result;
   host_impl()->CommitComplete();
-  EXPECT_EQ(host_impl()->gpu_rasterization_status(),
-            GpuRasterizationStatus::ON);
+  EXPECT_TRUE(host_impl()->use_gpu_rasterization());
   host_impl()->active_tree()->SetDeviceViewportRect(gfx::Rect(2000, 2000));
   host_impl()->NotifyReadyToActivate();
 
@@ -6020,7 +6035,7 @@ TEST_F(LegacySWPictureLayerImplTest,
   SetupDrawProperties(pending_layer(), 2.25f, 1.5f, 1.f);
   gfx::Transform translate1;
   translate1.Translate(0.25f, 0.5f);
-  pending_layer()->draw_properties().screen_space_transform.ConcatTransform(
+  pending_layer()->draw_properties().screen_space_transform.PostConcat(
       translate1);
   pending_layer()->draw_properties().target_space_transform =
       pending_layer()->draw_properties().screen_space_transform;
@@ -6040,7 +6055,7 @@ TEST_F(LegacySWPictureLayerImplTest,
   SetupDrawProperties(pending_layer(), 2.25f, 1.5f, 1.f);
   gfx::Transform translate2;
   translate2.Translate(0.75f, 0.25f);
-  pending_layer()->draw_properties().screen_space_transform.ConcatTransform(
+  pending_layer()->draw_properties().screen_space_transform.PostConcat(
       translate2);
   pending_layer()->draw_properties().target_space_transform =
       pending_layer()->draw_properties().screen_space_transform;
@@ -6058,7 +6073,7 @@ TEST_F(LegacySWPictureLayerImplTest,
   // Now change the device scale factor but keep the same total scale. Old tiles
   // with the same scale would become non-ideal and deleted on pending layers.
   SetupDrawProperties(pending_layer(), 2.25f, 1.0f, 1.f);
-  pending_layer()->draw_properties().screen_space_transform.ConcatTransform(
+  pending_layer()->draw_properties().screen_space_transform.PostConcat(
       translate2);
   pending_layer()->draw_properties().target_space_transform =
       pending_layer()->draw_properties().screen_space_transform;
@@ -6086,7 +6101,7 @@ TEST_F(LegacySWPictureLayerImplTest,
   SetupDrawProperties(active_layer(), 2.25f, 1.5f, 1.f);
   gfx::Transform translate1;
   translate1.Translate(0.25f, 0.5f);
-  active_layer()->draw_properties().screen_space_transform.ConcatTransform(
+  active_layer()->draw_properties().screen_space_transform.PostConcat(
       translate1);
   active_layer()->draw_properties().target_space_transform =
       active_layer()->draw_properties().screen_space_transform;
@@ -6106,7 +6121,7 @@ TEST_F(LegacySWPictureLayerImplTest,
   SetupDrawProperties(pending_layer(), 2.25f, 1.5f, 1.f);
   gfx::Transform translate2;
   translate2.Translate(0.75f, 0.25f);
-  pending_layer()->draw_properties().screen_space_transform.ConcatTransform(
+  pending_layer()->draw_properties().screen_space_transform.PostConcat(
       translate2);
   pending_layer()->draw_properties().target_space_transform =
       pending_layer()->draw_properties().screen_space_transform;
@@ -6190,6 +6205,58 @@ TEST_F(LegacySWPictureLayerImplTest, AnimatedImages) {
   EXPECT_FALSE(active_layer()->ShouldAnimate(image2.stable_id()));
 }
 
+TEST_F(LegacySWPictureLayerImplTest, PaintWorkletInputPaintRecordInvalidation) {
+  gfx::Size layer_bounds(1000, 1000);
+
+  PaintWorkletInput::PropertyKey key(
+      PaintWorkletInput::NativePropertyType::kClipPath, ElementId());
+
+  // Set up a raster source with a PaintWorkletInput.
+  auto recording_source = FakeRecordingSource::CreateRecordingSource(
+      gfx::Rect(layer_bounds), layer_bounds);
+  scoped_refptr<TestPaintWorkletInput> input1 =
+      base::MakeRefCounted<TestPaintWorkletInput>(key, gfx::SizeF(100, 100));
+  PaintImage image1 = CreatePaintWorkletPaintImage(input1);
+  recording_source->add_draw_image(image1, gfx::Point(100, 100));
+  recording_source->Rerecord();
+  scoped_refptr<RasterSource> raster_source =
+      recording_source->CreateRasterSource();
+
+  // Ensure the input is registered
+  SetupPendingTree(raster_source, gfx::Size(), Region(gfx::Rect(layer_bounds)));
+  EXPECT_EQ(pending_layer()->GetPaintWorkletRecordMap().size(), 1u);
+  EXPECT_TRUE(pending_layer()->GetPaintWorkletRecordMap().contains(input1));
+
+  // Add a paint record
+  PaintRecord record1;
+  pending_layer()->SetPaintWorkletRecord(input1, record1);
+
+  // Should be immediately accessible
+  auto it = pending_layer()->GetPaintWorkletRecordMap().find(input1);
+  ASSERT_NE(it, pending_layer()->GetPaintWorkletRecordMap().end());
+  EXPECT_TRUE(it->second.second.has_value());
+  EXPECT_TRUE(it->second.second->EqualsForTesting(record1));
+
+  PaintWorkletInput::PropertyValue val1;
+  val1.float_value = 0.1f;
+  pending_layer()->InvalidatePaintWorklets(key, val1, val1);
+
+  // Paint record should not be invalidated with the same value
+  it = pending_layer()->GetPaintWorkletRecordMap().find(input1);
+  ASSERT_NE(it, pending_layer()->GetPaintWorkletRecordMap().end());
+  EXPECT_TRUE(it->second.second.has_value());
+  EXPECT_TRUE(it->second.second->EqualsForTesting(record1));
+
+  PaintWorkletInput::PropertyValue val2;
+  val2.float_value = 0.2f;
+  pending_layer()->InvalidatePaintWorklets(key, val1, val2);
+
+  // Paint record should have been invalidated
+  it = pending_layer()->GetPaintWorkletRecordMap().find(input1);
+  ASSERT_NE(it, pending_layer()->GetPaintWorkletRecordMap().end());
+  EXPECT_FALSE(it->second.second.has_value());
+}
+
 TEST_F(LegacySWPictureLayerImplTest, PaintWorkletInputs) {
   gfx::Size layer_bounds(1000, 1000);
 
@@ -6215,7 +6282,7 @@ TEST_F(LegacySWPictureLayerImplTest, PaintWorkletInputs) {
   EXPECT_TRUE(pending_layer()->GetPaintWorkletRecordMap().contains(input2));
 
   // Specify a record for one of the inputs.
-  sk_sp<PaintRecord> record1 = sk_make_sp<PaintOpBuffer>();
+  PaintRecord record1;
   pending_layer()->SetPaintWorkletRecord(input1, record1);
 
   // Now activate and make sure the active layer is registered as well, with the
@@ -6224,7 +6291,7 @@ TEST_F(LegacySWPictureLayerImplTest, PaintWorkletInputs) {
   EXPECT_EQ(active_layer()->GetPaintWorkletRecordMap().size(), 2u);
   auto it = active_layer()->GetPaintWorkletRecordMap().find(input1);
   ASSERT_NE(it, active_layer()->GetPaintWorkletRecordMap().end());
-  EXPECT_EQ(it->second.second, record1);
+  EXPECT_TRUE(it->second.second->EqualsForTesting(record1));
   EXPECT_TRUE(active_layer()->GetPaintWorkletRecordMap().contains(input2));
 
   // Committing new PaintWorkletInputs (in a new raster source) should replace
@@ -6243,6 +6310,37 @@ TEST_F(LegacySWPictureLayerImplTest, PaintWorkletInputs) {
   EXPECT_TRUE(pending_layer()->GetPaintWorkletRecordMap().contains(input3));
 }
 
+TEST_F(LegacySWPictureLayerImplTest, PaintWorkletInputsIdenticalEntries) {
+  gfx::Size layer_bounds(1000, 1000);
+
+  auto recording_source = FakeRecordingSource::CreateRecordingSource(
+      gfx::Rect(layer_bounds), layer_bounds);
+  scoped_refptr<TestPaintWorkletInput> input =
+      base::MakeRefCounted<TestPaintWorkletInput>(gfx::SizeF(100, 100));
+  PaintImage image = CreatePaintWorkletPaintImage(input);
+  recording_source->add_draw_image(image, gfx::Point(100, 100));
+  recording_source->add_draw_image(image, gfx::Point(100, 100));
+  recording_source->Rerecord();
+
+  // All inputs should be registered on the pending layer.
+  SetupPendingTree(recording_source->CreateRasterSource(), gfx::Size(),
+                   Region(gfx::Rect(layer_bounds)));
+  EXPECT_EQ(pending_layer()->GetPaintWorkletRecordMap().size(), 1u);
+  EXPECT_TRUE(pending_layer()->GetPaintWorkletRecordMap().contains(input));
+
+  PaintRecord record;
+  pending_layer()->SetPaintWorkletRecord(input, record);
+  pending_layer()->picture_layer_tiling_set()->RemoveAllTiles();
+  recording_source->Rerecord();
+  pending_layer()->SetRasterSource(recording_source->CreateRasterSource(),
+                                   Region());
+  EXPECT_EQ(pending_layer()->GetPaintWorkletRecordMap().size(), 1u);
+  auto it = pending_layer()->GetPaintWorkletRecordMap().find(input);
+  ASSERT_NE(it, pending_layer()->GetPaintWorkletRecordMap().end());
+  // For now the paint record is cleared for multiple identical inputs.
+  EXPECT_FALSE(it->second.second.has_value());
+}
+
 TEST_F(LegacySWPictureLayerImplTest, NoTilingsUsesScaleOne) {
   auto render_pass = viz::CompositorRenderPass::Create();
 
@@ -6253,6 +6351,7 @@ TEST_F(LegacySWPictureLayerImplTest, NoTilingsUsesScaleOne) {
   ActivateTree();
 
   active_layer()->SetContentsOpaque(true);
+  active_layer()->SetSafeOpaqueBackgroundColor(SkColors::kWhite);
   active_layer()->draw_properties().visible_layer_rect =
       gfx::Rect(0, 0, 1000, 1000);
   active_layer()->UpdateTiles();

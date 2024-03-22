@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,8 @@ std::unique_ptr<syncer::DeviceInfo> CloneDeviceInfo(
   return std::make_unique<syncer::DeviceInfo>(
       device_info.guid(), device_info.client_name(),
       device_info.chrome_version(), device_info.sync_user_agent(),
-      device_info.device_type(), device_info.signin_scoped_device_id(),
+      device_info.device_type(), device_info.os_type(),
+      device_info.form_factor(), device_info.signin_scoped_device_id(),
       device_info.manufacturer_name(), device_info.model_name(),
       device_info.full_hardware_class(), device_info.last_updated_timestamp(),
       device_info.pulse_interval(),
@@ -71,15 +72,15 @@ void FakeDeviceInfoTracker::RemoveObserver(Observer* observer) {
   observers_.RemoveObserver(observer);
 }
 
-std::map<sync_pb::SyncEnums_DeviceType, int>
+std::map<DeviceInfo::FormFactor, int>
 FakeDeviceInfoTracker::CountActiveDevicesByType() const {
   if (device_count_per_type_override_) {
     return *device_count_per_type_override_;
   }
 
-  std::map<sync_pb::SyncEnums_DeviceType, int> count_by_type;
+  std::map<DeviceInfo::FormFactor, int> count_by_type;
   for (const auto* device : devices_) {
-    count_by_type[device->device_type()]++;
+    count_by_type[device->form_factor()]++;
   }
   return count_by_type;
 }
@@ -100,6 +101,21 @@ void FakeDeviceInfoTracker::Add(const DeviceInfo* device) {
   }
 }
 
+void FakeDeviceInfoTracker::Add(const std::vector<const DeviceInfo*>& devices) {
+  for (auto* device : devices) {
+    devices_.push_back(device);
+  }
+  for (auto& observer : observers_) {
+    observer.OnDeviceInfoChange();
+  }
+}
+
+void FakeDeviceInfoTracker::Remove(const DeviceInfo* device) {
+  const auto remove_it = base::ranges::remove(devices_, device);
+  CHECK(remove_it != devices_.end());
+  devices_.erase(remove_it);
+}
+
 void FakeDeviceInfoTracker::Replace(const DeviceInfo* old_device,
                                     const DeviceInfo* new_device) {
   std::vector<const DeviceInfo*>::iterator it =
@@ -112,7 +128,7 @@ void FakeDeviceInfoTracker::Replace(const DeviceInfo* old_device,
 }
 
 void FakeDeviceInfoTracker::OverrideActiveDeviceCount(
-    const std::map<sync_pb::SyncEnums_DeviceType, int>& counts) {
+    const std::map<DeviceInfo::FormFactor, int>& counts) {
   device_count_per_type_override_ = counts;
   for (auto& observer : observers_) {
     observer.OnDeviceInfoChange();

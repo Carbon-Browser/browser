@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 #include <memory>
 
 #include "base/android/scoped_java_ref.h"
+#include "base/component_export.h"
 #include "base/containers/span.h"
 #include "url/gurl.h"
 
 namespace url {
 
-class GURLAndroid {
+class COMPONENT_EXPORT(URL) GURLAndroid {
  public:
   static std::unique_ptr<GURL> ToNativeGURL(
       JNIEnv* env,

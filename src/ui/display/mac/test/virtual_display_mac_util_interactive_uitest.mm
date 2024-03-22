@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,21 @@
 #include "ui/display/mac/test/virtual_display_mac_util.h"
 #include "ui/display/screen.h"
 #include "ui/display/types/display_constants.h"
+#include "ui/gfx/geometry/size.h"
 
 class VirtualDisplayMacUtilInteractiveUitest : public testing::Test {
- protected:
-  VirtualDisplayMacUtilInteractiveUitest() = default;
-
+ public:
   VirtualDisplayMacUtilInteractiveUitest(
       const VirtualDisplayMacUtilInteractiveUitest&) = delete;
   VirtualDisplayMacUtilInteractiveUitest& operator=(
       const VirtualDisplayMacUtilInteractiveUitest&) = delete;
 
+ protected:
+  VirtualDisplayMacUtilInteractiveUitest() = default;
+
   void SetUp() override {
     if (!display::test::VirtualDisplayMacUtil::IsAPIAvailable()) {
-      GTEST_SKIP() << "Skipping test for MacOS 11.0 and older or Arm Macs.";
+      GTEST_SKIP() << "Skipping test for unsupported MacOS version.";
     }
 
     testing::Test::SetUp();
@@ -31,18 +33,8 @@ class VirtualDisplayMacUtilInteractiveUitest : public testing::Test {
       base::test::TaskEnvironment::MainThreadType::UI};
 };
 
-TEST_F(VirtualDisplayMacUtilInteractiveUitest, WarmUp) {
-  int display_count = display::Screen::GetScreen()->GetNumDisplays();
-
-  display::test::VirtualDisplayMacUtil virtual_display_mac_util;
-  virtual_display_mac_util.WarmUp();
-
-  EXPECT_EQ(display::Screen::GetScreen()->GetNumDisplays(), display_count);
-}
-
 TEST_F(VirtualDisplayMacUtilInteractiveUitest, AddDisplay) {
   display::test::VirtualDisplayMacUtil virtual_display_mac_util;
-  virtual_display_mac_util.WarmUp();
 
   int64_t id = virtual_display_mac_util.AddDisplay(
       1, display::test::VirtualDisplayMacUtil::k1920x1080);
@@ -55,7 +47,6 @@ TEST_F(VirtualDisplayMacUtilInteractiveUitest, AddDisplay) {
 
 TEST_F(VirtualDisplayMacUtilInteractiveUitest, RemoveDisplay) {
   display::test::VirtualDisplayMacUtil virtual_display_mac_util;
-  virtual_display_mac_util.WarmUp();
 
   int64_t id = virtual_display_mac_util.AddDisplay(
       1, display::test::VirtualDisplayMacUtil::k1920x1080);
@@ -80,7 +71,6 @@ TEST_F(VirtualDisplayMacUtilInteractiveUitest, HotPlug) {
   std::unique_ptr<display::test::VirtualDisplayMacUtil>
       virtual_display_mac_util =
           std::make_unique<display::test::VirtualDisplayMacUtil>();
-  virtual_display_mac_util->WarmUp();
 
   virtual_display_mac_util->AddDisplay(
       1, display::test::VirtualDisplayMacUtil::k1920x1080);
@@ -92,4 +82,15 @@ TEST_F(VirtualDisplayMacUtilInteractiveUitest, HotPlug) {
 
   virtual_display_mac_util.reset();
   EXPECT_EQ(display::Screen::GetScreen()->GetNumDisplays(), display_count);
+}
+
+TEST_F(VirtualDisplayMacUtilInteractiveUitest, EnsureDisplayWithResolution) {
+  display::test::VirtualDisplayMacUtil virtual_display_mac_util;
+
+  int64_t id = virtual_display_mac_util.AddDisplay(
+      1, display::test::VirtualDisplayMacUtil::k1920x1080);
+
+  display::Display d;
+  display::Screen::GetScreen()->GetDisplayWithDisplayId(id, &d);
+  EXPECT_EQ(d.size(), gfx::Size(1920, 1080));
 }

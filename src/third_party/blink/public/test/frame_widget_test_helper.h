@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_TEST_FRAME_WIDGET_TEST_HELPER_H_
 #define THIRD_PARTY_BLINK_PUBLIC_TEST_FRAME_WIDGET_TEST_HELPER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/web/web_frame_widget.h"
 
@@ -58,16 +58,12 @@ class FrameWidgetTestHelper {
   // produces up-to-date pixel output. This is a separate path as most
   // compositing paths stop running when the test ends, to avoid tests running
   // forever.
-  virtual void SynchronouslyCompositeAfterTest() = 0;
+  virtual void SynchronouslyCompositeAfterTest(base::OnceClosure callback) = 0;
 
   // Forces a redraw and invokes the callback once the frame's been displayed
   // to the user in the display compositor.
   virtual void UpdateAllLifecyclePhasesAndComposite(
       base::OnceClosure completion_callback) = 0;
-
-  // Retains the pseudo-element transition DOM generated for a
-  // DocumentTransition after all animations have finished.
-  virtual void DisableEndDocumentTransition() = 0;
 };
 
 }  // namespace blink

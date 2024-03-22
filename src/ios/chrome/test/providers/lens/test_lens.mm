@@ -1,18 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "ios/public/provider/chrome/browser/lens/lens_api.h"
-#import "ios/public/provider/chrome/browser/lens/lens_configuration.h"
-
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-
 #import <UIKit/UIKit.h>
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import <optional>
+#import <ostream>
+
+#import "base/functional/bind.h"
+#import "base/notreached.h"
+#import "ios/public/provider/chrome/browser/lens/lens_api.h"
+#import "ios/public/provider/chrome/browser/lens/lens_configuration.h"
+#import "url/url_constants.h"
 
 namespace ios {
 namespace provider {
@@ -29,6 +28,9 @@ enum TestLensProviderErrors : NSInteger {
 
 }
 
+using LensWebParamsCallback =
+    base::OnceCallback<void(web::NavigationManager::WebLoadParams)>;
+
 id<ChromeLensController> NewChromeLensController(LensConfiguration* config) {
   // Lens is not supported for tests.
   return nil;
@@ -39,16 +41,18 @@ bool IsLensSupported() {
   return false;
 }
 
-void GenerateLensWebURLForImage(
-    UIImage* image,
-    ios::provider::LensWebURLCompletion completion) {
-  NSError* error = [NSError errorWithDomain:kTestLensProviderErrorDomain
-                                       code:kTestLensProviderErrorNotImplemented
-                                   userInfo:nil];
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   base::BindOnce(^() {
-                                                     completion(nil, error);
-                                                   }));
+bool IsLensWebResultsURL(const GURL& url) {
+  // Lens is not supported for tests.
+  return false;
+}
+
+std::optional<LensEntrypoint> GetLensEntryPointFromURL(const GURL& url) {
+  return std::nullopt;
+}
+
+void GenerateLensLoadParamsAsync(LensQuery* query,
+                                 LensWebParamsCallback completion) {
+  NOTREACHED() << "Lens is not supported.";
 }
 
 }  // namespace provider

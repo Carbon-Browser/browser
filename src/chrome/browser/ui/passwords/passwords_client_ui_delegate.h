@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/password_manager/core/browser/leak_detection_dialog_utils.h"
 #include "components/password_manager/core/browser/password_form.h"
+#include "components/prefs/pref_service.h"
 
 namespace content {
 class WebContents;
@@ -81,8 +82,8 @@ class PasswordsClientUIDelegate {
   // Called when the password will be saved automatically, but we still wish to
   // visually inform the user that the save has occured.
   virtual void OnAutomaticPasswordSave(
-      std::unique_ptr<password_manager::PasswordFormManagerForUI>
-          form_manager) = 0;
+      std::unique_ptr<password_manager::PasswordFormManagerForUI> form_manager,
+      bool is_update_confirmation) = 0;
 
   // Called when a form is autofilled with login information, so we can manage
   // password credentials for the current site which are stored in
@@ -106,6 +107,15 @@ class PasswordsClientUIDelegate {
   virtual void OnShowMoveToAccountBubble(
       std::unique_ptr<password_manager::PasswordFormManagerForUI>
           form_to_move) = 0;
+
+  // Called when trying to enable biometric authentication for filling from
+  // bubble promp.
+  virtual void OnBiometricAuthenticationForFilling(
+      PrefService* pref_service) = 0;
+
+  // Called when trying to access saved passwords when keychain is not
+  // available.
+  virtual void OnKeychainError() = 0;
 
  protected:
   virtual ~PasswordsClientUIDelegate() = default;

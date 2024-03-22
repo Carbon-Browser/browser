@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/values_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -149,7 +149,7 @@ class ChromePermissionRequestManagerTest
   permissions::MockPermissionRequest request2_;
   permissions::MockPermissionRequest request_mic_;
   permissions::MockPermissionRequest request_camera_;
-  raw_ptr<permissions::PermissionRequestManager> manager_;
+  raw_ptr<permissions::PermissionRequestManager, DanglingUntriaged> manager_;
   std::unique_ptr<permissions::MockPermissionPromptFactory> prompt_factory_;
 };
 
@@ -325,7 +325,7 @@ TEST_F(ChromePermissionRequestManagerTest,
           "true"},
          {QuietNotificationPermissionUiConfig::kEnableAdaptiveActivationDryRun,
           "true"}}}},
-      {features::kPermissionPredictions});
+      {});
 
   ASSERT_TRUE(
       QuietNotificationPermissionUiConfig::IsAdaptiveActivationDryRunEnabled());
@@ -410,7 +410,7 @@ TEST_F(ChromePermissionRequestManagerTest,
          {QuietNotificationPermissionUiConfig::
               kAdaptiveActivationActionWindowSizeInDays,
           "7"}}}},
-      {features::kPermissionPredictions});
+      {});
 
   ASSERT_EQ(
       base::Days(7),
@@ -456,8 +456,7 @@ TEST_F(ChromePermissionRequestManagerTest,
       {{features::kQuietNotificationPrompts,
         {{QuietNotificationPermissionUiConfig::kEnableAdaptiveActivation,
           "true"}}}},
-      {permissions::features::kBlockRepeatedNotificationPermissionPrompts,
-       features::kPermissionPredictions});
+      {permissions::features::kBlockRepeatedNotificationPermissionPrompts});
 
   EXPECT_FALSE(profile()->GetPrefs()->GetBoolean(
       prefs::kEnableQuietNotificationPermissionUi));
@@ -608,16 +607,15 @@ TEST_F(ChromePermissionRequestManagerTest,
   WaitForBubbleToBeShown();
   Deny();
 
-  DictionaryPrefUpdate update(profile()->GetPrefs(),
+  ScopedDictPrefUpdate update(profile()->GetPrefs(),
                               permissions::prefs::kPermissionActions);
-  const auto permissions_actions =
-      update->FindListPath("notifications")->GetListDeprecated();
+  const auto& permissions_actions = *update->FindList("notifications");
   PermissionActionsHistoryFactory::GetForProfile(profile())->ClearHistory(
       from_time, to_time);
 
   // Check that we have cleared all entries >= |from_time| and <|end_time|.
   EXPECT_EQ(permissions_actions.size(), 3u);
-  EXPECT_EQ((base::ValueToTime(permissions_actions[0].FindKey("time")))
+  EXPECT_EQ((base::ValueToTime(permissions_actions[0].GetDict().Find("time")))
                 .value_or(base::Time()),
             recorded_time);
 }
@@ -653,7 +651,7 @@ class ChromePermissionRequestManagerAdaptiveQuietUiActivationTest
         {{features::kQuietNotificationPrompts,
           {{QuietNotificationPermissionUiConfig::kEnableAdaptiveActivation,
             "true"}}}},
-        {features::kPermissionPredictions});
+        {});
   }
 
  protected:

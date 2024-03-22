@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,16 @@
 #include <vector>
 
 #include "base/atomicops.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/queue.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -32,6 +33,7 @@
 #include "base/trace_event/process_memory_dump.h"
 #include "cc/paint/image_transfer_cache_entry.h"
 #include "cc/paint/transfer_cache_entry.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/common/buffer.h"
 #include "gpu/command_buffer/common/capabilities.h"
 #include "gpu/command_buffer/common/constants.h"
@@ -42,12 +44,14 @@
 #include "gpu/command_buffer/common/sync_token.h"
 #include "gpu/command_buffer/service/context_group.h"
 #include "gpu/command_buffer/service/decoder_context.h"
-#include "gpu/command_buffer/service/image_factory.h"
 #include "gpu/command_buffer/service/mocks.h"
 #include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/command_buffer/service/sequence_id.h"
 #include "gpu/command_buffer/service/service_transfer_cache.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_backing_factory.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
+#include "gpu/command_buffer/service/shared_image/test_image_backing.h"
 #include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
@@ -73,7 +77,6 @@
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 #include "ui/gl/gl_bindings.h"
-#include "ui/gl/gl_image_stub.h"
 #include "url/gurl.h"
 
 using testing::InSequence;
@@ -109,12 +112,9 @@ uint64_t GetMemoryDumpByteSize(
     const base::trace_event::MemoryAllocatorDump* dump,
     const std::string& entry_name) {
   DCHECK(dump);
-  auto entry_it = std::find_if(
-      dump->entries().cbegin(), dump->entries().cend(),
-      [&entry_name](
-          const base::trace_event::MemoryAllocatorDump::Entry& entry) {
-        return entry.name == entry_name;
-      });
+  auto entry_it =
+      base::ranges::find(dump->entries(), entry_name,
+                         &base::trace_event::MemoryAllocatorDump::Entry::name);
   if (entry_it != dump->entries().cend()) {
     EXPECT_EQ(std::string(base::trace_event::MemoryAllocatorDump::kUnitsBytes),
               entry_it->units);
@@ -136,35 +136,88 @@ base::CheckedNumeric<uint64_t> GetExpectedTotalMippedSizeForPlanarImage(
   return safe_total_image_size;
 }
 
-// This ImageFactory is defined so that we don't have to generate a real
-// GpuMemoryBuffer with decoded data in these tests.
-class TestImageFactory : public ImageFactory {
+class TestSharedImageBackingFactory : public SharedImageBackingFactory {
  public:
-  TestImageFactory() = default;
-  ~TestImageFactory() override = default;
+  TestSharedImageBackingFactory() : SharedImageBackingFactory(kUsageAll) {}
 
-  // ImageFactory implementation.
-  scoped_refptr<gl::GLImage> CreateImageForGpuMemoryBuffer(
-      gfx::GpuMemoryBufferHandle handle,
+  // SharedImageBackingFactory implementation.
+  std::unique_ptr<SharedImageBacking> CreateSharedImage(
+      const Mailbox& mailbox,
+      viz::SharedImageFormat format,
+      SurfaceHandle surface_handle,
       const gfx::Size& size,
-      gfx::BufferFormat format,
       const gfx::ColorSpace& color_space,
-      gfx::BufferPlane plane,
-      int client_id,
-      SurfaceHandle surface_handle) override {
-    return base::MakeRefCounted<gl::GLImageStub>();
-  }
-  bool SupportsCreateAnonymousImage() const override { return false; }
-  scoped_refptr<gl::GLImage> CreateAnonymousImage(const gfx::Size& size,
-                                                  gfx::BufferFormat format,
-                                                  gfx::BufferUsage usage,
-                                                  SurfaceHandle surface_handle,
-                                                  bool* is_cleared) override {
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      std::string debug_label,
+      bool is_thread_safe) override {
     NOTREACHED();
     return nullptr;
   }
-  unsigned RequiredTextureType() override { return GL_TEXTURE_EXTERNAL_OES; }
-  bool SupportsFormatRGB() override { return false; }
+  std::unique_ptr<SharedImageBacking> CreateSharedImage(
+      const Mailbox& mailbox,
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      std::string debug_label,
+      base::span<const uint8_t> pixel_data) override {
+    NOTREACHED();
+    return nullptr;
+  }
+  std::unique_ptr<SharedImageBacking> CreateSharedImage(
+      const Mailbox& mailbox,
+      gfx::GpuMemoryBufferHandle handle,
+      gfx::BufferFormat format,
+      gfx::BufferPlane plane,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      std::string debug_label) override {
+    auto test_image_backing = std::make_unique<TestImageBacking>(
+        mailbox, viz::GetSinglePlaneSharedImageFormat(format), size,
+        color_space, surface_origin, alpha_type, usage, 0);
+
+    // If the backing is not cleared, SkiaImageRepresentation errors out
+    // when trying to create the scoped read access.
+    test_image_backing->SetCleared();
+
+    return std::move(test_image_backing);
+  }
+  std::unique_ptr<SharedImageBacking> CreateSharedImage(
+      const Mailbox& mailbox,
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      std::string debug_label,
+      gfx::GpuMemoryBufferHandle handle) override {
+    auto test_image_backing = std::make_unique<TestImageBacking>(
+        mailbox, format, size, color_space, surface_origin, alpha_type, usage,
+        0);
+
+    // If the backing is not cleared, SkiaImageRepresentation errors out
+    // when trying to create the scoped read access.
+    test_image_backing->SetCleared();
+
+    return std::move(test_image_backing);
+  }
+  bool IsSupported(uint32_t usage,
+                   viz::SharedImageFormat format,
+                   const gfx::Size& size,
+                   bool thread_safe,
+                   gfx::GpuMemoryBufferType gmb_type,
+                   GrContextType gr_context_type,
+                   base::span<const uint8_t> pixel_data) override {
+    return true;
+  }
 };
 
 }  // namespace
@@ -195,9 +248,8 @@ class MockImageDecodeAcceleratorWorker : public ImageDecodeAcceleratorWorker {
     pending_decodes_.pop();
     if (success) {
       // We give out a dummy GpuMemoryBufferHandle as the result: since we mock
-      // the ImageFactory and the gl::GLImage in these tests, the only
-      // requirement is that the NativePixmapHandle has the right number of
-      // planes.
+      // the SharedImage backing in these tests, the only requirement is that
+      // the NativePixmapHandle has the right number of planes.
       auto decode_result = std::make_unique<DecodeResult>();
       decode_result->handle.type = gfx::GpuMemoryBufferType::NATIVE_PIXMAP;
       for (size_t plane = 0; plane < gfx::NumberOfPlanesForLinearBufferFormat(
@@ -299,14 +351,14 @@ class ImageDecodeAcceleratorStubTest
         channel_manager()->GetSharedContextState(&context_result);
     ASSERT_EQ(ContextResult::kSuccess, context_result);
     ASSERT_TRUE(shared_context_state);
-    shared_context_state->InitializeGrContext(
-        GpuPreferences(), GpuDriverBugWorkarounds(), nullptr);
+    shared_context_state->InitializeSkia(GpuPreferences(),
+                                         GpuDriverBugWorkarounds());
 
     GpuChannel* channel = CreateChannel(kChannelId, false /* is_gpu_host */);
     ASSERT_TRUE(channel);
-    ASSERT_TRUE(channel->GetImageDecodeAcceleratorStubForTesting());
-    channel->GetImageDecodeAcceleratorStubForTesting()
-        ->SetImageFactoryForTesting(&image_factory_);
+    channel->shared_image_stub()
+        ->factory()
+        ->RegisterSharedImageBackingFactoryForTesting(&test_factory_);
 
     // Create a raster command buffer so that the ImageDecodeAcceleratorStub can
     // have access to a TransferBufferManager. Note that we mock the
@@ -315,7 +367,6 @@ class ImageDecodeAcceleratorStubTest
     CommandBufferStub::SetMemoryTrackerFactoryForTesting(
         base::BindRepeating(&CreateMockMemoryTracker));
     auto init_params = mojom::CreateCommandBufferParams::New();
-    init_params->surface_handle = kNullSurfaceHandle;
     init_params->share_group_id = MSG_ROUTING_NONE;
     init_params->stream_id = 0;
     init_params->stream_priority = SchedulingPriority::kNormal;
@@ -326,8 +377,10 @@ class ImageDecodeAcceleratorStubTest
     init_params->active_url = GURL();
     ContextResult result = ContextResult::kTransientFailure;
     Capabilities capabilities;
+    GLCapabilities gl_capabilities;
     CreateCommandBuffer(*channel, std::move(init_params), kCommandBufferRouteId,
-                        GetSharedMemoryRegion(), &result, &capabilities);
+                        GetSharedMemoryRegion(), &result, &capabilities,
+                        &gl_capabilities);
     ASSERT_EQ(ContextResult::kSuccess, result);
     CommandBufferStub* command_buffer =
         channel->LookupCommandBuffer(kCommandBufferRouteId);
@@ -517,9 +570,9 @@ class ImageDecodeAcceleratorStubTest
     base::trace_event::MemoryDumpRequestArgs dump_args{};
     dump_args.dump_guid = 1234u;
     dump_args.dump_type =
-        base::trace_event::MemoryDumpType::EXPLICITLY_TRIGGERED;
+        base::trace_event::MemoryDumpType::kExplicitlyTriggered;
     dump_args.level_of_detail = detail_level;
-    dump_args.determinism = base::trace_event::MemoryDumpDeterminism::FORCE_GC;
+    dump_args.determinism = base::trace_event::MemoryDumpDeterminism::kForceGc;
     std::unique_ptr<base::trace_event::ProcessMemoryDump> dump;
     base::RunLoop run_loop;
     base::trace_event::MemoryDumpManager::GetInstance()->CreateProcessDump(
@@ -552,7 +605,7 @@ class ImageDecodeAcceleratorStubTest
         base::StringPrintf("gpu/transfer_cache/cache_0x%" PRIXPTR,
                            reinterpret_cast<uintptr_t>(cache));
     if (detail_level ==
-        base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+        base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
       auto transfer_cache_dump_it =
           dump->allocator_dumps().find(transfer_cache_dump_name);
       ASSERT_NE(dump->allocator_dumps().end(), transfer_cache_dump_it);
@@ -570,7 +623,7 @@ class ImageDecodeAcceleratorStubTest
                 GetMemoryDumpByteSize(avg_image_size_dump_it->second.get(),
                                       "average_size"));
     } else {
-      DCHECK_EQ(base::trace_event::MemoryDumpLevelOfDetail::DETAILED,
+      DCHECK_EQ(base::trace_event::MemoryDumpLevelOfDetail::kDetailed,
                 detail_level);
       base::CheckedNumeric<uint64_t> safe_actual_transfer_cache_total_size(0u);
       std::string entry_dump_prefix =
@@ -659,7 +712,7 @@ class ImageDecodeAcceleratorStubTest
   StrictMock<MockImageDecodeAcceleratorWorker> image_decode_accelerator_worker_;
 
  private:
-  TestImageFactory image_factory_;
+  TestSharedImageBackingFactory test_factory_;
   base::test::ScopedFeatureList feature_list_;
   base::WeakPtrFactory<ImageDecodeAcceleratorStubTest> weak_ptr_factory_{this};
 };
@@ -956,7 +1009,7 @@ TEST_P(ImageDecodeAcceleratorStubTest, MemoryReportDetailedForUnmippedDecode) {
       RunSimpleDecode(false /* needs_mips */);
   ASSERT_TRUE(decode_entry);
   ExpectProcessMemoryDump(
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED,
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed,
       base::strict_cast<uint64_t>(
           kDecodedBufferByteSize) /* expected_total_transfer_cache_size */,
       0u /* expected_total_skia_gpu_resources_size */,
@@ -969,7 +1022,7 @@ TEST_P(ImageDecodeAcceleratorStubTest,
       RunSimpleDecode(false /* needs_mips */);
   ASSERT_TRUE(decode_entry);
   ExpectProcessMemoryDump(
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND,
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground,
       base::strict_cast<uint64_t>(
           kDecodedBufferByteSize) /* expected_total_transfer_cache_size */,
       0u /* expected_total_skia_gpu_resources_size */,
@@ -987,7 +1040,7 @@ TEST_P(ImageDecodeAcceleratorStubTest, MemoryReportDetailedForMippedDecode) {
       GetExpectedTotalMippedSizeForPlanarImage(decode_entry);
   ASSERT_TRUE(safe_expected_total_transfer_cache_size.IsValid());
   ExpectProcessMemoryDump(
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED,
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed,
       safe_expected_total_transfer_cache_size.ValueOrDie(),
       kSkiaBufferObjectSize /* expected_total_skia_gpu_resources_size */,
       0u /* expected_avg_image_size */);
@@ -1003,7 +1056,7 @@ TEST_P(ImageDecodeAcceleratorStubTest, MemoryReportBackgroundForMippedDecode) {
       GetExpectedTotalMippedSizeForPlanarImage(decode_entry);
   ASSERT_TRUE(safe_expected_total_transfer_cache_size.IsValid());
   ExpectProcessMemoryDump(
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND,
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground,
       safe_expected_total_transfer_cache_size.ValueOrDie(),
       kSkiaBufferObjectSize,
       safe_expected_total_transfer_cache_size
@@ -1022,7 +1075,7 @@ TEST_P(ImageDecodeAcceleratorStubTest,
       GetExpectedTotalMippedSizeForPlanarImage(decode_entry);
   ASSERT_TRUE(safe_expected_total_transfer_cache_size.IsValid());
   ExpectProcessMemoryDump(
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED,
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed,
       safe_expected_total_transfer_cache_size.ValueOrDie(),
       kSkiaBufferObjectSize /* expected_total_skia_gpu_resources_size */,
       0u /* expected_avg_image_size */);
@@ -1039,7 +1092,7 @@ TEST_P(ImageDecodeAcceleratorStubTest,
   // For a deferred mip request, the transfer cache doesn't update its size
   // computation, so it reports memory as if no mips had been generated.
   ExpectProcessMemoryDump(
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND,
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground,
       base::strict_cast<uint64_t>(
           kDecodedBufferByteSize) /* expected_total_transfer_cache_size */,
       kSkiaBufferObjectSize,

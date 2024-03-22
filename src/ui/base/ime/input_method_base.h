@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,6 @@ class Rect;
 
 namespace ui {
 
-class IMEEngineHandlerInterface;
 class InputMethodObserver;
 class KeyEvent;
 class TextInputClient;
@@ -40,22 +39,15 @@ class COMPONENT_EXPORT(UI_BASE_IME) InputMethodBase
   ~InputMethodBase() override;
 
   // Overriden from InputMethod.
-  void SetDelegate(internal::InputMethodDelegate* delegate) override;
+  void SetImeKeyEventDispatcher(
+      ImeKeyEventDispatcher* ime_key_event_dispatcher) override;
   void OnFocus() override;
-  void OnTouch(ui::EventPointerType pointerType) override;
   void OnBlur() override;
-
-#if BUILDFLAG(IS_WIN)
-  bool OnUntranslatedIMEMessage(const CHROME_MSG event,
-                                NativeEventResult* result) override;
-  void OnInputLocaleChanged() override;
-  bool IsInputLocaleCJK() const override;
-#endif
 
   void SetFocusedTextInputClient(TextInputClient* client) override;
   void DetachTextInputClient(TextInputClient* client) override;
   TextInputClient* GetTextInputClient() const override;
-  void SetOnScreenKeyboardBounds(const gfx::Rect& new_bounds) override;
+  void SetVirtualKeyboardBounds(const gfx::Rect& new_bounds) override;
 
   // If a derived class overrides this method, it should call parent's
   // implementation.
@@ -67,20 +59,18 @@ class COMPONENT_EXPORT(UI_BASE_IME) InputMethodBase
   void RemoveObserver(InputMethodObserver* observer) override;
 
   VirtualKeyboardController* GetVirtualKeyboardController() override;
+  void SetVirtualKeyboardControllerForTesting(
+      std::unique_ptr<VirtualKeyboardController> controller) override;
 
  protected:
-  explicit InputMethodBase(internal::InputMethodDelegate* delegate);
-  InputMethodBase(internal::InputMethodDelegate* delegate,
+  explicit InputMethodBase(ImeKeyEventDispatcher* ime_key_event_dispatcher);
+  InputMethodBase(ImeKeyEventDispatcher* ime_key_event_dispatcher,
                   std::unique_ptr<VirtualKeyboardController> controller);
 
   virtual void OnWillChangeFocusedClient(TextInputClient* focused_before,
                                          TextInputClient* focused) {}
   virtual void OnDidChangeFocusedClient(TextInputClient* focused_before,
                                         TextInputClient* focused) {}
-
-  // Sends a fake key event for IME composing without physical key events.
-  // Returns true if the faked key event is stopped propagation.
-  bool SendFakeProcessKeyEvent(bool pressed) const;
 
   // Returns true if |client| is currently focused.
   bool IsTextInputClientFocused(const TextInputClient* client);
@@ -105,24 +95,23 @@ class COMPONENT_EXPORT(UI_BASE_IME) InputMethodBase
   // |client| which is the text input client with focus.
   void NotifyTextInputCaretBoundsChanged(const TextInputClient* client);
 
-  // Gets the bounds of the composition text or cursor in |client|.
-  std::vector<gfx::Rect> GetCompositionBounds(const TextInputClient* client);
-
-  internal::InputMethodDelegate* delegate() const { return delegate_; }
+  ImeKeyEventDispatcher* ime_key_event_dispatcher() {
+    return ime_key_event_dispatcher_;
+  }
 
  private:
-  raw_ptr<internal::InputMethodDelegate> delegate_;
+  raw_ptr<ImeKeyEventDispatcher, DanglingUntriaged> ime_key_event_dispatcher_;
 
   void SetFocusedTextInputClientInternal(TextInputClient* client);
 
-  raw_ptr<TextInputClient> text_input_client_ = nullptr;
+  raw_ptr<TextInputClient, DanglingUntriaged> text_input_client_ = nullptr;
 
   base::ObserverList<InputMethodObserver>::Unchecked observer_list_;
 
   // Screen bounds of a on-screen keyboard.
   gfx::Rect keyboard_bounds_;
 
-  std::unique_ptr<VirtualKeyboardController> const keyboard_controller_;
+  std::unique_ptr<VirtualKeyboardController> keyboard_controller_;
 };
 
 }  // namespace ui

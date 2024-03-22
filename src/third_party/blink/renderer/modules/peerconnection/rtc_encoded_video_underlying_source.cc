@@ -1,15 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_video_underlying_source.h"
 
+#include "base/memory/ptr_util.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_default_controller_with_script_scope.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_video_frame.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_video_frame_delegate.h"
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
+#include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/webrtc/api/frame_transformer_interface.h"
 
 namespace blink {
@@ -21,23 +26,28 @@ const int RTCEncodedVideoUnderlyingSource::kMinQueueDesiredSize = -60;
 
 RTCEncodedVideoUnderlyingSource::RTCEncodedVideoUnderlyingSource(
     ScriptState* script_state,
-    base::OnceClosure disconnect_callback)
+    WTF::CrossThreadOnceClosure disconnect_callback)
     : UnderlyingSourceBase(script_state),
       script_state_(script_state),
       disconnect_callback_(std::move(disconnect_callback)) {
   DCHECK(disconnect_callback_);
+
+  ExecutionContext* context = ExecutionContext::From(script_state);
+  task_runner_ = context->GetTaskRunner(TaskType::kInternalMediaRealTime);
 }
 
-ScriptPromise RTCEncodedVideoUnderlyingSource::pull(ScriptState* script_state) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+ScriptPromise RTCEncodedVideoUnderlyingSource::Pull(ScriptState* script_state,
+                                                    ExceptionState&) {
+  DCHECK(task_runner_->BelongsToCurrentThread());
   // WebRTC is a push source without backpressure support, so nothing to do
   // here.
   return ScriptPromise::CastUndefined(script_state);
 }
 
 ScriptPromise RTCEncodedVideoUnderlyingSource::Cancel(ScriptState* script_state,
-                                                      ScriptValue reason) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+                                                      ScriptValue reason,
+                                                      ExceptionState&) {
+  DCHECK(task_runner_->BelongsToCurrentThread());
   if (disconnect_callback_)
     std::move(disconnect_callback_).Run();
   return ScriptPromise::CastUndefined(script_state);
@@ -50,7 +60,15 @@ void RTCEncodedVideoUnderlyingSource::Trace(Visitor* visitor) const {
 
 void RTCEncodedVideoUnderlyingSource::OnFrameFromSource(
     std::unique_ptr<webrtc::TransformableVideoFrameInterface> webrtc_frame) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  // It can happen that a frame is posted to the task runner of the old
+  // execution context during a stream transfer to a new context.
+  // TODO(https://crbug.com/1506631): Make the state updates related to the
+  // transfer atomic and turn this into a DCHECK.
+  if (!task_runner_->BelongsToCurrentThread()) {
+    DVLOG(1) << "Dropped frame posted to incorrect task runner. This can "
+                "happen during transfer.";
+    return;
+  }
   // If the source is canceled or there are too many queued frames,
   // drop the new frame.
   if (!disconnect_callback_ || !GetExecutionContext()) {
@@ -76,11 +94,28 @@ void RTCEncodedVideoUnderlyingSource::OnFrameFromSource(
 }
 
 void RTCEncodedVideoUnderlyingSource::Close() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK(task_runner_->BelongsToCurrentThread());
   if (disconnect_callback_)
     std::move(disconnect_callback_).Run();
 
-  Controller()->Close();
+  if (Controller())
+    Controller()->Close();
+}
+
+void RTCEncodedVideoUnderlyingSource::OnSourceTransferStartedOnTaskRunner() {
+  DCHECK(task_runner_->BelongsToCurrentThread());
+  // This can potentially be called before the stream is constructed and so
+  // Controller() is still unset.
+  if (Controller())
+    Controller()->Close();
+}
+
+void RTCEncodedVideoUnderlyingSource::OnSourceTransferStarted() {
+  PostCrossThreadTask(
+      *task_runner_, FROM_HERE,
+      CrossThreadBindOnce(
+          &RTCEncodedVideoUnderlyingSource::OnSourceTransferStartedOnTaskRunner,
+          WrapCrossThreadPersistent(this)));
 }
 
 }  // namespace blink

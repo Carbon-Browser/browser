@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,20 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/process/process_handle.h"
 #include "base/strings/string_piece.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/mojo_utils.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_client.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_messaging.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_network_context.h"
 #include "chrome/browser/ash/wilco_dtc_supportd/wilco_dtc_supportd_notification_controller.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/platform/platform_channel_endpoint.h"
@@ -84,7 +83,7 @@ void WilcoDtcSupportdBridgeDelegateImpl::
   mojo::OutgoingInvitation invitation;
   mojo::PlatformChannel channel;
   mojo::ScopedMessagePipeHandle server_pipe = invitation.AttachMessagePipe(
-      diagnostics::kWilcoDtcSupportdMojoConnectionChannelToken);
+      ::diagnostics::kWilcoDtcSupportdMojoConnectionChannelToken);
   mojo::OutgoingInvitation::Send(std::move(invitation),
                                  base::kNullProcessHandle,
                                  channel.TakeLocalEndpoint());
@@ -176,7 +175,7 @@ void WilcoDtcSupportdBridge::ScheduleWaitingForDBusService() {
   // ScheduleWaitingForDBusService().
   dbus_waiting_weak_ptr_factory_.InvalidateWeakPtrs();
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&WilcoDtcSupportdBridge::WaitForDBusService,
                      dbus_waiting_weak_ptr_factory_.GetWeakPtr()),
@@ -384,21 +383,23 @@ void WilcoDtcSupportdBridge::HandleEvent(WilcoDtcSupportdEvent event) {
     case WilcoDtcSupportdEvent::kLowPowerCharger:
       notification_controller_->ShowLowPowerChargerNotification();
       return;
+    case WilcoDtcSupportdEvent::kUnmappedEnumField:
+      LOG(ERROR) << "Get unrecognized event: " << event;
+      return;
   }
-  LOG(ERROR) << "Unrecognized event " << event << " event";
 }
 
 void WilcoDtcSupportdBridge::GetCrosHealthdDiagnosticsService(
-    mojo::PendingReceiver<
-        chromeos::cros_healthd::mojom::CrosHealthdDiagnosticsService> service) {
-  chromeos::cros_healthd::ServiceConnection::GetInstance()
-      ->GetDiagnosticsService(std::move(service));
+    mojo::PendingReceiver<cros_healthd::mojom::CrosHealthdDiagnosticsService>
+        service) {
+  cros_healthd::ServiceConnection::GetInstance()->BindDiagnosticsService(
+      std::move(service));
 }
 
 void WilcoDtcSupportdBridge::GetCrosHealthdProbeService(
-    mojo::PendingReceiver<
-        chromeos::cros_healthd::mojom::CrosHealthdProbeService> service) {
-  chromeos::cros_healthd::ServiceConnection::GetInstance()->GetProbeService(
+    mojo::PendingReceiver<cros_healthd::mojom::CrosHealthdProbeService>
+        service) {
+  cros_healthd::ServiceConnection::GetInstance()->BindProbeService(
       std::move(service));
 }
 

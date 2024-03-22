@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,10 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/android/webapk/webapk_install_service.h"
@@ -52,9 +53,22 @@ class WebApkInstallCoordinatorBridge {
 
   void OnFinishedApkInstall(const WebApkInstallResult result);
 
+  void Retry(
+      JNIEnv* env,
+      jstring start_url,
+      const base::android::JavaParamRef<jbyteArray>& java_serialized_proto,
+      const base::android::JavaParamRef<jobject>& java_primary_icon);
+
+  void OnRetryFinished(const WebApkInstallResult result);
+
   void Destroy(JNIEnv* env);
 
  private:
+  void RetryInstallOnUiThread(
+      std::unique_ptr<std::string> serialized_proto,
+      const SkBitmap& primary_icon,
+      WebApkInstallService::ServiceInstallFinishCallback finish_callback);
+
   JavaObjectWeakGlobalRef java_ref_;
 
   const scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;

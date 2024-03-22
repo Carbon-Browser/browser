@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_MEMBER_H_
 
+#include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/heap/thread_state_storage.h"
 #include "third_party/blink/renderer/platform/heap/write_barrier.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -24,6 +25,11 @@ using WeakMember = cppgc::WeakMember<T>;
 
 template <typename T>
 using UntracedMember = cppgc::UntracedMember<T>;
+
+namespace subtle {
+template <typename T>
+using UncompressedMember = cppgc::subtle::UncompressedMember<T>;
+}
 
 template <typename T>
 inline bool IsHashTableDeletedValue(const Member<T>& m) {
@@ -63,52 +69,6 @@ static constexpr bool kBlinkMemberGCHasDebugChecks =
 
 namespace WTF {
 
-// Default hash for hash tables with Member<>-derived elements.
-template <typename T>
-struct MemberHash
-    : IntHash<cppgc::internal::MemberBase::RawStorage::IntegralType> {
-  using Base = IntHash<cppgc::internal::MemberBase::RawStorage::IntegralType>;
-  STATIC_ONLY(MemberHash);
-  // Heap hash containers allow to operate with raw pointers, e.g.
-  //   HeapHashSet<Member<GCed>> set;
-  //   set.find(raw_ptr);
-  // Therefore, provide two hashing functions, one for raw pointers, another for
-  // Member. Prefer compressing raw pointers instead of decompressing Members,
-  // assuming the former is cheaper.
-  static unsigned GetHash(const T* key) {
-    cppgc::internal::MemberBase::RawStorage st(key);
-    return Base::GetHash(st.GetAsInteger());
-  }
-  template <typename Member,
-            std::enable_if_t<WTF::IsAnyMemberType<Member>::value>* = nullptr>
-  static unsigned GetHash(const Member& m) {
-    return Base::GetHash(m.GetRawStorage().GetAsInteger());
-  }
-
-  template <typename U, typename V>
-  static bool Equal(const U& a, const V& b) {
-    return a == b;
-  }
-};
-
-template <typename T>
-struct DefaultHash<blink::Member<T>> {
-  STATIC_ONLY(DefaultHash);
-  using Hash = MemberHash<T>;
-};
-
-template <typename T>
-struct DefaultHash<blink::WeakMember<T>> {
-  STATIC_ONLY(DefaultHash);
-  using Hash = MemberHash<T>;
-};
-
-template <typename T>
-struct DefaultHash<blink::UntracedMember<T>> {
-  STATIC_ONLY(DefaultHash);
-  using Hash = MemberHash<T>;
-};
-
 template <typename T>
 struct IsTraceable<blink::Member<T>> {
   STATIC_ONLY(IsTraceable);
@@ -124,84 +84,148 @@ struct IsTraceable<blink::WeakMember<T>> {
   static const bool value = true;
 };
 
+// Peeker type that allows for using all kinds of Member, Persistent, and T*
+// interchangeably. This is necessary for collection methods that are called
+// directly with any of those types.
+template <typename T>
+class ValuePeeker final {
+  DISALLOW_NEW();
+
+ public:
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE ValuePeeker(T* ptr) : ptr_(ptr) {}
+  template <typename U>
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE ValuePeeker(const blink::Member<U>& m) : ptr_(m.Get()) {}
+  template <typename U>
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE ValuePeeker(const blink::WeakMember<U>& m) : ptr_(m.Get()) {}
+  template <typename U>
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE ValuePeeker(const blink::UntracedMember<U>& m)
+      : ptr_(m.Get()) {}
+  template <typename U>
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE ValuePeeker(const blink::Persistent<U>& p) : ptr_(p.Get()) {}
+  template <typename U>
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE ValuePeeker(const blink::WeakPersistent<U>& p)
+      : ptr_(p.Get()) {}
+
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE operator T*() const { return ptr_; }
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE operator blink::Member<T>() const { return ptr_; }
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE operator blink::WeakMember<T>() const { return ptr_; }
+  // NOLINTNEXTLINE
+  ALWAYS_INLINE operator blink::UntracedMember<T>() const { return ptr_; }
+
+ private:
+  T* ptr_;
+};
+
+// Default hash for hash tables with Member<>-derived elements.
 template <typename T, typename MemberType>
 struct BaseMemberHashTraits : SimpleClassHashTraits<MemberType> {
   STATIC_ONLY(BaseMemberHashTraits);
 
-  using PeekInType = T*;
+  // Heap hash containers allow to operate with raw pointers, e.g.
+  //   HeapHashSet<Member<GCed>> set;
+  //   set.find(raw_ptr);
+  // Therefore, provide two hashing functions, one for raw pointers, another for
+  // Member. Prefer compressing raw pointers instead of decompressing Members,
+  // assuming the former is cheaper.
+  static unsigned GetHash(const T* key) {
+#if defined(CPPGC_POINTER_COMPRESSION)
+    cppgc::internal::CompressedPointer st(key);
+#else
+    cppgc::internal::RawPointer st(key);
+#endif
+    return WTF::GetHash(st.GetAsInteger());
+  }
+  template <typename Member,
+            std::enable_if_t<WTF::IsAnyMemberType<Member>::value>* = nullptr>
+  static unsigned GetHash(const Member& m) {
+    return WTF::GetHash(m.GetRawStorage().GetAsInteger());
+  }
+
+  static constexpr bool kEmptyValueIsZero = true;
+
+  using PeekInType = ValuePeeker<T>;
   using PeekOutType = T*;
   using IteratorGetType = MemberType*;
   using IteratorConstGetType = const MemberType*;
   using IteratorReferenceType = MemberType&;
   using IteratorConstReferenceType = const MemberType&;
 
-  static PeekOutType Peek(const MemberType& value) { return value; }
+  static PeekOutType Peek(const MemberType& value) { return value.Get(); }
 
-  static IteratorReferenceType GetToReferenceConversion(IteratorGetType x) {
-    return *x;
-  }
-
-  static IteratorConstReferenceType GetToReferenceConstConversion(
-      IteratorConstGetType x) {
-    return *x;
-  }
-
-  template <typename U>
-  static void Store(const U& value, MemberType& storage) {
-    storage = value;
-  }
-
-  static void ConstructDeletedValue(MemberType& slot, bool) {
+  static void ConstructDeletedValue(MemberType& slot) {
     slot = cppgc::kSentinelPointer;
   }
 
   static bool IsDeletedValue(const MemberType& value) {
-    return value.Get() == cppgc::kSentinelPointer;
+    return value == cppgc::kSentinelPointer;
   }
 };
 
+// Custom HashTraits<Member<Type>> can inherit this type.
 template <typename T>
-struct HashTraits<blink::Member<T>>
-    : BaseMemberHashTraits<T, blink::Member<T>> {
+struct MemberHashTraits : BaseMemberHashTraits<T, blink::Member<T>> {
   static constexpr bool kCanTraceConcurrently = true;
 };
-
 template <typename T>
-struct HashTraits<blink::WeakMember<T>>
-    : BaseMemberHashTraits<T, blink::WeakMember<T>> {
+struct HashTraits<blink::Member<T>> : MemberHashTraits<T> {};
+
+// Custom HashTraits<WeakMember<Type>> can inherit this type.
+template <typename T>
+struct WeakMemberHashTraits : BaseMemberHashTraits<T, blink::WeakMember<T>> {
   static constexpr bool kCanTraceConcurrently = true;
 };
-
 template <typename T>
-struct HashTraits<blink::UntracedMember<T>>
+struct HashTraits<blink::WeakMember<T>> : WeakMemberHashTraits<T> {};
+
+// Custom HashTraits<UntracedMember<Type>> can inherit this type.
+template <typename T>
+struct UntracedMemberHashTraits
     : BaseMemberHashTraits<T, blink::UntracedMember<T>> {};
+template <typename T>
+struct HashTraits<blink::UntracedMember<T>> : UntracedMemberHashTraits<T> {};
 
-template <typename T, typename Traits, typename Allocator>
+template <typename T>
 class MemberConstructTraits {
   STATIC_ONLY(MemberConstructTraits);
 
  public:
   template <typename... Args>
   static T* Construct(void* location, Args&&... args) {
+    // `Construct()` creates a new Member which must not be visible to the
+    // concurrent marker yet, similar to regular ctors in Member.
     return new (NotNullTag::kNotNull, location) T(std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  static T* ConstructAndNotifyElement(void* location, Args&&... args) {
+    // `ConstructAndNotifyElement()` updates an existing Member which might
+    // also be concurrently traced while we update it. The regular ctors
+    // for Member don't use an atomic write which can lead to data races.
+    T* object = new (NotNullTag::kNotNull, location)
+        T(std::forward<Args>(args)..., typename T::AtomicInitializerTag());
+    NotifyNewElement(object);
+    return object;
   }
 
   static void NotifyNewElement(T* element) {
     blink::WriteBarrier::DispatchForObject(element);
   }
 
-  template <typename... Args>
-  static T* ConstructAndNotifyElement(void* location, Args&&... args) {
-    // ConstructAndNotifyElement updates an existing Member which might
-    // also be comncurrently traced while we update it. The regular ctors
-    // for Member don't use an atomic write which can lead to data races.
-    T* object = Construct(location, std::forward<Args>(args)...,
-                          typename T::AtomicInitializerTag());
-    NotifyNewElement(object);
-    return object;
-  }
-
   static void NotifyNewElements(T* array, size_t len) {
+    // Checking the first element is sufficient for determining whether a
+    // marking or generational barrier is required.
+    if (LIKELY((len == 0) || !blink::WriteBarrier::IsWriteBarrierNeeded(array)))
+      return;
+
     while (len-- > 0) {
       blink::WriteBarrier::DispatchForObject(array);
       array++;
@@ -210,12 +234,12 @@ class MemberConstructTraits {
 };
 
 template <typename T, typename Traits, typename Allocator>
-class ConstructTraits<blink::Member<T>, Traits, Allocator>
-    : public MemberConstructTraits<blink::Member<T>, Traits, Allocator> {};
+class ConstructTraits<blink::Member<T>, Traits, Allocator> final
+    : public MemberConstructTraits<blink::Member<T>> {};
 
 template <typename T, typename Traits, typename Allocator>
-class ConstructTraits<blink::WeakMember<T>, Traits, Allocator>
-    : public MemberConstructTraits<blink::WeakMember<T>, Traits, Allocator> {};
+class ConstructTraits<blink::WeakMember<T>, Traits, Allocator> final
+    : public MemberConstructTraits<blink::WeakMember<T>> {};
 
 }  // namespace WTF
 

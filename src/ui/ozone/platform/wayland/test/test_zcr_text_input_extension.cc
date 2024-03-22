@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,6 @@
 namespace wl {
 
 namespace {
-
-constexpr uint32_t kTextInputExtensionVersion = 1;
 
 void GetExtendedTextInput(struct wl_client* client,
                           struct wl_resource* resource,
@@ -32,10 +30,11 @@ const struct zcr_text_input_extension_v1_interface
         &GetExtendedTextInput,  // get_extended_text_input
 };
 
-TestZcrTextInputExtensionV1::TestZcrTextInputExtensionV1()
+TestZcrTextInputExtensionV1::TestZcrTextInputExtensionV1(
+    TestZcrTextInputExtensionV1::Version version)
     : GlobalObject(&zcr_text_input_extension_v1_interface,
                    &kTestZcrTextInputExtensionV1Impl,
-                   kTextInputExtensionVersion) {}
+                   static_cast<uint32_t>(version)) {}
 
 TestZcrTextInputExtensionV1::~TestZcrTextInputExtensionV1() = default;
 

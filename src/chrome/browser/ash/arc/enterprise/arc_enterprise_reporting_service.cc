@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/histogram_functions.h"
@@ -50,32 +50,24 @@ const char* TimedCloudDpcOpToString(mojom::TimedCloudDpcOp op) {
       return "";
     case mojom::TimedCloudDpcOp::SETUP_TOTAL:
       return "SetupService.Total";
-    case mojom::TimedCloudDpcOp::SETUP_CHECK_FOR_ANDROID_ID:
-      return "SetupService.CheckForAndroidId";
-    case mojom::TimedCloudDpcOp::SETUP_CHECK_FOR_FIRST_ACCOUNT_READY:
-      return "SetupService.CheckForFirstAccountReady";
-    case mojom::TimedCloudDpcOp::SETUP_REGISTER:
-      return "SetupService.Register";
     case mojom::TimedCloudDpcOp::SETUP_PULL_AND_APPLY_POLICIES:
       return "SetupService.PullAndApplyPolicies";
-    case mojom::TimedCloudDpcOp::SETUP_REPORT_POLICY_COMPLIANCE:
-      return "SetupService.ReportPolicyCompliance";
-    case mojom::TimedCloudDpcOp::SETUP_QUARANTINED:
-      return "SetupService.QuarantinedRevised";
     case mojom::TimedCloudDpcOp::SETUP_ADD_ACCOUNT:
       return "SetupService.AddAccount";
     case mojom::TimedCloudDpcOp::SETUP_INSTALL_APPS:
       return "SetupService.InstallApps";
-    case mojom::TimedCloudDpcOp::SETUP_INSTALL_APPS_RETRY:
-      return "SetupService.InstallAppsRetry";
-    case mojom::TimedCloudDpcOp::SETUP_UPDATE_PLAY_SERVICES:
-      return "SetupService.UpdatePlayServices";
-    case mojom::TimedCloudDpcOp::SETUP_CHECK_REGISTRATION_TOKEN:
-      return "SetupService.CheckRegistrationToken";
-    case mojom::TimedCloudDpcOp::SETUP_THIRD_PARTY_SIGNIN:
-      return "SetupService.ThirdPartySignin";
     case mojom::TimedCloudDpcOp::DEVICE_SETUP:
       return "DeviceSetup";
+    case mojom::TimedCloudDpcOp::SETUP_CHECK_FOR_ANDROID_ID:
+    case mojom::TimedCloudDpcOp::SETUP_CHECK_FOR_FIRST_ACCOUNT_READY:
+    case mojom::TimedCloudDpcOp::SETUP_REGISTER:
+    case mojom::TimedCloudDpcOp::SETUP_REPORT_POLICY_COMPLIANCE:
+    case mojom::TimedCloudDpcOp::SETUP_QUARANTINED:
+    case mojom::TimedCloudDpcOp::SETUP_INSTALL_APPS_RETRY:
+    case mojom::TimedCloudDpcOp::SETUP_UPDATE_PLAY_SERVICES:
+    case mojom::TimedCloudDpcOp::SETUP_CHECK_REGISTRATION_TOKEN:
+    case mojom::TimedCloudDpcOp::SETUP_THIRD_PARTY_SIGNIN:
+      return ""; // Deprecated and unused
   }
 
   NOTREACHED();
@@ -111,19 +103,6 @@ ArcEnterpriseReportingService::~ArcEnterpriseReportingService() {
   arc_bridge_service_->enterprise_reporting()->SetHost(nullptr);
 }
 
-void ArcEnterpriseReportingService::ReportManagementState(
-    mojom::ManagementState state) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  VLOG(1) << "ReportManagementState state=" << state;
-
-  if (state == mojom::ManagementState::MANAGED_DO_LOST) {
-    DCHECK(ArcServiceManager::Get());
-    VLOG(1) << "Management state lost. Removing ARC user data.";
-    ArcSessionManager::Get()->RequestArcDataRemoval();
-    ArcSessionManager::Get()->StopAndEnableArc();
-  }
-}
-
 void ArcEnterpriseReportingService::ReportCloudDpcOperationTime(
     int64_t time_ms,
     mojom::TimedCloudDpcOp op,
@@ -141,6 +120,11 @@ void ArcEnterpriseReportingService::ReportCloudDpcOperationTime(
   } else {
     DLOG(ERROR) << "Attempted to record time for unknown op";
   }
+}
+
+// static
+void ArcEnterpriseReportingService::EnsureFactoryBuilt() {
+  ArcEnterpriseReportingServiceFactory::GetInstance();
 }
 
 }  // namespace arc

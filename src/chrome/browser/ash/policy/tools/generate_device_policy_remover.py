@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -62,7 +62,7 @@ def main():
       file.write('      case {proto_tag}:\n'
                  '        policies->clear_{name}();\n'
                  '        break;\n'
-                 .format(proto_tag=field.number, name=field.name))
+                 .format(proto_tag=field.number, name=field.name.lower()))
     file.write(file_footer);
   return 0
 

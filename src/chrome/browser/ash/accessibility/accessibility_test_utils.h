@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/error_console/error_console.h"
 #include "content/public/test/browser_test_utils.h"
 
@@ -46,7 +47,7 @@ class ExtensionConsoleErrorObserver : public ErrorConsole::Observer {
 
  private:
   std::vector<std::u16string> errors_;
-  ErrorConsole* error_console_;
+  raw_ptr<ErrorConsole, ExperimentalAsh> error_console_;
 };
 
 }  // namespace ash

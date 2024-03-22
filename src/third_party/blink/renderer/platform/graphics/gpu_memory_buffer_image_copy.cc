@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/gpu_memory_buffer_image_copy.h"
 
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
@@ -46,10 +47,12 @@ bool GpuMemoryBufferImageCopy::EnsureDestImage(const gfx::Size& size) {
 
     dest_image_size_ = size;
 
-    dest_mailbox_ = sii_->CreateSharedImage(
-        gpu_memory_buffer_.get(), gpu_memory_buffer_manager, gfx::ColorSpace(),
+    dest_shared_image_ = sii_->CreateSharedImage(
+        viz::SinglePlaneFormat::kRGBA_8888, size, gfx::ColorSpace(),
         kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-        gpu::SHARED_IMAGE_USAGE_GLES2);
+        gpu::SHARED_IMAGE_USAGE_GLES2, "GpuMemoryBufferImageCopy",
+        gpu_memory_buffer_->CloneHandle());
+    CHECK(dest_shared_image_);
     gl_->WaitSyncTokenCHROMIUM(sii_->GenUnverifiedSyncToken().GetConstData());
   }
   return true;
@@ -67,8 +70,8 @@ GpuMemoryBufferImageCopy::CopyImage(Image* image) {
     return {};
 
   // Bind the write framebuffer to copy image.
-  GLuint dest_texture_id =
-      gl_->CreateAndTexStorage2DSharedImageCHROMIUM(dest_mailbox_.name);
+  GLuint dest_texture_id = gl_->CreateAndTexStorage2DSharedImageCHROMIUM(
+      dest_shared_image_->mailbox().name);
   gl_->BeginSharedImageAccessDirectCHROMIUM(
       dest_texture_id, GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
 
@@ -119,14 +122,14 @@ GpuMemoryBufferImageCopy::CopyImage(Image* image) {
 void GpuMemoryBufferImageCopy::CleanupDestImage() {
   gpu_memory_buffer_.reset();
 
-  if (dest_mailbox_.IsZero())
+  if (!dest_shared_image_) {
     return;
+  }
 
   gpu::SyncToken sync_token;
   gl_->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
 
-  sii_->DestroySharedImage(sync_token, dest_mailbox_);
-  dest_mailbox_.SetZero();
+  sii_->DestroySharedImage(sync_token, std::move(dest_shared_image_));
 }
 
 }  // namespace blink

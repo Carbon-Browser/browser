@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_TEST_PROVIDERS_SIGNIN_FAKE_TRUSTED_VAULT_CLIENT_BACKEND_H_
 #define IOS_CHROME_TEST_PROVIDERS_SIGNIN_FAKE_TRUSTED_VAULT_CLIENT_BACKEND_H_
 
-#include "ios/chrome/browser/signin/trusted_vault_client_backend.h"
+#include "ios/chrome/browser/signin/model/trusted_vault_client_backend.h"
 
 @class FakeTrustedVaultClientBackendViewController;
 
@@ -18,20 +18,26 @@ class FakeTrustedVaultClientBackend final : public TrustedVaultClientBackend {
   // TrustedVaultClientBackend implementation.
   void AddObserver(Observer* observer) final;
   void RemoveObserver(Observer* observer) final;
-  void FetchKeys(ChromeIdentity* chrome_identity,
+  void SetDeviceRegistrationPublicKeyVerifierForUMA(
+      VerifierCallback verifier) final;
+  void FetchKeys(id<SystemIdentity> identity,
                  KeyFetchedCallback callback) final;
-  void MarkLocalKeysAsStale(ChromeIdentity* chrome_identity,
+  void MarkLocalKeysAsStale(id<SystemIdentity> identity,
                             base::OnceClosure callback) final;
   void GetDegradedRecoverabilityStatus(
-      ChromeIdentity* chrome_identity,
+      id<SystemIdentity> identity,
       base::OnceCallback<void(bool)> callback) final;
-  void Reauthentication(ChromeIdentity* chrome_identity,
+  void Reauthentication(id<SystemIdentity> identity,
                         UIViewController* presenting_view_controller,
                         CompletionBlock callback) final;
-  void FixDegradedRecoverability(ChromeIdentity* chrome_identity,
+  void FixDegradedRecoverability(id<SystemIdentity> identity,
                                  UIViewController* presenting_view_controller,
                                  CompletionBlock callback) final;
   void CancelDialog(BOOL animated, ProceduralBlock callback) final;
+  void ClearLocalData(id<SystemIdentity> identity,
+                      base::OnceCallback<void(bool)> callback) final;
+  void GetPublicKeyForIdentity(id<SystemIdentity> identity,
+                               GetPublicKeyCallback callback) final;
 
   // Simulates user cancelling the reauth dialog.
   void SimulateUserCancel();

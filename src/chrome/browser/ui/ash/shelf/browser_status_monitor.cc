@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/public/cpp/shelf_types.h"
 #include "base/containers/contains.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/browser/ui/ash/shelf/app_service/app_service_app_window_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
@@ -67,7 +68,7 @@ class BrowserStatusMonitor::LocalWebContentsObserver
   }
 
  private:
-  BrowserStatusMonitor* monitor_;
+  raw_ptr<BrowserStatusMonitor, ExperimentalAsh> monitor_;
 };
 
 BrowserStatusMonitor::BrowserStatusMonitor(
@@ -167,7 +168,7 @@ void BrowserStatusMonitor::UpdateAppItemState(content::WebContents* contents,
   // It is possible to come here from Browser::SwapTabContent where the contents
   // cannot be associated with a browser. A removal however should be properly
   // processed.
-  Browser* browser = chrome::FindBrowserWithWebContents(contents);
+  Browser* browser = chrome::FindBrowserWithTab(contents);
   if (remove || (browser && multi_user_util::IsProfileFromActiveUser(
                                 browser->profile()))) {
     shelf_controller_->UpdateAppState(contents, remove);
@@ -340,7 +341,7 @@ void BrowserStatusMonitor::OnActiveTabChanged(
     Browser* browser = nullptr;
     // Use |new_contents|. |old_contents| could be nullptr.
     DCHECK(new_contents);
-    browser = chrome::FindBrowserWithWebContents(new_contents);
+    browser = chrome::FindBrowserWithTab(new_contents);
 
     // Update immediately on a tab change.
     if (old_contents &&
@@ -367,7 +368,7 @@ void BrowserStatusMonitor::OnTabReplaced(TabStripModel* tab_strip_model,
                                          content::WebContents* new_contents) {
   if (!web_app::IsWebAppsCrosapiEnabled()) {
     DCHECK(old_contents && new_contents);
-    Browser* browser = chrome::FindBrowserWithWebContents(new_contents);
+    Browser* browser = chrome::FindBrowserWithTab(new_contents);
 
     UpdateAppItemState(old_contents, true /*remove*/);
     RemoveWebContentsObserver(old_contents);
@@ -396,14 +397,12 @@ void BrowserStatusMonitor::OnTabInserted(TabStripModel* tab_strip_model,
                                          content::WebContents* contents) {
   if (!web_app::IsWebAppsCrosapiEnabled()) {
     UpdateAppItemState(contents, false /*remove*/);
-    // If the contents does not have a visible navigation entry that is not the
-    // initial entry, wait until a navigation status changes before setting the
-    // browser window Shelf ID (done by the web contents observer added by
-    // AddWebContentsObserver()).
+    // If the visible navigation entry is the initial entry, wait until a
+    // navigation status changes before setting the browser window Shelf ID
+    // (done by the web contents observer added by AddWebContentsObserver()).
     if (tab_strip_model->GetActiveWebContents() == contents &&
-        contents->GetController().GetVisibleEntry() &&
         !contents->GetController().GetVisibleEntry()->IsInitialEntry()) {
-      Browser* browser = chrome::FindBrowserWithWebContents(contents);
+      Browser* browser = chrome::FindBrowserWithTab(contents);
       SetShelfIDForBrowserWindowContents(browser, contents);
     }
 
@@ -437,7 +436,7 @@ void BrowserStatusMonitor::OnTabNavigationFinished(
   UpdateBrowserItemState();
 
   // Navigating may change the ShelfID associated with the WebContents.
-  Browser* browser = chrome::FindBrowserWithWebContents(contents);
+  Browser* browser = chrome::FindBrowserWithTab(contents);
   if (browser &&
       browser->tab_strip_model()->GetActiveWebContents() == contents) {
     SetShelfIDForBrowserWindowContents(browser, contents);

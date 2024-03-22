@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,14 +30,13 @@ using bookmarks::BookmarkNode;
 namespace {
 
 bool IsNTP(content::WebContents* web_contents) {
-  // Use the committed entry so the bookmarks bar disappears at the same time
-  // the page does.
+  // Use the committed entry (or the visible entry, if the committed entry is
+  // the initial NavigationEntry) so the bookmarks bar disappears at the same
+  // time the page does.
   content::NavigationEntry* entry =
       web_contents->GetController().GetLastCommittedEntry();
-  if (!entry)
+  if (entry->IsInitialEntry())
     entry = web_contents->GetController().GetVisibleEntry();
-  if (!entry)
-    return false;
   const GURL& url = entry->GetURL();
   return NewTabUI::IsNewTab(url) || NewTabPageUI::IsNewTabPageOrigin(url) ||
          NewTabPageThirdPartyUI::IsNewTabPageOrigin(url) ||
@@ -123,7 +122,8 @@ void BookmarkTabHelper::BookmarkModelLoaded(BookmarkModel* model,
 
 void BookmarkTabHelper::BookmarkNodeAdded(BookmarkModel* model,
                                           const BookmarkNode* parent,
-                                          size_t index) {
+                                          size_t index,
+                                          bool added_by_user) {
   UpdateStarredStateForCurrentURL();
 }
 

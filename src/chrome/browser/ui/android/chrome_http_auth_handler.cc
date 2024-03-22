@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ ChromeHttpAuthHandler::ChromeHttpAuthHandler(
                                      : nullptr) {
   if (login_model_data) {
     auth_manager_->SetObserverAndDeliverCredentials(this,
-                                                    login_model_data->form);
+                                                    *login_model_data->form);
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,16 @@ package org.chromium.base.memory;
 
 import android.os.Debug;
 
+import org.jni_zero.CalledByNative;
+
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
 
 import java.io.IOException;
-/**
- * Enables the generation of hprof files from heap dumps.
- */
+
+/** Enables the generation of hprof files from heap dumps. */
 public final class JavaHeapDumpGenerator {
     private static final String TAG = "JavaHprofGenerator";
+
     private JavaHeapDumpGenerator() {}
 
     /**

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,5 +10,4 @@ import org.chromium.components.module_installer.builder.ModuleInterface;
 @ModuleInterface(module = "vr", impl = "org.chromium.chrome.browser.vr.VrDelegateProviderImpl")
 public interface VrDelegateProvider {
     VrDelegate getDelegate();
-    VrIntentDelegate getIntentDelegate();
 }

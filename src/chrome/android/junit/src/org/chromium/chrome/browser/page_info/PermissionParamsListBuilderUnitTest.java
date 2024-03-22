@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,19 +32,15 @@ import org.chromium.ui.permissions.PermissionCallback;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests for PermissionParamsListBuilder.
- */
+/** Unit tests for PermissionParamsListBuilder. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PermissionParamsListBuilderUnitTest {
     private PermissionParamsListBuilder mPermissionParamsListBuilder;
 
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
-    @Mock
-    Profile mProfileMock;
+    @Mock Profile mProfileMock;
 
     @Before
     public void setUp() {

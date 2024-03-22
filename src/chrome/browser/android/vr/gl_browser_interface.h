@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,9 @@
 #define CHROME_BROWSER_ANDROID_VR_GL_BROWSER_INTERFACE_H_
 
 #include "base/android/jni_weak_ref.h"
-#include "chrome/browser/vr/assets_load_status.h"
 #include "chrome/browser/vr/ui_test_input.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
 #include "ui/gfx/geometry/transform.h"
-
-namespace gl {
-class SurfaceTexture;
-}
 
 namespace vr {
 
@@ -23,15 +18,9 @@ class GlBrowserInterface {
   virtual ~GlBrowserInterface() {}
 
   virtual void ForceExitVr() = 0;
-  virtual void ContentSurfaceCreated(jobject surface,
-                                     gl::SurfaceTexture* texture) = 0;
-  virtual void ContentOverlaySurfaceCreated(jobject surface,
-                                            gl::SurfaceTexture* texture) = 0;
   virtual void GvrDelegateReady() = 0;
   // XRSessionPtr is optional, if null, the request failed.
   virtual void SendRequestPresentReply(device::mojom::XRSessionPtr) = 0;
-  virtual void DialogSurfaceCreated(jobject surface,
-                                    gl::SurfaceTexture* texture) = 0;
   virtual void ToggleCardboardGamepad(bool enabled) = 0;
 };
 

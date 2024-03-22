@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/numerics/safe_conversions.h"
 #include "storage/common/quota/padding_key.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_response.mojom-blink.h"
 #include "third_party/blink/renderer/core/fetch/fetch_header_list.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
@@ -137,7 +138,7 @@ FetchResponseData* FetchResponseData::CreateOpaqueRedirectFilteredResponse()
 const KURL* FetchResponseData::Url() const {
   // "A response has an associated url. It is a pointer to the last response URL
   // in response’s url list and null if response’s url list is the empty list."
-  if (url_list_.IsEmpty())
+  if (url_list_.empty())
     return nullptr;
   return &url_list_.back();
 }
@@ -162,9 +163,9 @@ String FetchResponseData::MimeType() const {
 
 BodyStreamBuffer* FetchResponseData::InternalBuffer() const {
   if (internal_response_) {
-    return internal_response_->buffer_;
+    return internal_response_->buffer_.Get();
   }
-  return buffer_;
+  return buffer_.Get();
 }
 
 String FetchResponseData::InternalMIMEType() const {
@@ -314,7 +315,7 @@ void FetchResponseData::InitFromResourceResponse(
   if (response.CurrentRequestUrl().ProtocolIsAbout() ||
       response.CurrentRequestUrl().ProtocolIsData() ||
       response.CurrentRequestUrl().ProtocolIs("blob")) {
-    SetStatusMessage("OK");
+    SetStatusMessage(AtomicString("OK"));
   } else {
     SetStatusMessage(response.HttpStatusText());
   }
@@ -325,7 +326,7 @@ void FetchResponseData::InitFromResourceResponse(
   // Corresponds to https://fetch.spec.whatwg.org/#main-fetch step:
   // "If |internalResponse|’s URL list is empty, then set it to a clone of
   // |request|’s URL list."
-  if (response.UrlListViaServiceWorker().IsEmpty()) {
+  if (response.UrlListViaServiceWorker().empty()) {
     // Note: |UrlListViaServiceWorker()| is empty, unless the response came from
     // a service worker, in which case it will only be empty if it was created
     // through new Response().
@@ -364,12 +365,18 @@ void FetchResponseData::InitFromResourceResponse(
     SetPadding(response.GetPadding());
   } else {
     if (storage::ShouldPadResponseType(response_type)) {
-      int64_t padding = response.WasCached()
-                            ? storage::ComputeStableResponsePadding(
-                                  context->GetSecurityOrigin()->ToUrlOrigin(),
-                                  Url()->GetString().Utf8(), ResponseTime(),
-                                  request_method.Utf8())
-                            : storage::ComputeRandomResponsePadding();
+      int64_t padding =
+          response.WasCached()
+              ? storage::ComputeStableResponsePadding(
+                    // TODO(https://crbug.com/1199077): Investigate the need to
+                    // have a specified storage key within the ExecutionContext
+                    // and if warranted change this to use the actual storage
+                    // key instead.
+                    blink::StorageKey::CreateFirstParty(
+                        context->GetSecurityOrigin()->ToUrlOrigin()),
+                    Url()->GetString().Utf8(), ResponseTime(),
+                    request_method.Utf8())
+              : storage::ComputeRandomResponsePadding();
       SetPadding(padding);
     }
   }
@@ -389,7 +396,6 @@ FetchResponseData::FetchResponseData(Type type,
       status_message_(status_message),
       header_list_(MakeGarbageCollected<FetchHeaderList>()),
       response_time_(base::Time::Now()),
-      connection_info_(net::HttpResponseInfo::CONNECTION_INFO_UNKNOWN),
       alpn_negotiated_protocol_("unknown"),
       was_fetched_via_spdy_(false),
       has_range_requested_(false),

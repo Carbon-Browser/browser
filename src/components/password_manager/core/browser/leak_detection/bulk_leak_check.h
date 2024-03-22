@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 namespace password_manager {
 
+enum class LeakDetectionInitiator;
 // A credential to be checked against the service. Caller can attach any data to
 // it.
 class LeakCheckCredential : public base::SupportsUserData {
@@ -53,6 +54,7 @@ class BulkLeakCheck {
   // The caller is responsible for deduplication of credentials if it wants to
   // make it efficient.
   virtual void CheckCredentials(
+      LeakDetectionInitiator initiator,
       std::vector<LeakCheckCredential> credentials) = 0;
 
   // Returns # of pending credentials to check.

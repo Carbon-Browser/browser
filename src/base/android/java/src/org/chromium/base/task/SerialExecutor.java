@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,16 +13,14 @@ class SerialExecutor implements Executor {
 
     @Override
     public synchronized void execute(final Runnable r) {
-        mTasks.offer(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    r.run();
-                } finally {
-                    scheduleNext();
-                }
-            }
-        });
+        mTasks.offer(
+                () -> {
+                    try {
+                        r.run();
+                    } finally {
+                        scheduleNext();
+                    }
+                });
         if (mActive == null) {
             scheduleNext();
         }

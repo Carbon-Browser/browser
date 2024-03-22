@@ -1,9 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_PUBLIC_CPP_CORB_ORB_IMPL_H_
 #define SERVICES_NETWORK_PUBLIC_CPP_CORB_ORB_IMPL_H_
+
+#include <string_view>
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
@@ -36,10 +38,12 @@ class COMPONENT_EXPORT(NETWORK_CPP) OpaqueResponseBlockingAnalyzer final
   Decision Init(const GURL& request_url,
                 const absl::optional<url::Origin>& request_initiator,
                 mojom::RequestMode request_mode,
+                mojom::RequestDestination request_destination_from_renderer,
                 const network::mojom::URLResponseHead& response) override;
-  Decision Sniff(base::StringPiece data) override;
+  Decision Sniff(std::string_view data) override;
   Decision HandleEndOfSniffableResponseBody() override;
   bool ShouldReportBlockedResponse() const override;
+  BlockedResponseHandling ShouldHandleBlockedResponseAs() const override;
 
   // TODO(https://crbug.com/1178928): Remove this once we gather enough
   // DumpWithoutCrashing data.
@@ -85,10 +89,18 @@ class COMPONENT_EXPORT(NETWORK_CPP) OpaqueResponseBlockingAnalyzer final
   // Remembering which past requests sniffed as media.  Never null.
   // TODO(lukasza): Replace with raw_ref<T> or nonnull_raw_ptr<T> once
   // available.
-  raw_ptr<PerFactoryState> per_factory_state_;
+  // This dangling raw_ptr occurred in:
+  // content_browsertests: SignedExchangeSubresourcePrefetchBrowserTest.CORS
+  // https://ci.chromium.org/ui/p/chromium/builders/try/mac-rel/1416613/test-results?q=ExactID%3Aninja%3A%2F%2Fcontent%2Ftest%3Acontent_browsertests%2FSignedExchangeSubresourcePrefetchBrowserTest.CORS+VHash%3Ae04c2114e5be4931
+  raw_ptr<PerFactoryState, FlakyDanglingUntriaged> per_factory_state_;
 
   BlockingDecisionReason blocking_decision_reason_ =
       BlockingDecisionReason::kInvalid;
+
+  // The request destination. Note that this value always originates from
+  // the renderer.
+  mojom::RequestDestination request_destination_from_renderer_ =
+      mojom::RequestDestination::kEmpty;
 };
 
 }  // namespace corb

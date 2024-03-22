@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
-#include "base/values.h"
+#include "printing/buildflags/buildflags.h"
 #include "printing/mojom/print.mojom.h"
 
-#if defined(USE_CUPS)
-#include "printing/backend/cups_ipp_utils.h"
+#if BUILDFLAG(USE_CUPS)
+#include "printing/backend/cups_connection.h"
 #include "printing/backend/print_backend_cups_ipp.h"
-#endif  // defined(USE_CUPS)
+#endif  // BUILDFLAG(USE_CUPS)
 
 namespace printing {
 
@@ -29,13 +29,11 @@ class PrintBackendChromeOS : public PrintBackend {
   mojom::ResultCode GetPrinterBasicInfo(
       const std::string& printer_name,
       PrinterBasicInfo* printer_info) override;
-  mojom::ResultCode GetPrinterCapsAndDefaults(
-      const std::string& printer_name,
-      PrinterCapsAndDefaults* printer_info) override;
   mojom::ResultCode GetPrinterSemanticCapsAndDefaults(
       const std::string& printer_name,
       PrinterSemanticCapsAndDefaults* printer_info) override;
-  std::string GetPrinterDriverInfo(const std::string& printer_name) override;
+  std::vector<std::string> GetPrinterDriverInfo(
+      const std::string& printer_name) override;
   bool IsValidPrinter(const std::string& printer_name) override;
 
  protected:
@@ -53,13 +51,6 @@ mojom::ResultCode PrintBackendChromeOS::GetPrinterBasicInfo(
   return mojom::ResultCode::kFailed;
 }
 
-mojom::ResultCode PrintBackendChromeOS::GetPrinterCapsAndDefaults(
-    const std::string& printer_name,
-    PrinterCapsAndDefaults* printer_info) {
-  NOTREACHED();
-  return mojom::ResultCode::kFailed;
-}
-
 mojom::ResultCode PrintBackendChromeOS::GetPrinterSemanticCapsAndDefaults(
     const std::string& printer_name,
     PrinterSemanticCapsAndDefaults* printer_info) {
@@ -67,10 +58,9 @@ mojom::ResultCode PrintBackendChromeOS::GetPrinterSemanticCapsAndDefaults(
   return mojom::ResultCode::kFailed;
 }
 
-std::string PrintBackendChromeOS::GetPrinterDriverInfo(
+std::vector<std::string> PrintBackendChromeOS::GetPrinterDriverInfo(
     const std::string& printer_name) {
-  NOTREACHED();
-  return std::string();
+  NOTREACHED_NORETURN();
 }
 
 mojom::ResultCode PrintBackendChromeOS::GetDefaultPrinterName(
@@ -86,14 +76,12 @@ bool PrintBackendChromeOS::IsValidPrinter(const std::string& printer_name) {
 
 // static
 scoped_refptr<PrintBackend> PrintBackend::CreateInstanceImpl(
-    const base::Value::Dict* print_backend_settings,
     const std::string& /*locale*/) {
-#if defined(USE_CUPS)
-  return base::MakeRefCounted<PrintBackendCupsIpp>(
-      CreateConnection(print_backend_settings));
+#if BUILDFLAG(USE_CUPS)
+  return base::MakeRefCounted<PrintBackendCupsIpp>(CupsConnection::Create());
 #else
   return base::MakeRefCounted<PrintBackendChromeOS>();
-#endif  // defined(USE_CUPS)
+#endif  // BUILDFLAG(USE_CUPS)
 }
 
 }  // namespace printing

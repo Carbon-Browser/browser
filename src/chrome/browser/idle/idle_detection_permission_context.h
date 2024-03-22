@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,12 +26,8 @@ class IdleDetectionPermissionContext
   void UpdateTabContext(const permissions::PermissionRequestID& id,
                         const GURL& requesting_frame,
                         bool allowed) override;
-  bool IsRestrictedToSecureOrigins() const override;
   void DecidePermission(
-      const permissions::PermissionRequestID& id,
-      const GURL& requesting_origin,
-      const GURL& embedding_origin,
-      bool user_gesture,
+      permissions::PermissionRequestData request_data,
       permissions::BrowserPermissionCallback callback) override;
 
   base::WeakPtrFactory<IdleDetectionPermissionContext> weak_factory_{this};

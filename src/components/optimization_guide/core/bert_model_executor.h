@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,8 @@ class BertModelExecutor
       ModelExecutionTask* execution_task,
       ExecutionStatus* out_status,
       const std::string& input) override;
-  std::unique_ptr<ModelExecutionTask> BuildModelExecutionTask(
-      base::MemoryMappedFile* model_file,
-      ExecutionStatus* out_status) override;
+  base::expected<std::unique_ptr<ModelExecutionTask>, ExecutionStatus>
+  BuildModelExecutionTask(base::MemoryMappedFile* model_file) override;
 
  private:
   const proto::OptimizationTarget optimization_target_;

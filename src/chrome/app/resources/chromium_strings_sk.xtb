@@ -1,376 +1,474 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="sk">
+<translation id="1001716830750249114">Prejsť do nastavení verzie prehliadača Carbon Browser</translation>
 <translation id="1026101648481255140">Pokračovať v inštalácii</translation>
-<translation id="1029669172902658969">Znova spustiť a aktualizovať &amp;Carbon Browser Browser OS</translation>
+<translation id="1029669172902658969">Znova spustiť a aktualizovať &amp;Carbon Browser OS</translation>
+<translation id="1040916596585577953">Carbon Browser odporúča, aby ste toto rozšírenie skontrolovali</translation>
+<translation id="1042552502243217427">Keď nejaký web požiada o súkromné prednačítanie odkazov na svojej stránke, Carbon Browser použije servery Googlu. Týmto sa pred predinštalovaným webom skryje vaša identita, ale Google sa naučí, ktoré weby sa prednačítavajú.</translation>
 <translation id="1065672644894730302">Vaše predvoľby sa nedajú načítať.
 
 Niektoré funkcie nemusia byť k dispozícii a zmeny vykonané v predvoľbách sa neuložia.</translation>
-<translation id="1098170124587656448">Carbon Browser Browser vás môže chrániť pred porušeniami ochrany údajov, škodlivými rozšíreniami a ďalšími hrozbami</translation>
-<translation id="1104942323762546749">Prehliadač Carbon Browser Browser sa pokúša exportovať vaše heslá. Ak to chcete povoliť, zadajte heslo systému Windows.</translation>
-<translation id="113122355610423240">Carbon Browser Browser je vaším predvoleným prehliadačom</translation>
-<translation id="1131805035311359397">Ak chcete skontrolovať, či sú vaše heslá chránené pred porušením ochrany údajov a inými bezpečnostnými hrozbami, <ph name="BEGIN_LINK" />prihláste sa do prehliadača Carbon Browser Browser<ph name="END_LINK" />.</translation>
-<translation id="1185134272377778587">Informácie o prehliadači Carbon Browser Browser</translation>
+<translation id="1083934481477628225">Váš nadradený účet vypol Povolenia pre weby, aplikácie a rozšírenia v prehliadači Carbon Browser</translation>
+<translation id="1098170124587656448">Carbon Browser vás môže chrániť pred porušeniami ochrany údajov, škodlivými rozšíreniami a ďalšími hrozbami</translation>
+<translation id="1104942323762546749">Prehliadač Carbon Browser sa pokúša exportovať vaše heslá. Ak to chcete povoliť, zadajte heslo systému Windows.</translation>
+<translation id="113122355610423240">Carbon Browser je vaším predvoleným prehliadačom</translation>
+<translation id="1131805035311359397">Ak chcete skontrolovať, či sú vaše heslá chránené pred porušením ochrany údajov a inými bezpečnostnými hrozbami, <ph name="BEGIN_LINK" />prihláste sa do prehliadača Carbon Browser<ph name="END_LINK" />.</translation>
+<translation id="1153368717515616349">Kliknite na ponuku prehliadača Carbon Browser</translation>
+<translation id="1185134272377778587">Informácie o prehliadači Carbon Browser</translation>
 <translation id="1203500561924088507">Ďakujeme za inštaláciu. Než začnete aplikáciu <ph name="BUNDLE_NAME" /> používať, musíte reštartovať prehliadač.</translation>
-<translation id="1315551408014407711">Nastavte si nový profil prehliadača Carbon Browser Browser</translation>
-<translation id="1385859895174722837">Asistent Google v prehliadači Carbon Browser Browser</translation>
-<translation id="1396446129537741364">Prehliadač Carbon Browser Browser sa snaží zobraziť heslá.</translation>
-<translation id="1414495520565016063">Ste prihlásený/-á do prehliadača Carbon Browser Browser.</translation>
-<translation id="1524282610922162960">Zdieľajte kartu prehliadača Carbon Browser Browser</translation>
-<translation id="1553461853655228091">Carbon Browser Browser potrebuje povolenie použiť fotoaparát, aby mohol vytvoriť 3D mapu vášho okolia</translation>
-<translation id="1607715478322902680">{COUNT,plural, =0{Správca požaduje nové spustenie prehliadača Carbon Browser Browser, aby sa použila aktualizácia}=1{Správca požaduje nové spustenie prehliadača Carbon Browser Browser, aby sa použila aktualizácia. Vaše okno inkognito sa neotvorí.}few{Správca požaduje nové spustenie prehliadača Carbon Browser Browser, aby sa použila aktualizácia. Vaše # okná inkognito sa neotvoria.}many{Správca požaduje nové spustenie prehliadača Carbon Browser Browser, aby sa použila aktualizácia. Your # private windows won't reopen.}other{Správca požaduje nové spustenie prehliadača Carbon Browser Browser, aby sa použila aktualizácia. Vašich # okien inkognito sa neotvorí.}}</translation>
-<translation id="1625909126243026060">Pozrite si hlavné ovládacie prvky ochrany súkromia a zabezpečenia v prehliadači Carbon Browser Browser</translation>
-<translation id="1632539827495546968">Ak chcete použiť tento účet iba raz, môžete v prehliadači Carbon Browser Browser použiť <ph name="GUEST_LINK_BEGIN" />režim pre hostí<ph name="GUEST_LINK_END" />. Ak chcete pridať účet niekoho iného, pridajte do svojho zariadenia <ph name="DEVICE_TYPE" /> <ph name="LINK_BEGIN" />novú osobu<ph name="LINK_END" />.
+<translation id="1261119230216066228">Šetrič pamäte zrýchlil Carbon Browser</translation>
+<translation id="1262876892872089030">Keď bola táto karta neaktívna, bola uvoľnená pamäť, aby Carbon Browser zostal rýchly. Môžete nastaviť, aby bol tento web vždy vylúčený z nečinnosti.</translation>
+<translation id="1265577313130862557">Prehliadač Carbon Browser toto sťahovanie zablokoval, pretože daný súbor je nebezpečný</translation>
+<translation id="1315551408014407711">Nastavte si nový profil prehliadača Carbon Browser</translation>
+<translation id="1342274909142618978">Odstrániť aj údaje z prehliadača Carbon Browser (<ph name="URL" />)</translation>
+<translation id="1414495520565016063">Ste prihlásený/-á do prehliadača Carbon Browser.</translation>
+<translation id="1478370723027452770">Získať pomoc s verziou Carbon Browser for Testing</translation>
+<translation id="1497802159252041924">Chyba inštalácie: <ph name="INSTALL_ERROR" /></translation>
+<translation id="1524282610922162960">Zdieľajte kartu prehliadača Carbon Browser</translation>
+<translation id="1553461853655228091">Carbon Browser potrebuje povolenie použiť fotoaparát, aby mohol vytvoriť 3D mapu vášho okolia</translation>
+<translation id="1574377791422810894">Bezpečnostné nástroje prehliadača Carbon Browser</translation>
+<translation id="1607715478322902680">{COUNT,plural, =0{Správca požaduje nové spustenie prehliadača Carbon Browser, aby sa použila aktualizácia}=1{Správca požaduje nové spustenie prehliadača Carbon Browser, aby sa použila aktualizácia. Vaše okno inkognito sa neotvorí.}few{Správca požaduje nové spustenie prehliadača Carbon Browser, aby sa použila aktualizácia. Vaše # okná inkognito sa neotvoria.}many{Správca požaduje nové spustenie prehliadača Carbon Browser, aby sa použila aktualizácia. Your # private windows won't reopen.}other{Správca požaduje nové spustenie prehliadača Carbon Browser, aby sa použila aktualizácia. Vašich # okien inkognito sa neotvorí.}}</translation>
+<translation id="1625909126243026060">Pozrite si hlavné ovládacie prvky ochrany súkromia a zabezpečenia v prehliadači Carbon Browser</translation>
+<translation id="1632539827495546968">Ak chcete použiť tento účet iba raz, môžete v prehliadači Carbon Browser použiť <ph name="GUEST_LINK_BEGIN" />režim pre hostí<ph name="GUEST_LINK_END" />. Ak chcete pridať účet niekoho iného, pridajte do svojho zariadenia <ph name="DEVICE_TYPE" /> <ph name="LINK_BEGIN" />novú osobu<ph name="LINK_END" />.
 
 Povolenia, ktoré ste už udelili webom a aplikáciám, sa môžu vzťahovať na tento účet. Účty Google môžete spravovať v <ph name="SETTINGS_LINK_BEGIN" />Nastaveniach<ph name="SETTINGS_LINK_END" />.</translation>
 <translation id="1640672724030957280">Sťahuje sa…</translation>
-<translation id="1708666629004767631">K dispozícii je nová bezpečnejšia verzia prehliadača Carbon Browser Browser.</translation>
-<translation id="17264556997921157">Môžete si prezrieť témy záujmu, pomocou ktorých vám weby zobrazujú reklamy, a odstrániť ich. Carbon Browser Browser odhaduje záujmy na základe nedávnej histórie prehliadania.</translation>
-<translation id="1774152462503052664">Povoliť prehliadaču Carbon Browser Browser spustenie na pozadí</translation>
-<translation id="1779356040007214683">Z dôvodu vyššej bezpečnosti prehliadača Carbon Browser Browser sme zakázali niektoré rozšírenia, ktoré nedodáva <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> a mohli byť pridané bez vášho vedomia.</translation>
-<translation id="1808667845054772817">Preinštalovať prehliadač Carbon Browser Browser</translation>
-<translation id="185970820835152459">Svoje prihlásené účty Google môžete spravovať. Účty Google sa používajú pre prehliadač Carbon Browser Browser, Obchod Play, Gmail a ďalšie služby. Ak chcete pridať účet inej osoby, napríklad člena rodiny, pridajte radšej novú osobu do svojho zariadenia <ph name="DEVICE_TYPE" />. <ph name="LINK_BEGIN" />Ďalšie informácie<ph name="LINK_END" /></translation>
-<translation id="1863308913976887472">Weby môžu v prehliadači Carbon Browser Browser ukladať údaje o vašich záujmoch. Ak napríklad navštívite web na nákup obuvi na maratón, daný web môže definovať váš záujem ako behanie maratónov. Ak neskôr navštívite iný, aby ste sa zaregistrovali na preteky, tento web vám môže zobraziť reklamu na bežeckú obuv na základe vašich záujmov.</translation>
-<translation id="1881322772814446296">Prihlasujete sa pomocou spravovaného účtu a jeho správcovi dávate kontrolu nad vaším profilom Carbon Browser Browser. Vaše údaje prehliadača Carbon Browser Browser, ako sú aplikácie, záložky, história, heslá a iné nastavenia, sa natrvalo priradia k účtu <ph name="USER_NAME" />. Tieto údaje budete môcť odstrániť len pomocou panela Dashboard v Účtoch Google, ale nebudete ich môcť priradiť k inému účtu. Ak chcete, aby boli existujúce údaje prehliadača Carbon Browser Browser oddelené, môžete vytvoriť nový profil. <ph name="LEARN_MORE" /></translation>
-<translation id="1911763535808217981">Po vypnutí tejto možnosti sa budete môcť prihlásiť do webov Googlu (napríklad do Gmailu) bez prihlásenia do prehliadača Carbon Browser Browser</translation>
-<translation id="1929939181775079593">Carbon Browser Browser nereaguje. Chcete ho spustiť znova?</translation>
-<translation id="193439633299369377">Aktualizácia sa použije po reštartovaní systému Carbon Browser Browser OS.</translation>
-<translation id="1940680973325097484">Ak chcete použiť tento účet iba raz, môžete v prehliadači Carbon Browser Browser použiť režim pre hostí. Ak chcete pridať účet niekoho iného, pridajte do svojho zariadenia <ph name="DEVICE_TYPE" /> <ph name="LINK_BEGIN" />novú osobu<ph name="LINK_END" />.
-
-Povolenia, ktoré ste už udelili webom a aplikáciám, sa môžu vzťahovať na tento účet. Účty Google môžete spravovať v <ph name="SETTINGS_LINK_BEGIN" />Nastaveniach<ph name="SETTINGS_LINK_END" />.</translation>
+<translation id="1708666629004767631">K dispozícii je nová bezpečnejšia verzia prehliadača Carbon Browser.</translation>
+<translation id="1715127912119967311">Carbon Browser odosiela vaše interakcie s nimi Googlu, aby pomohol tieto funkcie zlepšovať. Tieto údaje môžu čítať, spracúvať a označovať poznámkami kontrolóri.</translation>
+<translation id="17264556997921157">Môžete si prezrieť témy záujmu, pomocou ktorých vám weby zobrazujú reklamy, a odstrániť ich. Carbon Browser odhaduje záujmy na základe nedávnej histórie prehliadania.</translation>
+<translation id="1733725117201708356">Carbon Browser čoskoro odstráni dáta prehliadania</translation>
+<translation id="1736443181683099871">Carbon Browser sa pokúsi inovovať navigácie na HTTPS</translation>
+<translation id="1745121272106313518">Carbon Browser sa reštartuje o <ph name="REMAINING_TIME" /></translation>
+<translation id="1749104137266986751">Keď HTTPS nie je k dispozícii, Carbon Browser bude bez upozornenia používať nezabezpečené pripojenie</translation>
+<translation id="1774152462503052664">Povoliť prehliadaču Carbon Browser spustenie na pozadí</translation>
+<translation id="1779356040007214683">Z dôvodu vyššej bezpečnosti prehliadača Carbon Browser sme zakázali niektoré rozšírenia, ktoré nedodáva <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> a mohli byť pridané bez vášho vedomia.</translation>
+<translation id="1808667845054772817">Preinštalovať prehliadač Carbon Browser</translation>
+<translation id="1820835682567584003">Carbon Browser sa pokúša <ph name="AUTHENTICATION_PURPOSE" /></translation>
+<translation id="185970820835152459">Svoje prihlásené účty Google môžete spravovať. Účty Google sa používajú pre prehliadač Carbon Browser, Obchod Play, Gmail a ďalšie služby. Ak chcete pridať účet inej osoby, napríklad člena rodiny, pridajte radšej novú osobu do svojho zariadenia <ph name="DEVICE_TYPE" />. <ph name="LINK_BEGIN" />Ďalšie informácie<ph name="LINK_END" /></translation>
+<translation id="1863308913976887472">Weby môžu v prehliadači Carbon Browser ukladať údaje o vašich záujmoch. Ak napríklad navštívite web na nákup obuvi na maratón, daný web môže definovať váš záujem ako behanie maratónov. Ak neskôr navštívite iný, aby ste sa zaregistrovali na preteky, tento web vám môže zobraziť reklamu na bežeckú obuv na základe vašich záujmov.</translation>
+<translation id="1881322772814446296">Prihlasujete sa pomocou spravovaného účtu a jeho správcovi dávate kontrolu nad vaším profilom Carbon Browser. Vaše údaje prehliadača Carbon Browser, ako sú aplikácie, záložky, história, heslá a iné nastavenia, sa natrvalo priradia k účtu <ph name="USER_NAME" />. Tieto údaje budete môcť odstrániť len pomocou panela Dashboard v Účtoch Google, ale nebudete ich môcť priradiť k inému účtu. Ak chcete, aby boli existujúce údaje prehliadača Carbon Browser oddelené, môžete vytvoriť nový profil. <ph name="LEARN_MORE" /></translation>
+<translation id="1906696617298807388">Keď zadávate text do panela s adresou alebo vyhľadávacieho poľa, Carbon Browser odosiela tieto informácie na Disk Google, aby ste mali k dispozícii návrhy položiek. Táto možnosť je v režime inkognito vypnutá.</translation>
+<translation id="1911763535808217981">Po vypnutí tejto možnosti sa budete môcť prihlásiť do webov Googlu (napríklad do Gmailu) bez prihlásenia do prehliadača Carbon Browser</translation>
+<translation id="1929939181775079593">Carbon Browser nereaguje. Chcete ho spustiť znova?</translation>
+<translation id="193439633299369377">Aktualizácia sa použije po reštartovaní systému Carbon Browser OS.</translation>
+<translation id="1951406923938785464">Prehliadač Carbon Browser toto sťahovanie zablokoval, pretože používatelia tento typ súboru bežne nesťahujú a môže byť nebezpečný</translation>
 <translation id="1953553007165777902">Sťahuje sa… Zostávajúci čas: <ph name="MINUTE" /> min</translation>
-<translation id="1966382378801805537">Carbon Browser Browser nedokáže určiť alebo nastaviť predvolený prehliadač</translation>
-<translation id="2008474315282236005">Táto akcia odstráni zo zariadenia jednu položku. Ak budete chcieť svoje údaje neskôr opäť načítať, prihláste sa do prehliadača Carbon Browser Browser ako <ph name="USER_EMAIL" />.</translation>
+<translation id="1966382378801805537">Carbon Browser nedokáže určiť alebo nastaviť predvolený prehliadač</translation>
+<translation id="2008474315282236005">Táto akcia odstráni zo zariadenia jednu položku. Ak budete chcieť svoje údaje neskôr opäť načítať, prihláste sa do prehliadača Carbon Browser ako <ph name="USER_EMAIL" />.</translation>
 <translation id="2018879682492276940">Inštalácia bola neúspešná. Skúste to znova.</translation>
-<translation id="2020032459870799438">Ak chcete skontrolovať, či sú vaše ostatné heslá chránené pred porušením ochrany údajov a inými bezpečnostnými hrozbami, <ph name="BEGIN_LINK" />prihláste sa do prehliadača Carbon Browser Browser<ph name="END_LINK" />.</translation>
-<translation id="2049376729098081731">Vyberte, či sa má zahrnúť história prehliadača Carbon Browser Browser na zaistenie prispôsobenejšieho prostredia v službách Googlu</translation>
-<translation id="2088953378266246249">Informácie o tom, ako Carbon Browser Browser spravuje koreňové certifikáty</translation>
-<translation id="2174178932569897599">Prispôsobiť Carbon Browser Browser</translation>
+<translation id="2020032459870799438">Ak chcete skontrolovať, či sú vaše ostatné heslá chránené pred porušením ochrany údajov a inými bezpečnostnými hrozbami, <ph name="BEGIN_LINK" />prihláste sa do prehliadača Carbon Browser<ph name="END_LINK" />.</translation>
+<translation id="2049376729098081731">Vyberte, či sa má zahrnúť história prehliadača Carbon Browser na zaistenie prispôsobenejšieho prostredia v službách Googlu</translation>
+<translation id="2086476982681781442">Prehliadač Carbon Browser toto sťahovanie zablokoval, pretože daný súbor je klamlivý a môže vo vašom zariadení vykonať neočakávané zmeny</translation>
+<translation id="2088953378266246249">Informácie o tom, ako Carbon Browser spravuje koreňové certifikáty</translation>
+<translation id="2120965832000301375">{COUNT,plural, =1{Vaša organizácia automaticky odstráni dáta prehliadania, keď sa Carbon Browser nebude používať jednu minútu. Môže v nich byť zahrnutá história, automatické dopĺňanie a stiahnuté súbory. Vaše karty zostanú otvorené.}few{Vaša organizácia automaticky odstráni dáta prehliadania, keď sa Carbon Browser nebude používať # minúty. Môže v nich byť zahrnutá história, automatické dopĺňanie a stiahnuté súbory. Vaše karty zostanú otvorené.}many{Vaša organizácia automaticky odstráni dáta prehliadania, keď sa Carbon Browser nebude používať # minúty. Môže v nich byť zahrnutá história, automatické dopĺňanie a stiahnuté súbory. Vaše karty zostanú otvorené.}other{Vaša organizácia automaticky odstráni dáta prehliadania, keď sa Carbon Browser nebude používať # minút. Môže v nich byť zahrnutá história, automatické dopĺňanie a stiahnuté súbory. Vaše karty zostanú otvorené.}}</translation>
+<translation id="2126108037660393668">Stiahnutý súbor sa nepodarilo overiť.</translation>
+<translation id="2130870084309816036">Nepodarilo sa pripojiť k internetu. Ak používate firewall, pridajte <ph name="PRODUCT_EXE_NAME" /> na zoznam povolených.</translation>
+<translation id="215352261310130060">Prehliadač Carbon Browser toto sťahovanie zablokoval, pretože daný web nepoužíva zabezpečené pripojenie a v súbore mohol niekto vykonať zmeny</translation>
+<translation id="2174178932569897599">Prispôsobiť Carbon Browser</translation>
 <translation id="2174917724755363426">Inštalácia nie je dokončená. Naozaj ju chcete zrušiť?</translation>
-<translation id="2185166961232948079">Carbon Browser Browser – prihlásenie do siete – <ph name="PAGE_TITLE" /></translation>
-<translation id="2241627712206172106">Ak počítač zdieľate s rodinou a priateľmi, môžu v prehliadači Carbon Browser Browser prehliadať oddelene a tiež si ho nastaviť podľa vlastných požiadaviek.</translation>
-<translation id="2313870531055795960">Kontroluje webové adresy podľa zoznamu nebezpečných webov uloženého v prehliadači Carbon Browser Browser. Ak sa vám určitý web pokúsi ukradnúť heslo alebo stiahnete škodlivý súbor, Carbon Browser Browser môže tiež odoslať webové adresy vrátane častí obsahu stránky Bezpečnému prehliadaniu.</translation>
-<translation id="2343156876103232566">Ak chcete odtiaľto odoslať číslo do svojho telefónu s Androidom, prihláste sa v oboch zariadeniach do prehliadača Carbon Browser Browser.</translation>
-<translation id="2347108572062610441">Toto rozšírenie zmenilo stránku, ktorá sa zobrazí pri spustení prehliadača Carbon Browser Browser.</translation>
+<translation id="2185166961232948079">Carbon Browser – prihlásenie do siete – <ph name="PAGE_TITLE" /></translation>
+<translation id="2190166659037789668">Chyba kontroly aktualizácií: <ph name="UPDATE_CHECK_ERROR" />.</translation>
+<translation id="2241627712206172106">Ak počítač zdieľate s rodinou a priateľmi, môžu v prehliadači Carbon Browser prehliadať oddelene a tiež si ho nastaviť podľa vlastných požiadaviek.</translation>
+<translation id="2313870531055795960">Kontroluje webové adresy podľa zoznamu nebezpečných webov uloženého v prehliadači Carbon Browser. Ak sa vám určitý web pokúsi ukradnúť heslo alebo stiahnete škodlivý súbor, Carbon Browser môže tiež odoslať webové adresy vrátane častí obsahu stránky Bezpečnému prehliadaniu.</translation>
+<translation id="2329088755516916767">Keď je táto možnosť zapnutá, Carbon Browser prednačíta stránky, takže prehliadanie a vyhľadávanie bude rýchlejšie.</translation>
+<translation id="2343156876103232566">Ak chcete odtiaľto odoslať číslo do svojho telefónu s Androidom, prihláste sa v oboch zariadeniach do prehliadača Carbon Browser.</translation>
 <translation id="2359808026110333948">Pokračovať</translation>
-<translation id="2384373936468275798">Systému Carbon Browser Browser OS sa nepodarilo synchronizovať vaše údaje, pretože vaše prihlasovacie údaje účtu sú zastarané.</translation>
-<translation id="2396765026452590966">Rozšírenie „<ph name="EXTENSION_NAME" />“ zmenilo stránku, ktorá sa zobrazí pri spustení prehliadača Carbon Browser Browser.</translation>
-<translation id="2401032172288869980">Carbon Browser Browser vyžaduje pre tento web povolený prístup ku kamere aj mikrofónu</translation>
-<translation id="2483889755041906834">V prehliadači Carbon Browser Browser</translation>
+<translation id="2359920621792549529">Ak chcete vymazať dáta prehliadania iba z tohto zariadenia a v účte Google ich ponechať, <ph name="BEGIN_LINK" />odhláste sa z prehliadača Carbon Browser<ph name="END_LINK" />.</translation>
+<translation id="2384373936468275798">Systému Carbon Browser OS sa nepodarilo synchronizovať vaše údaje, pretože vaše prihlasovacie údaje účtu sú zastarané.</translation>
+<translation id="2398377054246527950">{NUM_DEVICES,plural, =0{K 1 zariadeniu s ľudským rozhraním malo prístup jedno alebo viac rozšírení pre prehliadač Carbon Browser}=1{K 1 zariadeniu s ľudským rozhraním má prístup jedno alebo viac rozšírení pre prehliadač Carbon Browser}few{K # zariadeniam s ľudským rozhraním má prístup jedno alebo viac rozšírení pre prehliadač Carbon Browser}many{# HID devices are being accessed by one or more Carbon Browser extensions}other{K # zariadeniam s ľudským rozhraním má prístup jedno alebo viac rozšírení pre prehliadač Carbon Browser}}</translation>
+<translation id="2401032172288869980">Carbon Browser vyžaduje pre tento web povolený prístup ku kamere aj mikrofónu</translation>
+<translation id="2440750600860946460">Pomocou <ph name="BEGIN_LINK" />nástrojov prehliadača Carbon Browser<ph name="END_LINK" /> môžete bezpečne prehliadať a mať všetko pod kontrolou</translation>
+<translation id="2451727308784734061">Pomocou odkazu rýchlo prejdete do Správcu hesiel. Odkaz môžete v počítači presunúť na plochu alebo do Spúšťača aplikácií.</translation>
+<translation id="2478295928299953161">Carbon Browser sa čoskoro zavrie</translation>
+<translation id="2483889755041906834">V prehliadači Carbon Browser</translation>
 <translation id="2485422356828889247">Odinštalovať</translation>
-<translation id="2560420686485554789">Carbon Browser Browser potrebuje na sťahovanie súborov prístup k úložisku</translation>
-<translation id="2572494885440352020">Carbon Browser Browser Helper</translation>
-<translation id="2583187216237139145">Všetky údaje prehliadača Carbon Browser Browser vygenerované počas používania tohto profilu (napríklad vytvorenie záložiek, histórie, hesiel a ďalších nastavení) môžu byť odstránené správcom pracovného profilu. <ph name="LEARN_MORE" /></translation>
-<translation id="2648074677641340862">V priebehu inštalácie sa vyskytla chyba operačného systému. Stiahnite prehliadač Carbon Browser Browser znova.</translation>
-<translation id="2661879430930417727">Ak zdieľate zariadenie s rodinou a priateľmi, môžu v prehliadači Carbon Browser Browser prehliadať samostatne a tiež si ho nastaviť podľa vlastných požiadaviek</translation>
-<translation id="268602741124540128">Vitajte v prehliadači Carbon Browser Browser, <ph name="ACCOUNT_FIRST_NAME" /></translation>
-<translation id="2711502716910134313">Karta Carbon Browser Browser</translation>
-<translation id="2718390899429598676">V záujme vyššej miery zabezpečenia budú dáta v prehliadači Carbon Browser Browser šifrované.</translation>
+<translation id="2513154137948333830">Vyžaduje sa reštart: <ph name="INSTALL_SUCCESS" /></translation>
+<translation id="2554739539410784893">Carbon Browser sa pokúša nahradiť existujúce heslá. Ak to chcete povoliť, zadajte heslo systému Windows.</translation>
+<translation id="2560420686485554789">Carbon Browser potrebuje na sťahovanie súborov prístup k úložisku</translation>
+<translation id="2572494885440352020">Carbon Browser Helper</translation>
+<translation id="2583187216237139145">Všetky údaje prehliadača Carbon Browser vygenerované počas používania tohto profilu (napríklad vytvorenie záložiek, histórie, hesiel a ďalších nastavení) môžu byť odstránené správcom pracovného profilu. <ph name="LEARN_MORE" /></translation>
+<translation id="2592940277904433508">Pokračovať v používaní prehliadača Carbon Browser</translation>
+<translation id="259935314519650377">Stiahnutý inštalátor sa nepodarilo uložiť do vyrovnávacej pamäte. Chyba: <ph name="UNPACK_CACHING_ERROR_CODE" />.</translation>
+<translation id="2648074677641340862">V priebehu inštalácie sa vyskytla chyba operačného systému. Stiahnite prehliadač Carbon Browser znova.</translation>
+<translation id="2661879430930417727">Ak zdieľate zariadenie s rodinou a priateľmi, môžu v prehliadači Carbon Browser prehliadať samostatne a tiež si ho nastaviť podľa vlastných požiadaviek</translation>
+<translation id="268602741124540128">Vitajte v prehliadači Carbon Browser, <ph name="ACCOUNT_FIRST_NAME" /></translation>
+<translation id="2711502716910134313">Karta Carbon Browser</translation>
+<translation id="2718390899429598676">V záujme vyššej miery zabezpečenia budú dáta v prehliadači Carbon Browser šifrované.</translation>
+<translation id="2738871930057338499">Nepodarilo sa pripojiť k internetu. Chyba odmietnutia prístupu HTTP 403. Skontrolujte konfiguráciu servera proxy.</translation>
 <translation id="2770231113462710648">Zmeniť predvolený prehliadač na:</translation>
+<translation id="2785438272836277133">Toto rozšírenie obsahuje malvér a je nebezpečné. Odstráňte ho z prehliadača Carbon Browser, aby sa mu nezobrazovali vaše údaje na weboch, ktoré navštevujete (vrátane vašich osobných údajov), a nemohlo ich meniť.</translation>
 <translation id="2799223571221894425">Znova spustiť</translation>
-<translation id="2837693172913560447">Týmto sa vytvorí nový profil prehliadača Carbon Browser Browser pre <ph name="USER_EMAIL_ADDRESS" /></translation>
-<translation id="2847479871509788944">Odstrániť z prehliadača Carbon Browser Browser...</translation>
-<translation id="2850691299438350830">Chráni vás v prehliadači Carbon Browser Browser a môže zlepšiť zabezpečenie v ďalších aplikáciách Googlu, keď sa prihlásite.</translation>
+<translation id="2837693172913560447">Týmto sa vytvorí nový profil prehliadača Carbon Browser pre <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="2846251086934905009">Chyba inštalácie: inštalátor nebol dokončený. Inštalácia bola prerušená.</translation>
+<translation id="2847479871509788944">Odstrániť z prehliadača Carbon Browser...</translation>
+<translation id="2850691299438350830">Chráni vás v prehliadači Carbon Browser a môže zlepšiť zabezpečenie v ďalších aplikáciách Googlu, keď sa prihlásite.</translation>
 <translation id="2885378588091291677">Správca úloh</translation>
-<translation id="2910007522516064972">Informácie o prehliadači &amp;Carbon Browser Browser</translation>
+<translation id="2910007522516064972">Informácie o prehliadači &amp;Carbon Browser</translation>
 <translation id="2915996080311180594">Reštartovať neskôr</translation>
 <translation id="2928420929544864228">Inštalácia bola dokončená.</translation>
-<translation id="2977470724722393594">Prehliadač Carbon Browser Browser bol aktualizovaný</translation>
-<translation id="2977506796191543575">Ak sa vám určitý web pokúsi ukradnúť heslo alebo stiahnete škodlivý súbor, Carbon Browser Browser môže odoslať Bezpečnému prehliadaniu aj webové adresy vrátane častí obsahu stránok</translation>
-<translation id="2983934633046890458">Carbon Browser Browser sa pokúša upraviť heslá.</translation>
-<translation id="3032706164202344641">Carbon Browser Browser nemôže skontrolovať heslá. Skúste to neskôr.</translation>
-<translation id="3032787606318309379">Pridáva sa do prehliadača Carbon Browser Browser...</translation>
+<translation id="2945997411976714835">Chyba inštalácie: proces inštalátora sa nespustil.</translation>
+<translation id="2977470724722393594">Prehliadač Carbon Browser bol aktualizovaný</translation>
+<translation id="2977506796191543575">Ak sa vám určitý web pokúsi ukradnúť heslo alebo stiahnete škodlivý súbor, Carbon Browser môže odoslať Bezpečnému prehliadaniu aj webové adresy vrátane častí obsahu stránok</translation>
+<translation id="3032706164202344641">Carbon Browser nemôže skontrolovať heslá. Skúste to neskôr.</translation>
+<translation id="3032787606318309379">Pridáva sa do prehliadača Carbon Browser...</translation>
 <translation id="3038232873781883849">Čaká sa na inštaláciu…</translation>
-<translation id="3068515742935458733">Pomôcť zlepšiť prehliadač Carbon Browser Browser odosielaním správ o zlyhaní a <ph name="UMA_LINK" /> spoločnosti Google</translation>
-<translation id="3101560983689755071">Vaša história prehliadania ovplyvňuje zobrazované reklamy a záujmy, ktoré sú odhadnuté nižšie. Carbon Browser Browser priebežne automaticky odstraňuje vaše záujmy každý mesiac, aby tak chránil vaše súkromie. Záujmy sa môžu obnoviť, pokiaľ ich neodstránite.</translation>
-<translation id="3103660991484857065">Inštalačný program pri dekomprimácii archívu zlyhal. Stiahnite prehliadač Carbon Browser Browser znova.</translation>
-<translation id="3130323860337406239">Carbon Browser Browser používa váš mikrofón.</translation>
-<translation id="3155163173539279776">Znova spustiť prehliadač Carbon Browser Browser</translation>
-<translation id="3179665906251668410">Otvoriť odkaz v okne inko&amp;gnito prehliadača Carbon Browser Browser</translation>
-<translation id="3185330573522821672">Prispôsobte svoj nový profil prehliadača Carbon Browser Browser</translation>
-<translation id="3190315855212034486">Prehliadač Carbon Browser Browser zlyhal. Chcete ho spustiť znova?</translation>
-<translation id="3229526316128325841">Prehliadač Carbon Browser Browser sa pokúša exportovať vaše heslá.</translation>
-<translation id="3258596308407688501">Prehliadač Carbon Browser Browser nemôže čítať ani zapisovať do adresára s údajmi:
+<translation id="3068515742935458733">Pomôcť zlepšiť prehliadač Carbon Browser odosielaním správ o zlyhaní a <ph name="UMA_LINK" /> spoločnosti Google</translation>
+<translation id="3079753320517721795">{NUM_DEVICES,plural, =0{K 1 zariadeniu USB malo prístup jedno alebo viac rozšírení pre prehliadač Carbon Browser}=1{K 1 zariadeniu USB má prístup jedno alebo viac rozšírení pre prehliadač Carbon Browser}few{K # zariadeniam USB má prístup jedno alebo viacero rozšírení pre prehliadač Carbon Browser}many{# USB devices are being accessed by one or more Carbon Browser extensions}other{K # zariadeniam USB má prístup jedno alebo viacero rozšírení pre prehliadač Carbon Browser}}</translation>
+<translation id="3101560983689755071">Vaša história prehliadania ovplyvňuje zobrazované reklamy a záujmy, ktoré sú odhadnuté nižšie. Carbon Browser priebežne automaticky odstraňuje vaše záujmy každý mesiac, aby tak chránil vaše súkromie. Záujmy sa môžu obnoviť, pokiaľ ich neodstránite.</translation>
+<translation id="3103660991484857065">Inštalačný program pri dekomprimácii archívu zlyhal. Stiahnite prehliadač Carbon Browser znova.</translation>
+<translation id="3130323860337406239">Carbon Browser používa váš mikrofón.</translation>
+<translation id="3155163173539279776">Znova spustiť prehliadač Carbon Browser</translation>
+<translation id="3179665906251668410">Otvoriť odkaz v okne inko&amp;gnito prehliadača Carbon Browser</translation>
+<translation id="3185330573522821672">Prispôsobte svoj nový profil prehliadača Carbon Browser</translation>
+<translation id="3190315855212034486">Prehliadač Carbon Browser zlyhal. Chcete ho spustiť znova?</translation>
+<translation id="3258596308407688501">Prehliadač Carbon Browser nemôže čítať ani zapisovať do adresára s údajmi:
 
 <ph name="USER_DATA_DIRECTORY" /></translation>
-<translation id="3283186697780795848">Máte nainštalovaný Carbon Browser Browser verzie <ph name="PRODUCT_VERSION" /></translation>
+<translation id="3283186697780795848">Máte nainštalovaný Carbon Browser verzie <ph name="PRODUCT_VERSION" /></translation>
 <translation id="3286538390144397061">Reštartovať</translation>
-<translation id="328888136576916638">Chýbajú kľúče rozhrania Google API. Niektoré funkcie prehliadača Google Carbon Browser Browser budú zakázané.</translation>
-<translation id="3296368748942286671">Po zatvorení prehliadača Carbon Browser Browser ponechať spustené aplikácie na pozadí</translation>
-<translation id="3350761136195634146">Profil prehliadača Carbon Browser Browser s týmto účtom už existuje</translation>
-<translation id="3387527074123400161">Carbon Browser Browser OS</translation>
-<translation id="3406848076815591792">Chcete prepnúť na existujúci profil prehliadača Carbon Browser Browser?</translation>
+<translation id="328888136576916638">Chýbajú kľúče rozhrania Google API. Niektoré funkcie prehliadača Google Carbon Browser budú zakázané.</translation>
+<translation id="3296368748942286671">Po zatvorení prehliadača Carbon Browser ponechať spustené aplikácie na pozadí</translation>
+<translation id="3313189106987092621">Carbon Browser vás bude pred načítaním webu používajúceho nezabezpečené pripojenie upozorňovať</translation>
+<translation id="3350761136195634146">Profil prehliadača Carbon Browser s týmto účtom už existuje</translation>
+<translation id="3387527074123400161">Carbon Browser OS</translation>
+<translation id="3406848076815591792">Chcete prepnúť na existujúci profil prehliadača Carbon Browser?</translation>
 <translation id="3412460710772753638">V Správcovi hesiel v tomto zariadení</translation>
-<translation id="3430503420100763906">Profilmi prehliadača Carbon Browser Browser môžete oddeliť všetok svoj obsah v prehliadači Carbon Browser Browser. Vytvorte profily pre rodinu aj priateľov alebo si rozdeľte obsah na prácu a zábavu.</translation>
-<translation id="347328004046849135">Carbon Browser Browser vás upozorní, keď sa prihlásite pomocou prelomeného hesla</translation>
-<translation id="3474745554856756813">Táto akcia odstráni zo zariadenia niekoľko položiek (počet: <ph name="ITEMS_COUNT" />). Ak budete chcieť svoje údaje neskôr opäť načítať, prihláste sa do prehliadača Carbon Browser Browser ako <ph name="USER_EMAIL" />.</translation>
-<translation id="3497319089134299931">Skratkou <ph name="SHORTCUT" /> môžete prepínať profily prehliadača Carbon Browser Browser</translation>
-<translation id="3509308970982693815">Zatvorte všetky okná prehliadača Carbon Browser Browser a skúste to znova.</translation>
-<translation id="3518180795744733843">Asistent Google v prehliadači Carbon Browser Browser môže za vás dokončiť akcie na weboch</translation>
-<translation id="3533435340678213462">V rámci ochrany vášho súkromia automaticky odstraňujeme záujmy, ktoré sú staršie ako štyri týždne. Pri ďalšom prehliadaní sa v zozname môže znova zobraziť určitý záujem. Prípadne môžete odstrániť záujmy, ktoré nemá Carbon Browser Browser posudzovať.</translation>
-<translation id="3567254597502212821">Vaša história prehliadania, teda záznam webov, ktoré ste navštívili pomocou prehliadača Carbon Browser Browser v tomto zariadení.</translation>
-<translation id="3575459661164320785">V počítači máte škodlivý softvér. Carbon Browser Browser ho môže odstrániť, obnoviť nastavenia a deaktivovať rozšírenia, aby prehliadač znova normálne fungoval.</translation>
-<translation id="3593091352817399191">Už je prihlásený iný účet. Ak chcete oddeliť svoje prehliadanie, Carbon Browser Browser vám môže vytvoriť vlastný profil.</translation>
-<translation id="3639635944603682591">Dáta prehliadania tejto osoby sa odstránia z tohto zariadenia. Ak ich chcete obnoviť, prihláste sa do prehliadača Carbon Browser Browser ako <ph name="USER_EMAIL" />.</translation>
-<translation id="364817392622123556">{COUNT,plural, =0{K dispozícii je aktualizácia pre Carbon Browser Browser, ktorá bude použitá po najbližšom novom spustení.}=1{K dispozícii je aktualizácia pre Carbon Browser Browser, ktorá bude použitá po najbližšom novom spustení. Vaše okno inkognito sa neotvorí.}few{K dispozícii je aktualizácia pre Carbon Browser Browser, ktorá bude použitá po najbližšom novom spustení. Vaše # okná inkognito sa neotvoria.}many{K dispozícii je aktualizácia pre Carbon Browser Browser, ktorá bude použitá po najbližšom novom spustení. Your # private windows won't reopen.}other{K dispozícii je aktualizácia pre Carbon Browser Browser, ktorá bude použitá po najbližšom novom spustení. Vašich # okien inkognito sa neotvorí.}}</translation>
-<translation id="3651803019964686660">Ak chcete z webu <ph name="ORIGIN" /> odoslať číslo do svojho telefónu s Androidom, prihláste sa v oboch zariadeniach do prehliadača Carbon Browser Browser.</translation>
-<translation id="3685209450716071127">Carbon Browser Browser nemôže skontrolovať heslá. Skontrolujte internetové pripojenie.</translation>
-<translation id="3702352323269013324">Ďalšie informácie o prispôsobení reklám v prehliadači Carbon Browser Browser</translation>
-<translation id="370962675267501463">{COUNT,plural, =0{Správca vás žiada o nové spustenie prehliadača Carbon Browser Browser, aby sa použila táto aktualizácia}=1{Správca vás žiada o nové spustenie prehliadača Carbon Browser Browser, aby sa použila táto aktualizácia. Vaše okno inkognito sa neotvorí.}few{Správca vás žiada o nové spustenie prehliadača Carbon Browser Browser, aby sa použila táto aktualizácia. Vaše # okná inkognito sa neotvoria.}many{Správca vás žiada o nové spustenie prehliadača Carbon Browser Browser, aby sa použila táto aktualizácia. Your # private windows won't reopen.}other{Správca vás žiada o nové spustenie prehliadača Carbon Browser Browser, aby sa použila táto aktualizácia. Vašich # okien inkognito sa neotvorí.}}</translation>
-<translation id="3713809861844741608">Otvoriť odkaz na novej &amp;karte prehliadača Carbon Browser Browser</translation>
-<translation id="3728336900324680424">Carbon Browser Browser bude mať prístup na váš Disk, aby mohol v paneli s adresou zobrazovať návrhy</translation>
-<translation id="378917192836375108">Prehliadač Carbon Browser Browser vám umožňuje vybrať telefónne číslo na webe a zavolať naň pomocou aplikácie Skype.</translation>
-<translation id="3830894615770080216">Systém Carbon Browser Browser OS</translation>
-<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> – Carbon Browser Browser</translation>
-<translation id="386822487697155367">Získať pomoc so systémom Carbon Browser Browser OS</translation>
-<translation id="3871664619793219264">Získajte údaje prehliadača Carbon Browser Browser z účtu <ph name="ACCOUNT_EMAIL" /></translation>
-<translation id="388648406173476553">Prispôsobte a ovládajte Carbon Browser Browser. Vyžaduje sa vaša pozornosť. Podrobnosti získate kliknutím.</translation>
-<translation id="3889543394854987837">Ak chcete otvoriť prehliadač Carbon Browser Browser a začať prehliadať, kliknite na svoje meno.</translation>
-<translation id="390528597099634151">Používateľ <ph name="EXISTING_USER" /> je už do tohto profilu prehliadača Carbon Browser Browser prihlásený. Ak chcete oddeliť svoje prehliadanie, Carbon Browser Browser vám môže vytvoriť vlastný profil.</translation>
-<translation id="391789666908693569">Váš účet spravuje <ph name="MANAGER_NAME" />. Váš správca si môže zobraziť a upraviť tento profil prehliadača Carbon Browser Browser vrátane jeho údajov, ako sú záložky, história a heslá.</translation>
-<translation id="3945058413678539331">Carbon Browser Browser sa pokúša kopírovať heslá. Ak to chcete povoliť, zadajte heslo systému Windows.</translation>
-<translation id="3962623956404948996">Carbon Browser Browser odporúča skontrolovať tento súbor, pretože môže byť nebezpečný</translation>
-<translation id="3997429360543082038">Carbon Browser Browser OS</translation>
-<translation id="4019629340646866719">Carbon Browser Browser OS mohol vzniknúť vďaka ďalšiemu <ph name="BEGIN_LINK_CROS_OSS" />softvéru typu open source<ph name="END_LINK_CROS_OSS" />, ako je <ph name="BEGIN_LINK_LINUX_OSS" />vývojové prostredie systému Linux<ph name="END_LINK_LINUX_OSS" />.</translation>
-<translation id="4036079820698952681">Nahláste <ph name="BEGIN_LINK" />aktuálne nastavenia<ph name="END_LINK" /> a pomôžte tak zlepšiť prehliadač Carbon Browser Browser</translation>
+<translation id="3430503420100763906">Profilmi prehliadača Carbon Browser môžete oddeliť všetok svoj obsah v prehliadači Carbon Browser. Vytvorte profily pre rodinu aj priateľov alebo si rozdeľte obsah na prácu a zábavu.</translation>
+<translation id="347328004046849135">Carbon Browser vás upozorní, keď sa prihlásite pomocou prelomeného hesla</translation>
+<translation id="3474745554856756813">Táto akcia odstráni zo zariadenia niekoľko položiek (počet: <ph name="ITEMS_COUNT" />). Ak budete chcieť svoje údaje neskôr opäť načítať, prihláste sa do prehliadača Carbon Browser ako <ph name="USER_EMAIL" />.</translation>
+<translation id="3497319089134299931">Skratkou <ph name="SHORTCUT" /> môžete prepínať profily prehliadača Carbon Browser</translation>
+<translation id="3509308970982693815">Zatvorte všetky okná prehliadača Carbon Browser a skúste to znova.</translation>
+<translation id="3533435340678213462">V rámci ochrany vášho súkromia automaticky odstraňujeme záujmy, ktoré sú staršie ako štyri týždne. Pri ďalšom prehliadaní sa v zozname môže znova zobraziť určitý záujem. Prípadne môžete odstrániť záujmy, ktoré nemá Carbon Browser posudzovať.</translation>
+<translation id="3567254597502212821">Vaša história prehliadania, teda záznam webov, ktoré ste navštívili pomocou prehliadača Carbon Browser v tomto zariadení.</translation>
+<translation id="3593091352817399191">Už je prihlásený iný účet. Ak chcete oddeliť svoje prehliadanie, Carbon Browser vám môže vytvoriť vlastný profil.</translation>
+<translation id="363078681319665186">Ak chcete dostávať budúce aktualizácie prehliadača Carbon Browser, musíte používať systém macOS 10.15 alebo novší. V tomto počítači používate macOS 10.13.</translation>
+<translation id="3639635944603682591">Dáta prehliadania tejto osoby sa odstránia z tohto zariadenia. Ak ich chcete obnoviť, prihláste sa do prehliadača Carbon Browser ako <ph name="USER_EMAIL" />.</translation>
+<translation id="364817392622123556">{COUNT,plural, =0{K dispozícii je aktualizácia pre Carbon Browser, ktorá bude použitá po najbližšom novom spustení.}=1{K dispozícii je aktualizácia pre Carbon Browser, ktorá bude použitá po najbližšom novom spustení. Vaše okno inkognito sa neotvorí.}few{K dispozícii je aktualizácia pre Carbon Browser, ktorá bude použitá po najbližšom novom spustení. Vaše # okná inkognito sa neotvoria.}many{K dispozícii je aktualizácia pre Carbon Browser, ktorá bude použitá po najbližšom novom spustení. Your # private windows won't reopen.}other{K dispozícii je aktualizácia pre Carbon Browser, ktorá bude použitá po najbližšom novom spustení. Vašich # okien inkognito sa neotvorí.}}</translation>
+<translation id="3651803019964686660">Ak chcete z webu <ph name="ORIGIN" /> odoslať číslo do svojho telefónu s Androidom, prihláste sa v oboch zariadeniach do prehliadača Carbon Browser.</translation>
+<translation id="3667616615096815454">Nepodarilo sa nainštalovať, pretože server aplikáciu nepozná.</translation>
+<translation id="3685209450716071127">Carbon Browser nemôže skontrolovať heslá. Skontrolujte internetové pripojenie.</translation>
+<translation id="3702352323269013324">Ďalšie informácie o prispôsobení reklám v prehliadači Carbon Browser</translation>
+<translation id="370962675267501463">{COUNT,plural, =0{Správca vás žiada o nové spustenie prehliadača Carbon Browser, aby sa použila táto aktualizácia}=1{Správca vás žiada o nové spustenie prehliadača Carbon Browser, aby sa použila táto aktualizácia. Vaše okno inkognito sa neotvorí.}few{Správca vás žiada o nové spustenie prehliadača Carbon Browser, aby sa použila táto aktualizácia. Vaše # okná inkognito sa neotvoria.}many{Správca vás žiada o nové spustenie prehliadača Carbon Browser, aby sa použila táto aktualizácia. Your # private windows won't reopen.}other{Správca vás žiada o nové spustenie prehliadača Carbon Browser, aby sa použila táto aktualizácia. Vašich # okien inkognito sa neotvorí.}}</translation>
+<translation id="3713809861844741608">Otvoriť odkaz na novej &amp;karte prehliadača Carbon Browser</translation>
+<translation id="378917192836375108">Prehliadač Carbon Browser vám umožňuje vybrať telefónne číslo na webe a zavolať naň pomocou aplikácie Skype.</translation>
+<translation id="3790262771324122253">Prečo Carbon Browser blokuje niektoré stiahnuté súbory</translation>
+<translation id="379589255253486813">Ak bude potrebné niečo skontrolovať, Carbon Browser vás upozorní</translation>
+<translation id="3802055581630249637">Carbon Browser prednačítava stránky, ktoré pravdepodobne navštívite, aby sa načítali rýchlejšie, keď na ne prejdete</translation>
+<translation id="3830894615770080216">Systém Carbon Browser OS</translation>
+<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> – Carbon Browser</translation>
+<translation id="386822487697155367">Získať pomoc so systémom Carbon Browser OS</translation>
+<translation id="3871664619793219264">Získajte údaje prehliadača Carbon Browser z účtu <ph name="ACCOUNT_EMAIL" /></translation>
+<translation id="387966568917439637">Ak chcete dostávať budúce aktualizácie prehliadača Carbon Browser, musíte používať systém macOS 10.15 alebo novší. V tomto počítači používate macOS 10.14.</translation>
+<translation id="388648406173476553">Prispôsobte a ovládajte Carbon Browser. Vyžaduje sa vaša pozornosť. Podrobnosti získate kliknutím.</translation>
+<translation id="3889543394854987837">Ak chcete otvoriť prehliadač Carbon Browser a začať prehliadať, kliknite na svoje meno.</translation>
+<translation id="390528597099634151">Používateľ <ph name="EXISTING_USER" /> je už do tohto profilu prehliadača Carbon Browser prihlásený. Ak chcete oddeliť svoje prehliadanie, Carbon Browser vám môže vytvoriť vlastný profil.</translation>
+<translation id="3909353120217047026">Toto rozšírenie porušuje pravidlá Internetového obchodu Carbon Browser a môže byť nebezpečné. Odstráňte ho z prehliadača Carbon Browser, aby sa mu nezobrazovali vaše údaje na weboch, ktoré navštevujete (vrátane vašich osobných údajov), a nemohlo ich meniť.</translation>
+<translation id="391789666908693569">Váš účet spravuje <ph name="MANAGER_NAME" />. Váš správca si môže zobraziť a upraviť tento profil prehliadača Carbon Browser vrátane jeho údajov, ako sú záložky, história a heslá.</translation>
+<translation id="3922825997980843979">Keď píšete, Carbon Browser odosiela obsah panela s adresou alebo vyhľadávacieho poľa do predvoleného vyhľadávača</translation>
+<translation id="3941890832296813527">Chyba inštalácie: názov súboru inštalátora je neplatný alebo nie je podporovaný.</translation>
+<translation id="3945058413678539331">Carbon Browser sa pokúša kopírovať heslá. Ak to chcete povoliť, zadajte heslo systému Windows.</translation>
+<translation id="3962647064319009959">Ako vás Carbon Browser chráni</translation>
+<translation id="3975724895399328945">Carbon Browser for Testing</translation>
+<translation id="3997429360543082038">Carbon Browser OS</translation>
+<translation id="4019629340646866719">Carbon Browser OS mohol vzniknúť vďaka ďalšiemu <ph name="BEGIN_LINK_CROS_OSS" />softvéru typu open source<ph name="END_LINK_CROS_OSS" />, ako je <ph name="BEGIN_LINK_LINUX_OSS" />vývojové prostredie systému Linux<ph name="END_LINK_LINUX_OSS" />.</translation>
+<translation id="4028143804911941282">Keď je táto možnosť vypnutá, naďalej sa vám budú zobrazovať návrhy, ktoré Carbon Browser poskytuje miestne</translation>
+<translation id="4036079820698952681">Nahláste <ph name="BEGIN_LINK" />aktuálne nastavenia<ph name="END_LINK" /> a pomôžte tak zlepšiť prehliadač Carbon Browser</translation>
 <translation id="4050175100176540509">V najnovšej verzii sú k dispozícii dôležité vylepšenia zabezpečenia a nové funkcie.</translation>
+<translation id="4055805654398742145">Správca hesiel</translation>
+<translation id="4095980151185649725">{COUNT,plural, =1{Vaša organizácia Carbon Browser automaticky zavrie, keď sa nebude používať jednu minútu. Dáta prehliadania budú odstránené. Môže v nich byť zahrnutá história, automatické dopĺňanie a stiahnuté súbory.}few{Vaša organizácia Carbon Browser automaticky zavrie, keď sa nebude používať # minúty. Dáta prehliadania budú odstránené. Môže v nich byť zahrnutá história, automatické dopĺňanie a stiahnuté súbory.}many{Vaša organizácia Carbon Browser automaticky zavrie, keď sa nebude používať # minúty. Dáta prehliadania budú odstránené. Môže v nich byť zahrnutá história, automatické dopĺňanie a stiahnuté súbory.}other{Vaša organizácia Carbon Browser automaticky zavrie, keď sa nebude používať # minút. Dáta prehliadania budú odstránené. Môže v nich byť zahrnutá história, automatické dopĺňanie a stiahnuté súbory.}}</translation>
+<translation id="4118474109249235144">Režim Inkognito prehliadača Carbon Browser</translation>
 <translation id="4148957013307229264">Inštaluje sa...</translation>
-<translation id="419998258129752635"><ph name="PAGE_TITLE" /> – prihlásenie do siete – Carbon Browser Browser</translation>
-<translation id="421369550622382712">Objavte skvelé aplikácie, hry, rozšírenia a motívy pre prehliadač Carbon Browser Browser.</translation>
-<translation id="4216212958613226427">V tomto jazyku sa zobrazuje používateľské rozhranie prehliadača Carbon Browser Browser.</translation>
+<translation id="419998258129752635"><ph name="PAGE_TITLE" /> – prihlásenie do siete – Carbon Browser</translation>
+<translation id="421369550622382712">Objavte skvelé aplikácie, hry, rozšírenia a motívy pre prehliadač Carbon Browser.</translation>
+<translation id="4216212958613226427">V tomto jazyku sa zobrazuje používateľské rozhranie prehliadača Carbon Browser.</translation>
 <translation id="4222932583846282852">Ruší sa...</translation>
-<translation id="4230135487732243613">Chcete prepojiť údaje prehliadača Carbon Browser Browser s týmto účtom?</translation>
-<translation id="4271805377592243930">Pomoc s prehliadačom Carbon Browser Browser</translation>
-<translation id="4285930937574705105">Inštalácia zlyhala kvôli neurčenej chybe. Ak je prehliadač Carbon Browser Browser momentálne spustený, zatvorte ho a skúste znova.</translation>
+<translation id="4230135487732243613">Chcete prepojiť údaje prehliadača Carbon Browser s týmto účtom?</translation>
+<translation id="4251772536351901305">Analyzuje viac údajov z webov než štandardná ochrana a upozorňuje vás na nebezpečné weby, dokonca aj také, o ktorých Google predtým nevedel. Upozornenia z prehliadača Carbon Browser môžete preskočiť.</translation>
+<translation id="4271805377592243930">Pomoc s prehliadačom Carbon Browser</translation>
+<translation id="4281844954008187215">Zmluvné podmienky</translation>
+<translation id="4285930937574705105">Inštalácia zlyhala kvôli neurčenej chybe. Ak je prehliadač Carbon Browser momentálne spustený, zatvorte ho a skúste znova.</translation>
 <translation id="4304713468139749426">Správca hesiel</translation>
 <translation id="4334294535648607276">Sťahovanie bolo dokončené.</translation>
-<translation id="439358628917130594"><ph name="MANAGER" /> vyžaduje, aby ste si pred používaním tohto zariadenia prečítali nasledujúce zmluvné podmienky a vyjadrili s nimi súhlas. Tieto zmluvné podmienky nerozširujú, neupravujú ani neobmedzujú zmluvné podmienky systému Carbon Browser Browser OS.</translation>
-<translation id="4407044323746248786">Chcete Carbon Browser Browser napriek tomu ukončiť?</translation>
-<translation id="4415566066719264597">Povoliť prehliadaču Carbon Browser Browser spustenie na pozadí</translation>
-<translation id="4423735387467980091">Prispôsobiť a spravovať Carbon Browser Browser</translation>
+<translation id="439358628917130594"><ph name="MANAGER" /> vyžaduje, aby ste si pred používaním tohto zariadenia prečítali nasledujúce zmluvné podmienky a vyjadrili s nimi súhlas. Tieto zmluvné podmienky nerozširujú, neupravujú ani neobmedzujú zmluvné podmienky systému Carbon Browser OS.</translation>
+<translation id="4407044323746248786">Chcete Carbon Browser napriek tomu ukončiť?</translation>
+<translation id="4415566066719264597">Povoliť prehliadaču Carbon Browser spustenie na pozadí</translation>
+<translation id="4423735387467980091">Prispôsobiť a spravovať Carbon Browser</translation>
 <translation id="4427306783828095590">Rozšírená ochrana efektívnejšie blokuje phishing aj malvér</translation>
-<translation id="4440114195512068100">Ak chcete zistiť, či je zariadenie aktualizované, prejdite do <ph name="LINK_BEGIN" />nastavení systému Carbon Browser Browser OS<ph name="LINK_END" /></translation>
-<translation id="452711251841752011">Vitajte v prehliadači Carbon Browser Browser, otvorilo sa nové okno prehliadača</translation>
-<translation id="4544142686420020088">Carbon Browser Browser sa neaktualizoval. Vyskytol sa problém. <ph name="BEGIN_LINK" />Vyriešiť problémy so sťahovaním aktualizácií prehliadača Carbon Browser Browser a neúspešnými aktualizáciami<ph name="END_LINK" /></translation>
-<translation id="454579500955453258">Chcete pokračovať v novom profile prehliadača Carbon Browser Browser?</translation>
+<translation id="4447409407328223819">Carbon Browser for Testing</translation>
+<translation id="4501471624619070934">Nepodarilo sa nainštalovať, pretože v tejto krajine je obmedzený prístup.</translation>
+<translation id="452711251841752011">Vitajte v prehliadači Carbon Browser, otvorilo sa nové okno prehliadača</translation>
+<translation id="4544142686420020088">Carbon Browser sa neaktualizoval. Vyskytol sa problém. <ph name="BEGIN_LINK" />Vyriešiť problémy so sťahovaním aktualizácií prehliadača Carbon Browser a neúspešnými aktualizáciami<ph name="END_LINK" /></translation>
+<translation id="454579500955453258">Chcete pokračovať v novom profile prehliadača Carbon Browser?</translation>
 <translation id="4567424176335768812">Ste prihlásený/-á ako <ph name="USER_EMAIL_ADDRESS" />. Teraz môžete na všetkých zariadeniach, kde ste prihlásený/-á, pristupovať k svojim záložkám, histórii a ďalším nastaveniam.</translation>
+<translation id="4570813286784708942">Prehliadač Carbon Browser toto sťahovanie zablokoval, pretože ste vypli Bezpečné prehliadanie a súbor sa nedá overiť</translation>
 <translation id="4594305310729380060">Do Správcu hesiel v tomto zariadení</translation>
-<translation id="459535195905078186">Aplikácie Carbon Browser Browser</translation>
-<translation id="4613863813562375431">Verzia systému Carbon Browser Browser OS</translation>
-<translation id="4621240073146040695">Aktualizácia je takmer hotová! Dokončite ju reštartovaním prehliadača Carbon Browser Browser.</translation>
-<translation id="4665829708273112819">Upozornenie: Carbon Browser Browser nemôže zabrániť rozšíreniam v zaznamenávaní vašej histórie prehliadania. Ak chcete rozšírenie v režime inkognito zakázať, zrušte výber tejto možnosti.</translation>
-<translation id="4673151026126227699">Ak zdieľate aj prehľady používania prehliadača Carbon Browser Browser, nachádzajú sa v nich webové adresy, ktoré navštívite</translation>
-<translation id="4677944499843243528">Zdá sa, že profil používa ďalší proces prehliadača Carbon Browser Browser (<ph name="PROCESS_ID" />) na inom počítači (<ph name="HOST_NAME" />). Prehliadač Carbon Browser Browser daný profil uzamkol, aby sa nepoškodil. Ak s istotou viete, že tento profil nepoužívajú žiadne iné procesy, môžete ho odomknúť a prehliadač Carbon Browser Browser znova spustiť.</translation>
+<translation id="459535195905078186">Aplikácie Carbon Browser</translation>
+<translation id="4613863813562375431">Verzia systému Carbon Browser OS</translation>
+<translation id="4621240073146040695">Aktualizácia je takmer hotová! Dokončite ju reštartovaním prehliadača Carbon Browser.</translation>
+<translation id="4665829708273112819">Upozornenie: Carbon Browser nemôže zabrániť rozšíreniam v zaznamenávaní vašej histórie prehliadania. Ak chcete rozšírenie v režime inkognito zakázať, zrušte výber tejto možnosti.</translation>
+<translation id="4673151026126227699">Ak zdieľate aj prehľady používania prehliadača Carbon Browser, nachádzajú sa v nich webové adresy, ktoré navštívite</translation>
+<translation id="4677944499843243528">Zdá sa, že profil používa ďalší proces prehliadača Carbon Browser (<ph name="PROCESS_ID" />) na inom počítači (<ph name="HOST_NAME" />). Prehliadač Carbon Browser daný profil uzamkol, aby sa nepoškodil. Ak s istotou viete, že tento profil nepoužívajú žiadne iné procesy, môžete ho odomknúť a prehliadač Carbon Browser znova spustiť.</translation>
 <translation id="4680828127924988555">Zrušiť inštaláciu</translation>
-<translation id="4708774505295300557">Do prehliadača Carbon Browser Browser sa už na tomto počítači niekto prihlásil pomocou účtu <ph name="ACCOUNT_EMAIL_LAST" />. Ak chcete ponechať svoje informácie oddelené, vytvorte v prehliadači Carbon Browser Browser nového používateľa.</translation>
-<translation id="4746050847053251315">Chcete Carbon Browser Browser napriek tomu ukončiť?</translation>
-<translation id="4748217263233248895">Práve bola použitá mimoriadna bezpečnostná aktualizácia pre prehliadač Carbon Browser Browser. Zmeny sa prejavia až po jeho reštartovaní (vaše karty sa automaticky obnovia).</translation>
-<translation id="4765210420921718862">Svoje rozhodnutie môžete kedykoľvek zmeniť v nastaveniach prehliadača Carbon Browser Browser. Skúšobné obdobia prebiehajú popri aktuálnemu spôsobu zobrazovania reklám, takže zmeny hneď neuvidíte.</translation>
-<translation id="4788777615168560705">Carbon Browser Browser nemôže skontrolovať heslá. Skúste to znova o 24 hodín alebo <ph name="BEGIN_LINK" />skontrolujte heslá vo svojom účte Google<ph name="END_LINK" />.</translation>
+<translation id="4708774505295300557">Do prehliadača Carbon Browser sa už na tomto počítači niekto prihlásil pomocou účtu <ph name="ACCOUNT_EMAIL_LAST" />. Ak chcete ponechať svoje informácie oddelené, vytvorte v prehliadači Carbon Browser nového používateľa.</translation>
+<translation id="4724676981607797757">Nepodarilo sa nainštalovať pre chybu nepodporovaného protokolu.</translation>
+<translation id="4746050847053251315">Chcete Carbon Browser napriek tomu ukončiť?</translation>
+<translation id="4748217263233248895">Práve bola použitá mimoriadna bezpečnostná aktualizácia pre prehliadač Carbon Browser. Zmeny sa prejavia až po jeho reštartovaní (vaše karty sa automaticky obnovia).</translation>
+<translation id="4765210420921718862">Svoje rozhodnutie môžete kedykoľvek zmeniť v nastaveniach prehliadača Carbon Browser. Skúšobné obdobia prebiehajú popri aktuálnemu spôsobu zobrazovania reklám, takže zmeny hneď neuvidíte.</translation>
+<translation id="4788777615168560705">Carbon Browser nemôže skontrolovať heslá. Skúste to znova o 24 hodín alebo <ph name="BEGIN_LINK" />skontrolujte heslá vo svojom účte Google<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Využíva rovnaký nástroj na kontrolu pravopisu, aký sa používa vo Vyhľadávaní Google. Text zadaný do prehliadača sa odošle Googlu. Toto správanie môžete zmeniť v nastaveniach.</translation>
-<translation id="4888717733111232871">Pravidlo pre prichádzajúce prenosy pre prehliadač Carbon Browser Browser, ktoré povoľuje prenos dát mDNS.</translation>
-<translation id="4893347770495441059">Znova spustiť a aktualizovať Carbon Browser Browser</translation>
-<translation id="4943838377383847465">Carbon Browser Browser je v režime na pozadí.</translation>
-<translation id="4987820182225656817">Hostia môžu používať prehliadač Carbon Browser Browser bez toho, aby po sebe zanechali akékoľvek informácie.</translation>
-<translation id="4994636714258228724">Pridajte si účet do prehliadača Carbon Browser Browser</translation>
-<translation id="5114678101347489141">Carbon Browser Browser skúma nové funkcie, ktoré umožňujú webom zobraziť rovnaké prostredie prehliadania s využitím menšieho množstva vašich údajov</translation>
-<translation id="5224391634244552924">Žiadne uložené heslá. Carbon Browser Browser môže skontrolovať heslá, keď ich uložíte.</translation>
-<translation id="5252179775517634216">Používateľ <ph name="EXISTING_USER" /> je už do tohto profilu prehliadača Carbon Browser Browser prihlásený. Týmto sa vytvorí nový profil prehliadača Carbon Browser Browser pre <ph name="USER_EMAIL_ADDRESS" /></translation>
-<translation id="5277894862589591112">Ak chcete zmeny použiť, spustite Carbon Browser Browser znova</translation>
-<translation id="5296845517486664001">Keď sú zapnuté skúšobné obdobia a ak vás Carbon Browser Browser náhodne zapojil do aktívneho skúšobného obdobia, vaša história prehliadania ovplyvňuje zobrazované reklamy a záujmy, ktoré sú odhadnuté nižšie. Carbon Browser Browser priebežne odstraňuje vaše záujmy každý mesiac, aby tak chránil vaše súkromie.</translation>
-<translation id="5358375970380395591">Prihlasujete sa pomocou spravovaného účtu a jeho správcovi dávate kontrolu nad vaším profilom Carbon Browser Browser. Vaše údaje prehliadača Carbon Browser Browser, ako sú aplikácie, záložky, história, heslá a iné nastavenia, sa natrvalo priradia k účtu <ph name="USER_NAME" />. Tieto údaje budete môcť odstrániť len pomocou panela Dashboard v Účtoch Google, ale nebudete ich môcť priradiť k inému účtu. <ph name="LEARN_MORE" /></translation>
-<translation id="5386450000063123300">Aktualizuje sa Carbon Browser Browser (<ph name="PROGRESS_PERCENT" />)</translation>
-<translation id="538767207339317086">Povoliť prihlásenie do prehliadača Carbon Browser Browser</translation>
-<translation id="5398878173008909840">K dispozícii je nová verzia prehliadača Carbon Browser Browser.</translation>
-<translation id="5427571867875391349">Nastaviť Carbon Browser Browser ako predvolený prehliadač</translation>
-<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Beta</translation>
-<translation id="5473971139929175403">Carbon Browser Browser nemusí fungovať správne, pretože v tejto verzii systému Linux už nie je podporovaný</translation>
-<translation id="5480860683791598150">Carbon Browser Browser potrebuje prístup k vašej polohe, aby ju mohol zdieľať s týmto webom</translation>
-<translation id="5487574057737591516">V rámci ochrany vášho súkromia automaticky odstraňujeme záujmy, ktoré sú staršie ako štyri týždne. Pri ďalšom prehliadaní sa v zozname môže znova zobraziť určitý záujem. A ak sa to prehliadaču Carbon Browser Browser nepodarí správne alebo ak nechcete zobrazovať určité reklamy, môžete ľubovoľný záujem odstrániť.</translation>
-<translation id="549669000822060376">Počkajte, kým Carbon Browser Browser nainštaluje najnovšie aktualizácie systému.</translation>
-<translation id="5496810170689441661">Carbon Browser Browser sa pokúša upraviť heslá. Ak to chcete povoliť, zadajte heslo systému Windows.</translation>
-<translation id="5527463683072221100">Otvoriť súbory PDF v prehliadači Carbon Browser Browser</translation>
-<translation id="5614091477838198795">Keď zapnete túto možnosť, systém vás odhlási aj z prehliadača Carbon Browser Browser</translation>
-<translation id="5623402015214259806">{0,plural, =0{Je k dispozícii aktualizácia prehliadača Carbon Browser Browser}=1{Je k dispozícii aktualizácia prehliadača Carbon Browser Browser}few{Aktualizácia prehliadača Carbon Browser Browser je k dispozícii už # dni}many{Aktualizácia prehliadača Carbon Browser Browser je k dispozícii už # dňa}other{Aktualizácia prehliadača Carbon Browser Browser je k dispozícii už # dní}}</translation>
-<translation id="5634636535844844681">Carbon Browser Browser vyžaduje Windows 7 alebo vyšší.</translation>
-<translation id="5653831366781983928">Reštartujte Carbon Browser Browser</translation>
-<translation id="5698481217667032250">Zobraziť Carbon Browser Browser v tomto jazyku</translation>
-<translation id="5862307444128926510">Vitajte v prehliadači Carbon Browser Browser</translation>
-<translation id="5883558403894052917">Prehliadač Carbon Browser Browser zistil, že tieto položky obsahujú malvér:</translation>
+<translation id="4814736265800133385">Použiť Carbon Browser bez účtu</translation>
+<translation id="4888717733111232871">Pravidlo pre prichádzajúce prenosy pre prehliadač Carbon Browser, ktoré povoľuje prenos dát mDNS.</translation>
+<translation id="4893347770495441059">Znova spustiť a aktualizovať Carbon Browser</translation>
+<translation id="4943838377383847465">Carbon Browser je v režime na pozadí.</translation>
+<translation id="4987820182225656817">Hostia môžu používať prehliadač Carbon Browser bez toho, aby po sebe zanechali akékoľvek informácie.</translation>
+<translation id="4994636714258228724">Pridajte si účet do prehliadača Carbon Browser</translation>
+<translation id="5114678101347489141">Carbon Browser skúma nové funkcie, ktoré umožňujú webom zobraziť rovnaké prostredie prehliadania s využitím menšieho množstva vašich údajov</translation>
+<translation id="5224391634244552924">Žiadne uložené heslá. Carbon Browser môže skontrolovať heslá, keď ich uložíte.</translation>
+<translation id="5252179775517634216">Používateľ <ph name="EXISTING_USER" /> je už do tohto profilu prehliadača Carbon Browser prihlásený. Týmto sa vytvorí nový profil prehliadača Carbon Browser pre <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="5277894862589591112">Ak chcete zmeny použiť, spustite Carbon Browser znova</translation>
+<translation id="5294316920224716406">Pri prehliadaní v režime inkognito vás bude Carbon Browser pred načítaním webu používajúceho nezabezpečené pripojenie upozorňovať</translation>
+<translation id="5296845517486664001">Keď sú zapnuté skúšobné obdobia a ak vás Carbon Browser náhodne zapojil do aktívneho skúšobného obdobia, vaša história prehliadania ovplyvňuje zobrazované reklamy a záujmy, ktoré sú odhadnuté nižšie. Carbon Browser priebežne odstraňuje vaše záujmy každý mesiac, aby tak chránil vaše súkromie.</translation>
+<translation id="5352264705793813212">Prehliadač Carbon Browser našiel niekoľko bezpečnostných odporúčaní, ktoré by ste si mali pozrieť</translation>
+<translation id="5358375970380395591">Prihlasujete sa pomocou spravovaného účtu a jeho správcovi dávate kontrolu nad vaším profilom Carbon Browser. Vaše údaje prehliadača Carbon Browser, ako sú aplikácie, záložky, história, heslá a iné nastavenia, sa natrvalo priradia k účtu <ph name="USER_NAME" />. Tieto údaje budete môcť odstrániť len pomocou panela Dashboard v Účtoch Google, ale nebudete ich môcť priradiť k inému účtu. <ph name="LEARN_MORE" /></translation>
+<translation id="5368118228313795342">Ďalší kód: <ph name="EXTRA_CODE" />.</translation>
+<translation id="5383439451358640070">Prečo Carbon Browser blokuje niektoré súbory</translation>
+<translation id="5386450000063123300">Aktualizuje sa Carbon Browser (<ph name="PROGRESS_PERCENT" />)</translation>
+<translation id="538767207339317086">Povoliť prihlásenie do prehliadača Carbon Browser</translation>
+<translation id="5398878173008909840">K dispozícii je nová verzia prehliadača Carbon Browser.</translation>
+<translation id="5405650547142096840">Odstrániť z prehliadača Carbon Browser</translation>
+<translation id="5427571867875391349">Nastaviť Carbon Browser ako predvolený prehliadač</translation>
+<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> – Carbon Browser Beta</translation>
+<translation id="5473971139929175403">Carbon Browser nemusí fungovať správne, pretože v tejto verzii systému Linux už nie je podporovaný</translation>
+<translation id="5480860683791598150">Carbon Browser potrebuje prístup k vašej polohe, aby ju mohol zdieľať s týmto webom</translation>
+<translation id="5487574057737591516">V rámci ochrany vášho súkromia automaticky odstraňujeme záujmy, ktoré sú staršie ako štyri týždne. Pri ďalšom prehliadaní sa v zozname môže znova zobraziť určitý záujem. A ak sa to prehliadaču Carbon Browser nepodarí správne alebo ak nechcete zobrazovať určité reklamy, môžete ľubovoľný záujem odstrániť.</translation>
+<translation id="549669000822060376">Počkajte, kým Carbon Browser nainštaluje najnovšie aktualizácie systému.</translation>
+<translation id="5496810170689441661">Carbon Browser sa pokúša upraviť heslá. Ak to chcete povoliť, zadajte heslo systému Windows.</translation>
+<translation id="5527463683072221100">Otvoriť súbory PDF v prehliadači Carbon Browser</translation>
+<translation id="5623402015214259806">{0,plural, =0{Je k dispozícii aktualizácia prehliadača Carbon Browser}=1{Je k dispozícii aktualizácia prehliadača Carbon Browser}few{Aktualizácia prehliadača Carbon Browser je k dispozícii už # dni}many{Aktualizácia prehliadača Carbon Browser je k dispozícii už # dňa}other{Aktualizácia prehliadača Carbon Browser je k dispozícii už # dní}}</translation>
+<translation id="5643865575100044307">Pred zavretím prehliadača Carbon Browser vždy odstraňujte dáta webov zo zariadenia</translation>
+<translation id="5653831366781983928">Reštartujte Carbon Browser</translation>
+<translation id="5675598751761067447">Tento súbor môže byť nebezpečný<ph name="LINE_BREAK" />Ak zadáte heslo, Carbon Browser môže tento stiahnutý súbor skontrolovať (vaše heslo zostane v zariadení)</translation>
+<translation id="5690427481109656848">Carbon X Labs</translation>
+<translation id="5698481217667032250">Zobraziť Carbon Browser v tomto jazyku</translation>
+<translation id="569897634095159764">Nepodarilo sa pripojiť k internetu. Proxy server vyžaduje overenie.</translation>
+<translation id="5809516625706423866">Nepodarilo sa pripojiť k internetu. Chyba autorizácie HTTP 401. Skontrolujte konfiguráciu servera proxy.</translation>
+<translation id="5862307444128926510">Vitajte v prehliadači Carbon Browser</translation>
+<translation id="5883558403894052917">Prehliadač Carbon Browser zistil, že tieto položky obsahujú malvér:</translation>
+<translation id="5889361821821684993">Carbon Browser vykonáva pravidelné kontroly s cieľom uistiť sa, že v prehliadači máte najbezpečnejšie nastavenia. Ak bude treba, aby ste niečo skontrolovali, oznámime vám to.</translation>
 <translation id="5895138241574237353">Reštartovať</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> – prihlásenie do siete</translation>
 <translation id="5924017743176219022">Pripája sa k internetu…</translation>
 <translation id="5941711191222866238">Minimalizovať</translation>
-<translation id="5972142260211327093">Ak vás Carbon Browser Browser náhodne zapojil do aktívneho skúšobného obdobia, vaša história prehliadania ovplyvňuje zobrazované reklamy a záujmy, ktoré sú odhadnuté nižšie. Carbon Browser Browser priebežne odstraňuje vaše záujmy každý mesiac, aby tak chránil vaše súkromie. Záujmy sa obnovujú, pokiaľ ich neodstránite.</translation>
-<translation id="5987687638152509985">Ak chcete spustiť synchronizáciu, aktualizujte Carbon Browser Browser</translation>
-<translation id="5988505247484123880">Je bežné, že navštívené weby si pamätajú veci, ktoré vás zaujímajú, aby vám mohli prispôsobiť prostredie. Weby môžu v prehliadači Carbon Browser Browser ukladať aj údaje o vašich záujmoch.</translation>
+<translation id="5972142260211327093">Ak vás Carbon Browser náhodne zapojil do aktívneho skúšobného obdobia, vaša história prehliadania ovplyvňuje zobrazované reklamy a záujmy, ktoré sú odhadnuté nižšie. Carbon Browser priebežne odstraňuje vaše záujmy každý mesiac, aby tak chránil vaše súkromie. Záujmy sa obnovujú, pokiaľ ich neodstránite.</translation>
+<translation id="5986585015444752010">{COUNT,plural, =1{Vaša organizácia Carbon Browser automaticky zavrie, keď sa nebude používať jednu minútu.}few{Vaša organizácia Carbon Browser automaticky zavrie, keď sa nebude používať # minúty.}many{Vaša organizácia Carbon Browser automaticky zavrie, keď sa nebude používať # minúty.}other{Vaša organizácia Carbon Browser automaticky zavrie, keď sa nebude používať # minút.}}</translation>
+<translation id="5987687638152509985">Ak chcete spustiť synchronizáciu, aktualizujte Carbon Browser</translation>
+<translation id="5988505247484123880">Je bežné, že navštívené weby si pamätajú veci, ktoré vás zaujímajú, aby vám mohli prispôsobiť prostredie. Weby môžu v prehliadači Carbon Browser ukladať aj údaje o vašich záujmoch.</translation>
 <translation id="6003112304606738118">Sťahuje sa… Zostávajúci čas: <ph name="HOURS" /> h</translation>
 <translation id="6040143037577758943">Zavrieť</translation>
-<translation id="6055895534982063517">K dispozícii je nová verzia prehliadača Carbon Browser Browser, ktorá je rýchlejšia ako kedykoľvek predtým.</translation>
-<translation id="6063093106622310249">&amp;Otvoriť v prehliadači Carbon Browser Browser</translation>
-<translation id="6072279588547424923">Rozšírenie <ph name="EXTENSION_NAME" /> bolo pridané do prehliadača Carbon Browser Browser</translation>
+<translation id="6055895534982063517">K dispozícii je nová verzia prehliadača Carbon Browser, ktorá je rýchlejšia ako kedykoľvek predtým.</translation>
+<translation id="6058380562449900225">Povoľte prehliadaču Carbon Browser odstraňovať povolenia z webov, ktoré ste v poslednom čase nenavštívili, a ochráňte tak svoje údaje. Upozornenia sa tým nedeaktivujú.</translation>
+<translation id="6063093106622310249">&amp;Otvoriť v prehliadači Carbon Browser</translation>
+<translation id="6072279588547424923">Rozšírenie <ph name="EXTENSION_NAME" /> bolo pridané do prehliadača Carbon Browser</translation>
+<translation id="6072463441809498330">Zrýchlite Carbon Browser</translation>
 <translation id="608006075545470555">Pridanie pracovného profilu do tohto prehliadača</translation>
-<translation id="6096348254544841612">Prispôsobte si prehliadač Carbon Browser Browser a ovládajte ho. K dispozícii je aktualizácia.</translation>
-<translation id="6120345080069858279">Carbon Browser Browser toto heslo uloží do vášho účtu Google. Nebudete si ho musieť pamätať.</translation>
-<translation id="6129621093834146363">Súbor <ph name="FILE_NAME" /> je nebezpečný, a preto ho prehliadač Carbon Browser Browser zablokoval.</translation>
-<translation id="6134968993075716475">Bezpečné prehliadanie je vypnuté. Carbon Browser Browser ho odporúča zapnúť.</translation>
-<translation id="6145820983052037069">Tu môžete prepínať profily prehliadača Carbon Browser Browser</translation>
-<translation id="6183079672144801177">Skontrolujte, či ste sa v zariadení <ph name="TARGET_DEVICE_NAME" /> prihlásili do prehliadača Carbon Browser Browser, a potom to skúste odoslať znova.</translation>
-<translation id="6212496753309875659">Tento počítač už obsahuje novšiu verziu prehliadača Carbon Browser Browser. Ak softvér nefunguje, odinštalujte prehliadač Carbon Browser Browser a skúste to znova.</translation>
-<translation id="6219195342503754812">{0,plural, =0{Carbon Browser Browser sa teraz reštartuje}=1{Carbon Browser Browser sa reštartuje o 1 sekundu}few{Carbon Browser Browser sa reštartuje o # sekundy}many{Carbon Browser Browser sa reštartuje o # sekundy}other{Carbon Browser Browser sa reštartuje o # sekúnd}}</translation>
-<translation id="6241367896540709610">Carbon Browser Browser vyžaduje na sťahovanie súborov povolený prístup k úložisku</translation>
-<translation id="6245734527075554892">Kontroluje webové adresy podľa zoznamu nebezpečných webov uloženého v prehliadači Carbon Browser Browser</translation>
-<translation id="6248213926982192922">Nastavte Carbon Browser Browser ako svoj predvolený prehliadač</translation>
-<translation id="6266342355635466082">Carbon Browser Browser nemôže skontrolovať dostupnosť aktualizácií. Skontrolujte internetové pripojenie.</translation>
-<translation id="6268381023930128611">Odhlásiť sa z prehliadača Carbon Browser Browser?</translation>
+<translation id="6096348254544841612">Prispôsobte si prehliadač Carbon Browser a ovládajte ho. K dispozícii je aktualizácia.</translation>
+<translation id="6102072151902574948">Keď je táto možnosť zapnutá, Carbon Browser šetrí batériu tým, že obmedzí aktivitu na pozadí a vizuálne efekty, napríklad plynulé posúvanie a snímkové frekvencie videa.</translation>
+<translation id="6119438414301547735">Povoliť rozšíreniu zobrazovať požiadavky na prístup na paneli s nástrojmi prehliadača Carbon Browser</translation>
+<translation id="6120345080069858279">Carbon Browser toto heslo uloží do vášho účtu Google. Nebudete si ho musieť pamätať.</translation>
+<translation id="6129621093834146363">Súbor <ph name="FILE_NAME" /> je nebezpečný, a preto ho prehliadač Carbon Browser zablokoval.</translation>
+<translation id="6132897690380286411">Carbon Browser sa čoskoro zavrie a odstráni dáta</translation>
+<translation id="6134968993075716475">Bezpečné prehliadanie je vypnuté. Carbon Browser ho odporúča zapnúť.</translation>
+<translation id="6144416395842701622">Prihláste sa, aby ste mohli Carbon Browser využívať naplno</translation>
+<translation id="6145820983052037069">Tu môžete prepínať profily prehliadača Carbon Browser</translation>
+<translation id="615103374448673771">Keď povolíte súbory cookie, Carbon Browser ich môže použiť pri prednačítavaní</translation>
+<translation id="6175304430031192654">V závislosti od vašich nastavení môže Carbon Browser odosielať aj súbory cookie a vašu aktuálnu webovú adresu</translation>
+<translation id="6182736845697986886">Nepodarilo sa nainštalovať pre internú chybu servera aktualizácií.</translation>
+<translation id="6183079672144801177">Skontrolujte, či ste sa v zariadení <ph name="TARGET_DEVICE_NAME" /> prihlásili do prehliadača Carbon Browser, a potom to skúste odoslať znova.</translation>
+<translation id="6212496753309875659">Tento počítač už obsahuje novšiu verziu prehliadača Carbon Browser. Ak softvér nefunguje, odinštalujte prehliadač Carbon Browser a skúste to znova.</translation>
+<translation id="6219195342503754812">{0,plural, =0{Carbon Browser sa teraz reštartuje}=1{Carbon Browser sa reštartuje o 1 sekundu}few{Carbon Browser sa reštartuje o # sekundy}many{Carbon Browser sa reštartuje o # sekundy}other{Carbon Browser sa reštartuje o # sekúnd}}</translation>
+<translation id="6241367896540709610">Carbon Browser vyžaduje na sťahovanie súborov povolený prístup k úložisku</translation>
+<translation id="6245734527075554892">Kontroluje webové adresy podľa zoznamu nebezpečných webov uloženého v prehliadači Carbon Browser</translation>
+<translation id="6248213926982192922">Nastavte Carbon Browser ako svoj predvolený prehliadač</translation>
+<translation id="6266342355635466082">Carbon Browser nemôže skontrolovať dostupnosť aktualizácií. Skontrolujte internetové pripojenie.</translation>
+<translation id="6268381023930128611">Odhlásiť sa z prehliadača Carbon Browser?</translation>
 <translation id="6273793429163604305">Príprava na štart…</translation>
-<translation id="6281746429495226318">Prispôsobiť profil prehliadača Carbon Browser Browser</translation>
-<translation id="6290827346642914212">Názov vášho profilu Carbon Browser Browser</translation>
-<translation id="6295779123002464101">Súbor <ph name="FILE_NAME" /> môže byť nebezpečný, a preto ho prehliadač Carbon Browser Browser zablokoval.</translation>
-<translation id="6309712487085796862">Carbon Browser Browser používa vašu kameru.</translation>
-<translation id="632355235628111698">Prehliadač Carbon Browser Browser zablokoval tento súbor, pretože je nebezpečný</translation>
+<translation id="6281746429495226318">Prispôsobiť profil prehliadača Carbon Browser</translation>
+<translation id="6290827346642914212">Názov vášho profilu Carbon Browser</translation>
+<translation id="6295779123002464101">Súbor <ph name="FILE_NAME" /> môže byť nebezpečný, a preto ho prehliadač Carbon Browser zablokoval.</translation>
+<translation id="6309712487085796862">Carbon Browser používa vašu kameru.</translation>
+<translation id="632355235628111698">Prehliadač Carbon Browser zablokoval tento súbor, pretože je nebezpečný</translation>
 <translation id="6327105987658262776">K dispozícii nie je žiadna aktualizácia.</translation>
-<translation id="6333502561965082103">V prehliadači Carbon Browser Browser práve prebieha iná operácia. Skúste to neskôr.</translation>
-<translation id="6334986366598267305">Teraz je používanie prehliadača Carbon Browser Browser s účtom Google a na zdieľaných počítačoch oveľa ľahšie.</translation>
-<translation id="6373523479360886564">Naozaj chcete Carbon Browser Browser odinštalovať?</translation>
-<translation id="6384011394608460044"><ph name="BEGIN_BOLD" />Ako používame tieto údaje:<ph name="END_BOLD" /> Carbon Browser Browser môže odhadovať vaše záujmy. Neskôr môže web, ktorý navštívite, o ne Carbon Browser Browser požiadať, aby mohol prispôsobiť zobrazované reklamy.</translation>
-<translation id="6403826409255603130">Carbon Browser Browser je webový prehliadač, ktorý spúšťa webové stránky a aplikácie rýchlosťou svetla. Je rýchly, stabilný a ľahko sa používa. S ochranou proti škodlivému softvéru a phishingu, ktorá je zabudovaná do prehliadača Carbon Browser Browser, môžete prehliadať web bezpečnejšie.</translation>
-<translation id="6442900851116057561">Reštartovanie systému Carbon Browser Browser OS</translation>
-<translation id="6455857529632101747">Vitajte v profiloch prehliadača Carbon Browser Browser</translation>
-<translation id="6457450909262716557">{SECONDS,plural, =1{Carbon Browser Browser sa reštartuje o 1 sekundu}few{Carbon Browser Browser sa reštartujte o # sekundy}many{Carbon Browser Browser sa reštartujte o # sekundy}other{Carbon Browser Browser sa reštartujte o # sekúnd}}</translation>
-<translation id="6475912303565314141">Tiež určuje, ktorá stránka sa zobrazí pri spustení prehliadača Carbon Browser Browser.</translation>
-<translation id="6510925080656968729">Odinštalovať Carbon Browser Browser</translation>
-<translation id="6542839706527980775">V každom profile sú uchované vlastné údaje prehliadača Carbon Browser Browser, ako sú záložky, história, heslá a ďalšie položky</translation>
-<translation id="6570579332384693436">Carbon Browser Browser odošle text zadaný v textových poliach Googlu s cieľom opraviť pravopisné chyby</translation>
-<translation id="6598877126913850652">Prejsť do nastavení upozornení prehliadača Carbon Browser Browser</translation>
-<translation id="6613594504749178791">Zmeny sa prejavia pri nasledujúcom reštartovaní prehliadača Carbon Browser Browser.</translation>
-<translation id="665732753414869868">Carbon Browser Browser vyžaduje na vytvorenie 3D mapy vášho okolia povolený prístup ku kamere</translation>
+<translation id="6333502561965082103">V prehliadači Carbon Browser práve prebieha iná operácia. Skúste to neskôr.</translation>
+<translation id="6334986366598267305">Teraz je používanie prehliadača Carbon Browser s účtom Google a na zdieľaných počítačoch oveľa ľahšie.</translation>
+<translation id="6366160072964553914">Prehliadač Carbon Browser toto sťahovanie zablokoval, pretože používatelia tento súbor bežne nesťahujú a môže byť nebezpečný</translation>
+<translation id="6373523479360886564">Naozaj chcete Carbon Browser odinštalovať?</translation>
+<translation id="6375219077595103062">Pridajte odkaz na Správcu hesiel</translation>
+<translation id="6384011394608460044"><ph name="BEGIN_BOLD" />Ako používame tieto údaje:<ph name="END_BOLD" /> Carbon Browser môže odhadovať vaše záujmy. Neskôr môže web, ktorý navštívite, o ne Carbon Browser požiadať, aby mohol prispôsobiť zobrazované reklamy.</translation>
+<translation id="6400112897226594999">Logo prehliadača Carbon Browser na obrazovke počítača.</translation>
+<translation id="6403826409255603130">Carbon Browser je webový prehliadač, ktorý spúšťa webové stránky a aplikácie rýchlosťou svetla. Je rýchly, stabilný a ľahko sa používa. S ochranou proti škodlivému softvéru a phishingu, ktorá je zabudovaná do prehliadača Carbon Browser, môžete prehliadať web bezpečnejšie.</translation>
+<translation id="6442900851116057561">Reštartovanie systému Carbon Browser OS</translation>
+<translation id="6443470774889161065">Carbon Browser prednačítava dokonca viac stránok, ako pravdepodobne navštívite, aby sa v prípade návštevy načítali rýchlejšie</translation>
+<translation id="6455857529632101747">Vitajte v profiloch prehliadača Carbon Browser</translation>
+<translation id="6475912303565314141">Tiež určuje, ktorá stránka sa zobrazí pri spustení prehliadača Carbon Browser.</translation>
+<translation id="648319183876919572">Zlepšené bezpečné prehliadanie vás chráni viac pred nebezpečnými webmi a stiahnutými súbormi</translation>
+<translation id="6510925080656968729">Odinštalovať Carbon Browser</translation>
+<translation id="6539122709674868420">Ak sa prehliadač Carbon Browser nebude používať <ph name="TIMEOUT_DURATION" />, vaša organizácia ho zavrie. Dáta prehliadania boli odstránené. Môže to zahŕňať históriu, automatické dopĺňanie a stiahnuté súbory.</translation>
+<translation id="6542839706527980775">V každom profile sú uchované vlastné údaje prehliadača Carbon Browser, ako sú záložky, história, heslá a ďalšie položky</translation>
+<translation id="6563921047760808519"><ph name="BEGIN_LINK" />Ako Carbon Browser uchováva vaše údaje v súkromí<ph name="END_LINK" /></translation>
+<translation id="656935081669708576">Môžete si zobraziť heslá z iného profilu prehliadača Carbon Browser</translation>
+<translation id="6570579332384693436">Carbon Browser odošle text zadaný v textových poliach Googlu s cieľom opraviť pravopisné chyby</translation>
+<translation id="6598877126913850652">Prejsť do nastavení upozornení prehliadača Carbon Browser</translation>
+<translation id="6613594504749178791">Zmeny sa prejavia pri nasledujúcom reštartovaní prehliadača Carbon Browser.</translation>
+<translation id="665732753414869868">Carbon Browser vyžaduje na vytvorenie 3D mapy vášho okolia povolený prístup ku kamere</translation>
+<translation id="6663852025006259149">Weby budú pravdepodobne fungovať podľa vašich očakávaní, ale po zavretí všetkých okien prehliadača Carbon Browser si vás nebudú pamätať</translation>
+<translation id="6669284030132180248">Ak vo svojom účte Google ukladáte aj záložky, môžete sledovať ceny produktov v prehliadači Carbon Browser a dostávať upozornenia na poklesy ceny</translation>
 <translation id="6676384891291319759">Prístup do siete Internet</translation>
-<translation id="668175097507315160">Systému Carbon Browser Browser OS sa nepodarilo synchronizovať vaše údaje, pretože sa pri prihlasovaní vyskytla chyba.</translation>
-<translation id="6709350901466051922">Carbon Browser Browser vyžaduje pre tento web povolený prístup k mikrofónu</translation>
-<translation id="6717134281241384636">Váš profil sa nedá použiť, pretože pochádza z novšej verzie prehliadača Carbon Browser Browser.
+<translation id="668175097507315160">Systému Carbon Browser OS sa nepodarilo synchronizovať vaše údaje, pretože sa pri prihlasovaní vyskytla chyba.</translation>
+<translation id="6709350901466051922">Carbon Browser vyžaduje pre tento web povolený prístup k mikrofónu</translation>
+<translation id="6712881677154121168">Chyba sťahovania: <ph name="DOWNLOAD_ERROR" />.</translation>
+<translation id="6717134281241384636">Váš profil sa nedá použiť, pretože pochádza z novšej verzie prehliadača Carbon Browser.
 
-Niektoré funkcie nemusia byť k dispozícii. Zadajte iný adresár profilu alebo použite novšiu verziu prehliadača Carbon Browser Browser.</translation>
-<translation id="6734291798041940871">Carbon Browser Browser už majú nainštalovaný všetci používatelia na vašom počítači.</translation>
-<translation id="673636774878526923">Ak chcete získať prístup k obsahu prehliadača Carbon Browser Browser vo všetkých svojich zariadeniach, prihláste sa a zapnite synchronizáciu.</translation>
-<translation id="6774082503108938489">Tvoj rodič vypol „Povolenia pre weby, aplikácie a rozšírenia“ v prehliadači Carbon Browser Browser. Povolenie tohto rozšírenia (<ph name="EXTENSION_TYPE_PARAMETER" />) je zakázané.</translation>
-<translation id="6779406956731413166">Carbon Browser Browser OS mohol vzniknúť vďaka ďalšiemu <ph name="BEGIN_LINK_CROS_OSS" />softvéru typu open source<ph name="END_LINK_CROS_OSS" />.</translation>
-<translation id="6847869444787758381">Ak budú vaše heslá napadnuté, Carbon Browser Browser vám to oznámi</translation>
-<translation id="6852530923436401894">Carbon Browser Browser zablokoval tento súbor, pretože obsahuje malvér</translation>
-<translation id="6857782730669500492">Carbon Browser Browser – <ph name="PAGE_TITLE" /></translation>
-<translation id="6863361426438995919">Google Pay (skopírované do prehliadača Carbon Browser Browser)</translation>
-<translation id="6873893289264747459">Prehliadač Carbon Browser Browser zistil, že <ph name="EXTENSION_NAME" /> obsahuje malvér</translation>
-<translation id="6893813176749746474">Prehliadač Carbon Browser Browser bol aktualizovaný, ale najmenej 30 dní ste ho nepoužili.</translation>
-<translation id="691026815377248078">Prehliadač Carbon Browser Browser potrebuje prístup k rozhraniu Bluetooth, aby mohol pokračovať 
+Niektoré funkcie nemusia byť k dispozícii. Zadajte iný adresár profilu alebo použite novšiu verziu prehliadača Carbon Browser.</translation>
+<translation id="6730677189742196061">Šetrič pamäte zrýchlil Carbon Browser</translation>
+<translation id="6734291798041940871">Carbon Browser už majú nainštalovaný všetci používatelia na vašom počítači.</translation>
+<translation id="673636774878526923">Ak chcete získať prístup k obsahu prehliadača Carbon Browser vo všetkých svojich zariadeniach, prihláste sa a zapnite synchronizáciu.</translation>
+<translation id="67706546131546258">Carbon Browser odporúča skontrolovať tento súbor, pretože môže byť nebezpečný.</translation>
+<translation id="6779406956731413166">Carbon Browser OS mohol vzniknúť vďaka ďalšiemu <ph name="BEGIN_LINK_CROS_OSS" />softvéru typu open source<ph name="END_LINK_CROS_OSS" />.</translation>
+<translation id="6847869444787758381">Ak budú vaše heslá napadnuté, Carbon Browser vám to oznámi</translation>
+<translation id="6852530923436401894">Carbon Browser zablokoval tento súbor, pretože obsahuje malvér</translation>
+<translation id="6857782730669500492">Carbon Browser – <ph name="PAGE_TITLE" /></translation>
+<translation id="6863361426438995919">Google Pay (skopírované do prehliadača Carbon Browser)</translation>
+<translation id="6873893289264747459">Prehliadač Carbon Browser zistil, že <ph name="EXTENSION_NAME" /> obsahuje malvér</translation>
+<translation id="6893813176749746474">Prehliadač Carbon Browser bol aktualizovaný, ale najmenej 30 dní ste ho nepoužili.</translation>
+<translation id="691026815377248078">Prehliadač Carbon Browser potrebuje prístup k rozhraniu Bluetooth, aby mohol pokračovať 
  v párovaní. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
-<translation id="6929417474050522668">Keď sú skúšobné obdobia zapnuté, meranie reklám umožňuje webom, ktoré navštívite, požadovať od prehliadača Carbon Browser Browser údaje, ktoré im pomáhajú merať výkonnosť reklám. Meranie reklám obmedzuje sledovanie na rôznych weboch presúvaním minimálneho množstva údajov medzi webmi.</translation>
-<translation id="6940431691900807093">Neskôr môže web, ktorý navštívite, o ne Carbon Browser Browser požiadať, aby mohol prispôsobiť zobrazované reklamy. Carbon Browser Browser môže zdieľať až tri záujmy.</translation>
-<translation id="6964305034639999644">Otvoriť odkaz v okne inko&amp;gnito prehliadača Carbon Browser Browser</translation>
-<translation id="6978145336957848883">Slabé heslá sa dajú ľahko uhádnuť. Povoľte prehliadaču Carbon Browser Browser, <ph name="BEGIN_LINK" />aby vám vytváral silné heslá a pamätal si ich<ph name="END_LINK" />.</translation>
-<translation id="6985329841647292029">Zmluvné podmienky systému Carbon Browser Browser OS</translation>
-<translation id="6990124437352146030">Carbon Browser Browser potrebuje povolenie pre tento web na prístup k mikrofónu</translation>
+<translation id="6929417474050522668">Keď sú skúšobné obdobia zapnuté, meranie reklám umožňuje webom, ktoré navštívite, požadovať od prehliadača Carbon Browser údaje, ktoré im pomáhajú merať výkonnosť reklám. Meranie reklám obmedzuje sledovanie na rôznych weboch presúvaním minimálneho množstva údajov medzi webmi.</translation>
+<translation id="6940431691900807093">Neskôr môže web, ktorý navštívite, o ne Carbon Browser požiadať, aby mohol prispôsobiť zobrazované reklamy. Carbon Browser môže zdieľať až tri záujmy.</translation>
+<translation id="6964305034639999644">Otvoriť odkaz v okne inko&amp;gnito prehliadača Carbon Browser</translation>
+<translation id="6978145336957848883">Slabé heslá sa dajú ľahko uhádnuť. Povoľte prehliadaču Carbon Browser, <ph name="BEGIN_LINK" />aby vám vytváral silné heslá a pamätal si ich<ph name="END_LINK" />.</translation>
+<translation id="6981396265751285733">Keď je táto možnosť zapnutá, Carbon Browser bude uvoľňovať pamäť z neaktívnych kariet. Aktívne karty a ďalšie aplikácie tak získajú viac zdrojov počítača a prehliadač Carbon Browser zostane rýchly. Neaktívne karty sa automaticky znova aktivujú, keď na ne prejdete.</translation>
+<translation id="6985329841647292029">Zmluvné podmienky systému Carbon Browser OS</translation>
+<translation id="6990124437352146030">Carbon Browser potrebuje povolenie pre tento web na prístup k mikrofónu</translation>
+<translation id="7011190694940573312">Nepodarilo sa nainštalovať, pretože táto verzia operačného systému nie je podporovaná.</translation>
+<translation id="7024536598735240744">Chyba pri rozbalení: <ph name="UNPACK_ERROR" />.</translation>
 <translation id="7025789849649390912">Inštalácia bola zastavená.</translation>
-<translation id="705851970750939768">Aktualizovať Carbon Browser Browser</translation>
-<translation id="7067091210845072982">Ak obrázok nemá užitočný popis, Carbon Browser Browser sa vám ho pokúsi poskytnúť. Obrázky sa odosielajú Googlu, aby bolo možné vytvoriť popisy.</translation>
-<translation id="718435575166326686">Carbon Browser Browser vyžaduje pre tento web povolený prístup ku kamere</translation>
-<translation id="7196312274710523067">Carbon Browser Browser sa nepodarilo spustiť. Skúste to znova.</translation>
-<translation id="7197677400338048821">Carbon Browser Browser nemôže skontrolovať heslá. Skúste to znova o 24 hodín.</translation>
-<translation id="7218568399872925918">Navštevované weby si pamätajú vaše informácie, dokým nezavriete Carbon Browser Browser</translation>
-<translation id="7223968959479464213">Správca úloh – Carbon Browser Browser</translation>
-<translation id="7246575524853130370">Vaše záujmy podľa odhadu prehliadača Carbon Browser Browser</translation>
-<translation id="7309928523159922338">Meranie reklám umožňuje webom, ktoré navštívite, požadovať od prehliadača Carbon Browser Browser údaje, ktoré im pomáhajú merať výkonnosť reklám. Meranie reklám obmedzuje sledovanie na rôznych weboch presúvaním minimálneho množstva údajov medzi webmi.</translation>
-<translation id="731795002583552498">Carbon Browser Browser sa aktualizuje</translation>
+<translation id="705851970750939768">Aktualizovať Carbon Browser</translation>
+<translation id="7067091210845072982">Ak obrázok nemá užitočný popis, Carbon Browser sa vám ho pokúsi poskytnúť. Obrázky sa odosielajú Googlu, aby bolo možné vytvoriť popisy.</translation>
+<translation id="7141270731789036260">Prispôsobiť Carbon Browser for Testing</translation>
+<translation id="7173822816570314652">Ak sa údaje prehliadača Carbon Browser nebudú používať <ph name="TIMEOUT_DURATION" />, vaša organizácia ich odstráni. Môže to zahŕňať históriu, automatické dopĺňanie a stiahnuté súbory.</translation>
+<translation id="718435575166326686">Carbon Browser vyžaduje pre tento web povolený prístup ku kamere</translation>
+<translation id="7196312274710523067">Carbon Browser sa nepodarilo spustiť. Skúste to znova.</translation>
+<translation id="7197677400338048821">Carbon Browser nemôže skontrolovať heslá. Skúste to znova o 24 hodín.</translation>
+<translation id="7213407614656404070">Carbon Browser môžete kedykoľvek použiť kliknutím na odkazy v správach, dokumentoch a ďalších aplikáciách</translation>
+<translation id="7223968959479464213">Správca úloh – Carbon Browser</translation>
+<translation id="7246575524853130370">Vaše záujmy podľa odhadu prehliadača Carbon Browser</translation>
+<translation id="7309928523159922338">Meranie reklám umožňuje webom, ktoré navštívite, požadovať od prehliadača Carbon Browser údaje, ktoré im pomáhajú merať výkonnosť reklám. Meranie reklám obmedzuje sledovanie na rôznych weboch presúvaním minimálneho množstva údajov medzi webmi.</translation>
+<translation id="731795002583552498">Carbon Browser sa aktualizuje</translation>
 <translation id="7318036098707714271">Súbor predvolieb je poškodený alebo neplatný. 
 
-Prehliadač Carbon Browser Browser nedokáže obnoviť vaše nastavenia.</translation>
-<translation id="7337881442233988129">Carbon Browser Browser</translation>
+Prehliadač Carbon Browser nedokáže obnoviť vaše nastavenia.</translation>
 <translation id="7339898014177206373">Nové okno</translation>
-<translation id="734373864078049451">Tu nájdete svoj obsah na webe, záložky a ďalšie položky prehliadača Carbon Browser Browser.</translation>
-<translation id="7349591376906416160">Správca systému nakonfiguroval Carbon Browser Browser, aby <ph name="TARGET_URL_HOSTNAME" /> otváral v prehliadači <ph name="ALTERNATIVE_BROWSER_NAME" />.</translation>
-<translation id="7398989605938454041">Profilmi prehliadača Carbon Browser Browser môžete oddeliť všetok svoj obsah v prehliadači Carbon Browser Browser. Jednoduchšie tak rozdelíte prácu a zábavu.</translation>
-<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Dev</translation>
-<translation id="7451052299415159299">Carbon Browser Browser potrebuje povolenie pre tento web na prístup k fotoaparátu</translation>
-<translation id="7467949745582939695">Chcete Carbon Browser Browser znova spustiť?</translation>
-<translation id="7483335560992089831">Nemôžete nainštalovať rovnakú verziu prehliadača Carbon Browser Browser ako je tá, ktorá je momentálne spustená. Zatvorte prehliadač Carbon Browser Browser a skúste to znova.</translation>
-<translation id="753534427205733210">{0,plural, =1{Carbon Browser Browser sa reštartuje o 1 minútu}few{Carbon Browser Browser sa reštartuje o # minúty}many{Carbon Browser Browser sa reštartuje o # minúty}other{Carbon Browser Browser sa reštartuje o # minút}}</translation>
-<translation id="7561906087460245826">Tiež vymazať údaje z prehliadača Carbon Browser Browser (<ph name="URL" />)</translation>
-<translation id="7582945390259497898">Carbon Browser Browser môže odhadnúť vaše záujmy. Neskôr môže web, ktorý navštívite, o ne Carbon Browser Browser požiadať, aby mohol prispôsobiť zobrazované reklamy.</translation>
+<translation id="734373864078049451">Tu nájdete svoj obsah na webe, záložky a ďalšie položky prehliadača Carbon Browser.</translation>
+<translation id="7349591376906416160">Správca systému nakonfiguroval Carbon Browser, aby <ph name="TARGET_URL_HOSTNAME" /> otváral v prehliadači <ph name="ALTERNATIVE_BROWSER_NAME" />.</translation>
+<translation id="7398989605938454041">Profilmi prehliadača Carbon Browser môžete oddeliť všetok svoj obsah v prehliadači Carbon Browser. Jednoduchšie tak rozdelíte prácu a zábavu.</translation>
+<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> – Carbon Browser Dev</translation>
+<translation id="7451052299415159299">Carbon Browser potrebuje povolenie pre tento web na prístup k fotoaparátu</translation>
+<translation id="7461356015007898716">Ak chcete dostávať budúce aktualizácie prehliadača Carbon Browser, budete potrebovať systém Windows 10 alebo novší. Tento počítač používa Windows 7.</translation>
+<translation id="7467949745582939695">Chcete Carbon Browser znova spustiť?</translation>
+<translation id="7483335560992089831">Nemôžete nainštalovať rovnakú verziu prehliadača Carbon Browser ako je tá, ktorá je momentálne spustená. Zatvorte prehliadač Carbon Browser a skúste to znova.</translation>
+<translation id="753534427205733210">{0,plural, =1{Carbon Browser sa reštartuje o 1 minútu}few{Carbon Browser sa reštartuje o # minúty}many{Carbon Browser sa reštartuje o # minúty}other{Carbon Browser sa reštartuje o # minút}}</translation>
+<translation id="7582945390259497898">Carbon Browser môže odhadnúť vaše záujmy. Neskôr môže web, ktorý navštívite, o ne Carbon Browser požiadať, aby mohol prispôsobiť zobrazované reklamy.</translation>
 <translation id="7583399374488819119">Inštalátor aplikácie <ph name="COMPANY_NAME" /></translation>
-<translation id="7597596667193879455">V účte ste zapli Zlepšené bezpečné prehliadanie. Povoľte ho aj pre Carbon Browser Browser.</translation>
-<translation id="761356813943268536">Carbon Browser Browser používa vašu kameru a mikrofón.</translation>
-<translation id="7617377681829253106">Prehliadač Carbon Browser Browser bol práve vylepšený</translation>
+<translation id="761356813943268536">Carbon Browser používa vašu kameru a mikrofón.</translation>
+<translation id="7617377681829253106">Prehliadač Carbon Browser bol práve vylepšený</translation>
 <translation id="7649070708921625228">Pomocník</translation>
-<translation id="7682213815243802460">Viac o týchto funkciách sa dozviete v nastaveniach prehliadača Carbon Browser Browser.</translation>
-<translation id="7682601070171973634">Carbon Browser Browser skúma nové funkcie, ktoré umožňujú webom zobraziť rovnaké prostredie prehliadania s využitím menšieho počtu dát</translation>
-<translation id="7686590090926151193">Carbon Browser Browser nie je váš predvolený prehliadač</translation>
-<translation id="7689606757190482937">Synchronizujte a prispôsobte si Carbon Browser Browser v rôznych zariadeniach</translation>
-<translation id="7745317241717453663">Táto akcia odstráni zo zariadenia údaje prehliadania. Ak budete chcieť svoje údaje neskôr opäť načítať, prihláste sa do prehliadača Carbon Browser Browser ako <ph name="USER_EMAIL" />.</translation>
+<translation id="7682213815243802460">Viac o týchto funkciách sa dozviete v nastaveniach prehliadača Carbon Browser.</translation>
+<translation id="7682601070171973634">Carbon Browser skúma nové funkcie, ktoré umožňujú webom zobraziť rovnaké prostredie prehliadania s využitím menšieho počtu dát</translation>
+<translation id="7686590090926151193">Carbon Browser nie je váš predvolený prehliadač</translation>
+<translation id="7689606757190482937">Synchronizujte a prispôsobte si Carbon Browser v rôznych zariadeniach</translation>
+<translation id="7699779824407626136">Aktualizácia prehliadača Carbon Browser</translation>
+<translation id="7745317241717453663">Táto akcia odstráni zo zariadenia údaje prehliadania. Ak budete chcieť svoje údaje neskôr opäť načítať, prihláste sa do prehliadača Carbon Browser ako <ph name="USER_EMAIL" />.</translation>
 <translation id="7747138024166251722">Inštalátor nemohol vytvoriť dočasný priečinok. Skontrolujte úroveň zaplnenia disku a povolenie na inštaláciu softvéru.</translation>
-<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> – Carbon Browser Browser Canary</translation>
-<translation id="7828947555739565424">Profil prehliadača Carbon Browser Browser s týmto účtom už v tomto zariadení existuje</translation>
+<translation id="7786760609782648049">Zrýchlenie prehliadača Carbon Browser</translation>
+<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> – Carbon Browser Canary</translation>
+<translation id="7828947555739565424">Profil prehliadača Carbon Browser s týmto účtom už v tomto zariadení existuje</translation>
 <translation id="7845233973568007926">Ďakujeme za inštaláciu. Než začnete aplikáciu <ph name="BUNDLE_NAME" /> používať, musíte reštartovať počítač.</translation>
-<translation id="7867198900892795913">Carbon Browser Browser sa nepodarilo aktualizovať na najnovšiu verziu. K dispozícii tak nie sú niektoré nové funkcie ani bezpečnostné opravy.</translation>
+<translation id="7859018312476869945">Keď zadávate v paneli s adresou alebo vyhľadávacom poli, prehliadač Carbon Browser odosiela zadaný text do vášho predvoleného vyhľadávača, aby dostal lepšie návrhy. Táto možnosť je v režime inkognito vypnutá.</translation>
+<translation id="7867198900892795913">Carbon Browser sa nepodarilo aktualizovať na najnovšiu verziu. K dispozícii tak nie sú niektoré nové funkcie ani bezpečnostné opravy.</translation>
 <translation id="7872446069773932638">Sťahuje sa… Zostávajúci čas: <ph name="SECONDS" /> s</translation>
-<translation id="7877292582355102282"><ph name="BEGIN_BOLD" />Ako môžete spravovať svoje údaje:<ph name="END_BOLD" /> v rámci ochrany vášho súkromia automaticky odstraňujeme záujmy, ktoré sú staršie ako štyri týždne. Pri ďalšom prehliadaní sa v zozname môže znova zobraziť určitý záujem. Prípadne môžete odstrániť záujmy, ktoré nemá Carbon Browser Browser posudzovať.</translation>
-<translation id="7937630085815544518">Do prehliadača Carbon Browser Browser ste boli prihlásený/-á ako <ph name="USER_EMAIL_ADDRESS" />. Ak sa chcete prihlásiť znova, použite rovnaký účet.</translation>
-<translation id="7975919845073681630">Toto je sekundárna inštalácia prehliadača Carbon Browser Browser – nemôže byť nastavený ako váš predvolený prehliadač.</translation>
-<translation id="7982481011030453202">Ak určité nastavenie nevidíte na tejto stránke, skontrolujte <ph name="LINK_BEGIN" />nastavenia systému Carbon Browser Browser OS<ph name="LINK_END" /></translation>
-<translation id="7997934263947464652">Rozšírenia, aplikácie a motívy z neznámych zdrojov môžu poškodiť vaše zariadenie. Carbon Browser Browser odporúča ich inštaláciu iba zo zdroja <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />.</translation>
-<translation id="8013436988911883588">Keď Carbon Browser Browser získa prístup, weby vás budú môcť žiadať o prístup.</translation>
+<translation id="7877292582355102282"><ph name="BEGIN_BOLD" />Ako môžete spravovať svoje údaje:<ph name="END_BOLD" /> v rámci ochrany vášho súkromia automaticky odstraňujeme záujmy, ktoré sú staršie ako štyri týždne. Pri ďalšom prehliadaní sa v zozname môže znova zobraziť určitý záujem. Prípadne môžete odstrániť záujmy, ktoré nemá Carbon Browser posudzovať.</translation>
+<translation id="7937630085815544518">Do prehliadača Carbon Browser ste boli prihlásený/-á ako <ph name="USER_EMAIL_ADDRESS" />. Ak sa chcete prihlásiť znova, použite rovnaký účet.</translation>
+<translation id="7975919845073681630">Toto je sekundárna inštalácia prehliadača Carbon Browser – nemôže byť nastavený ako váš predvolený prehliadač.</translation>
+<translation id="7997934263947464652">Rozšírenia, aplikácie a motívy z neznámych zdrojov môžu poškodiť vaše zariadenie. Carbon Browser odporúča ich inštaláciu iba zo zdroja <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />.</translation>
+<translation id="8013436988911883588">Keď Carbon Browser získa prístup, weby vás budú môcť žiadať o prístup.</translation>
 <translation id="80471789339884597">Ďakujeme za inštaláciu. Než začnete aplikáciu <ph name="BUNDLE_NAME" /> používať, musíte reštartovať všetky svoje prehliadače.</translation>
-<translation id="8105840573057009683">Carbon Browser Browser vyžaduje pre tento web povolený prístup k polohe</translation>
-<translation id="8133124826068723441">Systému Carbon Browser Browser OS sa nepodarilo synchronizovať vaše údaje, pretože možnosť synchronizácie nie je pre vašu doménu k dispozícii.</translation>
+<translation id="8086881907087796310">Nepodarilo sa nainštalovať, pretože váš počítač nespĺňa minimálne požiadavky na hardvér.</translation>
+<translation id="8096472344908884505"><ph name="PAGE_TITLE" /> – Carbon Browser for Testing</translation>
+<translation id="8105840573057009683">Carbon Browser vyžaduje pre tento web povolený prístup k polohe</translation>
+<translation id="8133124826068723441">Systému Carbon Browser OS sa nepodarilo synchronizovať vaše údaje, pretože možnosť synchronizácie nie je pre vašu doménu k dispozícii.</translation>
 <translation id="813913629614996137">Prebieha inicializácia...</translation>
-<translation id="81770708095080097">Tento súbor je nebezpečný, a preto ho prehliadač Carbon Browser Browser zablokoval.</translation>
-<translation id="8213374284266571500">Carbon Browser Browser zablokoval tento súbor, pretože tento typ súboru je nebezpečný</translation>
-<translation id="8248265253516264921">Ak obrázok nemá užitočný popis, Carbon Browser Browser sa vám ho pokúsi poskytnúť. Obrázky sa odosielajú Googlu, aby bolo možné vytvoriť popisy. Môžete to kedykoľvek vypnúť v nastaveniach.</translation>
-<translation id="8266560134891435528">Carbon Browser Browser nemôže skontrolovať heslá, pretože ste sa neprihlásili</translation>
-<translation id="8276522524898344151">Carbon Browser Browser sa pokúša kopírovať heslá.</translation>
-<translation id="8290862415967981663">Tento súbor môže byť nebezpečný, a preto ho prehliadač Carbon Browser Browser zablokoval.</translation>
-<translation id="8330519371938183845">Po prihlásení budete môcť Carbon Browser Browser synchronizovať a prispôsobiť v rôznych zariadeniach.</translation>
-<translation id="8340674089072921962">Účet <ph name="USER_EMAIL_ADDRESS" /> predtým používal Carbon Browser Browser</translation>
-<translation id="8357820681460164151">Ak chcete získať prístup k obsahu prehliadača Carbon Browser Browser vo všetkých svojich zariadeniach, prihláste sa a zapnite synchronizáciu</translation>
-<translation id="8417404458978023919">{0,plural, =1{Carbon Browser Browser znova spustite do jedného dňa}few{Carbon Browser Browser znova spustite do # dní}many{Carbon Browser Browser znova spustite do # dňa}other{Carbon Browser Browser znova spustite do # dní}}</translation>
-<translation id="8453117565092476964">Archív inštalácie je poškodený alebo neplatný. Stiahnite prehliadač Carbon Browser Browser znova.</translation>
-<translation id="8463672209299734063">Nepovinné: Pomôžte zlepšovať funkcie a výkonnosť systému Carbon Browser Browser OS automatickým odosielaním diagnostík a údajov o využití Googlu</translation>
-<translation id="8493179195440786826">Prehliadač Carbon Browser Browser je zastaraný</translation>
+<translation id="81770708095080097">Tento súbor je nebezpečný, a preto ho prehliadač Carbon Browser zablokoval.</translation>
+<translation id="8213374284266571500">Carbon Browser zablokoval tento súbor, pretože tento typ súboru je nebezpečný</translation>
+<translation id="8248265253516264921">Ak obrázok nemá užitočný popis, Carbon Browser sa vám ho pokúsi poskytnúť. Obrázky sa odosielajú Googlu, aby bolo možné vytvoriť popisy. Môžete to kedykoľvek vypnúť v nastaveniach.</translation>
+<translation id="8266560134891435528">Carbon Browser nemôže skontrolovať heslá, pretože ste sa neprihlásili</translation>
+<translation id="8286943863733751221"><ph name="BEGIN_LINK" />Carbon Browser vás upozorňuje<ph name="END_LINK" /> na nebezpečné weby a súbory na stiahnutie</translation>
+<translation id="8290862415967981663">Tento súbor môže byť nebezpečný, a preto ho prehliadač Carbon Browser zablokoval.</translation>
+<translation id="8318772038038596122">Ak sa prehliadač Carbon Browser nebude používať <ph name="TIMEOUT_DURATION" />, vaša organizácia ho zavrie.</translation>
+<translation id="8325404639443959713">S prehliadačom Carbon Browser môžete robiť viac</translation>
+<translation id="8330519371938183845">Po prihlásení budete môcť Carbon Browser synchronizovať a prispôsobiť v rôznych zariadeniach.</translation>
+<translation id="8340674089072921962">Účet <ph name="USER_EMAIL_ADDRESS" /> predtým používal Carbon Browser</translation>
+<translation id="8357820681460164151">Ak chcete získať prístup k obsahu prehliadača Carbon Browser vo všetkých svojich zariadeniach, prihláste sa a zapnite synchronizáciu</translation>
+<translation id="8360718212975266891">Ak chcete v budúcnosti dostávať aktualizácie prehliadača Carbon Browser, budete potrebovať systém Windows 10 alebo novší. Tento počítač používa Windows 8.</translation>
+<translation id="8370517070665726704">Copyright <ph name="YEAR" /> Carbon X Labs. Všetky práva vyhradené.</translation>
+<translation id="8401454788024434101">Zverejnenie tohto rozšírenia bolo zrušené jeho vývojárom. Môže byť nebezpečné. Odstráňte ho z prehliadača Carbon Browser, aby sa mu nezobrazovali vaše údaje na weboch, ktoré navštevujete (vrátane vašich osobných údajov), a nemohlo ich meniť.</translation>
+<translation id="8417404458978023919">{0,plural, =1{Carbon Browser znova spustite do jedného dňa}few{Carbon Browser znova spustite do # dní}many{Carbon Browser znova spustite do # dňa}other{Carbon Browser znova spustite do # dní}}</translation>
+<translation id="8453117565092476964">Archív inštalácie je poškodený alebo neplatný. Stiahnite prehliadač Carbon Browser znova.</translation>
+<translation id="8458614432758743027">Carbon Browser vyžaduje systém Windows 10 alebo novší.</translation>
+<translation id="8463672209299734063">Nepovinné: Pomôžte zlepšovať funkcie a výkonnosť systému Carbon Browser OS automatickým odosielaním diagnostík a údajov o využití Googlu</translation>
+<translation id="8493179195440786826">Prehliadač Carbon Browser je zastaraný</translation>
+<translation id="8522801943730206384">Carbon Browser môže skontrolovať heslá, keď ich uložíte</translation>
 <translation id="8550334526674375523">Tento pracovný profil je úplne oddelený od vášho osobného.</translation>
-<translation id="8558383651099478961">Tvoj rodič vypol „Povolenia pre weby, aplikácie a rozšírenia“ v prehliadači Carbon Browser Browser. Pridanie tohto rozšírenia (<ph name="EXTENSION_TYPE_PARAMETER" />) nie je povolené.</translation>
-<translation id="8561285221328166383">Ak chcete dostávať budúce aktualizácie prehliadača Carbon Browser Browser, musíte používať systém macOS 10.13 alebo novší. V tomto počítači používate macOS 10.12.</translation>
-<translation id="8568283329061645092">Keď sa prihlásite pomocou účtu Google, Carbon Browser Browser môže skontrolovať vaše heslá</translation>
-<translation id="8586442755830160949">Copyright <ph name="YEAR" /> Autori Carbon Browser Browser. Všetky práva vyhradené.</translation>
-<translation id="8608079656141766906"><ph name="BEGIN_BOLD" />Ako používame tieto údaje:<ph name="END_BOLD" /> weby môžu v prehliadači Carbon Browser Browser ukladať údaje o vašich záujmoch. Ak napríklad navštívite web na nákup obuvi na maratón, daný web môže definovať váš záujem ako behanie maratónov. Ak neskôr navštívite iný, aby ste sa zaregistrovali na preteky, tento web vám môže zobraziť reklamu na bežeckú obuv na základe vašich záujmov.</translation>
-<translation id="8619360774459241877">Spúšťa sa Carbon Browser Browser…</translation>
-<translation id="8621669128220841554">Inštalácia zlyhala kvôli neznámej chybe. Skúste prehliadač Carbon Browser Browser stiahnuť znova.</translation>
-<translation id="8697124171261953979">Tiež určuje, ktorá stránka sa zobrazí pri spustení prehliadača Carbon Browser Browser alebo pri vyhľadávaní pomocou všeobecného poľa.</translation>
-<translation id="8704119203788522458">Toto je váš prehliadač Carbon Browser Browser</translation>
-<translation id="8713679423359107094">Keď zavriete všetky okná prehliadača Carbon Browser Browser, súbory cookie a dáta webov budú automaticky vymazané</translation>
-<translation id="8796443464227412154">Keď zavriete Carbon Browser Browser, systém vás <ph name="BEGIN_BOLD" />odhlási z väčšiny webov<ph name="END_BOLD" />. Ak je synchronizácia vypnutá, <ph name="BEGIN_BOLD" />odhlási vás aj zo služieb Googlu a prehliadača Carbon Browser Browser<ph name="END_BOLD" />.</translation>
-<translation id="8796602469536043152">Carbon Browser Browser potrebuje povolenie pre tento web na prístup k fotoaparátu a mikrofónu</translation>
-<translation id="8833697763442816810">Systém Carbon Browser Browser OS</translation>
-<translation id="8846118132221683440"><ph name="BEGIN_BOLD" />Aké údaje sa používajú:<ph name="END_BOLD" /> vaša história prehliadania, teda záznam webov, ktoré ste navštívili pomocou prehliadača Carbon Browser Browser v tomto zariadení.</translation>
+<translation id="8555465886620020932">Chyba služby: <ph name="SERVICE_ERROR" />.</translation>
+<translation id="8568283329061645092">Keď sa prihlásite pomocou účtu Google, Carbon Browser môže skontrolovať vaše heslá</translation>
+<translation id="8586442755830160949">Copyright <ph name="YEAR" /> Autori Carbon Browser. Všetky práva vyhradené.</translation>
+<translation id="8608079656141766906"><ph name="BEGIN_BOLD" />Ako používame tieto údaje:<ph name="END_BOLD" /> weby môžu v prehliadači Carbon Browser ukladať údaje o vašich záujmoch. Ak napríklad navštívite web na nákup obuvi na maratón, daný web môže definovať váš záujem ako behanie maratónov. Ak neskôr navštívite iný, aby ste sa zaregistrovali na preteky, tento web vám môže zobraziť reklamu na bežeckú obuv na základe vašich záujmov.</translation>
+<translation id="8619360774459241877">Spúšťa sa Carbon Browser…</translation>
+<translation id="8621669128220841554">Inštalácia zlyhala kvôli neznámej chybe. Skúste prehliadač Carbon Browser stiahnuť znova.</translation>
+<translation id="8648201657708811153">Carbon Browser for Testing nemôžete nastaviť ako svoj predvolený prehliadač.</translation>
+<translation id="8697124171261953979">Tiež určuje, ktorá stránka sa zobrazí pri spustení prehliadača Carbon Browser alebo pri vyhľadávaní pomocou všeobecného poľa.</translation>
+<translation id="8704119203788522458">Toto je váš prehliadač Carbon Browser</translation>
+<translation id="8719993436687031146">Chcete sa prihlásiť do prehliadača Carbon Browser?</translation>
+<translation id="878572486461146056">Chyba inštalácie: správca siete uplatnil skupinové pravidlá, ktoré zabraňujú inštalácii: <ph name="INSTALL_ERROR" /></translation>
+<translation id="8796602469536043152">Carbon Browser potrebuje povolenie pre tento web na prístup k fotoaparátu a mikrofónu</translation>
+<translation id="8826492472752484139">Kliknite na položku Správca hesiel</translation>
+<translation id="8833697763442816810">Systém Carbon Browser OS</translation>
+<translation id="8846118132221683440"><ph name="BEGIN_BOLD" />Aké údaje sa používajú:<ph name="END_BOLD" /> vaša história prehliadania, teda záznam webov, ktoré ste navštívili pomocou prehliadača Carbon Browser v tomto zariadení.</translation>
 <translation id="8862326446509486874">Nemáte potrebné práva na inštaláciu na úrovni systému. Skúste inštalátor spustiť znova ako správca.</translation>
-<translation id="8880203542552872219">Ak áno, upravte svoje uložené heslo v prehliadači Carbon Browser Browser tak, aby sa zhodovalo s týmto novým heslom.</translation>
-<translation id="8897323336392112261">Tiež určuje, ktorá stránka sa zobrazí pri spustení prehliadača Carbon Browser Browser alebo po kliknutí na tlačidlo Domovská stránka.</translation>
-<translation id="8907580949721785412">Prehliadač Carbon Browser Browser sa pokúša zobraziť heslá. Ak to chcete povoliť, zadajte svoje heslo systému Windows.</translation>
-<translation id="8931379085695076764">Carbon Browser Browser môže odhadnúť vaše záujmy na základe vašej histórie prehliadania z posledných niekoľkých týždňov. Tieto údaje zostávajú vo vašom zariadení.</translation>
-<translation id="8941642502866065432">Carbon Browser Browser sa nedá aktualizovať</translation>
-<translation id="897581876605952338">Logo Carbon Browser Browser Enterprise</translation>
+<translation id="8880203542552872219">Ak áno, upravte svoje uložené heslo v prehliadači Carbon Browser tak, aby sa zhodovalo s týmto novým heslom.</translation>
+<translation id="8907580949721785412">Prehliadač Carbon Browser sa pokúša zobraziť heslá. Ak to chcete povoliť, zadajte svoje heslo systému Windows.</translation>
+<translation id="8931379085695076764">Carbon Browser môže odhadnúť vaše záujmy na základe vašej histórie prehliadania z posledných niekoľkých týždňov. Tieto údaje zostávajú vo vašom zariadení.</translation>
+<translation id="8941642502866065432">Carbon Browser sa nedá aktualizovať</translation>
+<translation id="897581876605952338">Logo Carbon Browser Enterprise</translation>
 <translation id="8986207147630327271">Do tohto prehliadača pridávate pracovný profil a svojmu správcovi udeľujete kontrolu iba nad ním.</translation>
-<translation id="9019929317751753759">Z dôvodu zvýšenia bezpečnosti prehliadača Carbon Browser Browser sme zakázali nasledujúce rozšírenie, ktoré nie je uvedené v službe <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> a mohlo byť pridané bez vášho vedomia.</translation>
-<translation id="9022552996538154597">Prihlásiť sa do prehliadača Carbon Browser Browser</translation>
-<translation id="9089354809943900324">Prehliadač Carbon Browser Browser je zastaraný</translation>
-<translation id="9093206154853821181">{0,plural, =1{Carbon Browser Browser sa znova spustí do jednej hodiny}few{Carbon Browser Browser sa znova spustí do # hodín}many{Carbon Browser Browser sa znova spustí do # hodiny}other{Carbon Browser Browser sa znova spustí do # hodín}}</translation>
-<translation id="91086099826398415">Otvoriť odkaz na novej &amp;karte prehliadača Carbon Browser Browser</translation>
+<translation id="9019929317751753759">Z dôvodu zvýšenia bezpečnosti prehliadača Carbon Browser sme zakázali nasledujúce rozšírenie, ktoré nie je uvedené v službe <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> a mohlo byť pridané bez vášho vedomia.</translation>
+<translation id="9022552996538154597">Prihlásiť sa do prehliadača Carbon Browser</translation>
+<translation id="907832235989677238">Prihláste sa do prehliadača Carbon Browser. Ak sa chcete prihlásiť do účtu iba jednorazovo, môžete <ph name="GUEST_LINK_BEGIN" />použiť dané zariadenie ako hosť<ph name="GUEST_LINK_END" />.</translation>
+<translation id="9078733879136747090">Prehliadač Carbon Browser bol automaticky zavretý</translation>
+<translation id="9089354809943900324">Prehliadač Carbon Browser je zastaraný</translation>
+<translation id="9093206154853821181">{0,plural, =1{Carbon Browser sa znova spustí do jednej hodiny}few{Carbon Browser sa znova spustí do # hodín}many{Carbon Browser sa znova spustí do # hodiny}other{Carbon Browser sa znova spustí do # hodín}}</translation>
+<translation id="9106612006984859720">Ak chcete dostávať budúce aktualizácie prehliadača Carbon Browser, budete potrebovať systém Windows 10 alebo novší. Tento počítač používa Windows 8.1.</translation>
+<translation id="91086099826398415">Otvoriť odkaz na novej &amp;karte prehliadača Carbon Browser</translation>
 <translation id="911206726377975832">Chcete tiež odstrániť svoje údaje prehliadania?</translation>
-<translation id="9144490074902256427">Počas týchto skúšobných období si môžete prezrieť témy záujmu, pomocou ktorých vám weby zobrazujú reklamy, a odstrániť ich. Carbon Browser Browser odhaduje záujmy na základe nedávnej histórie prehliadania.</translation>
-<translation id="9158494823179993217">Správca systému nakonfiguroval Carbon Browser Browser, aby web <ph name="TARGET_URL_HOSTNAME" /> otváral v alternatívnom prehliadači.</translation>
-<translation id="9185526690718004400">Znova spustiť a aktualizovať Carbon Browser Browser</translation>
-<translation id="9190841055450128916">Carbon Browser Browser (mDNS-In)</translation>
-<translation id="93478295209880648">Carbon Browser Browser nemusí fungovať správne, pretože v systémoch Windows XP a Windows Vista už nie je podporovaný</translation>
-<translation id="942598560705308788">Certifikáty, ktoré spravuje Carbon Browser Browser</translation>
-<translation id="945990405696787151">Ak chcete dostávať budúce aktualizácie prehliadača Carbon Browser Browser, musíte používať systém macOS 10.13 alebo novší. V tomto počítači používate OS X 10.11.</translation>
-<translation id="965162752251293939">Kto používa Carbon Browser Browser?</translation>
-<translation id="967427899662692980">Získajte najsilnejšie zabezpečenie prehliadača Carbon Browser Browser</translation>
-<translation id="985602178874221306">Autori prehliadača Carbon Browser Browser</translation>
+<translation id="9144490074902256427">Počas týchto skúšobných období si môžete prezrieť témy záujmu, pomocou ktorých vám weby zobrazujú reklamy, a odstrániť ich. Carbon Browser odhaduje záujmy na základe nedávnej histórie prehliadania.</translation>
+<translation id="9158494823179993217">Správca systému nakonfiguroval Carbon Browser, aby web <ph name="TARGET_URL_HOSTNAME" /> otváral v alternatívnom prehliadači.</translation>
+<translation id="9185526690718004400">Znova spustiť a aktualizovať Carbon Browser</translation>
+<translation id="9190841055450128916">Carbon Browser (mDNS-In)</translation>
+<translation id="924957577793602335">Upravte Carbon Browser podľa seba</translation>
+<translation id="93478295209880648">Carbon Browser nemusí fungovať správne, pretože v systémoch Windows XP a Windows Vista už nie je podporovaný</translation>
+<translation id="942598560705308788">Certifikáty, ktoré spravuje Carbon Browser</translation>
+<translation id="965162752251293939">Kto používa Carbon Browser?</translation>
+<translation id="967427899662692980">Získajte najsilnejšie zabezpečenie prehliadača Carbon Browser</translation>
+<translation id="983803489796659991">Nepodarilo sa nainštalovať, pretože aktualizačný server nemá žiadne údaje o haši aplikácie.</translation>
+<translation id="985602178874221306">Autori prehliadača Carbon Browser</translation>
 </translationbundle>

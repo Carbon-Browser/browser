@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ class TrackedSplitPreference : public TrackedPreference {
   void OnNewValue(const base::Value* value,
                   PrefHashStoreTransaction* transaction) const override;
   bool EnforceAndReport(
-      base::DictionaryValue* pref_store_contents,
+      base::Value::Dict& pref_store_contents,
       PrefHashStoreTransaction* transaction,
       PrefHashStoreTransaction* external_validation_transaction) const override;
 

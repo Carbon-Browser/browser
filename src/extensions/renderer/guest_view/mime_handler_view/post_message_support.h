@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "v8/include/v8.h"
@@ -99,7 +100,7 @@ class PostMessageSupport {
   // the messages are forwarded to the target frame.
   bool is_active_ = false;
 
-  Delegate* const delegate_;
+  const raw_ptr<Delegate, ExperimentalRenderer> delegate_;
 
   base::WeakPtrFactory<PostMessageSupport> weak_factory_{this};
 };

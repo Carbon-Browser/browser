@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/web_contents_media_capture_id.h"
+#include "media/capture/mojom/video_capture_types.mojom.h"
 
 namespace content {
 
@@ -48,10 +49,12 @@ class CONTENT_EXPORT WebContentsVideoCaptureDevice
       const std::string& device_id);
 
   // VideoCaptureDevice overrides.
-  void Crop(
-      const base::Token& crop_id,
-      uint32_t crop_version,
-      base::OnceCallback<void(media::mojom::CropRequestResult)> callback) final;
+  void ApplySubCaptureTarget(
+      media::mojom::SubCaptureTargetType type,
+      const base::Token& target,
+      uint32_t sub_capture_target_version,
+      base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+          callback) final;
 
   // FrameSinkVideoConsumer overrides.
   void OnFrameCaptured(
@@ -60,6 +63,9 @@ class CONTENT_EXPORT WebContentsVideoCaptureDevice
       const gfx::Rect& content_rect,
       mojo::PendingRemote<viz::mojom::FrameSinkVideoConsumerFrameCallbacks>
           callbacks) final;
+
+  // VideoCaptureDevice overrides.
+  void OnUtilizationReport(media::VideoCaptureFeedback feedback) override;
 
   // For testing, we need the ability to create a device without its tracker.
  protected:

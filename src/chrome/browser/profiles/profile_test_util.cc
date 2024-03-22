@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,59 +10,97 @@
 #include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "chrome/browser/profiles/profile_manager.h"
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/profiles/profile_window.h"
-#include "components/policy/core/browser/browser_policy_connector.h"
+#include "components/signin/public/identity_manager/account_managed_status_finder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/ash/components/login/login_state/login_state.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/startup/browser_init_params.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
 namespace profiles::testing {
 
-Profile* CreateProfileSync(ProfileManager* profile_manager,
+Profile& CreateProfileSync(ProfileManager* profile_manager,
                            const base::FilePath& path) {
-  Profile* created_profile = nullptr;
-  base::RunLoop run_loop;
-  profile_manager->CreateProfileAsync(
-      path, base::BindLambdaForTesting(
-                [&run_loop, &created_profile](Profile* profile,
-                                              Profile::CreateStatus status) {
-                  switch (status) {
-                    case Profile::CREATE_STATUS_LOCAL_FAIL:
-                      NOTREACHED();
-                      return;
-                    case Profile::CREATE_STATUS_CREATED:
-                      // Do nothing, wait for the profile to be initialized.
-                      return;
-                    case Profile::CREATE_STATUS_INITIALIZED:
-                      created_profile = profile;
-                      run_loop.Quit();
-                      return;
-                  }
-                }));
-  run_loop.Run();
-  return created_profile;
+  base::test::TestFuture<Profile*> profile_future;
+  profile_manager->CreateProfileAsync(path, profile_future.GetCallback());
+  Profile* profile = profile_future.Get();
+  CHECK(profile);
+  return *profile;
 }
 
 #if !BUILDFLAG(IS_ANDROID)
 
 void SwitchToProfileSync(const base::FilePath& path, bool always_create) {
-  base::test::TestFuture<Profile*> future;
+  base::test::TestFuture<Browser*> future;
   profiles::SwitchToProfile(path, always_create, future.GetCallback());
   ASSERT_TRUE(future.Wait()) << "profiles::SwitchToProfile() did not complete";
 }
 
 ScopedNonEnterpriseDomainSetterForTesting::
     ScopedNonEnterpriseDomainSetterForTesting(const char* domain) {
-  policy::BrowserPolicyConnector::SetNonEnterpriseDomainForTesting(domain);
+  signin::AccountManagedStatusFinder::SetNonEnterpriseDomainForTesting(domain);
 }
 
 ScopedNonEnterpriseDomainSetterForTesting::
     ~ScopedNonEnterpriseDomainSetterForTesting() {
-  policy::BrowserPolicyConnector::SetNonEnterpriseDomainForTesting(nullptr);
+  signin::AccountManagedStatusFinder::SetNonEnterpriseDomainForTesting(nullptr);
 }
 
 #endif  // !BUILDFLAG(IS_ANDROID)
+
+ScopedProfileSelectionsForFactoryTesting::
+    ScopedProfileSelectionsForFactoryTesting(
+        ProfileKeyedServiceFactory* factory,
+        ProfileSelections selections)
+    : factory_(factory),
+      old_selections_(std::exchange(factory->profile_selections_, selections)) {
+}
+
+ScopedProfileSelectionsForFactoryTesting::
+    ~ScopedProfileSelectionsForFactoryTesting() {
+  factory_->profile_selections_ = old_selections_;
+}
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+ScopedTestManagedGuestSession::ScopedTestManagedGuestSession() {
+  init_params_ = chromeos::BrowserInitParams::GetForTests()->Clone();
+  auto init_params = crosapi::mojom::BrowserInitParams::New();
+  init_params->session_type = crosapi::mojom::SessionType::kPublicSession;
+  chromeos::BrowserInitParams::SetInitParamsForTests(std::move(init_params));
+}
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+ScopedTestManagedGuestSession::ScopedTestManagedGuestSession() {
+  ash::LoginState::Initialize();
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT);
+}
+#else
+ScopedTestManagedGuestSession::ScopedTestManagedGuestSession() = default;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+ScopedTestManagedGuestSession::~ScopedTestManagedGuestSession() {
+  chromeos::BrowserInitParams::SetInitParamsForTests(std::move(init_params_));
+}
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+ScopedTestManagedGuestSession::~ScopedTestManagedGuestSession() {
+  if (ash::LoginState::IsInitialized()) {
+    ash::LoginState::Shutdown();
+  }
+}
+#else
+ScopedTestManagedGuestSession::~ScopedTestManagedGuestSession() = default;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 }  // namespace profiles::testing

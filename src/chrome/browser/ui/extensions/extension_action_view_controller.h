@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,12 @@
 #include "chrome/browser/extensions/extension_action_icon_factory.h"
 #include "chrome/browser/extensions/extension_context_menu_model.h"
 #include "chrome/browser/extensions/site_permissions_helper.h"
+#include "chrome/browser/ui/toolbar/toolbar_action_hover_card_types.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_controller.h"
 #include "extensions/browser/extension_host.h"
 #include "extensions/browser/extension_host_observer.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_id.h"
-#include "ui/gfx/image/image.h"
 
 class Browser;
 class ExtensionActionPlatformDelegate;
@@ -31,6 +31,10 @@ class ExtensionAction;
 class ExtensionRegistry;
 class ExtensionViewHost;
 class SitePermissionsHelper;
+}  // namespace extensions
+
+namespace ui {
+class ImageModel;
 }
 
 // The platform-independent controller for an ExtensionAction that is shown on
@@ -63,28 +67,34 @@ class ExtensionActionViewController
   // ToolbarActionViewController:
   std::string GetId() const override;
   void SetDelegate(ToolbarActionViewDelegate* delegate) override;
-  gfx::Image GetIcon(content::WebContents* web_contents,
-                     const gfx::Size& size) override;
+  ui::ImageModel GetIcon(content::WebContents* web_contents,
+                         const gfx::Size& size) override;
   std::u16string GetActionName() const override;
   std::u16string GetAccessibleName(
       content::WebContents* web_contents) const override;
   std::u16string GetTooltip(content::WebContents* web_contents) const override;
+  ToolbarActionViewController::HoverCardState GetHoverCardState(
+      content::WebContents* web_contents) const override;
   extensions::SitePermissionsHelper::SiteInteraction GetSiteInteraction(
       content::WebContents* web_contents) const override;
   bool IsEnabled(content::WebContents* web_contents) const override;
   bool IsShowingPopup() const override;
-  bool IsRequestingSiteAccess(
+  bool ShouldShowSiteAccessRequestInToolbar(
       content::WebContents* web_contents) const override;
   void HidePopup() override;
   gfx::NativeView GetPopupNativeView() override;
   ui::MenuModel* GetContextMenu(
       extensions::ExtensionContextMenuModel::ContextMenuSource
           context_menu_source) override;
-  void OnContextMenuShown() override;
-  void OnContextMenuClosed() override;
+  void OnContextMenuShown(
+      extensions::ExtensionContextMenuModel::ContextMenuSource source) override;
+  void OnContextMenuClosed(
+      extensions::ExtensionContextMenuModel::ContextMenuSource source) override;
   void ExecuteUserAction(InvocationSource source) override;
   void TriggerPopupForAPI(ShowPopupCallback callback) override;
   void UpdateState() override;
+  void UpdateHoverCard(ToolbarActionView* action_view,
+                       ToolbarActionHoverCardUpdateType update_type) override;
   void RegisterCommand() override;
   void UnregisterCommand() override;
 
@@ -113,7 +123,6 @@ class ExtensionActionViewController
   std::unique_ptr<IconWithBadgeImageSource> GetIconImageSourceForTesting(
       content::WebContents* web_contents,
       const gfx::Size& size);
-  bool HasBeenBlockedForTesting(content::WebContents* web_contents) const;
 
  private:
   // New instances should be instantiated with Create().
@@ -172,13 +181,20 @@ class ExtensionActionViewController
 
   // The browser action this view represents. The ExtensionAction is not owned
   // by this class.
-  const raw_ptr<extensions::ExtensionAction> extension_action_;
+  const raw_ptr<extensions::ExtensionAction, DanglingUntriaged>
+      extension_action_;
 
   // The corresponding ExtensionsContainer on the toolbar.
   const raw_ptr<ExtensionsContainer> extensions_container_;
 
   // The extension popup's host if the popup is visible; null otherwise.
   raw_ptr<extensions::ExtensionViewHost> popup_host_;
+
+  // Whether the toolbar action has opened an active popup. This is unique from
+  // `popup_host_` since `popup_host_` may be non-null even if the popup hasn't
+  // opened yet if we're waiting on other UI to be ready (e.g. the action to
+  // slide out in the toolbar).
+  bool has_opened_popup_ = false;
 
   // The context menu model for the extension.
   std::unique_ptr<extensions::ExtensionContextMenuModel> context_menu_model_;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "url/gurl.h"
 
@@ -25,12 +25,12 @@ class PrefMetricsService : public KeyedService {
 
   ~PrefMetricsService() override;
 
-  // Records metrics about the state of the homepage on launch.
+  // Records metrics about various per-profile configurations on profile open.
   static void RecordHomePageLaunchMetrics(bool show_home_button,
                                           bool homepage_is_ntp,
                                           const GURL& homepage_url);
 
-  class Factory : public BrowserContextKeyedServiceFactory {
+  class Factory : public ProfileKeyedServiceFactory {
    public:
     static Factory* GetInstance();
     static PrefMetricsService* GetForProfile(Profile* profile);
@@ -41,11 +41,9 @@ class PrefMetricsService : public KeyedService {
     ~Factory() override;
 
     // BrowserContextKeyedServiceFactory implementation
-    KeyedService* BuildServiceInstanceFor(
-        content::BrowserContext* profile) const override;
-    bool ServiceIsCreatedWithBrowserContext() const override;
-    content::BrowserContext* GetBrowserContextToUse(
+    std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
         content::BrowserContext* context) const override;
+    bool ServiceIsCreatedWithBrowserContext() const override;
   };
 
  private:

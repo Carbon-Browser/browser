@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #import <Cocoa/Cocoa.h>
 
-#import "base/mac/scoped_nsobject.h"
 #include "components/remote_cocoa/app_shim/ns_view_ids.h"
 #import "content/app_shim_remote_cocoa/popup_window_mac.h"
 #import "content/app_shim_remote_cocoa/render_widget_host_view_cocoa.h"
@@ -30,7 +29,8 @@ class RenderWidgetHostNSViewBridge : public mojom::RenderWidgetHostNSView,
  public:
   RenderWidgetHostNSViewBridge(mojom::RenderWidgetHostNSViewHost* client,
                                RenderWidgetHostNSViewHostHelper* client_helper,
-                               uint64_t ns_view_id);
+                               uint64_t ns_view_id,
+                               base::OnceClosure destroy_callback = {});
 
   RenderWidgetHostNSViewBridge(const RenderWidgetHostNSViewBridge&) = delete;
   RenderWidgetHostNSViewBridge& operator=(const RenderWidgetHostNSViewBridge&) =
@@ -83,6 +83,11 @@ class RenderWidgetHostNSViewBridge : public mojom::RenderWidgetHostNSView,
       const std::string& url,
       const std::vector<std::string>& file_paths,
       ShowSharingServicePickerCallback callback) override;
+  void Destroy() override;
+  void GestureScrollEventAck(
+      std::unique_ptr<blink::WebCoalescedInputEvent> event,
+      bool consumed) override;
+  void DidOverscroll(blink::mojom::DidOverscrollParamsPtr params) override;
 
  private:
   bool IsPopup() const { return !!popup_window_; }
@@ -93,7 +98,7 @@ class RenderWidgetHostNSViewBridge : public mojom::RenderWidgetHostNSView,
   void OnDisplayMetricsChanged(const display::Display&, uint32_t) override;
 
   // The NSView used for input and display.
-  base::scoped_nsobject<RenderWidgetHostViewCocoa> cocoa_view_;
+  RenderWidgetHostViewCocoa* __strong cocoa_view_;
 
   // Once set, all calls to set the background color or CALayer content will
   // be ignored.
@@ -104,7 +109,7 @@ class RenderWidgetHostNSViewBridge : public mojom::RenderWidgetHostNSView,
 
   // The background CALayer which is hosted by |cocoa_view_|, and is used as
   // the root of |display_ca_layer_tree_|.
-  base::scoped_nsobject<CALayer> background_layer_;
+  CALayer* __strong background_layer_;
   std::unique_ptr<ui::DisplayCALayerTree> display_ca_layer_tree_;
 
   // Cached copy of the tooltip text, to avoid redundant calls.
@@ -116,6 +121,9 @@ class RenderWidgetHostNSViewBridge : public mojom::RenderWidgetHostNSView,
 
   // The receiver for this object (only used when remotely instantiated).
   mojo::AssociatedReceiver<mojom::RenderWidgetHostNSView> receiver_{this};
+
+  // The callback to be called when `Destroy()` is called.
+  base::OnceClosure destroy_callback_;
 };
 
 }  // namespace remote_cocoa

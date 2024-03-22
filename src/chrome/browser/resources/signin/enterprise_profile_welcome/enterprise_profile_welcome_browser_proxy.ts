@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,19 @@
  * to interact with the browser.
  */
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 // Enterprise profile info sent from C++.
-export type EnterpriseProfileInfo = {
-  backgroundColor: string,
-  pictureUrl: string,
-  showEnterpriseBadge: boolean,
-  title: string,
-  subtitle: string,
-  enterpriseInfo: string,
-  proceedLabel: string,
-  showCancelButton: boolean,
-};
+export interface EnterpriseProfileInfo {
+  pictureUrl: string;
+  showEnterpriseBadge: boolean;
+  title: string;
+  subtitle: string;
+  enterpriseInfo: string;
+  proceedLabel: string;
+  showCancelButton: boolean;
+  checkLinkDataCheckboxByDefault: boolean;
+}
 
 export interface EnterpriseProfileWelcomeBrowserProxy {
   // Called when the page is ready

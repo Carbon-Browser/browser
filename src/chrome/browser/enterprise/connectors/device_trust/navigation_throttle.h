@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,16 @@
 #include "base/values.h"
 #include "content/public/browser/navigation_throttle.h"
 
+namespace device_signals {
+class UserPermissionService;
+}  // namespace device_signals
+
+class ConsentRequester;
+
 namespace enterprise_connectors {
 
 class DeviceTrustService;
+struct DeviceTrustResponse;
 
 // DeviceTrustNavigationThrottle provides a simple way to start a handshake
 // between Chrome and an origin based on a list of trusted URLs set in the
@@ -32,12 +39,10 @@ class DeviceTrustNavigationThrottle : public content::NavigationThrottle {
   static std::unique_ptr<DeviceTrustNavigationThrottle> MaybeCreateThrottleFor(
       content::NavigationHandle* navigation_handle);
 
-  using AttestationCallback = base::OnceCallback<void(const std::string&)>;
-
-  explicit DeviceTrustNavigationThrottle(
+  DeviceTrustNavigationThrottle(
+      DeviceTrustService* device_trust_service,
+      device_signals::UserPermissionService* user_permission_service,
       content::NavigationHandle* navigation_handle);
-  DeviceTrustNavigationThrottle(DeviceTrustService* device_trust_service,
-                                content::NavigationHandle* navigation_handle);
 
   DeviceTrustNavigationThrottle(const DeviceTrustNavigationThrottle&) = delete;
   DeviceTrustNavigationThrottle& operator=(
@@ -50,16 +55,35 @@ class DeviceTrustNavigationThrottle : public content::NavigationThrottle {
   const char* GetNameForLogging() override;
 
  private:
+  content::NavigationThrottle::ThrottleCheckResult MayTriggerConsentDialog();
   content::NavigationThrottle::ThrottleCheckResult AddHeadersIfNeeded();
 
-  // Not owned.
+  // Not owned, profile-keyed service.
   const raw_ptr<DeviceTrustService> device_trust_service_;
 
-  // Set `challege_response` into the header
+  // Not owned, profile-keyed service.
+  const raw_ptr<device_signals::UserPermissionService> user_permission_service_;
+
+  // Resumes the navigation by setting a value into the header
   // `X-Verified-Access-Challenge-Response` of the redirection request to the
-  // IdP and resume the navigation.
+  // IdP and resume the navigation. That value is determined by the properties
+  // of `dt_response` which, when in success cases, contains a valid response
+  // string. `start_time` is used to measure the latency of the end-to-end flow.
   void ReplyChallengeResponseAndResume(base::TimeTicks start_time,
-                                       const std::string& challenge_response);
+                                       const DeviceTrustResponse& dt_response);
+
+  // Invoked when generation of the challenge response timed out.
+  void OnResponseTimedOut(base::TimeTicks start_time);
+
+  // Callback function for when kDeviceSignalsConsentReceived is updated
+  // to true.
+  void OnConsentPrefUpdated();
+
+  std::unique_ptr<ConsentRequester> consent_requester_;
+
+  // Only set to true when a challenge response (or timeout) resumed the
+  // throttled navigation.
+  bool is_resumed_{false};
 
   base::WeakPtrFactory<DeviceTrustNavigationThrottle> weak_ptr_factory_{this};
 };

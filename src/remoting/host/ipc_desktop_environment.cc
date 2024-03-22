@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/process/process_handle.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "remoting/host/action_executor.h"
+#include "remoting/host/active_display_monitor.h"
 #include "remoting/host/audio_capturer.h"
 #include "remoting/host/base/screen_controls.h"
 #include "remoting/host/client_session_control.h"
@@ -84,6 +85,12 @@ IpcDesktopEnvironment::CreateKeyboardLayoutMonitor(
       std::move(callback));
 }
 
+std::unique_ptr<ActiveDisplayMonitor>
+IpcDesktopEnvironment::CreateActiveDisplayMonitor(
+    ActiveDisplayMonitor::Callback callback) {
+  return nullptr;
+}
+
 std::unique_ptr<DesktopCapturer> IpcDesktopEnvironment::CreateVideoCapturer() {
   return desktop_session_proxy_->CreateVideoCapturer();
 }
@@ -107,12 +114,6 @@ void IpcDesktopEnvironment::SetCapabilities(const std::string& capabilities) {
 
 uint32_t IpcDesktopEnvironment::GetDesktopSessionId() const {
   return desktop_session_proxy_->desktop_session_id();
-}
-
-std::unique_ptr<DesktopAndCursorConditionalComposer>
-IpcDesktopEnvironment::CreateComposingVideoCapturer() {
-  // Cursor compositing is done by the desktop process if necessary.
-  return nullptr;
 }
 
 std::unique_ptr<RemoteWebAuthnStateChangeNotifier>
@@ -157,8 +158,9 @@ void IpcDesktopEnvironmentFactory::ConnectTerminal(
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
 
   int id = next_id_++;
-  bool inserted = active_connections_.insert(
-      std::make_pair(id, desktop_session_proxy)).second;
+  bool inserted =
+      active_connections_.insert(std::make_pair(id, desktop_session_proxy))
+          .second;
   CHECK(inserted);
 
   VLOG(1) << "Network: registered desktop environment " << id;
@@ -173,8 +175,9 @@ void IpcDesktopEnvironmentFactory::DisconnectTerminal(
 
   ActiveConnectionsList::iterator i;
   for (i = active_connections_.begin(); i != active_connections_.end(); ++i) {
-    if (i->second == desktop_session_proxy)
+    if (i->second == desktop_session_proxy) {
       break;
+    }
   }
 
   if (i != active_connections_.end()) {
@@ -193,8 +196,9 @@ void IpcDesktopEnvironmentFactory::SetScreenResolution(
 
   ActiveConnectionsList::iterator i;
   for (i = active_connections_.begin(); i != active_connections_.end(); ++i) {
-    if (i->second == desktop_session_proxy)
+    if (i->second == desktop_session_proxy) {
       break;
+    }
   }
 
   if (i != active_connections_.end()) {

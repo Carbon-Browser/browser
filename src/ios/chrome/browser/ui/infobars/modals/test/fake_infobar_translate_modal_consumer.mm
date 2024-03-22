@@ -1,16 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/infobars/modals/test/fake_infobar_translate_modal_consumer.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @implementation FakeInfobarTranslateModalConsumer
 - (void)setupModalViewControllerWithPrefs:(NSDictionary*)prefs {
   self.sourceLanguage = prefs[kSourceLanguagePrefKey];
+  self.sourceLanguageIsUnknown = prefs[kSourceLanguageIsUnknownPrefKey];
   self.targetLanguage = prefs[kTargetLanguagePrefKey];
   self.enableTranslateActionButton =
       [prefs[kEnableTranslateButtonPrefKey] boolValue];

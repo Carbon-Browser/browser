@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/sync/base/model_type.h"
+#include "components/sync/base/storage_type.h"
 #include "components/sync/model/model_type_store.h"
 
 namespace syncer {
@@ -26,7 +27,8 @@ class ModelTypeStoreImpl : public ModelTypeStore {
   // |backend_store| must not be null and must have been created in
   // |backend_task_runner|.
   ModelTypeStoreImpl(
-      ModelType type,
+      ModelType model_type,
+      StorageType storage_type,
       std::unique_ptr<BlockingModelTypeStoreImpl, base::OnTaskRunnerDeleter>
           backend_store,
       scoped_refptr<base::SequencedTaskRunner> backend_task_runner);
@@ -65,7 +67,8 @@ class ModelTypeStoreImpl : public ModelTypeStore {
   void WriteModificationsDone(CallbackWithResult callback,
                               const absl::optional<ModelError>& error);
 
-  const ModelType type_;
+  const ModelType model_type_;
+  const StorageType storage_type_;
   scoped_refptr<base::SequencedTaskRunner> backend_task_runner_;
   // |backend_store_| should be deleted on backend thread.
   std::unique_ptr<BlockingModelTypeStoreImpl, base::OnTaskRunnerDeleter>

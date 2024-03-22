@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/flatland/flatland_window.h"
 
-#include <fuchsia/sys/cpp/fidl.h>
-#include <lib/sys/cpp/component_context.h>
-#include <lib/ui/scenic/cpp/view_identity.h>
+#include <fidl/fuchsia.ui.pointer/cpp/hlcpp_conversion.h>
+#include <fidl/fuchsia.ui.views/cpp/hlcpp_conversion.h>
+#include <lib/async/default.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -15,29 +15,50 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/check_op.h"
+#include "base/fuchsia/fuchsia_component_connect.h"
 #include "base/fuchsia/fuchsia_logging.h"
-#include "base/fuchsia/process_context.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
-#include "flatland_connection.h"
 #include "ui/base/cursor/platform_cursor.h"
+#include "ui/display/types/display_constants.h"
 #include "ui/events/event.h"
 #include "ui/events/ozone/events_ozone.h"
 #include "ui/events/platform/platform_event_source.h"
 #include "ui/ozone/platform/flatland/flatland_window_manager.h"
+#include "ui/platform_window/fuchsia/scenic_window_delegate.h"
 
 namespace ui {
 
+namespace {
+
+// Converts and scales Scenic's rect-based representation of insets to
+// gfx::Insets. Returns zero-width insets if |view_inset| information was not
+// provided in the |GetLayout()| call.
+gfx::Insets ConvertInsets(float device_pixel_ratio,
+                          const fuchsia::math::Inset& view_inset) {
+  return gfx::ScaleToRoundedInsets(
+      gfx::Insets::TLBR(view_inset.top, view_inset.left, view_inset.bottom,
+                        view_inset.right),
+      device_pixel_ratio);
+}
+
+}  // namespace
+
 FlatlandWindow::FlatlandWindow(FlatlandWindowManager* window_manager,
-                               PlatformWindowDelegate* delegate,
+                               PlatformWindowDelegate* platform_window_delegate,
                                PlatformWindowInitProperties properties)
     : manager_(window_manager),
-      window_delegate_(delegate),
+      platform_window_delegate_(platform_window_delegate),
+      scenic_window_delegate_(properties.scenic_window_delegate),
       window_id_(manager_->AddWindow(this)),
       view_ref_(std::move(properties.view_ref_pair.view_ref)),
       view_controller_(std::move(properties.view_controller)),
-      flatland_("Chromium FlatlandWindow"),
-      bounds_(properties.bounds) {
+      flatland_("Chromium FlatlandWindow",
+                base::BindOnce(&FlatlandWindow::OnFlatlandError,
+                               base::Unretained(this))),
+      bounds_(
+          platform_window_delegate->ConvertRectToPixels(properties.bounds)) {
   if (view_controller_) {
     view_controller_.set_error_handler(
         fit::bind_member(this, &FlatlandWindow::OnViewControllerDisconnected));
@@ -48,13 +69,27 @@ FlatlandWindow::FlatlandWindow(FlatlandWindowManager* window_manager,
 
   fuchsia::ui::composition::ViewBoundProtocols view_bound_protocols;
   view_bound_protocols.set_view_ref_focused(view_ref_focused_.NewRequest());
-  fuchsia::ui::pointer::TouchSourceHandle touch_source;
-  view_bound_protocols.set_touch_source(touch_source.NewRequest());
-  fuchsia::ui::pointer::MouseSourceHandle mouse_source;
-  view_bound_protocols.set_mouse_source(mouse_source.NewRequest());
+  view_ref_focused_.set_error_handler([](zx_status_t status) {
+    ZX_LOG(ERROR, status) << "ViewRefFocused disconnected.";
+  });
+
+  auto touch_source_endpoints =
+      fidl::CreateEndpoints<fuchsia_ui_pointer::TouchSource>();
+  ZX_CHECK(touch_source_endpoints.is_ok(),
+           touch_source_endpoints.status_value());
+  view_bound_protocols.set_touch_source(
+      fidl::NaturalToHLCPP(std::move(touch_source_endpoints->server)));
+
+  auto mouse_source_endpoints =
+      fidl::CreateEndpoints<fuchsia_ui_pointer::MouseSource>();
+  ZX_CHECK(mouse_source_endpoints.is_ok(),
+           mouse_source_endpoints.status_value());
+  view_bound_protocols.set_mouse_source(
+      fidl::NaturalToHLCPP(std::move(mouse_source_endpoints->server)));
 
   pointer_handler_ = std::make_unique<PointerEventsHandler>(
-      std::move(touch_source), std::move(mouse_source));
+      std::move(touch_source_endpoints->client),
+      std::move(mouse_source_endpoints->client));
   pointer_handler_->StartWatching(base::BindRepeating(
       &FlatlandWindow::DispatchEvent,
       // This is safe since |pointer_handler_| is a class member.
@@ -73,18 +108,27 @@ FlatlandWindow::FlatlandWindow(FlatlandWindowManager* window_manager,
   root_transform_id_ = flatland_.NextTransformId();
   flatland_.flatland()->CreateTransform(root_transform_id_);
 
-  window_delegate_->OnAcceleratedWidgetAvailable(window_id_);
+  // Create the infinite hit region that will cover the surface. Do not set clip
+  // boundaries on this transform, so that the hit region retains maximal size.
+  shield_transform_id_ = flatland_.NextTransformId();
+  flatland_.flatland()->CreateTransform(shield_transform_id_);
+  flatland_.flatland()->SetInfiniteHitRegion(
+      shield_transform_id_,
+      fuchsia::ui::composition::HitTestInteraction::DEFAULT);
+
+  platform_window_delegate_->OnAcceleratedWidgetAvailable(window_id_);
 
   if (properties.enable_keyboard) {
     is_virtual_keyboard_enabled_ = properties.enable_virtual_keyboard;
-    keyboard_service_ = base::ComponentContextForProcess()
-                            ->svc()
-                            ->Connect<fuchsia::ui::input3::Keyboard>();
-    keyboard_service_.set_error_handler([](zx_status_t status) {
-      ZX_LOG(ERROR, status) << "input3.Keyboard service disconnected.";
-    });
-    keyboard_client_ = std::make_unique<KeyboardClient>(keyboard_service_.get(),
-                                                        CloneViewRef(), this);
+    auto keyboard_client_end =
+        base::fuchsia_component::Connect<fuchsia_ui_input3::Keyboard>();
+    CHECK(keyboard_client_end.is_ok())
+        << base::FidlConnectionErrorMessage(keyboard_client_end);
+    keyboard_fidl_client_.Bind(std::move(keyboard_client_end.value()),
+                               async_get_default_dispatcher(),
+                               &fidl_error_event_logger_);
+    keyboard_client_ = std::make_unique<KeyboardClient>(
+        keyboard_fidl_client_, fidl::HLCPPToNatural(CloneViewRef()), this);
   } else {
     DCHECK(!properties.enable_virtual_keyboard);
   }
@@ -94,20 +138,46 @@ FlatlandWindow::~FlatlandWindow() {
   manager_->RemoveWindow(window_id_, this);
 }
 
+void FlatlandWindow::ResetSurfaceContent() {
+  if (!surface_content_id_.value) {
+    return;
+  }
+  flatland_.flatland()->RemoveChild(root_transform_id_, surface_transform_id_);
+  flatland_.flatland()->RemoveChild(root_transform_id_, shield_transform_id_);
+
+  flatland_.flatland()->ReleaseViewport(surface_content_id_, [](auto) {});
+  flatland_.flatland()->ReleaseTransform(surface_transform_id_);
+
+  surface_content_id_ = {};
+  surface_transform_id_ = {};
+}
+
 void FlatlandWindow::AttachSurfaceContent(
     fuchsia::ui::views::ViewportCreationToken token) {
-  if (surface_content_id_.value) {
-    flatland_.flatland()->ReleaseViewport(surface_content_id_, [](auto) {});
-    flatland_.flatland()->ReleaseTransform(surface_transform_id_);
+  // 0x0 is not a valid Viewport size for Flatland. Sending these commands will
+  // cause an error that results in channel closure. We will receive a non-zero
+  // size at OnGetLayout(), so we wait until then to run these commands.
+  if (!logical_size_) {
+    pending_attach_surface_content_closure_ =
+        base::BindOnce(&FlatlandWindow::AttachSurfaceContent,
+                       base::Unretained(this), std::move(token));
+    return;
   }
+
+  ResetSurfaceContent();
 
   surface_transform_id_ = flatland_.NextTransformId();
   flatland_.flatland()->CreateTransform(surface_transform_id_);
+  // Hit-testing starts from the last child transform added, and propagates
+  // forward to the first. Adding the shield transform last therefore allows it
+  // to consume all hit-tests, preventing the surface from handling them to
+  // capture input.
   flatland_.flatland()->AddChild(root_transform_id_, surface_transform_id_);
+  flatland_.flatland()->AddChild(root_transform_id_, shield_transform_id_);
 
   fuchsia::ui::composition::ViewportProperties properties;
-  properties.set_logical_size({static_cast<uint32_t>(bounds_.width()),
-                               static_cast<uint32_t>(bounds_.height())});
+  properties.set_logical_size({static_cast<uint32_t>(logical_size_->width()),
+                               static_cast<uint32_t>(logical_size_->height())});
 
   surface_content_id_ = flatland_.NextContentId();
   fuchsia::ui::composition::ChildViewWatcherPtr content_link;
@@ -116,10 +186,6 @@ void FlatlandWindow::AttachSurfaceContent(
                                        content_link.NewRequest());
   flatland_.flatland()->SetContent(surface_transform_id_, surface_content_id_);
   flatland_.Present();
-
-  // View is actually not attached but without it we dont get OutputPresenter
-  // updates.
-  OnViewAttachedChanged(true);
 }
 
 fuchsia::ui::views::ViewRef FlatlandWindow::CloneViewRef() {
@@ -140,12 +206,14 @@ void FlatlandWindow::SetBoundsInPixels(const gfx::Rect& bounds) {
 }
 
 gfx::Rect FlatlandWindow::GetBoundsInDIP() const {
-  return window_delegate_->ConvertRectToDIP(bounds_);
+  // TODO(crbug.com/1382849): Remove the hardcoded values and return
+  // |logical_size_|.
+  return platform_window_delegate_->ConvertRectToDIP(bounds_);
 }
 
 void FlatlandWindow::SetBoundsInDIP(const gfx::Rect& bounds) {
   // This path should only be reached in tests.
-  bounds_ = window_delegate_->ConvertRectToPixels(bounds);
+  bounds_ = platform_window_delegate_->ConvertRectToPixels(bounds);
 }
 
 void FlatlandWindow::SetTitle(const std::u16string& title) {
@@ -176,7 +244,7 @@ void FlatlandWindow::Close() {
     view_controller_ = nullptr;
   }
   Hide();
-  window_delegate_->OnClosed();
+  platform_window_delegate_->OnClosed();
 }
 
 bool FlatlandWindow::IsVisible() const {
@@ -199,9 +267,10 @@ bool FlatlandWindow::HasCapture() const {
   return has_capture_;
 }
 
-void FlatlandWindow::ToggleFullscreen() {
+void FlatlandWindow::SetFullscreen(bool fullscreen, int64_t target_display_id) {
   NOTIMPLEMENTED_LOG_ONCE();
-  is_fullscreen_ = !is_fullscreen_;
+  DCHECK_EQ(target_display_id, display::kInvalidDisplayId);
+  is_fullscreen_ = fullscreen;
 }
 
 void FlatlandWindow::Maximize() {
@@ -217,7 +286,6 @@ void FlatlandWindow::Restore() {
 }
 
 PlatformWindowState FlatlandWindow::GetPlatformWindowState() const {
-  NOTIMPLEMENTED_LOG_ONCE();
   if (is_fullscreen_)
     return PlatformWindowState::kFullScreen;
   if (!is_view_attached_)
@@ -275,12 +343,21 @@ void FlatlandWindow::SizeConstraintsChanged() {
 }
 
 void FlatlandWindow::OnGetLayout(fuchsia::ui::composition::LayoutInfo info) {
-  // TODO(https://fxbug.dev/99312): Read device pixel ratio from LayoutInfo when
-  // available.
-  view_properties_ = info.logical_size();
+  logical_size_ =
+      gfx::Size(info.logical_size().width, info.logical_size().height);
+  device_pixel_ratio_ =
+      std::max(info.device_pixel_ratio().x, info.device_pixel_ratio().y);
+  DCHECK_EQ(info.device_pixel_ratio().x, info.device_pixel_ratio().y);
 
-  if (view_properties_ || device_pixel_ratio_ > 0.0)
-    UpdateSize();
+  if (info.has_inset()) {
+    view_inset_ = ConvertInsets(device_pixel_ratio_, info.inset());
+  }
+
+  if (scenic_window_delegate_) {
+    scenic_window_delegate_->OnScenicPixelScale(this, device_pixel_ratio_);
+  }
+
+  UpdateSize();
 
   // Size update is sent via |delegate_| and SetViewportProperties().
   if (surface_content_id_.value) {
@@ -301,10 +378,33 @@ void FlatlandWindow::OnGetStatus(
     case fuchsia::ui::composition::ParentViewportStatus::CONNECTED_TO_DISPLAY:
       OnViewAttachedChanged(true);
       break;
+
     case fuchsia::ui::composition::ParentViewportStatus::
         DISCONNECTED_FROM_DISPLAY:
+      // We may get here after the initial `GetStatus()` call. There is no need
+      // to do anything in this case.
+      if (!is_view_attached_) {
+        break;
+      }
+
       OnViewAttachedChanged(false);
+
+      // Detach the surface view. This is necessary to ensure that the
+      // current content doesn't become visible when the view is attached
+      // again.
+      ResetSurfaceContent();
+      flatland_.Present();
+      pending_attach_surface_content_closure_.Reset();
+
+      // Destroy and recreate AcceleratedWidget. This will force the
+      // compositor drop the current LayerTreeFrameSink together with the
+      // corresponding ScenicSurface. They will be created again only after
+      // the window becomes visible again.
+      platform_window_delegate_->OnAcceleratedWidgetDestroyed();
+      platform_window_delegate_->OnAcceleratedWidgetAvailable(window_id_);
+
       break;
+
     default:
       NOTIMPLEMENTED();
       break;
@@ -315,26 +415,26 @@ void FlatlandWindow::OnGetStatus(
 
 void FlatlandWindow::OnViewRefFocusedWatchResult(
     fuchsia::ui::views::FocusState focus_state) {
-  window_delegate_->OnActivationChanged(focus_state.focused());
+  platform_window_delegate_->OnActivationChanged(focus_state.focused());
 
   view_ref_focused_->Watch(
       fit::bind_member(this, &FlatlandWindow::OnViewRefFocusedWatchResult));
 }
 
 void FlatlandWindow::UpdateSize() {
-  DCHECK_GT(device_pixel_ratio_, 0.0);
-  DCHECK(view_properties_);
+  DCHECK(logical_size_);
+  if (pending_attach_surface_content_closure_) {
+    std::move(pending_attach_surface_content_closure_).Run();
+  }
 
-  const uint32_t width = view_properties_->width;
-  const uint32_t height = view_properties_->height;
+  const auto old_bounds = bounds_;
+  bounds_ = gfx::Rect(
+      gfx::ScaleToCeiledSize(logical_size_.value(), device_pixel_ratio_));
 
-  bounds_ = gfx::Rect(ceilf(width * device_pixel_ratio_),
-                      ceilf(height * device_pixel_ratio_));
-
-  PlatformWindowDelegate::BoundsChange bounds;
-  bounds.bounds = bounds_;
-  // TODO(fxbug.dev/93998): Calculate insets and update.
-  window_delegate_->OnBoundsChanged(bounds);
+  PlatformWindowDelegate::BoundsChange bounds(old_bounds.origin() !=
+                                              bounds_.origin());
+  bounds.system_ui_overlap = view_inset_;
+  platform_window_delegate_->OnBoundsChanged(bounds);
 }
 
 void FlatlandWindow::OnViewAttachedChanged(bool is_view_attached) {
@@ -342,7 +442,7 @@ void FlatlandWindow::OnViewAttachedChanged(bool is_view_attached) {
   is_view_attached_ = is_view_attached;
   PlatformWindowState new_state = GetPlatformWindowState();
   if (old_state != new_state) {
-    window_delegate_->OnWindowStateChanged(old_state, new_state);
+    platform_window_delegate_->OnWindowStateChanged(old_state, new_state);
   }
 }
 
@@ -353,12 +453,18 @@ void FlatlandWindow::DispatchEvent(ui::Event* event) {
     location.Scale(device_pixel_ratio_);
     located_event->set_location_f(location);
   }
-  window_delegate_->DispatchEvent(event);
+  platform_window_delegate_->DispatchEvent(event);
+}
+
+void FlatlandWindow::OnFlatlandError(
+    fuchsia::ui::composition::FlatlandError error) {
+  LOG(ERROR) << "Flatland error: " << static_cast<int>(error);
+  platform_window_delegate_->OnClosed();
 }
 
 void FlatlandWindow::OnViewControllerDisconnected(zx_status_t status) {
   view_controller_ = nullptr;
-  window_delegate_->OnCloseRequest();
+  platform_window_delegate_->OnClosed();
 }
 
 }  // namespace ui

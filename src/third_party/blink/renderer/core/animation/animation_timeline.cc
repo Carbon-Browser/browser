@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ AnimationTimeline::AnimationTimeline(Document* document)
 void AnimationTimeline::AnimationAttached(Animation* animation) {
   DCHECK(!animations_.Contains(animation));
   animations_.insert(animation);
+  animation->ResolveTimelineOffsets(GetTimelineRange());
 }
 
 void AnimationTimeline::AnimationDetached(Animation* animation) {
@@ -31,6 +32,7 @@ void AnimationTimeline::AnimationDetached(Animation* animation) {
   animations_needing_update_.erase(animation);
   if (animation->Outdated())
     outdated_animation_count_--;
+  animation->ResolveTimelineOffsets(GetTimelineRange());
 }
 
 bool CompareAnimations(const Member<Animation>& left,
@@ -80,7 +82,7 @@ wtf_size_t AnimationTimeline::AnimationsNeedingUpdateCount() const {
   for (const auto& animation : animations_needing_update_) {
     // Exclude animations which are not actively generating frames.
     if ((!animation->CompositorPending() && !animation->Playing() &&
-         !IsScrollTimeline()) ||
+         !IsProgressBased()) ||
         animation->AnimationHasNoEffect()) {
       continue;
     }
@@ -97,10 +99,10 @@ bool AnimationTimeline::NeedsAnimationTimingUpdate() {
   // We allow |last_current_phase_and_time_| to advance here when there
   // are no animations to allow animations spawned during style
   // recalc to not invalidate this flag.
-  if (animations_needing_update_.IsEmpty())
+  if (animations_needing_update_.empty())
     last_current_phase_and_time_ = current_phase_and_time;
 
-  return !animations_needing_update_.IsEmpty();
+  return !animations_needing_update_.empty();
 }
 
 void AnimationTimeline::ServiceAnimations(TimingUpdateReason reason) {
@@ -108,7 +110,7 @@ void AnimationTimeline::ServiceAnimations(TimingUpdateReason reason) {
 
   auto current_phase_and_time = CurrentPhaseAndTime();
 
-  if (IsScrollTimeline() &&
+  if (IsProgressBased() &&
       last_current_phase_and_time_ != current_phase_and_time) {
     UpdateCompositorTimeline();
   }
@@ -150,7 +152,7 @@ void AnimationTimeline::getReplaceableAnimations(
     if (!animation->IsReplaceable())
       continue;
     DCHECK(animation->effect());
-    Element* target = To<KeyframeEffect>(animation->effect())->target();
+    Element* target = To<KeyframeEffect>(animation->effect())->EffectTarget();
     DCHECK(target);
     if (target->GetDocument() != animation->GetDocument())
       continue;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,7 +80,8 @@ class VIZ_SERVICE_EXPORT HitTestAggregator {
 
   const raw_ptr<HitTestAggregatorDelegate> delegate_;
 
-  const raw_ptr<LatestLocalSurfaceIdLookupDelegate, DanglingUntriaged>
+  const raw_ptr<LatestLocalSurfaceIdLookupDelegate,
+                AcrossTasksDanglingUntriaged>
       local_surface_id_lookup_delegate_;
 
   // This is the FrameSinkId for the corresponding root CompositorFrameSink.

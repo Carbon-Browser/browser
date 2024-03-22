@@ -1,36 +1,30 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_cell.h"
 
 #import <MaterialComponents/MaterialActivityIndicator.h>
-#include <ostream>
+#import <ostream>
 
-#include "base/check.h"
-#include "base/notreached.h"
-#import "ios/chrome/browser/commerce/price_alert_util.h"
-#import "ios/chrome/browser/ui/elements/top_aligned_image_view.h"
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
+#import "base/check.h"
+#import "base/check_op.h"
+#import "base/debug/dump_without_crashing.h"
+#import "base/notreached.h"
+#import "ios/chrome/browser/shared/ui/elements/top_aligned_image_view.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_constants.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 #import "ui/gfx/ios/uikit_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
 // The size of symbol icons.
 NSInteger kIconSymbolPointSize = 13;
-
-// Specific symbol image used as a badge for unslected tabs.
-NSString* kCircleSymbol = @"circle";
 
 // Size of activity indicator replacing fav icon when active.
 const CGFloat kIndicatorSize = 16.0;
@@ -91,6 +85,15 @@ void PositionView(UIView* view, CGPoint point) {
 
 @implementation GridCell
 
++ (instancetype)transitionSelectionCellFromCell:(GridCell*)cell {
+  GridCell* transitionSelectionCell = [[self alloc] initWithFrame:cell.bounds];
+  transitionSelectionCell.selected = YES;
+  transitionSelectionCell.theme = cell.theme;
+  transitionSelectionCell.contentView.hidden = YES;
+  transitionSelectionCell.opacity = cell.opacity;
+  return transitionSelectionCell;
+}
+
 // `-dequeueReusableCellWithReuseIdentifier:forIndexPath:` calls this method to
 // initialize a cell.
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -123,11 +126,8 @@ void PositionView(UIView* view, CGPoint point) {
         kGridCellCloseButtonIdentifier;
     [contentView addSubview:topBar];
     [contentView addSubview:snapshotView];
-    PriceCardView* priceCardView;
-    if (IsPriceAlertsEnabled()) {
-      priceCardView = [[PriceCardView alloc] init];
-      [snapshotView addSubview:priceCardView];
-    }
+    PriceCardView* priceCardView = [[PriceCardView alloc] init];
+    [snapshotView addSubview:priceCardView];
     [contentView addSubview:closeTapTargetButton];
     _topBar = topBar;
     _snapshotView = snapshotView;
@@ -147,8 +147,7 @@ void PositionView(UIView* view, CGPoint point) {
     self.layer.shadowRadius = 4.0f;
     self.layer.shadowOpacity = 0.5f;
     self.layer.masksToBounds = NO;
-    NSMutableArray* constraints = [[NSMutableArray alloc] init];
-    [constraints addObjectsFromArray:@[
+    NSArray* constraints = @[
       [topBar.topAnchor constraintEqualToAnchor:contentView.topAnchor],
       [topBar.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor],
       [topBar.trailingAnchor
@@ -168,21 +167,16 @@ void PositionView(UIView* view, CGPoint point) {
           constraintEqualToConstant:kGridCellCloseTapTargetWidthHeight],
       [closeTapTargetButton.heightAnchor
           constraintEqualToConstant:kGridCellCloseTapTargetWidthHeight],
-    ]];
-    if (IsPriceAlertsEnabled()) {
-      [constraints addObjectsFromArray:@[
-        [priceCardView.topAnchor
-            constraintEqualToAnchor:snapshotView.topAnchor
-                           constant:kGridCellPriceDropTopSpacing],
-        [priceCardView.leadingAnchor
-            constraintEqualToAnchor:snapshotView.leadingAnchor
-                           constant:kGridCellPriceDropLeadingSpacing],
-        [priceCardView.trailingAnchor
-            constraintLessThanOrEqualToAnchor:snapshotView.trailingAnchor
-                                     constant:-
-                                              kGridCellPriceDropTrailingSpacing]
-      ]];
-    }
+      [priceCardView.topAnchor
+          constraintEqualToAnchor:snapshotView.topAnchor
+                         constant:kGridCellPriceDropTopSpacing],
+      [priceCardView.leadingAnchor
+          constraintEqualToAnchor:snapshotView.leadingAnchor
+                         constant:kGridCellPriceDropLeadingSpacing],
+      [priceCardView.trailingAnchor
+          constraintLessThanOrEqualToAnchor:snapshotView.trailingAnchor
+                                   constant:-kGridCellPriceDropTrailingSpacing],
+    ];
     [NSLayoutConstraint activateConstraints:constraints];
   }
   return self;
@@ -211,7 +205,6 @@ void PositionView(UIView* view, CGPoint point) {
 
 - (void)prepareForReuse {
   [super prepareForReuse];
-  self.itemIdentifier = nil;
   self.title = nil;
   self.titleHidden = NO;
   self.icon = nil;
@@ -254,8 +247,6 @@ void PositionView(UIView* view, CGPoint point) {
   if (_theme == theme)
     return;
 
-  self.iconView.backgroundColor = UIColor.clearColor;
-
   self.overrideUserInterfaceStyle = (theme == GridThemeDark)
                                         ? UIUserInterfaceStyleDark
                                         : UIUserInterfaceStyleUnspecified;
@@ -266,11 +257,10 @@ void PositionView(UIView* view, CGPoint point) {
   switch (theme) {
     case GridThemeLight:
       self.border.layer.borderColor =
-          [UIColor colorNamed:@"grid_theme_selection_tint_color"].CGColor;
+          [UIColor colorNamed:kStaticBlue400Color].CGColor;
       break;
     case GridThemeDark:
-      self.border.layer.borderColor =
-          [UIColor colorNamed:@"grid_theme_dark_selection_tint_color"].CGColor;
+      self.border.layer.borderColor = UIColor.whiteColor.CGColor;
       break;
   }
 
@@ -317,10 +307,6 @@ void PositionView(UIView* view, CGPoint point) {
     self.snapshotView.image = snapshot;
   }
   _snapshot = snapshot;
-}
-
-- (BOOL)hasIdentifier:(NSString*)identifier {
-  return [self.itemIdentifier isEqualToString:identifier];
 }
 
 - (void)setPriceDrop:(NSString*)price previousPrice:(NSString*)previousPrice {
@@ -378,6 +364,8 @@ void PositionView(UIView* view, CGPoint point) {
   iconView.contentMode = UIViewContentModeScaleAspectFill;
   iconView.layer.cornerRadius = kGridCellIconCornerRadius;
   iconView.layer.masksToBounds = YES;
+  iconView.backgroundColor = UIColor.clearColor;
+  iconView.tintColor = [UIColor colorNamed:kGrey400Color];
 
   CGRect indicatorFrame = CGRectMake(0, 0, kIndicatorSize, kIndicatorSize);
   MDCActivityIndicator* activityIndicator =
@@ -396,11 +384,7 @@ void PositionView(UIView* view, CGPoint point) {
   closeIconView.contentMode = UIViewContentModeCenter;
   closeIconView.hidden = self.isInSelectionMode;
   closeIconView.image =
-      UseSymbols()
-          ? DefaultSymbolTemplateWithPointSize(kXMarkSymbol,
-                                               kIconSymbolPointSize)
-          : [[UIImage imageNamed:@"grid_cell_close_button"]
-                imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+      DefaultSymbolTemplateWithPointSize(kXMarkSymbol, kIconSymbolPointSize);
 
   UIImageView* selectIconView = [[UIImageView alloc] init];
   selectIconView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -449,8 +433,8 @@ void PositionView(UIView* view, CGPoint point) {
     [titleLabel.trailingAnchor
         constraintEqualToAnchor:closeIconView.leadingAnchor
                        constant:-kGridCellTitleLabelContentInset],
-    [titleLabel.centerYAnchor
-        constraintEqualToAnchor:closeIconView.centerYAnchor],
+    [topBar.topAnchor constraintEqualToAnchor:closeIconView.centerYAnchor
+                                     constant:-kGridCellCloseButtonTopSpacing],
     [closeIconView.trailingAnchor
         constraintEqualToAnchor:topBar.trailingAnchor
                        constant:-kGridCellCloseButtonContentInset],
@@ -465,8 +449,8 @@ void PositionView(UIView* view, CGPoint point) {
       [titleLabel.trailingAnchor
           constraintEqualToAnchor:_selectIconView.leadingAnchor
                          constant:-kGridCellTitleLabelContentInset],
-      [titleLabel.centerYAnchor
-          constraintEqualToAnchor:_selectIconView.centerYAnchor],
+      [topBar.topAnchor constraintEqualToAnchor:_selectIconView.topAnchor
+                                       constant:-kGridCellSelectIconTopSpacing],
       [_selectIconView.trailingAnchor
           constraintEqualToAnchor:topBar.trailingAnchor
                          constant:-kGridCellSelectIconContentInset],
@@ -512,7 +496,7 @@ void PositionView(UIView* view, CGPoint point) {
     return DefaultSymbolTemplateWithPointSize(kCircleSymbol,
                                               kIconSymbolPointSize);
   }
-  return DefaultSymbolTemplateWithPointSize(kCheckMarkCircleFillSymbol,
+  return DefaultSymbolTemplateWithPointSize(kCheckmarkCircleFillSymbol,
                                             kIconSymbolPointSize);
 }
 
@@ -627,19 +611,6 @@ void PositionView(UIView* view, CGPoint point) {
 
 @end
 
-@implementation GridTransitionSelectionCell
-
-+ (instancetype)transitionCellFromCell:(GridCell*)cell {
-  GridTransitionSelectionCell* proxy = [[self alloc] initWithFrame:cell.bounds];
-  proxy.selected = YES;
-  proxy.theme = cell.theme;
-  proxy.contentView.hidden = YES;
-  proxy.opacity = cell.opacity;
-  return proxy;
-}
-
-@end
-
 @implementation GridTransitionCell {
   // Previous tab view width, used to scale the tab views.
   CGFloat _previousTabViewWidth;
@@ -690,6 +661,11 @@ void PositionView(UIView* view, CGPoint point) {
 }
 
 - (void)setMainTabView:(UIView*)mainTabView {
+  if (!mainTabView) {
+    // TODO(crbug.com/1506555): Temporary investigation to see if there is a
+    // misconfiguration in the transition.
+    base::debug::DumpWithoutCrashing();
+  }
   DCHECK(!_mainTabView) << "mainTabView should only be set once.";
   if (!mainTabView.superview)
     [self.contentView addSubview:mainTabView];
@@ -714,6 +690,12 @@ void PositionView(UIView* view, CGPoint point) {
 
 #pragma mark - GridToTabTransitionView methods
 
+- (void)prepareForTransitionWithAnimationDirection:
+    (GridAnimationDirection)animationDirection {
+  // Use the same animation set up for both directions.
+  [self prepareForAnimation];
+}
+
 - (void)positionTabViews {
   [self scaleTabViews];
   self.topBarHeightConstraint.constant = self.topTabView.frame.size.height;
@@ -736,8 +718,9 @@ void PositionView(UIView* view, CGPoint point) {
   self.topBarHeightConstraint.constant = [self topBarHeight];
   [self setNeedsUpdateConstraints];
   [self layoutIfNeeded];
-  CGFloat yOffset = kGridCellHeaderHeight - self.topTabView.frame.size.height;
-  PositionView(self.topTabView, CGPointMake(0, yOffset));
+  CGFloat topYOffset =
+      kGridCellHeaderHeight - self.topTabView.frame.size.height;
+  PositionView(self.topTabView, CGPointMake(0, topYOffset));
   // Position the main view so it's top-aligned with the main cell view.
   PositionView(self.mainTabView, self.mainCellView.frame.origin);
   if (!self.bottomTabView)
@@ -750,12 +733,18 @@ void PositionView(UIView* view, CGPoint point) {
                  CGPointMake(0, self.bottomTabView.frame.origin.y * scale));
   } else {
     // Position the bottom tab view below the main content view.
-    CGFloat yOffset = CGRectGetMaxY(self.mainCellView.frame);
-    PositionView(self.bottomTabView, CGPointMake(0, yOffset));
+    CGFloat bottomYOffset = CGRectGetMaxY(self.mainCellView.frame);
+    PositionView(self.bottomTabView, CGPointMake(0, bottomYOffset));
   }
 }
 
 #pragma mark - Private helper methods
+
+// Common logic for the cell animation preparation.
+- (void)prepareForAnimation {
+  // Remove dark corners from the transition animtation cell.
+  self.backgroundColor = [UIColor clearColor];
+}
 
 // Scales the tab views relative to the current width of the cell.
 - (void)scaleTabViews {

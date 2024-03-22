@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -40,6 +41,65 @@ base::TimeDelta DeltaFromNowToTarget(const base::TimeTicks start,
 }
 #endif
 
+void SetLayerOpacity(Layer& layer, float opacity, base::TimeDelta duration) {
+  LayerAnimator* animator = layer.GetAnimator();
+  ScopedLayerAnimationSettings settings(animator);
+  settings.SetTransitionDuration(duration);
+  layer.SetOpacity(opacity);
+}
+
+class TestCompositorMonitor : public ui::CompositorObserver {
+ public:
+  explicit TestCompositorMonitor(ui::Compositor* compositor)
+      : compositor_(compositor) {
+    compositor->AddObserver(this);
+  }
+
+  ~TestCompositorMonitor() override { compositor_->RemoveObserver(this); }
+
+  // ui::CompositorObserver
+  void OnFirstAnimationStarted(Compositor* compositor) override {
+    animations_running_ = true;
+  }
+
+  void OnFirstNonAnimatedFrameStarted(Compositor* compositor) override {
+    DCHECK_EQ(compositor_, compositor);
+    if (animations_running_) {
+      waiting_for_did_present_compositor_frame_ = true;
+    }
+    animations_running_ = false;
+  }
+
+  void OnDidPresentCompositorFrame(
+      uint32_t frame_token,
+      const gfx::PresentationFeedback& feedback) override {
+    if (waiting_for_did_present_compositor_frame_) {
+      waiting_for_did_present_compositor_frame_ = false;
+      if (animations_running_)
+        return;
+
+      if (run_loop_)
+        run_loop_->Quit();
+    }
+  }
+
+  void WaitForAllAnimationsEnd() {
+    if (!animations_running_ && !waiting_for_did_present_compositor_frame_)
+      return;
+
+    run_loop_ = std::make_unique<base::RunLoop>(
+        base::RunLoop::Type::kNestableTasksAllowed);
+    run_loop_->Run();
+    run_loop_.reset();
+  }
+
+ private:
+  const raw_ptr<ui::Compositor> compositor_;
+  bool animations_running_ = false;
+  bool waiting_for_did_present_compositor_frame_ = false;
+  std::unique_ptr<base::RunLoop> run_loop_;
+};
+
 }  // namespace
 
 using TotalAnimationThroughputReporterTest =
@@ -51,14 +111,25 @@ TEST_F(TotalAnimationThroughputReporterTest, SingleAnimation) {
   root_layer()->Add(&layer);
 
   ThroughputReportChecker checker(this);
+  TestCompositorMonitor compositor_monitor(compositor());
   TotalAnimationThroughputReporter reporter(compositor(),
                                             checker.repeating_callback());
-  {
-    LayerAnimator* animator = layer.GetAnimator();
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(48));
-    layer.SetOpacity(1.0f);
-  }
+  auto scoped_blocker = reporter.NewScopedBlocker();
+  SetLayerOpacity(layer, 1.0f, base::Milliseconds(48));
+  // Make sure animation ends.
+  compositor_monitor.WaitForAllAnimationsEnd();
+
+  // No report should happen while scoped_blocker exists.
+  EXPECT_FALSE(checker.reported());
+
+  scoped_blocker.reset();
+  // No animation should be running yet, nothing to report.
+  EXPECT_FALSE(checker.reported());
+  Advance(base::Milliseconds(200));
+  EXPECT_FALSE(checker.reported());
+
+  // Animation of opacity goes to 0.5.
+  SetLayerOpacity(layer, 0.5f, base::Milliseconds(48));
   Advance(base::Milliseconds(32));
   EXPECT_FALSE(checker.reported());
   EXPECT_TRUE(checker.WaitUntilReported());
@@ -73,13 +144,7 @@ TEST_F(TotalAnimationThroughputReporterTest, StopAnimation) {
   ThroughputReportChecker checker(this);
   TotalAnimationThroughputReporter reporter(compositor(),
                                             checker.repeating_callback());
-  {
-    LayerAnimator* animator = layer.GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(64));
-    layer.SetOpacity(1.0f);
-  }
+  SetLayerOpacity(layer, 1.0f, base::Milliseconds(64));
   Advance(base::Milliseconds(32));
   EXPECT_FALSE(checker.reported());
   layer.GetAnimator()->StopAnimating();
@@ -96,24 +161,12 @@ TEST_F(TotalAnimationThroughputReporterTest, DISABLED_MultipleAnimations) {
   ThroughputReportChecker checker(this);
   TotalAnimationThroughputReporter reporter(compositor(),
                                             checker.repeating_callback());
-  {
-    LayerAnimator* animator = layer1.GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(48));
-    layer1.SetOpacity(1.0f);
-  }
+  SetLayerOpacity(layer1, 1.0f, base::Milliseconds(48));
   Layer layer2;
   layer2.SetOpacity(0.5f);
   root_layer()->Add(&layer2);
 
-  {
-    LayerAnimator* animator = layer2.GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(96));
-    layer2.SetOpacity(1.0f);
-  }
+  SetLayerOpacity(layer2, 1.0f, base::Milliseconds(96));
 #if !defined(SANITIZER_ENABLED)
   auto start = base::TimeTicks::Now();
 #endif
@@ -141,13 +194,7 @@ TEST_F(TotalAnimationThroughputReporterTest, MultipleAnimationsOnSingleLayer) {
   ThroughputReportChecker checker(this);
   TotalAnimationThroughputReporter reporter(compositor(),
                                             checker.repeating_callback());
-  {
-    LayerAnimator* animator = layer.GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(48));
-    layer.SetOpacity(1.0f);
-  }
+  SetLayerOpacity(layer, 1.0f, base::Milliseconds(48));
   {
     LayerAnimator* animator = layer.GetAnimator();
 
@@ -172,13 +219,7 @@ TEST_F(TotalAnimationThroughputReporterTest,
   ThroughputReportChecker checker(this);
   TotalAnimationThroughputReporter reporter(compositor(),
                                             checker.repeating_callback());
-  {
-    LayerAnimator* animator = layer1.GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(48));
-    layer1.SetOpacity(1.0f);
-  }
+  SetLayerOpacity(layer1, 1.0f, base::Milliseconds(48));
 #if !defined(SANITIZER_ENABLED)
   base::TimeTicks start = base::TimeTicks::Now();
 #endif
@@ -190,13 +231,7 @@ TEST_F(TotalAnimationThroughputReporterTest,
   layer2.SetOpacity(0.5f);
   root_layer()->Add(&layer2);
 
-  {
-    LayerAnimator* animator = layer2.GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(48));
-    layer2.SetOpacity(1.0f);
-  }
+  SetLayerOpacity(layer2, 1.0f, base::Milliseconds(48));
 
   // The following check may fail on sanitizer builds which
   // runs slwer.
@@ -220,25 +255,13 @@ TEST_F(TotalAnimationThroughputReporterTest, RemoveWhileAnimating) {
   ThroughputReportChecker checker(this);
   TotalAnimationThroughputReporter reporter(compositor(),
                                             checker.repeating_callback());
-  {
-    LayerAnimator* animator = layer1->GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(100));
-    layer1->SetOpacity(1.0f);
-  }
+  SetLayerOpacity(*layer1, 1.0f, base::Milliseconds(100));
 
   Layer layer2;
   layer2.SetOpacity(0.5f);
   root_layer()->Add(&layer2);
 
-  {
-    LayerAnimator* animator = layer2.GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(48));
-    layer2.SetOpacity(1.0f);
-  }
+  SetLayerOpacity(layer2, 1.0f, base::Milliseconds(48));
   Advance(base::Milliseconds(48));
   EXPECT_FALSE(checker.reported());
   layer1.reset();
@@ -253,13 +276,7 @@ TEST_F(TotalAnimationThroughputReporterTest, StartWhileAnimating) {
   layer.SetOpacity(0.5f);
   root_layer()->Add(&layer);
 
-  {
-    LayerAnimator* animator = layer.GetAnimator();
-
-    ScopedLayerAnimationSettings settings(animator);
-    settings.SetTransitionDuration(base::Milliseconds(96));
-    layer.SetOpacity(1.0f);
-  }
+  SetLayerOpacity(layer, 1.0f, base::Milliseconds(96));
   Advance(base::Milliseconds(32));
   ThroughputReportChecker checker(this);
   TotalAnimationThroughputReporter reporter(compositor(),
@@ -299,21 +316,39 @@ class ObserverChecker : public ui::CompositorObserver {
  public:
   ObserverChecker(ui::Compositor* compositor,
                   ui::CompositorObserver* reporter_observer)
-      : reporter_observer_(reporter_observer) {
+      : compositor_(compositor), reporter_observer_(reporter_observer) {
     EXPECT_TRUE(compositor->HasObserver(reporter_observer_));
     compositor->AddObserver(this);
   }
   ObserverChecker(const ObserverChecker&) = delete;
   ObserverChecker& operator=(const ObserverChecker&) = delete;
-  ~ObserverChecker() override = default;
+  ~ObserverChecker() override {
+    if (compositor_) {
+      EXPECT_FALSE(compositor_->HasObserver(reporter_observer_));
+      compositor_->RemoveObserver(this);
+    }
+  }
 
   // ui::CompositorObserver:
-  void OnLastAnimationEnded(ui::Compositor* compositor) override {
+  void OnCompositingShuttingDown(Compositor* compositor) override {
+    EXPECT_EQ(compositor_, compositor);
+    EXPECT_EQ(0, number_of_active_first_animation_started_);
     EXPECT_FALSE(compositor->HasObserver(reporter_observer_));
-    compositor->RemoveObserver(this);
+    compositor_ = nullptr;
+  }
+  void OnFirstAnimationStarted(Compositor* compositor) override {
+    first_animation_ever_started_ = true;
+    ++number_of_active_first_animation_started_;
+  }
+  void OnFirstNonAnimatedFrameStarted(ui::Compositor* compositor) override {
+    --number_of_active_first_animation_started_;
+    EXPECT_EQ(0, number_of_active_first_animation_started_);
   }
 
  private:
+  raw_ptr<ui::Compositor> compositor_;
+  bool first_animation_ever_started_ = false;
+  int number_of_active_first_animation_started_ = 0;
   const raw_ptr<ui::CompositorObserver> reporter_observer_;
 };
 
@@ -321,6 +356,7 @@ class ObserverChecker : public ui::CompositorObserver {
 
 // Make sure the once reporter is called only once.
 TEST_F(TotalAnimationThroughputReporterTest, OnceReporter) {
+  TestCompositorMonitor compositor_monitor(compositor());
   Layer layer;
   layer.SetOpacity(0.5f);
   root_layer()->Add(&layer);
@@ -332,18 +368,35 @@ TEST_F(TotalAnimationThroughputReporterTest, OnceReporter) {
   ThroughputReportChecker checker(this);
   TotalAnimationThroughputReporter reporter(
       compositor(), checker.once_callback(), /*should_delete=*/false);
+  auto scoped_blocker = reporter.NewScopedBlocker();
 
   // Make sure the TotalAnimationThroughputReporter removes itself
   // from compositor as observer.
   ObserverChecker observer_checker(compositor(), &reporter);
 
   // Report data for animation of opacity goes to 1.
-  layer.SetOpacity(1.0f);
+  SetLayerOpacity(layer, 1.0f, base::Milliseconds(48));
+  Advance(base::Milliseconds(100));
+
+  // No report should happen while scoped_blocker exists.
+  EXPECT_FALSE(checker.reported());
+
+  // Make sure there are no animations running.
+  compositor_monitor.WaitForAllAnimationsEnd();
+
+  scoped_blocker.reset();
+  // No animation should be running yet, nothing to report.
+  EXPECT_FALSE(checker.reported());
+  Advance(base::Milliseconds(100));
+  EXPECT_FALSE(checker.reported());
+
+  // Animation of opacity goes to 0.5.
+  SetLayerOpacity(layer, 0.7f, base::Milliseconds(48));
   EXPECT_TRUE(checker.WaitUntilReported());
 
   // Report data for animation of opacity goes to 0.5.
   checker.reset();
-  layer.SetOpacity(1.0f);
+  SetLayerOpacity(layer, 1.0f, base::Milliseconds(48));
   Advance(base::Milliseconds(100));
   EXPECT_FALSE(checker.reported());
 }
@@ -366,6 +419,7 @@ TEST_F(TotalAnimationThroughputReporterTest, OnceReporterShouldDelete) {
     raw_ptr<bool> deleted_;
   };
 
+  TestCompositorMonitor compositor_monitor(compositor());
   Layer layer;
   layer.SetOpacity(0.5f);
   root_layer()->Add(&layer);
@@ -378,21 +432,40 @@ TEST_F(TotalAnimationThroughputReporterTest, OnceReporterShouldDelete) {
   base::RunLoop run_loop;
 
   bool deleted = false;
-  new DeleteTestReporter(
+  TotalAnimationThroughputReporter* reporter = new DeleteTestReporter(
       compositor(),
       base::BindLambdaForTesting(
           [&](const cc::FrameSequenceMetrics::CustomReportData&) {
             run_loop.Quit();
           }),
       &deleted);
+  auto scoped_blocker = reporter->NewScopedBlocker();
 
   // Report data for animation of opacity goes to 1.
-  layer.SetOpacity(1.0f);
-  run_loop.Run();
+  SetLayerOpacity(layer, 1.0f, base::Milliseconds(48));
+  Advance(base::Milliseconds(100));
+
+  // No report should happen while scoped_blocker exists.
+  EXPECT_FALSE(deleted);
+
+  // Make sure there are no animations running.
+  compositor_monitor.WaitForAllAnimationsEnd();
+
+  scoped_blocker.reset();
+  // No animation should be running yet, nothing to report.
+  EXPECT_FALSE(deleted);
+  Advance(base::Milliseconds(100));
+  EXPECT_FALSE(deleted);
+
+  // Animation of opacity goes to 0.5.
+  layer.SetOpacity(0.7f);
+  EXPECT_FALSE(deleted);
+  Advance(base::Milliseconds(100));
   EXPECT_TRUE(deleted);
 }
 
 TEST_F(TotalAnimationThroughputReporterTest, ThreadCheck) {
+  TestCompositorMonitor compositor_monitor(compositor());
   Layer layer;
   layer.SetOpacity(0.5f);
   root_layer()->Add(&layer);
@@ -415,9 +488,26 @@ TEST_F(TotalAnimationThroughputReporterTest, ThreadCheck) {
 
   TotalAnimationThroughputReporter reporter(c, std::move(callback),
                                             /*should_delete=*/false);
+  auto scoped_blocker = reporter.NewScopedBlocker();
 
   // Report data for animation of opacity goes to 1.
   layer.SetOpacity(1.0f);
+  Advance(base::Milliseconds(100));
+
+  // No report should happen while scoped_blocker exists.
+  EXPECT_FALSE(checker.reported());
+
+  // Make sure there are no animations running.
+  compositor_monitor.WaitForAllAnimationsEnd();
+
+  scoped_blocker.reset();
+  // No animation should be running yet, nothing to report.
+  EXPECT_FALSE(checker.reported());
+  Advance(base::Milliseconds(100));
+  EXPECT_FALSE(checker.reported());
+
+  // Animation of opacity goes to 0.5.
+  layer.SetOpacity(0.7f);
   EXPECT_TRUE(checker.WaitUntilReported());
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -104,8 +104,7 @@ bool RequestPinView::IsDialogButtonEnabled(ui::DialogButton button) const {
       return true;
   }
 
-  NOTREACHED();
-  return true;
+  NOTREACHED_NORETURN();
 }
 
 views::View* RequestPinView::GetInitiallyFocusedView() {
@@ -179,7 +178,7 @@ void RequestPinView::Init() {
   textfield_ = AddChildView(std::make_unique<chromeos::PassphraseTextfield>());
   textfield_->set_controller(this);
   textfield_->SetEnabled(true);
-  textfield_->SetAssociatedLabel(header_label_);
+  textfield_->SetAccessibleName(header_label_);
   textfield_->SetDefaultWidthInChars(kDefaultTextWidthChars);
 
   // Error label.

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -95,7 +95,7 @@ bool mojo::StructTraits<remoting::mojom::DesktopEnvironmentOptionsDataView,
   out_options->set_enable_remote_open_url(data_view.enable_remote_open_url());
   out_options->set_enable_remote_webauthn(data_view.enable_remote_webauthn());
 
-  absl::optional<uint32_t> clipboard_size;
+  std::optional<uint32_t> clipboard_size;
   if (!data_view.ReadClipboardSize(&clipboard_size)) {
     return false;
   }
@@ -136,6 +136,102 @@ bool mojo::StructTraits<remoting::mojom::DesktopVectorDataView,
     Read(remoting::mojom::DesktopVectorDataView data_view,
          ::webrtc::DesktopVector* out_vector) {
   out_vector->set(data_view.x(), data_view.y());
+  return true;
+}
+
+#if BUILDFLAG(IS_WIN)
+// static
+bool mojo::UnionTraits<
+    remoting::mojom::FileChooserResultDataView,
+    ::remoting::Result<base::FilePath,
+                       ::remoting::protocol::FileTransfer_Error>>::
+    Read(remoting::mojom::FileChooserResultDataView data_view,
+         ::remoting::Result<base::FilePath,
+                            ::remoting::protocol::FileTransfer_Error>*
+             out_result) {
+  switch (data_view.tag()) {
+    case remoting::mojom::FileChooserResultDataView::Tag::kFilepath: {
+      base::FilePath filepath;
+      if (!data_view.ReadFilepath(&filepath)) {
+        return false;
+      }
+      out_result->EmplaceSuccess(std::move(filepath));
+      return true;
+    }
+    case remoting::mojom::FileChooserResultDataView::Tag::kError: {
+      ::remoting::protocol::FileTransfer_Error error;
+      if (!data_view.ReadError(&error)) {
+        return false;
+      }
+      out_result->EmplaceError(std::move(error));
+      return true;
+    }
+  }
+}
+#endif  // BUILDFLAG(IS_WIN)
+
+// static
+bool mojo::UnionTraits<
+    remoting::mojom::ReadChunkResultDataView,
+    ::remoting::Result<std::vector<uint8_t>,
+                       ::remoting::protocol::FileTransfer_Error>>::
+    Read(remoting::mojom::ReadChunkResultDataView data_view,
+         ::remoting::Result<std::vector<uint8_t>,
+                            ::remoting::protocol::FileTransfer_Error>*
+             out_result) {
+  switch (data_view.tag()) {
+    case remoting::mojom::ReadChunkResultDataView::Tag::kData: {
+      std::vector<uint8_t> data;
+      if (!data_view.ReadData(&data)) {
+        return false;
+      }
+      out_result->EmplaceSuccess(std::move(data));
+      return true;
+    }
+    case remoting::mojom::ReadChunkResultDataView::Tag::kError: {
+      ::remoting::protocol::FileTransfer_Error error;
+      if (!data_view.ReadError(&error)) {
+        return false;
+      }
+      out_result->EmplaceError(std::move(error));
+      return true;
+    }
+  }
+}
+
+// static
+bool mojo::StructTraits<remoting::mojom::FileTransferErrorDataView,
+                        ::remoting::protocol::FileTransfer_Error>::
+    Read(remoting::mojom::FileTransferErrorDataView data_view,
+         ::remoting::protocol::FileTransfer_Error* out_error) {
+  ::remoting::protocol::FileTransfer_Error_Type type;
+  if (!data_view.ReadType(&type)) {
+    return false;
+  }
+  out_error->set_type(type);
+
+  std::optional<int32_t> api_error_code;
+  if (!data_view.ReadApiErrorCode(&api_error_code)) {
+    return false;
+  }
+  if (api_error_code) {
+    out_error->set_api_error_code(*api_error_code);
+  }
+
+  std::string function;
+  if (!data_view.ReadFunction(&function)) {
+    return false;
+  }
+  out_error->set_function(std::move(function));
+
+  std::string source_file;
+  if (!data_view.ReadSourceFile(&source_file)) {
+    return false;
+  }
+  out_error->set_source_file(std::move(source_file));
+
+  out_error->set_line_number(data_view.line_number());
+
   return true;
 }
 
@@ -187,20 +283,20 @@ bool mojo::StructTraits<remoting::mojom::KeyEventDataView,
   out_event->set_usb_keycode(data_view.usb_keycode());
   out_event->set_lock_states(data_view.lock_states());
 
-  absl::optional<bool> caps_lock_state;
+  std::optional<bool> caps_lock_state;
   if (!data_view.ReadCapsLockState(&caps_lock_state)) {
     return false;
   }
   if (caps_lock_state.has_value()) {
-    out_event->set_caps_lock_state(caps_lock_state.value());
+    out_event->set_caps_lock_state(*caps_lock_state);
   }
 
-  absl::optional<bool> num_lock_state;
+  std::optional<bool> num_lock_state;
   if (!data_view.ReadNumLockState(&num_lock_state)) {
     return false;
   }
   if (num_lock_state.has_value()) {
-    out_event->set_num_lock_state(num_lock_state.value());
+    out_event->set_num_lock_state(*num_lock_state);
   }
 
   return true;
@@ -253,20 +349,20 @@ bool mojo::StructTraits<remoting::mojom::MouseEventDataView,
                         ::remoting::protocol::MouseEvent>::
     Read(remoting::mojom::MouseEventDataView data_view,
          ::remoting::protocol::MouseEvent* out_event) {
-  absl::optional<int32_t> x;
+  std::optional<int32_t> x;
   if (!data_view.ReadX(&x)) {
     return false;
   }
   if (x.has_value()) {
-    out_event->set_x(x.value());
+    out_event->set_x(*x);
   }
 
-  absl::optional<int32_t> y;
+  std::optional<int32_t> y;
   if (!data_view.ReadY(&y)) {
     return false;
   }
   if (y.has_value()) {
-    out_event->set_y(y.value());
+    out_event->set_y(*y);
   }
 
   if (data_view.button() != remoting::mojom::MouseButton::kUndefined) {
@@ -277,60 +373,60 @@ bool mojo::StructTraits<remoting::mojom::MouseEventDataView,
     out_event->set_button(mouse_button);
   }
 
-  absl::optional<bool> button_down;
+  std::optional<bool> button_down;
   if (!data_view.ReadButtonDown(&button_down)) {
     return false;
   }
   if (button_down.has_value()) {
-    out_event->set_button_down(button_down.value());
+    out_event->set_button_down(*button_down);
   }
 
-  absl::optional<float> wheel_delta_x;
+  std::optional<float> wheel_delta_x;
   if (!data_view.ReadWheelDeltaX(&wheel_delta_x)) {
     return false;
   }
   if (wheel_delta_x.has_value()) {
-    out_event->set_wheel_delta_x(wheel_delta_x.value());
+    out_event->set_wheel_delta_x(*wheel_delta_x);
   }
 
-  absl::optional<float> wheel_delta_y;
+  std::optional<float> wheel_delta_y;
   if (!data_view.ReadWheelDeltaY(&wheel_delta_y)) {
     return false;
   }
   if (wheel_delta_y.has_value()) {
-    out_event->set_wheel_delta_y(wheel_delta_y.value());
+    out_event->set_wheel_delta_y(*wheel_delta_y);
   }
 
-  absl::optional<float> wheel_ticks_x;
+  std::optional<float> wheel_ticks_x;
   if (!data_view.ReadWheelTicksX(&wheel_ticks_x)) {
     return false;
   }
   if (wheel_ticks_x.has_value()) {
-    out_event->set_wheel_ticks_x(wheel_ticks_x.value());
+    out_event->set_wheel_ticks_x(*wheel_ticks_x);
   }
 
-  absl::optional<float> wheel_ticks_y;
+  std::optional<float> wheel_ticks_y;
   if (!data_view.ReadWheelTicksY(&wheel_ticks_y)) {
     return false;
   }
   if (wheel_ticks_y.has_value()) {
-    out_event->set_wheel_ticks_y(wheel_ticks_y.value());
+    out_event->set_wheel_ticks_y(*wheel_ticks_y);
   }
 
-  absl::optional<int32_t> delta_x;
+  std::optional<int32_t> delta_x;
   if (!data_view.ReadDeltaX(&delta_x)) {
     return false;
   }
   if (delta_x.has_value()) {
-    out_event->set_delta_x(delta_x.value());
+    out_event->set_delta_x(*delta_x);
   }
 
-  absl::optional<int32_t> delta_y;
+  std::optional<int32_t> delta_y;
   if (!data_view.ReadDeltaY(&delta_y)) {
     return false;
   }
   if (delta_y.has_value()) {
-    out_event->set_delta_y(delta_y.value());
+    out_event->set_delta_y(*delta_y);
   }
 
   return true;
@@ -483,6 +579,8 @@ bool mojo::StructTraits<remoting::mojom::VideoLayoutDataView,
 
   out_layout->set_supports_full_desktop_capture(
       data_view.supports_full_desktop_capture());
+
+  out_layout->set_primary_screen_id(data_view.primary_screen_id());
 
   return true;
 }

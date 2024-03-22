@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@
 #include "base/time/time.h"
 #include "google_apis/calendar/calendar_api_response_types.h"
 #include "google_apis/common/api_error_codes.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -44,10 +43,15 @@ using SingleDayEventList = std::list<google_apis::calendar::CalendarEvent>;
 // Controller of the `CalendarView`.
 class ASH_EXPORT CalendarModel : public SessionObserver {
  public:
-  // kNa is used to represent the fetching status when on the non-logged-in
-  // screens. If kNa is returned, the loading bar won't be shown since events
+  // `kNa` is used to represent the fetching status when on the non-logged-in
+  // screens. If `kNa` is returned, the loading bar won't be shown since events
   // are not being fetched.
-  enum FetchingStatus { kNever, kFetching, kSuccess, kError, kNa };
+  // `kRefetching` is used to represent the fetching status when there're cached
+  // events for a month but another fetching request has been sent. In this
+  // case, the event indicator dots and the tooltip will show the cached events.
+  // `kNever` is used as the default state when we experience an error or
+  // timeout or haven't fetched anything.
+  enum FetchingStatus { kNever, kFetching, kRefetching, kSuccess, kError, kNa };
 
   CalendarModel();
   CalendarModel(const CalendarModel& other) = delete;
@@ -73,6 +77,9 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
         const FetchingStatus status,
         const base::Time start_time,
         const google_apis::calendar::EventList* events) {}
+
+    // Invoked when an internal timeout has occurred.
+    virtual void OnTimeout(base::Time start_of_month) {}
   };
 
   void AddObserver(Observer* observer);
@@ -109,6 +116,16 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
   // likely to be pruned if we need to trim down to stay within storage limits.
   SingleDayEventList FindEvents(base::Time day) const;
 
+  // Uses the `FindEvents` method to get events for that day and then filters
+  // the result into two lists of multi-day and same day events.
+  std::tuple<SingleDayEventList, SingleDayEventList>
+  FindEventsSplitByMultiDayAndSameDay(base::Time day) const;
+
+  // Uses the `FindEvents` method to get events for that day and then filters
+  // the result into events that start or end in the next two hours.
+  std::list<google_apis::calendar::CalendarEvent> FindUpcomingEvents(
+      base::Time now_local) const;
+
   // Checks the `FetchingStatus` of a given start time.
   FetchingStatus FindFetchingStatus(base::Time start_time) const;
 
@@ -116,23 +133,24 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
   // time difference. This method is only called when there's a timezone change.
   void RedistributeEvents();
 
-  // Dumps our internal state to logs.
-  void DebugDump();
-
  private:
   // For unit tests.
   friend class CalendarModelTest;
-  friend class CalendarViewEventListViewTest;
+  friend class CalendarMonthViewFetchTest;
   friend class CalendarMonthViewTest;
-  friend class CalendarViewTest;
+  friend class CalendarUpNextViewAnimationTest;
+  friend class CalendarUpNextViewPixelTest;
+  friend class CalendarUpNextViewTest;
+  friend class CalendarViewPixelTest;
   friend class CalendarViewAnimationTest;
+  friend class CalendarViewAnimationWithJellyEnabledTest;
+  friend class CalendarViewEventListViewTest;
+  friend class CalendarViewTest;
+  friend class CalendarViewWithJellyEnabledTest;
 
   // Checks if the event has allowed statuses and is eligible for insertion.
   bool ShouldInsertEvent(
       const google_apis::calendar::CalendarEvent* event) const;
-
-  // Checks if the event spans more than one day.
-  bool IsMultiDayEvent(const google_apis::calendar::CalendarEvent* event) const;
 
   // Inserts a single `event` that spans more than one day in the EventCache.
   void InsertMultiDayEvent(const google_apis::calendar::CalendarEvent* event,
@@ -150,25 +168,6 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
       const google_apis::calendar::CalendarEvent* event,
       const base::Time start_time_midnight);
 
-  // Returns the `start_time` of `event` adjusted by time difference, to ensure
-  // that each event is stored by its local time, e.g. an event that starts at
-  // 2022-05-31 22:00:00.000 PST (2022-06-01 05:00:00.000 UTC) is stored in the
-  // map for 05-2022.
-  base::Time GetStartTimeAdjusted(
-      const google_apis::calendar::CalendarEvent* event) const;
-
-  // Returns the `end_time` of `event` adjusted by time difference.
-  base::Time GetEndTimeAdjusted(
-      const google_apis::calendar::CalendarEvent* event) const;
-
-  // Returns midnight on the day of the start time of `event`.
-  base::Time GetStartTimeMidnightAdjusted(
-      const google_apis::calendar::CalendarEvent* event) const;
-
-  // Returns midnight on the day of the end time of `event`.
-  base::Time GetEndTimeMidnightAdjusted(
-      const google_apis::calendar::CalendarEvent* event) const;
-
   // Frees up months of events as needed to keep us within storage limits.
   void PruneEventCache();
 
@@ -185,26 +184,6 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
   void OnEventFetchFailedInternalError(
       base::Time start_of_month,
       CalendarEventFetchInternalErrorCode error);
-
-  // Inserts month into `pending_fetches_`. For testing only.
-  void InsertPendingFetchesForTesting(base::Time start_of_month);
-
-  // Deletes month from `pending_fetches_`. For testing only.
-  void DeletePendingFetchesForTesting(base::Time start_of_month);
-
-  // Methods for dumping various event containers/representations to logs.
-  void DebugDumpOnEventFetched(const google_apis::calendar::EventList* events,
-                               base::Time start_of_month);
-  void DebugDumpEventSmall(std::ostringstream* out,
-                           const char* prefix,
-                           const google_apis::calendar::CalendarEvent* event);
-  void DebugDumpEventLarge(const char* prefix,
-                           const google_apis::calendar::CalendarEvent* event);
-
-  void DebugDumpEvents(std::ostringstream* out, const char* prefix);
-  void DebugDumpMruMonths(std::ostringstream* out, const char* prefix);
-  void DebugDumpNonPrunableMonths(std::ostringstream* out, const char* prefix);
-  void DebugDumpMonthsFetched(std::ostringstream* out, const char* prefix);
 
   // Internal storage for fetched events, with each fetched month having a
   // map of days to events.

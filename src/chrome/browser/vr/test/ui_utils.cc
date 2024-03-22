@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 #if BUILDFLAG(IS_WIN)
@@ -20,7 +21,8 @@ UiUtils::UiUtils()
           static_cast<int>(UiTestOperationType::kNumUiTestOperationTypes))),
       ui_operation_callbacks_(std::vector<base::OnceCallback<void()>>(
           static_cast<int>(UiTestOperationType::kNumUiTestOperationTypes))),
-      main_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      main_thread_task_runner_(
+          base::SingleThreadTaskRunner::GetCurrentDefault()) {
   auto* renderer = GetBrowserRenderer();
   DCHECK(renderer) << "Failed to get a BrowserRenderer. Consider using "
                    << "UiUtils::Create() instead.";
@@ -39,7 +41,7 @@ UiUtils::~UiUtils() {
 
 std::unique_ptr<UiUtils> UiUtils::Create() {
   base::RunLoop wait_loop(base::RunLoop::Type::kNestableTasksAllowed);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&UiUtils::PollForBrowserRenderer, &wait_loop));
   wait_loop.Run();
 
@@ -48,7 +50,7 @@ std::unique_ptr<UiUtils> UiUtils::Create() {
 
 void UiUtils::PollForBrowserRenderer(base::RunLoop* wait_loop) {
   if (GetBrowserRenderer() == nullptr) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, base::BindOnce(&UiUtils::PollForBrowserRenderer, wait_loop),
         XrBrowserTestBase::kPollCheckIntervalShort);
     return;

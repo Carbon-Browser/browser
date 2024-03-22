@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_HUD_DISPLAY_FPS_GRAPH_PAGE_VIEW_H_
 #define ASH_HUD_DISPLAY_FPS_GRAPH_PAGE_VIEW_H_
 
-#include "time.h"
+#include "base/memory/raw_ptr.h"
 
 #include "ash/hud_display/graph.h"
 #include "ash/hud_display/graph_page_view_base.h"
@@ -78,7 +78,7 @@ class FPSGraphPageView : public GraphPageViewBase,
   // Active display refresh rate.
   Graph refresh_rate_;
 
-  ReferenceLines* reference_lines_;  // not owned
+  raw_ptr<ReferenceLines, ExperimentalAsh> reference_lines_;  // not owned
 
   float frame_rate_for_last_half_second_;
 

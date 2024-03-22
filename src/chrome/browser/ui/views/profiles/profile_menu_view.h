@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/password_manager/web_app_profile_switcher.h"
 #include "chrome/browser/profiles/avatar_menu.h"
 #include "chrome/browser/profiles/avatar_menu_observer.h"
 #include "chrome/browser/sync/sync_ui_util.h"
@@ -33,8 +34,6 @@ class Browser;
 // It displays a list of profiles and allows users to switch between profiles.
 class ProfileMenuView : public ProfileMenuViewBase {
  public:
-  METADATA_HEADER(ProfileMenuView);
-
   ProfileMenuView(views::Button* anchor_button, Browser* browser);
   ~ProfileMenuView() override;
 
@@ -66,13 +65,13 @@ class ProfileMenuView : public ProfileMenuViewBase {
   void OnExitProfileButtonClicked();
   void OnSyncSettingsButtonClicked();
   void OnSyncErrorButtonClicked(AvatarSyncErrorType error);
-  void OnSigninAccountButtonClicked(CoreAccountInfo account);
+  void OnSigninButtonClicked(CoreAccountInfo account,
+                             ActionableItem button_type);
   void OnCookiesClearedOnExitLinkClicked();
 #if BUILDFLAG(ENABLE_DICE_SUPPORT) || BUILDFLAG(IS_CHROMEOS_LACROS)
   void OnSignoutButtonClicked();
 #endif
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-  void OnSigninButtonClicked();
   void OnOtherProfileSelected(const base::FilePath& profile_path);
   void OnAddNewProfileButtonClicked();
   void OnManageProfilesButtonClicked();
@@ -91,12 +90,18 @@ class ProfileMenuView : public ProfileMenuViewBase {
   void BuildSyncInfo();
   void BuildFeatureButtons();
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-  void BuildSelectableProfiles();
+  void BuildAvailableProfiles();
   void BuildProfileManagementFeatureButtons();
 #endif
 
   std::u16string menu_title_;
   std::u16string menu_subtitle_;
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  // A profile switcher object needed if the user triggers opening other
+  // profile in a web app.
+  absl::optional<WebAppProfileSwitcher> app_profile_switcher_;
+#endif
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_MENU_VIEW_H_

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@ import android.net.Uri;
 
 import androidx.core.util.Pair;
 
-import org.chromium.base.CollectionUtil;
 import org.chromium.components.offline_items_collection.OfflineItem;
 import org.chromium.components.offline_items_collection.OfflineItemShareInfo;
 
@@ -90,11 +89,11 @@ public class ShareUtils {
         Set<String> firstParts = new HashSet<>();
         Set<String> secondParts = new HashSet<>();
 
-        CollectionUtil.forEach(mimeTypes, mimeType -> {
+        for (String mimeType : mimeTypes) {
             String[] parts = mimeType.split(MIME_TYPE_DELIMITER);
             firstParts.add(parts[0]);
             secondParts.add(parts[1]);
-        });
+        }
 
         if (firstParts.size() == 1) {
             String secondPart = secondParts.size() > 1 ? "*" : secondParts.iterator().next();

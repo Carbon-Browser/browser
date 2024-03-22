@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define CHROME_BROWSER_ASH_LOGIN_UI_LOGIN_SCREEN_EXTENSION_UI_WINDOW_H_
 
 #include <memory>
+
+#include "base/memory/raw_ptr.h"
 
 namespace views {
 class Widget;
@@ -15,7 +17,7 @@ namespace ash {
 namespace login_screen_extension_ui {
 struct CreateOptions;
 class DialogDelegate;
-class WebDialogView;
+class LoginWebView;
 
 // This class represents the window that can be created by the
 // chrome.loginScreenUi API. It manages the window's widget, view and delegate,
@@ -35,9 +37,9 @@ class Window {
   views::Widget* GetDialogWidgetForTesting();
 
  private:
-  DialogDelegate* dialog_delegate_ = nullptr;
-  WebDialogView* dialog_view_ = nullptr;
-  views::Widget* dialog_widget_ = nullptr;
+  raw_ptr<DialogDelegate, ExperimentalAsh> dialog_delegate_ = nullptr;
+  raw_ptr<LoginWebView, ExperimentalAsh> dialog_view_ = nullptr;
+  raw_ptr<views::Widget, ExperimentalAsh> dialog_widget_ = nullptr;
 };
 
 class WindowFactory {
@@ -54,14 +56,5 @@ class WindowFactory {
 
 }  // namespace login_screen_extension_ui
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace login_screen_extension_ui {
-using ::ash::login_screen_extension_ui::Window;
-using ::ash::login_screen_extension_ui::WindowFactory;
-}  // namespace login_screen_extension_ui
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_UI_LOGIN_SCREEN_EXTENSION_UI_WINDOW_H_

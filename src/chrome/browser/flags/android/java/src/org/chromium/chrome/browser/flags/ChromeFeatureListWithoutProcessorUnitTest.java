@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,25 +25,20 @@ import java.util.Collections;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class ChromeFeatureListWithoutProcessorUnitTest {
-    /**
-     * In unit tests, all flags checked must have their value specified.
-     */
+    /** In unit tests, all flags checked must have their value specified. */
     @Test(expected = AssertionError.class)
     public void testNoOverridesDefaultDisabled_asserts() {
         ChromeFeatureList.isEnabled(ChromeFeatureList.TEST_DEFAULT_DISABLED);
     }
 
-    /**
-     * In unit tests, all flags checked must have their value specified.
-     */
+    /** In unit tests, all flags checked must have their value specified. */
     @Test(expected = AssertionError.class)
     public void testNoOverridesDefaultEnabled_asserts() {
         ChromeFeatureList.isEnabled(ChromeFeatureList.TEST_DEFAULT_ENABLED);
     }
 
     /**
-     * In unit tests without a Features.JUnitProcessor, the EnableFeatures annotation does not
-     * work.
+     * In unit tests without a Features.JUnitProcessor, the EnableFeatures annotation does not work.
      */
     @Test(expected = AssertionError.class)
     @EnableFeatures(ChromeFeatureList.TEST_DEFAULT_DISABLED)

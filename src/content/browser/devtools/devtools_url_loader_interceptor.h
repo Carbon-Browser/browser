@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_DEVTOOLS_DEVTOOLS_URL_LOADER_INTERCEPTOR_H_
 #define CONTENT_BROWSER_DEVTOOLS_DEVTOOLS_URL_LOADER_INTERCEPTOR_H_
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "content/browser/devtools/protocol/network.h"
@@ -54,6 +54,7 @@ struct InterceptedRequestInfo {
   protocol::Maybe<bool> is_download;
   protocol::Maybe<protocol::String> redirect_url;
   protocol::Maybe<protocol::String> renderer_request_id;
+  protocol::Maybe<protocol::String> redirected_request_id;
 };
 
 class DevToolsURLLoaderInterceptor {

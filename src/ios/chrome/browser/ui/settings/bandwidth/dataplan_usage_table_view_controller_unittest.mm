@@ -1,49 +1,41 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/bandwidth/dataplan_usage_table_view_controller.h"
+#import "ios/chrome/browser/ui/settings/bandwidth/dataplan_usage_table_view_controller+Testing.h"
 
-#include <memory>
+#import <memory>
 
-#include "base/compiler_specific.h"
-#include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
-#include "base/test/task_environment.h"
-#include "components/prefs/pref_registry_simple.h"
-#include "components/prefs/pref_service.h"
-#include "components/sync_preferences/pref_service_mock_factory.h"
-#import "ios/chrome/browser/prerender/prerender_pref.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/files/file_path.h"
+#import "base/memory/ref_counted.h"
+#import "base/test/task_environment.h"
+#import "components/prefs/pref_registry_simple.h"
+#import "components/prefs/pref_service.h"
+#import "components/sync_preferences/pref_service_mock_factory.h"
+#import "ios/chrome/browser/prerender/model/prerender_pref.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/grit/ios_strings.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 using prerender_prefs::NetworkPredictionSetting;
-
-@interface DataplanUsageTableViewController (ExposedForTesting)
-- (void)updateSetting:(prerender_prefs::NetworkPredictionSetting)newSetting;
-@end
 
 namespace {
 
 const char* kPrefName = "SettingPref";
 
 class DataplanUsageTableViewControllerTest
-    : public ChromeTableViewControllerTest {
+    : public LegacyChromeTableViewControllerTest {
  protected:
   void SetUp() override {
-    ChromeTableViewControllerTest::SetUp();
+    LegacyChromeTableViewControllerTest::SetUp();
     pref_service_ = CreateLocalState();
     CreateController();
   }
 
-  ChromeTableViewController* InstantiateController() override {
+  LegacyChromeTableViewController* InstantiateController() override {
     dataplanController_ = [[DataplanUsageTableViewController alloc]
         initWithPrefs:pref_service_.get()
           settingPref:kPrefName

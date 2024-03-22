@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,7 @@ class MockConsoleLogger final : public GarbageCollected<MockConsoleLogger>,
       absl::optional<mojom::ConsoleMessageCategory>) override {
     message_ = message;
   }
+  void AddConsoleMessageImpl(ConsoleMessage*, bool) override { NOTREACHED(); }
   String message_;
 };
 
@@ -69,8 +70,8 @@ TEST(ScriptWebBundleRuleTest, SourceOnly) {
   ASSERT_TRUE(absl::holds_alternative<ScriptWebBundleRule>(result));
   auto& rule = absl::get<ScriptWebBundleRule>(result);
   EXPECT_EQ(rule.source_url(), "https://example.com/foo.wbn");
-  EXPECT_TRUE(rule.scope_urls().IsEmpty());
-  EXPECT_TRUE(rule.resource_urls().IsEmpty());
+  EXPECT_TRUE(rule.scope_urls().empty());
+  EXPECT_TRUE(rule.resource_urls().empty());
 }
 
 TEST(ScriptWebBundleRuleTest, ResourcesShouldBeResolvedOnBundleURL) {
@@ -304,8 +305,8 @@ TEST(ScriptWebBundleRuleTest, UnknownKey) {
   ASSERT_TRUE(absl::holds_alternative<ScriptWebBundleRule>(result));
   auto& rule = absl::get<ScriptWebBundleRule>(result);
   EXPECT_EQ(rule.source_url(), "https://example.com/foo.wbn");
-  EXPECT_TRUE(rule.scope_urls().IsEmpty());
-  EXPECT_TRUE(rule.resource_urls().IsEmpty());
+  EXPECT_TRUE(rule.scope_urls().empty());
+  EXPECT_TRUE(rule.resource_urls().empty());
   EXPECT_EQ(logger.Message(),
             "Invalid top-level key \"unknown\" in WebBundle rule.");
 }

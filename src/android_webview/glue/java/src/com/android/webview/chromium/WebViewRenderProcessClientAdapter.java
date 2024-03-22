@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,11 @@ import android.webkit.WebViewRenderProcessClient;
 import androidx.annotation.RequiresApi;
 
 import org.chromium.android_webview.AwRenderProcess;
+import org.chromium.android_webview.common.Lifetime;
 
 import java.util.concurrent.Executor;
 
+@Lifetime.WebView
 @RequiresApi(Build.VERSION_CODES.Q)
 class WebViewRenderProcessClientAdapter extends SharedWebViewRendererClientAdapter {
     private Executor mExecutor;

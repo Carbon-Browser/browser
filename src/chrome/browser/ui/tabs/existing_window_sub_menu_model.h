@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,6 +53,8 @@ class ExistingWindowSubMenuModel : public ExistingBaseSubMenuModel {
   // the submenu would show at least one window. Does not assume ownership of
   // |model|; |model| must outlive this instance.
   static bool ShouldShowSubmenu(Profile* profile);
+  static bool ShouldShowSubmenuForApp(
+      TabMenuModelDelegate* tab_menu_model_delegate);
 
  protected:
   // Retrieves a base::Passkey which can be used to construct an instance of

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -104,7 +104,7 @@ class PlatformStateStoreWinTest : public ::testing::Test {
 
   static const char kProfileName_[];
   static const wchar_t kStoreKeyName_[];
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
 
  private:
   content::BrowserTaskEnvironment task_environment_;
@@ -117,6 +117,9 @@ const char PlatformStateStoreWinTest::kProfileName_[] = "test_profile";
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 const wchar_t PlatformStateStoreWinTest::kStoreKeyName_[] =
     L"Software\\Google\\Chrome\\IncidentsSent";
+#elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+const wchar_t PlatformStateStoreWinTest::kStoreKeyName_[] =
+    L"Software\\Google\\Chrome for Testing\\IncidentsSent";
 #else
 const wchar_t PlatformStateStoreWinTest::kStoreKeyName_[] =
     L"Software\\Chromium\\IncidentsSent";

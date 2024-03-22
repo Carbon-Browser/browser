@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/api/printing/printing_api_handler.h"
 #include "chrome/browser/extensions/chrome_extension_function_details.h"
@@ -27,9 +27,9 @@ void PrintingSubmitJobFunction::GetQuotaLimitHeuristics(
 }
 
 ExtensionFunction::ResponseAction PrintingSubmitJobFunction::Run() {
-  std::unique_ptr<api::printing::SubmitJob::Params> params(
-      api::printing::SubmitJob::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::printing::SubmitJob::Params> params =
+      api::printing::SubmitJob::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   PrintingAPIHandler::Get(browser_context())
       ->SubmitJob(ChromeExtensionFunctionDetails(this).GetNativeWindowForUI(),
                   extension_, std::move(params),
@@ -41,7 +41,7 @@ ExtensionFunction::ResponseAction PrintingSubmitJobFunction::Run() {
 
 void PrintingSubmitJobFunction::OnPrintJobSubmitted(
     absl::optional<api::printing::SubmitJobStatus> status,
-    std::unique_ptr<std::string> job_id,
+    absl::optional<std::string> job_id,
     absl::optional<std::string> error) {
   if (error.has_value()) {
     Respond(Error(error.value()));
@@ -51,15 +51,15 @@ void PrintingSubmitJobFunction::OnPrintJobSubmitted(
   DCHECK(status.has_value());
   response.status = status.value();
   response.job_id = std::move(job_id);
-  Respond(OneArgument(base::Value::FromUniquePtrValue(response.ToValue())));
+  Respond(WithArguments(response.ToValue()));
 }
 
 PrintingCancelJobFunction::~PrintingCancelJobFunction() = default;
 
 ExtensionFunction::ResponseAction PrintingCancelJobFunction::Run() {
-  std::unique_ptr<api::printing::CancelJob::Params> params(
-      api::printing::CancelJob::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<api::printing::CancelJob::Params> params =
+      api::printing::CancelJob::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   absl::optional<std::string> error =
       PrintingAPIHandler::Get(browser_context())
           ->CancelJob(extension_id(), params->job_id);
@@ -96,8 +96,8 @@ void PrintingGetPrinterInfoFunction::GetQuotaLimitHeuristics(
 }
 
 ExtensionFunction::ResponseAction PrintingGetPrinterInfoFunction::Run() {
-  std::unique_ptr<api::printing::GetPrinterInfo::Params> params(
-      api::printing::GetPrinterInfo::Params::Create(args()));
+  absl::optional<api::printing::GetPrinterInfo::Params> params =
+      api::printing::GetPrinterInfo::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   PrintingAPIHandler::Get(browser_context())
       ->GetPrinterInfo(
@@ -118,18 +118,17 @@ void PrintingGetPrinterInfoFunction::OnPrinterInfoRetrieved(
   }
   api::printing::GetPrinterInfoResponse response;
   if (capabilities.has_value()) {
-    response.capabilities =
-        std::make_unique<api::printing::GetPrinterInfoResponse::Capabilities>();
+    response.capabilities.emplace();
     base::Value capabilities_value = std::move(capabilities.value());
     CHECK(capabilities_value.is_dict());
     // It's safe just to swap values here as |capabilities_value| stores exactly
     // the same object as |response.capabilities| expects.
-    response.capabilities->additional_properties.Swap(
-        static_cast<base::DictionaryValue*>(&capabilities_value));
+    std::swap(response.capabilities->additional_properties,
+              capabilities_value.GetDict());
   }
   DCHECK(status.has_value());
   response.status = status.value();
-  Respond(OneArgument(base::Value::FromUniquePtrValue(response.ToValue())));
+  Respond(WithArguments(response.ToValue()));
 }
 
 }  // namespace extensions

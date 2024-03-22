@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,9 +56,9 @@ class NewBadgeLabelTest : public views::ViewsTestBase {
 
  private:
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<views::View> contents_ = nullptr;
-  raw_ptr<views::Label> control_label_ = nullptr;
-  raw_ptr<NewBadgeLabel> new_badge_label_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> contents_ = nullptr;
+  raw_ptr<views::Label, DanglingUntriaged> control_label_ = nullptr;
+  raw_ptr<NewBadgeLabel, DanglingUntriaged> new_badge_label_ = nullptr;
 };
 
 TEST_F(NewBadgeLabelTest, NoBadgeReportsSameSizes) {

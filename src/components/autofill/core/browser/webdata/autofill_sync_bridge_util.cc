@@ -1,19 +1,25 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/autofill/core/browser/webdata/autofill_sync_bridge_util.h"
 
 #include "base/base64.h"
+#include "base/check.h"
 #include "base/pickle.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/autofill/core/browser/autofill_data_util.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
-#include "components/autofill/core/browser/data_model/autofill_profile.h"
+#include "components/autofill/core/browser/data_model/autofill_wallet_usage_data.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/data_model/credit_card_cloud_token_data.h"
+#include "components/autofill/core/browser/data_model/iban.h"
 #include "components/autofill/core/browser/payments/payments_customer_data.h"
 #include "components/autofill/core/browser/webdata/autofill_table.h"
 #include "components/autofill/core/common/autofill_util.h"
@@ -73,9 +79,9 @@ const char* CardNetworkFromWalletCardType(
   }
 }
 
-// Creates an AutofillProfile from the specified |card| specifics.
+// Creates a CreditCard from the specified `card` specifics.
 CreditCard CardFromSpecifics(const sync_pb::WalletMaskedCreditCard& card) {
-  CreditCard result(CreditCard::MASKED_SERVER_CARD, card.id());
+  CreditCard result(CreditCard::RecordType::kMaskedServerCard, card.id());
   result.SetNumber(base::UTF8ToUTF16(card.last_four()));
   result.SetNetworkForMaskedCard(CardNetworkFromWalletCardType(card.type()));
   result.SetRawInfo(CREDIT_CARD_NAME_FULL,
@@ -84,42 +90,71 @@ CreditCard CardFromSpecifics(const sync_pb::WalletMaskedCreditCard& card) {
   result.SetExpirationYear(card.exp_year());
   result.set_billing_address_id(card.billing_address_id());
 
-  CreditCard::Issuer issuer = CreditCard::ISSUER_UNKNOWN;
+  CreditCard::Issuer issuer = CreditCard::Issuer::kIssuerUnknown;
   switch (card.card_issuer().issuer()) {
     case sync_pb::CardIssuer::ISSUER_UNKNOWN:
-      issuer = CreditCard::ISSUER_UNKNOWN;
+      issuer = CreditCard::Issuer::kIssuerUnknown;
       break;
     case sync_pb::CardIssuer::GOOGLE:
-      issuer = CreditCard::GOOGLE;
+      issuer = CreditCard::Issuer::kGoogle;
+      break;
+    case sync_pb::CardIssuer::EXTERNAL_ISSUER:
+      issuer = CreditCard::Issuer::kExternalIssuer;
       break;
   }
   result.set_card_issuer(issuer);
+  result.set_issuer_id(card.card_issuer().issuer_id());
 
   if (!card.nickname().empty())
     result.SetNickname(base::UTF8ToUTF16(card.nickname()));
   result.set_instrument_id(card.instrument_id());
 
-  CreditCard::VirtualCardEnrollmentState state = CreditCard::UNSPECIFIED;
+  CreditCard::VirtualCardEnrollmentState state;
   switch (card.virtual_card_enrollment_state()) {
     case sync_pb::WalletMaskedCreditCard::UNENROLLED:
-      state = CreditCard::UNENROLLED;
+      state = CreditCard::VirtualCardEnrollmentState::kUnenrolled;
       break;
     case sync_pb::WalletMaskedCreditCard::ENROLLED:
-      state = CreditCard::ENROLLED;
+      state = CreditCard::VirtualCardEnrollmentState::kEnrolled;
       break;
     case sync_pb::WalletMaskedCreditCard::UNENROLLED_AND_NOT_ELIGIBLE:
-      state = CreditCard::UNENROLLED_AND_NOT_ELIGIBLE;
+      state = CreditCard::VirtualCardEnrollmentState::kUnenrolledAndNotEligible;
       break;
     case sync_pb::WalletMaskedCreditCard::UNENROLLED_AND_ELIGIBLE:
-      state = CreditCard::UNENROLLED_AND_ELIGIBLE;
+      state = CreditCard::VirtualCardEnrollmentState::kUnenrolledAndEligible;
       break;
     case sync_pb::WalletMaskedCreditCard::UNSPECIFIED:
+      state = CreditCard::VirtualCardEnrollmentState::kUnspecified;
       break;
   }
   result.set_virtual_card_enrollment_state(state);
 
+  // We should only have a virtual card enrollment type for enrolled cards.
+  if (card.virtual_card_enrollment_state() ==
+      sync_pb::WalletMaskedCreditCard::ENROLLED) {
+    CreditCard::VirtualCardEnrollmentType virtual_card_enrollment_type;
+    switch (card.virtual_card_enrollment_type()) {
+      case sync_pb::WalletMaskedCreditCard::TYPE_UNSPECIFIED:
+        virtual_card_enrollment_type =
+            CreditCard::VirtualCardEnrollmentType::kTypeUnspecified;
+        break;
+      case sync_pb::WalletMaskedCreditCard::ISSUER:
+        virtual_card_enrollment_type =
+            CreditCard::VirtualCardEnrollmentType::kIssuer;
+        break;
+      case sync_pb::WalletMaskedCreditCard::NETWORK:
+        virtual_card_enrollment_type =
+            CreditCard::VirtualCardEnrollmentType::kNetwork;
+        break;
+    }
+    result.set_virtual_card_enrollment_type(virtual_card_enrollment_type);
+  }
+
   if (!card.card_art_url().empty())
     result.set_card_art_url(GURL(card.card_art_url()));
+
+  result.set_product_description(base::UTF8ToUTF16(card.product_description()));
+
   return result;
 }
 
@@ -144,6 +179,18 @@ CreditCardCloudTokenData CloudTokenDataFromSpecifics(
   return result;
 }
 
+// Creates an IBAN from the specified `iban` specifics.
+Iban IbanFromSpecifics(const sync_pb::WalletMaskedIban& iban) {
+  int64_t instrument_id = 0;
+  CHECK(base::StringToInt64(iban.instrument_id(), &instrument_id));
+  Iban result{Iban::InstrumentId(instrument_id)};
+  result.set_prefix(base::UTF8ToUTF16(iban.prefix()));
+  result.set_suffix(base::UTF8ToUTF16(iban.suffix()));
+  result.set_length(iban.length());
+  result.set_nickname(base::UTF8ToUTF16(iban.nickname()));
+  return result;
+}
+
 }  // namespace
 
 std::string GetBase64EncodedId(const std::string& id) {
@@ -165,66 +212,7 @@ std::string GetStorageKeyForWalletMetadataTypeAndSpecificsId(
   pickle.WriteInt(static_cast<int>(type));
   // We use the (base64-encoded) |specifics_id| here.
   pickle.WriteString(specifics_id);
-  return std::string(static_cast<const char*>(pickle.data()), pickle.size());
-}
-
-void SetAutofillWalletSpecificsFromServerProfile(
-    const AutofillProfile& address,
-    AutofillWalletSpecifics* wallet_specifics,
-    bool enforce_utf8) {
-  wallet_specifics->set_type(AutofillWalletSpecifics::POSTAL_ADDRESS);
-
-  sync_pb::WalletPostalAddress* wallet_address =
-      wallet_specifics->mutable_address();
-
-  if (enforce_utf8) {
-    wallet_address->set_id(GetBase64EncodedId(address.server_id()));
-  } else {
-    wallet_address->set_id(address.server_id());
-  }
-
-  wallet_address->set_language_code(TruncateUTF8(address.language_code()));
-
-  if (address.HasRawInfo(NAME_FULL)) {
-    wallet_address->set_recipient_name(
-        TruncateUTF8(base::UTF16ToUTF8(address.GetRawInfo(NAME_FULL))));
-  }
-  if (address.HasRawInfo(COMPANY_NAME)) {
-    wallet_address->set_company_name(
-        TruncateUTF8(base::UTF16ToUTF8(address.GetRawInfo(COMPANY_NAME))));
-  }
-  if (address.HasRawInfo(ADDRESS_HOME_STREET_ADDRESS)) {
-    wallet_address->add_street_address(TruncateUTF8(
-        base::UTF16ToUTF8(address.GetRawInfo(ADDRESS_HOME_STREET_ADDRESS))));
-  }
-  if (address.HasRawInfo(ADDRESS_HOME_STATE)) {
-    wallet_address->set_address_1(TruncateUTF8(
-        base::UTF16ToUTF8(address.GetRawInfo(ADDRESS_HOME_STATE))));
-  }
-  if (address.HasRawInfo(ADDRESS_HOME_CITY)) {
-    wallet_address->set_address_2(
-        TruncateUTF8(base::UTF16ToUTF8(address.GetRawInfo(ADDRESS_HOME_CITY))));
-  }
-  if (address.HasRawInfo(ADDRESS_HOME_DEPENDENT_LOCALITY)) {
-    wallet_address->set_address_3(TruncateUTF8(base::UTF16ToUTF8(
-        address.GetRawInfo(ADDRESS_HOME_DEPENDENT_LOCALITY))));
-  }
-  if (address.HasRawInfo(ADDRESS_HOME_ZIP)) {
-    wallet_address->set_postal_code(
-        TruncateUTF8(base::UTF16ToUTF8(address.GetRawInfo(ADDRESS_HOME_ZIP))));
-  }
-  if (address.HasRawInfo(ADDRESS_HOME_COUNTRY)) {
-    wallet_address->set_country_code(TruncateUTF8(
-        base::UTF16ToUTF8(address.GetRawInfo(ADDRESS_HOME_COUNTRY))));
-  }
-  if (address.HasRawInfo(PHONE_HOME_WHOLE_NUMBER)) {
-    wallet_address->set_phone_number(TruncateUTF8(
-        base::UTF16ToUTF8(address.GetRawInfo(PHONE_HOME_WHOLE_NUMBER))));
-  }
-  if (address.HasRawInfo(ADDRESS_HOME_SORTING_CODE)) {
-    wallet_address->set_sorting_code(TruncateUTF8(
-        base::UTF16ToUTF8(address.GetRawInfo(ADDRESS_HOME_SORTING_CODE))));
-  }
+  return std::string(pickle.data_as_char(), pickle.size());
 }
 
 void SetAutofillWalletSpecificsFromServerCard(
@@ -264,40 +252,66 @@ void SetAutofillWalletSpecificsFromServerCard(
 
   sync_pb::CardIssuer::Issuer issuer = sync_pb::CardIssuer::ISSUER_UNKNOWN;
   switch (card.card_issuer()) {
-    case CreditCard::ISSUER_UNKNOWN:
+    case CreditCard::Issuer::kIssuerUnknown:
       issuer = sync_pb::CardIssuer::ISSUER_UNKNOWN;
       break;
-    case CreditCard::GOOGLE:
+    case CreditCard::Issuer::kGoogle:
       issuer = sync_pb::CardIssuer::GOOGLE;
+      break;
+    case CreditCard::Issuer::kExternalIssuer:
+      issuer = sync_pb::CardIssuer::EXTERNAL_ISSUER;
       break;
   }
   wallet_card->mutable_card_issuer()->set_issuer(issuer);
+  wallet_card->mutable_card_issuer()->set_issuer_id(card.issuer_id());
 
   wallet_card->set_instrument_id(card.instrument_id());
 
-  sync_pb::WalletMaskedCreditCard::VirtualCardEnrollmentState state =
-      sync_pb::WalletMaskedCreditCard::UNSPECIFIED;
+  sync_pb::WalletMaskedCreditCard::VirtualCardEnrollmentState state;
   switch (card.virtual_card_enrollment_state()) {
-    case CreditCard::UNENROLLED:
+    case CreditCard::VirtualCardEnrollmentState::kUnenrolled:
       state = sync_pb::WalletMaskedCreditCard::UNENROLLED;
       break;
-    case CreditCard::ENROLLED:
+    case CreditCard::VirtualCardEnrollmentState::kEnrolled:
       state = sync_pb::WalletMaskedCreditCard::ENROLLED;
       break;
-    case CreditCard::UNENROLLED_AND_NOT_ELIGIBLE:
+    case CreditCard::VirtualCardEnrollmentState::kUnenrolledAndNotEligible:
       state = sync_pb::WalletMaskedCreditCard::UNENROLLED_AND_NOT_ELIGIBLE;
       break;
-    case CreditCard::UNENROLLED_AND_ELIGIBLE:
+    case CreditCard::VirtualCardEnrollmentState::kUnenrolledAndEligible:
       state = sync_pb::WalletMaskedCreditCard::UNENROLLED_AND_ELIGIBLE;
       break;
-    case CreditCard::UNSPECIFIED:
+    case CreditCard::VirtualCardEnrollmentState::kUnspecified:
       state = sync_pb::WalletMaskedCreditCard::UNSPECIFIED;
       break;
   }
   wallet_card->set_virtual_card_enrollment_state(state);
 
+  // We should only have a virtual card enrollment type for enrolled cards.
+  if (card.virtual_card_enrollment_state() ==
+      CreditCard::VirtualCardEnrollmentState::kEnrolled) {
+    sync_pb::WalletMaskedCreditCard::VirtualCardEnrollmentType
+        virtual_card_enrollment_type;
+    switch (card.virtual_card_enrollment_type()) {
+      case CreditCard::VirtualCardEnrollmentType::kTypeUnspecified:
+        virtual_card_enrollment_type =
+            sync_pb::WalletMaskedCreditCard::TYPE_UNSPECIFIED;
+        break;
+      case CreditCard::VirtualCardEnrollmentType::kIssuer:
+        virtual_card_enrollment_type = sync_pb::WalletMaskedCreditCard::ISSUER;
+        break;
+      case CreditCard::VirtualCardEnrollmentType::kNetwork:
+        virtual_card_enrollment_type = sync_pb::WalletMaskedCreditCard::NETWORK;
+        break;
+    }
+    wallet_card->set_virtual_card_enrollment_type(virtual_card_enrollment_type);
+  }
+
   if (!card.card_art_url().is_empty())
     wallet_card->set_card_art_url(card.card_art_url().spec());
+
+  wallet_card->set_product_description(
+      base::UTF16ToUTF8(card.product_description()));
 }
 
 void SetAutofillWalletSpecificsFromPaymentsCustomerData(
@@ -335,6 +349,55 @@ void SetAutofillWalletSpecificsFromCreditCardCloudTokenData(
   mutable_cloud_token_data->set_art_fife_url(cloud_token_data.card_art_url);
   mutable_cloud_token_data->set_instrument_token(
       cloud_token_data.instrument_token);
+}
+
+void SetAutofillWalletSpecificsFromMaskedIban(
+    const Iban& iban,
+    sync_pb::AutofillWalletSpecifics* wallet_specifics,
+    bool enforce_utf8) {
+  wallet_specifics->set_type(AutofillWalletSpecifics::MASKED_IBAN);
+  sync_pb::WalletMaskedIban* wallet_iban =
+      wallet_specifics->mutable_masked_iban();
+  if (enforce_utf8) {
+    wallet_iban->set_instrument_id(
+        GetBase64EncodedId(base::NumberToString(iban.instrument_id())));
+  } else {
+    wallet_iban->set_instrument_id(base::NumberToString(iban.instrument_id()));
+  }
+
+  wallet_iban->set_prefix(base::UTF16ToUTF8(iban.prefix()));
+  wallet_iban->set_suffix(base::UTF16ToUTF8(iban.suffix()));
+  wallet_iban->set_nickname(base::UTF16ToUTF8(iban.nickname()));
+  wallet_iban->set_length(iban.length());
+}
+
+void SetAutofillWalletUsageSpecificsFromAutofillWalletUsageData(
+    const AutofillWalletUsageData& wallet_usage_data,
+    sync_pb::AutofillWalletUsageSpecifics* wallet_usage_specifics) {
+  if (wallet_usage_data.usage_data_type() ==
+      AutofillWalletUsageData::UsageDataType::kVirtualCard) {
+    // Ensure the Virtual Card Usage Data fields are set before transferring to
+    // `wallet_usage_specifics`.
+    DCHECK(
+        IsVirtualCardUsageDataSet(wallet_usage_data.virtual_card_usage_data()));
+
+    wallet_usage_specifics->set_guid(
+        *wallet_usage_data.virtual_card_usage_data().usage_data_id());
+
+    wallet_usage_specifics->mutable_virtual_card_usage_data()
+        ->set_instrument_id(
+            *wallet_usage_data.virtual_card_usage_data().instrument_id());
+
+    wallet_usage_specifics->mutable_virtual_card_usage_data()
+        ->set_virtual_card_last_four(
+            base::UTF16ToUTF8(*wallet_usage_data.virtual_card_usage_data()
+                                   .virtual_card_last_four()));
+
+    wallet_usage_specifics->mutable_virtual_card_usage_data()->set_merchant_url(
+        wallet_usage_data.virtual_card_usage_data()
+            .merchant_origin()
+            .Serialize());
+  }
 }
 
 void SetAutofillOfferSpecificsFromOfferData(
@@ -442,62 +505,75 @@ AutofillOfferData AutofillOfferDataFromOfferSpecifics(
   }
 }
 
-AutofillProfile ProfileFromSpecifics(
-    const sync_pb::WalletPostalAddress& address) {
-  AutofillProfile profile(AutofillProfile::SERVER_PROFILE, std::string());
-
-  // AutofillProfile stores multi-line addresses with newline separators.
-  std::vector<base::StringPiece> street_address(
-      address.street_address().begin(), address.street_address().end());
-  profile.SetRawInfo(ADDRESS_HOME_STREET_ADDRESS,
-                     base::UTF8ToUTF16(base::JoinString(street_address, "\n")));
-
-  profile.SetRawInfo(COMPANY_NAME, base::UTF8ToUTF16(address.company_name()));
-  profile.SetRawInfo(ADDRESS_HOME_STATE,
-                     base::UTF8ToUTF16(address.address_1()));
-  profile.SetRawInfo(ADDRESS_HOME_CITY, base::UTF8ToUTF16(address.address_2()));
-  profile.SetRawInfo(ADDRESS_HOME_DEPENDENT_LOCALITY,
-                     base::UTF8ToUTF16(address.address_3()));
-  // AutofillProfile doesn't support address_4 ("sub dependent locality").
-  profile.SetRawInfo(ADDRESS_HOME_ZIP,
-                     base::UTF8ToUTF16(address.postal_code()));
-  profile.SetRawInfo(ADDRESS_HOME_SORTING_CODE,
-                     base::UTF8ToUTF16(address.sorting_code()));
-  profile.SetRawInfo(ADDRESS_HOME_COUNTRY,
-                     base::UTF8ToUTF16(address.country_code()));
-  profile.set_language_code(address.language_code());
-
-  // SetInfo instead of SetRawInfo so the constituent pieces will be parsed
-  // for these data types.
-  profile.SetInfo(NAME_FULL, base::UTF8ToUTF16(address.recipient_name()),
-                  profile.language_code());
-  profile.SetInfo(PHONE_HOME_WHOLE_NUMBER,
-                  base::UTF8ToUTF16(address.phone_number()),
-                  profile.language_code());
-
-  profile.GenerateServerProfileIdentifier();
-
-  // Call the finalization routine to parse the structure of the name and the
-  // address into their components.
-  profile.FinalizeAfterImport();
-  return profile;
+sync_pb::AutofillWalletCredentialSpecifics
+AutofillWalletCredentialSpecificsFromStructData(const ServerCvc& server_cvc) {
+  sync_pb::AutofillWalletCredentialSpecifics wallet_credential_specifics;
+  CHECK(!server_cvc.cvc.empty());
+  wallet_credential_specifics.set_instrument_id(
+      base::NumberToString(server_cvc.instrument_id));
+  wallet_credential_specifics.set_cvc(base::UTF16ToUTF8(server_cvc.cvc));
+  wallet_credential_specifics.set_last_updated_time_unix_epoch_millis(
+      (server_cvc.last_updated_timestamp - base::Time::UnixEpoch())
+          .InMilliseconds());
+  return wallet_credential_specifics;
 }
 
-void CopyRelevantWalletMetadataFromDisk(
+ServerCvc AutofillWalletCvcStructDataFromWalletCredentialSpecifics(
+    const sync_pb::AutofillWalletCredentialSpecifics&
+        wallet_credential_specifics) {
+  CHECK(IsAutofillWalletCredentialDataSpecificsValid(
+      wallet_credential_specifics));
+  int64_t instrument_id;
+  base::StringToInt64(wallet_credential_specifics.instrument_id(),
+                      &instrument_id);
+
+  return ServerCvc{
+      .instrument_id = instrument_id,
+      .cvc = base::UTF8ToUTF16(wallet_credential_specifics.cvc()),
+      .last_updated_timestamp =
+          base::Time::UnixEpoch() +
+          base::Milliseconds(wallet_credential_specifics
+                                 .last_updated_time_unix_epoch_millis())};
+}
+
+VirtualCardUsageData VirtualCardUsageDataFromUsageSpecifics(
+    const sync_pb::AutofillWalletUsageSpecifics& usage_specifics) {
+  const sync_pb::AutofillWalletUsageSpecifics::VirtualCardUsageData
+      virtual_card_usage_data_specifics =
+          usage_specifics.virtual_card_usage_data();
+  DCHECK(usage_specifics.has_guid() && IsVirtualCardUsageDataSpecificsValid(
+                                           virtual_card_usage_data_specifics));
+
+  return VirtualCardUsageData(
+      VirtualCardUsageData::UsageDataId(usage_specifics.guid()),
+      VirtualCardUsageData::InstrumentId(
+          virtual_card_usage_data_specifics.instrument_id()),
+      VirtualCardUsageData::VirtualCardLastFour(base::UTF8ToUTF16(
+          virtual_card_usage_data_specifics.virtual_card_last_four())),
+      url::Origin::Create(
+          GURL(virtual_card_usage_data_specifics.merchant_url())));
+}
+
+void CopyRelevantWalletMetadataAndCvc(
     const AutofillTable& table,
     std::vector<CreditCard>* cards_from_server) {
-  std::vector<std::unique_ptr<CreditCard>> cards_on_disk;
-  table.GetServerCreditCards(&cards_on_disk);
+  std::vector<std::unique_ptr<CreditCard>> cards_from_local_storage;
+  table.GetServerCreditCards(cards_from_local_storage);
 
   // Since the number of cards is fairly small, the brute-force search is good
   // enough.
-  for (const auto& saved_card : cards_on_disk) {
+  for (const auto& saved_card : cards_from_local_storage) {
     for (CreditCard& server_card : *cards_from_server) {
       if (saved_card->server_id() == server_card.server_id()) {
         // The wallet data doesn't have the use stats. Use the ones present on
         // disk to not overwrite them with bad data.
         server_card.set_use_count(saved_card->use_count());
         server_card.set_use_date(saved_card->use_date());
+
+        // Wallet data from the server doesn't have the CVC data as it's
+        // decoupled. Use the data present in the local storage, to prevent
+        // CVC data deletion.
+        server_card.set_cvc(saved_card->cvc());
 
         // Keep the billing address id of the saved cards only if it points to
         // a local address.
@@ -512,12 +588,10 @@ void CopyRelevantWalletMetadataFromDisk(
 
 void PopulateWalletTypesFromSyncData(
     const syncer::EntityChangeList& entity_data,
-    std::vector<CreditCard>* wallet_cards,
-    std::vector<AutofillProfile>* wallet_addresses,
-    std::vector<PaymentsCustomerData>* customer_data,
-    std::vector<CreditCardCloudTokenData>* cloud_token_data) {
-  std::map<std::string, std::string> ids;
-
+    std::vector<CreditCard>& wallet_cards,
+    std::vector<Iban>& wallet_ibans,
+    std::vector<PaymentsCustomerData>& customer_data,
+    std::vector<CreditCardCloudTokenData>& cloud_token_data) {
   for (const std::unique_ptr<syncer::EntityChange>& change : entity_data) {
     DCHECK(change->data().specifics.has_autofill_wallet());
 
@@ -526,42 +600,31 @@ void PopulateWalletTypesFromSyncData(
 
     switch (autofill_specifics.type()) {
       case sync_pb::AutofillWalletSpecifics::MASKED_CREDIT_CARD:
-        wallet_cards->push_back(
+        wallet_cards.push_back(
             CardFromSpecifics(autofill_specifics.masked_card()));
         break;
       case sync_pb::AutofillWalletSpecifics::POSTAL_ADDRESS:
-        // Unlike other pointers, |wallet_addresses| can be nullptr. This means
-        // that addresses should not get populated (and billing address ids not
-        // get translated to local profile ids).
-        if (wallet_addresses) {
-          wallet_addresses->push_back(
-              ProfileFromSpecifics(autofill_specifics.address()));
-
-          // Map the sync billing address id to the profile's id.
-          ids[autofill_specifics.address().id()] =
-              wallet_addresses->back().server_id();
-        }
+        // POSTAL_ADDRESS is deprecated.
         break;
       case sync_pb::AutofillWalletSpecifics::CUSTOMER_DATA:
-        customer_data->push_back(
+        customer_data.push_back(
             CustomerDataFromSpecifics(autofill_specifics.customer_data()));
         break;
       case sync_pb::AutofillWalletSpecifics::CREDIT_CARD_CLOUD_TOKEN_DATA:
-        cloud_token_data->push_back(
+        cloud_token_data.push_back(
             CloudTokenDataFromSpecifics(autofill_specifics.cloud_token_data()));
+        break;
+      case sync_pb::AutofillWalletSpecifics::PAYMENT_INSTRUMENT:
+        // TODO(crbug.com/1472125) Support syncing of payment instruments.
+        break;
+      case sync_pb::AutofillWalletSpecifics::MASKED_IBAN:
+        wallet_ibans.push_back(
+            IbanFromSpecifics(autofill_specifics.masked_iban()));
         break;
       case sync_pb::AutofillWalletSpecifics::UNKNOWN:
         // Just ignore new entry types that the client doesn't know about.
         break;
     }
-  }
-
-  // Set the billing address of the wallet cards to the id of the appropriate
-  // profile.
-  for (CreditCard& card : *wallet_cards) {
-    auto it = ids.find(card.billing_address_id());
-    if (it != ids.end())
-      card.set_billing_address_id(it->second);
   }
 }
 
@@ -590,8 +653,7 @@ bool AreAnyItemsDifferent(const std::vector<std::unique_ptr<Item>>& old_data,
   auto compare_equal = [](const Item* lhs, const Item* rhs) {
     return lhs->Compare(*rhs) == 0;
   };
-  return !std::equal(old_ptrs.begin(), old_ptrs.end(), new_ptrs.begin(),
-                     compare_equal);
+  return !base::ranges::equal(old_ptrs, new_ptrs, compare_equal);
 }
 
 template bool AreAnyItemsDifferent<>(
@@ -640,6 +702,37 @@ bool IsOfferSpecificsValid(const sync_pb::AutofillOfferSpecifics specifics) {
 
   return (has_instrument_id && has_fixed_or_percentage_reward) ||
          has_promo_code;
+}
+
+bool IsVirtualCardUsageDataSpecificsValid(
+    const sync_pb::AutofillWalletUsageSpecifics::VirtualCardUsageData&
+        specifics) {
+  // Ensure fields are present and in correct format.
+  return specifics.has_instrument_id() &&
+         specifics.has_virtual_card_last_four() &&
+         specifics.virtual_card_last_four().length() == 4 &&
+         specifics.has_merchant_url() &&
+         !url::Origin::Create(GURL(specifics.merchant_url())).opaque();
+}
+
+bool IsVirtualCardUsageDataSet(
+    const VirtualCardUsageData& virtual_card_usage_data) {
+  return *virtual_card_usage_data.instrument_id() != 0 &&
+         !virtual_card_usage_data.usage_data_id()->empty() &&
+         !virtual_card_usage_data.virtual_card_last_four()->empty();
+}
+
+bool IsAutofillWalletCredentialDataSpecificsValid(
+    const sync_pb::AutofillWalletCredentialSpecifics&
+        wallet_credential_specifics) {
+  int64_t temp_instrument_id;
+  return !wallet_credential_specifics.instrument_id().empty() &&
+         base::StringToInt64(wallet_credential_specifics.instrument_id(),
+                             &temp_instrument_id) &&
+         !wallet_credential_specifics.cvc().empty() &&
+         wallet_credential_specifics
+             .has_last_updated_time_unix_epoch_millis() &&
+         wallet_credential_specifics.last_updated_time_unix_epoch_millis() != 0;
 }
 
 }  // namespace autofill

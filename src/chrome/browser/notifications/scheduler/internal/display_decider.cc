@@ -1,12 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/notifications/scheduler/internal/display_decider.h"
 
-#include <algorithm>
-
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/clock.h"
 #include "chrome/browser/notifications/scheduler/internal/impression_types.h"
 #include "chrome/browser/notifications/scheduler/internal/notification_entry.h"
@@ -101,7 +100,7 @@ class DecisionHelper {
 
     // No previous shown notification, move the iterator to last element.
     // We will iterate through all client types later.
-    auto it = std::find(clients_.begin(), clients_.end(), last_shown_type_);
+    auto it = base::ranges::find(clients_, last_shown_type_);
     if (it == clients_.end()) {
       DCHECK_EQ(last_shown_type_, SchedulerClientType::kUnknown);
       last_shown_type_ = clients_.back();
@@ -160,7 +159,7 @@ class DecisionHelper {
   Notifications notifications_;
 
   const ClientStates client_states_;
-  raw_ptr<const SchedulerConfig> config_;
+  raw_ptr<const SchedulerConfig, DanglingUntriaged> config_;
   const std::vector<SchedulerClientType> clients_;
   raw_ptr<base::Clock> clock_;
 
@@ -204,7 +203,7 @@ class DisplayDeciderImpl : public DisplayDecider {
     helper->DecideNotificationToShow(results);
   }
 
-  raw_ptr<const SchedulerConfig> config_;
+  raw_ptr<const SchedulerConfig, DanglingUntriaged> config_;
   const std::vector<SchedulerClientType> clients_;
   raw_ptr<base::Clock> clock_;
 };

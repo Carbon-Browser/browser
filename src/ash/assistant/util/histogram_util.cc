@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,17 +13,15 @@ namespace assistant {
 namespace util {
 
 void IncrementAssistantQueryCountForEntryPoint(
-    chromeos::assistant::AssistantEntryPoint entry_point) {
+    AssistantEntryPoint entry_point) {
   UMA_HISTOGRAM_ENUMERATION("Assistant.QueryCountPerEntryPoint", entry_point);
 }
 
-void RecordAssistantEntryPoint(
-    chromeos::assistant::AssistantEntryPoint entry_point) {
+void RecordAssistantEntryPoint(AssistantEntryPoint entry_point) {
   UMA_HISTOGRAM_ENUMERATION("Assistant.EntryPoint", entry_point);
 }
 
-void RecordAssistantExitPoint(
-    chromeos::assistant::AssistantExitPoint exit_point) {
+void RecordAssistantExitPoint(AssistantExitPoint exit_point) {
   UMA_HISTOGRAM_ENUMERATION("Assistant.ExitPoint", exit_point);
 }
 
@@ -32,8 +30,7 @@ void IncrementAssistantButtonClickCount(AssistantButtonId button_id) {
                             AssistantButtonId::kMaxValue);
 }
 
-void RecordAssistantQuerySource(
-    chromeos::assistant::AssistantQuerySource source) {
+void RecordAssistantQuerySource(AssistantQuerySource source) {
   UMA_HISTOGRAM_ENUMERATION("Assistant.QuerySource", source);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
 
-/**
- * Empty service used by the custom tab to bind to, raising the application's importance.
- */
+/** Empty service used by the custom tab to bind to, raising the application's importance. */
 public class KeepAliveService extends Service {
     private static final Binder sBinder = new Binder();
 

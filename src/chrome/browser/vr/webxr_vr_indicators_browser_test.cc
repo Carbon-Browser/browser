@@ -1,11 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <algorithm>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/ranges/algorithm.h"
+#include "base/test/to_vector.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/vr/test/multi_class_browser_test.h"
@@ -44,13 +45,10 @@ struct TestContentSettings {
 // Helpers
 std::vector<TestContentSettings> ExtractFrom(
     const std::vector<TestIndicatorSetting>& test_indicator_settings) {
-  std::vector<TestContentSettings> test_content_settings;
-  std::transform(test_indicator_settings.begin(), test_indicator_settings.end(),
-                 std::back_inserter(test_content_settings),
-                 [](const TestIndicatorSetting& s) -> TestContentSettings {
-                   return {s.content_setting_type, s.content_setting};
-                 });
-  return test_content_settings;
+  return base::test::ToVector(
+      test_indicator_settings, [](const TestIndicatorSetting& s) {
+        return TestContentSettings{s.content_setting_type, s.content_setting};
+      });
 }
 
 void SetMultipleContentSetting(

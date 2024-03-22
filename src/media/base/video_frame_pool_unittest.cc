@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,9 @@ class VideoFramePoolTest
     if (format == PIXEL_FORMAT_ARGB) {
       EXPECT_EQ(coded_size, frame->coded_size());
     } else {
-      const gfx::Size adjusted(base::bits::AlignUp(coded_size.width(), 2),
-                               base::bits::AlignUp(coded_size.height(), 2));
+      const gfx::Size adjusted(
+          base::bits::AlignUpDeprecatedDoNotUse(coded_size.width(), 2),
+          base::bits::AlignUpDeprecatedDoNotUse(coded_size.height(), 2));
       EXPECT_EQ(adjusted, frame->coded_size());
     }
     EXPECT_EQ(visible_rect, frame->visible_rect());
@@ -120,7 +121,7 @@ TEST_F(VideoFramePoolTest, FrameValidAfterPoolDestruction) {
 
   // Write to the Y plane. The memory tools should detect a
   // use-after-free if the storage was actually removed by pool destruction.
-  memset(frame->data(VideoFrame::kYPlane), 0xff,
+  memset(frame->writable_data(VideoFrame::kYPlane), 0xff,
          frame->rows(VideoFrame::kYPlane) * frame->stride(VideoFrame::kYPlane));
 }
 

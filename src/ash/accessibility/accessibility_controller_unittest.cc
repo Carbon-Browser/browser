@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "ash/accessibility/a11y_feature_type.h"
 #include "ash/accessibility/accessibility_observer.h"
 #include "ash/accessibility/magnifier/docked_magnifier_controller.h"
 #include "ash/accessibility/sticky_keys/sticky_keys_controller.h"
@@ -14,12 +15,14 @@
 #include "ash/constants/ash_constants.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
+#include "ash/display/cursor_window_controller.h"
 #include "ash/keyboard/ui/keyboard_util.h"
+#include "ash/public/cpp/test/test_system_tray_client.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/session/test_pref_service_provider.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
@@ -27,7 +30,9 @@
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
 #include "media/base/media_switches.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/aura/aura_window_properties.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/message_center.h"
 
 using message_center::MessageCenter;
@@ -58,15 +63,36 @@ class AccessibilityControllerTest : public AshTestBase {
 
   void SetUp() override {
     scoped_feature_list_.InitWithFeatures(
-        {media::kLiveCaption, media::kLiveCaptionSystemWideOnChromeOS,
-         ash::features::kOnDeviceSpeechRecognition},
-        {});
+        /*enabled_features=*/{media::kLiveCaption,
+                              media::kLiveCaptionSystemWideOnChromeOS,
+                              ash::features::kOnDeviceSpeechRecognition,
+                              ::features::kAccessibilityFaceGaze},
+        /*disabled_feaures=*/{
+            ::features::kAccessibilityDictationKeyboardImprovements});
     AshTestBase::SetUp();
   }
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
 };
+
+TEST_F(AccessibilityControllerTest, ChangingCursorSizePrefChangesCursorSize) {
+  PrefService* prefs =
+      Shell::Get()->session_controller()->GetLastActiveUserPrefService();
+
+  prefs->SetBoolean(prefs::kAccessibilityLargeCursorEnabled, true);
+
+  CursorWindowController* cursor_window_controller =
+      Shell::Get()->window_tree_host_manager()->cursor_window_controller();
+
+  // Test all possible sizes
+  for (int size = 25; size <= 64; ++size) {
+    prefs->SetInteger(prefs::kAccessibilityLargeCursorDipSize, size);
+    auto bounds = cursor_window_controller->GetBoundsForTest();
+    EXPECT_EQ(bounds.height(), size);
+    EXPECT_EQ(bounds.width(), size);
+  }
+}
 
 TEST_F(AccessibilityControllerTest, PrefsAreRegistered) {
   PrefService* prefs =
@@ -77,6 +103,7 @@ TEST_F(AccessibilityControllerTest, PrefsAreRegistered) {
       prefs->FindPreference(prefs::kAccessibilityCaretHighlightEnabled));
   EXPECT_TRUE(
       prefs->FindPreference(prefs::kAccessibilityCursorHighlightEnabled));
+  EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityCursorColorEnabled));
   EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityDictationEnabled));
   EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityDictationLocale));
   EXPECT_TRUE(
@@ -93,12 +120,77 @@ TEST_F(AccessibilityControllerTest, PrefsAreRegistered) {
   EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityScreenMagnifierScale));
   EXPECT_TRUE(
       prefs->FindPreference(prefs::kAccessibilitySpokenFeedbackEnabled));
+  EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityChromeVoxAutoRead));
+  EXPECT_TRUE(prefs->FindPreference(
+      prefs::kAccessibilityChromeVoxAnnounceDownloadNotifications));
+  EXPECT_TRUE(prefs->FindPreference(
+      prefs::kAccessibilityChromeVoxAnnounceRichTextAttributes));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxAudioStrategy));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxBrailleSideBySide));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxBrailleTable));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxBrailleTable6));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxBrailleTable8));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxBrailleTableType));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxBrailleWordWrap));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxCapitalStrategy));
+  EXPECT_TRUE(prefs->FindPreference(
+      prefs::kAccessibilityChromeVoxCapitalStrategyBackup));
+  EXPECT_TRUE(prefs->FindPreference(
+      prefs::kAccessibilityChromeVoxEnableBrailleLogging));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxEnableEarconLogging));
+  EXPECT_TRUE(prefs->FindPreference(
+      prefs::kAccessibilityChromeVoxEnableEventStreamLogging));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxEnableSpeechLogging));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxEventStreamFilters));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxLanguageSwitching));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxMenuBrailleCommands));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxNumberReadingStyle));
+  EXPECT_TRUE(prefs->FindPreference(
+      prefs::kAccessibilityChromeVoxPreferredBrailleDisplayAddress));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxPunctuationEcho));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxSmartStickyMode));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxSpeakTextUnderMouse));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxUsePitchChanges));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxUseVerboseMode));
+  EXPECT_TRUE(prefs->FindPreference(
+      prefs::kAccessibilityChromeVoxVirtualBrailleColumns));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityChromeVoxVirtualBrailleRows));
+  EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityChromeVoxVoiceName));
   EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityStickyKeysEnabled));
   EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityShortcutsEnabled));
   EXPECT_TRUE(
       prefs->FindPreference(prefs::kAccessibilityVirtualKeyboardEnabled));
   EXPECT_TRUE(prefs->FindPreference(
       prefs::kAccessibilityEnhancedNetworkVoicesInSelectToSpeakAllowed));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityColorCorrectionEnabled));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityColorCorrectionHasBeenSetup));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityColorVisionCorrectionType));
+  EXPECT_TRUE(
+      prefs->FindPreference(prefs::kAccessibilityColorVisionCorrectionAmount));
+  EXPECT_TRUE(prefs->FindPreference(prefs::kAccessibilityFaceGazeEnabled));
 }
 
 TEST_F(AccessibilityControllerTest, SetAutoclickEnabled) {
@@ -141,6 +233,42 @@ TEST_F(AccessibilityControllerTest, SetCaretHighlightEnabled) {
   controller->RemoveObserver(&observer);
 }
 
+TEST_F(AccessibilityControllerTest, SetColorCorrectionEnabled) {
+  AccessibilityControllerImpl* controller =
+      Shell::Get()->accessibility_controller();
+  EXPECT_FALSE(controller->color_correction().enabled());
+
+  TestAccessibilityObserver observer;
+  controller->AddObserver(&observer);
+  EXPECT_EQ(0, observer.status_changed_count_);
+
+  EXPECT_EQ(0, GetSystemTrayClient()->show_color_correction_settings_count());
+
+  controller->color_correction().SetEnabled(true);
+  EXPECT_TRUE(controller->color_correction().enabled());
+  EXPECT_EQ(1, observer.status_changed_count_);
+
+  // The first time we should show the settings for color correction.
+  EXPECT_EQ(1, GetSystemTrayClient()->show_color_correction_settings_count());
+
+  controller->color_correction().SetEnabled(false);
+  EXPECT_FALSE(controller->color_correction().enabled());
+  EXPECT_EQ(2, observer.status_changed_count_);
+
+  controller->color_correction().SetEnabled(true);
+  EXPECT_TRUE(controller->color_correction().enabled());
+  EXPECT_EQ(3, observer.status_changed_count_);
+
+  // The second time, the settings window should not be opened.
+  EXPECT_EQ(1, GetSystemTrayClient()->show_color_correction_settings_count());
+
+  controller->color_correction().SetEnabled(false);
+  EXPECT_FALSE(controller->color_correction().enabled());
+  EXPECT_EQ(4, observer.status_changed_count_);
+
+  controller->RemoveObserver(&observer);
+}
+
 TEST_F(AccessibilityControllerTest, SetCursorHighlightEnabled) {
   AccessibilityControllerImpl* controller =
       Shell::Get()->accessibility_controller();
@@ -159,6 +287,66 @@ TEST_F(AccessibilityControllerTest, SetCursorHighlightEnabled) {
   EXPECT_EQ(2, observer.status_changed_count_);
 
   controller->RemoveObserver(&observer);
+}
+
+TEST_F(AccessibilityControllerTest, SetFaceGazeEnabled) {
+  AccessibilityControllerImpl* controller =
+      Shell::Get()->accessibility_controller();
+  EXPECT_FALSE(controller->face_gaze().enabled());
+
+  TestAccessibilityObserver observer;
+  controller->AddObserver(&observer);
+  EXPECT_EQ(0, observer.status_changed_count_);
+
+  controller->face_gaze().SetEnabled(true);
+  EXPECT_TRUE(controller->face_gaze().enabled());
+  EXPECT_EQ(1, observer.status_changed_count_);
+
+  controller->face_gaze().SetEnabled(false);
+  EXPECT_FALSE(controller->face_gaze().enabled());
+  EXPECT_EQ(2, observer.status_changed_count_);
+
+  controller->RemoveObserver(&observer);
+}
+
+TEST_F(AccessibilityControllerTest, FaceGazeTrayMenuVisibility) {
+  // Check that when the pref isn't being controlled by any policy will be
+  // visible in the accessibility tray menu despite its value.
+  PrefService* prefs =
+      Shell::Get()->session_controller()->GetLastActiveUserPrefService();
+  AccessibilityControllerImpl* controller =
+      Shell::Get()->accessibility_controller();
+
+  // Check when the value is true and not being controlled by any policy.
+  controller->face_gaze().SetEnabled(true);
+  EXPECT_FALSE(
+      prefs->IsManagedPreference(prefs::kAccessibilityFaceGazeEnabled));
+  EXPECT_TRUE(prefs->GetBoolean(prefs::kAccessibilityFaceGazeEnabled));
+  EXPECT_TRUE(controller->face_gaze().enabled());
+  EXPECT_TRUE(controller->IsFaceGazeSettingVisibleInTray());
+  // Check when the value is false and not being controlled by any policy.
+  controller->face_gaze().SetEnabled(false);
+  EXPECT_FALSE(
+      prefs->IsManagedPreference(prefs::kAccessibilityFaceGazeEnabled));
+  EXPECT_FALSE(controller->face_gaze().enabled());
+  EXPECT_TRUE(controller->IsFaceGazeSettingVisibleInTray());
+  EXPECT_FALSE(prefs->GetBoolean(prefs::kAccessibilityFaceGazeEnabled));
+
+  // Check that when the pref is managed and being forced on then it will be
+  // visible.
+  static_cast<TestingPrefServiceSimple*>(prefs)->SetManagedPref(
+      prefs::kAccessibilityFaceGazeEnabled,
+      std::make_unique<base::Value>(true));
+  EXPECT_TRUE(prefs->IsManagedPreference(prefs::kAccessibilityFaceGazeEnabled));
+  EXPECT_TRUE(controller->IsFaceGazeSettingVisibleInTray());
+  // Check that when the pref is managed and only being forced off then it will
+  // be invisible.
+  static_cast<TestingPrefServiceSimple*>(prefs)->SetManagedPref(
+      prefs::kAccessibilityFaceGazeEnabled,
+      std::make_unique<base::Value>(false));
+  EXPECT_TRUE(prefs->IsManagedPreference(prefs::kAccessibilityFaceGazeEnabled));
+  EXPECT_FALSE(controller->face_gaze().enabled());
+  EXPECT_FALSE(controller->IsFaceGazeSettingVisibleInTray());
 }
 
 TEST_F(AccessibilityControllerTest, SetFocusHighlightEnabled) {
@@ -779,6 +967,46 @@ TEST_F(AccessibilityControllerTest, SwitchAccessTrayMenuVisibility) {
   EXPECT_FALSE(controller->IsSwitchAccessSettingVisibleInTray());
 }
 
+TEST_F(AccessibilityControllerTest, ColorCorrectionTrayMenuVisibility) {
+  // Check that when the pref isn't being controlled by any policy will be
+  // visible in the accessibility tray menu despite its value.
+  PrefService* prefs =
+      Shell::Get()->session_controller()->GetLastActiveUserPrefService();
+  AccessibilityControllerImpl* controller =
+      Shell::Get()->accessibility_controller();
+  // Check when the value is true and not being controlled by any policy.
+  controller->color_correction().SetEnabled(true);
+  EXPECT_FALSE(
+      prefs->IsManagedPreference(prefs::kAccessibilityColorCorrectionEnabled));
+  EXPECT_TRUE(controller->color_correction().enabled());
+  EXPECT_TRUE(controller->IsColorCorrectionSettingVisibleInTray());
+  // Check when the value is false and not being controlled by any policy.
+  controller->color_correction().SetEnabled(false);
+  EXPECT_FALSE(
+      prefs->IsManagedPreference(prefs::kAccessibilityColorCorrectionEnabled));
+  EXPECT_FALSE(controller->color_correction().enabled());
+  EXPECT_TRUE(controller->IsColorCorrectionSettingVisibleInTray());
+
+  // Check that when the pref is managed and being forced on then it will be
+  // visible.
+  static_cast<TestingPrefServiceSimple*>(prefs)->SetManagedPref(
+      prefs::kAccessibilityColorCorrectionEnabled,
+      std::make_unique<base::Value>(true));
+  EXPECT_TRUE(
+      prefs->IsManagedPreference(prefs::kAccessibilityColorCorrectionEnabled));
+  EXPECT_TRUE(controller->IsColorCorrectionSettingVisibleInTray());
+  EXPECT_TRUE(controller->color_correction().enabled());
+  // Check that when the pref is managed and only being forced off then it will
+  // be invisible.
+  static_cast<TestingPrefServiceSimple*>(prefs)->SetManagedPref(
+      prefs::kAccessibilityColorCorrectionEnabled,
+      std::make_unique<base::Value>(false));
+  EXPECT_TRUE(
+      prefs->IsManagedPreference(prefs::kAccessibilityColorCorrectionEnabled));
+  EXPECT_FALSE(controller->color_correction().enabled());
+  EXPECT_FALSE(controller->IsColorCorrectionSettingVisibleInTray());
+}
+
 TEST_F(AccessibilityControllerTest, FocusHighlightTrayMenuVisibility) {
   // Check that when the pref isn't being controlled by any policy will be
   // visible in the accessibility tray menu despite its value.
@@ -874,6 +1102,35 @@ TEST_F(AccessibilityControllerTest, DisableLargeCursorResetsSize) {
             prefs->GetInteger(prefs::kAccessibilityLargeCursorDipSize));
 }
 
+TEST_F(AccessibilityControllerTest, ChangingCursorColorPrefChangesCursorColor) {
+  PrefService* prefs =
+      Shell::Get()->session_controller()->GetLastActiveUserPrefService();
+
+  // Simulate using chrome settings webui to set cursor color, which also turns
+  // on the cursor color enabled pref.
+  prefs->SetInteger(prefs::kAccessibilityCursorColor, SK_ColorBLUE);
+  prefs->SetBoolean(prefs::kAccessibilityCursorColorEnabled, true);
+
+  CursorWindowController* cursor_window_controller =
+      Shell::Get()->window_tree_host_manager()->cursor_window_controller();
+
+  // Expect cursor color in cursor_window_controller to be blue.
+  EXPECT_EQ(SK_ColorBLUE, cursor_window_controller->GetCursorColorForTest());
+
+  // Set cursor color pref to green.
+  prefs->SetInteger(prefs::kAccessibilityCursorColor, SK_ColorGREEN);
+
+  // Expect cursor color in cursor_window_controller to be green.
+  EXPECT_EQ(SK_ColorGREEN, cursor_window_controller->GetCursorColorForTest());
+
+  // Simulate using chrome settings webui to set cursor color to black, which
+  // which also turns off the cursor color enabled pref.
+  prefs->SetInteger(prefs::kAccessibilityCursorColor, 0);
+  prefs->SetBoolean(prefs::kAccessibilityCursorColorEnabled, false);
+  EXPECT_EQ(kDefaultCursorColor,
+            cursor_window_controller->GetCursorColorForTest());
+}
+
 TEST_F(AccessibilityControllerTest, SetMonoAudioEnabled) {
   AccessibilityControllerImpl* controller =
       Shell::Get()->accessibility_controller();
@@ -912,6 +1169,45 @@ TEST_F(AccessibilityControllerTest, SetSpokenFeedbackEnabled) {
   EXPECT_EQ(2, observer.status_changed_count_);
 
   controller->RemoveObserver(&observer);
+}
+
+TEST_F(AccessibilityControllerTest, FeaturesConflictingWithChromeVox) {
+  AccessibilityControllerImpl* controller =
+      Shell::Get()->accessibility_controller();
+  EXPECT_FALSE(controller->spoken_feedback().enabled());
+  EXPECT_FALSE(controller->sticky_keys().enabled());
+  EXPECT_FALSE(controller->focus_highlight().enabled());
+  EXPECT_TRUE(controller->IsSpokenFeedbackSettingVisibleInTray());
+  EXPECT_TRUE(controller->IsFocusHighlightSettingVisibleInTray());
+  EXPECT_TRUE(controller->IsStickyKeysSettingVisibleInTray());
+
+  controller->sticky_keys().SetEnabled(true);
+  controller->focus_highlight().SetEnabled(true);
+  EXPECT_FALSE(controller->spoken_feedback().enabled());
+  EXPECT_TRUE(controller->sticky_keys().enabled());
+  EXPECT_TRUE(controller->focus_highlight().enabled());
+  EXPECT_TRUE(controller->IsSpokenFeedbackSettingVisibleInTray());
+  EXPECT_TRUE(controller->IsFocusHighlightSettingVisibleInTray());
+  EXPECT_TRUE(controller->IsStickyKeysSettingVisibleInTray());
+
+  // Turning on Spoken Feedback will make sticky keys, focus highlight
+  // act disabled and disappear from the tray.
+  controller->spoken_feedback().SetEnabled(true);
+  EXPECT_TRUE(controller->spoken_feedback().enabled());
+  EXPECT_FALSE(controller->sticky_keys().enabled());
+  EXPECT_FALSE(controller->focus_highlight().enabled());
+  EXPECT_TRUE(controller->IsSpokenFeedbackSettingVisibleInTray());
+  EXPECT_FALSE(controller->IsFocusHighlightSettingVisibleInTray());
+  EXPECT_FALSE(controller->IsStickyKeysSettingVisibleInTray());
+
+  // Disabling ChromeVox will reset to previous state.
+  controller->spoken_feedback().SetEnabled(false);
+  EXPECT_FALSE(controller->spoken_feedback().enabled());
+  EXPECT_TRUE(controller->sticky_keys().enabled());
+  EXPECT_TRUE(controller->focus_highlight().enabled());
+  EXPECT_TRUE(controller->IsSpokenFeedbackSettingVisibleInTray());
+  EXPECT_TRUE(controller->IsFocusHighlightSettingVisibleInTray());
+  EXPECT_TRUE(controller->IsStickyKeysSettingVisibleInTray());
 }
 
 TEST_F(AccessibilityControllerTest, SetStickyKeysEnabled) {
@@ -1086,21 +1382,23 @@ TEST_F(AccessibilityControllerTest, SelectToSpeakStateChanges) {
 
 TEST_F(AccessibilityControllerTest,
        SpeechRecognitionDownloadSucceededNotification) {
-  const std::u16string kSucceededTitle = u"English speech files downloaded";
+  const std::u16string kSucceededTitle =
+      u"English speech files partially downloaded";
   const std::u16string kSucceededDescription =
-      u"Speech is now processed locally and Dictation works offline";
+      u"Speech is processed locally and dictation works offline, but some "
+      u"voice commands won’t work.";
   AccessibilityControllerImpl* controller =
       Shell::Get()->accessibility_controller();
 
-  controller->ShowSpeechRecognitionDownloadNotificationForDictation(true,
-                                                                    u"English");
+  controller->ShowNotificationForDictation(
+      DictationNotificationType::kOnlySodaDownloaded, u"English");
   message_center::NotificationList::Notifications notifications =
       MessageCenter::Get()->GetVisibleNotifications();
   ASSERT_EQ(1u, notifications.size());
   EXPECT_EQ(kSucceededTitle, (*notifications.begin())->title());
   EXPECT_EQ(kSucceededDescription, (*notifications.begin())->message());
   EXPECT_EQ(u"Dictation", (*notifications.begin())->display_source());
-  EXPECT_EQ(message_center::SystemNotificationWarningLevel::NORMAL,
+  EXPECT_EQ(message_center::SystemNotificationWarningLevel::CRITICAL_WARNING,
             (*notifications.begin())->system_notification_warning_level());
 }
 
@@ -1109,12 +1407,12 @@ TEST_F(AccessibilityControllerTest,
   const std::u16string kFailedTitle = u"Couldn't download English speech files";
   const std::u16string kFailedDescription =
       u"Download will be attempted later. Speech will be sent to Google for "
-      u"processing until download is completed.";
+      u"processing for now.";
   AccessibilityControllerImpl* controller =
       Shell::Get()->accessibility_controller();
 
-  controller->ShowSpeechRecognitionDownloadNotificationForDictation(false,
-                                                                    u"English");
+  controller->ShowNotificationForDictation(
+      DictationNotificationType::kNoDlcsDownloaded, u"English");
   message_center::NotificationList::Notifications notifications =
       MessageCenter::Get()->GetVisibleNotifications();
   ASSERT_EQ(1u, notifications.size());
@@ -1123,6 +1421,149 @@ TEST_F(AccessibilityControllerTest,
   EXPECT_EQ(u"Dictation", (*notifications.begin())->display_source());
   EXPECT_EQ(message_center::SystemNotificationWarningLevel::CRITICAL_WARNING,
             (*notifications.begin())->system_notification_warning_level());
+}
+
+// Test to ensure all features that are toggleable in the quicksettings menu
+// have a valid `name_resource_id`.
+TEST_F(AccessibilityControllerTest, AllAccessibilityFeaturesHaveValidNames) {
+  auto* accessibility_controller = Shell::Get()->accessibility_controller();
+  for (int type = 0; type != static_cast<int>(A11yFeatureType::kFeatureCount);
+       type++) {
+    auto& feature = accessibility_controller->GetFeature(
+        static_cast<A11yFeatureType>(type));
+    if (!feature.toggleable_in_quicksettings()) {
+      continue;
+    }
+
+    std::u16string feature_name =
+        l10n_util::GetStringUTF16(feature.name_resource_id());
+    EXPECT_GT(feature_name.length(), 0u);
+  }
+}
+
+// Verifies the behavior of EnableOrToggleDictation without the keyboard
+// improvements feature (current behavior).
+TEST_F(AccessibilityControllerTest, EnableOrToggleDictation) {
+  AccessibilityControllerImpl* controller =
+      Shell::Get()->accessibility_controller();
+  TestAccessibilityControllerClient client;
+  controller->SetClient(&client);
+  PrefService* prefs =
+      Shell::Get()->session_controller()->GetLastActiveUserPrefService();
+
+  // If Dictation is disabled, then EnableOrToggleDictation should do nothing.
+  prefs->SetBoolean(prefs::kDictationAcceleratorDialogHasBeenAccepted, false);
+  ASSERT_FALSE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  ASSERT_FALSE(controller->IsDictationKeyboardDialogShowingForTesting());
+  controller->EnableOrToggleDictationFromSource(
+      DictationToggleSource::kKeyboard);
+  ASSERT_FALSE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  ASSERT_FALSE(controller->IsDictationKeyboardDialogShowingForTesting());
+
+  prefs->SetBoolean(prefs::kDictationAcceleratorDialogHasBeenAccepted, true);
+  ASSERT_FALSE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  controller->EnableOrToggleDictationFromSource(
+      DictationToggleSource::kKeyboard);
+  ASSERT_FALSE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  ASSERT_FALSE(controller->IsDictationKeyboardDialogShowingForTesting());
+
+  // If Dictation is enabled, then EnableOrToggleDictation should toggle
+  // Dictation on/off.
+  ASSERT_TRUE(
+      prefs->GetBoolean(prefs::kDictationAcceleratorDialogHasBeenAccepted));
+  ASSERT_FALSE(controller->dictation_active());
+  controller->dictation().SetEnabled(true);
+  controller->EnableOrToggleDictationFromSource(
+      DictationToggleSource::kKeyboard);
+  ASSERT_TRUE(controller->dictation().enabled());
+  ASSERT_TRUE(controller->dictation_active());
+  ASSERT_FALSE(controller->IsDictationKeyboardDialogShowingForTesting());
+  controller->EnableOrToggleDictationFromSource(
+      DictationToggleSource::kKeyboard);
+  ASSERT_TRUE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  ASSERT_FALSE(controller->IsDictationKeyboardDialogShowingForTesting());
+}
+
+class AccessibilityControllerDictationKeyboardImprovementsTest
+    : public AshTestBase {
+ protected:
+  AccessibilityControllerDictationKeyboardImprovementsTest() = default;
+  AccessibilityControllerDictationKeyboardImprovementsTest(
+      const AccessibilityControllerDictationKeyboardImprovementsTest&) = delete;
+  AccessibilityControllerDictationKeyboardImprovementsTest& operator=(
+      const AccessibilityControllerDictationKeyboardImprovementsTest&) = delete;
+  ~AccessibilityControllerDictationKeyboardImprovementsTest() override =
+      default;
+
+  void SetUp() override {
+    scoped_feature_list_.InitAndEnableFeature(
+        ::features::kAccessibilityDictationKeyboardImprovements);
+    AshTestBase::SetUp();
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// Verifies the behavior of EnableOrToggleDictation with the keyboard
+// improvements feature (new behavior).
+TEST_F(AccessibilityControllerDictationKeyboardImprovementsTest,
+       EnableOrToggleDictation) {
+  AccessibilityControllerImpl* controller =
+      Shell::Get()->accessibility_controller();
+  TestAccessibilityControllerClient client;
+  controller->SetClient(&client);
+  PrefService* prefs =
+      Shell::Get()->session_controller()->GetLastActiveUserPrefService();
+
+  // Dictation disabled.
+
+  prefs->SetBoolean(prefs::kDictationAcceleratorDialogHasBeenAccepted, false);
+  ASSERT_FALSE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  controller->EnableOrToggleDictationFromSource(
+      DictationToggleSource::kKeyboard);
+  // If the dialog hasn't been accepted yet, then pressing the Dictation key
+  // should show a dialog.
+  ASSERT_FALSE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  ASSERT_TRUE(controller->IsDictationKeyboardDialogShowingForTesting());
+
+  controller->DismissDictationKeyboardDialogForTesting();
+  prefs->SetBoolean(prefs::kDictationAcceleratorDialogHasBeenAccepted, true);
+  controller->dictation().SetEnabled(false);
+  controller->SetDictationActive(false);
+  controller->EnableOrToggleDictationFromSource(
+      DictationToggleSource::kKeyboard);
+  // If the dialog has been accepted, then pressing the Dictation key should
+  // enable Dictation (Dictation should still remain inactive).
+  ASSERT_TRUE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  ASSERT_FALSE(controller->IsDictationKeyboardDialogShowingForTesting());
+
+  // Dictation enabled.
+
+  ASSERT_TRUE(
+      prefs->GetBoolean(prefs::kDictationAcceleratorDialogHasBeenAccepted));
+  ASSERT_FALSE(controller->dictation_active());
+  controller->dictation().SetEnabled(true);
+  controller->EnableOrToggleDictationFromSource(
+      DictationToggleSource::kKeyboard);
+  // If Dictation is already on, then pressing the Dictation key should toggle
+  // Dictation on/off.
+  ASSERT_TRUE(controller->dictation().enabled());
+  ASSERT_TRUE(controller->dictation_active());
+  ASSERT_FALSE(controller->IsDictationKeyboardDialogShowingForTesting());
+  controller->EnableOrToggleDictationFromSource(
+      DictationToggleSource::kKeyboard);
+  ASSERT_TRUE(controller->dictation().enabled());
+  ASSERT_FALSE(controller->dictation_active());
+  ASSERT_FALSE(controller->IsDictationKeyboardDialogShowingForTesting());
 }
 
 namespace {
@@ -1190,11 +1631,11 @@ TEST_P(AccessibilityControllerSigninTest, EnableOnLoginScreenAndLogin) {
   EXPECT_FALSE(accessibility->autoclick().enabled());
   EXPECT_FALSE(accessibility->mono_audio().enabled());
   EXPECT_FALSE(docked_magnifier->GetEnabled());
-  using prefs::kAccessibilityLargeCursorEnabled;
-  using prefs::kAccessibilitySpokenFeedbackEnabled;
-  using prefs::kAccessibilityHighContrastEnabled;
   using prefs::kAccessibilityAutoclickEnabled;
+  using prefs::kAccessibilityHighContrastEnabled;
+  using prefs::kAccessibilityLargeCursorEnabled;
   using prefs::kAccessibilityMonoAudioEnabled;
+  using prefs::kAccessibilitySpokenFeedbackEnabled;
   using prefs::kDockedMagnifierEnabled;
   PrefService* signin_prefs = session->GetSigninScreenPrefService();
   EXPECT_FALSE(signin_prefs->GetBoolean(kAccessibilityLargeCursorEnabled));

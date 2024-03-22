@@ -1,18 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/phonehub/task_continuation_view.h"
 
-#include "ash/components/phonehub/fake_user_action_recorder.h"
-#include "ash/components/phonehub/mutable_phone_model.h"
-#include "ash/components/phonehub/phone_model_test_util.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/test/test_new_window_delegate.h"
 #include "ash/system/phonehub/continue_browsing_chip.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
+#include "chromeos/ash/components/phonehub/fake_user_action_recorder.h"
+#include "chromeos/ash/components/phonehub/mutable_phone_model.h"
+#include "chromeos/ash/components/phonehub/phone_model_test_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "ui/events/test/test_event.h"
 #include "ui/views/test/button_test_api.h"
 
 namespace ash {
@@ -24,12 +26,10 @@ using BrowserTabsModel = phonehub::BrowserTabsModel;
 class MockNewWindowDelegate : public testing::NiceMock<TestNewWindowDelegate> {
  public:
   // TestNewWindowDelegate:
-  MOCK_METHOD(void, OpenUrl, (const GURL& url, OpenUrlFrom from), (override));
-};
-
-class DummyEvent : public ui::Event {
- public:
-  DummyEvent() : Event(ui::ET_UNKNOWN, base::TimeTicks(), 0) {}
+  MOCK_METHOD(void,
+              OpenUrl,
+              (const GURL& url, OpenUrlFrom from, Disposition disposition),
+              (override));
 };
 
 }  // namespace
@@ -41,7 +41,7 @@ class TaskContinuationViewTest : public AshTestBase {
 
   // AshTestBase:
   void SetUp() override {
-    feature_list_.InitAndEnableFeature(chromeos::features::kPhoneHub);
+    feature_list_.InitAndEnableFeature(features::kPhoneHub);
     auto delegate = std::make_unique<MockNewWindowDelegate>();
     new_window_delegate_ = delegate.get();
     delegate_provider_ =
@@ -67,7 +67,8 @@ class TaskContinuationViewTest : public AshTestBase {
   phonehub::FakeUserActionRecorder fake_user_action_recorder_;
   phonehub::MutablePhoneModel phone_model_;
   base::test::ScopedFeatureList feature_list_;
-  MockNewWindowDelegate* new_window_delegate_;
+  raw_ptr<MockNewWindowDelegate, DanglingUntriaged | ExperimentalAsh>
+      new_window_delegate_;
   std::unique_ptr<TestNewWindowDelegateProvider> delegate_provider_;
 };
 
@@ -120,9 +121,10 @@ TEST_F(TaskContinuationViewTest, TaskChipsView) {
     // OpenUrl is expected to call after button pressed simulation.
     EXPECT_CALL(new_window_delegate(),
                 OpenUrl(GURL("https://www.example.com/tab1"),
-                        NewWindowDelegate::OpenUrlFrom::kUserInteraction));
+                        NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+                        NewWindowDelegate::Disposition::kNewForegroundTab));
     // Simulate clicking button using dummy event.
-    views::test::ButtonTestApi(chip).NotifyClick(DummyEvent());
+    views::test::ButtonTestApi(chip).NotifyClick(ui::test::TestEvent());
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,9 +56,8 @@ bool FileSystemProviderCapabilitiesHandler::Parse(Extension* extension,
                                                   std::u16string* error) {
   const bool has_permission = extensions::PermissionsParser::HasAPIPermission(
       extension, mojom::APIPermissionID::kFileSystemProvider);
-  const base::DictionaryValue* section = nullptr;
-  extension->manifest()->GetDictionary(
-      manifest_keys::kFileSystemProviderCapabilities, &section);
+  const base::Value::Dict* section = extension->manifest()->FindDictPath(
+      manifest_keys::kFileSystemProviderCapabilities);
 
   if (has_permission && !section) {
     *error = manifest_errors::kInvalidFileSystemProviderMissingCapabilities;
@@ -78,37 +77,34 @@ bool FileSystemProviderCapabilitiesHandler::Parse(Extension* extension,
     return true;
   }
 
-  api::manifest_types::FileSystemProviderCapabilities idl_capabilities;
-  if (!api::manifest_types::FileSystemProviderCapabilities::Populate(
-          *section, &idl_capabilities, error)) {
+  auto idl_capabilities =
+      api::manifest_types::FileSystemProviderCapabilities::FromValue(*section);
+  if (!idl_capabilities.has_value()) {
+    *error = std::move(idl_capabilities).error();
     return false;
   }
 
   FileSystemProviderSource source = SOURCE_FILE;
-  switch (idl_capabilities.source) {
-    case api::manifest_types::FILE_SYSTEM_PROVIDER_SOURCE_FILE:
+  switch (idl_capabilities->source) {
+    case api::manifest_types::FileSystemProviderSource::kFile:
       source = SOURCE_FILE;
       break;
-    case api::manifest_types::FILE_SYSTEM_PROVIDER_SOURCE_DEVICE:
+    case api::manifest_types::FileSystemProviderSource::kDevice:
       source = SOURCE_DEVICE;
       break;
-    case api::manifest_types::FILE_SYSTEM_PROVIDER_SOURCE_NETWORK:
+    case api::manifest_types::FileSystemProviderSource::kNetwork:
       source = SOURCE_NETWORK;
       break;
-    case api::manifest_types::FILE_SYSTEM_PROVIDER_SOURCE_NONE:
+    case api::manifest_types::FileSystemProviderSource::kNone:
       NOTREACHED();
   }
 
   std::unique_ptr<FileSystemProviderCapabilities> capabilities(
       new FileSystemProviderCapabilities(
-          idl_capabilities.configurable.get()
-              ? *idl_capabilities.configurable.get()
-              : false /* false by default */,
-          idl_capabilities.watchable.get() ? *idl_capabilities.watchable.get()
-                                           : false /* false by default */,
-          idl_capabilities.multiple_mounts.get()
-              ? *idl_capabilities.multiple_mounts.get()
-              : false /* false by default */,
+          idl_capabilities->configurable.value_or(false) /* false by default */,
+          idl_capabilities->watchable.value_or(false) /* false by default */,
+          idl_capabilities->multiple_mounts.value_or(
+              false) /* false by default */,
           source));
 
   extension->SetManifestData(manifest_keys::kFileSystemProviderCapabilities,

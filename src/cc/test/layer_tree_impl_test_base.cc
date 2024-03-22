@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ LayerTreeImplTestBase::LayerTreeImplTestBase(
     const LayerTreeSettings& settings,
     std::unique_ptr<LayerTreeFrameSink> layer_tree_frame_sink)
     : layer_tree_frame_sink_(std::move(layer_tree_frame_sink)),
-      animation_host_(AnimationHost::CreateForTesting(ThreadInstance::MAIN)),
+      animation_host_(AnimationHost::CreateForTesting(ThreadInstance::kMain)),
       host_(FakeLayerTreeHost::Create(&client_,
                                       &task_graph_runner_,
                                       animation_host_.get(),

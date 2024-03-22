@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,17 @@
 
 #include <algorithm>
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
@@ -146,7 +146,7 @@ class TestHttpClient {
     DCHECK_LE(0, body_size);
     auto headers = base::MakeRefCounted<net::HttpResponseHeaders>(
         net::HttpUtil::AssembleRawHeaders(
-            base::StringPiece(response.data(), end_of_headers)));
+            std::string_view(response.data(), end_of_headers)));
     return body_size >= headers->GetContentLength();
   }
 
@@ -163,9 +163,7 @@ class TestHttpClient {
 
 }  // namespace
 
-namespace network {
-
-namespace server {
+namespace network::server {
 
 class HttpServerTest : public testing::Test, public HttpServer::Delegate {
  public:
@@ -180,8 +178,10 @@ class HttpServerTest : public testing::Test, public HttpServer::Delegate {
   void SetUp() override {
     int net_error = net::ERR_FAILED;
     base::RunLoop run_loop;
+    auto options = network::mojom::TCPServerSocketOptions::New();
+    options->backlog = 1;
     factory_.CreateTCPServerSocket(
-        net::IPEndPoint(net::IPAddress::IPv6Localhost(), 0), 1 /* backlog */,
+        net::IPEndPoint(net::IPAddress::IPv6Localhost(), 0), std::move(options),
         TRAFFIC_ANNOTATION_FOR_TESTS,
         server_socket_.InitWithNewPipeAndPassReceiver(),
         base::BindOnce(
@@ -201,6 +201,15 @@ class HttpServerTest : public testing::Test, public HttpServer::Delegate {
     server_ = std::make_unique<HttpServer>(std::move(server_socket_), this);
   }
 
+  void TearDown() override {
+    // There might be pending tasks, such as destroying connections, wait until
+    // their completion.
+    base::RunLoop run_loop;
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop.QuitClosure());
+    run_loop.Run();
+  }
+
   void OnConnect(int connection_id) override {
     DCHECK(connection_map_.find(connection_id) == connection_map_.end());
     connection_map_[connection_id] = true;
@@ -211,7 +220,7 @@ class HttpServerTest : public testing::Test, public HttpServer::Delegate {
 
   void OnHttpRequest(int connection_id,
                      const HttpServerRequestInfo& info) override {
-    requests_.push_back(std::make_pair(info, connection_id));
+    requests_.emplace_back(info, connection_id);
     if (requests_.size() == quit_after_request_count_) {
       run_loop_quit_func_.Run();
     }
@@ -874,6 +883,4 @@ TEST_F(CloseOnConnectHttpServerTest, ServerImmediatelyClosesConnection) {
   EXPECT_EQ(0ul, requests_.size());
 }
 
-}  // namespace server
-
-}  // namespace network
+}  // namespace network::server

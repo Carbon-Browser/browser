@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "components/performance_manager/persistence/site_data/site_data_cache_factory.h"
 #include "components/performance_manager/persistence/site_data/site_data_cache_inspector.h"
 #include "components/performance_manager/persistence/site_data/site_data_impl.h"
-#include "components/performance_manager/persistence/site_data/unittest_utils.h"
+#include "components/performance_manager/test_support/persistence/unittest_utils.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_browser_context.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -32,7 +32,7 @@ class MockSiteCache : public testing::NoopSiteDataStore {
   MockSiteCache(const MockSiteCache&) = delete;
   MockSiteCache& operator=(const MockSiteCache&) = delete;
 
-  ~MockSiteCache() = default;
+  ~MockSiteCache() override = default;
 
   MOCK_METHOD1(RemoveSiteDataFromStore, void(const std::vector<url::Origin>&));
   MOCK_METHOD0(ClearStore, void());
@@ -113,7 +113,8 @@ class SiteDataCacheImplTest : public ::testing::Test {
   content::TestBrowserContext browser_context_;
 
   // Owned by |data_cache_|.
-  raw_ptr<::testing::StrictMock<MockSiteCache>> mock_db_ = nullptr;
+  raw_ptr<::testing::StrictMock<MockSiteCache>, DanglingUntriaged> mock_db_ =
+      nullptr;
   std::unique_ptr<SiteDataCacheFactory> data_cache_factory_;
   std::unique_ptr<SiteDataCacheImpl> data_cache_;
 

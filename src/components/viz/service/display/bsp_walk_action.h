@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "components/viz/service/display/direct_renderer.h"
 #include "components/viz/service/display/draw_polygon.h"
 
@@ -31,7 +32,7 @@ class VIZ_SERVICE_EXPORT BspWalkActionDrawPolygon : public BspWalkAction {
 
  private:
   raw_ptr<DirectRenderer> renderer_;
-  const gfx::Rect& render_pass_scissor_;
+  const raw_ref<const gfx::Rect> render_pass_scissor_;
   bool using_scissor_as_optimization_;
 };
 

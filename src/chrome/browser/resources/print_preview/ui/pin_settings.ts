@@ -1,17 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
+import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import './print_preview_shared.css.js';
 import './settings_section.js';
 
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {State} from '../data/state.js';
@@ -28,7 +28,7 @@ export interface PrintPreviewPinSettingsElement {
 }
 
 const PrintPreviewPinSettingsElementBase =
-    WebUIListenerMixin(InputMixin(SettingsMixin(I18nMixin(PolymerElement))));
+    WebUiListenerMixin(InputMixin(SettingsMixin(I18nMixin(PolymerElement))));
 
 export class PrintPreviewPinSettingsElement extends
     PrintPreviewPinSettingsElementBase {
@@ -63,10 +63,10 @@ export class PrintPreviewPinSettingsElement extends
         observer: 'onInputChanged_',
       },
 
-      inputValid_: {
+      isPinValid: {
         type: Boolean,
-        value: true,
         reflectToAttribute: true,
+        notify: true,
       },
     };
   }
@@ -80,9 +80,9 @@ export class PrintPreviewPinSettingsElement extends
 
   state: State;
   disabled: boolean;
+  isPinValid: boolean;
   private checkboxDisabled_: boolean;
   private inputString_: string;
-  private inputValid_: boolean;
   private pinEnabled_: boolean;
 
   override ready() {
@@ -121,7 +121,7 @@ export class PrintPreviewPinSettingsElement extends
    * @return Whether to disable the pin value input.
    */
   private inputDisabled_(): boolean {
-    return !this.pinEnabled_ || (this.inputValid_ && this.disabled);
+    return !this.pinEnabled_ || (this.isPinValid && this.disabled);
   }
 
   /**
@@ -142,7 +142,7 @@ export class PrintPreviewPinSettingsElement extends
     // after unchecking the pin and to check the validity again after checking
     // the pin.
     if (!this.$.pin.checked) {
-      this.setSettingValid('pinValue', true);
+      this.isPinValid = true;
     } else {
       this.changePinValueSetting_();
     }
@@ -176,12 +176,11 @@ export class PrintPreviewPinSettingsElement extends
     if (this.state !== State.READY && this.settings.pinValue!.valid) {
       return;
     }
-    this.inputValid_ = this.computeValid_();
-    this.setSettingValid('pinValue', this.inputValid_);
+    this.isPinValid = this.computeValid_();
 
     // We allow to save the empty string as sticky setting value to give users
     // the opportunity to unset their PIN in sticky settings.
-    if ((this.inputValid_ || this.inputString_ === '') &&
+    if ((this.isPinValid || this.inputString_ === '') &&
         this.inputString_ !== this.getSettingValue('pinValue')) {
       this.setSetting('pinValue', this.inputString_);
     }
@@ -199,7 +198,7 @@ export class PrintPreviewPinSettingsElement extends
   }
 
   private getPinErrorMessage_(): string {
-    return this.inputValid_ ? '' : this.i18n('pinErrorMessage');
+    return this.isPinValid ? '' : this.i18n('pinErrorMessage');
   }
 }
 

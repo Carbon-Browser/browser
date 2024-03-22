@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,11 @@ namespace ipcz {
 
 // Structure shared between both Routers connected by RouterLink. This is used
 // to synchronously query and reflect the state of each Router to the other,
-// and ultimately to facilitate orderly state changes across the route.
-//
-// This may live in shared memory, where it should be managed as a
+// and ultimately to facilitate orderly state changes across the route. This
+// may live in shared memory, where it should be managed as a
 // RefCountedFragment.
+//
+// Note that RouterLinkStates are effectively only used by central links.
 struct IPCZ_ALIGN(8) RouterLinkState : public RefCountedFragment {
   RouterLinkState();
 
@@ -29,7 +30,7 @@ struct IPCZ_ALIGN(8) RouterLinkState : public RefCountedFragment {
   static RouterLinkState& Initialize(void* where);
 
   // Link status which both sides atomically update to coordinate orderly proxy
-  // bypass and route closure propagation. Used only for central links.
+  // bypass, route closure propagation, and other operations.
   using Status = uint32_t;
 
   // Status constants follow.
@@ -70,8 +71,8 @@ struct IPCZ_ALIGN(8) RouterLinkState : public RefCountedFragment {
   // validate that C is an appropriate source of such a bypass request.
   NodeName allowed_bypass_request_source;
 
-  // Reserved slots.
-  uint32_t reserved[10];
+  // More reserved slots, padding out this structure to 64 bytes.
+  uint32_t reserved1[10] = {0};
 
   bool is_locked_by(LinkSide side) const {
     Status s = status.load(std::memory_order_relaxed);

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/process/process.h"
 #include "base/timer/timer.h"
@@ -68,8 +68,7 @@ class TracingAgent::DevToolsTraceEndpointProxy
     if (TracingAgent* h = tracing_agent_.get())
       h->OnTraceDataCollected(std::move(chunk));
   }
-  void ReceiveTraceFinalContents(
-      std::unique_ptr<const base::DictionaryValue> metadata) {
+  void ReceiveTraceFinalContents() {
     if (TracingAgent* h = tracing_agent_.get())
       h->OnTraceComplete();
   }
@@ -144,7 +143,7 @@ class TracingAgent::PerfettoTracingSession
     if (!tracing_session_host_) {
       if (endpoint_) {
         // Will delete |this|.
-        endpoint_->ReceiveTraceFinalContents(nullptr);
+        endpoint_->ReceiveTraceFinalContents();
       }
       return;
     }
@@ -220,7 +219,7 @@ class TracingAgent::PerfettoTracingSession
       std::move(pending_disable_tracing_task_).Run();
 
     if (endpoint_) {
-      endpoint_->ReceiveTraceFinalContents(nullptr);
+      endpoint_->ReceiveTraceFinalContents();
     }
   }
 
@@ -268,7 +267,7 @@ class TracingAgent::PerfettoTracingSession
     if (!endpoint_)
       return;
     // Will delete |this|.
-    endpoint_->ReceiveTraceFinalContents(nullptr);
+    endpoint_->ReceiveTraceFinalContents();
   }
 
   mojo::Receiver<tracing::mojom::TracingSessionClient> receiver_{this};
@@ -359,7 +358,7 @@ void TracingAgent::start(
     return;
   }
 
-  if (!categories.isJust() && !options.isJust()) {
+  if (!categories.has_value() && !options.has_value()) {
     callback->sendFailure(
         Response::InvalidParams("categories+options should be specified."));
     return;
@@ -367,7 +366,7 @@ void TracingAgent::start(
 
   did_initiate_recording_ = true;
   buffer_usage_reporting_interval_ =
-      buffer_usage_reporting_interval.fromMaybe(0);
+      buffer_usage_reporting_interval.value_or(0);
 
   // Since we want minimum changes to the devtools frontend, enable the
   // tracing categories for ui_devtools here.
@@ -376,7 +375,7 @@ void TracingAgent::start(
       "timeline.frame,views,latency,toplevel,"
       "benchmark,cc,viz,input,latency,gpu,rail,viz,ui";
   trace_config_ = base::trace_event::TraceConfig(ui_devtools_categories,
-                                                 options.fromMaybe(""));
+                                                 options.value_or(""));
   StartTracing(std::move(callback));
 }
 

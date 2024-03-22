@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ssl/known_interception_disclosure_infobar_delegate.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/infobars/content/content_infobar_manager.h"
@@ -20,6 +22,7 @@
 #include "net/cert/crl_set.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/test_data_directory.h"
+#include "services/cert_verifier/public/mojom/cert_verifier_service_factory.mojom.h"
 #include "ui/base/window_open_disposition.h"
 
 namespace {
@@ -27,16 +30,14 @@ namespace {
 size_t GetInfobarCount(content::WebContents* contents) {
   infobars::ContentInfoBarManager* infobar_manager =
       infobars::ContentInfoBarManager::FromWebContents(contents);
-  if (!infobar_manager)
-    return 0;
-  return infobar_manager->infobar_count();
+  return infobar_manager ? infobar_manager->infobars().size() : 0;
 }
 
 infobars::InfoBar* GetInfobar(content::WebContents* contents) {
   infobars::ContentInfoBarManager* infobar_manager =
       infobars::ContentInfoBarManager::FromWebContents(contents);
   DCHECK(infobar_manager);
-  return infobar_manager->infobar_at(0);
+  return infobar_manager->infobars()[0];
 }
 
 // Follows same logic as clicking the "Continue" button would.
@@ -45,9 +46,8 @@ void CloseInfobar(content::WebContents* contents) {
   if (!infobar)
     return;
 
-  ConfirmInfoBarDelegate* delegate =
-      static_cast<ConfirmInfoBarDelegate*>(infobar->delegate());
-  delegate->Accept();
+  ASSERT_TRUE(
+      static_cast<ConfirmInfoBarDelegate*>(infobar->delegate())->Accept());
   infobar->RemoveSelf();
 }
 
@@ -76,11 +76,8 @@ class KnownInterceptionDisclosureInfobarTest : public InProcessBrowserTest {
                                  "crlset_known_interception_by_root.raw"),
                              &crl_set_bytes);
     }
-    network::mojom::NetworkService* network_service =
-        content::GetNetworkService();
-    DCHECK(network_service);
     base::RunLoop run_loop;
-    network_service->UpdateCRLSet(
+    content::GetCertVerifierServiceFactory()->UpdateCRLSet(
         base::as_bytes(base::make_span(crl_set_bytes)), run_loop.QuitClosure());
     run_loop.Run();
   }
@@ -116,7 +113,7 @@ IN_PROC_BROWSER_TEST_F(KnownInterceptionDisclosureInfobarTest,
 
   // Close the new tab.
   tab_strip_model->CloseWebContentsAt(tab_strip_model->active_index(),
-                                      TabStripModel::CLOSE_USER_GESTURE);
+                                      TabCloseTypes::CLOSE_USER_GESTURE);
 
   // Reload the first page -- infobar should still show.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), kInterceptedUrl));

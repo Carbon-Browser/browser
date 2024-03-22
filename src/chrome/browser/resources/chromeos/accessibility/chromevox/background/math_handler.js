@@ -1,15 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
  * @fileoverview Handles math output and exploration.
  */
+import {AutomationPredicate} from '../../common/automation_predicate.js';
 import {CursorRange} from '../../common/cursors/range.js';
 import {Msgs} from '../common/msgs.js';
+import {QueueMode} from '../common/tts_types.js';
+
+import {ChromeVox} from './chromevox.js';
 
 /**
- * Initializes math for output and exploration.
+ * Handles specialized code to navigate, announce, and interact with math
+ * content (encoded in MathML).
  */
 export class MathHandler {
   /**

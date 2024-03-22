@@ -1,10 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <vector>
 
-#include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -37,8 +36,8 @@ class VKMSTest : public testing::Test {
         drm_device_.BindNewPipeAndPassReceiver());
     run_loop.Run();
 
-    auto [path, file] = ui::test::FindDrmDriverOrDie("vkms");
-    drm_device_->AddGraphicsDevice(path, std::move(file));
+    auto [path, fd] = ui::test::FindDrmDriverOrDie("vkms");
+    drm_device_->AddGraphicsDevice(path, mojo::PlatformHandle(std::move(fd)));
   }
 
  protected:

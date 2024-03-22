@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/test/test_content_client_initializer.h"
 
 #include "build/build_config.h"
+#include "content/browser/accessibility/browser_accessibility_state_impl.h"
 #include "content/browser/notification_service_impl.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/common/content_client.h"
@@ -30,9 +31,12 @@ TestContentClientInitializer::TestContentClientInitializer() {
 
   content_browser_client_ = std::make_unique<TestContentBrowserClient>();
   content::SetBrowserClientForTesting(content_browser_client_.get());
+
+  browser_accessibility_state_ = BrowserAccessibilityStateImpl::Create();
 }
 
 TestContentClientInitializer::~TestContentClientInitializer() {
+  browser_accessibility_state_.reset();
   test_render_view_host_factory_.reset();
   rph_factory_.reset();
   notification_service_.reset();

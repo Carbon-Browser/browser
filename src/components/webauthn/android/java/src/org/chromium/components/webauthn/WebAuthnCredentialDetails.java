@@ -1,21 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.webauthn;
 
-/**
- * Describes a WebAuthn credential available on the authenticator.
- */
+/** Describes a WebAuthn credential available on the authenticator. */
 public final class WebAuthnCredentialDetails {
-    /**
-     * Username associated with the credential.
-     */
+    /** Username associated with the credential. */
     public String mUserName;
 
-    /**
-     * Display name associated with the credential.
-     */
+    /** Display name associated with the credential. */
     public String mUserDisplayName;
 
     /**
@@ -24,19 +18,13 @@ public final class WebAuthnCredentialDetails {
      */
     public byte[] mUserId;
 
-    /**
-     * Identifier for the credential itself.
-     */
+    /** Identifier for the credential itself. */
     public byte[] mCredentialId;
 
-    /**
-     * Whether the credential is discoverable.
-     */
+    /** Whether the credential is discoverable. */
     public boolean mIsDiscoverable;
 
-    /**
-     * Whether the credential is enabled for Secure Payment Confirmation.
-     */
+    /** Whether the credential is enabled for Secure Payment Confirmation. */
     public boolean mIsPayment;
 
     public WebAuthnCredentialDetails() {}

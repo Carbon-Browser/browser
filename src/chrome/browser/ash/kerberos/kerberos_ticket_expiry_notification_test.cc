@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/kerberos/kerberos_ticket_expiry_notification.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/notifications/notification_display_service_impl.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
@@ -56,7 +57,7 @@ class KerberosTicketExpiryNotificationTest : public testing::Test {
   content::BrowserTaskEnvironment test_environment_{
       base::test::TaskEnvironment::MainThreadType::UI};
   TestingProfileManager profile_manager_{TestingBrowserProcess::GetGlobal()};
-  TestingProfile* profile_ = nullptr;
+  raw_ptr<TestingProfile, ExperimentalAsh> profile_ = nullptr;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_tester_;
 
   // Counts how many times a notification for a given user was clicked.

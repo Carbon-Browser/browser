@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@ import org.chromium.base.test.util.CallbackHelper;
 /**
  * CallbackHelper subclass which implements WebappRegistry.FetchWebappDataStorageCallback for tests.
  */
-public class TestFetchStorageCallback
-        extends CallbackHelper implements WebappRegistry.FetchWebappDataStorageCallback {
+public class TestFetchStorageCallback extends CallbackHelper
+        implements WebappRegistry.FetchWebappDataStorageCallback {
     protected WebappDataStorage mStorage;
 
     @Override

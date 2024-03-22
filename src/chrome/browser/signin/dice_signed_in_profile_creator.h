@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/profiles/profile.h"
@@ -15,6 +15,10 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class TokensLoadedCallbackRunner;
+
+namespace signin_util {
+class CookiesMover;
+}
 
 // Extracts an account from an existing profile and moves it to a new profile.
 class DiceSignedInProfileCreator {
@@ -30,7 +34,6 @@ class DiceSignedInProfileCreator {
                              CoreAccountId account_id,
                              const std::u16string& local_profile_name,
                              absl::optional<size_t> icon_index,
-                             bool use_guest_profile,
                              base::OnceCallback<void(Profile*)> callback);
 
   // Uses this version when the profile already exists at `target_profile_path`
@@ -48,21 +51,24 @@ class DiceSignedInProfileCreator {
       delete;
 
  private:
-  // Callback invoked once a profile is created, so we can transfer the
-  // credentials.
-  void OnNewProfileCreated(Profile* new_profile, Profile::CreateStatus status);
-
   // Called when the profile is initialized.
-  void OnNewProfileInitialized(Profile* new_profile);
+  void OnNewProfileInitialized(Profile* profile);
+
+  // Called when cookies have been moved from `source_profile_` to
+  // `new_profile`.
+  void OnCookiesMoved(Profile* new_profile);
+
+  void LoadNewProfileTokens(base::WeakPtr<Profile> new_profile);
 
   // Callback invoked once the token service is ready for the new profile.
   void OnNewProfileTokensLoaded(Profile* new_profile);
 
-  const raw_ptr<Profile> source_profile_;
+  const raw_ptr<Profile, DanglingUntriaged> source_profile_;
   const CoreAccountId account_id_;
 
   base::OnceCallback<void(Profile*)> callback_;
   std::unique_ptr<TokensLoadedCallbackRunner> tokens_loaded_callback_runner_;
+  std::unique_ptr<signin_util::CookiesMover> cookies_mover_;
 
   base::WeakPtrFactory<DiceSignedInProfileCreator> weak_pointer_factory_{this};
 };

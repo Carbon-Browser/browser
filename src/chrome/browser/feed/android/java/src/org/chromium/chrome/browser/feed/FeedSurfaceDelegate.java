@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import android.view.MotionEvent;
 
 import org.chromium.chrome.browser.feed.componentinterfaces.SurfaceCoordinator;
 
-/**
- * The delegate of the {@link FeedSurfaceProvider} creator needs to implement.
- */
+/** The delegate of the {@link FeedSurfaceProvider} creator needs to implement. */
 public interface FeedSurfaceDelegate {
     /**
      * Creates {@link FeedSurfaceLifecycleManager} for the specified {@link FeedSurfaceCoordinator}

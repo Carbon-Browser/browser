@@ -1,19 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/media/android/stream_texture_wrapper_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "cc/layers/video_frame_provider.h"
 #include "gpu/GLES2/gl2extchromium.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
-#include "media/base/bind_to_current_loop.h"
 
 namespace {
 // Non-member function to allow it to run even after this class is deleted.
@@ -72,17 +72,17 @@ void StreamTextureWrapperImpl::CreateVideoFrame(
       gpu::MailboxHolder(mailbox, gpu::SyncToken(), GL_TEXTURE_EXTERNAL_OES)};
 
   gpu::SharedImageInterface* sii = factory_->SharedImageInterface();
-  sii->NotifyMailboxAdded(mailbox, gpu::SHARED_IMAGE_USAGE_DISPLAY |
+  sii->NotifyMailboxAdded(mailbox, gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
                                        gpu::SHARED_IMAGE_USAGE_GLES2 |
                                        gpu::SHARED_IMAGE_USAGE_RASTER);
 
   // The pixel format doesn't matter here as long as it's valid for texture
   // frames. But SkiaRenderer wants to ensure that the format of the resource
   // used here which will eventually create a promise image must match the
-  // format of the resource(SharedImageVideo) used to create fulfill image.
-  // crbug.com/1028746. Since we create all the textures/abstract textures as
-  // well as shared images for video to be of format RGBA, we need to use the
-  // pixel format as ABGR here(which corresponds to 32bpp RGBA).
+  // format of the resource(AndroidVideoImageBacking) used to create fulfill
+  // image. crbug.com/1028746. Since we create all the textures/abstract
+  // textures as well as shared images for video to be of format RGBA, we need
+  // to use the pixel format as ABGR here(which corresponds to 32bpp RGBA).
   scoped_refptr<media::VideoFrame> new_frame =
       media::VideoFrame::WrapNativeTextures(
           media::PIXEL_FORMAT_ABGR, holders,
@@ -148,7 +148,7 @@ void StreamTextureWrapperImpl::Initialize(
       FROM_HERE,
       base::BindOnce(&StreamTextureWrapperImpl::InitializeOnMainThread,
                      weak_factory_.GetWeakPtr(), received_frame_cb,
-                     media::BindToCurrentLoop(std::move(init_cb))));
+                     base::BindPostTaskToCurrentDefault(std::move(init_cb))));
 }
 
 void StreamTextureWrapperImpl::InitializeOnMainThread(

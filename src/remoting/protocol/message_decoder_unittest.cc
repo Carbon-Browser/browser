@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,13 +16,11 @@
 #include "remoting/protocol/message_serialization.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 static const unsigned int kTestKey = 142;
 
-static void AppendMessage(const EventMessage& msg,
-                          std::string* buffer) {
+static void AppendMessage(const EventMessage& msg, std::string* buffer) {
   // Contains one encoded message.
   scoped_refptr<net::IOBufferWithSize> encoded_msg;
   encoded_msg = SerializeAndFrameMessage(msg);
@@ -71,14 +69,14 @@ void SimulateReadSequence(const int read_sequence[], int sequence_size) {
     int read = std::min(size - pos, read_sequence[pos % sequence_size]);
 
     // And then prepare an IOBuffer for feeding it.
-    scoped_refptr<net::IOBuffer> buffer =
-        base::MakeRefCounted<net::IOBuffer>(read);
+    auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(read);
     memcpy(buffer->data(), test_data + pos, read);
     decoder.AddData(buffer, read);
     while (true) {
       std::unique_ptr<CompoundBuffer> message(decoder.GetNextMessage());
-      if (!message.get())
+      if (!message.get()) {
         break;
+      }
 
       std::unique_ptr<EventMessage> event = std::make_unique<EventMessage>();
       CompoundBufferInputStream stream(message.get());
@@ -121,5 +119,4 @@ TEST(MessageDecoderTest, EmptyReads) {
   SimulateReadSequence(kReads, std::size(kReads));
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 namespace ui {
 
 // Event types. (prefixed because of a conflict with windows headers)
+// TODO(b/285921876): Refactor EventType enum to enum class.
 enum EventType {
   ET_UNKNOWN = 0,
   ET_MOUSE_PRESSED,

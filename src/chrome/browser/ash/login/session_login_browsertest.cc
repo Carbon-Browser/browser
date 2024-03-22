@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,23 +13,22 @@
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_screen_exit_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
-#include "chrome/browser/ash/login/user_flow.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/view_ids.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chrome/common/chrome_switches.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user_manager.h"
@@ -79,16 +78,16 @@ IN_PROC_BROWSER_TEST_F(BrowserLoginTest, BrowserActive) {
 
   Browser* browser =
       chrome::FindAnyBrowser(ProfileManager::GetActiveUserProfile(), false);
-  EXPECT_TRUE(browser != NULL);
+  EXPECT_TRUE(browser != nullptr);
   EXPECT_TRUE(browser->window()->IsActive());
 
   gfx::NativeWindow window = browser->window()->GetNativeWindow();
   views::Widget* widget = views::Widget::GetWidgetForNativeWindow(window);
   views::FocusManager* focus_manager = widget->GetFocusManager();
-  EXPECT_TRUE(focus_manager != NULL);
+  EXPECT_TRUE(focus_manager != nullptr);
 
   const views::View* focused_view = focus_manager->GetFocusedView();
-  EXPECT_TRUE(focused_view != NULL);
+  EXPECT_TRUE(focused_view != nullptr);
   EXPECT_EQ(VIEW_ID_OMNIBOX, focused_view->GetID());
 }
 
@@ -132,7 +131,8 @@ class OnboardingTest : public LoginManagerTest {
 
  protected:
   DeviceStateMixin device_state_{
-      &mixin_host_, DeviceStateMixin::State::OOBE_COMPLETED_UNOWNED};
+      &mixin_host_,
+      DeviceStateMixin::State::OOBE_COMPLETED_PERMANENTLY_UNOWNED};
   FakeGaiaMixin gaia_mixin_{&mixin_host_};
   LoginManagerMixin login_mixin_{&mixin_host_, LoginManagerMixin::UserList(),
                                  &gaia_mixin_};

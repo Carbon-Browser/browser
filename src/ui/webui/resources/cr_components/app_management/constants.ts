@@ -1,6 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {App} from './app_management.mojom-webui.js';
 
 export {AppType, InstallReason, InstallSource, OptionalBool, RunOnOsLogin, RunOnOsLoginMode, WindowMode} from './app_management.mojom-webui.js';
 
@@ -77,4 +79,9 @@ export enum AppManagementUserAction {
   FILE_HANDLING_TURNED_ON = 29,
   FILE_HANDLING_TURNED_OFF = 30,
   FILE_HANDLING_OVERFLOW_SHOWN = 31,
+  APP_STORE_LINK_CLICKED = 32,
 }
+
+// A Record (tuple) of app IDs to app used mostly for the supported links
+// frontend components.
+export type AppMap = Record<string, App>;

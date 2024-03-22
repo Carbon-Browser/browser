@@ -1,26 +1,23 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_view_controller.h"
 
 #import "base/ios/block_types.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#include "ios/chrome/browser/infobars/infobar_metrics_recorder.h"
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
-#import "ios/chrome/browser/ui/icons/infobar_icon.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/time/time.h"
+#import "ios/chrome/browser/infobars/infobar_metrics_recorder.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_constants.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_delegate.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
+#import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/common/ui/util/pointer_interaction_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
 // Banner View constants.
@@ -32,8 +29,10 @@ const CGFloat kBannerViewShadowOpacity = 0.23;
 // Banner View selected constants.
 const CGFloat kTappedBannerViewScale = 0.98;
 const CGFloat kSelectedBannerViewScale = 1.02;
-const CGFloat kSelectBannerAnimationDurationInSeconds = 0.2;
-const CGFloat kTappedBannerAnimationDurationInSeconds = 0.05;
+constexpr base::TimeDelta kSelectBannerAnimationDuration =
+    base::Milliseconds(200);
+constexpr base::TimeDelta kTappedBannerAnimationDuration =
+    base::Milliseconds(50);
 const CGFloat kSelectedBannerViewYShadowOffset = 8.0;
 
 // Button constants.
@@ -47,13 +46,20 @@ const CGFloat kContainerStackVerticalPadding = 18.0;
 const CGFloat kContainerStackHorizontalPadding = 15.0;
 
 // Icon constants.
-const CGFloat kIconWidth = 28.0;
-const CGFloat kIconHeight = 28.0;
 const CGFloat kIconCornerRadius = 5.0;
+
+// Favicon constants.
+const CGFloat kFaviconShadowRadius = 3.0;
+const CGFloat kFaviconShadowOpacity = 0.2;
+const CGFloat kFaviconShadowYOffset = 1;
+const CGFloat kFaviconSize = 24.0;
+const CGFloat kFavIconCornerRadius = 5.0;
+const CGFloat kFaviconContainerSize = 36.0;
+const CGFloat kFavIconContainerCornerRadius = 7.0;
 
 // Gesture constants.
 const CGFloat kChangeInPositionForDismissal = -15.0;
-const CGFloat kLongPressTimeDurationInSeconds = 0.4;
+constexpr base::TimeDelta kLongPressTimeDuration = base::Milliseconds(400);
 }  // namespace
 
 @interface InfobarBannerViewController ()
@@ -61,12 +67,18 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
 // Properties backing the InfobarBannerConsumer protocol.
 @property(nonatomic, copy) NSString* bannerAccessibilityLabel;
 @property(nonatomic, copy) NSString* buttonText;
+@property(nonatomic, strong) UIImage* faviconImage;
 @property(nonatomic, strong) UIImage* iconImage;
 @property(nonatomic, assign) BOOL presentsModal;
 @property(nonatomic, copy) NSString* titleText;
 @property(nonatomic, copy) NSString* subtitleText;
 @property(nonatomic, assign) BOOL useIconBackgroundTint;
-@property(nonatomic, assign) BOOL restrictSubtitleTextToSingleLine;
+@property(nonatomic, assign) BOOL ignoreIconColorWithTint;
+@property(nonatomic, strong) UIColor* iconImageTintColor;
+@property(nonatomic, strong) UIColor* iconBackgroundColor;
+@property(nonatomic, assign) NSInteger titleNumberOfLines;
+@property(nonatomic, assign) NSInteger subtitleNumberOfLines;
+@property(nonatomic, assign) NSLineBreakMode subtitleLineBreakMode;
 
 // The original position of this InfobarVC view in the parent's view coordinate
 // system.
@@ -90,8 +102,8 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
 @property(nonatomic, strong) UILabel* subTitleLabel;
 // Used to build and record metrics.
 @property(nonatomic, strong) InfobarMetricsRecorder* metricsRecorder;
-// The NSTimeInterval in which the Banner appeared on screen.
-@property(nonatomic, assign) NSTimeInterval bannerAppearedTime;
+// The time in which the Banner appeared on screen.
+@property(nonatomic, assign) base::TimeTicks bannerAppearedTime;
 // YES if the banner on screen time metric has already been recorded for this
 // banner.
 @property(nonatomic, assign) BOOL bannerOnScreenTimeWasRecorded;
@@ -112,7 +124,8 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
         [[InfobarMetricsRecorder alloc] initWithType:infobarType];
     _presentsModal = presentsModal;
     _useIconBackgroundTint = YES;
-    _restrictSubtitleTextToSingleLine = NO;
+    _ignoreIconColorWithTint = YES;
+    _subtitleLineBreakMode = NSLineBreakByTruncatingTail;
   }
   return self;
 }
@@ -135,52 +148,15 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
         setShadowColor:[UIColor colorNamed:kToolbarShadowColor].CGColor];
   }];
   self.view.accessibilityIdentifier = kInfobarBannerViewIdentifier;
-  self.view.isAccessibilityElement = YES;
-  self.view.accessibilityLabel = [self accessibilityLabel];
   self.view.accessibilityCustomActions = [self accessibilityActions];
 
   // Icon setup.
   UIView* iconContainerView = nil;
+  if (self.faviconImage) {
+    iconContainerView = [self configureFaviconImageContainer];
+  }
   if (self.iconImage) {
-    // If the icon image requires a background tint, ignore the original color
-    // information and draw the image as a template image.
-    if (self.useIconBackgroundTint) {
-      self.iconImage = [self.iconImage
-          imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    }
-    UIImageView* iconImageView =
-        [[UIImageView alloc] initWithImage:self.iconImage];
-    iconImageView.contentMode = UIViewContentModeScaleAspectFit;
-    iconImageView.translatesAutoresizingMaskIntoConstraints = NO;
-
-    UIView* backgroundIconView =
-        [[UIView alloc] initWithFrame:iconImageView.frame];
-    backgroundIconView.layer.cornerRadius = kIconCornerRadius;
-    if (self.useIconBackgroundTint) {
-      backgroundIconView.backgroundColor = [UIColor colorNamed:kBlueHaloColor];
-    }
-    backgroundIconView.translatesAutoresizingMaskIntoConstraints = NO;
-
-    iconContainerView = [[UIView alloc] init];
-    [iconContainerView addSubview:backgroundIconView];
-    [iconContainerView addSubview:iconImageView];
-    iconContainerView.translatesAutoresizingMaskIntoConstraints = NO;
-
-    [NSLayoutConstraint activateConstraints:@[
-      [backgroundIconView.centerXAnchor
-          constraintEqualToAnchor:iconContainerView.centerXAnchor],
-      [backgroundIconView.centerYAnchor
-          constraintEqualToAnchor:iconContainerView.centerYAnchor],
-      [backgroundIconView.widthAnchor constraintEqualToConstant:kIconWidth],
-      [backgroundIconView.heightAnchor constraintEqualToConstant:kIconHeight],
-      [iconImageView.centerXAnchor
-          constraintEqualToAnchor:iconContainerView.centerXAnchor],
-      [iconImageView.centerYAnchor
-          constraintEqualToAnchor:iconContainerView.centerYAnchor],
-      [iconImageView.widthAnchor constraintEqualToConstant:kIconWidth],
-      [iconContainerView.widthAnchor
-          constraintEqualToAnchor:backgroundIconView.widthAnchor],
-    ]];
+    iconContainerView = [self configureIconImageContainer];
   }
 
   // Labels setup.
@@ -189,7 +165,7 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
   self.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
   self.titleLabel.adjustsFontForContentSizeCategory = YES;
   self.titleLabel.textColor = [UIColor colorNamed:kTextPrimaryColor];
-  self.titleLabel.numberOfLines = 0;
+  self.titleLabel.numberOfLines = _titleNumberOfLines;
   self.titleLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
   [self.titleLabel
       setContentCompressionResistancePriority:UILayoutPriorityRequired
@@ -201,11 +177,9 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
       [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
   self.subTitleLabel.adjustsFontForContentSizeCategory = YES;
   self.subTitleLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
-  if (_restrictSubtitleTextToSingleLine) {
-    self.subTitleLabel.numberOfLines = 1;
-  } else {
-    self.subTitleLabel.numberOfLines = 0;
-  }
+  self.subTitleLabel.numberOfLines = _subtitleNumberOfLines;
+  self.subTitleLabel.lineBreakMode = _subtitleLineBreakMode;
+
   // If `self.subTitleText` hasn't been set or is empty, hide the label to keep
   // the title label centered in the Y axis.
   self.subTitleLabel.hidden = !self.subtitleText.length;
@@ -216,6 +190,10 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
   labelsStackView.layoutMarginsRelativeArrangement = YES;
   labelsStackView.directionalLayoutMargins = NSDirectionalEdgeInsetsMake(
       kContainerStackVerticalPadding, 0, kContainerStackVerticalPadding, 0);
+  labelsStackView.accessibilityIdentifier =
+      kInfobarBannerLabelsStackViewIdentifier;
+  labelsStackView.isAccessibilityElement = YES;
+  labelsStackView.accessibilityLabel = [self accessibilityLabel];
 
   // Button setup.
   self.infobarButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -224,6 +202,7 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
       scaledFontForFont:[UIFont
                             preferredFontForTextStyle:UIFontTextStyleHeadline]
        maximumPointSize:kButtonMaxFontSize];
+  self.infobarButton.titleLabel.adjustsFontForContentSizeCategory = YES;
   self.infobarButton.titleLabel.numberOfLines = 0;
   self.infobarButton.titleLabel.textAlignment = NSTextAlignmentCenter;
   [self.infobarButton addTarget:self
@@ -256,12 +235,8 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
   [containerStack addArrangedSubview:labelsStackView];
     // Open Modal Button setup.
   self.openModalButton = [UIButton buttonWithType:UIButtonTypeSystem];
-  UIImage* gearImage =
-      UseSymbols()
-          ? DefaultSymbolWithPointSize(kGearShapeSymbol, kSymbolImagePointSize)
-          : [UIImage imageNamed:@"infobar_settings_icon"];
-  gearImage =
-      [gearImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  UIImage* gearImage = DefaultSymbolWithPointSize(kSettingsFilledSymbol,
+                                                  kInfobarSymbolPointSize);
 
   [self.openModalButton setImage:gearImage forState:UIControlStateNormal];
   self.openModalButton.tintColor = [UIColor colorNamed:kTextSecondaryColor];
@@ -276,6 +251,8 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
                                       forAxis:UILayoutConstraintAxisHorizontal];
   self.openModalButton.accessibilityIdentifier =
       kInfobarBannerOpenModalButtonIdentifier;
+  self.openModalButton.accessibilityLabel =
+      l10n_util::GetNSString(IDS_IOS_INFOBAR_BANNER_OPTIONS_HINT);
   [containerStack addArrangedSubview:self.openModalButton];
   // Hide open modal button if user shouldn't be allowed to open the modal.
   self.openModalButton.hidden = !self.presentsModal;
@@ -338,14 +315,14 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
       [[UILongPressGestureRecognizer alloc] init];
   [longPressGestureRecognizer addTarget:self action:@selector(handleGestures:)];
   longPressGestureRecognizer.minimumPressDuration =
-      kLongPressTimeDurationInSeconds;
+      kLongPressTimeDuration.InSecondsF();
   [self.view addGestureRecognizer:longPressGestureRecognizer];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
   [super viewDidAppear:animated];
   [self.metricsRecorder recordBannerEvent:MobileMessagesBannerEvent::Presented];
-  self.bannerAppearedTime = [NSDate timeIntervalSinceReferenceDate];
+  self.bannerAppearedTime = base::TimeTicks::Now();
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -399,6 +376,7 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
 - (void)setSubtitleText:(NSString*)subtitleText {
   _subtitleText = subtitleText;
   self.subTitleLabel.text = _subtitleText;
+  self.subTitleLabel.hidden = !self.subtitleText.length;
 }
 
 - (void)setButtonText:(NSString*)buttonText {
@@ -415,16 +393,112 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
   self.view.accessibilityCustomActions = [self accessibilityActions];
 }
 
+- (void)setIconImageTintColor:(UIColor*)iconImageTintColor {
+  _iconImageTintColor = iconImageTintColor;
+}
+
 - (void)setUseIconBackgroundTint:(BOOL)useIconBackgroundTint {
   _useIconBackgroundTint = useIconBackgroundTint;
 }
 
-- (void)setRestrictSubtitleTextToSingleLine:
-    (BOOL)restrictSubtitleTextToSingleLine {
-  _restrictSubtitleTextToSingleLine = restrictSubtitleTextToSingleLine;
+- (void)setIgnoreIconColorWithTint:(BOOL)ignoreIconColorWithTint {
+  _ignoreIconColorWithTint = ignoreIconColorWithTint;
+}
+
+- (void)setIconBackgroundColor:(UIColor*)iconBackgroundColor {
+  _iconBackgroundColor = iconBackgroundColor;
 }
 
 #pragma mark - Private Methods
+
+// Configures and returns the UIView that contains the `faviconImage`.
+- (UIView*)configureFaviconImageContainer {
+  DCHECK(!self.iconImage);
+
+  UIView* faviconContainerView = [[UIView alloc] init];
+  faviconContainerView.layer.shadowColor = [UIColor blackColor].CGColor;
+  faviconContainerView.layer.shadowOffset =
+      CGSizeMake(0, kFaviconShadowYOffset);
+  faviconContainerView.layer.shadowRadius = kFaviconShadowRadius;
+  faviconContainerView.layer.shadowOpacity = kFaviconShadowOpacity;
+
+  UIView* faviconBackgroundContainerView = [[UIView alloc] init];
+  faviconBackgroundContainerView.translatesAutoresizingMaskIntoConstraints = NO;
+  faviconBackgroundContainerView.layer.cornerRadius =
+      kFavIconContainerCornerRadius;
+  faviconBackgroundContainerView.backgroundColor =
+      [UIColor colorNamed:kBackgroundColor];
+  [faviconContainerView addSubview:faviconBackgroundContainerView];
+
+  UIImageView* faviconImageView =
+      [[UIImageView alloc] initWithImage:self.faviconImage];
+  faviconImageView.clipsToBounds = YES;
+  faviconImageView.translatesAutoresizingMaskIntoConstraints = NO;
+  faviconImageView.layer.cornerRadius = kFavIconCornerRadius;
+  faviconImageView.backgroundColor = [UIColor colorNamed:kBackgroundColor];
+  [faviconBackgroundContainerView addSubview:faviconImageView];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [faviconContainerView.widthAnchor
+        constraintEqualToConstant:kFaviconContainerSize],
+    [faviconContainerView.heightAnchor
+        constraintEqualToConstant:kFaviconContainerSize],
+    [faviconImageView.widthAnchor constraintEqualToConstant:kFaviconSize],
+    [faviconImageView.heightAnchor constraintEqualToConstant:kFaviconSize],
+  ]];
+  AddSameConstraints(faviconContainerView, faviconBackgroundContainerView);
+  AddSameCenterConstraints(faviconContainerView, faviconImageView);
+
+  return faviconContainerView;
+}
+
+// Configures and returns the UIView that contains the `iconImage`.
+- (UIView*)configureIconImageContainer {
+  DCHECK(!self.faviconImage);
+
+  // If the icon image requires a background tint, ignore the original color
+  // information and draw the image as a template image.
+  if (self.useIconBackgroundTint && self.ignoreIconColorWithTint) {
+    self.iconImage = [self.iconImage
+        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  }
+  UIImageView* iconImageView =
+      [[UIImageView alloc] initWithImage:self.iconImage];
+  iconImageView.contentMode = UIViewContentModeScaleAspectFit;
+  iconImageView.translatesAutoresizingMaskIntoConstraints = NO;
+  iconImageView.tintColor = self.iconImageTintColor;
+
+  UIView* backgroundIconView =
+      [[UIView alloc] initWithFrame:iconImageView.frame];
+  backgroundIconView.layer.cornerRadius = kIconCornerRadius;
+  if (self.useIconBackgroundTint) {
+    backgroundIconView.backgroundColor =
+        self.iconBackgroundColor ? self.iconBackgroundColor
+                                 : [UIColor colorNamed:kBlueHaloColor];
+  }
+  backgroundIconView.translatesAutoresizingMaskIntoConstraints = NO;
+
+  UIView* iconContainerView = [[UIView alloc] init];
+  [iconContainerView addSubview:backgroundIconView];
+  [iconContainerView addSubview:iconImageView];
+  iconContainerView.translatesAutoresizingMaskIntoConstraints = NO;
+
+  [NSLayoutConstraint activateConstraints:@[
+    [backgroundIconView.widthAnchor
+        constraintEqualToConstant:kInfobarBannerIconSize],
+    [backgroundIconView.heightAnchor
+        constraintEqualToConstant:kInfobarBannerIconSize],
+
+    [iconImageView.widthAnchor
+        constraintEqualToConstant:kInfobarBannerIconSize],
+    [iconContainerView.widthAnchor
+        constraintEqualToAnchor:backgroundIconView.widthAnchor],
+  ]];
+  AddSameCenterConstraints(iconContainerView, backgroundIconView);
+  AddSameCenterConstraints(iconContainerView, iconImageView);
+
+  return iconContainerView;
+}
 
 - (void)bannerInfobarButtonWasPressed:(UIButton*)sender {
   [self.interactionDelegate infobarBannerStartedInteraction];
@@ -452,9 +526,9 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
   }
 
   if (gesture.state == UIGestureRecognizerStateEnded) {
-    [self animateBannerToOriginalStateWithDuration:
-              kSelectBannerAnimationDurationInSeconds
-                                        completion:nil];
+    [self
+        animateBannerToOriginalStateWithDuration:kSelectBannerAnimationDuration
+                                      completion:nil];
     // If dragged up by more than kChangeInPositionForDismissal at the time
     // the gesture ended, OR `self.shouldDismissAfterTouchesEnded` is YES.
     // Dismiss the banner.
@@ -486,7 +560,7 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
 
 // Animate the Banner being selected by scaling it up.
 - (void)animateBannerToScaleUpState {
-  [UIView animateWithDuration:kSelectBannerAnimationDurationInSeconds
+  [UIView animateWithDuration:kSelectBannerAnimationDuration.InSecondsF()
                    animations:^{
                      self.view.superview.transform = CGAffineTransformMakeScale(
                          kSelectedBannerViewScale, kSelectedBannerViewScale);
@@ -499,9 +573,9 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
 }
 
 // Animate the Banner back to its original size and styling.
-- (void)animateBannerToOriginalStateWithDuration:(NSTimeInterval)duration
+- (void)animateBannerToOriginalStateWithDuration:(base::TimeDelta)duration
                                       completion:(ProceduralBlock)completion {
-  [UIView animateWithDuration:duration
+  [UIView animateWithDuration:duration.InSecondsF()
       animations:^{
         self.view.superview.transform = CGAffineTransformIdentity;
         [self.view.layer
@@ -515,7 +589,7 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
 
 // Animate the banner back to its original position.
 - (void)animateBannerToOriginalPosition {
-  [UIView animateWithDuration:kSelectBannerAnimationDurationInSeconds
+  [UIView animateWithDuration:kSelectBannerAnimationDuration.InSecondsF()
                    animations:^{
                      self.view.center = self.originalCenter;
                    }
@@ -530,7 +604,7 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
   // TODO(crbug.com/961343): Interrupt this animation in case the Banner needs
   // to be dismissed mid tap (Currently it will be dismmissed after the
   // animation).
-  [UIView animateWithDuration:kTappedBannerAnimationDurationInSeconds
+  [UIView animateWithDuration:kTappedBannerAnimationDuration.InSecondsF()
       animations:^{
         self.view.superview.transform = CGAffineTransformMakeScale(
             kTappedBannerViewScale, kTappedBannerViewScale);
@@ -540,7 +614,7 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
       completion:^(BOOL finished) {
         [self
             animateBannerToOriginalStateWithDuration:
-                kTappedBannerAnimationDurationInSeconds
+                kTappedBannerAnimationDuration
                                           completion:^{
                                             [self presentInfobarModalAfterTap];
                                           }];
@@ -562,8 +636,8 @@ const CGFloat kLongPressTimeDurationInSeconds = 0.4;
 // doesn't call viewWillDissapear.
 - (void)recordBannerOnScreenTime {
   if (!self.bannerOnScreenTimeWasRecorded) {
-    double duration =
-        [NSDate timeIntervalSinceReferenceDate] - self.bannerAppearedTime;
+    const base::TimeDelta duration =
+        base::TimeTicks::Now() - self.bannerAppearedTime;
     [self.metricsRecorder recordBannerOnScreenDuration:duration];
     self.bannerOnScreenTimeWasRecorded = YES;
   }

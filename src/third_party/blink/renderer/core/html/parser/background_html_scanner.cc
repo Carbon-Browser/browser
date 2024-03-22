@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/core/dom/scriptable_document_parser.h"
 #include "third_party/blink/renderer/core/html/parser/html_preload_scanner.h"
+#include "third_party/blink/renderer/core/html/parser/html_token.h"
 #include "third_party/blink/renderer/core/html/parser/html_tokenizer.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -66,10 +67,32 @@ scoped_refptr<base::SequencedTaskRunner> GetCompileTaskRunner() {
       &features::kPrecompileInlineScripts, "compile-in-parallel", true};
   // Returning a null task runner will result in posting to the worker pool for
   // each task.
-  if (kCompileInParallelParam.Get())
+  if (kCompileInParallelParam.Get()) {
     return nullptr;
+  }
   return worker_pool::CreateSequencedTaskRunner(
       {base::TaskPriority::USER_BLOCKING});
+}
+
+wtf_size_t GetMinimumScriptSize() {
+  static const base::FeatureParam<int> kMinimumScriptSizeParam{
+      &features::kPrecompileInlineScripts, "minimum-script-size", 0};
+  // Cache the value to avoid parsing the param string more than once.
+  static const wtf_size_t kMinimumScriptSizeValue =
+      static_cast<wtf_size_t>(kMinimumScriptSizeParam.Get());
+  return kMinimumScriptSizeValue;
+}
+
+bool ShouldPrecompileFrame(bool is_main_frame) {
+  if (!base::FeatureList::IsEnabled(features::kPrecompileInlineScripts))
+    return false;
+
+  static const base::FeatureParam<bool> kPrecompileMainFrameOnlyParam{
+      &features::kPrecompileInlineScripts, "precompile-main-frame-only", false};
+  // Cache the value to avoid parsing the param string more than once.
+  static const bool kPrecompileMainFrameOnlyValue =
+      kPrecompileMainFrameOnlyParam.Get();
+  return is_main_frame || !kPrecompileMainFrameOnlyValue;
 }
 
 }  // namespace
@@ -79,14 +102,16 @@ WTF::SequenceBound<BackgroundHTMLScanner> BackgroundHTMLScanner::Create(
     const HTMLParserOptions& options,
     ScriptableDocumentParser* parser) {
   TRACE_EVENT0("blink", "BackgroundHTMLScanner::Create");
+  auto token_scanner = ScriptTokenScanner::Create(parser);
+  if (!token_scanner)
+    return WTF::SequenceBound<BackgroundHTMLScanner>();
   // The background scanner lives on one sequence, while the script streamers
   // work on a second sequence. This allows us to continue scanning the HTML
   // while scripts are compiling.
   return WTF::SequenceBound<BackgroundHTMLScanner>(
       worker_pool::CreateSequencedTaskRunner(
           {base::TaskPriority::USER_BLOCKING}),
-      std::make_unique<HTMLTokenizer>(options),
-      ScriptTokenScanner::Create(parser));
+      std::make_unique<HTMLTokenizer>(options), std::move(token_scanner));
 }
 
 BackgroundHTMLScanner::BackgroundHTMLScanner(
@@ -101,26 +126,34 @@ void BackgroundHTMLScanner::Scan(const String& source) {
   TRACE_EVENT0("blink", "BackgroundHTMLScanner::Scan");
   token_scanner_->set_first_script_in_scan(true);
   source_.Append(source);
-  while (tokenizer_->NextToken(source_, token_)) {
-    if (token_.GetType() == HTMLToken::kStartTag) {
-      tokenizer_->UpdateStateFor(
-          AttemptStaticStringCreation(token_.GetName(), kLikely8Bit));
-    }
-    token_scanner_->ScanToken(token_);
-    token_.Clear();
+  while (HTMLToken* token = tokenizer_->NextToken(source_)) {
+    if (token->GetType() == HTMLToken::kStartTag)
+      tokenizer_->UpdateStateFor(*token);
+    token_scanner_->ScanToken(*token);
+    token->Clear();
   }
 }
 
 std::unique_ptr<BackgroundHTMLScanner::ScriptTokenScanner>
 BackgroundHTMLScanner::ScriptTokenScanner::Create(
     ScriptableDocumentParser* parser) {
-  return std::make_unique<ScriptTokenScanner>(parser, GetCompileTaskRunner());
+  bool is_main_frame =
+      parser->GetDocument() && parser->GetDocument()->IsInOutermostMainFrame();
+  bool precompile_scripts = ShouldPrecompileFrame(is_main_frame);
+  if (!precompile_scripts) {
+    return nullptr;
+  }
+  return std::make_unique<ScriptTokenScanner>(parser, GetCompileTaskRunner(),
+                                              GetMinimumScriptSize());
 }
 
 BackgroundHTMLScanner::ScriptTokenScanner::ScriptTokenScanner(
     ScriptableDocumentParser* parser,
-    scoped_refptr<base::SequencedTaskRunner> task_runner)
-    : parser_(parser), task_runner_(std::move(task_runner)) {}
+    scoped_refptr<base::SequencedTaskRunner> task_runner,
+    wtf_size_t min_script_size)
+    : parser_(parser),
+      task_runner_(std::move(task_runner)),
+      min_script_size_(min_script_size) {}
 
 void BackgroundHTMLScanner::ScriptTokenScanner::ScanToken(
     const HTMLToken& token) {
@@ -145,11 +178,16 @@ void BackgroundHTMLScanner::ScriptTokenScanner::ScanToken(
       if (Match(TagImplFor(token.Data()), html_names::kScriptTag)) {
         in_script_ = false;
         // The script was empty, do nothing.
-        if (script_builder_.IsEmpty())
+        if (script_builder_.empty()) {
           return;
+        }
 
         String script_text = script_builder_.ReleaseString();
         script_builder_.Clear();
+
+        if (script_text.length() < min_script_size_) {
+          return;
+        }
 
         auto streamer = base::MakeRefCounted<BackgroundInlineScriptStreamer>(
             script_text, GetCompileOptions(first_script_in_scan_));

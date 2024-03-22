@@ -1,13 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/gpu/webgpu_swap_buffer_provider.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "gpu/command_buffer/client/webgpu_interface_stub.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_graphics_context_3d_provider.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/drawing_buffer_test_helpers.h"
 
@@ -26,6 +28,14 @@ class MockWebGPUInterface : public gpu::webgpu::WebGPUInterfaceStub {
     // real WebGPU device.
     procs()->deviceReference = [](WGPUDevice) {};
     procs()->deviceRelease = [](WGPUDevice) {};
+    procs()->textureReference = [](WGPUTexture) {};
+    procs()->textureRelease = [](WGPUTexture) {};
+
+    procs()->deviceGetLimits =
+        [](WGPUDevice, WGPUSupportedLimits* supportedLimits) -> WGPUBool {
+      supportedLimits->limits.maxTextureDimension2D = 8192;
+      return 1;
+    };
   }
 
   MOCK_METHOD(gpu::webgpu::ReservedTexture,
@@ -39,8 +49,10 @@ class MockWebGPUInterface : public gpu::webgpu::WebGPUInterfaceStub {
                         GLuint,
                         GLuint,
                         GLuint,
+                        const WGPUTextureFormat*,
+                        GLuint,
                         gpu::webgpu::MailboxFlags,
-                        const GLbyte*) override {
+                        const gpu::Mailbox&) override {
     num_associated_mailboxes++;
   }
   void DissociateMailbox(GLuint, GLuint) override {
@@ -86,7 +98,7 @@ class FakeProviderClient : public WebGPUSwapBufferProvider::Client {
     texture = nullptr;
   }
 
-  WGPUTexture texture;
+  scoped_refptr<WebGPUMailboxTexture> texture;
 };
 
 class WebGPUSwapBufferProviderForTests : public WebGPUSwapBufferProvider {
@@ -97,26 +109,43 @@ class WebGPUSwapBufferProviderForTests : public WebGPUSwapBufferProvider {
       WGPUDevice device,
       scoped_refptr<DawnControlClientHolder> dawn_control_client,
       WGPUTextureUsage usage,
-      WGPUTextureFormat format)
+      WGPUTextureFormat format,
+      PredefinedColorSpace color_space,
+      const gfx::HDRMetadata& hdr_metadata)
       : WebGPUSwapBufferProvider(client,
                                  dawn_control_client,
                                  device,
                                  usage,
-                                 format),
+                                 format,
+                                 color_space,
+                                 hdr_metadata),
         alive_(alive),
-        client_(client) {}
+        client_(client) {
+    texture_desc_.nextInChain = nullptr;
+    texture_desc_.usage = usage;
+    texture_desc_.format = format;
+    texture_desc_.size = {0, 0, 1};
+    texture_desc_.mipLevelCount = 1;
+    texture_desc_.sampleCount = 1;
+    texture_desc_.dimension = WGPUTextureDimension_2D;
+    texture_desc_.viewFormatCount = 0;
+    texture_desc_.viewFormats = nullptr;
+  }
   ~WebGPUSwapBufferProviderForTests() override { *alive_ = false; }
 
-  WGPUTexture GetNewTexture(const gfx::Size& size) {
+  scoped_refptr<WebGPUMailboxTexture> GetNewTexture(const gfx::Size& size) {
     // The alpha type is an optimization hint so just pass in opaque here.
-    client_->texture =
-        WebGPUSwapBufferProvider::GetNewTexture(size, kOpaque_SkAlphaType);
+    texture_desc_.size.width = size.width();
+    texture_desc_.size.height = size.height();
+    client_->texture = WebGPUSwapBufferProvider::GetNewTexture(
+        texture_desc_, kOpaque_SkAlphaType);
     return client_->texture;
   }
 
  private:
-  bool* alive_;
-  FakeProviderClient* client_;
+  raw_ptr<bool, ExperimentalRenderer> alive_;
+  raw_ptr<FakeProviderClient, ExperimentalRenderer> client_;
+  WGPUTextureDescriptor texture_desc_;
 };
 
 }  // anonymous namespace
@@ -137,19 +166,19 @@ class WebGPUSwapBufferProviderTest : public testing::Test {
     sii_ = provider->SharedImageInterface();
 
     dawn_control_client_ = base::MakeRefCounted<DawnControlClientHolder>(
-        std::move(provider), base::ThreadTaskRunnerHandle::Get());
+        std::move(provider), scheduler::GetSingleThreadTaskRunnerForTesting());
 
     provider_ = base::MakeRefCounted<WebGPUSwapBufferProviderForTests>(
         &provider_alive_, &client_, fake_device_, dawn_control_client_, kUsage,
-        kFormat);
+        kFormat, PredefinedColorSpace::kSRGB, gfx::HDRMetadata());
   }
 
   void TearDown() override { Platform::UnsetMainThreadTaskRunnerForTesting(); }
 
   base::test::TaskEnvironment task_environment_;
   scoped_refptr<DawnControlClientHolder> dawn_control_client_;
-  MockWebGPUInterface* webgpu_;
-  viz::TestSharedImageInterface* sii_;
+  raw_ptr<MockWebGPUInterface, ExperimentalRenderer> webgpu_;
+  raw_ptr<viz::TestSharedImageInterface, ExperimentalRenderer> sii_;
   FakeProviderClient client_;
   scoped_refptr<WebGPUSwapBufferProviderForTests> provider_;
   bool provider_alive_ = true;
@@ -546,6 +575,21 @@ TEST_F(WebGPUSwapBufferProviderTest, ReserveTextureDescriptorForReflection) {
                                                      &release_callback));
   EXPECT_EQ(kOtherSize, resource.size);
   std::move(release_callback).Run(gpu::SyncToken(), false /* lostResource */);
+}
+
+// Ensures that requests for zero size textures (width == 0 or height == 0) do
+// not attempt to reserve a texture.
+TEST_F(WebGPUSwapBufferProviderTest, VerifyZeroSizeRejects) {
+  const gfx::Size kZeroSize(0, 0);
+  const gfx::Size kZeroWidth(0, 10);
+  const gfx::Size kZeroHeight(10, 0);
+
+  // None of these calls should result in ReserveTexture being called
+  EXPECT_CALL(*webgpu_, ReserveTexture(fake_device_, _)).Times(0);
+
+  EXPECT_EQ(nullptr, provider_->GetNewTexture(kZeroSize));
+  EXPECT_EQ(nullptr, provider_->GetNewTexture(kZeroWidth));
+  EXPECT_EQ(nullptr, provider_->GetNewTexture(kZeroHeight));
 }
 
 }  // namespace blink

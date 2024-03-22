@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_SYSTEM_PROXY_SYSTEM_PROXY_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_SYSTEM_PROXY_SYSTEM_PROXY_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/dbus/system_proxy/system_proxy_service.pb.h"
 #include "dbus/object_proxy.h"
 

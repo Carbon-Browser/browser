@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,10 @@
 #include "ash/assistant/ui/assistant_view_delegate.h"
 #include "ash/assistant/ui/assistant_view_ids.h"
 #include "ash/assistant/util/resource_util.h"
-#include "ash/constants/ash_features.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_suggestion.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_suggestion.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/color_palette.h"
@@ -71,12 +70,9 @@ SkColor GetBackgroundColor(int index) {
   DCHECK_GE(index, 0);
   DCHECK_LT(index, static_cast<int>(std::size(kBackgroundColors)));
 
-  if (features::IsDarkLightModeEnabled()) {
-    return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
-               ? kBackgroundColors[index].dark
-               : kBackgroundColors[index].light;
-  }
-  return kBackgroundColors[index].flag_off;
+  return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
+             ? kBackgroundColors[index].dark
+             : kBackgroundColors[index].light;
 }
 
 SkColor GetForegroundColor(int index) {
@@ -93,12 +89,9 @@ SkColor GetForegroundColor(int index) {
   DCHECK_GE(index, 0);
   DCHECK_LT(index, static_cast<int>(std::size(kForegroundColors)));
 
-  if (features::IsDarkLightModeEnabled()) {
-    return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
-               ? kForegroundColors[index].dark
-               : kForegroundColors[index].light;
-  }
-  return kForegroundColors[index].flag_off;
+  return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
+             ? kForegroundColors[index].dark
+             : kForegroundColors[index].light;
 }
 
 }  // namespace
@@ -107,7 +100,7 @@ SkColor GetForegroundColor(int index) {
 
 AssistantOnboardingSuggestionView::AssistantOnboardingSuggestionView(
     AssistantViewDelegate* delegate,
-    const chromeos::assistant::AssistantSuggestion& suggestion,
+    const assistant::AssistantSuggestion& suggestion,
     int index)
     : views::Button(base::BindRepeating(
           &AssistantOnboardingSuggestionView::OnButtonPressed,
@@ -120,8 +113,8 @@ AssistantOnboardingSuggestionView::AssistantOnboardingSuggestionView(
 
 AssistantOnboardingSuggestionView::~AssistantOnboardingSuggestionView() {
   // TODO(pbos): Revisit explicit removal of InkDrop for classes that override
-  // Add/RemoveLayerBeneathView(). This is done so that the InkDrop doesn't
-  // access the non-override versions in ~View.
+  // AddLayerToRegion/RemoveLayerFromRegions(). This is done so that the InkDrop
+  // doesn't access the non-override versions in ~View.
   views::InkDrop::Remove(this);
 }
 
@@ -134,17 +127,19 @@ void AssistantOnboardingSuggestionView::ChildPreferredSizeChanged(
   PreferredSizeChanged();
 }
 
-void AssistantOnboardingSuggestionView::AddLayerBeneathView(ui::Layer* layer) {
+void AssistantOnboardingSuggestionView::AddLayerToRegion(
+    ui::Layer* layer,
+    views::LayerRegion region) {
   // This routes background layers to `ink_drop_container_` instead of `this` to
   // avoid painting effects underneath our background.
-  ink_drop_container_->AddLayerBeneathView(layer);
+  ink_drop_container_->AddLayerToRegion(layer, region);
 }
 
-void AssistantOnboardingSuggestionView::RemoveLayerBeneathView(
+void AssistantOnboardingSuggestionView::RemoveLayerFromRegions(
     ui::Layer* layer) {
   // This routes background layers to `ink_drop_container_` instead of `this` to
   // avoid painting effects underneath our background.
-  ink_drop_container_->RemoveLayerBeneathView(layer);
+  ink_drop_container_->RemoveLayerFromRegions(layer);
 }
 
 void AssistantOnboardingSuggestionView::OnThemeChanged() {
@@ -174,7 +169,7 @@ const std::u16string& AssistantOnboardingSuggestionView::GetText() const {
 }
 
 void AssistantOnboardingSuggestionView::InitLayout(
-    const chromeos::assistant::AssistantSuggestion& suggestion) {
+    const assistant::AssistantSuggestion& suggestion) {
   // A11y.
   SetAccessibleName(base::UTF8ToUTF16(suggestion.text));
 

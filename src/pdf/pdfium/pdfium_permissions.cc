@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,25 +45,25 @@ bool PDFiumPermissions::HasPermission(DocumentPermission permission) const {
       case DocumentPermission::kCopy:
       case DocumentPermission::kCopyAccessible:
         // Check the same copy bit for all copying permissions.
-        return HasPermissionBits(kPDFPermissionCopyMask);
+        return HasPermissionBits(kPDFPermissionBit05CopyMask);
       case DocumentPermission::kPrintLowQuality:
       case DocumentPermission::kPrintHighQuality:
         // Check the same printing bit for all printing permissions.
-        return HasPermissionBits(kPDFPermissionPrintMask);
+        return HasPermissionBits(kPDFPermissionBit03PrintMask);
     }
   } else {
     // Security handler revision 3+ have different rules for interpreting the
     // bits in `permission_bits_`.
     switch (permission) {
       case DocumentPermission::kCopy:
-        return HasPermissionBits(kPDFPermissionCopyMask);
+        return HasPermissionBits(kPDFPermissionBit05CopyMask);
       case DocumentPermission::kCopyAccessible:
-        return HasPermissionBits(kPDFPermissionCopyAccessibleMask);
+        return HasPermissionBits(kPDFPermissionBit10CopyAccessibleMask);
       case DocumentPermission::kPrintLowQuality:
-        return HasPermissionBits(kPDFPermissionPrintMask);
+        return HasPermissionBits(kPDFPermissionBit03PrintMask);
       case DocumentPermission::kPrintHighQuality:
-        return HasPermissionBits(kPDFPermissionPrintMask |
-                                 kPDFPermissionPrintHighQualityMask);
+        return HasPermissionBits(kPDFPermissionBit03PrintMask |
+                                 kPDFPermissionBit12PrintHighQualityMask);
     }
   }
 }

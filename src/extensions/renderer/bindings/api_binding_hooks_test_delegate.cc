@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 namespace extensions {
 
-APIBindingHooksTestDelegate::APIBindingHooksTestDelegate() {}
-APIBindingHooksTestDelegate::~APIBindingHooksTestDelegate() {}
+APIBindingHooksTestDelegate::APIBindingHooksTestDelegate() = default;
+APIBindingHooksTestDelegate::~APIBindingHooksTestDelegate() = default;
 
 bool APIBindingHooksTestDelegate::CreateCustomEvent(
     v8::Local<v8::Context> context,
@@ -46,7 +46,7 @@ APIBindingHooks::RequestResult APIBindingHooksTestDelegate::HandleRequest(
     const std::string& method_name,
     const APISignature* signature,
     v8::Local<v8::Context> context,
-    std::vector<v8::Local<v8::Value>>* arguments,
+    v8::LocalVector<v8::Value>* arguments,
     const APITypeReferenceMap& refs) {
   auto iter = request_handlers_.find(method_name);
   if (iter == request_handlers_.end()) {

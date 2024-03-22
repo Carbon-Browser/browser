@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,7 +74,7 @@ enum class QuickAnswersExitPoint {
   // The exit point is unspecified. Might be used by tests, obsolete code or as
   // placeholders.
   kUnspecified = 0,
-  KContextMenuDismiss = 1,
+  kContextMenuDismiss = 1,
   kContextMenuClick = 2,
   kQuickAnswersClick = 3,
   kSettingsButtonClick = 4,
@@ -126,6 +126,9 @@ struct PhoneticsInfo {
   PhoneticsInfo();
   PhoneticsInfo(const PhoneticsInfo&);
   ~PhoneticsInfo();
+
+  // Pronunciation of a word, i.e. in phonetic symbols.
+  std::string text;
 
   // Phonetics audio URL for playing pronunciation of dictionary results.
   // For other type of results the URL will be empty.
@@ -222,6 +225,96 @@ struct QuickAnswersRequest {
 
   // TODO(b/169346016): Add context and other targeted objects (e.g: images,
   // links, etc).
+};
+
+// `Sense` must be copyable.
+struct Sense {
+ public:
+  Sense();
+  ~Sense();
+
+  std::string definition;
+};
+
+// `DefinitionResult` holds result for definition intent.
+// `DefinitionResult` must be copyable.
+struct DefinitionResult {
+ public:
+  DefinitionResult();
+  ~DefinitionResult();
+
+  std::string word;
+  PhoneticsInfo phonetics_info;
+  Sense sense;
+};
+
+// `TranslationResult` holds result for translation intent.
+// `TranslationResult` must be copyable as it can be copied to a view.
+struct TranslationResult {
+ public:
+  TranslationResult();
+  ~TranslationResult();
+
+  // TODO(b/278929409): Migrate to `std::string` for strings in structs.
+  std::u16string text_to_translate;
+  std::u16string translated_text;
+  std::string source_locale;
+  std::string target_locale;
+};
+
+// `UnitConversionResult` holds result for unit conversion intent.
+// `UnitConversionResult` must be copyable.
+struct UnitConversionResult {
+ public:
+  UnitConversionResult();
+  ~UnitConversionResult();
+
+  std::string result_text;
+  std::string category;
+  std::string source_amount;
+  std::string destination_amount;
+  std::string source_unit;
+  std::string destination_unit;
+};
+
+// `StructuredResult` is NOT copyable as it's not trivial to make a class with
+// unique_ptr to copyable.
+class StructuredResult {
+ public:
+  StructuredResult();
+  ~StructuredResult();
+  StructuredResult(const StructuredResult&) = delete;
+  StructuredResult& operator=(const StructuredResult) = delete;
+
+  // Result type specific structs must be copyable.
+  std::unique_ptr<TranslationResult> translation_result;
+  std::unique_ptr<DefinitionResult> definition_result;
+  std::unique_ptr<UnitConversionResult> unit_conversion_result;
+};
+
+// `QuickAnswersSession` holds states related to a single Quick Answer session.
+//
+// This class currently holds results in `QuickAnswer` and `StructuredResult`.
+// `QuickAnswer` field is used by `QuickAnswersView`. Rich Answers will read
+// `StructuredResult`. Note that `QuickAnswer` is populated by using information
+// in `StructuredResult`, i.e. `StructuredResult` is a super-set of
+// `QuickAnswer`.
+//
+// Longer term plan is to migrate other states to this class, e.g. intent.
+//
+// `QuickAnswersSession` is NOT copyable as it's not trivial to make a class
+// with unique_ptr to copyable.
+class QuickAnswersSession {
+ public:
+  QuickAnswersSession();
+  ~QuickAnswersSession();
+  QuickAnswersSession(const QuickAnswersSession&) = delete;
+  QuickAnswersSession& operator=(const QuickAnswersSession) = delete;
+
+  // TODO(b/278929409): Once we migrate all result types to `StructuredResult`,
+  // populate `QuickAnswer` outside of ResultParsers.
+  std::unique_ptr<QuickAnswer> quick_answer;
+  std::unique_ptr<StructuredResult> structured_result;
 };
 
 }  // namespace quick_answers

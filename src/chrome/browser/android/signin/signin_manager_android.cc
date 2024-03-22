@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,20 @@
 #include <vector>
 
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/android/chrome_jni_headers/SigninManagerImpl_jni.h"
+#include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/base/signin_pref_names.h"
+#include "components/sync/service/sync_service.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 
 #include "base/android/callback_android.h"
-#include "base/android/jni_string.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_constants.h"
 #include "chrome/browser/policy/cloud/user_policy_signin_service_factory.h"
@@ -28,17 +30,14 @@
 #include "chrome/browser/signin/account_id_from_account_info.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/google/core/common/google_util.h"
-#include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/cloud/user_cloud_policy_manager.h"
-#include "components/prefs/pref_service.h"
-#include "components/signin/public/base/signin_pref_names.h"
+#include "components/signin/public/identity_manager/account_managed_status_finder.h"
 #include "components/signin/public/identity_manager/accounts_cookie_mutator.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browsing_data_filter_builder.h"
 #include "content/public/browser/browsing_data_remover.h"
 #include "content/public/browser/storage_partition.h"
-#include "google_apis/gaia/gaia_auth_util.h"
 
 using base::android::JavaParamRef;
 
@@ -55,7 +54,7 @@ class ProfileDataRemover : public content::BrowsingDataRemover::Observer {
       : profile_(profile),
         all_data_(all_data),
         callback_(std::move(callback)),
-        origin_runner_(base::ThreadTaskRunnerHandle::Get()),
+        origin_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
         remover_(profile->GetBrowsingDataRemover()) {
     remover_->AddObserver(this);
 
@@ -96,8 +95,9 @@ class ProfileDataRemover : public content::BrowsingDataRemover::Observer {
       // All the Profile data has been wiped. Clear the last signed in username
       // as well, so that the next signin doesn't trigger the account
       // change dialog.
-      profile_->GetPrefs()->ClearPref(prefs::kGoogleServicesLastAccountId);
-      profile_->GetPrefs()->ClearPref(prefs::kGoogleServicesLastUsername);
+      profile_->GetPrefs()->ClearPref(prefs::kGoogleServicesLastSyncingGaiaId);
+      profile_->GetPrefs()->ClearPref(
+          prefs::kGoogleServicesLastSyncingUsername);
     }
 
     origin_runner_->PostTask(FROM_HERE, std::move(callback_));
@@ -114,7 +114,9 @@ class ProfileDataRemover : public content::BrowsingDataRemover::Observer {
 
 // Returns whether the user is a managed user or not.
 bool ShouldLoadPolicyForUser(const std::string& username) {
-  return !policy::BrowserPolicyConnector::IsNonEnterpriseUser(username);
+  return signin::AccountManagedStatusFinder::IsEnterpriseUserBasedOnEmail(
+             username) ==
+         signin::AccountManagedStatusFinder::EmailEnterpriseStatus::kUnknown;
 }
 
 }  // namespace
@@ -145,7 +147,8 @@ SigninManagerAndroid::SigninManagerAndroid(
       base::android::AttachCurrentThread(), reinterpret_cast<intptr_t>(this),
       identity_manager_->LegacyGetAccountTrackerServiceJavaObject(),
       identity_manager_->GetJavaObject(),
-      identity_manager_->GetIdentityMutatorJavaObject());
+      identity_manager_->GetIdentityMutatorJavaObject(),
+      SyncServiceFactory::GetForProfile(profile_)->GetJavaObject());
 }
 
 base::android::ScopedJavaLocalRef<jobject>
@@ -160,6 +163,16 @@ void SigninManagerAndroid::Shutdown() {
                                  java_signin_manager_);
 }
 
+SigninManagerAndroid::ManagementCredentials::ManagementCredentials(
+    const std::string& dm_token,
+    const std::string& client_id,
+    const std::vector<std::string>& user_affiliation_ids)
+    : dm_token(dm_token),
+      client_id(client_id),
+      user_affiliation_ids(user_affiliation_ids) {}
+
+SigninManagerAndroid::ManagementCredentials::~ManagementCredentials() = default;
+
 bool SigninManagerAndroid::IsSigninAllowed() const {
   return signin_allowed_.GetValue();
 }
@@ -173,13 +186,14 @@ jboolean SigninManagerAndroid::IsForceSigninEnabled(JNIEnv* env) {
 }
 
 void SigninManagerAndroid::OnSigninAllowedPrefChanged() const {
+  VLOG(1) << "::OnSigninAllowedPrefChanged() " << IsSigninAllowed();
   Java_SigninManagerImpl_onSigninAllowedByPolicyChanged(
       base::android::AttachCurrentThread(), java_signin_manager_,
       IsSigninAllowed());
 }
 
 void SigninManagerAndroid::StopApplyingCloudPolicy(JNIEnv* env) {
-  user_policy_signin_service_->ShutdownUserCloudPolicyManager();
+  user_policy_signin_service_->ShutdownCloudPolicyManager();
 }
 
 void SigninManagerAndroid::RegisterPolicyWithAccount(
@@ -194,10 +208,11 @@ void SigninManagerAndroid::RegisterPolicyWithAccount(
       account.email, account.account_id,
       base::BindOnce(
           [](RegisterPolicyWithAccountCallback callback,
-             const std::string& dm_token, const std::string& client_id) {
+             const std::string& dm_token, const std::string& client_id,
+             const std::vector<std::string>& user_affiliation_ids) {
             absl::optional<ManagementCredentials> credentials;
             if (!dm_token.empty()) {
-              credentials.emplace(dm_token, client_id);
+              credentials.emplace(dm_token, client_id, user_affiliation_ids);
             }
             std::move(callback).Run(credentials);
           },
@@ -241,7 +256,8 @@ void SigninManagerAndroid::FetchPolicyBeforeSignIn(
           ->GetURLLoaderFactoryForBrowserProcess();
   user_policy_signin_service_->FetchPolicyForSignedInUser(
       AccountIdFromAccountInfo(account), credentials.dm_token,
-      credentials.client_id, url_loader_factory,
+      credentials.client_id, credentials.user_affiliation_ids,
+      url_loader_factory,
       base::BindOnce([](base::OnceCallback<void()> callback,
                         bool success) { std::move(callback).Run(); },
                      std::move(policy_callback)));

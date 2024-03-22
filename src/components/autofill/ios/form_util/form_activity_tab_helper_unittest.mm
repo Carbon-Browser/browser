@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,10 @@ class FormActivityTabHelperTest : public AutofillTestWithWebState {
   WebFrame* WaitForMainFrame() {
     __block WebFrame* main_frame = nullptr;
     EXPECT_TRUE(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^bool {
-      main_frame = web_state()->GetWebFramesManager()->GetMainWebFrame();
+      web::WebFramesManager* frames_manager =
+          autofill::FormUtilJavaScriptFeature::GetInstance()
+              ->GetWebFramesManager(web_state());
+      main_frame = frames_manager->GetMainWebFrame();
       return main_frame != nullptr;
     }));
     return main_frame;
@@ -93,7 +96,6 @@ TEST_F(FormActivityTabHelperTest, TestObserverDocumentSubmitted) {
   EXPECT_EQ(kTestFormData, observer_->submit_document_info()->form_data);
 
   EXPECT_FALSE(observer_->submit_document_info()->has_user_gesture);
-  EXPECT_TRUE(observer_->submit_document_info()->form_in_main_frame);
 }
 
 // Tests that observer is called on form submission using submit() method.
@@ -124,11 +126,13 @@ TEST_F(FormActivityTabHelperTest, TestFormSubmittedHook) {
   EXPECT_EQ(kTestFormName, observer_->submit_document_info()->form_name);
   EXPECT_EQ(kTestFormData, observer_->submit_document_info()->form_data);
   EXPECT_FALSE(observer_->submit_document_info()->has_user_gesture);
-  EXPECT_TRUE(observer_->submit_document_info()->form_in_main_frame);
 }
 
 // Tests that observer is called on form activity (input event).
-TEST_F(FormActivityTabHelperTest, TestObserverFormActivityFrameMessaging) {
+// TODO(crbug.com/1431960): Disabled test due to bot failure. Re-enable when
+// fixed.
+TEST_F(FormActivityTabHelperTest,
+       DISABLED_TestObserverFormActivityFrameMessaging) {
   LoadHtml(@"<form name='form-name'>"
             "<input type='input' name='field-name' id='fieldid'/>"
             "</form>");

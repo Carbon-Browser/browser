@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import org.chromium.chrome.browser.ui.native_page.BasicNativePage;
 import org.chromium.chrome.browser.ui.native_page.NativePageHost;
 import org.chromium.components.embedder_support.util.UrlConstants;
 
-/**
- * Native page that displays whether the current profile is managed or not.
- */
+/** Native page that displays whether the current profile is managed or not. */
 public class ManagementPage extends BasicNativePage {
     private final ManagementCoordinator mManagementCoordinator;
     private String mTitle;

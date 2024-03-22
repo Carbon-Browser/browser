@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ void MediaPlaylistTestBuilder::VerifyExpectations(
     const auto& segment = playlist.GetSegments().at(i);
     const auto& expectations = segment_expectations_.at(i);
     for (const auto& expectation : expectations.expectations) {
-      expectation.Run(segment);
+      expectation.Run(*segment);
     }
   }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,25 +6,23 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/proto/internal.pb.h"
 #include "remoting/protocol/p2p_stream_socket.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 static const int kReadBufferSize = 4096;
 
-MessageReader::MessageReader() {}
+MessageReader::MessageReader() = default;
 MessageReader::~MessageReader() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
@@ -50,13 +48,14 @@ void MessageReader::DoRead() {
   // Don't try to read again if there is another read pending or we
   // have messages that we haven't finished processing yet.
   while (!closed_ && !read_pending_) {
-    read_buffer_ = base::MakeRefCounted<net::IOBuffer>(kReadBufferSize);
+    read_buffer_ = base::MakeRefCounted<net::IOBufferWithSize>(kReadBufferSize);
     int result = socket_->Read(
         read_buffer_.get(), kReadBufferSize,
         base::BindOnce(&MessageReader::OnRead, weak_factory_.GetWeakPtr()));
 
-    if (!HandleReadResult(result))
+    if (!HandleReadResult(result)) {
       break;
+    }
   }
 }
 
@@ -101,9 +100,10 @@ void MessageReader::OnDataReceived(net::IOBuffer* data, int data_size) {
   // for all of them.
   while (true) {
     CompoundBuffer* buffer = message_decoder_.GetNextMessage();
-    if (!buffer)
+    if (!buffer) {
       break;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    }
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&MessageReader::RunCallback, weak_factory_.GetWeakPtr(),
                        base::WrapUnique(buffer)));
@@ -116,5 +116,4 @@ void MessageReader::RunCallback(std::unique_ptr<CompoundBuffer> message) {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

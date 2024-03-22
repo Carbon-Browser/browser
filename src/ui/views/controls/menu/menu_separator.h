@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ class VIEWS_EXPORT MenuSeparator : public View {
   METADATA_HEADER(MenuSeparator);
 
   explicit MenuSeparator(
-      ui::MenuSeparatorType type = ui::MenuSeparatorType::NORMAL_SEPARATOR)
-      : type_(type) {}
-
+      ui::MenuSeparatorType type = ui::MenuSeparatorType::NORMAL_SEPARATOR);
   MenuSeparator(const MenuSeparator&) = delete;
   MenuSeparator& operator=(const MenuSeparator&) = delete;
 
@@ -29,8 +27,6 @@ class VIEWS_EXPORT MenuSeparator : public View {
 
   ui::MenuSeparatorType GetType() const;
   void SetType(ui::MenuSeparatorType type);
-
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
  private:
   // The type of the separator.

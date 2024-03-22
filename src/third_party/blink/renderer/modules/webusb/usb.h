@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class ScriptState;
 class USBDevice;
 class USBDeviceRequestOptions;
 
-class USB final : public EventTargetWithInlineData,
+class USB final : public EventTarget,
                   public Supplement<NavigatorBase>,
                   public ExecutionContextLifecycleObserver,
                   public device::mojom::blink::UsbDeviceManagerClient {
@@ -91,7 +91,6 @@ class USB final : public EventTargetWithInlineData,
  private:
   void EnsureServiceConnection();
 
-  bool IsContextSupported() const;
   bool IsFeatureEnabled(ReportOptions) const;
 
   HeapMojoRemote<mojom::blink::WebUsbService> service_;

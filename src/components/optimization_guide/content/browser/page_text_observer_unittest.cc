@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/stl_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/types/optional_util.h"
 #include "components/optimization_guide/content/mojom/page_text_service.mojom.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
@@ -1066,14 +1066,7 @@ TEST_F(PageTextObserverTest, AMPRequestedOnNonOOPIF) {
 
 class PageTextObserverWithPrerenderTest : public PageTextObserverTest {
  public:
-  PageTextObserverWithPrerenderTest() {
-    scoped_feature_list_.InitWithFeatures(
-        {blink::features::kPrerender2},
-        // Disable the memory requirement of Prerender2 so the test can run on
-        // any bot.
-        {blink::features::kPrerender2MemoryControls});
-  }
-  ~PageTextObserverWithPrerenderTest() override = default;
+  PageTextObserverWithPrerenderTest() = default;
 
   content::RenderFrameHost* AddPrerender(const GURL& prerender_url) {
     content::RenderFrameHost* prerender_frame =
@@ -1087,7 +1080,7 @@ class PageTextObserverWithPrerenderTest : public PageTextObserverTest {
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
+  content::test::ScopedPrerenderFeatureList prerender_feature_list_;
 };
 
 TEST_F(PageTextObserverWithPrerenderTest,

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -94,41 +94,6 @@ TEST(NotificationSchedulerStatsTest, LogNotificationShow) {
                          true /*expect_ihnr_histogram*/,
                          true /*expect_life_cycle_histogram*/);
   }
-}
-
-// Verifies database initialization and record count are correctly tracked.
-TEST(NotificationSchedulerStatsTest, LogDbInit) {
-  base::HistogramTester histograms;
-  LogDbInit(DatabaseType::kImpressionDb, true, 3);
-  histograms.ExpectBucketCount(
-      "Notifications.Scheduler.ImpressionDb.InitResult", true, 1);
-  histograms.ExpectBucketCount(
-      "Notifications.Scheduler.ImpressionDb.RecordCount", 3, 1);
-
-  LogDbInit(DatabaseType::kNotificationDb, true, 5);
-  histograms.ExpectBucketCount(
-      "Notifications.Scheduler.NotificationDb.InitResult", true, 1);
-  histograms.ExpectBucketCount(
-      "Notifications.Scheduler.NotificationDb.RecordCount", 5, 1);
-
-  LogDbInit(DatabaseType::kIconDb, true, 1);
-  histograms.ExpectBucketCount("Notifications.Scheduler.IconDb.InitResult",
-                               true, 1);
-  histograms.ExpectTotalCount("Notifications.Scheduler.IconDb.RecordCount", 1);
-}
-
-// Verifies database operations are correctly tracked.
-TEST(NotificationSchedulerStatsTest, LogDbOperationResult) {
-  base::HistogramTester histograms;
-  LogDbOperation(DatabaseType::kImpressionDb, true);
-  histograms.ExpectBucketCount(
-      "Notifications.Scheduler.ImpressionDb.OperationResult", true, 1);
-  LogDbOperation(DatabaseType::kNotificationDb, true);
-  histograms.ExpectBucketCount(
-      "Notifications.Scheduler.NotificationDb.OperationResult", true, 1);
-  LogDbOperation(DatabaseType::kIconDb, true);
-  histograms.ExpectBucketCount("Notifications.Scheduler.IconDb.OperationResult",
-                               true, 1);
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,9 @@
 
 // The target for scribble events as forwarded by the NTP fakebox.
 - (UIResponder<UITextInput>*)fakeboxScribbleForwardingTarget;
+
+// NTP became active on the active web state.
+- (void)didNavigateToNTPOnActiveWebState;
 
 @end
 

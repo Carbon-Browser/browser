@@ -14,6 +14,7 @@ def client_hints_list():
           b"sec-ch-ua-full-version",
           b"sec-ch-ua-platform-version",
           b"sec-ch-prefers-color-scheme",
+          b"sec-ch-prefers-reduced-motion",
           b"sec-ch-ua-bitness",
           b"sec-ch-viewport-height",
           b"sec-ch-device-memory",
@@ -22,6 +23,7 @@ def client_hints_list():
           b"sec-ch-viewport-width",
           b"sec-ch-ua-full-version-list",
           b"sec-ch-ua-wow64",
+          b"sec-ch-prefers-reduced-transparency",
   ]
 
 def client_hints_full_list():

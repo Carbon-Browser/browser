@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "content/services/auction_worklet/public/mojom/auction_network_events_handler.mojom.h"
+#include "content/services/auction_worklet/public/mojom/auction_shared_storage_host.mojom.h"
 #include "net/http/http_status_code.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -70,6 +72,82 @@ void AddBidderJsonResponse(
 // Adds a task to `v8_helper->v8_runner()` that blocks until the return value
 // is signaled. The returned event will be deleted afterwards.
 base::WaitableEvent* WedgeV8Thread(AuctionV8Helper* v8_helper);
+
+// Receives shared storage mojom messages.
+class TestAuctionSharedStorageHost : public mojom::AuctionSharedStorageHost {
+ public:
+  enum RequestType {
+    kSet,
+    kAppend,
+    kDelete,
+    kClear,
+  };
+
+  struct Request {
+    RequestType type;
+    std::u16string key;
+    std::u16string value;
+    bool ignore_if_present;
+
+    bool operator==(const Request& rhs) const;
+  };
+
+  TestAuctionSharedStorageHost();
+
+  ~TestAuctionSharedStorageHost() override;
+
+  // mojom::AuctionSharedStorageHost:
+  void Set(const std::u16string& key,
+           const std::u16string& value,
+           bool ignore_if_present) override;
+
+  void Append(const std::u16string& key, const std::u16string& value) override;
+
+  void Delete(const std::u16string& key) override;
+
+  void Clear() override;
+
+  const std::vector<Request>& observed_requests() const {
+    return observed_requests_;
+  }
+
+  void ClearObservedRequests();
+
+ private:
+  std::vector<Request> observed_requests_;
+};
+
+class TestAuctionNetworkEventsHandler
+    : public mojom::AuctionNetworkEventsHandler {
+ public:
+  TestAuctionNetworkEventsHandler();
+  ~TestAuctionNetworkEventsHandler() override;
+
+  void OnNetworkSendRequest(const ::network::ResourceRequest& request,
+                            ::base::TimeTicks timestamp) override;
+
+  void OnNetworkResponseReceived(
+      const std::string& request_id,
+      const std::string& loader_id,
+      const ::GURL& request_url,
+      ::network::mojom::URLResponseHeadPtr headers) override;
+
+  void OnNetworkRequestComplete(
+      const std::string& request_id,
+      const ::network::URLLoaderCompletionStatus& status) override;
+
+  void Clone(
+      ::mojo::PendingReceiver<AuctionNetworkEventsHandler> receiver) override;
+
+  mojo::PendingRemote<AuctionNetworkEventsHandler> CreateRemote();
+
+  const std::vector<std::string>& GetObservedRequests();
+
+ private:
+  std::vector<std::string> observed_requests_;
+  mojo::ReceiverSet<auction_worklet::mojom::AuctionNetworkEventsHandler>
+      auction_network_events_handlers_;
+};
 
 }  // namespace auction_worklet
 

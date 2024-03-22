@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,22 +21,17 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Tests for CompositeTouchDelegate.
- */
+/** Tests for CompositeTouchDelegate. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public final class CompositeTouchDelegateUnitTest {
     CompositeTouchDelegate mCompositeTouchDelegate;
 
-    @Mock
-    TouchDelegate mMockTouchDelegate;
+    @Mock TouchDelegate mMockTouchDelegate;
 
-    @Mock
-    TouchDelegate mMockOtherTouchDelegate;
+    @Mock TouchDelegate mMockOtherTouchDelegate;
 
-    @Mock
-    MotionEvent mMockMotionEvent;
+    @Mock MotionEvent mMockMotionEvent;
 
     @Before
     public void setUp() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include "base/allocator/buildflags.h"
 #include "base/logging.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 
 #if !BUILDFLAG(IS_FUCHSIA)
@@ -38,8 +39,6 @@ int64_t TimeValToMicroseconds(const struct timeval& tv) {
   ret += tv.tv_usec;
   return ret;
 }
-
-ProcessMetrics::~ProcessMetrics() = default;
 
 #if !BUILDFLAG(IS_FUCHSIA)
 

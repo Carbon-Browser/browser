@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/resource_coordinator/memory_instrumentation/graph.h"
 
-#include "base/callback.h"
 #include "base/containers/adapters.h"
-#include "base/strings/string_piece.h"
+#include "base/containers/contains.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_tokenizer.h"
 
 namespace memory_instrumentation {
@@ -78,7 +78,7 @@ Process::Process(base::ProcessId pid, GlobalDumpGraph* global_graph)
 Process::~Process() {}
 
 Node* Process::CreateNode(MemoryAllocatorDumpGuid guid,
-                          base::StringPiece path,
+                          std::string_view path,
                           bool weak) {
   DCHECK(!path.empty());
 
@@ -89,7 +89,7 @@ Node* Process::CreateNode(MemoryAllocatorDumpGuid guid,
   // already exist on the path to the child.
   Node* current = root_;
   while (tokenizer.GetNext()) {
-    base::StringPiece key = tokenizer.token_piece();
+    std::string_view key = tokenizer.token_piece();
     Node* parent = current;
     current = current->GetChild(key);
     if (!current) {
@@ -113,14 +113,14 @@ Node* Process::CreateNode(MemoryAllocatorDumpGuid guid,
   return current;
 }
 
-Node* Process::FindNode(base::StringPiece path) {
+Node* Process::FindNode(std::string_view path) {
   DCHECK(!path.empty());
 
   std::string path_string(path);
   base::StringTokenizer tokenizer(path_string, "/");
   Node* current = root_;
   while (tokenizer.GetNext()) {
-    base::StringPiece key = tokenizer.token_piece();
+    std::string_view key = tokenizer.token_piece();
     current = current->GetChild(key);
     if (!current)
       return nullptr;
@@ -132,7 +132,7 @@ Node::Node(Process* dump_graph, Node* parent)
     : dump_graph_(dump_graph), parent_(parent), owns_edge_(nullptr) {}
 Node::~Node() {}
 
-Node* Node::GetChild(base::StringPiece name) {
+Node* Node::GetChild(std::string_view name) {
   DCHECK(!name.empty());
   DCHECK_EQ(std::string::npos, name.find('/'));
 
@@ -140,14 +140,14 @@ Node* Node::GetChild(base::StringPiece name) {
   return child == children_.end() ? nullptr : child->second;
 }
 
-void Node::InsertChild(base::StringPiece name, Node* node) {
+void Node::InsertChild(std::string_view name, Node* node) {
   DCHECK(!name.empty());
   DCHECK_EQ(std::string::npos, name.find('/'));
 
   children_.emplace(std::string(name), node);
 }
 
-Node* Node::CreateChild(base::StringPiece name) {
+Node* Node::CreateChild(std::string_view name) {
   Node* new_child = dump_graph_->global_graph()->CreateNode(dump_graph_, this);
   InsertChild(name, new_child);
   return new_child;
@@ -264,7 +264,7 @@ Node* PostOrderIterator::next() {
 
     // If the node is not at the front, it should also certainly not be
     // anywhere else in the path. If it is, there is a cycle in the graph.
-    DCHECK(std::find(path_.begin(), path_.end(), node) == path_.end());
+    DCHECK(!base::Contains(path_, node));
     path_.push_back(node);
 
     // Add this node back to the queue of nodes to visit.

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,8 @@ class ArcFileSystemMounter : public KeyedService {
   // or nullptr if the browser |context| is not allowed to use ARC.
   static ArcFileSystemMounter* GetForBrowserContext(
       content::BrowserContext* context);
+
+  static void EnsureFactoryBuilt();
 
   ArcFileSystemMounter(content::BrowserContext* context,
                        ArcBridgeService* bridge_service);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
-#include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/synchronization/condition_variable.h"
@@ -198,8 +197,8 @@ TestChannel* ScopedInspectorSupport::ConnectDebuggerSession(
 
 ScopedInspectorSupport::V8State::V8State() = default;
 ScopedInspectorSupport::V8State::~V8State() {
-  inspector_sessions_.clear();
   output_channels_.clear();
+  inspector_sessions_.clear();
 
   // Delete inspector after `inspector_sessions_`, before `inspector_client`_
   v8_helper_->SetV8InspectorForTesting(
@@ -219,7 +218,8 @@ void ScopedInspectorSupport::ConnectDebuggerSessionOnV8Thread(
   *result = test_channel.get();
 
   auto session = v8_state_->v8_helper_->inspector()->connect(
-      context_group_id, test_channel.get(), v8_inspector::StringView());
+      context_group_id, test_channel.get(), v8_inspector::StringView(),
+      v8_inspector::V8Inspector::kFullyTrusted);
   test_channel->SetInspectorSession(session.get());
   v8_state_->output_channels_.push_back(std::move(test_channel));
   v8_state_->inspector_sessions_.push_back(std::move(session));

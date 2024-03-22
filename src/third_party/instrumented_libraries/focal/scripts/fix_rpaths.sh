@@ -1,10 +1,10 @@
 #!/bin/bash
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 # Changes all RPATHs in a given directory from XORIGIN to $ORIGIN
-# See the comment about XORIGIN in instrumented_libraries.gyp
+# See the comment about XORIGIN in BUILD.gn
 
 # Fixes rpath from XORIGIN to $ORIGIN in a single file $1.
 function fix_rpath {

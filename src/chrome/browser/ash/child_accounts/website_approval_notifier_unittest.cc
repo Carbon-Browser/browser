@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/public/cpp/test/test_new_window_delegate.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/strcat.h"
 #include "base/test/metrics/user_action_tester.h"
@@ -24,7 +25,10 @@ namespace {
 class MockNewWindowDelegate : public testing::NiceMock<TestNewWindowDelegate> {
  public:
   // TestNewWindowDelegate:
-  MOCK_METHOD(void, OpenUrl, (const GURL& url, OpenUrlFrom from), (override));
+  MOCK_METHOD(void,
+              OpenUrl,
+              (const GURL& url, OpenUrlFrom from, Disposition disposition),
+              (override));
 };
 }  // namespace
 
@@ -65,7 +69,8 @@ class WebsiteApprovalNotifierTest : public testing::Test {
   TestingProfile profile_;
   NotificationDisplayServiceTester notification_tester_{&profile_};
   WebsiteApprovalNotifier notifier_{&profile_};
-  MockNewWindowDelegate* new_window_delegate_primary_;
+  raw_ptr<MockNewWindowDelegate, DanglingUntriaged | ExperimentalAsh>
+      new_window_delegate_primary_;
   std::unique_ptr<TestNewWindowDelegateProvider> new_window_provider_;
 };
 
@@ -114,7 +119,8 @@ TEST_F(WebsiteApprovalNotifierTest, UrlOpensInPrimaryBrowser) {
   EXPECT_TRUE(HasApprovalNotification(host));
   EXPECT_CALL(new_window_delegate_primary(),
               OpenUrl(GURL(expected_url),
-                      NewWindowDelegate::OpenUrlFrom::kUserInteraction));
+                      NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+                      NewWindowDelegate::Disposition::kNewForegroundTab));
   notification_tester_.SimulateClick(NotificationHandler::Type::TRANSIENT,
                                      GetNotificationId(host),
                                      /*action_index=*/absl::nullopt,

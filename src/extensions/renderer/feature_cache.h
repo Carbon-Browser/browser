@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "extensions/common/context_data.h"
 #include "extensions/common/extension_id.h"
 #include "extensions/common/features/feature.h"
 #include "url/gurl.h"
@@ -40,17 +41,22 @@ class FeatureCache {
   // extensions, extension should be non-null for extension contexts, etc.
   FeatureNameVector GetAvailableFeatures(Feature::Context context_type,
                                          const Extension* extension,
-                                         const GURL& url);
+                                         const GURL& url,
+                                         const ContextData& context_data);
 
   // Returns the names of features restricted to developer mode in a
   // lexicographically sorted vector.
   FeatureNameVector GetDeveloperModeRestrictedFeatures(
       Feature::Context context_type,
       const Extension* extension,
-      const GURL& url);
+      const GURL& url,
+      const ContextData& context_data);
 
   // Invalidates the cache for the specified extension.
   void InvalidateExtension(const ExtensionId& extension_id);
+
+  // Invalidates the cache for all extensions.
+  void InvalidateAllExtensions();
 
  private:
   using FeatureVector = std::vector<const Feature*>;
@@ -83,14 +89,16 @@ class FeatureCache {
       Feature::Context context_type,
       const Extension* extension,
       const GURL& origin,
-      int context_id);
+      int context_id,
+      const ContextData& context_data);
 
   // Creates ExtensionFeatureData to be entered into a cache for the specified
   // context data.
   ExtensionFeatureData CreateCacheEntry(Feature::Context context_type,
                                         const Extension* extension,
                                         const GURL& origin,
-                                        int context_id);
+                                        int context_id,
+                                        const ContextData& context_data);
 
   // The cache of extension-related contexts. These may be invalidated, since
   // extension permissions change.

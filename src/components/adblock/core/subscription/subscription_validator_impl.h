@@ -18,7 +18,8 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_VALIDATOR_IMPL_H_
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_VALIDATOR_IMPL_H_
 
-#include "base/task/sequenced_task_runner.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "components/adblock/core/subscription/subscription_validator.h"
 #include "components/prefs/pref_service.h"
@@ -30,25 +31,21 @@ namespace adblock {
 // Stores the hash of FlatbufferData in a Tracked Pref.
 class SubscriptionValidatorImpl final : public SubscriptionValidator {
  public:
-  SubscriptionValidatorImpl(
-      PrefService* pref_service,
-      const std::string& current_schema_version,
-      scoped_refptr<base::SequencedTaskRunner> main_thread_task_runner);
-  bool IsSignatureValid(const FlatbufferData& data,
-                        const base::FilePath& path) const final;
-  void StoreTrustedSignature(const FlatbufferData& data,
-                             const base::FilePath& path) final;
-  void RemoveStoredSignature(const base::FilePath& path) final;
+  SubscriptionValidatorImpl(PrefService* pref_service,
+                            const std::string& current_schema_version);
+  ~SubscriptionValidatorImpl() final;
+
+  IsSignatureValidThreadSafeCallback IsSignatureValid() const final;
+  StoreTrustedSignatureThreadSafeCallback StoreTrustedSignature() final;
+  RemoveStoredSignatureThreadSafeCallback RemoveStoredSignature() final;
 
  private:
-  ~SubscriptionValidatorImpl() final;
   void StoreTrustedSignatureOnMainThread(std::string signature,
                                          const base::FilePath& path);
   void RemoveStoredSignatureInMainThread(const base::FilePath& path);
 
-  PrefService* pref_service_;
-  scoped_refptr<base::SequencedTaskRunner> main_thread_task_runner_;
-  base::Value initial_subscription_signatures_;
+  raw_ptr<PrefService> pref_service_;
+  base::WeakPtrFactory<SubscriptionValidatorImpl> weak_ptr_factory_{this};
 };
 
 }  // namespace adblock

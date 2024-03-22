@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,18 @@
 
 namespace content {
 
-// Enables the Aggregation Service. See crbug.com/1207974.
-const base::Feature kPrivacySandboxAggregationService = {
-    "PrivacySandboxAggregationService", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kPrivacySandboxAggregationService,
+             "PrivacySandboxAggregationService",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 const base::FeatureParam<std::string>
-    kPrivacySandboxAggregationServiceTrustedServerUrlParam{
+    kPrivacySandboxAggregationServiceTrustedServerUrlAwsParam{
         &kPrivacySandboxAggregationService, "trusted_server_url",
         "https://publickeyservice.aws.privacysandboxservices.com/v1alpha/"
         "publicKeys"};
+
+BASE_FEATURE(kPrivacySandboxAggregationServiceReportPadding,
+             "PrivacySandboxAggregationServiceReportPadding",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace content

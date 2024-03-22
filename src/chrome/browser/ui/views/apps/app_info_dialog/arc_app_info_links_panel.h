@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/views/apps/app_info_dialog/app_info_panel.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/metadata/view_factory.h"
@@ -48,7 +49,7 @@ class ArcAppInfoLinksPanel : public AppInfoPanel,
 
   base::ScopedObservation<ArcAppListPrefs, ArcAppListPrefs::Observer>
       app_list_observation_{this};
-  views::Link* manage_link_ = nullptr;
+  raw_ptr<views::Link, ExperimentalAsh> manage_link_ = nullptr;
 };
 
 BEGIN_VIEW_BUILDER(/* no export */, ArcAppInfoLinksPanel, AppInfoPanel)

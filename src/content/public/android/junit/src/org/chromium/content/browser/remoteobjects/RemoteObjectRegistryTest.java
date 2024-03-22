@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,7 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Tests the object registry, which maintains bidirectional object/ID mappings.
- */
+/** Tests the object registry, which maintains bidirectional object/ID mappings. */
 @RunWith(BaseRobolectricTestRunner.class)
 public final class RemoteObjectRegistryTest {
     @Test

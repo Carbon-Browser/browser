@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ FixedPatternStringSearch::FixedPatternStringSearch(
 
 FixedPatternStringSearch::~FixedPatternStringSearch() {
   if (search_)
-    usearch_close(search_);
+    usearch_close(search_.ExtractAsDangling());
 }
 
 bool FixedPatternStringSearch::Search(const std::u16string& in_this,
@@ -137,7 +137,7 @@ RepeatingStringSearch::RepeatingStringSearch(const std::u16string& find_this,
 
 RepeatingStringSearch::~RepeatingStringSearch() {
   if (search_)
-    usearch_close(search_);
+    usearch_close(search_.ExtractAsDangling());
 }
 
 bool RepeatingStringSearch::NextMatchResult(int& match_index,

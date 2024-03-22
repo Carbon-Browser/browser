@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -125,9 +125,9 @@ public class ComposedBrowserControlsVisibilityDelegateTest {
         Mockito.verify(callback).onResult(BrowserControlsState.HIDDEN);
 
         mDelegate2.set(BrowserControlsState.HIDDEN);
-        Mockito.verifyZeroInteractions(callback);
+        Mockito.verifyNoMoreInteractions(callback);
         mDelegate2.set(BrowserControlsState.BOTH);
-        Mockito.verifyZeroInteractions(callback);
+        Mockito.verifyNoMoreInteractions(callback);
         mDelegate3.set(BrowserControlsState.BOTH);
         Mockito.verify(callback).onResult(BrowserControlsState.BOTH);
     }

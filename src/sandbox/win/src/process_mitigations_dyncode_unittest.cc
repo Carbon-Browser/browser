@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,8 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/path_service.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat_win.h"
+#include "base/strings/string_number_conversions_win.h"
 #include "base/win/windows_version.h"
 #include "sandbox/win/src/process_mitigations.h"
 #include "sandbox/win/src/sandbox.h"
@@ -249,7 +250,9 @@ class DynamicCodeOptOutThread {
 std::unique_ptr<sandbox::TestRunner> RunnerWithMitigation(
     sandbox::MitigationFlags mitigations) {
   auto runner = std::make_unique<sandbox::TestRunner>();
-  runner->GetPolicy()->SetDelayedProcessMitigations(mitigations);
+  EXPECT_EQ(sandbox::SBOX_ALL_OK,
+            runner->GetPolicy()->GetConfig()->SetDelayedProcessMitigations(
+                mitigations));
   return runner;
 }
 
@@ -287,7 +290,7 @@ void DynamicCodeTestHarness(sandbox::MitigationFlags which_mitigation,
   auto runner = enable_mitigation ? RunnerWithMitigation(which_mitigation)
                                   : std::make_unique<sandbox::TestRunner>();
   std::wstring test =
-      base::StringPrintf(L"%ls %u", shared.c_str(), VIRTUALALLOC);
+      base::StrCat({shared, L" ", base::NumberToWString(VIRTUALALLOC)});
   EXPECT_EQ((expect_success ? sandbox::SBOX_TEST_SUCCEEDED
                             : ERROR_DYNAMIC_CODE_BLOCKED),
             runner->RunTest(test.c_str()));
@@ -295,7 +298,7 @@ void DynamicCodeTestHarness(sandbox::MitigationFlags which_mitigation,
   // Test 2:
   runner = enable_mitigation ? RunnerWithMitigation(which_mitigation)
                              : std::make_unique<sandbox::TestRunner>();
-  test = base::StringPrintf(L"%ls %u", shared.c_str(), VIRTUALPROTECT);
+  test = base::StrCat({shared, L" ", base::NumberToWString(VIRTUALPROTECT)});
   EXPECT_EQ((expect_success ? sandbox::SBOX_TEST_SUCCEEDED
                             : ERROR_DYNAMIC_CODE_BLOCKED),
             runner->RunTest(test.c_str()));
@@ -304,11 +307,12 @@ void DynamicCodeTestHarness(sandbox::MitigationFlags which_mitigation,
   // Need token level >= USER_LIMITED to be able to successfully run test 3.
   runner = enable_mitigation ? RunnerWithMitigation(which_mitigation)
                              : std::make_unique<sandbox::TestRunner>();
-  runner->GetPolicy()->SetTokenLevel(
-      sandbox::TokenLevel::USER_RESTRICTED_SAME_ACCESS,
-      sandbox::TokenLevel::USER_LIMITED);
+  EXPECT_EQ(sandbox::SBOX_ALL_OK,
+            runner->GetPolicy()->GetConfig()->SetTokenLevel(
+                sandbox::TokenLevel::USER_RESTRICTED_SAME_ACCESS,
+                sandbox::TokenLevel::USER_LIMITED));
 
-  test = base::StringPrintf(L"%ls %u", shared.c_str(), MAPVIEWCUSTOM);
+  test = base::StrCat({shared, L" ", base::NumberToWString(MAPVIEWCUSTOM)});
   EXPECT_EQ((expect_success ? sandbox::SBOX_TEST_SUCCEEDED
                             : ERROR_DYNAMIC_CODE_BLOCKED),
             runner->RunTest(test.c_str()));
@@ -327,11 +331,11 @@ void DynamicCodeTestHarness(sandbox::MitigationFlags which_mitigation,
 
   runner = enable_mitigation ? RunnerWithMitigation(which_mitigation)
                              : std::make_unique<sandbox::TestRunner>();
-  EXPECT_TRUE(runner->AddFsRule(sandbox::Semantics::kFilesAllowAny,
-                                temp_dll_path.value().c_str()));
+  EXPECT_TRUE(runner->AllowFileAccess(sandbox::FileSemantics::kAllowAny,
+                                      temp_dll_path.value().c_str()));
 
-  test = base::StringPrintf(L"%ls %u \"%ls\"", shared.c_str(), MAPVIEWFILE,
-                            temp_dll_path.value().c_str());
+  test = base::StrCat({shared, L" ", base::NumberToWString(MAPVIEWFILE), L" \"",
+                       temp_dll_path.value(), L"\""});
   EXPECT_EQ((expect_success ? sandbox::SBOX_TEST_SUCCEEDED
                             : ERROR_DYNAMIC_CODE_BLOCKED),
             runner->RunTest(test.c_str()));
@@ -410,9 +414,6 @@ SBOX_TESTS_COMMAND int TestWin10DynamicCodeWithOptOut(int argc,
 // This test validates that setting the MITIGATION_DYNAMIC_CODE_DISABLE
 // mitigation enables the setting on a process.
 TEST(ProcessMitigationsTest, CheckWin81DynamicCodePolicySuccess) {
-  if (base::win::GetVersion() < base::win::Version::WIN8_1)
-    return;
-
 // TODO(crbug.com/805414): Windows ASan hotpatching requires dynamic code.
 #if !defined(ADDRESS_SANITIZER)
   std::wstring test_command = L"CheckPolicy ";
@@ -429,7 +430,8 @@ TEST(ProcessMitigationsTest, CheckWin81DynamicCodePolicySuccess) {
   TestRunner runner;
   sandbox::TargetPolicy* policy = runner.GetPolicy();
 
-  EXPECT_EQ(policy->SetProcessMitigations(MITIGATION_DYNAMIC_CODE_DISABLE),
+  EXPECT_EQ(policy->GetConfig()->SetProcessMitigations(
+                MITIGATION_DYNAMIC_CODE_DISABLE),
             SBOX_ALL_OK);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(test_command.c_str()));
 #endif  // defined(NDEBUG)
@@ -439,9 +441,9 @@ TEST(ProcessMitigationsTest, CheckWin81DynamicCodePolicySuccess) {
   TestRunner runner2;
   sandbox::TargetPolicy* policy2 = runner2.GetPolicy();
 
-  EXPECT_EQ(
-      policy2->SetDelayedProcessMitigations(MITIGATION_DYNAMIC_CODE_DISABLE),
-      SBOX_ALL_OK);
+  EXPECT_EQ(policy2->GetConfig()->SetDelayedProcessMitigations(
+                MITIGATION_DYNAMIC_CODE_DISABLE),
+            SBOX_ALL_OK);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner2.RunTest(test_command.c_str()));
 #endif
 }
@@ -449,9 +451,6 @@ TEST(ProcessMitigationsTest, CheckWin81DynamicCodePolicySuccess) {
 // This test validates that we can meddle with dynamic code if the
 // MITIGATION_DYNAMIC_CODE_DISABLE mitigation is NOT set.
 TEST(ProcessMitigationsTest, CheckWin81DynamicCode_BaseCase) {
-  if (base::win::GetVersion() < base::win::Version::WIN8_1)
-    return;
-
   ScopedTestMutex mutex(hooking_dll::g_hooking_dll_mutex);
 
   // Expect success, no mitigation.
@@ -463,9 +462,6 @@ TEST(ProcessMitigationsTest, CheckWin81DynamicCode_BaseCase) {
 // This test validates that setting the MITIGATION_DYNAMIC_CODE_DISABLE
 // mitigation prevents meddling with dynamic code.
 TEST(ProcessMitigationsTest, CheckWin81DynamicCode_TestMitigation) {
-  if (base::win::GetVersion() < base::win::Version::WIN8_1)
-    return;
-
   ScopedTestMutex mutex(hooking_dll::g_hooking_dll_mutex);
 
   // Expect failure, with mitigation.
@@ -503,7 +499,7 @@ TEST(ProcessMitigationsTest, CheckWin10DynamicCodeOptOutPolicySuccess) {
   TestRunner runner;
   sandbox::TargetPolicy* policy = runner.GetPolicy();
 
-  EXPECT_EQ(policy->SetProcessMitigations(
+  EXPECT_EQ(policy->GetConfig()->SetProcessMitigations(
                 MITIGATION_DYNAMIC_CODE_DISABLE_WITH_OPT_OUT),
             SBOX_ALL_OK);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(test_command.c_str()));
@@ -514,7 +510,7 @@ TEST(ProcessMitigationsTest, CheckWin10DynamicCodeOptOutPolicySuccess) {
   TestRunner runner2;
   sandbox::TargetPolicy* policy2 = runner2.GetPolicy();
 
-  EXPECT_EQ(policy2->SetDelayedProcessMitigations(
+  EXPECT_EQ(policy2->GetConfig()->SetDelayedProcessMitigations(
                 MITIGATION_DYNAMIC_CODE_DISABLE_WITH_OPT_OUT),
             SBOX_ALL_OK);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner2.RunTest(test_command.c_str()));

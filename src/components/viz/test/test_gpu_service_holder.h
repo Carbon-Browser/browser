@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,13 @@
 
 #include "base/feature_list.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
 #include "gpu/ipc/gpu_in_process_thread_service.h"
 #include "gpu/vulkan/buildflags.h"
 
-#if defined(USE_OZONE) && !BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_OZONE) && !BUILDFLAG(IS_FUCHSIA)
 #include "mojo/public/cpp/bindings/binder_map.h"
 #endif
 
@@ -99,8 +100,8 @@ class TestGpuServiceHolder : public gpu::GpuInProcessThreadServiceDelegate {
 
   ~TestGpuServiceHolder() override;
 
-  scoped_refptr<base::SingleThreadTaskRunner> gpu_thread_task_runner() {
-    return gpu_thread_.task_runner();
+  scoped_refptr<base::SingleThreadTaskRunner> gpu_main_thread_task_runner() {
+    return gpu_main_thread_.task_runner();
   }
 
   // Most of |gpu_service_| is not safe to use off of the GPU thread, be careful
@@ -108,10 +109,11 @@ class TestGpuServiceHolder : public gpu::GpuInProcessThreadServiceDelegate {
   GpuServiceImpl* gpu_service() { return gpu_service_.get(); }
 
   gpu::CommandBufferTaskExecutor* task_executor() {
-    return task_executor_.get();
+    return main_task_executor_.get();
   }
 
-  void ScheduleGpuTask(base::OnceClosure callback);
+  void ScheduleGpuMainTask(base::OnceClosure callback);
+  void ScheduleCompositorGpuTask(base::OnceClosure callback);
 
   bool is_vulkan_enabled() {
 #if BUILDFLAG(ENABLE_VULKAN)
@@ -120,6 +122,9 @@ class TestGpuServiceHolder : public gpu::GpuInProcessThreadServiceDelegate {
     return false;
 #endif
   }
+
+  scoped_refptr<gpu::SharedContextState>
+  GetCompositorGpuThreadSharedContextState();
 
   // gpu::GpuInProcessThreadServiceDelegate implementation:
   scoped_refptr<gpu::SharedContextState> GetSharedContextState() override;
@@ -131,7 +136,7 @@ class TestGpuServiceHolder : public gpu::GpuInProcessThreadServiceDelegate {
   void DeleteOnGpuThread();
 
 // TODO(crbug.com/1267788): Fuchsia crashes. See details in the crbug.
-#if defined(USE_OZONE) && !BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_OZONE) && !BUILDFLAG(IS_FUCHSIA)
   void BindInterface(const std::string& interface_name,
                      mojo::ScopedMessagePipeHandle interface_pipe);
   void BindInterfaceOnGpuThread(const std::string& interface_name,
@@ -141,19 +146,20 @@ class TestGpuServiceHolder : public gpu::GpuInProcessThreadServiceDelegate {
   absl::optional<base::FeatureList::ScopedDisallowOverrides>
       disallow_feature_overrides_;
 
-  base::Thread gpu_thread_;
+  base::Thread gpu_main_thread_;
   base::Thread io_thread_;
 
   // These should only be created and deleted on the gpu thread.
   std::unique_ptr<GpuServiceImpl> gpu_service_;
-  std::unique_ptr<gpu::CommandBufferTaskExecutor> task_executor_;
+  std::unique_ptr<gpu::CommandBufferTaskExecutor> main_task_executor_;
   // This is used to schedule gpu tasks in sequence.
-  std::unique_ptr<gpu::SingleTaskSequence> gpu_task_sequence_;
+  std::unique_ptr<gpu::SingleTaskSequence> gpu_main_task_sequence_;
+  std::unique_ptr<gpu::SingleTaskSequence> compositor_gpu_task_sequence_;
 #if BUILDFLAG(ENABLE_VULKAN)
   std::unique_ptr<gpu::VulkanImplementation> vulkan_implementation_;
 #endif
 
-#if defined(USE_OZONE) && !BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_OZONE) && !BUILDFLAG(IS_FUCHSIA)
   // Bound interfaces.
   mojo::BinderMap binders_;
 #endif

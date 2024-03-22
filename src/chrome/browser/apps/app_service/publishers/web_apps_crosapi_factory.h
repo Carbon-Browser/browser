@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_APPS_APP_SERVICE_PUBLISHERS_WEB_APPS_CROSAPI_FACTORY_H_
 #define CHROME_BROWSER_APPS_APP_SERVICE_PUBLISHERS_WEB_APPS_CROSAPI_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -16,7 +16,7 @@ class WebAppsCrosapi;
 
 // Singleton that owns all WebAppsCrosapi publisher and associates them with
 // Profiles.
-class WebAppsCrosapiFactory : public BrowserContextKeyedServiceFactory {
+class WebAppsCrosapiFactory : public ProfileKeyedServiceFactory {
  public:
   static WebAppsCrosapi* GetForProfile(Profile* profile);
 
@@ -25,7 +25,7 @@ class WebAppsCrosapiFactory : public BrowserContextKeyedServiceFactory {
   static void ShutDownForTesting(content::BrowserContext* context);
 
  private:
-  friend struct base::DefaultSingletonTraits<WebAppsCrosapiFactory>;
+  friend base::NoDestructor<WebAppsCrosapiFactory>;
 
   WebAppsCrosapiFactory();
   WebAppsCrosapiFactory(const WebAppsCrosapiFactory&) = delete;
@@ -33,10 +33,8 @@ class WebAppsCrosapiFactory : public BrowserContextKeyedServiceFactory {
   ~WebAppsCrosapiFactory() override = default;
 
   // BrowserContextKeyedServiceFactory overrides.
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
+    content::BrowserContext* context) const override;
 };
 
 }  // namespace apps

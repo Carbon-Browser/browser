@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,7 +80,8 @@ class ResponseAdapter {
 
   virtual content::WebContents::Getter GetWebContentsGetter() const = 0;
   virtual bool IsOutermostMainFrame() const = 0;
-  virtual GURL GetURL() const = 0;
+  virtual GURL GetUrl() const = 0;
+  virtual absl::optional<url::Origin> GetRequestInitiator() const = 0;
   virtual const net::HttpResponseHeaders* GetHeaders() const = 0;
   virtual void RemoveHeader(const std::string& name) = 0;
 

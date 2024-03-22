@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,6 +93,11 @@ void ArcKioskBridge::OnMaintenanceSessionFinished(int32_t session_id,
     return;
   session_id_ = -1;
   delegate_->OnMaintenanceSessionFinished();
+}
+
+// static
+void ArcKioskBridge::EnsureFactoryBuilt() {
+  ArcKioskBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

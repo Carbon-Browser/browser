@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "content/public/browser/video_capture_device_launcher.h"
 #include "media/base/scoped_async_trace.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "services/video_capture/public/mojom/device_factory.mojom.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 
 namespace content {
@@ -31,13 +30,16 @@ class CONTENT_EXPORT ServiceVideoCaptureDeviceLauncher
   ~ServiceVideoCaptureDeviceLauncher() override;
 
   // VideoCaptureDeviceLauncher implementation.
-  void LaunchDeviceAsync(const std::string& device_id,
-                         blink::mojom::MediaStreamType stream_type,
-                         const media::VideoCaptureParams& params,
-                         base::WeakPtr<media::VideoFrameReceiver> receiver,
-                         base::OnceClosure connection_lost_cb,
-                         Callbacks* callbacks,
-                         base::OnceClosure done_cb) override;
+  void LaunchDeviceAsync(
+      const std::string& device_id,
+      blink::mojom::MediaStreamType stream_type,
+      const media::VideoCaptureParams& params,
+      base::WeakPtr<media::VideoFrameReceiver> receiver,
+      base::OnceClosure connection_lost_cb,
+      Callbacks* callbacks,
+      base::OnceClosure done_cb,
+      mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+          video_effects_manager) override;
   void AbortLaunch() override;
 
  private:
@@ -64,7 +66,7 @@ class CONTENT_EXPORT ServiceVideoCaptureDeviceLauncher
   ConnectToDeviceFactoryCB connect_to_source_provider_cb_;
   scoped_refptr<RefCountedVideoSourceProvider> service_connection_;
   State state_;
-  base::SequenceChecker sequence_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
   base::OnceClosure done_cb_;
   raw_ptr<Callbacks> callbacks_;
 };

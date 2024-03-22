@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,29 @@ namespace {
 
 class CSSPrimitiveValueTest : public PageTestBase {
  public:
+  const CSSPrimitiveValue* ParseValue(const char* text) {
+    const CSSPrimitiveValue* value = To<CSSPrimitiveValue>(
+        css_test_helpers::ParseValue(GetDocument(), "<length>", text));
+    DCHECK(value);
+    return value;
+  }
+
   bool HasContainerRelativeUnits(const char* text) {
-    return To<CSSPrimitiveValue>(
-               css_test_helpers::ParseValue(GetDocument(), "<length>", text))
-        ->HasContainerRelativeUnits();
+    return ParseValue(text)->HasContainerRelativeUnits();
+  }
+
+  bool HasStaticViewportUnits(const char* text) {
+    const CSSPrimitiveValue* value = ParseValue(text);
+    CSSPrimitiveValue::LengthTypeFlags length_type_flags;
+    value->AccumulateLengthUnitTypes(length_type_flags);
+    return CSSPrimitiveValue::HasStaticViewportUnits(length_type_flags);
+  }
+
+  bool HasDynamicViewportUnits(const char* text) {
+    const CSSPrimitiveValue* value = ParseValue(text);
+    CSSPrimitiveValue::LengthTypeFlags length_type_flags;
+    value->AccumulateLengthUnitTypes(length_type_flags);
+    return CSSPrimitiveValue::HasDynamicViewportUnits(length_type_flags);
   }
 
   CSSPrimitiveValueTest() = default;
@@ -95,6 +114,8 @@ TEST_F(CSSPrimitiveValueTest, IsResolution) {
   EXPECT_FALSE(Create({5.0, UnitType::kNumber})->IsResolution());
   EXPECT_FALSE(Create({5.0, UnitType::kDegrees})->IsResolution());
   EXPECT_TRUE(Create({5.0, UnitType::kDotsPerPixel})->IsResolution());
+  EXPECT_TRUE(Create({5.0, UnitType::kX})->IsResolution());
+  EXPECT_TRUE(Create({5.0, UnitType::kDotsPerInch})->IsResolution());
   EXPECT_TRUE(Create({5.0, UnitType::kDotsPerCentimeter})->IsResolution());
 }
 
@@ -144,8 +165,7 @@ TEST_F(CSSPrimitiveValueTest, NaNLengthClamp) {
   UnitValue b = {1, UnitType::kPixels};
   CSSPrimitiveValue* value = CreateAddition(a, b);
   CSSToLengthConversionData conversion_data;
-  EXPECT_EQ(std::numeric_limits<double>::max(),
-            value->ComputeLength<double>(conversion_data));
+  EXPECT_EQ(0.0, value->ComputeLength<double>(conversion_data));
 }
 
 TEST_F(CSSPrimitiveValueTest, PositiveInfinityPercentLengthClamp) {
@@ -169,7 +189,7 @@ TEST_F(CSSPrimitiveValueTest, NaNPercentLengthClamp) {
       {-std::numeric_limits<double>::quiet_NaN(), UnitType::kPercentage});
   CSSToLengthConversionData conversion_data;
   Length length = value->ConvertToLength(conversion_data);
-  EXPECT_EQ(std::numeric_limits<float>::max(), length.Percent());
+  EXPECT_EQ(0.0, length.Percent());
 }
 
 TEST_F(CSSPrimitiveValueTest, GetDoubleValueWithoutClampingAllowNaN) {
@@ -198,7 +218,7 @@ TEST_F(CSSPrimitiveValueTest,
 TEST_F(CSSPrimitiveValueTest, GetDoubleValueClampNaN) {
   CSSPrimitiveValue* value =
       Create({std::numeric_limits<double>::quiet_NaN(), UnitType::kPixels});
-  EXPECT_EQ(std::numeric_limits<double>::max(), value->GetDoubleValue());
+  EXPECT_EQ(0.0, value->GetDoubleValue());
 }
 
 TEST_F(CSSPrimitiveValueTest, GetDoubleValueClampPositiveInfinity) {
@@ -222,8 +242,6 @@ TEST_F(CSSPrimitiveValueTest, TestCanonicalizingNumberUnitCategory) {
 }
 
 TEST_F(CSSPrimitiveValueTest, HasContainerRelativeUnits) {
-  ScopedCSSContainerQueriesForTest scoped_feature(true);
-
   EXPECT_TRUE(HasContainerRelativeUnits("1cqw"));
   EXPECT_TRUE(HasContainerRelativeUnits("1cqh"));
   EXPECT_TRUE(HasContainerRelativeUnits("1cqi"));
@@ -240,6 +258,77 @@ TEST_F(CSSPrimitiveValueTest, HasContainerRelativeUnits) {
   EXPECT_FALSE(HasContainerRelativeUnits("calc(1px + 1px)"));
   EXPECT_FALSE(HasContainerRelativeUnits("calc(1px + 1em)"));
   EXPECT_FALSE(HasContainerRelativeUnits("calc(1px + 1svh)"));
+}
+
+TEST_F(CSSPrimitiveValueTest, HasStaticViewportUnits) {
+  ScopedCSSViewportUnits4ForTest scoped_feature(true);
+
+  // v*
+  EXPECT_TRUE(HasStaticViewportUnits("1vw"));
+  EXPECT_TRUE(HasStaticViewportUnits("1vh"));
+  EXPECT_TRUE(HasStaticViewportUnits("1vi"));
+  EXPECT_TRUE(HasStaticViewportUnits("1vb"));
+  EXPECT_TRUE(HasStaticViewportUnits("1vmin"));
+  EXPECT_TRUE(HasStaticViewportUnits("1vmax"));
+  EXPECT_TRUE(HasStaticViewportUnits("calc(1px + 1vw)"));
+  EXPECT_TRUE(HasStaticViewportUnits("min(1px, 1vw)"));
+  EXPECT_FALSE(HasStaticViewportUnits("1px"));
+  EXPECT_FALSE(HasStaticViewportUnits("1em"));
+  EXPECT_FALSE(HasStaticViewportUnits("1dvh"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1px)"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1em)"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1dvh)"));
+
+  // sv*
+  EXPECT_TRUE(HasStaticViewportUnits("1svw"));
+  EXPECT_TRUE(HasStaticViewportUnits("1svh"));
+  EXPECT_TRUE(HasStaticViewportUnits("1svi"));
+  EXPECT_TRUE(HasStaticViewportUnits("1svb"));
+  EXPECT_TRUE(HasStaticViewportUnits("1svmin"));
+  EXPECT_TRUE(HasStaticViewportUnits("1svmax"));
+  EXPECT_TRUE(HasStaticViewportUnits("calc(1px + 1svw)"));
+  EXPECT_TRUE(HasStaticViewportUnits("min(1px, 1svw)"));
+  EXPECT_FALSE(HasStaticViewportUnits("1px"));
+  EXPECT_FALSE(HasStaticViewportUnits("1em"));
+  EXPECT_FALSE(HasStaticViewportUnits("1dvh"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1px)"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1em)"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1dvh)"));
+
+  // lv*
+  EXPECT_TRUE(HasStaticViewportUnits("1lvw"));
+  EXPECT_TRUE(HasStaticViewportUnits("1lvh"));
+  EXPECT_TRUE(HasStaticViewportUnits("1lvi"));
+  EXPECT_TRUE(HasStaticViewportUnits("1lvb"));
+  EXPECT_TRUE(HasStaticViewportUnits("1lvmin"));
+  EXPECT_TRUE(HasStaticViewportUnits("1lvmax"));
+  EXPECT_TRUE(HasStaticViewportUnits("calc(1px + 1lvw)"));
+  EXPECT_TRUE(HasStaticViewportUnits("min(1px, 1lvw)"));
+  EXPECT_FALSE(HasStaticViewportUnits("1px"));
+  EXPECT_FALSE(HasStaticViewportUnits("1em"));
+  EXPECT_FALSE(HasStaticViewportUnits("1dvh"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1px)"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1em)"));
+  EXPECT_FALSE(HasStaticViewportUnits("calc(1px + 1dvh)"));
+}
+
+TEST_F(CSSPrimitiveValueTest, HasDynamicViewportUnits) {
+  ScopedCSSViewportUnits4ForTest scoped_feature(true);
+  // dv*
+  EXPECT_TRUE(HasDynamicViewportUnits("1dvw"));
+  EXPECT_TRUE(HasDynamicViewportUnits("1dvh"));
+  EXPECT_TRUE(HasDynamicViewportUnits("1dvi"));
+  EXPECT_TRUE(HasDynamicViewportUnits("1dvb"));
+  EXPECT_TRUE(HasDynamicViewportUnits("1dvmin"));
+  EXPECT_TRUE(HasDynamicViewportUnits("1dvmax"));
+  EXPECT_TRUE(HasDynamicViewportUnits("calc(1px + 1dvw)"));
+  EXPECT_TRUE(HasDynamicViewportUnits("min(1px, 1dvw)"));
+  EXPECT_FALSE(HasDynamicViewportUnits("1px"));
+  EXPECT_FALSE(HasDynamicViewportUnits("1em"));
+  EXPECT_FALSE(HasDynamicViewportUnits("1svh"));
+  EXPECT_FALSE(HasDynamicViewportUnits("calc(1px + 1px)"));
+  EXPECT_FALSE(HasDynamicViewportUnits("calc(1px + 1em)"));
+  EXPECT_FALSE(HasDynamicViewportUnits("calc(1px + 1svh)"));
 }
 
 }  // namespace

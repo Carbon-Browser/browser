@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/webrtc/api/array_view.h"
 #include "third_party/webrtc/api/frame_transformer_interface.h"
+#include "third_party/webrtc/api/test/mock_transformable_video_frame.h"
 #include "third_party/webrtc/rtc_base/ref_counted_object.h"
 
 using ::testing::NiceMock;
@@ -40,6 +41,7 @@ class MockWebRtcTransformedFrameCallback
  public:
   MOCK_METHOD1(OnTransformedFrame,
                void(std::unique_ptr<webrtc::TransformableFrameInterface>));
+  MOCK_METHOD0(StartShortCircuiting, void());
 };
 
 class MockTransformerCallbackHolder {
@@ -48,27 +50,9 @@ class MockTransformerCallbackHolder {
                void(std::unique_ptr<webrtc::TransformableVideoFrameInterface>));
 };
 
-// Not allowed to include
-// third_party/blink/renderer/modules/peerconnection/testing/mock_transformable_video_frame.h
-// from here.
-class MockTransformableVideoFrame
-    : public webrtc::TransformableVideoFrameInterface {
- public:
-  MOCK_METHOD(rtc::ArrayView<const uint8_t>, GetData, (), (const override));
-  MOCK_METHOD(void, SetData, (rtc::ArrayView<const uint8_t> data), (override));
-  MOCK_METHOD(uint8_t, GetPayloadType, (), (const, override));
-  MOCK_METHOD(uint32_t, GetSsrc, (), (const, override));
-  MOCK_METHOD(uint32_t, GetTimestamp, (), (const override));
-  MOCK_METHOD(bool, IsKeyFrame, (), (const, override));
-  MOCK_METHOD(std::vector<uint8_t>, GetAdditionalData, (), (const, override));
-  MOCK_METHOD(const webrtc::VideoFrameMetadata&,
-              GetMetadata,
-              (),
-              (const, override));
-};
-
-std::unique_ptr<webrtc::TransformableVideoFrameInterface> CreateMockFrame() {
-  auto mock_frame = std::make_unique<NiceMock<MockTransformableVideoFrame>>();
+std::unique_ptr<webrtc::MockTransformableVideoFrame> CreateMockFrame() {
+  auto mock_frame =
+      std::make_unique<NiceMock<webrtc::MockTransformableVideoFrame>>();
   ON_CALL(*mock_frame.get(), GetSsrc).WillByDefault(Return(kSSRC));
   return mock_frame;
 }
@@ -120,8 +104,9 @@ TEST_F(RTCEncodedVideoStreamTransformerTest,
        TransformerForwardsFrameToTransformerCallback) {
   EXPECT_FALSE(encoded_video_stream_transformer_.HasTransformerCallback());
   encoded_video_stream_transformer_.SetTransformerCallback(
-      WTF::BindRepeating(&MockTransformerCallbackHolder::OnEncodedFrame,
-                         WTF::Unretained(&mock_transformer_callback_holder_)));
+      WTF::CrossThreadBindRepeating(
+          &MockTransformerCallbackHolder::OnEncodedFrame,
+          WTF::CrossThreadUnretained(&mock_transformer_callback_holder_)));
   EXPECT_TRUE(encoded_video_stream_transformer_.HasTransformerCallback());
 
   EXPECT_CALL(mock_transformer_callback_holder_, OnEncodedFrame);
@@ -141,6 +126,34 @@ TEST_F(RTCEncodedVideoStreamTransformerTest, TransformerForwardsFrameToWebRTC) {
   EXPECT_CALL(*webrtc_callback_, OnTransformedFrame);
   encoded_video_stream_transformer_.SendFrameToSink(CreateMockFrame());
   task_environment_.RunUntilIdle();
+}
+
+TEST_F(RTCEncodedVideoStreamTransformerTest, IgnoresSsrcForSinglecast) {
+  EXPECT_CALL(*webrtc_callback_, OnTransformedFrame);
+  std::unique_ptr<webrtc::MockTransformableVideoFrame> mock_frame =
+      CreateMockFrame();
+  EXPECT_CALL(*mock_frame.get(), GetSsrc)
+      .WillRepeatedly(Return(kNonexistentSSRC));
+  encoded_video_stream_transformer_.SendFrameToSink(std::move(mock_frame));
+  task_environment_.RunUntilIdle();
+}
+
+TEST_F(RTCEncodedVideoStreamTransformerTest, ShortCircuitingPropagated) {
+  EXPECT_CALL(*webrtc_callback_, StartShortCircuiting);
+  encoded_video_stream_transformer_.StartShortCircuiting();
+  task_environment_.RunUntilIdle();
+}
+
+TEST_F(RTCEncodedVideoStreamTransformerTest,
+       ShortCircuitingSetOnLateRegisteredCallback) {
+  EXPECT_CALL(*webrtc_callback_, StartShortCircuiting);
+  encoded_video_stream_transformer_.StartShortCircuiting();
+
+  rtc::scoped_refptr<MockWebRtcTransformedFrameCallback> webrtc_callback_2(
+      new rtc::RefCountedObject<MockWebRtcTransformedFrameCallback>());
+  EXPECT_CALL(*webrtc_callback_2, StartShortCircuiting);
+  encoded_video_stream_transformer_.RegisterTransformedFrameSinkCallback(
+      webrtc_callback_2, kSSRC + 1);
 }
 
 }  // namespace blink

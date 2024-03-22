@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,10 @@
 #include "sandbox/win/src/interception.h"
 #include "sandbox/win/src/internal_types.h"
 #include "sandbox/win/src/ipc_tags.h"
-#include "sandbox/win/src/named_pipe_dispatcher.h"
 #include "sandbox/win/src/process_mitigations_win32k_dispatcher.h"
 #include "sandbox/win/src/process_thread_dispatcher.h"
 #include "sandbox/win/src/sandbox_policy_base.h"
 #include "sandbox/win/src/signed_dispatcher.h"
-#include "sandbox/win/src/socket_dispatcher.h"
 
 namespace sandbox {
 
@@ -37,14 +35,8 @@ TopLevelDispatcher::TopLevelDispatcher(PolicyBase* policy) : policy_(policy) {
       dispatcher;
   filesystem_dispatcher_.reset(dispatcher);
 
-  dispatcher = new NamedPipeDispatcher(policy_);
-  ipc_targets_[static_cast<size_t>(IpcTag::CREATENAMEDPIPEW)] = dispatcher;
-  named_pipe_dispatcher_.reset(dispatcher);
-
   dispatcher = new ThreadProcessDispatcher();
   ipc_targets_[static_cast<size_t>(IpcTag::NTOPENTHREAD)] = dispatcher;
-  ipc_targets_[static_cast<size_t>(IpcTag::NTOPENPROCESS)] = dispatcher;
-  ipc_targets_[static_cast<size_t>(IpcTag::NTOPENPROCESSTOKEN)] = dispatcher;
   ipc_targets_[static_cast<size_t>(IpcTag::NTOPENPROCESSTOKENEX)] = dispatcher;
   ipc_targets_[static_cast<size_t>(IpcTag::CREATETHREAD)] = dispatcher;
   thread_process_dispatcher_.reset(dispatcher);
@@ -58,10 +50,6 @@ TopLevelDispatcher::TopLevelDispatcher(PolicyBase* policy) : policy_(policy) {
   dispatcher = new SignedDispatcher(policy_);
   ipc_targets_[static_cast<size_t>(IpcTag::NTCREATESECTION)] = dispatcher;
   signed_dispatcher_.reset(dispatcher);
-
-  dispatcher = new SocketDispatcher(policy_);
-  ipc_targets_[static_cast<size_t>(IpcTag::WS2SOCKET)] = dispatcher;
-  socket_dispatcher_.reset(dispatcher);
 }
 
 TopLevelDispatcher::~TopLevelDispatcher() {}

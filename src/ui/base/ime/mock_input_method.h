@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class TextInputClient;
 // ui/base/ime/init/input_method_factory.h
 class COMPONENT_EXPORT(UI_BASE_IME) MockInputMethod : public InputMethod {
  public:
-  explicit MockInputMethod(internal::InputMethodDelegate* delegate);
+  explicit MockInputMethod(ImeKeyEventDispatcher* ime_key_event_dispatcher);
 
   MockInputMethod(const MockInputMethod&) = delete;
   MockInputMethod& operator=(const MockInputMethod&) = delete;
@@ -33,10 +33,10 @@ class COMPONENT_EXPORT(UI_BASE_IME) MockInputMethod : public InputMethod {
   ~MockInputMethod() override;
 
   // Overriden from InputMethod.
-  void SetDelegate(internal::InputMethodDelegate* delegate) override;
+  void SetImeKeyEventDispatcher(
+      ImeKeyEventDispatcher* ime_key_event_dispatcher) override;
   void OnFocus() override;
   void OnBlur() override;
-  void OnTouch(ui::EventPointerType pointerType) override;
 
 #if BUILDFLAG(IS_WIN)
   bool OnUntranslatedIMEMessage(const CHROME_MSG event,
@@ -60,9 +60,9 @@ class COMPONENT_EXPORT(UI_BASE_IME) MockInputMethod : public InputMethod {
   VirtualKeyboardController* GetVirtualKeyboardController() override;
 
  private:
-  raw_ptr<TextInputClient> text_input_client_;
+  raw_ptr<TextInputClient, DanglingUntriaged> text_input_client_ = nullptr;
   base::ObserverList<InputMethodObserver>::Unchecked observer_list_;
-  raw_ptr<internal::InputMethodDelegate> delegate_;
+  raw_ptr<ImeKeyEventDispatcher> ime_key_event_dispatcher_;
 
   VirtualKeyboardControllerStub keyboard_controller_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "build/build_config.h"
@@ -80,7 +81,7 @@ class NavigationPredictorPreconnectClientBrowserTest
 
   void OnPreresolveFinished(
       const GURL& url,
-      const net::NetworkIsolationKey& network_isolation_key,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
       bool success) override {
     // The tests do not care about preresolves to non-test server (e.g., hard
     // coded preconnects to google.com).
@@ -213,7 +214,7 @@ IN_PROC_BROWSER_TEST_F(
 
   // We should not see additional preresolves.
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
   run_loop.Run();
 
@@ -256,8 +257,9 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_EQ(2, preresolve_done_count_);
 }
 
-const base::Feature kPreconnectOnDidFinishNavigation{
-    "PreconnectOnDidFinishNavigation", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kPreconnectOnDidFinishNavigation,
+             "PreconnectOnDidFinishNavigation",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 class
     NavigationPredictorPreconnectClientBrowserTestPreconnectOnDidFinishNavigationSecondDelay
@@ -361,8 +363,9 @@ IN_PROC_BROWSER_TEST_F(
 
 namespace {
 // Feature to control preconnect to search.
-const base::Feature kPreconnectToSearchTest{"PreconnectToSearch",
-                                            base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kPreconnectToSearchTest,
+             "PreconnectToSearch",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 }  // namespace
 
 class NavigationPredictorPreconnectClientBrowserTestWithSearch
@@ -469,7 +472,7 @@ class NavigationPredictorPreconnectClientPrerenderBrowserTestNoDelay
       delete;
 
   void SetUp() override {
-    prerender_test_helper_.SetUp(https_server_.get());
+    prerender_test_helper_.RegisterServerRequestMonitor(https_server_.get());
     NavigationPredictorPreconnectClientBrowserTestPreconnectOnDidFinishNavigationNoDelay::
         SetUp();
   }

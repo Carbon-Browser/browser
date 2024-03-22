@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,10 +12,6 @@ chrome_apps_api_schema_files_ = [
   "browser.idl",
   "media_galleries.idl",
   "sync_file_system.idl",
-
-  # TODO(devlin): This API is only available on ChromeOS. We should only
-  # generate sources for it on CrOS as well.
-  "webstore_widget_private.idl",
 ]
 
 if (is_chromeos_ash) {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,17 +34,19 @@ public final class GlueApiHelperForO {
      */
     public static boolean onRenderProcessGone(
             WebViewClient webViewClient, WebView webView, AwRenderProcessGoneDetail detail) {
-        return webViewClient.onRenderProcessGone(webView, new RenderProcessGoneDetail() {
-            @Override
-            public boolean didCrash() {
-                return detail.didCrash();
-            }
+        return webViewClient.onRenderProcessGone(
+                webView,
+                new RenderProcessGoneDetail() {
+                    @Override
+                    public boolean didCrash() {
+                        return detail.didCrash();
+                    }
 
-            @Override
-            public int rendererPriorityAtExit() {
-                return detail.rendererPriority();
-            }
-        });
+                    @Override
+                    public int rendererPriorityAtExit() {
+                        return detail.rendererPriority();
+                    }
+                });
     }
 
     public static boolean isMultiProcessEnabled(WebViewDelegate webViewDelegate) {

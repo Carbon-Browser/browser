@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/numerics/safe_math.h"
 #include "base/time/time.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_sample_types.h"
+#include "media/base/media_switches.h"
 #include "media/ffmpeg/ffmpeg_common.h"
 #include "media/ffmpeg/ffmpeg_decoding_loop.h"
 
@@ -80,6 +81,14 @@ bool AudioFileReader::OpenDemuxer() {
       AVStreamToAVCodecContext(format_context->streams[stream_index_]);
   if (!codec_context_)
     return false;
+
+  // Future versions of ffmpeg may copy the allow list from the format context.
+  if (base::FeatureList::IsEnabled(kFFmpegAllowLists) &&
+      !codec_context_->codec_whitelist) {
+    // Note: FFmpeg will try to free this string, so we must duplicate it.
+    codec_context_->codec_whitelist =
+        av_strdup(FFmpegGlue::GetAllowedAudioDecoders());
+  }
 
   DCHECK_EQ(codec_context_->codec_type, AVMEDIA_TYPE_AUDIO);
   return true;
@@ -243,10 +252,10 @@ bool AudioFileReader::OnNewFrame(
   // silence from being output. In the case where we are also discarding some
   // portion of the packet (as indicated by a negative pts), we further want to
   // adjust the duration downward by however much exists before zero.
-  if (audio_codec_ == AudioCodec::kAAC && frame->pkt_duration) {
+  if (audio_codec_ == AudioCodec::kAAC && frame->duration) {
     const base::TimeDelta pkt_duration = ConvertFromTimeBase(
         glue_->format_context()->streams[stream_index_]->time_base,
-        frame->pkt_duration + std::min(static_cast<int64_t>(0), frame->pts));
+        frame->duration + std::min(static_cast<int64_t>(0), frame->pts));
     const base::TimeDelta frame_duration =
         base::Seconds(frames_read / static_cast<double>(sample_rate_));
 

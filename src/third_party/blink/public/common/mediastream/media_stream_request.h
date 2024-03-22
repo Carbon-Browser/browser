@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-forward.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
+#include "ui/display/types/display_constants.h"
 
 namespace blink {
 
@@ -53,6 +54,10 @@ struct BLINK_COMMON_EXPORT MediaStreamDevice {
   MediaStreamDevice(mojom::MediaStreamType type,
                     const std::string& id,
                     const std::string& name);
+  MediaStreamDevice(mojom::MediaStreamType type,
+                    const std::string& id,
+                    const std::string& name,
+                    int64_t display_id);
   MediaStreamDevice(
       mojom::MediaStreamType type,
       const std::string& id,
@@ -64,7 +69,7 @@ struct BLINK_COMMON_EXPORT MediaStreamDevice {
                     const std::string& id,
                     const std::string& name,
                     int sample_rate,
-                    int channel_layout,
+                    const media::ChannelLayoutConfig& channel_layout_config,
                     int frames_per_buffer);
   MediaStreamDevice(const MediaStreamDevice& other);
   ~MediaStreamDevice();
@@ -93,6 +98,11 @@ struct BLINK_COMMON_EXPORT MediaStreamDevice {
 
   // The device's unique ID.
   std::string id;
+
+  // The device's unique display id if the device is a display.
+  // display::kInvalidDisplayId should be used in case a surface type other
+  // than monitor is requested.
+  int64_t display_id = display::kInvalidDisplayId;
 
   // The control support for video capture device.
   media::VideoCaptureControlSupport video_control_support;
@@ -132,6 +142,8 @@ BLINK_COMMON_EXPORT MediaStreamDevices
 ToMediaStreamDevicesList(const mojom::StreamDevicesSet& stream_devices_set);
 
 BLINK_COMMON_EXPORT size_t CountDevices(const mojom::StreamDevices& devices);
+BLINK_COMMON_EXPORT bool IsMediaStreamDeviceTransferrable(
+    const MediaStreamDevice& device);
 
 }  // namespace blink
 

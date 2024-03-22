@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/extension_uninstall_dialog.h"
 #include "chrome/browser/ui/views/extensions/extensions_dialogs_utils.h"
@@ -84,12 +84,13 @@ void ExtensionUninstallDialogViews::Show() {
       .AddOkButton(
           base::BindOnce(&ExtensionUninstallDialogViews::DialogAccepted,
                          weak_ptr_factory_.GetWeakPtr()),
-          l10n_util::GetStringUTF16(IDS_EXTENSION_PROMPT_UNINSTALL_BUTTON))
+          ui::DialogModelButton::Params().SetLabel(
+              l10n_util::GetStringUTF16(IDS_EXTENSION_PROMPT_UNINSTALL_BUTTON)))
       .AddCancelButton(
-          base::OnceClosure() /* Cancel is covered by WindowClosingCallback */);
+          base::DoNothing() /* Cancel is covered by WindowClosingCallback */);
 
   if (triggering_extension()) {
-    dialog_builder.AddBodyText(
+    dialog_builder.AddParagraph(
         ui::DialogModelLabel(
             l10n_util::GetStringFUTF16(
                 IDS_EXTENSION_PROMPT_UNINSTALL_TRIGGERED_BY_EXTENSION,

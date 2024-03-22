@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,11 +31,19 @@ const char kShowMacOverlayBorders[] = "show-mac-overlay-borders";
 const char kEnableResourcesFileSharing[] = "enable-resources-file-sharing";
 #endif
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+// Specifies system font family name. Improves determenism when rendering
+// pages in headless mode.
+const char kSystemFontFamily[] = "system-font-family";
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+// Specify the toolkit used to construct the Linux GUI.
+const char kUiToolkitFlag[] = "ui-toolkit";
+#endif
+
 // Disables layer-edge anti-aliasing in the compositor.
 const char kDisableCompositedAntialiasing[] = "disable-composited-antialiasing";
-
-// Disables use of DWM composition for top level windows.
-const char kDisableDwmComposition[] = "disable-dwm-composition";
 
 // Disables touch event based drag and drop.
 const char kDisableTouchDragDrop[] = "disable-touch-drag-drop";
@@ -44,6 +52,10 @@ const char kDisableTouchDragDrop[] = "disable-touch-drag-drop";
 // Intended only for use in layout or pixel tests to reduce noise.
 const char kDisallowNonExactResourceReuse[] =
     "disallow-non-exact-resource-reuse";
+
+// Treats DRM virtual connector as external to enable display mode change in VM.
+const char kDRMVirtualConnectorIsExternal[] =
+    "drm-virtual-connector-is-external";
 
 // Enables touch event based drag and drop.
 const char kEnableTouchDragDrop[] = "enable-touch-drag-drop";

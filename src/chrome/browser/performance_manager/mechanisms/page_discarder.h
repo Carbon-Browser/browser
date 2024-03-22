@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "chrome/browser/resource_coordinator/lifecycle_unit_state.mojom.h"
 
 namespace performance_manager {
 
@@ -23,10 +24,15 @@ class PageDiscarder {
   PageDiscarder(const PageDiscarder& other) = delete;
   PageDiscarder& operator=(const PageDiscarder&) = delete;
 
+  // When invoked, DiscardPageNodes() becomes a no-op.
+  static void DisableForTesting();
+
   // Discards |page_nodes| and runs |post_discard_cb| on the origin sequence
   // once this is done.
-  virtual void DiscardPageNodes(const std::vector<const PageNode*>& page_nodes,
-                                base::OnceCallback<void(bool)> post_discard_cb);
+  virtual void DiscardPageNodes(
+      const std::vector<const PageNode*>& page_nodes,
+      ::mojom::LifecycleUnitDiscardReason discard_reason,
+      base::OnceCallback<void(bool)> post_discard_cb);
 };
 
 }  // namespace mechanism

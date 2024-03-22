@@ -1,21 +1,22 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
 import './shared/action_link_style.css.js';
 import './shared/onboarding_background.js';
 import './shared/splash_pages_shared.css.js';
 import '../strings.m.js';
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './landing_view.html.js';
-import {LandingViewProxy, LandingViewProxyImpl} from './landing_view_proxy.js';
+import type {LandingViewProxy} from './landing_view_proxy.js';
+import {LandingViewProxyImpl} from './landing_view_proxy.js';
 import {navigateTo, NavigationMixin, Routes} from './navigation_mixin.js';
-import {OnboardingBackgroundElement} from './shared/onboarding_background.js';
+import type {OnboardingBackgroundElement} from './shared/onboarding_background.js';
 import {WelcomeBrowserProxyImpl} from './welcome_browser_proxy.js';
 
 export interface LandingViewElement {

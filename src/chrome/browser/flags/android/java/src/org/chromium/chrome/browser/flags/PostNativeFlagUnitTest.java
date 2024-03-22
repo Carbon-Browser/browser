@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,13 +16,10 @@ import org.junit.runner.RunWith;
 import org.chromium.base.FeatureList;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Unit Tests for {@link PostNativeFlag}.
- */
+/** Unit Tests for {@link PostNativeFlag}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class PostNativeFlagUnitTest {
-    @Rule
-    public final BaseFlagTestRule mBaseFlagTestRule = new BaseFlagTestRule();
+    @Rule public final BaseFlagTestRule mBaseFlagTestRule = new BaseFlagTestRule();
 
     @Test(expected = AssertionError.class)
     public void testDuplicateFeature_throwsException() {

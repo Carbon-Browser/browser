@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.Certificate;
 
-/**
- * Certificate related utility methods.
- */
+/** Certificate related utility methods. */
 public class CertTestUtil {
-    /**
-     * The location of the directory that contains certificates for testing.
-     */
+    /** The location of the directory that contains certificates for testing. */
     public static final String CERTS_DIRECTORY =
             UrlUtils.getIsolatedTestFilePath("net/data/ssl/certificates/");
 

@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
  * Asserts that promise gets rejected.
- * @param {Promise} promise
+ * @param {Promise<*>} promise
  */
 export async function assertRejected(promise) {
   let triggeredError = false;
@@ -22,9 +22,9 @@ export async function assertRejected(promise) {
 /**
  * Invokes a callback function depending on the result of promise.
  *
- * @param {Promise} promise Promise.
- * @param {function(boolean)} callback Callback function. True is passed if the
- *     test failed.
+ * @param {Promise<void>} promise Promise.
+ * @param {function(boolean):void} callback Callback function. True is passed if
+ *     the test failed.
  */
 export function reportPromise(promise, callback) {
   promise.then(
@@ -37,24 +37,29 @@ export function reportPromise(promise, callback) {
       });
 }
 
+/** Logs after the testFunction has run >3x (100ms each sleep). */
+const LOG_INTERVAL = 300;
+
 /**
  * Waits until testFunction becomes true.
  * @param {function(): boolean} testFunction A function which is tested.
- * @return {!Promise} A promise which is fulfilled when the testFunction
+ * @return {!Promise<void>} A promise which is fulfilled when the testFunction
  *     becomes true.
  */
-export function waitUntil(testFunction) {
-  const INTERVAL_FOR_WAIT_UNTIL = 100;  // ms
-
-  return new Promise((resolve) => {
-    const tryTestFunction = () => {
-      if (testFunction()) {
-        resolve();
-      } else {
-        setTimeout(tryTestFunction, INTERVAL_FOR_WAIT_UNTIL);
-      }
-    };
-
-    tryTestFunction();
-  });
+export async function waitUntil(testFunction) {
+  const stack = new Error().stack;
+  let logTime = Date.now() + LOG_INTERVAL;
+  let logged = false;
+  while (!testFunction()) {
+    if (Date.now() > logTime) {
+      console.warn(`>>> waitUntil():\nWaiting for ${
+          testFunction.toString()}\n-----\nFrom: ${stack}`);
+      logged = true;
+      logTime += LOG_INTERVAL;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  if (logged) {
+    console.warn('<<< waitUntil() ended successfully.');
+  }
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/threading/thread_checker.h"
 #include "third_party/metrics_proto/system_profile.pb.h"
@@ -47,6 +48,9 @@ class PersistentSystemProfile {
 
   // Records the existence of a field trial.
   void AddFieldTrial(base::StringPiece trial, base::StringPiece group);
+
+  // Removes the field trial from the system profile.
+  void RemoveFieldTrial(base::StringPiece trial);
 
   // Tests if a persistent memory allocator contains an system profile.
   static bool HasSystemProfile(
@@ -114,7 +118,7 @@ class PersistentSystemProfile {
     bool ReadData(RecordType* type, std::string* record) const;
 
     // This never changes but can't be "const" because vector calls operator=().
-    base::PersistentMemoryAllocator* allocator_;  // Storage location.
+    raw_ptr<base::PersistentMemoryAllocator> allocator_;  // Storage location.
 
     // Indicates if a complete profile has been stored.
     bool has_complete_profile_;

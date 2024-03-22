@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,12 @@
 
 #include <objbase.h>
 #include <stdint.h>
+
+#include <string_view>
 #include <utility>
 
 #include "base/location.h"
+#include "base/no_destructor.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/scoped_thread_priority.h"
@@ -33,8 +36,8 @@ constexpr wchar_t kSerialNumberQuery[] = L"SELECT SerialNumber FROM Win32_Bios";
 // Instantiates `wmi_services` with a connection to `server_name` in WMI. Will
 // set a security blanket if `set_blanket` is true.
 absl::optional<WmiError> CreateLocalWmiConnection(
-    const std::wstring& server_name,
     bool set_blanket,
+    const std::wstring& server_name,
     ComPtr<IWbemServices>* wmi_services) {
   DCHECK(wmi_services);
   ComPtr<IWbemLocator> wmi_locator;
@@ -94,7 +97,7 @@ absl::optional<WmiError> RunWmiQuery(const std::wstring& server_name,
   DCHECK(enumerator);
 
   ComPtr<IWbemServices> wmi_services;
-  auto error = CreateLocalWmiConnection(server_name, /*set_blanket=*/true,
+  auto error = CreateLocalWmiConnection(/*set_blanket=*/true, server_name,
                                         &wmi_services);
 
   if (error.has_value())
@@ -113,13 +116,26 @@ bool CreateLocalWmiConnection(bool set_blanket,
   SCOPED_MAY_LOAD_LIBRARY_AT_BACKGROUND_PRIORITY();
 
   auto error =
-      CreateLocalWmiConnection(kCimV2ServerName, set_blanket, wmi_services);
+      CreateLocalWmiConnection(set_blanket, kCimV2ServerName, wmi_services);
   return !error.has_value();
 }
 
+ComPtr<IWbemServices> CreateWmiConnection(bool set_blanket,
+                                          const std::wstring& resource) {
+  // Mitigate the issues caused by loading DLLs on a background thread
+  // (http://crbug/973868).
+  SCOPED_MAY_LOAD_LIBRARY_AT_BACKGROUND_PRIORITY();
+
+  ComPtr<IWbemServices> wmi_services = nullptr;
+  auto error = CreateLocalWmiConnection(set_blanket, resource, &wmi_services);
+  if (error.has_value())
+    return nullptr;
+  return wmi_services;
+}
+
 bool CreateWmiClassMethodObject(IWbemServices* wmi_services,
-                                WStringPiece class_name,
-                                WStringPiece method_name,
+                                std::wstring_view class_name,
+                                std::wstring_view method_name,
                                 ComPtr<IWbemClassObject>* class_instance) {
   // We attempt to instantiate a COM object that represents a WMI object plus
   // a method rolled into one entity.
@@ -200,17 +216,16 @@ bool WmiLaunchProcess(const std::wstring& command_line, int* process_id) {
 
 // static
 WmiComputerSystemInfo WmiComputerSystemInfo::Get() {
-  WmiComputerSystemInfo info;
-
-  ComPtr<IEnumWbemClassObject> enumerator_bios;
-  auto error =
-      RunWmiQuery(kCimV2ServerName, kSerialNumberQuery, &enumerator_bios);
-  if (error.has_value())
+  static const base::NoDestructor<WmiComputerSystemInfo> static_info([] {
+    WmiComputerSystemInfo info;
+    ComPtr<IEnumWbemClassObject> enumerator_bios;
+    auto error =
+        RunWmiQuery(kCimV2ServerName, kSerialNumberQuery, &enumerator_bios);
+    if (!error.has_value())
+      info.PopulateSerialNumber(enumerator_bios);
     return info;
-
-  info.PopulateSerialNumber(enumerator_bios);
-
-  return info;
+  }());
+  return *static_info;
 }
 
 void WmiComputerSystemInfo::PopulateSerialNumber(

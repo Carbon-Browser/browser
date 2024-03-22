@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef STORAGE_BROWSER_FILE_SYSTEM_WATCHER_MANAGER_H_
 #define STORAGE_BROWSER_FILE_SYSTEM_WATCHER_MANAGER_H_
 
-#include "base/callback_forward.h"
 #include "base/files/file.h"
+#include "base/functional/callback_forward.h"
 
 namespace storage {
 

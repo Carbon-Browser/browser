@@ -1,109 +1,190 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/strings/string_util.h"
-#include "base/strings/sys_string_conversions.h"
-#include "components/policy/core/common/policy_loader_ios_constants.h"
-#include "components/policy/policy_constants.h"
-#include "components/signin/ios/browser/features.h"
-#import "ios/chrome/browser/policy/policy_app_interface.h"
+#import "base/i18n/number_formatting.h"
+#import "base/ios/ios_util.h"
+#import "base/strings/string_util.h"
+#import "base/strings/sys_string_conversions.h"
+#import "build/branding_buildflags.h"
+#import "components/policy/core/common/policy_loader_ios_constants.h"
+#import "components/policy/policy_constants.h"
+#import "components/search_engines/search_engines_pref_names.h"
+#import "components/search_engines/search_engines_switches.h"
+#import "components/signin/ios/browser/features.h"
+#import "components/signin/public/base/consent_level.h"
+#import "components/signin/public/base/signin_switches.h"
+#import "components/strings/grit/components_strings.h"
+#import "components/sync/base/features.h"
+#import "components/sync/base/user_selectable_type.h"
+#import "components/sync/service/sync_prefs.h"
+#import "components/unified_consent/pref_names.h"
+#import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
 #import "ios/chrome/browser/policy/policy_earl_grey_utils.h"
-#import "ios/chrome/browser/ui/authentication/authentication_constants.h"
+#import "ios/chrome/browser/policy/policy_util.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/elements/elements_constants.h"
+#import "ios/chrome/browser/signin/model/capabilities_types.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/signin/model/test_constants.h"
+#import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 #import "ios/chrome/browser/ui/authentication/signin_earl_grey.h"
+#import "ios/chrome/browser/ui/authentication/signin_earl_grey_app_interface.h"
 #import "ios/chrome/browser/ui/authentication/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/ui/authentication/signin_matchers.h"
-#import "ios/chrome/browser/ui/authentication/views/views_constants.h"
+#import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey.h"
 #import "ios/chrome/browser/ui/first_run/first_run_app_interface.h"
 #import "ios/chrome/browser/ui/first_run/first_run_constants.h"
-#include "ios/chrome/browser/ui/first_run/fre_field_trial.h"
+#import "ios/chrome/browser/ui/search_engine_choice/search_engine_choice_constants.h"
+#import "ios/chrome/browser/ui/settings/google_services/google_services_settings_constants.h"
 #import "ios/chrome/browser/ui/settings/google_services/manage_sync_settings_constants.h"
-#include "ios/chrome/browser/ui/ui_feature_flags.h"
-#include "ios/chrome/common/string_util.h"
 #import "ios/chrome/common/ui/promo_style/constants.h"
-#include "ios/chrome/grit/ios_chromium_strings.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
-#include "ios/chrome/test/earl_grey/test_switches.h"
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity.h"
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity_interaction_manager_constants.h"
+#import "ios/chrome/test/earl_grey/test_switches.h"
+#import "ios/testing/earl_grey/app_launch_configuration.h"
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity_service_constants.h"
-#include "ios/third_party/earl_grey2/src/CommonLib/Matcher/GREYLayoutConstraint.h"  // nogncheck
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using chrome_test_util::IdentityCellMatcherForEmail;
-using chrome_test_util::AdvancedSyncSettingsDoneButtonMatcher;
+#import "ui/base/l10n/l10n_util.h"
+#import "ui/base/test/ios/ui_image_test_utils.h"
 
 namespace {
 
-NSString* const kMetricsConsentCheckboxAccessibilityIdentifier =
-    @"kMetricsConsentCheckboxAccessibilityIdentifier";
+// Type of FRE sign-in screen intent.
+typedef NS_ENUM(NSUInteger, FRESigninIntent) {
+  // FRE without enterprise policy.
+  FRESigninIntentRegular,
+  // FRE without forced sign-in policy.
+  FRESigninIntentSigninForcedByPolicy,
+  // FRE without disabled sign-in policy.
+  FRESigninIntentSigninDisabledByPolicy,
+  // FRE with an enterprise policy which is not explicitly handled by another
+  // entry.
+  FRESigninIntentSigninWithPolicy,
+  // FRE with the SyncDisabled enterprise policy.
+  FRESigninIntentSigninWithSyncDisabledPolicy,
+  // FRE with no UMA link in the first screen.
+  FRESigninIntentSigninWithUMAReportingDisabledPolicy,
+};
 
-NSString* const kBeginBoldTag = @"BEGIN_BOLD[ \t]*";
-NSString* const kEndBoldTag = @"[ \t]*END_BOLD";
+NSString* const kSyncPassphrase = @"hello";
 
-// Returns a matcher for the welcome screen UMA checkbox button.
-id<GREYMatcher> GetUMACheckboxButton() {
-  return grey_accessibilityID(kMetricsConsentCheckboxAccessibilityIdentifier);
-}
-
-// Returns a matcher for the welcome screen accept button.
-id<GREYMatcher> GetAcceptButton() {
-  return grey_allOf(grey_text(l10n_util::GetNSString(
-                        IDS_IOS_FIRST_RUN_WELCOME_SCREEN_ACCEPT_BUTTON)),
+// Returns matcher for the sync encryption action button.
+id<GREYMatcher> SyncEncryptionButtonMatcher() {
+  return grey_allOf(chrome_test_util::ButtonWithAccessibilityLabelId(
+                        IDS_IOS_MANAGE_SYNC_ENCRYPTION),
                     grey_sufficientlyVisible(), nil);
 }
 
-// Returns a matcher for the button to open the Sync settings.
+// Returns matcher for UMA manage link.
+id<GREYMatcher> ManageUMALinkMatcher() {
+  return grey_allOf(grey_accessibilityLabel(@"Manage"),
+                    grey_sufficientlyVisible(), nil);
+}
+
+// Returns matcher for the button to open the Sync settings.
 id<GREYMatcher> GetSyncSettings() {
   id<GREYMatcher> disclaimer =
       grey_accessibilityID(kPromoStyleDisclaimerViewAccessibilityIdentifier);
   return grey_allOf(grey_accessibilityLabel(@"settings"),
-                    grey_ancestor(disclaimer), nil);
+                    grey_ancestor(disclaimer), grey_sufficientlyVisible(), nil);
 }
 
-// Returns a matcher for the button to add account.
-id<GREYMatcher> GetAddAccountButton() {
-  return grey_allOf(grey_text(l10n_util::GetNSString(
-                        IDS_IOS_ACCOUNT_UNIFIED_CONSENT_ADD_ACCOUNT)),
-                    grey_sufficientlyVisible(), nil);
+// Selects search engine cell with `search_engine_name`.
+void SelectSearchEngineCellWithName(NSString* search_engine_name,
+                                    GREYDirection scroll_direction,
+                                    CGFloat scroll_amount) {
+  NSString* searchEngineAccessibiltyIdentifier =
+      [NSString stringWithFormat:@"%@%@", kSnippetSearchEngineIdentifierPrefix,
+                                 search_engine_name];
+  id<GREYMatcher> searchEngineRowMatcher =
+      grey_allOf(grey_userInteractionEnabled(),
+                 grey_accessibilityID(searchEngineAccessibiltyIdentifier), nil);
+  // Scroll down to find the search engine cell.
+  id<GREYMatcher> scrollView =
+      grey_accessibilityID(kSearchEngineTableViewIdentifier);
+  [[[EarlGrey selectElementWithMatcher:searchEngineRowMatcher]
+         usingSearchAction:grey_scrollInDirection(scroll_direction,
+                                                  scroll_amount)
+      onElementWithMatcher:scrollView] assertWithMatcher:grey_notNil()];
+  // Tap on the search engine cell.
+  [[[EarlGrey selectElementWithMatcher:searchEngineRowMatcher]
+      assertWithMatcher:grey_notNil()] performAction:grey_tap()];
 }
 
-// Returns a matcher for the button to sign-in and sync (OLD string).
-id<GREYMatcher> GetYesImInButton() {
-  return grey_allOf(grey_text(l10n_util::GetNSString(
-                        IDS_IOS_ACCOUNT_UNIFIED_CONSENT_OK_BUTTON)),
-                    grey_sufficientlyVisible(), nil);
+// Confirms the search engine choice screen. A search engine must have been
+// selected before.
+void ConfirmSearchEngineChoiceScreen() {
+  id<GREYMatcher> moreButtonMatcher =
+      grey_allOf(grey_accessibilityID(kSearchEngineMoreButtonIdentifier),
+                 grey_sufficientlyVisible(), nil);
+  NSError* error = nil;
+  [[EarlGrey selectElementWithMatcher:moreButtonMatcher]
+      assertWithMatcher:grey_notNil()
+                  error:&error];
+  if (!error) {
+    // Tap on the "More" button if it exists.
+    [[[EarlGrey selectElementWithMatcher:moreButtonMatcher]
+        assertWithMatcher:grey_notNil()] performAction:grey_tap()];
+  }
+  // Tap on the "Set as Default" button.
+  id<GREYMatcher> primaryButtonMatcher =
+      grey_allOf(grey_accessibilityID(kSetAsDefaultSearchEngineIdentifier),
+                 grey_sufficientlyVisible(), nil);
+  [[[EarlGrey selectElementWithMatcher:primaryButtonMatcher]
+      assertWithMatcher:grey_notNil()] performAction:grey_tap()];
 }
 
-// Returns a matcher for the button to skip sign-in and sync (OLD string).
-id<GREYMatcher> GetNoThanksButton() {
-  return grey_allOf(
-      grey_text(l10n_util::GetNSString(
+// Dismisses the choice screen if it appears
+void DismissChoiceScreenIfNecessary() {
+  if (![ChromeEarlGreyAppInterface IsSearchEngineChoiceScreenEnabledFre]) {
+    return;
+  }
+  // Selects a search engine. The list of search engines varies from country to
+  // country and is refreshed periodically. Google should always be proposed in
+  // the countries selected by test settings.
+  SelectSearchEngineCellWithName(
+      @"Google", /*scroll_direction=*/kGREYDirectionDown, /*scroll_amount*/ 50);
+  ConfirmSearchEngineChoiceScreen();
+}
+
+// Dismisses the remaining screens in FRE after the search engine choice screen.
+void DismissScreensAfterChoiceScreen() {
+  id<GREYMatcher> buttonMatcher = grey_allOf(
+      grey_ancestor(grey_accessibilityID(
+          first_run::kFirstRunDefaultBrowserScreenAccessibilityIdentifier)),
+      grey_accessibilityTrait(UIAccessibilityTraitStaticText),
+      grey_accessibilityLabel(l10n_util::GetNSString(
           IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_SECONDARY_ACTION)),
-      grey_sufficientlyVisible(), nil);
+      nil);
+
+  [[[EarlGrey selectElementWithMatcher:buttonMatcher]
+      assertWithMatcher:grey_notNil()] performAction:grey_tap()];
+
+  if ([FirstRunAppInterface isOmniboxPositionChoiceEnabled]) {
+    id<GREYMatcher> omniboxPositionScreenPrimaryButton = grey_allOf(
+        grey_ancestor(grey_accessibilityID(
+            first_run::
+                kFirstRunOmniboxPositionChoiceScreenAccessibilityIdentifier)),
+        grey_accessibilityID(kPromoStylePrimaryActionAccessibilityIdentifier),
+        nil);
+
+    [[[EarlGrey selectElementWithMatcher:omniboxPositionScreenPrimaryButton]
+        assertWithMatcher:grey_notNil()] performAction:grey_tap()];
+  }
 }
 
-// Returns a constraint where the element is below the reference.
-GREYLayoutConstraint* BelowConstraint() {
-  return [GREYLayoutConstraint
-      layoutConstraintWithAttribute:kGREYLayoutAttributeTop
-                          relatedBy:kGREYLayoutRelationGreaterThanOrEqual
-               toReferenceAttribute:kGREYLayoutAttributeBottom
-                         multiplier:1.0
-                           constant:0.0];
+// Dismisses the remaining screens in FRE after sign-in and sync.
+void DismissScreensAfterSigninAndSync() {
+  DismissChoiceScreenIfNecessary();
+  DismissScreensAfterChoiceScreen();
 }
 
 }  // namespace
@@ -117,960 +198,1429 @@ GREYLayoutConstraint* BelowConstraint() {
 
 - (void)setUp {
   [[self class] testForStartup];
-
   [super setUp];
-  [FirstRunAppInterface setUMACollectionEnabled:NO];
-  [FirstRunAppInterface resetUMACollectionEnabledByDefault];
+
+  // Because this test suite changes the state of Sync passwords, wait
+  // until the engine is initialized before startup.
+  [ChromeEarlGrey
+      waitForSyncEngineInitialized:NO
+                       syncTimeout:syncher::kSyncUKMOperationsTimeout];
 }
 
 - (void)tearDown {
-  [PolicyAppInterface clearPolicies];
-  [FirstRunAppInterface setUMACollectionEnabled:NO];
-  [FirstRunAppInterface resetUMACollectionEnabledByDefault];
+  [SigninEarlGrey signOut];
+
+  // Tests that use `addBookmarkWithSyncPassphrase` must ensure that Sync
+  // data is cleared before tear down to reset the Sync password state.
+  [ChromeEarlGrey
+      waitForSyncEngineInitialized:NO
+                       syncTimeout:syncher::kSyncUKMOperationsTimeout];
+  [ChromeEarlGrey clearSyncServerData];
+
+  // Clear sync prefs for data types.
+  [ChromeEarlGreyAppInterface
+      clearUserPrefWithName:base::SysUTF8ToNSString(
+                                syncer::SyncPrefs::GetPrefNameForTypeForTesting(
+                                    syncer::UserSelectableType::kTabs))];
+  [ChromeEarlGreyAppInterface
+      clearUserPrefWithName:base::SysUTF8ToNSString(
+                                syncer::SyncPrefs::GetPrefNameForTypeForTesting(
+                                    syncer::UserSelectableType::kHistory))];
+
+  // Clear MSBB consent.
+  [ChromeEarlGreyAppInterface
+      clearUserPrefWithName:base::SysUTF8ToNSString(
+                                unified_consent::prefs::
+                                    kUrlKeyedAnonymizedDataCollectionEnabled)];
+
+  // Clear the "choice was made" timestamp pref.
+  [ChromeEarlGreyAppInterface
+      clearUserPrefWithName:
+          base::SysUTF8ToNSString(
+              prefs::kDefaultSearchProviderChoiceScreenCompletionTimestamp)];
+
   [super tearDown];
 }
 
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config;
-  config.features_enabled.push_back(kEnableFREUIModuleIOS);
-  config.features_disabled.push_back(signin::kNewMobileIdentityConsistencyFRE);
-  config.features_disabled.push_back(kEnableFREDefaultBrowserPromoScreen);
+  // Enable the choice screen feature flag.
+  config.features_enabled.push_back(switches::kSearchEngineChoiceFre);
+  // Set the country to one that is eligible for the choice screen (in this
+  // case, France).
+  config.additional_args.push_back("--search-engine-choice-country=FR");
 
-  // Show the First Run UI at startup.
+  config.additional_args.push_back(std::string("-") +
+                                   test_switches::kSignInAtStartup);
   config.additional_args.push_back("-FirstRunForceEnabled");
   config.additional_args.push_back("true");
-
-  // Relaunch app at each test to rewind the startup state.
+  // Relaunches the app at each test to rewind the startup state.
   config.relaunch_policy = ForceRelaunchByKilling;
+
+  if ([self isRunningTest:@selector(testSignInWithNoAccount)] ||
+      [self isRunningTest:@selector(testHistorySyncSkipIfNoSignIn)] ||
+      [self isRunningTest:@selector(testHistorySyncShownAfterSignIn)] ||
+      [self isRunningTest:@selector
+            (testSignInSubtitleIfHistorySyncOptInEnabled)] ||
+      [self
+          isRunningTest:@selector(testHistorySyncConsentGrantedAfterConfirm)] ||
+      [self isRunningTest:@selector
+            (testHistorySyncConsentNotGrantedAfterReject)] ||
+      [self isRunningTest:@selector(testHistorySyncSkipIfSyncDisabled)] ||
+      [self isRunningTest:@selector(testHistorySyncSkipIfTabsSyncDisabled)] ||
+      [self isRunningTest:@selector
+            (testHistorySyncShownIfBookmarksSyncDisabled)] ||
+      [self isRunningTest:@selector(testHistorySyncLayout)]) {
+    config.features_enabled.push_back(
+        syncer::kReplaceSyncPromosWithSignInPromos);
+  } else if ([self isRunningTest:@selector
+                   (testAdvancedSettingsWithSyncPassphrase)] ||
+             [self isRunningTest:@selector
+                   (testAdvancedSettingsAndDisableTwoDataTypes)] ||
+             [self isRunningTest:@selector
+                   (testSigninWithOnlyBookmarkSyncDataTypeEnabled)]) {
+    config.features_disabled.push_back(
+        syncer::kReplaceSyncPromosWithSignInPromos);
+  }
 
   return config;
 }
 
-#pragma mark - Helpers
+#pragma mark - Tests
 
-// Remove when default browser screen will be fully enabled
-- (BOOL)isDefaultBrowserTestDisabled {
-  return YES;
+// Tests FRE with UMA default value and without sign-in.
+- (void)testWithUMACheckedAndNoSignin {
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Skip sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoSecondaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed out.
+  [SigninEarlGrey verifySignedOut];
 }
 
-// Checks that the welcome screen is displayed.
-- (void)verifyWelcomeScreenIsDisplayed {
-  [[EarlGrey selectElementWithMatcher:
-                 grey_accessibilityID(
-                     first_run::kFirstRunWelcomeScreenAccessibilityIdentifier)]
-      assertWithMatcher:grey_notNil()];
-}
-
-// Checks that the sign-in & sync screen is displayed.
-- (void)verifySignInSyncScreenIsDisplayed {
+// Tests FRE with UMA off and without sign-in.
+- (void)testWithUMAUncheckedAndNoSignin {
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Scroll down and open the UMA dialog.
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               ManageUMALinkMatcher(),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [ChromeEarlGreyUI waitForAppToIdle];
+  // Turn off UMA.
   [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   kSigninSyncScreenAccessibilityIdentifier)]
-      assertWithMatcher:grey_notNil()];
-}
-
-// Checks that the forced sign-in screen is displayed.
-- (void)verifyForcedSigninScreenIsDisplayed {
-  [[EarlGrey
-      selectElementWithMatcher:
-          grey_accessibilityID(
-              first_run::kFirstRunLegacySignInScreenAccessibilityIdentifier)]
-      assertWithMatcher:grey_notNil()];
-}
-
-// Checks that the default browser screen is displayed.
-- (void)verifyDefaultBrowserScreenIsDisplayed {
-  [[EarlGrey
-      selectElementWithMatcher:
-          grey_accessibilityID(
-              first_run::kFirstRunDefaultBrowserScreenAccessibilityIdentifier)]
-      assertWithMatcher:grey_notNil()];
-}
-
-// Checks that none of any FRE's screen is displayed.
-- (void)verifyFREIsDismissed {
-  [[EarlGrey selectElementWithMatcher:
-                 grey_accessibilityID(
-                     first_run::kFirstRunWelcomeScreenAccessibilityIdentifier)]
-      assertWithMatcher:grey_nil()];
-
-  [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   kSigninSyncScreenAccessibilityIdentifier)]
-      assertWithMatcher:grey_nil()];
-
-  [[EarlGrey
-      selectElementWithMatcher:
-          grey_accessibilityID(
-              first_run::kFirstRunDefaultBrowserScreenAccessibilityIdentifier)]
-      assertWithMatcher:grey_nil()];
-
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::FakeOmnibox()]
-      assertWithMatcher:grey_sufficientlyVisible()];
-}
-
-// Scrolls down to `elementMatcher` in the scrollable content of the first run
-// screen.
-- (void)scrollToElementAndAssertVisibility:(id<GREYMatcher>)elementMatcher {
-  id<GREYMatcher> scrollView =
-      grey_accessibilityID(kPromoStyleScrollViewAccessibilityIdentifier);
-
-  [[[EarlGrey
-      selectElementWithMatcher:grey_allOf(elementMatcher,
-                                          grey_sufficientlyVisible(), nil)]
-         usingSearchAction:grey_scrollInDirection(kGREYDirectionDown, 50)
-      onElementWithMatcher:scrollView] assertWithMatcher:grey_notNil()];
-}
-
-- (void)toggleSwitchWithIdentifier:(NSString*)identifier
-                           toValue:(BOOL)toggleOn {
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
-                                          identifier,
-                                          /*is_toggled_on=*/!toggleOn,
-                                          /*enabled=*/YES)]
-      performAction:chrome_test_util::TurnTableViewSwitchOn(toggleOn)];
-}
-
-- (void)verifySwitchWithIdentifier:(NSString*)identifier
-                           toValue:(BOOL)toggleOn {
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
-                                          identifier,
-                                          /*is_toggled_on=*/toggleOn,
-                                          /*enabled=*/YES)]
-      assertWithMatcher:grey_notNil()];
-}
-
-#pragma mark - Welcome Screen Tests
-
-// Checks that the Welcome screen is displayed correctly.
-- (void)testWelcomeScreenUI {
-  [self verifyWelcomeScreenIsDisplayed];
-
-  // Validate the Title text.
-  NSString* expectedTitleText =
-      [ChromeEarlGrey isIPadIdiom]
-          ? l10n_util::GetNSString(IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TITLE_IPAD)
-          : l10n_util::GetNSString(
-                IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TITLE_IPHONE);
-  id<GREYMatcher> title = grey_text(expectedTitleText);
-  [self scrollToElementAndAssertVisibility:title];
-
-  // Validate the Subtitle text.
-  id<GREYMatcher> subtitle = grey_text(
-      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_WELCOME_SCREEN_SUBTITLE));
-  [self scrollToElementAndAssertVisibility:subtitle];
-
-  // Validate the Metrics Consent box.
-  id<GREYMatcher> metricsConsent = grey_text(
-      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_WELCOME_SCREEN_METRICS_CONSENT));
-  [self scrollToElementAndAssertVisibility:metricsConsent];
-
-  // Validate the Accept box.
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-}
-
-// Checks that the Welcome screen is displayed correctly when enterprise is
-// enabled.
-- (void)testWelcomeScreenUIForEnterprise {
-  AppLaunchConfiguration config = self.appConfigurationForTestCase;
-
-  // Configure the policy to force sign-in.
-  std::string policy_data = "<dict>"
-                            "    <key>BrowserSignin</key>"
-                            "    <integer>2</integer>"
-                            "</dict>";
-  base::RemoveChars(policy_data, base::kWhitespaceASCII, &policy_data);
-
-  config.additional_args.push_back(
-      "-" + base::SysNSStringToUTF8(kPolicyLoaderIOSConfigurationKey));
-  config.additional_args.push_back(policy_data);
-
-  // Relaunch the app to take the configuration into account.
-  [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
-
-  [self verifyWelcomeScreenIsDisplayed];
-
-  // Validate the Title text.
-  id<GREYMatcher> title = grey_text(l10n_util::GetNSString(
-      IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TITLE_ENTERPRISE));
-  [self scrollToElementAndAssertVisibility:title];
-
-  // Validate the Subtitle text.
-  id<GREYMatcher> subtitle = grey_text(l10n_util::GetNSString(
-      IDS_IOS_FIRST_RUN_WELCOME_SCREEN_SUBTITLE_ENTERPRISE));
-  [self scrollToElementAndAssertVisibility:subtitle];
-
-  // Validate the Managed text.
-  id<GREYMatcher> managed = grey_text(
-      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_WELCOME_SCREEN_MANAGED));
-  [self scrollToElementAndAssertVisibility:managed];
-
-  // Validate the Metrics Consent box.
-  id<GREYMatcher> metricsConsent = grey_text(
-      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_WELCOME_SCREEN_METRICS_CONSENT));
-  [self scrollToElementAndAssertVisibility:metricsConsent];
-
-  // Validate the Accept box.
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-}
-
-#pragma mark - Sign-in & Sync Tests
-
-// Checks that the sign-in & sync screen is displayed correctly with no account
-// (using OLD strings set).
-- (void)testSignInSyncScreenUIOldStringNoAccount {
-  [self verifyWelcomeScreenIsDisplayed];
-
-  // Go to the sign-in & sync screen.
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-
-  // Validate the Title text.
-  id<GREYMatcher> title =
-      grey_text(l10n_util::GetNSString(IDS_IOS_ACCOUNT_UNIFIED_CONSENT_TITLE));
-  [self scrollToElementAndAssertVisibility:title];
-
-  // Validate the Subtitle text.
-  id<GREYMatcher> subtitle = grey_text(
-      l10n_util::GetNSString(IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_TITLE));
-  [self scrollToElementAndAssertVisibility:subtitle];
-
-  // Validate the Primary button text.
-  [self scrollToElementAndAssertVisibility:GetAddAccountButton()];
-
-  // Validate the Secondary button text.
-  [self scrollToElementAndAssertVisibility:GetNoThanksButton()];
-
-  // Validate that the sync button is not interactible.
-  [[EarlGrey selectElementWithMatcher:grey_allOf(GetSyncSettings(),
-                                                 grey_interactable(), nil)]
-      assertWithMatcher:grey_nil()];
-}
-
-// Checks that the sign-in & sync screen is displayed correctly with an account
-// (using OLD strings set).
-- (void)testSignInSyncScreenUIOldString {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  [self verifyWelcomeScreenIsDisplayed];
-
-  // Go to the sign-in & sync screen.
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-
-  // Validate the Title text.
-  id<GREYMatcher> title =
-      grey_text(l10n_util::GetNSString(IDS_IOS_ACCOUNT_UNIFIED_CONSENT_TITLE));
-  [self scrollToElementAndAssertVisibility:title];
-
-  // Validate the Subtitle text.
-  id<GREYMatcher> subtitle = grey_text(
-      l10n_util::GetNSString(IDS_IOS_ACCOUNT_UNIFIED_CONSENT_SYNC_TITLE));
-  [self scrollToElementAndAssertVisibility:subtitle];
-
-  // Validate the Primary button text.
-  [self scrollToElementAndAssertVisibility:GetYesImInButton()];
-
-  // Validate the Secondary button text.
-  [self scrollToElementAndAssertVisibility:GetNoThanksButton()];
-
-  // Validate that the sync button is interactible.
-  [[EarlGrey selectElementWithMatcher:grey_allOf(GetSyncSettings(),
-                                                 grey_interactable(), nil)]
-      assertWithMatcher:grey_sufficientlyVisible()];
-}
-
-// Tests that the forced sign-in screen is shown when the policy is enabled.
-// If the user says no during the FRE, then they should be re-prompted at the
-// end of the FRE.
-- (void)testSignInScreenUIWhenForcedByPolicy {
-  AppLaunchConfiguration configToSetPolicy = self.appConfigurationForTestCase;
-
-  // Configure the policy to force sign-in.
-  std::string policy_data = "<dict>"
-                            "    <key>BrowserSignin</key>"
-                            "    <integer>2</integer>"
-                            "</dict>";
-  base::RemoveChars(policy_data, base::kWhitespaceASCII, &policy_data);
-
-  configToSetPolicy.additional_args.push_back(
-      "-" + base::SysNSStringToUTF8(kPolicyLoaderIOSConfigurationKey));
-  configToSetPolicy.additional_args.push_back(policy_data);
-
-  // Relaunch the app to take the configuration into account.
-  [[AppLaunchManager sharedManager]
-      ensureAppLaunchedWithConfiguration:configToSetPolicy];
-
-  // Add account for the identity switcher to be shown.
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  // Go to the sign-in & sync screen from the welcome screen.
-  [self verifyWelcomeScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  // Sanity check that the sign-in & sync screen is being displayed.
-  [self verifySignInSyncScreenIsDisplayed];
-
-  // Do not sign-in or sync.
-  [self scrollToElementAndAssertVisibility:GetNoThanksButton()];
-  [[EarlGrey selectElementWithMatcher:GetNoThanksButton()]
-      performAction:grey_tap()];
-
-  // Add account for the identity switcher to be shown.
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  [self verifyForcedSigninScreenIsDisplayed];
-
-  // Restart the app to reset the policies and to make sure that the forced
-  // sign-in UI isn't retriggered when tearing down.
-  AppLaunchConfiguration configToCleanPolicy;
-  configToCleanPolicy.relaunch_policy = ForceRelaunchByCleanShutdown;
-  [[AppLaunchManager sharedManager]
-      ensureAppLaunchedWithConfiguration:configToCleanPolicy];
-}
-
-// Checks that the default browser screen is displayed correctly.
-// TODO(crbug.com/1282248): Re-enable this test.
-- (void)DISABLED_testDefaultBrowserScreenUI {
-  if ([self isDefaultBrowserTestDisabled]) {
-    return;
-  }
-
-  // Go to the default browser screen.
-  [self verifyWelcomeScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-  [[EarlGrey selectElementWithMatcher:GetNoThanksButton()]
-      performAction:grey_tap()];
-
-  [self verifyDefaultBrowserScreenIsDisplayed];
-
-  // Validate the Title text.
-  id<GREYMatcher> title = grey_text(
-      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_TITLE));
-  [self scrollToElementAndAssertVisibility:title];
-
-  // Validate the Subtitle text.
-  id<GREYMatcher> subtitle = grey_text(l10n_util::GetNSString(
-      IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_SUBTITLE));
-  [self scrollToElementAndAssertVisibility:subtitle];
-
-  // Remove bold tags in instructions.
-  StringWithTag firstInstructionParsed = ParseStringWithTag(
-      l10n_util::GetNSString(
-          IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_FIRST_STEP),
-      kBeginBoldTag, kEndBoldTag);
-  StringWithTag secondInstructionParsed = ParseStringWithTag(
-      l10n_util::GetNSString(
-          IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_SECOND_STEP),
-      kBeginBoldTag, kEndBoldTag);
-  StringWithTag thirdInstructionParsed = ParseStringWithTag(
-      l10n_util::GetNSString(
-          IDS_IOS_FIRST_RUN_DEFAULT_BROWSER_SCREEN_THIRD_STEP),
-      kBeginBoldTag, kEndBoldTag);
-
-  // Verify instruction order.
-  id<GREYMatcher> firstInstruction = grey_text(firstInstructionParsed.string);
-  id<GREYMatcher> secondInstruction = grey_text(secondInstructionParsed.string);
-  id<GREYMatcher> thirdInstruction = grey_text(thirdInstructionParsed.string);
-
-  // Scroll to ensure that the third instruction is visible.
-  id<GREYMatcher> scrollViewMatcher =
-      grey_accessibilityID(kPromoStyleScrollViewAccessibilityIdentifier);
-  [[EarlGrey selectElementWithMatcher:thirdInstruction]
-         usingSearchAction:grey_scrollInDirection(kGREYDirectionDown, 50)
-      onElementWithMatcher:scrollViewMatcher];
-
-  [[EarlGrey selectElementWithMatcher:secondInstruction]
-      assertWithMatcher:grey_layout(@[ BelowConstraint() ], firstInstruction)];
-  [[EarlGrey selectElementWithMatcher:thirdInstruction]
-      assertWithMatcher:grey_layout(@[ BelowConstraint() ], secondInstruction)];
-}
-
-// Navigates to the Terms of Service and back.
-- (void)testTermsAndConditions {
-  // Tap on “Terms of Service” on the first screen
-  [self verifyWelcomeScreenIsDisplayed];
-
-  // Scroll to and open the ToS screen.
-  id<GREYMatcher> termsOfServiceLink =
-      grey_accessibilityLabel(@"Terms of Service");
-  [self scrollToElementAndAssertVisibility:termsOfServiceLink];
-  [[EarlGrey selectElementWithMatcher:termsOfServiceLink]
-      performAction:grey_tap()];
-
-  [[EarlGrey selectElementWithMatcher:grey_text(l10n_util::GetNSString(
-                                          IDS_IOS_FIRSTRUN_TERMS_TITLE))]
-      assertWithMatcher:grey_sufficientlyVisible()];
-
-  // Tap on “Done” on the ToS screen
+      selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                   kImproveChromeItemAccessibilityIdentifier,
+                                   /*is_toggled_on=*/YES,
+                                   /*enabled=*/YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  // Close UMA dialog.
   [[EarlGrey
       selectElementWithMatcher:chrome_test_util::NavigationBarDoneButton()]
       performAction:grey_tap()];
+  // Skip sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is off.
+  GREYAssertFalse(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly true by default.");
+  // Check signed out.
+  [SigninEarlGrey verifySignedOut];
+}
 
-  // Ensure we went back to the First Run screen.
-  [self verifyWelcomeScreenIsDisplayed];
-
-  // Scroll to and tap the accept ToS button.
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
+// Tests FRE with UMA off, reopen UMA dialog and close the FRE without sign-in.
+- (void)testUMAUncheckedWhenOpenedSecondTime {
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Scroll down and open the UMA dialog.
+  id<GREYMatcher> manageUMALinkMatcher =
+      grey_allOf(ManageUMALinkMatcher(), grey_sufficientlyVisible(), nil);
+  [[self elementInteractionWithGreyMatcher:manageUMALinkMatcher
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
       performAction:grey_tap()];
 
-  [self verifySignInSyncScreenIsDisplayed];
+  // This wait is required because, on devices, EG-test may tap on the button
+  // while it is sliding up, which cause the tap to misses the button.
+  [ChromeEarlGreyUI waitForAppToIdle];
+  // Turn off UMA.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                   kImproveChromeItemAccessibilityIdentifier,
+                                   /*is_toggled_on=*/YES,
+                                   /*enabled=*/YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  // Close UMA dialog.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::NavigationBarDoneButton()]
+      performAction:grey_tap()];
+  // Open UMA dialog again.
+  [[self elementInteractionWithGreyMatcher:manageUMALinkMatcher
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [ChromeEarlGreyUI waitForAppToIdle];
+  // Check UMA off.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                   kImproveChromeItemAccessibilityIdentifier,
+                                   /*is_toggled_on=*/NO,
+                                   /*enabled=*/YES)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Close UMA dialog.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::NavigationBarDoneButton()]
+      performAction:grey_tap()];
+  // Skip sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is off.
+  GREYAssertFalse(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly true by default.");
+  // Check signed out.
+  [SigninEarlGrey verifySignedOut];
 }
 
-// Tests that the FRE is shown when incognito is forced by policy.
-- (void)testFirstRunWithIncognitoForced {
-  AppLaunchConfiguration config = self.appConfigurationForTestCase;
-
-  std::string policy_data = "<dict>"
-                            "    <key>IncognitoModeAvailability</key>"
-                            "    <integer>2</integer>"
-                            "</dict>";
-  base::RemoveChars(policy_data, base::kWhitespaceASCII, &policy_data);
-
-  config.additional_args.push_back(
-      "-" + base::SysNSStringToUTF8(kPolicyLoaderIOSConfigurationKey));
-  config.additional_args.push_back(policy_data);
-
-  [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
-
-  // Verify that the FRE UI is shown while the browser is in incognito mode.
-  [self verifyWelcomeScreenIsDisplayed];
+// Tests to turn off UMA, and open the UMA dialog to turn it back on.
+// TODO(crbug.com/1487756): Test fails on official builds.
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#define MAYBE_testUMAUncheckedAndCheckItAgain \
+  DISABLED_testUMAUncheckedAndCheckItAgain
+#else
+#define MAYBE_testUMAUncheckedAndCheckItAgain testUMAUncheckedAndCheckItAgain
+#endif
+- (void)MAYBE_testUMAUncheckedAndCheckItAgain {
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Scroll down and open the UMA dialog.
+  id<GREYMatcher> manageUMALinkMatcher =
+      grey_allOf(ManageUMALinkMatcher(), grey_sufficientlyVisible(), nil);
+  [[self elementInteractionWithGreyMatcher:manageUMALinkMatcher
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [ChromeEarlGreyUI waitForAppToIdle];
+  // Turn off UMA.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                   kImproveChromeItemAccessibilityIdentifier,
+                                   /*is_toggled_on=*/YES,
+                                   /*enabled=*/YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  // Close UMA dialog.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::NavigationBarDoneButton()]
+      performAction:grey_tap()];
+  // Open UMA dialog again.
+  [[self elementInteractionWithGreyMatcher:manageUMALinkMatcher
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [ChromeEarlGreyUI waitForAppToIdle];
+  // Turn UMA back on.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                   kImproveChromeItemAccessibilityIdentifier,
+                                   /*is_toggled_on=*/NO,
+                                   /*enabled=*/YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(YES)];
+  // Close UMA dialog.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::NavigationBarDoneButton()]
+      performAction:grey_tap()];
+  // Skip sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed out.
+  [SigninEarlGrey verifySignedOut];
 }
 
-// Tests that the FRE sign in screen is not displayed when sign in is disabled
-// by policy.
-- (void)testSignInDisabled {
-  AppLaunchConfiguration config = self.appConfigurationForTestCase;
+// Tests FRE with UMA off and without sign-in.
+- (void)testWithUMAUncheckedAndSignin {
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Scroll down and open the UMA dialog.
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               ManageUMALinkMatcher(),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [ChromeEarlGreyUI waitForAppToIdle];
+  // Turn off UMA.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                   kImproveChromeItemAccessibilityIdentifier,
+                                   /*is_toggled_on=*/YES,
+                                   /*enabled=*/YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  // Close UMA dialog.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::NavigationBarDoneButton()]
+      performAction:grey_tap()];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Accept sync.
+  [self acceptSyncOrHistory];
+  // Check that UMA is off.
+  GREYAssertFalse(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly true by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [self verifySyncOrHistoryEnabled:YES];
+}
 
+// Tests FRE with UMA default value and with sign-in.
+- (void)testWithUMACheckedAndSignin {
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Accept sync.
+  [self acceptSyncOrHistory];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [self verifySyncOrHistoryEnabled:YES];
+}
+
+// Tests FRE with UMA default value, with sign-in and no sync.
+- (void)testWithUMACheckedAndSigninAndNoSync {
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Refuse sync.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+  // Check sync is off.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [self verifySyncOrHistoryEnabled:NO];
+}
+
+// Tests accepting sync with 2 datatype disabled.
+- (void)testAdvancedSettingsAndDisableTwoDataTypes {
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Open advanced sync settings.
+  [[EarlGrey selectElementWithMatcher:GetSyncSettings()]
+      performAction:grey_tap()];
+  // Turn off "Sync Everything".
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                   kSyncEverythingItemAccessibilityIdentifier,
+                                   /*is_toggled_on=*/YES,
+                                   /*enabled=*/YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  // Turn off "Address and more".
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                          kSyncAutofillIdentifier,
+                                          /*is_toggled_on=*/YES,
+                                          /*enabled=*/YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  // Turn off "Bookmarks".
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                          kSyncBookmarksIdentifier,
+                                          /*is_toggled_on=*/YES,
+                                          /*enabled=*/YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  // Close the advanced sync settings.
+  [[EarlGrey selectElementWithMatcher:
+                 chrome_test_util::AdvancedSyncSettingsDoneButtonMatcher()]
+      performAction:grey_tap()];
+  // Check sync did not start yet.
+  GREYAssertFalse([FirstRunAppInterface isInitialSyncFeatureSetupComplete],
+                  @"Sync shouldn't start when discarding advanced settings.");
+  // Accept sync.
+  [self acceptSyncOrHistory];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [ChromeEarlGreyUI
+      tapSettingsMenuButton:chrome_test_util::ManageSyncSettingsButton()];
+  // Check "Sync Everything" is off.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                   kSyncEverythingItemAccessibilityIdentifier,
+                                   /*is_toggled_on=*/NO,
+                                   /*enabled=*/YES)]
+      assertWithMatcher:grey_notNil()];
+  // Check "Address and more" is off.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                          kSyncAutofillIdentifier,
+                                          /*is_toggled_on=*/NO,
+                                          /*enabled=*/YES)]
+      assertWithMatcher:grey_notNil()];
+  // Check "Bookmarks" is off.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TableViewSwitchCell(
+                                          kSyncBookmarksIdentifier,
+                                          /*is_toggled_on=*/NO,
+                                          /*enabled=*/YES)]
+      assertWithMatcher:grey_notNil()];
+}
+
+// Tests sign-in in FRE with an identity that needs a sync passphrase.
+- (void)testAdvancedSettingsWithSyncPassphrase {
+  [ChromeEarlGrey addBookmarkWithSyncPassphrase:kSyncPassphrase];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Open advanced sync settings.
+  [[EarlGrey selectElementWithMatcher:GetSyncSettings()]
+      performAction:grey_tap()];
+  // Select Encryption item.
+  [[self elementInteractionWithGreyMatcher:SyncEncryptionButtonMatcher()
+                      scrollViewIdentifier:
+                          kManageSyncTableViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [SigninEarlGreyUI submitSyncPassphrase:kSyncPassphrase];
+  // Close the advanced sync settings.
+  [[EarlGrey selectElementWithMatcher:
+                 chrome_test_util::AdvancedSyncSettingsDoneButtonMatcher()]
+      performAction:grey_tap()];
+  // Accept sync.
+  [self acceptSyncOrHistory];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [SigninEarlGrey verifySyncUIEnabled:YES];
+}
+
+#pragma mark - Enterprise
+
+// Tests FRE with disabled sign-in policy.
+- (void)testSignInDisabledByPolicy {
   // Configure the policy to disable SignIn.
-  std::string policy_data = "<dict>"
-                            "    <key>BrowserSignin</key>"
-                            "    <integer>0</integer>"
-                            "</dict>";
-  base::RemoveChars(policy_data, base::kWhitespaceASCII, &policy_data);
+  [self relaunchAppWithBrowserSigninMode:BrowserSigninMode::kDisabled];
+  // Verify 2 step FRE with disabled sign-in policy.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentSigninDisabledByPolicy];
+  // Accept FRE.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed out.
+  [SigninEarlGrey verifySignedOut];
+}
 
-  config.additional_args.push_back("-EnableSamplePolicies");
+// Tests forced sign-in policy, and accept sync.
+- (void)testForceSigninByPolicy {
+  // Configure the policy to force sign-in.
+  [self relaunchAppWithBrowserSigninMode:BrowserSigninMode::kForced];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE with forced sign-in policy.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentSigninForcedByPolicy];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Accept sync.
+  [self acceptSyncOrHistory];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [self verifySyncOrHistoryEnabled:YES];
+  // Close settings.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::SettingsDoneButton()]
+      performAction:grey_tap()];
+}
+
+// Tests forced sign-in policy, and refuse sync.
+- (void)testForceSigninByPolicyWithoutSync {
+  // Configure the policy to force sign-in.
+  [self relaunchAppWithBrowserSigninMode:BrowserSigninMode::kForced];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE with forced sign-in policy.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentSigninForcedByPolicy];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Refuse sync.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [self verifySyncOrHistoryEnabled:NO];
+  // Close settings.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::SettingsDoneButton()]
+      performAction:grey_tap()];
+}
+
+// Tests sign-in with sync disabled policy.
+- (void)testSyncDisabledByPolicy {
+  [self relaunchAppWithPolicyKey:policy::key::kSyncDisabled
+                  xmlPolicyValue:"<true/>"];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE with forced sign-in policy.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentSigninWithSyncDisabledPolicy];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [self verifySyncOrHistoryEnabled:NO];
+}
+
+// Tests sign-in and no sync with forced policy.
+- (void)testSigninWithOnlyBookmarkSyncDataTypeEnabled {
+  // Configure the policy to force sign-in.
+  [self relaunchAppWithPolicyKey:policy::key::kSyncTypesListDisabled
+                  xmlPolicyValue:"<array><string>bookmarks</string></array>"];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE with forced sign-in policy.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentSigninWithPolicy];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Open advanced sync settings.
+  [[EarlGrey selectElementWithMatcher:GetSyncSettings()]
+      performAction:grey_tap()];
+  // Check "Sync Everything" is off
+  [[EarlGrey selectElementWithMatcher:
+                 grey_allOf(grey_accessibilityID(
+                                kSyncEverythingItemAccessibilityIdentifier),
+                            grey_descendant(grey_text(
+                                l10n_util::GetNSString(IDS_IOS_SETTING_OFF))),
+                            nil)] assertWithMatcher:grey_notNil()];
+  // Check "Bookmarks" is off
+  [[EarlGrey selectElementWithMatcher:grey_allOf(grey_accessibilityID(
+                                                     kSyncBookmarksIdentifier),
+                                                 grey_descendant(grey_text(
+                                                     l10n_util::GetNSString(
+                                                         IDS_IOS_SETTING_OFF))),
+                                                 nil)]
+      assertWithMatcher:grey_notNil()];
+  // Close the advanced sync settings.
+  [[EarlGrey selectElementWithMatcher:
+                 chrome_test_util::AdvancedSyncSettingsDoneButtonMatcher()]
+      performAction:grey_tap()];
+  // Accept sync.
+  [self acceptSyncOrHistory];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [SigninEarlGrey verifySyncUIEnabled:YES];
+}
+
+// Tests enterprise policy wording on FRE when incognito policy is set.
+- (void)testIncognitoPolicy {
+  // Configure the policy to force sign-in.
+  [self relaunchAppWithPolicyKey:policy::key::kIncognitoModeAvailability
+                  xmlPolicyValue:"<integer>1</integer>"];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE with forced sign-in policy.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentSigninWithPolicy];
+  // Refuse sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed out.
+  [SigninEarlGrey verifySignedOut];
+}
+
+// Tests that the UMA link does not appear in  FRE when UMA is disabled by
+// enterprise policy.
+- (void)testUMADisabledByPolicy {
+  // Configure the policy to disable UMA.
+  [self relaunchAppWithPolicyKey:policy::key::kMetricsReportingEnabled
+                  xmlPolicyValue:"<false/>"];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify 2 step FRE with no UMA footer.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentSigninWithUMAReportingDisabledPolicy];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Accept sync.
+  [self acceptSyncOrHistory];
+  // Check that UMA is off.
+  GREYAssertFalse(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly true by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+}
+
+#pragma mark - Supervised User
+
+// TODO(crbug.com/1476928): This test is failing.
+// Tests FRE with UMA default value and with sign-in for a supervised user.
+- (void)DISABLED_testWithUMACheckedAndSigninSupervised {
+  // Add a fake supervised identity to the device.
+  FakeSystemIdentity* fakeSupervisedIdentity =
+      [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeSupervisedIdentity];
+  [SigninEarlGrey setIsSubjectToParentalControls:YES
+                                     forIdentity:fakeSupervisedIdentity];
+
+  // Verify 2 step FRE.
+  [self verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+            FRESigninIntentRegular];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Accept sync.
+  [self acceptSyncOrHistory];
+  // Check that UMA is on.
+  GREYAssertTrue(
+      [FirstRunAppInterface isUMACollectionEnabled],
+      @"kMetricsReportingEnabled pref was unexpectedly false by default.");
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeSupervisedIdentity];
+  // Check sync is on.
+  DismissScreensAfterSigninAndSync();
+  [ChromeEarlGreyUI openSettingsMenu];
+  [self verifySyncOrHistoryEnabled:YES];
+}
+
+#pragma mark - Sync UI Disabled
+
+// Tests sign-in with FRE when there's no account on the device.
+// See https://crbug.com/1471972.
+- (void)testSignInWithNoAccount {
+  // Add account.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentityForSSOAuthAddAccountFlow:fakeIdentity];
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(
+                                   grey_accessibilityID(
+                                       kFakeAuthAddAccountButtonIdentifier),
+                                   grey_sufficientlyVisible(), nil)]
+      performAction:grey_tap()];
+  // Verify that the primary button text is correct.
+  NSString* continueAsText = l10n_util::GetNSStringF(
+      IDS_IOS_FIRST_RUN_SIGNIN_CONTINUE_AS,
+      base::SysNSStringToUTF16(fakeIdentity.userGivenName));
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(chrome_test_util::SigninScreenPromoPrimaryButtonMatcher(),
+                     grey_descendant(grey_text(continueAsText)), nil)]
+      assertWithMatcher:grey_notNil()];
+  // Sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Verify that the History Sync Opt-In screen is shown.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kHistorySyncViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Check signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+}
+
+// Tests if the user skip the Sign-in step, the History Sync Opt-in screen is
+// skipped and the default browser screen is shown.
+- (void)testHistorySyncSkipIfNoSignIn {
+  // Skip sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [SigninEarlGrey verifySignedOut];
+  // Verify that the History Sync Opt-In screen is hidden.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kHistorySyncViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_nil()];
+  // Verify that the search engine choice screen is shown.
+  [self verifyChoiceScreenOrDefaultBrowserIsDisplayed];
+}
+
+// Tests if the user signs in with the first screen, the History Sync Opt-In
+// screen is shown next.
+- (void)testHistorySyncShownAfterSignIn {
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [SigninEarlGrey verifyPrimaryAccountWithEmail:fakeIdentity.userEmail
+                                        consent:signin::ConsentLevel::kSignin];
+  // Verify that the History Sync Opt-In screen is shown.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kHistorySyncViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Verify that the footer is shown without the user's email.
+  NSString* disclaimerText =
+      l10n_util::GetNSString(IDS_IOS_HISTORY_SYNC_FOOTER_WITHOUT_EMAIL);
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               grey_text(disclaimerText),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      assertWithMatcher:grey_notNil()];
+}
+
+// Tests that the correct subtitle is shown in the FRE sign-in screen if the
+// History Sync Opt-In feature is enabled.
+- (void)testSignInSubtitleIfHistorySyncOptInEnabled {
+  // Verify that the first run screen is present.
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     first_run::kFirstRunSignInScreenAccessibilityIdentifier)]
+      assertWithMatcher:grey_notNil()];
+  // Validate the subtitle text.
+  NSString* subtitle =
+      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_BENEFITS_SUBTITLE_SHORT);
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               grey_text(subtitle),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      assertWithMatcher:grey_notNil()];
+}
+
+// Tests that the standard subtitle is shown in the FRE sign-in screen, and that
+// History Sync Opt-In screen is skipped, if the sync is disabled by policy, and
+// History Sync Opt-In feature is enabled.
+- (void)testHistorySyncSkipIfSyncDisabled {
+  [self relaunchAppWithPolicyKey:policy::key::kSyncDisabled
+                  xmlPolicyValue:"<true/>"];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify that the first run screen is present.
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     first_run::kFirstRunSignInScreenAccessibilityIdentifier)]
+      assertWithMatcher:grey_notNil()];
+  // Verify the subtitle text is the standard one.
+  NSString* subtitle =
+      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_SUBTITLE_SHORT);
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               grey_text(subtitle),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      assertWithMatcher:grey_notNil()];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [SigninEarlGrey verifyPrimaryAccountWithEmail:fakeIdentity.userEmail
+                                        consent:signin::ConsentLevel::kSignin];
+  // Verify that the History Sync Opt-In screen is hidden.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kHistorySyncViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_nil()];
+  // Verify that the search engine choice screen is shown.
+  [self verifyChoiceScreenOrDefaultBrowserIsDisplayed];
+}
+
+// Tests that the standard subtitle is shown in the FRE sign-in screen, and that
+// History Sync Opt-In screen is skipped, in case the tabs sync is disabled by
+// policy, and History Sync Opt-In feature is enabled.
+- (void)testHistorySyncSkipIfTabsSyncDisabled {
+  [self relaunchAppWithPolicyKey:policy::key::kSyncTypesListDisabled
+                  xmlPolicyValue:"<array><string>tabs</string></array>"];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify that the first run screen is present.
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     first_run::kFirstRunSignInScreenAccessibilityIdentifier)]
+      assertWithMatcher:grey_notNil()];
+  // Verify the subtitle text is the standard one.
+  NSString* subtitle =
+      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_SUBTITLE_SHORT);
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               grey_text(subtitle),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      assertWithMatcher:grey_notNil()];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [SigninEarlGrey verifyPrimaryAccountWithEmail:fakeIdentity.userEmail
+                                        consent:signin::ConsentLevel::kSignin];
+  // Verify that the History Sync Opt-In screen is hidden.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kHistorySyncViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_nil()];
+  // Verify that the search engine choice screen is shown.
+  [self verifyChoiceScreenOrDefaultBrowserIsDisplayed];
+}
+
+// Tests that the standard subtitle is shown in the FRE sign-in screen, and
+// that History Sync Opt-In screen is shown, in case only the bookmarks sync is
+// disabled by policy, and History Sync Opt-In feature is enabled.
+- (void)testHistorySyncShownIfBookmarksSyncDisabled {
+  [self relaunchAppWithPolicyKey:policy::key::kSyncTypesListDisabled
+                  xmlPolicyValue:"<array><string>bookmarks</string></array>"];
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Verify that the first run screen is present.
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     first_run::kFirstRunSignInScreenAccessibilityIdentifier)]
+      assertWithMatcher:grey_notNil()];
+  // Verify the subtitle text is the standard one.
+  NSString* subtitle =
+      l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_SUBTITLE_SHORT);
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               grey_text(subtitle),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      assertWithMatcher:grey_notNil()];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  [SigninEarlGrey verifyPrimaryAccountWithEmail:fakeIdentity.userEmail
+                                        consent:signin::ConsentLevel::kSignin];
+  // Verify that the History Sync Opt-In screen is shown.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kHistorySyncViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+}
+
+// Tests that accepting History Sync enables the history sync, grants the
+// history sync and MSBB consent.
+- (void)testHistorySyncConsentGrantedAfterConfirm {
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Accept History Sync.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Verify that the search engine choice screen is shown.
+  [self verifyChoiceScreenOrDefaultBrowserIsDisplayed];
+  // Verify that the history sync is enabled.
+  GREYAssertTrue(
+      [SigninEarlGreyAppInterface
+          isSelectedTypeEnabled:syncer::UserSelectableType::kHistory],
+      @"History sync should be enabled.");
+  GREYAssertTrue([SigninEarlGreyAppInterface
+                     isSelectedTypeEnabled:syncer::UserSelectableType::kTabs],
+                 @"Tabs sync should be enabled.");
+  // TODO(crbug.com/1467853): Verify that sync consent is granted.
+  // Verify that MSBB consent is granted.
+  GREYAssertTrue(
+      [ChromeEarlGrey
+          userBooleanPref:unified_consent::prefs::
+                              kUrlKeyedAnonymizedDataCollectionEnabled],
+      @"MSBB consent was not granted.");
+  // Verify that the identity is signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+}
+
+// Tests that refusing History Sync keep the history syncdisabled, and does not
+// grant the history sync and MSBB consent.
+- (void)testHistorySyncConsentNotGrantedAfterReject {
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Refuse History Sync.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Verify that the search engine choice screen is shown.
+  [self verifyChoiceScreenOrDefaultBrowserIsDisplayed];
+  // Verify that the history sync is disabled.
+  GREYAssertFalse(
+      [SigninEarlGreyAppInterface
+          isSelectedTypeEnabled:syncer::UserSelectableType::kHistory],
+      @"History sync should be disabled.");
+  GREYAssertFalse([SigninEarlGreyAppInterface
+                      isSelectedTypeEnabled:syncer::UserSelectableType::kTabs],
+                  @"Tabs sync should be disabled.");
+  // TODO(crbug.com/1467853): Verify that sync consent is not granted.
+  // Verify that MSBB consent is not granted.
+  GREYAssertFalse(
+      [ChromeEarlGrey
+          userBooleanPref:unified_consent::prefs::
+                              kUrlKeyedAnonymizedDataCollectionEnabled],
+      @"MSBB consent should not be granted.");
+  // Verify that the identity is signed in.
+  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
+}
+
+// Tests that the History Sync Opt-In screen contains the avatar of the
+// signed-in user, and the correct background image for the avatar.
+- (void)testHistorySyncLayout {
+  // Add identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  // Accept sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Verify that the History Sync Opt-In screen is shown.
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityID(
+                                   kHistorySyncViewAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Verify that the user's avatar is shown.
+  NSString* avatarLabel =
+      [NSString stringWithFormat:@"%@ %@", fakeIdentity.userFullName,
+                                 fakeIdentity.userEmail];
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityLabel(avatarLabel)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Verify that the avatar background is shown.
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(
+              grey_accessibilityID(
+                  kPromoStyleHeaderViewBackgroundAccessibilityIdentifier),
+              chrome_test_util::ImageViewWithImageNamed(
+                  @"history_sync_opt_in_background"),
+              grey_sufficientlyVisible(), nil)]
+      assertWithMatcher:grey_notNil()];
+}
+
+// Tests that the Search Engine Choice screen is displayed, that the primary
+// button is correctly updated when the user selects a search engine then
+// scrolls down and that it correctly sets the default search engine.
+- (void)testSearchEngineChoiceScreenSelectThenScroll {
+  if (![ChromeEarlGreyAppInterface IsSearchEngineChoiceScreenEnabledFre]) {
+    // Do not run this test if the choice screen is not enabled.
+    return;
+  }
+  // Skips sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Checks that the choice screen is shown
+  [self verifyChoiceScreenOrDefaultBrowserIsDisplayed];
+  // Verifies that the primary button is initially the "More" button.
+  id<GREYMatcher> moreButtonMatcher =
+      grey_accessibilityID(kSearchEngineMoreButtonIdentifier);
+  [[EarlGrey selectElementWithMatcher:moreButtonMatcher]
+      assertWithMatcher:grey_allOf(grey_enabled(), grey_notNil(), nil)];
+
+  // Selects a search engine.
+  NSString* searchEngineToSelect = @"Bing";
+  SelectSearchEngineCellWithName(searchEngineToSelect,
+                                 /*scroll_direction=*/kGREYDirectionDown,
+                                 /*scroll_amount*/ 50);
+  // Taps the primary button. This scrolls the table down to the bottom.
+  [[[EarlGrey selectElementWithMatcher:moreButtonMatcher]
+      assertWithMatcher:grey_notNil()] performAction:grey_tap()];
+  // Verify that the "More" button has been removed.
+  [[EarlGrey selectElementWithMatcher:moreButtonMatcher]
+      assertWithMatcher:grey_nil()];
+  ConfirmSearchEngineChoiceScreen();
+  DismissScreensAfterChoiceScreen();
+
+  [self verifyDefaultSearchEngineSetting:searchEngineToSelect];
+}
+
+// Tests that the Search Engine Choice screen is displayed, that the primary
+// button is correctly updated when the user scolls down then selects a search
+// engine and that it correctly sets the default search engine.
+- (void)testSearchEngineChoiceScreenScollThenSelect {
+  if (![ChromeEarlGreyAppInterface IsSearchEngineChoiceScreenEnabledFre]) {
+    // Do not run this test if the choice screen is not enabled.
+    return;
+  }
+  // Skips sign-in.
+  [[self elementInteractionWithGreyMatcher:
+             chrome_test_util::PromoStyleSecondaryActionButtonMatcher()
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      performAction:grey_tap()];
+  // Checks that the choice screen is shown
+  [self verifyChoiceScreenOrDefaultBrowserIsDisplayed];
+  // Verifies that the primary button is initially the "More" button.
+  id<GREYMatcher> moreButtonMatcher =
+      grey_accessibilityID(kSearchEngineMoreButtonIdentifier);
+  [[EarlGrey selectElementWithMatcher:moreButtonMatcher]
+      assertWithMatcher:grey_allOf(grey_enabled(), grey_notNil(), nil)];
+
+  // Taps the primary button. This scrolls the table down to the bottom.
+  [[[EarlGrey selectElementWithMatcher:moreButtonMatcher]
+      assertWithMatcher:grey_notNil()] performAction:grey_tap()];
+
+  // Verifies that the primary button is now the disabled "Set as Default"
+  // button.
+  id<GREYMatcher> primaryActionButtonMatcher =
+      grey_accessibilityID(kSetAsDefaultSearchEngineIdentifier);
+  [[EarlGrey selectElementWithMatcher:primaryActionButtonMatcher]
+      assertWithMatcher:grey_allOf(grey_not(grey_enabled()), grey_notNil(),
+                                   nil)];
+
+  // Selects a search engine.
+  NSString* searchEngineToSelect = @"Bing";
+  SelectSearchEngineCellWithName(searchEngineToSelect,
+                                 /*scroll_direction=*/kGREYDirectionUp,
+                                 /*scroll_amount*/ 300);
+  ConfirmSearchEngineChoiceScreen();
+  DismissScreensAfterChoiceScreen();
+  [self verifyDefaultSearchEngineSetting:searchEngineToSelect];
+}
+
+#pragma mark - Helper
+
+- (void)relaunchAppWithBrowserSigninMode:(BrowserSigninMode)mode {
+  std::string xmlPolicyValue("<integer>");
+  xmlPolicyValue += std::to_string(static_cast<int>(mode));
+  xmlPolicyValue += "</integer>";
+  [self relaunchAppWithPolicyKey:policy::key::kBrowserSignin
+                  xmlPolicyValue:xmlPolicyValue];
+}
+
+// Sets policy value and relaunches the app.
+- (void)relaunchAppWithPolicyKey:(std::string)policyKey
+                  xmlPolicyValue:(std::string)xmlPolicyValue {
+  std::string policyData = std::string("<dict><key>") + policyKey + "</key>" +
+                           xmlPolicyValue + "</dict>";
+  // Configure the policy to force sign-in.
+  AppLaunchConfiguration config = self.appConfigurationForTestCase;
   config.additional_args.push_back(
       "-" + base::SysNSStringToUTF8(kPolicyLoaderIOSConfigurationKey));
-  config.additional_args.push_back(policy_data);
-
+  config.additional_args.push_back(policyData);
   // Relaunch the app to take the configuration into account.
   [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
-
-  [self verifyWelcomeScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-  [self verifyFREIsDismissed];
 }
 
-// Checks that when opening the app no accounts are here and the primary button
-// allows to create a new account and that it is updated if a new account is
-// added.
-- (void)testAddAccount {
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [[EarlGrey selectElementWithMatcher:GetAddAccountButton()]
-      performAction:grey_tap()];
-
-  // Check for the fake SSO screen.
-  [ChromeEarlGrey
-      waitForMatcher:grey_accessibilityID(kFakeAddAccountViewIdentifier)];
-  // Close the SSO view controller.
-  id<GREYMatcher> matcher =
-      grey_allOf(chrome_test_util::ButtonWithAccessibilityLabel(@"Cancel"),
-                 grey_sufficientlyVisible(), nil);
-  [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
-  // Make sure the SSO view controller is fully removed before ending the test.
-  // The tear down needs to remove other view controllers, and it cannot be done
-  // during the animation of the SSO view controler.
-  [ChromeEarlGreyUI waitForAppToIdle];
-
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  // Check that the title of the primary button updates for `fakeIdentity`.
-  [[EarlGrey selectElementWithMatcher:GetYesImInButton()]
-      performAction:grey_tap()];
-
-  [[EarlGrey selectElementWithMatcher:GetAddAccountButton()]
-      assertWithMatcher:grey_nil()];
-}
-
-// Checks that it is possible to add an account even if there is already account
-// and that it is possible to switch accounts when multiple accounts are
-// present.
-- (void)testSignInSelectAccount {
-  FakeChromeIdentity* fakeIdentity1 = [FakeChromeIdentity fakeIdentity1];
-  FakeChromeIdentity* fakeIdentity2 = [FakeChromeIdentity fakeIdentity2];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity2];
-
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  id<GREYMatcher> identityButton =
-      grey_accessibilityID(kIdentityButtonControlIdentifier);
-  [self scrollToElementAndAssertVisibility:identityButton];
-  [[EarlGrey selectElementWithMatcher:identityButton] performAction:grey_tap()];
-
-  // Check that `fakeIdentity2` is displayed.
-  [self scrollToElementAndAssertVisibility:IdentityCellMatcherForEmail(
-                                               fakeIdentity2.userEmail)];
-  // Check that 'Add Account' is displayed.
-  [self scrollToElementAndAssertVisibility:
-            grey_accessibilityLabel(l10n_util::GetNSString(
-                IDS_IOS_ACCOUNT_IDENTITY_CHOOSER_ADD_ACCOUNT))];
-
-  // Select `fakeIdentity2`.
-  [[EarlGrey selectElementWithMatcher:IdentityCellMatcherForEmail(
-                                          fakeIdentity2.userEmail)]
-      performAction:grey_tap()];
-
-  // Check that the title of the primary button updates for `fakeIdentity2`.
-  [self scrollToElementAndAssertVisibility:GetYesImInButton()];
-}
-
-// Checks that the user is signed in and that sync is turned on after the user
-// chooses to turn on sync.
-- (void)testSignInAndTurnOnSync {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetYesImInButton()];
-  [[EarlGrey selectElementWithMatcher:GetYesImInButton()]
-      performAction:grey_tap()];
-
-  // Verify that the user is signed in.
-  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
-
-  // Verify that the sync cell is visible and "On" is displayed.
-  [ChromeEarlGreyUI openSettingsMenu];
-  [SigninEarlGrey verifySyncUIEnabled:YES];
-
-  // Close opened settings for proper tear down.
-  [[self class] removeAnyOpenMenusAndInfoBars];
-}
-
-// Checks that pressing "No thanks" on sign-in & sync screen doesn't sign in the
-// user and doesn't sync.
-- (void)testNoSignInNoSync {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetNoThanksButton()];
-  [[EarlGrey selectElementWithMatcher:GetNoThanksButton()]
-      performAction:grey_tap()];
-
-  // Verify that the user is not signed in.
-  [SigninEarlGrey verifySignedOut];
-
-  [ChromeEarlGreyUI openSettingsMenu];
-
-  // Because the user is not signed in, the sync cell is not be visible.
-  [SigninEarlGrey verifySyncUIIsHidden];
-
-  // Close opened settings for proper tear down.
-  [[self class] removeAnyOpenMenusAndInfoBars];
-}
-
-// The browser should only be signed in temporarily while the advanced settings
-// prompt is opened and then signed out when the user selects "No thanks".
-// Sync is also turned off.
-- (void)testAdvancedSettingsSignoutSyncOff {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  [self verifyWelcomeScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-  [[EarlGrey selectElementWithMatcher:GetSyncSettings()]
-      performAction:grey_tap()];
-
-  // Check that Sync hasn't started yet, allowing the user to change some
-  // settings.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't have finished its original setup yet");
-
-  [self scrollToElementAndAssertVisibility:
-            AdvancedSyncSettingsDoneButtonMatcher()];
-  [[EarlGrey selectElementWithMatcher:AdvancedSyncSettingsDoneButtonMatcher()]
-      performAction:grey_tap()];
-
-  // Check sync did not start yet.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't start when discarding advanced settings.");
-
-  [self scrollToElementAndAssertVisibility:GetNoThanksButton()];
-  [[EarlGrey selectElementWithMatcher:GetNoThanksButton()]
-      performAction:grey_tap()];
-
-  // Verify that the browser isn't signed in by validating that there isn't a
-  // sync cell visible in settings.
-  [ChromeEarlGreyUI openSettingsMenu];
-  [SigninEarlGrey verifySyncUIIsHidden];
-
-  // Close opened settings for proper tear down.
-  [[self class] removeAnyOpenMenusAndInfoBars];
-}
-
-// If browser is already signed in and the user opens the advanced settings then
-// selects "No thanks", the user should stay signed in, but sync should be
-// turned off.
-- (void)testAdvancedSettingsSignedInSyncOff {
-  // Sign-in browser.
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity enableSync:NO];
-
-  // Reload with forced first run enabled.
-  AppLaunchConfiguration config = self.appConfigurationForTestCase;
-  config.relaunch_policy = ForceRelaunchByCleanShutdown;
-
-  // Add the switch to make sure that fakeIdentity1 is known at startup to avoid
-  // automatic sign out.
-  config.additional_args.push_back(std::string("-") +
-                                   test_switches::kSignInAtStartup);
-  config.additional_args.push_back(
-      std::string("-") + ios::kAddFakeIdentitiesArg + "=" +
-      [FakeChromeIdentity encodeIdentitiesToBase64:@[ fakeIdentity ]]);
-
-  [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
-
-  [self verifyWelcomeScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-  [[EarlGrey selectElementWithMatcher:GetSyncSettings()]
-      performAction:grey_tap()];
-
-  // Check that Sync hasn't started yet, allowing the user to change some
-  // settings.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't have finished its original setup yet");
-
-  [self scrollToElementAndAssertVisibility:
-            AdvancedSyncSettingsDoneButtonMatcher()];
-  [[EarlGrey selectElementWithMatcher:AdvancedSyncSettingsDoneButtonMatcher()]
-      performAction:grey_tap()];
-
-  // Check sync did not start yet.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't start when discarding advanced settings.");
-
-  [self scrollToElementAndAssertVisibility:GetNoThanksButton()];
-  [[EarlGrey selectElementWithMatcher:GetNoThanksButton()]
-      performAction:grey_tap()];
-
-  // Verify that the user is signed in.
-  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
-
-  // Verify that the sync cell is visible and "Off" is displayed.
-  [ChromeEarlGreyUI openSettingsMenu];
-  [SigninEarlGrey verifySyncUIEnabled:NO];
-
-  // Close opened settings for proper tear down.
-  [[self class] removeAnyOpenMenusAndInfoBars];
-}
-
-// Checks that sync is turned on after the user chose to turn on sync in the
-// advanced sync settings screen and that the correct sync options are selected.
-- (void)testCustomSyncOn {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  [self verifyWelcomeScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-  [[EarlGrey selectElementWithMatcher:GetSyncSettings()]
-      performAction:grey_tap()];
-
-  // Check that Sync hasn't started yet, allowing the user to change some
-  // settings.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't have finished its original setup yet");
-
-  // Toggle OFF Sync Everything and History.
-  [self toggleSwitchWithIdentifier:kSyncEverythingItemAccessibilityIdentifier
-                           toValue:NO];
-  [self toggleSwitchWithIdentifier:kSyncOmniboxHistoryIdentifier toValue:NO];
-
-  [self scrollToElementAndAssertVisibility:
-            AdvancedSyncSettingsDoneButtonMatcher()];
-  [[EarlGrey selectElementWithMatcher:AdvancedSyncSettingsDoneButtonMatcher()]
-      performAction:grey_tap()];
-
-  // Check sync did not start yet.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't start when discarding advanced settings.");
-
-  [self scrollToElementAndAssertVisibility:GetYesImInButton()];
-  [[EarlGrey selectElementWithMatcher:GetYesImInButton()]
-      performAction:grey_tap()];
-
-  // Check sync did start.
-  GREYAssertTrue([FirstRunAppInterface isSyncFirstSetupComplete],
-                 @"Sync should start when turning on sync in FRE.");
-
-  [ChromeEarlGreyUI openSettingsMenu];
-  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
-  [SigninEarlGrey verifySyncUIEnabled:YES];
-
-  // Go to the sync settings.
-  [ChromeEarlGreyUI
-      tapSettingsMenuButton:chrome_test_util::ManageSyncSettingsButton()];
-
-  // Check that the correct sync options are toggled OFF.
-  [self verifySwitchWithIdentifier:kSyncEverythingItemAccessibilityIdentifier
-                           toValue:NO];
-  [self verifySwitchWithIdentifier:kSyncOmniboxHistoryIdentifier toValue:NO];
-
-  // Revert back sync options to Sync Everything ON.
-  [self toggleSwitchWithIdentifier:kSyncEverythingItemAccessibilityIdentifier
-                           toValue:YES];
-
-  // Close opened settings for proper tear down.
-  [[self class] removeAnyOpenMenusAndInfoBars];
-}
-
-// Checks that the user is signed in, but no sync options is selected.
-- (void)testCustomSyncOff {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
-
-  [self verifyWelcomeScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  [self verifySignInSyncScreenIsDisplayed];
-  [[EarlGrey selectElementWithMatcher:GetSyncSettings()]
-      performAction:grey_tap()];
-
-  // Check that Sync hasn't started yet, allowing the user to change some
-  // settings.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't have finished its original setup yet");
-
-  // Turn OFF sync.
-  NSArray* switchesIdentifier = @[
-    kSyncEverythingItemAccessibilityIdentifier,
-    kSyncAutofillIdentifier,
-    kSyncBookmarksIdentifier,
-    kSyncOmniboxHistoryIdentifier,
-    kSyncOpenTabsIdentifier,
-    kSyncPasswordsIdentifier,
-    kSyncReadingListIdentifier,
-    kSyncPreferencesIdentifier,
-  ];
-  for (NSString* identifier in switchesIdentifier) {
-    [self toggleSwitchWithIdentifier:identifier toValue:NO];
+// Checks that the sign-in screen for enterprise is displayed.
+- (void)verifyEnterpriseWelcomeScreenIsDisplayedWithFRESigninIntent:
+    (FRESigninIntent)FRESigninIntent {
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     first_run::kFirstRunSignInScreenAccessibilityIdentifier)]
+      assertWithMatcher:grey_notNil()];
+  NSString* title = nil;
+  NSString* subtitle = nil;
+  NSArray* disclaimerStrings = nil;
+  switch (FRESigninIntent) {
+    case FRESigninIntentRegular:
+      title = l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_TITLE);
+      if ([ChromeEarlGrey isReplaceSyncWithSigninEnabled]) {
+        subtitle = l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_SIGNIN_BENEFITS_SUBTITLE_SHORT);
+      } else {
+        subtitle =
+            l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_SUBTITLE_SHORT);
+      }
+      disclaimerStrings = @[
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TERMS_OF_SERVICE),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_METRIC_REPORTING),
+      ];
+      break;
+    case FRESigninIntentSigninForcedByPolicy:
+      title =
+          l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_TITLE_SIGNIN_FORCED);
+      subtitle = l10n_util::GetNSString(
+          IDS_IOS_FIRST_RUN_SIGNIN_SUBTITLE_SIGNIN_FORCED);
+      disclaimerStrings = @[
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_BROWSER_MANAGED),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TERMS_OF_SERVICE),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_METRIC_REPORTING),
+      ];
+      break;
+    case FRESigninIntentSigninDisabledByPolicy:
+      if ([ChromeEarlGrey isIPadIdiom]) {
+        title =
+            l10n_util::GetNSString(IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TITLE_IPAD);
+      } else {
+        title = l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TITLE_IPHONE);
+      }
+      subtitle =
+          l10n_util::GetNSString(IDS_IOS_FIRST_RUN_WELCOME_SCREEN_SUBTITLE);
+      disclaimerStrings = @[
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_BROWSER_MANAGED),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TERMS_OF_SERVICE),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_METRIC_REPORTING),
+      ];
+      break;
+    case FRESigninIntentSigninWithSyncDisabledPolicy:
+      title = l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_TITLE);
+      // Note: With SyncDisabled, the "benefits" string is not used.
+      subtitle =
+          l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_SUBTITLE_SHORT);
+      disclaimerStrings = @[
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_BROWSER_MANAGED),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TERMS_OF_SERVICE),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_METRIC_REPORTING),
+      ];
+      break;
+    case FRESigninIntentSigninWithPolicy:
+      title = l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_TITLE);
+      if ([ChromeEarlGrey isReplaceSyncWithSigninEnabled]) {
+        subtitle = l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_SIGNIN_BENEFITS_SUBTITLE_SHORT);
+      } else {
+        subtitle =
+            l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_SUBTITLE_SHORT);
+      }
+      disclaimerStrings = @[
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_BROWSER_MANAGED),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TERMS_OF_SERVICE),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_METRIC_REPORTING),
+      ];
+      break;
+    case FRESigninIntentSigninWithUMAReportingDisabledPolicy:
+      title = l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_TITLE);
+      if ([ChromeEarlGrey isReplaceSyncWithSigninEnabled]) {
+        subtitle = l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_SIGNIN_BENEFITS_SUBTITLE_SHORT);
+      } else {
+        subtitle =
+            l10n_util::GetNSString(IDS_IOS_FIRST_RUN_SIGNIN_SUBTITLE_SHORT);
+      }
+      disclaimerStrings = @[
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_BROWSER_MANAGED),
+        l10n_util::GetNSString(
+            IDS_IOS_FIRST_RUN_WELCOME_SCREEN_TERMS_OF_SERVICE),
+      ];
+      break;
   }
+  // Validate the Title text.
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               grey_text(title),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      assertWithMatcher:grey_notNil()];
+  // Validate the Subtitle text.
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               grey_text(subtitle),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      assertWithMatcher:grey_notNil()];
+  // Validate the Managed text.
+  [self verifyDisclaimerFooterWithStrings:disclaimerStrings];
+}
 
-  [self scrollToElementAndAssertVisibility:
-            AdvancedSyncSettingsDoneButtonMatcher()];
-  [[EarlGrey selectElementWithMatcher:AdvancedSyncSettingsDoneButtonMatcher()]
-      performAction:grey_tap()];
+// Checks the disclaimer footer with the list of strings. `strings` can contain
+// "BEGIN_LINK" and "END_LINK" for URL tags.
+- (void)verifyDisclaimerFooterWithStrings:(NSArray*)strings {
+  NSString* disclaimerText = [strings componentsJoinedByString:@" "];
+  // Remove URL tags.
+  disclaimerText =
+      [disclaimerText stringByReplacingOccurrencesOfString:@"BEGIN_LINK"
+                                                withString:@""];
+  disclaimerText =
+      [disclaimerText stringByReplacingOccurrencesOfString:@"END_LINK"
+                                                withString:@""];
+  // Check the footer.
+  [[self elementInteractionWithGreyMatcher:grey_allOf(
+                                               grey_text(disclaimerText),
+                                               grey_sufficientlyVisible(), nil)
+                      scrollViewIdentifier:
+                          kPromoStyleScrollViewAccessibilityIdentifier]
+      assertWithMatcher:grey_notNil()];
+}
 
-  // Check sync did not start yet.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't start when discarding advanced settings.");
-
-  [self scrollToElementAndAssertVisibility:GetYesImInButton()];
-  [[EarlGrey selectElementWithMatcher:GetYesImInButton()]
-      performAction:grey_tap()];
-
-  // Check sync did start.
-  GREYAssertTrue([FirstRunAppInterface isSyncFirstSetupComplete],
-                 @"Sync should start when turning on sync in FRE.");
-
-  [ChromeEarlGreyUI openSettingsMenu];
-  [SigninEarlGrey verifySignedInWithFakeIdentity:fakeIdentity];
-
-  // Go to the sync settings.
-  [ChromeEarlGreyUI
-      tapSettingsMenuButton:chrome_test_util::ManageSyncSettingsButton()];
-
-  // Check that the all sync options are toggled OFF.
-  for (NSString* identifier in switchesIdentifier) {
-    [self verifySwitchWithIdentifier:identifier toValue:NO];
+// Checks that the search engine choice screen is being displayed when the
+// feature is enabled. If the feature is not enabled, checks that the default
+// browser screen is displayed.
+- (void)verifyChoiceScreenOrDefaultBrowserIsDisplayed {
+  if ([ChromeEarlGreyAppInterface IsSearchEngineChoiceScreenEnabledFre]) {
+    [[EarlGrey
+        selectElementWithMatcher:
+            grey_accessibilityID(
+                first_run::kSearchEngineChoiceTitleAccessibilityIdentifier)]
+        assertWithMatcher:grey_sufficientlyVisible()];
+    return;
   }
-
-  // Revert back sync options to Sync Everything ON.
-  [self toggleSwitchWithIdentifier:kSyncEverythingItemAccessibilityIdentifier
-                           toValue:YES];
-
-  // Close opened settings for proper tear down.
-  [[self class] removeAnyOpenMenusAndInfoBars];
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_accessibilityID(
+              first_run::kFirstRunDefaultBrowserScreenAccessibilityIdentifier)]
+      assertWithMatcher:grey_sufficientlyVisible()];
 }
 
-// Checks that the user is not signed in and that sync is turned off after the
-// user chose to not sign-in even though they selected some sync options in the
-// advanced sync settings screen.
-- (void)testCustomSyncSignout {
-  FakeChromeIdentity* fakeIdentity = [FakeChromeIdentity fakeIdentity1];
-  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+- (void)acceptSyncOrHistory {
+  if ([ChromeEarlGrey isReplaceSyncWithSigninEnabled]) {
+    // Accept the history opt-in screen.
+    [[EarlGrey selectElementWithMatcher:
+                   chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()]
+        performAction:grey_tap()];
+  } else {
+    // Accept sync.
+    [[EarlGrey
+        selectElementWithMatcher:grey_accessibilityID(
+                                     kTangibleSyncViewAccessibilityIdentifier)]
+        assertWithMatcher:grey_notNil()];
+    [[self elementInteractionWithGreyMatcher:
+               chrome_test_util::SigninScreenPromoPrimaryButtonMatcher()
+                        scrollViewIdentifier:
+                            kPromoStyleScrollViewAccessibilityIdentifier]
+        performAction:grey_tap()];
+  }
+}
 
-  [self verifyWelcomeScreenIsDisplayed];
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
+- (void)verifySyncOrHistoryEnabled:(BOOL)enabled {
+  if ([ChromeEarlGrey isReplaceSyncWithSigninEnabled]) {
+    if (enabled) {
+      GREYAssertTrue([ChromeEarlGrey isSyncHistoryDataTypeSelected],
+                     @"History sync was unexpectedly disabled.");
+    } else {
+      GREYAssertFalse([ChromeEarlGrey isSyncHistoryDataTypeSelected],
+                      @"History sync was unexpectedly enabled.");
+    }
+  } else {
+    [SigninEarlGrey verifySyncUIEnabled:enabled];
+  }
+}
 
-  [self verifySignInSyncScreenIsDisplayed];
-  [[EarlGrey selectElementWithMatcher:GetSyncSettings()]
-      performAction:grey_tap()];
-
-  // Check that Sync hasn't started yet, allowing the user to change some
-  // settings.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't have finished its original setup yet");
-
-  // Toggle OFF Sync Everything and History.
-  [self toggleSwitchWithIdentifier:kSyncEverythingItemAccessibilityIdentifier
-                           toValue:NO];
-  [self toggleSwitchWithIdentifier:kSyncOmniboxHistoryIdentifier toValue:NO];
-
-  [self scrollToElementAndAssertVisibility:
-            AdvancedSyncSettingsDoneButtonMatcher()];
-  [[EarlGrey selectElementWithMatcher:AdvancedSyncSettingsDoneButtonMatcher()]
-      performAction:grey_tap()];
-
-  // Check sync did not start yet.
-  GREYAssertFalse([FirstRunAppInterface isSyncFirstSetupComplete],
-                  @"Sync shouldn't start when discarding advanced settings.");
-
-  // Do not sign-in/sync.
-  [self scrollToElementAndAssertVisibility:GetNoThanksButton()];
-  [[EarlGrey selectElementWithMatcher:GetNoThanksButton()]
-      performAction:grey_tap()];
-
-  // Verify that the browser isn't signed in by validating that there isn't a
-  // sync cell visible in settings.
+- (void)verifyDefaultSearchEngineSetting:(NSString*)searchEngineName {
+  // Opens the default search engine settings menu.
   [ChromeEarlGreyUI openSettingsMenu];
-  [SigninEarlGrey verifySyncUIIsHidden];
-
-  // Revert back sync options to Sync Everything ON.
-  [[self class] removeAnyOpenMenusAndInfoBars];
-  [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
-  [ChromeEarlGreyUI openSettingsMenu];
-  [ChromeEarlGreyUI
-      tapSettingsMenuButton:chrome_test_util::ManageSyncSettingsButton()];
-  [self toggleSwitchWithIdentifier:kSyncEverythingItemAccessibilityIdentifier
-                           toValue:YES];
-
-  // Close opened settings for proper tear down.
-  [[self class] removeAnyOpenMenusAndInfoBars];
+  // Verifies that the correct search engine is selected. The default engine's
+  // name appears in the name of the selected row.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::SettingsSearchEngineButton()]
+      assertWithMatcher:grey_allOf(grey_accessibilityValue(searchEngineName),
+                                   grey_sufficientlyVisible(), nil)];
 }
 
-// Tests that metrics collection is enabled when the checkmark is checked on
-// the Welcome screen.
-- (void)testMetricsEnabled {
-  // Verify the metrics collection pref is disabled prior to going through the
-  // Welcome screen.
-  GREYAssertFalse(
-      [FirstRunAppInterface isUMACollectionEnabled],
-      @"kMetricsReportingEnabled pref was unexpectedly true by default.");
-
-  // Verify the metrics checkbox is checked by default.
-  [[EarlGrey selectElementWithMatcher:GetUMACheckboxButton()]
-      assertWithMatcher:grey_selected()];
-
-  // Verify the metrics checkbox is checked after tapping it twice.
-  [self scrollToElementAndAssertVisibility:GetUMACheckboxButton()];
-  [[EarlGrey selectElementWithMatcher:GetUMACheckboxButton()]
-      performAction:grey_tap()];
-  [[EarlGrey selectElementWithMatcher:GetUMACheckboxButton()]
-      performAction:grey_tap()];
-  [[EarlGrey selectElementWithMatcher:GetUMACheckboxButton()]
-      assertWithMatcher:grey_selected()];
-
-  // Verify the metrics collection pref is enabled after going through the
-  // Welcome screen with the UMA checkbox checked.
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-  GREYAssertTrue([FirstRunAppInterface isUMACollectionEnabled],
-                 @"kMetricsReportingEnabled pref was unexpectedly false after "
-                 @"checking the UMA checkbox.");
-}
-
-// Tests that metrics collection is disabled when the checkmark is unchecked on
-// the Welcome screen.
-- (void)testMetricsDisabled {
-  // Verify the metrics collection pref is disabled prior to going through the
-  // Welcome screen.
-  GREYAssertFalse(
-      [FirstRunAppInterface isUMACollectionEnabled],
-      @"kMetricsReportingEnabled pref was unexpectedly true by default.");
-
-  // Verify the metrics checkbox is checked by default.
-  [[EarlGrey selectElementWithMatcher:GetUMACheckboxButton()]
-      assertWithMatcher:grey_selected()];
-
-  // Verify the metrics checkbox is unchecked after tapping it.
-  [self scrollToElementAndAssertVisibility:GetUMACheckboxButton()];
-  [[EarlGrey selectElementWithMatcher:GetUMACheckboxButton()]
-      performAction:grey_tap()];
-  [[EarlGrey selectElementWithMatcher:GetUMACheckboxButton()]
-      assertWithMatcher:grey_not(grey_selected())];
-
-  // Verify the metrics collection pref is disabled after going through the
-  // Welcome screen with the checkmark unchecked.
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-  GREYAssertFalse([FirstRunAppInterface isUMACollectionEnabled],
-                  @"kMetricsReportingEnabled pref was unexpectedly true after "
-                  @"leaving the UMA checkbox unchecked.");
-}
-
-// Checks that the sync screen doesn't appear when the SyncDisabled policy is
-// enabled.
-- (void)testSyncDisabled {
-  policy_test_utils::SetPolicy(true, policy::key::kSyncDisabled);
-
-  // Go to the sign-in screen.
-  [self scrollToElementAndAssertVisibility:GetAcceptButton()];
-  [[EarlGrey selectElementWithMatcher:GetAcceptButton()]
-      performAction:grey_tap()];
-
-  // The Sync screen should not be displayed, so the NTP should be visible.
-  [self verifyFREIsDismissed];
+// Returns GREYElementInteraction for `matcher`, using `scrollViewMatcher` to
+// scroll.
+- (GREYElementInteraction*)
+    elementInteractionWithGreyMatcher:(id<GREYMatcher>)matcher
+                 scrollViewIdentifier:(NSString*)scrollViewIdentifier {
+  id<GREYMatcher> scrollViewMatcher =
+      grey_accessibilityID(scrollViewIdentifier);
+  // Needs to scroll slowly to make sure to not miss a cell if it is not
+  // currently on the screen. It should not be bigger than the visible part
+  // of the collection view.
+  id<GREYAction> searchAction = grey_scrollInDirection(kGREYDirectionDown, 200);
+  return [[EarlGrey selectElementWithMatcher:matcher]
+         usingSearchAction:searchAction
+      onElementWithMatcher:scrollViewMatcher];
 }
 
 @end

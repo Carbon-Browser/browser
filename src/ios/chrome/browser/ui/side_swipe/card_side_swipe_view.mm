@@ -1,34 +1,30 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/side_swipe/card_side_swipe_view.h"
 
-#include <cmath>
+#import <cmath>
 
-#include "base/ios/device_util.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#include "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/snapshots/snapshot_tab_helper.h"
+#import "base/ios/device_util.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/snapshots/model/snapshot_tab_helper.h"
 #import "ios/chrome/browser/ui/side_swipe/side_swipe_gesture_recognizer.h"
 #import "ios/chrome/browser/ui/side_swipe/side_swipe_util.h"
 #import "ios/chrome/browser/ui/side_swipe/swipe_view.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_constants.h"
 #import "ios/chrome/browser/ui/toolbar/public/side_swipe_toolbar_snapshot_providing.h"
-#include "ios/chrome/browser/ui/util/rtl_geometry.h"
-#include "ios/chrome/browser/ui/util/ui_util.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/toolbar/public/toolbar_type.h"
 #import "ios/chrome/browser/web/page_placeholder_tab_helper.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#include "ios/chrome/grit/ios_theme_resources.h"
+#import "ios/chrome/grit/ios_theme_resources.h"
 #import "ios/web/public/web_state.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "url/gurl.h"
 
 using base::UserMetricsAction;
 
@@ -77,8 +73,6 @@ const CGFloat kResizeFactor = 4;
 
 @synthesize backgroundTopConstraint = _backgroundTopConstraint;
 @synthesize delegate = _delegate;
-@synthesize topToolbarSnapshotProvider = _topToolbarSnapshotProvider;
-@synthesize bottomToolbarSnapshotProvider = _bottomToolbarSnapshotProvider;
 @synthesize topMargin = _topMargin;
 
 - (instancetype)initWithFrame:(CGRect)frame
@@ -155,13 +149,23 @@ const CGFloat kResizeFactor = 4;
 - (UIImage*)smallGreyImage:(UIImage*)image {
   CGRect smallSize = CGRectMake(0, 0, image.size.width / kResizeFactor,
                                 image.size.height / kResizeFactor);
+  UIGraphicsImageRendererFormat* format =
+      [UIGraphicsImageRendererFormat preferredFormat];
+  format.opaque = YES;
   // Using CIFilter here on iOS 5+ might be faster, but it doesn't easily
   // allow for resizing.  At the max size, it's still too slow for side swipe.
-  UIGraphicsBeginImageContextWithOptions(smallSize.size, YES, 0);
-  [image drawInRect:smallSize blendMode:kCGBlendModeLuminosity alpha:1.0];
-  UIImage* greyImage = UIGraphicsGetImageFromCurrentImageContext();
-  UIGraphicsEndImageContext();
-  return greyImage;
+
+  UIGraphicsImageRenderer* renderer =
+      [[UIGraphicsImageRenderer alloc] initWithSize:smallSize.size
+                                             format:format];
+
+  return [renderer imageWithActions:^(UIGraphicsImageRendererContext* context) {
+    UIBezierPath* background = [UIBezierPath bezierPathWithRect:smallSize];
+    [UIColor.blackColor set];
+    [background fill];
+
+    [image drawInRect:smallSize blendMode:kCGBlendModeLuminosity alpha:1.0];
+  }];
 }
 
 // Create card view based on `_webStateList`'s index.
@@ -173,11 +177,13 @@ const CGFloat kResizeFactor = 4;
   [card setHidden:NO];
 
   web::WebState* webState = _webStateList->GetWebStateAt(index);
-  UIImage* topToolbarSnapshot = [self.topToolbarSnapshotProvider
-      toolbarSideSwipeSnapshotForWebState:webState];
+  UIImage* topToolbarSnapshot = [self.toolbarSnapshotProvider
+      toolbarSideSwipeSnapshotForWebState:webState
+                          withToolbarType:ToolbarType::kPrimary];
   [card setTopToolbarImage:topToolbarSnapshot];
-  UIImage* bottomToolbarSnapshot = [self.bottomToolbarSnapshotProvider
-      toolbarSideSwipeSnapshotForWebState:webState];
+  UIImage* bottomToolbarSnapshot = [self.toolbarSnapshotProvider
+      toolbarSideSwipeSnapshotForWebState:webState
+                          withToolbarType:ToolbarType::kSecondary];
   [card setBottomToolbarImage:bottomToolbarSnapshot];
 
   __weak CardSideSwipeView* weakSelf = self;

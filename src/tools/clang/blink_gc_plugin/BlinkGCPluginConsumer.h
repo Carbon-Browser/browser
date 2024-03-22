@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,7 +75,7 @@ class BlinkGCPluginConsumer : public clang::ASTConsumer {
 
   bool InIgnoredDirectory(RecordInfo* info);
 
-  bool InCheckedNamespace(RecordInfo* info);
+  bool InCheckedNamespaceOrDirectory(RecordInfo* info);
 
   bool GetFilename(clang::SourceLocation loc, std::string* filename);
 

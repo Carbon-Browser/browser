@@ -1,7 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/test/test_future.h"
 #include "chrome/browser/lacros/browser_test_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -26,8 +27,7 @@ IN_PROC_BROWSER_TEST_F(TabletModeBrowserTest, Smoke) {
   auto* lacros_service = chromeos::LacrosService::Get();
   ASSERT_TRUE(lacros_service->IsAvailable<crosapi::mojom::TestController>());
   // This test requires the tablet mode API.
-  if (lacros_service->GetInterfaceVersion(
-          crosapi::mojom::TestController::Uuid_) <
+  if (lacros_service->GetInterfaceVersion<crosapi::mojom::TestController>() <
       static_cast<int>(crosapi::mojom::TestController::MethodMinVersions::
                            kEnterTabletModeMinVersion)) {
     LOG(WARNING) << "Unsupported ash version.";
@@ -38,7 +38,7 @@ IN_PROC_BROWSER_TEST_F(TabletModeBrowserTest, Smoke) {
   aura::Window* main_window = browser()->window()->GetNativeWindow();
   std::string main_id = lacros_window_utility::GetRootWindowUniqueId(
       main_window->GetRootWindow());
-  browser_test_util::WaitForWindowCreation(main_id);
+  ASSERT_TRUE(browser_test_util::WaitForWindowCreation(main_id));
 
   // Create an incognito window and make it visible.
   Browser* incognito_browser = Browser::Create(Browser::CreateParams(
@@ -49,20 +49,25 @@ IN_PROC_BROWSER_TEST_F(TabletModeBrowserTest, Smoke) {
       incognito_browser->window()->GetNativeWindow();
   std::string incognito_id = lacros_window_utility::GetRootWindowUniqueId(
       incognito_window->GetRootWindow());
-  browser_test_util::WaitForWindowCreation(incognito_id);
+  ASSERT_TRUE(browser_test_util::WaitForWindowCreation(incognito_id));
+
+  auto& test_controller =
+      lacros_service->GetRemote<crosapi::mojom::TestController>();
 
   // Enter tablet mode.
-  crosapi::mojom::TestControllerAsyncWaiter waiter(
-      lacros_service->GetRemote<crosapi::mojom::TestController>().get());
-  waiter.EnterTabletMode();
+  base::test::TestFuture<void> future;
+  test_controller->EnterTabletMode(future.GetCallback());
+  EXPECT_TRUE(future.Wait());
+  future.Clear();
 
   // Close the incognito window by closing all tabs and wait for it to stop
   // existing in ash.
   incognito_browser->tab_strip_model()->CloseAllTabs();
-  browser_test_util::WaitForWindowDestruction(incognito_id);
+  ASSERT_TRUE(browser_test_util::WaitForWindowDestruction(incognito_id));
 
   // Exit tablet mode.
-  waiter.ExitTabletMode();
+  test_controller->ExitTabletMode(future.GetCallback());
+  EXPECT_TRUE(future.Wait());
 }
 
 }  // namespace

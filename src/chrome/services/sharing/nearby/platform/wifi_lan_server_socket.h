@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "ash/services/nearby/public/mojom/firewall_hole.mojom.h"
 #include "base/containers/flat_set.h"
 #include "base/memory/scoped_refptr.h"
 #include "chrome/services/sharing/nearby/platform/wifi_lan_socket.h"
+#include "chromeos/ash/services/nearby/public/mojom/firewall_hole.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -25,7 +25,6 @@ class SequencedTaskRunner;
 class WaitableEvent;
 }  // namespace base
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -118,6 +117,5 @@ class WifiLanServerSocket : public api::WifiLanServerSocket {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_WIFI_LAN_SERVER_SOCKET_H_

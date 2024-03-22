@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_encrypted_metadata_key.h"
 #include "chrome/browser/nearby_sharing/proto/encrypted_metadata.pb.h"
 #include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace crypto {
@@ -36,7 +36,7 @@ class NearbySharePrivateCertificate {
   // Inverse operation of ToDictionary(). Returns absl::nullopt if the
   // conversion is not successful
   static absl::optional<NearbySharePrivateCertificate> FromDictionary(
-      const base::Value& dict);
+      const base::Value::Dict& dict);
 
   // Generates a random EC key pair, secret key, and metadata encryption
   // key. Derives the certificate ID from the secret key. Derives the
@@ -101,7 +101,7 @@ class NearbySharePrivateCertificate {
 
   // Converts this private certificate to a dictionary value for storage
   // in Prefs.
-  base::Value ToDictionary() const;
+  base::Value::Dict ToDictionary() const;
 
   // For testing only.
   base::queue<std::vector<uint8_t>>& next_salts_for_testing() {

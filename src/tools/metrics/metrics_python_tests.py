@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -25,14 +25,14 @@ sys.exit(
         tests=resolve(
             'actions/extract_actions_test.py',
 
-            # TODO(crbug.com/1220251) - the test ordering is very sensitive due to
-            # potential name collisions between ukm/pretty_print.py and
+            # TODO(crbug.com/1220251) - the test ordering is very sensitive due
+            # to potential name collisions between ukm/pretty_print.py and
             # histograms/pretty_print.py and the implementation in typ.
             #
-            # Until this issue is fixed, best to ensure that the 'histograms' files
-            # show up *after* the 'ukm' files (in order for the histograms
-            # directory to be added to sys.path *before* ukm), and that we run the
-            # tests in a single process (jobs=1, below).
+            # Until this issue is fixed, best to ensure that the 'histograms'
+            # files show up *after* the 'ukm' files (in order for the histograms
+            # directory to be added to sys.path *before* ukm), and that we run
+            # the tests in a single process (jobs=1, below).
             'ukm/codegen_test.py',
             'ukm/gen_builders_test.py',
             'ukm/ukm_model_test.py',
@@ -40,6 +40,7 @@ sys.exit(
             'histograms/expand_owners_unittest.py',
             'histograms/extract_histograms_test.py',
             'histograms/generate_expired_histograms_array_unittest.py',
+            'histograms/generate_histograms_variants_allowlist_unittest.py',
             'histograms/pretty_print_test.py',
             '../json_comment_eater/json_comment_eater_test.py',
             '../json_to_struct/element_generator_test.py',

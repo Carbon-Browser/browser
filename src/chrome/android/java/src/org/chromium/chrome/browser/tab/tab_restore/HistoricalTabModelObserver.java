@@ -1,12 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.tab.tab_restore;
 
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tab.state.CriticalPersistedTabData;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 import org.chromium.chrome.browser.tasks.tab_groups.TabGroupTitleUtils;
@@ -15,9 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-/**
- * A tab model observer for managing bulk closures.
- */
+/** A tab model observer for managing bulk closures. */
 public class HistoricalTabModelObserver implements TabModelObserver {
     private final TabModel mTabModel;
     private HistoricalTabSaver mHistoricalTabSaver;
@@ -38,12 +34,7 @@ public class HistoricalTabModelObserver implements TabModelObserver {
     }
 
     @Override
-    public void didCloseTabs(List<Tab> tabs) {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.BULK_TAB_RESTORE)) {
-            legacyCreateHistoricalTabs(tabs);
-            return;
-        }
-
+    public void onFinishingMultipleTabClosure(List<Tab> tabs) {
         if (tabs.isEmpty()) return;
 
         if (tabs.size() == 1) {
@@ -52,16 +43,6 @@ public class HistoricalTabModelObserver implements TabModelObserver {
         }
 
         buildGroupsAndCreateClosure(tabs);
-    }
-
-    /**
-     * Creates one historical tab entry per {@link Tab} in {@code tabs}. This is approximately
-     * identical to what occurred prior to {@link ChromeFeatureList.BULK_TAB_RESTORE}.
-     */
-    private void legacyCreateHistoricalTabs(List<Tab> tabs) {
-        for (Tab tab : tabs) {
-            mHistoricalTabSaver.createHistoricalTab(tab);
-        }
     }
 
     private void buildGroupsAndCreateClosure(List<Tab> tabs) {
@@ -74,7 +55,7 @@ public class HistoricalTabModelObserver implements TabModelObserver {
             // rely on the underlying root ID in the tab's persisted data which is used to restore
             // groups across an pending closure cancellation (undo). The root ID is the group ID
             // unless the tab is ungrouped in which case the root ID is the tab's ID.
-            int groupId = CriticalPersistedTabData.from(tab).getRootId();
+            int groupId = tab.getRootId();
             if (idToGroup.containsKey(groupId)) {
                 idToGroup.get(groupId).getTabs().add(tab);
                 continue;

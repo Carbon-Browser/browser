@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/bind.h"
 #include "components/favicon/core/favicon_service.h"
 #include "components/omnibox/browser/autocomplete_result.h"
 
@@ -160,11 +160,10 @@ void FaviconCache::InvokeRequestCallbackWithFavicon(const Request& request,
 }
 
 void FaviconCache::OnURLVisited(history::HistoryService* history_service,
-                                ui::PageTransition transition,
-                                const history::URLRow& row,
-                                base::Time visit_time) {
-  auto it =
-      responses_without_favicons_.Peek({RequestType::BY_PAGE_URL, row.url()});
+                                const history::URLRow& url_row,
+                                const history::VisitRow& new_visit) {
+  auto it = responses_without_favicons_.Peek(
+      {RequestType::BY_PAGE_URL, url_row.url()});
   if (it != responses_without_favicons_.end())
     responses_without_favicons_.Erase(it);
 }

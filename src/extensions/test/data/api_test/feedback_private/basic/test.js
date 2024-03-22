@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,9 @@ chrome.test.runTests([
       sendHistograms: false
     };
     chrome.feedbackPrivate.sendFeedback(
-        feedbackInfo, chrome.test.callbackPass(function(response) {
+        feedbackInfo, chrome.test.callbackPass(function(status) {
           chrome.test.assertEq(
-              response, chrome.feedbackPrivate.Status.SUCCESS);
+              chrome.feedbackPrivate.Status.SUCCESS, status);
     }));
   }
 ]);

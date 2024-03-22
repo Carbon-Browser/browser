@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "crypto/secure_hash.h"
 #include "net/http/http_cache.h"
@@ -142,7 +143,7 @@ class WritersTest : public TestWithTaskEnvironment {
     writers_->AddTransaction(transaction.get(), parallel_writing_pattern_,
                              transaction->priority(), info);
     writers_->SetNetworkTransaction(transaction.get(),
-                                    std::move(network_transaction), nullptr);
+                                    std::move(network_transaction));
     EXPECT_TRUE(writers_->HasTransaction(transaction.get()));
     transactions_.push_back(std::move(transaction));
   }
@@ -182,8 +183,7 @@ class WritersTest : public TestWithTaskEnvironment {
     std::string content;
     int rv = 0;
     do {
-      scoped_refptr<IOBuffer> buf =
-          base::MakeRefCounted<IOBuffer>(kDefaultBufferSize);
+      auto buf = base::MakeRefCounted<IOBufferWithSize>(kDefaultBufferSize);
       rv = writers_->Read(buf.get(), kDefaultBufferSize, callback.callback(),
                           transaction);
       if (rv == ERR_IO_PENDING) {
@@ -208,7 +208,7 @@ class WritersTest : public TestWithTaskEnvironment {
 
     std::string content;
     int rv = 0;
-    scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(5);
+    auto buf = base::MakeRefCounted<IOBufferWithSize>(5);
     rv = writers_->Read(buf.get(), 5, callback.callback(), transaction);
     if (rv == ERR_IO_PENDING) {
       rv = callback.WaitForResult();
@@ -239,7 +239,7 @@ class WritersTest : public TestWithTaskEnvironment {
 
     std::vector<scoped_refptr<IOBuffer>> bufs;
     for (auto buffer_length : buffer_lengths)
-      bufs.push_back(base::MakeRefCounted<IOBuffer>(buffer_length));
+      bufs.push_back(base::MakeRefCounted<IOBufferWithSize>(buffer_length));
 
     std::vector<TestCompletionCallback> callbacks(buffer_lengths.size());
 
@@ -298,7 +298,8 @@ class WritersTest : public TestWithTaskEnvironment {
       std::vector<TestCompletionCallback> callbacks(transactions_.size());
 
       for (size_t i = 0; i < transactions_.size(); i++) {
-        bufs.push_back(base::MakeRefCounted<IOBuffer>(kDefaultBufferSize));
+        bufs.push_back(
+            base::MakeRefCounted<IOBufferWithSize>(kDefaultBufferSize));
 
         // If we have deleted a transaction in the first iteration, then do not
         // invoke Read on it, in subsequent iterations.
@@ -369,13 +370,13 @@ class WritersTest : public TestWithTaskEnvironment {
 
     // Read a few bytes so that truncation is possible.
     TestCompletionCallback callback;
-    scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(5);
+    auto buf = base::MakeRefCounted<IOBufferWithSize>(5);
     int rv = writers_->Read(buf.get(), 5, callback.callback(), transaction);
     EXPECT_EQ(ERR_IO_PENDING, rv);  // Since the default is asynchronous.
     EXPECT_EQ(5, callback.GetResult(rv));
 
     // Start reading a few more bytes and return.
-    buf = base::MakeRefCounted<IOBuffer>(5);
+    buf = base::MakeRefCounted<IOBufferWithSize>(5);
     rv = writers_->Read(buf.get(), 5, base::BindOnce([](int rv) {}),
                         transaction);
     EXPECT_EQ(ERR_IO_PENDING, rv);
@@ -401,7 +402,7 @@ class WritersTest : public TestWithTaskEnvironment {
       en->Close();
 
       for (size_t i = 0; i < transactions_.size(); i++) {
-        bufs.push_back(base::MakeRefCounted<IOBuffer>(30));
+        bufs.push_back(base::MakeRefCounted<IOBufferWithSize>(30));
 
         if (!first_iter && i > 0)
           break;
@@ -434,7 +435,7 @@ class WritersTest : public TestWithTaskEnvironment {
     std::vector<TestCompletionCallback> callbacks(results->size());
 
     for (size_t i = 0; i < transactions_.size(); i++) {
-      bufs.push_back(base::MakeRefCounted<IOBuffer>(30));
+      bufs.push_back(base::MakeRefCounted<IOBufferWithSize>(30));
 
       rv = writers_->Read(bufs[i].get(), 30, callbacks[i].callback(),
                           transactions_[i].get());
@@ -475,8 +476,7 @@ class WritersTest : public TestWithTaskEnvironment {
     if (io_buf_len == 0)
       return false;
 
-    scoped_refptr<IOBuffer> read_buffer =
-        base::MakeRefCounted<IOBuffer>(io_buf_len);
+    auto read_buffer = base::MakeRefCounted<IOBufferWithSize>(io_buf_len);
     int rv = disk_entry_->ReadData(kResponseInfoIndex, 0, read_buffer.get(),
                                    io_buf_len, callback.callback());
     rv = callback.GetResult(rv);
@@ -497,7 +497,9 @@ class WritersTest : public TestWithTaskEnvironment {
   ScopedMockTransaction scoped_transaction_;
   MockHttpCache cache_;
   std::unique_ptr<HttpCache::Writers> writers_;
-  disk_cache::Entry* disk_entry_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION disk_cache::Entry* disk_entry_ = nullptr;
   std::unique_ptr<HttpCache::ActiveEntry> entry_;
   TestHttpCache test_cache_;
 

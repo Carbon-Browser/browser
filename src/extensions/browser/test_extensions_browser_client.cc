@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 #include "ui/base/l10n/l10n_util.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #endif
 
 using content::BrowserContext;
@@ -61,7 +61,7 @@ bool TestExtensionsBrowserClient::AreExtensionsDisabled(
   return false;
 }
 
-bool TestExtensionsBrowserClient::IsValidContext(BrowserContext* context) {
+bool TestExtensionsBrowserClient::IsValidContext(void* context) {
   return context == main_context_ ||
          (incognito_context_ && context == incognito_context_);
 }
@@ -92,12 +92,38 @@ BrowserContext* TestExtensionsBrowserClient::GetOriginalContext(
   return main_context_;
 }
 
+content::BrowserContext*
+TestExtensionsBrowserClient::GetContextRedirectedToOriginal(
+    content::BrowserContext* context,
+    bool force_guest_profile) {
+  return GetOriginalContext(context);
+}
+
+content::BrowserContext* TestExtensionsBrowserClient::GetContextOwnInstance(
+    content::BrowserContext* context,
+    bool force_guest_profile) {
+  return context;
+}
+
+content::BrowserContext* TestExtensionsBrowserClient::GetContextForOriginalOnly(
+    content::BrowserContext* context,
+    bool force_guest_profile) {
+  // Default implementation of
+  // `BrowserContextKeyedServiceFactory::GetBrowserContextToUse()`.
+  return context->IsOffTheRecord() ? nullptr : context;
+}
+
+bool TestExtensionsBrowserClient::AreExtensionsDisabledForContext(
+    content::BrowserContext* context) {
+  return false;
+}
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 std::string TestExtensionsBrowserClient::GetUserIdHashFromContext(
     content::BrowserContext* context) {
-  if (context != main_context_ || !chromeos::LoginState::IsInitialized())
+  if (context != main_context_ || !ash::LoginState::IsInitialized())
     return "";
-  return chromeos::LoginState::Get()->primary_user_hash();
+  return ash::LoginState::Get()->primary_user_hash();
 }
 #endif
 

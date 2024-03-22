@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -47,8 +47,8 @@ def Fix(line):
     if result:
       line = result.group(1)
   # For Android tests:
-  if line[:2] == 'I ':
-    result = re.search('I\s+\d+\.\d+s run_tests_on_device\([0-9a-f]+\)\s+(.*)',
+  if line[:2] == 'I ' or line[:2] == 'E ':
+    result = re.search('[I|E].*run_tests_on_device\([^\)]+\)\s+(.*)',
                        line)
     if result:
       line = result.group(1)
@@ -105,18 +105,22 @@ def Run():
   else:
     patchSetArg = '';
 
-  (_, tmppath) = tempfile.mkstemp()
-  print('Temp file: %s' % tmppath)
-  os.system('git cl try-results --json %s %s' % (tmppath, patchSetArg))
+  try:
+    (fd, tmppath) = tempfile.mkstemp()
+    print('Temp file: %s' % tmppath)
+    os.system('git cl try-results --json %s %s' % (tmppath, patchSetArg))
 
-  try_result = open(tmppath).read()
-  if len(try_result) < 1000:
-    print('Did not seem to get try bot data.')
-    print(try_result)
-    return
+    with open(tmppath) as file:
+      try_result = file.read()
+      if len(try_result) < 1000:
+        print('Did not seem to get try bot data.')
+        print(try_result)
+        return
+  finally:
+    os.close(fd)
+    os.unlink(tmppath)
 
   data = json.loads(try_result)
-  os.unlink(tmppath)
 
   for builder in data:
     print(builder['builder']['builder'], builder['status'])
@@ -144,7 +148,7 @@ def Run():
           'bb',
           'log',
           builder['id'],
-          '\'%s\'' % s_name,
+          '\"%s\"' % s_name,
       ]
       bb_command_expanded = ' '.join(bb_command)
       # print((BRIGHT_COLOR + '=> %s' + NORMAL_COLOR) % bb_command_expanded)

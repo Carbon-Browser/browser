@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -109,7 +109,7 @@ class SoundContentSettingObserverTest : public ChromeRenderViewHostTestHarness {
 #endif
 
  private:
-  raw_ptr<HostContentSettingsMap> host_content_settings_map_;
+  raw_ptr<HostContentSettingsMap, DanglingUntriaged> host_content_settings_map_;
   std::unique_ptr<ukm::TestUkmRecorder> test_ukm_recorder_;
   base::test::ScopedFeatureList scoped_feature_list_;
 };

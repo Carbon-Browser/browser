@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,9 +49,7 @@ public class OfflineContentAggregatorNotificationBridgeUi
      */
     private final HashMap<ContentId, OfflineItemVisuals> mVisualsCache = new HashMap<>();
 
-    /**
-     * Creates a new OfflineContentAggregatorNotificationBridgeUi based on {@code provider}.
-     */
+    /** Creates a new OfflineContentAggregatorNotificationBridgeUi based on {@code provider}. */
     public OfflineContentAggregatorNotificationBridgeUi(
             OfflineContentProvider provider, DownloadNotifier notifier) {
         mProvider = provider;
@@ -60,9 +58,7 @@ public class OfflineContentAggregatorNotificationBridgeUi
         mProvider.addObserver(this);
     }
 
-    /**
-     * Destroys this class and detaches it from associated objects.
-     */
+    /** Destroys this class and detaches it from associated objects. */
     public void destroy() {
         mProvider.removeObserver(this);
         destroyServiceDelegate();
@@ -117,8 +113,8 @@ public class OfflineContentAggregatorNotificationBridgeUi
     }
 
     @Override
-    public void resumeDownload(ContentId id, DownloadItem item, boolean hasUserGesture) {
-        mProvider.resumeDownload(id, hasUserGesture);
+    public void resumeDownload(ContentId id, DownloadItem item) {
+        mProvider.resumeDownload(id);
     }
 
     @Override
@@ -153,7 +149,7 @@ public class OfflineContentAggregatorNotificationBridgeUi
         // TODO(http://crbug.com/855141): Find a cleaner way to hide unimportant UI updates.
         // If it's a suggested page, or the user choose to download later. Do not add it to the
         // notification UI.
-        if (item.isSuggested || item.schedule != null) return;
+        if (item.isSuggested) return;
 
         // If the download is cancelled, no need to DownloadInfo object and it is enough to notify
         // that the download is canceled.
@@ -174,8 +170,8 @@ public class OfflineContentAggregatorNotificationBridgeUi
                 mUi.notifyDownloadSuccessful(info, -1L, false, item.isOpenable);
                 break;
             case OfflineItemState.INTERRUPTED:
-                mUi.notifyDownloadInterrupted(info,
-                        LegacyHelpers.isLegacyDownload(item.id) ? false : true, item.pendingState);
+                mUi.notifyDownloadInterrupted(
+                        info, !LegacyHelpers.isLegacyDownload(item.id), item.pendingState);
                 break;
             case OfflineItemState.PAUSED:
                 mUi.notifyDownloadPaused(info);
@@ -201,7 +197,7 @@ public class OfflineContentAggregatorNotificationBridgeUi
             case OfflineItemState.FAILED:
             case OfflineItemState.PAUSED:
                 return true;
-            // OfflineItemState.CANCELLED
+                // OfflineItemState.CANCELLED
             default:
                 return false;
         }
@@ -216,8 +212,8 @@ public class OfflineContentAggregatorNotificationBridgeUi
             case OfflineItemState.PAUSED:
             case OfflineItemState.COMPLETE:
                 return true;
-            // OfflineItemState.FAILED,
-            // OfflineItemState.CANCELLED
+                // OfflineItemState.FAILED,
+                // OfflineItemState.CANCELLED
             default:
                 return false;
         }

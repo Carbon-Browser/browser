@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -117,9 +117,10 @@ public final class Policies {
 
     @VisibleForTesting
     static Map<String, PolicyData> getPolicies(AnnotatedElement element) {
-        AnnotatedElement parent = (element instanceof Method)
-                ? ((Method) element).getDeclaringClass()
-                : ((Class<?>) element).getSuperclass();
+        AnnotatedElement parent =
+                (element instanceof Method)
+                        ? ((Method) element).getDeclaringClass()
+                        : ((Class<?>) element).getSuperclass();
         Map<String, PolicyData> flags =
                 (parent == null) ? new HashMap<String, PolicyData>() : getPolicies(parent);
 
@@ -128,8 +129,10 @@ public final class Policies {
         }
 
         if (element.isAnnotationPresent(Policies.Remove.class)) {
-            flags.keySet().removeAll(
-                    fromItems(element.getAnnotation(Policies.Remove.class).value()).keySet());
+            flags.keySet()
+                    .removeAll(
+                            fromItems(element.getAnnotation(Policies.Remove.class).value())
+                                    .keySet());
         }
 
         return flags;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,13 +33,14 @@ class DragMockChromeClient : public RenderingTestChromeClient {
                      const WebDragData&,
                      DragOperationsMask,
                      const SkBitmap& drag_image,
-                     const gfx::Point& drag_image_offset) override {
+                     const gfx::Vector2d& cursor_offset,
+                     const gfx::Rect& drag_obj_rect) override {
     last_drag_image_size = gfx::Size(drag_image.width(), drag_image.height());
-    last_drag_image_offset = drag_image_offset;
+    last_cursor_offset = cursor_offset;
   }
 
   gfx::Size last_drag_image_size;
-  gfx::Point last_drag_image_offset;
+  gfx::Vector2d last_cursor_offset;
 };
 
 class DragControllerTest : public RenderingTest {
@@ -84,7 +85,10 @@ class DragControllerSimTest : public SimTest {};
 // Drop clears out the Autoscroll state. Regression test for
 // https://crbug.com/733996.
 TEST_F(DragControllerSimTest, DropURLOnNonNavigatingClearsState) {
-  WebView().GetPage()->GetSettings().SetNavigateOnDragDrop(false);
+  auto renderer_preferences = WebView().GetRendererPreferences();
+  renderer_preferences.can_accept_load_drops = false;
+  WebView().SetRendererPreferences(renderer_preferences);
+
   WebView().MainFrameViewWidget()->Resize(gfx::Size(800, 600));
   SimRequest main_resource("https://example.com/test.html", "text/html");
 
@@ -97,22 +101,26 @@ TEST_F(DragControllerSimTest, DropURLOnNonNavigatingClearsState) {
 
   Compositor().BeginFrame();
 
-  DataObject* object = DataObject::Create();
-  object->SetURLAndTitle("https://www.example.com/index.html", "index");
-  DragData data(
-      object, gfx::PointF(10, 10), gfx::PointF(10, 10),
-      static_cast<DragOperationsMask>(kDragOperationCopy | kDragOperationLink |
-                                      kDragOperationMove));
+  WebDragData drag_data;
+  WebDragData::StringItem item;
+  item.type = "text/uri-list";
+  item.data = WebString::FromUTF8("https://www.example.com/index.html");
+  drag_data.AddItem(item);
 
-  WebView().GetPage()->GetDragController().DragEnteredOrUpdated(
-      &data, *GetDocument().GetFrame());
+  const gfx::PointF client_point(10, 10);
+  const gfx::PointF screen_point(10, 10);
+  WebFrameWidget* widget = WebView().MainFrameImpl()->FrameWidget();
+  widget->DragTargetDragEnter(drag_data, client_point, screen_point,
+                              kDragOperationCopy, 0, base::DoNothing());
 
   // The page should tell the AutoscrollController about the drag.
   EXPECT_TRUE(
       WebView().GetPage()->GetAutoscrollController().AutoscrollInProgress());
 
-  WebView().GetPage()->GetDragController().PerformDrag(
-      &data, *GetDocument().GetFrame());
+  widget->DragTargetDrop(drag_data, client_point, screen_point, 0,
+                         base::DoNothing());
+  frame_test_helpers::PumpPendingRequestsForFrameToLoad(
+      WebView().MainFrameImpl());
 
   // Once we've "performed" the drag (in which nothing happens), the
   // AutoscrollController should have been cleared.
@@ -124,7 +132,6 @@ TEST_F(DragControllerSimTest, DropURLOnNonNavigatingClearsState) {
 // lifecycle updates for frames - are accounted for in the DragController.
 // Regression test for https://crbug.com/685030
 TEST_F(DragControllerSimTest, ThrottledDocumentHandled) {
-  WebView().GetPage()->GetSettings().SetNavigateOnDragDrop(false);
   WebView().MainFrameViewWidget()->Resize(gfx::Size(800, 600));
   SimRequest main_resource("https://example.com/test.html", "text/html");
 
@@ -137,12 +144,12 @@ TEST_F(DragControllerSimTest, ThrottledDocumentHandled) {
       "  document.addEventListener('dragenter', e => e.preventDefault());"
       "</script>");
 
-  DataObject* object = DataObject::Create();
-  object->SetURLAndTitle("https://www.example.com/index.html", "index");
+  DataObject* object = DataObject::CreateFromString("hello world");
   DragData data(
       object, gfx::PointF(10, 10), gfx::PointF(10, 10),
       static_cast<DragOperationsMask>(kDragOperationCopy | kDragOperationLink |
-                                      kDragOperationMove));
+                                      kDragOperationMove),
+      false);
 
   WebView().GetPage()->GetDragController().DragEnteredOrUpdated(
       &data, *GetDocument().GetFrame());
@@ -416,7 +423,7 @@ TEST_F(DragControllerTest, DragImageOffsetWithPageScaleFactor) {
 
   auto& drag_state = GetFrame().GetPage()->GetDragController().GetDragState();
   drag_state.drag_type_ = kDragSourceActionSelection;
-  drag_state.drag_src_ = GetDocument().getElementById("drag");
+  drag_state.drag_src_ = GetDocument().getElementById(AtomicString("drag"));
   drag_state.drag_data_transfer_ = DataTransfer::Create(
       DataTransfer::kDragAndDrop, DataTransferAccessPolicy::kWritable,
       DataObject::Create());
@@ -428,9 +435,9 @@ TEST_F(DragControllerTest, DragImageOffsetWithPageScaleFactor) {
   EXPECT_EQ(expected_image_size, GetChromeClient().last_drag_image_size);
   // The drag image has a margin of 2px which should offset the selection
   // image by 2px from the dragged location of (5, 10).
-  gfx::Point expected_offset(5 * page_scale_factor,
-                             (10 - 2) * page_scale_factor);
-  EXPECT_EQ(expected_offset, GetChromeClient().last_drag_image_offset);
+  gfx::Vector2d expected_offset(5 * page_scale_factor,
+                                (10 - 2) * page_scale_factor);
+  EXPECT_EQ(expected_offset, GetChromeClient().last_cursor_offset);
 }
 
 TEST_F(DragControllerTest, DragLinkWithPageScaleFactor) {
@@ -460,7 +467,7 @@ TEST_F(DragControllerTest, DragLinkWithPageScaleFactor) {
 
   auto& drag_state = GetFrame().GetPage()->GetDragController().GetDragState();
   drag_state.drag_type_ = kDragSourceActionLink;
-  drag_state.drag_src_ = GetDocument().getElementById("drag");
+  drag_state.drag_src_ = GetDocument().getElementById(AtomicString("drag"));
   drag_state.drag_data_transfer_ = DataTransfer::Create(
       DataTransfer::kDragAndDrop, DataTransferAccessPolicy::kWritable,
       DataObject::Create());
@@ -476,14 +483,12 @@ TEST_F(DragControllerTest, DragLinkWithPageScaleFactor) {
   // image is not offset by margin because the link image is not based on the
   // link's painting but instead is a generated image of the link's url. Because
   // link_image_size is already scaled, no additional scaling is expected.
-  gfx::Point expected_offset = gfx::Point(link_image_size.width() / 2, 2);
+  gfx::Vector2d expected_offset(link_image_size.width() / 2, 2);
   // The offset is mapped using integers which can introduce rounding errors
   // (see TODO in DragController::DoSystemDrag) so we accept values near our
   // expectation until more precise offset mapping is available.
-  EXPECT_NEAR(expected_offset.x(), GetChromeClient().last_drag_image_offset.x(),
-              1);
-  EXPECT_NEAR(expected_offset.y(), GetChromeClient().last_drag_image_offset.y(),
-              1);
+  EXPECT_NEAR(expected_offset.x(), GetChromeClient().last_cursor_offset.x(), 1);
+  EXPECT_NEAR(expected_offset.y(), GetChromeClient().last_cursor_offset.y(), 1);
 }
 
 }  // namespace blink

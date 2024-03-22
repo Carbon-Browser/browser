@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,9 +63,9 @@ class SubresourceFilterAbusiveTest
   SubresourceFilterAbusiveTest() {
     std::tie(abusive_level_, bas_level_, enable_adblock_on_abusive_sites_) =
         GetParam();
-    std::vector<base::Feature> enabled_features{
+    std::vector<base::test::FeatureRef> enabled_features{
         blocked_content::kAbusiveExperienceEnforce};
-    std::vector<base::Feature> disabled_features;
+    std::vector<base::test::FeatureRef> disabled_features;
     (enable_adblock_on_abusive_sites_ ? enabled_features : disabled_features)
         .push_back(subresource_filter::kFilterAdsOnAbusiveSites);
     scoped_features_.InitWithFeatures(enabled_features, disabled_features);
@@ -96,7 +96,10 @@ class SubresourceFilterAbusiveTest
         blocked_content::SafeBrowsingTriggeredPopupBlocker::FromWebContents(
             web_contents());
   }
-
+  void TearDown() override {
+    popup_blocker_ = nullptr;
+    subresource_filter::SubresourceFilterTestHarness::TearDown();
+  }
   void ConfigureUrl(const GURL& url) {
     safe_browsing::ThreatMetadata metadata;
     metadata.subresource_filter_match = GetMatch(abusive_level_, bas_level_);

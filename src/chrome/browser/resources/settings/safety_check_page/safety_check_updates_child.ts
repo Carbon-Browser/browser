@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,9 @@ import '../relaunch_confirmation_dialog.js';
 
 // </if>
 
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {MetricsBrowserProxy, MetricsBrowserProxyImpl, SafetyCheckInteractions} from '../metrics_browser_proxy.js';
@@ -25,13 +25,13 @@ import {SafetyCheckCallbackConstants, SafetyCheckUpdatesStatus} from './safety_c
 import {SafetyCheckIconStatus} from './safety_check_child.js';
 import {getTemplate} from './safety_check_updates_child.html.js';
 
-type UpdatesChangedEvent = {
-  newState: SafetyCheckUpdatesStatus,
-  displayString: string,
-};
+interface UpdatesChangedEvent {
+  newState: SafetyCheckUpdatesStatus;
+  displayString: string;
+}
 
 const SettingsSafetyCheckUpdatesChildElementBase =
-    RelaunchMixin(WebUIListenerMixin(I18nMixin(PolymerElement)));
+    RelaunchMixin(WebUiListenerMixin(I18nMixin(PolymerElement)));
 
 export class SettingsSafetyCheckUpdatesChildElement extends
     SettingsSafetyCheckUpdatesChildElementBase {
@@ -69,7 +69,7 @@ export class SettingsSafetyCheckUpdatesChildElement extends
     super.connectedCallback();
 
     // Register for safety check status updates.
-    this.addWebUIListener(
+    this.addWebUiListener(
         SafetyCheckCallbackConstants.UPDATES_CHANGED,
         this.onSafetyCheckUpdatesChanged_.bind(this));
   }
@@ -88,6 +88,7 @@ export class SettingsSafetyCheckUpdatesChildElement extends
         return SafetyCheckIconStatus.SAFE;
       case SafetyCheckUpdatesStatus.RELAUNCH:
       case SafetyCheckUpdatesStatus.DISABLED_BY_ADMIN:
+      case SafetyCheckUpdatesStatus.UPDATE_TO_ROLLBACK_VERSION_DISALLOWED:
       case SafetyCheckUpdatesStatus.FAILED_OFFLINE:
       case SafetyCheckUpdatesStatus.UNKNOWN:
         return SafetyCheckIconStatus.INFO;

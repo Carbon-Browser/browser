@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,12 @@ class GURL;
 using DefaultClientCallback = base::OnceCallback<void(bool)>;
 
 namespace custom_handlers {
+
+enum class RphRegistrationMode {
+  kNone,
+  kAutoAccept,
+  kAutoReject,
+};
 
 class ProtocolHandler;
 
@@ -218,6 +224,13 @@ class ProtocolHandlerRegistry : public KeyedService {
 
   void SetIsLoading(bool is_loading);
 
+  base::WeakPtr<ProtocolHandlerRegistry> GetWeakPtr();
+
+  void SetRphRegistrationMode(RphRegistrationMode mode) {
+    registration_mode_ = mode;
+  }
+  RphRegistrationMode registration_mode() const { return registration_mode_; }
+
  private:
   friend class base::DeleteHelper<ProtocolHandlerRegistry>;
   friend struct content::BrowserThread::DeleteOnThread<
@@ -361,6 +374,10 @@ class ProtocolHandlerRegistry : public KeyedService {
   bool is_loaded_;
 
   base::ObserverList<Observer> observers_;
+
+  // The current registration automation mode for registerProtocolHandler API,
+  // to be used for any future RegisterProtocolHandler requests.
+  RphRegistrationMode registration_mode_ = RphRegistrationMode::kNone;
 
   // Makes it possible to invalidate the callback for the
   // DefaultProtocolClientWorker.

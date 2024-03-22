@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,8 @@ class WaylandBufferManagerGpu;
 class GLSurfaceEglReadbackWayland : public GLSurfaceEglReadback,
                                     public WaylandSurfaceGpu {
  public:
-  GLSurfaceEglReadbackWayland(gfx::AcceleratedWidget widget,
+  GLSurfaceEglReadbackWayland(gl::GLDisplayEGL* display,
+                              gfx::AcceleratedWidget widget,
                               WaylandBufferManagerGpu* buffer_manager);
   GLSurfaceEglReadbackWayland(const GLSurfaceEglReadbackWayland&) = delete;
   GLSurfaceEglReadbackWayland& operator=(const GLSurfaceEglReadbackWayland&) =
@@ -45,11 +46,12 @@ class GLSurfaceEglReadbackWayland : public GLSurfaceEglReadback,
               float scale_factor,
               const gfx::ColorSpace& color_space,
               bool has_alpha) override;
-  bool IsOffscreen() override;
-  gfx::SwapResult SwapBuffers(PresentationCallback callback) override;
+  gfx::SwapResult SwapBuffers(PresentationCallback callback,
+                              gfx::FrameData data) override;
   bool SupportsAsyncSwap() override;
   void SwapBuffersAsync(SwapCompletionCallback completion_callback,
-                        PresentationCallback presentation_callback) override;
+                        PresentationCallback presentation_callback,
+                        gfx::FrameData data) override;
   gfx::SurfaceOrigin GetOrigin() const override;
 
  private:

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,9 +34,9 @@ TEST_F(DeleteSelectionCommandTest, deleteListFromTable) {
       "</ol></td></tr></table>"
       "</div>");
 
-  Element* div = GetDocument().QuerySelector("div");
-  Element* table = GetDocument().QuerySelector("table");
-  Element* br = GetDocument().QuerySelector("br");
+  Element* div = GetDocument().QuerySelector(AtomicString("div"));
+  Element* table = GetDocument().QuerySelector(AtomicString("table"));
+  Element* br = GetDocument().QuerySelector(AtomicString("br"));
 
   LocalFrame* frame = GetDocument().GetFrame();
   frame->Selection().SetSelection(

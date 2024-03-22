@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -32,7 +32,7 @@
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_live_tab_context.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/dbus_appmenu_registrar.h"
@@ -307,11 +307,11 @@ ui::SimpleMenuModel* DbusAppmenu::BuildStaticMenu(
       continue;
     }
 
-    int string_id = commands->str_id;
+    int command_str_id = commands->str_id;
     if (command_id == IDC_SHOW_BOOKMARK_BAR)
-      menu->AddCheckItemWithStringId(command_id, string_id);
+      menu->AddCheckItemWithStringId(command_id, command_str_id);
     else
-      menu->AddItemWithStringId(command_id, string_id);
+      menu->AddItemWithStringId(command_id, command_str_id);
     if (command_id < kLastChromeCommand)
       RegisterCommandObserver(command_id);
   }

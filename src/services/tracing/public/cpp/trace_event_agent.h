@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
@@ -31,20 +30,11 @@ class COMPONENT_EXPORT(TRACING_CPP) TraceEventAgent : public BaseAgent {
 
   void GetCategories(std::set<std::string>* category_set) override;
 
-  using MetadataGeneratorFunction =
-      base::RepeatingCallback<absl::optional<base::Value>()>;
-  void AddMetadataGeneratorFunction(MetadataGeneratorFunction generator);
-
  private:
   friend base::NoDestructor<tracing::TraceEventAgent>;
-  friend std::default_delete<TraceEventAgent>;      // For Testing
-  friend class TraceEventAgentTest;                 // For Testing
 
   TraceEventAgent();
   ~TraceEventAgent() override;
-
-
-  std::vector<MetadataGeneratorFunction> metadata_generator_functions_;
 
   THREAD_CHECKER(thread_checker_);
 };

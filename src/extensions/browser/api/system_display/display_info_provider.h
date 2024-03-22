@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,12 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
-
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "extensions/common/api/system_display.h"
 #include "ui/display/display_observer.h"
 
 namespace display {
@@ -23,18 +22,6 @@ class Screen;
 
 namespace extensions {
 
-namespace api {
-namespace system_display {
-struct Bounds;
-struct DisplayLayout;
-struct DisplayProperties;
-struct DisplayUnitInfo;
-struct Insets;
-struct MirrorModeInfo;
-struct TouchCalibrationPairQuad;
-}  // namespace system_display
-}  // namespace api
-
 // Implementation class for chrome.system.display extension API
 // (system_display_api.cc). Callbacks that provide an error string use an
 // empty string for success.
@@ -42,7 +29,7 @@ class DisplayInfoProvider : public display::DisplayObserver {
  public:
   using DisplayUnitInfoList = std::vector<api::system_display::DisplayUnitInfo>;
   using DisplayLayoutList = std::vector<api::system_display::DisplayLayout>;
-  using ErrorCallback = base::OnceCallback<void(absl::optional<std::string>)>;
+  using ErrorCallback = base::OnceCallback<void(std::optional<std::string>)>;
 
   DisplayInfoProvider(const DisplayInfoProvider&) = delete;
   DisplayInfoProvider& operator=(const DisplayInfoProvider&) = delete;
@@ -125,6 +112,12 @@ class DisplayInfoProvider : public display::DisplayObserver {
   // Trigger OnDisplayChangedEvent
   void DispatchOnDisplayChangedEvent();
 
+  // Convert a vector of Displays into a DisplayUnitInfoList. This function
+  // needs to be thread-safe since it is called via PostTask.
+  DisplayUnitInfoList GetAllDisplaysInfoList(
+      const std::vector<display::Display>& displays,
+      int64_t primary_id) const;
+
   // Create a DisplayUnitInfo from a display::Display for implementations of
   // GetAllDisplaysInfo()
   static api::system_display::DisplayUnitInfo CreateDisplayUnitInfo(
@@ -132,11 +125,12 @@ class DisplayInfoProvider : public display::DisplayObserver {
       int64_t primary_display_id);
 
  private:
-  // Update the content of the |unit| obtained for |display| using
-  // platform specific method.
+  // Update the content of each unit in `units` obtained from the corresponding
+  // display in `displays` using a platform specific method.
+  // This must be safe to call off the ui thread.
   virtual void UpdateDisplayUnitInfoForPlatform(
-      const display::Display& display,
-      api::system_display::DisplayUnitInfo* unit);
+      const std::vector<display::Display>& displays,
+      DisplayUnitInfoList& units) const;
 
   // DisplayObserver
   void OnDisplayAdded(const display::Display& new_display) override;
@@ -144,9 +138,9 @@ class DisplayInfoProvider : public display::DisplayObserver {
   void OnDisplayMetricsChanged(const display::Display& display,
                                uint32_t metrics) override;
 
-  const raw_ptr<display::Screen> screen_;
+  raw_ptr<display::Screen> provided_screen_ = nullptr;
 
-  absl::optional<display::ScopedDisplayObserver> display_observer_;
+  std::optional<display::ScopedDisplayObserver> display_observer_;
 };
 
 }  // namespace extensions

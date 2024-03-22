@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,14 @@ FullscreenChangeWaiter::FullscreenChangeWaiter(
 void FullscreenChangeWaiter::Wait() {
   while (initial_fullscreen_state_ == window_->IsFullscreen())
     content::RunAllPendingInMessageLoop();
+}
+
+// Some of these tests fail if run on a machine with a non 1.0 device scale
+// factor, so make the test override the device scale factor.
+void AppWindowInteractiveTest::SetUpCommandLine(
+    base::CommandLine* command_line) {
+  extensions::PlatformAppBrowserTest::SetUpCommandLine(command_line);
+  command_line->AppendSwitchASCII(switches::kForceDeviceScaleFactor, "1");
 }
 
 bool AppWindowInteractiveTest::RunAppWindowInteractiveTest(

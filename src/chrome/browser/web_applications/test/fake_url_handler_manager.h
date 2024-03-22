@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "chrome/browser/web_applications/os_integration/url_handler_manager.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "components/webapps/common/web_app_id.h"
 
 class Profile;
 
@@ -19,11 +19,11 @@ class FakeUrlHandlerManager : public UrlHandlerManager {
   explicit FakeUrlHandlerManager(Profile* profile);
   ~FakeUrlHandlerManager() override;
 
-  void RegisterUrlHandlers(const AppId& app_id,
+  void RegisterUrlHandlers(const webapps::AppId& app_id,
                            ResultCallback callback) override;
-  bool UnregisterUrlHandlers(const AppId& app_id) override;
+  bool UnregisterUrlHandlers(const webapps::AppId& app_id) override;
   void UpdateUrlHandlers(
-      const AppId& app_id,
+      const webapps::AppId& app_id,
       base::OnceCallback<void(bool success)> callback) override;
 };
 

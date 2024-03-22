@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/browsertest_util.h"
@@ -223,9 +223,8 @@ class ContentVerifierHashTest
   }
 
   bool ExtensionIsDisabledForCorruption() {
-    const Extension* extension = extensions::ExtensionRegistry::Get(profile())
-                                     ->disabled_extensions()
-                                     .GetByID(id());
+    const Extension* extension =
+        ExtensionRegistry::Get(profile())->disabled_extensions().GetByID(id());
     if (!extension)
       return false;
 
@@ -237,9 +236,8 @@ class ContentVerifierHashTest
   }
 
   bool ExtensionIsEnabled() {
-    return extensions::ExtensionRegistry::Get(profile())
-        ->enabled_extensions()
-        .Contains(id());
+    return ExtensionRegistry::Get(profile())->enabled_extensions().Contains(
+        id());
   }
 
   bool HasValidComputedHashes() {

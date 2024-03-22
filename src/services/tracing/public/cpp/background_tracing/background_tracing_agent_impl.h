@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,23 +31,19 @@ class COMPONENT_EXPORT(BACKGROUND_TRACING_CPP) BackgroundTracingAgentImpl
   ~BackgroundTracingAgentImpl() override;
 
   // mojom::BackgroundTracingAgent methods:
-  void SetUMACallback(const std::string& histogram_name,
+  void SetUMACallback(tracing::mojom::BackgroundTracingRulePtr rule,
+                      const std::string& histogram_name,
                       int32_t histogram_lower_value,
-                      int32_t histogram_upper_value,
-                      bool repeat) override;
-  void ClearUMACallback(const std::string& histogram_name) override;
+                      int32_t histogram_upper_value) override;
+  void ClearUMACallback(tracing::mojom::BackgroundTracingRulePtr rule) override;
 
  private:
-  static void OnHistogramChanged(
-      base::WeakPtr<BackgroundTracingAgentImpl> weak_self,
-      base::Histogram::Sample reference_lower_value,
-      base::Histogram::Sample reference_upper_value,
-      bool repeat,
-      const char* histogram_name,
-      uint64_t name_hash,
-      base::Histogram::Sample actual_value);
-  void SendTriggerMessage(const std::string& histogram_name);
-  void SendAbortBackgroundTracingMessage();
+  void OnHistogramChanged(const std::string& rule_id,
+                          base::Histogram::Sample reference_lower_value,
+                          base::Histogram::Sample reference_upper_value,
+                          const char* histogram_name,
+                          uint64_t name_hash,
+                          base::Histogram::Sample actual_value);
 
   mojo::Remote<mojom::BackgroundTracingAgentClient> client_;
   base::Time histogram_last_changed_;

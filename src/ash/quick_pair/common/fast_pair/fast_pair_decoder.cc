@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/quick_pair/common/fast_pair/fast_pair_decoder.h"
 
+#include <optional>
 #include <vector>
+
 #include "base/strings/string_number_conversions.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -54,10 +55,10 @@ bool HasModelId(const std::vector<uint8_t>* service_data) {
            GetVersion(service_data) == 0 && IsIdLengthValid(service_data)));
 }
 
-absl::optional<std::string> GetHexModelIdFromServiceData(
+std::optional<std::string> GetHexModelIdFromServiceData(
     const std::vector<uint8_t>* service_data) {
   if (service_data == nullptr || service_data->size() < kMinModelIdLength)
-    return absl::nullopt;
+    return std::nullopt;
   else if (service_data->size() == kMinModelIdLength)
     // If the size is 3, all the bytes are the ID,
     return base::HexEncode(service_data->data(), kMinModelIdLength);

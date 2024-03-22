@@ -1,54 +1,81 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/omnibox/omnibox_suggestion_icon_util.h"
 
-#include "base/notreached.h"
+#import "base/notreached.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+namespace {
+const CGFloat kSymbolSize = 18;
+}  // namespace
 
-NSString* GetOmniboxSuggestionIconTypeAssetName(
-    OmniboxSuggestionIconType iconType) {
-  switch (iconType) {
-    case BOOKMARK:
-      return @"omnibox_completion_bookmark";
-    case CALCULATOR:
-      return @"answer_calculator";
-    case DEFAULT_FAVICON:
-      return @"favicon_fallback";
-    case HISTORY:
-      return @"omnibox_completion_history";
-    case SEARCH:
-      return @"search";
-    case CONVERSION:
-      return @"answer_conversion";
-    case DICTIONARY:
-      return @"answer_dictionary";
-    case STOCK:
-      return @"answer_stock";
-    case SUNRISE:
-      return @"answer_sunrise";
-    case LOCAL_TIME:
-      return @"answer_local_time";
-    case WHEN_IS:
-      return @"answer_when_is";
-    case TRANSLATION:
-      return @"answer_translation";
-    case FALLBACK_ANSWER:
-      return @"search";
-    case SEARCH_HISTORY:
-      return @"omnibox_popup_recent_query";
-    case OMNIBOX_SUGGESTION_ICON_TYPE_COUNT:
+UIImage* GetOmniboxSuggestionIcon(OmniboxSuggestionIconType icon_type) {
+  NSString* symbol_name = kGlobeSymbol;
+  bool default_symbol = true;
+  switch (icon_type) {
+    case OmniboxSuggestionIconType::kCalculator:
+      symbol_name = kEqualSymbol;
+      break;
+    case OmniboxSuggestionIconType::kDefaultFavicon:
+      if (@available(iOS 15, *)) {
+        symbol_name = kGlobeAmericasSymbol;
+      } else {
+        symbol_name = kGlobeSymbol;
+      }
+      break;
+    case OmniboxSuggestionIconType::kSearch:
+      symbol_name = kSearchSymbol;
+      break;
+    case OmniboxSuggestionIconType::kSearchHistory:
+      symbol_name = kHistorySymbol;
+      break;
+    case OmniboxSuggestionIconType::kConversion:
+      symbol_name = kSyncEnabledSymbol;
+      break;
+    case OmniboxSuggestionIconType::kDictionary:
+      symbol_name = kBookClosedSymbol;
+      break;
+    case OmniboxSuggestionIconType::kStock:
+      symbol_name = kSortSymbol;
+      break;
+    case OmniboxSuggestionIconType::kSunrise:
+      symbol_name = kSunFillSymbol;
+      break;
+    case OmniboxSuggestionIconType::kWhenIs:
+      symbol_name = kCalendarSymbol;
+      break;
+    case OmniboxSuggestionIconType::kTranslation:
+      symbol_name = kTranslateSymbol;
+      default_symbol = false;
+      break;
+    case OmniboxSuggestionIconType::kFallbackAnswer:
+      symbol_name = kSearchSymbol;
+      break;
+    case OmniboxSuggestionIconType::kSearchTrend:
+      symbol_name = kUpTrendSymbol;
+      default_symbol = false;
+      break;
+    case OmniboxSuggestionIconType::kCount:
       NOTREACHED();
-      return @"favicon_fallback";
+      if (@available(iOS 15, *)) {
+        symbol_name = kGlobeAmericasSymbol;
+      } else {
+        symbol_name = kGlobeSymbol;
+      }
+      break;
   }
+
+  if (default_symbol) {
+    return DefaultSymbolWithPointSize(symbol_name, kSymbolSize);
+  }
+  return CustomSymbolWithPointSize(symbol_name, kSymbolSize);
 }
 
-UIImage* GetOmniboxSuggestionIcon(OmniboxSuggestionIconType iconType) {
-  NSString* imageName = GetOmniboxSuggestionIconTypeAssetName(iconType);
-  return [[UIImage imageNamed:imageName]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+#if BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
+UIImage* GetBrandedGoogleIconForOmnibox() {
+  return MakeSymbolMonochrome(
+      CustomSymbolWithPointSize(kGoogleIconSymbol, kSymbolSize));
 }
+#endif  // BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)

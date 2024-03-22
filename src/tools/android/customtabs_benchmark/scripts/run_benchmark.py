@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -68,6 +68,7 @@ def _ParseConfiguration(filename):
   config.setdefault('pin_offset', -1)
   config.setdefault('pin_length', -1)
   config.setdefault('extra_brief_memory_mb', 0)
+  config.setdefault('delay_to_may_launch_url', -1)
 
   has_all_values = all(k in config for k in _KEYS)
   assert has_all_values

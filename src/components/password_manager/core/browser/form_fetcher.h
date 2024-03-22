@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@
 #include <vector>
 
 #include "base/observer_list_types.h"
-#include "components/autofill/core/common/gaia_id_hash.h"
 #include "components/password_manager/core/browser/password_form.h"
+#include "components/password_manager/core/browser/password_store/password_store_util.h"
+#include "components/signin/public/base/gaia_id_hash.h"
 
 namespace password_manager {
 
@@ -89,7 +90,7 @@ class FormFetcher {
   // local store to the account store for the user with
   // |destination| GaiaIdHash is blocked. This is relevant only for account
   // store users.
-  virtual bool IsMovingBlocked(const autofill::GaiaIdHash& destination,
+  virtual bool IsMovingBlocked(const signin::GaiaIdHash& destination,
                                const std::u16string& username) const = 0;
 
   // Non-federated matches obtained from the backend that have the same scheme
@@ -106,6 +107,16 @@ class FormFetcher {
   // Creates a copy of |*this| with contains the same credentials without the
   // need for calling Fetch().
   virtual std::unique_ptr<FormFetcher> Clone() = 0;
+
+  // Returns an error if it occurred during login retrieval from the
+  // profile store.
+  virtual std::optional<PasswordStoreBackendError> GetProfileStoreBackendError()
+      const = 0;
+
+  // Returns an error if it occurred during login retrieval from the
+  // account store.
+  virtual std::optional<PasswordStoreBackendError> GetAccountStoreBackendError()
+      const = 0;
 };
 
 }  // namespace password_manager

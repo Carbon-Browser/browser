@@ -1,39 +1,34 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web_view/internal/translate/cwv_translation_controller_internal.h"
 
-#include <memory>
-#include <string>
+#import <memory>
+#import <string>
 
-#include "base/check_op.h"
-#include "base/memory/ptr_util.h"
-#include "base/notreached.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/time/time.h"
-#include "components/translate/core/browser/translate_download_manager.h"
+#import "base/check_op.h"
+#import "base/memory/ptr_util.h"
+#import "base/notreached.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/time/time.h"
+#import "components/translate/core/browser/translate_download_manager.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
 #import "ios/web_view/internal/cwv_web_view_configuration_internal.h"
 #import "ios/web_view/internal/translate/cwv_translation_language_internal.h"
 #import "ios/web_view/internal/translate/web_view_translate_client.h"
-#include "ios/web_view/internal/web_view_browser_state.h"
+#import "ios/web_view/internal/web_view_browser_state.h"
 #import "ios/web_view/public/cwv_translation_controller_delegate.h"
 #import "ios/web_view/public/cwv_translation_policy.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 NSErrorDomain const CWVTranslationErrorDomain =
     @"org.chromium.chromewebview.TranslationErrorDomain";
 
 namespace {
-// Converts a |translate::TranslateErrors::Type| to a |CWVTranslationError|.
-CWVTranslationError CWVConvertTranslateError(
-    translate::TranslateErrors::Type type) {
+// Converts a |translate::TranslateErrors| to a |CWVTranslationError|.
+CWVTranslationError CWVConvertTranslateError(translate::TranslateErrors type) {
   switch (type) {
     case translate::TranslateErrors::NONE:
       return CWVTranslationErrorNone;
@@ -117,7 +112,7 @@ CWVTranslationError CWVConvertTranslateError(
 - (void)updateTranslateStep:(translate::TranslateStep)step
              sourceLanguage:(const std::string&)sourceLanguage
              targetLanguage:(const std::string&)targetLanguage
-                  errorType:(translate::TranslateErrors::Type)errorType
+                  errorType:(translate::TranslateErrors)errorType
           triggeredFromMenu:(bool)triggeredFromMenu {
   if (_webState->IsBeingDestroyed()) {
     return;

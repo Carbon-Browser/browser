@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ Disassembler::RvaVisitor_Abs32::RvaVisitor_Abs32(
 
 RVA Disassembler::RvaVisitor_Abs32::Get() const {
   // For Abs32 targets, get target RVA from architecture-dependent functions.
-  return translator_.PointerToTargetRVA(translator_.RVAToPointer(*it_));
+  return translator_->PointerToTargetRVA(translator_->RVAToPointer(*it_));
 }
 
 Disassembler::RvaVisitor_Rel32::RvaVisitor_Rel32(
@@ -30,7 +30,7 @@ Disassembler::RvaVisitor_Rel32::RvaVisitor_Rel32(
 
 RVA Disassembler::RvaVisitor_Rel32::Get() const {
   // For Rel32 targets, only handle 32-bit offsets.
-  return *it_ + 4 + Read32LittleEndian(translator_.RVAToPointer(*it_));
+  return *it_ + 4 + Read32LittleEndian(translator_->RVAToPointer(*it_));
 }
 
 Disassembler::Disassembler(const uint8_t* start, size_t length)

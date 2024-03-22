@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,8 @@ class UnifiedNotifierSettingsController : public DetailedViewController {
 
   ~UnifiedNotifierSettingsController() override;
 
-  // DetailedViewControllerBase:
-  views::View* CreateView() override;
+  // DetailedViewController:
+  std::unique_ptr<views::View> CreateView() override;
   std::u16string GetAccessibleName() const override;
 
  private:

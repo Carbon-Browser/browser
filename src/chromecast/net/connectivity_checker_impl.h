@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,6 +44,9 @@ constexpr char kHttpConnectivityCheckUrl[] =
 // The default URLs above are expected to respond with HTTP 204 (no content).
 constexpr net::HttpStatusCode kConnectivitySuccessStatusCode =
     net::HTTP_NO_CONTENT;
+
+// Delay notification of network change events to smooth out rapid flipping.
+constexpr base::TimeDelta kNetworkChangedDelay = base::Seconds(3);
 
 // Simple class to check network connectivity by sending a HEAD http request
 // to given url.
@@ -127,8 +130,9 @@ class ConnectivityCheckerImpl
   // Called when URL request failed.
   void OnUrlRequestError(ErrorType type);
 
-  // Called when URL request timed out.
-  void OnUrlRequestTimeout();
+  // Called when URL request timed out. |Timeout| stores how long we waited
+  // for the URL request to finish before giving up.
+  void OnUrlRequestTimeout(base::TimeDelta timeout);
 
   void CheckInternal();
 
@@ -159,10 +163,18 @@ class ConnectivityCheckerImpl
   // called.
   base::CancelableOnceCallback<void()> timeout_;
 
+  // Cancelable check handler used to cancel duplicate connectivity check.
+  base::CancelableOnceCallback<void()> delayed_check_;
+
   // How often connectivity checks are performed while not connected.
   const base::TimeDelta disconnected_probe_period_;
   // How often connectivity checks are performed while connected.
   const base::TimeDelta connected_probe_period_;
+  // Keeps track of whether this is the first time checking network
+  // connectivity due to a network change. To prevent unnecessary delays in Cast
+  // receiver initialization, kNetworkChangedDelay should only be applied on
+  // network changes after the first one.
+  bool first_connection_ = true;
 
   base::WeakPtr<ConnectivityCheckerImpl> weak_this_;
   base::WeakPtrFactory<ConnectivityCheckerImpl> weak_factory_;

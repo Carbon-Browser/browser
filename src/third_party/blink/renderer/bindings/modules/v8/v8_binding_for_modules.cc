@@ -67,10 +67,6 @@ static v8::Local<v8::Value> DeserializeIDBValueArray(
     v8::Isolate*,
     v8::Local<v8::Object> creation_context,
     const Vector<std::unique_ptr<IDBValue>>&);
-static v8::Local<v8::Value> DeserializeIDBValueArrayArray(
-    v8::Isolate* isolate,
-    v8::Local<v8::Object> creation_context,
-    const Vector<Vector<std::unique_ptr<IDBValue>>>&);
 
 v8::Local<v8::Value> ToV8(const IDBKeyPath& value,
                           v8::Local<v8::Object> creation_context,
@@ -169,9 +165,6 @@ v8::Local<v8::Value> ToV8(const IDBAny* impl,
       return v8::Number::New(isolate, impl->Integer());
     case IDBAny::kKeyType:
       return ToV8(impl->Key(), creation_context, isolate);
-    case IDBAny::kIDBValueArrayArrayType:
-      return DeserializeIDBValueArrayArray(isolate, creation_context,
-                                           impl->ValuesArray());
   }
 
   NOTREACHED();
@@ -195,7 +188,7 @@ static std::unique_ptr<IDBKey> CreateIDBKeyFromSimpleValue(
     return IDBKey::CreateNumber(value.As<v8::Number>()->Value());
 
   if (value->IsString())
-    return IDBKey::CreateString(ToCoreString(value.As<v8::String>()));
+    return IDBKey::CreateString(ToCoreString(isolate, value.As<v8::String>()));
 
   if (value->IsDate() && !std::isnan(value.As<v8::Date>()->ValueOf()))
     return IDBKey::CreateDate(value.As<v8::Date>()->ValueOf());
@@ -272,7 +265,7 @@ static std::unique_ptr<IDBKey> CreateIDBKeyFromValue(
   Vector<std::unique_ptr<Record>> stack;
 
   // Tracks seen arrays, to detect circular references and abort (per spec).
-  Vector<v8::Local<v8::Array>> seen;
+  v8::LocalVector<v8::Array> seen(isolate);
 
   // Initial state.
   {
@@ -287,11 +280,12 @@ static std::unique_ptr<IDBKey> CreateIDBKeyFromValue(
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   v8::TryCatch try_block(isolate);
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, context->GetMicrotaskQueue(),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   // Process stack - will return when complete.
   while (true) {
-    DCHECK(!stack.IsEmpty());
+    DCHECK(!stack.empty());
     Record* top = stack.back().get();
     const wtf_size_t item_index = top->subkeys.size();
 
@@ -302,7 +296,7 @@ static std::unique_ptr<IDBKey> CreateIDBKeyFromValue(
       seen.pop_back();
       stack.pop_back();
 
-      if (stack.IsEmpty())
+      if (stack.empty())
         return key;
       top = stack.back().get();
       top->subkeys.push_back(std::move(key));
@@ -335,7 +329,8 @@ static std::unique_ptr<IDBKey> CreateIDBKeyFromValue(
     } else {
       // A sub-array; push onto the stack and start processing it.
       v8::Local<v8::Array> array = item.As<v8::Array>();
-      if (seen.Contains(array) || stack.size() >= IndexedDBKey::kMaximumDepth ||
+      if (std::find(seen.begin(), seen.end(), array) != seen.end() ||
+          stack.size() >= IndexedDBKey::kMaximumDepth ||
           array->Length() > IndexedDBKey::kMaximumArraySize) {
         return IDBKey::CreateInvalid();
       }
@@ -356,11 +351,13 @@ static bool IsImplicitProperty(v8::Isolate* isolate,
     return true;
   if (value->IsArray() && name == "length")
     return true;
-  if (V8Blob::HasInstance(value, isolate))
+  if (V8Blob::HasInstance(isolate, value)) {
     return name == "size" || name == "type";
-  if (V8File::HasInstance(value, isolate))
+  }
+  if (V8File::HasInstance(isolate, value)) {
     return name == "name" || name == "lastModified" ||
            name == "lastModifiedDate";
+  }
   return false;
 }
 
@@ -393,7 +390,8 @@ static std::unique_ptr<IDBKey> CreateIDBKeyFromValueAndKeyPath(
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   v8::TryCatch block(isolate);
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, context->GetMicrotaskQueue(),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
   for (wtf_size_t i = 0; i < key_path_elements.size(); ++i) {
     const String& element = key_path_elements[i];
 
@@ -417,32 +415,29 @@ static std::unique_ptr<IDBKey> CreateIDBKeyFromValueAndKeyPath(
       return nullptr;
     v8::Local<v8::Object> object = v8_value.As<v8::Object>();
 
-    if (V8Blob::HasInstance(object, isolate)) {
+    if (Blob* blob = V8Blob::ToWrappable(isolate, object)) {
       if (element == "size") {
-        v8_value = v8::Number::New(isolate, V8Blob::ToImpl(object)->size());
+        v8_value = v8::Number::New(isolate, blob->size());
         continue;
       }
       if (element == "type") {
-        v8_value = V8String(isolate, V8Blob::ToImpl(object)->type());
+        v8_value = V8String(isolate, blob->type());
         continue;
       }
       // Fall through.
     }
 
-    if (V8File::HasInstance(object, isolate)) {
+    if (File* file = V8File::ToWrappable(isolate, object)) {
       if (element == "name") {
-        v8_value = V8String(isolate, V8File::ToImpl(object)->name());
+        v8_value = V8String(isolate, file->name());
         continue;
       }
       if (element == "lastModified") {
-        v8_value =
-            v8::Number::New(isolate, V8File::ToImpl(object)->lastModified());
+        v8_value = v8::Number::New(isolate, file->lastModified());
         continue;
       }
       if (element == "lastModifiedDate") {
-        v8_value = V8File::ToImpl(object)
-                       ->lastModifiedDate(ScriptState::From(context))
-                       .V8Value();
+        v8_value = file->lastModifiedDate(ScriptState::From(context)).V8Value();
         continue;
       }
       // Fall through.
@@ -634,29 +629,6 @@ static v8::Local<v8::Value> DeserializeIDBValueArray(
   return array;
 }
 
-static v8::Local<v8::Value> DeserializeIDBValueArrayArray(
-    v8::Isolate* isolate,
-    v8::Local<v8::Object> creation_context,
-    const Vector<Vector<std::unique_ptr<IDBValue>>>& all_values) {
-  DCHECK(isolate->InContext());
-
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  v8::Local<v8::Array> array = v8::Array::New(isolate, all_values.size());
-  for (wtf_size_t i = 0; i < all_values.size(); ++i) {
-    v8::Local<v8::Value> v8_values =
-        DeserializeIDBValueArray(isolate, creation_context, all_values[i]);
-    if (v8_values.IsEmpty())
-      v8_values = v8::Undefined(isolate);
-    bool created_property;
-    if (!array->CreateDataProperty(context, i, v8_values)
-             .To(&created_property) ||
-        !created_property)
-      return v8::Local<v8::Value>();
-  }
-
-  return array;
-}
-
 // Injects a primary key into a deserialized V8 value.
 //
 // In general, the value stored in IndexedDB is the serialized version of a
@@ -827,9 +799,10 @@ SQLValue NativeValueTraits<SQLValue>::NativeValue(
     return SQLValue();
   if (value->IsNumber())
     return SQLValue(value.As<v8::Number>()->Value());
-  V8StringResource<> string_value(value);
-  if (!string_value.Prepare(exception_state))
+  V8StringResource<> string_value(isolate, value);
+  if (!string_value.Prepare(exception_state)) {
     return SQLValue();
+  }
   return SQLValue(string_value);
 }
 
@@ -865,7 +838,7 @@ IDBKeyRange* NativeValueTraits<IDBKeyRange*>::NativeValue(
     v8::Isolate* isolate,
     v8::Local<v8::Value> value,
     ExceptionState& exception_state) {
-  return V8IDBKeyRange::ToImplWithTypeCheck(isolate, value);
+  return V8IDBKeyRange::ToWrappable(isolate, value);
 }
 
 #if DCHECK_IS_ON()

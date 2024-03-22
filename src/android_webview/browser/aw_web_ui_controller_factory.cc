@@ -1,10 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "android_webview/browser/aw_web_ui_controller_factory.h"
 
+#include "android_webview/browser/adblock/aw_adblock_internals_ui.h"
 #include "base/memory/ptr_util.h"
+#include "components/adblock/core/common/web_ui_constants.h"
 #include "components/safe_browsing/content/browser/web_ui/safe_browsing_ui.h"
 #include "components/safe_browsing/core/common/web_ui_constants.h"
 #include "content/public/browser/web_ui.h"
@@ -16,6 +22,7 @@ using content::WebUIController;
 namespace {
 
 const WebUI::TypeID kSafeBrowsingID = &kSafeBrowsingID;
+const WebUI::TypeID kAdblockInternalsID = &kAdblockInternalsID;
 
 // A function for creating a new WebUI. The caller owns the return value, which
 // may be nullptr (for example, if the URL refers to an non-existent extension).
@@ -36,12 +43,20 @@ WebUIFactoryFunctionPointer GetWebUIFactoryFunctionPointer(const GURL& url) {
     return &NewWebUI<safe_browsing::SafeBrowsingUI>;
   }
 
+  if (url.host() == adblock::kChromeUIAdblockInternalsHost) {
+    return &NewWebUI<adblock::AwAdblockInternalsUI>;
+  }
+
   return nullptr;
 }
 
 WebUI::TypeID GetWebUITypeID(const GURL& url) {
   if (url.host() == safe_browsing::kChromeUISafeBrowsingHost) {
     return kSafeBrowsingID;
+  }
+
+  if (url.host() == adblock::kChromeUIAdblockInternalsHost) {
+    return kAdblockInternalsID;
   }
 
   return WebUI::kNoWebUI;

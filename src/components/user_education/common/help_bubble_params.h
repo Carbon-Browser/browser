@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/interaction/element_tracker.h"
 #include "ui/gfx/vector_icon_types.h"
 
 namespace user_education {
+
+// The amount of time the promo should stay onscreen.
+constexpr base::TimeDelta kDefaultTimeoutWithoutButtons = base::Seconds(10);
+constexpr base::TimeDelta kDefaultTimeoutWithButtons = base::Seconds(0);
 
 // Mirrors most values of views::BubbleBorder::Arrow.
 // All values except kNone show a visible arrow between the bubble and the
@@ -39,9 +44,9 @@ enum class HelpBubbleArrow {
 
 struct HelpBubbleButtonParams {
   HelpBubbleButtonParams();
-  HelpBubbleButtonParams(HelpBubbleButtonParams&&);
+  HelpBubbleButtonParams(HelpBubbleButtonParams&&) noexcept;
+  HelpBubbleButtonParams& operator=(HelpBubbleButtonParams&&) noexcept;
   ~HelpBubbleButtonParams();
-  HelpBubbleButtonParams& operator=(HelpBubbleButtonParams&&);
 
   std::u16string text;
   bool is_default = false;
@@ -49,10 +54,32 @@ struct HelpBubbleButtonParams {
 };
 
 struct HelpBubbleParams {
+  // Platform-specific properties that can be set for a help bubble. If an
+  // extended property evolves to warrant cross-platform support, it should be
+  // promoted out of extended properties.
+  class ExtendedProperties {
+   public:
+    ExtendedProperties();
+    ExtendedProperties(const ExtendedProperties&);
+    ExtendedProperties(ExtendedProperties&&) noexcept;
+    ExtendedProperties& operator=(const ExtendedProperties&);
+    ExtendedProperties& operator=(ExtendedProperties&&) noexcept;
+    ~ExtendedProperties();
+
+    bool operator==(const ExtendedProperties&) const;
+    bool operator!=(const ExtendedProperties&) const;
+
+    base::Value::Dict& values() { return dict_; }
+    const base::Value::Dict& values() const { return dict_; }
+
+   private:
+    base::Value::Dict dict_;
+  };
+
   HelpBubbleParams();
-  HelpBubbleParams(HelpBubbleParams&&);
+  HelpBubbleParams(HelpBubbleParams&&) noexcept;
+  HelpBubbleParams& operator=(HelpBubbleParams&&) noexcept;
   ~HelpBubbleParams();
-  HelpBubbleParams& operator=(HelpBubbleParams&&);
 
   HelpBubbleArrow arrow = HelpBubbleArrow::kTopRight;
 
@@ -61,6 +88,12 @@ struct HelpBubbleParams {
   std::u16string body_icon_alt_text;
   std::u16string body_text;
   std::u16string screenreader_text;
+
+  // Whether the bubble should receive focus when it is shown. This is a
+  // behavioral hint; how it is actually implemented will depend on the bubble
+  // implementation (for example, bubbles attached to menu items cannot take
+  // focus for system activation reasons).
+  absl::optional<bool> focus_on_show_hint;
 
   // Additional message to be read to screen reader users to aid in
   // navigation.
@@ -71,9 +104,6 @@ struct HelpBubbleParams {
   // trailing edge of the bubble; however the order of non-default buttons is
   // guaranteed to remain stable.
   std::vector<HelpBubbleButtonParams> buttons;
-
-  // If set to true, a close button will always be shown.
-  bool force_close_button = false;
 
   // Alt text to use for the close button.
   std::u16string close_button_alt_text;
@@ -92,6 +122,11 @@ struct HelpBubbleParams {
 
   // Called when the bubble times out.
   base::OnceClosure timeout_callback = base::DoNothing();
+
+  // Platform-specific properties that can be set for a help bubble. If an
+  // extended property evolves to warrant cross-platform support, it should be
+  // promoted out of extended properties.
+  ExtendedProperties extended_properties;
 };
 
 }  // namespace user_education

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,8 @@
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_encrypted_metadata_key.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_private_certificate.h"
 #include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
+
+class NearbyShareProfileInfoProvider;
 
 // A fake implementation of NearbyShareCertificateManager, along with a fake
 // factory, to be used in tests.
@@ -39,6 +41,7 @@ class FakeNearbyShareCertificateManager : public NearbyShareCertificateManager {
     std::unique_ptr<NearbyShareCertificateManager> CreateInstance(
         NearbyShareLocalDeviceDataManager* local_device_data_manager,
         NearbyShareContactManager* contact_manager,
+        NearbyShareProfileInfoProvider* profile_info_provider,
         PrefService* pref_service,
         leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
         const base::FilePath& profile_path,

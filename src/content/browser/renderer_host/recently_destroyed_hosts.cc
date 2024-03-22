@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -94,26 +94,6 @@ void RecentlyDestroyedHosts::Add(
   // Android where site isolation is not used.
   if (instance->recently_destroyed_hosts_.size() > 20)
     instance->RemoveExpiredEntries();
-}
-
-// static
-base::TimeDelta RecentlyDestroyedHosts::GetPercentileReuseInterval(
-    int percentile,
-    BrowserContext* browser_context) {
-  DCHECK_GE(percentile, 0);
-  DCHECK_LE(percentile, 100);
-  auto* instance = GetInstance(browser_context);
-  if (instance->reuse_intervals_.empty())
-    return base::TimeDelta();
-  auto iter = instance->reuse_intervals_.begin();
-  if (percentile == 0)
-    return iter->interval;
-  const size_t percentile_index =
-      std::ceil(instance->reuse_intervals_.size() * (percentile / 100.0)) - 1;
-  DCHECK_GE(percentile_index, 0u);
-  DCHECK_LT(percentile_index, instance->reuse_intervals_.size());
-  std::advance(iter, percentile_index);
-  return iter->interval;
 }
 
 RecentlyDestroyedHosts::RecentlyDestroyedHosts() = default;

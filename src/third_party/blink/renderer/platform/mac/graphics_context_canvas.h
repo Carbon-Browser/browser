@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <ApplicationServices/ApplicationServices.h>
 
+#include "base/apple/scoped_cftyperef.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 
@@ -41,7 +42,7 @@ class PLATFORM_EXPORT GraphicsContextCanvas {
 
   cc::PaintCanvas* canvas_;
 
-  CGContextRef cg_context_;
+  base::apple::ScopedCFTypeRef<CGContextRef> cg_context_;
   SkBitmap offscreen_;
   SkScalar bitmap_scale_factor_;
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "base/containers/lru_cache.h"
-#include "base/memory/ref_counted.h"
 #include "base/numerics/safe_math.h"
 #include "base/thread_annotations.h"
 #include "base/trace_event/memory_dump_provider.h"
@@ -38,14 +37,17 @@ class CC_EXPORT SoftwareImageDecodeCache
   enum class TaskProcessingResult { kFullDecode, kLockOnly, kCancelled };
 
   SoftwareImageDecodeCache(SkColorType color_type,
-                           size_t locked_memory_limit_bytes,
-                           PaintImage::GeneratorClientId generator_client_id);
+                           size_t locked_memory_limit_bytes);
   ~SoftwareImageDecodeCache() override;
 
   // ImageDecodeCache overrides.
-  TaskResult GetTaskForImageAndRef(const DrawImage& image,
+  // |client_id| is not used by the SoftwareImageDecodeCache for both of these
+  // tasks.
+  TaskResult GetTaskForImageAndRef(ClientId client_id,
+                                   const DrawImage& image,
                                    const TracingInfo& tracing_info) override;
   TaskResult GetOutOfRasterDecodeTaskForImageAndRef(
+      ClientId client_id,
       const DrawImage& image) override;
   void UnrefImage(const DrawImage& image) override;
   DecodedDrawImage GetDecodedImageForDraw(const DrawImage& image) override;
@@ -53,12 +55,14 @@ class CC_EXPORT SoftwareImageDecodeCache
                              const DecodedDrawImage& decoded_image) override;
   void ReduceCacheUsage() override;
   // Software doesn't keep outstanding images pinned, so this is a no-op.
-  void SetShouldAggressivelyFreeResources(
-      bool aggressively_free_resources) override {}
+  void SetShouldAggressivelyFreeResources(bool aggressively_free_resources,
+                                          bool context_lock_acquired) override {
+  }
   void ClearCache() override;
   size_t GetMaximumMemoryLimitBytes() const override;
   bool UseCacheForDrawImage(const DrawImage& image) const override;
   void RecordStats() override {}
+  ClientId GenerateClientId() override;
 
   // Decode the given image and store it in the cache. This is only called by an
   // image decode task from a worker thread.
@@ -74,6 +78,7 @@ class CC_EXPORT SoftwareImageDecodeCache
                     base::trace_event::ProcessMemoryDump* pmd) override;
 
   size_t GetNumCacheEntriesForTesting();
+  size_t GetMaxNumCacheEntriesForTesting();
 
  private:
   using CacheEntry = Utils::CacheEntry;
@@ -129,7 +134,7 @@ class CC_EXPORT SoftwareImageDecodeCache
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
   void RemoveBudgetForImage(const CacheKey& key, CacheEntry* entry)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
-  absl::optional<CacheKey> FindCachedCandidate(const CacheKey& key)
+  std::optional<CacheKey> FindCachedCandidate(const CacheKey& key)
       EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   void UnrefImage(const CacheKey& key) EXCLUSIVE_LOCKS_REQUIRED(lock_);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,26 +7,21 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "base/feature_list.h"
 #include "components/autofill/core/common/form_field_data.h"
 #include "components/autofill/core/common/mojom/autofill_types.mojom-shared.h"
 #include "url/gurl.h"
-
-namespace base {
-struct Feature;
-}
 
 namespace autofill {
 
 // The length of the GUIDs used for local autofill data. It is different than
 // the length used for server autofill data.
 constexpr int kLocalGuidSize = 36;
-
-// Returns true when command line switch |kEnableSuggestionsWithSubstringMatch|
-// is on.
-bool IsFeatureSubstringMatchEnabled();
 
 // Returns true if showing autofill signature as HTML attributes is enabled.
 bool IsShowAutofillSignaturesEnabled();
@@ -36,14 +31,6 @@ bool IsKeyboardAccessoryEnabled();
 
 // A token is a sequences of contiguous characters separated by any of the
 // characters that are part of delimiter set {' ', '.', ',', '-', '_', '@'}.
-
-// Returns true if the |field_contents| is a substring of the |suggestion|
-// starting at token boundaries. |field_contents| can span multiple |suggestion|
-// tokens.
-bool FieldIsSuggestionSubstringStartingOnTokenBoundary(
-    const std::u16string& suggestion,
-    const std::u16string& field_contents,
-    bool case_sensitive);
 
 // Currently, a token for the purposes of this method is defined as {'@'}.
 // Returns true if the |full_string| has a |prefix| as a prefix and the prefix
@@ -70,7 +57,10 @@ void SetCheckStatus(FormFieldData* form_field_data,
 // Considers any ASCII whitespace character as a possible separator.
 // Also ignores empty tokens, resulting in a collapsing of whitespace.
 std::vector<std::string> LowercaseAndTokenizeAttributeString(
-    const std::string& attribute);
+    base::StringPiece attribute);
+
+// Returns `value` stripped from its whitespaces.
+std::u16string RemoveWhitespace(const std::u16string& value);
 
 // Returns true if and only if the field value has no character except the
 // formatting characters. This means that the field value is a formatting string

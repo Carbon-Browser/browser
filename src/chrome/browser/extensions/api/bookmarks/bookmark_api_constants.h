@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ extern const char kNoParentError[];
 extern const char kFolderNotEmptyError[];
 extern const char kInvalidIdError[];
 extern const char kInvalidIndexError[];
+extern const char kInvalidParentError[];
 extern const char kInvalidUrlError[];
 extern const char kModifySpecialError[];
 extern const char kEditBookmarksDisabled[];

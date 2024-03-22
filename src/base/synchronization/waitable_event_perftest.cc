@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,7 @@ class TraceWaitableEvent {
 
   bool TimedWaitUntil(const TimeTicks& end_time) {
     ElapsedTimer timer;
-    const bool signaled = event_.TimedWait(end_time - timer.Begin());
+    const bool signaled = event_.TimedWait(end_time - timer.start_time());
     total_wait_time_ += timer.Elapsed();
     ++wait_samples_;
     return signaled;

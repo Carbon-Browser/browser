@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_CHROMEBOX_FOR_MEETINGS_CFM_HOTLINE_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_CHROMEBOX_FOR_MEETINGS_CFM_HOTLINE_CLIENT_H_
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback_forward.h"
 #include "dbus/object_proxy.h"
 
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/cfm_observer.h"

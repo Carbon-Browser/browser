@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,13 +31,19 @@ class MODULES_EXPORT ClipPathPaintDefinition final
   ClipPathPaintDefinition& operator=(const ClipPathPaintDefinition&) = delete;
 
   // PaintDefinition override
-  sk_sp<PaintRecord> Paint(
+  PaintRecord Paint(
       const CompositorPaintWorkletInput*,
       const CompositorPaintWorkletJob::AnimatedPropertyValues&) override;
 
   scoped_refptr<Image> Paint(float zoom,
                              const gfx::RectF& reference_box,
+                             const gfx::SizeF& clip_area_size,
                              const Node&);
+  // The bounding rect for the entire animation, fitting the clip path at its
+  // largest extent
+  static gfx::RectF ClipAreaRect(const Node& node,
+                                 const gfx::RectF& reference_box,
+                                 float zoom);
   static Animation* GetAnimationIfCompositable(const Element* element);
   void Trace(Visitor* visitor) const override;
 };

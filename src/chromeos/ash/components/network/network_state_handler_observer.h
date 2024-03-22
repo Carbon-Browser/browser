@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,14 @@
 #include <vector>
 
 #include "base/component_export.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/device_state.h"
+#include "base/scoped_observation.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
 
-namespace chromeos {
+namespace ash {
+
+class DeviceState;
+class NetworkStateHandler;
 
 // Observer class for all network state changes, including changes to
 // active (connecting or connected) services.
@@ -91,11 +93,9 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkStateHandlerObserver {
   virtual void OnShuttingDown();
 };
 
-}  // namespace chromeos
+using NetworkStateHandlerScopedObservation =
+    base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>;
 
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-using ::chromeos::NetworkStateHandlerObserver;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_STATE_HANDLER_OBSERVER_H_

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "ash/host/ash_window_tree_host.h"
 #include "ash/host/transformer_helper.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_tree_host_platform.h"
 #include "ui/ozone/public/input_controller.h"
 
@@ -73,7 +74,8 @@ class ASH_EXPORT AshWindowTreeHostPlatform
   std::unique_ptr<aura::ScopedEnableUnadjustedMouseEvents>
   RequestUnadjustedMovement() override;
 
-  AshWindowTreeHostDelegate* delegate_ = nullptr;  // Not owned.
+  raw_ptr<AshWindowTreeHostDelegate, DanglingUntriaged | ExperimentalAsh>
+      delegate_ = nullptr;  // Not owned.
 
  private:
   // All constructors call into this.
@@ -84,7 +86,8 @@ class ASH_EXPORT AshWindowTreeHostPlatform
 
   TransformerHelper transformer_helper_;
 
-  ui::InputController* input_controller_ = nullptr;
+  raw_ptr<ui::InputController, DanglingUntriaged | ExperimentalAsh>
+      input_controller_ = nullptr;
 
   gfx::Rect last_cursor_confine_bounds_in_pixels_;
 };

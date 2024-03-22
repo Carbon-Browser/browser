@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,26 +6,27 @@
 
 #include <memory>
 
-#include "ash/components/multidevice/remote_device_test_util.h"
+#include "ash/constants/ash_features.h"
+#include "base/check.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/observer_list.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/values.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/multidevice/remote_device_test_util.h"
 #include "chromeos/ash/components/network/network_connect.h"
 
+namespace ash::tether {
+
 namespace {
+
 const int kTestNetworkSignalStrength = 50;
-}  // namespace
-
-namespace chromeos {
-
-namespace tether {
-
-namespace {
 
 const char kTetherSettingsSubpage[] = "networks?type=Tether";
 
@@ -35,23 +36,26 @@ class TetherNotificationPresenterTest : public BrowserWithTestWindowTest {
  public:
   class TestNetworkConnect : public NetworkConnect {
    public:
-    TestNetworkConnect() {}
-    ~TestNetworkConnect() override {}
+    TestNetworkConnect() = default;
+    ~TestNetworkConnect() override = default;
 
     std::string network_id_to_connect() { return network_id_to_connect_; }
 
     // NetworkConnect:
     void DisconnectFromNetworkId(const std::string& network_id) override {}
-    void SetTechnologyEnabled(const chromeos::NetworkTypePattern& technology,
+    void SetTechnologyEnabled(const NetworkTypePattern& technology,
                               bool enabled_state) override {}
     void ShowMobileSetup(const std::string& network_id) override {}
     void ShowCarrierAccountDetail(const std::string& network_id) override {}
+    void ShowCarrierUnlockNotification() override {}
+    void ShowPortalSignin(const std::string& network_id,
+                          NetworkConnect::Source source) override {}
     void ConfigureNetworkIdAndConnect(const std::string& network_id,
-                                      const base::Value& shill_properties,
+                                      const base::Value::Dict& shill_properties,
                                       bool shared) override {}
-    void CreateConfigurationAndConnect(base::Value* shill_properties,
+    void CreateConfigurationAndConnect(base::Value::Dict shill_properties,
                                        bool shared) override {}
-    void CreateConfiguration(base::Value* shill_properties,
+    void CreateConfiguration(base::Value::Dict shill_properties,
                              bool shared) override {}
 
     void ConnectToNetworkId(const std::string& network_id) override {
@@ -65,8 +69,8 @@ class TetherNotificationPresenterTest : public BrowserWithTestWindowTest {
   class TestSettingsUiDelegate
       : public TetherNotificationPresenter::SettingsUiDelegate {
    public:
-    TestSettingsUiDelegate() {}
-    ~TestSettingsUiDelegate() override {}
+    TestSettingsUiDelegate() = default;
+    ~TestSettingsUiDelegate() override = default;
 
     Profile* last_profile() { return last_profile_; }
     std::string last_settings_subpage() { return last_settings_subpage_; }
@@ -79,7 +83,9 @@ class TetherNotificationPresenterTest : public BrowserWithTestWindowTest {
     }
 
    private:
-    Profile* last_profile_ = nullptr;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #constexpr-ctor-field-initializer
+    RAW_PTR_EXCLUSION Profile* last_profile_ = nullptr;
     std::string last_settings_subpage_;
   };
 
@@ -105,7 +111,7 @@ class TetherNotificationPresenterTest : public BrowserWithTestWindowTest {
 
     test_settings_ui_delegate_ = new TestSettingsUiDelegate();
     notification_presenter_->SetSettingsUiDelegateForTesting(
-        base::WrapUnique(test_settings_ui_delegate_));
+        base::WrapUnique(test_settings_ui_delegate_.get()));
     has_verified_metrics_ = false;
   }
 
@@ -196,7 +202,8 @@ class TetherNotificationPresenterTest : public BrowserWithTestWindowTest {
   bool has_verified_metrics_;
 
   std::unique_ptr<TestNetworkConnect> test_network_connect_;
-  TestSettingsUiDelegate* test_settings_ui_delegate_;
+  raw_ptr<TestSettingsUiDelegate, DanglingUntriaged | ExperimentalAsh>
+      test_settings_ui_delegate_;
   std::unique_ptr<TetherNotificationPresenter> notification_presenter_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
 };
@@ -289,6 +296,34 @@ TEST_F(TetherNotificationPresenterTest,
       1u /* num_expected_body_tapped_setup_required */,
       0u /* num_expected_body_tapped_connection_failed */,
       0u /* num_expected_button_tapped_single_host_nearby */);
+}
+
+TEST_F(TetherNotificationPresenterTest,
+       TestInstantHotspotNotification_NeverDismiss) {
+  base::test::ScopedFeatureList scoped_list;
+  scoped_list.InitAndEnableFeature(ash::features::kInstantHotspotRebrand);
+  EXPECT_FALSE(
+      display_service_->GetNotification(GetPotentialHotspotNotificationId()));
+  notification_presenter_->NotifyPotentialHotspotNearby(
+      test_device_, kTestNetworkSignalStrength);
+
+  absl::optional<message_center::Notification> notification =
+      display_service_->GetNotification(GetPotentialHotspotNotificationId());
+
+  EXPECT_TRUE(notification->never_timeout());
+}
+
+TEST_F(TetherNotificationPresenterTest,
+       TestInstantHotspotNotification_NeverDismissNoFF) {
+  EXPECT_FALSE(
+      display_service_->GetNotification(GetPotentialHotspotNotificationId()));
+  notification_presenter_->NotifyPotentialHotspotNearby(
+      test_device_, kTestNetworkSignalStrength);
+
+  absl::optional<message_center::Notification> notification =
+      display_service_->GetNotification(GetPotentialHotspotNotificationId());
+
+  EXPECT_FALSE(notification->never_timeout());
 }
 
 TEST_F(TetherNotificationPresenterTest,
@@ -523,6 +558,4 @@ TEST_F(TetherNotificationPresenterTest,
       1u /* num_expected_button_tapped_single_host_nearby */);
 }
 
-}  // namespace tether
-
-}  // namespace chromeos
+}  // namespace ash::tether

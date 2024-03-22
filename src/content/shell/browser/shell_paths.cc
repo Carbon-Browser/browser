@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ bool GetDefaultUserDataDirectory(base::FilePath* result) {
   base::FilePath config_dir(base::nix::GetXDGDirectory(
       env.get(), base::nix::kXdgConfigHomeEnvVar, base::nix::kDotConfigDir));
   *result = config_dir.Append("content_shell");
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   CHECK(base::PathService::Get(base::DIR_APP_DATA, result));
   *result = result->Append("Chromium Content Shell");
 #elif BUILDFLAG(IS_ANDROID)

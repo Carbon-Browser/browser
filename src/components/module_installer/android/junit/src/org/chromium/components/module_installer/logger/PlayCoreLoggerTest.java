@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,19 +19,14 @@ import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Test suite for the PlayCoreLogger class.
- */
+/** Test suite for the PlayCoreLogger class. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class PlayCoreLoggerTest {
-    @Mock
-    private SplitInstallFailureLogger mFailureLogger;
+    @Mock private SplitInstallFailureLogger mFailureLogger;
 
-    @Mock
-    private SplitInstallStatusLogger mStatusLogger;
+    @Mock private SplitInstallStatusLogger mStatusLogger;
 
-    @Mock
-    private SplitAvailabilityLogger mAvailabilityLogger;
+    @Mock private SplitAvailabilityLogger mAvailabilityLogger;
 
     private PlayCoreLogger mPlayCoreLogger;
 

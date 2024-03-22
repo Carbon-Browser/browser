@@ -31,9 +31,9 @@
 #include <memory>
 
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/mojom/referrer_policy.mojom-blink-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink-forward.h"
@@ -45,7 +45,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/sanitize_script_errors.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
-#include "third_party/blink/renderer/core/frame/dom_timer_coordinator.h"
 #include "third_party/blink/renderer/core/frame/web_feature_forward.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap_observer_set.h"
@@ -57,6 +56,7 @@
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "v8/include/v8-callbacks.h"
 #include "v8/include/v8-forward.h"
 
@@ -71,6 +71,10 @@ class UkmRecorder;
 namespace v8 {
 class MicrotaskQueue;
 }  // namespace v8
+
+namespace perfetto::protos::pbzero {
+class BlinkExecutionContext;
+}  // namespace perfetto::protos::pbzero
 
 namespace blink {
 
@@ -89,6 +93,7 @@ class FrameOrWorkerScheduler;
 class KURL;
 class LocalDOMWindow;
 class OriginTrialContext;
+class RuntimeFeatureStateOverrideContext;
 class PolicyContainer;
 class PublicURLManager;
 class ResourceFetcher;
@@ -132,21 +137,13 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
                                      public UseCounter,
                                      public FeatureContext {
  public:
+  ExecutionContext(const ExecutionContext&) = delete;
+  ExecutionContext& operator=(const ExecutionContext&) = delete;
+
   void Trace(Visitor*) const override;
 
   static ExecutionContext* From(const ScriptState*);
   static ExecutionContext* From(v8::Local<v8::Context>);
-
-  // Returns the ExecutionContext of the current realm.
-  static ExecutionContext* ForCurrentRealm(
-      const v8::FunctionCallbackInfo<v8::Value>&);
-  static ExecutionContext* ForCurrentRealm(
-      const v8::PropertyCallbackInfo<v8::Value>&);
-  // Returns the ExecutionContext of the relevant realm for the receiver object.
-  static ExecutionContext* ForRelevantRealm(
-      const v8::FunctionCallbackInfo<v8::Value>&);
-  static ExecutionContext* ForRelevantRealm(
-      const v8::PropertyCallbackInfo<v8::Value>&);
 
   // Returns the CodeCacheHost interface associated with the execution
   // context. This could return nullptr if there is no CodeCacheHost associated
@@ -166,7 +163,13 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   virtual bool IsLayoutWorkletGlobalScope() const { return false; }
   virtual bool IsPaintWorkletGlobalScope() const { return false; }
   virtual bool IsThreadedWorkletGlobalScope() const { return false; }
+  virtual bool IsShadowRealmGlobalScope() const { return false; }
+  virtual bool IsSharedStorageWorkletGlobalScope() const { return false; }
   virtual bool IsJSExecutionForbidden() const { return false; }
+
+  // Notifies the execution context that new web socket activity (such as
+  // sending or receiving a message) has happened.
+  virtual void NotifyWebSocketActivity() {}
 
   // TODO(crbug.com/1335924) Change this method to be pure-virtual and each
   // derivative explicitly override it.
@@ -177,6 +180,12 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   virtual bool ShouldInstallV8Extensions() const { return false; }
 
   virtual void CountUseOnlyInCrossSiteIframe(mojom::blink::WebFeature feature) {
+  }
+
+  // Return the associated AgentGroupScheduler's compositor tasl runner.
+  virtual scoped_refptr<base::SingleThreadTaskRunner>
+  GetAgentGroupSchedulerCompositorTaskRunner() {
+    return nullptr;
   }
 
   const SecurityOrigin* GetSecurityOrigin() const;
@@ -214,15 +223,6 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
 
   virtual HttpsState GetHttpsState() const = 0;
 
-  // Gets the DOMTimerCoordinator which maintains the "active timer
-  // list" of tasks created by setTimeout and setInterval. The
-  // DOMTimerCoordinator is owned by the ExecutionContext and should
-  // not be used after the ExecutionContext is destroyed.
-  DOMTimerCoordinator* Timers() {
-    DCHECK(!IsWorkletGlobalScope());
-    return &timers_;
-  }
-
   virtual ResourceFetcher* Fetcher() = 0;
 
   SecurityContext& GetSecurityContext() { return security_context_; }
@@ -254,7 +254,7 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   bool is_in_back_forward_cache() const { return is_in_back_forward_cache_; }
 
   void SetLifecycleState(mojom::FrameLifecycleState);
-  void NotifyContextDestroyed();
+  virtual void NotifyContextDestroyed();
 
   using ConsoleLogger::AddConsoleMessage;
 
@@ -269,11 +269,10 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
 
   bool IsContextPaused() const;
   LoaderFreezeMode GetLoaderFreezeMode() const;
-  bool IsContextDestroyed() const { return is_context_destroyed_; }
   mojom::FrameLifecycleState ContextPauseState() const {
     return lifecycle_state_;
   }
-  bool IsLoadDeferred() const;
+  bool IsContextFrozenOrPaused() const;
 
   // Gets the next id in a circular sequence from 1 to 2^31-1.
   int CircularSequentialID();
@@ -291,7 +290,7 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   SecureContextMode GetSecureContextMode() const {
     return security_context_.GetSecureContextMode();
   }
-  bool IsSecureContext() const {
+  virtual bool IsSecureContext() const {
     return GetSecureContextMode() == SecureContextMode::kSecureContext;
   }
   bool IsSecureContext(String& error_message) const;
@@ -328,19 +327,24 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   virtual FrameOrWorkerScheduler* GetScheduler() = 0;
 
   v8::Isolate* GetIsolate() const { return isolate_; }
-  Agent* GetAgent() const { return agent_; }
+  Agent* GetAgent() const { return agent_.Get(); }
 
   v8::MicrotaskQueue* GetMicrotaskQueue() const;
 
   OriginTrialContext* GetOriginTrialContext() const {
-    return origin_trial_context_;
+    return origin_trial_context_.Get();
+  }
+
+  RuntimeFeatureStateOverrideContext* GetRuntimeFeatureStateOverrideContext()
+      const override {
+    return runtime_feature_state_override_context_.Get();
   }
 
   virtual TrustedTypePolicyFactory* GetTrustedTypes() const { return nullptr; }
   virtual bool RequireTrustedTypes() const;
 
   // FeatureContext override
-  bool FeatureEnabled(OriginTrialFeature) const override;
+  bool FeatureEnabled(mojom::blink::OriginTrialFeature) const override;
 
   // Tests whether the policy-controlled feature is enabled in this frame.
   // Optionally sends a report to any registered reporting observers or
@@ -374,6 +378,7 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   virtual void ReportPermissionsPolicyViolation(
       mojom::blink::PermissionsPolicyFeature,
       mojom::blink::PolicyDisposition,
+      const absl::optional<String>& reporting_endpoint,
       const String& message = g_empty_string) const {}
   virtual void ReportDocumentPolicyViolation(
       mojom::blink::DocumentPolicyFeature,
@@ -388,12 +393,15 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   // https://html.spec.whatwg.org/C/webappapis.html#concept-settings-object-cross-origin-isolated-capability
   virtual bool CrossOriginIsolatedCapability() const = 0;
 
+  // Allows --disable-web-security (via `Agent::IsWebSecurityDisabled()`) to
+  // override `CrossOriginIsolatedCapability()` .
+  bool CrossOriginIsolatedCapabilityOrDisabledWebSecurity() const;
+
   // Returns true if scripts within this ExecutionContext are allowed to use
-  // APIs that require the page to be part of an isolated application.
-  // https://github.com/reillyeon/isolated-web-apps
+  // Trusted Context APIs (i.e. annotated with [IsolatedContext] IDL attribute).
   //
   // TODO(mkwst): We need a specification for the necessary restrictions.
-  virtual bool IsolatedApplicationCapability() const = 0;
+  virtual bool IsIsolatedContext() const = 0;
 
   // Returns true if SharedArrayBuffers can be transferred via PostMessage,
   // false otherwise. SharedArrayBuffer allows pages to craft high-precision
@@ -404,9 +412,6 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   // inspector issue if the transfer was disallowed, or will be disallowed in
   // the future.
   bool CheckSharedArrayBufferTransferAllowedAndReport();
-
-  // Reports first usage of `navigator.userAgent` and related getters
-  void ReportNavigatorUserAgentAccess();
 
   virtual ukm::UkmRecorder* UkmRecorder() = 0;
   virtual ukm::SourceId UkmSourceID() const = 0;
@@ -443,6 +448,10 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
     return is_in_request_animation_frame_;
   }
 
+  // Write a representation of this object into a trace.
+  using Proto = perfetto::protos::pbzero::BlinkExecutionContext;
+  void WriteIntoTrace(perfetto::TracedProto<Proto> proto) const;
+
   // For use by FrameRequestCallbackCollection::ExecuteFrameCallbacks();
   // IsInRequestAnimationFrame() for the corresponding ExecutionContext will
   // return true while this instance exists.
@@ -463,10 +472,12 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
     ExecutionContext* context_;
   };
 
+  // Returns true if this execution context has obtained storage access via the
+  // Storage Access API.
+  virtual bool HasStorageAccess() const { return false; }
+
  protected:
-  explicit ExecutionContext(v8::Isolate* isolate, Agent*);
-  ExecutionContext(const ExecutionContext&) = delete;
-  ExecutionContext& operator=(const ExecutionContext&) = delete;
+  ExecutionContext(v8::Isolate* isolate, Agent* agent, bool is_window = false);
   ~ExecutionContext() override;
 
   // Resetting the Agent is only necessary for a special case related to the
@@ -481,8 +492,8 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
       const String& message,
       bool discard_duplicates,
       absl::optional<mojom::ConsoleMessageCategory> category) override;
-  virtual void AddConsoleMessageImpl(ConsoleMessage*,
-                                     bool discard_duplicates) = 0;
+  void AddConsoleMessageImpl(ConsoleMessage*,
+                             bool discard_duplicates) override = 0;
 
   v8::Isolate* const isolate_;
 
@@ -498,21 +509,17 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   HeapVector<Member<ErrorEvent>> pending_exceptions_;
 
   mojom::FrameLifecycleState lifecycle_state_;
-  bool is_context_destroyed_;
 
   bool is_in_back_forward_cache_ = false;
 
   bool has_filed_shared_array_buffer_transfer_issue_ = false;
   bool has_filed_shared_array_buffer_creation_issue_ = false;
-  bool has_filed_navigator_user_agent_issue_ = false;
 
   bool is_in_request_animation_frame_ = false;
 
   Member<PublicURLManager> public_url_manager_;
 
   const Member<ContentSecurityPolicyDelegate> csp_delegate_;
-
-  DOMTimerCoordinator timers_;
 
   // Counter that keeps track of how many window interaction calls are allowed
   // for this ExecutionContext. Callers are expected to call
@@ -527,6 +534,10 @@ class CORE_EXPORT ExecutionContext : public Supplementable<ExecutionContext>,
   Member<OriginTrialContext> origin_trial_context_;
 
   Member<ContentSecurityPolicy> content_security_policy_;
+
+  Member<RuntimeFeatureStateOverrideContext>
+      runtime_feature_state_override_context_;
+
   bool require_safe_types_ = false;
 };
 

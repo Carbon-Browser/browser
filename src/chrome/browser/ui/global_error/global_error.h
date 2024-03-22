@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,7 +75,6 @@ class GlobalErrorWithStandardBubble
   virtual bool ShouldShowCloseButton() const;
   virtual bool ShouldAddElevationIconToAcceptButton();
   virtual std::u16string GetBubbleViewCancelButtonLabel() = 0;
-  virtual int GetDefaultDialogButton() const;
   virtual bool ShouldCloseOnDeactivate() const;
   virtual std::u16string GetBubbleViewDetailsButtonLabel();
 

@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,11 +10,13 @@ assert(!is_android)
 
 buildflag_header("buildflags") {
   header = "buildflags.h"
-  flags = [ "ENABLE_SODA=$enable_soda" ]
+  flags = [ "ENABLE_SODA_INTEGRATION_TESTS=$enable_soda_integration_tests" ]
 }
 
 component("soda") {
   sources = [
+    "soda_features.cc",
+    "soda_features.h",
     "soda_installer.cc",
     "soda_installer.h",
   ]
@@ -38,8 +40,8 @@ component("soda") {
 
     deps += [
       "//ash/constants",
-      "//chromeos/dbus/dlcservice:dlcservice",
-      "//chromeos/dbus/dlcservice:dlcservice_proto",
+      "//chromeos/ash/components/dbus/dlcservice",
+      "//chromeos/ash/components/dbus/dlcservice:dlcservice_proto",
       "//ui/base",
     ]
   }
@@ -55,9 +57,11 @@ source_set("constants") {
 
   deps = [
     "//base",
-    "//components/component_updater",
+    "//components/component_updater:component_updater_paths",
     "//components/crx_file",
     "//components/strings/",
+    "//media",
+    "//ui/base",
   ]
 }
 
@@ -70,7 +74,7 @@ source_set("unit_tests") {
       ":constants",
       ":soda",
       "//ash/constants",
-      "//chromeos/dbus/dlcservice",
+      "//chromeos/ash/components/dbus/dlcservice",
       "//components/live_caption:constants",
       "//components/prefs:test_support",
       "//content/test:test_support",

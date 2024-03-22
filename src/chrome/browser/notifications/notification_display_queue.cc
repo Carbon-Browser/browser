@@ -1,13 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/notifications/notification_display_queue.h"
 
-#include <algorithm>
 #include <utility>
 
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/notifications/notification_display_service.h"
+#include "url/origin.h"
 
 namespace {
 
@@ -59,8 +60,22 @@ void NotificationDisplayQueue::RemoveQueuedNotification(
 std::set<std::string> NotificationDisplayQueue::GetQueuedNotificationIds()
     const {
   std::set<std::string> notification_ids;
-  for (const QueuedNotification& queued : queued_notifications_)
+  for (const QueuedNotification& queued : queued_notifications_) {
     notification_ids.insert(queued.notification.id());
+  }
+
+  return notification_ids;
+}
+
+std::set<std::string>
+NotificationDisplayQueue::GetQueuedNotificationIdsForOrigin(
+    const GURL& origin) const {
+  std::set<std::string> notification_ids;
+  for (const QueuedNotification& queued : queued_notifications_) {
+    if (url::IsSameOriginWith(queued.notification.origin_url(), origin)) {
+      notification_ids.insert(queued.notification.id());
+    }
+  }
 
   return notification_ids;
 }
@@ -89,11 +104,10 @@ void NotificationDisplayQueue::AddNotificationBlocker(
 bool NotificationDisplayQueue::DoRemoveQueuedNotification(
     const std::string& notification_id,
     bool notify) {
-  auto it =
-      std::find_if(queued_notifications_.begin(), queued_notifications_.end(),
-                   [&notification_id](const QueuedNotification& queued) {
-                     return queued.notification.id() == notification_id;
-                   });
+  auto it = base::ranges::find(queued_notifications_, notification_id,
+                               [](const QueuedNotification& queued) {
+                                 return queued.notification.id();
+                               });
 
   if (it == queued_notifications_.end())
     return false;
@@ -131,8 +145,8 @@ void NotificationDisplayQueue::MaybeDisplayQueuedNotifications() {
 
 bool NotificationDisplayQueue::IsAnyNotificationBlockerActive(
     const message_center::Notification& notification) const {
-  return std::any_of(
-      blockers_.begin(), blockers_.end(),
+  return base::ranges::any_of(
+      blockers_,
       [&notification](const std::unique_ptr<NotificationBlocker>& blocker) {
         return blocker->ShouldBlockNotification(notification);
       });

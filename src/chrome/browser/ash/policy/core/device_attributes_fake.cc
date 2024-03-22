@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <string>
 
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -25,12 +26,12 @@ std::string FakeDeviceAttributes::GetSSOProfile() const {
   return fake_sso_profile_;
 }
 
-std::string FakeDeviceAttributes::GetRealm() const {
-  return fake_realm_;
-}
-
 std::string FakeDeviceAttributes::GetDeviceAssetID() const {
   return fake_device_asset_id_;
+}
+
+std::string FakeDeviceAttributes::GetDeviceSerialNumber() const {
+  return fake_device_serial_number_;
 }
 
 std::string FakeDeviceAttributes::GetMachineName() const {
@@ -38,7 +39,11 @@ std::string FakeDeviceAttributes::GetMachineName() const {
 }
 
 std::string FakeDeviceAttributes::GetDeviceAnnotatedLocation() const {
-  return fake_device_anotated_location_;
+  return fake_device_annotated_location_;
+}
+
+absl::optional<std::string> FakeDeviceAttributes::GetDeviceHostname() const {
+  return fake_device_hostname_;
 }
 
 std::string FakeDeviceAttributes::GetDirectoryApiID() const {
@@ -71,22 +76,28 @@ void FakeDeviceAttributes::SetFakeSsoProfile(const std::string& sso_profile) {
   fake_sso_profile_ = sso_profile;
 }
 
-void FakeDeviceAttributes::SetFakeRealm(const std::string& realm) {
-  fake_realm_ = realm;
-}
-
 void FakeDeviceAttributes::SetFakeDeviceAssetId(
     const std::string& device_asset_id) {
   fake_device_asset_id_ = device_asset_id;
+}
+
+void FakeDeviceAttributes::SetFakeDeviceSerialNumber(
+    const std::string& device_serial_number) {
+  fake_device_serial_number_ = device_serial_number;
 }
 
 void FakeDeviceAttributes::SetFakeMachineName(const std::string& machine_name) {
   fake_machine_name_ = machine_name;
 }
 
-void FakeDeviceAttributes::SetFakeDeviceAnotatedLocation(
-    const std::string& device_anotated_location) {
-  fake_device_anotated_location_ = device_anotated_location;
+void FakeDeviceAttributes::SetFakeDeviceAnnotatedLocation(
+    const std::string& device_annotated_location) {
+  fake_device_annotated_location_ = device_annotated_location;
+}
+
+void FakeDeviceAttributes::SetFakeDeviceHostname(
+    const absl::optional<std::string> device_hostname) {
+  fake_device_hostname_ = device_hostname;
 }
 
 void FakeDeviceAttributes::SetFakeDirectoryApiId(

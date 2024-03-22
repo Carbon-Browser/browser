@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "base/synchronization/lock.h"
 #include "third_party/nearby/src/internal/platform/implementation/mutex.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -32,6 +31,5 @@ class Mutex : public api::Mutex {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_MUTEX_H_

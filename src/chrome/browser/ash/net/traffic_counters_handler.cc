@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,6 @@
 namespace ash {
 
 namespace {
-
-using chromeos::NetworkGuidId;
 
 // Interval duration to determine the auto reset check frequency.
 constexpr base::TimeDelta kResetCheckInterval = base::Hours(6);
@@ -105,7 +103,7 @@ void TrafficCountersHandler::OnNetworkStateListReceived(
 }
 
 bool TrafficCountersHandler::GetAutoResetEnabled(std::string guid) {
-  chromeos::NetworkMetadataStore* metadata_store =
+  NetworkMetadataStore* metadata_store =
       NetworkHandler::Get()->network_metadata_store();
   DCHECK(metadata_store);
   const base::Value* enabled =
@@ -149,7 +147,7 @@ void TrafficCountersHandler::OnManagedPropertiesReceived(
 // the reset day the following month.
 bool TrafficCountersHandler::ShouldReset(std::string guid,
                                          base::Time last_reset_time) {
-  chromeos::NetworkMetadataStore* metadata_store =
+  NetworkMetadataStore* metadata_store =
       NetworkHandler::Get()->network_metadata_store();
   DCHECK(metadata_store);
   const base::Value* reset_day_ptr =
@@ -208,10 +206,9 @@ base::Time TrafficCountersHandler::GetExpectedLastResetTime(
   // month. Otherwise, we expect that the last reset occurred in the current
   // month.
   if (exploded.day_of_month > current_time_exploded.day_of_month) {
-    if (--exploded.month < 1) {
-      exploded.month = 12;
-      exploded.year--;
-    }
+    // "+ 11) % 12) + 1" wraps the month around if it goes outside 1..12.
+    exploded.month = (((exploded.month - 1) + 11) % 12) + 1;
+    exploded.year -= (exploded.month == 12);
   }
   return GetValidTime(exploded);
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,6 @@ class DefaultBrowserInfoBarDelegate : public ConfirmInfoBarDelegate {
   std::u16string GetMessageText() const override;
   int GetButtons() const override;
   std::u16string GetButtonLabel(InfoBarButton button) const override;
-  bool OKButtonTriggersUACPrompt() const override;
   bool Accept() override;
 
   // The WebContents's corresponding profile.

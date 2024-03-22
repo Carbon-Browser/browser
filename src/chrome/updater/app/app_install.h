@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,15 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "chrome/updater/app/app.h"
+#include "chrome/updater/lock.h"
 #include "chrome/updater/splash_screen.h"
 
 namespace base {
-class FilePath;
 class Version;
 }
 
@@ -39,8 +40,6 @@ class AppInstallController
 
   virtual void InstallAppOffline(const std::string& app_id,
                                  const std::string& app_name,
-                                 const base::FilePath& offline_dir,
-                                 bool enterprise,
                                  base::OnceCallback<void(int)> callback) = 0;
 
  protected:
@@ -61,9 +60,12 @@ class AppInstall : public App {
   ~AppInstall() override;
 
   // Overrides for App.
-  void Initialize() override;
-  void Uninitialize() override;
+  [[nodiscard]] int Initialize() override;
   void FirstTaskRun() override;
+
+  // Initializes or reinitializes `update_service_`. Reinitialization can be
+  // used to pick up a possible change to the active updater.
+  void CreateUpdateServiceProxy();
 
   // Called after the version of the active updater has been retrieved.
   void GetVersionDone(const base::Version& version);
@@ -72,7 +74,7 @@ class AppInstall : public App {
 
   void WakeCandidate();
 
-  void WakeCandidateDone();
+  void FetchPolicies();
 
   void RegisterUpdater();
 
@@ -82,6 +84,9 @@ class AppInstall : public App {
 
   // Bound to the main sequence.
   SEQUENCE_CHECKER(sequence_checker_);
+
+  // Inter-process lock taken by AppInstall, AppUninstall, and AppUpdate.
+  std::unique_ptr<ScopedLock> setup_lock_;
 
   // The `app_id_` is parsed from the tag, if the the tag is present, or from
   // the command line argument --app-id.
@@ -105,7 +110,7 @@ class AppInstall : public App {
   scoped_refptr<UpdateService> update_service_;
 };
 
-scoped_refptr<App> MakeAppInstall();
+scoped_refptr<App> MakeAppInstall(bool is_silent_install);
 
 }  // namespace updater
 

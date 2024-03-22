@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -37,6 +37,8 @@ def _set_recipe_experiments(ctx):
         fail("There is no buildbucket configuration file to reformat properties")
 
     for bucket in cfg.buckets:
+        if not proto.has(bucket, "swarming"):
+            continue
         bucket_name = bucket.name
         for builder in bucket.swarming.builders:
             builder_name = builder.name

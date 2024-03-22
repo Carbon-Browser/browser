@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ class InfoCardTracker {
   void SetState(int info_card_type,
                 const feedwire::InfoCardTrackingState& state);
 
-  raw_ptr<PrefService> profile_prefs_;
+  raw_ptr<PrefService, DanglingUntriaged> profile_prefs_;
 };
 
 }  // namespace feed

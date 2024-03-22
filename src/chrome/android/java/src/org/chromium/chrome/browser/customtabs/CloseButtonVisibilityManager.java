@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import org.chromium.chrome.browser.toolbar.ToolbarManager;
 
 import javax.inject.Inject;
 
-/**
- * Manages the visibility of the close button.
- */
+/** Manages the visibility of the close button. */
 @ActivityScope
 public class CloseButtonVisibilityManager {
     private final Drawable mCloseButtonDrawable;

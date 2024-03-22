@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,6 +78,9 @@ class VIEWS_EXAMPLES_EXPORT TextExample : public ExampleBase {
 
   // Check box to enable/disable underline style.
   raw_ptr<Checkbox> underline_checkbox_;
+
+  // Check box to enable/disable underline style.
+  raw_ptr<Checkbox> strike_checkbox_;
 };
 
 }  // namespace examples

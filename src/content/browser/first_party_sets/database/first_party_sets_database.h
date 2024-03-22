@@ -1,13 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_FIRST_PARTY_SETS_DATABASE_FIRST_PARTY_SETS_DATABASE_H_
 #define CONTENT_BROWSER_FIRST_PARTY_SETS_DATABASE_FIRST_PARTY_SETS_DATABASE_H_
 
+#include <stdint.h>
+
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
@@ -15,6 +20,9 @@
 #include "sql/meta_table.h"
 
 namespace net {
+class FirstPartySetsCacheFilter;
+class FirstPartySetsContextConfig;
+class GlobalFirstPartySets;
 class SchemefulSite;
 }  // namespace net
 
@@ -43,9 +51,9 @@ class CONTENT_EXPORT FirstPartySetsDatabase {
     // `LazyInit()` failed and a more specific error wasn't diagnosed.
     kError = 2,
     // `LazyInit()` failed due to a compatible version number being too high.
-    kTooNew = 3,
+    // kTooNew = 3, // No longer used
     // `LazyInit()` failed due to a version number being too low.
-    kTooOld = 4,
+    // kTooOld = 4,  // No longer used
     // `LazyInit()` was successful but data is considered corrupted.
     kCorrupted = 5,
 
@@ -60,22 +68,91 @@ class CONTENT_EXPORT FirstPartySetsDatabase {
   FirstPartySetsDatabase& operator=(const FirstPartySetsDatabase&&) = delete;
   ~FirstPartySetsDatabase();
 
-  // Stores the `sites` into sites_to_clear table, and returns true on
-  // success.
+  // Stores the overall First-Party Sets for the given `browser_context_id` into
+  // database in one transaction.
+  [[nodiscard]] bool PersistSets(
+      const std::string& browser_context_id,
+      const net::GlobalFirstPartySets& sets,
+      const net::FirstPartySetsContextConfig& config);
+
+  // Stores the `sites` to be cleared for the `browser_context_id` into
+  // database, and returns true on success.
   [[nodiscard]] bool InsertSitesToClear(
-      const std::vector<net::SchemefulSite>& sites);
+      const std::string& browser_context_id,
+      const base::flat_set<net::SchemefulSite>& sites);
 
   // Stores the `browser_context_id` that has performed clearing into
   // browser_contexts_cleared table, and returns true on success.
   [[nodiscard]] bool InsertBrowserContextCleared(
       const std::string& browser_context_id);
 
-  // Gets the list of sites to clear for the `browser_context_id`. Returns an
-  // empty vector if `browser_context_id` does not exist in the database before.
-  [[nodiscard]] std::vector<net::SchemefulSite> FetchSitesToClear(
+  // TODO(crbug.com/1219656): Consider returning absl::nullopt for all the
+  // fetching methods when having query errors
+
+  // Gets the global First-Party Sets and the config used by
+  // `browser_context_id`.
+  [[nodiscard]] std::pair<net::GlobalFirstPartySets,
+                          net::FirstPartySetsContextConfig>
+  GetGlobalSetsAndConfig(const std::string& browser_context_id);
+
+  // Gets the sites to clear filters. The first filter holds the list of sites
+  // that haven't had their cookies/storage cleared, the second filter is the
+  // cache filter that holds the current `run_count_` and a map of sites to
+  // their `marked_at_run`, containing all the sites that were added into DB to
+  // be cleared in a certain browser run, for the `browser_context_id`.
+  [[nodiscard]] std::pair<std::vector<net::SchemefulSite>,
+                          net::FirstPartySetsCacheFilter>
+  GetSitesToClearFilters(const std::string& browser_context_id);
+
+  // Check whether the `browser_context_id`  has performed clearing.
+  [[nodiscard]] bool HasEntryInBrowserContextsClearedForTesting(
       const std::string& browser_context_id);
 
  private:
+  // Stores the public First-Party Sets into database, and keeps track of the
+  // the sets version used by `browser_context_id`. `sets_version` must be
+  // valid. Returns true on success.
+  [[nodiscard]] bool SetPublicSets(const std::string& browser_context_id,
+                                   const net::GlobalFirstPartySets& sets);
+
+  // Stores the manual configuration into manual_configurations table, and
+  // returns true on success. Inserting new manual configuration will wipe out
+  // pre-existing entries for the given 'browser_context_id'
+  [[nodiscard]] bool InsertManualConfiguration(
+      const std::string& browser_context_id,
+      const net::GlobalFirstPartySets& global_first_party_sets);
+
+  // Stores the policy configurations into policy_configurations table, and
+  // returns true on success. Note that inserting new configurations will
+  // wipe out the pre-existing ones for the given `browser_context_id`.
+  [[nodiscard]] bool InsertPolicyConfigurations(
+      const std::string& browser_context_id,
+      const net::FirstPartySetsContextConfig& policy_config);
+
+  // Gets the global First-Party Sets used by `browser_context_id`.
+  [[nodiscard]] net::GlobalFirstPartySets GetGlobalSets(
+      const std::string& browser_context_id);
+
+  // Gets the previously-stored manual configuration for the
+  // `browser_context_id`.
+  [[nodiscard]] net::FirstPartySetsContextConfig FetchManualConfiguration(
+      const std::string& browser_context_id);
+
+  // Gets the previously-stored policy configuration for the
+  // `browser_context_id`.
+  [[nodiscard]] net::FirstPartySetsContextConfig FetchPolicyConfigurations(
+      const std::string& browser_context_id);
+
+  // Gets the list of sites to clear for the `browser_context_id`.
+  [[nodiscard]] std::vector<net::SchemefulSite> FetchSitesToClear(
+      const std::string& browser_context_id);
+
+  // Gets all the sites and mapped to the value of `run_count_`, which
+  // represents the site was added into DB to be cleared in a certain browser
+  // run, for the `browser_context_id`.
+  [[nodiscard]] base::flat_map<net::SchemefulSite, int64_t>
+  FetchAllSitesToClearFilter(const std::string& browser_context_id);
+
   // Called at the start of each public operation, and initializes the database
   // if it isn't already initialized.
   [[nodiscard]] bool LazyInit() VALID_CONTEXT_REQUIRED(sequence_checker_);
@@ -92,14 +169,23 @@ class CONTENT_EXPORT FirstPartySetsDatabase {
   [[nodiscard]] InitStatus InitializeTables()
       VALID_CONTEXT_REQUIRED(sequence_checker_);
 
+  // Upgrades `db_` to the latest schema, and updates the version stored in
+  // `meta_table_` accordingly. Returns false on failure.
+  [[nodiscard]] bool UpgradeSchema() VALID_CONTEXT_REQUIRED(sequence_checker_);
+
+  [[nodiscard]] bool MigrateToVersion3()
+      VALID_CONTEXT_REQUIRED(sequence_checker_);
+
+  [[nodiscard]] bool MigrateToVersion4()
+      VALID_CONTEXT_REQUIRED(sequence_checker_);
+
+  [[nodiscard]] bool MigrateToVersion5()
+      VALID_CONTEXT_REQUIRED(sequence_checker_);
+
   // Increase the `run_count` stored in the meta table by 1. Should only be
   // called once during DB initialization.  The value of `run_count` should
   // never be negative.
   void IncreaseRunCount() VALID_CONTEXT_REQUIRED(sequence_checker_);
-
-  // Returns whether an entry exists for the `browser_context_id`.
-  [[nodiscard]] bool HasEntryFor(const std::string& browser_context_id) const
-      VALID_CONTEXT_REQUIRED(sequence_checker_);
 
   // Deletes the database and returns whether the operation was successful.
   //

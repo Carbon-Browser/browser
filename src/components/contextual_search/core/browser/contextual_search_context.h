@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 
 #include <string>
 
+#include "base/memory/weak_ptr.h"
 #include "url/gurl.h"
 
 // Encapsulates key parts of a Contextual Search Context, including surrounding
 // text.
-struct ContextualSearchContext {
+struct ContextualSearchContext
+    : public base::SupportsWeakPtr<ContextualSearchContext> {
  public:
   // Languages used for translation.
   struct TranslationLanguages {
@@ -21,10 +23,6 @@ struct ContextualSearchContext {
   };
 
   ContextualSearchContext();
-  // Constructor for tests.
-  ContextualSearchContext(const std::string& home_country,
-                          const GURL& page_url,
-                          const std::string& encoding);
 
   ContextualSearchContext(const ContextualSearchContext&) = delete;
   ContextualSearchContext& operator=(const ContextualSearchContext&) = delete;
@@ -41,12 +39,6 @@ struct ContextualSearchContext {
   // Sets the properties needed to resolve a context.
   void SetResolveProperties(const std::string& home_country,
                             bool may_send_base_page_url);
-
-  // Sets the surrounding text to the given string and the selection to the
-  // given start/end range.
-  void SetSurroundingsAndSelection(const std::string& surrounding_text,
-                                   int selection_start,
-                                   int selection_end);
 
   // Adjust the current selection offsets by the given signed amounts.
   void AdjustSelection(int start_adjust, int end_adjust);
@@ -124,14 +116,36 @@ struct ContextualSearchContext {
     return translation_languages_;
   }
 
-  // Returns whether this request should include Related Searches in the
-  // response.
-  bool GetRelatedSearches() const { return do_related_searches_; }
+  // Indicates the type of request that is being made to the Contextual Search
+  // service.
+  enum class RequestType {
+    // A base contextual search request.
+    CONTEXTUAL_SEARCH,
+    // A contextual search request that also includes information around related
+    // searches.
+    RELATED_SEARCHES,
+    // A request to translate a selection of text, used by the Partial Translate
+    // functionality on desktop.
+    PARTIAL_TRANSLATE,
+  };
+
+  // Gets the type of request that the context was collected for.
+  RequestType GetRequestType() const { return request_type_; }
+  void SetRequestType(RequestType request_type) {
+    request_type_ = request_type;
+  }
 
   // Get the logging information stamp for Related Searches requests or the
   // empty string if the feature is not enabled.
   const std::string& GetRelatedSearchesStamp() const {
     return related_searches_stamp_;
+  }
+
+  // Returns whether the source language of the context should be used as a hint
+  // for backend language detection.
+  bool GetApplyLangHint() const { return apply_lang_hint_; }
+  void SetApplyLangHint(bool apply_lang_hint) {
+    apply_lang_hint_ = apply_lang_hint;
   }
 
  private:
@@ -143,6 +157,7 @@ struct ContextualSearchContext {
   std::u16string GetSelection() const;
 
   bool can_resolve_ = false;
+  RequestType request_type_ = RequestType::CONTEXTUAL_SEARCH;
   bool can_send_base_page_url_ = false;
   std::string home_country_;
   GURL base_page_url_;
@@ -154,8 +169,8 @@ struct ContextualSearchContext {
   int previous_event_results_ = 0;
   bool is_exact_resolve_ = false;
   TranslationLanguages translation_languages_;
-  bool do_related_searches_ = false;
   std::string related_searches_stamp_;
+  bool apply_lang_hint_ = false;
 };
 
 #endif  // COMPONENTS_CONTEXTUAL_SEARCH_CORE_BROWSER_CONTEXTUAL_SEARCH_CONTEXT_H_

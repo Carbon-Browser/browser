@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "net/base/io_buffer.h"
 #include "remoting/codec/video_encoder.h"
@@ -16,6 +17,7 @@
 #include "remoting/protocol/audio_source.h"
 #include "remoting/protocol/audio_stream.h"
 #include "remoting/protocol/clipboard_stub.h"
+#include "remoting/protocol/desktop_capturer.h"
 #include "remoting/protocol/host_control_dispatcher.h"
 #include "remoting/protocol/host_event_dispatcher.h"
 #include "remoting/protocol/host_stub.h"
@@ -30,8 +32,7 @@
 #include "third_party/webrtc/api/peer_connection_interface.h"
 #include "third_party/webrtc/api/sctp_transport_interface.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -39,10 +40,10 @@ const char kVideoStatsStreamLabel[] = "screen_stream";
 
 }  // namespace
 
-// Currently the network thread is also used as worker thread for webrtc.
+// Currently the network thread is also used as the worker thread for webrtc.
 //
-// TODO(sergeyu): Figure out if we would benefit from using a separate
-// thread as a worker thread.
+// TODO(sergeyu): Figure out if we would benefit from using a separate thread as
+// a worker thread.
 WebrtcConnectionToClient::WebrtcConnectionToClient(
     std::unique_ptr<protocol::Session> session,
     scoped_refptr<protocol::TransportContext> transport_context,
@@ -62,22 +63,22 @@ WebrtcConnectionToClient::WebrtcConnectionToClient(
 }
 
 WebrtcConnectionToClient::~WebrtcConnectionToClient() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 }
 
 void WebrtcConnectionToClient::SetEventHandler(
     ConnectionToClient::EventHandler* event_handler) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   event_handler_ = event_handler;
 }
 
 protocol::Session* WebrtcConnectionToClient::session() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   return session_.get();
 }
 
 void WebrtcConnectionToClient::Disconnect(ErrorCode error) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   // This should trigger OnConnectionClosed() event and this object
   // may be destroyed as the result.
@@ -86,8 +87,8 @@ void WebrtcConnectionToClient::Disconnect(ErrorCode error) {
 
 std::unique_ptr<VideoStream> WebrtcConnectionToClient::StartVideoStream(
     const std::string& stream_name,
-    std::unique_ptr<webrtc::DesktopCapturer> desktop_capturer) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+    std::unique_ptr<DesktopCapturer> desktop_capturer) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(transport_);
 
   auto stream =
@@ -102,7 +103,7 @@ std::unique_ptr<VideoStream> WebrtcConnectionToClient::StartVideoStream(
 
 std::unique_ptr<AudioStream> WebrtcConnectionToClient::StartAudioStream(
     std::unique_ptr<AudioSource> audio_source) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(transport_);
 
   std::unique_ptr<WebrtcAudioStream> stream(new WebrtcAudioStream());
@@ -112,23 +113,23 @@ std::unique_ptr<AudioStream> WebrtcConnectionToClient::StartAudioStream(
 
 // Return pointer to ClientStub.
 ClientStub* WebrtcConnectionToClient::client_stub() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   return control_dispatcher_.get();
 }
 
 void WebrtcConnectionToClient::set_clipboard_stub(
     protocol::ClipboardStub* clipboard_stub) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   control_dispatcher_->set_clipboard_stub(clipboard_stub);
 }
 
 void WebrtcConnectionToClient::set_host_stub(protocol::HostStub* host_stub) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   control_dispatcher_->set_host_stub(host_stub);
 }
 
 void WebrtcConnectionToClient::set_input_stub(protocol::InputStub* input_stub) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   event_dispatcher_->set_input_stub(input_stub);
 }
 
@@ -149,7 +150,7 @@ WebrtcEventLogData* WebrtcConnectionToClient::rtc_event_log() {
 }
 
 void WebrtcConnectionToClient::OnSessionStateChange(Session::State state) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   DCHECK(event_handler_);
   switch (state) {
@@ -170,8 +171,9 @@ void WebrtcConnectionToClient::OnSessionStateChange(Session::State state) {
 
       // OnConnectionAuthenticated() call above may result in the connection
       // being torn down.
-      if (self)
+      if (self) {
         event_handler_->CreateMediaStreams();
+      }
       break;
     }
 
@@ -188,7 +190,7 @@ void WebrtcConnectionToClient::OnSessionStateChange(Session::State state) {
 }
 
 void WebrtcConnectionToClient::OnWebrtcTransportConnecting() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   // Create outgoing control channel. |event_dispatcher_| is initialized later
   // because event channel is expected to be created by the client.
   control_dispatcher_->Init(
@@ -203,10 +205,10 @@ void WebrtcConnectionToClient::OnWebrtcTransportConnecting() {
 }
 
 void WebrtcConnectionToClient::OnWebrtcTransportConnected() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto sctp_transport = transport_->peer_connection()->GetSctpTransport();
   if (sctp_transport) {
-    absl::optional<double> max_message_size =
+    std::optional<double> max_message_size =
         sctp_transport->Information().MaxMessageSize();
     if (max_message_size && *max_message_size > 0) {
       control_dispatcher_->set_max_message_size(*max_message_size);
@@ -215,12 +217,12 @@ void WebrtcConnectionToClient::OnWebrtcTransportConnected() {
 }
 
 void WebrtcConnectionToClient::OnWebrtcTransportError(ErrorCode error) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   Disconnect(error);
 }
 
 void WebrtcConnectionToClient::OnWebrtcTransportProtocolChanged() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   // If not all channels are connected, this call will be deferred to
   // OnChannelInitialized() when all channels are connected.
   if (allChannelsConnected()) {
@@ -231,7 +233,7 @@ void WebrtcConnectionToClient::OnWebrtcTransportProtocolChanged() {
 void WebrtcConnectionToClient::OnWebrtcTransportIncomingDataChannel(
     const std::string& name,
     std::unique_ptr<MessagePipe> pipe) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(event_handler_);
 
   if (name == event_dispatcher_->channel_name() &&
@@ -245,18 +247,18 @@ void WebrtcConnectionToClient::OnWebrtcTransportIncomingDataChannel(
 
 void WebrtcConnectionToClient::OnWebrtcTransportMediaStreamAdded(
     rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   LOG(WARNING) << "The client created an unexpected media stream.";
 }
 
 void WebrtcConnectionToClient::OnWebrtcTransportMediaStreamRemoved(
     rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 }
 
 void WebrtcConnectionToClient::OnWebrtcTransportRouteChanged(
     const TransportRoute& route) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(event_handler_);
 
   // WebRTC route-change events are triggered at the transport level, so the
@@ -267,7 +269,7 @@ void WebrtcConnectionToClient::OnWebrtcTransportRouteChanged(
 
 void WebrtcConnectionToClient::OnChannelInitialized(
     ChannelDispatcherBase* channel_dispatcher) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   if (allChannelsConnected()) {
     event_handler_->OnConnectionChannelsConnected();
@@ -280,7 +282,7 @@ void WebrtcConnectionToClient::OnChannelInitialized(
 
 void WebrtcConnectionToClient::OnChannelClosed(
     ChannelDispatcherBase* channel_dispatcher) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   if (channel_dispatcher == &video_stats_dispatcher_) {
     LOG(WARNING) << "video_stats channel was closed.";
@@ -297,5 +299,4 @@ bool WebrtcConnectionToClient::allChannelsConnected() {
          event_dispatcher_ && event_dispatcher_->is_connected();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

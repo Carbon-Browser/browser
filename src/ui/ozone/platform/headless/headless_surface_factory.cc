@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
@@ -75,10 +75,10 @@ class FileSurface : public SurfaceOzoneCanvas {
   // SurfaceOzoneCanvas overrides:
   void ResizeCanvas(const gfx::Size& viewport_size, float scale) override {
     SkSurfaceProps props = skia::LegacyDisplayGlobals::GetSkSurfaceProps();
-    surface_ = SkSurface::MakeRaster(
-        SkImageInfo::MakeN32Premul(viewport_size.width(),
-                                   viewport_size.height()),
-        &props);
+    surface_ =
+        SkSurfaces::Raster(SkImageInfo::MakeN32Premul(viewport_size.width(),
+                                                      viewport_size.height()),
+                           &props);
   }
   SkCanvas* GetCanvas() override { return surface_->getCanvas(); }
   void PresentCanvas(const gfx::Rect& damage) override {
@@ -107,8 +107,8 @@ class FileSurface : public SurfaceOzoneCanvas {
 
 class FileGLSurface : public GLSurfaceEglReadback {
  public:
-  explicit FileGLSurface(const base::FilePath& location)
-      : location_(location) {}
+  FileGLSurface(gl::GLDisplayEGL* display, const base::FilePath& location)
+      : GLSurfaceEglReadback(display), location_(location) {}
 
   FileGLSurface(const FileGLSurface&) = delete;
   FileGLSurface& operator=(const FileGLSurface&) = delete;
@@ -188,16 +188,19 @@ class GLOzoneEGLHeadless : public GLOzoneEGL {
 
   // GLOzone:
   scoped_refptr<gl::GLSurface> CreateViewGLSurface(
+      gl::GLDisplay* display,
       gfx::AcceleratedWidget window) override {
     return gl::InitializeGLSurface(base::MakeRefCounted<FileGLSurface>(
+        display->GetAs<gl::GLDisplayEGL>(),
         GetPathForWidget(base_path_, window)));
   }
 
   scoped_refptr<gl::GLSurface> CreateOffscreenGLSurface(
+      gl::GLDisplay* display,
       const gfx::Size& size) override {
     return gl::InitializeGLSurface(
         base::MakeRefCounted<gl::PbufferGLSurfaceEGL>(
-            gl::GLSurfaceEGL::GetGLDisplayEGL(), size));
+            display->GetAs<gl::GLDisplayEGL>(), size));
   }
 
  protected:
@@ -229,9 +232,8 @@ HeadlessSurfaceFactory::~HeadlessSurfaceFactory() = default;
 std::vector<gl::GLImplementationParts>
 HeadlessSurfaceFactory::GetAllowedGLImplementations() {
   return std::vector<gl::GLImplementationParts>{
-      gl::GLImplementationParts(gl::ANGLEImplementation::kSwiftShader),
+      gl::GLImplementationParts(gl::kGLImplementationEGLANGLE),
       gl::GLImplementationParts(gl::kGLImplementationEGLGLES2),
-      gl::GLImplementationParts(gl::ANGLEImplementation::kDefault),
   };
 }
 
@@ -254,7 +256,7 @@ HeadlessSurfaceFactory::CreateCanvasForWidget(gfx::AcceleratedWidget widget) {
 
 scoped_refptr<gfx::NativePixmap> HeadlessSurfaceFactory::CreateNativePixmap(
     gfx::AcceleratedWidget widget,
-    VkDevice vk_device,
+    gpu::VulkanDeviceQueue* device_queue,
     gfx::Size size,
     gfx::BufferFormat format,
     gfx::BufferUsage usage,

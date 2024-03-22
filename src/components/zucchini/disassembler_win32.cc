@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ bool ReadWin32Header(ConstBufferView image, BufferSource* source) {
     return false;
   }
   // Offset to PE header is in DOS header.
-  *source = std::move(BufferSource(image).Skip(dos_header->e_lfanew));
+  *source = BufferSource(image, dos_header->e_lfanew);
   // Check 'PE\0\0' magic from PE header.
   if (!source->ConsumeBytes({'P', 'E', 0, 0}))
     return false;

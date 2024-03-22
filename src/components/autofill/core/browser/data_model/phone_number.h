@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/core/browser/data_model/form_group.h"
 #include "components/autofill/core/browser/geo/phone_number_i18n.h"
 
@@ -34,16 +35,9 @@ class PhoneNumber : public FormGroup {
                         const std::string& app_locale,
                         ServerFieldTypeSet* matching_types) const override;
   std::u16string GetRawInfo(ServerFieldType type) const override;
-  void SetRawInfoWithVerificationStatus(
-      ServerFieldType type,
-      const std::u16string& value,
-      structured_address::VerificationStatus status) override;
-
-  // Size and offset of the prefix and suffix portions of phone numbers.
-  static const size_t kPrefixOffset = 0;
-  static const size_t kPrefixLength = 3;
-  static const size_t kSuffixOffset = 3;
-  static const size_t kSuffixLength = 4;
+  void SetRawInfoWithVerificationStatus(ServerFieldType type,
+                                        const std::u16string& value,
+                                        VerificationStatus status) override;
 
   // The class used to combine home phone parts into a whole number.
   class PhoneCombineHelper {
@@ -51,8 +45,9 @@ class PhoneNumber : public FormGroup {
     PhoneCombineHelper();
     ~PhoneCombineHelper();
 
-    // If |type| is a phone field type, saves the |value| accordingly and
-    // returns true.  For all other field types returns false.
+    // If |type| is a phone field type, processes the |value| accordingly and
+    // returns true. This function always returns true for all phone number
+    // field types. For all other field types false is returned.
     bool SetInfo(const AutofillType& type, const std::u16string& value);
 
     // Parses the number built up from pieces stored via SetInfo() according to
@@ -61,7 +56,7 @@ class PhoneNumber : public FormGroup {
     // true if parsing was successful, false otherwise.
     bool ParseNumber(const AutofillProfile& profile,
                      const std::string& app_locale,
-                     std::u16string* value);
+                     std::u16string* value) const;
 
     // Returns true if both |phone_| and |whole_number_| are empty.
     bool IsEmpty() const;
@@ -78,11 +73,10 @@ class PhoneNumber : public FormGroup {
   void GetSupportedTypes(ServerFieldTypeSet* supported_types) const override;
   std::u16string GetInfoImpl(const AutofillType& type,
                              const std::string& app_locale) const override;
-  bool SetInfoWithVerificationStatusImpl(
-      const AutofillType& type,
-      const std::u16string& value,
-      const std::string& app_locale,
-      structured_address::VerificationStatus status) override;
+  bool SetInfoWithVerificationStatusImpl(const AutofillType& type,
+                                         const std::u16string& value,
+                                         const std::string& app_locale,
+                                         VerificationStatus status) override;
 
   // Updates the cached parsed number if the profile's region has changed
   // since the last time the cache was updated.
@@ -91,7 +85,7 @@ class PhoneNumber : public FormGroup {
   // The phone number.
   std::u16string number_;
   // Profile which stores the region used as hint when normalizing the number.
-  const AutofillProfile* profile_;  // WEAK
+  raw_ptr<const AutofillProfile> profile_;
 
   // Cached number.
   mutable i18n::PhoneObject cached_parsed_phone_;

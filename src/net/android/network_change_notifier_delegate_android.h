@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,12 @@
 
 #include "base/android/jni_android.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/observer_list_threadsafe.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
 #include "net/base/net_export.h"
 #include "net/base/network_change_notifier.h"
+#include "net/base/network_handle.h"
 
 namespace net {
 
@@ -29,7 +29,6 @@ class NET_EXPORT_PRIVATE NetworkChangeNotifierDelegateAndroid {
   typedef NetworkChangeNotifier::ConnectionCost ConnectionCost;
   typedef NetworkChangeNotifier::ConnectionType ConnectionType;
   typedef NetworkChangeNotifier::ConnectionSubtype ConnectionSubtype;
-  typedef NetworkChangeNotifier::NetworkHandle NetworkHandle;
   typedef NetworkChangeNotifier::NetworkList NetworkList;
 
   // Observer interface implemented by NetworkChangeNotifierAndroid which
@@ -151,8 +150,8 @@ class NET_EXPORT_PRIVATE NetworkChangeNotifierDelegateAndroid {
   void GetCurrentMaxBandwidthAndConnectionType(
       double* max_bandwidth_mbps,
       ConnectionType* connection_type) const;
-  ConnectionType GetNetworkConnectionType(NetworkHandle network) const;
-  NetworkHandle GetCurrentDefaultNetwork() const;
+  ConnectionType GetNetworkConnectionType(handles::NetworkHandle network) const;
+  handles::NetworkHandle GetCurrentDefaultNetwork() const;
   void GetCurrentlyConnectedNetworks(NetworkList* network_list) const;
   bool IsDefaultNetworkActive();
 
@@ -171,10 +170,10 @@ class NET_EXPORT_PRIVATE NetworkChangeNotifierDelegateAndroid {
   friend class BaseNetworkChangeNotifierAndroidTest;
 
   // Map of active connected networks and their connection type.
-  typedef std::map<NetworkHandle, ConnectionType> NetworkMap;
+  typedef std::map<handles::NetworkHandle, ConnectionType> NetworkMap;
 
   // Converts a Java long[] into a NetworkMap. Expects long[] to contain
-  // repeated instances of: NetworkHandle, ConnectionType
+  // repeated instances of: handles::NetworkHandle, ConnectionType
   static void JavaLongArrayToNetworkMap(
       JNIEnv* env,
       const base::android::JavaRef<jlongArray>& long_array,
@@ -189,17 +188,18 @@ class NET_EXPORT_PRIVATE NetworkChangeNotifierDelegateAndroid {
   void SetCurrentConnectionCost(ConnectionCost connection_cost);
   void SetCurrentConnectionType(ConnectionType connection_type);
   void SetCurrentMaxBandwidth(double max_bandwidth);
-  void SetCurrentDefaultNetwork(NetworkHandle default_network);
+  void SetCurrentDefaultNetwork(handles::NetworkHandle default_network);
   void SetCurrentNetworksAndTypes(NetworkMap network_map);
 
   // Methods calling the Java side exposed for testing.
   void SetOnline();
   void SetOffline();
-  void FakeNetworkConnected(NetworkHandle network, ConnectionType type);
-  void FakeNetworkSoonToBeDisconnected(NetworkHandle network);
-  void FakeNetworkDisconnected(NetworkHandle network);
+  void FakeNetworkConnected(handles::NetworkHandle network,
+                            ConnectionType type);
+  void FakeNetworkSoonToBeDisconnected(handles::NetworkHandle network);
+  void FakeNetworkDisconnected(handles::NetworkHandle network);
   void FakePurgeActiveNetworkList(NetworkList networks);
-  void FakeDefaultNetwork(NetworkHandle network, ConnectionType type);
+  void FakeDefaultNetwork(handles::NetworkHandle network, ConnectionType type);
   void FakeConnectionCostChanged(ConnectionCost cost);
   void FakeConnectionSubtypeChanged(ConnectionSubtype subtype);
   void FakeDefaultNetworkActive();
@@ -215,15 +215,12 @@ class NET_EXPORT_PRIVATE NetworkChangeNotifierDelegateAndroid {
   // network-specific callbacks will not be issued.
   const bool register_network_callback_failed_;
   base::android::ScopedJavaGlobalRef<jobject> java_network_active_notifier_;
-  // True if DefaultNetworkActive type of info are not supported, indicating
-  // that we shouldn't try to enable its callback or query its status.
-  const bool is_default_network_active_api_supported_;
 
   mutable base::Lock connection_lock_;  // Protects the state below.
   ConnectionType connection_type_;
   ConnectionCost connection_cost_;
   double connection_max_bandwidth_;
-  NetworkHandle default_network_;
+  handles::NetworkHandle default_network_;
   NetworkMap network_map_;
 
   // Used to enable/disable default network active notifications on the Java

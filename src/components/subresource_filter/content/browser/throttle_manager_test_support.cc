@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ ThrottleManagerTestSupport::ThrottleManagerTestSupport(
   HostContentSettingsMap::RegisterProfilePrefs(prefs_.registry());
   settings_map_ = base::MakeRefCounted<HostContentSettingsMap>(
       &prefs_, false /* is_off_the_record */, false /* store_last_modified */,
-      false /* restore_session */);
+      false /* restore_session */, false /* should_record_metrics */);
   profile_context_ =
       std::make_unique<SubresourceFilterProfileContext>(settings_map_.get());
 

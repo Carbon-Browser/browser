@@ -1,22 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://bluetooth-pairing/strings.m.js';
 
-import {SettingsBluetoothPairingConfirmCodePageElement} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_pairing_confirm_code_page.js';
-import {SettingsBluetoothPairingDeviceSelectionPageElement} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_pairing_device_selection_page.js';
-import {SettingsBluetoothPairingEnterCodeElement} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_pairing_enter_code_page.js';
-import {SettingsBluetoothRequestCodePageElement} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_pairing_request_code_page.js';
-import {SettingsBluetoothPairingUiElement} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_pairing_ui.js';
-import {SettingsBluetoothSpinnerPageElement} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_spinner_page.js';
-import {PairingAuthType} from 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_types.js';
-import {setBluetoothConfigForTesting} from 'chrome://resources/cr_components/chromeos/bluetooth/cros_bluetooth_config.js';
-import {AudioOutputCapability, BluetoothDeviceProperties, BluetoothSystemState, DeviceConnectionState, DeviceType} from 'chrome://resources/mojo/chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom-webui.js';
+import {SettingsBluetoothPairingConfirmCodePageElement} from 'chrome://resources/ash/common/bluetooth/bluetooth_pairing_confirm_code_page.js';
+import {SettingsBluetoothPairingDeviceSelectionPageElement} from 'chrome://resources/ash/common/bluetooth/bluetooth_pairing_device_selection_page.js';
+import {SettingsBluetoothPairingEnterCodeElement} from 'chrome://resources/ash/common/bluetooth/bluetooth_pairing_enter_code_page.js';
+import {SettingsBluetoothRequestCodePageElement} from 'chrome://resources/ash/common/bluetooth/bluetooth_pairing_request_code_page.js';
+import {SettingsBluetoothPairingUiElement} from 'chrome://resources/ash/common/bluetooth/bluetooth_pairing_ui.js';
+import {SettingsBluetoothSpinnerPageElement} from 'chrome://resources/ash/common/bluetooth/bluetooth_spinner_page.js';
+import {PairingAuthType} from 'chrome://resources/ash/common/bluetooth/bluetooth_types.js';
+import {setBluetoothConfigForTesting} from 'chrome://resources/ash/common/bluetooth/cros_bluetooth_config.js';
+import {AudioOutputCapability, BluetoothDeviceProperties, BluetoothSystemState, DeviceConnectionState, DeviceType} from 'chrome://resources/mojo/chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom-webui.js';
+import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../../chai_assert.js';
-import {eventToPromise, flushTasks} from '../../../test_util.js';
-import {waitAfterNextRender} from '../../../test_util.js';
+import {assertEquals, assertFalse, assertTrue} from '../../../chromeos/chai_assert.js';
+import {eventToPromise} from '../../../chromeos/test_util.js';
 
 import {createDefaultBluetoothDevice, FakeBluetoothConfig} from './fake_bluetooth_config.js';
 
@@ -113,9 +113,10 @@ suite('CrComponentsBluetoothPairingUiTest', function() {
   async function displayPinOrPasskey(pairingAuthType) {
     await init();
 
+    const deviceName = 'BeatsX';
     const device = createDefaultBluetoothDevice(
         /*id=*/ '123456',
-        /*publicName=*/ 'BeatsX',
+        /*publicName=*/ deviceName,
         /*connectionState=*/
         DeviceConnectionState.kConnected,
         /*opt_nickname=*/ 'device1',
@@ -137,6 +138,7 @@ suite('CrComponentsBluetoothPairingUiTest', function() {
     await flushTasks();
 
     assertTrue(!!getEnterCodePage());
+    assertEquals(getEnterCodePage().deviceName, deviceName);
 
     // Simulate pairing cancelation.
     await simulateCancelation();
@@ -155,6 +157,7 @@ suite('CrComponentsBluetoothPairingUiTest', function() {
 
     assertEquals(getEnterCodePage().numKeysEntered, 2);
     assertEquals(getEnterCodePage().code, pairingCode);
+    assertEquals(getEnterCodePage().deviceName, deviceName);
 
     const finishedPromise = eventToPromise('finished', bluetoothPairingUi);
     // Finished event is fired on successful pairing.
@@ -413,11 +416,40 @@ suite('CrComponentsBluetoothPairingUiTest', function() {
         deviceHandler.completePairDevice(/*success=*/ false);
         await flushTasks();
 
-        // Simulate pairing cancelation.
+        // Simulate clicking cancel button.
         await simulateCancelation();
         // Finish event is fired when canceling from device selection page.
         await finishedPromise;
       });
+
+  test('Cancel pairing without completing pairing', async function() {
+    await init();
+    assertTrue(!!getDeviceSelectionPage());
+    const finishedPromise = eventToPromise('finished', bluetoothPairingUi);
+
+    const device = createDefaultBluetoothDevice(
+        /*id=*/ '123456',
+        /*publicName=*/ 'BeatsX',
+        /*connectionState=*/
+        DeviceConnectionState.kConnected,
+        /*opt_nickname=*/ 'device1',
+        /*opt_audioCapability=*/
+        AudioOutputCapability.kCapableOfAudioOutput,
+        /*opt_deviceType=*/ DeviceType.kMouse);
+
+    bluetoothConfig.appendToDiscoveredDeviceList([device.deviceProperties]);
+    await flushTasks();
+    await selectDevice(device.deviceProperties);
+    await flushTasks();
+
+    // Cancel pairing before it finishes, this should cancel pairing.
+    await simulateCancelation();
+
+    // Clicking cancel again should close the UI.
+    await simulateCancelation();
+    // Finish event is fired when canceling from device selection page.
+    await finishedPromise;
+  });
 
   test('Confirm code', async function() {
     await init();

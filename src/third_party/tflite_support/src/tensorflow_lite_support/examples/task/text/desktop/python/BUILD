@@ -1,7 +1,6 @@
+# Placeholder: load py_binary
+
 package(
-    default_visibility = [
-        "//tensorflow_lite_support:internal",
-    ],
     licenses = ["notice"],  # Apache 2.0
 )
 
@@ -15,6 +14,7 @@ py_binary(
     srcs = ["nl_classifier_demo.py"],
     data = ["//tensorflow_lite_support/examples/task/text/desktop:nl_classifier_demo"],
     deps = [
+        # build rule placeholder: tensorflow dep,
         "@absl_py//absl:app",
         "@absl_py//absl/flags",
     ],
@@ -30,6 +30,7 @@ py_binary(
     srcs = ["bert_nl_classifier_demo.py"],
     data = ["//tensorflow_lite_support/examples/task/text/desktop:bert_nl_classifier_demo"],
     deps = [
+        # build rule placeholder: tensorflow dep,
         "@absl_py//absl:app",
         "@absl_py//absl/flags",
     ],
@@ -50,6 +51,7 @@ py_binary(
     srcs = ["bert_question_answerer_demo.py"],
     data = ["//tensorflow_lite_support/examples/task/text/desktop:bert_question_answerer_demo"],
     deps = [
+        # build rule placeholder: tensorflow dep,
         "@absl_py//absl:app",
         "@absl_py//absl/flags",
     ],

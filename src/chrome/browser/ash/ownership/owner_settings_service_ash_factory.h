@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define CHROME_BROWSER_ASH_OWNERSHIP_OWNER_SETTINGS_SERVICE_ASH_FACTORY_H_
 
 #include "base/memory/ref_counted.h"
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class KeyedService;
 
@@ -25,8 +25,7 @@ class DeviceSettingsService;
 class OwnerSettingsServiceAsh;
 class StubCrosSettingsProvider;
 
-class OwnerSettingsServiceAshFactory
-    : public BrowserContextKeyedServiceFactory {
+class OwnerSettingsServiceAshFactory : public ProfileKeyedServiceFactory {
  public:
   static OwnerSettingsServiceAsh* GetForBrowserContext(
       content::BrowserContext* context);
@@ -50,14 +49,12 @@ class OwnerSettingsServiceAshFactory
       const scoped_refptr<ownership::OwnerKeyUtil>& owner_key_util);
 
  private:
-  friend struct base::DefaultSingletonTraits<OwnerSettingsServiceAshFactory>;
+  friend base::NoDestructor<OwnerSettingsServiceAshFactory>;
 
   OwnerSettingsServiceAshFactory();
   ~OwnerSettingsServiceAshFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides:
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   KeyedService* BuildServiceInstanceFor(
       content::BrowserContext* browser_context) const override;
@@ -66,11 +63,5 @@ class OwnerSettingsServiceAshFactory
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OwnerSettingsServiceAshFactory;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_OWNERSHIP_OWNER_SETTINGS_SERVICE_ASH_FACTORY_H_

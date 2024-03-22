@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
-#include "base/scoped_observation.h"
+#include "base/scoped_observation_traits.h"
 #include "chromeos/crosapi/mojom/login.mojom.h"
 #include "components/user_manager/user_type.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -59,6 +59,7 @@ class LoginAsh : public mojom::Login {
       mojo::PendingRemote<mojom::ExternalLogoutRequestObserver> observer)
       override;
   void NotifyOnExternalLogoutDone() override;
+  void ShowGuestSessionConfirmationDialog() override;
   // Methods that are removed from mojom::Login interface. The methods cannot be
   // completely removed, only renamed, because the interface is Stable and has
   // to preserve backward-compatibility.
@@ -164,5 +165,24 @@ class LoginAsh : public mojom::Login {
 };
 
 }  // namespace crosapi
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<crosapi::LoginAsh,
+                               crosapi::LoginAsh::ExternalLogoutDoneObserver> {
+  static void AddObserver(
+      crosapi::LoginAsh* source,
+      crosapi::LoginAsh::ExternalLogoutDoneObserver* observer) {
+    source->AddExternalLogoutDoneObserver(observer);
+  }
+  static void RemoveObserver(
+      crosapi::LoginAsh* source,
+      crosapi::LoginAsh::ExternalLogoutDoneObserver* observer) {
+    source->RemoveExternalLogoutDoneObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROME_BROWSER_ASH_CROSAPI_LOGIN_ASH_H_

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "content/public/browser/web_contents.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom.h"
 
 #if BUILDFLAG(IS_MAC)
 #include "chrome/browser/webshare/mac/sharing_service_operation.h"
@@ -167,6 +168,13 @@ void ShareServiceImpl::Share(const std::string& title,
                              std::vector<blink::mojom::SharedFilePtr> files,
                              ShareCallback callback) {
   UMA_HISTOGRAM_ENUMERATION(kWebShareApiCountMetric, WebShareMethod::kShare);
+
+  if (!render_frame_host().IsFeatureEnabled(
+          blink::mojom::PermissionsPolicyFeature::kWebShare)) {
+    std::move(callback).Run(blink::mojom::ShareError::PERMISSION_DENIED);
+    ReportBadMessageAndDeleteThis("Feature policy blocks Web Share");
+    return;
+  }
 
   content::WebContents* const web_contents =
       content::WebContents::FromRenderFrameHost(&render_frame_host());

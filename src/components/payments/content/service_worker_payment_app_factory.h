@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,14 +29,8 @@ class ServiceWorkerPaymentAppFactory : public PaymentAppFactory {
   // PaymentAppFactory:
   void Create(base::WeakPtr<Delegate> delegate) override;
 
-  // Called by ServiceWorkerPaymentAppCreator to remove itself from the list of
-  // |creators_|, which deletes the caller object.
-  void DeleteCreator(ServiceWorkerPaymentAppCreator* creator_raw_pointer);
-
  private:
-  std::map<ServiceWorkerPaymentAppCreator*,
-           std::unique_ptr<ServiceWorkerPaymentAppCreator>>
-      creators_;
+  std::unique_ptr<ServiceWorkerPaymentAppCreator> creator_;
 };
 
 }  // namespace payments

@@ -1,11 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_BOOKMARKS_UNDO_MANAGER_BRIDGE_OBSERVER_H_
 #define IOS_CHROME_BROWSER_UI_BOOKMARKS_UNDO_MANAGER_BRIDGE_OBSERVER_H_
 
-#include "base/compiler_specific.h"
 #include "components/undo/undo_manager_observer.h"
 
 // The ObjC translations of the C++ observer callbacks are defined here.

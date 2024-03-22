@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/external_data/device_local_account_external_data_manager.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
@@ -75,13 +75,15 @@ bool DeviceLocalAccountPolicyProvider::IsFirstPolicyLoadComplete(
   return IsInitializationComplete(domain);
 }
 
-void DeviceLocalAccountPolicyProvider::RefreshPolicies() {
+void DeviceLocalAccountPolicyProvider::RefreshPolicies(
+    PolicyFetchReason reason) {
   DeviceLocalAccountPolicyBroker* broker = GetBroker();
   if (broker && broker->core()->service()) {
     waiting_for_policy_refresh_ = true;
     broker->core()->service()->RefreshPolicy(
         base::BindOnce(&DeviceLocalAccountPolicyProvider::ReportPolicyRefresh,
-                       weak_factory_.GetWeakPtr()));
+                       weak_factory_.GetWeakPtr()),
+        reason);
   } else {
     UpdateFromBroker();
   }
@@ -109,17 +111,17 @@ void DeviceLocalAccountPolicyProvider::ReportPolicyRefresh(bool success) {
 
 void DeviceLocalAccountPolicyProvider::UpdateFromBroker() {
   DeviceLocalAccountPolicyBroker* broker = GetBroker();
-  std::unique_ptr<PolicyBundle> bundle(new PolicyBundle());
+  PolicyBundle bundle;
   if (broker) {
     store_initialized_ |= broker->core()->store()->is_initialized();
     if (!waiting_for_policy_refresh_) {
       // Copy policy from the broker.
-      bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())) =
+      bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())) =
           broker->core()->store()->policy_map().Clone();
       external_data_manager_ = broker->external_data_manager();
 
       if (broker->component_policy_service())
-        bundle->MergeFrom(broker->component_policy_service()->policy());
+        bundle.MergeFrom(broker->component_policy_service()->policy());
     } else {
       // Wait for the refresh to finish.
       return;
@@ -128,11 +130,11 @@ void DeviceLocalAccountPolicyProvider::UpdateFromBroker() {
     // Keep existing policy, but do send an update.
     waiting_for_policy_refresh_ = false;
     weak_factory_.InvalidateWeakPtrs();
-    bundle->CopyFrom(policies());
+    bundle = policies().Clone();
   }
 
   PolicyMap& chrome_policy =
-      bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()));
+      bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()));
   // Apply the defaults for policies that haven't been configured by the
   // administrator given that this is an enterprise user.
   SetEnterpriseUsersDefaults(&chrome_policy);

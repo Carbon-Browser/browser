@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@ import org.chromium.base.supplier.Supplier;
  * @see CachedProviderAdapter for a conditional provider adapter that can postpone the notification
  *      about provided data by caching it and trigger it later.
  */
-public class ConditionalProviderAdapter<T>
-        extends PropertyProvider<T> implements Provider.Observer<T> {
+public class ConditionalProviderAdapter<T> extends PropertyProvider<T>
+        implements Provider.Observer<T> {
     private final Supplier<Boolean> mPropagationCondition;
 
     public ConditionalProviderAdapter(

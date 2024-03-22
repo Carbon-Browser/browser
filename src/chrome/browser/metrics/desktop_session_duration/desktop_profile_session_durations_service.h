@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@
 #include "chrome/browser/metrics/desktop_session_duration/desktop_session_duration_tracker.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/password_manager/core/browser/password_session_durations_metrics_recorder.h"
-#include "components/sync/driver/sync_session_durations_metrics_recorder.h"
+#include "components/sync/service/sync_session_durations_metrics_recorder.h"
+#include "components/unified_consent/msbb_session_durations_metrics_recorder.h"
 
 namespace signin {
 class IdentityManager;
@@ -55,6 +56,8 @@ class DesktopProfileSessionDurationsService
  private:
   std::unique_ptr<syncer::SyncSessionDurationsMetricsRecorder>
       sync_metrics_recorder_;
+  std::unique_ptr<unified_consent::MsbbSessionDurationsMetricsRecorder>
+      msbb_metrics_recorder_;
   std::unique_ptr<password_manager::PasswordSessionDurationsMetricsRecorder>
       password_metrics_recorder_;
 

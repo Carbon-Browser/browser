@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,16 @@ class MockMojoIndexedDBDatabaseCallbacks
 
   ~MockMojoIndexedDBDatabaseCallbacks() override;
 
+  // Creates a remote that must be passed over another mojo pipe before it's
+  // used.
   mojo::PendingAssociatedRemote<blink::mojom::IDBDatabaseCallbacks>
   CreateInterfacePtrAndBind();
+
+  // Creates a remote that has its own mojo pipe.
+  mojo::PendingAssociatedRemote<blink::mojom::IDBDatabaseCallbacks>
+  BindNewEndpointAndPassDedicatedRemote();
+
+  void FlushForTesting();
 
   MOCK_METHOD0(ForcedClose, void());
   MOCK_METHOD2(VersionChange, void(int64_t old_version, int64_t new_version));

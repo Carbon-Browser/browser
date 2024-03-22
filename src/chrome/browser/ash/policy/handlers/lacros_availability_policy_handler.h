@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/ash/crosapi/browser_util.h"
+#include "chromeos/ash/components/standalone_browser/lacros_availability.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -35,7 +35,7 @@ class LacrosAvailabilityPolicyHandler : public TypeCheckingPolicyHandler {
                            PrefValueMap* prefs) override;
 
  private:
-  absl::optional<crosapi::browser_util::LacrosAvailability> GetValue(
+  absl::optional<ash::standalone_browser::LacrosAvailability> GetValue(
       const PolicyMap& policies,
       PolicyErrorMap* errors);
 };

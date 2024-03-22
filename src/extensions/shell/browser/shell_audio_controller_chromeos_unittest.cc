@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 
 #include <memory>
 
-#include "ash/components/audio/audio_device.h"
-#include "ash/components/audio/audio_devices_pref_handler.h"
-#include "ash/components/audio/cras_audio_handler.h"
 #include "base/memory/ptr_util.h"
+#include "chromeos/ash/components/audio/audio_device.h"
+#include "chromeos/ash/components/audio/audio_devices_pref_handler.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/components/dbus/audio/audio_node.h"
 #include "chromeos/ash/components/dbus/audio/fake_cras_audio_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -126,8 +126,7 @@ TEST_F(ShellAudioControllerTest, InitialVolume) {
 
   EXPECT_FALSE(audio_handler()->IsOutputMuted());
   EXPECT_FALSE(audio_handler()->IsInputMuted());
-  EXPECT_EQ(static_cast<double>(
-                ash::AudioDevicesPrefHandler::kDefaultOutputVolumePercent),
+  EXPECT_EQ(ash::AudioDevicesPrefHandler::kDefaultOutputVolumePercent,
             audio_handler()->GetOutputVolumePercent());
 
   EXPECT_EQ(75.0, audio_handler()->GetInputGainPercent());

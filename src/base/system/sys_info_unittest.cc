@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/environment.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/process_metrics.h"
 #include "base/run_loop.h"
@@ -40,6 +40,11 @@
 #include "base/win/wmi.h"
 #endif  // BUILDFLAG(IS_WIN)
 
+#if BUILDFLAG(IS_MAC)
+#include "base/system/sys_info_internal.h"
+#include "base/test/scoped_feature_list.h"
+#endif  // BUILDFLAG(IS_MAC)
+
 namespace base {
 
 #if BUILDFLAG(IS_ANDROID)
@@ -54,7 +59,31 @@ using SysInfoTest = PlatformTest;
 TEST_F(SysInfoTest, NumProcs) {
   // We aren't actually testing that it's correct, just that it's sane.
   EXPECT_GE(SysInfo::NumberOfProcessors(), 1);
+
+  EXPECT_GE(SysInfo::NumberOfEfficientProcessors(), 0);
+  EXPECT_LT(SysInfo::NumberOfEfficientProcessors(),
+            SysInfo::NumberOfProcessors());
 }
+
+#if BUILDFLAG(IS_MAC)
+TEST_F(SysInfoTest, NumProcsWithSecurityMitigationEnabled) {
+  // Reset state so that the call to SetCpuSecurityMitigationsEnabled() below
+  // succeeds even if SysInfo::NumberOfProcessors() was previously called.
+  SysInfo::ResetCpuSecurityMitigationsEnabledForTesting();
+
+  // Verify that the number of number of available processors available when CPU
+  // security mitigation is enabled is the number of available "physical"
+  // processors.
+  test::ScopedFeatureList feature_list_;
+  feature_list_.InitAndEnableFeature(kNumberOfCoresWithCpuSecurityMitigation);
+  SysInfo::SetCpuSecurityMitigationsEnabled();
+  EXPECT_EQ(SysInfo::NumberOfProcessors(),
+            internal::NumberOfPhysicalProcessors());
+
+  // Reset state set by this test.
+  SysInfo::ResetCpuSecurityMitigationsEnabledForTesting();
+}
+#endif  // BUILDFLAG(IS_MAC)
 
 TEST_F(SysInfoTest, AmountOfMem) {
   // We aren't actually testing that it's correct, just that it's sane.
@@ -347,11 +376,11 @@ TEST_F(SysInfoTest, GoogleChromeOSNoVersionNumbers) {
 TEST_F(SysInfoTest, GoogleChromeOSLsbReleaseTime) {
   const char kLsbRelease[] = "CHROMEOS_RELEASE_VERSION=1.2.3.4";
   // Use a fake time that can be safely displayed as a string.
-  const Time lsb_release_time(Time::FromDoubleT(12345.6));
+  const Time lsb_release_time(Time::FromSecondsSinceUnixEpoch(12345.6));
   test::ScopedChromeOSVersionInfo version(kLsbRelease, lsb_release_time);
   Time parsed_lsb_release_time = SysInfo::GetLsbReleaseTime();
-  EXPECT_DOUBLE_EQ(lsb_release_time.ToDoubleT(),
-                   parsed_lsb_release_time.ToDoubleT());
+  EXPECT_DOUBLE_EQ(lsb_release_time.InSecondsFSinceUnixEpoch(),
+                   parsed_lsb_release_time.InSecondsFSinceUnixEpoch());
 }
 
 TEST_F(SysInfoTest, IsRunningOnChromeOS) {

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,9 @@ void WebTestRuntimeFlags::Reset() {
 
   set_is_printing(false);
   set_printing_frame("");
+  set_printing_width(0);
+  set_printing_height(0);
+  set_printing_margin(0);
 
   set_policy_delegate_enabled(false);
   set_policy_delegate_is_permissive(false);
@@ -32,7 +35,6 @@ void WebTestRuntimeFlags::Reset() {
 
   set_dump_web_content_settings_client_callbacks(false);
   set_images_allowed(true);
-  set_scripts_allowed(true);
   set_storage_allowed(true);
   set_running_insecure_content_allowed(false);
 
@@ -60,6 +62,8 @@ void WebTestRuntimeFlags::Reset() {
 
   // No need to report the initial state - only the future delta is important.
   tracked_dictionary().ResetChangeTracking();
+
+  set_auto_drag_drop_enabled(true);
 }
 
 }  // namespace content

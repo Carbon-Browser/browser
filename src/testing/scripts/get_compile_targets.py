@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -36,7 +36,6 @@ def main(argv):
                     'PRESUBMIT.py',
                     'sizes_common.py',
                     'variations_seed_access_helper.py',
-                    'wpt_common.py',
                     'run_variations_smoke_tests.py',
                     'run_performance_tests_unittest.py'):
       continue

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,12 @@
 #include "media/gpu/vaapi/vaapi_wrapper.h"
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/gfx/linux/gbm_util.h"  // nogncheck
 #endif
 
 namespace media {
@@ -26,8 +30,8 @@ namespace test {
 VideoTestEnvironment::VideoTestEnvironment() : VideoTestEnvironment({}, {}) {}
 
 VideoTestEnvironment::VideoTestEnvironment(
-    const std::vector<base::Feature>& enabled_features,
-    const std::vector<base::Feature>& disabled_features) {
+    const std::vector<base::test::FeatureRef>& enabled_features,
+    const std::vector<base::test::FeatureRef>& disabled_features) {
   // Using shared memory requires mojo to be initialized (crbug.com/849207).
   mojo::core::Init();
 
@@ -49,9 +53,17 @@ VideoTestEnvironment::VideoTestEnvironment(
   // to initialize them before calling VaapiWrapper::PreSandboxInitialization().
   scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
 
+#if BUILDFLAG(IS_CHROMEOS)
+  // At this point, the base::FeatureList has been initialized and the process
+  // should still be single threaded. Additionally, minigbm shouldn't have
+  // been used yet by this process. Therefore, it's a good time to ensure the
+  // Intel media compression environment flag for minigbm is correctly set
+  ui::EnsureIntelMediaCompressionEnvVarIsSet();
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
   // Perform all static initialization that is required when running video
   // codecs in a test environment.
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   // Initialize Ozone. This is necessary to gain access to the GPU for hardware
   // video acceleration.
   // TODO(b/230370976): we may no longer need to initialize Ozone since we don't
@@ -65,7 +77,8 @@ VideoTestEnvironment::VideoTestEnvironment(
 #endif
 
 #if BUILDFLAG(USE_VAAPI)
-  media::VaapiWrapper::PreSandboxInitialization();
+  media::VaapiWrapper::PreSandboxInitialization(
+      /*allow_disabling_global_lock=*/true);
 #endif
 }
 

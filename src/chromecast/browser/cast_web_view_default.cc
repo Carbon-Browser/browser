@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,12 @@
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromecast/base/cast_features.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
-#include "chromecast/browser/accessibility/accessibility_service_impl.h"
 #include "chromecast/browser/cast_browser_process.h"
 #include "chromecast/browser/cast_web_service.h"
 #include "chromecast/browser/lru_renderer_cache.h"
@@ -104,9 +103,6 @@ CastWebViewDefault::CastWebViewDefault(
                   : web_service->CreateWindow(params_->Clone())) {
   DCHECK(web_service_);
   DCHECK(window_);
-  cast_web_contents_.local_interfaces()
-      ->AddInterface<chromecast::shell::mojom::CastAccessibilityService>(
-          shell::CastBrowserProcess::GetInstance()->accessibility_service());
   window_->SetCastWebContents(&cast_web_contents_);
   web_contents_->SetDelegate(this);
 #if defined(USE_AURA)
@@ -192,7 +188,7 @@ void CastWebViewDefault::ActivateContents(content::WebContents* contents) {
 
 bool CastWebViewDefault::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   if (!chromecast::IsFeatureEnabled(kAllowUserMediaAccess) &&
       !params_->allow_media_access) {
@@ -223,11 +219,8 @@ const blink::MediaStreamDevice* GetRequestedDeviceOrDefault(
     const blink::MediaStreamDevices& devices,
     const std::string& requested_device_id) {
   if (!requested_device_id.empty()) {
-    auto it = std::find_if(
-        devices.begin(), devices.end(),
-        [requested_device_id](const blink::MediaStreamDevice& device) {
-          return device.id == requested_device_id;
-        });
+    auto it = base::ranges::find(devices, requested_device_id,
+                                 &blink::MediaStreamDevice::id);
     return it != devices.end() ? &(*it) : nullptr;
   }
 

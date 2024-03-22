@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,8 +66,6 @@ void StatsEventSubscriber::SimpleHistogram::Reset() {
 
 base::Value::List StatsEventSubscriber::SimpleHistogram::GetHistogram() const {
   base::Value::List histo;
-
-  base::Value::Dict bucket;
 
   if (buckets_.front()) {
     base::Value::Dict bucket;
@@ -239,7 +237,9 @@ base::Value::Dict StatsEventSubscriber::GetStats() const {
     stats.Set(CastStatToString(it->first), it->second->GetHistogram());
   }
 
-  ret.Set(event_media_type_ == AUDIO_EVENT ? "audio" : "video",
+  ret.Set(event_media_type_ == AUDIO_EVENT
+              ? StatsEventSubscriber::kAudioStatsDictKey
+              : StatsEventSubscriber::kVideoStatsDictKey,
           std::move(stats));
 
   return ret;
@@ -312,9 +312,11 @@ const char* StatsEventSubscriber::CastStatToString(CastStat stat) {
     STAT_ENUM_TO_STRING(FRAME_LATENCY_MS_HISTO);
     STAT_ENUM_TO_STRING(E2E_LATENCY_MS_HISTO);
     STAT_ENUM_TO_STRING(LATE_FRAME_MS_HISTO);
+    STAT_ENUM_TO_STRING(ENQUEUE_FPS);
+    STAT_ENUM_TO_STRING(UNKNOWN_OPEN_SCREEN_STAT);
+    STAT_ENUM_TO_STRING(UNKNOWN_OPEN_SCREEN_HISTO);
   }
-  NOTREACHED();
-  return "";
+  NOTREACHED_NORETURN();
 }
 
 const int kDefaultMaxLatencyBucketMs = 800;

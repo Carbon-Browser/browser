@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,9 +77,10 @@
 // 29. "intel_gpu_series" is a list of gpu series names. Currently supported
 //     series include: "broadwater", "eaglelake", "ironlake", "sandybridge",
 //     "baytrail", "ivybridge", "haswell", "cherrytrail", "broadwell",
-//     "apollolake", "skylake", "geminilake", "kabylake", "coffeelake",
-//     "whiskeylake", "cometlake", "cannonlake", "icelake", "elkhartlake",
-//     "jasperlake", "tigerlake", "alderlake".
+//     "apollolake", "skylake", "geminilake", "kabylake", "amberlake",
+//     "coffeelake", "whiskeylake", "cometlake", "cannonlake", "icelake",
+//     "elkhartlake", "jasperlake", "tigerlake", "rocketlake", "DG1",
+//     "alderlake", "alchemist", "raptorlake", "meteorlake".
 // 30. "hardware_overlay" is either "supported" or "unsupported". Currently it
 //     only applies on Windows where hardware overlays may be supported on
 //     certain Intel GPUs. By default it's "dont_care" and there is no need to

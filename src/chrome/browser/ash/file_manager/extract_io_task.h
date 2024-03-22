@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,20 @@
 
 #include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/drive/file_system_util.h"
 #include "chrome/browser/ash/file_manager/io_task.h"
-#include "chrome/browser/ash/file_manager/speedometer.h"
+#include "chromeos/ash/components/file_manager/speedometer.h"
+#include "components/file_access/scoped_file_access.h"
 #include "components/services/unzip/public/cpp/unzip.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_url.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace file_manager {
-namespace io_task {
+namespace file_manager::io_task {
 
 // Histogram name for FileBrowser.ExtractTask.
 inline constexpr char kExtractTaskStatusHistogramName[] =
@@ -35,7 +37,8 @@ enum class ExtractStatus {
   kCancelled = 2,
   kInsufficientDiskSpace = 3,
   kPasswordError = 4,
-  kMaxValue = kPasswordError,
+  kAesEncrypted = 5,
+  kMaxValue = kAesEncrypted,
 };
 
 class ExtractIOTask : public IOTask {
@@ -47,7 +50,8 @@ class ExtractIOTask : public IOTask {
                 std::string password,
                 storage::FileSystemURL parent_folder,
                 Profile* profile,
-                scoped_refptr<storage::FileSystemContext> file_system_context);
+                scoped_refptr<storage::FileSystemContext> file_system_context,
+                bool show_notification = true);
   ~ExtractIOTask() override;
 
   void Execute(ProgressCallback progress_callback,
@@ -82,6 +86,18 @@ class ExtractIOTask : public IOTask {
 
   void CheckSizeThenExtract();
 
+  // Stores the file access object and begins the actual extraction. This object
+  // needs to survive for the all extraction time, otherwise when Data Leak
+  // Prevention features are enabled, managed archives cannot be opened.
+  void GotScopedFileAccess(file_access::ScopedFileAccess file_access);
+
+  // Retrieves a scoped file access object for the zip files under examination
+  // and calls `GotScopedFileAccess`. This is required to open the zip files
+  // when Data Leak Prevention features are enabled. When these features are not
+  // enabled, `GotScopedFileAccess` is directly called with a default
+  // always-allow file access object.
+  void GetScopedFileAccess();
+
   // URLs of the files that have archives in them for extraction.
   const std::vector<storage::FileSystemURL> source_urls_;
 
@@ -92,7 +108,7 @@ class ExtractIOTask : public IOTask {
   const storage::FileSystemURL parent_folder_;
 
   // Raw pointer not owned by this.
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
   const scoped_refptr<storage::FileSystemContext> file_system_context_;
 
   // Speedometer used to calculate the remaining time to finish the operation.
@@ -107,16 +123,22 @@ class ExtractIOTask : public IOTask {
   // Boolean set to true if we find archives that are encrypted.
   bool have_encrypted_content_ = false;
 
+  // Boolean set to true if the encryption scheme is AES.
+  bool uses_aes_encryption_ = false;
+
   // Counter of the number of archives needing extraction.
   size_t extractCount_;
 
   // Reference to the unpacker service instances.
   std::map<base::FilePath, scoped_refptr<unzip::ZipFileUnpacker>> unpackers_;
 
+  // Scoped file access object required to open the zipped files when Data Leak
+  // Prevention features are enabled.
+  absl::optional<file_access::ScopedFileAccess> file_access_;
+
   base::WeakPtrFactory<ExtractIOTask> weak_ptr_factory_{this};
 };
 
-}  // namespace io_task
-}  // namespace file_manager
+}  // namespace file_manager::io_task
 
 #endif  // CHROME_BROWSER_ASH_FILE_MANAGER_EXTRACT_IO_TASK_H_

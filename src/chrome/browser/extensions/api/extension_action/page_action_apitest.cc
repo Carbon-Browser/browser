@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,8 @@ IN_PROC_BROWSER_TEST_P(PageActionApiTest, Basic) {
 
   // We should not be creating icons asynchronously, so we don't need an
   // observer.
-  ExtensionActionIconFactory icon_factory(profile(), extension, action, NULL);
+  ExtensionActionIconFactory icon_factory(profile(), extension, action,
+                                          nullptr);
 
   // Test that we received the changes.
   tab_id = sessions::SessionTabHelper::FromWebContents(
@@ -247,12 +248,8 @@ IN_PROC_BROWSER_TEST_P(PageActionApiTest, TestTriggerPageAction) {
   }
 
   // Verify that the browser action turned the background color red.
-  const std::string script =
-      "window.domAutomationController.send(document.body.style."
-      "backgroundColor);";
-  std::string result;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractString(tab, script, &result));
-  EXPECT_EQ(result, "red");
+  const std::string script = "document.body.style.backgroundColor;";
+  EXPECT_EQ(content::EvalJs(tab, script), "red");
 }
 
 }  // namespace

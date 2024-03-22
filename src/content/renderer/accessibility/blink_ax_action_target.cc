@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,10 +64,6 @@ gfx::Point BlinkAXActionTarget::MaximumScrollOffset() const {
 
 void BlinkAXActionTarget::SetScrollOffset(const gfx::Point& point) const {
   web_ax_object_.SetScrollOffset(point);
-}
-
-bool BlinkAXActionTarget::SetSelected(bool selected) const {
-  return web_ax_object_.SetSelected(selected);
 }
 
 bool BlinkAXActionTarget::SetSelection(const ui::AXActionTarget* anchor_object,

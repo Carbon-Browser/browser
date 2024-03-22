@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,17 @@
 
 #include <math.h>
 
-#include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
@@ -34,6 +34,7 @@
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/animation/animation.h"
 #include "ui/gfx/geometry/rect_conversions.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/geometry/vector3d_f.h"
 #include "ui/gfx/interpolated_transform.h"
@@ -58,6 +59,9 @@ class HidingWindowAnimationObserverBase : public aura::WindowObserver {
  public:
   explicit HidingWindowAnimationObserverBase(aura::Window* window)
       : window_(window) {
+    window_->SetProperty(
+        kWindowHidingAnimationCountKey,
+        window_->GetProperty(kWindowHidingAnimationCountKey) + 1);
     window_->AddObserver(this);
   }
 
@@ -67,8 +71,13 @@ class HidingWindowAnimationObserverBase : public aura::WindowObserver {
       const HidingWindowAnimationObserverBase&) = delete;
 
   ~HidingWindowAnimationObserverBase() override {
-    if (window_)
-      window_->RemoveObserver(this);
+    if (!window_)
+      return;
+    window_->RemoveObserver(this);
+    window_->SetProperty(
+        kWindowHidingAnimationCountKey,
+        window_->GetProperty(kWindowHidingAnimationCountKey) - 1);
+    DCHECK_GE(window_->GetProperty(kWindowHidingAnimationCountKey), 0);
   }
 
   // aura::WindowObserver:
@@ -93,8 +102,7 @@ class HidingWindowAnimationObserverBase : public aura::WindowObserver {
     if (window_->parent()) {
       const aura::Window::Windows& transient_children =
           GetTransientChildren(window_);
-      auto iter = std::find(window_->parent()->children().begin(),
-                            window_->parent()->children().end(), window_);
+      auto iter = base::ranges::find(window_->parent()->children(), window_);
       DCHECK(iter != window_->parent()->children().end());
       aura::Window* topmost_transient_child = nullptr;
       for (++iter; iter != window_->parent()->children().end(); ++iter) {
@@ -123,7 +131,6 @@ class HidingWindowAnimationObserverBase : public aura::WindowObserver {
       AnimationHost* animation_host = GetAnimationHost(window_);
       if (animation_host)
         animation_host->OnWindowHidingAnimationCompleted();
-      window_->RemoveObserver(this);
     }
     delete this;
   }
@@ -241,10 +248,7 @@ gfx::Rect GetLayerWorldBoundsAfterTransform(ui::Layer* layer,
   gfx::Transform in_world = transform;
   GetTransformRelativeToRoot(layer, &in_world);
 
-  gfx::RectF transformed = gfx::RectF(layer->bounds());
-  in_world.TransformRect(&transformed);
-
-  return gfx::ToEnclosingRect(transformed);
+  return in_world.MapRect(layer->bounds());
 }
 
 // Augment the host window so that the enclosing bounds of the full

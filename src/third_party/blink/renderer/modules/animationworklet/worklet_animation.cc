@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
 #include "third_party/blink/renderer/core/animation/element_animations.h"
 #include "third_party/blink/renderer/core/animation/keyframe_effect_model.h"
-#include "third_party/blink/renderer/core/animation/scroll_timeline.h"
 #include "third_party/blink/renderer/core/animation/scroll_timeline_util.h"
 #include "third_party/blink/renderer/core/animation/timing.h"
 #include "third_party/blink/renderer/core/animation/worklet_animation_controller.h"
@@ -38,7 +37,7 @@ bool ConvertAnimationEffects(
     HeapVector<Member<KeyframeEffect>>& keyframe_effects,
     String& error_string) {
   DCHECK(effects);
-  DCHECK(keyframe_effects.IsEmpty());
+  DCHECK(keyframe_effects.empty());
 
   // Currently we only support KeyframeEffect.
   switch (effects->GetContentType()) {
@@ -71,7 +70,7 @@ bool ConvertAnimationEffects(
     }
   }
 
-  if (keyframe_effects.IsEmpty()) {
+  if (keyframe_effects.empty()) {
     error_string = "Effects array must be non-empty";
     return false;
   }
@@ -304,9 +303,6 @@ WorkletAnimation::WorkletAnimation(
   }
   effect_timings_ = std::make_unique<WorkletAnimationEffectTimings>(
       timings, normalized_timings);
-
-  if (timeline_->IsScrollTimeline())
-    To<ScrollTimeline>(*timeline_).WorkletAnimationAttached(this);
 }
 
 String WorkletAnimation::playState() {
@@ -417,8 +413,8 @@ void WorkletAnimation::cancel() {
   if (IsActive(play_state_)) {
     for (auto& effect : effects_) {
       effect->UpdateInheritedTime(absl::nullopt,
-                                  /* at_scroll_timeline_boundary */ false,
-                                  playback_rate_, kTimingUpdateOnDemand);
+                                  /* is_idle */ false, playback_rate_,
+                                  kTimingUpdateOnDemand);
     }
   }
   SetPlayState(Animation::kIdle);
@@ -504,7 +500,7 @@ void WorkletAnimation::Update(TimingUpdateReason reason) {
         local_times_[i]
             ? absl::make_optional(AnimationTimeDelta(local_times_[i].value()))
             : absl::nullopt,
-        /* at_scroll_timeline_boundary */ false, playback_rate_, reason);
+        /* is_idle */ false, playback_rate_, reason);
   }
 }
 
@@ -522,25 +518,25 @@ bool WorkletAnimation::CheckCanStart(String* failure_message) {
 }
 
 void WorkletAnimation::SetCurrentTime(
-    absl::optional<base::TimeDelta> seek_time) {
+    absl::optional<base::TimeDelta> current_time) {
   DCHECK(timeline_);
-  DCHECK(seek_time || play_state_ == Animation::kIdle ||
+  DCHECK(current_time || play_state_ == Animation::kIdle ||
          play_state_ == Animation::kUnset);
   // The procedure either:
   // 1) updates the hold time (for paused animations, non-existent or inactive
   //    timeline)
   // 2) updates the start time (for playing animations)
   bool should_hold =
-      play_state_ == Animation::kPaused || !seek_time || !IsTimelineActive();
+      play_state_ == Animation::kPaused || !current_time || !IsTimelineActive();
   if (should_hold) {
     start_time_ = absl::nullopt;
-    hold_time_ = seek_time;
+    hold_time_ = current_time;
   } else {
     start_time_ =
-        CalculateStartTime(seek_time.value(), playback_rate_, *timeline_);
+        CalculateStartTime(current_time.value(), playback_rate_, *timeline_);
     hold_time_ = absl::nullopt;
   }
-  last_current_time_ = seek_time;
+  last_current_time_ = current_time;
   was_timeline_active_ = IsTimelineActive();
 }
 
@@ -551,7 +547,7 @@ void WorkletAnimation::UpdateCompositingState() {
 #if DCHECK_IS_ON()
     String warning_message;
     DCHECK(CheckCanStart(&warning_message));
-    DCHECK(warning_message.IsEmpty());
+    DCHECK(warning_message.empty());
 #endif  // DCHECK_IS_ON()
     if (StartOnCompositor())
       return;
@@ -728,7 +724,7 @@ void WorkletAnimation::DestroyCompositorAnimation() {
 
 KeyframeEffect* WorkletAnimation::GetEffect() const {
   DCHECK(effects_.at(0));
-  return effects_.at(0);
+  return effects_.at(0).Get();
 }
 
 bool WorkletAnimation::IsActiveAnimation() const {

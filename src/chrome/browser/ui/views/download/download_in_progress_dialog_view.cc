@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -72,8 +72,7 @@ DownloadInProgressDialogView::DownloadInProgressDialogView(
     case Browser::DownloadCloseType::kOk:
       // This dialog should have been created within the same thread invocation
       // as the original test, so it's never ok to close.
-      NOTREACHED();
-      break;
+      NOTREACHED_NORETURN();
   }
   auto message_label = std::make_unique<views::Label>(
       l10n_util::GetStringUTF16(message_id),

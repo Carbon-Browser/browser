@@ -1,14 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_BROWSER_XR_RUNTIME_MANAGER_H_
 #define CONTENT_PUBLIC_BROWSER_XR_RUNTIME_MANAGER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list_types.h"
 #include "content/common/content_export.h"
 #include "device/vr/public/mojom/vr_service.mojom-forward.h"
+#include "device/vr/public/mojom/xr_device.mojom-forward.h"
 
 namespace content {
 class BrowserXRRuntime;
@@ -48,11 +49,6 @@ class CONTENT_EXPORT XRRuntimeManager {
   // XRDeviceId, or nullptr if no such device exists/has been registered.
   virtual content::BrowserXRRuntime* GetRuntime(
       device::mojom::XRDeviceId id) = 0;
-
-  // Provides a mechanism for performing operations on/reasoning about all
-  // currently active runtimes, without exposing the collection.
-  virtual void ForEachRuntime(
-      base::RepeatingCallback<void(content::BrowserXRRuntime*)> fn) = 0;
 };
 
 }  // namespace content

@@ -1,34 +1,34 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
-#include <map>
-#include <memory>
+#import <map>
+#import <memory>
 
-#include "base/mac/foundation_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
-#include "build/branding_buildflags.h"
-#include "components/strings/grit/components_strings.h"
+#import "base/apple/foundation_util.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
+#import "build/branding_buildflags.h"
+#import "components/strings/grit/components_strings.h"
+#import "components/sync/base/features.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/signin/model/test_constants.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
+#import "ios/chrome/browser/ui/authentication/signin_matchers.h"
 #import "ios/chrome/browser/ui/settings/settings_app_interface.h"
-#include "ios/chrome/grit/ios_chromium_strings.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "net/test/embedded_test_server/embedded_test_server.h"
-#include "ui/base/l10n/l10n_util.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/embedded_test_server.h"
+#import "ui/base/l10n/l10n_util.h"
+#import "url/gurl.h"
 
 using chrome_test_util::ButtonWithAccessibilityLabelId;
 using chrome_test_util::ClearBrowsingDataButton;
@@ -41,6 +41,7 @@ using chrome_test_util::SettingsCollectionView;
 using chrome_test_util::SettingsDoneButton;
 using chrome_test_util::SettingsMenuBackButton;
 using chrome_test_util::SettingsMenuPrivacyButton;
+using chrome_test_util::SettingsSignInRowMatcher;
 
 namespace {
 
@@ -49,8 +50,7 @@ NSString* const kCookieValue = @"value";
 
 enum MetricsServiceType {
   kMetrics,
-  kBreakpad,
-  kBreakpadFirstLaunch,
+  kCrashpad,
 };
 
 // Matcher for the Clear Browsing Data cell on the Privacy screen.
@@ -65,6 +65,22 @@ id<GREYMatcher> ClearBrowsingDataCell() {
 @end
 
 @implementation SettingsTestCase
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config;
+  if ([self isRunningTest:@selector
+            (testSettingsKeyboardCommandsIfSyncToSigninDisabled)]) {
+    config.features_disabled.push_back(
+        syncer::kReplaceSyncPromosWithSignInPromos);
+  }
+  if ([self isRunningTest:@selector
+            (testSettingsKeyboardCommandsIfSyncToSigninEnabled)]) {
+    config.features_enabled.push_back(kConsistencyNewAccountInterface);
+    config.features_enabled.push_back(
+        syncer::kReplaceSyncPromosWithSignInPromos);
+  }
+  return config;
+}
 
 - (void)tearDown {
   // It is possible for a test to fail with a menu visible, which can cause
@@ -178,20 +194,11 @@ id<GREYMatcher> ClearBrowsingDataCell() {
       GREYAssertTrue([SettingsAppInterface isMetricsReportingEnabled],
                      @"Metrics reporting should be enabled.");
       break;
-    case kBreakpad:
-      GREYAssertTrue([SettingsAppInterface isBreakpadEnabled],
-                     @"Breakpad should be enabled.");
-      GREYAssertTrue([SettingsAppInterface isBreakpadReportingEnabled],
-                     @"Breakpad reporting should be enabled.");
-      break;
-    case kBreakpadFirstLaunch:
-      // For first launch after upgrade, or after install, uploading of crash
-      // reports is always disabled.  Check that the first launch flag is being
-      // honored.
-      GREYAssertTrue([SettingsAppInterface isBreakpadEnabled],
-                     @"Breakpad should be enabled.");
-      GREYAssertFalse([SettingsAppInterface isBreakpadReportingEnabled],
-                      @"Breakpad reporting should be disabled.");
+    case kCrashpad:
+      GREYAssertTrue([SettingsAppInterface isCrashpadEnabled],
+                     @"Crashpad should be enabled.");
+      GREYAssertTrue([SettingsAppInterface isCrashpadReportingEnabled],
+                     @"Crashpad reporting should be enabled.");
       break;
   }
 }
@@ -206,13 +213,10 @@ id<GREYMatcher> ClearBrowsingDataCell() {
                       @"Metrics reporting should be disabled.");
       break;
     }
-    case kBreakpad:
-    case kBreakpadFirstLaunch: {
-      // Check only whether or not breakpad is enabled.  Disabling
-      // breakpad does stop uploading, and does not change the flag
-      // used to check whether or not it's uploading.
-      GREYAssertFalse([SettingsAppInterface isBreakpadEnabled],
-                      @"Breakpad should be disabled.");
+    case kCrashpad: {
+      // Crashpad is always enabled.
+      GREYAssertTrue([SettingsAppInterface isCrashpadEnabled],
+                     @"Crashpad should be enabled.");
       break;
     }
   }
@@ -231,12 +235,11 @@ id<GREYMatcher> ClearBrowsingDataCell() {
                       @"Metrics reporting should be disabled.");
       break;
     }
-    case kBreakpad:
-    case kBreakpadFirstLaunch: {
-      GREYAssertTrue([SettingsAppInterface isBreakpadEnabled],
-                     @"Breakpad should be enabled.");
-      GREYAssertFalse([SettingsAppInterface isBreakpadReportingEnabled],
-                      @"Breakpad reporting should be disabled.");
+    case kCrashpad: {
+      GREYAssertTrue([SettingsAppInterface isCrashpadEnabled],
+                     @"Crashpad should be enabled.");
+      GREYAssertFalse([SettingsAppInterface isCrashpadReportingEnabled],
+                      @"Crashpad reporting should be disabled.");
       break;
     }
   }
@@ -319,35 +322,17 @@ id<GREYMatcher> ClearBrowsingDataCell() {
   [self assertsMetricsPrefsForService:kMetrics];
 }
 
-// Verifies that breakpad reporting works properly under possible settings of
+// Verifies that crashpad reporting works properly under possible settings of
 // the preference `kMetricsReportingEnabled`.
-// NOTE: breakpad only allows uploading for non-first-launch runs.
-- (void)testBreakpadReporting {
-  [self setTearDownHandler:^{
-    // Restore the first launch state to previous state.
-    [SettingsAppInterface resetFirstLaunchState];
-  }];
-
-  [SettingsAppInterface setFirstLunchState:NO];
-  [self assertsMetricsPrefsForService:kBreakpad];
-}
-
-// Verifies that breakpad reporting works properly under possible settings of
-// the preference `kMetricsReportingEnabled`.
-// NOTE: breakpad only allows uploading for non-first-launch runs.
-- (void)testBreakpadReportingFirstLaunch {
-  [self setTearDownHandler:^{
-    // Restore the first launch state to previous state.
-    [SettingsAppInterface resetFirstLaunchState];
-  }];
-
-  [SettingsAppInterface setFirstLunchState:YES];
-  [self assertsMetricsPrefsForService:kBreakpadFirstLaunch];
+// NOTE: crashpad only allows uploading for non-first-launch runs.
+- (void)testCrashpadReporting {
+  [self assertsMetricsPrefsForService:kCrashpad];
 }
 
 // Verifies that the Settings UI registers keyboard commands when presented, but
-// not when it itslef presents something.
-- (void)testSettingsKeyboardCommands {
+// not when it itself presents something. kReplaceSyncPromosWithSignInPromos is
+// disabled.
+- (void)testSettingsKeyboardCommandsIfSyncToSigninDisabled {
   [ChromeEarlGreyUI openSettingsMenu];
   [[EarlGrey selectElementWithMatcher:SettingsCollectionView()]
       assertWithMatcher:grey_notNil()];
@@ -357,8 +342,8 @@ id<GREYMatcher> ClearBrowsingDataCell() {
                  @"Settings should register key commands when presented.");
 
   // Present the Sign-in UI.
-  id<GREYMatcher> matcher = grey_allOf(chrome_test_util::PrimarySignInButton(),
-                                       grey_sufficientlyVisible(), nil);
+  id<GREYMatcher> matcher =
+      grey_allOf(SettingsSignInRowMatcher(), grey_sufficientlyVisible(), nil);
   [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
   // Wait for UI to finish loading the Sign-in screen.
   [ChromeEarlGreyUI waitForAppToIdle];
@@ -370,6 +355,42 @@ id<GREYMatcher> ClearBrowsingDataCell() {
   // Cancel the sign-in operation.
   [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
                                           kSkipSigninAccessibilityIdentifier)]
+      performAction:grey_tap()];
+
+  // Wait for UI to finish closing the Sign-in screen.
+  [ChromeEarlGreyUI waitForAppToIdle];
+
+  // Verify that the Settings register keyboard commands.
+  GREYAssertTrue([SettingsAppInterface settingsRegisteredKeyboardCommands],
+                 @"Settings should register key commands when presented.");
+}
+
+// Verifies that the Settings UI registers keyboard commands when presented, but
+// not when it itself presents something. kReplaceSyncPromosWithSignInPromos and
+// kConsistencyNewAccountInterface are enabled.
+- (void)testSettingsKeyboardCommandsIfSyncToSigninEnabled {
+  [ChromeEarlGreyUI openSettingsMenu];
+  [[EarlGrey selectElementWithMatcher:SettingsCollectionView()]
+      assertWithMatcher:grey_notNil()];
+
+  // Verify that the Settings register keyboard commands.
+  GREYAssertTrue([SettingsAppInterface settingsRegisteredKeyboardCommands],
+                 @"Settings should register key commands when presented.");
+
+  // Present the Sign-in UI.
+  id<GREYMatcher> matcher =
+      grey_allOf(SettingsSignInRowMatcher(), grey_sufficientlyVisible(), nil);
+  [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
+  // Wait for UI to finish loading the Sign-in screen.
+  [ChromeEarlGreyUI waitForAppToIdle];
+
+  // Verify that the Settings register keyboard commands.
+  GREYAssertFalse([SettingsAppInterface settingsRegisteredKeyboardCommands],
+                  @"Settings should not register key commands when presented.");
+
+  // Cancel the sign-in operation.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kFakeAuthCancelButtonIdentifier)]
       performAction:grey_tap()];
 
   // Wait for UI to finish closing the Sign-in screen.

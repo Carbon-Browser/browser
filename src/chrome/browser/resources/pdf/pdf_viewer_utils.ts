@@ -1,32 +1,32 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {getDeepActiveElement} from 'chrome://resources/js/util.js';
 
 import {LayoutOptions, ViewportRect} from './viewport.js';
 
-export type DocumentDimensionsMessageData = {
-  type: string,
-  height: number,
-  width: number,
-  pageDimensions: ViewportRect[],
-  layoutOptions?: LayoutOptions,
-};
+export interface DocumentDimensionsMessageData {
+  type: string;
+  height: number;
+  width: number;
+  pageDimensions: ViewportRect[];
+  layoutOptions?: LayoutOptions;
+}
 
-export type DestinationMessageData = {
-  type: string,
-  page: number,
-  x: number,
-  y: number,
-  zoom: number,
-};
+export interface DestinationMessageData {
+  type: string;
+  page: number;
+  x: number;
+  y: number;
+  zoom: number;
+}
 
-export type RequiredSaveResult = {
-  fileName: string,
-  dataToSave: ArrayBuffer,
-};
+export interface RequiredSaveResult {
+  fileName: string;
+  dataToSave: ArrayBuffer;
+}
 
 /**
  * Determines if the event has the platform-equivalent of the Windows ctrl key
@@ -39,6 +39,19 @@ export function hasCtrlModifier(e: KeyboardEvent): boolean {
   hasModifier = e.metaKey;  // AKA Command.
   // </if>
   return hasModifier;
+}
+
+/**
+ * Determines if the event has the platform-equivalent of the Windows ctrl key
+ * modifier, and only that modifier.
+ * @return Whether the event only has the ctrl key modifier.
+ */
+export function hasCtrlModifierOnly(e: KeyboardEvent): boolean {
+  let metaModifier = e.metaKey;
+  // <if expr="is_macosx">
+  metaModifier = e.ctrlKey;
+  // </if>
+  return hasCtrlModifier(e) && !e.shiftKey && !e.altKey && !metaModifier;
 }
 
 /**

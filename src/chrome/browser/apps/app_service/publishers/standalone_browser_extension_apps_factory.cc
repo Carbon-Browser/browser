@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "chrome/browser/apps/app_service/publishers/standalone_browser_extension_apps.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 
 namespace apps {
@@ -26,7 +25,9 @@ StandaloneBrowserExtensionAppsFactoryForApp::GetForProfile(Profile* profile) {
 // static
 StandaloneBrowserExtensionAppsFactoryForApp*
 StandaloneBrowserExtensionAppsFactoryForApp::GetInstance() {
-  return base::Singleton<StandaloneBrowserExtensionAppsFactoryForApp>::get();
+  static base::NoDestructor<StandaloneBrowserExtensionAppsFactoryForApp>
+      instance;
+  return instance.get();
 }
 
 // static
@@ -39,37 +40,21 @@ void StandaloneBrowserExtensionAppsFactoryForApp::ShutDownForTesting(
 
 StandaloneBrowserExtensionAppsFactoryForApp::
     StandaloneBrowserExtensionAppsFactoryForApp()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "StandaloneBrowserExtensionAppsForApp",
-          BrowserContextDependencyManager::GetInstance()) {
-  DependsOn(apps::AppServiceProxyFactory::GetInstance());
+          ProfileSelections::Builder()
+              .WithGuest(ProfileSelection::kOffTheRecordOnly)
+              .Build()) {
+  DependsOn(AppServiceProxyFactory::GetInstance());
 }
 
-KeyedService*
-StandaloneBrowserExtensionAppsFactoryForApp::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
-  return new StandaloneBrowserExtensionApps(
+std::unique_ptr<KeyedService> StandaloneBrowserExtensionAppsFactoryForApp::
+    BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const {
+  return std::make_unique<StandaloneBrowserExtensionApps>(
       AppServiceProxyFactory::GetForProfile(
           Profile::FromBrowserContext(context)),
       AppType::kStandaloneBrowserChromeApp);
-}
-
-content::BrowserContext*
-StandaloneBrowserExtensionAppsFactoryForApp::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  Profile* const profile = Profile::FromBrowserContext(context);
-  if (!profile) {
-    return nullptr;
-  }
-
-  // Use OTR profile for Guest Session.
-  if (profile->IsGuestSession()) {
-    return profile->IsOffTheRecord()
-               ? chrome::GetBrowserContextOwnInstanceInIncognito(context)
-               : nullptr;
-  }
-
-  return BrowserContextKeyedServiceFactory::GetBrowserContextToUse(context);
 }
 
 /******** StandaloneBrowserExtensionAppsFactoryForExtension ********/
@@ -86,8 +71,9 @@ StandaloneBrowserExtensionAppsFactoryForExtension::GetForProfile(
 // static
 StandaloneBrowserExtensionAppsFactoryForExtension*
 StandaloneBrowserExtensionAppsFactoryForExtension::GetInstance() {
-  return base::Singleton<
-      StandaloneBrowserExtensionAppsFactoryForExtension>::get();
+  static base::NoDestructor<StandaloneBrowserExtensionAppsFactoryForExtension>
+      instance;
+  return instance.get();
 }
 
 // static
@@ -100,10 +86,12 @@ void StandaloneBrowserExtensionAppsFactoryForExtension::ShutDownForTesting(
 
 StandaloneBrowserExtensionAppsFactoryForExtension::
     StandaloneBrowserExtensionAppsFactoryForExtension()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "StandaloneBrowserExtensionAppsForExtension",
-          BrowserContextDependencyManager::GetInstance()) {
-  DependsOn(apps::AppServiceProxyFactory::GetInstance());
+          ProfileSelections::Builder()
+              .WithGuest(ProfileSelection::kOffTheRecordOnly)
+              .Build()) {
+  DependsOn(AppServiceProxyFactory::GetInstance());
 }
 
 KeyedService*
@@ -113,24 +101,6 @@ StandaloneBrowserExtensionAppsFactoryForExtension::BuildServiceInstanceFor(
       AppServiceProxyFactory::GetForProfile(
           Profile::FromBrowserContext(context)),
       AppType::kStandaloneBrowserExtension);
-}
-
-content::BrowserContext*
-StandaloneBrowserExtensionAppsFactoryForExtension::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  Profile* const profile = Profile::FromBrowserContext(context);
-  if (!profile) {
-    return nullptr;
-  }
-
-  // Use OTR profile for Guest Session.
-  if (profile->IsGuestSession()) {
-    return profile->IsOffTheRecord()
-               ? chrome::GetBrowserContextOwnInstanceInIncognito(context)
-               : nullptr;
-  }
-
-  return BrowserContextKeyedServiceFactory::GetBrowserContextToUse(context);
 }
 
 }  // namespace apps

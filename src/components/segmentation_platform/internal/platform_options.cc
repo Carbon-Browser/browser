@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,18 @@
 
 namespace segmentation_platform {
 
-PlatformOptions::PlatformOptions(bool force_refresh_results)
-    : force_refresh_results(force_refresh_results) {}
+PlatformOptions::PlatformOptions(bool force_refresh_results,
+                                 bool disable_model_execution_delay)
+    : force_refresh_results(force_refresh_results),
+      disable_model_execution_delay(disable_model_execution_delay) {}
 
 // static
 PlatformOptions PlatformOptions::CreateDefault() {
-  return PlatformOptions(base::CommandLine::ForCurrentProcess()->HasSwitch(
-      kSegmentationPlatformRefreshResultsSwitch));
+  return PlatformOptions(
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          kSegmentationPlatformRefreshResultsSwitch),
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          kSegmentationPlatformDisableModelExecutionDelaySwitch));
 }
 
 }  // namespace segmentation_platform

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,10 +32,11 @@ class MEDIA_EXPORT VideoEncoderFallback : public VideoEncoder {
   // VideoEncoder implementation.
   void Initialize(VideoCodecProfile profile,
                   const Options& options,
+                  EncoderInfoCB info_cb,
                   OutputCB output_cb,
                   EncoderStatusCB done_cb) override;
   void Encode(scoped_refptr<VideoFrame> frame,
-              bool key_frame,
+              const EncodeOptions& encode_options,
               EncoderStatusCB done_cb) override;
   void ChangeOptions(const Options& options,
                      OutputCB output_cb,
@@ -47,8 +48,9 @@ class MEDIA_EXPORT VideoEncoderFallback : public VideoEncoder {
   void FallbackEncode(PendingEncode args);
   void FallbackInitCompleted(EncoderStatus status);
   PendingEncode MakePendingEncode(scoped_refptr<VideoFrame> frame,
-                                  bool key_frame,
+                                  const EncodeOptions& encode_options,
                                   EncoderStatusCB done_cb);
+  void CallInfo(const VideoEncoderInfo& info);
   void CallOutput(VideoEncoderOutput output,
                   absl::optional<CodecDescription> desc);
 
@@ -67,6 +69,7 @@ class MEDIA_EXPORT VideoEncoderFallback : public VideoEncoder {
 
   CreateFallbackCB create_fallback_cb_;
   EncoderStatusCB init_done_cb_;
+  EncoderInfoCB info_cb_;
   OutputCB output_cb_;
   VideoCodecProfile profile_;
   Options options_;

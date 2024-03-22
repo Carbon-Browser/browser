@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -26,8 +26,8 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/api/gcm/gcm_api.h"
+#include "chrome/browser/extensions/crx_installer.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
@@ -333,11 +333,9 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
     extension_service_->AddExtension(extension);
   }
 
-  static bool IsCrxInstallerDone(extensions::CrxInstaller** installer,
-                                 const content::NotificationSource& source,
-                                 const content::NotificationDetails& details) {
-    return content::Source<extensions::CrxInstaller>(source).ptr() ==
-           *installer;
+  void InstallerDone(const absl::optional<CrxInstallError>& error) {
+    ASSERT_FALSE(error);
+    waiter_.SignalCompleted();
   }
 
   void UpdateExtension(const Extension* extension,
@@ -354,16 +352,15 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
     path = path.Append(data_dir.BaseName());
     ASSERT_TRUE(base::CopyFile(data_dir, path));
 
-    extensions::CrxInstaller* installer = NULL;
-    content::WindowedNotificationObserver observer(
-        extensions::NOTIFICATION_CRX_INSTALLER_DONE,
-        base::BindRepeating(&IsCrxInstallerDone, &installer));
     extensions::CRXFileInfo crx_info(path, extensions::GetTestVerifierFormat());
     crx_info.extension_id = extension->id();
-    extension_service_->UpdateExtension(crx_info, true, &installer);
 
-    if (installer)
-      observer.Wait();
+    auto installer = extension_service_->CreateUpdateInstaller(crx_info, true);
+    installer->AddInstallerCallback(base::BindOnce(
+        &ExtensionGCMAppHandlerTest::InstallerDone, base::Unretained(this)));
+    installer->InstallCrxFile(crx_info);
+
+    waiter_.WaitUntilCompleted();
   }
 
   void DisableExtension(const Extension* extension) {
@@ -377,9 +374,7 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
 
   void UninstallExtension(const Extension* extension) {
     extension_service_->UninstallExtension(
-        extension->id(),
-        extensions::UNINSTALL_REASON_FOR_TESTING,
-        NULL);
+        extension->id(), extensions::UNINSTALL_REASON_FOR_TESTING, nullptr);
   }
 
   void Register(const std::string& app_id,
@@ -421,7 +416,8 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
   std::unique_ptr<content::InProcessUtilityThreadHelper>
       in_process_utility_thread_helper_;
   std::unique_ptr<TestingProfile> profile_;
-  raw_ptr<ExtensionService> extension_service_;  // Not owned.
+  raw_ptr<ExtensionService, DanglingUntriaged>
+      extension_service_;  // Not owned.
   base::ScopedTempDir temp_dir_;
 
   // This is needed to create extension service under CrOS.

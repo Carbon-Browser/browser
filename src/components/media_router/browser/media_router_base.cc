@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/check_op.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/uuid.h"
 #include "content/public/browser/browser_thread.h"
 
 using blink::mojom::PresentationConnectionState;
@@ -38,7 +38,7 @@ MediaRouterBase::MediaRouterBase() = default;
 
 // static
 std::string MediaRouterBase::CreatePresentationId() {
-  return "mr_" + base::GenerateGUID();
+  return "mr_" + base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 void MediaRouterBase::NotifyPresentationConnectionStateChange(

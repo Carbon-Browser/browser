@@ -1,11 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/offscreen_document_host.h"
 
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/values_test_util.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/devtools/devtools_window_testing.h"
@@ -26,7 +25,6 @@
 #include "extensions/browser/script_result_queue.h"
 #include "extensions/browser/view_type_utils.h"
 #include "extensions/common/constants.h"
-#include "extensions/common/extension_features.h"
 #include "extensions/common/features/feature.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/test/test_extension_dir.h"
@@ -37,10 +35,7 @@ namespace extensions {
 
 class OffscreenDocumentBrowserTest : public ExtensionApiTest {
  public:
-  OffscreenDocumentBrowserTest() {
-    feature_list_.InitAndEnableFeature(
-        extensions_features::kExtensionsOffscreenDocuments);
-  }
+  OffscreenDocumentBrowserTest() = default;
   ~OffscreenDocumentBrowserTest() override = default;
 
   // Creates a new OffscreenDocumentHost and waits for it to load.
@@ -61,24 +56,10 @@ class OffscreenDocumentBrowserTest : public ExtensionApiTest {
     return offscreen_document;
   }
 
-  // Executes a script in `web_contents` and extracts a string from the
-  // result.
-  std::string ExecuteScriptSync(content::WebContents* web_contents,
-                                const std::string& script) {
-    std::string result;
-    EXPECT_TRUE(
-        content::ExecuteScriptAndExtractString(web_contents, script, &result))
-        << script;
-    return result;
-  }
-
   void SetUpOnMainThread() override {
     ExtensionBrowserTest::SetUpOnMainThread();
     host_resolver()->AddRule("*", "127.0.0.1");
   }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
 };
 
 // Test basic properties of offscreen documents.
@@ -118,7 +99,7 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest,
   EXPECT_EQ(offscreen_url, contents->GetLastCommittedURL());
   // - The offscreen document should be, well, offscreen; it should not be
   //   contained within any Browser window.
-  EXPECT_EQ(nullptr, chrome::FindBrowserWithWebContents(contents));
+  EXPECT_EQ(nullptr, chrome::FindBrowserWithTab(contents));
   // - The view type should be correctly set (it should not be considered a
   //   background page, tab, or other type of view).
   EXPECT_EQ(mojom::ViewType::kOffscreenDocument,
@@ -174,9 +155,9 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest,
     static constexpr char kScript[] =
         R"({
              let div = document.getElementById('signal');
-             domAutomationController.send(div ? div.innerText : '<no div>');
+             div ? div.innerText : '<no div>';
            })";
-    EXPECT_EQ("Hello, World", ExecuteScriptSync(contents, kScript));
+    EXPECT_EQ("Hello, World", EvalJs(contents, kScript));
   }
 
   {
@@ -221,10 +202,10 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest, APIAccessIsLimited) {
     constexpr char kScript[] =
         R"({
              let keys = Object.keys(chrome);
-             domAutomationController.send(JSON.stringify(keys.sort()));
+             JSON.stringify(keys.sort());
            })";
     EXPECT_EQ(R"(["csi","loadTimes","runtime","test"])",
-              ExecuteScriptSync(contents, kScript));
+              EvalJs(contents, kScript));
   }
 
   {
@@ -235,13 +216,17 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest, APIAccessIsLimited) {
     constexpr char kScript[] =
         R"({
              let keys = Object.keys(chrome.runtime);
-             domAutomationController.send(JSON.stringify(keys.sort()));
+             JSON.stringify(keys.sort());
            })";
     static constexpr char kExpectedProperties[] =
-        R"(["OnInstalledReason","OnRestartRequiredReason","PlatformArch",)"
-        R"("PlatformNaclArch","PlatformOs","RequestUpdateCheckStatus",)"
-        R"("connect","getURL","id","onConnect","onMessage","sendMessage"])";
-    EXPECT_EQ(kExpectedProperties, ExecuteScriptSync(contents, kScript));
+        // Enums.
+        R"(["ContextType","OnInstalledReason","OnRestartRequiredReason",)"
+        R"("PlatformArch","PlatformNaclArch","PlatformOs",)"
+        R"("RequestUpdateCheckStatus",)"
+        // Methods and events.
+        R"("connect","getURL","id","onConnect","onConnectExternal",)"
+        R"("onMessage","onMessageExternal","sendMessage"])";
+    EXPECT_EQ(kExpectedProperties, EvalJs(contents, kScript));
   }
 }
 
@@ -388,15 +373,13 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest,
            } catch (e) {
              msg = e.toString();
            }
-           domAutomationController.send(msg);
+           return msg;
          })();)";
 
   EXPECT_EQ("fetch1 - cat\n",
-            ExecuteScriptSync(contents,
-                              content::JsReplace(kFetchScript, allowed_url)));
+            EvalJs(contents, content::JsReplace(kFetchScript, allowed_url)));
   EXPECT_EQ("TypeError: Failed to fetch",
-            ExecuteScriptSync(
-                contents, content::JsReplace(kFetchScript, restricted_url)));
+            EvalJs(contents, content::JsReplace(kFetchScript, restricted_url)));
 }
 
 // Tests that content scripts matching iframes contained within an offscreen
@@ -473,11 +456,8 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest,
   auto get_script_div_in_frame = [](content::RenderFrameHost* frame) {
     static constexpr char kGetScriptDiv[] =
         R"(var d = document.getElementById('script-div');
-           domAutomationController.send(d ? d.textContent : '<no div>');)";
-    std::string result;
-    EXPECT_TRUE(
-        content::ExecuteScriptAndExtractString(frame, kGetScriptDiv, &result));
-    return result;
+           d ? d.textContent : '<no div>';)";
+    return content::EvalJs(frame, kGetScriptDiv).ExtractString();
   };
 
   // Navigate a frame to a URL that matches an extension content script; the
@@ -609,7 +589,7 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest, CallWindowClose) {
       run_loop.Quit();
     };
     offscreen_document->SetCloseHandler(
-        base::BindOnce(base::BindLambdaForTesting(close_handler)));
+        base::BindLambdaForTesting(close_handler));
     content::ExecuteScriptAsync(offscreen_document->host_contents(),
                                 "window.close();");
     run_loop.Run();
@@ -632,7 +612,7 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest, CallWindowClose) {
       ++close_count;
     };
     offscreen_document->SetCloseHandler(
-        base::BindOnce(base::BindLambdaForTesting(close_handler)));
+        base::BindLambdaForTesting(close_handler));
 
     content::WebContents* contents = offscreen_document->host_contents();
     // WebContentsDelegate::CloseContents() isn't guaranteed to be called by the
@@ -641,7 +621,7 @@ IN_PROC_BROWSER_TEST_F(OffscreenDocumentBrowserTest, CallWindowClose) {
     // execute script in the renderer multiple times to ensure all the pipes
     // are appropriately flushed.
     for (int i = 0; i < 20; ++i)
-      ASSERT_TRUE(content::ExecuteScript(contents, "window.close();"));
+      ASSERT_TRUE(content::ExecJs(contents, "window.close();"));
     // Even though `window.close()` was called 20 times, the close handler
     // should only be invoked once.
     EXPECT_EQ(1u, close_count);

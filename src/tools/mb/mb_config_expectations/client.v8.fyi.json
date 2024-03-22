@@ -2,6 +2,7 @@
   "Android V8 FYI Release (Nexus 5X)": {
     "gn_args": {
       "dcheck_always_on": true,
+      "debuggable_apks": false,
       "ffmpeg_branding": "Chrome",
       "is_component_build": false,
       "is_debug": false,
@@ -9,7 +10,8 @@
       "symbol_level": 1,
       "target_cpu": "arm64",
       "target_os": "android",
-      "use_goma": true,
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true,
       "use_static_angle": true
     }
   },
@@ -21,7 +23,8 @@
       "is_debug": false,
       "is_lsan": true,
       "symbol_level": 1,
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "Linux Debug Builder": {
@@ -31,7 +34,7 @@
       "is_debug": true,
       "proprietary_codecs": true,
       "symbol_level": 1,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "Linux V8 FYI Release (NVIDIA)": {
@@ -42,7 +45,8 @@
       "is_debug": false,
       "proprietary_codecs": true,
       "symbol_level": 1,
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "Linux V8 FYI Release - pointer compression (NVIDIA)": {
@@ -53,7 +57,8 @@
       "is_debug": false,
       "proprietary_codecs": true,
       "symbol_level": 1,
-      "use_goma": true,
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true,
       "v8_enable_pointer_compression": false
     }
   },
@@ -65,18 +70,20 @@
       "is_debug": false,
       "proprietary_codecs": true,
       "symbol_level": 1,
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   },
   "V8 Android GN (dbg)": {
     "gn_args": {
+      "debuggable_apks": false,
       "ffmpeg_branding": "Chrome",
       "is_component_build": true,
       "is_debug": true,
       "proprietary_codecs": true,
       "symbol_level": 1,
       "target_os": "android",
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "V8 Blink Linux": {
@@ -86,7 +93,7 @@
       "is_component_build": false,
       "is_debug": false,
       "proprietary_codecs": true,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "V8 Blink Linux Debug": {
@@ -96,7 +103,7 @@
       "is_component_build": false,
       "is_debug": false,
       "proprietary_codecs": true,
-      "use_goma": true,
+      "use_remoteexec": true,
       "v8_enable_debugging_features": true
     }
   },
@@ -107,7 +114,7 @@
       "is_component_build": false,
       "is_debug": false,
       "proprietary_codecs": true,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "V8 Blink Mac": {
@@ -117,7 +124,7 @@
       "is_component_build": false,
       "is_debug": false,
       "proprietary_codecs": true,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "V8 Blink Win": {
@@ -127,7 +134,7 @@
       "is_component_build": false,
       "is_debug": false,
       "proprietary_codecs": true,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "V8 Linux GN": {
@@ -135,7 +142,7 @@
       "dcheck_always_on": false,
       "is_component_build": false,
       "is_debug": false,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "Win V8 FYI Release (NVIDIA)": {
@@ -148,7 +155,8 @@
       "proprietary_codecs": true,
       "symbol_level": 1,
       "target_cpu": "x86",
-      "use_goma": true
+      "use_dummy_lastchange": true,
+      "use_remoteexec": true
     }
   }
 }

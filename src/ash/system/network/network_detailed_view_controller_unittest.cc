@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,26 +19,30 @@
 #include "chromeos/ash/components/network/network_connect.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/services/bluetooth_config/fake_adapter_state_controller.h"
-#include "chromeos/services/bluetooth_config/scoped_bluetooth_config_test_helper.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/bluetooth_config/fake_adapter_state_controller.h"
+#include "chromeos/ash/services/bluetooth_config/scoped_bluetooth_config_test_helper.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace ash {
 
 namespace {
 
-using chromeos::network_config::mojom::ActivationStateType;
-using chromeos::network_config::mojom::ConnectionStateType;
-using chromeos::network_config::mojom::NetworkStatePropertiesPtr;
-using chromeos::network_config::mojom::NetworkType;
-
-using chromeos::bluetooth_config::ScopedBluetoothConfigTestHelper;
-using chromeos::bluetooth_config::mojom::BluetoothSystemState;
+using bluetooth_config::ScopedBluetoothConfigTestHelper;
+using bluetooth_config::mojom::BluetoothSystemState;
+using ::chromeos::network_config::mojom::ActivationStateType;
+using ::chromeos::network_config::mojom::ConnectionStateType;
+using ::chromeos::network_config::mojom::NetworkStatePropertiesPtr;
+using ::chromeos::network_config::mojom::NetworkType;
+using ::chromeos::network_config::mojom::PortalState;
 
 const std::string kCellular = "cellular";
 constexpr char kCellularDevicePath[] = "/device/cellular_device";
+
 constexpr char kWifi[] = "Wifi";
+constexpr char kServicePatternWiFi[] = R"({
+    "GUID": "%s", "Type": "wifi", "State": "%s", "Strength": 100,
+            "Connectable": true})";
 
 constexpr char kTetherName[] = "tether";
 constexpr char kTetherGuid[] = "tetherNetworkGuid";
@@ -57,8 +61,9 @@ constexpr char kNetworkConnectionDetails[] =
 
 const std::string kNetworkTechnologyWiFi = "WiFi";
 const std::string kNetworkTechnologyMobile = "Mobile";
+const std::string kNetworkTechnologyCellular = "Cellular";
 
-class NetworkConnectTestDelegate : public chromeos::NetworkConnect::Delegate {
+class NetworkConnectTestDelegate : public NetworkConnect::Delegate {
  public:
   NetworkConnectTestDelegate() {}
 
@@ -74,10 +79,20 @@ class NetworkConnectTestDelegate : public chromeos::NetworkConnect::Delegate {
     return false;
   }
   void ShowMobileSetupDialog(const std::string& network_id) override {}
+  void ShowCarrierUnlockNotification() override {}
   void ShowCarrierAccountDetail(const std::string& network_id) override {}
+  void ShowPortalSignin(const std::string& network_id,
+                        NetworkConnect::Source source) override {
+    portal_signin_guid_ = network_id;
+  }
   void ShowNetworkConnectError(const std::string& error_name,
                                const std::string& network_id) override {}
   void ShowMobileActivationError(const std::string& network_id) override {}
+
+  const std::string& portal_signin_guid() const { return portal_signin_guid_; }
+
+ private:
+  std::string portal_signin_guid_;
 };
 
 }  // namespace
@@ -88,28 +103,15 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
     // Initialize CrosNetworkConfigTestHelper here, so we can initialize
     // a unique network handler and also use NetworkConnectTestDelegate to
     // initialize NetworkConnect.
-    network_config_helper_ = std::make_unique<
-        chromeos::network_config::CrosNetworkConfigTestHelper>();
+    network_config_helper_ =
+        std::make_unique<network_config::CrosNetworkConfigTestHelper>();
 
-    chromeos::NetworkHandler::Initialize();
+    NetworkHandler::Initialize();
     base::RunLoop().RunUntilIdle();
 
-    // Creating a service here, since we would be testing that wifi,
-    // networks which can be connected to are actually connected to. This
-    // checks that chromeos::NetworkConnect eventually connects us to the
-    // network.
-    wifi_service_path_ =
-        network_state_helper()->ConfigureService(base::StringPrintf(
-            R"({"GUID": "%s", "Type": "wifi",
-            "State": "idle", "Strength": 100,
-            "Connectable": true})",
-            kWifi));
-
     network_connect_delegate_ = std::make_unique<NetworkConnectTestDelegate>();
-    chromeos::NetworkConnect::Initialize(network_connect_delegate_.get());
+    NetworkConnect::Initialize(network_connect_delegate_.get());
     AshTestBase::SetUp();
-
-    feature_list_.InitAndEnableFeature(features::kQuickSettingsNetworkRevamp);
 
     network_detailed_view_controller_ =
         std::make_unique<NetworkDetailedViewController>(
@@ -119,8 +121,8 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
   void TearDown() override {
     network_detailed_view_controller_.reset();
     AshTestBase::TearDown();
-    chromeos::NetworkConnect::Shutdown();
-    chromeos::NetworkHandler::Shutdown();
+    NetworkConnect::Shutdown();
+    NetworkHandler::Shutdown();
     network_connect_delegate_.reset();
   }
 
@@ -187,13 +189,12 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
     base::RunLoop().RunUntilIdle();
   }
 
-  chromeos::NetworkStateHandler::TechnologyState GetTechnologyState(
-      const chromeos::NetworkTypePattern& network) {
+  NetworkStateHandler::TechnologyState GetTechnologyState(
+      const NetworkTypePattern& network) {
     return network_state_handler()->GetTechnologyState(network);
   }
 
-  void SetTetherTechnologyState(
-      chromeos::NetworkStateHandler::TechnologyState state) {
+  void SetTetherTechnologyState(NetworkStateHandler::TechnologyState state) {
     network_state_handler()->SetTetherTechnologyState(state);
     base::RunLoop().RunUntilIdle();
   }
@@ -213,25 +214,11 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
     base::RunLoop().RunUntilIdle();
   }
 
-  void SetCellularSimLockStatus(const std::string& lock_type, bool sim_locked) {
-    base::Value sim_lock_status(base::Value::Type::DICTIONARY);
-    sim_lock_status.SetKey(shill::kSIMLockEnabledProperty,
-                           base::Value(sim_locked));
-    sim_lock_status.SetKey(shill::kSIMLockTypeProperty, base::Value(lock_type));
-    sim_lock_status.SetKey(shill::kSIMLockRetriesLeftProperty, base::Value(3));
-    network_state_helper()->device_test()->SetDeviceProperty(
-        kCellularDevicePath, shill::kSIMLockStatusProperty,
-        std::move(sim_lock_status),
-        /*notify_changed=*/true);
-
-    base::RunLoop().RunUntilIdle();
-  }
-
   // Adds a Tether network state, adds a Wifi network to be used as the Wifi
   // hotspot, and associates the two networks.
   void AddTetherDevice() {
     network_state_handler()->SetTetherTechnologyState(
-        chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED);
+        NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED);
     network_state_handler()->AddTetherNetworkState(
         kTetherGuid, kTetherName, kTetherCarrier, /*battery_percentage=*/100,
         kSignalStrength, /*has_connected_to_host=*/false);
@@ -239,6 +226,11 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
         base::StringPrintf(kServicePatternTetherWiFi, kWifiServiceGuid));
     network_state_handler()->AssociateTetherNetworkStateWithWifiNetwork(
         kTetherGuid, kWifiServiceGuid);
+  }
+
+  void AddWifiService(std::string state) {
+    wifi_service_path_ = network_state_helper()->ConfigureService(
+        base::StringPrintf(kServicePatternWiFi, kWifi, state.c_str()));
   }
 
   void SetBluetoothAdapterState(BluetoothSystemState system_state) {
@@ -254,12 +246,16 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
         ->GetAdapterState();
   }
 
+  const std::string& portal_signin_guid() const {
+    return network_connect_delegate_->portal_signin_guid();
+  }
+
  private:
-  chromeos::NetworkStateHandler* network_state_handler() {
+  NetworkStateHandler* network_state_handler() {
     return network_state_helper()->network_state_handler();
   }
 
-  chromeos::NetworkStateTestHelper* network_state_helper() {
+  NetworkStateTestHelper* network_state_helper() {
     return &network_config_helper_->network_state_helper();
   }
 
@@ -267,8 +263,7 @@ class NetworkDetailedViewControllerTest : public AshTestBase {
     return ash_test_helper()->bluetooth_config_test_helper();
   }
 
-  base::test::ScopedFeatureList feature_list_;
-  std::unique_ptr<chromeos::network_config::CrosNetworkConfigTestHelper>
+  std::unique_ptr<network_config::CrosNetworkConfigTestHelper>
       network_config_helper_;
   std::unique_ptr<NetworkConnectTestDelegate> network_connect_delegate_;
   std::unique_ptr<NetworkDetailedViewController>
@@ -391,6 +386,68 @@ TEST_F(NetworkDetailedViewControllerTest, CellularNetworkListItemSelected) {
       /*count=*/1u, /*total_count=*/2u);
 }
 
+TEST_F(NetworkDetailedViewControllerTest,
+       CarrierLockedNetworkListItemSelected) {
+  base::UserActionTester user_action_tester;
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kCellularCarrierLock);
+
+  EXPECT_EQ(0, user_action_tester.GetActionCount(kNetworkConnectionDetails));
+  EXPECT_EQ(0, user_action_tester.GetActionCount(kNetworkConnectConfigured));
+  EXPECT_EQ(0, GetSystemTrayClient()->show_network_settings_count());
+  EXPECT_EQ(0, GetSystemTrayClient()->show_sim_unlock_settings_count());
+
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenNetworkSettingsPage,
+      /*count=*/0u, /*total_count=*/0u);
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenSimUnlockDialog,
+      /*count=*/0u, /*total_count=*/0u);
+
+  NetworkStatePropertiesPtr cellular_network =
+      CreateStandaloneNetworkProperties(kCellular, NetworkType::kCellular,
+                                        ConnectionStateType::kConnected);
+
+  // When cellular network is carrier locked, verify that SIM unlock
+  // settings page is NOT displayed. Device will be unlocked only through
+  // carrier lock manager.
+  cellular_network->type_state->get_cellular()->sim_locked = true;
+  cellular_network->type_state->get_cellular()->sim_lock_type = "network-pin";
+  SelectNetworkListItem(cellular_network);
+  EXPECT_EQ(0, GetSystemTrayClient()->show_sim_unlock_settings_count());
+}
+
+TEST_F(NetworkDetailedViewControllerTest,
+       CarrierLockedNetworkListItemSelectedFeatureDisabled) {
+  base::UserActionTester user_action_tester;
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(features::kCellularCarrierLock);
+
+  EXPECT_EQ(0, user_action_tester.GetActionCount(kNetworkConnectionDetails));
+  EXPECT_EQ(0, user_action_tester.GetActionCount(kNetworkConnectConfigured));
+  EXPECT_EQ(0, GetSystemTrayClient()->show_network_settings_count());
+  EXPECT_EQ(0, GetSystemTrayClient()->show_sim_unlock_settings_count());
+
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenNetworkSettingsPage,
+      /*count=*/0u, /*total_count=*/0u);
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenSimUnlockDialog,
+      /*count=*/0u, /*total_count=*/0u);
+
+  NetworkStatePropertiesPtr cellular_network =
+      CreateStandaloneNetworkProperties(kCellular, NetworkType::kCellular,
+                                        ConnectionStateType::kConnected);
+
+  // With feature flag disabled verify that When cellular
+  // network is carrier locked SIM unlock
+  // settings page is displayed.
+  cellular_network->type_state->get_cellular()->sim_locked = true;
+  cellular_network->type_state->get_cellular()->sim_lock_type = "network-pin";
+  SelectNetworkListItem(cellular_network);
+  EXPECT_EQ(1, GetSystemTrayClient()->show_sim_unlock_settings_count());
+}
+
 TEST_F(NetworkDetailedViewControllerTest, WifiNetworkListItemSelected) {
   base::UserActionTester user_action_tester;
 
@@ -406,6 +463,7 @@ TEST_F(NetworkDetailedViewControllerTest, WifiNetworkListItemSelected) {
       NetworkRowClickedAction::kConnectToNetwork,
       /*count=*/0u, /*total_count=*/0u);
 
+  AddWifiService(shill::kStateIdle);
   // Clicking on an already connected network opens settings page.
   // Since this network is already connected, selecting this network
   // in network list vew should result in no change in NetworkState of
@@ -502,8 +560,8 @@ TEST_F(NetworkDetailedViewControllerTest, WifiNetworkListItemSelected) {
 
 TEST_F(NetworkDetailedViewControllerTest, WifiStateChange) {
   // By default ash test instantiates WiFi networks and enables them.
-  EXPECT_EQ(chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
-            GetTechnologyState(chromeos::NetworkTypePattern::WiFi()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::WiFi()));
   CheckNetworkTypeToggledHistogramBuckets(
       /*network_type=*/kNetworkTechnologyWiFi,
       /*new_state=*/false, /*count=*/0u,
@@ -516,9 +574,8 @@ TEST_F(NetworkDetailedViewControllerTest, WifiStateChange) {
       /*network_type=*/kNetworkTechnologyWiFi,
       /*new_state=*/false, /*count=*/1u,
       /*total_count=*/1u);
-  EXPECT_EQ(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
-      GetTechnologyState(chromeos::NetworkTypePattern::WiFi()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
+            GetTechnologyState(NetworkTypePattern::WiFi()));
 
   // Renable wifi.
   ToggleWifiState(/*new_state=*/true);
@@ -527,19 +584,22 @@ TEST_F(NetworkDetailedViewControllerTest, WifiStateChange) {
       /*network_type=*/kNetworkTechnologyWiFi,
       /*new_state=*/true, /*count=*/1u,
       /*total_count=*/2u);
-  EXPECT_EQ(chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
-            GetTechnologyState(chromeos::NetworkTypePattern::WiFi()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::WiFi()));
 }
 
 TEST_F(NetworkDetailedViewControllerTest, MobileToggleClicked) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(features::kInstantHotspotRebrand);
+
   AddCellularDevice();
 
   CheckNetworkTypeToggledHistogramBuckets(
       /*network_type=*/kNetworkTechnologyMobile,
       /*new_state=*/false, /*count=*/0u,
       /*total_count=*/0u);
-  EXPECT_EQ(chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
-            GetTechnologyState(chromeos::NetworkTypePattern::Cellular()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Cellular()));
 
   ToggleMobileState(/*new_state=*/false);
 
@@ -547,92 +607,158 @@ TEST_F(NetworkDetailedViewControllerTest, MobileToggleClicked) {
       /*network_type=*/kNetworkTechnologyMobile,
       /*new_state=*/false, /*count=*/1u,
       /*total_count=*/1u);
-  EXPECT_EQ(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
-      GetTechnologyState(chromeos::NetworkTypePattern::Cellular()));
-  EXPECT_EQ(0, GetSystemTrayClient()->show_sim_unlock_settings_count());
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
+            GetTechnologyState(NetworkTypePattern::Cellular()));
 
-  // When SIM is locked and new state is being toggled on show SIM unlock
-  // dialog.
-  SetCellularSimLockStatus(shill::kSIMLockPin, /*sim_locked=*/true);
+  // When Cellular and Tether are both available toggle should control cellular.
+  AddTetherDevice();
+
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+
+  // Set Tether to available and check toggle updates Cellular.
+  SetTetherTechnologyState(
+      NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE);
+
   ToggleMobileState(/*new_state=*/true);
-  EXPECT_EQ(1, GetSystemTrayClient()->show_sim_unlock_settings_count());
-  EXPECT_EQ(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
-      GetTechnologyState(chromeos::NetworkTypePattern::Cellular()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Cellular()));
   CheckNetworkTypeToggledHistogramBuckets(
       /*network_type=*/kNetworkTechnologyMobile,
       /*new_state=*/true, /*count=*/1u,
       /*total_count=*/2u);
 
-  // When Cellular and Tether are both available toggle should control cellular.
-  AddTetherDevice();
-
-  EXPECT_EQ(chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
-            GetTechnologyState(chromeos::NetworkTypePattern::Tether()));
-
-  // Set Tether to available and check toggle updates Cellular.
-  SetTetherTechnologyState(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE);
-  SetCellularSimLockStatus(/*lock_type=*/"", /*sim_locked=*/false);
-
-  ToggleMobileState(/*new_state=*/true);
-  EXPECT_EQ(1, GetSystemTrayClient()->show_sim_unlock_settings_count());
-  EXPECT_EQ(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
-      GetTechnologyState(chromeos::NetworkTypePattern::Tether()));
-  EXPECT_EQ(chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
-            GetTechnologyState(chromeos::NetworkTypePattern::Cellular()));
-  CheckNetworkTypeToggledHistogramBuckets(
-      /*network_type=*/kNetworkTechnologyMobile,
-      /*new_state=*/true, /*count=*/2u,
-      /*total_count=*/3u);
-
   ClearDevices();
   AddTetherDevice();
 
   // Toggle now controls Tether since there are no Cellular devices.
-  EXPECT_EQ(chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
-            GetTechnologyState(chromeos::NetworkTypePattern::Tether()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
 
   ToggleMobileState(/*new_state=*/false);
-  EXPECT_EQ(1, GetSystemTrayClient()->show_sim_unlock_settings_count());
-  EXPECT_EQ(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
-      GetTechnologyState(chromeos::NetworkTypePattern::Tether()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
+            GetTechnologyState(NetworkTypePattern::Tether()));
   CheckNetworkTypeToggledHistogramBuckets(
       /*network_type=*/kNetworkTechnologyMobile,
       /*new_state=*/false, /*count=*/2u,
-      /*total_count=*/4u);
+      /*total_count=*/3u);
 
   // When Tether is uninitialized and Bluetooth is disabled, toggling Mobile on
   // should enable Bluetooth.
   SetTetherTechnologyState(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED);
+      NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED);
   SetBluetoothAdapterState(BluetoothSystemState::kDisabled);
 
   ToggleMobileState(/*new_state=*/true);
   EXPECT_EQ(BluetoothSystemState::kEnabling, GetBluetoothAdapterState());
-  EXPECT_EQ(1, GetSystemTrayClient()->show_sim_unlock_settings_count());
-  EXPECT_EQ(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED,
-      GetTechnologyState(chromeos::NetworkTypePattern::Tether()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
   CheckNetworkTypeToggledHistogramBuckets(
       /*network_type=*/kNetworkTechnologyMobile,
-      /*new_state=*/true, /*count=*/3u,
-      /*total_count=*/5u);
+      /*new_state=*/true, /*count=*/2u,
+      /*total_count=*/4u);
 
   // Simulate Bluetooth adapter being enabled. Note that when testing Bluetooth
   // will be set to kEnabling and needs to be manually changed to kEnabled using
   // adapter state. Enabling Bluetooth will also change Tether state to
   // available.
   SetTetherTechnologyState(
-      chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE);
+      NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE);
   SetBluetoothAdapterState(BluetoothSystemState::kEnabled);
 
   EXPECT_EQ(BluetoothSystemState::kEnabled, GetBluetoothAdapterState());
-  EXPECT_EQ(chromeos::NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
-            GetTechnologyState(chromeos::NetworkTypePattern::Tether()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+}
+
+TEST_F(NetworkDetailedViewControllerTest, MobileToggleDoesntAffectTether) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kInstantHotspotRebrand);
+
+  AddCellularDevice();
+  AddTetherDevice();
+
+  CheckNetworkTypeToggledHistogramBuckets(
+      /*network_type=*/kNetworkTechnologyCellular,
+      /*new_state=*/false, /*count=*/0u,
+      /*total_count=*/0u);
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Cellular()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+
+  // Toggle should only control Cellular device, not Tether device.
+  ToggleMobileState(/*new_state=*/false);
+  CheckNetworkTypeToggledHistogramBuckets(
+      /*network_type=*/kNetworkTechnologyCellular,
+      /*new_state=*/false, /*count=*/1u,
+      /*total_count=*/1u);
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_AVAILABLE,
+            GetTechnologyState(NetworkTypePattern::Cellular()));
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_ENABLED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+}
+
+TEST_F(NetworkDetailedViewControllerTest, MobileToggleDoesntAffectBluetooth) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kInstantHotspotRebrand);
+
+  AddCellularDevice();
+  AddTetherDevice();
+
+  // When Tether is uninitialized and Bluetooth is disabled, toggling Mobile on
+  // should NOT enable Bluetooth with the Instant Hotspot Rebrand flag enabled.
+  SetTetherTechnologyState(
+      NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED);
+  SetBluetoothAdapterState(BluetoothSystemState::kDisabled);
+
+  ToggleMobileState(/*new_state=*/true);
+  EXPECT_EQ(BluetoothSystemState::kDisabled, GetBluetoothAdapterState());
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+  CheckNetworkTypeToggledHistogramBuckets(
+      /*network_type=*/kNetworkTechnologyCellular,
+      /*new_state=*/true, /*count=*/1u,
+      /*total_count=*/1u);
+
+  // Simulate Bluetooth adapter being enabled. Note that when testing Bluetooth
+  // will be set to kEnabling and needs to be manually changed to kEnabled using
+  // adapter state. Disabling cellular will NOT change the Bluetooth or Tether
+  // state to available.
+  SetTetherTechnologyState(
+      NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED);
+  SetBluetoothAdapterState(BluetoothSystemState::kEnabled);
+
+  ToggleMobileState(/*new_state=*/false);
+  EXPECT_EQ(BluetoothSystemState::kEnabled, GetBluetoothAdapterState());
+  EXPECT_EQ(NetworkStateHandler::TechnologyState::TECHNOLOGY_UNINITIALIZED,
+            GetTechnologyState(NetworkTypePattern::Tether()));
+}
+
+TEST_F(NetworkDetailedViewControllerTest,
+       PortalNetworkListItemSelectedWithFlagEnabled) {
+  AddWifiService(shill::kStateRedirectFound);
+
+  NetworkStatePropertiesPtr wifi_network = CreateStandaloneNetworkProperties(
+      kWifi, NetworkType::kWiFi, ConnectionStateType::kPortal);
+  wifi_network->portal_state = PortalState::kPortal;
+
+  SelectNetworkListItem(wifi_network);
+
+  // Wait for Network to be connected to.
+  base::RunLoop().RunUntilIdle();
+
+  // Verify that guid is set from ShowPortalSignin.
+  EXPECT_EQ(portal_signin_guid(), kWifi);
+  EXPECT_EQ(0, GetSystemTrayClient()->show_network_settings_count());
+  EXPECT_EQ(0, GetSystemTrayClient()->show_sim_unlock_settings_count());
+  EXPECT_EQ(shill::kStateRedirectFound, GetWifiNetworkState());
+
+  CheckRowClickedActionHistogramBuckets(
+      NetworkRowClickedAction::kOpenPortalSignin,
+      /*count=*/1u, /*total_count=*/1u);
 }
 
 }  // namespace ash

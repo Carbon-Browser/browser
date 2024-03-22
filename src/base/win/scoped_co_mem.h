@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <objbase.h>
 
 #include "base/check.h"
+#include "base/memory/raw_ptr_exclusion.h"
 
 namespace base {
 namespace win {
@@ -54,7 +55,9 @@ class ScopedCoMem {
   T* get() const { return mem_ptr_; }
 
  private:
-  T* mem_ptr_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of, #union
+  RAW_PTR_EXCLUSION T* mem_ptr_;
 };
 
 }  // namespace win

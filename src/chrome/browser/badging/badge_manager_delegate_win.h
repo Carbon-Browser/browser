@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ class BadgeManagerDelegateWin : public BadgeManagerDelegate {
   explicit BadgeManagerDelegateWin(Profile* profile,
                                    BadgeManager* badge_manager);
 
-  void OnAppBadgeUpdated(const web_app::AppId& app_id) override;
+  void OnAppBadgeUpdated(const webapps::AppId& app_id) override;
 
  private:
   // Determines if a browser is for a specific hosted app, on this profile.

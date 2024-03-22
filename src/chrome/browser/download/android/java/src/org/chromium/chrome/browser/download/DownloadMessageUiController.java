@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,7 @@ import java.util.List;
  * downloads etc. and computes the current state of the UI to be shown.
  */
 public interface DownloadMessageUiController extends OfflineContentProvider.Observer {
-    /**
-     * A delegate to provide chrome layer dependencies.
-     */
+    /** A delegate to provide chrome layer dependencies. */
     interface Delegate {
         /** @return The context used for obtaining resources. */
         @Nullable
@@ -56,8 +54,11 @@ public interface DownloadMessageUiController extends OfflineContentProvider.Obse
          * Called to open the download associated with the given {@link
          * contentId}.
          */
-        void openDownload(ContentId contentId, OTRProfileID otrProfileID,
-                @DownloadOpenSource int source, Context context);
+        void openDownload(
+                ContentId contentId,
+                OTRProfileID otrProfileID,
+                @DownloadOpenSource int source,
+                Context context);
 
         /** Called to remove a notification. */
         void removeNotification(int notificationId, DownloadInfo downloadInfo);
@@ -81,8 +82,13 @@ public interface DownloadMessageUiController extends OfflineContentProvider.Obse
     void addDownloadInterstitialSource(GURL originalUrl);
 
     /**
-     * Shows a message that asks for the user confirmation before the actual download starts.
+     * Returns true if the given download information matches an interstitial download.
+     * @param originalUrl The URL of the download.
+     * @param guid Unique GUID of the download.
      */
+    boolean isDownloadInterstitialItem(GURL originalUrl, String guid);
+
+    /** Shows a message that asks for the user confirmation before the actual download starts. */
     void showIncognitoDownloadMessage(Callback<Boolean> callback);
 
     /** OfflineContentProvider.Observer methods. */

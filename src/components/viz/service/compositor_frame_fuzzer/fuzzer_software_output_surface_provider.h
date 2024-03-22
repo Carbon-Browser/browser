@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,8 @@ class FuzzerSoftwareOutputSurfaceProvider : public OutputSurfaceProvider {
       DisplayCompositorMemoryAndTaskController* gpu_dependency,
       const RendererSettings& renderer_settings,
       const DebugRendererSettings* debug_settings) override;
+  gpu::SharedImageManager* GetSharedImageManager() override;
+  gpu::SyncPointManager* GetSyncPointManager() override;
 
  private:
   absl::optional<base::FilePath> png_dir_path_;

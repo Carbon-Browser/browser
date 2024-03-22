@@ -20,6 +20,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/adblock/content/browser/element_hider.h"
 #include "components/adblock/core/subscription/subscription_service.h"
@@ -45,14 +46,7 @@ class ElementHiderImpl final : public ElementHider {
                           content::RenderFrameHost* render_frame_host) final;
 
  private:
-  void ApplyElementHidingEmulationInternal(
-      GURL url,
-      std::vector<GURL> frame_hierarchy,
-      content::GlobalRenderFrameHostId frame_host_id,
-      SiteKey sitekey,
-      base::OnceCallback<void(const ElementHider::ElemhideInjectionData&)>
-          on_finished);
-  SubscriptionService* subscription_service_;
+  raw_ptr<SubscriptionService> subscription_service_;
   base::WeakPtrFactory<ElementHiderImpl> weak_ptr_factory_{this};
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,10 @@ import androidx.annotation.MainThread;
 import androidx.annotation.StringRes;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.browser.profiles.ProfileAccountManagementMetrics;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
-import org.chromium.chrome.browser.signin.services.SigninMetricsUtils;
 import org.chromium.components.signin.GAIAServiceType;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.user_prefs.UserPrefs;
@@ -40,9 +39,7 @@ import java.lang.annotation.RetentionPolicy;
  * child accounts that are syncing.
  */
 public class SignOutDialogCoordinator {
-    /**
-     * Receives updates when the user interacts with the dialog buttons.
-     */
+    /** Receives updates when the user interacts with the dialog buttons. */
     public interface Listener {
         /**
          * Notifies when the positive button in this dialog was pressed.
@@ -77,8 +74,12 @@ public class SignOutDialogCoordinator {
      * @param gaiaServiceType  The GAIA service that's prompted this dialog.
      */
     @MainThread
-    public static void show(Context context, ModalDialogManager dialogManager, Listener listener,
-            @ActionType int actionType, @GAIAServiceType int gaiaServiceType) {
+    public static void show(
+            Context context,
+            ModalDialogManager dialogManager,
+            Listener listener,
+            @ActionType int actionType,
+            @GAIAServiceType int gaiaServiceType) {
         new SignOutDialogCoordinator(context, dialogManager, listener, actionType, gaiaServiceType);
     }
 
@@ -86,8 +87,6 @@ public class SignOutDialogCoordinator {
             Context context, String managedDomain, @ActionType int actionType) {
         final View view =
                 LayoutInflater.from(context).inflate(R.layout.signout_wipe_storage_dialog, null);
-        ((TextView) view.findViewById(android.R.id.title))
-                .setText(getTitleRes(managedDomain, actionType));
         ((TextView) view.findViewById(android.R.id.message))
                 .setText(getMessage(context, managedDomain));
 
@@ -96,8 +95,8 @@ public class SignOutDialogCoordinator {
 
     private static @StringRes int getTitleRes(String managedDomain, @ActionType int actionType) {
         if (!IdentityServicesProvider.get()
-                        .getIdentityManager(Profile.getLastUsedRegularProfile())
-                        .hasPrimaryAccount(ConsentLevel.SYNC)) {
+                .getIdentityManager(Profile.getLastUsedRegularProfile())
+                .hasPrimaryAccount(ConsentLevel.SYNC)) {
             return R.string.signout_title;
         }
         if (managedDomain != null) {
@@ -116,8 +115,8 @@ public class SignOutDialogCoordinator {
 
     private static String getMessage(Context context, String managedDomain) {
         if (!IdentityServicesProvider.get()
-                        .getIdentityManager(Profile.getLastUsedRegularProfile())
-                        .hasPrimaryAccount(ConsentLevel.SYNC)) {
+                .getIdentityManager(Profile.getLastUsedRegularProfile())
+                .hasPrimaryAccount(ConsentLevel.SYNC)) {
             return context.getString(R.string.signout_message);
         }
         if (managedDomain != null) {
@@ -129,8 +128,9 @@ public class SignOutDialogCoordinator {
     private static int getCheckBoxVisibility(String managedDomain) {
         // TODO(crbug.com/1294761): extract logic for whether data wiping is allowed into
         // SigninManager.
-        final boolean allowDeletingData = UserPrefs.get(Profile.getLastUsedRegularProfile())
-                                                  .getBoolean(Pref.ALLOW_DELETING_BROWSER_HISTORY);
+        final boolean allowDeletingData =
+                UserPrefs.get(Profile.getLastUsedRegularProfile())
+                        .getBoolean(Pref.ALLOW_DELETING_BROWSER_HISTORY);
         final boolean hasSyncConsent =
                 IdentityServicesProvider.get()
                         .getIdentityManager(Profile.getLastUsedRegularProfile())
@@ -141,30 +141,39 @@ public class SignOutDialogCoordinator {
 
     @VisibleForTesting
     @MainThread
-    SignOutDialogCoordinator(Context context, ModalDialogManager dialogManager, Listener listener,
-            @ActionType int actionType, @GAIAServiceType int gaiaServiceType) {
-        final String managedDomain = IdentityServicesProvider.get()
-                                             .getSigninManager(Profile.getLastUsedRegularProfile())
-                                             .getManagementDomain();
+    SignOutDialogCoordinator(
+            Context context,
+            ModalDialogManager dialogManager,
+            Listener listener,
+            @ActionType int actionType,
+            @GAIAServiceType int gaiaServiceType) {
+        final String managedDomain =
+                IdentityServicesProvider.get()
+                        .getSigninManager(Profile.getLastUsedRegularProfile())
+                        .getManagementDomain();
         final View view = inflateView(context, managedDomain, actionType);
         mCheckBox = view.findViewById(R.id.remove_local_data);
         mCheckBox.setVisibility(getCheckBoxVisibility(managedDomain));
 
         mGaiaServiceType = gaiaServiceType;
         mListener = listener;
-        mModel = new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
-                         .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
-                         .with(ModalDialogProperties.POSITIVE_BUTTON_TEXT,
-                                 context.getString(R.string.continue_button))
-                         .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
-                                 context.getString(R.string.cancel))
-                         .with(ModalDialogProperties.CUSTOM_VIEW, view)
-                         .with(ModalDialogProperties.CONTROLLER, createController())
-                         .build();
+        mModel =
+                new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
+                        .with(
+                                ModalDialogProperties.TITLE,
+                                context.getString(getTitleRes(managedDomain, actionType)))
+                        .with(
+                                ModalDialogProperties.POSITIVE_BUTTON_TEXT,
+                                context.getString(R.string.continue_button))
+                        .with(
+                                ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
+                                context.getString(R.string.cancel))
+                        .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
+                        .with(ModalDialogProperties.CUSTOM_VIEW, view)
+                        .with(ModalDialogProperties.CONTROLLER, createController())
+                        .build();
         mDialogManager = dialogManager;
 
-        SigninMetricsUtils.logProfileAccountManagementMenu(
-                ProfileAccountManagementMetrics.TOGGLE_SIGNOUT, gaiaServiceType);
         mDialogManager.showDialog(mModel, ModalDialogType.APP);
     }
 
@@ -173,6 +182,10 @@ public class SignOutDialogCoordinator {
             @Override
             public void onClick(PropertyModel model, int buttonType) {
                 if (buttonType == ButtonType.POSITIVE) {
+                    if (mCheckBox.getVisibility() == View.VISIBLE) {
+                        RecordHistogram.recordBooleanHistogram(
+                                "Signin.UserRequestedWipeDataOnSignout", mCheckBox.isChecked());
+                    }
                     mListener.onSignOutClicked(
                             mCheckBox.getVisibility() == View.VISIBLE && mCheckBox.isChecked());
                     mDialogManager.dismissDialog(
@@ -184,15 +197,7 @@ public class SignOutDialogCoordinator {
             }
 
             @Override
-            public void onDismiss(PropertyModel model, int dismissalCause) {
-                if (dismissalCause == DialogDismissalCause.POSITIVE_BUTTON_CLICKED) {
-                    SigninMetricsUtils.logProfileAccountManagementMenu(
-                            ProfileAccountManagementMetrics.SIGNOUT_SIGNOUT, mGaiaServiceType);
-                } else {
-                    SigninMetricsUtils.logProfileAccountManagementMenu(
-                            ProfileAccountManagementMetrics.SIGNOUT_CANCEL, mGaiaServiceType);
-                }
-            }
+            public void onDismiss(PropertyModel model, int dismissalCause) {}
         };
     }
 

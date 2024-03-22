@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "cbor.h"
@@ -84,15 +85,18 @@ class CRDTP_EXPORT ContainerSerializer {
   }
   template <typename T>
   void AddField(span<char> field_name, const detail::ValueMaybe<T>& value) {
-    if (!value.isJust())
+    if (!value.has_value()) {
       return;
-    AddField(field_name, value.fromJust());
+    }
+    AddField(field_name, value.value());
   }
+
   template <typename T>
   void AddField(span<char> field_name, const detail::PtrMaybe<T>& value) {
-    if (!value.isJust())
+    if (!value.has_value()) {
       return;
-    AddField(field_name, *value.fromJust());
+    }
+    AddField(field_name, value.value());
   }
 
   void EncodeStop();
@@ -222,7 +226,7 @@ struct ProtocolTypeTraits<detail::ValueMaybe<T>> {
 
   static void Serialize(const detail::ValueMaybe<T>& value,
                         std::vector<uint8_t>* bytes) {
-    ProtocolTypeTraits<T>::Serialize(value.fromJust(), bytes);
+    ProtocolTypeTraits<T>::Serialize(value.value(), bytes);
   }
 };
 
@@ -239,7 +243,7 @@ struct ProtocolTypeTraits<detail::PtrMaybe<T>> {
 
   static void Serialize(const detail::PtrMaybe<T>& value,
                         std::vector<uint8_t>* bytes) {
-    ProtocolTypeTraits<T>::Serialize(*value.fromJust(), bytes);
+    ProtocolTypeTraits<T>::Serialize(value.value(), bytes);
   }
 };
 
@@ -306,8 +310,6 @@ class ProtocolObject : public Serializable,
     AppendSerialized(&serialized);
     return T::ReadFrom(std::move(serialized)).value();
   }
-  // TODO(caseq): compatibility only, remove.
-  std::unique_ptr<T> clone() const { return Clone(); }
 
  protected:
   using ProtocolType = T;

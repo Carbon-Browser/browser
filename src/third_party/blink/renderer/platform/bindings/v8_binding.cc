@@ -51,24 +51,23 @@ v8::Local<v8::Value> FreezeV8Object(v8::Local<v8::Value> value,
   return value;
 }
 
-String GetCurrentScriptUrl() {
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+String GetCurrentScriptUrl(v8::Isolate* isolate) {
   DCHECK(isolate);
   if (!isolate->InContext())
     return String();
 
   v8::Local<v8::String> script_name =
       v8::StackTrace::CurrentScriptNameOrSourceURL(isolate);
-  return ToCoreStringWithNullCheck(script_name);
+  return ToCoreStringWithNullCheck(isolate, script_name);
 }
 
-Vector<String> GetScriptUrlsFromCurrentStack(wtf_size_t unique_url_count) {
+Vector<String> GetScriptUrlsFromCurrentStack(v8::Isolate* isolate,
+                                             wtf_size_t unique_url_count) {
   Vector<String> unique_urls;
 
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
-  DCHECK(isolate);
-  if (!isolate->InContext())
+  if (!isolate || !isolate->InContext()) {
     return unique_urls;
+  }
 
   // CurrentStackTrace is 10x faster than CaptureStackTrace if all that you
   // need is the url of the script at the top of the stack. See
@@ -84,7 +83,7 @@ Vector<String> GetScriptUrlsFromCurrentStack(wtf_size_t unique_url_count) {
     v8::Local<v8::String> script_name = frame->GetScriptName();
     if (script_name.IsEmpty() || !script_name->Length())
       continue;
-    String url = ToCoreString(script_name);
+    String url = ToCoreString(isolate, script_name);
     if (!unique_urls.Contains(url)) {
       unique_urls.push_back(std::move(url));
     }

@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/public/cpp/external_arc/message_center/arc_notification_surface_impl.h"
 
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "components/exo/notification_surface.h"
 #include "components/exo/surface.h"
 #include "ui/aura/client/aura_constants.h"
@@ -75,7 +76,8 @@ class CustomWindowDelegate : public aura::WindowDelegate {
   }
 
  private:
-  exo::NotificationSurface* const notification_surface_;
+  const raw_ptr<exo::NotificationSurface, ExperimentalAsh>
+      notification_surface_;
 };
 
 }  // namespace

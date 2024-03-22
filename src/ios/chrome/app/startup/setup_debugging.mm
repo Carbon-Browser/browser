@@ -1,22 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/app/startup/setup_debugging.h"
+#import "ios/chrome/app/startup/setup_debugging.h"
 
-#include <objc/runtime.h>
+#import <objc/runtime.h>
 
-#include <ostream>
+#import <ostream>
 
-#include "base/check.h"
-#include "base/logging.h"
-#include "base/strings/sys_string_conversions.h"
-#include "build/build_config.h"
-#include "components/crash/core/common/objc_zombie.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/check.h"
+#import "base/logging.h"
+#import "base/strings/sys_string_conversions.h"
+#import "build/build_config.h"
+#import "components/crash/core/common/objc_zombie.h"
 
 namespace {
 
@@ -96,6 +92,71 @@ void SwizzleUIImageImageNamed() {
   originalImp = method_setImplementation(method, blockImp);
 }
 
+// Swizzles +[UIImage imageWithContentsOfFile:] to trigger a DCHECK if an
+// invalid image is attempted to be loaded.
+void SwizzleUIImageImageWithContentsOfFile() {
+  // The original implementation of [UIImage imageWithContentsOfFile:].
+  // Called by the new implementation.
+  static IMP original_imp;
+  IMP* original_imp_ptr = &original_imp;
+
+  id swizzle_block = ^(id self, NSString* path) {
+    // Call the original [UIImage imageWithContentsOfFile:] method.
+    UIImage* (*imp)(id, SEL, id) =
+        reinterpret_cast<UIImage* (*)(id, SEL, id)>(*original_imp_ptr);
+    Class class_object = objc_getClass("UIImage");
+    UIImage* image =
+        imp(class_object, @selector(imageWithContentsOfFile:), path);
+    DCHECK(image) << "Missing image at path: " << base::SysNSStringToUTF8(path);
+    return image;
+  };
+
+  Method method = class_getClassMethod([UIImage class],
+                                       @selector(imageWithContentsOfFile:));
+  DCHECK(method);
+
+  IMP block_imp = imp_implementationWithBlock(swizzle_block);
+  original_imp = method_setImplementation(method, block_imp);
+}
+
+// Swizzles +[NSData dataWithContentsOfFile:] to trigger a DCHECK if an invalid
+// image is attempted to be loaded.
+void SwizzleNSDataDataWithContentsOfFile() {
+  // The original implementation of [NSData dataWithContentsOfFile:].
+  // Called by the new implementation.
+  static IMP original_imp;
+  IMP* original_imp_ptr = &original_imp;
+
+  // Retained by the swizzle block.
+  // A set of file extensions that are exceptions to the 'missing data' check.
+  NSMutableSet* exceptions = [NSMutableSet set];
+  [exceptions addObject:@"plist"];
+  [exceptions addObject:@"png"];
+  [exceptions addObject:@"jpg"];
+  // Can have no path extension.
+  [exceptions addObject:@""];
+
+  id swizzle_block = ^(id self, NSString* path) {
+    // Call the original [NSData dataWithContentsOfFile:] method.
+    NSData* (*imp)(id, SEL, id) =
+        reinterpret_cast<NSData* (*)(id, SEL, id)>(*original_imp_ptr);
+    Class class_object = objc_getClass("NSData");
+    NSData* data = imp(class_object, @selector(dataWithContentsOfFile:), path);
+    if (![exceptions containsObject:[path pathExtension]] &&
+        [path pathExtension]) {
+      DCHECK(data) << "Missing data at path: " << base::SysNSStringToUTF8(path);
+    }
+    return data;
+  };
+
+  Method method =
+      class_getClassMethod([NSData class], @selector(dataWithContentsOfFile:));
+  DCHECK(method);
+
+  IMP block_imp = imp_implementationWithBlock(swizzle_block);
+  original_imp = method_setImplementation(method, block_imp);
+}
+
 #endif  // !defined(NDEBUG)
 
 }  // namespace
@@ -113,6 +174,8 @@ void SwizzleUIImageImageNamed() {
   // Enable the detection of missing assets.
   SwizzleUIColorColorNamed();
   SwizzleUIImageImageNamed();
+  SwizzleUIImageImageWithContentsOfFile();
+  SwizzleNSDataDataWithContentsOfFile();
 #endif
 }
 

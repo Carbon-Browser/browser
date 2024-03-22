@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,8 @@
 
 using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;
-using base::android::ToJavaArrayOfStrings;
 using base::android::ToJavaBooleanArray;
+using base::android::ToJavaByteArray;
 using base::android::ToJavaIntArray;
 
 namespace {
@@ -51,6 +51,8 @@ enum class MatchVerificationPoint {
   DELETE_MATCH = 3,
   GROUP_BY_SEARCH_VS_URL_BEFORE = 4,
   GROUP_BY_SEARCH_VS_URL_AFTER = 5,
+  ON_TOUCH_MATCH = 6,
+  GET_MATCHING_TAB = 7,
 };
 
 const char* MatchVerificationPointToString(int verification_point) {
@@ -65,9 +67,14 @@ const char* MatchVerificationPointToString(int verification_point) {
       return "Group/Before";
     case MatchVerificationPoint::GROUP_BY_SEARCH_VS_URL_AFTER:
       return "Group/After";
-    default:
+    case MatchVerificationPoint::ON_TOUCH_MATCH:
+      return "OnTouch";
+    case MatchVerificationPoint::GET_MATCHING_TAB:
+      return "GetMatchingTab";
+    case MatchVerificationPoint::INVALID:
       return "Invalid";
   }
+  NOTREACHED();
 }
 
 bool sInvalidMatchMetricsUploaded = false;
@@ -91,29 +98,25 @@ ScopedJavaLocalRef<jobject> AutocompleteResult::GetOrCreateJavaObject(
   if (java_result_)
     return ScopedJavaLocalRef<jobject>(java_result_);
 
-  const size_t groups_count = suggestion_groups_map_.size();
+  const size_t groups_count = suggestion_groups_map().size();
 
   std::vector<int> group_ids(groups_count);
-  std::vector<std::u16string> group_names(groups_count);
-  bool group_collapsed_states[groups_count];
+  omnibox::GroupsInfo groups_info;
+  std::string serialized_groups_info;
 
-  size_t index = 0;
-  for (const auto& suggestion_group : suggestion_groups_map_) {
-    group_ids[index] = static_cast<int>(suggestion_group.first);
-    group_names[index] = suggestion_group.second.header;
-    group_collapsed_states[index] = suggestion_group.second.hidden;
-    ++index;
+  for (const auto& suggestion_group : suggestion_groups_map()) {
+    (*groups_info.mutable_group_configs())[suggestion_group.first] =
+        suggestion_group.second;
+  }
+  if (!groups_info.SerializeToString(&serialized_groups_info)) {
+    serialized_groups_info.clear();
   }
 
   ScopedJavaLocalRef<jintArray> j_group_ids = ToJavaIntArray(env, group_ids);
-  ScopedJavaLocalRef<jbooleanArray> j_group_collapsed_states =
-      ToJavaBooleanArray(env, group_collapsed_states, groups_count);
-  ScopedJavaLocalRef<jobjectArray> j_group_names =
-      ToJavaArrayOfStrings(env, group_names);
 
   java_result_ = Java_AutocompleteResult_fromNative(
-      env, reinterpret_cast<intptr_t>(this), BuildJavaMatches(env), j_group_ids,
-      j_group_names, j_group_collapsed_states);
+      env, reinterpret_cast<intptr_t>(this), BuildJavaMatches(env),
+      ToJavaByteArray(env, serialized_groups_info));
 
   return ScopedJavaLocalRef<jobject>(java_result_);
 }
@@ -178,8 +181,6 @@ bool AutocompleteResult::VerifyCoherency(
     UMA_HISTOGRAM_ENUMERATION("Android.Omnibox.InvalidMatch",
                               MatchVerificationResult::BAD_RESULT_SIZE,
                               MatchVerificationResult::COUNT);
-    NOTREACHED() << "AutocompletResult objects are of different size: "
-                 << j_matches.size() << " (Java) vs " << size() << " (Native)";
     ReportInvalidMatchData(base::NumberToString(j_matches.size()) +
                                "!=" + base::NumberToString(size()),
                            verification_point);
@@ -190,8 +191,6 @@ bool AutocompleteResult::VerifyCoherency(
     UMA_HISTOGRAM_ENUMERATION("Android.Omnibox.InvalidMatch",
                               MatchVerificationResult::INVALID_MATCH_POSITION,
                               MatchVerificationResult::COUNT);
-    NOTREACHED() << "Requested action index is not valid: " << match_index
-                 << " outside of " << size() << " limit";
     ReportInvalidMatchData(
         base::NumberToString(match_index) + ">=" + base::NumberToString(size()),
         verification_point);
@@ -217,9 +216,6 @@ bool AutocompleteResult::VerifyCoherency(
                                       : u"<null>");
       }
 #endif
-      NOTREACHED()
-          << "AutocompleteMatch mismatch with native-sourced suggestions at "
-          << index;
 
       ReportInvalidMatchData(
           base::NumberToString(index) + "/" + base::NumberToString(size()),

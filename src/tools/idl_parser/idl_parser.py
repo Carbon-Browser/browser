@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -917,9 +917,12 @@ class IDLParser(object):
                            | SEQUENCE '<' TypeWithExtendedAttributes '>' Null
                            | FROZENARRAY '<' TypeWithExtendedAttributes '>' Null
                            | OBSERVABLEARRAY '<' TypeWithExtendedAttributes '>' Null
-                           | RecordType Null"""
+                           | RecordType Null
+                           | UNDEFINED Null"""
     if len(p) == 3:
-      if type(p[1]) == str:
+      if p[1] == 'undefined':
+        typeref = self.BuildProduction('Undefined', p, 1)
+      elif type(p[1]) == str:
         typeref = self.BuildNamed('Typeref', p, 1)
       else:
         typeref = p[1]
@@ -942,6 +945,7 @@ class IDLParser(object):
     """PrimitiveType : UnsignedIntegerType
                      | UnrestrictedFloatType
                      | StringType
+                     | BIGINT
                      | BOOLEAN
                      | BYTE
                      | OCTET
@@ -1050,6 +1054,7 @@ class IDLParser(object):
     """ExtendedAttribute : ExtendedAttributeNoArgs
                          | ExtendedAttributeArgList
                          | ExtendedAttributeIdent
+                         | ExtendedAttributeWildcard
                          | ExtendedAttributeIdentList
                          | ExtendedAttributeNamedArgList
                          | ExtendedAttributeStringLiteral
@@ -1083,6 +1088,11 @@ class IDLParser(object):
 
   def p_ExtendedAttributeIdent(self, p):
     """ExtendedAttributeIdent : identifier '=' identifier"""
+    value = self.BuildAttribute('VALUE', p[3])
+    p[0] = self.BuildNamed('ExtAttribute', p, 1, value)
+
+  def p_ExtendedAttributeWildcard(self, p):
+    """ExtendedAttributeWildcard : identifier '=' '*'"""
     value = self.BuildAttribute('VALUE', p[3])
     p[0] = self.BuildNamed('ExtAttribute', p, 1, value)
 
@@ -1306,7 +1316,7 @@ class IDLParser(object):
 
 def ParseFile(parser, filename):
   """Parse a file and return a File type of node."""
-  with open(filename) as fileobject:
+  with open(filename, encoding='utf-8') as fileobject:
     try:
       out = parser.ParseText(filename, fileobject.read())
       out.SetProperty('ERRORS', parser.GetErrors())

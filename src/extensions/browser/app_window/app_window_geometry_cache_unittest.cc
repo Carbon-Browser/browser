@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@
 #include "extensions/browser/extensions_test.h"
 #include "extensions/browser/unloaded_extension_reason.h"
 #include "extensions/common/extension_builder.h"
-#include "extensions/common/value_builder.h"
 
 namespace extensions {
 
@@ -59,7 +58,7 @@ class AppWindowGeometryCacheTest : public ExtensionsTest {
   std::string AddExtensionWithPrefs(const std::string& name);
 
  protected:
-  raw_ptr<ExtensionPrefs> extension_prefs_;  // Weak.
+  raw_ptr<ExtensionPrefs, DanglingUntriaged> extension_prefs_;  // Weak.
   std::unique_ptr<AppWindowGeometryCache> cache_;
 };
 
@@ -82,20 +81,18 @@ void AppWindowGeometryCacheTest::AddGeometryAndLoadExtension(
     const gfx::Rect& bounds,
     const gfx::Rect& screen_bounds,
     ui::WindowShowState state) {
-  std::unique_ptr<base::DictionaryValue> dict =
-      std::make_unique<base::DictionaryValue>();
-  std::unique_ptr<base::DictionaryValue> value =
-      std::make_unique<base::DictionaryValue>();
-  value->SetIntKey("x", bounds.x());
-  value->SetIntKey("y", bounds.y());
-  value->SetIntKey("w", bounds.width());
-  value->SetIntKey("h", bounds.height());
-  value->SetIntKey("screen_bounds_x", screen_bounds.x());
-  value->SetIntKey("screen_bounds_y", screen_bounds.y());
-  value->SetIntKey("screen_bounds_w", screen_bounds.width());
-  value->SetIntKey("screen_bounds_h", screen_bounds.height());
-  value->SetIntKey("state", state);
-  dict->SetKey(window_id, base::Value::FromUniquePtrValue(std::move(value)));
+  base::Value::Dict dict;
+  base::Value::Dict value;
+  value.Set("x", bounds.x());
+  value.Set("y", bounds.y());
+  value.Set("w", bounds.width());
+  value.Set("h", bounds.height());
+  value.Set("screen_bounds_x", screen_bounds.x());
+  value.Set("screen_bounds_y", screen_bounds.y());
+  value.Set("screen_bounds_w", screen_bounds.width());
+  value.Set("screen_bounds_h", screen_bounds.height());
+  value.Set("state", state);
+  dict.Set(window_id, std::move(value));
   extension_prefs_->SetGeometryCache(extension_id, std::move(dict));
   LoadExtension(extension_id);
 }
@@ -138,7 +135,8 @@ std::string AppWindowGeometryCacheTest::AddExtensionWithPrefs(
 // Test getting geometry from an empty store.
 TEST_F(AppWindowGeometryCacheTest, GetGeometryEmptyStore) {
   const std::string extension_id = AddExtensionWithPrefs("ext1");
-  ASSERT_FALSE(cache_->GetGeometry(extension_id, kWindowId, NULL, NULL, NULL));
+  ASSERT_FALSE(
+      cache_->GetGeometry(extension_id, kWindowId, nullptr, nullptr, nullptr));
 }
 
 // Test getting geometry for an unknown extension.
@@ -150,7 +148,8 @@ TEST_F(AppWindowGeometryCacheTest, GetGeometryUnkownExtension) {
                               gfx::Rect(4, 5, 31, 43),
                               gfx::Rect(0, 0, 1600, 900),
                               ui::SHOW_STATE_NORMAL);
-  ASSERT_FALSE(cache_->GetGeometry(extension_id2, kWindowId, NULL, NULL, NULL));
+  ASSERT_FALSE(
+      cache_->GetGeometry(extension_id2, kWindowId, nullptr, nullptr, nullptr));
 }
 
 // Test getting geometry for an unknown window in a known extension.
@@ -161,7 +160,8 @@ TEST_F(AppWindowGeometryCacheTest, GetGeometryUnkownWindow) {
                               gfx::Rect(4, 5, 31, 43),
                               gfx::Rect(0, 0, 1600, 900),
                               ui::SHOW_STATE_NORMAL);
-  ASSERT_FALSE(cache_->GetGeometry(extension_id, kWindowId2, NULL, NULL, NULL));
+  ASSERT_FALSE(
+      cache_->GetGeometry(extension_id, kWindowId2, nullptr, nullptr, nullptr));
 }
 
 // Test that loading geometry, screen_bounds and state from the store works
@@ -266,25 +266,25 @@ TEST_F(AppWindowGeometryCacheTest, SaveGeometryAndStateToStore) {
   UnloadExtension(extension_id);
 
   // check if geometry got stored correctly in the state store
-  const base::DictionaryValue* dict =
+  const base::Value::Dict* dict =
       extension_prefs_->GetGeometryCache(extension_id);
   ASSERT_TRUE(dict);
 
-  ASSERT_TRUE(dict->FindKey(window_id));
+  ASSERT_TRUE(dict->Find(window_id));
 
-  ASSERT_EQ(bounds.x(), dict->FindIntPath(window_id + ".x"));
-  ASSERT_EQ(bounds.y(), dict->FindIntPath(window_id + ".y"));
-  ASSERT_EQ(bounds.width(), dict->FindIntPath(window_id + ".w"));
-  ASSERT_EQ(bounds.height(), dict->FindIntPath(window_id + ".h"));
+  ASSERT_EQ(bounds.x(), dict->FindIntByDottedPath(window_id + ".x"));
+  ASSERT_EQ(bounds.y(), dict->FindIntByDottedPath(window_id + ".y"));
+  ASSERT_EQ(bounds.width(), dict->FindIntByDottedPath(window_id + ".w"));
+  ASSERT_EQ(bounds.height(), dict->FindIntByDottedPath(window_id + ".h"));
   ASSERT_EQ(screen_bounds.x(),
-            dict->FindIntPath(window_id + ".screen_bounds_x"));
+            dict->FindIntByDottedPath(window_id + ".screen_bounds_x"));
   ASSERT_EQ(screen_bounds.y(),
-            dict->FindIntPath(window_id + ".screen_bounds_y"));
+            dict->FindIntByDottedPath(window_id + ".screen_bounds_y"));
   ASSERT_EQ(screen_bounds.width(),
-            dict->FindIntPath(window_id + ".screen_bounds_w"));
+            dict->FindIntByDottedPath(window_id + ".screen_bounds_w"));
   ASSERT_EQ(screen_bounds.height(),
-            dict->FindIntPath(window_id + ".screen_bounds_h"));
-  ASSERT_EQ(state, dict->FindIntPath(window_id + ".state"));
+            dict->FindIntByDottedPath(window_id + ".screen_bounds_h"));
+  ASSERT_EQ(state, dict->FindIntByDottedPath(window_id + ".state"));
 
   // reload extension
   LoadExtension(extension_id);
@@ -374,11 +374,13 @@ TEST_F(AppWindowGeometryCacheTest, MaxWindows) {
   }
 
   // The first added window should no longer have cached geometry.
-  EXPECT_FALSE(cache_->GetGeometry(extension_id, "window_0", NULL, NULL, NULL));
+  EXPECT_FALSE(
+      cache_->GetGeometry(extension_id, "window_0", nullptr, nullptr, nullptr));
   // All other windows should still exist.
   for (size_t i = 1; i < AppWindowGeometryCache::kMaxCachedWindows + 1; ++i) {
     std::string window_id = "window_" + base::NumberToString(i);
-    EXPECT_TRUE(cache_->GetGeometry(extension_id, window_id, NULL, NULL, NULL));
+    EXPECT_TRUE(cache_->GetGeometry(extension_id, window_id, nullptr, nullptr,
+                                    nullptr));
   }
 }
 

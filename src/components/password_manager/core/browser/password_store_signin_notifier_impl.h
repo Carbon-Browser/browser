@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,8 @@ class PasswordStoreSigninNotifierImpl
   void OnExtendedAccountInfoRemoved(const AccountInfo& info) override;
 
  private:
-  // Passes signed-out to |store_|.
-  void NotifySignedOut(const std::string& username, bool primary_account);
+  // Passes the sign-out notification to `reuse_manager_`.
+  void NotifySignedOut(const std::string& username, bool syncing_account);
 
   raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;
 

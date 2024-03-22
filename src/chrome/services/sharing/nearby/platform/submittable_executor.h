@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "chrome/services/sharing/nearby/platform/atomic_boolean.h"
 #include "third_party/nearby/src/internal/platform/implementation/submittable_executor.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -53,6 +52,5 @@ class SubmittableExecutor : public api::SubmittableExecutor {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_SUBMITTABLE_EXECUTOR_H_

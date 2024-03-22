@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/cr_elements/cr_grid/cr_grid.js';
 import './mini_page.js';
 import './iframe.js';
 
 import {DomRepeat, DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {getTemplate} from './customize_backgrounds.html.js';
 
+import {getTemplate} from './customize_backgrounds.html.js';
 import {loadTimeData} from './i18n_setup.js';
 import {BackgroundCollection, CollectionImage, CustomizeDialogAction, PageHandlerRemote, Theme} from './new_tab_page.mojom-webui.js';
 import {NewTabPageProxy} from './new_tab_page_proxy.js';
@@ -96,8 +96,7 @@ export class CustomizeBackgroundsElement extends PolymerElement {
   private getNoBackgroundClass_(): string {
     return this.theme &&
             (this.theme.backgroundImage && !this.theme.isCustomBackground ||
-             !this.theme.backgroundImage &&
-                 !this.theme.dailyRefreshCollectionId) ?
+             !this.theme.backgroundImage && !this.theme.dailyRefreshEnabled) ?
         'selected' :
         '';
   }
@@ -106,7 +105,7 @@ export class CustomizeBackgroundsElement extends PolymerElement {
     const {url} = this.images_[index].imageUrl;
     return this.theme && this.theme.backgroundImage &&
             this.theme.backgroundImage.url.url === url &&
-            !this.theme.dailyRefreshCollectionId ?
+            !this.theme.dailyRefreshEnabled ?
         'selected' :
         '';
   }
@@ -143,9 +142,17 @@ export class CustomizeBackgroundsElement extends PolymerElement {
       this.pageHandler_.onCustomizeDialogAction(
           CustomizeDialogAction.kBackgroundsImageSelected);
     }
-    const {attribution1, attribution2, attributionUrl, imageUrl} = image;
+    const {
+      attribution1,
+      attribution2,
+      attributionUrl,
+      imageUrl,
+      previewImageUrl,
+      collectionId,
+    } = image;
     this.pageHandler_.setBackgroundImage(
-        attribution1, attribution2, attributionUrl, imageUrl);
+        attribution1, attribution2, attributionUrl, imageUrl, previewImageUrl,
+        collectionId);
   }
 
   private async onSelectedCollectionChange_() {
@@ -165,11 +172,15 @@ export class CustomizeBackgroundsElement extends PolymerElement {
   }
 
   revertBackgroundChanges() {
-    this.pageHandler_.revertBackgroundChanges();
+    if (!this.customBackgroundDisabledByPolicy_) {
+      this.pageHandler_.revertBackgroundChanges();
+    }
   }
 
   confirmBackgroundChanges() {
-    this.pageHandler_.confirmBackgroundChanges();
+    if (!this.customBackgroundDisabledByPolicy_) {
+      this.pageHandler_.confirmBackgroundChanges();
+    }
   }
 }
 

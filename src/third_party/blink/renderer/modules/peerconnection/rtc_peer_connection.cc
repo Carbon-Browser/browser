@@ -40,6 +40,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
@@ -75,6 +76,7 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/dom/dom_time_stamp.h"
+#include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
 #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
@@ -83,11 +85,9 @@
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/modules/crypto/crypto_result_impl.h"
 #include "third_party/blink/renderer/modules/mediastream/media_constraints_impl.h"
-#include "third_party/blink/renderer/modules/mediastream/media_error_state.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_event.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track_impl.h"
-#include "third_party/blink/renderer/modules/mediastream/user_media_controller.h"
 #include "third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_certificate.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_certificate_generator.h"
@@ -113,8 +113,8 @@
 #include "third_party/blink/renderer/modules/peerconnection/rtc_void_request_impl.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_void_request_promise_impl.h"
 #include "third_party/blink/renderer/modules/peerconnection/web_rtc_stats_report_callback_resolver.h"
+#include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -129,6 +129,7 @@
 #include "third_party/blink/renderer/platform/peerconnection/rtc_stats_request.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_void_request.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+#include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_policy.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/webrtc/api/data_channel_interface.h"
@@ -166,20 +167,22 @@ bool ThrowExceptionIfSignalingStateClosed(
   return false;
 }
 
-void AsyncCallErrorCallback(V8RTCPeerConnectionErrorCallback* error_callback,
+void AsyncCallErrorCallback(ExecutionContext* context,
+                            V8RTCPeerConnectionErrorCallback* error_callback,
                             DOMException* exception) {
   DCHECK(error_callback);
-  Microtask::EnqueueMicrotask(WTF::Bind(
+  context->GetAgent()->event_loop()->EnqueueMicrotask(WTF::BindOnce(
       &V8RTCPeerConnectionErrorCallback::InvokeAndReportException,
       WrapPersistent(error_callback), nullptr, WrapPersistent(exception)));
 }
 
 bool CallErrorCallbackIfSignalingStateClosed(
+    ExecutionContext* context,
     webrtc::PeerConnectionInterface::SignalingState state,
     V8RTCPeerConnectionErrorCallback* error_callback) {
   if (state == webrtc::PeerConnectionInterface::SignalingState::kClosed) {
     if (error_callback) {
-      AsyncCallErrorCallback(error_callback,
+      AsyncCallErrorCallback(context, error_callback,
                              MakeGarbageCollected<DOMException>(
                                  DOMExceptionCode::kInvalidStateError,
                                  kSignalingStateClosedMessage));
@@ -237,35 +240,36 @@ RTCIceCandidatePlatform* ConvertToRTCIceCandidatePlatform(
       candidate->usernameFragment());
 }
 
-enum SdpSemanticRequested {
-  kSdpSemanticRequestedDefault,
-  kSdpSemanticRequestedPlanB,
-  kSdpSemanticRequestedUnifiedPlan,
-  kSdpSemanticRequestedMax
-};
-
-SdpSemanticRequested GetSdpSemanticRequested(
-    const blink::RTCConfiguration* configuration) {
-  if (!configuration->hasSdpSemantics()) {
-    return kSdpSemanticRequestedDefault;
-  }
-  if (configuration->sdpSemantics() == "plan-b") {
-    return kSdpSemanticRequestedPlanB;
-  }
-  if (configuration->sdpSemantics() == "unified-plan") {
-    return kSdpSemanticRequestedUnifiedPlan;
-  }
-
-  NOTREACHED();
-  return kSdpSemanticRequestedDefault;
-}
-
 webrtc::PeerConnectionInterface::IceTransportsType IceTransportPolicyFromString(
     const String& policy) {
   if (policy == "relay")
     return webrtc::PeerConnectionInterface::kRelay;
   DCHECK_EQ(policy, "all");
   return webrtc::PeerConnectionInterface::kAll;
+}
+
+bool IsValidStunURL(const KURL& url) {
+  if (!url.ProtocolIs("stun") && !url.ProtocolIs("stuns")) {
+    return false;
+  }
+  if (!url.Query().empty()) {
+    return false;
+  }
+  return true;
+}
+
+bool IsValidTurnURL(const KURL& url) {
+  if (!url.ProtocolIs("turn") && !url.ProtocolIs("turns")) {
+    return false;
+  }
+  if (!url.Query().empty()) {
+    Vector<String> query_parts;
+    url.Query().Split("=", query_parts);
+    if (query_parts.size() < 2 || query_parts[0] != "transport") {
+      return false;
+    }
+  }
+  return true;
 }
 
 webrtc::PeerConnectionInterface::RTCConfiguration ParseConfiguration(
@@ -304,24 +308,11 @@ webrtc::PeerConnectionInterface::RTCConfiguration ParseConfiguration(
     DCHECK_EQ(configuration->rtcpMuxPolicy(), "require");
   }
 
-  // Unified Plan is used by default (RTCUnifiedPlanByDefault is
-  // ENABLED_BY_DEFAULT). For testing-only purposes the default can be set to
-  // Plan B instead using --disable-features=RTCUnifiedPlanByDefault.
-  DCHECK_EQ(web_configuration.sdp_semantics,
-            webrtc::SdpSemantics::kUnifiedPlan);
-  if (!base::FeatureList::IsEnabled(features::kRTCUnifiedPlanByDefault) &&
-      !RuntimeEnabledFeatures::RTCUnifiedPlanByDefaultEnabled()) {
-    web_configuration.sdp_semantics = webrtc::SdpSemantics::kPlanB;
-  }
-  if (web_configuration.sdp_semantics == webrtc::SdpSemantics::kPlanB) {
-    Deprecation::CountDeprecation(
-        context, WebFeature::kRTCPeerConnectionSdpSemanticsPlanB);
-  }
-
   if (configuration->hasIceServers()) {
     WebVector<webrtc::PeerConnectionInterface::IceServer> ice_servers;
     for (const RTCIceServer* ice_server : configuration->iceServers()) {
       Vector<String> url_strings;
+      std::vector<std::string> converted_urls;
       if (ice_server->hasUrls()) {
         UseCounter::Count(context, WebFeature::kRTCIceServerURLs);
         switch (ice_server->urls()->GetContentType()) {
@@ -348,16 +339,14 @@ webrtc::PeerConnectionInterface::RTCConfiguration ParseConfiguration(
               "'" + url_string + "' is not a valid URL.");
           return {};
         }
-        if (!(url.ProtocolIs("turn") || url.ProtocolIs("turns") ||
-              url.ProtocolIs("stun"))) {
+        bool is_valid_turn = IsValidTurnURL(url);
+        if (!is_valid_turn && !IsValidStunURL(url)) {
           exception_state->ThrowDOMException(
               DOMExceptionCode::kSyntaxError,
-              "'" + url.Protocol() +
-                  "' is not one of the supported URL schemes "
-                  "'stun', 'turn' or 'turns'.");
+              "'" + url_string + "' is not a valid stun or turn URL.");
           return {};
         }
-        if ((url.ProtocolIs("turn") || url.ProtocolIs("turns")) &&
+        if (is_valid_turn &&
             (!ice_server->hasUsername() || !ice_server->hasCredential())) {
           exception_state->ThrowDOMException(
               DOMExceptionCode::kInvalidAccessError,
@@ -366,18 +355,18 @@ webrtc::PeerConnectionInterface::RTCConfiguration ParseConfiguration(
               "\"turn\" or \"turns\".");
         }
 
-        auto converted_ice_server =
-            webrtc::PeerConnectionInterface::IceServer();
-        converted_ice_server.urls.push_back(String(url).Utf8());
-        if (ice_server->hasUsername()) {
-          converted_ice_server.username = ice_server->username().Utf8();
-        }
-        if (ice_server->hasCredential()) {
-          converted_ice_server.password = ice_server->credential().Utf8();
-        }
-
-        ice_servers.emplace_back(std::move(converted_ice_server));
+        converted_urls.push_back(String(url).Utf8());
       }
+
+      auto converted_ice_server = webrtc::PeerConnectionInterface::IceServer();
+      converted_ice_server.urls = std::move(converted_urls);
+      if (ice_server->hasUsername()) {
+        converted_ice_server.username = ice_server->username().Utf8();
+      }
+      if (ice_server->hasCredential()) {
+        converted_ice_server.password = ice_server->credential().Utf8();
+      }
+      ice_servers.emplace_back(std::move(converted_ice_server));
     }
     web_configuration.servers = ice_servers.ReleaseVector();
   }
@@ -498,93 +487,7 @@ bool ContainsOpusStereo(String sdp) {
   return sdp.Find("stereo=1") != kNotFound;
 }
 
-enum class SdpFormat {
-  kSimple,
-  kComplexPlanB,
-  kComplexUnifiedPlan,
-};
-
-absl::optional<SdpFormat> DeduceSdpFormat(
-    const ParsedSessionDescription& parsed_sdp) {
-  auto* session_description = parsed_sdp.description();
-  if (!session_description)
-    return absl::nullopt;
-  size_t num_audio_mlines = 0u;
-  size_t num_video_mlines = 0u;
-  size_t num_audio_tracks = 0u;
-  size_t num_video_tracks = 0u;
-  for (const cricket::ContentInfo& content :
-       session_description->description()->contents()) {
-    cricket::MediaType media_type = content.media_description()->type();
-    size_t num_tracks = std::max(static_cast<size_t>(1u),
-                                 content.media_description()->streams().size());
-    if (media_type == cricket::MEDIA_TYPE_AUDIO) {
-      ++num_audio_mlines;
-      num_audio_tracks += num_tracks;
-    } else if (media_type == cricket::MEDIA_TYPE_VIDEO) {
-      ++num_video_mlines;
-      num_video_tracks += num_tracks;
-    }
-  }
-  if (num_audio_mlines <= 1u && num_audio_tracks <= 1u &&
-      num_video_mlines <= 1u && num_video_tracks <= 1u) {
-    return SdpFormat::kSimple;
-  }
-  if ((num_audio_mlines == 1u && num_audio_tracks > 1u) ||
-      (num_video_mlines == 1u && num_video_tracks > 1u)) {
-    return SdpFormat::kComplexPlanB;
-  }
-  DCHECK(num_audio_mlines > 1u || num_audio_tracks > 1u ||
-         num_video_mlines > 1u || num_video_tracks > 1u);
-  return SdpFormat::kComplexUnifiedPlan;
-}
-
-RTCSetSessionDescriptionOperation GetRTCVoidRequestOperationType(
-    RTCPeerConnection::SetSdpOperationType operation,
-    const RTCSessionDescriptionInit& description) {
-  switch (operation) {
-    case RTCPeerConnection::SetSdpOperationType::kSetLocalDescription:
-      if (!description.hasType()) {
-        return RTCSetSessionDescriptionOperation::
-            kSetLocalDescriptionInvalidType;
-      }
-      switch (description.type().AsEnum()) {
-        case V8RTCSdpType::Enum::kOffer:
-          return RTCSetSessionDescriptionOperation::kSetLocalDescriptionOffer;
-        case V8RTCSdpType::Enum::kPranswer:
-        case V8RTCSdpType::Enum::kAnswer:
-          return RTCSetSessionDescriptionOperation::kSetLocalDescriptionAnswer;
-        case V8RTCSdpType::Enum::kRollback:
-          return RTCSetSessionDescriptionOperation::
-              kSetLocalDescriptionInvalidType;
-      }
-      NOTREACHED();
-      return RTCSetSessionDescriptionOperation::kSetLocalDescriptionInvalidType;
-    case RTCPeerConnection::SetSdpOperationType::kSetRemoteDescription:
-      if (!description.hasType()) {
-        return RTCSetSessionDescriptionOperation::
-            kSetRemoteDescriptionInvalidType;
-      }
-      switch (description.type().AsEnum()) {
-        case V8RTCSdpType::Enum::kOffer:
-          return RTCSetSessionDescriptionOperation::kSetRemoteDescriptionOffer;
-        case V8RTCSdpType::Enum::kPranswer:
-        case V8RTCSdpType::Enum::kAnswer:
-          return RTCSetSessionDescriptionOperation::kSetRemoteDescriptionAnswer;
-        case V8RTCSdpType::Enum::kRollback:
-          return RTCSetSessionDescriptionOperation::
-              kSetRemoteDescriptionInvalidType;
-      }
-      NOTREACHED();
-      return RTCSetSessionDescriptionOperation::
-          kSetRemoteDescriptionInvalidType;
-  }
-}
-
 }  // namespace
-
-const char kOnlySupportedInUnifiedPlanMessage[] =
-    "This operation is only supported in 'unified-plan'.";
 
 RTCPeerConnection::EventWrapper::EventWrapper(Event* event,
                                               BoolFunction function)
@@ -645,8 +548,8 @@ RTCPeerConnection* RTCPeerConnection::Create(
 
   // Make sure no certificates have expired.
   if (!configuration.certificates.empty()) {
-    DOMTimeStamp now =
-        ConvertSecondsToDOMTimeStamp(base::Time::Now().ToDoubleT());
+    DOMTimeStamp now = ConvertSecondsToDOMTimeStamp(
+        base::Time::Now().InSecondsFSinceUnixEpoch());
     for (const rtc::scoped_refptr<rtc::RTCCertificate>& certificate :
          configuration.certificates) {
       DOMTimeStamp expires = certificate->Expires();
@@ -659,29 +562,11 @@ RTCPeerConnection* RTCPeerConnection::Create(
   }
 
   RTCPeerConnection* peer_connection = MakeGarbageCollected<RTCPeerConnection>(
-      context, std::move(configuration), rtc_configuration->hasSdpSemantics(),
-      rtc_configuration->encodedInsertableStreams(),
+      context, std::move(configuration),
       rtc_configuration->encodedInsertableStreams(), media_constraints,
       exception_state);
   if (exception_state.HadException())
     return nullptr;
-
-  SdpSemanticRequested sdp_semantics_requested =
-      GetSdpSemanticRequested(rtc_configuration);
-  UMA_HISTOGRAM_ENUMERATION("WebRTC.PeerConnection.SdpSemanticRequested",
-                            sdp_semantics_requested, kSdpSemanticRequestedMax);
-
-  if (sdp_semantics_requested == kSdpSemanticRequestedPlanB) {
-    UseCounter::Count(context,
-                      WebFeature::kRTCPeerConnectionConstructedWithPlanB);
-  } else {
-    // Unified Plan is the default.
-    DCHECK(sdp_semantics_requested == kSdpSemanticRequestedDefault ||
-           sdp_semantics_requested == kSdpSemanticRequestedUnifiedPlan);
-    UseCounter::Count(context,
-                      WebFeature::kRTCPeerConnectionConstructedWithUnifiedPlan);
-  }
-
   return peer_connection;
 }
 
@@ -696,12 +581,11 @@ RTCPeerConnection* RTCPeerConnection::Create(
 RTCPeerConnection::RTCPeerConnection(
     ExecutionContext* context,
     webrtc::PeerConnectionInterface::RTCConfiguration configuration,
-    bool sdp_semantics_specified,
-    bool force_encoded_audio_insertable_streams,
-    bool force_encoded_video_insertable_streams,
+    bool encoded_insertable_streams,
     GoogMediaConstraints* media_constraints,
     ExceptionState& exception_state)
-    : ExecutionContextLifecycleObserver(context),
+    : ActiveScriptWrappable<RTCPeerConnection>({}),
+      ExecutionContextLifecycleObserver(context),
       pending_local_description_(nullptr),
       current_local_description_(nullptr),
       pending_remote_description_(nullptr),
@@ -715,12 +599,7 @@ RTCPeerConnection::RTCPeerConnection(
       peer_handler_unregistered_(true),
       closed_(true),
       suppress_events_(true),
-      sdp_semantics_(configuration.sdp_semantics),
-      sdp_semantics_specified_(sdp_semantics_specified),
-      force_encoded_audio_insertable_streams_(
-          force_encoded_audio_insertable_streams),
-      force_encoded_video_insertable_streams_(
-          force_encoded_video_insertable_streams) {
+      encoded_insertable_streams_(encoded_insertable_streams) {
   LocalDOMWindow* window = To<LocalDOMWindow>(context);
 
   InstanceCounters::IncrementCounter(
@@ -743,8 +622,7 @@ RTCPeerConnection::RTCPeerConnection(
   } else {
     peer_handler_ = dependency_factory.CreateRTCPeerConnectionHandler(
         this, window->GetTaskRunner(TaskType::kInternalMedia),
-        force_encoded_audio_insertable_streams_,
-        force_encoded_video_insertable_streams_);
+        encoded_insertable_streams_);
   }
 
   if (!peer_handler_) {
@@ -790,10 +668,17 @@ RTCPeerConnection::~RTCPeerConnection() {
 }
 
 void RTCPeerConnection::Dispose() {
-  // Promptly clears the handler's pointer to |this|
-  // so that content/ doesn't access it in a lazy sweeping phase.
+  // Promptly clears the handler so that content doesn't access it in a lazy
+  // sweeping phase. Other references to the handler use a weak pointer,
+  // preventing access.
   if (peer_handler_) {
-    peer_handler_->CloseAndUnregister();
+    peer_handler_.reset();
+  }
+  // Memory owned by RTCPeerConnection must not be touched after Dispose().
+  // Shut down the cache to cancel any in-flight tasks that may otherwise have
+  // used the cache.
+  if (rtp_contributing_source_cache_.has_value()) {
+    rtp_contributing_source_cache_.value().Shutdown();
   }
 }
 
@@ -806,14 +691,12 @@ ScriptPromise RTCPeerConnection::createOffer(ScriptState* script_state,
                                       kSignalingStateClosedMessage);
     return ScriptPromise();
   }
-  call_setup_state_tracker_.NoteOffererStateEvent(
-      OffererState::kCreateOfferPending, HasDocumentMedia());
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   RTCSessionDescriptionRequest* request =
       RTCSessionDescriptionRequestPromiseImpl::Create(
-          RTCCreateSessionDescriptionOperation::kCreateOffer, this, resolver,
-          "RTCPeerConnection", "createOffer");
+          this, resolver, "RTCPeerConnection", "createOffer");
 
   ExecutionContext* context = ExecutionContext::From(script_state);
   UseCounter::Count(context, WebFeature::kRTCPeerConnectionCreateOffer);
@@ -845,16 +728,13 @@ ScriptPromise RTCPeerConnection::createOffer(
       context, WebFeature::kRTCPeerConnectionCreateOfferLegacyFailureCallback);
   UseCounter::Count(context,
                     WebFeature::kRTCPeerConnectionCreateOfferLegacyCompliant);
-  if (CallErrorCallbackIfSignalingStateClosed(signaling_state_, error_callback))
+  if (CallErrorCallbackIfSignalingStateClosed(context, signaling_state_,
+                                              error_callback))
     return ScriptPromise::CastUndefined(script_state);
 
-  call_setup_state_tracker_.NoteOffererStateEvent(
-      OffererState::kCreateOfferPending, HasDocumentMedia());
   RTCSessionDescriptionRequest* request =
       RTCSessionDescriptionRequestImpl::Create(
-          GetExecutionContext(),
-          RTCCreateSessionDescriptionOperation::kCreateOffer, this,
-          success_callback, error_callback);
+          GetExecutionContext(), this, success_callback, error_callback);
 
   Vector<std::unique_ptr<RTCRtpTransceiverPlatform>> platform_transceivers =
       peer_handler_->CreateOffer(request,
@@ -879,14 +759,12 @@ ScriptPromise RTCPeerConnection::createAnswer(ScriptState* script_state,
   UseCounter::Count(context, WebFeature::kRTCPeerConnectionCreateAnswer);
   UseCounter::Count(context, WebFeature::kRTCPeerConnectionCreateAnswerPromise);
 
-  call_setup_state_tracker_.NoteAnswererStateEvent(
-      AnswererState::kCreateAnswerPending, HasDocumentMedia());
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   RTCSessionDescriptionRequest* request =
       RTCSessionDescriptionRequestPromiseImpl::Create(
-          RTCCreateSessionDescriptionOperation::kCreateAnswer, this, resolver,
-          "RTCPeerConnection", "createAnswer");
+          this, resolver, "RTCPeerConnection", "createAnswer");
   peer_handler_->CreateAnswer(request,
                               ConvertToRTCAnswerOptionsPlatform(options));
   return promise;
@@ -906,16 +784,13 @@ ScriptPromise RTCPeerConnection::createAnswer(
   UseCounter::Count(context,
                     WebFeature::kRTCPeerConnectionCreateAnswerLegacyCompliant);
 
-  if (CallErrorCallbackIfSignalingStateClosed(signaling_state_, error_callback))
+  if (CallErrorCallbackIfSignalingStateClosed(context, signaling_state_,
+                                              error_callback))
     return ScriptPromise::CastUndefined(script_state);
 
-  call_setup_state_tracker_.NoteAnswererStateEvent(
-      AnswererState::kCreateAnswerPending, HasDocumentMedia());
   RTCSessionDescriptionRequest* request =
       RTCSessionDescriptionRequestImpl::Create(
-          GetExecutionContext(),
-          RTCCreateSessionDescriptionOperation::kCreateAnswer, this,
-          success_callback, error_callback);
+          GetExecutionContext(), this, success_callback, error_callback);
   peer_handler_->CreateAnswer(request, nullptr);
   return ScriptPromise::CastUndefined(script_state);
 }
@@ -981,76 +856,6 @@ DOMException* RTCPeerConnection::checkSdpForStateErrors(
   return nullptr;
 }
 
-absl::optional<ComplexSdpCategory> RTCPeerConnection::CheckForComplexSdp(
-    const ParsedSessionDescription& parsed_sdp) const {
-  absl::optional<SdpFormat> sdp_format = DeduceSdpFormat(parsed_sdp);
-  if (!sdp_format) {
-    return sdp_semantics_specified_
-               ? ComplexSdpCategory::kErrorExplicitSemantics
-               : ComplexSdpCategory::kErrorImplicitSemantics;
-  }
-
-  if (*sdp_format == SdpFormat::kComplexPlanB) {
-    return sdp_semantics_specified_
-               ? ComplexSdpCategory::kPlanBExplicitSemantics
-               : ComplexSdpCategory::kPlanBImplicitSemantics;
-  } else if (*sdp_format == SdpFormat::kComplexUnifiedPlan) {
-    return sdp_semantics_specified_
-               ? ComplexSdpCategory::kUnifiedPlanExplicitSemantics
-               : ComplexSdpCategory::kUnifiedPlanImplicitSemantics;
-  }
-
-  return absl::nullopt;
-}
-
-void RTCPeerConnection::RecordSdpCategoryAndMaybeEmitWarnings(
-    const ParsedSessionDescription& parsed_sdp) const {
-  absl::optional<ComplexSdpCategory> complex_sdp_category =
-      CheckForComplexSdp(parsed_sdp);
-  if (!complex_sdp_category || !GetExecutionContext())
-    return;
-
-  LocalDOMWindow* window = To<LocalDOMWindow>(GetExecutionContext());
-  RTCPeerConnectionController::From(*window->document())
-      .MaybeReportComplexSdp(*complex_sdp_category);
-
-  if (*complex_sdp_category == ComplexSdpCategory::kPlanBImplicitSemantics) {
-    Deprecation::CountDeprecation(
-        GetExecutionContext(),
-        WebFeature::kRTCPeerConnectionComplexPlanBSdpUsingDefaultSdpSemantics);
-  }
-
-  // kComplexPlanB/kComplexUnifiedPlan or null.
-  absl::optional<SdpFormat> complex_sdp_format;
-  switch (*complex_sdp_category) {
-    case ComplexSdpCategory::kPlanBExplicitSemantics:
-    case ComplexSdpCategory::kPlanBImplicitSemantics:
-      complex_sdp_format = SdpFormat::kComplexPlanB;
-      break;
-    case ComplexSdpCategory::kUnifiedPlanExplicitSemantics:
-    case ComplexSdpCategory::kUnifiedPlanImplicitSemantics:
-      complex_sdp_format = SdpFormat::kComplexUnifiedPlan;
-      break;
-    case ComplexSdpCategory::kErrorImplicitSemantics:
-    case ComplexSdpCategory::kErrorExplicitSemantics:
-      complex_sdp_format = absl::nullopt;
-      break;
-  }
-  // Complex SDP use counters go up when complex SDP is used on an
-  // RTCPeerConnection configured for that SDP format.
-  if (complex_sdp_format.has_value()) {
-    if (sdp_semantics_ == webrtc::SdpSemantics::kPlanB &&
-        complex_sdp_format.value() == SdpFormat::kComplexPlanB) {
-      UseCounter::Count(GetExecutionContext(),
-                        WebFeature::kRTCPeerConnectionUsingComplexPlanB);
-    } else if (sdp_semantics_ == webrtc::SdpSemantics::kUnifiedPlan &&
-               complex_sdp_format.value() == SdpFormat::kComplexUnifiedPlan) {
-      UseCounter::Count(GetExecutionContext(),
-                        WebFeature::kRTCPeerConnectionUsingComplexUnifiedPlan);
-    }
-  }
-}
-
 HeapHashSet<Member<RTCIceTransport>> RTCPeerConnection::ActiveIceTransports()
     const {
   HeapHashSet<Member<RTCIceTransport>> active_transports;
@@ -1078,94 +883,6 @@ HeapHashSet<Member<RTCIceTransport>> RTCPeerConnection::ActiveIceTransports()
   return active_transports;
 }
 
-const CallSetupStateTracker& RTCPeerConnection::call_setup_state_tracker()
-    const {
-  return call_setup_state_tracker_;
-}
-
-void RTCPeerConnection::NoteCallSetupStateEventPending(
-    RTCPeerConnection::SetSdpOperationType operation,
-    const RTCSessionDescriptionInit& description) {
-  if (!description.hasType())
-    return;
-
-  switch (operation) {
-    case RTCPeerConnection::SetSdpOperationType::kSetLocalDescription:
-      if (description.type() == V8RTCSdpType::Enum::kOffer) {
-        call_setup_state_tracker_.NoteOffererStateEvent(
-            OffererState::kSetLocalOfferPending, HasDocumentMedia());
-      } else if (description.type() == V8RTCSdpType::Enum::kAnswer ||
-                 description.type() == V8RTCSdpType::Enum::kPranswer) {
-        call_setup_state_tracker_.NoteAnswererStateEvent(
-            AnswererState::kSetLocalAnswerPending, HasDocumentMedia());
-      }
-      break;
-    case RTCPeerConnection::SetSdpOperationType::kSetRemoteDescription:
-      if (description.type() == V8RTCSdpType::Enum::kOffer) {
-        call_setup_state_tracker_.NoteAnswererStateEvent(
-            AnswererState::kSetRemoteOfferPending, HasDocumentMedia());
-      } else if (description.type() == V8RTCSdpType::Enum::kAnswer ||
-                 description.type() == V8RTCSdpType::Enum::kPranswer) {
-        call_setup_state_tracker_.NoteOffererStateEvent(
-            OffererState::kSetRemoteAnswerPending, HasDocumentMedia());
-      }
-      break;
-  }
-}
-
-void RTCPeerConnection::NoteSessionDescriptionRequestCompleted(
-    RTCCreateSessionDescriptionOperation operation,
-    bool success) {
-  switch (operation) {
-    case RTCCreateSessionDescriptionOperation::kCreateOffer:
-      call_setup_state_tracker_.NoteOffererStateEvent(
-          success ? OffererState::kCreateOfferResolved
-                  : OffererState::kCreateOfferRejected,
-          HasDocumentMedia());
-      return;
-    case RTCCreateSessionDescriptionOperation::kCreateAnswer:
-      call_setup_state_tracker_.NoteAnswererStateEvent(
-          success ? AnswererState::kCreateAnswerResolved
-                  : AnswererState::kCreateAnswerRejected,
-          HasDocumentMedia());
-      return;
-  }
-}
-
-void RTCPeerConnection::NoteVoidRequestCompleted(
-    RTCSetSessionDescriptionOperation operation,
-    bool success) {
-  switch (operation) {
-    case RTCSetSessionDescriptionOperation::kSetLocalDescriptionOffer:
-      call_setup_state_tracker_.NoteOffererStateEvent(
-          success ? OffererState::kSetLocalOfferResolved
-                  : OffererState::kSetLocalOfferRejected,
-          HasDocumentMedia());
-      break;
-    case RTCSetSessionDescriptionOperation::kSetLocalDescriptionAnswer:
-      call_setup_state_tracker_.NoteAnswererStateEvent(
-          success ? AnswererState::kSetLocalAnswerResolved
-                  : AnswererState::kSetLocalAnswerRejected,
-          HasDocumentMedia());
-      break;
-    case RTCSetSessionDescriptionOperation::kSetRemoteDescriptionOffer:
-      call_setup_state_tracker_.NoteAnswererStateEvent(
-          success ? AnswererState::kSetRemoteOfferResolved
-                  : AnswererState::kSetRemoteOfferRejected,
-          HasDocumentMedia());
-      break;
-    case RTCSetSessionDescriptionOperation::kSetRemoteDescriptionAnswer:
-      call_setup_state_tracker_.NoteOffererStateEvent(
-          success ? OffererState::kSetRemoteAnswerResolved
-                  : OffererState::kSetRemoteAnswerRejected,
-          HasDocumentMedia());
-      break;
-    case RTCSetSessionDescriptionOperation::kSetLocalDescriptionInvalidType:
-    case RTCSetSessionDescriptionOperation::kSetRemoteDescriptionInvalidType:
-      break;
-  }
-}
-
 void RTCPeerConnection::GenerateCertificateCompleted(
     ScriptPromiseResolver* resolver,
     rtc::scoped_refptr<rtc::RTCCertificate> certificate) {
@@ -1178,17 +895,7 @@ void RTCPeerConnection::GenerateCertificateCompleted(
       MakeGarbageCollected<RTCCertificate>(std::move(certificate)));
 }
 
-bool RTCPeerConnection::HasDocumentMedia() const {
-  if (!GetExecutionContext())
-    return false;
-  UserMediaController* user_media_controller =
-      UserMediaController::From(To<LocalDOMWindow>(GetExecutionContext()));
-  return user_media_controller &&
-         user_media_controller->HasRequestedUserMedia();
-}
-
 void RTCPeerConnection::UpdateIceConnectionState() {
-  DCHECK_EQ(webrtc::SdpSemantics::kUnifiedPlan, sdp_semantics_);
   auto new_state = ComputeIceConnectionState();
   if (ice_connection_state_ != new_state) {
     peer_handler_->TrackIceConnectionStateChange(new_state);
@@ -1202,8 +909,7 @@ ScriptPromise RTCPeerConnection::setLocalDescription(
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
   auto* request = MakeGarbageCollected<RTCVoidRequestPromiseImpl>(
-      absl::nullopt, this, resolver, "RTCPeerConnection",
-      "setLocalDescription");
+      this, resolver, "RTCPeerConnection", "setLocalDescription");
   peer_handler_->SetLocalDescription(request);
   return promise;
 }
@@ -1225,7 +931,7 @@ ScriptPromise RTCPeerConnection::setLocalDescription(
   String sdp = session_description_init->sdp();
   // https://w3c.github.io/webrtc-pc/#dom-peerconnection-setlocaldescription
   // step 4.4 and 4.5: If SDP is empty, return the last created offer or answer.
-  if (sdp.IsEmpty()) {
+  if (sdp.empty()) {
     switch (session_description_init->type().AsEnum()) {
       case V8RTCSdpType::Enum::kOffer:
         sdp = last_offer_;
@@ -1241,8 +947,6 @@ ScriptPromise RTCPeerConnection::setLocalDescription(
   ParsedSessionDescription parsed_sdp =
       ParsedSessionDescription::Parse(session_description_init->type(), sdp);
   if (session_description_init->type() != V8RTCSdpType::Enum::kRollback) {
-    RecordSdpCategoryAndMaybeEmitWarnings(parsed_sdp);
-
     DOMException* exception = checkSdpForStateErrors(
         ExecutionContext::From(script_state), parsed_sdp);
     if (exception) {
@@ -1252,18 +956,15 @@ ScriptPromise RTCPeerConnection::setLocalDescription(
       return ScriptPromise();
     }
   }
-  NoteCallSetupStateEventPending(SetSdpOperationType::kSetLocalDescription,
-                                 *session_description_init);
   ExecutionContext* context = ExecutionContext::From(script_state);
   UseCounter::Count(context, WebFeature::kRTCPeerConnectionSetLocalDescription);
   UseCounter::Count(context,
                     WebFeature::kRTCPeerConnectionSetLocalDescriptionPromise);
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   auto* request = MakeGarbageCollected<RTCVoidRequestPromiseImpl>(
-      GetRTCVoidRequestOperationType(SetSdpOperationType::kSetLocalDescription,
-                                     *session_description_init),
       this, resolver, "RTCPeerConnection", "setLocalDescription");
   peer_handler_->SetLocalDescription(request, std::move(parsed_sdp));
   return promise;
@@ -1274,8 +975,9 @@ ScriptPromise RTCPeerConnection::setLocalDescription(
     const RTCSessionDescriptionInit* session_description_init,
     V8VoidFunction* success_callback,
     V8RTCPeerConnectionErrorCallback* error_callback) {
-  if (CallErrorCallbackIfSignalingStateClosed(signaling_state_,
-                                              error_callback)) {
+  if (CallErrorCallbackIfSignalingStateClosed(
+          ExecutionContext::From(script_state), signaling_state_,
+          error_callback)) {
     return ScriptPromise::CastUndefined(script_state);
   }
 
@@ -1283,7 +985,7 @@ ScriptPromise RTCPeerConnection::setLocalDescription(
   String sdp = session_description_init->sdp();
   // https://w3c.github.io/webrtc-pc/#dom-peerconnection-setlocaldescription
   // step 4.4 and 4.5: If SDP is empty, return the last created offer or answer.
-  if (sdp.IsEmpty() && session_description_init->hasType()) {
+  if (sdp.empty() && session_description_init->hasType()) {
     switch (session_description_init->type().AsEnum()) {
       case V8RTCSdpType::Enum::kOffer:
         sdp = last_offer_;
@@ -1301,10 +1003,6 @@ ScriptPromise RTCPeerConnection::setLocalDescription(
           ? session_description_init->type().AsString()
           : String(),
       sdp);
-  if (!session_description_init->hasType() ||
-      session_description_init->type() != V8RTCSdpType::Enum::kRollback) {
-    RecordSdpCategoryAndMaybeEmitWarnings(parsed_sdp);
-  }
   ExecutionContext* context = ExecutionContext::From(script_state);
   UseCounter::Count(context, WebFeature::kRTCPeerConnectionSetLocalDescription);
   if (success_callback && error_callback) {
@@ -1328,17 +1026,12 @@ ScriptPromise RTCPeerConnection::setLocalDescription(
     DOMException* exception = checkSdpForStateErrors(context, parsed_sdp);
     if (exception) {
       if (error_callback)
-        AsyncCallErrorCallback(error_callback, exception);
+        AsyncCallErrorCallback(context, error_callback, exception);
       return ScriptPromise::CastUndefined(script_state);
     }
   }
-  NoteCallSetupStateEventPending(SetSdpOperationType::kSetLocalDescription,
-                                 *session_description_init);
   auto* request = MakeGarbageCollected<RTCVoidRequestImpl>(
-      GetExecutionContext(),
-      GetRTCVoidRequestOperationType(SetSdpOperationType::kSetLocalDescription,
-                                     *session_description_init),
-      this, success_callback, error_callback);
+      GetExecutionContext(), this, success_callback, error_callback);
   peer_handler_->SetLocalDescription(request, std::move(parsed_sdp));
   return ScriptPromise::CastUndefined(script_state);
 }
@@ -1349,11 +1042,11 @@ RTCSessionDescription* RTCPeerConnection::localDescription() const {
 }
 
 RTCSessionDescription* RTCPeerConnection::currentLocalDescription() const {
-  return current_local_description_;
+  return current_local_description_.Get();
 }
 
 RTCSessionDescription* RTCPeerConnection::pendingLocalDescription() const {
-  return pending_local_description_;
+  return pending_local_description_.Get();
 }
 
 ScriptPromise RTCPeerConnection::setRemoteDescription(
@@ -1369,10 +1062,6 @@ ScriptPromise RTCPeerConnection::setRemoteDescription(
   DCHECK(script_state->ContextIsValid());
   ParsedSessionDescription parsed_sdp =
       ParsedSessionDescription::Parse(session_description_init);
-  if (!session_description_init->hasType() ||
-      session_description_init->type() != V8RTCSdpType::Enum::kRollback) {
-    RecordSdpCategoryAndMaybeEmitWarnings(parsed_sdp);
-  }
   if (signaling_state_ ==
       webrtc::PeerConnectionInterface::SignalingState::kClosed) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
@@ -1386,8 +1075,6 @@ ScriptPromise RTCPeerConnection::setRemoteDescription(
   UseCounter::Count(context,
                     WebFeature::kRTCPeerConnectionSetRemoteDescriptionPromise);
 
-  NoteCallSetupStateEventPending(SetSdpOperationType::kSetRemoteDescription,
-                                 *session_description_init);
   if (ContainsLegacyRtpDataChannel(session_description_init->sdp())) {
     UseCounter::Count(context, WebFeature::kRTCLegacyRtpDataChannelNegotiated);
   }
@@ -1395,11 +1082,10 @@ ScriptPromise RTCPeerConnection::setRemoteDescription(
   if (ContainsCandidate(session_description_init->sdp()))
     DisableBackForwardCache(context);
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   auto* request = MakeGarbageCollected<RTCVoidRequestPromiseImpl>(
-      GetRTCVoidRequestOperationType(SetSdpOperationType::kSetRemoteDescription,
-                                     *session_description_init),
       this, resolver, "RTCPeerConnection", "setRemoteDescription");
   peer_handler_->SetRemoteDescription(request, std::move(parsed_sdp));
   return promise;
@@ -1410,18 +1096,15 @@ ScriptPromise RTCPeerConnection::setRemoteDescription(
     const RTCSessionDescriptionInit* session_description_init,
     V8VoidFunction* success_callback,
     V8RTCPeerConnectionErrorCallback* error_callback) {
-  if (CallErrorCallbackIfSignalingStateClosed(signaling_state_,
-                                              error_callback)) {
+  if (CallErrorCallbackIfSignalingStateClosed(
+          ExecutionContext::From(script_state), signaling_state_,
+          error_callback)) {
     return ScriptPromise::CastUndefined(script_state);
   }
 
   DCHECK(script_state->ContextIsValid());
   ParsedSessionDescription parsed_sdp =
       ParsedSessionDescription::Parse(session_description_init);
-  if (!session_description_init->hasType() ||
-      session_description_init->type() != V8RTCSdpType::Enum::kRollback) {
-    RecordSdpCategoryAndMaybeEmitWarnings(parsed_sdp);
-  }
   ExecutionContext* context = ExecutionContext::From(script_state);
   UseCounter::Count(context,
                     WebFeature::kRTCPeerConnectionSetRemoteDescription);
@@ -1449,16 +1132,12 @@ ScriptPromise RTCPeerConnection::setRemoteDescription(
   if (ContainsCandidate(session_description_init->sdp()))
     DisableBackForwardCache(context);
 
-  if (CallErrorCallbackIfSignalingStateClosed(signaling_state_, error_callback))
+  if (CallErrorCallbackIfSignalingStateClosed(context, signaling_state_,
+                                              error_callback))
     return ScriptPromise::CastUndefined(script_state);
 
-  NoteCallSetupStateEventPending(SetSdpOperationType::kSetRemoteDescription,
-                                 *session_description_init);
   auto* request = MakeGarbageCollected<RTCVoidRequestImpl>(
-      GetExecutionContext(),
-      GetRTCVoidRequestOperationType(SetSdpOperationType::kSetRemoteDescription,
-                                     *session_description_init),
-      this, success_callback, error_callback);
+      GetExecutionContext(), this, success_callback, error_callback);
   peer_handler_->SetRemoteDescription(request, std::move(parsed_sdp));
   return ScriptPromise::CastUndefined(script_state);
 }
@@ -1469,11 +1148,11 @@ RTCSessionDescription* RTCPeerConnection::remoteDescription() const {
 }
 
 RTCSessionDescription* RTCPeerConnection::currentRemoteDescription() const {
-  return current_remote_description_;
+  return current_remote_description_.Get();
 }
 
 RTCSessionDescription* RTCPeerConnection::pendingRemoteDescription() const {
-  return pending_remote_description_;
+  return pending_remote_description_.Get();
 }
 
 RTCConfiguration* RTCPeerConnection::getConfiguration(
@@ -1517,25 +1196,14 @@ RTCConfiguration* RTCPeerConnection::getConfiguration(
       NOTREACHED();
   }
 
-  switch (webrtc_configuration.sdp_semantics) {
-    case webrtc::SdpSemantics::kPlanB:
-      result->setSdpSemantics("plan-b");
-      break;
-    case webrtc::SdpSemantics::kUnifiedPlan:
-      result->setSdpSemantics("unified-plan");
-      break;
-    default:
-      NOTREACHED();
-  }
-
   HeapVector<Member<RTCIceServer>> ice_servers;
-  ice_servers.ReserveCapacity(
+  ice_servers.reserve(
       base::checked_cast<wtf_size_t>(webrtc_configuration.servers.size()));
   for (const auto& webrtc_server : webrtc_configuration.servers) {
     auto* ice_server = RTCIceServer::Create();
 
     Vector<String> url_vector;
-    url_vector.ReserveCapacity(
+    url_vector.reserve(
         base::checked_cast<wtf_size_t>(webrtc_server.urls.size()));
     for (const auto& url : webrtc_server.urls) {
       url_vector.emplace_back(url.c_str());
@@ -1552,7 +1220,7 @@ RTCConfiguration* RTCPeerConnection::getConfiguration(
 
   if (!webrtc_configuration.certificates.empty()) {
     HeapVector<blink::Member<RTCCertificate>> certificates;
-    certificates.ReserveCapacity(base::checked_cast<wtf_size_t>(
+    certificates.reserve(base::checked_cast<wtf_size_t>(
         webrtc_configuration.certificates.size()));
     for (const auto& webrtc_certificate : webrtc_configuration.certificates) {
       certificates.emplace_back(
@@ -1576,6 +1244,8 @@ RTCConfiguration* RTCPeerConnection::getConfiguration(
     result->setRtcAudioJitterBufferMinDelayMs(
         static_cast<int32_t>(audio_jitter_buffer_min_delay_ms));
   }
+  result->setEncodedInsertableStreams(
+      peer_handler_->encoded_insertable_streams());
 
   return result;
 }
@@ -1594,25 +1264,30 @@ void RTCPeerConnection::setConfiguration(
   if (exception_state.HadException())
     return;
 
-  MediaErrorState media_error_state;
-  if (media_error_state.HadException()) {
-    media_error_state.RaiseException(exception_state);
-    return;
+  if (peer_handler_->encoded_insertable_streams() !=
+      rtc_configuration->encodedInsertableStreams()) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidModificationError,
+        "Attempted to modify the PeerConnection's "
+        "configuration in an unsupported way.");
   }
 
   webrtc::RTCErrorType error = peer_handler_->SetConfiguration(configuration);
-  if (error != webrtc::RTCErrorType::NONE) {
-    // All errors besides InvalidModification should have been detected above.
-    if (error == webrtc::RTCErrorType::INVALID_MODIFICATION) {
-      exception_state.ThrowDOMException(
-          DOMExceptionCode::kInvalidModificationError,
-          "Attempted to modify the PeerConnection's "
-          "configuration in an unsupported way.");
-    } else {
-      exception_state.ThrowDOMException(
-          DOMExceptionCode::kOperationError,
-          "Could not update the PeerConnection with the given configuration.");
-    }
+  if (error == webrtc::RTCErrorType::NONE) {
+    return;
+  } else if (error == webrtc::RTCErrorType::INVALID_MODIFICATION) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidModificationError,
+        "Attempted to modify the PeerConnection's configuration in an "
+        "unsupported way.");
+  } else if (error == webrtc::RTCErrorType::SYNTAX_ERROR) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kSyntaxError,
+        "The given configuration has a syntax error.");
+  } else {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kOperationError,
+        "Could not update the PeerConnection with the given configuration.");
   }
 }
 
@@ -1716,13 +1391,14 @@ ScriptPromise RTCPeerConnection::generateCertificate(
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   // Helper closure callback for RTCPeerConnection::generateCertificate.
   auto completion_callback =
-      WTF::Bind(RTCPeerConnection::GenerateCertificateCompleted,
-                WrapPersistent(resolver));
+      WTF::BindOnce(RTCPeerConnection::GenerateCertificateCompleted,
+                    WrapPersistent(resolver));
 
   // Generate certificate. The |certificateObserver| will resolve the promise
   // asynchronously upon completion. The observer will manage its own
@@ -1755,7 +1431,7 @@ ScriptPromise RTCPeerConnection::addIceCandidate(
     return ScriptPromise();
   }
 
-  if (candidate->hasCandidate() && candidate->candidate().IsEmpty()) {
+  if (candidate->hasCandidate() && candidate->candidate().empty()) {
     // Temporary mitigation to avoid throwing an exception when candidate is
     // empty or nothing was passed.
     // TODO(crbug.com/978582): Remove this mitigation when the WebRTC layer
@@ -1767,7 +1443,6 @@ ScriptPromise RTCPeerConnection::addIceCandidate(
       ConvertToRTCIceCandidatePlatform(ExecutionContext::From(script_state),
                                        candidate);
 
-
   if (IsIceCandidateMissingSdpMidAndMLineIndex(candidate)) {
     exception_state.ThrowTypeError(
         "Candidate missing values for both sdpMid and sdpMLineIndex");
@@ -1776,10 +1451,11 @@ ScriptPromise RTCPeerConnection::addIceCandidate(
 
   DisableBackForwardCache(GetExecutionContext());
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   auto* request = MakeGarbageCollected<RTCVoidRequestPromiseImpl>(
-      absl::nullopt, this, resolver, "RTCPeerConnection", "addIceCandidate");
+      this, resolver, "RTCPeerConnection", "addIceCandidate");
   peer_handler_->AddIceCandidate(request, std::move(platform_candidate));
   return promise;
 }
@@ -1794,7 +1470,9 @@ ScriptPromise RTCPeerConnection::addIceCandidate(
   DCHECK(success_callback);
   DCHECK(error_callback);
 
-  if (CallErrorCallbackIfSignalingStateClosed(signaling_state_, error_callback))
+  if (CallErrorCallbackIfSignalingStateClosed(
+          ExecutionContext::From(script_state), signaling_state_,
+          error_callback))
     return ScriptPromise::CastUndefined(script_state);
 
   if (IsIceCandidateMissingSdpMidAndMLineIndex(candidate)) {
@@ -1811,14 +1489,13 @@ ScriptPromise RTCPeerConnection::addIceCandidate(
   // empty.
   // TODO(crbug.com/978582): Remove this mitigation when the WebRTC layer
   // handles the empty candidate field or the null candidate correctly.
-  if (platform_candidate->Candidate().IsEmpty())
+  if (platform_candidate->Candidate().empty())
     return ScriptPromise::CastUndefined(script_state);
 
   DisableBackForwardCache(GetExecutionContext());
 
   auto* request = MakeGarbageCollected<RTCVoidRequestImpl>(
-      GetExecutionContext(), absl::nullopt, this, success_callback,
-      error_callback);
+      GetExecutionContext(), this, success_callback, error_callback);
   peer_handler_->AddIceCandidate(request, std::move(platform_candidate));
   return ScriptPromise::CastUndefined(script_state);
 }
@@ -1904,21 +1581,12 @@ void RTCPeerConnection::removeStream(MediaStream* stream,
 
 MediaStreamVector RTCPeerConnection::getLocalStreams() const {
   MediaStreamVector local_streams;
-  if (sdp_semantics_ == webrtc::SdpSemantics::kPlanB) {
-    for (const auto& sender : rtp_senders_) {
-      for (const auto& stream : sender->streams()) {
-        if (!local_streams.Contains(stream))
-          local_streams.push_back(stream);
-      }
-    }
-  } else {
-    for (const auto& transceiver : transceivers_) {
-      if (!transceiver->DirectionHasSend())
-        continue;
-      for (const auto& stream : transceiver->sender()->streams()) {
-        if (!local_streams.Contains(stream))
-          local_streams.push_back(stream);
-      }
+  for (const auto& transceiver : transceivers_) {
+    if (!transceiver->DirectionHasSend())
+      continue;
+    for (const auto& stream : transceiver->sender()->streams()) {
+      if (!local_streams.Contains(stream))
+        local_streams.push_back(stream);
     }
   }
   return local_streams;
@@ -1926,21 +1594,12 @@ MediaStreamVector RTCPeerConnection::getLocalStreams() const {
 
 MediaStreamVector RTCPeerConnection::getRemoteStreams() const {
   MediaStreamVector remote_streams;
-  if (sdp_semantics_ == webrtc::SdpSemantics::kPlanB) {
-    for (const auto& receiver : rtp_receivers_) {
-      for (const auto& stream : receiver->streams()) {
-        if (!remote_streams.Contains(stream))
-          remote_streams.push_back(stream);
-      }
-    }
-  } else {
-    for (const auto& transceiver : transceivers_) {
-      if (!transceiver->DirectionHasRecv())
-        continue;
-      for (const auto& stream : transceiver->receiver()->streams()) {
-        if (!remote_streams.Contains(stream))
-          remote_streams.push_back(stream);
-      }
+  for (const auto& transceiver : transceivers_) {
+    if (!transceiver->DirectionHasRecv())
+      continue;
+    for (const auto& stream : transceiver->receiver()->streams()) {
+      if (!remote_streams.Contains(stream))
+        remote_streams.push_back(stream);
     }
   }
   return remote_streams;
@@ -1950,7 +1609,7 @@ MediaStream* RTCPeerConnection::getRemoteStreamById(const String& id) const {
   for (const auto& rtp_receiver : rtp_receivers_) {
     for (const auto& stream : rtp_receiver->streams()) {
       if (stream->id() == id) {
-        return stream;
+        return stream.Get();
       }
     }
   }
@@ -1998,10 +1657,9 @@ ScriptPromise RTCPeerConnection::getStats(ScriptState* script_state,
     V8RTCStatsCallback* success_callback =
         V8RTCStatsCallback::Create(first_argument.As<v8::Function>());
     MediaStreamTrack* selector_or_null =
-        V8MediaStreamTrack::ToImplWithTypeCheck(isolate,
-                                                legacy_selector.V8Value());
+        V8MediaStreamTrack::ToWrappable(isolate, legacy_selector.V8Value());
     return LegacyCallbackBasedGetStats(script_state, success_callback,
-                                       selector_or_null);
+                                       selector_or_null, exception_state);
   }
   // Custom binding for spec-compliant
   // "getStats(optional MediaStreamTrack? selector)". null is a valid selector
@@ -2010,7 +1668,7 @@ ScriptPromise RTCPeerConnection::getStats(ScriptState* script_state,
     return PromiseBasedGetStats(script_state, nullptr, exception_state);
 
   MediaStreamTrack* track =
-      V8MediaStreamTrack::ToImplWithTypeCheck(isolate, first_argument);
+      V8MediaStreamTrack::ToWrappable(isolate, first_argument);
   if (track)
     return PromiseBasedGetStats(script_state, track, exception_state);
 
@@ -2023,13 +1681,30 @@ ScriptPromise RTCPeerConnection::getStats(ScriptState* script_state,
 ScriptPromise RTCPeerConnection::LegacyCallbackBasedGetStats(
     ScriptState* script_state,
     V8RTCStatsCallback* success_callback,
-    MediaStreamTrack* selector) {
+    MediaStreamTrack* selector,
+    ExceptionState& exception_state) {
   ExecutionContext* context = ExecutionContext::From(script_state);
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
   ScriptPromise promise = resolver->Promise();
 
-  UseCounter::Count(context,
-                    WebFeature::kRTCPeerConnectionGetStatsLegacyNonCompliant);
+  // This API is only usable if this Deprecation Trial is enabled:
+  // https://developer.chrome.com/origintrials/#/view_trial/3633278999381147649
+  // TODO(https://crbug.com/822696): In M122, delete this API.
+  bool deprecation_trial_enabled =
+      RuntimeEnabledFeatures::RTCLegacyCallbackBasedGetStatsEnabled(context);
+  if (deprecation_trial_enabled) {
+    // The deprecation trial is enabled, allow API usage without the warning.
+    UseCounter::Count(context,
+                      WebFeature::kRTCPeerConnectionLegacyGetStatsTrial);
+  } else {
+    // The deprecation trial is not enabled: count deprecation and throw.
+    Deprecation::CountDeprecation(
+        context, WebFeature::kRTCPeerConnectionGetStatsLegacyNonCompliant);
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotSupportedError,
+        "The callback-based getStats() method is no longer supported.");
+    return ScriptPromise();
+  }
   auto* stats_request = MakeGarbageCollected<RTCStatsRequestImpl>(
       GetExecutionContext(), this, success_callback, selector);
   // FIXME: Add passing selector as part of the statsRequest.
@@ -2053,7 +1728,8 @@ ScriptPromise RTCPeerConnection::PromiseBasedGetStats(
                                         "Internal error: release in progress");
       return ScriptPromise();
     }
-    auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+    auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+        script_state, exception_state.GetContext());
     ScriptPromise promise = resolver->Promise();
     if (peer_handler_unregistered_) {
       LOG(ERROR) << "Internal error: context is destroyed";
@@ -2061,9 +1737,8 @@ ScriptPromise RTCPeerConnection::PromiseBasedGetStats(
       // while leaving the associated promise pending as specified.
       resolver->Detach();
     } else {
-      peer_handler_->GetStats(WTF::Bind(WebRTCStatsReportCallbackResolver,
-                                        WrapPersistent(resolver)),
-                              GetExposedGroupIds(script_state));
+      peer_handler_->GetStats(WTF::BindOnce(WebRTCStatsReportCallbackResolver,
+                                            WrapPersistent(resolver)));
     }
     return promise;
   }
@@ -2124,40 +1799,52 @@ RtpContributingSourceCache& RTCPeerConnection::GetRtpContributingSourceCache() {
   return rtp_contributing_source_cache_.value();
 }
 
-RTCRtpTransceiver* RTCPeerConnection::addTransceiver(
-    const V8UnionMediaStreamTrackOrString* track_or_kind,
+absl::optional<webrtc::RtpTransceiverInit> ValidateRtpTransceiverInit(
+    ExecutionContext* execution_context,
+    ExceptionState& exception_state,
     const RTCRtpTransceiverInit* init,
-    ExceptionState& exception_state) {
-  if (sdp_semantics_ != webrtc::SdpSemantics::kUnifiedPlan) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      kOnlySupportedInUnifiedPlanMessage);
-    return nullptr;
-  }
-  if (ThrowExceptionIfSignalingStateClosed(signaling_state_, &exception_state))
-    return nullptr;
-  auto webrtc_init = ToRtpTransceiverInit(GetExecutionContext(), init);
+    const String kind) {
+  auto webrtc_init = ToRtpTransceiverInit(execution_context, init, kind);
   // Validate sendEncodings.
   for (auto& encoding : webrtc_init.send_encodings) {
     if (encoding.rid.length() > 16) {
       exception_state.ThrowTypeError("Illegal length of rid");
-      return nullptr;
+      return absl::nullopt;
     }
     // Allowed characters: a-z 0-9 _ and -
     if (encoding.rid.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLM"
                                        "NOPQRSTUVWXYZ0123456789-_") !=
         std::string::npos) {
       exception_state.ThrowTypeError("Illegal character in rid");
-      return nullptr;
+      return absl::nullopt;
     }
+  }
+  return webrtc_init;
+}
+
+RTCRtpTransceiver* RTCPeerConnection::addTransceiver(
+    const V8UnionMediaStreamTrackOrString* track_or_kind,
+    const RTCRtpTransceiverInit* init,
+    ExceptionState& exception_state) {
+  if (ThrowExceptionIfSignalingStateClosed(signaling_state_,
+                                           &exception_state)) {
+    return nullptr;
   }
   webrtc::RTCErrorOr<std::unique_ptr<RTCRtpTransceiverPlatform>> result =
       webrtc::RTCError(webrtc::RTCErrorType::UNSUPPORTED_OPERATION);
   switch (track_or_kind->GetContentType()) {
     case V8UnionMediaStreamTrackOrString::ContentType::kMediaStreamTrack: {
       MediaStreamTrack* track = track_or_kind->GetAsMediaStreamTrack();
+
+      auto webrtc_init = ValidateRtpTransceiverInit(
+          GetExecutionContext(), exception_state, init, track->kind());
+      if (!webrtc_init) {
+        return nullptr;
+      }
+
       RegisterTrack(track);
       result = peer_handler_->AddTransceiverWithTrack(track->Component(),
-                                                      std::move(webrtc_init));
+                                                      std::move(*webrtc_init));
       break;
     }
     case V8UnionMediaStreamTrackOrString::ContentType::kString: {
@@ -2175,8 +1862,15 @@ RTCRtpTransceiver* RTCPeerConnection::addTransceiver(
             "MediaStreamTrack kind ('audio' or 'video').");
         return nullptr;
       }
+
+      auto webrtc_init = ValidateRtpTransceiverInit(
+          GetExecutionContext(), exception_state, init, kind);
+      if (!webrtc_init) {
+        return nullptr;
+      }
+
       result = peer_handler_->AddTransceiverWithKind(std::move(kind),
-                                                     std::move(webrtc_init));
+                                                     std::move(*webrtc_init));
       break;
     }
   }
@@ -2194,14 +1888,6 @@ RTCRtpSender* RTCPeerConnection::addTrack(MediaStreamTrack* track,
   DCHECK(track->Component());
   if (ThrowExceptionIfSignalingStateClosed(signaling_state_, &exception_state))
     return nullptr;
-  if (sdp_semantics_ == webrtc::SdpSemantics::kPlanB && streams.size() >= 2) {
-    // TODO(hbos): Update peer_handler_ to call the AddTrack() that returns the
-    // appropriate errors, and let the lower layers handle it.
-    exception_state.ThrowDOMException(
-        DOMExceptionCode::kNotSupportedError,
-        "Adding a track to multiple streams is not supported.");
-    return nullptr;
-  }
   for (const auto& sender : rtp_senders_) {
     if (sender->track() == track) {
       exception_state.ThrowDOMException(
@@ -2230,31 +1916,13 @@ RTCRtpSender* RTCPeerConnection::addTrack(MediaStreamTrack* track,
   RegisterTrack(track);
 
   auto stream_ids = platform_transceiver->Sender()->StreamIds();
-  RTCRtpSender* sender;
-  if (sdp_semantics_ == webrtc::SdpSemantics::kPlanB) {
-    DCHECK_EQ(platform_transceiver->ImplementationType(),
-              RTCRtpTransceiverPlatformImplementationType::kPlanBSenderOnly);
-    sender =
-        CreateOrUpdateSender(platform_transceiver->Sender(), track->kind());
-  } else {
-    DCHECK_EQ(sdp_semantics_, webrtc::SdpSemantics::kUnifiedPlan);
-    DCHECK_EQ(platform_transceiver->ImplementationType(),
-              RTCRtpTransceiverPlatformImplementationType::kFullTransceiver);
-    RTCRtpTransceiver* transceiver =
-        CreateOrUpdateTransceiver(std::move(platform_transceiver));
-    sender = transceiver->sender();
-  }
+  RTCRtpTransceiver* transceiver =
+      CreateOrUpdateTransceiver(std::move(platform_transceiver));
+  RTCRtpSender* sender = transceiver->sender();
   // Newly created senders have no streams set, we have to set it ourselves.
   sender->set_streams(streams);
-
-  // The stream IDs should match between layers, with one exception;
-  // in Plan B if no stream was supplied, the lower layer still generates a
-  // stream which has no blink layer correspondence.
-  DCHECK(sdp_semantics_ != webrtc::SdpSemantics::kPlanB ||
-         (streams.size() == 0u && stream_ids.size() == 1u) ||
-         stream_ids.size() == streams.size());
-  DCHECK(sdp_semantics_ != webrtc::SdpSemantics::kUnifiedPlan ||
-         stream_ids.size() == streams.size());
+  // The native sender may have filtered out duplicates.
+  DCHECK_LE(stream_ids.size(), streams.size());
   return sender;
 }
 
@@ -2272,37 +1940,20 @@ void RTCPeerConnection::removeTrack(RTCRtpSender* sender,
   }
 
   auto error_or_transceiver = peer_handler_->RemoveTrack(sender->web_sender());
-  if (sdp_semantics_ == webrtc::SdpSemantics::kPlanB) {
-    // Plan B: Was the sender removed?
-    if (!error_or_transceiver.ok()) {
-      // Operation aborted. This indicates that the sender is no longer used by
-      // the peer connection, i.e. that it was removed due to setting a remote
-      // description of type "rollback".
-      return;
-    }
-    // Successfully removing the track results in the sender's track property
-    // being nulled.
-    DCHECK(!sender->web_sender()->Track());
-    sender->SetTrack(nullptr);
-    rtp_senders_.erase(it);
-  } else {
-    // Unified Plan: Was the transceiver updated?
-    DCHECK_EQ(sdp_semantics_, webrtc::SdpSemantics::kUnifiedPlan);
-    if (!error_or_transceiver.ok()) {
-      ThrowExceptionFromRTCError(error_or_transceiver.error(), exception_state);
-      return;
-    }
-    if (!error_or_transceiver.value()) {
-      // There is no transceiver to update - the operation was cancelled, such
-      // as if the transceiver was rolled back.
-      return;
-    }
-    CreateOrUpdateTransceiver(error_or_transceiver.MoveValue());
+  if (!error_or_transceiver.ok()) {
+    ThrowExceptionFromRTCError(error_or_transceiver.error(), exception_state);
+    return;
   }
+  if (!error_or_transceiver.value()) {
+    // There is no transceiver to update - the operation was cancelled, such
+    // as if the transceiver was rolled back.
+    return;
+  }
+  CreateOrUpdateTransceiver(error_or_transceiver.MoveValue());
 }
 
 RTCSctpTransport* RTCPeerConnection::sctp() const {
-  return sctp_transport_;
+  return sctp_transport_.Get();
 }
 
 RTCDataChannel* RTCPeerConnection::createDataChannel(
@@ -2369,7 +2020,7 @@ RTCDataChannel* RTCPeerConnection::createDataChannel(
   }
   // Further checks of DataChannelId are done in the webrtc layer.
 
-  scoped_refptr<webrtc::DataChannelInterface> webrtc_channel =
+  rtc::scoped_refptr<webrtc::DataChannelInterface> webrtc_channel =
       peer_handler_->CreateDataChannel(label, init);
   if (!webrtc_channel) {
     exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
@@ -2386,7 +2037,7 @@ MediaStreamTrack* RTCPeerConnection::GetTrackForTesting(
     MediaStreamComponent* component) const {
   auto it = tracks_.find(component);
   if (it != tracks_.end()) {
-    return it->value;
+    return it->value.Get();
   } else {
     return nullptr;
   }
@@ -2399,7 +2050,7 @@ RTCRtpSender* RTCPeerConnection::FindSenderForTrackAndStream(
     if (rtp_sender->track() == track) {
       auto streams = rtp_sender->streams();
       if (streams.size() == 1u && streams[0] == stream)
-        return rtp_sender;
+        return rtp_sender.Get();
     }
   }
   return nullptr;
@@ -2453,8 +2104,8 @@ RTCRtpSender* RTCPeerConnection::CreateOrUpdateSender(
     // Create new sender (with empty stream set).
     sender = MakeGarbageCollected<RTCRtpSender>(
         this, std::move(rtp_sender_platform), kind, track, MediaStreamVector(),
-        force_encoded_audio_insertable_streams(),
-        force_encoded_video_insertable_streams());
+        encoded_insertable_streams_,
+        GetExecutionContext()->GetTaskRunner(TaskType::kInternalMedia));
     rtp_senders_.push_back(sender);
   } else {
     // Update existing sender (not touching the stream set).
@@ -2488,8 +2139,8 @@ RTCRtpReceiver* RTCPeerConnection::CreateOrUpdateReceiver(
     // Create new receiver.
     receiver = MakeGarbageCollected<RTCRtpReceiver>(
         this, std::move(platform_receiver), track, MediaStreamVector(),
-        force_encoded_audio_insertable_streams(),
-        force_encoded_video_insertable_streams());
+        encoded_insertable_streams_,
+        GetExecutionContext()->GetTaskRunner(TaskType::kInternalMedia));
     // Receiving tracks should be muted by default. SetReadyState() propagates
     // the related state changes to ensure it is muted on all layers. It also
     // fires events - which is not desired - but because they fire synchronously
@@ -2512,11 +2163,10 @@ RTCRtpReceiver* RTCPeerConnection::CreateOrUpdateReceiver(
 
 RTCRtpTransceiver* RTCPeerConnection::CreateOrUpdateTransceiver(
     std::unique_ptr<RTCRtpTransceiverPlatform> platform_transceiver) {
-  String kind =
-      (platform_transceiver->Receiver()->Track()->Source()->GetType() ==
-       MediaStreamSource::kTypeAudio)
-          ? "audio"
-          : "video";
+  String kind = (platform_transceiver->Receiver()->Track()->GetSourceType() ==
+                 MediaStreamSource::kTypeAudio)
+                    ? "audio"
+                    : "video";
   RTCRtpSender* sender =
       CreateOrUpdateSender(platform_transceiver->Sender(), kind);
   RTCRtpReceiver* receiver =
@@ -2556,7 +2206,7 @@ RTCDtlsTransport* RTCPeerConnection::CreateOrUpdateDtlsTransport(
         GetExecutionContext(), std::move(native_transport), ice_transport);
   }
   transport->ChangeState(information);
-  return transport;
+  return transport.Get();
 }
 
 RTCIceTransport* RTCPeerConnection::CreateOrUpdateIceTransport(
@@ -2571,7 +2221,7 @@ RTCIceTransport* RTCPeerConnection::CreateOrUpdateIceTransport(
     transport = RTCIceTransport::Create(GetExecutionContext(),
                                         std::move(ice_transport), this);
   }
-  return transport;
+  return transport.Get();
 }
 
 RTCDTMFSender* RTCPeerConnection::createDTMFSender(
@@ -2629,30 +2279,19 @@ void RTCPeerConnection::NoteSdpCreated(const RTCSessionDescription& desc) {
 }
 
 void RTCPeerConnection::OnStreamAddTrack(MediaStream* stream,
-                                         MediaStreamTrack* track) {
-  ExceptionState exception_state(v8::Isolate::GetCurrent(),
-                                 ExceptionState::kUnknownContext, nullptr,
-                                 nullptr);
+                                         MediaStreamTrack* track,
+                                         ExceptionState& exception_state) {
   MediaStreamVector streams;
   streams.push_back(stream);
   addTrack(track, streams, exception_state);
-  // If addTrack() failed most likely the track already has a sender and this is
-  // a NO-OP or the connection is closed. The exception can be suppressed, there
-  // is nothing to do.
-  exception_state.ClearException();
 }
 
 void RTCPeerConnection::OnStreamRemoveTrack(MediaStream* stream,
-                                            MediaStreamTrack* track) {
+                                            MediaStreamTrack* track,
+                                            ExceptionState& exception_state) {
   auto* sender = FindSenderForTrackAndStream(track, stream);
   if (sender) {
-    ExceptionState exception_state(v8::Isolate::GetCurrent(),
-                                   ExceptionState::kUnknownContext, nullptr,
-                                   nullptr);
     removeTrack(sender, exception_state);
-    // If removeTrack() failed most likely the connection is closed. The
-    // exception can be suppressed, there is nothing to do.
-    exception_state.ClearException();
   }
 }
 
@@ -2714,174 +2353,11 @@ void RTCPeerConnection::DidChangeIceGatheringState(
   ChangeIceGatheringState(new_state);
 }
 
-void RTCPeerConnection::DidChangeIceConnectionState(
-    webrtc::PeerConnectionInterface::IceConnectionState new_state) {
-  DCHECK(!closed_);
-  DCHECK(GetExecutionContext()->IsContextThread());
-  if (sdp_semantics_ == webrtc::SdpSemantics::kUnifiedPlan) {
-    // Unified plan relies on UpdateIceConnectionState() instead.
-    return;
-  }
-  // Plan B only.
-  // TODO(https://crbug.com/1302249): Delete this.
-  peer_handler_->TrackIceConnectionStateChange(new_state);
-  ChangeIceConnectionState(new_state);
-}
-
 void RTCPeerConnection::DidChangePeerConnectionState(
     webrtc::PeerConnectionInterface::PeerConnectionState new_state) {
   DCHECK(!closed_);
   DCHECK(GetExecutionContext()->IsContextThread());
   ChangePeerConnectionState(new_state);
-}
-
-void RTCPeerConnection::DidModifyReceiversPlanB(
-    webrtc::PeerConnectionInterface::SignalingState signaling_state,
-    Vector<std::unique_ptr<RTCRtpReceiverPlatform>> platform_receivers_added,
-    Vector<std::unique_ptr<RTCRtpReceiverPlatform>>
-        platform_receivers_removed) {
-  DCHECK(!closed_);
-  DCHECK(GetExecutionContext()->IsContextThread());
-  DCHECK_EQ(sdp_semantics_, webrtc::SdpSemantics::kPlanB);
-  if (signaling_state_ ==
-      webrtc::PeerConnectionInterface::SignalingState::kClosed)
-    return;
-
-  // We must complete all processing before firing events to avoid JS events
-  // influencing the algorithm or have events fire before the peer connection's
-  // state has settled.
-  HeapVector<Member<MediaStreamTrack>> mute_tracks;
-  HeapVector<std::pair<Member<MediaStream>, Member<MediaStreamTrack>>>
-      remove_list;
-  HeapVector<std::pair<Member<MediaStream>, Member<MediaStreamTrack>>> add_list;
-  HeapVector<Member<RTCRtpReceiver>> track_events;
-  MediaStreamVector previous_streams = getRemoteStreams();
-
-  // Process the addition of receivers.
-  for (auto& platform_receiver : platform_receivers_added) {
-    // Create track.
-    auto* track = MakeGarbageCollected<MediaStreamTrackImpl>(
-        GetExecutionContext(), platform_receiver->Track());
-    tracks_.insert(track->Component(), track);
-    // Create or update streams.
-    HeapVector<Member<MediaStream>> streams;
-    for (const auto& stream_id : platform_receiver->StreamIds()) {
-      MediaStream* stream = getRemoteStreamById(stream_id);
-      if (!stream) {
-        // The stream is new, create it containing this track.
-        MediaStreamComponentVector audio_track_components;
-        MediaStreamTrackVector audio_tracks;
-        MediaStreamComponentVector video_track_components;
-        MediaStreamTrackVector video_tracks;
-        if (track->Component()->Source()->GetType() ==
-            MediaStreamSource::kTypeAudio) {
-          audio_track_components.push_back(track->Component());
-          audio_tracks.push_back(track);
-        } else {
-          DCHECK(track->Component()->Source()->GetType() ==
-                 MediaStreamSource::kTypeVideo);
-          video_track_components.push_back(track->Component());
-          video_tracks.push_back(track);
-        }
-        auto* descriptor = MakeGarbageCollected<MediaStreamDescriptor>(
-            stream_id, std::move(audio_track_components),
-            std::move(video_track_components));
-        stream = MediaStream::Create(GetExecutionContext(), descriptor,
-                                     std::move(audio_tracks),
-                                     std::move(video_tracks));
-      } else {
-        // The stream already exists, the track will be added and events fired
-        // after processing the remaining receivers.
-        add_list.push_back(std::make_pair(stream, track));
-      }
-      streams.push_back(stream);
-    }
-    DCHECK(FindReceiver(*platform_receiver) == rtp_receivers_.end());
-    RTCRtpReceiver* rtp_receiver = MakeGarbageCollected<RTCRtpReceiver>(
-        this, std::move(platform_receiver), track, streams,
-        force_encoded_audio_insertable_streams(),
-        force_encoded_video_insertable_streams());
-    rtp_receivers_.push_back(rtp_receiver);
-    track_events.push_back(rtp_receiver);
-  }
-
-  // Process the removal of receivers.
-  for (auto& platform_receiver : platform_receivers_removed) {
-    auto* it = FindReceiver(*platform_receiver);
-    DCHECK(it != rtp_receivers_.end());
-    RTCRtpReceiver* rtp_receiver = *it;
-    auto streams = rtp_receiver->streams();
-    MediaStreamTrack* track = rtp_receiver->track();
-    rtp_receivers_.erase(it);
-
-    // The track will be removed from the stream and events fired after
-    // processing the remaining receivers.
-    for (const auto& stream : streams) {
-      remove_list.push_back(std::make_pair(stream, track));
-      if (!IsRemoteStream(stream)) {
-        stream->UnregisterObserver(this);
-      }
-    }
-
-    // The track will be muted and events fired after processing the remaining
-    // receivers.
-    mute_tracks.push_back(track);
-  }
-  MediaStreamVector current_streams = getRemoteStreams();
-
-  // Modify and fire "pc.onsignalingchange" synchronously.
-  if (signaling_state_ == webrtc::PeerConnectionInterface::kHaveLocalOffer &&
-      signaling_state == webrtc::PeerConnectionInterface::kHaveRemoteOffer) {
-    // Inject missing kStable in case of implicit rollback.
-    ChangeSignalingState(webrtc::PeerConnectionInterface::kStable, true);
-  }
-  ChangeSignalingState(signaling_state, true);
-
-  // Mute the tracks, this fires "track.onmute" synchronously.
-  for (auto& track : mute_tracks) {
-    track->Component()->Source()->SetReadyState(
-        MediaStreamSource::kReadyStateMuted);
-  }
-  // Remove/add tracks to streams, this fires "stream.onremovetrack" and
-  // "stream.onaddtrack" synchronously.
-  for (auto& pair : remove_list) {
-    auto& stream = pair.first;
-    auto& track = pair.second;
-    if (stream->getTracks().Contains(track)) {
-      stream->RemoveTrackAndFireEvents(
-          track,
-          MediaStreamDescriptorClient::DispatchEventTiming::kImmediately);
-    }
-  }
-  for (auto& pair : add_list) {
-    auto& stream = pair.first;
-    auto& track = pair.second;
-    if (!stream->getTracks().Contains(track)) {
-      stream->AddTrackAndFireEvents(
-          track,
-          MediaStreamDescriptorClient::DispatchEventTiming::kImmediately);
-    }
-  }
-
-  // Legacy APIs: "pc.onaddstream" and "pc.onremovestream".
-  for (const auto& current_stream : current_streams) {
-    if (!previous_streams.Contains(current_stream)) {
-      MaybeDispatchEvent(MakeGarbageCollected<MediaStreamEvent>(
-          event_type_names::kAddstream, current_stream));
-    }
-  }
-  for (const auto& previous_stream : previous_streams) {
-    if (!current_streams.Contains(previous_stream)) {
-      MaybeDispatchEvent(MakeGarbageCollected<MediaStreamEvent>(
-          event_type_names::kRemovestream, previous_stream));
-    }
-  }
-
-  // Fire "pc.ontrack" synchronously.
-  for (auto& rtp_receiver : track_events) {
-    MaybeDispatchEvent(MakeGarbageCollected<RTCTrackEvent>(
-        rtp_receiver, rtp_receiver->track(), rtp_receiver->streams(), nullptr));
-  }
 }
 
 void RTCPeerConnection::DidModifySctpTransport(
@@ -2967,15 +2443,13 @@ void RTCPeerConnection::DidModifyTransceivers(
         mute_tracks.push_back(transceiver->receiver()->track());
     }
   }
-  if (sdp_semantics_ == webrtc::SdpSemantics::kUnifiedPlan) {
-    // Update the rtp_senders_ and rtp_receivers_ members to only contain
-    // senders and receivers that are in the current set of transceivers.
-    rtp_senders_.clear();
-    rtp_receivers_.clear();
-    for (auto& transceiver : transceivers_) {
-      rtp_senders_.push_back(transceiver->sender());
-      rtp_receivers_.push_back(transceiver->receiver());
-    }
+  // Update the rtp_senders_ and rtp_receivers_ members to only contain
+  // senders and receivers that are in the current set of transceivers.
+  rtp_senders_.clear();
+  rtp_receivers_.clear();
+  for (auto& transceiver : transceivers_) {
+    rtp_senders_.push_back(transceiver->sender());
+    rtp_receivers_.push_back(transceiver->receiver());
   }
 
   MediaStreamVector current_streams = getRemoteStreams();
@@ -3049,9 +2523,7 @@ void RTCPeerConnection::DidModifyTransceivers(
   // Note - this must be done every time the set of ICE transports happens.
   // At the moment this only happens in SLD/SRD, and this function is called
   // whenever these functions complete.
-  if (sdp_semantics_ == webrtc::SdpSemantics::kUnifiedPlan) {
-    UpdateIceConnectionState();
-  }
+  UpdateIceConnectionState();
 }
 
 void RTCPeerConnection::SetAssociatedMediaStreams(
@@ -3099,7 +2571,7 @@ void RTCPeerConnection::SetAssociatedMediaStreams(
 }
 
 void RTCPeerConnection::DidAddRemoteDataChannel(
-    scoped_refptr<webrtc::DataChannelInterface> channel) {
+    rtc::scoped_refptr<webrtc::DataChannelInterface> channel) {
   DCHECK(!closed_);
   DCHECK(GetExecutionContext()->IsContextThread());
 
@@ -3129,7 +2601,7 @@ void RTCPeerConnection::DidNoteInterestingUsage(int usage_pattern) {
 
 void RTCPeerConnection::UnregisterPeerConnectionHandler() {
   if (peer_handler_unregistered_) {
-    DCHECK(scheduled_events_.IsEmpty())
+    DCHECK(scheduled_events_.empty())
         << "Undelivered events can cause memory leaks due to "
         << "WrapPersistent(this) in setup function callbacks";
     return;
@@ -3189,8 +2661,8 @@ void RTCPeerConnection::ChangeIceGatheringState(
       webrtc::PeerConnectionInterface::kIceConnectionClosed) {
     ScheduleDispatchEvent(
         Event::Create(event_type_names::kIcegatheringstatechange),
-        WTF::Bind(&RTCPeerConnection::SetIceGatheringState,
-                  WrapPersistent(this), ice_gathering_state));
+        WTF::BindOnce(&RTCPeerConnection::SetIceGatheringState,
+                      WrapPersistent(this), ice_gathering_state));
     if (ice_gathering_state ==
         webrtc::PeerConnectionInterface::kIceGatheringComplete) {
       // If ICE gathering is completed, generate a null ICE candidate, to
@@ -3304,8 +2776,8 @@ void RTCPeerConnection::ChangePeerConnectionState(
       webrtc::PeerConnectionInterface::PeerConnectionState::kClosed) {
     ScheduleDispatchEvent(
         Event::Create(event_type_names::kConnectionstatechange),
-        WTF::Bind(&RTCPeerConnection::SetPeerConnectionState,
-                  WrapPersistent(this), peer_connection_state));
+        WTF::BindOnce(&RTCPeerConnection::SetPeerConnectionState,
+                      WrapPersistent(this), peer_connection_state));
   }
 }
 
@@ -3365,7 +2837,7 @@ void RTCPeerConnection::ScheduleDispatchEvent(Event* event) {
 void RTCPeerConnection::ScheduleDispatchEvent(Event* event,
                                               BoolFunction setup_function) {
   if (peer_handler_unregistered_) {
-    DCHECK(scheduled_events_.IsEmpty())
+    DCHECK(scheduled_events_.empty())
         << "Undelivered events can cause memory leaks due to "
         << "WrapPersistent(this) in setup function callbacks";
     return;
@@ -3394,14 +2866,14 @@ void RTCPeerConnection::ScheduleDispatchEvent(Event* event,
     // https://www.w3.org/TR/webrtc/#operation
     dispatch_scheduled_events_task_handle_ = PostCancellableTask(
         *context->GetTaskRunner(TaskType::kNetworking), FROM_HERE,
-        WTF::Bind(&RTCPeerConnection::DispatchScheduledEvents,
-                  WrapPersistent(this)));
+        WTF::BindOnce(&RTCPeerConnection::DispatchScheduledEvents,
+                      WrapPersistent(this)));
   }
 }
 
 void RTCPeerConnection::DispatchScheduledEvents() {
   if (peer_handler_unregistered_) {
-    DCHECK(scheduled_events_.IsEmpty())
+    DCHECK(scheduled_events_.empty())
         << "Undelivered events can cause memory leaks due to "
         << "WrapPersistent(this) in setup function callbacks";
     return;
@@ -3438,7 +2910,7 @@ void RTCPeerConnection::Trace(Visitor* visitor) const {
   visitor->Trace(dtls_transports_by_native_transport_);
   visitor->Trace(ice_transports_by_native_transport_);
   visitor->Trace(sctp_transport_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
   MediaStreamObserver::Trace(visitor);
 }
@@ -3461,10 +2933,19 @@ int RTCPeerConnection::PeerConnectionCountLimit() {
 
 void RTCPeerConnection::DisableBackForwardCache(ExecutionContext* context) {
   LocalDOMWindow* window = To<LocalDOMWindow>(context);
+  // Two features are registered here:
+  // - `kWebRTC`: a non-sticky feature that will disable BFCache for any page.
+  // It will be reset after the `RTCPeerConnection` is closed.
+  // - `kWebRTCSticky`: a sticky feature that will only disable BFCache for the
+  // page containing "Cache-Control: no-store" header. It won't be reset even if
+  // the `RTCPeerConnection` is closed.
   feature_handle_for_scheduler_ =
       window->GetFrame()->GetFrameScheduler()->RegisterFeature(
           SchedulingPolicy::Feature::kWebRTC,
           SchedulingPolicy{SchedulingPolicy::DisableBackForwardCache()});
+  window->GetFrame()->GetFrameScheduler()->RegisterStickyFeature(
+      SchedulingPolicy::Feature::kWebRTCSticky,
+      SchedulingPolicy{SchedulingPolicy::DisableBackForwardCache()});
 }
 
 }  // namespace blink

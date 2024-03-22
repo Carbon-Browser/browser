@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
@@ -35,7 +35,6 @@
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
 #include "ui/base/ime/init/input_method_factory.h"
 #include "ui/base/ime/input_method.h"
-#include "ui/base/layout.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/base/view_prop.h"
 #include "ui/compositor/compositor.h"
@@ -137,7 +136,7 @@ class WindowTreeHost::HideHelper {
         host_window->layer()->device_scale_factor());
     // Request a presentation frame. Once the frame is generated the real root
     // layer is added back (from the destructor).
-    compositor->RequestPresentationTimeForNextFrame(base::BindOnce(
+    compositor->RequestSuccessfulPresentationTimeForNextFrame(base::BindOnce(
         &HideHelper::OnFramePresented, weak_ptr_factory_.GetWeakPtr()));
   }
 
@@ -151,7 +150,7 @@ class WindowTreeHost::HideHelper {
   }
 
  private:
-  void OnFramePresented(const gfx::PresentationFeedback& feedback) {
+  void OnFramePresented(base::TimeTicks presentation_timestamp) {
     host_->FinishHideTransition();
     // WARNING: this has been deleted.
   }
@@ -175,10 +174,6 @@ WindowTreeHost::VideoCaptureLock::VideoCaptureLock(WindowTreeHost* host)
 
 WindowTreeHost::~WindowTreeHost() {
   DCHECK(!compositor_) << "compositor must be destroyed before root window";
-  if (owned_input_method_) {
-    delete input_method_;
-    input_method_ = nullptr;
-  }
 }
 
 // static
@@ -292,7 +287,7 @@ void WindowTreeHost::ConvertDIPToPixels(gfx::Point* point) const {
 }
 
 void WindowTreeHost::ConvertDIPToPixels(gfx::PointF* point) const {
-  GetRootTransform().TransformPoint(point);
+  *point = GetRootTransform().MapPoint(*point);
 }
 
 void WindowTreeHost::ConvertPixelsToDIP(gfx::Point* point) const {
@@ -302,7 +297,7 @@ void WindowTreeHost::ConvertPixelsToDIP(gfx::Point* point) const {
 }
 
 void WindowTreeHost::ConvertPixelsToDIP(gfx::PointF* point) const {
-  GetInverseRootTransform().TransformPoint(point);
+  *point = GetInverseRootTransform().MapPoint(*point);
 }
 
 void WindowTreeHost::SetCursor(gfx::NativeCursor cursor) {
@@ -344,18 +339,15 @@ void WindowTreeHost::MoveCursorToLocationInPixels(
 
 ui::InputMethod* WindowTreeHost::GetInputMethod() {
   if (!input_method_) {
-    input_method_ =
-        ui::CreateInputMethod(this, GetAcceleratedWidget()).release();
-    owned_input_method_ = true;
+    input_method_owned_ = ui::CreateInputMethod(this, GetAcceleratedWidget());
+    input_method_ = input_method_owned_.get();
   }
   return input_method_;
 }
 
 void WindowTreeHost::SetSharedInputMethod(ui::InputMethod* input_method) {
-  if (input_method_ && owned_input_method_)
-    delete input_method_;
   input_method_ = input_method;
-  owned_input_method_ = false;
+  input_method_owned_.reset();
 }
 
 ui::EventDispatchDetails WindowTreeHost::DispatchKeyEventPostIME(
@@ -436,6 +428,7 @@ void WindowTreeHost::SetNativeWindowOcclusionState(
     return;
 
   occlusion_state_ = state;
+  occluded_region_ = occluded_region;
 
   if (compositor() && accelerated_widget_made_visible_ &&
       NativeWindowOcclusionTracker::
@@ -625,9 +618,10 @@ void WindowTreeHost::CreateCompositor(bool force_software_compositor,
   DCHECK(context_factory);
   compositor_ = std::make_unique<ui::Compositor>(
       context_factory->AllocateFrameSinkId(), context_factory,
-      base::ThreadTaskRunnerHandle::Get(), ui::IsPixelCanvasRecordingEnabled(),
-      use_external_begin_frame_control, force_software_compositor,
-      enable_compositing_based_throttling, memory_limit_when_visible_mb);
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      ui::IsPixelCanvasRecordingEnabled(), use_external_begin_frame_control,
+      force_software_compositor, enable_compositing_based_throttling,
+      memory_limit_when_visible_mb);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   compositor_->AddObserver(this);
 #endif
@@ -647,7 +641,7 @@ void WindowTreeHost::InitCompositor() {
 
   display::Display display =
       display::Screen::GetScreen()->GetDisplayNearestWindow(window());
-  compositor_->SetDisplayColorSpaces(display.color_spaces());
+  compositor_->SetDisplayColorSpaces(display.GetColorSpaces());
 }
 
 void WindowTreeHost::OnAcceleratedWidgetAvailable() {
@@ -660,13 +654,11 @@ void WindowTreeHost::OnAcceleratedWidgetAvailable() {
   }
 }
 
-void WindowTreeHost::OnHostMovedInPixels(
-    const gfx::Point& new_location_in_pixels) {
-  TRACE_EVENT1("ui", "WindowTreeHost::OnHostMovedInPixels", "origin",
-               new_location_in_pixels.ToString());
+void WindowTreeHost::OnHostMovedInPixels() {
+  TRACE_EVENT0("ui", "WindowTreeHost::OnHostMovedInPixels");
 
   for (WindowTreeHostObserver& observer : observers_)
-    observer.OnHostMovedInPixels(this, new_location_in_pixels);
+    observer.OnHostMovedInPixels(this);
 }
 
 void WindowTreeHost::OnHostResizedInPixels(
@@ -706,7 +698,7 @@ void WindowTreeHost::OnHostDisplayChanged() {
     return;
   display::Display display =
       display::Screen::GetScreen()->GetDisplayNearestWindow(window());
-  compositor_->SetDisplayColorSpaces(display.color_spaces());
+  compositor_->SetDisplayColorSpaces(display.GetColorSpaces());
 }
 
 void WindowTreeHost::OnHostCloseRequested() {
@@ -730,7 +722,7 @@ void WindowTreeHost::OnDisplayMetricsChanged(const display::Display& display,
                                              uint32_t metrics) {
   if (metrics & DisplayObserver::DISPLAY_METRIC_COLOR_SPACE && compositor_ &&
       display.id() == GetDisplayId())
-    compositor_->SetDisplayColorSpaces(display.color_spaces());
+    compositor_->SetDisplayColorSpaces(display.GetColorSpaces());
 
 // Chrome OS is handled in WindowTreeHostManager::OnDisplayMetricsChanged.
 // Chrome OS requires additional handling for the bounds that we do not need to
@@ -744,9 +736,7 @@ void WindowTreeHost::OnDisplayMetricsChanged(const display::Display& display,
 
 gfx::Rect WindowTreeHost::GetTransformedRootWindowBoundsFromPixelSize(
     const gfx::Size& size_in_pixels) const {
-  gfx::RectF new_bounds = gfx::RectF(gfx::Rect(size_in_pixels));
-  GetInverseRootTransform().TransformRect(&new_bounds);
-  return gfx::ToEnclosingRect(new_bounds);
+  return GetInverseRootTransform().MapRect(gfx::Rect(size_in_pixels));
 }
 
 void WindowTreeHost::SetNativeWindowOcclusionEnabled(bool enable) {

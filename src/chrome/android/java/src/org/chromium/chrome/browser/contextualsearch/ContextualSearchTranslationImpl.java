@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,10 @@ import org.chromium.chrome.browser.translate.TranslateBridge;
 
 import java.util.List;
 
-/**
- * Controls how Translation triggering is handled for the {@link ContextualSearchManager}.
- */
+/** Controls how Translation triggering is handled for the {@link ContextualSearchManager}. */
 public class ContextualSearchTranslationImpl implements ContextualSearchTranslation {
     private final TranslateBridgeWrapper mTranslateBridgeWrapper;
+
     /**
      * Creates a {@link ContextualSearchTranslation} for updating {@link ContextualSearchRequest}s
      * for translation.
@@ -34,7 +33,6 @@ public class ContextualSearchTranslationImpl implements ContextualSearchTranslat
     public void forceTranslateIfNeeded(
             ContextualSearchRequest searchRequest, String sourceLanguage, boolean isTapSelection) {
         if (needsTranslation(sourceLanguage)) {
-            ContextualSearchUma.logTranslationNeeded(isTapSelection);
             searchRequest.forceTranslation(sourceLanguage, getTranslateServiceTargetLanguage());
         }
     }

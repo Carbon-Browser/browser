@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/task/single_thread_task_runner.h"
 #include "content/public/browser/url_data_source.h"
 
@@ -60,8 +59,12 @@ class ThemeSource : public content::URLDataSource {
                      const content::WebContents::Getter& wc_getter,
                      content::URLDataSource::GotDataCallback callback);
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void SendTypographyCss(content::URLDataSource::GotDataCallback callback);
+#endif
+
   // The profile this object was initialized with.
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, FlakyDanglingUntriaged> profile_;
 
   // Whether this source services chrome-unstrusted://theme.
   bool serve_untrusted_;

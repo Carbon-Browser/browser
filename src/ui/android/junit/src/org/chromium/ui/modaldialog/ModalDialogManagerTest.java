@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,24 +35,19 @@ import org.chromium.ui.modelutil.PropertyModel;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Tests to validate actions within {@link ModalDialogManager}.
- */
+/** Tests to validate actions within {@link ModalDialogManager}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class ModalDialogManagerTest {
     private static final int MAX_DIALOGS = 4;
 
-    @Spy
-    private ModalDialogManager.Presenter mAppModalPresenter;
-    @Mock
-    private ModalDialogManager.Presenter mTabModalPresenter;
+    @Spy private ModalDialogManager.Presenter mAppModalPresenter;
+    @Mock private ModalDialogManager.Presenter mTabModalPresenter;
 
     private ModalDialogManager mModalDialogManager;
     private List<PropertyModel> mDialogModels = new ArrayList<>();
 
-    @Mock
-    private ModalDialogManagerObserver mObserver;
+    @Mock private ModalDialogManagerObserver mObserver;
 
     @Before
     public void setUp() {
@@ -62,17 +57,19 @@ public class ModalDialogManagerTest {
         mModalDialogManager.addObserver(mObserver);
 
         for (int i = 0; i < MAX_DIALOGS; ++i) {
-            ModalDialogProperties.Controller controller = new ModalDialogProperties.Controller() {
-                @Override
-                public void onClick(PropertyModel model, int buttonType) {}
+            ModalDialogProperties.Controller controller =
+                    new ModalDialogProperties.Controller() {
+                        @Override
+                        public void onClick(PropertyModel model, int buttonType) {}
 
-                @Override
-                public void onDismiss(PropertyModel model, int dismissalCause) {}
-            };
+                        @Override
+                        public void onDismiss(PropertyModel model, int dismissalCause) {}
+                    };
 
-            mDialogModels.add(new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
-                                      .with(ModalDialogProperties.CONTROLLER, spy(controller))
-                                      .build());
+            mDialogModels.add(
+                    new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
+                            .with(ModalDialogProperties.CONTROLLER, spy(controller))
+                            .build());
         }
     }
 
@@ -272,7 +269,8 @@ public class ModalDialogManagerTest {
         verify(mAppModalPresenter, times(1)).removeDialogView(mDialogModels.get(0));
 
         assertTrue(mModalDialogManager.isShowing());
-        assertNull("Dismissing the last modal dialog of its type didn't remove the"
+        assertNull(
+                "Dismissing the last modal dialog of its type didn't remove the"
                         + " corresponding pending list.",
                 mModalDialogManager.getPendingDialogsForTest(ModalDialogType.APP));
         assertEquals(1, mModalDialogManager.getPendingDialogsForTest(ModalDialogType.TAB).size());
@@ -283,7 +281,8 @@ public class ModalDialogManagerTest {
         mModalDialogManager.dismissDialog(mDialogModels.get(0), DialogDismissalCause.UNKNOWN);
         assertOnDismissCalled(mDialogModels.get(0), 1);
         assertEquals(mDialogModels.get(2), mModalDialogManager.getCurrentDialogForTest());
-        assertNull("Dismissing the last modal dialog of its type didn't remove the"
+        assertNull(
+                "Dismissing the last modal dialog of its type didn't remove the"
                         + " corresponding pending list.",
                 mModalDialogManager.getPendingDialogsForTest(ModalDialogType.APP));
         assertEquals(1, mModalDialogManager.getPendingDialogsForTest(ModalDialogType.TAB).size());
@@ -306,7 +305,8 @@ public class ModalDialogManagerTest {
         mModalDialogManager.dismissDialog(mDialogModels.get(1), DialogDismissalCause.UNKNOWN);
         assertOnDismissCalled(mDialogModels.get(1), 1);
         assertEquals(mDialogModels.get(0), mModalDialogManager.getCurrentDialogForTest());
-        assertNull("Dismissing the last modal dialog of its type didn't remove the"
+        assertNull(
+                "Dismissing the last modal dialog of its type didn't remove the"
                         + " corresponding pending list.",
                 mModalDialogManager.getPendingDialogsForTest(ModalDialogType.APP));
         assertEquals(1, mModalDialogManager.getPendingDialogsForTest(ModalDialogType.TAB).size());
@@ -352,10 +352,12 @@ public class ModalDialogManagerTest {
         assertOnDismissCalled(mDialogModels.get(0), 1);
         assertOnDismissCalled(mDialogModels.get(1), 1);
         assertEquals(mDialogModels.get(2), mModalDialogManager.getCurrentDialogForTest());
-        assertNull("Dismissing the last modal dialog of its type didn't remove the"
+        assertNull(
+                "Dismissing the last modal dialog of its type didn't remove the"
                         + " corresponding pending list.",
                 mModalDialogManager.getPendingDialogsForTest(ModalDialogType.APP));
-        assertNull("Dismissing the last modal dialog of its type didn't remove the"
+        assertNull(
+                "Dismissing the last modal dialog of its type didn't remove the"
                         + " corresponding pending list.",
                 mModalDialogManager.getPendingDialogsForTest(ModalDialogType.TAB));
     }
@@ -410,6 +412,114 @@ public class ModalDialogManagerTest {
         mModalDialogManager.resumeType(ModalDialogType.TAB, token);
         assertEquals(mDialogModels.get(0), mModalDialogManager.getCurrentDialogForTest());
         assertEquals(2, mModalDialogManager.getPendingDialogsForTest(ModalDialogType.TAB).size());
+    }
+
+    @Test
+    @Feature({"ModalDialog"})
+    public void testVeryHighPriorityDialog_SuspendType_APP_DoesNotDismissCurrentDialog() {
+        // Show a very high priority dialog of type APP.
+        mModalDialogManager.showDialog(
+                mDialogModels.get(0),
+                ModalDialogType.APP,
+                ModalDialogManager.ModalDialogPriority.VERY_HIGH,
+                false);
+        // Suspend the APP type and check we are still showing the very_high priority dialog.
+        int token = mModalDialogManager.suspendType(ModalDialogType.APP);
+        assertTrue(mModalDialogManager.isShowing());
+    }
+
+    @Test
+    @Feature({"ModalDialog"})
+    public void testVeryHighPriorityDialog_SuspendType_TAB_DoesNotDismissCurrentDialog() {
+        // Show a very high priority dialog of type TAB.
+        mModalDialogManager.showDialog(
+                mDialogModels.get(0),
+                ModalDialogType.TAB,
+                ModalDialogManager.ModalDialogPriority.VERY_HIGH,
+                false);
+        // Suspend the APP type and check we are still showing the very_high priority dialog.
+        int token = mModalDialogManager.suspendType(ModalDialogType.TAB);
+        assertTrue(mModalDialogManager.isShowing());
+    }
+
+    @Test
+    @Feature({"ModalDialog"})
+    public void testSuspendType_StillAllowsShowing_NewVeryHighPriorityDialog_OfSameType() {
+        // Show a high priority dialog.
+        mModalDialogManager.showDialog(
+                mDialogModels.get(0),
+                ModalDialogType.APP,
+                ModalDialogManager.ModalDialogPriority.HIGH,
+                false);
+
+        // Suspend the APP type.
+        int token = mModalDialogManager.suspendType(ModalDialogType.APP);
+        assertFalse(mModalDialogManager.isShowing());
+
+        // Create a new dialog of the same type(!) but with a very_high priority and check it's
+        // shown.
+        mModalDialogManager.showDialog(
+                mDialogModels.get(1),
+                ModalDialogType.APP,
+                ModalDialogManager.ModalDialogPriority.VERY_HIGH,
+                false);
+        assertTrue(mModalDialogManager.isShowing());
+        assertEquals(
+                mDialogModels.get(1),
+                mModalDialogManager.getCurrentPresenterForTest().getDialogModel());
+    }
+
+    @Test
+    @Feature({"ModalDialog"})
+    public void testVeryHighPriorityDialog_IsShown_IfCurrentDialog_IsLowerPriority() {
+        // Show a high priority dialog.
+        mModalDialogManager.showDialog(
+                mDialogModels.get(0),
+                ModalDialogType.APP,
+                ModalDialogManager.ModalDialogPriority.HIGH,
+                false);
+        // Create a new dialog of the same type but with a very_high priority and check it's
+        // shown.
+        mModalDialogManager.showDialog(
+                mDialogModels.get(1),
+                ModalDialogType.APP,
+                ModalDialogManager.ModalDialogPriority.VERY_HIGH,
+                false);
+        assertTrue(mModalDialogManager.isShowing());
+        assertEquals(
+                mDialogModels.get(1),
+                mModalDialogManager.getCurrentPresenterForTest().getDialogModel());
+        // Check that the previously shown dialog was removed and we are now showing the new dialog
+        // which has a very high priority.
+        verify(mAppModalPresenter, times(1)).removeDialogView(mDialogModels.get(0));
+        verify(mAppModalPresenter, times(1)).addDialogView(mDialogModels.get(1));
+    }
+
+    @Test
+    @Feature({"ModalDialog"})
+    public void testVeryHighPriorityDialog_IsNotShown_IfCurrentDialog_IsAlsoVeryHighPriority() {
+        // Show a very high priority dialog.
+        mModalDialogManager.showDialog(
+                mDialogModels.get(0),
+                ModalDialogType.APP,
+                ModalDialogManager.ModalDialogPriority.VERY_HIGH,
+                false);
+        assertTrue(mModalDialogManager.isShowing());
+        verify(mAppModalPresenter, times(1)).addDialogView(mDialogModels.get(0));
+
+        // Create a new dialog of the same type and with very_high priority as well.
+        mModalDialogManager.showDialog(
+                mDialogModels.get(1),
+                ModalDialogType.APP,
+                ModalDialogManager.ModalDialogPriority.VERY_HIGH,
+                false);
+
+        // Check that the new dialog is not shown and the previously shown dialog is never removed.
+        verify(mAppModalPresenter, times(0)).removeDialogView(mDialogModels.get(0));
+        verify(mAppModalPresenter, times(0)).addDialogView(mDialogModels.get(1));
+        assertEquals(
+                mDialogModels.get(0),
+                mModalDialogManager.getCurrentPresenterForTest().getDialogModel());
     }
 
     private static void assertOnDismissCalled(PropertyModel model, int numberOfInvocations) {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,6 @@ constexpr char kInternalAppIdKeyboardShortcutViewer[] =
 
 // Generated as crx_file::id_util::GenerateId("org.chromium.settings_ui").
 constexpr char kInternalAppIdSettings[] = "dhnmfjegnohoakobpikffnelcemaplkm";
-
-// Generated as
-// crx_file::id_util::GenerateId("org.chromium.continuous_reading"). This is an
-// app placehoder for continuous reading in Chrome.
-constexpr char kInternalAppIdContinueReading[] =
-    "fbokpncipdhffndmljhhidahghagaonp";
 
 }  // namespace ash
 

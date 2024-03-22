@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,16 +20,15 @@
 #include "chrome/browser/extensions/api/notifications/extension_notification_handler.h"
 #include "chrome/browser/extensions/api/notifications/notifications_api.h"
 #include "chrome/browser/extensions/extension_apitest.h"
-#include "chrome/browser/extensions/extension_function_test_utils.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/notifications/notification_handler.h"
 #include "chrome/browser/notifications/notifier_state_tracker.h"
 #include "chrome/browser/notifications/notifier_state_tracker_factory.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/test/base/interactive_test_utils.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "content/public/test/browser_test.h"
 #include "extensions/browser/api/test/test_api.h"
+#include "extensions/browser/api_test_utils.h"
 #include "extensions/browser/app_window/app_window.h"
 #include "extensions/browser/app_window/app_window_registry.h"
 #include "extensions/browser/app_window/native_app_window.h"
@@ -54,7 +53,7 @@ using extensions::ExtensionNotificationDisplayHelper;
 using extensions::ExtensionNotificationDisplayHelperFactory;
 using extensions::ResultCatcher;
 
-namespace utils = extension_function_test_utils;
+namespace utils = extensions::api_test_utils;
 
 namespace {
 
@@ -86,7 +85,7 @@ class NotificationsApiTest : public extensions::ExtensionApiTest {
 
   const Extension* LoadAppWithWindowState(
       const std::string& test_name, WindowState window_state) {
-    const char* window_state_string = NULL;
+    const char* window_state_string = nullptr;
     switch (window_state) {
       case WindowState::FULLSCREEN:
         window_state_string = "fullscreen";
@@ -118,7 +117,7 @@ class NotificationsApiTest : public extensions::ExtensionApiTest {
     if (iter != app_windows.end())
       return *iter;
 
-    return NULL;
+    return nullptr;
   }
 
   ExtensionNotificationDisplayHelper* GetDisplayHelper() {
@@ -294,9 +293,10 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestGetPermissionLevel) {
     notification_function->set_extension(empty_extension.get());
     notification_function->set_has_callback(true);
 
-    std::unique_ptr<base::Value> result(utils::RunFunctionAndReturnSingleResult(
-        notification_function.get(), "[]", browser(),
-        extensions::api_test_utils::NONE));
+    absl::optional<base::Value> result =
+        utils::RunFunctionAndReturnSingleResult(
+            notification_function.get(), "[]", profile(),
+            extensions::api_test_utils::FunctionMode::kNone);
 
     EXPECT_EQ(base::Value::Type::STRING, result->type());
     EXPECT_TRUE(result->is_string());
@@ -316,9 +316,10 @@ IN_PROC_BROWSER_TEST_F(NotificationsApiTest, TestGetPermissionLevel) {
         message_center::NotifierType::APPLICATION, empty_extension->id());
     GetNotifierStateTracker()->SetNotifierEnabled(notifier_id, false);
 
-    std::unique_ptr<base::Value> result(utils::RunFunctionAndReturnSingleResult(
-        notification_function.get(), "[]", browser(),
-        extensions::api_test_utils::NONE));
+    absl::optional<base::Value> result =
+        utils::RunFunctionAndReturnSingleResult(
+            notification_function.get(), "[]", profile(),
+            extensions::api_test_utils::FunctionMode::kNone);
 
     EXPECT_EQ(base::Value::Type::STRING, result->type());
     EXPECT_TRUE(result->is_string());

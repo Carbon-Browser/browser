@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "components/permissions/permission_request_manager.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
-#include "device/base/features.h"
 #include "device/vr/buildflags/buildflags.h"
 #include "ui/gfx/geometry/vector3d_f.h"
 

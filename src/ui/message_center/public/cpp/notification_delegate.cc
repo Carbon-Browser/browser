@@ -1,13 +1,19 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/message_center/public/cpp/notification_delegate.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 
 namespace message_center {
+
+  // NotificationDelegate:
+
+NotificationDelegate* NotificationDelegate::GetDelegateForParentCopy() {
+  return this;
+}
 
 // ThunkNotificationDelegate:
 
@@ -35,6 +41,18 @@ void ThunkNotificationDelegate::SettingsClick() {
 void ThunkNotificationDelegate::DisableNotification() {
   if (impl_)
     impl_->DisableNotification();
+}
+
+void ThunkNotificationDelegate::ExpandStateChanged(bool expanded) {
+  // Not implemented by default.
+}
+
+void ThunkNotificationDelegate::SnoozeButtonClicked() {
+  // Not implemented by default.
+}
+
+NotificationDelegate* ThunkNotificationDelegate::GetDelegateForParentCopy() {
+  return this;
 }
 
 ThunkNotificationDelegate::~ThunkNotificationDelegate() = default;

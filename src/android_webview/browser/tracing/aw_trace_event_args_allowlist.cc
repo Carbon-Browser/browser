@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/browser/tracing/aw_trace_event_args_allowlist.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/pattern.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
@@ -15,7 +16,9 @@ namespace {
 struct AllowlistEntry {
   const char* category_name;
   const char* event_name;
-  const char* const* arg_name_filter;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const char* const* arg_name_filter;
 };
 
 const char* const kMemoryDumpAllowedArgs[] = {"dumps", nullptr};

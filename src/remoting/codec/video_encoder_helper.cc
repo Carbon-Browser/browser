@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,8 @@ VideoEncoderHelper::CreateVideoPacketWithUpdatedRegion(
   }
 
   // Record the list of changed rectangles.
-  for (webrtc::DesktopRegion::Iterator iter(updated_region);
-       !iter.IsAtEnd(); iter.Advance()) {
+  for (webrtc::DesktopRegion::Iterator iter(updated_region); !iter.IsAtEnd();
+       iter.Advance()) {
     const webrtc::DesktopRect& rect = iter.rect();
     Rect* dirty_rect = packet->add_dirty_rects();
     dirty_rect->set_x(rect.left());

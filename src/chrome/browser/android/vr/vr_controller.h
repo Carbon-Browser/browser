@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -103,8 +103,6 @@ class VrController : public PlatformController {
   std::unique_ptr<gvr::ControllerState> controller_state_;
 
   raw_ptr<gvr::GvrApi> gvr_api_;
-
-  std::unique_ptr<GestureDetector> gesture_detector_;
 
   float last_qx_;
   bool pinch_started_;

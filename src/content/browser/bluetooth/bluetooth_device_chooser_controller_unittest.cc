@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,25 +18,25 @@ TEST_F(BluetoothDeviceChooserControllerTest, CalculateSignalStrengthLevel) {
   EXPECT_EQ(
       0, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-128));
   EXPECT_EQ(
-      0, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-80));
+      0, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-82));
 
   EXPECT_EQ(
-      1, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-79));
+      1, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-81));
   EXPECT_EQ(
-      1, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-70));
+      1, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-74));
 
   EXPECT_EQ(
-      2, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-69));
+      2, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-73));
   EXPECT_EQ(
-      2, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-62));
+      2, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-66));
 
   EXPECT_EQ(
-      3, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-61));
+      3, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-65));
   EXPECT_EQ(
-      3, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-53));
+      3, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-56));
 
   EXPECT_EQ(
-      4, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-52));
+      4, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(-55));
   EXPECT_EQ(
       4, BluetoothDeviceChooserController::CalculateSignalStrengthLevel(127));
 }

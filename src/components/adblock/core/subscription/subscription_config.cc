@@ -20,7 +20,37 @@
 #include "components/adblock/core/common/adblock_constants.h"
 #include "components/grit/components_resources.h"
 
+namespace {
+int g_port_for_testing = 0;
+
+std::string GetHost() {
+  GURL url("https://easylist-downloads.adblockplus.org");
+  if (!g_port_for_testing) {
+    return url.spec();
+  }
+  GURL::Replacements replacements;
+  const std::string port_str = base::NumberToString(g_port_for_testing);
+  replacements.SetPortStr(port_str);
+  return url.ReplaceComponents(replacements).spec();
+}
+}  // namespace
+
 namespace adblock {
+
+const GURL& AcceptableAdsUrl() {
+  static GURL kAcceptableAds(GetHost() + "exceptionrules.txt");
+  return kAcceptableAds;
+}
+
+const GURL& AntiCVUrl() {
+  static GURL kAntiCV(GetHost() + "abp-filters-anti-cv.txt");
+  return kAntiCV;
+}
+
+const GURL& DefaultSubscriptionUrl() {
+  static GURL kEasylistUrl(GetHost() + "easylist.txt");
+  return kEasylistUrl;
+}
 
 KnownSubscriptionInfo::KnownSubscriptionInfo() = default;
 KnownSubscriptionInfo::~KnownSubscriptionInfo() = default;
@@ -58,28 +88,25 @@ const std::vector<KnownSubscriptionInfo>& config::GetKnownSubscriptions() {
   // align the C++ representation, better to update it manually because it also
   // contains visibility and first run behavior options.
   static std::vector<KnownSubscriptionInfo> recommendations = {
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "abpindo+easylist.txt"),
+      {GURL(GetHost() + "abpindo+easylist.txt"),
        "ABPindo+EasyList",
        {"id", "ms"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/abpvn+easylist.txt"),
+      {GURL(GetHost() + "abpvn+easylist.txt"),
        "ABPVN List+EasyList",
        {"vi"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "bulgarian_list+easylist.txt"),
+      {GURL(GetHost() + "bulgarian_list+easylist.txt"),
        "Bulgarian list+EasyList",
        {"bg"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "dandelion_sprouts_nordic_filters+easylist.txt"),
+      {GURL(GetHost() + "dandelion_sprouts_nordic_filters+easylist.txt"),
        "Dandelion Sprout's Nordic Filters+EasyList",
        {"no", "nb", "nn", "da", "is", "fo", "kl"},
        SubscriptionUiVisibility::Visible,
@@ -91,123 +118,137 @@ const std::vector<KnownSubscriptionInfo>& config::GetKnownSubscriptions() {
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistchina+easylist.txt"),
+      {GURL(GetHost() + "easylistchina+easylist.txt"),
        "EasyList China+EasyList",
        {"zh"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistczechslovak+easylist.txt"),
+      {GURL(GetHost() + "easylistczechslovak+easylist.txt"),
        "EasyList Czech and Slovak+EasyList",
        {"cs", "sk"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistdutch+easylist.txt"),
+      {GURL(GetHost() + "easylistdutch+easylist.txt"),
        "EasyList Dutch+EasyList",
        {"nl"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistgermany+easylist.txt"),
+      {GURL(GetHost() + "easylistgermany+easylist.txt"),
        "EasyList Germany+EasyList",
        {"de"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "israellist+easylist.txt"),
+      {GURL(GetHost() + "israellist+easylist.txt"),
        "EasyList Hebrew+EasyList",
        {"he"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistitaly+easylist.txt"),
+      {GURL(GetHost() + "hufilter+easylist.txt"),
+       "EasyList Hungarian+EasyList",
+       {"hu"},
+       SubscriptionUiVisibility::Visible,
+       SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
+       SubscriptionPrivilegedFilterStatus::Forbidden},
+      {GURL(GetHost() + "easylistitaly+easylist.txt"),
        "EasyList Italy+EasyList",
        {"it"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistlithuania+easylist.txt"),
+      {GURL(GetHost() + "easylistlithuania+easylist.txt"),
        "EasyList Lithuania+EasyList",
        {"lt"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistpolish+easylist.txt"),
+      {GURL(GetHost() + "easylistpolish+easylist.txt"),
        "EasyList Polish+EasyList",
        {"pl"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistportuguese+easylist.txt"),
+      {GURL(GetHost() + "easylistportuguese+easylist.txt"),
        "EasyList Portuguese+EasyList",
        {"pt"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "easylistspanish+easylist.txt"),
+      {GURL(GetHost() + "easylistspanish+easylist.txt"),
        "EasyList Spanish+EasyList",
        {"es"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "indianlist+easylist.txt"),
+      {GURL(GetHost() + "global-filters+easylist.txt"),
+       "Global Filters+EasyList",
+       {"th", "el", "sl", "hr", "sr", "bs"},
+       SubscriptionUiVisibility::Visible,
+       SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
+       SubscriptionPrivilegedFilterStatus::Forbidden},
+      {GURL(GetHost() + "indianlist+easylist.txt"),
        "IndianList+EasyList",
        {"bn", "gu", "hi", "pa", "as", "mr", "ml", "te", "kn", "or", "ne", "si"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "koreanlist+easylist.txt"),
+      {GURL(GetHost() + "japanese-filters+easylist.txt"),
+       "Japanese Filters+EasyList",
+       {"ja"},
+       SubscriptionUiVisibility::Visible,
+       SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
+       SubscriptionPrivilegedFilterStatus::Forbidden},
+      {GURL(GetHost() + "koreanlist+easylist.txt"),
        "KoreanList+EasyList",
        {"ko"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "latvianlist+easylist.txt"),
+      {GURL(GetHost() + "latvianlist+easylist.txt"),
        "Latvian List+EasyList",
        {"lv"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "liste_ar+liste_fr+easylist.txt"),
+      {GURL(GetHost() + "liste_ar+liste_fr+easylist.txt"),
        "Liste AR+Liste FR+EasyList",
        {"ar"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "liste_fr+easylist.txt"),
+      {GURL(GetHost() + "liste_fr+easylist.txt"),
        "Liste FR+EasyList",
        {"fr"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/rolist+easylist.txt"),
+      {GURL(GetHost() + "rolist+easylist.txt"),
        "ROList+EasyList",
        {"ro"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "ruadlist+easylist.txt"),
+      {GURL(GetHost() + "ruadlist+easylist.txt"),
        "RuAdList+EasyList",
-       {"ru", "uk"},
+       {"ru", "uk", "uz", "kk"},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
+       SubscriptionPrivilegedFilterStatus::Forbidden},
+      {GURL(GetHost() + "turkish-filters+easylist.txt"),
+       "Turkish Filters+EasyList",
+       {"tr"},
+       SubscriptionUiVisibility::Visible,
+       SubscriptionFirstRunBehavior::SubscribeIfLocaleMatch,
+       SubscriptionPrivilegedFilterStatus::Forbidden},
+      {AcceptableAdsUrl(),
+       "Acceptable Ads",
+       {},
+       SubscriptionUiVisibility::Invisible,
+       SubscriptionFirstRunBehavior::Subscribe,
        SubscriptionPrivilegedFilterStatus::Forbidden},
       {AntiCVUrl(),
        "ABP filters",
@@ -215,27 +256,26 @@ const std::vector<KnownSubscriptionInfo>& config::GetKnownSubscriptions() {
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::Subscribe,
        SubscriptionPrivilegedFilterStatus::Allowed},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "i_dont_care_about_cookies.txt"),
+      {GURL(GetHost() + "i_dont_care_about_cookies.txt"),
        "I don't care about cookies",
        {},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::Ignore,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/"
-            "fanboy-notifications.txt"),
+      {GURL(GetHost() + ""
+                        "fanboy-notifications.txt"),
        "Fanboy's Notifications Blocking List",
        {},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::Ignore,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/easyprivacy.txt"),
+      {GURL(GetHost() + "easyprivacy.txt"),
        "EasyPrivacy",
        {},
        SubscriptionUiVisibility::Visible,
        SubscriptionFirstRunBehavior::Ignore,
        SubscriptionPrivilegedFilterStatus::Forbidden},
-      {GURL("https://easylist-downloads.adblockplus.org/fanboy-social.txt"),
+      {GURL(GetHost() + "fanboy-social.txt"),
        "Fanboy's Social Blocking List",
        {},
        SubscriptionUiVisibility::Visible,
@@ -295,6 +335,10 @@ config::GetPreloadedSubscriptionConfiguration() {
        {"*exceptionrules.txt", IDR_ADBLOCK_FLATBUFFER_EXCEPTIONRULES},
        {"*abp-filters-anti-cv.txt", IDR_ADBLOCK_FLATBUFFER_ANTICV}};
   return preloaded_subscriptions;
+}
+
+void SetFilterListServerPortForTesting(int port_for_testing) {
+  g_port_for_testing = port_for_testing;
 }
 
 }  // namespace adblock

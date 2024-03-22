@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 #import "ios/web_view/public/cwv_web_view_configuration.h"
 
 #import "base/test/ios/wait_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForPageLoadTimeout;
@@ -44,35 +40,40 @@ bool TapWebViewElementWithId(CWVWebView* web_view, NSString* element_id) {
                         "  return false;"
                         "})();",
                        element_id];
-  return [EvaluateJavaScript(web_view, script, nil) boolValue];
+  return [EvaluateJavaScript(web_view, script) boolValue];
 }
 
 id EvaluateJavaScript(CWVWebView* web_view, NSString* script, NSError** error) {
   __block bool callback_called = false;
   __block id evaluation_result = nil;
-  __block id evaluation_error = nil;
+  __block NSError* evaluation_error = nil;
   [web_view evaluateJavaScript:script
-             completionHandler:^(id local_result, NSError* local_error) {
-               callback_called = true;
-               evaluation_result = [local_result copy];
-               evaluation_error = [local_error copy];
-             }];
+                    completion:^(id local_result, NSError* local_error) {
+                      callback_called = true;
+                      evaluation_result = [local_result copy];
+                      evaluation_error = [local_error copy];
+                    }];
 
   bool completed = WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^{
     return callback_called;
   });
 
-  if (error)
+  if (error) {
     *error = evaluation_error;
+  }
 
   return completed ? evaluation_result : nil;
 }
 
 bool WaitForWebViewContainingTextOrTimeout(CWVWebView* web_view,
                                            NSString* text) {
+  // Wait for load to stop because a new load may have just started.
+  if (!WaitForWebViewLoadCompletionOrTimeout(web_view)) {
+    return false;
+  }
   return WaitUntilConditionOrTimeout(kWaitForUIElementTimeout, ^{
     id body = ios_web_view::test::EvaluateJavaScript(
-        web_view, @"document.body ? document.body.textContent : null", nil);
+        web_view, @"document.body ? document.body.textContent : null");
     return [body isKindOfClass:[NSString class]] && [body containsString:text];
   });
 }

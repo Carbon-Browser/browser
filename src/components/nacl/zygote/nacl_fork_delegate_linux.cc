@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "base/files/file_path.h"
 #include "base/files/scoped_file.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/pickle.h"
 #include "base/posix/eintr_wrapper.h"
@@ -32,6 +33,7 @@
 #include "components/nacl/loader/nacl_helper_linux.h"
 #include "content/public/common/content_descriptors.h"
 #include "content/public/common/content_switches.h"
+#include "mojo/core/embedder/embedder.h"
 #include "sandbox/linux/services/namespace_sandbox.h"
 #include "sandbox/linux/suid/client/setuid_sandbox_client.h"
 #include "sandbox/linux/suid/client/setuid_sandbox_host.h"
@@ -218,8 +220,7 @@ void NaClForkDelegate::Init(const int sandboxdesc,
       };
       const base::CommandLine& current_cmd_line =
           *base::CommandLine::ForCurrentProcess();
-      cmd_line.CopySwitchesFrom(current_cmd_line, kForwardSwitches,
-                                std::size(kForwardSwitches));
+      cmd_line.CopySwitchesFrom(current_cmd_line, kForwardSwitches);
 
       // The command line needs to be tightly controlled to use
       // |helper_bootstrap_exe|. So from now on, argv_to_launch should be
@@ -238,7 +239,9 @@ void NaClForkDelegate::Init(const int sandboxdesc,
                             bootstrap_prepend.end());
     }
 
+    std::vector<int> max_these_limits;  // must outlive `options`
     base::LaunchOptions options;
+    options.maximize_rlimits = &max_these_limits;
     options.fds_to_remap.push_back(
         std::make_pair(fds[1], kNaClZygoteDescriptor));
     options.fds_to_remap.push_back(
@@ -260,9 +263,7 @@ void NaClForkDelegate::Init(const int sandboxdesc,
     // because the existing limit may prevent the initial exec of
     // nacl_helper_bootstrap from succeeding, with its large address space
     // reservation.
-    std::vector<int> max_these_limits;
     max_these_limits.push_back(RLIMIT_AS);
-    options.maximize_rlimits = &max_these_limits;
 
     // Clear the environment for the NaCl Helper process.
     options.clear_environment = true;
@@ -346,6 +347,7 @@ bool NaClForkDelegate::CanHelp(const std::string& process_type,
 }
 
 pid_t NaClForkDelegate::Fork(const std::string& process_type,
+                             const std::vector<std::string>& args,
                              const std::vector<int>& fds,
                              const std::string& channel_id) {
   VLOG(1) << "NaClForkDelegate::Fork";
@@ -361,6 +363,10 @@ pid_t NaClForkDelegate::Fork(const std::string& process_type,
   base::Pickle write_pickle;
   write_pickle.WriteInt(nacl::kNaClForkRequest);
   write_pickle.WriteString(channel_id);
+  write_pickle.WriteInt(base::checked_cast<int>(args.size()));
+  for (const std::string& arg : args) {
+    write_pickle.WriteString(arg);
+  }
 
   char reply_buf[kNaClMaxIPCMessageLength];
   ssize_t reply_size = 0;

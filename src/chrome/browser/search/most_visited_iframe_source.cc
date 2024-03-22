@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -115,7 +115,8 @@ void MostVisitedIframeSource::SendJSWithOrigin(
       ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
           resource_id);
   base::ReplaceFirstSubstringAfterOffset(&response, 0, "{{ORIGIN}}", origin);
-  std::move(callback).Run(base::RefCountedString::TakeString(&response));
+  std::move(callback).Run(
+      base::MakeRefCounted<base::RefCountedString>(std::move(response)));
 }
 
 bool MostVisitedIframeSource::GetOrigin(

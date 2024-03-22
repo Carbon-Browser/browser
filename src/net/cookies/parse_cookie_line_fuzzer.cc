@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 
   // Call zero or one of ParsedCookie's mutator methods.  Should not call
   // anything other than SetName/SetValue when !IsValid().
-  const uint8_t action = data_provider.ConsumeIntegralInRange(0, 12);
+  const uint8_t action = data_provider.ConsumeIntegralInRange(0, 11);
   switch (action) {
     case 1:
       parsed_cookie.SetName(GetArbitraryNameValueString(&data_provider));
@@ -80,9 +80,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
             GetArbitraryAttributeValueString(&data_provider));
         break;
       case 11:
-        parsed_cookie.SetIsSameParty(data_provider.ConsumeBool());
-        break;
-      case 12:
         parsed_cookie.SetIsPartitioned(data_provider.ConsumeBool());
         break;
     }

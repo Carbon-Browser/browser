@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class TestPopupNavigationDelegate : public PopupNavigationDelegate {
   // PopupNavigationDelegate:
   content::RenderFrameHost* GetOpener() override;
   bool GetOriginalUserGesture() override;
-  const GURL& GetURL() override;
+  GURL GetURL() override;
   NavigateResult NavigateWithGesture(
       const blink::mojom::WindowFeatures& window_features,
       absl::optional<WindowOpenDisposition> updated_disposition) override;

@@ -1,22 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_mediator.h"
 
-#include "base/check_op.h"
-#include "base/memory/ptr_util.h"
+#import "base/check_op.h"
+#import "base/memory/ptr_util.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_animator.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_content_adjustment_util.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_controller_observer.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_model.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_web_view_resizer.h"
-#include "ios/chrome/browser/ui/util/ui_util.h"
+#import "ios/chrome/common/ui/util/ui_util.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 FullscreenMediator::FullscreenMediator(FullscreenController* controller,
                                        FullscreenModel* model)
@@ -67,12 +63,23 @@ void FullscreenMediator::EnterFullscreen() {
 }
 
 void FullscreenMediator::ExitFullscreen() {
+  if (model_->IsForceFullscreenMode()) {
+    return;
+  }
   // Instruct the model to ignore the remainder of the current scroll when
   // starting this animator.  This prevents the toolbar from immediately being
   // hidden if AnimateModelReset() is called while a scroll view is
   // decelerating.
   model_->IgnoreRemainderOfCurrentScroll();
   AnimateWithStyle(FullscreenAnimatorStyle::EXIT_FULLSCREEN);
+}
+
+void FullscreenMediator::ForceEnterFullscreen() {
+  model_->ForceEnterFullscreen();
+}
+
+void FullscreenMediator::ExitFullscreenWithoutAnimation() {
+  model_->ResetForNavigation();
 }
 
 void FullscreenMediator::Disconnect() {
@@ -103,7 +110,10 @@ void FullscreenMediator::FullscreenModelToolbarHeightsUpdated(
 void FullscreenMediator::FullscreenModelProgressUpdated(
     FullscreenModel* model) {
   DCHECK_EQ(model_, model);
-  StopAnimating(true /* update_model */);
+  // Stops the animation only if there is a current animation running.
+  if (animator_ && animator_.state == UIViewAnimatingStateActive) {
+    StopAnimating(true /* update_model */);
+  }
   for (auto& observer : observers_) {
     observer.FullscreenProgressUpdated(controller_, model_->progress());
   }
@@ -114,7 +124,10 @@ void FullscreenMediator::FullscreenModelProgressUpdated(
 void FullscreenMediator::FullscreenModelEnabledStateChanged(
     FullscreenModel* model) {
   DCHECK_EQ(model_, model);
-  StopAnimating(true /* update_model */);
+  // Stops the animation only if there is a current animation running.
+  if (animator_ && animator_.state == UIViewAnimatingStateActive) {
+    StopAnimating(true /* update_model */);
+  }
   for (auto& observer : observers_) {
     observer.FullscreenEnabledStateChanged(controller_, model->enabled());
   }
@@ -126,7 +139,7 @@ void FullscreenMediator::FullscreenModelScrollEventStarted(
   StopAnimating(true /* update_model */);
   // Show the toolbars if the user begins a scroll past the bottom edge of the
   // screen and the toolbars have been fully collapsed.
-  if (model_->is_scrolled_to_bottom() &&
+  if (model_->enabled() && model_->is_scrolled_to_bottom() &&
       AreCGFloatsEqual(model_->progress(), 0.0) &&
       model_->can_collapse_toolbar()) {
     ExitFullscreen();

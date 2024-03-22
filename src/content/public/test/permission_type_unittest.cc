@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@ using testing::Contains;
 TEST(PermissionTypeHelpersTest, AllPermissionTypesSmokeTest) {
   const auto all_permission_types = blink::GetAllPermissionTypes();
 
-  // All but PermissionType::NUM should be added.
+  // All but five removed permissions and PermissionType::NUM should be added.
   EXPECT_EQ(all_permission_types.size(),
-            static_cast<unsigned long>(blink::PermissionType::NUM) - 5);
+            static_cast<unsigned long>(blink::PermissionType::NUM) - 6);
 
   // Check that some arbitrary permission types are in this vector.
   // The order is not relevant.

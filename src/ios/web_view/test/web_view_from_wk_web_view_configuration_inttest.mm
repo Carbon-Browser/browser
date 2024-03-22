@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,6 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest_mac.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -213,7 +209,7 @@ TEST_F(WebViewFromWKWebViewConfigurationTest, FromWKWebViewConfiguration) {
 
     // Checks if the page in web_view_ is loaded successfully
     NSString* inner_text =
-        test::EvaluateJavaScript(web_view_, @"document.body.innerText", nil);
+        test::EvaluateJavaScript(web_view_, @"document.body.innerText");
     EXPECT_NSEQ(@"page2", inner_text);
   }
 

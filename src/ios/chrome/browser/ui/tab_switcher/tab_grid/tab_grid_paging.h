@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@ typedef NS_ENUM(NSUInteger, TabGridMode) {
   TabGridModeNormal = 0,
   TabGridModeSelection = 1,
   TabGridModeSearch = 2,
+  TabGridModeInactive = 3,
 };
 
 // An object implementing this protocol can change the active "page" or the mode

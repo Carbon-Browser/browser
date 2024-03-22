@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "components/update_client/update_client.h"
+#include "extensions/common/extension_id.h"
 
 namespace extensions {
 
@@ -65,7 +66,7 @@ class ExtensionInstaller : public update_client::CrxInstaller {
   friend class base::RefCountedThreadSafe<ExtensionInstaller>;
   ~ExtensionInstaller() override;
 
-  std::string extension_id_;
+  ExtensionId extension_id_;
   base::FilePath extension_root_;
   bool install_immediately_;
   ExtensionInstallerCallback extension_installer_callback_;

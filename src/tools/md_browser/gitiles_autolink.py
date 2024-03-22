@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -23,11 +23,12 @@ AUTOLINK_RE = (r'(https?://[a-zA-Z0-9$_.+!*\',%;:@=?#/~<>-]+'
 
 
 class _GitilesSmartQuotesExtension(Extension):
-  """Add Gitiles' simpler linkifier to Markdown."""
+  """Add Gitiles' simpler linkifier to Markdown, with a priority just higher
+  than that of the builtin ''autolink''."""
 
   def extendMarkdown(self, md):
-    md.inlinePatterns.add('gitilesautolink',
-                          AutolinkInlineProcessor(AUTOLINK_RE, md), '<autolink')
+    md.inlinePatterns.register(AutolinkInlineProcessor(AUTOLINK_RE, md),
+                               'gitilesautolink', 122)
 
 
 def makeExtension(*args, **kwargs):

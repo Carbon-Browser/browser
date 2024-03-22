@@ -1,10 +1,16 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//mojo/public/tools/bindings/mojom.gni")
 
 mojom("mojom") {
+  cpp_only = true
+
+  # The interfaces defined here are privileged, and not vended to a renderer, so
+  # they are not fuzzable by javascript-based fuzzers.
+  enable_js_fuzzing = false
+
   sources = [
     "blob_storage_context.mojom",
     "cache_storage_control.mojom",
@@ -40,8 +46,12 @@ mojom("mojom") {
   ]
   component_deps = [ "//third_party/blink/public/common" ]
 
+  enabled_features = []
+  if (is_linux || is_chromeos) {
+    enabled_features += [ "is_linux_or_chromeos" ]
+  }
   if (!is_android) {
-    enabled_features = [ "is_not_android" ]
+    enabled_features += [ "is_not_android" ]
   }
 }
 
@@ -54,6 +64,7 @@ source_set("tests") {
   testonly = true
   sources = [
     "buckets/bucket_id_mojom_traits_unittest.cc",
+    "buckets/bucket_info_mojom_traits_unittest.cc",
     "buckets/bucket_locator_mojom_traits_unittest.cc",
   ]
   deps = [

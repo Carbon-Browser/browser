@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/enterprise/browser/reporting/report_scheduler.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace enterprise_reporting {
@@ -18,7 +16,8 @@ namespace enterprise_reporting {
 // static
 CloudProfileReportingServiceFactory*
 CloudProfileReportingServiceFactory::GetInstance() {
-  return base::Singleton<CloudProfileReportingServiceFactory>::get();
+  static base::NoDestructor<CloudProfileReportingServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -28,13 +27,12 @@ CloudProfileReportingServiceFactory::GetForProfile(Profile* profile) {
       GetInstance()->GetServiceForBrowserContext(profile, /*create=*/true));
 }
 
-KeyedService* CloudProfileReportingServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CloudProfileReportingServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  if (!profile->IsRegularProfile())
-    return nullptr;
 
-  return new CloudProfileReportingService(
+  return std::make_unique<CloudProfileReportingService>(
       profile,
       g_browser_process->browser_policy_connector()
           ->device_management_service(),
@@ -46,9 +44,8 @@ bool CloudProfileReportingServiceFactory::ServiceIsCreatedWithBrowserContext()
 }
 
 CloudProfileReportingServiceFactory::CloudProfileReportingServiceFactory()
-    : BrowserContextKeyedServiceFactory(
-          "CloudProfileReporting",
-          BrowserContextDependencyManager::GetInstance()) {}
+    : ProfileKeyedServiceFactory("CloudProfileReporting",
+                                 ProfileSelections::BuildForRegularProfile()) {}
 
 CloudProfileReportingServiceFactory::~CloudProfileReportingServiceFactory() =
     default;

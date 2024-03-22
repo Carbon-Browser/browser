@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/profiler/stack_sampling_profiler.h"
 #include "base/run_loop.h"
@@ -15,7 +15,7 @@
 #include "build/build_config.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_switches.h"
-#include "components/metrics/call_stack_profile_metrics_provider.h"
+#include "components/metrics/call_stacks/call_stack_profile_metrics_provider.h"
 #include "components/version_info/channel.h"
 #include "content/public/test/browser_test.h"
 #include "third_party/metrics_proto/sampled_profile.pb.h"

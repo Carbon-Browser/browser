@@ -1,11 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/ash/network/enrollment_dialog_view.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
@@ -15,12 +16,12 @@
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/client_cert_util.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "extensions/browser/extension_host.h"
 #include "extensions/common/constants.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -29,7 +30,7 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/dialog_delegate.h"
 
-namespace chromeos {
+namespace ash::enrollment {
 
 namespace {
 
@@ -66,7 +67,7 @@ class EnrollmentDialogView : public views::DialogDelegateView {
 
   bool accepted_;
   std::string network_name_;
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
   GURL target_uri_;
 };
 
@@ -96,7 +97,7 @@ EnrollmentDialogView::EnrollmentDialogView(const std::string& network_name,
   label->SetAllowCharacterBreak(true);
 }
 
-EnrollmentDialogView::~EnrollmentDialogView() {}
+EnrollmentDialogView::~EnrollmentDialogView() = default;
 
 // static
 void EnrollmentDialogView::ShowDialog(const std::string& network_name,
@@ -158,7 +159,7 @@ class DialogEnrollmentDelegate {
  private:
   std::string network_guid_;
   std::string network_name_;
-  Profile* profile_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
 };
 
 DialogEnrollmentDelegate::DialogEnrollmentDelegate(
@@ -169,7 +170,7 @@ DialogEnrollmentDelegate::DialogEnrollmentDelegate(
       network_name_(network_name),
       profile_(profile) {}
 
-DialogEnrollmentDelegate::~DialogEnrollmentDelegate() {}
+DialogEnrollmentDelegate::~DialogEnrollmentDelegate() = default;
 
 bool DialogEnrollmentDelegate::Enroll(
     const std::vector<std::string>& uri_list) {
@@ -207,7 +208,7 @@ bool EnrollmentDialogAllowed(Profile* profile) {
   if (ProfileHelper::IsSigninProfile(profile))
     return false;
 
-  chromeos::LoginState::LoggedInUserType user_type =
+  LoginState::LoggedInUserType user_type =
       LoginState::Get()->GetLoggedInUserType();
   switch (user_type) {
     case LoginState::LOGGED_IN_USER_NONE:
@@ -219,23 +220,18 @@ bool EnrollmentDialogAllowed(Profile* profile) {
     case LoginState::LOGGED_IN_USER_GUEST:
       return true;
     case LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT:
-    case LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED:
       return false;
     case LoginState::LOGGED_IN_USER_KIOSK:
       return false;
     case LoginState::LOGGED_IN_USER_CHILD:
       return true;
   }
-  NOTREACHED();
-  return false;
 }
 
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 // Factory function.
-
-namespace enrollment {
 
 bool CreateEnrollmentDialog(const std::string& network_id) {
   const NetworkState* network =
@@ -247,28 +243,32 @@ bool CreateEnrollmentDialog(const std::string& network_id) {
     return false;
   }
   Profile* profile = ProfileManager::GetPrimaryUserProfile();
-  if (!EnrollmentDialogAllowed(profile))
+  if (!EnrollmentDialogAllowed(profile)) {
     return false;
+  }
   std::string username_hash = ProfileHelper::GetUserIdHashFromProfile(profile);
 
   onc::ONCSource onc_source = onc::ONC_SOURCE_NONE;
-  const base::Value* policy =
+  const base::Value::Dict* policy =
       NetworkHandler::Get()
           ->managed_network_configuration_handler()
           ->FindPolicyByGUID(username_hash, network_id, &onc_source);
 
-  if (!policy)
+  if (!policy) {
     return false;
+  }
 
   client_cert::ClientCertConfig cert_config;
-  OncToClientCertConfig(onc_source, policy->GetDict(), &cert_config);
+  OncToClientCertConfig(onc_source, *policy, &cert_config);
 
-  if (cert_config.client_cert_type != onc::client_cert::kPattern)
+  if (cert_config.client_cert_type != onc::client_cert::kPattern) {
     return false;
+  }
 
-  if (cert_config.pattern.Empty())
+  if (cert_config.pattern.Empty()) {
     NET_LOG(ERROR) << "Certificate pattern is empty for: "
                    << NetworkGuidId(network_id);
+  }
 
   if (cert_config.pattern.enrollment_uri_list().empty()) {
     NET_LOG(EVENT) << "No enrollment URIs for: " << NetworkGuidId(network_id);
@@ -282,6 +282,4 @@ bool CreateEnrollmentDialog(const std::string& network_id) {
   return enrollment->Enroll(cert_config.pattern.enrollment_uri_list());
 }
 
-}  // namespace enrollment
-
-}  // namespace chromeos
+}  // namespace ash::enrollment

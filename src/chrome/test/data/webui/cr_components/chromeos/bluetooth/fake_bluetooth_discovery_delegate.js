@@ -1,8 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {BluetoothDeviceProperties, BluetoothDiscoveryDelegateInterface} from 'chrome://resources/mojo/chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom-webui.js';
+import {BluetoothDeviceProperties, BluetoothDiscoveryDelegateInterface} from 'chrome://resources/mojo/chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom-webui.js';
 
 /**
  * @fileoverview Fake implementation of BluetoothDiscoveryDelegate for
@@ -24,7 +24,6 @@ export class FakeBluetoothDiscoveryDelegate {
   }
 
   /**
-   * @override
    * @param {!Array<!BluetoothDeviceProperties>}
    *     discoveredDevices
    */
@@ -33,12 +32,10 @@ export class FakeBluetoothDiscoveryDelegate {
     this.notifyCallbacksDiscoveredDevicesListChanged_();
   }
 
-  /** @override */
   onBluetoothDiscoveryStarted() {
     // TODO(crbug.com/1010321): Implement this function.
   }
 
-  /** @override */
   onBluetoothDiscoveryStopped() {
     // TODO(crbug.com/1010321): Implement this function.
   }

@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/color/color_provider_source.h"
+
+#include <memory>
 
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -15,11 +17,12 @@ namespace {
 
 class MockColorProviderSource : public ColorProviderSource {
  public:
-  MOCK_METHOD(ColorProviderManager::Key,
-              GetColorProviderKey,
-              (),
-              (const, override));
+  MOCK_METHOD(ColorProviderKey, GetColorProviderKey, (), (const, override));
   MOCK_METHOD(const ColorProvider*, GetColorProvider, (), (const, override));
+  MOCK_METHOD(const RendererColorMap,
+              GetRendererColorMap,
+              (ColorProviderKey::ColorMode, ColorProviderKey::ForcedColors),
+              (const, override));
 };
 
 class MockColorProviderSourceObserver : public ColorProviderSourceObserver {

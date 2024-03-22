@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -57,6 +57,7 @@ class VIZ_HOST_EXPORT ClientFrameSinkVideoCapturer
     void SetImageAndBounds(const SkBitmap& image,
                            const gfx::RectF& bounds) final;
     void SetBounds(const gfx::RectF& bounds) final;
+    void OnCapturedMouseEvent(const gfx::Point& coordinates) final;
 
    private:
     friend class ClientFrameSinkVideoCapturer;
@@ -89,7 +90,7 @@ class VIZ_HOST_EXPORT ClientFrameSinkVideoCapturer
   void SetAutoThrottlingEnabled(bool enabled);
   void ChangeTarget(const absl::optional<VideoCaptureTarget>& target);
   void ChangeTarget(const absl::optional<VideoCaptureTarget>& target,
-                    uint32_t crop_version);
+                    uint32_t sub_capture_target_version);
   void Stop();
   void RequestRefreshFrame();
 
@@ -129,7 +130,7 @@ class VIZ_HOST_EXPORT ClientFrameSinkVideoCapturer
       const gfx::Rect& content_rect,
       mojo::PendingRemote<mojom::FrameSinkVideoConsumerFrameCallbacks>
           callbacks) final;
-  void OnNewCropVersion(uint32_t crop_version) final;
+  void OnNewSubCaptureTargetVersion(uint32_t sub_capture_target_version) final;
   void OnFrameWithEmptyRegionCapture() final;
   void OnStopped() final;
   void OnLog(const std::string& message) final;
@@ -157,7 +158,7 @@ class VIZ_HOST_EXPORT ClientFrameSinkVideoCapturer
   absl::optional<ResolutionConstraints> resolution_constraints_;
   absl::optional<bool> auto_throttling_enabled_;
   absl::optional<VideoCaptureTarget> target_;
-  uint32_t crop_version_ = 0;
+  uint32_t sub_capture_target_version_ = 0;
   // Overlays are owned by the callers of CreateOverlay().
   std::vector<Overlay*> overlays_;
   bool is_started_ = false;

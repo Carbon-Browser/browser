@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,20 +24,22 @@ class UkmDataManagerImpl : public UkmDataManager {
   UkmDataManagerImpl();
   ~UkmDataManagerImpl() override;
 
-  UkmDataManagerImpl(UkmDataManagerImpl&) = delete;
-  UkmDataManagerImpl& operator=(UkmDataManagerImpl&) = delete;
+  UkmDataManagerImpl(const UkmDataManagerImpl&) = delete;
+  UkmDataManagerImpl& operator=(const UkmDataManagerImpl&) = delete;
 
   void InitializeForTesting(std::unique_ptr<UkmDatabase> ukm_database,
                             UkmObserver* ukm_observer);
 
   // UkmDataManager implementation:
   void Initialize(const base::FilePath& database_path,
+                  bool in_memory,
                   UkmObserver* ukm_observer) override;
   bool IsUkmEngineEnabled() override;
   void StartObservingUkm(const UkmConfig& config) override;
   void PauseOrResumeObservation(bool pause) override;
   UrlSignalHandler* GetOrCreateUrlHandler() override;
   UkmDatabase* GetUkmDatabase() override;
+  bool HasUkmDatabase() override;
   void OnEntryAdded(ukm::mojom::UkmEntryPtr entry) override;
   void OnUkmSourceUpdated(ukm::SourceId source_id,
                           const std::vector<GURL>& urls) override;

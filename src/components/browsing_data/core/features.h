@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,19 @@
 
 #include "base/feature_list.h"
 
-namespace browsing_data {
-namespace features {
-
-// Enable removal of all third-party cookies and site data.
-extern const base::Feature kEnableRemovingAllThirdPartyCookies;
+namespace browsing_data::features {
 
 // Enable BrowsingDataLifetimeManager that periodically delete browsing data as
 // defined by the BrowsingDataLifetime policy.
-extern const base::Feature kEnableBrowsingDataLifetimeManager;
+BASE_DECLARE_FEATURE(kEnableBrowsingDataLifetimeManager);
 
-}  // namespace features
-}  // namespace browsing_data
+// Deprecate CookiesTReeModel and use BrowsingDataModel as the only browsing
+// data interface.
+BASE_DECLARE_FEATURE(kDeprecateCookiesTreeModel);
+
+// Enables `BrowsingDataModel` to be the sole handler for storage i.e. local
+// storage and quota managed storage.
+BASE_DECLARE_FEATURE(kMigrateStorageToBDM);
+}  // namespace browsing_data::features
 
 #endif  // COMPONENTS_BROWSING_DATA_CORE_FEATURES_H_

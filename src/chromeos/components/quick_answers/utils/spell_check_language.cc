@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/path_service.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -26,17 +25,30 @@ namespace {
 constexpr char kDownloadServerUrl[] =
     "https://redirector.gvt1.com/edgedl/chrome/dict/";
 
+constexpr char kQuickAnswersDictionarySubDirName[] = "quick_answers";
+
 constexpr net::NetworkTrafficAnnotationTag kNetworkTrafficAnnotationTag =
     net::DefineNetworkTrafficAnnotation("quick_answers_spellchecker", R"(
           semantics {
-            sender: "Quick answers Spellchecker"
+            sender: "Quick Answers Spellchecker"
             description:
-              "Download dictionary for Quick answers feature if necessary."
-            trigger: "Quick answers feature enabled."
+              "Download spell checker dictionary for Quick Answers feature. "
+              "The downloaded dictionaries are used to generate intents for "
+              "selected text."
+            trigger: "Eligible for Quick Answers feature"
             data:
               "The spell checking language identifier. No user identifier is "
-              "sent."
+              "sent other than user locales."
             destination: GOOGLE_OWNED_SERVICE
+            internal {
+              contacts {
+                email: "assistive-eng@google.com"
+              }
+            }
+            user_data {
+              type: OTHER
+            }
+            last_reviewed: "2023-06-30"
           }
           policy {
             cookies_allowed: NO
@@ -50,43 +62,34 @@ constexpr net::NetworkTrafficAnnotationTag kNetworkTrafficAnnotationTag =
             }
           })");
 
-constexpr int kMaxRetries = 3;
+constexpr int kMaxRetries = 1;
 
-base::FilePath GetDictionaryFilePath(const std::string& language) {
+base::FilePath GetDictionaryDirectoryPath() {
   base::FilePath dict_dir;
-  base::PathService::Get(chrome::DIR_APP_DICTIONARIES, &dict_dir);
-  base::FilePath dict_path =
-      spellcheck::GetVersionedFileName(language, dict_dir);
-  return dict_path;
+  if (!base::PathService::Get(chrome::DIR_APP_DICTIONARIES, &dict_dir)) {
+    return base::FilePath();
+  }
+  return dict_dir.AppendASCII(kQuickAnswersDictionarySubDirName);
+}
+
+bool EnsureDictionaryDirectoryExists() {
+  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
+                                                base::BlockingType::MAY_BLOCK);
+
+  base::FilePath dict_dir = GetDictionaryDirectoryPath();
+
+  if (dict_dir.empty()) {
+    LOG(ERROR) << "Failed to resolve the dictionary directory path.";
+    return false;
+  }
+
+  // `base::CreateDirectory` returns true if it successfully creates
+  // the directory or if the directory already exists.
+  return base::CreateDirectory(dict_dir);
 }
 
 GURL GetDictionaryURL(const std::string& file_name) {
   return GURL(std::string(kDownloadServerUrl) + base::ToLowerASCII(file_name));
-}
-
-bool SaveDictionaryData(std::unique_ptr<std::string> data,
-                        const base::FilePath& file_path) {
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::MAY_BLOCK);
-
-  // Create a temporary file.
-  base::FilePath tmp_path;
-  if (!base::CreateTemporaryFileInDir(file_path.DirName(), &tmp_path)) {
-    LOG(ERROR) << "Failed to create a temporary file.";
-    return false;
-  }
-
-  // Write to the temporary file.
-  size_t bytes_written =
-      base::WriteFile(tmp_path, data->data(), data->length());
-  if (bytes_written != data->length()) {
-    base::DeleteFile(tmp_path);
-    LOG(ERROR) << "Failed to write dictionary data to the temporary file";
-    return false;
-  }
-
-  // Atomically rename the temporary file to become the real one.
-  return base::ReplaceFile(tmp_path, file_path, nullptr);
 }
 
 base::File OpenDictionaryFile(const base::FilePath& file_path) {
@@ -103,11 +106,11 @@ void CloseDictionaryFile(base::File file) {
   file.Close();
 }
 
-void RemoveDictionaryFile(const base::FilePath& file_path) {
+bool RemoveDictionaryFile(const base::FilePath& file_path) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
 
-  base::DeleteFile(file_path);
+  return base::DeleteFile(file_path);
 }
 
 }  // namespace
@@ -122,12 +125,10 @@ SpellCheckLanguage::~SpellCheckLanguage() = default;
 
 void SpellCheckLanguage::Initialize(const std::string& language) {
   language_ = language;
-  dictionary_file_path_ = GetDictionaryFilePath(language);
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&base::PathExists, dictionary_file_path_),
-      base::BindOnce(&SpellCheckLanguage::OnPathExistsComplete,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&EnsureDictionaryDirectoryExists),
+      base::BindOnce(&SpellCheckLanguage::OnDictionaryDirectoryExistsComplete,
                      weak_factory_.GetWeakPtr()));
 }
 
@@ -149,15 +150,13 @@ void SpellCheckLanguage::InitializeSpellCheckService() {
             .Pass());
   }
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&OpenDictionaryFile, dictionary_file_path_),
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&OpenDictionaryFile, dictionary_file_path_),
       base::BindOnce(&SpellCheckLanguage::OnOpenDictionaryFileComplete,
                      weak_factory_.GetWeakPtr()));
 }
 
-void SpellCheckLanguage::OnSimpleURLLoaderComplete(
-    std::unique_ptr<std::string> data) {
+void SpellCheckLanguage::OnSimpleURLLoaderComplete(base::FilePath tmp_path) {
   int response_code = -1;
   if (loader_->ResponseInfo() && loader_->ResponseInfo()->headers)
     response_code = loader_->ResponseInfo()->headers->response_code();
@@ -168,18 +167,31 @@ void SpellCheckLanguage::OnSimpleURLLoaderComplete(
     return;
   }
 
-  // Basic sanity check on the dictionary data.
-  if (!data || data->size() < 4 || data->compare(0, 4, "BDic") != 0) {
-    LOG(ERROR) << "Downloaded dictionary data is empty or broken.";
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&base::PathExists, dictionary_file_path_),
+      base::BindOnce(&SpellCheckLanguage::OnSaveDictionaryDataComplete,
+                     weak_factory_.GetWeakPtr()));
+}
+
+void SpellCheckLanguage::OnDictionaryDirectoryExistsComplete(
+    bool directory_exists) {
+  if (!directory_exists) {
+    LOG(ERROR) << "Failed to find or create the dictionary directory.";
     MaybeRetryInitialize();
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&SaveDictionaryData, std::move(data),
-                     dictionary_file_path_),
-      base::BindOnce(&SpellCheckLanguage::OnSaveDictionaryDataComplete,
+  base::FilePath dict_dir = GetDictionaryDirectoryPath();
+  if (dict_dir.empty()) {
+    LOG(ERROR) << "Failed to resolve the dictionary directory path.";
+    MaybeRetryInitialize();
+    return;
+  }
+  dictionary_file_path_ = spellcheck::GetVersionedFileName(language_, dict_dir);
+
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&base::PathExists, dictionary_file_path_),
+      base::BindOnce(&SpellCheckLanguage::OnPathExistsComplete,
                      weak_factory_.GetWeakPtr()));
 }
 
@@ -197,11 +209,21 @@ void SpellCheckLanguage::OnDictionaryCreated(
 }
 
 void SpellCheckLanguage::MaybeRetryInitialize() {
-  task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&RemoveDictionaryFile, dictionary_file_path_));
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&RemoveDictionaryFile, dictionary_file_path_),
+      base::BindOnce(&SpellCheckLanguage::OnFileRemovedForRetry,
+                     weak_factory_.GetWeakPtr()));
+}
 
+void SpellCheckLanguage::OnFileRemovedForRetry(bool file_removed) {
   if (num_retries_ >= kMaxRetries) {
-    LOG(ERROR) << "Service initialize failed after max retries";
+    LOG(ERROR) << "Service initialize failed after max retries.";
+    service_.reset();
+    return;
+  }
+
+  if (!file_removed) {
+    LOG(ERROR) << "Will not retry - could not remove the dictionary file.";
     service_.reset();
     return;
   }
@@ -221,16 +243,17 @@ void SpellCheckLanguage::OnPathExistsComplete(bool path_exists) {
     resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
     loader_ = network::SimpleURLLoader::Create(std::move(resource_request),
                                                kNetworkTrafficAnnotationTag);
+
     loader_->SetRetryOptions(
-        /*max_retries=*/5,
+        /*max_retries=*/3,
         network::SimpleURLLoader::RetryMode::RETRY_ON_5XX |
             network::SimpleURLLoader::RETRY_ON_NETWORK_CHANGE);
 
-    // TODO(b/226221138): Probably use |DownloadToTempFile| instead.
-    loader_->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
+    loader_->DownloadToFile(
         url_loader_factory_.get(),
         base::BindOnce(&SpellCheckLanguage::OnSimpleURLLoaderComplete,
-                       base::Unretained(this)));
+                       base::Unretained(this)),
+        dictionary_file_path_);
     return;
   }
 

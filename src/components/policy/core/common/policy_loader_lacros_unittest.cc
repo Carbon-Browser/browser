@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,9 +44,9 @@ std::vector<uint8_t> GetValidPolicyFetchResponse(
   return data;
 }
 
-const PolicyMap& GetChromePolicyMap(PolicyBundle* bundle) {
+const PolicyMap& GetChromePolicyMap(const PolicyBundle& bundle) {
   PolicyNamespace ns = PolicyNamespace(POLICY_DOMAIN_CHROME, std::string());
-  return bundle->Get(ns);
+  return bundle.Get(ns);
 }
 
 std::vector<uint8_t> GetValidPolicyFetchResponseWithAllPolicy() {
@@ -113,7 +113,7 @@ class PolicyLoaderLacrosTest : public PolicyTestBase {
     }
   }
 
-  void CheckCorrectPoliciesAreSet(PolicyBundle* bundle) const {
+  void CheckCorrectPoliciesAreSet(const PolicyBundle& bundle) const {
     const PolicyMap& policy_map = GetChromePolicyMap(bundle);
     CheckProfilePolicies(policy_map);
     CheckSystemWidePolicies(policy_map);
@@ -140,7 +140,7 @@ TEST_F(PolicyLoaderLacrosTest, BasicTestSystemWidePolicies) {
   PolicyLoaderLacros loader(task_environment_.GetMainThreadTaskRunner(),
                             per_profile_);
   base::RunLoop().RunUntilIdle();
-  CheckCorrectPoliciesAreSet(loader.Load().get());
+  CheckCorrectPoliciesAreSet(loader.Load());
 }
 
 TEST_F(PolicyLoaderLacrosTest, BasicTestProfilePolicies) {
@@ -150,7 +150,7 @@ TEST_F(PolicyLoaderLacrosTest, BasicTestProfilePolicies) {
   PolicyLoaderLacros loader(task_environment_.GetMainThreadTaskRunner(),
                             per_profile_);
   base::RunLoop().RunUntilIdle();
-  CheckCorrectPoliciesAreSet(loader.Load().get());
+  CheckCorrectPoliciesAreSet(loader.Load());
 }
 
 TEST_F(PolicyLoaderLacrosTest, UpdateTestProfilePolicies) {
@@ -165,13 +165,12 @@ TEST_F(PolicyLoaderLacrosTest, UpdateTestProfilePolicies) {
                                std::unique_ptr<AsyncPolicyLoader>(loader));
   provider.Init(&schema_registry_);
   base::RunLoop().RunUntilIdle();
-  EXPECT_EQ(GetChromePolicyMap(loader->Load().get()).size(), (unsigned int)0);
+  EXPECT_TRUE(GetChromePolicyMap(loader->Load()).empty());
 
   std::vector<uint8_t> data = GetValidPolicyFetchResponseWithAllPolicy();
   loader->OnPolicyUpdated(data);
   base::RunLoop().RunUntilIdle();
-  EXPECT_GT(GetChromePolicyMap(loader->Load().get()).size(),
-            static_cast<unsigned int>(0));
+  EXPECT_FALSE(GetChromePolicyMap(loader->Load()).empty());
   provider.Shutdown();
 }
 
@@ -187,13 +186,12 @@ TEST_F(PolicyLoaderLacrosTest, UpdateTestSystemWidePolicies) {
                                std::unique_ptr<AsyncPolicyLoader>(loader));
   provider.Init(&schema_registry_);
   base::RunLoop().RunUntilIdle();
-  EXPECT_EQ(GetChromePolicyMap(loader->Load().get()).size(), (unsigned int)0);
+  EXPECT_TRUE(GetChromePolicyMap(loader->Load()).empty());
 
   std::vector<uint8_t> data = GetValidPolicyFetchResponseWithAllPolicy();
   loader->OnPolicyUpdated(data);
   base::RunLoop().RunUntilIdle();
-  EXPECT_GT(GetChromePolicyMap(loader->Load().get()).size(),
-            static_cast<unsigned int>(0));
+  EXPECT_FALSE(GetChromePolicyMap(loader->Load()).empty());
   provider.Shutdown();
 }
 
@@ -220,19 +218,15 @@ TEST_F(PolicyLoaderLacrosTest, TwoLoaders) {
 
   base::RunLoop().RunUntilIdle();
 
-  EXPECT_EQ(GetChromePolicyMap(system_wide_loader->Load().get()).size(),
-            (unsigned int)0);
-  EXPECT_EQ(GetChromePolicyMap(per_profile_loader->Load().get()).size(),
-            (unsigned int)0);
+  EXPECT_TRUE(GetChromePolicyMap(system_wide_loader->Load()).empty());
+  EXPECT_TRUE(GetChromePolicyMap(per_profile_loader->Load()).empty());
 
   std::vector<uint8_t> data = GetValidPolicyFetchResponseWithAllPolicy();
   system_wide_loader->OnPolicyUpdated(data);
   per_profile_loader->OnPolicyUpdated(data);
   base::RunLoop().RunUntilIdle();
-  EXPECT_GT(GetChromePolicyMap(system_wide_loader->Load().get()).size(),
-            static_cast<unsigned int>(0));
-  EXPECT_GT(GetChromePolicyMap(per_profile_loader->Load().get()).size(),
-            static_cast<unsigned int>(0));
+  EXPECT_FALSE(GetChromePolicyMap(system_wide_loader->Load()).empty());
+  EXPECT_FALSE(GetChromePolicyMap(per_profile_loader->Load()).empty());
   system_wide_provider.Shutdown();
   per_profile_provider.Shutdown();
 }
@@ -255,14 +249,14 @@ TEST_F(PolicyLoaderLacrosTest, ChildUsersNoEnterpriseDefaults) {
   PolicyLoaderLacros loader(task_environment_.GetMainThreadTaskRunner(),
                             per_profile_);
   base::RunLoop().RunUntilIdle();
-  std::unique_ptr<PolicyBundle> bundle = loader.Load();
+  PolicyBundle bundle = loader.Load();
 
   EXPECT_TRUE(PolicyLoaderLacros::IsMainUserManaged());
   EXPECT_FALSE(PolicyLoaderLacros::IsDeviceLocalAccountUser());
   EXPECT_FALSE(PolicyLoaderLacros::IsMainUserAffiliated());
 
   // Check that desired policy is set and enterprise defaults are not applied.
-  const PolicyMap& policy_map = GetChromePolicyMap(bundle.get());
+  const PolicyMap& policy_map = GetChromePolicyMap(bundle);
   EXPECT_EQ(1u, policy_map.size());
 
   const PolicyMap::Entry* entry =
@@ -279,6 +273,25 @@ TEST_F(PolicyLoaderLacrosTest, DeviceLocalAccountUsers) {
       crosapi::mojom::SessionType::kWebKioskSession);
   SwitchAndCheckLocalDeviceAccountUser(
       crosapi::mojom::SessionType::kAppKioskSession);
+}
+
+TEST_F(PolicyLoaderLacrosTest, DeviceAffiliatedId) {
+  const char kAffiliationId[] = "affiliation-id";
+  auto init_params = crosapi::mojom::BrowserInitParams::New();
+  init_params->device_properties = crosapi::mojom::DeviceProperties::New();
+  init_params->device_properties->device_affiliation_ids = {kAffiliationId};
+  chromeos::BrowserInitParams::SetInitParamsForTests(std::move(init_params));
+  EXPECT_EQ(1u, PolicyLoaderLacros::device_affiliation_ids().size());
+  EXPECT_EQ(kAffiliationId, PolicyLoaderLacros::device_affiliation_ids()[0]);
+}
+
+TEST_F(PolicyLoaderLacrosTest, DeviceDMToken) {
+  const char kDMToken[] = "dm-token";
+  auto init_params = crosapi::mojom::BrowserInitParams::New();
+  init_params->device_properties = crosapi::mojom::DeviceProperties::New();
+  init_params->device_properties->device_dm_token = kDMToken;
+  chromeos::BrowserInitParams::SetInitParamsForTests(std::move(init_params));
+  EXPECT_EQ(kDMToken, PolicyLoaderLacros::device_dm_token());
 }
 
 }  // namespace policy

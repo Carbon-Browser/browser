@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,7 @@ ImeModeIndicatorView::ImeModeIndicatorView(const gfx::Rect& cursor_bounds,
   set_shadow(views::BubbleBorder::STANDARD_SHADOW);
   SetArrow(views::BubbleBorder::TOP_CENTER);
   // Ignore this view for accessibility purposes.
-  SetAccessibleRole(ax::mojom::Role::kNone);
+  SetAccessibleWindowRole(ax::mojom::Role::kNone);
 }
 
 ImeModeIndicatorView::~ImeModeIndicatorView() = default;
@@ -93,7 +93,7 @@ gfx::Size ImeModeIndicatorView::CalculatePreferredSize() const {
 
 void ImeModeIndicatorView::Init() {
   SetLayoutManager(std::make_unique<views::FillLayout>());
-  AddChildView(label_view_);
+  AddChildView(label_view_.get());
 
   SetAnchorRect(cursor_bounds_);
 }

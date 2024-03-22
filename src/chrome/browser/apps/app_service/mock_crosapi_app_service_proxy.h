@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include "base/run_loop.h"
 #include "chromeos/crosapi/mojom/app_service.mojom.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
 
 namespace apps {
@@ -32,15 +33,21 @@ class MockCrosapiAppServiceProxy : public crosapi::mojom::AppServiceProxy {
       mojo::PendingRemote<crosapi::mojom::AppServiceSubscriber> subscriber)
       override;
   void Launch(crosapi::mojom::LaunchParamsPtr launch_params) override;
+  void LaunchWithResult(crosapi::mojom::LaunchParamsPtr launch_params,
+                        LaunchWithResultCallback callback) override;
   void LoadIcon(const std::string& app_id,
                 IconKeyPtr icon_key,
                 IconType icon_type,
                 int32_t size_hint_in_dip,
                 apps::LoadIconCallback callback) override;
-  void AddPreferredApp(const std::string& app_id,
-                       crosapi::mojom::IntentPtr intent) override;
+  void AddPreferredAppDeprecated(const std::string& app_id,
+                                 crosapi::mojom::IntentPtr intent) override {}
   void ShowAppManagementPage(const std::string& app_id) override;
   void SetSupportedLinksPreference(const std::string& app_id) override;
+  void UninstallSilently(const std::string& app_id,
+                         UninstallSource uninstall_source) override;
+  void InstallApp(crosapi::mojom::InstallAppParamsPtr params,
+                  InstallAppCallback callback) override;
 
   std::vector<crosapi::mojom::LaunchParamsPtr> launched_apps_;
   std::vector<std::string> supported_link_apps_;

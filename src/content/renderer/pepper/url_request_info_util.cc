@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -111,7 +111,7 @@ bool AppendFileRefToBody(PP_Instance instance,
   absl::optional<base::Time> optional_modified_time;
   if (expected_last_modified_time != 0)
     optional_modified_time =
-        base::Time::FromDoubleT(expected_last_modified_time);
+        base::Time::FromSecondsSinceUnixEpoch(expected_last_modified_time);
   http_body->AppendFileRange(blink::FilePathToWebString(platform_path),
                              start_offset, number_of_bytes,
                              optional_modified_time);

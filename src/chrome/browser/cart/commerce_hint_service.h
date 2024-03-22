@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/version.h"
 #include "chrome/common/cart/commerce_hints.mojom.h"
-#include "components/optimization_guide/content/browser/optimization_guide_decider.h"
+#include "components/optimization_guide/core/optimization_guide_decider.h"
 #include "components/optimization_guide/proto/hints.pb.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -40,7 +40,7 @@ class CommerceHintService
 
   // Testing-only. Used to initialize commerce heuristics data in browser
   // process for testing.
-  bool InitializeCommerceHeuristicsForTesting(
+  static bool InitializeCommerceHeuristicsForTesting(
       base::Version version,
       const std::string& hint_json_data,
       const std::string& global_json_data,

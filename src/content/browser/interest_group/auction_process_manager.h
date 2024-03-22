@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -150,9 +150,9 @@ class CONTENT_EXPORT AuctionProcessManager {
   // properties.
   //
   // If a process is synchronously assigned to the ProcessHandle, returns true
-  // and the service pointer can immediately be retrieved from `handle`.
+  // and the service pointer can immediately be retrieved from `process_handle`.
   // `callback` will not be invoked. Otherwise, returns false and will invoke
-  // `callback` when the service pointer can be retrieved from `handle`.
+  // `callback` when the service pointer can be retrieved from `process_handle`.
   //
   // Auctions must request (and get) a service for their `kSeller` worklet
   // before requesting any `kBidder` worklets to avoid deadlock.

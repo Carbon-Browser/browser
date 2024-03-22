@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/signin/public/base/consent_level.h"
 
@@ -16,52 +17,33 @@
 
 namespace feed {
 
-extern const base::Feature kInterestFeedContentSuggestions;
-extern const base::Feature kInterestFeedV2;
-extern const base::Feature kInterestFeedV2Autoplay;
-extern const base::Feature kInterestFeedV2Hearts;
-extern const base::Feature kInterestFeedV2Scrolling;
-
-extern const base::FeatureParam<std::string> kDisableTriggerTypes;
-extern const base::FeatureParam<int> kSuppressRefreshDurationMinutes;
-extern const base::FeatureParam<int> kTimeoutDurationSeconds;
-extern const base::FeatureParam<bool> kThrottleBackgroundFetches;
-extern const base::FeatureParam<bool> kOnlySetLastRefreshAttemptOnSuccess;
-
-// TODO(b/213622639): The following two features are obsolete and should be
-// removed.
-// Determines whether conditions should be reached before enabling the upload of
-// click and view actions in the feed (e.g., the user needs to view X cards).
-// For example, this is needed when the notice card is at the second position in
-// the feed.
-extern const base::Feature kInterestFeedV1ClicksAndViewsConditionalUpload;
-extern const base::Feature kInterestFeedV2ClicksAndViewsConditionalUpload;
+BASE_DECLARE_FEATURE(kInterestFeedV2);
+BASE_DECLARE_FEATURE(kInterestFeedV2Autoplay);
+BASE_DECLARE_FEATURE(kInterestFeedV2Hearts);
+BASE_DECLARE_FEATURE(kInterestFeedV2Scrolling);
 
 // Feature that allows the client to automatically dismiss the notice card based
 // on the clicks and views on the notice card.
 #if BUILDFLAG(IS_IOS)
-extern const base::Feature kInterestFeedNoticeCardAutoDismiss;
+BASE_DECLARE_FEATURE(kInterestFeedNoticeCardAutoDismiss);
 #endif
 
 // Feature that allows users to keep up with and consume web content.
-extern const base::Feature kWebFeed;
+BASE_DECLARE_FEATURE(kWebFeed);
 
 // Use the new DiscoFeed endpoint.
-extern const base::Feature kDiscoFeedEndpoint;
+BASE_DECLARE_FEATURE(kDiscoFeedEndpoint);
 
 // Feature that enables xsurface to provide the metrics reporting state to an
 // xsurface feed.
-extern const base::Feature kXsurfaceMetricsReporting;
+BASE_DECLARE_FEATURE(kXsurfaceMetricsReporting);
 
-// Whether to log reliability events.
-extern const base::Feature kReliabilityLogging;
-
-// Feature that enables refreshing feeds triggered by the users.
-extern const base::Feature kFeedInteractiveRefresh;
+// Feature that enables sticky header when users scroll down.
+BASE_DECLARE_FEATURE(kFeedHeaderStickToTop);
 
 // Feature that shows placeholder cards instead of a loading spinner at first
 // load.
-extern const base::Feature kFeedLoadingPlaceholder;
+BASE_DECLARE_FEATURE(kFeedLoadingPlaceholder);
 
 // Param allowing animations to be disabled when showing the placeholder on
 // instant start.
@@ -70,68 +52,96 @@ extern const base::FeatureParam<bool>
 
 // Feature that allows tuning the size of the image memory cache. Value is a
 // percentage of the maximum size calculated for the device.
-extern const base::Feature kFeedImageMemoryCacheSizePercentage;
-
-// Feature that enables clearing the image memory cache when the feed is
-// destroyed.
-extern const base::Feature kFeedClearImageMemoryCache;
+BASE_DECLARE_FEATURE(kFeedImageMemoryCacheSizePercentage);
 
 // Feature that enables showing a callout to help users return to the top of the
 // feeds quickly.
-extern const base::Feature kFeedBackToTop;
+BASE_DECLARE_FEATURE(kFeedBackToTop);
+
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+// When enabled, causes the server to restrig the Sync Promo Banner for the
+// bottom of Feed to a Signin Promo.
+BASE_DECLARE_FEATURE(kFeedBottomSyncStringRemoval);
+#endif
 
 // Feature that enables StAMP cards in the feed.
-extern const base::Feature kFeedStamp;
+BASE_DECLARE_FEATURE(kFeedStamp);
 
 // Feature that provides the user assistance in discovering the web feed.
-extern const base::Feature kWebFeedAwareness;
+BASE_DECLARE_FEATURE(kWebFeedAwareness);
 
 // Feature that provides the user assistance in using the web feed.
-extern const base::Feature kWebFeedOnboarding;
+BASE_DECLARE_FEATURE(kWebFeedOnboarding);
 
 // Feature that enables sorting by different heuristics in the web feed.
-extern const base::Feature kWebFeedSort;
+BASE_DECLARE_FEATURE(kWebFeedSort);
 
 // Feature that causes the "open in new tab" menu item to appear on feed items
 // on Start Surface.
-extern const base::Feature kEnableOpenInNewTabFromStartSurfaceFeed;
+BASE_DECLARE_FEATURE(kEnableOpenInNewTabFromStartSurfaceFeed);
 
 // Feature that causes the WebUI version of the Feed to be enabled.
-extern const base::Feature kWebUiFeed;
-extern const base::FeatureParam<std::string> kWebUiScriptFetchUrl;
+BASE_DECLARE_FEATURE(kWebUiFeed);
+extern const base::FeatureParam<std::string> kWebUiFeedUrl;
 extern const base::FeatureParam<bool> kWebUiDisableContentSecurityPolicy;
 
 std::string GetFeedReferrerUrl();
 
-// Personalize feed for unsigned users.
-extern const base::Feature kPersonalizeFeedUnsignedUsers;
+bool IsCormorantEnabledForLocale(std::string country);
 
-// Personalize feed for signed in users who haven't enabled sync.
-extern const base::Feature kPersonalizeFeedNonSyncUsers;
+// Personalize feed for unsigned users.
+BASE_DECLARE_FEATURE(kPersonalizeFeedUnsignedUsers);
 
 // Returns the consent level needed to request a personalized feed.
 signin::ConsentLevel GetConsentLevelNeededForPersonalizedFeed();
 
 // Feature that enables tracking the acknowledgement state for the info cards.
-extern const base::Feature kInfoCardAcknowledgementTracking;
-
-// Feature that enables the Crow feature.
-// Owned by the CwF team but located here until it makes sense to create a crow
-// component, since it is being used in the feed component.
-extern const base::Feature kShareCrowButton;
-
-// Feature that when enabled completely removes all Feeds from chrome.
-extern const base::Feature kIsAblated;
+BASE_DECLARE_FEATURE(kInfoCardAcknowledgementTracking);
 
 // When enabled, schedule a background refresh for a feed sometime after the
 // last user engagement with that feed.
-extern const base::Feature kFeedCloseRefresh;
+BASE_DECLARE_FEATURE(kFeedCloseRefresh);
 // On each qualifying user engagement, schedule a background refresh this many
 // minutes out.
 extern const base::FeatureParam<int> kFeedCloseRefreshDelayMinutes;
 // If true, schedule the refresh only when the user scrolls or interacts. If
 // false, schedule only when the feed surface is opened to content.
 extern const base::FeatureParam<bool> kFeedCloseRefreshRequireInteraction;
+
+// When enabled, no view cache is used.
+BASE_DECLARE_FEATURE(kFeedNoViewCache);
+
+// When enabled, allow tagging experiments with only an experiment ID.
+BASE_DECLARE_FEATURE(kFeedExperimentIDTagging);
+
+// When enabled, allow show sign in command to request a user signs in / syncs.
+BASE_DECLARE_FEATURE(kFeedShowSignInCommand);
+
+// When enabled, depending on params selected, enable different
+// performance-oriented features in Feed.
+BASE_DECLARE_FEATURE(kFeedPerformanceStudy);
+
+// When enabled, allows the server to unilaterally alter capabilities sent
+// by the client, primarily to retroactively work around bugs.
+BASE_DECLARE_FEATURE(kSyntheticCapabilities);
+
+// Feature that enables reporting feed user interaction reliability.
+BASE_DECLARE_FEATURE(kFeedUserInteractionReliabilityReport);
+
+// Feature that enables signed-out view demotion.
+BASE_DECLARE_FEATURE(kFeedSignedOutViewDemotion);
+
+// Feature that enables dynamic colors in the feed.
+BASE_DECLARE_FEATURE(kFeedDynamicColors);
+
+// Feature that enables UI update for Follow.
+BASE_DECLARE_FEATURE(kFeedFollowUiUpdate);
+
+// Feature that enables sports card in the feed.
+BASE_DECLARE_FEATURE(kFeedSportsCard);
+
+// Feature that enables refreshing feed when Chrome restarts.
+BASE_DECLARE_FEATURE(kRefreshFeedOnRestart);
 
 }  // namespace feed
 

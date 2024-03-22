@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,27 +25,13 @@ bool ContentId::operator==(const ContentId& content_id) const {
   return name_space == content_id.name_space && id == content_id.id;
 }
 
+bool ContentId::operator!=(const ContentId& content_id) const {
+  return !(content_id == *this);
+}
+
 bool ContentId::operator<(const ContentId& content_id) const {
   return std::tie(name_space, id) <
          std::tie(content_id.name_space, content_id.id);
-}
-
-// -----------------------------------------------------------------------------
-// OfflineItemSchedule.
-OfflineItemSchedule::OfflineItemSchedule(bool only_on_wifi,
-                                         absl::optional<base::Time> start_time)
-    : only_on_wifi(only_on_wifi), start_time(std::move(start_time)) {}
-
-OfflineItemSchedule::OfflineItemSchedule(const OfflineItemSchedule& other) =
-    default;
-
-OfflineItemSchedule& OfflineItemSchedule::operator=(
-    const OfflineItemSchedule& other) = default;
-
-OfflineItemSchedule::~OfflineItemSchedule() = default;
-
-bool OfflineItemSchedule::operator==(const OfflineItemSchedule& other) const {
-  return only_on_wifi == other.only_on_wifi && start_time == other.start_time;
 }
 
 // -----------------------------------------------------------------------------
@@ -117,6 +103,7 @@ bool OfflineItem::operator==(const OfflineItem& offline_item) const {
          is_off_the_record == offline_item.is_off_the_record &&
          otr_profile_id == offline_item.otr_profile_id &&
          attribution == offline_item.attribution &&
+         referrer_url == offline_item.referrer_url &&
          state == offline_item.state && fail_state == offline_item.fail_state &&
          pending_state == offline_item.pending_state &&
          is_resumable == offline_item.is_resumable &&
@@ -124,8 +111,7 @@ bool OfflineItem::operator==(const OfflineItem& offline_item) const {
          received_bytes == offline_item.received_bytes &&
          progress == offline_item.progress &&
          time_remaining_ms == offline_item.time_remaining_ms &&
-         is_dangerous == offline_item.is_dangerous &&
-         schedule == offline_item.schedule;
+         is_dangerous == offline_item.is_dangerous;
 }
 
 OfflineItemVisuals::OfflineItemVisuals() = default;

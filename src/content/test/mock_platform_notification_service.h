@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/notification_database_data.h"
 #include "content/public/browser/platform_notification_service.h"
@@ -66,6 +66,9 @@ class MockPlatformNotificationService : public PlatformNotificationService {
   void CloseNotification(const std::string& notification_id) override;
   void ClosePersistentNotification(const std::string& notification_id) override;
   void GetDisplayedNotifications(
+      DisplayedNotificationsCallback callback) override;
+  void GetDisplayedNotificationsForOrigin(
+      const GURL& origin,
       DisplayedNotificationsCallback callback) override;
   void ScheduleTrigger(base::Time timestamp) override;
   base::Time ReadNextTriggerTimestamp() override;

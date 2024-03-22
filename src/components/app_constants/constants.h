@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,9 @@ namespace app_constants {
 
 // The ID of the Chrome component application as part of ash.
 COMPONENT_EXPORT(APP_CONSTANTS) extern const char kChromeAppId[];
+
+// The ID of Ash Browser for debugging.
+COMPONENT_EXPORT(APP_CONSTANTS) extern const char kAshDebugBrowserAppId[];
 
 // The ID of the Lacros Chrome browser application that runs outside of ash.
 COMPONENT_EXPORT(APP_CONSTANTS) extern const char kLacrosAppId[];

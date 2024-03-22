@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class InflateTransformer final : public TransformStreamTransformer {
   ScriptPromise Flush(TransformStreamDefaultController*,
                       ExceptionState&) override;
 
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
   void Trace(Visitor*) const override;
 

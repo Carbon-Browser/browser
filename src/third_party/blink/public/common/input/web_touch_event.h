@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,6 +61,14 @@ class BLINK_COMMON_EXPORT WebTouchEvent : public WebInputEvent {
   WebTouchPoint TouchPointInRootFrame(unsigned touch_point) const;
 
   bool IsCancelable() const { return dispatch_type == DispatchType::kBlocking; }
+
+  // Returns whether this event represents a transition from no active
+  // touches to some active touches (the start of a new "touch sequence").
+  bool IsTouchSequenceStart() const;
+
+  // Returns whether this event represents a transition from active
+  // touches to no active touches (the end of a "touch sequence").
+  bool IsTouchSequenceEnd() const;
 };
 
 }  // namespace blink

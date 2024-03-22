@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,6 @@
 #define CHROME_BROWSER_UI_COCOA_HISTORY_OVERLAY_CONTROLLER_H_
 
 #import <Cocoa/Cocoa.h>
-
-#include "base/mac/scoped_nsobject.h"
 
 @class HistoryOverlayView;
 
@@ -19,14 +17,7 @@ enum HistoryOverlayMode {
 // The HistoryOverlayController manages a view that is inserted atop the web
 // contents to provide visual feedback when the user is performing history
 // navigation gestures.
-@interface HistoryOverlayController : NSViewController {
- @private
-  HistoryOverlayMode _mode;
-  // Strongly typed reference of self.view.
-  base::scoped_nsobject<HistoryOverlayView> _contentView;
-  // The view above which self.view is inserted as a subview.
-  base::scoped_nsobject<NSView> _parent;
-}
+@interface HistoryOverlayController : NSViewController
 
 // Designated initializer.
 - (instancetype)initForMode:(HistoryOverlayMode)mode;

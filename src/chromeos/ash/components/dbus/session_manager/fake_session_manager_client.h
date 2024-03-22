@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,18 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
+#include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
-#include "chromeos/ash/components/dbus/login_manager/arc.pb.h"
+#include "chromeos/ash/components/dbus/arc/arc.pb.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "components/policy/proto/device_management_backend.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
@@ -68,14 +73,14 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
   void RemoveObserver(Observer* observer) override;
   bool HasObserver(const Observer* observer) const override;
   void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) override;
+      chromeos::WaitForServiceToBeAvailableCallback callback) override;
   bool IsScreenLocked() const override;
   void EmitLoginPromptVisible() override;
   void EmitAshInitialized() override;
   void RestartJob(int socket_fd,
                   const std::vector<std::string>& argv,
                   RestartJobReason reason,
-                  VoidDBusMethodCallback callback) override;
+                  chromeos::VoidDBusMethodCallback callback) override;
   void SaveLoginPassword(const std::string& password) override;
 
   void LoginScreenStorageStore(
@@ -92,20 +97,31 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
 
   void StartSession(
       const cryptohome::AccountIdentifier& cryptohome_id) override;
+  void StartSessionEx(const cryptohome::AccountIdentifier& cryptohome_id,
+                      bool chrome_side_key_generation) override;
   void StopSession(login_manager::SessionStopReason reason) override;
   void LoadShillProfile(
       const cryptohome::AccountIdentifier& cryptohome_id) override;
-  void StartDeviceWipe() override;
+  void StartDeviceWipe(chromeos::VoidDBusMethodCallback callback) override;
   void StartRemoteDeviceWipe(
       const enterprise_management::SignedData& signed_command) override;
-  void ClearForcedReEnrollmentVpd(VoidDBusMethodCallback callback) override;
+  void ClearForcedReEnrollmentVpd(
+      chromeos::VoidDBusMethodCallback callback) override;
+  void UnblockDevModeForEnrollment(
+      chromeos::VoidDBusMethodCallback callback) override;
+  void UnblockDevModeForInitialStateDetermination(
+      chromeos::VoidDBusMethodCallback callback) override;
+  void UnblockDevModeForCarrierLock(
+      chromeos::VoidDBusMethodCallback callback) override;
   void StartTPMFirmwareUpdate(const std::string& update_mode) override;
   void RequestLockScreen() override;
   void NotifyLockScreenShown() override;
   void NotifyLockScreenDismissed() override;
-  bool RequestBrowserDataMigration(
+  bool BlockingRequestBrowserDataMigration(
       const cryptohome::AccountIdentifier& cryptohome_id,
-      const bool is_move) override;
+      const std::string& mode) override;
+  bool BlockingRequestBrowserDataBackwardMigration(
+      const cryptohome::AccountIdentifier& cryptohome_id) override;
   void RetrieveActiveSessions(ActiveSessionsCallback callback) override;
   void RetrieveDevicePolicy(RetrievePolicyCallback callback) override;
   RetrievePolicyResponseType BlockingRetrieveDevicePolicy(
@@ -127,16 +143,17 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
       const login_manager::PolicyDescriptor& descriptor,
       std::string* policy_out) override;
   void StoreDevicePolicy(const std::string& policy_blob,
-                         VoidDBusMethodCallback callback) override;
+                         chromeos::VoidDBusMethodCallback callback) override;
   void StorePolicyForUser(const cryptohome::AccountIdentifier& cryptohome_id,
                           const std::string& policy_blob,
-                          VoidDBusMethodCallback callback) override;
-  void StoreDeviceLocalAccountPolicy(const std::string& account_id,
-                                     const std::string& policy_blob,
-                                     VoidDBusMethodCallback callback) override;
+                          chromeos::VoidDBusMethodCallback callback) override;
+  void StoreDeviceLocalAccountPolicy(
+      const std::string& account_id,
+      const std::string& policy_blob,
+      chromeos::VoidDBusMethodCallback callback) override;
   void StorePolicy(const login_manager::PolicyDescriptor& descriptor,
                    const std::string& policy_blob,
-                   VoidDBusMethodCallback callback) override;
+                   chromeos::VoidDBusMethodCallback callback) override;
   bool SupportsBrowserRestart() const override;
   void SetFlagsForUser(const cryptohome::AccountIdentifier& cryptohome_id,
                        const std::vector<std::string>& flags) override;
@@ -149,20 +166,20 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
       PsmDeviceActiveSecretCallback callback) override;
 
   void StartArcMiniContainer(
-      const login_manager::StartArcMiniContainerRequest& request,
-      VoidDBusMethodCallback callback) override;
-  void UpgradeArcContainer(
-      const login_manager::UpgradeArcContainerRequest& request,
-      VoidDBusMethodCallback callback) override;
+      const arc::StartArcMiniInstanceRequest& request,
+      chromeos::VoidDBusMethodCallback callback) override;
+  void UpgradeArcContainer(const arc::UpgradeArcContainerRequest& request,
+                           chromeos::VoidDBusMethodCallback callback) override;
   void StopArcInstance(const std::string& account_id,
                        bool should_backup_log,
-                       VoidDBusMethodCallback callback) override;
+                       chromeos::VoidDBusMethodCallback callback) override;
   void SetArcCpuRestriction(
       login_manager::ContainerCpuRestrictionState restriction_state,
-      VoidDBusMethodCallback callback) override;
+      chromeos::VoidDBusMethodCallback callback) override;
   void EmitArcBooted(const cryptohome::AccountIdentifier& cryptohome_id,
-                     VoidDBusMethodCallback callback) override;
-  void GetArcStartTime(DBusMethodCallback<base::TimeTicks> callback) override;
+                     chromeos::VoidDBusMethodCallback callback) override;
+  void GetArcStartTime(
+      chromeos::DBusMethodCallback<base::TimeTicks> callback) override;
   void EnableAdbSideload(EnableAdbSideloadCallback callback) override;
   void QueryAdbSideload(QueryAdbSideloadCallback callback) override;
 
@@ -174,6 +191,9 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
   // |SetFlagsForUser|.
   bool GetFlagsForUser(const cryptohome::AccountIdentifier& cryptohome_id,
                        std::vector<std::string>* out_flags_for_user) const;
+
+  // Notify observers about the session stopping.
+  void NotifySessionStopping() const;
 
   // Sets whether FakeSessionManagerClient should advertise (through
   // |SupportsBrowserRestart|) that it supports restarting Chrome. For example,
@@ -229,12 +249,11 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
   void set_device_local_account_policy(const std::string& account_id,
                                        const std::string& policy_blob);
 
-  const login_manager::UpgradeArcContainerRequest& last_upgrade_arc_request()
-      const {
+  const arc::UpgradeArcContainerRequest& last_upgrade_arc_request() const {
     return last_upgrade_arc_request_;
   }
-  const login_manager::StartArcMiniContainerRequest
-  last_start_arc_mini_container_request() const {
+  const arc::StartArcMiniInstanceRequest last_start_arc_mini_container_request()
+      const {
     return last_start_arc_mini_container_request_;
   }
 
@@ -257,6 +276,18 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
 
   int clear_forced_re_enrollment_vpd_call_count() const {
     return clear_forced_re_enrollment_vpd_call_count_;
+  }
+
+  int unblock_dev_mode_enrollment_call_count() const {
+    return unblock_dev_mode_enrollment_call_count_;
+  }
+
+  int unblock_dev_mode_init_state_call_count() const {
+    return unblock_dev_mode_init_state_call_count_;
+  }
+
+  int unblock_dev_mode_carrier_lock_call_count() const {
+    return unblock_dev_mode_carrier_lock_call_count_;
   }
 
   void set_on_start_device_wipe_callback(base::OnceClosure callback);
@@ -326,8 +357,16 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
     return request_browser_data_migration_called_;
   }
 
-  bool request_browser_data_migration_for_move_called() const {
-    return request_browser_data_migration_for_move_called_;
+  bool request_browser_data_migration_mode_called() const {
+    return request_browser_data_migration_mode_called_;
+  }
+
+  const std::string& request_browser_data_migration_mode_value() const {
+    return request_browser_data_migration_mode_value_;
+  }
+
+  bool request_browser_data_backward_migration_called() const {
+    return request_browser_data_backward_migration_called_;
   }
 
  private:
@@ -377,6 +416,9 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
       AdbSideloadResponseCode::SUCCESS;
 
   int clear_forced_re_enrollment_vpd_call_count_ = 0;
+  int unblock_dev_mode_enrollment_call_count_ = 0;
+  int unblock_dev_mode_init_state_call_count_ = 0;
+  int unblock_dev_mode_carrier_lock_call_count_ = 0;
   // Callback which is run after calling |StartDeviceWipe| or
   // |StartRemoteDeviceWipe|.
   base::OnceClosure on_start_device_wipe_callback_;
@@ -402,16 +444,18 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
   std::string login_password_;
 
   bool request_browser_data_migration_called_ = false;
-  bool request_browser_data_migration_for_move_called_ = false;
+  bool request_browser_data_migration_mode_called_ = false;
+  std::string request_browser_data_migration_mode_value_ = "invalid";
+
+  bool request_browser_data_backward_migration_called_ = false;
 
   // Contains last request passed to StartArcMiniContainer
-  login_manager::StartArcMiniContainerRequest
-      last_start_arc_mini_container_request_;
+  arc::StartArcMiniInstanceRequest last_start_arc_mini_container_request_;
 
-  // Contains last requst passed to StartArcInstance
-  login_manager::UpgradeArcContainerRequest last_upgrade_arc_request_;
+  // Contains last request passed to StartArcInstance
+  arc::UpgradeArcContainerRequest last_upgrade_arc_request_;
 
-  StubDelegate* delegate_ = nullptr;
+  raw_ptr<StubDelegate, ExperimentalAsh> delegate_ = nullptr;
 
   bool session_stopped_ = false;
 
@@ -429,26 +473,23 @@ class COMPONENT_EXPORT(SESSION_MANAGER) FakeSessionManagerClient
 
   absl::optional<std::string> primary_user_id_;
 
+  base::flat_map<std::string, std::string> login_screen_storage_;
+
+  base::flat_set<base::FilePath> files_to_clean_up_;
+
   base::WeakPtrFactory<FakeSessionManagerClient> weak_ptr_factory_{this};
 };
 
+// Helper class to create FakeSessionManagerClient. Note that the existing
+// SessionManagerClient instance will be released.
 class COMPONENT_EXPORT(SESSION_MANAGER) ScopedFakeSessionManagerClient {
  public:
   ScopedFakeSessionManagerClient();
+  explicit ScopedFakeSessionManagerClient(
+      FakeSessionManagerClient::PolicyStorageType policy_storage);
   ~ScopedFakeSessionManagerClient();
 };
 
-class COMPONENT_EXPORT(SESSION_MANAGER) ScopedFakeInMemorySessionManagerClient {
- public:
-  ScopedFakeInMemorySessionManagerClient();
-  ~ScopedFakeInMemorySessionManagerClient();
-};
-
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::FakeSessionManagerClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_SESSION_MANAGER_FAKE_SESSION_MANAGER_CLIENT_H_

@@ -1,93 +1,76 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.feed;
 
 import android.content.Context;
-import android.os.Build;
 import android.util.DisplayMetrics;
 
-import androidx.annotation.RequiresApi;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeClassQualifiedName;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.ContextUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeClassQualifiedName;
-import org.chromium.base.annotations.NativeMethods;
-import org.chromium.chrome.browser.feed.hooks.FeedHooks;
-import org.chromium.chrome.browser.feed.hooks.FeedHooksImpl;
 import org.chromium.chrome.browser.feed.v2.ContentOrder;
 import org.chromium.chrome.browser.feed.v2.FeedUserActionType;
 import org.chromium.chrome.browser.xsurface.ImageCacheHelper;
 import org.chromium.chrome.browser.xsurface.ProcessScope;
-import org.chromium.chrome.browser.xsurface.ProcessScopeDependencyProvider;
+import org.chromium.chrome.browser.xsurface_provider.XSurfaceProcessScopeProvider;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.Locale;
 
-/**
- * Bridge for FeedService-related calls.
- */
+/** Bridge for FeedService-related calls. */
 @JNINamespace("feed")
 public final class FeedServiceBridge {
     // Access to JNI test hooks for other libraries. This can go away once more Feed code is
     // migrated to chrome/browser/feed.
-    public static org.chromium.base.JniStaticTestMocker<FeedServiceBridge.Natives>
-    getTestHooksForTesting() {
+    public static org.jni_zero.JniStaticTestMocker<FeedServiceBridge.Natives>
+            getTestHooksForTesting() {
         return FeedServiceBridgeJni.TEST_HOOKS;
     }
 
-    private static ProcessScope sXSurfaceProcessScope;
-
-    public static ProcessScope xSurfaceProcessScope() {
-        if (sXSurfaceProcessScope != null) {
-            return sXSurfaceProcessScope;
-        }
-        FeedHooks feedHooks = FeedHooksImpl.getInstance();
-        if (!feedHooks.isEnabled()) {
-            return null;
-        }
+    private static FeedServiceDependencyProviderFactory getDependencyProviderFactory() {
         Class<?> dependencyProviderFactoryClazz;
         try {
-            dependencyProviderFactoryClazz = Class.forName(
-                    "org.chromium.chrome.browser.app.feed.ProcessScopeDependencyProviderFactory");
+            dependencyProviderFactoryClazz =
+                    Class.forName(
+                            "org.chromium.chrome.browser.app.feed.FeedServiceDependencyProviderFactoryImpl");
         } catch (ClassNotFoundException e) {
             return null;
         }
-
-        ProcessScopeDependencyProvider dependencyProvider = null;
         try {
-            dependencyProvider = (ProcessScopeDependencyProvider) dependencyProviderFactoryClazz
-                                         .getDeclaredMethod("create")
-                                         .invoke(null);
+            return (FeedServiceDependencyProviderFactory)
+                    dependencyProviderFactoryClazz.getDeclaredMethod("getInstance").invoke(null);
         } catch (NoSuchMethodException e) {
         } catch (InvocationTargetException e) {
         } catch (IllegalAccessException e) {
         }
-        if (dependencyProvider == null) {
-            return null;
-        }
-
-        sXSurfaceProcessScope = feedHooks.createProcessScope(dependencyProvider);
-        return sXSurfaceProcessScope;
+        return null;
     }
 
-    public static void setProcessScopeForTesting(ProcessScope processScope) {
-        sXSurfaceProcessScope = processScope;
+    public static ProcessScope xSurfaceProcessScope() {
+        return XSurfaceProcessScopeProvider.getProcessScope();
+    }
+
+    private static FeedServiceUtil sFeedServiceUtil;
+
+    public static FeedServiceUtil feedServiceUtil() {
+        if (sFeedServiceUtil == null) {
+            sFeedServiceUtil = getDependencyProviderFactory().createFeedServiceUtil();
+        }
+        return sFeedServiceUtil;
     }
 
     public static boolean isEnabled() {
-        // return FeedServiceBridgeJni.get().isEnabled();
-        return false;
+        return FeedServiceBridgeJni.get().isEnabled();
     }
 
     /** Returns the top user specified locale. */
-    @RequiresApi(Build.VERSION_CODES.N)
     private static Locale getLocale(Context context) {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-                ? context.getResources().getConfiguration().getLocales().get(0)
-                : context.getResources().getConfiguration().locale;
+        return context.getResources().getConfiguration().getLocales().get(0);
     }
 
     // Java functionality needed for the native FeedService.
@@ -95,6 +78,7 @@ public final class FeedServiceBridge {
     public static String getLanguageTag() {
         return getLocale(ContextUtils.getApplicationContext()).toLanguageTag();
     }
+
     @CalledByNative
     public static double[] getDisplayMetrics() {
         DisplayMetrics metrics =
@@ -118,6 +102,12 @@ public final class FeedServiceBridge {
             }
         }
     }
+
+    @CalledByNative
+    public static @TabGroupEnabledState int getTabGroupEnabledState() {
+        return feedServiceUtil().getTabGroupEnabledState();
+    }
+
     /** Called at startup to trigger creation of |FeedService|. */
     public static void startup() {
         FeedServiceBridgeJni.get().startup();
@@ -133,28 +123,11 @@ public final class FeedServiceBridge {
         return FeedServiceBridgeJni.get().getLoadMoreTriggerScrollDistanceDp();
     }
 
-    public static void reportOpenVisitComplete(long visitTimeMs) {
-        FeedServiceBridgeJni.get().reportOpenVisitComplete(visitTimeMs);
-    }
-
-    public static @VideoPreviewsType int getVideoPreviewsTypePreference() {
-        return FeedServiceBridgeJni.get().getVideoPreviewsTypePreference();
-    }
-
-    public static void setVideoPreviewsTypePreference(@VideoPreviewsType int videoPreviewsType) {
-        FeedServiceBridgeJni.get().setVideoPreviewsTypePreference(videoPreviewsType);
-    }
-
     public static long getReliabilityLoggingId() {
         return FeedServiceBridgeJni.get().getReliabilityLoggingId();
     }
 
-    public static boolean isAutoplayEnabled() {
-        return FeedServiceBridgeJni.get().isAutoplayEnabled();
-    }
-
-    @ContentOrder
-    public static int getContentOrderForWebFeed() {
+    public static @ContentOrder int getContentOrderForWebFeed() {
         return FeedServiceBridgeJni.get().getContentOrderForWebFeed();
     }
 
@@ -209,21 +182,26 @@ public final class FeedServiceBridge {
     @NativeMethods
     public interface Natives {
         boolean isEnabled();
+
         void startup();
+
         int getLoadMoreTriggerLookahead();
+
         int getLoadMoreTriggerScrollDistanceDp();
-        void reportOpenVisitComplete(long visitTimeMs);
-        int getVideoPreviewsTypePreference();
-        void setVideoPreviewsTypePreference(int videoPreviewsType);
+
         long getReliabilityLoggingId();
-        boolean isAutoplayEnabled();
+
         void reportOtherUserAction(@StreamKind int streamKind, @FeedUserActionType int userAction);
+
         @ContentOrder
         int getContentOrderForWebFeed();
+
         void setContentOrderForWebFeed(@ContentOrder int contentOrder);
 
         long addUnreadContentObserver(Object object, boolean isWebFeed);
+
         boolean isSignedIn();
+
         @NativeClassQualifiedName("feed::JavaUnreadContentObserver")
         void destroy(long nativePtr);
     }

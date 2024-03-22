@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,6 +46,7 @@ bool IsImageSizeValidForGpuMemoryBufferFormat(const gfx::Size& size,
       return true;
     case gfx::BufferFormat::YVU_420:
     case gfx::BufferFormat::YUV_420_BIPLANAR:
+    case gfx::BufferFormat::YUVA_420_TRIPLANAR:
     case gfx::BufferFormat::P010:
 #if BUILDFLAG(IS_CHROMEOS)
       // Allow odd size for CrOS.
@@ -68,6 +69,28 @@ bool IsImageSizeValidForGpuMemoryBufferFormat(const gfx::Size& size,
 
 GPU_EXPORT bool IsPlaneValidForGpuMemoryBufferFormat(gfx::BufferPlane plane,
                                                      gfx::BufferFormat format) {
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN)
+  // On Windows, macOS and iOS each plane of a YUV GpuMemoryBuffer must be
+  // sampled separately.
+  switch (format) {
+    case gfx::BufferFormat::YUV_420_BIPLANAR:
+    case gfx::BufferFormat::P010:
+      return plane == gfx::BufferPlane::Y || plane == gfx::BufferPlane::UV;
+    case gfx::BufferFormat::YUVA_420_TRIPLANAR:
+      return plane == gfx::BufferPlane::Y || plane == gfx::BufferPlane::UV ||
+             plane == gfx::BufferPlane::A;
+    case gfx::BufferFormat::YVU_420:
+#if BUILDFLAG(IS_APPLE)
+      // YVU_420 not used on macOS or iOS
+      return false;
+#else
+      return plane == gfx::BufferPlane::Y || plane == gfx::BufferPlane::U ||
+             plane == gfx::BufferPlane::V;
+#endif
+    default:
+      return plane == gfx::BufferPlane::DEFAULT;
+  }
+#else
   switch (format) {
     case gfx::BufferFormat::YVU_420:
       return plane == gfx::BufferPlane::DEFAULT ||
@@ -76,9 +99,13 @@ GPU_EXPORT bool IsPlaneValidForGpuMemoryBufferFormat(gfx::BufferPlane plane,
     case gfx::BufferFormat::YUV_420_BIPLANAR:
       return plane == gfx::BufferPlane::DEFAULT ||
              plane == gfx::BufferPlane::Y || plane == gfx::BufferPlane::UV;
+    case gfx::BufferFormat::YUVA_420_TRIPLANAR:
+      return plane == gfx::BufferPlane::Y || plane == gfx::BufferPlane::UV ||
+             plane == gfx::BufferPlane::A;
     default:
       return plane == gfx::BufferPlane::DEFAULT;
   }
+#endif
   NOTREACHED();
   return false;
 }
@@ -90,16 +117,17 @@ gfx::BufferFormat GetPlaneBufferFormat(gfx::BufferPlane plane,
       return format;
     case gfx::BufferPlane::Y:
       if (format == gfx::BufferFormat::YVU_420 ||
-          format == gfx::BufferFormat::YUV_420_BIPLANAR) {
+          format == gfx::BufferFormat::YUV_420_BIPLANAR ||
+          format == gfx::BufferFormat::YUVA_420_TRIPLANAR) {
         return gfx::BufferFormat::R_8;
       }
       if (format == gfx::BufferFormat::P010) {
         return gfx::BufferFormat::R_16;
       }
-      NOTREACHED();
       break;
     case gfx::BufferPlane::UV:
-      if (format == gfx::BufferFormat::YUV_420_BIPLANAR)
+      if (format == gfx::BufferFormat::YUV_420_BIPLANAR ||
+          format == gfx::BufferFormat::YUVA_420_TRIPLANAR)
         return gfx::BufferFormat::RG_88;
       if (format == gfx::BufferFormat::P010)
         return gfx::BufferFormat::RG_1616;
@@ -112,16 +140,36 @@ gfx::BufferFormat GetPlaneBufferFormat(gfx::BufferPlane plane,
       if (format == gfx::BufferFormat::YVU_420)
         return gfx::BufferFormat::R_8;
       break;
+    case gfx::BufferPlane::A:
+      if (format == gfx::BufferFormat::YUVA_420_TRIPLANAR)
+        return gfx::BufferFormat::R_8;
+      break;
   }
 
   NOTREACHED();
   return format;
 }
 
+int32_t GetPlaneIndex(gfx::BufferPlane plane, gfx::BufferFormat format) {
+  switch (plane) {
+    case gfx::BufferPlane::DEFAULT:
+    case gfx::BufferPlane::Y:
+      return 0;
+    case gfx::BufferPlane::U:
+    case gfx::BufferPlane::UV:
+      return 1;
+    case gfx::BufferPlane::V:
+      return 2;
+    case gfx::BufferPlane::A:
+      return format == gfx::BufferFormat::YUVA_420_TRIPLANAR ? 2 : 3;
+  }
+}
+
 gfx::Size GetPlaneSize(gfx::BufferPlane plane, const gfx::Size& size) {
   switch (plane) {
     case gfx::BufferPlane::DEFAULT:
     case gfx::BufferPlane::Y:
+    case gfx::BufferPlane::A:
       return size;
     case gfx::BufferPlane::U:
     case gfx::BufferPlane::V:
@@ -136,8 +184,11 @@ uint32_t GetPlatformSpecificTextureTarget() {
 #elif BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || \
     BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
   return GL_TEXTURE_EXTERNAL_OES;
-#elif BUILDFLAG(IS_FUCHSIA)
+#elif BUILDFLAG(IS_IOS)
   return GL_TEXTURE_2D;
+#elif BUILDFLAG(IS_FUCHSIA)
+  // Fuchsia uses Vulkan.
+  return 0;
 #elif BUILDFLAG(IS_NACL)
   NOTREACHED();
   return 0;
@@ -165,11 +216,14 @@ GPU_EXPORT uint32_t GetBufferTextureTarget(gfx::BufferUsage usage,
 GPU_EXPORT bool NativeBufferNeedsPlatformSpecificTextureTarget(
     gfx::BufferFormat format,
     gfx::BufferPlane plane) {
-#if defined(USE_OZONE) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
+#if BUILDFLAG(IS_OZONE) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
     BUILDFLAG(IS_WIN)
   // Always use GL_TEXTURE_2D as the target for RGB textures.
   // https://crbug.com/916728
   if (format == gfx::BufferFormat::R_8 || format == gfx::BufferFormat::RG_88 ||
+#if BUILDFLAG(IS_CHROMEOS)
+      format == gfx::BufferFormat::RGBA_F16 ||
+#endif
       format == gfx::BufferFormat::RGBA_8888 ||
       format == gfx::BufferFormat::BGRA_8888 ||
       format == gfx::BufferFormat::RGBX_8888 ||

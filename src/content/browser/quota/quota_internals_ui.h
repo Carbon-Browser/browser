@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,10 @@ class CONTENT_EXPORT QuotaInternalsUI : public WebUIController {
 
   // WebUIController overrides:
   void WebUIRenderFrameCreated(RenderFrameHost* render_frame_host) override;
+
+  void BindInterface(
+      RenderFrameHost* render_frame_host,
+      mojo::PendingReceiver<storage::mojom::QuotaInternalsHandler> receiver);
 
  private:
   WEB_UI_CONTROLLER_TYPE_DECL();

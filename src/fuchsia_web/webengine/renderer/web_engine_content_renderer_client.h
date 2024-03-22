@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,17 @@
 
 #include <memory>
 
+#include "build/chromecast_buildflags.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "fuchsia_web/webengine/renderer/web_engine_audio_device_factory.h"
 #include "fuchsia_web/webengine/renderer/web_engine_render_frame_observer.h"
+#include "third_party/blink/public/common/tokens/tokens.h"
 
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
 namespace cast_streaming {
 class ResourceProvider;
 }
+#endif
 
 namespace memory_pressure {
 class MultiSourceMemoryPressureMonitor;
@@ -31,14 +35,14 @@ class WebEngineContentRendererClient : public content::ContentRendererClient {
   ~WebEngineContentRendererClient() override;
 
   // Returns the WebEngineRenderFrameObserver corresponding to
-  // |render_frame_id|.
-  WebEngineRenderFrameObserver* GetWebEngineRenderFrameObserverForRenderFrameId(
-      int render_frame_id) const;
+  // `frame_token`.
+  WebEngineRenderFrameObserver* GetWebEngineRenderFrameObserverForFrameToken(
+      const blink::LocalFrameToken& frame_token) const;
 
  private:
   // Called by WebEngineRenderFrameObserver when its corresponding RenderFrame
   // is in the process of being deleted.
-  void OnRenderFrameDeleted(int render_frame_id);
+  void OnRenderFrameDeleted(const blink::LocalFrameToken& frame_token);
 
   // content::ContentRendererClient overrides.
   void RenderThreadStarted() override;
@@ -57,8 +61,11 @@ class WebEngineContentRendererClient : public content::ContentRendererClient {
       media::DecoderFactory* decoder_factory,
       base::RepeatingCallback<media::GpuVideoAcceleratorFactories*()>
           get_gpu_factories_cb) override;
+
+#if BUILDFLAG(ENABLE_CAST_RECEIVER)
   std::unique_ptr<cast_streaming::ResourceProvider>
   CreateCastStreamingResourceProvider() override;
+#endif
 
   bool RunClosureWhenInForeground(content::RenderFrame* render_frame,
                                   base::OnceClosure closure);
@@ -67,9 +74,10 @@ class WebEngineContentRendererClient : public content::ContentRendererClient {
   // use the AudioConsumer service directly.
   WebEngineAudioDeviceFactory audio_device_factory_;
 
-  // Map of RenderFrame ID to WebEngineRenderFrameObserver.
-  std::map<int, std::unique_ptr<WebEngineRenderFrameObserver>>
-      render_frame_id_to_observer_map_;
+  // Map of `blink::LocalFrameToken` to WebEngineRenderFrameObserver.
+  std::map<blink::LocalFrameToken,
+           std::unique_ptr<WebEngineRenderFrameObserver>>
+      frame_token_to_observer_map_;
 
   // Initiates cache purges and Blink/V8 garbage collection when free memory
   // is limited.

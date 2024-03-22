@@ -1,4 +1,4 @@
-// Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+// Copyright 2006-2008 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -96,7 +96,14 @@ class VisitedLinkCommon {
 
     // goes into salt_
     uint8_t salt[LINK_SALT_LENGTH];
+
+    // Padding to ensure the Fingerprint table is aligned. Without this, reading
+    // from the table causes unaligned reads.
+    uint8_t padding[4];
   };
+
+  static_assert(sizeof(SharedHeader) % alignof(Fingerprint) == 0,
+                "Fingerprint must be aligned when placed after SharedHeader");
 
   // Returns the fingerprint at the given index into the URL table. This
   // function should be called instead of accessing the table directly to
@@ -129,10 +136,13 @@ class VisitedLinkCommon {
   }
 
   // pointer to the first item
-  raw_ptr<VisitedLinkCommon::Fingerprint> hash_table_;
+  // May temporarily point to an old unmapped region during update.
+  raw_ptr<VisitedLinkCommon::Fingerprint,
+          DisableDanglingPtrDetection | AllowPtrArithmetic>
+      hash_table_ = nullptr;
 
   // the number of items in the hash table
-  int32_t table_length_;
+  int32_t table_length_ = 0;
 
   // salt used for each URL when computing the fingerprint
   uint8_t salt_[LINK_SALT_LENGTH];

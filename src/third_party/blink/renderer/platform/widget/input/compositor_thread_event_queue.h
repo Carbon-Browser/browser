@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,6 +33,8 @@ class PLATFORM_EXPORT CompositorThreadEventQueue {
              base::TimeTicks timestamp_now);
 
   std::unique_ptr<EventWithCallback> Pop();
+
+  WebInputEvent::Type PeekType() const;
 
   bool empty() const { return queue_.empty(); }
 

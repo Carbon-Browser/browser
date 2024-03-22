@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,10 +44,13 @@ void WebApkHandlerDelegate::OnWebApkInfoRetrieved(
     const JavaParamRef<jstring>& jscope,
     const JavaParamRef<jstring>& jmanifest_url,
     const JavaParamRef<jstring>& jmanifest_start_url,
+    const JavaParamRef<jstring>& jmanifest_id,
     const jint jdisplay_mode,
     const jint jorientation,
     const jlong jtheme_color,
     const jlong jbackground_color,
+    const jlong jdark_theme_color,
+    const jlong jdark_background_color,
     const jlong jlast_update_check_time_ms,
     const jlong jlast_update_completion_time_ms,
     const jboolean jrelax_updates,
@@ -60,6 +63,11 @@ void WebApkHandlerDelegate::OnWebApkInfoRetrieved(
         env, jbacking_browser_package_name);
   }
 
+  std::string manifest_id;
+  if (jmanifest_id) {
+    manifest_id = base::android::ConvertJavaStringToUTF8(env, jmanifest_id);
+  }
+
   callback_.Run(WebApkInfo(
       base::android::ConvertJavaStringToUTF8(env, jname),
       base::android::ConvertJavaStringToUTF8(env, jshort_name),
@@ -70,12 +78,15 @@ void WebApkHandlerDelegate::OnWebApkInfoRetrieved(
       base::android::ConvertJavaStringToUTF8(env, jscope),
       base::android::ConvertJavaStringToUTF8(env, jmanifest_url),
       base::android::ConvertJavaStringToUTF8(env, jmanifest_start_url),
-      static_cast<blink::mojom::DisplayMode>(jdisplay_mode),
+      manifest_id, static_cast<blink::mojom::DisplayMode>(jdisplay_mode),
       static_cast<device::mojom::ScreenOrientationLockType>(jorientation),
       ui::JavaColorToOptionalSkColor(jtheme_color),
       ui::JavaColorToOptionalSkColor(jbackground_color),
-      base::Time::FromJavaTime(jlast_update_check_time_ms),
-      base::Time::FromJavaTime(jlast_update_completion_time_ms),
+      ui::JavaColorToOptionalSkColor(jdark_theme_color),
+      ui::JavaColorToOptionalSkColor(jdark_background_color),
+      base::Time::FromMillisecondsSinceUnixEpoch(jlast_update_check_time_ms),
+      base::Time::FromMillisecondsSinceUnixEpoch(
+          jlast_update_completion_time_ms),
       static_cast<bool>(jrelax_updates), backing_browser_package_name,
       static_cast<bool>(jis_backing_browser),
       base::android::ConvertJavaStringToUTF8(env, jupdate_status)));

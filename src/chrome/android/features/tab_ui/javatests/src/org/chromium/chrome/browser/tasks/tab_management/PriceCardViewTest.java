@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,22 +65,29 @@ public class PriceCardViewTest extends BlankUiTestActivityTestCase {
     public void setUpTest() throws Exception {
         super.setUpTest();
 
-        TabUiTestHelper.applyThemeOverlays(getActivity());
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        FrameLayout.LayoutParams params =
+                new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ViewGroup view = new FrameLayout(getActivity());
-            getActivity().setContentView(view, params);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ViewGroup view = new FrameLayout(getActivity());
+                    getActivity().setContentView(view, params);
 
-            ViewGroup tabView = (ViewGroup) getActivity().getLayoutInflater().inflate(
-                    R.layout.closable_tab_grid_card_item, view, false);
-            tabView.setVisibility(View.VISIBLE);
+                    ViewGroup tabView =
+                            (ViewGroup)
+                                    getActivity()
+                                            .getLayoutInflater()
+                                            .inflate(
+                                                    R.layout.closable_tab_grid_card_item,
+                                                    view,
+                                                    false);
+                    tabView.setVisibility(View.VISIBLE);
 
-            view.addView(tabView);
+                    view.addView(tabView);
 
-            mPriceCardView = tabView.findViewById(R.id.price_info_box_outer);
-        });
+                    mPriceCardView = tabView.findViewById(R.id.price_info_box_outer);
+                });
     }
 
     @Override

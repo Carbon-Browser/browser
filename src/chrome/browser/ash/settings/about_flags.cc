@@ -1,11 +1,9 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/settings/about_flags.h"
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "ash/components/settings/cros_settings_names.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/json/json_reader.h"
@@ -18,7 +16,10 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/site_isolation/about_flags.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/standalone_browser/lacros_availability.h"
 #include "components/account_id/account_id.h"
 #include "components/flags_ui/flags_storage.h"
 #include "components/flags_ui/flags_ui_pref_names.h"
@@ -47,7 +48,7 @@ std::set<std::string> ParseFlagsFromCommandLine(
     return flags;
   }
 
-  for (const auto& flag : flags_list.value().GetListDeprecated()) {
+  for (const auto& flag : flags_list.value().GetList()) {
     if (!flag.is_string()) {
       LOG(WARNING) << "Invalid entry in encoded feature flags";
       continue;
@@ -72,7 +73,7 @@ std::map<std::string, std::string> ParseOriginListFlagsFromCommmandLine(
     return origin_list_flags;
   }
 
-  for (const auto entry : origin_list_flags_dict->DictItems()) {
+  for (const auto entry : origin_list_flags_dict->GetDict()) {
     if (!entry.second.is_string()) {
       LOG(WARNING) << "Invalid entry in encoded origin list flags";
       continue;
@@ -140,6 +141,14 @@ std::string ReadOnlyFlagsStorage::GetOriginListFlag(
 void ReadOnlyFlagsStorage::SetOriginListFlag(
     const std::string& internal_entry_name,
     const std::string& origin_list_value) {}
+
+std::string ReadOnlyFlagsStorage::GetStringFlag(
+    const std::string& internal_entry_name) const {
+  return GetOriginListFlag(internal_entry_name);
+}
+
+void ReadOnlyFlagsStorage::SetStringFlag(const std::string& internal_entry_name,
+                                         const std::string& string_value) {}
 
 FeatureFlagsUpdate::FeatureFlagsUpdate(
     const ::flags_ui::FlagsStorage& flags_storage,
@@ -209,14 +218,14 @@ void FeatureFlagsUpdate::UpdateSessionManager() {
   if (lacros_launch_switch_pref->IsManaged()) {
     // If there's the value, convert it into the feature name.
     base::StringPiece value =
-        crosapi::browser_util::GetLacrosAvailabilityPolicyName(
-            static_cast<crosapi::browser_util::LacrosAvailability>(
+        ash::standalone_browser::GetLacrosAvailabilityPolicyName(
+            static_cast<ash::standalone_browser::LacrosAvailability>(
                 lacros_launch_switch_pref->GetValue()->GetInt()));
     DCHECK(!value.empty())
         << "The unexpect value is set to LacrosAvailability: "
         << lacros_launch_switch_pref->GetValue()->GetInt();
     auto* entry = ::about_flags::GetCurrentFlagsState()->FindFeatureEntryByName(
-        crosapi::browser_util::kLacrosAvailabilityPolicyInternalName);
+        ash::standalone_browser::kLacrosAvailabilityPolicyInternalName);
     DCHECK(entry);
     int index;
     for (index = 0; index < entry->NumOptions(); ++index) {
@@ -225,6 +234,28 @@ void FeatureFlagsUpdate::UpdateSessionManager() {
     }
     if (static_cast<size_t>(index) != entry->choices.size()) {
       LOG(ERROR) << "Updating the lacros_availability: " << index;
+      flags.insert(entry->NameForOption(index));
+    }
+  }
+
+  const PrefService::Preference* lacros_data_backward_migration_mode_pref =
+      g_browser_process->local_state()->FindPreference(
+          ::prefs::kLacrosDataBackwardMigrationMode);
+  if (lacros_data_backward_migration_mode_pref->IsManaged()) {
+    auto value =
+        lacros_data_backward_migration_mode_pref->GetValue()->GetString();
+    auto* entry = ::about_flags::GetCurrentFlagsState()->FindFeatureEntryByName(
+        crosapi::browser_util::
+            kLacrosDataBackwardMigrationModePolicyInternalName);
+    DCHECK(entry);
+    int index;
+    for (index = 0; index < entry->NumOptions(); ++index) {
+      if (value == entry->ChoiceForOption(index).command_line_value)
+        break;
+    }
+    if (static_cast<size_t>(index) != entry->choices.size()) {
+      LOG(ERROR) << "Updating the lacros_data_backward_migration_mode: "
+                 << index;
       flags.insert(entry->NameForOption(index));
     }
   }

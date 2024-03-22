@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -92,7 +92,7 @@ sk_sp<const SkPicture> PaintPictureLargeImage(gfx::Size bounds) {
   paint.setStyle(SkPaint::kFill_Style);
   paint.setColor(SK_ColorRED);
   canvas->drawRect(sk_bounds, paint);
-  canvas->drawImage(SkImage::MakeFromBitmap(bitmap), 0, 0);
+  canvas->drawImage(SkImages::RasterFromBitmap(bitmap), 0, 0);
   return recorder.finishRecordingAsPicture();
 }
 

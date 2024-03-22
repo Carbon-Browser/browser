@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "build/branding_buildflags.h"
 #include "chrome/app/chrome_command_ids.h"
@@ -18,7 +18,7 @@
 #include "chrome/browser/ui/toolbar/media_router_action_controller.h"
 #include "chrome/browser/ui/toolbar/media_router_contextual_menu.h"
 #include "chrome/browser/ui/toolbar/mock_media_router_action_controller.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "components/media_router/browser/test/mock_media_router.h"
@@ -56,8 +56,8 @@ std::unique_ptr<KeyedService> BuildUIService(content::BrowserContext* context) {
 class MockMediaRouterContextualMenuObserver
     : public MediaRouterContextualMenu::Observer {
  public:
-  MOCK_METHOD0(OnContextMenuShown, void());
-  MOCK_METHOD0(OnContextMenuHidden, void());
+  MOCK_METHOD(void, OnContextMenuShown, ());
+  MOCK_METHOD(void, OnContextMenuHidden, ());
 };
 
 }  // namespace
@@ -159,7 +159,7 @@ TEST_F(MediaRouterContextualMenuUnitTest, Basic) {
 }
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-// "Report an issue" should be present for normal profiles but not for
+// "Report an issue" should be present for normal profiles as well as for
 // incognito.
 TEST_F(MediaRouterContextualMenuUnitTest, EnableAndDisableReportIssue) {
   MediaRouterContextualMenu menu(browser(), kShownByPolicy, &observer_);
@@ -175,7 +175,7 @@ TEST_F(MediaRouterContextualMenuUnitTest, EnableAndDisableReportIssue) {
 
   MediaRouterContextualMenu incognito_menu(incognito_browser.get(),
                                            kShownByPolicy, &observer_);
-  EXPECT_FALSE(
+  EXPECT_TRUE(
       incognito_menu.CreateMenuModel()
           ->GetIndexOfCommandId(IDC_MEDIA_TOOLBAR_CONTEXT_REPORT_CAST_ISSUE)
           .has_value());

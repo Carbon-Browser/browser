@@ -23,6 +23,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LOADER_RESOURCE_IMAGE_RESOURCE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LOADER_RESOURCE_IMAGE_RESOURCE_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/loader/resource/image_resource_content.h"
@@ -74,7 +75,8 @@ class CORE_EXPORT ImageResource final
 
   void DidAddClient(ResourceClient*) override;
 
-  ResourcePriority PriorityFromObservers() override;
+  std::pair<ResourcePriority, ResourcePriority> PriorityFromObservers()
+      override;
 
   void AllClientsAndObserversRemoved() override;
 
@@ -135,10 +137,10 @@ class CORE_EXPORT ImageResource final
   Member<ImageResourceContent> content_;
 
   Member<MultipartImageResourceParser> multipart_parser_;
+  base::TimeTicks last_flush_time_;
+
   MultipartParsingState multipart_parsing_state_ =
       MultipartParsingState::kWaitingForFirstPart;
-
-  base::TimeTicks last_flush_time_;
 
   bool is_during_finish_as_error_ = false;
 

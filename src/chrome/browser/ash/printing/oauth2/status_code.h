@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,10 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/strings/string_piece.h"
 
-namespace ash {
-namespace printing {
-namespace oauth2 {
+namespace ash::printing::oauth2 {
 
 enum class StatusCode {
   // Success - no errors occurred.
@@ -25,8 +24,8 @@ enum class StatusCode {
   // The client is not registered to the server and the server does not support
   // dynamic registration (as described in rfc7591).
   kClientNotRegistered,
-  // The server is unknown (not trusted).
-  kUnknownAuthorizationServer,
+  // The server is untrusted.
+  kUntrustedAuthorizationServer,
   // The server denied the request.
   kAccessDenied,
   // RedirectURL obtained during authorization process does not match any
@@ -49,15 +48,18 @@ enum class StatusCode {
   kUnexpectedError
 };
 
+// Returns the given `status` as strings that can be used in device-log.
+// Returned string equals C++ name of `status` without leading 'k', e.g.:
+// kClientNotRegistered is converted to "ClientNotRegistered".
+base::StringPiece ToStringPiece(StatusCode status);
+
 // This is the standard callback used in oauth2 namespace. When `status` equals
 // StatusCode::kOK, `data` may contain an access token or authorization URL.
 // When `status` is different than StatusCode::kOK, `data` may contain
 // an additional error message.
 using StatusCallback =
-    base::OnceCallback<void(StatusCode status, const std::string& data)>;
+    base::OnceCallback<void(StatusCode status, std::string data)>;
 
-}  // namespace oauth2
-}  // namespace printing
-}  // namespace ash
+}  // namespace ash::printing::oauth2
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_OAUTH2_STATUS_CODE_H_

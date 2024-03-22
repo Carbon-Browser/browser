@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,7 +78,7 @@ void NetworkChangeNotifierDelegateAndroid::JavaLongArrayToNetworkMap(
   base::android::JavaLongArrayToInt64Vector(env, long_array, &int64_list);
   network_map->clear();
   for (auto i = int64_list.begin(); i != int64_list.end(); ++i) {
-    NetworkChangeNotifier::NetworkHandle network_handle = *i;
+    handles::NetworkHandle network_handle = *i;
     CHECK(++i != int64_list.end());
     (*network_map)[network_handle] = static_cast<ConnectionType>(*i);
   }
@@ -90,11 +90,7 @@ NetworkChangeNotifierDelegateAndroid::NetworkChangeNotifierDelegateAndroid()
       register_network_callback_failed_(
           Java_NetworkChangeNotifier_registerNetworkCallbackFailed(
               base::android::AttachCurrentThread(),
-              java_network_change_notifier_)),
-      // TODO(crbug.com/1042122): Remove once Cronet drops Kitkat support.
-      is_default_network_active_api_supported_(
-          base::android::BuildInfo::GetInstance()->sdk_int() >=
-          base::android::SDK_VERSION_LOLLIPOP) {
+              java_network_change_notifier_)) {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NetworkChangeNotifier_addNativeObserver(
       env, java_network_change_notifier_, reinterpret_cast<intptr_t>(this));
@@ -115,9 +111,8 @@ NetworkChangeNotifierDelegateAndroid::NetworkChangeNotifierDelegateAndroid()
           env, java_network_change_notifier_);
   JavaLongArrayToNetworkMap(env, networks_and_types, &network_map);
   SetCurrentNetworksAndTypes(network_map);
-  if (is_default_network_active_api_supported_)
-    java_network_active_notifier_ = Java_NetworkActiveNotifier_build(
-        base::android::AttachCurrentThread(), reinterpret_cast<intptr_t>(this));
+  java_network_active_notifier_ = Java_NetworkActiveNotifier_build(
+      base::android::AttachCurrentThread(), reinterpret_cast<intptr_t>(this));
 }
 
 NetworkChangeNotifierDelegateAndroid::~NetworkChangeNotifierDelegateAndroid() {
@@ -163,7 +158,7 @@ void NetworkChangeNotifierDelegateAndroid::
 
 NetworkChangeNotifier::ConnectionType
 NetworkChangeNotifierDelegateAndroid::GetNetworkConnectionType(
-    NetworkChangeNotifier::NetworkHandle network) const {
+    handles::NetworkHandle network) const {
   base::AutoLock auto_lock(connection_lock_);
   auto network_entry = network_map_.find(network);
   if (network_entry == network_map_.end())
@@ -171,7 +166,7 @@ NetworkChangeNotifierDelegateAndroid::GetNetworkConnectionType(
   return network_entry->second;
 }
 
-NetworkChangeNotifier::NetworkHandle
+handles::NetworkHandle
 NetworkChangeNotifierDelegateAndroid::GetCurrentDefaultNetwork() const {
   base::AutoLock auto_lock(connection_lock_);
   return default_network_;
@@ -186,10 +181,6 @@ void NetworkChangeNotifierDelegateAndroid::GetCurrentlyConnectedNetworks(
 }
 
 bool NetworkChangeNotifierDelegateAndroid::IsDefaultNetworkActive() {
-  // If the API is not available always return true to avoid indefinitely
-  // batching.
-  if (!is_default_network_active_api_supported_)
-    return true;
   JNIEnv* env = base::android::AttachCurrentThread();
   return Java_NetworkActiveNotifier_isDefaultNetworkActive(
       env, java_network_active_notifier_);
@@ -217,7 +208,7 @@ void NetworkChangeNotifierDelegateAndroid::NotifyConnectionTypeChanged(
   const ConnectionType actual_connection_type = ConvertConnectionType(
       new_connection_type);
   SetCurrentConnectionType(actual_connection_type);
-  NetworkHandle default_network = default_netid;
+  handles::NetworkHandle default_network = default_netid;
   if (default_network != GetCurrentDefaultNetwork()) {
     SetCurrentDefaultNetwork(default_network);
     bool default_exists;
@@ -278,7 +269,7 @@ void NetworkChangeNotifierDelegateAndroid::NotifyOfNetworkConnect(
     jlong net_id,
     jint connection_type) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  NetworkHandle network = net_id;
+  handles::NetworkHandle network = net_id;
   bool already_exists;
   bool is_default_network;
   {
@@ -305,7 +296,7 @@ void NetworkChangeNotifierDelegateAndroid::NotifyOfNetworkSoonToDisconnect(
     const JavaParamRef<jobject>& obj,
     jlong net_id) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  NetworkHandle network = net_id;
+  handles::NetworkHandle network = net_id;
   {
     base::AutoLock auto_lock(connection_lock_);
     if (network_map_.find(network) == network_map_.end())
@@ -321,11 +312,11 @@ void NetworkChangeNotifierDelegateAndroid::NotifyOfNetworkDisconnect(
     const JavaParamRef<jobject>& obj,
     jlong net_id) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  NetworkHandle network = net_id;
+  handles::NetworkHandle network = net_id;
   {
     base::AutoLock auto_lock(connection_lock_);
     if (network == default_network_)
-      default_network_ = NetworkChangeNotifier::kInvalidNetworkHandle;
+      default_network_ = handles::kInvalidNetworkHandle;
     if (network_map_.erase(network) == 0)
       return;
   }
@@ -384,24 +375,18 @@ void NetworkChangeNotifierDelegateAndroid::UnregisterObserver(
 }
 
 void NetworkChangeNotifierDelegateAndroid::DefaultNetworkActiveObserverAdded() {
-  if (!is_default_network_active_api_supported_)
-    return;
   if (default_network_active_observers_.fetch_add(1) == 0)
     EnableDefaultNetworkActiveNotifications();
 }
 
 void NetworkChangeNotifierDelegateAndroid::
     DefaultNetworkActiveObserverRemoved() {
-  if (!is_default_network_active_api_supported_)
-    return;
   if (default_network_active_observers_.fetch_sub(1) == 1)
     DisableDefaultNetworkActiveNotifications();
 }
 
 void NetworkChangeNotifierDelegateAndroid::
     EnableDefaultNetworkActiveNotifications() {
-  if (!is_default_network_active_api_supported_)
-    return;
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NetworkActiveNotifier_enableNotifications(env,
                                                  java_network_active_notifier_);
@@ -409,8 +394,6 @@ void NetworkChangeNotifierDelegateAndroid::
 
 void NetworkChangeNotifierDelegateAndroid::
     DisableDefaultNetworkActiveNotifications() {
-  if (!is_default_network_active_api_supported_)
-    return;
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NetworkActiveNotifier_disableNotifications(
       env, java_network_active_notifier_);
@@ -435,7 +418,7 @@ void NetworkChangeNotifierDelegateAndroid::SetCurrentMaxBandwidth(
 }
 
 void NetworkChangeNotifierDelegateAndroid::SetCurrentDefaultNetwork(
-    NetworkHandle default_network) {
+    handles::NetworkHandle default_network) {
   base::AutoLock auto_lock(connection_lock_);
   default_network_ = default_network;
 }
@@ -457,20 +440,20 @@ void NetworkChangeNotifierDelegateAndroid::SetOffline() {
 }
 
 void NetworkChangeNotifierDelegateAndroid::FakeNetworkConnected(
-    NetworkChangeNotifier::NetworkHandle network,
+    handles::NetworkHandle network,
     ConnectionType type) {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NetworkChangeNotifier_fakeNetworkConnected(env, network, type);
 }
 
 void NetworkChangeNotifierDelegateAndroid::FakeNetworkSoonToBeDisconnected(
-    NetworkChangeNotifier::NetworkHandle network) {
+    handles::NetworkHandle network) {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NetworkChangeNotifier_fakeNetworkSoonToBeDisconnected(env, network);
 }
 
 void NetworkChangeNotifierDelegateAndroid::FakeNetworkDisconnected(
-    NetworkChangeNotifier::NetworkHandle network) {
+    handles::NetworkHandle network) {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NetworkChangeNotifier_fakeNetworkDisconnected(env, network);
 }
@@ -483,7 +466,7 @@ void NetworkChangeNotifierDelegateAndroid::FakePurgeActiveNetworkList(
 }
 
 void NetworkChangeNotifierDelegateAndroid::FakeDefaultNetwork(
-    NetworkChangeNotifier::NetworkHandle network,
+    handles::NetworkHandle network,
     ConnectionType type) {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NetworkChangeNotifier_fakeDefaultNetwork(env, network, type);
@@ -502,8 +485,6 @@ void NetworkChangeNotifierDelegateAndroid::FakeConnectionSubtypeChanged(
 }
 
 void NetworkChangeNotifierDelegateAndroid::FakeDefaultNetworkActive() {
-  if (!is_default_network_active_api_supported_)
-    return;
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_NetworkActiveNotifier_fakeDefaultNetworkActive(
       env, java_network_active_notifier_);

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@ package org.chromium.content_public.browser;
 
 import android.os.Handler;
 
-import org.chromium.base.annotations.UsedByReflection;
+import org.chromium.build.annotations.UsedByReflection;
 
 /**
  * An interface to provide smart clip data when requested.
@@ -24,9 +24,7 @@ public interface SmartClipProvider {
     @UsedByReflection("ExternalOemSupport")
     void extractSmartClipData(int x, int y, int width, int height);
 
-    /**
-     * Register a handler to handle smart clip data once extraction is done.
-     */
+    /** Register a handler to handle smart clip data once extraction is done. */
     @UsedByReflection("ExternalOemSupport")
     void setSmartClipResultHandler(final Handler resultHandler);
 }

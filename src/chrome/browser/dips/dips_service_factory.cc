@@ -1,16 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/dips/dips_service_factory.h"
 
-#include "base/logging.h"
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/dips/dips_service.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
+#include "content/public/common/content_features.h"
 
-// static
+/* static */
 DIPSService* DIPSServiceFactory::GetForBrowserContext(
     content::BrowserContext* context) {
   return static_cast<DIPSService*>(
@@ -18,22 +18,28 @@ DIPSService* DIPSServiceFactory::GetForBrowserContext(
 }
 
 DIPSServiceFactory* DIPSServiceFactory::GetInstance() {
-  return base::Singleton<DIPSServiceFactory>::get();
+  static base::NoDestructor<DIPSServiceFactory> instance;
+  return instance.get();
+}
+
+/* static */
+ProfileSelections DIPSServiceFactory::CreateProfileSelections() {
+  if (!base::FeatureList::IsEnabled(features::kDIPS)) {
+    return ProfileSelections::BuildNoProfilesSelected();
+  }
+
+  return GetHumanProfileSelections();
 }
 
 DIPSServiceFactory::DIPSServiceFactory()
-    : BrowserContextKeyedServiceFactory(
-          "DIPSService",
-          BrowserContextDependencyManager::GetInstance()) {}
+    : ProfileKeyedServiceFactory("DIPSService", CreateProfileSelections()) {
+  DependsOn(CookieSettingsFactory::GetInstance());
+  DependsOn(IdentityManagerFactory::GetInstance());
+}
 
 DIPSServiceFactory::~DIPSServiceFactory() = default;
 
 KeyedService* DIPSServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
   return new DIPSService(context);
-}
-
-content::BrowserContext* DIPSServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
 }

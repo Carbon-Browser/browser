@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,8 @@
 
 namespace ash {
 
-WindowMirrorViewPip::WindowMirrorViewPip(aura::Window* source,
-                                         bool trilinear_filtering_on_init)
-    : WindowMirrorView(source, trilinear_filtering_on_init) {}
+WindowMirrorViewPip::WindowMirrorViewPip(aura::Window* source)
+    : WindowMirrorView(source) {}
 
 WindowMirrorViewPip::~WindowMirrorViewPip() = default;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/webui/new_tab_page_third_party/new_tab_page_third_party.mojom.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -72,8 +73,8 @@ class NewTabPageThirdPartyUI
   std::unique_ptr<MostVisitedHandler> most_visited_page_handler_;
   mojo::Receiver<most_visited::mojom::MostVisitedPageHandlerFactory>
       most_visited_page_factory_receiver_;
-  Profile* profile_;
-  content::WebContents* web_contents_;
+  raw_ptr<Profile> profile_;
+  raw_ptr<content::WebContents> web_contents_;
   // Time the NTP started loading. Used for logging the WebUI NTP's load
   // performance.
   base::Time navigation_start_time_;

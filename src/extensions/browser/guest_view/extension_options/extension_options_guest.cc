@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,22 +18,18 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/result_codes.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/bad_message.h"
 #include "extensions/browser/extension_function_dispatcher.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/guest_view/extension_options/extension_options_constants.h"
 #include "extensions/browser/guest_view/extension_options/extension_options_guest_delegate.h"
-#include "extensions/browser/view_type_utils.h"
+#include "extensions/browser/guest_view/guest_view_feature_util.h"
 #include "extensions/common/api/extension_options_internal.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_messages.h"
 #include "extensions/common/manifest_handlers/options_page_info.h"
-#include "extensions/common/permissions/permissions_data.h"
 #include "extensions/strings/grit/extensions_strings.h"
-#include "ipc/ipc_message_macros.h"
 
 using content::WebContents;
 using guest_view::GuestViewBase;
@@ -44,21 +40,23 @@ namespace extensions {
 // static
 const char ExtensionOptionsGuest::Type[] = "extensionoptions";
 
-ExtensionOptionsGuest::ExtensionOptionsGuest(WebContents* owner_web_contents)
-    : GuestView<ExtensionOptionsGuest>(owner_web_contents),
+ExtensionOptionsGuest::ExtensionOptionsGuest(
+    content::RenderFrameHost* owner_rfh)
+    : GuestView<ExtensionOptionsGuest>(owner_rfh),
       extension_options_guest_delegate_(
           extensions::ExtensionsAPIClient::Get()
               ->CreateExtensionOptionsGuestDelegate(this)) {}
 
-ExtensionOptionsGuest::~ExtensionOptionsGuest() {
-}
+ExtensionOptionsGuest::~ExtensionOptionsGuest() = default;
 
 // static
-GuestViewBase* ExtensionOptionsGuest::Create(WebContents* owner_web_contents) {
-  return new ExtensionOptionsGuest(owner_web_contents);
+std::unique_ptr<GuestViewBase> ExtensionOptionsGuest::Create(
+    content::RenderFrameHost* owner_rfh) {
+  return base::WrapUnique(new ExtensionOptionsGuest(owner_rfh));
 }
 
 void ExtensionOptionsGuest::CreateWebContents(
+    std::unique_ptr<GuestViewBase> owned_this,
     const base::Value::Dict& create_params,
     WebContentsCreatedCallback callback) {
   // Get the extension's base URL.
@@ -66,22 +64,14 @@ void ExtensionOptionsGuest::CreateWebContents(
       create_params.FindString(extensionoptions::kExtensionId);
 
   if (!extension_id || !crx_file::id_util::IdIsValid(*extension_id)) {
-    std::move(callback).Run(nullptr);
-    return;
-  }
-
-  std::string embedder_extension_id = GetOwnerSiteURL().host();
-  if (crx_file::id_util::IdIsValid(embedder_extension_id) &&
-      *extension_id != embedder_extension_id) {
-    // Extensions cannot embed other extensions' options pages.
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
 
   GURL extension_url =
       extensions::Extension::GetBaseURLFromExtensionId(*extension_id);
   if (!extension_url.is_valid()) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
 
@@ -93,13 +83,13 @@ void ExtensionOptionsGuest::CreateWebContents(
   if (!extension) {
     // The ID was valid but the extension didn't exist. Typically this will
     // happen when an extension is disabled.
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
 
   options_page_ = extensions::OptionsPageInfo::GetOptionsPage(extension);
   if (!options_page_.is_valid()) {
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::move(owned_this), nullptr);
     return;
   }
 
@@ -110,24 +100,28 @@ void ExtensionOptionsGuest::CreateWebContents(
       browser_context(),
       content::SiteInstance::CreateForURL(browser_context(), extension_url));
   params.guest_delegate = this;
-  // TODO(erikchen): Fix ownership semantics for guest views.
-  // https://crbug.com/832879.
-  std::move(callback).Run(WebContents::Create(params).release());
+  std::move(callback).Run(std::move(owned_this), WebContents::Create(params));
 }
 
 void ExtensionOptionsGuest::DidInitialize(
     const base::Value::Dict& create_params) {
   ExtensionsAPIClient::Get()->AttachWebContentsHelpers(web_contents());
-  web_contents()->GetController().LoadURL(options_page_,
-                                          content::Referrer(),
-                                          ui::PAGE_TRANSITION_LINK,
-                                          std::string());
+  GetController().LoadURL(options_page_, content::Referrer(),
+                          ui::PAGE_TRANSITION_LINK, std::string());
+}
+
+void ExtensionOptionsGuest::MaybeRecreateGuestContents(
+    content::RenderFrameHost* outer_contents_frame) {
+  if (AreWebviewMPArchBehaviorsEnabled(browser_context())) {
+    // This situation is not possible for ExtensionOptions.
+    NOTREACHED();
+  }
 }
 
 void ExtensionOptionsGuest::GuestViewDidStopLoading() {
-  std::unique_ptr<base::DictionaryValue> args(new base::DictionaryValue());
   DispatchEventToView(std::make_unique<GuestViewEvent>(
-      api::extension_options_internal::OnLoad::kEventName, std::move(args)));
+      api::extension_options_internal::OnLoad::kEventName,
+      base::Value::Dict()));
 }
 
 const char* ExtensionOptionsGuest::GetAPINamespace() const {
@@ -157,7 +151,7 @@ void ExtensionOptionsGuest::AddNewContents(
     std::unique_ptr<WebContents> new_contents,
     const GURL& target_url,
     WindowOpenDisposition disposition,
-    const gfx::Rect& initial_rect,
+    const blink::mojom::WindowFeatures& window_features,
     bool user_gesture,
     bool* was_blocked) {
   // |new_contents| is potentially used as a non-embedded WebContents, so we
@@ -169,7 +163,7 @@ void ExtensionOptionsGuest::AddNewContents(
     return;
 
   embedder_web_contents()->GetDelegate()->AddNewContents(
-      source, std::move(new_contents), target_url, disposition, initial_rect,
+      source, std::move(new_contents), target_url, disposition, window_features,
       user_gesture, was_blocked);
 }
 
@@ -196,7 +190,7 @@ WebContents* ExtensionOptionsGuest::OpenURLFromTab(
 void ExtensionOptionsGuest::CloseContents(WebContents* source) {
   DispatchEventToView(std::make_unique<GuestViewEvent>(
       api::extension_options_internal::OnClose::kEventName,
-      base::WrapUnique(new base::DictionaryValue())));
+      base::Value::Dict()));
 }
 
 bool ExtensionOptionsGuest::HandleContextMenu(
@@ -207,6 +201,12 @@ bool ExtensionOptionsGuest::HandleContextMenu(
 
   return extension_options_guest_delegate_->HandleContextMenu(render_frame_host,
                                                               params);
+}
+
+bool ExtensionOptionsGuest::ShouldResumeRequestsForCreatedWindow() {
+  // Not reached due to the use of `CreateCustomWebContents`.
+  NOTREACHED();
+  return true;
 }
 
 bool ExtensionOptionsGuest::IsWebContentsCreationOverridden(

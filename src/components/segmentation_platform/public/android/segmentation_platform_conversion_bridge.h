@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,12 @@
 #define COMPONENTS_SEGMENTATION_PLATFORM_PUBLIC_ANDROID_SEGMENTATION_PLATFORM_CONVERSION_BRIDGE_H_
 
 #include "base/android/jni_android.h"
+#include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
+#include "components/segmentation_platform/public/prediction_options.h"
+#include "components/segmentation_platform/public/result.h"
 #include "components/segmentation_platform/public/segment_selection_result.h"
-#include "components/segmentation_platform/public/trigger_context.h"
 
 using base::android::ScopedJavaLocalRef;
 
@@ -21,10 +24,10 @@ class SegmentationPlatformConversionBridge {
   static ScopedJavaLocalRef<jobject> CreateJavaSegmentSelectionResult(
       JNIEnv* env,
       const SegmentSelectionResult& result);
-  static ScopedJavaLocalRef<jobject> CreateJavaOnDemandSegmentSelectionResult(
+
+  static ScopedJavaLocalRef<jobject> CreateJavaClassificationResult(
       JNIEnv* env,
-      const SegmentSelectionResult& result,
-      const TriggerContext& trigger_context);
+      const ClassificationResult& result);
 };
 
 }  // namespace segmentation_platform

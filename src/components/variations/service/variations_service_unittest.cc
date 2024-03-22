@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -24,6 +24,7 @@
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "components/metrics/clean_exit_beacon.h"
 #include "components/metrics/client_info.h"
@@ -35,6 +36,7 @@
 #include "components/variations/proto/study.pb.h"
 #include "components/variations/proto/variations_seed.pb.h"
 #include "components/variations/scoped_variations_ids_provider.h"
+#include "components/variations/variations_seed_simulator.h"
 #include "components/version_info/channel.h"
 #include "components/web_resource/resource_request_allowed_notifier_test_util.h"
 #include "net/base/mock_network_change_notifier.h"
@@ -96,6 +98,8 @@ class TestVariationsServiceClient : public VariationsServiceClient {
     return true;
   }
   bool IsEnterprise() override { return false; }
+  void RemoveGoogleGroupsFromPrefsForDeletedProfiles(
+      PrefService* local_state) override {}
 
   void set_restrict_parameter(const std::string& value) {
     restrict_parameter_ = value;
@@ -148,9 +152,7 @@ class TestVariationsService : public VariationsService {
   ~TestVariationsService() override {}
 
   GURL interception_url() { return interception_url_; }
-  void set_intercepts_fetch(bool value) {
-    intercepts_fetch_ = value;
-  }
+  void set_intercepts_fetch(bool value) { intercepts_fetch_ = value; }
   void set_insecure_url(const GURL& url) {
     set_insecure_variations_server_url(url);
   }
@@ -192,9 +194,9 @@ class TestVariationsService : public VariationsService {
     return VariationsService::DoFetchFromURL(url, is_http_retry);
   }
 
-  bool StoreSeed(const std::string& seed_data,
-                 const std::string& seed_signature,
-                 const std::string& country_code,
+  void StoreSeed(std::string seed_data,
+                 std::string seed_signature,
+                 std::string country_code,
                  base::Time date_fetched,
                  bool is_delta_compressed,
                  bool is_gzip_compressed) override {
@@ -204,12 +206,8 @@ class TestVariationsService : public VariationsService {
     delta_compressed_seed_ = is_delta_compressed;
     gzip_compressed_seed_ = is_gzip_compressed;
     RecordSuccessfulFetch();
-    return seed_stores_succeed_;
-  }
-
-  std::unique_ptr<const base::FieldTrial::EntropyProvider>
-  CreateLowEntropyProvider() override {
-    return std::unique_ptr<const base::FieldTrial::EntropyProvider>(nullptr);
+    OnSeedStoreResult(is_delta_compressed, seed_stores_succeed_,
+                      VariationsSeed());
   }
 
   TestVariationsServiceClient* client() {
@@ -260,9 +258,7 @@ class TestVariationsServiceObserver : public VariationsService::Observer {
     return best_effort_changes_notified_;
   }
 
-  int crticial_changes_notified() const {
-    return crticial_changes_notified_;
-  }
+  int crticial_changes_notified() const { return crticial_changes_notified_; }
 
  private:
   // Number of notification received with BEST_EFFORT severity.
@@ -301,12 +297,12 @@ std::string SerializeSeed(const VariationsSeed& seed) {
   return serialized_seed;
 }
 
-// Converts |value| to a string, to make it easier for debugging.
-std::string ValueToString(const base::Value& value) {
+// Converts |list| to a string, to make it easier for debugging.
+std::string ListToString(const base::Value::List& list) {
   std::string json;
   JSONStringValueSerializer serializer(&json);
   serializer.set_pretty_print(true);
-  serializer.Serialize(value);
+  serializer.Serialize(list);
   return json;
 }
 
@@ -605,7 +601,7 @@ TEST_F(VariationsServiceTest, RequestDeltaCompressedSeed) {
 }
 
 TEST_F(VariationsServiceTest, InstanceManipulations) {
-  struct  {
+  struct {
     std::string im;
     bool delta_compressed;
     bool gzip_compressed;
@@ -681,33 +677,27 @@ TEST_F(VariationsServiceTest, Observer) {
     int expected_best_effort_notifications;
     int expected_crtical_notifications;
   } cases[] = {
-      {0, 0, 0, 0, 0},
-      {1, 0, 0, 0, 0},
-      {10, 0, 0, 0, 0},
-      {0, 1, 0, 1, 0},
-      {0, 10, 0, 1, 0},
-      {0, 0, 1, 0, 1},
-      {0, 0, 10, 0, 1},
-      {0, 1, 1, 0, 1},
-      {1, 1, 1, 0, 1},
-      {1, 1, 0, 1, 0},
-      {1, 0, 1, 0, 1},
+      {0, 0, 0, 0, 0},  {1, 0, 0, 0, 0}, {10, 0, 0, 0, 0}, {0, 1, 0, 1, 0},
+      {0, 10, 0, 1, 0}, {0, 0, 1, 0, 1}, {0, 0, 10, 0, 1}, {0, 1, 1, 0, 1},
+      {1, 1, 1, 0, 1},  {1, 1, 0, 1, 0}, {1, 0, 1, 0, 1},
   };
 
   for (size_t i = 0; i < std::size(cases); ++i) {
     TestVariationsServiceObserver observer;
     service.AddObserver(&observer);
 
-    VariationsSeedSimulator::Result result;
+    SeedSimulationResult result;
     result.normal_group_change_count = cases[i].normal_count;
     result.kill_best_effort_group_change_count = cases[i].best_effort_count;
     result.kill_critical_group_change_count = cases[i].critical_count;
     service.NotifyObservers(result);
 
     EXPECT_EQ(cases[i].expected_best_effort_notifications,
-              observer.best_effort_changes_notified()) << i;
+              observer.best_effort_changes_notified())
+        << i;
     EXPECT_EQ(cases[i].expected_crtical_notifications,
-              observer.crticial_changes_notified()) << i;
+              observer.crticial_changes_notified())
+        << i;
 
     service.RemoveObserver(&observer);
   }
@@ -790,13 +780,14 @@ TEST_F(VariationsServiceTest, LoadPermanentConsistencyCountry) {
     if (!test.permanent_consistency_country_before) {
       prefs_.ClearPref(prefs::kVariationsPermanentConsistencyCountry);
     } else {
-      base::ListValue list_value;
+      base::Value::List list_value;
       for (const std::string& component :
            base::SplitString(test.permanent_consistency_country_before, ",",
                              base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
         list_value.Append(component);
       }
-      prefs_.Set(prefs::kVariationsPermanentConsistencyCountry, list_value);
+      prefs_.SetList(prefs::kVariationsPermanentConsistencyCountry,
+                     std::move(list_value));
     }
 
     VariationsSeed seed(CreateTestSeed());
@@ -811,15 +802,15 @@ TEST_F(VariationsServiceTest, LoadPermanentConsistencyCountry) {
         << test.permanent_consistency_country_before << ", " << test.version
         << ", " << test.latest_country_code;
 
-    base::Value expected_list_value{base::Value::Type::LIST};
+    base::Value::List expected_list;
     for (const std::string& component :
          base::SplitString(test.permanent_consistency_country_after, ",",
                            base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
-      expected_list_value.Append(component);
+      expected_list.Append(component);
     }
-    const base::Value* pref_value =
+    const base::Value::List& pref_list =
         prefs_.GetList(prefs::kVariationsPermanentConsistencyCountry);
-    EXPECT_EQ(ValueToString(expected_list_value), ValueToString(*pref_value))
+    EXPECT_EQ(ListToString(expected_list), ListToString(pref_list))
         << test.permanent_consistency_country_before << ", " << test.version
         << ", " << test.latest_country_code;
 
@@ -859,13 +850,14 @@ TEST_F(VariationsServiceTest, GetStoredPermanentCountry) {
     if (test.permanent_consistency_country_before.empty()) {
       prefs_.ClearPref(prefs::kVariationsPermanentConsistencyCountry);
     } else {
-      base::ListValue list_value;
+      base::Value::List list_value;
       for (const std::string& component :
            base::SplitString(test.permanent_consistency_country_before, ",",
                              base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
         list_value.Append(component);
       }
-      prefs_.Set(prefs::kVariationsPermanentConsistencyCountry, list_value);
+      prefs_.SetList(prefs::kVariationsPermanentConsistencyCountry,
+                     std::move(list_value));
     }
 
     VariationsSeed seed(CreateTestSeed());
@@ -889,9 +881,8 @@ TEST_F(VariationsServiceTest, OverrideStoredPermanentCountry) {
     // Is the pref expected to be updated or not.
     const bool has_updated;
   } test_cases[] = {
-      {kPrefUs, "ca", kPrefCa, true},
-      {kPrefUs, "us", kPrefUs, false},
-      {kPrefUs, "", "", true},
+      {kPrefUs, "ca", kPrefCa, true},  {kPrefUs, "CA", kPrefCa, true},
+      {kPrefUs, "us", kPrefUs, false}, {kPrefUs, "", "", true},
       {"", "ca", kPrefCa, true},
   };
 
@@ -1008,7 +999,7 @@ TEST_F(VariationsServiceTest, FieldTrialCreatorInitializedCorrectly) {
 
   // Call will crash in service's VariationsFieldTrialCreator if not initialized
   // correctly.
-  service.GetClientFilterableStateForVersionCalledForTesting();
+  service.GetClientFilterableStateForVersion();
 }
 
 TEST_F(VariationsServiceTest, RetryOverHTTPIfURLisSet) {
@@ -1111,8 +1102,7 @@ TEST_F(VariationsServiceTest, NullResponseReceivedWithHTTPOk) {
                                       net::ERR_FAILED, 1);
 }
 
-TEST_F(VariationsServiceTest,
-       VariationsServiceStartsRequestOnNetworkChange) {
+TEST_F(VariationsServiceTest, VariationsServiceStartsRequestOnNetworkChange) {
   // Verifies VariationsService does a request when network status changes from
   // none to connected. This is a regression test for https://crbug.com/826930.
   VariationsService::EnableFetchForTesting();

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "base/atomic_sequence_num.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
@@ -60,6 +60,7 @@ class GPU_EXPORT GpuChannelHost
       int channel_id,
       const gpu::GPUInfo& gpu_info,
       const gpu::GpuFeatureInfo& gpu_feature_info,
+      const gpu::SharedImageCapabilities& shared_image_capabilities,
       mojo::ScopedMessagePipeHandle handle,
       scoped_refptr<base::SingleThreadTaskRunner> io_task_runner = nullptr);
   GpuChannelHost(const GpuChannelHost&) = delete;
@@ -115,6 +116,19 @@ class GPU_EXPORT GpuChannelHost
 
   // Generate a route ID guaranteed to be unique for this channel.
   int32_t GenerateRouteID();
+
+  // Creates a GpuMemoryBufferHandle in service side on the IO thread. This is a
+  // blocking call and will block the calling client.
+  void CreateGpuMemoryBuffer(const gfx::Size& size,
+                             const viz::SharedImageFormat& format,
+                             gfx::BufferUsage buffer_usage,
+                             gfx::GpuMemoryBufferHandle* handle);
+
+  void GetGpuMemoryBufferHandleInfo(const Mailbox& mailbox,
+                                    gfx::GpuMemoryBufferHandle* handle,
+                                    viz::SharedImageFormat* format,
+                                    gfx::Size* size,
+                                    gfx::BufferUsage* buffer_usage);
 
   // Crashes the GPU process. This functionality is added here because
   // of instability when creating a new tab just to navigate to
@@ -243,7 +257,7 @@ class GPU_EXPORT GpuChannelHost
   mutable base::Lock context_lock_;
   std::vector<mojom::DeferredRequestPtr> deferred_messages_
       GUARDED_BY(context_lock_);
-  absl::optional<OrderingBarrierInfo> pending_ordering_barrier_
+  std::optional<OrderingBarrierInfo> pending_ordering_barrier_
       GUARDED_BY(context_lock_);
   uint32_t next_deferred_message_id_ GUARDED_BY(context_lock_) = 1;
   // Highest deferred message id in |deferred_messages_|.

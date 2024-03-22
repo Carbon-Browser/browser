@@ -1,34 +1,30 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/ios/ios_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
+#import "base/functional/bind.h"
+#import "base/ios/ios_util.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/translate/core/browser/translate_pref_names.h"
-#import "ios/chrome/browser/ui/fullscreen/fullscreen_features.h"
+#import "components/translate/core/browser/translate_pref_names.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/fullscreen/test/fullscreen_app_interface.h"
-#include "ios/chrome/browser/ui/util/ui_util.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
-#include "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
+#import "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
 #import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/web/common/features.h"
 #import "ios/web/public/test/http_server/error_page_response_provider.h"
 #import "ios/web/public/test/http_server/http_server.h"
-#include "ios/web/public/test/http_server/http_server_util.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/test/http_server/http_server_util.h"
+#import "url/gurl.h"
 
 using base::test::ios::kWaitForPageLoadTimeout;
 using base::test::ios::kWaitForJSCompletionTimeout;
@@ -87,21 +83,15 @@ void WaitforPDFExtensionView() {
 #pragma mark - Tests
 
 // Fullscreens tests for Chrome.
-@interface FullscreenTestCase : WebHttpServerChromeTestCase
+// TODO(crbug.com/1338585): Remove the "ZZZ" when the bug is fixed.
+@interface ZZZFullscreenTestCase : WebHttpServerChromeTestCase
 @end
 
-@implementation FullscreenTestCase
+@implementation ZZZFullscreenTestCase
 
-// TODO(crbug.com/1345810): Remove when iOS16/kSmoothScrollingDefault is fixed.
 - (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config = [super appConfigurationForTestCase];
-  if (@available(iOS 16, *)) {
-    NSString* bundleIdentifier = [[NSBundle mainBundle] bundleIdentifier];
-    if ([bundleIdentifier hasPrefix:@"org.chromium.ost.chrome"]) {
-      config.features_disabled.push_back(
-          fullscreen::features::kSmoothScrollingDefault);
-    }
-  }
+  AppLaunchConfiguration config;
+  config.features_disabled.push_back(web::features::kSmoothScrollingDefault);
   return config;
 }
 
@@ -113,6 +103,8 @@ void WaitforPDFExtensionView() {
       setBoolValue:NO
        forUserPref:base::SysUTF8ToNSString(
                        translate::prefs::kOfferTranslateEnabled)];
+
+  [ChromeEarlGrey setBoolValue:NO forUserPref:prefs::kBottomOmnibox];
 }
 
 - (void)tearDown {
@@ -421,6 +413,76 @@ void WaitforPDFExtensionView() {
   [ChromeEarlGrey tapWebStateElementWithID:@"link"];
   AssertURLIs(ErrorPageResponseProvider::GetDnsFailureUrl());
   [ChromeEarlGreyUI waitForToolbarVisible:YES];
+}
+
+// Tests collapsing of toolbar when a user scroll on a long page and rotate.
+- (void)testCollapseToolbarOnScrollAndRotate {
+  std::map<GURL, std::string> responses;
+  const GURL URL = web::test::HttpServer::MakeUrl("http://tallpage");
+  // A page long enough to ensure that the toolbar goes away on scrolling.
+  responses[URL] =
+      base::StringPrintf("<p style='height:%dem'>a</p><p>b</p>", kPageHeightEM);
+  web::test::SetUpSimpleHttpServer(responses);
+
+  [ChromeEarlGrey loadURL:URL];
+  [ChromeEarlGreyUI waitForToolbarVisible:YES];
+
+  // Scroll and check that toolbar is collapsed.
+  HideToolbarUsingUI();
+  [ChromeEarlGreyUI waitForToolbarVisible:NO];
+
+  // Rotate and check that toolbar is still collapsed.
+  [EarlGrey rotateDeviceToOrientation:UIDeviceOrientationLandscapeLeft
+                                error:nil];
+  [ChromeEarlGreyUI waitForToolbarVisible:NO];
+
+  // Cancel the rotation.
+  [EarlGrey rotateDeviceToOrientation:UIDeviceOrientationPortrait error:nil];
+}
+
+@end
+
+#pragma mark - Smooth scrolling enabled Tests
+
+// Fullscreens tests for Chrome.
+@interface FullscreenSmoothScrollingTestCase : ZZZFullscreenTestCase
+@end
+
+@implementation FullscreenSmoothScrollingTestCase
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config;
+  config.features_enabled.push_back(web::features::kSmoothScrollingDefault);
+  return config;
+}
+
+// This is currently needed to prevent this test case from being ignored.
+- (void)testEmpty {
+}
+
+@end
+
+#pragma mark - Bottom omnibox enabled Tests
+
+// Fullscreens tests for Chrome with bottom omnibox enabled by default.
+@interface FullscreenBottomOmniboxTestCase : ZZZFullscreenTestCase
+@end
+
+@implementation FullscreenBottomOmniboxTestCase
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config;
+  config.features_enabled.push_back(kBottomOmniboxSteadyState);
+  return config;
+}
+
+- (void)setUp {
+  [super setUp];
+  [ChromeEarlGrey setBoolValue:YES forUserPref:prefs::kBottomOmnibox];
+}
+
+// This is currently needed to prevent this test case from being ignored.
+- (void)testEmpty {
 }
 
 @end

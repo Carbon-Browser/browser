@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_SUPERVISED_USER_PARENT_PERMISSION_DIALOG_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_SUPERVISED_USER_PARENT_PERMISSION_DIALOG_VIEW_H_
 
+#include <string>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -14,7 +15,6 @@
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "google_apis/gaia/gaia_auth_consumer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
-#include "ui/gfx/image/image.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/view.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -45,6 +45,7 @@ class ParentPermissionDialogView : public views::DialogDelegateView,
                                    public GaiaAuthConsumer {
  public:
   METADATA_HEADER(ParentPermissionDialogView);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kDialogViewIdForTesting);
 
   class Observer {
    public:
@@ -83,8 +84,6 @@ class ParentPermissionDialogView : public views::DialogDelegateView,
   bool GetRepromptAfterIncorrectCredential() const;
 
  private:
-  std::u16string GetActiveUserFirstName() const;
-
   // views::View:
   void AddedToWidget() override;
   void OnThemeChanged() override;
@@ -107,10 +106,7 @@ class ParentPermissionDialogView : public views::DialogDelegateView,
 
   void AddInvalidCredentialLabel();
   void LoadParentEmailAddresses();
-  void OnExtensionIconLoaded(const gfx::Image& image);
-  void LoadExtensionIcon();
   void CloseWithReason(views::Widget::ClosedReason reason);
-  void OnDialogClose();
 
   // Given an email address of the child's parent, return the parents'
   // obfuscated gaia id.
@@ -145,7 +141,7 @@ class ParentPermissionDialogView : public views::DialogDelegateView,
 
   // Sets the |extension| to be optionally displayed in the dialog.  This
   // causes the view to show several extension properties including the
-  // permissions, the icon and the extension name.
+  // permissions and the extension name.
   void InitializeExtensionData(
       scoped_refptr<const extensions::Extension> extension);
 
@@ -177,10 +173,6 @@ class ParentPermissionDialogView : public views::DialogDelegateView,
 
   // Used to ensure we don't try to show same dialog twice.
   bool is_showing_ = false;
-
-  // Used to set close reason if the dialog is closed without clicking
-  // "approve."
-  bool is_approve_clicked_ = false;
 
   // Used to fetch the Reauth token.
   std::unique_ptr<GaiaAuthFetcher> reauth_token_fetcher_;

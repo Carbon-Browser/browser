@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/test/perf_log.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/google_benchmark/src/include/benchmark/benchmark.h"
 
 #if BUILDFLAG(IS_FUCHSIA)
 #include "base/fuchsia/file_utils.h"
@@ -49,8 +50,20 @@ void PerfTestSuite::Initialize() {
     RaiseProcessToHighPriority();
 }
 
+void PerfTestSuite::InitializeFromCommandLine(int* argc, char** argv) {
+  TestSuite::InitializeFromCommandLine(argc, argv);
+  ::benchmark::Initialize(argc, argv);
+}
+
+int PerfTestSuite::RunAllTests() {
+  const int result = TestSuite::RunAllTests();
+  ::benchmark::RunSpecifiedBenchmarks();
+  return result;
+}
+
 void PerfTestSuite::Shutdown() {
   TestSuite::Shutdown();
+  ::benchmark::Shutdown();
   FinalizePerfLog();
 }
 

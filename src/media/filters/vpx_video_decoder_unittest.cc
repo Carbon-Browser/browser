@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -28,7 +28,7 @@ namespace media {
 class VpxVideoDecoderTest : public testing::Test {
  public:
   VpxVideoDecoderTest()
-      : decoder_(new VpxVideoDecoder()),
+      : decoder_(std::make_unique<VpxVideoDecoder>()),
         i_frame_buffer_(ReadTestDataFile("vp9-I-frame-320x240")) {}
 
   VpxVideoDecoderTest(const VpxVideoDecoderTest&) = delete;
@@ -304,7 +304,7 @@ TEST_F(VpxVideoDecoderTest, FrameValidAfterPoolDestruction) {
 
   // Write to the Y plane. The memory tools should detect a
   // use-after-free if the storage was actually removed by pool destruction.
-  memset(output_frames_.front()->data(VideoFrame::kYPlane), 0xff,
+  memset(output_frames_.front()->writable_data(VideoFrame::kYPlane), 0xff,
          output_frames_.front()->rows(VideoFrame::kYPlane) *
              output_frames_.front()->stride(VideoFrame::kYPlane));
 }
@@ -354,7 +354,7 @@ TEST_F(VpxVideoDecoderTest, MemoryPoolAllowsMultipleDisplay) {
   Destroy();
 
   // ASAN will be very unhappy with this line if the above is incorrect.
-  memset(last_frame->data(VideoFrame::kYPlane), 0,
+  memset(last_frame->writable_data(VideoFrame::kYPlane), 0,
          last_frame->row_bytes(VideoFrame::kYPlane));
 }
 #endif  // !defined(LIBVPX_NO_HIGH_BIT_DEPTH) && !defined(ARCH_CPU_ARM_FAMILY)

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,24 @@ using ReusedPasswordAccountType =
     LoginReputationClientRequest::PasswordReuseEvent::ReusedPasswordAccountType;
 using password_manager::metrics_util::PasswordType;
 
+using PasswordReuseEvent =
+    safe_browsing::LoginReputationClientRequest::PasswordReuseEvent;
+using ReusedPasswordType = safe_browsing::LoginReputationClientRequest::
+    PasswordReuseEvent::ReusedPasswordType;
+using SyncAccountType =
+    LoginReputationClientRequest::PasswordReuseEvent::SyncAccountType;
+
+struct PasswordReuseInfo {
+  PasswordReuseInfo();
+  PasswordReuseInfo(const PasswordReuseInfo& other);
+  ~PasswordReuseInfo();
+  bool matches_signin_password;
+  ReusedPasswordAccountType reused_password_account_type;
+  std::vector<std::string> matching_domains;
+  uint64_t reused_password_hash;
+  int count{0};
+};
+
 class PasswordProtectionService : public PasswordProtectionServiceBase {
   using PasswordProtectionServiceBase::PasswordProtectionServiceBase;
 
@@ -40,6 +58,20 @@ class PasswordProtectionService : public PasswordProtectionServiceBase {
   // instance. This function also insert this request object in |requests_| for
   // record keeping.
   void StartRequest(
+      content::WebContents* web_contents,
+      const GURL& main_frame_url,
+      const GURL& password_form_action,
+      const GURL& password_form_frame_url,
+      const std::string& username,
+      PasswordType password_type,
+      const std::vector<password_manager::MatchingReusedCredential>&
+          matching_reused_credentials,
+      LoginReputationClientRequest::TriggerType trigger_type,
+      bool password_field_exists);
+
+  // Same as above but uses a PasswordProtectionRequest that avoids sending
+  // real requests that can be used for testing.
+  void StartRequestForTesting(
       content::WebContents* web_contents,
       const GURL& main_frame_url,
       const GURL& password_form_action,
@@ -95,14 +127,6 @@ class PasswordProtectionService : public PasswordProtectionServiceBase {
       content::WebContents* web_contents) = 0;
 #endif
 
-#if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
-  // Binds the |phishing_detector| to the appropriate interface, as provided by
-  // |provider|.
-  virtual void GetPhishingDetector(
-      service_manager::InterfaceProvider* provider,
-      mojo::Remote<mojom::PhishingDetector>* phishing_detector);
-#endif
-
   // Called when a new navigation is starting to create a deferring condition
   // if there is a pending sync password reuse ping or if there is a modal
   // warning dialog showing in the corresponding web contents.
@@ -111,6 +135,8 @@ class PasswordProtectionService : public PasswordProtectionServiceBase {
       content::NavigationHandle& navigation_handle);
 
  protected:
+  void StartRequestInternal(scoped_refptr<PasswordProtectionRequest> request);
+
   void RemoveWarningRequestsByWebContents(content::WebContents* web_contents);
 
   bool IsModalWarningShowingInWebContents(content::WebContents* web_contents);

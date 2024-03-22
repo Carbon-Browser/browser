@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -15,7 +16,6 @@
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -43,7 +43,7 @@ class BluetoothAdapterTest : public testing::Test {
   }
 
  protected:
-  bluetooth::FakeAdapter* fake_adapter_;
+  raw_ptr<bluetooth::FakeAdapter, ExperimentalAsh> fake_adapter_;
   std::unique_ptr<BluetoothAdapter> bluetooth_adapter_;
 
  private:
@@ -130,4 +130,3 @@ TEST_F(BluetoothAdapterTest, TestGetAddress) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

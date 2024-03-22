@@ -1,71 +1,95 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE(['../testing/chromevox_next_e2e_test_base.js']);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
-GEN_INCLUDE(['../testing/fake_objects.js']);
+GEN_INCLUDE([
+  '../../common/testing/documents.js',
+  '../testing/fake_objects.js',
+]);
 
 /**
  * Test fixture for Background.
  */
-ChromeVoxBackgroundTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxBackgroundTest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    await importModule(
-        'BackgroundKeyboardHandler',
-        '/chromevox/background/keyboard_handler.js');
-    await importModule(
-        'BaseAutomationHandler',
-        '/chromevox/background/base_automation_handler.js');
-    await importModule(
-        'BrailleCommandHandler',
-        '/chromevox/background/braille/braille_command_handler.js');
-    await importModule(
-        'ChromeVoxBackground', '/chromevox/background/classic_background.js');
-    await importModule(
-        'ChromeVoxState', '/chromevox/background/chromevox_state.js');
-    await importModule(
-        'CommandHandlerInterface',
-        '/chromevox/background/command_handler_interface.js');
-    await importModule('CursorRange', '/common/cursors/range.js');
-    await importModule(
-        'CustomAutomationEvent',
-        '/chromevox/common/custom_automation_event.js');
-    await importModule(
-        'DesktopAutomationInterface',
-        '/chromevox/background/desktop_automation_interface.js');
-    await importModule('EventGenerator', '/common/event_generator.js');
-    await importModule('FocusBounds', '/chromevox/background/focus_bounds.js');
-    await importModule(
-        'GestureCommandHandler',
-        '/chromevox/background/gesture_command_handler.js');
-    await importModule('Output', '/chromevox/background/output/output.js');
-    await importModule(
-        'PageLoadSoundHandler',
-        '/chromevox/background/page_load_sound_handler.js');
-    await importModule(
-        'PointerHandler', '/chromevox/background/pointer_handler.js');
-    await importModule('Cursor', '/common/cursors/cursor.js');
-    await importModule(
-        'OutputAction', '/chromevox/background/output/output_types.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'BrailleCommandHandler',
+          '/chromevox/background/braille/braille_command_handler.js'),
+      importModule('ChromeVox', '/chromevox/background/chromevox.js'),
+      importModule(
+          'ChromeVoxRange', '/chromevox/background/chromevox_range.js'),
+      importModule(
+          'ChromeVoxState', '/chromevox/background/chromevox_state.js'),
+      importModule(
+          'BaseAutomationHandler',
+          '/chromevox/background/event/base_automation_handler.js'),
+      importModule(
+          'DesktopAutomationInterface',
+          '/chromevox/background/event/desktop_automation_interface.js'),
+      importModule(
+          'PageLoadSoundHandler',
+          '/chromevox/background/event/page_load_sound_handler.js'),
+      importModule(
+          'PointerHandler', '/chromevox/background/event/pointer_handler.js'),
+      importModule('FocusBounds', '/chromevox/background/focus_bounds.js'),
+      importModule(
+          'CommandHandlerInterface',
+          '/chromevox/background/input/command_handler_interface.js'),
+      importModule(
+          'GestureCommandHandler',
+          '/chromevox/background/input/gesture_command_handler.js'),
+      importModule(
+          'BackgroundKeyboardHandler',
+          '/chromevox/background/input/keyboard_handler.js'),
+      importModule('Output', '/chromevox/background/output/output.js'),
+      importModule(
+          'OutputAction', '/chromevox/background/output/output_types.js'),
+      importModule('TtsBackground', '/chromevox/background/tts_background.js'),
+      importModule(
+          ['BrailleKeyEvent', 'BrailleKeyCommand'],
+          '/chromevox/common/braille/braille_key_types.js'),
+      importModule(
+          'CustomAutomationEvent',
+          '/chromevox/common/custom_automation_event.js'),
+      importModule('EarconId', '/chromevox/common/earcon_id.js'),
+      importModule(
+          ['Spannable', 'MultiSpannable'], '/chromevox/common/spannable.js'),
+      importModule('QueueMode', '/chromevox/common/tts_types.js'),
+      importModule('AutomationPredicate', '/common/automation_predicate.js'),
+      importModule('AutomationUtil', '/common/automation_util.js'),
+      importModule('Cursor', '/common/cursors/cursor.js'),
+      importModule('CursorRange', '/common/cursors/range.js'),
+      importModule('EventGenerator', '/common/event_generator.js'),
+      importModule('KeyCode', '/common/key_code.js'),
+      importModule('SettingsManager', '/chromevox/common/settings_manager.js'),
+      importModule('LocalStorage', '/common/local_storage.js'),
+    ]);
 
-    window.doGesture = this.doGesture;
-    window.simulateHitTestResult = this.simulateHitTestResult;
-    window.press = this.press;
-    window.Mod = constants.ModifierFlag;
-    window.ActionType = chrome.automation.ActionType;
+    globalThis.simulateHitTestResult = this.simulateHitTestResult;
+    globalThis.press = this.press;
+    globalThis.doDefault = this.doDefault;
+    globalThis.focus = this.focus;
+
+    globalThis.ActionType = chrome.automation.ActionType;
+    globalThis.EventType = chrome.automation.EventType;
+    globalThis.Gesture = chrome.accessibilityPrivate.Gesture;
+    globalThis.Mod = constants.ModifierFlag;
+    globalThis.RoleType = chrome.automation.RoleType;
 
     this.forceContextualLastOutput();
   }
 
   simulateHitTestResult(node) {
-    return () => {
-      GestureCommandHandler.pointerHandler_.handleHitTestResult(node);
-    };
+    return () => GestureCommandHandler.instance.pointerHandler_
+                     .handleHitTestResult_(node);
   }
 
   press(keyCode, modifiers) {
@@ -73,6 +97,15 @@ ChromeVoxBackgroundTest = class extends ChromeVoxNextE2ETest {
       EventGenerator.sendKeyPress(keyCode, modifiers);
     };
   }
+
+  focus(node) {
+    return () => node.focus();
+  }
+
+  doDefault(node) {
+    return () => node.doDefault();
+  }
+
 
   get linksAndHeadingsDoc() {
     return `
@@ -226,16 +259,9 @@ ChromeVoxBackgroundTestWithTestServer = class extends ChromeVoxBackgroundTest {
   }
 };
 
-
-
-/** Tests that ChromeVox classic is in this context. */
-AX_TEST_F('ChromeVoxBackgroundTest', 'ClassicNamespaces', function() {
-  assertEquals('function', typeof (ChromeVoxBackground));
-});
-
 /** Tests that ChromeVox's background object is not available globally. */
 AX_TEST_F('ChromeVoxBackgroundTest', 'NextNamespaces', function() {
-  assertEquals(undefined, window.Background);
+  assertEquals(undefined, globalThis.Background);
 });
 
 /** Tests consistency of navigating forward and backward. */
@@ -294,7 +320,7 @@ AX_TEST_F(
           .expectSpeech('of test')
           .expectBraille('of test');
 
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'CaretNavigation', async function() {
@@ -321,7 +347,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'CaretNavigation', async function() {
   mockFeedback.call(doCmd('previousCharacter')).expectSpeech('a', 'Link');
   mockFeedback.call(doCmd('previousCharacter')).expectSpeech('t');
   mockFeedback.call(doCmd('nextWord')).expectSpeech('echo', 'Link');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 /** Tests that individual buttons are stops for move-by-word functionality. */
@@ -349,22 +375,23 @@ AX_TEST_F(
       mockFeedback.call(doCmd('previousWord')).expectSpeech('one');
       mockFeedback.call(doCmd('previousWord')).expectSpeech('button');
       mockFeedback.call(doCmd('previousWord')).expectSpeech('hello');
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
-AX_TEST_F('ChromeVoxBackgroundTest', 'SelectSingleBasic', async function() {
-  const mockFeedback = this.createMockFeedback();
-  await this.runWithLoadedTree(this.formsDoc);
-  mockFeedback.expectSpeech('apple', 'has pop up', 'Collapsed')
-      .expectBraille('apple btn +popup +3 +')
-      .call(press(KeyCode.DOWN))
-      .expectSpeech('grape', /2 of 3/)
-      .expectBraille('grape 2/3')
-      .call(press(KeyCode.DOWN))
-      .expectSpeech('banana', /3 of 3/)
-      .expectBraille('banana 3/3');
-  mockFeedback.replay();
-});
+AX_TEST_F(
+    'ChromeVoxBackgroundTest', 'SelectSingleBasic', async function() {
+      const mockFeedback = this.createMockFeedback();
+      await this.runWithLoadedTree(this.formsDoc);
+      mockFeedback.expectSpeech('apple', 'has pop up', 'Collapsed')
+          .expectBraille('apple btn +popup +3 +')
+          .call(press(KeyCode.DOWN))
+          .expectSpeech('grape', /2 of 3/)
+          .expectBraille('grape 2/3')
+          .call(press(KeyCode.DOWN))
+          .expectSpeech('banana', /3 of 3/)
+          .expectBraille('banana 3/3');
+      await mockFeedback.replay();
+    });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ContinuousRead', async function() {
   const mockFeedback = this.createMockFeedback();
@@ -373,14 +400,14 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ContinuousRead', async function() {
       .call(doCmd('readFromHere'))
       .expectSpeech(
           'start', 'alpha', 'Link', 'beta', 'Link', 'charlie', 'Heading 1');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'InitialFocus', async function() {
   const mockFeedback = this.createMockFeedback();
   await this.runWithLoadedTree('<a href="a">a</a>');
   mockFeedback.expectSpeech('a').expectSpeech('Link');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'AriaLabel', async function() {
@@ -392,7 +419,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'AriaLabel', async function() {
       .expectSpeech('Link')
       .expectSpeech('Press Search+Space to activate')
       .expectBraille('foo lnk');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ShowContextMenu', async function() {
@@ -400,13 +427,13 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ShowContextMenu', async function() {
   const rootNode =
       await this.runWithLoadedTree('<p>before</p><a href="a">a</a>');
   const go = rootNode.find({role: RoleType.LINK});
-  mockFeedback.call(go.focus.bind(go))
+  mockFeedback.call(focus(go))
       .expectSpeech('a', 'Link')
       .call(doCmd('contextMenu'))
       .expectSpeech(/menu opened/)
       .call(press(KeyCode.ESCAPE))
       .expectSpeech('a', 'Link');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'BrailleRouting', async function() {
@@ -434,18 +461,18 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'BrailleRouting', async function() {
       rootNode.find({role: RoleType.BUTTON, attributes: {name: 'Click me'}});
   const textField = rootNode.find({role: RoleType.TEXT_FIELD});
   mockFeedback.expectBraille('start')
-      .call(button1.focus.bind(button1))
+      .call(focus(button1))
       .expectBraille(/^Click me btn/)
       .call(route.bind(null, 5))
       .expectBraille(/Focus me btn/)
-      .call(textField.focus.bind(textField))
+      .call(focus(textField))
       .expectBraille('Edit me ed', {startIndex: 0})
       .call(route.bind(null, 3))
       .expectBraille('Edit me ed', {startIndex: 3})
       .call(function() {
         assertEquals(3, textField.textSelStart);
       });
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'FocusInputElement', async function() {
@@ -460,14 +487,14 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'FocusInputElement', async function() {
   const quest = rootNode.find({attributes: {value: 'Grail'}});
   const color = rootNode.find({attributes: {value: 'Blue'}});
 
-  mockFeedback.call(quest.focus.bind(quest))
+  mockFeedback.call(focus(quest))
       .expectSpeech('Grail', 'Edit text')
-      .call(color.focus.bind(color))
+      .call(focus(color))
       .expectSpeech('Blue', 'Edit text')
-      .call(name.focus.bind(name))
+      .call(focus(name))
       .expectNextSpeechUtteranceIsNot('Blue')
       .expectSpeech('Lancelot', 'Edit text');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'UseEditableState', async function() {
@@ -505,48 +532,34 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'EarconsForControls', async function() {
   const rootNode = await this.runWithLoadedTree(site);
   mockFeedback.call(doCmd('nextObject'))
       .expectSpeech('MyLink')
-      .expectEarcon(Earcon.LINK)
+      .expectEarcon(EarconId.LINK)
       .call(doCmd('nextObject'))
       .expectSpeech('MyButton')
-      .expectEarcon(Earcon.BUTTON)
+      .expectEarcon(EarconId.BUTTON)
       .call(doCmd('nextObject'))
       .expectSpeech('Check box')
-      .expectEarcon(Earcon.CHECK_OFF)
+      .expectEarcon(EarconId.CHECK_OFF)
       .call(doCmd('nextObject'))
       .expectSpeech('Check box')
-      .expectEarcon(Earcon.CHECK_ON)
+      .expectEarcon(EarconId.CHECK_ON)
       .call(doCmd('nextObject'))
       .expectSpeech('Edit text')
-      .expectEarcon(Earcon.EDITABLE_TEXT)
+      .expectEarcon(EarconId.EDITABLE_TEXT)
 
       // Editable text Search re-mappings are in effect.
       .call(doCmd('toggleStickyMode'))
       .expectSpeech('Sticky mode enabled')
       .call(doCmd('nextObject'))
       .expectSpeech('List box')
-      .expectEarcon(Earcon.LISTBOX)
+      .expectEarcon(EarconId.LISTBOX)
       .call(doCmd('nextObject'))
       .expectSpeech('Button', 'has pop up')
-      .expectEarcon(Earcon.POP_UP_BUTTON)
+      .expectEarcon(EarconId.POP_UP_BUTTON)
       .call(doCmd('nextObject'))
       .expectSpeech(/Slider/)
-      .expectEarcon(Earcon.SLIDER);
+      .expectEarcon(EarconId.SLIDER);
 
-  mockFeedback.replay();
-});
-
-TEST_F('ChromeVoxBackgroundTest', 'GlobsToRegExp', function() {
-  this.newCallback(async () => {
-    const module = await import('./background.js');
-    const Background = module.Background;
-    assertEquals('/^()$/', Background.globsToRegExp_([]).toString());
-    assertEquals(
-        '/^(http:\\/\\/host\\/path\\+here)$/',
-        Background.globsToRegExp_(['http://host/path+here']).toString());
-    assertEquals(
-        '/^(url1.*|u.l2|.*url3)$/',
-        Background.globsToRegExp_(['url1*', 'u?l2', '*url3']).toString());
-  })();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ShouldNotFocusIframe', async function() {
@@ -565,8 +578,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ShouldNotFocusIframe', async function() {
   iframe.addEventListener('focus', function() {
     didFocus = true;
   });
-  const b = ChromeVoxState.instance;
-  b.currentRange_ = CursorRange.fromNode(button);
+  ChromeVoxRange.instance.current_ = CursorRange.fromNode(button);
   doCmd('previousElement');
   assertFalse(didFocus);
 });
@@ -587,8 +599,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ShouldFocusLink', async function() {
   link.addEventListener('focus', this.newCallback(function() {
     // Success
   }));
-  const b = ChromeVoxState.instance;
-  b.currentRange_ = CursorRange.fromNode(button);
+  ChromeVoxRange.instance.current_ = CursorRange.fromNode(button);
   doCmd('previousElement');
 });
 
@@ -611,14 +622,12 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NoisySlider', async function() {
   const root = await this.runWithLoadedTree(site);
   const go = root.find({role: RoleType.BUTTON});
   const slider = root.find({role: RoleType.SLIDER});
-  const focusButton = go.focus.bind(go);
-  const focusSlider = slider.focus.bind(slider);
-  mockFeedback.call(focusButton)
+  mockFeedback.call(focus(go))
       .expectNextSpeechUtteranceIsNot('noisy')
-      .call(focusSlider)
+      .call(focus(slider))
       .expectSpeech('noisy')
-      .expectSpeech('noisy')
-      .replay();
+      .expectSpeech('noisy');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'Checkbox', async function() {
@@ -640,28 +649,27 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'Checkbox', async function() {
   `;
   const root = await this.runWithLoadedTree(site);
   const cbx = root.find({role: RoleType.CHECK_BOX});
-  const click = cbx.doDefault.bind(cbx);
-  const focus = cbx.focus.bind(cbx);
-  mockFeedback.call(focus)
+  mockFeedback.call(focus(cbx))
       .expectSpeech('go')
       .expectSpeech('Check box')
       .expectSpeech('Not checked')
-      .call(click)
+      .call(doDefault(cbx))
       .expectSpeech('go')
       .expectSpeech('Check box')
       .expectSpeech('Checked')
-      .call(click)
+      .call(doDefault(cbx))
       .expectSpeech('go')
       .expectSpeech('Check box')
-      .expectSpeech('Not checked')
-      .replay();
+      .expectSpeech('Not checked');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'MixedCheckbox', async function() {
   const mockFeedback = this.createMockFeedback();
   const site = '<div id="go" role="checkbox" aria-checked="mixed">go</div>';
   const root = await this.runWithLoadedTree(site);
-  mockFeedback.expectSpeech('go', 'Check box', 'Partially checked').replay();
+  mockFeedback.expectSpeech('go', 'Check box', 'Partially checked');
+  await mockFeedback.replay();
 });
 
 /** Tests navigating into and out of iframes using nextButton */
@@ -671,7 +679,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
 
       let running = false;
-      const runTestIfIframeIsLoaded = function(rootNode) {
+      const runTestIfIframeIsLoaded = async rootNode => {
         if (running) {
           return;
         }
@@ -694,17 +702,15 @@ AX_TEST_F(
             .expectSpeech('Inside', 'Button');
         mockFeedback.call(doCmd('previousButton'))
             .expectSpeech('Before', 'Button');
-        mockFeedback.replay();
-      }.bind(this);
+        await mockFeedback.replay();
+      };
 
       const rootNode = await this.runWithLoadedTree(this.iframesDoc);
-      chrome.automation.getDesktop(function(desktopNode) {
-        runTestIfIframeIsLoaded(rootNode);
+      runTestIfIframeIsLoaded(rootNode);
 
-        desktopNode.addEventListener('loadComplete', function(evt) {
-          runTestIfIframeIsLoaded(rootNode);
-        }, true);
-      });
+      this.desktop_.addEventListener('loadComplete', function(evt) {
+        runTestIfIframeIsLoaded(rootNode);
+      }, true);
     });
 
 /** Tests navigating into and out of iframes using nextObject */
@@ -714,7 +720,7 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
 
       let running = false;
-      const runTestIfIframeIsLoaded = function(rootNode) {
+      const runTestIfIframeIsLoaded = async rootNode => {
         if (running) {
           return;
         }
@@ -732,7 +738,7 @@ AX_TEST_F(
         };
         const beforeButton =
             rootNode.find({role: RoleType.BUTTON, name: 'Before'});
-        mockFeedback.call(beforeButton.focus.bind(beforeButton))
+        mockFeedback.call(focus(beforeButton))
             .expectSpeech('Before', 'Button')
             .call(suppressFocusActionOutput)
             .call(doCmd('nextObject'))
@@ -746,21 +752,19 @@ AX_TEST_F(
             .expectSpeech('Inside', 'Button');
         mockFeedback.call(doCmd('previousObject'))
             .expectSpeech('Before', 'Button');
-        mockFeedback.replay();
-      }.bind(this);
+        await mockFeedback.replay();
+      };
 
       const rootNode = await this.runWithLoadedTree(this.iframesDoc);
-      chrome.automation.getDesktop(function(desktopNode) {
-        runTestIfIframeIsLoaded(rootNode);
+      runTestIfIframeIsLoaded(rootNode);
 
-        desktopNode.addEventListener('loadComplete', function(evt) {
-          runTestIfIframeIsLoaded(rootNode);
-        }, true);
-      });
+      this.desktop_.addEventListener('loadComplete', function(evt) {
+        runTestIfIframeIsLoaded(rootNode);
+      }, true);
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'SelectOptionSelected', async function() {
-  // Undoes the ChromeVoxNextE2E call setting this to true. The doDefault
+  // Undoes the ChromeVoxE2E call setting this to true. The doDefault
   // action should always be read.
   BaseAutomationHandler.announceActions = false;
   const mockFeedback = this.createMockFeedback();
@@ -773,8 +777,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'SelectOptionSelected', async function() {
     </select>
   `;
   const root = await this.runWithLoadedTree(site);
-  const select = root.find({role: RoleType.POP_UP_BUTTON});
-  const clickSelect = select.doDefault.bind(select);
+  const select = root.find({role: RoleType.COMBO_BOX_SELECT});
   const selectLastOption = () => {
     const options = select.findAll({role: RoleType.LIST_BOX_OPTION});
     options[options.length - 1].doDefault();
@@ -782,14 +785,14 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'SelectOptionSelected', async function() {
 
   mockFeedback.call(doCmd('nextObject'))
       .expectSpeech('Button', 'Press Search+Space to activate')
-      .call(clickSelect)
+      .call(doDefault(select))
       .expectSpeech('apple')
       .expectSpeech('Button')
       .expectSpeech('Expanded')
       .call(selectLastOption)
       .expectNextSpeechUtteranceIsNot('apple')
-      .expectSpeech('grapefruit')
-      .replay();
+      .expectSpeech('grapefruit');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ToggleButton', async function() {
@@ -801,7 +804,6 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ToggleButton', async function() {
     <div aria-pressed role="button">close</div>
   `;
   const root = await this.runWithLoadedTree(site);
-  const b = ChromeVoxState.instance;
   const move = doCmd('nextObject');
   mockFeedback.call(move)
       .expectSpeech('boldface')
@@ -820,9 +822,9 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ToggleButton', async function() {
 
       .call(move)
       .expectSpeech('close')
-      .expectSpeech('Button')
+      .expectSpeech('Button');
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'EditText', async function() {
@@ -837,15 +839,15 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'EditText', async function() {
   mockFeedback.call(nextEditText)
       .expectSpeech('Combo box')
       .call(previousEditText)
-      .expectSpeech('Edit text')
-      .replay();
+      .expectSpeech('Edit text');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ComboBox', async function() {
   const mockFeedback = this.createMockFeedback();
   await this.runWithLoadedTree(this.comboBoxDoc);
-  mockFeedback.expectSpeech('Edit text', 'Choose an item', 'Combo box')
-      .replay();
+  mockFeedback.expectSpeech('Edit text', 'Choose an item', 'Combo box');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'BackwardForwardSync', async function() {
@@ -863,7 +865,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'BackwardForwardSync', async function() {
   const root = await this.runWithLoadedTree(site);
   const listItem = root.find({role: RoleType.LIST_ITEM});
 
-  mockFeedback.call(listItem.focus.bind(listItem))
+  mockFeedback.call(focus(listItem))
       .expectSpeech('ok', 'List item')
       .call(this.doCmd('nextObject'))
       .expectSpeech('\u2022 ')  // bullet
@@ -876,8 +878,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'BackwardForwardSync', async function() {
       .call(this.doCmd('previousObject'))
       .expectSpeech('Edit text')
       .call(this.doCmd('previousObject'))
-      .expectSpeech('Group')
-      .replay();
+      .expectSpeech('Group');
+  await mockFeedback.replay();
 });
 
 /** Tests that navigation works when the current object disappears. */
@@ -886,7 +888,6 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'DisappearingObject', async function() {
   const rootNode = await this.runWithLoadedTree(this.disappearingObjectDoc);
   const deleteButton =
       rootNode.find({role: RoleType.BUTTON, attributes: {name: 'Delete'}});
-  const pressDelete = deleteButton.doDefault.bind(deleteButton);
   mockFeedback.expectSpeech('start').expectBraille('start');
 
   mockFeedback.call(doCmd('nextObject'))
@@ -897,7 +898,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'DisappearingObject', async function() {
       .expectSpeech('Before3')
       .call(doCmd('nextObject'))
       .expectSpeech('Disappearing')
-      .call(pressDelete)
+      .call(doDefault(deleteButton))
       .expectSpeech('Deleted')
       .call(doCmd('nextObject'))
       .expectSpeech('After1')
@@ -916,7 +917,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'DisappearingObject', async function() {
           .expectSpeech('Before3');
   */
 
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 /** Tests that focus jumps to details properly when indicated. */
@@ -924,7 +925,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'JumpToDetails', async function() {
   const mockFeedback = this.createMockFeedback();
   const rootNode = await this.runWithLoadedTree(this.detailsDoc);
   mockFeedback.call(doCmd('jumpToDetails')).expectSpeech('Details');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -933,10 +934,8 @@ AX_TEST_F(
       const site = '<input type="submit" aria-label="foo" value="foo"></input>';
       const root = await this.runWithLoadedTree(site);
       const btn = root.find({role: RoleType.BUTTON});
-      mockFeedback.call(btn.focus.bind(btn))
-          .expectSpeech('foo')
-          .expectSpeech('Button')
-          .replay();
+      mockFeedback.call(focus(btn)).expectSpeech('foo').expectSpeech('Button');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NameFromHeadingLink', async function() {
@@ -947,11 +946,11 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NameFromHeadingLink', async function() {
   `;
   const root = await this.runWithLoadedTree(site);
   const link = root.find({role: RoleType.LINK});
-  mockFeedback.call(link.focus.bind(link))
+  mockFeedback.call(focus(link))
       .expectSpeech('go')
       .expectSpeech('Link')
-      .expectSpeech('Heading 1')
-      .replay();
+      .expectSpeech('Heading 1');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'OptionChildIndexCount', async function() {
@@ -968,10 +967,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'OptionChildIndexCount', async function() {
   // Select first child of the list box, similar to what happens if
   // navigated by Tab.
   const firstChild = root.find({role: RoleType.PARAGRAPH});
-  mockFeedback
-      .call(
-          () => ChromeVoxState.instance.setCurrentRange(
-              CursorRange.fromNode(firstChild)))
+  mockFeedback.call(() => ChromeVoxRange.set(CursorRange.fromNode(firstChild)))
       .call(doCmd('nextObject'))
       .expectSpeech('List box')
       .expectSpeech('Fruits')
@@ -980,8 +976,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'OptionChildIndexCount', async function() {
       .expectSpeech(' 1 of 2 ')
       .call(doCmd('nextObject'))
       .expectSpeech('banana')
-      .expectSpeech(' 2 of 2 ')
-      .replay();
+      .expectSpeech(' 2 of 2 ');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ListMarkerIsIgnored', async function() {
@@ -989,8 +985,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ListMarkerIsIgnored', async function() {
   const root = await this.runWithLoadedTree('<ul><li>apple</ul>');
   mockFeedback.call(doCmd('nextObject'))
       .expectNextSpeechUtteranceIsNot('listMarker')
-      .expectSpeech('\u2022 apple')  // bullet apple
-      .replay();
+      .expectSpeech('\u2022 apple');  // bullet apple
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -1006,8 +1002,8 @@ AX_TEST_F(
           .expectSpeech('NW')
           .call(doCmd('previousHeading'))
           .expectNextSpeechUtteranceIsNot('NE')
-          .expectSpeech('NW')
-          .replay();
+          .expectSpeech('NW');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1023,12 +1019,8 @@ AX_TEST_F(
     </div>
   `;
       const root = await this.runWithLoadedTree(site);
-      const assertRangeHasText = function(text) {
-        return function() {
-          assertEquals(
-              text, ChromeVoxState.instance.getCurrentRange().start.node.name);
-        };
-      };
+      const assertRangeHasText = (text) => () =>
+          assertEquals(text, ChromeVoxRange.current.start.node.name);
 
       mockFeedback.call(doCmd('nextEditText'))
           .expectSpeech('Top News Most Popular Sports')
@@ -1040,8 +1032,8 @@ AX_TEST_F(
           .call(assertRangeHasText('Most Popular'))
           .call(doCmd('nextHeading'))
           .expectSpeech('Sports')
-          .call(assertRangeHasText('Sports'))
-          .replay();
+          .call(assertRangeHasText('Sports'));
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'Selection', async function() {
@@ -1070,8 +1062,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'Selection', async function() {
       .expectSpeech('i', 'unselected')
       .call(doCmd('nextCharacter'))
       .call(doCmd('nextCharacter'))
-      .expectSpeech('End selection', 'sim')
-      .replay();
+      .expectSpeech('End selection', 'sim');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'BasicTableCommands', async function() {
@@ -1139,9 +1131,9 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'BasicTableCommands', async function() {
       .call(doCmd('goToFirstCell'))
       .expectSpeech('name', 'row 1 column 1')
       .call(doCmd('goToFirstCell'))
-      .expectSpeech('name')
+      .expectSpeech('name');
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'MissingTableCells', async function() {
@@ -1182,15 +1174,16 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'MissingTableCells', async function() {
       .call(doCmd('goToLastCell'))
       .expectSpeech('f', 'row 3 column 1')
       .call(doCmd('goToLastCell'))
-      .expectSpeech('f')
-      .replay();
+      .expectSpeech('f');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'DisabledState', async function() {
   const mockFeedback = this.createMockFeedback();
   const site = '<button aria-disabled="true">ok</button>';
   const root = await this.runWithLoadedTree(site);
-  mockFeedback.expectSpeech('ok', 'Disabled', 'Button').replay();
+  mockFeedback.expectSpeech('ok', 'Disabled', 'Button');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'HeadingLevels', async function() {
@@ -1203,14 +1196,14 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'HeadingLevels', async function() {
     mockFeedback.call(doCmd('nextHeading' + level))
         .expectSpeech('Heading ' + level)
         .call(doCmd('nextHeading' + level))
-        .expectEarcon('wrap')
+        .expectEarcon(EarconId.WRAP)
         .call(doCmd('previousHeading' + level))
-        .expectEarcon('wrap');
+        .expectEarcon(EarconId.WRAP);
   };
   for (let i = 1; i <= 6; i++) {
     makeLevelAssertions(i);
   }
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'EditableNavigation', async function() {
@@ -1228,8 +1221,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'EditableNavigation', async function() {
       .call(doCmd('nextWord'))
       .expectSpeech('a')
       .call(doCmd('nextWord'))
-      .expectSpeech('test')
-      .replay();
+      .expectSpeech('test');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NavigationMovesFocus', async function() {
@@ -1240,9 +1233,9 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NavigationMovesFocus', async function() {
   const root = await this.runWithLoadedTree(site);
   doCmd('nextEditText')();
   await this.waitForEvent(root.find({role: RoleType.TEXT_FIELD}), 'focus');
-  const focus = ChromeVoxState.instance.currentRange.start.node;
-  assertEquals(RoleType.TEXT_FIELD, focus.role);
-  assertTrue(focus.state.focused);
+  const textField = ChromeVoxRange.current.start.node;
+  assertEquals(RoleType.TEXT_FIELD, textField.role);
+  assertTrue(textField.state.focused);
 });
 
 AX_TEST_F(
@@ -1263,8 +1256,8 @@ AX_TEST_F(
           .expectBraille(text, {startIndex: 0, endIndex: 4})  // This
           .call(doCmd('nextLine'))
           // Ensure nothing is selected when the range covers the entire line.
-          .expectBraille('with a second line', {startIndex: -1, endIndex: -1})
-          .replay();
+          .expectBraille('with a second line', {startIndex: -1, endIndex: -1});
+      await mockFeedback.replay();
     });
 
 // This tests ChromeVox's special support for following an in-page link
@@ -1278,8 +1271,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ForceClickInPageLinks', async function() {
   const root = await this.runWithLoadedTree(site);
   mockFeedback.expectSpeech('hi', 'Internal link')
       .call(doCmd('forceClickOnCurrentItem'))
-      .expectSpeech('there', 'Button')
-      .replay();
+      .expectSpeech('there', 'Button');
+  await mockFeedback.replay();
 });
 
 // This tests ChromeVox's handling of the scrolledToAnchor event, which is
@@ -1298,13 +1291,15 @@ AX_TEST_F(
             testRunnerParams
                 .testServerBaseUrl}accessibility/in_page_links.html`,
       });
+      const link = root.find({role: RoleType.LINK});
       mockFeedback.call(doCmd('nextObject'))
           .expectSpeech('Jump', 'Internal link')
-          .call(press(KeyCode.RETURN))
+          // Use doDefault instead of press(KeyCode.RETURN) to avoid flakes.
+          .call(doDefault(link))
           .expectSpeech('Found It')
           .call(doCmd('nextHeading'))
-          .expectSpeech('Continue Here', 'Heading 2')
-          .replay();
+          .expectSpeech('Continue Here', 'Heading 2');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ListItem', async function() {
@@ -1337,8 +1332,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ListItem', async function() {
       // Mixing with line nav.
       .call(doCmd('nextLine'))
       .expectSpeech('3. chicken', 'List item')
-      .expectBraille('3. chicken lstitm lst end')
-      .replay();
+      .expectBraille('3. chicken lstitm lst end');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'BusyHeading', async function() {
@@ -1354,8 +1349,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'BusyHeading', async function() {
   mockFeedback.call(doCmd('nextLine'))
       .expectSpeech(
           'Lots', 'Link', 'going', 'Link', 'here', 'Link', 'Heading 2')
-      .expectBraille('Lots lnk going lnk here lnk h2')
-      .replay();
+      .expectBraille('Lots lnk going lnk here lnk h2');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NodeVsSubnode', async function() {
@@ -1383,11 +1378,12 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NodeVsSubnode', async function() {
       .expectNextSpeechUtteranceIsNot('Internal link')
       .expectSpeech('es')
       .call(outputLinkRange(0, 4))
-      .expectSpeech('test', 'Internal link')
-      .replay();
+      .expectSpeech('test', 'Internal link');
+  await mockFeedback.replay();
 });
 
-AX_TEST_F('ChromeVoxBackgroundTest', 'NativeFind', async function() {
+// TODO(crbug.com/1419811): Flaky.
+AX_TEST_F('ChromeVoxBackgroundTest', 'DISABLED_NativeFind', async function() {
   const mockFeedback = this.createMockFeedback();
   const site = `
     <a href="#">grape</a>
@@ -1400,8 +1396,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NativeFind', async function() {
       .expectSpeech('grape', 'Link')
       .call(press(KeyCode.BACK))
       .call(press(KeyCode.L))
-      .expectSpeech('pineapple', 'Link')
-      .replay();
+      .expectSpeech('pineapple', 'Link');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'EditableKeyCommand', async function() {
@@ -1414,7 +1410,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'EditableKeyCommand', async function() {
   const root = await this.runWithLoadedTree(site);
   const assertCurNode = function(node) {
     return function() {
-      assertEquals(node, ChromeVoxState.instance.currentRange.start.node);
+      assertEquals(node, ChromeVoxRange.current.start.node);
     };
   };
 
@@ -1431,63 +1427,53 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'EditableKeyCommand', async function() {
       .expectSpeech('Text area')
       .call(assertCurNode(textArea))
       .call(doCmd('previousObject'))
-      .call(assertCurNode(textField))
+      .call(assertCurNode(textField));
 
-      .replay();
+  await mockFeedback.replay();
 });
 
-// TODO(crbug.com/935678): Test times out flakily in MSAN builds.
-TEST_F_WITH_PREAMBLE(
-    `
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_TextSelectionAndLiveRegion DISABLED_TextSelectionAndLiveRegion
-#else
-#define MAYBE_TextSelectionAndLiveRegion TextSelectionAndLiveRegion
-#endif
-`,
-    'ChromeVoxBackgroundTest', 'MAYBE_TextSelectionAndLiveRegion', function() {
-      this.newCallback(async () => {
-        BaseAutomationHandler.announceActions = true;
-        const mockFeedback = this.createMockFeedback();
-        const root = await this.runWithLoadedTree(`
-      <p>start</p>
-      <div><input value="test" type="text"></input></div>
-      <div id="live" aria-live="assertive"></div>
-      <script>
-        const input = document.querySelector('input');
-        const [div, live] = document.querySelectorAll('div');
-        let clicks = 0;
-        div.addEventListener('click', function() {
-          clicks++;
-          if (clicks == 1) {
-            live.textContent = 'go';
-          } else if (clicks == 2) {
-            input.selectionStart = 1;
-            live.textContent = 'queued';
-          } else {
-            input.selectionStart = 2;
-            live.textContent = 'interrupted';
-          }
-        });
-      </script>
-    `);
-        const textField = root.find({role: RoleType.TEXT_FIELD});
-        const div = textField.parent;
-        mockFeedback.call(textField.focus.bind(textField))
-            .expectSpeech('Edit text')
-            .call(div.doDefault.bind(div))
-            .expectSpeechWithQueueMode('go', QueueMode.CATEGORY_FLUSH)
+AX_TEST_F(
+    'ChromeVoxBackgroundTest', 'TextSelectionAndLiveRegion', async function() {
+      BaseAutomationHandler.announceActions = true;
+      const mockFeedback = this.createMockFeedback();
+      const root = await this.runWithLoadedTree(`
+  <p>start</p>
+  <div><input value="test" type="text"></input></div>
+  <div id="live" aria-live="assertive"></div>
+  <script>
+    const input = document.querySelector('input');
+    const [div, live] = document.querySelectorAll('div');
+    let clicks = 0;
+    div.addEventListener('click', function() {
+      clicks++;
+      if (clicks == 1) {
+        live.textContent = 'go';
+      } else if (clicks == 2) {
+        input.selectionStart = 1;
+        live.textContent = 'queued';
+      } else {
+        input.selectionStart = 2;
+        live.textContent = 'interrupted';
+      }
+    });
+  </script>
+      `);
+      const textField = root.find({role: RoleType.TEXT_FIELD});
+      const div = textField.parent;
+      mockFeedback.call(focus(textField))
+          .expectSpeech('Edit text')
+          .call(doDefault(div))
+          .expectSpeechWithQueueMode('go', QueueMode.CATEGORY_FLUSH)
 
-            .call(div.doDefault.bind(div))
-            .expectSpeechWithQueueMode('queued', QueueMode.QUEUE)
-            .expectSpeechWithQueueMode('e', QueueMode.CATEGORY_FLUSH)
+          .call(doDefault(div))
+          .expectSpeechWithQueueMode('queued', QueueMode.QUEUE)
+          .expectSpeechWithQueueMode('e', QueueMode.CATEGORY_FLUSH)
 
-            .call(div.doDefault.bind(div))
-            .expectSpeechWithQueueMode('interrupted', QueueMode.QUEUE)
-            .expectSpeechWithQueueMode('s', QueueMode.CATEGORY_FLUSH)
+          .call(doDefault(div))
+          .expectSpeechWithQueueMode('interrupted', QueueMode.QUEUE)
+          .expectSpeechWithQueueMode('s', QueueMode.CATEGORY_FLUSH);
 
-            .replay();
-      })();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'TableColumnHeaders', async function() {
@@ -1526,8 +1512,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'TableColumnHeaders', async function() {
       .call(doCmd('previousRow'))
       .expectSpeech('CA', 'row 2 column 2')
       .call(doCmd('previousRow'))
-      .expectSpeech('state', 'row 1 column 2')
-      .replay();
+      .expectSpeech('state', 'row 1 column 2');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -1552,12 +1538,12 @@ AX_TEST_F(
   `;
       const root = await this.runWithLoadedTree(site);
       const group = root.firstChild;
-      mockFeedback.call(group.focus.bind(group))
-          .call(group.doDefault.bind(group))
+      mockFeedback.call(focus(group))
+          .call(doDefault(group))
           .expectSpeech('Tree item', ' 2 of 2 ')
-          .call(group.doDefault.bind(group))
-          .expectSpeech('Tree item', 'Not selected', ' 1 of 2 ')
-          .replay();
+          .call(doDefault(group))
+          .expectSpeech('Tree item', 'Not selected', ' 1 of 2 ');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NavigationEscapesEdit', async function() {
@@ -1584,45 +1570,45 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NavigationEscapesEdit', async function() {
 
   contentEditable.focus();
   await this.waitForEvent(contentEditable, EventType.FOCUS);
-  mockFeedback.call(assertBeginning.bind(this, true))
-      .call(assertEnd.bind(this, false))
+  mockFeedback.call(() => assertBeginning(true))
+      .call(() => assertEnd(false))
 
       .call(press(KeyCode.DOWN))
       .expectSpeech('is')
-      .call(assertBeginning.bind(this, false))
-      .call(assertEnd.bind(this, false))
+      .call(() => assertBeginning(false))
+      .call(() => assertEnd(false))
 
       .call(press(KeyCode.DOWN))
       .expectSpeech('a')
-      .call(assertBeginning.bind(this, false))
-      .call(assertEnd.bind(this, false))
+      .call(() => assertBeginning(false))
+      .call(() => assertEnd(false))
 
       .call(press(KeyCode.DOWN))
       .expectSpeech('test')
-      .call(assertBeginning.bind(this, false))
-      .call(assertEnd.bind(this, true))
+      .call(() => assertBeginning(false))
+      .call(() => assertEnd(true))
 
-      .call(textArea.focus.bind(textArea))
+      .call(focus(textArea))
       .expectSpeech('Text area')
-      .call(assertBeginning.bind(this, true))
-      .call(assertEnd.bind(this, false))
+      .call(() => assertBeginning(true))
+      .call(() => assertEnd(false))
 
       .call(press(40 /* ArrowDown */))
       .expectSpeech('is')
-      .call(assertBeginning.bind(this, false))
-      .call(assertEnd.bind(this, false))
+      .call(() => assertBeginning(false))
+      .call(() => assertEnd(false))
 
       .call(press(40 /* ArrowDown */))
       .expectSpeech('a')
-      .call(assertBeginning.bind(this, false))
-      .call(assertEnd.bind(this, false))
+      .call(() => assertBeginning(false))
+      .call(() => assertEnd(false))
 
       .call(press(40 /* ArrowDown */))
       .expectSpeech('test')
-      .call(assertBeginning.bind(this, false))
-      .call(assertEnd.bind(this, true))
+      .call(() => assertBeginning(false))
+      .call(() => assertEnd(true));
 
-      .replay();
+  await mockFeedback.replay();
 
   // TODO: soft line breaks currently won't work in <textarea>.
 });
@@ -1638,24 +1624,18 @@ AX_TEST_F(
     </select>
   `;
       const root = await this.runWithLoadedTree(site);
-      const select = root.find({role: RoleType.POP_UP_BUTTON});
+      const select = root.find({role: RoleType.COMBO_BOX_SELECT});
       mockFeedback.expectSpeech('Button', 'has pop up', 'Collapsed')
-          .call(select.doDefault.bind(select))
+          .call(doDefault(select))
           .expectSpeech('Expanded')
-          .call(
-              () => assertEquals(
-                  select, ChromeVoxState.instance.currentRange.start.node))
+          .call(() => assertEquals(select, ChromeVoxRange.current.start.node))
           .call(press(KeyCode.DOWN))
           .expectSpeech('grape', 'List item', ' 2 of 2 ')
-          .call(
-              () => assertEquals(
-                  select, ChromeVoxState.instance.currentRange.start.node))
+          .call(() => assertEquals(select, ChromeVoxRange.current.start.node))
           .call(press(KeyCode.UP))
           .expectSpeech('apple', 'List item', ' 1 of 2 ')
-          .call(
-              () => assertEquals(
-                  select, ChromeVoxState.instance.currentRange.start.node))
-          .replay();
+          .call(() => assertEquals(select, ChromeVoxRange.current.start.node));
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1692,10 +1672,10 @@ AX_TEST_F(
           .call(doCmd('nextObject'))
           .expectSpeech('label headingLabel', 'Button')
           .call(doCmd('nextObject'))
-          .expectEarcon(Earcon.WRAP)
+          .expectEarcon(EarconId.WRAP)
           .call(doCmd('nextObject'))
-          .expectSpeech('before')
-          .replay();
+          .expectSpeech('before');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1726,10 +1706,10 @@ AX_TEST_F(
           .call(doCmd('nextObject'))
           .expectSpeech('label', 'lebal', 'Button')
           .call(doCmd('nextObject'))
-          .expectEarcon(Earcon.WRAP)
+          .expectEarcon(EarconId.WRAP)
           .call(doCmd('nextObject'))
-          .expectSpeech('before')
-          .replay();
+          .expectSpeech('before');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1771,8 +1751,8 @@ AX_TEST_F(
       const root = await this.runWithLoadedTree(site);
       mockFeedback.call(doCmd('nextObject'))
           .expectSpeech('a ( y + m ) squared + b ( y + m ) + c = 0 .')
-          .expectSpeech('Press up, down, left, or right to explore math')
-          .replay();
+          .expectSpeech('Press up, down, left, or right to explore math');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'GestureGranularity', async function() {
@@ -1838,9 +1818,9 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'GestureGranularity', async function() {
       .call(doGesture(Gesture.SWIPE_RIGHT3))
       .expectSpeech('Form field control')
       .call(doGesture(Gesture.SWIPE_RIGHT3))
-      .expectSpeech('Character')
+      .expectSpeech('Character');
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'LinesFilterWhitespace', async function() {
@@ -1860,15 +1840,14 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'LinesFilterWhitespace', async function() {
       .call(doCmd('nextLine'))
       .expectSpeech('Munich')
       .expectNextSpeechUtteranceIsNot(' ')
-      .expectSpeech('London')
-      .replay();
+      .expectSpeech('London');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
     'ChromeVoxBackgroundTest', 'TabSwitchAndRefreshRecovery', async function() {
       const mockFeedback = this.createMockFeedback();
-      const root1 = await this.runWithLoadedTree('<p>tab1</p>');
-      const root2 = await this.runWithLoadedTree('<p>tab2</p>');
+      await this.runWithLoadedTabs(['<p>tab1</p>', '<p>tab2</p>']);
       mockFeedback.expectSpeech('tab2')
           .clearPendingOutput()
           .call(press(KeyCode.TAB, {shift: true, ctrl: true}))
@@ -1881,10 +1860,9 @@ AX_TEST_F(
 
           // ChromeVox stays on the same node due to tree path recovery.
           .call(() => {
-            assertEquals(
-                'tab2', ChromeVoxState.instance.currentRange.start.node.name);
-          })
-          .replay();
+            assertEquals('tab2', ChromeVoxRange.current.start.node.name);
+          });
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ListName', async function() {
@@ -1900,7 +1878,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ListName', async function() {
     </div>
   `;
   const root = await this.runWithLoadedTree(site);
-  mockFeedback.expectSpeech('Favorite Sports').replay();
+  mockFeedback.expectSpeech('Favorite Sports');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'LayoutTable', async function() {
@@ -1913,8 +1892,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'LayoutTable', async function() {
       .call(doCmd('nextObject'))
       .expectNextSpeechUtteranceIsNot('row 1 column 1')
       .expectNextSpeechUtteranceIsNot('Table , 1 by 1')
-      .expectSpeech('end')
-      .replay();
+      .expectSpeech('end');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -1942,8 +1921,8 @@ AX_TEST_F(
           .call(doCmd('nextObject'))
           .call(doCmd('nextObject'))
           .call(doCmd('nextObject'))
-          .expectSpeech('end', 'Button')
-          .replay();
+          .expectSpeech('end', 'Button');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1963,8 +1942,8 @@ AX_TEST_F(
       assertNotNullNorUndefined(buttonText);
       mockFeedback.call(simulateHitTestResult(buttonText))
           .expectSpeech('Jefferson')
-          .expectSpeech('Button')
-          .replay();
+          .expectSpeech('Button');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -1984,9 +1963,8 @@ AX_TEST_F(
       const root = await this.runWithLoadedTree(site);
       const slider = root.find({role: RoleType.SLIDER});
       assertNotNullNorUndefined(slider);
-      mockFeedback.call(slider.doDefault.bind(slider))
-          .expectSpeech('51')
-          .replay();
+      mockFeedback.call(doDefault(slider)).expectSpeech('51');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2008,10 +1986,10 @@ AX_TEST_F(
       const slider = root.find({role: RoleType.SLIDER});
       assertNotNullNorUndefined(slider);
       mockFeedback.clearPendingOutput()
-          .call(slider.doDefault.bind(slider))
+          .call(doDefault(slider))
           .expectNextSpeechUtteranceIsNot('51')
-          .expectSpeech('large')
-          .replay();
+          .expectSpeech('large');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'SelectValidityOutput', async function() {
@@ -2037,8 +2015,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'SelectValidityOutput', async function() {
       .expectSpeech('Edit text')
       .expectSpeech('Required')
       .expectNextSpeechUtteranceIsNot('Alert')
-      .expectSpeech('Please enter name')
-      .replay();
+      .expectSpeech('Please enter name');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'EventFromAction', async function() {
@@ -2109,7 +2087,7 @@ AX_TEST_F(
           .call(doCmd('nextEditText'))
           .call(doCmd('readPhoneticPronunciation'))
           .expectSpeech('No available text for this item');
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'SimilarItemNavigation', async function() {
@@ -2122,9 +2100,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'SimilarItemNavigation', async function() {
     <h3>outer2</h3>
   `;
   const root = await this.runWithLoadedTree(site);
-  assertEquals(
-      RoleType.LINK, ChromeVoxState.instance.currentRange.start.node.role);
-  assertEquals('inner', ChromeVoxState.instance.currentRange.start.node.name);
+  assertEquals(RoleType.LINK, ChromeVoxRange.current.start.node.role);
+  assertEquals('inner', ChromeVoxRange.current.start.node.name);
   mockFeedback.call(doCmd('nextSimilarItem'))
       .expectSpeech('outer1', 'Link')
       .call(doCmd('nextSimilarItem'))
@@ -2137,7 +2114,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'SimilarItemNavigation', async function() {
       .call(doCmd('previousSimilarItem'))
       .expectSpeech('inner', 'Heading 3');
 
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'InvalidItemNavigation', async function() {
@@ -2156,9 +2133,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'InvalidItemNavigation', async function() {
   `;
 
   const root = await this.runWithLoadedTree(site);
-  assertEquals(
-      RoleType.LINK, ChromeVoxState.instance.currentRange.start.node.role);
-  assertEquals('inner', ChromeVoxState.instance.currentRange.start.node.name);
+  assertEquals(RoleType.LINK, ChromeVoxRange.current.start.node.role);
+  assertEquals('inner', ChromeVoxRange.current.start.node.name);
   mockFeedback.call(doCmd('nextInvalidItem'))
       .expectSpeech('txet', 'misspelled')
       .call(doCmd('nextInvalidItem'))
@@ -2176,7 +2152,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'InvalidItemNavigation', async function() {
       .call(doCmd('previousInvalidItem'))
       .expectSpeech('this are', 'grammar error');
 
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -2190,16 +2166,14 @@ AX_TEST_F(
     <h3>outer2</h3>
   `;
       const root = await this.runWithLoadedTree(site);
-      assertEquals(
-          RoleType.LINK, ChromeVoxState.instance.currentRange.start.node.role);
-      assertEquals(
-          'inner', ChromeVoxState.instance.currentRange.start.node.name);
+      assertEquals(RoleType.LINK, ChromeVoxRange.current.start.node.role);
+      assertEquals('inner', ChromeVoxRange.current.start.node.name);
       mockFeedback.call(doCmd('nextInvalidItem'))
           .expectSpeech('No invalid item')
           .call(doCmd('previousInvalidItem'))
           .expectSpeech('No invalid item');
 
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'TableWithAriaRowCol', async function() {
@@ -2213,8 +2187,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'TableWithAriaRowCol', async function() {
   `;
   const root = await this.runWithLoadedTree(site);
   mockFeedback.call(doCmd('fullyDescribe'))
-      .expectSpeech('test', 'row 3 column 1', 'Table , 1 by 1')
-      .replay();
+      .expectSpeech('test', 'row 3 column 1', 'Table , 1 by 1');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -2230,8 +2204,8 @@ AX_TEST_F(
       mockFeedback.call(doCmd('nextHeading'))
           .expectSpeech('Heading inside dialog')
           .call(doCmd('previousHeading'))
-          .expectSpeech('Heading outside dialog')
-          .replay();
+          .expectSpeech('Heading outside dialog');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2267,24 +2241,18 @@ AX_TEST_F(
       const grapefruits = root.find({attributes: {name: 'Grapefruits'}});
 
       mockFeedback
-          .call(() => {
-            ChromeVoxState.instance.setCurrentRange(
-                CursorRange.fromNode(blueberries));
-          })
+          .call(() => ChromeVoxRange.set(CursorRange.fromNode(blueberries)))
           .call(doCmd('nextObject'))
           .expectSpeech(
               '◦ Raspberries', 'List item', 'List end', 'nested level 2')
-          .call(() => {
-            ChromeVoxState.instance.setCurrentRange(
-                CursorRange.fromNode(grapefruits));
-          })
+          .call(() => ChromeVoxRange.set(CursorRange.fromNode(grapefruits)))
           .call(doCmd('nextObject'))
           .expectSpeech(
               '■ Mandarins', 'List item', 'List end', 'nested level 3')
           .call(doCmd('nextObject'))
           // Nested level is not mentioned for level 1.
-          .expectSpeech('• Bananas', 'List item', 'List end')
-          .replay();
+          .expectSpeech('• Bananas', 'List item', 'List end');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2303,8 +2271,8 @@ AX_TEST_F(
           .expectSpeech('◦ Raspberries', 'List item', 'List end')
           .call(doCmd('nextObject'))
           .expectSpeech('• Bananas', 'List item', 'List end')
-          .expectBraille('• Bananas lstitm lst end')
-          .replay();
+          .expectBraille('• Bananas lstitm lst end');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2335,8 +2303,8 @@ AX_TEST_F(
           .expectSpeech('◦ Strawberries', '◦ Raspberries')
           .clearPendingOutput()
           .call(doCmd('previousGroup'))
-          .expectSpeech('• Oranges')
-          .replay();
+          .expectSpeech('• Oranges');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NavigationByList', async function() {
@@ -2410,8 +2378,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NavigationByList', async function() {
       .call(doCmd('previousObject'))
       .expectSpeech('A random paragraph')
       .call(doCmd('previousList'))
-      .expectSpeech('Drinks', 'List', 'with 2 items')
-      .replay();
+      .expectSpeech('Drinks', 'List', 'with 2 items');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NoListTest', async function() {
@@ -2421,7 +2389,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NoListTest', async function() {
       .expectSpeech('No next list')
       .call(doCmd('previousList'))
       .expectSpeech('No previous list');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NavigateToLastHeading', async function() {
@@ -2435,8 +2403,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NavigateToLastHeading', async function() {
   mockFeedback.call(doCmd('jumpToTop'))
       .expectSpeech('First', 'Heading 1')
       .call(doCmd('previousHeading'))
-      .expectSpeech('Third', 'Heading 1')
-      .replay();
+      .expectSpeech('Third', 'Heading 1');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ReadLinkURLTest', async function() {
@@ -2453,8 +2421,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ReadLinkURLTest', async function() {
       .call(doCmd('nextObject'))
       .expectSpeech('Not a link', 'Button', 'Press Search+Space to activate')
       .call(doCmd('readLinkURL'))
-      .expectSpeech('No URL found')
-      .replay();
+      .expectSpeech('No URL found');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NoRepeatTitle', async function() {
@@ -2466,8 +2434,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NoRepeatTitle', async function() {
   mockFeedback.expectSpeech('title')
       .expectSpeech('Button')
       .expectNextSpeechUtteranceIsNot('title')
-      .expectSpeech('Press Search+Space to activate')
-      .replay();
+      .expectSpeech('Press Search+Space to activate');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'PhoneticsAndCommands', async function() {
@@ -2496,31 +2464,34 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'PhoneticsAndCommands', async function() {
       .expectSpeechWithProperties(phonetics, 'o')
       .call(doCmd('jumpToBottom'))
       .expectSpeechWithProperties(noPhonetics, 'A');
-  mockFeedback.replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ToggleScreen', async function() {
   const mockFeedback = this.createMockFeedback();
   // Pretend we've already accepted the confirmation dialog once.
-  localStorage['acceptToggleScreen'] = 'true';
+  LocalStorage.set('acceptToggleScreen', true);
   await this.runWithLoadedTree('<div>Unimportant web content</div>');
   mockFeedback.call(doCmd('toggleScreen'))
       .expectSpeech('Screen off')
       .call(doCmd('toggleScreen'))
       .expectSpeech('Screen on')
       .call(doCmd('toggleScreen'))
-      .expectSpeech('Screen off')
-      .replay();
+      .expectSpeech('Screen off');
+  await mockFeedback.replay();
 });
 
+// Tests the behavior of ChromeVox when Talkback is disabled and there is no
+// current focus. We set no focus by modifying the internal ChromeVox state.
 AX_TEST_F(
-    'ChromeVoxBackgroundTest', 'NoFocusTalkBackDisabled', async function() {
+    'ChromeVoxBackgroundTest', 'NoFocusTalkBackDisabledInternalState',
+    async function() {
       // Fire onCustomSpokenFeedbackEnabled event to communicate that Talkback
       // is off for the current app.
       this.dispatchOnCustomSpokenFeedbackToggledEvent(false);
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree('<p>Test document</p>');
-      ChromeVoxState.instance.setCurrentRange(null);
+      ChromeVoxRange.set(null);
       mockFeedback.call(doCmd('nextObject'))
           .expectSpeech(
               'No current ChromeVox focus. Press Alt+Shift+L to go to the ' +
@@ -2529,7 +2500,27 @@ AX_TEST_F(
           .expectSpeech(
               'No current ChromeVox focus. Press Alt+Shift+L to go to the ' +
               'launcher.');
-      mockFeedback.replay();
+      await mockFeedback.replay();
+    });
+
+// Tests the behavior of ChromeVox when Talkback is disabled and there is no
+// current focus. We set no focus by modifying the automation API.
+AX_TEST_F(
+    'ChromeVoxBackgroundTest', 'NoFocusTalkBackDisabledAutomation',
+    async function() {
+      this.dispatchOnCustomSpokenFeedbackToggledEvent(false);
+      const mockFeedback = this.createMockFeedback();
+      await this.runWithLoadedTree('<p>Test document</p>');
+      chrome.automation.getFocus = (callback) => callback(null);
+      mockFeedback.call(doCmd('nextObject'))
+          .expectSpeech(
+              'No current ChromeVox focus. Press Alt+Shift+L to go to the ' +
+              'launcher.')
+          .call(doCmd('previousObject'))
+          .expectSpeech(
+              'No current ChromeVox focus. Press Alt+Shift+L to go to the ' +
+              'launcher.');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2542,7 +2533,7 @@ AX_TEST_F(
       this.dispatchOnCustomSpokenFeedbackToggledEvent(true);
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree('<p>Start here</p>');
-      ChromeVoxState.instance.setCurrentRange(null);
+      ChromeVoxRange.set(null);
       mockFeedback.call(doCmd('nextObject'))
           .call(
               () => assertFalse(mockFeedback.utteranceInQueue(
@@ -2553,7 +2544,7 @@ AX_TEST_F(
               () => assertFalse(mockFeedback.utteranceInQueue(
                   'No current ChromeVox focus. ' +
                   'Press Alt+Shift+L to go to the launcher.')));
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2570,7 +2561,7 @@ AX_TEST_F(
       const root = await this.runWithLoadedTree(site);
       const contentEditable =
           root.find({attributes: {nonAtomicTextFieldRoot: true}});
-      mockFeedback.call(contentEditable.focus.bind(contentEditable))
+      mockFeedback.call(focus(contentEditable))
           .expectSpeech(/Testing testing\s+one two three/)
           .call(doCmd('nextLine'))
           .expectSpeech('one two three')
@@ -2581,15 +2572,15 @@ AX_TEST_F(
           // line, because all subsequent commands require the content
           // editable to be focused first):
           .clearPendingOutput()
-          .call(contentEditable.focus.bind(contentEditable))
+          .call(focus(contentEditable))
           .expectSpeech(/Testing testing\s+one two three/)
           .call(doCmd('nextLine'))
           .expectSpeech('one two three')
           .call(doCmd('previousLine'))
           .expectSpeech('Testing testing')
           .call(doCmd('previousLine'))
-          .expectSpeech('before')
-          .replay();
+          .expectSpeech('before');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ReadWindowTitle', async function() {
@@ -2620,8 +2611,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ReadWindowTitle', async function() {
       // This test may run against official builds, so match against
       // utterances starting with 'bar'. This should exclude any other
       // utterances that contain 'bar' e.g. data:...bar.. or the data url.
-      .expectSpeech(/^bar*/)
-      .replay();
+      .expectSpeech(/^bar*/);
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'OutputEmptyQueueMode', async function() {
@@ -2629,15 +2620,15 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'OutputEmptyQueueMode', async function() {
   const root = await this.runWithLoadedTree('<p>unused</p>');
   const output = new Output();
   Output.forceModeForNextSpeechUtterance(QueueMode.CATEGORY_FLUSH);
-  output.append_(
+  output.append(
       output.speechBuffer_, new Spannable(''),
       {annotation: [new OutputAction()]});
   output.withString('test');
   mockFeedback.clearPendingOutput()
       .call(output.go.bind(output))
       .expectSpeechWithQueueMode('', QueueMode.CATEGORY_FLUSH)
-      .expectSpeechWithQueueMode('test', QueueMode.CATEGORY_FLUSH)
-      .replay();
+      .expectSpeechWithQueueMode('test', QueueMode.CATEGORY_FLUSH);
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'SetAccessibilityFocus', async function() {
@@ -2668,8 +2659,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'MenuItemRadio', async function() {
       .call(doCmd('nextObject'))
       .expectSpeech('Small, menu item radio button selected', ' 1 of 3 ')
       .call(doCmd('nextObject'))
-      .expectSpeech('Medium, menu item radio button unselected', ' 2 of 3 ')
-      .replay();
+      .expectSpeech('Medium, menu item radio button unselected', ' 2 of 3 ');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -2691,7 +2682,7 @@ AX_TEST_F(
           .call(doCmd('nextButton'))
           .expectSpeech('Action 2', 'Button');
 
-      mockFeedback.replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -2728,12 +2719,12 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'HitTestOnExoSurface', async function() {
 
   // Fake a mouse explore event on the real text field. This should not
   // trigger the above mouse path.
-  GestureCommandHandler.pointerHandler_.onMouseMove(
+  GestureCommandHandler.instance.pointerHandler_.onMouseMove(
       realTextField.location.left, realTextField.location.top);
 
   // Fake a touch explore gesture event on the fake window which should
   // trigger a mouse move.
-  GestureCommandHandler.onAccessibilityGesture_(
+  GestureCommandHandler.instance.onAccessibilityGesture_(
       Gesture.TOUCH_EXPLORE, fakeWindow.location.left, fakeWindow.location.top);
 });
 
@@ -2747,7 +2738,7 @@ AX_TEST_F(
     </div>
   `;
       const root = await this.runWithLoadedTree(site);
-      ChromeVoxState.addObserver(new class {
+      ChromeVoxRange.addObserver(new class {
         onCurrentRangeChanged(range) {
           if (!range) {
             ChromeVox.tts.speak('range cleared!');
@@ -2772,13 +2763,13 @@ AX_TEST_F(
           })
           .call(simulateHitTestResult(group))
           .expectSpeech('range cleared!')
-          .expectEarcon(Earcon.NO_POINTER_ANCHOR)
+          .expectEarcon(EarconId.NO_POINTER_ANCHOR)
           .call(simulateHitTestResult(button))
           .expectSpeech('Button')
           .call(simulateHitTestResult(group))
           .expectSpeech('range cleared!')
-          .expectEarcon(Earcon.NO_POINTER_ANCHOR)
-          .replay();
+          .expectEarcon(EarconId.NO_POINTER_ANCHOR);
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'FocusOnUnknown', async function() {
@@ -2806,16 +2797,16 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'FocusOnUnknown', async function() {
   });
 
   const evt2 = new CustomAutomationEvent(EventType.FOCUS, group2);
-  const currentRange = ChromeVoxState.instance.currentRange;
-  DesktopAutomationInterface.instance.onFocus(evt2);
-  assertEquals(currentRange, ChromeVoxState.instance.currentRange);
+  const currentRange = ChromeVoxRange.current;
+  DesktopAutomationInterface.instance.onFocus_(evt2);
+  assertEquals(currentRange, ChromeVoxRange.current);
 
   const evt1 = new CustomAutomationEvent(EventType.FOCUS, group1);
   mockFeedback
-      .call(DesktopAutomationInterface.instance.onFocus.bind(
+      .call(DesktopAutomationInterface.instance.onFocus_.bind(
           DesktopAutomationInterface.instance, evt1))
-      .expectSpeech('hello')
-      .replay();
+      .expectSpeech('hello');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'TimeDateCommand', async function() {
@@ -2823,13 +2814,16 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'TimeDateCommand', async function() {
   const root = await this.runWithLoadedTree('<p></p>');
   mockFeedback.call(doCmd('speakTimeAndDate'))
       .expectSpeech(/(AM|PM)*(2)/)
-      .expectBraille(/(AM|PM)*(2)/)
-      .replay();
+      .expectBraille(/(AM|PM)*(2)/);
+  await mockFeedback.replay();
 });
 
-AX_TEST_F('ChromeVoxBackgroundTest', 'SwipeToScrollByPage', async function() {
-  const mockFeedback = this.createMockFeedback();
-  const site = `
+// TODO(https://crbug.com/1395217): Re-enable the test.
+AX_TEST_F(
+    'ChromeVoxBackgroundTest', 'DISABLED_SwipeToScrollByPage',
+    async function() {
+      const mockFeedback = this.createMockFeedback();
+      const site = `
     <p style="font-size: 200pt">This is a test</p>
     <p style="font-size: 200pt">This is a test</p>
     <p style="font-size: 200pt">This is a test</p>
@@ -2838,24 +2832,24 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'SwipeToScrollByPage', async function() {
     <p style="font-size: 200pt">This is a test</p>
     <p style="font-size: 200pt">This is a test</p>
   `;
-  const root = await this.runWithLoadedTree(site);
-  mockFeedback.call(doGesture(Gesture.SWIPE_UP3))
-      .expectSpeech(/Page 2 of/)
-      .call(doGesture(Gesture.SWIPE_UP3))
-      .expectSpeech(/Page 3 of/)
-      .call(doGesture(Gesture.SWIPE_DOWN3))
-      .expectSpeech(/Page 2 of/)
-      .call(doGesture(Gesture.SWIPE_DOWN3))
-      .expectSpeech(/Page 1 of/)
-      .replay();
-});
+      const root = await this.runWithLoadedTree(site);
+      mockFeedback.call(doGesture(Gesture.SWIPE_UP3))
+          .expectSpeech(/Page 2 of/)
+          .call(doGesture(Gesture.SWIPE_UP3))
+          .expectSpeech(/Page 3 of/)
+          .call(doGesture(Gesture.SWIPE_DOWN3))
+          .expectSpeech(/Page 2 of/)
+          .call(doGesture(Gesture.SWIPE_DOWN3))
+          .expectSpeech(/Page 1 of/);
+      await mockFeedback.replay();
+    });
 
 AX_TEST_F(
     'ChromeVoxBackgroundTest', 'PointerOnOffOnRepeatsNode', async function() {
       PointerHandler.MIN_NO_POINTER_ANCHOR_SOUND_DELAY_MS = -1;
       const mockFeedback = this.createMockFeedback();
       const root = await this.runWithLoadedTree('<button>hi</button>');
-      ChromeVoxState.addObserver(new class {
+      ChromeVoxRange.addObserver(new class {
         onCurrentRangeChanged(range) {
           if (!range) {
             ChromeVox.tts.speak('range cleared!');
@@ -2869,18 +2863,18 @@ AX_TEST_F(
           .expectSpeech('hi', 'Button')
 
           // Touch slightly off of the button.
-          .call(GestureCommandHandler.onAccessibilityGesture_.bind(
-              null, Gesture.TOUCH_EXPLORE, button.location.left,
-              button.location.top + 60))
+          .call(GestureCommandHandler.instance.onAccessibilityGesture_.bind(
+              GestureCommandHandler.instance, Gesture.TOUCH_EXPLORE,
+              button.location.left, button.location.top + 60))
           .expectSpeech('range cleared!')
-          .expectEarcon(Earcon.NO_POINTER_ANCHOR)
+          .expectEarcon(EarconId.NO_POINTER_ANCHOR)
           .clearPendingOutput()
           .call(simulateHitTestResult(button))
-          .expectSpeech('hi', 'Button')
-          .replay();
+          .expectSpeech('hi', 'Button');
+      await mockFeedback.replay();
     });
 
-AX_TEST_F('ChromeVoxBackgroundTest', 'PopupButtonCollapsed', async function() {
+AX_TEST_F('ChromeVoxBackgroundTest', 'SelectCollapsed', async function() {
   const mockFeedback = this.createMockFeedback();
   const site = `
     <select id="button">
@@ -2892,8 +2886,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'PopupButtonCollapsed', async function() {
   mockFeedback.call(doCmd('jumpToTop'))
       .expectSpeech(
           'Apple', 'Button', 'has pop up', 'Collapsed',
-          'Press Search+Space to activate')
-      .replay();
+          'Press Search+Space to activate');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'PopupButtonExpanded', async function() {
@@ -2917,8 +2911,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'PopupButtonExpanded', async function() {
       // SetSize is only reported if popup button is expanded.
       .expectSpeech(
           'Click me', 'Button', 'has pop up', 'with 3 items', 'Expanded',
-          'Press Search+Space to activate')
-      .replay();
+          'Press Search+Space to activate');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'SortDirection', async function() {
@@ -2942,13 +2936,13 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'SortDirection', async function() {
   const root = await this.runWithLoadedTree(site);
   const sortButton = root.find({role: RoleType.BUTTON});
   mockFeedback.expectSpeech('Button', 'Ascending sort')
-      .call(sortButton.doDefault.bind(sortButton))
+      .call(doDefault(sortButton))
       .expectSpeech('Descending sort')
-      .call(sortButton.doDefault.bind(sortButton))
+      .call(doDefault(sortButton))
       .expectSpeech('Ascending sort')
-      .call(sortButton.doDefault.bind(sortButton))
-      .expectSpeech('Descending sort')
-      .replay();
+      .call(doDefault(sortButton))
+      .expectSpeech('Descending sort');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'InlineLineNavigation', async function() {
@@ -2958,9 +2952,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'InlineLineNavigation', async function() {
     <p><strong>This</strong><b>is</b>a <em>test</em></p>
   `;
   const root = await this.runWithLoadedTree(site);
-  mockFeedback.call(doCmd('nextLine'))
-      .expectSpeech('This', 'is', 'a ', 'test')
-      .replay();
+  mockFeedback.call(doCmd('nextLine')).expectSpeech('This', 'is', 'a ', 'test');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'AudioVideo', async function() {
@@ -2996,14 +2989,14 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'AudioVideo', async function() {
   mockFeedback.call(doCmd('nextObject'))
       .expectSpeech('Video')
       .call(doCmd('previousObject'))
-      .expectSpeech('Audio')
-      .replay();
+      .expectSpeech('Audio');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'AlertNoAnnouncement', async function() {
   const mockFeedback = this.createMockFeedback();
   const root = await this.runWithLoadedTree('<button></button>');
-  ChromeVoxState.addObserver(new class {
+  ChromeVoxRange.addObserver(new class {
     onCurrentRangeChanged(range) {
       assertNotReached('Range was changed unexpectedly.');
     }
@@ -3011,16 +3004,16 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'AlertNoAnnouncement', async function() {
   const button = root.find({role: RoleType.BUTTON});
   const alertEvt = new CustomAutomationEvent(EventType.ALERT, button);
   mockFeedback
-      .call(DesktopAutomationInterface.instance.onAlert.bind(
+      .call(DesktopAutomationInterface.instance.onAlert_.bind(
           DesktopAutomationInterface.instance, alertEvt))
-      .call(() => assertFalse(mockFeedback.utteranceInQueue('Alert')))
-      .replay();
+      .call(() => assertFalse(mockFeedback.utteranceInQueue('Alert')));
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'AlertAnnouncement', async function() {
   const mockFeedback = this.createMockFeedback();
   const root = await this.runWithLoadedTree('<button>hello world</button>');
-  ChromeVoxState.addObserver(new class {
+  ChromeVoxRange.addObserver(new class {
     onCurrentRangeChanged(range) {
       assertNotReached('Range was changed unexpectedly.');
     }
@@ -3029,33 +3022,61 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'AlertAnnouncement', async function() {
   const button = root.find({role: RoleType.BUTTON});
   const alertEvt = new CustomAutomationEvent(EventType.ALERT, button);
   mockFeedback
-      .call(DesktopAutomationInterface.instance.onAlert.bind(
+      .call(DesktopAutomationInterface.instance.onAlert_.bind(
           DesktopAutomationInterface.instance, alertEvt))
       .expectNextSpeechUtteranceIsNot('Alert')
-      .expectSpeech('hello world')
-      .replay();
+      .expectSpeech('hello world');
+  await mockFeedback.replay();
 });
 
-AX_TEST_F(
-    'ChromeVoxBackgroundTest', 'SwipeLeftRight4ByContainers', async function() {
-      const mockFeedback = this.createMockFeedback();
-      const root = await this.runWithLoadedTree(`<p>test</p>`);
-      mockFeedback.call(doGesture(Gesture.SWIPE_RIGHT4))
-          .expectSpeech('Launcher', 'Button', 'Shelf', 'Tool bar', ', window')
-          .call(doGesture(Gesture.SWIPE_RIGHT4))
-          .expectSpeech('Shelf', 'Tool bar')
-          .call(doGesture(Gesture.SWIPE_RIGHT4))
-          .expectSpeech(/Calendar*/)
-          .call(doGesture(Gesture.SWIPE_RIGHT4))
-          .expectSpeech(/Address and search bar*/)
+/**
+ * Fixtures and tests that need to be parameterized based on whether the
+ * `ash::features::kHoldingSpacePredictability` feature flag is enabled.
+ *
+ * Generated fixtures are:
+ * - ChromeVoxBackgroundTestWithHoldingSpacePredictabilityEnabled
+ * - ChromeVoxBackgroundTestWithHoldingSpacePredictabilityDisabled
+ */
+[true, false].forEach((enabled) => {
+  const testFixture = `ChromeVoxBackgroundTestWithHoldingSpacePredictability${
+      enabled ? 'Enabled' : 'Disabled'}`;
 
-          .call(doGesture(Gesture.SWIPE_LEFT4))
-          .expectSpeech(/Calendar*/)
-          .call(doGesture(Gesture.SWIPE_LEFT4))
-          .expectSpeech('Shelf', 'Tool bar')
+  this[testFixture] = class extends ChromeVoxBackgroundTest {
+    /** @override */
+    testGenCppIncludes() {
+      super.testGenCppIncludes();
+      GEN('#include "ash/constants/ash_features.h"');
+    }
 
-          .replay();
-    });
+    /** @override */
+    get featureList() {
+      const featureList = {enabled: [], disabled: []};
+      (enabled ? featureList.enabled : featureList.disabled)
+          .push('ash::features::kHoldingSpacePredictability');
+      return featureList;
+    }
+  };
+
+  AX_TEST_F(testFixture, 'SwipeLeftRight4ByContainers', async function() {
+    const mockFeedback = this.createMockFeedback();
+    const root = await this.runWithLoadedTree(`<p>test</p>`);
+    mockFeedback.call(doGesture(Gesture.SWIPE_RIGHT4))
+        .expectSpeech('Launcher', 'Button', 'Shelf', 'Tool bar', ', window')
+        .call(doGesture(Gesture.SWIPE_RIGHT4))
+        .expectSpeech('Shelf', 'Tool bar')
+        .call(doGesture(Gesture.SWIPE_RIGHT4))
+        .expectSpeech(enabled ? /Tote*/ : /Calendar*/)
+        .call(doGesture(Gesture.SWIPE_RIGHT4))
+        .expectSpeech(/Address and search bar*/)
+
+        .call(doGesture(Gesture.SWIPE_LEFT4))
+        .expectSpeech(enabled ? /Tote*/ : /Calendar*/)
+        .call(doGesture(Gesture.SWIPE_LEFT4))
+        .expectSpeech('Shelf', 'Tool bar');
+
+    await mockFeedback.replay();
+  });
+});
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'SwipeLeftRight2', async function() {
   const mockFeedback = this.createMockFeedback();
@@ -3069,14 +3090,14 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'SwipeLeftRight2', async function() {
   `;
   const root = await this.runWithLoadedTree(site);
   mockFeedback.call(doGesture(Gesture.SWIPE_RIGHT2)).expectSpeech('Enter');
-  mockFeedback.call(doGesture(Gesture.SWIPE_LEFT2))
-      .expectSpeech('Escape')
-      .replay();
+  mockFeedback.call(doGesture(Gesture.SWIPE_LEFT2)).expectSpeech('Escape');
+  await mockFeedback.replay();
 });
 
 // TODO(crbug.com/1228418) - Improve the generation of summaries across ChromeOS
 AX_TEST_F(
-    'ChromeVoxBackgroundTest', 'AlertDialogAutoSummaryTextContent',
+    // TODO(crbug.com/1419811): Test is flaky.
+    'ChromeVoxBackgroundTest', 'DISABLED_AlertDialogAutoSummaryTextContent',
     async function() {
       this.resetContextualOutput();
       const mockFeedback = this.createMockFeedback();
@@ -3107,9 +3128,9 @@ AX_TEST_F(
           .call(doCmd('previousObject'))
           .expectSpeech(`Let's go`, 'Button')
           .expectSpeech('Setup')
-          .expectSpeech(`Welcome This is some introductory text Exit Let's go`)
+          .expectSpeech(`Welcome This is some introductory text Exit Let's go`);
 
-          .replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ImageAnnotations', async function() {
@@ -3146,8 +3167,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ImageAnnotations', async function() {
       .expectSpeech('bar', 'Image')
       .call(doCmd('nextObject'))
       .expectNextSpeechUtteranceIsNot('bar')
-      .expectSpeech('foo', 'Image')
-      .replay();
+      .expectSpeech('foo', 'Image');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'VolumeChanges', async function() {
@@ -3159,8 +3180,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'VolumeChanges', async function() {
       .call(() => {
         // The bounds should not have changed.
         assertEquals(JSON.stringify(bounds), JSON.stringify(FocusBounds.get()));
-      })
-      .replay();
+      });
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -3173,11 +3194,11 @@ AX_TEST_F(
       mockFeedback.call(doCmd('nextObject'))
           .expectSpeech('Edit text')
           .call(doCmd('nextObject'))
-          .expectEarcon(Earcon.WRAP)
+          .expectEarcon(EarconId.WRAP)
           .expectSpeech('Web Content')
           .call(doCmd('nextObject'))
-          .expectSpeech('start')
-          .replay();
+          .expectSpeech('start');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -3186,15 +3207,14 @@ AX_TEST_F(
       const site = `<a tabindex=0></a><p>start</p><a tabindex=0></a><p>end</p>`;
       const root = await this.runWithLoadedTree(site);
       assertEquals(
-          RoleType.STATIC_TEXT,
-          ChromeVoxState.instance.currentRange.start.node.role);
+          RoleType.STATIC_TEXT, ChromeVoxRange.current.start.node.role);
 
       // "start" is uttered twice, once for the initial focus as the page loads,
       // and once during the 'read from here' command.
       mockFeedback.expectSpeech('start')
           .call(doCmd('readFromHere'))
-          .expectSpeech('start', 'end')
-          .replay();
+          .expectSpeech('start', 'end');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'ContainerButtons', async function() {
@@ -3219,8 +3239,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'ContainerButtons', async function() {
   mockFeedback.call(doCmd('nextObject'))
       .expectSpeech('Cat Video', 'Button')
       .call(doCmd('nextObject'))
-      .expectSpeech('4 minutes, Cat Video')
-      .replay();
+      .expectSpeech('4 minutes, Cat Video');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -3245,7 +3265,7 @@ AX_TEST_F(
   `;
       const root = await this.runWithLoadedTree(site);
       const application = root.find({role: RoleType.APPLICATION});
-      const popUpButton = root.find({role: RoleType.POP_UP_BUTTON});
+      const popUpButton = root.find({role: RoleType.COMBO_BOX_SELECT});
       const p = root.find({role: RoleType.PARAGRAPH});
 
       // Move focus to the select, which honors value changes through
@@ -3257,8 +3277,7 @@ AX_TEST_F(
       p.doDefault();
       await TestUtils.waitForSpeech('grape');
       assertEquals(
-          RoleType.POP_UP_BUTTON,
-          ChromeVoxState.instance.currentRange.start.node.role);
+          RoleType.COMBO_BOX_SELECT, ChromeVoxRange.current.start.node.role);
 
       // Now, move focus to the application which is a parent of the select.
       application.focus();
@@ -3297,24 +3316,21 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'AriaLeaves', async function() {
       .expectSpeech('PM')
       .call(
           () => assertEquals(
-              RoleType.STATIC_TEXT,
-              ChromeVoxState.instance.currentRange.start.node.role))
+              RoleType.STATIC_TEXT, ChromeVoxRange.current.start.node.role))
 
       .call(doCmd('nextObject'))
       .expectSpeech('Agree, switch off')
       .call(
           () => assertEquals(
-              RoleType.SWITCH,
-              ChromeVoxState.instance.currentRange.start.node.role))
+              RoleType.SWITCH, ChromeVoxRange.current.start.node.role))
 
       .call(doCmd('nextObject'))
       .expectSpeech('Agree', 'Check box')
       .call(
           () => assertEquals(
-              RoleType.CHECK_BOX,
-              ChromeVoxState.instance.currentRange.start.node.role))
+              RoleType.CHECK_BOX, ChromeVoxRange.current.start.node.role));
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'MarkedContent', async function() {
@@ -3367,8 +3383,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'MarkedContent', async function() {
       .expectBraille(`Suggest Delete everyone's Delete end Suggest end`)
       .call(doCmd('nextObject'))
       .expectSpeech(' text.')
-      .expectBraille(' text.')
-      .replay();
+      .expectBraille(' text.');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -3398,8 +3414,8 @@ AX_TEST_F(
           .call(doCmd('nextObject'))
           .expectSpeech('more info')
           .call(doCmd('nextObject'))
-          .expectSpeech('end')
-          .replay();
+          .expectSpeech('end');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'TouchEditingState', async function() {
@@ -3417,8 +3433,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'TouchEditingState', async function() {
       .expectSpeech('Edit text', 'Double tap to start editing')
       .call(doGesture(
           chrome.accessibilityPrivate.Gesture.CLICK, bounds.left, bounds.top))
-      .expectSpeech('Edit text', 'is editing')
-      .replay();
+      .expectSpeech('Edit text', 'is editing');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -3434,14 +3450,14 @@ AX_TEST_F(
       mockFeedback.expectSpeech('Start')
           .call(doGesture(chrome.accessibilityPrivate.Gesture.SWIPE_RIGHT1))
           .expectSpeech('ok', 'Button')
-          .expectEarcon(Earcon.BUTTON)
+          .expectEarcon(EarconId.BUTTON)
           .call(doGesture(chrome.accessibilityPrivate.Gesture.SWIPE_RIGHT1))
           .expectSpeech('cancel', 'Link')
-          .expectEarcon(Earcon.LINK)
+          .expectEarcon(EarconId.LINK)
           .call(doGesture(chrome.accessibilityPrivate.Gesture.SWIPE_LEFT1))
           .expectSpeech('ok', 'Button')
-          .expectEarcon(Earcon.BUTTON)
-          .replay();
+          .expectEarcon(EarconId.BUTTON);
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'Separator', async function() {
@@ -3460,8 +3476,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'Separator', async function() {
       .expectSpeech('Separator content should be read', 'Separator')
       .expectBraille('Separator content should be read seprtr')
       .call(doCmd('nextObject'))
-      .expectSpeech('World')
-      .replay();
+      .expectSpeech('World');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'FocusAfterClick', async function() {
@@ -3483,16 +3499,14 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'FocusAfterClick', async function() {
       .expectSpeech('Click me')
       .call(doCmd('forceClickOnCurrentItem'))
       .expectSpeech('Focus me')
-      .call(() => {
-        assertEquals(
-            'Focus me',
-            ChromeVoxState.instance.getCurrentRange().start.node.name);
-      })
-      .replay();
+      .call(
+          () =>
+              assertEquals('Focus me', ChromeVoxRange.current.start.node.name));
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'EarconPlayback', function() {
-  const engine = ChromeVoxState.instance.earcons_.engine_;
+  const engine = ChromeVox.earcons.engine_;
   assertTrue(engine !== undefined);
 
   // We only test a few earcons here. Not all earcons prevent parallel playback
@@ -3504,32 +3518,33 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'EarconPlayback', function() {
   // Note that alert modal vs nonmodal would be allowed to play in parallel (as
   // do wrap / wrap edge) because they are different events even though they
   // really play the same sound.
-  ChromeVox.earcons.playEarcon(Earcon.ALERT_MODAL);
+  ChromeVox.earcons.playEarcon(EarconId.ALERT_MODAL);
   assertEquals(1, Object.keys(engine.lastEarconSources_).length);
-  const lastAlertSource = engine.lastEarconSources_[Earcon.ALERT_MODAL];
+  const lastAlertSource = engine.lastEarconSources_[EarconId.ALERT_MODAL];
   assertTrue(lastAlertSource !== undefined);
 
-  ChromeVox.earcons.playEarcon(Earcon.ALERT_MODAL);
+  ChromeVox.earcons.playEarcon(EarconId.ALERT_MODAL);
   assertEquals(1, Object.keys(engine.lastEarconSources_).length);
 
   // The earcon for this stayed the same (above), so there's no duplicate
   // playback of two alerts.
-  assertEquals(lastAlertSource, engine.lastEarconSources_[Earcon.ALERT_MODAL]);
+  assertEquals(
+      lastAlertSource, engine.lastEarconSources_[EarconId.ALERT_MODAL]);
 
   // This simulates a parallel playback of the button earcon which is allowed.
-  ChromeVox.earcons.playEarcon(Earcon.BUTTON);
+  ChromeVox.earcons.playEarcon(EarconId.BUTTON);
   assertEquals(2, Object.keys(engine.lastEarconSources_).length);
-  assertTrue(engine.lastEarconSources_[Earcon.BUTTON] !== undefined);
+  assertTrue(engine.lastEarconSources_[EarconId.BUTTON] !== undefined);
 
   // This gets called by web audio when the earcon finishes.
   lastAlertSource.onended();
 
   // The button earcon is still playing.
   assertEquals(1, Object.keys(engine.lastEarconSources_).length);
-  assertTrue(engine.lastEarconSources_[Earcon.BUTTON] !== undefined);
+  assertTrue(engine.lastEarconSources_[EarconId.BUTTON] !== undefined);
 
   // Finish up the button earcon, too.
-  engine.lastEarconSources_[Earcon.BUTTON].onended();
+  engine.lastEarconSources_[EarconId.BUTTON].onended();
   assertEquals(0, Object.keys(engine.lastEarconSources_).length);
 });
 
@@ -3556,10 +3571,9 @@ AX_TEST_F(
       const nextObjectBraille = BrailleCommandHandler.onBrailleKeyEvent.bind(
           BrailleCommandHandler, {command: BrailleKeyCommand.PAN_RIGHT});
       const nextObjectGesture =
-          GestureCommandHandler.onAccessibilityGesture_.bind(
-              GestureCommandHandler, Gesture.SWIPE_RIGHT1);
-      const clearCurrentRange = ChromeVoxState.instance.setCurrentRange.bind(
-          ChromeVoxState.instance, null);
+          GestureCommandHandler.instance.onAccessibilityGesture_.bind(
+              GestureCommandHandler.instance, Gesture.SWIPE_RIGHT1);
+      const clearCurrentRange = () => ChromeVoxRange.set(null);
       const toggleTalkBack = () => {
         ChromeVoxState.instance.talkBackEnabled_ =
             !ChromeVoxState.instance.talkBackEnabled_;
@@ -3587,22 +3601,19 @@ AX_TEST_F(
           .call(clearCurrentRange)
           .call(toggleTalkBack)
           .call(nextObjectKeyboard)
-          .call(
-              () => assertFalse(Boolean(ChromeVoxState.instance.currentRange)))
+          .call(() => assertFalse(Boolean(ChromeVoxRange.current)))
 
           .call(nextObjectBraille)
-          .call(
-              () => assertFalse(Boolean(ChromeVoxState.instance.currentRange)))
+          .call(() => assertFalse(Boolean(ChromeVoxRange.current)))
 
           .call(nextObjectGesture)
-          .call(
-              () => assertFalse(Boolean(ChromeVoxState.instance.currentRange)))
+          .call(() => assertFalse(Boolean(ChromeVoxRange.current)))
 
           .call(toggleTalkBack)
           .call(nextObjectKeyboard)
-          .call(() => assertTrue(Boolean(ChromeVoxState.instance.currentRange)))
+          .call(() => assertTrue(Boolean(ChromeVoxRange.current)));
 
-          .replay();
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'DetailsChanged', async function() {
@@ -3610,7 +3621,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'DetailsChanged', async function() {
 
   // Make sure we're not testing reading of the hint from the button's output
   // below.
-  localStorage['useVerboseMode'] = false;
+  SettingsManager.set('useVerboseMode', false);
   const site = `
     <button id="click">ok</button>
     <p id="details">hello</p>
@@ -3624,9 +3635,9 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'DetailsChanged', async function() {
   const root = await this.runWithLoadedTree(site);
   const button = root.find({role: RoleType.BUTTON});
   mockFeedback.expectSpeech('ok')
-      .call(button.doDefault.bind(button))
-      .expectSpeech('Press Search+A, J to jump to details')
-      .replay();
+      .call(doDefault(button))
+      .expectSpeech('Press Search+A, J to jump to details');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'PageLoadEarcons', function() {
@@ -3645,15 +3656,15 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'PageLoadEarcons', function() {
   fakeNode.parent = {state: {focused: true}};
 
   handler.onLoadStart({target: fakeNode});
-  assertEqualStringArrays([Earcon.PAGE_START_LOADING], sawEarcons);
+  assertEqualStringArrays([EarconId.PAGE_START_LOADING], sawEarcons);
   handler.onLoadComplete({target: fakeNode});
   assertEqualStringArrays(
-      [Earcon.PAGE_START_LOADING, Earcon.PAGE_FINISH_LOADING], sawEarcons);
+      [EarconId.PAGE_START_LOADING, EarconId.PAGE_FINISH_LOADING], sawEarcons);
 
   // No extra earcons.
   handler.onLoadComplete({target: fakeNode});
   assertEqualStringArrays(
-      [Earcon.PAGE_START_LOADING, Earcon.PAGE_FINISH_LOADING], sawEarcons);
+      [EarconId.PAGE_START_LOADING, EarconId.PAGE_FINISH_LOADING], sawEarcons);
 
   // Try a range change that finishes the load sound.
   sawEarcons.length = 0;
@@ -3661,7 +3672,7 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'PageLoadEarcons', function() {
   fakeNode.docLoadingProgress = 1;
   handler.onCurrentRangeChanged({start: {node: fakeNode}});
   assertEqualStringArrays(
-      [Earcon.PAGE_START_LOADING, Earcon.PAGE_FINISH_LOADING], sawEarcons);
+      [EarconId.PAGE_START_LOADING, EarconId.PAGE_FINISH_LOADING], sawEarcons);
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NewTabRead', async function() {
@@ -3671,8 +3682,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NewTabRead', async function() {
   mockFeedback.call(doCmd('nextObject'))
       .expectSpeech('end')
       .call(press(KeyCode.T, {ctrl: true}))
-      .expectSpeech(/New Tab/)
-      .replay();
+      .expectSpeech(/New Tab/);
+  await mockFeedback.replay();
 });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NestedMenuHints', async function() {
@@ -3690,8 +3701,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NestedMenuHints', async function() {
       .expectSpeech('Press left or right arrow to navigate; enter to activate')
       .call(
           () => assertFalse(mockFeedback.utteranceInQueue(
-              'Press up or down arrow to navigate; enter to activate')))
-      .replay();
+              'Press up or down arrow to navigate; enter to activate')));
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -3714,8 +3725,8 @@ AX_TEST_F(
           .call(doCmd('previousObject'))
           .expectSpeech('Enable speech logging', 'Check box')
           .call(doCmd('previousObject'))
-          .expectSpeech('start')
-          .replay();
+          .expectSpeech('start');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'Abbreviation', async function() {
@@ -3724,11 +3735,12 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'Abbreviation', async function() {
     <abbr title="uniform resource locator">URL</abbr>
   `;
   await this.runWithLoadedTree(site);
-  mockFeedback.expectSpeech('URL', 'uniform resource locator', 'Abbreviation')
-      .replay();
+  mockFeedback.expectSpeech('URL', 'uniform resource locator', 'Abbreviation');
+  await mockFeedback.replay();
 });
 
-AX_TEST_F('ChromeVoxBackgroundTest', 'EndOfText', async function() {
+// TODO(crbug.com/1361544): Test is flaky.
+AX_TEST_F('ChromeVoxBackgroundTest', 'DISABLED_EndOfText', async function() {
   const mockFeedback = this.createMockFeedback();
   const site = `
     <p>start</p>
@@ -3767,9 +3779,9 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'EndOfText', async function() {
       .call(press(KeyCode.LEFT))
       .expectSpeech('b')
       .call(press(KeyCode.LEFT))
-      .expectSpeech('a')
+      .expectSpeech('a');
 
-      .replay();
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -3780,10 +3792,11 @@ AX_TEST_F(
       const tabs = root.findAll({Role: RoleType.TAB});
       assertTrue(tabs.length > 0);
       tabs[0].showContextMenu();
-      mockFeedback.expectSpeech(/menu opened/).replay();
+      mockFeedback.expectSpeech(/menu opened/);
+      await mockFeedback.replay();
     });
 
-// TODO(crbug.com/1346144): Fix flaky test.
+// TODO(crbug.com/1427939): Flaky.
 AX_TEST_F(
     'ChromeVoxBackgroundTest', 'DISABLED_SelectWithOptGroup', async function() {
       const mockFeedback = this.createMockFeedback();
@@ -3805,8 +3818,8 @@ AX_TEST_F(
           .call(press(KeyCode.DOWN))
           .expectSpeech('Deinonychus')
           .call(press(KeyCode.UP))
-          .expectSpeech('Velociraptor')
-          .replay();
+          .expectSpeech('Velociraptor');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'GroupNavigation', async function() {
@@ -3823,8 +3836,8 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'GroupNavigation', async function() {
       .call(doCmd('nextObject'))
       .expectSpeech('bye', 'Link')
       .call(doCmd('previousGroup'))
-      .expectSpeech('hello', 'hi', 'Link', 'hey', 'Link')
-      .replay();
+      .expectSpeech('hello', 'hi', 'Link', 'hey', 'Link');
+  await mockFeedback.replay();
 });
 
 AX_TEST_F(
@@ -3845,9 +3858,9 @@ AX_TEST_F(
       const root = await this.runWithLoadedTree(site);
       const button = root.find({role: RoleType.BUTTON});
       mockFeedback.expectSpeech('hello')
-          .call(button.doDefault.bind(button))
-          .expectSpeech('test title')
-          .replay();
+          .call(doDefault(button))
+          .expectSpeech('test title');
+      await mockFeedback.replay();
     });
 
 TEST_F('ChromeVoxBackgroundTest', 'NewWindowWebSpeech', function() {
@@ -3861,11 +3874,11 @@ TEST_F('ChromeVoxBackgroundTest', 'NewWindowWebSpeech', function() {
       }
     };
 
-    chrome.runtime.openOptionsPage();
+    this.runWithLoadedTree('<h1>ChromeVox Rocks</h1><p>We love ChromeVox</p>');
 
     await new Promise(resolve => {
       onSpeech = textString => {
-        if (textString === 'ChromeVox Options') {
+        if (textString === 'ChromeVox Rocks') {
           resolve();
         }
       };
@@ -3879,8 +3892,8 @@ TEST_F('ChromeVoxBackgroundTest', 'NewWindowWebSpeech', function() {
 
     // Check to ensure there are no duplicate announcements.
     assertEquals(
-        speech.indexOf('ChromeVox Options'),
-        speech.lastIndexOf('ChromeVox Options'));
+        speech.indexOf('ChromeVox Rocks'),
+        speech.lastIndexOf('ChromeVox Rocks'));
 
     // Ensure there are no announcements about the Tab role.
     assertTrue(speech.every(text => {
@@ -3950,8 +3963,9 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'MultipleListBoxes', async function() {
       .call(press(KeyCode.TAB))
       .expectSpeech('Listbox item 2', ' 2 of 3 ', 'Configuration 2', 'List box')
       .call(press(KeyCode.TAB))
-      .expectSpeech('Listbox item 3', ' 3 of 3 ', 'Configuration 3', 'List box')
-      .replay();
+      .expectSpeech(
+          'Listbox item 3', ' 3 of 3 ', 'Configuration 3', 'List box');
+  await mockFeedback.replay();
 });
 
 // Make sure linear navigation does not go inside ListBox's options.
@@ -3964,8 +3978,8 @@ AX_TEST_F(
           .call(doCmd('nextObject'))
           .expectSpeech('Click', 'Button')
           .call(doCmd('previousObject'))
-          .expectSpeech('Select an item', 'List box')
-          .replay();
+          .expectSpeech('Select an item', 'List box');
+      await mockFeedback.replay();
     });
 
 // Make sure navigation with Tab to ListBox lands on options.
@@ -3980,8 +3994,8 @@ AX_TEST_F(
           .call(doCmd('nextObject'))
           .expectSpeech('Listbox item two', ' 2 of 3 ')
           .call(doCmd('nextObject'))
-          .expectSpeech('Listbox item three', ' 3 of 3 ')
-          .replay();
+          .expectSpeech('Listbox item three', ' 3 of 3 ');
+      await mockFeedback.replay();
     });
 
 // Make sure navigation with touch to ListBox lands on options.
@@ -4002,8 +4016,8 @@ AX_TEST_F(
           .call(doGesture(chrome.accessibilityPrivate.Gesture.SWIPE_RIGHT1))
           .expectSpeech('Listbox item two', ' 2 of 3 ')
           .call(doGesture(chrome.accessibilityPrivate.Gesture.SWIPE_RIGHT1))
-          .expectSpeech('Listbox item three', ' 3 of 3 ')
-          .replay();
+          .expectSpeech('Listbox item three', ' 3 of 3 ');
+      await mockFeedback.replay();
     });
 
 AX_TEST_F(
@@ -4035,9 +4049,10 @@ AX_TEST_F(
 
           .call(() => {
             // Link the two "windows" with next/previous focus.
-            Object.defineProperty(window1, 'nextFocus', {get: () => window2});
             Object.defineProperty(
-                window2, 'previousFocus', {get: () => window1});
+                window1, 'nextWindowFocus', {get: () => window2});
+            Object.defineProperty(
+                window2, 'previousWindowFocus', {get: () => window1});
           })
 
           // window1 -> window2.
@@ -4052,8 +4067,9 @@ AX_TEST_F(
             // Link the two "windows" with next/previous focus in a slightly
             // different way.
             Object.defineProperty(
-                window1, 'previousFocus', {get: () => window2});
-            Object.defineProperty(window2, 'nextFocus', {get: () => window1});
+                window1, 'previousWindowFocus', {get: () => window2});
+            Object.defineProperty(
+                window2, 'nextWindowFocus', {get: () => window1});
           })
 
           .call(doCmd('previousObject'))
@@ -4065,29 +4081,26 @@ AX_TEST_F(
 
           // window2 -> window1.
           .call(doCmd('nextObject'))
-          .expectSpeech('second', 'Button', 'first, window')
+          .expectSpeech('second', 'Button', 'first, window');
 
-          .replay();
+      await mockFeedback.replay();
     });
 
-// TODO(crbug.com/1346144): Fix flaky test.
-AX_TEST_F(
-    'ChromeVoxBackgroundTest', 'DISABLED_GestureOnPopUpButton',
-    async function() {
-      const mockFeedback = this.createMockFeedback();
-      const site = `
+AX_TEST_F('ChromeVoxBackgroundTest', 'GestureOnPopUpButton', async function() {
+  const mockFeedback = this.createMockFeedback();
+  const site = `
     <select><option>apple</option><option>banana</option></select>
   `;
-      await this.runWithLoadedTree(site);
-      mockFeedback.expectSpeech('Button', 'has pop up')
-          .call(doGesture(Gesture.CLICK))
-          .expectSpeech('Button', 'has pop up', 'Expanded')
-          .call(doGesture(Gesture.SWIPE_DOWN1))
-          .expectSpeech('banana')
-          .call(doGesture(Gesture.SWIPE_UP1))
-          .expectSpeech('apple')
-          .replay();
-    });
+  await this.runWithLoadedTree(site);
+  mockFeedback.expectSpeech('Button', 'has pop up')
+      .call(doGesture(Gesture.CLICK))
+      .expectSpeech('Button', 'has pop up', 'Expanded')
+      .call(doGesture(Gesture.SWIPE_DOWN1))
+      .expectSpeech('banana')
+      .call(doGesture(Gesture.SWIPE_UP1))
+      .expectSpeech('apple');
+  await mockFeedback.replay();
+});
 
 AX_TEST_F('ChromeVoxBackgroundTest', 'NestedImages', async function() {
   const mockFeedback = this.createMockFeedback();
@@ -4120,6 +4133,92 @@ AX_TEST_F('ChromeVoxBackgroundTest', 'NestedImages', async function() {
       .expectSpeech('third', 'Image')
 
       .call(doCmd('nextObject'))
-      .expectSpeech('end')
-      .replay();
+      .expectSpeech('end');
+  await mockFeedback.replay();
+});
+
+AX_TEST_F(
+    'ChromeVoxBackgroundTest', 'ToggleSpeechWithAnnouncement',
+    async function() {
+      const mockFeedback = this.createMockFeedback();
+      const root =
+          await this.runWithLoadedTree(Documents.autofocus + Documents.button);
+
+      // The test will not finish unless this method is called.
+      this.addCallbackPostMethod(
+          TtsBackground, 'toggleSpeechWithAnnouncement', this.newCallback(),
+          () => true /** remove callback */);
+
+      mockFeedback.call(doCmd('toggleSpeechOnOrOff')).expectSpeech(/.*off.*/);
+      await mockFeedback.replay();
+    });
+
+AX_TEST_F('ChromeVoxBackgroundTest', 'CanvasHasImageData', async function() {
+  const site = `
+    <canvas id=myCanvas></canvas>
+    <script>
+      const c = document.getElementById("myCanvas");
+      const ctx = c.getContext("2d");
+      ctx.beginPath();
+      ctx.arc(95, 50, 40, 0, 2 * Math.PI);
+      ctx.stroke();
+    </script>
+  `;
+  const root = await this.runWithLoadedTree(site);
+  const canvas = root.find({role: 'canvas'});
+  canvas.getImageData(0, 0);
+  await new Promise(r => {
+    canvas.addEventListener(EventType.IMAGE_FRAME_UPDATED, r);
+  });
+  assertNotEquals('', canvas.imageDataUrl);
+
+  // Repeated calls should continue to result in events.
+  canvas.getImageData(0, 0);
+  await new Promise(r => {
+    canvas.addEventListener(EventType.IMAGE_FRAME_UPDATED, r);
+  });
+  assertNotEquals('', canvas.imageDataUrl);
+});
+
+AX_TEST_F('ChromeVoxBackgroundTest', 'NestedEmptyClickable', async function() {
+  const mockFeedback = this.createMockFeedback();
+  const site = `
+<div>start</div>
+<div tabindex=0><div aria-label="label" tabindex=0></div></div>
+<div>end</div>
+`;
+  const root = await this.runWithLoadedTree(site);
+  const outer = root.children[1];
+  const inner = outer.children[0];
+
+  Object.defineProperty(outer, 'clickable', {get: () => true});
+  Object.defineProperty(inner, 'clickable', {get: () => true});
+
+  Object.defineProperty(outer, 'name', {get: () => undefined});
+
+  // Linear nav should visit the inner div only.
+  mockFeedback
+      .expectSpeech('start')
+
+      .call(doCmd('nextObject'))
+      .expectSpeech('label')
+
+      .call(doCmd('nextObject'))
+      .expectSpeech('end');
+  await mockFeedback.replay();
+});
+
+AX_TEST_F('ChromeVoxBackgroundTest', 'CustomTabList', async function() {
+  const mockFeedback = this.createMockFeedback();
+  const root = await this.runWithLoadedTree(Documents.customTabList);
+  const tabList = root.find({role: RoleType.TAB_LIST});
+  assertNotNullNorUndefined(tabList);
+  const tabs = root.findAll({role: RoleType.TAB});
+  assertEquals(2, tabs.length, 'Expected two tabs');
+
+  mockFeedback.call(() => tabs[1].doDefault())
+      .expectSpeech(/.*, tab/)
+      .expectSpeech(/[0-9]+ of [0-9]+/)
+      .expectSpeech('Selected');
+  await mockFeedback.replay();
 });

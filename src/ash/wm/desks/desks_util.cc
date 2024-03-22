@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,22 @@
 
 #include <array>
 
-#include "ash/public/cpp/tablet_mode.h"
+#include "ash/constants/ash_features.h"
 #include "ash/shell.h"
 #include "ash/wm/desks/desk.h"
-#include "ash/wm/desks/desks_bar_view.h"
 #include "ash/wm/desks/desks_controller.h"
+#include "ash/wm/desks/legacy_desk_bar_view.h"
+#include "ash/wm/float/float_controller.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_grid.h"
 #include "ash/wm/overview/overview_session.h"
+#include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
+#include "base/containers/adapters.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
+#include "ui/display/screen.h"
 
 namespace ash {
 
@@ -25,22 +29,29 @@ namespace desks_util {
 
 namespace {
 
-constexpr std::array<int, kMaxNumberOfDesks> kDesksContainersIds = {
-    kShellWindowId_DefaultContainerDeprecated,
-    kShellWindowId_DeskContainerB,
-    kShellWindowId_DeskContainerC,
-    kShellWindowId_DeskContainerD,
-    kShellWindowId_DeskContainerE,
-    kShellWindowId_DeskContainerF,
-    kShellWindowId_DeskContainerG,
-    kShellWindowId_DeskContainerH,
+constexpr std::array<int, kDesksUpperLimit> kDesksContainersIds = {
+    kShellWindowId_DeskContainerA, kShellWindowId_DeskContainerB,
+    kShellWindowId_DeskContainerC, kShellWindowId_DeskContainerD,
+    kShellWindowId_DeskContainerE, kShellWindowId_DeskContainerF,
+    kShellWindowId_DeskContainerG, kShellWindowId_DeskContainerH,
+    kShellWindowId_DeskContainerI, kShellWindowId_DeskContainerJ,
+    kShellWindowId_DeskContainerK, kShellWindowId_DeskContainerL,
+    kShellWindowId_DeskContainerM, kShellWindowId_DeskContainerN,
+    kShellWindowId_DeskContainerO, kShellWindowId_DeskContainerP,
 };
+
+// Default max number of desks (that is, enable-16-desks is off).
+constexpr size_t kDesksDefaultLimit = 8;
 
 }  // namespace
 
+size_t GetMaxNumberOfDesks() {
+  return features::Is16DesksEnabled() ? kDesksUpperLimit : kDesksDefaultLimit;
+}
+
 std::vector<int> GetDesksContainersIds() {
   return std::vector<int>(kDesksContainersIds.begin(),
-                          kDesksContainersIds.end());
+                          kDesksContainersIds.begin() + GetMaxNumberOfDesks());
 }
 
 std::vector<aura::Window*> GetDesksContainers(aura::Window* root) {
@@ -58,37 +69,20 @@ std::vector<aura::Window*> GetDesksContainers(aura::Window* root) {
 }
 
 const char* GetDeskContainerName(int container_id) {
-  DCHECK(IsDeskContainerId(container_id));
-
-  switch (container_id) {
-    case kShellWindowId_DefaultContainerDeprecated:
-      return "Desk_Container_A";
-
-    case kShellWindowId_DeskContainerB:
-      return "Desk_Container_B";
-
-    case kShellWindowId_DeskContainerC:
-      return "Desk_Container_C";
-
-    case kShellWindowId_DeskContainerD:
-      return "Desk_Container_D";
-
-    case kShellWindowId_DeskContainerE:
-      return "Desk_Container_E";
-
-    case kShellWindowId_DeskContainerF:
-      return "Desk_Container_F";
-
-    case kShellWindowId_DeskContainerG:
-      return "Desk_Container_G";
-
-    case kShellWindowId_DeskContainerH:
-      return "Desk_Container_H";
-
-    default:
-      NOTREACHED();
-      return "";
+  if (!IsDeskContainerId(container_id)) {
+    NOTREACHED();
+    return "";
   }
+
+  static const char* kDeskContainerNames[] = {
+      "Desk_Container_A", "Desk_Container_B", "Desk_Container_C",
+      "Desk_Container_D", "Desk_Container_E", "Desk_Container_F",
+      "Desk_Container_G", "Desk_Container_H", "Desk_Container_I",
+      "Desk_Container_J", "Desk_Container_K", "Desk_Container_L",
+      "Desk_Container_M", "Desk_Container_N", "Desk_Container_O",
+      "Desk_Container_P",
+  };
+  return kDeskContainerNames[container_id - kShellWindowId_DeskContainerA];
 }
 
 bool IsDeskContainer(const aura::Window* container) {
@@ -97,14 +91,8 @@ bool IsDeskContainer(const aura::Window* container) {
 }
 
 bool IsDeskContainerId(int id) {
-  return id == kShellWindowId_DefaultContainerDeprecated ||
-         id == kShellWindowId_DeskContainerB ||
-         id == kShellWindowId_DeskContainerC ||
-         id == kShellWindowId_DeskContainerD ||
-         id == kShellWindowId_DeskContainerE ||
-         id == kShellWindowId_DeskContainerF ||
-         id == kShellWindowId_DeskContainerG ||
-         id == kShellWindowId_DeskContainerH;
+  return id >= kShellWindowId_DeskContainerA &&
+         id <= kShellWindowId_DeskContainerP;
 }
 
 int GetActiveDeskContainerId() {
@@ -127,6 +115,27 @@ aura::Window* GetActiveDeskContainerForRoot(aura::Window* root) {
 ASH_EXPORT bool BelongsToActiveDesk(aura::Window* window) {
   DCHECK(window);
 
+  // This function may be called early on during window construction. If there
+  // is no parent, then it's not part of any desk yet. See b/260851890 for more
+  // details.
+  if (!window->parent())
+    return false;
+
+  auto* window_state = WindowState::Get(window);
+  // A floated window may be associated with a desk, but they would be parented
+  // to the float container.
+  if (window_state && window_state->IsFloated()) {
+    // When restoring floated window, this will be called when window is not
+    // assigned to a desk by float controller yet. Only return `desk` when it
+    // exists.
+    // Note: in above case, `window` still belongs to desk container and
+    // can be checked in statements below.
+    if (auto* desk =
+            Shell::Get()->float_controller()->FindDeskOfFloatedWindow(window)) {
+      return desk->is_active();
+    }
+  }
+
   const int active_desk_id = GetActiveDeskContainerId();
   aura::Window* desk_container = GetDeskContainerForContext(window);
   return desk_container && desk_container->GetId() == active_desk_id;
@@ -145,8 +154,25 @@ aura::Window* GetDeskContainerForContext(aura::Window* context) {
   return nullptr;
 }
 
+const Desk* GetDeskForContext(aura::Window* context) {
+  DCHECK(context);
+
+  if (aura::Window* context_desk = GetDeskContainerForContext(context)) {
+    for (auto& desk : DesksController::Get()->desks()) {
+      if (desk->container_id() == context_desk->GetId()) {
+        return desk.get();
+      }
+    }
+  }
+
+  if (WindowState::Get(context)->IsFloated())
+    return Shell::Get()->float_controller()->FindDeskOfFloatedWindow(context);
+
+  return nullptr;
+}
+
 bool ShouldDesksBarBeCreated() {
-  return !TabletMode::Get()->InTabletMode() ||
+  return !display::Screen::GetScreen()->InTabletMode() ||
          DesksController::Get()->desks().size() > 1;
 }
 
@@ -168,7 +194,7 @@ bool IsDraggingAnyDesk() {
     return false;
 
   for (auto& grid : overview_session->grid_list()) {
-    const DesksBarView* desks_bar_view = grid->desks_bar_view();
+    const LegacyDeskBarView* desks_bar_view = grid->desks_bar_view();
     if (desks_bar_view && desks_bar_view->IsDraggingDesk())
       return true;
   }
@@ -179,6 +205,26 @@ bool IsDraggingAnyDesk() {
 bool IsWindowVisibleOnAllWorkspaces(const aura::Window* window) {
   return window->GetProperty(aura::client::kWindowWorkspaceKey) ==
          aura::client::kWindowWorkspaceVisibleOnAllWorkspaces;
+}
+
+bool IsZOrderTracked(aura::Window* window) {
+  return window->GetType() == aura::client::WindowType::WINDOW_TYPE_NORMAL &&
+         window->GetProperty(aura::client::kZOrderingKey) ==
+             ui::ZOrderLevel::kNormal;
+}
+
+std::optional<size_t> GetWindowZOrder(const std::vector<aura::Window*>& windows,
+                                      aura::Window* window) {
+  size_t position = 0;
+  for (aura::Window* w : base::Reversed(windows)) {
+    if (IsZOrderTracked(w)) {
+      if (w == window)
+        return position;
+      ++position;
+    }
+  }
+
+  return std::nullopt;
 }
 
 }  // namespace desks_util

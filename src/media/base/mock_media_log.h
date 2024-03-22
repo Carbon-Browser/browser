@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,6 +105,9 @@ class MockMediaLog : public MediaLog {
   std::unique_ptr<MediaLogRecord> take_most_recent_event() {
     return std::move(most_recent_event_);
   }
+
+  // Disable console logging since the mock log is used in spammy tests.
+  bool ShouldLogToDebugConsole() const override;
 
  private:
   std::unique_ptr<MediaLogRecord> most_recent_event_;

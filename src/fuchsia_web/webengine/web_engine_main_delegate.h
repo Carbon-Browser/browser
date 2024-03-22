@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <memory>
 #include <string>
 
+#include <optional>
 #include "content/public/app/content_main_delegate.h"
 #include "fuchsia_web/webengine/web_engine_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class ContentClient;
@@ -36,7 +36,7 @@ class WEB_ENGINE_EXPORT WebEngineMainDelegate
   }
 
   // ContentMainDelegate implementation.
-  absl::optional<int> BasicStartupComplete() override;
+  std::optional<int> BasicStartupComplete() override;
   void PreSandboxStartup() override;
   absl::variant<int, content::MainFunctionParams> RunProcess(
       const std::string& process_type,

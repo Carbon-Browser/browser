@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -37,7 +37,6 @@
 #define MEDIA_AUDIO_MAC_AUDIO_LOW_LATENCY_INPUT_MAC_H_
 
 #include <AudioUnit/AudioUnit.h>
-#include <CoreAudio/CoreAudio.h>
 
 #include <memory>
 #include <vector>
@@ -52,7 +51,9 @@
 #include "media/audio/audio_io.h"
 #include "media/audio/mac/audio_manager_mac.h"
 #include "media/audio/system_glitch_reporter.h"
+#include "media/base/amplitude_peak_detector.h"
 #include "media/base/audio_block_fifo.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_parameters.h"
 
 namespace media {
@@ -131,15 +132,8 @@ class MEDIA_EXPORT AUAudioInputStream
   // Gets the current capture time.
   base::TimeTicks GetCaptureTime(const AudioTimeStamp* input_time_stamp);
 
-  // Gets the number of channels for a stream of audio data.
-  int GetNumberOfChannelsFromStream();
-
   // Issues the OnError() callback to the |sink_|.
-  void HandleError(OSStatus err);
-
-  // Helper function to check if the volume control is available on specific
-  // channel.
-  bool IsVolumeSettableOnChannel(int channel);
+  void HandleError(OSStatus err, const base::Location& location = FROM_HERE);
 
   // Helper methods to set and get atomic |input_callback_is_active_|.
   void SetInputCallbackIsActive(bool active);
@@ -168,7 +162,7 @@ class MEDIA_EXPORT AUAudioInputStream
 
   // Verifies that Open(), Start(), Stop() and Close() are all called on the
   // creating thread which is the main browser thread (CrBrowserMain) on Mac.
-  base::ThreadChecker thread_checker_;
+  THREAD_CHECKER(thread_checker_);
 
   // Our creator, the audio manager needs to be notified when we close.
   const raw_ptr<AudioManagerMac> manager_;
@@ -180,10 +174,6 @@ class MEDIA_EXPORT AUAudioInputStream
   // This may be different from what we ask for, so we use this for stats in
   // order to understand how often this happens and what are the typical values.
   size_t number_of_frames_provided_;
-
-  // The actual I/O buffer size for the input device connected to the active
-  // AUHAL audio unit.
-  size_t io_buffer_frame_size_;
 
   // Pointer to the object that will receive the recorded audio samples.
   raw_ptr<AudioInputCallback> sink_;
@@ -209,10 +199,6 @@ class MEDIA_EXPORT AUAudioInputStream
 
   // Fixed capture hardware latency.
   base::TimeDelta hardware_latency_;
-
-  // The number of channels in each frame of audio data, which is used
-  // when querying the volume of each channel.
-  int number_of_channels_in_frame_;
 
   // FIFO used to accumulates recorded data.
   media::AudioBlockFifo fifo_;
@@ -241,13 +227,6 @@ class MEDIA_EXPORT AUAudioInputStream
   // This timer lives on the main browser thread.
   std::unique_ptr<base::OneShotTimer> input_callback_timer_;
 
-  // Set to true if the audio unit's IO buffer was changed when Open() was
-  // called.
-  bool buffer_size_was_changed_;
-
-  // Set to true once when AudioUnitRender() succeeds for the first time.
-  bool audio_unit_render_has_worked_;
-
   // Set to true when we've successfully called SuppressNoiseReduction to
   // disable ambient noise reduction.
   bool noise_reduction_suppressed_;
@@ -274,6 +253,11 @@ class MEDIA_EXPORT AUAudioInputStream
   // Used to aggregate and report glitch metrics to UMA (periodically) and to
   // text logs (when a stream ends).
   SystemGlitchReporter glitch_reporter_;
+
+  // Used to accumulate glitches to be passed to the AudioInputCallback.
+  AudioGlitchInfo::Accumulator glitch_accumulator_;
+
+  AmplitudePeakDetector peak_detector_;
 
   // Callback to send statistics info.
   AudioManager::LogCallback log_callback_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/memory/ptr_util.h"
 #include "net/dns/dns_response.h"
 #include "net/dns/https_record_rdata.h"
+#include "net/dns/opt_record_rdata.h"
 #include "net/dns/record_rdata.h"
 
 namespace net {
@@ -63,10 +64,7 @@ std::unique_ptr<const RecordParsed> RecordParsed::CreateFrom(
       rdata = NsecRecordRdata::Create(record.rdata, *parser);
       break;
     case OptRecordRdata::kType:
-      rdata = OptRecordRdata::Create(record.rdata, *parser);
-      break;
-    case IntegrityRecordRdata::kType:
-      rdata = IntegrityRecordRdata::Create(record.rdata);
+      rdata = OptRecordRdata::Create(record.rdata);
       break;
     case HttpsRecordRdata::kType:
       rdata = HttpsRecordRdata::Parse(record.rdata);

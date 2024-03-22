@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,22 +9,22 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
+#include "media/gpu/test/video_frame_helpers.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 namespace test {
 
 class FrameRendererDummy;
-class Video;
-class VideoFrameProcessor;
+class VideoBitstream;
 class DecoderWrapper;
 struct DecoderWrapperConfig;
 
@@ -37,6 +37,7 @@ class DecoderListener {
  public:
   enum class Event : size_t {
     kInitialized,
+    kDecoderBufferAccepted,  // Calling Decode() fires a kOK DecodeCB call.
     kFrameDecoded,
     kFlushing,
     kFlushDone,
@@ -73,7 +74,7 @@ class DecoderListener {
   // called multiple times and needs to be called before Play(). The |video|
   // will not be owned by the video player, the caller should guarantee it
   // outlives the video player.
-  bool Initialize(const Video* video);
+  bool Initialize(const VideoBitstream* video);
   // Play the video asynchronously.
   void Play();
   // Play the video asynchronously. Automatically pause decoding when |event|

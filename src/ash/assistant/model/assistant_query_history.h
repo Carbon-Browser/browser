@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 #define ASH_ASSISTANT_MODEL_ASSISTANT_QUERY_HISTORY_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/component_export.h"
 #include "base/containers/circular_deque.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/memory/raw_ref.h"
 
 namespace ash {
 
@@ -28,18 +29,19 @@ class COMPONENT_EXPORT(ASSISTANT_MODEL) AssistantQueryHistory {
 
     // Fetches the next query. If current is already the last query, or there is
     // no query in history, returns nullopt.
-    absl::optional<std::string> Next();
+    std::optional<std::string> Next();
 
     // Fetches the previous query. If current is already the first query, return
     // the first query. If there is no query in history, returns nullopt.
-    absl::optional<std::string> Prev();
+    std::optional<std::string> Prev();
 
     // Resets to the last query. It also makes current iterator valid again if
     // new queries are added to the underlying AssistantQueryHistory.
     void ResetToLast();
 
    private:
-    const base::circular_deque<std::string>& queries_;
+    const raw_ref<const base::circular_deque<std::string>, ExperimentalAsh>
+        queries_;
     size_t cur_pos_;
   };
 

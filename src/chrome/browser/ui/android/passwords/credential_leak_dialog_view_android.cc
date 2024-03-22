@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,6 @@ void CredentialLeakDialogViewAndroid::Show(ui::WindowAndroid* window_android) {
       base::android::ConvertUTF16ToJavaString(env, controller_->GetTitle()),
       base::android::ConvertUTF16ToJavaString(env,
                                               controller_->GetDescription()),
-      controller_->ShouldShowAutomaticChangePasswordButton(),
       base::android::ConvertUTF16ToJavaString(
           env, controller_->GetAcceptButtonLabel()),
       controller_->ShouldShowCancelButton()

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,10 +24,10 @@ bool operator!=(const ProtocolHandlerInfo& handler1,
 }
 
 base::Value ProtocolHandlerInfo::AsDebugValue() const {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetStringKey("protocol", protocol);
-  root.SetStringKey("url", url.spec());
-  return root;
+  base::Value::Dict root;
+  root.Set("protocol", protocol);
+  root.Set("url", url.spec());
+  return base::Value(std::move(root));
 }
 
 }  // namespace apps

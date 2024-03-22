@@ -1,18 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_credit_card+CreditCard.h"
 
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "components/autofill/core/browser/data_model/credit_card.h"
-#include "testing/platform_test.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
+#import "components/autofill/core/browser/data_model/credit_card.h"
+#import "testing/platform_test.h"
+#import "url/gurl.h"
 
 using autofill::CreditCard;
 using ManualFillCreditCardFormAutofilliOSTest = PlatformTest;
@@ -67,7 +63,8 @@ TEST_F(ManualFillCreditCardFormAutofilliOSTest, CreationObfuscated) {
   NSString* expirationMonth = @"1";
 
   CreditCard autofillCreditCard = CreditCard();
-  autofillCreditCard.set_record_type(autofill::CreditCard::MASKED_SERVER_CARD);
+  autofillCreditCard.set_record_type(
+      autofill::CreditCard::RecordType::kMaskedServerCard);
   autofillCreditCard.set_guid(
       base::UTF16ToASCII(base::SysNSStringToUTF16(GUID)));
   autofillCreditCard.SetNumber(base::SysNSStringToUTF16(number));

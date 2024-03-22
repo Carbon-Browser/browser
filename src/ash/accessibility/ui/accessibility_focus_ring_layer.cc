@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "third_party/skia/include/core/SkPaint.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/effects/SkDashPathEffect.h"
@@ -69,8 +69,8 @@ SkPath MakePath(const AccessibilityFocusRing& input_ring,
   }
 
   SkPath path;
-  gfx::Point p0 = ring.points[0] - offset;
-  path.moveTo(SkIntToScalar(p0.x()), SkIntToScalar(p0.y()));
+  gfx::Point p = ring.points[0] - offset;
+  path.moveTo(SkIntToScalar(p.x()), SkIntToScalar(p.y()));
   for (int i = 0; i < 12; i++) {
     int index0 = ((3 * i) + 1) % 36;
     int index1 = ((3 * i) + 2) % 36;

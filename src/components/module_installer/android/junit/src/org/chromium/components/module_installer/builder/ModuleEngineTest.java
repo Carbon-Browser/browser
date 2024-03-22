@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,16 +24,12 @@ import org.chromium.components.module_installer.engine.EngineFactory;
 import org.chromium.components.module_installer.engine.InstallEngine;
 import org.chromium.components.module_installer.engine.InstallListener;
 
-/**
- * Test suite for the ModuleEngine class.
- */
+/** Test suite for the ModuleEngine class. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class ModuleEngineTest {
-    @Mock
-    private InstallEngine mInstallEngineMock;
+    @Mock private InstallEngine mInstallEngineMock;
 
-    @Mock
-    private EngineFactory mEngineFactoryMock;
+    @Mock private EngineFactory mEngineFactoryMock;
 
     private ModuleEngine mModuleEngine;
 

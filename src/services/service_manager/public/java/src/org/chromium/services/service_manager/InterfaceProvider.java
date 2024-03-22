@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ import org.chromium.mojo.system.MessagePipeHandle;
 import org.chromium.mojo.system.MojoException;
 import org.chromium.mojo.system.Pair;
 
-/**
- * Provides access to interfaces exposed by an InterfaceProvider mojo interface.
- */
+/** Provides access to interfaces exposed by an InterfaceProvider mojo interface. */
 public class InterfaceProvider implements ConnectionErrorHandler {
     private Core mCore;
     private org.chromium.service_manager.mojom.InterfaceProvider.Proxy mInterfaceProvider;

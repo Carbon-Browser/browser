@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/file_system_provider/registry_interface.h"
 #include "chrome/browser/ash/file_system_provider/watcher.h"
 
@@ -58,7 +59,7 @@ class Registry : public RegistryInterface {
                         const Watcher& watcher) override;
 
  private:
-  Profile* profile_;  // Not owned.
+  raw_ptr<Profile, ExperimentalAsh> profile_;  // Not owned.
 };
 
 }  // namespace file_system_provider

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "remoting/host/linux/x11_keyboard.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -102,10 +102,11 @@ void FakeX11Keyboard::PressKey(uint32_t keycode, uint32_t modifiers) {
 bool FakeX11Keyboard::FindKeycode(uint32_t code_point,
                                   uint32_t* keycode,
                                   uint32_t* modifiers) {
-  auto position = std::find_if(keycode_mapping_.begin(), keycode_mapping_.end(),
-               [code_point](const std::pair<uint32_t, MappingInfo>& pair) {
-    return pair.second.code_point == code_point;
-  });
+  auto position =
+      base::ranges::find(keycode_mapping_, code_point,
+                         [](const std::pair<uint32_t, MappingInfo>& pair) {
+                           return pair.second.code_point;
+                         });
   if (position == keycode_mapping_.end()) {
     return false;
   }
@@ -136,7 +137,7 @@ void FakeX11Keyboard::Sync() {}
 void FakeX11Keyboard::ExpectEnterCodePoints(
     const std::vector<uint32_t>& sequence) {
   expected_code_point_sequence_.insert(expected_code_point_sequence_.end(),
-              sequence.begin(), sequence.end());
+                                       sequence.begin(), sequence.end());
 }
 
 class X11CharacterInjectorTest : public testing::Test {
@@ -151,7 +152,8 @@ class X11CharacterInjectorTest : public testing::Test {
   void InjectAndRun(const std::vector<uint32_t>& code_points);
 
   std::unique_ptr<X11CharacterInjector> injector_;
-  raw_ptr<FakeX11Keyboard> keyboard_;  // Owned by |injector_|.
+  raw_ptr<FakeX11Keyboard, DanglingUntriaged>
+      keyboard_;  // Owned by |injector_|.
 
   base::test::SingleThreadTaskEnvironment task_environment_;
 };
@@ -169,14 +171,14 @@ void X11CharacterInjectorTest::InjectAndRun(
     const std::vector<uint32_t>& code_points) {
   base::RunLoop run_loop;
   keyboard_->SetKeyPressFinishedCallback(run_loop.QuitClosure());
-  for (uint32_t code_point : code_points)
+  for (uint32_t code_point : code_points) {
     injector_->Inject(code_point);
+  }
   keyboard_->ExpectEnterCodePoints(code_points);
   run_loop.Run();
 }
 
-TEST_F(X11CharacterInjectorTest, TestNoMappingNoExpectation) {
-}
+TEST_F(X11CharacterInjectorTest, TestNoMappingNoExpectation) {}
 
 TEST_F(X11CharacterInjectorTest, TestTypeOneCharacter) {
   InjectAndRun({123});

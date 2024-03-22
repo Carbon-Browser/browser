@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class MockPaymentProvider : public payments::mojom::blink::PaymentRequest {
     has_closed_ = true;
   }
 
-  void Show(bool wait_for_updated_details) override {}
+  void Show(bool wait_for_updated_details, bool had_user_activation) override {}
   void Retry(
       payments::mojom::blink::PaymentValidationErrorsPtr errors) override {
     NOTREACHED();
@@ -85,7 +85,8 @@ class PaymentRequestForInvalidOriginOrSslTest : public testing::Test {
   std::string GetRejectString(ScriptState* script_state,
                               ScriptPromise& promise) {
     ScriptValue on_reject = GetRejectValue(script_state, promise);
-    return ToCoreString(on_reject.V8Value()
+    return ToCoreString(script_state->GetIsolate(),
+                        on_reject.V8Value()
                             ->ToString(script_state->GetContext())
                             .ToLocalChecked())
         .Ascii()
@@ -128,9 +129,10 @@ TEST_F(PaymentRequestForInvalidOriginOrSslTest,
   // The show() will be rejected before user activation is checked, so there is
   // no need to trigger user-activation here.
   ScriptPromise promise =
-      request->show(scope.GetScriptState(), ASSERT_NO_EXCEPTION);
-  EXPECT_EQ("NotSupportedError: mock error message",
-            GetRejectString(scope.GetScriptState(), promise));
+      request->show(scope.GetScriptState(), scope.GetExceptionState());
+  EXPECT_TRUE(scope.GetExceptionState().HadException());
+  EXPECT_EQ(DOMExceptionCode::kNotSupportedError,
+            scope.GetExceptionState().CodeAs<DOMExceptionCode>());
 }
 
 TEST_F(PaymentRequestForInvalidOriginOrSslTest,
@@ -143,14 +145,18 @@ TEST_F(PaymentRequestForInvalidOriginOrSslTest,
   // The show()s will be rejected before user activation is checked, so there is
   // no need to trigger user-activation here.
   ScriptPromise promise1 =
-      request->show(scope.GetScriptState(), ASSERT_NO_EXCEPTION);
-  EXPECT_EQ("NotSupportedError: mock error message",
-            GetRejectString(scope.GetScriptState(), promise1));
+      request->show(scope.GetScriptState(), scope.GetExceptionState());
+  EXPECT_TRUE(scope.GetExceptionState().HadException());
+  EXPECT_EQ(DOMExceptionCode::kNotSupportedError,
+            scope.GetExceptionState().CodeAs<DOMExceptionCode>());
+
+  scope.GetExceptionState().ClearException();
 
   ScriptPromise promise2 =
       request->show(scope.GetScriptState(), scope.GetExceptionState());
-  EXPECT_EQ("NotSupportedError: mock error message",
-            GetRejectString(scope.GetScriptState(), promise2));
+  EXPECT_TRUE(scope.GetExceptionState().HadException());
+  EXPECT_EQ(DOMExceptionCode::kNotSupportedError,
+            scope.GetExceptionState().CodeAs<DOMExceptionCode>());
 }
 
 TEST_F(PaymentRequestForInvalidOriginOrSslTest,

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include "ash/display/display_alignment_indicator.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/ranges/algorithm.h"
 #include "base/timer/timer.h"
 #include "ui/events/event.h"
 #include "ui/gfx/color_palette.h"
@@ -281,11 +282,8 @@ void DisplayAlignmentController::ComputePreviewIndicators() {
     const bool are_neighbors = display::ComputeBoundary(
         bounds, peer.bounds(), &source_edge, &peer_edge);
 
-    const auto& existing_indicator_it =
-        std::find_if(active_indicators_.begin(), active_indicators_.end(),
-                     [id = peer.id()](const auto& indicator) {
-                       return id == indicator->display_id();
-                     });
+    const auto& existing_indicator_it = base::ranges::find(
+        active_indicators_, peer.id(), &DisplayAlignmentIndicator::display_id);
 
     const bool indicator_exists =
         existing_indicator_it != active_indicators_.end();

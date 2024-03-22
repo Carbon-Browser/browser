@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,8 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/safe_browsing/core/browser/sync/safe_browsing_sync_observer_impl.h"
 #include "components/safe_browsing/core/browser/verdict_cache_manager.h"
 #include "content/public/browser/browser_context.h"
@@ -26,33 +24,35 @@ VerdictCacheManager* VerdictCacheManagerFactory::GetForProfile(
 
 // static
 VerdictCacheManagerFactory* VerdictCacheManagerFactory::GetInstance() {
-  return base::Singleton<VerdictCacheManagerFactory>::get();
+  static base::NoDestructor<VerdictCacheManagerFactory> instance;
+  return instance.get();
 }
 
 VerdictCacheManagerFactory::VerdictCacheManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "VerdictCacheManager",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(HostContentSettingsMapFactory::GetInstance());
   DependsOn(SyncServiceFactory::GetInstance());
 }
 
-KeyedService* VerdictCacheManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+VerdictCacheManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new VerdictCacheManager(
+  return std::make_unique<VerdictCacheManager>(
       HistoryServiceFactory::GetForProfile(profile,
                                            ServiceAccessType::EXPLICIT_ACCESS),
       HostContentSettingsMapFactory::GetForProfile(profile),
       profile->GetPrefs(),
       std::make_unique<SafeBrowsingSyncObserverImpl>(
           SyncServiceFactory::GetForProfile(profile)));
-}
-
-content::BrowserContext* VerdictCacheManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
 }
 
 }  // namespace safe_browsing

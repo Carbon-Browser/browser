@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class DawnServiceSerializer : public dawn::wire::CommandSerializer {
   bool NeedsFlush() const;
 
  private:
-  raw_ptr<DecoderClient> client_;
+  raw_ptr<DecoderClient, DanglingUntriaged> client_;
   std::vector<uint8_t> buffer_;
   size_t put_offset_;
 };

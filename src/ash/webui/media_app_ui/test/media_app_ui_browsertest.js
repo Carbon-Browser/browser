@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -125,8 +125,8 @@ const MediaAppUIBrowserTest = {
   runTestInGuest,
 };
 
-// Expose an old-style export for js2gtest.
-window['MediaAppUIBrowserTest_for_js2gtest'] = MediaAppUIBrowserTest;
+// Expose an export for tests run through `isolatedTestRunner`.
+window['MediaAppUiBrowserTest'] = MediaAppUIBrowserTest;
 
 // Tests that chrome://media-app is allowed to frame
 // chrome-untrusted://media-app. The URL is set in the html. If that URL can't
@@ -1479,16 +1479,8 @@ MediaAppUIBrowserTest.GuestHasFocus = async () => {
   assertEquals(document.activeElement, guest);
 };
 
-// Check the body element's background color when the DarkLightMode feature is
-// enabled.
-MediaAppUIBrowserTest.BodyHasCorrectBackgroundColorWithDarkLight = () => {
+// Check the body element's background color when it is light mode.
+MediaAppUIBrowserTest.BodyHasCorrectBackgroundColorInLightMode = () => {
   const actualBackgroundColor = getComputedStyle(document.body).backgroundColor;
   assertEquals(actualBackgroundColor, 'rgb(255, 255, 255)');  // White.
-};
-
-// Check the body element's background color when the DarkLightMode feature is
-// disabled.
-MediaAppUIBrowserTest.BodyHasCorrectBackgroundColorWithoutDarkLight = () => {
-  const actualBackgroundColor = getComputedStyle(document.body).backgroundColor;
-  assertEquals(actualBackgroundColor, 'rgb(32, 33, 36)');  // Grey 900.
 };

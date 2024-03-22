@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/palette/palette_ids.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/vector_icon_types.h"
 
 namespace aura {
@@ -49,13 +50,6 @@ class ASH_EXPORT PaletteTool {
 
     // Returns the root window.
     virtual aura::Window* GetWindow() = 0;
-
-    // Record usage of each pen palette option.
-    virtual void RecordPaletteOptionsUsage(PaletteTrayOptions option,
-                                           PaletteInvocationMethod method) = 0;
-
-    // Record mode cancellation of pen palette.
-    virtual void RecordPaletteModeCancellation(PaletteModeCancelType type) = 0;
 
    protected:
     virtual ~Delegate() {}
@@ -117,7 +111,7 @@ class ASH_EXPORT PaletteTool {
   bool enabled_ = false;
 
   // Unowned pointer to the delegate. The delegate should outlive this instance.
-  Delegate* delegate_;
+  raw_ptr<Delegate, ExperimentalAsh> delegate_;
 };
 
 }  // namespace ash

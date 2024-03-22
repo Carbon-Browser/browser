@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "content/browser/renderer_host/event_with_latency_info.h"
 #include "content/browser/renderer_host/input/timeout_monitor.h"
+#include "content/common/input/event_with_latency_info.h"
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
 
 namespace content {

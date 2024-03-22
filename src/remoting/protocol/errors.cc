@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 
 #include "remoting/base/name_value_map.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -32,6 +31,7 @@ const NameMapElement<ErrorCode> kErrorCodeNames[] = {
     {AUTHZ_POLICY_CHECK_FAILED, "AUTHZ_POLICY_CHECK_FAILED"},
     {DISALLOWED_BY_POLICY, "DISALLOWED_BY_POLICY"},
     {LOCATION_AUTHZ_POLICY_CHECK_FAILED, "LOCATION_AUTHZ_POLICY_CHECK_FAILED"},
+    {UNAUTHORIZED_ACCOUNT, "UNAUTHORIZED_ACCOUNT"},
 };
 
 }  // namespace
@@ -44,5 +44,4 @@ bool ParseErrorCode(const std::string& name, ErrorCode* result) {
   return NameToValue(kErrorCodeNames, name, result);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

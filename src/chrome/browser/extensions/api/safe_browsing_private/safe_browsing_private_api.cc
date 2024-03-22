@@ -1,10 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/safe_browsing_private/safe_browsing_private_api.h"
 
-#include <memory>
 #include <utility>
 
 #include "base/strings/stringprintf.h"
@@ -41,9 +40,9 @@ SafeBrowsingPrivateGetReferrerChainFunction::
 
 ExtensionFunction::ResponseAction
 SafeBrowsingPrivateGetReferrerChainFunction::Run() {
-  std::unique_ptr<api::safe_browsing_private::GetReferrerChain::Params> params =
+  absl::optional<api::safe_browsing_private::GetReferrerChain::Params> params =
       api::safe_browsing_private::GetReferrerChain::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   content::WebContents* contents = nullptr;
 

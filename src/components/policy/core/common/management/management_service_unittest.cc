@@ -1,14 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/core/common/management/management_service.h"
 
-#include "base/run_loop.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "components/policy/core/common/features.h"
+#include "base/test/test_future.h"
 #include "components/policy/core/common/management/scoped_management_service_override_for_testing.h"
 #include "components/prefs/persistent_pref_store.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -52,8 +50,6 @@ class ManagementServiceTests : public testing::Test {
   ManagementServiceTests& operator=(const ManagementServiceTests&) = delete;
 
   void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kEnableCachedManagementStatus);
     prefs_.registry()->RegisterIntegerPref(kPrefName, 0);
   }
 
@@ -68,7 +64,6 @@ class ManagementServiceTests : public testing::Test {
 
  private:
   TestingPrefServiceSimple prefs_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_F(ManagementServiceTests, ScopedManagementServiceOverrideForTesting) {
@@ -143,15 +138,13 @@ TEST_F(ManagementServiceTests, LoadCachedValues) {
 
   management_service.UsePrefServiceAsCache(prefs());
 
-  base::RunLoop run_loop;
-  management_service.RefreshCache(base::BindLambdaForTesting(
-      [&](ManagementAuthorityTrustworthiness previous,
-          ManagementAuthorityTrustworthiness next) {
-        EXPECT_EQ(previous, ManagementAuthorityTrustworthiness::TRUSTED);
-        EXPECT_EQ(next, ManagementAuthorityTrustworthiness::FULLY_TRUSTED);
-        run_loop.Quit();
-      }));
-  run_loop.Run();
+  base::test::TestFuture<ManagementAuthorityTrustworthiness,
+                         ManagementAuthorityTrustworthiness>
+      test_future;
+  management_service.RefreshCache(test_future.GetCallback());
+  EXPECT_EQ(test_future.Get<0>(), ManagementAuthorityTrustworthiness::TRUSTED);
+  EXPECT_EQ(test_future.Get<1>(),
+            ManagementAuthorityTrustworthiness::FULLY_TRUSTED);
 
   EXPECT_FALSE(management_service.HasManagementAuthority(
       EnterpriseManagementAuthority::CLOUD));

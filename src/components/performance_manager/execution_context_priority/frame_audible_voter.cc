@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,12 +41,12 @@ void FrameAudibleVoter::SetVotingChannel(VotingChannel voting_channel) {
   voting_channel_ = std::move(voting_channel);
 }
 
-void FrameAudibleVoter::OnFrameNodeAdded(const FrameNode* frame_node) {
+void FrameAudibleVoter::OnFrameNodeInitializing(const FrameNode* frame_node) {
   const Vote vote = GetVote(frame_node->IsAudible());
   voting_channel_.SubmitVote(GetExecutionContext(frame_node), vote);
 }
 
-void FrameAudibleVoter::OnBeforeFrameNodeRemoved(const FrameNode* frame_node) {
+void FrameAudibleVoter::OnFrameNodeTearingDown(const FrameNode* frame_node) {
   voting_channel_.InvalidateVote(GetExecutionContext(frame_node));
 }
 

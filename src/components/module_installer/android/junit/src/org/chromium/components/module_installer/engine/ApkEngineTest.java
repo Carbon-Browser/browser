@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import org.mockito.InOrder;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Test suite for the ApkEngine class.
- */
+/** Test suite for the ApkEngine class. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class ApkEngineTest {
     private ApkEngine mEngine;

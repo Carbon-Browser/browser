@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,11 +31,14 @@ class PrivacySandboxHandler : public SettingsPageUIHandler {
                            SetTopicAllowed);
   FRIEND_TEST_ALL_PREFIXES(PrivacySandboxHandlerTestMockService,
                            GetTopicsState);
+  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxHandlerTestMockService,
+                           TopicsToggleChanged);
 
   void HandleSetFledgeJoiningAllowed(const base::Value::List& args);
   void HandleGetFledgeState(const base::Value::List& args);
   void HandleSetTopicAllowed(const base::Value::List& args);
   void HandleGetTopicsState(const base::Value::List& args);
+  void HandleTopicsToggleChanged(const base::Value::List& args);
 
   PrivacySandboxService* GetPrivacySandboxService();
 

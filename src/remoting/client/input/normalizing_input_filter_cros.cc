@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,7 @@ static bool IsRewrittenKey(uint32_t code) {
 // target application doesn't distinguish between left and right Alt keys.
 //
 // This file must be kept up to date with changes to
-// ui/chromeos/events/event_rewriter_chromeos.cc
+// ui/events/ash/event_rewriter_ash.cc
 
 NormalizingInputFilterCros::NormalizingInputFilterCros(
     protocol::InputStub* input_stub)

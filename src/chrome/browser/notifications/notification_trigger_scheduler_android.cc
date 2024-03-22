@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,12 +26,3 @@ NotificationTriggerSchedulerAndroid::NotificationTriggerSchedulerAndroid() {
 
 NotificationTriggerSchedulerAndroid::~NotificationTriggerSchedulerAndroid() =
     default;
-
-void NotificationTriggerSchedulerAndroid::ScheduleTrigger(
-    base::Time timestamp) {
-  DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  JNIEnv* env = base::android::AttachCurrentThread();
-
-  Java_NotificationTriggerScheduler_schedule(
-      env, java_notification_trigger_scheduler_, timestamp.ToJavaTime());
-}

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "components/crx_file/id_util.h"
+#include "content/public/common/content_features.h"
 #include "extensions/common/extension_api.h"
 #include "extensions/common/extension_features.h"
+#include "extensions/common/features/feature.h"
 #include "extensions/common/features/feature_channel.h"
 #include "extensions/common/features/feature_developer_mode_only.h"
 #include "extensions/common/features/feature_flags.h"
@@ -39,16 +42,7 @@ struct AllowlistInfo {
     const std::string& allowlisted_extension_id =
         base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
             switches::kAllowlistedExtensionID);
-
-    if (!allowlisted_extension_id.empty()) {
-      hashed_id = HashedIdInHex(allowlisted_extension_id);
-    } else {
-      // Check the deprecated switch if the main one is not set. If both of them
-      // are empty, `hash_id` will contain the hash of an empty string.
-      hashed_id = HashedIdInHex(
-          base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-              switches::kDEPRECATED_AllowlistedExtensionID));
-    }
+    hashed_id = HashedIdInHex(allowlisted_extension_id);
   }
   std::string hashed_id;
 };
@@ -133,6 +127,8 @@ std::string GetDisplayName(Feature::Context context) {
       return "lock screen app";
     case Feature::OFFSCREEN_EXTENSION_CONTEXT:
       return "offscreen document";
+    case Feature::USER_SCRIPT_CONTEXT:
+      return "user script";
   }
   NOTREACHED();
   return "";
@@ -225,7 +221,7 @@ SimpleFeature::SimpleFeature()
       is_internal_(false),
       disallow_for_service_workers_(false) {}
 
-SimpleFeature::~SimpleFeature() {}
+SimpleFeature::~SimpleFeature() = default;
 
 Feature::Availability SimpleFeature::IsAvailableToManifest(
     const HashedExtensionId& hashed_id,
@@ -255,9 +251,12 @@ Feature::Availability SimpleFeature::IsAvailableToContextForBind(
     const GURL& url,
     Feature::Platform platform,
     int context_id,
+    const ContextData* context_data,
     const Feature* feature) {
+  CHECK(feature);
+  CHECK(context_data);
   return feature->IsAvailableToContextImpl(extension, context, url, platform,
-                                           context_id, true);
+                                           context_id, true, *context_data);
 }
 
 Feature::Availability SimpleFeature::IsAvailableToContextImpl(
@@ -266,12 +265,30 @@ Feature::Availability SimpleFeature::IsAvailableToContextImpl(
     const GURL& url,
     Platform platform,
     int context_id,
-    bool check_developer_mode) const {
+    bool check_developer_mode,
+    const ContextData& context_data) const {
+  // Check the environment availability first. This is because, for features
+  // that use delegated availability checks, those checks should also include
+  // environment availability checks. By checking the environment first, if the
+  // feature isn't intended for the current environment, it will fail the
+  // availability check here first. If it passes the environment check, then the
+  // delegated availability check will run and we can return that result, either
+  // pass or fail. This also allows features that don't require delegated
+  // availability checks to proceed through their normal checks from environment
+  // on to manifest and then context availability.
   Availability environment_availability = GetEnvironmentAvailability(
       platform, GetCurrentChannel(), GetCurrentFeatureSessionType(), context_id,
       check_developer_mode);
   if (!environment_availability.is_available())
     return environment_availability;
+
+  if (RequiresDelegatedAvailabilityCheck()) {
+    return HasDelegatedAvailabilityCheckHandler()
+               ? RunDelegatedAvailabilityCheck(
+                     extension, context, url, platform, context_id,
+                     check_developer_mode, std::move(context_data))
+               : CreateAvailability(MISSING_DELEGATED_AVAILABILITY_CHECK);
+  }
 
   if (extension) {
     Availability manifest_availability = GetManifestAvailability(
@@ -298,9 +315,10 @@ Feature::Availability SimpleFeature::IsAvailableToContextImpl(
 
   // TODO(kalman): Assert that if the context was a webpage or WebUI context
   // then at some point a "matches" restriction was checked.
+
   return CheckDependencies(base::BindRepeating(
       &IsAvailableToContextForBind, base::RetainedRef(extension), context, url,
-      platform, context_id));
+      platform, context_id, base::Unretained(&context_data)));
 }
 
 Feature::Availability SimpleFeature::IsAvailableToEnvironment(
@@ -396,6 +414,12 @@ std::string SimpleFeature::GetAvailabilityMessage(
       return base::StringPrintf(
           "'%s' requires the user to have developer mode enabled.",
           name().c_str());
+    case MISSING_DELEGATED_AVAILABILITY_CHECK:
+      return base::StringPrintf(
+          "'%s' is missing its delegated availability check", name().c_str());
+    case FAILED_DELEGATED_AVAILABILITY_CHECK:
+      return base::StringPrintf("'%s' failed its delegated availability check.",
+                                name().c_str());
   }
 
   NOTREACHED();
@@ -524,6 +548,21 @@ bool SimpleFeature::MatchesSessionTypes(
          base::Contains(session_types_, mojom::FeatureSessionType::kKiosk);
 }
 
+bool SimpleFeature::RequiresDelegatedAvailabilityCheck() const {
+  return requires_delegated_availability_check_;
+}
+
+bool SimpleFeature::HasDelegatedAvailabilityCheckHandler() const {
+  return !delegated_availability_check_handler_.is_null();
+}
+
+void SimpleFeature::SetDelegatedAvailabilityCheckHandler(
+    DelegatedAvailabilityCheckHandler handler) {
+  DCHECK(RequiresDelegatedAvailabilityCheck());
+  DCHECK(!HasDelegatedAvailabilityCheckHandler());
+  delegated_availability_check_handler_ = handler;
+}
+
 Feature::Availability SimpleFeature::CheckDependencies(
     const base::RepeatingCallback<Availability(const Feature*)>& checker)
     const {
@@ -637,10 +676,21 @@ Feature::Availability SimpleFeature::GetEnvironmentAvailability(
   if (!MatchesSessionTypes(session_type))
     return CreateAvailability(INVALID_SESSION_TYPE, session_type);
 
-  if (check_developer_mode &&
-      base::FeatureList::IsEnabled(
-          extensions_features::kRestrictDeveloperModeAPIs) &&
-      developer_mode_only_ && !GetCurrentDeveloperMode(context_id)) {
+  // Check developer mode only if the corresponding feature is enabled.
+  // There's a chance this can be hit before the feature list is instantiated
+  // if the user appended the --pack-extension switch. In this case, use the
+  // feature's default value.
+  // TODO(https://crbug.com/1506254): Remove this handling and rely on
+  // the FeatureList being initialized.
+  bool dev_mode_feature_is_enabled =
+      base::FeatureList::GetInstance()
+          ? base::FeatureList::IsEnabled(
+                extensions_features::kRestrictDeveloperModeAPIs)
+          : extensions_features::kRestrictDeveloperModeAPIs.default_state ==
+                base::FEATURE_ENABLED_BY_DEFAULT;
+  check_developer_mode &= dev_mode_feature_is_enabled;
+  if (check_developer_mode && developer_mode_only_ &&
+      !GetCurrentDeveloperMode(context_id)) {
     return CreateAvailability(REQUIRES_DEVELOPER_MODE);
   }
 
@@ -717,6 +767,24 @@ Feature::Availability SimpleFeature::GetContextAvailability(
   if (is_for_service_worker && disallow_for_service_workers_)
     return CreateAvailability(INVALID_CONTEXT);
 
+  return CreateAvailability(IS_AVAILABLE);
+}
+
+Feature::Availability SimpleFeature::RunDelegatedAvailabilityCheck(
+    const Extension* extension,
+    Context context,
+    const GURL& url,
+    Platform platform,
+    int context_id,
+    bool check_developer_mode,
+    const ContextData& context_data) const {
+  DCHECK(RequiresDelegatedAvailabilityCheck());
+  DCHECK(HasDelegatedAvailabilityCheckHandler());
+  if (!delegated_availability_check_handler_.Run(
+          name_, extension, context, url, platform, context_id,
+          check_developer_mode, context_data)) {
+    return CreateAvailability(FAILED_DELEGATED_AVAILABILITY_CHECK);
+  }
   return CreateAvailability(IS_AVAILABLE);
 }
 

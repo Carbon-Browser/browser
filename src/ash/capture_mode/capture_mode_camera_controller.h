@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include <vector>
 
 #include "ash/ash_export.h"
+#include "ash/capture_mode/capture_mode_behavior.h"
 #include "ash/capture_mode/capture_mode_types.h"
-#include "ash/public/cpp/system_tray_observer.h"
-#include "base/callback_forward.h"
+#include "ash/system/tray/system_tray_observer.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -31,6 +33,7 @@ class Rect;
 namespace ash {
 
 class CameraPreviewView;
+class CaptureModeBehavior;
 class CaptureModeDelegate;
 
 // The ID used internally in capture mode to identify the camera.
@@ -168,6 +171,10 @@ class ASH_EXPORT CaptureModeCameraController
   // only if no other camera is already selected.
   void MaybeSelectFirstCamera();
 
+  // Reverts the automatic selection of the first available camera if one was
+  // made by calling the `MaybeSelectFirstCamera()`.
+  void MaybeRevertAutoCameraSelection();
+
   // Returns true if camera support is disabled by admins via
   // the `SystemFeaturesDisableList` policy, false otherwise.
   bool IsCameraDisabledByPolicy() const;
@@ -216,7 +223,7 @@ class ASH_EXPORT CaptureModeCameraController
   // http://b/230917107#comment12 for more details).
   void OnCaptureSessionStarted();
 
-  void OnRecordingStarted(bool is_in_projector_mode);
+  void OnRecordingStarted(const CaptureModeBehavior* active_behavior);
   void OnRecordingEnded();
 
   // Called when the `CameraVideoFrameHandler` of the current
@@ -246,6 +253,8 @@ class ASH_EXPORT CaptureModeCameraController
   // SystemTrayObserver:
   void OnSystemTrayBubbleShown() override;
   void OnFocusLeavingSystemTray(bool reverse) override {}
+  void OnStatusAreaAnchoredBubbleVisibilityChanged(TrayBubbleView* tray_bubble,
+                                                   bool visible) override;
 
   void SetOnCameraListReceivedForTesting(base::OnceClosure callback) {
     on_camera_list_received_for_test_ = std::move(callback);
@@ -329,7 +338,7 @@ class ASH_EXPORT CaptureModeCameraController
 
   // Owned by CaptureModeController and guaranteed to be not null and to outlive
   // `this`.
-  CaptureModeDelegate* const delegate_;
+  const raw_ptr<CaptureModeDelegate, ExperimentalAsh> delegate_;
 
   // The remote end to the video source provider that exists in the video
   // capture service.
@@ -353,7 +362,7 @@ class ASH_EXPORT CaptureModeCameraController
 
   // The camera preview widget and its contents view.
   views::UniqueWidgetPtr camera_preview_widget_;
-  CameraPreviewView* camera_preview_view_ = nullptr;
+  raw_ptr<CameraPreviewView, ExperimentalAsh> camera_preview_view_ = nullptr;
 
   // A timer used to give a `selected_camera_` that got disconnected a grace
   // period, so if it reconnects again within this period, its ID is kept around
@@ -401,7 +410,7 @@ class ASH_EXPORT CaptureModeCameraController
 
   // Valid only during recording to track the number of camera disconnections
   // while recording is in progress.
-  absl::optional<int> in_recording_camera_disconnections_;
+  std::optional<int> in_recording_camera_disconnections_;
 
   // Will be set to true the first time the number of connected cameras is
   // reported.
@@ -410,6 +419,12 @@ class ASH_EXPORT CaptureModeCameraController
   // Will be set to true the first user logs in. And we should only request the
   // camera devices after the first user logs in.
   bool did_first_user_login_ = false;
+
+  // True if the first available camera was auto-selected by calling
+  // `MaybeSelectFirstCamera()`, false otherwise or if
+  // `MaybeRevertAutoCameraSelection()` was called to revert back this automatic
+  // selection.
+  bool did_make_camera_auto_selection_ = false;
 
   base::WeakPtrFactory<CaptureModeCameraController> weak_ptr_factory_{this};
 };

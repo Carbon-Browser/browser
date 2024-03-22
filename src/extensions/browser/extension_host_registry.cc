@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,8 @@ content::BrowserContext* ExtensionHostRegistryFactory::GetBrowserContextToUse(
   // LazyBackgroundTaskQueue!) rely on this, and are set up to be redirect to
   // the original context. This makes it quite challenging to let this have its
   // own incognito context.
-  return ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+  return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+      context, /*force_guest_profile=*/true);
 }
 
 KeyedService* ExtensionHostRegistryFactory::BuildServiceInstanceFor(
@@ -181,6 +182,12 @@ void ExtensionHostRegistry::AddObserver(Observer* observer) {
 
 void ExtensionHostRegistry::RemoveObserver(Observer* observer) {
   observers_.RemoveObserver(observer);
+}
+
+void ExtensionHostRegistry::Shutdown() {
+  for (Observer& observer : observers_) {
+    observer.OnExtensionHostRegistryShutdown(this);
+  }
 }
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@ package org.chromium.android_webview.test;
 
 import static org.chromium.android_webview.test.OnlyRunIn.ProcessMode.SINGLE_PROCESS;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 
 import org.junit.After;
@@ -19,9 +18,7 @@ import org.junit.runner.RunWith;
 import org.chromium.android_webview.HttpAuthDatabase;
 import org.chromium.base.test.util.Feature;
 
-/**
- * Test suite for HttpAuthDatabase.
- */
+/** Test suite for HttpAuthDatabase. */
 @RunWith(AwJUnit4ClassRunner.class)
 @OnlyRunIn(SINGLE_PROCESS)
 public class HttpAuthDatabaseTest {
@@ -41,8 +38,9 @@ public class HttpAuthDatabaseTest {
     @SmallTest
     @Feature({"AndroidWebView"})
     public void testAccessHttpAuthUsernamePassword() {
-        HttpAuthDatabase instance = HttpAuthDatabase.newInstance(
-                InstrumentationRegistry.getTargetContext(), TEST_DATABASE);
+        HttpAuthDatabase instance =
+                HttpAuthDatabase.newInstance(
+                        InstrumentationRegistry.getTargetContext(), TEST_DATABASE);
 
         String host = "http://localhost:8080";
         String realm = "testrealm";

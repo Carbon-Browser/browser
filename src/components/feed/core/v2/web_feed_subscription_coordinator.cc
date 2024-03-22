@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <memory>
 #include <ostream>
 
-#include "base/callback_helpers.h"
 #include "base/debug/stack_trace.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/feed/core/common/pref_names.h"
 #include "components/feed/core/proto/v2/store.pb.h"
@@ -95,20 +95,20 @@ WebFeedSubscriptionCoordinator::WebFeedSubscriptionCoordinator(
       datastore_provider_(&feed_stream->GetGlobalXsurfaceDatastore()) {
   base::TimeDelta delay = GetFeedConfig().fetch_web_feed_info_delay;
   if (IsSignedInAndWebFeedsEnabled() && !delay.is_zero()) {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(
             &WebFeedSubscriptionCoordinator::FetchRecommendedWebFeedsIfStale,
             GetWeakPtr()),
         delay);
     base::OnceClosure do_nothing = base::DoNothing();
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(
             &WebFeedSubscriptionCoordinator::FetchSubscribedWebFeedsIfStale,
             GetWeakPtr(), std::move(do_nothing)),
         delay);
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&WebFeedSubscriptionCoordinator::RetryPendingOperations,
                        GetWeakPtr()),
@@ -290,7 +290,7 @@ void WebFeedSubscriptionCoordinator::FollowWebFeedComplete(
 
   if (result.request_status == WebFeedSubscriptionRequestStatus::kSuccess) {
     model_->OnSubscribed(result.web_feed_info);
-    feed_stream_->SetStreamStale(kWebFeedStream, true);
+    feed_stream_->SetStreamStale(StreamType(StreamKind::kFollowing), true);
   }
 
   SubscriptionsChanged();
@@ -304,6 +304,7 @@ void WebFeedSubscriptionCoordinator::FollowWebFeedComplete(
       index_.IsRecommended(result.followed_web_feed_id);
   callback_result.request_status = result.request_status;
   callback_result.subscription_count = index_.SubscriptionCount();
+  callback_result.change_reason = result.change_reason;
   feed_stream_->GetMetricsReporter().OnFollowAttempt(followed_with_id,
                                                      callback_result);
   std::move(callback).Run(std::move(callback_result));
@@ -363,7 +364,7 @@ void WebFeedSubscriptionCoordinator::UnfollowWebFeedComplete(
     UnsubscribeFromWebFeedTask::Result result) {
   if (!result.unsubscribed_feed_name.empty()) {
     model_->OnUnsubscribed(result.unsubscribed_feed_name);
-    feed_stream_->SetStreamStale(kWebFeedStream, true);
+    feed_stream_->SetStreamStale(StreamType(StreamKind::kFollowing), true);
   }
 
   WebFeedInFlightChange change = DequeueInflightChange();
@@ -965,6 +966,52 @@ WebFeedSubscriptionCoordinator::GetPendingOperationStateForTesting() {
     result.push_back(op.operation);
   }
   return result;
+}
+
+void WebFeedSubscriptionCoordinator::QueryWebFeed(
+    const GURL& url,
+    base::OnceCallback<void(QueryWebFeedResult)> callback) {
+  // TODO(crbug/1409701) Combine subscription status into result callback. This
+  // would require binding a start call via WithModel and updating the local
+  // state to match the result from the server,
+  QueryWebFeedTask::Request request;
+  request.web_feed_url = url;
+
+  feed_stream_->GetTaskQueue().AddTask(
+      FROM_HERE,
+      std::make_unique<QueryWebFeedTask>(
+          feed_stream_, token_generator_.Token(), std::move(request),
+          base::BindOnce(&WebFeedSubscriptionCoordinator::QueryWebFeedComplete,
+                         base::Unretained(this), std::move(callback))));
+}
+
+void WebFeedSubscriptionCoordinator::QueryWebFeedId(
+    const std::string& id,
+    base::OnceCallback<void(QueryWebFeedResult)> callback) {
+  // TODO(crbug/1409701) Combine subscription status into result callback. This
+  // would require binding a start call via WithModel and updating the local
+  // state to match the result from the server,
+  QueryWebFeedTask::Request request;
+  request.web_feed_id = id;
+
+  feed_stream_->GetTaskQueue().AddTask(
+      FROM_HERE,
+      std::make_unique<QueryWebFeedTask>(
+          feed_stream_, token_generator_.Token(), std::move(request),
+          base::BindOnce(&WebFeedSubscriptionCoordinator::QueryWebFeedComplete,
+                         base::Unretained(this), std::move(callback))));
+}
+
+void WebFeedSubscriptionCoordinator::QueryWebFeedComplete(
+    base::OnceCallback<void(QueryWebFeedResult)> callback,
+    QueryWebFeedResult result) {
+  QueryWebFeedResult callback_result;
+  callback_result.web_feed_id = result.web_feed_id;
+  callback_result.url = result.url;
+  callback_result.title = result.title;
+  callback_result.request_status = result.request_status;
+  feed_stream_->GetMetricsReporter().OnQueryAttempt(callback_result);
+  std::move(callback).Run(std::move(callback_result));
 }
 
 }  // namespace feed

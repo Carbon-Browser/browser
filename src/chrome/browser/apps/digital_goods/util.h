@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace apps {
 
 /**
  * Gets the TWA package name associated with the website present in the
- * render frame host. An empty string will be retured if there is no associated
+ * RenderFrameHost. An empty string will be returned if there is no associated
  * TWA, if the website is in an Incognito tab, or if the website is not in a
  * web app window.
  */

@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/scheduler/common/back_forward_cache_disabling_feature_tracker.h"
 
-#include "third_party/blink/renderer/platform/scheduler/common/thread_scheduler_impl.h"
+#include "third_party/blink/renderer/platform/scheduler/common/thread_scheduler_base.h"
 
 namespace blink {
 namespace scheduler {
@@ -12,7 +12,7 @@ namespace scheduler {
 BackForwardCacheDisablingFeatureTracker::
     BackForwardCacheDisablingFeatureTracker(
         TraceableVariableController* tracing_controller,
-        ThreadSchedulerImpl* scheduler)
+        ThreadSchedulerBase* scheduler)
     : opted_out_from_back_forward_cache_{false,
                                          "FrameScheduler."
                                          "OptedOutFromBackForwardCache",
@@ -38,27 +38,53 @@ void BackForwardCacheDisablingFeatureTracker::Reset() {
   back_forward_cache_disabling_feature_counts_.clear();
   back_forward_cache_disabling_features_.reset();
   last_uploaded_bfcache_disabling_features_ = 0;
+  non_sticky_features_and_js_locations_.Clear();
+  sticky_features_and_js_locations_.Clear();
+  last_reported_non_sticky_.Clear();
+  last_reported_sticky_.Clear();
 }
 
-void BackForwardCacheDisablingFeatureTracker::Add(
+void BackForwardCacheDisablingFeatureTracker::AddFeatureInternal(
     SchedulingPolicy::Feature feature) {
-  uint64_t old_mask = GetActiveFeaturesTrackedForBackForwardCacheMetricsMask();
-
   ++back_forward_cache_disabling_feature_counts_[feature];
   back_forward_cache_disabling_features_.set(static_cast<size_t>(feature));
   opted_out_from_back_forward_cache_ = true;
 
-  uint64_t new_mask = GetActiveFeaturesTrackedForBackForwardCacheMetricsMask();
+  NotifyDelegateAboutFeaturesAfterCurrentTask(
+      BackForwardCacheDisablingFeatureTracker::TracingType::kBegin, feature);
+}
 
-  if (old_mask != new_mask) {
-    NotifyDelegateAboutFeaturesAfterCurrentTask(
-        BackForwardCacheDisablingFeatureTracker::TracingType::kBegin, feature);
-  }
+void BackForwardCacheDisablingFeatureTracker::AddNonStickyFeature(
+    SchedulingPolicy::Feature feature,
+    std::unique_ptr<SourceLocation> source_location,
+    FrameOrWorkerScheduler::SchedulingAffectingFeatureHandle* handle) {
+  DCHECK(!scheduler::IsFeatureSticky(feature));
+  AddFeatureInternal(feature);
+
+  DCHECK(handle);
+  non_sticky_features_and_js_locations_.MaybeAdd(
+      handle->GetFeatureAndJSLocationBlockingBFCache());
+
+  NotifyDelegateAboutFeaturesAfterCurrentTask(
+      BackForwardCacheDisablingFeatureTracker::TracingType::kBegin, feature);
+}
+
+void BackForwardCacheDisablingFeatureTracker::AddStickyFeature(
+    SchedulingPolicy::Feature feature,
+    std::unique_ptr<SourceLocation> source_location) {
+  DCHECK(scheduler::IsFeatureSticky(feature));
+  AddFeatureInternal(feature);
+
+  sticky_features_and_js_locations_.MaybeAdd(
+      FeatureAndJSLocationBlockingBFCache(feature, source_location.get()));
+
+  NotifyDelegateAboutFeaturesAfterCurrentTask(
+      BackForwardCacheDisablingFeatureTracker::TracingType::kBegin, feature);
 }
 
 void BackForwardCacheDisablingFeatureTracker::Remove(
-    SchedulingPolicy::Feature feature) {
-  uint64_t old_mask = GetActiveFeaturesTrackedForBackForwardCacheMetricsMask();
+    FeatureAndJSLocationBlockingBFCache feature_and_js_location) {
+  SchedulingPolicy::Feature feature = feature_and_js_location.Feature();
 
   DCHECK_GT(back_forward_cache_disabling_feature_counts_[feature], 0);
   auto it = back_forward_cache_disabling_feature_counts_.find(feature);
@@ -71,12 +97,10 @@ void BackForwardCacheDisablingFeatureTracker::Remove(
   opted_out_from_back_forward_cache_ =
       !back_forward_cache_disabling_feature_counts_.empty();
 
-  uint64_t new_mask = GetActiveFeaturesTrackedForBackForwardCacheMetricsMask();
+  non_sticky_features_and_js_locations_.Erase(feature_and_js_location);
 
-  if (old_mask != new_mask) {
-    NotifyDelegateAboutFeaturesAfterCurrentTask(
-        BackForwardCacheDisablingFeatureTracker::TracingType::kEnd, feature);
-  }
+  NotifyDelegateAboutFeaturesAfterCurrentTask(
+      BackForwardCacheDisablingFeatureTracker::TracingType::kEnd, feature);
 }
 
 WTF::HashSet<SchedulingPolicy::Feature>
@@ -88,14 +112,15 @@ BackForwardCacheDisablingFeatureTracker::
   return result;
 }
 
-uint64_t BackForwardCacheDisablingFeatureTracker::
-    GetActiveFeaturesTrackedForBackForwardCacheMetricsMask() const {
-  auto result = back_forward_cache_disabling_features_.to_ullong();
-  static_assert(static_cast<size_t>(SchedulingPolicy::Feature::kMaxValue) <
-                    sizeof(result) * 8,
-                "Number of the features should allow a bitmask to fit into "
-                "64-bit integer");
-  return result;
+BFCacheBlockingFeatureAndLocations& BackForwardCacheDisablingFeatureTracker::
+    GetActiveNonStickyFeaturesTrackedForBackForwardCache() {
+  return non_sticky_features_and_js_locations_;
+}
+
+const BFCacheBlockingFeatureAndLocations&
+BackForwardCacheDisablingFeatureTracker::
+    GetActiveStickyFeaturesTrackedForBackForwardCache() const {
+  return sticky_features_and_js_locations_;
 }
 
 void BackForwardCacheDisablingFeatureTracker::
@@ -129,11 +154,15 @@ void BackForwardCacheDisablingFeatureTracker::
 void BackForwardCacheDisablingFeatureTracker::ReportFeaturesToDelegate() {
   feature_report_scheduled_ = false;
 
-  uint64_t mask = GetActiveFeaturesTrackedForBackForwardCacheMetricsMask();
-  if (mask == last_uploaded_bfcache_disabling_features_)
+  if (non_sticky_features_and_js_locations_ == last_reported_non_sticky_ &&
+      sticky_features_and_js_locations_ == last_reported_sticky_) {
     return;
-  last_uploaded_bfcache_disabling_features_ = mask;
-  delegate_->UpdateBackForwardCacheDisablingFeatures(mask);
+  }
+  last_reported_non_sticky_ = non_sticky_features_and_js_locations_;
+  last_reported_sticky_ = sticky_features_and_js_locations_;
+  FrameOrWorkerScheduler::Delegate::BlockingDetails details(
+      non_sticky_features_and_js_locations_, sticky_features_and_js_locations_);
+  delegate_->UpdateBackForwardCacheDisablingFeatures(details);
 }
 
 }  // namespace scheduler

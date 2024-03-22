@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {assert, assertInstanceof} from './assert.js';
 import * as dom from './dom.js';
 import {reportError} from './error.js';
+import {AsyncIntervalRunner} from './models/async_interval.js';
 import {Filenamer} from './models/file_namer.js';
 import * as filesystem from './models/file_system.js';
 import {
@@ -12,8 +13,9 @@ import {
   FileAccessEntry,
 } from './models/file_system_access_entry.js';
 import {ResultSaver} from './models/result_saver.js';
-import {VideoSaver} from './models/video_saver.js';
+import {TimeLapseSaver, VideoSaver} from './models/video_saver.js';
 import {ChromeHelper} from './mojo/chrome_helper.js';
+import {ToteMetricFormat} from './mojo/type.js';
 import {extractImageFromBlob} from './thumbnailer.js';
 import {
   ErrorLevel,
@@ -22,6 +24,7 @@ import {
   MimeType,
   VideoType,
 } from './type.js';
+import {WaitableEvent} from './waitable_event.js';
 
 /**
  * Cover photo of gallery button.
@@ -31,7 +34,7 @@ class CoverPhoto {
    * @param file File entry of cover photo.
    * @param url Url to its cover photo. Might be null if the cover is failed to
    *     load.
-   * @param draggable If the file type support share by dragg/drop cover photo.
+   * @param draggable If the file type support share by drag/drop cover photo.
    */
   constructor(
       readonly file: FileAccessEntry,
@@ -100,6 +103,8 @@ export class GalleryButton implements ResultSaver {
 
   private readonly coverPhoto: HTMLImageElement;
 
+  private retryingCheckCover = false;
+
   constructor() {
     this.coverPhoto = dom.getFrom(this.button, 'img', HTMLImageElement);
 
@@ -138,9 +143,15 @@ export class GalleryButton implements ResultSaver {
     this.coverPhoto.src = cover?.url ?? '';
 
     if (file !== null) {
-      ChromeHelper.getInstance().monitorFileDeletion(file.name, () => {
-        this.checkCover();
-      });
+      // The promise is only resolved after the file is deleted.
+      void ChromeHelper.getInstance().monitorFileDeletion(
+          file.name, async () => {
+            try {
+              await this.checkCover();
+            } catch (e) {
+              reportError(ErrorType.CHECK_COVER_FAILURE, ErrorLevel.ERROR, e);
+            }
+          });
     }
   }
 
@@ -155,30 +166,68 @@ export class GalleryButton implements ResultSaver {
 
     // Checks existence of cached cover photo.
     if (this.cover !== null) {
-      if (await dir.isExist(this.cover.name)) {
+      if (await dir.exists(this.cover.name)) {
         return;
       }
     }
 
-    // Rescan file system.
-    const files = await filesystem.getEntries();
+    // Rescan file system. Only select files following CCA naming styles.
+    const files = (await filesystem.getEntries())
+                      .filter((file) => Filenamer.isCCAFileFormat(file.name));
     if (files.length === 0) {
       await this.updateCover(null);
       return;
     }
-    const filesWithTime = await Promise.all(
-        files.map(async (file) => ({
-                    file,
-                    time: (await file.getLastModificationTime()),
-                  })));
-    const lastFile =
-        filesWithTime.reduce((last, cur) => last.time > cur.time ? last : cur)
-            .file;
-    await this.updateCover(lastFile);
+
+    try {
+      const filesWithTime = await Promise.all(
+          files.map(async (file) => ({
+                      file,
+                      time: (await file.getLastModificationTime()),
+                    })));
+      const lastFile =
+          filesWithTime.reduce((last, cur) => last.time > cur.time ? last : cur)
+              .file;
+      await this.updateCover(lastFile);
+    } catch (e) {
+      // The file might be deleted at any time and cause the operation
+      // interrupted. Since it might take a while when doing bulk deletion, only
+      // try check cover again if the amount of files become stable.
+      if (e instanceof DOMException && !this.retryingCheckCover) {
+        this.retryingCheckCover = true;
+        try {
+          await this.waitUntilCameraFolderStable();
+          await this.checkCover();
+        } finally {
+          this.retryingCheckCover = false;
+        }
+      } else {
+        throw e;
+      }
+    }
   }
 
-  async savePhoto(blob: Blob, name: string, metadata: Metadata|null):
-      Promise<void> {
+  private async waitUntilCameraFolderStable(): Promise<void> {
+    let prevFileCount = (await filesystem.getEntries()).length;
+    const cameraFolderStable = new WaitableEvent();
+
+    async function checkFileCount() {
+      const newFileCount = (await filesystem.getEntries()).length;
+      if (prevFileCount === newFileCount) {
+        runner.stop();
+        cameraFolderStable.signal();
+      } else {
+        prevFileCount = newFileCount;
+      }
+    }
+
+    const runner = new AsyncIntervalRunner(checkFileCount, 500);
+    return cameraFolderStable.wait();
+  }
+
+  async savePhoto(
+      blob: Blob, format: ToteMetricFormat, name: string,
+      metadata: Metadata|null): Promise<void> {
     const file = await filesystem.saveBlob(blob, name);
     if (metadata !== null) {
       const metadataBlob =
@@ -188,25 +237,31 @@ export class GalleryButton implements ResultSaver {
 
     ChromeHelper.getInstance().sendNewCaptureBroadcast(
         {isVideo: false, name: file.name});
+    ChromeHelper.getInstance().notifyTote(format, name);
     await this.updateCover(file);
   }
 
   async saveGif(blob: Blob, name: string): Promise<void> {
     const file = await filesystem.saveBlob(blob, name);
+    ChromeHelper.getInstance().notifyTote(ToteMetricFormat.VIDEO_GIF, name);
     await this.updateCover(file);
   }
 
   async startSaveVideo(videoRotation: number): Promise<VideoSaver> {
-    const file = await filesystem.createVideoFile(VideoType.MP4);
-    return VideoSaver.createForFile(file, videoRotation);
+    return VideoSaver.create(videoRotation);
   }
 
-  async finishSaveVideo(video: VideoSaver): Promise<void> {
+  async finishSaveVideo(video: TimeLapseSaver|VideoSaver): Promise<void> {
     const file = await video.endWrite();
     assert(file !== null);
 
+    const videoName = (new Filenamer()).newVideoName(VideoType.MP4);
+    assert(this.directory !== null);
+    await file.moveTo(this.directory, videoName);
     ChromeHelper.getInstance().sendNewCaptureBroadcast(
         {isVideo: true, name: file.name});
+    ChromeHelper.getInstance().notifyTote(
+        ToteMetricFormat.VIDEO_MP4, file.name);
     await this.updateCover(file);
   }
 }

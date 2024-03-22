@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,8 +60,8 @@ int main(int argc, char** argv) {
     std::swap(black, white);
   }
 
-  QRCodeGenerator generator;
-  absl::optional<QRCodeGenerator::GeneratedCode> code =
+  qr_code_generator::QRCodeGenerator generator;
+  absl::optional<qr_code_generator::QRCodeGenerator::GeneratedCode> code =
       generator.Generate(base::span<const uint8_t>(input, input_len), mask);
   if (!code) {
     fprintf(STDERR, "Input too long to be encoded.\n");

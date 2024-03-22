@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,31 +6,22 @@ package org.chromium.chrome.browser.logo;
 
 import android.graphics.Bitmap;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.chrome.browser.profiles.Profile;
 
-/**
- * Provides access to the search provider's logo via the C++ LogoService.
- */
+/** Provides access to the search provider's logo via the C++ LogoService. */
 public class LogoBridge {
-    /**
-     * A logo for a search provider (e.g. the Yahoo! logo or Google doodle).
-     */
+    /** A logo for a search provider (e.g. the Yahoo! logo or Google doodle). */
     public static class Logo {
-        /**
-         * The logo image. Non-null.
-         */
+        /** The logo image. Non-null. */
         public final Bitmap image;
 
-        /**
-         * The URL to navigate to when the user clicks on the logo. May be null.
-         */
+        /** The URL to navigate to when the user clicks on the logo. May be null. */
         public final String onClickUrl;
 
-        /**
-         * The accessibility text describing the logo. May be null.
-         */
+        /** The accessibility text describing the logo. May be null. */
         public final String altText;
 
         /**
@@ -46,9 +37,7 @@ public class LogoBridge {
         }
     }
 
-    /**
-     * Observer for receiving the logo when it's available.
-     */
+    /** Observer for receiving the logo when it's available. */
     public interface LogoObserver {
         /**
          * Called when the cached or fresh logo is available. This may be called up to two times,
@@ -109,7 +98,9 @@ public class LogoBridge {
     @NativeMethods
     public interface Natives {
         long init(LogoBridge caller, Profile profile);
+
         void getCurrentLogo(long nativeLogoBridge, LogoBridge caller, LogoObserver logoObserver);
+
         void destroy(long nativeLogoBridge, LogoBridge caller);
     }
 }

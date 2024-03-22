@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "third_party/blink/renderer/core/css/css_rule.h"
 #include "third_party/blink/renderer/core/css/css_rule_list.h"
 #include "third_party/blink/renderer/core/css/media_list.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
@@ -82,8 +83,8 @@ TEST_F(CSSStyleSheetTest,
 TEST_F(CSSStyleSheetTest, AdoptedStyleSheetMediaQueryEvalChange) {
   SetBodyInnerHTML("<div id=green></div><div id=blue></div>");
 
-  Element* green = GetDocument().getElementById("green");
-  Element* blue = GetDocument().getElementById("blue");
+  Element* green = GetDocument().getElementById(AtomicString("green"));
+  Element* blue = GetDocument().getElementById(AtomicString("blue"));
 
   CSSStyleSheetInit* init = CSSStyleSheetInit::Create();
   CSSStyleSheet* sheet =
@@ -124,7 +125,7 @@ TEST_F(CSSStyleSheetTest, AdoptedStyleSheetMediaQueryEvalChange) {
   ASSERT_TRUE(sheet->Contents()->HasRuleSet());
   EXPECT_NE(rule_set, &sheet->Contents()->GetRuleSet());
   EXPECT_EQ(
-      MakeRGB(0, 128, 0),
+      Color::FromRGB(0, 128, 0),
       green->GetComputedStyle()->VisitedDependentColor(GetCSSPropertyColor()));
   EXPECT_EQ(Color::kBlack, blue->GetComputedStyle()->VisitedDependentColor(
                                GetCSSPropertyColor()));
@@ -142,10 +143,11 @@ TEST_F(CSSStyleSheetTest, AdoptedStyleSheetMediaQueryEvalChange) {
   UpdateAllLifecyclePhasesForTest();
 
   EXPECT_EQ(
-      MakeRGB(0, 128, 0),
+      Color::FromRGB(0, 128, 0),
       green->GetComputedStyle()->VisitedDependentColor(GetCSSPropertyColor()));
-  EXPECT_EQ(MakeRGB(0, 0, 255), blue->GetComputedStyle()->VisitedDependentColor(
-                                    GetCSSPropertyColor()));
+  EXPECT_EQ(
+      Color::FromRGB(0, 0, 255),
+      blue->GetComputedStyle()->VisitedDependentColor(GetCSSPropertyColor()));
 }
 
 }  // namespace blink

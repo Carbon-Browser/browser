@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@
 #include "net/base/net_errors.h"
 #include "net/cert/ct_log_verifier.h"
 #include "net/cert/ct_serialization.h"
-#include "net/cert/pem.h"
 #include "net/cert/sct_status_flags.h"
 #include "net/cert/signed_certificate_timestamp.h"
 #include "net/cert/signed_certificate_timestamp_and_status.h"
@@ -38,7 +37,6 @@ namespace net {
 
 namespace {
 
-const char kHostname[] = "example.com";
 const char kLogDescription[] = "somelog";
 
 class DoNothingLogProvider : public MultiLogCTVerifier::CTLogProvider {
@@ -82,23 +80,24 @@ class MultiLogCTVerifierTest : public ::testing::Test {
       return false;
 
     const NetLogEntry& parsed = entries[1];
-    if (!parsed.params.is_dict())
+    if (parsed.params.empty()) {
+      return false;
+    }
+
+    const base::Value::List* scts = parsed.params.FindList("scts");
+    if (!scts || scts->size() != 1)
       return false;
 
-    const base::Value* scts = parsed.params.FindListPath("scts");
-    if (!scts || scts->GetListDeprecated().size() != 1)
-      return false;
-
-    const base::Value& the_sct = scts->GetListDeprecated()[0];
+    const base::Value& the_sct = (*scts)[0];
     if (!the_sct.is_dict())
       return false;
 
-    const std::string* origin = the_sct.FindStringPath("origin");
+    const std::string* origin = the_sct.GetDict().FindString("origin");
     if (!origin || *origin != "Embedded in certificate")
       return false;
 
     const std::string* verification_status =
-        the_sct.FindStringPath("verification_status");
+        the_sct.GetDict().FindString("verification_status");
     if (!verification_status || *verification_status != "Verified")
       return false;
 
@@ -109,8 +108,8 @@ class MultiLogCTVerifierTest : public ::testing::Test {
   // successfully extracted.
   bool VerifySinglePrecertificateChain(scoped_refptr<X509Certificate> chain) {
     SignedCertificateTimestampAndStatusList scts;
-    verifier_->Verify(kHostname, chain.get(), base::StringPiece(),
-                      base::StringPiece(), &scts, NetLogWithSource());
+    verifier_->Verify(chain.get(), base::StringPiece(), base::StringPiece(),
+                      &scts, NetLogWithSource());
     return !scts.empty();
   }
 
@@ -122,8 +121,8 @@ class MultiLogCTVerifierTest : public ::testing::Test {
     RecordingNetLogObserver net_log_observer(NetLogCaptureMode::kDefault);
     NetLogWithSource net_log = NetLogWithSource::Make(
         NetLog::Get(), NetLogSourceType::SSL_CONNECT_JOB);
-    verifier_->Verify(kHostname, chain.get(), base::StringPiece(),
-                      base::StringPiece(), &scts, net_log);
+    verifier_->Verify(chain.get(), base::StringPiece(), base::StringPiece(),
+                      &scts, net_log);
     return ct::CheckForSingleVerifiedSCTInResult(scts, kLogDescription) &&
            ct::CheckForSCTOrigin(
                scts, ct::SignedCertificateTimestamp::SCT_EMBEDDED) &&
@@ -197,8 +196,8 @@ TEST_F(MultiLogCTVerifierTest, VerifiesSCTOverX509Cert) {
   std::string sct_list = ct::GetSCTListForTesting();
 
   SignedCertificateTimestampAndStatusList scts;
-  verifier_->Verify(kHostname, chain_.get(), base::StringPiece(), sct_list,
-                    &scts, NetLogWithSource());
+  verifier_->Verify(chain_.get(), base::StringPiece(), sct_list, &scts,
+                    NetLogWithSource());
   ASSERT_TRUE(ct::CheckForSingleVerifiedSCTInResult(scts, kLogDescription));
   ASSERT_TRUE(ct::CheckForSCTOrigin(
       scts, ct::SignedCertificateTimestamp::SCT_FROM_TLS_EXTENSION));
@@ -208,8 +207,8 @@ TEST_F(MultiLogCTVerifierTest, IdentifiesSCTFromUnknownLog) {
   std::string sct_list = ct::GetSCTListWithInvalidSCT();
   SignedCertificateTimestampAndStatusList scts;
 
-  verifier_->Verify(kHostname, chain_.get(), base::StringPiece(), sct_list,
-                    &scts, NetLogWithSource());
+  verifier_->Verify(chain_.get(), base::StringPiece(), sct_list, &scts,
+                    NetLogWithSource());
   EXPECT_EQ(1U, scts.size());
   EXPECT_EQ("", scts[0].sct->log_description);
   EXPECT_EQ(ct::SCT_STATUS_LOG_UNKNOWN, scts[0].status);
@@ -231,8 +230,8 @@ TEST_F(MultiLogCTVerifierTest, CountsInvalidSCTsInStatusHistogram) {
   int num_invalid_scts = GetValueFromHistogram(
       "Net.CertificateTransparency.SCTStatus", ct::SCT_STATUS_LOG_UNKNOWN);
 
-  verifier_->Verify(kHostname, chain_.get(), base::StringPiece(), sct_list,
-                    &scts, NetLogWithSource());
+  verifier_->Verify(chain_.get(), base::StringPiece(), sct_list, &scts,
+                    NetLogWithSource());
 
   ASSERT_EQ(num_valid_scts, NumValidSCTsInStatusHistogram());
   ASSERT_EQ(num_invalid_scts + 1,

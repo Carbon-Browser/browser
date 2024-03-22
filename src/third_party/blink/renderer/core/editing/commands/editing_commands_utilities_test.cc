@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ TEST_F(EditingCommandsUtilitiesTest, AreaIdenticalElements) {
       "}</style><ul><li>first item</li><li>second item</li><li "
       "class=foo>third</li><li>fourth</li></ul>");
   StaticElementList* items =
-      GetDocument().QuerySelectorAll("li", ASSERT_NO_EXCEPTION);
+      GetDocument().QuerySelectorAll(AtomicString("li"), ASSERT_NO_EXCEPTION);
   DCHECK_EQ(items->length(), 4u);
 
   EXPECT_FALSE(AreIdenticalElements(*items->item(0)->firstChild(),

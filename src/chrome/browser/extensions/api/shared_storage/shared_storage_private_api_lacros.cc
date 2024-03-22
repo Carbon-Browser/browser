@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,14 +44,14 @@ void SharedStoragePrivateGetFunction::OnGet(absl::optional<base::Value> items) {
     LOG(ERROR) << kErrorFetching;
     return Respond(Error(kErrorFetching));
   }
-  Respond(OneArgument(std::move(*items)));
+  Respond(WithArguments(std::move(*items)));
 }
 
 SharedStoragePrivateSetFunction::SharedStoragePrivateSetFunction() = default;
 SharedStoragePrivateSetFunction::~SharedStoragePrivateSetFunction() = default;
 
 ExtensionFunction::ResponseAction SharedStoragePrivateSetFunction::Run() {
-  std::unique_ptr<shared_api::Set::Params> params =
+  absl::optional<shared_api::Set::Params> params =
       shared_api::Set::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   auto* lacros_service = chromeos::LacrosService::Get();
@@ -67,13 +67,13 @@ ExtensionFunction::ResponseAction SharedStoragePrivateSetFunction::Run() {
   return RespondLater();
 }
 
-void SharedStoragePrivateSetFunction::OnGet(base::DictionaryValue to_add,
+void SharedStoragePrivateSetFunction::OnGet(base::Value::Dict to_add,
                                             absl::optional<base::Value> items) {
   if (!items) {
     LOG(ERROR) << kErrorFetching;
     return Respond(Error(kErrorFetching));
   }
-  items->MergeDictionary(&to_add);
+  items->GetDict().Merge(std::move(to_add));
   auto* lacros_service = chromeos::LacrosService::Get();
   if (!lacros_service ||
       !lacros_service->IsAvailable<crosapi::mojom::Prefs>()) {
@@ -95,7 +95,7 @@ SharedStoragePrivateRemoveFunction::~SharedStoragePrivateRemoveFunction() =
     default;
 
 ExtensionFunction::ResponseAction SharedStoragePrivateRemoveFunction::Run() {
-  std::unique_ptr<shared_api::Remove::Params> params =
+  absl::optional<shared_api::Remove::Params> params =
       shared_api::Remove::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   auto* lacros_service = chromeos::LacrosService::Get();
@@ -114,12 +114,12 @@ ExtensionFunction::ResponseAction SharedStoragePrivateRemoveFunction::Run() {
 void SharedStoragePrivateRemoveFunction::OnGet(
     std::vector<std::string> keys,
     absl::optional<base::Value> items) {
-  if (!items) {
+  if (!items || !items->is_dict()) {
     LOG(ERROR) << kErrorFetching;
     return Respond(Error(kErrorFetching));
   }
   for (const auto& key : keys) {
-    items->RemoveKey(key);
+    items->GetDict().Remove(key);
   }
   auto* lacros_service = chromeos::LacrosService::Get();
   if (!lacros_service ||

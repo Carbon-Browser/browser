@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 #define ASH_CONTROLS_CONTEXTUAL_NUDGE_H_
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/controls/label.h"
 
@@ -31,14 +32,12 @@ class ASH_EXPORT ContextualNudge : public views::BubbleDialogDelegateView {
   // |position| - The nudge position relative to the anchor rectangle.
   // |margins| - The margins added to the nudge bubble.
   // |text| - The nudge text.
-  // |text_color| - The nudge text label foreground color.
-  // |tap_callback| - If set, the callback called when the user taps the nuge.
+  // |tap_callback| - If set, the callback called when the user taps the nudge.
   ContextualNudge(views::View* anchor,
                   aura::Window* parent_window,
                   Position position,
                   const gfx::Insets& margins,
                   const std::u16string& text,
-                  SkColor text_color,
                   const base::RepeatingClosure& tap_callback);
   ~ContextualNudge() override;
 
@@ -58,7 +57,7 @@ class ASH_EXPORT ContextualNudge : public views::BubbleDialogDelegateView {
  private:
   base::RepeatingClosure tap_callback_;
 
-  views::Label* label_;
+  raw_ptr<views::Label, ExperimentalAsh> label_;
 };
 
 }  // namespace ash

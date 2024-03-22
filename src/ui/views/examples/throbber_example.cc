@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,20 @@
 
 #include "base/memory/raw_ptr.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/controls/throbber.h"
 #include "ui/views/examples/grit/views_examples_resources.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/view.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 
 class ThrobberView : public View {
  public:
+  METADATA_HEADER(ThrobberView);
   ThrobberView() {
     throbber_ = AddChildView(std::make_unique<Throbber>());
     throbber_->Start();
@@ -58,6 +60,9 @@ class ThrobberView : public View {
   bool is_checked_ = false;
 };
 
+BEGIN_METADATA(ThrobberView, View)
+END_METADATA
+
 }  // namespace
 
 ThrobberExample::ThrobberExample()
@@ -71,5 +76,4 @@ void ThrobberExample::CreateExampleView(View* container) {
   container->AddChildView(std::make_unique<ThrobberView>());
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

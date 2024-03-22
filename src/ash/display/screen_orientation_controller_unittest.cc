@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "ash/accelerometer/accelerometer_types.h"
 #include "ash/constants/app_types.h"
 #include "ash/constants/ash_switches.h"
-#include "ash/display/screen_orientation_controller.h"
 #include "ash/display/screen_orientation_controller_test_api.h"
 #include "ash/shell.h"
 #include "ash/system/screen_layout_observer.h"
@@ -43,13 +42,6 @@ namespace {
 using base::kMeanGravityFloat;
 
 const float kDegreesToRadians = 3.1415926f / 180.0f;
-
-display::ManagedDisplayInfo CreateDisplayInfo(int64_t id,
-                                              const gfx::Rect& bounds) {
-  display::ManagedDisplayInfo info(id, "dummy", false);
-  info.SetBounds(bounds);
-  return info;
-}
 
 void EnableTabletMode(bool enable) {
   Shell::Get()->tablet_mode_controller()->ForceUiTabletModeState(enable);
@@ -358,10 +350,10 @@ TEST_F(ScreenOrientationControllerTest, SplitViewPreventsLock) {
   Lock(child_window2.get(), chromeos::OrientationType::kPortrait);
   ASSERT_TRUE(RotationLocked());
 
-  split_view_controller()->SnapWindow(focus_window1.get(),
-                                      SplitViewController::LEFT);
-  split_view_controller()->SnapWindow(focus_window1.get(),
-                                      SplitViewController::RIGHT);
+  split_view_controller()->SnapWindow(
+      focus_window1.get(), SplitViewController::SnapPosition::kPrimary);
+  split_view_controller()->SnapWindow(
+      focus_window1.get(), SplitViewController::SnapPosition::kSecondary);
   EXPECT_FALSE(RotationLocked());
 
   split_view_controller()->EndSplitView();
@@ -576,9 +568,9 @@ TEST_F(ScreenOrientationControllerTest, RotateInactiveDisplay) {
   const display::Display::Rotation kNewRotation = display::Display::ROTATE_180;
 
   const display::ManagedDisplayInfo internal_display_info =
-      CreateDisplayInfo(kInternalDisplayId, gfx::Rect(0, 0, 600, 500));
+      display::CreateDisplayInfo(kInternalDisplayId, gfx::Rect(0, 0, 600, 500));
   const display::ManagedDisplayInfo external_display_info =
-      CreateDisplayInfo(kExternalDisplayId, gfx::Rect(1, 1, 600, 500));
+      display::CreateDisplayInfo(kExternalDisplayId, gfx::Rect(1, 1, 600, 500));
 
   std::vector<display::ManagedDisplayInfo> display_info_list_two_active;
   display_info_list_two_active.push_back(internal_display_info);
@@ -844,7 +836,7 @@ TEST_F(ScreenOrientationControllerTest, GetCurrentAppRequestedOrientationLock) {
   EXPECT_EQ(display::Display::ROTATE_270, GetCurrentInternalDisplayRotation());
   EXPECT_EQ(chromeos::OrientationType::kAny, UserLockedOrientation());
 
-  display_manager()->SetMirrorMode(display::MirrorMode::kOff, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kOff, std::nullopt);
   base::RunLoop().RunUntilIdle();
 
   roots = Shell::GetAllRootWindows();
@@ -874,7 +866,7 @@ TEST_F(ScreenOrientationControllerTest, GetCurrentAppRequestedOrientationLock) {
 
   // Once `win0` is snapped in splitview, it can no longer lock the rotation.
   SplitViewController::Get(win0->GetRootWindow())
-      ->SnapWindow(win0.get(), SplitViewController::RIGHT);
+      ->SnapWindow(win0.get(), SplitViewController::SnapPosition::kSecondary);
   EXPECT_EQ(
       chromeos::OrientationType::kAny,
       screen_orientation_controller->GetCurrentAppRequestedOrientationLock());
@@ -890,7 +882,7 @@ TEST_F(ScreenOrientationControllerTest,
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(display_manager()->IsInSoftwareMirrorMode());
   // Now switch mirror mode off so that we can have two displays in tablet mode.
-  display_manager()->SetMirrorMode(display::MirrorMode::kOff, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kOff, std::nullopt);
   base::RunLoop().RunUntilIdle();
   auto roots = Shell::GetAllRootWindows();
   ASSERT_EQ(2u, roots.size());
@@ -944,6 +936,28 @@ TEST_F(ScreenOrientationControllerTest,
       screen_orientation_controller->GetCurrentAppRequestedOrientationLock());
   EXPECT_EQ(display::Display::ROTATE_270, GetCurrentInternalDisplayRotation());
   EXPECT_EQ(chromeos::OrientationType::kAny, UserLockedOrientation());
+}
+
+// Tests that the controller ignores the app-requested orientation of floated
+// windows.
+TEST_F(ScreenOrientationControllerTest, IgnoreFloatWindowOrientationLock) {
+  EnableTabletMode(true);
+
+  std::unique_ptr<aura::Window> child_window = CreateControlWindow();
+  std::unique_ptr<aura::Window> focus_window(CreateAppWindow());
+  ASSERT_EQ(display::Display::ROTATE_0, GetCurrentInternalDisplayRotation());
+  ASSERT_FALSE(RotationLocked());
+
+  AddWindowAndActivateParent(child_window.get(), focus_window.get());
+  Lock(child_window.get(), chromeos::OrientationType::kPortrait);
+  EXPECT_TRUE(RotationLocked());
+
+  // Float `focus_window`.
+  const WindowFloatWMEvent float_event(
+      chromeos::FloatStartLocation::kBottomRight);
+  WindowState::Get(focus_window.get())->OnWMEvent(&float_event);
+
+  EXPECT_FALSE(RotationLocked());
 }
 
 class SupportsClamshellAutoRotation : public ScreenOrientationControllerTest {

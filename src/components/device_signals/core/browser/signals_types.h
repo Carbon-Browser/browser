@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "base/values.h"
 #include "build/build_config.h"
-#include "components/device_signals/core/browser/user_context.h"
 #include "components/device_signals/core/common/common_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -18,6 +18,13 @@
 #endif  // BUILDFLAG(IS_WIN)
 
 namespace device_signals {
+
+// Possible values for the trigger which generated the device signals.
+enum class Trigger {
+  kUnspecified = 0,
+  kBrowserNavigation = 1,
+  kLoginScreen = 2,
+};
 
 // Enum of names representing signals bundles that can be aggregated via the
 // SignalsAggregator.
@@ -29,7 +36,8 @@ enum class SignalName {
   kHotfixes,
   kFileSystemInfo,
   kSystemSettings,
-  kMaxValue = kSystemSettings
+  kAgent,
+  kMaxValue = kAgent
 };
 
 // Superset of all signal collection errors that can occur, including top-level
@@ -45,7 +53,9 @@ enum class SignalCollectionError {
   kMissingBundle,
   kInvalidUser,
   kMissingParameters,
-  kMaxValue = kMissingParameters
+  kParsingFailed,
+  kUnexpectedValue,
+  kMaxValue = kUnexpectedValue
 };
 
 const std::string ErrorToString(SignalCollectionError error);
@@ -86,6 +96,86 @@ struct HotfixSignalResponse : BaseSignalResponse {
 };
 #endif  // BUILDFLAG(IS_WIN)
 
+enum class RegistryHive {
+  kHkeyClassesRoot,
+  kHkeyLocalMachine,
+  kHkeyCurrentUser,
+  kMaxValue = kHkeyCurrentUser
+};
+
+struct GetSettingsOptions {
+  GetSettingsOptions();
+
+  GetSettingsOptions(const GetSettingsOptions&);
+  GetSettingsOptions& operator=(const GetSettingsOptions&);
+
+  ~GetSettingsOptions();
+
+  // General path value usable by derived types.
+  // On Windows it would be the path to the reg key inside the hive.
+  // On Mac it would be the path to the plist file.
+  std::string path{};
+
+  // Key specifying the setting entry we're looking for.
+  // On Windows, that will be the registry key itself.
+  // On Mac, this is a key path used to retrieve a value from valueForKeyPath:.
+  std::string key{};
+
+  // When set to true, the retrieved signal will also include the setting’s
+  // value. When false, the signal will only contain the setting’s
+  // presence.
+  // Supported types on Windows:
+  // - REG_SZ
+  // - REG_DWORD
+  // - REG_QWORD
+  // Supported types on Mac:
+  // - NSString
+  // - NSNumber
+  bool get_value = false;
+
+  // Windows registry hive containing the desired value. This values is required
+  // on Windows, but will be ignored on Mac.
+  absl::optional<RegistryHive> hive = absl::nullopt;
+
+  bool operator==(const GetSettingsOptions& other) const;
+};
+
+struct SettingsItem {
+  SettingsItem();
+
+  SettingsItem(const SettingsItem&);
+  SettingsItem& operator=(const SettingsItem&);
+
+  ~SettingsItem();
+
+  std::string path{};
+
+  std::string key{};
+
+  absl::optional<RegistryHive> hive = absl::nullopt;
+
+  // Value indicating whether the specific resource could be found or not.
+  PresenceValue presence = PresenceValue::kUnspecified;
+
+  // JSON string representing the value of the setting. Only set when the
+  // setting was found and `get_value` was true on the corresponding request
+  // options.
+  absl::optional<std::string> setting_json_value = absl::nullopt;
+
+  bool operator==(const SettingsItem& other) const;
+};
+
+struct SettingsResponse : BaseSignalResponse {
+  SettingsResponse();
+
+  SettingsResponse(const SettingsResponse&);
+  SettingsResponse& operator=(const SettingsResponse&);
+
+  ~SettingsResponse() override;
+
+  std::vector<SettingsItem> settings_items{};
+};
+
 struct FileSystemInfoResponse : BaseSignalResponse {
   FileSystemInfoResponse();
 
@@ -95,6 +185,17 @@ struct FileSystemInfoResponse : BaseSignalResponse {
   ~FileSystemInfoResponse() override;
 
   std::vector<FileSystemItem> file_system_items{};
+};
+
+struct AgentSignalsResponse : BaseSignalResponse {
+  AgentSignalsResponse();
+
+  AgentSignalsResponse(const AgentSignalsResponse&);
+  AgentSignalsResponse& operator=(const AgentSignalsResponse&);
+
+  ~AgentSignalsResponse() override;
+
+  absl::optional<CrowdStrikeSignals> crowdstrike_signals = absl::nullopt;
 };
 
 // Request struct containing properties that will be used by the
@@ -109,15 +210,14 @@ struct SignalsAggregationRequest {
 
   ~SignalsAggregationRequest();
 
-  // Information about the user for whom these signals are collected.
-  UserContext user_context{};
-
   // Names of the signals that need to be collected.
   std::unordered_set<SignalName> signal_names{};
 
   // Parameters required when requesting the collection of signals living on
   // the device's file system.
   std::vector<GetFileSystemInfoOptions> file_system_signal_parameters{};
+
+  std::vector<GetSettingsOptions> settings_signal_parameters{};
 
   bool operator==(const SignalsAggregationRequest& other) const;
 };
@@ -141,8 +241,12 @@ struct SignalsAggregationResponse {
   absl::optional<AntiVirusSignalResponse> av_signal_response = absl::nullopt;
   absl::optional<HotfixSignalResponse> hotfix_signal_response = absl::nullopt;
 #endif  // BUILDFLAG(IS_WIN)
+  absl::optional<SettingsResponse> settings_response = absl::nullopt;
+
   absl::optional<FileSystemInfoResponse> file_system_info_response =
       absl::nullopt;
+
+  absl::optional<AgentSignalsResponse> agent_signals_response = absl::nullopt;
 };
 
 }  // namespace device_signals

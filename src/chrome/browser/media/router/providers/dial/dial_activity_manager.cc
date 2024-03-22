@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/providers/dial/dial_activity_manager.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "chrome/browser/media/router/discovery/dial/dial_app_discovery_service.h"
 #include "chrome/browser/media/router/providers/dial/dial_internal_message_util.h"
@@ -71,8 +72,7 @@ std::unique_ptr<DialActivity> DialActivity::From(
     const std::string& presentation_id,
     const MediaSinkInternal& sink,
     const MediaSource::Id& source_id,
-    const url::Origin& client_origin,
-    bool off_the_record) {
+    const url::Origin& client_origin) {
   MediaSource source(source_id);
   GURL url = source.url();
   if (!url.is_valid())
@@ -108,7 +108,6 @@ std::unique_ptr<DialActivity> DialActivity::From(
       sink_id, app_name,
       /* is_local */ true);
   route.set_presentation_id(presentation_id);
-  route.set_off_the_record(off_the_record);
   return std::make_unique<DialActivity>(launch_info, route, sink,
                                         client_origin);
 }
@@ -153,9 +152,9 @@ const DialActivity* DialActivityManager::GetActivity(
 const DialActivity* DialActivityManager::GetActivityBySinkId(
     const MediaSink::Id& sink_id) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  auto record_it = std::find_if(
-      records_.begin(), records_.end(), [&sink_id](const auto& record) {
-        return record.second->activity.route.media_sink_id() == sink_id;
+  auto record_it =
+      base::ranges::find(records_, sink_id, [](const auto& record) {
+        return record.second->activity.route.media_sink_id();
       });
   return record_it != records_.end() ? &(record_it->second->activity) : nullptr;
 }
@@ -163,19 +162,15 @@ const DialActivity* DialActivityManager::GetActivityBySinkId(
 const DialActivity* DialActivityManager::GetActivityToJoin(
     const std::string& presentation_id,
     const MediaSource& media_source,
-    const url::Origin& client_origin,
-    bool off_the_record) const {
+    const url::Origin& client_origin) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  auto record_it = std::find_if(
-      records_.begin(), records_.end(),
-      [&presentation_id, &media_source, &client_origin,
-       off_the_record](const auto& record) {
+  auto record_it = base::ranges::find_if(
+      records_,
+      [&presentation_id, &media_source, &client_origin](const auto& record) {
         const auto& route = record.second->activity.route;
         const url::Origin& origin = record.second->activity.client_origin;
         return route.presentation_id() == presentation_id &&
-               route.media_source() == media_source &&
-               origin == client_origin &&
-               route.is_off_the_record() == off_the_record;
+               route.media_source() == media_source && origin == client_origin;
       });
   return record_it != records_.end() ? &(record_it->second->activity) : nullptr;
 }
@@ -226,7 +221,7 @@ DialActivityManager::CanStopApp(const MediaRoute::Id& route_id) const {
 
   if (record_it->second->pending_stop_request) {
     return {"A pending request already exists",
-            mojom::RouteRequestResultCode::UNKNOWN_ERROR};
+            mojom::RouteRequestResultCode::REDUNDANT_REQUEST};
   }
   return {absl::nullopt, mojom::RouteRequestResultCode::OK};
 }
@@ -279,7 +274,7 @@ std::vector<MediaRoute> DialActivityManager::GetRoutes() const {
 std::unique_ptr<DialURLFetcher> DialActivityManager::CreateFetcher(
     DialURLFetcher::SuccessCallback success_cb,
     DialURLFetcher::ErrorCallback error_cb) {
-  // TODO(https://crbug.com/816628): Add timeout.
+  // TODO(https://crbug.com/1421142): Add timeout.
   return std::make_unique<DialURLFetcher>(std::move(success_cb),
                                           std::move(error_cb));
 }
@@ -360,15 +355,17 @@ void DialActivityManager::OnInfoFetchedAfterStopError(
 
   auto& record = record_it->second;
   auto cb = std::move(record->pending_stop_request->callback);
+  records_.erase(record_it);
   if (result.app_info && result.app_info->state != DialAppState::kRunning) {
     // The app is no longer running, so we remove the record and the MediaRoute
     // associated with it.
-    records_.erase(record_it);
     std::move(cb).Run(message,
                       mojom::RouteRequestResultCode::ROUTE_ALREADY_TERMINATED);
   } else {
-    // The app might still be running, so we don't remove the record.
-    record->pending_stop_request.reset();
+    // The app might still be running, but manually stopping Cast session
+    // from DIAL device is not reflected on Chrome side. So, we remove the
+    // record and the MediaRoute associated with it here as well.
+    // See (crbug.com/1420829) for more context.
     std::move(cb).Run(message, mojom::RouteRequestResultCode::UNKNOWN_ERROR);
   }
 }

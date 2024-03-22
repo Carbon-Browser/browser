@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,18 @@
 #define UI_VIEWS_CONTROLS_MENU_MENU_RUNNER_IMPL_COCOA_H_
 
 #include <stdint.h>
+#include <string>
 
-#include "base/callback.h"
-#import "base/mac/scoped_nsobject.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "ui/views/controls/menu/menu_runner_impl_interface.h"
 
 @class MenuControllerCocoa;
-@class MenuControllerDelegate;
+@class MenuControllerCocoaDelegateImpl;
+
+namespace gfx {
+class RoundedCornersF;
+}  // namespace gfx
 
 namespace views {
 namespace test {
@@ -24,7 +28,7 @@ namespace internal {
 // A menu runner implementation that uses NSMenu to show a context menu.
 class VIEWS_EXPORT MenuRunnerImplCocoa : public MenuRunnerImplInterface {
  public:
-  MenuRunnerImplCocoa(ui::MenuModel* menu,
+  MenuRunnerImplCocoa(ui::MenuModel* menu_model,
                       base::RepeatingClosure on_menu_closed_callback);
 
   MenuRunnerImplCocoa(const MenuRunnerImplCocoa&) = delete;
@@ -37,7 +41,10 @@ class VIEWS_EXPORT MenuRunnerImplCocoa : public MenuRunnerImplInterface {
                  const gfx::Rect& bounds,
                  MenuAnchorPosition anchor,
                  int32_t run_types,
-                 gfx::NativeView native_view_for_gestures) override;
+                 gfx::NativeView native_view_for_gestures,
+                 absl::optional<gfx::RoundedCornersF> corners = absl::nullopt,
+                 absl::optional<std::string> show_menu_host_duration_histogram =
+                     absl::nullopt) override;
   void Cancel() override;
   base::TimeTicks GetClosingEventTime() const override;
 
@@ -47,10 +54,10 @@ class VIEWS_EXPORT MenuRunnerImplCocoa : public MenuRunnerImplInterface {
   ~MenuRunnerImplCocoa() override;
 
   // The Cocoa menu controller that this instance is bridging.
-  base::scoped_nsobject<MenuControllerCocoa> menu_controller_;
+  MenuControllerCocoa* __strong menu_controller_;
 
   // The delegate for the |menu_controller_|.
-  base::scoped_nsobject<MenuControllerDelegate> menu_delegate_;
+  MenuControllerCocoaDelegateImpl* __strong menu_delegate_;
 
   // Are we in run waiting for it to return?
   bool running_ = false;

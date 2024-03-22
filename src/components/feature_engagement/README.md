@@ -145,21 +145,21 @@ you would have to add it to the following places:
     For features configured only on the client side:
 
     ```c++
-    const base::Feature kIPHGoatTeleportationFeature{"IPH_GoatTeleportation",
-                                                     base::FEATURE_ENABLED_BY_DEFAULT};
+    BASE_FEATURE(kIPHGoatTeleportationFeature, "IPH_GoatTeleportation",
+                 base::FEATURE_ENABLED_BY_DEFAULT);
     ```
 
     For features configured only on the server side:
 
     ```c++
-    const base::Feature kIPHGoatTeleportationFeature{"IPH_GoatTeleportation",
-                                                     base::FEATURE_DISABLED_BY_DEFAULT};
+    BASE_FEATURE(kIPHGoatTeleportationFeature, "IPH_GoatTeleportation",
+                 base::FEATURE_DISABLED_BY_DEFAULT);
     ```
 
 1.  `//components/feature_engagement/public/feature_constants.h`:
 
     ```c++
-    extern const base::Feature kIPHGoatTeleportationFeature;
+    BASE_DECLARE_FEATURE(kIPHGoatTeleportationFeature);
     ```
 
 1.  `//components/feature_engagement/public/feature_list.cc`:
@@ -181,7 +181,7 @@ constant.
 To enable UMA tracking, you need to make the following changes to the metrics
 configuration:
 
-1.  Add feature to the histogram variant `IPHFeatures` in:
+1.  Add feature to the histogram variant `IPHFeature` in:
     `//tools/metrics/histograms/metadata/feature_engagement/histograms.xml`.
     *   The variant name must match the `base::Feature` `name` member of your
         feature.
@@ -293,7 +293,7 @@ To ensure that your in-product help triggers at the right time, you need to
 configure what the constraints are for showing. There are two ways of doing
 this: (1) Using a [client side configuration](#client-side-configuration), or
 (2) using a [field trial configuration](#field-trial-configuration). It is also
-possible to use a mix of both (1) and (2).
+possible to use a [mix of both (1) and (2)](#mixed-configuration).
 
 Please read both sections below to figure out what fits your use-case best.
 
@@ -402,6 +402,10 @@ When using a server side configuration, it is suggested to define the
 `base::Feature` as `base::FEATURE_DISABLED_BY_DEFAULT`, since there is no
 default configuration available.
 
+### Mixed configuration
+
+When having an active field trial configuration in the fieldtrial_testing_config.json, it will override any configuration declared on the client side (default configuration). However it is still possible to test out the default client configuration by enabling the flag `IPH Use Client Config` from `chrome://flags`.
+
 ## Demo mode
 
 The feature_engagement::Tracker supports a special demo mode, which enables a
@@ -438,6 +442,18 @@ How to select a feature or features is described below.
     *   Enabled IPH_GoatTeleportationFeature
 1.  Restart Chrome
 
+
+## Feature Grouping
+
+Sometimes, it's desirable to have one list of rules apply to many different
+features. For example, you may have a set of 3 similar features and want to
+show one to the user each week. Each feature can declare itself part of one
+or more groups. Groups have their own extra configuration, and then when a
+feature is checked, all the group configuration properties are checked as
+well. Thus, for a feature to show, its own configuration and all of its
+groups' configurations must be met. Effectively, the strictest set of rules
+will apply.
+
 ## Configuration Format
 
 Each In-Product Help feature must have its own feature configuration
@@ -461,7 +477,9 @@ Format:
   "event_used": "{EventConfig}",
   "event_trigger": "{EventConfig}",
   "event_???": "{EventConfig}",
+  "snooze_params": "{SnoozeParams}"
   "tracking_only": "{Boolean}"
+  "groups": {GroupList},
   "x_???": "..."
  }
 ```
@@ -519,12 +537,13 @@ into the same field trial.
 *   `event_used` __REQUIRED__
     *   Relates to what the in-product help wants to highlight, i.e. teach the
         user about and increase usage of.
-    *   This is typically the action that the In-Product Help should stimulate
-        usage of.
+    *   This is typically recorded during the action that the In-Product Help
+        should stimulate usage of.
     *   Special UMA is tracked for this.
     *   See [EventConfig](#EventConfig) below for details.
 *   `event_trigger` __REQUIRED__
     *   Relates to the times in-product help is triggered.
+    *   Automatically increments when the in-product help is triggered.
     *   Special UMA is tracked for this.
     *   See [EventConfig](#EventConfig) below for details.
 *   `event_???`
@@ -533,6 +552,14 @@ into the same field trial.
     *   Name must match `/^event_[a-zA-Z0-9-_]+$/` and not be `event_used` or
         `event_trigger`.
     *   See [EventConfig](#EventConfig) below for details.
+*   `snooze_params`
+    *   Enabled snooze capability for in-product help bubbles.
+    *   By default, an in-product help is not snoozable and is dismissed until triggered again.
+    *   See [SnoozeParams](#SnoozeParams) below for details.
+*   `groups`
+    *   List of groups this feature is part of.
+    *   The feature will be subject to all items from its groups' configurations.
+    *   See [GroupList](#GroupList) below for details.
 *   `tracking_only`
     *   Set to true if in-product help should never trigger.
     *   Tracker::ShouldTriggerHelpUI(...) will always return false, but if all
@@ -627,7 +654,7 @@ all described below:
         *   `0` Nothing should be stored.
         *   `1` |current_day| should be stored.
         *   `2+` |current_day| plus |N-1| more days should be stored.
-    *   The value should not exceed 10 years (3650 days).
+    *   The value should not exceed 10 years (3650 days, see `kMaxStoragePeriod`).
     *   Value client side data type: uint32_t
     *   Whenever a particular event is used by multiple features, the maximum
         value of all `storage` is used as the storage window.
@@ -766,6 +793,96 @@ all
 none
 ```
 
+### SnoozeParams
+
+Format: `max_limit:{uint32_t},snooze_interval:{uint32_t}`
+
+The SnoozeParams is a comma separated data structure with the following two key-value pairs described below:
+
+*   `max_limit`
+
+    * The maximum amount of times an IPH bubble is shown to the client before being force dismissed.
+    * The value must be given as a number of recurrence.
+        * If `N = 0`, the IPH bubble will be dismissed after the first occurrence.
+        * If `N = 1`, the IPH bubble will be dismissed after the 2nd occurrence.
+    * Value client side data type: uint32_t
+
+*   `snooze_interval`
+
+    * The interval between when the client snoozes the IPH bubble and when the IPH is elligible to be shown to the client again.
+    * The value must be given as a number of days.
+        * If `N=1`, the IPH bubble will not be shown again to the client in the next 1 day (24 hours).
+    * Value client side data type: uint32_t
+
+
+**Examples**
+
+The IPH bubble will be force dismissed after 2 snoozes, which means it will be shown to the client exactly 3 times. The IPH bubble will be shown no less then 4 days apart.
+
+```
+max_limit:2,snooze_interval:4
+```
+
+### GroupList
+
+Format: `[comma-separated list]`
+
+This is a comma-separated list of group names that this feature is part of.
+
+### GroupConfig
+
+The `GroupConfig` fields `session_rate` and `event_trigger` are required, and
+there can be an arbitrary amount of other `event_???` entries. Like features,
+the group fields can also have an optional name prefix.
+
+
+```
+{
+  "session_rate": "{Comparator}",
+  "event_trigger": "{EventConfig}",
+  "event_???": "{EventConfig}",
+  "x_???": "..."
+ }
+```
+
+* `session_rate` __REQUIRED__
+    * Similar to the [FeatureConfig](#FeatureConfig) field of the same name.
+    * The count of total In-Product Help displayed in the current end user session must
+      meet all session rates: the base feature's and those of any of its groups.
+
+* `event_trigger` __REQUIRED__
+    * Similar to the [FeatureConfig](#FeatureConfig) field of the same name.
+    * Automatically increments whenever any feature in this group is triggered.
+
+* `event_???`
+    * Similar to the [FeatureConfig](#FeatureConfig) field of the same name.
+
+**Examples**
+
+There are 2 features that trigger once per month each. The overarching group causes
+only one of the 2 to trigger every week.
+
+```
+DownloadHomeIPH: {
+  "availability": ">=30",
+  "session_rate": "<1",
+  "event_used": "name:download_home_opened;comparator:any;window:90;storage:360",
+  "event_trigger": "name:download_home_iph_trigger;comparator:==0;window:30;storage:30",
+  "groups": "DownloadGroup",
+}
+DownloadCustomIPH: {
+  "availability": ">=30",
+  "session_rate": "<1",
+  "event_used": "name:download_custom_opened;comparator:any;window:90;storage:360",
+  "event_trigger": "name:download_custom_iph_trigger;comparator:==0;window:30;storage:30",
+  "groups": "DownloadGroup",
+}
+DownloadGroup: {
+  "session_rate": "<1",
+  "event_trigger": "name:download_group_trigger;comparator:==0;window:7;storage:30",
+}
+```
+
 ### Manual testing using field trial configurations
 
 Usually, the options for testing IPHs provided in
@@ -835,6 +952,18 @@ a debug build of chrome with the following command line arguments:
 --vmodule=tracker_impl*=2,event_model_impl*=2,persistent_availability_store*=2,chrome_variations_configuration*=3
 ```
 
+## Automated External Testing (Tast)
+
+If you want to restrict the IPH that can show when launching Chrome as an
+external process as part of a test, use the `--propagate-iph-for-testing`
+switch:
+
+ * `chrome --propagate-iph-for-testing`
+   - disables all IPH
+ * `chrome --propagate-iph-for-testing=IPH_GoatTeleportationFeature,IPH_FlyingCowFeature`
+   - disables all IPH except for "IPH_GoatTeleportationFeature" and
+   "IPH_FlyingCowFeature".
+
 ## Development of `//components/feature_engagement`
 
 ### Testing
@@ -855,6 +984,57 @@ When adding new test suites, also remember to add the suite to the filter file:
 
 See
 [this doc](https://docs.google.com/document/d/1EhQe3G9juBiw-otuRnGf5gzTsfHZVZiSKrgF6r7Sz4E/edit#heading=h.la5fs7q2klme)
+
+## Example
+
+Let's image you want to add an in-product help to increase the use of the "Save
+password" infobar. The in-product help will be shown at most once per year, when
+the user is shown an infobar, if the user ignored the infobar 3 times in the
+past 60 days and accepted it less than 2 times in the past two years.
+
+The configuration will look like this:
+
+ ```
+{
+  "availability": ">=0",
+  "session_rate": "<1",
+  "event_used": "name:password_infobar_accepted;comparator:<=2;window:720;storage:720",
+  "event_trigger": "name:password_infobar_iph_trigger;comparator:==0;window:360;storage:360",
+  "event_1": "name:password_infobar_ignored;comparator:>=3;window:60;storage:60"
+}
+```
+
+In `//components/feature_engagement/public/feature_constants.h`:
+
+```c++
+BASE_DECLARE_FEATURE(kIPHPasswordInfobarFeature);
+```
+
+In `//components/feature_engagement/public/event_constants.h`
+
+```c++
+extern const char kPasswordInfobarIgnored[];  // "password_infobar_ignored"
+extern const char kPasswordInfobarAccepted[];  // "password_infobar_accepted"
+```
+
+In the Password Infobar code (example code):
+
+```c++
+void PasswordInfobar::OnInfobarIgnored() {
+  tracker->NotifyEvent(kPasswordInfobarIgnored);
+}
+
+void PasswordInfobar::OnInfobarAccepted() {
+  tracker->NotifyEvent(kPasswordInfobarAccepted);
+}
+
+void PasswordInfobar::OnInfobarPresented() {
+  if (tracker->ShouldTriggerHelpUI(kIPHPasswordInfobarFeature)) {
+    // Display the IPH.
+  }
+}
+```
+
 
 [field-trial-testing-configuration]: https://chromium.googlesource.com/chromium/src/+/main/testing/variations/README.md
 [GetClientSideFeatureConfig]: https://source.chromium.org/chromium/chromium/src/+/main:components/feature_engagement/public/feature_configurations.cc?q=GetClientSideFeatureConfig

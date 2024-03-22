@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_SHELF_IN_APP_TO_HOME_NUDGE_CONTROLLER_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -30,7 +31,7 @@ class ASH_EXPORT InAppToHomeNudgeController {
 
  private:
   // pointer to the shelf widget that owns the drag handle anchoring the nudge.
-  ShelfWidget* const shelf_widget_;
+  const raw_ptr<ShelfWidget, ExperimentalAsh> shelf_widget_;
 };
 
 }  // namespace ash

@@ -1,18 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/declarative/rules_registry_service.h"
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_process_host.h"
@@ -20,7 +20,7 @@
 #include "extensions/browser/api/declarative_webrequest/webrequest_constants.h"
 #include "extensions/browser/api/declarative_webrequest/webrequest_rules_registry.h"
 #include "extensions/browser/api/extensions_api_client.h"
-#include "extensions/browser/api/web_request/web_request_api.h"
+#include "extensions/browser/api/web_request/extension_web_request_event_router.h"
 #include "extensions/browser/extension_util.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/features/feature.h"
@@ -53,7 +53,7 @@ RulesRegistryService::RulesRegistryService(content::BrowserContext* context)
   }
 }
 
-RulesRegistryService::~RulesRegistryService() {}
+RulesRegistryService::~RulesRegistryService() = default;
 
 int RulesRegistryService::GetNextRulesRegistryID() {
   return ++current_rules_registry_id_;
@@ -63,8 +63,15 @@ void RulesRegistryService::Shutdown() {
   // Release the references to all registries, and remove the default registry
   // from ExtensionWebRequestEventRouter.
   rule_registries_.clear();
-  ExtensionWebRequestEventRouter::GetInstance()->RegisterRulesRegistry(
-      browser_context_, RulesRegistryService::kDefaultRulesRegistryID, nullptr);
+  // TODO(crbug.com/1433136): This could be moved to
+  // WebRequestEventRouter::Shutdown when the new per-BrowserContext event
+  // router is the only implementation. Or we might just remove it completely,
+  // since that instance will be destroyed when this RulesRegistryService
+  // instance is.
+  WebRequestEventRouter::Get(browser_context_)
+      ->RegisterRulesRegistry(browser_context_,
+                              RulesRegistryService::kDefaultRulesRegistryID,
+                              nullptr);
 }
 
 static base::LazyInstance<BrowserContextKeyedAPIFactory<RulesRegistryService>>::
@@ -93,7 +100,7 @@ void RulesRegistryService::RegisterRulesRegistry(
     scoped_refptr<RulesRegistry> rule_registry) {
   const std::string event_name(rule_registry->event_name());
   RulesRegistryKey key(event_name, rule_registry->id());
-  DCHECK(rule_registries_.find(key) == rule_registries_.end());
+  DCHECK(!base::Contains(rule_registries_, key));
   rule_registries_[key] = rule_registry;
 }
 
@@ -137,10 +144,11 @@ void RulesRegistryService::RemoveRulesRegistriesByID(int rules_registry_id) {
 }
 
 bool RulesRegistryService::HasAnyRegisteredRules() const {
-  return std::any_of(cache_delegates_.begin(), cache_delegates_.end(),
-                     [](const std::unique_ptr<RulesCacheDelegate>& delegate) {
-                       return delegate->HasRules();
-                     });
+  return base::ranges::any_of(
+      cache_delegates_,
+      [](const std::unique_ptr<RulesCacheDelegate>& delegate) {
+        return delegate->HasRules();
+      });
 }
 
 void RulesRegistryService::AddObserver(Observer* observer) {
@@ -156,6 +164,13 @@ void RulesRegistryService::RemoveObserver(Observer* observer) {
 void RulesRegistryService::SimulateExtensionUninstalled(
     const Extension* extension) {
   NotifyRegistriesHelper(&RulesRegistry::OnExtensionUninstalled, extension);
+}
+
+bool RulesRegistryService::HasRulesRegistryForTesting(
+    int rules_registry_id,
+    const std::string& event_name) {
+  return base::Contains(rule_registries_,
+                        RulesRegistryKey(event_name, rules_registry_id));
 }
 
 void RulesRegistryService::OnUpdateRules() {
@@ -174,8 +189,8 @@ RulesRegistryService::RegisterWebRequestRulesRegistry(
       RulesRegistryKey(declarative_webrequest_constants::kOnRequest,
                        rules_registry_id)));
 
-  auto web_request_cache_delegate = std::make_unique<RulesCacheDelegate>(
-      cache_delegate_type, true /* log_storage_init_delay */);
+  auto web_request_cache_delegate =
+      std::make_unique<RulesCacheDelegate>(cache_delegate_type);
   auto web_request_rules_registry =
       base::MakeRefCounted<WebRequestRulesRegistry>(
           browser_context_, web_request_cache_delegate.get(),
@@ -183,8 +198,9 @@ RulesRegistryService::RegisterWebRequestRulesRegistry(
   web_request_cache_delegate->AddObserver(this);
   cache_delegates_.push_back(std::move(web_request_cache_delegate));
   RegisterRulesRegistry(web_request_rules_registry);
-  ExtensionWebRequestEventRouter::GetInstance()->RegisterRulesRegistry(
-      browser_context_, rules_registry_id, web_request_rules_registry);
+  WebRequestEventRouter::Get(browser_context_)
+      ->RegisterRulesRegistry(browser_context_, rules_registry_id,
+                              web_request_rules_registry);
   return web_request_rules_registry;
 }
 
@@ -211,8 +227,7 @@ void RulesRegistryService::EnsureDefaultRulesRegistriesRegistered() {
   // Create the ContentRulesRegistry.
   DCHECK(!content_rules_registry_);
   auto content_rules_cache_delegate = std::make_unique<RulesCacheDelegate>(
-      RulesCacheDelegate::Type::kPersistent,
-      false /* log_storage_init_delay */);
+      RulesCacheDelegate::Type::kPersistent);
   scoped_refptr<ContentRulesRegistry> content_rules_registry =
       ExtensionsAPIClient::Get()->CreateContentRulesRegistry(
           browser_context_, content_rules_cache_delegate.get());

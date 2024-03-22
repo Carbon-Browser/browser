@@ -1,17 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './strings.m.js';
 
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 export enum SourceType {
   WEBSTORE = 'webstore',
   POLICY = 'policy',
   SIDELOADED = 'sideloaded',
   UNPACKED = 'unpacked',
+  INSTALLED_BY_DEFAULT = 'installed-by-default',
   UNKNOWN = 'unknown',
 }
 
@@ -62,6 +63,7 @@ export function userCanChangeEnablement(
   if (item.disableReasons.corruptInstall ||
       item.disableReasons.suspiciousInstall ||
       item.disableReasons.updateRequired ||
+      item.disableReasons.publishedInStoreRequired ||
       item.disableReasons.blockedByPolicy) {
     return false;
   }
@@ -93,6 +95,8 @@ export function getItemSource(item: chrome.developerPrivate.ExtensionInfo):
       return SourceType.UNKNOWN;
     case chrome.developerPrivate.Location.FROM_STORE:
       return SourceType.WEBSTORE;
+    case chrome.developerPrivate.Location.INSTALLED_BY_DEFAULT:
+      return SourceType.INSTALLED_BY_DEFAULT;
     default:
       assertNotReached(item.location);
   }
@@ -108,6 +112,8 @@ export function getItemSourceString(source: SourceType): string {
       return loadTimeData.getString('itemSourceUnpacked');
     case SourceType.WEBSTORE:
       return loadTimeData.getString('itemSourceWebstore');
+    case SourceType.INSTALLED_BY_DEFAULT:
+      return loadTimeData.getString('itemSourceInstalledByDefault');
     case SourceType.UNKNOWN:
       // Nothing to return. Calling code should use
       // chrome.developerPrivate.ExtensionInfo's |locationText| instead.
@@ -146,6 +152,30 @@ export function computeInspectableViewLabel(
   }
 
   return label;
+}
+
+/**
+ * Computes the accessible human-facing aria label for an extension toggle item.
+ */
+export function getEnableToggleAriaLabel(
+    toggleEnabled: boolean,
+    extensionsDataType: chrome.developerPrivate.ExtensionType,
+    appEnabled: string, extensionEnabled: string, itemOff: string): string {
+  if (!toggleEnabled) {
+    return itemOff;
+  }
+
+  const ExtensionType = chrome.developerPrivate.ExtensionType;
+  switch (extensionsDataType) {
+    case ExtensionType.HOSTED_APP:
+    case ExtensionType.LEGACY_PACKAGED_APP:
+    case ExtensionType.PLATFORM_APP:
+      return appEnabled;
+    case ExtensionType.EXTENSION:
+    case ExtensionType.SHARED_MODULE:
+      return extensionEnabled;
+  }
+  assertNotReached('Item type is not App or Extension.');
 }
 
 /**
@@ -188,4 +218,19 @@ export function getEnableControl(data: chrome.developerPrivate.ExtensionInfo):
     return EnableControl.REPAIR;
   }
   return EnableControl.ENABLE_TOGGLE;
+}
+
+/**
+ * @return The tooltip to show for an extension's enable toggle.
+ */
+export function getEnableToggleTooltipText(
+    data: chrome.developerPrivate.ExtensionInfo): string {
+  if (!isEnabled(data.state)) {
+    return loadTimeData.getString('enableToggleTooltipDisabled');
+  }
+
+  return loadTimeData.getString(
+      data.permissions.canAccessSiteData ?
+          'enableToggleTooltipEnabledWithSiteAccess' :
+          'enableToggleTooltipEnabled');
 }

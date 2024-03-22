@@ -1,9 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // DELETE LATER
 #include "base/logging.h"
+#include "chrome/browser/ui/bookmarks/bookmark_stats.h"
 #include "chrome/browser/ui/tabs/tab_group_model.h"
 
 #include "chrome/browser/ui/bookmarks/bookmark_context_menu_controller.h"
@@ -32,8 +33,11 @@
 #include "components/bookmarks/browser/bookmark_client.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
+#include "components/bookmarks/browser/scoped_group_bookmark_actions.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/bookmarks/managed/managed_bookmark_service.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/tab_groups/tab_group_visual_data.h"
@@ -43,7 +47,6 @@
 
 using base::UserMetricsAction;
 using bookmarks::BookmarkNode;
-using content::PageNavigator;
 
 namespace {
 
@@ -70,7 +73,7 @@ const UserMetricsAction* GetActionForLocationAndDisposition(
     BookmarkLaunchLocation location,
     WindowOpenDisposition disposition) {
   switch (location) {
-    case BOOKMARK_LAUNCH_LOCATION_ATTACHED_BAR:
+    case BookmarkLaunchLocation::kAttachedBar:
       switch (disposition) {
         case WindowOpenDisposition::NEW_BACKGROUND_TAB:
           return &kBookmarkBarNewBackgroundTab;
@@ -81,7 +84,7 @@ const UserMetricsAction* GetActionForLocationAndDisposition(
         default:
           return nullptr;
       }
-    case BOOKMARK_LAUNCH_LOCATION_APP_MENU:
+    case BookmarkLaunchLocation::kAppMenu:
       switch (disposition) {
         case WindowOpenDisposition::NEW_BACKGROUND_TAB:
           return &kAppMenuBookmarksNewBackgroundTab;
@@ -92,7 +95,7 @@ const UserMetricsAction* GetActionForLocationAndDisposition(
         default:
           return nullptr;
       }
-    case BOOKMARK_LAUNCH_LOCATION_SIDE_PANEL_CONTEXT_MENU:
+    case BookmarkLaunchLocation::kSidePanelContextMenu:
       switch (disposition) {
         case WindowOpenDisposition::NEW_BACKGROUND_TAB:
           return &kSidePanelBookmarksNewBackgroundTab;
@@ -115,7 +118,6 @@ BookmarkContextMenuController::BookmarkContextMenuController(
     BookmarkContextMenuControllerDelegate* delegate,
     Browser* browser,
     Profile* profile,
-    base::RepeatingCallback<content::PageNavigator*()> get_navigator,
     BookmarkLaunchLocation opened_from,
     const BookmarkNode* parent,
     const std::vector<const BookmarkNode*>& selection)
@@ -123,7 +125,6 @@ BookmarkContextMenuController::BookmarkContextMenuController(
       delegate_(delegate),
       browser_(browser),
       profile_(profile),
-      get_navigator_(std::move(get_navigator)),
       opened_from_(opened_from),
       parent_(parent),
       selection_(selection),
@@ -247,8 +248,7 @@ void BookmarkContextMenuController::ExecuteCommand(int id, int event_flags) {
       if (action)
         base::RecordAction(*action);
 
-      chrome::OpenAllIfAllowed(browser_, std::move(get_navigator_), selection_,
-                               initial_disposition,
+      chrome::OpenAllIfAllowed(browser_, selection_, initial_disposition,
                                id == IDC_BOOKMARK_BAR_OPEN_ALL_NEW_TAB_GROUP);
       break;
     }
@@ -256,6 +256,7 @@ void BookmarkContextMenuController::ExecuteCommand(int id, int event_flags) {
     case IDC_BOOKMARK_BAR_RENAME_FOLDER:
     case IDC_BOOKMARK_BAR_EDIT:
       base::RecordAction(UserMetricsAction("BookmarkBar_ContextMenu_Edit"));
+      RecordBookmarkEdited(opened_from_);
 
       if (selection_.size() != 1) {
         NOTREACHED();
@@ -269,6 +270,27 @@ void BookmarkContextMenuController::ExecuteCommand(int id, int event_flags) {
           selection_[0]->is_url() ? BookmarkEditor::SHOW_TREE :
                                     BookmarkEditor::NO_TREE);
       break;
+
+    case IDC_BOOKMARK_BAR_ADD_TO_BOOKMARKS_BAR: {
+      base::RecordAction(
+          UserMetricsAction("BookmarkBar_ContextMenu_AddToBookmarkBar"));
+      const BookmarkNode* bookmark_bar_node = model_->bookmark_bar_node();
+      for (const auto* node : selection_) {
+        model_->Move(node, bookmark_bar_node,
+                     bookmark_bar_node->children().size());
+      }
+      break;
+    }
+
+    case IDC_BOOKMARK_BAR_REMOVE_FROM_BOOKMARKS_BAR: {
+      base::RecordAction(
+          UserMetricsAction("BookmarkBar_ContextMenu_RemoveFromBookmarkBar"));
+      const BookmarkNode* other_node = model_->other_node();
+      for (const auto* node : selection_) {
+        model_->Move(node, other_node, other_node->children().size());
+      }
+      break;
+    }
 
     case IDC_BOOKMARK_BAR_UNDO: {
       base::RecordAction(UserMetricsAction("BookmarkBar_ContextMenu_Undo"));
@@ -286,12 +308,11 @@ void BookmarkContextMenuController::ExecuteCommand(int id, int event_flags) {
 
     case IDC_BOOKMARK_BAR_REMOVE: {
       base::RecordAction(UserMetricsAction("BookmarkBar_ContextMenu_Remove"));
+      RecordBookmarkRemoved(opened_from_);
 
-      for (size_t i = 0; i < selection_.size(); ++i) {
-        int index = selection_[i]->parent()->GetIndexOf(selection_[i]);
-        if (index > -1)
-          model_->Remove(selection_[i]);
-      }
+      bookmarks::ScopedGroupBookmarkActions group_remove(model_);
+      for (const auto* node : selection_)
+        model_->Remove(node, bookmarks::metrics::BookmarkEditSource::kUser);
       selection_.clear();
       break;
     }
@@ -366,11 +387,13 @@ void BookmarkContextMenuController::ExecuteCommand(int id, int event_flags) {
     }
 
     case IDC_CUT:
-      bookmarks::CopyToClipboard(model_, selection_, true);
+      bookmarks::CopyToClipboard(model_, selection_, true,
+                                 bookmarks::metrics::BookmarkEditSource::kUser);
       break;
 
     case IDC_COPY:
-      bookmarks::CopyToClipboard(model_, selection_, false);
+      bookmarks::CopyToClipboard(model_, selection_, false,
+                                 bookmarks::metrics::BookmarkEditSource::kUser);
       break;
 
     case IDC_PASTE: {
@@ -444,29 +467,46 @@ bool BookmarkContextMenuController::IsCommandIdEnabled(int command_id) const {
                       selection_[0]->parent() == model_->root_node();
   bool can_edit = prefs->GetBoolean(bookmarks::prefs::kEditBookmarksEnabled) &&
                   bookmarks::CanAllBeEditedByUser(model_->client(), selection_);
-  IncognitoModePrefs::Availability incognito_avail =
+  policy::IncognitoModeAvailability incognito_avail =
       IncognitoModePrefs::GetAvailability(prefs);
 
   switch (command_id) {
     case IDC_BOOKMARK_BAR_OPEN_INCOGNITO:
       return !profile_->IsOffTheRecord() &&
-             incognito_avail != IncognitoModePrefs::Availability::kDisabled;
+             incognito_avail != policy::IncognitoModeAvailability::kDisabled;
 
     case IDC_BOOKMARK_BAR_OPEN_ALL_INCOGNITO:
       return chrome::HasBookmarkURLsAllowedInIncognitoMode(selection_,
                                                            profile_) &&
              !profile_->IsOffTheRecord() &&
-             incognito_avail != IncognitoModePrefs::Availability::kDisabled;
+             incognito_avail != policy::IncognitoModeAvailability::kDisabled;
     case IDC_BOOKMARK_BAR_OPEN_ALL:
     case IDC_BOOKMARK_BAR_OPEN_ALL_NEW_TAB_GROUP:
       return chrome::HasBookmarkURLs(selection_);
     case IDC_BOOKMARK_BAR_OPEN_ALL_NEW_WINDOW:
       return chrome::HasBookmarkURLs(selection_) &&
-             incognito_avail != IncognitoModePrefs::Availability::kForced;
+             incognito_avail != policy::IncognitoModeAvailability::kForced;
 
     case IDC_BOOKMARK_BAR_RENAME_FOLDER:
     case IDC_BOOKMARK_BAR_EDIT:
       return selection_.size() == 1 && !is_root_node && can_edit;
+
+    case IDC_BOOKMARK_BAR_ADD_TO_BOOKMARKS_BAR:
+      for (auto* node : selection_) {
+        if (node->is_permanent_node() ||
+            node->parent() == model_->bookmark_bar_node()) {
+          return false;
+        }
+      }
+      return can_edit && !model_->client()->IsNodeManaged(parent_);
+    case IDC_BOOKMARK_BAR_REMOVE_FROM_BOOKMARKS_BAR:
+      for (auto* node : selection_) {
+        if (node->is_permanent_node() ||
+            node->parent() != model_->bookmark_bar_node()) {
+          return false;
+        }
+      }
+      return can_edit && !model_->client()->IsNodeManaged(parent_);
 
     case IDC_BOOKMARK_BAR_UNDO:
       return can_edit &&
@@ -483,7 +523,7 @@ bool BookmarkContextMenuController::IsCommandIdEnabled(int command_id) const {
 
     case IDC_BOOKMARK_BAR_NEW_FOLDER:
     case IDC_BOOKMARK_BAR_ADD_NEW_BOOKMARK:
-      return can_edit && model_->client()->CanBeEditedByUser(parent_) &&
+      return can_edit && !model_->client()->IsNodeManaged(parent_) &&
              bookmarks::GetParentForNewNodes(parent_, selection_, nullptr);
 
     case IDC_BOOKMARK_BAR_ALWAYS_SHOW:

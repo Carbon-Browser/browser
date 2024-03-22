@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@ package org.chromium.net;
 import android.content.Context;
 import android.net.ConnectivityManager;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeClassQualifiedName;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeClassQualifiedName;
-import org.chromium.base.annotations.NativeMethods;
 
 /**
  * Triggers updates to the underlying network state in Chrome alongside NetworkChangeNotifier.
@@ -36,9 +37,7 @@ public class NetworkActiveNotifier implements ConnectivityManager.OnNetworkActiv
     // Used for testing, keeps track of when platform notification are enabled (or disabled).
     private boolean mAreNotificationsEnabled;
 
-    /**
-     * Used to build a Java object from native code.
-     */
+    /** Used to build a Java object from native code. */
     @CalledByNative
     public static NetworkActiveNotifier build(long nativeNetworkActiveNotifier) {
         return new NetworkActiveNotifier(nativeNetworkActiveNotifier);
@@ -66,9 +65,7 @@ public class NetworkActiveNotifier implements ConnectivityManager.OnNetworkActiv
         NetworkActiveNotifierJni.get().notifyOfDefaultNetworkActive(mNativeNetworkActiveObserver);
     }
 
-    /**
-     * For testing, called by native code to trigger a fake platform notification.
-     */
+    /** For testing, called by native code to trigger a fake platform notification. */
     @CalledByNative
     public void fakeDefaultNetworkActive() {
         if (mAreNotificationsEnabled) {

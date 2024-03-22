@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 #define ASH_COMPONENTS_ARC_MEMORY_ARC_MEMORY_BRIDGE_H_
 
 #include "ash/components/arc/mojom/memory.mojom.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -37,10 +38,17 @@ class ArcMemoryBridge : public KeyedService {
   using DropCachesCallback = base::OnceCallback<void(bool)>;
   void DropCaches(DropCachesCallback callback);
 
+  // Reclaims pages from all guest processes.
+  using ReclaimCallback = base::OnceCallback<void(mojom::ReclaimResultPtr)>;
+  void Reclaim(mojom::ReclaimRequestPtr, ReclaimCallback);
+
+  static void EnsureFactoryBuilt();
+
  private:
   THREAD_CHECKER(thread_checker_);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService, ExperimentalAsh>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 };
 
 }  // namespace arc

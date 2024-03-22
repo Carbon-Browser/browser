@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/extensions/extension_apitest.h"
@@ -78,6 +79,10 @@ IN_PROC_BROWSER_TEST_P(ExtensionContextMenuApiLazyTest, ContextMenus) {
   ASSERT_TRUE(RunExtensionTest("context_menus/event_page")) << message_;
 }
 
+IN_PROC_BROWSER_TEST_P(ExtensionContextMenuApiTestWithContextType, Count) {
+  ASSERT_TRUE(RunExtensionTest("context_menus/count")) << message_;
+}
+
 // crbug.com/51436 -- creating context menus from multiple script contexts
 // should work.
 IN_PROC_BROWSER_TEST_P(ExtensionContextMenuApiTestWithContextType,
@@ -130,6 +135,11 @@ class ExtensionContextMenuVisibilityApiTest
   ExtensionContextMenuVisibilityApiTest& operator=(
       const ExtensionContextMenuVisibilityApiTest&) = delete;
 
+  void TearDownOnMainThread() override {
+    menu_.reset();
+    ExtensionContextMenuApiTest::TearDownOnMainThread();
+  }
+
   void SetUpTestExtension() {
     extension_ = LoadExtension(
         test_data_dir_.AppendASCII("context_menus/item_visibility/"));
@@ -163,10 +173,7 @@ class ExtensionContextMenuVisibilityApiTest
 
   void CallAPI(const Extension* extension, const std::string& script) {
     content::WebContents* background_page = GetBackgroundPage(extension->id());
-    bool error = false;
-    ASSERT_TRUE(
-        content::ExecuteScriptAndExtractBool(background_page, script, &error));
-    ASSERT_FALSE(error);
+    ASSERT_EQ(false, content::EvalJs(background_page, script));
   }
 
   // Verifies that the UI menu model has the given number of extension menu
@@ -209,7 +216,9 @@ class ExtensionContextMenuVisibilityApiTest
 
   const Extension* extension() { return extension_; }
 
-  ui::MenuModel* top_level_model_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION ui::MenuModel* top_level_model_ = nullptr;
 
  private:
   content::WebContents* GetBackgroundPage(const std::string& extension_id) {
@@ -220,7 +229,7 @@ class ExtensionContextMenuVisibilityApiTest
 
   ProcessManager* process_manager() { return ProcessManager::Get(profile()); }
 
-  raw_ptr<const Extension> extension_ = nullptr;
+  raw_ptr<const Extension, DanglingUntriaged> extension_ = nullptr;
   std::unique_ptr<TestRenderViewContextMenu> menu_;
   size_t top_level_index_ = 0;
 };

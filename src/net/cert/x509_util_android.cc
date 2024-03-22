@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,12 @@ using base::android::JavaParamRef;
 
 namespace net {
 
-void JNI_X509Util_NotifyKeyChainChanged(JNIEnv* env) {
-  CertDatabase::GetInstance()->NotifyObserversCertDBChanged();
+void JNI_X509Util_NotifyTrustStoreChanged(JNIEnv* env) {
+  CertDatabase::GetInstance()->NotifyObserversTrustStoreChanged();
+}
+
+void JNI_X509Util_NotifyClientCertStoreChanged(JNIEnv* env) {
+  CertDatabase::GetInstance()->NotifyObserversClientCertStoreChanged();
 }
 
 }  // namespace net

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,7 @@ const int kCompatibleVersionNumber = 1;
 }  // namespace
 
 UserNoteDatabase::UserNoteDatabase(const base::FilePath& path_to_database_dir)
-    : db_(sql::DatabaseOptions{.exclusive_locking = true,
-                               .page_size = 4096,
-                               .cache_size = 128}),
+    : db_(sql::DatabaseOptions{.page_size = 4096, .cache_size = 128}),
       db_file_path_(path_to_database_dir.Append(kDatabaseName)) {}
 
 UserNoteDatabase::~UserNoteDatabase() {
@@ -71,7 +69,7 @@ bool UserNoteDatabase::Init() {
 }
 
 UserNoteMetadataSnapshot UserNoteDatabase::GetNoteMetadataForUrls(
-    std::vector<GURL> urls) {
+    const UserNoteStorage::UrlSet& urls) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!EnsureDBInit())
@@ -104,15 +102,18 @@ UserNoteMetadataSnapshot UserNoteDatabase::GetNoteMetadataForUrls(
           !base::HexStringToUInt64(string_piece.substr(16, 16), &low)) {
         continue;
       }
-      base::UnguessableToken token =
+      absl::optional<base::UnguessableToken> token =
           base::UnguessableToken::Deserialize(high, low);
+      if (!token.has_value()) {
+        continue;
+      }
 
       base::Time creation_date = statement.ColumnTime(1);
       base::Time modification_date = statement.ColumnTime(2);
 
       auto metadata = std::make_unique<UserNoteMetadata>(
           creation_date, modification_date, /*min_note_version=*/1);
-      metadata_snapshot.AddEntry(url, token, std::move(metadata));
+      metadata_snapshot.AddEntry(url, token.value(), std::move(metadata));
     }
   }
 
@@ -122,7 +123,7 @@ UserNoteMetadataSnapshot UserNoteDatabase::GetNoteMetadataForUrls(
 }
 
 std::vector<std::unique_ptr<UserNote>> UserNoteDatabase::GetNotesById(
-    std::vector<base::UnguessableToken> ids) {
+    const UserNoteStorage::IdSet& ids) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::vector<std::unique_ptr<UserNote>> user_notes;
 
@@ -201,7 +202,7 @@ std::unique_ptr<UserNote> UserNoteDatabase::GetNoteById(
                                     std::move(target));
 }
 
-bool UserNoteDatabase::CreateNote(const UserNote* model,
+bool UserNoteDatabase::CreateNote(std::unique_ptr<UserNote> model,
                                   std::u16string note_body_text) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -270,11 +271,11 @@ bool UserNoteDatabase::CreateNote(const UserNote* model,
   return true;
 }
 
-bool UserNoteDatabase::UpdateNote(const UserNote* model,
+bool UserNoteDatabase::UpdateNote(std::unique_ptr<UserNote> model,
                                   std::u16string note_body_text,
                                   bool is_creation) {
   if (is_creation) {
-    return CreateNote(model, note_body_text);
+    return CreateNote(std::move(model), note_body_text);
   }
 
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -491,7 +492,7 @@ void UserNoteDatabase::DatabaseErrorCallback(int error, sql::Statement* stmt) {
 
   // After this call, the `db_` handle is poisoned so that future calls will
   // return errors until the handle is re-opened.
-  db_.RazeAndClose();
+  db_.RazeAndPoison();
 }
 
 bool UserNoteDatabase::InitSchema() {
@@ -520,9 +521,8 @@ bool UserNoteDatabase::InitSchema() {
     return CreateSchema();
   }
 
-  meta_table.SetVersionNumber(kCurrentVersionNumber);
-  meta_table.SetCompatibleVersionNumber(kCompatibleVersionNumber);
-  return true;
+  return meta_table.SetVersionNumber(kCurrentVersionNumber) &&
+         meta_table.SetCompatibleVersionNumber(kCompatibleVersionNumber);
 }
 
 bool UserNoteDatabase::CreateSchema() {

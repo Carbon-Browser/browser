@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,11 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
@@ -24,8 +24,8 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "build/build_config.h"
@@ -34,7 +34,6 @@
 #include "components/services/storage/dom_storage/dom_storage_database.h"
 #include "components/services/storage/dom_storage/local_storage_database.pb.h"
 #include "components/services/storage/dom_storage/storage_area_impl.h"
-#include "components/services/storage/filesystem_proxy_factory.h"
 #include "components/services/storage/public/cpp/constants.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "storage/common/database/database_identifier.h"
@@ -75,6 +74,16 @@ const int64_t kCurrentLocalStorageSchemaVersion = 1;
 // database.
 const int kCommitErrorThreshold = 8;
 
+// Limits on the cache size and number of areas in memory, over which the areas
+// are purged.
+#if BUILDFLAG(IS_ANDROID)
+const unsigned kMaxLocalStorageAreaCount = 10;
+const size_t kMaxLocalStorageCacheSize = 2 * 1024 * 1024;
+#else
+const unsigned kMaxLocalStorageAreaCount = 50;
+const size_t kMaxLocalStorageCacheSize = 20 * 1024 * 1024;
+#endif
+
 DomStorageDatabase::Key CreateMetaDataKey(
     const blink::StorageKey& storage_key) {
   std::string storage_key_str = storage_key.SerializeForLocalStorage();
@@ -93,7 +102,7 @@ absl::optional<blink::StorageKey> ExtractStorageKeyFromMetaDataKey(
   DCHECK_GT(key.size(), std::size(kMetaPrefix));
   const base::StringPiece key_string(reinterpret_cast<const char*>(key.data()),
                                      key.size());
-  return blink::StorageKey::Deserialize(
+  return blink::StorageKey::DeserializeForLocalStorage(
       key_string.substr(std::size(kMetaPrefix)));
 }
 
@@ -139,29 +148,21 @@ void DeleteStorageKeys(AsyncDomStorageDatabase* database,
           storage_keys),
       std::move(callback));
 }
+StorageAreaImpl::Options createOptions() {
+  // Delay for a moment after a value is set in anticipation
+  // of other values being set, so changes are batched.
+  static constexpr base::TimeDelta kCommitDefaultDelaySecs = base::Seconds(5);
 
-}  // namespace
+  // To avoid excessive IO we apply limits to the amount of data being written
+  // and the frequency of writes.
+  static const size_t kMaxBytesPerHour = kPerStorageAreaQuota;
+  static constexpr int kMaxCommitsPerHour = 60;
 
-class LocalStorageImpl::StorageAreaHolder final
-    : public StorageAreaImpl::Delegate {
- public:
-  StorageAreaHolder(LocalStorageImpl* context,
-                    const blink::StorageKey& storage_key)
-      : context_(context), storage_key_(storage_key) {
-    // Delay for a moment after a value is set in anticipation
-    // of other values being set, so changes are batched.
-    static constexpr base::TimeDelta kCommitDefaultDelaySecs = base::Seconds(5);
-
-    // To avoid excessive IO we apply limits to the amount of data being written
-    // and the frequency of writes.
-    static const size_t kMaxBytesPerHour = kPerStorageAreaQuota;
-    static constexpr int kMaxCommitsPerHour = 60;
-
-    StorageAreaImpl::Options options;
-    options.max_size = kPerStorageAreaQuota + kPerStorageAreaOverQuotaAllowance;
-    options.default_commit_delay = kCommitDefaultDelaySecs;
-    options.max_bytes_per_hour = kMaxBytesPerHour;
-    options.max_commits_per_hour = kMaxCommitsPerHour;
+  StorageAreaImpl::Options options;
+  options.max_size = kPerStorageAreaQuota + kPerStorageAreaOverQuotaAllowance;
+  options.default_commit_delay = kCommitDefaultDelaySecs;
+  options.max_bytes_per_hour = kMaxBytesPerHour;
+  options.max_commits_per_hour = kMaxCommitsPerHour;
 #if BUILDFLAG(IS_ANDROID)
     options.cache_mode = StorageAreaImpl::CacheMode::KEYS_ONLY_WHEN_POSSIBLE;
 #else
@@ -170,13 +171,23 @@ class LocalStorageImpl::StorageAreaHolder final
       options.cache_mode = StorageAreaImpl::CacheMode::KEYS_ONLY_WHEN_POSSIBLE;
     }
 #endif
-    area_ = std::make_unique<StorageAreaImpl>(
-        context_->database_.get(), MakeStorageKeyPrefix(storage_key_), this,
-        options);
-    area_ptr_ = area_.get();
-  }
+    return options;
+}
+}  // namespace
 
-  StorageAreaImpl* storage_area() { return area_ptr_; }
+class LocalStorageImpl::StorageAreaHolder final
+    : public StorageAreaImpl::Delegate {
+ public:
+  StorageAreaHolder(LocalStorageImpl* context,
+                    const blink::StorageKey& storage_key)
+      : context_(context),
+        storage_key_(storage_key),
+        area_(context_->database_.get(),
+              MakeStorageKeyPrefix(storage_key_),
+              this,
+              createOptions()) {}
+
+  StorageAreaImpl* storage_area() { return &area_; }
 
   void OnNoBindings() override {
     has_bindings_ = false;
@@ -227,12 +238,7 @@ class LocalStorageImpl::StorageAreaHolder final
  private:
   raw_ptr<LocalStorageImpl> context_;
   blink::StorageKey storage_key_;
-  // Holds the same value as |area_|. The reason for this is that
-  // during destruction of the StorageAreaImpl instance we might still get
-  // called and need access  to the StorageAreaImpl instance. The unique_ptr
-  // could already be null, but this field should still be valid.
-  raw_ptr<StorageAreaImpl, DanglingUntriaged> area_ptr_;
-  std::unique_ptr<StorageAreaImpl> area_;
+  StorageAreaImpl area_;
   bool has_bindings_ = false;
 };
 
@@ -382,7 +388,7 @@ void LocalStorageImpl::ShutDown(base::OnceClosure callback) {
     return;  // Keep everything.
   }
 
-  if (!storage_keys_to_purge_on_shutdown_.empty()) {
+  if (!origins_to_purge_on_shutdown_.empty()) {
     RetrieveStorageUsage(
         base::BindOnce(&LocalStorageImpl::OnGotStorageUsageForShutdown,
                        base::Unretained(this)));
@@ -405,13 +411,11 @@ void LocalStorageImpl::PurgeMemory() {
 void LocalStorageImpl::ApplyPolicyUpdates(
     std::vector<mojom::StoragePolicyUpdatePtr> policy_updates) {
   for (const auto& update : policy_updates) {
-    // TODO(https://crbug.com/1199077): Pass the real StorageKey when
-    // StoragePolicyUpdate is converted.
-    blink::StorageKey storage_key(update->origin);
+    const url::Origin origin = update->origin;
     if (!update->purge_on_shutdown)
-      storage_keys_to_purge_on_shutdown_.erase(storage_key);
+      origins_to_purge_on_shutdown_.erase(origin);
     else
-      storage_keys_to_purge_on_shutdown_.insert(std::move(storage_key));
+      origins_to_purge_on_shutdown_.insert(std::move(origin));
   }
 }
 
@@ -422,6 +426,12 @@ void LocalStorageImpl::PurgeUnusedAreasIfNeeded() {
   // Nothing to purge.
   if (!unused_area_count)
     return;
+
+  // No purge is needed.
+  if (total_cache_size <= kMaxLocalStorageCacheSize &&
+      areas_.size() <= kMaxLocalStorageAreaCount && !is_low_end_device_) {
+    return;
+  }
 
   for (auto it = areas_.begin(); it != areas_.end();) {
     if (it->second->has_bindings())
@@ -454,7 +464,7 @@ bool LocalStorageImpl::OnMemoryDump(
   pmd->AddOwnershipEdge(leveldb_mad->guid(), global_dump->guid(), kImportance);
 
   if (args.level_of_detail ==
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
     size_t total_cache_size, unused_area_count;
     GetStatistics(&total_cache_size, &unused_area_count);
     auto* mad = pmd->CreateAllocatorDump(context_name + "/cache_size");
@@ -680,10 +690,7 @@ void LocalStorageImpl::RetrieveStorageUsage(GetUsageCallback callback) {
     std::vector<mojom::StorageUsageInfoPtr> result;
     base::Time now = base::Time::Now();
     for (const auto& it : areas_) {
-      result.emplace_back(mojom::StorageUsageInfo::New(
-          // TODO(https://crbug.com/1199077): Pass the real StorageKey when
-          // StorageUsageInfo is converted.
-          it.first.origin(), 0, now));
+      result.emplace_back(mojom::StorageUsageInfo::New(it.first, 0, now));
     }
     std::move(callback).Run(std::move(result));
   } else {
@@ -719,9 +726,7 @@ void LocalStorageImpl::OnGotMetaData(
     }
 
     result.emplace_back(mojom::StorageUsageInfo::New(
-        // TODO(https://crbug.com/1199077): Pass the real StorageKey when
-        // StorageUsageInfo is converted.
-        storage_key->origin(), row_data.size_bytes(),
+        storage_key.value(), row_data.size_bytes(),
         base::Time::FromInternalValue(row_data.last_modified())));
   }
   // Add any storage keys for which StorageAreas exist, but which haven't
@@ -735,10 +740,7 @@ void LocalStorageImpl::OnGotMetaData(
         it.second->storage_area()->empty()) {
       continue;
     }
-    result.emplace_back(mojom::StorageUsageInfo::New(
-        // TODO(https://crbug.com/1199077): Pass the real StorageKey when
-        // StorageUsageInfo is converted.
-        it.first.origin(), 0, now));
+    result.emplace_back(mojom::StorageUsageInfo::New(it.first, 0, now));
   }
   std::move(callback).Run(std::move(result));
 }
@@ -747,11 +749,20 @@ void LocalStorageImpl::OnGotStorageUsageForShutdown(
     std::vector<mojom::StorageUsageInfoPtr> usage) {
   std::vector<blink::StorageKey> storage_keys_to_delete;
   for (const auto& info : usage) {
-    // TODO(https://crbug.com/1199077): Pass the real StorageKey when
-    // StorageUsageInfo is converted.
-    blink::StorageKey storage_key(info->origin);
-    if (base::Contains(storage_keys_to_purge_on_shutdown_, storage_key))
-      storage_keys_to_delete.push_back(storage_key);
+    const blink::StorageKey& storage_key = info->storage_key;
+    const url::Origin& key_origin = storage_key.origin();
+    // Delete the storage if its origin matches one of the origins to purge, or
+    // if it is third-party and the top-level site is same-site with one of
+    // those origins.
+    for (const auto& origin_to_purge : origins_to_purge_on_shutdown_) {
+      if (key_origin == origin_to_purge ||
+          (storage_key.IsThirdPartyContext() &&
+           net::SchemefulSite(origin_to_purge) ==
+               storage_key.top_level_site())) {
+        storage_keys_to_delete.push_back(storage_key);
+        break;
+      }
+    }
   }
 
   if (!storage_keys_to_delete.empty()) {

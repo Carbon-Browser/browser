@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
@@ -24,6 +24,7 @@
 #include "components/translate/core/common/translate_errors.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "ui/base/interaction/element_identifier.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/simple_menu_model.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
@@ -49,6 +50,8 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
                             public ui::SimpleMenuModel::Delegate,
                             public views::TabbedPaneListener {
  public:
+  METADATA_HEADER(TranslateBubbleView);
+
   // Item IDs for the option button's menu.
   enum OptionsMenuItem {
     ALWAYS_TRANSLATE_LANGUAGE,
@@ -74,7 +77,7 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
 
   TranslateBubbleView(views::View* anchor_view,
                       std::unique_ptr<TranslateBubbleModel> model,
-                      translate::TranslateErrors::Type error_type,
+                      translate::TranslateErrors error_type,
                       content::WebContents* web_contents,
                       base::OnceClosure on_closing);
 
@@ -107,7 +110,7 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
 
   // Initialize the bubble in the correct view state when it is shown.
   void SetViewState(translate::TranslateStep step,
-                    translate::TranslateErrors::Type error_type);
+                    translate::TranslateErrors error_type);
 
   // LocationBarBubbleDelegateView:
   void CloseBubble() override;
@@ -242,7 +245,7 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
   void SwitchTabForViewState(TranslateBubbleModel::ViewState view_state);
 
   // Switches to the error view.
-  void SwitchToErrorView(translate::TranslateErrors::Type error_type);
+  void SwitchToErrorView(translate::TranslateErrors error_type);
 
   // Updates the advanced view.
   void UpdateAdvancedView();
@@ -270,22 +273,33 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
   // translation. Then close the bubble view.
   void RevertOrDeclineTranslation();
 
-  raw_ptr<views::View> translate_view_ = nullptr;
-  raw_ptr<views::View> error_view_ = nullptr;
-  raw_ptr<views::View> advanced_view_source_ = nullptr;
-  raw_ptr<views::View> advanced_view_target_ = nullptr;
+  // Helper method to announce the passed-in text to the screenreader.
+  void AnnounceTextToScreenReader(const std::u16string& announcement_text);
 
-  raw_ptr<views::Combobox> source_language_combobox_ = nullptr;
-  raw_ptr<views::Combobox> target_language_combobox_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> translate_view_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> error_view_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> advanced_view_source_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> advanced_view_target_ = nullptr;
 
-  raw_ptr<views::Checkbox> always_translate_checkbox_ = nullptr;
-  raw_ptr<views::Checkbox> advanced_always_translate_checkbox_ = nullptr;
-  raw_ptr<views::TabbedPane> tabbed_pane_ = nullptr;
+  raw_ptr<views::Combobox, DanglingUntriaged> source_language_combobox_ =
+      nullptr;
+  raw_ptr<views::Combobox, DanglingUntriaged> target_language_combobox_ =
+      nullptr;
 
-  raw_ptr<views::LabelButton> advanced_reset_button_source_ = nullptr;
-  raw_ptr<views::LabelButton> advanced_reset_button_target_ = nullptr;
-  raw_ptr<views::LabelButton> advanced_done_button_source_ = nullptr;
-  raw_ptr<views::LabelButton> advanced_done_button_target_ = nullptr;
+  raw_ptr<views::Checkbox, DanglingUntriaged> always_translate_checkbox_ =
+      nullptr;
+  raw_ptr<views::Checkbox, DanglingUntriaged>
+      advanced_always_translate_checkbox_ = nullptr;
+  raw_ptr<views::TabbedPane, DanglingUntriaged> tabbed_pane_ = nullptr;
+
+  raw_ptr<views::LabelButton, DanglingUntriaged> advanced_reset_button_source_ =
+      nullptr;
+  raw_ptr<views::LabelButton, DanglingUntriaged> advanced_reset_button_target_ =
+      nullptr;
+  raw_ptr<views::LabelButton, DanglingUntriaged> advanced_done_button_source_ =
+      nullptr;
+  raw_ptr<views::LabelButton, DanglingUntriaged> advanced_done_button_target_ =
+      nullptr;
 
   // Default source/target language without user interaction.
   size_t previous_source_language_index_;
@@ -296,7 +310,7 @@ class TranslateBubbleView : public LocationBarBubbleDelegateView,
 
   std::unique_ptr<TranslateBubbleModel> model_;
 
-  translate::TranslateErrors::Type error_type_;
+  translate::TranslateErrors error_type_;
 
   // Whether the window is an incognito window.
   const bool is_in_incognito_window_;

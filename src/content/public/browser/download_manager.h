@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -33,8 +33,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
@@ -163,8 +163,8 @@ class CONTENT_EXPORT DownloadManager : public base::SupportsUserData::Data,
       bool opened,
       base::Time last_access_time,
       bool transient,
-      const std::vector<download::DownloadItem::ReceivedSlice>& received_slices,
-      const download::DownloadItemRerouteInfo& reroute_info) = 0;
+      const std::vector<download::DownloadItem::ReceivedSlice>&
+          received_slices) = 0;
 
   // Enum to describe which dependency was initialized in PostInitialization.
   enum DownloadInitializationDependency {
@@ -186,11 +186,11 @@ class CONTENT_EXPORT DownloadManager : public base::SupportsUserData::Data,
   // is too slow, use an AllDownloadItemNotifier to count in-progress items.
   virtual int InProgressCount() = 0;
 
-  // The number of in progress (including paused) downloads.
+  // The number of in progress (including paused) downloads that should block
+  // shutdown. This excludes downloads that are marked as malicious.
   // Performance note: this loops over all items. If profiling finds that this
   // is too slow, use an AllDownloadItemNotifier to count in-progress items.
-  // This excludes downloads that are marked as malicious.
-  virtual int NonMaliciousInProgressCount() = 0;
+  virtual int BlockingShutdownCount() = 0;
 
   virtual BrowserContext* GetBrowserContext() = 0;
 

@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_COMPOSITOR_CALLBACK_LAYER_ANIMATION_OBSERVER_H_
 #define UI_COMPOSITOR_CALLBACK_LAYER_ANIMATION_OBSERVER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/compositor/compositor_export.h"
 #include "ui/compositor/layer_animation_observer.h"
 

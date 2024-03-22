@@ -1,22 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/media_host.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromeos/ash/services/assistant/media_session/assistant_media_session.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
+#include "chromeos/ash/services/libassistant/public/mojom/media_controller.mojom.h"
 #include "chromeos/services/assistant/public/shared/utils.h"
-#include "chromeos/services/libassistant/public/mojom/media_controller.mojom.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
-using chromeos::libassistant::mojom::PlaybackState;
+using libassistant::mojom::PlaybackState;
 using media_session::mojom::MediaSessionAction;
 using media_session::mojom::MediaSessionInfo;
 using media_session::mojom::MediaSessionInfoPtr;
@@ -87,9 +87,9 @@ class MediaHost::ChromeosMediaStateObserver
       }
     }
 
-    chromeos::libassistant::mojom::MediaStatePtr media_state =
-        chromeos::libassistant::mojom::MediaState::New();
-    media_state->metadata = chromeos::libassistant::mojom::MediaMetadata::New();
+    libassistant::mojom::MediaStatePtr media_state =
+        libassistant::mojom::MediaState::New();
+    media_state->metadata = libassistant::mojom::MediaMetadata::New();
 
     // Set media metadata.
     if (media_metadata_.has_value()) {
@@ -116,7 +116,7 @@ class MediaHost::ChromeosMediaStateObserver
                               std::move(media_state));
   }
 
-  MediaHost* const parent_;
+  const raw_ptr<MediaHost, ExperimentalAsh> parent_;
   mojo::Receiver<media_session::mojom::MediaControllerObserver> receiver_{this};
 
   // Info associated to the active media session.
@@ -138,7 +138,7 @@ class MediaHost::ChromeosMediaStateObserver
 // |MediaHost::chromeos_media_controller_| or
 // |MediaHost::media_session_|.
 class MediaHost::LibassistantMediaDelegate
-    : public chromeos::libassistant::mojom::MediaDelegate {
+    : public libassistant::mojom::MediaDelegate {
  public:
   explicit LibassistantMediaDelegate(
       MediaHost* parent,
@@ -151,9 +151,9 @@ class MediaHost::LibassistantMediaDelegate
   ~LibassistantMediaDelegate() override = default;
 
  private:
-  // chromeos::libassistant::mojom::MediaDelegate implementation:
+  // libassistant::mojom::MediaDelegate implementation:
   void OnPlaybackStateChanged(
-      chromeos::libassistant::mojom::MediaStatePtr new_state) override {
+      libassistant::mojom::MediaStatePtr new_state) override {
     parent_->media_session_->NotifyMediaSessionMetadataChanged(*new_state);
   }
 
@@ -197,7 +197,7 @@ class MediaHost::LibassistantMediaDelegate
     return *parent_->chromeos_media_controller_;
   }
 
-  MediaHost* const parent_;
+  const raw_ptr<MediaHost, ExperimentalAsh> parent_;
   mojo::Receiver<MediaDelegate> receiver_;
 };
 
@@ -223,10 +223,8 @@ MediaHost::MediaHost(AssistantBrowserDelegate* delegate,
 MediaHost::~MediaHost() = default;
 
 void MediaHost::Initialize(
-    chromeos::libassistant::mojom::MediaController* libassistant_controller,
-    mojo::PendingReceiver<chromeos::libassistant::mojom::MediaDelegate>
-        media_delegate) {
-  // Initialize can only be called once.
+    libassistant::mojom::MediaController* libassistant_controller,
+    mojo::PendingReceiver<libassistant::mojom::MediaDelegate> media_delegate) {
   DCHECK(!libassistant_media_controller_);
 
   libassistant_media_controller_ = libassistant_controller;
@@ -235,15 +233,22 @@ void MediaHost::Initialize(
 }
 
 void MediaHost::Stop() {
+  libassistant_media_controller_ = nullptr;
   StopObservingMediaController();
 }
 
 void MediaHost::ResumeInternalMediaPlayer() {
-  libassistant_media_controller().ResumeInternalMediaPlayer();
+  if (!libassistant_media_controller_) {
+    return;
+  }
+  libassistant_media_controller_->ResumeInternalMediaPlayer();
 }
 
 void MediaHost::PauseInternalMediaPlayer() {
-  libassistant_media_controller().PauseInternalMediaPlayer();
+  if (!libassistant_media_controller_) {
+    return;
+  }
+  libassistant_media_controller_->PauseInternalMediaPlayer();
 }
 
 void MediaHost::SetRelatedInfoEnabled(bool enable) {
@@ -255,16 +260,9 @@ void MediaHost::SetRelatedInfoEnabled(bool enable) {
   }
 }
 
-libassistant::mojom::MediaController&
-MediaHost::libassistant_media_controller() {
-  // Initialize must be called first.
-  DCHECK(libassistant_media_controller_);
-  return *libassistant_media_controller_;
-}
-
 void MediaHost::UpdateMediaState(
     const base::UnguessableToken& media_session_id,
-    chromeos::libassistant::mojom::MediaStatePtr media_state) {
+    libassistant::mojom::MediaStatePtr media_state) {
   // MediaSession Integrated providers (include the libassistant internal
   // media provider) will trigger media state change event. Only update the
   // external media status if the state changes is triggered by external
@@ -273,13 +271,19 @@ void MediaHost::UpdateMediaState(
     return;
   }
 
-  libassistant_media_controller().SetExternalPlaybackState(
+  if (!libassistant_media_controller_) {
+    return;
+  }
+  libassistant_media_controller_->SetExternalPlaybackState(
       std::move(media_state));
 }
 
 void MediaHost::ResetMediaState() {
-  libassistant_media_controller().SetExternalPlaybackState(
-      chromeos::libassistant::mojom::MediaState::New());
+  if (!libassistant_media_controller_) {
+    return;
+  }
+  libassistant_media_controller_->SetExternalPlaybackState(
+      libassistant::mojom::MediaState::New());
 }
 
 void MediaHost::StartObservingMediaController() {
@@ -296,5 +300,4 @@ void MediaHost::StopObservingMediaController() {
   chromeos_media_state_observer_.reset();
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

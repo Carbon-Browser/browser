@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "device/bluetooth/android/wrappers.h"
 #include "device/bluetooth/bluetooth_adapter_android.h"
@@ -173,8 +174,8 @@ void BluetoothTestAndroid::SimulateGattServicesDiscovered(
 
   // Join UUID strings into a single string.
   std::ostringstream uuids_space_delimited;
-  std::copy(uuids.begin(), uuids.end(),
-            std::ostream_iterator<std::string>(uuids_space_delimited, " "));
+  base::ranges::copy(
+      uuids, std::ostream_iterator<std::string>(uuids_space_delimited, " "));
 
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_FakeBluetoothDevice_servicesDiscovered(

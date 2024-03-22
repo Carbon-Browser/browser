@@ -1,15 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_LOADER_NAVIGATION_LOADER_INTERCEPTOR_H_
 #define CONTENT_BROWSER_LOADER_NAVIGATION_LOADER_INTERCEPTOR_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
+#include "net/base/load_timing_info.h"
 #include "net/url_request/redirect_info.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
@@ -25,6 +26,7 @@ namespace content {
 class BrowserContext;
 struct ResourceRequest;
 struct SubresourceLoaderParams;
+struct ResponseHeadUpdateParams;
 
 // NavigationLoaderInterceptor is given a chance to create a URLLoader and
 // intercept a navigation request before the request is handed off to the
@@ -40,7 +42,8 @@ class CONTENT_EXPORT NavigationLoaderInterceptor {
   using LoaderCallback =
       base::OnceCallback<void(scoped_refptr<network::SharedURLLoaderFactory>)>;
   using FallbackCallback =
-      base::OnceCallback<void(bool /* reset_subresource_loader_params */)>;
+      base::OnceCallback<void(bool /* reset_subresource_loader_params */,
+                              const ResponseHeadUpdateParams&)>;
 
   // Asks this interceptor to handle this resource load request.
   // The interceptor must invoke `callback` eventually with either a non-null
@@ -97,6 +100,11 @@ class CONTENT_EXPORT NavigationLoaderInterceptor {
   // downloaded.  The URLLoader remote is returned in the `loader` parameter.
   // The mojo::PendingReceiver for the URLLoaderClient is returned in the
   // `client_receiver` parameter.
+  // `status` is the loader completion status, allowing the interceptor to
+  // handle failed loads differently from successful loads. For requests that
+  // successfully received a response, this will be a URLLoaderCompletionStatus
+  // with an error code of `net::OK`. For requests that failed, this will be a
+  // URLLoaderCompletionStatus with the underlying net error.
   // The `url_loader` points to the ThrottlingURLLoader that currently controls
   // the request. It can be optionally consumed to get the current
   // URLLoaderClient and URLLoader so that the implementation can rebind them to
@@ -108,24 +116,15 @@ class CONTENT_EXPORT NavigationLoaderInterceptor {
   // flag was introduced to skip service worker after signed exchange redirect.
   // Remove this flag when we support service worker and signed exchange
   // integration. See crbug.com/894755#c1. Nullptr is not allowed.
-  // `will_return_unsafe_redirect` is set to true when this interceptor will
-  // return an unsafe redirect response and will handle the redirected request,
-  // therefore regular safety check should be exempted for the redirect.
-  // Nullptr is not allowed.
   virtual bool MaybeCreateLoaderForResponse(
+      const network::URLLoaderCompletionStatus& status,
       const network::ResourceRequest& request,
       network::mojom::URLResponseHeadPtr* response_head,
       mojo::ScopedDataPipeConsumerHandle* response_body,
       mojo::PendingRemote<network::mojom::URLLoader>* loader,
       mojo::PendingReceiver<network::mojom::URLLoaderClient>* client_receiver,
       blink::ThrottlingURLLoader* url_loader,
-      bool* skip_other_interceptors,
-      bool* will_return_unsafe_redirect);
-
-  // Called when MaybeCreateLoader() has called the LoaderCallback with a valid
-  // loader factory. Returns true when this interceptor will return an unsafe
-  // redirect response and will handle the redirected request.
-  virtual bool ShouldBypassRedirectChecks();
+      bool* skip_other_interceptors);
 };
 
 }  // namespace content

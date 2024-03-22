@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/Win Builder/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "Win Builder",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-win-archive",
@@ -15,7 +18,6 @@
               "execution_mode": "COMPILE_AND_TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "goma_enable_global_file_stat_cache",
                   "mb"
                 ],
                 "build_config": "Release",
@@ -24,35 +26,6 @@
               },
               "legacy_gclient_config": {
                 "config": "chromium"
-              }
-            }
-          },
-          {
-            "builder_id": {
-              "bucket": "ci",
-              "builder": "Win7 Tests (1)",
-              "project": "chromium"
-            },
-            "builder_spec": {
-              "build_gs_bucket": "chromium-win-archive",
-              "builder_group": "chromium.win",
-              "execution_mode": "TEST",
-              "legacy_chromium_config": {
-                "apply_configs": [
-                  "goma_enable_global_file_stat_cache",
-                  "mb"
-                ],
-                "build_config": "Release",
-                "config": "chromium",
-                "target_bits": 32
-              },
-              "legacy_gclient_config": {
-                "config": "chromium"
-              },
-              "parent": {
-                "bucket": "ci",
-                "builder": "Win Builder",
-                "project": "chromium"
               }
             }
           }
@@ -62,19 +35,12 @@
         {
           "bucket": "ci",
           "builder": "Win Builder",
-          "project": "chromium"
-        }
-      ],
-      "builder_ids_in_scope_for_testing": [
-        {
-          "bucket": "ci",
-          "builder": "Win7 Tests (1)",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "mirroring_builder_group_and_names": [
         {
-          "builder": "win7-rel",
+          "builder": "win_chromium_compile_rel_ng",
           "group": "tryserver.chromium.win"
         }
       ]
@@ -83,7 +49,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 250,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

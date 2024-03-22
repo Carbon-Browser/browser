@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
@@ -37,13 +37,6 @@ void TemplateURLTableModel::Reload() {
       extension_entries;
   // Keywords that can be made the default first.
   for (auto* template_url : urls) {
-    // Don't include starter pack keywords if the starter pack feature flag is
-    // not enabled.
-    if (!OmniboxFieldTrial::IsSiteSearchStarterPackEnabled() &&
-        template_url->starter_pack_id() != 0) {
-      continue;
-    }
-
     if (template_url_service_->ShowInDefaultList(template_url)) {
       default_entries.push_back(template_url);
     } else if (template_url->type() == TemplateURL::OMNIBOX_API_EXTENSION) {

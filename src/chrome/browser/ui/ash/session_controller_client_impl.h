@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,16 @@
 #include <vector>
 
 #include "ash/public/cpp/session/session_controller_client.h"
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/crosapi/browser_manager_observer.h"
 #include "chrome/browser/ash/policy/off_hours/device_off_hours_controller.h"
-#include "chrome/browser/supervised_user/supervised_user_service_observer.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "components/session_manager/core/session_manager_observer.h"
+#include "components/supervised_user/core/browser/supervised_user_service_observer.h"
 #include "components/user_manager/user_manager.h"
 
 class Profile;
@@ -80,7 +81,9 @@ class SessionControllerClientImpl
 
   // ash::SessionControllerClient:
   void RequestLockScreen() override;
+  void RequestHideLockScreen() override;
   void RequestSignOut() override;
+  void RequestRestartForUpdate() override;
   void AttemptRestartChrome() override;
   void SwitchActiveUser(const AccountId& account_id) override;
   void CycleActiveUser(ash::CycleUserDirection direction) override;
@@ -88,7 +91,9 @@ class SessionControllerClientImpl
   void EmitAshInitialized() override;
   PrefService* GetSigninScreenPrefService() override;
   PrefService* GetUserPrefService(const AccountId& account_id) override;
+  base::FilePath GetProfilePath(const AccountId& account_id) override;
   bool IsEnterpriseManaged() const override;
+  absl::optional<int> GetExistingUsersCount() const override;
 
   // Returns true if a multi-profile user can be added to the session or if
   // multiple users are already signed in.
@@ -101,6 +106,7 @@ class SessionControllerClientImpl
   // user_manager::UserManager::Observer
   void LocalStateChanged(user_manager::UserManager* user_manager) override;
   void OnUserImageChanged(const user_manager::User& user) override;
+  void OnUserNotAllowed(const std::string& user_email) override;
 
   // session_manager::SessionManagerObserver:
   void OnSessionStateChanged() override;
@@ -158,14 +164,15 @@ class SessionControllerClientImpl
   void OnStateChanged() override;
 
   // SessionController instance in ash.
-  ash::SessionController* session_controller_ = nullptr;
+  raw_ptr<ash::SessionController, ExperimentalAsh> session_controller_ =
+      nullptr;
 
   // Tracks users whose profiles are being loaded.
   std::set<AccountId> pending_users_;
 
   // If the session is for a supervised user, the profile of that user.
   // Chrome OS only supports a single supervised user in a session.
-  Profile* supervised_user_profile_ = nullptr;
+  raw_ptr<Profile, ExperimentalAsh> supervised_user_profile_ = nullptr;
 
   base::CallbackListSubscription subscription_;
 

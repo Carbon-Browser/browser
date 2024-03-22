@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/script_streamer.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/core/html/parser/html_token.h"
-#include "third_party/blink/renderer/platform/heap/persistent.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
 #include "third_party/blink/renderer/platform/text/segmented_string.h"
 #include "third_party/blink/renderer/platform/wtf/sequence_bound.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -16,6 +15,7 @@
 namespace blink {
 
 class HTMLParserOptions;
+class HTMLToken;
 class HTMLTokenizer;
 class ScriptableDocumentParser;
 
@@ -52,7 +52,8 @@ class CORE_EXPORT BackgroundHTMLScanner {
         ScriptableDocumentParser* parser);
 
     ScriptTokenScanner(ScriptableDocumentParser* parser,
-                       scoped_refptr<base::SequencedTaskRunner> task_runner);
+                       scoped_refptr<base::SequencedTaskRunner> task_runner,
+                       wtf_size_t min_script_size);
 
     void ScanToken(const HTMLToken& token);
 
@@ -61,6 +62,7 @@ class CORE_EXPORT BackgroundHTMLScanner {
    private:
     CrossThreadWeakPersistent<ScriptableDocumentParser> parser_;
     scoped_refptr<base::SequencedTaskRunner> task_runner_;
+    wtf_size_t min_script_size_;
     StringBuilder script_builder_;
 
     bool in_script_ = false;
@@ -83,7 +85,6 @@ class CORE_EXPORT BackgroundHTMLScanner {
 
  private:
   SegmentedString source_;
-  HTMLToken token_;
   std::unique_ptr<HTMLTokenizer> tokenizer_;
   std::unique_ptr<ScriptTokenScanner> token_scanner_;
 };

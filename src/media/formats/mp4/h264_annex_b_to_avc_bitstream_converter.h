@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,6 +60,7 @@ class MEDIA_EXPORT H264AnnexBToAvcBitstreamConverter {
 
   using blob = std::vector<uint8_t>;
   base::flat_map<int, blob> id2sps_;
+  base::flat_map<int, blob> id2sps_ext_;
   base::flat_map<int, blob> id2pps_;
 
   int active_sps_id_ = -1;

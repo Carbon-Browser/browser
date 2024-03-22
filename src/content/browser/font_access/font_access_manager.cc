@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/sequence_checker.h"
 #include "base/task/thread_pool.h"
@@ -18,10 +18,12 @@
 #include "content/browser/font_access/font_enumeration_data_source.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/permission_controller.h"
+#include "content/public/browser/permission_request_description.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/common/content_client.h"
 #include "third_party/blink/public/common/features.h"
@@ -122,8 +124,9 @@ void FontAccessManager::EnumerateLocalFonts(
       blink::mojom::UserActivationNotificationType::kNone);
 
   permission_controller->RequestPermissionFromCurrentDocument(
-      blink::PermissionType::LOCAL_FONTS, rfh,
-      /*user_gesture=*/true,
+      rfh,
+      PermissionRequestDescription(blink::PermissionType::LOCAL_FONTS,
+                                   /*user_gesture=*/true),
       base::BindOnce(&FontAccessManager::DidRequestPermission,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }

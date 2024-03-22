@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,13 @@ bool ParsePinHashFromConfig(const std::string& value,
                             const std::string& host_id,
                             std::string* pin_hash_out) {
   size_t separator = value.find(':');
-  if (separator == std::string::npos)
+  if (separator == std::string::npos) {
     return false;
+  }
 
-  if (!base::Base64Decode(value.substr(separator + 1), pin_hash_out))
+  if (!base::Base64Decode(value.substr(separator + 1), pin_hash_out)) {
     return false;
+  }
 
   std::string function_name = value.substr(0, separator);
   if (function_name == "plain") {

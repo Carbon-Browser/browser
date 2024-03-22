@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #ifndef COMPONENTS_POWER_METRICS_M1_SENSORS_MAC_H_
 #define COMPONENTS_POWER_METRICS_M1_SENSORS_MAC_H_
 
-#include <memory>
-
 #include <IOKit/hidsystem/IOHIDEventSystemClient.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include <memory>
+
+#include "base/apple/scoped_cftyperef.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace power_metrics {
@@ -37,10 +37,11 @@ class M1SensorsReader {
   virtual TemperaturesCelsius ReadTemperatures();
 
  protected:
-  M1SensorsReader(base::ScopedCFTypeRef<IOHIDEventSystemClientRef> system);
+  explicit M1SensorsReader(
+      base::apple::ScopedCFTypeRef<IOHIDEventSystemClientRef> system);
 
  private:
-  base::ScopedCFTypeRef<IOHIDEventSystemClientRef> system_;
+  base::apple::ScopedCFTypeRef<IOHIDEventSystemClientRef> system_;
 };
 
 }  // namespace power_metrics

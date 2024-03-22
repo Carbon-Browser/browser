@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,19 @@
 
 #include "chrome/browser/ui/prefs/pref_watcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
+#include "chrome/browser/privacy_sandbox/tracking_protection_settings_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/renderer_preferences_util.h"
 #include "chrome/browser/ui/prefs/prefs_tab_helper.h"
 #include "chrome/common/pref_names.h"
 #include "components/adblock/core/common/adblock_prefs.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/live_caption/pref_names.h"
+#include "components/privacy_sandbox/tracking_protection_settings.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -54,7 +54,9 @@ const char* const kWebPrefsToObserve[] = {
     prefs::kAccessibilityCaptionsBackgroundOpacity,
 #if BUILDFLAG(IS_ANDROID)
     browser_ui::prefs::kWebKitFontScaleFactor,
+    prefs::kAccessibilityTextSizeContrastFactor,
     browser_ui::prefs::kWebKitForceEnableZoom,
+    prefs::kAccessibilityFontWeightAdjustment,
     prefs::kWebKitPasswordEchoEnabled,
 #endif
     prefs::kWebKitForceDarkModeEnabled,
@@ -72,12 +74,12 @@ const char* const kWebPrefsToObserve[] = {
     prefs::kAccessibilityFocusHighlightEnabled,
 #endif
 
-    adblock::prefs::kAdblockAllowedDomains,
-    adblock::prefs::kAdblockCustomFilters,
-    adblock::prefs::kAdblockCustomSubscriptions,
-    adblock::prefs::kAdblockSubscriptions,
-    adblock::prefs::kEnableAcceptableAds,
-    adblock::prefs::kEnableAdblock,
+    adblock::common::prefs::kAdblockAllowedDomainsLegacy,
+    adblock::common::prefs::kAdblockCustomFiltersLegacy,
+    adblock::common::prefs::kAdblockCustomSubscriptionsLegacy,
+    adblock::common::prefs::kAdblockSubscriptionsLegacy,
+    adblock::common::prefs::kEnableAcceptableAdsLegacy,
+    adblock::common::prefs::kEnableAdblockLegacy,
 
 };
 
@@ -88,14 +90,19 @@ const int kWebPrefsToObserveLength = std::size(kWebPrefsToObserve);
 // Watching all these settings per tab is slow when a user has a lot of tabs and
 // and they use session restore. So watch them once per profile.
 // http://crbug.com/452693
-PrefWatcher::PrefWatcher(Profile* profile) : profile_(profile) {
+PrefWatcher::PrefWatcher(Profile* profile)
+    : profile_(profile),
+      tracking_protection_settings_(
+          TrackingProtectionSettingsFactory::GetForProfile(profile)) {
+  CHECK(tracking_protection_settings_);
+  tracking_protection_settings_observation_.Observe(
+      tracking_protection_settings_);
+
   profile_pref_change_registrar_.Init(profile_->GetPrefs());
 
   base::RepeatingClosure renderer_callback = base::BindRepeating(
       &PrefWatcher::UpdateRendererPreferences, base::Unretained(this));
   profile_pref_change_registrar_.Add(language::prefs::kAcceptLanguages,
-                                     renderer_callback);
-  profile_pref_change_registrar_.Add(prefs::kEnableDoNotTrack,
                                      renderer_callback);
   profile_pref_change_registrar_.Add(prefs::kEnableReferrers,
                                      renderer_callback);
@@ -153,6 +160,10 @@ void PrefWatcher::Shutdown() {
   local_state_pref_change_registrar_.RemoveAll();
 }
 
+void PrefWatcher::OnDoNotTrackEnabledChanged() {
+  UpdateRendererPreferences();
+}
+
 void PrefWatcher::UpdateRendererPreferences() {
   for (auto* helper : tab_helpers_)
     helper->UpdateRendererPreferences();
@@ -180,20 +191,24 @@ PrefWatcherFactory* PrefWatcherFactory::GetInstance() {
 }
 
 PrefWatcherFactory::PrefWatcherFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "PrefWatcher",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
+  DependsOn(TrackingProtectionSettingsFactory::GetInstance());
+}
 
 PrefWatcherFactory::~PrefWatcherFactory() = default;
 
-KeyedService* PrefWatcherFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PrefWatcherFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
-  return new PrefWatcher(Profile::FromBrowserContext(browser_context));
-}
-
-content::BrowserContext* PrefWatcherFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return std::make_unique<PrefWatcher>(
+      Profile::FromBrowserContext(browser_context));
 }
 
 // static

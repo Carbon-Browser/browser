@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,6 @@
 #include "chrome/browser/themes/theme_service_observer.h"
 #include "components/sync/model/sync_change.h"
 #include "components/sync/model/sync_data.h"
-#include "components/sync/model/sync_error.h"
-#include "components/sync/model/sync_error_factory.h"
 #include "components/sync/model/syncable_service.h"
 
 class Profile;
@@ -77,17 +75,16 @@ class ThemeSyncableService : public syncer::SyncableService,
   absl::optional<syncer::ModelError> MergeDataAndStartSyncing(
       syncer::ModelType type,
       const syncer::SyncDataList& initial_sync_data,
-      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor,
-      std::unique_ptr<syncer::SyncErrorFactory> error_handler) override;
+      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) override;
   void StopSyncing(syncer::ModelType type) override;
   syncer::SyncDataList GetAllSyncDataForTesting(syncer::ModelType type) const;
   absl::optional<syncer::ModelError> ProcessSyncChanges(
       const base::Location& from_here,
       const syncer::SyncChangeList& change_list) override;
 
-  // Client tag and tile of theme node in sync.
-  static const char kCurrentThemeClientTag[];
-  static const char kCurrentThemeNodeTitle[];
+  // Client tag and title of the single theme sync_pb::SyncEntity of an account.
+  static const char kSyncEntityClientTag[];
+  static const char kSyncEntityTitle[];
 
  private:
   static bool AreThemeSpecificsEqual(
@@ -99,14 +96,10 @@ class ThemeSyncableService : public syncer::SyncableService,
   static bool HasNonDefaultTheme(
       const sync_pb::ThemeSpecifics& theme_specifics);
 
-  // Set theme from theme specifics in |sync_data| using
-  // SetCurrentThemeFromThemeSpecifics() if it's different from |current_specs|.
-  // Returns the state of themes after the operation.
+  // Set theme from theme specifics in |sync_data| if it's different from
+  // |current_specs|. Returns the state of themes after the operation.
   ThemeSyncState MaybeSetTheme(const sync_pb::ThemeSpecifics& current_specs,
                                const syncer::SyncData& sync_data);
-  // Returns the state of themes after the operation.
-  ThemeSyncState SetCurrentThemeFromThemeSpecifics(
-      const sync_pb::ThemeSpecifics& theme_specifics);
 
   // If the current theme is syncable, fills in the passed |theme_specifics|
   // structure based on the currently applied theme and returns |true|.
@@ -127,7 +120,6 @@ class ThemeSyncableService : public syncer::SyncableService,
   base::ObserverList<Observer> observer_list_;
 
   std::unique_ptr<syncer::SyncChangeProcessor> sync_processor_;
-  std::unique_ptr<syncer::SyncErrorFactory> sync_error_handler_;
 
   // Persist use_system_theme_by_default for platforms that use it, even if
   // we're not on one.

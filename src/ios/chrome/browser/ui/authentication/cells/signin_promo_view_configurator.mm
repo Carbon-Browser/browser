@@ -1,23 +1,22 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_configurator.h"
 
-#include "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/signin/constants.h"
-#import "ios/chrome/browser/signin/signin_util.h"
+#import "base/notreached.h"
+#import "base/strings/sys_string_conversions.h"
+#import "build/branding_buildflags.h"
+#import "ios/chrome/browser/signin/model/constants.h"
+#import "ios/chrome/browser/signin/model/signin_util.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_constants.h"
+#import "ios/chrome/browser/ui/ntp/new_tab_page_feature.h"
 #import "ios/chrome/common/ui/util/image_util.h"
-#include "ios/chrome/grit/ios_chromium_strings.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/signin/signin_resources_api.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 using base::SysNSStringToUTF16;
 using l10n_util::GetNSString;
@@ -43,13 +42,18 @@ using l10n_util::GetNSStringF;
 
 @end
 
-@implementation SigninPromoViewConfigurator
+@implementation SigninPromoViewConfigurator {
+  // Shows a spinner on top of the primary button, and disables ther buttons if
+  // set to YES.
+  BOOL _hasSignInSpinner;
+}
 
 - (instancetype)initWithSigninPromoViewMode:(SigninPromoViewMode)viewMode
                                   userEmail:(NSString*)userEmail
                               userGivenName:(NSString*)userGivenName
                                   userImage:(UIImage*)userImage
-                             hasCloseButton:(BOOL)hasCloseButton {
+                             hasCloseButton:(BOOL)hasCloseButton
+                           hasSignInSpinner:(BOOL)hasSignInSpinner {
   self = [super init];
   if (self) {
     DCHECK(userEmail || (!userEmail && !userGivenName && !userImage));
@@ -58,14 +62,42 @@ using l10n_util::GetNSStringF;
     _userEmail = [userEmail copy];
     _userImage = [userImage copy];
     _hasCloseButton = hasCloseButton;
+    _hasSignInSpinner = hasSignInSpinner;
   }
   return self;
 }
 
-- (void)configureSigninPromoView:(SigninPromoView*)signinPromoView {
+- (void)configureSigninPromoView:(SigninPromoView*)signinPromoView
+                       withStyle:(SigninPromoViewStyle)promoViewStyle {
   signinPromoView.closeButton.hidden = !self.hasCloseButton;
   signinPromoView.mode = self.signinPromoViewMode;
+  signinPromoView.promoViewStyle = promoViewStyle;
+  switch (promoViewStyle) {
+    case SigninPromoViewStyleStandard: {
+      [self configureStandardSigninPromoView:signinPromoView];
+      break;
+    }
+    case SigninPromoViewStyleCompactHorizontal:
+    case SigninPromoViewStyleCompactVertical: {
+      [self configureCompactPromoView:signinPromoView withStyle:promoViewStyle];
+      break;
+    }
+    case SigninPromoViewStyleOnlyButton:
+      [self configureOnlyButtonPromoView:signinPromoView];
+      break;
+  }
+  if (_hasSignInSpinner) {
+    [signinPromoView startSignInSpinner];
+  } else {
+    [signinPromoView stopSignInSpinner];
+  }
+}
 
+#pragma mark - Private
+
+// Configures the view elements of the `signinPromoView` to conform to the
+// `SigninPromoViewStyleStandard` style.
+- (void)configureStandardSigninPromoView:(SigninPromoView*)signinPromoView {
   NSString* name =
       self.userGivenName.length ? self.userGivenName : self.userEmail;
   std::u16string name16 = SysNSStringToUTF16(name);
@@ -73,29 +105,71 @@ using l10n_util::GetNSStringF;
     case SigninPromoViewModeNoAccounts: {
       DCHECK(!name);
       DCHECK(!self.userImage);
-      NSString* signInString = GetNSString(IDS_IOS_SYNC_PROMO_TURN_ON_SYNC);
-      [signinPromoView.primaryButton setTitle:signInString
-                                     forState:UIControlStateNormal];
-      return;
+      NSString* signInString =
+          self.primaryButtonTitleOverride
+              ? self.primaryButtonTitleOverride
+              : GetNSString(IDS_IOS_SYNC_PROMO_TURN_ON_SYNC);
+      [signinPromoView configurePrimaryButtonWithTitle:signInString];
+      break;
     }
     case SigninPromoViewModeSigninWithAccount: {
-      [signinPromoView.primaryButton
-          setTitle:GetNSStringF(IDS_IOS_SIGNIN_PROMO_CONTINUE_AS, name16)
-          forState:UIControlStateNormal];
+      [signinPromoView
+          configurePrimaryButtonWithTitle:GetNSStringF(
+                                              IDS_IOS_SIGNIN_PROMO_CONTINUE_AS,
+                                              name16)];
       [signinPromoView.secondaryButton
           setTitle:GetNSString(IDS_IOS_SIGNIN_PROMO_CHANGE_ACCOUNT)
           forState:UIControlStateNormal];
+      [self assignProfileImageToSigninPromoView:signinPromoView];
       break;
     }
-    case SigninPromoViewModeSyncWithPrimaryAccount: {
-      [signinPromoView.primaryButton
-          setTitle:GetNSString(IDS_IOS_SYNC_PROMO_TURN_ON_SYNC)
-          forState:UIControlStateNormal];
+    case SigninPromoViewModeSignedInWithPrimaryAccount: {
+      [signinPromoView configurePrimaryButtonWithTitle:
+                           self.primaryButtonTitleOverride
+                               ? self.primaryButtonTitleOverride
+                               : GetNSString(IDS_IOS_SYNC_PROMO_TURN_ON_SYNC)];
+      [self assignProfileImageToSigninPromoView:signinPromoView];
       break;
     }
   }
-  DCHECK(name);
-  DCHECK_NE(self.signinPromoViewMode, SigninPromoViewModeNoAccounts);
+}
+
+// Configures the view elements of the `signinPromoView` to conform to a compact
+// style.
+- (void)configureCompactPromoView:(SigninPromoView*)signinPromoView
+                        withStyle:(SigninPromoViewStyle)promoStyle {
+  switch (promoStyle) {
+    case SigninPromoViewStyleStandard:
+    case SigninPromoViewStyleOnlyButton:
+      // This function shouldn't be used for the non-compact promos.
+      NOTREACHED_NORETURN();
+    case SigninPromoViewStyleCompactVertical:
+    case SigninPromoViewStyleCompactHorizontal:
+      [signinPromoView configurePrimaryButtonWithTitle:
+                           GetNSString(IDS_IOS_NTP_FEED_SIGNIN_PROMO_CONTINUE)];
+      switch (self.signinPromoViewMode) {
+        case SigninPromoViewModeNoAccounts:
+          DCHECK(!self.userImage);
+          [self assignNonProfileImageToSigninPromoView:signinPromoView];
+          break;
+        case SigninPromoViewModeSigninWithAccount:
+        case SigninPromoViewModeSignedInWithPrimaryAccount:
+          [self assignProfileImageToSigninPromoView:signinPromoView];
+          break;
+      }
+  }
+}
+
+// Configures the view elements of the `signinPromoView` to conform to the
+// `SigninPromoViewStyleOnlyButton` style.
+- (void)configureOnlyButtonPromoView:(SigninPromoView*)signinPromoView {
+  [signinPromoView
+      configurePrimaryButtonWithTitle:l10n_util::GetNSString(
+                                          IDS_IOS_SIGNIN_PROMO_TURN_ON)];
+}
+
+// Sets profile image to a given `signinPromoView`.
+- (void)assignProfileImageToSigninPromoView:(SigninPromoView*)signinPromoView {
   UIImage* image = self.userImage;
   DCHECK(image);
   CGSize avatarSize =
@@ -105,26 +179,17 @@ using l10n_util::GetNSStringF;
   [signinPromoView setProfileImage:image];
 }
 
-- (void)configureSigninPromoView:(SigninPromoView*)signinPromoView
-                       withStyle:(SigninPromoViewStyle)promoViewStyle {
-  switch (promoViewStyle) {
-    case SigninPromoViewStyleStandard: {
-      signinPromoView.titleLabel.hidden = YES;
-      signinPromoView.compactLayout = NO;
-      [self configureSigninPromoView:signinPromoView];
-      return;
-    }
-    case SigninPromoViewStyleTitled: {
-      signinPromoView.titleLabel.hidden = NO;
-      signinPromoView.compactLayout = NO;
-      break;
-    }
-    case SigninPromoViewStyleTitledCompact: {
-      signinPromoView.titleLabel.hidden = NO;
-      signinPromoView.compactLayout = YES;
-      break;
-    }
-  }
+// Sets non-profile image to a given `signinPromoView`.
+- (void)assignNonProfileImageToSigninPromoView:
+    (SigninPromoView*)signinPromoView {
+  UIImage* logo = nil;
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  logo = [UIImage imageNamed:@"signin_promo_logo_chrome_color"];
+#else
+  logo = [UIImage imageNamed:@"signin_promo_logo_chromium_color"];
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  DCHECK(logo);
+  [signinPromoView setNonProfileImage:logo];
 }
 
 @end

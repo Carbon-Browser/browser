@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,13 @@
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_node_position.h"
-#include "ui/accessibility/platform/ax_platform_node_delegate_base.h"
-#include "ui/accessibility/test_ax_tree_manager.h"
+#include "ui/accessibility/platform/ax_platform_node.h"
+#include "ui/accessibility/platform/ax_platform_node_delegate.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/table/table_view.h"
+#include "ui/views/views_export.h"
 #include "ui/views/widget/widget_observer.h"
 
 namespace ui {
@@ -34,14 +35,16 @@ class AXUniqueId;
 
 namespace views {
 
+class AtomicViewAXTreeManager;
 class View;
 
 // Shared base class for platforms that require an implementation of
 // |ViewAXPlatformNodeDelegate| to interface with the native accessibility
 // toolkit. This class owns the |AXPlatformNode|, which implements those native
 // APIs.
-class ViewAXPlatformNodeDelegate : public ViewAccessibility,
-                                   public ui::AXPlatformNodeDelegateBase {
+class VIEWS_EXPORT ViewAXPlatformNodeDelegate
+    : public ViewAccessibility,
+      public ui::AXPlatformNodeDelegate {
  public:
   ViewAXPlatformNodeDelegate(const ViewAXPlatformNodeDelegate&) = delete;
   ViewAXPlatformNodeDelegate& operator=(const ViewAXPlatformNodeDelegate&) =
@@ -59,14 +62,16 @@ class ViewAXPlatformNodeDelegate : public ViewAccessibility,
   gfx::NativeViewAccessible GetNativeObject() const override;
   void NotifyAccessibilityEvent(ax::mojom::Event event_type) override;
 #if BUILDFLAG(IS_MAC)
-  void AnnounceText(const std::u16string& text) override;
+  void AnnounceTextAs(const std::u16string& text,
+                      ui::AXPlatformNode::AnnouncementType announcement_type);
 #endif
 
   // ui::AXPlatformNodeDelegate.
   const ui::AXNodeData& GetData() const override;
   size_t GetChildCount() const override;
-  gfx::NativeViewAccessible ChildAtIndex(size_t index) override;
+  gfx::NativeViewAccessible ChildAtIndex(size_t index) const override;
   bool HasModalDialog() const override;
+  std::wstring ComputeListItemNameFromContent() const override;
   // Also in |ViewAccessibility|.
   bool IsChildOfLeaf() const override;
   ui::AXNodePosition::AXPositionInstance CreateTextPositionAt(
@@ -103,7 +108,6 @@ class ViewAXPlatformNodeDelegate : public ViewAccessibility,
 
   // Also in |ViewAccessibility|.
   const ui::AXUniqueId& GetUniqueId() const override;
-  absl::optional<bool> GetTableHasColumnOrRowHeaderNode() const override;
   std::vector<int32_t> GetColHeaderNodeIds() const override;
   std::vector<int32_t> GetColHeaderNodeIds(int col_index) const override;
   absl::optional<int32_t> GetCellId(int row_index,
@@ -112,6 +116,11 @@ class ViewAXPlatformNodeDelegate : public ViewAccessibility,
   bool IsOrderedSet() const override;
   absl::optional<int> GetPosInSet() const override;
   absl::optional<int> GetSetSize() const override;
+
+  bool TableHasColumnOrRowHeaderNodeForTesting() const;
+
+  AtomicViewAXTreeManager* GetAtomicViewAXTreeManagerForTesting()
+      const override;
 
  protected:
   explicit ViewAXPlatformNodeDelegate(View* view);
@@ -122,9 +131,17 @@ class ViewAXPlatformNodeDelegate : public ViewAccessibility,
   // during the constructor.
   virtual void Init();
 
+  ui::AXNodeData data() { return data_; }
   ui::AXPlatformNode* ax_platform_node() { return ax_platform_node_; }
 
+  // Manager for the accessibility tree for this view. The tree will only have
+  // one node, which contains the AXNodeData for this view. It's a temporary
+  // solution to enable the ITextRangeProvider in Views: crbug.com/1468416.
+  std::unique_ptr<AtomicViewAXTreeManager> atomic_view_ax_tree_manager_;
+
  private:
+  friend class AtomicViewAXTreeManagerTest;
+
   struct ChildWidgetsResult final {
     ChildWidgetsResult();
     ChildWidgetsResult(std::vector<Widget*> child_widgets,
@@ -156,17 +173,9 @@ class ViewAXPlatformNodeDelegate : public ViewAccessibility,
   // Gets the real (non-virtual) TableView, otherwise nullptr.
   TableView* GetAncestorTableView() const;
 
-  // A tree manager that is used to hook up `AXPosition` to text fields in
-  // Views. This is a temporary workaround until `ViewsAXTreeManager` is
-  // well-tested and fully implemented.
-  //
-  // TODO(nektar): Replace `TestAXTreeManager` with `ViewsAXTreeManager` in the
-  // next release of Chrome.
-  mutable std::unique_ptr<ui::TestAXTreeManager> dummy_tree_manager_;
-
   // We own this, but it is reference-counted on some platforms so we can't use
   // a unique_ptr. It is destroyed in the destructor.
-  raw_ptr<ui::AXPlatformNode, DanglingUntriaged> ax_platform_node_ = nullptr;
+  raw_ptr<ui::AXPlatformNode> ax_platform_node_ = nullptr;
 
   mutable ui::AXNodeData data_;
 };

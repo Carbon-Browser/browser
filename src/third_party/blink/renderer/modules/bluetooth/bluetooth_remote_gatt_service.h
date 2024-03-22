@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class BluetoothRemoteGATTService final : public ScriptWrappable {
   // IDL exposed interface:
   String uuid() { return service_->uuid; }
   bool isPrimary() { return is_primary_; }
-  BluetoothDevice* device() { return device_; }
+  BluetoothDevice* device() { return device_.Get(); }
   ScriptPromise getCharacteristic(
       ScriptState* script_state,
       const V8BluetoothCharacteristicUUID* characteristic,

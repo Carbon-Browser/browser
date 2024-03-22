@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,13 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "chromecast/public/media/audio_post_processor2_shlib.h"
 
 namespace chromecast {
 namespace media {
-
-class AudioPostProcessor2;
 
 // Global registry for built-in postprocessors.
 class PostProcessorRegistry {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/threading/thread_checker.h"
@@ -22,7 +21,7 @@ namespace net {
 class NSSCertDatabase;
 }
 
-namespace chromeos {
+namespace ash {
 
 // This class is responsible for loading certificates once the TPM is
 // initialized. It is expected to be constructed on the UI thread and public
@@ -276,12 +275,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkCertLoader
   base::WeakPtrFactory<NetworkCertLoader> weak_factory_{this};
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::NetworkCertLoader;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CERT_LOADER_H_

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ AccountCapabilitiesFetcherFactoryAndroid::
 std::unique_ptr<AccountCapabilitiesFetcher>
 AccountCapabilitiesFetcherFactoryAndroid::CreateAccountCapabilitiesFetcher(
     const CoreAccountInfo& account_info,
+    AccountCapabilitiesFetcher::FetchPriority fetch_priority,
     AccountCapabilitiesFetcher::OnCompleteCallback on_complete_callback) {
   return std::make_unique<AccountCapabilitiesFetcherAndroid>(
-      account_info, std::move(on_complete_callback));
+      account_info, fetch_priority, std::move(on_complete_callback));
 }

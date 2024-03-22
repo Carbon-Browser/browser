@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
@@ -237,9 +237,12 @@ class FtlSignalStrategyTest : public testing::Test,
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 
-  raw_ptr<MockOAuthTokenGetter> token_getter_ = nullptr;
-  raw_ptr<FakeRegistrationManager> registration_manager_ = nullptr;
-  raw_ptr<FakeMessagingClient> messaging_client_ = nullptr;
+  raw_ptr<MockOAuthTokenGetter, AcrossTasksDanglingUntriaged> token_getter_ =
+      nullptr;
+  raw_ptr<FakeRegistrationManager, AcrossTasksDanglingUntriaged>
+      registration_manager_ = nullptr;
+  raw_ptr<FakeMessagingClient, AcrossTasksDanglingUntriaged> messaging_client_ =
+      nullptr;
   std::unique_ptr<FtlSignalStrategy> signal_strategy_;
 
   std::vector<SignalStrategy::State> state_history_;

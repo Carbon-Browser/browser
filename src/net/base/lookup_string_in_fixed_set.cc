@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -204,12 +204,12 @@ int LookupStringInFixedSet(const unsigned char* graph,
 int LookupSuffixInReversedSet(const unsigned char* graph,
                               size_t length,
                               bool include_private,
-                              base::StringPiece host,
+                              std::string_view host,
                               size_t* suffix_length) {
   FixedSetIncrementalLookup lookup(graph, length);
   *suffix_length = 0;
   int result = kDafsaNotFound;
-  base::StringPiece::const_iterator pos = host.end();
+  std::string_view::const_iterator pos = host.end();
   // Look up host from right to left.
   while (pos != host.begin() && lookup.Advance(*--pos)) {
     // Only host itself or a part that follows a dot can match.

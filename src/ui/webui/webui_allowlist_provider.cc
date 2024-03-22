@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,10 @@ WebUIAllowlistProvider::WebUIAllowlistProvider(
 WebUIAllowlistProvider::~WebUIAllowlistProvider() = default;
 
 std::unique_ptr<content_settings::RuleIterator>
-WebUIAllowlistProvider::GetRuleIterator(ContentSettingsType content_type,
-                                        bool incognito) const {
+WebUIAllowlistProvider::GetRuleIterator(
+    ContentSettingsType content_type,
+    bool incognito,
+    const content_settings::PartitionKey& partition_key) const {
   return allowlist_->GetRuleIterator(content_type);
 }
 
@@ -34,13 +36,15 @@ bool WebUIAllowlistProvider::SetWebsiteSetting(
     const ContentSettingsPattern& secondary_pattern,
     ContentSettingsType content_type,
     base::Value&& value,
-    const content_settings::ContentSettingConstraints& constraints) {
+    const content_settings::ContentSettingConstraints& constraints,
+    const content_settings::PartitionKey& partition_key) {
   // WebUIAllowlistProvider doesn't support settings Website settings.
   return false;
 }
 
 void WebUIAllowlistProvider::ClearAllContentSettingsRules(
-    ContentSettingsType content_type) {
+    ContentSettingsType content_type,
+    const content_settings::PartitionKey& partition_key) {
   // WebUIAllowlistProvider doesn't support changing content settings directly.
 }
 

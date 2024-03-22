@@ -1,20 +1,22 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/printing/ppd_provider.h"
 
-#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "base/containers/queue.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -25,6 +27,7 @@
 #include "chromeos/printing/printer_config_cache.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "chromeos/printing/printing_constants.h"
+#include "components/device_event_log/device_event_log.h"
 #include "net/base/filename_util.h"
 
 namespace chromeos {
@@ -63,9 +66,8 @@ bool PpdReferenceIsWellFormed(const Printer::PpdReference& reference) {
   // All effective-make-and-model strings should be lowercased, since v2.
   // Since make-and-model strings could include non-Latin chars, only checking
   // that it excludes all upper-case chars A-Z.
-  if (!std::all_of(reference.effective_make_and_model.begin(),
-                   reference.effective_make_and_model.end(),
-                   [](char c) -> bool { return !base::IsAsciiUpper(c); })) {
+  if (!base::ranges::all_of(reference.effective_make_and_model,
+                            [](char c) { return !base::IsAsciiUpper(c); })) {
     return false;
   }
   // Should have exactly one non-empty field.
@@ -74,6 +76,13 @@ bool PpdReferenceIsWellFormed(const Printer::PpdReference& reference) {
 
 std::string PpdPathInServingRoot(base::StringPiece ppd_basename) {
   return base::StrCat({"ppds_for_metadata_v3/", ppd_basename});
+}
+
+// Zebra printers that support ZPL contain "Zebra" and "ZPL" in the
+// IEEE 1284 device id make and model.
+bool SupportsGenericZebraPPD(const PrinterSearchData& search_data) {
+  return search_data.printer_id.make() == "Zebra" &&
+         base::Contains(search_data.printer_id.model(), "ZPL");
 }
 
 // Helper struct for PpdProviderImpl. Allows PpdProviderImpl to defer
@@ -119,7 +128,7 @@ struct MethodDeferralContext {
   // Dequeues and posts all |deferred_methods| onto our sequence.
   void FlushAndPostAll() {
     while (!deferred_methods.empty()) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, std::move(deferred_methods.front()));
       deferred_methods.pop();
     }
@@ -167,8 +176,8 @@ class PpdProviderImpl : public PpdProvider {
         auto failure_cb = base::BindOnce(
             std::move(cb), PpdProvider::CallbackResultCode::SERVER_ERROR,
             std::vector<std::string>());
-        base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                         std::move(failure_cb));
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+            FROM_HERE, std::move(failure_cb));
         return;
       }
 
@@ -197,8 +206,8 @@ class PpdProviderImpl : public PpdProvider {
       auto failure_cb = base::BindOnce(
           std::move(cb), PpdProvider::CallbackResultCode::INTERNAL_ERROR,
           ResolvedPrintersList());
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       std::move(failure_cb));
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(failure_cb));
       return;
     }
 
@@ -230,6 +239,14 @@ class PpdProviderImpl : public PpdProvider {
     PrinterSearchData lowercased_search_data(search_data);
     for (std::string& emm : lowercased_search_data.make_and_model) {
       emm = base::ToLowerASCII(emm);
+    }
+
+    // Any Zebra printer that supports ZPL uses the same PPD file, which is
+    // kept in the PPD index with the key "zebra zpl label printer".
+    if (SupportsGenericZebraPPD(lowercased_search_data)) {
+      lowercased_search_data.make_and_model.clear();
+      lowercased_search_data.make_and_model.push_back(
+          "zebra zpl label printer");
     }
 
     ResolvePpdReferenceContext context(lowercased_search_data, std::move(cb));
@@ -266,7 +283,7 @@ class PpdProviderImpl : public PpdProvider {
         base::ToLowerASCII(lowercased_reference.effective_make_and_model);
 
     if (!PpdReferenceIsWellFormed(lowercased_reference)) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(cb),
                                     CallbackResultCode::INTERNAL_ERROR, ""));
       return;
@@ -297,8 +314,8 @@ class PpdProviderImpl : public PpdProvider {
         auto failure_cb = base::BindOnce(
             std::move(cb), PpdProvider::CallbackResultCode::SERVER_ERROR, "",
             "");
-        base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                         std::move(failure_cb));
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+            FROM_HERE, std::move(failure_cb));
         return;
       }
 
@@ -448,7 +465,7 @@ class PpdProviderImpl : public PpdProvider {
                         bool succeeded,
                         const ParsedPrinters& printers) {
     if (!succeeded) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::SERVER_ERROR,
                          ResolvedPrintersList()));
@@ -465,7 +482,7 @@ class PpdProviderImpl : public PpdProvider {
             printer.user_visible_printer_name, ppd_reference});
       }
     }
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::SUCCESS,
                                   printers_available_to_our_version));
   }
@@ -499,7 +516,7 @@ class PpdProviderImpl : public PpdProvider {
       ResolvePpdReferenceCallback cb) {
     Printer::PpdReference reference;
     reference.effective_make_and_model = std::string(effective_make_and_model);
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::SUCCESS,
                                   std::move(reference), /*manufacturer=*/""));
   }
@@ -513,7 +530,7 @@ class PpdProviderImpl : public PpdProvider {
   static void FailToResolvePpdReferenceWithUsbManufacturer(
       ResolvePpdReferenceCallback cb,
       const std::string& usb_manufacturer) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::NOT_FOUND,
                                   Printer::PpdReference(), usb_manufacturer));
   }
@@ -718,7 +735,7 @@ class PpdProviderImpl : public PpdProvider {
     DCHECK(!ppd_contents.empty());
 
     if (ppd_contents.size() > kMaxPpdSizeBytes) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::PPD_TOO_LARGE, ""));
       return;
@@ -726,7 +743,7 @@ class PpdProviderImpl : public PpdProvider {
 
     StorePpdWithContents(ppd_contents, std::move(ppd_basename), ppd_origin,
                          std::move(reference));
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::SUCCESS,
                                   std::move(ppd_contents)));
   }
@@ -740,7 +757,7 @@ class PpdProviderImpl : public PpdProvider {
       ResolvePpdCallback cb,
       const PrinterConfigCache::FetchResult& result) {
     if (!result.succeeded || result.contents.empty()) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::SERVER_ERROR, ""));
       return;
@@ -760,7 +777,7 @@ class PpdProviderImpl : public PpdProvider {
                                      ResolvePpdCallback cb,
                                      const PpdCache::FindResult& result) {
     if (!result.success || result.contents.empty()) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::NOT_FOUND, ""));
       return;
@@ -835,6 +852,8 @@ class PpdProviderImpl : public PpdProvider {
 
     // The forward index does advertise a best-fit PPD basename. We
     // check the local PpdCache to see if we already have it.
+    PRINTER_LOG(DEBUG) << reference.effective_make_and_model << " mapped to "
+                       << leaf->ppd_basename;
     ppd_cache_->Find(
         PpdBasenameToCacheKey(leaf->ppd_basename),
         base::BindOnce(&PpdProviderImpl::OnPpdFromServingRootSoughtInPpdCache,
@@ -852,7 +871,7 @@ class PpdProviderImpl : public PpdProvider {
                                          ResolvePpdCallback cb,
                                          const PpdCache::FindResult& result) {
     if (!result.success) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::NOT_FOUND, ""));
       return;
@@ -920,7 +939,7 @@ class PpdProviderImpl : public PpdProvider {
       // This particular |effective_make_and_model| is invisible to the
       // current |version_|; either it is restricted or it is missing
       // entirely from the forward indices.
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::NOT_FOUND,
                          /*license_name=*/""));
@@ -930,7 +949,7 @@ class PpdProviderImpl : public PpdProvider {
     // Note that the license can also be empty; this denotes that
     // no license is associated with this particular
     // |effective_make_and_model| in this |version_|.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::SUCCESS,
                                   index_leaf->license));
   }

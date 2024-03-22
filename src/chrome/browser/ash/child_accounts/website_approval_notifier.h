@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 
 class Profile;
@@ -38,7 +39,7 @@ class WebsiteApprovalNotifier {
   // No notification is shown if |allowed_host| is a match pattern.
   void MaybeShowApprovalNotification(const std::string& allowed_host);
 
-  Profile* const profile_;
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
 
   base::CallbackListSubscription website_approval_subscription_;
 

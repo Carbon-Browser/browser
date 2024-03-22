@@ -39,11 +39,9 @@ from blinkpy.web_tests.port.base import Port, VirtualTestSuite
 from blinkpy.web_tests.port.driver import DeviceFailure, Driver, DriverOutput
 from blinkpy.w3c.wpt_manifest import BASE_MANIFEST_NAME
 
-# Here we use a non-standard location for the web tests, to ensure that
-# this works. The path contains a '.' in the name because we've seen bugs
-# related to this before.
-WEB_TEST_DIR = '/test.checkout/wtests'
-PERF_TEST_DIR = '/test.checkout/PerformanceTests'
+MOCK_ROOT = '/mock-checkout/'
+MOCK_WEB_TESTS = MOCK_ROOT + 'third_party/blink/web_tests/'
+PERF_TEST_DIR = MOCK_ROOT + 'PerformanceTests'
 
 
 # This sets basic expectations for a test. Each individual expectation
@@ -320,61 +318,55 @@ layer at (0,0) size 800x34
         actual_text='\nfoo\r\n\r\r\n')
 
     # For reftests.
-    tests.add_reftest('passes/reftest.html', 'platform/generic/passes/reftest-expected.html')
+    tests.add_reftest('passes/reftest.html', 'passes/reftest-expected.html')
     # This adds a different virtual reference to ensure that that also works.
-    tests.add_reference('platform/generic/virtual/virtual_passes/passes/reftest-expected.html')
+    tests.add_reference('virtual/virtual_passes/passes/reftest-expected.html')
 
-    tests.add_reftest(
-        'passes/reftest-with-text.html',
-        'platform/generic/passes/reftest-with-text-expected.html',
-        actual_text='reftest',
-        expected_text='reftest')
-    tests.add_reftest(
-        'passes/mismatch.html',
-        'platform/generic/passes/mismatch-expected-mismatch.html',
-        same_image=False)
+    tests.add_reftest('passes/reftest-with-text.html',
+                      'passes/reftest-with-text-expected.html',
+                      actual_text='reftest',
+                      expected_text='reftest')
+    tests.add_reftest('passes/mismatch.html',
+                      'passes/mismatch-expected-mismatch.html',
+                      same_image=False)
     tests.add_reftest('passes/svgreftest.svg',
-                      'platform/generic/passes/svgreftest-expected.svg')
+                      'passes/svgreftest-expected.svg')
     tests.add_reftest('passes/xhtreftest.xht',
-                      'platform/generic/passes/xhtreftest-expected.html')
-    tests.add_reftest(
-        'passes/phpreftest.php',
-        'platform/generic/passes/phpreftest-expected-mismatch.svg',
-        same_image=False)
-    tests.add_reftest(
-        'failures/expected/reftest.html',
-        'platform/generic/failures/expected/reftest-expected.html',
-        same_image=False)
+                      'passes/xhtreftest-expected.html')
+    tests.add_reftest('passes/phpreftest.php',
+                      'passes/phpreftest-expected-mismatch.svg',
+                      same_image=False)
+    tests.add_reftest('failures/expected/reftest.html',
+                      'failures/expected/reftest-expected.html',
+                      same_image=False)
     tests.add_reftest(
         'failures/unexpected/reftest-with-matching-text.html',
-        'platform/generic/failures/unexpected/reftest-with-matching-text-expected.html',
+        'failures/unexpected/reftest-with-matching-text-expected.html',
         same_image=False,
         actual_text='reftest',
         expected_text='reftest')
     tests.add_reftest(
         'failures/unexpected/reftest-with-mismatching-text.html',
-        'platform/generic/failures/unexpected/reftest-with-mismatching-text-expected.html',
+        'failures/unexpected/reftest-with-mismatching-text-expected.html',
         actual_text='reftest',
         expected_text='reftest-different')
     tests.add_reftest('failures/expected/mismatch.html',
-                      'platform/generic/failures/expected/mismatch-expected-mismatch.html')
-    tests.add_reftest(
-        'failures/unexpected/crash-reftest.html',
-        'platform/generic/failures/unexpected/crash-reftest-expected.html',
-        crash=True)
-    tests.add_reftest(
-        'failures/unexpected/reftest.html',
-        'platform/generic/failures/unexpected/reftest-expected.html',
-        same_image=False)
+                      'failures/expected/mismatch-expected-mismatch.html')
+    tests.add_reftest('failures/unexpected/crash-reftest.html',
+                      'failures/unexpected/crash-reftest-expected.html',
+                      crash=True)
+    tests.add_reftest('failures/unexpected/reftest.html',
+                      'failures/unexpected/reftest-expected.html',
+                      same_image=False)
     tests.add_reftest(
         'failures/unexpected/reftest-mismatch-with-text-mismatch-with-stderr.html',
-        'platform/generic/failures/unexpected/reftest-mismatch-with-text-mismatch-with-stderr-expected.html',
+        'failures/unexpected/reftest-mismatch-with-text-mismatch-with-stderr-expected.html',
         same_image=False,
         actual_text='actual',
         expected_text='expected',
         error=b'oops')
     tests.add_reftest('failures/unexpected/mismatch.html',
-                      'platform/generic/failures/unexpected/mismatch-expected-mismatch.html')
+                      'failures/unexpected/mismatch-expected-mismatch.html')
     tests.add(
         'failures/unexpected/reftest-nopixel.html',
         actual_checksum=None,
@@ -402,24 +394,22 @@ layer at (0,0) size 800x34
 
     tests.add('passes_two/test-virtual-passes.html')
 
-    tests.add(
-        'passes/testharness.html',
-        actual_text='This is a testharness.js-based test.\nPASS: bah\n'
-        'Harness: the test ran to completion.',
-        expected_text=None,
-        actual_checksum=None,
-        actual_image=None,
-        expected_checksum=None,
-        expected_image=None)
-    tests.add(
-        'failures/unexpected/testharness.html',
-        actual_text='This is a testharness.js-based test.\nFAIL: bah\n'
-        'Harness: the test ran to completion.',
-        expected_text=None,
-        actual_checksum=None,
-        actual_image=None,
-        expected_checksum=None,
-        expected_image=None)
+    tests.add('passes/testharness.html',
+              actual_text='This is a testharness.js-based test.\n[PASS] bah\n'
+              'Harness: the test ran to completion.',
+              expected_text=None,
+              actual_checksum=None,
+              actual_image=None,
+              expected_checksum=None,
+              expected_image=None)
+    tests.add('failures/unexpected/testharness.html',
+              actual_text='This is a testharness.js-based test.\n[FAIL] bah\n'
+              'Harness: the test ran to completion.',
+              expected_text=None,
+              actual_checksum=None,
+              actual_image=None,
+              expected_checksum=None,
+              expected_image=None)
 
     tests.add('virtual/virtual_empty_bases/physical1.html')
     tests.add('virtual/virtual_empty_bases/dir/physical2.html')
@@ -432,10 +422,10 @@ layer at (0,0) size 800x34
 # we don't need a real filesystem to run the tests.
 def add_unit_tests_to_mock_filesystem(filesystem):
     # Add the test_expectations file.
-    filesystem.maybe_make_directory(WEB_TEST_DIR)
-    if not filesystem.exists(WEB_TEST_DIR + '/TestExpectations'):
+    filesystem.maybe_make_directory(MOCK_WEB_TESTS)
+    if not filesystem.exists(MOCK_WEB_TESTS + 'TestExpectations'):
         filesystem.write_text_file(
-            WEB_TEST_DIR + '/TestExpectations', """
+            MOCK_WEB_TESTS + 'TestExpectations', """
 # results: [ Pass Failure Crash Timeout Skip ]
 failures/expected/audio.html [ Failure ]
 failures/expected/crash.html [ Crash ]
@@ -461,9 +451,9 @@ passes/text.html [ Pass ]
 virtual/skipped/failures/expected* [ Skip ]
 """)
 
-    if not filesystem.exists(WEB_TEST_DIR + '/NeverFixTests'):
+    if not filesystem.exists(MOCK_WEB_TESTS + 'NeverFixTests'):
         filesystem.write_text_file(
-            WEB_TEST_DIR + '/NeverFixTests', """
+            MOCK_WEB_TESTS + 'NeverFixTests', """
 # results: [ Pass Failure Crash Timeout Skip ]
 failures/expected/keyboard.html [ Skip ]
 failures/expected/exception.html [ Skip ]
@@ -473,9 +463,9 @@ virtual/virtual_failures/failures/expected/exception.html [ Skip ]
 virtual/virtual_failures/failures/expected/device_failure.html [ Skip ]
 """)
 
-    if not filesystem.exists(WEB_TEST_DIR + '/SlowTests'):
+    if not filesystem.exists(MOCK_WEB_TESTS + 'SlowTests'):
         filesystem.write_text_file(
-            WEB_TEST_DIR + '/SlowTests', """
+            MOCK_WEB_TESTS + 'SlowTests', """
 # results: [ Slow ]
 passes/slow.html [ Slow ]
 """)
@@ -483,20 +473,10 @@ passes/slow.html [ Slow ]
     # FIXME: This test was only being ignored because of missing a leading '/'.
     # Fixing the typo causes several tests to assert, so disabling the test entirely.
     # Add in a file should be ignored by port.find_test_files().
-    #files[WEB_TEST_DIR + '/userscripts/resources/iframe.html'] = 'iframe'
+    #files[MOCK_WEB_TESTS + 'userscripts/resources/iframe.html'] = 'iframe'
 
     def add_file(test, suffix, contents):
-        dirname = filesystem.join(WEB_TEST_DIR,
-                                  test.name[0:test.name.rfind('/')])
-        base = test.base
-        filesystem.maybe_make_directory(dirname)
-        filesystem.write_binary_file(
-            filesystem.join(dirname, base + suffix), contents)
-
-    def add_baseline(test, suffix, contents):
-        dirname = filesystem.join(WEB_TEST_DIR,
-                                  "platform",
-                                  "generic",
+        dirname = filesystem.join(MOCK_WEB_TESTS,
                                   test.name[0:test.name.rfind('/')])
         base = test.base
         filesystem.maybe_make_directory(dirname)
@@ -508,23 +488,20 @@ passes/slow.html [ Slow ]
     for test in test_list.tests.values():
         add_file(test, test.name[test.name.rfind('.'):], b'')
         if test.expected_audio:
-            add_baseline(test, '-expected.wav', test.expected_audio)
+            add_file(test, '-expected.wav', test.expected_audio)
         if test.expected_text:
-            add_baseline(test, '-expected.txt', test.expected_text.encode('utf-8'))
+            add_file(test, '-expected.txt', test.expected_text.encode('utf-8'))
         if test.expected_image:
-            add_baseline(test, '-expected.png', test.expected_image)
+            add_file(test, '-expected.png', test.expected_image)
 
     filesystem.write_text_file(
-        filesystem.join(WEB_TEST_DIR, 'platform', 'generic',
-                        'virtual', 'virtual_passes', 'passes',
+        filesystem.join(MOCK_WEB_TESTS, 'virtual', 'virtual_passes', 'passes',
                         'args-expected.txt'), 'args-txt --virtual-arg')
-    filesystem.maybe_make_directory(
-        filesystem.join(WEB_TEST_DIR, 'virtual', 'virtual_passes'))
 
     filesystem.maybe_make_directory(
-        filesystem.join(WEB_TEST_DIR, 'external', 'wpt'))
+        filesystem.join(MOCK_WEB_TESTS, 'external', 'wpt'))
     filesystem.write_text_file(
-        filesystem.join(WEB_TEST_DIR, 'external', BASE_MANIFEST_NAME),
+        filesystem.join(MOCK_WEB_TESTS, 'external', BASE_MANIFEST_NAME),
         '{"manifest": "base"}')
 
     # Clear the list of written files so that we can watch what happens during testing.
@@ -536,7 +513,7 @@ def add_manifest_to_mock_filesystem(port):
     port.set_option_default('manifest_update', False)
     filesystem = port.host.filesystem
     filesystem.write_text_file(
-        WEB_TEST_DIR + '/external/wpt/MANIFEST.json',
+        MOCK_WEB_TESTS + 'external/wpt/MANIFEST.json',
         json.dumps({
             'items': {
                 'testharness': {
@@ -587,12 +564,41 @@ def add_manifest_to_mock_filesystem(port):
                                                 '/html/dom/elements/global-attributes/dir_auto-EN-L-ref.html',
                                                 '=='
                                             ]], {
-                                                'timeout': 'long'
+                                                'timeout':
+                                                'long',
+                                                'fuzzy':
+                                                [[None, [[0, 255], [0, 200]]]]
                                             }
                                         ],
                                     ]
                                 }
                             }
+                        }
+                    }
+                },
+                'print-reftest': {
+                    'foo': {
+                        'bar': {
+                            'test-print.html': [
+                                'abcdef123',
+                                [
+                                    None,
+                                    [['/foo/bar/test-print-ref.html', '==']], {
+                                        'timeout': 'long'
+                                    }
+                                ]
+                            ]
+                        },
+                        'print': {
+                            'test.html': [
+                                'abcdef123',
+                                [
+                                    None,
+                                    [['/foo/bar/test-print-ref.html', '==']], {
+                                        'timeout': 'long'
+                                    }
+                                ]
+                            ]
                         }
                     }
                 },
@@ -605,18 +611,22 @@ def add_manifest_to_mock_filesystem(port):
             }
         }))
     filesystem.write_text_file(
-        WEB_TEST_DIR + '/external/wpt/dom/ranges/Range-attributes.html', '')
+        MOCK_WEB_TESTS + 'external/wpt/dom/ranges/Range-attributes.html', '')
     filesystem.write_text_file(
-        WEB_TEST_DIR + '/external/wpt/dom/ranges/Range-attributes-slow.html',
+        MOCK_WEB_TESTS + 'external/wpt/dom/ranges/Range-attributes-slow.html',
         '')
     filesystem.write_text_file(
-        WEB_TEST_DIR + '/external/wpt/console/console-is-a-namespace.any.js',
+        MOCK_WEB_TESTS + 'external/wpt/console/console-is-a-namespace.any.js',
         '')
     filesystem.write_text_file(
-        WEB_TEST_DIR + '/external/wpt/common/blank.html', 'foo')
+        MOCK_WEB_TESTS + 'external/wpt/common/blank.html', 'foo')
+    filesystem.write_text_file(
+        MOCK_WEB_TESTS + 'external/wpt/foo/bar/test-print.html', '')
+    filesystem.write_text_file(
+        MOCK_WEB_TESTS + 'external/wpt/foo/print/test.html', '')
 
     filesystem.write_text_file(
-        WEB_TEST_DIR + '/wpt_internal/MANIFEST.json',
+        MOCK_WEB_TESTS + 'wpt_internal/MANIFEST.json',
         json.dumps({
             'items': {
                 'testharness': {
@@ -626,7 +636,7 @@ def add_manifest_to_mock_filesystem(port):
                 }
             }
         }))
-    filesystem.write_text_file(WEB_TEST_DIR + '/wpt_internal/dom/bar.html',
+    filesystem.write_text_file(MOCK_WEB_TESTS + 'wpt_internal/dom/bar.html',
                                'baz')
 
 
@@ -665,7 +675,7 @@ class TestPort(Port):
         # test ports. rebaseline_unittest.py needs to not mix both "real" ports
         # and "test" ports
 
-        self._generic_expectations_path = WEB_TEST_DIR + '/TestExpectations'
+        self._generic_expectations_path = MOCK_WEB_TESTS + 'TestExpectations'
         self._results_directory = None
 
         self._operating_system = 'mac'
@@ -681,6 +691,7 @@ class TestPort(Port):
             'test-win-win10': 'win10',
             'test-mac-mac10.10': 'mac10.10',
             'test-mac-mac10.11': 'mac10.11',
+            'test-mac-mac11-arm64': 'mac11-arm64',
             'test-linux-precise': 'precise',
             'test-linux-trusty': 'trusty',
         }
@@ -688,17 +699,25 @@ class TestPort(Port):
 
         if self._operating_system == 'linux':
             self._architecture = 'x86_64'
+        elif self._operating_system == 'mac':
+            self._architecture = 'arm64'
 
-        self.all_systems = (('mac10.10', 'x86'), ('mac10.11', 'x86'),
-                            ('win7', 'x86'), ('win10', 'x86'),
-                            ('precise', 'x86_64'), ('trusty', 'x86_64'))
+        self.all_systems = (
+            ('mac10.10', 'x86'),
+            ('mac10.11', 'x86'),
+            ('mac11-arm64', 'arm64'),
+            ('win7', 'x86'),
+            ('win10', 'x86'),
+            ('precise', 'x86_64'),
+            ('trusty', 'x86_64'),
+        )
 
         self.all_build_types = ('debug', 'release')
 
         # To avoid surprises when introducing new macros, these are
         # intentionally fixed in time.
         self.configuration_specifier_macros_dict = {
-            'mac': ['mac10.10', 'mac10.11'],
+            'mac': ['mac10.10', 'mac10.11', 'mac10.12'],
             'win': ['win7', 'win10'],
             'linux': ['precise', 'trusty']
         }
@@ -716,13 +735,6 @@ class TestPort(Port):
                 sample_files[cp[0]] = sample_file
         return sample_files
 
-    def _flag_specific_expectations_path(self):
-        flags = [f[2:] for f in self._specified_additional_driver_flags()]
-        if not flags:
-            return None
-        return self._filesystem.join(self.web_tests_dir(), 'FlagExpectations',
-                                     flags[0])
-
     def look_for_new_crash_logs(self, crashed_processes, start_time):
         del start_time
         crash_logs = {}
@@ -731,7 +743,7 @@ class TestPort(Port):
                 crash_logs[cp[0]] = (b'delayed crash log', '/tmp')
         return crash_logs
 
-    def _path_to_driver(self, target=None):
+    def path_to_driver(self, target=None):
         # This routine shouldn't normally be called, but it is called by
         # the mock_drt Driver. We return something, but make sure it's useless.
         return 'MOCK _path_to_driver'
@@ -772,7 +784,7 @@ class TestPort(Port):
         return (None, None, None)
 
     def web_tests_dir(self):
-        return WEB_TEST_DIR
+        return MOCK_WEB_TESTS
 
     def _perf_tests_dir(self):
         return PERF_TEST_DIR
@@ -843,6 +855,11 @@ class TestPort(Port):
 
     def virtual_test_suites(self):
         return [
+            VirtualTestSuite(
+                prefix='virtual_console',
+                platforms=['Linux', 'Mac', 'Win'],
+                bases=['external/wpt/console/console-is-a-namespace.any.js'],
+                args=['--virtual-console']),
             VirtualTestSuite(prefix='virtual_passes',
                              platforms=['Linux', 'Mac', 'Win'],
                              bases=['passes', 'passes_two'],
@@ -851,11 +868,11 @@ class TestPort(Port):
                              platforms=['Linux', 'Mac', 'Win'],
                              bases=['failures/expected'],
                              args=['--virtual-arg-skipped']),
-            VirtualTestSuite(prefix='virtual_failures',
-                             platforms=['Linux', 'Mac', 'Win'],
-                             bases=['failures/expected',
-                                    'failures/unexpected'],
-                             args=['--virtual-arg-failures']),
+            VirtualTestSuite(
+                prefix='virtual_failures',
+                platforms=['Linux', 'Mac', 'Win'],
+                bases=['failures/expected', 'failures/unexpected'],
+                args=['--virtual-arg-failures']),
             VirtualTestSuite(prefix='virtual_wpt',
                              platforms=['Linux', 'Mac', 'Win'],
                              bases=['external/wpt'],
@@ -868,10 +885,17 @@ class TestPort(Port):
                              platforms=['Linux', 'Mac', 'Win'],
                              bases=[],
                              args=['--virtual-arg-empty-bases']),
-            VirtualTestSuite(prefix='mixed_wpt',
-                             platforms=['Linux', 'Mac', 'Win'],
-                             bases=['http', 'external/wpt/dom'],
-                             args=['--virtual-arg']),
+            VirtualTestSuite(
+                prefix='mixed_wpt',
+                platforms=['Linux', 'Mac', 'Win'],
+                bases=[
+                    'http',
+                    'external/wpt/dom',
+                    # Should use the physical tests located under
+                    # `virtual/virtual_empty_bases`.
+                    'virtual/virtual_empty_bases',
+                ],
+                args=['--virtual-arg']),
         ]
 
 
@@ -887,8 +911,11 @@ class TestDriver(Driver):
         self.pid = 0
 
     def cmd_line(self, per_test_args):
-        return [self._port._path_to_driver()] + \
-            self._port.get_option('additional_driver_flag', []) + per_test_args
+        return [
+            self._port.path_to_driver(),
+            *self._port.get_option('additional_driver_flag', []),
+            *per_test_args,
+        ]
 
     def run_test(self, driver_input):
         if not self.started:

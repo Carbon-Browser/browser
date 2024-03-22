@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,11 @@
 #include "ash/components/arc/metrics/stability_metrics_manager.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
-#include "ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/md5.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -36,12 +35,15 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/metrics/cached_metrics_profile.h"
+#include "chrome/browser/metrics/chromeos_system_profile_provider.h"
 #include "chrome/browser/metrics/enrollment_status.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
+#include "chromeos/ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager_client.h"
-#include "chromeos/system/statistics_provider.h"
 #include "components/metrics/metrics_service.h"
 #include "components/metrics/structured/recorder.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -50,6 +52,9 @@
 #include "components/user_manager/user_manager.h"
 #include "components/user_manager/user_type.h"
 #include "components/variations/hashing.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/metrics_proto/chrome_user_metrics_extension.pb.h"
 #include "ui/display/display.h"
 #include "ui/events/event_utils.h"
@@ -60,42 +65,27 @@ using metrics::SystemProfileProto;
 
 namespace {
 
-void IncrementPrefValue(const char* path) {
+inline constexpr char kFeatureManagementLevelFlag[] =
+    "feature-management-level";
+inline constexpr char kFeatureManagementMaxLevelFlag[] =
+    "feature-management-max-level";
+inline constexpr char kFeatureManagementScopeFlag[] =
+    "feature-management-scope";
+
+void IncrementPrefValue(const char* path, int num_samples) {
   PrefService* pref = g_browser_process->local_state();
   DCHECK(pref);
   int value = pref->GetInteger(path);
-  pref->SetInteger(path, value + 1);
-}
-
-// Called on a background thread to load cellular device variant
-// using ConfigFS.
-std::string GetCellularDeviceVariantOnBackgroundThread() {
-  constexpr char kFirmwareVariantPath[] =
-      "/run/chromeos-config/v1/modem/firmware-variant";
-  std::string cellular_device_variant;
-  const base::FilePath modem_path = base::FilePath(kFirmwareVariantPath);
-  if (base::PathExists(modem_path)) {
-    base::ReadFileToString(modem_path, &cellular_device_variant);
-  }
-  VLOG(1) << "cellular_device_variant: " << cellular_device_variant;
-  return cellular_device_variant;
-}
-
-bool IsFeatureEnabled(
-    const ash::multidevice_setup::MultiDeviceSetupClient::FeatureStatesMap&
-        feature_states_map,
-    ash::multidevice_setup::mojom::Feature feature) {
-  return feature_states_map.find(feature)->second ==
-         ash::multidevice_setup::mojom::FeatureState::kEnabledByUser;
+  pref->SetInteger(path, value + num_samples);
 }
 
 }  // namespace
 
 ChromeOSMetricsProvider::ChromeOSMetricsProvider(
-    metrics::MetricsLogUploader::MetricServiceType service_type)
-    : cached_profile_(std::make_unique<metrics::CachedMetricsProfile>()),
-      registered_user_count_at_log_initialization_(false),
-      user_count_at_log_initialization_(0) {
+    metrics::MetricsLogUploader::MetricServiceType service_type,
+    ChromeOSSystemProfileProvider* cros_system_profile_provider)
+    : cros_system_profile_provider_(cros_system_profile_provider) {
+  DCHECK(cros_system_profile_provider_);
   if (service_type == metrics::MetricsLogUploader::UMA)
     profile_provider_ = std::make_unique<metrics::ProfileProvider>();
 }
@@ -110,15 +100,18 @@ void ChromeOSMetricsProvider::RegisterPrefs(PrefRegistrySimple* registry) {
 }
 
 // static
-void ChromeOSMetricsProvider::LogCrash(const std::string& crash_type) {
-  if (crash_type == "user")
-    IncrementPrefValue(prefs::kStabilityOtherUserCrashCount);
-  else if (crash_type == "kernel")
-    IncrementPrefValue(prefs::kStabilityKernelCrashCount);
-  else if (crash_type == "uncleanshutdown")
-    IncrementPrefValue(prefs::kStabilitySystemUncleanShutdownCount);
-  else
+void ChromeOSMetricsProvider::LogCrash(const std::string& crash_type,
+                                       int num_samples) {
+  if (crash_type == "user") {
+    IncrementPrefValue(prefs::kStabilityOtherUserCrashCount, num_samples);
+  } else if (crash_type == "kernel") {
+    IncrementPrefValue(prefs::kStabilityKernelCrashCount, num_samples);
+  } else if (crash_type == "uncleanshutdown") {
+    IncrementPrefValue(prefs::kStabilitySystemUncleanShutdownCount,
+                       num_samples);
+  } else {
     NOTREACHED() << "Unexpected Chrome OS crash type " << crash_type;
+  }
 
   // Wake up metrics logs sending if necessary now that new
   // log data is available.
@@ -140,22 +133,15 @@ void ChromeOSMetricsProvider::Init() {
     profile_provider_->Init();
 }
 
-void ChromeOSMetricsProvider::AsyncInit(base::OnceClosure done_callback) {
-  base::RepeatingClosure barrier =
-      base::BarrierClosure(4, std::move(done_callback));
-  InitTaskGetFullHardwareClass(barrier);
-  InitTaskGetArcFeatures(barrier);
-  InitTaskGetTpmFirmwareVersion(barrier);
-  InitTaskGetCellularDeviceVariant(barrier);
-}
-
 void ChromeOSMetricsProvider::OnDidCreateMetricsLog() {
-  registered_user_count_at_log_initialization_ = false;
-  if (user_manager::UserManager::IsInitialized()) {
-    registered_user_count_at_log_initialization_ = true;
-    user_count_at_log_initialization_ =
-        user_manager::UserManager::Get()->GetLoggedInUsers().size();
+  cros_system_profile_provider_->OnDidCreateMetricsLog();
+  if (!arc::StabilityMetricsManager::Get()) {
+    return;
   }
+  // Not guaranteed to result in emitting hisotograms when called early on
+  // browser startup.
+  arc::StabilityMetricsManager::Get()->RecordMetricsToUMA();
+  emitted_ = UpdateUserTypeUMA();
 }
 
 void ChromeOSMetricsProvider::OnRecordingEnabled() {
@@ -168,70 +154,10 @@ void ChromeOSMetricsProvider::OnRecordingDisabled() {
     profile_provider_->OnRecordingDisabled();
 }
 
-void ChromeOSMetricsProvider::InitTaskGetFullHardwareClass(
-    base::OnceClosure callback) {
-  chromeos::system::StatisticsProvider::GetInstance()
-      ->ScheduleOnMachineStatisticsLoaded(
-          base::BindOnce(&ChromeOSMetricsProvider::OnMachineStatisticsLoaded,
-                         weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
-}
-
-void ChromeOSMetricsProvider::InitTaskGetArcFeatures(
-    base::OnceClosure callback) {
-  arc::ArcFeaturesParser::GetArcFeatures(
-      base::BindOnce(&ChromeOSMetricsProvider::OnArcFeaturesParsed,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
-}
-
-void ChromeOSMetricsProvider::InitTaskGetTpmFirmwareVersion(
-    base::OnceClosure callback) {
-  chromeos::TpmManagerClient::Get()->GetVersionInfo(
-      tpm_manager::GetVersionInfoRequest(),
-      base::BindOnce(&ChromeOSMetricsProvider::OnTpmManagerGetVersionInfo,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
-}
-
-void ChromeOSMetricsProvider::InitTaskGetCellularDeviceVariant(
-    base::OnceClosure callback) {
-  // Run the (potentially expensive) task in the background to avoid blocking
-  // the UI thread.
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE,
-      {base::MayBlock(), base::WithBaseSyncPrimitives(),
-       base::TaskPriority::BEST_EFFORT,
-       base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-      base::BindOnce(&GetCellularDeviceVariantOnBackgroundThread),
-      base::BindOnce(&ChromeOSMetricsProvider::SetCellularDeviceVariant,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
-}
-
 void ChromeOSMetricsProvider::ProvideSystemProfileMetrics(
     metrics::SystemProfileProto* system_profile_proto) {
-  WriteLinkedAndroidPhoneProto(system_profile_proto);
-  UpdateMultiProfileUserCount(system_profile_proto);
-  WriteDemoModeDimensionMetrics(system_profile_proto);
-
-  metrics::SystemProfileProto::Hardware* hardware =
-      system_profile_proto->mutable_hardware();
-  hardware->set_full_hardware_class(full_hardware_class_);
-  display::Display::TouchSupport has_touch =
-      ui::GetInternalDisplayTouchSupport();
-  if (has_touch == display::Display::TouchSupport::AVAILABLE)
-    hardware->set_internal_display_supports_touch(true);
-  else if (has_touch == display::Display::TouchSupport::UNAVAILABLE)
-    hardware->set_internal_display_supports_touch(false);
-
-  if (tpm_firmware_version_.has_value()) {
-    hardware->set_tpm_firmware_version(*tpm_firmware_version_);
-  }
-
-  hardware->set_cellular_device_variant(cellular_device_variant_);
-
-  if (arc_release_) {
-    metrics::SystemProfileProto::OS::Arc* arc =
-        system_profile_proto->mutable_os()->mutable_arc();
-    arc->set_release(*arc_release_);
-  }
+  cros_system_profile_provider_->ProvideSystemProfileMetrics(
+      system_profile_proto);
 }
 
 void ChromeOSMetricsProvider::ProvideAccessibilityMetrics() {
@@ -245,11 +171,12 @@ void ChromeOSMetricsProvider::ProvideSuggestedContentMetrics() {
   UMA_HISTOGRAM_BOOLEAN(
       "Apps.AppList.SuggestedContent.Enabled",
       ProfileManager::GetActiveUserProfile()->GetPrefs()->GetBoolean(
-          chromeos::prefs::kSuggestedContentEnabled));
+          ash::prefs::kSuggestedContentEnabled));
 }
 
-void ChromeOSMetricsProvider::ProvideStabilityMetrics(
-    metrics::SystemProfileProto* system_profile_proto) {
+void ChromeOSMetricsProvider::ProvideMetrics(
+    metrics::SystemProfileProto* system_profile_proto,
+    bool should_include_arc_metrics) {
   metrics::SystemProfileProto::Stability* stability_proto =
       system_profile_proto->mutable_stability();
   PrefService* pref = g_browser_process->local_state();
@@ -278,16 +205,24 @@ void ChromeOSMetricsProvider::ProvideStabilityMetrics(
       // static_cast because we only have macros for stability histograms.
       static_cast<int>(EnrollmentStatus::kMaxValue) + 1);
 
-  // Record ARC-related stability metrics that should be included in initial
-  // stability logs and all regular UMA logs.
-  arc::StabilityMetricsManager::Get()->RecordMetricsToUMA();
+  if (should_include_arc_metrics) {
+    // Record ARC-related stability metrics that should be included in initial
+    // stability logs and all regular UMA logs.
+    arc::StabilityMetricsManager::Get()->RecordMetricsToUMA();
+  }
+}
+
+void ChromeOSMetricsProvider::ProvideStabilityMetrics(
+    metrics::SystemProfileProto* system_profile_proto) {
+  ProvideMetrics(system_profile_proto, /*should_include_arc_metrics=*/true);
 }
 
 void ChromeOSMetricsProvider::ProvideCurrentSessionData(
     metrics::ChromeUserMetricsExtension* uma_proto) {
   ProvideAccessibilityMetrics();
   ProvideSuggestedContentMetrics();
-  ProvideStabilityMetrics(uma_proto->mutable_system_profile());
+  ProvideMetrics(uma_proto->mutable_system_profile(),
+                 /*should_include_arc_metrics=*/!emitted_);
   std::vector<SampledProfile> sampled_profiles;
   if (profile_provider_->GetSampledProfiles(&sampled_profiles)) {
     for (auto& profile : sampled_profiles) {
@@ -295,141 +230,97 @@ void ChromeOSMetricsProvider::ProvideCurrentSessionData(
     }
   }
   arc::UpdateEnabledStateByUserTypeUMA();
-  UpdateUserTypeUMA();
-}
-
-void ChromeOSMetricsProvider::WriteDemoModeDimensionMetrics(
-    metrics::SystemProfileProto* system_profile_proto) {
-  if (!ash::DemoSession::IsDeviceInDemoMode()) {
-    return;
-  }
-  metrics::SystemProfileProto::DemoModeDimensions* demo_mode_dimensions =
-      system_profile_proto->mutable_demo_mode_dimensions();
-  PrefService* pref = g_browser_process->local_state();
-  std::string demo_country = pref->GetString(prefs::kDemoModeCountry);
-  demo_mode_dimensions->set_country(demo_country);
-
-  metrics::SystemProfileProto_DemoModeDimensions_Retailer* retailer =
-      demo_mode_dimensions->mutable_retailer();
-  retailer->set_retailer_id(pref->GetString(prefs::kDemoModeRetailerId));
-  retailer->set_store_id(pref->GetString(prefs::kDemoModeStoreId));
-}
-
-void ChromeOSMetricsProvider::WriteLinkedAndroidPhoneProto(
-    metrics::SystemProfileProto* system_profile_proto) {
-  ash::multidevice_setup::MultiDeviceSetupClient* client =
-      ash::multidevice_setup::MultiDeviceSetupClientFactory::GetForProfile(
-          cached_profile_->GetMetricsProfile());
-
-  if (!client)
-    return;
-
-  const ash::multidevice_setup::MultiDeviceSetupClient::HostStatusWithDevice&
-      host_status_with_device = client->GetHostStatus();
-  if (host_status_with_device.first !=
-      ash::multidevice_setup::mojom::HostStatus::kHostVerified) {
-    return;
-  }
-
-  SystemProfileProto::LinkedAndroidPhoneData* linked_android_phone_data =
-      system_profile_proto->mutable_linked_android_phone_data();
-  const uint32_t hashed_name =
-      variations::HashName(host_status_with_device.second->pii_free_name());
-  linked_android_phone_data->set_phone_model_name_hash(hashed_name);
-
-  const ash::multidevice_setup::MultiDeviceSetupClient::FeatureStatesMap&
-      feature_states_map = client->GetFeatureStates();
-  linked_android_phone_data->set_is_smartlock_enabled(IsFeatureEnabled(
-      feature_states_map, ash::multidevice_setup::mojom::Feature::kSmartLock));
-  linked_android_phone_data->set_is_instant_tethering_enabled(IsFeatureEnabled(
-      feature_states_map,
-      ash::multidevice_setup::mojom::Feature::kInstantTethering));
-  linked_android_phone_data->set_is_messages_enabled(IsFeatureEnabled(
-      feature_states_map, ash::multidevice_setup::mojom::Feature::kMessages));
-}
-
-// Writes cellular device variant to system profile proto
-// if present.
-void ChromeOSMetricsProvider::WriteCellularDeviceVariant(
-    metrics::SystemProfileProto* system_profile_proto) {
-  metrics::SystemProfileProto::Hardware* hardware =
-      system_profile_proto->mutable_hardware();
-  constexpr char kFirmwareVariantPath[] =
-      "/run/chromeos-config/v1/modem/firmware-variant";
-  std::string cellular_device_variant;
-  const base::FilePath modem_path = base::FilePath(kFirmwareVariantPath);
-
-  if (base::PathExists(modem_path)) {
-    base::ReadFileToString(modem_path, &cellular_device_variant);
-    hardware->set_cellular_device_variant(cellular_device_variant);
+  if (!emitted_) {
+    UpdateUserTypeUMA();
   }
 }
 
-void ChromeOSMetricsProvider::UpdateMultiProfileUserCount(
-    metrics::SystemProfileProto* system_profile_proto) {
-  if (user_manager::UserManager::IsInitialized()) {
-    size_t user_count =
-        user_manager::UserManager::Get()->GetLoggedInUsers().size();
+void ChromeOSMetricsProvider::ProvideCurrentSessionUKMData() {
+  ukm::SourceId source_id = ukm::NoURLSourceId();
+  EnrollmentStatus status = GetEnrollmentStatus();
+  ukm::builders::ChromeOS_DeviceManagement(source_id)
+      .SetEnrollmentStatus(static_cast<int64_t>(status))
+      .Record(ukm::UkmRecorder::Get());
+}
 
-    // We invalidate the user count if it changed while the log was open.
-    if (registered_user_count_at_log_initialization_ &&
-        user_count != user_count_at_log_initialization_) {
-      user_count = 0;
-    }
-
-    system_profile_proto->set_multi_profile_user_count(user_count);
+bool ChromeOSMetricsProvider::UpdateUserTypeUMA() {
+  if (!user_manager::UserManager::IsInitialized()) {
+    return false;
   }
-}
-
-void ChromeOSMetricsProvider::OnMachineStatisticsLoaded(
-    base::OnceClosure callback) {
-  chromeos::system::StatisticsProvider::GetInstance()->GetMachineStatistic(
-      "hardware_class", &full_hardware_class_);
-
-  // Structured metrics needs to know when full hardware class is available
-  // since events should have full hardware class populated. Notify structured
-  // metrics recorder that HWID is available to start sending events.
-  metrics::structured::Recorder::GetInstance()->OnHardwareClassInitialized();
-  std::move(callback).Run();
-}
-
-void ChromeOSMetricsProvider::SetCellularDeviceVariant(
-    base::OnceClosure callback,
-    std::string cellular_device_variant) {
-  cellular_device_variant_ = cellular_device_variant;
-  std::move(callback).Run();
-}
-
-void ChromeOSMetricsProvider::OnArcFeaturesParsed(
-    base::OnceClosure callback,
-    absl::optional<arc::ArcFeatures> features) {
-  base::ScopedClosureRunner runner(std::move(callback));
-  if (!features) {
-    LOG(WARNING) << "ArcFeatures not available on this build";
-    return;
-  }
-  arc_release_ = features->build_props.at("ro.build.version.release");
-}
-
-void ChromeOSMetricsProvider::OnTpmManagerGetVersionInfo(
-    base::OnceClosure callback,
-    const tpm_manager::GetVersionInfoReply& reply) {
-  if (reply.status() == tpm_manager::STATUS_SUCCESS) {
-    tpm_firmware_version_ = reply.firmware_version();
-  } else {
-    LOG(ERROR) << "Failed to get TPM version info.";
-  }
-  std::move(callback).Run();
-}
-
-void ChromeOSMetricsProvider::UpdateUserTypeUMA() {
-  if (!user_manager::UserManager::IsInitialized())
-    return;
   const user_manager::User* primary_user =
       user_manager::UserManager::Get()->GetPrimaryUser();
-  if (!primary_user)
-    return;
+  if (!primary_user) {
+    return false;
+  }
   user_manager::UserType user_type = primary_user->GetType();
   base::UmaHistogramEnumeration("UMA.PrimaryUserType", user_type,
                                 user_manager::UserType::NUM_USER_TYPES);
+  return true;
+}
+
+ChromeOSHistogramMetricsProvider::ChromeOSHistogramMetricsProvider() = default;
+
+ChromeOSHistogramMetricsProvider::~ChromeOSHistogramMetricsProvider() = default;
+
+bool ChromeOSHistogramMetricsProvider::ProvideHistograms() {
+  // The scope type. Used in a histogram; do not modify existing types.
+  // see histograms/enums.xml.
+  enum {
+    FEATURE_MANAGEMENT_REGULAR = 0,
+    FEATURE_MANAGEMENT_SOFT_BRANDED = 1,
+    FEATURE_MANAGEMENT_HARD_BRANDED = 2,
+    kMaxValue = FEATURE_MANAGEMENT_HARD_BRANDED
+  } scope_level;
+
+  if (!base::CommandLine::InitializedForCurrentProcess()) {
+    return false;
+  }
+
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (!command_line->HasSwitch(kFeatureManagementLevelFlag) ||
+      !command_line->HasSwitch(kFeatureManagementMaxLevelFlag) ||
+      !command_line->HasSwitch(kFeatureManagementScopeFlag)) {
+    return false;
+  }
+  int feature_level = -1;
+  int feature_max_level = -1;
+  int scope_level_raw = -1;
+  if (!base::StringToInt(
+          command_line->GetSwitchValueASCII(kFeatureManagementLevelFlag),
+          &feature_level) ||
+      !base::StringToInt(
+          command_line->GetSwitchValueASCII(kFeatureManagementMaxLevelFlag),
+          &feature_max_level) ||
+      !base::StringToInt(
+          command_line->GetSwitchValueASCII(kFeatureManagementScopeFlag),
+          &scope_level_raw)) {
+    return false;
+  }
+  if (feature_level < 0 || feature_max_level < 0 || scope_level_raw < 0 ||
+      feature_max_level < feature_level) {
+    LOG(ERROR) << "Invalid FeatureLevel arguments: "
+               << kFeatureManagementLevelFlag << " (" << feature_level
+               << ") or " << kFeatureManagementMaxLevelFlag << " ("
+               << feature_max_level << ") or " << kFeatureManagementScopeFlag
+               << " (" << scope_level_raw << ")";
+    return false;
+  }
+  if (feature_level == 0 && scope_level_raw == 0) {
+    scope_level = FEATURE_MANAGEMENT_REGULAR;
+  } else if (feature_level > 0 && scope_level_raw == 0) {
+    scope_level = FEATURE_MANAGEMENT_SOFT_BRANDED;
+  } else if (feature_level > 0 && scope_level_raw == 1) {
+    scope_level = FEATURE_MANAGEMENT_HARD_BRANDED;
+  } else {
+    LOG(ERROR) << "Invalid ScopeLevel:" << kFeatureManagementLevelFlag << " ("
+               << feature_level << ") or " << kFeatureManagementScopeFlag
+               << " (" << scope_level_raw << ")";
+    return false;
+  }
+
+  base::UmaHistogramExactLinear("Platform.Segmentation.FeatureLevel",
+                                feature_level, feature_max_level + 1);
+  base::UmaHistogramEnumeration("Platform.Segmentation.ScopeLevel",
+                                scope_level);
+  return true;
 }

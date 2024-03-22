@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,7 +93,7 @@ TEST_F(AccessibilityFocusRingGroupTest, ClipToBounds) {
 }
 
 TEST_F(AccessibilityFocusRingGroupTest, RectsToRingsSimpleBoundsCheck) {
-  // Easy sanity check. Given a single rectangle, make sure we get back
+  // Easy confidence check. Given a single rectangle, make sure we get back
   // a focus ring with the same bounds.
   std::vector<gfx::Rect> rects;
   rects.push_back(gfx::Rect(20, 30, 70, 150));

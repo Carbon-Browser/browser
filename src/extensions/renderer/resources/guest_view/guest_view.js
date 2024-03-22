@@ -1,11 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // This module implements a wrapper for a guestview that manages its
 // creation, attaching, and destruction.
 
+var $Document = require('safeMethods').SafeMethods.$Document;
 var $HTMLIFrameElement = require('safeMethods').SafeMethods.$HTMLIFrameElement;
+var $Node = require('safeMethods').SafeMethods.$Node;
 var CreateEvent = require('guestViewEvents').CreateEvent;
 var GuestViewInternal = getInternalApi('guestViewInternal');
 var GuestViewInternalNatives = requireNative('guest_view_internal');
@@ -17,7 +19,6 @@ var ResizeEvent = CreateEvent('guestViewInternal.onResize');
 var ERROR_MSG_ALREADY_ATTACHED = 'The guest has already been attached.';
 var ERROR_MSG_ALREADY_CREATED = 'The guest has already been created.';
 var ERROR_MSG_INVALID_STATE = 'The guest is in an invalid state.';
-var ERROR_MSG_NOT_ATTACHED = 'The guest is not attached.';
 var ERROR_MSG_NOT_CREATED = 'The guest has not been created.';
 
 // Properties.
@@ -33,6 +34,21 @@ var getIframeContentWindow = function(viewInstanceId) {
     return $HTMLIFrameElement.contentWindow.get(internalIframeElement);
 
   return null;
+};
+
+// Returns the window object associated with the given view's element.
+var getOwnerWindow = function(viewInstanceId) {
+  var view = GuestViewInternalNatives.GetViewFromID(viewInstanceId);
+  if (!view) {
+    return null;
+  }
+
+  var ownerDocument = $Node.ownerDocument.get(view.element);
+  if (!ownerDocument) {
+    return null;
+  }
+
+  return $Document.defaultView.get(ownerDocument);
 };
 
 // Contains and hides the internal implementation details of |GuestView|,
@@ -128,7 +144,6 @@ GuestViewImpl.prototype.checkState = function(action) {
     'attach': [ERROR_MSG_NOT_CREATED, null, ERROR_MSG_ALREADY_ATTACHED],
     'create': [null, ERROR_MSG_ALREADY_CREATED, ERROR_MSG_ALREADY_CREATED],
     'destroy': [null, null, null],
-    'detach': [ERROR_MSG_NOT_ATTACHED, ERROR_MSG_NOT_ATTACHED, null],
     'setSize': [ERROR_MSG_NOT_CREATED, null, null]
   };
 
@@ -197,6 +212,17 @@ GuestViewImpl.prototype.attachImpl = function(
 
   attachParams['instanceId'] = viewInstanceId;
   var contentWindow = getIframeContentWindow(viewInstanceId);
+
+  // The internal iframe element may have a null contentWindow at this point.
+  // For example, we may be trying to attach a guest whose element is in
+  // another iframe which has already shutdown.
+  if (!contentWindow) {
+    this.state = GuestViewImpl.GuestState.GUEST_STATE_CREATED;
+    this.internalInstanceId = 0;
+    this.handleCallback(callback);
+    return;
+  }
+
   // |contentWindow| is used to retrieve the RenderFrame in cpp.
   GuestViewInternalNatives.AttachIframeGuest(
       internalInstanceId, this.id, attachParams, contentWindow,
@@ -219,7 +245,8 @@ GuestViewImpl.prototype.attachImpl = function(
 };
 
 // Internal implementation of create().
-GuestViewImpl.prototype.createImpl = function(createParams, callback) {
+GuestViewImpl.prototype.createImpl = function(
+    viewInstanceId, createParams, callback) {
   // Check the current state.
   if (!this.checkState('create')) {
     this.handleCallback(callback);
@@ -229,8 +256,8 @@ GuestViewImpl.prototype.createImpl = function(createParams, callback) {
   // Callback wrapper function to store the guestInstanceId from the
   // createGuest() callback, handle potential creation failure, and advance the
   // queue.
-  var callbackWrapper = function(callback, guestInfo) {
-    this.id = guestInfo.id;
+  var callbackWrapper = function(callback, instanceId) {
+    this.id = instanceId;
 
     // Check if creation failed.
     if (this.id === 0) {
@@ -242,15 +269,16 @@ GuestViewImpl.prototype.createImpl = function(createParams, callback) {
     this.handleCallback(callback);
   };
 
-  this.sendCreateRequest(
-      createParams, $Function.bind(callbackWrapper, this, callback));
+  // Determine the window which owns the guest view element, so we can inform
+  // the browser of the prospective owner of the guest.
+  var ownerWindow = getOwnerWindow(viewInstanceId);
+  var ownerFrameToken = GuestViewInternalNatives.GetFrameToken(ownerWindow);
+
+  GuestViewInternal.createGuest(
+      this.viewType, ownerFrameToken, createParams,
+      $Function.bind(callbackWrapper, this, callback));
 
   this.state = GuestViewImpl.GuestState.GUEST_STATE_CREATED;
-};
-
-GuestViewImpl.prototype.sendCreateRequest = function(
-    createParams, boundCallback) {
-  GuestViewInternal.createGuest(this.viewType, createParams, boundCallback);
 };
 
 // Internal implementation of destroy().
@@ -265,6 +293,13 @@ GuestViewImpl.prototype.destroyImpl = function(callback) {
     // destroy() does nothing in this case.
     this.handleCallback(callback);
     return;
+  }
+
+  if (this.state == GuestViewImpl.GuestState.GUEST_STATE_CREATED) {
+    // If we destroy a guest before attaching it, inform the browser so it can
+    // clear its associated state. This is only needed for unattached guests,
+    // since after attachment, the browser knows when to clear the state.
+    GuestViewInternal.destroyUnattachedGuest(this.id);
   }
 
   // Reset the state of the destroyed guest;
@@ -313,10 +348,13 @@ GuestView.prototype.attach = function(
 };
 
 // Creates the guestview.
-GuestView.prototype.create = function(createParams, callback) {
+GuestView.prototype.create = function(viewInstanceId, createParams, callback) {
   var internal = this.internal;
-  $Array.push(internal.actionQueue, $Function.bind(internal.createImpl,
-      internal, createParams, callback));
+  $Array.push(
+      internal.actionQueue,
+      $Function.bind(
+          internal.createImpl, internal, viewInstanceId, createParams,
+          callback));
   internal.performNextAction();
 };
 

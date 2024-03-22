@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_INPUT_METHOD_UI_ASSISTIVE_ACCESSIBILITY_VIEW_H_
 #define CHROME_BROWSER_ASH_INPUT_METHOD_UI_ASSISTIVE_ACCESSIBILITY_VIEW_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/input_method/ui/suggestion_accessibility_label.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/chromeos/ui_chromeos_export.h"
@@ -32,7 +33,8 @@ class UI_CHROMEOS_EXPORT AssistiveAccessibilityView
   AssistiveAccessibilityView();
 
  private:
-  SuggestionAccessibilityLabel* accessibility_label_ = nullptr;
+  raw_ptr<SuggestionAccessibilityLabel, ExperimentalAsh> accessibility_label_ =
+      nullptr;
 };
 
 BEGIN_VIEW_BUILDER(UI_CHROMEOS_EXPORT,

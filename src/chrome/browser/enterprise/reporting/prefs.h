@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,8 @@ namespace enterprise_reporting {
 
 extern const char kLastUploadVersion[];
 extern const char kCloudExtensionRequestUploadedIds[];
+
+extern const char kCloudLegacyTechReportAllowlist[];
 
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);

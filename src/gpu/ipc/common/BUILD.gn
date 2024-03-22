@@ -1,8 +1,9 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/ui.gni")
+import("//components/nacl/toolchain.gni")
 import("//gpu/vulkan/features.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
 
@@ -52,7 +53,7 @@ source_set("command_buffer_traits_sources") {
     "//ui/gfx/ipc/geometry",
   ]
 
-  if (!is_nacl) {
+  if (!is_nacl && !is_minimal_toolchain) {
     deps += [ "//ui/gfx/ipc/skia" ]
   }
 }
@@ -78,6 +79,9 @@ source_set("ipc_common_sources") {
   sources = [
     "command_buffer_id.h",
     "gpu_client_ids.h",
+    "gpu_disk_cache_type.cc",
+    "gpu_disk_cache_type.h",
+    "gpu_memory_buffer_handle_info.h",
     "gpu_memory_buffer_impl.cc",
     "gpu_memory_buffer_impl.h",
     "gpu_memory_buffer_impl_shared_memory.cc",
@@ -133,8 +137,8 @@ source_set("ipc_common_sources") {
 
   deps = [
     "//base",
-    "//components/viz/common:resource_format",
-    "//gpu/command_buffer/client:client_sources",
+    "//components/viz/common:shared_image_format",
+    "//gpu/command_buffer/client:client_gmb_manager",
     "//gpu/command_buffer/common:common_sources",
     "//gpu/config:config_sources",
     "//third_party/libyuv",
@@ -148,7 +152,7 @@ source_set("ipc_common_sources") {
     "//ui/gl",
   ]
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
       "gpu_memory_buffer_impl_io_surface.cc",
       "gpu_memory_buffer_impl_io_surface.h",
@@ -156,7 +160,7 @@ source_set("ipc_common_sources") {
     frameworks = [ "IOSurface.framework" ]
   }
 
-  if (!is_nacl) {
+  if (!is_nacl && !is_minimal_toolchain) {
     deps += [ "//ui/gfx/ipc/skia" ]
   }
 
@@ -174,25 +178,6 @@ source_set("ipc_common_sources") {
 
   if (use_ozone) {
     deps += [ "//ui/ozone" ]
-  }
-}
-
-if (is_android) {
-  source_set("android_image_reader_utils") {
-    sources = [
-      "android/android_image_reader_utils.cc",
-      "android/android_image_reader_utils.h",
-    ]
-    configs += [ "//gpu:gpu_implementation" ]
-    deps = [
-      "//base",
-      "//ui/gl",
-    ]
-    visibility = [
-      "//android_webview/browser/gfx",
-      "//gpu/*",
-      "//media/gpu:gpu",
-    ]
   }
 }
 
@@ -226,8 +211,9 @@ mojom("gpu_channel_mojom") {
   sources = [ "gpu_channel.mojom" ]
 
   public_deps = [
+    ":surface_handle",
     "//mojo/public/mojom/base",
-    "//services/viz/public/mojom:resource_format",
+    "//services/viz/public/mojom:shared_image_format",
     "//skia/public/mojom",
     "//ui/gfx/geometry/mojom",
     "//ui/gfx/mojom",
@@ -306,6 +292,39 @@ mojom("gpu_channel_mojom") {
   cpp_configs = [ "//gpu:gpu_implementation" ]
 }
 
+mojom("gmb_interface") {
+  generate_java = true
+  visibility = [
+    "//gpu/*",
+    "//services/*",
+  ]
+  sources = [ "client_gmb_interface.mojom" ]
+  deps = [
+    ":surface_handle",
+    "//mojo/public/mojom/base",
+    "//ui/gfx/geometry/mojom",
+    "//ui/gfx/mojom",
+  ]
+}
+
+mojom("surface_handle") {
+  generate_java = true
+  sources = [ "surface_handle.mojom" ]
+  cpp_typemaps = [
+    {
+      types = [
+        {
+          mojom = "gpu.mojom.SurfaceHandle"
+          cpp = "::gpu::SurfaceHandle"
+          copyable_pass_by_value = true
+        },
+      ]
+      traits_headers = [ "surface_handle_mojom_traits.h" ]
+      traits_public_deps = [ "//ui/gfx:native_widget_types" ]
+    },
+  ]
+}
+
 mojom("interfaces") {
   generate_java = true
   sources = [
@@ -313,13 +332,14 @@ mojom("interfaces") {
     "context_result.mojom",
     "device_perf_info.mojom",
     "dx_diag_node.mojom",
+    "gpu_disk_cache_type.mojom",
     "gpu_feature_info.mojom",
     "gpu_info.mojom",
     "gpu_peak_memory.mojom",
     "mailbox.mojom",
     "mailbox_holder.mojom",
     "memory_stats.mojom",
-    "surface_handle.mojom",
+    "shared_image_capabilities.mojom",
     "sync_token.mojom",
     "vulkan_ycbcr_info.mojom",
   ]
@@ -330,6 +350,7 @@ mojom("interfaces") {
 
   public_deps = [
     ":gpu_preferences_interface",
+    ":surface_handle",
     "//mojo/public/mojom/base",
     "//ui/gfx/geometry/mojom",
     "//ui/gfx/mojom",
@@ -340,7 +361,7 @@ mojom("interfaces") {
     public_deps += [ ":vulkan_interface" ]
     enabled_features += [ "supports_vulkan" ]
   }
-  if (is_win || is_chromeos || is_chromeos_lacros) {
+  if (is_win || is_chromeos) {
     enabled_features += [ "has_gpu_revision_info" ]
   }
 
@@ -350,6 +371,16 @@ mojom("interfaces") {
         {
           mojom = "gpu.mojom.Capabilities"
           cpp = "::gpu::Capabilities"
+        },
+      ]
+      traits_headers = [ "gpu_command_buffer_traits.h" ]
+      traits_public_deps = [ ":command_buffer_traits_sources" ]
+    },
+    {
+      types = [
+        {
+          mojom = "gpu.mojom.GLCapabilities"
+          cpp = "::gpu::GLCapabilities"
         },
       ]
       traits_headers = [ "gpu_command_buffer_traits.h" ]
@@ -490,6 +521,17 @@ mojom("interfaces") {
     {
       types = [
         {
+          mojom = "gpu.mojom.SharedImageCapabilities"
+          cpp = "::gpu::SharedImageCapabilities"
+        },
+      ]
+      traits_sources = [ "shared_image_capabilities_mojom_traits.cc" ]
+      traits_headers = [ "shared_image_capabilities_mojom_traits.h" ]
+      traits_public_deps = [ ":mojom_traits" ]
+    },
+    {
+      types = [
+        {
           mojom = "gpu.mojom.SyncToken"
           cpp = "::gpu::SyncToken"
         },
@@ -513,23 +555,40 @@ mojom("interfaces") {
     {
       types = [
         {
-          mojom = "gpu.mojom.SurfaceHandle"
-          cpp = "::gpu::SurfaceHandle"
-          copyable_pass_by_value = true
-        },
-      ]
-      traits_headers = [ "surface_handle_mojom_traits.h" ]
-      traits_public_deps = [ "//ui/gfx:native_widget_types" ]
-    },
-    {
-      types = [
-        {
           mojom = "gpu.mojom.VulkanYCbCrInfo"
           cpp = "::gpu::VulkanYCbCrInfo"
           copyable_pass_by_value = true
         },
       ]
       traits_headers = [ "vulkan_ycbcr_info_mojom_traits.h" ]
+    },
+    {
+      types = [
+        # Each specific handle is declared here to ensure that nullable is set.
+        {
+          mojom = "gpu.mojom.GpuDiskCacheGlShaderHandle"
+          cpp = "::gpu::GpuDiskCacheGlShaderHandle"
+          nullable_is_same_type = true
+        },
+        {
+          mojom = "gpu.mojom.GpuDiskCacheDawnWebGPUHandle"
+          cpp = "::gpu::GpuDiskCacheDawnWebGPUHandle"
+          nullable_is_same_type = true
+        },
+
+        # General types that are the ones generally exposed in interfaces.
+        {
+          mojom = "gpu.mojom.GpuDiskCacheHandle"
+          cpp = "::gpu::GpuDiskCacheHandle"
+          nullable_is_same_type = true
+        },
+        {
+          mojom = "gpu.mojom.GpuDiskCacheType"
+          cpp = "::gpu::GpuDiskCacheType"
+        },
+      ]
+      traits_sources = [ "gpu_disk_cache_type_mojom_traits.cc" ]
+      traits_headers = [ "gpu_disk_cache_type_mojom_traits.h" ]
     },
   ]
 
@@ -650,12 +709,14 @@ mojom("gpu_preferences_interface") {
 
 mojom("vulkan_interface") {
   generate_java = true
+  webui_module_path = "/"
+  generate_legacy_js_bindings = true
 
-  # TODO(crbug.com/1062364): This interface code is used by some javascript targets even
-  # when vulkan isn't enabled, but the C++ fuzzer code will fail to compile if
-  # the headers aren't available.
+  # TODO(crbug.com/1062364): This interface code is used by some javascript
+  # targets even when vulkan isn't enabled, but the C++ fuzzer code will fail
+  # to compile if the headers aren't available.
   if (!enable_vulkan) {
-    enable_fuzzing = false
+    enable_mojolpm_fuzzing = false
   }
 
   sources = [
@@ -694,8 +755,6 @@ mojom("vulkan_interface") {
   export_class_attribute = "GPU_EXPORT"
   export_header = "gpu/gpu_export.h"
   cpp_configs = [ "//gpu:gpu_implementation" ]
-
-  webui_module_path = "/"
 }
 
 mojom("test_interfaces") {

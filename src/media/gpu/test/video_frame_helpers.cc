@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/bits.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
@@ -24,6 +24,7 @@
 #include "ui/gfx/gpu_memory_buffer.h"
 
 #if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
+#include "media/gpu/chromeos/chromeos_compressed_gpu_memory_buffer_video_frame_utils.h"
 #include "media/gpu/chromeos/platform_video_frame_utils.h"
 #include "media/gpu/video_frame_mapper.h"
 #include "media/gpu/video_frame_mapper_factory.h"
@@ -93,9 +94,9 @@ bool ConvertVideoFrameToI420(const VideoFrame* src_frame,
   const auto& visible_rect = src_frame->visible_rect();
   const int width = visible_rect.width();
   const int height = visible_rect.height();
-  uint8_t* const dst_y = dst_frame->visible_data(VideoFrame::kYPlane);
-  uint8_t* const dst_u = dst_frame->visible_data(VideoFrame::kUPlane);
-  uint8_t* const dst_v = dst_frame->visible_data(VideoFrame::kVPlane);
+  uint8_t* const dst_y = dst_frame->GetWritableVisibleData(VideoFrame::kYPlane);
+  uint8_t* const dst_u = dst_frame->GetWritableVisibleData(VideoFrame::kUPlane);
+  uint8_t* const dst_v = dst_frame->GetWritableVisibleData(VideoFrame::kVPlane);
   const int dst_stride_y = dst_frame->stride(VideoFrame::kYPlane);
   const int dst_stride_u = dst_frame->stride(VideoFrame::kUPlane);
   const int dst_stride_v = dst_frame->stride(VideoFrame::kVPlane);
@@ -145,9 +146,9 @@ bool ConvertVideoFrameToYUV420P10(const VideoFrame* src_frame,
   const auto& visible_rect = src_frame->visible_rect();
   const int width = visible_rect.width();
   const int height = visible_rect.height();
-  uint8_t* const dst_y = dst_frame->visible_data(VideoFrame::kYPlane);
-  uint8_t* const dst_u = dst_frame->visible_data(VideoFrame::kUPlane);
-  uint8_t* const dst_v = dst_frame->visible_data(VideoFrame::kVPlane);
+  uint8_t* const dst_y = dst_frame->GetWritableVisibleData(VideoFrame::kYPlane);
+  uint8_t* const dst_u = dst_frame->GetWritableVisibleData(VideoFrame::kUPlane);
+  uint8_t* const dst_v = dst_frame->GetWritableVisibleData(VideoFrame::kVPlane);
   const int dst_stride_y = dst_frame->stride(VideoFrame::kYPlane);
   const int dst_stride_u = dst_frame->stride(VideoFrame::kUPlane);
   const int dst_stride_v = dst_frame->stride(VideoFrame::kVPlane);
@@ -169,7 +170,8 @@ bool ConvertVideoFrameToARGB(const VideoFrame* src_frame,
   const auto& visible_rect = src_frame->visible_rect();
   const int width = visible_rect.width();
   const int height = visible_rect.height();
-  uint8_t* const dst_argb = dst_frame->visible_data(VideoFrame::kARGBPlane);
+  uint8_t* const dst_argb =
+      dst_frame->GetWritableVisibleData(VideoFrame::kARGBPlane);
   const int dst_stride = dst_frame->stride(VideoFrame::kARGBPlane);
 
   switch (src_frame->format()) {
@@ -213,8 +215,15 @@ bool CopyVideoFrame(const VideoFrame* src_frame,
   // buffer into memory. We use a VideoFrameMapper to create a memory-based
   // VideoFrame that refers to the |dst_frame|'s buffer.
   if (dst_frame->storage_type() == VideoFrame::STORAGE_DMABUFS) {
+    // We should never get Intel media compressed VideoFrames backed by
+    // STORAGE_DMABUFS, so we don't need that capability from the
+    // VideoFrameMapper.
+    ASSERT_TRUE_OR_RETURN(
+        !IsIntelMediaCompressedModifier(dst_frame->layout().modifier()), false);
     auto video_frame_mapper = VideoFrameMapperFactory::CreateMapper(
-        dst_frame->format(), VideoFrame::STORAGE_DMABUFS, true);
+        dst_frame->format(), VideoFrame::STORAGE_DMABUFS,
+        /*force_linear_buffer_mapper=*/true,
+        /*must_support_intel_media_compressed_buffers=*/false);
     ASSERT_TRUE_OR_RETURN(video_frame_mapper, false);
     dst_frame =
         video_frame_mapper->Map(std::move(dst_frame), PROT_READ | PROT_WRITE);
@@ -239,7 +248,7 @@ bool CopyVideoFrame(const VideoFrame* src_frame,
         VideoFrame::PlaneSize(dst_frame->format(), i, dst_frame->coded_size());
     libyuv::CopyPlane(
         src_frame->data(i), src_frame->layout().planes()[i].stride,
-        dst_frame->data(i), dst_frame->layout().planes()[i].stride,
+        dst_frame->writable_data(i), dst_frame->layout().planes()[i].stride,
         plane_size.width(), plane_size.height());
   }
   return true;
@@ -303,9 +312,9 @@ scoped_refptr<VideoFrame> ScaleVideoFrame(const VideoFrame* src_frame,
       src_frame->visible_data(VideoFrame::kUVPlane),
       src_frame->stride(VideoFrame::kUVPlane),
       src_frame->visible_rect().width(), src_frame->visible_rect().height(),
-      scaled_frame->visible_data(VideoFrame::kYPlane),
+      scaled_frame->GetWritableVisibleData(VideoFrame::kYPlane),
       scaled_frame->stride(VideoFrame::kYPlane),
-      scaled_frame->visible_data(VideoFrame::kUVPlane),
+      scaled_frame->GetWritableVisibleData(VideoFrame::kUVPlane),
       scaled_frame->stride(VideoFrame::kUVPlane), dst_resolution.width(),
       dst_resolution.height(), libyuv::FilterMode::kFilterBilinear);
   if (fail_scaling) {

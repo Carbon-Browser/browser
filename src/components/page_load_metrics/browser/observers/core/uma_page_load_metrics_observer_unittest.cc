@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_trace_processor.h"
 #include "base/time/time.h"
 #include "components/page_load_metrics/browser/metrics_web_contents_observer.h"
 #include "components/page_load_metrics/browser/observers/core/largest_contentful_paint_handler.h"
@@ -17,7 +18,9 @@
 #include "components/page_load_metrics/browser/page_load_metrics_util.h"
 #include "components/page_load_metrics/browser/page_load_tracker.h"
 #include "components/page_load_metrics/common/test/page_load_metrics_test_util.h"
+#include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -44,18 +47,50 @@ const char kDefaultTestUrl2[] = "https://whatever.com";
 }  // namespace
 
 class UmaPageLoadMetricsObserverTest
-    : public page_load_metrics::PageLoadMetricsObserverContentTestHarness {
+    : public page_load_metrics::PageLoadMetricsObserverContentTestHarness,
+      public testing::WithParamInterface<bool>,
+      public content::WebContentsObserver {
  public:
+  using page_load_metrics::PageLoadMetricsObserverContentTestHarness::
+      web_contents;
   void RegisterObservers(page_load_metrics::PageLoadTracker* tracker) override {
     tracker->AddObserver(std::make_unique<UmaPageLoadMetricsObserver>());
   }
 
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+  ::base::test::TracingEnvironment tracing_environment_;
+#endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+
  protected:
+  bool WithFencedFrames() { return GetParam(); }
+
+  content::RenderFrameHost* AppendChildFrame(content::RenderFrameHost* parent,
+                                             const char* frame_name) {
+    if (WithFencedFrames()) {
+      return content::RenderFrameHostTester::For(parent)->AppendFencedFrame();
+    } else {
+      return content::RenderFrameHostTester::For(parent)->AppendChild(
+          frame_name);
+    }
+  }
+
+  content::RenderFrameHost* AppendChildFrameAndNavigateAndCommit(
+      content::RenderFrameHost* parent,
+      const char* frame_name,
+      const GURL& url) {
+    content::RenderFrameHost* subframe = AppendChildFrame(parent, frame_name);
+    std::unique_ptr<NavigationSimulator> simulator =
+        NavigationSimulator::CreateRendererInitiated(url, subframe);
+    simulator->Commit();
+    return simulator->GetFinalRenderFrameHost();
+  }
+
   void SetUp() override {
     scoped_feature_list_.InitAndEnableFeature(
         features::kV8PerFrameMemoryMonitoring);
     page_load_metrics::PageLoadMetricsObserverContentTestHarness::SetUp();
     page_load_metrics::LargestContentfulPaintHandler::SetTestMode(true);
+    WebContentsObserver::Observe(web_contents());
   }
 
   void OnCpuTimingUpdate(RenderFrameHost* render_frame_host,
@@ -127,11 +162,20 @@ class UmaPageLoadMetricsObserverTest
     tester()->SimulateMemoryUpdate(render_frame_host, delta_bytes);
   }
 
+  void DidStartNavigation(
+      content::NavigationHandle* navigation_handle) override {
+    last_navigation_id_ = navigation_handle->GetNavigationId();
+  }
+
+  int64_t last_navigation_id_ = -1;
+
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-TEST_F(UmaPageLoadMetricsObserverTest, NoMetrics) {
+INSTANTIATE_TEST_SUITE_P(All, UmaPageLoadMetricsObserverTest, testing::Bool());
+
+TEST_P(UmaPageLoadMetricsObserverTest, NoMetrics) {
   tester()->histogram_tester().ExpectTotalCount(
       internal::kHistogramDomContentLoaded, 0);
   tester()->histogram_tester().ExpectTotalCount(internal::kHistogramLoad, 0);
@@ -139,11 +183,11 @@ TEST_F(UmaPageLoadMetricsObserverTest, NoMetrics) {
       internal::kHistogramFirstImagePaint, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        SameDocumentNoTriggerUntilTrueNavCommit) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   PopulateRequiredTimingFields(&timing);
 
   NavigateAndCommit(GURL(kDefaultTestUrl));
@@ -159,7 +203,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
       internal::kHistogramFirstImagePaint, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, SingleMetricAfterCommit) {
+TEST_P(UmaPageLoadMetricsObserverTest, SingleMetricAfterCommit) {
   base::TimeDelta parse_start = base::Milliseconds(1);
   base::TimeDelta parse_stop = base::Milliseconds(5);
   base::TimeDelta parse_script_load_duration = base::Milliseconds(3);
@@ -167,7 +211,7 @@ TEST_F(UmaPageLoadMetricsObserverTest, SingleMetricAfterCommit) {
 
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = parse_start;
   timing.parse_timing->parse_stop = parse_stop;
   timing.parse_timing->parse_blocked_on_script_load_duration =
@@ -186,9 +230,6 @@ TEST_F(UmaPageLoadMetricsObserverTest, SingleMetricAfterCommit) {
       internal::kHistogramDomContentLoaded, 0);
   tester()->histogram_tester().ExpectTotalCount(internal::kHistogramLoad, 0);
   tester()->histogram_tester().ExpectBucketCount(
-      internal::kHistogramParseDuration,
-      (parse_stop - parse_start).InMilliseconds(), 1);
-  tester()->histogram_tester().ExpectBucketCount(
       internal::kHistogramParseBlockedOnScriptLoad,
       parse_script_load_duration.InMilliseconds(), 1);
   tester()->histogram_tester().ExpectBucketCount(
@@ -201,7 +242,7 @@ TEST_F(UmaPageLoadMetricsObserverTest, SingleMetricAfterCommit) {
       internal::kHistogramPageTimingForegroundDuration, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, MultipleMetricsAfterCommits) {
+TEST_P(UmaPageLoadMetricsObserverTest, MultipleMetricsAfterCommits) {
   base::TimeDelta parse_start = base::Milliseconds(1);
   base::TimeDelta response = base::Milliseconds(1);
   base::TimeDelta first_image_paint = base::Milliseconds(30);
@@ -211,7 +252,7 @@ TEST_F(UmaPageLoadMetricsObserverTest, MultipleMetricsAfterCommits) {
 
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.response_start = response;
   timing.parse_timing->parse_start = parse_start;
   timing.paint_timing->first_image_paint = first_image_paint;
@@ -233,7 +274,7 @@ TEST_F(UmaPageLoadMetricsObserverTest, MultipleMetricsAfterCommits) {
 
   page_load_metrics::mojom::PageLoadTiming timing2;
   page_load_metrics::InitPageLoadTimingForTest(&timing2);
-  timing2.navigation_start = base::Time::FromDoubleT(200);
+  timing2.navigation_start = base::Time::FromSecondsSinceUnixEpoch(200);
   PopulateRequiredTimingFields(&timing2);
 
   tester()->SimulateTimingUpdate(timing2);
@@ -261,10 +302,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, MultipleMetricsAfterCommits) {
                                                  load.InMilliseconds(), 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, BackgroundDifferentHistogram) {
+TEST_P(UmaPageLoadMetricsObserverTest, BackgroundDifferentHistogram) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   PopulateRequiredTimingFields(&timing);
 
   // Simulate "Open link in new tab."
@@ -292,10 +333,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, BackgroundDifferentHistogram) {
       internal::kHistogramFirstImagePaint, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, OnlyBackgroundLaterEvents) {
+TEST_P(UmaPageLoadMetricsObserverTest, OnlyBackgroundLaterEvents) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.document_timing->dom_content_loaded_event_start =
       base::Microseconds(1);
   PopulateRequiredTimingFields(&timing);
@@ -356,10 +397,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, OnlyBackgroundLaterEvents) {
       internal::kHistogramPageTimingForegroundDuration, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, DontBackgroundQuickerLoad) {
+TEST_P(UmaPageLoadMetricsObserverTest, DontBackgroundQuickerLoad) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   PopulateRequiredTimingFields(&timing);
 
   web_contents()->WasHidden();
@@ -384,7 +425,7 @@ TEST_F(UmaPageLoadMetricsObserverTest, DontBackgroundQuickerLoad) {
       internal::kHistogramFirstImagePaint, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, FailedProvisionalLoad) {
+TEST_P(UmaPageLoadMetricsObserverTest, FailedProvisionalLoad) {
   GURL url(kDefaultTestUrl);
   // The following tests a navigation that fails and should commit an error
   // page, but finishes before the error page commit.
@@ -405,10 +446,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, FailedProvisionalLoad) {
       internal::kHistogramPageTimingForegroundDurationNoCommit, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, Reload) {
+TEST_P(UmaPageLoadMetricsObserverTest, Reload) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(5);
   timing.paint_timing->first_contentful_paint = base::Milliseconds(10);
   PopulateRequiredTimingFields(&timing);
@@ -421,17 +462,6 @@ TEST_F(UmaPageLoadMetricsObserverTest, Reload) {
   auto resources =
       GetSampleResourceDataUpdateForTesting(10 * 1024 /* resource_size */);
   tester()->SimulateResourceDataUseUpdate(resources);
-  int64_t network_bytes = 0;
-  int64_t cache_bytes = 0;
-  for (const auto& resource : resources) {
-    if (resource->is_complete) {
-      if (resource->cache_type ==
-          page_load_metrics::mojom::CacheType::kNotCached)
-        network_bytes += resource->encoded_body_length;
-      else
-        cache_bytes += resource->encoded_body_length;
-    }
-  }
 
   tester()->NavigateToUntrackedUrl();
 
@@ -453,36 +483,12 @@ TEST_F(UmaPageLoadMetricsObserverTest, Reload) {
       internal::kHistogramLoadTypeParseStartForwardBack, 0);
   tester()->histogram_tester().ExpectTotalCount(
       internal::kHistogramLoadTypeParseStartNewNavigation, 0);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeNetworkBytesReload,
-      static_cast<int>((network_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeNetworkBytesForwardBack, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeNetworkBytesNewNavigation, 0);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeCacheBytesReload,
-      static_cast<int>((cache_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeCacheBytesForwardBack, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeCacheBytesNewNavigation, 0);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeTotalBytesReload,
-      static_cast<int>((network_bytes + cache_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeTotalBytesForwardBack, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeTotalBytesNewNavigation, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, ForwardBack) {
+TEST_P(UmaPageLoadMetricsObserverTest, ForwardBack) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(5);
   timing.paint_timing->first_contentful_paint = base::Milliseconds(10);
   PopulateRequiredTimingFields(&timing);
@@ -500,17 +506,6 @@ TEST_F(UmaPageLoadMetricsObserverTest, ForwardBack) {
   auto resources =
       GetSampleResourceDataUpdateForTesting(10 * 1024 /* resource_size */);
   tester()->SimulateResourceDataUseUpdate(resources);
-  int64_t network_bytes = 0;
-  int64_t cache_bytes = 0;
-  for (const auto& resource : resources) {
-    if (resource->is_complete) {
-      if (resource->cache_type ==
-          page_load_metrics::mojom::CacheType::kNotCached)
-        network_bytes += resource->encoded_body_length;
-      else
-        cache_bytes += resource->encoded_body_length;
-    }
-  }
 
   tester()->NavigateToUntrackedUrl();
 
@@ -532,33 +527,9 @@ TEST_F(UmaPageLoadMetricsObserverTest, ForwardBack) {
       timing.parse_timing->parse_start.value().InMilliseconds(), 1);
   tester()->histogram_tester().ExpectTotalCount(
       internal::kHistogramLoadTypeParseStartNewNavigation, 0);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeNetworkBytesForwardBack,
-      static_cast<int>((network_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeNetworkBytesNewNavigation, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeNetworkBytesReload, 0);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeCacheBytesForwardBack,
-      static_cast<int>((cache_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeCacheBytesNewNavigation, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeCacheBytesReload, 0);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeTotalBytesForwardBack,
-      static_cast<int>((network_bytes + cache_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeTotalBytesNewNavigation, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeTotalBytesReload, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, NavigationTiming) {
+TEST_P(UmaPageLoadMetricsObserverTest, NavigationTiming) {
   GURL url(kDefaultTestUrl);
   tester()->NavigateWithPageTransitionAndCommit(url, ui::PAGE_TRANSITION_LINK);
   tester()->NavigateToUntrackedUrl();
@@ -590,10 +561,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, NavigationTiming) {
     tester()->histogram_tester().ExpectTotalCount(metric, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, NewNavigation) {
+TEST_P(UmaPageLoadMetricsObserverTest, NewNavigation) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.parse_timing->parse_start = base::Milliseconds(5);
   timing.paint_timing->first_contentful_paint = base::Milliseconds(10);
   PopulateRequiredTimingFields(&timing);
@@ -605,17 +576,6 @@ TEST_F(UmaPageLoadMetricsObserverTest, NewNavigation) {
   auto resources =
       GetSampleResourceDataUpdateForTesting(10 * 1024 /* resource_size */);
   tester()->SimulateResourceDataUseUpdate(resources);
-  int64_t network_bytes = 0;
-  int64_t cache_bytes = 0;
-  for (const auto& resource : resources) {
-    if (resource->is_complete) {
-      if (resource->cache_type ==
-          page_load_metrics::mojom::CacheType::kNotCached)
-        network_bytes += resource->encoded_body_length;
-      else
-        cache_bytes += resource->encoded_body_length;
-    }
-  }
 
   tester()->NavigateToUntrackedUrl();
 
@@ -637,46 +597,14 @@ TEST_F(UmaPageLoadMetricsObserverTest, NewNavigation) {
   tester()->histogram_tester().ExpectBucketCount(
       internal::kHistogramLoadTypeParseStartNewNavigation,
       timing.parse_timing->parse_start.value().InMilliseconds(), 1);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeNetworkBytesNewNavigation,
-      static_cast<int>((network_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeNetworkBytesForwardBack, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeNetworkBytesReload, 0);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeCacheBytesNewNavigation,
-      static_cast<int>((cache_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeCacheBytesForwardBack, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeCacheBytesReload, 0);
-
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramLoadTypeTotalBytesNewNavigation,
-      static_cast<int>((network_bytes + cache_bytes) / 1024), 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeTotalBytesForwardBack, 0);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramLoadTypeTotalBytesReload, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, BytesAndResourcesCounted) {
+TEST_P(UmaPageLoadMetricsObserverTest, BytesAndResourcesCounted) {
   NavigateAndCommit(GURL(kDefaultTestUrl));
   NavigateAndCommit(GURL(kDefaultTestUrl2));
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramPageLoadTotalBytes, 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramPageLoadNetworkBytes, 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramPageLoadCacheBytes, 1);
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramPageLoadNetworkBytesIncludingHeaders, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, CpuUsageCounted) {
+TEST_P(UmaPageLoadMetricsObserverTest, CpuUsageCounted) {
   NavigateAndCommit(GURL(kDefaultTestUrl));
   OnCpuTimingUpdate(web_contents()->GetPrimaryMainFrame(),
                     base::Milliseconds(750));
@@ -691,29 +619,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, CpuUsageCounted) {
       internal::kHistogramPageLoadCpuTotalUsageForegrounded, 750, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, FirstMeaningfulPaint) {
+TEST_P(UmaPageLoadMetricsObserverTest, LargestImageLoading) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
-  timing.parse_timing->parse_start = base::Milliseconds(5);
-  timing.paint_timing->first_meaningful_paint = base::Milliseconds(10);
-  PopulateRequiredTimingFields(&timing);
-
-  NavigateAndCommit(GURL(kDefaultTestUrl));
-  tester()->SimulateTimingUpdate(timing);
-  NavigateAndCommit(GURL(kDefaultTestUrl2));
-
-  tester()->histogram_tester().ExpectTotalCount(
-      internal::kHistogramFirstMeaningfulPaint, 1);
-  tester()->histogram_tester().ExpectBucketCount(
-      internal::kHistogramFirstMeaningfulPaintStatus,
-      internal::FIRST_MEANINGFUL_PAINT_RECORDED, 1);
-}
-
-TEST_F(UmaPageLoadMetricsObserverTest, LargestImageLoading) {
-  page_load_metrics::mojom::PageLoadTiming timing;
-  page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Largest image is loading so its timestamp is TimeDelta().
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::TimeDelta();
@@ -735,10 +644,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, LargestImageLoading) {
   TestNoLCP();
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, LargestImageLoadingSmallerThanText) {
+TEST_P(UmaPageLoadMetricsObserverTest, LargestImageLoadingSmallerThanText) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Largest image is loading so its timestamp is TimeDelta().
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::TimeDelta();
@@ -759,20 +668,20 @@ TEST_F(UmaPageLoadMetricsObserverTest, LargestImageLoadingSmallerThanText) {
   TestAllFramesLCP(4780, LargestContentTextOrImage::kText);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        LargestContentfulPaintAllFrames_OnlySubframeProvided) {
   const char kSubframeTestUrl[] = "https://google.com/subframe.html";
 
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(100);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(100);
   // Intentionally not set candidates for the main frame.
   PopulateRequiredTimingFields(&timing);
 
   // Create a subframe timing with a largest_image_paint.
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(200);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(200);
   subframe_timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
   subframe_timing.paint_timing->largest_contentful_paint
@@ -781,11 +690,9 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -798,20 +705,20 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   TestEmptyMainFrameLCP();
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        LargestContentfulPaintAllFrames_SubframeImageLoading) {
   const char kSubframeTestUrl[] = "https://google.com/subframe.html";
 
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(100);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(100);
   // Intentionally not set candidates for the main frame.
   PopulateRequiredTimingFields(&timing);
 
   // Create a subframe timing with a largest_image_paint.
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(200);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(200);
   subframe_timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::TimeDelta();
   subframe_timing.paint_timing->largest_contentful_paint
@@ -824,11 +731,9 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -840,13 +745,13 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   TestNoLCP();
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        LargestContentfulPaintAllFrames_OnlyMainFrameProvided) {
   const char kSubframeTestUrl[] = "https://google.com/subframe.html";
 
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Pick a value that lines up with a histogram bucket.
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
@@ -855,17 +760,15 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   // Intentionally not set candidates for the subframes.
   PopulateRequiredTimingFields(&subframe_timing);
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -881,14 +784,14 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 // This is to test whether LargestContentfulPaintAllFrames could merge
 // candidates from different frames correctly. The merging will substitutes the
 // existing candidate if a larger candidate from subframe is provided.
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        LargestContentfulPaintAllFrames_MergeFromFramesBySize_SubframeLarger) {
   const char kSubframeTestUrl[] = "https://google.com/subframe.html";
 
   // Create a main frame timing with a largest_image_paint that happens late.
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Pick a value that lines up with a histogram bucket.
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(9382);
@@ -898,7 +801,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Create a candidate in subframe with a larger size.
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   subframe_timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
   subframe_timing.paint_timing->largest_contentful_paint
@@ -907,11 +810,9 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -927,13 +828,13 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 // This is to test whether LargestContentfulPaintAllFrames could merge
 // candidates from different frames correctly. The merging will substitutes the
 // existing candidate if a larger candidate from main frame is provided.
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        LargestContentfulPaintAllFrames_MergeFromFramesBySize_MainFrameLarger) {
   const char kSubframeTestUrl[] = "https://google.com/subframe.html";
 
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Pick a value that lines up with a histogram bucket.
   timing.paint_timing->largest_contentful_paint->largest_text_paint =
       base::Milliseconds(4780);
@@ -943,7 +844,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Create a candidate in subframe with a smaller size.
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   subframe_timing.paint_timing->largest_contentful_paint->largest_text_paint =
       base::Milliseconds(300);
   subframe_timing.paint_timing->largest_contentful_paint
@@ -952,11 +853,9 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -973,18 +872,18 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 // which makes LCP unable to substitute the subframe candidate with a smaller
 // candidate. This test provides two subframe candidates, the later larger than
 // the first one.
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        LargestContentfulPaintAllFrames_SubframesCandidateOnlyGetLarger_Larger) {
   const char kSubframeTestUrl[] = "https://google.com/subframe.html";
 
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   PopulateRequiredTimingFields(&timing);
 
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   subframe_timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
   subframe_timing.paint_timing->largest_contentful_paint
@@ -993,11 +892,9 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -1020,19 +917,19 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 // which makes LCP unable to substitute the subframe candidate with a smaller
 // candidate. This test provides two subframe candidates, the later smaller than
 // the first one.
-TEST_F(
+TEST_P(
     UmaPageLoadMetricsObserverTest,
     LargestContentfulPaintAllFrames_SubframesCandidateOnlyGetLarger_Smaller) {
   const char kSubframeTestUrl[] = "https://google.com/subframe.html";
 
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   PopulateRequiredTimingFields(&timing);
 
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   subframe_timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
   subframe_timing.paint_timing->largest_contentful_paint
@@ -1041,11 +938,9 @@ TEST_F(
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -1064,10 +959,10 @@ TEST_F(
   TestAllFramesLCP(990, LargestContentTextOrImage::kImage);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_NoTextOrImage) {
+TEST_P(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_NoTextOrImage) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // When the size is 0, the timing is regarded as not set and should be
   // excluded from recording to UMA.
   timing.paint_timing->largest_contentful_paint->largest_text_paint_size = 0u;
@@ -1081,10 +976,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_NoTextOrImage) {
   TestNoLCP();
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_OnlyText) {
+TEST_P(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_OnlyText) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Pick a value that lines up with a histogram bucket.
   timing.paint_timing->largest_contentful_paint->largest_text_paint =
       base::Milliseconds(4780);
@@ -1099,10 +994,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_OnlyText) {
   TestAllFramesLCP(4780, LargestContentTextOrImage::kText);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_OnlyImage) {
+TEST_P(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_OnlyImage) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Pick a value that lines up with a histogram bucket.
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
@@ -1117,11 +1012,11 @@ TEST_F(UmaPageLoadMetricsObserverTest, LargestContentfulPaint_OnlyImage) {
   TestAllFramesLCP(4780, LargestContentTextOrImage::kImage);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        LargestContentfulPaint_ImageLargerThanText) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Pick a value that lines up with a histogram bucket.
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
@@ -1139,11 +1034,11 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   TestAllFramesLCP(4780, LargestContentTextOrImage::kImage);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        LargestContentfulPaint_TextLargerThanImage) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
   timing.paint_timing->largest_contentful_paint->largest_image_paint_size = 10;
@@ -1161,19 +1056,23 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   TestAllFramesLCP(990, LargestContentTextOrImage::kText);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, NormalizedResponsivenessMetrics) {
+TEST_P(UmaPageLoadMetricsObserverTest, NormalizedResponsivenessMetrics) {
   page_load_metrics::mojom::InputTiming input_timing;
   input_timing.num_interactions = 3;
   input_timing.max_event_durations =
       UserInteractionLatencies::NewUserInteractionLatencies({});
   auto& max_event_durations =
       input_timing.max_event_durations->get_user_interaction_latencies();
+  base::TimeTicks current_time = base::TimeTicks::Now();
   max_event_durations.emplace_back(UserInteractionLatency::New(
-      base::Milliseconds(50), UserInteractionType::kKeyboard));
+      base::Milliseconds(50), UserInteractionType::kKeyboard, 0,
+      current_time + base::Milliseconds(1000)));
   max_event_durations.emplace_back(UserInteractionLatency::New(
-      base::Milliseconds(100), UserInteractionType::kTapOrClick));
+      base::Milliseconds(100), UserInteractionType::kTapOrClick, 1,
+      current_time + base::Milliseconds(2000)));
   max_event_durations.emplace_back(UserInteractionLatency::New(
-      base::Milliseconds(150), UserInteractionType::kDrag));
+      base::Milliseconds(150), UserInteractionType::kDrag, 2,
+      current_time + base::Milliseconds(3000)));
   NavigateAndCommit(GURL(kDefaultTestUrl));
   tester()->SimulateInputTimingUpdate(input_timing);
   // Navigate again to force histogram recording.
@@ -1184,20 +1083,9 @@ TEST_F(UmaPageLoadMetricsObserverTest, NormalizedResponsivenessMetrics) {
           internal::kHistogramWorstUserInteractionLatencyMaxEventDuration, 146),
       std::make_pair(
           internal::
-              kHistogramSumOfUserInteractionLatencyOverBudgetMaxEventDuration,
-          50),
-      std::make_pair(
-          internal::
-              kHistogramAverageUserInteractionLatencyOverBudgetMaxEventDuration,
-          14),
-      std::make_pair(
-          internal::
-              kHistogramSlowUserInteractionLatencyOverBudgetHighPercentile2MaxEventDuration,
-          50),
-      std::make_pair(
-          internal::
               kHistogramUserInteractionLatencyHighPercentile2MaxEventDuration,
           146),
+      std::make_pair(internal::kHistogramInpOffset, 2),
       std::make_pair(internal::kHistogramNumInteractions, 3)};
 
   for (auto& metric : uma_list) {
@@ -1209,10 +1097,10 @@ TEST_F(UmaPageLoadMetricsObserverTest, NormalizedResponsivenessMetrics) {
   }
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, FirstInputDelayAndTimestamp) {
+TEST_P(UmaPageLoadMetricsObserverTest, FirstInputDelayAndTimestamp) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.interactive_timing->first_input_delay = base::Milliseconds(5);
   // Pick a value that lines up with a histogram bucket.
   timing.interactive_timing->first_input_timestamp = base::Milliseconds(4780);
@@ -1231,33 +1119,11 @@ TEST_F(UmaPageLoadMetricsObserverTest, FirstInputDelayAndTimestamp) {
               testing::ElementsAre(base::Bucket(4780, 1)));
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, LongestInputDelayAndTimestamp) {
-  page_load_metrics::mojom::PageLoadTiming timing;
-  page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
-  timing.interactive_timing->longest_input_delay = base::Milliseconds(5);
-  // Pick a value that lines up with a histogram bucket.
-  timing.interactive_timing->longest_input_timestamp = base::Milliseconds(4780);
-  PopulateRequiredTimingFields(&timing);
-
-  NavigateAndCommit(GURL(kDefaultTestUrl));
-  tester()->SimulateTimingUpdate(timing);
-  // Navigate again to force histogram recording.
-  NavigateAndCommit(GURL(kDefaultTestUrl2));
-
-  EXPECT_THAT(tester()->histogram_tester().GetAllSamples(
-                  internal::kHistogramLongestInputDelay),
-              testing::ElementsAre(base::Bucket(5, 1)));
-  EXPECT_THAT(tester()->histogram_tester().GetAllSamples(
-                  internal::kHistogramLongestInputTimestamp),
-              testing::ElementsAre(base::Bucket(4780, 1)));
-}
-
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        FirstInputDelayAndTimestampBackgrounded) {
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.interactive_timing->first_input_delay = base::Milliseconds(5);
   timing.interactive_timing->first_input_timestamp = base::Milliseconds(5000);
   PopulateRequiredTimingFields(&timing);
@@ -1278,7 +1144,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
       internal::kHistogramFirstInputTimestamp, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, NavigationToBackNavigationWithGesture) {
+TEST_P(UmaPageLoadMetricsObserverTest, NavigationToBackNavigationWithGesture) {
   GURL url(kDefaultTestUrl);
 
   // Navigate once to the page with a user gesture.
@@ -1295,7 +1161,7 @@ TEST_F(UmaPageLoadMetricsObserverTest, NavigationToBackNavigationWithGesture) {
       internal::kHistogramUserGestureNavigationToForwardBack, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        BrowserNavigationToBackNavigationWithGesture) {
   GURL url(kDefaultTestUrl);
 
@@ -1313,7 +1179,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
       internal::kHistogramUserGestureNavigationToForwardBack, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        NavigationToBackNavigationWithoutGesture) {
   GURL url(kDefaultTestUrl);
 
@@ -1331,7 +1197,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
       internal::kHistogramUserGestureNavigationToForwardBack, 0);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        AbortedNavigationToBackNavigationWithGesture) {
   GURL url(kDefaultTestUrl);
 
@@ -1349,26 +1215,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
       internal::kHistogramUserGestureNavigationToForwardBack, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, UnfinishedBytesRecorded) {
-  NavigateAndCommit(GURL(kDefaultTestUrl));
-
-  std::vector<page_load_metrics::mojom::ResourceDataUpdatePtr> resources;
-  // Incomplete resource.
-  resources.push_back(
-      CreateResource(false /* was_cached */, 10 * 1024 /* delta_bytes */,
-                     0 /* encoded_body_length */, 0 /* decoded_body_length */,
-                     false /* is_complete */));
-  tester()->SimulateResourceDataUseUpdate(resources);
-
-  // Navigate again to force histogram recording.
-  NavigateAndCommit(GURL(kDefaultTestUrl2));
-
-  // Verify that the unfinished resource bytes are recorded.
-  tester()->histogram_tester().ExpectUniqueSample(
-      internal::kHistogramPageLoadUnfinishedBytes, 10, 1);
-}
-
-TEST_F(UmaPageLoadMetricsObserverTest, MainFrame_MaxMemoryBytesRecorded) {
+TEST_P(UmaPageLoadMetricsObserverTest, MainFrame_MaxMemoryBytesRecorded) {
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
 
@@ -1389,18 +1236,15 @@ TEST_F(UmaPageLoadMetricsObserverTest, MainFrame_MaxMemoryBytesRecorded) {
       internal::kHistogramMemorySubframeAggregate, 0, 1);
   histogram_tester().ExpectUniqueSample(internal::kHistogramMemoryTotal, 150,
                                         1);
-  histogram_tester().ExpectUniqueSample(
-      internal::kHistogramMemoryUpdateReceived, true, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, SingleSubFrame_MaxMemoryBytesRecorded) {
+TEST_P(UmaPageLoadMetricsObserverTest, SingleSubFrame_MaxMemoryBytesRecorded) {
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL("https://google.com/subframe.html"),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL("https://google.com/subframe.html"));
 
   // Notify that memory measurements are available for each frame.
   SimulateV8MemoryChange(main_rfh(), 100 * 1024);
@@ -1420,27 +1264,20 @@ TEST_F(UmaPageLoadMetricsObserverTest, SingleSubFrame_MaxMemoryBytesRecorded) {
       internal::kHistogramMemorySubframeAggregate, 40, 1);
   histogram_tester().ExpectUniqueSample(internal::kHistogramMemoryTotal, 140,
                                         1);
-  histogram_tester().ExpectUniqueSample(
-      internal::kHistogramMemoryUpdateReceived, true, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest, MultiSubFrames_MaxMemoryBytesRecorded) {
+TEST_P(UmaPageLoadMetricsObserverTest, MultiSubFrames_MaxMemoryBytesRecorded) {
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kDefaultTestUrl));
-  RenderFrameHost* subframe1 =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL("https://google.com/subframe.html"),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe1"));
-  RenderFrameHost* subframe2 =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL("https://google.com/subframe2.html"),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe2"));
-  RenderFrameHost* subframe3 =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL("https://google.com/subframe3.html"),
-          RenderFrameHostTester::For(subframe2)->AppendChild("subframe3"));
+
+  RenderFrameHost* subframe1 = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe1",
+      GURL("https://google.com/subframe.html"));
+  RenderFrameHost* subframe2 = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe2",
+      GURL("https://google.com/subframe2.html"));
+  RenderFrameHost* subframe3 = AppendChildFrameAndNavigateAndCommit(
+      subframe2, "subframe3", GURL("https://google.com/subframe3.html"));
 
   // Notify that memory measurements are available for each frame.
   SimulateV8MemoryChange(main_rfh(), 500 * 1024);
@@ -1469,11 +1306,9 @@ TEST_F(UmaPageLoadMetricsObserverTest, MultiSubFrames_MaxMemoryBytesRecorded) {
       10 + 20 + 30 + 5 - 2 + 5 - 2 + 5, 1);
   histogram_tester().ExpectUniqueSample(
       internal::kHistogramMemoryTotal, 500 + 10 + 20 + 30 + 100 + 5 - 2 + 5, 1);
-  histogram_tester().ExpectUniqueSample(
-      internal::kHistogramMemoryUpdateReceived, true, 1);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        CrossSiteSubframeLargestContentfulPaint_SubframeLarger) {
   // Use the page having no subframes to record the passed LCP candidate.
   const char kNoSubFramesTestUrl[] = "https://example.com";
@@ -1481,7 +1316,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Create a main frame.
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(9382);
   timing.paint_timing->largest_contentful_paint->largest_image_paint_size = 50u;
@@ -1490,7 +1325,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Create a candidate in subframe with a larger size.
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   subframe_timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
   subframe_timing.paint_timing->largest_contentful_paint
@@ -1499,11 +1334,9 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kNoSubFramesTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -1515,7 +1348,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   TestCrossSiteSubFrameLCP(4780);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        CrossSiteSubframeLargestContentfulPaint_SubframeSmaller) {
   // Use the page having no subframes to record the passed LCP candidate.
   const char kNoSubFramesTestUrl[] = "https://example.com";
@@ -1523,7 +1356,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Create a main frame.
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Pick a value that lines up with a histogram bucket.
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(900);
@@ -1533,7 +1366,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Create a candidate in subframe with a smaller size.
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   subframe_timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
   subframe_timing.paint_timing->largest_contentful_paint
@@ -1542,11 +1375,9 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kNoSubFramesTestUrl));
-  RenderFrameHost* subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSubframeTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe"));
+  RenderFrameHost* subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe",
+      GURL(kSubframeTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -1558,7 +1389,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   TestCrossSiteSubFrameLCP(4780);
 }
 
-TEST_F(UmaPageLoadMetricsObserverTest,
+TEST_P(UmaPageLoadMetricsObserverTest,
        CrossSiteSubframeLargestContentfulPaint_MultiSubframes) {
   // Use the page having no subframes to record the passed LCP candidate.
   const char kNoSubFramesTestUrl[] = "https://example.com";
@@ -1568,7 +1399,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Create a main frame.
   page_load_metrics::mojom::PageLoadTiming timing;
   page_load_metrics::InitPageLoadTimingForTest(&timing);
-  timing.navigation_start = base::Time::FromDoubleT(1);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
   // Pick a value that lines up with a histogram bucket.
   timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(900);
@@ -1578,7 +1409,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Create a candidates in subframes from same-site and cross-site
   page_load_metrics::mojom::PageLoadTiming subframe_timing;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing);
-  subframe_timing.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   subframe_timing.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(3000);
   subframe_timing.paint_timing->largest_contentful_paint
@@ -1587,7 +1418,7 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   page_load_metrics::mojom::PageLoadTiming subframe_timing2;
   page_load_metrics::InitPageLoadTimingForTest(&subframe_timing2);
-  subframe_timing2.navigation_start = base::Time::FromDoubleT(2);
+  subframe_timing2.navigation_start = base::Time::FromSecondsSinceUnixEpoch(2);
   subframe_timing2.paint_timing->largest_contentful_paint->largest_image_paint =
       base::Milliseconds(4780);
   subframe_timing2.paint_timing->largest_contentful_paint
@@ -1596,16 +1427,13 @@ TEST_F(UmaPageLoadMetricsObserverTest,
 
   // Commit the main frame and a subframe.
   NavigateAndCommit(GURL(kNoSubFramesTestUrl));
-  RenderFrameHost* first_party_subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kSameSiteSubFrameTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe1"));
-  RenderFrameHost* cross_site_subframe =
-      NavigationSimulator::NavigateAndCommitFromDocument(
-          GURL(kCrossSiteSubFrameTestUrl),
-          RenderFrameHostTester::For(web_contents()->GetPrimaryMainFrame())
-              ->AppendChild("subframe2"));
+
+  RenderFrameHost* first_party_subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe1",
+      GURL(kSameSiteSubFrameTestUrl));
+  RenderFrameHost* cross_site_subframe = AppendChildFrameAndNavigateAndCommit(
+      web_contents()->GetPrimaryMainFrame(), "subframe2",
+      GURL(kCrossSiteSubFrameTestUrl));
 
   // Simulate timing updates in the main frame and the subframe.
   tester()->SimulateTimingUpdate(timing);
@@ -1618,3 +1446,171 @@ TEST_F(UmaPageLoadMetricsObserverTest,
   // Make sure subframe LCP from same-site is ignored
   TestCrossSiteSubFrameLCP(4780);
 }
+
+// The following tests are ensure that Page Load metrics are recorded in a
+// trace. Currently enabled only for platforms where USE_PERFETTO_CLIENT_LIBRARY
+// is true (Android, Linux) as test infra (TestTraceProcessor) requires it.
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+TEST_F(UmaPageLoadMetricsObserverTest, TestTracingFirstContentfulPaint) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("interactions");
+
+  base::TimeDelta parse_start = base::Milliseconds(1);
+  base::TimeDelta response = base::Milliseconds(1);
+  base::TimeDelta first_image_paint = base::Milliseconds(30);
+  base::TimeDelta first_contentful_paint = first_image_paint;
+  base::TimeDelta dom_content = base::Milliseconds(40);
+  base::TimeDelta load = base::Milliseconds(100);
+
+  page_load_metrics::mojom::PageLoadTiming timing;
+  page_load_metrics::InitPageLoadTimingForTest(&timing);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
+  timing.response_start = response;
+  timing.parse_timing->parse_start = parse_start;
+  timing.paint_timing->first_image_paint = first_image_paint;
+  timing.paint_timing->first_contentful_paint = first_contentful_paint;
+  timing.document_timing->dom_content_loaded_event_start = dom_content;
+  timing.document_timing->load_event_start = load;
+  PopulateRequiredTimingFields(&timing);
+
+  GURL url(kDefaultTestUrl);
+  NavigateAndCommit(url);
+  tester()->SimulateTimingUpdate(timing);
+
+  // Ensure that the "PageLoadMetrics.NavigationToFirstContentfulPaint" trace
+  // event is emitted.
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query = R"(
+    SELECT
+      EXTRACT_ARG(arg_set_id, 'page_load.url') AS url,
+      EXTRACT_ARG(arg_set_id, 'page_load.navigation_id')
+        AS navigation_id
+    FROM slice
+    WHERE name = 'PageLoadMetrics.NavigationToFirstContentfulPaint'
+  )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(
+      result.value(),
+      ::testing::ElementsAre(
+          std::vector<std::string>{"url", "navigation_id"},
+          std::vector<std::string>{url.possibly_invalid_spec(),
+                                   base::NumberToString(last_navigation_id_)}));
+}
+
+TEST_F(UmaPageLoadMetricsObserverTest, TestTracingLargestContentfulPaint) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("interactions");
+
+  page_load_metrics::mojom::PageLoadTiming timing;
+  page_load_metrics::InitPageLoadTimingForTest(&timing);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
+  timing.paint_timing->largest_contentful_paint->largest_image_paint =
+      base::Milliseconds(4780);
+  timing.paint_timing->largest_contentful_paint->largest_image_paint_size = 10;
+  // Pick a value that lines up with a histogram bucket.
+  timing.paint_timing->largest_contentful_paint->largest_text_paint =
+      base::Milliseconds(990);
+  timing.paint_timing->largest_contentful_paint->largest_text_paint_size = 100;
+  PopulateRequiredTimingFields(&timing);
+
+  GURL url(kDefaultTestUrl);
+  NavigateAndCommit(url);
+  tester()->SimulateTimingUpdate(timing);
+  int64_t navigation_id = last_navigation_id_;
+  // Navigate again to force histogram recording. This also increments the
+  // navigation id.
+  NavigateAndCommit(GURL(kDefaultTestUrl2));
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query = R"(
+    SELECT
+      EXTRACT_ARG(arg_set_id, 'page_load.navigation_id')
+        AS navigation_id
+    FROM slice
+    WHERE name = 'PageLoadMetrics.NavigationToLargestContentfulPaint'
+  )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"navigation_id"},
+                                     std::vector<std::string>{
+                                         base::NumberToString(navigation_id)}));
+}
+
+TEST_F(UmaPageLoadMetricsObserverTest, TestTracingLoadEventStart) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("interactions");
+
+  base::TimeDelta load = base::Milliseconds(100);
+
+  page_load_metrics::mojom::PageLoadTiming timing;
+  page_load_metrics::InitPageLoadTimingForTest(&timing);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
+  timing.document_timing->load_event_start = load;
+  PopulateRequiredTimingFields(&timing);
+
+  GURL url(kDefaultTestUrl);
+  NavigateAndCommit(url);
+  tester()->SimulateTimingUpdate(timing);
+  int64_t navigation_id = last_navigation_id_;
+  // Navigate again to force histogram recording. This also increments the
+  // navigation id.
+  NavigateAndCommit(GURL(kDefaultTestUrl2));
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query = R"(
+    SELECT
+      EXTRACT_ARG(arg_set_id, 'page_load.navigation_id')
+        AS navigation_id
+    FROM slice
+    WHERE name = 'PageLoadMetrics.NavigationToMainFrameOnLoad'
+  )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"navigation_id"},
+                                     std::vector<std::string>{
+                                         base::NumberToString(navigation_id)}));
+}
+
+TEST_F(UmaPageLoadMetricsObserverTest, TestTracingDomContentLoadedEventStart) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("interactions");
+
+  base::TimeDelta dom_content = base::Milliseconds(40);
+
+  page_load_metrics::mojom::PageLoadTiming timing;
+  page_load_metrics::InitPageLoadTimingForTest(&timing);
+  timing.navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
+  timing.document_timing->dom_content_loaded_event_start = dom_content;
+  PopulateRequiredTimingFields(&timing);
+
+  GURL url(kDefaultTestUrl);
+  NavigateAndCommit(url);
+  tester()->SimulateTimingUpdate(timing);
+  int64_t navigation_id = last_navigation_id_;
+  // Navigate again to force histogram recording. This also increments the
+  // navigation id.
+  NavigateAndCommit(GURL(kDefaultTestUrl2));
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query = R"(
+    SELECT
+      EXTRACT_ARG(arg_set_id, 'page_load.navigation_id')
+        AS navigation_id
+    FROM slice
+    WHERE name = 'PageLoadMetrics.NavigationToDOMContentLoadedEventFired'
+  )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"navigation_id"},
+                                     std::vector<std::string>{
+                                         base::NumberToString(navigation_id)}));
+}
+#endif

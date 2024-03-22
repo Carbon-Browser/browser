@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,6 @@ class PLATFORM_EXPORT ShapeResultBuffer {
                                    float total_width,
                                    unsigned from,
                                    unsigned to) const;
-  Vector<CharacterRange> IndividualCharacterRanges(TextDirection,
-                                                   float total_width) const;
   Vector<double> IndividualCharacterAdvances(const StringView&,
                                              TextDirection,
                                              float total_width) const;

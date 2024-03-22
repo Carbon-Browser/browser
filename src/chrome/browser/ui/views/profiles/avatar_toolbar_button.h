@@ -1,19 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_PROFILES_AVATAR_TOOLBAR_BUTTON_H_
 #define CHROME_BROWSER_UI_VIEWS_PROFILES_AVATAR_TOOLBAR_BUTTON_H_
 
-#include "base/feature_list.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/scoped_observation.h"
 #include "base/time/time.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
-#include "chrome/browser/ui/views/toolbar/toolbar_icon_container_view.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event.h"
 
@@ -21,8 +19,7 @@ class AvatarToolbarButtonDelegate;
 class Browser;
 class BrowserView;
 
-class AvatarToolbarButton : public ToolbarButton,
-                            ToolbarIconContainerView::Observer {
+class AvatarToolbarButton : public ToolbarButton {
  public:
   METADATA_HEADER(AvatarToolbarButton);
 
@@ -30,6 +27,7 @@ class AvatarToolbarButton : public ToolbarButton,
   enum class State {
     kIncognitoProfile,
     kGuestSession,
+    kSignInTextShowing,
     kAnimatedUserIdentity,
     kSyncPaused,
     // An error in sync-the-feature or sync-the-transport.
@@ -44,17 +42,28 @@ class AvatarToolbarButton : public ToolbarButton,
     virtual void OnAvatarHighlightAnimationFinished() = 0;
   };
 
-  // TODO(crbug.com/922525): Remove this constructor when this button always has
-  // ToolbarIconContainerView as a parent.
   explicit AvatarToolbarButton(BrowserView* browser);
-  AvatarToolbarButton(BrowserView* browser_view,
-                      ToolbarIconContainerView* parent);
   AvatarToolbarButton(const AvatarToolbarButton&) = delete;
   AvatarToolbarButton& operator=(const AvatarToolbarButton&) = delete;
   ~AvatarToolbarButton() override;
 
   void UpdateText();
+  absl::optional<SkColor> GetHighlightTextColor() const override;
+  absl::optional<SkColor> GetHighlightBorderColor() const override;
+  bool ShouldPaintBorder() const override;
+  bool ShouldBlendHighlightColor() const override;
+
   void ShowAvatarHighlightAnimation();
+
+#if !BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_CHROMEOS_ASH)
+  // Expands the pill to show the signin text.
+  void ShowSignInText();
+  // Contracts the pill so that no text is shown.
+  void HideSignInText();
+
+  void DisableActionButton();
+  void ResetActionButton();
+#endif
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
@@ -70,9 +79,16 @@ class AvatarToolbarButton : public ToolbarButton,
   void OnThemeChanged() override;
   void UpdateIcon() override;
   void Layout() override;
+  int GetIconSize() const override;
+  SkColor GetForegroundColor(ButtonState state) const override;
 
-  // ToolbarIconContainerView::Observer:
-  void OnHighlightChanged() override;
+  // Returns true if a text is set and is visible.
+  bool IsLabelPresentAndVisible() const;
+
+  // Updates the inkdrop highlight and ripple properties depending on the state
+  // and
+  // whether the chip is expanded.
+  void UpdateInkdrop();
 
   // Can be used in tests to reduce or remove the delay before showing the IPH.
   static void SetIPHMinDelayAfterCreationForTesting(base::TimeDelta delay);
@@ -80,6 +96,21 @@ class AvatarToolbarButton : public ToolbarButton,
  private:
   FRIEND_TEST_ALL_PREFIXES(AvatarToolbarButtonTest,
                            HighlightMeetsMinimumContrast);
+
+  // Struct to store the button state before overriding the disabled state.
+  class DisabledStateHelper {
+   public:
+    void Init(bool previous_enable_state, SkColor previous_disabled_text_color);
+
+    bool GetPreviousEnableState() const;
+    SkColor GetPreviousDisabledTextColor() const;
+
+   private:
+    bool init_ = false;
+
+    bool previous_enable_state_ = true;
+    SkColor previous_disabled_text_color_;
+  };
 
   // ui::PropertyHandler:
   void AfterPropertyChange(const void* key, int64_t old_value) override;
@@ -92,15 +123,12 @@ class AvatarToolbarButton : public ToolbarButton,
 
   void SetInsets();
 
-  // Attempts to show the in-product help for profile switching. This function
-  // should only be called after the backend is initialized. Otherwise prefer
-  // calling MaybeShowProfileSwitchIPH().
-  void MaybeShowProfileSwitchIPHInitialized(bool success);
+  // Updates the layout insets depending on whether it is a chip or a button.
+  void UpdateLayoutInsets();
 
   std::unique_ptr<AvatarToolbarButtonDelegate> delegate_;
 
   const raw_ptr<Browser> browser_;
-  const raw_ptr<ToolbarIconContainerView> parent_;
 
   // Time when this object was created.
   const base::TimeTicks creation_time_;
@@ -108,6 +136,8 @@ class AvatarToolbarButton : public ToolbarButton,
   // Do not show the IPH right when creating the window, so that the IPH has a
   // separate animation.
   static base::TimeDelta g_iph_min_delay_after_creation;
+
+  DisabledStateHelper disabled_state_helper_;
 
   base::ObserverList<Observer>::Unchecked observer_list_;
 

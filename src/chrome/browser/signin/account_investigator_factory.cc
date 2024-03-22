@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/signin/account_investigator_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -14,7 +14,8 @@
 
 // static
 AccountInvestigatorFactory* AccountInvestigatorFactory::GetInstance() {
-  return base::Singleton<AccountInvestigatorFactory>::get();
+  static base::NoDestructor<AccountInvestigatorFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -29,7 +30,7 @@ AccountInvestigatorFactory::AccountInvestigatorFactory()
   DependsOn(IdentityManagerFactory::GetInstance());
 }
 
-AccountInvestigatorFactory::~AccountInvestigatorFactory() {}
+AccountInvestigatorFactory::~AccountInvestigatorFactory() = default;
 
 KeyedService* AccountInvestigatorFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {

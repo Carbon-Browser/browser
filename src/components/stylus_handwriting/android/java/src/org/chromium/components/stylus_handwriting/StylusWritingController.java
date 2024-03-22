@@ -1,10 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.stylus_handwriting;
 
 import android.content.Context;
+import android.os.Build;
+import android.view.PointerIcon;
 
 import androidx.annotation.Nullable;
 
@@ -18,19 +20,27 @@ import org.chromium.content_public.browser.WebContents;
 public class StylusWritingController {
     private final Context mContext;
     private WebContents mCurrentWebContents;
+    @Nullable private PointerIcon mHandwritingIcon;
+    private boolean mShouldOverrideStylusHoverIcon;
 
-    @Nullable
-    private AndroidStylusWritingHandler mAndroidHandler;
-    @Nullable
-    private DirectWritingTrigger mDirectWritingTrigger;
-    @Nullable
-    private DisabledStylusWritingHandler mDisabledStylusWritingHandler;
+    @Nullable private AndroidStylusWritingHandler mAndroidHandler;
+    @Nullable private DirectWritingTrigger mDirectWritingTrigger;
+    @Nullable private DisabledStylusWritingHandler mDisabledStylusWritingHandler;
 
-    /**
-     * Creates a new instance of this class.
-     */
+    static StylusWritingController createControllerForTests(Context context, PointerIcon icon) {
+        StylusWritingController controller = new StylusWritingController(context);
+        controller.mHandwritingIcon = icon;
+        return controller;
+    }
+
+    /** Creates a new instance of this class. */
     public StylusWritingController(Context context) {
         mContext = context;
+        int iconType = getHandler().getStylusPointerIcon();
+        if (iconType != PointerIcon.TYPE_NULL) {
+            mHandwritingIcon =
+                    PointerIcon.getSystemIcon(context, getHandler().getStylusPointerIcon());
+        }
     }
 
     /**
@@ -46,7 +56,11 @@ public class StylusWritingController {
 
             return mDirectWritingTrigger;
         }
-        if (AndroidStylusWritingHandler.isEnabled(mContext)) {
+
+        // The check for Android T is already in isEnabled but we are adding it here too to make
+        // lint happy.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && AndroidStylusWritingHandler.isEnabled(mContext)) {
             if (mAndroidHandler == null) {
                 mAndroidHandler = new AndroidStylusWritingHandler(mContext);
             }
@@ -73,8 +87,9 @@ public class StylusWritingController {
         mCurrentWebContents = webContents;
         StylusApiOption handler = getHandler();
         handler.onWebContentsChanged(mContext, webContents);
-        webContents.getViewAndroidDelegate().setStylusWritingCursorHandler(
-                handler.getStylusWritingCursorHandler());
+        webContents
+                .getViewAndroidDelegate()
+                .setShouldShowStylusHoverIconCallback(this::setShouldOverrideStylusHoverIcon);
     }
 
     /**
@@ -91,7 +106,17 @@ public class StylusWritingController {
         if (mCurrentWebContents == null) return;
         handler.onWebContentsChanged(mContext, mCurrentWebContents);
         if (mCurrentWebContents.getViewAndroidDelegate() == null) return;
-        mCurrentWebContents.getViewAndroidDelegate().setStylusWritingCursorHandler(
-                handler.getStylusWritingCursorHandler());
+        mCurrentWebContents
+                .getViewAndroidDelegate()
+                .setShouldShowStylusHoverIconCallback(this::setShouldOverrideStylusHoverIcon);
+    }
+
+    @Nullable
+    public PointerIcon resolvePointerIcon() {
+        return mShouldOverrideStylusHoverIcon ? mHandwritingIcon : null;
+    }
+
+    private void setShouldOverrideStylusHoverIcon(boolean shouldOverride) {
+        mShouldOverrideStylusHoverIcon = shouldOverride;
     }
 }

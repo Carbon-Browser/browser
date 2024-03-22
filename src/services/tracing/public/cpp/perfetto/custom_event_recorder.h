@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,9 @@ namespace tracing {
 class COMPONENT_EXPORT(TRACING_CPP) CustomEventRecorder
     : public perfetto::TrackEventSessionObserver {
  public:
+  using ActiveProcessesCallback =
+      base::RepeatingCallback<std::set<base::ProcessId>()>;
+
   static CustomEventRecorder* GetInstance();
   static void EmitRecurringUpdates();
 
@@ -38,6 +41,10 @@ class COMPONENT_EXPORT(TRACING_CPP) CustomEventRecorder
       bool privacy_filtering_enabled);
   void OnTracingStarted(const perfetto::DataSourceConfig& data_source_config);
   void OnTracingStopped(base::OnceClosure stop_complete_callback);
+
+  void SetActiveProcessesCallback(ActiveProcessesCallback callback) {
+    active_processes_callback_ = callback;
+  }
 
   // Registered as a callback to receive every action recorded using
   // base::RecordAction(), when tracing is enabled with a histogram category.
@@ -75,11 +82,13 @@ class COMPONENT_EXPORT(TRACING_CPP) CustomEventRecorder
   std::vector<std::string> histograms_;
   // Stores the registered histogram callbacks for which OnMetricsSampleCallback
   // was set individually.
-  std::vector<
+  std::unordered_map<
+      std::string,
       std::unique_ptr<base::StatisticsRecorder::ScopedHistogramSampleObserver>>
       monitored_histograms_;
   base::ActionCallback user_action_callback_ =
       base::BindRepeating(&CustomEventRecorder::OnUserActionSampleCallback);
+  ActiveProcessesCallback active_processes_callback_;
 
   base::Lock lock_;
   bool privacy_filtering_enabled_ GUARDED_BY(lock_) = false;

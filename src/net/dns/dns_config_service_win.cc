@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,23 @@
 
 #include <sysinfoapi.h>
 
-#include <algorithm>
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/free_deleter.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/ranges/algorithm.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
@@ -300,8 +301,7 @@ void ConfigureSuffixSearch(const WinDnsSystemSettings& settings,
   // behavior (see also ParseSearchList). If a suffix is not valid, it will be
   // discarded when the fully-qualified name is converted to DNS format.
 
-  unsigned num_dots = std::count(primary_suffix.begin(),
-                                 primary_suffix.end(), '.');
+  unsigned num_dots = base::ranges::count(primary_suffix, '.');
 
   for (size_t offset = 0; num_dots >= devolution.level.value(); --num_dots) {
     offset = primary_suffix.find('.', offset + 1);
@@ -353,7 +353,7 @@ bool CheckAndRecordCompatibility(bool have_name_resolution_policy,
 
 }  // namespace
 
-std::string ParseDomainASCII(base::WStringPiece widestr) {
+std::string ParseDomainASCII(std::wstring_view widestr) {
   if (widestr.empty())
     return "";
 
@@ -365,8 +365,9 @@ std::string ParseDomainASCII(base::WStringPiece widestr) {
   // Otherwise try to convert it from IDN to punycode.
   const int kInitialBufferSize = 256;
   url::RawCanonOutputT<char16_t, kInitialBufferSize> punycode;
-  if (!url::IDNToASCII(base::as_u16cstr(widestr), widestr.length(), &punycode))
+  if (!url::IDNToASCII(base::AsStringPiece16(widestr), &punycode)) {
     return "";
+  }
 
   // |punycode_output| should now be ASCII; convert it to a std::string.
   // (We could use UTF16ToASCII() instead, but that requires an extra string
@@ -379,7 +380,7 @@ std::string ParseDomainASCII(base::WStringPiece widestr) {
   return converted;
 }
 
-std::vector<std::string> ParseSearchList(base::WStringPiece value) {
+std::vector<std::string> ParseSearchList(std::wstring_view value) {
   if (value.empty())
     return {};
 
@@ -389,7 +390,7 @@ std::vector<std::string> ParseSearchList(base::WStringPiece value) {
   // Although nslookup and network connection property tab ignore such
   // fragments ("a,b,,c" becomes ["a", "b", "c"]), our reference is getaddrinfo
   // (which sees ["a", "b"]). WMI queries also return a matching search list.
-  for (base::WStringPiece t : base::SplitStringPiece(
+  for (std::wstring_view t : base::SplitStringPiece(
            value, L",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
     // Convert non-ASCII to punycode, although getaddrinfo does not properly
     // handle such suffixes.

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
@@ -35,7 +35,8 @@ QuotaReservation::QuotaReservation(
     : file_system_context_(file_system_context) {
   quota_reservation_ =
       file_system_context->CreateQuotaReservationOnFileTaskRunner(
-          blink::StorageKey(url::Origin::Create(origin_url)), file_system_type);
+          blink::StorageKey::CreateFirstParty(url::Origin::Create(origin_url)),
+          file_system_type);
 }
 
 // For unit testing only.

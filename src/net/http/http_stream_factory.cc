@@ -1,9 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/http/http_stream_factory.h"
 
+#include <cstddef>
 #include <tuple>
 #include <utility>
 
@@ -13,7 +14,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "net/base/host_mapping_rules.h"
 #include "net/base/host_port_pair.h"
@@ -50,7 +50,7 @@ HttpStreamFactory::~HttpStreamFactory() = default;
 
 void HttpStreamFactory::ProcessAlternativeServices(
     HttpNetworkSession* session,
-    const net::NetworkIsolationKey& network_isolation_key,
+    const net::NetworkAnonymizationKey& network_anonymization_key,
     const HttpResponseHeaders* headers,
     const url::SchemeHostPort& http_server) {
   if (!headers->HasHeader(kAlternativeServiceHeader))
@@ -67,7 +67,7 @@ void HttpStreamFactory::ProcessAlternativeServices(
   }
 
   session->http_server_properties()->SetAlternativeServices(
-      RewriteHost(http_server), network_isolation_key,
+      RewriteHost(http_server), network_anonymization_key,
       net::ProcessAlternativeServices(
           alternative_service_vector, session->params().enable_http2,
           session->params().enable_quic,
@@ -88,15 +88,15 @@ std::unique_ptr<HttpStreamRequest> HttpStreamFactory::RequestStream(
     const HttpRequestInfo& request_info,
     RequestPriority priority,
     const SSLConfig& server_ssl_config,
-    const SSLConfig& proxy_ssl_config,
     HttpStreamRequest::Delegate* delegate,
     bool enable_ip_based_pooling,
     bool enable_alternative_services,
     const NetLogWithSource& net_log) {
-  return RequestStreamInternal(
-      request_info, priority, server_ssl_config, proxy_ssl_config, delegate,
-      nullptr, HttpStreamRequest::HTTP_STREAM, false /* is_websocket */,
-      enable_ip_based_pooling, enable_alternative_services, net_log);
+  return RequestStreamInternal(request_info, priority, server_ssl_config,
+                               delegate, nullptr,
+                               HttpStreamRequest::HTTP_STREAM,
+                               /*is_websocket=*/false, enable_ip_based_pooling,
+                               enable_alternative_services, net_log);
 }
 
 std::unique_ptr<HttpStreamRequest>
@@ -104,17 +104,17 @@ HttpStreamFactory::RequestWebSocketHandshakeStream(
     const HttpRequestInfo& request_info,
     RequestPriority priority,
     const SSLConfig& server_ssl_config,
-    const SSLConfig& proxy_ssl_config,
     HttpStreamRequest::Delegate* delegate,
     WebSocketHandshakeStreamBase::CreateHelper* create_helper,
     bool enable_ip_based_pooling,
     bool enable_alternative_services,
     const NetLogWithSource& net_log) {
   DCHECK(create_helper);
-  return RequestStreamInternal(
-      request_info, priority, server_ssl_config, proxy_ssl_config, delegate,
-      create_helper, HttpStreamRequest::HTTP_STREAM, true /* is_websocket */,
-      enable_ip_based_pooling, enable_alternative_services, net_log);
+  return RequestStreamInternal(request_info, priority, server_ssl_config,
+                               delegate, create_helper,
+                               HttpStreamRequest::HTTP_STREAM,
+                               /*is_websocket=*/true, enable_ip_based_pooling,
+                               enable_alternative_services, net_log);
 }
 
 std::unique_ptr<HttpStreamRequest>
@@ -122,25 +122,23 @@ HttpStreamFactory::RequestBidirectionalStreamImpl(
     const HttpRequestInfo& request_info,
     RequestPriority priority,
     const SSLConfig& server_ssl_config,
-    const SSLConfig& proxy_ssl_config,
     HttpStreamRequest::Delegate* delegate,
     bool enable_ip_based_pooling,
     bool enable_alternative_services,
     const NetLogWithSource& net_log) {
   DCHECK(request_info.url.SchemeIs(url::kHttpsScheme));
 
-  return RequestStreamInternal(
-      request_info, priority, server_ssl_config, proxy_ssl_config, delegate,
-      nullptr, HttpStreamRequest::BIDIRECTIONAL_STREAM,
-      false /* is_websocket */, enable_ip_based_pooling,
-      enable_alternative_services, net_log);
+  return RequestStreamInternal(request_info, priority, server_ssl_config,
+                               delegate, nullptr,
+                               HttpStreamRequest::BIDIRECTIONAL_STREAM,
+                               /*is_websocket=*/false, enable_ip_based_pooling,
+                               enable_alternative_services, net_log);
 }
 
 std::unique_ptr<HttpStreamRequest> HttpStreamFactory::RequestStreamInternal(
     const HttpRequestInfo& request_info,
     RequestPriority priority,
     const SSLConfig& server_ssl_config,
-    const SSLConfig& proxy_ssl_config,
     HttpStreamRequest::Delegate* delegate,
     WebSocketHandshakeStreamBase::CreateHelper*
         websocket_handshake_stream_create_helper,
@@ -156,7 +154,7 @@ std::unique_ptr<HttpStreamRequest> HttpStreamFactory::RequestStreamInternal(
       session_->context()
           .quic_context->params()
           ->delay_main_job_with_available_spdy_session,
-      server_ssl_config, proxy_ssl_config);
+      server_ssl_config);
   JobController* job_controller_raw_ptr = job_controller.get();
   job_controller_set_.insert(std::move(job_controller));
   return job_controller_raw_ptr->Start(delegate,
@@ -165,7 +163,7 @@ std::unique_ptr<HttpStreamRequest> HttpStreamFactory::RequestStreamInternal(
 }
 
 void HttpStreamFactory::PreconnectStreams(int num_streams,
-                                          const HttpRequestInfo& request_info) {
+                                          HttpRequestInfo& request_info) {
   DCHECK(request_info.url.is_valid());
 
   auto job_controller = std::make_unique<JobController>(
@@ -177,8 +175,7 @@ void HttpStreamFactory::PreconnectStreams(int num_streams,
       session_->context()
           .quic_context->params()
           ->delay_main_job_with_available_spdy_session,
-      /*server_ssl_config=*/SSLConfig(),
-      /*proxy_ssl_config=*/SSLConfig());
+      /*server_ssl_config=*/SSLConfig());
   JobController* job_controller_raw_ptr = job_controller.get();
   job_controller_set_.insert(std::move(job_controller));
   job_controller_raw_ptr->Preconnect(num_streams);

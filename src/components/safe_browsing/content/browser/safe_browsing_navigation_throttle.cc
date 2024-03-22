@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,23 +45,64 @@ content::NavigationThrottle::ThrottleCheckResult
 SafeBrowsingNavigationThrottle::WillFailRequest() {
   DCHECK(manager_);
 
+  // Goes over |RedirectChain| to get the severest threat information
   security_interstitials::UnsafeResource resource;
   content::NavigationHandle* handle = navigation_handle();
+  ThreatSeverity severity =
+      manager_->GetSeverestThreatForNavigation(handle, resource);
 
-  if (manager_->PopUnsafeResourceForURL(handle->GetURL(), &resource)) {
-    // Subframes and nested frame trees will show an interstitial directly from
-    // BaseUIManager::DisplayBlockingPage.
+  // Unsafe resource will show a blocking page
+  if (severity != std::numeric_limits<ThreatSeverity>::max() &&
+      resource.threat_type != SBThreatType::SB_THREAT_TYPE_SAFE) {
+    // Subframes and nested frame trees will show an interstitial directly
+    // from BaseUIManager::DisplayBlockingPage.
     DCHECK(handle->IsInPrimaryMainFrame() ||
            handle->IsInPrerenderedMainFrame());
-    SafeBrowsingBlockingPage* blocking_page =
-        manager_->blocking_page_factory()->CreateSafeBrowsingPage(
-            manager_, handle->GetWebContents(), handle->GetURL(), {resource},
-            true);
+
+    security_interstitials::SecurityInterstitialPage* blocking_page = nullptr;
+#if !BUILDFLAG(IS_ANDROID)
+    if (resource.threat_type ==
+        SBThreatType::SB_THREAT_TYPE_MANAGED_POLICY_WARN) {
+      blocking_page =
+          manager_->blocking_page_factory()->CreateEnterpriseWarnPage(
+              manager_, handle->GetWebContents(), handle->GetURL(), {resource});
+
+      manager_->ForwardUrlFilteringInterstitialExtensionEventToEmbedder(
+          handle->GetWebContents(), handle->GetURL(), "ENTERPRISE_WARNED_SEEN",
+          resource.rt_lookup_response);
+    } else if (resource.threat_type ==
+               SBThreatType::SB_THREAT_TYPE_MANAGED_POLICY_BLOCK) {
+      blocking_page =
+          manager_->blocking_page_factory()->CreateEnterpriseBlockPage(
+              manager_, handle->GetWebContents(), handle->GetURL(), {resource});
+
+      manager_->ForwardUrlFilteringInterstitialExtensionEventToEmbedder(
+          handle->GetWebContents(), handle->GetURL(), "ENTERPRISE_BLOCKED_SEEN",
+          resource.rt_lookup_response);
+    } else {
+      blocking_page = manager_->blocking_page_factory()->CreateSafeBrowsingPage(
+          manager_, handle->GetWebContents(), handle->GetURL(), {resource},
+          true);
+
+      manager_->ForwardSecurityInterstitialShownExtensionEventToEmbedder(
+          handle->GetWebContents(), handle->GetURL(),
+          SafeBrowsingUIManager::GetThreatTypeStringForInterstitial(
+              resource.threat_type),
+          /*net_error_code=*/0);
+    }
+
+#else
+
+    blocking_page = manager_->blocking_page_factory()->CreateSafeBrowsingPage(
+        manager_, handle->GetWebContents(), handle->GetURL(), {resource}, true);
+
     manager_->ForwardSecurityInterstitialShownExtensionEventToEmbedder(
         handle->GetWebContents(), handle->GetURL(),
         SafeBrowsingUIManager::GetThreatTypeStringForInterstitial(
             resource.threat_type),
         /*net_error_code=*/0);
+#endif
+
     std::string error_page_content = blocking_page->GetHTMLContents();
     security_interstitials::SecurityInterstitialTabHelper::
         AssociateBlockingPage(handle, base::WrapUnique(blocking_page));

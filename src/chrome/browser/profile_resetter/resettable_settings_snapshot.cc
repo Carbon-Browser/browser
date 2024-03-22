@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/hash/md5.h"
 #include "base/stl_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/atomic_flag.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -27,7 +27,7 @@
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/embedder_support/user_agent_utils.h"
 #include "components/prefs/pref_service.h"
@@ -41,13 +41,13 @@
 namespace {
 
 template <class StringType>
-void AddPair(base::ListValue* list,
+void AddPair(base::Value::List& list,
              const std::u16string& key,
              const StringType& value) {
   base::Value::Dict results;
   results.Set("key", key);
   results.Set("value", value);
-  list->GetList().Append(std::move(results));
+  list.Append(std::move(results));
 }
 
 }  // namespace
@@ -85,7 +85,7 @@ ResettableSettingsSnapshot::ResettableSettingsSnapshot(Profile* profile)
 
   // Calculate the MD5 sum of the GUID to make sure that no part of the GUID
   // contains information identifying the sender of the report.
-  guid_ = base::MD5String(base::GenerateGUID());
+  guid_ = base::MD5String(base::Uuid::GenerateRandomV4().AsLowercaseString());
 }
 
 ResettableSettingsSnapshot::~ResettableSettingsSnapshot() {
@@ -137,17 +137,17 @@ void ResettableSettingsSnapshot::RequestShortcuts(base::OnceClosure callback) {
 
   cancellation_flag_ = new SharedCancellationFlag;
 #if BUILDFLAG(IS_WIN)
-  base::PostTaskAndReplyWithResult(
-      base::ThreadPool::CreateCOMSTATaskRunner(
-          {base::MayBlock(), base::TaskPriority::USER_VISIBLE})
-          .get(),
-      FROM_HERE, base::BindOnce(&GetChromeLaunchShortcuts, cancellation_flag_),
-      base::BindOnce(&ResettableSettingsSnapshot::SetShortcutsAndReport,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  base::ThreadPool::CreateCOMSTATaskRunner(
+      {base::MayBlock(), base::TaskPriority::USER_VISIBLE})
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE,
+          base::BindOnce(&GetChromeLaunchShortcuts, cancellation_flag_),
+          base::BindOnce(&ResettableSettingsSnapshot::SetShortcutsAndReport,
+                         weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 #else   // BUILDFLAG(IS_WIN)
   // Shortcuts are only supported on Windows.
   std::vector<ShortcutCommand> no_shortcuts;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&ResettableSettingsSnapshot::SetShortcutsAndReport,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback),
@@ -175,8 +175,20 @@ std::unique_ptr<reset_report::ChromeResetReport> SerializeSettingsReportToProto(
       new reset_report::ChromeResetReport());
 
   if (field_mask & ResettableSettingsSnapshot::STARTUP_MODE) {
-    for (const auto& url : snapshot.startup_urls())
-      report->add_startup_url_path(url.spec());
+    for (const auto& url : snapshot.startup_urls()) {
+      // TODO(crbug.com/1501983) Delete the following if-block once we have
+      // seen some samples.
+      if (!url.is_valid()) {
+        // This is intentionally a DUMP_WILL_BE_NOTREACHED_NORETURN() instead of
+        // a DCHECK() so that it generates crash dumps with debug data. A
+        // similar NOTREACHED() used to be triggered by url.spec() and the
+        // volume is not incredibly high. A DCHECK() would probably not be
+        // sufficient because we had very few cases of url.is_valid() being
+        // false on the pre-stable channels.
+        DUMP_WILL_BE_NOTREACHED_NORETURN() << url.possibly_invalid_spec();
+      }
+      report->add_startup_url_path(url.is_valid() ? url.spec() : std::string());
+    }
     switch (snapshot.startup_type()) {
       case SessionStartupPref::DEFAULT:
         report->set_startup_type(
@@ -233,20 +245,20 @@ void SendSettingsFeedbackProto(const reset_report::ChromeResetReport& report,
       ->DispatchReport(report);
 }
 
-std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
+base::Value::List GetReadableFeedbackForSnapshot(
     Profile* profile,
     const ResettableSettingsSnapshot& snapshot) {
   DCHECK(profile);
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  std::unique_ptr<base::ListValue> list(new base::ListValue);
-  AddPair(list.get(),
+  base::Value::List list;
+  AddPair(list,
           l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_LOCALE),
           g_browser_process->GetApplicationLocale());
-  AddPair(list.get(), l10n_util::GetStringUTF16(IDS_VERSION_UI_USER_AGENT),
+  AddPair(list, l10n_util::GetStringUTF16(IDS_VERSION_UI_USER_AGENT),
           embedder_support::GetUserAgent());
-  std::string version = version_info::GetVersionNumber();
+  std::string version(version_info::GetVersionNumber());
   version += chrome::GetChannelName(chrome::WithExtendedStable(true));
-  AddPair(list.get(),
+  AddPair(list,
           l10n_util::GetStringUTF16(IDS_PRODUCT_NAME),
           version);
 
@@ -259,7 +271,7 @@ std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
     startup_urls += i->host();
   }
   if (!startup_urls.empty()) {
-    AddPair(list.get(),
+    AddPair(list,
             l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_STARTUP_URLS),
             startup_urls);
   }
@@ -285,12 +297,12 @@ std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
     default:
       break;
   }
-  AddPair(list.get(),
+  AddPair(list,
           l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_STARTUP_TYPE),
           startup_type);
 
   if (!snapshot.homepage().empty()) {
-    AddPair(list.get(),
+    AddPair(list,
             l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_HOMEPAGE),
             snapshot.homepage());
   }
@@ -298,7 +310,7 @@ std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
   int is_ntp_message_id = snapshot.homepage_is_ntp()
       ? IDS_RESET_PROFILE_SETTINGS_YES
       : IDS_RESET_PROFILE_SETTINGS_NO;
-  AddPair(list.get(),
+  AddPair(list,
           l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_HOMEPAGE_IS_NTP),
           l10n_util::GetStringUTF16(is_ntp_message_id));
 
@@ -306,7 +318,7 @@ std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
       ? IDS_RESET_PROFILE_SETTINGS_YES
       : IDS_RESET_PROFILE_SETTINGS_NO;
   AddPair(
-      list.get(),
+      list,
       l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_SHOW_HOME_BUTTON),
       l10n_util::GetStringUTF16(show_home_button_id));
 
@@ -315,7 +327,7 @@ std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
   DCHECK(service);
   const TemplateURL* dse = service->GetDefaultSearchProvider();
   if (dse) {
-    AddPair(list.get(),
+    AddPair(list,
             l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_DSE),
             dse->GenerateSearchURL(service->search_terms_data()).host());
   }
@@ -330,12 +342,12 @@ std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
       shortcut_targets += base::WideToUTF16(i->second);
     }
     if (!shortcut_targets.empty()) {
-      AddPair(list.get(),
+      AddPair(list,
               l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_SHORTCUTS),
               shortcut_targets);
     }
   } else {
-    AddPair(list.get(),
+    AddPair(list,
             l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_SHORTCUTS),
             l10n_util::GetStringUTF16(
                 IDS_RESET_PROFILE_SETTINGS_PROCESSING_SHORTCUTS));
@@ -350,7 +362,7 @@ std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
     extension_names += i->second;
   }
   if (!extension_names.empty()) {
-    AddPair(list.get(),
+    AddPair(list,
             l10n_util::GetStringUTF16(IDS_RESET_PROFILE_SETTINGS_EXTENSIONS),
             extension_names);
   }

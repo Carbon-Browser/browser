@@ -1,16 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_card_mediator.h"
 
-#include <vector>
+#import <vector>
 
-#include "base/metrics/user_metrics.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "components/autofill/core/browser/browser_autofill_manager.h"
-#include "components/autofill/core/browser/data_model/credit_card.h"
+#import "base/metrics/user_metrics.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
+#import "components/autofill/core/browser/browser_autofill_manager.h"
+#import "components/autofill/core/browser/data_model/credit_card.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_model.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/card_consumer.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/card_list_delegate.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/full_card_request_result_delegate_bridge.h"
@@ -19,17 +22,10 @@
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_content_injector.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_credit_card+CreditCard.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_credit_card.h"
-#import "ios/chrome/browser/ui/list_model/list_model.h"
-#import "ios/chrome/browser/ui/table_view/table_view_model.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "net/base/registry_controlled_domains/registry_controlled_domain.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "net/base/registry_controlled_domains/registry_controlled_domain.h"
+#import "ui/base/l10n/l10n_util_mac.h"
+#import "url/gurl.h"
 
 namespace autofill {
 class CreditCard;
@@ -118,7 +114,7 @@ NSString* const kAddCreditCardsAccessibilityIdentifier =
   NSString* manageCreditCardsTitle =
       l10n_util::GetNSString(IDS_IOS_MANUAL_FALLBACK_MANAGE_CREDIT_CARDS);
   __weak __typeof(self) weakSelf = self;
-  auto manageCreditCardsItem = [[ManualFillActionItem alloc]
+  ManualFillActionItem* manageCreditCardsItem = [[ManualFillActionItem alloc]
       initWithTitle:manageCreditCardsTitle
              action:^{
                base::RecordAction(base::UserMetricsAction(
@@ -131,7 +127,7 @@ NSString* const kAddCreditCardsAccessibilityIdentifier =
   NSString* addCreditCardsTitle =
       l10n_util::GetNSString(IDS_IOS_MANUAL_FALLBACK_ADD_PAYMENT_METHOD);
 
-  auto addCreditCardsItem = [[ManualFillActionItem alloc]
+  ManualFillActionItem* addCreditCardsItem = [[ManualFillActionItem alloc]
       initWithTitle:addCreditCardsTitle
              action:^{
                base::RecordAction(base::UserMetricsAction(

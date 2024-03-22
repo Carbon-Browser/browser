@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/base_export.h"
 #include "base/win/sid.h"
 #include "base/win/windows_types.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -43,6 +44,10 @@ BASE_EXPORT std::vector<Sid> CloneSidVector(const std::vector<Sid>& sids);
 // Append a vector of Sids to an existing vector.
 BASE_EXPORT void AppendSidVector(std::vector<Sid>& base_sids,
                                  const std::vector<Sid>& append_sids);
+
+// Gets the granted access for an open handle.
+// |handle| specifies any kernel object handle to query.
+BASE_EXPORT absl::optional<ACCESS_MASK> GetGrantedAccess(HANDLE handle);
 
 }  // namespace win
 }  // namespace base

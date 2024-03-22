@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,18 +11,15 @@ import static org.junit.Assert.assertNull;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.annotation.Config;
-import org.robolectric.shadows.multidex.ShadowMultiDex;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
 import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.bookmarks.BookmarkType;
 
-/**
- * Unit tests for ClientId.
- */
+/** Unit tests for ClientId. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowMultiDex.class})
+@Config(manifest = Config.NONE)
 public class ClientIdTest {
     private static final long INVALID_BOOKMARK_ID = -1;
     private static final long TEST_BOOKMARK_ID = 42;
@@ -37,14 +34,16 @@ public class ClientIdTest {
     @Test
     @Feature({"OfflinePages"})
     public void testCreateClientIdForBookmarkId() {
-        ClientId clientId = ClientId.createClientIdForBookmarkId(
-                new BookmarkId(TEST_BOOKMARK_ID, BookmarkType.NORMAL));
+        ClientId clientId =
+                ClientId.createClientIdForBookmarkId(
+                        new BookmarkId(TEST_BOOKMARK_ID, BookmarkType.NORMAL));
         assertNotNull(clientId);
         assertEquals(OfflinePageBridge.BOOKMARK_NAMESPACE, clientId.getNamespace());
         assertEquals(Long.toString(TEST_BOOKMARK_ID), clientId.getId());
 
-        clientId = ClientId.createClientIdForBookmarkId(
-                new BookmarkId(INVALID_BOOKMARK_ID, BookmarkType.NORMAL));
+        clientId =
+                ClientId.createClientIdForBookmarkId(
+                        new BookmarkId(INVALID_BOOKMARK_ID, BookmarkType.NORMAL));
         assertNotNull(clientId);
         assertEquals(OfflinePageBridge.BOOKMARK_NAMESPACE, clientId.getNamespace());
         assertEquals(Long.toString(INVALID_BOOKMARK_ID), clientId.getId());
@@ -53,9 +52,7 @@ public class ClientIdTest {
         assertNull(clientId);
     }
 
-    /**
-     * Ensure that ClientId works properly.
-     */
+    /** Ensure that ClientId works properly. */
     @Test
     @Feature({"OfflinePages"})
     public void testClientIdConstructor() {

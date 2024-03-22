@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,20 @@
 
 #include "base/no_destructor.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/image_fetcher/image_decoder_impl.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/autofill/core/browser/ui/autofill_image_fetcher.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "content/public/browser/storage_partition.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
+#if BUILDFLAG(IS_ANDROID)
+#include "chrome/browser/autofill/android/autofill_image_fetcher_impl.h"
+#else
+#include "chrome/browser/autofill/ui/autofill_image_fetcher_impl.h"
+#endif
 
 namespace autofill {
 
 // static
-AutofillImageFetcher* AutofillImageFetcherFactory::GetForProfile(
+AutofillImageFetcherBase* AutofillImageFetcherFactory::GetForProfile(
     Profile* profile) {
-  return static_cast<AutofillImageFetcher*>(
-      GetInstance()->GetServiceForBrowserContext(profile, true));
+  return static_cast<AutofillImageFetcherImpl*>(
+      GetInstance()->GetServiceForBrowserContext(profile, /*create=*/true));
 }
 
 // static
@@ -30,31 +29,21 @@ AutofillImageFetcherFactory* AutofillImageFetcherFactory::GetInstance() {
 }
 
 AutofillImageFetcherFactory::AutofillImageFetcherFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AutofillImageFetcher",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
 AutofillImageFetcherFactory::~AutofillImageFetcherFactory() = default;
 
-KeyedService* AutofillImageFetcherFactory::BuildAutofillImageFetcher(
-    content::BrowserContext* context) {
-  Profile* profile = Profile::FromBrowserContext(context);
-  AutofillImageFetcher* service =
-      new AutofillImageFetcher(profile->GetDefaultStoragePartition()
-                                   ->GetURLLoaderFactoryForBrowserProcess(),
-                               std::make_unique<ImageDecoderImpl>());
-  return service;
-}
-
 KeyedService* AutofillImageFetcherFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
-  return BuildAutofillImageFetcher(context);
-}
-
-content::BrowserContext* AutofillImageFetcherFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  // Use the image fetcher from the original browser context.
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return new AutofillImageFetcherImpl(
+      Profile::FromBrowserContext(context)->GetProfileKey());
 }
 
 }  // namespace autofill

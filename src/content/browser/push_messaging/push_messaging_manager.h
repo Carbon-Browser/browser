@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/browser_thread.h"
@@ -166,7 +167,7 @@ class PushMessagingManager : public blink::mojom::PushMessaging {
 
   PushMessagingService* GetService();
 
-  RenderProcessHost& render_process_host_;
+  const raw_ref<RenderProcessHost> render_process_host_;
 
   // Will be ChildProcessHost::kInvalidUniqueID in requests from Service Worker.
   const int render_frame_id_;

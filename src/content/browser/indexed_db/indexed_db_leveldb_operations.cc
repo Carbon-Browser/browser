@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/indexed_db/indexed_db_leveldb_operations.h"
 
+#include "base/files/file_util.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
@@ -19,7 +20,6 @@
 #include "components/services/storage/public/cpp/constants.h"
 #include "content/browser/indexed_db/indexed_db_data_format_version.h"
 #include "content/browser/indexed_db/indexed_db_data_loss_info.h"
-#include "content/browser/indexed_db/indexed_db_leveldb_env.h"
 #include "content/browser/indexed_db/indexed_db_reporting.h"
 #include "storage/common/database/database_identifier.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -56,11 +56,14 @@ const base::FilePath::CharType kIndexedDBFile[] =
 const base::FilePath::CharType kLevelDBExtension[] =
     FILE_PATH_LITERAL(".leveldb");
 
-// static
+bool ShouldUseLegacyFilePath(const storage::BucketLocator& bucket_locator) {
+  return bucket_locator.storage_key.IsFirstPartyContext() &&
+         bucket_locator.is_default;
+}
+
 base::FilePath GetBlobStoreFileName(
     const storage::BucketLocator& bucket_locator) {
-  // TODO(crbug.com/1315371): Allow custom bucket names.
-  if (bucket_locator.storage_key.IsFirstPartyContext()) {
+  if (ShouldUseLegacyFilePath(bucket_locator)) {
     // First-party blob files, for legacy reasons, are stored at:
     // {{first_party_data_path}}/{{serialized_origin}}.indexeddb.blob
     return base::FilePath()
@@ -68,22 +71,16 @@ base::FilePath GetBlobStoreFileName(
             bucket_locator.storage_key.origin()))
         .AddExtension(kIndexedDBExtension)
         .AddExtension(kBlobExtension);
-  } else {
-    // Third-party blob files are stored at:
-    // {{third_party_data_path}}/{{bucket_id}}/IndexedDB/indexeddb.blob
-    return base::FilePath()
-        .AppendASCII(base::NumberToString(bucket_locator.id.GetUnsafeValue()))
-        .Append(storage::kIndexedDbDirectory)
-        .Append(kIndexedDBFile)
-        .AddExtension(kBlobExtension);
   }
+
+  // Third-party blob files are stored at:
+  // {{third_party_data_path}}/{{bucket_id}}/IndexedDB/indexeddb.blob
+  return base::FilePath(kIndexedDBFile).AddExtension(kBlobExtension);
 }
 
-// static
 base::FilePath GetLevelDBFileName(
     const storage::BucketLocator& bucket_locator) {
-  // TODO(crbug.com/1315371): Allow custom bucket names.
-  if (bucket_locator.storage_key.IsFirstPartyContext()) {
+  if (ShouldUseLegacyFilePath(bucket_locator)) {
     // First-party leveldb files, for legacy reasons, are stored at:
     // {{first_party_data_path}}/{{serialized_origin}}.indexeddb.leveldb
     // TODO(crbug.com/1315371): Migrate all first party buckets to the new path.
@@ -92,16 +89,11 @@ base::FilePath GetLevelDBFileName(
             bucket_locator.storage_key.origin()))
         .AddExtension(kIndexedDBExtension)
         .AddExtension(kLevelDBExtension);
-  } else {
-    // Third-party leveldb files are stored at:
-    // {{third_party_data_path}}/{{bucket_id}}/IndexedDB/indexeddb.leveldb
-    // TODO(crbug.com/1315371): Use QuotaManagerProxy::GetClientBucketPath.
-    return base::FilePath()
-        .AppendASCII(base::NumberToString(bucket_locator.id.GetUnsafeValue()))
-        .Append(storage::kIndexedDbDirectory)
-        .Append(kIndexedDBFile)
-        .AddExtension(kLevelDBExtension);
   }
+
+  // Third-party leveldb files are stored at:
+  // {{third_party_data_path}}/{{bucket_id}}/IndexedDB/indexeddb.leveldb
+  return base::FilePath(kIndexedDBFile).AddExtension(kLevelDBExtension);
 }
 
 base::FilePath ComputeCorruptionFileName(
@@ -110,10 +102,9 @@ base::FilePath ComputeCorruptionFileName(
       .Append(FILE_PATH_LITERAL("corruption_info.json"));
 }
 
-bool IsPathTooLong(storage::FilesystemProxy* filesystem,
-                   const base::FilePath& leveldb_dir) {
+bool IsPathTooLong(const base::FilePath& leveldb_dir) {
   absl::optional<int> limit =
-      filesystem->GetMaximumPathComponentLength(leveldb_dir.DirName());
+      base::GetMaximumPathComponentLength(leveldb_dir.DirName());
   if (!limit.has_value()) {
     DLOG(WARNING) << "GetMaximumPathComponentLength returned -1";
 // In limited testing, ChromeOS returns 143, other OSes 255.
@@ -139,46 +130,42 @@ bool IsPathTooLong(storage::FilesystemProxy* filesystem,
   return false;
 }
 
-std::string ReadCorruptionInfo(storage::FilesystemProxy* filesystem_proxy,
-                               const base::FilePath& path_base,
+std::string ReadCorruptionInfo(const base::FilePath& path_base,
                                const storage::BucketLocator& bucket_locator) {
   const base::FilePath info_path =
       path_base.Append(indexed_db::ComputeCorruptionFileName(bucket_locator));
   std::string message;
-  if (IsPathTooLong(filesystem_proxy, info_path))
+  if (IsPathTooLong(info_path)) {
     return message;
+  }
 
   const int64_t kMaxJsonLength = 4096;
 
-  absl::optional<base::File::Info> file_info =
-      filesystem_proxy->GetFileInfo(info_path);
-  if (!file_info.has_value())
+  base::File::Info file_info;
+  if (!base::GetFileInfo(info_path, &file_info)) {
     return message;
-  if (!file_info->size || file_info->size > kMaxJsonLength) {
-    filesystem_proxy->DeleteFile(info_path);
+  }
+  if (!file_info.size || file_info.size > kMaxJsonLength) {
+    base::DeleteFile(info_path);
     return message;
   }
 
-  base::FileErrorOr<base::File> file_or_error = filesystem_proxy->OpenFile(
-      info_path, base::File::FLAG_OPEN | base::File::FLAG_READ);
-  if (!file_or_error.is_error()) {
-    auto& file = file_or_error.value();
-    if (file.IsValid()) {
-      std::string input_js(file_info->size, '\0');
-      if (file_info->size ==
-          file.Read(0, std::data(input_js), file_info->size)) {
-        absl::optional<base::Value> val = base::JSONReader::Read(input_js);
-        if (val && val->is_dict()) {
-          std::string* s = val->FindStringKey("message");
-          if (s)
-            message = *s;
+  base::File file(info_path, base::File::FLAG_OPEN | base::File::FLAG_READ);
+  if (file.IsValid()) {
+    std::string input_js(file_info.size, '\0');
+    if (file_info.size == file.Read(0, std::data(input_js), file_info.size)) {
+      absl::optional<base::Value> val = base::JSONReader::Read(input_js);
+      if (val && val->is_dict()) {
+        std::string* s = val->GetDict().FindString("message");
+        if (s) {
+          message = *s;
         }
       }
-      file.Close();
     }
+    file.Close();
   }
 
-  filesystem_proxy->DeleteFile(info_path);
+  base::DeleteFile(info_path);
 
   return message;
 }

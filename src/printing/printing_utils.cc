@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "third_party/icu/source/common/unicode/uchar.h"
 #include "ui/gfx/text_elider.h"
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 #include <unicode/ulocdata.h>
 
 #include <cmath>
@@ -26,13 +26,17 @@
 #include "ui/gfx/geometry/size.h"
 #endif
 
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+#endif
+
 namespace printing {
 
 namespace {
 
 constexpr size_t kMaxDocumentTitleLength = 80;
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 constexpr gfx::Size kIsoA4Microns = gfx::Size(210000, 297000);
 #endif
 
@@ -85,7 +89,7 @@ std::u16string FormatDocumentTitleWithOwner(const std::u16string& owner,
                                                kMaxDocumentTitleLength);
 }
 
-#if defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 gfx::Size GetDefaultPaperSizeFromLocaleMicrons(base::StringPiece locale) {
   if (locale.empty())
     return kIsoA4Microns;
@@ -102,7 +106,7 @@ gfx::Size GetDefaultPaperSizeFromLocaleMicrons(base::StringPiece locale) {
     return kIsoA4Microns;
   }
   // Convert millis to microns
-  return gfx::Size(width * 1000, height * 1000);
+  return gfx::Size(width * kMicronsPerMm, height * kMicronsPerMm);
 }
 
 bool SizesEqualWithinEpsilon(const gfx::Size& lhs,
@@ -116,7 +120,7 @@ bool SizesEqualWithinEpsilon(const gfx::Size& lhs,
   return std::abs(lhs.width() - rhs.width()) <= epsilon &&
          std::abs(lhs.height() - rhs.height()) <= epsilon;
 }
-#endif  // defined(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(USE_CUPS) && !BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_WIN)
 gfx::Rect GetCenteredPageContentRect(const gfx::Size& paper_size,
@@ -132,6 +136,26 @@ gfx::Rect GetCenteredPageContentRect(const gfx::Size& paper_size,
     content_rect.set_y(content_rect.y() + diff / 2);
   }
   return content_rect;
+}
+
+gfx::Rect GetPrintableAreaDeviceUnits(HDC hdc) {
+  DCHECK(hdc);
+
+  gfx::Size physical_size_device_units(GetDeviceCaps(hdc, PHYSICALWIDTH),
+                                       GetDeviceCaps(hdc, PHYSICALHEIGHT));
+  gfx::Rect printable_area_device_units(
+      GetDeviceCaps(hdc, PHYSICALOFFSETX), GetDeviceCaps(hdc, PHYSICALOFFSETY),
+      GetDeviceCaps(hdc, HORZRES), GetDeviceCaps(hdc, VERTRES));
+
+  // Sanity check the printable_area: we've seen crashes caused by a printable
+  // area rect of 0, 0, 0, 0, so it seems some drivers don't set it.
+  if (printable_area_device_units.IsEmpty() ||
+      !gfx::Rect(physical_size_device_units)
+           .Contains(printable_area_device_units)) {
+    printable_area_device_units = gfx::Rect(physical_size_device_units);
+  }
+
+  return printable_area_device_units;
 }
 #endif  // BUILDFLAG(IS_WIN)
 

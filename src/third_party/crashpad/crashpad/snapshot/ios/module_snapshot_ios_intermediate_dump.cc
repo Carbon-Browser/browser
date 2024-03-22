@@ -1,4 +1,4 @@
-// Copyright 2020 The Crashpad Authors. All rights reserved.
+// Copyright 2020 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 #include <mach-o/loader.h>
 #include <mach/mach.h>
 
+#include "base/apple/mach_logging.h"
 #include "base/files/file_path.h"
-#include "base/mac/mach_logging.h"
 #include "client/annotation.h"
 #include "snapshot/ios/intermediate_dump_reader_util.h"
 #include "util/ios/ios_intermediate_dump_data.h"
@@ -51,10 +51,13 @@ bool ModuleSnapshotIOSIntermediateDump::Initialize(
   GetDataStringFromMap(image_data, Key::kName, &name_);
   GetDataValueFromMap(image_data, Key::kAddress, &address_);
   GetDataValueFromMap(image_data, Key::kSize, &size_);
-  GetDataValueFromMap(image_data, Key::kSourceVersion, &source_version_);
   GetDataValueFromMap(image_data, Key::kFileType, &filetype_);
 
   // These keys are often missing.
+  GetDataValueFromMap(image_data,
+                      Key::kSourceVersion,
+                      &source_version_,
+                      LogMissingDataValueFromMap::kDontLogIfMissing);
   GetDataValueFromMap(image_data,
                       Key::kTimestamp,
                       &timestamp_,

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,13 @@
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
 #include "components/omnibox/browser/shortcuts_backend.h"
 #include "components/omnibox/browser/test_scheme_classifier.h"
+#include "components/optimization_guide/machine_learning_tflite_buildflags.h"
+#include "components/query_tiles/tile_service.h"
+
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+#include "components/omnibox/browser/autocomplete_scoring_model_service.h"
+#include "components/omnibox/browser/fake_on_device_tail_model_service.h"
+#endif  // BUILDFLAG(BUILD_WITH_TFLITE_LIB)
 
 namespace bookmarks {
 class BookmarkModel;
@@ -56,13 +63,19 @@ class FakeAutocompleteProviderClient : public MockAutocompleteProviderClient {
   history::HistoryService* GetHistoryService() override;
   history_clusters::HistoryClustersService* GetHistoryClustersService()
       override;
-  bookmarks::BookmarkModel* GetBookmarkModel() override;
+  bookmarks::BookmarkModel* GetLocalOrSyncableBookmarkModel() override;
   InMemoryURLIndex* GetInMemoryURLIndex() override;
   scoped_refptr<ShortcutsBackend> GetShortcutsBackend() override;
   scoped_refptr<ShortcutsBackend> GetShortcutsBackendIfExists() override;
   query_tiles::TileService* GetQueryTileService() const override;
   const TabMatcher& GetTabMatcher() const override;
   scoped_refptr<history::TopSites> GetTopSites() override;
+
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+  OnDeviceTailModelService* GetOnDeviceTailModelService() const override;
+  AutocompleteScoringModelService* GetAutocompleteScoringModelService()
+      const override;
+#endif  // BUILDFLAG(BUILD_WITH_TFLITE_LIB)
 
   // Test-only setters
   void set_bookmark_model(std::unique_ptr<bookmarks::BookmarkModel> model) {
@@ -78,6 +91,9 @@ class FakeAutocompleteProviderClient : public MockAutocompleteProviderClient {
     history_clusters_service_ = service;
   }
 
+  // There should be no reason to set this unless the tested provider actually
+  // uses the AutocompleteProviderClient's InMemoryURLIndex, like the
+  // HistoryQuickProvider does.
   void set_in_memory_url_index(std::unique_ptr<InMemoryURLIndex> index) {
     in_memory_url_index_ = std::move(index);
   }
@@ -89,6 +105,17 @@ class FakeAutocompleteProviderClient : public MockAutocompleteProviderClient {
   void set_shortcuts_backend(scoped_refptr<ShortcutsBackend> backend) {
     shortcuts_backend_ = std::move(backend);
   }
+
+  void set_tile_service(std::unique_ptr<query_tiles::TileService> tile_svc) {
+    tile_service_ = std::move(tile_svc);
+  }
+
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+  void set_scoring_model_service(
+      std::unique_ptr<AutocompleteScoringModelService> scoring_model_service) {
+    scoring_model_service_ = std::move(scoring_model_service);
+  }
+#endif  // BUILDFLAG(BUILD_WITH_TFLITE_LIB)
 
  private:
   base::ScopedTempDir history_dir_;
@@ -103,7 +130,12 @@ class FakeAutocompleteProviderClient : public MockAutocompleteProviderClient {
   scoped_refptr<ShortcutsBackend> shortcuts_backend_;
   std::unique_ptr<query_tiles::TileService> tile_service_;
   FakeTabMatcher fake_tab_matcher_;
-  scoped_refptr<history::TopSites> top_sites_{};
+  scoped_refptr<history::TopSites> top_sites_;
+
+#if BUILDFLAG(BUILD_WITH_TFLITE_LIB)
+  std::unique_ptr<FakeOnDeviceTailModelService> on_device_tail_model_service_;
+  std::unique_ptr<AutocompleteScoringModelService> scoring_model_service_;
+#endif  // BUILDFLAG(BUILD_WITH_TFLITE_LIB)
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_FAKE_AUTOCOMPLETE_PROVIDER_CLIENT_H_

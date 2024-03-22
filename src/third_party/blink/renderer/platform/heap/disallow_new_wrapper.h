@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,21 +16,18 @@ class DisallowNewWrapper final
     : public GarbageCollected<DisallowNewWrapper<T>> {
  public:
   explicit DisallowNewWrapper(const T& value) : value_(value) {
-    static_assert(WTF::IsDisallowNew<T>::value,
-                  "T needs to be a disallow new type");
+    static_assert(WTF::IsDisallowNew<T>, "T needs to be a disallow new type");
     static_assert(WTF::IsTraceable<T>::value, "T needs to be traceable");
   }
   explicit DisallowNewWrapper(T&& value) : value_(std::forward<T>(value)) {
-    static_assert(WTF::IsDisallowNew<T>::value,
-                  "T needs to be a disallow new type");
+    static_assert(WTF::IsDisallowNew<T>, "T needs to be a disallow new type");
     static_assert(WTF::IsTraceable<T>::value, "T needs to be traceable");
   }
 
   template <typename... Args>
   explicit DisallowNewWrapper(Args&&... args)
       : value_(std::forward<Args>(args)...) {
-    static_assert(WTF::IsDisallowNew<T>::value,
-                  "T needs to be a disallow new type");
+    static_assert(WTF::IsDisallowNew<T>, "T needs to be a disallow new type");
     static_assert(WTF::IsTraceable<T>::value, "T needs to be traceable");
   }
 

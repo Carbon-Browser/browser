@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,18 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/segmentation_platform/internal/database/database_maintenance.h"
-#include "components/segmentation_platform/internal/execution/default_model_manager.h"
-#include "components/segmentation_platform/internal/proto/types.pb.h"
+#include "components/segmentation_platform/internal/database/segment_info_database.h"
+#include "components/segmentation_platform/internal/database/signal_storage_config.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
+#include "components/segmentation_platform/public/proto/types.pb.h"
+
+class PrefService;
 
 namespace base {
 class Clock;
@@ -28,7 +31,6 @@ class Time;
 namespace segmentation_platform {
 using proto::SegmentId;
 
-class DefaultModelManager;
 class SegmentInfoDatabase;
 class SignalDatabase;
 class SignalStorageConfig;
@@ -38,14 +40,13 @@ class SignalStorageConfig;
 class DatabaseMaintenanceImpl : public DatabaseMaintenance {
  public:
   using SignalIdentifier = std::pair<uint64_t, proto::SignalType>;
-  using CleanupItem = std::tuple<uint64_t, proto::SignalType, base::Time>;
 
   explicit DatabaseMaintenanceImpl(const base::flat_set<SegmentId>& segment_ids,
                                    base::Clock* clock,
                                    SegmentInfoDatabase* segment_info_database,
                                    SignalDatabase* signal_database,
                                    SignalStorageConfig* signal_storage_config,
-                                   DefaultModelManager* default_model_manager);
+                                   PrefService* profile_prefs);
   ~DatabaseMaintenanceImpl() override;
 
   // DatabaseMaintenance overrides.
@@ -59,7 +60,7 @@ class DatabaseMaintenanceImpl : public DatabaseMaintenance {
   // All tasks currently need information about various segments, so this is
   // the callback after the initial database lookup for this data.
   void OnSegmentInfoCallback(
-      DefaultModelManager::SegmentInfoList segment_infos);
+      std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> segment_infos);
 
   // Returns an ordered vector of all the tasks we are supposed to perform.
   // These are unfinished and also need to be linked to the next task to be
@@ -84,7 +85,8 @@ class DatabaseMaintenanceImpl : public DatabaseMaintenance {
   void RecordCompactionResult(proto::SignalType signal_type,
                               uint64_t name_hash,
                               bool success);
-  void CompactSamplesDone(base::OnceClosure next_action);
+  void CompactSamplesDone(base::OnceClosure next_action,
+                          base::Time last_compation_time);
 
   // Input.
   base::flat_set<SegmentId> segment_ids_;
@@ -95,8 +97,8 @@ class DatabaseMaintenanceImpl : public DatabaseMaintenance {
   raw_ptr<SignalDatabase> signal_database_;
   raw_ptr<SignalStorageConfig> signal_storage_config_;
 
-  // Default model provider.
-  raw_ptr<DefaultModelManager> default_model_manager_;
+  // PrefService from profile.
+  raw_ptr<PrefService> profile_prefs_;
 
   base::WeakPtrFactory<DatabaseMaintenanceImpl> weak_ptr_factory_{this};
 };

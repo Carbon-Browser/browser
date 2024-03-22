@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.download;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+
 import org.chromium.chrome.browser.profiles.OTRProfileID;
 import org.chromium.components.download.DownloadState;
 import org.chromium.components.download.ResumeMode;
@@ -180,24 +181,27 @@ public class DownloadItem {
         offlineItem.completionTimeMs = item.getEndTime();
         offlineItem.externallyRemoved = item.hasBeenExternallyRemoved();
         offlineItem.canRename = item.getDownloadInfo().state() == DownloadState.COMPLETE;
-        offlineItem.schedule = downloadInfo.getOfflineItemSchedule();
         switch (downloadInfo.state()) {
             case DownloadState.IN_PROGRESS:
-                offlineItem.state = downloadInfo.isPaused() ? OfflineItemState.PAUSED
-                                                            : OfflineItemState.IN_PROGRESS;
+                offlineItem.state =
+                        downloadInfo.isPaused()
+                                ? OfflineItemState.PAUSED
+                                : OfflineItemState.IN_PROGRESS;
                 break;
             case DownloadState.COMPLETE:
-                offlineItem.state = downloadInfo.getBytesReceived() == 0
-                        ? OfflineItemState.FAILED
-                        : OfflineItemState.COMPLETE;
+                offlineItem.state =
+                        downloadInfo.getBytesReceived() == 0
+                                ? OfflineItemState.FAILED
+                                : OfflineItemState.COMPLETE;
                 break;
             case DownloadState.CANCELLED:
                 offlineItem.state = OfflineItemState.CANCELLED;
                 break;
             case DownloadState.INTERRUPTED:
                 @ResumeMode
-                int resumeMode = DownloadUtils.getResumeMode(
-                        downloadInfo.getUrl().getSpec(), downloadInfo.getFailState());
+                int resumeMode =
+                        DownloadUtils.getResumeMode(
+                                downloadInfo.getUrl().getSpec(), downloadInfo.getFailState());
                 if (resumeMode == ResumeMode.INVALID || resumeMode == ResumeMode.USER_RESTART) {
                     // Fail but can restart from the beginning. The UI should let the user to retry.
                     offlineItem.state = OfflineItemState.INTERRUPTED;
@@ -245,8 +249,11 @@ public class DownloadItem {
     }
 
     @CalledByNative
-    private static DownloadItem createDownloadItem(DownloadInfo downloadInfo, long startTimestamp,
-            long endTimestamp, boolean hasBeenExternallyRemoved) {
+    private static DownloadItem createDownloadItem(
+            DownloadInfo downloadInfo,
+            long startTimestamp,
+            long endTimestamp,
+            boolean hasBeenExternallyRemoved) {
         DownloadItem downloadItem = new DownloadItem(false, downloadInfo);
         downloadItem.setStartTime(startTimestamp);
         downloadItem.setEndTime(endTimestamp);

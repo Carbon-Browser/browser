@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,20 @@ import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
 
 import androidx.core.app.NotificationCompat;
 
-import org.chromium.base.Function;
 import org.chromium.base.Log;
 import org.chromium.chromecast.base.Controller;
 import org.chromium.chromecast.base.Observable;
-import org.chromium.chromecast.base.Observers;
+import org.chromium.chromecast.base.Observer;
 import org.chromium.content.browser.MediaSessionImpl;
 import org.chromium.content_public.browser.WebContents;
+
+import java.util.function.Function;
 
 /**
  * Service for "displaying" a WebContents in CastShell.
@@ -57,7 +59,10 @@ public class CastWebContentsService extends Service {
             return () -> stopForeground(true /*removeNotification*/);
         });
         mWebContentsState.map(this::getMediaSessionImpl)
-                .subscribe(Observers.onEnter(MediaSessionImpl::requestSystemAudioFocus));
+                .subscribe(Observer.onOpen(MediaSessionImpl::requestSystemAudioFocus));
+        // Inform CastContentWindowAndroid we're detaching.
+        Observable<String> instanceIdState = mIntentState.map(Intent::getData).map(Uri::getPath);
+        instanceIdState.subscribe(Observer.onClose(CastWebContentsComponent::onComponentClosed));
 
         if (DEBUG) {
             mWebContentsState.subscribe(x -> {

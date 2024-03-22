@@ -1,13 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/web_package/signed_exchange_cert_fetcher.h"
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_piece.h"
 #include "base/test/task_environment.h"
 #include "components/cbor/values.h"
@@ -257,7 +257,7 @@ class SignedExchangeCertFetcherTest : public testing::Test {
                                       "application/cert-chain+cbor");
     response_head->mime_type = "application/cert-chain+cbor";
     mock_loader_factory_.client_remote()->OnReceiveResponse(
-        std::move(response_head), std::move(consumer_handle));
+        std::move(response_head), std::move(consumer_handle), absl::nullopt);
   }
 
   DeferringURLLoaderThrottle* InitializeDeferringURLLoaderThrottle() {
@@ -463,7 +463,7 @@ TEST_F(SignedExchangeCertFetcherTest, MaxCertSize_ContentLengthCheck) {
   CHECK(mojo::BlockingCopyFromString(message, producer_handle));
   producer_handle.reset();
   mock_loader_factory_.client_remote()->OnReceiveResponse(
-      std::move(response_head), std::move(consumer_handle));
+      std::move(response_head), std::move(consumer_handle), absl::nullopt);
   mock_loader_factory_.client_remote()->OnComplete(
       network::URLLoaderCompletionStatus(net::OK));
   RunUntilIdle();
@@ -493,7 +493,8 @@ TEST_F(SignedExchangeCertFetcherTest, Abort_404) {
   response_head->headers =
       base::MakeRefCounted<net::HttpResponseHeaders>("HTTP/1.1 404 Not Found");
   mock_loader_factory_.client_remote()->OnReceiveResponse(
-      std::move(response_head), mojo::ScopedDataPipeConsumerHandle());
+      std::move(response_head), mojo::ScopedDataPipeConsumerHandle(),
+      absl::nullopt);
   RunUntilIdle();
 
   EXPECT_TRUE(callback_called_);
@@ -510,7 +511,8 @@ TEST_F(SignedExchangeCertFetcherTest, WrongMimeType) {
   response_head->headers->SetHeader("Content-Type", "application/octet-stream");
   response_head->mime_type = "application/octet-stream";
   mock_loader_factory_.client_remote()->OnReceiveResponse(
-      std::move(response_head), mojo::ScopedDataPipeConsumerHandle());
+      std::move(response_head), mojo::ScopedDataPipeConsumerHandle(),
+      absl::nullopt);
   RunUntilIdle();
 
   EXPECT_TRUE(callback_called_);

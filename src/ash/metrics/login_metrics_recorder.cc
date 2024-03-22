@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -95,6 +95,11 @@ const ShelfButtonClickMapping kShelfTargets[] = {
      LoginMetricsRecorder::LockScreenUserClickTarget::kTargetCount,
      LoginMetricsRecorder::LoginScreenUserClickTarget::kTargetCount,
      LoginMetricsRecorder::OobeUserClickTarget::kSignIn},
+    // |kSchoolEnrollmentButton|
+    {LoginMetricsRecorder::ShelfButtonClickTarget::kSchoolEnrollmentButton,
+     LoginMetricsRecorder::LockScreenUserClickTarget::kTargetCount,
+     LoginMetricsRecorder::LoginScreenUserClickTarget::kTargetCount,
+     LoginMetricsRecorder::OobeUserClickTarget::kSchoolEnrollmentButton},
 };
 
 // Defines mapping of TrayClickTarget |original| to different UMA target in
@@ -147,19 +152,6 @@ bool ShouldRecordMetrics() {
 
 LoginMetricsRecorder::LoginMetricsRecorder() = default;
 LoginMetricsRecorder::~LoginMetricsRecorder() = default;
-
-void LoginMetricsRecorder::RecordNumLoginAttempts(bool success,
-                                                  int* num_attempt) {
-  if (success) {
-    UMA_HISTOGRAM_COUNTS_100("Ash.Login.Lock.NbPasswordAttempts.UntilSuccess",
-                             *num_attempt);
-  } else if (*num_attempt > 0) {
-    UMA_HISTOGRAM_COUNTS_100("Ash.Login.Lock.NbPasswordAttempts.UntilFailure",
-                             *num_attempt);
-  }
-
-  *num_attempt = 0;
-}
 
 void LoginMetricsRecorder::RecordUserTrayClick(TrayClickTarget target) {
   if (!ShouldRecordMetrics())

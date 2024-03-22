@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,10 @@
 #include <windows.h>
 #include <wrl/client.h>
 
+#include <memory>
+
 #include "base/component_export.h"
-#include "ui/base/ime/input_method_delegate.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 
 namespace ui {
 class TextInputClient;
@@ -31,7 +33,7 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN) TSFBridge {
   TSFBridge(const TSFBridge&) = delete;
   TSFBridge& operator=(const TSFBridge&) = delete;
 
-  virtual ~TSFBridge();
+  virtual ~TSFBridge() = default;
 
   // Returns the thread local TSFBridge instance. Initialize() must be called
   // first. Do not cache this pointer and use it after TSFBridge Shutdown().
@@ -48,7 +50,8 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN) TSFBridge {
   // Sets the new instance of TSFBridge in the thread-local storage (such as
   // MockTSFBridge for testing). This function replaces previous TSFBridge
   // instance with the newInstance and also deletes the old instance.
-  static void ReplaceThreadLocalTSFBridge(TSFBridge* new_instance);
+  static void ReplaceThreadLocalTSFBridge(
+      std::unique_ptr<TSFBridge> new_instance);
 
   // Destroys the thread local instance.
   static void Shutdown();
@@ -82,12 +85,12 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN) TSFBridge {
   // Caller must free |client|.
   virtual void RemoveFocusedClient(TextInputClient* client) = 0;
 
-  // Lets TSFTextstore see InputMethodDelegate instance when in focus.
-  virtual void SetInputMethodDelegate(
-      internal::InputMethodDelegate* delegate) = 0;
+  // Lets TSFTextstore see ImeKeyEventDispatcher instance when in focus.
+  virtual void SetImeKeyEventDispatcher(
+      ImeKeyEventDispatcher* ime_key_event_dispatcher) = 0;
 
-  // Remove InputMethodDelegate instance from TSFTextStore when not in focus.
-  virtual void RemoveInputMethodDelegate() = 0;
+  // Remove ImeKeyEventDispatcher instance from TSFTextStore when not in focus.
+  virtual void RemoveImeKeyEventDispatcher() = 0;
 
   // Returns whether the system's input language is CJK.
   virtual bool IsInputLanguageCJK() = 0;
@@ -98,9 +101,12 @@ class COMPONENT_EXPORT(UI_BASE_IME_WIN) TSFBridge {
   // Returns the focused text input client.
   virtual TextInputClient* GetFocusedTextInputClient() const = 0;
 
+  // Notify TSF when a frame with a committed Url has been focused.
+  virtual void OnUrlChanged() = 0;
+
  protected:
   // Uses GetInstance() instead.
-  TSFBridge();
+  TSFBridge() = default;
 };
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,14 @@
 #include "ash/host/ash_window_tree_host_delegate.h"
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/timer/timer.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host_observer.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/base/ime/input_method.h"
-#include "ui/base/ime/input_method_delegate.h"
 #include "ui/display/display_observer.h"
 #include "ui/display/manager/content_protection_manager.h"
 #include "ui/display/manager/display_manager.h"
@@ -42,6 +43,7 @@ class CursorWindowController;
 class FocusActivationStore;
 class MirrorWindowController;
 class RootWindowController;
+class RoundedDisplayProvider;
 
 // WindowTreeHostManager owns and maintains RootWindows for each attached
 // display, keeping them in sync with display configuration changes.
@@ -50,7 +52,7 @@ class ASH_EXPORT WindowTreeHostManager
       public aura::WindowTreeHostObserver,
       public display::ContentProtectionManager::Observer,
       public display::DisplayManager::Delegate,
-      public ui::internal::InputMethodDelegate,
+      public ui::ImeKeyEventDispatcher,
       public AshWindowTreeHostDelegate {
  public:
   // TODO(oshima): Consider moving this to display::DisplayObserver.
@@ -149,6 +151,15 @@ class ASH_EXPORT WindowTreeHostManager
   void OnDisplayMetricsChanged(const display::Display& display,
                                uint32_t metrics) override;
 
+  // Enables the rounded corners mask texture for a display. It creates
+  // `RoundedDisplayProvider` for a display as needed and updates the surface if
+  // required.
+  void EnableRoundedCorners(const display::Display& display);
+
+  // Updates the rounded corners masks textures on the display by submitting a
+  // compositor frame if needed.
+  void MaybeUpdateRoundedDisplaySurface(const display::Display& display);
+
   // aura::WindowTreeHostObserver overrides:
   void OnHostResized(aura::WindowTreeHost* host) override;
 
@@ -163,7 +174,7 @@ class ASH_EXPORT WindowTreeHostManager
   void PreDisplayConfigurationChange(bool clear_focus) override;
   void PostDisplayConfigurationChange() override;
 
-  // ui::internal::InputMethodDelegate overrides:
+  // ui::ImeKeyEventDispatcher overrides:
   ui::EventDispatchDetails DispatchKeyEventPostIME(
       ui::KeyEvent* event) override;
 
@@ -171,6 +182,14 @@ class ASH_EXPORT WindowTreeHostManager
   const display::Display* GetDisplayById(int64_t display_id) const override;
   void SetCurrentEventTargeterSourceHost(
       aura::WindowTreeHost* targeter_src_host) override;
+
+  // Get the rounded display provider for a display.
+  RoundedDisplayProvider* GetRoundedDisplayProvider(int64_t display_id);
+
+  // Deletes the RoundedDisplayProviders for displays with rounded-corners.
+  // Needs to be called before `Shell::CloseAllRootWindowChildWindows()` since
+  // we need host_windows for proper deletion of the providers.
+  void ShutdownRoundedDisplays();
 
  private:
   FRIEND_TEST_ALL_PREFIXES(WindowTreeHostManagerTest, BoundsUpdated);
@@ -187,15 +206,32 @@ class ASH_EXPORT WindowTreeHostManager
   // |window_tree_hosts_|. Caller has to explicitly remove it.
   void DeleteHost(AshWindowTreeHost* host_to_delete);
 
+  // Create RoundedDisplayProvider for the display if needed.
+  void AddRoundedDisplayProviderIfNeeded(const display::Display& display);
+  void RemoveRoundedDisplayProvider(const display::Display& display);
+
+  // Updates the window tree host that the RoundedDisplayProvider is attached
+  // to, for all the display providers. This ensures that the display textures
+  // are rendered on the correct display.
+  void UpdateHostOfDisplayProviders();
+
+  // True if display addition happens, and restore the windows back to it if
+  // they were previously inside it.
+  bool should_restore_windows_on_display_addd_ = false;
+
   typedef std::map<int64_t, AshWindowTreeHost*> WindowTreeHostMap;
   // The mapping from display ID to its window tree host.
   WindowTreeHostMap window_tree_hosts_;
+
+  // The mapping from display ID to its rounded display provider.
+  base::flat_map<int64_t, std::unique_ptr<RoundedDisplayProvider>>
+      rounded_display_providers_map_;
 
   base::ObserverList<Observer, true>::Unchecked observers_;
 
   // Store the primary window tree host temporarily while replacing
   // display.
-  AshWindowTreeHost* primary_tree_host_for_replace_;
+  raw_ptr<AshWindowTreeHost, ExperimentalAsh> primary_tree_host_for_replace_;
 
   std::unique_ptr<FocusActivationStore> focus_activation_store_;
 
@@ -216,7 +252,7 @@ class ASH_EXPORT WindowTreeHostManager
   int64_t cursor_display_id_for_restore_;
 
   // Receive DisplayObserver callbacks between Start and Shutdown.
-  absl::optional<display::ScopedDisplayObserver> display_observer_;
+  std::optional<display::ScopedDisplayObserver> display_observer_;
 
   // A repeating timer to trigger sending UMA metrics for primary display's
   // effective resolution at fixed intervals.

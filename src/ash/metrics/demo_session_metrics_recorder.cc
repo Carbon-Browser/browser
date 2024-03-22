@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shelf/shelf_window_watcher.h"
 #include "ash/shell.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/scoped_multi_source_observation.h"
@@ -49,14 +50,13 @@ constexpr int kMaxPeriodsWithoutActivity = base::Seconds(15) / kSamplePeriod;
 DemoModeApp GetAppFromAppId(const std::string& app_id) {
   // Each version of the Highlights app is bucketed into the same value.
   if (app_id == extension_misc::kHighlightsAppId ||
-      app_id == extension_misc::kHighlightsAtlasAppId) {
+      app_id == extension_misc::kNewHighlightsAppId) {
     return DemoModeApp::kHighlights;
   }
 
   // Each version of the Screensaver app is bucketed into the same value.
   if (app_id == extension_misc::kScreensaverAppId ||
-      app_id == extension_misc::kScreensaverAtlasAppId ||
-      app_id == extension_misc::kScreensaverKraneZdksAppId) {
+      app_id == extension_misc::kNewAttractLoopAppId) {
     return DemoModeApp::kScreensaver;
   }
 
@@ -266,7 +266,7 @@ class DemoSessionMetricsRecorder::ActiveAppArcPackageNameObserver
   }
 
  private:
-  DemoSessionMetricsRecorder* metrics_recorder_;
+  raw_ptr<DemoSessionMetricsRecorder, ExperimentalAsh> metrics_recorder_;
   base::ScopedMultiSourceObservation<aura::Window, aura::WindowObserver>
       scoped_observations_{this};
 };
@@ -305,16 +305,17 @@ class DemoSessionMetricsRecorder::UniqueAppsLaunchedArcPackageNameObserver
   }
 
   void OnWindowDestroyed(aura::Window* window) override {
-    if (scoped_observation_.IsObservingSource(window))
-      scoped_observation_.Reset();
+    DCHECK(scoped_observation_.IsObservingSource(window));
+    scoped_observation_.Reset();
   }
 
   void ObserveWindow(aura::Window* window) {
+    scoped_observation_.Reset();
     scoped_observation_.Observe(window);
   }
 
  private:
-  DemoSessionMetricsRecorder* metrics_recorder_;
+  raw_ptr<DemoSessionMetricsRecorder, ExperimentalAsh> metrics_recorder_;
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       scoped_observation_{this};
 };

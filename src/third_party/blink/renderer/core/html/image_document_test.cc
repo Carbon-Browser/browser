@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -349,7 +349,8 @@ class ImageDocumentViewportTest : public SimTest {
 // Tests that hiding the URL bar doesn't cause a "jump" when viewing an image
 // much wider than the viewport.
 TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
-  v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
+  v8::HandleScope handle_scope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
 
   // Initialize with the URL bar showing. Make the viewport very thin so that
   // we load an image much wider than the viewport but fits vertically. The
@@ -366,7 +367,7 @@ TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
   Compositor().BeginFrame();
 
   HTMLImageElement* img = GetDocument().ImageElement();
-  DOMRect* rect = img->getBoundingClientRect();
+  DOMRect* rect = img->GetBoundingClientRect();
 
   // Some initial sanity checking. We'll use the BoundingClientRect for the
   // image location since that's relative to the layout viewport and the layout
@@ -383,7 +384,7 @@ TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
   // layout size so the image location shouldn't change.
   WebView().ResizeWithBrowserControls(gfx::Size(5, 50), 10, 10, false);
   Compositor().BeginFrame();
-  rect = img->getBoundingClientRect();
+  rect = img->GetBoundingClientRect();
   EXPECT_EQ(50, rect->width());
   EXPECT_EQ(50, rect->height());
   EXPECT_EQ(0, rect->x());
@@ -391,7 +392,8 @@ TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
 }
 
 TEST_F(ImageDocumentViewportTest, ScaleImage) {
-  v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
+  v8::HandleScope handle_scope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
   SimRequest request("https://example.com/test.jpg", "image/jpeg");
   LoadURL("https://example.com/test.jpg");
 
@@ -431,7 +433,8 @@ TEST_F(ImageDocumentViewportTest, ScaleImage) {
 // Tests that with zoom factor for device scale factor, image with different
 // size fit in the viewport correctly.
 TEST_F(ImageDocumentViewportTest, DivWidth) {
-  v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
+  v8::HandleScope handle_scope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
   SimRequest request("https://example.com/test.jpg", "image/jpeg");
   LoadURL("https://example.com/test.jpg");
 
@@ -454,7 +457,7 @@ TEST_F(ImageDocumentViewportTest, DivWidth) {
   EXPECT_EQ(1.f, GetVisualViewport().Scale());
   EXPECT_EQ(100, GetVisualViewport().Width());
   EXPECT_EQ(100, GetVisualViewport().Height());
-  DOMRect* rect = img->getBoundingClientRect();
+  DOMRect* rect = img->GetBoundingClientRect();
   EXPECT_EQ(25, rect->x());
   EXPECT_EQ(25, rect->y());
 
@@ -479,7 +482,7 @@ TEST_F(ImageDocumentViewportTest, DivWidth) {
   EXPECT_EQ(0.1f, GetVisualViewport().Scale());
   EXPECT_EQ(20, GetVisualViewport().Width());
   EXPECT_EQ(100, GetVisualViewport().Height());
-  rect = img->getBoundingClientRect();
+  rect = img->GetBoundingClientRect();
   EXPECT_EQ(0, rect->x());
   EXPECT_EQ(40, rect->y());
 }

@@ -1,13 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/edu_coexistence_login_screen.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_exit_waiter.h"
@@ -17,11 +16,14 @@
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
-#include "chrome/browser/supervised_user/supervised_user_service.h"
-#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/system_web_dialog_delegate.h"
-#include "chrome/browser/ui/webui/signin/inline_login_dialog_chromeos_onboarding.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
+#include "chrome/browser/ui/webui/ash/login/locale_switch_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/system_web_dialog_delegate.h"
+#include "chrome/browser/ui/webui/signin/ash/inline_login_dialog_onboarding.h"
+#include "chrome/common/webui_url_constants.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "components/account_id/account_id.h"
 #include "content/public/test/browser_test.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -30,8 +32,8 @@ namespace ash {
 namespace {
 
 SystemWebDialogDelegate* GetInlineLoginDialog() {
-  return chromeos::SystemWebDialogDelegate::FindInstance(
-      SupervisedUserService::GetEduCoexistenceLoginUrl());
+  return SystemWebDialogDelegate::FindInstance(
+      chrome::kChromeUIEDUCoexistenceLoginURLV2);
 }
 
 bool IsInlineLoginDialogShown() {
@@ -101,11 +103,12 @@ void EduCoexistenceLoginBrowserTest::HandleScreenExit(
 }
 
 void EduCoexistenceLoginBrowserTest::WaitForScreenExit() {
-  if (result_.has_value())
+  if (result_.has_value()) {
     return;
-  base::RunLoop run_loop;
-  quit_closure_ = base::BindOnce(run_loop.QuitClosure());
-  run_loop.Run();
+  }
+  base::test::TestFuture<void> waiter;
+  quit_closure_ = waiter.GetCallback();
+  EXPECT_TRUE(waiter.Wait());
 }
 
 EduCoexistenceLoginScreen*

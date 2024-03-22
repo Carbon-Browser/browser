@@ -1,14 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "FindBadConstructsConsumer.h"
 
+#include "FindBadRawPtrPatterns.h"
 #include "Util.h"
 #include "clang/AST/Attr.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Lex/Lexer.h"
 #include "clang/Sema/Sema.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace clang;
@@ -118,11 +120,18 @@ std::string GetAutoReplacementTypeAsString(QualType type,
 FindBadConstructsConsumer::FindBadConstructsConsumer(CompilerInstance& instance,
                                                      const Options& options)
     : ChromeClassTester(instance, options) {
+  if (options.check_blink_data_member_type) {
+    blink_data_member_type_checker_.reset(
+        new BlinkDataMemberTypeChecker(instance));
+  }
   if (options.check_ipc) {
     ipc_visitor_.reset(new CheckIPCVisitor(instance));
   }
   if (options.check_layout_object_methods) {
     layout_visitor_.reset(new CheckLayoutObjectMethodsVisitor(instance));
+  }
+  if (options.check_stack_allocated) {
+    stack_allocated_checker_.reset(new StackAllocatedChecker(instance));
   }
 
   // Messages for virtual methods.
@@ -226,6 +235,7 @@ void FindBadConstructsConsumer::Traverse(ASTContext& context) {
   RecursiveASTVisitor::TraverseDecl(context.getTranslationUnitDecl());
   if (ipc_visitor_)
     ipc_visitor_->set_context(nullptr);
+  FindBadRawPtrPatterns(options_, context, instance());
 }
 
 bool FindBadConstructsConsumer::TraverseDecl(Decl* decl) {
@@ -235,6 +245,14 @@ bool FindBadConstructsConsumer::TraverseDecl(Decl* decl) {
   if (ipc_visitor_)
     ipc_visitor_->EndDecl();
   return result;
+}
+
+bool FindBadConstructsConsumer::VisitCXXRecordDecl(
+    clang::CXXRecordDecl* cxx_record_decl) {
+  if (stack_allocated_checker_) {
+    stack_allocated_checker_->Check(cxx_record_decl);
+  }
+  return true;
 }
 
 bool FindBadConstructsConsumer::VisitEnumDecl(clang::EnumDecl* decl) {
@@ -297,6 +315,11 @@ void FindBadConstructsConsumer::CheckChromeClass(LocationType location_type,
   // modularized.
   if (location_type != LocationType::kBlink)
     CheckRefCountedDtors(record_location, record);
+
+  if (blink_data_member_type_checker_ &&
+      location_type == LocationType::kBlink) {
+    blink_data_member_type_checker_->CheckClass(record_location, record);
+  }
 
   CheckWeakPtrFactoryMembers(record_location, record);
 }
@@ -523,8 +546,6 @@ void FindBadConstructsConsumer::CheckVirtualMethods(
     CXXRecordDecl* record,
     bool warn_on_inline_bodies) {
   if (IsGmockObject(record)) {
-    if (!options_.check_gmock_objects)
-      return;
     warn_on_inline_bodies = false;
   }
 
@@ -662,7 +683,7 @@ void FindBadConstructsConsumer::CheckVirtualBodies(
         SourceLocation loc = cs->getLBracLoc();
         // CR_BEGIN_MSG_MAP_EX and BEGIN_SAFE_MSG_MAP_EX try to be compatible
         // to BEGIN_MSG_MAP(_EX).  So even though they are in chrome code,
-        // we can't easily fix them, so explicitly whitelist them here.
+        // we can't easily fix them, so explicitly allowlist them here.
         bool emit = true;
         if (loc.isMacroID()) {
           SourceManager& manager = instance().getSourceManager();
@@ -1042,12 +1063,14 @@ void FindBadConstructsConsumer::CheckWeakPtrFactoryMembers(
     if (template_spec_type) {
       const TemplateDecl* template_decl =
           template_spec_type->getTemplateName().getAsTemplateDecl();
-      if (template_decl && template_spec_type->getNumArgs() == 1) {
+      if (template_decl &&
+          template_spec_type->template_arguments().size() == 1) {
         if (template_decl->getNameAsString().compare("WeakPtrFactory") == 0 &&
             GetNamespace(template_decl) == "base") {
           // Only consider WeakPtrFactory members which are specialized for the
           // owning class.
-          const TemplateArgument& arg = template_spec_type->getArg(0);
+          const TemplateArgument& arg =
+              template_spec_type->template_arguments()[0];
           if (arg.getAsType().getTypePtr()->getAsCXXRecordDecl() ==
               record->getTypeForDecl()->getAsCXXRecordDecl()) {
             if (!weak_ptr_factory_location.isValid()) {

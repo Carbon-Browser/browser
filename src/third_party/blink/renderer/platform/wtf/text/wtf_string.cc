@@ -27,7 +27,7 @@
 
 #include <algorithm>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_util.h"
@@ -38,6 +38,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/ascii_ctype.h"
 #include "third_party/blink/renderer/platform/wtf/text/case_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
+#include "third_party/blink/renderer/platform/wtf/text/code_point_iterator.h"
+#include "third_party/blink/renderer/platform/wtf/text/copy_lchars_from_uchar_source.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
 #include "third_party/blink/renderer/platform/wtf/text/unicode.h"
@@ -98,6 +100,14 @@ UChar32 String::CharacterStartingAt(unsigned i) const {
   return impl_->CharacterStartingAt(i);
 }
 
+CodePointIterator String::begin() const {
+  return CodePointIterator(*this);
+}
+
+CodePointIterator String::end() const {
+  return CodePointIterator::End(*this);
+}
+
 void String::Ensure16Bit() {
   if (IsNull())
     return;
@@ -141,6 +151,13 @@ String String::UpperASCII() const {
   if (!impl_)
     return String();
   return impl_->UpperASCII();
+}
+
+unsigned String::LengthWithStrippedWhiteSpace() const {
+  if (!impl_) {
+    return 0;
+  }
+  return impl_->LengthWithStrippedWhiteSpace();
 }
 
 String String::StripWhiteSpace() const {
@@ -292,7 +309,7 @@ int String::ToIntStrict(bool* ok) const {
       *ok = false;
     return 0;
   }
-  return impl_->ToInt(NumberParsingOptions::kStrict, ok);
+  return impl_->ToInt(NumberParsingOptions::Strict(), ok);
 }
 
 unsigned String::ToUIntStrict(bool* ok) const {
@@ -301,7 +318,7 @@ unsigned String::ToUIntStrict(bool* ok) const {
       *ok = false;
     return 0;
   }
-  return impl_->ToUInt(NumberParsingOptions::kStrict, ok);
+  return impl_->ToUInt(NumberParsingOptions::Strict(), ok);
 }
 
 unsigned String::HexToUIntStrict(bool* ok) const {
@@ -328,7 +345,7 @@ int64_t String::ToInt64Strict(bool* ok) const {
       *ok = false;
     return 0;
   }
-  return impl_->ToInt64(NumberParsingOptions::kStrict, ok);
+  return impl_->ToInt64(NumberParsingOptions::Strict(), ok);
 }
 
 uint64_t String::ToUInt64Strict(bool* ok) const {
@@ -337,7 +354,7 @@ uint64_t String::ToUInt64Strict(bool* ok) const {
       *ok = false;
     return 0;
   }
-  return impl_->ToUInt64(NumberParsingOptions::kStrict, ok);
+  return impl_->ToUInt64(NumberParsingOptions::Strict(), ok);
 }
 
 int String::ToInt(bool* ok) const {
@@ -346,7 +363,7 @@ int String::ToInt(bool* ok) const {
       *ok = false;
     return 0;
   }
-  return impl_->ToInt(NumberParsingOptions::kLoose, ok);
+  return impl_->ToInt(NumberParsingOptions::Loose(), ok);
 }
 
 unsigned String::ToUInt(bool* ok) const {
@@ -355,7 +372,7 @@ unsigned String::ToUInt(bool* ok) const {
       *ok = false;
     return 0;
   }
-  return impl_->ToUInt(NumberParsingOptions::kLoose, ok);
+  return impl_->ToUInt(NumberParsingOptions::Loose(), ok);
 }
 
 double String::ToDouble(bool* ok) const {
@@ -374,12 +391,6 @@ float String::ToFloat(bool* ok) const {
     return 0.0f;
   }
   return impl_->ToFloat(ok);
-}
-
-String String::IsolatedCopy() const {
-  if (!impl_)
-    return String();
-  return impl_->IsolatedCopy();
 }
 
 void String::Split(const StringView& separator,

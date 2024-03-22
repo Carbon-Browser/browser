@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 
 #include <unordered_map>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
 #include "components/user_notes/interfaces/user_note_metadata_snapshot.h"
+#include "components/user_notes/interfaces/user_note_storage.h"
 #include "components/user_notes/model/user_note.h"
 #include "sql/database.h"
 #include "url/gurl.h"
@@ -33,12 +35,13 @@ class UserNoteDatabase {
   // Initialises internal database. Must be called prior to any other usage.
   bool Init();
 
-  UserNoteMetadataSnapshot GetNoteMetadataForUrls(std::vector<GURL> urls);
+  UserNoteMetadataSnapshot GetNoteMetadataForUrls(
+      const UserNoteStorage::UrlSet& urls);
 
   std::vector<std::unique_ptr<UserNote>> GetNotesById(
-      std::vector<base::UnguessableToken> ids);
+      const UserNoteStorage::IdSet& ids);
 
-  bool UpdateNote(const UserNote* model,
+  bool UpdateNote(std::unique_ptr<UserNote> model,
                   std::u16string note_body_text,
                   bool is_creation);
 
@@ -65,7 +68,8 @@ class UserNoteDatabase {
   bool InitSchema();
 
   // Called by UpdateNote() with is_creation=true to create a new note.
-  bool CreateNote(const UserNote* model, std::u16string note_body_text);
+  bool CreateNote(std::unique_ptr<UserNote> model,
+                  std::u16string note_body_text);
 
   bool CreateSchema();
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,10 +35,6 @@ class COMPONENT_EXPORT(VR_ORIENTATION) VROrientationSession
   void GetEnvironmentIntegrationProvider(
       mojo::PendingAssociatedReceiver<mojom::XREnvironmentIntegrationProvider>
           environment_provider) override;
-  void SetInputSourceButtonListener(
-      mojo::PendingAssociatedRemote<device::mojom::XRInputSourceButtonListener>)
-      override;
-
   // Accessible to tests.
  protected:
   // mojom::XRFrameDataProvider

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include <shellapi.h>
 #include <shlobj.h>
 #include <wininet.h>
+
+#include <string_view>
 
 #include "base/files/file_path.h"
 #include "base/logging.h"
@@ -125,7 +127,7 @@ std::wstring GetBrowserLocation(const wchar_t* regkey_name) {
   return location;
 }
 
-const BrowserVarMapping* FindBrowserMapping(base::WStringPiece path,
+const BrowserVarMapping* FindBrowserMapping(std::wstring_view path,
                                             bool compare_typical_executable) {
   // If |compare_typical_executable| is true: also look at executable filenames,
   // to reduce false-negatives when the path is specified explicitly by the

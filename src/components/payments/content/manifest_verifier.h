@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "components/payments/content/developer_console_logger.h"
 #include "components/webdata/common/web_data_service_base.h"
@@ -90,6 +89,15 @@ class ManifestVerifier final : public WebDataServiceConsumer {
               base::OnceClosure finished_using_resources);
 
  private:
+  struct CacheLookupData {
+    CacheLookupData();
+    CacheLookupData(const GURL& method_manifest_url,
+                    base::TimeTicks start_time);
+
+    GURL method_manifest_url;
+    base::TimeTicks start_time;
+  };
+
   // Called when a manifest is retrieved from cache.
   void OnWebDataServiceRequestDone(
       WebDataServiceBase::Handle h,
@@ -99,6 +107,7 @@ class ManifestVerifier final : public WebDataServiceConsumer {
   // redirects" is intentionally not used.
   void OnPaymentMethodManifestDownloaded(
       const GURL& method_manifest_url,
+      base::TimeTicks method_manifest_download_start_time,
       const GURL& unused_method_manifest_url_after_redirects,
       const std::string& content,
       const std::string& error_message);
@@ -106,6 +115,7 @@ class ManifestVerifier final : public WebDataServiceConsumer {
   // Called when a manifest is parsed.
   void OnPaymentMethodManifestParsed(
       const GURL& method_manifest_url,
+      base::TimeTicks method_manifest_download_start_time,
       const std::vector<GURL>& default_applications,
       const std::vector<url::Origin>& supported_origins);
 
@@ -116,10 +126,10 @@ class ManifestVerifier final : public WebDataServiceConsumer {
   DeveloperConsoleLogger log_;
 
   // Downloads the manifests.
-  raw_ptr<PaymentManifestDownloader> downloader_;
+  raw_ptr<PaymentManifestDownloader, DanglingUntriaged> downloader_;
 
   // Parses the manifests.
-  raw_ptr<PaymentManifestParser> parser_;
+  raw_ptr<PaymentManifestParser, DanglingUntriaged> parser_;
 
   // Caches the manifests.
   raw_ptr<PaymentManifestWebDataService> cache_;
@@ -143,8 +153,8 @@ class ManifestVerifier final : public WebDataServiceConsumer {
   // use these payment method names.
   std::map<GURL, std::vector<int64_t>> manifest_url_to_app_id_map_;
 
-  // The mapping of cache request handles to the payment method manifest URLs.
-  std::map<WebDataServiceBase::Handle, GURL> cache_request_handles_;
+  // The mapping of cache request handles to CacheLookupData.
+  std::map<WebDataServiceBase::Handle, CacheLookupData> cache_request_handles_;
 
   // The set of payment method manifest URLs for which the cached value was
   // used.

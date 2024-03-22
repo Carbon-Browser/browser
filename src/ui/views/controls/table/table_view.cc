@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,15 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/cxx17_backports.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_flags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -51,6 +52,8 @@
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/style/platform_style.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
+#include "ui/views/view_utils.h"
 
 namespace views {
 
@@ -170,7 +173,7 @@ class TableView::HighlightPathGenerator : public views::HighlightPathGenerator {
 TableView::TableView() : weak_factory_(this) {
   constexpr int kTextContext = style::CONTEXT_TABLE_ROW;
   constexpr int kTextStyle = style::STYLE_PRIMARY;
-  font_list_ = style::GetFont(kTextContext, kTextStyle);
+  font_list_ = TypographyProvider::Get().GetFont(kTextContext, kTextStyle);
   row_height_ = LayoutProvider::GetControlHeightForFont(kTextContext,
                                                         kTextStyle, font_list_);
 
@@ -181,9 +184,12 @@ TableView::TableView() : weak_factory_(this) {
       this, std::make_unique<TableView::HighlightPathGenerator>());
 
   FocusRing::Install(this);
-  views::FocusRing::Get(this)->SetHasFocusPredicate([&](View* view) {
-    return static_cast<TableView*>(view)->HasFocus() && !header_row_is_active_;
-  });
+  views::FocusRing::Get(this)->SetHasFocusPredicate(
+      base::BindRepeating([](const View* view) {
+        const auto* v = views::AsViewClass<TableView>(view);
+        CHECK(v);
+        return v->HasFocus() && !v->header_row_is_active_;
+      }));
 }
 
 TableView::TableView(ui::TableModel* model,
@@ -335,9 +341,9 @@ void TableView::SetColumnVisibility(int id, bool is_visible) {
     visible_column.column = FindColumnByID(id);
     visible_columns_.push_back(visible_column);
   } else {
-    const auto i = std::find_if(
-        visible_columns_.begin(), visible_columns_.end(),
-        [id](const auto& column) { return column.column.id == id; });
+    const auto i =
+        base::ranges::find(visible_columns_, id,
+                           [](const auto& column) { return column.column.id; });
     if (i != visible_columns_.end()) {
       visible_columns_.erase(i);
       if (active_visible_column_index_.has_value() &&
@@ -404,16 +410,13 @@ void TableView::SetSortDescriptors(const SortDescriptors& sort_descriptors) {
 }
 
 bool TableView::IsColumnVisible(int id) const {
-  const auto ids_match = [id](const auto& column) {
-    return column.column.id == id;
-  };
-  return std::any_of(visible_columns_.cbegin(), visible_columns_.cend(),
-                     ids_match);
+  return base::Contains(visible_columns_, id, [](const VisibleColumn& column) {
+    return column.column.id;
+  });
 }
 
 bool TableView::HasColumn(int id) const {
-  const auto ids_match = [id](const auto& column) { return column.id == id; };
-  return std::any_of(columns_.cbegin(), columns_.cend(), ids_match);
+  return base::Contains(columns_, id, &ui::TableColumn::id);
 }
 
 bool TableView::GetHasFocusIndicator() const {
@@ -449,6 +452,7 @@ void TableView::SetVisibleColumnWidth(size_t index, int width) {
   }
   PreferredSizeChanged();
   SchedulePaint();
+  UpdateFocusRings();
   UpdateVirtualAccessibilityChildrenBounds();
 }
 
@@ -717,7 +721,7 @@ std::u16string TableView::GetTooltipText(const gfx::Point& p) const {
   }
 
   const int x = GetMirroredXInView(p.x());
-  const absl::optional<size_t> column = GetClosestVisibleColumnIndex(this, x);
+  const absl::optional<size_t> column = GetClosestVisibleColumnIndex(*this, x);
   if (!column.has_value() || x < visible_columns_[column.value()].x ||
       x > (visible_columns_[column.value()].x +
            visible_columns_[column.value()].width)) {
@@ -1003,13 +1007,20 @@ void TableView::OnPaintImpl(gfx::Canvas* canvas) {
         gfx::ImageSkia image =
             model_->GetIcon(model_index).Rasterize(GetColorProvider());
         if (!image.isNull()) {
-          int image_x = GetMirroredXWithWidthInView(text_bounds.x(),
-                                                    ui::TableModel::kIconSize);
-          canvas->DrawImageInt(
-              image, 0, 0, image.width(), image.height(), image_x,
-              cell_bounds.y() +
-                  (cell_bounds.height() - ui::TableModel::kIconSize) / 2,
-              ui::TableModel::kIconSize, ui::TableModel::kIconSize, true);
+          // Need to check the area where the icon is paint. And it is necessary
+          // to consider the UI layout direction.
+          gfx::Rect dest_image_bounds =
+              GetPaintIconDestBounds(cell_bounds, text_bounds.x());
+          // The area does not have a width drawing icon.
+          if (!dest_image_bounds.IsEmpty()) {
+            gfx::Rect src_image_bounds =
+                GetPaintIconSrcBounds(image.size(), dest_image_bounds.width());
+            canvas->DrawImageInt(
+                image, src_image_bounds.x(), src_image_bounds.y(),
+                src_image_bounds.width(), src_image_bounds.height(),
+                dest_image_bounds.x(), dest_image_bounds.y(),
+                dest_image_bounds.width(), dest_image_bounds.height(), true);
+          }
         }
         text_bounds.Inset(gfx::Insets().set_left(ui::TableModel::kIconSize +
                                                  cell_element_spacing));
@@ -1163,7 +1174,8 @@ void TableView::CreateHeaderIfNecessary(ScrollView* scroll_view) {
   if (header_ || (columns_.size() == 1 && columns_[0].title.empty()))
     return;
 
-  header_ = scroll_view->SetHeader(std::make_unique<TableHeader>(this));
+  header_ = scroll_view->SetHeader(
+      std::make_unique<TableHeader>(weak_factory_.GetWeakPtr()));
 
   // The header accessibility view should be the first row, to match the
   // original view accessibility construction.
@@ -1200,6 +1212,51 @@ void TableView::UpdateVisibleColumnSizes() {
   }
 }
 
+// The default drawing size for icons in a table view is 16 * 16. If the cell
+// size is not sufficient, the original image needs to be clipped. e.g if the
+// original image size is 32 * 32, the normal bounds would be src bounds (0, 0,
+// 32, 32) and dest bounds (x, y, 16, 16). If the dest bounds are (x, y, 8, 16),
+// the original image needs to be clipped to prevent stretching during drawing.
+// For LTR (left-to-right) layout, the src bounds would be (0, 0, 16, 32), and
+// the width would be calculated as width = image_size.width() *
+// image_dest_width / ui::TableModel::kIconSize.
+// For RTL (right-to-left) layout, the src bounds would be (16, 0, 16, 32),
+// and the `x` would be calculated as x = image_size.width() - src_image_width.
+// (https://crbug.com/1494675)
+gfx::Rect TableView::GetPaintIconSrcBounds(const gfx::Size& image_size,
+                                           int image_dest_width) const {
+  int src_image_x = 0;
+  int src_image_width =
+      image_size.width() * image_dest_width / ui::TableModel::kIconSize;
+  if (GetMirrored()) {
+    src_image_x = image_size.width() - src_image_width;
+  }
+  return gfx::Rect(src_image_x, 0, src_image_width, image_size.height());
+}
+
+gfx::Rect TableView::GetPaintIconDestBounds(const gfx::Rect& cell_bounds,
+                                            int text_bounds_x) const {
+  int dest_image_x =
+      GetMirroredXWithWidthInView(text_bounds_x, ui::TableModel::kIconSize);
+  int dest_image_width = ui::TableModel::kIconSize;
+  gfx::Rect mirrored_cell_bounds = GetMirroredRect(cell_bounds);
+  if (GetMirrored()) {
+    if (dest_image_x < mirrored_cell_bounds.x()) {
+      dest_image_width =
+          dest_image_x + dest_image_width - mirrored_cell_bounds.x();
+      dest_image_x = mirrored_cell_bounds.x();
+    }
+  } else {
+    if (dest_image_x + dest_image_width > mirrored_cell_bounds.right()) {
+      dest_image_width = mirrored_cell_bounds.right() - dest_image_x;
+    }
+  }
+  return gfx::Rect(
+      dest_image_x,
+      cell_bounds.y() + (cell_bounds.height() - ui::TableModel::kIconSize) / 2,
+      dest_image_width > 0 ? dest_image_width : 0, ui::TableModel::kIconSize);
+}
+
 TableView::PaintRegion TableView::GetPaintRegion(
     const gfx::Rect& bounds) const {
   DCHECK(!visible_columns_.empty());
@@ -1207,8 +1264,8 @@ TableView::PaintRegion TableView::GetPaintRegion(
 
   PaintRegion region;
   region.min_row = static_cast<size_t>(
-      base::clamp(bounds.y() / row_height_, 0,
-                  base::saturated_cast<int>(GetRowCount() - 1)));
+      std::clamp(bounds.y() / row_height_, 0,
+                 base::saturated_cast<int>(GetRowCount() - 1)));
   region.max_row = static_cast<size_t>(bounds.bottom() / row_height_);
   if (bounds.bottom() % row_height_ != 0)
     region.max_row++;
@@ -1258,8 +1315,7 @@ void TableView::SchedulePaintForSelection() {
 }
 
 ui::TableColumn TableView::FindColumnByID(int id) const {
-  const auto ids_match = [id](const auto& column) { return column.id == id; };
-  const auto i = std::find_if(columns_.cbegin(), columns_.cend(), ids_match);
+  const auto i = base::ranges::find(columns_, id, &ui::TableColumn::id);
   DCHECK(i != columns_.cend());
   return *i;
 }
@@ -1291,15 +1347,20 @@ absl::optional<size_t> TableView::GetActiveVisibleColumnIndex() const {
 }
 
 void TableView::SetActiveVisibleColumnIndex(absl::optional<size_t> index) {
-  if (active_visible_column_index_ == index)
+  if (active_visible_column_index_ == index) {
     return;
+  }
   active_visible_column_index_ = index;
-
-  if (selection_model_.active().has_value() &&
-      active_visible_column_index_.has_value()) {
-    ScrollRectToVisible(
-        GetCellBounds(ModelToView(selection_model_.active().value()),
-                      active_visible_column_index_.value()));
+  if (active_visible_column_index_.has_value()) {
+    if (selection_model_.active().has_value()) {
+      ScrollRectToVisible(
+          GetCellBounds(ModelToView(selection_model_.active().value()),
+                        active_visible_column_index_.value()));
+    } else if (header_row_is_active()) {
+      const TableView::VisibleColumn& column =
+          GetVisibleColumn(active_visible_column_index_.value());
+      ScrollRectToVisible(gfx::Rect(column.x, 0, column.width, height()));
+    }
   }
 
   UpdateFocusRings();
@@ -1328,7 +1389,7 @@ void TableView::SetSelectionModel(ui::ListSelectionModel new_selection) {
 
   // Scroll the group for the active item to visible.
   if (selection_model_.active().has_value()) {
-    gfx::Rect vis_rect(GetVisibleBounds());
+    gfx::Rect vis_rect(GetMirroredRect(GetVisibleBounds()));
     const GroupRange range(GetGroupRange(selection_model_.active().value()));
     const int start_y = GetRowBounds(ModelToView(range.start)).y();
     const int end_y =
@@ -1360,17 +1421,21 @@ void TableView::AdvanceSelection(AdvanceDirection direction) {
     ScheduleUpdateAccessibilityFocusIfNeeded();
     return;
   }
-  size_t view_index = ModelToView(selection_model_.active().value());
+  size_t active_index = selection_model_.active().value();
+  size_t view_index = ModelToView(active_index);
+  const GroupRange range(GetGroupRange(active_index));
+  size_t view_range_start = ModelToView(range.start);
   if (direction == AdvanceDirection::kDecrement) {
     bool make_header_active = header_ && view_index == 0;
     header_row_is_active_ = make_header_active;
     SelectByViewIndex(
         make_header_active
             ? absl::nullopt
-            : absl::make_optional(std::max(size_t{1}, view_index) - 1));
+            : absl::make_optional(std::max(size_t{1}, view_range_start) - 1));
   } else {
     header_row_is_active_ = false;
-    SelectByViewIndex(std::min(GetRowCount() - 1, view_index + 1));
+    SelectByViewIndex(
+        std::min(GetRowCount() - 1, view_range_start + range.length));
   }
 }
 
@@ -1783,7 +1848,7 @@ void TableView::ScheduleUpdateAccessibilityFocusIfNeeded() {
     return;
 
   update_accessibility_focus_pending_ = true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&TableView::UpdateAccessibilityFocus,
                                 weak_factory_.GetWeakPtr(),
                                 UpdateAccessibilityFocusPassKey()));
@@ -1843,23 +1908,19 @@ AXVirtualView* TableView::GetVirtualAccessibilityBodyRow(size_t row) {
   DCHECK_LT(row, GetRowCount());
   if (header_)
     ++row;
-  if (row < GetViewAccessibility().virtual_children().size()) {
-    const auto& ax_row = GetViewAccessibility().virtual_children()[row];
-    DCHECK(ax_row);
-    DCHECK_EQ(ax_row->GetData().role, ax::mojom::Role::kRow);
-    return ax_row.get();
-  }
-  NOTREACHED() << "|row| not found. Did you forget to call "
-                  "RebuildVirtualAccessibilityChildren()?";
-  return nullptr;
+  CHECK_LT(row, GetViewAccessibility().virtual_children().size())
+      << "|row| not found. Did you forget to call "
+         "RebuildVirtualAccessibilityChildren()?";
+
+  const auto& ax_row = GetViewAccessibility().virtual_children()[row];
+  DCHECK(ax_row);
+  DCHECK_EQ(ax_row->GetData().role, ax::mojom::Role::kRow);
+  return ax_row.get();
 }
 
 AXVirtualView* TableView::GetVirtualAccessibilityHeaderRow() {
-  if (!header_) {
-    NOTREACHED() << "|row| not found. Did you forget to call "
+  CHECK(header_) << "|row| not found. Did you forget to call "
                     "RebuildVirtualAccessibilityChildren()?";
-    return nullptr;
-  }
   // The header row is always the first virtual child.
   const auto& ax_row = GetViewAccessibility().virtual_children()[size_t{0}];
   DCHECK(ax_row);
@@ -1887,8 +1948,7 @@ AXVirtualView* TableView::GetVirtualAccessibilityCellImpl(
                ax::mojom::IntAttribute::kTableCellColumnIndex)) ==
            visible_column_index;
   };
-  const auto i = std::find_if(ax_row->children().cbegin(),
-                              ax_row->children().cend(), matches_index);
+  const auto i = base::ranges::find_if(ax_row->children(), matches_index);
   DCHECK(i != ax_row->children().cend())
       << "|visible_column_index| not found. Did you forget to call "
       << "RebuildVirtualAccessibilityChildren()?";

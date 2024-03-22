@@ -26,6 +26,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FILEAPI_PUBLIC_URL_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_FILEAPI_PUBLIC_URL_MANAGER_H_
 
+#include "base/types/pass_key.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-blink-forward.h"
@@ -34,6 +35,7 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_associated_remote.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -42,14 +44,30 @@ namespace blink {
 
 class KURL;
 class ExecutionContext;
+class StorageAccessHandle;
 class URLRegistry;
 class URLRegistrable;
+
+// Execution context ids for usage in metrics. Entries should not be renumbered
+// and numeric values should never be reused. Please keep in sync with
+// "BlobURLExecutionContextId" in
+// src/tools/metrics/histograms/metadata/histogram_suffixes_list.xml and with
+// `kExecutionContextNamesForHistograms` in public_url_manager.cc.
+enum class ExecutionContextIdForHistogram {
+  kFrame = 0,
+  kWorker = 1,
+  kMaxValue = kWorker
+};
 
 class CORE_EXPORT PublicURLManager final
     : public GarbageCollected<PublicURLManager>,
       public ExecutionContextLifecycleObserver {
  public:
   explicit PublicURLManager(ExecutionContext*);
+  explicit PublicURLManager(
+      base::PassKey<StorageAccessHandle>,
+      ExecutionContext*,
+      mojo::PendingAssociatedRemote<mojom::blink::BlobURLStore>);
 
   // Generates a new Blob URL and registers the URLRegistrable to the
   // corresponding URLRegistry with the Blob URL. Returns the serialization
@@ -73,9 +91,13 @@ class CORE_EXPORT PublicURLManager final
   void Trace(Visitor*) const override;
 
   void SetURLStoreForTesting(
-      HeapMojoAssociatedRemote<mojom::blink::BlobURLStore> url_store) {
-    url_store_ = std::move(url_store);
+      HeapMojoAssociatedRemote<mojom::blink::BlobURLStore> frame_url_store) {
+    frame_url_store_ = std::move(frame_url_store);
   }
+
+  // Returns a reference to the BlobURLStore from either `frame_url_store_` or
+  // `worker_url_store_` (depending on the context).
+  mojom::blink::BlobURLStore& GetBlobURLStore();
 
  private:
   typedef String URLString;
@@ -84,9 +106,21 @@ class CORE_EXPORT PublicURLManager final
   URLToRegistryMap url_to_registry_;
   HashSet<URLString> mojo_urls_;
 
-  bool is_stopped_;
+  // Records which execution context type instantiated this PublicURLManager,
+  // for collecting metrics. This is only set when the SupportPartitionedBlobUrl
+  // feature is enabled, and is only set for frame or worker execution contexts.
+  absl::optional<ExecutionContextIdForHistogram> execution_context_type_;
 
-  HeapMojoAssociatedRemote<mojom::blink::BlobURLStore> url_store_;
+  bool is_stopped_ = false;
+
+  // For a frame context or from a main thread worklet context, a
+  // navigation-associated interface is used to preserve message ordering.
+  // Remotes corresponding to that interface get stored in `frame_url_store_`.
+  // For workers and threaded worklets, the interface is exposed via
+  // `BrowserInterfaceBroker`s, and the remotes for that are stored in
+  // `worker_url_store_`.
+  HeapMojoAssociatedRemote<mojom::blink::BlobURLStore> frame_url_store_;
+  HeapMojoRemote<mojom::blink::BlobURLStore> worker_url_store_;
 };
 
 }  // namespace blink

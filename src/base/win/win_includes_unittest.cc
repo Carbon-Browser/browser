@@ -1,13 +1,13 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // This file ensures that these header files don't include Windows.h and can
 // compile without including Windows.h. This helps to improve compile times.
 
-#include "base/allocator/partition_allocator/partition_alloc-inl.h"
-#include "base/allocator/partition_allocator/partition_tls.h"
-#include "base/allocator/partition_allocator/spinning_mutex.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc-inl.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_tls.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/spinning_mutex.h"
 #include "base/atomicops.h"
 #include "base/files/file_util.h"
 #include "base/files/platform_file.h"

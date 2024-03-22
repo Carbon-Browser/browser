@@ -1,9 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SQL_INTERNAL_API_TOKEN_H_
 #define SQL_INTERNAL_API_TOKEN_H_
+
+namespace base {
+class FilePath;
+}  // namespace base
 
 namespace sql {
 
@@ -21,6 +25,7 @@ class InternalApiToken {
   InternalApiToken() {}
   InternalApiToken(const InternalApiToken&) = default;
 
+  friend class BuiltInRecovery;
   friend class DatabaseTestPeer;
   friend class Recovery;
   friend struct test::ColumnInfo;

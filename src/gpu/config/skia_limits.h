@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include "gpu/gpu_export.h"
 
 namespace gpu {
+
+GPU_EXPORT size_t DetermineGraphiteImageProviderCacheLimitFromAvailableMemory();
 
 GPU_EXPORT void DetermineGrCacheLimitsFromAvailableMemory(
     size_t* max_resource_cache_bytes,

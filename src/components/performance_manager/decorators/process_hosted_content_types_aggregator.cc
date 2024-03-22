@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,8 @@ void ProcessHostedContentTypesAggregator::OnTakenFromGraph(Graph* graph) {
 }
 
 void ProcessHostedContentTypesAggregator::OnTypeChanged(
-    const PageNode* page_node) {
+    const PageNode* page_node,
+    PageType previous_type) {
   if (page_node->GetType() == PageType::kExtension) {
     // `PageType::kExtension` should be set early on the `PageNode`, before it
     // has the opportunity to create more than one main frame or any subframe.
@@ -62,7 +63,7 @@ void ProcessHostedContentTypesAggregator::OnFrameNodeAdded(
       frame_node_impl->IsMainFrame() ? ProcessNode::ContentType::kMainFrame
                                      : ProcessNode::ContentType::kSubframe);
 
-  if (frame_node_impl->page_node()->type() == PageType::kExtension) {
+  if (frame_node_impl->page_node()->GetType() == PageType::kExtension) {
     process_node_impl->add_hosted_content_type(
         ProcessNode::ContentType::kExtension);
   }
@@ -73,7 +74,7 @@ void ProcessHostedContentTypesAggregator::OnIsAdFrameChanged(
   auto* frame_node_impl = FrameNodeImpl::FromNode(frame_node);
 
   // No need to handle untagging as content hosted in the past is still counted.
-  if (frame_node_impl->is_ad_frame()) {
+  if (frame_node_impl->IsAdFrame()) {
     frame_node_impl->process_node()->add_hosted_content_type(
         ProcessNode::ContentType::kAd);
   }

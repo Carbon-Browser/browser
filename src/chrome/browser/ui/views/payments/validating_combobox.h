@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "chrome/browser/ui/views/payments/validation_delegate.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/combobox_model_observer.h"
 #include "ui/views/controls/combobox/combobox.h"
 
@@ -15,6 +16,7 @@ namespace payments {
 
 class ValidatingCombobox : public views::Combobox {
  public:
+  METADATA_HEADER(ValidatingCombobox);
   ValidatingCombobox(std::unique_ptr<ui::ComboboxModel> model,
                      std::unique_ptr<ValidationDelegate> delegate);
 

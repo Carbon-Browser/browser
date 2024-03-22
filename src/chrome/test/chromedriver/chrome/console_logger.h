@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_TEST_CHROMEDRIVER_CHROME_CONSOLE_LOGGER_H_
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_event_listener.h"
 
 class Log;
@@ -30,14 +31,14 @@ class ConsoleLogger : public DevToolsEventListener {
   // Translates an event into a log entry.
   Status OnEvent(DevToolsClient* client,
                  const std::string& method,
-                 const base::DictionaryValue& params) override;
+                 const base::Value::Dict& params) override;
 
  private:
   raw_ptr<Log> log_;  // The log where to create entries.
 
-  Status OnLogEntryAdded(const base::DictionaryValue& params);
-  Status OnRuntimeConsoleApiCalled(const base::DictionaryValue& params);
-  Status OnRuntimeExceptionThrown(const base::DictionaryValue& params);
+  Status OnLogEntryAdded(const base::Value::Dict& params);
+  Status OnRuntimeConsoleApiCalled(const base::Value::Dict& params);
+  Status OnRuntimeExceptionThrown(const base::Value::Dict& params);
 };
 
 #endif  // CHROME_TEST_CHROMEDRIVER_CHROME_CONSOLE_LOGGER_H_

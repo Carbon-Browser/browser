@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -272,6 +272,7 @@ class GPU_EXPORT CommandBufferHelper {
   CommandBuffer* command_buffer() const { return command_buffer_; }
 
   scoped_refptr<Buffer> get_ring_buffer() const { return ring_buffer_; }
+  int32_t get_ring_buffer_id() const { return ring_buffer_id_; }
 
   uint32_t flush_generation() const { return flush_generation_; }
 
@@ -310,11 +311,11 @@ class GPU_EXPORT CommandBufferHelper {
   // from given command buffer state.
   void UpdateCachedState(const CommandBuffer::State& state);
 
-  const raw_ptr<CommandBuffer> command_buffer_;
+  const raw_ptr<CommandBuffer, DanglingUntriaged> command_buffer_;
   int32_t ring_buffer_id_ = -1;
   uint32_t ring_buffer_size_ = 0;
   scoped_refptr<gpu::Buffer> ring_buffer_;
-  raw_ptr<CommandBufferEntry> entries_ = nullptr;
+  raw_ptr<CommandBufferEntry, AllowPtrArithmetic> entries_ = nullptr;
   int32_t total_entry_count_ = 0;  // the total number of entries
   int32_t immediate_entry_count_ = 0;
   int32_t token_ = 0;

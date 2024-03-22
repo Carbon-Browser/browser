@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,12 +21,6 @@ namespace content {
 enum NotificationType {
   NOTIFICATION_CONTENT_START = 0,
 
-  // General -----------------------------------------------------------------
-
-  // Special signal value to represent an interest in all notifications.
-  // Not valid when posting a notification.
-  NOTIFICATION_ALL = NOTIFICATION_CONTENT_START,
-
   // NavigationController ----------------------------------------------------
 
   // A new non-pending navigation entry has been created. This will
@@ -37,59 +31,9 @@ enum NotificationType {
   // details will be NavigationController::LoadCommittedDetails.
   // DEPRECATED: Use WebContentsObserver::NavigationEntryCommitted()
   // TODO(https://crbug.com/1174760): Remove.
-  NOTIFICATION_NAV_ENTRY_COMMITTED,
-
-  // Other load-related (not from NavigationController) ----------------------
-
-  // DEPRECATED: Use
-  // WebContentsObserver::DocumentOnLoadCompletedInPrimaryMainFrame() when this
-  // is fired.
-  // TODO(https://crbug.com/1174761): Remove.
-  NOTIFICATION_LOAD_COMPLETED_MAIN_FRAME,
-
-  // A content load is starting.  The source will be a
-  // Source<NavigationController> corresponding to the tab in which the load
-  // is occurring.  No details are expected for this notification.
-  // DEPRECATED: Use WebContentsObserver::DidStartLoading()
-  // TODO(https://crbug.com/1174762): Remove.
-  NOTIFICATION_LOAD_START,
-
-  // A content load has stopped. The source will be a
-  // Source<NavigationController> corresponding to the tab in which the load
-  // is occurring.  Details in the form of a LoadNotificationDetails object
-  // are optional.
-  // DEPRECATED: Use WebContentsObserver::DidStopLoading()
-  // TODO(https://crbug.com/1174764): Remove.
-  NOTIFICATION_LOAD_STOP,
+  NOTIFICATION_NAV_ENTRY_COMMITTED = NOTIFICATION_CONTENT_START,
 
   // WebContents ---------------------------------------------------------------
-
-  // Indicates that a RenderProcessHost was created and its handle is now
-  // available. The source will be the RenderProcessHost that corresponds to
-  // the process.
-  // DEPRECATED: Use RenderProcessHostObserver::RenderProcessReady()
-  // TODO(https://crbug.com/357627): Remove.
-  NOTIFICATION_RENDERER_PROCESS_CREATED,
-
-  // Indicates that a RenderProcessHost is destructing. The source will be the
-  // RenderProcessHost that corresponds to the process.
-  // DEPRECATED: Use RenderProcessHostObserver::RenderProcessHostDestroyed()
-  // TODO(https://crbug.com/357627): Remove.
-  NOTIFICATION_RENDERER_PROCESS_TERMINATED,
-
-  // Indicates that a render process was closed (meaning it exited, but the
-  // RenderProcessHost might be reused).  The source will be the corresponding
-  // RenderProcessHost.  The details will be a ChildProcessTerminationInfo
-  // struct. This may get sent along with RENDERER_PROCESS_TERMINATED.
-  // DEPRECATED: Use RenderProcessHostObserver::RenderProcessExited()
-  // TODO(https://crbug.com/357627): Remove.
-  NOTIFICATION_RENDERER_PROCESS_CLOSED,
-
-  // Indicates that a RenderWidgetHost has become unresponsive for a period of
-  // time. The source will be the RenderWidgetHost that corresponds to the
-  // hung view, and no details are expected.
-  // TODO(https://crbug.com/1174769): Remove.
-  NOTIFICATION_RENDER_WIDGET_HOST_HANG,
 
   // Indicates a RenderWidgetHost has been hidden or restored. The source is
   // the RWH whose visibility changed, the details is a bool set to true if
@@ -99,13 +43,6 @@ enum NotificationType {
   // Use RenderWidgetHostObserver::RenderWidgetHostVisibilityChanged()
   // TODO(https://crbug.com/1174771): Remove.
   NOTIFICATION_RENDER_WIDGET_VISIBILITY_CHANGED,
-
-  // Notification from WebContents that we have received a response from the
-  // renderer in response to a dom automation controller action. The source is
-  // the RenderViewHost, and the details is a string with the response.
-  // DEPRECATED: Use WebContentsObserver::DomOperationResponse()
-  // TODO(https://crbug.com/1174774): Remove.
-  NOTIFICATION_DOM_OPERATION_RESPONSE,
 
   // Custom notifications used by the embedder should start from here.
   NOTIFICATION_CONTENT_END,

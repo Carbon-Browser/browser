@@ -1,12 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_WM_DESKS_TEMPLATES_SAVED_DESK_ANIMATIONS_H_
 #define ASH_WM_DESKS_TEMPLATES_SAVED_DESK_ANIMATIONS_H_
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
 
 namespace ui {
 class Layer;

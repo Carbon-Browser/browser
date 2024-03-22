@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "components/keyed_service/core/keyed_service_export.h"
 #include "components/keyed_service/core/keyed_service_factory.h"
 
@@ -21,8 +21,9 @@ class BrowserContext;
 }
 
 // Base class for Factories that take a BrowserContext object and return some
-// service on a one-to-one mapping. Each factory that derives from this class
-// *must* be a Singleton (only unit tests don't do that).
+// service on a one-to-one mapping. Barring unit tests, each factory that
+// derives from this class *must* be a singleton (base::NoDestructor is
+// recommended over base::Singleton).
 //
 // We do this because services depend on each other and we need to control
 // shutdown/destruction order. In each derived classes' constructors, the
@@ -109,12 +110,22 @@ class KEYED_SERVICE_EXPORT BrowserContextKeyedServiceFactory
   // Interface for people building a concrete FooServiceFactory: --------------
 
   // Finds which browser context (if any) to use.
+  //
+  // Should return nullptr when the service should not be created for the given
+  // |context|.
   virtual content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const;
 
   // By default, we create instances of a service lazily and wait until
   // GetForBrowserContext() is called on our subclass. Some services need to be
   // created as soon as the BrowserContext has been brought up.
+  //
+  // Note: To ensure that this method takes effect, the Factory should be
+  // instantiated before any BrowserContext is created to be part of the
+  // dependency graph used to initialize all services on BrowserContext
+  // creation.
+  // The best practice is to initialize the factory in the appropriate
+  // `EnsureBrowserContextKeyedServiceFactoriesBuilt()` method.
   virtual bool ServiceIsCreatedWithBrowserContext() const;
 
   // By default, TestingBrowserContexts will be treated like normal contexts.
@@ -128,8 +139,18 @@ class KEYED_SERVICE_EXPORT BrowserContextKeyedServiceFactory
 
   // All subclasses of BrowserContextKeyedServiceFactory must return a
   // KeyedService instead of just a BrowserContextKeyedBase.
+  //
+  // This should not return nullptr; instead, return nullptr from
+  // `GetBrowserContextToUse()`.
+  //
+  // Sub-classes implement one of these two forms:
+  virtual std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
+      content::BrowserContext* context) const;
+
+  // DEPRECATED: allows incremental conversion to the unique_ptr<> form
+  // above. New code should not be using this form.
   virtual KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const = 0;
+      content::BrowserContext* context) const;
 
   // A helper object actually listens for notifications about BrowserContext
   // destruction, calculates the order in which things are destroyed and then
@@ -144,7 +165,7 @@ class KEYED_SERVICE_EXPORT BrowserContextKeyedServiceFactory
   // and the default implementation removes it from |mapping_| and deletes
   // the pointer.
   virtual void BrowserContextShutdown(content::BrowserContext* context);
-  void BrowserContextDestroyed(content::BrowserContext* context);
+  virtual void BrowserContextDestroyed(content::BrowserContext* context);
 
  private:
   friend class BrowserContextDependencyManagerUnittests;

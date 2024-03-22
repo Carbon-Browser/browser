@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,9 @@ public class PlatformContentCaptureConsumer implements ContentCaptureConsumer {
             View view, ViewStructure viewStructure, WebContents webContents) {
         mView = view;
         if (viewStructure != null) {
-            mPlatformSession = new PlatformSession(
-                    view.getContentCaptureSession(), viewStructure.getAutofillId());
+            mPlatformSession =
+                    new PlatformSession(
+                            view.getContentCaptureSession(), viewStructure.getAutofillId());
         }
     }
 

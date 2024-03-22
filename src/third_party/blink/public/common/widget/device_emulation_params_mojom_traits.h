@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,6 +62,11 @@ struct BLINK_COMMON_EXPORT
   static const std::vector<gfx::Rect>& window_segments(
       const blink::DeviceEmulationParams& r) {
     return r.window_segments;
+  }
+
+  static device::mojom::DevicePostureType device_posture(
+      const blink::DeviceEmulationParams& r) {
+    return r.device_posture;
   }
 
   static bool Read(blink::mojom::DeviceEmulationParamsDataView r,

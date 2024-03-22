@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,21 +31,20 @@ ExtensionFunction::ResponseAction ExtensionSetUpdateUrlDataFunction::Run() {
   }
 
   ExtensionPrefs::Get(browser_context())
-      ->UpdateExtensionPref(extension_id(), kUpdateURLData,
-                            std::make_unique<base::Value>(data));
+      ->UpdateExtensionPref(extension_id(), kUpdateURLData, base::Value(data));
   return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
 ExtensionIsAllowedIncognitoAccessFunction::Run() {
-  return RespondNow(OneArgument(base::Value(
-      util::IsIncognitoEnabled(extension_id(), browser_context()))));
+  return RespondNow(WithArguments(
+      util::IsIncognitoEnabled(extension_id(), browser_context())));
 }
 
 ExtensionFunction::ResponseAction
 ExtensionIsAllowedFileSchemeAccessFunction::Run() {
-  return RespondNow(OneArgument(
-      base::Value(util::AllowFileAccess(extension_id(), browser_context()))));
+  return RespondNow(
+      WithArguments(util::AllowFileAccess(extension_id(), browser_context())));
 }
 
 }  // namespace extensions

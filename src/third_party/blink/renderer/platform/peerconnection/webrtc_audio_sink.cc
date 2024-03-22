@@ -1,17 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/peerconnection/webrtc_audio_sink.h"
 
-#include <algorithm>
 #include <limits>
 
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_timestamp_helper.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
@@ -31,7 +32,7 @@ namespace WTF {
 
 template <>
 struct CrossThreadCopier<scoped_refptr<webrtc::AudioProcessorInterface>>
-    : public CrossThreadCopierPassThrough<
+    : public CrossThreadCopierByValuePassThrough<
           scoped_refptr<webrtc::AudioProcessorInterface>> {
   STATIC_ONLY(CrossThreadCopier);
 };
@@ -120,7 +121,7 @@ void WebRtcAudioSink::OnData(const media::AudioBus& audio_bus,
 }
 
 void WebRtcAudioSink::OnSetFormat(const media::AudioParameters& params) {
-  DCHECK(params.IsValid());
+  CHECK(params.IsValid());
   SendLogMessage(base::StringPrintf("OnSetFormat([label=%s] {params=[%s]})",
                                     adapter_->label().c_str(),
                                     params.AsHumanReadableString().c_str()));
@@ -157,7 +158,7 @@ void WebRtcAudioSink::DeliverRebufferedAudio(const media::AudioBus& audio_bus,
 
 namespace {
 void DereferenceOnMainThread(
-    const scoped_refptr<webrtc::AudioProcessorInterface>& processor) {}
+    scoped_refptr<webrtc::AudioProcessorInterface> processor) {}
 }  // namespace
 
 WebRtcAudioSink::Adapter::Adapter(
@@ -243,7 +244,7 @@ void WebRtcAudioSink::Adapter::RemoveSink(
   SendLogMessage(
       base::StringPrintf("Adapter::RemoveSink([label=%s])", label_.c_str()));
   base::AutoLock auto_lock(lock_);
-  const auto it = std::find(sinks_.begin(), sinks_.end(), sink);
+  auto** it = base::ranges::find(sinks_, sink);
   if (it != sinks_.end())
     sinks_.erase(it);
 }

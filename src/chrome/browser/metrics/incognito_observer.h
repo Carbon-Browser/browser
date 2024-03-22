@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_METRICS_INCOGNITO_OBSERVER_H_
 #define CHROME_BROWSER_METRICS_INCOGNITO_OBSERVER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 // Encapsulates platform-specific functionality for observing events that may
 // cause "is incognito active?" state to change. The class takes a closure that

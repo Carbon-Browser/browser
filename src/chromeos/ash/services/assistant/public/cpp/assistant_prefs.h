@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@
 
 class PrefRegistrySimple;
 
-namespace chromeos {
-namespace assistant {
-namespace prefs {
+namespace ash::assistant::prefs {
 
 // The status of the user's consent. The enum values cannot be changed because
 // they are persisted on disk.
@@ -52,8 +50,6 @@ extern const char kAssistantConsentStatus[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantContextEnabled[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
-extern const char kAssistantDeprecateStylusToast[];
-COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantDisabledByPolicy[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantEnabled[];
@@ -69,6 +65,8 @@ COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantOnboardingMode[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantVoiceMatchEnabledDuringOobe[];
+COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
+extern const char kAssistantNumFailuresSinceLastServiceRun[];
 
 // Registers Assistant specific profile preferences for browser prefs.
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
@@ -80,8 +78,12 @@ AssistantOnboardingMode ToOnboardingMode(const std::string& onboarding_mode);
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 std::string ToOnboardingModeString(AssistantOnboardingMode onboarding_mode);
 
-}  // namespace prefs
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant::prefs
+
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
+namespace chromeos::assistant {
+namespace prefs = ::ash::assistant::prefs;
+}
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_PUBLIC_CPP_ASSISTANT_PREFS_H_

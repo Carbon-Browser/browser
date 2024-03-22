@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,10 @@ TEST(HashingTest, HashName) {
   for (size_t i = 0; i < std::size(known_hashes); ++i) {
     EXPECT_EQ(known_hashes[i].hash_value, HashName(known_hashes[i].name));
   }
+}
+
+TEST(HashingTest, HashNameAsHexString) {
+  EXPECT_EQ("37e4f786", HashNameAsHexString("a"));
 }
 
 }  // namespace variations

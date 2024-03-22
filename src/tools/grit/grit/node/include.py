@@ -1,11 +1,10 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Handling of the <include> element.
 """
 
-from __future__ import print_function
 
 import os
 
@@ -19,7 +18,7 @@ class IncludeNode(base.Node):
   """An <include> element."""
 
   def __init__(self):
-    super(IncludeNode, self).__init__()
+    super().__init__()
 
     # Cache flattened data so that we don't flatten the same file
     # multiple times.

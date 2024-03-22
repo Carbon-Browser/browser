@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/base/constants.h"
 #include "remoting/protocol/audio_decode_scheduler.h"
 #include "remoting/protocol/audio_reader.h"
@@ -25,8 +26,7 @@
 #include "remoting/protocol/transport_context.h"
 #include "remoting/protocol/video_renderer.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 IceConnectionToHost::IceConnectionToHost() = default;
 
@@ -195,18 +195,22 @@ ConnectionToHost::State IceConnectionToHost::state() const {
 }
 
 void IceConnectionToHost::NotifyIfChannelsReady() {
-  if (!control_dispatcher_.get() || !control_dispatcher_->is_connected())
+  if (!control_dispatcher_.get() || !control_dispatcher_->is_connected()) {
     return;
-  if (!event_dispatcher_.get() || !event_dispatcher_->is_connected())
+  }
+  if (!event_dispatcher_.get() || !event_dispatcher_->is_connected()) {
     return;
-  if (!video_dispatcher_.get() || !video_dispatcher_->is_connected())
+  }
+  if (!video_dispatcher_.get() || !video_dispatcher_->is_connected()) {
     return;
+  }
   if ((!audio_reader_.get() || !audio_reader_->is_connected()) &&
       session_->config().is_audio_enabled()) {
     return;
   }
-  if (state_ != AUTHENTICATED)
+  if (state_ != AUTHENTICATED) {
     return;
+  }
 
   // Start forwarding clipboard and input events.
   clipboard_forwarder_.set_clipboard_stub(control_dispatcher_.get());
@@ -235,5 +239,4 @@ void IceConnectionToHost::SetState(State state, ErrorCode error) {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

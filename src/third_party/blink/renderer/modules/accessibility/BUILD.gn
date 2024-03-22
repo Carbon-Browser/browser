@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,6 +6,8 @@ import("//third_party/blink/renderer/modules/modules.gni")
 
 blink_modules_sources("accessibility") {
   sources = [
+    "aria_notification.cc",
+    "aria_notification.h",
     "ax_enums.cc",
     "ax_enums.h",
     "ax_image_map_link.cc",
@@ -54,6 +56,8 @@ blink_modules_sources("accessibility") {
     "ax_validation_message.h",
     "ax_virtual_object.cc",
     "ax_virtual_object.h",
+    "blink_ax_tree_source.cc",
+    "blink_ax_tree_source.h",
     "inspector_accessibility_agent.cc",
     "inspector_accessibility_agent.h",
     "inspector_type_builder_helper.cc",
@@ -65,6 +69,7 @@ blink_modules_sources("accessibility") {
     "//third_party/blink/public/strings:strings_grit",
     "//third_party/blink/renderer/modules/media_controls:media_controls",
     "//third_party/blink/renderer/modules/permissions:permissions",
+    "//ui/accessibility",
     "//ui/accessibility:ax_base",
     "//ui/accessibility:ax_enums_mojo_blink",
   ]
@@ -72,4 +77,11 @@ blink_modules_sources("accessibility") {
   # The modules/accessibility/ depends closely on core/ --
   # include the core pch for faster Windows compilation times.
   configs += [ "//third_party/blink/renderer/core:blink_core_pch" ]
+
+  if (is_debug || dcheck_always_on) {
+    sources += [
+      "ax_debug_utils.cc",
+      "ax_debug_utils.h",
+    ]
+  }
 }

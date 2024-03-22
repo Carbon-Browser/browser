@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,8 @@ class ExclusiveAccessBubble : public gfx::AnimationDelegate {
  public:
   ExclusiveAccessBubble(ExclusiveAccessManager* manager,
                         const GURL& url,
-                        ExclusiveAccessBubbleType bubble_type);
+                        ExclusiveAccessBubbleType bubble_type,
+                        bool notify_download);
 
   ExclusiveAccessBubble(const ExclusiveAccessBubble&) = delete;
   ExclusiveAccessBubble& operator=(const ExclusiveAccessBubble&) = delete;
@@ -57,9 +58,8 @@ class ExclusiveAccessBubble : public gfx::AnimationDelegate {
   static const int kSimplifiedPopupTopPx;
 
   // Returns the current desirable rect for the popup window in screen
-  // coordinates. If |ignore_animation_state| is true this returns the rect
-  // assuming the popup is fully onscreen.
-  virtual gfx::Rect GetPopupRect(bool ignore_animation_state) const = 0;
+  // coordinates.
+  virtual gfx::Rect GetPopupRect() const = 0;
   virtual gfx::Point GetCursorScreenPoint() = 0;
   virtual bool WindowContainsPoint(gfx::Point pos) = 0;
 
@@ -110,6 +110,12 @@ class ExclusiveAccessBubble : public gfx::AnimationDelegate {
   // The type of the bubble; controls e.g. which buttons to show.
   ExclusiveAccessBubbleType bubble_type_;
 
+  // The bubble should notify about downloads
+  bool notify_download_ = false;
+
+  // The bubble should notify about overriding another ExclusiveAccessBubble
+  bool notify_overridden_ = false;
+
  private:
   friend class ExclusiveAccessTest;
 
@@ -141,6 +147,12 @@ class ExclusiveAccessBubble : public gfx::AnimationDelegate {
   // if the mouse has moved since our last check. Only used in non-simplified
   // fullscreen mode.
   gfx::Point last_mouse_pos_;
+
+  // Indicates if the exit bubble should re-show once input is first detected.
+  bool reshow_on_first_input_ = false;
+
+  // Tracks if any user input has been detected on the exclusive access context.
+  bool has_seen_user_input_ = false;
 };
 
 #endif  // CHROME_BROWSER_UI_EXCLUSIVE_ACCESS_EXCLUSIVE_ACCESS_BUBBLE_H_

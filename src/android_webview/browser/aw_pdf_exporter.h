@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,15 @@ class PrintSettings;
 
 namespace android_webview {
 
+// Native companion to Java AwPdfExporter.
+// Owned by native AwContents, which lazy-instantiates this object when
+// instructed to by the Java side.
+//
+// The Java AwPdfExporter holds a pointer to this native component but is not
+// responsible for its lifetime.
+// The Java AwPdfExporter is similarly owned by the Java AwContents.
+//
+// Lifetime: WebView
 class AwPdfExporter {
  public:
   AwPdfExporter(JNIEnv* env,

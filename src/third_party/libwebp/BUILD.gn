@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -16,14 +16,16 @@ config("libwebp_config_internal") {
   defines = [
     "WEBP_NEAR_LOSSLESS=0",
     "WEBP_DISABLE_STATS",
-    "WEBP_REDUCE_SIZE",
   ]
+  if (!is_chromeos) {
+    defines += [ "WEBP_REDUCE_SIZE" ]
+  }
   if (!is_ios) {
     defines += [ "WEBP_REDUCE_CSP" ]
   }
 }
 
-set_opt_level = !is_debug && (is_posix || is_fuchsia) &&
+set_opt_level = !is_debug && (is_posix || is_fuchsia || is_win) &&
                 (current_cpu == "arm" || current_cpu == "arm64")
 
 # webp's dsp code can be built for all configurations. Skipping it when both
@@ -185,7 +187,7 @@ static_library("libwebp_dsp") {
   ]
   public_deps = [ ":libwebp_dsp_headers" ]
   if (is_android) {
-    deps += [ "//third_party/android_ndk:cpu_features" ]
+    deps += [ "//third_party/cpu_features:ndk_compat" ]
   }
   if (current_cpu == "x86" || current_cpu == "x64") {
     defines = [
@@ -363,10 +365,16 @@ source_set("libwebp_sharpyuv_dsp_headers") {
   public = [ "src/sharpyuv/sharpyuv_dsp.h" ]
 }
 
+source_set("libwebp_dsp_cpu_c") {
+  public = [ "src/src/dsp/cpu.c" ]
+}
+
 static_library("libwebp_sharpyuv") {
   sources = [
     "src/sharpyuv/sharpyuv.c",
     "src/sharpyuv/sharpyuv.h",
+    "src/sharpyuv/sharpyuv_cpu.c",
+    "src/sharpyuv/sharpyuv_cpu.h",
     "src/sharpyuv/sharpyuv_csp.c",
     "src/sharpyuv/sharpyuv_csp.h",
     "src/sharpyuv/sharpyuv_gamma.c",
@@ -383,6 +391,7 @@ static_library("libwebp_sharpyuv") {
   all_dependent_configs = [ ":libwebp_config" ]
 
   deps = [
+    ":libwebp_dsp_cpu_c",
     ":libwebp_dsp_headers",
     ":libwebp_sharpyuv_dsp",
     ":libwebp_webp",
@@ -391,6 +400,8 @@ static_library("libwebp_sharpyuv") {
 
 static_library("libwebp_sharpyuv_dsp") {
   sources = [
+    "src/sharpyuv/sharpyuv.h",
+    "src/sharpyuv/sharpyuv_cpu.h",
     "src/sharpyuv/sharpyuv_dsp.c",
     "src/sharpyuv/sharpyuv_dsp.h",
   ]
@@ -464,13 +475,6 @@ static_library("libwebp_sharpyuv_sse2") {
   ]
 }
 
-config("libwebp_utils_warnings") {
-  if (is_clang) {
-    # See https://code.google.com/p/webp/issues/detail?id=253.
-    cflags = [ "-Wno-incompatible-pointer-types" ]
-  }
-}
-
 static_library("libwebp_utils") {
   sources = [
     "src/src/utils/bit_reader_inl_utils.h",
@@ -509,8 +513,6 @@ static_library("libwebp_utils") {
   }
 
   all_dependent_configs = [ ":libwebp_config" ]
-
-  public_configs = [ ":libwebp_utils_warnings" ]
 
   deps = [
     ":libwebp_dsp_headers",
@@ -651,6 +653,7 @@ if (current_toolchain == host_toolchain) {
       ":imagedec",
       ":imageio_util",
       ":libwebp",
+      ":libwebp_sharpyuv",
       ":libwebp_webp",
       "//base",
       "//build/win:default_exe_manifest",
@@ -712,6 +715,7 @@ fuzzer_test("libwebp_advanced_api_fuzzer") {
   seed_corpus = "fuzzing/fuzz_seed_corpus"
   deps = [
     ":libwebp",
+    ":libwebp_utils",
     ":libwebp_webp",
   ]
   defines = [ "WEBP_MAX_IMAGE_SIZE=838860800" ]

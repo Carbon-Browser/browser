@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,13 +19,12 @@ namespace {
 using css_parsing_utils::AtDelimiter;
 using css_parsing_utils::AtIdent;
 using css_parsing_utils::ConsumeAngle;
-using css_parsing_utils::ConsumeIdSelector;
 using css_parsing_utils::ConsumeIfDelimiter;
 using css_parsing_utils::ConsumeIfIdent;
 
-CSSParserContext* MakeContext() {
+CSSParserContext* MakeContext(CSSParserMode mode = kHTMLStandardMode) {
   return MakeGarbageCollected<CSSParserContext>(
-      kHTMLStandardMode, SecureContextMode::kInsecureContext);
+      mode, SecureContextMode::kInsecureContext);
 }
 
 TEST(CSSParsingUtilsTest, BasicShapeUseCount) {
@@ -43,65 +42,6 @@ TEST(CSSParsingUtilsTest, BasicShapeUseCount) {
 TEST(CSSParsingUtilsTest, Revert) {
   EXPECT_TRUE(css_parsing_utils::IsCSSWideKeyword(CSSValueID::kRevert));
   EXPECT_TRUE(css_parsing_utils::IsCSSWideKeyword("revert"));
-}
-
-TEST(CSSParsingUtilsTest, ConsumeIdSelector) {
-  {
-    String text = "#foo";
-    auto tokens = CSSTokenizer(text).TokenizeToEOF();
-    CSSParserTokenRange range(tokens);
-    EXPECT_EQ("#foo", ConsumeIdSelector(range)->CssText());
-  }
-  {
-    String text = "#bar  ";
-    auto tokens = CSSTokenizer(text).TokenizeToEOF();
-    CSSParserTokenRange range(tokens);
-    EXPECT_EQ("#bar", ConsumeIdSelector(range)->CssText());
-    EXPECT_TRUE(range.AtEnd())
-        << "ConsumeIdSelector cleans up trailing whitespace";
-  }
-
-  {
-    String text = "#123";
-    auto tokens = CSSTokenizer(text).TokenizeToEOF();
-    CSSParserTokenRange range(tokens);
-    ASSERT_TRUE(range.Peek().GetType() == kHashToken &&
-                range.Peek().GetHashTokenType() == kHashTokenUnrestricted);
-    EXPECT_FALSE(ConsumeIdSelector(range))
-        << "kHashTokenUnrestricted is not a valid <id-selector>";
-  }
-  {
-    String text = "#";
-    auto tokens = CSSTokenizer(text).TokenizeToEOF();
-    CSSParserTokenRange range(tokens);
-    EXPECT_FALSE(ConsumeIdSelector(range));
-  }
-  {
-    String text = " #foo";
-    auto tokens = CSSTokenizer(text).TokenizeToEOF();
-    CSSParserTokenRange range(tokens);
-    EXPECT_FALSE(ConsumeIdSelector(range))
-        << "ConsumeIdSelector does not accept preceding whitespace";
-    EXPECT_EQ(kWhitespaceToken, range.Peek().GetType());
-  }
-  {
-    String text = "foo";
-    auto tokens = CSSTokenizer(text).TokenizeToEOF();
-    CSSParserTokenRange range(tokens);
-    EXPECT_FALSE(ConsumeIdSelector(range));
-  }
-  {
-    String text = "##";
-    auto tokens = CSSTokenizer(text).TokenizeToEOF();
-    CSSParserTokenRange range(tokens);
-    EXPECT_FALSE(ConsumeIdSelector(range));
-  }
-  {
-    String text = "10px";
-    auto tokens = CSSTokenizer(text).TokenizeToEOF();
-    CSSParserTokenRange range(tokens);
-    EXPECT_FALSE(ConsumeIdSelector(range));
-  }
 }
 
 double ConsumeAngleValue(String target) {
@@ -316,6 +256,57 @@ TEST(CSSParsingUtilsTest, NoSystemColor) {
     EXPECT_EQ(ConsumeColorForTest(expectation.css_text,
                                   AllowedColorKeywords::kNoSystemColor),
               expectation.not_allowed_expectation);
+  }
+}
+
+TEST(CSSParsingUtilsTest, InternalColorsOnlyAllowedInUaMode) {
+  auto ConsumeColorForTest = [](String css_text, CSSParserMode mode) {
+    auto tokens = CSSTokenizer(css_text).TokenizeToEOF();
+    CSSParserTokenRange range(tokens);
+    return css_parsing_utils::ConsumeColor(range, *MakeContext(mode));
+  };
+
+  struct {
+    STACK_ALLOCATED();
+
+   public:
+    String css_text;
+    CSSIdentifierValue* ua_expectation;
+    CSSIdentifierValue* other_expectation;
+  } expectations[]{
+      {"blue", CSSIdentifierValue::Create(CSSValueID::kBlue),
+       CSSIdentifierValue::Create(CSSValueID::kBlue)},
+      {"-internal-spelling-error-color",
+       CSSIdentifierValue::Create(CSSValueID::kInternalSpellingErrorColor),
+       nullptr},
+      {"-internal-grammar-error-color",
+       CSSIdentifierValue::Create(CSSValueID::kInternalGrammarErrorColor),
+       nullptr},
+  };
+  for (auto& expectation : expectations) {
+    EXPECT_EQ(ConsumeColorForTest(expectation.css_text, kHTMLStandardMode),
+              expectation.other_expectation);
+    EXPECT_EQ(ConsumeColorForTest(expectation.css_text, kHTMLQuirksMode),
+              expectation.other_expectation);
+    EXPECT_EQ(ConsumeColorForTest(expectation.css_text, kUASheetMode),
+              expectation.ua_expectation);
+  }
+}
+
+// Verify that the state of CSSParserTokenRange is preserved
+// for failing <color> values.
+TEST(CSSParsingUtilsTest, ConsumeColorRangePreservation) {
+  const char* tests[] = {
+      "color-mix(42deg)",
+      "color-contrast(42deg)",
+  };
+  for (const char*& test : tests) {
+    String input(test);
+    SCOPED_TRACE(input);
+    Vector<CSSParserToken, 32> tokens = CSSTokenizer(input).TokenizeToEOF();
+    CSSParserTokenRange range(tokens);
+    EXPECT_EQ(nullptr, css_parsing_utils::ConsumeColor(range, *MakeContext()));
+    EXPECT_EQ(test, range.Serialize());
   }
 }
 

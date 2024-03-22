@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@ import org.chromium.base.Log;
 /** Service exposing the dummy {@link SpnegoAuthenticator}. */
 public class SpnegoAuthenticatorService extends Service {
     private static final String TAG = "tools_SpnegoAuth";
+
     @SuppressLint("StaticFieldLeak")
     private static SpnegoAuthenticator sAuthenticator;
 

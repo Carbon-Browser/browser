@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,22 +23,65 @@ class CORE_EXPORT CSSTokenizer {
   DISALLOW_NEW();
 
  public:
-  CSSTokenizer(const String&, wtf_size_t offset = 0);
+  // The overload with const String& holds on to a reference to the string.
+  // (Most places, we probably don't need to do that, but fixing that would
+  // require manual inspection.)
+  explicit CSSTokenizer(const String&, wtf_size_t offset = 0);
+  explicit CSSTokenizer(StringView, wtf_size_t offset = 0);
   CSSTokenizer(const CSSTokenizer&) = delete;
   CSSTokenizer& operator=(const CSSTokenizer&) = delete;
 
   Vector<CSSParserToken, 32> TokenizeToEOF();
   wtf_size_t TokenCount();
 
+  // Like TokenizeToEOF(), but also returns the start byte for each token.
+  // There's an extra offset at the very end that returns the end byte
+  // of the last token, i.e., the length of the input string.
+  // This matches the convention CSSParserTokenOffsets expects.
+  std::pair<Vector<CSSParserToken, 32>, Vector<wtf_size_t, 32>>
+  TokenizeToEOFWithOffsets();
+
+  // The unicode-range descriptor invokes a special tokenizer
+  // to solve a design mistake in CSS.
+  //
+  // https://drafts.csswg.org/css-syntax/#consume-unicode-range-value
+  Vector<CSSParserToken, 32> TokenizeToEOFWithUnicodeRanges();
+
   wtf_size_t Offset() const { return input_.Offset(); }
   wtf_size_t PreviousOffset() const { return prev_offset_; }
   StringView StringRangeAt(wtf_size_t start, wtf_size_t length) const;
-
- private:
+  const Vector<String>& StringPool() const { return string_pool_; }
   CSSParserToken TokenizeSingle();
   CSSParserToken TokenizeSingleWithComments();
 
-  CSSParserToken NextToken();
+  // If you want the returned CSSParserTokens' Value() to be valid beyond
+  // the destruction of CSSTokenizer, you'll need to call PersistString()
+  // to some longer-lived tokenizer (escaped string tokens may have
+  // StringViews that refer to the string pool). The tokenizer
+  // (*this, not the destination) is in an undefined state after this;
+  // all you can do is destroy it.
+  void PersistStrings(CSSTokenizer& destination);
+
+  // See documentation near CSSParserTokenStream.
+  CSSParserToken Restore(const CSSParserToken& next, wtf_size_t offset) {
+    // Undo block stack mutation.
+    if (next.GetBlockType() == CSSParserToken::BlockType::kBlockStart) {
+      block_stack_.pop_back();
+    } else if (next.GetBlockType() == CSSParserToken::BlockType::kBlockEnd) {
+      static_assert(kLeftParenthesisToken == (kRightParenthesisToken - 1));
+      static_assert(kLeftBracketToken == (kRightBracketToken - 1));
+      static_assert(kLeftBraceToken == (kRightBraceToken - 1));
+      block_stack_.push_back(
+          static_cast<CSSParserTokenType>(next.GetType() - 1));
+    }
+    input_.Restore(offset);
+    // Produce the post-restore lookahead token.
+    return TokenizeSingle();
+  }
+
+ private:
+  template <bool SkipComments, bool StoreOffset>
+  ALWAYS_INLINE CSSParserToken NextToken();
 
   UChar Consume();
   void Reconsume(UChar);
@@ -82,7 +125,6 @@ class CORE_EXPORT CSSTokenizer {
   CSSParserToken HyphenMinus(UChar);
   CSSParserToken Asterisk(UChar);
   CSSParserToken LessThan(UChar);
-  CSSParserToken Solidus(UChar);
   CSSParserToken Colon(UChar);
   CSSParserToken SemiColon(UChar);
   CSSParserToken Hash(UChar);
@@ -100,9 +142,6 @@ class CORE_EXPORT CSSTokenizer {
 
   StringView RegisterString(const String&);
 
-  using CodePoint = CSSParserToken (CSSTokenizer::*)(UChar);
-  static const CodePoint kCodePoints[];
-
   CSSTokenizerInputStream input_;
   Vector<CSSParserTokenType, 8> block_stack_;
 
@@ -113,8 +152,9 @@ class CORE_EXPORT CSSTokenizer {
 
   wtf_size_t prev_offset_ = 0;
   wtf_size_t token_count_ = 0;
-};
 
+  bool unicode_ranges_allowed_ = false;
+};
 }  // namespace blink
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_CSS_PARSER_CSS_TOKENIZER_H_

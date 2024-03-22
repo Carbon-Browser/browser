@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
-#include "chrome/browser/content_settings/sound_content_setting_observer.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -255,8 +254,7 @@ IN_PROC_BROWSER_TEST_F(SoundContentSettingObserverBrowserTest,
   base::RunLoop run_loop;
   TestAudioStateObserver audio_state_observer(web_contents(),
                                               run_loop.QuitClosure());
-  EXPECT_EQ("OK", content::EvalJs(web_contents(), "StartOscillator();",
-                                  content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  EXPECT_EQ("OK", content::EvalJs(web_contents(), "StartOscillator();"));
   run_loop.Run();
 
   SoundContentSettingObserver* observer =
@@ -353,6 +351,12 @@ class SoundContentSettingObserverFencedFrameBrowserTest
  public:
   SoundContentSettingObserverFencedFrameBrowserTest() = default;
   ~SoundContentSettingObserverFencedFrameBrowserTest() override = default;
+
+  // TODO(crbug.com/1491942): This fails with the field trial testing config.
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    InProcessBrowserTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitch("disable-field-trial-config");
+  }
 
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();

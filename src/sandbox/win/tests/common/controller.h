@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,9 @@ enum SboxTestResult {
   SBOX_TEST_TIMED_OUT,
   // Test failed. (0xE5B1000B or -441384949)
   SBOX_TEST_FAILED,
-  // Last Result. (0xE5B1000C or -441384948)
+  // Failed to configure sandbox before test. (0xE5B1000C or -441384948)
+  SBOX_TEST_FAILED_SETUP,
+  // Last Result. (0xE5B1000D or -441384947)
   SBOX_TEST_LAST_RESULT
 };
 
@@ -98,20 +100,14 @@ class TestRunner {
 
   ~TestRunner();
 
-  // Adds a rule to the policy. The parameters are the same as the AddRule
-  // function in the sandbox.
-  bool AddRule(SubSystem subsystem,
-               Semantics semantics,
-               const wchar_t* pattern);
-
   // Adds a filesystem rules with the path of a file in system32. The function
   // appends "pattern" to "system32" and then call AddRule. Return true if the
   // function succeeds.
-  bool AddRuleSys32(Semantics semantics, const wchar_t* pattern);
+  bool AddRuleSys32(FileSemantics semantics, const wchar_t* pattern);
 
   // Adds a filesystem rules to the policy. Returns true if the functions
   // succeeds.
-  bool AddFsRule(Semantics semantics, const wchar_t* pattern);
+  bool AllowFileAccess(FileSemantics semantics, const wchar_t* pattern);
 
   // Starts a child process in the sandbox and ask it to run |command|. Returns
   // a SboxTestResult. By default, the test runs AFTER_REVERT.
@@ -149,6 +145,9 @@ class TestRunner {
 
   // Returns the process ID for an asynchronous test.
   DWORD process_id() { return target_process_id_; }
+
+  // Blocks until the number of tracked processes returns to zero.
+  bool WaitForAllTargets();
 
  private:
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,8 +89,9 @@ class DocumentsProviderRootManagerTest : public testing::Test {
     root_manager_.reset();
     arc_service_manager_->arc_bridge_service()->file_system()->CloseInstance(
         &file_system_instance_);
-    if (runner_)
+    if (runner_) {
       runner_->Shutdown();
+    }
   }
 
   void AddFakeRoot(const std::string& authority,

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -107,7 +107,7 @@ TEST_F(LoginStateApiAshUnittest, GetSessionState) {
     // |AshTestHelper::bluetooth_config_test_helper()|.
     session_manager::SessionManager::Get()->SetSessionState(test.session_state);
     auto function = base::MakeRefCounted<LoginStateGetSessionStateFunction>();
-    std::unique_ptr<base::Value> result =
+    absl::optional<base::Value> result =
         RunFunctionAndReturnValue(function.get(), "[]");
     EXPECT_EQ(test.expected, result->GetString());
   }

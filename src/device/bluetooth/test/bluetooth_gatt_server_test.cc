@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ void BluetoothGattServerTest::StartGattSetup() {
 }
 
 void BluetoothGattServerTest::CompleteGattSetup() {
+  delegate_->set_expected_service(nullptr);
   service_->Register(GetCallback(Call::EXPECTED),
                      GetGattErrorCallback(Call::NOT_EXPECTED));
 }

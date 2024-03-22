@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,9 @@ namespace media_router {
 
 class LocalPresentationManager;
 
-// LocalPresentationManager is shared between a Profile and
-// its associated incognito Profiles.
 class LocalPresentationManagerFactory
     : public BrowserContextKeyedServiceFactory {
  public:
-  // If |web_contents| is normal profile, use it as browser context;
-  // If |web_contents| is incognito profile, |GetBrowserContextToUse| will
-  // redirect incognito profile to original profile, and use original one as
-  // browser context.
   static LocalPresentationManager* GetOrCreateForWebContents(
       content::WebContents* web_contents);
   static LocalPresentationManager* GetOrCreateForBrowserContext(
@@ -39,7 +33,7 @@ class LocalPresentationManagerFactory
   ~LocalPresentationManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory interface.
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

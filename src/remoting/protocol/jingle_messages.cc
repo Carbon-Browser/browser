@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,7 @@
 using jingle_xmpp::QName;
 using jingle_xmpp::XmlElement;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -38,21 +37,21 @@ const int kPortMin = 1000;
 const int kPortMax = 65535;
 
 const NameMapElement<JingleMessage::ActionType> kActionTypes[] = {
-  { JingleMessage::SESSION_INITIATE, "session-initiate" },
-  { JingleMessage::SESSION_ACCEPT, "session-accept" },
-  { JingleMessage::SESSION_TERMINATE, "session-terminate" },
-  { JingleMessage::SESSION_INFO, "session-info" },
-  { JingleMessage::TRANSPORT_INFO, "transport-info" },
+    {JingleMessage::SESSION_INITIATE, "session-initiate"},
+    {JingleMessage::SESSION_ACCEPT, "session-accept"},
+    {JingleMessage::SESSION_TERMINATE, "session-terminate"},
+    {JingleMessage::SESSION_INFO, "session-info"},
+    {JingleMessage::TRANSPORT_INFO, "transport-info"},
 };
 
 const NameMapElement<JingleMessage::Reason> kReasons[] = {
-  { JingleMessage::SUCCESS, "success" },
-  { JingleMessage::DECLINE, "decline" },
-  { JingleMessage::CANCEL, "cancel" },
-  { JingleMessage::EXPIRED, "expired" },
-  { JingleMessage::GENERAL_ERROR, "general-error" },
-  { JingleMessage::FAILED_APPLICATION, "failed-application" },
-  { JingleMessage::INCOMPATIBLE_PARAMETERS, "incompatible-parameters" },
+    {JingleMessage::SUCCESS, "success"},
+    {JingleMessage::DECLINE, "decline"},
+    {JingleMessage::CANCEL, "cancel"},
+    {JingleMessage::EXPIRED, "expired"},
+    {JingleMessage::GENERAL_ERROR, "general-error"},
+    {JingleMessage::FAILED_APPLICATION, "failed-application"},
+    {JingleMessage::INCOMPATIBLE_PARAMETERS, "incompatible-parameters"},
 };
 
 bool ParseIceCredentials(const jingle_xmpp::XmlElement* element,
@@ -60,8 +59,7 @@ bool ParseIceCredentials(const jingle_xmpp::XmlElement* element,
   DCHECK(element->Name() == QName(kIceTransportNamespace, "credentials"));
 
   const std::string& channel = element->Attr(QName(kEmptyNamespace, "channel"));
-  const std::string& ufrag =
-      element->Attr(QName(kEmptyNamespace, "ufrag"));
+  const std::string& ufrag = element->Attr(QName(kEmptyNamespace, "ufrag"));
   const std::string& password =
       element->Attr(QName(kEmptyNamespace, "password"));
 
@@ -270,8 +268,8 @@ bool JingleMessage::ParseXml(const jingle_xmpp::XmlElement* stanza,
     return false;
   }
 
-  const XmlElement* webrtc_transport_tag = content_tag->FirstNamed(
-      QName(kWebrtcTransportNamespace, "transport"));
+  const XmlElement* webrtc_transport_tag =
+      content_tag->FirstNamed(QName(kWebrtcTransportNamespace, "transport"));
   if (webrtc_transport_tag) {
     transport_info =
         std::make_unique<jingle_xmpp::XmlElement>(*webrtc_transport_tag);
@@ -279,8 +277,8 @@ bool JingleMessage::ParseXml(const jingle_xmpp::XmlElement* stanza,
 
   description.reset();
   if (action == SESSION_INITIATE || action == SESSION_ACCEPT) {
-    const XmlElement* description_tag = content_tag->FirstNamed(
-        QName(kChromotingXmlNamespace, "description"));
+    const XmlElement* description_tag =
+        content_tag->FirstNamed(QName(kChromotingXmlNamespace, "description"));
     if (!description_tag) {
       *error = "Missing chromoting content description";
       return false;
@@ -295,8 +293,8 @@ bool JingleMessage::ParseXml(const jingle_xmpp::XmlElement* stanza,
   }
 
   if (!webrtc_transport_tag) {
-    const XmlElement* ice_transport_tag = content_tag->FirstNamed(
-        QName(kIceTransportNamespace, "transport"));
+    const XmlElement* ice_transport_tag =
+        content_tag->FirstNamed(QName(kIceTransportNamespace, "transport"));
     if (ice_transport_tag) {
       transport_info =
           std::make_unique<jingle_xmpp::XmlElement>(*ice_transport_tag);
@@ -319,8 +317,9 @@ std::unique_ptr<jingle_xmpp::XmlElement> JingleMessage::ToXml() const {
   jingle_tag->AddAttr(QName(kEmptyNamespace, "sid"), sid);
 
   to.SetInMessage(root.get(), SignalingAddress::TO);
-  if (!from.empty())
+  if (!from.empty()) {
     from.SetInMessage(root.get(), SignalingAddress::FROM);
+  }
 
   const char* action_attr = ValueToName(kActionTypes, action);
   if (!action_attr) {
@@ -346,8 +345,8 @@ std::unique_ptr<jingle_xmpp::XmlElement> JingleMessage::ToXml() const {
   if (reason != UNKNOWN_REASON) {
     XmlElement* reason_tag = new XmlElement(QName(kJingleNamespace, "reason"));
     jingle_tag->AddElement(reason_tag);
-    reason_tag->AddElement(new XmlElement(
-        QName(kJingleNamespace, ValueToName(kReasons, reason))));
+    reason_tag->AddElement(
+        new XmlElement(QName(kJingleNamespace, ValueToName(kReasons, reason))));
 
     if (error_code != UNKNOWN_ERROR) {
       XmlElement* error_code_tag =
@@ -391,21 +390,14 @@ void JingleMessage::AddAttachment(std::unique_ptr<XmlElement> attachment) {
 }
 
 JingleMessageReply::JingleMessageReply()
-    : type(REPLY_RESULT),
-      error_type(NONE) {
-}
+    : type(REPLY_RESULT), error_type(NONE) {}
 
 JingleMessageReply::JingleMessageReply(ErrorType error)
-    : type(error != NONE ? REPLY_ERROR : REPLY_RESULT),
-      error_type(error) {
-}
+    : type(error != NONE ? REPLY_ERROR : REPLY_RESULT), error_type(error) {}
 
 JingleMessageReply::JingleMessageReply(ErrorType error,
                                        const std::string& text_value)
-    : type(REPLY_ERROR),
-      error_type(error),
-      text(text_value) {
-}
+    : type(REPLY_ERROR), error_type(error), text(text_value) {}
 
 JingleMessageReply::~JingleMessageReply() = default;
 
@@ -484,8 +476,8 @@ std::unique_ptr<jingle_xmpp::XmlElement> JingleMessageReply::ToXml(
   // If the error name is not in the standard namespace, we have
   // to first add some error from that namespace.
   if (name.Namespace() != kJabberNamespace) {
-    error->AddElement(
-        new jingle_xmpp::XmlElement(QName(kJabberNamespace, "undefined-condition")));
+    error->AddElement(new jingle_xmpp::XmlElement(
+        QName(kJabberNamespace, "undefined-condition")));
   }
   error->AddElement(new jingle_xmpp::XmlElement(name));
 
@@ -493,7 +485,7 @@ std::unique_ptr<jingle_xmpp::XmlElement> JingleMessageReply::ToXml(
     // It's okay to always use English here. This text is for
     // debugging purposes only.
     jingle_xmpp::XmlElement* text_elem =
-            new jingle_xmpp::XmlElement(QName(kJabberNamespace, "text"));
+        new jingle_xmpp::XmlElement(QName(kJabberNamespace, "text"));
     text_elem->SetAttr(QName(kXmlNamespace, "lang"), "en");
     text_elem->SetBodyText(error_text);
     error->AddElement(text_elem);
@@ -515,8 +507,7 @@ IceTransportInfo::IceCredentials::IceCredentials(std::string channel,
 IceTransportInfo::IceTransportInfo() = default;
 IceTransportInfo::~IceTransportInfo() = default;
 
-bool IceTransportInfo::ParseXml(
-    const jingle_xmpp::XmlElement* element) {
+bool IceTransportInfo::ParseXml(const jingle_xmpp::XmlElement* element) {
   if (element->Name() != QName(kIceTransportNamespace, "transport")) {
     return false;
   }
@@ -560,5 +551,4 @@ std::unique_ptr<jingle_xmpp::XmlElement> IceTransportInfo::ToXml() const {
   return result;
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

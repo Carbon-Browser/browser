@@ -1,6 +1,8 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "base/memory/raw_ptr_exclusion.h"
 
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -13,8 +15,8 @@
 #include <vector>
 
 #include "base/allocator/allocator_check.h"
-#include "base/allocator/buildflags.h"
-#include "base/allocator/partition_allocator/page_allocator.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/page_allocator.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/compiler_specific.h"
 #include "base/debug/alias.h"
 #include "base/memory/aligned_memory.h"
@@ -30,9 +32,9 @@
 #endif
 #if BUILDFLAG(IS_MAC)
 #include <malloc/malloc.h>
-#include "base/allocator/allocator_interception_mac.h"
-#include "base/allocator/allocator_shim.h"
-#include "base/allocator/buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/shim/allocator_interception_apple.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/shim/allocator_shim.h"
+#include "base/check_op.h"
 #include "base/process/memory_unittest_mac.h"
 #endif
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -74,7 +76,7 @@ static void callFree(void *ptr) {
 
 TEST(ProcessMemoryTest, MacTerminateOnHeapCorruption) {
 #if BUILDFLAG(USE_ALLOCATOR_SHIM)
-  base::allocator::InitializeAllocatorShim();
+  allocator_shim::InitializeAllocatorShim();
 #endif
   // Assert that freeing an unallocated pointer will crash the process.
   char buf[9];
@@ -93,25 +95,25 @@ TEST(ProcessMemoryTest, MacTerminateOnHeapCorruption) {
 #endif
 
 #if BUILDFLAG(USE_ALLOCATOR_SHIM)
-  base::allocator::UninterceptMallocZonesForTesting();
+  allocator_shim::UninterceptMallocZonesForTesting();
 #endif
 }
 
 #endif  // BUILDFLAG(IS_MAC)
 
+#if BUILDFLAG(USE_ALLOCATOR_SHIM)
 TEST(MemoryTest, AllocatorShimWorking) {
 #if BUILDFLAG(IS_MAC)
-#if BUILDFLAG(USE_ALLOCATOR_SHIM)
-  base::allocator::InitializeAllocatorShim();
-#endif
-  base::allocator::InterceptAllocationsMac();
+  allocator_shim::InitializeAllocatorShim();
+  allocator_shim::InterceptAllocationsMac();
 #endif
   ASSERT_TRUE(base::allocator::IsAllocatorInitialized());
 
 #if BUILDFLAG(IS_MAC)
-  base::allocator::UninterceptMallocZonesForTesting();
+  allocator_shim::UninterceptMallocZonesForTesting();
 #endif
 }
+#endif  // BUILDFLAG(USE_ALLOCATOR_SHIM)
 
 // OpenBSD does not support these tests. Don't test these on ASan/TSan/MSan
 // configurations: only test the real allocator.
@@ -119,6 +121,7 @@ TEST(MemoryTest, AllocatorShimWorking) {
     !defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
 
 namespace {
+
 #if BUILDFLAG(IS_WIN)
 
 // Windows raises an exception in order to make the exit code unique to OOM.
@@ -148,7 +151,9 @@ class OutOfMemoryTest : public testing::Test {
         signed_test_size_(std::numeric_limits<ssize_t>::max()) {}
 
  protected:
-  void* value_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION void* value_;
   size_t test_size_;
   size_t insecure_test_size_;
   ssize_t signed_test_size_;
@@ -158,7 +163,7 @@ class OutOfMemoryDeathTest : public OutOfMemoryTest {
  public:
   void SetUpInDeathAssert() {
 #if BUILDFLAG(IS_MAC) && BUILDFLAG(USE_ALLOCATOR_SHIM)
-    base::allocator::InitializeAllocatorShim();
+    allocator_shim::InitializeAllocatorShim();
 #endif
 
     // Must call EnableTerminationOnOutOfMemory() because that is called from
@@ -171,7 +176,7 @@ class OutOfMemoryDeathTest : public OutOfMemoryTest {
 
 #if BUILDFLAG(IS_MAC)
   void TearDown() override {
-    base::allocator::UninterceptMallocZonesForTesting();
+    allocator_shim::UninterceptMallocZonesForTesting();
   }
 #endif
 
@@ -282,10 +287,16 @@ TEST_F(OutOfMemoryDeathTest, NewHandlerGeneratesUnhandledException) {
 }
 #endif  // BUILDFLAG(IS_WIN)
 
-// OS X and Android have no 2Gb allocation limit.
+// OS X has no 2Gb allocation limit.
 // See https://crbug.com/169327.
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_ANDROID)
+// PartitionAlloc is not active in component builds, so cannot enforce
+// this limit. (//BUILD.gn asserts that we cannot have an official component
+// build.)
+#if !BUILDFLAG(IS_MAC) && !defined(COMPONENT_BUILD)
 TEST_F(OutOfMemoryDeathTest, SecurityNew) {
+  if (ShouldSkipTest()) {
+    return;
+  }
   ASSERT_OOM_DEATH({
     SetUpInDeathAssert();
     value_ = operator new(insecure_test_size_);
@@ -293,6 +304,9 @@ TEST_F(OutOfMemoryDeathTest, SecurityNew) {
 }
 
 TEST_F(OutOfMemoryDeathTest, SecurityNewArray) {
+  if (ShouldSkipTest()) {
+    return;
+  }
   ASSERT_OOM_DEATH({
     SetUpInDeathAssert();
     value_ = new char[insecure_test_size_];
@@ -300,6 +314,9 @@ TEST_F(OutOfMemoryDeathTest, SecurityNewArray) {
 }
 
 TEST_F(OutOfMemoryDeathTest, SecurityMalloc) {
+  if (ShouldSkipTest()) {
+    return;
+  }
   ASSERT_OOM_DEATH({
     SetUpInDeathAssert();
     value_ = malloc(insecure_test_size_);
@@ -307,6 +324,9 @@ TEST_F(OutOfMemoryDeathTest, SecurityMalloc) {
 }
 
 TEST_F(OutOfMemoryDeathTest, SecurityRealloc) {
+  if (ShouldSkipTest()) {
+    return;
+  }
   ASSERT_OOM_DEATH({
     SetUpInDeathAssert();
     value_ = realloc(nullptr, insecure_test_size_);
@@ -314,6 +334,9 @@ TEST_F(OutOfMemoryDeathTest, SecurityRealloc) {
 }
 
 TEST_F(OutOfMemoryDeathTest, SecurityCalloc) {
+  if (ShouldSkipTest()) {
+    return;
+  }
   ASSERT_OOM_DEATH({
     SetUpInDeathAssert();
     value_ = calloc(1024, insecure_test_size_ / 1024L);
@@ -321,6 +344,9 @@ TEST_F(OutOfMemoryDeathTest, SecurityCalloc) {
 }
 
 TEST_F(OutOfMemoryDeathTest, SecurityAlignedAlloc) {
+  if (ShouldSkipTest()) {
+    return;
+  }
   ASSERT_OOM_DEATH({
     SetUpInDeathAssert();
     value_ = base::AlignedAlloc(insecure_test_size_, 8);
@@ -330,13 +356,16 @@ TEST_F(OutOfMemoryDeathTest, SecurityAlignedAlloc) {
 // POSIX does not define an aligned realloc function.
 #if BUILDFLAG(IS_WIN)
 TEST_F(OutOfMemoryDeathTest, SecurityAlignedRealloc) {
+  if (ShouldSkipTest()) {
+    return;
+  }
   ASSERT_OOM_DEATH({
     SetUpInDeathAssert();
     value_ = _aligned_realloc(nullptr, insecure_test_size_, 8);
   });
 }
 #endif  // BUILDFLAG(IS_WIN)
-#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_ANDROID)
+#endif  // !BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
@@ -515,7 +544,7 @@ class OutOfMemoryHandledTest : public OutOfMemoryTest {
 
   void TearDown() override {
 #if BUILDFLAG(IS_MAC)
-    base::allocator::UninterceptMallocZonesForTesting();
+    allocator_shim::UninterceptMallocZonesForTesting();
 #endif
   }
 };
@@ -675,3 +704,25 @@ TEST_F(OutOfMemoryHandledTest, UncheckedCalloc) {
 #endif  // BUILDFLAG(IS_ANDROID)
 #endif  // !BUILDFLAG(IS_OPENBSD) && BUILDFLAG(USE_ALLOCATOR_SHIM) &&
         // !defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
+
+#if BUILDFLAG(IS_MAC) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+
+// Not a proper test because it needs to be in a static initializer, see the
+// comment in UncheckedMalloc() in memory_mac.mm.
+//
+// The "test" passes if the binary doesn't crash.
+size_t need_a_static_initializer = []() {
+  void* ptr;
+  constexpr size_t kRequestedSize = 1000u;
+  bool ok = base::UncheckedMalloc(kRequestedSize, &ptr);
+  CHECK(ok);
+  size_t actual_size = malloc_size(ptr);
+  // If no known zone owns the pointer, dispatching code in libmalloc returns 0.
+  CHECK_GE(actual_size, kRequestedSize);
+  // If no zone owns the pointer, libmalloc aborts here.
+  free(ptr);
+
+  return actual_size;
+}();
+
+#endif  // BUILDFLAG(IS_MAC) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)

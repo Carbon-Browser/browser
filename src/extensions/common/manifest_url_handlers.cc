@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,14 +70,6 @@ const GURL& ManifestURL::GetUpdateURL(const Extension* extension) {
 // static
 bool ManifestURL::UpdatesFromGallery(const Extension* extension) {
   return extension_urls::IsWebstoreUpdateUrl(GetUpdateURL(extension));
-}
-
-// static
-bool ManifestURL::UpdatesFromGallery(const base::DictionaryValue* manifest) {
-  if (const std::string* url = manifest->FindStringKey(keys::kUpdateURL)) {
-    return extension_urls::IsWebstoreUpdateUrl(GURL(*url));
-  }
-  return false;
 }
 
 // static

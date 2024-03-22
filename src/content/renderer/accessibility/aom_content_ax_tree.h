@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/blink/public/platform/web_computed_ax_tree.h"
 
 #include "content/renderer/render_frame_impl.h"
@@ -55,7 +56,7 @@ class AomContentAxTree : public blink::WebComputedAXTree {
                                   blink::WebAOMBoolAttribute,
                                   bool* out_param);
   ui::AXTree tree_;
-  RenderFrameImpl* render_frame_;
+  raw_ptr<RenderFrameImpl, ExperimentalRenderer> render_frame_;
 };
 
 }  // namespace content

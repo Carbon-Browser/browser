@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/version.h"
 #include "chrome/updater/registration_data.h"
 #include "chrome/updater/update_service.h"
@@ -28,23 +28,26 @@ class UpdateServiceImplInactive : public UpdateService {
   void GetVersion(
       base::OnceCallback<void(const base::Version&)> callback) override {
     VLOG(1) << __func__ << " (Inactive)";
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), base::Version()));
   }
 
-  void RegisterApp(
-      const RegistrationRequest& request,
-      base::OnceCallback<void(const RegistrationResponse&)> callback) override {
+  void FetchPolicies(base::OnceCallback<void(int)> callback) override {
     VLOG(1) << __func__ << " (Inactive)";
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE,
-        base::BindOnce(std::move(callback), RegistrationResponse(-1)));
+    std::move(callback).Run(-1);
+  }
+
+  void RegisterApp(const RegistrationRequest& /*request*/,
+                   base::OnceCallback<void(int)> callback) override {
+    VLOG(1) << __func__ << " (Inactive)";
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), -1));
   }
 
   void GetAppStates(base::OnceCallback<void(const std::vector<AppState>&)>
                         callback) override {
     VLOG(1) << __func__ << " (Inactive)";
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), std::vector<AppState>()));
   }
@@ -54,9 +57,13 @@ class UpdateServiceImplInactive : public UpdateService {
     std::move(callback).Run();
   }
 
-  void UpdateAll(StateChangeCallback state_update, Callback callback) override {
+  void CheckForUpdate(const std::string& /*app_id*/,
+                      Priority /*priority*/,
+                      PolicySameVersionUpdate /*policy_same_version_update*/,
+                      StateChangeCallback /*state_update*/,
+                      Callback callback) override {
     VLOG(1) << __func__ << " (Inactive)";
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), UpdateService::Result::kInactive));
   }
@@ -68,18 +75,27 @@ class UpdateServiceImplInactive : public UpdateService {
               StateChangeCallback /*state_update*/,
               Callback callback) override {
     VLOG(1) << __func__ << " (Inactive)";
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback), UpdateService::Result::kInactive));
+  }
+
+  void UpdateAll(StateChangeCallback /*state_update*/,
+                 Callback callback) override {
+    VLOG(1) << __func__ << " (Inactive)";
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), UpdateService::Result::kInactive));
   }
 
   void Install(const RegistrationRequest& /*registration*/,
+               const std::string& /*client_install_data*/,
                const std::string& /*install_data_index*/,
                Priority /*priority*/,
                StateChangeCallback /*state_update*/,
                Callback callback) override {
     VLOG(1) << __func__ << " (Inactive)";
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), UpdateService::Result::kInactive));
   }
@@ -96,12 +112,10 @@ class UpdateServiceImplInactive : public UpdateService {
                     StateChangeCallback /*state_update*/,
                     Callback callback) override {
     VLOG(1) << __func__ << " (Inactive)";
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), UpdateService::Result::kInactive));
   }
-
-  void Uninitialize() override {}
 
  private:
   ~UpdateServiceImplInactive() override = default;

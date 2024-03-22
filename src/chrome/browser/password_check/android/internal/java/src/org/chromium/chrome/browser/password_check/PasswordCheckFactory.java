@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.password_check;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
 
 /**
@@ -15,6 +15,7 @@ import org.chromium.components.browser_ui.settings.SettingsLauncher;
  */
 public class PasswordCheckFactory {
     private static PasswordCheck sPasswordCheck;
+
     private PasswordCheckFactory() {}
 
     /**
@@ -43,9 +44,10 @@ public class PasswordCheckFactory {
         sPasswordCheck = null;
     }
 
-    @VisibleForTesting
     public static void setPasswordCheckForTesting(PasswordCheck passwordCheck) {
+        var oldValue = sPasswordCheck;
         sPasswordCheck = passwordCheck;
+        ResettersForTesting.register(() -> sPasswordCheck = oldValue);
     }
 
     /**

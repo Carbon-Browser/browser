@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ class DiscardMetricsLifecycleUnitObserverTest : public testing::Test {
   }
 
   // Owned by |lifecycle_unit|.
-  raw_ptr<DiscardMetricsLifecycleUnitObserver> observer_ =
+  raw_ptr<DiscardMetricsLifecycleUnitObserver, DanglingUntriaged> observer_ =
       new DiscardMetricsLifecycleUnitObserver();
 
   std::unique_ptr<TestLifecycleUnit> lifecycle_unit_ =

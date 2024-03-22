@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/tray/tray_popup_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromeos/ash/components/network/cellular_metrics_logger.h"
 #include "components/onc/onc_constants.h"
 #include "components/session_manager/session_manager_types.h"
@@ -76,7 +76,8 @@ void ManagedSimLockNotifier::OnGetDeviceStateList(
 
   // Remove Notification and reset |primary_iccid_| if no cellular device or
   // the cellular device is currently not enabled.
-  if (!cellular_device ||
+  if (!cellular_device || !cellular_device->sim_lock_status ||
+      !cellular_device->sim_infos ||
       cellular_device->device_state !=
           chromeos::network_config::mojom::DeviceStateType::kEnabled) {
     primary_iccid_.clear();
@@ -142,6 +143,10 @@ void ManagedSimLockNotifier::OnCellularNetworksList(
   for (auto& network : networks) {
     if (network->type_state->get_cellular()->sim_lock_enabled) {
       ShowNotification();
+      if (network->type_state->get_cellular()->sim_locked) {
+        CellularMetricsLogger::RecordSimLockNotificationLockType(
+            network->type_state->get_cellular()->sim_lock_type);
+      }
       return;
     }
   }
@@ -151,16 +156,15 @@ void ManagedSimLockNotifier::OnCellularNetworksList(
 
 void ManagedSimLockNotifier::Close(bool by_user) {
   if (by_user) {
-    chromeos::CellularMetricsLogger::RecordSimLockNotificationEvent(
-        chromeos::CellularMetricsLogger::SimLockNotificationEvent::kDismissed);
+    CellularMetricsLogger::RecordSimLockNotificationEvent(
+        CellularMetricsLogger::SimLockNotificationEvent::kDismissed);
   }
 }
 
-void ManagedSimLockNotifier::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
-  chromeos::CellularMetricsLogger::RecordSimLockNotificationEvent(
-      chromeos::CellularMetricsLogger::SimLockNotificationEvent::kClicked);
+void ManagedSimLockNotifier::Click(const std::optional<int>& button_index,
+                                   const std::optional<std::u16string>& reply) {
+  CellularMetricsLogger::RecordSimLockNotificationEvent(
+      CellularMetricsLogger::SimLockNotificationEvent::kClicked);
 
   // When clicked, open the SIM Unlock dialog in Cellular settings if
   // we can open WebUI settings, otherwise do nothing.
@@ -174,7 +178,7 @@ void ManagedSimLockNotifier::Click(
 
 void ManagedSimLockNotifier::ShowNotification() {
   std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
+      ash::CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE,
           kManagedSimLockNotificationId,
           l10n_util::GetStringUTF16(
@@ -195,8 +199,8 @@ void ManagedSimLockNotifier::ShowNotification() {
   message_center::MessageCenter* message_center =
       message_center::MessageCenter::Get();
   message_center->AddNotification(std::move(notification));
-  chromeos::CellularMetricsLogger::RecordSimLockNotificationEvent(
-      chromeos::CellularMetricsLogger::SimLockNotificationEvent::kShown);
+  CellularMetricsLogger::RecordSimLockNotificationEvent(
+      CellularMetricsLogger::SimLockNotificationEvent::kShown);
 }
 
 void ManagedSimLockNotifier::RemoveNotification() {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,13 @@
 #include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/views/vector_icons.h"
+
+using SidePanelWebUIViewT_FeedUI = SidePanelWebUIViewT<feed::FeedUI>;
+BEGIN_TEMPLATE_METADATA(SidePanelWebUIViewT_FeedUI, SidePanelWebUIViewT)
+END_METADATA
 
 namespace feed {
 
@@ -37,7 +42,7 @@ void FeedSidePanelCoordinator::CreateAndRegisterEntry(
 
 std::unique_ptr<views::View> FeedSidePanelCoordinator::CreateFeedWebUIView() {
   auto view = std::make_unique<SidePanelWebUIViewT<FeedUI>>(
-      &GetBrowser(), base::RepeatingClosure(), base::RepeatingClosure(),
+      base::RepeatingClosure(), base::RepeatingClosure(),
       std::make_unique<BubbleContentsWrapperT<FeedUI>>(
           GURL(chrome::kChromeUIUntrustedFeedURL), GetBrowser().profile(),
           IDS_FEED_TITLE,
@@ -50,6 +55,6 @@ std::unique_ptr<views::View> FeedSidePanelCoordinator::CreateFeedWebUIView() {
   return view;
 }
 
-WEB_CONTENTS_USER_DATA_KEY_IMPL(FeedSidePanelCoordinator);
+BROWSER_USER_DATA_KEY_IMPL(FeedSidePanelCoordinator);
 
 }  // namespace feed

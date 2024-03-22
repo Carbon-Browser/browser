@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 
 #include "ash/capture_mode/fake_camera_device.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "media/base/video_facing.h"
 #include "media/capture/video/video_capture_device_info.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -59,7 +59,6 @@ class FakeVideoSourceProvider
   void AddSharedMemoryVirtualDevice(
       const media::VideoCaptureDeviceInfo& device_info,
       mojo::PendingRemote<video_capture::mojom::Producer> producer,
-      bool send_buffer_handles_to_producer_as_raw_file_descriptors,
       mojo::PendingReceiver<video_capture::mojom::SharedMemoryVirtualDevice>
           virtual_device_receiver) override {}
   void AddTextureVirtualDevice(
@@ -70,6 +69,9 @@ class FakeVideoSourceProvider
       mojo::PendingRemote<video_capture::mojom::DevicesChangedObserver>
           observer,
       bool raise_event_if_virtual_devices_already_present) override {}
+  void RegisterDevicesChangedObserver(
+      mojo::PendingRemote<video_capture::mojom::DevicesChangedObserver>
+          observer) override {}
   void Close(CloseCallback callback) override {}
 
  private:

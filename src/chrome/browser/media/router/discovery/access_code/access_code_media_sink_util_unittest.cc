@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "chrome/browser/media/router/discovery/access_code/access_code_test_util.h"
 #include "chrome/browser/media/router/discovery/mdns/media_sink_util.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "components/cast_channel/cast_socket.h"
+#include "components/media_router/common/providers/cast/channel/cast_socket.h"
 #include "content/public/test/browser_task_environment.h"
 #include "net/base/ip_address.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -104,9 +104,12 @@ TEST_F(AccessCodeMediaSinkUtilTest, MissingPort) {
   media_router::MediaSinkInternal expected_sink_internal;
   media_router::CastSinkExtraData expected_extra_data;
 
-  expected_extra_data.capabilities =
-      cast_channel::VIDEO_OUT | cast_channel::VIDEO_IN |
-      cast_channel::AUDIO_OUT | cast_channel::AUDIO_IN | cast_channel::DEV_MODE;
+  expected_extra_data.capabilities = {
+      cast_channel::CastDeviceCapability::kVideoOut,
+      cast_channel::CastDeviceCapability::kVideoIn,
+      cast_channel::CastDeviceCapability::kAudioOut,
+      cast_channel::CastDeviceCapability::kAudioIn,
+      cast_channel::CastDeviceCapability::kDevMode};
   net::IPAddress expected_ip;
 
   // Must use equality to bypass `warn_unused_result`.
@@ -118,6 +121,7 @@ TEST_F(AccessCodeMediaSinkUtilTest, MissingPort) {
       net::IPEndPoint(expected_ip, kCastControlPort);
   expected_extra_data.discovery_type =
       CastDiscoveryType::kAccessCodeManualEntry;
+  expected_extra_data.model_name = "Chromecast Cast Moderator";
 
   media_router::MediaSink expected_sink(
       base::StringPrintf("cast:<%s>", kExpectedSinkId), kExpectedDisplayName,
@@ -156,9 +160,12 @@ TEST_F(AccessCodeMediaSinkUtilTest, MediaSinkCreatedCorrectly) {
   media_router::MediaSinkInternal expected_sink_internal;
   media_router::CastSinkExtraData expected_extra_data;
 
-  expected_extra_data.capabilities =
-      cast_channel::VIDEO_OUT | cast_channel::VIDEO_IN |
-      cast_channel::AUDIO_OUT | cast_channel::AUDIO_IN | cast_channel::DEV_MODE;
+  expected_extra_data.capabilities = {
+      cast_channel::CastDeviceCapability::kVideoOut,
+      cast_channel::CastDeviceCapability::kVideoIn,
+      cast_channel::CastDeviceCapability::kAudioOut,
+      cast_channel::CastDeviceCapability::kAudioIn,
+      cast_channel::CastDeviceCapability::kDevMode};
   net::IPAddress expected_ip;
 
   // Must use equality to bypass `warn_unused_result`.
@@ -169,6 +176,7 @@ TEST_F(AccessCodeMediaSinkUtilTest, MediaSinkCreatedCorrectly) {
   expected_extra_data.ip_endpoint = net::IPEndPoint(expected_ip, port_value);
   expected_extra_data.discovery_type =
       CastDiscoveryType::kAccessCodeManualEntry;
+  expected_extra_data.model_name = "Chromecast Cast Moderator";
 
   media_router::MediaSink expected_sink(
       base::StringPrintf("cast:<%s>", kExpectedSinkId), kExpectedDisplayName,
@@ -195,9 +203,10 @@ TEST_F(AccessCodeMediaSinkUtilTest, ParsedMediaSinkInternalEqualToOriginal) {
       CastDiscoveryType::kAccessCodeRememberedDevice;
   cast_sink.set_cast_data(cast_sink_data);
 
-  auto value_dict =
-      std::move(*CreateValueDictFromMediaSinkInternal(cast_sink).GetIfDict());
-  EXPECT_EQ(ParseValueDictIntoMediaSinkInternal(value_dict).value(), cast_sink);
+  EXPECT_EQ(ParseValueDictIntoMediaSinkInternal(
+                CreateValueDictFromMediaSinkInternal(cast_sink))
+                .value(),
+            cast_sink);
 }
 
 TEST_F(AccessCodeMediaSinkUtilTest, AddSinkResultMetricsHelper) {
@@ -231,6 +240,20 @@ TEST_F(AccessCodeMediaSinkUtilTest, AddSinkResultMetricsHelper) {
             AccessCodeCastAddSinkResult::kChannelOpenError);
   EXPECT_EQ(AddSinkResultMetricsHelper(AddSinkResultCode::PROFILE_SYNC_ERROR),
             AccessCodeCastAddSinkResult::kProfileSyncError);
+}
+
+TEST_F(AccessCodeMediaSinkUtilTest, GetIPEndPointFromValueDict) {
+  DiscoveryDevice discovery_device_proto = BuildDiscoveryDeviceProto();
+  auto cast_sink =
+      CreateAccessCodeMediaSink(discovery_device_proto).first.value();
+  media_router::CastSinkExtraData cast_sink_data = cast_sink.cast_data();
+  cast_sink_data.discovery_type =
+      CastDiscoveryType::kAccessCodeRememberedDevice;
+  cast_sink.set_cast_data(cast_sink_data);
+  EXPECT_EQ(GetIPEndPointFromValueDict(
+                CreateValueDictFromMediaSinkInternal(cast_sink))
+                .value(),
+            cast_sink.cast_data().ip_endpoint);
 }
 
 }  // namespace media_router

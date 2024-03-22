@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -142,8 +142,7 @@ HRESULT FilterBase::GetSyncSource(IReferenceClock** clock) {
 
 // Implement from IPersistent.
 HRESULT FilterBase::GetClassID(CLSID* class_id) {
-  NOTREACHED();
-  return E_NOTIMPL;
+  NOTREACHED_NORETURN();
 }
 
 // Implement IUnknown.

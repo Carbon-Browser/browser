@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -16,6 +16,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "components/leveldb_proto/public/proto_database.h"
 #include "components/leveldb_proto/public/proto_database_provider.h"
@@ -104,16 +105,6 @@ bool KeySetFilter(const base::flat_set<std::string>& key_set,
   return key_set.find(key) != key_set.end();
 }
 
-bool CheckAllPathsExist(
-    const std::vector<base::FilePath>& file_paths_to_check) {
-  for (const base::FilePath& file_path : file_paths_to_check) {
-    if (!base::PathExists(file_path)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 }  // namespace
 
 OptimizationGuideStore::OptimizationGuideStore(
@@ -121,7 +112,21 @@ OptimizationGuideStore::OptimizationGuideStore(
     const base::FilePath& database_dir,
     scoped_refptr<base::SequencedTaskRunner> store_task_runner,
     PrefService* pref_service)
-    : store_task_runner_(store_task_runner), pref_service_(pref_service) {
+    : OptimizationGuideStore(database_provider,
+                             database_dir,
+                             /*base_model_store_dir=*/base::FilePath(),
+                             store_task_runner,
+                             pref_service) {}
+
+OptimizationGuideStore::OptimizationGuideStore(
+    leveldb_proto::ProtoDatabaseProvider* database_provider,
+    const base::FilePath& database_dir,
+    const base::FilePath& base_model_store_dir,
+    scoped_refptr<base::SequencedTaskRunner> store_task_runner,
+    PrefService* pref_service)
+    : base_model_store_dir_(base_model_store_dir),
+      store_task_runner_(store_task_runner),
+      pref_service_(pref_service) {
   database_ = database_provider->GetDB<proto::StoreEntry>(
       leveldb_proto::ProtoDbType::HINT_CACHE_STORE, database_dir,
       store_task_runner_);
@@ -134,9 +139,11 @@ OptimizationGuideStore::OptimizationGuideStore(
 
 OptimizationGuideStore::OptimizationGuideStore(
     std::unique_ptr<leveldb_proto::ProtoDatabase<proto::StoreEntry>> database,
+    const base::FilePath& base_model_store_dir,
     scoped_refptr<base::SequencedTaskRunner> store_task_runner,
     PrefService* pref_service)
     : database_(std::move(database)),
+      base_model_store_dir_(base_model_store_dir),
       store_task_runner_(store_task_runner),
       pref_service_(pref_service) {
   RecordStatusChange(status_);
@@ -889,6 +896,7 @@ void OptimizationGuideStore::UpdatePredictionModels(
     base::OnceClosure callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(prediction_models_update_data);
+  DCHECK(!base_model_store_dir_.empty());
 
   if (!IsAvailable()) {
     std::move(callback).Run();
@@ -897,6 +905,22 @@ void OptimizationGuideStore::UpdatePredictionModels(
 
   std::unique_ptr<EntryVector> entry_vector =
       prediction_models_update_data->TakeUpdateEntries();
+
+  if (base::FeatureList::IsEnabled(features::kModelStoreUseRelativePath)) {
+    for (auto& entry : *entry_vector) {
+      proto::PredictionModel* prediction_model =
+          entry.second.mutable_prediction_model();
+      if (!prediction_model) {
+        continue;
+      }
+      absl::optional<base::FilePath> model_file_path =
+          StringToFilePath(prediction_model->model().download_url());
+      if (model_file_path) {
+        prediction_model->mutable_model()->set_download_url(FilePathToString(
+            ConvertToRelativePath(base_model_store_dir_, *model_file_path)));
+      }
+    }
+  }
 
   EntryKeySet keys_to_update;
   for (const auto& entry : *entry_vector)
@@ -923,27 +947,50 @@ void OptimizationGuideStore::OnLoadModelsToBeUpdated(
     base::OnceClosure callback,
     bool success,
     std::unique_ptr<EntryMap> entries) {
+  DCHECK(!base_model_store_dir_.empty());
   if (!success || !entries) {
     std::move(callback).Run();
     return;
   }
 
+  std::vector<std::string> model_dirs_to_delete;
   int64_t now_since_epoch =
       base::Time::Now().ToDeltaSinceWindowsEpoch().InSeconds();
   bool had_entries_to_update_or_remove =
       !update_vector->empty() || !remove_vector->empty();
+  absl::optional<std::map<proto::OptimizationTarget, std::set<int64_t>>>
+      killswitch_model_versions;
+  if (!had_entries_to_update_or_remove) {
+    // Only get killswitch versions when the purge is called at init, and not
+    // the model update or revove case.
+    killswitch_model_versions =
+        features::GetPredictionModelVersionsInKillSwitch();
+  }
+
   for (const auto& entry : *entries) {
-    absl::optional<std::string> delete_download_file;
     if (had_entries_to_update_or_remove &&
         entry.second.has_prediction_model() &&
         !entry.second.prediction_model().model().download_url().empty()) {
-      delete_download_file =
-          entry.second.prediction_model().model().download_url();
+      model_dirs_to_delete.push_back(
+          entry.second.prediction_model().model().download_url());
     }
 
     // Only check expiry if we weren't explicitly passed in entries to update or
     // remove.
     if (!had_entries_to_update_or_remove) {
+      proto::OptimizationTarget optimization_target =
+          GetOptimizationTargetFromPredictionModelEntryKey(entry.first);
+      DCHECK(killswitch_model_versions);
+      if (IsPredictionModelVersionInKillSwitch(
+              *killswitch_model_versions, optimization_target,
+              entry.second.prediction_model().model_info().version())) {
+        remove_vector->push_back(entry.first);
+        if (entry.second.has_prediction_model() &&
+            !entry.second.prediction_model().model().download_url().empty()) {
+          model_dirs_to_delete.push_back(
+              entry.second.prediction_model().model().download_url());
+        }
+      }
       if (entry.second.keep_beyond_valid_duration()) {
         continue;
       }
@@ -952,13 +999,11 @@ void OptimizationGuideStore::OnLoadModelsToBeUpdated(
           // Update the entry to remove the model.
           if (entry.second.has_prediction_model() &&
               !entry.second.prediction_model().model().download_url().empty()) {
-            delete_download_file =
-                entry.second.prediction_model().model().download_url();
+            model_dirs_to_delete.push_back(
+                entry.second.prediction_model().model().download_url());
           }
 
           remove_vector->push_back(entry.first);
-          proto::OptimizationTarget optimization_target =
-              GetOptimizationTargetFromPredictionModelEntryKey(entry.first);
           base::UmaHistogramBoolean(
               "OptimizationGuide.PredictionModelExpired." +
                   GetStringNameForOptimizationTarget(optimization_target),
@@ -977,49 +1022,52 @@ void OptimizationGuideStore::OnLoadModelsToBeUpdated(
             features::StoredModelsValidDuration().InSeconds());
       }
     }
-
+  }
+  for (const auto& model_dir_to_delete : model_dirs_to_delete) {
     // Delete files (the model itself and any additional files) that are
     // provided by the model in its directory.
-    if (delete_download_file) {
-      // |StringToFilePath| only returns nullopt when
-      // |delete_download_file| is empty.
-      base::FilePath model_file_path =
-          StringToFilePath(*delete_download_file).value();
-      base::FilePath path_to_delete;
+    DCHECK(!model_dir_to_delete.empty());
+    DCHECK(StringToFilePath(model_dir_to_delete));
+    base::FilePath model_file_path =
+        StringToFilePath(model_dir_to_delete).value();
+    base::FilePath path_to_delete;
+    if (!model_file_path.IsAbsolute()) {
+      // |kModelStoreUseRelativePath| will save the relative path in the store.
+      // Convert it to absolute path using base model store dir.
+      model_file_path = base_model_store_dir_.Append(model_file_path);
+    }
 
-      // Backwards compatibility: Once upon a time (<M93), model files were
-      // stored as
-      // `$CHROME_DATA/OptGuideModels/${MODELTARGET}_${MODELVERSION}.tfl` but
-      // were later moved to
-      // `$CHROME_DATA/OptGuideModels/${MODELTARGET}_${MODELVERSION}/model.tfl`
-      // to support additional files to be packaged alongside the model. Since
-      // the current code needs to recursively delete the whole directory, we'd
-      // normally just take the directory name of the model file. However, doing
-      // this on a freshly updated browser to newer code would cause the entire
-      // OptGuide directory to be blown away, causing collateral damage to other
-      // downloaded models. This is detected by checking whether the base name
-      // of the model file is the old or new version, and acting accordingly.
-      if (model_file_path.BaseName() == GetBaseFileNameForModels()) {
-        path_to_delete = model_file_path.DirName();
-      } else {
-        path_to_delete = model_file_path;
-      }
+    // Backwards compatibility: Once upon a time (<M93), model files were stored
+    // as `$CHROME_DATA/OptGuideModels/${MODELTARGET}_${MODELVERSION}.tfl` but
+    // were later moved to
+    // `$CHROME_DATA/OptGuideModels/${MODELTARGET}_${MODELVERSION}/model.tfl` to
+    // support additional files to be packaged alongside the model. Since the
+    // current code needs to recursively delete the whole directory, we'd
+    // normally just take the directory name of the model file. However, doing
+    // this on a freshly updated browser to newer code would cause the entire
+    // OptGuide directory to be blown away, causing collateral damage to other
+    // downloaded models. This is detected by checking whether the base name of
+    // the model file is the old or new version, and acting accordingly.
+    if (model_file_path.BaseName() == GetBaseFileNameForModels()) {
+      path_to_delete = model_file_path.DirName();
+    } else {
+      path_to_delete = model_file_path;
+    }
 
-      if (pref_service_) {
-        DictionaryPrefUpdate pref_update(pref_service_,
-                                         prefs::kStoreFilePathsToDelete);
-        pref_update->SetBoolKey(FilePathToString(path_to_delete), true);
-      } else {
-        // |pref_service_| should always be provided by owning classes; however,
-        // if it is not, just default back to deleting it here. This has the
-        // potential to be racy though.
+    if (pref_service_) {
+      ScopedDictPrefUpdate pref_update(pref_service_,
+                                       prefs::kStoreFilePathsToDelete);
+      pref_update->Set(FilePathToString(path_to_delete), true);
+    } else {
+      // |pref_service_| should always be provided by owning classes; however,
+      // if it is not, just default back to deleting it here. This has the
+      // potential to be racy though.
 
-        // Note that the delete function doesn't care whether the target is a
-        // directory or file. But in the case of a directory, it is recursively
-        // deleted.
-        store_task_runner_->PostTask(
-            FROM_HERE, base::GetDeletePathRecursivelyCallback(path_to_delete));
-      }
+      // Note that the delete function doesn't care whether the target is a
+      // directory or file. But in the case of a directory, it is recursively
+      // deleted.
+      store_task_runner_->PostTask(
+          FROM_HERE, base::GetDeletePathRecursivelyCallback(path_to_delete));
     }
   }
 
@@ -1089,6 +1137,7 @@ void OptimizationGuideStore::OnLoadPredictionModel(
     bool success,
     std::unique_ptr<proto::StoreEntry> entry) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(!base_model_store_dir_.empty());
 
   // If either the request failed or the store was set to unavailable after the
   // request was started, then the loaded model should not be considered valid.
@@ -1127,14 +1176,39 @@ void OptimizationGuideStore::OnLoadPredictionModel(
   absl::optional<base::FilePath> model_file_path =
       StringToFilePath(loaded_prediction_model->model().download_url());
   if (model_file_path) {
-    file_paths_to_check.emplace_back(*model_file_path);
+    if (!model_file_path->IsAbsolute()) {
+      // |kModelStoreUseRelativePath| will save the relative path in the store.
+      // Create the absolute path using base model store dir.
+      base::FilePath absolute_model_path =
+          base_model_store_dir_.Append(*model_file_path);
+      loaded_prediction_model->mutable_model()->set_download_url(
+          FilePathToString(absolute_model_path));
+      file_paths_to_check.emplace_back(absolute_model_path);
+    } else {
+      file_paths_to_check.emplace_back(*model_file_path);
+    }
   }
-  for (const proto::AdditionalModelFile& additional_file :
-       loaded_prediction_model->model_info().additional_files()) {
+  for (int i = 0;
+       i <
+       loaded_prediction_model->mutable_model_info()->additional_files_size();
+       i++) {
+    proto::AdditionalModelFile* additional_file =
+        loaded_prediction_model->mutable_model_info()->mutable_additional_files(
+            i);
     absl::optional<base::FilePath> additional_file_path =
-        StringToFilePath(additional_file.file_path());
+        StringToFilePath(additional_file->file_path());
     if (additional_file_path) {
-      file_paths_to_check.emplace_back(*additional_file_path);
+      if (!additional_file_path->IsAbsolute()) {
+        // |kModelStoreUseRelativePath| will save the relative path in the
+        // store. Create the absolute path using base model store dir.
+        base::FilePath absolute_additional_path =
+            base_model_store_dir_.Append(*additional_file_path);
+        additional_file->set_file_path(
+            FilePathToString(absolute_additional_path));
+        file_paths_to_check.emplace_back(absolute_additional_path);
+      } else {
+        file_paths_to_check.emplace_back(*additional_file_path);
+      }
     }
   }
 
@@ -1177,9 +1251,9 @@ void OptimizationGuideStore::CleanUpFilePaths() {
     return;
   }
 
-  DictionaryPrefUpdate file_paths_to_delete_pref(
+  ScopedDictPrefUpdate file_paths_to_delete_pref(
       pref_service_, prefs::kStoreFilePathsToDelete);
-  for (const auto entry : file_paths_to_delete_pref->DictItems()) {
+  for (const auto entry : *file_paths_to_delete_pref) {
     absl::optional<base::FilePath> path_to_delete =
         StringToFilePath(entry.first);
     if (!path_to_delete) {
@@ -1214,8 +1288,8 @@ void OptimizationGuideStore::OnFilePathDeleted(
 
   // If we get here, we should have a pref service.
   DCHECK(pref_service_);
-  DictionaryPrefUpdate update(pref_service_, prefs::kStoreFilePathsToDelete);
-  update->RemoveKey(file_path_to_clean_up);
+  ScopedDictPrefUpdate update(pref_service_, prefs::kStoreFilePathsToDelete);
+  update->Remove(file_path_to_clean_up);
 }
 
 }  // namespace optimization_guide

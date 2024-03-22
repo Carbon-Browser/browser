@@ -1,9 +1,10 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/events/ozone/events_ozone.h"
 
+#include "base/check.h"
 #include "ui/events/event.h"
 
 namespace ui {
@@ -44,8 +45,11 @@ bool DispatchEventFromNativeUiEvent(
     std::move(callback).Run(&scroll_event);
     handled = scroll_event.handled();
   } else if (event->IsGestureEvent()) {
-    std::move(callback).Run(event);
-    handled = event->handled();
+    // TODO(https://crbug.com/1355835: Missing ui::GestureEvent(const
+    // PlatformEvent&) ctor).
+    auto gesture_event = *(event->AsGestureEvent());
+    std::move(callback).Run(&gesture_event);
+    handled = gesture_event.handled();
     // TODO(mohsen): Use the same pattern for scroll/touch/wheel events.
     // Apparently, there is no need for them to wrap the |event|.
   } else {
@@ -55,8 +59,39 @@ bool DispatchEventFromNativeUiEvent(
   return handled;
 }
 
-EVENTS_EXPORT void DisableNativeUiEventDispatchForTest() {
+void DisableNativeUiEventDispatchForTest() {
   dispatch_disabled = true;
+}
+
+bool IsNativeUiEventDispatchDisabled() {
+  return dispatch_disabled;
+}
+
+void SetKeyboardImeFlagProperty(KeyEvent::Properties* properties,
+                                uint8_t flags) {
+  properties->emplace(kPropertyKeyboardImeFlag, std::vector<uint8_t>{flags});
+}
+
+void SetKeyboardImeFlags(KeyEvent* event, uint8_t flags) {
+  Event::Properties properties;
+  if (const auto* original = event->properties()) {
+    properties = *original;
+  }
+  SetKeyboardImeFlagProperty(&properties, flags);
+  event->SetProperties(properties);
+}
+
+uint8_t GetKeyboardImeFlags(const KeyEvent& event) {
+  const auto* properties = event.properties();
+  if (!properties) {
+    return 0;
+  }
+  auto it = properties->find(kPropertyKeyboardImeFlag);
+  if (it == properties->end()) {
+    return 0;
+  }
+  DCHECK_EQ(1u, it->second.size());
+  return it->second[0];
 }
 
 }  // namespace ui

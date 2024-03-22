@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/fido/ctap_make_credential_request.h"
 
-#include <algorithm>
 #include <limits>
 #include <utility>
 
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "components/cbor/values.h"
 #include "device/fido/device_response_converter.h"
 #include "device/fido/fido_constants.h"
@@ -19,8 +19,8 @@ namespace device {
 namespace {
 bool IsMakeCredentialOptionMapFormatCorrect(
     const cbor::Value::MapValue& option_map) {
-  return std::all_of(
-      option_map.begin(), option_map.end(), [](const auto& param) {
+  return base::ranges::all_of(
+      option_map, [](const auto& param) {
         return param.first.is_string() &&
                (param.first.GetString() == kResidentKeyMapKey ||
                 param.first.GetString() == kUserVerificationMapKey) &&
@@ -30,8 +30,8 @@ bool IsMakeCredentialOptionMapFormatCorrect(
 
 bool AreMakeCredentialRequestMapKeysCorrect(
     const cbor::Value::MapValue& request_map) {
-  return std::all_of(
-      request_map.begin(), request_map.end(), [](const auto& param) {
+  return base::ranges::all_of(
+      request_map, [](const auto& param) {
         return (param.first.is_integer() && 1u <= param.first.GetInteger() &&
                 param.first.GetInteger() <= 10u);
       });
@@ -108,6 +108,25 @@ absl::optional<CtapMakeCredentialRequest> CtapMakeCredentialRequest::Parse(
     request.exclude_list = std::move(exclude_list);
   }
 
+  const auto enterprise_attestation_it = request_map.find(cbor::Value(10));
+  if (enterprise_attestation_it != request_map.end()) {
+    if (!enterprise_attestation_it->second.is_unsigned()) {
+      return absl::nullopt;
+    }
+    switch (enterprise_attestation_it->second.GetUnsigned()) {
+      case 1:
+        request.attestation_preference = AttestationConveyancePreference::
+            kEnterpriseIfRPListedOnAuthenticator;
+        break;
+      case 2:
+        request.attestation_preference =
+            AttestationConveyancePreference::kEnterpriseApprovedByBrowser;
+        break;
+      default:
+        return absl::nullopt;
+    }
+  }
+
   const auto extensions_it = request_map.find(cbor::Value(6));
   if (extensions_it != request_map.end()) {
     if (!extensions_it->second.is_map()) {
@@ -149,11 +168,44 @@ absl::optional<CtapMakeCredentialRequest> CtapMakeCredentialRequest::Parse(
           return absl::nullopt;
         }
         request.hmac_secret = extension.second.GetBool();
+      } else if (extension_name == kExtensionPRF) {
+        if (!extension.second.is_map()) {
+          return absl::nullopt;
+        }
+        const cbor::Value::MapValue& prf = extension.second.GetMap();
+        const auto eval_it = prf.find(cbor::Value(kExtensionPRFEval));
+        if (eval_it != prf.end()) {
+          request.prf_input = PRFInput::FromCBOR(eval_it->second);
+          if (!request.prf_input) {
+            return absl::nullopt;
+          }
+        }
+        request.prf = true;
       } else if (extension_name == kExtensionLargeBlobKey) {
         if (!extension.second.is_bool() || !extension.second.GetBool()) {
           return absl::nullopt;
         }
         request.large_blob_key = true;
+      } else if (extension_name == kExtensionLargeBlob) {
+        if (!extension.second.is_map()) {
+          return absl::nullopt;
+        }
+        const cbor::Value::MapValue& large_blob_ext = extension.second.GetMap();
+        const auto support_it =
+            large_blob_ext.find(cbor::Value(kExtensionLargeBlobSupport));
+        if (support_it != large_blob_ext.end()) {
+          if (!support_it->second.is_string()) {
+            return absl::nullopt;
+          }
+          const std::string& support = support_it->second.GetString();
+          if (support == kExtensionLargeBlobSupportRequired) {
+            request.large_blob_support = LargeBlobSupport::kRequired;
+          } else if (support == kExtensionLargeBlobSupportPreferred) {
+            request.large_blob_support = LargeBlobSupport::kPreferred;
+          } else {
+            return absl::nullopt;
+          }
+        }
       } else if (extension_name == kExtensionCredBlob) {
         if (!extension.second.is_bytestring()) {
           return absl::nullopt;
@@ -216,25 +268,6 @@ absl::optional<CtapMakeCredentialRequest> CtapMakeCredentialRequest::Parse(
     request.pin_protocol = *pin_protocol;
   }
 
-  const auto enterprise_attestation_it = request_map.find(cbor::Value(10));
-  if (enterprise_attestation_it != request_map.end()) {
-    if (!enterprise_attestation_it->second.is_unsigned()) {
-      return absl::nullopt;
-    }
-    switch (enterprise_attestation_it->second.GetUnsigned()) {
-      case 1:
-        request.attestation_preference = AttestationConveyancePreference::
-            kEnterpriseIfRPListedOnAuthenticator;
-        break;
-      case 2:
-        request.attestation_preference =
-            AttestationConveyancePreference::kEnterpriseApprovedByBrowser;
-        break;
-      default:
-        return absl::nullopt;
-    }
-  }
-
   return request;
 }
 
@@ -283,6 +316,26 @@ AsCTAPRequestValuePair(const CtapMakeCredentialRequest& request) {
 
   if (request.hmac_secret) {
     extensions[cbor::Value(kExtensionHmacSecret)] = cbor::Value(true);
+  }
+
+  if (request.prf) {
+    cbor::Value::MapValue prf_ext;
+    if (request.prf_input) {
+      cbor::Value::MapValue eval;
+      prf_ext.emplace(kExtensionPRFEval, request.prf_input->ToCBOR());
+    }
+
+    extensions.emplace(kExtensionPRF, std::move(prf_ext));
+  }
+
+  if (request.large_blob_support != LargeBlobSupport::kNotRequested) {
+    cbor::Value::MapValue large_blob_ext;
+    large_blob_ext.emplace(
+        kExtensionLargeBlobSupport,
+        request.large_blob_support == LargeBlobSupport::kRequired
+            ? kExtensionLargeBlobSupportRequired
+            : kExtensionLargeBlobSupportPreferred);
+    extensions.emplace(kExtensionLargeBlob, std::move(large_blob_ext));
   }
 
   if (request.large_blob_key) {

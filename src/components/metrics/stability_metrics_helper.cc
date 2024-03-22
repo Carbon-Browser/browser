@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,10 +23,6 @@
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>  // Needed for STATUS_* codes
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS)
-#include "components/metrics/system_memory_stats_recorder.h"
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
@@ -197,9 +193,6 @@ void StabilityMetricsHelper::LogRendererCrash(bool was_extension_process,
       RecordChildKills(histogram_type);
       base::UmaHistogramExactLinear("BrowserRenderProcessHost.ChildKills.OOM",
                                     was_extension_process ? 2 : 1, 3);
-      RecordMemoryStats(was_extension_process
-                            ? RECORD_MEMORY_STATS_EXTENSIONS_OOM_KILLED
-                            : RECORD_MEMORY_STATS_CONTENTS_OOM_KILLED);
       break;
 #endif
     case base::TERMINATION_STATUS_STILL_RUNNING:
@@ -253,21 +246,6 @@ void StabilityMetricsHelper::LogRendererLaunchFailed(
 void StabilityMetricsHelper::IncrementPrefValue(const char* path) {
   int value = local_state_->GetInteger(path);
   local_state_->SetInteger(path, value + 1);
-}
-
-void StabilityMetricsHelper::LogRendererHang() {
-#if BUILDFLAG(IS_ANDROID)
-  base::android::ApplicationState app_state =
-      base::android::ApplicationStatusListener::GetState();
-  bool is_foreground =
-      app_state == base::android::APPLICATION_STATE_HAS_RUNNING_ACTIVITIES ||
-      app_state == base::android::APPLICATION_STATE_HAS_PAUSED_ACTIVITIES;
-  base::UmaHistogramBoolean("ChildProcess.HungRendererInForeground",
-                            is_foreground);
-#endif
-  base::UmaHistogramMemoryMB(
-      "ChildProcess.HungRendererAvailableMemoryMB",
-      base::SysInfo::AmountOfAvailablePhysicalMemory() / 1024 / 1024);
 }
 
 // static

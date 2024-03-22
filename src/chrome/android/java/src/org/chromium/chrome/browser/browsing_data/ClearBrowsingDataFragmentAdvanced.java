@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,16 +46,22 @@ public class ClearBrowsingDataFragmentAdvanced extends ClearBrowsingDataFragment
 
     @Override
     protected List<Integer> getDialogOptions() {
-        return Arrays.asList(DialogOption.CLEAR_HISTORY, DialogOption.CLEAR_COOKIES_AND_SITE_DATA,
-                DialogOption.CLEAR_CACHE, DialogOption.CLEAR_PASSWORDS,
-                DialogOption.CLEAR_FORM_DATA, DialogOption.CLEAR_SITE_SETTINGS);
+        return Arrays.asList(
+                DialogOption.CLEAR_HISTORY,
+                DialogOption.CLEAR_COOKIES_AND_SITE_DATA,
+                DialogOption.CLEAR_CACHE,
+                DialogOption.CLEAR_PASSWORDS,
+                DialogOption.CLEAR_FORM_DATA,
+                DialogOption.CLEAR_SITE_SETTINGS);
     }
 
     @Override
     protected void onClearBrowsingData() {
         super.onClearBrowsingData();
-        RecordHistogram.recordEnumeratedHistogram("History.ClearBrowsingData.UserDeletedFromTab",
-                ClearBrowsingDataTab.ADVANCED, ClearBrowsingDataTab.NUM_TYPES);
+        RecordHistogram.recordEnumeratedHistogram(
+                "History.ClearBrowsingData.UserDeletedFromTab",
+                ClearBrowsingDataTab.ADVANCED,
+                ClearBrowsingDataTab.NUM_TYPES);
         RecordUserAction.record("ClearBrowsingData_AdvancedTab");
     }
 }

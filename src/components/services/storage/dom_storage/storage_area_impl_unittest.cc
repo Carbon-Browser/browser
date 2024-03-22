@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,12 @@
 #include <vector>
 
 #include "base/atomic_ref_count.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -71,7 +70,7 @@ class BarrierBuilder {
   BarrierBuilder& operator=(const BarrierBuilder&) = delete;
 
   base::OnceClosure AddClosure() {
-    return base::BindOnce([](scoped_refptr<ContinuationRef>) {}, continuation_);
+    return base::DoNothingWithBoundArgs(continuation_);
   }
 
  private:

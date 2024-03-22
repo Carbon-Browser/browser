@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/scoped_multi_source_observation.h"
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/aura/aura_export.h"
@@ -92,8 +93,7 @@ class AURA_EXPORT WindowOcclusionTracker : public ui::LayerAnimationObserver,
     void OnWindowDestroying(Window* window) override;
 
     void Shutdown();
-
-    raw_ptr<Window> window_;
+    raw_ptr<Window, DanglingUntriaged> window_;
   };
 
   // Forces the occlusion state of a window to VISIBLE regardless of the drawn
@@ -120,7 +120,7 @@ class AURA_EXPORT WindowOcclusionTracker : public ui::LayerAnimationObserver,
 
     void Shutdown();
 
-    raw_ptr<Window> window_;
+    raw_ptr<Window, DanglingUntriaged> window_;
   };
 
   // Holds occlusion related information for tracked windows.
@@ -199,6 +199,13 @@ class AURA_EXPORT WindowOcclusionTracker : public ui::LayerAnimationObserver,
   // bounds of |window| and its descendants. |occluded_region| is a region
   // covered by windows which are on top of |window|. Returns true if at least
   // one window in the hierarchy starting at |window| is NOT_OCCLUDED.
+  // If bounds such as window bounds or occluded region calculated with using
+  // |parent_transform_relative_to_root| end up with fractions, enclosed bounds
+  // are used for the former while enclosing bounds are used for the later,
+  // which makes the occludee (window bounds) smaller while the occluder
+  // (occluded region) larger. This is because if there is an off by 1 error due
+  // to scaling, it will be more performant to favor occlusion. See
+  // *FractionalWindow in unit tests for concrete examples.
   bool RecomputeOcclusionImpl(
       Window* window,
       const gfx::Transform& parent_transform_relative_to_root,
@@ -406,7 +413,9 @@ class AURA_EXPORT WindowOcclusionTracker : public ui::LayerAnimationObserver,
   // occlusion based on target bounds, opacity, transform, and visibility
   // values. If the occlusion tracker is not computing for a specific window
   // (most of the time it is not), this will be nullptr.
-  Window* target_occlusion_window_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION Window* target_occlusion_window_ = nullptr;
 };
 
 }  // namespace aura

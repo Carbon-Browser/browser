@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,12 @@
 #include "chromeos/ash/services/assistant/public/cpp/device_actions.h"
 #include "chromeos/ash/services/assistant/service_context.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
 
-using chromeos::libassistant::mojom::GetBrightnessResult;
-using GetScreenBrightnessLevelCallback = chromeos::libassistant::mojom::
+using libassistant::mojom::GetBrightnessResult;
+using GetScreenBrightnessLevelCallback = libassistant::mojom::
     DeviceSettingsDelegate::GetScreenBrightnessLevelCallback;
 
 void HandleScreenBrightnessCallback(GetScreenBrightnessLevelCallback callback,
@@ -37,6 +36,10 @@ DeviceSettingsHost::~DeviceSettingsHost() = default;
 void DeviceSettingsHost::Bind(
     mojo::PendingReceiver<DeviceSettingsDelegate> pending_receiver) {
   receiver_.Bind(std::move(pending_receiver));
+}
+
+void DeviceSettingsHost::Stop() {
+  receiver_.reset();
 }
 
 void DeviceSettingsHost::GetScreenBrightnessLevel(
@@ -80,17 +83,16 @@ void DeviceSettingsHost::reset_has_setting_changed() {
 }
 
 DeviceActions& DeviceSettingsHost::device_actions() {
-  auto* result = context_.device_actions();
+  auto* result = context_->device_actions();
   DCHECK(result);
   return *result;
 }
 
-ash::AssistantNotificationController&
+AssistantNotificationController&
 DeviceSettingsHost::assistant_notification_controller() {
-  auto* result = context_.assistant_notification_controller();
+  auto* result = context_->assistant_notification_controller();
   DCHECK(result);
   return *result;
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

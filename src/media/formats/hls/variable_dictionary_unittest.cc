@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ void ErrorTest(const VariableDictionary& dict,
   const auto source_str = SourceString::CreateForTesting(in);
   VariableDictionary::SubstitutionBuffer buffer;
   auto result = dict.Resolve(source_str, buffer);
-  ASSERT_TRUE(result.has_error()) << from.ToString();
+  ASSERT_FALSE(result.has_value()) << from.ToString();
   EXPECT_EQ(std::move(result).error(), expected_error) << from.ToString();
 }
 

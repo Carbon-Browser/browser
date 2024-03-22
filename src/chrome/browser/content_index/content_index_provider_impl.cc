@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "base/barrier_closure.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/engagement/site_engagement_service_factory.h"
 #include "chrome/browser/metrics/ukm_background_recorder_service.h"
@@ -41,7 +41,6 @@ using offline_items_collection::ContentId;
 using offline_items_collection::LaunchLocation;
 using offline_items_collection::OfflineItem;
 using offline_items_collection::OfflineItemFilter;
-using offline_items_collection::OfflineItemSchedule;
 
 namespace {
 
@@ -251,7 +250,7 @@ void ContentIndexProviderImpl::GetItemById(const ContentId& id,
       components.origin.GetURL(), /* can_create= */ false);
 
   if (!storage_partition || !storage_partition->GetContentIndexContext()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
@@ -273,29 +272,28 @@ void ContentIndexProviderImpl::DidGetItem(
 
 void ContentIndexProviderImpl::GetAllItems(MultipleItemCallback callback) {
   // Get the number of Storage Paritions.
-  std::vector<content::StoragePartition*> storage_paritions;
-  profile_->ForEachStoragePartition(base::BindRepeating(
-      [](std::vector<content::StoragePartition*>* storage_paritions,
-         content::StoragePartition* storage_partition) {
-        storage_paritions->push_back(storage_partition);
-      },
-      &storage_paritions));
-  DCHECK(!storage_paritions.empty());
+  std::vector<content::StoragePartition*> storage_partitions;
+  profile_->ForEachLoadedStoragePartition(
+      [&](content::StoragePartition* partition) {
+        storage_partitions.push_back(partition);
+      });
+  DCHECK(!storage_partitions.empty());
 
   auto item_list = std::make_unique<OfflineItemList>();
   OfflineItemList* item_list_ptr = item_list.get();
 
   // Get the all entries from every partition.
   auto barrier_closure = base::BarrierClosure(
-      storage_paritions.size(),
+      storage_partitions.size(),
       base::BindOnce(
           &ContentIndexProviderImpl::DidGetAllEntriesAcrossStorageParitions,
           weak_ptr_factory_.GetWeakPtr(), std::move(item_list),
           std::move(callback)));
 
-  for (auto* storage_partition : storage_paritions) {
+  for (auto* storage_partition : storage_partitions) {
     if (!storage_partition || !storage_partition->GetContentIndexContext()) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, barrier_closure);
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, barrier_closure);
       continue;
     }
 
@@ -310,7 +308,6 @@ void ContentIndexProviderImpl::GetAllItems(MultipleItemCallback callback) {
 void ContentIndexProviderImpl::DidGetAllEntriesAcrossStorageParitions(
     std::unique_ptr<OfflineItemList> item_list,
     MultipleItemCallback callback) {
-  ContentIndexMetrics::RecordContentIndexEntries(item_list->size());
   std::move(callback).Run(*item_list);
 }
 
@@ -342,7 +339,7 @@ void ContentIndexProviderImpl::GetVisualsForItem(const ContentId& id,
       components.origin.GetURL(), /* can_create= */ false);
 
   if (!storage_partition || !storage_partition->GetContentIndexContext()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), id, nullptr));
     return;
   }

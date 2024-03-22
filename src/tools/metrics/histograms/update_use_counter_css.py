@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -56,7 +56,10 @@ def ReadCssProperties(filename):
       # Properties with id = 0 are invalid. Skip them.
       if property_id == 0:
         continue
-      properties[property_id] = EnumToCssProperty(enum_name)
+      label = EnumToCssProperty(enum_name)
+      if line.strip().startswith('//'):
+        label += ' (obsolete)'
+      properties[property_id] = label
 
   return properties
 
@@ -75,5 +78,6 @@ if __name__ == '__main__':
     update_use_counter_feature_enum.PrintEnumForDashboard(enum_dict)
   else:
     update_histogram_enum.UpdateHistogramFromDict(
-        'MappedCSSProperties', ReadCssProperties(USE_COUNTER_MOJOM_PATH),
-        USE_COUNTER_MOJOM_PATH, os.path.basename(__file__))
+        'tools/metrics/histograms/enums.xml', 'MappedCSSProperties',
+        ReadCssProperties(USE_COUNTER_MOJOM_PATH), USE_COUNTER_MOJOM_PATH,
+        os.path.basename(__file__))

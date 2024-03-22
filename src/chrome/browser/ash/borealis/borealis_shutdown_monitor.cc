@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/borealis/borealis_shutdown_monitor.h"
 
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/borealis/borealis_context_manager.h"
 #include "chrome/browser/ash/borealis/borealis_service.h"
 
@@ -30,7 +30,7 @@ void BorealisShutdownMonitor::ShutdownWithDelay() {
   in_progress_request_.Reset(
       base::BindOnce(&BorealisShutdownMonitor::OnShutdownTimerElapsed,
                      base::Unretained(this)));
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, in_progress_request_.callback(), delay_);
 }
 

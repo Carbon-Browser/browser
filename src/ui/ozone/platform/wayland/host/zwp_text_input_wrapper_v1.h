@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include <text-input-unstable-v1-client-protocol.h>
 
 #include "base/memory/raw_ptr.h"
+#include "base/timer/timer.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/zwp_text_input_wrapper.h"
 
@@ -38,7 +39,8 @@ class ZWPTextInputWrapperV1 : public ZWPTextInputWrapper {
 
   void Reset() override;
 
-  void Activate(WaylandWindow* window) override;
+  void Activate(WaylandWindow* window,
+                ui::TextInputClient::FocusReason reason) override;
   void Deactivate() override;
 
   void ShowInputPanel() override;
@@ -47,18 +49,24 @@ class ZWPTextInputWrapperV1 : public ZWPTextInputWrapper {
   void SetCursorRect(const gfx::Rect& rect) override;
   void SetSurroundingText(const std::string& text,
                           const gfx::Range& selection_range) override;
+  bool HasAdvancedSurroundingTextSupport() const override;
+  void SetSurroundingTextOffsetUtf16(uint32_t offset_utf16) override;
   void SetContentType(TextInputType type,
                       TextInputMode mode,
                       uint32_t flags,
-                      bool should_do_learning) override;
+                      bool should_do_learning,
+                      bool can_compose_inline) override;
   void SetGrammarFragmentAtCursor(const ui::GrammarFragment& fragment) override;
   void SetAutocorrectInfo(const gfx::Range& autocorrect_range,
                           const gfx::Rect& autocorrect_bounds) override;
 
  private:
   void ResetInputEventState();
+  void TryScheduleFinalizeVirtualKeyboardChanges();
+  void FinalizeVirtualKeyboardChanges();
+  bool SupportsFinalizeVirtualKeyboardChanges();
 
-  // zwp_text_input_v1_listener
+  // zwp_text_input_v1_listener callbacks:
   static void OnEnter(void* data,
                       struct zwp_text_input_v1* text_input,
                       struct wl_surface* surface);
@@ -110,31 +118,43 @@ class ZWPTextInputWrapperV1 : public ZWPTextInputWrapper {
                               uint32_t serial,
                               uint32_t direction);
 
-  // zcr_extended_text_input_v1_listener
+  // zcr_extended_text_input_v1_listener callbacks:
   static void OnSetPreeditRegion(
       void* data,
       struct zcr_extended_text_input_v1* extended_text_input,
       int32_t index,
       uint32_t length);
-
   static void OnClearGrammarFragments(
       void* data,
       struct zcr_extended_text_input_v1* extended_text_input,
       uint32_t start,
       uint32_t end);
-
   static void OnAddGrammarFragment(
       void* data,
       struct zcr_extended_text_input_v1* extended_text_input,
       uint32_t start,
       uint32_t end,
       const char* suggestion);
-
   static void OnSetAutocorrectRange(
       void* data,
       struct zcr_extended_text_input_v1* extended_text_input,
       uint32_t start,
       uint32_t end);
+  static void OnSetVirtualKeyboardOccludedBounds(
+      void* data,
+      struct zcr_extended_text_input_v1* extended_text_input,
+      int32_t x,
+      int32_t y,
+      int32_t width,
+      int32_t height);
+  static void OnConfirmPreedit(
+      void* data,
+      struct zcr_extended_text_input_v1* extended_text_input,
+      uint32_t selection_behavior);
+  static void OnInsertImage(
+      void* data,
+      struct zcr_extended_text_input_v1* extended_text_input,
+      const char* src);
 
   const raw_ptr<WaylandConnection> connection_;
   wl::Object<zwp_text_input_v1> obj_;
@@ -143,6 +163,9 @@ class ZWPTextInputWrapperV1 : public ZWPTextInputWrapper {
 
   std::vector<ZWPTextInputWrapperClient::SpanStyle> spans_;
   int32_t preedit_cursor_ = -1;
+
+  // Timer for sending the finalize_virtual_keyboard_changes request.
+  base::OneShotTimer send_vk_finalize_timer_;
 };
 
 }  // namespace ui

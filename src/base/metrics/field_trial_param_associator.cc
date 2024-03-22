@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,6 +86,12 @@ void FieldTrialParamAssociator::ClearParamsForTesting(
 }
 
 void FieldTrialParamAssociator::ClearAllCachedParamsForTesting() {
+  AutoLock scoped_lock(lock_);
+  field_trial_params_.clear();
+}
+
+void FieldTrialParamAssociator::ClearAllCachedParams(
+    PassKey<AppShimController>) {
   AutoLock scoped_lock(lock_);
   field_trial_params_.clear();
 }

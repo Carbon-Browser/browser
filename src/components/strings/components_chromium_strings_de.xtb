@@ -4,14 +4,17 @@
 <translation id="130631256467250065">Deine Änderungen werden beim nächsten Neustart wirksam.</translation>
 <translation id="275588974610408078">Absturzberichte sind in Carbon Browser nicht verfügbar.</translation>
 <translation id="3064346599913645280">Dies ist eine sichere Carbon Browser-Seite</translation>
+<translation id="3255926992597692024">Carbon Browser versucht, Einstellungen für das Ausfüllen von Zahlungsmethoden zu ändern.</translation>
 <translation id="358997566136285270">Carbon Browser-Logo</translation>
+<translation id="4050599136622776556">Carbon Browser versucht, Zahlungsmethoden zu bearbeiten.</translation>
 <translation id="4365115785552740256">Carbon Browser wird durch das Open-Source-Projekt <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser<ph name="END_LINK_CHROMIUM" /> und andere <ph name="BEGIN_LINK_OSS" />Open-Source-Software<ph name="END_LINK_OSS" /> ermöglicht.</translation>
 <translation id="4559775032954821361">Gehe zum Carbon Browser-Menü &gt; „<ph name="SETTINGS_TITLE" />“ &gt; „<ph name="ADVANCED_TITLE" />“ &gt; „<ph name="PROXIES_TITLE" />“ &gt; „LAN-Einstellungen“ und deaktiviere das Kästchen „Proxyserver für LAN verwenden“.</translation>
 <translation id="4622039161600275920">Diese Seite wurde von Carbon Browser blockiert</translation>
 <translation id="48558539577516920">Erlaube Carbon Browser in deinen Firewall- und Virenschutzeinstellungen den Zugriff auf das Netzwerk.</translation>
-<translation id="4918837013875648434">Die Ersteinrichtung von Carbon Browser OS wurde nicht abgeschlossen.</translation>
 <translation id="580822234363523061">Gehe zum Carbon Browser-Menü &gt; „<ph name="SETTINGS_TITLE" />“ &gt; „<ph name="ADVANCED_TITLE" />“ &gt; „<ph name="PROXIES_TITLE" />“ und vergewissere dich, dass in deiner Konfiguration die Einstellung „Kein Proxy“ oder „Direkt“ verwendet wird.</translation>
+<translation id="6549378540556750549">Carbon Browser wird auch durch andere <ph name="BEGIN_LINK_OSS" />Open-Source-Software<ph name="END_LINK_OSS" /> ermöglicht.</translation>
 <translation id="6613594504749178791">Deine Änderungen werden beim nächsten Neustart von Carbon Browser wirksam.</translation>
+<translation id="7681937895330411637">Carbon Browser wird durch das Open-Source-Projekt <ph name="BEGIN_LINK_CHROMIUM" />Carbon Browser<ph name="END_LINK_CHROMIUM" /> ermöglicht.</translation>
 <translation id="7861509383340276692">Öffne
           das Carbon Browser-Menü &gt;
           <ph name="SETTINGS_TITLE" />
@@ -21,5 +24,6 @@
           Falls das Problem nicht dadurch verursacht wurde, empfehlen wir,
           diese Option für eine verbesserte Leistung wieder zu aktivieren.</translation>
 <translation id="8187289872471304532">Gehe zu „Programme“ &gt; „Systemeinstellungen“ &gt; „Netzwerk“ &gt; „Erweitert“ &gt; „Proxys“ und deaktiviere alle ausgewählten Proxyserver.</translation>
+<translation id="8597726643333341451">Du siehst eine sichere Carbon Browser for Testing-Seite</translation>
 <translation id="8684913864886094367">Carbon Browser wurde nicht richtig beendet.</translation>
 </translationbundle>

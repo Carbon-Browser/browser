@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,9 @@
 #include <string>
 #include <vector>
 
+#include "base/values.h"
 #include "components/certificate_matching/certificate_principal_pattern.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-
-namespace base {
-class Value;
-}
 
 namespace net {
 class X509Certificate;
@@ -74,10 +71,5 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) OncCertificatePattern {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::OncCertificatePattern;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_ONC_ONC_CERTIFICATE_PATTERN_H_

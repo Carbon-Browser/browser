@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "components/reporting/util/statusor.h"
 #include "components/reporting/util/test_support_callbacks.h"
@@ -27,8 +27,8 @@ TEST_F(EmptyDMTokenRetrieverTest, GetDMToken) {
   EmptyDMTokenRetriever empty_dm_token_retriever;
   empty_dm_token_retriever.RetrieveDMToken(dm_token_retrieved_event.cb());
   const auto dm_token_result = dm_token_retrieved_event.result();
-  ASSERT_OK(dm_token_result);
-  EXPECT_THAT(dm_token_result.ValueOrDie(), ::testing::IsEmpty());
+  ASSERT_TRUE(dm_token_result.has_value());
+  EXPECT_THAT(dm_token_result.value(), ::testing::IsEmpty());
 }
 
 }  // namespace

@@ -34,9 +34,11 @@
 #include <memory>
 
 #include "base/numerics/safe_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "services/network/public/cpp/cors/cors_error_status.h"
 #include "services/network/public/mojom/cors.mojom-blink.h"
 #include "services/network/public/mojom/fetch_api.mojom-blink.h"
+#include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/frame/frame_console.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -97,10 +99,10 @@ ThreadableLoader::ThreadableLoader(
     ThreadableLoaderClient* client,
     const ResourceLoaderOptions& resource_loader_options,
     ResourceFetcher* resource_fetcher)
-    : client_(client),
+    : resource_loader_options_(resource_loader_options),
+      client_(client),
       execution_context_(execution_context),
       resource_fetcher_(resource_fetcher),
-      resource_loader_options_(resource_loader_options),
       request_mode_(network::mojom::RequestMode::kSameOrigin),
       timeout_timer_(execution_context_->GetTaskRunner(TaskType::kNetworking),
                      this,
@@ -166,7 +168,7 @@ void ThreadableLoader::Start(ResourceRequest request) {
   }
 }
 
-ThreadableLoader::~ThreadableLoader() {}
+ThreadableLoader::~ThreadableLoader() = default;
 
 void ThreadableLoader::SetTimeout(const base::TimeDelta& timeout) {
   timeout_ = timeout;
@@ -291,6 +293,16 @@ void ThreadableLoader::ResponseReceived(Resource* resource,
 
   checker_.ResponseReceived();
 
+  // If "Cache-Control: no-store" header exists in the XHR response,
+  // Back/Forward cache will be disabled for the page if the main resource has
+  // "Cache-Control: no-store" as well.
+  if (response.CacheControlContainsNoStore()) {
+    execution_context_->GetScheduler()->RegisterStickyFeature(
+        SchedulingPolicy::Feature::
+            kJsNetworkRequestReceivedCacheControlNoStoreResource,
+        {SchedulingPolicy::DisableBackForwardCache()});
+  }
+
   client_->DidReceiveResponse(resource->InspectorId(), response);
 }
 
@@ -377,6 +389,10 @@ void ThreadableLoader::Trace(Visitor* visitor) const {
   visitor->Trace(resource_fetcher_);
   visitor->Trace(timeout_timer_);
   RawResourceClient::Trace(visitor);
+}
+
+scoped_refptr<base::SingleThreadTaskRunner> ThreadableLoader::GetTaskRunner() {
+  return execution_context_->GetTaskRunner(TaskType::kNetworking);
 }
 
 }  // namespace blink

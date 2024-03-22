@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/unguessable_token.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -48,7 +48,7 @@ AudioLoopbackStreamBroker::AudioLoopbackStreamBroker(
   // Notify the source that we are capturing from it.
   source_->AddLoopbackSink(this);
 
-  NotifyProcessHostOfStartedStream(render_process_id);
+  NotifyHostOfStartedStream();
 }
 
 AudioLoopbackStreamBroker::~AudioLoopbackStreamBroker() {
@@ -57,7 +57,7 @@ AudioLoopbackStreamBroker::~AudioLoopbackStreamBroker() {
   if (source_)
     source_->RemoveLoopbackSink(this);
 
-  NotifyProcessHostOfStoppedStream(render_process_id());
+  NotifyHostOfStoppedStream();
 }
 
 void AudioLoopbackStreamBroker::CreateStream(

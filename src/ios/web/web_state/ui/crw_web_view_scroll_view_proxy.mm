@@ -1,22 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/web_state/ui/crw_web_view_scroll_view_proxy+internal.h"
 
 #import <objc/runtime.h>
-#include <memory>
+#import <memory>
 
-#include "base/auto_reset.h"
+#import "base/apple/foundation_util.h"
+#import "base/auto_reset.h"
 #import "base/ios/crb_protocol_observers.h"
-#include "base/mac/foundation_util.h"
-#include "base/strings/sys_string_conversions.h"
-#include "ios/web/common/features.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/web/common/features.h"
 #import "ios/web/web_state/ui/crw_web_view_scroll_view_delegate_proxy.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // *Address of* this variable is used as a marker to specify that it matches any
 // context.
@@ -24,8 +20,8 @@ static int gAnyContext = 0;
 
 // A wrapper of a key-value observer. When an instance of
 // CRWKeyValueObserverForwarder receives a KVO callback, it forwards the
-// callback to |wrappedObserver|, but replacing the object parameter with the
-// |object| given in its initializer.
+// callback to `wrappedObserver`, but replacing the object parameter with the
+// `object` given in its initializer.
 //
 // This is useful when creating a proxy class of an object and forwarding KVO
 // against the proxy object to the underlying object, but making the KVO
@@ -75,11 +71,7 @@ static int gAnyContext = 0;
 
 @end
 
-@interface CRWWebViewScrollViewProxy () {
-  std::unique_ptr<UIScrollViewContentInsetAdjustmentBehavior>
-      _storedContentInsetAdjustmentBehavior;
-  std::unique_ptr<BOOL> _storedClipsToBounds;
-}
+@interface CRWWebViewScrollViewProxy ()
 
 // A delegate object of the UIScrollView managed by this class.
 @property(nonatomic, strong, readonly)
@@ -124,7 +116,7 @@ static int gAnyContext = 0;
 // Returns the key paths that need to be observed for UIScrollView.
 + (NSArray*)scrollViewObserverKeyPaths;
 
-// Adds and removes key-value observers for |scrollView| needed by |proxy|.
+// Adds and removes key-value observers for `scrollView` needed by `proxy`.
 + (void)startObservingScrollView:(UIScrollView*)scrollView
                            proxy:(CRWWebViewScrollViewProxy*)proxy;
 + (void)stopObservingScrollView:(UIScrollView*)scrollView
@@ -214,32 +206,16 @@ static int gAnyContext = 0;
   scrollView.delegate = self.delegateProxy;
   [self.class startObservingScrollView:scrollView proxy:self];
 
-  if (base::FeatureList::IsEnabled(
-          web::features::kPreserveScrollViewProperties)) {
-    [self preservePropertiesFromOldScrollView:self.underlyingScrollView
-                              toNewScrollView:scrollView];
-  }
+  [self preservePropertiesFromOldScrollView:self.underlyingScrollView
+                            toNewScrollView:scrollView];
 
   self.underlyingScrollView = scrollView;
-
-  // TODO(crbug.com/1023250): Restore these in
-  // -preservePropertiesFromOldScrollView:toNewScrollView: once the feature flag
-  // kPreserveScrollViewProperties is removed.
-  if (_storedClipsToBounds) {
-    scrollView.clipsToBounds = *_storedClipsToBounds;
-  }
-  // Assigns |contentInsetAdjustmentBehavior| which was set before setting the
-  // scroll view.
-  if (_storedContentInsetAdjustmentBehavior) {
-    self.underlyingScrollView.contentInsetAdjustmentBehavior =
-        *_storedContentInsetAdjustmentBehavior;
-  }
 
   [_observers webViewScrollViewProxyDidSetScrollView:self];
 }
 
 // Preserves properties of the underlying scroll view when it changes from
-// |oldScrollView| to |newScrollView|.
+// `oldScrollView` to `newScrollView`.
 //
 // This is necessary to avoid losing properties set against the proxy when the
 // underlying scroll view is reset.
@@ -250,8 +226,8 @@ static int gAnyContext = 0;
   // CRWWebViewScrollViewProxy) which:
   //   - is a readwrite property
   //   - AND is supposed to be modified directly, considering it's a scroll
-  //     view of a web view. e.g., |frame| and |subviews| do not meet this
-  //     condition because they are managed by the web view.  |backgroundColor|
+  //     view of a web view. e.g., `frame` and `subviews` do not meet this
+  //     condition because they are managed by the web view.  `backgroundColor`
   //     is also managed by WKWebView to match the page's background color, and
   //     should not be set directly (see crbug.com/1078790).
   //
@@ -259,7 +235,20 @@ static int gAnyContext = 0;
   // be accessed via -asUIScrollView, so they should be preserved as well.
 
   // UIScrollView properties.
-  newScrollView.scrollEnabled = oldScrollView.scrollEnabled;
+  if (base::FeatureList::IsEnabled(
+          web::features::kScrollViewProxyScrollEnabledWorkaround)) {
+    if (newScrollView.scrollEnabled != oldScrollView.scrollEnabled) {
+      // Don't update scrollEnabled if it is the same value as it creates issues
+      // with clobbering state in WebKit, since the getter and setter in WebKit
+      // are not symmetric. The setter sets state about whether the WKWebView
+      // embedder wants to disable scrolling, while the getter and used value
+      // also account for whether the main-frame is scrollable (e.g., due to the
+      // size of its content relative to the viewport). See crbug.com/1375837.
+      newScrollView.scrollEnabled = oldScrollView.scrollEnabled;
+    }
+  } else {
+    newScrollView.scrollEnabled = oldScrollView.scrollEnabled;
+  }
   newScrollView.directionalLockEnabled = oldScrollView.directionalLockEnabled;
   newScrollView.pagingEnabled = oldScrollView.pagingEnabled;
   newScrollView.scrollsToTop = oldScrollView.scrollsToTop;
@@ -288,6 +277,14 @@ static int gAnyContext = 0;
   newScrollView.userInteractionEnabled = oldScrollView.userInteractionEnabled;
   newScrollView.multipleTouchEnabled = oldScrollView.multipleTouchEnabled;
   newScrollView.exclusiveTouch = oldScrollView.exclusiveTouch;
+  if (newScrollView.clipsToBounds != oldScrollView.clipsToBounds) {
+    newScrollView.clipsToBounds = oldScrollView.clipsToBounds;
+  }
+  if (newScrollView.contentInsetAdjustmentBehavior !=
+      oldScrollView.contentInsetAdjustmentBehavior) {
+    newScrollView.contentInsetAdjustmentBehavior =
+        oldScrollView.contentInsetAdjustmentBehavior;
+  }
 }
 
 - (BOOL)clipsToBounds {
@@ -295,7 +292,6 @@ static int gAnyContext = 0;
 }
 
 - (void)setClipsToBounds:(BOOL)clipsToBounds {
-  _storedClipsToBounds = std::make_unique<BOOL>(clipsToBounds);
   self.underlyingScrollView.clipsToBounds = clipsToBounds;
 }
 
@@ -307,9 +303,6 @@ static int gAnyContext = 0;
     (UIScrollViewContentInsetAdjustmentBehavior)contentInsetAdjustmentBehavior {
   [self.underlyingScrollView
       setContentInsetAdjustmentBehavior:contentInsetAdjustmentBehavior];
-  _storedContentInsetAdjustmentBehavior =
-      std::make_unique<UIScrollViewContentInsetAdjustmentBehavior>(
-          contentInsetAdjustmentBehavior);
 }
 
 - (NSArray<__kindof UIView*>*)subviews {
@@ -319,14 +312,22 @@ static int gAnyContext = 0;
 #pragma mark -
 
 + (NSArray*)scrollViewObserverKeyPaths {
-  return @[ @"frame", @"contentSize", @"contentInset" ];
+  if (base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    return @[ @"frame", @"contentSize", @"contentInset" ];
+  } else {
+    return @[ @"contentSize" ];
+  }
 }
 
 + (void)startObservingScrollView:(UIScrollView*)scrollView
                            proxy:(CRWWebViewScrollViewProxy*)proxy {
-  // Add observations by |proxy|.
+  // Add observations by `proxy`.
   for (NSString* keyPath in [proxy.class scrollViewObserverKeyPaths]) {
-    [scrollView addObserver:proxy forKeyPath:keyPath options:0 context:nil];
+    [scrollView
+        addObserver:proxy
+         forKeyPath:keyPath
+            options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld
+            context:nil];
   }
 
   // Restore observers which were added to the past underlying scroll views.
@@ -348,7 +349,7 @@ static int gAnyContext = 0;
 
 + (void)stopObservingScrollView:(UIScrollView*)scrollView
                           proxy:(CRWWebViewScrollViewProxy*)proxy {
-  // Remove observations by |self|.
+  // Remove observations by `self`.
   for (NSString* keyPath in [proxy.class scrollViewObserverKeyPaths]) {
     [scrollView removeObserver:proxy forKeyPath:keyPath];
   }
@@ -374,12 +375,28 @@ static int gAnyContext = 0;
                         change:(NSDictionary*)change
                        context:(void*)context {
   DCHECK_EQ(object, self.underlyingScrollView);
-  if ([keyPath isEqualToString:@"frame"])
-    [_observers webViewScrollViewFrameDidChange:self];
-  if ([keyPath isEqualToString:@"contentSize"])
+  if (base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    if ([keyPath isEqualToString:@"frame"]) {
+      [_observers webViewScrollViewFrameDidChange:self];
+    }
+    if ([keyPath isEqualToString:@"contentInset"]) {
+      [_observers webViewScrollViewDidResetContentInset:self];
+    }
+  }
+  if ([keyPath isEqualToString:@"contentSize"]) {
+    if (!base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+      NSValue* oldValue =
+          base::apple::ObjCCast<NSValue>(change[NSKeyValueChangeOldKey]);
+      NSValue* newValue =
+          base::apple::ObjCCast<NSValue>(change[NSKeyValueChangeNewKey]);
+      // If the value is unchanged -- if the old and new values are equal --
+      // then return without notifying observers.
+      if (oldValue && newValue && [newValue isEqualToValue:oldValue]) {
+        return;
+      }
+    }
     [_observers webViewScrollViewDidResetContentSize:self];
-  if ([keyPath isEqualToString:@"contentInset"])
-    [_observers webViewScrollViewDidResetContentInset:self];
+  }
 }
 
 - (UIScrollView*)asUIScrollView {
@@ -424,7 +441,7 @@ static int gAnyContext = 0;
             options:(NSKeyValueObservingOptions)options
             context:(nullable void*)context {
   // KVO against CRWWebViewScrollViewProxy works as KVO against the underlying
-  // scroll view, except that |object| parameter of the notification points to
+  // scroll view, except that `object` parameter of the notification points to
   // CRWWebViewScrollViewProxy, not the undelying scroll view. This is achieved
   // by CRWKeyValueObserverForwarder.
   NSMutableDictionary<NSValue*, NSMutableArray<CRWKeyValueObserverForwarder*>*>*
@@ -474,7 +491,7 @@ static int gAnyContext = 0;
       map[observerValue];
 
   // It is technically allowed to call -addObserver:forKeypath:options:context:
-  // multiple times with the same |observer| and same |keyPath|. And
+  // multiple times with the same `observer` and same `keyPath`. And
   // -removeObserver:forKeyPath:context: (and -removeObserver:forKeyPath:)
   // removes the *last* observation matching the condition. This matches the
   // (undocumented) behavior of the built-in KVO.

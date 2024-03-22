@@ -1,8 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module help_bubble.mojom;
+
+import "mojo/public/mojom/base/time.mojom";
+import "ui/gfx/geometry/mojom/geometry.mojom";
 
 // Contains IPC calls that allow the HelpBubbleFactory system to connect to
 // the HelpBubbleMixin and HelpBubbleElement component.
@@ -15,17 +18,44 @@ module help_bubble.mojom;
 // more detailed usage information, see README.md.
 
 // Where the help bubble floats relative to its anchor.
-enum HelpBubblePosition {
-  ABOVE,
-  BELOW,
-  LEFT,
-  RIGHT
+enum HelpBubbleArrowPosition {
+  TOP_LEFT,
+  TOP_CENTER,
+  TOP_RIGHT,
+
+  BOTTOM_LEFT,
+  BOTTOM_CENTER,
+  BOTTOM_RIGHT,
+
+  LEFT_TOP,
+  LEFT_CENTER,
+  LEFT_BOTTOM,
+
+  RIGHT_TOP,
+  RIGHT_CENTER,
+  RIGHT_BOTTOM,
+};
+
+// Reason for dismissing a help bubble
+enum HelpBubbleClosedReason {
+  // page navigated away, anchor disappeared, etc.
+  kPageChanged,
+  // user dismissed via button or close-icon
+  kDismissedByUser,
+  // timeout reached
+  kTimedOut,
 };
 
 // Simplified version of user_education::HelpBubbleButtonParams.
 struct HelpBubbleButtonParams {
   string text;
   bool is_default = false;
+};
+
+// Progress indicator for tutorial bubbles.
+struct Progress {
+  uint8 current;
+  uint8 total;
 };
 
 // Simplified version of user_education::HelpBubbleParams.
@@ -35,11 +65,17 @@ struct HelpBubbleParams {
   // element ID.
   string native_identifier;
 
-  HelpBubblePosition position = HelpBubblePosition.BELOW;
+  HelpBubbleArrowPosition position = HelpBubbleArrowPosition.TOP_CENTER;
   string? title_text;
   string body_text;
   string close_button_alt_text;
+  string? body_icon_name;
+  string body_icon_alt_text;
+  Progress? progress;
   array<HelpBubbleButtonParams> buttons;
+
+  // Auto-dismiss timeout as TimeDelta
+  mojo_base.mojom.TimeDelta? timeout;
 };
 
 // Used by the controller to bootstrap IPC. Any WebUIController can implement
@@ -62,10 +98,34 @@ interface HelpBubbleHandlerFactory {
 // showing a help bubble or when communicating events back to the handler on the
 // browser side, because HTML ids can be ambiguous within a document with shadow
 // DOMs.
+//
+// TODO(crbug.com/1376247): consider splitting into ElementTrackerHandler and
+// HelpBubbleHandler, with the previous handling show/hide/activated/custom
+// events and the latter handling the help bubble itself.
 interface HelpBubbleHandler {
   // Indicates that the visibility of the element that the help bubble could be
   // anchored to has changed.
-  HelpBubbleAnchorVisibilityChanged(string native_identifier, bool visible);
+  HelpBubbleAnchorVisibilityChanged(string native_identifier,
+                                    bool visible,
+                                    gfx.mojom.RectF rect);
+
+  // Notifies that a specific element tagged as a help bubble anchor has been
+  // activated, which will in turn be propagated through the ui::ElementTracker
+  // system as an EventType::kActivated.
+  //
+  // As with the above methods, the ui::ElementIdentifier will be generated from
+  // `native_identifier`.
+  HelpBubbleAnchorActivated(string native_identifier);
+
+  // Notifies that a custom event has occurred associated with a particular help
+  // bubble anchor, which will in turn be propagated through the
+  // ui::ElementTracker system as an EventType::kCustomEvent.
+  //
+  // As with the above methods, the ui::ElementIdentifier will be generated from
+  // `native_identifier` and the ui::CustomElementEventType will be generated
+  // from `custom_event_name`.
+  HelpBubbleAnchorCustomEvent(string native_identifier,
+                              string custom_event_name);
 
   // Notifies that a button on the help bubble anchored to `native_identifier`
   // has been pressed and the help bubble is closing as a result. The
@@ -75,9 +135,9 @@ interface HelpBubbleHandler {
   HelpBubbleButtonPressed(string native_identifier, uint8 button_index);
 
   // Called when the help bubble anchored to `native_identifier` is closed,
-  // either because the element it is associated with goes away, or because the
-  // user canceled it (e.g. pressed the [x] button).
-  HelpBubbleClosed(string native_identifier, bool by_user);
+  // either because the element it is associated with goes away, the user
+  // canceled it (e.g. pressed the [x] button), or the timeout was reached.
+  HelpBubbleClosed(string native_identifier, HelpBubbleClosedReason reason);
 };
 
 // Represents WebUI component that can display help bubbles. The implementing UI
@@ -94,4 +154,9 @@ interface HelpBubbleClient {
   // Invoked to hide the help bubble anchored to `native_identifier` if it
   // should no longer be shown.
   HideHelpBubble(string native_identifier);
+
+  // Notifies the client that an external help bubble (i.e. one owned/displayed
+  // by the handler) anchored to `native_identifier` has been shown or hidden.
+  // The client may change the visual appearance of the anchor as a result.
+  ExternalHelpBubbleUpdated(string native_identifier, bool shown);
 };

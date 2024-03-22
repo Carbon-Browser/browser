@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 
 #import <Foundation/Foundation.h>
 
-#include "ios/chrome/browser/ui/follow/follow_block_types.h"
+#import "ios/chrome/browser/follow/model/followed_web_site_state.h"
 
 @class CrURL;
 
 // A view model representing a followed web channel.
+// TODO(crbug.com/1346506): remove this class when code has been converted
+// to use FollowedWebSite instead.
 @interface FollowedWebChannel : NSObject
 
 // Title of the web channel.
@@ -26,14 +28,8 @@
 // URL of the favicon.
 @property(nonatomic, strong) CrURL* faviconURL;
 
-// YES if the web channel is available.
-@property(nonatomic, assign) BOOL available;
-
-// Used to request to unfollow this web channel.
-@property(nonatomic, copy) FollowRequestBlock unfollowRequestBlock;
-
-// Used to request to refollow this web channel, if it has been unfollowed.
-@property(nonatomic, copy) FollowRequestBlock refollowRequestBlock;
+// State of the website.
+@property(nonatomic, assign) FollowedWebSiteState state;
 
 @end
 

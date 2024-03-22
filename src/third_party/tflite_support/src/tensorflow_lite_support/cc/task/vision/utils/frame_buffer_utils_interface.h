@@ -37,14 +37,11 @@ class FrameBufferUtilsInterface {
   //
   // The `output_buffer` should have metadata populated and its backing buffer
   // should be big enough to store the operation result.
-  virtual absl::Status Crop(const FrameBuffer& buffer,
-                            int x0,
-                            int y0,
-                            int x1,
-                            int y1,
-                            FrameBuffer* output_buffer) = 0;
+  virtual absl::Status Crop(const FrameBuffer& buffer, int x0, int y0, int x1,
+                            int y1, FrameBuffer* output_buffer) = 0;
 
-  // Resizes `buffer` to the size of the given `output_buffer`.
+  // Resizes `buffer` to the size of the given `output_buffer` using bilinear
+  // interpolation.
   //
   // The resize dimension is determined based on the size of `output_buffer`.
   //
@@ -52,6 +49,16 @@ class FrameBufferUtilsInterface {
   // should be big enough to store the operation result.
   virtual absl::Status Resize(const FrameBuffer& buffer,
                               FrameBuffer* output_buffer) = 0;
+
+  // Resizes `buffer` to the size of the given `output_buffer` using
+  // nearest-neighbor interpolation.
+  //
+  // The resize dimension is determined based on the size of `output_buffer`.
+  //
+  // The `output_buffer` should have metadata populated and its backing buffer
+  // should be big enough to store the operation result.
+  virtual absl::Status ResizeNearestNeighbor(const FrameBuffer& buffer,
+                                             FrameBuffer* output_buffer) = 0;
 
   // Rotates `buffer` counter-clockwise by the given `angle_deg` (in degrees).
   //
@@ -61,8 +68,7 @@ class FrameBufferUtilsInterface {
   //
   // The `output_buffer` should have metadata populated and its backing buffer
   // should be big enough to store the operation result.
-  virtual absl::Status Rotate(const FrameBuffer& buffer,
-                              int angle_deg,
+  virtual absl::Status Rotate(const FrameBuffer& buffer, int angle_deg,
                               FrameBuffer* output_buffer) = 0;
 
   // Flips `buffer` horizontally.

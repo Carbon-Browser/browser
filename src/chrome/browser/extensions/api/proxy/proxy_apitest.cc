@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,14 @@
 #include "extensions/common/extension.h"
 #include "extensions/test/result_catcher.h"
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/crosapi/mojom/network_settings_service.mojom.h"
+#include "chromeos/crosapi/mojom/prefs.mojom-shared.h"
+#include "chromeos/crosapi/mojom/prefs.mojom.h"
+#include "chromeos/lacros/crosapi_pref_observer.h"
+#include "chromeos/lacros/lacros_service.h"
+#endif
+
 namespace extensions {
 
 namespace {
@@ -25,6 +33,15 @@ namespace {
 const char kNoServer[] = "";
 const char kNoBypass[] = "";
 const char kNoPac[] = "";
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+bool IsLacrosServiceSyncingProxyPref() {
+  static constexpr int kMinVersionProxyPolicy = 4;
+  const int version = chromeos::LacrosService::Get()
+                          ->GetInterfaceVersion<crosapi::mojom::Prefs>();
+  return version >= kMinVersionProxyPolicy;
+}
+#endif
 
 }  // namespace
 
@@ -36,6 +53,33 @@ class ProxySettingsApiTest : public ExtensionApiTest {
   ProxySettingsApiTest& operator=(const ProxySettingsApiTest&) = delete;
 
  protected:
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void TearDownOnMainThread() override {
+    // Clear the proxy from the test_ash_chrome since the same instance Ash is
+    // used for all tests in the target. Setting a proxy will prevent other
+    // tests which require a direct connection to complete successfully.
+    auto* lacros_service = chromeos::LacrosService::Get();
+    if (!lacros_service) {
+      ExtensionApiTest::TearDownOnMainThread();
+      return;
+    }
+    if (IsLacrosServiceSyncingProxyPref()) {
+      if (lacros_service->IsAvailable<crosapi::mojom::Prefs>()) {
+        lacros_service->GetRemote<crosapi::mojom::Prefs>()
+            ->ClearExtensionControlledPref(crosapi::mojom::PrefPath::kProxy,
+                                           base::DoNothing());
+      }
+    } else {
+      if (lacros_service
+              ->IsAvailable<crosapi::mojom::NetworkSettingsService>()) {
+        lacros_service->GetRemote<crosapi::mojom::NetworkSettingsService>()
+            ->ClearExtensionProxy();
+      }
+    }
+    ExtensionApiTest::TearDownOnMainThread();
+  }
+#endif
+
   void ValidateSettings(int expected_mode,
                         const std::string& expected_server,
                         const std::string& bypass,
@@ -43,11 +87,13 @@ class ProxySettingsApiTest : public ExtensionApiTest {
                         PrefService* pref_service) {
     const PrefService::Preference* pref =
         pref_service->FindPreference(proxy_config::prefs::kProxy);
-    ASSERT_TRUE(pref != NULL);
+    ASSERT_TRUE(pref != nullptr);
     EXPECT_TRUE(pref->IsExtensionControlled());
 
+    // TODO(https://crbug.com/1348219) This should call
+    // `PrefService::GetDict`.
     ProxyConfigDictionary dict(
-        pref_service->GetDictionary(proxy_config::prefs::kProxy)->Clone());
+        pref_service->GetDict(proxy_config::prefs::kProxy).Clone());
 
     ProxyPrefs::ProxyMode mode;
     ASSERT_TRUE(dict.GetMode(&mode));
@@ -79,7 +125,7 @@ class ProxySettingsApiTest : public ExtensionApiTest {
   void ExpectNoSettings(PrefService* pref_service) {
     const PrefService::Preference* pref =
         pref_service->FindPreference(proxy_config::prefs::kProxy);
-    ASSERT_TRUE(pref != NULL);
+    ASSERT_TRUE(pref != nullptr);
     EXPECT_FALSE(pref->IsExtensionControlled());
   }
 
@@ -434,14 +480,14 @@ IN_PROC_BROWSER_TEST_F(ProxySettingsApiTest,
 // chrome.proxy.onProxyError to fire with ERR_PROXY_CONNECTION_FAILED.
 IN_PROC_BROWSER_TEST_F(ProxySettingsApiTest, ProxyEventsInvalidProxy) {
   ASSERT_TRUE(
-      RunExtensionTest("proxy/events", {.page_url = "invalid_proxy.html"}))
+      RunExtensionTest("proxy/events", {.extension_url = "invalid_proxy.html"}))
       << message_;
 }
 
 // Tests error events: PAC script parse error.
 IN_PROC_BROWSER_TEST_F(ProxySettingsApiTest, ProxyEventsParseError) {
   ASSERT_TRUE(
-      RunExtensionTest("proxy/events", {.page_url = "parse_error.html"}))
+      RunExtensionTest("proxy/events", {.extension_url = "parse_error.html"}))
       << message_;
 }
 
@@ -449,7 +495,7 @@ IN_PROC_BROWSER_TEST_F(ProxySettingsApiTest, ProxyEventsParseError) {
 // non-proxy error.
 IN_PROC_BROWSER_TEST_F(ProxySettingsApiTest, ProxyEventsOtherError) {
   ASSERT_TRUE(
-      RunExtensionTest("proxy/events", {.page_url = "other_error.html"}))
+      RunExtensionTest("proxy/events", {.extension_url = "other_error.html"}))
       << message_;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/raster/raster_source.h"
 #include "ui/gfx/geometry/rect_conversions.h"
@@ -173,7 +174,9 @@ void PictureLayerTilingSet::UpdateTilingsToCurrentRasterSourceForCommit(
   // Invalidate tiles and update them to the new raster source.
   for (const std::unique_ptr<PictureLayerTiling>& tiling : tilings_) {
     DCHECK(tree_ != PENDING_TREE || !tiling->has_tiles());
-    tiling->SetRasterSourceAndResize(raster_source);
+    // Force |UpdateTilePriorities| on commit for cases when tiling needs update
+    state_since_last_tile_priority_update_.tiling_needs_update |=
+        tiling->SetRasterSourceAndResize(raster_source);
 
     // Force |UpdateTilePriorities| on commit for cases where the compositor is
     // heavily pipelined resulting in back to back draw and commit. This
@@ -300,10 +303,8 @@ PictureLayerTiling* PictureLayerTilingSet::AddTiling(
 }
 
 int PictureLayerTilingSet::NumHighResTilings() const {
-  return std::count_if(tilings_.begin(), tilings_.end(),
-                       [](const std::unique_ptr<PictureLayerTiling>& tiling) {
-                         return tiling->resolution() == HIGH_RESOLUTION;
-                       });
+  return base::ranges::count(tilings_, HIGH_RESOLUTION,
+                             &PictureLayerTiling::resolution);
 }
 
 PictureLayerTiling* PictureLayerTilingSet::FindTilingWithScaleKey(
@@ -317,11 +318,8 @@ PictureLayerTiling* PictureLayerTilingSet::FindTilingWithScaleKey(
 
 PictureLayerTiling* PictureLayerTilingSet::FindTilingWithResolution(
     TileResolution resolution) const {
-  auto iter = std::find_if(
-      tilings_.begin(), tilings_.end(),
-      [resolution](const std::unique_ptr<PictureLayerTiling>& tiling) {
-        return tiling->resolution() == resolution;
-      });
+  auto iter =
+      base::ranges::find(tilings_, resolution, &PictureLayerTiling::resolution);
   if (iter == tilings_.end())
     return nullptr;
   return iter->get();
@@ -371,11 +369,8 @@ void PictureLayerTilingSet::RemoveAllTilings() {
 }
 
 void PictureLayerTilingSet::Remove(PictureLayerTiling* tiling) {
-  auto iter = std::find_if(
-      tilings_.begin(), tilings_.end(),
-      [tiling](const std::unique_ptr<PictureLayerTiling>& candidate) {
-        return candidate.get() == tiling;
-      });
+  auto iter = base::ranges::find(tilings_, tiling,
+                                 &std::unique_ptr<PictureLayerTiling>::get);
   if (iter == tilings_.end())
     return;
   tilings_.erase(iter);
@@ -418,6 +413,11 @@ bool PictureLayerTilingSet::TilingsNeedUpdate(
 
   if (visible_rect_in_layer_space != last_frame.visible_rect_in_layer_space)
     return true;
+
+  if (state_since_last_tile_priority_update_.tiling_needs_update) {
+    return true;
+  }
+
   return false;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_CONTROLS_ROUNDED_SCROLL_BAR_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/insets.h"
@@ -65,13 +66,13 @@ class ASH_EXPORT RoundedScrollBar : public views::ScrollBar {
   void HideScrollBar();
 
   // Called when the thumb hover/pressed state changed.
-  void OnThumbStateChanged();
+  void OnThumbStateChanged(views::Button::ButtonState old_state);
 
   // Called when the thumb bounds (position or size) changed.
   void OnThumbBoundsChanged();
 
   // Equivalent to GetThumb() but typed as the inner class `Thumb`.
-  Thumb* const thumb_;
+  const raw_ptr<Thumb, ExperimentalAsh> thumb_;
 
   // Insets for the scroll track.
   gfx::Insets insets_;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,6 +69,11 @@ class ProfileAuthServersSyncBridge : public syncer::ModelTypeSyncBridge {
 
   ~ProfileAuthServersSyncBridge() override;
 
+  // Returns true <=> the callback OnProfileAuthorizationServersInitialized()
+  // was called. It means that the bridge can accept calls to
+  // AddAuthorizationServer().
+  bool IsInitialized() const { return initialization_completed_; }
+
   // This method must be called when a new Authorization Server is added to the
   // list of trusted Authorization Servers on this client. The new record will
   // be saved in the user's profile. This method DOES NOT trigger a call to the
@@ -82,10 +87,10 @@ class ProfileAuthServersSyncBridge : public syncer::ModelTypeSyncBridge {
   // Implementation of ModelTypeSyncBridge interface. For internal use only.
   std::unique_ptr<syncer::MetadataChangeList> CreateMetadataChangeList()
       override;
-  absl::optional<syncer::ModelError> MergeSyncData(
+  absl::optional<syncer::ModelError> MergeFullSyncData(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_data) override;
-  absl::optional<syncer::ModelError> ApplySyncChanges(
+  absl::optional<syncer::ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
@@ -119,9 +124,8 @@ class ProfileAuthServersSyncBridge : public syncer::ModelTypeSyncBridge {
   void NotifyObserver(const std::set<std::string>& added,
                       const std::set<std::string>& deleted);
 
-  // This is set to true when the object is ready to use. Use the callback
-  // from the Observer to check this. This field is used only for internal
-  // validation.
+  // This is set to true when the object is ready to use. Use the method
+  // IsInitialized() or the callback from the Observer to check this.
   bool initialization_completed_ = false;
 
   // The current trusted list of Authorization Servers URIs.

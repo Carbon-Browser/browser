@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
@@ -37,7 +37,7 @@
 #include "components/security_interstitials/content/ssl_cert_reporter.h"
 #include "components/security_state/core/security_state.h"
 #include "components/variations/variations_params_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -183,18 +183,16 @@ class CaptivePortalBlockingPageTest : public InProcessBrowserTest {
  public:
   CaptivePortalBlockingPageTest() {
     CertReportHelper::SetFakeOfficialBuildForTesting();
+
+    // Setting the sending threshold to 1.0 ensures reporting is enabled.
+    variations::testing::VariationParamsManager::SetVariationParams(
+        "ReportCertificateErrors", "ShowAndPossiblySend",
+        {{"sendingThreshold", "1.0"}});
   }
 
   CaptivePortalBlockingPageTest(const CaptivePortalBlockingPageTest&) = delete;
   CaptivePortalBlockingPageTest& operator=(
       const CaptivePortalBlockingPageTest&) = delete;
-
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    // Setting the sending threshold to 1.0 ensures reporting is enabled.
-    variations::testing::VariationParamsManager::AppendVariationParams(
-        "ReportCertificateErrors", "ShowAndPossiblySend",
-        {{"sendingThreshold", "1.0"}}, command_line);
-  }
 
   void TestInterstitial(bool is_wifi_connection,
                         const std::string& wifi_ssid,

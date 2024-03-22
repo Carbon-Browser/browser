@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,17 +12,18 @@
 #include "base/check.h"
 #include "base/containers/flat_map.h"
 #include "base/cpu.h"
-#include "base/guid.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "base/version.h"
 #include "build/build_config.h"
 #include "components/update_client/activity_data_service.h"
 #include "components/update_client/persisted_data.h"
+#include "components/update_client/protocol_definition.h"
 #include "components/update_client/update_query_params.h"
 #include "components/update_client/utils.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -108,15 +109,16 @@ protocol_request::Request MakeProtocolRequest(
     const base::flat_map<std::string, std::string>& updater_state_attributes,
     std::vector<protocol_request::App> apps) {
   protocol_request::Request request;
-  request.protocol_version = kProtocolVersion;
+  request.protocol_version = protocol_request::kProtocolVersion;
   request.is_machine = is_machine;
 
   // Session id and request id.
-  DCHECK(!session_id.empty());
-  DCHECK(base::StartsWith(session_id, "{", base::CompareCase::SENSITIVE));
-  DCHECK(base::EndsWith(session_id, "}", base::CompareCase::SENSITIVE));
+  CHECK(!session_id.empty());
+  CHECK(base::StartsWith(session_id, "{", base::CompareCase::SENSITIVE));
+  CHECK(base::EndsWith(session_id, "}", base::CompareCase::SENSITIVE));
   request.session_id = session_id;
-  request.request_id = base::StrCat({"{", base::GenerateGUID(), "}"});
+  request.request_id = base::StrCat(
+      {"{", base::Uuid::GenerateRandomV4().AsLowercaseString(), "}"});
 
   request.updatername = prod_id;
   request.updaterversion = browser_version;
@@ -150,7 +152,7 @@ protocol_request::Request MakeProtocolRequest(
   request.os.platform = os_long_name;
   request.os.version = GetOSVersion();
   request.os.service_pack = GetServicePack();
-  request.os.arch = base::SysInfo().OperatingSystemArchitecture();
+  request.os.arch = GetArchitecture();
 
   if (!updater_state_attributes.empty()) {
     request.updater = absl::make_optional<protocol_request::Updater>();
@@ -162,12 +164,12 @@ protocol_request::Request MakeProtocolRequest(
       request.updater->version = it->second;
     it = updater_state_attributes.find("ismachine");
     if (it != updater_state_attributes.end()) {
-      DCHECK(it->second == "0" || it->second == "1");
+      CHECK(it->second == "0" || it->second == "1");
       request.updater->is_machine = it->second != "0";
     }
     it = updater_state_attributes.find("autoupdatecheckenabled");
     if (it != updater_state_attributes.end()) {
-      DCHECK(it->second == "0" || it->second == "1");
+      CHECK(it->second == "0" || it->second == "1");
       request.updater->autoupdate_check_enabled = it->second != "0";
     }
     it = updater_state_attributes.find("laststarted");
@@ -200,6 +202,7 @@ protocol_request::App MakeProtocolApp(
     const std::string& ap,
     const std::string& brand_code,
     const std::string& lang,
+    const int install_date,
     const std::string& install_source,
     const std::string& install_location,
     const std::string& fingerprint,
@@ -212,7 +215,7 @@ protocol_request::App MakeProtocolApp(
     absl::optional<protocol_request::UpdateCheck> update_check,
     const std::vector<protocol_request::Data>& data,
     absl::optional<protocol_request::Ping> ping,
-    absl::optional<std::vector<base::Value>> events) {
+    absl::optional<std::vector<base::Value::Dict>> events) {
   protocol_request::App app;
   app.app_id = app_id;
   app.version = version.GetString();
@@ -220,6 +223,7 @@ protocol_request::App MakeProtocolApp(
   app.events = std::move(events);
   app.brand_code = FilterBrandCode(brand_code);
   app.lang = lang;
+  app.install_date = install_date;
   app.install_source = install_source;
   app.install_location = install_location;
   app.fingerprint = fingerprint;
@@ -252,7 +256,7 @@ protocol_request::UpdateCheck MakeProtocolUpdateCheck(
 protocol_request::Ping MakeProtocolPing(const std::string& app_id,
                                         const PersistedData* metadata,
                                         bool active) {
-  DCHECK(metadata);
+  CHECK(metadata);
   protocol_request::Ping ping;
 
   if (active) {

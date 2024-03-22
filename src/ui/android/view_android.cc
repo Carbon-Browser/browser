@@ -1,10 +1,9 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/android/view_android.h"
 
-#include <algorithm>
 #include <cmath>
 #include <utility>
 
@@ -12,7 +11,8 @@
 #include "base/android/jni_string.h"
 #include "base/containers/adapters.h"
 #include "base/containers/contains.h"
-#include "cc/layers/layer.h"
+#include "base/ranges/algorithm.h"
+#include "cc/slim/layer.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/android/event_forwarder.h"
@@ -208,7 +208,7 @@ bool ViewAndroid::SubtreeHasEventForwarder(ViewAndroid* view) {
 
 void ViewAndroid::MoveToFront(ViewAndroid* child) {
   DCHECK(child);
-  auto it = std::find(children_.begin(), children_.end(), child);
+  auto it = base::ranges::find(children_, child);
   DCHECK(it != children_.end());
 
   // Top element is placed at the end of the list.
@@ -218,7 +218,7 @@ void ViewAndroid::MoveToFront(ViewAndroid* child) {
 
 void ViewAndroid::MoveToBack(ViewAndroid* child) {
   DCHECK(child);
-  auto it = std::find(children_.begin(), children_.end(), child);
+  auto it = base::ranges::find(children_, child);
   DCHECK(it != children_.end());
 
   // Bottom element is placed at the beginning of the list.
@@ -313,8 +313,7 @@ void ViewAndroid::RemoveChild(ViewAndroid* child) {
 
   if (GetWindowAndroid())
     child->OnDetachedFromWindow();
-  std::list<ViewAndroid*>::iterator it =
-      std::find(children_.begin(), children_.end(), child);
+  std::list<ViewAndroid*>::iterator it = base::ranges::find(children_, child);
   DCHECK(it != children_.end());
   children_.erase(it);
   child->parent_ = nullptr;
@@ -386,8 +385,12 @@ const ScopedJavaLocalRef<jobject> ViewAndroid::GetViewAndroidDelegate()
   return parent_ ? parent_->GetViewAndroidDelegate() : delegate;
 }
 
-cc::Layer* ViewAndroid::GetLayer() const {
+cc::slim::Layer* ViewAndroid::GetLayer() const {
   return layer_.get();
+}
+
+void ViewAndroid::SetLayer(scoped_refptr<cc::slim::Layer> layer) {
+  layer_ = std::move(layer);
 }
 
 bool ViewAndroid::HasFocus() {
@@ -406,18 +409,19 @@ void ViewAndroid::RequestFocus() {
   Java_ViewAndroidDelegate_requestFocus(env, delegate);
 }
 
-void ViewAndroid::SetLayer(scoped_refptr<cc::Layer> layer) {
-  layer_ = layer;
-}
-
 bool ViewAndroid::StartDragAndDrop(const JavaRef<jobject>& jshadow_image,
-                                   const JavaRef<jobject>& jdrop_data) {
+                                   const JavaRef<jobject>& jdrop_data,
+                                   jint cursor_offset_x,
+                                   jint cursor_offset_y,
+                                   jint drag_obj_rect_width,
+                                   jint drag_obj_rect_height) {
   ScopedJavaLocalRef<jobject> delegate(GetViewAndroidDelegate());
   if (delegate.is_null())
     return false;
   JNIEnv* env = base::android::AttachCurrentThread();
-  return Java_ViewAndroidDelegate_startDragAndDrop(env, delegate, jshadow_image,
-                                                   jdrop_data);
+  return Java_ViewAndroidDelegate_startDragAndDrop(
+      env, delegate, jshadow_image, jdrop_data, cursor_offset_x,
+      cursor_offset_y, drag_obj_rect_width, drag_obj_rect_height);
 }
 
 void ViewAndroid::OnCursorChanged(const Cursor& cursor) {
@@ -442,13 +446,13 @@ void ViewAndroid::OnCursorChanged(const Cursor& cursor) {
   }
 }
 
-void ViewAndroid::SetHoverActionStylusWritable(bool stylus_writable) {
+void ViewAndroid::NotifyHoverActionStylusWritable(bool stylus_writable) {
   ScopedJavaLocalRef<jobject> delegate(GetViewAndroidDelegate());
   if (delegate.is_null())
     return;
   JNIEnv* env = base::android::AttachCurrentThread();
-  Java_ViewAndroidDelegate_setHoverActionStylusWritable(env, delegate,
-                                                        stylus_writable);
+  Java_ViewAndroidDelegate_notifyHoverActionStylusWritable(env, delegate,
+                                                           stylus_writable);
 }
 
 void ViewAndroid::OnBackgroundColorChanged(unsigned int color) {
@@ -734,6 +738,16 @@ bool ViewAndroid::HitTest(EventHandlerCallback<E> handler_callback,
 
 void ViewAndroid::SetLayoutForTesting(int x, int y, int width, int height) {
   bounds_.SetRect(x, y, width, height);
+}
+
+size_t ViewAndroid::GetChildrenCountForTesting() const {
+  return children_.size();
+}
+
+const ViewAndroid* ViewAndroid::GetTopMostChildForTesting() const {
+  // The top-most refers to the back element of the children. This is mirroring
+  // the children ordering of the cc Layer tree.
+  return children_.back();
 }
 
 }  // namespace ui

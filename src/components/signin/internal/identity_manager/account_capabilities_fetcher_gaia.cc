@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/signin/internal/identity_manager/account_capabilities_fetcher_gaia.h"
 
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -17,12 +18,63 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+namespace {
+
+BASE_FEATURE(kSetNetworkPriorityForAccountCapabilitiesFetch,
+             "SetNetworkPriorityForAccountCapabilitiesFetch",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+constexpr std::string_view kAccountCapabilitiesFetcherHistogramBaseName =
+    "Signin.AccountCapabilities";
+
+net::RequestPriority ToNetworkPriority(
+    AccountCapabilitiesFetcher::FetchPriority priority) {
+  if (!base::FeatureList::IsEnabled(
+          kSetNetworkPriorityForAccountCapabilitiesFetch)) {
+    // Return the default priority value.
+    return net::RequestPriority::IDLE;
+  }
+
+  switch (priority) {
+    case AccountCapabilitiesFetcher::FetchPriority::kForeground:
+      return net::RequestPriority::HIGHEST;
+    case AccountCapabilitiesFetcher::FetchPriority::kBackground:
+      return net::RequestPriority::IDLE;
+  }
+  NOTREACHED_NORETURN() << "Unknown priority: " << static_cast<int>(priority);
+}
+
+std::string_view ToUmaToken(
+    AccountCapabilitiesFetcher::FetchPriority priority) {
+  switch (priority) {
+    case AccountCapabilitiesFetcher::FetchPriority::kForeground:
+      return "Foreground";
+    case AccountCapabilitiesFetcher::FetchPriority::kBackground:
+      return "Background";
+  }
+  NOTREACHED_NORETURN() << "Unknown priority: " << static_cast<int>(priority);
+}
+
+std::string_view ToUmaToken(
+    AccountCapabilitiesFetcherGaia::FetchResult result) {
+  if (result == AccountCapabilitiesFetcherGaia::FetchResult::kSuccess) {
+    return "Success";
+  } else {
+    return "Failure";
+  }
+}
+
+}  // namespace
+
 AccountCapabilitiesFetcherGaia::AccountCapabilitiesFetcherGaia(
     ProfileOAuth2TokenService* token_service,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const CoreAccountInfo& account_info,
+    AccountCapabilitiesFetcher::FetchPriority fetch_priority,
     AccountCapabilitiesFetcher::OnCompleteCallback on_complete_callback)
-    : AccountCapabilitiesFetcher(account_info, std::move(on_complete_callback)),
+    : AccountCapabilitiesFetcher(account_info,
+                                 fetch_priority,
+                                 std::move(on_complete_callback)),
       OAuth2AccessTokenManager::Consumer("account_capabilities_fetcher"),
       token_service_(token_service),
       url_loader_factory_(std::move(url_loader_factory)) {
@@ -62,8 +114,8 @@ void AccountCapabilitiesFetcherGaia::OnGetTokenSuccess(
   const int kMaxRetries = 3;
   gaia_oauth_client_->GetAccountCapabilities(
       token_response.access_token,
-      AccountCapabilities::GetSupportedAccountCapabilityNames(), kMaxRetries,
-      this);
+      AccountCapabilities::GetSupportedAccountCapabilityNames(),
+      ToNetworkPriority(fetch_priority()), kMaxRetries, this);
 }
 
 void AccountCapabilitiesFetcherGaia::OnGetTokenFailure(
@@ -79,15 +131,15 @@ void AccountCapabilitiesFetcherGaia::OnGetTokenFailure(
 }
 
 void AccountCapabilitiesFetcherGaia::OnGetAccountCapabilitiesResponse(
-    std::unique_ptr<base::Value> account_capabilities) {
+    const base::Value::Dict& account_capabilities) {
   TRACE_EVENT_NESTABLE_ASYNC_END0("AccountFetcherService",
                                   "GetAccountCapabilities", this);
   absl::optional<AccountCapabilities> parsed_capabilities =
-      AccountCapabilitiesFromValue(*account_capabilities);
+      AccountCapabilitiesFromValue(account_capabilities);
   FetchResult result = FetchResult::kSuccess;
   if (!parsed_capabilities) {
     VLOG(1) << "Failed to parse account capabilities for " << account_id()
-            << ". Response body: " << account_capabilities->DebugString();
+            << ". Response body: " << account_capabilities.DebugString();
     result = FetchResult::kParseResponseFailure;
   }
 
@@ -121,8 +173,11 @@ void AccountCapabilitiesFetcherGaia::RecordFetchResultAndDuration(
   }
   fetch_histograms_recorded_ = true;
 
-  base::UmaHistogramEnumeration("Signin.AccountCapabilities.FetchResult",
-                                result);
+  base::UmaHistogramEnumeration(
+      base::JoinString({kAccountCapabilitiesFetcherHistogramBaseName,
+                        ToUmaToken(fetch_priority()), "FetchResult"},
+                       "."),
+      result);
 
   if (fetch_start_time_.is_null()) {
     // Cannot record duration for a fetch that hasn't started.
@@ -130,11 +185,11 @@ void AccountCapabilitiesFetcherGaia::RecordFetchResultAndDuration(
     return;
   }
   base::TimeDelta duration = base::TimeTicks::Now() - fetch_start_time_;
-  if (result == FetchResult::kSuccess) {
-    base::UmaHistogramMediumTimes(
-        "Signin.AccountCapabilities.FetchDuration.Success", duration);
-  } else {
-    base::UmaHistogramMediumTimes(
-        "Signin.AccountCapabilities.FetchDuration.Failure", duration);
-  }
+
+  base::UmaHistogramMediumTimes(
+      base::JoinString(
+          {kAccountCapabilitiesFetcherHistogramBaseName,
+           ToUmaToken(fetch_priority()), "FetchDuration", ToUmaToken(result)},
+          "."),
+      duration);
 }

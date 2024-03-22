@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,8 @@ WebAppMetrics* WebAppMetricsFactory::GetForProfile(Profile* profile) {
 
 // static
 WebAppMetricsFactory* WebAppMetricsFactory::GetInstance() {
-  return base::Singleton<WebAppMetricsFactory>::get();
+  static base::NoDestructor<WebAppMetricsFactory> instance;
+  return instance.get();
 }
 
 WebAppMetricsFactory::WebAppMetricsFactory()
@@ -35,10 +36,11 @@ WebAppMetricsFactory::WebAppMetricsFactory()
 
 WebAppMetricsFactory::~WebAppMetricsFactory() = default;
 
-KeyedService* WebAppMetricsFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+WebAppMetricsFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new WebAppMetrics(profile);
+  return std::make_unique<WebAppMetrics>(profile);
 }
 
 content::BrowserContext* WebAppMetricsFactory::GetBrowserContextToUse(

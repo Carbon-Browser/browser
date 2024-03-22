@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,6 @@ class ASH_EXPORT CapsLockNotificationController
   virtual ~CapsLockNotificationController();
 
   static bool IsSearchKeyMappedToCapsLock();
-
-  // See Shell::RegisterProfilePrefs().
-  static void RegisterProfilePrefs(PrefRegistrySimple* registry, bool for_test);
 
   // ImeControllerImpl::Observer:
   void OnCapsLockChanged(bool enabled) override;

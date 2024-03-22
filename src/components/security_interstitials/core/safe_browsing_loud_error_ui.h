@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,6 +55,9 @@ class SafeBrowsingLoudErrorUI
   void PopulatePhishingLoadTimeData(base::Value::Dict& load_time_data);
   void PopulateBillingLoadTimeData(base::Value::Dict& load_time_data);
   void PopulateEnhancedProtectionMessage(base::Value::Dict& load_time_data);
+
+  // Handle update to interstitial_interaction_data_ when a command occurs.
+  void UpdateInterstitialInteractionData(SecurityInterstitialCommand command);
 
   const bool created_prior_to_navigation_;
 };

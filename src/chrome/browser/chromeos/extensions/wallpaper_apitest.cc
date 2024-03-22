@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "net/dns/mock_host_resolver.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/cryptohome/system_salt_getter.h"
+#include "chromeos/ash/components/cryptohome/system_salt_getter.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -27,8 +27,8 @@ class WallPaperApiTest : public extensions::ExtensionApiTest {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(WallPaperApiTest, Wallpaper) {
-  chromeos::SystemSaltGetter::Get()->SetRawSaltForTesting(
-      chromeos::SystemSaltGetter::RawSalt({1, 2, 3, 4, 5, 6, 7, 8}));
+  ash::SystemSaltGetter::Get()->SetRawSaltForTesting(
+      ash::SystemSaltGetter::RawSalt({1, 2, 3, 4, 5, 6, 7, 8}));
 
   ASSERT_TRUE(StartEmbeddedTestServer());
   ASSERT_TRUE(RunExtensionTest("wallpaper")) << message_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,6 @@ class TabWebContentsDelegateAndroid
 
   ~TabWebContentsDelegateAndroid() override;
 
-  void PortalWebContentsCreated(content::WebContents* portal_contents) override;
   void RunFileChooser(content::RenderFrameHost* render_frame_host,
                       scoped_refptr<content::FileSelectListener> listener,
                       const blink::mojom::FileChooserParams& params) override;
@@ -73,7 +72,7 @@ class TabWebContentsDelegateAndroid
       const content::MediaStreamRequest& request,
       content::MediaResponseCallback callback) override;
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) override;
   void SetOverlayMode(bool use_overlay_mode) override;
   content::WebContents* OpenURLFromTab(
@@ -84,7 +83,7 @@ class TabWebContentsDelegateAndroid
                       std::unique_ptr<content::WebContents> new_contents,
                       const GURL& target_url,
                       WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
+                      const blink::mojom::WindowFeatures& window_features,
                       bool user_gesture,
                       bool* was_blocked) override;
   void OnDidBlockNavigation(
@@ -98,10 +97,8 @@ class TabWebContentsDelegateAndroid
       content::WebContents* web_contents) override;
   void ExitPictureInPicture() override;
   bool IsBackForwardCacheSupported() override;
-  bool IsPrerender2Supported(content::WebContents& web_contents) override;
-  std::unique_ptr<content::WebContents> ActivatePortalWebContents(
-      content::WebContents* predecessor_contents,
-      std::unique_ptr<content::WebContents> portal_contents) override;
+  content::PreloadingEligibility IsPrerender2Supported(
+      content::WebContents& web_contents) override;
   device::mojom::GeolocationContext* GetInstalledWebappGeolocationContext()
       override;
 
@@ -130,7 +127,6 @@ class TabWebContentsDelegateAndroid
   bool IsNightModeEnabled() const;
   bool IsForceDarkWebContentEnabled() const;
   bool CanShowAppBanners() const;
-  bool IsTabLargeEnoughForDesktopSite() const;
 
   // Returns true if this tab is currently presented in the context of custom
   // tabs. Tabs can be moved between different activities so the returned value
@@ -138,6 +134,7 @@ class TabWebContentsDelegateAndroid
   bool IsCustomTab() const;
   const GURL GetManifestScope() const;
   bool IsInstalledWebappDelegateGeolocation() const;
+  bool IsModalContextMenu() const;
 
  private:
   std::unique_ptr<device::mojom::GeolocationContext>

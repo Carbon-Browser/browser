@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/media/router/providers/cast/cast_internal_message_util.h"
 #include "components/media_router/common/mojom/media_router.mojom.h"
-#include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/presentation/presentation.mojom.h"
 
@@ -27,7 +24,7 @@ class CastSessionClient {
  public:
   CastSessionClient(const std::string& client_id,
                     const url::Origin& origin,
-                    int tab_id);
+                    int frame_tree_node_id);
   CastSessionClient(const CastSessionClient&) = delete;
   CastSessionClient& operator=(const CastSessionClient&) = delete;
   virtual ~CastSessionClient();
@@ -35,7 +32,7 @@ class CastSessionClient {
   const std::string& client_id() const { return client_id_; }
   const absl::optional<std::string>& session_id() const { return session_id_; }
   const url::Origin& origin() const { return origin_; }
-  int tab_id() const { return tab_id_; }
+  int frame_tree_node_id() const { return frame_tree_node_id_; }
 
   // Initializes the PresentationConnection Mojo message pipes and returns the
   // handles of the two pipes to be held by Blink. Also transitions the
@@ -47,11 +44,11 @@ class CastSessionClient {
   virtual void SendMessageToClient(
       blink::mojom::PresentationConnectionMessagePtr message) = 0;
 
-  // Sends a media status message to the client.  If |request_id| is given, it
+  // Sends a media message to the client.  If |request_id| is given, it
   // is used to look up the sequence number of a previous request, which is
   // included in the outgoing message.
-  virtual void SendMediaStatusToClient(const base::Value& media_status,
-                                       absl::optional<int> request_id) = 0;
+  virtual void SendMediaMessageToClient(const base::Value::Dict& payload,
+                                        absl::optional<int> request_id) = 0;
 
   // Changes the PresentationConnection state to CLOSED/TERMINATED and resets
   // PresentationConnection message pipes.
@@ -59,17 +56,18 @@ class CastSessionClient {
       blink::mojom::PresentationConnectionCloseReason close_reason) = 0;
   virtual void TerminateConnection() = 0;
 
-  // Tests whether the specified origin and tab ID match this session's origin
-  // and tab ID to the extent required by this sesssion's auto-join policy.
-  // Depending on the value of |auto_join_policy_|, |origin|, |tab_id|, or both
-  // may be ignored.
+  // Tests whether the specified origin and FrameTreeNode ID match this
+  // session's origin and FrameTreeNode ID to the extent required by this
+  // sesssion's auto-join policy. Depending on the value of |auto_join_policy_|,
+  // |origin|, |frame_tree_node_id_|, or both may be ignored.
   //
   // TODO(crbug.com/1291742): It appears the purpose of this method is to detect
   // whether this session was created by an auto-join request.  It might make
   // more sense to record at session creation time whether a particular session
   // was created by an auto-join request, in which case this method would no
   // longer be needed.
-  virtual bool MatchesAutoJoinPolicy(url::Origin origin, int tab_id) const = 0;
+  virtual bool MatchesAutoJoinPolicy(url::Origin origin,
+                                     int frame_tree_node_id) const = 0;
 
   virtual void SendErrorCodeToClient(
       int sequence_number,
@@ -79,16 +77,17 @@ class CastSessionClient {
   // NOTE: This is current only called from SendErrorCodeToClient, but based on
   // the old code this method based on, it seems likely it will have other
   // callers once error handling for the Cast MRP is more fleshed out.
-  virtual void SendErrorToClient(int sequence_number, base::Value error) = 0;
+  virtual void SendErrorToClient(int sequence_number,
+                                 base::Value::Dict error) = 0;
 
  private:
   std::string client_id_;
   absl::optional<std::string> session_id_;
 
-  // The origin and tab ID parameters originally passed to the CreateRoute
-  // method of the MediaRouteProvider Mojo interface.
+  // The origin and FrameTreeNode ID parameters originally passed to the
+  // CreateRoute method of the MediaRouteProvider Mojo interface.
   url::Origin origin_;
-  int tab_id_;
+  int frame_tree_node_id_;
 };
 
 class CastSessionClientFactoryForTest {
@@ -96,7 +95,7 @@ class CastSessionClientFactoryForTest {
   virtual std::unique_ptr<CastSessionClient> MakeClientForTest(
       const std::string& client_id,
       const url::Origin& origin,
-      int tab_id) = 0;
+      int frame_tree_node_id) = 0;
 };
 
 }  // namespace media_router

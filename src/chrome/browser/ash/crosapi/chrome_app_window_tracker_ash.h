@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "chromeos/crosapi/mojom/app_window_tracker.mojom.h"
@@ -69,7 +70,7 @@ class ChromeAppWindowTrackerAsh : public mojom::AppWindowTracker,
   // an existing one.
   struct WindowData {
     std::string app_id;
-    aura::Window* window = nullptr;
+    raw_ptr<aura::Window, ExperimentalAsh> window = nullptr;
   };
 
   // A map from |window_id| to WindowData. Note that Lacros windows that are not

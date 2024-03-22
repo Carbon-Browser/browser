@@ -1,13 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/time/time.h"
 #include "media/cast/net/cast_transport_config.h"
@@ -288,12 +290,9 @@ TEST_F(RtcpTest, ReportCastFeedback) {
 
   EXPECT_EQ(last_cast_message_.ack_frame_id, cast_message.ack_frame_id);
   EXPECT_EQ(last_cast_message_.target_delay_ms, kTargetDelayMs);
-  EXPECT_EQ(last_cast_message_.missing_frames_and_packets.size(),
-            cast_message.missing_frames_and_packets.size());
   EXPECT_TRUE(
-      std::equal(cast_message.missing_frames_and_packets.begin(),
-                 cast_message.missing_frames_and_packets.end(),
-                 last_cast_message_.missing_frames_and_packets.begin()));
+      base::ranges::equal(cast_message.missing_frames_and_packets,
+                          last_cast_message_.missing_frames_and_packets));
 }
 
 TEST_F(RtcpTest, ReportPli) {

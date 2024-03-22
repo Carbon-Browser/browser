@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,8 @@ blink::FontEnumerationTable FontEnumerationDataSourceFuchsia::GetFonts(
     const std::string& locale) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  NOTIMPLEMENTED_LOG_ONCE() << "Use a FIDL interface when available";
+  //  Use a FIDL interface when available.
+  NOTIMPLEMENTED_LOG_ONCE();
 
   blink::FontEnumerationTable font_enumeration_table;
 

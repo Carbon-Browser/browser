@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,6 @@
 // view open source licenses, terms of service, etc.
 @interface AboutChromeTableViewController
     : SettingsRootTableViewController <SettingsControllerProtocol>
-
-// ApplicationCommands handler.
-@property(nonatomic, weak) id<ApplicationCommands> applicationCommandsHandler;
-
-// SnackbarCommands handler.
-@property(nonatomic, weak) id<SnackbarCommands> snackbarCommandsHandler;
 
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "chrome/browser/media/router/data_decoder_util.h"
 #include "chrome/browser/media/router/providers/cast/app_activity.h"
-#include "components/cast_channel/enum_table.h"
+#include "components/media_router/common/providers/cast/channel/enum_table.h"
 
 using blink::mojom::PresentationConnectionCloseReason;
 using blink::mojom::PresentationConnectionMessagePtr;
@@ -28,21 +28,21 @@ void ReportClientMessageParseError(const MediaRoute::Id& route_id,
 // Traverses a JSON value, recursively removing any dict entries whose value is
 // null.
 void RemoveNullFields(base::Value& value) {
-  if (value.is_list()) {
-    for (auto& item : value.GetListDeprecated()) {
+  if (auto* list = value.GetIfList()) {
+    for (auto& item : *list) {
       RemoveNullFields(item);
     }
-  } else if (value.is_dict()) {
+  } else if (auto* dict = value.GetIfDict()) {
     std::vector<std::string> to_remove;
-    for (auto pair : value.DictItems()) {
-      if (pair.second.is_none()) {
-        to_remove.push_back(pair.first);
+    for (auto [key, val] : *dict) {
+      if (val.is_none()) {
+        to_remove.push_back(key);
       } else {
-        RemoveNullFields(pair.second);
+        RemoveNullFields(val);
       }
     }
     for (const auto& key : to_remove) {
-      value.RemoveKey(key);
+      dict->Remove(key);
     }
   }
 }
@@ -51,10 +51,10 @@ void RemoveNullFields(base::Value& value) {
 
 CastSessionClientImpl::CastSessionClientImpl(const std::string& client_id,
                                              const url::Origin& origin,
-                                             int tab_id,
+                                             int frame_tree_node_id,
                                              AutoJoinPolicy auto_join_policy,
                                              CastActivity* activity)
-    : CastSessionClient(client_id, origin, tab_id),
+    : CastSessionClient(client_id, origin, frame_tree_node_id),
       auto_join_policy_(auto_join_policy),
       activity_(activity) {}
 
@@ -77,8 +77,8 @@ void CastSessionClientImpl::SendMessageToClient(
   connection_remote_->OnMessage(std::move(message));
 }
 
-void CastSessionClientImpl::SendMediaStatusToClient(
-    const base::Value& media_status,
+void CastSessionClientImpl::SendMediaMessageToClient(
+    const base::Value::Dict& payload,
     absl::optional<int> request_id) {
   // Look up if there is a pending request from this client associated with this
   // message. If so, send the media status message as a response by setting the
@@ -93,18 +93,18 @@ void CastSessionClientImpl::SendMediaStatusToClient(
       pending_media_requests_.erase(it);
     }
   }
-
-  SendMessageToClient(
-      CreateV2Message(client_id(), media_status, sequence_number));
+  SendMessageToClient(CreateV2Message(client_id(), payload, sequence_number));
 }
 
-bool CastSessionClientImpl::MatchesAutoJoinPolicy(url::Origin other_origin,
-                                                  int other_tab_id) const {
+bool CastSessionClientImpl::MatchesAutoJoinPolicy(
+    url::Origin other_origin,
+    int other_frame_tree_node_id) const {
   switch (auto_join_policy_) {
     case AutoJoinPolicy::kPageScoped:
       return false;
     case AutoJoinPolicy::kTabAndOriginScoped:
-      return other_origin == origin() && other_tab_id == tab_id();
+      return other_origin == origin() &&
+             other_frame_tree_node_id == frame_tree_node_id();
     case AutoJoinPolicy::kOriginScoped:
       return other_origin == origin();
   }
@@ -129,23 +129,23 @@ void CastSessionClientImpl::SendErrorCodeToClient(
     int sequence_number,
     CastInternalMessage::ErrorCode error_code,
     absl::optional<std::string> description) {
-  base::Value message(base::Value::Type::DICTIONARY);
-  message.SetKey("code", base::Value(*cast_util::EnumToString(error_code)));
-  message.SetKey("description",
-                 description ? base::Value(*description) : base::Value());
-  message.SetKey("details", base::Value());
+  base::Value::Dict message;
+  message.Set("code", base::Value(*cast_util::EnumToString(error_code)));
+  message.Set("description",
+              description ? base::Value(*description) : base::Value());
+  message.Set("details", base::Value());
   SendErrorToClient(sequence_number, std::move(message));
 }
 
 void CastSessionClientImpl::SendErrorToClient(int sequence_number,
-                                              base::Value error) {
+                                              base::Value::Dict error) {
   SendMessageToClient(
       CreateErrorMessage(client_id(), std::move(error), sequence_number));
 }
 
 void CastSessionClientImpl::HandleParsedClientMessage(
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.has_value()) {
+  if (!result.has_value() || !result.value().is_dict()) {
     ReportClientMessageParseError(activity_->route().media_route_id(),
                                   result.error());
     return;
@@ -157,7 +157,7 @@ void CastSessionClientImpl::HandleParsedClientMessage(
   RemoveNullFields(*result);
 
   std::unique_ptr<CastInternalMessage> cast_message =
-      CastInternalMessage::From(std::move(*result));
+      CastInternalMessage::From(std::move(result.value().GetDict()));
   if (!cast_message) {
     ReportClientMessageParseError(activity_->route().media_route_id(),
                                   "Not a Cast message");
@@ -256,7 +256,7 @@ void CastSessionClientImpl::SendResultResponse(int sequence_number,
   if (result == cast_channel::Result::kOk) {
     // Send an empty message to let the client know the request succeeded.
     SendMessageToClient(
-        CreateV2Message(client_id(), base::Value(), sequence_number));
+        CreateV2Message(client_id(), base::Value::Dict(), sequence_number));
   } else {
     // TODO(crbug.com/951089): Send correct error codes.  The original
     // implementation isn't much help here because it sends incorrectly

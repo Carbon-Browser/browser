@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,15 @@
 
 #include "ash/ash_export.h"
 #include "ash/shelf/shelf_view.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace ash {
 
 class ASH_EXPORT ShelfContainerView : public views::View {
+  METADATA_HEADER(ShelfContainerView, views::View)
+
  public:
   explicit ShelfContainerView(ShelfView* shelf_view);
 
@@ -35,11 +39,10 @@ class ASH_EXPORT ShelfContainerView : public views::View {
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
   void ChildPreferredSizeChanged(views::View* child) override;
-  const char* GetClassName() const override;
 
  protected:
   // Owned by views hierarchy.
-  ShelfView* shelf_view_ = nullptr;
+  raw_ptr<ShelfView, ExperimentalAsh> shelf_view_ = nullptr;
 };
 
 }  // namespace ash

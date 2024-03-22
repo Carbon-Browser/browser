@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -122,7 +122,7 @@ void CredentialProviderBrokerWin::OpenDevice(
 
       DCHECK(base::IsStringASCII(device_path.value()));
       if (!base::EqualsCaseInsensitiveASCII(
-              device_path.value(), base::AsWStringPiece(input_device_path))) {
+              device_path.value(), base::AsWStringView(input_device_path))) {
         continue;
       }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,22 +9,22 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/values.h"
 #include "components/crash/core/browser/crashes_ui_util.h"
 #include "components/crash/core/common/reporter_running_ios.h"
 #include "components/grit/dev_ui_components_resources.h"
-#include "components/strings/grit/components_chromium_strings.h"
+#include "components/strings/grit/components_branded_strings.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/version_info/version_info.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/chrome/browser/crash_report/crash_upload_list.h"
-#include "ios/chrome/browser/metrics/ios_chrome_metrics_service_accessor.h"
-#include "ios/chrome/grit/ios_chromium_strings.h"
+#include "ios/chrome/browser/crash_report/model/crash_upload_list.h"
+#include "ios/chrome/browser/metrics/model/ios_chrome_metrics_service_accessor.h"
+#include "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#include "ios/chrome/grit/ios_branded_strings.h"
 #include "ios/web/public/webui/web_ui_ios.h"
 #include "ios/web/public/webui/web_ui_ios_data_source.h"
 #include "ios/web/public/webui/web_ui_ios_message_handler.h"
@@ -151,20 +151,18 @@ void CrashesDOMHandler::UpdateUI() {
   if (crash_reporting_enabled)
     crash_reporter::UploadListToValue(upload_list_.get(), &crash_list);
 
-  base::Value result(base::Value::Type::DICTIONARY);
-  result.GetDict().Set("enabled", crash_reporting_enabled);
-  result.GetDict().Set("dynamicBackend", false);
-  result.GetDict().Set("manualUploads", crash_reporter::IsCrashpadRunning());
-  result.GetDict().Set("crashes", std::move(crash_list));
-  result.GetDict().Set("version", version_info::GetVersionNumber());
-  result.GetDict().Set("os", base::SysInfo::OperatingSystemName() + " " +
-                                 base::SysInfo::OperatingSystemVersion());
+  base::Value::Dict result;
+  result.Set("enabled", crash_reporting_enabled);
+  result.Set("dynamicBackend", false);
+  result.Set("manualUploads", crash_reporter::IsCrashpadRunning());
+  result.Set("crashes", std::move(crash_list));
+  result.Set("version", version_info::GetVersionNumber());
+  result.Set("os", base::SysInfo::OperatingSystemName() + " " +
+                       base::SysInfo::OperatingSystemVersion());
 
   base::Value event_name(crash_reporter::kCrashesUIUpdateCrashList);
 
-  std::vector<const base::Value*> args;
-  args.push_back(&event_name);
-  args.push_back(&result);
+  base::ValueView args[] = {event_name, result};
   web_ui()->CallJavascriptFunction("cr.webUIListenerCallback", args);
 }
 

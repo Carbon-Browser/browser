@@ -1,8 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/autofill/autofill_uitest_util.h"
@@ -11,9 +12,11 @@
 #include "chrome/browser/ui/autofill/payments/offer_notification_controller_android.h"
 #include "chrome/test/base/android/android_browser_test.h"
 #include "chrome/test/base/chrome_test_utils.h"
+#include "components/autofill/content/browser/content_autofill_client.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
+#include "components/autofill/core/browser/metrics/payments/offers_metrics.h"
 #include "components/autofill/core/browser/payments/autofill_offer_manager.h"
 #include "components/autofill/core/browser/payments/autofill_offer_notification_infobar_delegate_mobile.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
@@ -32,7 +35,9 @@
 
 namespace autofill {
 
-const char kHostName[] = "example.com";
+namespace {
+constexpr char kHostName[] = "example.com";
+}
 
 class OfferNotificationControllerAndroidBrowserTest
     : public AndroidBrowserTest {
@@ -69,6 +74,9 @@ class OfferNotificationControllerAndroidBrowserTest
   // AndroidBrowserTest
   void SetUpOnMainThread() override {
     personal_data_ = PersonalDataManagerFactory::GetForProfile(GetProfile());
+    // Mimic the user is signed in so payments integration is considered
+    // enabled.
+    personal_data_->SetSyncingForTest(true);
     // Wait for Personal Data Manager to be fully loaded to prevent that
     // spurious notifications deceive the tests.
     WaitForPersonalDataManagerToBeLoaded(GetProfile());
@@ -82,7 +90,7 @@ class OfferNotificationControllerAndroidBrowserTest
   Profile* GetProfile() { return chrome_test_utils::GetProfile(this); }
 
   AutofillOfferData* SetUpOfferDataWithDomains(const GURL& url) {
-    personal_data_->ClearAllServerData();
+    personal_data_->ClearAllServerDataForTesting();
     std::vector<GURL> merchant_origins;
     merchant_origins.emplace_back(url.DeprecatedGetOriginAsURL());
     std::vector<int64_t> eligible_instrument_ids = {0x4444};
@@ -99,10 +107,8 @@ class OfferNotificationControllerAndroidBrowserTest
   }
 
   AutofillOfferManager* GetOfferManager() {
-    return ContentAutofillDriver::GetForRenderFrameHost(
-               GetWebContents()->GetPrimaryMainFrame())
-        ->autofill_manager()
-        ->GetOfferManager();
+    return ContentAutofillClient::FromWebContents(GetWebContents())
+        ->GetAutofillOfferManager();
   }
 
   void SetShownOffer(int64_t id) {
@@ -123,9 +129,9 @@ class OfferNotificationControllerAndroidBrowserTest
   // CreditCard that is linked to the offer displayed in the offer notification.
   CreditCard card_;
   base::HistogramTester histogram_tester_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 
  private:
+  test::AutofillBrowserTestEnvironment autofill_environment_;
   raw_ptr<PersonalDataManager> personal_data_;
 };
 
@@ -145,15 +151,11 @@ class OfferNotificationControllerAndroidBrowserTestForInfobar
   infobars::InfoBar* GetInfoBar() {
     infobars::ContentInfoBarManager* infobar_manager =
         infobars::ContentInfoBarManager::FromWebContents(GetWebContents());
-    for (size_t i = 0; i < infobar_manager->infobar_count(); ++i) {
-      infobars::InfoBar* infobar = infobar_manager->infobar_at(i);
-      if (infobar->delegate()->GetIdentifier() ==
-          infobars::InfoBarDelegate::
-              AUTOFILL_OFFER_NOTIFICATION_INFOBAR_DELEGATE) {
-        return infobar;
-      }
-    }
-    return nullptr;
+    const auto it = base::ranges::find(
+        infobar_manager->infobars(),
+        infobars::InfoBarDelegate::AUTOFILL_OFFER_NOTIFICATION_INFOBAR_DELEGATE,
+        &infobars::InfoBar::GetIdentifier);
+    return it != infobar_manager->infobars().cend() ? *it : nullptr;
   }
 
   AutofillOfferNotificationInfoBarDelegateMobile* GetInfoBarDelegate(
@@ -172,12 +174,15 @@ class OfferNotificationControllerAndroidBrowserTestForInfobar
   }
 
   void VerifyInfoBarResultMetric(
-      AutofillMetrics::OfferNotificationInfoBarResultMetric metric,
+      autofill_metrics::OfferNotificationInfoBarResultMetric metric,
       int count) {
     histogram_tester_.ExpectBucketCount(
         "Autofill.OfferNotificationInfoBarResult.CardLinkedOffer", metric,
         count);
   }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(OfferNotificationControllerAndroidBrowserTestForInfobar,
@@ -196,7 +201,7 @@ IN_PROC_BROWSER_TEST_F(OfferNotificationControllerAndroidBrowserTestForInfobar,
 
   // Verify histogram counts.
   VerifyInfoBarResultMetric(
-      AutofillMetrics::OfferNotificationInfoBarResultMetric::
+      autofill_metrics::OfferNotificationInfoBarResultMetric::
           OFFER_NOTIFICATION_INFOBAR_ACKNOWLEDGED,
       1);
 }
@@ -217,7 +222,7 @@ IN_PROC_BROWSER_TEST_F(OfferNotificationControllerAndroidBrowserTestForInfobar,
 
   // Verify histogram counts.
   VerifyInfoBarResultMetric(
-      AutofillMetrics::OfferNotificationInfoBarResultMetric::
+      autofill_metrics::OfferNotificationInfoBarResultMetric::
           OFFER_NOTIFICATION_INFOBAR_CLOSED,
       1);
 }
@@ -254,12 +259,17 @@ class OfferNotificationControllerAndroidBrowserTestForMessagesUi
 
   void VerifyMessageShownCountMetric(int count) {
     histogram_tester_.ExpectBucketCount(
-        "Android.Messages.Enqueued.Visible",
+        messages::IsStackingAnimationEnabled()
+            ? "Android.Messages.Stacking.InsertAtFront"
+            : "Android.Messages.Enqueued.Visible",
         static_cast<int>(messages::MessageIdentifier::OFFER_NOTIFICATION),
         count);
   }
 
   messages::MessagesTestHelper messages_test_helper_;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(

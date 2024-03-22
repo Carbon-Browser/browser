@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.ui.modelutil;
@@ -7,12 +7,13 @@ import androidx.annotation.Nullable;
 
 /**
  * Helper class for implementing a {@link ListObserver} that just forwards to its own observers.
+ *
  * @param <P> The payload type for partial updates, or {@link Void} if the class doesn't support
- *         partial updates.
- * TODO(bauerb): Remove this class if it turns out we can shortcut notifications
+ *     partial updates. TODO(bauerb): Remove this class if it turns out we can shortcut
+ *     notifications
  */
-public class ForwardingListObservable<P>
-        extends ListObservableImpl<P> implements ListObservable.ListObserver<P> {
+public class ForwardingListObservable<P> extends ListObservableImpl<P>
+        implements ListObservable.ListObserver<P> {
     @Override
     public void onItemRangeInserted(ListObservable source, int index, int count) {
         notifyItemRangeInserted(index, count);

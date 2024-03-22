@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/time/default_clock.h"
 #include "base/time/default_tick_clock.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 
@@ -276,13 +276,12 @@ void RelaunchNotificationController::HandleRelaunchRequiredState(
                  &RelaunchNotificationController::OnRelaunchDeadlineExpired);
   }
 
-  if (platform_impl_.IsRequiredNotificationShown()) {
-    platform_impl_.SetDeadline(deadline);
-  } else {
-    // Otherwise, show the dialog if there has been a level change or if the
-    // deadline is in the past.
-    if (level != last_level_ || high_deadline <= now)
-      NotifyRelaunchRequired();
+  platform_impl_.SetDeadline(deadline);
+  // Show the dialog if there has been a level change or if the deadline is in
+  // the past.
+  if (!platform_impl_.IsRequiredNotificationShown() &&
+      (level != last_level_ || high_deadline <= now)) {
+    NotifyRelaunchRequired();
   }
 }
 
@@ -357,10 +356,6 @@ void RelaunchNotificationController::DoNotifyRelaunchRequired(
 
 void RelaunchNotificationController::Close() {
   platform_impl_.CloseRelaunchNotification();
-}
-
-void RelaunchNotificationController::SetDeadline(base::Time deadline) {
-  platform_impl_.SetDeadline(deadline);
 }
 
 void RelaunchNotificationController::OnRelaunchDeadlineExpired() {

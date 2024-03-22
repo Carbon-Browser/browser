@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,6 +62,10 @@ class PdfNupConverterClient
   // Stores the mapping between document cookies and their corresponding
   // mojo::Remote.
   std::map<int, mojo::Remote<mojom::PdfNupConverter>> pdf_nup_converter_map_;
+
+  // Indicates whether to use Skia renderer is enabled by enterprise policy.
+  // A nullopt value indicates that such enterprise policy is not set.
+  absl::optional<bool> skia_policy_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

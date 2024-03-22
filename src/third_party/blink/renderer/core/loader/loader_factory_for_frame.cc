@@ -1,19 +1,22 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/loader/loader_factory_for_frame.h"
 
+#include "base/memory/scoped_refptr.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "services/network/public/cpp/wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-blink.h"
 #include "third_party/blink/public/common/blob/blob_utils.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/platform/modules/service_worker/web_service_worker_network_provider.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
-#include "third_party/blink/public/platform/web_url_loader_factory.h"
+#include "third_party/blink/public/platform/web_background_resource_fetch_assets.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_local_frame_client.h"
 #include "third_party/blink/renderer/core/fileapi/public_url_manager.h"
@@ -23,9 +26,33 @@
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/loader/prefetched_signed_exchange_manager.h"
 #include "third_party/blink/renderer/platform/exported/wrapped_resource_request.h"
+#include "third_party/blink/renderer/platform/loader/fetch/background_code_cache_host.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/background_url_loader.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/url_loader_factory.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
+#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 
 namespace blink {
+
+namespace {
+
+Vector<String>& CorsExemptHeaderList() {
+  DEFINE_STATIC_LOCAL(ThreadSpecific<Vector<String>>, cors_exempt_header_list,
+                      ());
+  return *cors_exempt_header_list;
+}
+
+}  // namespace
+
+// static
+void LoaderFactoryForFrame::SetCorsExemptHeaderList(
+    Vector<String> cors_exempt_header_list) {
+  CorsExemptHeaderList() = std::move(cors_exempt_header_list);
+}
+// static
+Vector<String> LoaderFactoryForFrame::GetCorsExemptHeaderList() {
+  return CorsExemptHeaderList();
+}
 
 LoaderFactoryForFrame::LoaderFactoryForFrame(DocumentLoader& document_loader,
                                              LocalDOMWindow& window)
@@ -37,6 +64,17 @@ LoaderFactoryForFrame::LoaderFactoryForFrame(DocumentLoader& document_loader,
   window.GetFrame()->GetLocalFrameHostRemote().GetKeepAliveHandleFactory(
       keep_alive_handle_factory_.BindNewPipeAndPassReceiver(
           window.GetTaskRunner(TaskType::kNetworking)));
+
+  // LocalFrameClient member may not be valid in some tests.
+  if (window_->GetFrame()->Client() &&
+      window_->GetFrame()->Client()->GetWebFrame() &&
+      window_->GetFrame()->Client()->GetWebFrame()->Client()) {
+    throttle_provider_ = window_->GetFrame()
+                             ->Client()
+                             ->GetWebFrame()
+                             ->Client()
+                             ->CreateWebURLLoaderThrottleProviderForFrame();
+  }
 }
 
 void LoaderFactoryForFrame::Trace(Visitor* visitor) const {
@@ -47,13 +85,22 @@ void LoaderFactoryForFrame::Trace(Visitor* visitor) const {
   LoaderFactory::Trace(visitor);
 }
 
-std::unique_ptr<WebURLLoader> LoaderFactoryForFrame::CreateURLLoader(
+std::unique_ptr<URLLoader> LoaderFactoryForFrame::CreateURLLoader(
     const ResourceRequest& request,
     const ResourceLoaderOptions& options,
     scoped_refptr<base::SingleThreadTaskRunner> freezable_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> unfreezable_task_runner,
-    WebBackForwardCacheLoaderHelper back_forward_cache_loader_helper) {
+    BackForwardCacheLoaderHelper* back_forward_cache_loader_helper) {
   WrappedResourceRequest webreq(request);
+  Vector<std::unique_ptr<URLLoaderThrottle>> throttles;
+  if (throttle_provider_) {
+    WebVector<std::unique_ptr<URLLoaderThrottle>> web_throttles =
+        throttle_provider_->CreateThrottles(webreq);
+    throttles.reserve(base::checked_cast<wtf_size_t>(web_throttles.size()));
+    for (auto& throttle : web_throttles) {
+      throttles.push_back(std::move(throttle));
+    }
+  }
 
   mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>
       url_loader_factory;
@@ -91,39 +138,42 @@ std::unique_ptr<WebURLLoader> LoaderFactoryForFrame::CreateURLLoader(
   FrameScheduler* frame_scheduler = frame->GetFrameScheduler();
   DCHECK(frame_scheduler);
 
-  // TODO(altimin): frame_scheduler->CreateResourceLoadingTaskRunnerHandle is
-  // used when creating a URLLoader, and ResourceFetcher::GetTaskRunner is
-  // used whenever asynchronous tasks around resource loading are posted. Modify
-  // the code so that all the tasks related to loading a resource use the
-  // resource loader handle's task runner.
   if (url_loader_factory) {
-    return Platform::Current()
-        ->WrapURLLoaderFactory(std::move(url_loader_factory))
-        ->CreateURLLoader(webreq, CreateTaskRunnerHandle(freezable_task_runner),
-                          CreateTaskRunnerHandle(unfreezable_task_runner),
-                          /*keep_alive_handle=*/mojo::NullRemote(),
-                          back_forward_cache_loader_helper);
+    return std::make_unique<URLLoaderFactory>(
+               base::MakeRefCounted<network::WrapperSharedURLLoaderFactory>(
+                   CrossVariantMojoRemote<
+                       network::mojom::URLLoaderFactoryInterfaceBase>(
+                       std::move(url_loader_factory))),
+               GetCorsExemptHeaderList(),
+               /*terminate_sync_load_event=*/nullptr)
+        ->CreateURLLoader(
+            webreq, freezable_task_runner, unfreezable_task_runner,
+            /*keep_alive_handle=*/mojo::NullRemote(),
+            back_forward_cache_loader_helper, std::move(throttles));
   }
 
   if (document_loader_->GetServiceWorkerNetworkProvider()) {
     mojo::PendingRemote<mojom::blink::KeepAliveHandle> pending_remote;
     mojo::PendingReceiver<mojom::blink::KeepAliveHandle> pending_receiver =
         pending_remote.InitWithNewPipeAndPassReceiver();
-    auto loader =
-        document_loader_->GetServiceWorkerNetworkProvider()->CreateURLLoader(
-            webreq, CreateTaskRunnerHandle(freezable_task_runner),
-            CreateTaskRunnerHandle(unfreezable_task_runner),
-            std::move(pending_remote), back_forward_cache_loader_helper);
-    if (loader) {
+    auto loader_factory = document_loader_->GetServiceWorkerNetworkProvider()
+                              ->GetSubresourceLoaderFactory(webreq);
+    if (loader_factory) {
       IssueKeepAliveHandleIfRequested(request, frame->GetLocalFrameHostRemote(),
                                       std::move(pending_receiver));
-      return loader;
+      return std::make_unique<URLLoaderFactory>(
+                 std::move(loader_factory), GetCorsExemptHeaderList(),
+                 /*terminate_sync_load_event=*/nullptr)
+          ->CreateURLLoader(webreq, freezable_task_runner,
+                            unfreezable_task_runner, std::move(pending_remote),
+                            back_forward_cache_loader_helper,
+                            std::move(throttles));
     }
   }
 
   if (prefetched_signed_exchange_manager_) {
-    auto loader =
-        prefetched_signed_exchange_manager_->MaybeCreateURLLoader(webreq);
+    auto loader = prefetched_signed_exchange_manager_->MaybeCreateURLLoader(
+        webreq, throttles);
     if (loader)
       return loader;
   }
@@ -132,27 +182,37 @@ std::unique_ptr<WebURLLoader> LoaderFactoryForFrame::CreateURLLoader(
   IssueKeepAliveHandleIfRequested(
       request, frame->GetLocalFrameHostRemote(),
       pending_remote.InitWithNewPipeAndPassReceiver());
-  WebURLLoaderFactory* factory = frame->GetURLLoaderFactory();
-  return factory->CreateURLLoader(
-      webreq, CreateTaskRunnerHandle(freezable_task_runner),
-      CreateTaskRunnerHandle(unfreezable_task_runner),
-      std::move(pending_remote), back_forward_cache_loader_helper);
-}
 
-std::unique_ptr<WebCodeCacheLoader>
-LoaderFactoryForFrame::CreateCodeCacheLoader() {
-  if (document_loader_->GetCodeCacheHost() == nullptr) {
-    return nullptr;
+  auto loader = frame->CreateURLLoaderForTesting();
+  if (loader) {
+    return loader;
   }
-  return blink::WebCodeCacheLoader::Create(
-      document_loader_->GetCodeCacheHost());
+
+  if (BackgroundURLLoader::CanHandleRequest(request, options)) {
+    scoped_refptr<WebBackgroundResourceFetchAssets>
+        web_background_resource_fetch_assets =
+            frame->MaybeGetBackgroundResourceFetchAssets();
+    if (web_background_resource_fetch_assets) {
+      // TODO(crbug.com/1379780): Consider using a cloned ThrottleProvider
+      // instead of cloning all `throttles`.
+      return std::make_unique<BackgroundURLLoader>(
+          std::move(web_background_resource_fetch_assets),
+          GetCorsExemptHeaderList(), freezable_task_runner,
+          unfreezable_task_runner, back_forward_cache_loader_helper,
+          std::move(throttles), GetBackgroundCodeCacheHost());
+    }
+  }
+
+  return std::make_unique<URLLoaderFactory>(
+             frame->GetURLLoaderFactory(), GetCorsExemptHeaderList(),
+             /*terminate_sync_load_event=*/nullptr)
+      ->CreateURLLoader(webreq, freezable_task_runner, unfreezable_task_runner,
+                        std::move(pending_remote),
+                        back_forward_cache_loader_helper, std::move(throttles));
 }
 
-std::unique_ptr<blink::scheduler::WebResourceLoadingTaskRunnerHandle>
-LoaderFactoryForFrame::CreateTaskRunnerHandle(
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
-  return scheduler::WebResourceLoadingTaskRunnerHandle::CreateUnprioritized(
-      std::move(task_runner));
+CodeCacheHost* LoaderFactoryForFrame::GetCodeCacheHost() {
+  return document_loader_->GetCodeCacheHost();
 }
 
 void LoaderFactoryForFrame::IssueKeepAliveHandleIfRequested(
@@ -160,7 +220,13 @@ void LoaderFactoryForFrame::IssueKeepAliveHandleIfRequested(
     mojom::blink::LocalFrameHost& local_frame_host,
     mojo::PendingReceiver<mojom::blink::KeepAliveHandle> pending_receiver) {
   DCHECK(pending_receiver);
-  if (request.GetKeepalive() && keep_alive_handle_factory_.is_bound()) {
+  if (request.GetKeepalive() &&
+      (!base::FeatureList::IsEnabled(features::kKeepAliveInBrowserMigration) ||
+       (request.GetAttributionReportingEligibility() !=
+            network::mojom::AttributionReportingEligibility::kUnset &&
+        !base::FeatureList::IsEnabled(
+            features::kAttributionReportingInBrowserMigration))) &&
+      keep_alive_handle_factory_.is_bound() && !request.IsFetchLaterAPI()) {
     keep_alive_handle_factory_->IssueKeepAliveHandle(
         std::move(pending_receiver));
   }
@@ -170,6 +236,22 @@ void LoaderFactoryForFrame::IssueKeepAliveHandleIfRequested(
     // done.
     CHECK(window_->IsContextDestroyed());
   }
+}
+
+scoped_refptr<BackgroundCodeCacheHost>
+LoaderFactoryForFrame::GetBackgroundCodeCacheHost() {
+  if (!background_code_cache_host_) {
+    // TODO(crbug.com/1379780): Consider passing a pending_remote in the
+    // navigation IPC instead.
+    mojo::PendingRemote<mojom::blink::CodeCacheHost> pending_remote;
+    document_loader_->GetFrame()
+        ->Client()
+        ->GetBrowserInterfaceBroker()
+        .GetInterface(pending_remote.InitWithNewPipeAndPassReceiver());
+    background_code_cache_host_ = base::MakeRefCounted<BackgroundCodeCacheHost>(
+        std::move(pending_remote));
+  }
+  return background_code_cache_host_;
 }
 
 }  // namespace blink

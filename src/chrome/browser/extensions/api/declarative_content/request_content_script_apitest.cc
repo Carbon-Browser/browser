@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,8 +84,8 @@ bool RunAllPendingInRenderer(content::WebContents* web_contents) {
   // common.
   // This is slight hack to achieve a RunPendingInRenderer() method. Since IPCs
   // are sent synchronously, anything started prior to this method will finish
-  // before this method returns (as content::ExecuteScript() is synchronous).
-  return content::ExecuteScript(web_contents, "1 == 1;");
+  // before this method returns (as content::ExecJs() is synchronous).
+  return content::ExecJs(web_contents, "1 == 1;");
 }
 
 }  // namespace
@@ -135,7 +135,8 @@ testing::AssertionResult RequestContentScriptAPITest::RunTest(
       browser(), embedded_test_server()->GetURL("/extensions/test_file.html")));
 
   content::WebContents* web_contents =
-      browser() ? browser()->tab_strip_model()->GetActiveWebContents() : NULL;
+      browser() ? browser()->tab_strip_model()->GetActiveWebContents()
+                : nullptr;
   if (!web_contents)
     return testing::AssertionFailure() << "No web contents.";
 
@@ -168,7 +169,7 @@ testing::AssertionResult RequestContentScriptAPITest::CreateAndLoadExtension(
       kBackgroundScriptSource,
       kScriptMatchers[script_matcher]);
 
-  std::unique_ptr<TestExtensionDir> dir(new TestExtensionDir);
+  auto dir = std::make_unique<TestExtensionDir>();
   dir->WriteManifest(manifest);
   dir->WriteFile(FILE_PATH_LITERAL("background.js"), background_src);
   dir->WriteFile(FILE_PATH_LITERAL("script.js"),

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "ui/base/win/hidden_window.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 #include "ui/gl/dc_layer_tree.h"
+#include "ui/gl/direct_composition_support.h"
 #include "ui/gl/direct_composition_surface_win.h"
 #include "ui/gl/gl_angle_util_win.h"
 #include "ui/gl/gl_context.h"
@@ -98,9 +99,10 @@ class DelegatedInkPointRendererGpuTest : public testing::Test {
  protected:
   void SetUp() override {
     // Without this, the following check always fails.
-    display_ = gl::init::InitializeGLNoExtensionsOneOff(/*init_bindings=*/true,
-                                                        /*system_device_id=*/0);
-    if (!gl::DirectCompositionSurfaceWin::GetDirectCompositionDevice()) {
+    display_ = gl::init::InitializeGLNoExtensionsOneOff(
+        /*init_bindings=*/true,
+        /*gpu_preference=*/gl::GpuPreference::kDefault);
+    if (!gl::DirectCompositionSupported()) {
       LOG(WARNING)
           << "GL implementation not using DirectComposition, skipping test.";
       return;
@@ -132,12 +134,12 @@ class DelegatedInkPointRendererGpuTest : public testing::Test {
   void CreateDirectCompositionSurfaceWin() {
     DirectCompositionSurfaceWin::Settings settings;
     surface_ = base::MakeRefCounted<DirectCompositionSurfaceWin>(
-        gl::GLSurfaceEGL::GetGLDisplayEGL(), parent_window_,
+        gl::GLSurfaceEGL::GetGLDisplayEGL(),
         DirectCompositionSurfaceWin::VSyncCallback(), settings);
     EXPECT_TRUE(surface_->Initialize(GLSurfaceFormat()));
 
-    // ImageTransportSurfaceDelegate::DidCreateAcceleratedSurfaceChildWindow()
-    // is called in production code here. However, to remove dependency from
+    // ImageTransportSurfaceDelegate::AddChildWindowToBrowser() is called in
+    // production code here. However, to remove dependency from
     // gpu/ipc/service/image_transport_surface_delegate.h, here we directly
     // executes the required minimum code.
     if (parent_window_)

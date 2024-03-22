@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,74 +6,31 @@
 
 #include <tuple>
 
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/test/test_file_util.h"
+#include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
 #include "chrome/browser/file_system_access/file_system_access_permission_request_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/permissions/permission_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/file_system_chooser_test_helpers.h"
 #include "content/public/test/prerender_test_util.h"
+#include "content/public/test/test_utils.h"
+#include "extensions/test/extension_test_message_listener.h"
 #include "net/dns/mock_host_resolver.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "ui/shell_dialogs/select_file_dialog_factory.h"
 #include "ui/shell_dialogs/select_file_policy.h"
+#include "url/gurl.h"
 
 namespace {
-
-// Fake ui::SelectFileDialog that selects one or more pre-determined files.
-class FakeSelectFileDialog : public ui::SelectFileDialog {
- public:
-  FakeSelectFileDialog(std::vector<base::FilePath> result,
-                       Listener* listener,
-                       std::unique_ptr<ui::SelectFilePolicy> policy)
-      : ui::SelectFileDialog(listener, std::move(policy)),
-        result_(std::move(result)) {}
-
- protected:
-  void SelectFileImpl(Type type,
-                      const std::u16string& title,
-                      const base::FilePath& default_path,
-                      const FileTypeInfo* file_types,
-                      int file_type_index,
-                      const base::FilePath::StringType& default_extension,
-                      gfx::NativeWindow owning_window,
-                      void* params) override {
-    if (result_.size() == 1)
-      listener_->FileSelected(result_[0], 0, params);
-    else
-      listener_->MultiFilesSelected(result_, params);
-  }
-
-  bool IsRunning(gfx::NativeWindow owning_window) const override {
-    return false;
-  }
-  void ListenerDestroyed() override {}
-  bool HasMultipleFileTypeChoicesImpl() override { return false; }
-
- private:
-  ~FakeSelectFileDialog() override = default;
-  std::vector<base::FilePath> result_;
-};
-
-class FakeSelectFileDialogFactory : public ui::SelectFileDialogFactory {
- public:
-  explicit FakeSelectFileDialogFactory(std::vector<base::FilePath> result)
-      : result_(std::move(result)) {}
-  ~FakeSelectFileDialogFactory() override = default;
-
-  ui::SelectFileDialog* Create(
-      ui::SelectFileDialog::Listener* listener,
-      std::unique_ptr<ui::SelectFilePolicy> policy) override {
-    return new FakeSelectFileDialog(result_, listener, std::move(policy));
-  }
-
- private:
-  std::vector<base::FilePath> result_;
-};
 
 class TestFileSystemAccessPermissionContext
     : public ChromeFileSystemAccessPermissionContext {
@@ -94,15 +51,17 @@ class TestFileSystemAccessPermissionContext
     content::RenderFrameHost* rfh = content::RenderFrameHost::FromID(frame_id);
     EXPECT_TRUE(rfh->IsActive());
     performed_after_write_checks_ = true;
-    if (quit_callback_)
+    if (quit_callback_) {
       std::move(quit_callback_).Run();
+    }
   }
 
   bool performed_after_write_checks() { return performed_after_write_checks_; }
 
   void WaitForPerformAfterWriteChecks() {
-    if (performed_after_write_checks_)
+    if (performed_after_write_checks_) {
       return;
+    }
 
     base::RunLoop run_loop;
     quit_callback_ = run_loop.QuitClosure();
@@ -128,8 +87,15 @@ class ChromeFileSystemAccessPermissionContextPrerenderingBrowserTest
       default;
 
   void SetUp() override {
-    ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
-    prerender_test_helper_.SetUp(embedded_test_server());
+    // Create a scoped directory under %TEMP% instead of using
+    // `base::ScopedTempDir::CreateUniqueTempDir`.
+    // `base::ScopedTempDir::CreateUniqueTempDir` creates a path under
+    // %ProgramFiles% on Windows when running as Admin, which is a blocked path
+    // (`kBlockedPaths`). This can fail some of the tests.
+    ASSERT_TRUE(
+        temp_dir_.CreateUniqueTempDirUnderPath(base::GetTempDirForTesting()));
+
+    prerender_test_helper_.RegisterServerRequestMonitor(embedded_test_server());
     InProcessBrowserTest::SetUp();
   }
 
@@ -173,7 +139,8 @@ IN_PROC_BROWSER_TEST_F(
     PerformAfterWriteChecks) {
   const base::FilePath test_file = CreateTestFile("");
   ui::SelectFileDialog::SetFactory(
-      new FakeSelectFileDialogFactory({test_file}));
+      std::make_unique<content::FakeSelectFileDialogFactory>(
+          std::vector<base::FilePath>{test_file}));
 
   TestFileSystemAccessPermissionContext permission_context(
       browser()->profile());
@@ -237,4 +204,30 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(permission_context.performed_after_write_checks());
 
   ui::SelectFileDialog::SetFactory(nullptr);
+}
+
+class FileSystemChromeAppTest : public extensions::PlatformAppBrowserTest {};
+
+// TODO(b/276433834): Implement an end-to-end test for getDirectoryPicker in
+// Chrome apps.
+IN_PROC_BROWSER_TEST_F(FileSystemChromeAppTest,
+                       FileSystemAccessPermissionRequestManagerExists) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  ExtensionTestMessageListener launched_listener("Launched");
+
+  // Install Platform App
+  content::CreateAndLoadWebContentsObserver app_loaded_observer;
+  const extensions::Extension* extension =
+      InstallPlatformApp("file_system_test");
+  ASSERT_TRUE(extension);
+
+  // Launch Platform App
+  LaunchPlatformApp(extension);
+  app_loaded_observer.Wait();
+  ASSERT_TRUE(launched_listener.WaitUntilSatisfied());
+
+  content::WebContents* web_contents = GetFirstAppWindowWebContents();
+  EXPECT_TRUE(web_contents);
+  EXPECT_NE(nullptr, FileSystemAccessPermissionRequestManager::FromWebContents(
+                         web_contents));
 }

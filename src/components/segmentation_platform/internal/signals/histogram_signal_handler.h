@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/observer_list.h"
-#include "components/segmentation_platform/internal/proto/types.pb.h"
+#include "components/segmentation_platform/public/proto/types.pb.h"
 
 namespace segmentation_platform {
 
@@ -78,8 +78,9 @@ class HistogramSignalHandler {
 
   // Tracks the histogram names we are currently listening to along with their
   // corresponding observers.
+  using HistogramSignal = std::pair<std::string, proto::SignalType>;
   std::map<
-      std::string,
+      HistogramSignal,
       std::unique_ptr<base::StatisticsRecorder::ScopedHistogramSampleObserver>>
       histogram_observers_;
 

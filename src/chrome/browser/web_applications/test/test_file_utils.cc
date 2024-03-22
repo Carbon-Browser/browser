@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,6 +64,10 @@ bool TestFileUtils::DeleteFileRecursively(const base::FilePath& path) {
   return delete_file_recursively_result_
              ? *delete_file_recursively_result_
              : FileUtilsWrapper::DeleteFileRecursively(path);
+}
+
+TestFileUtils* TestFileUtils::AsTestFileUtils() {
+  return this;
 }
 
 }  // namespace web_app

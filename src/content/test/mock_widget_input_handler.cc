@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -137,6 +137,11 @@ void MockWidgetInputHandler::GetFrameWidgetInputHandler(
     mojo::PendingAssociatedReceiver<blink::mojom::FrameWidgetInputHandler>
         interface_request) {}
 
+void MockWidgetInputHandler::UpdateBrowserControlsState(
+    cc::BrowserControlsState constraints,
+    cc::BrowserControlsState current,
+    bool animate) {}
+
 MockWidgetInputHandler::DispatchedMessage::DispatchedMessage(
     const std::string& name)
     : name_(name) {}
@@ -228,9 +233,10 @@ MockWidgetInputHandler::DispatchedEventMessage::DispatchedEventMessage(
 
 MockWidgetInputHandler::DispatchedEventMessage::~DispatchedEventMessage() {
   if (callback_) {
-    std::move(callback_).Run(
-        blink::mojom::InputEventResultSource::kUnknown, ui::LatencyInfo(),
-        blink::mojom::InputEventResultState::kNotConsumed, nullptr, nullptr);
+    std::move(callback_).Run(blink::mojom::InputEventResultSource::kUnknown,
+                             ui::LatencyInfo(),
+                             blink::mojom::InputEventResultState::kNotConsumed,
+                             nullptr, nullptr, nullptr);
     base::RunLoop().RunUntilIdle();
   }
 }
@@ -244,7 +250,8 @@ void MockWidgetInputHandler::DispatchedEventMessage::CallCallback(
     blink::mojom::InputEventResultState state) {
   if (callback_) {
     std::move(callback_).Run(blink::mojom::InputEventResultSource::kMainThread,
-                             ui::LatencyInfo(), state, nullptr, nullptr);
+                             ui::LatencyInfo(), state, nullptr, nullptr,
+                             nullptr);
     base::RunLoop().RunUntilIdle();
   }
 }
@@ -254,10 +261,12 @@ void MockWidgetInputHandler::DispatchedEventMessage::CallCallback(
     const ui::LatencyInfo& latency_info,
     blink::mojom::InputEventResultState state,
     blink::mojom::DidOverscrollParamsPtr overscroll,
-    blink::mojom::TouchActionOptionalPtr touch_action) {
+    blink::mojom::TouchActionOptionalPtr touch_action,
+    blink::mojom::ScrollResultDataPtr scroll_result_data) {
   if (callback_) {
     std::move(callback_).Run(source, latency_info, state, std::move(overscroll),
-                             std::move(touch_action));
+                             std::move(touch_action),
+                             std::move(scroll_result_data));
     base::RunLoop().RunUntilIdle();
   }
 }

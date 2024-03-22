@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,6 +68,9 @@ class ASH_EXPORT LoginDataDispatcher : public LoginScreenModel {
     virtual void OnFingerprintAuthResult(const AccountId& account_id,
                                          bool successful);
 
+    // Called after unlock was aborted after successful auth attempt.
+    virtual void OnResetFingerprintUIState(const AccountId& account_id);
+
     // Called when smart lock state is changed.
     virtual void OnSmartLockStateChanged(const AccountId& user,
                                          SmartLockState state);
@@ -86,6 +89,9 @@ class ASH_EXPORT LoginDataDispatcher : public LoginScreenModel {
         const AccountId& user,
         const AuthDisabledData& auth_disabled_data);
 
+    // Called when authentication stage changed.
+    virtual void OnAuthenticationStageChanged(AuthenticationStage auth_stage);
+
     // Called when TPM is locked.
     virtual void OnSetTpmLockedState(const AccountId& user,
                                      bool is_locked,
@@ -101,12 +107,6 @@ class ASH_EXPORT LoginDataDispatcher : public LoginScreenModel {
 
     // Called when the lock screen note state changes.
     virtual void OnLockScreenNoteStateChanged(mojom::TrayActionState state);
-
-    // TODO(https://crbug.com/1233614): Delete this method in favor of
-    // OnSmartLockStateChanged once SmartLock UI revamp is enabled. Called when
-    // an easy unlock icon should be displayed.
-    virtual void OnShowEasyUnlockIcon(const AccountId& user,
-                                      const EasyUnlockIconInfo& icon_info);
 
     // Called when a warning message should be displayed, or hidden if |message|
     // is empty.
@@ -190,12 +190,14 @@ class ASH_EXPORT LoginDataDispatcher : public LoginScreenModel {
                            FingerprintState state) override;
   void NotifyFingerprintAuthResult(const AccountId& account_id,
                                    bool successful) override;
+  void ResetFingerprintUIState(const AccountId& account_id) override;
   void SetSmartLockState(const AccountId& user, SmartLockState state) override;
   void NotifySmartLockAuthResult(const AccountId& account_id,
                                  bool successful) override;
   void EnableAuthForUser(const AccountId& account_id) override;
   void DisableAuthForUser(const AccountId& account_id,
                           const AuthDisabledData& auth_disabled_data) override;
+  void AuthenticationStageChange(const AuthenticationStage auth_stage) override;
   void SetTpmLockedState(const AccountId& user,
                          bool is_locked,
                          base::TimeDelta time_left) override;
@@ -203,10 +205,6 @@ class ASH_EXPORT LoginDataDispatcher : public LoginScreenModel {
                                     bool enabled) override;
   void ForceOnlineSignInForUser(const AccountId& user) override;
   void SetLockScreenNoteState(mojom::TrayActionState state);
-  // TODO(https://crbug.com/1233614): Delete ShowEasyUnlockIcon in favor of
-  // SetSmartLockState once SmartLock UI revamp is enabled.
-  void ShowEasyUnlockIcon(const AccountId& user,
-                          const EasyUnlockIconInfo& icon_info) override;
   void UpdateWarningMessage(const std::u16string& message) override;
   void SetSystemInfo(bool show,
                      bool enforced,

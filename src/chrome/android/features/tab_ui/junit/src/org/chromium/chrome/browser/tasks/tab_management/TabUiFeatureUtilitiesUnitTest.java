@@ -1,12 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.tasks.tab_management;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.when;
+
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.os.Build.VERSION_CODES;
 
 import org.junit.After;
 import org.junit.Before;
@@ -14,35 +17,25 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.robolectric.annotation.Config;
 
 import org.chromium.base.BaseSwitches;
-import org.chromium.base.CommandLine;
 import org.chromium.base.ContextUtils;
-import org.chromium.base.SysUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.chrome.browser.device.DeviceClassManager;
-import org.chromium.chrome.browser.flags.CachedFeatureFlags;
-import org.chromium.chrome.browser.flags.CachedFlag;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.multiwindow.MultiWindowTestUtils;
 import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
 import org.chromium.chrome.test.util.browser.Features;
+import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
-import java.util.Arrays;
-import java.util.List;
-
-/**
- * Unit Tests for {@link TabUiFeatureUtilities}.
- */
+/** Unit Tests for {@link TabUiFeatureUtilities}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class TabUiFeatureUtilitiesUnitTest {
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
-
-    @Mock
-    CommandLine mCommandLine;
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
     private void setAccessibilityEnabledForTesting(Boolean value) {
         TestThreadUtils.runOnUiThreadBlocking(
@@ -52,477 +45,78 @@ public class TabUiFeatureUtilitiesUnitTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-
-        when(mCommandLine.isNativeImplementation()).thenReturn(true);
-        CommandLine.setInstanceForTesting(mCommandLine);
-
         setAccessibilityEnabledForTesting(false);
-        CachedFeatureFlags.resetFlagsForTesting();
     }
 
     @After
     public void tearDown() {
-        CommandLine.reset();
-        CachedFeatureFlags.resetFlagsForTesting();
         setAccessibilityEnabledForTesting(null);
         DeviceClassManager.resetForTesting();
-        SysUtils.resetForTesting();
-    }
-
-    private void cacheFeatureFlags() {
-        List<CachedFlag> featuresToCache = Arrays.asList(ChromeFeatureList.sTabGridLayoutAndroid,
-                ChromeFeatureList.sTabGroupsAndroid,
-                ChromeFeatureList.sTabGroupsContinuationAndroid);
-        CachedFeatureFlags.cacheNativeFlags(featuresToCache);
     }
 
     @Test
-    // clang-format off
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    public void testCacheGridTabSwitcher_LowEnd_NoEnabledFlags() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
+    @CommandLineFlags.Add({BaseSwitches.DISABLE_LOW_END_DEVICE_MODE})
+    public void testCacheGridTabSwitcher_HighEnd() {
+        assertFalse(TabUiFeatureUtilities.shouldUseListMode(ContextUtils.getApplicationContext()));
+        assertTrue(
+                TabUiFeatureUtilities.isTabToGtsAnimationEnabled(
+                        ContextUtils.getApplicationContext()));
 
         setAccessibilityEnabledForTesting(true);
         DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
 
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
+        assertFalse(TabUiFeatureUtilities.shouldUseListMode(ContextUtils.getApplicationContext()));
+        assertTrue(
+                TabUiFeatureUtilities.isTabToGtsAnimationEnabled(
+                        ContextUtils.getApplicationContext()));
     }
 
     @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_ANDROID})
-    public void testCacheGridTabSwitcher_HighEnd_Layout() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.DISABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
+    @CommandLineFlags.Add({BaseSwitches.ENABLE_LOW_END_DEVICE_MODE})
+    public void testCacheGridTabSwitcher_LowEnd() {
+        assertTrue(TabUiFeatureUtilities.shouldUseListMode(ContextUtils.getApplicationContext()));
+        assertFalse(
+                TabUiFeatureUtilities.isTabToGtsAnimationEnabled(
+                        ContextUtils.getApplicationContext()));
 
         setAccessibilityEnabledForTesting(true);
         DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
 
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
+        assertTrue(TabUiFeatureUtilities.shouldUseListMode(ContextUtils.getApplicationContext()));
+        assertFalse(
+                TabUiFeatureUtilities.isTabToGtsAnimationEnabled(
+                        ContextUtils.getApplicationContext()));
     }
 
     @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_ANDROID})
-    public void testCacheGridTabSwitcher_LowEnd_Layout() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
+    @EnableFeatures(ChromeFeatureList.TAB_DRAG_DROP_ANDROID)
+    public void testIsTabDragAsWindowEnabled() {
+        assertTrue(TabUiFeatureUtilities.isTabDragAsWindowEnabled());
     }
 
     @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    public void testCacheGridTabSwitcher_HighEnd_LayoutGroup() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.DISABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
+    @Config(sdk = VERSION_CODES.S)
+    @EnableFeatures(ChromeFeatureList.TAB_LINK_DRAG_DROP_ANDROID)
+    public void testIsTabDragDropEnabled() throws NameNotFoundException {
+        MultiWindowTestUtils.enableMultiInstance();
+        assertTrue(TabUiFeatureUtilities.isTabDragEnabled());
     }
 
     @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    public void testCacheGridTabSwitcher_LowEnd_LayoutGroup() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
+    @Config(sdk = VERSION_CODES.S)
+    @EnableFeatures({
+        ChromeFeatureList.TAB_LINK_DRAG_DROP_ANDROID,
+        ChromeFeatureList.TAB_DRAG_DROP_ANDROID
+    })
+    public void testIsTabDragDropEnabled_bothFlagsEnabled() throws NameNotFoundException {
+        MultiWindowTestUtils.enableMultiInstance();
+        assertThrows(AssertionError.class, () -> TabUiFeatureUtilities.isTabDragEnabled());
     }
 
     @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GROUPS_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    public void testCacheGridTabSwitcher_HighEnd_Group() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.DISABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GROUPS_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    public void testCacheGridTabSwitcher_LowEnd_Group() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_ANDROID})
-    public void testCacheGridTabSwitcher_LowEnd_Continuation() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    public void testCacheGridTabSwitcher_HighEnd_AllFlags() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.DISABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    public void testCacheGridTabSwitcher_LowEnd_AllFlags() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GROUPS_ANDROID})
-    public void testCacheGridTabSwitcher_HighEnd_LayoutContinuation() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.DISABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GROUPS_ANDROID})
-    public void testCacheGridTabSwitcher_LowEnd_LayoutContinuation() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GROUPS_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID})
-    public void testCacheGridTabSwitcher_HighEnd_GroupContinuation() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.DISABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GROUPS_ANDROID,
-                                ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID})
-    public void testCacheGridTabSwitcher_LowEnd_GroupContinuation() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        setAccessibilityEnabledForTesting(true);
-        DeviceClassManager.resetForTesting();
-        cacheFeatureFlags();
-
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-    }
-
-    @Test
-    // clang-format off
-    @Features.EnableFeatures({ChromeFeatureList.TAB_GROUPS_ANDROID,
-            ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID})
-    @Features.DisableFeatures({ChromeFeatureList.TAB_GRID_LAYOUT_ANDROID})
-    public void testCacheGridAndGroup_LowEnd_enabledThenDisabled_withContinuationFlag() {
-        // clang-format on
-        when(mCommandLine.hasSwitch(BaseSwitches.ENABLE_LOW_END_DEVICE_MODE)).thenReturn(true);
-        cacheFeatureFlags();
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertTrue(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
-
-        CachedFeatureFlags.resetFlagsForTesting();
-        // Pretend that we've flipped the continuation flag.
-        CachedFeatureFlags.setForTesting(ChromeFeatureList.TAB_GROUPS_CONTINUATION_ANDROID, false);
-        assertTrue(TabUiFeatureUtilities.isGridTabSwitcherEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidEnabled(
-                ContextUtils.getApplicationContext()));
-        assertFalse(TabUiFeatureUtilities.isTabGroupsAndroidContinuationEnabled(
-                ContextUtils.getApplicationContext()));
+    @Config(sdk = VERSION_CODES.Q)
+    @EnableFeatures(ChromeFeatureList.TAB_LINK_DRAG_DROP_ANDROID)
+    public void testIsTabDragDropEnabled_multiInstanceDisabled() {
+        assertFalse(TabUiFeatureUtilities.isTabDragEnabled());
     }
 }

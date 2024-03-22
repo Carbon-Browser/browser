@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,9 @@
 
 #include <string>
 
-#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/extensions/site_permissions_helper.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_delegate.h"
-#include "ui/gfx/image/image.h"
-#include "ui/gfx/image/image_skia.h"
+#include "ui/base/models/image_model.h"
 
 TestToolbarActionViewController::TestToolbarActionViewController(
     const std::string& id)
@@ -31,10 +29,10 @@ void TestToolbarActionViewController::SetDelegate(
   delegate_ = delegate;
 }
 
-gfx::Image TestToolbarActionViewController::GetIcon(
+ui::ImageModel TestToolbarActionViewController::GetIcon(
     content::WebContents* web_contents,
     const gfx::Size& size) {
-  return gfx::Image();
+  return ui::ImageModel();
 }
 
 std::u16string TestToolbarActionViewController::GetActionName() const {
@@ -51,6 +49,17 @@ std::u16string TestToolbarActionViewController::GetTooltip(
   return tooltip_;
 }
 
+ToolbarActionViewController::HoverCardState
+TestToolbarActionViewController::GetHoverCardState(
+    content::WebContents* web_contents) const {
+  ToolbarActionViewController::HoverCardState state;
+  state.site_access = ToolbarActionViewController::HoverCardState::SiteAccess::
+      kExtensionDoesNotWantAccess;
+  state.policy =
+      ToolbarActionViewController::HoverCardState::AdminPolicy::kNone;
+  return state;
+}
+
 bool TestToolbarActionViewController::IsEnabled(
     content::WebContents* web_contents) const {
   return is_enabled_;
@@ -60,7 +69,7 @@ bool TestToolbarActionViewController::IsShowingPopup() const {
   return popup_showing_;
 }
 
-bool TestToolbarActionViewController::IsRequestingSiteAccess(
+bool TestToolbarActionViewController::ShouldShowSiteAccessRequestInToolbar(
     content::WebContents* web_contents) const {
   return false;
 }

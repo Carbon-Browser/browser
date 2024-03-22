@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,9 @@ public class RemotingNotificationController extends BaseNotificationController {
 
     @Override
     public Intent createContentIntent() {
-        Intent contentIntent = new Intent(
-                ContextUtils.getApplicationContext(), CafExpandedControllerActivity.class);
+        Intent contentIntent =
+                new Intent(
+                        ContextUtils.getApplicationContext(), CafExpandedControllerActivity.class);
         contentIntent.putExtra(
                 MediaNotificationUma.INTENT_EXTRA_NAME, MediaNotificationUma.Source.MEDIA_FLING);
         return contentIntent;

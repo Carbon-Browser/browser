@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ import android.os.Parcelable;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
 /**
  * This class mirrors unguessable_token.h .  Since tokens are passed by value,
@@ -104,4 +104,5 @@ public class UnguessableToken implements Parcelable {
 
         return token;
     }
-};
+}
+;

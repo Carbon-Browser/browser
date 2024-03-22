@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@
 #include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_usage_estimator.h"
@@ -129,7 +129,8 @@ TabRestoreServiceHelper::TabRestoreServiceHelper(
       time_factory_(time_factory) {
   DCHECK(tab_restore_service_);
   base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
-      this, "TabRestoreServiceHelper", base::ThreadTaskRunnerHandle::Get());
+      this, "TabRestoreServiceHelper",
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 void TabRestoreServiceHelper::SetHelperObserver(Observer* observer) {
@@ -406,34 +407,6 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreMostRecentEntry(
     LiveTabContext* context) {
   if (entries_.empty())
     return std::vector<LiveTab*>();
-  auto& entry = *entries_.front();
-  switch (entry.type) {
-    case TabRestoreService::TAB: {
-      auto& tab = static_cast<const Tab&>(entry);
-      if (tab.timestamp != base::Time() &&
-          !tab.timestamp.ToDeltaSinceWindowsEpoch().is_zero())
-        UMA_HISTOGRAM_LONG_TIMES("TabManager.TimeSinceTabClosedUntilRestored",
-                                 TimeNow() - tab.timestamp);
-      break;
-    }
-    case TabRestoreService::WINDOW: {
-      auto& window = static_cast<Window&>(entry);
-      if (window.timestamp != base::Time() &&
-          !window.timestamp.ToDeltaSinceWindowsEpoch().is_zero())
-        UMA_HISTOGRAM_LONG_TIMES(
-            "TabManager.TimeSinceWindowClosedUntilRestored",
-            TimeNow() - window.timestamp);
-      break;
-    }
-    case TabRestoreService::GROUP: {
-      auto& group = static_cast<Group&>(entry);
-      if (group.timestamp != base::Time() &&
-          !group.timestamp.ToDeltaSinceWindowsEpoch().is_zero())
-        UMA_HISTOGRAM_LONG_TIMES("TabManager.TimeSinceGroupClosedUntilRestored",
-                                 TimeNow() - group.timestamp);
-      break;
-    }
-  }
   return RestoreEntryById(context, entries_.front()->id,
                           WindowOpenDisposition::UNKNOWN);
 }
@@ -465,7 +438,7 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreEntryById(
   // Normally an entry's ID should match the ID that is being restored. If it
   // does not, then the entry is a window or group from which a single tab will
   // be restored (reachable through OS-level menus like Mac > History).
-  bool entry_id_matches_restore_id = entry.id == id;
+  bool entry_id_matches_restore_id = entry.id == id || entry.original_id == id;
 
   // |context| will be NULL in cases where one isn't already available (eg,
   // when invoked on Mac OS X with no windows open). In this case, create a
@@ -474,6 +447,13 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreEntryById(
   switch (entry.type) {
     case TabRestoreService::TAB: {
       auto& tab = static_cast<const Tab&>(entry);
+
+      if (tab.timestamp != base::Time() &&
+          !tab.timestamp.ToDeltaSinceWindowsEpoch().is_zero()) {
+        UMA_HISTOGRAM_LONG_TIMES("TabRestore.Tab.TimeBetweenClosedAndRestored",
+                                 TimeNow() - tab.timestamp);
+      }
+
       LiveTab* restored_tab = nullptr;
       context = RestoreTab(tab, context, disposition, &restored_tab);
       live_tabs.push_back(restored_tab);
@@ -483,6 +463,13 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreEntryById(
     case TabRestoreService::WINDOW: {
       LiveTabContext* current_context = context;
       auto& window = static_cast<Window&>(entry);
+
+      if (window.timestamp != base::Time() &&
+          !window.timestamp.ToDeltaSinceWindowsEpoch().is_zero()) {
+        UMA_HISTOGRAM_LONG_TIMES(
+            "TabRestore.Window.TimeBetweenClosedAndRestored",
+            TimeNow() - window.timestamp);
+      }
 
       // When restoring a window, either the entire window can be restored, or a
       // single tab within it. If the entry's ID matches the one to restore, or
@@ -550,7 +537,7 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreEntryById(
           SessionID::id_type restored_tab_browser_id;
           {
             const Tab& tab = *window.tabs[tab_i];
-            if (tab.id != id)
+            if (tab.id != id && tab.original_id != id)
               continue;
 
             restored_tab_browser_id = tab.browser_id;
@@ -605,6 +592,13 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreEntryById(
     }
     case TabRestoreService::GROUP: {
       auto& group = static_cast<Group&>(entry);
+
+      if (group.timestamp != base::Time() &&
+          !group.timestamp.ToDeltaSinceWindowsEpoch().is_zero()) {
+        UMA_HISTOGRAM_LONG_TIMES(
+            "TabRestore.Group.TimeBetweenClosedAndRestored",
+            TimeNow() - group.timestamp);
+      }
 
       // When restoring a group, either the entire group can be restored, or a
       // single tab within it. If the entry's ID matches the one to restore,
@@ -710,7 +704,7 @@ void TabRestoreServiceHelper::PruneEntries() {
 TabRestoreService::Entries::iterator
 TabRestoreServiceHelper::GetEntryIteratorById(SessionID id) {
   for (auto i = entries_.begin(); i != entries_.end(); ++i) {
-    if ((*i)->id == id)
+    if ((*i)->id == id || (*i)->original_id == id)
       return i;
 
     // For Window and Group entries, see if the ID matches a tab. If so, report
@@ -718,14 +712,14 @@ TabRestoreServiceHelper::GetEntryIteratorById(SessionID id) {
     if ((*i)->type == TabRestoreService::WINDOW) {
       auto& window = static_cast<const Window&>(**i);
       for (const auto& tab : window.tabs) {
-        if (tab->id == id) {
+        if (tab->id == id || tab->original_id == id) {
           return i;
         }
       }
     } else if ((*i)->type == TabRestoreService::GROUP) {
       auto& group = static_cast<const Group&>(**i);
       for (const auto& tab : group.tabs) {
-        if (tab->id == id) {
+        if (tab->id == id || tab->original_id == id) {
           return i;
         }
       }

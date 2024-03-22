@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,7 +66,6 @@ class BrowserDesktopWindowTreeHostWin
   bool GetDwmFrameInsetsInPixels(gfx::Insets* insets) const override;
   void HandleCreate() override;
   void HandleDestroying() override;
-  void HandleFrameChanged() override;
   void HandleWindowScaleFactorChanged(float window_scale_factor) override;
   bool PreHandleMSG(UINT message,
                     WPARAM w_param,
@@ -76,6 +75,7 @@ class BrowserDesktopWindowTreeHostWin
   views::FrameMode GetFrameMode() const override;
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
+  void HandleWindowMinimizedOrRestored(bool restored) override;
 
   // ProfileAttributesStorage::Observer:
   void OnProfileAvatarChanged(const base::FilePath& profile_path) override;
@@ -86,8 +86,6 @@ class BrowserDesktopWindowTreeHostWin
   // Kicks off an asynchronous update of |workspace_|, and notifies
   // WindowTreeHost of its value.
   void UpdateWorkspace();
-
-  bool IsOpaqueHostedAppFrame() const;
 
   void SetWindowIcon(bool badged);
 

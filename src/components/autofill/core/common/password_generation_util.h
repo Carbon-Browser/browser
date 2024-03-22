@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,11 +83,19 @@ enum PasswordGenerationEvent {
   EVENT_ENUM_COUNT
 };
 
+// The enum, which identifies where the password generation was triggered.
+// Used to determine the histogram name for metrics reporting.
 enum class PasswordGenerationType {
-  // The user was automatically shown the possibility to generate a password.
+  // The possibility for automatic generation was detected and the user
+  // requested the generation.
   kAutomatic,
-  // The user had to manually request password generation.
-  kManual
+  // The possibility for automatic generation was not detected and the user
+  // manually requested the password generation.
+  kManual,
+  // The possibility for automatic generation was detected and the password
+  // generation bottom sheet was automatically triggered without the user
+  // choice.
+  kTouchToFill,
 };
 
 // Wrapper to store the user interactions with the password generation bubble.
@@ -115,7 +123,8 @@ struct PasswordGenerationUIData {
                            FieldRendererId generation_element_id,
                            bool is_generation_element_password_type,
                            base::i18n::TextDirection text_direction,
-                           const FormData& form_data);
+                           const FormData& form_data,
+                           bool input_field_empty);
   PasswordGenerationUIData();
   PasswordGenerationUIData(const PasswordGenerationUIData& rhs);
   PasswordGenerationUIData(PasswordGenerationUIData&& rhs);
@@ -145,6 +154,9 @@ struct PasswordGenerationUIData {
 
   // The form associated with the password field.
   FormData form_data;
+
+  // Whether the password input field is empty.
+  bool input_field_empty;
 };
 
 void LogPasswordGenerationEvent(PasswordGenerationEvent event);

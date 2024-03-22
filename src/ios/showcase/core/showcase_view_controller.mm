@@ -1,15 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/showcase/core/showcase_view_controller.h"
 
-#include "base/notreached.h"
+#import "base/notreached.h"
 #import "ios/showcase/common/coordinator.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace showcase {
 
@@ -66,6 +62,8 @@ NSString* const kUseCaseKey = @"useCase";
       [[UISearchController alloc] initWithSearchResultsController:nil];
   self.searchController.searchResultsUpdater = self;
   self.searchController.obscuresBackgroundDuringPresentation = NO;
+  self.searchController.searchBar.accessibilityIdentifier =
+      @"showcase_home_search_bar";
   self.tableView.tableHeaderView = self.searchController.searchBar;
 
   UINavigationBarAppearance* appearance =
@@ -87,6 +85,9 @@ NSString* const kUseCaseKey = @"useCase";
 
   // Resets the current coordinator whenever the navigation controller pops
   // back to this view controller.
+  if ([self.activeCoordinator respondsToSelector:@selector(stop)]) {
+    [self.activeCoordinator stop];
+  }
   self.activeCoordinator = nil;
 }
 

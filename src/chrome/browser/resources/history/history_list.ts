@@ -1,38 +1,39 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import 'chrome://resources/polymer/v3_0/iron-scroll-threshold/iron-scroll-threshold.js';
 import './shared_style.css.js';
 import './history_item.js';
 
 import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
-import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
-import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
-import {IronScrollThresholdElement} from 'chrome://resources/polymer/v3_0/iron-scroll-threshold/iron-scroll-threshold.js';
+import type {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {getDeepActiveElement} from 'chrome://resources/js/util.js';
+import type {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
+import type {IronScrollThresholdElement} from 'chrome://resources/polymer/v3_0/iron-scroll-threshold/iron-scroll-threshold.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BrowserServiceImpl} from './browser_service.js';
 import {BROWSING_GAP_TIME} from './constants.js';
-import {HistoryEntry, HistoryQuery, QueryState} from './externs.js';
-import {HistoryItemElement, searchResultsTitle} from './history_item.js';
+import type {HistoryEntry, HistoryQuery, QueryState} from './externs.js';
+import type {HistoryItemElement} from './history_item.js';
+import {searchResultsTitle} from './history_item.js';
 import {getTemplate} from './history_list.html.js';
 
-export type ActionMenuModel = {
-  index: number,
-  item: HistoryEntry,
-  target: HTMLElement,
-};
+export interface ActionMenuModel {
+  index: number;
+  item: HistoryEntry;
+  target: HTMLElement;
+}
 
 type OpenMenuEvent = CustomEvent<ActionMenuModel>;
 
@@ -59,7 +60,7 @@ declare global {
   }
 }
 
-const HistoryListElementBase = WebUIListenerMixin(I18nMixin(PolymerElement));
+const HistoryListElementBase = WebUiListenerMixin(I18nMixin(PolymerElement));
 
 export class HistoryListElement extends HistoryListElementBase {
   static get is() {
@@ -129,7 +130,7 @@ export class HistoryListElement extends HistoryListElementBase {
     this.$['scroll-threshold'].scrollTarget = this;
     this.setAttribute('aria-roledescription', this.i18n('ariaRoleDescription'));
 
-    this.addWebUIListener('history-deleted', () => this.onHistoryDeleted_());
+    this.addWebUiListener('history-deleted', () => this.onHistoryDeleted_());
   }
 
   override ready() {
@@ -354,7 +355,7 @@ export class HistoryListElement extends HistoryListElementBase {
   /////////////////////////////////////////////////////////////////////////////
   // Event listeners:
 
-  private onDialogConfirmTap_() {
+  private onDialogConfirmClick_() {
     BrowserServiceImpl.getInstance().recordAction('ConfirmRemoveSelected');
 
     this.deleteSelected_();
@@ -363,7 +364,7 @@ export class HistoryListElement extends HistoryListElementBase {
     dialog.close();
   }
 
-  private onDialogCancelTap_() {
+  private onDialogCancelClick_() {
     BrowserServiceImpl.getInstance().recordAction('CancelRemoveSelected');
 
     const dialog = this.$.dialog.getIfExists();
@@ -416,7 +417,7 @@ export class HistoryListElement extends HistoryListElementBase {
     this.$.sharedMenu.get().showAt(target);
   }
 
-  private onMoreFromSiteTap_() {
+  private onMoreFromSiteClick_() {
     BrowserServiceImpl.getInstance().recordAction('EntryMenuShowMoreFromSite');
 
     assert(this.$.sharedMenu.getIfExists());
@@ -436,14 +437,14 @@ export class HistoryListElement extends HistoryListElementBase {
     return BrowserServiceImpl.getInstance().removeVisits(removalList);
   }
 
-  private onRemoveBookmarkTap_() {
+  private onRemoveBookmarkClick_() {
     const browserService = BrowserServiceImpl.getInstance();
     browserService.removeBookmark(this.actionMenuModel_!.item.url);
     this.fire_('remove-bookmark-stars', this.actionMenuModel_!.item.url);
     this.closeMenu_();
   }
 
-  private onRemoveFromHistoryTap_() {
+  private onRemoveFromHistoryClick_() {
     const browserService = BrowserServiceImpl.getInstance();
     browserService.recordAction('EntryMenuRemoveFromHistory');
 

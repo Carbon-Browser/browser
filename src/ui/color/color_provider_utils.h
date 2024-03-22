@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_id.mojom.h"
+#include "ui/color/color_mixer.h"
 #include "ui/color/color_provider_manager.h"
 
 namespace ui {
@@ -32,15 +33,19 @@ class COMPONENT_EXPORT(COLOR) ColorProviderUtilsCallbacks {
 
 // Converts the ColorMode.
 base::StringPiece COMPONENT_EXPORT(COLOR)
-    ColorModeName(ColorProviderManager::ColorMode color_mode);
+    ColorModeName(ColorProviderKey::ColorMode color_mode);
 
 // Converts the ContrastMode.
 base::StringPiece COMPONENT_EXPORT(COLOR)
-    ContrastModeName(ColorProviderManager::ContrastMode contrast_mode);
+    ContrastModeName(ColorProviderKey::ContrastMode contrast_mode);
+
+// Converts the ForcedColors.
+base::StringPiece COMPONENT_EXPORT(COLOR)
+    ForcedColorsName(ColorProviderKey::ForcedColors forced_colors);
 
 // Converts SystemTheme.
 base::StringPiece COMPONENT_EXPORT(COLOR)
-    SystemThemeName(ColorProviderManager::SystemTheme system_theme);
+    SystemThemeName(ui::SystemTheme system_theme);
 
 // Converts ColorId.
 std::string COMPONENT_EXPORT(COLOR) ColorIdName(ColorId color_id);
@@ -70,6 +75,29 @@ RendererColorMap COMPONENT_EXPORT(COLOR)
 // in the renderer process.
 ColorProvider COMPONENT_EXPORT(COLOR) CreateColorProviderFromRendererColorMap(
     const RendererColorMap& renderer_color_map);
+
+// Creates a color provider emulating Windows 10 default high contrast color
+// themes. Currently only defines colors for scrollbar parts.
+ColorProvider COMPONENT_EXPORT(COLOR)
+    CreateEmulatedForcedColorsColorProvider(bool dark_mode);
+
+// TODO(samomekarajr): Forced colors web tests currently rely on specific set of
+// hardcoded colors for for determining which system colors to render. This
+// function should be updated once the web driver support spec for forced colors
+// mode is updated.
+ColorProvider COMPONENT_EXPORT(COLOR)
+    CreateEmulatedForcedColorsColorProviderForWebTests();
+
+// Scrollbars have three main colors. This function completes the
+// definition of colors for all scrollbar parts in relation to the three main
+// ones.
+void COMPONENT_EXPORT(COLOR)
+    CompleteScrollbarColorsDefinition(ui::ColorMixer& mixer);
+
+// Completes color definitions for the controls defined in
+// NativeThemeBase::ControlColorId when in forced colors mode.
+void COMPONENT_EXPORT(COLOR)
+    CompleteControlsForcedColorsDefinition(ui::ColorMixer& mixer);
 
 // Returns true if `color_provider` and `renderer_color_map` map renderer
 // color ids to the same SkColor.

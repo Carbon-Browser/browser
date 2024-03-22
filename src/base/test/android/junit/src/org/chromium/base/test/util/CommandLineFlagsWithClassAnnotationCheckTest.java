@@ -1,13 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base.test.util;
 
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.robolectric.annotation.Config;
 
@@ -22,19 +20,18 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 @Config(manifest = Config.NONE)
 @CommandLineFlags.Add("some-switch")
 public class CommandLineFlagsWithClassAnnotationCheckTest {
-    @Rule
-    public TestRule mCommandLineFlagsRule = CommandLineFlags.getTestRule();
-
     @Test
     public void testOnlyClassAnnotation() throws Throwable {
-        Assert.assertTrue("some-switch should be appended by the class",
+        Assert.assertTrue(
+                "some-switch should be appended by the class",
                 CommandLine.getInstance().hasSwitch("some-switch"));
     }
 
     @Test
     @CommandLineFlags.Remove("some-switch")
     public void testRemoveSwitch_method() throws Throwable {
-        Assert.assertTrue("CommandLine switches should be removed by the method",
+        Assert.assertTrue(
+                "CommandLine switches should be removed by the method",
                 CommandLine.getInstance().getSwitches().isEmpty());
     }
 }

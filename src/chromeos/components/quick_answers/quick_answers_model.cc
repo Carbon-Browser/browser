@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,5 +35,23 @@ QuickAnswersRequest::QuickAnswersRequest() = default;
 QuickAnswersRequest::QuickAnswersRequest(const QuickAnswersRequest& other) =
     default;
 QuickAnswersRequest::~QuickAnswersRequest() = default;
+
+Sense::Sense() = default;
+Sense::~Sense() = default;
+
+DefinitionResult::DefinitionResult() = default;
+DefinitionResult::~DefinitionResult() = default;
+
+TranslationResult::TranslationResult() = default;
+TranslationResult::~TranslationResult() = default;
+
+UnitConversionResult::UnitConversionResult() = default;
+UnitConversionResult::~UnitConversionResult() = default;
+
+StructuredResult::StructuredResult() = default;
+StructuredResult::~StructuredResult() = default;
+
+QuickAnswersSession::QuickAnswersSession() = default;
+QuickAnswersSession::~QuickAnswersSession() = default;
 
 }  // namespace quick_answers

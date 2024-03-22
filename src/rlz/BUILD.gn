@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 import("//build/config/chromeos/ui_mode.gni")
 import("//rlz/buildflags/buildflags.gni")
 import("//testing/test.gni")
-
-config("rlz_lib_config") {
-  defines = [ "RLZ_NETWORK_IMPLEMENTATION_CHROME_NET" ]
-}
 
 source_set("rlz_utils") {
   sources = [
@@ -85,8 +81,9 @@ if (enable_rlz_support) {
         "chromeos/lib/rlz_value_store_chromeos.h",
       ]
       deps += [
-        "//chromeos/dbus",
-        "//chromeos/system",
+        "//chromeos/ash/components/dbus",
+        "//chromeos/ash/components/dbus/debug_daemon",
+        "//chromeos/ash/components/system",
       ]
     }
 
@@ -141,12 +138,10 @@ if (enable_rlz_support) {
 
     if (is_chromeos_ash) {
       deps += [
-        "//chromeos/dbus",
-        "//chromeos/system",
+        "//chromeos/ash/components/dbus",
+        "//chromeos/ash/components/system",
       ]
     }
-
-    public_configs = [ ":rlz_lib_config" ]
   }
 
   source_set("test_support") {
@@ -165,7 +160,7 @@ if (enable_rlz_support) {
       "//build:chromeos_buildflags",
     ]
     if (is_chromeos_ash) {
-      public_deps += [ "//chromeos/system" ]
+      public_deps += [ "//chromeos/ash/components/system" ]
     }
   }
 
@@ -200,8 +195,9 @@ if (enable_rlz_support) {
     ]
     if (is_chromeos_ash) {
       deps += [
-        "//chromeos/dbus:test_support",
-        "//chromeos/system",
+        "//chromeos/ash/components/dbus:test_support",
+        "//chromeos/ash/components/dbus/debug_daemon",
+        "//chromeos/ash/components/system",
       ]
     }
   }
@@ -213,20 +209,6 @@ if (!is_ios && !is_android) {
     deps = [
       ":rlz_lib",
       "//build/win:default_exe_manifest",
-    ]
-  }
-}
-
-if (is_win) {
-  shared_library("rlz") {
-    sources = [
-      "win/dll/dll_main.cc",
-      "win/dll/exports.cc",
-    ]
-    deps = [
-      ":rlz_lib",
-      ":rlz_utils",
-      "//third_party/zlib",
     ]
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "components/viz/client/client_resource_provider.h"
+#include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/common/quads/aggregated_render_pass_draw_quad.h"
 #include "components/viz/common/quads/compositor_render_pass_draw_quad.h"
 #include "components/viz/common/quads/debug_border_draw_quad.h"
@@ -29,6 +30,7 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkImageFilter.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/video_types.h"
 
 namespace cc {
 
@@ -39,9 +41,9 @@ viz::ResourceId CreateAndImportResource(
     const gpu::SyncToken& sync_token,
     gfx::ColorSpace color_space = gfx::ColorSpace::CreateSRGB()) {
   constexpr gfx::Size size(64, 64);
-  auto transfer_resource = viz::TransferableResource::MakeGL(
-      gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, sync_token, size,
-      false /* is_overlay_candidate */);
+  auto transfer_resource = viz::TransferableResource::MakeGpu(
+      gpu::Mailbox::GenerateForSharedImage(), GL_TEXTURE_2D, sync_token, size,
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
   transfer_resource.color_space = std::move(color_space);
   return resource_provider->ImportResource(transfer_resource,
                                            base::DoNothing());
@@ -112,7 +114,9 @@ viz::SolidColorDrawQuad* AddClippedQuad(viz::AggregatedRenderPass* pass,
                                         SkColor4f color) {
   viz::SharedQuadState* shared_state = pass->CreateAndAppendSharedQuadState();
   shared_state->SetAll(gfx::Transform(), rect, rect, gfx::MaskFilterInfo(),
-                       rect, false, 1, SkBlendMode::kSrcOver, 0);
+                       rect, /*contents_opaque=*/false, /*opacity_f=*/1,
+                       SkBlendMode::kSrcOver, /*sorting_context=*/0,
+                       /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* quad = pass->CreateAndAppendDrawQuad<viz::SolidColorDrawQuad>();
   quad->SetNew(shared_state, rect, rect, color, false);
   return quad;
@@ -124,9 +128,10 @@ viz::SolidColorDrawQuad* AddTransformedQuad(viz::AggregatedRenderPass* pass,
                                             const gfx::Transform& transform) {
   viz::SharedQuadState* shared_state = pass->CreateAndAppendSharedQuadState();
   shared_state->SetAll(transform, rect, rect, gfx::MaskFilterInfo(),
-                       absl::nullopt, false, 1,
-
-                       SkBlendMode::kSrcOver, 0);
+                       /*clip=*/std::nullopt, /*contents_opaque=*/false,
+                       /*opacity_f=*/1, SkBlendMode::kSrcOver,
+                       /*sorting_context=*/0, /*layer_id=*/0u,
+                       /*fast_rounded_corner=*/false);
   auto* quad = pass->CreateAndAppendDrawQuad<viz::SolidColorDrawQuad>();
   quad->SetNew(shared_state, rect, rect, color, false);
   return quad;
@@ -139,12 +144,15 @@ QuadType* AddRenderPassQuadInternal(RenderPassType* to_pass,
   viz::SharedQuadState* shared_state =
       to_pass->CreateAndAppendSharedQuadState();
   shared_state->SetAll(gfx::Transform(), output_rect, output_rect,
-                       gfx::MaskFilterInfo(), absl::nullopt, false, 1,
-                       SkBlendMode::kSrcOver, 0);
+                       gfx::MaskFilterInfo(), /*clip=*/std::nullopt,
+                       /*contents_opaque=*/false, /*opacity_f=*/1,
+                       SkBlendMode::kSrcOver, /*sorting_context=*/0,
+                       /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* quad = to_pass->template CreateAndAppendDrawQuad<QuadType>();
   quad->SetNew(shared_state, output_rect, output_rect, contributing_pass->id,
                viz::kInvalidResourceId, gfx::RectF(), gfx::Size(),
-               gfx::Vector2dF(), gfx::PointF(), gfx::RectF(), false, 1.0f);
+               gfx::Vector2dF(1.0f, 1.0f), gfx::PointF(), gfx::RectF(), false,
+               1.0f);
   return quad;
 }
 
@@ -169,9 +177,10 @@ void AddRenderPassQuad(viz::AggregatedRenderPass* to_pass,
   gfx::Rect output_rect = contributing_pass->output_rect;
   viz::SharedQuadState* shared_state =
       to_pass->CreateAndAppendSharedQuadState();
-  shared_state->SetAll(transform, output_rect, output_rect,
-                       gfx::MaskFilterInfo(), absl::nullopt, false, 1,
-                       blend_mode, 0);
+  shared_state->SetAll(
+      transform, output_rect, output_rect, gfx::MaskFilterInfo(),
+      /*clip=*/std::nullopt, /*contents_opaque=*/false, 1, blend_mode,
+      /*sorting_context=*/0, /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* quad =
       to_pass->CreateAndAppendDrawQuad<viz::AggregatedRenderPassDrawQuad>();
   gfx::Size arbitrary_nonzero_size(1, 1);
@@ -218,7 +227,10 @@ std::vector<viz::ResourceId> AddOneOfEveryQuadType(
   viz::SharedQuadState* shared_state =
       to_pass->CreateAndAppendSharedQuadState();
   shared_state->SetAll(gfx::Transform(), rect, rect, gfx::MaskFilterInfo(),
-                       absl::nullopt, false, 1, SkBlendMode::kSrcOver, 0);
+                       /*clip=*/std::nullopt, /*contents_opaque=*/false,
+                       /*opacity_f=*/1, SkBlendMode::kSrcOver,
+                       /*sorting_context=*/0, /*layer_id=*/0u,
+                       /*fast_rounded_corner=*/false);
 
   auto* debug_border_quad =
       to_pass->CreateAndAppendDrawQuad<viz::DebugBorderDrawQuad>();
@@ -230,8 +242,8 @@ std::vector<viz::ResourceId> AddOneOfEveryQuadType(
         to_pass->CreateAndAppendDrawQuad<viz::CompositorRenderPassDrawQuad>();
     render_pass_quad->SetNew(shared_state, rect, visible_rect, child_pass_id,
                              resource5, gfx::RectF(rect), gfx::Size(73, 26),
-                             gfx::Vector2dF(), gfx::PointF(), gfx::RectF(),
-                             false, 1.0f);
+                             gfx::Vector2dF(1.0f, 1.0f), gfx::PointF(),
+                             gfx::RectF(), false, 1.0f);
   }
 
   auto* solid_color_quad =
@@ -285,7 +297,10 @@ std::vector<viz::ResourceId> AddOneOfEveryQuadType(
   viz::SharedQuadState* shared_state2 =
       to_pass->CreateAndAppendSharedQuadState();
   shared_state->SetAll(gfx::Transform(), rect, rect, gfx::MaskFilterInfo(),
-                       absl::nullopt, false, 1, SkBlendMode::kSrcOver, 0);
+                       /*clip=*/std::nullopt, /*contents_opaque=*/false,
+                       /*opacity_f=*/1, SkBlendMode::kSrcOver,
+                       /*sorting_context=*/0, /*layer_id=*/0u,
+                       /*fast_rounded_corner=*/false);
 
   auto* tile_quad = to_pass->CreateAndAppendDrawQuad<viz::TileDrawQuad>();
   tile_quad->SetNew(shared_state2, rect, visible_rect, needs_blending,
@@ -294,11 +309,11 @@ std::vector<viz::ResourceId> AddOneOfEveryQuadType(
 
   auto* yuv_quad = to_pass->CreateAndAppendDrawQuad<viz::YUVVideoDrawQuad>();
   yuv_quad->SetNew(shared_state2, rect, visible_rect, needs_blending,
-                   gfx::RectF(.0f, .0f, 100.0f, 100.0f),
-                   gfx::RectF(.0f, .0f, 50.0f, 50.0f), gfx::Size(100, 100),
-                   gfx::Size(50, 50), plane_resources[0], plane_resources[1],
+                   gfx::Size(100, 100), gfx::Rect(0, 0, 50, 50),
+                   gfx::Size(2, 2), plane_resources[0], plane_resources[1],
                    plane_resources[2], plane_resources[3],
-                   gfx::ColorSpace::CreateREC601(), 0.0, 1.0, 8);
+                   gfx::ColorSpace::CreateREC601(), 0.0, 1.0, 8,
+                   gfx::ProtectedVideoType::kClear, std::nullopt);
 
   return {resource1,          resource2,          resource3,
           resource4,          resource5,          resource6,
@@ -313,7 +328,7 @@ void AddOneOfEveryQuadTypeInDisplayResourceProvider(
     viz::AggregatedRenderPass* to_pass,
     viz::DisplayResourceProvider* resource_provider,
     viz::ClientResourceProvider* child_resource_provider,
-    viz::ContextProvider* child_context_provider,
+    viz::RasterContextProvider* child_context_provider,
     viz::AggregatedRenderPassId child_pass_id,
     gpu::SyncToken* sync_token_for_mailbox_tebxture) {
   gfx::Rect rect(0, 0, 100, 100);
@@ -401,7 +416,10 @@ void AddOneOfEveryQuadTypeInDisplayResourceProvider(
   viz::SharedQuadState* shared_state =
       to_pass->CreateAndAppendSharedQuadState();
   shared_state->SetAll(gfx::Transform(), rect, rect, gfx::MaskFilterInfo(),
-                       absl::nullopt, false, 1, SkBlendMode::kSrcOver, 0);
+                       /*clip=*/std::nullopt, /*contents_opaque=*/false,
+                       /*opacity_f=*/1, SkBlendMode::kSrcOver,
+                       /*sorting_context=*/0, /*layer_id=*/0u,
+                       /*fast_rounded_corner=*/false);
 
   viz::DebugBorderDrawQuad* debug_border_quad =
       to_pass->CreateAndAppendDrawQuad<viz::DebugBorderDrawQuad>();
@@ -466,7 +484,10 @@ void AddOneOfEveryQuadTypeInDisplayResourceProvider(
   viz::SharedQuadState* shared_state2 =
       to_pass->CreateAndAppendSharedQuadState();
   shared_state2->SetAll(gfx::Transform(), rect, rect, gfx::MaskFilterInfo(),
-                        absl::nullopt, false, 1, SkBlendMode::kSrcOver, 0);
+                        /*clip=*/std::nullopt, /*contents_opaque=*/false,
+                        /*opacity_f=*/1, SkBlendMode::kSrcOver,
+                        /*sorting_context=*/0, /*layer_id=*/0u,
+                        /*fast_rounded_corner=*/false);
 
   viz::TileDrawQuad* tile_quad =
       to_pass->CreateAndAppendDrawQuad<viz::TileDrawQuad>();
@@ -476,12 +497,12 @@ void AddOneOfEveryQuadTypeInDisplayResourceProvider(
 
   viz::YUVVideoDrawQuad* yuv_quad =
       to_pass->CreateAndAppendDrawQuad<viz::YUVVideoDrawQuad>();
-  yuv_quad->SetNew(
-      shared_state2, rect, visible_rect, needs_blending,
-      gfx::RectF(.0f, .0f, 100.0f, 100.0f), gfx::RectF(.0f, .0f, 50.0f, 50.0f),
-      gfx::Size(100, 100), gfx::Size(50, 50), mapped_plane_resources[0],
-      mapped_plane_resources[1], mapped_plane_resources[2],
-      mapped_plane_resources[3], gfx::ColorSpace::CreateREC601(), 0.0, 1.0, 8);
+  yuv_quad->SetNew(shared_state2, rect, visible_rect, needs_blending,
+                   gfx::Size(200, 200), gfx::Rect(0, 0, 100, 100),
+                   gfx::Size(2, 1), mapped_plane_resources[0],
+                   mapped_plane_resources[1], mapped_plane_resources[2],
+                   mapped_plane_resources[3], gfx::ColorSpace::CreateREC601(),
+                   0.0, 1.0, 8, gfx::ProtectedVideoType::kClear, std::nullopt);
 }
 
 }  // namespace cc

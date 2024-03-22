@@ -1,17 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/vulkan/tests/basic_vulkan_test.h"
 
 #include "base/command_line.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
+#include "build/build_config.h"
 #include "gpu/vulkan/init/vulkan_factory.h"
 #include "gpu/vulkan/tests/native_window.h"
 #include "gpu/vulkan/vulkan_surface.h"
 #include "ui/gfx/geometry/rect.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -23,7 +24,7 @@ BasicVulkanTest::~BasicVulkanTest() {}
 
 void BasicVulkanTest::SetUp() {
   bool supports_swapchain = true;
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   supports_swapchain = ui::OzonePlatform::GetInstance()
                            ->GetPlatformProperties()
                            .supports_vulkan_swap_chain;
@@ -53,6 +54,7 @@ void BasicVulkanTest::TearDown() {
     window_ = gfx::kNullAcceleratedWidget;
   }
   device_queue_->Destroy();
+  device_queue_.reset();
   vulkan_implementation_.reset();
 }
 

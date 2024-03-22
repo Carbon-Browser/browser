@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class CAPTURE_EXPORT VideoCaptureBufferTrackerFactory {
       VideoCaptureBufferType buffer_type) = 0;
   virtual std::unique_ptr<VideoCaptureBufferTracker>
   CreateTrackerForExternalGpuMemoryBuffer(
-      const gfx::GpuMemoryBufferHandle& handle) = 0;
+      gfx::GpuMemoryBufferHandle handle) = 0;
 };
 
 }  // namespace media

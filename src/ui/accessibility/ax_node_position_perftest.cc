@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "ui/accessibility/ax_node_position.h"
 #include "ui/accessibility/ax_tree_id.h"
 #include "ui/accessibility/ax_tree_update.h"
-#include "ui/accessibility/test_ax_tree_manager.h"
+#include "ui/accessibility/test_single_ax_tree_manager.h"
 
 namespace ui {
 
@@ -21,7 +21,8 @@ constexpr int kLaps = 5000;
 constexpr int kWarmupLaps = 5;
 constexpr char kMetricCallsPerSecondRunsPerS[] = "calls_per_second";
 
-class AXPositionPerfTest : public ::testing::Test, public TestAXTreeManager {
+class AXPositionPerfTest : public ::testing::Test,
+                           public TestSingleAXTreeManager {
  public:
   AXPositionPerfTest() = default;
 
@@ -108,8 +109,8 @@ void AXPositionPerfTest::SetUp() {
 }  // namespace
 
 TEST_F(AXPositionPerfTest, AsTreePositionFromTextPosition) {
-  TestPositionType text_position = AXNodePosition::CreateTextPosition(
-      GetTreeID(), /*anchor_id=*/1, /*text_offset=*/103,
+  TestPositionType text_position = CreateTextPosition(
+      /*anchor_id=*/1, /*text_offset=*/103,
       ax::mojom::TextAffinity::kDownstream);
 
   // The time limit is unused. Use kLaps for the check interval so the time is
@@ -125,8 +126,8 @@ TEST_F(AXPositionPerfTest, AsTreePositionFromTextPosition) {
 }
 
 TEST_F(AXPositionPerfTest, AsLeafTextPositionFromTextPosition) {
-  TestPositionType text_position = AXNodePosition::CreateTextPosition(
-      GetTreeID(), /*anchor_id=*/1, /*text_offset=*/103,
+  TestPositionType text_position = CreateTextPosition(
+      /*anchor_id=*/1, /*text_offset=*/103,
       ax::mojom::TextAffinity::kDownstream);
 
   // The time limit is unused. Use kLaps for the check interval so the time is
@@ -142,8 +143,8 @@ TEST_F(AXPositionPerfTest, AsLeafTextPositionFromTextPosition) {
 }
 
 TEST_F(AXPositionPerfTest, AsLeafTextPositionFromTreePosition) {
-  TestPositionType tree_position = AXNodePosition::CreateTreePosition(
-      GetTreeID(), /*anchor_id=*/1, /*child_index=*/4);
+  TestPositionType tree_position =
+      CreateTreePosition(*ax_tree()->root(), /*child_index=*/4);
 
   base::LapTimer timer(kWarmupLaps, base::TimeDelta(), kLaps);
   for (int i = 0; i < kLaps + kWarmupLaps; ++i) {
@@ -156,12 +157,11 @@ TEST_F(AXPositionPerfTest, AsLeafTextPositionFromTreePosition) {
 }
 
 TEST_F(AXPositionPerfTest, CompareTextPositions) {
-  TestPositionType text_position_1 = AXNodePosition::CreateTextPosition(
-      GetTreeID(), /*anchor_id=*/7, /*text_offset=*/1,
-      ax::mojom::TextAffinity::kDownstream);
+  TestPositionType text_position_1 = CreateTextPosition(
+      /*anchor_id=*/7, /*text_offset=*/1, ax::mojom::TextAffinity::kDownstream);
 
-  TestPositionType text_position_2 = AXNodePosition::CreateTextPosition(
-      GetTreeID(), /*anchor_id=*/27, /*text_offset=*/1,
+  TestPositionType text_position_2 = CreateTextPosition(
+      /*anchor_id=*/27, /*text_offset=*/1,
       ax::mojom::TextAffinity::kDownstream);
 
   base::LapTimer timer(kWarmupLaps, base::TimeDelta(), kLaps);

@@ -1,38 +1,37 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/policy/reporting/profile_report_generator_ios.h"
-#include "components/enterprise/browser/reporting/report_type.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/policy/reporting/profile_report_generator_ios.h"
+#import "components/enterprise/browser/reporting/report_type.h"
 
 #import <Foundation/Foundation.h>
 
-#include "base/files/file_path.h"
-#include "base/run_loop.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/test/bind.h"
-#include "components/policy/core/common/mock_policy_service.h"
-#include "components/policy/core/common/policy_map.h"
-#include "components/policy/core/common/schema_registry.h"
-#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#include "ios/chrome/browser/browser_state/test_chrome_browser_state_manager.h"
+#import "base/files/file_path.h"
+#import "base/run_loop.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/test/bind.h"
+#import "components/policy/core/common/mock_policy_service.h"
+#import "components/policy/core/common/policy_map.h"
+#import "components/policy/core/common/schema_registry.h"
+#import "components/signin/public/base/signin_metrics.h"
 #import "ios/chrome/browser/policy/browser_state_policy_connector_mock.h"
-#include "ios/chrome/browser/policy/reporting/reporting_delegate_factory_ios.h"
-#include "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/authentication_service_fake.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
-#include "ios/chrome/test/ios_chrome_scoped_testing_chrome_browser_state_manager.h"
+#import "ios/chrome/browser/policy/reporting/reporting_delegate_factory_ios.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state_manager.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
+#import "ios/chrome/test/ios_chrome_scoped_testing_chrome_browser_state_manager.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
-#include "ios/chrome/test/testing_application_context.h"
-#include "ios/public/provider/chrome/browser/signin/fake_chrome_identity_service.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "testing/platform_test.h"
+#import "ios/chrome/test/testing_application_context.h"
+#import "ios/web/public/test/web_task_environment.h"
+#import "testing/gtest/include/gtest/gtest.h"
+#import "testing/platform_test.h"
 
 namespace em = enterprise_management;
 
@@ -52,8 +51,7 @@ class ProfileReportGeneratorIOSTest : public PlatformTest {
     builder.SetPath(kProfilePath);
     builder.AddTestingFactory(
         AuthenticationServiceFactory::GetInstance(),
-        base::BindRepeating(
-            &AuthenticationServiceFake::CreateAuthenticationService));
+        AuthenticationServiceFactory::GetDefaultFactory());
     InitMockPolicyService();
     builder.SetPolicyConnector(
         std::make_unique<BrowserStatePolicyConnectorMock>(
@@ -65,6 +63,9 @@ class ProfileReportGeneratorIOSTest : public PlatformTest {
         std::make_unique<IOSChromeScopedTestingChromeBrowserStateManager>(
             std::make_unique<TestChromeBrowserStateManager>(builder.Build()));
 
+    AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
+        GetBrowserState(),
+        std::make_unique<FakeAuthenticationServiceDelegate>());
     authentication_service_ =
         AuthenticationServiceFactory::GetForBrowserState(GetBrowserState());
     account_manager_service_ =
@@ -96,11 +97,15 @@ class ProfileReportGeneratorIOSTest : public PlatformTest {
   }
 
   void SignIn() {
-    ios::FakeChromeIdentityService* identity_service =
-        ios::FakeChromeIdentityService::GetInstanceFromChromeProvider();
-    identity_service->AddIdentities(@[ base::SysUTF8ToNSString(kAccount) ]);
-    ChromeIdentity* identity = account_manager_service_->GetDefaultIdentity();
-    authentication_service_->SignIn(identity, nil);
+    FakeSystemIdentityManager* system_identity_manager =
+        FakeSystemIdentityManager::FromSystemIdentityManager(
+            GetApplicationContext()->GetSystemIdentityManager());
+    system_identity_manager->AddIdentities(
+        @[ base::SysUTF8ToNSString(kAccount) ]);
+    id<SystemIdentity> identity =
+        account_manager_service_->GetDefaultIdentity();
+    authentication_service_->SignIn(
+        identity, signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
   }
 
   std::unique_ptr<em::ChromeUserProfileInfo> GenerateReport() {
@@ -162,7 +167,7 @@ TEST_F(ProfileReportGeneratorIOSTest, PoliciesReportedOnlyWhenEnabled) {
   ASSERT_TRUE(report);
   EXPECT_EQ(2, report->chrome_policies_size());
 
-  // Make sure policies are no longer reported when |set_policies_enabled| is
+  // Make sure policies are no longer reported when `set_policies_enabled` is
   // set to false.
   generator_.set_policies_enabled(false);
   report = GenerateReport();
@@ -170,7 +175,7 @@ TEST_F(ProfileReportGeneratorIOSTest, PoliciesReportedOnlyWhenEnabled) {
   EXPECT_EQ(0, report->chrome_policies_size());
 
   // Make sure policies are once again being reported after setting
-  // |set_policies_enabled| back to true.
+  // `set_policies_enabled` back to true.
   generator_.set_policies_enabled(true);
   report = GenerateReport();
   ASSERT_TRUE(report);

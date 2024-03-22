@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "mojo/public/cpp/bindings/remote.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
 
 namespace network {
@@ -57,8 +57,9 @@ class SearchAndAssistantEnabledChecker {
   void OnJsonParsed(data_decoder::DataDecoder::ValueOrError response);
 
   std::unique_ptr<network::SimpleURLLoader> url_loader_;
-  network::mojom::URLLoaderFactory* url_loader_factory_;
-  Delegate* const delegate_;
+  raw_ptr<network::mojom::URLLoaderFactory, ExperimentalAsh>
+      url_loader_factory_;
+  const raw_ptr<Delegate, ExperimentalAsh> delegate_;
 
   base::WeakPtrFactory<SearchAndAssistantEnabledChecker> weak_factory_{this};
 };

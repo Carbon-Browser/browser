@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,11 @@ class Size;
 namespace ash {
 
 // We force at least this many DIPs for any window on the screen.
-const int kMinimumOnScreenArea = 25;
+inline constexpr int kMinimumOnScreenArea = 25;
 
-const float kDefaultSnapRatio = 0.5f;
+// This specifies how much percent (30%) of a window rect must be visible when
+// the window is added to the workspace.
+inline constexpr float kMinimumPercentOnScreenArea = 0.3f;
 
 // In clamshell mode, users can snap left/right for horizontal display and
 // top/bottom for vertical display. For primary-landscape-oriented display,
@@ -82,9 +84,6 @@ ASH_EXPORT gfx::Rect GetSnappedWindowBounds(const gfx::Rect& work_area,
 // orientation of this |display|.
 chromeos::OrientationType GetSnapDisplayOrientation(
     const display::Display& display);
-
-// Moves the window to the center of the display.
-ASH_EXPORT void CenterWindow(aura::Window* window);
 
 // Sets the bounds of |window| to |bounds_in_screen|. This may move |window|
 // to |display| if necessary.

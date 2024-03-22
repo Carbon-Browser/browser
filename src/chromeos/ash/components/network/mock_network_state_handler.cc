@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/mock_network_state_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 MockNetworkStateHandler::MockNetworkStateHandler() = default;
 
@@ -18,4 +18,4 @@ MockNetworkStateHandler::InitializeForTest() {
   return handler;
 }
 
-}  // namespace chromeos
+}  // namespace ash

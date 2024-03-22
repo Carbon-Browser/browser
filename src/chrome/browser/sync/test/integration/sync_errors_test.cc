@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,10 +21,13 @@
 #include "components/history/core/common/pref_names.h"
 #include "components/prefs/pref_member.h"
 #include "components/prefs/pref_service.h"
+#include "components/sync/base/features.h"
 #include "components/sync/base/model_type.h"
-#include "components/sync/driver/sync_service_impl.h"
-#include "components/sync/protocol/sync_protocol_error.h"
+#include "components/sync/engine/sync_protocol_error.h"
+#include "components/sync/model/model_type_controller_delegate.h"
+#include "components/sync/model/type_entities_count.h"
 #include "components/sync/protocol/user_event_specifics.pb.h"
+#include "components/sync/service/sync_service_impl.h"
 #include "components/sync_user_events/user_event_service.h"
 #include "content/public/test/browser_test.h"
 #include "google_apis/gaia/google_service_auth_error.h"
@@ -33,6 +36,7 @@ using bookmarks::BookmarkNode;
 using bookmarks_helper::AddFolder;
 using bookmarks_helper::SetTitle;
 using syncer::SyncServiceImpl;
+using testing::IsEmpty;
 using user_events_helper::CreateTestEvent;
 
 namespace {
@@ -50,6 +54,20 @@ syncer::ModelTypeSet GetThrottledDataTypes(
       }));
   loop.Run();
   return throttled_types;
+}
+
+size_t GetTypeNonTombstoneEntitiesCount(
+    syncer::ModelTypeControllerDelegate* model_type_controller_delegate) {
+  base::RunLoop loop;
+  size_t result = 0;
+  model_type_controller_delegate->GetTypeEntitiesCountForDebugging(
+      base::BindLambdaForTesting(
+          [&result, &loop](const syncer::TypeEntitiesCount& count) {
+            result = count.non_tombstone_entities;
+            loop.Quit();
+          }));
+  loop.Run();
+  return result;
 }
 
 class TypeDisabledChecker : public SingleClientStatusChangeChecker {
@@ -109,15 +127,17 @@ class SyncErrorTest : public SyncTest {
 };
 
 // Helper class that waits until the sync engine has hit an actionable error.
-class ActionableErrorChecker : public SingleClientStatusChangeChecker {
+class ActionableProtocolErrorChecker : public SingleClientStatusChangeChecker {
  public:
-  explicit ActionableErrorChecker(SyncServiceImpl* service)
+  explicit ActionableProtocolErrorChecker(SyncServiceImpl* service)
       : SingleClientStatusChangeChecker(service) {}
 
-  ActionableErrorChecker(const ActionableErrorChecker&) = delete;
-  ActionableErrorChecker& operator=(const ActionableErrorChecker&) = delete;
+  ActionableProtocolErrorChecker(const ActionableProtocolErrorChecker&) =
+      delete;
+  ActionableProtocolErrorChecker& operator=(
+      const ActionableProtocolErrorChecker&) = delete;
 
-  ~ActionableErrorChecker() override = default;
+  ~ActionableProtocolErrorChecker() override = default;
 
   // Checks if an actionable error has been hit. Called repeatedly each time PSS
   // notifies observers of a state change.
@@ -150,16 +170,16 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest, UpgradeClientErrorDuringIncrementalSync) {
 
   std::string description = "Not My Fault";
   std::string url = "www.google.com";
-  GetFakeServer()->TriggerActionableError(sync_pb::SyncEnums::THROTTLED,
-                                          description, url,
-                                          sync_pb::SyncEnums::UPGRADE_CLIENT);
+  GetFakeServer()->TriggerActionableProtocolError(
+      sync_pb::SyncEnums::THROTTLED, description, url,
+      sync_pb::SyncEnums::UPGRADE_CLIENT);
 
   // Now make one more change so we will do another sync.
   const BookmarkNode* node2 = AddFolder(0, 0, "title2");
   SetTitle(0, node2, "new_title2");
 
   // Wait until an actionable error is encountered.
-  EXPECT_TRUE(ActionableErrorChecker(GetSyncService(0)).Wait());
+  EXPECT_TRUE(ActionableProtocolErrorChecker(GetSyncService(0)).Wait());
 
   // UPGRADE_CLIENT gets mapped to an unrecoverable error, so Sync will *not*
   // start up again in transport-only mode (which would clear the cached error).
@@ -176,9 +196,9 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest, UpgradeClientErrorDuringIncrementalSync) {
 IN_PROC_BROWSER_TEST_F(SyncErrorTest, UpgradeClientErrorDuringInitialSync) {
   std::string description = "Not My Fault";
   std::string url = "www.google.com";
-  GetFakeServer()->TriggerActionableError(sync_pb::SyncEnums::THROTTLED,
-                                          description, url,
-                                          sync_pb::SyncEnums::UPGRADE_CLIENT);
+  GetFakeServer()->TriggerActionableProtocolError(
+      sync_pb::SyncEnums::THROTTLED, description, url,
+      sync_pb::SyncEnums::UPGRADE_CLIENT);
 
   ASSERT_TRUE(SetupClients());
 
@@ -187,7 +207,7 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest, UpgradeClientErrorDuringInitialSync) {
   ASSERT_TRUE(GetClient(0)->SignInPrimaryAccount());
 
   // Wait until an actionable error is encountered.
-  EXPECT_TRUE(ActionableErrorChecker(GetSyncService(0)).Wait());
+  EXPECT_TRUE(ActionableProtocolErrorChecker(GetSyncService(0)).Wait());
 
   // UPGRADE_CLIENT gets mapped to an unrecoverable error, so Sync will *not*
   // start up again in transport-only mode (which would clear the cached error).
@@ -278,7 +298,7 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest, EncryptionObsoleteErrorTest) {
   SetTitle(0, node1, "new_title1");
   ASSERT_TRUE(UpdatedProgressMarkerChecker(GetSyncService(0)).Wait());
 
-  GetFakeServer()->TriggerActionableError(
+  GetFakeServer()->TriggerActionableProtocolError(
       sync_pb::SyncEnums::ENCRYPTION_OBSOLETE, "Not My Fault", "www.google.com",
       sync_pb::SyncEnums::UNKNOWN_ACTION);
 
@@ -301,20 +321,18 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest, DisableDatatypeWhileRunning) {
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
   syncer::ModelTypeSet synced_datatypes =
       GetSyncService(0)->GetActiveDataTypes();
-  ASSERT_TRUE(synced_datatypes.Has(syncer::TYPED_URLS));
+  ASSERT_TRUE(synced_datatypes.Has(syncer::HISTORY));
   ASSERT_TRUE(synced_datatypes.Has(syncer::SESSIONS));
   GetProfile(0)->GetPrefs()->SetBoolean(prefs::kSavingBrowserHistoryDisabled,
                                         true);
 
   // Wait for reconfigurations.
-  ASSERT_TRUE(
-      TypeDisabledChecker(GetSyncService(0), syncer::TYPED_URLS).Wait());
+  ASSERT_TRUE(TypeDisabledChecker(GetSyncService(0), syncer::HISTORY).Wait());
   ASSERT_TRUE(TypeDisabledChecker(GetSyncService(0), syncer::SESSIONS).Wait());
 
   const BookmarkNode* node1 = AddFolder(0, 0, "title1");
   SetTitle(0, node1, "new_title1");
   ASSERT_TRUE(UpdatedProgressMarkerChecker(GetSyncService(0)).Wait());
-  // TODO(lipalani): Verify initial sync ended for typed url is false.
 }
 
 // Tests that the unsynced entity will be eventually committed even after failed
@@ -323,7 +341,7 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest,
                        PRE_ShouldResendUncommittedEntitiesAfterBrowserRestart) {
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
 
-  GetFakeServer()->SetHttpError(net::HTTP_INTERNAL_SERVER_ERROR);
+  GetFakeServer()->TriggerCommitError(sync_pb::SyncEnums::TRANSIENT_ERROR);
   syncer::UserEventService* event_service =
       browser_sync::UserEventServiceFactory::GetForProfile(GetProfile(0));
   const sync_pb::UserEventSpecifics specifics =
@@ -347,6 +365,10 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest,
 
 IN_PROC_BROWSER_TEST_F(SyncErrorTest,
                        ShouldResendUncommittedEntitiesAfterBrowserRestart) {
+  // Make sure the PRE_ test didn't successfully commit the event.
+  ASSERT_THAT(GetFakeServer()->GetSyncEntitiesByModelType(syncer::USER_EVENTS),
+              IsEmpty());
+
   ASSERT_TRUE(SetupClients()) << "SetupClients() failed.";
   ASSERT_TRUE(GetClient(0)->AwaitEngineInitialization());
 
@@ -355,7 +377,12 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest,
           base::Microseconds(kUserEventTimeUsec)));
   EXPECT_TRUE(UserEventEqualityChecker(GetSyncService(0), GetFakeServer(),
                                        {{expected_specifics}})
-                  .Wait());
+                  .Wait())
+      << "Non-tombstone entities: "
+      << GetTypeNonTombstoneEntitiesCount(
+             browser_sync::UserEventServiceFactory::GetForProfile(GetProfile(0))
+                 ->GetControllerDelegate()
+                 .get());
 }
 
 // Tests that throttling one datatype does not influence other datatypes.
@@ -401,7 +428,7 @@ IN_PROC_BROWSER_TEST_F(SyncErrorTest, ShouldThrottleOneDatatypeButNotOthers) {
 
   // PREFERENCES should now be throttled.
   EXPECT_EQ(GetThrottledDataTypes(GetSyncService(0)),
-            syncer::ModelTypeSet{syncer::PREFERENCES});
+            syncer::ModelTypeSet({syncer::PREFERENCES}));
 
   // Unthrottle PREFERENCES to verify that sync can resume.
   GetFakeServer()->SetThrottledTypes(syncer::ModelTypeSet());

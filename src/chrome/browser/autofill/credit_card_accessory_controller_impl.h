@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ class ManualFillingController;
 
 namespace autofill {
 
-class AutofillManager;
+class BrowserAutofillManager;
 
 // Use either CreditCardAccessoryController::GetOrCreate or
 // CreditCardAccessoryController::GetIfExisting to obtain instances of this
@@ -32,19 +32,16 @@ class CreditCardAccessoryControllerImpl
   absl::optional<AccessorySheetData> GetSheetData() const override;
   void OnFillingTriggered(FieldGlobalId focused_field_id,
                           const AccessorySheetField& selection) override;
+  void OnPasskeySelected(const std::vector<uint8_t>& passkey_id) override;
   void OnOptionSelected(AccessoryAction selected_action) override;
   void OnToggleChanged(AccessoryAction toggled_action, bool enabled) override;
 
   // CreditCardAccessoryController:
   void RefreshSuggestions() override;
+  base::WeakPtr<CreditCardAccessoryController> AsWeakPtr() override;
 
   // PersonalDataManagerObserver:
   void OnPersonalDataChanged() override;
-
-  // CreditCardAccessManager::Accessor:
-  void OnCreditCardFetched(CreditCardFetchResult result,
-                           const CreditCard* credit_card,
-                           const std::u16string& cvc) override;
 
   static void CreateForWebContentsForTesting(
       content::WebContents* web_contents,
@@ -82,12 +79,18 @@ class CreditCardAccessoryControllerImpl
   // plaintext and won't require any authentication when filling is triggered.
   std::vector<const CachedServerCardInfo*> GetUnmaskedCreditCards() const;
 
+  // `OnFillingTriggered()` fetches the credit card and calls this function
+  // once the `credit_card` is available. If successful, it fills it.
+  void OnCreditCardFetched(CreditCardFetchResult result,
+                           const CreditCard* credit_card);
+
   // Gets promo code offers from personal data manager.
   std::vector<const AutofillOfferData*> GetPromoCodeOffers() const;
 
   base::WeakPtr<ManualFillingController> GetManualFillingController();
   AutofillDriver* GetDriver();
-  AutofillManager* GetManager() const;
+  const BrowserAutofillManager* GetManager() const;
+  BrowserAutofillManager* GetManager();
 
   content::WebContents& GetWebContents() const;
 
@@ -104,6 +107,9 @@ class CreditCardAccessoryControllerImpl
   FieldGlobalId last_focused_field_id_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
+
+  base::WeakPtrFactory<CreditCardAccessoryControllerImpl> weak_ptr_factory_{
+      this};
 };
 
 }  // namespace autofill

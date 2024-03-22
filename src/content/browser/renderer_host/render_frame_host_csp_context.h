@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_RENDERER_HOST_RENDER_FRAME_HOST_CSP_CONTEXT_H_
 #define CONTENT_BROWSER_RENDERER_HOST_RENDER_FRAME_HOST_CSP_CONTEXT_H_
 
+#include "base/memory/raw_ptr.h"
 #include "content/common/content_export.h"
 #include "services/network/public/cpp/content_security_policy/csp_context.h"
 
@@ -33,7 +34,7 @@ class CONTENT_EXPORT RenderFrameHostCSPContext : public network::CSPContext {
       network::mojom::SourceLocation* source_location) const override;
 
  private:
-  RenderFrameHostImpl* render_frame_host_;
+  raw_ptr<RenderFrameHostImpl> render_frame_host_;
 };
 
 }  // namespace content

@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -39,8 +39,9 @@ source_set("shortcut_viewer") {
     "//chromeos/ui/wm",
     "//ui/accessibility",
     "//ui/aura",
-    "//ui/chromeos/events",
+    "//ui/chromeos/styles:cros_tokens_color_mappings",
     "//ui/events:events_base",
+    "//ui/events/ash",
     "//ui/events/devices",
     "//ui/events/ozone/layout",
     "//ui/views",

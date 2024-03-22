@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
@@ -17,7 +17,6 @@
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
 #include "chrome/browser/ash/app_mode/certificate_manager_dialog.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
 #include "chrome/browser/ash/login/auth/chrome_login_performer.h"
 #include "chrome/browser/ash/login/chrome_restart_request.h"
 #include "chrome/browser/ash/login/ui/captive_portal_window_proxy.h"
@@ -28,23 +27,24 @@
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/connectivity_diagnostics_dialog.h"
-#include "chrome/browser/ui/webui/chromeos/internet_detail_dialog.h"
-#include "chrome/browser/ui/webui/chromeos/login/error_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/connectivity_diagnostics_dialog.h"
+#include "chrome/browser/ui/webui/ash/internet_detail_dialog.h"
+#include "chrome/browser/ui/webui/ash/login/app_launch_splash_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/error_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/network_state_informer.h"
+#include "chrome/browser/ui/webui/ash/login/offline_login_screen_handler.h"
 #include "chrome/grit/browser_resources.h"
-#include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_handler.h"
-#include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
-#include "chromeos/ash/components/network/portal_detector/network_portal_detector_strategy.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "components/session_manager/core/session_manager.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "ui/gfx/native_widget_types.h"
 
 namespace ash {
+
 namespace {
 
 // TODO(https://crbug.com/1241511): Remove this global.
@@ -74,8 +74,6 @@ constexpr const char kUserActionConfigureCertsButtonClicked[] =
 constexpr const char kUserActionDiagnoseButtonClicked[] = "diagnose";
 constexpr const char kUserActionLaunchOobeGuestSessionClicked[] =
     "launch-oobe-guest";
-constexpr const char kUserActionLocalStateErrorPowerwashButtonClicked[] =
-    "local-state-error-powerwash";
 constexpr const char kUserActionRebootButtonClicked[] = "reboot";
 constexpr const char kUserActionShowCaptivePortalClicked[] =
     "show-captive-portal";
@@ -85,7 +83,6 @@ constexpr const char kUserActionReloadGaia[] = "reload-gaia";
 constexpr const char kUserActionCancelReset[] = "cancel-reset";
 constexpr const char kUserActionCancel[] = "cancel";
 constexpr const char kUserActionContinueAppLaunch[] = "continue-app-launch";
-constexpr const char kUserActionLaunchHelpApp[] = "launch-help-app";
 constexpr const char kUserActionOfflineLogin[] = "offline-login";
 
 ErrorScreen::ErrorScreen(base::WeakPtr<ErrorScreenView> view)
@@ -101,13 +98,15 @@ ErrorScreen::~ErrorScreen() {
 }
 
 void ErrorScreen::AllowGuestSignin(bool allowed) {
-  if (view_)
+  if (view_) {
     view_->SetGuestSigninAllowed(allowed);
+  }
 }
 
 void ErrorScreen::ShowOfflineLoginOption(bool show) {
-  if (view_)
+  if (view_) {
     view_->SetOfflineSigninAllowed(show);
+  }
 }
 
 void ErrorScreen::OnOfflineLoginClicked() {
@@ -128,9 +127,17 @@ void ErrorScreen::AllowOfflineLoginPerUser(bool allowed) {
 }
 
 void ErrorScreen::FixCaptivePortal() {
+  const std::string network_path = network_state_informer_->network_path();
+  const std::string network_name =
+      NetworkStateInformer::GetNetworkName(network_path);
+  const auto state = network_state_informer_->state();
+  if (network_name.empty() || state != NetworkStateInformer::CAPTIVE_PORTAL) {
+    LOG(ERROR) << __func__ << " without network in a portalled state.";
+    return;
+  }
   MaybeInitCaptivePortalWindowProxy(
       LoginDisplayHost::default_host()->GetOobeWebContents());
-  captive_portal_window_proxy_->ShowIfRedirected();
+  captive_portal_window_proxy_->ShowIfRedirected(network_name);
 }
 
 NetworkError::UIState ErrorScreen::GetUIState() const {
@@ -146,18 +153,22 @@ OobeScreenId ErrorScreen::GetParentScreen() const {
 }
 
 void ErrorScreen::HideCaptivePortal() {
-  if (captive_portal_window_proxy_.get())
+  if (captive_portal_window_proxy_.get()) {
     captive_portal_window_proxy_->Close();
+  }
 }
 
 void ErrorScreen::SetUIState(NetworkError::UIState ui_state) {
+  LOG(WARNING) << __func__ << " to " << ui_state;
   ui_state_ = ui_state;
-  if (view_)
+  if (view_) {
     view_->SetUIState(ui_state);
+  }
 }
 
 void ErrorScreen::SetErrorState(NetworkError::ErrorState error_state,
                                 const std::string& network) {
+  LOG(WARNING) << __func__ << " to " << error_state;
   error_state_ = error_state;
   if (view_) {
     view_->SetErrorStateCode(error_state);
@@ -175,20 +186,29 @@ void ErrorScreen::SetHideCallback(base::OnceClosure on_hide) {
 }
 
 void ErrorScreen::ShowCaptivePortal() {
+  const std::string network_path = network_state_informer_->network_path();
+  const std::string network_name =
+      NetworkStateInformer::GetNetworkName(network_path);
+  const auto state = network_state_informer_->state();
+  if (network_name.empty() || state != NetworkStateInformer::CAPTIVE_PORTAL) {
+    LOG(ERROR) << __func__ << " without network in a portalled state.";
+    return;
+  }
+
   // This call is an explicit user action
   // i.e. clicking on link so force dialog show.
   FixCaptivePortal();
-  captive_portal_window_proxy_->Show();
+  captive_portal_window_proxy_->Show(network_name);
 }
 
 void ErrorScreen::ShowConnectingIndicator(bool show) {
-  if (view_)
+  if (view_) {
     view_->SetShowConnectingIndicator(show);
+  }
 }
 
 void ErrorScreen::SetIsPersistentError(bool is_persistent) {
-  if (view_)
-    view_->SetIsPersistentError(is_persistent);
+  is_persistent_ = is_persistent;
 }
 
 base::CallbackListSubscription ErrorScreen::RegisterConnectRequestCallback(
@@ -199,25 +219,27 @@ base::CallbackListSubscription ErrorScreen::RegisterConnectRequestCallback(
 void ErrorScreen::MaybeInitCaptivePortalWindowProxy(
     content::WebContents* web_contents) {
   if (!captive_portal_window_proxy_.get()) {
-    captive_portal_window_proxy_ = std::make_unique<CaptivePortalWindowProxy>(
-        network_state_informer_.get(), web_contents);
+    captive_portal_window_proxy_ =
+        std::make_unique<CaptivePortalWindowProxy>(web_contents);
   }
 }
 
 void ErrorScreen::ShowNetworkErrorMessage(NetworkStateInformer::State state,
                                           NetworkError::ErrorReason reason) {
+  LOG(WARNING) << __func__ << " state = " << state << " reason = " << reason;
   const std::string network_path = network_state_informer_->network_path();
   const std::string network_name =
       NetworkStateInformer::GetNetworkName(network_path);
 
   const bool is_behind_captive_portal =
-      NetworkStateInformer::IsBehindCaptivePortal(state, reason);
+      state == NetworkStateInformer::CAPTIVE_PORTAL;
   const bool is_proxy_error = NetworkStateInformer::IsProxyError(state, reason);
   const bool is_loading_timeout =
       (reason == NetworkError::ERROR_REASON_LOADING_TIMEOUT);
 
-  if (!is_behind_captive_portal)
+  if (!is_behind_captive_portal) {
     HideCaptivePortal();
+  }
 
   if (is_proxy_error) {
     SetErrorState(NetworkError::ERROR_STATE_PROXY, std::string());
@@ -227,7 +249,7 @@ void ErrorScreen::ShowNetworkErrorMessage(NetworkStateInformer::State state,
     }
     SetErrorState(NetworkError::ERROR_STATE_PORTAL, network_name);
   } else if (is_loading_timeout) {
-    SetErrorState(NetworkError::ERROR_STATE_AUTH_EXT_TIMEOUT, network_name);
+    SetErrorState(NetworkError::ERROR_STATE_LOADING_TIMEOUT, network_name);
   } else {
     SetErrorState(NetworkError::ERROR_STATE_OFFLINE, std::string());
   }
@@ -237,7 +259,7 @@ void ErrorScreen::ShowNetworkErrorMessage(NetworkStateInformer::State state,
   AllowGuestSignin(guest_signin_allowed);
   ShowOfflineLoginOption(
       g_offline_login_allowed_ && g_offline_login_per_user_allowed_ &&
-      GetErrorState() != NetworkError::ERROR_STATE_AUTH_EXT_TIMEOUT);
+      GetErrorState() != NetworkError::ERROR_STATE_LOADING_TIMEOUT);
 
   // No need to show the screen again if it is already shown.
   if (is_hidden()) {
@@ -251,27 +273,27 @@ void ErrorScreen::ShowImpl() {
     SetHideCallback(base::BindOnce(&ErrorScreen::DefaultHideCallback,
                                    weak_factory_.GetWeakPtr()));
   }
-  if (!view_)
+  if (!view_) {
     return;
+  }
 
-  view_->Show();
+  const bool is_closeable = LoginDisplayHost::default_host() &&
+                            LoginDisplayHost::default_host()->HasUserPods() &&
+                            !is_persistent_;
+  view_->ShowScreenWithParam(is_closeable);
   LOG(WARNING) << "Network error screen message is shown";
-  session_manager::SessionManager::Get()->NotifyNetworkErrorScreenShown();
-  network_portal_detector::GetInstance()->SetStrategy(
-      PortalDetectorStrategy::STRATEGY_ID_ERROR_SCREEN);
 }
 
 void ErrorScreen::HideImpl() {
-  if (!view_ || is_hidden())
+  if (!view_ || is_hidden()) {
     return;
+  }
 
   LOG(WARNING) << "Network error screen message is hidden";
   if (on_hide_callback_) {
     std::move(on_hide_callback_).Run();
     on_hide_callback_ = base::OnceClosure();
   }
-  network_portal_detector::GetInstance()->SetStrategy(
-      PortalDetectorStrategy::STRATEGY_ID_LOGIN_SCREEN);
 }
 
 void ErrorScreen::OnUserAction(const base::Value::List& args) {
@@ -280,32 +302,32 @@ void ErrorScreen::OnUserAction(const base::Value::List& args) {
     ShowCaptivePortal();
   } else if (action_id == kUserActionOpenInternetDialog) {
     // Empty string opens the internet detail dialog for the default network.
-    chromeos::InternetDetailDialog::ShowDialog("");
+    InternetDetailDialog::ShowDialog("");
   } else if (action_id == kUserActionConfigureCertsButtonClicked) {
     OnConfigureCerts();
   } else if (action_id == kUserActionDiagnoseButtonClicked) {
     OnDiagnoseButtonClicked();
   } else if (action_id == kUserActionLaunchOobeGuestSessionClicked) {
     OnLaunchOobeGuestSession();
-  } else if (action_id == kUserActionLocalStateErrorPowerwashButtonClicked) {
-    OnLocalStateErrorPowerwashButtonClicked();
   } else if (action_id == kUserActionRebootButtonClicked) {
     OnRebootButtonClicked();
   } else if (action_id == kUserActionCancel) {
     OnCancelButtonClicked();
   } else if (action_id == kUserActionReloadGaia) {
     OnReloadGaiaClicked();
-  } else if (action_id == kUserActionNetworkConnected ||
-             action_id == kUserActionCancelReset) {
+  } else if (action_id == kUserActionNetworkConnected) {
+    // JS network implementation might notify that the network was connected
+    // faster than the corresponding C++ code. Let the screen on which error is
+    // shown handle `ErrorScreen::Hide`
+    if (network_state_informer_->state() == NetworkStateInformer::ONLINE) {
+      Hide();
+    }
+  } else if (action_id == kUserActionCancelReset) {
     Hide();
   } else if (action_id == kUserActionOfflineLogin) {
     OnOfflineLoginClicked();
   } else if (action_id == kUserActionContinueAppLaunch) {
     OnContinueAppLaunchButtonClicked();
-  } else if (action_id == kUserActionLaunchHelpApp) {
-    CHECK_EQ(args.size(), 2);
-    const int help_topic_id = args[1].GetInt();
-    LaunchHelpApp(help_topic_id);
   } else {
     BaseScreen::OnUserAction(args);
   }
@@ -332,7 +354,9 @@ void ErrorScreen::OnOffTheRecordAuthSuccess() {
   RestartChrome(command_line, RestartChromeReason::kGuest);
 }
 
-void ErrorScreen::OnPasswordChangeDetected(const UserContext& user_context) {
+void ErrorScreen::OnOnlinePasswordUnusable(
+    std::unique_ptr<UserContext> user_context,
+    bool online_password_mismatch) {
   LOG(FATAL);
 }
 
@@ -345,8 +369,9 @@ void ErrorScreen::PolicyLoadFailed() {
 }
 
 void ErrorScreen::DefaultHideCallback() {
-  if (parent_screen_ != ash::OOBE_SCREEN_UNKNOWN && view_)
+  if (parent_screen_ != OOBE_SCREEN_UNKNOWN && view_) {
     view_->ShowOobeScreen(parent_screen_);
+  }
 
   // TODO(antrim): Due to potential race with GAIA reload and hiding network
   // error UI we can't just reset parent screen to SCREEN_UNKNOWN here.
@@ -361,17 +386,13 @@ void ErrorScreen::OnConfigureCerts() {
 }
 
 void ErrorScreen::OnDiagnoseButtonClicked() {
-  chromeos::ConnectivityDiagnosticsDialog::ShowDialog();
+  ConnectivityDiagnosticsDialog::ShowDialog();
 }
 
 void ErrorScreen::OnLaunchOobeGuestSession() {
   DeviceSettingsService::Get()->GetOwnershipStatusAsync(
       base::BindOnce(&ErrorScreen::StartGuestSessionAfterOwnershipCheck,
                      weak_factory_.GetWeakPtr()));
-}
-
-void ErrorScreen::OnLocalStateErrorPowerwashButtonClicked() {
-  SessionManagerClient::Get()->StartDeviceWipe();
 }
 
 void ErrorScreen::OnRebootButtonClicked() {
@@ -426,24 +447,28 @@ void ErrorScreen::StartGuestSessionAfterOwnershipCheck(
       return;
     case CrosSettingsProvider::PERMANENTLY_UNTRUSTED:
       // Only allow guest sessions if there is no owner yet.
-      if (ownership_status == DeviceSettingsService::OWNERSHIP_NONE)
+      if (ownership_status ==
+          DeviceSettingsService::OwnershipStatus::kOwnershipNone) {
         break;
+      }
       return;
     case CrosSettingsProvider::TRUSTED: {
       // Honor kAccountsPrefAllowGuest.
       bool allow_guest = false;
       CrosSettings::Get()->GetBoolean(kAccountsPrefAllowGuest, &allow_guest);
-      if (allow_guest)
+      if (allow_guest) {
         break;
+      }
       return;
     }
   }
 
-  if (guest_login_performer_)
+  if (guest_login_performer_) {
     return;
+  }
 
-  guest_login_performer_ = std::make_unique<ChromeLoginPerformer>(
-      this, LoginDisplayHost::default_host()->metrics_recorder());
+  guest_login_performer_ =
+      std::make_unique<ChromeLoginPerformer>(this, AuthEventsRecorder::Get());
   guest_login_performer_->LoginOffTheRecord();
 }
 

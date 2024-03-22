@@ -4,6 +4,7 @@ URL: http://www.dabeaz.com/ply/ply-3.11.tar.gz
 License: BSD
 License File: LICENSE
 Security Critical: no
+Shipped: no
 Version: 3.11
 
 PLY is used by (at least) the Mojo python bindings, the PPAPI
@@ -19,6 +20,7 @@ Sources           ply-3.11/ply/__init__.py
 
 The license is in LICENSE.
 
-Modifications made with initial commit:
+Modifications made:
 - Added the file README.chromium (this file)
 - Applies license.patch
+- Added ply.gni to list sources

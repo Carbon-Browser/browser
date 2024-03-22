@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define EXTENSIONS_BROWSER_API_STORAGE_STORAGE_API_H_
 
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
 #include "components/value_store/value_store.h"
 #include "extensions/browser/api/storage/session_storage_manager.h"
 #include "extensions/browser/api/storage/settings_namespace.h"
@@ -130,6 +129,8 @@ class StorageStorageAreaClearFunction : public SettingsFunction {
 class StorageStorageAreaGetBytesInUseFunction : public SettingsFunction {
  public:
   DECLARE_EXTENSION_FUNCTION("storage.getBytesInUse", STORAGE_GETBYTESINUSE)
+
+  FRIEND_TEST_ALL_PREFIXES(StorageApiUnittest, GetBytesInUseIntOverflow);
 
  protected:
   ~StorageStorageAreaGetBytesInUseFunction() override {}

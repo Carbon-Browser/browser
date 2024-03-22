@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom.h"
 #include "third_party/blink/public/mojom/frame/viewport_intersection_state.mojom.h"
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
 #include "third_party/blink/public/mojom/input/pointer_lock_result.mojom-shared.h"
 #include "ui/display/screen_infos.h"
 #include "ui/gfx/geometry/rect.h"
@@ -32,6 +33,10 @@ namespace cc {
 class RenderFrameMetadata;
 }
 
+namespace ui {
+class Cursor;
+}
+
 namespace viz {
 class SurfaceId;
 class SurfaceInfo;
@@ -42,7 +47,6 @@ class RenderFrameHostImpl;
 class RenderFrameProxyHost;
 class RenderWidgetHostViewBase;
 class RenderWidgetHostViewChildFrame;
-class WebCursor;
 
 // CrossProcessFrameConnector provides the platform view abstraction for
 // RenderWidgetHostViewChildFrame allowing RWHVChildFrame to remain ignorant
@@ -135,14 +139,8 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
 
   // Return the rect in DIP that the RenderWidgetHostViewChildFrame's content
   // will render into.
-  const gfx::Rect& screen_space_rect_in_dip() const {
-    return screen_space_rect_in_dip_;
-  }
-
-  // Return the rect in pixels that the RenderWidgetHostViewChildFrame's content
-  // will render into.
-  const gfx::Rect& screen_space_rect_in_pixels() const {
-    return screen_space_rect_in_pixels_;
+  const gfx::Rect& rect_in_parent_view_in_dip() const {
+    return rect_in_parent_view_in_dip_;
   }
 
   // Return the latest capture sequence number for this subframe.
@@ -150,7 +148,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
 
   // Request that the platform change the mouse cursor when the mouse is
   // positioned over this view's content.
-  void UpdateCursor(const WebCursor& cursor);
+  void UpdateCursor(const ui::Cursor& cursor);
 
   // Given a point in the current view's coordinate space, return the same
   // point transformed into the coordinate space of the top-level view's
@@ -171,7 +169,8 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   // for processing.
   void ForwardAckedTouchpadZoomEvent(
       const blink::WebGestureEvent& event,
-      blink::mojom::InputEventResultState ack_result);
+      blink::mojom::InputEventResultState ack_result,
+      blink::mojom::ScrollResultDataPtr scroll_result_data);
 
   // A gesture scroll sequence that is not consumed by a child must be bubbled
   // to ancestors who may consume it.
@@ -257,7 +256,8 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   bool has_size() const { return has_size_; }
 
   void DidAckGestureEvent(const blink::WebGestureEvent& event,
-                          blink::mojom::InputEventResultState ack_result);
+                          blink::mojom::InputEventResultState ack_result,
+                          blink::mojom::ScrollResultDataPtr scroll_result_data);
 
   // Called by RenderWidgetHostViewChildFrame to update the visibility of any
   // nested child RWHVCFs inside it.
@@ -268,9 +268,9 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   // if not.
   void SetLocalFrameSize(const gfx::Size& local_frame_size);
 
-  // Called to resize the child renderer. |screen_space_rect| is in pixels if
-  // zoom-for-dsf is enabled, and in DIP if not.
-  void SetScreenSpaceRect(const gfx::Rect& screen_space_rect);
+  // Called to resize the child renderer. |rect_in_parent_view| is in physical
+  // pixels.
+  void SetRectInParentView(const gfx::Rect& rect_in_parent_view);
 
   void SetIsInert(bool inert);
 
@@ -341,7 +341,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
 
   // Resets the rect and the viz::LocalSurfaceId of the connector to ensure the
   // unguessable surface ID is not reused after a cross-process navigation.
-  void ResetScreenSpaceRect();
+  void ResetRectInParentView();
 
   // Logs the Stability.ChildFrameCrash.Visibility metric after checking that a
   // crash has indeed happened and checking that the crash has not already been
@@ -366,8 +366,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector {
   display::ScreenInfos screen_infos_;
   gfx::Size local_frame_size_in_dip_;
   gfx::Size local_frame_size_in_pixels_;
-  gfx::Rect screen_space_rect_in_dip_;
-  gfx::Rect screen_space_rect_in_pixels_;
+  gfx::Rect rect_in_parent_view_in_dip_;
 
   viz::LocalSurfaceId local_surface_id_;
 

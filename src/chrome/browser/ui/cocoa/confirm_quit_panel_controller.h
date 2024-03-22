@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,7 @@
 
 // The ConfirmQuitPanelController manages the black HUD window that tells users
 // to "Hold Cmd+Q to Quit".
-@interface ConfirmQuitPanelController : NSWindowController<NSWindowDelegate> {
- @private
-  // The content view of the window that this controller manages.
-  ConfirmQuitFrameView* _contentView;  // Weak, owned by the window.
-}
+@interface ConfirmQuitPanelController : NSWindowController <NSWindowDelegate>
 
 // Returns a singleton instance of the Controller. This will create one if it
 // does not currently exist.

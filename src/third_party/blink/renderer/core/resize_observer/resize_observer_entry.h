@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,10 @@
 
 namespace blink {
 
-class Element;
 class DOMRectReadOnly;
+class Element;
+class LayoutBox;
+class LayoutObject;
 class ResizeObserverSize;
 
 class CORE_EXPORT ResizeObserverEntry final : public ScriptWrappable {
@@ -23,8 +25,8 @@ class CORE_EXPORT ResizeObserverEntry final : public ScriptWrappable {
  public:
   ResizeObserverEntry(Element* target);
 
-  Element* target() const { return target_; }
-  DOMRectReadOnly* contentRect() const { return content_rect_; }
+  Element* target() const { return target_.Get(); }
+  DOMRectReadOnly* contentRect() const { return content_rect_.Get(); }
   HeapVector<Member<ResizeObserverSize>> contentBoxSize() const {
     return content_box_size_;
   }
@@ -38,6 +40,9 @@ class CORE_EXPORT ResizeObserverEntry final : public ScriptWrappable {
   void Trace(Visitor*) const override;
 
  private:
+  void PopulateFromLayoutBox(const LayoutBox&);
+  void PopulateFromSVGChild(const LayoutObject&);
+
   Member<Element> target_;
   Member<DOMRectReadOnly> content_rect_;
   HeapVector<Member<ResizeObserverSize>> device_pixel_content_box_size_;

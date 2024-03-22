@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,9 @@ class SupportLibWebMessageCallbackAdapter {
         // calling it.
         String[] supportedFeatures = mImpl.getSupportedFeatures();
         if (BoundaryInterfaceReflectionUtil.containsFeature(
-                    supportedFeatures, Features.WEB_MESSAGE_CALLBACK_ON_MESSAGE)) {
-            mImpl.onMessage(BoundaryInterfaceReflectionUtil.createInvocationHandlerFor(port),
+                supportedFeatures, Features.WEB_MESSAGE_CALLBACK_ON_MESSAGE)) {
+            mImpl.onMessage(
+                    BoundaryInterfaceReflectionUtil.createInvocationHandlerFor(port),
                     BoundaryInterfaceReflectionUtil.createInvocationHandlerFor(message));
         }
     }

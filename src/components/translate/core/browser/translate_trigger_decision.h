@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_TRANSLATE_CORE_BROWSER_TRANSLATE_TRIGGER_DECISION_H_
 #define COMPONENTS_TRANSLATE_CORE_BROWSER_TRANSLATE_TRIGGER_DECISION_H_
 
+#include <string>
 #include <vector>
 #include "components/translate/core/browser/translate_browser_metrics.h"
 
@@ -60,12 +61,11 @@ struct TranslateTriggerDecision {
   // 3. Ranker isn't requesting that the UI be suppressed.
   bool ShouldShowUI() const;
 
-  std::vector<TranslateBrowserMetrics::InitiationStatusType>
-      initiation_statuses;
   std::vector<int> ranker_events;
   std::string auto_translate_target;
   std::string href_translate_source;
   std::string href_translate_target;
+  std::string predefined_translate_source;
   std::string predefined_translate_target;
 
  private:

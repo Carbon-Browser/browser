@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
@@ -224,7 +224,7 @@ void AlsaPcmInputStream::ReadAudio() {
 
       callback_->OnData(audio_bus_.get(),
                         base::TimeTicks::Now() - hardware_delay,
-                        normalized_volume);
+                        normalized_volume, {});
     } else if (frames_read < 0) {
       bool success = Recover(frames_read);
       LOG(WARNING) << "PcmReadi failed with error "

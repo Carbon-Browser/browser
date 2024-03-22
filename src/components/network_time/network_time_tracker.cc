@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/i18n/time_formatting.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
@@ -60,11 +60,13 @@ namespace network_time {
 // Network time queries are enabled on all desktop platforms except ChromeOS,
 // which uses tlsdated to set the system time.
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_IOS)
-const base::Feature kNetworkTimeServiceQuerying{
-    "NetworkTimeServiceQuerying", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kNetworkTimeServiceQuerying,
+             "NetworkTimeServiceQuerying",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 #else
-const base::Feature kNetworkTimeServiceQuerying{
-    "NetworkTimeServiceQuerying", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kNetworkTimeServiceQuerying,
+             "NetworkTimeServiceQuerying",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 #endif
 
 namespace {
@@ -116,7 +118,8 @@ const uint32_t kClockDivergenceSeconds = 60;
 // Maximum time lapse before deserialized data are considered stale.
 const uint32_t kSerializedDataMaxAgeDays = 7;
 
-// Name of a pref that stores the wall clock time, via |ToJsTime|.
+// Name of a pref that stores the wall clock time, via
+// |InMillisecondsFSinceUnixEpoch|.
 const char kPrefTime[] = "local";
 
 // Name of a pref that stores the tick clock time, via |ToInternalValue|.
@@ -125,7 +128,8 @@ const char kPrefTicks[] = "ticks";
 // Name of a pref that stores the time uncertainty, via |ToInternalValue|.
 const char kPrefUncertainty[] = "uncertainty";
 
-// Name of a pref that stores the network time via |ToJsTime|.
+// Name of a pref that stores the network time via
+// |InMillisecondsFSinceUnixEpoch|.
 const char kPrefNetworkTime[] = "network";
 
 // Time server's maximum allowable clock skew, in seconds.  (This is a property
@@ -137,25 +141,22 @@ const uint32_t kTimeServerMaxSkewSeconds = 10;
 const char kTimeServiceURL[] = "http://clients2.google.com/time/1/current";
 
 // This is an ECDSA prime256v1 named-curve key.
-const int kKeyVersion = 6;
+const int kKeyVersion = 7;
 const uint8_t kKeyPubBytes[] = {
     0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02,
     0x01, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07, 0x03,
-    0x42, 0x00, 0x04, 0x59, 0x65, 0x1F, 0x1D, 0x36, 0x33, 0x81, 0xE1, 0xB2,
-    0xD3, 0x78, 0x4B, 0xE1, 0x7B, 0x8D, 0x07, 0x33, 0x55, 0x4F, 0x0D, 0x67,
-    0x1C, 0x33, 0xD2, 0xFE, 0x78, 0x02, 0xB6, 0xD2, 0xDF, 0x2F, 0x45, 0x1F,
-    0x49, 0xBA, 0xD2, 0xE6, 0x67, 0x4E, 0x4D, 0xA9, 0x77, 0xB3, 0x34, 0x12,
-    0xEB, 0x6D, 0xC0, 0xDC, 0x86, 0xE7, 0xBE, 0xF7, 0x09, 0x56, 0x77, 0x2A,
-    0xF3, 0xE8, 0x4E, 0x96, 0xAB, 0xAB, 0x12};
+    0x42, 0x00, 0x04, 0x9F, 0xB4, 0x82, 0x7E, 0xAE, 0x02, 0xA2, 0xF2, 0x9C,
+    0x32, 0x8E, 0xF8, 0x00, 0xFC, 0x75, 0x45, 0xCF, 0x45, 0x36, 0x01, 0x71,
+    0x93, 0x57, 0x54, 0x1C, 0xA7, 0xC5, 0x09, 0xDA, 0xB1, 0xBC, 0x36, 0xB1,
+    0x44, 0x1C, 0x2E, 0x12, 0x58, 0x2F, 0xE2, 0x27, 0x40, 0x40, 0x42, 0xEE,
+    0x95, 0x7A, 0xAC, 0xE4, 0x33, 0xAC, 0xAA, 0x09, 0x6F, 0x5C, 0x0F, 0x94,
+    0xA7, 0xB4, 0xB5, 0xE2, 0x6B, 0xB6, 0xC4};
 
 // Number of samples to be used for the computation of clock drift.
 constexpr base::FeatureParam<NetworkTimeTracker::ClockDriftSamples>::Option
     kClockDriftSamplesOptions[] = {
         {NetworkTimeTracker::ClockDriftSamples::NO_SAMPLES, "0"},
-        {NetworkTimeTracker::ClockDriftSamples::TWO_SAMPLES, "2"},
-        {NetworkTimeTracker::ClockDriftSamples::FOUR_SAMPLES, "4"},
-        {NetworkTimeTracker::ClockDriftSamples::SIX_SAMPLES, "6"},
-};
+        {NetworkTimeTracker::ClockDriftSamples::TWO_SAMPLES, "2"}};
 constexpr base::FeatureParam<NetworkTimeTracker::ClockDriftSamples>
     kClockDriftSamples{&kNetworkTimeServiceQuerying, "ClockDriftSamples",
                        NetworkTimeTracker::ClockDriftSamples::NO_SAMPLES,
@@ -173,10 +174,6 @@ std::string GetServerProof(
                                            &proof)
              ? proof
              : std::string();
-}
-
-void RecordFetchValidHistogram(bool valid) {
-  LOCAL_HISTOGRAM_BOOLEAN("NetworkTimeTracker.UpdateTimeFetchValid", valid);
 }
 
 void UmaHistogramCustomTimesClockSkew(const char* name,
@@ -207,7 +204,7 @@ NetworkTimeTracker::NetworkTimeTracker(
       pref_service_(pref_service),
       time_query_completed_(false) {
   const base::Value::Dict& time_mapping =
-      pref_service_->GetValueDict(prefs::kNetworkTimeMapping);
+      pref_service_->GetDict(prefs::kNetworkTimeMapping);
   absl::optional<double> time_js = time_mapping.FindDouble(kPrefTime);
   absl::optional<double> ticks_js = time_mapping.FindDouble(kPrefTicks);
   absl::optional<double> uncertainty_js =
@@ -215,13 +212,14 @@ NetworkTimeTracker::NetworkTimeTracker(
   absl::optional<double> network_time_js =
       time_mapping.FindDouble(kPrefNetworkTime);
   if (time_js && ticks_js && uncertainty_js && network_time_js) {
-    time_at_last_measurement_ = base::Time::FromJsTime(*time_js);
+    time_at_last_measurement_ =
+        base::Time::FromMillisecondsSinceUnixEpoch(*time_js);
     ticks_at_last_measurement_ =
         base::TimeTicks::FromInternalValue(static_cast<int64_t>(*ticks_js));
     network_time_uncertainty_ = base::TimeDelta::FromInternalValue(
         static_cast<int64_t>(*uncertainty_js));
     network_time_at_last_measurement_ =
-        base::Time::FromJsTime(*network_time_js);
+        base::Time::FromMillisecondsSinceUnixEpoch(*network_time_js);
   }
   base::Time now = clock_->Now();
   if (ticks_at_last_measurement_ > tick_clock_->NowTicks() ||
@@ -280,15 +278,17 @@ void NetworkTimeTracker::UpdateNetworkTime(base::Time network_time,
       kNumTimeMeasurements * base::Milliseconds(kTicksResolutionMs);
 
   base::Value::Dict time_mapping;
-  time_mapping.Set(kPrefTime, time_at_last_measurement_.ToJsTime());
+  time_mapping.Set(kPrefTime,
+                   time_at_last_measurement_.InMillisecondsFSinceUnixEpoch());
   time_mapping.Set(
       kPrefTicks,
       static_cast<double>(ticks_at_last_measurement_.ToInternalValue()));
   time_mapping.Set(
       kPrefUncertainty,
       static_cast<double>(network_time_uncertainty_.ToInternalValue()));
-  time_mapping.Set(kPrefNetworkTime,
-                   network_time_at_last_measurement_.ToJsTime());
+  time_mapping.Set(
+      kPrefNetworkTime,
+      network_time_at_last_measurement_.InMillisecondsFSinceUnixEpoch());
   pref_service_->Set(prefs::kNetworkTimeMapping,
                      base::Value(std::move(time_mapping)));
 }
@@ -370,9 +370,6 @@ NetworkTimeTracker::NetworkTimeResult NetworkTimeTracker::GetNetworkTime(
   base::TimeDelta time_delta = clock_->Now() - time_at_last_measurement_;
   if (time_delta.InMilliseconds() < 0) {  // Has wall clock run backward?
     DVLOG(1) << "Discarding network time due to wall clock running backward";
-    LOCAL_HISTOGRAM_CUSTOM_TIMES("NetworkTimeTracker.WallClockRanBackwards",
-                                 time_delta.magnitude(), base::Seconds(1),
-                                 base::Days(7), 50);
     network_time_at_last_measurement_ = base::Time();
     return NETWORK_TIME_SYNC_LOST;
   }
@@ -383,19 +380,6 @@ NetworkTimeTracker::NetworkTimeResult NetworkTimeTracker::GetNetworkTime(
     // reset.
     DVLOG(1) << "Discarding network time due to clocks diverging";
 
-    // The below histograms do not use |kClockDivergenceSeconds| as the
-    // lower-bound, so that |kClockDivergenceSeconds| can be changed
-    // without causing the buckets to change and making data from
-    // old/new clients incompatible.
-    if (divergence.InMilliseconds() < 0) {
-      LOCAL_HISTOGRAM_CUSTOM_TIMES(
-          "NetworkTimeTracker.ClockDivergence.Negative", divergence.magnitude(),
-          base::Seconds(60), base::Days(7), 50);
-    } else {
-      LOCAL_HISTOGRAM_CUSTOM_TIMES(
-          "NetworkTimeTracker.ClockDivergence.Positive", divergence.magnitude(),
-          base::Seconds(60), base::Days(7), 50);
-    }
     network_time_at_last_measurement_ = base::Time();
     return NETWORK_TIME_SYNC_LOST;
   }
@@ -514,12 +498,6 @@ bool NetworkTimeTracker::UpdateTimeFromResponse(
   if (response_code != 200 || !response_body) {
     time_query_completed_ = true;
     DVLOG(1) << "fetch failed code=" << response_code;
-    // The error code is negated because net errors are negative, but
-    // the corresponding histogram enum is positive.
-    const int kPositiveError = -time_fetcher_->NetError();
-    DCHECK_LE(kPositiveError, 10000);
-    LOCAL_HISTOGRAM_COUNTS_10000("NetworkTimeTracker.UpdateTimeFetchFailed",
-                                 kPositiveError);
     return false;
   }
 
@@ -529,35 +507,29 @@ bool NetworkTimeTracker::UpdateTimeFromResponse(
   if (!query_signer_->ValidateResponse(
           response, GetServerProof(time_fetcher_->ResponseInfo()->headers))) {
     DVLOG(1) << "invalid signature";
-    RecordFetchValidHistogram(false);
     return false;
   }
   response.remove_prefix(5);  // Skips leading )]}'\n
   absl::optional<base::Value> value = base::JSONReader::Read(response);
   if (!value) {
     DVLOG(1) << "bad JSON";
-    RecordFetchValidHistogram(false);
     return false;
   }
-  const base::DictionaryValue* dict;
-  if (!value->GetAsDictionary(&dict)) {
+  if (!value->is_dict()) {
     DVLOG(1) << "not a dictionary";
-    RecordFetchValidHistogram(false);
     return false;
   }
   absl::optional<double> current_time_millis =
-      dict->FindDoubleKey("current_time_millis");
+      value->GetDict().FindDouble("current_time_millis");
   if (!current_time_millis) {
     DVLOG(1) << "no current_time_millis";
-    RecordFetchValidHistogram(false);
     return false;
   }
 
-  RecordFetchValidHistogram(true);
-
   // There is a "server_nonce" key here too, but it serves no purpose other than
   // to make the server's response unpredictable.
-  base::Time current_time = base::Time::FromJsTime(*current_time_millis);
+  base::Time current_time =
+      base::Time::FromMillisecondsSinceUnixEpoch(*current_time_millis);
   base::TimeDelta resolution =
       base::Milliseconds(1) + base::Seconds(kTimeServerMaxSkewSeconds);
 
@@ -566,13 +538,7 @@ bool NetworkTimeTracker::UpdateTimeFromResponse(
   base::TimeDelta latency =
       time_fetcher_->ResponseInfo()->load_timing.receive_headers_start -
       time_fetcher_->ResponseInfo()->load_timing.send_end;
-  LOCAL_HISTOGRAM_TIMES("NetworkTimeTracker.TimeQueryLatency", latency);
 
-  if (!last_fetched_time_.is_null()) {
-    LOCAL_HISTOGRAM_CUSTOM_TIMES("NetworkTimeTracker.TimeBetweenFetches",
-                                 current_time - last_fetched_time_,
-                                 base::Hours(1), base::Days(7), 50);
-  }
   last_fetched_time_ = current_time;
 
   if (check_type == CheckTimeType::BACKGROUND) {
@@ -591,13 +557,16 @@ void NetworkTimeTracker::ProcessClockHistograms(base::Time current_time,
   base::TimeDelta system_clock_skew =
       clock_->Now() - (current_time + latency / 2);
   if (clock_drift_measurement_triggered_) {
-    clock_drift_skews_.push_back(system_clock_skew);
-    clock_drift_latencies_.push_back(latency);
+    ClockDriftSample s;
+    s.latency = latency;
+    s.skew = system_clock_skew;
+    s.timestamp = current_time + latency / 2;
+    clock_drift_samples_.push_back(s);
 
-    // We need one more sample than the number used for the computation
-    // because the middle sample is not used by the central finite difference
-    // formulas.
-    if (clock_drift_skews_.size() ==
+    // We need one more sample than the number used for the
+    // computation because the middle sample is not used by the
+    // central finite difference formulas.
+    if (clock_drift_samples_.size() ==
         static_cast<uint8_t>(kClockDriftSamples.Get()) + 1) {
       RecordClockDriftHistograms();
       clock_drift_measurement_triggered_ = false;
@@ -642,48 +611,27 @@ void NetworkTimeTracker::MaybeTriggerClockDriftMeasurements() {
       static_cast<uint8_t>(kClockDriftSamples.Get()) == 0) {
     return;
   }
-  clock_drift_latencies_.clear();
-  clock_drift_skews_.clear();
+  clock_drift_samples_.clear();
   clock_drift_measurement_triggered_ = true;
   QueueCheckTime(kClockDriftSamplesDistance.Get());
 }
 
 // The clock drift is the time derivative of clock skew. We use the central
-// finite difference method to compute the derivative using the equally
-// distanced samples we have collected. The coefficients for computing the
-// derivative depending on the number of samples we use can be found at
-// https://en.wikipedia.org/wiki/Finite_difference_coefficient . Because we use
-// *central* finite differences, the middle sample does not take part in the
-// computation.
+// finite difference method to compute the derivative using the skew samples
+// we have collected. Because we use *central* finite differences, the middle
+// sample does not take part in the computation.
 double NetworkTimeTracker::ComputeClockDrift() {
   if (kClockDriftSamplesDistance.Get() <= base::TimeDelta(base::Seconds(0)))
     return std::numeric_limits<double>::infinity();
-
-  switch (kClockDriftSamples.Get()) {
-    case NetworkTimeTracker::ClockDriftSamples::NO_SAMPLES:
-      NOTREACHED();
-      return std::numeric_limits<double>::infinity();
-    case NetworkTimeTracker::ClockDriftSamples::TWO_SAMPLES:
-      return (clock_drift_skews_[2] - clock_drift_skews_[0]) /
-             kClockDriftSamplesDistance.Get();
-    case NetworkTimeTracker::ClockDriftSamples::FOUR_SAMPLES:
-      return (-clock_drift_skews_[0] + 8 * clock_drift_skews_[1] -
-              8 * clock_drift_skews_[3] + clock_drift_skews_[4]) /
-             (12 * kClockDriftSamplesDistance.Get());
-    case NetworkTimeTracker::ClockDriftSamples::SIX_SAMPLES:
-      return (-clock_drift_skews_[0] + 9 * clock_drift_skews_[1] -
-              45 * clock_drift_skews_[2] + 45 * clock_drift_skews_[4] -
-              9 * clock_drift_skews_[5] + clock_drift_skews_[6]) /
-             (60 * kClockDriftSamplesDistance.Get());
-  }
+  CHECK(clock_drift_samples_.size() >= 2);
+  return (clock_drift_samples_[2].skew - clock_drift_samples_[0].skew) /
+         (clock_drift_samples_[2].timestamp -
+          clock_drift_samples_[0].timestamp);
 }
 
 void NetworkTimeTracker::RecordClockDriftHistograms() {
-  DCHECK_EQ(clock_drift_skews_.size(), clock_drift_latencies_.size());
-  if (clock_drift_latencies_.size() !=
-          static_cast<uint8_t>(kClockDriftSamples.Get()) + 1 ||
-      clock_drift_skews_.size() !=
-          static_cast<uint8_t>(kClockDriftSamples.Get()) + 1) {
+  if (clock_drift_samples_.size() !=
+      static_cast<uint8_t>(kClockDriftSamples.Get()) + 1) {
     return;
   }
 
@@ -706,23 +654,29 @@ void NetworkTimeTracker::RecordClockDriftHistograms() {
 }
 
 double NetworkTimeTracker::ComputeClockDriftLatencyVariance() {
+  if (static_cast<uint8_t>(kClockDriftSamples.Get()) == 0) {
+    return std::numeric_limits<double>::infinity();
+  }
+
   base::TimeDelta mean = base::Seconds(0);
-  for (size_t i = 0; i < clock_drift_latencies_.size(); i++) {
+  for (size_t i = 0; i < clock_drift_samples_.size(); i++) {
     // Exclude middle sample since we do not use it
-    if (i != clock_drift_latencies_.size() / 2)
-      mean += clock_drift_latencies_[i];
+    if (i != clock_drift_samples_.size() / 2) {
+      mean += clock_drift_samples_[i].latency;
+    }
   }
   mean /= static_cast<uint8_t>(kClockDriftSamples.Get());
 
   double variance = 0;
-  for (size_t i = 0; i < clock_drift_latencies_.size(); i++) {
-    base::TimeDelta diff_from_mean = mean - clock_drift_latencies_[i];
+  for (size_t i = 0; i < clock_drift_samples_.size(); i++) {
+    base::TimeDelta diff_from_mean = mean - clock_drift_samples_[i].latency;
     // Exclude middle sample since we do not use it
-    if (i != clock_drift_latencies_.size() / 2) {
+    if (i != clock_drift_samples_.size() / 2) {
       variance +=
           diff_from_mean.InMilliseconds() * diff_from_mean.InMilliseconds();
     }
   }
+  variance /= static_cast<uint8_t>(kClockDriftSamples.Get());
 
   return variance;
 }

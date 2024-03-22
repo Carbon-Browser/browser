@@ -1,12 +1,10 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/ui/tabs/target_frame_cache.h"
+#import "ios/chrome/browser/ui/tabs/target_frame_cache.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/containers/contains.h"
 
 TargetFrameCache::TargetFrameCache() {}
 
@@ -29,5 +27,5 @@ CGRect TargetFrameCache::GetFrame(UIView* view) {
 }
 
 bool TargetFrameCache::HasFrame(UIView* view) {
-  return targetFrames_.find(view) != targetFrames_.end();
+  return base::Contains(targetFrames_, view);
 }

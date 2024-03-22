@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,12 +64,14 @@ std::string IdentityGetAuthTokenError::ToString() const {
       return identity_constants::kOffTheRecord;
     case State::kRemoteConsentPageLoadFailure:
       return identity_constants::kPageLoadFailure;
-    case State::kSetAccountsInCookieFailure:
-      return identity_constants::kSetAccountsInCookieFailure;
     case State::kInvalidConsentResult:
       return identity_constants::kInvalidConsentResult;
     case State::kCanceled:
       return identity_constants::kCanceled;
+    case State::kInteractivityDenied:
+      return identity_constants::kGetAuthTokenInteractivityDeniedError;
+    case State::kCannotCreateWindow:
+      return identity_constants::kCannotCreateWindow;
   }
 }
 

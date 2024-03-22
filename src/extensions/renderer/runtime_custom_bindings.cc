@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/mojom/view_type.mojom.h"
 #include "extensions/common/view_type_util.h"
@@ -23,7 +23,7 @@ namespace extensions {
 RuntimeCustomBindings::RuntimeCustomBindings(ScriptContext* context)
     : ObjectBackedNativeHandler(context) {}
 
-RuntimeCustomBindings::~RuntimeCustomBindings() {}
+RuntimeCustomBindings::~RuntimeCustomBindings() = default;
 
 void RuntimeCustomBindings::AddRoutes() {
   RouteHandlerFunction(

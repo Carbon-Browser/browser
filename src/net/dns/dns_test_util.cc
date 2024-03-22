@@ -1,39 +1,39 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/dns/dns_test_util.h"
 
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/big_endian.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/ranges/algorithm.h"
-#include "base/stl_util.h"
 #include "base/strings/strcat.h"
 #include "base/sys_byteorder.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
-#include "net/base/address_list.h"
+#include "base/types/optional_util.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/dns/address_sorter.h"
 #include "net/dns/dns_hosts.h"
+#include "net/dns/dns_names_util.h"
 #include "net/dns/dns_query.h"
 #include "net/dns/dns_session.h"
-#include "net/dns/dns_util.h"
 #include "net/dns/public/dns_over_https_server_config.h"
 #include "net/dns/resolve_context.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/scheme_host_port.h"
 
 namespace net {
@@ -52,9 +52,10 @@ const uint8_t kMalformedResponseHeader[] = {
 // Create a response containing a valid question (as would normally be validated
 // in DnsTransaction) but completely missing a header-declared answer.
 DnsResponse CreateMalformedResponse(std::string hostname, uint16_t type) {
-  std::string dns_name;
-  CHECK(DNSDomainFromDot(hostname, &dns_name));
-  DnsQuery query(0x14 /* id */, dns_name, type);
+  absl::optional<std::vector<uint8_t>> dns_name =
+      dns_names_util::DottedNameToNetwork(hostname);
+  CHECK(dns_name.has_value());
+  DnsQuery query(/*id=*/0x14, dns_name.value(), type);
 
   // Build response to simulate the barebones validation DnsResponse applies to
   // responses received from the network.
@@ -107,11 +108,15 @@ DnsResourceRecord BuildTestCnameRecord(std::string name,
   DCHECK(!name.empty());
   DCHECK(!canonical_name.empty());
 
-  std::string rdata;
-  CHECK(DNSDomainFromDot(canonical_name, &rdata));
+  absl::optional<std::vector<uint8_t>> rdata =
+      dns_names_util::DottedNameToNetwork(canonical_name);
+  CHECK(rdata.has_value());
 
-  return BuildTestDnsRecord(std::move(name), dns_protocol::kTypeCNAME,
-                            std::move(rdata), ttl);
+  return BuildTestDnsRecord(
+      std::move(name), dns_protocol::kTypeCNAME,
+      std::string(reinterpret_cast<char*>(rdata.value().data()),
+                  rdata.value().size()),
+      ttl);
 }
 
 DnsResourceRecord BuildTestAddressRecord(std::string name,
@@ -150,9 +155,11 @@ DnsResourceRecord BuildTestHttpsAliasRecord(std::string name,
 
   std::string rdata("\000\000", 2);
 
-  std::string alias_domain;
-  CHECK(DNSDomainFromDot(alias_name, &alias_domain));
-  rdata.append(alias_domain);
+  absl::optional<std::vector<uint8_t>> alias_domain =
+      dns_names_util::DottedNameToNetwork(alias_name);
+  CHECK(alias_domain.has_value());
+  rdata.append(reinterpret_cast<char*>(alias_domain.value().data()),
+               alias_domain.value().size());
 
   return BuildTestDnsRecord(std::move(name), dns_protocol::kTypeHttps,
                             std::move(rdata), ttl);
@@ -219,17 +226,19 @@ DnsResourceRecord BuildTestHttpsServiceRecord(
   base::WriteBigEndian(num_buffer, priority);
   rdata.append(num_buffer, 2);
 
-  std::string service_domain;
+  absl::optional<std::vector<uint8_t>> service_domain;
   if (service_name == ".") {
     // HTTPS records have special behavior for `service_name == "."` (that it
     // will be treated as if the service name is the same as the record owner
     // name), so allow such inputs despite normally being disallowed for
     // Chrome-encoded DNS names.
-    service_domain = '\x00';
+    service_domain = std::vector<uint8_t>{0};
   } else {
-    CHECK(DNSDomainFromDot(service_name, &service_domain));
+    service_domain = dns_names_util::DottedNameToNetwork(service_name);
   }
-  rdata.append(service_domain);
+  CHECK(service_domain.has_value());
+  rdata.append(reinterpret_cast<char*>(service_domain.value().data()),
+               service_domain.value().size());
 
   for (auto& param : params) {
     base::WriteBigEndian(num_buffer, param.first);
@@ -255,10 +264,11 @@ DnsResponse BuildTestDnsResponse(
     uint8_t rcode) {
   DCHECK(!name.empty());
 
-  std::string dns_name;
-  CHECK(DNSDomainFromDot(name, &dns_name));
+  absl::optional<std::vector<uint8_t>> dns_name =
+      dns_names_util::DottedNameToNetwork(name);
+  CHECK(dns_name.has_value());
 
-  absl::optional<DnsQuery> query(absl::in_place, 0, std::move(dns_name), type);
+  absl::optional<DnsQuery> query(absl::in_place, 0, dns_name.value(), type);
   return DnsResponse(0, true /* is_authoritative */, answers,
                      authority /* authority_records */,
                      additional /* additional_records */, query, rcode,
@@ -291,12 +301,15 @@ DnsResponse BuildTestDnsAddressResponseWithCname(std::string name,
   if (answer_name.empty())
     answer_name = name;
 
-  std::string cname_rdata;
-  CHECK(DNSDomainFromDot(cannonname, &cname_rdata));
+  absl::optional<std::vector<uint8_t>> cname_rdata =
+      dns_names_util::DottedNameToNetwork(cannonname);
+  CHECK(cname_rdata.has_value());
 
   std::vector<DnsResourceRecord> answers = {
-      BuildTestDnsRecord(std::move(answer_name), dns_protocol::kTypeCNAME,
-                         std::move(cname_rdata)),
+      BuildTestDnsRecord(
+          std::move(answer_name), dns_protocol::kTypeCNAME,
+          std::string(reinterpret_cast<char*>(cname_rdata.value().data()),
+                      cname_rdata.value().size())),
       BuildTestAddressRecord(std::move(cannonname), ip)};
 
   return BuildTestDnsResponse(
@@ -327,11 +340,14 @@ DnsResponse BuildTestDnsPointerResponse(std::string name,
 
   std::vector<DnsResourceRecord> answers;
   for (std::string& pointer_name : pointer_names) {
-    std::string rdata;
-    CHECK(DNSDomainFromDot(pointer_name, &rdata));
+    absl::optional<std::vector<uint8_t>> rdata =
+        dns_names_util::DottedNameToNetwork(pointer_name);
+    CHECK(rdata.has_value());
 
-    answers.push_back(BuildTestDnsRecord(answer_name, dns_protocol::kTypePTR,
-                                         std::move(rdata)));
+    answers.push_back(BuildTestDnsRecord(
+        answer_name, dns_protocol::kTypePTR,
+        std::string(reinterpret_cast<char*>(rdata.value().data()),
+                    rdata.value().size())));
   }
 
   return BuildTestDnsResponse(std::move(name), dns_protocol::kTypePTR, answers);
@@ -354,9 +370,12 @@ DnsResponse BuildTestDnsServiceResponse(
     rdata.append(num_buffer, 2);
     base::WriteBigEndian(num_buffer, service_record.port);
     rdata.append(num_buffer, 2);
-    std::string dns_name;
-    CHECK(DNSDomainFromDot(service_record.target, &dns_name));
-    rdata += dns_name;
+
+    absl::optional<std::vector<uint8_t>> dns_name =
+        dns_names_util::DottedNameToNetwork(service_record.target);
+    CHECK(dns_name.has_value());
+    rdata.append(reinterpret_cast<char*>(dns_name.value().data()),
+                 dns_name.value().size());
 
     answers.push_back(BuildTestDnsRecord(answer_name, dns_protocol::kTypeSRV,
                                          std::move(rdata), base::Hours(5)));
@@ -433,10 +452,11 @@ class MockDnsTransactionFactory::MockTransaction
 
           // Generate a DnsResponse when not provided with the rule.
           std::vector<DnsResourceRecord> authority_records;
-          std::string dns_name;
-          CHECK(DNSDomainFromDot(hostname_, &dns_name));
-          absl::optional<DnsQuery> query(absl::in_place, 22 /* id */, dns_name,
-                                         qtype_);
+          absl::optional<std::vector<uint8_t>> dns_name =
+              dns_names_util::DottedNameToNetwork(hostname_);
+          CHECK(dns_name.has_value());
+          absl::optional<DnsQuery> query(absl::in_place, /*id=*/22,
+                                         dns_name.value(), qtype_);
           switch (result->type) {
             case MockDnsClientRule::ResultType::kNoDomain:
             case MockDnsClientRule::ResultType::kEmpty:
@@ -502,7 +522,7 @@ class MockDnsTransactionFactory::MockTransaction
     if (delayed_)
       return;
     // Using WeakPtr to cleanly cancel when transaction is destroyed.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&MockTransaction::Finish, AsWeakPtr()));
   }
 
@@ -519,8 +539,8 @@ class MockDnsTransactionFactory::MockTransaction
     if (result->response) {
       // Copy response in case |result| is destroyed before the transaction
       // completes.
-      auto buffer_copy =
-          base::MakeRefCounted<IOBuffer>(result->response->io_buffer_size());
+      auto buffer_copy = base::MakeRefCounted<IOBufferWithSize>(
+          result->response->io_buffer_size());
       memcpy(buffer_copy->data(), result->response->io_buffer()->data(),
              result->response->io_buffer_size());
       result_.response = DnsResponse(std::move(buffer_copy),
@@ -544,15 +564,14 @@ class MockDnsTransactionFactory::MockTransaction
       case MockDnsClientRule::ResultType::kFail: {
         int error = result_.net_error.value_or(ERR_NAME_NOT_RESOLVED);
         DCHECK_NE(error, OK);
-        std::move(callback_).Run(error,
-                                 base::OptionalOrNullptr(result_.response));
+        std::move(callback_).Run(error, base::OptionalToPtr(result_.response));
         break;
       }
       case MockDnsClientRule::ResultType::kEmpty:
       case MockDnsClientRule::ResultType::kOk:
       case MockDnsClientRule::ResultType::kMalformed:
         DCHECK(!result_.net_error.has_value());
-        std::move(callback_).Run(OK, base::OptionalOrNullptr(result_.response));
+        std::move(callback_).Run(OK, base::OptionalToPtr(result_.response));
         break;
       case MockDnsClientRule::ResultType::kTimeout:
         DCHECK(!result_.net_error.has_value());
@@ -639,7 +658,8 @@ std::unique_ptr<DnsProbeRunner> MockDnsTransactionFactory::CreateDohProbeRunner(
   return std::make_unique<MockDohProbeRunner>(weak_ptr_factory_.GetWeakPtr());
 }
 
-void MockDnsTransactionFactory::AddEDNSOption(const OptRecordRdata::Opt& opt) {}
+void MockDnsTransactionFactory::AddEDNSOption(
+    std::unique_ptr<OptRecordRdata::Opt> opt) {}
 
 SecureDnsMode MockDnsTransactionFactory::GetSecureDnsModeForTest() {
   return SecureDnsMode::kAutomatic;
@@ -743,9 +763,9 @@ const DnsConfig* MockDnsClient::GetEffectiveConfig() const {
   return effective_config_.has_value() ? &effective_config_.value() : nullptr;
 }
 
-base::Value MockDnsClient::GetDnsConfigAsValueForNetLog() const {
+base::Value::Dict MockDnsClient::GetDnsConfigAsValueForNetLog() const {
   // This is just a stub implementation that never produces a meaningful value.
-  return base::Value(base::Value::Dict());
+  return base::Value::Dict();
 }
 
 const DnsHosts* MockDnsClient::GetHosts() const {
@@ -785,7 +805,7 @@ void MockDnsClient::SetTransactionFactoryForTesting(
   NOTREACHED();
 }
 
-absl::optional<AddressList> MockDnsClient::GetPresetAddrs(
+absl::optional<std::vector<IPEndPoint>> MockDnsClient::GetPresetAddrs(
     const url::SchemeHostPort& endpoint) const {
   EXPECT_THAT(preset_endpoint_, testing::Optional(endpoint));
   return preset_addrs_;
@@ -820,7 +840,7 @@ scoped_refptr<DnsSession> MockDnsClient::BuildSession() {
   // Session not expected to be used for anything that will actually require
   // random numbers.
   auto null_random_callback =
-      base::BindRepeating([](int, int) -> int { IMMEDIATE_CRASH(); });
+      base::BindRepeating([](int, int) -> int { base::ImmediateCrash(); });
 
   return base::MakeRefCounted<DnsSession>(
       effective_config_.value(), null_random_callback, nullptr /* net_log */);

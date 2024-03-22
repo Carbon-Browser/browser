@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,9 @@ class SamplingController {
 
   // Returns true iff this controller has all the samples it wants.
   bool OnSamplingEvent();
+
+  // Returns true if any samplers have been added.
+  bool HasSamplers();
 
   // Call once after the last call to OnSamplingEvent.
   // Will notify monitors that a session has ended.

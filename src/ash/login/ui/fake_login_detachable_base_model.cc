@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,9 @@ void FakeLoginDetachableBaseModel::InitLastUsedBases(
 std::string FakeLoginDetachableBaseModel::GetLastUsedBase(
     const AccountId& account_id) {
   auto it = last_used_bases_.find(account_id);
-  if (it == last_used_bases_.end())
+  if (it == last_used_bases_.end()) {
     return "";
+  }
   return it->second;
 }
 
@@ -55,8 +56,9 @@ bool FakeLoginDetachableBaseModel::PairedBaseMatchesLastUsedByUser(
 
 bool FakeLoginDetachableBaseModel::SetPairedBaseAsLastUsedByUser(
     const UserInfo& user_info) {
-  if (current_authenticated_base_.empty())
+  if (current_authenticated_base_.empty()) {
     return false;
+  }
 
   last_used_bases_[user_info.account_id] = current_authenticated_base_;
   return true;

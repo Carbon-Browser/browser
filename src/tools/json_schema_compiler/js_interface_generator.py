@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """
@@ -6,7 +6,7 @@ Generator that produces an interface file for the Closure Compiler.
 Note: This is a work in progress, and generated interfaces may require tweaking.
 """
 
-from code import Code
+from code_util import Code
 from js_util import JsUtil
 from model import *
 from schema_util import *

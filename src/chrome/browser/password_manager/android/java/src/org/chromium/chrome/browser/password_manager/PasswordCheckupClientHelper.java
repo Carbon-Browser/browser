@@ -1,22 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.password_manager;
 
 import android.app.PendingIntent;
 
-import com.google.common.base.Optional;
-
 import org.chromium.base.Callback;
 import org.chromium.chrome.browser.password_manager.CredentialManagerLauncher.CredentialManagerError;
 
-/**
- * Interface for the helper responsible for Password Checkup operations.
- */
+import java.util.Optional;
+
+/** Interface for the helper responsible for Password Checkup operations. */
 public interface PasswordCheckupClientHelper {
-    /**
-     * Serves as a general exception for failed requests to the password checkup backend.
-     */
+    /** Serves as a general exception for failed requests to the password checkup backend. */
     class PasswordCheckBackendException extends Exception {
         public @CredentialManagerError int errorCode;
 
@@ -36,8 +32,11 @@ public interface PasswordCheckupClientHelper {
      * @param successCallback callback called with the intent if the retrieving was successful
      * @param failureCallback callback called if the retrieving failed with the encountered error.
      */
-    void getPasswordCheckupIntent(@PasswordCheckReferrer int referrer, Optional<String> accountName,
-            Callback<PendingIntent> successCallback, Callback<Exception> failureCallback);
+    void getPasswordCheckupIntent(
+            @PasswordCheckReferrer int referrer,
+            Optional<String> accountName,
+            Callback<PendingIntent> successCallback,
+            Callback<Exception> failureCallback);
 
     /**
      * Asynchronously runs Password Checkup and stores the result in PasswordSpecifics then saves it
@@ -49,8 +48,10 @@ public interface PasswordCheckupClientHelper {
      * @param successCallback callback called with Password Check started successful
      * @param failureCallback callback called if encountered an error.
      */
-    void runPasswordCheckupInBackground(@PasswordCheckReferrer int referrer,
-            Optional<String> accountName, Callback<Void> successCallback,
+    void runPasswordCheckupInBackground(
+            @PasswordCheckReferrer int referrer,
+            Optional<String> accountName,
+            Callback<Void> successCallback,
             Callback<Exception> failureCallback);
 
     /**
@@ -62,7 +63,9 @@ public interface PasswordCheckupClientHelper {
      * @param successCallback callback called with the number of breached passwords.
      * @param failureCallback callback called if encountered an error.
      */
-    void getBreachedCredentialsCount(@PasswordCheckReferrer int referrer,
-            Optional<String> accountName, Callback<Integer> successCallback,
+    void getBreachedCredentialsCount(
+            @PasswordCheckReferrer int referrer,
+            Optional<String> accountName,
+            Callback<Integer> successCallback,
             Callback<Exception> failureCallback);
 }

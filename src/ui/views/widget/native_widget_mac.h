@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <memory>
 #include <string>
 
+#include "base/callback_list.h"
 #include "base/memory/raw_ptr.h"
-#include "ui/base/ime/input_method_delegate.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/widget/native_widget_private.h"
@@ -41,7 +42,7 @@ class NativeWidgetMacNSWindowHost;
 
 class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
                                      public FocusChangeListener,
-                                     public ui::internal::InputMethodDelegate {
+                                     public ui::ImeKeyEventDispatcher {
  public:
   explicit NativeWidgetMac(internal::NativeWidgetDelegate* delegate);
   NativeWidgetMac(const NativeWidgetMac&) = delete;
@@ -88,6 +89,13 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
       int32_t command,
       remote_cocoa::mojom::ValidateUserInterfaceItemResult* result) {}
 
+  // Returns in |will_execute| whether or not ExecuteCommand() will execute
+  // the chrome command |command| with |window_open_disposition| and
+  // |is_before_first_responder|.
+  virtual bool WillExecuteCommand(int32_t command,
+                                  WindowOpenDisposition window_open_disposition,
+                                  bool is_before_first_responder);
+
   // Execute the chrome command |command| with |window_open_disposition|. If
   // |is_before_first_responder| then only call ExecuteCommand if the command
   // is reserved and extension shortcut handling is not suspended. Returns in
@@ -105,6 +113,7 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   // internal::NativeWidgetPrivate:
   void InitNativeWidget(Widget::InitParams params) override;
   void OnWidgetInitDone() override;
+  void ReparentNativeViewImpl(gfx::NativeView new_parent) override;
   std::unique_ptr<NonClientFrameView> CreateNonClientFrameView() override;
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
@@ -143,6 +152,7 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   void SetSize(const gfx::Size& size) override;
   void StackAbove(gfx::NativeView native_view) override;
   void StackAtTop() override;
+  bool IsStackedAbove(gfx::NativeView native_view) override;
   void SetShape(std::unique_ptr<Widget::ShapeRects> shape) override;
   void Close() override;
   void CloseNow() override;
@@ -167,7 +177,8 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   void SetCanAppearInExistingFullscreenSpaces(
       bool can_appear_in_existing_fullscreen_spaces) override;
   void SetOpacity(float opacity) override;
-  void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
+  void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                      const gfx::Size& excluded_margin) override;
   void FlashFrame(bool flash_frame) override;
   void RunShellDrag(View* view,
                     std::unique_ptr<ui::OSExchangeData> data,
@@ -198,11 +209,12 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   void OnNativeViewHierarchyWillChange() override;
   void OnNativeViewHierarchyChanged() override;
   std::string GetName() const override;
+  base::WeakPtr<internal::NativeWidgetPrivate> GetWeakPtr() override;
 
   // Calls |callback| with the newly created NativeWidget whenever a
   // NativeWidget is created.
-  static void SetInitNativeWidgetCallback(
-      base::RepeatingCallback<void(NativeWidgetMac*)> callback);
+  static base::CallbackListSubscription RegisterInitNativeWidgetCallback(
+      const base::RepeatingCallback<void(NativeWidgetMac*)>& callback);
 
  protected:
   // The argument to SetBounds is sometimes in screen coordinates and sometimes
@@ -215,11 +227,7 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
       remote_cocoa::mojom::CreateWindowParams* params) {}
 
   // Creates the NSWindow that will be passed to the NativeWidgetNSWindowBridge.
-  // Called by InitNativeWidget. The return value will be autoreleased.
-  // Note that some tests (in particular, views_unittests that interact
-  // with ScopedFakeNSWindowFullscreen, on 10.10) assume that these windows
-  // are autoreleased, and will crash if the window has a more precise
-  // lifetime.
+  // Called by InitNativeWidget.
   virtual NativeWidgetMacNSWindow* CreateNSWindow(
       const remote_cocoa::mojom::CreateWindowParams* params);
 
@@ -256,7 +264,7 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   void OnWillChangeFocus(View* focused_before, View* focused_now) override;
   void OnDidChangeFocus(View* focused_before, View* focused_now) override;
 
-  // ui::internal::InputMethodDelegate:
+  // ui::ImeKeyEventDispatcher:
   ui::EventDispatchDetails DispatchKeyEventPostIME(ui::KeyEvent* key) override;
 
  private:
@@ -264,10 +272,11 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   friend class views::test::NativeWidgetMacTest;
   class ZoomFocusMonitor;
 
-  raw_ptr<internal::NativeWidgetDelegate> delegate_;
+  raw_ptr<internal::NativeWidgetDelegate, DanglingUntriaged> delegate_;
   std::unique_ptr<NativeWidgetMacNSWindowHost> ns_window_host_;
 
-  Widget::InitParams::Ownership ownership_;
+  Widget::InitParams::Ownership ownership_ =
+      Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET;
 
   // Internal name.
   std::string name_;
@@ -283,6 +292,9 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   std::unique_ptr<ZoomFocusMonitor> zoom_focus_monitor_;
   // Held while this widget is active if it's a child.
   std::unique_ptr<Widget::PaintAsActiveLock> parent_key_lock_;
+  // The following factory is used to provide references to the NativeWidgetMac
+  // instance.
+  base::WeakPtrFactory<NativeWidgetMac> weak_factory{this};
 };
 
 }  // namespace views

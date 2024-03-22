@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "ui/display/manager/test/action_logger.h"
 #include "ui/display/manager/test/action_logger_util.h"
@@ -84,6 +85,9 @@ class TestNativeDisplayDelegate : public NativeDisplayDelegate {
       const std::vector<display::DisplayConfigurationParams>& config_requests,
       ConfigureCallback callback,
       uint32_t modeset_flag) override;
+  void SetHdcpKeyProp(int64_t display_id,
+                      const std::string& key,
+                      SetHdcpKeyPropCallback callback) override;
   void GetHDCPState(const DisplaySnapshot& output,
                     GetHDCPStateCallback callback) override;
   void SetHDCPState(const DisplaySnapshot& output,
@@ -92,10 +96,9 @@ class TestNativeDisplayDelegate : public NativeDisplayDelegate {
                     SetHDCPStateCallback callback) override;
   bool SetColorMatrix(int64_t display_id,
                       const std::vector<float>& color_matrix) override;
-  bool SetGammaCorrection(
-      int64_t display_id,
-      const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-      const std::vector<display::GammaRampRGBEntry>& gamma_lut) override;
+  bool SetGammaCorrection(int64_t display_id,
+                          const display::GammaCurve& degamma,
+                          const display::GammaCurve& gamma) override;
   void SetPrivacyScreen(int64_t display_id,
                         bool enabled,
                         SetPrivacyScreenCallback callback) override;
@@ -141,12 +144,14 @@ class TestNativeDisplayDelegate : public NativeDisplayDelegate {
   // If true, the callbacks are posted on the message loop.
   bool run_async_;
 
-  ActionLogger* log_;  // Not owned.
+  raw_ptr<ActionLogger, DanglingUntriaged | ExperimentalAsh>
+      log_;  // Not owned.
 
   base::ObserverList<NativeDisplayObserver>::Unchecked observers_;
 };
 
 }  // namespace test
+
 }  // namespace display
 
 #endif  // UI_DISPLAY_MANAGER_TEST_TEST_NATIVE_DISPLAY_DELEGATE_H_

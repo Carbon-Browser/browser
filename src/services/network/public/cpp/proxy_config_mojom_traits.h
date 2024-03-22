@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ template <>
 struct COMPONENT_EXPORT(NETWORK_CPP_PROXY_CONFIG)
     StructTraits<network::mojom::ProxyListDataView, net::ProxyList> {
  public:
-  static std::vector<std::string> proxies(const net::ProxyList& r);
+  static std::vector<std::vector<std::string>> proxies(const net::ProxyList& r);
   static bool Read(network::mojom::ProxyListDataView data,
                    net::ProxyList* out_proxy_list);
 };
@@ -63,6 +63,10 @@ struct COMPONENT_EXPORT(NETWORK_CPP_PROXY_CONFIG)
   }
   static bool reverse_bypass(const net::ProxyConfig::ProxyRules& r) {
     return r.reverse_bypass;
+  }
+  static bool restrict_to_network_service_proxy_allow_list(
+      const net::ProxyConfig::ProxyRules& r) {
+    return r.restrict_to_network_service_proxy_allow_list;
   }
   static net::ProxyConfig::ProxyRules::Type type(
       const net::ProxyConfig::ProxyRules& r) {

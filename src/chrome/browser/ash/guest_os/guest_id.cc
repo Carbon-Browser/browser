@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 #include <vector>
 
 #include "base/containers/contains.h"
+#include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/ash/guest_os/guest_os_pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/dbus/vm_applications/apps.pb.h"
@@ -18,18 +20,16 @@
 namespace guest_os {
 namespace {
 
-bool MatchContainerDict(const base::Value& dict, const GuestId& container_id) {
-  const std::string* vm_name = dict.FindStringKey(prefs::kVmNameKey);
-  const std::string* container_name =
-      dict.FindStringKey(prefs::kContainerNameKey);
-  return (vm_name && *vm_name == container_id.vm_name) &&
-         (container_name && *container_name == container_id.container_name);
-}
-
 static const base::NoDestructor<std::vector<std::string>> kPropertiesAllowList{{
+    prefs::kContainerCreateOptions,
     prefs::kContainerOsVersionKey,
     prefs::kContainerOsPrettyNameKey,
     prefs::kContainerColorKey,
+    prefs::kTerminalSupportedKey,
+    prefs::kTerminalLabel,
+    prefs::kTerminalPolicyDisabled,
+    prefs::kContainerSharedVmDevicesKey,
+    prefs::kBruschettaConfigId,
 }};
 
 }  // namespace
@@ -38,6 +38,11 @@ GuestId::GuestId(VmType vm_type,
                  std::string vm_name,
                  std::string container_name) noexcept
     : vm_type(vm_type),
+      vm_name(std::move(vm_name)),
+      container_name(std::move(container_name)) {}
+
+GuestId::GuestId(std::string vm_name, std::string container_name) noexcept
+    : vm_type(VmType::UNKNOWN),
       vm_name(std::move(vm_name)),
       container_name(std::move(container_name)) {}
 
@@ -88,26 +93,18 @@ std::ostream& operator<<(std::ostream& ostream, const GuestId& container_id) {
                  << container_id.container_name << "\")";
 }
 
-void RemoveDuplicateContainerEntries(PrefService* prefs) {
-  ListPrefUpdate updater(prefs, prefs::kGuestOsContainers);
-
-  std::set<GuestId> seen_containers;
-  auto& containers = updater->GetList();
-  for (auto it = containers.begin(); it != containers.end();) {
-    GuestId id(*it);
-    if (seen_containers.find(id) == seen_containers.end()) {
-      seen_containers.insert(id);
-      it++;
-    } else {
-      it = containers.erase(it);
-    }
-  }
+bool MatchContainerDict(const base::Value& dict, const GuestId& container_id) {
+  const std::string* vm_name = dict.GetDict().FindString(prefs::kVmNameKey);
+  const std::string* container_name =
+      dict.GetDict().FindString(prefs::kContainerNameKey);
+  return (vm_name && *vm_name == container_id.vm_name) &&
+         (container_name && *container_name == container_id.container_name);
 }
 
 std::vector<GuestId> GetContainers(Profile* profile, VmType vm_type) {
   std::vector<GuestId> result;
   const base::Value::List& container_list =
-      profile->GetPrefs()->GetList(prefs::kGuestOsContainers)->GetList();
+      profile->GetPrefs()->GetList(prefs::kGuestOsContainers);
   for (const auto& container : container_list) {
     guest_os::GuestId id(container);
     if (id.vm_type == vm_type) {
@@ -120,21 +117,17 @@ std::vector<GuestId> GetContainers(Profile* profile, VmType vm_type) {
 void AddContainerToPrefs(Profile* profile,
                          const GuestId& container_id,
                          base::Value::Dict properties) {
-  ListPrefUpdate updater(profile->GetPrefs(), prefs::kGuestOsContainers);
-  auto it = std::find_if(
-      updater->GetListDeprecated().begin(), updater->GetListDeprecated().end(),
-      [&](const auto& dict) { return MatchContainerDict(dict, container_id); });
-  if (it != updater->GetListDeprecated().end()) {
+  ScopedListPrefUpdate updater(profile->GetPrefs(), prefs::kGuestOsContainers);
+  if (base::ranges::any_of(*updater, [&container_id](const auto& dict) {
+        return MatchContainerDict(dict, container_id);
+      })) {
     return;
   }
 
-  base::Value new_container(base::Value::Type::DICTIONARY);
-  new_container.SetKey(prefs::kVmNameKey, base::Value(container_id.vm_name));
-  new_container.SetKey(prefs::kContainerNameKey,
-                       base::Value(container_id.container_name));
-  for (const auto item : properties) {
-    if (base::Contains(*kPropertiesAllowList, item.first)) {
-      new_container.SetKey(std::move(item.first), std::move(item.second));
+  base::Value::Dict new_container = container_id.ToDictValue();
+  for (auto [key, value] : properties) {
+    if (base::Contains(*kPropertiesAllowList, key)) {
+      new_container.Set(key, std::move(value));
     }
   }
   updater->Append(std::move(new_container));
@@ -142,30 +135,32 @@ void AddContainerToPrefs(Profile* profile,
 
 void RemoveContainerFromPrefs(Profile* profile, const GuestId& container_id) {
   auto* pref_service = profile->GetPrefs();
-  ListPrefUpdate updater(pref_service, prefs::kGuestOsContainers);
-  updater->EraseListIter(
-      std::find_if(updater->GetListDeprecated().begin(),
-                   updater->GetListDeprecated().end(), [&](const auto& dict) {
-                     return MatchContainerDict(dict, container_id);
-                   }));
+  ScopedListPrefUpdate updater(pref_service, prefs::kGuestOsContainers);
+  base::Value::List& update_list = updater.Get();
+  auto it = base::ranges::find_if(update_list, [&](const auto& dict) {
+    return MatchContainerDict(dict, container_id);
+  });
+  if (it != update_list.end())
+    update_list.erase(it);
 }
 
 void RemoveVmFromPrefs(Profile* profile, VmType vm_type) {
   auto* pref_service = profile->GetPrefs();
-  ListPrefUpdate updater(pref_service, prefs::kGuestOsContainers);
-  updater->EraseListIter(std::find_if(
-      updater->GetListDeprecated().begin(), updater->GetListDeprecated().end(),
-      [&](const auto& dict) { return VmTypeFromPref(dict) == vm_type; }));
+  ScopedListPrefUpdate updater(pref_service, prefs::kGuestOsContainers);
+  base::Value::List& update_list = updater.Get();
+  auto it = base::ranges::find(update_list, vm_type, &VmTypeFromPref);
+  if (it != update_list.end())
+    update_list.erase(it);
 }
 
 const base::Value* GetContainerPrefValue(Profile* profile,
                                          const GuestId& container_id,
                                          const std::string& key) {
   const base::Value::List& containers =
-      profile->GetPrefs()->GetValueList(prefs::kGuestOsContainers);
+      profile->GetPrefs()->GetList(prefs::kGuestOsContainers);
   for (const auto& dict : containers) {
     if (MatchContainerDict(dict, container_id))
-      return dict.FindKey(key);
+      return dict.GetDict().Find(key);
   }
   return nullptr;
 }
@@ -174,13 +169,39 @@ void UpdateContainerPref(Profile* profile,
                          const GuestId& container_id,
                          const std::string& key,
                          base::Value value) {
-  ListPrefUpdate updater(profile->GetPrefs(), prefs::kGuestOsContainers);
-  auto it = std::find_if(
-      updater->GetListDeprecated().begin(), updater->GetListDeprecated().end(),
-      [&](const auto& dict) { return MatchContainerDict(dict, container_id); });
-  if (it != updater->GetListDeprecated().end()) {
+  ScopedListPrefUpdate updater(profile->GetPrefs(), prefs::kGuestOsContainers);
+  auto it = base::ranges::find_if(*updater, [&](const auto& dict) {
+    return MatchContainerDict(dict, container_id);
+  });
+  if (it != updater->end()) {
     if (base::Contains(*kPropertiesAllowList, key)) {
-      it->SetKey(key, std::move(value));
+      it->GetDict().Set(key, std::move(value));
+    } else {
+      LOG(ERROR) << "Ignoring disallowed property: " << key;
+    }
+  }
+}
+
+void MergeContainerPref(Profile* profile,
+                        const GuestId& container_id,
+                        const std::string& key,
+                        base::Value::Dict dict) {
+  ScopedListPrefUpdate updater(profile->GetPrefs(), prefs::kGuestOsContainers);
+  auto it = base::ranges::find_if(*updater, [&](const auto& dict) {
+    return MatchContainerDict(dict, container_id);
+  });
+  if (it != updater->end()) {
+    if (base::Contains(*kPropertiesAllowList, key)) {
+      base::Value::Dict* old_container_dict = it->GetIfDict();
+      if (old_container_dict) {
+        base::Value::Dict wrapped;
+        wrapped.Set(key, std::move(dict));
+        old_container_dict->Merge(std::move(wrapped));
+      } else {
+        LOG(ERROR) << "Expected a dict for " << container_id;
+      }
+    } else {
+      LOG(ERROR) << "Ignoring disallowed property: " << key;
     }
   }
 }
@@ -192,8 +213,9 @@ VmType VmTypeFromPref(const base::Value& pref) {
 
   // Default is TERMINA(0) if field not present since this field was introduced
   // when only TERMINA was using prefs..
-  auto type = pref.FindIntKey(guest_os::prefs::kVmTypeKey);
+  auto type = pref.GetDict().FindInt(guest_os::prefs::kVmTypeKey);
   if (!type.has_value()) {
+    LOG(WARNING) << "No VM type in pref, defaulting to termina";
     return VmType::TERMINA;
   }
   if (*type < vm_tools::apps::VmType_MIN ||

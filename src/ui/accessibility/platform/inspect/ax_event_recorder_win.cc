@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,16 +27,6 @@
 namespace ui {
 
 namespace {
-
-std::string RoleVariantToString(const base::win::ScopedVariant& role) {
-  if (role.type() == VT_I4) {
-    return base::WideToUTF8(IAccessibleRoleToString(V_I4(role.ptr())));
-  } else if (role.type() == VT_BSTR) {
-    return base::WideToUTF8(
-        std::wstring(V_BSTR(role.ptr()), SysStringLen(V_BSTR(role.ptr()))));
-  }
-  return std::string();
-}
 
 std::string BstrToPrettyUTF8(BSTR bstr) {
   std::wstring wstr(bstr, SysStringLen(bstr));

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,8 @@ class ASH_EXPORT AmbientAccessTokenController {
   // token if it expires.
   void RequestAccessToken(AccessTokenCallback callback,
                           bool may_refresh_token_on_lock = false);
+
+  base::WeakPtr<AmbientAccessTokenController> AsWeakPtr();
 
  private:
   friend class AmbientAshTestBase;

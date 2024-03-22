@@ -1,13 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/sync/sessions/sync_sessions_web_contents_router_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/sessions/sync_sessions_web_contents_router.h"
-
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace sync_sessions {
 
@@ -21,20 +19,28 @@ SyncSessionsWebContentsRouterFactory::GetForProfile(Profile* profile) {
 // static
 SyncSessionsWebContentsRouterFactory*
 SyncSessionsWebContentsRouterFactory::GetInstance() {
-  return base::Singleton<SyncSessionsWebContentsRouterFactory>::get();
+  static base::NoDestructor<SyncSessionsWebContentsRouterFactory> instance;
+  return instance.get();
 }
 
 SyncSessionsWebContentsRouterFactory::SyncSessionsWebContentsRouterFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SyncSessionsWebContentsRouter",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 SyncSessionsWebContentsRouterFactory::~SyncSessionsWebContentsRouterFactory() =
     default;
 
-KeyedService* SyncSessionsWebContentsRouterFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SyncSessionsWebContentsRouterFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SyncSessionsWebContentsRouter(static_cast<Profile*>(context));
+  return std::make_unique<SyncSessionsWebContentsRouter>(
+      static_cast<Profile*>(context));
 }
 
 }  // namespace sync_sessions

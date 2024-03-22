@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
 #include "components/favicon_base/favicon_types.h"
 #include "components/sessions/core/session_id.h"
@@ -36,12 +35,11 @@ class OpenTabsUIDelegate {
   // Delete a foreign session and all its sync data.
   virtual void DeleteForeignSession(const std::string& tag) = 0;
 
-  // Loads all windows for foreign session with session tag |tag|. Caller does
-  // NOT own SessionWindow objects.
-  // Returns true if the foreign session was found, false otherwise.
-  virtual bool GetForeignSession(
-      const std::string& tag,
-      std::vector<const sessions::SessionWindow*>* windows) = 0;
+  // Returns the foreign session windows associated with session tag `tag`.
+  // Returns an empty vector if no windows for `tag`. Caller does NOT own
+  // SessionWindow objects.
+  virtual std::vector<const sessions::SessionWindow*> GetForeignSession(
+      const std::string& tag) = 0;
 
   // Loads all tabs for a foreign session, ignoring window grouping, and
   // ordering by recency (most recent to least recent). Will automatically

@@ -1,19 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/external_protocol/external_protocol_handler.h"
 
 #include <stddef.h>
+
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
-#include "base/stl_util.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_util.h"
+#include "base/types/optional_util.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/external_protocol/auto_launch_protocols_policy_handler.h"
@@ -39,7 +41,9 @@
 #include "chrome/browser/sharing/click_to_call/click_to_call_utils.h"
 #endif
 
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID)
+#include "components/navigation_interception/intercept_navigation_delegate.h"
+#else
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -83,10 +87,6 @@ constexpr const char* kDeniedSchemes[] = {
     "vnd.ms.radio",
 };
 
-constexpr const char* kAllowedSchemes[] = {
-    "mailto", "news", "snews",
-};
-
 void AddMessageToConsole(const content::WeakDocumentPtr& document,
                          blink::mojom::ConsoleMessageLevel level,
                          const std::string& message) {
@@ -94,16 +94,18 @@ void AddMessageToConsole(const content::WeakDocumentPtr& document,
     rfh->AddMessageToConsole(level, message);
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 // Functions enabling unit testing. Using a NULL delegate will use the default
 // behavior; if a delegate is provided it will be used instead.
-scoped_refptr<shell_integration::DefaultProtocolClientWorker> CreateShellWorker(
-    const std::string& protocol,
+scoped_refptr<shell_integration::DefaultSchemeClientWorker> CreateShellWorker(
+    const GURL& url,
     ExternalProtocolHandler::Delegate* delegate) {
   if (delegate)
-    return delegate->CreateShellWorker(protocol);
-  return base::MakeRefCounted<shell_integration::DefaultProtocolClientWorker>(
-      protocol);
+    return delegate->CreateShellWorker(url);
+  return base::MakeRefCounted<shell_integration::DefaultSchemeClientWorker>(
+      url);
 }
+#endif
 
 ExternalProtocolHandler::BlockState GetBlockStateWithDelegate(
     const std::string& scheme,
@@ -116,6 +118,7 @@ ExternalProtocolHandler::BlockState GetBlockStateWithDelegate(
                                                 profile);
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 void RunExternalProtocolDialogWithDelegate(
     const GURL& url,
     content::WebContents* web_contents,
@@ -124,18 +127,20 @@ void RunExternalProtocolDialogWithDelegate(
     bool is_in_fenced_frame_tree,
     const absl::optional<url::Origin>& initiating_origin,
     content::WeakDocumentPtr initiator_document,
+    const std::u16string& program_name,
     ExternalProtocolHandler::Delegate* delegate) {
   DCHECK(web_contents);
   if (delegate) {
     delegate->RunExternalProtocolDialog(url, web_contents, page_transition,
-                                        has_user_gesture, initiating_origin);
+                                        has_user_gesture, initiating_origin,
+                                        program_name);
     return;
   }
 
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
   // If the Shell does not have a registered name for the protocol,
   // attempting to invoke the protocol will fail.
-  if (shell_integration::GetApplicationNameForProtocol(url).empty()) {
+  if (program_name.empty()) {
     AddMessageToConsole(
         initiator_document, blink::mojom::ConsoleMessageLevel::kError,
         "Failed to launch '" + url.possibly_invalid_spec() +
@@ -146,9 +151,10 @@ void RunExternalProtocolDialogWithDelegate(
 
   ExternalProtocolHandler::RunExternalProtocolDialog(
       url, web_contents, page_transition, has_user_gesture,
-      is_in_fenced_frame_tree, initiating_origin,
-      std::move(initiator_document));
+      is_in_fenced_frame_tree, initiating_origin, std::move(initiator_document),
+      program_name);
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 void LaunchUrlWithoutSecurityCheckWithDelegate(
     const GURL& url,
@@ -170,14 +176,17 @@ void LaunchUrlWithoutSecurityCheckWithDelegate(
       "Launched external handler for '" + url.possibly_invalid_spec() + "'.");
 
   platform_util::OpenExternal(
-      Profile::FromBrowserContext(web_contents->GetBrowserContext()), url);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      Profile::FromBrowserContext(web_contents->GetBrowserContext()),
+#endif
+      url);
 
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH)
   // If the protocol navigation occurs in a new tab, close it.
   // Avoid calling CloseContents if the tab is not in this browser's tab strip
   // model; this can happen if the protocol was initiated by something
   // internal to Chrome.
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (browser && web_contents->GetController().IsInitialNavigation() &&
       browser->tab_strip_model()->count() > 1 &&
       browser->tab_strip_model()->GetIndexOfWebContents(web_contents) !=
@@ -187,10 +196,11 @@ void LaunchUrlWithoutSecurityCheckWithDelegate(
 #endif
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 // When we are about to launch a URL with the default OS level application, we
 // check if the external application will be us. If it is we just ignore the
 // request.
-void OnDefaultProtocolClientWorkerFinished(
+void OnDefaultSchemeClientWorkerFinished(
     const GURL& escaped_url,
     content::WebContents::Getter web_contents_getter,
     bool prompt_user,
@@ -200,7 +210,8 @@ void OnDefaultProtocolClientWorkerFinished(
     const absl::optional<url::Origin>& initiating_origin,
     content::WeakDocumentPtr initiator_document,
     ExternalProtocolHandler::Delegate* delegate,
-    shell_integration::DefaultWebClientState state) {
+    shell_integration::DefaultWebClientState state,
+    const std::u16string& program_name) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   if (delegate)
@@ -220,9 +231,9 @@ void OnDefaultProtocolClientWorkerFinished(
                           web_contents->GetBrowserContext(), escaped_url)) {
     // Handle tel links by opening the Click to Call dialog. This will call back
     // into LaunchUrlWithoutSecurityCheck if the user selects a system handler.
-    ClickToCallUiController::ShowDialog(web_contents, initiating_origin,
-                                        std::move(initiator_document),
-                                        escaped_url, chrome_is_default_handler);
+    ClickToCallUiController::ShowDialog(
+        web_contents, initiating_origin, std::move(initiator_document),
+        escaped_url, chrome_is_default_handler, program_name);
     return;
   }
 #endif
@@ -246,13 +257,14 @@ void OnDefaultProtocolClientWorkerFinished(
     RunExternalProtocolDialogWithDelegate(
         escaped_url, web_contents, page_transition, has_user_gesture,
         is_in_fenced_frame_tree, initiating_origin,
-        std::move(initiator_document), delegate);
+        std::move(initiator_document), program_name, delegate);
     return;
   }
 
   LaunchUrlWithoutSecurityCheckWithDelegate(
       escaped_url, web_contents, std::move(initiator_document), delegate);
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 bool IsSchemeOriginPairAllowedByPolicy(const std::string& scheme,
                                        const url::Origin* initiating_origin,
@@ -261,7 +273,7 @@ bool IsSchemeOriginPairAllowedByPolicy(const std::string& scheme,
     return false;
 
   const base::Value::List& exempted_protocols =
-      prefs->GetValueList(prefs::kAutoLaunchProtocolsFromOrigins);
+      prefs->GetList(prefs::kAutoLaunchProtocolsFromOrigins);
 
   const base::Value::List* origin_patterns = nullptr;
   for (const base::Value& entry : exempted_protocols) {
@@ -289,6 +301,8 @@ bool IsSchemeOriginPairAllowedByPolicy(const std::string& scheme,
 
 }  // namespace
 
+const char ExternalProtocolHandler::kBlockStateMetric[] =
+    "BrowserDialogs.ExternalProtocol.BlockState";
 const char ExternalProtocolHandler::kHandleStateMetric[] =
     "BrowserDialogs.ExternalProtocol.HandleState";
 
@@ -322,41 +336,52 @@ ExternalProtocolHandler::BlockState ExternalProtocolHandler::GetBlockState(
   }
 
   // Always block the hard-coded denied schemes.
-  for (size_t i = 0; i < std::size(kDeniedSchemes); ++i) {
-    if (kDeniedSchemes[i] == scheme)
+  for (const auto* candidate : kDeniedSchemes) {
+    if (candidate == scheme) {
+      base::UmaHistogramEnumeration(kBlockStateMetric,
+                                    BlockStateMetric::kDeniedDefault);
       return BLOCK;
+    }
   }
 
-  // Always allow the hard-coded allowed schemes.
-  for (size_t i = 0; i < std::size(kAllowedSchemes); ++i) {
-    if (kAllowedSchemes[i] == scheme)
-      return DONT_BLOCK;
+  // The mailto scheme is allowed explicitly because of its ubiquity on the web
+  // and because every platform provides a default handler for it.
+  if (scheme == "mailto") {
+    base::UmaHistogramEnumeration(kBlockStateMetric,
+                                  BlockStateMetric::kAllowedDefaultMail);
+    return DONT_BLOCK;
   }
 
   PrefService* profile_prefs = profile->GetPrefs();
   if (profile_prefs) {  // May be NULL during testing.
     if (IsSchemeOriginPairAllowedByPolicy(scheme, initiating_origin,
                                           profile_prefs)) {
+      base::UmaHistogramEnumeration(
+          kBlockStateMetric, BlockStateMetric::kAllowedByEnterprisePolicy);
       return DONT_BLOCK;
     }
 
     if (MayRememberAllowDecisionsForThisOrigin(initiating_origin)) {
       // Check if there is a matching {Origin+Protocol} pair exemption:
-      const base::Value* allowed_origin_protocol_pairs =
-          profile_prefs->GetDictionary(
+      const base::Value::Dict& allowed_origin_protocol_pairs =
+          profile_prefs->GetDict(
               prefs::kProtocolHandlerPerOriginAllowedProtocols);
-      const base::Value* allowed_protocols_for_origin =
-          allowed_origin_protocol_pairs->FindDictKey(
+      const base::Value::Dict* allowed_protocols_for_origin =
+          allowed_origin_protocol_pairs.FindDict(
               initiating_origin->Serialize());
       if (allowed_protocols_for_origin) {
         absl::optional<bool> allow =
-            allowed_protocols_for_origin->FindBoolKey(scheme);
-        if (allow.has_value() && allow.value())
+            allowed_protocols_for_origin->FindBool(scheme);
+        if (allow.has_value() && allow.value()) {
+          base::UmaHistogramEnumeration(kBlockStateMetric,
+                                        BlockStateMetric::kAllowedByPreference);
           return DONT_BLOCK;
+        }
       }
     }
   }
 
+  base::UmaHistogramEnumeration(kBlockStateMetric, BlockStateMetric::kPrompt);
   return UNKNOWN;
 }
 
@@ -376,25 +401,25 @@ void ExternalProtocolHandler::SetBlockState(
   if (MayRememberAllowDecisionsForThisOrigin(&initiating_origin)) {
     PrefService* profile_prefs = profile->GetPrefs();
     if (profile_prefs) {  // May be NULL during testing.
-      DictionaryPrefUpdate update_allowed_origin_protocol_pairs(
+      ScopedDictPrefUpdate update_allowed_origin_protocol_pairs(
           profile_prefs, prefs::kProtocolHandlerPerOriginAllowedProtocols);
 
       const std::string serialized_origin = initiating_origin.Serialize();
-      base::Value* allowed_protocols_for_origin =
-          update_allowed_origin_protocol_pairs->FindDictKey(serialized_origin);
+      base::Value::Dict* allowed_protocols_for_origin =
+          update_allowed_origin_protocol_pairs->FindDict(serialized_origin);
       if (!allowed_protocols_for_origin) {
-        update_allowed_origin_protocol_pairs->SetKey(
-            serialized_origin, base::Value(base::Value::Type::DICTIONARY));
+        update_allowed_origin_protocol_pairs->Set(serialized_origin,
+                                                  base::Value::Dict());
         allowed_protocols_for_origin =
-            update_allowed_origin_protocol_pairs->FindDictKey(
-                serialized_origin);
+            update_allowed_origin_protocol_pairs->FindDict(serialized_origin);
       }
       if (state == DONT_BLOCK) {
-        allowed_protocols_for_origin->SetBoolKey(scheme, true);
+        allowed_protocols_for_origin->Set(scheme, true);
       } else {
-        allowed_protocols_for_origin->RemoveKey(scheme);
-        if (allowed_protocols_for_origin->DictEmpty())
-          update_allowed_origin_protocol_pairs->RemoveKey(serialized_origin);
+        allowed_protocols_for_origin->Remove(scheme);
+        if (allowed_protocols_for_origin->empty()) {
+          update_allowed_origin_protocol_pairs->Remove(serialized_origin);
+        }
       }
     }
   }
@@ -413,7 +438,12 @@ void ExternalProtocolHandler::LaunchUrl(
     bool has_user_gesture,
     bool is_in_fenced_frame_tree,
     const absl::optional<url::Origin>& initiating_origin,
-    content::WeakDocumentPtr initiator_document) {
+    content::WeakDocumentPtr initiator_document
+#if BUILDFLAG(IS_ANDROID)
+    ,
+    mojo::PendingRemote<network::mojom::URLLoaderFactory>* out_factory
+#endif
+) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   // Disable anti-flood protection if the user is invoking a bookmark or
@@ -439,7 +469,7 @@ void ExternalProtocolHandler::LaunchUrl(
   if (web_contents)  // Maybe NULL during testing.
     profile = Profile::FromBrowserContext(web_contents->GetBrowserContext());
   BlockState block_state = GetBlockStateWithDelegate(
-      escaped_url.scheme(), base::OptionalOrNullptr(initiating_origin),
+      escaped_url.scheme(), base::OptionalToPtr(initiating_origin),
       g_external_protocol_handler_delegate, profile);
   if (block_state == BLOCK) {
     AddMessageToConsole(
@@ -454,6 +484,22 @@ void ExternalProtocolHandler::LaunchUrl(
 
   g_accept_requests = false;
 
+  // Shell integration code below doesn't work on Android - default handler
+  // checks are instead handled through the InterceptNavigationDelegate. See
+  // ExternalNavigationHandler.java.
+  // The Origin is used for security checks, not for displaying to the user, so
+  // the precursor origin should not be used.
+  // Also, a protocol dialog isn't used on Android.
+#if BUILDFLAG(IS_ANDROID)
+  navigation_interception::InterceptNavigationDelegate* delegate =
+      navigation_interception::InterceptNavigationDelegate::Get(web_contents);
+  if (delegate) {
+    delegate->HandleSubframeExternalProtocol(escaped_url, page_transition,
+                                             has_user_gesture,
+                                             initiating_origin, out_factory);
+  }
+  return;
+#else
   absl::optional<url::Origin> initiating_origin_or_precursor;
   if (initiating_origin) {
     // Transform the initiating origin to its precursor origin if it is
@@ -470,17 +516,20 @@ void ExternalProtocolHandler::LaunchUrl(
 
   // The worker creates tasks with references to itself and puts them into
   // message loops.
-  shell_integration::DefaultWebClientWorkerCallback callback = base::BindOnce(
-      &OnDefaultProtocolClientWorkerFinished, escaped_url,
-      std::move(web_contents_getter), block_state == UNKNOWN, page_transition,
-      has_user_gesture, is_in_fenced_frame_tree, initiating_origin_or_precursor,
-      std::move(initiator_document), g_external_protocol_handler_delegate);
+  shell_integration::DefaultSchemeHandlerWorkerCallback callback =
+      base::BindOnce(&OnDefaultSchemeClientWorkerFinished, escaped_url,
+                     std::move(web_contents_getter), block_state == UNKNOWN,
+                     page_transition, has_user_gesture, is_in_fenced_frame_tree,
+                     initiating_origin_or_precursor,
+                     std::move(initiator_document),
+                     g_external_protocol_handler_delegate);
 
   // Start the check process running. This will send tasks to a worker task
   // runner and when the answer is known will send the result back to
-  // OnDefaultProtocolClientWorkerFinished().
-  CreateShellWorker(escaped_url.scheme(), g_external_protocol_handler_delegate)
-      ->StartCheckIsDefault(std::move(callback));
+  // OnDefaultSchemeClientWorkerFinished().
+  CreateShellWorker(escaped_url, g_external_protocol_handler_delegate)
+      ->StartCheckIsDefaultAndGetDefaultClientName(std::move(callback));
+#endif
 }
 
 // static

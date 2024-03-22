@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace enterprise_connectors {
 // A schema policy handler for Enterprise Connectors policies that only accept
 // cloud sources.
 class EnterpriseConnectorsPolicyHandler
-    : public policy::SchemaValidatingPolicyHandler {
+    : public policy::CloudOnlyPolicyHandler {
  public:
   EnterpriseConnectorsPolicyHandler(const char* policy_name,
                                     const char* pref_path,
@@ -28,8 +28,6 @@ class EnterpriseConnectorsPolicyHandler
   ~EnterpriseConnectorsPolicyHandler() override;
 
   // ConfigurationPolicyHandler methods:
-  bool CheckPolicySettings(const policy::PolicyMap& policies,
-                           policy::PolicyErrorMap* errors) override;
   void ApplyPolicySettings(const policy::PolicyMap& policies,
                            PrefValueMap* prefs) override;
 

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2022 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file.
+<!--
+Copyright 2022 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
 -->
 
 <!-- This manifest is required for tests using
@@ -11,6 +12,7 @@
     package="org.chromium.chrome">
 
   <application android:theme="@style/Theme.AppCompat.Light">
+    <activity android:name="androidx.fragment.app.FragmentActivity" />
     <activity android:name="org.chromium.ui.base.TestActivity"
               android:theme="@style/Theme.Chromium.Activity"/>
     <activity android:name="org.chromium.chrome.browser.ChromeTabbedActivity"
@@ -28,6 +30,9 @@
       </activity>
       <activity android:name="org.chromium.chrome.browser.customtabs.CustomTabActivity"
           android:theme="@style/Theme.Chromium.Activity"
+          android:exported="false" />
+      <activity android:name="org.chromium.chrome.browser.settings.SettingsActivity"
+          android:theme="@style/Theme.Chromium.Settings"
           android:exported="false" />
   </application>
 </manifest>

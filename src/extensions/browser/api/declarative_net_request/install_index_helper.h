@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,17 @@
 #define EXTENSIONS_BROWSER_API_DECLARATIVE_NET_REQUEST_INSTALL_INDEX_HELPER_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
-
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "extensions/browser/api/declarative_net_request/file_backed_ruleset_source.h"
 #include "extensions/browser/api/declarative_net_request/ruleset_install_pref.h"
 #include "extensions/browser/api/declarative_net_request/ruleset_source.h"
 #include "extensions/common/install_warning.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 class Extension;
@@ -34,9 +33,9 @@ class InstallIndexHelper
     Result& operator=(Result&&);
 
     // Non-empty on failure.
-    absl::optional<std::string> error;
+    std::optional<std::string> error;
 
-    // Valid if |error| is absl::nullopt. Clients should not use these fields in
+    // Valid if |error| is std::nullopt. Clients should not use these fields in
     // case of a failure since these may be partially populated.
     std::vector<InstallWarning> warnings;
     std::vector<RulesetInstallPref> ruleset_install_prefs;

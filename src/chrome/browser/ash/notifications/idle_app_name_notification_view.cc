@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <string>
 
 #include "ash/public/cpp/shell_window_ids.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
@@ -15,7 +16,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "extensions/common/extension.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -118,7 +118,6 @@ class IdleAppNameNotificationDelegateView
     // Add the application name label to the message.
     AddLabel(app_name, rb->GetFontList(ui::ResourceBundle::BoldFont),
              error ? kErrorTextColor : kTextColor);
-    spoken_text_ = app_name;
     SetLayoutManager(std::make_unique<views::FillLayout>());
 
     // Set a timer which will trigger to remove the message after the given
@@ -126,6 +125,8 @@ class IdleAppNameNotificationDelegateView
     hide_timer_.Start(FROM_HERE,
                       base::Milliseconds(message_visibility_time_in_ms), this,
                       &IdleAppNameNotificationDelegateView::RemoveMessage);
+
+    SetAccessibilityProperties(ax::mojom::Role::kAlert, app_name);
   }
 
   IdleAppNameNotificationDelegateView(
@@ -148,7 +149,7 @@ class IdleAppNameNotificationDelegateView
     // Inform our owner that we are going away.
     if (owner_) {
       IdleAppNameNotificationView* owner = owner_;
-      owner_ = NULL;
+      owner_ = nullptr;
       owner->CloseMessage();
     }
     // Close the owning widget - if required.
@@ -177,11 +178,6 @@ class IdleAppNameNotificationDelegateView
     views::WidgetDelegateView::OnPaint(canvas);
   }
 
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
-    node_data->SetName(spoken_text_);
-    node_data->role = ax::mojom::Role::kAlert;
-  }
-
   // ImplicitAnimationObserver overrides
   void OnImplicitAnimationsCompleted() override { Close(); }
 
@@ -204,10 +200,7 @@ class IdleAppNameNotificationDelegateView
 
   // The owner of this message which needs to get notified when the message
   // closes.
-  IdleAppNameNotificationView* owner_;
-
-  // The spoken text.
-  std::u16string spoken_text_;
+  raw_ptr<IdleAppNameNotificationView, ExperimentalAsh> owner_;
 
   // True if the widget got already closed.
   bool widget_closed_;
@@ -217,7 +210,7 @@ IdleAppNameNotificationView::IdleAppNameNotificationView(
     int message_visibility_time_in_ms,
     int animation_time_ms,
     const extensions::Extension* extension)
-    : view_(NULL) {
+    : view_(nullptr) {
   ShowMessage(message_visibility_time_in_ms, animation_time_ms, extension);
 }
 
@@ -228,13 +221,13 @@ IdleAppNameNotificationView::~IdleAppNameNotificationView() {
 void IdleAppNameNotificationView::CloseMessage() {
   if (view_) {
     IdleAppNameNotificationDelegateView* view = view_;
-    view_ = NULL;
+    view_ = nullptr;
     view->Close();
   }
 }
 
 bool IdleAppNameNotificationView::IsVisible() {
-  return view_ != NULL;
+  return view_ != nullptr;
 }
 
 std::u16string IdleAppNameNotificationView::GetShownTextForTest() {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "third_party/blink/renderer/core/css/css_to_length_conversion_data.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
+#include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
@@ -101,13 +102,12 @@ TEST(CSSGradientValueTest, RepeatingRadialGradientNan) {
   ASSERT_TRUE(radial);
 
   // This should not fail any DCHECKs.
-  radial->CreateGradient(conversion_data, gfx::SizeF(800, 200), document,
-                         document.ComputedStyleRef());
+  radial->CreateGradient(
+      conversion_data, gfx::SizeF(800, 200), document,
+      document.GetStyleEngine().GetStyleResolver().InitialStyle());
 }
 
 TEST(CSSGradientValueTest, IsUsingContainerRelativeUnits) {
-  ScopedCSSContainerQueriesForTest scoped_feature(true);
-
   EXPECT_TRUE(
       IsUsingContainerRelativeUnits("linear-gradient(green 5cqw, blue 10cqh)"));
   EXPECT_TRUE(

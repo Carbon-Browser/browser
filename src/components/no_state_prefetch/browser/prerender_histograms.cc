@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,16 +73,10 @@ void PrerenderHistograms::RecordFinalStatus(Origin origin,
 
 void PrerenderHistograms::RecordNetworkBytesConsumed(
     Origin origin,
-    int64_t prerender_bytes,
-    int64_t profile_bytes) const {
+    int64_t prerender_bytes) const {
   const int kHistogramMin = 1;
   const int kHistogramMax = 100000000;  // 100M.
   const int kBucketCount = 50;
-
-  UMA_HISTOGRAM_CUSTOM_COUNTS("Prerender.NetworkBytesTotalForProfile",
-                              profile_bytes, kHistogramMin,
-                              1000000000,  // 1G
-                              kBucketCount);
 
   if (prerender_bytes == 0)
     return;

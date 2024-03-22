@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 import logging
@@ -17,31 +17,27 @@ from telemetry.web_perf import timeline_based_measurement
 RENDERING_BENCHMARK_UMA = [
     'Compositing.Display.DrawToSwapUs',
     'CompositorLatency.TotalLatency',
-    'CompositorLatency.Type',
-    'Event.Latency.ScrollBegin.Touch.TimeToScrollUpdateSwapBegin4',
-    'Event.Latency.ScrollUpdate.Touch.TimeToScrollUpdateSwapBegin4',
-    'Event.Latency.ScrollBegin.Wheel.TimeToScrollUpdateSwapBegin4',
-    'Event.Latency.ScrollUpdate.Wheel.TimeToScrollUpdateSwapBegin4',
     'EventLatency.FirstGestureScrollUpdate.Touchscreen.TotalLatency',
     'EventLatency.FirstGestureScrollUpdate.Wheel.TotalLatency',
     'EventLatency.GestureScrollUpdate.Touchscreen.TotalLatency',
     'EventLatency.GestureScrollUpdate.Wheel.TotalLatency',
-    'Graphics.Smoothness.Checkerboarding.AllAnimations',
-    'Graphics.Smoothness.Checkerboarding.AllInteractions',
-    'Graphics.Smoothness.Checkerboarding.AllSequences',
-    'Graphics.Smoothness.Checkerboarding.TouchScroll',
-    'Graphics.Smoothness.Checkerboarding.WheelScroll',
-    'Graphics.Smoothness.Jank.AllAnimations',
-    'Graphics.Smoothness.Jank.AllInteractions',
-    'Graphics.Smoothness.Jank.AllSequences',
-    'Graphics.Smoothness.PercentDroppedFrames2.AllAnimations',
-    'Graphics.Smoothness.PercentDroppedFrames2.AllInteractions',
-    'Graphics.Smoothness.PercentDroppedFrames2.AllSequences',
+    'Graphics.Smoothness.Checkerboarding3.AllAnimations',
+    'Graphics.Smoothness.Checkerboarding3.AllInteractions',
+    'Graphics.Smoothness.Checkerboarding3.AllSequences',
+    'Graphics.Smoothness.Jank3.AllAnimations',
+    'Graphics.Smoothness.Jank3.AllInteractions',
+    'Graphics.Smoothness.Jank3.AllSequences',
     'Graphics.Smoothness.PercentDroppedFrames3.AllAnimations',
     'Graphics.Smoothness.PercentDroppedFrames3.AllInteractions',
     'Graphics.Smoothness.PercentDroppedFrames3.AllSequences',
     'Memory.GPU.PeakMemoryUsage2.Scroll',
     'Memory.GPU.PeakMemoryUsage2.PageLoad',
+    'Event.ScrollJank.DelayedFramesPercentage.FixedWindow',
+    'Event.ScrollJank.DelayedFramesPercentage.PerScroll',
+    'Event.ScrollJank.MissedVsyncsSum.FixedWindow',
+    'Event.ScrollJank.MissedVsyncsSum.PerScroll',
+    'Event.ScrollJank.MissedVsyncsPercentage.FixedWindow',
+    'Event.ScrollJank.MissedVsyncsPercentage.PerScroll',
 ]
 
 
@@ -108,14 +104,13 @@ class _RenderingBenchmark(perf_benchmark.PerfBenchmark):
     return options
 
 
-@benchmark.Info(emails=['behdadb@chromium.org', 'jonross@chromium.org',
-                        'sadrul@chromium.org'],
-                documentation_url='https://bit.ly/rendering-benchmarks',
-                component='Internals>GPU>Metrics')
+@benchmark.Info(
+    emails=['jonross@chromium.org', 'chrome-gpu-metrics@google.com'],
+    documentation_url='https://bit.ly/rendering-benchmarks',
+    component='Internals>GPU>Metrics')
 class RenderingDesktop(_RenderingBenchmark):
-  # TODO(rmhasan): Remove the SUPPORTED_PLATFORMS lists.
-  # SUPPORTED_PLATFORMS is deprecated, please put system specifier tags
-  # from expectations.config in SUPPORTED_PLATFORM_TAGS.
+  # TODO(johnchen): Remove either the SUPPORTED_PLATFORMS or
+  # SUPPORTED_PLATFORMS_TAGS lists. Only one is necessary.
   SUPPORTED_PLATFORMS = [story_module.expectations.ALL_DESKTOP]
   SUPPORTED_PLATFORM_TAGS = [core_platforms.DESKTOP]
   PLATFORM_NAME = platforms.DESKTOP
@@ -134,13 +129,17 @@ class RenderingDesktop(_RenderingBenchmark):
     if sys.platform == 'darwin':
       options.AppendExtraBrowserArgs(
           '--use-gpu-high-thread-priority-for-perf-tests')
+      # Mac bots without a physical display fallbacks to SRGB. This flag forces
+      # them to use a color profile (P3), which matches the usual color profile
+      # on Mac monitors and changes the cost of some overlay operations to match
+      # real conditions more closely.
+      options.AppendExtraBrowserArgs('--force-color-profile=display-p3-d65')
 
 
-@benchmark.Info(emails=[
-    'behdadb@chromium.org', 'jonross@chromium.org', 'sadrul@chromium.org'
-],
-                documentation_url='https://bit.ly/rendering-benchmarks',
-                component='Internals>GPU>Metrics')
+@benchmark.Info(
+    emails=['jonross@chromium.org', 'chrome-gpu-metrics@google.com'],
+    documentation_url='https://bit.ly/rendering-benchmarks',
+    component='Internals>GPU>Metrics')
 class RenderingDesktopNoTracing(RenderingDesktop):
   @classmethod
   def Name(cls):
@@ -157,14 +156,13 @@ class RenderingDesktopNoTracing(RenderingDesktop):
     return options
 
 
-@benchmark.Info(emails=['behdadb@chromium.org', 'jonross@chromium.org',
-                        'sadrul@chromium.org'],
-                documentation_url='https://bit.ly/rendering-benchmarks',
-                component='Internals>GPU>Metrics')
+@benchmark.Info(
+    emails=['jonross@chromium.org', 'chrome-gpu-metrics@google.com'],
+    documentation_url='https://bit.ly/rendering-benchmarks',
+    component='Internals>GPU>Metrics')
 class RenderingMobile(_RenderingBenchmark):
-  # TODO(rmhasan): Remove the SUPPORTED_PLATFORMS lists.
-  # SUPPORTED_PLATFORMS is deprecated, please put system specifier tags
-  # from expectations.config in SUPPORTED_PLATFORM_TAGS.
+  # TODO(johnchen): Remove either the SUPPORTED_PLATFORMS or
+  # SUPPORTED_PLATFORMS_TAGS lists. Only one is necessary.
   SUPPORTED_PLATFORMS = [
       story_module.expectations.ALL_MOBILE,
       story_module.expectations.FUCHSIA_ASTRO,
@@ -198,11 +196,10 @@ class RenderingMobile(_RenderingBenchmark):
     return options
 
 
-@benchmark.Info(emails=[
-    'behdadb@chromium.org', 'jonross@chromium.org', 'sadrul@chromium.org'
-],
-                documentation_url='https://bit.ly/rendering-benchmarks',
-                component='Internals>GPU>Metrics')
+@benchmark.Info(
+    emails=['jonross@chromium.org', 'chrome-gpu-metrics@google.com'],
+    documentation_url='https://bit.ly/rendering-benchmarks',
+    component='Internals>GPU>Metrics')
 class RenderingMobileNoTracing(RenderingMobile):
   @classmethod
   def Name(cls):

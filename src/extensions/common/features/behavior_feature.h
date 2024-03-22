@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,12 @@ namespace extensions {
 // One day we might want to auto generate these.
 namespace behavior_feature {
 
-extern const char kDoNotSync[];
 extern const char kZoomWithoutBubble[];
 extern const char kAllowUsbDevicesPermissionInterfaceClass[];
 extern const char kSigninScreen[];
 extern const char kAllowSecondaryKioskAppEnabledOnLaunch[];
 extern const char kKeyPermissionsInLoginScreen[];
+extern const char kImprivataExtension[];
 extern const char kImprivataInSessionExtension[];
 extern const char kImprivataLoginScreenExtension[];
 

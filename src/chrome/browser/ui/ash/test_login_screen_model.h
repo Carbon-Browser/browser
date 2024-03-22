@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,7 @@ class TestLoginScreenModel : public ash::LoginScreenModel {
                            ash::FingerprintState state) override;
   void NotifyFingerprintAuthResult(const AccountId& account_id,
                                    bool successful) override;
+  void ResetFingerprintUIState(const AccountId& account_id) override;
   void SetSmartLockState(const AccountId& account_id,
                          ash::SmartLockState state) override;
   void NotifySmartLockAuthResult(const AccountId& account_id,
@@ -36,14 +37,14 @@ class TestLoginScreenModel : public ash::LoginScreenModel {
   void DisableAuthForUser(
       const AccountId& account_id,
       const ash::AuthDisabledData& auth_disabled_data) override;
+  void AuthenticationStageChange(ash::AuthenticationStage auth_state) override;
+
   void SetTpmLockedState(const AccountId& user,
                          bool is_locked,
                          base::TimeDelta time_left) override;
   void SetTapToUnlockEnabledForUser(const AccountId& account_id,
                                     bool enabled) override;
   void ForceOnlineSignInForUser(const AccountId& account_id) override;
-  void ShowEasyUnlockIcon(const AccountId& user,
-                          const ash::EasyUnlockIconInfo& icon_info) override;
   void SetChallengeResponseAuthEnabledForUser(const AccountId& user,
                                               bool enabled) override;
 

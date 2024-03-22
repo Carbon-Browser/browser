@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,12 +52,7 @@ bool ShellNaClBrowserDelegate::DialogsAreSuppressed() {
 
 bool ShellNaClBrowserDelegate::GetCacheDirectory(base::FilePath* cache_dir) {
   // Just use the general cache directory, not a subdirectory like Chrome does.
-#if BUILDFLAG(IS_POSIX)
   return base::PathService::Get(base::DIR_CACHE, cache_dir);
-#elif BUILDFLAG(IS_WIN)
-  // TODO(yoz): Find an appropriate persistent directory to use here.
-  return base::PathService::Get(base::DIR_TEMP, cache_dir);
-#endif
 }
 
 bool ShellNaClBrowserDelegate::GetPluginDirectory(base::FilePath* plugin_dir) {

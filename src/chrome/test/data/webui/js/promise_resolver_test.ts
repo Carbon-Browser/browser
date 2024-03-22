@@ -1,27 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
-import {assertFalse, assertThrows, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+import {assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
-suite('PromiseResolverModuleTest', function() {
-  test('members read only', function() {
-    const resolver = new PromiseResolver<void>();
-    assertThrows(function() {
-      // Ignore 'readonly' TS warning to check that a runtime exception is
-      // thrown as well.
-      // @ts-ignore:next-line
-      resolver.promise = Promise.resolve();
-    });
-    assertThrows(function() {
-      resolver.resolve = function() {};
-    });
-    assertThrows(function() {
-      resolver.reject = function() {};
-    });
-  });
-
+suite('PromiseResolverTest', function() {
   test('resolves', function(done) {
     const resolver = new PromiseResolver<void>();
     resolver.promise.then(done);

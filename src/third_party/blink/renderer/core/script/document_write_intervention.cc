@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,15 +64,15 @@ void EmitErrorBlocked(const String& url, Document& document) {
 
 void AddWarningHeader(FetchParameters* params) {
   params->MutableResourceRequest().AddHttpHeaderField(
-      "Intervention",
-      "<https://www.chromestatus.com/feature/5718547946799104>; "
-      "level=\"warning\"");
+      AtomicString("Intervention"),
+      AtomicString("<https://www.chromestatus.com/feature/5718547946799104>; "
+                   "level=\"warning\""));
 }
 
 void AddHeader(FetchParameters* params) {
   params->MutableResourceRequest().AddHttpHeaderField(
-      "Intervention",
-      "<https://www.chromestatus.com/feature/5718547946799104>");
+      AtomicString("Intervention"),
+      AtomicString("<https://www.chromestatus.com/feature/5718547946799104>"));
 }
 
 bool IsConnectionEffectively2G(WebEffectiveConnectionType effective_type) {
@@ -151,7 +151,7 @@ bool MaybeDisallowFetchForDocWrittenScript(FetchParameters& params,
   // getDomainAndRegistry will return the empty string for domains that are
   // already top-level, such as localhost. Thus we only compare domains if we
   // get non-empty results back from getDomainAndRegistry.
-  if (!request_domain.IsEmpty() && !document_domain.IsEmpty() &&
+  if (!request_domain.empty() && !document_domain.empty() &&
       request_domain == document_domain)
     same_site = true;
 
@@ -212,8 +212,15 @@ void PossiblyFetchBlockedDocWriteScript(
       cross_origin, resource->Encoding(), FetchParameters::kIdleLoad));
   params.SetRenderBlockingBehavior(RenderBlockingBehavior::kNonBlocking);
   AddHeader(&params);
+
+  // If streaming is not allowed, no compile hints are needed either.
+  constexpr v8_compile_hints::V8CrowdsourcedCompileHintsProducer*
+      kNoCompileHintsProducer = nullptr;
+  constexpr v8_compile_hints::V8CrowdsourcedCompileHintsConsumer*
+      kNoCompileHintsConsumer = nullptr;
   ScriptResource::Fetch(params, element_document.Fetcher(), nullptr,
-                        ScriptResource::kNoStreaming);
+                        ScriptResource::kNoStreaming, kNoCompileHintsProducer,
+                        kNoCompileHintsConsumer);
 }
 
 }  // namespace blink

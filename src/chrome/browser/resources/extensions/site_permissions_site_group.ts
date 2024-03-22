@@ -1,27 +1,28 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_expand_button/cr_expand_button.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import './strings.m.js';
 import './shared_style.css.js';
 import './shared_vars.css.js';
 import './site_permissions_edit_permissions_dialog.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './site_permissions_site_group.html.js';
 import {SiteSettingsDelegate} from './site_settings_mixin.js';
-import {getFaviconUrl} from './url_util.js';
+import {getFaviconUrl, matchesSubdomains, SUBDOMAIN_SPECIFIER} from './url_util.js';
 
 export interface SitePermissionsSiteGroupElement {
   $: {
     etldOrSite: HTMLElement,
+    etldOrSiteIncludesSubdomains: HTMLElement,
     etldOrSiteSubtext: HTMLElement,
   };
 }
@@ -39,6 +40,7 @@ export class SitePermissionsSiteGroupElement extends PolymerElement {
     return {
       data: Object,
       delegate: Object,
+      extensions: Array,
 
       listIndex: {
         type: Number,
@@ -69,6 +71,7 @@ export class SitePermissionsSiteGroupElement extends PolymerElement {
 
   data: chrome.developerPrivate.SiteGroup;
   delegate: SiteSettingsDelegate;
+  extensions: chrome.developerPrivate.ExtensionInfo[];
   listIndex: number;
   private expanded_: boolean;
   private isExpandable_: boolean;
@@ -92,34 +95,66 @@ export class SitePermissionsSiteGroupElement extends PolymerElement {
   }
 
   private getDisplayUrl_(): string {
-    return this.data.sites.length === 1 ? this.data.sites[0].site :
-                                          this.data.etldPlusOne;
+    return this.data.sites.length === 1 ?
+        this.getSiteWithoutSubdomainSpecifier_(this.data.sites[0].site) :
+        this.data.etldPlusOne;
   }
 
   private getEtldOrSiteSubText_(): string {
-    if (this.data.sites.length === 1) {
-      return this.getSiteSubtext_(this.data.sites[0].siteList);
+    // TODO(crbug.com/1253673): Revisit what to show for this eTLD+1 group's
+    // subtext. For now, default to showing no text if there is any mix of sites
+    // under the group (i.e. user permitted/restricted/specified by extensions).
+    const siteSet = this.data.sites[0].siteSet;
+    const isSiteSetConsistent =
+        this.data.sites.every(site => site.siteSet === siteSet);
+    if (!isSiteSetConsistent) {
+      return '';
     }
 
-    const areAllPermitted = this.data.sites.every(
-        site =>
-            site.siteList === chrome.developerPrivate.UserSiteSet.PERMITTED);
-    if (areAllPermitted) {
+    if (siteSet === chrome.developerPrivate.SiteSet.USER_PERMITTED) {
       return loadTimeData.getString('permittedSites');
     }
 
-    const areAllRestricted = this.data.sites.every(
-        site =>
-            site.siteList === chrome.developerPrivate.UserSiteSet.RESTRICTED);
-    return areAllRestricted ? loadTimeData.getString('restrictedSites') : '';
+    return siteSet === chrome.developerPrivate.SiteSet.USER_RESTRICTED ?
+        loadTimeData.getString('restrictedSites') :
+        this.getExtensionCountText_(this.data.numExtensions);
   }
 
-  private getSiteSubtext_(siteList: chrome.developerPrivate.UserSiteSet):
-      string {
+  private getSiteWithoutSubdomainSpecifier_(site: string): string {
+    return site.replace(SUBDOMAIN_SPECIFIER, '');
+  }
+
+  private etldOrFirstSiteMatchesSubdomains_(): boolean {
+    const site = this.data.sites.length === 1 ? this.data.sites[0].site :
+                                                this.data.etldPlusOne;
+    return matchesSubdomains(site);
+  }
+
+  private matchesSubdomains_(site: string): boolean {
+    return matchesSubdomains(site);
+  }
+
+  private getSiteSubtext_(siteInfo: chrome.developerPrivate.SiteInfo): string {
+    if (siteInfo.numExtensions > 0) {
+      return this.getExtensionCountText_(siteInfo.numExtensions);
+    }
+
     return loadTimeData.getString(
-        siteList === chrome.developerPrivate.UserSiteSet.PERMITTED ?
+        siteInfo.siteSet === chrome.developerPrivate.SiteSet.USER_PERMITTED ?
             'permittedSites' :
             'restrictedSites');
+  }
+
+  // TODO(crbug.com/1402795): Use PluralStringProxyImpl to retrieve the
+  // extension count text. However, this is non-trivial in this component as
+  // some of the strings are nestled inside dom-repeats and plural strings are
+  // currently retrieved asynchronously, and would need to be set directly on a
+  // property when retrieved.
+  private getExtensionCountText_(numExtensions: number): string {
+    return numExtensions === 1 ?
+        loadTimeData.getString('sitePermissionsAllSitesOneExtension') :
+        loadTimeData.getStringF(
+            'sitePermissionsAllSitesExtensionCount', numExtensions);
   }
 
   private onEditSiteClick_() {
@@ -137,6 +172,12 @@ export class SitePermissionsSiteGroupElement extends PolymerElement {
     this.showEditSitePermissionsDialog_ = false;
     assert(this.siteToEdit_, 'Site To Edit');
     this.siteToEdit_ = null;
+  }
+
+  private isUserSpecifiedSite_(siteSet: chrome.developerPrivate.SiteSet):
+      boolean {
+    return siteSet === chrome.developerPrivate.SiteSet.USER_PERMITTED ||
+        siteSet === chrome.developerPrivate.SiteSet.USER_RESTRICTED;
   }
 }
 

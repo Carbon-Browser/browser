@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_TABS_TAB_GROUP_EDITOR_BUBBLE_VIEW_H_
 
 #include <string>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/tabs/tab_group_header.h"
@@ -74,6 +75,8 @@ class TabGroupEditorBubbleView : public views::BubbleDialogDelegateView {
   ~TabGroupEditorBubbleView() override;
 
   void UpdateGroup();
+  const std::u16string GetTextForCloseButton();
+  const std::u16string GetSaveToggleAccessibleName();
 
   void OnSaveTogglePressed();
   void NewTabInGroupPressed();
@@ -129,7 +132,9 @@ class TabGroupEditorBubbleView : public views::BubbleDialogDelegateView {
   raw_ptr<ColorPickerView> color_selector_;
 
   raw_ptr<views::ToggleButton> save_group_toggle_ = nullptr;
-  raw_ptr<views::LabelButton> move_menu_item_ = nullptr;
+  raw_ptr<views::ImageView> save_group_icon_ = nullptr;
+  raw_ptr<views::Label> save_group_label_ = nullptr;
+  std::vector<raw_ptr<views::LabelButton>> menu_items_;
 
   // If true will use the |anchor_rect_| provided in the constructor, otherwise
   // fall back to using the anchor view bounds.

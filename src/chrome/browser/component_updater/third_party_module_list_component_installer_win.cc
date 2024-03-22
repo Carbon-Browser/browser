@@ -1,17 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/component_updater/third_party_module_list_component_installer_win.h"
 
-#include <algorithm>
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
+#include "base/ranges/algorithm.h"
 #include "base/values.h"
 #include "base/version.h"
 #include "chrome/browser/win/conflicts/module_blocklist_cache_util.h"
@@ -34,9 +34,7 @@ base::Version GetComponentVersion(
   DCHECK(component_update_service);
 
   auto components = component_update_service->GetComponents();
-  auto iter = std::find_if(
-      components.begin(), components.end(),
-      [](const auto& component) { return component.id == kComponentId; });
+  auto iter = base::ranges::find(components, kComponentId, &ComponentInfo::id);
   DCHECK(iter != components.end());
 
   return iter->version;
@@ -95,7 +93,7 @@ bool ThirdPartyModuleListComponentInstallerPolicy::RequiresNetworkEncryption()
 
 update_client::CrxInstaller::Result
 ThirdPartyModuleListComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -108,7 +106,7 @@ void ThirdPartyModuleListComponentInstallerPolicy::OnCustomUninstall() {}
 void ThirdPartyModuleListComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   // Forward the notification to the ThirdPartyConflictsManager on the
   // ModuleDatabase task runner. The manager is responsible for the work of
   // actually loading the module list, etc, on background threads.
@@ -118,7 +116,7 @@ void ThirdPartyModuleListComponentInstallerPolicy::ComponentReady(
 }
 
 bool ThirdPartyModuleListComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // This is called during startup and installation before ComponentReady().
   // The component is considered valid if the expected file exists in the

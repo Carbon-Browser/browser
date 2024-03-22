@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,13 +26,13 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.TypedArray;
 import android.os.Build;
 import android.provider.Settings;
 import android.view.ActionMode;
 import android.view.Menu;
 import android.view.ViewGroup;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -45,19 +45,23 @@ import org.robolectric.fakes.RoboMenu;
 import org.robolectric.shadows.ShadowLog;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.FeatureList;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
-import org.chromium.content.browser.ContentClassFactory;
 import org.chromium.content.browser.GestureListenerManagerImpl;
 import org.chromium.content.browser.PopupController;
 import org.chromium.content.browser.RenderCoordinatesImpl;
 import org.chromium.content.browser.RenderWidgetHostViewImpl;
 import org.chromium.content.browser.webcontents.WebContentsImpl;
+import org.chromium.content_public.browser.ContentFeatureList;
 import org.chromium.content_public.browser.RenderFrameHost;
 import org.chromium.content_public.browser.SelectAroundCaretResult;
 import org.chromium.content_public.browser.SelectionClient;
 import org.chromium.content_public.browser.SelectionEventProcessor;
 import org.chromium.content_public.browser.SelectionPopupController;
+import org.chromium.content_public.browser.selection.SelectionDropdownMenuDelegate;
+import org.chromium.content_public.browser.test.util.TestSelectionDropdownMenuDelegate;
+import org.chromium.content_public.common.ContentFeatures;
 import org.chromium.ui.base.MenuSourceType;
 import org.chromium.ui.base.ViewAndroidDelegate;
 import org.chromium.ui.base.WindowAndroid;
@@ -68,15 +72,14 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests for {@link SelectionPopupController}.
- */
+/** Unit tests for {@link SelectionPopupController}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class SelectionPopupControllerTest {
     private SelectionPopupControllerImpl mController;
     private Context mContext;
     private WeakReference<Context> mWeakContext;
+    private TypedArray mTypedArray;
     private WindowAndroid mWindowAndroid;
     private WebContentsImpl mWebContents;
     private ViewGroup mView;
@@ -88,9 +91,9 @@ public class SelectionPopupControllerTest {
     private RenderCoordinatesImpl mRenderCoordinates;
     private ContentResolver mContentResolver;
     private PopupController mPopupController;
-    private ContentClassFactory mOriginalContentClassFactory;
     private GestureListenerManagerImpl mGestureStateListenerManager;
     private RenderFrameHost mRenderFrameHost;
+    private FeatureList.TestValues mTestValues;
 
     private static final String MOUNTAIN_FULL = "585 Franklin Street, Mountain View, CA 94041";
     private static final String MOUNTAIN = "Mountain";
@@ -152,6 +155,7 @@ public class SelectionPopupControllerTest {
 
         mContext = Mockito.mock(Context.class);
         mWeakContext = new WeakReference<Context>(mContext);
+        mTypedArray = Mockito.mock(TypedArray.class);
         mWindowAndroid = Mockito.mock(WindowAndroid.class);
         mWebContents = Mockito.mock(WebContentsImpl.class);
         mView = Mockito.mock(ViewGroup.class);
@@ -165,12 +169,12 @@ public class SelectionPopupControllerTest {
         mPopupController = Mockito.mock(PopupController.class);
         mGestureStateListenerManager = Mockito.mock(GestureListenerManagerImpl.class);
 
-        mOriginalContentClassFactory = ContentClassFactory.get();
-        ContentClassFactory mockContentClassFactory = Mockito.mock(ContentClassFactory.class);
-        when(mockContentClassFactory.createHandleObserver(
-                     Mockito.any(SelectionPopupControllerImpl.ReadbackViewCallback.class)))
-                .thenReturn(null);
-        ContentClassFactory.set(mockContentClassFactory);
+        mTestValues = new FeatureList.TestValues();
+        setDropdownMenuFeatureEnabled(false);
+        mTestValues.addFeatureFlagOverride(ContentFeatures.SELECTION_MENU_ITEM_MODIFICATION, true);
+        FeatureList.setTestValues(mTestValues);
+
+        SelectionPopupControllerImpl.setDisableMagnifierForTesting(true);
 
         mContentResolver = RuntimeEnvironment.application.getContentResolver();
         // To let isDeviceProvisioned() call in showSelectionMenu() return true.
@@ -178,6 +182,7 @@ public class SelectionPopupControllerTest {
 
         when(mContext.getPackageManager()).thenReturn(mPackageManager);
         when(mContext.getContentResolver()).thenReturn(mContentResolver);
+        when(mContext.obtainStyledAttributes(Mockito.any(int[].class))).thenReturn(mTypedArray);
         when(mWebContents.getRenderWidgetHostView()).thenReturn(mRenderWidgetHostViewImpl);
         when(mWebContents.getRenderCoordinates()).thenReturn(mRenderCoordinates);
         when(mRenderCoordinates.getDeviceScaleFactor()).thenReturn(1.f);
@@ -189,11 +194,6 @@ public class SelectionPopupControllerTest {
 
         mController = SelectionPopupControllerImpl.createForTesting(mWebContents, mPopupController);
         when(mController.getGestureListenerManager()).thenReturn(mGestureStateListenerManager);
-    }
-
-    @After
-    public void tearDown() {
-        ContentClassFactory.set(mOriginalContentClassFactory);
     }
 
     @Test
@@ -209,11 +209,23 @@ public class SelectionPopupControllerTest {
         mController.setSelectionClient(client);
 
         // Long press triggered showSelectionMenu() call.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE, /* selectionOffset = */ 5,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE,
+                /* selectionOffset= */ 5,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
 
         // adjustSelectionByCharacterOffset() should be called.
         order.verify(mWebContents)
@@ -223,11 +235,23 @@ public class SelectionPopupControllerTest {
         when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // Call showSelectionMenu again, which is adjustSelectionByCharacterOffset triggered.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE_FULL, /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION,
+                mRenderFrameHost);
 
         order.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
 
@@ -253,11 +277,23 @@ public class SelectionPopupControllerTest {
         mController.setSelectionClient(client);
 
         // Long press triggered showSelectionMenu() call.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE, /* selectionOffset = */ 5,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE,
+                /* selectionOffset= */ 5,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
 
         // adjustSelectionByCharacterOffset() should be called.
         order.verify(mWebContents)
@@ -266,11 +302,23 @@ public class SelectionPopupControllerTest {
 
         // Another long press triggered showSelectionMenu() call.
         client.setResult(newResult);
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, MOUNTAIN, /* selectionOffset = */ 21,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                MOUNTAIN,
+                /* selectionOffset= */ 21,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
         order.verify(mWebContents)
                 .adjustSelectionByCharacterOffset(newResult.startAdjust, newResult.endAdjust, true);
         assertFalse(mController.isActionModeValid());
@@ -278,11 +326,23 @@ public class SelectionPopupControllerTest {
         when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // First adjustSelectionByCharacterOffset() triggered.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE_FULL, /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION,
+                mRenderFrameHost);
 
         SelectionClient.Result returnResult = mController.getClassificationResult();
         assertEquals(-21, returnResult.startAdjust);
@@ -290,11 +350,23 @@ public class SelectionPopupControllerTest {
         assertEquals("Maps", returnResult.label);
 
         // Second adjustSelectionByCharacterOffset() triggered.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, MOUNTAIN_FULL, /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                MOUNTAIN_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION,
+                mRenderFrameHost);
 
         order.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
         assertTrue(mController.isActionModeValid());
@@ -312,18 +384,42 @@ public class SelectionPopupControllerTest {
         mController.setSelectionClient(client);
 
         // Long press triggered showSelectionMenu() call.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE, /* selectionOffset = */ 5,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE,
+                /* selectionOffset= */ 5,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
 
         // Another long press triggered showSelectionMenu() call.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, MOUNTAIN, /* selectionOffset = */ 21,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                MOUNTAIN,
+                /* selectionOffset= */ 21,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
 
         // Then we done with the first classification.
         mController.getResultCallback().onClassified(result);
@@ -341,11 +437,23 @@ public class SelectionPopupControllerTest {
         when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // First adjustSelectionByCharacterOffset() triggered.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE_FULL, /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION,
+                mRenderFrameHost);
 
         SelectionClient.Result returnResult = mController.getClassificationResult();
         assertEquals(-21, returnResult.startAdjust);
@@ -353,11 +461,23 @@ public class SelectionPopupControllerTest {
         assertEquals("Maps", returnResult.label);
 
         // Second adjustSelectionByCharacterOffset() triggered.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, MOUNTAIN_FULL, /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                MOUNTAIN_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION,
+                mRenderFrameHost);
 
         order.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
         assertTrue(mController.isActionModeValid());
@@ -377,11 +497,23 @@ public class SelectionPopupControllerTest {
         mController.setSelectionClient(client);
 
         // Long press triggered showSelectionMenu() call.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE, /* selectionOffset = */ 5,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE,
+                /* selectionOffset= */ 5,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
 
         when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
@@ -390,30 +522,55 @@ public class SelectionPopupControllerTest {
         mController.getResultCallback().onClassified(result);
 
         // Call showSelectionMenu again, which is adjustSelectionByCharacterOffset triggered.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE_FULL, /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_ADJUST_SELECTION,
+                mRenderFrameHost);
 
-        order.verify(mLogger).onSelectionModified(
-                eq(AMPHITHEATRE_FULL), eq(0), isA(SelectionClient.Result.class));
+        order.verify(mLogger)
+                .onSelectionModified(
+                        eq(AMPHITHEATRE_FULL), eq(0), isA(SelectionClient.Result.class));
 
         // Dragging selection handle, select "1600 Amphitheatre".
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE_FULL.substring(0, 17),
-                /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_TOUCH_HANDLE, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL.substring(0, 17),
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_TOUCH_HANDLE,
+                mRenderFrameHost);
 
         order.verify(mLogger, never())
                 .onSelectionModified(anyString(), anyInt(), any(SelectionClient.Result.class));
 
         mController.getResultCallback().onClassified(resultForNoChange());
 
-        order.verify(mLogger).onSelectionModified(
-                eq("1600 Amphitheatre"), eq(0), isA(SelectionClient.Result.class));
+        order.verify(mLogger)
+                .onSelectionModified(
+                        eq("1600 Amphitheatre"), eq(0), isA(SelectionClient.Result.class));
     }
 
     @Test
@@ -430,11 +587,23 @@ public class SelectionPopupControllerTest {
         mController.setSelectionClient(client);
 
         // Long press triggered showSelectionMenu() call.
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE, /* selectionOffset = */ 5,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE,
+                /* selectionOffset= */ 5,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
 
         when(mView.startActionMode(any(ActionMode.Callback2.class), anyInt()))
                 .thenReturn(mActionMode);
@@ -442,22 +611,34 @@ public class SelectionPopupControllerTest {
 
         // No expansion.
         mController.getResultCallback().onClassified(result);
-        order.verify(mLogger).onSelectionModified(
-                eq(AMPHITHEATRE), eq(5), any(SelectionClient.Result.class));
+        order.verify(mLogger)
+                .onSelectionModified(eq(AMPHITHEATRE), eq(5), any(SelectionClient.Result.class));
 
         // Dragging selection handle, select "1600 Amphitheatre".
-        mController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE_FULL.substring(0, 17),
-                /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_TOUCH_HANDLE, mRenderFrameHost);
+        mController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL.substring(0, 17),
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_TOUCH_HANDLE,
+                mRenderFrameHost);
 
         order.verify(mLogger, never())
                 .onSelectionModified(anyString(), anyInt(), any(SelectionClient.Result.class));
         mController.getResultCallback().onClassified(resultForNoChange());
-        order.verify(mLogger).onSelectionModified(
-                eq("1600 Amphitheatre"), eq(0), isA(SelectionClient.Result.class));
+        order.verify(mLogger)
+                .onSelectionModified(
+                        eq("1600 Amphitheatre"), eq(0), isA(SelectionClient.Result.class));
     }
 
     @Test
@@ -481,51 +662,49 @@ public class SelectionPopupControllerTest {
     }
 
     @Test
-    @Feature({"TextInput", "HandleObserver"})
+    @Feature({"TextInput", "Magnifier"})
     public void testHandleObserverSelectionHandle() {
-        SelectionInsertionHandleObserver handleObserver =
-                Mockito.mock(SelectionInsertionHandleObserver.class);
-        InOrder order = inOrder(handleObserver);
-        mController.setSelectionInsertionHandleObserver(handleObserver);
+        MagnifierAnimator magnifierAnimator = Mockito.mock(MagnifierAnimator.class);
+        InOrder order = inOrder(magnifierAnimator);
+        mController.setMagnifierAnimator(magnifierAnimator);
 
         // Selection handles shown.
         mController.onSelectionEvent(SelectionEventType.SELECTION_HANDLES_SHOWN, 0, 0, 1, 1);
 
         // Selection handles drag started.
         mController.onDragUpdate(TouchSelectionDraggableType.TOUCH_HANDLE, 0.f, 0.f);
-        order.verify(handleObserver).handleDragStartedOrMoved(0.f, 0.f);
+        order.verify(magnifierAnimator).handleDragStartedOrMoved(0.f, 0.f);
 
         // Moving.
         mController.onDragUpdate(TouchSelectionDraggableType.TOUCH_HANDLE, 5.f, 5.f);
-        order.verify(handleObserver).handleDragStartedOrMoved(5.f, 5.f);
+        order.verify(magnifierAnimator).handleDragStartedOrMoved(5.f, 5.f);
 
         // Selection handle drag stopped.
         mController.onSelectionEvent(SelectionEventType.SELECTION_HANDLE_DRAG_STOPPED, 0, 0, 1, 1);
-        order.verify(handleObserver).handleDragStopped();
+        order.verify(magnifierAnimator).handleDragStopped();
     }
 
     @Test
-    @Feature({"TextInput", "HandleObserver"})
+    @Feature({"TextInput", "Magnifier"})
     public void testHandleObserverInsertionHandle() {
-        SelectionInsertionHandleObserver handleObserver =
-                Mockito.mock(SelectionInsertionHandleObserver.class);
-        InOrder order = inOrder(handleObserver);
-        mController.setSelectionInsertionHandleObserver(handleObserver);
+        MagnifierAnimator magnifierAnimator = Mockito.mock(MagnifierAnimator.class);
+        InOrder order = inOrder(magnifierAnimator);
+        mController.setMagnifierAnimator(magnifierAnimator);
 
         // Insertion handle shown.
         mController.onSelectionEvent(SelectionEventType.INSERTION_HANDLE_SHOWN, 0, 0, 1, 1);
 
         // Insertion handle drag started.
         mController.onDragUpdate(TouchSelectionDraggableType.TOUCH_HANDLE, 0.f, 0.f);
-        order.verify(handleObserver).handleDragStartedOrMoved(0.f, 0.f);
+        order.verify(magnifierAnimator).handleDragStartedOrMoved(0.f, 0.f);
 
         // Moving.
         mController.onDragUpdate(TouchSelectionDraggableType.TOUCH_HANDLE, 5.f, 5.f);
-        order.verify(handleObserver).handleDragStartedOrMoved(5.f, 5.f);
+        order.verify(magnifierAnimator).handleDragStartedOrMoved(5.f, 5.f);
 
         // Insertion handle drag stopped.
         mController.onSelectionEvent(SelectionEventType.INSERTION_HANDLE_DRAG_STOPPED, 0, 0, 1, 1);
-        order.verify(handleObserver).handleDragStopped();
+        order.verify(magnifierAnimator).handleDragStopped();
     }
 
     @Test
@@ -586,11 +765,23 @@ public class SelectionPopupControllerTest {
         when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // Long press triggered showSelectionMenu() call.
-        spyController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE_FULL, /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        spyController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
 
         Mockito.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
         // showSelectionMenu() will invoke the first call to finishActionMode() in the
@@ -623,11 +814,23 @@ public class SelectionPopupControllerTest {
         when(mView.startActionMode(any(), anyInt())).thenReturn(mActionMode);
 
         // Long press triggered showSelectionMenu() call.
-        spyController.showSelectionMenu(0, 0, 0, 0, 0, /* isEditable = */ true,
-                /* isPasswordType = */ false, AMPHITHEATRE_FULL, /* selectionOffset = */ 0,
-                /* canSelectAll = */ true,
-                /* canRichlyEdit = */ true, /* shouldSuggest = */ true,
-                MenuSourceType.MENU_SOURCE_LONG_PRESS, mRenderFrameHost);
+        spyController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
 
         Mockito.verify(mView).startActionMode(isNull(), eq(ActionMode.TYPE_FLOATING));
         // showSelectionMenu() will invoke the first call to finishActionMode() in the
@@ -668,7 +871,7 @@ public class SelectionPopupControllerTest {
 
         Menu menu1 = new RoboMenu();
         assertEquals(0, menu1.size());
-        spyController.initializeTextProcessingMenu(menu1);
+        spyController.initializeTextProcessingMenuForTesting(mActionMode, menu1);
         assertEquals(0, menu1.size());
 
         // test activityInfo exported=true
@@ -679,7 +882,7 @@ public class SelectionPopupControllerTest {
 
         Menu menu2 = new RoboMenu();
         assertEquals(0, menu2.size());
-        spyController.initializeTextProcessingMenu(menu2);
+        spyController.initializeTextProcessingMenuForTesting(mActionMode, menu2);
         assertEquals(1, menu2.size());
 
         // test null activityInfo
@@ -691,8 +894,113 @@ public class SelectionPopupControllerTest {
 
         Menu menu3 = new RoboMenu();
         assertEquals(0, menu3.size());
-        spyController.initializeTextProcessingMenu(menu3);
+        spyController.initializeTextProcessingMenuForTesting(mActionMode, menu3);
         assertEquals(0, menu3.size());
+    }
+
+    @Test
+    @Feature({"TextInput"})
+    public void testShowDropdownMenuWhenMenuSourceIsMouse() {
+        setDropdownMenuFeatureEnabled(true);
+        SelectionPopupControllerImpl spyController = Mockito.spy(mController);
+        SelectionDropdownMenuDelegate dropdownMenuDelegate =
+                Mockito.spy(new TestSelectionDropdownMenuDelegate());
+        spyController.setDropdownMenuDelegate(dropdownMenuDelegate);
+        spyController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_MOUSE,
+                mRenderFrameHost);
+        Mockito.verify(spyController, times(1)).createAndShowDropdownMenu();
+        Mockito.verify(spyController, times(1)).destroyActionModeAndKeepSelection();
+        Mockito.verify(spyController, times(1)).destroyPastePopup();
+        Mockito.verify(dropdownMenuDelegate, times(1)).dismiss();
+        Mockito.verify(dropdownMenuDelegate, times(1))
+                .show(any(), any(), any(), any(), anyInt(), anyInt());
+        Mockito.verify(spyController, never()).createAndShowPastePopup();
+        Mockito.verify(spyController, never()).showActionModeOrClearOnFailure();
+    }
+
+    @Test
+    @Feature({"TextInput"})
+    public void testShowPasteMenuWhenSourceIsLongPressWithNoSelection() {
+        // Needed so createAndShowPastePopup() won't return early.
+        when(mView.getParent()).thenReturn(Mockito.mock(ViewGroup.class));
+        setDropdownMenuFeatureEnabled(true);
+        SelectionPopupControllerImpl spyController = Mockito.spy(mController);
+        SelectionDropdownMenuDelegate dropdownMenuDelegate =
+                Mockito.spy(new TestSelectionDropdownMenuDelegate());
+        spyController.setDropdownMenuDelegate(dropdownMenuDelegate);
+        spyController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                "",
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
+        Mockito.verify(spyController, times(1)).createAndShowPastePopup();
+        Mockito.verify(dropdownMenuDelegate, times(1)).dismiss();
+        Mockito.verify(spyController, never()).createAndShowDropdownMenu();
+        Mockito.verify(spyController, never()).showActionModeOrClearOnFailure();
+    }
+
+    @Test
+    @Feature({"TextInput"})
+    public void testShowSelectionActionMenuWhenSourceIsLongPressWithSelection() {
+        setDropdownMenuFeatureEnabled(true);
+        SelectionPopupControllerImpl spyController = Mockito.spy(mController);
+        SelectionDropdownMenuDelegate dropdownMenuDelegate =
+                Mockito.spy(new TestSelectionDropdownMenuDelegate());
+        spyController.setDropdownMenuDelegate(dropdownMenuDelegate);
+        spyController.showSelectionMenu(
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                /* isEditable= */ true,
+                /* isPasswordType= */ false,
+                AMPHITHEATRE_FULL,
+                /* selectionOffset= */ 0,
+                /* canSelectAll= */ true,
+                /* canRichlyEdit= */ true,
+                /* shouldSuggest= */ true,
+                MenuSourceType.MENU_SOURCE_LONG_PRESS,
+                mRenderFrameHost);
+        Mockito.verify(spyController, times(1)).showActionModeOrClearOnFailure();
+        Mockito.verify(dropdownMenuDelegate, times(1)).dismiss();
+        Mockito.verify(spyController, never()).createAndShowPastePopup();
+        Mockito.verify(spyController, never()).createAndShowDropdownMenu();
+    }
+
+    private void setDropdownMenuFeatureEnabled(boolean enabled) {
+        mTestValues.addFeatureFlagOverride(
+                ContentFeatureList.MOUSE_AND_TRACKPAD_DROPDOWN_MENU, enabled);
+        SelectionPopupControllerImpl.setEnableTabletUiModeForTesting(enabled);
     }
 
     private ResolveInfo createResolveInfoWithActivityInfo(String activityName, boolean exported) {
@@ -705,12 +1013,13 @@ public class SelectionPopupControllerTest {
         activityInfo.applicationInfo = new ApplicationInfo();
         activityInfo.applicationInfo.flags = ApplicationInfo.FLAG_SYSTEM;
 
-        ResolveInfo resolveInfo = new ResolveInfo() {
-            @Override
-            public CharSequence loadLabel(PackageManager pm) {
-                return "TEST_LABEL";
-            }
-        };
+        ResolveInfo resolveInfo =
+                new ResolveInfo() {
+                    @Override
+                    public CharSequence loadLabel(PackageManager pm) {
+                        return "TEST_LABEL";
+                    }
+                };
         resolveInfo.activityInfo = activityInfo;
         return resolveInfo;
     }

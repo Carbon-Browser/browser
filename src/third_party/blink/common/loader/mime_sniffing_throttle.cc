@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/public/common/loader/mime_sniffing_throttle.h"
 
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/mime_sniffer.h"
@@ -60,7 +61,8 @@ void MimeSniffingThrottle::WillProcessResponse(
     std::tie(new_remote, new_receiver, mime_sniffing_loader) =
         MimeSniffingURLLoader::CreateLoader(
             weak_factory_.GetWeakPtr(), response_url, response_head->Clone(),
-            task_runner_ ? task_runner_ : base::ThreadTaskRunnerHandle::Get());
+            task_runner_ ? task_runner_
+                         : base::SingleThreadTaskRunner::GetCurrentDefault());
     delegate_->InterceptResponse(std::move(new_remote), std::move(new_receiver),
                                  &source_loader, &source_client_receiver,
                                  &body);

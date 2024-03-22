@@ -1,10 +1,11 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_WEBUI_NEW_TAB_PAGE_THIRD_PARTY_NEW_TAB_PAGE_THIRD_PARTY_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_NEW_TAB_PAGE_THIRD_PARTY_NEW_TAB_PAGE_THIRD_PARTY_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/themes/theme_service_observer.h"
 #include "chrome/browser/ui/webui/new_tab_page_third_party/new_tab_page_third_party.mojom.h"
 #include "content/public/browser/web_contents.h"
@@ -52,8 +53,8 @@ class NewTabPageThirdPartyHandler
 
   void NotifyAboutTheme();
 
-  Profile* profile_;
-  content::WebContents* web_contents_;
+  raw_ptr<Profile> profile_;
+  raw_ptr<content::WebContents> web_contents_;
 
   // These are located at the end of the list of member variables to ensure the
   // WebUI page is disconnected before other members are destroyed.

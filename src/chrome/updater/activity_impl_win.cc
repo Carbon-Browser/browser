@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,29 +6,24 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/function_ref.h"
 #include "base/logging.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/win/registry.h"
 #include "base/win/windows_types.h"
 #include "chrome/updater/updater_scope.h"
+#include "chrome/updater/util/win_util.h"
 #include "chrome/updater/win/user_info.h"
 #include "chrome/updater/win/win_constants.h"
-#include "chrome/updater/win/win_util.h"
 
 namespace updater {
 namespace {
 
 using ProcessActiveBitUnderKeyCallback =
-    base::RepeatingCallback<bool(HKEY, const std::wstring&)>;
+    base::FunctionRef<bool(HKEY, const std::wstring&)>;
 
 constexpr wchar_t kDidRun[] = L"dr";
-
-std::wstring GetAppClientStateKey(const std::string& id) {
-  return base::StrCat({CLIENT_STATE_KEY, base::ASCIIToWide(id)});
-}
 
 bool GetActiveBitUnderKey(HKEY rootkey, const std::wstring& key_name) {
   base::win::RegKey key;
@@ -72,7 +67,7 @@ bool ProcessActiveBit(ProcessActiveBitUnderKeyCallback callback,
                       const std::string& id) {
   const std::wstring rootkey_suffix =
       (rootkey == HKEY_USERS) ? base::StrCat({sid, L"\\"}) : L"";
-  const bool process_success = callback.Run(
+  const bool process_success = callback(
       rootkey, base::StrCat({rootkey_suffix, GetAppClientStateKey(id)}));
 
   // For Google Toolbar and similar apps that run at low integrity, we need to
@@ -85,7 +80,7 @@ bool ProcessActiveBit(ProcessActiveBitUnderKeyCallback callback,
       base::StrCat({rootkey_suffix, USER_REG_VISTA_LOW_INTEGRITY_HKCU, L"\\",
                     sid, L"\\", GetAppClientStateKey(id)});
 
-  return callback.Run(rootkey, low_integrity_key_name) || process_success;
+  return callback(rootkey, low_integrity_key_name) || process_success;
 }
 
 bool ProcessUserActiveBit(ProcessActiveBitUnderKeyCallback callback,
@@ -116,22 +111,22 @@ bool ProcessSystemActiveBit(ProcessActiveBitUnderKeyCallback callback,
 
 bool GetUserActiveBit(const std::string& id) {
   // Read the active bit under HKCU.
-  return ProcessUserActiveBit(base::BindRepeating(&GetActiveBitUnderKey), id);
+  return ProcessUserActiveBit(&GetActiveBitUnderKey, id);
 }
 
 void ClearUserActiveBit(const std::string& id) {
   // Clear the active bit under HKCU.
-  ProcessUserActiveBit(base::BindRepeating(&ClearActiveBitUnderKey), id);
+  ProcessUserActiveBit(&ClearActiveBitUnderKey, id);
 }
 
 bool GetSystemActiveBit(const std::string& id) {
   // Read the active bit under each user in HKU\<sid>.
-  return ProcessSystemActiveBit(base::BindRepeating(&GetActiveBitUnderKey), id);
+  return ProcessSystemActiveBit(&GetActiveBitUnderKey, id);
 }
 
 void ClearSystemActiveBit(const std::string& id) {
   // Clear the active bit under each user in HKU\<sid>.
-  ProcessSystemActiveBit(base::BindRepeating(&ClearActiveBitUnderKey), id);
+  ProcessSystemActiveBit(&ClearActiveBitUnderKey, id);
 }
 
 }  // namespace
@@ -139,9 +134,7 @@ void ClearSystemActiveBit(const std::string& id) {
 bool GetActiveBit(UpdaterScope scope, const std::string& id) {
   switch (scope) {
     case UpdaterScope::kUser:
-      // TODO(crbug/1159498): Standardize registry access.
       return GetUserActiveBit(id);
-
     case UpdaterScope::kSystem:
       return GetSystemActiveBit(id);
   }
@@ -150,10 +143,8 @@ bool GetActiveBit(UpdaterScope scope, const std::string& id) {
 void ClearActiveBit(UpdaterScope scope, const std::string& id) {
   switch (scope) {
     case UpdaterScope::kUser:
-      // TODO(crbug/1159498): Standardize registry access.
       ClearUserActiveBit(id);
       break;
-
     case UpdaterScope::kSystem:
       ClearSystemActiveBit(id);
       break;

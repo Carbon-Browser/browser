@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -179,9 +179,8 @@ class NET_EXPORT_PRIVATE HttpStreamRequest {
   void SetPriority(RequestPriority priority);
 
   // Marks completion of the request. Must be called before OnStreamReady().
-  void Complete(bool was_alpn_negotiated,
-                NextProto negotiated_protocol,
-                bool using_spdy);
+  void Complete(NextProto negotiated_protocol,
+                AlternateProtocolUsage alternate_protocol_usage);
 
   // Called by |helper_| to record connection attempts made by the socket
   // layer in an attached Job for this stream request.
@@ -190,14 +189,12 @@ class NET_EXPORT_PRIVATE HttpStreamRequest {
   // Returns the LoadState for the request.
   LoadState GetLoadState() const;
 
-  // Returns true if TLS/ALPN was negotiated for this stream.
-  bool was_alpn_negotiated() const;
-
   // Protocol negotiated with the server.
   NextProto negotiated_protocol() const;
 
-  // Returns true if this stream is being fetched over SPDY.
-  bool using_spdy() const;
+  // The reason why Chrome uses a specific transport protocol for HTTP
+  // semantics.
+  AlternateProtocolUsage alternate_protocol_usage() const;
 
   // Returns socket-layer connection attempts made for this stream request.
   const ConnectionAttempts& connection_attempts() const;
@@ -219,18 +216,20 @@ class NET_EXPORT_PRIVATE HttpStreamRequest {
  private:
   const GURL url_;
 
-  // Unowned. The helper must outlive this request.
-  raw_ptr<Helper, DanglingUntriaged> helper_;
+  // Unowned. The helper must not be destroyed before this object is.
+  raw_ptr<Helper> helper_;
 
   const raw_ptr<WebSocketHandshakeStreamBase::CreateHelper>
       websocket_handshake_stream_create_helper_;
   const NetLogWithSource net_log_;
 
   bool completed_ = false;
-  bool was_alpn_negotiated_ = false;
   // Protocol negotiated with the server.
   NextProto negotiated_protocol_ = kProtoUnknown;
-  bool using_spdy_ = false;
+  // The reason why Chrome uses a specific transport protocol for HTTP
+  // semantics.
+  AlternateProtocolUsage alternate_protocol_usage_ =
+      AlternateProtocolUsage::ALTERNATE_PROTOCOL_USAGE_UNSPECIFIED_REASON;
   ConnectionAttempts connection_attempts_;
   const StreamType stream_type_;
 };

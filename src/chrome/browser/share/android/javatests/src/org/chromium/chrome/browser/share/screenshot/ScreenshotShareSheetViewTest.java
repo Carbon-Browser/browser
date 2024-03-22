@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,8 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.Callback;
 import org.chromium.base.test.UiThreadTest;
+import org.chromium.chrome.R;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.chrome.test.R;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
@@ -27,9 +27,7 @@ import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Tests for the {@link ScreenshotShareSheetView}.
- */
+/** Tests for the {@link ScreenshotShareSheetView}. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 public class ScreenshotShareSheetViewTest extends BlankUiTestActivityTestCase {
     private ScreenshotShareSheetView mScreenshotView;
@@ -41,44 +39,60 @@ public class ScreenshotShareSheetViewTest extends BlankUiTestActivityTestCase {
     private AtomicBoolean mSaveClicked = new AtomicBoolean();
     private AtomicBoolean mInstallClicked = new AtomicBoolean();
 
-    private Callback<Integer> mMockNoArgListener = new Callback<Integer>() {
-        @Override
-        public void onResult(@ScreenshotShareSheetViewProperties.NoArgOperation Integer operation) {
-            if (ScreenshotShareSheetViewProperties.NoArgOperation.SHARE == operation) {
-                mShareClicked.set(true);
-            } else if (ScreenshotShareSheetViewProperties.NoArgOperation.SAVE == operation) {
-                mSaveClicked.set(true);
-            } else if (ScreenshotShareSheetViewProperties.NoArgOperation.DELETE == operation) {
-                mCloseClicked.set(true);
-            } else if (ScreenshotShareSheetViewProperties.NoArgOperation.INSTALL == operation) {
-                mInstallClicked.set(true);
-            }
-        }
-    };
+    private Callback<Integer> mMockNoArgListener =
+            new Callback<Integer>() {
+                @Override
+                public void onResult(
+                        @ScreenshotShareSheetViewProperties.NoArgOperation Integer operation) {
+                    if (ScreenshotShareSheetViewProperties.NoArgOperation.SHARE == operation) {
+                        mShareClicked.set(true);
+                    } else if (ScreenshotShareSheetViewProperties.NoArgOperation.SAVE
+                            == operation) {
+                        mSaveClicked.set(true);
+                    } else if (ScreenshotShareSheetViewProperties.NoArgOperation.DELETE
+                            == operation) {
+                        mCloseClicked.set(true);
+                    } else if (ScreenshotShareSheetViewProperties.NoArgOperation.INSTALL
+                            == operation) {
+                        mInstallClicked.set(true);
+                    }
+                }
+            };
 
     @Override
     public void setUpTest() throws Exception {
         super.setUpTest();
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ViewGroup view = new LinearLayout(getActivity());
-            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-            getActivity().setContentView(view, params);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ViewGroup view = new LinearLayout(getActivity());
+                    FrameLayout.LayoutParams params =
+                            new FrameLayout.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT);
+                    getActivity().setContentView(view, params);
 
-            mScreenshotView = (ScreenshotShareSheetView) getActivity().getLayoutInflater().inflate(
-                    R.layout.screenshot_share_sheet, null);
+                    mScreenshotView =
+                            (ScreenshotShareSheetView)
+                                    getActivity()
+                                            .getLayoutInflater()
+                                            .inflate(R.layout.screenshot_share_sheet, null);
 
-            view.addView(mScreenshotView);
+                    view.addView(mScreenshotView);
 
-            mScreenshotModel =
-                    new PropertyModel.Builder(ScreenshotShareSheetViewProperties.ALL_KEYS)
-                            .with(ScreenshotShareSheetViewProperties.NO_ARG_OPERATION_LISTENER,
-                                    mMockNoArgListener)
-                            .build();
-            mScreenshotMCP = PropertyModelChangeProcessor.create(
-                    mScreenshotModel, mScreenshotView, ScreenshotShareSheetViewBinder::bind);
-        });
+                    mScreenshotModel =
+                            new PropertyModel.Builder(ScreenshotShareSheetViewProperties.ALL_KEYS)
+                                    .with(
+                                            ScreenshotShareSheetViewProperties
+                                                    .NO_ARG_OPERATION_LISTENER,
+                                            mMockNoArgListener)
+                                    .build();
+                    mScreenshotMCP =
+                            PropertyModelChangeProcessor.create(
+                                    mScreenshotModel,
+                                    mScreenshotView,
+                                    ScreenshotShareSheetViewBinder::bind);
+                });
     }
 
     @Test

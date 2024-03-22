@@ -1,17 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // https://wicg.github.io/navigation-api/
 [
   Exposed=Window,
-  RuntimeEnabled=NavigationApi,
   ImplementedAs=NavigationApi
 ] interface Navigation : EventTarget {
   readonly attribute NavigationHistoryEntry? currentEntry;
   sequence<NavigationHistoryEntry> entries();
   [RaisesException, MeasureAs=AppHistory] void updateCurrentEntry(NavigationUpdateCurrentEntryOptions options);
   readonly attribute NavigationTransition? transition;
+  [RuntimeEnabled=NavigationActivation] readonly attribute NavigationActivation? activation;
 
   readonly attribute boolean canGoBack;
   readonly attribute boolean canGoForward;

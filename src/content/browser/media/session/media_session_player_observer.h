@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,9 +48,6 @@ class MediaSessionPlayerObserver {
   // The given |player_id| has been requested picture-in-picture.
   virtual void OnEnterPictureInPicture(int player_id) = 0;
 
-  // The given |player_id| has been requested to exit picture-in-picture.
-  virtual void OnExitPictureInPicture(int player_id) = 0;
-
   // The given |player_id| has been requested to route audio output to the
   // specified audio device.
   virtual void OnSetAudioSinkId(int player_id,
@@ -58,6 +55,9 @@ class MediaSessionPlayerObserver {
 
   // The given |player_id| has been requested to mute or unmute.
   virtual void OnSetMute(int player_id, bool mute) = 0;
+
+  // The given |player_id| has been requested to start Media Remoting.
+  virtual void OnRequestMediaRemoting(int player_id) = 0;
 
   // Returns the position for |player_id|.
   virtual absl::optional<media_session::MediaPosition> GetPosition(

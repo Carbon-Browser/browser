@@ -1,6 +1,6 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file
+// found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/managed_device/navigator_managed_data.h"
 
@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/navigator.h"
+#include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
 
 namespace blink {
@@ -20,6 +21,11 @@ namespace {
 
 const char kNotHighTrustedAppExceptionMessage[] =
     "This API is available only for managed apps.";
+
+#if BUILDFLAG(IS_ANDROID)
+const char kManagedConfigNotSupported[] =
+    "Managed Configuration API is not supported on this platform.";
+#endif  // BUILDFLAG(IS_ANDROID)
 
 }  // namespace
 
@@ -39,7 +45,8 @@ NavigatorManagedData* NavigatorManagedData::managed(Navigator& navigator) {
 }
 
 NavigatorManagedData::NavigatorManagedData(Navigator& navigator)
-    : Supplement<Navigator>(navigator),
+    : ActiveScriptWrappable<NavigatorManagedData>({}),
+      Supplement<Navigator>(navigator),
       device_api_service_(navigator.DomWindow()),
       managed_configuration_service_(navigator.DomWindow()),
       configuration_observer_(this, navigator.DomWindow()) {}
@@ -55,11 +62,11 @@ ExecutionContext* NavigatorManagedData::GetExecutionContext() const {
 bool NavigatorManagedData::HasPendingActivity() const {
   // Prevents garbage collecting of this object when not hold by another
   // object but still has listeners registered.
-  return !pending_promises_.IsEmpty() || HasEventListeners();
+  return !pending_promises_.empty() || HasEventListeners();
 }
 
 void NavigatorManagedData::Trace(Visitor* visitor) const {
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ActiveScriptWrappable::Trace(visitor);
   Supplement<Navigator>::Trace(visitor);
 
@@ -77,13 +84,14 @@ mojom::blink::DeviceAPIService* NavigatorManagedData::GetService() {
     // The access status of Device API can change dynamically. Hence, we have to
     // properly handle cases when we are losing this access.
     device_api_service_.set_disconnect_handler(
-        WTF::Bind(&NavigatorManagedData::OnServiceConnectionError,
-                  WrapWeakPersistent(this)));
+        WTF::BindOnce(&NavigatorManagedData::OnServiceConnectionError,
+                      WrapWeakPersistent(this)));
   }
 
   return device_api_service_.get();
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 mojom::blink::ManagedConfigurationService*
 NavigatorManagedData::GetManagedConfigurationService() {
   if (!managed_configuration_service_.is_bound()) {
@@ -93,12 +101,13 @@ NavigatorManagedData::GetManagedConfigurationService() {
     // The access status of Device API can change dynamically. Hence, we have to
     // properly handle cases when we are losing this access.
     managed_configuration_service_.set_disconnect_handler(
-        WTF::Bind(&NavigatorManagedData::OnServiceConnectionError,
-                  WrapWeakPersistent(this)));
+        WTF::BindOnce(&NavigatorManagedData::OnServiceConnectionError,
+                      WrapWeakPersistent(this)));
   }
 
   return managed_configuration_service_.get();
 }
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 void NavigatorManagedData::OnServiceConnectionError() {
   device_api_service_.reset();
@@ -128,9 +137,15 @@ ScriptPromise NavigatorManagedData::getManagedConfiguration(
   if (!GetExecutionContext()) {
     return promise;
   }
+#if !BUILDFLAG(IS_ANDROID)
   GetManagedConfigurationService()->GetManagedConfiguration(
-      keys, WTF::Bind(&NavigatorManagedData::OnConfigurationReceived,
-                      WrapWeakPersistent(this), WrapPersistent(resolver)));
+      keys, WTF::BindOnce(&NavigatorManagedData::OnConfigurationReceived,
+                          WrapWeakPersistent(this), WrapPersistent(resolver)));
+#else
+  resolver->Reject(MakeGarbageCollected<DOMException>(
+      DOMExceptionCode::kNotSupportedError, kManagedConfigNotSupported));
+#endif  // !BUILDFLAG(IS_ANDROID)
+
   return promise;
 }
 
@@ -142,7 +157,7 @@ ScriptPromise NavigatorManagedData::getDirectoryId(ScriptState* script_state) {
   if (!GetExecutionContext()) {
     return promise;
   }
-  GetService()->GetDirectoryId(WTF::Bind(
+  GetService()->GetDirectoryId(WTF::BindOnce(
       &NavigatorManagedData::OnAttributeReceived, WrapWeakPersistent(this),
       WrapPersistent(script_state), WrapPersistent(resolver)));
   return promise;
@@ -156,7 +171,7 @@ ScriptPromise NavigatorManagedData::getHostname(ScriptState* script_state) {
   if (!GetExecutionContext()) {
     return promise;
   }
-  GetService()->GetHostname(WTF::Bind(
+  GetService()->GetHostname(WTF::BindOnce(
       &NavigatorManagedData::OnAttributeReceived, WrapWeakPersistent(this),
       WrapPersistent(script_state), WrapPersistent(resolver)));
   return promise;
@@ -170,7 +185,7 @@ ScriptPromise NavigatorManagedData::getSerialNumber(ScriptState* script_state) {
   if (!GetExecutionContext()) {
     return promise;
   }
-  GetService()->GetSerialNumber(WTF::Bind(
+  GetService()->GetSerialNumber(WTF::BindOnce(
       &NavigatorManagedData::OnAttributeReceived, WrapWeakPersistent(this),
       WrapPersistent(script_state), WrapPersistent(resolver)));
   return promise;
@@ -185,7 +200,7 @@ ScriptPromise NavigatorManagedData::getAnnotatedAssetId(
   if (!GetExecutionContext()) {
     return promise;
   }
-  GetService()->GetAnnotatedAssetId(WTF::Bind(
+  GetService()->GetAnnotatedAssetId(WTF::BindOnce(
       &NavigatorManagedData::OnAttributeReceived, WrapWeakPersistent(this),
       WrapPersistent(script_state), WrapPersistent(resolver)));
   return promise;
@@ -200,7 +215,7 @@ ScriptPromise NavigatorManagedData::getAnnotatedLocation(
   if (!GetExecutionContext()) {
     return promise;
   }
-  GetService()->GetAnnotatedLocation(WTF::Bind(
+  GetService()->GetAnnotatedLocation(WTF::BindOnce(
       &NavigatorManagedData::OnAttributeReceived, WrapWeakPersistent(this),
       WrapPersistent(script_state), WrapPersistent(resolver)));
   return promise;
@@ -260,8 +275,8 @@ void NavigatorManagedData::AddedEventListener(
     return;
   }
 
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  EventTarget::AddedEventListener(event_type, registered_listener);
+#if !BUILDFLAG(IS_ANDROID)
   if (event_type == event_type_names::kManagedconfigurationchange) {
     if (!configuration_observer_.is_bound()) {
       GetManagedConfigurationService()->SubscribeToManagedConfiguration(
@@ -270,13 +285,17 @@ void NavigatorManagedData::AddedEventListener(
                   TaskType::kMiscPlatformAPI)));
     }
   }
+#else
+  GetExecutionContext()->AddConsoleMessage(MakeGarbageCollected<ConsoleMessage>(
+      mojom::blink::ConsoleMessageSource::kOther,
+      mojom::blink::ConsoleMessageLevel::kWarning, kManagedConfigNotSupported));
+#endif  // !BUILDFLAG(IS_ANDROID)
 }
 
 void NavigatorManagedData::RemovedEventListener(
     const AtomicString& event_type,
     const RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::RemovedEventListener(event_type,
-                                                  registered_listener);
+  EventTarget::RemovedEventListener(event_type, registered_listener);
   if (!HasEventListeners())
     StopObserving();
 }

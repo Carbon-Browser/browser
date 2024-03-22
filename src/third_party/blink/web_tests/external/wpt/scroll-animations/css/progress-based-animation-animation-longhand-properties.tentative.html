@@ -5,6 +5,8 @@
 <link rel="help" src="https://github.com/w3c/csswg-drafts/issues/6674">
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
+<script src="/web-animations/testcommon.js"></script>
+<script src="support/testcommon.js"></script>
 <style>
   @keyframes anim {
     from { translate: 0px; }
@@ -25,6 +27,8 @@
 <div id="log"></div>
 <script>
 "use strict";
+
+setup(assert_implements_animation_timeline);
 
 const createTargetAndScroller = function(t) {
   let container = document.createElement('div');
@@ -56,70 +60,82 @@ const createTargetAndScroller = function(t) {
   return [target, container];
 };
 
+async function scrollTop(element, value) {
+  element.scrollTop = value;
+  await waitForNextFrame();
+}
+
 // ------------------------------
 // Test animation-duration
 // ------------------------------
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+  });
 
-  scroller.scrollTop = 25; // [0, 100].
+  await scrollTop(scroller, 25); // [0, 100].
   assert_equals(getComputedStyle(target).translate, '25px');
 }, 'animation-duration');
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '0s linear anim scroll(nearest)';
+  target.style.animation = '0s linear anim forwards';
+  target.style.animationTimeline = 'scroll(nearest)';
 
-  scroller.scrollTop = 25; // [0, 100].
+  await scrollTop(scroller, 25); // [0, 100].
   assert_equals(getComputedStyle(target).translate, '100px');
 }, 'animation-duration: 0s');
-
-test(t => {
-  let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = 'infinite linear anim scroll(nearest)';
-
-  scroller.scrollTop = 25; // [0, 100].
-  assert_equals(getComputedStyle(target).translate, '100px');
-}, 'animation-duration: infinite');
 
 
 // ------------------------------
 // Test animation-iteration-count
 // ------------------------------
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+  });
 
-  scroller.scrollTop = 25; // [0, 100].
+  await scrollTop(scroller, 25); // [0, 100].
   assert_equals(getComputedStyle(target).translate, '25px');
 
   // Let animation become 50% in the 1st iteration.
   target.style.animationIterationCount = '2';
+  await waitForCSSScrollTimelineStyle();
   assert_equals(getComputedStyle(target).translate, '50px');
 
   // Let animation become 0% in the 2nd iteration.
   target.style.animationIterationCount = '4';
+  await waitForCSSScrollTimelineStyle();
   assert_equals(getComputedStyle(target).translate, '0px');
 }, 'animation-iteration-count');
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
-  target.style.animationIterationCount = '0';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim forwards';
+    target.style.animationTimeline = 'scroll(nearest)';
+    target.style.animationIterationCount = '0';
+  });
 
-  scroller.scrollTop = 25; // [0, 100].
+  await scrollTop(scroller, 25); // [0, 100].
   assert_equals(getComputedStyle(target).translate, '0px');
 }, 'animation-iteration-count: 0');
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
-  target.style.animationIterationCount = 'infinite';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim forwards';
+    target.style.animationTimeline = 'scroll(nearest)';
+    target.style.animationIterationCount = 'infinite';
+  });
 
-  scroller.scrollTop = 25; // [0, 100].
+  await scrollTop(scroller, 25); // [0, 100].
   assert_equals(getComputedStyle(target).translate, '100px');
 }, 'animation-iteration-count: infinite');
 
@@ -128,46 +144,58 @@ test(t => {
 // Test animation-direction
 // ------------------------------
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+  });
 
-  scroller.scrollTop = 25 // [0, 100].
+  await scrollTop(scroller, 25) // [0, 100].
   assert_equals(getComputedStyle(target).translate, '25px');
 }, 'animation-direction: normal');
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
-  target.style.animationDirection = 'reverse';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+    target.style.animationDirection = 'reverse';
+  });
 
-  scroller.scrollTop = 25; // 25% in the reversing direction.
+  await scrollTop(scroller, 25); // 25% in the reversing direction.
   assert_equals(getComputedStyle(target).translate, '75px');
 }, 'animation-direction: reverse');
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
-  target.style.animationIterationCount = '2';
-  target.style.animationDirection = 'alternate';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+    target.style.animationIterationCount = '2';
+    target.style.animationDirection = 'alternate';
+  });
 
-  scroller.scrollTop = 10; // 20% in the 1st iteration.
+  await scrollTop(scroller, 10); // 20% in the 1st iteration.
   assert_equals(getComputedStyle(target).translate, '20px');
 
-  scroller.scrollTop = 60; // 20% in the 2nd iteration (reversing direction).
+  await scrollTop(scroller, 60); // 20% in the 2nd iteration (reversing direction).
   assert_equals(getComputedStyle(target).translate, '80px');
 }, 'animation-direction: alternate');
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
-  target.style.animationIterationCount = '2';
-  target.style.animationDirection = 'alternate-reverse';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+    target.style.animationIterationCount = '2';
+    target.style.animationDirection = 'alternate-reverse';
+  });
 
-  scroller.scrollTop = 10; // 20% in the 1st iteration (reversing direction).
+  await scrollTop(scroller, 10); // 20% in the 1st iteration (reversing direction).
   assert_equals(getComputedStyle(target).translate, '80px');
 
-  scroller.scrollTop = 60; // 20% in the 2nd iteration.
+  await scrollTop(scroller, 60); // 20% in the 2nd iteration.
   assert_equals(getComputedStyle(target).translate, '20px');
 }, 'animation-direction: alternate-reverse');
 
@@ -176,11 +204,14 @@ test(t => {
 // Test animation-delay
 // ------------------------------
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+  });
 
-  scroller.scrollTop = 25; // [0, 100].
+  await scrollTop(scroller, 25); // [0, 100].
   assert_equals(getComputedStyle(target).translate, '25px');
 
   //    (start delay: 10s)    (duration: 10s)
@@ -191,26 +222,32 @@ test(t => {
 
   // Let animation be in before phase.
   target.style.animationDelay = '10s';
+  target.style.animationDelayStart = '10s'; // crbug.com/1375994
   assert_equals(getComputedStyle(target).translate, 'none');
 
-  scroller.scrollTop = 50; // The animation enters active phase.
+  await scrollTop(scroller, 50); // The animation enters active phase.
   assert_equals(getComputedStyle(target).translate, '0px');
 
-  scroller.scrollTop = 75; // The ieration progress is 50%.
+  await scrollTop(scroller, 75); // The ieration progress is 50%.
   assert_equals(getComputedStyle(target).translate, '50px');
 }, 'animation-delay with a positive value');
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+  });
 
   //         active
   // |--------------------|
   // 0px                100px (The scroller)
   // 50%                100%  (The iteration progress)
 
-  scroller.scrollTop = 20; // [0, 100].
+  await scrollTop(scroller, 20); // [0, 100].
   target.style.animationDelay = '-5s';
+  target.style.animationDelayStart = '-5s'; // crbug.com/1375994
+  await waitForCSSScrollTimelineStyle();
   assert_equals(getComputedStyle(target).translate, '60px');
 }, 'animation-delay with a negative value');
 
@@ -219,15 +256,20 @@ test(t => {
 // Test animation-fill-mode
 // ------------------------------
 
-test(t => {
+promise_test(async t => {
   let [target, scroller] = createTargetAndScroller(t);
-  target.style.animation = '10s linear anim scroll(nearest)';
-  target.style.animationDelay = '10s';
+  await runAndWaitForFrameUpdate(() => {
+    target.style.animation = '10s linear anim';
+    target.style.animationTimeline = 'scroll(nearest)';
+    target.style.animationDelay = '10s';
+    target.style.animationDelayStart = '10s'; // crbug.com/1375994
+  });
 
-  scroller.scrollTop = 25;
+  await scrollTop(scroller, 25);
   assert_equals(getComputedStyle(target).translate, 'none');
 
   target.style.animationFillMode = 'backwards';
+  await waitForCSSScrollTimelineStyle();
   assert_equals(getComputedStyle(target).translate, '0px');
 }, 'animation-fill-mode');
 

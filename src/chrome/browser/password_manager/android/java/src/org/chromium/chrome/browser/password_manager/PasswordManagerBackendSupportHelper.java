@@ -1,14 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.password_manager;
 
-import androidx.annotation.VisibleForTesting;
+import org.chromium.base.ResettersForTesting;
 
-/**
- * Helper class to check PasswordManager backend availability.
- */
+/** Helper class to check PasswordManager backend availability. */
 public abstract class PasswordManagerBackendSupportHelper {
     private static PasswordManagerBackendSupportHelper sInstance;
 
@@ -40,9 +38,10 @@ public abstract class PasswordManagerBackendSupportHelper {
         return false;
     }
 
-    @VisibleForTesting
     public static void setInstanceForTesting(
             PasswordManagerBackendSupportHelper backendSupportHelper) {
+        var oldValue = sInstance;
         sInstance = backendSupportHelper;
+        ResettersForTesting.register(() -> sInstance = oldValue);
     }
 }

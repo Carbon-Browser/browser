@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/network/device_state.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/crosapi/mojom/crosapi.mojom.h"
 #include "chromeos/crosapi/mojom/networking_private.mojom-forward.h"
 #include "chromeos/crosapi/mojom/networking_private.mojom.h"
@@ -16,9 +18,9 @@
 #include "extensions/browser/api/networking_private/networking_private_delegate_factory.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
-using chromeos::NetworkHandler;
-using chromeos::NetworkState;
-using chromeos::NetworkStateHandler;
+using ::ash::NetworkHandler;
+using ::ash::NetworkState;
+using ::ash::NetworkStateHandler;
 
 namespace crosapi {
 
@@ -99,7 +101,8 @@ SplitDictionaryAdapterCallback(DictionarySuccessOrFailureCallback callback) {
 
   return {
       base::BindOnce(
-          [](DictionarySuccessOrFailureCallback callback, base::Value result) {
+          [](DictionarySuccessOrFailureCallback callback,
+             base::Value::Dict result) {
             std::move(callback).Run(
                 mojom::DictionarySuccessOrErrorReturn::NewSuccessResult(
                     std::move(result)));
@@ -119,17 +122,17 @@ SplitDictionaryAdapterCallback(DictionarySuccessOrFailureCallback callback) {
 using ListValueSuccessOrFailureCallback =
     base::OnceCallback<void(mojom::ListValueSuccessOrErrorReturnPtr)>;
 
-std::pair<base::OnceCallback<void(std::unique_ptr<base::ListValue>)>,
+std::pair<base::OnceCallback<void(base::Value::List)>,
           extensions::NetworkingPrivateDelegate::FailureCallback>
 SplitListValueAdapterCallback(ListValueSuccessOrFailureCallback callback) {
   auto [success, failure] = base::SplitOnceCallback(std::move(callback));
 
   return {base::BindOnce(
               [](ListValueSuccessOrFailureCallback callback,
-                 std::unique_ptr<base::ListValue> result) {
+                 base::Value::List result) {
                 std::move(callback).Run(
                     mojom::ListValueSuccessOrErrorReturn::NewSuccessResult(
-                        std::move(result->GetList())));
+                        std::move(result)));
               },
               std::move(success)),
           base::BindOnce(
@@ -141,38 +144,16 @@ SplitListValueAdapterCallback(ListValueSuccessOrFailureCallback callback) {
               std::move(failure))};
 }
 
-// This adapter will handle the call back to Lacros using the mojo api with a
-// single callback function. It has to remove the unique_ptr in the process and
-// add absl::optional instead.
-using ValueMojoCallback =
-    base::OnceCallback<void(absl::optional<base::Value> result)>;
-using ValueDelegateCallback =
-    base::OnceCallback<void(std::unique_ptr<base::Value> result)>;
-
-ValueDelegateCallback ValueAdapterCallback(ValueMojoCallback result_callback) {
-  return base::BindOnce(
-      [](ValueMojoCallback callback, std::unique_ptr<base::Value> result) {
-        if (result) {
-          std::move(callback).Run(std::move(*result));
-        } else {
-          std::move(callback).Run(absl::nullopt);
-        }
-      },
-      std::move(result_callback));
-}
-
 // This adapter will handle the case where a list get returned.
 using ValueListMojoCallback =
     base::OnceCallback<void(absl::optional<base::Value::List>)>;
-ValueDelegateCallback ValueListAdapterCallback(
+using ValueListDelegateCallback =
+    base::OnceCallback<void(base::Value::List result)>;
+ValueListDelegateCallback ValueListAdapterCallback(
     ValueListMojoCallback result_callback) {
   return base::BindOnce(
-      [](ValueListMojoCallback callback, std::unique_ptr<base::Value> result) {
-        if (result) {
-          std::move(callback).Run(std::move(result->GetList()));
-        } else {
-          std::move(callback).Run(absl::nullopt);
-        }
+      [](ValueListMojoCallback callback, base::Value::List result) {
+        std::move(callback).Run(std::move(result));
       },
       std::move(result_callback));
 }
@@ -183,18 +164,19 @@ ValueDelegateCallback ValueListAdapterCallback(
 using PropertiesMojoCallback =
     base::OnceCallback<void(mojom::PropertiesSuccessOrErrorReturnPtr result)>;
 using PropertiesDelegateCallback =
-    base::OnceCallback<void(absl::optional<::base::Value> result,
+    base::OnceCallback<void(absl::optional<::base::Value::Dict> result,
                             const absl::optional<std::string>& error)>;
 
 PropertiesDelegateCallback PropertiesAdapterCallback(
     PropertiesMojoCallback result_callback) {
   return base::BindOnce(
-      [](PropertiesMojoCallback callback, absl::optional<::base::Value> result,
+      [](PropertiesMojoCallback callback,
+         absl::optional<::base::Value::Dict> result,
          const absl::optional<std::string>& error) {
         if (result) {
           std::move(callback).Run(
               mojom::PropertiesSuccessOrErrorReturn::NewSuccessResult(
-                  std::move(*result)));
+                  base::Value(std::move(*result))));
         } else {
           std::move(callback).Run(
               mojom::PropertiesSuccessOrErrorReturn::NewError(*error));
@@ -203,27 +185,19 @@ PropertiesDelegateCallback PropertiesAdapterCallback(
       std::move(result_callback));
 }
 
-// Converting the DeviceStateList into a crosapi::mojom::GetDeviceStateList
-// which will be returned over Mojo as result to Lacros.
-using DeviceStateListPtr =
-    absl::optional<std::vector<absl::optional<::base::Value>>>;
-
 void DeviceStateListCallbackAdapter(
     NetworkingPrivateAsh::GetDeviceStateListCallback callback,
-    std::unique_ptr<extensions::NetworkingPrivateDelegate::DeviceStateList>
+    std::optional<extensions::NetworkingPrivateDelegate::DeviceStateList>
         result) {
   if (!result) {
-    std::move(callback).Run(DeviceStateListPtr());
+    std::move(callback).Run(absl::nullopt);
     return;
   }
-  auto list = DeviceStateListPtr(std::vector<absl::optional<::base::Value>>());
+
+  std::vector<absl::optional<base::Value::Dict>> list;
 
   for (size_t i = 0; i < result->size(); ++i) {
-    if (result->at(i)) {
-      list->push_back(std::move(*result->at(i)->ToValue()));
-    } else {
-      list->push_back(base::Value(base::Value::Type::DICTIONARY));
-    }
+    list.emplace_back(result->at(i).ToValue());
   }
 
   std::move(callback).Run(std::move(list));
@@ -238,7 +212,7 @@ mojom::CaptivePortalStatus GetCaptivePortalStatusFromNetworkState(
     return mojom::CaptivePortalStatus::kOnline;
   }
 
-  switch (network->portal_state()) {
+  switch (network->GetPortalState()) {
     case NetworkState::PortalState::kUnknown:
       return mojom::CaptivePortalStatus::kUnknown;
     case NetworkState::PortalState::kOnline:
@@ -286,7 +260,7 @@ void NetworkingPrivateAsh::GetState(const std::string& guid,
 }
 
 void NetworkingPrivateAsh::SetProperties(const std::string& guid,
-                                         base::Value properties,
+                                         base::Value::Dict properties,
                                          bool allow_set_shared_config,
                                          SetPropertiesCallback callback) {
   auto [success, failure] = SplitVoidAdapterCallback(std::move(callback));
@@ -299,7 +273,7 @@ void NetworkingPrivateAsh::CreateNetwork(bool shared,
                                          base::Value properties,
                                          CreateNetworkCallback callback) {
   auto [success, failure] = SplitStringAdapterCallback(std::move(callback));
-  GetDelegate()->CreateNetwork(shared, std::move(properties),
+  GetDelegate()->CreateNetwork(shared, std::move(properties).TakeDict(),
                                std::move(success), std::move(failure));
 }
 
@@ -392,12 +366,12 @@ void NetworkingPrivateAsh::GetDeviceStateList(
 }
 
 void NetworkingPrivateAsh::GetGlobalPolicy(GetGlobalPolicyCallback callback) {
-  GetDelegate()->GetGlobalPolicy(ValueAdapterCallback(std::move(callback)));
+  GetDelegate()->GetGlobalPolicy(std::move(callback));
 }
 
 void NetworkingPrivateAsh::GetCertificateLists(
     GetCertificateListsCallback callback) {
-  GetDelegate()->GetCertificateLists(ValueAdapterCallback(std::move(callback)));
+  GetDelegate()->GetCertificateLists(std::move(callback));
 }
 
 void NetworkingPrivateAsh::EnableNetworkType(
@@ -439,7 +413,7 @@ void NetworkingPrivateAsh::DeviceListChanged() {
 }
 
 void NetworkingPrivateAsh::DevicePropertiesUpdated(
-    const chromeos::DeviceState* device) {
+    const ash::DeviceState* device) {
   // networkingPrivate uses a single event for device changes.
   DeviceListChanged();
 
@@ -449,9 +423,9 @@ void NetworkingPrivateAsh::DevicePropertiesUpdated(
 
   NetworkStateHandler::NetworkStateList cellular_networks;
   NetworkHandler::Get()->network_state_handler()->GetNetworkListByType(
-      chromeos::NetworkTypePattern::Cellular(), false /* configured_only */,
+      ash::NetworkTypePattern::Cellular(), false /* configured_only */,
       true /* visible_only */, -1 /* default limit */, &cellular_networks);
-  for (const chromeos::NetworkState* network : cellular_networks) {
+  for (const NetworkState* network : cellular_networks) {
     NetworkPropertiesUpdated(network);
   }
 }
@@ -473,7 +447,7 @@ void NetworkingPrivateAsh::NetworkListChanged() {
 }
 
 void NetworkingPrivateAsh::NetworkPropertiesUpdated(
-    const chromeos::NetworkState* network) {
+    const NetworkState* network) {
   for (auto& observer : observers_) {
     observer->OnNetworksChangedEvent(
         std::vector<std::string>(1, network->guid()));

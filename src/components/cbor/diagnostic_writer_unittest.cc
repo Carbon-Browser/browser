@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,9 +33,11 @@ TEST(CBORDiagnosticWriterTest, Basic) {
 
   map.emplace(7, "es\'cap\\in\ng");
 
+  map.emplace(8, cbor::Value(3.14));
+
   EXPECT_EQ(
       "{1: 1, 2: -2, 3: \"test\", 4: h'01020304', 5: {5: true, 6: false}, 6: "
-      "[1, 2, 3, \"foo\"], 7: \"es'cap\\\\in\\ng\"}",
+      "[1, 2, 3, \"foo\"], 7: \"es'cap\\\\in\\ng\", 8: 3.14}",
       DiagnosticWriter::Write(cbor::Value(map)));
 }
 

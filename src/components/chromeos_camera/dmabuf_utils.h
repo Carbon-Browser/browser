@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,8 @@ namespace chromeos_camera {
 scoped_refptr<media::VideoFrame> ConstructVideoFrame(
     std::vector<mojom::DmaBufPlanePtr> dma_buf_planes,
     media::VideoPixelFormat pixel_format,
-    const gfx::Size& coded_size);
+    const gfx::Size& coded_size,
+    uint64_t modifier = gfx::NativePixmapHandle::kNoModifier);
 
 }  // namespace chromeos_camera
 

@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/notifications/notification_platform_bridge_lacros.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
@@ -15,8 +15,12 @@
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
 #include "chromeos/crosapi/mojom/message_center.mojom.h"
+#include "chromeos/crosapi/mojom/notification.mojom-shared.h"
 #include "chromeos/crosapi/mojom/notification.mojom.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/color/color_provider.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_types.h"
 #include "ui/native_theme/native_theme.h"
@@ -26,8 +30,7 @@ namespace {
 crosapi::mojom::NotificationType ToMojo(message_center::NotificationType type) {
   switch (type) {
     case message_center::NOTIFICATION_TYPE_SIMPLE:
-    case message_center::NOTIFICATION_TYPE_BASE_FORMAT:
-      // TYPE_BASE_FORMAT is displayed the same as TYPE_SIMPLE.
+    case message_center::DEPRECATED_NOTIFICATION_TYPE_BASE_FORMAT:
       return crosapi::mojom::NotificationType::kSimple;
     case message_center::NOTIFICATION_TYPE_IMAGE:
       return crosapi::mojom::NotificationType::kImage;
@@ -39,6 +42,23 @@ crosapi::mojom::NotificationType ToMojo(message_center::NotificationType type) {
       // TYPE_CUSTOM exists only within ash.
       NOTREACHED();
       return crosapi::mojom::NotificationType::kSimple;
+  }
+}
+
+crosapi::mojom::NotifierType ToMojo(message_center::NotifierType type) {
+  switch (type) {
+    case message_center::NotifierType::APPLICATION:
+      return crosapi::mojom::NotifierType::kApplication;
+    case message_center::NotifierType::ARC_APPLICATION:
+      return crosapi::mojom::NotifierType::kArcApplication;
+    case message_center::NotifierType::WEB_PAGE:
+      return crosapi::mojom::NotifierType::kWebPage;
+    case message_center::NotifierType::SYSTEM_COMPONENT:
+      return crosapi::mojom::NotifierType::kSystemComponent;
+    case message_center::NotifierType::CROSTINI_APPLICATION:
+      return crosapi::mojom::NotifierType::kCrostiniApplication;
+    case message_center::NotifierType::PHONE_HUB:
+      return crosapi::mojom::NotifierType::kPhoneHub;
   }
 }
 
@@ -64,7 +84,7 @@ crosapi::mojom::NotificationPtr ToMojo(
   mojo_note->origin_url = notification.origin_url();
   if (!notification.icon().IsEmpty())
     mojo_note->icon = notification.icon().Rasterize(color_provider);
-  mojo_note->priority = base::clamp(notification.priority(), -2, 2);
+  mojo_note->priority = std::clamp(notification.priority(), -2, 2);
   mojo_note->require_interaction = notification.never_timeout();
   mojo_note->timestamp = notification.timestamp();
   if (!notification.image().IsEmpty())
@@ -81,7 +101,7 @@ crosapi::mojom::NotificationPtr ToMojo(
     mojo_item->message = item.message;
     mojo_note->items.push_back(std::move(mojo_item));
   }
-  mojo_note->progress = base::clamp(notification.progress(), -1, 100);
+  mojo_note->progress = std::clamp(notification.progress(), -1, 100);
   mojo_note->progress_status = notification.progress_status();
   for (const auto& button : notification.buttons()) {
     auto mojo_button = crosapi::mojom::ButtonInfo::New();
@@ -95,7 +115,29 @@ crosapi::mojom::NotificationPtr ToMojo(
   mojo_note->accessible_name = notification.accessible_name();
   mojo_note->fullscreen_visibility =
       ToMojo(notification.fullscreen_visibility());
-  mojo_note->accent_color = notification.accent_color();
+  if (notification.accent_color_id().has_value()) {
+    // Colors have to be resolved in lacros since color ids are not guaranteed
+    // to be stable across the process boundary.
+    mojo_note->accent_color =
+        color_provider->GetColor(*notification.accent_color_id());
+  } else {
+    // TODO(b/308208767): Remove when this isn't used anymore.
+    mojo_note->accent_color = notification.accent_color();
+  }
+
+  mojo_note->notifier_id = crosapi::mojom::NotifierId::New();
+  mojo_note->notifier_id->type = ToMojo(notification.notifier_id().type);
+  mojo_note->notifier_id->id = notification.notifier_id().id;
+  mojo_note->notifier_id->url = notification.notifier_id().url;
+  mojo_note->notifier_id->title = notification.notifier_id().title;
+  mojo_note->notifier_id->profile_id = notification.notifier_id().profile_id;
+
+  const absl::optional<base::FilePath>& image_path =
+      notification.rich_notification_data().image_path;
+  if (image_path.has_value()) {
+    mojo_note->image_path = image_path;
+  }
+
   return mojo_note;
 }
 
@@ -212,6 +254,14 @@ void NotificationPlatformBridgeLacros::Close(
 
 void NotificationPlatformBridgeLacros::GetDisplayed(
     Profile* profile,
+    GetDisplayedNotificationsCallback callback) const {
+  NOTIMPLEMENTED();
+  std::move(callback).Run(/*notification_ids=*/{}, /*supports_sync=*/false);
+}
+
+void NotificationPlatformBridgeLacros::GetDisplayedForOrigin(
+    Profile* profile,
+    const GURL& origin,
     GetDisplayedNotificationsCallback callback) const {
   NOTIMPLEMENTED();
   std::move(callback).Run(/*notification_ids=*/{}, /*supports_sync=*/false);

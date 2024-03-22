@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,18 @@ void ChromeSafeBrowsingUIManagerDelegate::
                                                  net_error_code);
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+void ChromeSafeBrowsingUIManagerDelegate::
+    TriggerUrlFilteringInterstitialExtensionEventIfDesired(
+        content::WebContents* web_contents,
+        const GURL& page_url,
+        const std::string& threat_type,
+        safe_browsing::RTLookupResponse rt_lookup_response) {
+  MaybeTriggerUrlFilteringInterstitialEvent(web_contents, page_url, threat_type,
+                                            rt_lookup_response);
+}
+#endif
+
 prerender::NoStatePrefetchContents*
 ChromeSafeBrowsingUIManagerDelegate::GetNoStatePrefetchContentsIfExists(
     content::WebContents* web_contents) {
@@ -67,7 +79,7 @@ bool ChromeSafeBrowsingUIManagerDelegate::IsHostingExtension(
     return false;
 
   extensions::ExtensionHost* extension_host =
-      extension_manager->GetExtensionHostForRenderFrameHost(
+      extension_manager->GetBackgroundHostForRenderFrameHost(
           web_contents->GetPrimaryMainFrame());
   return extension_host != nullptr;
 #else

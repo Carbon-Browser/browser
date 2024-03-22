@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,8 +58,8 @@ TEST_F(EditorTest, copyGeneratedPassword) {
   const char* body_content = "<input type='password' id='password'></input>";
   SetBodyContent(body_content);
 
-  auto& element =
-      To<HTMLInputElement>(*GetDocument().getElementById("password"));
+  auto& element = To<HTMLInputElement>(
+      *GetDocument().getElementById(AtomicString("password")));
 
   const String kPasswordValue = "secret";
   element.Focus();
@@ -77,8 +77,8 @@ TEST_F(EditorTest, CopyVisibleSelection) {
   const char* body_content = "<input id=hiding value=HEY>";
   SetBodyContent(body_content);
 
-  auto& text_control =
-      To<HTMLInputElement>(*GetDocument().getElementById("hiding"));
+  auto& text_control = To<HTMLInputElement>(
+      *GetDocument().getElementById(AtomicString("hiding")));
   text_control.select();
 
   ExecuteCopy();
@@ -94,19 +94,19 @@ TEST_F(EditorTest, DontCopyHiddenSelections) {
       "<input id=hiding value=HEY>";
   SetBodyContent(body_content);
 
-  auto& text_control =
-      To<HTMLInputElement>(*GetDocument().getElementById("hiding"));
+  auto& text_control = To<HTMLInputElement>(
+      *GetDocument().getElementById(AtomicString("hiding")));
   text_control.select();
 
-  auto& checkbox =
-      To<HTMLInputElement>(*GetDocument().getElementById("checkbox"));
+  auto& checkbox = To<HTMLInputElement>(
+      *GetDocument().getElementById(AtomicString("checkbox")));
   checkbox.Focus();
 
   ExecuteCopy();
 
   const String copied =
       GetDocument().GetFrame()->GetSystemClipboard()->ReadPlainText();
-  EXPECT_TRUE(copied.IsEmpty()) << copied << " was copied.";
+  EXPECT_TRUE(copied.empty()) << copied << " was copied.";
 }
 
 TEST_F(EditorTest, ReplaceSelection) {
@@ -114,7 +114,7 @@ TEST_F(EditorTest, ReplaceSelection) {
   SetBodyContent(body_content);
 
   auto& text_control =
-      To<HTMLInputElement>(*GetDocument().getElementById("text"));
+      To<HTMLInputElement>(*GetDocument().getElementById(AtomicString("text")));
   text_control.select();
   text_control.SetSelectionRange(2, 2);
 

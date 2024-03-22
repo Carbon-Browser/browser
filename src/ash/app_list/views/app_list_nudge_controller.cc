@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,7 +59,7 @@ std::string GetPrefPath(AppListNudgeController::NudgeType type) {
 // Returns true if the app list has been reordered before.
 bool WasAppListReorderedPreviously(PrefService* prefs) {
   const base::Value::Dict& dictionary =
-      prefs->GetValueDict(prefs::kAppListReorderNudge);
+      prefs->GetDict(prefs::kAppListReorderNudge);
   return dictionary.FindBool(kReorderNudgeConfirmed).value_or(false);
 }
 
@@ -82,11 +82,9 @@ void AppListNudgeController::ResetPrefsForNewUserSession(PrefService* prefs) {
 
 // static
 int AppListNudgeController::GetShownCount(PrefService* prefs, NudgeType type) {
-  const base::Value* dictionary = prefs->GetDictionary(GetPrefPath(type));
-  if (!dictionary)
-    return 0;
+  const base::Value::Dict& dictionary = prefs->GetDict(GetPrefPath(type));
 
-  return dictionary->FindIntPath(kReorderNudgeShownCount).value_or(0);
+  return dictionary.FindInt(kReorderNudgeShownCount).value_or(0);
 }
 
 // static
@@ -120,14 +118,14 @@ bool AppListNudgeController::ShouldShowReorderNudge() const {
 }
 
 void AppListNudgeController::OnTemporarySortOrderChanged(
-    const absl::optional<AppListSortOrder>& new_order) {
+    const std::optional<AppListSortOrder>& new_order) {
   PrefService* prefs = GetPrefs();
   if (!prefs)
     return;
 
   // Record the reorder action so that the nudge view won't be showing anymore.
-  DictionaryPrefUpdate update(prefs, prefs::kAppListReorderNudge);
-  update->SetBoolPath(kReorderNudgeConfirmed, true);
+  ScopedDictPrefUpdate update(prefs, prefs::kAppListReorderNudge);
+  update->Set(kReorderNudgeConfirmed, true);
 }
 
 void AppListNudgeController::SetPrivacyNoticeAcceptedPref(bool accepted) {
@@ -136,9 +134,9 @@ void AppListNudgeController::SetPrivacyNoticeAcceptedPref(bool accepted) {
     return;
 
   {
-    DictionaryPrefUpdate privacy_pref_update(
+    ScopedDictPrefUpdate privacy_pref_update(
         prefs, prefs::kLauncherFilesPrivacyNotice);
-    privacy_pref_update->SetBoolKey(kPrivacyNoticeAcceptedKey, accepted);
+    privacy_pref_update->Set(kPrivacyNoticeAcceptedKey, accepted);
   }
 }
 
@@ -147,9 +145,9 @@ void AppListNudgeController::SetPrivacyNoticeShownPref(bool shown) {
   if (!prefs)
     return;
 
-  DictionaryPrefUpdate privacy_pref_update(prefs,
+  ScopedDictPrefUpdate privacy_pref_update(prefs,
                                            prefs::kLauncherFilesPrivacyNotice);
-  privacy_pref_update->SetBoolKey(kPrivacyNoticeShownKey, shown);
+  privacy_pref_update->Set(kPrivacyNoticeShownKey, shown);
 }
 
 bool AppListNudgeController::IsPrivacyNoticeAccepted() const {
@@ -160,12 +158,9 @@ bool AppListNudgeController::IsPrivacyNoticeAccepted() const {
   if (!prefs)
     return false;
 
-  const base::Value* result = prefs->Get(prefs::kLauncherFilesPrivacyNotice)
-                                  ->FindKey(kPrivacyNoticeAcceptedKey);
-  if (!result || !result->is_bool())
-    return false;
-
-  return result->GetBool();
+  return prefs->GetDict(prefs::kLauncherFilesPrivacyNotice)
+      .FindBool(kPrivacyNoticeAcceptedKey)
+      .value_or(false);
 }
 
 bool AppListNudgeController::WasPrivacyNoticeShown() const {
@@ -173,12 +168,9 @@ bool AppListNudgeController::WasPrivacyNoticeShown() const {
   if (!prefs)
     return false;
 
-  const base::Value* result = prefs->Get(prefs::kLauncherFilesPrivacyNotice)
-                                  ->FindKey(kPrivacyNoticeShownKey);
-  if (!result || !result->is_bool())
-    return false;
-
-  return result->GetBool();
+  return prefs->GetDict(prefs::kLauncherFilesPrivacyNotice)
+      .FindBool(kPrivacyNoticeShownKey)
+      .value_or(false);
 }
 
 void AppListNudgeController::SetPrivacyNoticeShown(bool shown) {
@@ -238,8 +230,8 @@ void AppListNudgeController::OnReorderNudgeConfirmed() {
     return;
 
   // Record the nudge as confirmed so that it will not show up again.
-  DictionaryPrefUpdate update(prefs, prefs::kAppListReorderNudge);
-  update->SetBoolPath(kReorderNudgeConfirmed, true);
+  ScopedDictPrefUpdate update(prefs, prefs::kAppListReorderNudge);
+  update->Set(kReorderNudgeConfirmed, true);
 }
 
 void AppListNudgeController::UpdateCurrentNudgeStateInPrefs(
@@ -268,7 +260,7 @@ void AppListNudgeController::UpdateCurrentNudgeStateInPrefs(
   // Handle the case where the nudge is not active to the users.
   switch (current_nudge_) {
     case NudgeType::kReorderNudge: {
-      DictionaryPrefUpdate update(prefs, prefs::kAppListReorderNudge);
+      ScopedDictPrefUpdate update(prefs, prefs::kAppListReorderNudge);
       base::TimeDelta shown_duration =
           base::Time::Now() - current_nudge_show_timestamp_;
 
@@ -294,15 +286,15 @@ void AppListNudgeController::UpdateCurrentNudgeStateInPrefs(
 }
 
 void AppListNudgeController::MaybeIncrementShownCountInPrefs(
-    DictionaryPrefUpdate& update,
+    ScopedDictPrefUpdate& update,
     base::TimeDelta duration) {
   // Only increment the shown count if the nudge changed to invisible state and
   // the nudge was shown long enough to the user before the nudge became
   // invisible. Note that if the nudge is inactive but visible, it doesn't count
   // as showing once to the user.
   if (!is_visible_ && is_nudge_considered_as_shown_) {
-    update->SetIntPath(kReorderNudgeShownCount,
-                       GetShownCount(GetPrefs(), NudgeType::kReorderNudge) + 1);
+    update->Set(kReorderNudgeShownCount,
+                GetShownCount(GetPrefs(), NudgeType::kReorderNudge) + 1);
   }
 }
 

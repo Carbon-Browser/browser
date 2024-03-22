@@ -1,16 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/content_creation/notes/core/templates/template_store.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/rand_util.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
@@ -18,89 +17,38 @@
 #include "components/content_creation/notes/core/note_prefs.h"
 #include "components/content_creation/notes/core/templates/note_template.h"
 #include "components/content_creation/notes/core/templates/template_constants.h"
-#include "components/content_creation/notes/core/templates/template_fetcher.h"
 #include "components/content_creation/notes/core/templates/template_types.h"
 #include "components/prefs/pref_service.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace content_creation {
 
 namespace {
 
 bool ConvertProtoDateToTime(proto::Date date, base::Time& time_date) {
-  base::Time::Exploded exploded_date = {
-      /*year=*/date.year(),
-      /*month=*/date.month(),
-      /*day_of_week=*/0,
-      /*day_of_month=*/date.day(),
-      /*hour=*/0,
-      /*minute=*/0,
-      /*second=*/0,
-      /*millisecond=*/0,
-  };
-
+  const base::Time::Exploded exploded_date = {
+      .year = date.year(), .month = date.month(), .day_of_month = date.day()};
   return base::Time::FromLocalExploded(exploded_date, &time_date);
-}
-
-std::string FetchTemplatesFromFile(base::FilePath local_path) {
-  std::string data;
-
-  if (!base::ReadFileToString(local_path, &data)) {
-    return "";
-  }
-
-  return data;
 }
 
 }  // namespace
 
-TemplateStore::TemplateStore(
-    PrefService* pref_service,
-    scoped_refptr<network::SharedURLLoaderFactory> url_loader,
-    std::string country_code)
+TemplateStore::TemplateStore(PrefService* pref_service,
+                             std::string country_code)
     : task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::USER_BLOCKING})),
       pref_service_(pref_service),
-      country_code_(country_code) {
-  fetcher_ = std::make_unique<TemplateFetcher>(url_loader);
-}
+      country_code_(country_code) {}
 
 TemplateStore::~TemplateStore() = default;
 
-void TemplateStore::FetchTemplates(GetTemplatesCallback callback) {
-  fetcher_->Start(base::BindOnce(&TemplateStore::OnFetchTemplateComplete,
-                                 base::Unretained(this), std::move(callback)));
-}
-
 void TemplateStore::GetTemplates(GetTemplatesCallback callback) {
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          kLocalDynamicTemplatesForTesting)) {
-    OnFetchTemplateComplete(
-        std::move(callback),
-        FetchTemplatesFromFile(
-            base::CommandLine::ForCurrentProcess()->GetSwitchValuePath(
-                kLocalDynamicTemplatesForTesting)));
-    return;
-  }
-
-  if (IsDynamicTemplatesEnabled()) {
-    FetchTemplates(std::move(callback));
-  } else {
-    base::PostTaskAndReplyWithResult(
-        task_runner_.get(), FROM_HERE,
-        base::BindOnce(&TemplateStore::BuildDefaultTemplates,
-                       base::Unretained(this)),
-        base::BindOnce(&TemplateStore::OnTemplatesReceived,
-                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
-  }
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&TemplateStore::BuildDefaultTemplates),
+      base::BindOnce(&TemplateStore::OnTemplatesReceived,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-void TemplateStore::OnFetchTemplateComplete(GetTemplatesCallback callback,
-                                            std::string response_body) {
-  OnTemplatesReceived(std::move(callback),
-                      ParseTemplatesFromString(response_body));
-}
-
+// static
 std::vector<NoteTemplate> TemplateStore::BuildDefaultTemplates() {
   std::vector<NoteTemplate> templates = {
       GetClassicTemplate(),  GetFriendlyTemplate(),   GetFreshTemplate(),

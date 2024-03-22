@@ -1,14 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <vector>
+#include "build/build_config.h"
 
 #include "base/path_service.h"
 #include "content/browser/media/media_browsertest.h"
 #include "content/browser/media/media_web_contents_observer.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
+#include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/content_paths.h"
 #include "content/public/common/content_switches.h"
@@ -149,10 +151,36 @@ IN_PROC_BROWSER_TEST_F(FullscreenDetectionTest, EncompassingDivNotFullscreen) {
 
   FullscreenEventsRecorder recorder(web_contents);
 
+#if BUILDFLAG(IS_ANDROID)
+  RenderWidgetHostImpl* rwh = static_cast<RenderWidgetHostImpl*>(
+      web_contents->GetRenderViewHost()->GetWidget());
+  gfx::Size compositor_viewport_pixel_rect =
+      rwh->GetVisualProperties().compositor_viewport_pixel_rect.size();
+#endif
+
   ASSERT_TRUE(content::ExecJs(web_contents, "makeFullscreen('small_div')"));
 
   recorder.Wait(1);
   EXPECT_EQ(recorder.event(0), FullscreenTestEvent::kEnterFullscreen);
+
+#if BUILDFLAG(IS_ANDROID)
+  // Android fullscreen transitions causes layout changes, which triggers
+  // SurfaceSync. We should confirm the fullscreen frames have been produced
+  // before exiting.
+  RenderFrameSubmissionObserver rfm_observer(web_contents);
+  while (rwh->GetVisualProperties().compositor_viewport_pixel_rect.size() ==
+         compositor_viewport_pixel_rect) {
+    rfm_observer.WaitForMetadataChange();
+  }
+
+  viz::LocalSurfaceId target = static_cast<RenderWidgetHostViewBase*>(
+                                   web_contents->GetRenderWidgetHostView())
+                                   ->GetLocalSurfaceId();
+  while (!rfm_observer.LastRenderFrameMetadata()
+              .local_surface_id->IsSameOrNewerThan(target)) {
+    rfm_observer.WaitForMetadataChange();
+  }
+#endif
 
   ASSERT_TRUE(content::ExecJs(web_contents, "exitFullscreen()"));
   recorder.Wait(2);
@@ -222,7 +250,13 @@ IN_PROC_BROWSER_TEST_F(FullscreenDetectionTest, DetachAttachDuringFullscreen) {
 
 // The test changes visibility of the <video> and observes
 // how it gets and loses effectively-fullscreen status.
-IN_PROC_BROWSER_TEST_F(FullscreenDetectionTest, HideVideoTag) {
+// TODO(crbug.com/1352246): Re-enable this test
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID)
+#define MAYBE_HideVideoTag DISABLED_HideVideoTag
+#else
+#define MAYBE_HideVideoTag HideVideoTag
+#endif
+IN_PROC_BROWSER_TEST_F(FullscreenDetectionTest, MAYBE_HideVideoTag) {
   auto* web_contents = shell()->web_contents();
   EXPECT_TRUE(NavigateToURL(
       shell(), embedded_test_server()->GetURL("/media/fullscreen.html")));

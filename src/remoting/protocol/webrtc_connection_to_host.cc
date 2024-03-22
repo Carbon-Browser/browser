@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/logging.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "remoting/base/constants.h"
 #include "remoting/protocol/client_control_dispatcher.h"
@@ -23,8 +24,7 @@
 #include "remoting/protocol/webrtc_transport.h"
 #include "remoting/protocol/webrtc_video_renderer_adapter.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 WebrtcConnectionToHost::WebrtcConnectionToHost() = default;
 WebrtcConnectionToHost::~WebrtcConnectionToHost() = default;
@@ -39,8 +39,9 @@ void WebrtcConnectionToHost::Connect(
   transport_ = std::make_unique<WebrtcTransport>(
       webrtc::ThreadWrapper::current(), transport_context, nullptr, this);
 
-  if (audio_decode_task_runner_)
+  if (audio_decode_task_runner_) {
     transport_->audio_module()->SetAudioTaskRunner(audio_decode_task_runner_);
+  }
 
   session_ = std::move(session);
   session_->SetEventHandler(this);
@@ -108,7 +109,7 @@ void WebrtcConnectionToHost::OnSessionStateChange(Session::State state) {
 
     case Session::CLOSED:
       CloseChannels();
-      SetState(CLOSED,  OK);
+      SetState(CLOSED, OK);
       break;
 
     case Session::FAILED:
@@ -137,8 +138,9 @@ void WebrtcConnectionToHost::OnWebrtcTransportProtocolChanged() {}
 void WebrtcConnectionToHost::OnWebrtcTransportIncomingDataChannel(
     const std::string& name,
     std::unique_ptr<MessagePipe> pipe) {
-  if (!control_dispatcher_)
+  if (!control_dispatcher_) {
     control_dispatcher_ = std::make_unique<ClientControlDispatcher>();
+  }
 
   if (name == control_dispatcher_->channel_name() &&
       !control_dispatcher_->is_connected()) {
@@ -170,8 +172,9 @@ void WebrtcConnectionToHost::OnWebrtcTransportMediaStreamAdded(
 
 void WebrtcConnectionToHost::OnWebrtcTransportMediaStreamRemoved(
     rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
-  if (video_adapter_ && video_adapter_->label() == stream->id())
+  if (video_adapter_ && video_adapter_->label() == stream->id()) {
     video_adapter_.reset();
+  }
 }
 
 void WebrtcConnectionToHost::OnWebrtcTransportRouteChanged(
@@ -194,10 +197,12 @@ ConnectionToHost::State WebrtcConnectionToHost::state() const {
 }
 
 void WebrtcConnectionToHost::NotifyIfChannelsReady() {
-  if (!control_dispatcher_.get() || !control_dispatcher_->is_connected())
+  if (!control_dispatcher_.get() || !control_dispatcher_->is_connected()) {
     return;
-  if (!event_dispatcher_.get() || !event_dispatcher_->is_connected())
+  }
+  if (!event_dispatcher_.get() || !event_dispatcher_->is_connected()) {
     return;
+  }
 
   // Start forwarding clipboard and input events.
   clipboard_forwarder_.set_clipboard_stub(control_dispatcher_.get());
@@ -236,5 +241,4 @@ void WebrtcConnectionToHost::SetState(State state, ErrorCode error) {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

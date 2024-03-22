@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@
 #elif BUILDFLAG(IS_ANDROID)
 #include "components/viz/service/display/overlay_processor_android.h"
 #include "components/viz/service/display/overlay_processor_surface_control.h"
-#elif defined(USE_OZONE)
+#elif BUILDFLAG(IS_OZONE)
 #include "components/viz/service/display/overlay_processor_delegated.h"
 #include "components/viz/service/display/overlay_processor_ozone.h"
 #include "ui/ozone/public/overlay_manager_ozone.h"
@@ -110,13 +110,10 @@ OverlayProcessorInterface::CreateOverlayProcessor(
     return std::make_unique<OverlayProcessorStub>();
 
   return std::make_unique<OverlayProcessorWin>(
-      output_surface,
+      output_surface, debug_settings,
       std::make_unique<DCLayerOverlayProcessor>(
-          debug_settings, /*allowed_yuv_overlay_count=*/capabilities
-                                  .supports_two_yuv_hardware_overlays
-                              ? 2
-                              : 1));
-#elif defined(USE_OZONE)
+          capabilities.allowed_yuv_overlay_count));
+#elif BUILDFLAG(IS_OZONE)
 #if !BUILDFLAG(IS_CASTOS)
   // In tests and Ozone/X11, we do not expect surfaceless surface support.
   // For CastOS, we always need OverlayProcessorOzone.
@@ -138,16 +135,15 @@ OverlayProcessorInterface::CreateOverlayProcessor(
   }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (features::IsDelegatedCompositingEnabled()) {
-    return std::make_unique<OverlayProcessorDelegated>(
-        std::move(overlay_candidates),
-        std::move(renderer_settings.overlay_strategies), sii);
-  }
-#endif
-
+  return std::make_unique<OverlayProcessorDelegated>(
+      std::move(overlay_candidates),
+      std::move(renderer_settings.overlay_strategies), sii);
+#else
   return std::make_unique<OverlayProcessorOzone>(
       std::move(overlay_candidates),
       std::move(renderer_settings.overlay_strategies), sii);
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+
 #elif BUILDFLAG(IS_ANDROID)
   DCHECK(display_controller);
 
@@ -217,6 +213,10 @@ void OverlayProcessorInterface::OverlayPresentationComplete() {}
 
 gfx::CALayerResult OverlayProcessorInterface::GetCALayerErrorCode() const {
   return gfx::kCALayerSuccess;
+}
+
+gfx::RectF OverlayProcessorInterface::GetUnassignedDamage() const {
+  return gfx::RectF();
 }
 
 }  // namespace viz

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ AddressInfo::AddressInfoAndResult AddressInfo::Get(
     const std::string& host,
     const addrinfo& hints,
     std::unique_ptr<AddrInfoGetter> getter,
-    NetworkChangeNotifier::NetworkHandle network) {
+    handles::NetworkHandle network) {
   if (getter == nullptr)
     getter = std::make_unique<AddrInfoGetter>();
   int err = OK;
@@ -179,7 +179,7 @@ std::unique_ptr<addrinfo, FreeAddrInfoFunc> AddrInfoGetter::getaddrinfo(
     const std::string& host,
     const addrinfo* hints,
     int* out_os_error,
-    NetworkChangeNotifier::NetworkHandle network) {
+    handles::NetworkHandle network) {
   addrinfo* ai;
   // We wrap freeaddrinfo() in a lambda just in case some operating systems use
   // a different signature for it.
@@ -187,7 +187,7 @@ std::unique_ptr<addrinfo, FreeAddrInfoFunc> AddrInfoGetter::getaddrinfo(
 
   std::unique_ptr<addrinfo, FreeAddrInfoFunc> rv = {nullptr, deleter};
 
-  if (network != NetworkChangeNotifier::kInvalidNetworkHandle) {
+  if (network != handles::kInvalidNetworkHandle) {
     // Currently, only Android supports lookups for a specific network.
 #if BUILDFLAG(IS_ANDROID)
     *out_os_error = android::GetAddrInfoForNetwork(network, host.c_str(),

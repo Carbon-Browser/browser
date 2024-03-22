@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/settings/settings_utils.h"
@@ -82,7 +82,11 @@ void StartupPagesHandler::OnModelChanged() {
   for (size_t i = 0; i < page_count; ++i) {
     base::Value::Dict entry;
     entry.Set("title", startup_custom_pages_table_model_.GetText(i, 0));
-    entry.Set("url", urls[i].spec());
+    std::string spec;
+    if (urls[i].is_valid()) {
+      spec = urls[i].spec();
+    }
+    entry.Set("url", std::move(spec));
     entry.Set("tooltip", startup_custom_pages_table_model_.GetTooltip(i));
     entry.Set("modelIndex", base::checked_cast<int>(i));
     startup_pages.Append(std::move(entry));

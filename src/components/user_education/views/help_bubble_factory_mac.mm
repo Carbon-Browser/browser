@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,16 +29,21 @@ std::unique_ptr<HelpBubble> HelpBubbleFactoryMac::CreateBubble(
   views::Widget* const widget =
       views::ElementTrackerViews::GetInstance()->GetWidgetForContext(
           element_mac->context());
-  auto* const anchor_view = widget->GetRootView();
-  gfx::Rect anchor_rect = element_mac->screen_bounds();
+
+  // Because the exact location of the menu item cannot be determined, an arrow
+  // is not shown on the bubble.
+  internal::HelpBubbleAnchorParams anchor;
+  anchor.show_arrow = false;
+  anchor.view = widget->GetRootView();
+  anchor.rect = element_mac->GetScreenBounds();
 
   // We don't want the bubble to be flush with either the side or top of the
   // Mac native menu, because it looks funny.
   constexpr auto kMacMenuInsets = gfx::Insets::VH(10, -5);
-  anchor_rect.Inset(kMacMenuInsets);
+  anchor.rect->Inset(kMacMenuInsets);
 
-  return base::WrapUnique(new HelpBubbleViews(new HelpBubbleView(
-      delegate_, anchor_view, std::move(params), anchor_rect)));
+  return base::WrapUnique(new HelpBubbleViews(
+      new HelpBubbleView(delegate_, anchor, std::move(params)), element));
 }
 
 bool HelpBubbleFactoryMac::CanBuildBubbleForTrackedElement(

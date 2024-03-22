@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,20 @@
 #include "base/observer_list_types.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/metrics/structured/event.h"
-#include "components/metrics/structured/event_base.h"
 #include "components/metrics/structured/structured_metrics_client.h"
+#include "components/metrics/structured/structured_metrics_validator.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class FilePath;
 }
 
-namespace metrics {
-namespace structured {
+namespace metrics::structured {
+namespace {
+
+using ::metrics::ChromeUserMetricsExtension;
+
+}
 
 // Recorder is a singleton to help communicate with the
 // StructuredMetricsProvider. It serves three purposes:
@@ -39,28 +43,32 @@ namespace structured {
 //
 // Recorder is embedded within StructuredMetricsClient for Ash Chrome and should
 // only be used in Ash Chrome.
-class Recorder : public StructuredMetricsClient::RecordingDelegate {
+//
+// TODO(b/282031543): Remove this class and merge remaining logic into
+// structured_metrics_recorder.h since the Record() is exposed via
+// StructuredMetricsClient interface now.
+class Recorder {
  public:
   class RecorderImpl : public base::CheckedObserver {
    public:
     // Called on a call to Record.
-    virtual void OnRecord(const EventBase& event) = 0;
+    virtual void OnEventRecord(const Event& event) = 0;
     // Called on a call to ProfileAdded.
     virtual void OnProfileAdded(const base::FilePath& profile_path) = 0;
     // Called on a call to OnReportingStateChanged.
     virtual void OnReportingStateChanged(bool enabled) = 0;
-    // Called when hardware class has been loaded.
-    virtual void OnHardwareClassInitialized(){};
-    // Called on a call to LastKeyRotation.
-    virtual absl::optional<int> LastKeyRotation(uint64_t project_name_hash) = 0;
+    // Called when SystemProfile has finished loading
+    virtual void OnSystemProfileInitialized() {}
   };
+
+  Recorder(const Recorder&) = delete;
+  Recorder& operator=(const Recorder&) = delete;
 
   static Recorder* GetInstance();
 
-  // RecordingDelegate:
-  void RecordEvent(Event&& event) override;
-  void Record(EventBase&& event) override;
-  bool IsReadyToRecord() const override;
+  // This signals to StructuredMetricsProvider that the event should be
+  // recorded.
+  void RecordEvent(Event&& event);
 
   // Notifies the StructuredMetricsProvider that a profile has been added with
   // path |profile_path|. The first call to ProfileAdded initializes the
@@ -71,15 +79,11 @@ class Recorder : public StructuredMetricsClient::RecordingDelegate {
   // investigate whether initialization can be simplified for Chrome.
   void ProfileAdded(const base::FilePath& profile_path);
 
-  // Returns when the key for |project_name_hash| was last rotated, in days
-  // since epoch. Returns nullopt if the information is not available.
-  absl::optional<int> LastKeyRotation(uint64_t project_name_hash);
-
   // Notifies observers that metrics reporting has been enabled or disabled.
   void OnReportingStateChanged(bool enabled);
 
-  // Notifies observers that hardware class has been loaded.
-  void OnHardwareClassInitialized();
+  // Notifies observers that system profile has been loaded.
+  void OnSystemProfileInitialized();
 
   void SetUiTaskRunner(
       const scoped_refptr<base::SequencedTaskRunner> ui_task_runner);
@@ -87,20 +91,30 @@ class Recorder : public StructuredMetricsClient::RecordingDelegate {
   void AddObserver(RecorderImpl* observer);
   void RemoveObserver(RecorderImpl* observer);
 
+  // Adds |events_processor| to further add metadata to recorded events or
+  // listen to recorded events.
+  void AddEventsProcessor(
+      std::unique_ptr<EventsProcessorInterface> events_processor);
+
+  // Modifies |uma_proto| before the log is sent.
+  void OnProvideIndependentMetrics(ChromeUserMetricsExtension* uma_proto);
+
+  // Modifies |event| once after the proto has been built.
+  void OnEventRecorded(StructuredEventProto* event);
+
  private:
   friend class base::NoDestructor<Recorder>;
 
   Recorder();
-  ~Recorder() override;
-  Recorder(const Recorder&) = delete;
-  Recorder& operator=(const Recorder&) = delete;
+  ~Recorder();
 
   scoped_refptr<base::SequencedTaskRunner> ui_task_runner_;
 
   base::ObserverList<RecorderImpl> observers_;
+
+  DelegatingEventsProcessor delegating_events_processor_;
 };
 
-}  // namespace structured
-}  // namespace metrics
+}  // namespace metrics::structured
 
 #endif  // COMPONENTS_METRICS_STRUCTURED_RECORDER_H_

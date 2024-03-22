@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,13 +34,15 @@ class DeviceAttributesImpl : public DeviceAttributes {
 
   std::string GetSSOProfile() const override;
 
-  std::string GetRealm() const override;
-
   std::string GetDeviceAssetID() const override;
+
+  std::string GetDeviceSerialNumber() const override;
 
   std::string GetMachineName() const override;
 
   std::string GetDeviceAnnotatedLocation() const override;
+
+  absl::optional<std::string> GetDeviceHostname() const override;
 
   std::string GetDirectoryApiID() const override;
 

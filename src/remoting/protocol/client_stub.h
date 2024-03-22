@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@
 #include "remoting/protocol/cursor_shape_stub.h"
 #include "remoting/protocol/keyboard_layout_stub.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
+class ActiveDisplay;
 class Capabilities;
 class ExtensionMessage;
 class PairingResponse;
@@ -48,9 +48,12 @@ class ClientStub : public ClipboardStub,
 
   // Passes the host's transport info to the client.
   virtual void SetTransportInfo(const TransportInfo& transport_info) = 0;
+
+  // Sends the host's active display to the client. This is sent whenever the
+  // screen id associated with the active window changes.
+  virtual void SetActiveDisplay(const ActiveDisplay& active_display) = 0;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_CLIENT_STUB_H_

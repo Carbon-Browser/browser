@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@ import android.os.RemoteException;
 
 import androidx.annotation.BinderThread;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.components.webapk_install.IOnFinishInstallCallback;
 
 /**
@@ -32,12 +33,20 @@ public class WebApkInstallCoordinatorBridge {
     }
 
     @BinderThread
-    void install(byte[] apkProto, Bitmap primaryIcon, boolean isPrimaryIconMaskable,
+    void install(
+            byte[] apkProto,
+            Bitmap primaryIcon,
+            boolean isPrimaryIconMaskable,
             IOnFinishInstallCallback callback) {
         mCallback = callback;
 
-        WebApkInstallCoordinatorBridgeJni.get().install(mNativeWebApkInstallCoordinatorBridge,
-                WebApkInstallCoordinatorBridge.this, apkProto, primaryIcon, isPrimaryIconMaskable);
+        WebApkInstallCoordinatorBridgeJni.get()
+                .install(
+                        mNativeWebApkInstallCoordinatorBridge,
+                        WebApkInstallCoordinatorBridge.this,
+                        apkProto,
+                        primaryIcon,
+                        isPrimaryIconMaskable);
     }
 
     @CalledByNative
@@ -62,12 +71,28 @@ public class WebApkInstallCoordinatorBridge {
         }
     }
 
+    void retry(String startUrl, byte[] proto, Bitmap primaryIcon) {
+        WebApkInstallCoordinatorBridgeJni.get()
+                .retry(mNativeWebApkInstallCoordinatorBridge, startUrl, proto, primaryIcon);
+    }
+
     @NativeMethods
     interface Natives {
         long init(WebApkInstallCoordinatorBridge caller);
-        void install(long nativeWebApkInstallCoordinatorBridge,
-                WebApkInstallCoordinatorBridge caller, byte[] apkProto, Bitmap primaryIcon,
+
+        void install(
+                long nativeWebApkInstallCoordinatorBridge,
+                WebApkInstallCoordinatorBridge caller,
+                byte[] apkProto,
+                Bitmap primaryIcon,
                 boolean isPrimaryIconMaskable);
+
+        void retry(
+                long nativeWebApkInstallCoordinatorBridge,
+                String startUrl,
+                byte[] apkProto,
+                Bitmap primaryIcon);
+
         void destroy(long nativeWebApkInstallCoordinatorBridge);
     }
 }

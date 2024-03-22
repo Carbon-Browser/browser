@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,17 +13,16 @@
 #include "base/scoped_observation.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "chromeos/ash/services/assistant/public/cpp/conversation_observer.h"
-#include "chromeos/services/libassistant/public/cpp/android_app_info.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_interaction_metadata.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_notification.h"
-#include "chromeos/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
-#include "chromeos/services/libassistant/public/mojom/notification_delegate.mojom.h"
+#include "chromeos/ash/services/libassistant/public/cpp/android_app_info.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_interaction_metadata.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_notification.h"
+#include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
+#include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "ui/accessibility/mojom/ax_assistant_structure.mojom.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 struct AssistantFeedback;
 
@@ -74,13 +73,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) Assistant {
   // to edit the specified reminder.
   virtual void StartEditReminderInteraction(const std::string& client_id) = 0;
 
-  // Starts a screen context interaction. Results related to the screen context
-  // will be returned through the |AssistantInteractionSubscriber| interface to
-  // registered subscribers.
-  // |assistant_screenshot| contains JPEG data.
-  virtual void StartScreenContextInteraction(
-      const std::vector<uint8_t>& assistant_screenshot) = 0;
-
   // Starts a new Assistant text interaction. If |allow_tts| is true, the
   // result will contain TTS. Otherwise TTS will not be present in the
   // generated server response. Results will be returned through registered
@@ -106,8 +98,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) Assistant {
   virtual void AddRemoteConversationObserver(
       ConversationObserver* observer) = 0;
 
-  virtual mojo::PendingReceiver<
-      chromeos::libassistant::mojom::NotificationDelegate>
+  virtual mojo::PendingReceiver<libassistant::mojom::NotificationDelegate>
   GetPendingNotificationDelegate() = 0;
 
   // Retrieves a notification. A voiceless interaction will be sent to server to
@@ -157,12 +148,9 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) Assistant {
 };
 
 using ScopedAssistantInteractionSubscriber =
-    base::ScopedObservation<Assistant,
-                            AssistantInteractionSubscriber,
-                            &Assistant::AddAssistantInteractionSubscriber,
-                            &Assistant::RemoveAssistantInteractionSubscriber>;
+    base::ScopedObservation<Assistant, AssistantInteractionSubscriber>;
 
-// Main interface between browser and |chromeos::assistant::Service|.
+// Main interface between browser and |ash::assistant::Service|.
 class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AssistantService {
  public:
   AssistantService();
@@ -182,7 +170,33 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AssistantService {
   virtual Assistant* GetAssistant() = 0;
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
+
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
+namespace chromeos::assistant {
+using ::ash::assistant::Assistant;
+using ::ash::assistant::AssistantInteractionSubscriber;
+using ::ash::assistant::AssistantService;
+}  // namespace chromeos::assistant
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<ash::assistant::Assistant,
+                               ash::assistant::AssistantInteractionSubscriber> {
+  static void AddObserver(
+      ash::assistant::Assistant* source,
+      ash::assistant::AssistantInteractionSubscriber* observer) {
+    source->AddAssistantInteractionSubscriber(observer);
+  }
+  static void RemoveObserver(
+      ash::assistant::Assistant* source,
+      ash::assistant::AssistantInteractionSubscriber* observer) {
+    source->RemoveAssistantInteractionSubscriber(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_PUBLIC_CPP_ASSISTANT_SERVICE_H_

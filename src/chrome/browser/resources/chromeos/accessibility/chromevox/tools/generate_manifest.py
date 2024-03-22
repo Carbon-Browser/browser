@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -62,6 +62,12 @@ def main():
       action='store',
       metavar='NUM',
       help='Whether to generate a guest mode capable manifest')
+  parser.add_option(
+      '--is_manifest_v3',
+      default='0',
+      action='store',
+      metavar='NUM',
+      help='Whether to generate a manifest using manifest version 3')
   parser.add_option(
       '--is_js_compressed',
       default='1',

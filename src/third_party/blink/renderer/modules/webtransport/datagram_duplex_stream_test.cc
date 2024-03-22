@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -80,6 +80,10 @@ class StubWebTransport final : public network::mojom::blink::WebTransport {
 
   void SetOutgoingDatagramExpirationDuration(base::TimeDelta value) override {
     outgoing_datagram_expiration_duration_value_ = value;
+  }
+
+  void GetStats(GetStatsCallback callback) override {
+    std::move(callback).Run(nullptr);
   }
 
   void Close(network::mojom::blink::WebTransportCloseInfoPtr) override {}

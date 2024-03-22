@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,17 @@
 #define ASH_STYLE_SYSTEM_SHADOW_H_
 
 #include "ash/ash_export.h"
+#include "ui/color/color_provider_source_observer.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
+#include "ui/gfx/shadow_value.h"
 
 namespace aura {
 class Window;
 }  // namespace aura
 
 namespace ui {
+class ColorProvider;
 class Layer;
 }  // namespace ui
 
@@ -24,19 +28,17 @@ namespace ash {
 
 // SystemShadow is an interface to generate shadow with system shadow style for
 // different types of UI surfaces.
-class ASH_EXPORT SystemShadow {
+class ASH_EXPORT SystemShadow : public ui::ColorProviderSourceObserver {
  public:
   // Shadow types of system UI components. The shadows with different elevations
   // have different appearance.
   enum class Type {
-    kElevation4,
-    kElevation8,
-    kElevation12,
-    kElevation16,
-    kElevation24,
+    kElevation4,   // corresponds to cros.sys.system-elevation1.
+    kElevation12,  // corresponds to cros.sys.system-elevation3.
+    kElevation24,  // corresponds to cros.sys.system-elevation5.
   };
 
-  virtual ~SystemShadow();
+  ~SystemShadow() override;
 
   // Create a system shadow based on `ui::Shadow` which paints shadow on a nine
   // patch layer. This shadow can be used for any UI surfaces. Usually, when
@@ -70,6 +72,12 @@ class ASH_EXPORT SystemShadow {
       aura::Window* window,
       Type shadow_type);
 
+  // Create a system shadow painted on a texture layer. Painting shadow on a
+  // texture layer is expensive so only use it when necessary. See
+  // `SystemShadowOnTextureLayer` for more details.
+  static std::unique_ptr<SystemShadow> CreateShadowOnTextureLayer(
+      Type shadow_type);
+
   // Get shadow elevation according to the given type.
   static int GetElevationFromType(Type type);
 
@@ -80,7 +88,16 @@ class ASH_EXPORT SystemShadow {
 
   virtual void SetContentBounds(const gfx::Rect& bounds) = 0;
 
+  // TODO(http://b/307326019): Deprecate this method when all shadow
+  // implementations use `gfx::RoundedCornersF`.
   virtual void SetRoundedCornerRadius(int corner_radius) = 0;
+
+  // TODO(http://b/307326019): This is only used for
+  // `SystemShadowOnTextureLayer` for now. Should be applied to
+  // `SystemShadowOnNinePatchLayer` when `ui::Shadow` is able to use
+  // `gfx::RoundedCornersF`.
+  virtual void SetRoundedCorners(
+      const gfx::RoundedCornersF& rounded_corners) = 0;
 
   virtual const gfx::Rect& GetContentBounds() = 0;
 
@@ -95,6 +112,20 @@ class ASH_EXPORT SystemShadow {
   // hierarchy, visibility and transformation on the shadow's layer instead of
   // the nine patch layer.
   virtual ui::Layer* GetNinePatchLayer() = 0;
+
+  // Return the shadow values of the shadow for testing.
+  virtual const gfx::ShadowValues GetShadowValuesForTesting() const = 0;
+
+  // Observe the given color provider source to update the shadow colors.
+  void ObserveColorProviderSource(
+      ui::ColorProviderSource* color_provider_source);
+
+  // ui::ColorProviderSourceObserver:
+  void OnColorProviderChanged() override;
+
+ private:
+  // Update shadow colors with given color provider.
+  virtual void UpdateShadowColors(const ui::ColorProvider* color_provider) = 0;
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ class WebAppRunOnOsLoginLinuxTest : public WebAppTest {
 
   std::unique_ptr<ShortcutInfo> GetShortcutInfo() {
     auto shortcut_info = std::make_unique<ShortcutInfo>();
-    shortcut_info->extension_id = kAppId;
+    shortcut_info->app_id = kAppId;
     shortcut_info->title = kAppTitle;
     shortcut_info->profile_path = profile()->GetPath();
 
@@ -78,7 +78,7 @@ TEST_F(WebAppRunOnOsLoginLinuxTest, Unregister) {
   EXPECT_TRUE(base::PathExists(GetPathToAutoStartFile()));
 
   EXPECT_EQ(Result::kOk,
-            internals::UnregisterRunOnOsLogin(shortcut_info->extension_id,
+            internals::UnregisterRunOnOsLogin(shortcut_info->app_id,
                                               profile()->GetPath(), kAppTitle));
   EXPECT_FALSE(base::PathExists(GetPathToAutoStartFile()));
 }

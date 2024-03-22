@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
  * @fileoverview Multi-tap gesture detector for web UI OOBE.
  */
 
-// #import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from '//resources/ash/common/assert.js';
 
 /** Multi-tap gesture detector. */
-/* #export */ class MultiTapDetector {
+export class MultiTapDetector {
   /**
    * @param {?HTMLElement} element UI element to attach the multi-tap detector to.
    * @param {number} tapsCount Number of taps in multi-tap gesture to detect.

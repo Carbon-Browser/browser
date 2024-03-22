@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright (c) 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -60,7 +60,10 @@ class SendResultsFatalException(SendResultException):
 
 def LuciAuthTokenGeneratorCallback():
   args = ['luci-auth', 'token']
-  p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+  p = subprocess.Popen(args,
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE,
+                       universal_newlines=True)
   if p.wait() == 0:
     return p.stdout.read().strip()
   raise RuntimeError(
@@ -68,7 +71,10 @@ def LuciAuthTokenGeneratorCallback():
       (p.stdout.read(), p.stderr.read()))
 
 
-def SendResults(data, data_label, url, send_as_histograms=False,
+def SendResults(data,
+                data_label,
+                url,
+                send_as_histograms=False,
                 token_generator_callback=LuciAuthTokenGeneratorCallback,
                 num_retries=4):
   """Sends results to the Chrome Performance Dashboard.
@@ -427,7 +433,9 @@ def _SendResultsJson(url, results_json, token_generator_callback):
   """
   # When data is provided to urllib2.Request, a POST is sent instead of GET.
   # The data must be in the application/x-www-form-urlencoded format.
-  data = six.moves.urllib.parse.urlencode({'data': results_json})
+  data = six.moves.urllib.parse.urlencode({
+      'data': results_json
+  }).encode('utf-8')
   req = six.moves.urllib.request.Request(url + SEND_RESULTS_PATH, data)
   try:
     oauth_token = token_generator_callback()
@@ -470,8 +478,10 @@ def _SendHistogramJson(url, histogramset_json, token_generator_callback):
 
     http = httplib2.Http()
 
-    response, content = http.request(
-      url + SEND_HISTOGRAMS_PATH, method='POST', body=data, headers=headers)
+    response, content = http.request(url + SEND_HISTOGRAMS_PATH,
+                                     method='POST',
+                                     body=data,
+                                     headers=headers)
 
     # A 500 is presented on an exception on the dashboard side, timeout,
     # exception, etc. The dashboard can also send back 400 and 403, we could

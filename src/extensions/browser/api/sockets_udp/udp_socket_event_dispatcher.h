@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,7 @@ namespace api {
 
 // Dispatch events related to "sockets.udp" sockets from callback on native
 // socket instances. There is one instance per profile.
-class UDPSocketEventDispatcher
-    : public BrowserContextKeyedAPI,
-      public base::SupportsWeakPtr<UDPSocketEventDispatcher> {
+class UDPSocketEventDispatcher : public BrowserContextKeyedAPI {
  public:
   explicit UDPSocketEventDispatcher(content::BrowserContext* context);
   ~UDPSocketEventDispatcher() override;
@@ -64,7 +62,7 @@ class UDPSocketEventDispatcher
     ~ReceiveParams();
 
     content::BrowserThread::ID thread_id;
-    raw_ptr<void> browser_context_id;
+    raw_ptr<void, DanglingUntriaged> browser_context_id;
     std::string extension_id;
     scoped_refptr<SocketData> sockets;
     int socket_id;

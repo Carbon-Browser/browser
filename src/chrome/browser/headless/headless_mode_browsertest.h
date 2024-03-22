@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,27 @@
 #define CHROME_BROWSER_HEADLESS_HEADLESS_MODE_BROWSERTEST_H_
 
 #include "base/command_line.h"
+#include "base/files/file_path.h"
+#include "base/files/scoped_temp_dir.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+namespace content {
+class WebContents;
+}
+
+namespace views {
+class Widget;
+}
+
+namespace headless {
 
 class HeadlessModeBrowserTest : public InProcessBrowserTest {
  public:
-  static constexpr char kHeadlessSwitchValue[] = "chrome";
+  static constexpr char kHeadlessSwitchValue[] = "new";
 
-  HeadlessModeBrowserTest() = default;
+  HeadlessModeBrowserTest();
 
   HeadlessModeBrowserTest(const HeadlessModeBrowserTest&) = delete;
   HeadlessModeBrowserTest& operator=(const HeadlessModeBrowserTest&) = delete;
@@ -22,6 +35,35 @@ class HeadlessModeBrowserTest : public InProcessBrowserTest {
 
   void SetUpCommandLine(base::CommandLine* command_line) override;
   void SetUpOnMainThread() override;
+
+  // Returns the visibility state of the platform window associated with the
+  // widget. This method has platform specific implementations.
+  static bool IsPlatformWindowVisible(views::Widget* widget);
+
+ protected:
+  bool headful_mode() const { return headful_mode_; }
+
+  void AppendHeadlessCommandLineSwitches(base::CommandLine* command_line);
+
+  content::WebContents* GetActiveWebContents();
+
+ private:
+  bool headful_mode_ = false;
+};
+
+class HeadlessModeBrowserTestWithUserDataDir : public HeadlessModeBrowserTest {
+ public:
+  HeadlessModeBrowserTestWithUserDataDir() = default;
+  ~HeadlessModeBrowserTestWithUserDataDir() override = default;
+
+  void SetUpCommandLine(base::CommandLine* command_line) override;
+
+  const base::FilePath& user_data_dir() const {
+    return user_data_dir_.GetPath();
+  }
+
+ private:
+  base::ScopedTempDir user_data_dir_;
 };
 
 enum StartWindowMode {
@@ -35,20 +77,37 @@ class HeadlessModeBrowserTestWithStartWindowMode
       public testing::WithParamInterface<StartWindowMode> {
  public:
   HeadlessModeBrowserTestWithStartWindowMode() = default;
-
-  HeadlessModeBrowserTestWithStartWindowMode(
-      const HeadlessModeBrowserTestWithStartWindowMode&) = delete;
-  HeadlessModeBrowserTestWithStartWindowMode& operator=(
-      const HeadlessModeBrowserTestWithStartWindowMode&) = delete;
-
   ~HeadlessModeBrowserTestWithStartWindowMode() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override;
 
-  StartWindowMode start_window_mode() const { return GetParam(); };
+  StartWindowMode start_window_mode() const { return GetParam(); }
 };
 
 // Toggles browser fullscreen mode synchronously.
 void ToggleFullscreenModeSync(Browser* browser);
+
+class HeadlessModeBrowserTestWithWindowSize : public HeadlessModeBrowserTest {
+ public:
+  static constexpr gfx::Size kWindowSize = {4096, 2160};
+
+  HeadlessModeBrowserTestWithWindowSize() = default;
+  ~HeadlessModeBrowserTestWithWindowSize() override = default;
+
+  void SetUpCommandLine(base::CommandLine* command_line) override;
+};
+
+class HeadlessModeBrowserTestWithWindowSizeAndScale
+    : public HeadlessModeBrowserTest {
+ public:
+  static constexpr gfx::Size kWindowSize = {800, 600};
+
+  HeadlessModeBrowserTestWithWindowSizeAndScale() = default;
+  ~HeadlessModeBrowserTestWithWindowSizeAndScale() override = default;
+
+  void SetUpCommandLine(base::CommandLine* command_line) override;
+};
+
+}  // namespace headless
 
 #endif  // CHROME_BROWSER_HEADLESS_HEADLESS_MODE_BROWSERTEST_H_

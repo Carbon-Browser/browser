@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,10 +83,6 @@ class PasswordsModelDelegateMock
                password_manager::CredentialType),
               (override));
   MOCK_METHOD(void,
-              NavigateToPasswordManagerAccountDashboard,
-              (password_manager::ManagePasswordsReferrer),
-              (override));
-  MOCK_METHOD(void,
               NavigateToPasswordManagerSettingsPage,
               (password_manager::ManagePasswordsReferrer),
               (override));
@@ -96,24 +92,27 @@ class PasswordsModelDelegateMock
               (override));
   MOCK_METHOD(void, EnableSync, (const AccountInfo& account), (override));
   MOCK_METHOD(void, OnDialogHidden, (), (override));
-  MOCK_METHOD(bool, AuthenticateUser, (), (override));
+  MOCK_METHOD(void,
+              AuthenticateUserWithMessage,
+              (const std::u16string& message, AvailabilityCallback callback),
+              (override));
   MOCK_METHOD(void,
               AuthenticateUserForAccountStoreOptInAndSavePassword,
               (const std::u16string&, const std::u16string&),
-              (override));
-  MOCK_METHOD(void,
-              AuthenticateUserForAccountStoreOptInAndMovePassword,
-              (),
               (override));
   MOCK_METHOD(
       void,
       AuthenticateUserForAccountStoreOptInAfterSavingLocallyAndMovePassword,
       (),
       (override));
-  MOCK_METHOD(bool,
-              ArePasswordsRevealedWhenBubbleIsOpened,
-              (),
-              (const override));
+  MOCK_METHOD(void, ShowBiometricActivationConfirmation, (), (override));
+  MOCK_METHOD(void, OnBiometricAuthBeforeFillingDeclined, (), (override));
+  MOCK_METHOD(void,
+              OnAddUsernameSaveClicked,
+              (const std::u16string&),
+              (override));
+  MOCK_METHOD(void, MaybeShowIOSPasswordPromo, (), (override));
+  MOCK_METHOD(void, RelaunchChrome, (), (override));
 };
 
 #endif  // CHROME_BROWSER_UI_PASSWORDS_PASSWORDS_MODEL_DELEGATE_MOCK_H_

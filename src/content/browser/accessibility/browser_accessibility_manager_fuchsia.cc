@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/fuchsia/fuchsia_logging.h"
 #include "content/browser/accessibility/browser_accessibility_fuchsia.h"
+#include "content/browser/accessibility/web_ax_platform_tree_manager_delegate.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/accessibility/platform/fuchsia/accessibility_bridge_fuchsia_registry.h"
 
@@ -16,20 +17,20 @@ namespace content {
 // static
 BrowserAccessibilityManager* BrowserAccessibilityManager::Create(
     const ui::AXTreeUpdate& initial_tree,
-    BrowserAccessibilityDelegate* delegate) {
+    WebAXPlatformTreeManagerDelegate* delegate) {
   return new BrowserAccessibilityManagerFuchsia(initial_tree, delegate);
 }
 
 // static
 BrowserAccessibilityManager* BrowserAccessibilityManager::Create(
-    content::BrowserAccessibilityDelegate* delegate) {
+    WebAXPlatformTreeManagerDelegate* delegate) {
   return new BrowserAccessibilityManagerFuchsia(
       BrowserAccessibilityManagerFuchsia::GetEmptyDocument(), delegate);
 }
 
 BrowserAccessibilityManagerFuchsia::BrowserAccessibilityManagerFuchsia(
     const ui::AXTreeUpdate& initial_tree,
-    BrowserAccessibilityDelegate* delegate)
+    WebAXPlatformTreeManagerDelegate* delegate)
     : BrowserAccessibilityManager(delegate) {
   Initialize(initial_tree);
 
@@ -42,7 +43,7 @@ BrowserAccessibilityManagerFuchsia::BrowserAccessibilityManagerFuchsia(
 
       auto str = ax_tree()->ToString();
       auto str_capacity = str.capacity();
-      inspector.GetRoot().CreateString(ax_tree_id().ToString(), std::move(str),
+      inspector.GetRoot().CreateString(GetTreeID().ToString(), std::move(str),
                                        &inspector);
 
       // Test to check if the string fit in memory.
@@ -66,38 +67,35 @@ BrowserAccessibilityManagerFuchsia::GetAccessibilityBridge() const {
   if (accessibility_bridge_for_test_)
     return accessibility_bridge_for_test_;
 
+  gfx::NativeWindow top_level_native_window =
+      delegate_ ? delegate_->GetTopLevelNativeWindow() : gfx::NativeWindow();
+
+  aura::Window* accessibility_bridge_key =
+      top_level_native_window ? top_level_native_window->GetRootWindow()
+                              : nullptr;
+  if (!accessibility_bridge_key) {
+    return nullptr;
+  }
+
   ui::AccessibilityBridgeFuchsiaRegistry* accessibility_bridge_registry =
       ui::AccessibilityBridgeFuchsiaRegistry::GetInstance();
   DCHECK(accessibility_bridge_registry);
 
-  WebContents* web_contents = this->web_contents();
-  if (!web_contents)
-    return nullptr;
-
-  gfx::NativeWindow top_level_native_window =
-      web_contents->GetTopLevelNativeWindow();
-  if (!top_level_native_window)
-    return nullptr;
-
-  aura::Window* root_window = top_level_native_window->GetRootWindow();
-  if (!root_window)
-    return nullptr;
-
-  return accessibility_bridge_registry->GetAccessibilityBridge(root_window);
+  return accessibility_bridge_registry->GetAccessibilityBridge(
+      accessibility_bridge_key);
 }
 
-void BrowserAccessibilityManagerFuchsia::FireFocusEvent(
-    BrowserAccessibility* node) {
-  BrowserAccessibilityManager::FireFocusEvent(node);
+void BrowserAccessibilityManagerFuchsia::FireFocusEvent(ui::AXNode* node) {
+  ui::AXTreeManager::FireFocusEvent(node);
 
   if (!GetAccessibilityBridge())
     return;
 
   BrowserAccessibilityFuchsia* new_focus_fuchsia =
-      ToBrowserAccessibilityFuchsia(node);
+      ToBrowserAccessibilityFuchsia(GetFromAXNode(node));
 
   BrowserAccessibilityFuchsia* old_focus_fuchsia =
-      ToBrowserAccessibilityFuchsia(GetLastFocusedNode());
+      ToBrowserAccessibilityFuchsia(GetFromAXNode(GetLastFocusedNode()));
 
   if (old_focus_fuchsia)
     old_focus_fuchsia->OnDataChanged();

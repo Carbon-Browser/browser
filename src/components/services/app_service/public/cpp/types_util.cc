@@ -1,26 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/app_service/public/cpp/types_util.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 
 namespace apps_util {
-
-bool IsInstalled(apps::mojom::Readiness readiness) {
-  switch (readiness) {
-    case apps::mojom::Readiness::kReady:
-    case apps::mojom::Readiness::kDisabledByBlocklist:
-    case apps::mojom::Readiness::kDisabledByPolicy:
-    case apps::mojom::Readiness::kDisabledByUser:
-    case apps::mojom::Readiness::kTerminated:
-      return true;
-    case apps::mojom::Readiness::kUninstalledByUser:
-    case apps::mojom::Readiness::kUninstalledByMigration:
-    case apps::mojom::Readiness::kRemoved:
-    case apps::mojom::Readiness::kUnknown:
-      return false;
-  }
-}
 
 bool IsInstalled(apps::Readiness readiness) {
   switch (readiness) {
@@ -31,7 +16,7 @@ bool IsInstalled(apps::Readiness readiness) {
     case apps::Readiness::kTerminated:
       return true;
     case apps::Readiness::kUninstalledByUser:
-    case apps::Readiness::kUninstalledByMigration:
+    case apps::Readiness::kUninstalledByNonUser:
     case apps::Readiness::kRemoved:
     case apps::Readiness::kUnknown:
       return false;
@@ -60,6 +45,12 @@ bool IsHumanLaunch(apps::LaunchSource launch_source) {
     case apps::LaunchSource::kFromSmartTextContextMenu:
     case apps::LaunchSource::kFromDiscoverTabNotification:
     case apps::LaunchSource::kFromCommandLine:
+    case apps::LaunchSource::kFromLockScreen:
+    case apps::LaunchSource::kFromAppHomePage:
+    case apps::LaunchSource::kFromReparenting:
+    case apps::LaunchSource::kFromProfileMenu:
+    case apps::LaunchSource::kFromSysTrayCalendar:
+    case apps::LaunchSource::kFromInstaller:
       return true;
     case apps::LaunchSource::kUnknown:
     case apps::LaunchSource::kFromChromeInternal:
@@ -94,6 +85,7 @@ bool AppTypeUsesWebContents(apps::AppType app_type) {
     case apps::AppType::kStandaloneBrowser:
     case apps::AppType::kRemote:
     case apps::AppType::kBorealis:
+    case apps::AppType::kBruschetta:
     case apps::AppType::kStandaloneBrowserChromeApp:
     case apps::AppType::kStandaloneBrowserExtension:
       return false;

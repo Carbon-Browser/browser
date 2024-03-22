@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -201,11 +201,9 @@ void AssistantCardElementView::InitLayout() {
   SetLayoutManager(std::make_unique<views::FillLayout>());
 
   // Contents view.
-  contents_view_ = AddChildView(
-      const_cast<AssistantCardElement*>(card_element_)->MoveContentsView());
-
-  // OverrideDescription() doesn't work. Only names are read automatically.
-  GetViewAccessibility().OverrideName(card_element_->fallback());
+  contents_view_ =
+      AddChildView(const_cast<AssistantCardElement*>(card_element_.get())
+                       ->MoveContentsView());
 }
 
 std::unique_ptr<ElementAnimator> AssistantCardElementView::CreateAnimator() {

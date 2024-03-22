@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_SHARESHEET_SHARESHEET_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_SHARESHEET_SHARESHEET_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -15,7 +15,7 @@ namespace sharesheet {
 class SharesheetService;
 
 // Singleton that owns all SharesheetServices and associates them with Profile.
-class SharesheetServiceFactory : public BrowserContextKeyedServiceFactory {
+class SharesheetServiceFactory : public ProfileKeyedServiceFactory {
  public:
   static SharesheetService* GetForProfile(Profile* profile);
 
@@ -25,15 +25,13 @@ class SharesheetServiceFactory : public BrowserContextKeyedServiceFactory {
   SharesheetServiceFactory& operator=(const SharesheetServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<SharesheetServiceFactory>;
+  friend base::NoDestructor<SharesheetServiceFactory>;
 
   SharesheetServiceFactory();
   ~SharesheetServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides.
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/media_export.h"
 #include "media/base/video_types.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
@@ -26,6 +26,10 @@ class SharedImageInterface;
 struct Mailbox;
 struct SyncToken;
 }  // namespace gpu
+
+namespace viz {
+class SharedImageFormat;
+}
 
 namespace media {
 
@@ -50,6 +54,18 @@ class MEDIA_EXPORT RenderableGpuMemoryBufferVideoFramePool {
     // allocated by this interface. Populate `mailbox` and `sync_token`.
     virtual void CreateSharedImage(gfx::GpuMemoryBuffer* gpu_memory_buffer,
                                    gfx::BufferPlane plane,
+                                   const gfx::ColorSpace& color_space,
+                                   GrSurfaceOrigin surface_origin,
+                                   SkAlphaType alpha_type,
+                                   uint32_t usage,
+                                   gpu::Mailbox& mailbox,
+                                   gpu::SyncToken& sync_token) = 0;
+
+    // Create a SharedImage representation with format `si_format` of a
+    // GpuMemoryBuffer allocated by this interface. Populate `mailbox` and
+    // `sync_token`.
+    virtual void CreateSharedImage(gfx::GpuMemoryBuffer* gpu_memory_buffer,
+                                   const viz::SharedImageFormat& si_format,
                                    const gfx::ColorSpace& color_space,
                                    GrSurfaceOrigin surface_origin,
                                    SkAlphaType alpha_type,

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,8 @@ class ImmersiveModeControllerChromeos
       const gfx::Rect& new_visible_bounds_in_screen) override;
   bool ShouldStayImmersiveAfterExitingFullscreen() override;
   void OnWidgetActivationChanged(views::Widget* widget, bool active) override;
+  int GetMinimumContentOffset() const override;
+  int GetExtraInfobarOffset() const override;
 
  private:
   // Updates the browser root view's layout including window caption controls.

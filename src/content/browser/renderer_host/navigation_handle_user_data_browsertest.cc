@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -95,7 +95,7 @@ IN_PROC_BROWSER_TEST_F(NavigationHandleUserDataBrowserTest,
         EXPECT_EQ(data->value(), "data");
         did_finish_navigation = true;
       }));
-  navigation_manager.WaitForNavigationFinished();
+  ASSERT_TRUE(navigation_manager.WaitForNavigationFinished());
   EXPECT_TRUE(did_finish_navigation);
 
   // Ensure that the data is deleted after navigation finished.
@@ -191,7 +191,7 @@ IN_PROC_BROWSER_TEST_F(NavigationHandleUserDataBrowserTest, VeryEarlyAttach) {
   EXPECT_EQ(data->value(), "data");
 
   // Wait for the navigation to finish.
-  navigation_manager.WaitForNavigationFinished();
+  ASSERT_TRUE(navigation_manager.WaitForNavigationFinished());
   EXPECT_TRUE(did_start_navigation);
   EXPECT_TRUE(did_finish_navigation);
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class ExternalLogoutRequestEventHandler
   void SetEventRouterForTesting(EventRouter* event_router);
 
  private:
-  raw_ptr<EventRouter> event_router_;
+  raw_ptr<EventRouter, DanglingUntriaged> event_router_;
   mojo::Receiver<crosapi::mojom::ExternalLogoutRequestObserver> receiver_{this};
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/memory/ref_counted.h"
-#include "base/trace_event/traced_value.h"
+#include "base/functional/bind.h"
+#include "base/memory/scoped_refptr.h"
+#include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/overlay_plane_data.h"
@@ -18,7 +18,7 @@
 
 namespace gfx {
 class GpuFence;
-}
+}  // namespace gfx
 
 namespace ui {
 
@@ -35,6 +35,7 @@ struct DrmOverlayPlane {
   DrmOverlayPlane(const scoped_refptr<DrmFramebuffer>& buffer,
                   int z_order,
                   gfx::OverlayTransform plane_transform,
+                  const gfx::Rect& damage_rect,
                   const gfx::Rect& display_bounds,
                   const gfx::RectF& crop_rect,
                   bool enable_blend,
@@ -58,7 +59,8 @@ struct DrmOverlayPlane {
 
   DrmOverlayPlane Clone() const;
 
-  void AsValueInto(base::trace_event::TracedValue* value) const;
+  // Adds trace records to |context|.
+  void WriteIntoTrace(perfetto::TracedValue context) const;
 
   static std::vector<DrmOverlayPlane> Clone(
       const std::vector<DrmOverlayPlane>& planes);
@@ -66,6 +68,7 @@ struct DrmOverlayPlane {
   scoped_refptr<DrmFramebuffer> buffer;
   int z_order = 0;
   gfx::OverlayTransform plane_transform;
+  gfx::Rect damage_rect;
   gfx::Rect display_bounds;
   gfx::RectF crop_rect;
   bool enable_blend;

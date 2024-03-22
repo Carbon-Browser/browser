@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,15 @@ const char switches::kTestLauncherDebugLauncher[] =
 // List of paths to files (separated by ';') containing test filters (one
 // pattern per line).
 const char switches::kTestLauncherFilterFile[] = "test-launcher-filter-file";
+
+// Force running the test cases listed in the positive filter file with full
+// name (not wildcard). If set, only exact positive filter from the filter
+// file is allowed. Passing --gtest_filter, positive wildcard filters, or
+// negative filters will fail the test launcher.
+// If any test case is disabled or deleted in source files, the test suite
+// fails.
+const char switches::kEnforceExactPositiveFilter[] =
+    "enforce-exact-positive-filter";
 
 // Force running all requested tests and retries even if too many test errors
 // occur.

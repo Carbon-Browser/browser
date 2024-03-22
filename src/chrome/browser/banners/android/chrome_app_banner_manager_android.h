@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,12 @@
 #include "components/webapps/browser/android/app_banner_manager_android.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+
+class PrefService;
+
+namespace segmentation_platform {
+class SegmentationPlatformService;
+}
 
 namespace webapps {
 
@@ -28,15 +34,14 @@ class ChromeAppBannerManagerAndroid
 
  protected:
   // AppBannerManagerAndroid:
-  InstallableParams ParamsToPerformInstallableWebAppCheck() override;
   void OnDidPerformInstallableWebAppCheck(
       const InstallableData& result) override;
   void MaybeShowAmbientBadge() override;
-  void ShowAmbientBadge() override;
-  void ShowBannerUi(WebappInstallSource install_source) override;
   void RecordExtraMetricsForInstallEvent(
       AddToHomescreenInstaller::Event event,
       const AddToHomescreenParams& a2hs_params) override;
+  segmentation_platform::SegmentationPlatformService*
+  GetSegmentationPlatformService() override;
 
  private:
   friend class content::WebContentsUserData<ChromeAppBannerManagerAndroid>;
@@ -45,6 +50,10 @@ class ChromeAppBannerManagerAndroid
   // show it was made, but false if conditions (e.g. engagement score) for
   // showing where not deemed adequate.
   bool MaybeShowInProductHelp() const;
+
+  raw_ptr<segmentation_platform::SegmentationPlatformService>
+      segmentation_platform_service_;
+  raw_ptr<PrefService> pref_service_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

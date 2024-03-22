@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,12 @@
 
 #include "base/check.h"
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "v8/include/cppgc/heap-consistency.h"
 #include "v8/include/v8-fast-api-calls.h"
 
 namespace blink {
@@ -41,6 +44,8 @@ namespace blink {
 // NoAllocDirectCall extended IDL attribute.
 class PLATFORM_EXPORT NoAllocDirectCallHost {
  public:
+  NoAllocDirectCallHost();
+
   using DeferrableAction = base::OnceCallback<void()>;
 
   // Methods called from the implementations of APIs that use NoAllocDirectCall.
@@ -68,24 +73,33 @@ class PLATFORM_EXPORT NoAllocDirectCallHost {
   bool HasDeferredActions();
   void FlushDeferredActions();
 
-  // Methods used by NoAllocScope
-  //==============================
+  // Methods used by NoAllocDirectCallScope
+  //========================================
 
+  cppgc::HeapHandle& heap_handle() { return *heap_handle_; }
   void EnterNoAllocDirectCallScope(v8::FastApiCallbackOptions*);
   void ExitNoAllocDirectCallScope();
 
  private:
+  // We cache the heap handle here to avoid accessing thread-local storage
+  // (ThreadState::Current) on each NADC method call.
+  const raw_ref<cppgc::HeapHandle, ExperimentalRenderer> heap_handle_;
+
   WTF::Vector<DeferrableAction> deferred_actions_;
-  v8::FastApiCallbackOptions* callback_options_ = nullptr;
+  raw_ptr<v8::FastApiCallbackOptions, ExperimentalRenderer> callback_options_ =
+      nullptr;
 };
 
 class NoAllocDirectCallScope {
+  STACK_ALLOCATED();
+
  public:
   NoAllocDirectCallScope(NoAllocDirectCallHost*, v8::FastApiCallbackOptions*);
   ~NoAllocDirectCallScope();
 
  private:
-  NoAllocDirectCallHost* host_;
+  NoAllocDirectCallHost* const host_;
+  const cppgc::subtle::DisallowGarbageCollectionScope disallow_gc_;
 };
 
 // We use inline definitions for the methods used in bindings boilerplate that
@@ -103,14 +117,14 @@ inline void NoAllocDirectCallHost::ExitNoAllocDirectCallScope() {
 }
 
 inline bool NoAllocDirectCallHost::HasDeferredActions() {
-  return !deferred_actions_.IsEmpty();
+  return !deferred_actions_.empty();
 }
 
 inline NoAllocDirectCallScope::NoAllocDirectCallScope(
     NoAllocDirectCallHost* host,
-    v8::FastApiCallbackOptions* callback_options) {
-  host->EnterNoAllocDirectCallScope(callback_options);
-  host_ = host;
+    v8::FastApiCallbackOptions* callback_options)
+    : host_(host), disallow_gc_(host->heap_handle()) {
+  host_->EnterNoAllocDirectCallScope(callback_options);
 }
 
 inline NoAllocDirectCallScope::~NoAllocDirectCallScope() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,8 +29,6 @@ enum InterceptorId {
   QUERY_ATTRIB_FILE_ID,
   QUERY_FULL_ATTRIB_FILE_ID,
   SET_INFO_FILE_ID,
-  // Named pipe dispatcher:
-  CREATE_NAMED_PIPE_ID,
   // Process-thread dispatcher:
   CREATE_PROCESSW_ID,
   CREATE_PROCESSA_ID,

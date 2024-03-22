@@ -1,8 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/command_buffer/service/shader_translator.h"
+
+#include "base/containers/contains.h"
+#include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_version_info.h"
@@ -22,6 +25,9 @@ class ShaderTranslatorTest : public testing::Test {
 
  protected:
   void SetUp() override {
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+    GTEST_SKIP() << "Angle doesn't support OpenGL on Windows";
+#else
     ShBuiltInResources resources;
     sh::InitBuiltInResources(&resources);
     resources.MaxExpressionComplexity = 32;
@@ -32,12 +38,11 @@ class ShaderTranslatorTest : public testing::Test {
 
     ASSERT_TRUE(vertex_translator_->Init(GL_VERTEX_SHADER, SH_GLES2_SPEC,
                                          &resources, shader_output_language_,
-                                         static_cast<ShCompileOptions>(0),
-                                         false));
+                                         {}, false));
     ASSERT_TRUE(fragment_translator_->Init(GL_FRAGMENT_SHADER, SH_GLES2_SPEC,
                                            &resources, shader_output_language_,
-                                           static_cast<ShCompileOptions>(0),
-                                           false));
+                                           {}, false));
+#endif  //  BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
   }
   void TearDown() override {
     vertex_translator_ = nullptr;
@@ -61,6 +66,9 @@ class ES3ShaderTranslatorTest : public testing::Test {
 
  protected:
   void SetUp() override {
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+    GTEST_SKIP() << "Angle doesn't support OpenGL on Windows";
+#else
     ShBuiltInResources resources;
     sh::InitBuiltInResources(&resources);
     resources.MaxExpressionComplexity = 32;
@@ -71,12 +79,11 @@ class ES3ShaderTranslatorTest : public testing::Test {
 
     ASSERT_TRUE(vertex_translator_->Init(GL_VERTEX_SHADER, SH_GLES3_SPEC,
                                          &resources, shader_output_language_,
-                                         static_cast<ShCompileOptions>(0),
-                                         false));
+                                         {}, false));
     ASSERT_TRUE(fragment_translator_->Init(GL_FRAGMENT_SHADER, SH_GLES3_SPEC,
                                            &resources, shader_output_language_,
-                                           static_cast<ShCompileOptions>(0),
-                                           false));
+                                           {}, false));
+#endif  //  BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
   }
   void TearDown() override {
     vertex_translator_ = nullptr;
@@ -404,19 +411,17 @@ TEST_F(ShaderTranslatorTest, OptionsString) {
   ShBuiltInResources resources;
   sh::InitBuiltInResources(&resources);
 
+  ShCompileOptions with_init_output_variables{};
+  with_init_output_variables.initOutputVariables = true;
+
   ASSERT_TRUE(translator_1->Init(GL_VERTEX_SHADER, SH_GLES2_SPEC, &resources,
-                                 SH_GLSL_150_CORE_OUTPUT,
-                                 static_cast<ShCompileOptions>(0),
-                                 false));
+                                 SH_GLSL_150_CORE_OUTPUT, {}, false));
   ASSERT_TRUE(translator_2->Init(GL_FRAGMENT_SHADER, SH_GLES2_SPEC, &resources,
                                  SH_GLSL_150_CORE_OUTPUT,
-                                 SH_INIT_OUTPUT_VARIABLES,
-                                 false));
+                                 with_init_output_variables, false));
   resources.EXT_draw_buffers = 1;
   ASSERT_TRUE(translator_3->Init(GL_VERTEX_SHADER, SH_GLES2_SPEC, &resources,
-                                 SH_GLSL_150_CORE_OUTPUT,
-                                 static_cast<ShCompileOptions>(0),
-                                 false));
+                                 SH_GLSL_150_CORE_OUTPUT, {}, false));
 
   std::string options_1(
       translator_1->GetStringForOptionsThatWouldAffectCompilation()->data);
@@ -435,6 +440,12 @@ TEST_F(ShaderTranslatorTest, OptionsString) {
 
 class ShaderTranslatorOutputVersionTest
     : public testing::TestWithParam<testing::tuple<const char*, const char*>> {
+ public:
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+  void SetUp() override {
+    GTEST_SKIP() << "Angle doesn't support OpenGL on Windows";
+  }
+#endif
 };
 
 // crbug.com/540543
@@ -443,7 +454,10 @@ class ShaderTranslatorOutputVersionTest
 TEST_F(ShaderTranslatorOutputVersionTest, DISABLED_CompatibilityOutput) {
   ShBuiltInResources resources;
   sh::InitBuiltInResources(&resources);
-  ShCompileOptions compile_options = SH_OBJECT_CODE;
+
+  ShCompileOptions compile_options{};
+  compile_options.objectCode = true;
+
   ShShaderOutput shader_output_language = SH_GLSL_COMPATIBILITY_OUTPUT;
   scoped_refptr<ShaderTranslator> vertex_translator = new ShaderTranslator();
   ASSERT_TRUE(vertex_translator->Init(GL_VERTEX_SHADER, SH_GLES2_SPEC,
@@ -468,7 +482,7 @@ TEST_F(ShaderTranslatorOutputVersionTest, DISABLED_CompatibilityOutput) {
         kShader, nullptr, &translated_source, &shader_version, nullptr, nullptr,
         nullptr, nullptr, nullptr));
     EXPECT_TRUE(translated_source.find("#version") == std::string::npos);
-    if (translated_source.find("gl_Position =") == std::string::npos) {
+    if (!base::Contains(translated_source, "gl_Position =")) {
       ADD_FAILURE() << "Did not find gl_Position initialization.";
       LOG(ERROR) << "Generated output:\n" << translated_source;
     }
@@ -485,9 +499,8 @@ TEST_F(ShaderTranslatorOutputVersionTest, DISABLED_CompatibilityOutput) {
     EXPECT_TRUE(fragment_translator->Translate(
         kShader, nullptr, &translated_source, &shader_version, nullptr, nullptr,
         nullptr, nullptr, nullptr));
-    EXPECT_TRUE(translated_source.find("#version 120") != std::string::npos);
-    if (translated_source.find("#pragma STDGL invariant(all)") !=
-        std::string::npos) {
+    EXPECT_TRUE(base::Contains(translated_source, "#version 120"));
+    if (base::Contains(translated_source, "#pragma STDGL invariant(all)")) {
       ADD_FAILURE() << "Found forbidden pragma.";
       LOG(ERROR) << "Generated output:\n" << translated_source;
     }
@@ -512,7 +525,10 @@ TEST_P(ShaderTranslatorOutputVersionTest, HasCorrectOutputGLSLVersion) {
   scoped_refptr<ShaderTranslator> translator = new ShaderTranslator();
   ShBuiltInResources resources;
   sh::InitBuiltInResources(&resources);
-  ShCompileOptions compile_options = SH_OBJECT_CODE;
+
+  ShCompileOptions compile_options{};
+  compile_options.objectCode = true;
+
   ShShaderOutput shader_output_language =
       ShaderTranslator::GetShaderOutputLanguageForContext(
           output_context_version);
@@ -527,12 +543,13 @@ TEST_P(ShaderTranslatorOutputVersionTest, HasCorrectOutputGLSLVersion) {
 
   std::string expected_version_directive = testing::get<1>(GetParam());
   if (expected_version_directive.empty()) {
-    EXPECT_TRUE(translated_source.find("#version") == std::string::npos)
-        << "Translation was:\n" << translated_source;
+    EXPECT_TRUE(!base::Contains(translated_source, "#version"))
+        << "Translation was:\n"
+        << translated_source;
   } else {
-    EXPECT_TRUE(translated_source.find(expected_version_directive) !=
-                std::string::npos)
-        << "Translation was:\n" << translated_source;
+    EXPECT_TRUE(base::Contains(translated_source, expected_version_directive))
+        << "Translation was:\n"
+        << translated_source;
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -76,6 +76,7 @@ class POLICY_EXPORT DeviceManagementService {
   static constexpr int kPendingApproval = 412;
   static constexpr int kRequestTooLarge = 413;
   static constexpr int kConsumerAccountWithPackagedLicense = 417;
+  static constexpr int kInvalidPackagedDeviceForKiosk = 418;
   static constexpr int kTooManyRequests = 429;
   static constexpr int kInternalServerError = 500;
   static constexpr int kServiceUnavailable = 503;
@@ -95,7 +96,7 @@ class POLICY_EXPORT DeviceManagementService {
   // possible because some aren't ready during startup. http://crbug.com/302798
   class POLICY_EXPORT Configuration {
    public:
-    virtual ~Configuration() {}
+    virtual ~Configuration() = default;
 
     // Server at which to contact the service (DMServer).
     virtual std::string GetDMServerUrl() const = 0;
@@ -143,7 +144,7 @@ class POLICY_EXPORT DeviceManagementService {
       RETRY_WITH_DELAY
     };
 
-    virtual ~Job() {}
+    virtual ~Job() = default;
   };
 
   class JobImpl;
@@ -184,7 +185,7 @@ class POLICY_EXPORT DeviceManagementService {
     // facilitate reading of logs.)
     // TYPE_INVALID is used only in tests so that they can EXPECT the correct
     // job type has been used.  Otherwise, tests would need to initially set
-    // the type to somehing like TYPE_AUTO_ENROLLMENT, and then it would not
+    // the type to something like TYPE_AUTO_ENROLLMENT, and then it would not
     // be possible to EXPECT the job type in auto enrollment tests.
     enum JobType {
       TYPE_INVALID = -1,
@@ -229,7 +230,7 @@ class POLICY_EXPORT DeviceManagementService {
     // Convert the job type into a string.
     static std::string GetJobTypeAsString(JobType type);
 
-    virtual ~JobConfiguration() {}
+    virtual ~JobConfiguration() = default;
 
     virtual JobType GetType() = 0;
 
@@ -252,6 +253,9 @@ class POLICY_EXPORT DeviceManagementService {
         bool bypass_proxy,
         int last_error) = 0;
 
+    // Returns whether UMA histograms should be recorded. If this is false
+    // then GetUmaName() is invalid.
+    virtual bool ShouldRecordUma() const = 0;
     // Returns the the UMA histogram to record stats about the network request.
     virtual std::string GetUmaName() = 0;
 
@@ -365,6 +369,7 @@ class POLICY_EXPORT JobConfigurationBase
   std::unique_ptr<network::ResourceRequest> GetResourceRequest(
       bool bypass_proxy,
       int last_error) override;
+  bool ShouldRecordUma() const override;
   DeviceManagementService::Job::RetryMethod ShouldRetry(
       int response_code,
       const std::string& response_body) override;

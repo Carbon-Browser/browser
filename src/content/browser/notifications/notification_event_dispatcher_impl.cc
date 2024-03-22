@@ -1,13 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/notifications/notification_event_dispatcher_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/metrics/histogram_functions.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/notreached.h"
 #include "build/build_config.h"
 #include "content/browser/notifications/devtools_event_logging.h"
 #include "content/browser/notifications/platform_notification_context_impl.h"
@@ -16,8 +16,10 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/storage_partition.h"
+#include "content/public/browser/weak_document_ptr.h"
 #include "content/public/common/persistent_notification_status.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/notifications/platform_notification_data.h"
@@ -76,6 +78,7 @@ PersistentNotificationStatus ConvertServiceWorkerStatus(
     case blink::ServiceWorkerStatusCode::kErrorDisallowed:
     case blink::ServiceWorkerStatusCode::kErrorInvalidArguments:
     case blink::ServiceWorkerStatusCode::kErrorStorageDisconnected:
+    case blink::ServiceWorkerStatusCode::kErrorStorageDataCorrupted:
       return PersistentNotificationStatus::kServiceWorkerError;
   }
   NOTREACHED();
@@ -144,6 +147,7 @@ void DispatchNotificationEventOnRegistration(
     case blink::ServiceWorkerStatusCode::kErrorDisallowed:
     case blink::ServiceWorkerStatusCode::kErrorInvalidArguments:
     case blink::ServiceWorkerStatusCode::kErrorStorageDisconnected:
+    case blink::ServiceWorkerStatusCode::kErrorStorageDataCorrupted:
       status = PersistentNotificationStatus::kServiceWorkerError;
       break;
     case blink::ServiceWorkerStatusCode::kOk:
@@ -183,7 +187,7 @@ void FindServiceWorkerRegistration(
   // NotificationDatabaseData should be changed to use StorageKey.
   service_worker_context->FindReadyRegistrationForId(
       notification_database_data.service_worker_registration_id,
-      blink::StorageKey(origin),
+      blink::StorageKey::CreateFirstParty(origin),
       base::BindOnce(&DispatchNotificationEventOnRegistration,
                      notification_database_data,
                      std::move(notification_action_callback),
@@ -379,10 +383,6 @@ void OnDispatchNotificationClickEventComplete(
     PersistentNotificationDispatchCompleteCallback dispatch_complete_callback,
     PersistentNotificationStatus status,
     blink::ServiceWorkerStatusCode service_worker_status) {
-  base::UmaHistogramEnumeration(
-      "Notifications.PersistentWebNotificationClickEventResult",
-      service_worker_status);
-
   std::move(dispatch_complete_callback).Run(status);
 }
 
@@ -390,10 +390,6 @@ void OnDispatchNotificationCloseEventComplete(
     PersistentNotificationDispatchCompleteCallback dispatch_complete_callback,
     PersistentNotificationStatus status,
     blink::ServiceWorkerStatusCode service_worker_status) {
-  base::UmaHistogramEnumeration(
-      "Notifications.PersistentWebNotificationCloseEventResult",
-      service_worker_status);
-
   std::move(dispatch_complete_callback).Run(status);
 }
 
@@ -412,6 +408,69 @@ NotificationEventDispatcherImpl::GetInstance() {
 
 NotificationEventDispatcherImpl::NotificationEventDispatcherImpl() = default;
 NotificationEventDispatcherImpl::~NotificationEventDispatcherImpl() = default;
+
+NotificationEventDispatcherImpl::NonPersistentNotificationListenerInfo::
+    NonPersistentNotificationListenerInfo(
+        mojo::Remote<blink::mojom::NonPersistentNotificationListener> remote,
+        WeakDocumentPtr document,
+        RenderProcessHost::NotificationServiceCreatorType creator_type)
+    : remote(std::move(remote)),
+      document(document),
+      creator_type(creator_type) {}
+
+NotificationEventDispatcherImpl::NonPersistentNotificationListenerInfo::
+    NonPersistentNotificationListenerInfo(
+        NotificationEventDispatcherImpl::NonPersistentNotificationListenerInfo&&
+            info) = default;
+
+NotificationEventDispatcherImpl::NonPersistentNotificationListenerInfo::
+    ~NonPersistentNotificationListenerInfo() = default;
+
+bool NotificationEventDispatcherImpl::
+    ShouldDispatchNonPersistentNotificationEvent(
+        const std::string& notification_id) {
+  auto listener = non_persistent_notification_listeners_.find(notification_id);
+
+  // If there is no listener registered for this notification id, no event
+  // should be dispatched.
+  if (listener == non_persistent_notification_listeners_.end()) {
+    return false;
+  }
+
+  // The non-persistent notification should not be created by service workers.
+  DCHECK(listener->second.creator_type !=
+         RenderProcessHost::NotificationServiceCreatorType::kServiceWorker);
+
+  RenderFrameHost* rfh = listener->second.document.AsRenderFrameHostIfValid();
+  if (!rfh) {
+    switch (listener->second.creator_type) {
+      case RenderProcessHost::NotificationServiceCreatorType::kDedicatedWorker:
+      case RenderProcessHost::NotificationServiceCreatorType::kDocument: {
+        // The weak document pointer should be pointing to the document that the
+        // notification service is communicating with, if it's empty, it's
+        // possible that the document is already destroyed. In this case, the
+        // notification event shouldn't be dispatched.
+        return false;
+      }
+      case RenderProcessHost::NotificationServiceCreatorType::kSharedWorker: {
+        // In this case, the weak document pointer is always null and we
+        // shouldn't block the notification.
+        return true;
+      }
+      case RenderProcessHost::NotificationServiceCreatorType::kServiceWorker: {
+        NOTREACHED();
+        return false;
+      }
+    }
+  }
+
+  // If the associated document is currently in back/forward cache, the
+  // function returns false to prevent the listener from being triggered.
+  // TODO: in the future, this could be improved to cover more lifecycle
+  // state. see: https://crrev.com/c/3861889/comment/e1759c1e_4dd15e4e/
+  return !rfh->IsInLifecycleState(
+      RenderFrameHost::LifecycleState::kInBackForwardCache);
+}
 
 void NotificationEventDispatcherImpl::DispatchNotificationClickEvent(
     BrowserContext* browser_context,
@@ -454,7 +513,9 @@ void NotificationEventDispatcherImpl::DispatchNotificationCloseEvent(
 void NotificationEventDispatcherImpl::RegisterNonPersistentNotificationListener(
     const std::string& notification_id,
     mojo::PendingRemote<blink::mojom::NonPersistentNotificationListener>
-        event_listener_remote) {
+        event_listener_remote,
+    const WeakDocumentPtr& event_document_ptr,
+    const RenderProcessHost::NotificationServiceCreatorType creator_type) {
   mojo::Remote<blink::mojom::NonPersistentNotificationListener> bound_remote(
       std::move(event_listener_remote));
 
@@ -466,54 +527,62 @@ void NotificationEventDispatcherImpl::RegisterNonPersistentNotificationListener(
           HandleConnectionErrorForNonPersistentNotificationListener,
       base::Unretained(this), notification_id));
 
+  // Dispatch the close event for any previously displayed notification with
+  // the same notification id. This happens whenever a non-persistent
+  // notification is replaced (by creating another with the same tag), since
+  // from the JavaScript point of view there will be two notification objects,
+  // and the old one needs to receive a close event before the new one
+  // receives a show event.
+  DispatchNonPersistentCloseEvent(notification_id, base::DoNothing());
+
   if (non_persistent_notification_listeners_.count(notification_id)) {
-    // Dispatch the close event for any previously displayed notification with
-    // the same notification id. This happens whenever a non-persistent
-    // notification is replaced (by creating another with the same tag), since
-    // from the JavaScript point of view there will be two notification objects,
-    // and the old one needs to receive a close event before the new one
-    // receives a show event.
-    non_persistent_notification_listeners_[notification_id]->OnClose(
-        base::DoNothing());
     non_persistent_notification_listeners_.erase(notification_id);
   }
-
-  non_persistent_notification_listeners_.insert(
-      {notification_id, std::move(bound_remote)});
+  non_persistent_notification_listeners_.emplace(
+      std::piecewise_construct, std::forward_as_tuple(notification_id),
+      std::forward_as_tuple(std::move(bound_remote), event_document_ptr,
+                            creator_type));
 }
 
+// Only fire the notification listeners (including show, click and
+// close) when it exists in the map and the document is currently
+// not in back/forward cache.
+// See https://crbug.com/1350944
 void NotificationEventDispatcherImpl::DispatchNonPersistentShowEvent(
     const std::string& notification_id) {
-  if (!non_persistent_notification_listeners_.count(notification_id))
-    return;
-  non_persistent_notification_listeners_[notification_id]->OnShow();
+  if (ShouldDispatchNonPersistentNotificationEvent(notification_id)) {
+    auto listener =
+        non_persistent_notification_listeners_.find(notification_id);
+    listener->second.remote->OnShow();
+  }
 }
 
 void NotificationEventDispatcherImpl::DispatchNonPersistentClickEvent(
     const std::string& notification_id,
     NotificationClickEventCallback callback) {
-  if (!non_persistent_notification_listeners_.count(notification_id)) {
+  if (ShouldDispatchNonPersistentNotificationEvent(notification_id)) {
+    auto listener =
+        non_persistent_notification_listeners_.find(notification_id);
+    listener->second.remote->OnClick(
+        base::BindOnce(std::move(callback), true /* success */));
+  } else {
     std::move(callback).Run(false /* success */);
-    return;
   }
-
-  non_persistent_notification_listeners_[notification_id]->OnClick(
-      base::BindOnce(std::move(callback), true /* success */));
 }
 
 void NotificationEventDispatcherImpl::DispatchNonPersistentCloseEvent(
     const std::string& notification_id,
     base::OnceClosure completed_closure) {
-  if (!non_persistent_notification_listeners_.count(notification_id)) {
+  if (ShouldDispatchNonPersistentNotificationEvent(notification_id)) {
+    // Listeners get freed together with `this`, thus the Unretained is safe.
+    auto listener =
+        non_persistent_notification_listeners_.find(notification_id);
+    listener->second.remote->OnClose(base::BindOnce(
+        &NotificationEventDispatcherImpl::OnNonPersistentCloseComplete,
+        base::Unretained(this), notification_id, std::move(completed_closure)));
+  } else {
     std::move(completed_closure).Run();
-    return;
   }
-  // Listeners get freed together with |this|, thus the Unretained is safe.
-  non_persistent_notification_listeners_[notification_id]->OnClose(
-      base::BindOnce(
-          &NotificationEventDispatcherImpl::OnNonPersistentCloseComplete,
-          base::Unretained(this), notification_id,
-          std::move(completed_closure)));
 }
 
 void NotificationEventDispatcherImpl::OnNonPersistentCloseComplete(

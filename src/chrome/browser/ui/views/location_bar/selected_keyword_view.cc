@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -46,6 +47,22 @@ SelectedKeywordView::SelectedKeywordView(
   partial_label_.SetFontList(font_list);
   partial_label_.SetVisible(false);
   label()->SetElideBehavior(gfx::FADE_TAIL);
+
+  // TODO(crbug.com/1411342): `IconLabelBubbleView::GetAccessibleNodeData`
+  // would set the name to explicitly empty when the name was missing.
+  // That function no longer exists. As a result we need to handle that here.
+  // Regarding this view's namelessness: Until this view has a keyword and
+  // labels with text, there will be no accessible name. But this view claims to
+  // be focusable, so paint checks will fail due to a lack of name. It might
+  // make more sense to only set `FocusBehavior` when this view will be shown.
+  // For now, Eliminate the paint check failure.
+  if (GetAccessibleName().empty()) {
+    SetAccessibilityProperties(/*role*/ absl::nullopt,
+                               /*name*/ std::u16string(),
+                               /*description*/ absl::nullopt,
+                               /*role_description*/ absl::nullopt,
+                               ax::mojom::NameFrom::kAttributeExplicitlyEmpty);
+  }
 }
 
 SelectedKeywordView::~SelectedKeywordView() {}
@@ -113,7 +130,7 @@ const std::u16string& SelectedKeywordView::GetKeyword() const {
 
 int SelectedKeywordView::GetExtraInternalSpacing() const {
   // Align the label text with the suggestion text.
-  return 11;
+  return OmniboxFieldTrial::IsCr23LayoutEnabled() ? 14 : 11;
 }
 
 void SelectedKeywordView::SetLabelForCurrentWidth() {

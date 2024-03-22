@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,14 +34,10 @@ class PageInfoControllerAndroid : public PageInfoUI {
   void RecordPageInfoAction(JNIEnv* env,
                             const base::android::JavaParamRef<jobject>& obj,
                             jint action);
-  void SetAboutThisSiteShown(JNIEnv* env,
-                             const base::android::JavaParamRef<jobject>& obj,
-                             jboolean was_about_this_site_shown);
   void UpdatePermissions(JNIEnv* env,
                          const base::android::JavaParamRef<jobject>& obj);
 
   // PageInfoUI implementations.
-  void SetCookieInfo(const CookieInfoList& cookie_info_list) override;
   void SetPermissionInfo(const PermissionInfoList& permission_info_list,
                          ChosenObjectInfoList chosen_object_info_list) override;
   void SetIdentityInfo(const IdentityInfo& identity_info) override;

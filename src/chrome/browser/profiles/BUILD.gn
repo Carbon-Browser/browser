@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,10 +12,18 @@ source_set("profiles") {
   sources = [
     "incognito_helpers.cc",
     "incognito_helpers.h",
+    "profile_key.cc",
+    "profile_key.h",
+
+    # TODO(b/307628893): Move profile_key_android.cc to
+    # chrome/browser/profiles:profiles once the circular dependency is removed.
+    "profile_key_android.h",
   ]
 
   # Cannot depend on //chrome/browser:browser.
   deps = [ ":profile" ]
+
+  public_deps = [ "//components/leveldb_proto" ]
 }
 
 # This target should be very minimal, likely no new sources should be added
@@ -25,8 +33,21 @@ source_set("profile") {
   sources = [
     "profile.cc",
     "profile.h",
+    "profile_keyed_service_factory.cc",
+    "profile_keyed_service_factory.h",
     "profile_observer.h",
+    "profile_selections.cc",
+    "profile_selections.h",
+    "refcounted_profile_keyed_service_factory.cc",
+    "refcounted_profile_keyed_service_factory.h",
   ]
+
+  if (is_chromeos_ash) {
+    sources += [
+      "profile_types_ash.cc",
+      "profile_types_ash.h",
+    ]
+  }
 
   public_deps = [ "//base" ]
 
@@ -41,8 +62,10 @@ source_set("profile") {
     "//components/live_caption:constants",
     "//components/media_router/common",
     "//components/pref_registry",
+    "//components/prefs",
     "//components/profile_metrics",
-    "//components/sync/driver",
+    "//components/search_engines",
+    "//components/sync/service",
     "//components/variations",
     "//content/public/browser",
     "//extensions/buildflags",
@@ -51,7 +74,10 @@ source_set("profile") {
     deps += [ "//extensions/browser" ]
   }
   if (is_chromeos_ash) {
-    deps += [ "//ash/constants" ]
+    deps += [
+      "//ash/constants",
+      "//chromeos/ash/components/browser_context_helper",
+    ]
   }
   if (is_chromeos_lacros) {
     deps += [
@@ -61,13 +87,5 @@ source_set("profile") {
   }
   if (is_android) {
     deps += [ "//chrome/browser/profiles/android:jni_headers" ]
-  }
-}
-
-if (is_android) {
-  import("//build/config/android/rules.gni")
-
-  java_cpp_enum("profile_metrics_enum_java") {
-    sources = [ "profile_metrics.h" ]
   }
 }

@@ -28,7 +28,6 @@
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
-#include "third_party/blink/renderer/modules/mediastream/focusable_media_stream_track.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track_event.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track_impl.h"
 #include "third_party/blink/renderer/modules/mediastream/transferred_media_stream_track.h"
@@ -124,6 +123,7 @@ MediaStream::MediaStream(ExecutionContext* context,
                          TransferredMediaStreamTrack* transferred_track,
                          base::OnceCallback<void(MediaStream*)> callback)
     : ExecutionContextClient(context),
+      ActiveScriptWrappable<MediaStream>({}),
       descriptor_(stream_descriptor),
       media_stream_initialized_callback_(std::move(callback)),
       scheduled_event_timer_(
@@ -133,7 +133,7 @@ MediaStream::MediaStream(ExecutionContext* context,
   descriptor_->SetClient(this);
 
   uint32_t number_of_audio_tracks = descriptor_->NumberOfAudioComponents();
-  audio_tracks_.ReserveCapacity(number_of_audio_tracks);
+  audio_tracks_.reserve(number_of_audio_tracks);
   for (uint32_t i = 0; i < number_of_audio_tracks; i++) {
     auto* new_track = MakeGarbageCollected<MediaStreamTrackImpl>(
         context, descriptor_->AudioComponent(i));
@@ -146,13 +146,12 @@ MediaStream::MediaStream(ExecutionContext* context,
   }
 
   uint32_t number_of_video_tracks = descriptor_->NumberOfVideoComponents();
-  video_tracks_.ReserveCapacity(number_of_video_tracks);
+  video_tracks_.reserve(number_of_video_tracks);
   for (uint32_t i = 0; i < number_of_video_tracks; i++) {
     MediaStreamTrack* const new_track = MediaStreamTrackImpl::Create(
         context, descriptor_->VideoComponent(i),
-        WTF::Bind(&MediaStream::OnMediaStreamTrackInitialized,
-                  WrapPersistent(this)),
-        descriptor_->Id());
+        WTF::BindOnce(&MediaStream::OnMediaStreamTrackInitialized,
+                      WrapPersistent(this)));
     new_track->RegisterMediaStream(this);
     video_tracks_.push_back(new_track);
     if (transferred_track) {
@@ -168,8 +167,8 @@ MediaStream::MediaStream(ExecutionContext* context,
   if (number_of_video_tracks == 0) {
     context->GetTaskRunner(TaskType::kInternalMedia)
         ->PostTask(FROM_HERE,
-                   WTF::Bind(std::move(media_stream_initialized_callback_),
-                             WrapPersistent(this)));
+                   WTF::BindOnce(std::move(media_stream_initialized_callback_),
+                                 WrapPersistent(this)));
   }
 }
 
@@ -185,6 +184,7 @@ MediaStream::MediaStream(ExecutionContext* context,
                          const MediaStreamTrackVector& audio_tracks,
                          const MediaStreamTrackVector& video_tracks)
     : ExecutionContextClient(context),
+      ActiveScriptWrappable<MediaStream>({}),
       descriptor_(stream_descriptor),
       scheduled_event_timer_(
           context->GetTaskRunner(TaskType::kMediaElementEvent),
@@ -192,13 +192,13 @@ MediaStream::MediaStream(ExecutionContext* context,
           &MediaStream::ScheduledEventTimerFired) {
   descriptor_->SetClient(this);
 
-  audio_tracks_.ReserveCapacity(audio_tracks.size());
+  audio_tracks_.reserve(audio_tracks.size());
   for (MediaStreamTrack* audio_track : audio_tracks) {
     DCHECK_EQ("audio", audio_track->kind());
     audio_track->RegisterMediaStream(this);
     audio_tracks_.push_back(audio_track);
   }
-  video_tracks_.ReserveCapacity(video_tracks.size());
+  video_tracks_.reserve(video_tracks.size());
   for (MediaStreamTrack* video_track : video_tracks) {
     DCHECK_EQ("video", video_track->kind());
     video_track->RegisterMediaStream(this);
@@ -215,6 +215,7 @@ MediaStream::MediaStream(ExecutionContext* context,
                          const MediaStreamTrackVector& audio_tracks,
                          const MediaStreamTrackVector& video_tracks)
     : ExecutionContextClient(context),
+      ActiveScriptWrappable<MediaStream>({}),
       scheduled_event_timer_(
           context->GetTaskRunner(TaskType::kMediaElementEvent),
           this,
@@ -246,7 +247,7 @@ MediaStream::MediaStream(ExecutionContext* context,
 MediaStream::~MediaStream() = default;
 
 bool MediaStream::HasPendingActivity() const {
-  return !scheduled_events_.IsEmpty();
+  return !scheduled_events_.empty();
 }
 
 bool MediaStream::EmptyOrOnlyEndedTracks() {
@@ -305,7 +306,7 @@ void MediaStream::addTrack(MediaStreamTrack* track,
   if (getTrackById(track->id()))
     return;
 
-  switch (track->Component()->Source()->GetType()) {
+  switch (track->Component()->GetSourceType()) {
     case MediaStreamSource::kTypeAudio:
       audio_tracks_.push_back(track);
       break;
@@ -321,8 +322,14 @@ void MediaStream::addTrack(MediaStreamTrack* track,
     ScheduleDispatchEvent(Event::Create(event_type_names::kActive));
   }
 
-  for (auto& observer : observers_)
-    observer->OnStreamAddTrack(this, track);
+  for (auto& observer : observers_) {
+    observer->OnStreamAddTrack(this, track, exception_state);
+
+    // If processing by the observer failed, it is most likely because it was
+    // not necessary and it became a no-op. The exception can be suppressed,
+    // there is nothing to do.
+    exception_state.ClearException();
+  }
 }
 
 void MediaStream::removeTrack(MediaStreamTrack* track,
@@ -335,7 +342,7 @@ void MediaStream::removeTrack(MediaStreamTrack* track,
   }
 
   wtf_size_t pos = kNotFound;
-  switch (track->Component()->Source()->GetType()) {
+  switch (track->Component()->GetSourceType()) {
     case MediaStreamSource::kTypeAudio:
       pos = audio_tracks_.Find(track);
       if (pos != kNotFound)
@@ -358,8 +365,14 @@ void MediaStream::removeTrack(MediaStreamTrack* track,
     ScheduleDispatchEvent(Event::Create(event_type_names::kInactive));
   }
 
-  for (auto& observer : observers_)
-    observer->OnStreamRemoveTrack(this, track);
+  for (auto& observer : observers_) {
+    observer->OnStreamRemoveTrack(this, track, exception_state);
+
+    // If processing by the observer failed, it is most likely because it was
+    // not necessary and it became a no-op. The exception can be suppressed,
+    // there is nothing to do.
+    exception_state.ClearException();
+  }
 }
 
 MediaStreamTrack* MediaStream::getTrackById(String id) {
@@ -383,10 +396,10 @@ MediaStream* MediaStream::clone(ScriptState* script_state) {
   ExecutionContext* context = ExecutionContext::From(script_state);
   for (MediaStreamTrackVector::iterator iter = audio_tracks_.begin();
        iter != audio_tracks_.end(); ++iter)
-    tracks.push_back((*iter)->clone(script_state));
+    tracks.push_back((*iter)->clone(ExecutionContext::From(script_state)));
   for (MediaStreamTrackVector::iterator iter = video_tracks_.begin();
        iter != video_tracks_.end(); ++iter)
-    tracks.push_back((*iter)->clone(script_state));
+    tracks.push_back((*iter)->clone(ExecutionContext::From(script_state)));
   return MediaStream::Create(context, tracks);
 }
 
@@ -436,8 +449,7 @@ bool MediaStream::AddEventListenerInternal(
                       WebFeature::kMediaStreamOnInactive);
   }
 
-  return EventTargetWithInlineData::AddEventListenerInternal(event_type,
-                                                             listener, options);
+  return EventTarget::AddEventListenerInternal(event_type, listener, options);
 }
 
 const AtomicString& MediaStream::InterfaceName() const {
@@ -463,7 +475,7 @@ void MediaStream::RemoveTrackByComponentAndFireEvents(
     return;
 
   MediaStreamTrackVector* tracks = nullptr;
-  switch (component->Source()->GetType()) {
+  switch (component->GetSourceType()) {
     case MediaStreamSource::kTypeAudio:
       tracks = &audio_tracks_;
       break;
@@ -511,7 +523,7 @@ void MediaStream::RemoveTrackByComponentAndFireEvents(
 void MediaStream::AddTrackAndFireEvents(MediaStreamTrack* track,
                                         DispatchEventTiming event_timing) {
   DCHECK(track);
-  switch (track->Component()->Source()->GetType()) {
+  switch (track->Component()->GetSourceType()) {
     case MediaStreamSource::kTypeAudio:
       audio_tracks_.push_back(track);
       break;
@@ -576,7 +588,7 @@ void MediaStream::Trace(Visitor* visitor) const {
   visitor->Trace(observers_);
   visitor->Trace(scheduled_event_timer_);
   visitor->Trace(scheduled_events_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
   MediaStreamDescriptorClient::Trace(visitor);
 }

@@ -1,4 +1,12 @@
 <style include="print-management-shared">
+  :host-context(body.jelly-enabled) #confirmationText {
+    font: var(--cros-body-2-font);
+  }
+
+  :host-context(body.jelly-enabled) cr-dialog::part(dialog) {
+    border-radius: 20px;
+  }
+
   #buttonContainer {
     display: flex;
     justify-content: flex-end;
@@ -16,8 +24,10 @@
   }
 
   #confirmationText {
-    @apply --print-management-default-font;
     color: var(--print-management-default-text-color);
+    font-family: var(--print-management-default-font-family);
+    font-size: var(--print-management-default-font-size);
+    font-weight: var(--print-management-default-font-weight);
     overflow-wrap: break-word;
   }
 
@@ -31,17 +41,22 @@
 </style>
 
 <cr-dialog id="clearDialog">
+  <div slot="title">
+    <div id="titleText">
+      [[i18n('clearAllHistoryDialogTitle')]]
+    </div>
+  </div>
   <div slot="body">
     <div id="confirmationText">
       [[i18n('clearHistoryConfirmationText')]]
     </div>
   </div>
   <div slot="button-container">
-    <cr-button id="cancelButton" on-click="onCancelButtonClick_">
+    <cr-button id="cancelButton" on-click="onCancelButtonClick">
       [[i18n('cancelButtonLabel')]]
     </cr-button>
-    <cr-button class="action-button" on-click="onClearButtonClick_"
-        disabled="[[shouldDisableClearButton_]]">
+    <cr-button class="action-button" on-click="onClearButtonClick"
+        disabled="[[shouldDisableClearButton]]">
       [[i18n('clearButtonLabel')]]
     </cr-button>
   </div>

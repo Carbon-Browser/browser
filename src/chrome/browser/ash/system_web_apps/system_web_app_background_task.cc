@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/system_web_apps/system_web_app_background_task.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -117,21 +117,11 @@ void SystemWebAppBackgroundTask::NavigateBackgroundPage() {
 
   prefs.allow_scripts_to_close_windows = true;
   web_contents_->SetWebPreferences(prefs);
-  web_app_url_loader_->PrepareForLoad(
-      web_contents_.get(),
-      base::BindOnce(&SystemWebAppBackgroundTask::OnLoaderReady,
+  web_app_url_loader_->LoadUrl(
+      url_, web_contents_.get(),
+      web_app::WebAppUrlLoader::UrlComparison::kExact,
+      base::BindOnce(&SystemWebAppBackgroundTask::OnPageReady,
                      weak_ptr_factory_.GetWeakPtr()));
-}
-
-void SystemWebAppBackgroundTask::OnLoaderReady(
-    web_app::WebAppUrlLoader::Result result) {
-  if (web_contents_) {
-    web_app_url_loader_->LoadUrl(
-        url_, web_contents_.get(),
-        web_app::WebAppUrlLoader::UrlComparison::kExact,
-        base::BindOnce(&SystemWebAppBackgroundTask::OnPageReady,
-                       weak_ptr_factory_.GetWeakPtr()));
-  }
 }
 
 void SystemWebAppBackgroundTask::OnPageReady(

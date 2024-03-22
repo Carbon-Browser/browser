@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import android.view.MotionEvent;
 
 import org.chromium.base.ContextUtils;
 
-/**
- * Support S-Pen event detection and conversion.
- */
+/** Support S-Pen event detection and conversion. */
 public final class SPenSupport {
     // These values are obtained from Samsung.
     private static final int SPEN_ACTION_DOWN = 211;
@@ -49,7 +47,7 @@ public final class SPenSupport {
      * Convert SPen event action into normal event action.
      *
      * @param eventActionMasked Input event action. It is assumed that it is masked as the values
-                                cannot be ORed.
+     *     cannot be ORed.
      * @return Event action after the conversion.
      */
     public static int convertSPenEventAction(int eventActionMasked) {

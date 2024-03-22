@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/media/router/chrome_media_router_factory.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_feature.h"
@@ -37,7 +38,14 @@ class AccessCodeCastSinkServiceFactoryTest : public testing::Test {
     profile_builder.SetPrefService(std::move(pref_service));
     profile_ = profile_builder.Build();
     AccessCodeCastSinkServiceFactory::GetInstance()->SetTestingFactory(
-        profile(), base::BindRepeating(&MockAccessCodeCastSinkService::Create));
+        profile(),
+        base::BindLambdaForTesting([this](content::BrowserContext* context)
+                                       -> std::unique_ptr<KeyedService> {
+          return std::make_unique<
+              testing::NiceMock<MockAccessCodeCastSinkService>>(
+              profile(), MediaRouterFactory::GetApiForBrowserContext(profile()),
+              nullptr, discovery_network_monitor_.get());
+        }));
     MediaRouterFactory::GetInstance()->SetTestingFactory(
         profile(), base::BindRepeating(&MockMediaRouter::Create));
   }
@@ -46,8 +54,18 @@ class AccessCodeCastSinkServiceFactoryTest : public testing::Test {
 
   Profile* profile() { return profile_.get(); }
 
- private:
+ protected:
   content::BrowserTaskEnvironment task_environment_;
+
+  static std::vector<DiscoveryNetworkInfo> FakeGetNetworkInfo() {
+    return {
+        DiscoveryNetworkInfo{std::string("enp0s2"), std::string("ethernet1")}};
+    ;
+  }
+  std::unique_ptr<DiscoveryNetworkMonitor> discovery_network_monitor_ =
+      DiscoveryNetworkMonitor::CreateInstanceForTest(&FakeGetNetworkInfo);
+
+ private:
   std::unique_ptr<TestingProfile> profile_;
   base::test::ScopedFeatureList feature_list_;
 };

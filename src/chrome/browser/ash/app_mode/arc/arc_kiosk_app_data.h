@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_data_base.h"
 #include "components/account_id/account_id.h"
 #include "ui/gfx/image/image_skia.h"
@@ -40,23 +39,17 @@ class ArcKioskAppData : public KioskAppDataBase {
   // Sets the cached data.
   void SetCache(const std::string& name, const gfx::ImageSkia& icon);
 
-  // Callbacks for KioskAppIconLoader.
-  void OnIconLoadSuccess(const gfx::ImageSkia& icon) override;
-  void OnIconLoadFailure() override;
-
  private:
+  void OnIconLoadDone(absl::optional<gfx::ImageSkia> icon);
+
   // Not cached, always provided in ctor.
   const std::string package_name_;
   const std::string activity_;
   const std::string intent_;
+
+  base::WeakPtrFactory<ArcKioskAppData> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the //chrome/browser/chromeos
-// migration is finished.
-namespace chromeos {
-using ::ash::ArcKioskAppData;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_DATA_H_

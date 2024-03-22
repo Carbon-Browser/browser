@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/platform_file.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "components/chromeos_camera/common/dmabuf.mojom.h"
@@ -104,7 +104,7 @@ void MojoMjpegDecodeAcceleratorService::InitializeInternal(
     return;
   }
   accelerator_ = std::move(remaining_accelerator_factory_functions.front())
-                     .Run(base::ThreadTaskRunnerHandle::Get());
+                     .Run(base::SingleThreadTaskRunner::GetCurrentDefault());
   remaining_accelerator_factory_functions.erase(
       remaining_accelerator_factory_functions.begin());
   if (!accelerator_) {
@@ -147,7 +147,7 @@ void MojoMjpegDecodeAcceleratorService::OnInitialize(
   // InitializeInternal() may destroy |accelerator_| which could cause a
   // use-after-free if |accelerator_| needs to do more stuff after calling
   // OnInitialize().
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MojoMjpegDecodeAcceleratorService::InitializeInternal,
                      weak_this_factory_.GetWeakPtr(),
@@ -215,8 +215,13 @@ void MojoMjpegDecodeAcceleratorService::Decode(
         ::chromeos_camera::MjpegDecodeAccelerator::Error::PLATFORM_FAILURE);
     return;
   }
-  frame->BackWithOwnedSharedMemory(std::move(output_region),
-                                   std::move(mapping));
+  // BackWithOwnedSharedMemory() is not executed because
+  // MjpegDecodeAccelerator doesn't use shared memory region of the frame.
+  // Just attach the video frame so that the mapped memory is valid until the
+  // VideoFrame is alive.
+  frame->AddDestructionObserver(base::BindOnce(
+      [](base::UnsafeSharedMemoryRegion, base::WritableSharedMemoryMapping) {},
+      std::move(output_region), std::move(mapping)));
 
   if (!accelerator_initialized_) {
     NotifyDecodeStatus(
@@ -256,7 +261,9 @@ void MojoMjpegDecodeAcceleratorService::DecodeWithDmaBuf(
   const gfx::Size coded_size(base::checked_cast<int>(dst_frame->coded_width),
                              base::checked_cast<int>(dst_frame->coded_height));
   scoped_refptr<media::VideoFrame> frame = ConstructVideoFrame(
-      std::move(dst_frame->planes), dst_frame->format, coded_size);
+      std::move(dst_frame->planes), dst_frame->format, coded_size,
+      dst_frame->has_modifier ? dst_frame->modifier
+                              : gfx::NativePixmapHandle::kNoModifier);
   if (!frame) {
     LOG(ERROR) << "Failed to create video frame";
     std::move(callback).Run(

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,9 @@
 #include "third_party/blink/public/mojom/annotation/annotation.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/fragment_directive/text_fragment_selector_generator.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver_set.h"
@@ -22,7 +24,7 @@ class AnnotationAgentContainerImplTest;
 class AnnotationAgentImpl;
 class AnnotationSelector;
 class LocalFrame;
-class TextFragmentSelector;
+class AnnotationAgentGenerator;
 class TextFragmentSelectorGenerator;
 
 // This class provides a per-Document container for AnnotationAgents. It is
@@ -42,10 +44,22 @@ class CORE_EXPORT AnnotationAgentContainerImpl final
 
   static const char kSupplementName[];
 
+  class Observer : public GarbageCollectedMixin {
+   public:
+    virtual void WillPerformAttach() {}
+  };
+
+  void AddObserver(Observer* observer);
+  void RemoveObserver(Observer* observer);
+
   // Static getter for the container for the given document. Will instantiate a
   // container if the document doesn't yet have one. This can return nullptr if
   // requested from an inactive or detached document.
-  static AnnotationAgentContainerImpl* From(Document&);
+  static AnnotationAgentContainerImpl* CreateIfNeeded(Document&);
+
+  // Same as above but won't create an instance if one isn't already present on
+  // the Document.
+  static AnnotationAgentContainerImpl* FromIfExists(Document&);
 
   static void BindReceiver(
       LocalFrame* frame,
@@ -66,6 +80,10 @@ class CORE_EXPORT AnnotationAgentContainerImpl final
       mojo::PendingReceiver<mojom::blink::AnnotationAgentContainer> receiver);
 
   void Trace(Visitor* visitor) const override;
+
+  // Calls Attach() on any agent that needs an attachment. Must be called in a
+  // clean lifecycle state.
+  void PerformInitialAttachments();
 
   // Removes the given agent from this container. It is an error to try and
   // remove an agent from a container that doesn't hold it. Once removed, the
@@ -92,21 +110,41 @@ class CORE_EXPORT AnnotationAgentContainerImpl final
       mojom::blink::AnnotationType type,
       CreateAgentFromSelectionCallback callback) override;
 
+  void OpenedContextMenuOverSelection();
+
+  // Returns true if the document is in a clean state to run annotation
+  // attachment. i.e. Parsing has finished and layout and style are clean.
+  bool IsLifecycleCleanForAttachment() const;
+
  private:
   friend AnnotationAgentContainerImplTest;
 
+  bool ShouldPreemptivelyGenerate();
+
   void DidFinishSelectorGeneration(
-      TextFragmentSelectorGenerator* generator,
-      mojom::blink::AnnotationType type,
       CreateAgentFromSelectionCallback callback,
+      mojom::blink::AnnotationType type,
+      shared_highlighting::LinkGenerationReadyStatus ready_status,
+      const String& selected_text,
       const TextFragmentSelector& selector,
       shared_highlighting::LinkGenerationError error);
+
+  void ScheduleBeginMainFrame();
+
+  Document& GetDocument() const;
+  LocalFrame& GetFrame() const;
+
+  Member<AnnotationAgentGenerator> annotation_agent_generator_;
 
   HeapMojoReceiverSet<mojom::blink::AnnotationAgentContainer,
                       AnnotationAgentContainerImpl>
       receivers_;
 
-  HeapHashSet<Member<AnnotationAgentImpl>> agents_;
+  HeapVector<Member<AnnotationAgentImpl>> agents_;
+
+  HeapHashSet<Member<Observer>> observers_;
+
+  bool page_has_been_visible_ = false;
 };
 
 }  // namespace blink

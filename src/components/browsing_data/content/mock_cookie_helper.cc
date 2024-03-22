@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,17 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "base/time/time.h"
-#include "content/public/browser/browser_context.h"
 #include "net/cookies/cookie_options.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace browsing_data {
 
-MockCookieHelper::MockCookieHelper(content::BrowserContext* browser_context)
-    : CookieHelper(browser_context->GetDefaultStoragePartition(),
-                   base::NullCallback()) {}
+MockCookieHelper::MockCookieHelper(content::StoragePartition* storage_partition)
+    : CookieHelper(storage_partition, base::NullCallback()) {}
 
 MockCookieHelper::~MockCookieHelper() {}
 

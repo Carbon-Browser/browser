@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,9 +53,6 @@ class CAPTURE_EXPORT VideoCaptureBufferPool
   virtual mojo::ScopedSharedBufferHandle DuplicateAsMojoBuffer(
       int buffer_id) = 0;
 
-  virtual mojom::SharedMemoryViaRawFileDescriptorPtr
-  CreateSharedMemoryViaRawFileDescriptorStruct(int buffer_id) = 0;
-
   // Try and obtain a read/write access to the buffer.
   virtual std::unique_ptr<VideoCaptureBufferHandle> GetHandleForInProcessAccess(
       int buffer_id) = 0;
@@ -90,13 +87,25 @@ class CAPTURE_EXPORT VideoCaptureBufferPool
   virtual void RelinquishProducerReservation(int buffer_id) = 0;
 
   // Reserve a buffer id to use for a buffer specified by |handle| (which was
-  // allocated by some external source). This call cannot fail (no allocation is
-  // done). It may return a new id, or may reuse an existing id, if the buffer
-  // represented by |handle| is already being tracked. The behavior of
-  // |buffer_id_to_drop| is the same as ReserveForProducer.
-  virtual int ReserveIdForExternalBuffer(
-      const gfx::GpuMemoryBufferHandle& handle,
-      int* buffer_id_to_drop) = 0;
+  // allocated by some external source).
+
+  // |buffer.handle| is used to create buffer on windows, mac doesn't create
+  // buffer but holds io_surface. |buffer.format| is the source texture format,
+  // currently it should be NV12. Buffer tracker will hold |buffer.imf_buffer|
+  // for reusing the texture in right timing on Windows since once the
+  // imf_buffer is released, Windows capture pipeline assumes the application
+  // has finished reading from the texture and the capture pipeline will perform
+  // the write operation(i.e. reusing texture). |dimensions| is used for
+  // creating buffer on Windows.
+
+  // If the pool is already at maximum capacity, return the reused ID based on
+  // LRU strategy. Otherwise, return a new tracker ID via |buffer_id|. The
+  // behavior of |buffer_id_to_drop| is the same as ReserveForProducer.
+  virtual VideoCaptureDevice::Client::ReserveResult ReserveIdForExternalBuffer(
+      CapturedExternalVideoBuffer buffer,
+      const gfx::Size& dimensions,
+      int* buffer_id_to_drop,
+      int* buffer_id) = 0;
 
   // Returns a snapshot of the current number of buffers in-use divided by the
   // maximum |count_|.

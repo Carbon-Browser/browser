@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,19 +20,15 @@ import org.robolectric.shadows.ShadowProcess;
 import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Unit tests for {@link OneshotSupplierImpl}.
- */
+/** Unit tests for {@link OneshotSupplierImpl}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(shadows = {ShadowProcess.class})
 @LooperMode(LooperMode.Mode.LEGACY)
 public class OneshotSupplierImplTest {
     private OneshotSupplierImpl<String> mSupplier = new OneshotSupplierImpl<>();
 
-    @Spy
-    private Callback<String> mCallback1;
-    @Spy
-    private Callback<String> mCallback2;
+    @Spy private Callback<String> mCallback1;
+    @Spy private Callback<String> mCallback2;
 
     @Before
     public void setup() {

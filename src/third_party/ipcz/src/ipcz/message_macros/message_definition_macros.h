@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,21 @@
 #define IPCZ_MSG_ID(x)
 #define IPCZ_MSG_VERSION(x)
 
-#define IPCZ_MSG_BEGIN(name, id_decl, version_decl)                     \
-  name::name() = default;                                               \
-  name::~name() = default;                                              \
-  bool name::Deserialize(const DriverTransport::RawMessage& message,    \
-                         const DriverTransport& transport) {            \
-    return DeserializeFromTransport(sizeof(ParamsType), kVersion,       \
-                                    absl::MakeSpan(kMetadata), message, \
-                                    transport);                         \
-  }                                                                     \
+#define IPCZ_MSG_BEGIN(name, id_decl, version_decl)                        \
+  name::name() = default;                                                  \
+  name::name(decltype(kIncoming)) : MessageWithParams(kIncoming) {}        \
+  name::~name() = default;                                                 \
+  bool name::Deserialize(const DriverTransport::RawMessage& message,       \
+                         const DriverTransport& transport) {               \
+    return DeserializeFromTransport(sizeof(ParamsType), kVersion,          \
+                                    absl::MakeSpan(kMetadata), message,    \
+                                    transport);                            \
+  }                                                                        \
+  bool name::DeserializeRelayed(absl::Span<const uint8_t> data,            \
+                                absl::Span<DriverObject> objects) {        \
+    return DeserializeFromRelay(sizeof(ParamsType), kVersion,              \
+                                absl::MakeSpan(kMetadata), data, objects); \
+  }                                                                        \
   constexpr internal::ParamMetadata name::kMetadata[];
 
 #define IPCZ_MSG_END()

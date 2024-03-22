@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Chromium Authors. All rights reserved.
+ * Copyright 2020 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -12,7 +12,8 @@
  * 'true' in hasEnrolledInstrument() call. Otherwise 'false' or an error
  * message.
  */
-async function hasEnrolledInstrumentInTwoPaymentRequestObjects(supportedMethods) { // eslint-disable-line no-unused-vars, max-len
+async function hasEnrolledInstrumentInTwoPaymentRequestObjects(
+    supportedMethods) {
   try {
     const methods = [{supportedMethods}];
     const details = {

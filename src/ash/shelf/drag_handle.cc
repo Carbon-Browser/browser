@@ -1,8 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/shelf/drag_handle.h"
+
+#include <optional>
+#include <string>
 
 #include "ash/accessibility/accessibility_controller_impl.h"
 #include "ash/constants/ash_features.h"
@@ -10,17 +13,26 @@
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shelf/shelf_layout_manager.h"
+#include "ash/shelf/shelf_navigation_widget.h"
 #include "ash/shelf/shelf_observer.h"
 #include "ash/shelf/shelf_widget.h"
+#include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
+#include "ash/system/status_area_widget.h"
 #include "ash/wm/overview/overview_controller.h"
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/wm/core/coordinate_conversion.h"
 
 namespace ash {
@@ -79,7 +91,7 @@ class HideNudgeObserver : public ui::ImplicitAnimationObserver {
   }
 
  private:
-  ContextualNudge* const drag_handle_nudge_;
+  const raw_ptr<ContextualNudge, ExperimentalAsh> drag_handle_nudge_;
 };
 
 }  // namespace
@@ -159,7 +171,8 @@ void DragHandle::ShowDragHandleNudge() {
     hide_drag_handle_nudge_timer_.Start(
         FROM_HERE, nudge_duration,
         base::BindOnce(&DragHandle::HideDragHandleNudge, base::Unretained(this),
-                       contextual_tooltip::DismissNudgeReason::kTimeout));
+                       contextual_tooltip::DismissNudgeReason::kTimeout,
+                       /*animate=*/true));
   }
   contextual_tooltip::HandleNudgeShown(
       pref, contextual_tooltip::TooltipType::kInAppToHome);
@@ -184,7 +197,8 @@ void DragHandle::ScheduleShowDragHandleNudge() {
 }
 
 void DragHandle::HideDragHandleNudge(
-    contextual_tooltip::DismissNudgeReason reason) {
+    contextual_tooltip::DismissNudgeReason reason,
+    bool animate) {
   StopDragHandleNudgeShowTimer();
   if (!gesture_nudge_target_visibility())
     return;
@@ -198,8 +212,9 @@ void DragHandle::HideDragHandleNudge(
         contextual_tooltip::TooltipType::kInAppToHome);
   }
 
-  HideDragHandleNudgeHelper(/*hidden_by_tap=*/reason ==
-                            contextual_tooltip::DismissNudgeReason::kTap);
+  HideDragHandleNudgeHelper(
+      /*hidden_by_tap=*/reason == contextual_tooltip::DismissNudgeReason::kTap,
+      animate);
   gesture_nudge_target_visibility_ = false;
 }
 
@@ -222,13 +237,18 @@ void DragHandle::SetWindowDragFromShelfInProgress(bool gesture_in_progress) {
     hide_drag_handle_nudge_timer_.Stop();
   } else {
     HideDragHandleNudge(
-        contextual_tooltip::DismissNudgeReason::kPerformedGesture);
+        contextual_tooltip::DismissNudgeReason::kPerformedGesture,
+        /*animate=*/true);
   }
 }
 
 void DragHandle::UpdateColor() {
-  layer()->SetColor(AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kShelfHandleColor));
+  if (chromeos::features::IsJellyEnabled()) {
+    layer()->SetColor(
+        GetColorProvider()->GetColor(cros_tokens::kCrosSysOnSurface));
+  } else {
+    layer()->SetColor(GetColorProvider()->GetColor(kColorAshShelfHandleColor));
+  }
 }
 
 void DragHandle::OnGestureEvent(ui::GestureEvent* event) {
@@ -249,23 +269,27 @@ gfx::Rect DragHandle::GetAnchorBoundsInScreen() const {
   // anchor for contextual nudges, and their bounds are set relative to the
   // handle bounds without transform (for example, for in-app to home nudge both
   // drag handle and the nudge will have non-indentity, identical transforms).
-  gfx::Point origin_in_screen = anchor_bounds.origin();
-  layer()->transform().TransformPointReverse(&origin_in_screen);
+  gfx::PointF origin(anchor_bounds.origin());
+  gfx::PointF origin_in_screen =
+      layer()->transform().InverseMapPoint(origin).value_or(origin);
 
   // If the parent widget has a transform set, it should be ignored as well (the
   // transform is set during shelf widget animations, and will animate to
   // identity transform), so the nudge bounds are set relative to the target
   // shelf bounds.
   aura::Window* const widget_window = GetWidget()->GetNativeWindow();
-  origin_in_screen += widget_window->bounds().origin().OffsetFromOrigin();
+  origin_in_screen +=
+      gfx::Vector2dF(widget_window->bounds().origin().OffsetFromOrigin());
   wm::ConvertPointToScreen(widget_window->parent(), &origin_in_screen);
 
-  anchor_bounds.set_origin(origin_in_screen);
+  anchor_bounds.set_origin(gfx::ToRoundedPoint(origin_in_screen));
   return anchor_bounds;
 }
 
 void DragHandle::GetAccessibleNodeData(ui::AXNodeData* node_data) {
+  // TODO(b/262424972): Remove unwanted ", window" string from the announcement.
   Button::GetAccessibleNodeData(node_data);
+  GetViewAccessibility().OverrideRole(ax::mojom::Role::kPopUpButton);
 
   std::u16string accessible_name = std::u16string();
   switch (shelf_->shelf_layout_manager()->hotseat_state()) {
@@ -275,14 +299,30 @@ void DragHandle::GetAccessibleNodeData(ui::AXNodeData* node_data) {
       break;
     case HotseatState::kHidden:
       accessible_name = l10n_util::GetStringUTF16(
-          IDS_ASH_DRAG_HANDLE_HOTSEAT_SHOW_ACCESSIBLE_NAME);
+          IDS_ASH_DRAG_HANDLE_HOTSEAT_ACCESSIBLE_NAME);
+      node_data->AddState(ax::mojom::State::kCollapsed);
+
+      // When the hotseat is kHidden, the focus traversal should go to the
+      // status area as the next focus and the navigation area as the previous
+      // focus.
+      GetViewAccessibility().OverrideNextFocus(shelf_->GetStatusAreaWidget());
+      GetViewAccessibility().OverridePreviousFocus(
+          shelf_->shelf_widget()->navigation_widget());
       break;
     case HotseatState::kExtended:
+      node_data->AddState(ax::mojom::State::kExpanded);
+
+      // When the hotseat is kExtended, the focus traversal should go to the
+      // hotseat as both the next and previous focus.
+      GetViewAccessibility().OverrideNextFocus(shelf_->hotseat_widget());
+      GetViewAccessibility().OverridePreviousFocus(shelf_->hotseat_widget());
+
       // The name should be empty when the hotseat is extended but we cannot
       // hide it.
-      if (force_show_hotseat_resetter_)
+      if (force_show_hotseat_resetter_) {
         accessible_name = l10n_util::GetStringUTF16(
-            IDS_ASH_DRAG_HANDLE_HOTSEAT_HIDE_ACCESSIBLE_NAME);
+            IDS_ASH_DRAG_HANDLE_HOTSEAT_ACCESSIBLE_NAME);
+      }
       break;
   }
   node_data->SetName(accessible_name);
@@ -309,7 +349,8 @@ void DragHandle::OnSplitViewStateChanged(
     SplitViewController::State state) {
   if (SplitViewController::Get(shelf_->shelf_widget()->GetNativeWindow())
           ->InSplitViewMode()) {
-    HideDragHandleNudge(contextual_tooltip::DismissNudgeReason::kOther);
+    HideDragHandleNudge(contextual_tooltip::DismissNudgeReason::kOther,
+                        /*animate=*/true);
   }
 }
 
@@ -338,6 +379,11 @@ void DragHandle::ButtonPressed() {
     shelf_->hotseat_widget()->set_manually_extended(false);
     force_show_hotseat_resetter_.RunAndReset();
   }
+
+  // The accessibility focus order depends on the hotseat state, and pressing
+  // the drag handle changes the hotseat state. So, send an accessibility
+  // notification in order to recompute the focus order.
+  NotifyAccessibilityEvent(ax::mojom::Event::kStateChanged, true);
 }
 
 void DragHandle::OnImplicitAnimationsCompleted() {
@@ -350,8 +396,6 @@ void DragHandle::ShowDragHandleTooltip() {
   drag_handle_nudge_ = new ContextualNudge(
       this, nullptr /*parent_window*/, ContextualNudge::Position::kTop,
       gfx::Insets(), l10n_util::GetStringUTF16(IDS_ASH_DRAG_HANDLE_NUDGE),
-      AshColorProvider::Get()->GetContentLayerColor(
-          AshColorProvider::ContentLayerType::kTextColorPrimary),
       base::BindRepeating(&DragHandle::HandleTapOnNudge,
                           weak_factory_.GetWeakPtr()));
   drag_handle_nudge_->GetWidget()->Show();
@@ -401,7 +445,16 @@ void DragHandle::ShowDragHandleTooltip() {
   }
 }
 
-void DragHandle::HideDragHandleNudgeHelper(bool hidden_by_tap) {
+void DragHandle::HideDragHandleNudgeHelper(bool hidden_by_tap, bool animate) {
+  if (!animate) {
+    ScheduleDragHandleTranslationAnimation(
+        0, base::TimeDelta(), gfx::Tween::ZERO,
+        ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
+    views::Widget* nudge_widget = drag_handle_nudge_->GetWidget();
+    drag_handle_nudge_ = nullptr;
+    nudge_widget->CloseWithReason(views::Widget::ClosedReason::kUnspecified);
+    return;
+  }
   ScheduleDragHandleTranslationAnimation(
       0,
       hidden_by_tap ? kInAppToHomeHideOnTapAnimationDuration
@@ -465,12 +518,16 @@ void DragHandle::ScheduleDragHandleTranslationAnimation(
 void DragHandle::HandleTapOnNudge() {
   if (!drag_handle_nudge_)
     return;
-  HideDragHandleNudge(contextual_tooltip::DismissNudgeReason::kTap);
+  HideDragHandleNudge(contextual_tooltip::DismissNudgeReason::kTap,
+                      /*animate=*/true);
 }
 
 void DragHandle::StopDragHandleNudgeShowTimer() {
   show_drag_handle_nudge_timer_.Stop();
   overview_observation_.Reset();
 }
+
+BEGIN_METADATA(DragHandle)
+END_METADATA
 
 }  // namespace ash

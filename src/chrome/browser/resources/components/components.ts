@@ -1,13 +1,14 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './strings.m.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {addWebUIListener, isChromeOS, sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {$} from 'chrome://resources/js/util.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {isChromeOS} from 'chrome://resources/js/platform.js';
+import {$, getRequiredElement} from 'chrome://resources/js/util.js';
 
 declare global {
   class JsEvalContext {
@@ -18,17 +19,17 @@ declare global {
   const trustedTypes: {emptyHTML: string};
 }
 
-type Component = {
-  id: string,
-  name: string,
-  status: string,
-  version: string,
-};
+interface Component {
+  id: string;
+  name: string;
+  status: string;
+  version: string;
+}
 
-type ComponentsData = {
-  components: Component[],
-  showOsLink: boolean,
-};
+interface ComponentsData {
+  components: Component[];
+  showOsLink: boolean;
+}
 
 /**
  * An array of the latest component data including ID, name, status and
@@ -50,12 +51,13 @@ function renderTemplate(componentsData: ComponentsData) {
   const output =
       document.body.querySelector<HTMLElement>(
                        '#component-template')!.cloneNode(true) as HTMLElement;
-  $('component-placeholder').innerHTML = trustedTypes.emptyHTML;
-  $('component-placeholder').appendChild(output);
+  getRequiredElement('component-placeholder').innerHTML =
+      trustedTypes.emptyHTML;
+  getRequiredElement('component-placeholder').appendChild(output);
   jstProcess(input, output);
   output.removeAttribute('hidden');
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   const crosUrlRedirectButton = $('os-link-href');
   if (crosUrlRedirectButton) {
     crosUrlRedirectButton.onclick = crosUrlComponentRedirect;
@@ -63,7 +65,7 @@ function renderTemplate(componentsData: ComponentsData) {
   // </if>
 }
 
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 /**
  * Called when the user clicks on the os-link-href button.
  */
@@ -87,7 +89,7 @@ function requestComponentsData() {
  * @param componentsData Detailed info about installed components.
  */
 function returnComponentsData(componentsData: ComponentsData) {
-  const bodyContainer = $('body-container');
+  const bodyContainer = getRequiredElement('body-container');
   const body = document.body;
 
   bodyContainer.style.visibility = 'hidden';
@@ -126,11 +128,11 @@ function returnComponentsData(componentsData: ComponentsData) {
   body.className = 'show-tmi-mode-initial';
 }
 
-type ComponentEvent = {
-  event: string,
-  id?: string,
-  version?: string,
-};
+interface ComponentEvent {
+  event: string;
+  id?: string;
+  version?: string;
+}
 
 /**
  * Listener called when state of component updater service changes.
@@ -159,12 +161,12 @@ function onComponentEvent(event: ComponentEvent) {
   assert(component);
 
   const status = event.event;
-  $('status-' + id).textContent = status;
+  getRequiredElement('status-' + id).textContent = status;
   component.status = status;
 
   if (event.version) {
     const version = event.version;
-    $('version-' + id).textContent = version;
+    getRequiredElement('version-' + id).textContent = version;
     component.version = version;
   }
 }
@@ -175,7 +177,7 @@ function onComponentEvent(event: ComponentEvent) {
  *     update.
  */
 function handleCheckUpdate(node: HTMLElement) {
-  $('status-' + String(node.id)).textContent =
+  getRequiredElement('status-' + String(node.id)).textContent =
       loadTimeData.getString('checkingLabel');
 
   // Tell the C++ ComponentssDOMHandler to check for update.
@@ -184,6 +186,6 @@ function handleCheckUpdate(node: HTMLElement) {
 
 // Get data and have it displayed upon loading.
 document.addEventListener('DOMContentLoaded', function() {
-  addWebUIListener('component-event', onComponentEvent);
+  addWebUiListener('component-event', onComponentEvent);
   requestComponentsData();
 });

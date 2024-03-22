@@ -33,7 +33,6 @@
 #include "third_party/blink/renderer/platform/transforms/scale_transform_operation.h"
 #include "third_party/blink/renderer/platform/transforms/skew_transform_operation.h"
 #include "third_party/blink/renderer/platform/transforms/transform_operations.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "third_party/blink/renderer/platform/transforms/translate_transform_operation.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/transform_operations.h"
@@ -67,8 +66,6 @@ void ToGfxTransformOperations(
       case TransformOperation::kTranslate: {
         auto* transform =
             static_cast<const TranslateTransformOperation*>(operation.get());
-        if (!RuntimeEnabledFeatures::CompositeRelativeKeyframesEnabled())
-          DCHECK(transform->X().IsFixed() && transform->Y().IsFixed());
         out_transform_operations->AppendTranslate(
             SkDoubleToScalar(transform->X(box_size)),
             SkDoubleToScalar(transform->Y(box_size)),
@@ -113,15 +110,13 @@ void ToGfxTransformOperations(
       case TransformOperation::kMatrix: {
         auto* transform =
             static_cast<const MatrixTransformOperation*>(operation.get());
-        out_transform_operations->AppendMatrix(
-            transform->Matrix().ToTransform());
+        out_transform_operations->AppendMatrix(transform->Matrix());
         break;
       }
       case TransformOperation::kMatrix3D: {
         auto* transform =
             static_cast<const Matrix3DTransformOperation*>(operation.get());
-        out_transform_operations->AppendMatrix(
-            transform->Matrix().ToTransform());
+        out_transform_operations->AppendMatrix(transform->Matrix());
         break;
       }
       case TransformOperation::kPerspective: {
@@ -138,9 +133,9 @@ void ToGfxTransformOperations(
       }
       case TransformOperation::kRotateAroundOrigin:
       case TransformOperation::kInterpolated: {
-        TransformationMatrix m;
+        gfx::Transform m;
         operation->Apply(m, box_size);
-        out_transform_operations->AppendMatrix(m.ToTransform());
+        out_transform_operations->AppendMatrix(m);
         break;
       }
       default:

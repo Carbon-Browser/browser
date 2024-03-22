@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,11 @@ bool ProcessIterator::IncludeEntry() {
 
 NamedProcessIterator::NamedProcessIterator(
     const FilePath::StringType& executable_name,
-    const ProcessFilter* filter) : ProcessIterator(filter),
-                                   executable_name_(executable_name) {
+    const ProcessFilter* filter,
+    bool use_prefix_match)
+    : ProcessIterator(filter),
+      executable_name_(executable_name),
+      use_prefix_match_(use_prefix_match) {
 #if BUILDFLAG(IS_ANDROID)
   // On Android, the process name contains only the last 15 characters, which
   // is in file /proc/<pid>/stat, the string between open parenthesis and close

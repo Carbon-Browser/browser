@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,8 @@
 
 #include "ash/public/cpp/shelf_item_delegate.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/scoped_observation.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/apps/app_service/browser_app_instance_observer.h"
@@ -64,6 +66,8 @@ class BrowserAppShelfItemController : public ash::ShelfItemDelegate,
   void OnBrowserAppRemoved(const apps::BrowserAppInstance& instance) override;
 
  private:
+  using CommandToInstanceMap = base::flat_map<int, base::UnguessableToken>;
+
   // Gets a list of instances (a pair of app menu command ID and instance ID)
   // matching the predicate.
   std::vector<std::pair<int, base::UnguessableToken>> GetMatchingInstances(
@@ -75,8 +79,8 @@ class BrowserAppShelfItemController : public ash::ShelfItemDelegate,
   void OnLoadMediumIcon(apps::IconValuePtr icon_value);
   void OnLoadBittyIcon(apps::IconValuePtr icon_value);
 
-  Profile* profile_;
-  apps::BrowserAppInstanceRegistry& registry_;
+  raw_ptr<Profile, ExperimentalAsh> profile_;
+  const raw_ref<apps::BrowserAppInstanceRegistry, ExperimentalAsh> registry_;
 
   // ShelfContextMenu instance needs to be alive for the duration of the
   // GetMenuModel call.
@@ -90,7 +94,7 @@ class BrowserAppShelfItemController : public ash::ShelfItemDelegate,
   // association of instances to command IDs and to order the items by launch
   // time. The set of instances is usually under 10 items so a flat map is
   // sufficient.
-  base::flat_map<int, base::UnguessableToken> command_to_instance_map_;
+  CommandToInstanceMap command_to_instance_map_;
   int last_command_id_{0};
 
   base::ScopedObservation<apps::BrowserAppInstanceRegistry,

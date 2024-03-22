@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,22 +44,35 @@ class MockAppClient : public ProjectorAppClient {
   MOCK_METHOD1(RemoveObserver, void(Observer*));
   MOCK_METHOD1(OnNewScreencastPreconditionChanged,
                void(const NewScreencastPrecondition&));
-  MOCK_CONST_METHOD0(GetPendingScreencasts, const PendingScreencastSet&());
+  MOCK_CONST_METHOD0(GetPendingScreencasts,
+                     const PendingScreencastContainerSet&());
   MOCK_CONST_METHOD0(ShouldDownloadSoda, bool());
   MOCK_METHOD0(InstallSoda, void());
   MOCK_METHOD1(OnSodaInstallProgress, void(int));
   MOCK_METHOD0(OnSodaInstallError, void());
   MOCK_METHOD0(OnSodaInstalled, void());
   MOCK_CONST_METHOD0(OpenFeedbackDialog, void());
-  MOCK_METHOD2(GetScreencast,
-               void(const std::string&,
-                    ProjectorAppClient::OnGetScreencastCallback));
+  MOCK_CONST_METHOD3(GetVideo,
+                     void(const std::string&,
+                          const std::optional<std::string>&,
+                          ProjectorAppClient::OnGetVideoCallback));
+  MOCK_METHOD1(SetAnnotatorPageHandler,
+               void(UntrustedAnnotatorPageHandlerImpl*));
+  MOCK_METHOD1(ResetAnnotatorPageHandler,
+               void(UntrustedAnnotatorPageHandlerImpl*));
+  MOCK_METHOD1(SetTool, void(const AnnotatorTool&));
+  MOCK_METHOD0(Clear, void());
+  MOCK_METHOD1(NotifyAppUIActive, void(bool active));
+  MOCK_METHOD2(ToggleFileSyncingNotificationForPaths,
+               void(const std::vector<base::FilePath>&, bool));
+  MOCK_METHOD1(HandleAccountReauth, void(const std::string&));
 
   void SetAutomaticIssueOfAccessTokens(bool success);
   void WaitForAccessRequest(const std::string& account_email);
   void GrantOAuthTokenFor(const std::string& account_email,
                           const base::Time& expiry_time);
   void AddSecondaryAccount(const std::string& account_email);
+  void MakeFetchTokenFailWithError(const GoogleServiceAuthError& error);
 
  private:
   signin::IdentityTestEnvironment identity_test_environment_;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,10 @@ CRYPTO_EXPORT SECMODModule* LoadChaps();
 // worker thread.
 CRYPTO_EXPORT ScopedPK11Slot GetChapsSlot(SECMODModule* chaps_module,
                                           CK_SLOT_ID slot_id);
+
+// Returns true if the given module is the Chaps module. Should be called on a
+// worker thread.
+CRYPTO_EXPORT bool IsChapsModule(SECMODModule* pk11_module);
 
 // Returns true if chaps is the module to which |slot| is attached. Should be
 // called on a worker thread.

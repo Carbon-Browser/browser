@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@ package org.chromium.chrome.browser.incognito;
 import android.annotation.SuppressLint;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.UnownedUserData;
 import org.chromium.base.UnownedUserDataKey;
-import org.chromium.base.annotations.CheckDiscard;
+import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.chrome.browser.dependency_injection.ActivityScope;
-import org.chromium.chrome.browser.profiles.OTRProfileID;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileProvider;
 import org.chromium.ui.base.WindowAndroid;
 
 import javax.inject.Inject;
@@ -36,12 +36,14 @@ public class IncognitoCctProfileManager implements UnownedUserData {
     private static final UnownedUserDataKey<IncognitoCctProfileManager> KEY =
             new UnownedUserDataKey<>(IncognitoCctProfileManager.class);
 
-    private OTRProfileID mOTRProfileID;
     private final WindowAndroid mWindowAndroid;
+    private final OneshotSupplier<ProfileProvider> mProfileProviderSupplier;
 
     @Inject
-    public IncognitoCctProfileManager(WindowAndroid windowAndroid) {
+    public IncognitoCctProfileManager(
+            WindowAndroid windowAndroid, OneshotSupplier<ProfileProvider> profileProviderSupplier) {
         mWindowAndroid = windowAndroid;
+        mProfileProviderSupplier = profileProviderSupplier;
         attach(mWindowAndroid, this);
     }
 
@@ -76,25 +78,22 @@ public class IncognitoCctProfileManager implements UnownedUserData {
         return KEY.retrieveDataFromHost(window.getUnownedUserDataHost());
     }
 
-    @CheckDiscard("Test-only setter.")
-    @VisibleForTesting
     public static void setIncognitoCctProfileManagerForTesting(
             IncognitoCctProfileManager incognitoCctProfileManager) {
         sIncognitoCctProfileManagerForTesting = incognitoCctProfileManager;
+        ResettersForTesting.register(() -> sIncognitoCctProfileManagerForTesting = null);
     }
 
     public Profile getProfile() {
-        if (mOTRProfileID == null) mOTRProfileID = OTRProfileID.createUnique("CCT:Incognito");
-        return Profile.getLastUsedRegularProfile().getOffTheRecordProfile(
-                mOTRProfileID, /*createIfNeeded=*/true);
+        return mProfileProviderSupplier.get().getOffTheRecordProfile(/* createIfNeeded= */ true);
     }
 
     public void destroyProfile() {
-        if (mOTRProfileID != null) {
-            Profile.getLastUsedRegularProfile()
-                    .getOffTheRecordProfile(mOTRProfileID, /*createIfNeeded=*/true)
+        if (mProfileProviderSupplier.get().hasOffTheRecordProfile()) {
+            mProfileProviderSupplier
+                    .get()
+                    .getOffTheRecordProfile(/* createIfNeeded= */ false)
                     .destroyWhenAppropriate();
-            mOTRProfileID = null;
         }
         detach(this);
     }

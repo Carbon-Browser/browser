@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,23 +27,30 @@ class AutofillPrivateEventRouter :
     public EventRouter::Observer,
     public autofill::PersonalDataManagerObserver {
  public:
-  static AutofillPrivateEventRouter* Create(
-      content::BrowserContext* browser_context);
+  // Uses AutofillPrivateEventRouterFactory instead.
+  explicit AutofillPrivateEventRouter(content::BrowserContext* context);
   AutofillPrivateEventRouter(const AutofillPrivateEventRouter&) = delete;
   AutofillPrivateEventRouter& operator=(const AutofillPrivateEventRouter&) =
       delete;
   ~AutofillPrivateEventRouter() override = default;
 
- protected:
-  explicit AutofillPrivateEventRouter(content::BrowserContext* context);
+  // Rebind and Unbind test PDM when using `TestContentAutofillClient`.
+  void RebindPersonalDataManagerForTesting(
+      autofill::PersonalDataManager* personal_data);
+  void UnbindPersonalDataManagerForTesting();
 
+ protected:
   // KeyedService overrides:
   void Shutdown() override;
 
   // PersonalDataManagerObserver implementation.
   void OnPersonalDataChanged() override;
+  void OnPersonalDataSyncStateChanged() override;
 
  private:
+  // Triggers an event on the router with current user's data.
+  void BroadcastCurrentData();
+
   raw_ptr<content::BrowserContext> context_;
 
   raw_ptr<EventRouter> event_router_ = nullptr;

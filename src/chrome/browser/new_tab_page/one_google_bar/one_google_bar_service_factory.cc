@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/signin/core/browser/cookie_settings_util.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/storage_partition.h"
@@ -31,32 +30,39 @@ OneGoogleBarService* OneGoogleBarServiceFactory::GetForProfile(
 
 // static
 OneGoogleBarServiceFactory* OneGoogleBarServiceFactory::GetInstance() {
-  return base::Singleton<OneGoogleBarServiceFactory>::get();
+  static base::NoDestructor<OneGoogleBarServiceFactory> instance;
+  return instance.get();
 }
 
 OneGoogleBarServiceFactory::OneGoogleBarServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "OneGoogleBarService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(CookieSettingsFactory::GetInstance());
   DependsOn(IdentityManagerFactory::GetInstance());
 }
 
 OneGoogleBarServiceFactory::~OneGoogleBarServiceFactory() = default;
 
-KeyedService* OneGoogleBarServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+OneGoogleBarServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   signin::IdentityManager* identity_manager =
       IdentityManagerFactory::GetForProfile(profile);
-  content_settings::CookieSettings* cookie_settings =
-      CookieSettingsFactory::GetForProfile(profile).get();
+  scoped_refptr<content_settings::CookieSettings> cookie_settings =
+      CookieSettingsFactory::GetForProfile(profile);
   auto url_loader_factory = context->GetDefaultStoragePartition()
                                 ->GetURLLoaderFactoryForBrowserProcess();
-  return new OneGoogleBarService(
+  return std::make_unique<OneGoogleBarService>(
       identity_manager,
       std::make_unique<OneGoogleBarLoaderImpl>(
           url_loader_factory, g_browser_process->GetApplicationLocale(),
           AccountConsistencyModeManager::IsMirrorEnabledForProfile(profile) &&
-              signin::SettingsAllowSigninCookies(cookie_settings)));
+              signin::SettingsAllowSigninCookies(cookie_settings.get())));
 }

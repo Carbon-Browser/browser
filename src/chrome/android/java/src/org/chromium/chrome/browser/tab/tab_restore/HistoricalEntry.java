@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import org.chromium.chrome.browser.tab.Tab;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Base class representing a historical entry. Can be used for either a group or single tab.
- */
+/** Base class representing a historical entry. Can be used for either a group or single tab. */
 public class HistoricalEntry {
     private final int mGroupId;
     private final String mGroupTitle;

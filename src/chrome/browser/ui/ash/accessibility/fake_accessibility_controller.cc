@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,12 +70,15 @@ void FakeAccessibilityController::SetDictationActive(bool is_active) {}
 void FakeAccessibilityController::ToggleDictationFromSource(
     ash::DictationToggleSource source) {}
 
+void FakeAccessibilityController::EnableOrToggleDictationFromSource(
+    ash::DictationToggleSource source) {}
+
 void FakeAccessibilityController::ShowDictationLanguageUpgradedNudge(
     const std::string& dictation_locale,
     const std::string& application_locale) {}
 
 void FakeAccessibilityController::HandleAutoclickScrollableBoundsFound(
-    gfx::Rect& bounds_in_screen) {}
+    const gfx::Rect& bounds_in_screen) {}
 
 std::u16string FakeAccessibilityController::GetBatteryDescription() const {
   return std::u16string();
@@ -97,16 +100,22 @@ void FakeAccessibilityController::
     DisableSwitchAccessDisableConfirmationDialogTesting() {}
 
 void FakeAccessibilityController::
+    DisableSwitchAccessEnableNotificationTesting() {}
+
+void FakeAccessibilityController::
     UpdateDictationButtonOnSpeechRecognitionDownloadChanged(
         int download_progress) {}
 
-void FakeAccessibilityController::
-    ShowSpeechRecognitionDownloadNotificationForDictation(
-        bool succeeded,
-        const std::u16string& display_language) {}
+void FakeAccessibilityController::ShowNotificationForDictation(
+    ash::DictationNotificationType type,
+    const std::u16string& display_language) {}
 
 void FakeAccessibilityController::UpdateDictationBubble(
     bool visible,
     ash::DictationBubbleIconType icon,
-    const absl::optional<std::u16string>& text,
-    const absl::optional<std::vector<ash::DictationBubbleHintType>>& hints) {}
+    const std::optional<std::u16string>& text,
+    const std::optional<std::vector<ash::DictationBubbleHintType>>& hints) {}
+
+void FakeAccessibilityController::SilenceSpokenFeedback() {}
+
+void FakeAccessibilityController::ShowToast(ash::AccessibilityToastType type) {}

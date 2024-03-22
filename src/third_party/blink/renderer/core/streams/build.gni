@@ -1,20 +1,28 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 blink_core_sources_streams = [
   "byte_length_queuing_strategy.cc",
   "byte_length_queuing_strategy.h",
+  "byte_stream_tee_engine.cc",
+  "byte_stream_tee_engine.h",
   "count_queuing_strategy.cc",
   "count_queuing_strategy.h",
   "miscellaneous_operations.cc",
   "miscellaneous_operations.h",
+  "pipe_options.cc",
+  "pipe_options.h",
+  "pipe_to_engine.cc",
+  "pipe_to_engine.h",
   "promise_handler.cc",
   "promise_handler.h",
   "queue_with_sizes.cc",
   "queue_with_sizes.h",
   "queuing_strategy_common.cc",
   "queuing_strategy_common.h",
+  "read_into_request.h",
+  "read_request.h",
   "readable_byte_stream_controller.cc",
   "readable_byte_stream_controller.h",
   "readable_stream.cc",
@@ -36,6 +44,8 @@ blink_core_sources_streams = [
   "stream_algorithms.h",
   "stream_promise_resolver.cc",
   "stream_promise_resolver.h",
+  "tee_engine.cc",
+  "tee_engine.h",
   "transferable_streams.cc",
   "transferable_streams.h",
   "transform_stream.cc",

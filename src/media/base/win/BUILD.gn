@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,21 +13,21 @@ config("delay_load_mf") {
   ]
 }
 
-component("media_foundation_util") {
-  defines = [ "IS_MF_UTIL_IMPL" ]
+source_set("media_foundation_util") {
   sources = [
     "dxgi_device_manager.cc",
     "dxgi_device_manager.h",
+    "hresults.h",
     "mf_helpers.cc",
     "mf_helpers.h",
     "mf_initializer.cc",
     "mf_initializer.h",
-    "mf_util_export.h",
   ]
-  configs += [ "//media:media_config" ]
+  configs += [ "//media:subcomponent_config" ]
   deps = [
     "//base",
     "//media:shared_memory_support",
+    "//media/base",
   ]
   libs = [
     "d3d11.lib",
@@ -36,6 +36,28 @@ component("media_foundation_util") {
     "mfreadwrite.lib",
     "dxguid.lib",
     "dxgi.lib",
+  ]
+
+  # MediaFoundation is not available on Windows N, so must be delay loaded.
+  all_dependent_configs = [ ":delay_load_mf" ]
+}
+
+component("color_space_util_win") {
+  defines = [ "IS_MEDIA_IMPL" ]
+  sources = [
+    "color_space_util_win.cc",
+    "color_space_util_win.h",
+  ]
+  configs += [ "//media:media_config" ]
+  deps = [
+    "//media:shared_memory_support",
+    "//media/base",
+    "//ui/gfx:color_space",
+  ]
+  libs = [
+    "mf.lib",
+    "mfplat.lib",
+    "mfreadwrite.lib",
   ]
 
   # MediaFoundation is not available on Windows N, so must be delay loaded.

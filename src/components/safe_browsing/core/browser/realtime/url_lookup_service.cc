@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/rand_util.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/buildflags.h"
@@ -18,7 +19,6 @@
 #include "components/safe_browsing/core/browser/realtime/policy_engine.h"
 #include "components/safe_browsing/core/browser/referrer_chain_provider.h"
 #include "components/safe_browsing/core/browser/safe_browsing_token_fetcher.h"
-#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/unified_consent/pref_names.h"
 #include "net/base/ip_address.h"
@@ -54,7 +54,8 @@ RealTimeUrlLookupService::RealTimeUrlLookupService(
     : RealTimeUrlLookupServiceBase(url_loader_factory,
                                    cache_manager,
                                    get_user_population_callback,
-                                   referrer_chain_provider),
+                                   referrer_chain_provider,
+                                   pref_service),
       pref_service_(pref_service),
       token_fetcher_(std::move(token_fetcher)),
       client_token_config_callback_(client_token_config_callback),
@@ -87,7 +88,7 @@ void RealTimeUrlLookupService::GetAccessToken(
 
 void RealTimeUrlLookupService::OnPrefChanged() {
   if (CanPerformFullURLLookup()) {
-    url_lookup_enabled_timestamp_ = base::Time::Now().ToDoubleT();
+    url_lookup_enabled_timestamp_ = base::Time::Now();
   }
 }
 
@@ -135,11 +136,12 @@ int RealTimeUrlLookupService::GetReferrerUserGestureLimit() const {
 }
 
 bool RealTimeUrlLookupService::CanSendPageLoadToken() const {
-  return base::FeatureList::IsEnabled(kSafeBrowsingPageLoadToken);
+  return true;
 }
 
 bool RealTimeUrlLookupService::CanCheckSubresourceURL() const {
-  return IsEnhancedProtectionEnabled(*pref_service_);
+  return IsEnhancedProtectionEnabled(*pref_service_) &&
+         CanPerformFullURLLookup();
 }
 
 bool RealTimeUrlLookupService::CanCheckSafeBrowsingDb() const {
@@ -148,10 +150,15 @@ bool RealTimeUrlLookupService::CanCheckSafeBrowsingDb() const {
   return true;
 }
 
+bool RealTimeUrlLookupService::CanCheckSafeBrowsingHighConfidenceAllowlist()
+    const {
+  // Always return true, because consumer real time URL check always checks
+  // high confidence allowlist.
+  return true;
+}
+
 bool RealTimeUrlLookupService::CanSendRTSampleRequest() const {
   return IsExtendedReportingEnabled(*pref_service_) &&
-         base::FeatureList::IsEnabled(
-             safe_browsing::kSendSampledPingsForProtegoAllowlistDomains) &&
          (bypass_protego_probability_for_tests_ ||
           base::RandDouble() <= kProbabilityForSendingSampledRequests);
 }
@@ -223,9 +230,30 @@ bool RealTimeUrlLookupService::ShouldIncludeCredentials() const {
   return true;
 }
 
-double RealTimeUrlLookupService::GetMinAllowedTimestampForReferrerChains()
+base::Time RealTimeUrlLookupService::GetMinAllowedTimestampForReferrerChains()
     const {
+  // TODO(crbug.com/1501054): Currently some unit tests can call this when this
+  // has not been explicitly set to base::Time::Now() by OnPrefChangeed().
+  //
+  // Either:
+  // 1. The tests need to make sure that OnPrefChanged() is appropriately
+  //    triggered, because CanPerformFullURLLookup() is true.
+  // 2. Or CanPerformFullURLLookup() is false and this function should not be
+  //    called, so this field should be set to a sentinel value and a CHECK()
+  //    added that the sentinel value is not returned here.
   return url_lookup_enabled_timestamp_;
+}
+
+void RealTimeUrlLookupService::MaybeLogLastProtegoPingTimeToPrefs(
+    bool sent_with_token) {
+  // `pref_service_` can be null in tests.
+  if (pref_service_ && IsEnhancedProtectionEnabled(*pref_service_)) {
+    pref_service_->SetTime(
+        sent_with_token
+            ? prefs::kSafeBrowsingEsbProtegoPingWithTokenLastLogTime
+            : prefs::kSafeBrowsingEsbProtegoPingWithoutTokenLastLogTime,
+        base::Time::Now());
+  }
 }
 
 }  // namespace safe_browsing

@@ -1,20 +1,22 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import <Cocoa/Cocoa.h>
-
 #import "content/browser/accessibility/browser_accessibility_mac.h"
 
+#import <Cocoa/Cocoa.h>
+
 #include "base/debug/stack_trace.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/scoped_policy.h"
+#import "base/task/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #import "content/browser/accessibility/browser_accessibility_cocoa.h"
 #include "content/browser/accessibility/browser_accessibility_manager_mac.h"
 
 namespace content {
 
-// Static.
+// static
 std::unique_ptr<BrowserAccessibility> BrowserAccessibility::Create(
     BrowserAccessibilityManager* manager,
     ui::AXNode* node) {
@@ -29,8 +31,8 @@ BrowserAccessibilityMac::BrowserAccessibilityMac(
 
 BrowserAccessibilityMac::~BrowserAccessibilityMac() {
   if (platform_node_) {
-    platform_node_->Destroy();  // `Destroy()` also deletes the object.
-    platform_node_ = nullptr;
+    // `Destroy()` also deletes the object.
+    platform_node_.ExtractAsDangling()->Destroy();
   }
 }
 
@@ -67,8 +69,7 @@ void BrowserAccessibilityMac::ReplaceNativeObject() {
   // We need to keep the old native wrapper alive until we set up the new one
   // because we need to retrieve some information from the old wrapper in order
   // to add it to the new one, e.g. its list of children.
-  base::scoped_nsobject<AXPlatformNodeCocoa> old_native_obj(
-      platform_node_->ReleaseNativeWrapper());
+  AXPlatformNodeCocoa* old_native_obj = platform_node_->ReleaseNativeWrapper();
 
   // We should have never called this method if a native wrapper has not been
   // created, but keep a null check just in case.
@@ -101,16 +102,16 @@ void BrowserAccessibilityMac::ReplaceNativeObject() {
   // We use 1000ms; however, this magic number isn't necessary to avoid
   // use-after-free or anything scary like that. The worst case scenario if this
   // gets destroyed too early is that VoiceOver announces the wrong thing once.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(
-          [](base::scoped_nsobject<AXPlatformNodeCocoa> destroyed) {
+          [](AXPlatformNodeCocoa* destroyed) {
             if (destroyed && [destroyed instanceActive]) {
               // Follow destruction pattern from NativeReleaseReference().
               [destroyed detach];
             }
           },
-          std::move(old_native_obj)),
+          old_native_obj),
       base::Milliseconds(1000));
 }
 
@@ -213,7 +214,6 @@ BrowserAccessibilityCocoa* BrowserAccessibilityMac::CreateNativeWrapper() {
       [[BrowserAccessibilityCocoa alloc] initWithObject:this
                                        withPlatformNode:platform_node_];
 
-  // `AXPlatformNodeMac` takes ownership of the Cocoa object here.
   platform_node_->SetNativeWrapper(node_cocoa);
   return node_cocoa;
 }

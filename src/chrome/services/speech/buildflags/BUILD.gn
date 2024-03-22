@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,5 +13,6 @@ buildflag_header("buildflags") {
   flags = [
     "ENABLE_SPEECH_SERVICE=$enable_speech_service",
     "ENABLE_BROWSER_SPEECH_SERVICE=$enable_browser_speech_service",
+    "ENABLE_SERVER_BASED_RECOGNITION_RECOGNIZER=$enable_server_based_recognition",
   ]
 }

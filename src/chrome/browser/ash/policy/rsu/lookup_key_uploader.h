@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/attestation/enrollment_certificate_uploader.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -63,17 +64,19 @@ class LookupKeyUploader : public CloudPolicyStore::Observer {
   // Used in tests.
   void SetClock(base::Clock* clock) { clock_ = clock; }
 
-  DeviceCloudPolicyStoreAsh* policy_store_;
-  PrefService* prefs_;
-  ash::attestation::EnrollmentCertificateUploader* certificate_uploader_;
-  ash::CryptohomeMiscClient* cryptohome_misc_client_;
+  raw_ptr<DeviceCloudPolicyStoreAsh, ExperimentalAsh> policy_store_;
+  raw_ptr<PrefService, DanglingUntriaged | ExperimentalAsh> prefs_;
+  raw_ptr<ash::attestation::EnrollmentCertificateUploader, ExperimentalAsh>
+      certificate_uploader_;
+  raw_ptr<ash::CryptohomeMiscClient, DanglingUntriaged | ExperimentalAsh>
+      cryptohome_misc_client_;
 
   // Whether we need to upload the lookup key right now. By default, it is set
   // to true. Later, it is set to false after first successful upload or finding
   // prefs::kLastRSULookupKeyUploaded to be equal to the current lookup key.
   bool needs_upload_ = true;
 
-  base::Clock* clock_;
+  raw_ptr<base::Clock, ExperimentalAsh> clock_;
   // Timestamp of the last lookup key upload, used for resrticting too frequent
   // usage.
   base::Time last_upload_time_;

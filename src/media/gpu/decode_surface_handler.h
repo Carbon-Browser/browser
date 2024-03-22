@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,13 @@ class DecodeSurfaceHandler {
 
   // Returns a T for decoding into, if available, or nullptr.
   virtual scoped_refptr<T> CreateSurface() = 0;
+
+  // Returns a T for decoding into, if available, or nullptr. This is used for
+  // secure playback on V4L2 only. The |secure_handle| should be from the
+  // corresponding input buffer that will be decoded.
+  virtual scoped_refptr<T> CreateSecureSurface(uint64_t secure_handle) {
+    return nullptr;
+  }
 
   // Called by the client to indicate that |dec_surface| is ready to be
   // outputted. This can actually be called before decode is finished in

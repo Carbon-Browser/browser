@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -283,22 +283,6 @@ std::ostream& operator<<(std::ostream& os, const int test_case) {
   return os;
 }
 
-// Compares two legal message lines |lhs| and |rhs|.
-bool operator==(const LegalMessageLine& lhs, const LegalMessageLine& rhs) {
-  if (lhs.text() != rhs.text() || lhs.links().size() != rhs.links().size())
-    return false;
-
-  for (size_t i = 0; i < lhs.links().size(); ++i) {
-    if (lhs.links()[i].range != rhs.links()[i].range)
-      return false;
-
-    if (lhs.links()[i].url != rhs.links()[i].url)
-      return false;
-  }
-
-  return true;
-}
-
 class LegalMessageLineTest : public ::testing::TestWithParam<int> {
  public:
   LegalMessageLineTest() {}
@@ -313,7 +297,8 @@ TEST_P(LegalMessageLineTest, Parsing) {
   ASSERT_TRUE(value);
   ASSERT_TRUE(value->is_dict());
   LegalMessageLines actual_lines;
-  LegalMessageLine::Parse(*value, &actual_lines, test_case.escape_apostrophes);
+  LegalMessageLine::Parse(value->GetDict(), &actual_lines,
+                          test_case.escape_apostrophes);
 
   EXPECT_EQ(test_case.expected_lines, actual_lines);
 }

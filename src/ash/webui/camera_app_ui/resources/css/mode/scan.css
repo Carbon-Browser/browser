@@ -1,7 +1,7 @@
-/* Copyright 2021 The Chromium Authors. All rights reserved.
+/* Copyright 2021 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
-body:is(:not(.scan), :not(.streaming)) #scan-modes-group {
+body:is(:not(.scan), :not(.streaming), .doc-mode-reviewing) #scan-modes-group {
   display: none;
 }
 
@@ -20,7 +20,7 @@ body:is(:not(.scan), :not(.streaming)) #scan-modes-group {
   width: calc(100% / 2);
 }
 
-body.scan.enable-scan-barcode :is(#shutters-group, #toggle-timer) {
+body.scan.enable-scan-barcode #shutters-group {
   display: none;
 }
 
@@ -37,7 +37,7 @@ body.enable-scan-barcode .barcode-scan-box {
   --offset: calc(var(--border-width) + var(--border-distance));
   border-radius: var(--inner-border-radius);
   bottom: var(--offset);
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 0 9999px var(--cros-sys-scrim2);
   content: '';
   left: var(--offset);
   position: absolute;
@@ -49,7 +49,7 @@ body.enable-scan-barcode .barcode-scan-box {
 /* The corner borders of the scan box. */
 .barcode-scan-box::after {
   -webkit-mask: url(/images/barcode_scan_box_border_mask.svg);
-  border: var(--border-width) solid white;
+  border: var(--border-width) solid var(--cros-sys-illo-color3);
   border-radius: calc(var(--inner-border-radius) + var(--border-distance));
   box-sizing: border-box;
   content: '';
@@ -63,10 +63,10 @@ body.enable-scan-barcode .barcode-scan-box {
 /* TODO(b/172879638): Tune the position and layout after we finalized the
  * responsive window design. */
 .barcode-chip-container {
-  --chip-height: 32px;
+  --chip-height: 36px;
   --chip-max-width: 420px;
   --min-scanbox-distance: 40px;
-  --text-expand-button-height: 40px;
+  --text-expand-button-height: 48px;
   --text-line-height: 24px;
   --text-padding-vertical: 8px;
   /* Avoid collision with scan-box and preview-box */
@@ -94,49 +94,47 @@ body.enable-scan-barcode .barcode-scan-box {
               visibility 0s var(--fast2-duration);
 }
 
-.barcode-chip-url {
+#barcode-chip-url {
   align-items: center;
-  background: var(--grey-900);
+  background: var(--cros-sys-base_elevated);
   border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1), 0 4px 4px rgba(0, 0, 0, 0.2);
   box-sizing: border-box;
   display: flex;
-  font: 400 15px Roboto;
+  font: var(--cros-body-2-font);
   height: var(--chip-height);
-  padding: 8px;
+  justify-content: center;
+  gap: 10px;
+  max-width: 100%;
+  overflow:hidden;
+  padding: 8px 16px;
 }
 
-.barcode-chip-url::before {
-  background: url(/images/barcode_url.svg) no-repeat;
-  content: '';
-  display: inline-block;
-  flex-shrink: 0;
-  height: 20px;
-  margin-inline-end: 6px;
-  vertical-align: middle;
-  width: 20px;
+#barcode-chip-url > svg-wrapper {
+  color: var(--cros-sys-primary);
 }
 
-.barcode-chip-url > a {
-  color: var(--blue-300);
-  overflow: hidden;
+#barcode-chip-url-content {
+  color: var(--cros-sys-primary);
+  line-height: var(--text-line-height);
   text-decoration: none;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.barcode-chip-url > a:focus {
-  outline: none;
-}
-
 .barcode-copy-button:hover {
-  /* TODO(b/172879638): Tweak color according to the final UX spec */
-  background: url(/images/barcode_copy.svg) center no-repeat, rgb(50, 51, 54);
+  /* Use linear-gradient to apply multiple background colors. */
+  background: linear-gradient(
+    0deg,
+    var(--cros-sys-hover_on_subtle),
+    var(--cros-sys-hover_on_subtle)
+  ), var(--cros-sys-base_elevated);
 }
 
 .barcode-copy-button {
-  background: url(/images/barcode_copy.svg) center no-repeat, var(--grey-900);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.15);
+  background: var(--cros-sys-base_elevated);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1), 0 4px 4px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   height: var(--chip-height);
   inset-inline-start: calc(100% + 8px);
@@ -146,20 +144,24 @@ body.enable-scan-barcode .barcode-scan-box {
   z-index: 50;
 }
 
+.barcode-copy-button svg-wrapper {
+  color: var(--cros-sys-primary);
+}
+
 .barcode-chip-text {
   align-items: center;
-  background: var(--grey-900);
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.15);
+  background: var(--cros-sys-base_elevated);
+  border-radius: 20px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1), 0 4px 4px rgba(0, 0, 0, 0.2);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  font: 400 15px Roboto;
-  padding: var(--text-padding-vertical) 20px;
+  font: var(--cros-body-2-font);
+  padding: var(--text-padding-vertical) 16px;
 }
 
 #barcode-chip-text-content {
-  color: var(--grey-200);
+  color: var(--cros-sys-on_surface);
   line-height: var(--text-line-height);
   max-width: 100%;
   overflow: hidden;
@@ -171,32 +173,72 @@ body.enable-scan-barcode .barcode-scan-box {
 .expanded #barcode-chip-text-content {
   /* TODO(b/172879638): Make this responsive */
   max-height: calc(var(--text-line-height) * 10);
+  overflow-wrap: break-word;
   white-space: normal;
   /* Keep the same width as before to avoid text jumping. */
   width: var(--chip-max-width);
 }
 
 #barcode-chip-text-expand {
-  background: url(/images/barcode_chevron_down.svg) center no-repeat;
   height: var(--text-expand-button-height);
+  margin-top: 8px;
   width: 100%;
+
+  .up-icon {
+    display: none;
+  }
 }
 
 .expanded #barcode-chip-text-expand {
-  background: url(/images/barcode_chevron_up.svg) center no-repeat;
+  .up-icon {
+    display: block;
+  }
+  .down-icon {
+    display: none;
+  }
+}
+
+#barcode-chip-wifi {
+  align-items: center;
+  background: var(--cros-sys-base_elevated);
+  border-radius: 16px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1), 0 4px 4px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+  display: flex;
+  font: var(--cros-body-2-font);
+  height: var(--chip-height);
+  justify-content: center;
+  padding: 8px 16px;
+}
+
+#barcode-chip-wifi > svg-wrapper {
+  color: var(--cros-sys-primary);
+  margin-inline-end: 10px;
+}
+
+#barcode-chip-wifi-content {
+  color: var(--cros-sys-primary);
+  line-height: var(--text-line-height);
+  overflow: hidden;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .snackbar {
   align-items: center;
-  background: var(--grey-900);
-  border-radius: 4px;
+  background: var(--cros-sys-inverse_surface);
+  border-radius: 12px;
+  /*
+   * TODO(pihsun): Move the snackbar to the position as the design after jelly
+   * is default on.
+   */
   bottom: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.15);
   box-sizing: border-box;
-  color: var(--grey-200);
+  color: var(--cros-sys-inverse_on_surface);
   display: flex;
-  font-family: Roboto;
-  font-size: 13px;
+  font: var(--cros-body-2-font);
   height: 48px;
   left: 4px;
   opacity: 0;
@@ -263,7 +305,7 @@ body.enable-scan-barcode .barcode-scan-box {
 }
 
 #preview-document-corner-overlay .corner div {
-  background: var(--blue-300);
+  background: var(--cros-sys-illo-color3);
 }
 
 #preview-document-corner-overlay .corner {
@@ -290,19 +332,19 @@ body.enable-scan-barcode .barcode-scan-box {
 }
 
 #preview-document-corner-overlay .side.line {
-  background: var(--blue-500);
+  background: var(--cros-sys-illo-color3);
   height: 1px;
   width: 1px;
 }
 
 #preview-document-corner-overlay .no-document-toast {
-  background: var(--grey-900);
-  border-radius: 6px;
-  color: var(--grey-400);
+  background: var(--cros-sys-base_elevated);
+  border-radius: var(--border-radius-rounded-with-short-side);
+  color: var(--cros-sys-on_surface);
   display: inline-block;
-  font: normal 400 14px/20px Roboto;
+  font: var(--cros-body-2-font);
   left: 50%;
-  padding: 8px 10px;
+  padding: 8px 16px;
   position: absolute;
   text-align: center;
   top: 22px;
@@ -311,33 +353,222 @@ body.enable-scan-barcode .barcode-scan-box {
   white-space: nowrap;
 }
 
-#view-crop-document .review-image {
-  background-repeat: no-repeat;
-  background-size: cover;
-  overflow: hidden;
+body.doc-mode-reviewing :is(#back-to-review-document, #document-page-count) {
+  visibility: visible;
+}
+
+#back-to-review-document {
+  visibility: hidden;
+}
+
+#document-page-count {
+  align-items: center;
+  color: var(--cros-sys-on_surface);
+  display: flex;
+  font: var(--cros-body-2-font);
+  justify-content: center;
+  visibility: hidden;
+}
+
+#view-document-review {
+  --buttons-container-height: calc(var(--bottom-line) * 2);
+  --preview-area-padding-inline-end: 32px;
+  --preview-area-padding-inline-start: 32px;
+  display: flex;
+}
+
+#view-document-review:has(.page:nth-child(2)) {
+  --preview-area-padding-inline-start: 8px;
+}
+
+#view-document-review .document-pages {
+  background: var(--cros-sys-base_elevated);
+  counter-reset: page-count;
+  overflow: auto;
+  padding: 16px;
+}
+
+#view-document-review:not(:has(.page:nth-child(2))) .document-pages {
+  display: none;
+}
+
+#view-document-review .page {
+  border-radius: 8px;
+  display: flex;
+  gap: 4px;
+  outline-offset: 0;
+  padding: 20px 20px 20px 0;
+}
+
+#view-document-review .page.active {
+  background: var(--cros-sys-highlight_shape);
+}
+
+#view-document-review .delete-container {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  position: relative;
+  width: 48px;
+}
+
+#view-document-review .delete-container::before {
+  align-self: flex-start;
+  color: var(--cros-sys-on_surface);
+  content: counter(page-count);
+  counter-increment: page-count;
+  font: var(--cros-body-2-font);
   position: absolute;
+}
+
+#view-document-review .delete {
+  border-radius: 12px;
+  visibility: hidden;
+}
+
+#view-document-review .page.active .delete {
+  visibility: unset;
+}
+
+#view-document-review .thumbnail-container {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  max-height: 90px;
+  min-height: 60px;
+  width: 60px;
+}
+
+#view-document-review .thumbnail {
+  border-radius: 6px;
+  max-height: 100%;
+  max-width: 100%;
+}
+
+#view-document-review .document-preview {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  /* Default min-width of flex items is auto. */
+  min-width: 0;
+  padding-inline-end: var(--preview-area-padding-inline-end);
+  padding-inline-start: var(--preview-area-padding-inline-start);
+  padding-top: 8px;
+  position: relative;
+}
+
+#view-document-review .preview-area {
+  background: var(--cros-sys-app_base_shaded);
+  border-radius: 12px;
+  flex: 1;
+  /* Default min-height of column direction flex items is auto. */
+  min-height: 0;
+}
+
+#view-document-review .buttons-container {
+  height: var(--buttons-container-height);
+  position: relative;
+}
+
+#view-document-review .button-group.left {
+  inset-inline-start: 0;
+}
+
+#view-document-review .button-group.right {
+  inset-inline-end: 0;
+}
+
+#view-document-review .icon-button {
+  height: 32px;
+  width: 32px;
+}
+
+.document-preview-mode {
+  display: none;
+}
+
+.document-preview-mode.show {
+  display: contents;
+}
+
+.document-preview-mode .separator {
+  background-color: var(--cros-sys-separator);
+  height: 32px;
+  width: 1px;
+}
+
+.document-preview-mode .image {
+  max-height: 100%;
+  max-width: 100%;
+}
+
+.document-preview-mode .preview-area {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+}
+
+#view-document-review:has(.page:nth-child(2)) .document-preview-mode button[i18n-text=label_save_photo_document] {
+  display: none;
+}
+
+.document-preview-mode button[i18n-label=add_new_page_button] {
+  display: none;
+}
+
+.document-preview-mode button[i18n-label=label_share] {
+  display: none;
+}
+
+.document-preview-mode button[i18n-label=fix_page_button] {
+  display: none;
+}
+
+.document-preview-mode .menu-item-content {
+  display: flex;
+  gap: 16px;
+}
+
+.document-preview-mode .menu-item-icon {
+  margin: 0;
+}
+
+.document-fix-mode {
+  display: none;
+}
+
+.document-fix-mode.show {
+  display: contents;
+}
+
+.document-fix-mode .image-container {
+  position: relative;
   touch-action: none;
   transform-origin: left top;
 }
 
-#view-crop-document .review-image .crop-area-container {
+.document-fix-mode .image-container .image {
+  height: 100%;
+  position: absolute;
+  width: 100%;
+}
+
+.document-fix-mode .crop-area-container {
   height: 100%;
   pointer-events: none;
+  position: absolute;
   touch-action: none;
   width: 100%;
 }
 
-#view-crop-document .review-image .crop-area {
-  fill: rgba(var(--blue-300-rgb), 0.3);
-  stroke: var(--blue-500);
+.document-fix-mode .crop-area {
+  /* TODO(pihsun): Change this after the new token is added. */
+  fill: color-mix(in srgb, var(--cros-sys-illo-color3) 8%, transparent);
+  stroke: var(--cros-sys-illo-color3);
+  stroke-width: 2px;
 }
 
-#document-corner-move-desc {
-  position: absolute;
-  visibility: hidden;
-}
-
-#view-crop-document .review-image .dot {
+.document-fix-mode .dot {
   --icon-size: 12px;
   --focus-size: 32px;
 
@@ -349,12 +580,12 @@ body.enable-scan-barcode .barcode-scan-box {
   width: 48px;
 }
 
-#view-crop-document .review-image .dot:focus-visible {
+.document-fix-mode .dot:focus-visible {
   outline: none;
 }
 
-#view-crop-document .review-image .dot::before,
-#view-crop-document .review-image .dot::after {
+.document-fix-mode .dot::before,
+.document-fix-mode .dot::after {
   border-radius: 50%;
   content: '';
   height: var(--icon-size);
@@ -366,31 +597,27 @@ body.enable-scan-barcode .barcode-scan-box {
   width: var(--icon-size);
 }
 
-#view-crop-document .review-image .dot::before {
-  background: var(--blue-300);
+.document-fix-mode .dot::before {
+  background: var(--cros-sys-illo-color3);
   box-shadow: 0 2px 1px -1px rgba(0, 0, 0, 0.2), 0 1px 1px 0 rgba(0, 0, 0, 0.14), 0 1px 3px 0 rgba(0, 0, 0, 0.12);
 }
 
-#view-crop-document .review-image .dot::after {
-  background: rgba(var(--blue-300-rgb), 0.24);
-  border: 2px solid var(--blue-300);
+.document-fix-mode .dot::after {
+  /* TODO(pihsun): Change this after the new token is added. */
+  background: color-mix(in srgb, var(--cros-sys-illo-color3) 8%, transparent);
+  border: 2px solid var(--cros-sys-illo-color3);
   box-sizing: border-box;
 }
 
-#view-crop-document .review-image .dot.dragging::after,
-body.keyboard-navigation #view-crop-document .review-image .dot:focus::after {
+.document-fix-mode .dot.dragging::after,
+body.keyboard-navigation .document-fix-mode .dot:focus::after {
   height: var(--focus-size);
   transition-duration: var(--fast1-duration);
   transition-property: width, height;
   width: var(--focus-size);
 }
 
-#view-crop-document .icon-button {
-  height: 32px;
-  width: 32px;
-}
-
-#view-crop-document .review-crop-rotation-button-group {
+.document-fix-mode .review-crop-rotation-button-group {
   bottom: 0;
   left: 50%;
   position: absolute;
@@ -398,10 +625,20 @@ body.keyboard-navigation #view-crop-document .review-image .dot:focus::after {
   transform: translateX(-50%);
 }
 
-#view-crop-document button[i18n-aria=rotate_clockwise_button] {
-  background-image: url(/images/crop_document_clockwise_rotate.svg);
-}
-
-#view-crop-document button[i18n-aria=rotate_counterclockwise_button] {
-  background-image: url(/images/crop_document_counterclockwise_rotate.svg);
+@media (min-width: 680px) {
+  #view-document-review .thumbnail-container {
+    max-height: 120px;
+    min-height: 96px;
+    width: 120px;
+  }
+  #view-document-review :is(
+    button[i18n-label=label_share],
+    button[i18n-label=fix_page_button],
+    button[i18n-label=add_new_page_button]
+  ) {
+    display: block;
+  }
+  .document-preview-mode #doc-scan-menu-button {
+    display: none;
+  }
 }

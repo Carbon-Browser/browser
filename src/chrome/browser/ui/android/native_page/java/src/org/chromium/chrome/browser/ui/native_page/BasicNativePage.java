@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,9 +32,7 @@ public abstract class BasicNativePage implements NativePage {
         mBackgroundColor = ChromeColors.getPrimaryBackgroundColor(host.getContext(), false);
     }
 
-    /**
-     * Sets the View contained in this native page and finishes BasicNativePage initialization.
-     */
+    /** Sets the View contained in this native page and finishes BasicNativePage initialization. */
     protected void initWithView(View view) {
         assert mView == null : "initWithView() should only be called once";
         mView = view;
@@ -95,11 +93,10 @@ public abstract class BasicNativePage implements NativePage {
         if (url.equals(mUrl)) return;
         LoadUrlParams params = new LoadUrlParams(url);
         params.setShouldReplaceCurrentEntry(replaceLastUrl);
-        mHost.loadUrl(params, /* incognito = */ false);
+        mHost.loadUrl(params, /* incognito= */ false);
     }
-    /**
-     * Updates the top margin depending on whether the browser controls are shown or hidden.
-     */
+
+    /** Updates the top margin depending on whether the browser controls are shown or hidden. */
     private void updateMargins(Rect margins) {
         LayoutParams layoutParams =
                 new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,14 @@
 #include <vector>
 
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/display/display_layout_builder.h"
 #include "ui/display/manager/display_manager.h"
-#include "ui/display/manager/display_manager_utilities.h"
 #include "ui/display/manager/managed_display_info.h"
+#include "ui/display/manager/util/display_manager_test_util.h"
+#include "ui/display/manager/util/display_manager_util.h"
 #include "ui/display/screen.h"
 #include "ui/display/util/display_util.h"
 
@@ -56,10 +58,7 @@ bool GetDisplayModeForResolution(const ManagedDisplayInfo& info,
   const ManagedDisplayInfo::ManagedDisplayModeList& modes =
       info.display_modes();
   DCHECK_NE(0u, modes.size());
-  auto iter = std::find_if(modes.begin(), modes.end(),
-                           [resolution](const ManagedDisplayMode& mode) {
-                             return mode.size() == resolution;
-                           });
+  auto iter = base::ranges::find(modes, resolution, &ManagedDisplayMode::size);
   if (iter == modes.end()) {
     DLOG(WARNING) << "Unsupported resolution was requested:"
                   << resolution.ToString();
@@ -85,20 +84,29 @@ void DisplayManagerTestApi::ResetMaximumDisplay() {
   maximum_support_display_ = kDefaultMaxSupportDisplayTest;
 }
 
-void DisplayManagerTestApi::UpdateDisplay(const std::string& display_specs) {
+void DisplayManagerTestApi::UpdateDisplay(const std::string& display_specs,
+                                          bool from_native_platform) {
   DisplayInfoList display_info_list =
       CreateDisplayInfoListFromString(display_specs, display_manager_);
+  UpdateDisplayWithDisplayInfoList(display_info_list, from_native_platform);
+}
+
+void DisplayManagerTestApi::UpdateDisplayWithDisplayInfoList(
+    const std::vector<ManagedDisplayInfo>& display_info_list,
+    bool from_native_platform) {
+  std::vector<ManagedDisplayInfo> display_list_copy = display_info_list;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (display_info_list.size() > maximum_support_display_) {
+  if (display_list_copy.size() > maximum_support_display_) {
     display_manager_->configurator()->has_unassociated_display_ = true;
-    while (display_info_list.size() > maximum_support_display_)
-      display_info_list.pop_back();
+    while (display_list_copy.size() > maximum_support_display_) {
+      display_list_copy.pop_back();
+    }
   } else {
     display_manager_->configurator()->has_unassociated_display_ = false;
   }
 #endif
   bool is_host_origin_set = false;
-  for (const ManagedDisplayInfo& display_info : display_info_list) {
+  for (const ManagedDisplayInfo& display_info : display_list_copy) {
     if (display_info.bounds_in_native().origin() != gfx::Point(0, 0)) {
       is_host_origin_set = true;
       break;
@@ -108,7 +116,7 @@ void DisplayManagerTestApi::UpdateDisplay(const std::string& display_specs) {
   // Start from (1,1) so that windows won't overlap with native mouse cursor.
   // See |AshTestBase::SetUp()|.
   int next_y = 1;
-  for (auto& info : display_info_list) {
+  for (auto& info : display_list_copy) {
     // On non-testing environment, when a secondary display is connected, a new
     // native (i.e. X) window for the display is always created below the
     // previous one for GPU performance reasons. Try to emulate the behavior
@@ -120,18 +128,23 @@ void DisplayManagerTestApi::UpdateDisplay(const std::string& display_specs) {
       next_y += bounds.height();
       info.SetBounds(bounds);
     }
+    info.set_from_native_platform(from_native_platform);
 
-    // Overcan and native resolution are excluded for now as they require
+    // Overscan and native resolution are excluded for now as they require
     // special handing (has_overscan flag. resolution change makes sense
     // only on external).
-    display_manager_->RegisterDisplayProperty(
-        info.id(), info.GetRotation(Display::RotationSource::USER),
-        /*overscan_insets=*/nullptr,
-        /*native_resolution=*/gfx::Size(), info.device_scale_factor(),
-        info.zoom_factor(), info.refresh_rate(), info.is_interlaced());
+    if (!from_native_platform) {
+      display_manager_->RegisterDisplayProperty(
+          info.id(), info.GetRotation(Display::RotationSource::USER),
+          /*overscan_insets=*/nullptr,
+          /*resolution_in_pixels=*/gfx::Size(), info.device_scale_factor(),
+          info.zoom_factor(), info.zoom_factor_map(), info.refresh_rate(),
+          info.is_interlaced(), info.variable_refresh_rate_state(),
+          info.vsync_rate_min());
+    }
   }
 
-  display_manager_->OnNativeDisplaysChanged(display_info_list);
+  display_manager_->OnNativeDisplaysChanged(display_list_copy);
   display_manager_->UpdateInternalManagedDisplayModeListForTest();
   display_manager_->RunPendingTasksForTest();
 }
@@ -169,12 +182,8 @@ const Display& DisplayManagerTestApi::GetSecondaryDisplay() const {
   const int64_t primary_display_id =
       Screen::GetScreen()->GetPrimaryDisplay().id();
 
-  auto primary_display_iter =
-      std::find_if(display_manager_->active_display_list_.begin(),
-                   display_manager_->active_display_list_.end(),
-                   [id = primary_display_id](const Display& display) {
-                     return display.id() == id;
-                   });
+  auto primary_display_iter = base::ranges::find(
+      display_manager_->active_display_list_, primary_display_id, &Display::id);
 
   DCHECK(primary_display_iter != display_manager_->active_display_list_.end());
 
@@ -233,7 +242,7 @@ DisplayIdList CreateDisplayIdListN(int64_t start_id, size_t count) {
   int64_t id = start_id;
   size_t N = count;
   while (count-- > 1) {
-    id = display::GetNextSynthesizedDisplayId(id);
+    id = display::SynthesizeDisplayIdFromSeed(id);
     list.push_back(id);
   }
   SortDisplayIdList(&list);

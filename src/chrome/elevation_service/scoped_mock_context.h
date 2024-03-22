@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <unknwn.h>
 #include <wrl/client.h>
+
+#include "base/memory/raw_ptr_exclusion.h"
 
 namespace elevation_service {
 
@@ -23,7 +25,9 @@ class ScopedMockContext {
 
  private:
   Microsoft::WRL::ComPtr<IUnknown> mock_call_context_;
-  IUnknown* original_call_context_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION IUnknown* original_call_context_ = nullptr;
 };
 
 }  // namespace elevation_service

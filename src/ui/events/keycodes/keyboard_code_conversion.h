@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 
 namespace ui {
 
-enum class DomCode;
+enum class DomCode : uint32_t;
 
 // Helper functions to get the meaning of a DOM |code| in a
 // platform independent way. It supports control characters as well.

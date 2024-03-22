@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,12 @@
 #include <utility>
 
 #include "base/android/jni_android.h"
-#include "base/bind.h"
-#include "chrome/android/features/vr/jni_headers/VrShellDelegate_jni.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
+#include "chrome/android/features/vr/split_jni_headers/VrShellDelegate_jni.h"
 #include "chrome/browser/android/vr/vr_shell.h"
 #include "chrome/browser/android/vr/vrcore_install_helper.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/component_updater/vr_assets_component_installer.h"
-#include "chrome/browser/vr/assets_loader.h"
 #include "content/public/browser/browser_xr_runtime.h"
 #include "content/public/browser/xr_runtime_manager.h"
 #include "device/vr/android/gvr/gvr_delegate_provider_factory.h"
@@ -53,7 +52,7 @@ VrShellDelegateProviderFactory::CreateGvrDelegateProvider() {
 }  // namespace
 
 VrShellDelegate::VrShellDelegate(JNIEnv* env, jobject obj)
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   DVLOG(1) << __FUNCTION__ << "=" << this;
   j_vr_shell_delegate_.Reset(env, obj);
 }
@@ -222,11 +221,6 @@ jlong JNI_VrShellDelegate_Init(JNIEnv* env, const JavaParamRef<jobject>& obj) {
 static void JNI_VrShellDelegate_OnLibraryAvailable(JNIEnv* env) {
   device::GvrDelegateProviderFactory::Install(
       std::make_unique<VrShellDelegateProviderFactory>());
-}
-
-static void JNI_VrShellDelegate_RegisterVrAssetsComponent(JNIEnv* env) {
-  component_updater::RegisterVrAssetsComponent(
-      g_browser_process->component_updater());
 }
 
 }  // namespace vr

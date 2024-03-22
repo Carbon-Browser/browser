@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/components/remote_apps/mojom/remote_apps.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/event_router_factory.h"
 
@@ -29,15 +28,21 @@ RemoteAppsProxyLacrosFactory* RemoteAppsProxyLacrosFactory::GetInstance() {
 }
 
 RemoteAppsProxyLacrosFactory::RemoteAppsProxyLacrosFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "RemoteAppsProxyLacros",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(extensions::EventRouterFactory::GetInstance());
 }
 
 RemoteAppsProxyLacrosFactory::~RemoteAppsProxyLacrosFactory() = default;
 
-KeyedService* RemoteAppsProxyLacrosFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+RemoteAppsProxyLacrosFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
   if (!chromeos::LacrosService::Get()
            ->IsAvailable<
@@ -46,7 +51,7 @@ KeyedService* RemoteAppsProxyLacrosFactory::BuildServiceInstanceFor(
   }
 
   Profile* profile = Profile::FromBrowserContext(browser_context);
-  return new RemoteAppsProxyLacros(profile);
+  return std::make_unique<RemoteAppsProxyLacros>(profile);
 }
 
 bool RemoteAppsProxyLacrosFactory::ServiceIsNULLWhileTesting() const {

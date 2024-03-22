@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,13 @@
 #include "base/check.h"
 #include "base/feature_list.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "components/viz/common/features.h"
-#include "components/viz/common/resources/resource_format_utils.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "components/viz/service/display_embedder/skia_output_surface_dependency.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
-#include "gpu/ipc/common/gpu_surface_lookup.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/geometry/rect_conversions.h"
@@ -26,13 +25,9 @@
 #include "ui/gfx/overlay_plane_data.h"
 #include "ui/gfx/overlay_transform.h"
 #include "ui/gl/gl_fence.h"
-#include "ui/gl/gl_surface.h"
+#include "ui/gl/presenter.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#include "ui/gl/gl_surface_egl_surface_control.h"
-#endif
-
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/base/ui_base_features.h"
 #endif
 
@@ -48,66 +43,25 @@ std::unique_ptr<gfx::GpuFence> TakeGpuFence(gfx::GpuFenceHandle fence) {
 
 class PresenterImageGL : public OutputPresenter::Image {
  public:
-  PresenterImageGL() = default;
+  PresenterImageGL(
+      gpu::SharedImageFactory* factory,
+      gpu::SharedImageRepresentationFactory* representation_factory,
+      SkiaOutputSurfaceDependency* deps)
+      : Image(factory, representation_factory, deps) {}
   ~PresenterImageGL() override = default;
-
-  bool Initialize(gpu::SharedImageFactory* factory,
-                  gpu::SharedImageRepresentationFactory* representation_factory,
-                  const gfx::Size& size,
-                  const gfx::ColorSpace& color_space,
-                  ResourceFormat format,
-                  SkiaOutputSurfaceDependency* deps,
-                  uint32_t shared_image_usage);
 
   void BeginPresent() final;
   void EndPresent(gfx::GpuFenceHandle release_fence) final;
   int GetPresentCount() const final;
   void OnContextLost() final;
 
-  gl::GLImage* GetGLImage(std::unique_ptr<gfx::GpuFence>* fence);
+  gl::OverlayImage GetOverlayImage(std::unique_ptr<gfx::GpuFence>* fence);
 
   const gfx::ColorSpace& color_space() {
     DCHECK(overlay_representation_);
     return overlay_representation_->color_space();
   }
-
- private:
-  std::unique_ptr<gpu::OverlayImageRepresentation> overlay_representation_;
-  std::unique_ptr<gpu::OverlayImageRepresentation::ScopedReadAccess>
-      scoped_overlay_read_access_;
-
-  int present_count_ = 0;
 };
-
-bool PresenterImageGL::Initialize(
-    gpu::SharedImageFactory* factory,
-    gpu::SharedImageRepresentationFactory* representation_factory,
-    const gfx::Size& size,
-    const gfx::ColorSpace& color_space,
-    ResourceFormat format,
-    SkiaOutputSurfaceDependency* deps,
-    uint32_t shared_image_usage) {
-  auto mailbox = gpu::Mailbox::GenerateForSharedImage();
-
-  if (!factory->CreateSharedImage(
-          mailbox, format, size, color_space, kTopLeft_GrSurfaceOrigin,
-          kPremul_SkAlphaType, deps->GetSurfaceHandle(), shared_image_usage)) {
-    DLOG(ERROR) << "CreateSharedImage failed.";
-    return false;
-  }
-
-  if (!Image::Initialize(factory, representation_factory, mailbox, deps))
-    return false;
-
-  overlay_representation_ = representation_factory->ProduceOverlay(mailbox);
-
-  if (!overlay_representation_) {
-    LOG(ERROR) << "ProduceOverlay() failed";
-    return false;
-  }
-
-  return true;
-}
 
 void PresenterImageGL::BeginPresent() {
   if (++present_count_ != 1) {
@@ -118,10 +72,9 @@ void PresenterImageGL::BeginPresent() {
   DCHECK(!sk_surface());
   DCHECK(!scoped_overlay_read_access_);
 
-    scoped_overlay_read_access_ =
-        overlay_representation_->BeginScopedReadAccess(
-            true /* need_gl_image */);
-    DCHECK(scoped_overlay_read_access_);
+  scoped_overlay_read_access_ =
+      overlay_representation_->BeginScopedReadAccess();
+  DCHECK(scoped_overlay_read_access_);
 }
 
 void PresenterImageGL::EndPresent(gfx::GpuFenceHandle release_fence) {
@@ -143,95 +96,50 @@ void PresenterImageGL::OnContextLost() {
     overlay_representation_->OnContextLost();
 }
 
-gl::GLImage* PresenterImageGL::GetGLImage(
+gl::OverlayImage PresenterImageGL::GetOverlayImage(
     std::unique_ptr<gfx::GpuFence>* fence) {
   DCHECK(scoped_overlay_read_access_);
   if (fence) {
     *fence = TakeGpuFence(scoped_overlay_read_access_->TakeAcquireFence());
   }
-  return scoped_overlay_read_access_->gl_image();
+#if BUILDFLAG(IS_OZONE)
+  return scoped_overlay_read_access_->GetNativePixmap();
+#elif BUILDFLAG(IS_APPLE)
+  return scoped_overlay_read_access_->GetIOSurface();
+#elif BUILDFLAG(IS_ANDROID)
+  return scoped_overlay_read_access_->GetAHardwareBufferFenceSync();
+#else
+  LOG(FATAL) << "GetOverlayImage() is not implemented on this platform".
+#endif
 }
 
 }  // namespace
 
 // static
 const uint32_t OutputPresenterGL::kDefaultSharedImageUsage =
-    gpu::SHARED_IMAGE_USAGE_SCANOUT | gpu::SHARED_IMAGE_USAGE_DISPLAY |
+    gpu::SHARED_IMAGE_USAGE_SCANOUT | gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+    gpu::SHARED_IMAGE_USAGE_DISPLAY_WRITE |
     gpu::SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT;
 
-// static
-std::unique_ptr<OutputPresenterGL> OutputPresenterGL::Create(
-    SkiaOutputSurfaceDependency* deps,
-    gpu::SharedImageFactory* factory,
-    gpu::SharedImageRepresentationFactory* representation_factory) {
-#if BUILDFLAG(IS_ANDROID)
-  if (deps->GetGpuFeatureInfo()
-          .status_values[gpu::GPU_FEATURE_TYPE_ANDROID_SURFACE_CONTROL] !=
-      gpu::kGpuFeatureStatusEnabled) {
-    return nullptr;
-  }
-
-  bool can_be_used_with_surface_control = false;
-  ANativeWindow* window =
-      gpu::GpuSurfaceLookup::GetInstance()->AcquireNativeWidget(
-          deps->GetSurfaceHandle(), &can_be_used_with_surface_control);
-  base::ScopedClosureRunner release_runner(base::BindOnce(
-      [](gfx::AcceleratedWidget widget) {
-        if (widget)
-          ANativeWindow_release(widget);
-      },
-      window));
-  if (!window || !can_be_used_with_surface_control)
-    return nullptr;
-  // TODO(https://crbug.com/1012401): don't depend on GL.
-  auto gl_surface = base::MakeRefCounted<gl::GLSurfaceEGLSurfaceControl>(
-      gl::GLSurfaceEGL::GetGLDisplayEGL(), window,
-      base::ThreadTaskRunnerHandle::Get());
-  if (!gl_surface->Initialize(gl::GLSurfaceFormat())) {
-    LOG(ERROR) << "Failed to initialize GLSurfaceEGLSurfaceControl.";
-    return nullptr;
-  }
-
-  if (!deps->GetSharedContextState()->MakeCurrent(gl_surface.get(),
-                                                  true /* needs_gl*/)) {
-    LOG(ERROR) << "MakeCurrent failed.";
-    return nullptr;
-  }
-
-  return std::make_unique<OutputPresenterGL>(std::move(gl_surface), deps,
-                                             factory, representation_factory,
-                                             kDefaultSharedImageUsage);
-#else
-  return nullptr;
-#endif
-}
-
 OutputPresenterGL::OutputPresenterGL(
-    scoped_refptr<gl::GLSurface> gl_surface,
+    scoped_refptr<gl::Presenter> presenter,
     SkiaOutputSurfaceDependency* deps,
     gpu::SharedImageFactory* factory,
     gpu::SharedImageRepresentationFactory* representation_factory,
     uint32_t shared_image_usage)
-    : gl_surface_(gl_surface),
+    : presenter_(presenter),
       dependency_(deps),
-      supports_async_swap_(gl_surface_->SupportsAsyncSwap()),
       shared_image_factory_(factory),
       shared_image_representation_factory_(representation_factory),
-      shared_image_usage_(shared_image_usage) {
-  // GL is origin is at bottom left normally, all Surfaceless implementations
-  // are flipped.
-  DCHECK_EQ(gl_surface_->GetOrigin(), gfx::SurfaceOrigin::kTopLeft);
-}
+      shared_image_usage_(shared_image_usage) {}
 
 OutputPresenterGL::~OutputPresenterGL() = default;
 
 void OutputPresenterGL::InitializeCapabilities(
     OutputSurface::Capabilities* capabilities) {
   capabilities->android_surface_control_feature_enabled = true;
-  capabilities->supports_post_sub_buffer = gl_surface_->SupportsPostSubBuffer();
-  capabilities->supports_commit_overlay_planes =
-      gl_surface_->SupportsCommitOverlayPlanes();
-  capabilities->supports_viewporter = gl_surface_->SupportsViewporter();
+  capabilities->supports_post_sub_buffer = true;
+  capabilities->supports_viewporter = presenter_->SupportsViewporter();
 
   // Set supports_surfaceless to enable overlays.
   capabilities->supports_surfaceless = true;
@@ -239,7 +147,7 @@ void OutputPresenterGL::InitializeCapabilities(
   capabilities->output_surface_origin = gfx::SurfaceOrigin::kTopLeft;
   // Set resize_based_on_root_surface to omit platform proposed size.
   capabilities->resize_based_on_root_surface =
-      gl_surface_->SupportsOverridePlatformSize();
+      presenter_->SupportsOverridePlatformSize();
 #if BUILDFLAG(IS_ANDROID)
   capabilities->supports_dynamic_frame_buffer_allocation = true;
 #endif
@@ -268,16 +176,16 @@ void OutputPresenterGL::InitializeCapabilities(
       kRGBA_F16_SkColorType;
 }
 
-bool OutputPresenterGL::Reshape(
-    const SkSurfaceCharacterization& characterization,
-    const gfx::ColorSpace& color_space,
-    float device_scale_factor,
-    gfx::OverlayTransform transform) {
-  const gfx::Size size = gfx::SkISizeToSize(characterization.dimensions());
-  image_format_ = SkColorTypeToResourceFormat(characterization.colorType());
-  const bool has_alpha =
-      !SkAlphaTypeIsOpaque(characterization.imageInfo().alphaType());
-  return gl_surface_->Resize(size, device_scale_factor, color_space, has_alpha);
+bool OutputPresenterGL::Reshape(const SkImageInfo& image_info,
+                                const gfx::ColorSpace& color_space,
+                                int sample_count,
+                                float device_scale_factor,
+                                gfx::OverlayTransform transform) {
+  const gfx::Size size = gfx::SkISizeToSize(image_info.dimensions());
+  image_format_ =
+      SkColorTypeToSinglePlaneSharedImageFormat(image_info.colorType());
+  const bool has_alpha = !image_info.isOpaque();
+  return presenter_->Resize(size, device_scale_factor, color_space, has_alpha);
 }
 
 std::vector<std::unique_ptr<OutputPresenter::Image>>
@@ -286,10 +194,10 @@ OutputPresenterGL::AllocateImages(gfx::ColorSpace color_space,
                                   size_t num_images) {
   std::vector<std::unique_ptr<Image>> images;
   for (size_t i = 0; i < num_images; ++i) {
-    auto image = std::make_unique<PresenterImageGL>();
-    if (!image->Initialize(shared_image_factory_,
-                           shared_image_representation_factory_, image_size,
-                           color_space, image_format_, dependency_,
+    auto image = std::make_unique<PresenterImageGL>(
+        shared_image_factory_, shared_image_representation_factory_,
+        dependency_);
+    if (!image->Initialize(image_size, color_space, image_format_,
                            shared_image_usage_)) {
       DLOG(ERROR) << "Failed to initialize image.";
       return {};
@@ -303,10 +211,9 @@ OutputPresenterGL::AllocateImages(gfx::ColorSpace color_space,
 std::unique_ptr<OutputPresenter::Image> OutputPresenterGL::AllocateSingleImage(
     gfx::ColorSpace color_space,
     gfx::Size image_size) {
-  auto image = std::make_unique<PresenterImageGL>();
-  if (!image->Initialize(shared_image_factory_,
-                         shared_image_representation_factory_, image_size,
-                         color_space, image_format_, dependency_,
+  auto image = std::make_unique<PresenterImageGL>(
+      shared_image_factory_, shared_image_representation_factory_, dependency_);
+  if (!image->Initialize(image_size, color_space, image_format_,
                          shared_image_usage_)) {
     DLOG(ERROR) << "Failed to initialize image.";
     return nullptr;
@@ -314,36 +221,14 @@ std::unique_ptr<OutputPresenter::Image> OutputPresenterGL::AllocateSingleImage(
   return image;
 }
 
-void OutputPresenterGL::SwapBuffers(
-    SwapCompletionCallback completion_callback,
-    BufferPresentedCallback presentation_callback) {
-  if (supports_async_swap_) {
-    gl_surface_->SwapBuffersAsync(std::move(completion_callback),
-                                  std::move(presentation_callback));
-  } else {
-    auto result = gl_surface_->SwapBuffers(std::move(presentation_callback));
-    std::move(completion_callback).Run(gfx::SwapCompletionResult(result));
-  }
-}
-
-void OutputPresenterGL::PostSubBuffer(
-    const gfx::Rect& rect,
-    SwapCompletionCallback completion_callback,
-    BufferPresentedCallback presentation_callback) {
-#if BUILDFLAG(IS_MAC)
-  gl_surface_->SetCALayerErrorCode(ca_layer_error_code_);
+void OutputPresenterGL::Present(SwapCompletionCallback completion_callback,
+                                BufferPresentedCallback presentation_callback,
+                                gfx::FrameData data) {
+#if BUILDFLAG(IS_APPLE)
+  presenter_->SetCALayerErrorCode(ca_layer_error_code_);
 #endif
-
-  if (supports_async_swap_) {
-    gl_surface_->PostSubBufferAsync(
-        rect.x(), rect.y(), rect.width(), rect.height(),
-        std::move(completion_callback), std::move(presentation_callback));
-  } else {
-    auto result = gl_surface_->PostSubBuffer(rect.x(), rect.y(), rect.width(),
-                                             rect.height(),
-                                             std::move(presentation_callback));
-    std::move(completion_callback).Run(gfx::SwapCompletionResult(result));
-  }
+  presenter_->Present(std::move(completion_callback),
+                      std::move(presentation_callback), data);
 }
 
 void OutputPresenterGL::SchedulePrimaryPlane(
@@ -353,9 +238,9 @@ void OutputPresenterGL::SchedulePrimaryPlane(
   std::unique_ptr<gfx::GpuFence> fence;
   auto* presenter_image = static_cast<PresenterImageGL*>(image);
   // If the submitted_image() is being scheduled, we don't new a new fence.
-  auto* gl_image = presenter_image->GetGLImage(
-      (is_submitted || !gl_surface_->SupportsPlaneGpuFences()) ? nullptr
-                                                               : &fence);
+  gl::OverlayImage overlay_image = presenter_image->GetOverlayImage(
+      (is_submitted || !presenter_->SupportsPlaneGpuFences()) ? nullptr
+                                                              : &fence);
 
   // Output surface is also z-order 0.
   constexpr int kPlaneZOrder = 0;
@@ -363,8 +248,8 @@ void OutputPresenterGL::SchedulePrimaryPlane(
   // PostSubBuffer. As part of unifying the handling of the primary plane and
   // overlays, damage should be added to OutputSurfaceOverlayPlane and passed in
   // here.
-  gl_surface_->ScheduleOverlayPlane(
-      gl_image, std::move(fence),
+  presenter_->ScheduleOverlayPlane(
+      std::move(overlay_image), std::move(fence),
       gfx::OverlayPlaneData(
           kPlaneZOrder, plane.transform, plane.display_rect, plane.uv_rect,
           plane.enable_blending,
@@ -374,59 +259,47 @@ void OutputPresenterGL::SchedulePrimaryPlane(
           /*hdr_metadata=*/absl::nullopt));
 }
 
-void OutputPresenterGL::CommitOverlayPlanes(
-    SwapCompletionCallback completion_callback,
-    BufferPresentedCallback presentation_callback) {
-  if (supports_async_swap_) {
-    gl_surface_->CommitOverlayPlanesAsync(std::move(completion_callback),
-                                          std::move(presentation_callback));
-  } else {
-    auto result =
-        gl_surface_->CommitOverlayPlanes(std::move(presentation_callback));
-    std::move(completion_callback).Run(gfx::SwapCompletionResult(result));
-  }
-}
-
 void OutputPresenterGL::ScheduleOverlayPlane(
     const OutputPresenter::OverlayPlaneCandidate& overlay_plane_candidate,
     ScopedOverlayAccess* access,
     std::unique_ptr<gfx::GpuFence> acquire_fence) {
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_APPLE) || defined(USE_OZONE)
   // Note that |overlay_plane_candidate| has different types on different
-  // platforms. On Android and Ozone it is an OverlayCandidate, on Windows it is
-  // a DCLayerOverlay, and on macOS it is a CALayeroverlay.
-  auto* gl_image = access ? access->gl_image() : nullptr;
-#if BUILDFLAG(IS_ANDROID) || defined(USE_OZONE)
+  // platforms. On Android, Ozone, and Windows, it is an OverlayCandidate and on
+  // macOS it is a CALayeroverlay.
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_OZONE)
+#if BUILDFLAG(IS_OZONE)
+  // TODO(crbug.com/1366808): Add ScopedOverlayAccess::GetOverlayImage() that
+  // works on all platforms.
+  gl::OverlayImage overlay_image = access ? access->GetNativePixmap() : nullptr;
+#elif BUILDFLAG(IS_ANDROID)
+  gl::OverlayImage overlay_image =
+      access ? access->GetAHardwareBufferFenceSync() : nullptr;
+#endif
   // TODO(msisov): Once shared image factory allows creating a non backed
-  // images and ScheduleOverlayPlane does not rely on GLImage, remove the if
-  // condition that checks if this is a solid color overlay plane.
+  // images, remove the if condition that checks if this is a solid color
+  // overlay plane.
   //
   // Solid color overlays can be non-backed and are delegated for processing
   // to underlying backend. The only backend that uses them is Wayland - it
   // may have a protocol that asks Wayland compositor to create a solid color
   // buffer for a client. OverlayProcessorDelegated decides if a solid color
   // overlay is an overlay candidate and should be scheduled.
-  if (gl_image || overlay_plane_candidate.is_solid_color) {
+  if (overlay_image || overlay_plane_candidate.is_solid_color) {
 #if DCHECK_IS_ON()
     if (overlay_plane_candidate.is_solid_color) {
       LOG_IF(FATAL, !overlay_plane_candidate.color.has_value())
           << "Solid color quads must have color set.";
     }
-    CHECK(!overlay_plane_candidate.gpu_fence_id);
 
     if (acquire_fence && !acquire_fence->GetGpuFenceHandle().is_null()) {
       CHECK(access);
-      CHECK_EQ(gpu::GrContextType::kGL, dependency_->gr_context_type());
+      CHECK_EQ(gpu::GrContextType::kGL,
+               dependency_->GetSharedContextState()->gr_context_type());
       CHECK(features::IsDelegatedCompositingEnabled());
       CHECK(access->representation()->usage() &
             gpu::SHARED_IMAGE_USAGE_RASTER_DELEGATED_COMPOSITING);
     }
 #endif
-    // TODO(crbug.com/1308932): OverlayPlaneData to SkColor4f will make this
-    // unnecessary.
-    absl::optional<SkColor> overlay_plane_data_color;
-    if (overlay_plane_candidate.color)
-      overlay_plane_data_color = overlay_plane_candidate.color->toSkColor();
 
     // Access fence takes priority over composite fence iff it exists.
     if (access) {
@@ -437,8 +310,8 @@ void OutputPresenterGL::ScheduleOverlayPlane(
       }
     }
 
-    gl_surface_->ScheduleOverlayPlane(
-        gl_image, std::move(acquire_fence),
+    presenter_->ScheduleOverlayPlane(
+        std::move(overlay_image), std::move(acquire_fence),
         gfx::OverlayPlaneData(
             overlay_plane_candidate.plane_z_order,
             overlay_plane_candidate.transform,
@@ -449,31 +322,41 @@ void OutputPresenterGL::ScheduleOverlayPlane(
             overlay_plane_candidate.priority_hint,
             overlay_plane_candidate.rounded_corners,
             overlay_plane_candidate.color_space,
-            overlay_plane_candidate.hdr_metadata, overlay_plane_data_color,
-            overlay_plane_candidate.is_solid_color));
+            overlay_plane_candidate.hdr_metadata, overlay_plane_candidate.color,
+            overlay_plane_candidate.is_solid_color,
+            overlay_plane_candidate.clip_rect));
   }
 #elif BUILDFLAG(IS_APPLE)
-  gl_surface_->ScheduleCALayer(ui::CARendererLayerParams(
-      overlay_plane_candidate.shared_state->is_clipped,
-      gfx::ToEnclosingRect(overlay_plane_candidate.shared_state->clip_rect),
-      overlay_plane_candidate.shared_state->rounded_corner_bounds,
-      overlay_plane_candidate.shared_state->sorting_context_id,
-      gfx::Transform(overlay_plane_candidate.shared_state->transform), gl_image,
-      overlay_plane_candidate.contents_rect,
-      gfx::ToEnclosingRect(overlay_plane_candidate.bounds_rect),
-      overlay_plane_candidate.background_color.toSkColor(),
+  presenter_->ScheduleCALayer(ui::CARendererLayerParams(
+      overlay_plane_candidate.clip_rect.has_value(),
+      overlay_plane_candidate.clip_rect.value_or(gfx::Rect()),
+      overlay_plane_candidate.rounded_corners,
+      overlay_plane_candidate.sorting_context_id,
+      absl::get<gfx::Transform>(overlay_plane_candidate.transform),
+      access ? access->GetIOSurface() : gfx::ScopedIOSurface(),
+      access ? access->representation()->color_space() : gfx::ColorSpace(),
+      overlay_plane_candidate.uv_rect,
+      gfx::ToEnclosingRect(overlay_plane_candidate.display_rect),
+      overlay_plane_candidate.color.value_or(SkColors::kTransparent),
       overlay_plane_candidate.edge_aa_mask, overlay_plane_candidate.opacity,
-      overlay_plane_candidate.filter, overlay_plane_candidate.hdr_metadata,
-      overlay_plane_candidate.protected_video_type));
+      overlay_plane_candidate.nearest_neighbor_filter,
+      overlay_plane_candidate.hdr_metadata,
+      overlay_plane_candidate.protected_video_type,
+      overlay_plane_candidate.is_render_pass_draw_quad));
+
 #endif
-#endif  //  BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_APPLE) || defined(USE_OZONE)
 }
 
-#if BUILDFLAG(IS_MAC)
+void OutputPresenterGL::SetVSyncDisplayID(int64_t display_id) {
+  presenter_->SetVSyncDisplayID(display_id);
+}
+
+#if BUILDFLAG(IS_APPLE)
 void OutputPresenterGL::SetCALayerErrorCode(
     gfx::CALayerResult ca_layer_error_code) {
   ca_layer_error_code_ = ca_layer_error_code;
 }
+
 #endif
 
 }  // namespace viz

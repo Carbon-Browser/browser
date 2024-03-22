@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 namespace blink {
 class FileSystemCreateWritableOptions;
+class FileSystemCreateSyncAccessHandleOptions;
 
 class FileSystemFileHandle final : public FileSystemHandle {
   DEFINE_WRAPPERTYPEINFO();
@@ -32,6 +33,10 @@ class FileSystemFileHandle final : public FileSystemHandle {
   // TODO(fivedots): Define if this method should be generally exposed or only
   // on files backed by the Origin Private File System.
   ScriptPromise createSyncAccessHandle(ScriptState*, ExceptionState&);
+  ScriptPromise createSyncAccessHandle(
+      ScriptState*,
+      const FileSystemCreateSyncAccessHandleOptions* options,
+      ExceptionState&);
 
   mojo::PendingRemote<mojom::blink::FileSystemAccessTransferToken> Transfer()
       override;
@@ -63,6 +68,13 @@ class FileSystemFileHandle final : public FileSystemHandle {
       mojo::PendingRemote<mojom::blink::FileSystemAccessTransferToken> other,
       base::OnceCallback<void(mojom::blink::FileSystemAccessErrorPtr, bool)>)
       override;
+  void GetUniqueIdImpl(
+      base::OnceCallback<void(mojom::blink::FileSystemAccessErrorPtr,
+                              const WTF::String&)>) override;
+  void GetCloudIdentifiersImpl(
+      base::OnceCallback<void(
+          mojom::blink::FileSystemAccessErrorPtr,
+          Vector<mojom::blink::FileSystemAccessCloudIdentifierPtr>)>) override;
 
   HeapMojoRemote<mojom::blink::FileSystemAccessFileHandle> mojo_ptr_;
 };

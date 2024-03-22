@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@ function maybePreferH264SendCodec(sdp) {
 
   var mLineIndex = findLine(sdpLines, 'm=', 'video');
   if (mLineIndex === null) {
-    failTest('No |m=video| line found in the sdp.');
-    return sdp;
+    throw new Error('No |m=video| line found in the sdp.');
   }
 
   var payload = getCodecPayloadType(sdpLines, 'h264');

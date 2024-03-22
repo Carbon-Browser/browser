@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,8 +66,14 @@ gboolean XSourceDispatch(GSource* source,
   return G_SOURCE_CONTINUE;
 }
 
+void XSourceFinalize(GSource* source) {
+  GLibX11Source* src = static_cast<GLibX11Source*>(source);
+  src->connection = nullptr;
+  src->poll_fd = nullptr;
+}
+
 GSourceFuncs XSourceFuncs = {XSourcePrepare, XSourceCheck, XSourceDispatch,
-                             nullptr};
+                             XSourceFinalize};
 
 }  // namespace
 
@@ -112,7 +118,11 @@ void X11EventWatcherGlib::StopWatching() {
     return;
 
   g_source_destroy(x_source_);
-  g_source_unref(x_source_);
+  // `g_source_unref` decreases the reference count on `x_source_`. The
+  // underlying memory is freed if the reference count goes to zero. We use
+  // ExtractAsDangling() here to avoid holding a briefly dangling ptr in case
+  // the memory is freed.
+  g_source_unref(x_source_.ExtractAsDangling());
   started_ = false;
 }
 

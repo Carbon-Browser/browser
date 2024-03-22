@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -316,8 +316,8 @@ TEST_P(InterestGroupPermissionsCheckerParamaterizedTest, DifferentFrameOrigin) {
   // NetworkIsolationKey.
   const url::Origin kOtherFrameOrigin =
       url::Origin::Create(GURL("https://other.frame.test"));
-  DCHECK_EQ(net::NetworkIsolationKey(kOtherFrameOrigin, kOtherFrameOrigin),
-            kNetworkIsolationKey);
+  DCHECK(net::NetworkIsolationKey(kOtherFrameOrigin, kOtherFrameOrigin) ==
+         kNetworkIsolationKey);
   const GURL kOtherValidationUrl(
       "https://group.test/.well-known/interest-group/permissions/"
       "?origin=https%3A%2F%2Fother.frame.test");
@@ -440,7 +440,8 @@ TEST_P(InterestGroupPermissionsCheckerParamaterizedTest,
               producer_handle->WriteData(response_body.data(), &bytes_written,
                                          MOJO_WRITE_DATA_FLAG_ALL_OR_NONE));
 
-    pending_request.client->OnReceiveResponse(std::move(head), std::move(body));
+    pending_request.client->OnReceiveResponse(std::move(head), std::move(body),
+                                              absl::nullopt);
 
     auto status = network::URLLoaderCompletionStatus();
     status.decoded_body_length = response_body.size();

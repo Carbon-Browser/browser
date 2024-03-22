@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,9 +39,10 @@ class MEDIA_EXPORT DeviceMonitorMac {
   void StartMonitoring();
 
   // Method called by the internal DeviceMonitorMacImpl object
-  // |device_monitor_impl_| when a device of type |type| has been added to or
-  // removed from the system. This code executes in the notification thread.
-  void NotifyDeviceChanged(base::SystemMonitor::DeviceType type);
+  // |device_monitor_impl_| when a device of type DEVTYPE_VIDEO_CAPTURE has been
+  // added to or removed from the system. This code executes in the notification
+  // thread.
+  void NotifyDeviceChanged();
 
  private:
   scoped_refptr<base::SingleThreadTaskRunner> device_task_runner_;

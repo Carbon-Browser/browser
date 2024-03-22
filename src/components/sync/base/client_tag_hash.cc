@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,8 @@ ClientTagHash ClientTagHash::FromUnhashed(ModelType model_type,
   serialized_type.AppendToString(&hash_input);
   hash_input.append(client_tag);
 
-  std::string encode_output;
-  base::Base64Encode(base::SHA1HashString(hash_input), &encode_output);
+  std::string encode_output = base::Base64Encode(
+      base::SHA1HashSpan(base::as_bytes(base::make_span(hash_input))));
   return FromHashed(encode_output);
 }
 

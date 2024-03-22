@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,8 +29,9 @@ class NetworkHintsHandlerImpl
           receiver);
 
   // network_hints::mojom::NetworkHintsHandler methods:
-  void PrefetchDNS(const std::vector<std::string>& names) override;
-  void Preconnect(const GURL& url, bool allow_credentials) override;
+  void PrefetchDNS(const std::vector<url::SchemeHostPort>& urls) override;
+  void Preconnect(const url::SchemeHostPort& url,
+                  bool allow_credentials) override;
 
  private:
   explicit NetworkHintsHandlerImpl(content::RenderFrameHost* frame_host);

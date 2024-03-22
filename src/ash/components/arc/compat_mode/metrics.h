@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,22 +20,10 @@ enum class ResizeLockStateHistogramType {
   InitialState,
 };
 
-// The assigned values cannot be renumbered or reordered because it's used for
-// enum histogram.
-enum class RightClickConversionResultHistogramResult {
-  kDisabled = 0,
-  kConverted = 1,
-  kNotConverted = 2,
-  kMaxValue = kNotConverted,
-};
-
 void RecordResizeLockAction(ResizeLockActionType type);
 
 void RecordResizeLockStateHistogram(ResizeLockStateHistogramType type,
                                     mojom::ArcResizeLockState state);
-
-void RecordRightClickConversionResultHistogram(
-    RightClickConversionResultHistogramResult result);
 
 const char* GetResizeLockActionNameForTesting(ResizeLockActionType type);
 const char* GetResizeLockStateHistogramNameForTesting(

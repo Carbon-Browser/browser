@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,7 @@ CompositorFrameMetadata::CompositorFrameMetadata(
       may_contain_video(other.may_contain_video),
       is_resourceless_software_draw_with_scroll_or_animation(
           other.is_resourceless_software_draw_with_scroll_or_animation),
+      is_handling_interaction(other.is_handling_interaction),
       root_background_color(other.root_background_color),
       latency_info(other.latency_info),
       referenced_surfaces(other.referenced_surfaces),

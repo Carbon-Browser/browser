@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,6 @@ namespace internal {
 extern const char kHistogramFencedFramesNavigationToFirstPaint[];
 extern const char kHistogramFencedFramesNavigationToFirstImagePaint[];
 extern const char kHistogramFencedFramesNavigationToFirstContentfulPaint[];
-extern const char
-    kHistogramFencedFramesNavigationToFirstContentfulPaintBackground[];
 extern const char kHistogramFencedFramesNavigationToLargestContentfulPaint2[];
 extern const char kHistogramFencedFramesFirstInputDelay4[];
 extern const char kHistogramFencedFramesCumulativeShiftScore[];
@@ -39,6 +37,8 @@ class FencedFramesPageLoadMetricsObserver
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override;
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override;
   void OnFirstPaintInPage(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
   void OnFirstImagePaintInPage(

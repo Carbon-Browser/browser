@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class Navigator;
 // The VirtualKeyboard API provides control of the on-screen keyboard
 // to JS authors. The VirtualKeyboard object lives in the Navigator.
 // It is exposed to JS via a new attribute virtualKeyboard in the Navigator.
-class VirtualKeyboard final : public EventTargetWithInlineData,
+class VirtualKeyboard final : public EventTarget,
                               public Supplement<Navigator>,
                               public VirtualKeyboardOverlayChangedObserver {
   DEFINE_WRAPPERTYPEINFO();
@@ -56,7 +56,6 @@ class VirtualKeyboard final : public EventTargetWithInlineData,
   void Trace(Visitor*) const override;
 
  private:
-  bool overlays_content_ = false;
   Member<DOMRect> bounding_rect_;
 };
 

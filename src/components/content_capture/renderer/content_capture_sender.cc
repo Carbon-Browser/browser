@@ -1,11 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/content_capture/renderer/content_capture_sender.h"
 
-#include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/content_capture/common/content_capture_data.h"
 #include "components/content_capture/common/content_capture_features.h"
 #include "content/public/renderer/render_frame.h"
@@ -22,7 +21,7 @@ ContentCaptureSender::ContentCaptureSender(
     content::RenderFrame* render_frame,
     blink::AssociatedInterfaceRegistry* registry)
     : content::RenderFrameObserver(render_frame) {
-  registry->AddInterface(base::BindRepeating(
+  registry->AddInterface<mojom::ContentCaptureSender>(base::BindRepeating(
       &ContentCaptureSender::BindPendingReceiver, base::Unretained(this)));
 }
 
@@ -77,7 +76,8 @@ void ContentCaptureSender::StopCapture() {
 }
 
 void ContentCaptureSender::OnDestruct() {
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 void ContentCaptureSender::FillContentCaptureData(
@@ -90,7 +90,6 @@ void ContentCaptureSender::FillContentCaptureData(
         render_frame()->GetWebFrame()->GetDocument().Url().GetString().Utf16();
   }
   data->children.reserve(node_holders.size());
-  base::TimeTicks start = base::TimeTicks::Now();
   for (auto& holder : node_holders) {
     ContentCaptureData child;
     child.id = holder.GetId();
@@ -98,9 +97,6 @@ void ContentCaptureSender::FillContentCaptureData(
     child.bounds = holder.GetBoundingBox();
     data->children.push_back(child);
   }
-  UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
-      "ContentCapture.GetBoundingBox", base::TimeTicks::Now() - start,
-      base::Microseconds(1), base::Milliseconds(10), 50);
 }
 
 const mojo::AssociatedRemote<mojom::ContentCaptureReceiver>&

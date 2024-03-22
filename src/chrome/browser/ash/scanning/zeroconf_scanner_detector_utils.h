@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,11 @@ namespace ash {
 // more details.
 absl::optional<Scanner> CreateSaneScanner(const std::string& name,
                                           const std::string& service_type,
-                                          const std::string& rs,
+                                          const std::string& manufacturer,
+                                          const std::string& model,
+                                          const std::string& uuid,
+                                          const absl::optional<std::string>& rs,
+                                          const std::vector<std::string>& pdl,
                                           const net::IPAddress& ip_address,
                                           int port,
                                           bool usable = true);

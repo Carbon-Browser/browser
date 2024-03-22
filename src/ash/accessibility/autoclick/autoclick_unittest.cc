@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -173,7 +173,7 @@ class AutoclickTest : public AshTestBase {
         GetAutoclickController()
             ->GetMenuBubbleControllerForTesting()
             ->scroll_bubble_controller_.get();
-    return controller ? controller->scroll_view_ : nullptr;
+    return controller ? controller->scroll_view_.get() : nullptr;
   }
 
   views::Widget* GetAutoclickBubbleWidget() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "base/logging.h"
 #include "base/memory/page_size.h"
 #include "base/strings/string_piece.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "base/trace_event/memory_dump_request_args.h"
@@ -22,6 +21,7 @@
 #include "gpu/command_buffer/common/cmd_buffer_common.h"
 #include "gpu/command_buffer/common/command_buffer_shared.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
+#include "gpu/config/gpu_finch_features.h"
 
 #if BUILDFLAG(IS_MAC)
 #include <mach/mach_vm.h>
@@ -29,9 +29,6 @@
 
 #include "base/no_destructor.h"
 #include "base/process/process_metrics.h"
-#include "base/trace_event/memory_dump_manager.h"
-#include "base/trace_event/memory_dump_provider.h"
-#include "base/trace_event/memory_dump_request_args.h"
 #include "base/trace_event/process_memory_dump.h"
 #endif
 
@@ -164,6 +161,17 @@ bool AppleGpuMemoryDumpProvider::OnMemoryDump(
 }  // namespace
 #endif
 
+// Context switching leads to a render pass break in ANGLE/Vulkan. The command
+// buffer has a 20-command limit before it forces a context switch. This
+// experiment tests a 100-command limit.
+int GetCommandBufferSliceSize() {
+  static int slice_size =
+      (base::FeatureList::IsEnabled(features::kIncreasedCmdBufferParseSlice)
+           ? CommandBufferService::kParseCommandsSliceLarge
+           : CommandBufferService::kParseCommandsSliceSmall);
+  return slice_size;
+}
+
 CommandBufferService::CommandBufferService(CommandBufferServiceClient* client,
                                            MemoryTracker* memory_tracker)
     : client_(client),
@@ -210,13 +218,20 @@ void CommandBufferService::Flush(int32_t put_offset,
   }
 
   handler->BeginDecoding();
+
+  // BeginDecoding can cause context loss due to resuming shared image access.
+  if (state_.error != error::kNoError) {
+    handler->EndDecoding();
+    return;
+  }
+
   int end = put_offset_ < state_.get_offset ? num_entries_ : put_offset_;
   while (put_offset_ != state_.get_offset) {
     int num_entries = end - state_.get_offset;
     int entries_processed = 0;
-    error::Error error =
-        handler->DoCommands(kParseCommandsSlice, buffer_ + state_.get_offset,
-                            num_entries, &entries_processed);
+    error::Error error = handler->DoCommands(GetCommandBufferSliceSize(),
+                                             buffer_ + state_.get_offset,
+                                             num_entries, &entries_processed);
 
     state_.get_offset += entries_processed;
     DCHECK_LE(state_.get_offset, num_entries_);
@@ -252,11 +267,11 @@ void CommandBufferService::SetGetBuffer(int32_t transfer_buffer_id) {
   ++state_.set_get_buffer_count;
 
   // If the buffer is invalid we handle it gracefully.
-  // This means ring_buffer_ can be nullptr.
-  ring_buffer_ = GetTransferBuffer(transfer_buffer_id);
-  if (ring_buffer_) {
-    uint32_t size = ring_buffer_->size();
-    volatile void* memory = ring_buffer_->memory();
+  // This means `transfer_buffer` can be nullptr.
+  auto transfer_buffer = GetTransferBuffer(transfer_buffer_id);
+  if (transfer_buffer) {
+    uint32_t size = transfer_buffer->size();
+    volatile void* memory = transfer_buffer->memory();
     // check proper alignments.
     DCHECK_EQ(
         0u, (reinterpret_cast<intptr_t>(memory)) % alignof(CommandBufferEntry));
@@ -268,7 +283,7 @@ void CommandBufferService::SetGetBuffer(int32_t transfer_buffer_id) {
     num_entries_ = 0;
     buffer_ = nullptr;
   }
-
+  ring_buffer_ = std::move(transfer_buffer);
   UpdateState();
 }
 
@@ -294,12 +309,15 @@ void CommandBufferService::SetReleaseCount(uint64_t release_count) {
   UpdateState();
 }
 
-scoped_refptr<Buffer> CommandBufferService::CreateTransferBuffer(uint32_t size,
-                                                                 int32_t* id) {
+scoped_refptr<Buffer> CommandBufferService::CreateTransferBuffer(
+    uint32_t size,
+    int32_t* id,
+    uint32_t alignment) {
   *id = GetNextBufferId();
-  auto result = CreateTransferBufferWithId(size, *id);
-  if (!result)
+  auto result = CreateTransferBufferWithId(size, *id, alignment);
+  if (!result) {
     *id = -1;
+  }
   return result;
 }
 
@@ -320,8 +338,9 @@ bool CommandBufferService::RegisterTransferBuffer(
 
 scoped_refptr<Buffer> CommandBufferService::CreateTransferBufferWithId(
     uint32_t size,
-    int32_t id) {
-  scoped_refptr<Buffer> buffer = MakeMemoryBuffer(size);
+    int32_t id,
+    uint32_t alignment) {
+  scoped_refptr<Buffer> buffer = MakeMemoryBuffer(size, alignment);
   if (!RegisterTransferBuffer(id, buffer)) {
     SetParseError(gpu::error::kOutOfBounds);
     return nullptr;

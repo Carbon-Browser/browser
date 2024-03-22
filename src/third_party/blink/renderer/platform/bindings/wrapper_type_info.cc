@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,9 @@ v8::Local<v8::Template> WrapperTypeInfo::GetV8ClassTemplate(
       NOTREACHED();
       break;
     case kIdlObservableArray:
+      v8_template = v8::FunctionTemplate::New(isolate);
+      break;
+    case kIdlAsyncOrSyncIterator:
       v8_template = v8::FunctionTemplate::New(isolate);
       break;
     case kCustomWrappableKind:

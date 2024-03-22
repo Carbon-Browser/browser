@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,10 +32,7 @@ storage::FileSystemURL GetFileSystemURL(Profile* profile,
   storage::FileSystemContext* file_system_context =
       file_manager::util::GetFileManagerFileSystemContext(profile);
 
-  storage::FileSystemURL file_system_url;
-  file_system_url = file_system_context->CrackURLInFirstPartyContext(file_url);
-
-  return file_system_url;
+  return file_system_context->CrackURLInFirstPartyContext(file_url);
 }
 
 std::vector<GURL> GetFileSystemUrls(

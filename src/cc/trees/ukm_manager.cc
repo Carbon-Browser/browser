@@ -1,16 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/trees/ukm_manager.h"
 
-#include <algorithm>
 #include <utility>
 
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "cc/metrics/compositor_frame_reporter.h"
-#include "cc/metrics/throughput_ukm_reporter.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
@@ -26,93 +25,6 @@ UkmManager::~UkmManager() = default;
 
 void UkmManager::SetSourceId(ukm::SourceId source_id) {
   source_id_ = source_id;
-}
-
-void UkmManager::RecordThroughputUKM(
-    FrameSequenceTrackerType tracker_type,
-    FrameInfo::SmoothEffectDrivingThread thread_type,
-    int64_t throughput) const {
-  ukm::builders::Graphics_Smoothness_PercentDroppedFrames builder(source_id_);
-  switch (thread_type) {
-    case FrameInfo::SmoothEffectDrivingThread::kMain: {
-      switch (tracker_type) {
-#define CASE_FOR_MAIN_THREAD_TRACKER(name)    \
-  case FrameSequenceTrackerType::k##name:     \
-    builder.SetMainThread_##name(throughput); \
-    break;
-        CASE_FOR_MAIN_THREAD_TRACKER(CompositorAnimation);
-        CASE_FOR_MAIN_THREAD_TRACKER(MainThreadAnimation);
-        CASE_FOR_MAIN_THREAD_TRACKER(PinchZoom);
-        CASE_FOR_MAIN_THREAD_TRACKER(RAF);
-        CASE_FOR_MAIN_THREAD_TRACKER(ScrollbarScroll);
-        CASE_FOR_MAIN_THREAD_TRACKER(TouchScroll);
-        CASE_FOR_MAIN_THREAD_TRACKER(Video);
-        CASE_FOR_MAIN_THREAD_TRACKER(WheelScroll);
-        CASE_FOR_MAIN_THREAD_TRACKER(CanvasAnimation);
-        CASE_FOR_MAIN_THREAD_TRACKER(JSAnimation);
-#undef CASE_FOR_MAIN_THREAD_TRACKER
-        case FrameSequenceTrackerType::kSETCompositorAnimation:
-        case FrameSequenceTrackerType::kSETMainThreadAnimation:
-          break;
-        case FrameSequenceTrackerType::kCustom:
-        case FrameSequenceTrackerType::kMaxType:
-          NOTREACHED();
-          break;
-      }
-
-      break;
-    }
-
-    case FrameInfo::SmoothEffectDrivingThread::kCompositor: {
-      switch (tracker_type) {
-#define CASE_FOR_COMPOSITOR_THREAD_TRACKER(name)    \
-  case FrameSequenceTrackerType::k##name:           \
-    builder.SetCompositorThread_##name(throughput); \
-    break;
-        CASE_FOR_COMPOSITOR_THREAD_TRACKER(CompositorAnimation);
-        CASE_FOR_COMPOSITOR_THREAD_TRACKER(MainThreadAnimation);
-        CASE_FOR_COMPOSITOR_THREAD_TRACKER(PinchZoom);
-        CASE_FOR_COMPOSITOR_THREAD_TRACKER(RAF);
-        CASE_FOR_COMPOSITOR_THREAD_TRACKER(ScrollbarScroll);
-        CASE_FOR_COMPOSITOR_THREAD_TRACKER(TouchScroll);
-        CASE_FOR_COMPOSITOR_THREAD_TRACKER(Video);
-        CASE_FOR_COMPOSITOR_THREAD_TRACKER(WheelScroll);
-#undef CASE_FOR_COMPOSITOR_THREAD_TRACKER
-        case FrameSequenceTrackerType::kCanvasAnimation:
-        case FrameSequenceTrackerType::kJSAnimation:
-        case FrameSequenceTrackerType::kSETCompositorAnimation:
-        case FrameSequenceTrackerType::kSETMainThreadAnimation:
-          break;
-        case FrameSequenceTrackerType::kCustom:
-        case FrameSequenceTrackerType::kMaxType:
-          NOTREACHED();
-          break;
-      }
-      break;
-    }
-
-    case FrameInfo::SmoothEffectDrivingThread::kUnknown:
-      NOTREACHED();
-      break;
-  }
-  builder.Record(recorder_.get());
-}
-
-void UkmManager::RecordAggregateThroughput(AggregationType aggregation_type,
-                                           int64_t throughput_percent) const {
-  ukm::builders::Graphics_Smoothness_PercentDroppedFrames builder(source_id_);
-  switch (aggregation_type) {
-    case AggregationType::kAllAnimations:
-      builder.SetAllAnimations(throughput_percent);
-      break;
-    case AggregationType::kAllInteractions:
-      builder.SetAllInteractions(throughput_percent);
-      break;
-    case AggregationType::kAllSequences:
-      builder.SetAllSequences(throughput_percent);
-      break;
-  }
-  builder.Record(recorder_.get());
 }
 
 void UkmManager::RecordCompositorLatencyUKM(
@@ -293,9 +205,31 @@ void UkmManager::RecordEventLatencyUKM(
           (end_timestamp - dispatch_timestamp).InMicroseconds();
       switch (dispatch_stage) {
         case EventMetrics::DispatchStage::kGenerated:
+          switch (end_stage) {
+            case EventMetrics::DispatchStage::
+                kScrollsBlockingTouchDispatchedToRenderer:
+            case EventMetrics::DispatchStage::kArrivedInBrowserMain:
+              // Will build the `GenerationToRendererCompositor` metric on the
+              // `kArrivedInBrowserMain` stage.
+              break;
+            case EventMetrics::DispatchStage::kArrivedInRendererCompositor:
+              builder.SetGenerationToRendererCompositor(dispatch_latency);
+              break;
+            default:
+              NOTREACHED();
+              break;
+          }
+          break;
+        case EventMetrics::DispatchStage::
+            kScrollsBlockingTouchDispatchedToRenderer:
+          break;
+        case EventMetrics::DispatchStage::kArrivedInBrowserMain:
           DCHECK_EQ(end_stage,
                     EventMetrics::DispatchStage::kArrivedInRendererCompositor);
-          builder.SetGenerationToRendererCompositor(dispatch_latency);
+          // TODO(b/224960731): Add new UKM metrics and then split kGenerated
+          // with kArrivedInBrowserMain breakdown.
+          builder.SetGenerationToRendererCompositor(
+              (end_timestamp - generated_timestamp).InMicroseconds());
           break;
         case EventMetrics::DispatchStage::kArrivedInRendererCompositor:
           switch (end_stage) {
@@ -339,11 +273,9 @@ void UkmManager::RecordEventLatencyUKM(
     // a begin-impl, and the event was handled on the renderer before that frame
     // ended). To handle such cases, find the first stage that happens after the
     // event's processing finished on the renderer.
-    auto stage_it = std::find_if(
-        stage_history.begin(), stage_history.end(),
-        [dispatch_timestamp](const CompositorFrameReporter::StageData& stage) {
-          return stage.start_time >= dispatch_timestamp;
-        });
+    auto stage_it = base::ranges::lower_bound(
+        stage_history, dispatch_timestamp, {},
+        &CompositorFrameReporter::StageData::start_time);
     // TODO(crbug.com/1330903): Ideally, at least the start time of
     // SubmitCompositorFrameToPresentationCompositorFrame stage should be
     // greater than or equal to the final event dispatch timestamp, but

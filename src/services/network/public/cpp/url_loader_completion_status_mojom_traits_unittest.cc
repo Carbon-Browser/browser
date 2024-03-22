@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,6 @@ TEST(URLLoaderCompletionStatusMojomTraitsTest, MojoRoundTrip) {
   original.blocked_by_response_reason =
       mojom::BlockedByResponseReason::kCorpNotSameOrigin;
   original.should_report_corb_blocking = true;
-  original.proxy_server = net::ProxyServer(net::ProxyServer::SCHEME_HTTP,
-                                           net::HostPortPair("proxy", 80));
   original.resolve_error_info = net::ResolveErrorInfo(7, true);
   original.should_collapse_initiator = true;
 

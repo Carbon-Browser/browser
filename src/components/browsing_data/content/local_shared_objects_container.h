@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include <stddef.h>
 
+#include <map>
 #include <memory>
+#include <set>
 
 #include "base/memory/ref_counted.h"
 #include "components/browsing_data/content/cookie_helper.h"
@@ -16,7 +18,7 @@
 class GURL;
 
 namespace content {
-class BrowserContext;
+class StoragePartition;
 }
 
 namespace browsing_data {
@@ -31,8 +33,8 @@ class CannedLocalStorageHelper;
 
 class LocalSharedObjectsContainer {
  public:
-  explicit LocalSharedObjectsContainer(
-      content::BrowserContext* browser_context,
+  LocalSharedObjectsContainer(
+      content::StoragePartition* storage_partition,
       bool ignore_empty_localstorage,
       const std::vector<storage::FileSystemType>& additional_file_system_types,
       browsing_data::CookieHelper::IsDeletionDisabledCallback callback);
@@ -49,15 +51,21 @@ class LocalSharedObjectsContainer {
   // Returns the number of objects for the given |origin|.
   size_t GetObjectCountForDomain(const GURL& origin) const;
 
-  // Get number of unique registrable domains in the container.
-  size_t GetDomainCount() const;
-
   // Updates the ignored empty storage keys, which won't be included in the
   // object and domain counts.
   // Note: If `ignore_empty_localstorage` is true, the ignored empty storage
   //       keys are also updated automatically when the storage helper's
   //       `StartFetching` method is called.
   void UpdateIgnoredEmptyStorageKeys(base::OnceClosure done) const;
+
+  // Returns the number of unique sites in the container.
+  size_t GetHostCount() const;
+
+  // Returns the set of unique hosts in the container.
+  std::set<std::string> GetHosts() const;
+
+  // Returns the number of unique sites for the given |registrable_domain|.
+  size_t GetHostCountForDomain(const GURL& registrable_domain) const;
 
   // Empties the container.
   void Reset();
@@ -83,6 +91,8 @@ class LocalSharedObjectsContainer {
   }
 
  private:
+  std::map<url::Origin, int> GetObjectCountPerOriginMap() const;
+
   scoped_refptr<CannedCookieHelper> cookies_;
   scoped_refptr<CannedDatabaseHelper> databases_;
   scoped_refptr<CannedFileSystemHelper> file_systems_;

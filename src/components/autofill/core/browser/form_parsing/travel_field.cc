@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,20 @@
 #include <memory>
 #include <utility>
 
-#include "components/autofill/core/browser/autofill_regex_constants.h"
 #include "components/autofill/core/browser/form_parsing/regex_patterns.h"
+#include "components/autofill/core/common/autofill_regex_constants.h"
 
 namespace autofill {
 
 TravelField::~TravelField() = default;
 
 // static
-std::unique_ptr<FormField> TravelField::Parse(AutofillScanner* scanner,
-                                              const LanguageCode& page_language,
-                                              PatternSource pattern_source,
-                                              LogManager* log_manager) {
+std::unique_ptr<FormField> TravelField::Parse(
+    AutofillScanner* scanner,
+    const GeoIpCountryCode& client_country,
+    const LanguageCode& page_language,
+    PatternSource pattern_source,
+    LogManager* log_manager) {
   if (!scanner || scanner->IsEnd())
     return nullptr;
 
@@ -49,7 +51,7 @@ std::unique_ptr<FormField> TravelField::Parse(AutofillScanner* scanner,
 }
 
 void TravelField::AddClassifications(
-    FieldCandidatesMap* field_candidates) const {
+    FieldCandidatesMap& field_candidates) const {
   // Simply tag all the fields as unknown types. Travel is currently used as
   // filter.
   AddClassification(passport_, UNKNOWN_TYPE, kBaseTravelParserScore,

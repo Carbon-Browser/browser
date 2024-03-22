@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,8 @@ MediaControlOverlayPlayButtonElement::MediaControlOverlayPlayButtonElement(
   SetShadowPseudoId(AtomicString("-webkit-media-controls-overlay-play-button"));
 
   internal_button_ = MediaControlElementsHelper::CreateDiv(
-      "-internal-media-controls-overlay-play-button-internal", GetShadowRoot());
+      AtomicString("-internal-media-controls-overlay-play-button-internal"),
+      GetShadowRoot());
 }
 
 void MediaControlOverlayPlayButtonElement::UpdateDisplayType() {

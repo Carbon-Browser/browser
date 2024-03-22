@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,13 @@
 #include <algorithm>
 #include <map>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "remoting/protocol/network_settings.h"
 #include "remoting/protocol/transport_context.h"
 #include "third_party/abseil-cpp/absl/strings/string_view.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 PortAllocator::PortAllocator(
     std::unique_ptr<rtc::NetworkManager> network_manager,
@@ -38,11 +37,13 @@ PortAllocator::PortAllocator(
 
   NetworkSettings network_settings = transport_context_->network_settings();
 
-  if (!(network_settings.flags & NetworkSettings::NAT_TRAVERSAL_STUN))
+  if (!(network_settings.flags & NetworkSettings::NAT_TRAVERSAL_STUN)) {
     flags |= cricket::PORTALLOCATOR_DISABLE_STUN;
+  }
 
-  if (!(network_settings.flags & NetworkSettings::NAT_TRAVERSAL_RELAY))
+  if (!(network_settings.flags & NetworkSettings::NAT_TRAVERSAL_RELAY)) {
     flags |= cricket::PORTALLOCATOR_DISABLE_RELAY;
+  }
 
   set_flags(flags);
   SetPortRange(network_settings.port_range.min_port,
@@ -83,7 +84,7 @@ void PortAllocatorSession::GetPortConfigurations() {
 
 void PortAllocatorSession::OnIceConfig(const IceConfig& ice_config) {
   ice_config_ = ice_config;
-  ConfigReady(GetPortConfiguration().release());
+  ConfigReady(GetPortConfiguration());
 }
 
 std::unique_ptr<cricket::PortConfiguration>
@@ -105,5 +106,4 @@ PortAllocatorSession::GetPortConfiguration() {
   return config;
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

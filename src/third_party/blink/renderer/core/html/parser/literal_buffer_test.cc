@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/html/parser/literal_buffer.h"
+
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace blink {
-
 namespace {
 
 TEST(LiteralBufferTest, Empty) {
@@ -107,6 +107,20 @@ TEST(LiteralBufferTest, Is8BitMove) {
   EXPECT_FALSE(buf2.Is8Bit());
 }
 
-}  // anonymous namespace
+TEST(LiteralBufferTest, AsString) {
+  LCharLiteralBuffer<16> buf;
+  buf.AddChar('x');
+  const String as_string = buf.AsString();
+  EXPECT_TRUE(as_string.Is8Bit());
+  EXPECT_EQ("x", as_string);
+}
 
+TEST(LiteralBufferTest, AsStringIs8Bit) {
+  LCharLiteralBuffer<2> lit;
+  lit.AddChar('a');
+  lit.AddChar('b');
+  EXPECT_TRUE(lit.AsString().Is8Bit());
+}
+
+}  // anonymous namespace
 }  // namespace blink

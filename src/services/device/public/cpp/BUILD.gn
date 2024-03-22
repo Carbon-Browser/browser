@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -18,11 +18,13 @@ component("device_features") {
 
 if (is_android) {
   source_set("device_feature_list") {
-    sources = [ "device_feature_list.cc" ]
+    sources = [ "device_feature_map.cc" ]
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
     deps = [
       ":device_features",
       "//base",
-      "//services/device:device_service_jni_headers",
+      "//device/fido",
+      "//services/device/public/java:device_feature_list_jni",
     ]
   }
 }
@@ -31,10 +33,6 @@ source_set("test_support") {
   testonly = true
 
   sources = [
-    "test/fake_device_posture_provider.cc",
-    "test/fake_device_posture_provider.h",
-    "test/fake_geolocation_manager.cc",
-    "test/fake_geolocation_manager.h",
     "test/fake_sensor_and_provider.cc",
     "test/fake_sensor_and_provider.h",
     "test/fake_serial_port_client.cc",
@@ -57,13 +55,6 @@ source_set("test_support") {
     "test/test_wake_lock_provider.h",
   ]
 
-  if (is_android) {
-    sources += [
-      "test/scoped_nfc_overrider.cc",
-      "test/scoped_nfc_overrider.h",
-    ]
-  }
-
   public_deps = [
     "//base",
     "//services/device/public/cpp/generic_sensor",
@@ -83,4 +74,35 @@ source_set("test_support") {
     "//testing/gtest",
     "//url",
   ]
+
+  if (is_apple || is_chromeos) {
+    sources += [
+      "test/fake_geolocation_manager.cc",
+      "test/fake_geolocation_manager.h",
+    ]
+  }
+
+  if (is_android) {
+    sources += [
+      "test/scoped_nfc_overrider.cc",
+      "test/scoped_nfc_overrider.h",
+    ]
+  } else {
+    sources += [
+      "test/fake_hid_manager.cc",
+      "test/fake_hid_manager.h",
+      "test/hid_test_util.cc",
+      "test/hid_test_util.h",
+      "test/mock_hid_connection.cc",
+      "test/mock_hid_connection.h",
+      "test/mock_hid_service.cc",
+      "test/mock_hid_service.h",
+      "test/test_report_descriptors.cc",
+      "test/test_report_descriptors.h",
+    ]
+
+    public_deps += [ "//services/device/public/cpp/hid" ]
+
+    deps += [ "//services/device/hid" ]
+  }
 }

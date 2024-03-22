@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/api/storage/storage_frontend.h"
@@ -72,15 +72,14 @@ scoped_refptr<const Extension> AddExtensionWithIdAndPermissions(
     const std::string& id,
     Manifest::Type type,
     const std::set<std::string>& permissions_set) {
-  base::DictionaryValue manifest;
-  manifest.SetStringKey("name", std::string("Test extension ") + id);
-  manifest.SetStringKey("version", "1.0");
-  manifest.SetIntKey("manifest_version", 2);
+  auto manifest =
+      base::Value::Dict().Set("name", std::string("Test extension ") + id);
+  manifest.Set("version", "1.0");
+  manifest.Set("manifest_version", 2);
 
-  std::unique_ptr<base::ListValue> permissions(new base::ListValue());
-  for (auto it = permissions_set.cbegin(); it != permissions_set.cend(); ++it) {
-    permissions->Append(*it);
-  }
+  base::Value::List permissions;
+  for (const auto& perm : permissions_set)
+    permissions.Append(perm);
   manifest.Set("permissions", std::move(permissions));
 
   switch (type) {
@@ -88,10 +87,10 @@ scoped_refptr<const Extension> AddExtensionWithIdAndPermissions(
       break;
 
     case Manifest::TYPE_LEGACY_PACKAGED_APP: {
-      auto app = std::make_unique<base::DictionaryValue>();
-      auto app_launch = std::make_unique<base::DictionaryValue>();
-      app_launch->SetStringKey("local_path", "fake.html");
-      app->Set("launch", std::move(app_launch));
+      base::Value::Dict app;
+      base::Value::Dict app_launch;
+      app_launch.Set("local_path", "fake.html");
+      app.Set("launch", std::move(app_launch));
       manifest.Set("app", std::move(app));
       break;
     }

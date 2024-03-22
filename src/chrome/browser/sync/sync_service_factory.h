@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,27 +8,23 @@
 #include <memory>
 #include <vector>
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
-
-namespace base {
-template <typename T>
-struct DefaultSingletonTraits;
-}  // namespace base
 
 namespace syncer {
 class SyncServiceImpl;
 class SyncService;
 }  // namespace syncer
 
-class SyncServiceFactory : public BrowserContextKeyedServiceFactory {
+class SyncServiceFactory : public ProfileKeyedServiceFactory {
  public:
   // Returns the SyncService for the given profile.
   static syncer::SyncService* GetForProfile(Profile* profile);
   // Returns the SyncServiceImpl for the given profile. DO NOT USE unless
   // absolutely necessary! Prefer GetForProfile instead.
-  static syncer::SyncServiceImpl* GetAsSyncServiceImplForProfile(
+  static syncer::SyncServiceImpl* GetAsSyncServiceImplForProfileForTesting(
       Profile* profile);
 
   SyncServiceFactory(const SyncServiceFactory&) = delete;
@@ -53,13 +49,13 @@ class SyncServiceFactory : public BrowserContextKeyedServiceFactory {
   static TestingFactory GetDefaultFactory();
 
  private:
-  friend struct base::DefaultSingletonTraits<SyncServiceFactory>;
+  friend base::NoDestructor<SyncServiceFactory>;
 
   SyncServiceFactory();
   ~SyncServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsNULLWhileTesting() const override;
 };

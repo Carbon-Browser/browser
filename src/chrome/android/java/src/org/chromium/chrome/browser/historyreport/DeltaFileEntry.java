@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,35 +14,38 @@ public class DeltaFileEntry {
      * Smaller happened first.
      */
     public final long seqNo;
-    /**
-     * Type of the action represented by this entry. Can be 'add' or 'del'.
-     */
+
+    /** Type of the action represented by this entry. Can be 'add' or 'del'. */
     public final String type;
+
     /**
      * ID which identifies the URL targeted by the action represented by this entry.
      * It's shorter than 257 characters.
      */
     public final String id;
-    /**
-     * URL targeted by the action represented by this entry.
-     */
+
+    /** URL targeted by the action represented by this entry. */
     public final String url;
+
     /**
      * Score of the URL targeted by the action represented by this entry.
      * It's used in search ranking.
      */
     public final int score;
-    /**
-     * Title of the URL targeted by the action represented by this entry.
-     */
+
+    /** Title of the URL targeted by the action represented by this entry. */
     public final String title;
 
-    /**
-     * Part of URL which will be used as a search key in index.
-     */
+    /** Part of URL which will be used as a search key in index. */
     public final String indexedUrl;
 
-    public DeltaFileEntry(long seqNo, String type, String id, String url, int score, String title,
+    public DeltaFileEntry(
+            long seqNo,
+            String type,
+            String id,
+            String url,
+            int score,
+            String title,
             String indexedUrl) {
         this.seqNo = seqNo;
         this.type = type;
@@ -55,7 +58,16 @@ public class DeltaFileEntry {
 
     @Override
     public String toString() {
-        return "DeltaFileEntry[" + seqNo + ", " + type + ", " + id + ", " + url + ", " + title
+        return "DeltaFileEntry["
+                + seqNo
+                + ", "
+                + type
+                + ", "
+                + id
+                + ", "
+                + url
+                + ", "
+                + title
                 + "]";
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,17 +43,16 @@ class V4L2StatefulVideoDecoderBackend : public V4L2VideoDecoderBackend {
   // V4L2VideoDecoderBackend implementation
   bool Initialize() override;
   void EnqueueDecodeTask(scoped_refptr<DecoderBuffer> buffer,
-                         VideoDecoder::DecodeCB decode_cb,
-                         int32_t bitstream_id) override;
+                         VideoDecoder::DecodeCB decode_cb) override;
   void OnOutputBufferDequeued(V4L2ReadableBufferRef buffer) override;
   void OnServiceDeviceTask(bool event) override;
   void OnStreamStopped(bool stop_input_queue) override;
   bool ApplyResolution(const gfx::Size& pic_size,
-                       const gfx::Rect& visible_rect,
-                       const size_t num_output_frames) override;
+                       const gfx::Rect& visible_rect) override;
   void OnChangeResolutionDone(CroStatus status) override;
   void ClearPendingRequests(DecoderStatus status) override;
   bool StopInputQueueOnResChange() const override;
+  size_t GetNumOUTPUTQueueBuffers(bool secure_mode) const override;
 
  private:
   // TODO(b:149663704): merge with stateless?
@@ -66,12 +65,8 @@ class V4L2StatefulVideoDecoderBackend : public V4L2VideoDecoderBackend {
     size_t bytes_used = 0;
     // The callback function passed to EnqueueDecodeTask().
     VideoDecoder::DecodeCB decode_cb;
-    // Identifier for the decoder buffer.
-    int32_t bitstream_id;
 
-    DecodeRequest(scoped_refptr<DecoderBuffer> buf,
-                  VideoDecoder::DecodeCB cb,
-                  int32_t id);
+    DecodeRequest(scoped_refptr<DecoderBuffer> buf, VideoDecoder::DecodeCB cb);
 
     DecodeRequest(const DecodeRequest&) = delete;
     DecodeRequest& operator=(const DecodeRequest&) = delete;
@@ -102,7 +97,8 @@ class V4L2StatefulVideoDecoderBackend : public V4L2VideoDecoderBackend {
   // to actually apply the resolution.
   void ContinueChangeResolution(const gfx::Size& pic_size,
                                 const gfx::Rect& visible_rect,
-                                const size_t num_output_buffers);
+                                const size_t num_codec_reference_frames,
+                                uint8_t bit_depth);
 
   // Enqueue all output buffers that are available.
   void EnqueueOutputBuffers();

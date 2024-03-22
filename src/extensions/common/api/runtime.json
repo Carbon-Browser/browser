@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 [
   {
     "namespace": "runtime",
-    "description": "Use the <code>chrome.runtime</code> API to retrieve the background page, return details about the manifest, and listen for and respond to events in the app or extension lifecycle. You can also use this API to convert the relative path of URLs to fully-qualified URLs.",
+    "description": "Use the <code>chrome.runtime</code> API to retrieve the service worker, return details about the manifest, and listen for and respond to events in the app or extension lifecycle. You can also use this API to convert the relative path of URLs to fully-qualified URLs.",
     "types": [
       {
         "id": "Port",
@@ -71,8 +71,8 @@
           "nativeApplication": {"type": "string", "optional": true, "description": "The name of the native application that opened the connection, if any."},
           "tlsChannelId": {"type": "string", "optional": true, "description": "The TLS channel ID of the page or frame that opened the connection, if requested by the extension or app, and if available."},
           "origin": {"type": "string", "optional": true, "description": "The origin of the page or frame that opened the connection. It can vary from the url property (e.g., about:blank) or can be opaque (e.g., sandboxed iframes). This is useful for identifying if the origin can be trusted if we can't immediately tell from the URL."},
-          "documentId": {"type": "string", "optional": true, "description": "A UUID of the document that opened the connection.", "nodoc": true},
-          "documentLifecycle": {"type": "string", "optional": true, "description": "The lifecycle the document that opened the connection is in at the time the port was created. Note that the lifecycle state of the document may have changed since port creation.","nodoc": true}
+          "documentId": {"type": "string", "optional": true, "description": "A UUID of the document that opened the connection."},
+          "documentLifecycle": {"type": "string", "optional": true, "description": "The lifecycle the document that opened the connection is in at the time the port was created. Note that the lifecycle state of the document may have changed since port creation."}
         }
       },
       {
@@ -80,26 +80,39 @@
         "type": "string",
         "description": "The operating system Chrome is running on.",
         "enum": [
-          "mac",
-          "win",
-          "android",
-          "cros",
-          "linux",
-          "openbsd",
-          "fuchsia"
+            {"name": "mac", "description": "Specifies the MacOS operating system."},
+            {"name": "win", "description": "Specifies the Windows operating system."},
+            {"name": "android", "description": "Specifies the Android operating system."},
+            {"name": "cros", "description": "Specifies the Chrome operating system."},
+            {"name": "linux", "description": "Specifies the Linux operating system."},
+            {"name": "openbsd", "description": "Specifies the OpenBSD operating system."},
+            {"name": "fuchsia", "description": "Specifies the Fuchsia operating system."}
         ]
       },
       {
         "id": "PlatformArch",
         "type": "string",
-        "enum": ["arm", "arm64", "x86-32", "x86-64", "mips", "mips64"],
+        "enum": [
+            {"name": "arm", "description": "Specifies the processer architecture as arm."},
+            {"name": "arm64", "description": "Specifies the processer architecture as arm64."},
+            {"name": "x86-32", "description": "Specifies the processer architecture as x86-32."},
+            {"name": "x86-64", "description": "Specifies the processer architecture as x86-64."},
+            {"name": "mips", "description": "Specifies the processer architecture as mips."},
+            {"name": "mips64", "description": "Specifies the processer architecture as mips64."}
+         ],
         "description": "The machine's processor architecture."
       },
       {
         "id": "PlatformNaclArch",
         "description": "The native client architecture. This may be different from arch on some platforms.",
         "type": "string",
-        "enum": ["arm", "x86-32", "x86-64", "mips", "mips64"]
+        "enum": [
+          {"name": "arm", "description": "Specifies the native client architecture as arm."},
+          {"name": "x86-32", "description": "Specifies the native client architecture as x86-32."},
+          {"name": "x86-64", "description": "Specifies the native client architecture as x86-64."},
+          {"name": "mips", "description": "Specifies the native client architecture as mips."},
+          {"name": "mips64", "description": "Specifies the native client architecture as mips64."}
+        ]
       },
       {
         "id": "PlatformInfo",
@@ -123,27 +136,148 @@
       {
         "id": "RequestUpdateCheckStatus",
         "type": "string",
-        "enum": ["throttled", "no_update", "update_available"],
+        "enum": [
+          {"name":  "throttled", "description": "Specifies that the status check has been throttled. This can occur after repeated checks within a short amount of time."},
+          {"name": "no_update", "description": "Specifies that there are no available updates to install."},
+          {"name": "update_available", "description": "Specifies that there is an available update to install."}
+        ],
         "description": "Result of the update check."
       },
       {
         "id": "OnInstalledReason",
         "type": "string",
-        "enum": ["install", "update", "chrome_update", "shared_module_update"],
+        "enum": [
+          {"name": "install", "description": "Specifies the event reason as an installation."},
+          {"name": "update", "description": "Specifies the event reason as an extension update."},
+          {"name": "chrome_update", "description": "Specifies the event reason as a Chrome update."},
+          {"name": "shared_module_update", "description": "Specifies the event reason as an update to a shared module."}
+        ],
         "description": "The reason that this event is being dispatched."
       },
       {
         "id": "OnRestartRequiredReason",
         "type": "string",
         "description": "The reason that the event is being dispatched. 'app_update' is used when the restart is needed because the application is updated to a newer version. 'os_update' is used when the restart is needed because the browser/OS is updated to a newer version. 'periodic' is used when the system runs for more than the permitted uptime set in the enterprise policy.",
-        "enum": ["app_update", "os_update", "periodic"]
+        "enum": [
+          {"name": "app_update", "description": "Specifies the event reason as an update to the app."},
+          {"name": "os_update", "description": "Specifies the event reason as an update to the operating system."},
+          {"name": "periodic", "description": "Specifies the event reason as a periodic restart of the app."}
+        ]
+      },
+      {
+        "id": "ContextType",
+        "type": "string",
+        "enum": [
+          {"name": "TAB", "description": "Specifies the context type as a tab"},
+          {"name": "POPUP", "description": "Specifies the context type as an extension popup window"},
+          {"name": "BACKGROUND", "description": "Specifies the context type as a service worker."},
+          {"name": "OFFSCREEN_DOCUMENT", "description": "Specifies the context type as an offscreen document."},
+          {"name": "SIDE_PANEL", "description": "Specifies the context type as a side panel."}
+        ]
+      },
+      {
+        "id": "ExtensionContext",
+        "type": "object",
+        "description": "A context hosting extension content.",
+        "properties": {
+          "contextType": {
+            "$ref": "ContextType",
+            "description": "The type of context this corresponds to."
+          },
+          "contextId": {
+            "type": "string",
+            "description": "A unique identifier for this context"
+          },
+          "tabId": {
+            "type": "integer",
+            "description": "The ID of the tab for this context, or -1 if this context is not hosted in a tab."
+          },
+          "windowId": {
+            "type": "integer",
+            "description": "The ID of the window for this context, or -1 if this context is not hosted in a window."
+          },
+          "documentId": {
+            "type": "string",
+            "optional": true,
+            "description": "A UUID for the document associated with this context, or undefined if this context is hosted not in a document."
+          },
+          "frameId": {
+            "type": "integer",
+            "description": "The ID of the frame for this context, or -1 if this context is not hosted in a frame."
+          },
+          "documentUrl": {
+            "type": "string",
+            "optional": true,
+            "description": "The URL of the document associated with this context, or undefined if the context is not hosted in a document."
+          },
+          "documentOrigin": {
+            "type": "string",
+            "optional": true,
+            "description": "The origin of the document associated with this context, or undefined if the context is not hosted in a document."
+          },
+          "incognito": {
+            "type": "boolean",
+            "description": "Whether the context is associated with an incognito profile."
+          }
+        }
+      },
+      {
+        "id": "ContextFilter",
+        "type": "object",
+        "description": "A filter to match against certain extension contexts. Matching contexts must match all specified filters; any filter that is not specified matches all available contexts. Thus, a filter of `{}` will match all available contexts.",
+        "properties": {
+          "contextTypes": {
+            "type": "array",
+            "items": { "$ref": "ContextType" },
+            "optional": true
+          },
+          "contextIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "optional": true
+          },
+          "tabIds": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "optional": true
+          },
+          "windowIds": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "optional": true
+          },
+          "documentIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "optional": true
+          },
+          "frameIds": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "optional": true
+          },
+          "documentUrls": {
+            "type": "array",
+            "items": { "type": "string" },
+            "optional": true
+          },
+          "documentOrigins": {
+            "type": "array",
+            "items": { "type": "string" },
+            "optional": true
+          },
+          "incognito": {
+            "type": "boolean",
+            "optional": true
+          }
+        }
       }
     ],
     "properties": {
       "lastError": {
         "type": "object",
         "optional": true,
-        "description": "This will be defined during an API method callback if there was an error",
+        "description": "Populated with an error message if calling an API function fails; otherwise undefined. This is only defined within the scope of that function's callback. If an error is produced, but <code>runtime.lastError</code> is not accessed within the callback, a message is logged to the console listing the API function that produced the error. API functions that return promises do not set this property.",
         "properties": {
           "message": {
             "optional": true,
@@ -223,12 +357,12 @@
       {
         "name": "setUninstallURL",
         "type": "function",
-        "description": "Sets the URL to be visited upon uninstallation. This may be used to clean up server-side data, do analytics, and implement surveys. Maximum 255 characters.",
+        "description": "Sets the URL to be visited upon uninstallation. This may be used to clean up server-side data, do analytics, and implement surveys. Maximum 1023 characters.",
         "parameters": [
           {
             "type": "string",
             "name": "url",
-            "maxLength": 255,
+            "maxLength": 1023,
             "description": "URL to be opened after the extension is uninstalled. This URL must have an http: or https: scheme. Set an empty string to not open a new tab upon uninstallation."
           }
         ],
@@ -248,32 +382,29 @@
       {
         "name": "requestUpdateCheck",
         "type": "function",
-        "description": "<p>Requests an immediate update check be done for this app/extension.</p> <p><b>Important</b>: Most extensions/apps should <b>not</b> use this method, since Chrome already does automatic checks every few hours, and you can listen for the $(ref:runtime.onUpdateAvailable) event without needing to call requestUpdateCheck.</p><p>This method is only appropriate to call in very limited circumstances, such as if your extension/app talks to a backend service, and the backend service has determined that the client extension/app version is very far out of date and you'd like to prompt a user to update. Most other uses of requestUpdateCheck, such as calling it unconditionally based on a repeating timer, probably only serve to waste client, network, and server resources.</p>",
-        "parameters": [
-          {
-            "type": "function",
-            "name": "callback",
-            "parameters": [
-              {
-                "name": "status",
-                "$ref": "RequestUpdateCheckStatus",
-                "description": "Result of the update check."
-              },
-              {
-                "name": "details",
-                "type": "object",
-                "optional": true,
-                "properties": {
-                  "version": {
-                    "type": "string",
-                    "description": "The version of the available update."
-                  }
+        "description": "<p>Requests an immediate update check be done for this app/extension.</p> <p><b>Important</b>: Most extensions/apps should <b>not</b> use this method, since Chrome already does automatic checks every few hours, and you can listen for the $(ref:runtime.onUpdateAvailable) event without needing to call requestUpdateCheck.</p><p>This method is only appropriate to call in very limited circumstances, such as if your extension/app talks to a backend service, and the backend service has determined that the client extension/app version is very far out of date and you'd like to prompt a user to update. Most other uses of requestUpdateCheck, such as calling it unconditionally based on a repeating timer, probably only serve to waste client, network, and server resources.</p><p>Note: When called with a callback, instead of returning an object this function will return the two properties as separate arguments passed to the callback.</p>",
+        "parameters": [],
+        "returns_async": {
+          "name": "callback",
+          "parameters": [
+            {
+              "type": "object",
+              "name": "result",
+              "description": "RequestUpdateCheckResult object that holds the status of the update check and any details of the result if there is an update available",
+              "properties": {
+                "status": {
+                  "$ref": "RequestUpdateCheckStatus",
+                  "description": "Result of the update check."
                 },
-                "description": "If an update is available, this contains more information about the available update."
+                "version": {
+                  "type": "string",
+                  "optional": true,
+                  "description": "If an update is available, this contains the version of the available update."
+                }
               }
-            ]
-          }
-        ]
+            }
+          ]
+        }
       },
       {
         "name": "restart",
@@ -303,7 +434,7 @@
         "name": "connect",
         "type": "function",
         "nocompile": true,
-        "description": "Attempts to connect to connect listeners within an extension/app (such as the background page), or other extensions/apps. This is useful for content scripts connecting to their extension processes, inter-app/extension communication, and <a href=\"manifest/externally_connectable.html\">web messaging</a>. Note that this does not connect to any listeners in a content script. Extensions may connect to content scripts embedded in tabs via $(ref:tabs.connect).",
+        "description": "Attempts to connect listeners within an extension/app (such as the background page), or other extensions/apps. This is useful for content scripts connecting to their extension processes, inter-app/extension communication, and <a href=\"manifest/externally_connectable.html\">web messaging</a>. Note that this does not connect to any listeners in a content script. Extensions may connect to content scripts embedded in tabs via $(ref:tabs.connect).",
         "parameters": [
           {"type": "string", "name": "extensionId", "optional": true, "description": "The ID of the extension or app to connect to. If omitted, a connection will be attempted with your own extension. Required if sending messages from a web page for <a href=\"manifest/externally_connectable.html\">web messaging</a>."},
           {
@@ -437,6 +568,30 @@
             ]
           }
         ]
+      },
+      {
+        "name": "getContexts",
+        "type": "function",
+        "description": "Fetches information about active contexts associated with this extension",
+        "parameters": [
+          {
+            "$ref": "ContextFilter",
+            "name": "filter",
+            "description": "A filter to find matching contexts. A context matches if it matches all specified fields in the filter. Any unspecified field in the filter matches all contexts."
+          }
+        ],
+        "returns_async": {
+          "name": "callback",
+          "description": "Invoked with the matching contexts, if any.",
+          "parameters": [
+            {
+              "name": "contexts",
+              "type": "array",
+              "description": "The matching contexts, if any.",
+              "items": { "$ref": "ExtensionContext" }
+            }
+          ]
+        }
       }
     ],
     "events": [
@@ -532,6 +687,17 @@
         ]
       },
       {
+        "name": "onUserScriptConnect",
+        "nodoc": true,
+        "type": "function",
+        "nocompile": true,
+        "options": { "unmanaged": true },
+        "description": "Fired when a connection is made from a user script from this extension.",
+        "parameters": [
+          {"$ref": "Port", "name": "port"}
+        ]
+      },
+      {
         "name": "onConnectNative",
         "type": "function",
         "nocompile": true,
@@ -567,6 +733,24 @@
         "description": "Fired when a message is sent from another extension/app (by $(ref:runtime.sendMessage)). Cannot be used in a content script.",
         "parameters": [
           {"name": "message", "type": "any", "optional": true, "description": "The message sent by the calling script."},
+          {"name": "sender", "$ref": "MessageSender" },
+          {"name": "sendResponse", "type": "function", "description": "Function to call (at most once) when you have a response. The argument should be any JSON-ifiable object. If you have more than one <code>onMessage</code> listener in the same document, then only one may send a response. This function becomes invalid when the event listener returns, <strong>unless you return true</strong> from the event listener to indicate you wish to send a response asynchronously (this will keep the message channel open to the other end until <code>sendResponse</code> is called)." }
+        ],
+        "returns": {
+          "type": "boolean",
+          "optional": true,
+          "description": "Return true from the event listener if you wish to call <code>sendResponse</code> after the event listener returns."
+        }
+      },
+      {
+        "name": "onUserScriptMessage",
+        "nodoc": true,
+        "type": "function",
+        "nocompile": true,
+        "options": { "unmanaged": true },
+        "description": "Fired when a message is sent from a user script associated with the same extension.",
+        "parameters": [
+          {"name": "message", "type": "any", "optional": true, "description": "The message sent by the user script."},
           {"name": "sender", "$ref": "MessageSender" },
           {"name": "sendResponse", "type": "function", "description": "Function to call (at most once) when you have a response. The argument should be any JSON-ifiable object. If you have more than one <code>onMessage</code> listener in the same document, then only one may send a response. This function becomes invalid when the event listener returns, <strong>unless you return true</strong> from the event listener to indicate you wish to send a response asynchronously (this will keep the message channel open to the other end until <code>sendResponse</code> is called)." }
         ],

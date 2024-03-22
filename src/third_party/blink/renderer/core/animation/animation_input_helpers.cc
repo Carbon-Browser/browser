@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -90,8 +90,8 @@ CSSPropertyID AnimationInputHelpers::KeyframeAttributeToPresentationAttribute(
     return CSSPropertyID::kInvalid;
 
   String unprefixed_property = RemoveSVGPrefix(property);
-  if (SVGElement::IsAnimatableCSSProperty(QualifiedName(
-          g_null_atom, AtomicString(unprefixed_property), g_null_atom))) {
+  if (SVGElement::IsAnimatableCSSProperty(
+          QualifiedName(AtomicString(unprefixed_property)))) {
     return CssPropertyID(element->GetExecutionContext(), unprefixed_property);
   }
   return CSSPropertyID::kInvalid;
@@ -101,7 +101,7 @@ using AttributeNameMap = HashMap<QualifiedName, const QualifiedName*>;
 
 const AttributeNameMap& GetSupportedAttributes() {
   DEFINE_STATIC_LOCAL(AttributeNameMap, supported_attributes, ());
-  if (supported_attributes.IsEmpty()) {
+  if (supported_attributes.empty()) {
     // Fill the set for the first use.
     // Animatable attributes from http://www.w3.org/TR/SVG/attindex.html
     const QualifiedName* attributes[] = {
@@ -211,7 +211,7 @@ const AttributeNameMap& GetSupportedAttributes() {
 
 QualifiedName SvgAttributeName(const String& property) {
   DCHECK(!IsSVGPrefixed(property));
-  return QualifiedName(g_null_atom, AtomicString(property), g_null_atom);
+  return QualifiedName(AtomicString(property));
 }
 
 const QualifiedName* AnimationInputHelpers::KeyframeAttributeToSVGAttribute(
@@ -240,7 +240,7 @@ scoped_refptr<TimingFunction> AnimationInputHelpers::ParseTimingFunction(
     const String& string,
     Document* document,
     ExceptionState& exception_state) {
-  if (string.IsEmpty()) {
+  if (string.empty()) {
     exception_state.ThrowTypeError("Easing may not be the empty string");
     return nullptr;
   }

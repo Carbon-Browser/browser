@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,7 +81,8 @@ class MODULES_EXPORT WebAudioMediaStreamAudioSink
   // This function is triggered by the above ProvideInput() on the WebAudio
   // audio thread, so it has be called under the protection of |lock_|.
   double ProvideInput(media::AudioBus* audio_bus,
-                      uint32_t frames_delayed) override;
+                      uint32_t frames_delayed,
+                      const media::AudioGlitchInfo& glitch_info) override;
 
   std::unique_ptr<media::AudioConverter> audio_converter_ GUARDED_BY(lock_);
   std::unique_ptr<media::AudioFifo> fifo_ GUARDED_BY(lock_);

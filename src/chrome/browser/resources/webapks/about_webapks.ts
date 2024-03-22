@@ -1,32 +1,35 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {addWebUIListener} from 'chrome://resources/js/cr.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {addWebUiListener} from 'chrome://resources/js/cr.js';
 
-type WebApkInfo = {
-  name: string,
-  shortName: string,
-  packageName: string,
-  id: string,
-  shellApkVersion: number,
-  versionCode: number,
-  uri: string,
-  scope: string,
-  manifestUrl: string,
-  manifestStartUrl: string,
-  displayMode: string,
-  orientation: string,
-  themeColor: string,
-  backgroundColor: string,
-  lastUpdateCheckTimeMs: number,
-  lastUpdateCompletionTimeMs: number,
-  relaxUpdates: boolean,
-  backingBrowser: string,
-  isBackingBrowser: boolean,
-  updateStatus: string,
-};
+interface WebApkInfo {
+  name: string;
+  shortName: string;
+  packageName: string;
+  id: string;
+  shellApkVersion: number;
+  versionCode: number;
+  uri: string;
+  scope: string;
+  manifestUrl: string;
+  manifestStartUrl: string;
+  manifestId: string;
+  displayMode: string;
+  orientation: string;
+  themeColor: string;
+  backgroundColor: string;
+  darkThemeColor: string;
+  darkBackgroundColor: string;
+  lastUpdateCheckTimeMs: number;
+  lastUpdateCompletionTimeMs: number;
+  relaxUpdates: boolean;
+  backingBrowser: string;
+  isBackingBrowser: boolean;
+  updateStatus: string;
+}
 
 /**
  * Creates and returns an element (with |text| as content) assigning it the
@@ -98,10 +101,14 @@ function addWebApk(webApkInfo: WebApkInfo) {
   addWebApkField(webApkList, 'Manifest URL: ', webApkInfo.manifestUrl);
   addWebApkField(
       webApkList, 'Manifest Start URL: ', webApkInfo.manifestStartUrl);
+  addWebApkField(webApkList, 'Manifest Id: ', webApkInfo.manifestId);
   addWebApkField(webApkList, 'Display Mode: ', webApkInfo.displayMode);
   addWebApkField(webApkList, 'Orientation: ', webApkInfo.orientation);
   addWebApkField(webApkList, 'Theme color: ', webApkInfo.themeColor);
   addWebApkField(webApkList, 'Background color: ', webApkInfo.backgroundColor);
+  addWebApkField(webApkList, 'Dark theme color: ', webApkInfo.darkThemeColor);
+  addWebApkField(
+      webApkList, 'Dark background color: ', webApkInfo.darkBackgroundColor);
   addWebApkField(
       webApkList, 'Last Update Check Time: ',
       new Date(webApkInfo.lastUpdateCheckTimeMs).toString());
@@ -138,6 +145,6 @@ function addWebApk(webApkInfo: WebApkInfo) {
 document.addEventListener('DOMContentLoaded', function() {
   // Add a WebUI listener for the 'web-apk-info' event emitted from the
   // backend. This will be triggered once per WebAPK.
-  addWebUIListener('web-apk-info', addWebApk);
+  addWebUiListener('web-apk-info', addWebApk);
   chrome.send('requestWebApksInfo');
 });

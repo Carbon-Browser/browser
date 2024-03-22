@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -91,7 +91,6 @@ class ScriptsSmokeTest(unittest.TestCase):
     if 'ImportError: cannot import name small_profile_extender' in stdout:
       self.skipTest('small_profile_extender is missing')
     self.assertEqual(return_code, 0, stdout)
-    self.assertIn('kraken', stdout)
 
   @decorators.Disabled('chromeos')  # crbug.com/754913
   def testRunPerformanceTestsTelemetry_end2end(self):

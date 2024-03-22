@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/file_system_access/file_system_access_capacity_allocation_host_impl.h"
 
 #include "base/memory/weak_ptr.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "storage/browser/file_system/file_system_util.h"
+#include "storage/browser/file_system/file_observers.h"
+#include "storage/browser/file_system/task_runner_bound_observer_list.h"
 #include "storage/browser/quota/quota_client_type.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
 
@@ -89,7 +90,7 @@ void FileSystemAccessCapacityAllocationHostImpl::RequestCapacityChange(
 
   quota_manager_proxy()->GetUsageAndQuota(
       url_.storage_key(), blink::mojom::StorageType::kTemporary,
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindOnce(
           &FileSystemAccessCapacityAllocationHostImpl::DidGetUsageAndQuota,
           weak_factory_.GetWeakPtr(), capacity_delta, std::move(callback)));
@@ -113,12 +114,20 @@ void FileSystemAccessCapacityAllocationHostImpl::DidGetUsageAndQuota(
     return;
   }
   granted_capacity_ += capacity_delta;
-  quota_manager_proxy()->NotifyStorageModified(
-      storage::QuotaClientType::kFileSystem, url_.storage_key(),
-      storage::FileSystemTypeToQuotaStorageType(url_.type()), capacity_delta,
-      base::Time::Now(), base::SequencedTaskRunnerHandle::Get(),
+  quota_manager_proxy()->NotifyBucketModified(
+      storage::QuotaClientType::kFileSystem, *url_.bucket(), capacity_delta,
+      base::Time::Now(), base::SequencedTaskRunner::GetCurrentDefault(),
       base::DoNothing());
   std::move(callback).Run(capacity_delta);
+}
+
+void FileSystemAccessCapacityAllocationHostImpl::OnContentsModified() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (const storage::ChangeObserverList* change_observers =
+          manager_->context()->GetChangeObservers(url_.type())) {
+    change_observers->Notify(&storage::FileChangeObserver::OnModifyFile, url_);
+  }
 }
 
 }  // namespace content

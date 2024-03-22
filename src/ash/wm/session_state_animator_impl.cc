@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/window_animations.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_animation_sequence.h"
@@ -352,20 +352,33 @@ class SessionStateAnimatorImpl::AnimationSequence
     animator_->StartAnimationInSequence(container_mask, type, speed, this);
   }
 
+  void EndSequence() override {
+    SessionStateAnimator::AnimationSequence::EndSequence();
+
+    // Mark animation completed if there are no pending ones at the end in
+    // case it is skipped during animation setup because the sequence is not
+    // marked as ended..
+    if (sequences_completed_ == sequences_attached_) {
+      OnAnimationCompleted();
+    }
+  }
+
  private:
   ~AnimationSequence() override = default;
 
   // ui::LayerAnimationObserver:
   void OnLayerAnimationEnded(ui::LayerAnimationSequence* sequence) override {
     sequences_completed_++;
-    if (sequences_completed_ == sequences_attached_)
+    if (sequence_ended() && sequences_completed_ == sequences_attached_) {
       OnAnimationCompleted();
+    }
   }
 
   void OnLayerAnimationAborted(ui::LayerAnimationSequence* sequence) override {
     sequences_completed_++;
-    if (sequences_completed_ == sequences_attached_)
+    if (sequence_ended() && sequences_completed_ == sequences_attached_) {
       OnAnimationAborted();
+    }
   }
 
   void OnLayerAnimationScheduled(
@@ -376,7 +389,8 @@ class SessionStateAnimatorImpl::AnimationSequence
     sequences_attached_++;
   }
 
-  SessionStateAnimatorImpl* animator_;  // not owned
+  raw_ptr<SessionStateAnimatorImpl, LeakedDanglingUntriaged | ExperimentalAsh>
+      animator_;  // not owned
 
   // Number of sequences this observer was attached to.
   int sequences_attached_;
@@ -457,16 +471,6 @@ void SessionStateAnimatorImpl::StartAnimationWithCallback(
 SessionStateAnimator::AnimationSequence*
 SessionStateAnimatorImpl::BeginAnimationSequence(AnimationCallback callback) {
   return new AnimationSequence(this, std::move(callback));
-}
-
-void SessionStateAnimatorImpl::AbortAllAnimations(int container_mask) {
-  aura::Window::Windows containers;
-  GetContainers(container_mask, &containers);
-
-  for (aura::Window::Windows::const_iterator it = containers.begin();
-       it != containers.end(); ++it) {
-    (*it)->layer()->GetAnimator()->AbortAllAnimations();
-  }
 }
 
 bool SessionStateAnimatorImpl::IsWallpaperHidden() const {

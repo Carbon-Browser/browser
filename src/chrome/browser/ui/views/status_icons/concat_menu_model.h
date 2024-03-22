@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,7 @@ class ConcatMenuModel : public ui::MenuModel {
 
   ~ConcatMenuModel() override;
 
-  // MenuModel:
-  bool HasIcons() const override;
+  // ui::MenuModel:
   size_t GetItemCount() const override;
   ItemType GetTypeAt(size_t index) const override;
   ui::MenuSeparatorType GetSeparatorTypeAt(size_t index) const override;
@@ -55,8 +54,8 @@ class ConcatMenuModel : public ui::MenuModel {
   // adjusted for the returned menu.
   ui::MenuModel* GetMenuAndIndex(size_t* index) const;
 
-  const raw_ptr<ui::MenuModel> m1_;
-  const raw_ptr<ui::MenuModel> m2_;
+  const raw_ptr<ui::MenuModel, DanglingUntriaged> m1_;
+  const raw_ptr<ui::MenuModel, DanglingUntriaged> m2_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_STATUS_ICONS_CONCAT_MENU_MODEL_H_

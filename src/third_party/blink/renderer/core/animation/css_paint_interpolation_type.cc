@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,6 +61,22 @@ InterpolationValue CSSPaintInterpolationType::MaybeConvertInitial(
       CSSColorInterpolationType::CreateInterpolableColor(initial_color));
 }
 
+PairwiseInterpolationValue CSSPaintInterpolationType::MaybeMergeSingles(
+    InterpolationValue&& start,
+    InterpolationValue&& end) const {
+  DCHECK(!start.non_interpolable_value);
+  DCHECK(!end.non_interpolable_value);
+
+  // Confirm that both colors are in the same colorspace and adjust if
+  // necessary.
+  auto& start_color = To<InterpolableColor>(*start.interpolable_value);
+  auto& end_color = To<InterpolableColor>(*end.interpolable_value);
+  InterpolableColor::SetupColorInterpolationSpaces(start_color, end_color);
+
+  return PairwiseInterpolationValue(std::move(start.interpolable_value),
+                                    std::move(end.interpolable_value), nullptr);
+}
+
 class InheritedPaintChecker
     : public CSSInterpolationType::CSSConversionChecker {
  public:
@@ -104,11 +120,11 @@ InterpolationValue CSSPaintInterpolationType::MaybeConvertValue(
     const CSSValue& value,
     const StyleResolverState*,
     ConversionCheckers&) const {
-  std::unique_ptr<InterpolableValue> interpolable_color =
+  InterpolableValue* interpolable_color =
       CSSColorInterpolationType::MaybeCreateInterpolableColor(value);
   if (!interpolable_color)
     return nullptr;
-  return InterpolationValue(std::move(interpolable_color));
+  return InterpolationValue(interpolable_color);
 }
 
 InterpolationValue
@@ -127,16 +143,17 @@ void CSSPaintInterpolationType::ApplyStandardPropertyValue(
     const InterpolableValue& interpolable_color,
     const NonInterpolableValue*,
     StyleResolverState& state) const {
+  ComputedStyleBuilder& builder = state.StyleBuilder();
   Color color = CSSColorInterpolationType::ResolveInterpolableColor(
       interpolable_color, state);
   switch (CssProperty().PropertyID()) {
     case CSSPropertyID::kFill:
-      state.Style()->SetFillPaint(SVGPaint(color));
-      state.Style()->SetInternalVisitedFillPaint(SVGPaint(color));
+      builder.SetFillPaint(SVGPaint(color));
+      builder.SetInternalVisitedFillPaint(SVGPaint(color));
       break;
     case CSSPropertyID::kStroke:
-      state.Style()->SetStrokePaint(SVGPaint(color));
-      state.Style()->SetInternalVisitedStrokePaint(SVGPaint(color));
+      builder.SetStrokePaint(SVGPaint(color));
+      builder.SetInternalVisitedStrokePaint(SVGPaint(color));
       break;
     default:
       NOTREACHED();

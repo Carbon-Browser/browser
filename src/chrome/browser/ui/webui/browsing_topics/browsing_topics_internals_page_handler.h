@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "components/browsing_topics/annotator.h"
 #include "components/browsing_topics/mojom/browsing_topics_internals.mojom.h"
-#include "components/optimization_guide/core/page_content_annotations_common.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "ui/webui/mojo_web_ui_controller.h"
@@ -46,11 +46,10 @@ class BrowsingTopicsInternalsPageHandler
 
  private:
   void OnGetModelInfoCompleted(
-      browsing_topics::mojom::PageHandler::GetModelInfoCallback callback,
-      bool successful);
+      browsing_topics::mojom::PageHandler::GetModelInfoCallback callback);
   void OnGetTopicsForHostsCompleted(
       browsing_topics::mojom::PageHandler::ClassifyHostsCallback callback,
-      const std::vector<optimization_guide::BatchAnnotationResult>& results);
+      const std::vector<browsing_topics::Annotation>& annotations);
 
   const raw_ptr<Profile> profile_;
 

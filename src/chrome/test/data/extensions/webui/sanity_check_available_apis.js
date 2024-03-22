@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,4 +38,4 @@ if (!isEqual) {
                 'Expected: ' + JSON.stringify(expected) + ', ' +
                 'Actual: ' + JSON.stringify(actual));
 }
-domAutomationController.send(isEqual);
+return isEqual;

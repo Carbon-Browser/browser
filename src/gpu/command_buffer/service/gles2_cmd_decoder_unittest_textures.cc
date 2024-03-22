@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,6 @@
 
 #include "base/command_line.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/test/metrics/histogram_tester.h"
-#include "components/viz/common/resources/resource_format_utils.h"
 #include "gpu/command_buffer/common/gles2_cmd_format.h"
 #include "gpu/command_buffer/common/gles2_cmd_utils.h"
 #include "gpu/command_buffer/common/id_allocator.h"
@@ -26,7 +24,6 @@
 #include "gpu/command_buffer/service/test_helper.h"
 #include "gpu/config/gpu_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/gl/gl_image_stub.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_mock.h"
 #include "ui/gl/gl_surface_stub.h"
@@ -51,16 +48,6 @@ using ::testing::SetArgPointee;
 using ::testing::SetArgPointee;
 using ::testing::StrEq;
 using ::testing::StrictMock;
-
-namespace {
-class EmulatingRGBImageStub : public gl::GLImageStub {
- protected:
-  ~EmulatingRGBImageStub() override = default;
-  bool EmulatingRGB() const override {
-    return true;
-  }
-};
-}  // namespace
 
 namespace gpu {
 namespace gles2 {
@@ -2928,7 +2915,7 @@ TEST_P(GLES2DecoderTest, TextureUsageAngleExtNotEnabledByDefault) {
 }
 
 TEST_P(GLES2DecoderTest, ProduceAndConsumeDirectTextureCHROMIUM) {
-  Mailbox mailbox = Mailbox::Generate();
+  Mailbox mailbox = Mailbox::GenerateLegacyMailboxForTesting();
 
   DoBindTexture(GL_TEXTURE_2D, client_texture_id_, kServiceTextureId);
   DoTexImage2D(
@@ -3010,7 +2997,7 @@ TEST_P(GLES2DecoderTest, ProduceAndConsumeDirectTextureCHROMIUM) {
 
 TEST_P(GLES2DecoderTest, CreateAndConsumeTextureCHROMIUMInvalidMailbox) {
   // Attempt to consume the mailbox when no texture has been produced with it.
-  Mailbox mailbox = Mailbox::Generate();
+  Mailbox mailbox = Mailbox::GenerateLegacyMailboxForTesting();
   GLuint new_texture_id = kNewClientId;
 
   EXPECT_CALL(*gl_, GenTextures(1, _))
@@ -3045,7 +3032,7 @@ TEST_P(GLES2DecoderTest, CreateAndConsumeTextureCHROMIUMInvalidMailbox) {
 }
 
 TEST_P(GLES2DecoderTest, CreateAndConsumeTextureCHROMIUMInvalidTexture) {
-  Mailbox mailbox = Mailbox::Generate();
+  Mailbox mailbox = Mailbox::GenerateLegacyMailboxForTesting();
 
   DoBindTexture(GL_TEXTURE_2D, client_texture_id_, kServiceTextureId);
   TextureRef* texture_ref =
@@ -3075,17 +3062,18 @@ TEST_P(GLES2DecoderTest, CreateAndConsumeTextureCHROMIUMInvalidTexture) {
 TEST_P(GLES2DecoderTest, CreateAndTexStorage2DSharedImageCHROMIUM) {
   MemoryTypeTracker memory_tracker(memory_tracker_.get());
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
       GetSharedImageManager()->Register(
           std::make_unique<TestImageBacking>(
-              mailbox, viz::ResourceFormat::RGBA_8888, gfx::Size(10, 10),
-              gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-              0, 0, kNewServiceId),
+              mailbox, format, gfx::Size(10, 10), gfx::ColorSpace(),
+              kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, 0, 0,
+              kNewServiceId),
           &memory_tracker);
 
   auto& cmd = *GetImmediateAs<
       cmds::CreateAndTexStorage2DSharedImageINTERNALImmediate>();
-  cmd.Init(kNewClientId, GL_NONE, mailbox.name);
+  cmd.Init(kNewClientId, mailbox.name);
   EXPECT_EQ(error::kNoError, ExecuteImmediateCmd(cmd, sizeof(mailbox.name)));
   EXPECT_EQ(GL_NO_ERROR, GetGLError());
 
@@ -3115,7 +3103,7 @@ TEST_P(GLES2DecoderTest,
 
   auto& cmd = *GetImmediateAs<
       cmds::CreateAndTexStorage2DSharedImageINTERNALImmediate>();
-  cmd.Init(kNewClientId, GL_NONE, mailbox.name);
+  cmd.Init(kNewClientId, mailbox.name);
   EXPECT_EQ(error::kNoError, ExecuteImmediateCmd(cmd, sizeof(mailbox.name)));
 
   // CreateAndTexStorage2DSharedImage should fail if the mailbox is invalid.
@@ -3137,17 +3125,18 @@ TEST_P(GLES2DecoderTest,
   // Try to create a mailbox with kNewClientId.
   MemoryTypeTracker memory_tracker(memory_tracker_.get());
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
       GetSharedImageManager()->Register(
           std::make_unique<TestImageBacking>(
-              mailbox, viz::ResourceFormat::RGBA_8888, gfx::Size(10, 10),
-              gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-              0, 0, kNewServiceId),
+              mailbox, format, gfx::Size(10, 10), gfx::ColorSpace(),
+              kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, 0, 0,
+              kNewServiceId),
           &memory_tracker);
 
   auto& cmd = *GetImmediateAs<
       cmds::CreateAndTexStorage2DSharedImageINTERNALImmediate>();
-  cmd.Init(client_texture_id_, GL_NONE, mailbox.name);
+  cmd.Init(client_texture_id_, mailbox.name);
   EXPECT_EQ(error::kNoError, ExecuteImmediateCmd(cmd, sizeof(mailbox.name)));
 
   // CreateAndTexStorage2DSharedImage should fail.
@@ -3161,17 +3150,18 @@ TEST_P(GLES2DecoderTest,
 TEST_P(GLES2DecoderTest, BeginEndSharedImageAccessCRHOMIUM) {
   MemoryTypeTracker memory_tracker(memory_tracker_.get());
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
       GetSharedImageManager()->Register(
           std::make_unique<TestImageBacking>(
-              mailbox, viz::ResourceFormat::RGBA_8888, gfx::Size(10, 10),
-              gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-              0, 0, kNewServiceId),
+              mailbox, format, gfx::Size(10, 10), gfx::ColorSpace(),
+              kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, 0, 0,
+              kNewServiceId),
           &memory_tracker);
 
   auto& cmd = *GetImmediateAs<
       cmds::CreateAndTexStorage2DSharedImageINTERNALImmediate>();
-  cmd.Init(kNewClientId, GL_NONE, mailbox.name);
+  cmd.Init(kNewClientId, mailbox.name);
   EXPECT_EQ(error::kNoError, ExecuteImmediateCmd(cmd, sizeof(mailbox.name)));
   EXPECT_EQ(GL_NO_ERROR, GetGLError());
 
@@ -3222,10 +3212,10 @@ TEST_P(GLES2DecoderTest, BeginSharedImageAccessDirectCHROMIUMCantBeginAccess) {
   // Create a shared image.
   MemoryTypeTracker memory_tracker(memory_tracker_.get());
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   auto shared_image_backing = std::make_unique<TestImageBacking>(
-      mailbox, viz::ResourceFormat::RGBA_8888, gfx::Size(10, 10),
-      gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, 0, 0,
-      kNewServiceId);
+      mailbox, format, gfx::Size(10, 10), gfx::ColorSpace(),
+      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, 0, 0, kNewServiceId);
   // Set the shared image to fail BeginAccess.
   shared_image_backing->set_can_access(false);
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
@@ -3234,7 +3224,7 @@ TEST_P(GLES2DecoderTest, BeginSharedImageAccessDirectCHROMIUMCantBeginAccess) {
 
   auto& cmd = *GetImmediateAs<
       cmds::CreateAndTexStorage2DSharedImageINTERNALImmediate>();
-  cmd.Init(kNewClientId, GL_NONE, mailbox.name);
+  cmd.Init(kNewClientId, mailbox.name);
   EXPECT_EQ(error::kNoError, ExecuteImmediateCmd(cmd, sizeof(mailbox.name)));
   EXPECT_EQ(GL_NO_ERROR, GetGLError());
 
@@ -3349,32 +3339,6 @@ TEST_P(GLES2DecoderManualInitTest, GenerateMipmapDepthTexture) {
   EXPECT_EQ(GL_INVALID_OPERATION, GetGLError());
 }
 
-class MockGLImage : public gl::GLImage {
- public:
-  MockGLImage() = default;
-
-  // Overridden from gl::GLImage:
-  MOCK_METHOD0(GetSize, gfx::Size());
-  MOCK_METHOD0(GetInternalFormat, unsigned());
-  MOCK_METHOD0(GetDataFormat, unsigned());
-  MOCK_METHOD0(GetDataType, unsigned());
-  MOCK_METHOD0(ShouldBindOrCopy, gl::GLImage::BindOrCopy());
-  MOCK_METHOD1(BindTexImage, bool(unsigned));
-  MOCK_METHOD1(ReleaseTexImage, void(unsigned));
-  MOCK_METHOD1(CopyTexImage, bool(unsigned));
-  MOCK_METHOD3(CopyTexSubImage,
-               bool(unsigned, const gfx::Point&, const gfx::Rect&));
-  MOCK_METHOD1(SetColorSpace, void(const gfx::ColorSpace&));
-  MOCK_METHOD0(Flush, void());
-  MOCK_METHOD3(OnMemoryDump,
-               void(base::trace_event::ProcessMemoryDump*,
-                    uint64_t,
-                    const std::string&));
-
- protected:
-  ~MockGLImage() override = default;
-};
-
 TEST_P(GLES2DecoderManualInitTest, DrawWithGLImageExternal) {
   InitState init;
   init.extensions = "GL_OES_EGL_image_external";
@@ -3387,14 +3351,10 @@ TEST_P(GLES2DecoderManualInitTest, DrawWithGLImageExternal) {
   InitDecoder(init);
 
   TextureRef* texture_ref = GetTexture(client_texture_id_);
-  scoped_refptr<MockGLImage> image(new MockGLImage);
   group().texture_manager()->SetTarget(texture_ref, GL_TEXTURE_EXTERNAL_OES);
   group().texture_manager()->SetLevelInfo(texture_ref, GL_TEXTURE_EXTERNAL_OES,
                                           0, GL_RGBA, 1, 1, 1, 0, GL_RGBA,
                                           GL_UNSIGNED_BYTE, gfx::Rect(1, 1));
-  group().texture_manager()->SetLevelImage(texture_ref, GL_TEXTURE_EXTERNAL_OES,
-                                           0, image.get(), Texture::BOUND);
-
   DoBindTexture(GL_TEXTURE_EXTERNAL_OES, client_texture_id_, kServiceTextureId);
   EXPECT_EQ(GL_NO_ERROR, GetGLError());
 
@@ -3403,8 +3363,6 @@ TEST_P(GLES2DecoderManualInitTest, DrawWithGLImageExternal) {
   AddExpectationsForSimulatedAttrib0(kMaxValidIndex + 1, 0);
   SetupExpectationsForApplyingDefaultDirtyState();
   EXPECT_TRUE(group().texture_manager()->CanRender(texture_ref));
-
-  base::HistogramTester histogram_tester;
 
   InSequence s;
   EXPECT_CALL(*gl_, DrawElements(_, _, _, _)).Times(1);
@@ -3415,11 +3373,6 @@ TEST_P(GLES2DecoderManualInitTest, DrawWithGLImageExternal) {
            kValidIndexRangeStart * 2);
   EXPECT_EQ(error::kNoError, ExecuteCmd(cmd));
   EXPECT_EQ(GL_NO_ERROR, GetGLError());
-
-  // As the image was already bound, the decoder should have recorded that lazy
-  // binding was not necessary.
-  histogram_tester.ExpectUniqueSample(
-      "GPU.GLES2DecoderImplLazyBindingCheck.WasBindNecessary", false, 1);
 }
 
 TEST_P(GLES2DecoderManualInitTest, TexImage2DFloatOnGLES2) {

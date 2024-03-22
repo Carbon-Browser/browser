@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <utility>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -32,21 +34,36 @@ namespace blink {
 
 namespace {
 
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class BodyConsumerBaseFetchCheckPoint {
+  kConstructor = 0,
+  kDidFetchDataLoadFailed = 1,
+  kMaxValue = kDidFetchDataLoadFailed,
+};
+
+void SendHistogram(BodyConsumerBaseFetchCheckPoint cp) {
+  base::UmaHistogramEnumeration("Net.Fetch.CheckPoint.BodyConsumerBase", cp);
+}
+
 class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
                          public FetchDataLoader::Client {
  public:
   explicit BodyConsumerBase(ScriptPromiseResolver* resolver)
       : resolver_(resolver),
         task_runner_(ExecutionContext::From(resolver_->GetScriptState())
-                         ->GetTaskRunner(TaskType::kNetworking)) {}
+                         ->GetTaskRunner(TaskType::kNetworking)) {
+    SendHistogram(BodyConsumerBaseFetchCheckPoint::kConstructor);
+  }
   BodyConsumerBase(const BodyConsumerBase&) = delete;
   BodyConsumerBase& operator=(const BodyConsumerBase&) = delete;
 
-  ScriptPromiseResolver* Resolver() { return resolver_; }
+  ScriptPromiseResolver* Resolver() { return resolver_.Get(); }
   void DidFetchDataLoadFailed() override {
     ScriptState::Scope scope(Resolver()->GetScriptState());
     resolver_->Reject(V8ThrowException::CreateTypeError(
         Resolver()->GetScriptState()->GetIsolate(), "Failed to fetch"));
+    SendHistogram(BodyConsumerBaseFetchCheckPoint::kDidFetchDataLoadFailed);
   }
 
   void Abort() override {
@@ -60,8 +77,8 @@ class BodyConsumerBase : public GarbageCollected<BodyConsumerBase>,
   template <typename T>
   void ResolveLater(const T& object) {
     task_runner_->PostTask(FROM_HERE,
-                           WTF::Bind(&BodyConsumerBase::ResolveNow<T>,
-                                     WrapPersistent(this), object));
+                           WTF::BindOnce(&BodyConsumerBase::ResolveNow<T>,
+                                         WrapPersistent(this), object));
   }
 
   void Trace(Visitor* visitor) const override {
@@ -118,8 +135,13 @@ class BodyFormDataConsumer final : public BodyConsumerBase {
 
   void DidFetchDataLoadedString(const String& string) override {
     auto* formData = MakeGarbageCollected<FormData>();
-    for (const auto& pair : URLSearchParams::Create(string)->Params())
+    // URLSearchParams::Create() returns an on-heap object, but it can be
+    // garbage collected, so making it a persistent variable on the stack
+    // mitigates use-after-free scenarios. See crbug.com/1497997.
+    Persistent<URLSearchParams> search_params = URLSearchParams::Create(string);
+    for (const auto& pair : search_params->Params()) {
       formData->append(pair.first, pair.second);
+    }
     DidFetchDataLoadedFormData(formData);
   }
 };
@@ -179,7 +201,8 @@ ScriptPromise Body::arrayBuffer(ScriptState* script_state,
   if (!ExecutionContext::From(script_state))
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   if (BodyBuffer()) {
     BodyBuffer()->StartLoading(
@@ -207,7 +230,8 @@ ScriptPromise Body::blob(ScriptState* script_state,
   if (!ExecutionContext::From(script_state))
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   if (BodyBuffer()) {
     ExecutionContext* context = ExecutionContext::From(script_state);
@@ -239,7 +263,8 @@ ScriptPromise Body::formData(ScriptState* script_state,
   if (!ExecutionContext::From(script_state))
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   const ParsedContentType parsedTypeWithParameters(ContentType());
   const String parsedType = parsedTypeWithParameters.MimeType().LowerASCII();
   ScriptPromise promise = resolver->Promise();
@@ -247,7 +272,7 @@ ScriptPromise Body::formData(ScriptState* script_state,
     const String boundary =
         parsedTypeWithParameters.ParameterValueForName("boundary");
     auto* body_buffer = BodyBuffer();
-    if (body_buffer && !boundary.IsEmpty()) {
+    if (body_buffer && !boundary.empty()) {
       body_buffer->StartLoading(
           FetchDataLoader::CreateLoaderAsFormData(boundary),
           MakeGarbageCollected<BodyFormDataConsumer>(resolver),
@@ -309,7 +334,8 @@ ScriptPromise Body::json(ScriptState* script_state,
   if (!ExecutionContext::From(script_state))
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   if (BodyBuffer()) {
     BodyBuffer()->StartLoading(
@@ -338,7 +364,8 @@ ScriptPromise Body::text(ScriptState* script_state,
   if (!ExecutionContext::From(script_state))
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   if (BodyBuffer()) {
     BodyBuffer()->StartLoading(
@@ -379,15 +406,6 @@ bool Body::IsBodyUsed() const {
 bool Body::IsBodyLocked() const {
   auto* body_buffer = BodyBuffer();
   return body_buffer && body_buffer->IsStreamLocked();
-}
-
-bool Body::HasPendingActivity() const {
-  if (!GetExecutionContext() || GetExecutionContext()->IsContextDestroyed())
-    return false;
-  auto* body_buffer = BodyBuffer();
-  if (!body_buffer)
-    return false;
-  return body_buffer->HasPendingActivity();
 }
 
 Body::Body(ExecutionContext* context) : ExecutionContextClient(context) {}

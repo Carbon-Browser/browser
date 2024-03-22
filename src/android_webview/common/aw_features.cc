@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,30 +12,71 @@ namespace features {
 // Alphabetical:
 
 // Enable brotli compression support in WebView.
-const base::Feature kWebViewBrotliSupport{"WebViewBrotliSupport",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewBrotliSupport,
+             "WebViewBrotliSupport",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Check layer_tree_frame_sink_id when return resources to compositor.
+BASE_FEATURE(kWebViewCheckReturnResources,
+             "WebViewCheckReturnResources",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Whether to destroy the WebView rendering functor when after a WebView window
+// becomes invisible.
+//
+// From a stable experiment in October 2023, this saves tens of MiB of graphics
+// memory at high quantiles, at no performance cost.
+BASE_FEATURE(kWebViewClearFunctorInBackground,
+             "WebViewClearFunctorInBackground",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Use the SafeBrowsingApiHandlerBridge which uses the connectionless GMS APIs.
 // This Feature is checked and used in downstream internal code.
-const base::Feature kWebViewConnectionlessSafeBrowsing{
-    "WebViewConnectionlessSafeBrowsing", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewConnectionlessSafeBrowsing,
+             "WebViewConnectionlessSafeBrowsing",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Kill switch for adding CHECKs to loading pak files.
+BASE_FEATURE(kWebViewCheckPakFileDescriptors,
+             "WebViewCheckPakFileDescriptors",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Cache origins which have camera/mic permissions approved to allow subsequent
+// calls to enumerate devices to return device labels.
+BASE_FEATURE(kWebViewEnumerateDevicesCache,
+             "WebViewEnumerateDevicesCache",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kWebViewExitReasonMetric,
+             "WebViewExitReasonMetric",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Enable WebView to automatically darken the page in FORCE_DARK_AUTO mode if
 // the app's theme is dark.
-const base::Feature kWebViewForceDarkModeMatchTheme{
-    "WebViewForceDarkModeMatchTheme", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewForceDarkModeMatchTheme,
+             "WebViewForceDarkModeMatchTheme",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-const base::Feature kWebViewHitTestInBlinkOnTouchStart{
-    "WebViewHitTestInBlinkOnTouchStart", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewHitTestInBlinkOnTouchStart,
+             "WebViewHitTestInBlinkOnTouchStart",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Enable display cutout support for Android P and above.
-const base::Feature kWebViewDisplayCutout{"WebViewDisplayCutout",
-                                          base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewDisplayCutout,
+             "WebViewDisplayCutout",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Fake empty component to measure component updater performance impact on
 // WebView clients.
-const base::Feature kWebViewEmptyComponentLoaderPolicy{
-    "WebViewEmptyComponentLoaderPolicy", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewEmptyComponentLoaderPolicy,
+             "WebViewEmptyComponentLoaderPolicy",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enable the WebView Media Integrity API.
+// This feature requires `kWebViewInjectPlatformJsApis` to be enabled as well.
+BASE_FEATURE(kWebViewMediaIntegrityApi,
+             "WebViewMediaIntegrityApi",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // When enabled, passive mixed content (Audio/Video/Image subresources loaded
 // over HTTP on HTTPS sites) will be autoupgraded to HTTPS, and the load will be
@@ -43,74 +84,135 @@ const base::Feature kWebViewEmptyComponentLoaderPolicy{
 // set the mixed content mode to MIXED_CONTENT_COMPATIBILITY_MODE, autoupgrades
 // are always disabled for MIXED_CONTENT_NEVER_ALLOW and
 // MIXED_CONTENT_ALWAYS_ALLOW modes.
-const base::Feature kWebViewMixedContentAutoupgrades{
-    "WebViewMixedContentAutoupgrades", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewMixedContentAutoupgrades,
+             "WebViewMixedContentAutoupgrades",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Only allow extra headers added via loadUrl() to be sent to the original
 // origin; strip them from the request if a cross-origin redirect occurs.
-const base::Feature kWebViewExtraHeadersSameOriginOnly{
-    "WebViewExtraHeadersSameOriginOnly", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewExtraHeadersSameOriginOnly,
+             "WebViewExtraHeadersSameOriginOnly",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Enable the new Java/JS Bridge code path with mojo implementation.
-const base::Feature kWebViewJavaJsBridgeMojo{"WebViewJavaJsBridgeMojo",
-                                             base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewJavaJsBridgeMojo,
+             "WebViewJavaJsBridgeMojo",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, connections using legacy TLS 1.0/1.1 versions are allowed.
-const base::Feature kWebViewLegacyTlsSupport{"WebViewLegacyTlsSupport",
-                                             base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Measure the number of pixels occupied by one or more WebViews as a
-// proportion of the total screen size. Depending on the number of
-// WebVieaws and the size of the screen this might be expensive so
-// hidden behind a feature flag until the true runtime cost can be
-// measured.
-const base::Feature kWebViewMeasureScreenCoverage{
-    "WebViewMeasureScreenCoverage", base::FEATURE_DISABLED_BY_DEFAULT};
+// Enable reporting filtered metrics from webview clients used to be
+// out-sampled.
+BASE_FEATURE(kWebViewMetricsFiltering,
+             "WebViewMetricsFiltering",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Field trial feature for controlling support of Origin Trials on WebView.
-const base::Feature kWebViewOriginTrials{"WebViewOriginTrials",
-                                         base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewOriginTrials,
+             "WebViewOriginTrials",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Whether to record size of the embedding app's data directory to the UMA
 // histogram Android.WebView.AppDataDirectorySize.
-const base::Feature kWebViewRecordAppDataDirectorySize{
-    "WebViewRecordAppDataDirectorySize", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewRecordAppDataDirectorySize,
+             "WebViewRecordAppDataDirectorySize",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Flag to restrict main frame Web Content to verified web content. Verification
+// happens via Digital Asset Links.
+BASE_FEATURE(kWebViewRestrictSensitiveContent,
+             "WebViewRestrictSensitiveContent",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enable detection of loading mature sites (according to Google SafeSearch)
+// on WebViews running on supervised user accounts.
+BASE_FEATURE(kWebViewSupervisedUserSiteDetection,
+             "WebViewSupervisedUserSiteDetection",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enable blocking the loading of mature sites (according to Google SafeSearch)
+// on WebViews running on supervised user accounts.
+BASE_FEATURE(kWebViewSupervisedUserSiteBlock,
+             "WebViewSupervisedUserSiteBlock",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Disallows window.{alert, prompt, confirm} if triggered inside a subframe that
 // is not same origin with the main frame.
-const base::Feature kWebViewSuppressDifferentOriginSubframeJSDialogs{
-    "WebViewSuppressDifferentOriginSubframeJSDialogs",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewSuppressDifferentOriginSubframeJSDialogs,
+             "WebViewSuppressDifferentOriginSubframeJSDialogs",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // A Feature used for WebView variations tests. Not used in production.
-const base::Feature kWebViewTestFeature{"WebViewTestFeature",
-                                        base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewTestFeature,
+             "WebViewTestFeature",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Use WebView's nonembedded MetricsUploadService to upload UMA metrics instead
 // of sending it directly to GMS-core.
-const base::Feature kWebViewUseMetricsUploadService{
-    "WebViewUseMetricsUploadService", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewUseMetricsUploadService,
+             "WebViewUseMetricsUploadService",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Use WebView's nonembedded MetricsUploadService to upload UMA metrics instead
+// of sending it directly to GMS-core when running within the SDK Runtime.
+BASE_FEATURE(kWebViewUseMetricsUploadServiceOnlySdkRuntime,
+             "WebViewUseMetricsUploadServiceOnlySdkRuntime",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Propagate Android's network notification signals to networking stack
+BASE_FEATURE(kWebViewPropagateNetworkSignals,
+             "webViewPropagateNetworkSignals",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Provide the unreduced product version from the AwContentBrowserClient API,
+// regardless of the user agent reduction policy.
+BASE_FEATURE(kWebViewUnreducedProductVersion,
+             "WebViewUnreducedPrductVersion",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Enable raster in wide color gamut for apps that use webview in a wide color
 // gamut activity.
-const base::Feature kWebViewWideColorGamutSupport{
-    "WebViewWideColorGamutSupport", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kWebViewWideColorGamutSupport,
+             "WebViewWideColorGamutSupport",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-// Control the default behaviour for the XRequestedWith header
-const base::Feature kWebViewXRequestedWithHeader{
-    "WebViewXRequestedWithHeader", base::FEATURE_ENABLED_BY_DEFAULT};
+// Control the default behaviour for the XRequestedWith header.
+// TODO(crbug.com/1493963): enable by default after M120 branch point.
+BASE_FEATURE(kWebViewXRequestedWithHeaderControl,
+             "WebViewXRequestedWithHeaderControl",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Default value of the XRequestedWith header mode.
-// Must be value declared in in |AwSettings::RequestedWithHeaderMode|
+// Default value of the XRequestedWith header mode when
+// WebViewXRequestedWithHeaderControl is enabled. Defaults to
+// |AwSettings::RequestedWithHeaderMode::NO_HEADER| Must be value declared in in
+// |AwSettings::RequestedWithHeaderMode|
 const base::FeatureParam<int> kWebViewXRequestedWithHeaderMode{
-    &kWebViewXRequestedWithHeader, "WebViewXRequestedWithHeaderMode", 1};
+    &kWebViewXRequestedWithHeaderControl, "WebViewXRequestedWithHeaderMode", 0};
 
-// Only synthesize page load for URL spoof prevention at most once, on initial
-// main document access (instead on every NavigationStateChanged call that
-// invalidates the URL after).
-const base::Feature kWebViewSynthesizePageLoadOnlyOnInitialMainDocumentAccess{
-    "WebViewSynthesizePageLoadOnlyOnInitialMainDocumentAccess",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+// Control whether WebView will attempt to read the XRW header allow-list from
+// the manifest.
+BASE_FEATURE(kWebViewXRequestedWithHeaderManifestAllowList,
+             "WebViewXRequestedWithHeaderManifestAllowList",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// This enables image drage out for Webview.
+BASE_FEATURE(kWebViewImageDrag,
+             "WebViewImageDrag",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Enables injection of platform-specific JavaScript APIs.
+BASE_FEATURE(kWebViewInjectPlatformJsApis,
+             "WebViewInjectPlatformJsApis",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// This enables uploading UMA data with a higher frequency.
+// This Feature is checked and used in downstream internal code.
+BASE_FEATURE(kWebViewUmaUploadQualityOfServiceSetToDefault,
+             "WebViewUmaUploadQualityOfServiceSetToDefault",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// This enables zoom keyboard shortcuts for zoom-in, zoom-out and zoom reset.
+BASE_FEATURE(kWebViewZoomKeyboardShortcuts,
+             "WebViewZoomKeyboardShortcuts",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace features
 }  // namespace android_webview

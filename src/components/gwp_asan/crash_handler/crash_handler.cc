@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,6 +69,8 @@ const char* ErrorToString(Crash_ErrorType type) {
       return "unknown";
     case Crash::FREE_INVALID_ADDRESS:
       return "free-invalid-address";
+    case Crash::LIGHTWEIGHT_USE_AFTER_FREE:
+      return "lightweight-heap-use-after-free";
     default:
       return "unexpected error type";
   }

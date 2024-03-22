@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,17 +20,19 @@
 
 namespace printing {
 
-void InitializePrinting(content::WebContents* web_contents) {
-  if (headless::IsChromeNativeHeadless()) {
+void InitializePrintingForWebContents(content::WebContents* web_contents) {
+  // Headless mode uses a minimalistic Print Manager implementation that
+  // shortcuts most of the callbacks providing only print to PDF functionality.
+  if (headless::IsHeadlessMode()) {
     headless::HeadlessPrintManager::CreateForWebContents(web_contents);
-    return;
-  }
+  } else {
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
-  printing::PrintViewManager::CreateForWebContents(web_contents);
-  printing::PdfNupConverterClient::CreateForWebContents(web_contents);
+    PrintViewManager::CreateForWebContents(web_contents);
+    PdfNupConverterClient::CreateForWebContents(web_contents);
 #else
-  printing::PrintViewManagerBasic::CreateForWebContents(web_contents);
+    PrintViewManagerBasic::CreateForWebContents(web_contents);
 #endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
+  }
   CreateCompositeClientIfNeeded(web_contents, embedder_support::GetUserAgent());
 }
 

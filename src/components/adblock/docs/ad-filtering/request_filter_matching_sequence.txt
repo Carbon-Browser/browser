@@ -2,32 +2,27 @@
 title eyeo Chromium SDK request filter matching flow
 
 participant AdblockURLLoaderFactory (Browser)
-participant AdblockMojoInterfaceImpl (Browser - UI thread)
-participant ResourceClassificationRunner (Browser - UI thread)
+participant ResourceClassificationRunner
 participant ThreadPool
 participant SubscriptionService
 participant ElementHider (Browser - UI thread)
 participant RenderFrameHost
 
 [ -> AdblockURLLoaderFactory (Browser) : InProgressRequest::InProgressRequest(request)
-AdblockURLLoaderFactory (Browser) ->(2) AdblockMojoInterfaceImpl (Browser - UI thread) : CheckFilterMatch(request.url, ...)
-note over AdblockURLLoaderFactory (Browser), AdblockMojoInterfaceImpl (Browser - UI thread) : Mojo-based, in-process communication
-AdblockMojoInterfaceImpl (Browser - UI thread) -> ResourceClassificationRunner (Browser - UI thread) : CheckRequestFilterMatch(request.url, ...)
-ResourceClassificationRunner (Browser - UI thread) ->(2) ThreadPool : CheckRequestFilterMatchInternal()
+AdblockURLLoaderFactory (Browser) ->(2) ResourceClassificationRunner : CheckRequestFilterMatch(request.url, ...)
+ResourceClassificationRunner ->(2) ThreadPool : CheckRequestFilterMatchInternal()
 ThreadPool ->SubscriptionService: Matches(url, ...)
 SubscriptionService -->ThreadPool:
 opt when filter match
 ThreadPool ->SubscriptionService: IsContentAllowlisted(url, ...)
 SubscriptionService -->ThreadPool:
 end
-ThreadPool -->(2) ResourceClassificationRunner (Browser - UI thread) : OnCheckRequestFilterMatchComplete()
-ResourceClassificationRunner (Browser - UI thread) --> AdblockMojoInterfaceImpl (Browser - UI thread): callback.Run(result)
-note over AdblockURLLoaderFactory (Browser), AdblockMojoInterfaceImpl (Browser - UI thread) : Mojo-based, in-process communication
-AdblockMojoInterfaceImpl (Browser - UI thread) -->(2) AdblockURLLoaderFactory (Browser): OnFilterMatchResult(request.url, ..., result)
+ThreadPool -->(2) ResourceClassificationRunner : OnCheckRequestFilterMatchComplete()
+ResourceClassificationRunner -->AdblockURLLoaderFactory (Browser): OnFilterMatchResult(request.url, ..., result)
 AdblockURLLoaderFactory (Browser) --> [ : request->Resume() / request->CancelWithError()
 opt when request blocked
-note over AdblockMojoInterfaceImpl (Browser - UI thread), ElementHider (Browser - UI thread): collapse whitespace left after blocked resource
-AdblockMojoInterfaceImpl (Browser - UI thread) -> ElementHider (Browser - UI thread): HideBlockedElement()
+note over AdblockURLLoaderFactory (Browser), ElementHider (Browser - UI thread): collapse whitespace left after blocked resource
+AdblockURLLoaderFactory (Browser) -> ElementHider (Browser - UI thread): HideBlockedElement()
 ElementHider (Browser - UI thread) -> ElementHider (Browser - UI thread): GenerateBlockedElemhideJavaScript()
 ElementHider (Browser - UI thread) -> RenderFrameHost: ExecuteJavaScriptInIsolatedWorld()
 end

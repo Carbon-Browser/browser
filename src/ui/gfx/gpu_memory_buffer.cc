@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ GpuMemoryBufferHandle GpuMemoryBufferHandle::Clone() const {
   handle.stride = stride;
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
   handle.native_pixmap_handle = CloneHandleForIPC(native_pixmap_handle);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   handle.io_surface = io_surface;
 #elif BUILDFLAG(IS_WIN)
   handle.dxgi_handle = CloneDXGIHandle(dxgi_handle.Get());

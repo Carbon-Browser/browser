@@ -168,7 +168,7 @@ class CORE_EXPORT MessageEvent final : public Event {
   EventTarget* source() const { return source_.Get(); }
   MessagePortArray ports();
   bool isPortsDirty() const { return is_ports_dirty_; }
-  UserActivation* userActivation() const { return user_activation_; }
+  UserActivation* userActivation() const { return user_activation_.Get(); }
   mojom::blink::DelegatedCapability delegatedCapability() const {
     return delegated_capability_;
   }
@@ -192,6 +192,10 @@ class CORE_EXPORT MessageEvent final : public Event {
   // Returns true when |data_as_serialized_script_value_| is locked to an
   // agent cluster.
   bool IsLockedToAgentCluster() const;
+
+  // Returns true when |data_as_serialized_script_value_| is not prevented from
+  // being deserialized in the provided execution context.
+  bool CanDeserializeIn(ExecutionContext*) const;
 
   void EntangleMessagePorts(ExecutionContext*);
 

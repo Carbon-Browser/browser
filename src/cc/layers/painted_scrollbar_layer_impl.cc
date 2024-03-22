@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,7 +81,7 @@ void PaintedScrollbarLayerImpl::PushPropertiesTo(LayerImpl* layer) {
 }
 
 float PaintedScrollbarLayerImpl::OverlayScrollbarOpacity() const {
-  return painted_opacity_;
+  return IsFluentOverlayScrollbarEnabled() ? Opacity() : painted_opacity_;
 }
 
 bool PaintedScrollbarLayerImpl::WillDraw(
@@ -136,6 +136,12 @@ void PaintedScrollbarLayerImpl::AppendQuads(
     ValidateQuadResources(quad);
   }
 
+  if (IsFluentOverlayScrollbarEnabled() &&
+      thumb_thickness_scale_factor() <= GetIdleThicknessScale() &&
+      !has_find_in_page_tickmarks()) {
+    return;
+  }
+
   gfx::Rect track_quad_rect(bounds());
   gfx::Rect scaled_track_quad_rect(internal_content_bounds_);
   gfx::Rect visible_track_quad_rect =
@@ -145,7 +151,22 @@ void PaintedScrollbarLayerImpl::AppendQuads(
       visible_track_quad_rect, internal_contents_scale_);
   if (track_resource_id && !visible_track_quad_rect.IsEmpty()) {
     bool needs_blending = !contents_opaque();
-    const float opacity[] = {1.0f, 1.0f, 1.0f, 1.0f};
+    float opacity[] = {1.0f, 1.0f, 1.0f, 1.0f};
+    if (IsFluentOverlayScrollbarEnabled()) {
+      // Scale the opacity value linearly in function of the current thumb
+      // thickness. When thickness scale factor is kIdleThickness, then the
+      // track's opacity should be zero. When the thickness scale factor reaches
+      // its maximum value (1.f), then the opacity of the tracks should reach
+      // it's maximum value (1.f).
+      CHECK_GE(thumb_thickness_scale_factor(), GetIdleThicknessScale());
+      CHECK_LE(thumb_thickness_scale_factor(), 1.f);
+      const float opacity_scaled =
+          (thumb_thickness_scale_factor() - GetIdleThicknessScale()) /
+          (1.f - GetIdleThicknessScale());
+      for (auto& v : opacity) {
+        v = opacity_scaled;
+      }
+    }
     auto* quad = render_pass->CreateAndAppendDrawQuad<viz::TextureDrawQuad>();
     quad->SetNew(shared_quad_state, scaled_track_quad_rect,
                  scaled_visible_track_quad_rect, needs_blending,
@@ -163,6 +184,65 @@ gfx::Rect PaintedScrollbarLayerImpl::GetEnclosingVisibleRectInTargetSpace()
     return gfx::Rect();
   DCHECK_GT(internal_contents_scale_, 0.f);
   return GetScaledEnclosingVisibleRectInTargetSpace(internal_contents_scale_);
+}
+
+gfx::Rect PaintedScrollbarLayerImpl::ComputeThumbQuadRect() const {
+  gfx::Rect thumb_rect = ScrollbarLayerImplBase::ComputeThumbQuadRect();
+
+  if (IsFluentScrollbarEnabled()) {
+    thumb_rect = CenterFluentScrollbarThumb(thumb_rect);
+  }
+
+  return thumb_rect;
+}
+
+gfx::Rect PaintedScrollbarLayerImpl::ComputeHitTestableThumbQuadRect() const {
+  if (IsFluentScrollbarEnabled()) {
+    return ExpandFluentScrollbarThumb(ComputeThumbQuadRect());
+  }
+  return ScrollbarLayerImplBase::ComputeHitTestableThumbQuadRect();
+}
+
+gfx::Rect PaintedScrollbarLayerImpl::ComputeHitTestableExpandedThumbQuadRect()
+    const {
+  CHECK(is_overlay_scrollbar());
+  if (IsFluentOverlayScrollbarEnabled()) {
+    return ExpandFluentScrollbarThumb(CenterFluentScrollbarThumb(
+        ScrollbarLayerImplBase::ComputeHitTestableExpandedThumbQuadRect()));
+  }
+  return ScrollbarLayerImplBase::ComputeHitTestableExpandedThumbQuadRect();
+}
+
+gfx::Rect PaintedScrollbarLayerImpl::CenterFluentScrollbarThumb(
+    gfx::Rect thumb_rect) const {
+  CHECK(IsFluentScrollbarEnabled() || IsFluentOverlayScrollbarEnabled());
+  const int track_thickness = orientation() == ScrollbarOrientation::kHorizontal
+                                  ? track_rect_.height()
+                                  : track_rect_.width();
+  const int thumb_offset =
+      static_cast<int>((track_thickness - ThumbThickness()) / 2.0f);
+
+  if (orientation() == ScrollbarOrientation::kHorizontal) {
+    thumb_rect.Offset(0, thumb_offset);
+  } else {
+    thumb_rect.Offset(
+        is_left_side_vertical_scrollbar() ? -thumb_offset : thumb_offset, 0);
+  }
+  return thumb_rect;
+}
+
+gfx::Rect PaintedScrollbarLayerImpl::ExpandFluentScrollbarThumb(
+    gfx::Rect thumb_rect) const {
+  CHECK(IsFluentScrollbarEnabled() || IsFluentOverlayScrollbarEnabled());
+  const gfx::Rect back_track_rect = BackTrackRect();
+  if (orientation() == ScrollbarOrientation::kHorizontal) {
+    thumb_rect.set_y(back_track_rect.y());
+    thumb_rect.set_height(back_track_rect.height());
+    return thumb_rect;
+  }
+  thumb_rect.set_x(back_track_rect.x());
+  thumb_rect.set_width(back_track_rect.width());
+  return thumb_rect;
 }
 
 void PaintedScrollbarLayerImpl::SetJumpOnTrackClick(bool jump_on_track_click) {
@@ -211,8 +291,8 @@ int PaintedScrollbarLayerImpl::ThumbLength() const {
 }
 
 int PaintedScrollbarLayerImpl::TrackStart() const {
-  return orientation() == ScrollbarOrientation::VERTICAL ? track_rect_.y()
-                                                         : track_rect_.x();
+  return orientation() == ScrollbarOrientation::kVertical ? track_rect_.y()
+                                                          : track_rect_.x();
 }
 
 void PaintedScrollbarLayerImpl::SetBackButtonRect(gfx::Rect back_button_rect) {
@@ -242,7 +322,7 @@ gfx::Rect PaintedScrollbarLayerImpl::BackTrackRect() const {
   const gfx::Rect thumb_rect = ComputeThumbQuadRect();
   const int rect_x = track_rect_.x();
   const int rect_y = track_rect_.y();
-  if (orientation() == ScrollbarOrientation::HORIZONTAL) {
+  if (orientation() == ScrollbarOrientation::kHorizontal) {
     int width = thumb_rect.x() - rect_x;
     int height = track_rect_.height();
     return gfx::Rect(rect_x, rect_y, width, height);
@@ -256,7 +336,7 @@ gfx::Rect PaintedScrollbarLayerImpl::BackTrackRect() const {
 gfx::Rect PaintedScrollbarLayerImpl::ForwardTrackRect() const {
   const gfx::Rect thumb_rect = ComputeThumbQuadRect();
   const int track_end = TrackStart() + TrackLength();
-  if (orientation() == ScrollbarOrientation::HORIZONTAL) {
+  if (orientation() == ScrollbarOrientation::kHorizontal) {
     int rect_x = thumb_rect.right();
     int rect_y = track_rect_.y();
     int width = track_end - rect_x;
@@ -286,10 +366,11 @@ void PaintedScrollbarLayerImpl::SetScrollbarPaintedOpacity(float opacity) {
 }
 
 float PaintedScrollbarLayerImpl::TrackLength() const {
-  if (orientation() == ScrollbarOrientation::VERTICAL)
+  if (orientation() == ScrollbarOrientation::kVertical) {
     return track_rect_.height() + vertical_adjust();
-  else
+  } else {
     return track_rect_.width();
+  }
 }
 
 bool PaintedScrollbarLayerImpl::IsThumbResizable() const {
@@ -302,7 +383,8 @@ const char* PaintedScrollbarLayerImpl::LayerTypeAsString() const {
 
 LayerTreeSettings::ScrollbarAnimator
 PaintedScrollbarLayerImpl::GetScrollbarAnimator() const {
-  return LayerTreeSettings::NO_ANIMATOR;
+  return IsFluentOverlayScrollbarEnabled() ? LayerTreeSettings::AURA_OVERLAY
+                                           : LayerTreeSettings::NO_ANIMATOR;
 }
 
 }  // namespace cc

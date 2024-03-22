@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,17 +13,19 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/contains.h"
 #include "base/files/file_descriptor_watcher_posix.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/numerics/checked_math.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/ranges/algorithm.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/device_event_log/device_event_log.h"
 #include "services/device/public/cpp/usb/usb_utils.h"
 #include "services/device/usb/usb_device_linux.h"
@@ -427,7 +429,7 @@ UsbDeviceHandleUsbfs::UsbDeviceHandleUsbfs(
     scoped_refptr<base::SequencedTaskRunner> blocking_task_runner)
     : device_(std::move(device)),
       fd_(fd.get()),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   DCHECK(device_);
   DCHECK(fd.is_valid());
 
@@ -984,11 +986,8 @@ void UsbDeviceHandleUsbfs::OnTimeout(Transfer* transfer) {
 std::unique_ptr<UsbDeviceHandleUsbfs::Transfer>
 UsbDeviceHandleUsbfs::RemoveFromTransferList(Transfer* transfer_ptr) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  auto it = std::find_if(
-      transfers_.begin(), transfers_.end(),
-      [transfer_ptr](const std::unique_ptr<Transfer>& transfer) -> bool {
-        return transfer.get() == transfer_ptr;
-      });
+  auto it = base::ranges::find(transfers_, transfer_ptr,
+                               &std::unique_ptr<Transfer>::get);
   DCHECK(it != transfers_.end());
   std::unique_ptr<Transfer> transfer = std::move(*it);
   transfers_.erase(it);

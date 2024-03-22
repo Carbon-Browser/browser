@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,9 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
+#include "chromeos/components/kiosk/kiosk_utils.h"
+#include "chromeos/components/quick_answers/public/cpp/quick_answers_prefs.h"
+#include "chromeos/components/quick_answers/utils/quick_answers_metrics.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
@@ -30,12 +33,17 @@ void IncrementPrefCounter(PrefService* prefs,
 
 }  // namespace
 
-QuickAnswersStateAsh::QuickAnswersStateAsh() : session_observer_(this) {
+QuickAnswersStateAsh::QuickAnswersStateAsh() {
+  shell_observation_.Observe(ash::Shell::Get());
+
+  auto* session_controller = ash::Shell::Get()->session_controller();
+  CHECK(session_controller);
+
+  session_observation_.Observe(session_controller);
+
   // Register pref changes if use session already started.
-  if (ash::Shell::Get()->session_controller() &&
-      ash::Shell::Get()->session_controller()->IsActiveUserSessionStarted()) {
-    PrefService* prefs =
-        ash::Shell::Get()->session_controller()->GetPrimaryUserPrefService();
+  if (session_controller->IsActiveUserSessionStarted()) {
+    PrefService* prefs = session_controller->GetPrimaryUserPrefService();
     DCHECK(prefs);
     RegisterPrefChanges(prefs);
   }
@@ -49,11 +57,21 @@ void QuickAnswersStateAsh::OnFirstSessionStarted() {
   RegisterPrefChanges(prefs);
 }
 
+void QuickAnswersStateAsh::OnChromeTerminating() {
+  session_observation_.Reset();
+}
+
+void QuickAnswersStateAsh::OnShellDestroying() {
+  session_observation_.Reset();
+  shell_observation_.Reset();
+}
+
 void QuickAnswersStateAsh::RegisterPrefChanges(PrefService* pref_service) {
   pref_change_registrar_.reset();
 
-  if (!pref_service)
+  if (!pref_service) {
     return;
+  }
 
   // Register preference changes.
   pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
@@ -101,6 +119,12 @@ void QuickAnswersStateAsh::RegisterPrefChanges(PrefService* pref_service) {
   UpdateSpokenFeedbackEnabled();
 
   prefs_initialized_ = true;
+  for (auto& observer : observers_) {
+    observer.OnPrefsInitialized();
+  }
+
+  quick_answers::RecordFeatureEnabled(
+      pref_service->GetBoolean(kQuickAnswersEnabled));
 
   UpdateEligibility();
 }
@@ -128,9 +152,9 @@ void QuickAnswersStateAsh::OnConsentResult(ConsentResultType result) {
 
   switch (result) {
     case ConsentResultType::kAllow:
-      prefs->SetInteger(kQuickAnswersConsentStatus, ConsentStatus::kAccepted);
       // Enable Quick Answers if the user accepted the consent.
       prefs->SetBoolean(kQuickAnswersEnabled, true);
+      prefs->SetInteger(kQuickAnswersConsentStatus, ConsentStatus::kAccepted);
       break;
     case ConsentResultType::kNoThanks:
       prefs->SetInteger(kQuickAnswersConsentStatus, ConsentStatus::kRejected);
@@ -155,6 +179,23 @@ void QuickAnswersStateAsh::UpdateSettingsEnabled() {
   auto* prefs = pref_change_registrar_->prefs();
 
   auto settings_enabled = prefs->GetBoolean(kQuickAnswersEnabled);
+
+  // Quick answers should be disabled for kiosk session.
+  if (chromeos::IsKioskSession() && settings_enabled) {
+    settings_enabled = false;
+    prefs->SetBoolean(kQuickAnswersEnabled, false);
+    prefs->SetInteger(kQuickAnswersConsentStatus, ConsentStatus::kRejected);
+  }
+
+  // If the feature is enforced off by the administrator policy, set the
+  // consented status to rejected. This must be put before the same value return
+  // below as the default value is `false` and we cannot observe
+  // unmanaged-disabled to managed-disabled change.
+  if (!settings_enabled &&
+      prefs->IsManagedPreference(quick_answers::prefs::kQuickAnswersEnabled)) {
+    prefs->SetInteger(kQuickAnswersConsentStatus, ConsentStatus::kRejected);
+  }
+
   if (settings_enabled_ == settings_enabled) {
     return;
   }
@@ -166,15 +207,9 @@ void QuickAnswersStateAsh::UpdateSettingsEnabled() {
     prefs->SetInteger(kQuickAnswersConsentStatus, ConsentStatus::kAccepted);
   }
 
-  // If the feature is enforced off by the administrator policy, set the
-  // consented status to rejected.
-  if (!settings_enabled_ &&
-      prefs->IsManagedPreference(quick_answers::prefs::kQuickAnswersEnabled)) {
-    prefs->SetInteger(kQuickAnswersConsentStatus, ConsentStatus::kRejected);
-  }
-
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnSettingsEnabled(settings_enabled_);
+  }
 }
 
 void QuickAnswersStateAsh::UpdateConsentStatus() {
@@ -182,6 +217,10 @@ void QuickAnswersStateAsh::UpdateConsentStatus() {
       pref_change_registrar_->prefs()->GetInteger(kQuickAnswersConsentStatus));
 
   consent_status_ = consent_status;
+
+  for (auto& observer : observers_) {
+    observer.OnConsentStatusUpdated(consent_status_);
+  }
 }
 
 void QuickAnswersStateAsh::UpdateDefinitionEnabled() {
@@ -209,8 +248,9 @@ void QuickAnswersStateAsh::OnApplicationLocaleReady() {
   auto locale = pref_change_registrar_->prefs()->GetString(
       language::prefs::kApplicationLocale);
 
-  if (locale.empty())
+  if (locale.empty()) {
     return;
+  }
 
   // We should not directly use the pref locale, resolve the generic locale name
   // to one of the locally defined ones first.
@@ -238,8 +278,9 @@ void QuickAnswersStateAsh::UpdatePreferredLanguages() {
 
   preferred_languages_ = preferred_languages;
 
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnPreferredLanguagesChanged(preferred_languages);
+  }
 }
 
 void QuickAnswersStateAsh::UpdateSpokenFeedbackEnabled() {

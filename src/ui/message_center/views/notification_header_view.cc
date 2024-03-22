@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -254,7 +254,7 @@ void NotificationHeaderView::ConfigureLabelsStyle(
 }
 
 void NotificationHeaderView::SetAppIcon(const gfx::ImageSkia& img) {
-  app_icon_view_->SetImage(img);
+  app_icon_view_->SetImage(ui::ImageModel::FromImageSkia(img));
   using_default_app_icon_ = false;
 }
 
@@ -276,20 +276,20 @@ void NotificationHeaderView::SetProgress(int progress) {
   summary_text_view_->SetText(l10n_util::GetStringFUTF16Int(
       IDS_MESSAGE_CENTER_NOTIFICATION_PROGRESS_PERCENTAGE, progress));
   has_progress_ = true;
-  UpdateSummaryTextVisibility();
+  UpdateSummaryTextAndTimestampVisibility();
 }
 
 void NotificationHeaderView::SetSummaryText(const std::u16string& text) {
   summary_text_view_->SetText(text);
   has_progress_ = false;
-  UpdateSummaryTextVisibility();
+  UpdateSummaryTextAndTimestampVisibility();
 }
 
 void NotificationHeaderView::SetOverflowIndicator(int count) {
   summary_text_view_->SetText(l10n_util::GetStringFUTF16Int(
       IDS_MESSAGE_CENTER_LIST_NOTIFICATION_HEADER_OVERFLOW_INDICATOR, count));
   has_progress_ = false;
-  UpdateSummaryTextVisibility();
+  UpdateSummaryTextAndTimestampVisibility();
 }
 
 void NotificationHeaderView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
@@ -300,8 +300,11 @@ void NotificationHeaderView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->SetDescription(summary_text_view_->GetText() + u" " +
                             timestamp_view_->GetText());
 
-  if (expand_button_ && is_expanded_)
-    node_data->AddState(ax::mojom::State::kExpanded);
+  // If the expand button is not shown to the user, this view is not expandable.
+  if (expand_button_ && expand_button_->GetVisible()) {
+    node_data->AddState(is_expanded_ ? ax::mojom::State::kExpanded
+                                     : ax::mojom::State::kCollapsed);
+  }
 }
 
 void NotificationHeaderView::OnThemeChanged() {
@@ -317,7 +320,7 @@ void NotificationHeaderView::SetTimestamp(base::Time timestamp) {
 
   timestamp_view_->SetText(relative_time);
   timestamp_ = timestamp;
-  UpdateSummaryTextVisibility();
+  UpdateSummaryTextAndTimestampVisibility();
 
   // Unretained is safe as the timer cancels the task on destruction.
   timestamp_update_timer_.Start(
@@ -334,7 +337,7 @@ void NotificationHeaderView::SetDetailViewsVisible(bool visible) {
   else
     timestamp_update_timer_.Stop();
 
-  UpdateSummaryTextVisibility();
+  UpdateSummaryTextAndTimestampVisibility();
 }
 
 void NotificationHeaderView::SetExpandButtonEnabled(bool enabled) {
@@ -346,12 +349,18 @@ void NotificationHeaderView::SetExpandButtonEnabled(bool enabled) {
 void NotificationHeaderView::SetExpanded(bool expanded) {
   // We shouldn't execute this method if the expand button is not here.
   DCHECK(expand_button_);
+  bool was_expanded = is_expanded_;
   is_expanded_ = expanded;
   UpdateColors();
   expand_button_->SetTooltipText(l10n_util::GetStringUTF16(
       expanded ? IDS_MESSAGE_CENTER_COLLAPSE_NOTIFICATION
                : IDS_MESSAGE_CENTER_EXPAND_NOTIFICATION));
-  NotifyAccessibilityEvent(ax::mojom::Event::kStateChanged, true);
+
+  // If the expand button is not shown to the user, this view is presumably not
+  // expandable.
+  if (expand_button_->GetVisible() && was_expanded != is_expanded_) {
+    NotifyAccessibilityEvent(ax::mojom::Event::kExpandedChanged, true);
+  }
 }
 
 void NotificationHeaderView::SetColor(absl::optional<SkColor> color) {
@@ -381,7 +390,7 @@ void NotificationHeaderView::SetAppIconVisible(bool visible) {
 }
 
 void NotificationHeaderView::SetTimestampVisible(bool visible) {
-  timestamp_divider_->SetVisible(visible);
+  timestamp_divider_->SetVisible(!is_in_group_child_notification_ && visible);
   timestamp_view_->SetVisible(visible);
 }
 
@@ -398,6 +407,20 @@ void NotificationHeaderView::SetIsInAshNotificationView(
   SetPreferredSize(gfx::Size(kNotificationWidth, kHeaderHeightInAsh));
 }
 
+void NotificationHeaderView::SetIsInGroupChildNotification(
+    bool is_in_group_child_notification) {
+  if (is_in_group_child_notification_ == is_in_group_child_notification)
+    return;
+  is_in_group_child_notification_ = is_in_group_child_notification;
+
+  app_name_view_->SetVisible(!is_in_group_child_notification_);
+  app_icon_view_->SetVisible(!is_in_ash_notification_ &&
+                             !is_in_group_child_notification_);
+  expand_button_->SetVisible(!is_in_ash_notification_ &&
+                             !is_in_group_child_notification_);
+  UpdateSummaryTextAndTimestampVisibility();
+}
+
 const std::u16string& NotificationHeaderView::app_name_for_testing() const {
   return app_name_view_->GetText();
 }
@@ -406,14 +429,14 @@ gfx::ImageSkia NotificationHeaderView::app_icon_for_testing() const {
   return app_icon_view_->GetImage();
 }
 
-void NotificationHeaderView::UpdateSummaryTextVisibility() {
-  const bool summary_visible = !summary_text_view_->GetText().empty();
+void NotificationHeaderView::UpdateSummaryTextAndTimestampVisibility() {
+  const bool summary_visible = !is_in_group_child_notification_ &&
+                               !summary_text_view_->GetText().empty();
   summary_text_divider_->SetVisible(summary_visible);
   summary_text_view_->SetVisible(summary_visible);
 
   const bool timestamp_visible = !has_progress_ && timestamp_;
-  timestamp_divider_->SetVisible(timestamp_visible);
-  timestamp_view_->SetVisible(timestamp_visible);
+  SetTimestampVisible(timestamp_visible);
 
   // TODO(crbug.com/991492): this should not be necessary.
   detail_views_->InvalidateLayout();
@@ -440,15 +463,15 @@ void NotificationHeaderView::UpdateColors() {
   SkColor actual_color = app_name_view_->GetEnabledColor();
 
   if (expand_button_) {
-    expand_button_->SetImage(
-        gfx::CreateVectorIcon(is_expanded_ ? kNotificationExpandLessIcon
-                                           : kNotificationExpandMoreIcon,
-                              kExpandIconSize, actual_color));
+    expand_button_->SetImage(ui::ImageModel::FromVectorIcon(
+        is_expanded_ ? kNotificationExpandLessIcon
+                     : kNotificationExpandMoreIcon,
+        actual_color, kExpandIconSize));
   }
 
   if (using_default_app_icon_ && app_icon_view_) {
-    app_icon_view_->SetImage(
-        gfx::CreateVectorIcon(kProductIcon, kSmallImageSizeMD, actual_color));
+    app_icon_view_->SetImage(ui::ImageModel::FromVectorIcon(
+        kProductIcon, actual_color, kSmallImageSizeMD));
   }
 }
 

@@ -24,7 +24,10 @@
 namespace adblock {
 
 // Controls whether ad-blocking feature is enabled.
-extern const base::Feature kAdblockPlusFeature;
+BASE_DECLARE_FEATURE(kAdblockPlusFeature);
+
+// Controls whether ad-blocking ML service is enabled.
+BASE_DECLARE_FEATURE(kEyeoMlServiceFeature);
 
 }  // namespace adblock
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,20 @@
 #define CHROME_UPDATER_UPDATE_SERVICE_IMPL_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/values.h"
 #include "chrome/updater/update_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
+class FilePath;
 class SequencedTaskRunner;
 class Version;
 }  // namespace base
@@ -31,8 +32,8 @@ namespace updater {
 class Configurator;
 class PersistedData;
 struct RegistrationRequest;
-struct RegistrationResponse;
 
+using AppClientInstallData = base::flat_map<std::string, std::string>;
 using AppInstallDataIndex = base::flat_map<std::string, std::string>;
 
 // All functions and callbacks must be called on the same sequence.
@@ -43,20 +44,26 @@ class UpdateServiceImpl : public UpdateService {
   // Overrides for updater::UpdateService.
   void GetVersion(
       base::OnceCallback<void(const base::Version&)> callback) override;
-  void RegisterApp(
-      const RegistrationRequest& request,
-      base::OnceCallback<void(const RegistrationResponse&)> callback) override;
+  void FetchPolicies(base::OnceCallback<void(int)> callback) override;
+  void RegisterApp(const RegistrationRequest& request,
+                   base::OnceCallback<void(int)> callback) override;
   void GetAppStates(
       base::OnceCallback<void(const std::vector<AppState>&)>) override;
   void RunPeriodicTasks(base::OnceClosure callback) override;
-  void UpdateAll(StateChangeCallback state_update, Callback callback) override;
+  void CheckForUpdate(const std::string& app_id,
+                      Priority priority,
+                      PolicySameVersionUpdate policy_same_version_update,
+                      StateChangeCallback state_update,
+                      Callback callback) override;
   void Update(const std::string& app_id,
               const std::string& install_data_index,
               Priority priority,
               PolicySameVersionUpdate policy_same_version_update,
               StateChangeCallback state_update,
               Callback callback) override;
+  void UpdateAll(StateChangeCallback state_update, Callback callback) override;
   void Install(const RegistrationRequest& registration,
+               const std::string& client_install_data,
                const std::string& install_data_index,
                Priority priority,
                StateChangeCallback state_update,
@@ -70,8 +77,6 @@ class UpdateServiceImpl : public UpdateService {
                     StateChangeCallback state_update,
                     Callback callback) override;
 
-  void Uninitialize() override;
-
  private:
   ~UpdateServiceImpl() override;
 
@@ -80,6 +85,9 @@ class UpdateServiceImpl : public UpdateService {
 
   // Pops `tasks_`, and calls TaskStart.
   void TaskDone();
+
+  // Installs applications in the wake task based on the ForceInstalls policy.
+  void ForceInstall(StateChangeCallback state_update, Callback callback);
 
   bool IsUpdateDisabledByPolicy(const std::string& app_id,
                                 Priority priority,
@@ -91,12 +99,31 @@ class UpdateServiceImpl : public UpdateService {
                                     StateChangeCallback state_update,
                                     Callback callback);
 
-  void OnShouldBlockUpdateForMeteredNetwork(
+  void OnShouldBlockCheckForUpdateForMeteredNetwork(
+      const std::string& app_id,
+      Priority priority,
+      PolicySameVersionUpdate policy_same_version_update,
       StateChangeCallback state_update,
       Callback callback,
+      bool update_blocked);
+
+  void OnShouldBlockUpdateForMeteredNetwork(
+      const std::vector<std::string>& app_ids,
+      const AppClientInstallData& app_client_install_data,
       const AppInstallDataIndex& app_install_data_index,
       Priority priority,
       PolicySameVersionUpdate policy_same_version_update,
+      StateChangeCallback state_update,
+      Callback callback,
+      bool update_blocked);
+
+  void OnShouldBlockForceInstallForMeteredNetwork(
+      const std::vector<std::string>& app_ids,
+      const AppClientInstallData& app_client_install_data,
+      const AppInstallDataIndex& app_install_data_index,
+      PolicySameVersionUpdate policy_same_version_update,
+      StateChangeCallback state_update,
+      Callback callback,
       bool update_blocked);
 
   SEQUENCE_CHECKER(sequence_checker_);
@@ -112,6 +139,30 @@ class UpdateServiceImpl : public UpdateService {
   // Cancellation callbacks, keyed by appid.
   std::multimap<std::string, base::RepeatingClosure> cancellation_callbacks_;
 };
+
+namespace internal {
+UpdateService::Result ToResult(update_client::Error error);
+
+void GetComponents(
+    scoped_refptr<Configurator> config,
+    scoped_refptr<PersistedData> persisted_data,
+    const AppClientInstallData& app_client_install_data,
+    const AppInstallDataIndex& app_install_data_index,
+    UpdateService::Priority priority,
+    bool update_blocked,
+    UpdateService::PolicySameVersionUpdate policy_same_version_update,
+    const std::vector<std::string>& ids,
+    base::OnceCallback<
+        void(const std::vector<std::optional<update_client::CrxComponent>>&)>
+        callback);
+
+#if BUILDFLAG(IS_WIN)
+std::string GetInstallerText(UpdateService::ErrorCategory error_category,
+                             int error_code,
+                             int extra_code,
+                             bool is_installer_error = false);
+#endif  // BUILDFLAG(IS_WIN)
+}  // namespace internal
 
 }  // namespace updater
 

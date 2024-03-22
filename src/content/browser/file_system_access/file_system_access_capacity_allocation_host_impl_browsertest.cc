@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/bind.h"
+#include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
@@ -101,9 +102,9 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
       let root = await navigator.storage.getDirectory();
       let fh = await root.getFileHandle('test_closing', {create: false});
       let ah = await fh.createSyncAccessHandle();
-      await ah.truncate(100);
-      await ah.truncate(10);
-      await ah.close();
+      ah.truncate(100);
+      ah.truncate(10);
+      ah.close();
       return true;
     `);
   )")
@@ -131,9 +132,9 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
     runOnWorkerAndWaitForResult(`
       let root = await navigator.storage.getDirectory();
       let fh = await root.getFileHandle('test_existing', {create: true});
-      let ah =  await fh.createSyncAccessHandle();
-      await ah.truncate(100);
-      await ah.close();
+      let ah = await fh.createSyncAccessHandle();
+      ah.truncate(100);
+      ah.close();
       return true;
     `);
   )")
@@ -148,8 +149,8 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
       let root = await navigator.storage.getDirectory();
       let fh = await root.getFileHandle('test_existing', {create: false});
       let ah = await fh.createSyncAccessHandle();
-      await ah.truncate(0);
-      await ah.close();
+      ah.truncate(0);
+      ah.close();
       return true;
     `);
   )")
@@ -158,8 +159,10 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
   EXPECT_EQ(usage_before_operation, usage_after_operation + 100);
 }
 
-// TODO(crbug.com/1304977): Failing on Mac builders.
-#if BUILDFLAG(IS_MAC)
+// TODO(crbug.com/1304977): Failing on various builders.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||                     \
+    (BUILDFLAG(IS_CHROMEOS_LACROS) && defined(ADDRESS_SANITIZER) && \
+     defined(LEAK_SANITIZER))
 #define MAYBE_QuotaUsageOverallocation DISABLED_QuotaUsageOverallocation
 #else
 #define MAYBE_QuotaUsageOverallocation QuotaUsageOverallocation
@@ -178,13 +181,13 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
     runOnWorkerAndWaitForResult(`
       let root = await navigator.storage.getDirectory();
       let fh = await root.getFileHandle('test_file_small', {create: true});
-      let ah =  await fh.createSyncAccessHandle();
+      let ah = await fh.createSyncAccessHandle();
       let storage_manager = await navigator.storage.estimate();
       let usage_before_operation = storage_manager.usageDetails.fileSystem;
-      await ah.truncate(100);
+      ah.truncate(100);
       storage_manager = await navigator.storage.estimate();
       let usage_after_operation = storage_manager.usageDetails.fileSystem;
-      await ah.close();
+      ah.close();
       return usage_after_operation-usage_before_operation;
     `);
   )")
@@ -194,14 +197,14 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
     runOnWorkerAndWaitForResult(`
       let root = await navigator.storage.getDirectory();
       let fh = await root.getFileHandle('test_file_medium', {create: true});
-      let ah =  await fh.createSyncAccessHandle();
+      let ah = await fh.createSyncAccessHandle();
       let storage_manager = await navigator.storage.estimate();
       let usage_before_operation = storage_manager.usageDetails.fileSystem;
       let new_file_size = 3*1024*1024;
-      await ah.truncate(new_file_size);
+      ah.truncate(new_file_size);
       storage_manager = await navigator.storage.estimate();
       let usage_after_operation = storage_manager.usageDetails.fileSystem;
-      await ah.close();
+      ah.close();
       return usage_after_operation-usage_before_operation;
     `);
   )")
@@ -209,14 +212,10 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
             4 * 1024 * 1024);
 }
 
-// TODO(crbug.com/1304977): Failing on Mac builders.
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_QuotaUsageShrinks DISABLED_QuotaUsageShrinks
-#else
-#define MAYBE_QuotaUsageShrinks QuotaUsageShrinks
-#endif
+// TODO(crbug.com/1304977): Failing on Mac, Linux, and ChromeOS builders.
+// TODO(crbug.com/1459385): Re-enable this test
 IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
-                       MAYBE_QuotaUsageShrinks) {
+                       DISABLED_QuotaUsageShrinks) {
   const GURL& test_url =
       embedded_test_server()->GetURL("/run_async_code_on_worker.html");
   Shell* browser = CreateBrowser();
@@ -227,14 +226,14 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
     runOnWorkerAndWaitForResult(`
       let root = await navigator.storage.getDirectory();
       let fh = await root.getFileHandle('test_file_medium', {create: true});
-      let ah =  await fh.createSyncAccessHandle();
+      let ah = await fh.createSyncAccessHandle();
       let storage_manager = await navigator.storage.estimate();
       let usage_before_operation = storage_manager.usageDetails.fileSystem;
       let new_file_size = 3*1024*1024;
-      await ah.truncate(new_file_size);
+      ah.truncate(new_file_size);
       storage_manager = await navigator.storage.estimate();
       let usage_after_operation = storage_manager.usageDetails.fileSystem;
-      await ah.close();
+      ah.close();
       return usage_after_operation-usage_before_operation;
     `);
   )")
@@ -244,13 +243,13 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
     runOnWorkerAndWaitForResult(`
       let root = await navigator.storage.getDirectory();
       let fh = await root.getFileHandle('test_file_small', {create: true});
-      let ah =  await fh.createSyncAccessHandle();
+      let ah = await fh.createSyncAccessHandle();
       let storage_manager = await navigator.storage.estimate();
       let usage_before_operation = storage_manager.usageDetails.fileSystem;
-      await ah.truncate(100);
+      ah.truncate(100);
       storage_manager = await navigator.storage.estimate();
       let usage_after_operation = storage_manager.usageDetails.fileSystem;
-      await ah.close();
+      ah.close();
       return usage_after_operation-usage_before_operation;
     `);
   )")
@@ -291,7 +290,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
       let ah = await fh.createSyncAccessHandle();
       const buffer = new DataView(new ArrayBuffer(10));
       ah.write(buffer, { at: 0 });
-      await ah.close();
+      ah.close();
       return true;
     `);
   )")
@@ -307,7 +306,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
       let ah = await fh.createSyncAccessHandle();
       const buffer = new DataView(new ArrayBuffer(80));
       ah.write(buffer, { at: 20 });
-      await ah.close();
+      ah.close();
       return true;
     `);
   )")
@@ -323,7 +322,7 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
       let ah = await fh.createSyncAccessHandle();
       const buffer = new DataView(new ArrayBuffer(20));
       ah.write(buffer, { at: 5 });
-      await ah.close();
+      ah.close();
       return true;
     `);
   )")

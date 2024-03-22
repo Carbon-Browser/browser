@@ -1,15 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/diagnostics/diagnostics_api.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 
 namespace extensions {
 
@@ -25,7 +25,7 @@ const char kSize[] = "size";
 
 bool ParseResult(const std::string& status, std::string* ip, double* latency) {
   // Parses the result and returns IP and latency.
-  absl::optional<base::Value> parsed_value(base::JSONReader::Read(status));
+  std::optional<base::Value> parsed_value(base::JSONReader::Read(status));
   if (!parsed_value || !parsed_value->is_dict())
     return false;
 
@@ -38,7 +38,7 @@ bool ParseResult(const std::string& status, std::string* ip, double* latency) {
   if (!iterator->second.is_dict())
     return false;
 
-  absl::optional<double> avg = iterator->second.GetDict().FindDouble("avg");
+  std::optional<double> avg = iterator->second.GetDict().FindDouble("avg");
   if (!avg)
     return false;
   *latency = *avg;
@@ -66,7 +66,7 @@ ExtensionFunction::ResponseAction DiagnosticsSendPacketFunction::Run() {
   if (params->options.size)
     config[kSize] = base::NumberToString(*params->options.size);
 
-  chromeos::DebugDaemonClient::Get()->TestICMPWithOptions(
+  ash::DebugDaemonClient::Get()->TestICMPWithOptions(
       params->options.ip, config,
       base::BindOnce(&DiagnosticsSendPacketFunction::OnTestICMPCompleted,
                      this));
@@ -75,7 +75,7 @@ ExtensionFunction::ResponseAction DiagnosticsSendPacketFunction::Run() {
 }
 
 void DiagnosticsSendPacketFunction::OnTestICMPCompleted(
-    absl::optional<std::string> status) {
+    std::optional<std::string> status) {
   std::string ip;
   double latency;
   if (!status.has_value() || !ParseResult(status.value(), &ip, &latency)) {
@@ -86,7 +86,7 @@ void DiagnosticsSendPacketFunction::OnTestICMPCompleted(
   api::diagnostics::SendPacketResult result;
   result.ip = ip;
   result.latency = latency;
-  Respond(OneArgument(base::Value(SendPacket::Results::Create(result))));
+  Respond(WithArguments(SendPacket::Results::Create(result)));
 }
 
 }  // namespace extensions

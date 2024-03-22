@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -17,7 +17,7 @@
 #include "net/cert/nss_cert_database.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
+namespace ash {
 
 class SystemTokenCertDbStorageTest : public testing::Test {
  public:
@@ -200,4 +200,4 @@ TEST_F(SystemTokenCertDbStorageTest, RequestingDatabaseFailsAfterReset) {
       get_system_token_cert_db_callback_wrapper_2.IsDbRetrievalSucceeded());
 }
 
-}  // namespace chromeos
+}  // namespace ash

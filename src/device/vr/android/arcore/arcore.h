@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/time/time.h"
 #include "device/vr/public/mojom/isolated_xr_service.mojom.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
+#include "device/vr/public/mojom/xr_session.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/display/display.h"
 #include "ui/gfx/geometry/transform.h"
@@ -87,7 +88,7 @@ class COMPONENT_EXPORT(VR_ARCORE) ArCore {
       display::Display::Rotation display_rotation) = 0;
   virtual void SetCameraTexture(uint32_t camera_texture_id) = 0;
 
-  virtual gfx::Size GetUncroppedCameraImageSize() const;
+  virtual gfx::Size GetUncroppedCameraImageSize() const = 0;
 
   gfx::Transform GetCameraUvFromScreenUvTransform() const;
   gfx::Transform GetDepthUvFromScreenUvTransform() const;

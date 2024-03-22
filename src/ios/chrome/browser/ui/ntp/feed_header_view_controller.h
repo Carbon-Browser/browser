@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #import "ios/chrome/browser/discover_feed/feed_constants.h"
 
 @protocol FeedControlDelegate;
+@protocol FeedMenuCommands;
 @class FeedMetricsRecorder;
 @protocol NewTabPageDelegate;
 
@@ -22,7 +23,7 @@
 @property(nonatomic, weak) id<FeedControlDelegate> feedControlDelegate;
 
 // Delegate to communicate back to the New Tab Page coordinator.
-@property(nonatomic, weak) id<NewTabPageDelegate> ntpDelegate;
+@property(nonatomic, weak) id<NewTabPageDelegate> NTPDelegate;
 
 // The currently selected sorting for the Following feed.
 @property(nonatomic, assign) FollowingFeedSortType followingFeedSortType;
@@ -30,11 +31,12 @@
 // Feed metrics recorder.
 @property(nonatomic, weak) FeedMetricsRecorder* feedMetricsRecorder;
 
-// Initializes the header with the currently selected feed and the Following
-// feed's sort type.
-- (instancetype)initWithFollowingFeedSortType:
-                    (FollowingFeedSortType)followingFeedSortType
-                   followingSegmentDotVisible:(BOOL)followingSegmentDotVisible
+// Object that can open the feed menu.
+@property(nonatomic, weak) id<FeedMenuCommands> feedMenuHandler;
+
+// Initializes header with the Following segment dot visibility as
+// `followingDotVisible`.
+- (instancetype)initWithFollowingDotVisible:(BOOL)followingDotVisible
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
@@ -56,7 +58,7 @@
 // Updates the unseen content dot in the Following segment. Will only show the
 // dot if there is unseen content and if the user is not currently on the
 // Following feed.
-- (void)updateFollowingSegmentDotForUnseenContent:(BOOL)hasUnseenContent;
+- (void)updateFollowingDotForUnseenContent:(BOOL)hasUnseenContent;
 
 // Updates the header view and re-applies constraints in response to the default
 // search engine changing.

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/check.h"
+#include "base/containers/contains.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 
@@ -37,7 +38,7 @@ class TwoKeysAdapterMap {
   // map. There must not already exist a mapping for this primary key, in other
   // words |!FindByPrimary(primary)| must hold.
   Value* Insert(PrimaryKey primary, Value value) {
-    DCHECK(entries_by_primary_.find(primary) == entries_by_primary_.end());
+    DCHECK(!base::Contains(entries_by_primary_, primary));
     auto* add_result =
         entries_by_primary_
             .insert(std::move(primary),
@@ -121,7 +122,7 @@ class TwoKeysAdapterMap {
   size_t PrimarySize() const { return entries_by_primary_.size(); }
   // The number of elements in the map which have secondary keys.
   size_t SecondarySize() const { return entries_by_secondary_.size(); }
-  bool empty() const { return entries_by_primary_.IsEmpty(); }
+  bool empty() const { return entries_by_primary_.empty(); }
 
  private:
   struct Entry {

@@ -1,20 +1,23 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_CHROMEOS_APP_MODE_CHROME_KIOSK_APP_LAUNCHER_H_
 #define CHROME_BROWSER_CHROMEOS_APP_MODE_CHROME_KIOSK_APP_LAUNCHER_H_
 
-#include "base/callback.h"
+#include <string>
+
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "chrome/browser/chromeos/app_mode/kiosk_app_service_launcher.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/crosapi/mojom/chrome_app_kiosk_service.mojom.h"
 #include "extensions/browser/app_window/app_window.h"
 #include "extensions/browser/app_window/app_window_registry.h"
 #include "extensions/common/extension.h"
 
-namespace ash {
+namespace chromeos {
 
 class ChromeKioskAppLauncher : public extensions::AppWindowRegistry::Observer {
  public:
@@ -34,6 +37,9 @@ class ChromeKioskAppLauncher : public extensions::AppWindowRegistry::Observer {
  private:
   // AppWindowRegistry::Observer:
   void OnAppWindowAdded(extensions::AppWindow* app_window) override;
+
+  // `KioskAppServiceLauncher` callback.
+  void OnAppServiceAppLaunched(bool success);
 
   void WaitForAppWindow();
 
@@ -60,9 +66,13 @@ class ChromeKioskAppLauncher : public extensions::AppWindowRegistry::Observer {
                           extensions::AppWindowRegistry::Observer>
       app_window_observation_{this};
 
+  std::unique_ptr<KioskAppServiceLauncher> app_service_launcher_;
+
   LaunchCallback on_ready_callback_;
+
+  base::WeakPtrFactory<ChromeKioskAppLauncher> weak_ptr_factory_{this};
 };
 
-}  // namespace ash
+}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_CHROMEOS_APP_MODE_CHROME_KIOSK_APP_LAUNCHER_H_

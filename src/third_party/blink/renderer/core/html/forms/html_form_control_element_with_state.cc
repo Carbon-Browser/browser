@@ -26,9 +26,13 @@
 
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_element.h"
+#include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
+
+using mojom::blink::FormControlType;
 
 namespace {
 
@@ -38,6 +42,7 @@ enum class AutoCompleteCategory {
   kAutomatic,
   kNormal,
   kContact,
+  kCredential,
 };
 
 AutoCompleteCategory GetAutoCompleteCategory(const AtomicString& token) {
@@ -59,6 +64,7 @@ AutoCompleteCategory GetAutoCompleteCategory(const AtomicString& token) {
           {"username", AutoCompleteCategory::kNormal},
           {"new-password", AutoCompleteCategory::kNormal},
           {"current-password", AutoCompleteCategory::kNormal},
+          {"one-time-code", AutoCompleteCategory::kNormal},
           {"organization", AutoCompleteCategory::kNormal},
           {"street-address", AutoCompleteCategory::kNormal},
           {"address-line1", AutoCompleteCategory::kNormal},
@@ -102,10 +108,28 @@ AutoCompleteCategory GetAutoCompleteCategory(const AtomicString& token) {
           {"tel-extension", AutoCompleteCategory::kContact},
           {"email", AutoCompleteCategory::kContact},
           {"impp", AutoCompleteCategory::kContact},
+
+          {"webauthn", AutoCompleteCategory::kCredential},
       }));
 
   auto iter = category_map.find(token);
   return iter == category_map.end() ? AutoCompleteCategory::kNone : iter->value;
+}
+
+wtf_size_t GetMaxTokensForCategory(AutoCompleteCategory category) {
+  switch (category) {
+    case AutoCompleteCategory::kNone:
+      return 0;
+    case AutoCompleteCategory::kOff:
+    case AutoCompleteCategory::kAutomatic:
+      return 1;
+    case AutoCompleteCategory::kNormal:
+      return 3;
+    case AutoCompleteCategory::kContact:
+      return 4;
+    case AutoCompleteCategory::kCredential:
+      return 5;
+  }
 }
 
 }  // anonymous namespace
@@ -124,12 +148,11 @@ bool HTMLFormControlElementWithState::ShouldAutocomplete() const {
 }
 
 bool HTMLFormControlElementWithState::IsWearingAutofillAnchorMantle() const {
-  return FormControlType() == input_type_names::kHidden;
+  return FormControlType() == FormControlType::kInputHidden;
 }
 
 String HTMLFormControlElementWithState::IDLExposedAutofillValue() const {
-  // TODO(tkent): Share the code with autofill::FormStructure::
-  // ParseFieldTypesFromAutocompleteAttributes().
+  // TODO(tkent): Share the code with `autofill::ParseAutocompleteAttribute()`.
 
   // https://html.spec.whatwg.org/C/#autofill-processing-model
   // 1. If the element has no autocomplete attribute, then jump to the step
@@ -141,43 +164,34 @@ String HTMLFormControlElementWithState::IDLExposedAutofillValue() const {
   // 2. Let tokens be the result of splitting the attribute's value on ASCII
   // whitespace.
   SpaceSplitString tokens(value.LowerASCII());
+
+  // 3. If tokens is empty, then jump to the step labeled default.
   if (tokens.size() == 0)
     return g_empty_string;
 
   // 4. Let index be the index of the last token in tokens.
   wtf_size_t index = tokens.size() - 1;
 
-  // 5. If the indexth token in tokens is not an ASCII case-insensitive
-  // match for one of the tokens given in the first column of the
-  // following table, or if the number of tokens in tokens is greater
-  // than the maximum number given in the cell in the second column of
-  // that token's row, then jump to the step labeled default. Otherwise,
-  // let field be the string given in the cell of the first column of
-  // the matching row, and let category be the value of the cell in the
-  // third column of that same row.
+  // 5. Let field be the indexth token in tokens.
+  AtomicString field = tokens[index];
+
+  // 6. Let the category, maximum tokens pair be the result of executing the
+  // algorithm to determine a field's category with field.
   AtomicString token = tokens[index];
   AutoCompleteCategory category = GetAutoCompleteCategory(token);
-  wtf_size_t max_tokens;
-  switch (category) {
-    case AutoCompleteCategory::kNone:
-      max_tokens = 0;
-      break;
-    case AutoCompleteCategory::kOff:
-    case AutoCompleteCategory::kAutomatic:
-      max_tokens = 1;
-      break;
-    case AutoCompleteCategory::kNormal:
-      max_tokens = 3;
-      break;
-    case AutoCompleteCategory::kContact:
-      max_tokens = 4;
-      break;
+  wtf_size_t max_tokens = GetMaxTokensForCategory(category);
+
+  // 7. If category is empty, then jump to the step labeled default.
+  if (category == AutoCompleteCategory::kNone) {
+    return g_empty_string;
   }
+
+  // 8. If the number of tokens in tokens is greater than maximum tokens, then
+  // jump to the step labeled default.
   if (tokens.size() > max_tokens)
     return g_empty_string;
-  AtomicString field = token;
 
-  // 6. If category is Off or Automatic but the element's autocomplete attribute
+  // 9. If category is Off or Automatic but the element's autocomplete attribute
   // is wearing the autofill anchor mantle, then jump to the step labeled
   // default.
   if ((category == AutoCompleteCategory::kOff ||
@@ -186,78 +200,109 @@ String HTMLFormControlElementWithState::IDLExposedAutofillValue() const {
     return g_empty_string;
   }
 
-  // 7. If category is Off, let the element's autofill field name be the string
+  // 10. If category is Off, let the element's autofill field name be the string
   // "off", let its autofill hint set be empty, and let its IDL-exposed autofill
   // value be the string "off". Then, return.
   if (category == AutoCompleteCategory::kOff)
     return "off";
 
-  // 8. If category is Automatic, let the element's autofill field name be the
+  // 11. If category is Automatic, let the element's autofill field name be the
   // string "on", let its autofill hint set be empty, and let its IDL-exposed
   // autofill value be the string "on". Then, return.
   if (category == AutoCompleteCategory::kAutomatic)
     return "on";
 
-  // 11. Let IDL value have the same value as field.
+  // 15. Let IDL value have the same value as field.
   String idl_value = field;
-  // 12. If the indexth token in tokens is the first entry, then skip to the
+
+  // 16. If category is Credential and the indexth token in tokens is an ASCII
+  // case-insensitive match for "webauthn", then run the substeps that follow:
+  if (category == AutoCompleteCategory::kCredential) {
+    // 16.2 If the indexth token in tokens is the first entry, then skip to the
+    // step labeled done.
+    if (index != 0) {
+      // 16.3 Decrement index by one.
+      --index;
+      // 16.4 Let the category, maximum tokens pair be the result of executing
+      // the algorithm to determine a field's category with the indexth token in
+      // tokens.
+      category = GetAutoCompleteCategory(tokens[index]);
+      // 16.5 If category is not Normal and category is not Contact, then jump
+      // to the step labeled default.
+      if (category != AutoCompleteCategory::kNormal &&
+          category != AutoCompleteCategory::kContact) {
+        return g_empty_string;
+      }
+      // 16.6 If index is greater than maximum tokens minus one (i.e. if the
+      // number of remaining tokens is greater than maximum tokens), then jump
+      // to the step labeled default.
+      if (index > GetMaxTokensForCategory(category) - 1) {
+        return g_empty_string;
+      }
+      // 16.7 Let IDL value be the concatenation of the indexth token in tokens,
+      // a U+0020 SPACE character, and the previous value of IDL value.
+      idl_value = tokens[index] + " " + idl_value;
+    }
+  }
+
+  // 17. If the indexth token in tokens is the first entry, then skip to the
   // step labeled done.
   if (index != 0) {
-    // 13. Decrement index by one.
+    // 18. Decrement index by one.
     --index;
-    // 14. If category is Contact and the indexth token in tokens is an ASCII
+    // 19. If category is Contact and the indexth token in tokens is an ASCII
     // case-insensitive match for one of the strings in the following list, ...
     if (category == AutoCompleteCategory::kContact) {
       AtomicString contact = tokens[index];
       if (contact == "home" || contact == "work" || contact == "mobile" ||
           contact == "fax" || contact == "pager") {
-        // 14.4. Let IDL value be the concatenation of contact, a U+0020 SPACE
+        // 19.4. Let IDL value be the concatenation of contact, a U+0020 SPACE
         // character, and the previous value of IDL value (which at this point
         // will always be field).
         idl_value = contact + " " + idl_value;
-        // 14.5. If the indexth entry in tokens is the first entry, then skip to
+        // 19.5. If the indexth entry in tokens is the first entry, then skip to
         // the step labeled done.
         if (index == 0) {
           return idl_value;
         }
-        // 14.6. Decrement index by one.
+        // 19.6. Decrement index by one.
         --index;
       }
     }
 
-    // 15. If the indexth token in tokens is an ASCII case-insensitive match for
+    // 20. If the indexth token in tokens is an ASCII case-insensitive match for
     // one of the strings in the following list, ...
     AtomicString mode = tokens[index];
     if (mode == "shipping" || mode == "billing") {
-      // 15.4. Let IDL value be the concatenation of mode, a U+0020 SPACE
+      // 20.4. Let IDL value be the concatenation of mode, a U+0020 SPACE
       // character, and the previous value of IDL value (which at this point
       // will either be field or the concatenation of contact, a space, and
       // field).
       idl_value = mode + " " + idl_value;
-      // 15.5 If the indexth entry in tokens is the first entry, then skip to
+      // 20.5 If the indexth entry in tokens is the first entry, then skip to
       // the step labeled done.
       if (index == 0) {
         return idl_value;
       }
-      // 15.6. Decrement index by one.
+      // 20.6. Decrement index by one.
       --index;
     }
 
-    // 16. If the indexth entry in tokens is not the first entry, then jump to
+    // 21. If the indexth entry in tokens is not the first entry, then jump to
     // the step labeled default.
     if (index != 0)
       return g_empty_string;
-    // 17. If the first eight characters of the indexth token in tokens are not
+    // 22. If the first eight characters of the indexth token in tokens are not
     // an ASCII case-insensitive match for the string "section-", then jump to
     // the step labeled default.
     AtomicString section = tokens[index];
     if (!section.StartsWith("section-"))
       return g_empty_string;
-    // 20. Let IDL value be the concatenation of section, a U+0020 SPACE
+    // 25. Let IDL value be the concatenation of section, a U+0020 SPACE
     // character, and the previous value of IDL value.
     idl_value = section + " " + idl_value;
   }
-  // 24. Let the element's IDL-exposed autofill value be IDL value.
+  // 30. Let the element's IDL-exposed autofill value be IDL value.
   return idl_value;
 }
 
@@ -272,8 +317,22 @@ bool HTMLFormControlElementWithState::ClassSupportsStateRestore() const {
 
 bool HTMLFormControlElementWithState::ShouldSaveAndRestoreFormControlState()
     const {
-  // We don't save/restore control state in a form with autocomplete=off.
-  return isConnected() && ShouldAutocomplete();
+  if (!isConnected()) {
+    return false;
+  }
+  // TODO(crbug.com/1419161): remove this after M113 has been stable for a bit.
+  if (RuntimeEnabledFeatures::
+          FormControlRestoreStateIfAutocompleteOffEnabled()) {
+    return ShouldAutocomplete();
+  }
+  if (Form() && !Form()->ShouldAutocomplete()) {
+    return false;
+  }
+  if (EqualIgnoringASCIICase(FastGetAttribute(html_names::kAutocompleteAttr),
+                             "off")) {
+    return false;
+  }
+  return true;
 }
 
 void HTMLFormControlElementWithState::DispatchInputEvent() {
@@ -284,7 +343,16 @@ void HTMLFormControlElementWithState::DispatchInputEvent() {
 }
 
 void HTMLFormControlElementWithState::DispatchChangeEvent() {
+  if (UserHasEditedTheField()) {
+    // Start matching :user-valid, but only if the user has already edited the
+    // field.
+    SetUserHasEditedTheFieldAndBlurred();
+  }
   DispatchScopedEvent(*Event::CreateBubble(event_type_names::kChange));
+}
+
+void HTMLFormControlElementWithState::DispatchCancelEvent() {
+  DispatchScopedEvent(*Event::CreateBubble(event_type_names::kCancel));
 }
 
 void HTMLFormControlElementWithState::FinishParsingChildren() {
@@ -297,11 +365,36 @@ bool HTMLFormControlElementWithState::IsFormControlElementWithState() const {
 }
 
 void HTMLFormControlElementWithState::ResetImpl() {
-  user_has_edited_the_field_ = false;
+  ClearUserHasEditedTheField();
 }
 
 int HTMLFormControlElementWithState::DefaultTabIndex() const {
   return 0;
+}
+
+void HTMLFormControlElementWithState::SetUserHasEditedTheField() {
+  if (interacted_state_ < InteractedState::kInteractedAndStillFocused) {
+    interacted_state_ = InteractedState::kInteractedAndStillFocused;
+  }
+}
+
+void HTMLFormControlElementWithState::SetUserHasEditedTheFieldAndBlurred() {
+  if (interacted_state_ >= InteractedState::kInteractedAndBlurred) {
+    return;
+  }
+  interacted_state_ = InteractedState::kInteractedAndBlurred;
+  PseudoStateChanged(CSSSelector::kPseudoUserInvalid);
+  PseudoStateChanged(CSSSelector::kPseudoUserValid);
+}
+
+bool HTMLFormControlElementWithState::MatchesUserInvalidPseudo() {
+  return (UserHasEditedTheFieldAndBlurred() || force_user_valid_) &&
+         MatchesValidityPseudoClasses() && !ListedElement::IsValidElement();
+}
+
+bool HTMLFormControlElementWithState::MatchesUserValidPseudo() {
+  return (UserHasEditedTheFieldAndBlurred() || force_user_valid_) &&
+         MatchesValidityPseudoClasses() && ListedElement::IsValidElement();
 }
 
 }  // namespace blink

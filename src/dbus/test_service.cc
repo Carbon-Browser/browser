@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
@@ -19,6 +18,7 @@
 #include "base/test/test_timeouts.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "dbus/bus.h"
 #include "dbus/exported_object.h"
 #include "dbus/message.h"
@@ -51,7 +51,8 @@ TestService::TestService(const Options& options)
       exported_object_(nullptr),
       exported_object_manager_(nullptr) {
   if (service_name_.empty()) {
-    service_name_ = "org.chromium.TestService-" + base::GenerateGUID();
+    service_name_ = "org.chromium.TestService-" +
+                    base::Uuid::GenerateRandomV4().AsLowercaseString();
   }
 }
 

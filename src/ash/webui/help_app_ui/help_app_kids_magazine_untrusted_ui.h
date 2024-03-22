@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ class HelpAppKidsMagazineUntrustedUIConfig : public content::WebUIConfig {
   ~HelpAppKidsMagazineUntrustedUIConfig() override;
 
   std::unique_ptr<content::WebUIController> CreateWebUIController(
-      content::WebUI* web_ui) override;
+      content::WebUI* web_ui,
+      const GURL& url) override;
 };
 
 // The Web UI for chrome-untrusted://help-app-kids-magazine.

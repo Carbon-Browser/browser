@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -224,8 +224,9 @@ class TestService : public base::Thread {
   bool has_ownership_;
 
   scoped_refptr<Bus> bus_;
-  raw_ptr<ExportedObject> exported_object_;
-  raw_ptr<ExportedObject> exported_object_manager_;
+  raw_ptr<ExportedObject, AcrossTasksDanglingUntriaged> exported_object_;
+  raw_ptr<ExportedObject, AcrossTasksDanglingUntriaged>
+      exported_object_manager_;
 };
 
 }  // namespace dbus

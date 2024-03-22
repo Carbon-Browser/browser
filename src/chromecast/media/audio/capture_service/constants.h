@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,8 +63,10 @@ enum class StreamType : uint8_t {
   kHardwareEchoRescaled,
   // TDM loopback, e.g., from DSP output processing output.
   kTdmLoopback,
+  // USB audio input.
+  kUsbAudio,
   // Mark the last type.
-  kLastType = kTdmLoopback,
+  kLastType = kUsbAudio,
 };
 
 enum class AudioCodec : uint8_t {

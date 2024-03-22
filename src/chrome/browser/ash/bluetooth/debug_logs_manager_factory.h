@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_BLUETOOTH_DEBUG_LOGS_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_ASH_BLUETOOTH_DEBUG_LOGS_MANAGER_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -17,7 +17,7 @@ namespace bluetooth {
 class DebugLogsManager;
 
 // Factory for DebugLogsManager.
-class DebugLogsManagerFactory : public BrowserContextKeyedServiceFactory {
+class DebugLogsManagerFactory : public ProfileKeyedServiceFactory {
  public:
   static DebugLogsManager* GetForProfile(Profile* profile);
   static DebugLogsManagerFactory* GetInstance();
@@ -26,13 +26,13 @@ class DebugLogsManagerFactory : public BrowserContextKeyedServiceFactory {
   DebugLogsManagerFactory& operator=(const DebugLogsManagerFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<DebugLogsManagerFactory>;
+  friend base::NoDestructor<DebugLogsManagerFactory>;
 
   DebugLogsManagerFactory();
   ~DebugLogsManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   bool ServiceIsNULLWhileTesting() const override;
@@ -41,13 +41,5 @@ class DebugLogsManagerFactory : public BrowserContextKeyedServiceFactory {
 }  // namespace bluetooth
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace bluetooth {
-using ::ash::bluetooth::DebugLogsManagerFactory;
-}  // namespace bluetooth
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_BLUETOOTH_DEBUG_LOGS_MANAGER_FACTORY_H_

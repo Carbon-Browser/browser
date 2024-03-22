@@ -1,18 +1,25 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_SERVICES_CROS_HEALTHD_PRIVATE_CPP_DATA_COLLECTOR_H_
 #define CHROMEOS_ASH_SERVICES_CROS_HEALTHD_PRIVATE_CPP_DATA_COLLECTOR_H_
 
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/mojo_service_manager/mojom/mojo_service_manager.mojom.h"
 #include "chromeos/ash/services/cros_healthd/private/mojom/cros_healthd_internal.mojom.h"
+#include "chromeos/components/sensors/mojom/cros_sensor_service.mojom.h"
+#include "chromeos/components/sensors/mojom/sensor.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
 
-namespace chromeos {
-namespace cros_healthd {
-namespace internal {
+namespace ash::cros_healthd::internal {
 
-class DataCollector : public mojom::ChromiumDataCollector {
+// TODO(b/249182240): Rename interface name to another one. The
+// SetPrivacyScreenState method is conflicted with the interface name.
+class DataCollector
+    : public mojom::ChromiumDataCollector,
+      public chromeos::mojo_service_manager::mojom::ServiceProvider {
  public:
   // Delegate class to be replaced for testing.
   class Delegate {
@@ -22,6 +29,16 @@ class DataCollector : public mojom::ChromiumDataCollector {
 
     // Get the touchpad library name.
     virtual std::string GetTouchpadLibraryName() = 0;
+    // Queries if privacy screen is supported.
+    virtual bool IsPrivacyScreenSupported() = 0;
+    // Queries if privacy screen is in managed mode.
+    virtual bool IsPrivacyScreenManaged() = 0;
+    // Sets privacy screen state.
+    virtual void SetPrivacyScreenState(bool state) = 0;
+    // Queries if audio output device is force muted.
+    virtual bool IsOutputForceMuted() = 0;
+    // Set output mute, mock for testing.
+    virtual void SetOutputMute(bool mute_on) = 0;
   };
 
   DataCollector();
@@ -37,24 +54,25 @@ class DataCollector : public mojom::ChromiumDataCollector {
   // mojom::ChromiumDataCollector overrides.
   void GetTouchscreenDevices(GetTouchscreenDevicesCallback callback) override;
   void GetTouchpadLibraryName(GetTouchpadLibraryNameCallback callback) override;
+  void SetPrivacyScreenState(bool state,
+                             SetPrivacyScreenStateCallback callback) override;
+  void SetAudioOutputMute(bool mute_on,
+                          SetAudioOutputMuteCallback callback) override;
+
+  // chromeos::mojo_service_manager::mojom::ServiceProvider overrides.
+  void Request(
+      chromeos::mojo_service_manager::mojom::ProcessIdentityPtr identity,
+      mojo::ScopedMessagePipeHandle receiver) override;
 
   // Pointer to the delegate.
-  Delegate* const delegate_;
-  // The mojo receiver.
-  mojo::Receiver<mojom::ChromiumDataCollector> receiver_{this};
+  const raw_ptr<Delegate, ExperimentalAsh> delegate_;
+  // The mojo receiver of service provider.
+  mojo::Receiver<chromeos::mojo_service_manager::mojom::ServiceProvider>
+      provider_receiver_{this};
+  // The mojo receiver set of data collector.
+  mojo::ReceiverSet<mojom::ChromiumDataCollector> receiver_set_;
 };
 
-}  // namespace internal
-}  // namespace cros_healthd
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-namespace cros_healthd {
-namespace internal {
-using ::chromeos::cros_healthd::internal::DataCollector;
-}
-}  // namespace cros_healthd
-}  // namespace ash
+}  // namespace ash::cros_healthd::internal
 
 #endif  // CHROMEOS_ASH_SERVICES_CROS_HEALTHD_PRIVATE_CPP_DATA_COLLECTOR_H_

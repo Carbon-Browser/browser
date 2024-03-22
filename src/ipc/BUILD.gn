@@ -1,8 +1,9 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
+import("//build/config/features.gni")
 import("//build/config/nacl/config.gni")
 import("//ipc/features.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
@@ -31,7 +32,7 @@ component("ipc") {
     "struct_constructor_macros.h",
   ]
 
-  if (!is_ios) {
+  if (use_blink) {
     sources += [
       # Most sources go here since ios only needs the param_traits
       # code.
@@ -71,6 +72,7 @@ component("ipc") {
       "message_router.h",
       "trace_ipc_message.cc",
       "trace_ipc_message.h",
+      "urgent_message_observer.h",
     ]
   }
 
@@ -242,7 +244,23 @@ source_set("protobuf_support") {
   ]
 }
 
-if (!is_ios) {
+static_library("test_sink") {
+  testonly = true
+  sources = [
+    "ipc_security_test_util.cc",
+    "ipc_security_test_util.h",
+    "ipc_test_sink.cc",
+    "ipc_test_sink.h",
+  ]
+  public_deps = [ ":ipc" ]
+  deps = [
+    "//base",
+    "//base/test:test_support",
+    "//mojo/core/test:test_support",
+  ]
+}
+
+if (use_blink) {
   source_set("run_all_unittests") {
     testonly = true
 
@@ -253,7 +271,7 @@ if (!is_ios) {
       "//base/test:test_support",
       "//mojo/core/embedder",
       "//mojo/core/test:test_support",
-      "//third_party/ipcz/src:ipcz_tests_sources_chromium",
+      "//third_party/ipcz/src:ipcz_test_support_chromium",
       "//third_party/ipcz/src:test_buildflags",
     ]
   }
@@ -296,6 +314,7 @@ if (!is_ios) {
       "//base:i18n",
       "//base/test:test_support",
       "//crypto",
+      "//mojo/core:driver_for_ipcz_tests",
       "//mojo/core/test:test_support",
       "//testing/gtest",
       "//third_party/ipcz/src:ipcz_tests_sources_chromium",
@@ -334,16 +353,15 @@ if (!is_ios) {
   static_library("test_support") {
     testonly = true
     sources = [
-      "ipc_security_test_util.cc",
-      "ipc_security_test_util.h",
       "ipc_test_base.cc",
       "ipc_test_base.h",
       "ipc_test_channel_listener.cc",
       "ipc_test_channel_listener.h",
-      "ipc_test_sink.cc",
-      "ipc_test_sink.h",
     ]
-    public_deps = [ ":ipc" ]
+    public_deps = [
+      ":ipc",
+      ":test_sink",
+    ]
     deps = [
       "//base",
       "//base/test:test_support",

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 #include "base/android/callback_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "components/embedder_support/android/simple_factory_key/simple_factory_key_handle.h"
 #include "components/image_fetcher/core/cache/image_cache.h"
@@ -177,7 +177,8 @@ void ImageFetcherBridge::ReportCacheHitTime(
     const jlong start_time_millis) {
   std::string client_name =
       base::android::ConvertJavaStringToUTF8(j_client_name);
-  base::Time start_time = base::Time::FromJavaTime(start_time_millis);
+  base::Time start_time =
+      base::Time::FromMillisecondsSinceUnixEpoch(start_time_millis);
   ImageFetcherMetricsReporter::ReportImageLoadFromCacheTimeJava(client_name,
                                                                 start_time);
 }
@@ -189,7 +190,8 @@ void ImageFetcherBridge::ReportTotalFetchTimeFromNative(
     const jlong start_time_millis) {
   std::string client_name =
       base::android::ConvertJavaStringToUTF8(j_client_name);
-  base::Time start_time = base::Time::FromJavaTime(start_time_millis);
+  base::Time start_time =
+      base::Time::FromMillisecondsSinceUnixEpoch(start_time_millis);
   ImageFetcherMetricsReporter::ReportTotalFetchFromNativeTimeJava(client_name,
                                                                   start_time);
 }

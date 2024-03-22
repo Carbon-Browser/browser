@@ -1,17 +1,20 @@
 {
   "$build/chromium_orchestrator": {
     "compilator": "linux_chromium_tsan_rel_ng-compilator",
-    "compilator_watcher_git_revision": "7809a690bbd935bcb3b4d922e24cabe168aaabc8"
+    "compilator_watcher_git_revision": "e3cad57252d996ab02463019e7f49343d739b885"
   },
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/linux_chromium_tsan_rel_ng/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux TSan Builder",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-memory-archive",
@@ -26,9 +29,6 @@
                 "target_bits": 64
               },
               "legacy_gclient_config": {
-                "apply_configs": [
-                  "enable_reclient"
-                ],
                 "config": "chromium"
               }
             }
@@ -37,7 +37,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux TSan Tests",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-memory-archive",
@@ -52,15 +52,12 @@
                 "target_bits": 64
               },
               "legacy_gclient_config": {
-                "apply_configs": [
-                  "enable_reclient"
-                ],
                 "config": "chromium"
               },
               "parent": {
                 "bucket": "ci",
                 "builder": "Linux TSan Builder",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           }
@@ -70,20 +67,21 @@
         {
           "bucket": "ci",
           "builder": "Linux TSan Builder",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "builder_ids_in_scope_for_testing": [
         {
           "bucket": "ci",
           "builder": "Linux TSan Tests",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
-      ],
-      "rts_config": {
-        "condition": "QUICK_RUN_ONLY"
-      }
+      ]
     }
+  },
+  "$build/flakiness": {
+    "check_for_flakiness": true,
+    "check_for_flakiness_with_resultdb": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -93,5 +91,6 @@
     ]
   },
   "builder_group": "tryserver.chromium.linux",
+  "cq": "required",
   "recipe": "chromium/orchestrator"
 }

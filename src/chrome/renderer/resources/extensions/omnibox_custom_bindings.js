@@ -1,13 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Custom binding for the omnibox API. Only injected into the v8 contexts
 // for extensions which have permission for the omnibox API.
 
-// TODO(devlin): Move IsInServiceWorker() somewhere more common than setIcon
-// bindings.
-var inServiceWorker = requireNative('setIcon').IsInServiceWorker();
+var inServiceWorker = requireNative('utils').isInServiceWorker();
 
 // Remove invalid characters from |text| so that it is suitable to use
 // for |AutocompleteMatch::contents|.

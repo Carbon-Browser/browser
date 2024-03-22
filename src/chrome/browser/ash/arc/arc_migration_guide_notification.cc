@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/arc/arc_migration_constants.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
@@ -16,7 +16,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
 #include "components/vector_icons/vector_icons.h"
@@ -61,19 +61,17 @@ void ShowArcMigrationGuideNotification(Profile* profile) {
       base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
           base::BindRepeating(&chrome::AttemptUserExit));
 
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE, kSuggestNotificationId,
-          l10n_util::GetStringUTF16(
-              IDS_ARC_MIGRATE_ENCRYPTION_NOTIFICATION_TITLE),
-          message, std::u16string(), GURL(), notifier_id,
-          message_center::RichNotificationData(), std::move(delegate),
-          vector_icons::kSettingsIcon,
-          message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
-  notification->set_renotify(true);
+  message_center::Notification notification = ash::CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, kSuggestNotificationId,
+      l10n_util::GetStringUTF16(IDS_ARC_MIGRATE_ENCRYPTION_NOTIFICATION_TITLE),
+      message, std::u16string(), GURL(), notifier_id,
+      message_center::RichNotificationData(), std::move(delegate),
+      vector_icons::kSettingsIcon,
+      message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
+  notification.set_renotify(true);
 
   NotificationDisplayService::GetForProfile(profile)->Display(
-      NotificationHandler::Type::TRANSIENT, *notification,
+      NotificationHandler::Type::TRANSIENT, notification,
       /*metadata=*/nullptr);
 }
 

@@ -1,13 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/sql_table_builder.h"
 
-#include <algorithm>
 #include <set>
 #include <utility>
 
+#include "base/containers/adapters.h"
 #include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
@@ -353,9 +353,13 @@ std::vector<base::StringPiece> SQLTableBuilder::AllPrimaryKeyNames() const {
 
 size_t SQLTableBuilder::NumberOfColumns() const {
   DCHECK(IsVersionLastAndSealed(sealed_version_));
-  return base::checked_cast<size_t>(std::count_if(
-      columns_.begin(), columns_.end(),
+  return base::checked_cast<size_t>(base::ranges::count_if(
+      columns_,
       [this](const Column& column) { return IsColumnInLastVersion(column); }));
+}
+
+std::string SQLTableBuilder::TableName() const {
+  return table_name_;
 }
 
 bool SQLTableBuilder::MigrateToNextFrom(unsigned old_version,
@@ -528,16 +532,12 @@ bool SQLTableBuilder::MigrateIndicesToNextFrom(unsigned old_version,
 
 std::vector<SQLTableBuilder::Column>::reverse_iterator
 SQLTableBuilder::FindLastColumnByName(const std::string& name) {
-  return std::find_if(
-      columns_.rbegin(), columns_.rend(),
-      [&name](const Column& column) { return name == column.name; });
+  return base::ranges::find(base::Reversed(columns_), name, &Column::name);
 }
 
 std::vector<SQLTableBuilder::Index>::reverse_iterator
 SQLTableBuilder::FindLastIndexByName(const std::string& name) {
-  return std::find_if(
-      indices_.rbegin(), indices_.rend(),
-      [&name](const Index& index) { return name == index.name; });
+  return base::ranges::find(base::Reversed(indices_), name, &Index::name);
 }
 
 bool SQLTableBuilder::IsVersionLastAndSealed(unsigned version) const {

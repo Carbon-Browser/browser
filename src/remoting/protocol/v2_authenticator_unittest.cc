@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/v2_authenticator.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "net/base/net_errors.h"
 #include "remoting/base/rsa_key_pair.h"
@@ -20,8 +20,7 @@ using testing::_;
 using testing::DeleteArg;
 using testing::SaveArg;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -45,11 +44,10 @@ class V2AuthenticatorTest : public AuthenticatorTestBase {
  protected:
   void InitAuthenticators(const std::string& client_secret,
                           const std::string& host_secret) {
-    host_ = V2Authenticator::CreateForHost(
-        host_cert_, key_pair_, host_secret,
-        Authenticator::WAITING_MESSAGE);
-    client_ = V2Authenticator::CreateForClient(
-        client_secret, Authenticator::MESSAGE_READY);
+    host_ = V2Authenticator::CreateForHost(host_cert_, key_pair_, host_secret,
+                                           Authenticator::WAITING_MESSAGE);
+    client_ = V2Authenticator::CreateForClient(client_secret,
+                                               Authenticator::MESSAGE_READY);
   }
 };
 
@@ -95,5 +93,4 @@ TEST_F(V2AuthenticatorTest, InvalidSecret) {
   ASSERT_EQ(Authenticator::REJECTED, host_->state());
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

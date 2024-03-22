@@ -1,8 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/segmentation_platform/public/types/processed_value.h"
+
+#include "base/i18n/time_formatting.h"
+#include "base/json/values_util.h"
+#include "base/values.h"
 
 namespace segmentation_platform::processing {
 
@@ -82,6 +86,65 @@ bool ProcessedValue::operator==(const ProcessedValue& rhs) const {
     case Type::URL:
       return *url == *rhs.url;
   }
+}
+
+base::Value ProcessedValue::ToDebugValue() const {
+  base::Value::Dict dict;
+  switch (type) {
+    case Type::UNKNOWN:
+      dict.Set("type", "UNKNOWN");
+      break;
+    case Type::BOOL:
+      dict.Set("type", "BOOL");
+      dict.Set("value", bool_val);
+      break;
+    case Type::INT:
+      dict.Set("type", "INT");
+      dict.Set("value", int_val);
+      break;
+    case Type::FLOAT:
+      dict.Set("type", "FLOAT");
+      dict.Set("value", float_val);
+      break;
+    case Type::DOUBLE:
+      dict.Set("type", "DOUBLE");
+      dict.Set("value", double_val);
+      break;
+    case Type::STRING:
+      dict.Set("type", "STRING");
+      dict.Set("value", str_val);
+      break;
+    case Type::TIME:
+      dict.Set("type", "TIME");
+      dict.Set("value", base::TimeFormatHTTP(time_val));
+      break;
+    case Type::INT64:
+      dict.Set("type", "INT64");
+      dict.Set("value", base::Int64ToValue(int64_val));
+      break;
+    case Type::URL:
+      dict.Set("type", "URL");
+      if (!url) {
+        dict.Set("value", "(not set)");
+      } else if (url->is_empty()) {
+        dict.Set("value", "(empty)");
+      } else if (!url->is_valid()) {
+        dict.Set("value", "(invalid)");
+      } else {
+        dict.Set("value", url->spec());
+      }
+      break;
+  }
+  return base::Value(std::move(dict));
+}
+
+// static
+ProcessedValue ProcessedValue::FromFloat(float val) {
+  return ProcessedValue(val);
+}
+
+std::ostream& operator<<(std::ostream& out, const ProcessedValue& value) {
+  return out << value.ToDebugValue();
 }
 
 }  // namespace segmentation_platform::processing

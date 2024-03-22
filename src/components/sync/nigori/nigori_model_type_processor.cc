@@ -1,11 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/nigori/nigori_model_type_processor.h"
 
+#include <vector>
+
 #include "base/logging.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/trace_event/trace_event.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/base/data_type_histogram.h"
 #include "components/sync/base/time.h"
@@ -18,6 +20,7 @@
 #include "components/sync/nigori/nigori_sync_bridge.h"
 #include "components/sync/protocol/entity_metadata.pb.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
+#include "components/sync/protocol/model_type_state_helper.h"
 #include "components/sync/protocol/proto_memory_estimations.h"
 #include "components/sync/protocol/proto_value_conversions.h"
 
@@ -32,7 +35,7 @@ const char kRawNigoriClientTagHash[] = "NigoriClientTagHash";
 
 }  // namespace
 
-NigoriModelTypeProcessor::NigoriModelTypeProcessor() : bridge_(nullptr) {}
+NigoriModelTypeProcessor::NigoriModelTypeProcessor() = default;
 
 NigoriModelTypeProcessor::~NigoriModelTypeProcessor() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -112,12 +115,13 @@ void NigoriModelTypeProcessor::OnCommitCompleted(
     entity_->ClearTransientSyncState();
   }
   // Ask the bridge to persist the new metadata.
-  bridge_->ApplySyncChanges(/*data=*/absl::nullopt);
+  bridge_->ApplyIncrementalSyncChanges(/*data=*/absl::nullopt);
 }
 
 void NigoriModelTypeProcessor::OnUpdateReceived(
     const sync_pb::ModelTypeState& type_state,
-    UpdateResponseDataList updates) {
+    UpdateResponseDataList updates,
+    absl::optional<sync_pb::GarbageCollectionDirective> gc_directive) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(model_ready_to_sync_);
   // If there is a model error, it must have been reported already but hasn't
@@ -127,9 +131,12 @@ void NigoriModelTypeProcessor::OnUpdateReceived(
     return;
   }
 
+  // TODO(crbug.com/1356900): validate incoming updates, e.g. |gc_directive|
+  // must be empty for Nigori.
   absl::optional<ModelError> error;
 
-  const bool is_initial_sync = !model_type_state_.initial_sync_done();
+  const bool is_initial_sync =
+      !IsInitialSyncDone(model_type_state_.initial_sync_state());
   LogUpdatesReceivedByProcessorHistogram(NIGORI, is_initial_sync,
                                          updates.size());
 
@@ -138,14 +145,14 @@ void NigoriModelTypeProcessor::OnUpdateReceived(
   if (is_initial_sync) {
     DCHECK(!entity_);
     if (updates.empty()) {
-      error = bridge_->MergeSyncData(absl::nullopt);
+      error = bridge_->MergeFullSyncData(absl::nullopt);
     } else {
       DCHECK(!updates[0].entity.is_deleted());
       entity_ = ProcessorEntity::CreateNew(
           kNigoriStorageKey, ClientTagHash::FromHashed(kRawNigoriClientTagHash),
           updates[0].entity.id, updates[0].entity.creation_time);
       entity_->RecordAcceptedRemoteUpdate(updates[0], /*trimmed_specifics=*/{});
-      error = bridge_->MergeSyncData(std::move(updates[0].entity));
+      error = bridge_->MergeFullSyncData(std::move(updates[0].entity));
     }
     if (error) {
       ReportError(*error);
@@ -154,7 +161,7 @@ void NigoriModelTypeProcessor::OnUpdateReceived(
   }
 
   if (updates.empty()) {
-    bridge_->ApplySyncChanges(/*data=*/absl::nullopt);
+    bridge_->ApplyIncrementalSyncChanges(/*data=*/absl::nullopt);
     return;
   }
 
@@ -163,9 +170,9 @@ void NigoriModelTypeProcessor::OnUpdateReceived(
   // are adding the following DCHECK to simplify the code.
   DCHECK(!updates[0].entity.is_deleted());
 
-  if (entity_->UpdateIsReflection(updates[0].response_version)) {
+  if (entity_->IsVersionAlreadyKnown(updates[0].response_version)) {
     // Seen this update before; just ignore it.
-    bridge_->ApplySyncChanges(/*data=*/absl::nullopt);
+    bridge_->ApplyIncrementalSyncChanges(/*data=*/absl::nullopt);
     return;
   }
 
@@ -173,12 +180,13 @@ void NigoriModelTypeProcessor::OnUpdateReceived(
     // Remote update always win in case of conflict, because bridge takes care
     // of reapplying pending local changes after processing the remote update.
     entity_->RecordForcedRemoteUpdate(updates[0], /*trimmed_specifics=*/{});
-    error = bridge_->ApplySyncChanges(std::move(updates[0].entity));
   } else if (!entity_->MatchesData(updates[0].entity)) {
     // Inform the bridge of the new or updated data.
     entity_->RecordAcceptedRemoteUpdate(updates[0], /*trimmed_specifics=*/{});
-    error = bridge_->ApplySyncChanges(std::move(updates[0].entity));
   }
+  LogNonReflectionUpdateFreshnessToUma(NIGORI,
+                                       updates[0].entity.modification_time);
+  error = bridge_->ApplyIncrementalSyncChanges(std::move(updates[0].entity));
 
   if (error) {
     ReportError(*error);
@@ -187,6 +195,20 @@ void NigoriModelTypeProcessor::OnUpdateReceived(
 
   // There may be new reasons to commit by the time this function is done.
   NudgeForCommitIfNeeded();
+}
+
+void NigoriModelTypeProcessor::StorePendingInvalidations(
+    std::vector<sync_pb::ModelTypeState::Invalidation> invalidations_to_store) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (model_error_ || !bridge_) {
+    return;
+  }
+  model_type_state_.mutable_invalidations()->Assign(
+      invalidations_to_store.begin(), invalidations_to_store.end());
+  // ApplyIncrementalSyncChanges does actually query and persist the
+  // |model_type_state_|.
+  bridge_->ApplyIncrementalSyncChanges(/*data=*/absl::nullopt);
 }
 
 void NigoriModelTypeProcessor::OnSyncStarting(
@@ -238,8 +260,7 @@ void NigoriModelTypeProcessor::GetAllNodesForDebugging(
 
   std::unique_ptr<EntityData> entity_data = bridge_->GetData();
   if (!entity_data) {
-    std::move(callback).Run(syncer::NIGORI,
-                            std::make_unique<base::ListValue>());
+    std::move(callback).Run(syncer::NIGORI, base::Value::List());
     return;
   }
 
@@ -251,25 +272,21 @@ void NigoriModelTypeProcessor::GetAllNodesForDebugging(
     entity_data->modification_time =
         ProtoTimeToTime(metadata.modification_time());
   }
-  std::unique_ptr<base::DictionaryValue> root_node;
-  root_node = entity_data->ToDictionaryValue();
+  base::Value::Dict root_node = entity_data->ToDictionaryValue();
   if (entity_) {
-    root_node->SetKey("metadata",
-                      base::Value::FromUniquePtrValue(
-                          EntityMetadataToValue(entity_->metadata())));
+    root_node.Set("metadata", EntityMetadataToValue(entity_->metadata()));
   }
 
   // Function isTypeRootNode in sync_node_browser.js use PARENT_ID and
   // UNIQUE_SERVER_TAG to check if the node is root node. isChildOf in
   // sync_node_browser.js uses modelType to check if root node is parent of real
   // data node.
-  root_node->SetStringKey("PARENT_ID", "r");
-  root_node->SetStringKey("UNIQUE_SERVER_TAG", "Nigori");
-  root_node->SetStringKey("modelType", ModelTypeToDebugString(NIGORI));
+  root_node.Set("PARENT_ID", "r");
+  root_node.Set("UNIQUE_SERVER_TAG", "Nigori");
+  root_node.Set("modelType", ModelTypeToDebugString(NIGORI));
 
-  auto all_nodes = std::make_unique<base::ListValue>();
-  all_nodes->GetList().Append(
-      base::Value::FromUniquePtrValue(std::move(root_node)));
+  base::Value::List all_nodes;
+  all_nodes.Append(std::move(root_node));
   std::move(callback).Run(syncer::NIGORI, std::move(all_nodes));
 }
 
@@ -294,6 +311,7 @@ void NigoriModelTypeProcessor::RecordMemoryUsageAndCountsHistograms() {
 void NigoriModelTypeProcessor::ModelReadyToSync(
     NigoriSyncBridge* bridge,
     NigoriMetadataBatch nigori_metadata) {
+  TRACE_EVENT0("sync", "NigoriModelTypeProcessor::ModelReadyToSync");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(bridge);
   DCHECK(!model_ready_to_sync_);
@@ -305,7 +323,10 @@ void NigoriModelTypeProcessor::ModelReadyToSync(
     return;
   }
 
-  if (nigori_metadata.model_type_state.initial_sync_done() &&
+  MigrateLegacyInitialSyncDone(nigori_metadata.model_type_state, NIGORI);
+
+  if (IsInitialSyncDone(
+          nigori_metadata.model_type_state.initial_sync_state()) &&
       nigori_metadata.entity_metadata) {
     model_type_state_ = std::move(nigori_metadata.model_type_state);
     sync_pb::EntityMetadata metadata =
@@ -330,7 +351,7 @@ void NigoriModelTypeProcessor::Put(std::unique_ptr<EntityData> entity_data) {
   DCHECK_EQ(NIGORI, GetModelTypeFromSpecifics(entity_data->specifics));
   DCHECK(entity_);
 
-  if (!model_type_state_.initial_sync_done()) {
+  if (!IsInitialSyncDone(model_type_state_.initial_sync_state())) {
     // Ignore changes before the initial sync is done.
     return;
   }
@@ -402,7 +423,7 @@ NigoriModelTypeProcessor::GetModelTypeStateForTest() {
 }
 
 bool NigoriModelTypeProcessor::IsTrackingMetadata() {
-  return model_type_state_.initial_sync_done();
+  return IsInitialSyncDone(model_type_state_.initial_sync_state());
 }
 
 bool NigoriModelTypeProcessor::IsConnected() const {
@@ -423,7 +444,7 @@ void NigoriModelTypeProcessor::ConnectIfReady() {
     return;
   }
 
-  if (model_type_state_.initial_sync_done() &&
+  if (IsInitialSyncDone(model_type_state_.initial_sync_state()) &&
       model_type_state_.cache_guid() != activation_request_.cache_guid) {
     ClearMetadataAndReset();
     DCHECK(model_ready_to_sync_);
@@ -449,7 +470,7 @@ void NigoriModelTypeProcessor::NudgeForCommitIfNeeded() const {
   }
 
   // Don't send anything if the type is not ready to handle commits.
-  if (!model_type_state_.initial_sync_done()) {
+  if (!IsInitialSyncDone(model_type_state_.initial_sync_state())) {
     return;
   }
 
@@ -467,6 +488,11 @@ void NigoriModelTypeProcessor::ClearMetadataAndReset() {
   model_type_state_ = sync_pb::ModelTypeState();
   model_type_state_.mutable_progress_marker()->set_data_type_id(
       sync_pb::EntitySpecifics::kNigoriFieldNumber);
+}
+
+void NigoriModelTypeProcessor::ClearMetadataIfStopped() {
+  // Nigori has a separate load callback and way to clear data. In particular,
+  // Nigori is never considered to be stopped.
 }
 
 }  // namespace syncer

@@ -1,12 +1,11 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content.app;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.MainDex;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 /**
  * This class is used to initialize all types of process. It corresponds to
@@ -19,7 +18,6 @@ import org.chromium.base.annotations.NativeMethods;
  *
  **/
 @JNINamespace("content")
-@MainDex
 public class ContentMain {
     /**
      * Start the ContentMainRunner in native side.

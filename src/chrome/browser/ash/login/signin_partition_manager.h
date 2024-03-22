@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,11 @@
 #define CHROME_BROWSER_ASH_LOGIN_SIGNIN_PARTITION_MANAGER_H_
 
 #include <string>
-#include <vector>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
-#include "base/memory/weak_ptr.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -89,10 +87,6 @@ class SigninPartitionManager : public KeyedService {
   bool IsCurrentSigninStoragePartition(
       const content::StoragePartition* storage_partition) const;
 
-  // Disposes old storage partitions. Note that callers need to be sure that
-  // old partitions will not be referenced again.
-  void DisposeOldStoragePartitions();
-
   void SetClearStoragePartitionTaskForTesting(
       ClearStoragePartitionTask clear_storage_partition_task);
   void SetGetSystemNetworkContextForTesting(
@@ -100,7 +94,7 @@ class SigninPartitionManager : public KeyedService {
   void SetOnCreateNewStoragePartitionForTesting(
       OnCreateNewStoragePartition on_create_new_storage_partition);
 
-  class Factory : public BrowserContextKeyedServiceFactory {
+  class Factory : public ProfileKeyedServiceFactory {
    public:
     static SigninPartitionManager* GetForBrowserContext(
         content::BrowserContext* browser_context);
@@ -117,18 +111,12 @@ class SigninPartitionManager : public KeyedService {
     ~Factory() override;
 
     // BrowserContextKeyedServiceFactory:
-    KeyedService* BuildServiceInstanceFor(
-        content::BrowserContext* context) const override;
-    content::BrowserContext* GetBrowserContextToUse(
+    std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
         content::BrowserContext* context) const override;
   };
 
  private:
-  // Invoked after `storage_partition` is cleared.
-  void OnStoragePartitionCleared(content::StoragePartition* storage_partition,
-                                 base::OnceClosure partition_data_cleared);
-
-  content::BrowserContext* const browser_context_;
+  const raw_ptr<content::BrowserContext, ExperimentalAsh> browser_context_;
 
   ClearStoragePartitionTask clear_storage_partition_task_;
   GetSystemNetworkContextTask get_system_network_context_task_;
@@ -142,29 +130,11 @@ class SigninPartitionManager : public KeyedService {
   std::string current_storage_partition_name_;
   // The StoragePartition identified by `storage_partition_domain_` and
   // `current_storage_partition_name_`.
-  content::StoragePartition* current_storage_partition_ = nullptr;
-
-  // Storage partitions that should be disposed. Storage partitions for previous
-  // gaia loads are added here. It if only safe to remove them when there are no
-  // outstanding references. The current assumption is that all references are
-  // gone after the gaia loading webview is fully navigated away. The vector
-  // here is maintained in the time order of gaia loads and the last element
-  // is used as a barrier to indicate all previous ones could be safely
-  // disposed.
-  std::vector<content::StoragePartition*> pending_removal_partitions_;
-
-  base::WeakPtrFactory<SigninPartitionManager> weak_ptr_factory_{this};
+  raw_ptr<content::StoragePartition, ExperimentalAsh>
+      current_storage_partition_ = nullptr;
 };
 
 }  // namespace login
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace login {
-using ::ash::login::SigninPartitionManager;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SIGNIN_PARTITION_MANAGER_H_

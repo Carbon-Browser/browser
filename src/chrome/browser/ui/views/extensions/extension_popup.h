@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_POPUP_H_
 #define CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_POPUP_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ui/extensions/extension_popup_types.h"
@@ -115,6 +115,12 @@ class ExtensionPopup : public views::BubbleDialogDelegateView,
   void DevToolsAgentHostDetached(
       content::DevToolsAgentHost* agent_host) override;
 
+  // Closes the popup immediately, if possible. On Mac, if a nested
+  // run loop is running, schedule a deferred close for after the
+  // nested loop ends.
+  void CloseDeferredIfNecessary(views::Widget::ClosedReason reason =
+                                    views::Widget::ClosedReason::kUnspecified);
+
   // Returns the most recently constructed popup. For testing only.
   static ExtensionPopup* last_popup_for_testing();
 
@@ -139,7 +145,7 @@ class ExtensionPopup : public views::BubbleDialogDelegateView,
   // The contained host for the view.
   std::unique_ptr<extensions::ExtensionViewHost> host_;
 
-  raw_ptr<ExtensionViewViews> extension_view_;
+  raw_ptr<ExtensionViewViews, DanglingUntriaged> extension_view_;
 
   base::ScopedObservation<extensions::ExtensionRegistry,
                           extensions::ExtensionRegistryObserver>
@@ -149,10 +155,20 @@ class ExtensionPopup : public views::BubbleDialogDelegateView,
 
   ShowPopupCallback shown_callback_;
 
+#if BUILDFLAG(IS_MAC)
+  class ScopedBrowserActivationObservation;
+  // The observation on the browser window.
+  // Closes the extension popup when the browser window gets activation.
+  std::unique_ptr<ScopedBrowserActivationObservation>
+      scoped_browser_activation_obvervation_;
+#endif
+
   // Note: This must be reset *before* `host_`. See note in
   // OnExtensionUnloaded().
   std::unique_ptr<ScopedDevToolsAgentHostObservation>
       scoped_devtools_observation_;
+
+  base::WeakPtrFactory<ExtensionPopup> deferred_close_weak_ptr_factory_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSION_POPUP_H_

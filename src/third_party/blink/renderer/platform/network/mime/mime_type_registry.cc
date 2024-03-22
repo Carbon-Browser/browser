@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,16 +48,19 @@ std::string ToLowerASCIIInternal(CHARTYPE* str, SIZETYPE length) {
 
 // Does the same as ToASCIIOrEmpty, but also makes the chars lower.
 std::string ToLowerASCIIOrEmpty(const String& str) {
-  if (str.IsEmpty() || !str.ContainsOnlyASCIIOrEmpty())
+  if (str.empty() || !str.ContainsOnlyASCIIOrEmpty())
     return std::string();
   if (str.Is8Bit())
     return ToLowerASCIIInternal(str.Characters8(), str.length());
   return ToLowerASCIIInternal(str.Characters16(), str.length());
 }
 
-STATIC_ASSERT_ENUM(MIMETypeRegistry::kIsNotSupported, media::IsNotSupported);
-STATIC_ASSERT_ENUM(MIMETypeRegistry::kIsSupported, media::IsSupported);
-STATIC_ASSERT_ENUM(MIMETypeRegistry::kMayBeSupported, media::MayBeSupported);
+STATIC_ASSERT_ENUM(MIMETypeRegistry::kNotSupported,
+                   media::SupportsType::kNotSupported);
+STATIC_ASSERT_ENUM(MIMETypeRegistry::kSupported,
+                   media::SupportsType::kSupported);
+STATIC_ASSERT_ENUM(MIMETypeRegistry::kMaybeSupported,
+                   media::SupportsType::kMaybeSupported);
 
 }  // namespace
 
@@ -124,7 +127,7 @@ bool MIMETypeRegistry::IsSupportedNonImageMIMEType(const String& mime_type) {
 
 bool MIMETypeRegistry::IsSupportedMediaMIMEType(const String& mime_type,
                                                 const String& codecs) {
-  return SupportsMediaMIMEType(mime_type, codecs) != kIsNotSupported;
+  return SupportsMediaMIMEType(mime_type, codecs) != kNotSupported;
 }
 
 MIMETypeRegistry::SupportsType MIMETypeRegistry::SupportsMediaMIMEType(
@@ -142,7 +145,7 @@ MIMETypeRegistry::SupportsType MIMETypeRegistry::SupportsMediaSourceMIMEType(
     const String& codecs) {
   const std::string ascii_mime_type = ToLowerASCIIOrEmpty(mime_type);
   if (ascii_mime_type.empty())
-    return kIsNotSupported;
+    return kNotSupported;
   std::vector<std::string> parsed_codec_ids;
   media::SplitCodecs(ToASCIIOrEmpty(codecs), &parsed_codec_ids);
   return static_cast<SupportsType>(media::StreamParserFactory::IsTypeSupported(
@@ -176,26 +179,11 @@ bool MIMETypeRegistry::IsSupportedTextTrackMIMEType(const String& mime_type) {
   return EqualIgnoringASCIICase(mime_type, "text/vtt");
 }
 
-bool MIMETypeRegistry::IsLossyImageMIMEType(const String& mime_type) {
-  return EqualIgnoringASCIICase(mime_type, "image/jpeg") ||
-         EqualIgnoringASCIICase(mime_type, "image/jpg") ||
-         EqualIgnoringASCIICase(mime_type, "image/pjpeg");
-}
-
-bool MIMETypeRegistry::IsLosslessImageMIMEType(const String& mime_type) {
-  return EqualIgnoringASCIICase(mime_type, "image/bmp") ||
-         EqualIgnoringASCIICase(mime_type, "image/gif") ||
-         EqualIgnoringASCIICase(mime_type, "image/png") ||
-         EqualIgnoringASCIICase(mime_type, "image/webp") ||
-         EqualIgnoringASCIICase(mime_type, "image/x-xbitmap") ||
-         EqualIgnoringASCIICase(mime_type, "image/x-png");
-}
-
 bool MIMETypeRegistry::IsXMLMIMEType(const String& mime_type) {
   if (EqualIgnoringASCIICase(mime_type, "text/xml") ||
-      EqualIgnoringASCIICase(mime_type, "application/xml") ||
-      EqualIgnoringASCIICase(mime_type, "text/xsl"))
+      EqualIgnoringASCIICase(mime_type, "application/xml")) {
     return true;
+  }
 
   // Per RFCs 3023 and 2045, an XML MIME type is of the form:
   // ^[0-9a-zA-Z_\\-+~!$\\^{}|.%'`#&*]+/[0-9a-zA-Z_\\-+~!$\\^{}|.%'`#&*]+\+xml$

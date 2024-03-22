@@ -1,18 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/policy/dlp/dlp_confidential_contents.h"
 
-#include <algorithm>
 #include <memory>
 #include <vector>
 
 #include "base/containers/cxx20_erase_vector.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "chrome/browser/chromeos/policy/dlp/dlp_histogram_helper.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager.h"
 #include "chrome/browser/favicon/favicon_utils.h"
+#include "components/enterprise/data_controls/dlp_histogram_helper.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
@@ -30,17 +32,10 @@ gfx::ImageSkia GetWindowIcon(aura::Window* window) {
   return image ? *image : gfx::ImageSkia();
 }
 
-GURL GetWithoutRef(const GURL& url) {
-  GURL::Replacements replacements;
-  replacements.ClearRef();
-  return url.ReplaceComponents(replacements);
-}
-
 }  // namespace
 
 // The maximum number of entries that can be kept in the
 // DlpConfidentialContentsCache.
-// TODO(crbug.com/1275926): determine the value to use
 static constexpr size_t kDefaultCacheSizeLimit = 100;
 
 // The default timeout after which the entries are evicted from the
@@ -51,13 +46,13 @@ DlpConfidentialContent::DlpConfidentialContent(
     content::WebContents* web_contents)
     : icon(favicon::TabFaviconFromWebContents(web_contents).AsImageSkia()),
       title(web_contents->GetTitle()),
-      url(GetWithoutRef(web_contents->GetLastCommittedURL())) {}
+      url(web_contents->GetLastCommittedURL().GetWithoutRef()) {}
 
 DlpConfidentialContent::DlpConfidentialContent(aura::Window* window,
                                                const GURL& url)
     : icon(GetWindowIcon(window)),
       title(window->GetTitle()),
-      url(GetWithoutRef(url)) {}
+      url(url.GetWithoutRef()) {}
 
 DlpConfidentialContent::DlpConfidentialContent(
     const DlpConfidentialContent& other) = default;
@@ -146,12 +141,11 @@ void DlpConfidentialContents::InsertOrUpdate(
     const DlpConfidentialContents& other) {
   contents_.insert(other.contents_.begin(), other.contents_.end());
   for (auto other_content : other.contents_) {
-    auto it =
-        std::find_if(contents_.begin(), contents_.end(),
-                     [&other_content](const DlpConfidentialContent& content) {
-                       return content == other_content &&
-                              content.title != other_content.title;
-                     });
+    auto it = base::ranges::find_if(
+        contents_, [&other_content](const DlpConfidentialContent& content) {
+          return content == other_content &&
+                 content.title != other_content.title;
+        });
     if (it != contents_.end()) {
       *it = other_content;
     }
@@ -168,7 +162,7 @@ DlpConfidentialContentsCache::Entry::~Entry() = default;
 
 DlpConfidentialContentsCache::DlpConfidentialContentsCache()
     : cache_size_limit_(kDefaultCacheSizeLimit),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 DlpConfidentialContentsCache::~DlpConfidentialContentsCache() = default;
 
@@ -186,30 +180,30 @@ void DlpConfidentialContentsCache::Cache(
   if (entries_.size() > cache_size_limit_) {
     entries_.pop_back();
   }
-  DlpConfidentialContentsCountHistogram(dlp::kConfidentialContentsCount,
-                                        entries_.size(), cache_size_limit_);
+  data_controls::DlpCountHistogram(
+      data_controls::dlp::kConfidentialContentsCount, entries_.size(),
+      cache_size_limit_);
 }
 
 bool DlpConfidentialContentsCache::Contains(
     content::WebContents* web_contents,
     DlpRulesManager::Restriction restriction) const {
   const GURL url = web_contents->GetLastCommittedURL();
-  return std::find_if(entries_.begin(), entries_.end(),
-                      [&](const std::unique_ptr<Entry>& entry) {
-                        return entry->restriction == restriction &&
-                               entry->content.url.EqualsIgnoringRef(url);
-                      }) != entries_.end();
+  return base::ranges::any_of(
+      entries_, [&](const std::unique_ptr<Entry>& entry) {
+        return entry->restriction == restriction &&
+               entry->content.url.EqualsIgnoringRef(url);
+      });
 }
 
 bool DlpConfidentialContentsCache::Contains(
     const DlpConfidentialContent& content,
     DlpRulesManager::Restriction restriction) const {
-  return std::find_if(
-             entries_.begin(), entries_.end(),
-             [&](const std::unique_ptr<Entry>& entry) {
-               return entry->restriction == restriction &&
-                      entry->content.url.EqualsIgnoringRef(content.url);
-             }) != entries_.end();
+  return base::ranges::any_of(
+      entries_, [&](const std::unique_ptr<Entry>& entry) {
+        return entry->restriction == restriction &&
+               entry->content.url.EqualsIgnoringRef(content.url);
+      });
 }
 
 size_t DlpConfidentialContentsCache::GetSizeForTesting() const {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,8 @@ namespace policy {
 
 class DeviceCommandSetVolumeJob : public RemoteCommandJob {
  public:
+  static const char kVolumeFieldName[];
+
   DeviceCommandSetVolumeJob();
 
   DeviceCommandSetVolumeJob(const DeviceCommandSetVolumeJob&) = delete;
@@ -27,8 +29,7 @@ class DeviceCommandSetVolumeJob : public RemoteCommandJob {
  protected:
   // RemoteCommandJob:
   bool ParseCommandPayload(const std::string& command_payload) override;
-  void RunImpl(CallbackWithResult succeeded_callback,
-               CallbackWithResult failed_callback) override;
+  void RunImpl(CallbackWithResult result_callback) override;
 
  private:
   // New volume level to be set, value in range [0,100].

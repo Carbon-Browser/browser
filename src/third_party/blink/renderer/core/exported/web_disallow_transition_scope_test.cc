@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/public/web/web_disallow_transition_scope.h"
+
+#if DCHECK_IS_ON()
 
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -48,9 +50,9 @@ TEST_F(WebDisallowTransitionScopeTest, TestDisallowTransition) {
   {
     // Illegal transition.
     WebDisallowTransitionScope disallow(&web_doc);
-    EXPECT_DEATH(core_doc->Lifecycle().EnsureStateAtMost(
-                     DocumentLifecycle::kVisualUpdatePending),
-                 "Cannot rewind document lifecycle");
+    EXPECT_DEATH_IF_SUPPORTED(core_doc->Lifecycle().EnsureStateAtMost(
+                                  DocumentLifecycle::kVisualUpdatePending),
+                              "Cannot rewind document lifecycle");
   }
 
   // Legal transition.
@@ -60,3 +62,5 @@ TEST_F(WebDisallowTransitionScopeTest, TestDisallowTransition) {
 #endif
 
 }  // namespace blink
+
+#endif  // DCHECK_IS_ON()

@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/display/display_configuration_controller_test_api.h"
 
 #include "ash/display/display_configuration_controller.h"
+#include "ash/root_window_controller.h"
 #include "ash/rotator/screen_rotation_animator.h"
 #include "ash/shell.h"
 
@@ -27,9 +28,8 @@ DisplayConfigurationControllerTestApi::GetScreenRotationAnimatorForDisplay(
 void DisplayConfigurationControllerTestApi::SetScreenRotationAnimatorForDisplay(
     int64_t display_id,
     std::unique_ptr<ScreenRotationAnimator> animator) {
-  aura::Window* root_window = Shell::GetRootWindowForDisplayId(display_id);
-  ScreenRotationAnimator::SetScreenRotationAnimatorForTest(root_window,
-                                                           std::move(animator));
+  Shell::GetRootWindowControllerWithDisplayId(display_id)
+      ->SetScreenRotationAnimatorForTest(std::move(animator));
 }
 
 }  // namespace ash

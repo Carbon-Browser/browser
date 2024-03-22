@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,12 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/sha1.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "components/base32/base32.h"
@@ -47,7 +46,8 @@ namespace image_fetcher {
 
 // static
 std::string ImageCache::HashUrlToKey(const std::string& input) {
-  return base32::Base32Encode(base::SHA1HashString(input));
+  return base32::Base32Encode(
+      base::SHA1HashSpan(base::as_bytes(base::make_span(input))));
 }
 
 // static

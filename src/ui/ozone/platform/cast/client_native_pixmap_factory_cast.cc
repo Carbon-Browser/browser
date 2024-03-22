@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/check_op.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "ui/gfx/buffer_types.h"
@@ -27,23 +28,25 @@ class ClientNativePixmapCast : public gfx::ClientNativePixmap {
 
   // ClientNativePixmap implementation:
   bool Map() override {
-    NOTREACHED();
+    CHECK(false);
     return false;
   }
   size_t GetNumberOfPlanes() const override {
-    return pixmap_handle_.planes.size();
+    CHECK(false);
+    return 0u;
   }
   void* GetMemoryAddress(size_t plane) const override {
-    NOTREACHED();
+    CHECK(false);
     return nullptr;
   }
-  void Unmap() override { NOTREACHED(); }
+  void Unmap() override { CHECK(false); }
   int GetStride(size_t plane) const override {
-    CHECK_LT(plane, pixmap_handle_.planes.size());
-    return base::checked_cast<int>(pixmap_handle_.planes[plane].stride);
+    CHECK(false);
+    return 0;
   }
   gfx::NativePixmapHandle CloneHandleForIPC() const override {
-    return gfx::CloneHandleForIPC(pixmap_handle_);
+    CHECK(false);
+    return gfx::NativePixmapHandle();
   }
 
  private:

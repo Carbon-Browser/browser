@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,9 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
-#include "components/autofill/core/browser/payments/local_card_migration_strike_database.h"
-#include "components/autofill/core/browser/strike_database.h"
+#include "components/autofill/core/browser/metrics/payments/local_card_migration_metrics.h"
+#include "components/autofill/core/browser/strike_databases/payments/local_card_migration_strike_database.h"
+#include "components/autofill/core/browser/strike_databases/strike_database.h"
 #include "components/autofill/core/common/autofill_clock.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
@@ -47,8 +48,8 @@ void LocalCardMigrationBubbleControllerImpl::ShowBubble(
   local_card_migration_bubble_closure_ =
       std::move(local_card_migration_bubble_closure);
 
-  AutofillMetrics::LogLocalCardMigrationBubbleOfferMetric(
-      AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_REQUESTED, is_reshow_);
+  autofill_metrics::LogLocalCardMigrationBubbleOfferMetric(
+      autofill_metrics::LOCAL_CARD_MIGRATION_BUBBLE_REQUESTED, is_reshow_);
 
   Show();
 }
@@ -58,8 +59,8 @@ void LocalCardMigrationBubbleControllerImpl::ReshowBubble() {
     return;
 
   is_reshow_ = true;
-  AutofillMetrics::LogLocalCardMigrationBubbleOfferMetric(
-      AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_REQUESTED, is_reshow_);
+  autofill_metrics::LogLocalCardMigrationBubbleOfferMetric(
+      autofill_metrics::LOCAL_CARD_MIGRATION_BUBBLE_REQUESTED, is_reshow_);
 
   Show();
 }
@@ -95,28 +96,28 @@ void LocalCardMigrationBubbleControllerImpl::OnBubbleClosed(
   }
 
   // Log local card migration bubble result according to the closed reason.
-  AutofillMetrics::LocalCardMigrationBubbleResultMetric metric;
+  autofill_metrics::LocalCardMigrationBubbleResultMetric metric;
   switch (closed_reason) {
     case PaymentsBubbleClosedReason::kAccepted:
-      metric = AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_ACCEPTED;
+      metric = autofill_metrics::LOCAL_CARD_MIGRATION_BUBBLE_ACCEPTED;
       break;
     case PaymentsBubbleClosedReason::kClosed:
-      metric = AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_CLOSED;
+      metric = autofill_metrics::LOCAL_CARD_MIGRATION_BUBBLE_CLOSED;
       break;
     case PaymentsBubbleClosedReason::kNotInteracted:
-      metric = AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_NOT_INTERACTED;
+      metric = autofill_metrics::LOCAL_CARD_MIGRATION_BUBBLE_NOT_INTERACTED;
       break;
     case PaymentsBubbleClosedReason::kLostFocus:
-      metric = AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_LOST_FOCUS;
+      metric = autofill_metrics::LOCAL_CARD_MIGRATION_BUBBLE_LOST_FOCUS;
       break;
     case PaymentsBubbleClosedReason::kUnknown:
-      metric = AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_RESULT_UNKNOWN;
+      metric = autofill_metrics::LOCAL_CARD_MIGRATION_BUBBLE_RESULT_UNKNOWN;
       break;
     case PaymentsBubbleClosedReason::kCancelled:
       NOTREACHED();
       return;
   }
-  AutofillMetrics::LogLocalCardMigrationBubbleResultMetric(metric, is_reshow_);
+  autofill_metrics::LogLocalCardMigrationBubbleResultMetric(metric, is_reshow_);
 }
 
 PageActionIconType
@@ -128,15 +129,15 @@ void LocalCardMigrationBubbleControllerImpl::DoShowBubble() {
   DCHECK(local_card_migration_bubble_closure_);
   DCHECK(!bubble_view());
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents());
+  Browser* browser = chrome::FindBrowserWithTab(web_contents());
   set_bubble_view(
       browser->window()
           ->GetAutofillBubbleHandler()
           ->ShowLocalCardMigrationBubble(web_contents(), this, is_reshow_));
   DCHECK(bubble_view());
 
-  AutofillMetrics::LogLocalCardMigrationBubbleOfferMetric(
-      AutofillMetrics::LOCAL_CARD_MIGRATION_BUBBLE_SHOWN, is_reshow_);
+  autofill_metrics::LogLocalCardMigrationBubbleOfferMetric(
+      autofill_metrics::LOCAL_CARD_MIGRATION_BUBBLE_SHOWN, is_reshow_);
 }
 
 void LocalCardMigrationBubbleControllerImpl::AddStrikesForBubbleClose() {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,10 @@ namespace task_manager {
 namespace {
 
 std::u16string GetTitle(int tool_name) {
+  if (tool_name == 0) {
+    return std::u16string(u"");
+  }
+
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_TOOL_PREFIX,
                                     l10n_util::GetStringUTF16(tool_name));
 }

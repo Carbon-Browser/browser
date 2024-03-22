@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -267,7 +267,7 @@ TEST_F(WebBundleChunkedBufferTest, DataSource) {
 
   struct TestCase {
     uint64_t offset;
-    uint64_t length;
+    size_t length;
     MojoResult expected_result;
     uint64_t expected_bytes_read;
     std::string expected_read_result;

@@ -1,17 +1,8 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/logging.h"
-#include <atomic>
-#include <memory>
-
-// logging.h is a widely included header and its size has significant impact on
-// build time. Try not to raise this limit unless absolutely necessary. See
-// https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
-#ifndef NACL_TC_REV
-#pragma clang max_tokens_here 470000
-#endif  // NACL_TC_REV
 
 #ifdef BASE_CHECK_H_
 #error "logging.h should not include check.h"
@@ -20,51 +11,78 @@
 #include <limits.h>
 #include <stdint.h>
 
+#include <algorithm>
+#include <atomic>
+#include <cstring>
+#include <ctime>
+#include <iomanip>
+#include <memory>
+#include <ostream>
+#include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "base/base_export.h"
+#include "base/base_switches.h"
+#include "base/command_line.h"
+#include "base/containers/stack.h"
+#include "base/debug/alias.h"
 #include "base/debug/crash_logging.h"
+#include "base/debug/debugger.h"
+#include "base/debug/stack_trace.h"
+#include "base/debug/task_trace.h"
+#include "base/functional/callback.h"
+#include "base/immediate_crash.h"
+#include "base/no_destructor.h"
+#include "base/path_service.h"
+#include "base/pending_task.h"
+#include "base/posix/eintr_wrapper.h"
+#include "base/process/process_handle.h"
+#include "base/strings/string_piece.h"
+#include "base/strings/string_split.h"
+#include "base/strings/string_util.h"
+#include "base/strings/stringprintf.h"
+#include "base/strings/sys_string_conversions.h"
+#include "base/strings/utf_string_conversions.h"
+#include "base/synchronization/lock.h"
+#include "base/task/common/task_annotator.h"
+#include "base/test/scoped_logging_settings.h"
+#include "base/threading/platform_thread.h"
+#include "base/trace_event/base_tracing.h"
+#include "base/vlog.h"
+#include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
+
+#if !BUILDFLAG(IS_NACL)
+#include "base/auto_reset.h"
+#include "base/debug/crash_logging.h"
+#endif  // !BUILDFLAG(IS_NACL)
+
 #if defined(LEAK_SANITIZER) && !BUILDFLAG(IS_NACL)
 #include "base/debug/leak_annotations.h"
 #endif  // defined(LEAK_SANITIZER) && !BUILDFLAG(IS_NACL)
-#include "base/immediate_crash.h"
-#include "base/pending_task.h"
-#include "base/strings/string_piece.h"
-#include "base/task/common/task_annotator.h"
-#include "base/trace_event/base_tracing.h"
-#include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <io.h>
 #include <windows.h>
+
+#include "base/win/win_util.h"
+
 typedef HANDLE FileHandle;
 // Windows warns on using write().  It prefers _write().
 #define write(fd, buf, count) _write(fd, buf, static_cast<unsigned int>(count))
 // Windows doesn't define STDERR_FILENO.  Define it here.
 #define STDERR_FILENO 2
+#endif  // BUILDFLAG(IS_WIN)
 
-#elif BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(IS_APPLE)
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach-o/dyld.h>
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 #include <os/log.h>
-
-#elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
-#if BUILDFLAG(IS_NACL)
-#include <sys/time.h>  // timespec doesn't seem to be in <time.h>
-#endif
-#include <time.h>
-#endif
-
-#if BUILDFLAG(IS_FUCHSIA)
-#include "base/fuchsia/scoped_fx_logger.h"
-#endif
-
-#if BUILDFLAG(IS_ANDROID)
-#include <android/log.h>
-#endif
+#endif  // BUILDFLAG(IS_APPLE)
 
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 #include <errno.h>
@@ -73,53 +91,29 @@ typedef HANDLE FileHandle;
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "base/process/process_handle.h"
+#include <time.h>
+
+#include "base/posix/safe_strerror.h"
+
+#if BUILDFLAG(IS_NACL)
+#include <sys/time.h>  // timespec doesn't seem to be in <time.h>
+#endif
+
 #define MAX_PATH PATH_MAX
 typedef FILE* FileHandle;
-#endif
+#endif  // BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 
-#include <algorithm>
-#include <cstring>
-#include <ctime>
-#include <iomanip>
-#include <ostream>
-#include <string>
-#include <utility>
-
-#include "base/base_switches.h"
-#include "base/callback.h"
-#include "base/command_line.h"
-#include "base/containers/stack.h"
-#include "base/debug/activity_tracker.h"
-#include "base/debug/alias.h"
-#include "base/debug/debugger.h"
-#include "base/debug/stack_trace.h"
-#include "base/debug/task_trace.h"
-#include "base/no_destructor.h"
-#include "base/path_service.h"
-#include "base/posix/eintr_wrapper.h"
-#include "base/strings/string_piece.h"
-#include "base/strings/string_split.h"
-#include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/synchronization/lock.h"
-#include "base/test/scoped_logging_settings.h"
-#include "base/threading/platform_thread.h"
-#include "base/vlog.h"
-#include "build/chromeos_buildflags.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "base/win/win_util.h"
-#endif
-
-#if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
-#include "base/posix/safe_strerror.h"
+#if BUILDFLAG(IS_ANDROID)
+#include <android/log.h>
+#include "base/android/jni_android.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "base/files/scoped_file.h"
+#endif
+
+#if BUILDFLAG(IS_FUCHSIA)
+#include "base/fuchsia/scoped_fx_logger.h"
 #endif
 
 namespace logging {
@@ -128,7 +122,6 @@ namespace {
 
 int g_min_log_level = 0;
 
-#if BUILDFLAG(USE_RUNTIME_VLOG)
 // NOTE: Once |g_vlog_info| has been initialized, it might be in use
 // by another thread. Never delete the old VLogInfo, just create a second
 // one and overwrite. We need to use leak-san annotations on this intentional
@@ -196,25 +189,6 @@ void MaybeInitializeVlogInfo() {
     }
   }
 }
-#endif  // BUILDFLAG(USE_RUNTIME_VLOG)
-
-#if !BUILDFLAG(USE_RUNTIME_VLOG) && DCHECK_IS_ON()
-
-// Warn developers that vlog command line settings are being ignored.
-void MaybeWarnVmodule() {
-  if (base::CommandLine::InitializedForCurrentProcess()) {
-    base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-    if (command_line->HasSwitch(switches::kV) ||
-        command_line->HasSwitch(switches::kVModule)) {
-      LOG(WARNING)
-          << "--" << switches::kV << " and --" << switches::kVModule
-          << " are currently ignored. See comments in base/logging.h on "
-             "proper usage of USE_RUNTIME_VLOG.";
-    }
-  }
-}
-
-#endif  // !BUILDFLAG(USE_RUNTIME_VLOG) && DCHECK_IS_ON()
 
 const char* const log_severity_names[] = {"INFO", "WARNING", "ERROR", "FATAL"};
 static_assert(LOGGING_NUM_SEVERITIES == std::size(log_severity_names),
@@ -334,6 +308,17 @@ PathString GetDefaultLogFile() {
 // provides this functionality.
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 
+// Provides a lock to synchronize appending to the log file across
+// threads. This can be required to support NFS file systems even on OSes that
+// provide atomic append operations in most cases. It should be noted that this
+// lock is not not shared across processes. When using NFS filesystems
+// protection against clobbering between different processes will be best-effort
+// and provided by the OS. See
+// https://man7.org/linux/man-pages/man2/open.2.html.
+//
+// The lock also protects initializing and closing the log file which can
+// happen concurrently with logging on some platforms like ChromeOS that need to
+// redirect logging by calling BaseInitLoggingImpl() twice.
 base::Lock& GetLoggingLock() {
   static base::NoDestructor<base::Lock> lock;
   return *lock;
@@ -447,7 +432,7 @@ inline FuchsiaLogSeverity LogSeverityToFuchsiaLogSeverity(
   // LOGGING_VERBOSE levels 3 and higher, or incorrect levels.
   return FUCHSIA_LOG_TRACE;
 }
-#endif  // defined (OS_FUCHSIA)
+#endif  // BUILDFLAG(IS_FUCHSIA)
 
 void WriteToFd(int fd, const char* data, size_t length) {
   size_t bytes_written = 0;
@@ -462,14 +447,65 @@ void WriteToFd(int fd, const char* data, size_t length) {
   }
 }
 
+void SetLogFatalCrashKey(LogMessage* log_message) {
+#if !BUILDFLAG(IS_NACL)
+  // In case of an out-of-memory condition, this code could be reentered when
+  // constructing and storing the key. Using a static is not thread-safe, but if
+  // multiple threads are in the process of a fatal crash at the same time, this
+  // should work.
+  static bool guarded = false;
+  if (guarded)
+    return;
+
+  base::AutoReset<bool> guard(&guarded, true);
+
+  static auto* const crash_key = base::debug::AllocateCrashKeyString(
+      "LOG_FATAL", base::debug::CrashKeySize::Size1024);
+  base::debug::SetCrashKeyString(crash_key, log_message->BuildCrashString());
+
+#endif  // !BUILDFLAG(IS_NACL)
+}
+
+std::string BuildCrashString(const char* file,
+                             int line,
+                             const char* message_without_prefix) {
+  // Only log last path component.
+  if (file) {
+    const char* slash = strrchr(file,
+#if BUILDFLAG(IS_WIN)
+                                '\\'
+#else
+                                '/'
+#endif  // BUILDFLAG(IS_WIN)
+    );
+    if (slash) {
+      file = slash + 1;
+    }
+  }
+
+  return base::StringPrintf("%s:%d: %s", file, line, message_without_prefix);
+}
+
+// Invokes macro to record trace event when a log message is emitted.
+void TraceLogMessage(const char* file, int line, const std::string& message) {
+  TRACE_EVENT_INSTANT("log", "LogMessage", [&](perfetto::EventContext ctx) {
+    perfetto::protos::pbzero::LogMessage* log = ctx.event()->set_log_message();
+    log->set_source_location_iid(base::trace_event::InternedSourceLocation::Get(
+        &ctx, base::trace_event::TraceSourceLocation(/*function_name=*/nullptr,
+                                                     file, line)));
+    log->set_body_iid(
+        base::trace_event::InternedLogMessage::Get(&ctx, message));
+  });
+}
+
 }  // namespace
 
-#if defined(DCHECK_IS_CONFIGURABLE)
+#if BUILDFLAG(DCHECK_IS_CONFIGURABLE)
 // In DCHECK-enabled Chrome builds, allow the meaning of LOGGING_DCHECK to be
 // determined at run-time. We default it to INFO, to avoid it triggering
 // crashes before the run-time has explicitly chosen the behaviour.
 BASE_EXPORT logging::LogSeverity LOGGING_DCHECK = LOGGING_INFO;
-#endif  // defined(DCHECK_IS_CONFIGURABLE)
+#endif  // BUILDFLAG(DCHECK_IS_CONFIGURABLE)
 
 // This is never instantiated, it's just used for EAT_STREAM_PARAMETERS to have
 // an object of the correct type on the LHS of the unused part of the ternary
@@ -487,13 +523,7 @@ bool BaseInitLoggingImpl(const LoggingSettings& settings) {
   g_log_format = settings.log_format;
 #endif
 
-#if BUILDFLAG(USE_RUNTIME_VLOG)
   MaybeInitializeVlogInfo();
-#endif  // BUILDFLAG(USE_RUNTIME_VLOG)
-
-#if !BUILDFLAG(USE_RUNTIME_VLOG) && DCHECK_IS_ON()
-  MaybeWarnVmodule();
-#endif  // !BUILDFLAG(USE_RUNTIME_VLOG) && DCHECK_IS_ON()
 
   g_logging_destination = settings.logging_dest;
 
@@ -577,16 +607,12 @@ int GetVlogVerbosity() {
 int GetVlogLevelHelper(const char* file, size_t N) {
   DCHECK_GT(N, 0U);
 
-#if BUILDFLAG(USE_RUNTIME_VLOG)
   // Note: |g_vlog_info| may change on a different thread during startup
   // (but will always be valid or nullptr).
   VlogInfo* vlog_info = GetVlogInfo();
   return vlog_info ?
       vlog_info->GetVlogLevel(base::StringPiece(file, N - 1)) :
       GetVlogVerbosity();
-#else
-  return GetVlogVerbosity();
-#endif  // BUILDFLAG(USE_RUNTIME_VLOG)
 }
 
 void SetLogItems(bool enable_process_id, bool enable_thread_id,
@@ -670,6 +696,13 @@ LogMessage::~LogMessage() {
     base::debug::StackTrace stack_trace;
     stream_ << std::endl;  // Newline to separate from log message.
     stack_trace.OutputToStream(&stream_);
+#if BUILDFLAG(IS_ANDROID)
+    std::string java_stack = base::android::GetJavaStackTraceIfPresent();
+    if (!java_stack.empty()) {
+      stream_ << "Java stack (may interleave with native stack):\n";
+      stream_ << java_stack << '\n';
+    }
+#endif
     base::debug::TaskTrace task_trace;
     if (!task_trace.empty())
       task_trace.OutputToStream(&stream_);
@@ -688,8 +721,10 @@ LogMessage::~LogMessage() {
 #endif
   stream_ << std::endl;
   std::string str_newline(stream_.str());
-  TRACE_LOG_MESSAGE(
-      file_, base::StringPiece(str_newline).substr(message_start_), line_);
+  TraceLogMessage(file_, line_, str_newline.substr(message_start_));
+
+  if (severity_ == LOGGING_FATAL)
+    SetLogFatalCrashKey(this);
 
   // Give any log message handler first dibs on the message.
   if (g_log_message_handler &&
@@ -842,14 +877,12 @@ LogMessage::~LogMessage() {
   }
 
   if ((g_logging_destination & LOG_TO_FILE) != 0) {
-    // We can have multiple threads and/or processes, so try to prevent them
-    // from clobbering each other's writes.
-    // If the client app did not call InitLogging, and the lock has not
-    // been created do it now. We do this on demand, but if two threads try
-    // to do this at the same time, there will be a race condition to create
-    // the lock. This is why InitLogging should be called from the main
-    // thread at the beginning of execution.
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
+    // If the client app did not call InitLogging() and the lock has not
+    // been created it will be done now on calling GetLoggingLock(). We do this
+    // on demand, but if two threads try to do this at the same time, there will
+    // be a race condition to create the lock. This is why InitLogging should be
+    // called from the main thread at the beginning of execution.
     base::AutoLock guard(GetLoggingLock());
 #endif
     if (InitializeLogFileHandle()) {
@@ -871,12 +904,6 @@ LogMessage::~LogMessage() {
   }
 
   if (severity_ == LOGGING_FATAL) {
-    // Write the log message to the global activity tracker, if running.
-    base::debug::GlobalActivityTracker* tracker =
-        base::debug::GlobalActivityTracker::Get();
-    if (tracker)
-      tracker->RecordLogMessage(str_newline);
-
     char str_stack[1024];
     base::strlcpy(str_stack, str_newline.data(), std::size(str_stack));
     base::debug::Alias(&str_stack);
@@ -907,27 +934,14 @@ LogMessage::~LogMessage() {
 #endif
 
       // Crash the process to generate a dump.
-      IMMEDIATE_CRASH();
+      base::ImmediateCrash();
     }
   }
 }
 
 std::string LogMessage::BuildCrashString() const {
-  return BuildCrashString(file(), line(), str().c_str() + message_start_);
-}
-
-std::string LogMessage::BuildCrashString(const char* file,
-                                         int line,
-                                         const char* message_without_prefix) {
-  // Only log last path component.
-  if (file) {
-    const char* slash = strrchr(file, '/');
-    if (slash) {
-      file = slash + 1;
-    }
-  }
-
-  return base::StringPrintf("%s:%d: %s", file, line, message_without_prefix);
+  return logging::BuildCrashString(file(), line(),
+                                   str().c_str() + message_start_);
 }
 
 // writes the common header info to the stream
@@ -1158,7 +1172,7 @@ void RawLog(int level, const char* message) {
   }
 
   if (level == LOGGING_FATAL)
-    IMMEDIATE_CRASH();
+    base::ImmediateCrash();
 }
 
 // This was defined at the beginning of this file.
@@ -1176,15 +1190,9 @@ std::wstring GetLogFileFullPath() {
 }
 #endif
 
-#if !BUILDFLAG(USE_RUNTIME_VLOG)
-int GetDisableAllVLogLevel() {
-  return -1;
-}
-#endif  // !BUILDFLAG(USE_RUNTIME_VLOG)
-
 // Used for testing. Declared in test/scoped_logging_settings.h.
 ScopedVmoduleSwitches::ScopedVmoduleSwitches() = default;
-#if BUILDFLAG(USE_RUNTIME_VLOG)
+
 VlogInfo* ScopedVmoduleSwitches::CreateVlogInfoWithSwitches(
     const std::string& vmodule_switch) {
   // Try get a VlogInfo on which to base this.
@@ -1222,27 +1230,5 @@ ScopedVmoduleSwitches::~ScopedVmoduleSwitches() {
   // looking.
   CHECK_EQ(replaced_vlog_info, scoped_vlog_info_);
 }
-#else
-void ScopedVmoduleSwitches::InitWithSwitches(
-    const std::string& vmodule_switch) {}
-
-ScopedVmoduleSwitches::~ScopedVmoduleSwitches() = default;
-#endif  // BUILDFLAG(USE_RUNTIME_VLOG)
 
 }  // namespace logging
-
-std::ostream& std::operator<<(std::ostream& out, const wchar_t* wstr) {
-  return out << (wstr ? base::WStringPiece(wstr) : base::WStringPiece());
-}
-
-std::ostream& std::operator<<(std::ostream& out, const std::wstring& wstr) {
-  return out << base::WStringPiece(wstr);
-}
-
-std::ostream& std::operator<<(std::ostream& out, const char16_t* str16) {
-  return out << (str16 ? base::StringPiece16(str16) : base::StringPiece16());
-}
-
-std::ostream& std::operator<<(std::ostream& out, const std::u16string& str16) {
-  return out << base::StringPiece16(str16);
-}

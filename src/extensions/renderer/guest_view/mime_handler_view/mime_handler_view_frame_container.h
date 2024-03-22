@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_RENDERER_GUEST_VIEW_MIME_HANDLER_VIEW_MIME_HANDLER_VIEW_FRAME_CONTAINER_H_
 #define EXTENSIONS_RENDERER_GUEST_VIEW_MIME_HANDLER_VIEW_MIME_HANDLER_VIEW_FRAME_CONTAINER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/guest_view/common/guest_view_constants.h"
 #include "extensions/renderer/guest_view/mime_handler_view/post_message_support.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
@@ -81,7 +82,8 @@ class MimeHandlerViewFrameContainer : public PostMessageSupport::Delegate {
   bool AreFramesValid();
 
   // Controls the lifetime of |this| (always alive).
-  MimeHandlerViewContainerManager* const container_manager_;
+  const raw_ptr<MimeHandlerViewContainerManager, ExperimentalRenderer>
+      container_manager_;
   blink::WebElement plugin_element_;
   const GURL resource_url_;
   const std::string mime_type_;

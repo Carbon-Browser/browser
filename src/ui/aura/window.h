@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,7 @@ class Transform;
 }
 
 namespace ui {
-enum class DomCode;
+enum class DomCode : uint32_t;
 class Layer;
 }  // namespace ui
 
@@ -295,8 +295,14 @@ class AURA_EXPORT Window : public ui::LayerDelegate,
   const gfx::Transform& transform() const;
 
   // Assigns a LayoutManager to size and place child windows.
-  // The Window takes ownership of the LayoutManager.
-  void SetLayoutManager(LayoutManager* layout_manager);
+  template <typename LayoutManager>
+  LayoutManager* SetLayoutManager(
+      std::unique_ptr<LayoutManager> layout_manager) {
+    LayoutManager* layout_manager_local = layout_manager.get();
+    SetLayoutManagerImpl(std::move(layout_manager));
+    return layout_manager_local;
+  }
+  void SetLayoutManager(std::nullptr_t);
   LayoutManager* layout_manager() { return layout_manager_.get(); }
 
   // Sets a new event-targeter for the window, and returns the previous
@@ -485,7 +491,7 @@ class AURA_EXPORT Window : public ui::LayerDelegate,
 
   // Marks the current viz::LocalSurfaceId as invalid. AllocateLocalSurfaceId
   // must be called before submitting new CompositorFrames.
-  void InvalidateLocalSurfaceId();
+  void InvalidateLocalSurfaceId(bool also_invalidate_allocation_group = false);
 
   // Sets the current viz::LocalSurfaceId, in cases where the embedded client
   // has allocated one. Also sets child sequence number component of the
@@ -551,6 +557,11 @@ class AURA_EXPORT Window : public ui::LayerDelegate,
 
   // Overrides from ui::PropertyHandler
   void AfterPropertyChange(const void* key, int64_t old_value) override;
+
+  // viz::HostFrameSinkClient:
+  void OnFirstSurfaceActivation(const viz::SurfaceInfo& surface_info) override;
+  void OnFrameTokenChanged(uint32_t frame_token,
+                           base::TimeTicks activation_time) override;
 
  private:
   friend class DefaultWindowOcclusionChangeBuilder;
@@ -665,11 +676,6 @@ class AURA_EXPORT Window : public ui::LayerDelegate,
                             ui::LocatedEvent* event) const override;
   gfx::PointF GetScreenLocationF(const ui::LocatedEvent& event) const override;
 
-  // viz::HostFrameSinkClient:
-  void OnFirstSurfaceActivation(const viz::SurfaceInfo& surface_info) override;
-  void OnFrameTokenChanged(uint32_t frame_token,
-                           base::TimeTicks activation_time) override;
-
   // Updates the layer name based on the window's name and id.
   void UpdateLayerName();
 
@@ -701,6 +707,8 @@ class AURA_EXPORT Window : public ui::LayerDelegate,
   void SetX(int x);
   void SetY(int y);
 
+  void SetLayoutManagerImpl(std::unique_ptr<LayoutManager> layout_manager);
+
   bool GetCapture() const;
 
   viz::SurfaceId GetSurfaceId() const;
@@ -725,7 +733,7 @@ class AURA_EXPORT Window : public ui::LayerDelegate,
   // parent during its parents destruction.
   bool owned_by_parent_ = true;
 
-  raw_ptr<WindowDelegate, DanglingUntriaged> delegate_;
+  raw_ptr<WindowDelegate, AcrossTasksDanglingUntriaged> delegate_;
 
   // The Window's parent.
   raw_ptr<Window> parent_ = nullptr;

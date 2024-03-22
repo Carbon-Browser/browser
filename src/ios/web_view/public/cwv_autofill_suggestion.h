@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,9 +61,6 @@ CWV_EXPORT
 // The icon image of the suggestion, currently this is only used for displaying
 // credit card network icon.
 @property(nonatomic, readonly, nullable) UIImage* icon;
-
-// The unique identifier associated with the suggestion.
-@property(nonatomic, readonly) NSInteger uniqueIdentifier;
 
 - (instancetype)init NS_UNAVAILABLE;
 

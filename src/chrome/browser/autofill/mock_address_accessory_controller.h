@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,10 @@ class MockAddressAccessoryController
               OnFillingTriggered,
               (autofill::FieldGlobalId, const autofill::AccessorySheetField&),
               (override));
+  MOCK_METHOD((void),
+              OnPasskeySelected,
+              (const std::vector<uint8_t>& credential_id),
+              (override));
   MOCK_METHOD(void,
               OnOptionSelected,
               (autofill::AccessoryAction selected_action),
@@ -43,6 +47,13 @@ class MockAddressAccessoryController
               (autofill::AccessoryAction toggled_action, bool enabled),
               (override));
   MOCK_METHOD(void, RefreshSuggestions, (), (override));
+
+  base::WeakPtr<AddressAccessoryController> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<MockAddressAccessoryController> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_AUTOFILL_MOCK_ADDRESS_ACCESSORY_CONTROLLER_H_

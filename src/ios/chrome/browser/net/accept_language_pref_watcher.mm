@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 #import "components/language/core/browser/pref_names.h"
 #import "components/prefs/pref_service.h"
 #import "net/http/http_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 AcceptLanguagePrefWatcher::Handle::Handle(const std::string& languages) {
   SetAcceptLanguageHeaderFromPref(languages);

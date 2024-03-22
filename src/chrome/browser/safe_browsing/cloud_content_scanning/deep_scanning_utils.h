@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,6 +84,9 @@ enum class EventResult {
 void MaybeReportDeepScanningVerdict(
     Profile* profile,
     const GURL& url,
+    const GURL& tab_url,
+    const std::string& source,
+    const std::string& destination,
     const std::string& file_name,
     const std::string& download_digest_sha256,
     const std::string& mime_type,
@@ -101,6 +104,9 @@ void MaybeReportDeepScanningVerdict(
 void ReportAnalysisConnectorWarningBypass(
     Profile* profile,
     const GURL& url,
+    const GURL& tab_url,
+    const std::string& source,
+    const std::string& destination,
     const std::string& file_name,
     const std::string& download_digest_sha256,
     const std::string& mime_type,
@@ -113,12 +119,14 @@ void ReportAnalysisConnectorWarningBypass(
 // Helper functions to record DeepScanning UMA metrics for the duration of the
 // request split by its result and bytes/sec for successful requests.
 void RecordDeepScanMetrics(
+    bool is_cloud,
     DeepScanAccessPoint access_point,
     base::TimeDelta duration,
     int64_t total_bytes,
     const BinaryUploadService::Result& result,
     const enterprise_connectors::ContentAnalysisResponse& response);
-void RecordDeepScanMetrics(DeepScanAccessPoint access_point,
+void RecordDeepScanMetrics(bool is_cloud,
+                           DeepScanAccessPoint access_point,
                            base::TimeDelta duration,
                            int64_t total_bytes,
                            const std::string& result,

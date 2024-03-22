@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,23 @@
 
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/feed/web_feed_tab_helper.h"
+#include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
+#include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/tabs/existing_base_sub_menu_model.h"
+#include "chrome/browser/ui/tabs/organization/tab_organization_utils.h"
 #include "chrome/browser/ui/tabs/tab_menu_model_delegate.h"
+#include "chrome/browser/ui/tabs/test_tab_strip_model_delegate.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/menu_model_test.h"
 #include "components/feed/feed_feature_list.h"
+#include "components/optimization_guide/core/model_execution/model_execution_features.h"
+#include "components/optimization_guide/core/optimization_guide_features.h"
+#include "content/public/test/web_contents_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/models/menu_model.h"
+#include "ui/base/ui_base_features.h"
 
 class TabMenuModelTest : public MenuModelTest,
                          public BrowserWithTestWindowTest {
@@ -34,6 +42,23 @@ TEST_F(TabMenuModelTest, Basics) {
   EXPECT_GT(item_count, 0);
   EXPECT_EQ(item_count, delegate_.execute_count_);
   EXPECT_EQ(item_count, delegate_.enable_count_);
+}
+
+TEST_F(TabMenuModelTest, OrganizeTabs) {
+  TabOrganizationUtils::GetInstance()->SetIgnoreOptGuideForTesting(true);
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      {features::kTabOrganization, features::kChromeRefresh2023,
+       features::kChromeWebuiRefresh2023},
+      {});
+
+  chrome::NewTab(browser());
+  TabMenuModel model(&delegate_, browser()->tab_menu_model_delegate(),
+                     browser()->tab_strip_model(), 0);
+
+  // Verify that CommandOrganizeTabs is in the menu.
+  EXPECT_TRUE(model.GetIndexOfCommandId(TabStripModel::CommandOrganizeTabs)
+                  .has_value());
 }
 
 TEST_F(TabMenuModelTest, MoveToNewWindow) {
@@ -67,13 +92,13 @@ TEST_F(TabMenuModelTest, AddToExistingGroupSubmenu) {
           .value();
   ui::MenuModel* submenu = menu.GetSubmenuModelAt(submenu_index);
 
-  EXPECT_TRUE(submenu->HasIcons());
   EXPECT_EQ(submenu->GetItemCount(), 5u);
   EXPECT_EQ(submenu->GetCommandIdAt(0),
             ExistingBaseSubMenuModel::kMinExistingTabGroupCommandId);
   EXPECT_EQ(submenu->GetTypeAt(1), ui::MenuModel::TYPE_SEPARATOR);
   EXPECT_EQ(submenu->GetCommandIdAt(2),
             ExistingBaseSubMenuModel::kMinExistingTabGroupCommandId + 1);
+  EXPECT_FALSE(submenu->GetIconAt(2).IsEmpty());
   EXPECT_EQ(submenu->GetCommandIdAt(3),
             ExistingBaseSubMenuModel::kMinExistingTabGroupCommandId + 2);
   EXPECT_EQ(submenu->GetCommandIdAt(4),
@@ -100,13 +125,13 @@ TEST_F(TabMenuModelTest, AddToExistingGroupSubmenu_DoesNotIncludeCurrentGroup) {
           .value();
   ui::MenuModel* submenu = menu.GetSubmenuModelAt(submenu_index);
 
-  EXPECT_TRUE(submenu->HasIcons());
   EXPECT_EQ(submenu->GetItemCount(), 4u);
   EXPECT_EQ(submenu->GetCommandIdAt(0),
             ExistingBaseSubMenuModel::kMinExistingTabGroupCommandId);
   EXPECT_EQ(submenu->GetTypeAt(1), ui::MenuModel::TYPE_SEPARATOR);
   EXPECT_EQ(submenu->GetCommandIdAt(2),
             ExistingBaseSubMenuModel::kMinExistingTabGroupCommandId + 1);
+  EXPECT_FALSE(submenu->GetIconAt(2).IsEmpty());
   EXPECT_EQ(submenu->GetCommandIdAt(3),
             ExistingBaseSubMenuModel::kMinExistingTabGroupCommandId + 2);
 }
@@ -251,4 +276,114 @@ TEST_F(TabMenuModelTest, FollowOrUnfollow) {
     EXPECT_FALSE(menu.GetIndexOfCommandId(TabStripModel::CommandUnfollowSite)
                      .has_value());
   }
+}
+
+class TabMenuModelTestTabStripModelDelegate : public TestTabStripModelDelegate {
+ public:
+  bool IsForWebApp() override { return true; }
+
+  bool SupportsReadLater() override { return false; }
+};
+
+TEST_F(TabMenuModelTest, TabbedWebApp) {
+  // Create a tabbed web app window without home tab
+  TabMenuModelTestTabStripModelDelegate delegate;
+  TabStripModel strip(&delegate, profile());
+  strip.AppendWebContents(
+      content::WebContentsTester::CreateTestWebContents(profile(), nullptr),
+      true);
+
+  TabMenuModel model(&delegate_, browser()->tab_menu_model_delegate(), &strip,
+                     0);
+
+  // When adding/removing a menu item, either update this count and add it to
+  // the list below or disable it for tabbed web apps.
+  EXPECT_EQ(model.GetItemCount(), 7u);
+
+  EXPECT_TRUE(
+      model.GetIndexOfCommandId(TabStripModel::CommandCopyURL).has_value());
+  EXPECT_TRUE(
+      model.GetIndexOfCommandId(TabStripModel::CommandReload).has_value());
+  EXPECT_TRUE(
+      model.GetIndexOfCommandId(TabStripModel::CommandGoBack).has_value());
+  EXPECT_TRUE(
+      model.GetIndexOfCommandId(TabStripModel::CommandMoveTabsToNewWindow)
+          .has_value());
+
+  EXPECT_EQ(model.GetTypeAt(4), ui::MenuModel::TYPE_SEPARATOR);
+
+  EXPECT_TRUE(
+      model.GetIndexOfCommandId(TabStripModel::CommandCloseTab).has_value());
+  EXPECT_TRUE(model.GetIndexOfCommandId(TabStripModel::CommandCloseOtherTabs)
+                  .has_value());
+}
+
+TEST_F(TabMenuModelTest, TabbedWebAppHomeTab) {
+  TabMenuModelTestTabStripModelDelegate delegate;
+  TabStripModel strip(&delegate, profile());
+  strip.AppendWebContents(
+      content::WebContentsTester::CreateTestWebContents(profile(), nullptr),
+      true);
+  // Pin the first tab so we get the pinned home tab menu.
+  strip.SetTabPinned(0, true);
+
+  TabMenuModel home_tab_model(&delegate_, browser()->tab_menu_model_delegate(),
+                              &strip, 0);
+
+  // When adding/removing a menu item, either update this count and add it to
+  // the list below or disable it for tabbed web apps.
+  EXPECT_EQ(home_tab_model.GetItemCount(), 5u);
+
+  EXPECT_TRUE(home_tab_model.GetIndexOfCommandId(TabStripModel::CommandCopyURL)
+                  .has_value());
+  EXPECT_TRUE(home_tab_model.GetIndexOfCommandId(TabStripModel::CommandReload)
+                  .has_value());
+  EXPECT_TRUE(home_tab_model.GetIndexOfCommandId(TabStripModel::CommandGoBack)
+                  .has_value());
+
+  EXPECT_EQ(home_tab_model.GetTypeAt(3), ui::MenuModel::TYPE_SEPARATOR);
+
+  EXPECT_TRUE(
+      home_tab_model.GetIndexOfCommandId(TabStripModel::CommandCloseAllTabs)
+          .has_value());
+
+  strip.AppendWebContents(
+      content::WebContentsTester::CreateTestWebContents(profile(), nullptr),
+      true);
+  EXPECT_EQ(strip.count(), 2);
+  EXPECT_FALSE(strip.IsTabSelected(0));
+  EXPECT_TRUE(strip.IsTabSelected(1));
+
+  TabMenuModel regular_tab_model(
+      &delegate_, browser()->tab_menu_model_delegate(), &strip, 1);
+
+  // When adding/removing a menu item, either update this count and add it to
+  // the list below or disable it for tabbed web apps.
+  EXPECT_EQ(regular_tab_model.GetItemCount(), 8u);
+
+  EXPECT_TRUE(
+      regular_tab_model.GetIndexOfCommandId(TabStripModel::CommandCopyURL)
+          .has_value());
+  EXPECT_TRUE(
+      regular_tab_model.GetIndexOfCommandId(TabStripModel::CommandReload)
+          .has_value());
+  EXPECT_TRUE(
+      regular_tab_model.GetIndexOfCommandId(TabStripModel::CommandGoBack)
+          .has_value());
+  EXPECT_TRUE(
+      regular_tab_model
+          .GetIndexOfCommandId(TabStripModel::CommandMoveTabsToNewWindow)
+          .has_value());
+
+  EXPECT_EQ(regular_tab_model.GetTypeAt(4), ui::MenuModel::TYPE_SEPARATOR);
+
+  EXPECT_TRUE(
+      regular_tab_model.GetIndexOfCommandId(TabStripModel::CommandCloseTab)
+          .has_value());
+  EXPECT_TRUE(regular_tab_model
+                  .GetIndexOfCommandId(TabStripModel::CommandCloseOtherTabs)
+                  .has_value());
+  EXPECT_TRUE(
+      regular_tab_model.GetIndexOfCommandId(TabStripModel::CommandCloseAllTabs)
+          .has_value());
 }

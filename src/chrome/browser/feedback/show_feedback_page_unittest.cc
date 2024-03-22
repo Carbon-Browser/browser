@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,11 +19,11 @@ TEST_F(ShowFeedbackPageTest, DISABLED_UserFeedbackDisallowed) {
   base::HistogramTester histogram_tester;
   std::string unused;
   chrome::ShowFeedbackPage(browser(), chrome::kFeedbackSourceBrowserCommand,
-                           unused, unused, unused, unused);
+                           unused, unused, unused, unused, base::Value::Dict());
   histogram_tester.ExpectTotalCount("Feedback.RequestSource", 1);
   browser()->profile()->GetPrefs()->SetBoolean(prefs::kUserFeedbackAllowed,
                                                false);
   chrome::ShowFeedbackPage(browser(), chrome::kFeedbackSourceBrowserCommand,
-                           unused, unused, unused, unused);
+                           unused, unused, unused, unused, base::Value::Dict());
   histogram_tester.ExpectTotalCount("Feedback.RequestSource", 1);
 }

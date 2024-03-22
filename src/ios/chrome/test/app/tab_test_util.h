@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,7 @@ namespace chrome_test_util {
 // Opens a new tab, and does not wait for animations to complete.
 void OpenNewTab();
 
-// TODO(crbug.com/1277282): deprecate this in favor of
-// SimulateExternalAppURLOpeningWithURL() to not allow loading an external
-// page.
-//
-// Simulates opening http://www.example.com/ from another application.
-// Returns the opened URL.
-NSURL* SimulateExternalAppURLOpening();
-
-// Simulates opening |URL| from another application.
+// Simulates opening `URL` from another application.
 void SimulateExternalAppURLOpeningWithURL(NSURL* URL);
 
 // Simulates opening the add account sign-in flow from the web.
@@ -49,11 +41,14 @@ NSString* GetCurrentTabTitle();
 NSString* GetNextTabTitle();
 
 // Gets the WebState with the given index in the current mode (incognito or
-// normal). Returns nullptr if less than |index| + 1 tabs are open.
+// normal). Returns nullptr if less than `index` + 1 tabs are open.
 web::WebState* GetWebStateAtIndexInCurrentMode(int index);
 
 // Closes current tab.
 void CloseCurrentTab();
+
+// Pins current tab.
+void PinCurrentTab();
 
 // Closes tab with the given index in current mode (incognito or normal).
 void CloseTabAtIndex(NSUInteger index);
@@ -75,8 +70,11 @@ void CloseAllTabs();
 // Selects tab with given index in current mode (incognito or normal).
 void SelectTabAtIndexInCurrentMode(NSUInteger index);
 
-// Returns the number of main tabs.
+// Returns the number of main, active, tabs.
 NSUInteger GetMainTabCount();
+
+// Returns the number of inactive tabs.
+NSUInteger GetInactiveTabCount();
 
 // Returns the number of incognito tabs.
 NSUInteger GetIncognitoTabCount();
@@ -89,9 +87,6 @@ BOOL SetCurrentTabsToBeColdStartTabs();
 
 // Simulates a backgrounding. Return YES on success.
 BOOL SimulateTabsBackgrounding();
-
-// Persists the current list of tabs to disk immediately.
-void SaveSessionImmediately();
 
 // Evicts the tabs associated with the non-current browser mode.
 void EvictOtherBrowserTabs();

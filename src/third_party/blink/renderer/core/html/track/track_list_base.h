@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 namespace blink {
 
 template <class T>
-class TrackListBase : public EventTargetWithInlineData {
+class TrackListBase : public EventTarget {
  public:
   explicit TrackListBase(HTMLMediaElement* media_element)
       : media_element_(media_element) {}
@@ -48,7 +48,7 @@ class TrackListBase : public EventTargetWithInlineData {
   }
 
   void Add(T* track) {
-    track->SetMediaElement(media_element_);
+    track->SetMediaElement(media_element_.Get());
     tracks_.push_back(track);
     ScheduleEvent(TrackEvent::Create(event_type_names::kAddtrack, track));
   }
@@ -81,7 +81,7 @@ class TrackListBase : public EventTargetWithInlineData {
   void Trace(Visitor* visitor) const override {
     visitor->Trace(tracks_);
     visitor->Trace(media_element_);
-    EventTargetWithInlineData::Trace(visitor);
+    EventTarget::Trace(visitor);
   }
 
  private:

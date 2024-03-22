@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
@@ -33,8 +33,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -73,12 +72,14 @@ class TestTransportEventHandler : public WebrtcTransport::EventHandler {
 
   // WebrtcTransport::EventHandler interface.
   void OnWebrtcTransportConnecting() override {
-    if (!connecting_callback_.is_null())
+    if (!connecting_callback_.is_null()) {
       connecting_callback_.Run();
+    }
   }
   void OnWebrtcTransportConnected() override {
-    if (!connected_callback_.is_null())
+    if (!connected_callback_.is_null()) {
       connected_callback_.Run();
+    }
   }
   void OnWebrtcTransportError(ErrorCode error) override {
     error_callback_.Run(error);
@@ -134,13 +135,15 @@ class TestMessagePipeEventHandler : public MessagePipe::EventHandler {
   // MessagePipe::EventHandler interface.
   void OnMessagePipeOpen() override {
     is_open_ = true;
-    if (!open_callback_.is_null())
+    if (!open_callback_.is_null()) {
       open_callback_.Run();
+    }
   }
   void OnMessageReceived(std::unique_ptr<CompoundBuffer> message) override {
     received_messages_.push_back(std::move(message));
-    if (!message_callback_.is_null())
+    if (!message_callback_.is_null()) {
       message_callback_.Run();
+    }
   }
   void OnMessagePipeClosed() override {
     if (!closed_callback_.is_null()) {
@@ -179,9 +182,10 @@ class WebrtcTransportTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
-  void ProcessTransportInfo(std::unique_ptr<WebrtcTransport>* target_transport,
-                            bool normalize_line_endings,
-                            std::unique_ptr<jingle_xmpp::XmlElement> transport_info) {
+  void ProcessTransportInfo(
+      std::unique_ptr<WebrtcTransport>* target_transport,
+      bool normalize_line_endings,
+      std::unique_ptr<jingle_xmpp::XmlElement> transport_info) {
     ASSERT_TRUE(target_transport);
 
     // Reformat the message to normalize line endings by removing CR symbol.
@@ -279,13 +283,15 @@ class WebrtcTransportTest : public testing::Test {
     client_message_pipe_ = std::move(pipe);
     client_message_pipe_->Start(&client_message_pipe_event_handler_);
 
-    if (run_loop_ && host_message_pipe_event_handler_.is_open())
+    if (run_loop_ && host_message_pipe_event_handler_.is_open()) {
       run_loop_->Quit();
+    }
   }
 
   void OnHostChannelConnected() {
-    if (run_loop_ && client_message_pipe_event_handler_.is_open())
+    if (run_loop_ && client_message_pipe_event_handler_.is_open()) {
       run_loop_->Quit();
+    }
   }
 
   void OnSessionError(TransportRole role, ErrorCode error) {
@@ -313,8 +319,9 @@ class WebrtcTransportTest : public testing::Test {
 
   void QuitRunLoopOnCounter(int* counter) {
     --(*counter);
-    if (*counter == 0)
+    if (*counter == 0) {
       run_loop_->Quit();
+    }
   }
 
  protected:
@@ -463,5 +470,4 @@ TEST_F(WebrtcTransportTest, MAYBE_TerminateDataChannel) {
   EXPECT_FALSE(host_message_pipe_);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

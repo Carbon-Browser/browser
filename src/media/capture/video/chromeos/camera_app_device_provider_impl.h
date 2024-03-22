@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "media/capture/capture_export.h"
 #include "media/capture/video/chromeos/mojom/camera_app.mojom.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 
 namespace media {
@@ -41,6 +42,8 @@ class CAPTURE_EXPORT CameraAppDeviceProviderImpl
       const std::string& device_id,
       bool enabled,
       SetVirtualDeviceEnabledCallback callback) override;
+  void IsDeviceInUse(const std::string& source_id,
+                     IsDeviceInUseCallback callback) override;
 
  private:
   void GetCameraAppDeviceWithDeviceId(
@@ -51,6 +54,8 @@ class CAPTURE_EXPORT CameraAppDeviceProviderImpl
       bool enable,
       SetVirtualDeviceEnabledCallback callback,
       const absl::optional<std::string>& device_id);
+  void IsDeviceInUseWithDeviceId(IsDeviceInUseCallback callback,
+                                 const absl::optional<std::string>& device_id);
 
   mojo::Remote<cros::mojom::CameraAppDeviceBridge> bridge_;
 

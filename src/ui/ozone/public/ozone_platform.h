@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
@@ -26,14 +26,19 @@ class NativeDisplayDelegate;
 }
 
 namespace ui {
-enum class DomCode;
+enum class DomCode : uint32_t;
 enum class PlatformKeyboardHookTypes;
 
 class CursorFactory;
 class GpuPlatformSupportHost;
+class ImeKeyEventDispatcher;
+class InputMethod;
 class InputController;
 class KeyEvent;
 class OverlayManagerOzone;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+class PalmDetector;
+#endif
 class PlatformClipboard;
 class PlatformGLEGLUtility;
 class PlatformGlobalShortcutListener;
@@ -45,11 +50,6 @@ class PlatformUserInputMonitor;
 class PlatformUtils;
 class SurfaceFactoryOzone;
 class SystemInputInjector;
-
-namespace internal {
-class InputMethodDelegate;
-}  // namespace internal
-class InputMethod;
 
 struct PlatformWindowInitProperties;
 
@@ -104,10 +104,6 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
     PlatformProperties& operator=(const PlatformProperties& other) = delete;
     ~PlatformProperties();
 
-    // Fuchsia only: set to true when the platforms requires |view_token| field
-    // in PlatformWindowInitProperties when creating a window.
-    bool needs_view_token = false;
-
     // Determines whether we should default to native decorations or the custom
     // frame based on the currently-running window manager.
     bool custom_frame_pref_default = false;
@@ -124,10 +120,6 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
 
     // Determines if the platform supports vulkan swap chain.
     bool supports_vulkan_swap_chain = false;
-
-    // Linux only: determines if the platform uses the external Vulkan image
-    // factory.
-    bool uses_external_vulkan_image_factory = false;
 
     // Linux only: determines if Skia can fall back to the X11 output device.
     bool skia_can_fall_back_to_x11 = false;
@@ -167,6 +159,8 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
 
   // Groups platform properties that can only be known at run time.
   struct PlatformRuntimeProperties {
+    PlatformRuntimeProperties();
+
     // Values to override the value of the
     // supports_server_side_window_decorations property in tests.
     enum class SupportsSsdForTest {
@@ -192,12 +186,39 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
     // without a backing image via a wayland protocol.
     bool supports_non_backed_solid_color_buffers = false;
 
+    // Wayland only: determines whether single pixel buffer protocol is
+    // supported.
+    bool supports_single_pixel_buffer = false;
+
     // Indicates whether the platform supports native pixmaps.
     bool supports_native_pixmaps = false;
 
     // Wayland only: determines whether BufferQueue needs a background image to
     // be stacked below an AcceleratedWidget to make a widget opaque.
     bool needs_background_image = false;
+
+    // Wayland only: determines whether clip rects can be delegated via the
+    // wayland protocol when no quad is out of window.
+    bool supports_clip_rect = false;
+
+    // Wayland only: determine whether toplevel surfaces can be activated and
+    // deactivated.
+    bool supports_activation = false;
+
+    // Wayland only: determines whether non axis-aligned 2d transforms can be
+    // delegated via the wayland protocol.
+    bool supports_affine_transform = false;
+
+    // Wayland only: determines whether clip rects can be delegated via the
+    // wayland protocol when some quads are out of window.
+    // TODO(crbug.com/1470024): The flag is currently disabled by default since
+    // there is a bug. Set this flag to enabled in GPU process when the
+    // remaining issues are resolved.
+    bool supports_out_of_window_clip_rect = false;
+
+    // Whether wayland server has the fix that applies transformations in the
+    // correct order.
+    bool has_transformation_fix = false;
   };
 
   // Corresponds to chrome_browser_main_extra_parts.h.
@@ -217,11 +238,13 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
   // error handlers if supported so that we can print errors during the browser
   // process' start up).
   static void PreEarlyInitialization();
-  // Sets error handlers if supported for the browser process after the message
-  // loop started. It's required to call this so that we can exit cleanly if the
+  // Sets error handlers if supported for the browser process, and provides a
+  // task_runner suitable for handling user input after the message loop
+  // started. It's required to call this so that we can exit cleanly if the
   // server can exit before we do.
   virtual void PostCreateMainMessageLoop(
-      base::OnceCallback<void()> shutdown_cb);
+      base::OnceCallback<void()> shutdown_cb,
+      scoped_refptr<base::SingleThreadTaskRunner> user_input_task_runner);
   // Resets the error handlers if set.
   virtual void PostMainMessageLoopRun();
 
@@ -268,7 +291,7 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
   virtual void InitScreen(PlatformScreen* screen) = 0;
   virtual PlatformClipboard* GetPlatformClipboard();
   virtual std::unique_ptr<InputMethod> CreateInputMethod(
-      internal::InputMethodDelegate* delegate,
+      ImeKeyEventDispatcher* ime_key_event_dispatcher,
       gfx::AcceleratedWidget widget) = 0;
   virtual PlatformGLEGLUtility* GetPlatformGLEGLUtility();
   virtual PlatformMenuUtils* GetPlatformMenuUtils();
@@ -340,6 +363,19 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
   virtual std::unique_ptr<PlatformUserInputMonitor> GetPlatformUserInputMonitor(
       const scoped_refptr<base::SingleThreadTaskRunner>& io_task_runner);
 
+  virtual void DumpState(std::ostream& out) const {}
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Sets the proper PalmDetector implementation from outside Ozone. This is
+  // used for touch screen palm rejection on ChromeOS, so this interface should
+  // be only used from ChromeOS. We use this interface instead of directly
+  // creating the implementation because we don't want Ozone code to depend on
+  // ChromeOS code to avoid circular dependency.
+  void SetPalmDetector(std::unique_ptr<PalmDetector> params);
+
+  PalmDetector* GetPalmDetector();
+#endif
+
  protected:
   bool has_initialized_ui() const { return initialized_ui_; }
   bool has_initialized_gpu() const { return initialized_gpu_; }
@@ -376,6 +412,10 @@ class COMPONENT_EXPORT(OZONE) OzonePlatform {
   // modifications to |single_process_| visible by other threads. Mutex is not
   // needed since it's set before other threads are started.
   volatile bool single_process_ = false;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  std::unique_ptr<PalmDetector> palm_detector_;
+#endif
 };
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <map>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/browser_tab_strip_tracker.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 
@@ -43,7 +44,7 @@ class TabClusterUIClient : public TabStripModelObserver {
                     TabChangeType change_type) override;
 
  private:
-  ash::TabClusterUIController* controller_;
+  raw_ptr<ash::TabClusterUIController, ExperimentalAsh> controller_;
   BrowserTabStripTracker browser_tab_strip_tracker_;
   // A map from web contents to tab items.
   std::map<content::WebContents*, ash::TabClusterUIItem*> contents_item_map_;

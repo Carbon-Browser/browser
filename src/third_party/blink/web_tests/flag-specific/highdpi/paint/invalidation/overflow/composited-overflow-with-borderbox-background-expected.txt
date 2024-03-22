@@ -17,27 +17,24 @@
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow DIV id='scroller'",
-      "position": [15, 15],
-      "bounds": [278, 450],
-      "contentsOpaque": true,
-      "backgroundColor": "#008000",
-      "invalidations": [
-        [0, 0, 278, 450]
-      ],
-      "transform": 1
-    },
-    {
       "name": "HorizontalScrollbar",
       "position": [15, 293],
       "bounds": [300, 22],
-      "contentsOpaqueForText": true,
       "transform": 1
     },
     {
       "name": "VerticalScrollbar",
       "position": [293, 15],
       "bounds": [22, 278],
+      "contentsOpaque": true,
+      "transform": 1
+    },
+    {
+      "name": "LayoutNGBlockFlow DIV id='scroller'",
+      "position": [15, 15],
+      "bounds": [278, 450],
+      "contentsOpaque": true,
+      "backgroundColor": "#008000",
       "transform": 1
     }
   ],

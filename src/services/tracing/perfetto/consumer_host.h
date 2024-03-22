@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_handle.h"
 #include "base/sequence_checker.h"
 #include "base/threading/sequence_bound.h"
 #include "base/timer/timer.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/tracing/public/mojom/perfetto_service.mojom.h"
 #include "third_party/perfetto/include/perfetto/ext/tracing/core/consumer.h"
@@ -158,6 +159,7 @@ class ConsumerHost : public perfetto::Consumer, public mojom::ConsumerHost {
                    bool has_more) override;
   void OnObservableEvents(const perfetto::ObservableEvents&) override;
   void OnTraceStats(bool success, const perfetto::TraceStats&) override;
+  void OnSessionCloned(const OnSessionClonedArgs&) override;
 
   // Unused in Chrome.
   void OnDetach(bool success) override {}

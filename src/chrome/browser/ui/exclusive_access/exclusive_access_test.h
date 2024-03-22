@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "chrome/browser/ui/exclusive_access/exclusive_access_bubble.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_hide_callback.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_bubble_type.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
@@ -62,6 +63,8 @@ class ExclusiveAccessTest : public InProcessBrowserTest {
  public:
   ExclusiveAccessTest(const ExclusiveAccessTest&) = delete;
   ExclusiveAccessTest& operator=(const ExclusiveAccessTest&) = delete;
+
+  static bool IsBubbleDownloadNotification(ExclusiveAccessBubble* bubble);
 
  protected:
   ExclusiveAccessTest();

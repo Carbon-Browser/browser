@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,51 +9,57 @@
 #include "base/metrics/field_trial_params.h"
 #include "build/build_config.h"
 
-namespace base {
-struct Feature;
-}
-
 namespace autofill {
 namespace features {
 
 // All features in alphabetical order.
-extern const base::Feature kAutofillAlwaysReturnCloudTokenizedCard;
-extern const base::Feature kAutofillAutoTriggerManualFallbackForCards;
-extern const base::Feature kAutofillCreditCardAuthentication;
-extern const base::Feature kAutofillCreditCardUploadFeedback;
-extern const base::Feature
-    kAutofillEnableGetDetailsForEnrollParsingInUploadCardResponse;
-extern const base::Feature kAutofillEnableFIDOProgressDialog;
-extern const base::Feature kAutofillEnableManualFallbackForVirtualCards;
-extern const base::Feature kAutofillEnableOfferNotificationForPromoCodes;
-extern const base::Feature kAutofillEnableOffersInClankKeyboardAccessory;
-extern const base::Feature kAutofillEnableRemadeDownstreamMetrics;
-extern const base::Feature kAutofillEnableSendingBcnInGetUploadDetails;
-extern const base::Feature kAutofillEnableStickyManualFallbackForCards;
-extern const base::Feature kAutofillEnableToolbarStatusChip;
-extern const base::Feature kAutofillEnableUnmaskCardRequestSetInstrumentId;
-extern const base::Feature kAutofillEnableUpdateVirtualCardEnrollment;
-extern const base::Feature kAutofillEnableVirtualCard;
-extern const base::Feature kAutofillEnableVirtualCardFidoEnrollment;
-extern const base::Feature
-    kAutofillEnableVirtualCardManagementInDesktopSettingsPage;
-extern const base::Feature kAutofillEnableVirtualCardMetadata;
-extern const base::Feature kAutofillEnforceDelaysInStrikeDatabase;
-extern const base::Feature kAutofillFillMerchantPromoCodeFields;
-extern const base::Feature kAutofillParseIbanFields;
-extern const base::Feature kAutofillParseMerchantPromoCodeFields;
-extern const base::Feature kAutofillRemoveCardExpiryFromDownstreamSuggestion;
-extern const base::Feature kAutofillSaveCardDismissOnNavigation;
-extern const base::Feature kAutofillSaveCardInfobarEditSupport;
-extern const base::Feature kAutofillSaveCardUiExperiment;
-extern const base::FeatureParam<int>
-    kAutofillSaveCardUiExperimentSelectorInNumber;
-extern const base::Feature kAutofillShowUnmaskedCachedCardInManualFillingView;
-extern const base::Feature kAutofillUpstream;
-extern const base::Feature kAutofillUpstreamAllowAdditionalEmailDomains;
-extern const base::Feature kAutofillUpstreamAllowAllEmailDomains;
-extern const base::FeatureParam<int>
-    kAutofillVirtualCardEnrollDelayInStrikeDatabaseInDays;
+BASE_DECLARE_FEATURE(kAutofillEnableAndroidNKeyForFidoAuthentication);
+BASE_DECLARE_FEATURE(kAutofillEnableCardArtImage);
+BASE_DECLARE_FEATURE(kAutofillEnableCardArtServerSideStretching);
+BASE_DECLARE_FEATURE(kAutofillEnableCardBenefits);
+BASE_DECLARE_FEATURE(kAutofillEnableCardProductName);
+BASE_DECLARE_FEATURE(kAutofillEnableCvcStorageAndFilling);
+BASE_DECLARE_FEATURE(kAutofillEnableEmailOtpForVcnYellowPath);
+BASE_DECLARE_FEATURE(kAutofillEnableFIDOProgressDialog);
+BASE_DECLARE_FEATURE(kAutofillEnableFpanRiskBasedAuthentication);
+BASE_DECLARE_FEATURE(kAutofillEnableManualFallbackForVirtualCards);
+BASE_DECLARE_FEATURE(kAutofillEnableMerchantDomainInUnmaskCardRequest);
+BASE_DECLARE_FEATURE(kAutofillEnableMerchantOptOutClientSideUrlFiltering);
+BASE_DECLARE_FEATURE(kAutofillEnableMovingGPayLogoToTheRightOnDesktop);
+BASE_DECLARE_FEATURE(kAutofillEnableMovingGPayLogoToTheRightOnClank);
+BASE_DECLARE_FEATURE(kAutofillEnableNewCardArtAndNetworkImages);
+BASE_DECLARE_FEATURE(kAutofillEnableNewSaveCardBubbleUi);
+BASE_DECLARE_FEATURE(kAutofillEnableOffersInClankKeyboardAccessory);
+
+#if BUILDFLAG(IS_ANDROID)
+BASE_DECLARE_FEATURE(kAutofillEnablePaymentsAndroidBottomSheet);
+#endif
+
+BASE_DECLARE_FEATURE(kAutofillEnablePaymentsMandatoryReauth);
+BASE_DECLARE_FEATURE(kAutofillEnableRemadeDownstreamMetrics);
+BASE_DECLARE_FEATURE(kAutofillEnableSaveCardLoadingAndConfirmation);
+BASE_DECLARE_FEATURE(kAutofillEnableSaveCardLocalSaveFallback);
+BASE_DECLARE_FEATURE(kAutofillEnableServerIban);
+BASE_DECLARE_FEATURE(kAutofillEnableStickyManualFallbackForCards);
+BASE_DECLARE_FEATURE(kAutofillEnableUpdateVirtualCardEnrollment);
+BASE_DECLARE_FEATURE(kAutofillEnableUserAvatarInSaveCardFooter);
+BASE_DECLARE_FEATURE(kAutofillEnableVcnEnrollLoadingAndConfirmation);
+BASE_DECLARE_FEATURE(kAutofillEnableVirtualCardEnrollMetricsLogger);
+BASE_DECLARE_FEATURE(kAutofillEnableVirtualCardMetadata);
+BASE_DECLARE_FEATURE(kAutofillMoveLegalTermsAndIconForNewCardEnrollment);
+BASE_DECLARE_FEATURE(kAutofillParseVcnCardOnFileStandaloneCvcFields);
+BASE_DECLARE_FEATURE(kAutofillSuggestServerCardInsteadOfLocalCard);
+BASE_DECLARE_FEATURE(kAutofillUpdateChromeSettingsLinkToGPayWeb);
+BASE_DECLARE_FEATURE(kAutofillUpstream);
+
+#if BUILDFLAG(IS_IOS)
+BASE_DECLARE_FEATURE(kAutofillUseTwoDotsForLastFourDigits);
+BASE_DECLARE_FEATURE(kAutofillEnableVirtualCards);
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+BASE_DECLARE_FEATURE(kEnablePixPayments);
+#endif
 
 // Return whether a [No thanks] button and new messaging is shown in the save
 // card bubbles. This will be called only on desktop platforms.

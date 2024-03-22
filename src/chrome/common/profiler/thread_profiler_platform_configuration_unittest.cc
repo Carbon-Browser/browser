@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/profiler/profiler_buildflags.h"
+#include "base/test/bind.h"
 #include "base/test/gtest_util.h"
 #include "build/build_config.h"
 #include "components/version_info/version_info.h"
@@ -81,48 +82,13 @@ TEST_F(ThreadProfilerPlatformConfigurationTest, IsSupported) {
 }
 
 MAYBE_PLATFORM_CONFIG_TEST_F(ThreadProfilerPlatformConfigurationTest,
-                             GetRuntimeModuleState) {
-  using RuntimeModuleState =
-      ThreadProfilerPlatformConfiguration::RuntimeModuleState;
-#if BUILDFLAG(IS_ANDROID)
-  EXPECT_EQ(RuntimeModuleState::kModuleNotAvailable,
-            config()->GetRuntimeModuleState(version_info::Channel::UNKNOWN));
-  EXPECT_EQ(RuntimeModuleState::kModuleAbsentButAvailable,
-            config()->GetRuntimeModuleState(version_info::Channel::CANARY));
-  EXPECT_EQ(RuntimeModuleState::kModuleAbsentButAvailable,
-            config()->GetRuntimeModuleState(version_info::Channel::DEV));
-  EXPECT_EQ(RuntimeModuleState::kModuleNotAvailable,
-            config()->GetRuntimeModuleState(version_info::Channel::BETA));
-  EXPECT_EQ(RuntimeModuleState::kModuleNotAvailable,
-            config()->GetRuntimeModuleState(version_info::Channel::STABLE));
-
-  EXPECT_EQ(RuntimeModuleState::kModuleNotAvailable,
-            config()->GetRuntimeModuleState(version_info::Channel::UNKNOWN));
-#else
-  EXPECT_EQ(RuntimeModuleState::kModuleNotRequired,
-            config()->GetRuntimeModuleState(version_info::Channel::UNKNOWN));
-  EXPECT_EQ(RuntimeModuleState::kModuleNotRequired,
-            config()->GetRuntimeModuleState(version_info::Channel::CANARY));
-  EXPECT_EQ(RuntimeModuleState::kModuleNotRequired,
-            config()->GetRuntimeModuleState(version_info::Channel::DEV));
-  EXPECT_EQ(RuntimeModuleState::kModuleNotRequired,
-            config()->GetRuntimeModuleState(version_info::Channel::BETA));
-  EXPECT_EQ(RuntimeModuleState::kModuleNotRequired,
-            config()->GetRuntimeModuleState(version_info::Channel::STABLE));
-
-  EXPECT_EQ(RuntimeModuleState::kModuleNotRequired,
-            config()->GetRuntimeModuleState(version_info::Channel::UNKNOWN));
-#endif
-}
-
-MAYBE_PLATFORM_CONFIG_TEST_F(ThreadProfilerPlatformConfigurationTest,
                              GetEnableRates) {
   using RelativePopulations =
       ThreadProfilerPlatformConfiguration::RelativePopulations;
 #if BUILDFLAG(IS_ANDROID)
-  EXPECT_EQ((RelativePopulations{0, 50}),
+  EXPECT_EQ((RelativePopulations{1, 99}),
             config()->GetEnableRates(version_info::Channel::CANARY));
-  EXPECT_EQ((RelativePopulations{0, 50}),
+  EXPECT_EQ((RelativePopulations{1, 99}),
             config()->GetEnableRates(version_info::Channel::DEV));
   // Note: death tests aren't supported on Android. Otherwise this test would
   // check that the other inputs result in CHECKs.
@@ -141,25 +107,25 @@ MAYBE_PLATFORM_CONFIG_TEST_F(ThreadProfilerPlatformConfigurationTest,
 }
 
 MAYBE_PLATFORM_CONFIG_TEST_F(ThreadProfilerPlatformConfigurationTest,
-                             GetChildProcessEnableFraction) {
-  EXPECT_EQ(1.0, config()->GetChildProcessEnableFraction(
+                             GetChildProcessPerExecutionEnableFraction) {
+  EXPECT_EQ(1.0, config()->GetChildProcessPerExecutionEnableFraction(
                      metrics::CallStackProfileParams::Process::kGpu));
-  EXPECT_EQ(0.0, config()->GetChildProcessEnableFraction(
-                     metrics::CallStackProfileParams::Process::kUtility));
-  EXPECT_EQ(0.0, config()->GetChildProcessEnableFraction(
-                     metrics::CallStackProfileParams::Process::kUnknown));
-#if BUILDFLAG(IS_ANDROID)
-  EXPECT_EQ(0.75, config()->GetChildProcessEnableFraction(
-                      metrics::CallStackProfileParams::Process::kRenderer));
-  EXPECT_EQ(0.0,
-            config()->GetChildProcessEnableFraction(
-                metrics::CallStackProfileParams::Process::kNetworkService));
-#else
-  EXPECT_EQ(0.2, config()->GetChildProcessEnableFraction(
-                     metrics::CallStackProfileParams::Process::kRenderer));
   EXPECT_EQ(1.0,
-            config()->GetChildProcessEnableFraction(
+            config()->GetChildProcessPerExecutionEnableFraction(
                 metrics::CallStackProfileParams::Process::kNetworkService));
+
+#if BUILDFLAG(IS_ANDROID)
+  // Android child processes that match ChooseEnabledProcess() should be
+  // profiled unconditionally.
+  EXPECT_EQ(1.0, config()->GetChildProcessPerExecutionEnableFraction(
+                     metrics::CallStackProfileParams::Process::kRenderer));
+  EXPECT_EQ(1.0, config()->GetChildProcessPerExecutionEnableFraction(
+                     metrics::CallStackProfileParams::Process::kUnknown));
+#else
+  EXPECT_EQ(0.2, config()->GetChildProcessPerExecutionEnableFraction(
+                     metrics::CallStackProfileParams::Process::kRenderer));
+  EXPECT_EQ(0.0, config()->GetChildProcessPerExecutionEnableFraction(
+                     metrics::CallStackProfileParams::Process::kUnknown));
 #endif
 }
 
@@ -179,7 +145,23 @@ MAYBE_PLATFORM_CONFIG_TEST_F(ThreadProfilerPlatformConfigurationTest,
          ++j) {
       const auto thread =
           static_cast<metrics::CallStackProfileParams::Thread>(j);
-      EXPECT_TRUE(config()->IsEnabledForThread(process, thread));
+      EXPECT_TRUE(config()->IsEnabledForThread(process, thread,
+                                               version_info::Channel::CANARY));
+#if BUILDFLAG(IS_ANDROID) && defined(ARCH_CPU_ARMEL)
+      auto android_config1 = ThreadProfilerPlatformConfiguration::Create(
+          /* browser_test_mode_enabled=*/false,
+          base::BindLambdaForTesting([](double probability) { return true; }));
+      EXPECT_TRUE(android_config1->IsEnabledForThread(
+          process, thread, version_info::Channel::DEV));
+      auto android_config2 = ThreadProfilerPlatformConfiguration::Create(
+          /* browser_test_mode_enabled=*/false,
+          base::BindLambdaForTesting([](double probability) { return false; }));
+      EXPECT_FALSE(android_config2->IsEnabledForThread(
+          process, thread, version_info::Channel::DEV));
+#else
+      EXPECT_TRUE(config()->IsEnabledForThread(process, thread,
+                                               version_info::Channel::DEV));
+#endif
     }
   }
 }

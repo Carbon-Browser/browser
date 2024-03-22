@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,8 +55,8 @@ MerchantValidationEvent::MerchantValidationEvent(
     exception_state.ThrowTypeError("Invalid validation URL");
     return;
   }
-  if (!method_name_.IsEmpty() &&
-      !PaymentsValidators::IsValidMethodFormat(method_name_)) {
+  if (!method_name_.empty() && !PaymentsValidators::IsValidMethodFormat(
+                                   script_state->GetIsolate(), method_name_)) {
     exception_state.ThrowRangeError("Invalid payment method identifier.");
     return;
   }

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,12 +20,15 @@ namespace blink {
 class ShapeResultTest : public FontTestBase {
  protected:
   void SetUp() override {
-    font_description.SetComputedSize(12.0);
-    font = Font(font_description);
-
     FontDescription::VariantLigatures ligatures;
+    font = blink::test::CreateTestFont(
+        AtomicString("Roboto"),
+        blink::test::PlatformTestDataPath(
+            "third_party/Roboto/roboto-regular.woff2"),
+        12.0, &ligatures);
+
     arabic_font = blink::test::CreateTestFont(
-        "Noto",
+        AtomicString("Noto"),
         blink::test::PlatformTestDataPath(
             "third_party/Noto/NotoNaskhArabic-regular.woff2"),
         12.0, &ligatures);
@@ -301,6 +304,74 @@ TEST_F(ShapeResultTest, ComputeInkBoundsWithZeroOffset) {
   EXPECT_FALSE(result->ComputeInkBounds().IsEmpty());
 }
 
+struct TextAutoSpaceTextData {
+  // The string that should be processed.
+  const UChar* string;
+  // Precalculated insertion points' offsets.
+  std::vector<wtf_size_t> offsets;
+
+} text_auto_space_test_data[] = {
+    {u"Abcあああ", {3}},
+    {u"ああ123あああ", {2, 5}},
+    {u"ああ123ああ", {2, 5}},
+    {u"ああ123ああ", {1, 2, 3, 4, 5, 6, 7}},
+};
+class TextAutoSpaceResultText
+    : public ShapeResultTest,
+      public testing::WithParamInterface<TextAutoSpaceTextData> {};
+INSTANTIATE_TEST_SUITE_P(ShapeResultTest,
+                         TextAutoSpaceResultText,
+                         testing::ValuesIn(text_auto_space_test_data));
+
+Vector<float> RecordPositionBeforeApplyingSpacing(ShapeResult* result,
+                                                  wtf_size_t size) {
+  Vector<float> before_adding_spacing(size);
+  std::generate(before_adding_spacing.begin(), before_adding_spacing.end(),
+                [&, i = 0]() mutable {
+                  float position = result->PositionForOffset(i);
+                  i++;
+                  return position;
+                });
+  return before_adding_spacing;
+}
+
+Vector<OffsetWithSpacing, 16> RecordExpectedSpacing(
+    const std::vector<wtf_size_t>& offsets_data) {
+  Vector<OffsetWithSpacing, 16> offsets(offsets_data.size());
+  std::generate_n(offsets.begin(), offsets_data.size(), [&, i = -1]() mutable {
+    ++i;
+    return OffsetWithSpacing{.offset = offsets_data[i],
+                             .spacing = static_cast<float>(0.1 * (i + 1))};
+  });
+  return offsets;
+}
+
+// Tests the spacing should be appended at the correct positions.
+TEST_P(TextAutoSpaceResultText, AddAutoSpacingToIdeograph) {
+  const auto& test_data = GetParam();
+  String string(test_data.string);
+  HarfBuzzShaper shaper(string);
+  scoped_refptr<ShapeResult> result = shaper.Shape(&font, TextDirection::kLtr);
+
+  // Record the position before applying text-autospace, and fill the spacing
+  // widths with different values.
+  Vector<float> before_adding_spacing =
+      RecordPositionBeforeApplyingSpacing(result.get(), string.length());
+  Vector<OffsetWithSpacing, 16> offsets =
+      RecordExpectedSpacing(test_data.offsets);
+  result->ApplyTextAutoSpacing(offsets);
+  float accumulated_spacing = 0.0;
+  for (wtf_size_t i = 0, j = 0; i < string.length(); i++) {
+    if (j < test_data.offsets.size() && offsets[j].offset == i) {
+      accumulated_spacing += offsets[j].spacing;
+      j++;
+    }
+    EXPECT_NEAR(accumulated_spacing,
+                result->PositionForOffset(i) - before_adding_spacing[i],
+                /* abs_error= */ 1e-5);
+  }
+}
+
 // TDOO(yosin): We should use a font including U+0A81 or other code point
 // having non-zero glyph offset.
 TEST_F(ShapeResultTest, DISABLED_ComputeInkBoundsWithNonZeroOffset) {
@@ -310,6 +381,153 @@ TEST_F(ShapeResultTest, DISABLED_ComputeInkBoundsWithNonZeroOffset) {
   auto result = shaper.Shape(&font, TextDirection::kLtr);
   ASSERT_TRUE(HasNonZeroGlyphOffsets(*result));
   EXPECT_FALSE(result->ComputeInkBounds().IsEmpty());
+}
+
+// Tests for CaretPositionForOffset
+struct CaretPositionForOffsetTextData {
+  // The string that should be processed.
+  const UChar* string;
+  // Text direction to test
+  TextDirection direction;
+  // The offsets to test.
+  std::vector<wtf_size_t> offsets;
+  // Expected positions. The width is 240.
+  std::vector<float> positions;
+  // True to use latin font, otherwise arabic
+  bool is_latin;
+  // Adjust mid cluster value
+  AdjustMidCluster adjust_mid_cluster;
+} caret_position_for_offset_test_data[] = {
+    // 0
+    {u"012345678901234567890123456789",
+     TextDirection::kLtr,
+     {0, 1, 4, 5, 12, 18, 30, 32},
+#if BUILDFLAG(IS_APPLE)
+     {0, 6.738, 26.953, 33.691, 80.859, 121.289, 202.148, 0},
+#else
+     {0, 7, 28, 35, 84, 126, 210, 0},
+#endif
+     true,
+     AdjustMidCluster::kToStart},
+
+    // 1
+    {u"012345678901234567890123456789",  // 1
+     TextDirection::kRtl,
+     {0, 1, 4, 5, 12, 18, 30, 32},
+#if BUILDFLAG(IS_APPLE)
+     {202.148, 195.410, 175.195, 168.457, 121.289, 80.859, 0, 0},
+#else
+     {210, 203, 182, 175, 126, 84, 0, 0},
+#endif
+     true,
+     AdjustMidCluster::kToStart},
+
+    // 2
+    {u"0ff1ff23fff456ffff7890fffff12345ffffff6789",
+     TextDirection::kLtr,
+     {0, 1, 4, 5, 12, 18, 42, 43},
+#if BUILDFLAG(IS_APPLE)
+     {0, 6.738, 21.809, 25.975, 62.85, 92.994, 226.418, 0},
+#else
+     {0, 7, 22, 26, 63, 93, 228, 0},
+#endif
+     true,
+     AdjustMidCluster::kToStart},
+
+    // 3
+    {u"0ff1ff23fff456ffff7890fffff12345ffffff6789",
+     TextDirection::kRtl,
+     {0, 1, 4, 5, 12, 18, 42, 43},
+#if BUILDFLAG(IS_APPLE)
+     {226.418, 219.680, 204.609, 200.443, 163.564, 133.424, 0, 0},
+#else
+     {228, 221, 206, 202, 165, 135, 0, 0},
+#endif
+     true,
+     AdjustMidCluster::kToStart},
+
+    // 4
+    {u"مَ1مَمَ2مَمَمَ3مَمَمَمَ4مَمَمَمَمَ5مَمَمَمَمَمَ",
+     TextDirection::kLtr,
+     {0, 1, 2, 3, 4, 5, 10, 15, 20, 30, 47},
+#if BUILDFLAG(IS_APPLE)
+     {0, 0, 5.865, 12.727, 12.727, 19.061, 37.723, 55.008, 66.299, 99.832,
+      148.746},
+#elif BUILDFLAG(IS_WIN)
+     {0, 0, 6, 13, 13, 19, 37, 54, 65, 98, 146},
+#else
+     {0, 0, 6, 13, 13, 20, 40, 58, 70, 105, 156},
+#endif
+     false,
+     AdjustMidCluster::kToStart},
+
+    // 5
+    {u"مَ1مَمَ2مَمَمَ3مَمَمَمَ4مَمَمَمَمَ5مَمَمَمَمَمَ",
+     TextDirection::kLtr,
+     {0, 1, 2, 3, 4, 5, 10, 15, 20, 30, 47},
+#if BUILDFLAG(IS_APPLE)
+     {0, 5.865, 5.865, 12.727, 19.061, 19.061, 37.723, 55.008, 71.256, 99.832,
+      148.746},
+#elif BUILDFLAG(IS_WIN)
+     {0, 6, 6, 13, 19, 19, 37, 54, 70, 98, 146},
+#else
+     {0, 6, 6, 13, 20, 20, 40, 58, 75, 105, 156},
+#endif
+     false,
+     AdjustMidCluster::kToEnd},
+
+    // 6
+    {u"مَ1مَمَ2مَمَمَ3مَمَمَمَ4مَمَمَمَمَ5مَمَمَمَمَمَ",
+     TextDirection::kRtl,
+     {0, 1, 2, 3, 4, 5, 10, 15, 20, 30, 47},
+#if BUILDFLAG(IS_APPLE)
+     {148.746, 148.746, 142.881, 136.02, 136.02, 130.553, 111.891, 93.738,
+      83.315, 49.781, 0},
+#elif BUILDFLAG(IS_WIN)
+     {146, 146, 140, 133, 133, 128, 110, 92, 82, 49, 0},
+#else
+     {156, 156, 150, 143, 143, 137, 117, 98, 87, 52, 0},
+#endif
+     false,
+     AdjustMidCluster::kToStart},
+
+    // 7
+    {u"مَ1مَمَ2مَمَمَ3مَمَمَمَ4مَمَمَمَمَ5مَمَمَمَمَمَ",
+     TextDirection::kRtl,
+     {0, 1, 2, 3, 4, 5, 10, 15, 20, 30, 47},
+#if BUILDFLAG(IS_APPLE)
+     {148.746, 142.881, 142.881, 136.02, 130.553, 130.553, 111.891, 93.738,
+      78.357, 49.781, 0},
+#elif BUILDFLAG(IS_WIN)
+     {146, 140, 140, 133, 128, 128, 110, 92, 77, 49, 0},
+#else
+     {156, 150, 150, 143, 137, 137, 117, 98, 82, 52, 0},
+#endif
+     false,
+     AdjustMidCluster::kToEnd},
+};
+class CaretPositionForOffsetText
+    : public ShapeResultTest,
+      public testing::WithParamInterface<CaretPositionForOffsetTextData> {};
+INSTANTIATE_TEST_SUITE_P(
+    ShapeResultTest,
+    CaretPositionForOffsetText,
+    testing::ValuesIn(caret_position_for_offset_test_data));
+
+TEST_P(CaretPositionForOffsetText, CaretPositionForOffsets) {
+  const auto& test_data = GetParam();
+  String text_string(test_data.string);
+  HarfBuzzShaper shaper(text_string);
+  scoped_refptr<ShapeResult> result = shaper.Shape(
+      test_data.is_latin ? &font : &arabic_font, test_data.direction);
+  StringView text_view(text_string);
+
+  for (wtf_size_t i = 0; i < test_data.offsets.size(); ++i) {
+    EXPECT_NEAR(test_data.positions[i],
+                result->CaretPositionForOffset(test_data.offsets[i], text_view,
+                                               test_data.adjust_mid_cluster),
+                0.01f);
+  }
 }
 
 }  // namespace blink

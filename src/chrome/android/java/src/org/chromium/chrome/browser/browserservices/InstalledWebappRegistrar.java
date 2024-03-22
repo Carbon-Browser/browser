@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@ import static org.chromium.chrome.browser.dependency_injection.ChromeCommonQuali
 
 import android.content.Context;
 
+import dagger.Lazy;
+
 import org.chromium.chrome.browser.browserservices.permissiondelegation.PermissionUpdater;
 import org.chromium.components.embedder_support.util.Origin;
 
@@ -16,8 +18,6 @@ import java.util.Set;
 
 import javax.inject.Inject;
 import javax.inject.Named;
-
-import dagger.Lazy;
 
 /**
  * Records in all the appropriate places that an installed webapp (TWA or WebAPK) has successfully
@@ -32,8 +32,10 @@ public class InstalledWebappRegistrar {
     private final Set<Origin> mRegisteredOrigins = new HashSet<>();
 
     @Inject
-    public InstalledWebappRegistrar(@Named(APP_CONTEXT) Context appContext,
-            PermissionUpdater permissionUpdater, Lazy<InstalledWebappDataRecorder> dataRecorder) {
+    public InstalledWebappRegistrar(
+            @Named(APP_CONTEXT) Context appContext,
+            PermissionUpdater permissionUpdater,
+            Lazy<InstalledWebappDataRecorder> dataRecorder) {
         mAppContext = appContext;
         mPermissionUpdater = permissionUpdater;
         mDataRecorder = dataRecorder;
@@ -42,10 +44,10 @@ public class InstalledWebappRegistrar {
     /**
      * Registers to various stores that the app is linked with the origin.
      *
-     * We do this here, when the Trusted Web Activity UI is shown instead of in OriginVerifier when
-     * verification completes because when an origin is being verified, we don't know whether it is
-     * for the purposes of Trusted Web Activities or for Post Message (where this behaviour is not
-     * required).
+     * We do this here, when the Trusted Web Activity UI is shown instead of in ChromeOriginVerifier
+     * when verification completes because when an origin is being verified, we don't know whether
+     * it is for the purposes of Trusted Web Activities or for Post Message (where this behaviour is
+     * not required).
      *
      * Additionally we do it on every page navigation because an app can be verified for more than
      * one Origin, eg:
@@ -58,14 +60,14 @@ public class InstalledWebappRegistrar {
      * for PostMessage). Only at step 4 do we know that Chrome should associate the browsing data
      * for that origin with that app.
      */
-    public void registerClient(String packageName, Origin origin) {
+    public void registerClient(String packageName, Origin origin, String pageUrl) {
         if (mRegisteredOrigins.contains(origin)) return;
 
         // Register that we should wipe data for this origin when the client app is uninstalled.
         mDataRecorder.get().register(packageName, origin);
         // Register that we trust the client app to handle permission for this origin and update
         // Chrome's permission for the origin.
-        mPermissionUpdater.onOriginVerified(origin, packageName);
+        mPermissionUpdater.onOriginVerified(origin, pageUrl, packageName);
 
         mRegisteredOrigins.add(origin);
     }

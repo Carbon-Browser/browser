@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,10 @@ using blink::WebLocalFrame;
 using blink::WebString;
 
 namespace autofill {
+
+using form_util::ExtractOption;
+using form_util::UnownedFormElementsToFormData;
+using form_util::WebFormElementToFormData;
 
 namespace {
 
@@ -87,8 +91,10 @@ bool IsGaiaReauthenticationForm(const blink::WebFormElement& form) {
     // We're only interested in the presence
     // of <input type="hidden" /> elements.
     const WebInputElement input = element.DynamicTo<WebInputElement>();
-    if (input.IsNull() || input.FormControlTypeForAutofill() != "hidden")
+    if (input.IsNull() || input.FormControlTypeForAutofill() !=
+                              blink::mojom::FormControlType::kInputHidden) {
       continue;
+    }
 
     // There must be a hidden input named "rart".
     if (input.FormControlName() == "rart")
@@ -118,7 +124,7 @@ bool IsGaiaWithSkipSavePasswordForm(const blink::WebFormElement& form) {
 
 std::unique_ptr<FormData> CreateFormDataFromWebForm(
     const WebFormElement& web_form,
-    const FieldDataManager* field_data_manager,
+    const FieldDataManager& field_data_manager,
     UsernameDetectorCache* username_detector_cache,
     form_util::ButtonTitlesCache* button_titles_cache) {
   if (web_form.IsNull())
@@ -135,28 +141,26 @@ std::unique_ptr<FormData> CreateFormDataFromWebForm(
     return nullptr;
 
   if (!WebFormElementToFormData(web_form, WebFormControlElement(),
-                                field_data_manager, form_util::EXTRACT_VALUE,
-                                form_data.get(), nullptr /* FormFieldData */)) {
+                                field_data_manager, {ExtractOption::kValue},
+                                form_data.get(), /*field=*/nullptr)) {
     return nullptr;
   }
   form_data->username_predictions =
       GetUsernamePredictions(control_elements.ReleaseVector(), *form_data,
                              username_detector_cache, web_form);
-  form_data->button_titles = form_util::GetButtonTitles(
-      web_form, web_form.GetDocument(), button_titles_cache);
+  form_data->button_titles =
+      form_util::GetButtonTitles(web_form, button_titles_cache);
 
   return form_data;
 }
 
 std::unique_ptr<FormData> CreateFormDataFromUnownedInputElements(
     const WebLocalFrame& frame,
-    const FieldDataManager* field_data_manager,
+    const FieldDataManager& field_data_manager,
     UsernameDetectorCache* username_detector_cache,
     form_util::ButtonTitlesCache* button_titles_cache) {
-  std::vector<WebElement> fieldsets;
-
   std::vector<WebFormControlElement> control_elements =
-      form_util::GetUnownedFormFieldElements(frame.GetDocument(), &fieldsets);
+      form_util::GetUnownedFormFieldElements(frame.GetDocument());
   if (control_elements.empty())
     return nullptr;
 
@@ -165,17 +169,15 @@ std::unique_ptr<FormData> CreateFormDataFromUnownedInputElements(
   std::vector<WebElement> iframe_elements;
 
   auto form_data = std::make_unique<FormData>();
-  if (!UnownedFormElementsAndFieldSetsToFormData(
-          fieldsets, control_elements, iframe_elements, nullptr,
-          frame.GetDocument(), field_data_manager, form_util::EXTRACT_VALUE,
-          form_data.get(), nullptr /* FormFieldData */)) {
+  if (!UnownedFormElementsToFormData(control_elements, iframe_elements, nullptr,
+                                     frame.GetDocument(), field_data_manager,
+                                     {ExtractOption::kValue}, form_data.get(),
+                                     /*field=*/nullptr)) {
     return nullptr;
   }
 
   form_data->username_predictions = GetUsernamePredictions(
       control_elements, *form_data, username_detector_cache, WebFormElement());
-  form_data->button_titles = form_util::GetButtonTitles(
-      WebFormElement(), frame.GetDocument(), button_titles_cache);
 
   return form_data;
 }

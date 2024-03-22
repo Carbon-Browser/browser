@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ using AmbientContainerViewTest = AmbientAshTestBase;
 
 // Tests that AmbientContainerView window should be fullscreen.
 TEST_F(AmbientContainerViewTest, WindowFullscreenSize) {
-  ShowAmbientScreen();
+  SetAmbientShownAndWaitForWidgets();
   for (const auto* container : GetContainerViews()) {
     const views::Widget* widget = container->GetWidget();
 

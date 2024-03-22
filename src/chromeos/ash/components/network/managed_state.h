@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,22 +12,18 @@
 
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
+#include "base/values.h"
 
 namespace ash {
-namespace tether {
-class NetworkListSorterTest;
-}  // namespace tether
-}  // namespace ash
-
-namespace base {
-class Value;
-}  // namespace base
-
-namespace chromeos {
 
 class DeviceState;
 class NetworkState;
+class NetworkStateHandler;
 class NetworkTypePattern;
+
+namespace tether {
+class NetworkListSorterTest;
+}
 
 // Base class for states managed by NetworkStateManger which are associated
 // with a Shill path (e.g. service path or device path).
@@ -68,15 +64,14 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedState {
 
   // Called by NetworkStateHandler after all calls to PropertyChanged for the
   // initial set of properties. Used to update state requiring multiple
-  // properties, e.g. name from hex_ssid in NetworkState. |properties| must be
-  // of type DICTIONARY and contain the complete set of initial properties.
-  // Returns true if any additional properties are updated.
-  virtual bool InitialPropertiesReceived(const base::Value& properties);
+  // properties, e.g. name from hex_ssid in NetworkState. |properties| must
+  // contain the complete set of initial properties. Returns true if any
+  // additional properties are updated.
+  virtual bool InitialPropertiesReceived(const base::Value::Dict& properties);
 
-  // Fills |dictionary|, which must be of type DICTIONARY, with a minimal set of
-  // state properties for the network type. See implementations for which
-  // properties are included.
-  virtual void GetStateProperties(base::Value* dictionary) const;
+  // Fills |dictionary| with a minimal set of state properties for the network
+  // type. See implementations for which properties are included.
+  virtual void GetStateProperties(base::Value::Dict* dictionary) const;
 
   // Returns true if a state is "Active". For networks that means connected,
   // connecting, or activating. Devices are always "active".
@@ -127,9 +122,9 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedState {
   void set_type(const std::string& type) { type_ = type; }
 
  private:
-  friend class ::ash::tether::NetworkListSorterTest;
   friend class NetworkStateHandler;
   friend class NetworkStateTestHelper;
+  friend class tether::NetworkListSorterTest;
 
   ManagedType managed_type_;
 
@@ -147,11 +142,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ManagedState {
   bool update_requested_ = false;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when this file is moved to ash.
-namespace ash {
-using ::chromeos::ManagedState;
 }  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_MANAGED_STATE_H_

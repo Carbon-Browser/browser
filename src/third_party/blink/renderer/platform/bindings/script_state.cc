@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,22 @@
 #include "third_party/blink/renderer/platform/instrumentation/resource_coordinator/renderer_resource_coordinator.h"
 
 namespace blink {
+
+ScriptState::CreateCallback ScriptState::s_create_callback_ = nullptr;
+
+// static
+void ScriptState::SetCreateCallback(CreateCallback create_callback) {
+  DCHECK(create_callback);
+  DCHECK(!s_create_callback_);
+  s_create_callback_ = create_callback;
+}
+
+// static
+ScriptState* ScriptState::Create(v8::Local<v8::Context> context,
+                                 scoped_refptr<DOMWrapperWorld> world,
+                                 ExecutionContext* execution_context) {
+  return s_create_callback_(context, std::move(world), execution_context);
+}
 
 ScriptState::ScriptState(v8::Local<v8::Context> context,
                          scoped_refptr<DOMWrapperWorld> world,

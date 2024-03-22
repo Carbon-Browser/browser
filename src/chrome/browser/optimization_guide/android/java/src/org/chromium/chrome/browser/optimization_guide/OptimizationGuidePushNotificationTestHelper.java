@@ -1,25 +1,21 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.optimization_guide;
 
+import org.jni_zero.CalledByNative;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.chrome.browser.flags.CachedFeatureFlags;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.optimization_guide.proto.HintsProto.OptimizationType;
 import org.chromium.components.optimization_guide.proto.PushNotificationProto.HintNotificationPayload;
 
-/**
- * Unit test helper for OptimizationGuidePushNotificationManager.
- */
+/** Unit test helper for OptimizationGuidePushNotificationManager. */
 public class OptimizationGuidePushNotificationTestHelper {
-    @Mock
-    private Profile mProfile;
+    @Mock private Profile mProfile;
 
     @CalledByNative
     private OptimizationGuidePushNotificationTestHelper() {}
@@ -54,8 +50,9 @@ public class OptimizationGuidePushNotificationTestHelper {
 
     @CalledByNative
     public static boolean didOverflow(int optType) {
-        for (OptimizationType type : OptimizationGuidePushNotificationManager
-                                             .getOptTypesThatOverflowedPushNotifications()) {
+        for (OptimizationType type :
+                OptimizationGuidePushNotificationManager
+                        .getOptTypesThatOverflowedPushNotifications()) {
             if (type.getNumber() == optType) {
                 return true;
             }
@@ -75,8 +72,7 @@ public class OptimizationGuidePushNotificationTestHelper {
 
     @CalledByNative
     public static void setFeatureEnabled() {
-        CachedFeatureFlags.setForTesting(
-                ChromeFeatureList.OPTIMIZATION_GUIDE_PUSH_NOTIFICATIONS, true);
+        ChromeFeatureList.sOptimizationGuidePushNotifications.setForTesting(true);
     }
 
     @CalledByNative

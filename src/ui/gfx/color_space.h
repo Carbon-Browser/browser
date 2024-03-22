@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "build/build_config.h"
+#include "skia/ext/skcolorspace_trfn.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "ui/gfx/color_space_export.h"
@@ -55,7 +56,7 @@ namespace mojom {
 class ColorSpaceDataView;
 }  // namespace mojom
 
-// Used to represet a color space for the purpose of color conversion.
+// Used to represent a color space for the purpose of color conversion.
 // This is designed to be safe and compact enough to send over IPC
 // between any processes.
 class COLOR_SPACE_EXPORT ColorSpace {
@@ -149,7 +150,7 @@ class COLOR_SPACE_EXPORT ColorSpace {
     INVALID,
     // Limited Rec. 709 color range with RGB values ranging from 16 to 235.
     LIMITED,
-    // Full RGB color range with RGB valees from 0 to 255.
+    // Full RGB color range with RGB values from 0 to 255.
     FULL,
     // Range is defined by TransferID/MatrixID.
     DERIVED,
@@ -172,8 +173,7 @@ class COLOR_SPACE_EXPORT ColorSpace {
              MatrixID matrix,
              RangeID range,
              const skcms_Matrix3x3* custom_primary_matrix,
-             const skcms_TransferFunction* cunstom_transfer_fn,
-             bool is_hdr = false);
+             const skcms_TransferFunction* cunstom_transfer_fn);
 
   explicit ColorSpace(const SkColorSpace& sk_color_space, bool is_hdr = false);
 
@@ -230,6 +230,11 @@ class COLOR_SPACE_EXPORT ColorSpace {
     return ColorSpace(PrimaryID::BT2020, TransferID::HLG, MatrixID::RGB,
                       RangeID::FULL);
   }
+
+  // An extended sRGB ColorSpace that matches the sRGB EOTF but extends to
+  // 4.99x the headroom of SDR brightness. Designed for a 10 bpc buffer format.
+  // Uses P3 primaries. An HDR ColorSpace suitable for blending and compositing.
+  static ColorSpace CreateExtendedSRGB10Bit();
 
   // Create a piecewise-HDR color space.
   // - If |primaries| is CUSTOM, then |custom_primary_matrix| must be
@@ -337,7 +342,7 @@ class COLOR_SPACE_EXPORT ColorSpace {
 
   // Return the RGB and whitepoint coordinates of the ColorSpace's
   // chromaticity. Assumes D65 whitepoint in the case of a custom PrimaryID.
-  SkColorSpacePrimaries GetColorSpacePrimaries() const;
+  SkColorSpacePrimaries GetPrimaries() const;
   void GetPrimaryMatrix(skcms_Matrix3x3* to_XYZD50) const;
   SkM44 GetPrimaryMatrix() const;
 
@@ -383,6 +388,10 @@ class COLOR_SPACE_EXPORT ColorSpace {
   // unless the color space has a non-RGB matrix.
   bool HasExtendedSkTransferFn() const;
 
+  // Returns true if the transfer function values of this color space match
+  // those of the passed in skcms_TransferFunction.
+  bool IsTransferFunctionEqualTo(const skcms_TransferFunction& fn) const;
+
   // Returns true if each color in |other| can be expressed in this color space.
   bool Contains(const ColorSpace& other) const;
 
@@ -397,7 +406,7 @@ class COLOR_SPACE_EXPORT ColorSpace {
   static bool GetTransferFunction(TransferID, skcms_TransferFunction* fn);
   static size_t TransferParamCount(TransferID);
 
-  void SetCustomTransferFunction(const skcms_TransferFunction& fn, bool is_hdr);
+  void SetCustomTransferFunction(const skcms_TransferFunction& fn);
   void SetCustomPrimaries(const skcms_Matrix3x3& to_XYZD50);
 
   PrimaryID primaries_ = PrimaryID::INVALID;

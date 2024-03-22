@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace chromecast {
 class NetworkChangeNotifierFactoryCast
     : public net::NetworkChangeNotifierFactory {
  public:
-  NetworkChangeNotifierFactoryCast() {}
+  NetworkChangeNotifierFactoryCast() = default;
 
   NetworkChangeNotifierFactoryCast(const NetworkChangeNotifierFactoryCast&) =
       delete;
@@ -23,7 +23,10 @@ class NetworkChangeNotifierFactoryCast
   ~NetworkChangeNotifierFactoryCast() override;
 
   // net::NetworkChangeNotifierFactory implementation:
-  std::unique_ptr<net::NetworkChangeNotifier> CreateInstance() override;
+  std::unique_ptr<net::NetworkChangeNotifier> CreateInstanceWithInitialTypes(
+      net::NetworkChangeNotifier::ConnectionType /*initial_type*/,
+      net::NetworkChangeNotifier::ConnectionSubtype /*initial_subtype*/)
+      override;
 };
 
 }  // namespace chromecast

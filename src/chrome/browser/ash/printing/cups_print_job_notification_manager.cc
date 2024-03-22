@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,8 +88,21 @@ void CupsPrintJobNotificationManager::UpdateNotification(
     base::WeakPtr<CupsPrintJob> job) {
   if (!job)
     return;
-  DCHECK(base::Contains(notification_map_, job.get()));
-  notification_map_[job.get()]->OnPrintJobStatusUpdated();
+  auto it = notification_map_.find(job.get());
+  if (it == notification_map_.end()) {
+    return;
+  }
+  it->second->OnPrintJobStatusUpdated();
+}
+
+absl::optional<CupsPrintJobNotification*>
+CupsPrintJobNotificationManager::GetNotificationForTesting(CupsPrintJob* job) {
+  auto it = notification_map_.find(job);
+  if (it != notification_map_.end()) {
+    return it->second.get();
+  }
+
+  return absl::nullopt;
 }
 
 }  // namespace ash

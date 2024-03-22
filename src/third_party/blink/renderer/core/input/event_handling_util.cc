@@ -1,9 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/input/event_handling_util.h"
 
+#include "base/feature_list.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -101,17 +103,6 @@ ScrollableArea* AssociatedScrollableArea(const PaintLayer* layer) {
   return nullptr;
 }
 
-ContainerNode* ParentForClickEventInteractiveElementSensitive(
-    const Node& node) {
-  // IE doesn't dispatch click events for mousedown/mouseup events across form
-  // controls.
-  auto* html_element = DynamicTo<HTMLElement>(node);
-  if (html_element && html_element->IsInteractiveContent())
-    return nullptr;
-
-  return FlatTreeTraversal::Parent(node);
-}
-
 ContainerNode* ParentForClickEvent(const Node& node) {
   return FlatTreeTraversal::Parent(node);
 }
@@ -141,18 +132,39 @@ MouseEventWithHitTestResults PerformMouseEventHitTest(
 
 bool ShouldDiscardEventTargetingFrame(const WebInputEvent& event,
                                       const LocalFrame& frame) {
+  // Under certain circumstances, we discard input events to a recently moved
+  // cross-origin iframe:
+  //
+  // - If javascript in the frame's context is using
+  //   IntersectionObserver V2 to track the visibility of an element, we
+  //   interpret that as a strong signal that the frame is interested in
+  //   preventing mis-clicks. This behavior was added by:
+  //   https://chromium-review.googlesource.com/c/chromium/src/+/1686824
+  //
+  // - The feature flag kDiscardEventsToRecentlyMovedFrames expands this
+  //   behavior to all cross-origin iframes, regardless of whether they are
+  //   using IntersectionObserver V2.
+  //
   // There are two different mechanisms for tracking whether an iframe has moved
   // recently, for OOPIF and in-process iframes. For OOPIF's, frame movement is
   // tracked in the browser process using hit test data, and it's propagated in
   // event.GetModifiers(). For in-process iframes, frame movement is tracked
   // during lifecycle updates, in FrameView::UpdateViewportIntersection, and
   // propagated via FrameView::RectInParentIsStable.
+
   bool should_discard = false;
-  if (frame.NeedsOcclusionTracking() &&
-      frame.IsCrossOriginToOutermostMainFrame()) {
-    should_discard =
-        (event.GetModifiers() & WebInputEvent::kTargetFrameMovedRecently) ||
-        !frame.View()->RectInParentIsStable(event.TimeStamp());
+  if (frame.IsCrossOriginToOutermostMainFrame()) {
+    if (frame.NeedsOcclusionTracking()) {
+      should_discard =
+          (event.GetModifiers() &
+           WebInputEvent::kTargetFrameMovedRecentlyForIOv2) ||
+          !frame.View()->RectInParentIsStableForIOv2(event.TimeStamp());
+    } else if (base::FeatureList::IsEnabled(
+                   features::kDiscardInputEventsToRecentlyMovedFrames)) {
+      should_discard =
+          (event.GetModifiers() & WebInputEvent::kTargetFrameMovedRecently) ||
+          !frame.View()->RectInParentIsStable(event.TimeStamp());
+    }
   }
   if (should_discard) {
     UseCounter::Count(frame.GetDocument(),

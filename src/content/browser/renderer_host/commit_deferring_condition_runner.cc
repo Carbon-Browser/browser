@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,12 @@
 #include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
 #include "content/browser/renderer_host/back_forward_cache_commit_deferring_condition.h"
+#include "content/browser/renderer_host/concurrent_navigations_commit_deferring_condition.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/navigator_delegate.h"
+#include "content/browser/renderer_host/view_transition_commit_deferring_condition.h"
+#include "content/common/content_navigation_policy.h"
+#include "content/common/features.h"
 #include "content/public/browser/commit_deferring_condition.h"
 
 namespace content {
@@ -109,6 +113,14 @@ void CommitDeferringConditionRunner::RegisterDeferringConditions(
       navigation_request, navigation_type_,
       candidate_prerender_frame_tree_node_id_));
 
+  AddCondition(
+      ViewTransitionCommitDeferringCondition::MaybeCreate(navigation_request));
+
+  if (ShouldAvoidRedundantNavigationCancellations()) {
+    AddCondition(ConcurrentNavigationsCommitDeferringCondition::MaybeCreate(
+        navigation_request, navigation_type_));
+  }
+
   // The BFCache deferring condition should run after all other conditions
   // since it'll disable eviction on a cached renderer.
   AddCondition(BackForwardCacheCommitDeferringCondition::MaybeCreate(
@@ -148,10 +160,18 @@ void CommitDeferringConditionRunner::ProcessConditions() {
         base::BindOnce(&CommitDeferringConditionRunner::ResumeProcessing,
                        weak_factory_.GetWeakPtr());
     CommitDeferringCondition* condition = (*conditions_.begin()).get();
-    if (condition->WillCommitNavigation(std::move(resume_closure)) ==
-        CommitDeferringCondition::Result::kDefer) {
-      is_deferred_ = true;
-      return;
+    is_deferred_ = false;
+    switch (condition->WillCommitNavigation(std::move(resume_closure))) {
+      case CommitDeferringCondition::Result::kDefer:
+        is_deferred_ = true;
+        return;
+      case CommitDeferringCondition::Result::kCancelled:
+        // DO NOT ADD CODE after this. The previous call to
+        // `WillCommitNavigation()` may have caused the destruction of the
+        // `NavigationRequest` that owns this `CommitDeferringConditionRunner`.
+        return;
+      case CommitDeferringCondition::Result::kProceed:
+        break;
     }
 
     // Otherwise, the condition is resolved synchronously so remove it and move
@@ -161,7 +181,7 @@ void CommitDeferringConditionRunner::ProcessConditions() {
 
   // All checks are completed, proceed with the commit in the
   // NavigationRequest.
-  delegate_.OnCommitDeferringConditionChecksComplete(
+  delegate_->OnCommitDeferringConditionChecksComplete(
       navigation_type_, candidate_prerender_frame_tree_node_id_);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,13 +17,13 @@ bool ShowPageInfoDialog(content::WebContents* web_contents,
   if (!web_contents)
     return false;
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser)
     return false;
 
   content::NavigationEntry* entry =
       web_contents->GetController().GetVisibleEntry();
-  if (!entry || entry->IsInitialEntry())
+  if (entry->IsInitialEntry())
     return false;
 
   auto initialized_callback =

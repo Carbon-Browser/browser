@@ -1,25 +1,27 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/display/manager/content_protection_manager.h"
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/display/fake/fake_display_snapshot.h"
 #include "ui/display/manager/test/action_logger_util.h"
+#include "ui/display/manager/test/fake_display_snapshot.h"
 #include "ui/display/manager/test/test_display_layout_manager.h"
 #include "ui/display/manager/test/test_native_display_delegate.h"
+#include "ui/display/manager/util/display_manager_test_util.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 namespace {
 
 constexpr int64_t kDisplayIds[] = {123, 234, 345, 456};
-const DisplayMode kDisplayMode{gfx::Size(1366, 768), false, 60.0f};
+const DisplayMode kDisplayMode =
+    CreateDisplayModeForTest({1366, 768}, false, 60.0f);
 
 }  // namespace
 
@@ -45,7 +47,7 @@ class TestObserver : public ContentProtectionManager::Observer {
     security_changes_.emplace(display_id, secure);
   }
 
-  ContentProtectionManager* const manager_;
+  const raw_ptr<ContentProtectionManager, ExperimentalAsh> manager_;
   SecurityChanges security_changes_;
 };
 
@@ -766,5 +768,4 @@ TEST_F(ContentProtectionManagerTest, AnalogDisplaySecurity) {
             observer.security_changes());
 }
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test

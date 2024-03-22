@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.net;
 
-import static junit.framework.Assert.assertEquals;
+import static com.google.common.truth.Truth.assertThat;
 
 import android.os.ConditionVariable;
 import android.util.SparseIntArray;
@@ -49,7 +49,7 @@ class TestNetworkQualityRttListener extends NetworkQualityRttListener {
                 mExecutorThread = Thread.currentThread();
             }
             // Verify that the listener is always notified on the same thread.
-            assertEquals(mExecutorThread, Thread.currentThread());
+            assertThat(Thread.currentThread()).isEqualTo(mExecutorThread);
         }
     }
 

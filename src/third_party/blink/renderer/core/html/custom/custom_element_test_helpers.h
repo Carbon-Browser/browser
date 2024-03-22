@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,50 +7,80 @@
 
 #include <utility>
 
+#include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
 #include "third_party/blink/renderer/core/html/custom/ce_reactions_scope.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_definition.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_definition_builder.h"
+#include "third_party/blink/renderer/core/html/custom/custom_element_registry.h"
 #include "third_party/blink/renderer/core/html/html_document.h"
+#include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
 
-class CustomElementDescriptor;
+// Supports creating test custom element definitions to be added into the global
+// registry. Does not support scoped registries.
+class CustomElementTestingScope : public V8TestingScope {
+  STACK_ALLOCATED();
+
+ public:
+  static CustomElementTestingScope& GetInstance() {
+    DCHECK(instance_)
+        << "Custom element unit tests require CustomElementTestingScope";
+    return *instance_;
+  }
+
+  CustomElementTestingScope() {
+    // We should never create nested testing scopes.
+    DCHECK(!instance_);
+    instance_ = this;
+  }
+
+  ~CustomElementTestingScope() { instance_ = nullptr; }
+
+  CustomElementRegistry& Registry();
+
+ private:
+  static CustomElementTestingScope* instance_;
+};
 
 class TestCustomElementDefinitionBuilder
     : public CustomElementDefinitionBuilder {
   STACK_ALLOCATED();
 
  public:
-  TestCustomElementDefinitionBuilder() = default;
+  TestCustomElementDefinitionBuilder();
   TestCustomElementDefinitionBuilder(
       const TestCustomElementDefinitionBuilder&) = delete;
   TestCustomElementDefinitionBuilder& operator=(
       const TestCustomElementDefinitionBuilder&) = delete;
 
+  V8CustomElementConstructor* Constructor() override { return constructor_; }
   bool CheckConstructorIntrinsics() override { return true; }
   bool CheckConstructorNotRegistered() override { return true; }
   bool RememberOriginalProperties() override { return true; }
-  CustomElementDefinition* Build(const CustomElementDescriptor&,
-                                 CustomElementDefinition::Id) override;
+  CustomElementDefinition* Build(const CustomElementDescriptor&) override;
+
+ private:
+  V8CustomElementConstructor* constructor_;
 };
 
 class TestCustomElementDefinition : public CustomElementDefinition {
  public:
-  TestCustomElementDefinition(const CustomElementDescriptor& descriptor)
-      : CustomElementDefinition(descriptor) {}
+  explicit TestCustomElementDefinition(
+      const CustomElementDescriptor& descriptor);
 
   TestCustomElementDefinition(const CustomElementDescriptor& descriptor,
+                              V8CustomElementConstructor* constructor);
+
+  TestCustomElementDefinition(const CustomElementDescriptor& descriptor,
+                              V8CustomElementConstructor* constructor,
                               HashSet<AtomicString>&& observed_attributes,
-                              const Vector<String>& disabled_features)
-      : CustomElementDefinition(descriptor,
-                                std::move(observed_attributes),
-                                disabled_features,
-                                FormAssociationFlag::kNo) {}
+                              const Vector<String>& disabled_features);
 
   TestCustomElementDefinition(const TestCustomElementDefinition&) = delete;
   TestCustomElementDefinition& operator=(const TestCustomElementDefinition&) =
@@ -58,15 +88,18 @@ class TestCustomElementDefinition : public CustomElementDefinition {
 
   ~TestCustomElementDefinition() override = default;
 
+  void Trace(Visitor* visitor) const override {
+    visitor->Trace(constructor_);
+    CustomElementDefinition::Trace(visitor);
+  }
+
   ScriptValue GetConstructorForScript() override { return ScriptValue(); }
 
-  bool RunConstructor(Element& element) override {
-    if (GetConstructionStack().IsEmpty() ||
-        GetConstructionStack().back() != &element)
-      return false;
-    GetConstructionStack().back().Clear();
-    return true;
+  V8CustomElementConstructor* GetV8CustomElementConstructor() override {
+    return constructor_.Get();
   }
+
+  bool RunConstructor(Element& element) override;
 
   HTMLElement* CreateAutonomousCustomElementSync(
       Document& document,
@@ -120,6 +153,9 @@ class TestCustomElementDefinition : public CustomElementDefinition {
                                    const String& mode) override {
     NOTREACHED() << "definition does not have restoreValueCallback";
   }
+
+ private:
+  Member<V8CustomElementConstructor> constructor_;
 };
 
 class CreateElement {
@@ -152,8 +188,10 @@ class CreateElement {
 
   operator Element*() const {
     Document* document = document_;
-    if (!document)
-      document = HTMLDocument::CreateForTest();
+    if (!document) {
+      document =
+          HTMLDocument::CreateForTest(execution_context_.GetExecutionContext());
+    }
     NonThrowableExceptionState no_exceptions;
     Element* element = document->CreateElement(
         QualifiedName(g_null_atom, local_name_, namespace_uri_),
@@ -164,6 +202,7 @@ class CreateElement {
   }
 
  private:
+  ScopedNullExecutionContext execution_context_;
   Document* document_ = nullptr;
   AtomicString namespace_uri_;
   AtomicString local_name_;

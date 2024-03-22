@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/no_destructor.h"
 #include "chrome/browser/commerce/coupons/coupon_db.h"
 #include "chrome/browser/commerce/coupons/coupon_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/storage_partition.h"
 
 // static
@@ -23,15 +22,21 @@ CouponService* CouponServiceFactory::GetForProfile(Profile* profile) {
 }
 
 CouponServiceFactory::CouponServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "CouponService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 CouponServiceFactory::~CouponServiceFactory() = default;
 
-KeyedService* CouponServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CouponServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   DCHECK(!context->IsOffTheRecord());
 
-  return new CouponService(std::make_unique<CouponDB>(context));
+  return std::make_unique<CouponService>(std::make_unique<CouponDB>(context));
 }

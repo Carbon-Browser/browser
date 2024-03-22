@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/tray/tray_detailed_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 
@@ -97,7 +98,8 @@ class ImeListView : public TrayDetailedView {
 
   std::map<views::View*, std::string> ime_map_;
   std::map<views::View*, std::string> property_map_;
-  KeyboardStatusRow* keyboard_status_row_;
+  raw_ptr<KeyboardStatusRow, DanglingUntriaged | ExperimentalAsh>
+      keyboard_status_row_;
 
   // The id of the last item selected with keyboard. It will be empty if the
   // item is not selected with keyboard.
@@ -111,7 +113,12 @@ class ImeListView : public TrayDetailedView {
   bool should_focus_ime_after_selection_with_keyboard_ = false;
 
   // The item view of the current selected IME.
-  views::View* current_ime_view_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged | ExperimentalAsh> current_ime_view_ =
+      nullptr;
+
+  // The container for the IME list.
+  raw_ptr<views::View, DanglingUntriaged | ExperimentalAsh> container_ =
+      nullptr;
 };
 
 class ASH_EXPORT ImeListViewTestApi {
@@ -130,7 +137,7 @@ class ASH_EXPORT ImeListViewTestApi {
   }
 
  private:
-  ImeListView* ime_list_view_;
+  raw_ptr<ImeListView, ExperimentalAsh> ime_list_view_;
 };
 
 }  // namespace ash

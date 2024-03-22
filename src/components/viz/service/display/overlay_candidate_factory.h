@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,10 @@
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/service/display/aggregated_frame.h"
 #include "components/viz/service/display/overlay_candidate.h"
+#include "components/viz/service/display/overlay_processor_interface.h"
 #include "components/viz/service/viz_service_export.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/skia/include/core/SkDeferredDisplayList.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
@@ -46,12 +46,29 @@ class VIZ_SERVICE_EXPORT OverlayCandidateFactory {
  public:
   using CandidateStatus = OverlayCandidate::CandidateStatus;
 
-  OverlayCandidateFactory(const AggregatedRenderPass* render_pass,
-                          DisplayResourceProvider* resource_provider,
-                          const SurfaceDamageRectList* surface_damage_rect_list,
-                          const SkM44* output_color_matrix,
-                          const gfx::RectF primary_rect,
-                          bool is_delegated_context = false);
+  struct VIZ_SERVICE_EXPORT OverlayContext {
+    bool is_delegated_context = false;
+    // When false, the factory can modify the candidate to provide the same
+    // output but result in a smaller serialization size.
+    bool disable_wire_size_optimization = false;
+    bool supports_clip_rect = false;
+    bool supports_out_of_window_clip_rect = false;
+    bool supports_arbitrary_transform = false;
+    bool supports_rounded_display_masks = false;
+    bool supports_mask_filter = false;
+    bool transform_and_clip_rpdq = false;
+  };
+
+  // The coordinate space of |render_pass| is the target space for candidates
+  // produced by this factory.
+  OverlayCandidateFactory(
+      const AggregatedRenderPass* render_pass,
+      DisplayResourceProvider* resource_provider,
+      const SurfaceDamageRectList* surface_damage_rect_list,
+      const SkM44* output_color_matrix,
+      const gfx::RectF primary_rect,
+      const OverlayProcessorInterface::FilterOperationsMap* render_pass_filters,
+      const OverlayContext& context);
 
   OverlayCandidateFactory(const OverlayCandidateFactory&) = delete;
   OverlayCandidateFactory& operator=(const OverlayCandidateFactory&) = delete;
@@ -86,6 +103,14 @@ class VIZ_SERVICE_EXPORT OverlayCandidateFactory {
       const base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>&
           render_pass_backdrop_filters) const;
 
+  // Returns true if any of the quads in the list given by |quad_list_begin|
+  // and |quad_list_end| occlude |candidate|.
+  bool IsOccluded(const OverlayCandidate& candidate,
+                  QuadList::ConstIterator quad_list_begin,
+                  QuadList::ConstIterator quad_list_end) const;
+
+  gfx::Rect GetUnassignedDamage() { return unassigned_surface_damage_; }
+
  private:
   CandidateStatus FromDrawQuadResource(const DrawQuad* quad,
                                        ResourceId resource_id,
@@ -111,20 +136,44 @@ class VIZ_SERVICE_EXPORT OverlayCandidateFactory {
 
   void AssignDamage(const DrawQuad* quad, OverlayCandidate& candidate) const;
 
-  // Damage returned from this function is in target content space.
+  // Damage returned from this function is in target space.
+  // If quad doesn't have damage from the surface damage list, this returns the
+  // intersection of unassigned damage and the smallest axis-aligned rectangle
+  // containing |display_rect| in target space.
   gfx::RectF GetDamageRect(const DrawQuad* quad,
                            const OverlayCandidate& candidate) const;
+
+  gfx::RectF GetDamageEstimate(const OverlayCandidate& candidate) const;
+
+  // Apply clipping "geometrically" by adjusting the |quad->rect| and
+  // |quad->uv_rect|. May return CandidateStatus::kFailVisible if the clipping
+  // to be applied is empty.
+  CandidateStatus DoGeometricClipping(const DrawQuad* quad,
+                                      OverlayCandidate& candidate) const;
+
+  // Apply |quad_to_target_transform| to the candidate, based on
+  // |OverlayContext| settings.
+  CandidateStatus ApplyTransform(const gfx::Transform& quad_to_target_transform,
+                                 const bool y_flipped,
+                                 OverlayCandidate& candidate) const;
+
+  // Set |candidate.display_rect| based on |quad|. In delegated contexts, this
+  // will also apply content clipping in the quad, and expand to a render pass's
+  // filter bounds.
+  void SetDisplayRect(const DrawQuad& quad, OverlayCandidate& candidate) const;
 
   raw_ptr<const AggregatedRenderPass> render_pass_;
   raw_ptr<DisplayResourceProvider> resource_provider_;
   raw_ptr<const SurfaceDamageRectList> surface_damage_rect_list_;
-  raw_ptr<const SkM44> output_color_matrix_;
   const gfx::RectF primary_rect_;
-  bool is_delegated_context_;
+  raw_ptr<const OverlayProcessorInterface::FilterOperationsMap>
+      render_pass_filters_;
+  const OverlayContext context_;
 
   // The union of all surface damages that are not specifically assigned to a
   // draw quad.
   gfx::Rect unassigned_surface_damage_;
+  bool has_custom_color_matrix_;
 };
 
 }  // namespace viz

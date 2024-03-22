@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "base/memory/raw_ptr_exclusion.h"
 #include "mojo/public/cpp/bindings/array_data_view.h"
 #include "mojo/public/cpp/bindings/lib/array_serialization.h"
 #include "mojo/public/cpp/bindings/lib/map_data_internal.h"
@@ -36,7 +37,8 @@ class MapReaderBase {
   void* GetDataIfExists() { return nullptr; }
 
  protected:
-  MaybeConstUserType& input_;
+  // `input_` is not a raw_ref<...> as that leads to a binary size increase.
+  RAW_PTR_EXCLUSION MaybeConstUserType& input_;
   MaybeConstIterator iter_;
 };
 

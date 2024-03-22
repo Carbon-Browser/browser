@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,6 @@ bool InProgressInfo::operator==(const InProgressInfo& other) const {
          interrupt_reason == other.interrupt_reason && paused == other.paused &&
          metered == other.metered && bytes_wasted == other.bytes_wasted &&
          auto_resume_count == other.auto_resume_count &&
-         download_schedule == other.download_schedule &&
-         RerouteInfosEqual(reroute_info, other.reroute_info) &&
          credentials_mode == other.credentials_mode &&
          range_request_from == other.range_request_from &&
          range_request_to == other.range_request_to;

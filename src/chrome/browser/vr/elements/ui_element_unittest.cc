@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "cc/animation/keyframe_model.h"
 #include "chrome/browser/vr/databinding/binding.h"
 #include "chrome/browser/vr/test/animation_utils.h"
@@ -89,7 +89,7 @@ TEST(UiElement, BoundsContainChildren) {
       gfx::RectF(grand_parent->local_origin(), grand_parent->size()), kEpsilon);
 
   gfx::Point3F p;
-  anchored_ptr->LocalTransform().TransformPoint(&p);
+  p = anchored_ptr->LocalTransform().MapPoint(p);
   EXPECT_FLOAT_EQ(-3.9, p.y());
 }
 
@@ -142,7 +142,7 @@ TEST(UiElement, IgnoringAsymmetricPadding) {
   a->UpdateWorldSpaceTransform(false);
 
   gfx::Point3F p;
-  a->world_space_transform().TransformPoint(&p);
+  p = a->world_space_transform().MapPoint(p);
 
   EXPECT_POINT3F_EQ(gfx::Point3F(), p);
 }
@@ -180,7 +180,7 @@ TEST(UiElement, BoundsContainPaddingWithAnchoring) {
     child_ptr->set_y_anchoring(test_case.y_anchoring);
     parent->SizeAndLayOut();
     gfx::Point3F p;
-    child_ptr->LocalTransform().TransformPoint(&p);
+    p = child_ptr->LocalTransform().MapPoint(p);
     EXPECT_POINT3F_EQ(test_case.expected_position, p);
   }
 }
@@ -221,9 +221,8 @@ TEST(UiElement, BoundsContainPaddingWithCentering) {
     child_ptr->set_x_centering(test_case.x_centering);
     child_ptr->set_y_centering(test_case.y_centering);
     parent->SizeAndLayOut();
-    gfx::Point3F p;
-    child_ptr->LocalTransform().TransformPoint(&p);
-    EXPECT_POINT3F_EQ(test_case.expected_position, p);
+    EXPECT_POINT3F_EQ(test_case.expected_position,
+                      child_ptr->LocalTransform().MapPoint(gfx::Point3F()));
   }
 }
 
@@ -282,14 +281,12 @@ TEST(UiElement, AnimationAffectsInheritableTransform) {
 
   base::TimeTicks start_time = gfx::MicrosecondsToTicks(1);
   EXPECT_TRUE(scene.OnBeginFrame(start_time, kStartHeadPose));
-  gfx::Point3F p;
-  rect_ptr->LocalTransform().TransformPoint(&p);
-  EXPECT_POINT3F_EQ(gfx::Point3F(10, 100, 1000), p);
-  p = gfx::Point3F();
+  EXPECT_POINT3F_EQ(gfx::Point3F(10, 100, 1000),
+                    rect_ptr->LocalTransform().MapPoint(gfx::Point3F()));
   EXPECT_TRUE(scene.OnBeginFrame(start_time + gfx::MicrosecondsToDelta(10000),
                                  kStartHeadPose));
-  rect_ptr->LocalTransform().TransformPoint(&p);
-  EXPECT_POINT3F_EQ(gfx::Point3F(20, 200, 2000), p);
+  EXPECT_POINT3F_EQ(gfx::Point3F(20, 200, 2000),
+                    rect_ptr->LocalTransform().MapPoint(gfx::Point3F()));
 }
 
 TEST(UiElement, HitTest) {
@@ -392,14 +389,8 @@ class ElementEventHandlers {
     EventHandlers event_handlers;
     event_handlers.hover_enter = base::BindRepeating(
         &ElementEventHandlers::HandleHoverEnter, base::Unretained(this));
-    event_handlers.hover_move = base::BindRepeating(
-        &ElementEventHandlers::HandleHoverMove, base::Unretained(this));
     event_handlers.hover_leave = base::BindRepeating(
         &ElementEventHandlers::HandleHoverLeave, base::Unretained(this));
-    event_handlers.button_down = base::BindRepeating(
-        &ElementEventHandlers::HandleButtonDown, base::Unretained(this));
-    event_handlers.button_up = base::BindRepeating(
-        &ElementEventHandlers::HandleButtonUp, base::Unretained(this));
     element->set_event_handlers(event_handlers);
   }
 
@@ -409,32 +400,17 @@ class ElementEventHandlers {
   void HandleHoverEnter() { hover_enter_ = true; }
   bool hover_enter_called() { return hover_enter_; }
 
-  void HandleHoverMove(const gfx::PointF& position) { hover_move_ = true; }
-  bool hover_move_called() { return hover_move_; }
-
   void HandleHoverLeave() { hover_leave_ = true; }
   bool hover_leave_called() { return hover_leave_; }
 
-  void HandleButtonDown() { button_down_ = true; }
-  bool button_down_called() { return button_down_; }
-
-  void HandleButtonUp() { button_up_ = true; }
-  bool button_up_called() { return button_up_; }
-
   void ExpectCalled(bool called) {
     EXPECT_EQ(hover_enter_called(), called);
-    EXPECT_EQ(hover_move_called(), called);
     EXPECT_EQ(hover_leave_called(), called);
-    EXPECT_EQ(button_down_called(), called);
-    EXPECT_EQ(button_up_called(), called);
   }
 
  private:
   bool hover_enter_ = false;
-  bool hover_move_ = false;
   bool hover_leave_ = false;
-  bool button_up_ = false;
-  bool button_down_ = false;
 };
 
 TEST(UiElement, CoordinatedVisibilityTransitions) {
@@ -501,20 +477,14 @@ TEST(UiElement, EventBubbling) {
 
   // Events on grand_child don't bubble up the parent chain.
   grand_child_ptr->OnHoverEnter(gfx::PointF(), base::TimeTicks());
-  grand_child_ptr->OnHoverMove(gfx::PointF(), base::TimeTicks());
   grand_child_ptr->OnHoverLeave(base::TimeTicks());
-  grand_child_ptr->OnButtonDown(gfx::PointF(), base::TimeTicks());
-  grand_child_ptr->OnButtonUp(gfx::PointF(), base::TimeTicks());
   child_handlers.ExpectCalled(false);
   element_handlers.ExpectCalled(false);
 
   // Events on grand_child bubble up the parent chain.
   grand_child_ptr->set_bubble_events(true);
   grand_child_ptr->OnHoverEnter(gfx::PointF(), base::TimeTicks());
-  grand_child_ptr->OnHoverMove(gfx::PointF(), base::TimeTicks());
   grand_child_ptr->OnHoverLeave(base::TimeTicks());
-  grand_child_ptr->OnButtonDown(gfx::PointF(), base::TimeTicks());
-  grand_child_ptr->OnButtonUp(gfx::PointF(), base::TimeTicks());
   child_handlers.ExpectCalled(true);
   // Events don't bubble to element since it doesn't have the bubble_events bit
   // set.

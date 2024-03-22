@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,8 @@ class DelayedTaskHandleDelegate : public DelayedTaskHandle::Delegate {
 
  private:
   // The TaskQueueImpl where the task was posted.
-  const raw_ptr<TaskQueueImpl> outer_ GUARDED_BY_CONTEXT(sequence_checker_);
+  const raw_ptr<TaskQueueImpl, AcrossTasksDanglingUntriaged> outer_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 
   // The HeapHandle to the task, if the task is in the DelayedIncomingQueue,
   // invalid otherwise.

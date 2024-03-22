@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,11 +38,6 @@ namespace web_navigation_api_helpers {
 
 namespace {
 
-// Returns |time| as milliseconds since the epoch.
-double MilliSecondsFromTime(const base::Time& time) {
-  return 1000 * time.ToDoubleT();
-}
-
 // Dispatches events to the extension message service.
 void DispatchEvent(content::BrowserContext* browser_context,
                    std::unique_ptr<Event> event,
@@ -79,14 +74,13 @@ std::unique_ptr<Event> CreateOnBeforeNavigateEvent(
   // Only set the parentDocumentId value if we have a parent.
   if (content::RenderFrameHost* parent_frame_host =
           navigation_handle->GetParentFrameOrOuterDocument()) {
-    details.parent_document_id = std::make_unique<std::string>(
-        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString());
+    details.parent_document_id =
+        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString();
   }
-  details.frame_type =
-      ToString(ExtensionApiFrameIdMap::GetFrameType(navigation_handle));
+  details.frame_type = ExtensionApiFrameIdMap::GetFrameType(navigation_handle);
   details.document_lifecycle =
-      ToString(ExtensionApiFrameIdMap::GetDocumentLifecycle(navigation_handle));
-  details.time_stamp = MilliSecondsFromTime(base::Time::Now());
+      ExtensionApiFrameIdMap::GetDocumentLifecycle(navigation_handle);
+  details.time_stamp = base::Time::Now().InMillisecondsFSinceUnixEpoch();
 
   auto event = std::make_unique<Event>(
       events::WEB_NAVIGATION_ON_BEFORE_NAVIGATE,
@@ -151,7 +145,7 @@ void DispatchOnCommitted(events::HistogramValue histogram_value,
     transition_type_string = "start_page";
   dict.Set(web_navigation_api_constants::kTransitionTypeKey,
            transition_type_string);
-  base::Value qualifiers(base::Value::Type::LIST);
+  base::Value::List qualifiers;
   if (transition_type & ui::PAGE_TRANSITION_CLIENT_REDIRECT)
     qualifiers.Append("client_redirect");
   if (transition_type & ui::PAGE_TRANSITION_SERVER_REDIRECT)
@@ -163,7 +157,7 @@ void DispatchOnCommitted(events::HistogramValue histogram_value,
   dict.Set(web_navigation_api_constants::kTransitionQualifiersKey,
            std::move(qualifiers));
   dict.Set(web_navigation_api_constants::kTimeStampKey,
-           MilliSecondsFromTime(base::Time::Now()));
+           base::Time::Now().InMillisecondsFSinceUnixEpoch());
   args.Append(std::move(dict));
 
   content::BrowserContext* browser_context =
@@ -189,14 +183,13 @@ void DispatchOnDOMContentLoaded(content::WebContents* web_contents,
   // Only set the parentDocumentId value if we have a parent.
   if (content::RenderFrameHost* parent_frame_host =
           frame_host->GetParentOrOuterDocument()) {
-    details.parent_document_id = std::make_unique<std::string>(
-        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString());
+    details.parent_document_id =
+        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString();
   }
-  details.frame_type =
-      ToString(ExtensionApiFrameIdMap::GetFrameType(frame_host));
+  details.frame_type = ExtensionApiFrameIdMap::GetFrameType(frame_host);
   details.document_lifecycle =
-      ToString(ExtensionApiFrameIdMap::GetDocumentLifecycle(frame_host));
-  details.time_stamp = MilliSecondsFromTime(base::Time::Now());
+      ExtensionApiFrameIdMap::GetDocumentLifecycle(frame_host);
+  details.time_stamp = base::Time::Now().InMillisecondsFSinceUnixEpoch();
 
   content::BrowserContext* browser_context = web_contents->GetBrowserContext();
   auto event = std::make_unique<Event>(
@@ -222,14 +215,13 @@ void DispatchOnCompleted(content::WebContents* web_contents,
   // Only set the parentDocumentId value if we have a parent.
   if (content::RenderFrameHost* parent_frame_host =
           frame_host->GetParentOrOuterDocument()) {
-    details.parent_document_id = std::make_unique<std::string>(
-        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString());
+    details.parent_document_id =
+        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString();
   }
-  details.frame_type =
-      ToString(ExtensionApiFrameIdMap::GetFrameType(frame_host));
+  details.frame_type = ExtensionApiFrameIdMap::GetFrameType(frame_host);
   details.document_lifecycle =
-      ToString(ExtensionApiFrameIdMap::GetDocumentLifecycle(frame_host));
-  details.time_stamp = MilliSecondsFromTime(base::Time::Now());
+      ExtensionApiFrameIdMap::GetDocumentLifecycle(frame_host);
+  details.time_stamp = base::Time::Now().InMillisecondsFSinceUnixEpoch();
 
   content::BrowserContext* browser_context = web_contents->GetBrowserContext();
   auto event = std::make_unique<Event>(
@@ -260,7 +252,7 @@ void DispatchOnCreatedNavigationTarget(
   details.source_frame_id = source_extension_frame_id;
   details.url = target_url.possibly_invalid_spec();
   details.tab_id = ExtensionTabUtil::GetTabId(target_web_contents);
-  details.time_stamp = MilliSecondsFromTime(base::Time::Now());
+  details.time_stamp = base::Time::Now().InMillisecondsFSinceUnixEpoch();
 
   auto event = std::make_unique<Event>(
       events::WEB_NAVIGATION_ON_CREATED_NAVIGATION_TARGET,
@@ -294,14 +286,13 @@ void DispatchOnErrorOccurred(content::WebContents* web_contents,
   // Only set the parentDocumentId value if we have a parent.
   if (content::RenderFrameHost* parent_frame_host =
           frame_host->GetParentOrOuterDocument()) {
-    details.parent_document_id = std::make_unique<std::string>(
-        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString());
+    details.parent_document_id =
+        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString();
   }
-  details.frame_type =
-      ToString(ExtensionApiFrameIdMap::GetFrameType(frame_host));
+  details.frame_type = ExtensionApiFrameIdMap::GetFrameType(frame_host);
   details.document_lifecycle =
-      ToString(ExtensionApiFrameIdMap::GetDocumentLifecycle(frame_host));
-  details.time_stamp = MilliSecondsFromTime(base::Time::Now());
+      ExtensionApiFrameIdMap::GetDocumentLifecycle(frame_host);
+  details.time_stamp = base::Time::Now().InMillisecondsFSinceUnixEpoch();
 
   content::BrowserContext* browser_context = web_contents->GetBrowserContext();
   auto event =
@@ -329,14 +320,13 @@ void DispatchOnErrorOccurred(content::NavigationHandle* navigation_handle) {
   // Only set the parentDocumentId value if we have a parent.
   if (content::RenderFrameHost* parent_frame_host =
           navigation_handle->GetParentFrameOrOuterDocument()) {
-    details.parent_document_id = std::make_unique<std::string>(
-        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString());
+    details.parent_document_id =
+        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString();
   }
-  details.frame_type =
-      ToString(ExtensionApiFrameIdMap::GetFrameType(navigation_handle));
+  details.frame_type = ExtensionApiFrameIdMap::GetFrameType(navigation_handle);
   details.document_lifecycle =
-      ToString(ExtensionApiFrameIdMap::GetDocumentLifecycle(navigation_handle));
-  details.time_stamp = MilliSecondsFromTime(base::Time::Now());
+      ExtensionApiFrameIdMap::GetDocumentLifecycle(navigation_handle);
+  details.time_stamp = base::Time::Now().InMillisecondsFSinceUnixEpoch();
 
   content::BrowserContext* browser_context =
       navigation_handle->GetWebContents()->GetBrowserContext();
@@ -355,7 +345,7 @@ void DispatchOnTabReplaced(
   web_navigation::OnTabReplaced::Details details;
   details.replaced_tab_id = ExtensionTabUtil::GetTabId(old_web_contents);
   details.tab_id = ExtensionTabUtil::GetTabId(new_web_contents);
-  details.time_stamp = MilliSecondsFromTime(base::Time::Now());
+  details.time_stamp = base::Time::Now().InMillisecondsFSinceUnixEpoch();
 
   auto event = std::make_unique<Event>(
       events::WEB_NAVIGATION_ON_TAB_REPLACED,

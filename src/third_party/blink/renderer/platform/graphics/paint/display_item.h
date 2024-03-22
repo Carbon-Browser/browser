@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,24 +62,18 @@ class PLATFORM_EXPORT DisplayItem {
     kDrawingPaintPhaseFirst = kDrawingFirst,
     kDrawingPaintPhaseLast = kDrawingFirst + kPaintPhaseMax,
     kBoxDecorationBackground,
+    kFixedAttachmentBackground,
     kCapsLockIndicator,
     kCaret,
-    kClippingMask,
     kColumnRules,
-    kDebugDrawing,
     kDocumentRootBackdrop,
     kDocumentBackground,
-    kDragImage,
     kDragCaret,
     kForcedColorsModeBackplate,
     kSVGImage,
-    kLinkHighlight,
     kImageAreaFocusRing,
     kOverflowControls,
     kFrameOverlay,
-    kPopupContainerBorder,
-    kPopupListBoxBackground,
-    kPopupListBoxRow,
     kPrintedContentDestinationLocations,
     kPrintedContentPDFURLRect,
     kReflectionMask,
@@ -95,8 +89,6 @@ class PLATFORM_EXPORT DisplayItem {
     kScrollbarTickmarks,
     kSelectionTint,
     kTableCollapsedBorders,
-    kVideoBitmap,
-    kWebFont,
     kWebPlugin,
     kDrawingLast = kWebPlugin,
 
@@ -109,8 +101,8 @@ class PLATFORM_EXPORT DisplayItem {
     kForeignLayerLinkHighlight,
     kForeignLayerViewportScroll,
     kForeignLayerViewportScrollbar,
-    kForeignLayerDocumentTransitionContent,
-    kForeignLayerLast = kForeignLayerDocumentTransitionContent,
+    kForeignLayerViewTransitionContent,
+    kForeignLayerLast = kForeignLayerViewTransitionContent,
 
     kClipPaintPhaseFirst,
     kClipPaintPhaseLast = kClipPaintPhaseFirst + kPaintPhaseMax,
@@ -133,6 +125,9 @@ class PLATFORM_EXPORT DisplayItem {
     // include content that does not paint. Hit test data ensure a layer exists
     // and is sized properly even if no content would otherwise be painted.
     kHitTest,
+    // Web plugin needs a separate id to avoid conflict with the hit test data
+    // for LayoutReplaced.
+    kWebPluginHitTest,
 
     // Used for paint chunks that contain region capture data.
     kRegionCapture,
@@ -188,6 +183,9 @@ class PLATFORM_EXPORT DisplayItem {
     const wtf_size_t fragment;
 
     struct HashKey {
+      DISALLOW_NEW();
+
+     public:
       HashKey() = default;
       explicit HashKey(const DisplayItem::Id& id)
           : client_id(id.client_id), type(id.type), fragment(id.fragment) {}
@@ -372,27 +370,19 @@ template <>
 struct HashTraits<blink::DisplayItem::Id::HashKey>
     : GenericHashTraits<blink::DisplayItem::Id::HashKey> {
   using Key = blink::DisplayItem::Id::HashKey;
-  static void ConstructDeletedValue(Key& slot, bool) {
+  static constexpr bool kEmptyValueIsZero = true;
+  static void ConstructDeletedValue(Key& slot) {
     const_cast<wtf_size_t&>(slot.fragment) = kNotFound;
   }
   static bool IsDeletedValue(const Key& id) { return id.fragment == kNotFound; }
-};
 
-template <>
-struct DefaultHash<blink::DisplayItem::Id::HashKey> {
-  struct Hash {
-    STATIC_ONLY(Hash);
-    using Key = blink::DisplayItem::Id::HashKey;
-    static unsigned GetHash(const Key& id) {
-      unsigned hash =
-          IntHash<blink::DisplayItemClientId>::GetHash(id.client_id);
-      WTF::AddIntToHash(hash, id.type);
-      WTF::AddIntToHash(hash, id.fragment);
-      return hash;
-    }
-    static bool Equal(const Key& a, const Key& b) { return a == b; }
-    static const bool safe_to_compare_to_empty_or_deleted = false;
-  };
+  static unsigned GetHash(const Key& id) {
+    unsigned hash = WTF::GetHash(id.client_id);
+    WTF::AddIntToHash(hash, id.type);
+    WTF::AddIntToHash(hash, id.fragment);
+    return hash;
+  }
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
 };
 
 }  // namespace WTF

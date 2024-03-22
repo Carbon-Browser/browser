@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/memory/scoped_refptr.h"
 #include "base/sync_socket.h"
@@ -22,14 +23,13 @@
 #include "services/audio/input_controller.h"
 
 namespace media {
+class AecdumpRecordingManager;
 class AudioManager;
 class AudioParameters;
 }  // namespace media
 
 namespace audio {
-class AecdumpRecordingManager;
 class DeviceOutputListener;
-class InputStreamActivityMonitor;
 class InputSyncWriter;
 class UserInputMonitor;
 
@@ -50,9 +50,8 @@ class InputStream final : public media::mojom::AudioInputStream,
       mojo::PendingRemote<media::mojom::AudioInputStreamObserver> observer,
       mojo::PendingRemote<media::mojom::AudioLog> log,
       media::AudioManager* manager,
-      AecdumpRecordingManager* aecdump_recording_manager,
+      media::AecdumpRecordingManager* aecdump_recording_manager,
       std::unique_ptr<UserInputMonitor> user_input_monitor,
-      InputStreamActivityMonitor* activity_monitor,
       DeviceOutputListener* device_output_listener,
       media::mojom::AudioProcessingConfigPtr processing_config,
       const std::string& device_id,
@@ -75,7 +74,7 @@ class InputStream final : public media::mojom::AudioInputStream,
   // InputController::EventHandler implementation.
   void OnCreated(bool initially_muted) override;
   void OnError(InputController::ErrorCode error_code) override;
-  void OnLog(base::StringPiece) override;
+  void OnLog(std::string_view) override;
   void OnMuted(bool is_muted) override;
 
  private:

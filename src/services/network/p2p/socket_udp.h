@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,11 @@
 #include <set>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/ip_endpoint.h"
@@ -37,6 +37,12 @@ class P2PMessageThrottler;
 
 class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketUdp : public P2PSocket {
  public:
+  // Limit the maximum number of batching received packets.
+  static constexpr size_t kUdpMaxBatchingRecvPackets = 64;
+  // Limit the maximum buffering time of batching received packets.
+  static constexpr base::TimeDelta kUdpMaxBatchingRecvBuffering =
+      base::Milliseconds(1);
+
   using DatagramServerSocketFactory =
       base::RepeatingCallback<std::unique_ptr<net::DatagramServerSocket>(
           net::NetLog* net_log)>;
@@ -44,12 +50,14 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketUdp : public P2PSocket {
                mojo::PendingRemote<mojom::P2PSocketClient> client,
                mojo::PendingReceiver<mojom::P2PSocket> socket,
                P2PMessageThrottler* throttler,
+               const net::NetworkTrafficAnnotationTag& traffic_annotation,
                net::NetLog* net_log,
                const DatagramServerSocketFactory& socket_factory);
   P2PSocketUdp(Delegate* delegate,
                mojo::PendingRemote<mojom::P2PSocketClient> client,
                mojo::PendingReceiver<mojom::P2PSocket> socket,
                P2PMessageThrottler* throttler,
+               const net::NetworkTrafficAnnotationTag& traffic_annotation,
                net::NetLog* net_log);
 
   P2PSocketUdp(const P2PSocketUdp&) = delete;
@@ -58,17 +66,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketUdp : public P2PSocket {
   ~P2PSocketUdp() override;
 
   // P2PSocket overrides.
-  void Init(const net::IPEndPoint& local_address,
-            uint16_t min_port,
-            uint16_t max_port,
-            const P2PHostAndIPEndPoint& remote_address,
-            const net::NetworkIsolationKey& network_isolation_key) override;
+  void Init(
+      const net::IPEndPoint& local_address,
+      uint16_t min_port,
+      uint16_t max_port,
+      const P2PHostAndIPEndPoint& remote_address,
+      const net::NetworkAnonymizationKey& network_anonymization_key) override;
 
   // mojom::P2PSocket implementation:
-  void Send(const std::vector<int8_t>& data,
-            const P2PPacketInfo& packet_info,
-            const net::MutableNetworkTrafficAnnotationTag& traffic_annotation)
-      override;
+  void Send(base::span<const uint8_t> data,
+            const P2PPacketInfo& packet_info) override;
+  void SendBatch(std::vector<mojom::P2PSendPacketPtr> packet_batch) override;
   void SetOption(P2PSocketOption option, int32_t value) override;
 
  private:
@@ -78,22 +86,23 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketUdp : public P2PSocket {
 
   struct PendingPacket {
     PendingPacket(const net::IPEndPoint& to,
-                  const std::vector<int8_t>& content,
+                  base::span<const uint8_t> content,
                   const rtc::PacketOptions& options,
-                  uint64_t id,
-                  const net::NetworkTrafficAnnotationTag traffic_annotation);
+                  uint64_t id);
     PendingPacket(const PendingPacket& other);
     ~PendingPacket();
     net::IPEndPoint to;
     scoped_refptr<net::IOBuffer> data;
-    int size;
+    size_t size;
     rtc::PacketOptions packet_options;
     uint64_t id;
-    const net::NetworkTrafficAnnotationTag traffic_annotation;
   };
 
+  bool SendPacket(base::span<const uint8_t> data,
+                  const P2PPacketInfo& packet_info);
   void DoRead();
   void OnRecv(int result);
+  void MaybeDrainReceivedPackets(bool force);
 
   // Following 3 methods return false if the result was an error and the socket
   // was destroyed. The caller should stop using |this| in that case.
@@ -111,9 +120,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketUdp : public P2PSocket {
 
   int SetSocketDiffServCodePointInternal(net::DiffServCodePoint dscp);
 
+  // Called at the end of sends to send out SendComplete to the |client_|.
+  void ProcessSendCompletions();
+
   std::unique_ptr<net::DatagramServerSocket> socket_;
   scoped_refptr<net::IOBuffer> recv_buffer_;
   net::IPEndPoint recv_address_;
+
+  // Data of `pending_recieved_packets_` are raw pointers to buffers in
+  // `pending_receive_buffers_`.
+  std::vector<mojom::P2PReceivedPacketPtr> pending_received_packets_;
+  std::vector<scoped_refptr<net::IOBuffer>> pending_received_buffers_;
 
   base::circular_deque<PendingPacket> send_queue_;
   bool send_pending_ = false;
@@ -124,10 +141,14 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) P2PSocketUdp : public P2PSocket {
   ConnectedPeerSet connected_peers_;
   raw_ptr<P2PMessageThrottler> throttler_;
 
+  const net::NetworkTrafficAnnotationTag traffic_annotation_;
   raw_ptr<net::NetLog> net_log_;
 
   // Callback object that returns a new socket when invoked.
   DatagramServerSocketFactory socket_factory_;
+
+  // Container for batching send completions.
+  std::vector<::network::P2PSendPacketMetrics> send_completions_;
 };
 
 }  // namespace network

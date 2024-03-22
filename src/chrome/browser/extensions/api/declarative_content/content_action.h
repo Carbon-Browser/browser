@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ class ContentAction {
   static std::unique_ptr<ContentAction> Create(
       content::BrowserContext* browser_context,
       const Extension* extension,
-      const base::Value& json_action,
+      const base::Value::Dict& json_action_dict,
       std::string* error);
 
   static void SetAllowInvisibleIconsForTest(bool value);

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
 
 namespace content {
@@ -67,14 +68,9 @@ class ThrottleObserver {
   ObserverStateChangedCallback callback_;
 
  private:
-  content::BrowserContext* context_;
+  raw_ptr<content::BrowserContext, ExperimentalAsh> context_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::ThrottleObserver;
-}
 
 #endif  // CHROME_BROWSER_ASH_THROTTLE_OBSERVER_H_

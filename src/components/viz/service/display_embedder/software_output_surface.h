@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,7 @@ class VIZ_SERVICE_EXPORT SoftwareOutputSurface : public OutputSurface {
 
  private:
   void SwapBuffersCallback(base::TimeTicks swap_time,
+                           int64_t swap_trace_id,
                            const gfx::Size& pixel_size);
   void UpdateVSyncParameters(base::TimeTicks timebase,
                              base::TimeDelta interval);

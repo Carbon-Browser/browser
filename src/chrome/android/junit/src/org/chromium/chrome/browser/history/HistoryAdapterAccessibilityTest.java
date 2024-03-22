@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,10 +35,8 @@ public class HistoryAdapterAccessibilityTest {
     private StubbedHistoryProvider mHistoryProvider;
     private HistoryAdapter mAdapter;
 
-    @Mock
-    private MoreProgressButton mMockButton;
-    @Mock
-    private HistoryContentManager mContentManager;
+    @Mock private MoreProgressButton mMockButton;
+    @Mock private HistoryContentManager mContentManager;
 
     @Before
     public void setUp() {
@@ -46,8 +44,12 @@ public class HistoryAdapterAccessibilityTest {
         mHistoryProvider = new StubbedHistoryProvider();
         mHistoryProvider.setPaging(PAGING);
 
-        mAdapter = new HistoryAdapter(
-                mContentManager, mHistoryProvider, new ObservableSupplierImpl<>(), (vg) -> null);
+        mAdapter =
+                new HistoryAdapter(
+                        mContentManager,
+                        mHistoryProvider,
+                        new ObservableSupplierImpl<>(),
+                        (vg) -> null);
         mAdapter.generateHeaderItemsForTest();
         mAdapter.generateFooterItemsForTest(mMockButton);
         mAdapter.setScrollToLoadDisabledForTest(true);

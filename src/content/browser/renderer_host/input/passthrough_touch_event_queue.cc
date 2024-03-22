@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 
 #include "base/auto_reset.h"
 #include "base/metrics/field_trial_params.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/renderer_host/input/touch_timeout_handler.h"
 #include "content/common/input/web_touch_event_traits.h"
@@ -88,13 +87,8 @@ void PassthroughTouchEventQueue::SendTouchCancelEventForTouchEvent(
 void PassthroughTouchEventQueue::QueueEvent(
     const TouchEventWithLatencyInfo& event) {
   TRACE_EVENT0("input", "PassthroughTouchEventQueue::QueueEvent");
-  PreFilterResult filter_result = FilterBeforeForwarding(event.event);
-  bool should_forward_touch_event =
-      filter_result == PreFilterResult::kUnfiltered;
-  UMA_HISTOGRAM_ENUMERATION("Event.Touch.FilteredAtPassthroughQueue",
-                            filter_result);
 
-  if (!should_forward_touch_event) {
+  if (FilterBeforeForwarding(event.event) != PreFilterResult::kUnfiltered) {
     client_->OnFilteringTouchEvent(event.event);
 
     TouchEventWithLatencyInfoAndAckState event_with_ack_state = event;
@@ -287,6 +281,8 @@ void PassthroughTouchEventQueue::SendTouchEventImmediately(
 
   if (timeout_handler_)
     timeout_handler_->StartIfNecessary(*touch);
+  touch->event.GetModifiableEventLatencyMetadata().dispatched_to_renderer =
+      base::TimeTicks::Now();
   if (wait_for_ack)
     outstanding_touches_.insert(*touch);
   client_->SendTouchEventImmediately(*touch);
@@ -336,7 +332,7 @@ PassthroughTouchEventQueue::FilterBeforeForwardingImpl(
   if (event.GetType() == WebInputEvent::Type::kTouchScrollStarted)
     return PreFilterResult::kUnfiltered;
 
-  if (WebTouchEventTraits::IsTouchSequenceStart(event)) {
+  if (event.IsTouchSequenceStart()) {
     // We don't know if we have a handler until we get the ACK back so
     // assume it is true.
     maybe_has_handler_for_current_sequence_ = true;
@@ -419,14 +415,14 @@ void PassthroughTouchEventQueue::UpdateTouchConsumerStates(
     // Once we have the ack back for the sequence we know if there
     // is a handler or not. Other touch-starts sent can upgrade
     // whether we have a handler or not as well.
-    if (WebTouchEventTraits::IsTouchSequenceStart(event)) {
+    if (event.IsTouchSequenceStart()) {
       maybe_has_handler_for_current_sequence_ =
           ack_result != blink::mojom::InputEventResultState::kNoConsumerExists;
     } else {
       maybe_has_handler_for_current_sequence_ |=
           ack_result != blink::mojom::InputEventResultState::kNoConsumerExists;
     }
-  } else if (WebTouchEventTraits::IsTouchSequenceEnd(event)) {
+  } else if (event.IsTouchSequenceEnd()) {
     maybe_has_handler_for_current_sequence_ = false;
   }
 }

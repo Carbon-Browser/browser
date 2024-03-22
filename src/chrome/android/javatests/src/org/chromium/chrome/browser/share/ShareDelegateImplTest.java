@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,14 @@ package org.chromium.chrome.browser.share;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
+import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.BaseJUnit4ClassRunner;
+import org.chromium.base.test.util.Batch;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.MockTab;
 import org.chromium.chrome.test.ChromeBrowserTestRule;
 import org.chromium.chrome.test.util.SadTabRule;
@@ -23,22 +26,23 @@ import org.chromium.url.GURL;
 
 import java.util.concurrent.ExecutionException;
 
-/**
- * Tests (requiring native) of the ShareDelegateImpl.
- */
+/** Tests (requiring native) of the ShareDelegateImpl. */
+@Batch(Batch.PER_CLASS)
 @RunWith(BaseJUnit4ClassRunner.class)
 public class ShareDelegateImplTest {
-    @Rule
-    public final ChromeBrowserTestRule mBrowserTestRule = new ChromeBrowserTestRule();
+    @ClassRule
+    public static final ChromeBrowserTestRule sBrowserTestRule = new ChromeBrowserTestRule();
 
-    @Rule
-    public final SadTabRule mSadTabRule = new SadTabRule();
+    @Rule public final SadTabRule mSadTabRule = new SadTabRule();
 
     @Test
     @SmallTest
     public void testShouldFetchCanonicalUrl() throws ExecutionException {
         MockUrlTab mockTab =
-                TestThreadUtils.runOnUiThreadBlocking(() -> { return new MockUrlTab(); });
+                TestThreadUtils.runOnUiThreadBlocking(
+                        () -> {
+                            return new MockUrlTab();
+                        });
         MockWebContents mockWebContents = new MockWebContents();
         MockRenderFrameHost mockRenderFrameHost = new MockRenderFrameHost();
         mSadTabRule.setTab(mockTab);
@@ -103,7 +107,7 @@ public class ShareDelegateImplTest {
         public boolean isShowingErrorPage;
 
         public MockUrlTab() {
-            super(INVALID_TAB_ID, false);
+            super(INVALID_TAB_ID, Profile.getLastUsedRegularProfile());
         }
 
         @Override

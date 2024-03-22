@@ -176,7 +176,9 @@ void WebPluginContainerImpl::Paint(GraphicsContext& context,
 
   if (WantsWheelEvents()) {
     context.GetPaintController().RecordHitTestData(
-        *GetLayoutEmbeddedContent(), visual_rect, TouchAction::kAuto, true);
+        *GetLayoutEmbeddedContent(), visual_rect, TouchAction::kAuto,
+        /*blocking_wheel=*/true, cc::HitTestOpaqueness::kMixed,
+        DisplayItem::kWebPluginHitTest);
   }
 
   if (element_->GetRegionCaptureCropId()) {
@@ -261,18 +263,20 @@ void WebPluginContainerImpl::HandleEvent(Event& event) {
   //    http://devedge-temp.mozilla.org/library/manuals/2002/plugin/1.0/structures5.html#1000000
   // Don't take the documentation as truth, however.  There are many cases
   // where mozilla behaves differently than the spec.
-  if (auto* mouse_event = DynamicTo<MouseEvent>(event))
+  if (auto* mouse_event = DynamicTo<MouseEvent>(event)) {
     HandleMouseEvent(*mouse_event);
-  else if (auto* wheel_event = DynamicTo<WheelEvent>(event))
+  } else if (auto* wheel_event = DynamicTo<WheelEvent>(event)) {
     HandleWheelEvent(*wheel_event);
-  else if (auto* keyboard_event = DynamicTo<KeyboardEvent>(event))
+  } else if (auto* keyboard_event = DynamicTo<KeyboardEvent>(event)) {
     HandleKeyboardEvent(*keyboard_event);
-  else if (auto* touch_event = DynamicTo<TouchEvent>(event))
+  } else if (auto* touch_event = DynamicTo<TouchEvent>(event)) {
     HandleTouchEvent(*touch_event);
-  else if (auto* gesture_event = DynamicTo<GestureEvent>(event))
+  } else if (auto* gesture_event = DynamicTo<GestureEvent>(event)) {
     HandleGestureEvent(*gesture_event);
-  else if (IsA<DragEvent>(event) && web_plugin_->CanProcessDrag())
-    HandleDragEvent(To<DragEvent>(event));
+  } else if (auto* drag_event = DynamicTo<DragEvent>(event);
+             drag_event && web_plugin_->CanProcessDrag()) {
+    HandleDragEvent(*drag_event);
+  }
 
   // FIXME: it would be cleaner if EmbeddedContentView::HandleEvent returned
   // true/false and HTMLPluginElement called SetDefaultHandled or
@@ -377,8 +381,8 @@ bool WebPluginContainerImpl::IsMouseLocked() {
 bool WebPluginContainerImpl::LockMouse(bool request_unadjusted_movement) {
   if (Page* page = element_->GetDocument().GetPage()) {
     bool res = page->GetPointerLockController().RequestPointerLock(
-        element_, WTF::Bind(&WebPluginContainerImpl::HandleLockMouseResult,
-                            WrapWeakPersistent(this)));
+        element_, WTF::BindOnce(&WebPluginContainerImpl::HandleLockMouseResult,
+                                WrapWeakPersistent(this)));
     if (res) {
       mouse_lock_lost_listener_ =
           MakeGarbageCollected<MouseLockLostListener>(this);
@@ -447,6 +451,9 @@ void WebPluginContainerImpl::PrintEnd() {
 }
 
 void WebPluginContainerImpl::Copy() {
+  if (!web_plugin_->CanCopy())
+    return;
+
   if (!web_plugin_->HasSelection())
     return;
 
@@ -544,8 +551,7 @@ v8::Local<v8::Object> WebPluginContainerImpl::V8ObjectForElement() {
   if (!context || !context->CanExecuteScripts(kNotAboutToExecuteScript))
     return v8::Local<v8::Object>();
 
-  ScriptState* script_state =
-      ToScriptState(context, DOMWrapperWorld::MainWorld());
+  ScriptState* script_state = ToScriptStateForMainWorld(context);
   if (!script_state)
     return v8::Local<v8::Object>();
 

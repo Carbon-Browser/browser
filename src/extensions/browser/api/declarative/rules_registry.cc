@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
@@ -17,8 +17,6 @@
 #include "base/values.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_details.h"
-#include "content/public/browser/notification_source.h"
 #include "extensions/browser/api/declarative/rules_cache_delegate.h"
 #include "extensions/browser/extension_error.h"
 #include "extensions/browser/extension_prefs.h"
@@ -40,26 +38,29 @@ const char kDuplicateRuleId[] = "Duplicate rule ID: %s";
 const char kErrorCannotRemoveManifestRules[] =
     "Rules declared in the 'event_rules' manifest field cannot be removed";
 
-base::Value RulesToValue(const std::vector<const api::events::Rule*>& rules) {
-  base::Value value(base::Value::Type::LIST);
+base::Value::List RulesToValue(
+    const std::vector<const api::events::Rule*>& rules) {
+  base::Value::List value;
   for (const auto* rule : rules)
-    value.Append(std::move(*rule->ToValue()));
+    value.Append(rule->ToValue());
   return value;
 }
 
-std::vector<api::events::Rule> RulesFromValue(const base::Value* value) {
+std::vector<api::events::Rule> RulesFromValue(
+    const std::optional<base::Value>& value) {
   std::vector<api::events::Rule> rules;
 
   if (!value || !value->is_list())
     return rules;
 
   rules.reserve(value->GetList().size());
-  for (const base::Value& value : value->GetList()) {
-    if (!value.is_dict())
+  for (const base::Value& dict_value : value->GetList()) {
+    if (!dict_value.is_dict())
       continue;
-    api::events::Rule rule;
-    if (api::events::Rule::Populate(value, &rule))
-      rules.push_back(std::move(rule));
+    auto rule = api::events::Rule::FromValue(dict_value.GetDict());
+    if (rule) {
+      rules.push_back(std::move(rule).value());
+    }
   }
 
   return rules;
@@ -308,7 +309,7 @@ size_t RulesRegistry::GetNumberOfUsedRuleIdentifiersForTesting() const {
 }
 
 void RulesRegistry::DeserializeAndAddRules(const std::string& extension_id,
-                                           std::unique_ptr<base::Value> rules) {
+                                           std::optional<base::Value> rules) {
   DCHECK_CURRENTLY_ON(owner_thread());
 
   // Since this is called in response to asynchronously loading rules from
@@ -319,8 +320,8 @@ void RulesRegistry::DeserializeAndAddRules(const std::string& extension_id,
     return;
   }
 
-  std::string error = AddRulesNoFill(extension_id, RulesFromValue(rules.get()),
-                                     &rules_, nullptr);
+  std::string error =
+      AddRulesNoFill(extension_id, RulesFromValue(rules), &rules_, nullptr);
   if (!error.empty())
     ReportInternalError(extension_id, error);
 }
@@ -336,14 +337,8 @@ void RulesRegistry::ReportInternalError(const std::string& extension_id,
 RulesRegistry::~RulesRegistry() {
 }
 
-void RulesRegistry::MarkReady(base::Time storage_init_time) {
+void RulesRegistry::MarkReady() {
   DCHECK_CURRENTLY_ON(owner_thread());
-
-  if (!storage_init_time.is_null()) {
-    UMA_HISTOGRAM_TIMES("Extensions.DeclarativeRulesStorageInitialization",
-                        base::Time::Now() - storage_init_time);
-  }
-
   ready_.Signal();
 }
 
@@ -403,7 +398,7 @@ std::string RulesRegistry::CheckAndFillInOptionalRules(
   // First we insert all rules with existing identifier, so that generated
   // identifiers cannot collide with identifiers passed by the caller.
   for (const auto& rule : *rules) {
-    if (rule.id.get()) {
+    if (rule.id) {
       std::string id = *(rule.id);
       if (!IsUniqueId(extension_id, id)) {
         RemoveUsedRuleIdentifiers(extension_id, rollback_log);
@@ -415,8 +410,8 @@ std::string RulesRegistry::CheckAndFillInOptionalRules(
   // Now we generate IDs in case they were not specified in the rules. This
   // cannot fail so we do not need to keep track of a rollback log.
   for (auto& rule : *rules) {
-    if (!rule.id.get()) {
-      rule.id = std::make_unique<std::string>(GenerateUniqueId(extension_id));
+    if (!rule.id) {
+      rule.id = GenerateUniqueId(extension_id);
       used_rule_identifiers_[extension_id].insert(*(rule.id));
     }
   }
@@ -426,8 +421,8 @@ std::string RulesRegistry::CheckAndFillInOptionalRules(
 void RulesRegistry::FillInOptionalPriorities(
     std::vector<api::events::Rule>* rules) {
   for (auto& rule : *rules) {
-    if (!rule.priority.get())
-      rule.priority = std::make_unique<int>(DEFAULT_PRIORITY);
+    if (!rule.priority)
+      rule.priority = DEFAULT_PRIORITY;
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+// Copyright 2006-2008 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,10 @@
 #ifndef SANDBOX_WIN_SRC_INTERCEPTION_AGENT_H_
 #define SANDBOX_WIN_SRC_INTERCEPTION_AGENT_H_
 
+#include <windows.h>
+#include <winternl.h>
+
 #include "base/memory/raw_ptr_exclusion.h"
-#include "sandbox/win/src/nt_internals.h"
 #include "sandbox/win/src/sandbox_types.h"
 
 namespace sandbox {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ DeadlinePolicy DeadlinePolicy::UseInfiniteDeadline() {
 }
 
 DeadlinePolicy::DeadlinePolicy(Type policy_type,
-                               absl::optional<uint32_t> deadline_in_frames)
+                               std::optional<uint32_t> deadline_in_frames)
     : policy_type_(policy_type), deadline_in_frames_(deadline_in_frames) {}
 
 DeadlinePolicy::DeadlinePolicy(const DeadlinePolicy& other) = default;

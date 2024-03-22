@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,47 +18,48 @@ MerchantPromoCodeManager::MerchantPromoCodeManager() = default;
 
 MerchantPromoCodeManager::~MerchantPromoCodeManager() = default;
 
-void MerchantPromoCodeManager::OnGetSingleFieldSuggestions(
-    int query_id,
-    bool is_autocomplete_enabled,
-    bool autoselect_first_suggestion,
-    const std::u16string& name,
-    const std::u16string& prefix,
-    const std::string& form_control_type,
-    base::WeakPtr<SuggestionsHandler> handler,
+bool MerchantPromoCodeManager::OnGetSingleFieldSuggestions(
+    AutofillSuggestionTriggerSource trigger_source,
+    const FormFieldData& field,
+    const AutofillClient& client,
+    OnSuggestionsReturnedCallback on_suggestions_returned,
     const SuggestionsContext& context) {
+  // The field is eligible only if it's focused on a merchant promo code.
+  bool field_is_eligible =
+      context.focused_field &&
+      context.focused_field->Type().GetStorableType() == MERCHANT_PROMO_CODE;
+  if (!field_is_eligible)
+    return false;
+
   // If merchant promo code offers are available for the given site, and the
   // profile is not OTR, show the promo code offers.
   if (!is_off_the_record_ && personal_data_manager_) {
-    std::vector<const AutofillOfferData*> promo_code_offers =
+    const std::vector<const AutofillOfferData*> promo_code_offers =
         personal_data_manager_->GetActiveAutofillPromoCodeOffersForOrigin(
             context.form_structure->main_frame_origin().GetURL());
     if (!promo_code_offers.empty()) {
-      SendPromoCodeSuggestions(
-          promo_code_offers,
-          QueryHandler(query_id, autoselect_first_suggestion, prefix, handler));
-      uma_recorder_.OnOffersSuggestionsShown(name, promo_code_offers);
-      return;
+      SendPromoCodeSuggestions(std::move(promo_code_offers), field,
+                               std::move(on_suggestions_returned),
+                               trigger_source);
+      return true;
     }
   }
+  return false;
 }
 
 void MerchantPromoCodeManager::OnWillSubmitFormWithFields(
     const std::vector<FormFieldData>& fields,
     bool is_autocomplete_enabled) {}
 
-void MerchantPromoCodeManager::CancelPendingQueries(
-    const SuggestionsHandler* handler) {}
-
 void MerchantPromoCodeManager::OnRemoveCurrentSingleFieldSuggestion(
     const std::u16string& field_name,
     const std::u16string& value,
-    int frontend_id) {}
+    PopupItemId popup_item_id) {}
 
 void MerchantPromoCodeManager::OnSingleFieldSuggestionSelected(
     const std::u16string& value,
-    int frontend_id) {
-  uma_recorder_.OnOfferSuggestionSelected(frontend_id);
+    PopupItemId popup_item_id) {
+  uma_recorder_.OnOfferSuggestionSelected(popup_item_id);
 }
 
 void MerchantPromoCodeManager::Init(PersonalDataManager* personal_data_manager,
@@ -72,12 +73,12 @@ base::WeakPtr<MerchantPromoCodeManager> MerchantPromoCodeManager::GetWeakPtr() {
 }
 
 void MerchantPromoCodeManager::UMARecorder::OnOffersSuggestionsShown(
-    const std::u16string& name,
-    std::vector<const AutofillOfferData*>& offers) {
+    const FieldGlobalId& field_global_id,
+    const std::vector<const AutofillOfferData*>& offers) {
   // Log metrics related to the showing of overall offers suggestions popup.
   autofill_metrics::LogOffersSuggestionsPopupShown(
-      /*first_time_being_logged=*/most_recent_suggestions_shown_field_name_ !=
-      name);
+      /*first_time_being_logged=*/
+      most_recent_suggestions_shown_field_global_id_ != field_global_id);
 
   // Log metrics related to the showing of individual offers in the offers
   // suggestions popup.
@@ -90,19 +91,19 @@ void MerchantPromoCodeManager::UMARecorder::OnOffersSuggestionsShown(
 
     // We log that this individual offer suggestion was shown once for this
     // field while autofilling if it is the first time being logged.
-    if (most_recent_suggestions_shown_field_name_ != name) {
+    if (most_recent_suggestions_shown_field_global_id_ != field_global_id) {
       autofill_metrics::LogIndividualOfferSuggestionEvent(
           autofill_metrics::OffersSuggestionsEvent::kOfferSuggestionShownOnce,
           offer->GetOfferType());
     }
   }
 
-  most_recent_suggestions_shown_field_name_ = name;
+  most_recent_suggestions_shown_field_global_id_ = field_global_id;
 }
 
 void MerchantPromoCodeManager::UMARecorder::OnOfferSuggestionSelected(
-    int frontend_id) {
-  if (frontend_id == PopupItemId::POPUP_ITEM_ID_MERCHANT_PROMO_CODE_ENTRY) {
+    PopupItemId popup_item_id) {
+  if (popup_item_id == PopupItemId::kMerchantPromoCodeEntry) {
     // We log every time an individual offer suggestion is selected, regardless
     // if the user is repeatedly autofilling the same field.
     autofill_metrics::LogIndividualOfferSuggestionEvent(
@@ -111,14 +112,14 @@ void MerchantPromoCodeManager::UMARecorder::OnOfferSuggestionSelected(
 
     // We log that this individual offer suggestion was selected once for this
     // field while autofilling if it is the first time being logged.
-    if (most_recent_suggestion_selected_field_name_ !=
-        most_recent_suggestions_shown_field_name_) {
+    if (most_recent_suggestion_selected_field_global_id_ !=
+        most_recent_suggestions_shown_field_global_id_) {
       autofill_metrics::LogIndividualOfferSuggestionEvent(
           autofill_metrics::OffersSuggestionsEvent::
               kOfferSuggestionSelectedOnce,
           AutofillOfferData::OfferType::GPAY_PROMO_CODE_OFFER);
     }
-  } else if (frontend_id == PopupItemId::POPUP_ITEM_ID_SEE_PROMO_CODE_DETAILS) {
+  } else if (popup_item_id == PopupItemId::kSeePromoCodeDetails) {
     // We log every time the see offer details suggestion in the footer is
     // selected, regardless if the user is repeatedly autofilling the same
     // field.
@@ -130,8 +131,8 @@ void MerchantPromoCodeManager::UMARecorder::OnOfferSuggestionSelected(
     // We log that this individual see offer details suggestion in the footer
     // was selected once for this field while autofilling if it is the first
     // time being logged.
-    if (most_recent_suggestion_selected_field_name_ !=
-        most_recent_suggestions_shown_field_name_) {
+    if (most_recent_suggestion_selected_field_global_id_ !=
+        most_recent_suggestions_shown_field_global_id_) {
       autofill_metrics::LogIndividualOfferSuggestionEvent(
           autofill_metrics::OffersSuggestionsEvent::
               kOfferSuggestionSeeOfferDetailsSelectedOnce,
@@ -139,33 +140,32 @@ void MerchantPromoCodeManager::UMARecorder::OnOfferSuggestionSelected(
     }
   }
 
-  most_recent_suggestion_selected_field_name_ =
-      most_recent_suggestions_shown_field_name_;
+  most_recent_suggestion_selected_field_global_id_ =
+      most_recent_suggestions_shown_field_global_id_;
 }
 
 void MerchantPromoCodeManager::SendPromoCodeSuggestions(
-    const std::vector<const AutofillOfferData*>& promo_code_offers,
-    const QueryHandler& query_handler) {
-  if (!query_handler.handler_) {
-    // Either the handler has been destroyed, or it is invalid.
-    return;
-  }
-
+    std::vector<const AutofillOfferData*> promo_code_offers,
+    const FormFieldData& field,
+    OnSuggestionsReturnedCallback on_suggestions_returned,
+    AutofillSuggestionTriggerSource trigger_source) {
   // If the input box content equals any of the available promo codes, then
   // assume the promo code has been filled, and don't show any suggestions.
   for (const AutofillOfferData* promo_code_offer : promo_code_offers) {
-    if (query_handler.prefix_ ==
-        base::ASCIIToUTF16(promo_code_offer->GetPromoCode())) {
+    if (field.value == base::ASCIIToUTF16(promo_code_offer->GetPromoCode())) {
+      std::move(on_suggestions_returned)
+          .Run(field.global_id(), trigger_source, {});
       return;
     }
   }
 
-  // Return suggestions to query handler.
-  query_handler.handler_->OnSuggestionsReturned(
-      query_handler.client_query_id_,
-      query_handler.autoselect_first_suggestion_,
-      AutofillSuggestionGenerator::GetPromoCodeSuggestionsFromPromoCodeOffers(
-          promo_code_offers));
+  std::move(on_suggestions_returned)
+      .Run(field.global_id(), trigger_source,
+           AutofillSuggestionGenerator::
+               GetPromoCodeSuggestionsFromPromoCodeOffers(promo_code_offers));
+
+  // Log that promo code autofill suggestions were shown.
+  uma_recorder_.OnOffersSuggestionsShown(field.global_id(), promo_code_offers);
 }
 
 }  // namespace autofill

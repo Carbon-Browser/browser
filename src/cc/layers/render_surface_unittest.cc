@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -170,10 +170,8 @@ TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectSharedQuadState) {
   viz::SharedQuadState* shared_quad_state =
       render_pass->shared_quad_state_list.front();
 
-  EXPECT_EQ(30.0,
-            shared_quad_state->quad_to_target_transform.matrix().rc(0, 3));
-  EXPECT_EQ(40.0,
-            shared_quad_state->quad_to_target_transform.matrix().rc(1, 3));
+  EXPECT_EQ(30.0, shared_quad_state->quad_to_target_transform.rc(0, 3));
+  EXPECT_EQ(40.0, shared_quad_state->quad_to_target_transform.rc(1, 3));
   EXPECT_EQ(content_rect,
             gfx::Rect(shared_quad_state->visible_quad_layer_rect));
   EXPECT_EQ(1.f, shared_quad_state->opacity);
@@ -183,8 +181,9 @@ TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectSharedQuadState) {
 TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectRenderPass) {
   LayerTreeImplTestBase impl;
   LayerImpl* root = impl.root_layer();
-
   LayerImpl* layer = impl.AddLayer<LayerImpl>();
+  impl.SetElementIdsForTesting();
+
   CopyProperties(root, layer);
   auto& effect_node = CreateEffectNode(layer);
   effect_node.render_surface_reason = RenderSurfaceReason::kTest;
@@ -203,7 +202,8 @@ TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectRenderPass) {
 
   auto pass = render_surface->CreateRenderPass();
 
-  EXPECT_EQ(viz::CompositorRenderPassId{2}, pass->id);
+  EXPECT_EQ(viz::CompositorRenderPassId(layer->element_id().GetInternalValue()),
+            pass->id);
   EXPECT_EQ(content_rect, pass->output_rect);
   EXPECT_EQ(origin, pass->transform_to_root_target);
 }

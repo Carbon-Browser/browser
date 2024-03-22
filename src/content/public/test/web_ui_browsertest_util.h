@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,10 @@
 #include <string>
 #include <utility>
 
+#include "content/public/browser/web_ui_controller.h"
 #include "content/public/browser/web_ui_controller_factory.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/bindings_policy.h"
 #include "services/network/public/mojom/cross_origin_opener_policy.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -41,6 +44,17 @@ void AddUntrustedDataSource(
 // Returns chrome-untrusted://|host_and_path| as a GURL.
 GURL GetChromeUntrustedUIURL(const std::string& host_and_path);
 
+class TestWebUIConfig : public content::WebUIConfig {
+ public:
+  explicit TestWebUIConfig(base::StringPiece host);
+
+  ~TestWebUIConfig() override = default;
+
+  std::unique_ptr<content::WebUIController> CreateWebUIController(
+      content::WebUI* web_ui,
+      const GURL& url) override;
+};
+
 // Returns WebUIControllers whose CSPs and headers can be controlled through
 // query parameters.
 // - "bindings" controls the bindings e.g. Mojo, chrome.send() or both, with
@@ -68,8 +82,13 @@ class TestWebUIControllerFactory : public WebUIControllerFactory {
   bool UseWebUIForURL(BrowserContext* browser_context,
                       const GURL& url) override;
 
+  void SetSupportedScheme(const std::string& scheme);
+
  private:
   bool disable_xfo_ = false;
+
+  // Scheme supported by the WebUIControllerFactory.
+  std::string supported_scheme_;
 };
 
 }  // namespace content

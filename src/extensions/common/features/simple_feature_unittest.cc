@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,16 @@
 
 #include "base/command_line.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/bind.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/values.h"
+#include "content/public/common/content_features.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_features.h"
 #include "extensions/common/features/complex_feature.h"
+#include "extensions/common/features/feature.h"
 #include "extensions/common/features/feature_channel.h"
 #include "extensions/common/features/feature_developer_mode_only.h"
 #include "extensions/common/features/feature_flags.h"
@@ -26,7 +29,7 @@
 #include "extensions/common/manifest.h"
 #include "extensions/common/manifest_handlers/background_info.h"
 #include "extensions/common/switches.h"
-#include "extensions/common/value_builder.h"
+#include "extensions/test/test_context_data.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using extensions::mojom::ManifestLocation;
@@ -338,11 +341,11 @@ TEST_F(SimpleFeatureTest, Context) {
   feature.set_min_manifest_version(21);
   feature.set_max_manifest_version(25);
 
-  base::DictionaryValue manifest;
-  manifest.SetStringKey("name", "test");
-  manifest.SetStringKey("version", "1");
-  manifest.SetIntKey("manifest_version", 21);
-  manifest.SetStringPath("app.launch.local_path", "foo.html");
+  auto manifest = base::Value::Dict()
+                      .Set("name", "test")
+                      .Set("version", "1")
+                      .Set("manifest_version", 21);
+  manifest.SetByDottedPath("app.launch.local_path", "foo.html");
 
   std::string error;
   scoped_refptr<const Extension> extension(
@@ -354,9 +357,10 @@ TEST_F(SimpleFeatureTest, Context) {
   feature.set_allowlist({"monkey"});
   EXPECT_EQ(Feature::NOT_FOUND_IN_ALLOWLIST,
             feature
-                .IsAvailableToContext(
-                    extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                .IsAvailableToContext(extension.get(),
+                                      Feature::BLESSED_EXTENSION_CONTEXT,
+                                      Feature::CHROMEOS_PLATFORM,
+                                      kUnspecifiedContextId, TestContextData())
                 .result());
   feature.set_allowlist({});
 
@@ -364,7 +368,7 @@ TEST_F(SimpleFeatureTest, Context) {
   {
     Feature::Availability availability = feature.IsAvailableToContext(
         extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-        Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId);
+        Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId, TestContextData());
     EXPECT_EQ(Feature::INVALID_TYPE, availability.result());
     EXPECT_EQ("'somefeature' is only allowed for themes, "
               "but this is a legacy packaged app.",
@@ -377,7 +381,7 @@ TEST_F(SimpleFeatureTest, Context) {
   {
     Feature::Availability availability = feature.IsAvailableToContext(
         extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-        Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId);
+        Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId, TestContextData());
     EXPECT_EQ(Feature::INVALID_CONTEXT, availability.result());
     EXPECT_EQ("'somefeature' is only allowed to run in extension iframes and "
               "content scripts, but this is a privileged page",
@@ -390,7 +394,7 @@ TEST_F(SimpleFeatureTest, Context) {
   {
     Feature::Availability availability = feature.IsAvailableToContext(
         extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-        Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId);
+        Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId, TestContextData());
     EXPECT_EQ(Feature::INVALID_CONTEXT, availability.result());
     EXPECT_EQ("'somefeature' is only allowed to run in extension iframes, "
               "content scripts, and web pages, but this is a privileged page",
@@ -404,22 +408,24 @@ TEST_F(SimpleFeatureTest, Context) {
               other_feature
                   .IsAvailableToContext(
                       extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-                      Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                      Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId,
+                      TestContextData())
                   .result());
   }
 
   feature.set_contexts({Feature::BLESSED_EXTENSION_CONTEXT});
   EXPECT_EQ(Feature::INVALID_PLATFORM,
             feature
-                .IsAvailableToContext(
-                    extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-                    Feature::UNSPECIFIED_PLATFORM, kUnspecifiedContextId)
+                .IsAvailableToContext(extension.get(),
+                                      Feature::BLESSED_EXTENSION_CONTEXT,
+                                      Feature::UNSPECIFIED_PLATFORM,
+                                      kUnspecifiedContextId, TestContextData())
                 .result());
 
   {
     Feature::Availability availability = feature.IsAvailableToContext(
         extension.get(), Feature::LOCK_SCREEN_EXTENSION_CONTEXT,
-        Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId);
+        Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId, TestContextData());
     EXPECT_EQ(Feature::INVALID_CONTEXT, availability.result());
     EXPECT_EQ(
         "'somefeature' is only allowed to run in privileged pages, "
@@ -431,36 +437,39 @@ TEST_F(SimpleFeatureTest, Context) {
 
   EXPECT_EQ(Feature::IS_AVAILABLE,
             feature
-                .IsAvailableToContext(
-                    extension.get(), Feature::LOCK_SCREEN_EXTENSION_CONTEXT,
-                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                .IsAvailableToContext(extension.get(),
+                                      Feature::LOCK_SCREEN_EXTENSION_CONTEXT,
+                                      Feature::CHROMEOS_PLATFORM,
+                                      kUnspecifiedContextId, TestContextData())
                 .result());
 
   feature.set_min_manifest_version(22);
   EXPECT_EQ(Feature::INVALID_MIN_MANIFEST_VERSION,
             feature
-                .IsAvailableToContext(
-                    extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                .IsAvailableToContext(extension.get(),
+                                      Feature::BLESSED_EXTENSION_CONTEXT,
+                                      Feature::CHROMEOS_PLATFORM,
+                                      kUnspecifiedContextId, TestContextData())
                 .result());
   feature.set_min_manifest_version(21);
 
   feature.set_max_manifest_version(18);
   EXPECT_EQ(Feature::INVALID_MAX_MANIFEST_VERSION,
             feature
-                .IsAvailableToContext(
-                    extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                .IsAvailableToContext(extension.get(),
+                                      Feature::BLESSED_EXTENSION_CONTEXT,
+                                      Feature::CHROMEOS_PLATFORM,
+                                      kUnspecifiedContextId, TestContextData())
                 .result());
   feature.set_max_manifest_version(25);
 }
 
 TEST_F(SimpleFeatureTest, SessionType) {
-  base::DictionaryValue manifest;
-  manifest.SetStringKey("name", "test");
-  manifest.SetStringKey("version", "1");
-  manifest.SetIntKey("manifest_version", 2);
-  manifest.SetStringPath("app.launch.local_path", "foo.html");
+  auto manifest = base::Value::Dict()
+                      .Set("name", "test")
+                      .Set("version", "1")
+                      .Set("manifest_version", 2);
+  manifest.SetByDottedPath("app.launch.local_path", "foo.html");
 
   std::string error;
   scoped_refptr<const Extension> extension(
@@ -557,7 +566,8 @@ TEST_F(SimpleFeatureTest, SessionType) {
               feature
                   .IsAvailableToContext(
                       extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-                      Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                      Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId,
+                      TestContextData())
                   .result())
         << "Failed test '" << kTestData[i].desc << "'.";
 
@@ -748,28 +758,30 @@ TEST_F(SimpleFeatureTest, CommandLineSwitch) {
 }
 
 TEST_F(SimpleFeatureTest, FeatureFlags) {
-  const std::vector<base::Feature> features(
-      {{"stub_feature_1", base::FEATURE_ENABLED_BY_DEFAULT},
-       {"stub_feature_2", base::FEATURE_DISABLED_BY_DEFAULT}});
+  static BASE_FEATURE(kStubFeature1, "StubFeature1",
+                      base::FEATURE_ENABLED_BY_DEFAULT);
+  static BASE_FEATURE(kStubFeature2, "StubFeature2",
+                      base::FEATURE_DISABLED_BY_DEFAULT);
+  const base::Feature* kOverriddenFeatures[] = {&kStubFeature1, &kStubFeature2};
   auto scoped_feature_override =
-      CreateScopedFeatureFlagsOverrideForTesting(&features);
+      CreateScopedFeatureFlagsOverrideForTesting(kOverriddenFeatures);
 
   SimpleFeature simple_feature_1;
-  simple_feature_1.set_feature_flag(features[0].name);
+  simple_feature_1.set_feature_flag(kStubFeature1.name);
   EXPECT_EQ(Feature::IS_AVAILABLE,
             simple_feature_1.IsAvailableToEnvironment(kUnspecifiedContextId)
                 .result());
 
   SimpleFeature simple_feature_2;
-  simple_feature_2.set_feature_flag(features[1].name);
+  simple_feature_2.set_feature_flag(kStubFeature2.name);
   EXPECT_EQ(Feature::FEATURE_FLAG_DISABLED,
             simple_feature_2.IsAvailableToEnvironment(kUnspecifiedContextId)
                 .result());
 
   // Ensure we take any base::Feature overrides into account.
   base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures({features[1]} /* enabled_features */,
-                                       {features[0]} /* disabled_features */);
+  scoped_feature_list.InitWithFeatures({kStubFeature2} /* enabled_features */,
+                                       {kStubFeature1} /* disabled_features */);
   EXPECT_EQ(Feature::FEATURE_FLAG_DISABLED,
             simple_feature_1.IsAvailableToEnvironment(kUnspecifiedContextId)
                 .result());
@@ -971,6 +983,93 @@ TEST_F(SimpleFeatureTest, ComplexFeatureAvailability) {
   }
 }
 
+TEST(SimpleFeatureUnitTest, TestRequiresDelegatedAvailabilityCheck) {
+  // Test a feature that requires a delegated availability check, but the check
+  // fails.
+  std::string expected_feature_name = "DisallowedFeature";
+  uint32_t delegated_availability_check_call_count = 0;
+  auto delegated_availability_check = base::BindLambdaForTesting(
+      [&](const std::string& api_full_name, const Extension* extension,
+          Feature::Context context, const GURL& url, Feature::Platform platform,
+          int context_id, bool check_developer_mode,
+          const ContextData& context_data) {
+        ++delegated_availability_check_call_count;
+        EXPECT_EQ(expected_feature_name, api_full_name);
+        return api_full_name == "AllowedFeature";
+      });
+
+  SimpleFeature feature;
+  feature.set_requires_delegated_availability_check(true);
+  feature.set_contexts({Feature::WEB_PAGE_CONTEXT});
+  {
+    // Test a feature that requires a delegated availability check but is
+    // missing the check handler.
+    EXPECT_EQ(Feature::MISSING_DELEGATED_AVAILABILITY_CHECK,
+              feature
+                  .IsAvailableToContext(
+                      /*extension=*/nullptr, Feature::WEB_PAGE_CONTEXT,
+                      kUnspecifiedContextId, TestContextData())
+                  .result());
+  }
+
+  feature.SetDelegatedAvailabilityCheckHandler(delegated_availability_check);
+  feature.set_name(expected_feature_name);
+  {
+    // Test a feature that requires a delegated availability check and the check
+    // is not successful.
+    EXPECT_EQ(Feature::FAILED_DELEGATED_AVAILABILITY_CHECK,
+              feature
+                  .IsAvailableToContext(
+                      /*extension=*/nullptr, Feature::WEB_PAGE_CONTEXT,
+                      kUnspecifiedContextId, TestContextData())
+                  .result());
+    EXPECT_EQ(1u, delegated_availability_check_call_count);
+  }
+
+  expected_feature_name = "AllowedFeature";
+  feature.set_name(expected_feature_name);
+  {
+    // Test a feature that requires a delegated availability check and the check
+    // is successful.
+    EXPECT_EQ(Feature::IS_AVAILABLE,
+              feature
+                  .IsAvailableToContext(
+                      /*extension=*/nullptr, Feature::WEB_PAGE_CONTEXT,
+                      kUnspecifiedContextId, TestContextData())
+                  .result());
+    EXPECT_EQ(2u, delegated_availability_check_call_count);
+  }
+
+  feature.set_channel(version_info::Channel::DEV);
+  {
+    // Test a feature that requires a delegated availability check and the check
+    // would be successful, but actually isn't called since the environment
+    // check fails.
+    ScopedCurrentChannel current_channel(Channel::STABLE);
+    EXPECT_EQ(Feature::UNSUPPORTED_CHANNEL,
+              feature
+                  .IsAvailableToContext(
+                      /*extension=*/nullptr, Feature::WEB_PAGE_CONTEXT,
+                      kUnspecifiedContextId, TestContextData())
+                  .result());
+    EXPECT_EQ(2u, delegated_availability_check_call_count);
+  }
+  feature.set_channel(version_info::Channel::STABLE);
+  {
+    // Test a feature that requires a delegated availability check and the check
+    // would be successful, then confirm the check is called because the
+    // environment check passes.
+    ScopedCurrentChannel current_channel(Channel::STABLE);
+    EXPECT_EQ(Feature::IS_AVAILABLE,
+              feature
+                  .IsAvailableToContext(
+                      /*extension=*/nullptr, Feature::WEB_PAGE_CONTEXT,
+                      kUnspecifiedContextId, TestContextData())
+                  .result());
+    EXPECT_EQ(3u, delegated_availability_check_call_count);
+  }
+}
+
 TEST(SimpleFeatureUnitTest, TestChannelsWithoutExtension) {
   // Create a webui feature available on trunk.
   SimpleFeature feature;
@@ -987,7 +1086,8 @@ TEST(SimpleFeatureUnitTest, TestChannelsWithoutExtension) {
     EXPECT_EQ(Feature::IS_AVAILABLE,
               feature
                   .IsAvailableToContext(nullptr, Feature::WEBUI_CONTEXT,
-                                        kAllowlistedUrl, kUnspecifiedContextId)
+                                        kAllowlistedUrl, kUnspecifiedContextId,
+                                        TestContextData())
                   .result());
   }
   {
@@ -996,7 +1096,8 @@ TEST(SimpleFeatureUnitTest, TestChannelsWithoutExtension) {
     EXPECT_EQ(Feature::UNSUPPORTED_CHANNEL,
               feature
                   .IsAvailableToContext(nullptr, Feature::WEBUI_CONTEXT,
-                                        kAllowlistedUrl, kUnspecifiedContextId)
+                                        kAllowlistedUrl, kUnspecifiedContextId,
+                                        TestContextData())
                   .result());
   }
 }
@@ -1177,17 +1278,19 @@ TEST(SimpleFeatureUnitTest, DisallowForServiceWorkers) {
                     extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
                     extension->GetResourceURL(
                         ExtensionBuilder::kServiceWorkerScriptFile),
-                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId,
+                    TestContextData())
                 .result());
 
   // Check with a different script file, which should return available,
   // since it's not a service worker context.
   EXPECT_EQ(Feature::IS_AVAILABLE,
             feature
-                .IsAvailableToContext(
-                    extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
-                    extension->GetResourceURL("other.js"),
-                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                .IsAvailableToContext(extension.get(),
+                                      Feature::BLESSED_EXTENSION_CONTEXT,
+                                      extension->GetResourceURL("other.js"),
+                                      Feature::CHROMEOS_PLATFORM,
+                                      kUnspecifiedContextId, TestContextData())
                 .result());
 
   // Disable the feature for service workers. The feature should be disallowed.
@@ -1198,7 +1301,8 @@ TEST(SimpleFeatureUnitTest, DisallowForServiceWorkers) {
                     extension.get(), Feature::BLESSED_EXTENSION_CONTEXT,
                     extension->GetResourceURL(
                         ExtensionBuilder::kServiceWorkerScriptFile),
-                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId)
+                    Feature::CHROMEOS_PLATFORM, kUnspecifiedContextId,
+                    TestContextData())
                 .result());
 }
 

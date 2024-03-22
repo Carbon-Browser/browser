@@ -1,17 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_WEBUI_MOJO_FACADE_H_
 #define IOS_WEB_WEBUI_MOJO_FACADE_H_
 
-#include <objc/objc.h>
-
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
@@ -26,7 +25,7 @@ class WebState;
 class MojoFacade {
  public:
   // Constructs MojoFacade. The calling code must retain ownership of
-  // |web_state|, which cannot be null.
+  // `web_state`, which cannot be null.
   explicit MojoFacade(WebState* web_state);
   ~MojoFacade();
 
@@ -49,7 +48,7 @@ class MojoFacade {
   // Value returned by GetMessageNameAndArguments.
   struct MessageNameAndArguments {
     std::string name;
-    base::Value args;
+    base::Value::Dict args;
   };
 
   // Extracts message name and arguments from the given JSON string obtained
@@ -58,34 +57,35 @@ class MojoFacade {
   MessageNameAndArguments GetMessageNameAndArguments(
       const std::string& mojo_message_as_json);
 
-  // Connects to specified Mojo interface. |args| is a dictionary with the
+  // Connects to specified Mojo interface. `args` is a dictionary with the
   // following keys:
   //   - "interfaceName" (a string representing an interface name);
   //   - "requestHandle" (a number representing MojoHandle of the interface
   //     request).
-  void HandleMojoBindInterface(base::Value args);
+  void HandleMojoBindInterface(base::Value::Dict args);
 
-  // Closes the given handle. |args| is a dictionary which must contain "handle"
+  // Closes the given handle. `args` is a dictionary which must contain "handle"
   // key, which is a number representing a MojoHandle.
-  void HandleMojoHandleClose(base::Value args);
+  void HandleMojoHandleClose(base::Value::Dict args);
 
-  // Creates a Mojo message pipe. |args| is unused.
+  // Creates a Mojo message pipe. `args` is unused.
   // Returns a dictionary with the following keys:
   //   - "result" (a number representing MojoResult);
   //   - "handle0" and "handle1" (the numbers representing two endpoints of the
   //     message pipe).
-  base::Value HandleMojoCreateMessagePipe(base::Value args);
+  base::Value HandleMojoCreateMessagePipe(base::Value::Dict args);
 
-  // Writes a message to the message pipe endpoint given by handle. |args| is a
+  // Writes a message to the message pipe endpoint given by handle. `args` is a
   // dictionary which must contain the following keys:
   //   - "handle" (a number representing MojoHandle, the endpoint to write to);
-  //   - "buffer" (a dictionary representing the message data; may be empty);
+  //   - "buffer" (a base-64 string representing the message data; may be
+  //   empty);
   //   - "handles" (an array representing any handles to attach; handles are
   //     transferred and will no longer be valid; may be empty);
   // Returns MojoResult as a number.
-  base::Value HandleMojoHandleWriteMessage(base::Value args);
+  base::Value HandleMojoHandleWriteMessage(base::Value::Dict args);
 
-  // Reads a message from the message pipe endpoint given by handle. |args| is
+  // Reads a message from the message pipe endpoint given by handle. `args` is
   // a dictionary which must contain the keys "handle" (a number representing
   // MojoHandle, the endpoint to read from).
   // Returns a dictionary with the following keys:
@@ -93,26 +93,48 @@ class MojoFacade {
   //   - "buffer" (an array representing message data; non-empty only on
   //     success);
   //   - "handles" (an array representing MojoHandles received, if any);
-  base::Value HandleMojoHandleReadMessage(base::Value args);
+  base::Value HandleMojoHandleReadMessage(base::Value::Dict args);
 
   // Begins watching a handle for signals to be satisfied or unsatisfiable.
-  // |args| is a dictionary which must contain the following keys:
+  // `args` is a dictionary which must contain the following keys:
   //   - "handle" (a number representing a MojoHandle);
   //   - "signals" (a number representing MojoHandleSignals to watch);
   //   - "callbackId" (a number representing the id which should be passed to
   //     Mojo.internal.signalWatch call).
   // Returns watch id as a number.
-  base::Value HandleMojoHandleWatch(base::Value args);
+  base::Value HandleMojoHandleWatch(base::Value::Dict args);
 
-  // Cancels a handle watch initiated by "MojoHandle.watch". |args| is a
+  // Cancels a handle watch initiated by "MojoHandle.watch". `args` is a
   // dictionary which must contain "watchId" key (a number representing id
   // returned from "MojoHandle.watch").
-  void HandleMojoWatcherCancel(base::Value args);
+  void HandleMojoWatcherCancel(base::Value::Dict args);
+
+  // Assigns a new unique integer ID to the given message pipe handle and
+  // returns that ID. The ID can be used by JS to reference this pipe.
+  int AllocatePipeId(mojo::ScopedMessagePipeHandle pipe);
+
+  // Returns the pipe handle associated with `id` in JS, or an invalid handle if
+  // no such association exists.
+  mojo::MessagePipeHandle GetPipeFromId(int id);
+
+  // Returns the pipe handle associated with `id` in JS, and removes that
+  // association, effectively invalidating `id` and taking ownership of the
+  // pipe. Returns an invalid pipe if `id` had no associated pipe.
+  mojo::ScopedMessagePipeHandle TakePipeFromId(int id);
 
   // Runs JavaScript on WebUI page.
-  WebState* web_state_ = nil;
+  WebState* web_state_ = nullptr;
+
+  // The next available integer ID to assign a Mojo pipe for use in JS.
+  int next_pipe_id_ = 1;
+
+  // A mapping of integer handles used by JS, to actual pipe handles used with
+  // Mojo APIs.
+  std::unordered_map<int, mojo::ScopedMessagePipeHandle> pipes_;
+
   // Id of the last created watch.
   int last_watch_id_ = 0;
+
   // Currently active watches created through this facade.
   std::map<int, std::unique_ptr<mojo::SimpleWatcher>> watchers_;
 };

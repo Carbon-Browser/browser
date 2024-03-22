@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,7 @@ PagePrintAnalysisRequest::PagePrintAnalysisRequest(
           std::move(callback),
           analysis_settings.cloud_or_local_settings),
       page_(std::move(page)) {
+  DCHECK(page_.IsValid());
   safe_browsing::IncrementCrashKey(
       safe_browsing::ScanningCrashKey::PENDING_PRINTS);
   safe_browsing::IncrementCrashKey(
@@ -37,17 +38,19 @@ PagePrintAnalysisRequest::~PagePrintAnalysisRequest() {
 }
 
 void PagePrintAnalysisRequest::GetRequestData(DataCallback callback) {
-  safe_browsing::BinaryUploadService::Request::Data data;
+  Data data;
   data.size = page_.GetSize();
 
-  if (data.size >= kMaxPageSize) {
+  // Only enforce a max size for cloud scans.
+  if (data.size >= kMaxPageSize
+      && cloud_or_local_settings().is_cloud_analysis()) {
     std::move(callback).Run(
         safe_browsing::BinaryUploadService::Result::FILE_TOO_LARGE,
         std::move(data));
     return;
   }
 
-  data.page = std::move(page_);
+  data.page = page_.Duplicate();
   std::move(callback).Run(safe_browsing::BinaryUploadService::Result::SUCCESS,
                           std::move(data));
 }

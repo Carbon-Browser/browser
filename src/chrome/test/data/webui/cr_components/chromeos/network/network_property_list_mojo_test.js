@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://os-settings/strings.m.js';
-import 'chrome://resources/cr_components/chromeos/network/network_property_list_mojo.m.js';
+import 'chrome://resources/ash/common/network/network_property_list_mojo.js';
 
-import {FAKE_CREDENTIAL} from 'chrome://resources/cr_components/chromeos/network/onc_mojo.m.js';
+import {FAKE_CREDENTIAL} from 'chrome://resources/ash/common/network/onc_mojo.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 suite('NetworkPropertyListMojoTest', function() {
@@ -18,12 +18,17 @@ suite('NetworkPropertyListMojoTest', function() {
       ipAddress: '100.0.0.1',
       type: 'IPv4',
     };
-    propertyList.propertyDict = {ipv4: ipv4};
+    const tether = {
+      signalStrength: 0,
+    };
+
+    propertyList.propertyDict = {ipv4, typeProperties: {tether}};
     propertyList.fields = [
       'ipv4.ipAddress',
       'ipv4.routingPrefix',
       'ipv4.gateway',
       'ipv6.ipAddress',
+      `tether.signalStrength`,
     ];
 
     document.body.appendChild(propertyList);
@@ -59,6 +64,13 @@ suite('NetworkPropertyListMojoTest', function() {
       },
     };
     await flushAsync();
+  }
+
+  function simulateSignalStrengthChange(latestSignalStrength) {
+    const updatedPropertyDict = {...propertyList.propertyDict};
+    updatedPropertyDict.typeProperties.tether.signalStrength =
+        latestSignalStrength;
+    propertyList.propertyDict = updatedPropertyDict;
   }
 
   test(
@@ -159,5 +171,33 @@ suite('NetworkPropertyListMojoTest', function() {
       const textValue = element.textContent.trim();
       assertTrue(textSecurity === 'disc' || textValue !== FAKE_CREDENTIAL);
     });
+  });
+
+  test('Tether network signal strength updates', () => {
+    const element = propertyList.shadowRoot.querySelector(
+        '.cr-secondary-text[data-key="tether.signalStrength"]');
+    assertEquals(
+        propertyList.i18n('OncTether-SignalStrength_None'),
+        element.textContent.trim());
+
+    simulateSignalStrengthChange(25);
+    assertEquals(
+        propertyList.i18n('OncTether-SignalStrength_Low'),
+        element.textContent.trim());
+
+    simulateSignalStrengthChange(50);
+    assertEquals(
+        propertyList.i18n('OncTether-SignalStrength_Medium'),
+        element.textContent.trim());
+
+    simulateSignalStrengthChange(95);
+    assertEquals(
+        propertyList.i18n('OncTether-SignalStrength_Strong'),
+        element.textContent.trim());
+
+    simulateSignalStrengthChange(100);
+    assertEquals(
+        propertyList.i18n('OncTether-SignalStrength_Strong'),
+        element.textContent.trim());
   });
 });

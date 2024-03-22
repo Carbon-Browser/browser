@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/sys_byteorder.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "ui/display/util/display_util.h"
 #include "ui/gfx/geometry/size.h"
@@ -100,7 +101,8 @@ EdidParser::EdidParser(const std::vector<uint8_t>& edid_blob, bool is_external)
       year_of_manufacture_(display::kInvalidYearOfManufacture),
       gamma_(0.0),
       bits_per_channel_(-1),
-      primaries_({0}) {
+      primaries_({0}),
+      audio_formats_(0) {
   ParseEdid(edid_blob);
 }
 
@@ -199,7 +201,7 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
   }
   product_id_ = (edid[kProductIdOffset] << 8) + edid[kProductIdOffset + 1];
 
-  //   Bytes 12-15: dislay serial number, in little-endian (LSB). This field is
+  //   Bytes 12-15: display serial number, in little-endian (LSB). This field is
   //   optional and its absence is marked by having all bytes set to 0x00.
   //   Values do not represent ASCII characters.
   constexpr size_t kSerialNumberOffset = 12;
@@ -467,16 +469,15 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
     if (edid[offset] == 0 && edid[offset + 1] == 0 && edid[offset + 2] == 0 &&
         edid[offset + 3] == kDisplayRangeLimitsDescriptor) {
       // byte 4: Offsets for display range limits
-      const uint8_t kRateOffset = edid[offset + 4];
+      const uint8_t rateOffset = edid[offset + 4];
       // bits 7-4: Reserved \0
-      if (kRateOffset & 0x10)
+      if (rateOffset & 0xf0)
         continue;
       // bit 3: Horizontal max rate offset (not used)
       // bit 2: Horizontal min rate offset (not used)
-      // bit 1: Vertical max rate offset
-      const uint8_t verticalMaxRateOffset = kRateOffset & (1 << 1) ? 255 : 0;
+      // bit 1: Vertical max rate offset (not used)
       // bit 0: Vertical min rate offset
-      const uint8_t verticalMinRateOffset = kRateOffset & (1 << 0) ? 255 : 0;
+      const uint8_t verticalMinRateOffset = rateOffset & (1 << 0) ? 255 : 0;
 
       // bytes 5-8: Rate limits
       // Each byte must be within [1, 255].
@@ -484,9 +485,8 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
           edid[offset + 7] == 0 || edid[offset + 8] == 0)
         continue;
       // byte 5: Min vertical rate in Hz
-      min_vfreq_ = edid[offset + 5] + verticalMinRateOffset;
-      // byte 6: Max vertical rate in Hz
-      max_vfreq_ = edid[offset + 6] + verticalMaxRateOffset;
+      vsync_rate_min_ = edid[offset + 5] + verticalMinRateOffset;
+      // byte 6: Max vertical rate in Hz (not used)
       // byte 7: Min horizontal rate in kHz (not used)
       // byte 8: Max horizontal rate in kHz (not used)
 
@@ -524,7 +524,10 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
   // Replace unprintable chars with white space.
   std::replace_if(
       display_name_.begin(), display_name_.end(),
-      [](char c) { return !isascii(c) || !isprint(c); }, ' ');
+      [](unsigned char c) {
+        return !absl::ascii_isascii(c) || !absl::ascii_isprint(c);
+      },
+      ' ');
 
   // See http://en.wikipedia.org/wiki/Extended_display_identification_data
   // for the extension format of EDID.  Also see EIA/CEA-861 spec for
@@ -538,6 +541,7 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
   constexpr size_t kDataBlockOffset = 4;
   constexpr uint8_t kCEAExtensionTag = '\x02';
   constexpr uint8_t kExpectedExtensionRevision = '\x03';
+  constexpr uint8_t kAudioTag = 1;
   constexpr uint8_t kExtendedTag = 7;
   constexpr uint8_t kExtendedVideoCapabilityTag = 0;
   constexpr uint8_t kPTOverscanFlagPosition = 4;
@@ -545,24 +549,30 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
   constexpr uint8_t kCEOverscanFlagPosition = 0;
   // See CTA-861-F, particularly Table 56 "Colorimetry Data Block".
   constexpr uint8_t kColorimetryDataBlockCapabilityTag = 0x05;
-  constexpr gfx::ColorSpace::PrimaryID kPrimaryIDMap[] = {
-      // xvYCC601. Standard Definition Colorimetry based on IEC 61966-2-4.
-      gfx::ColorSpace::PrimaryID::SMPTE170M,
-      // xvYCC709. High Definition Colorimetry based on IEC 61966-2-4.
-      gfx::ColorSpace::PrimaryID::BT709,
-      // sYCC601. Colorimetry based on IEC 61966-2-1/Amendment 1.
-      gfx::ColorSpace::PrimaryID::SMPTE170M,
-      // opYCC601. Colorimetry based on IEC 61966-2-5, Annex A.
-      gfx::ColorSpace::PrimaryID::SMPTE170M,
-      // opRGB, Colorimetry based on IEC 61966-2-5.
-      gfx::ColorSpace::PrimaryID::SMPTE170M,
-      // BT2020RGB. Colorimetry based on ITU-R BT.2020 R’G’B’.
-      gfx::ColorSpace::PrimaryID::BT2020,
-      // BT2020YCC. Colorimetry based on ITU-R BT.2020 Y’C’BC’R.
-      gfx::ColorSpace::PrimaryID::BT2020,
-      // BT2020cYCC. Colorimetry based on ITU-R BT.2020 Y’cC’BCC’RC.
-      gfx::ColorSpace::PrimaryID::BT2020,
-  };
+  constexpr std::pair<gfx::ColorSpace::PrimaryID, gfx::ColorSpace::MatrixID>
+      kPrimaryMatrixIDMap[] = {
+          // xvYCC601. Standard Definition Colorimetry based on IEC 61966-2-4.
+          {gfx::ColorSpace::PrimaryID::SMPTE170M,
+           gfx::ColorSpace::MatrixID::SMPTE170M},
+          // xvYCC709. High Definition Colorimetry based on IEC 61966-2-4.
+          {gfx::ColorSpace::PrimaryID::BT709, gfx::ColorSpace::MatrixID::BT709},
+          // sYCC601. Colorimetry based on IEC 61966-2-1/Amendment 1.
+          {gfx::ColorSpace::PrimaryID::SMPTE170M,
+           gfx::ColorSpace::MatrixID::SMPTE170M},
+          // opYCC601. Colorimetry based on IEC 61966-2-5, Annex A.
+          {gfx::ColorSpace::PrimaryID::SMPTE170M,
+           gfx::ColorSpace::MatrixID::SMPTE170M},
+          // opRGB, Colorimetry based on IEC 61966-2-5.
+          {gfx::ColorSpace::PrimaryID::SMPTE170M,
+           gfx::ColorSpace::MatrixID::RGB},
+          // BT2020cYCC. Colorimetry based on ITU-R BT.2020 Y’cC’BCC’RC.
+          {gfx::ColorSpace::PrimaryID::BT2020,
+           gfx::ColorSpace::MatrixID::BT2020_CL},
+          // BT2020YCC. Colorimetry based on ITU-R BT.2020 Y’C’BC’R.
+          {gfx::ColorSpace::PrimaryID::BT2020,
+           gfx::ColorSpace::MatrixID::BT2020_NCL},
+          // BT2020RGB. Colorimetry based on ITU-R BT.2020 R’G’B’.
+          {gfx::ColorSpace::PrimaryID::BT2020, gfx::ColorSpace::MatrixID::RGB}};
   // See CEA 861.G-2018, Sec.7.5.13, "HDR Static Metadata Data Block" for these.
   constexpr uint8_t kHDRStaticMetadataCapabilityTag = 0x6;
   constexpr gfx::ColorSpace::TransferID kTransferIDMap[] = {
@@ -598,8 +608,8 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
     for (size_t data_offset = extension_offset + kDataBlockOffset;
          data_offset < extension_offset + timing_descriptors_start;) {
       // A data block is encoded as:
-      // - byte 1 high 3 bits: tag. '07' for extended tags.
-      // - byte 1 remaining bits: the length of data block.
+      // - byte 1 high 3 bits: tag: '1' for audio, '7' for extended tags.
+      // - byte 1 remaining bits: the length of data block after header.
       // - byte 2: the extended tag. E.g. '0' for video capability. Values are
       //   defined by the k...CapabilityTag constants.
       // - byte 3: the capability.
@@ -607,6 +617,35 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
       const uint8_t payload_length = edid[data_offset] & 0x1f;
       if (data_offset + payload_length + 1 > edid.size())
         break;
+
+      // Short Audio Descriptors contain passthrough audio support information.
+      // Note: Short Audio Descriptors also contain channel count and sampling
+      // frequency information as described in:
+      // CTA-861-G (2017) section 7.5.2 Audio Data Block.
+      if (tag == kAudioTag) {
+        constexpr uint8_t kCEAShortAudioDescriptorLength = 3;
+        constexpr uint8_t kFormatBitsLPCM = 1;
+        constexpr uint8_t kFormatBitsDTS = 7;
+        constexpr uint8_t kFormatBitsDTSHD = 11;
+
+        for (int sad_index = 0;
+             sad_index + kCEAShortAudioDescriptorLength <= payload_length;
+             sad_index += kCEAShortAudioDescriptorLength) {
+          switch ((edid[data_offset + 1 + sad_index] >> 3) & 0x1F) {
+            case kFormatBitsLPCM:
+              audio_formats_ |= kAudioBitstreamPcmLinear;
+              break;
+            case kFormatBitsDTS:
+              audio_formats_ |= kAudioBitstreamDts;
+              break;
+            case kFormatBitsDTSHD:
+              audio_formats_ |= kAudioBitstreamDtsHd;
+              break;
+          }
+        }
+        data_offset += payload_length + 1;
+        continue;
+      }
 
       if (tag != kExtendedTag || payload_length < 2) {
         data_offset += payload_length + 1;
@@ -628,27 +667,33 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
           const std::bitset<kMaxNumColorimetryEntries>
               supported_primaries_bitfield(edid[data_offset + 2]);
           static_assert(
-              kMaxNumColorimetryEntries == std::size(kPrimaryIDMap),
+              kMaxNumColorimetryEntries == std::size(kPrimaryMatrixIDMap),
               "kPrimaryIDMap should describe all possible colorimetry entries");
           for (size_t entry = 0; entry < kMaxNumColorimetryEntries; ++entry) {
-            if (supported_primaries_bitfield[entry])
-              supported_color_primary_ids_.insert(kPrimaryIDMap[entry]);
+            if (supported_primaries_bitfield[entry]) {
+              supported_color_primary_matrix_ids_.insert(
+                  kPrimaryMatrixIDMap[entry]);
+            }
           }
           break;
         }
 
         case kHDRStaticMetadataCapabilityTag: {
-          constexpr size_t kMaxNumHDRStaticMedatataEntries = 4;
-          const std::bitset<kMaxNumHDRStaticMedatataEntries>
+          constexpr size_t kMaxNumHDRStaticMetadataEntries = 4;
+          const std::bitset<kMaxNumHDRStaticMetadataEntries>
               supported_eotfs_bitfield(edid[data_offset + 2]);
           static_assert(
-              kMaxNumHDRStaticMedatataEntries == std::size(kTransferIDMap),
+              kMaxNumHDRStaticMetadataEntries == std::size(kTransferIDMap),
               "kTransferIDMap should describe all possible transfer entries");
-          for (size_t entry = 0; entry < kMaxNumHDRStaticMedatataEntries;
+          for (size_t entry = 0; entry < kMaxNumHDRStaticMetadataEntries;
                ++entry) {
             if (supported_eotfs_bitfield[entry])
               supported_color_transfer_ids_.insert(kTransferIDMap[entry]);
           }
+          hdr_static_metadata_ =
+              absl::make_optional<gfx::HDRStaticMetadata>({});
+          hdr_static_metadata_->supported_eotf_mask =
+              base::checked_cast<uint8_t>(supported_eotfs_bitfield.to_ulong());
 
           // See CEA 861.3-2015, Sec.7.5.13, "HDR Static Metadata Data Block"
           // for details on the following calculations.
@@ -657,8 +702,6 @@ void EdidParser::ParseEdid(const std::vector<uint8_t>& edid) {
           if (length_of_data_block <= 3)
             break;
           const uint8_t desired_content_max_luminance = edid[data_offset + 4];
-          hdr_static_metadata_ =
-              absl::make_optional<gfx::HDRStaticMetadata>({});
           hdr_static_metadata_->max =
               50.0 * pow(2, desired_content_max_luminance / 32.0);
 

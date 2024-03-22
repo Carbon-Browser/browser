@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,19 +10,22 @@
 #include <set>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/services/storage/public/cpp/constants.h"
 #include "storage/browser/file_system/file_system_backend.h"
 #include "storage/browser/file_system/file_system_features.h"
 #include "storage/browser/file_system/file_system_url.h"
+#include "storage/browser/file_system/obfuscated_file_util.h"
 #include "storage/browser/file_system/sandbox_file_system_backend_delegate.h"
 #include "storage/browser/quota/quota_manager.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
@@ -105,8 +108,9 @@ class SandboxFileSystemBackendTest
   void SetUpNewDelegate(const FileSystemOptions& options) {
     incognito_env_override_ = leveldb_chrome::NewMemEnv("FileSystem");
     delegate_ = std::make_unique<SandboxFileSystemBackendDelegate>(
-        quota_manager_->proxy(), base::ThreadTaskRunnerHandle::Get(),
-        data_dir_.GetPath(), /*special_storage_policy=*/nullptr, options,
+        quota_manager_->proxy(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), data_dir_.GetPath(),
+        /*special_storage_policy=*/nullptr, options,
         options.is_in_memory() ? incognito_env_override_.get() : nullptr);
   }
 
@@ -127,8 +131,9 @@ class SandboxFileSystemBackendTest
         FROM_HERE, base::BindOnce(
                        [](const scoped_refptr<QuotaManager>& quota_manager) {
                          QuotaSettings settings;
-                         settings.per_host_quota = 25 * 1024 * 1024;
-                         settings.pool_size = settings.per_host_quota * 5;
+                         settings.per_storage_key_quota = 25 * 1024 * 1024;
+                         settings.pool_size =
+                             settings.per_storage_key_quota * 5;
                          settings.must_remain_available = 10 * 1024 * 1024;
                          settings.refresh_interval = base::TimeDelta::Max();
                          quota_manager->SetQuotaSettings(settings);
@@ -143,10 +148,10 @@ class SandboxFileSystemBackendTest
     BucketInitParams params = BucketInitParams::ForDefaultBucket(storage_key);
     params.name = "non-default bucket";
     quota_manager_->proxy()->UpdateOrCreateBucket(
-        params, base::SequencedTaskRunnerHandle::Get(),
+        params, base::SequencedTaskRunner::GetCurrentDefault(),
         custom_future.GetCallback());
     QuotaErrorOr<BucketInfo> custom_bucket = custom_future.Take();
-    CHECK(custom_bucket.ok());
+    CHECK(custom_bucket.has_value());
     return custom_bucket.value().ToBucketLocator();
   }
 
@@ -203,8 +208,7 @@ class SandboxFileSystemBackendTest
   }
 
   base::FilePath file_system_path() const {
-    return data_dir_.GetPath().Append(
-        SandboxFileSystemBackendDelegate::kFileSystemDirectory);
+    return data_dir_.GetPath().Append(ObfuscatedFileUtil::kFileSystemDirectory);
   }
 
   base::FilePath file_system_path_for_buckets() const {
@@ -262,16 +266,16 @@ TEST_P(SandboxFileSystemBackendTest, EnumerateOrigins) {
   size_t temporary_actual_size = 0;
   size_t persistent_actual_size = 0;
 
-  absl::optional<blink::StorageKey> current;
+  std::optional<blink::StorageKey> current;
   while ((current = enumerator->Next()).has_value()) {
     SCOPED_TRACE(testing::Message()
                  << "EnumerateOrigin " << current->origin().Serialize());
     if (enumerator->HasFileSystemType(kFileSystemTypeTemporary)) {
-      ASSERT_TRUE(temporary_set.find(current.value()) != temporary_set.end());
+      EXPECT_TRUE(base::Contains(temporary_set, current.value()));
       ++temporary_actual_size;
     }
     if (enumerator->HasFileSystemType(kFileSystemTypePersistent)) {
-      ASSERT_TRUE(persistent_set.find(current.value()) != persistent_set.end());
+      EXPECT_TRUE(base::Contains(persistent_set, current.value()));
       ++persistent_actual_size;
     }
   }

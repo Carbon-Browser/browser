@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include "chrome/browser/profiles/profile.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_observer.h"
 
 extern const char kGeneratedPasswordLeakDetectionPref[];
 
@@ -31,8 +31,7 @@ class GeneratedPasswordLeakDetectionPref
   // Generated Preference Interface.
   extensions::settings_private::SetPrefResult SetPref(
       const base::Value* value) override;
-  std::unique_ptr<extensions::api::settings_private::PrefObject> GetPrefObject()
-      const override;
+  extensions::api::settings_private::PrefObject GetPrefObject() const override;
 
   // Fired when preferences used to generate this preference are changed.
   void OnSourcePreferencesChanged();

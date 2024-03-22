@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -122,7 +122,7 @@ class WebPushEncryptionDraft03
     std::string record;
     record.reserve(sizeof(uint16_t) + plaintext.size());
     record.append(sizeof(uint16_t), '\x00');
-    record.append(plaintext.data(), plaintext.size());
+    record.append(plaintext);
     return record;
   }
 
@@ -233,7 +233,7 @@ class WebPushEncryptionDraft08
   std::string CreateRecord(const base::StringPiece& plaintext) override {
     std::string record;
     record.reserve(plaintext.size() + sizeof(uint8_t));
-    record.append(plaintext.data(), plaintext.size());
+    record.append(plaintext);
     record.append(sizeof(uint8_t), '\x02');
     return record;
   }
@@ -385,7 +385,7 @@ bool GCMMessageCryptographer::Decrypt(
     return false;
   }
 
-  plaintext->assign(decrypted_record.data(), decrypted_record.size());
+  *plaintext = decrypted_record;
   return true;
 }
 

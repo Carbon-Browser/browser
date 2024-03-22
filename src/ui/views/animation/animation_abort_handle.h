@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class VIEWS_EXPORT AnimationAbortHandle : public ui::LayerObserver {
 
   AnimationState animation_state() const { return animation_state_; }
 
-  raw_ptr<AnimationBuilder::Observer> observer_;
+  raw_ptr<AnimationBuilder::Observer, DanglingUntriaged> observer_;
   AnimationState animation_state_ = AnimationState::kNotStarted;
 
   // Stores the layers tracked by the animation abort handle.

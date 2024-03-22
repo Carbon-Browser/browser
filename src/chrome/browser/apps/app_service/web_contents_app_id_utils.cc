@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,17 +15,18 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
-#include "chrome/browser/web_applications/extensions/bookmark_app_util.h"
+#include "chrome/browser/web_applications/app_service/publisher_helper.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/app_update.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
@@ -78,7 +79,7 @@ absl::optional<std::string> GetInstanceAppIdForWebContents(
   Profile* profile = Profile::FromBrowserContext(tab->GetBrowserContext());
   // Note: It is possible to come here after a tab got removed from the browser
   // before it gets destroyed, in which case there is no browser.
-  Browser* browser = chrome::FindBrowserWithWebContents(tab);
+  Browser* browser = chrome::FindBrowserWithTab(tab);
 
   // Use the Browser's app name to determine the web app for app windows and use
   // the tab's url for app tabs.
@@ -91,14 +92,17 @@ absl::optional<std::string> GetInstanceAppIdForWebContents(
       }
     }
 
-    absl::optional<web_app::AppId> app_id =
-        provider->registrar().FindAppWithUrlInScope(tab->GetVisibleURL());
+    absl::optional<webapps::AppId> app_id =
+        provider->registrar_unsafe().FindAppWithUrlInScope(
+            tab->GetVisibleURL());
     if (app_id) {
       const web_app::WebApp* web_app =
-          provider->registrar().GetAppById(*app_id);
+          provider->registrar_unsafe().GetAppById(*app_id);
       DCHECK(web_app);
-      if (web_app->user_display_mode() == web_app::UserDisplayMode::kBrowser &&
-          !web_app->is_uninstalling()) {
+      if (web_app->user_display_mode() ==
+              web_app::mojom::UserDisplayMode::kBrowser &&
+          !web_app->is_uninstalling() &&
+          !web_app::IsAppServiceShortcut(web_app->app_id(), *provider)) {
         return app_id;
       }
     }
@@ -119,7 +123,7 @@ absl::optional<std::string> GetInstanceAppIdForWebContents(
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 std::string GetAppIdForWebContents(content::WebContents* web_contents) {
-  const web_app::AppId* app_id =
+  const webapps::AppId* app_id =
       web_app::WebAppTabHelper::GetAppId(web_contents);
   if (app_id)
     return *app_id;
@@ -151,7 +155,7 @@ void SetAppIdForWebContents(Profile* profile,
   } else {
     bool app_installed = IsAppReady(profile, app_id);
     web_app::WebAppTabHelper::FromWebContents(web_contents)
-        ->SetAppId(app_installed ? absl::optional<web_app::AppId>(app_id)
+        ->SetAppId(app_installed ? absl::optional<webapps::AppId>(app_id)
                                  : absl::nullopt);
     extensions::TabHelper::FromWebContents(web_contents)
         ->SetExtensionAppById(std::string());

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,7 @@ class ASH_EXPORT FingerprintAuthFactorModel : public AuthFactorModel {
   ~FingerprintAuthFactorModel() override;
 
   void SetFingerprintState(FingerprintState state);
+  void ResetUIState();
   void NotifyFingerprintAuthResult(bool result);
 
   // If |available| is false, forces |GetAuthFactorState()| to return
@@ -61,7 +62,7 @@ class ASH_EXPORT FingerprintAuthFactorModel : public AuthFactorModel {
   void UpdateIcon(AuthIconView* icon) override;
 
   FingerprintState state_;
-  absl::optional<bool> auth_result_;
+  std::optional<bool> auth_result_;
 
   // TODO(b/216691052): Change the name of this to be more clear that this is
   // an override on top of |state_|.

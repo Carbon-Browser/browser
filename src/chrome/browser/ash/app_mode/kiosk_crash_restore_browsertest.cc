@@ -1,30 +1,28 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <string>
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_switches.h"
 #include "base/base64.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/values.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_launch_error.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_apps_mixin.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_test_helpers.h"
 #include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
-#include "chrome/browser/ash/login/test/kiosk_apps_mixin.h"
-#include "chrome/browser/ash/login/test/kiosk_test_helpers.h"
 #include "chrome/browser/ash/login/test/local_state_mixin.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "components/ownership/mock_owner_key_util.h"
@@ -97,9 +95,10 @@ class KioskCrashRestoreTest : public MixinBasedInProcessBrowserTest,
     g_browser_process->local_state()->SetString(prefs::kDeviceSettingsCache,
                                                 encoded);
 
-    base::Value accounts(base::Value::Type::LIST);
+    base::Value::List accounts;
     accounts.Append(GetTestAppUserId());
-    g_browser_process->local_state()->Set("PublicAccounts", accounts);
+    g_browser_process->local_state()->SetList("PublicAccounts",
+                                              std::move(accounts));
   }
 
   policy::DevicePolicyBuilder device_policy_;

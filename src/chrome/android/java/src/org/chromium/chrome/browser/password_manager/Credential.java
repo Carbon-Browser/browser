@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@ package org.chromium.chrome.browser.password_manager;
 
 import android.graphics.drawable.Drawable;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
 /**
  * Credential type which is used to represent credential which will be shown in account chooser
@@ -29,8 +29,8 @@ public class Credential {
      * @param federation Identity provider name for this credential (empty for local credentials).
      * @param index position in array of credentials.
      */
-    public Credential(String username, String displayName, String originUrl, String federation,
-            int index) {
+    public Credential(
+            String username, String displayName, String originUrl, String federation, int index) {
         mUsername = username;
         mDisplayName = displayName;
         mOriginUrl = originUrl;

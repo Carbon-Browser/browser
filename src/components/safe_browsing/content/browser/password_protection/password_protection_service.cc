@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,12 @@ using content::WebContents;
 using password_manager::metrics_util::PasswordType;
 
 namespace safe_browsing {
+
+PasswordReuseInfo::PasswordReuseInfo() = default;
+
+PasswordReuseInfo::PasswordReuseInfo(const PasswordReuseInfo& other) = default;
+
+PasswordReuseInfo::~PasswordReuseInfo() = default;
 
 #if defined(ON_FOCUS_PING_ENABLED)
 void PasswordProtectionService::MaybeStartPasswordFieldOnFocusRequest(
@@ -113,15 +119,40 @@ void PasswordProtectionService::StartRequest(
         matching_reused_credentials,
     LoginReputationClientRequest::TriggerType trigger_type,
     bool password_field_exists) {
-  DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
   scoped_refptr<PasswordProtectionRequest> request(
       new PasswordProtectionRequestContent(
           web_contents, main_frame_url, password_form_action,
           password_form_frame_url, web_contents->GetContentsMimeType(),
           username, password_type, matching_reused_credentials, trigger_type,
           password_field_exists, this, GetRequestTimeoutInMS()));
-  request->Start();
+  StartRequestInternal(std::move(request));
+}
 
+void PasswordProtectionService::StartRequestForTesting(
+    WebContents* web_contents,
+    const GURL& main_frame_url,
+    const GURL& password_form_action,
+    const GURL& password_form_frame_url,
+    const std::string& username,
+    PasswordType password_type,
+    const std::vector<password_manager::MatchingReusedCredential>&
+        matching_reused_credentials,
+    LoginReputationClientRequest::TriggerType trigger_type,
+    bool password_field_exists) {
+  scoped_refptr<PasswordProtectionRequest> request =
+      PasswordProtectionRequestContent::CreateForTesting(
+          web_contents, main_frame_url, password_form_action,
+          password_form_frame_url, web_contents->GetContentsMimeType(),
+          username, password_type, matching_reused_credentials, trigger_type,
+          password_field_exists, this, GetRequestTimeoutInMS());
+
+  StartRequestInternal(std::move(request));
+}
+
+void PasswordProtectionService::StartRequestInternal(
+    scoped_refptr<PasswordProtectionRequest> request) {
+  DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
+  request->Start();
   pending_requests_.insert(std::move(request));
 }
 
@@ -165,14 +196,6 @@ PasswordProtectionService::MaybeCreateCommitDeferringCondition(
   }
   return nullptr;
 }
-
-#if BUILDFLAG(SAFE_BROWSING_AVAILABLE)
-void PasswordProtectionService::GetPhishingDetector(
-    service_manager::InterfaceProvider* provider,
-    mojo::Remote<mojom::PhishingDetector>* phishing_detector) {
-  provider->GetInterface(phishing_detector->BindNewPipeAndPassReceiver());
-}
-#endif
 
 void PasswordProtectionService::RemoveWarningRequestsByWebContents(
     content::WebContents* web_contents) {

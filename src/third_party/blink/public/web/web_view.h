@@ -33,6 +33,8 @@
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/dom_storage/session_storage_namespace_id.h"
+#include "third_party/blink/public/common/fenced_frame/redacted_fenced_frame_config.h"
+#include "third_party/blink/public/common/page/browsing_context_group_info.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
 #include "third_party/blink/public/mojom/fenced_frame/fenced_frame.mojom-shared.h"
@@ -61,9 +63,10 @@ class PointF;
 class Rect;
 class Size;
 class SizeF;
-}
+}  // namespace gfx
 
 namespace blink {
+struct ColorProviderColorMaps;
 class PageScheduler;
 class WebFrame;
 class WebFrameWidget;
@@ -79,11 +82,11 @@ class WebWidget;
 struct DeviceEmulationParams;
 struct WebWindowFeatures;
 
-class WebView {
+class BLINK_EXPORT WebView {
  public:
-  BLINK_EXPORT static const double kTextSizeMultiplierRatio;
-  BLINK_EXPORT static const double kMinTextSizeMultiplier;
-  BLINK_EXPORT static const double kMaxTextSizeMultiplier;
+  static const double kTextSizeMultiplierRatio;
+  static const double kMinTextSizeMultiplier;
+  static const double kMaxTextSizeMultiplier;
 
   enum StyleInjectionTarget {
     kInjectStyleInAllFrames,
@@ -96,6 +99,11 @@ class WebView {
   // call WebLocalFrame::CreateMainFrame() or WebRemoteFrame::CreateMainFrame()
   // as appropriate. It is legal to modify settings before completing
   // initialization.
+  //
+  // The WebView is kept alive as long as the `page_handle` mojo interface
+  // is alive. The WebView will be destroyed when that interface closes, if
+  // a client wishes to close the WebView synchronously it can call `Close`
+  // directly.
   //
   // clients may be null, but should both be null or not together.
   // |is_hidden| defines the initial visibility of the page.
@@ -122,12 +130,13 @@ class WebView {
   // frame. Set on create to avoid races. Passing in nullopt indicates the
   // default base background color should be used.
   // TODO(yuzus): Remove |is_hidden| and start using |PageVisibilityState|.
-  BLINK_EXPORT static WebView* Create(
+  static WebView* Create(
       WebViewClient*,
       bool is_hidden,
       bool is_prerendering,
       bool is_inside_portal,
-      absl::optional<blink::mojom::FencedFrameMode> fenced_frame_mode,
+      absl::optional<blink::FencedFrame::DeprecatedFencedFrameMode>
+          fenced_frame_mode,
       bool compositing_enabled,
       bool widgets_never_composited,
       WebView* opener,
@@ -135,9 +144,10 @@ class WebView {
           page_handle,
       scheduler::WebAgentGroupScheduler& agent_group_scheduler,
       const SessionStorageNamespaceId& session_storage_namespace_id,
-      absl::optional<SkColor> page_base_background_color);
+      absl::optional<SkColor> page_base_background_color,
+      const BrowsingContextGroupInfo& browsing_context_group_info);
 
-  // Destroys the WebView.
+  // Destroys the WebView synchronously.
   virtual void Close() = 0;
 
   // Called to inform WebViewImpl that a local main frame has been attached.
@@ -284,7 +294,9 @@ class WebView {
   // level.
   virtual void SetZoomFactorForDeviceScaleFactor(float) = 0;
 
-  virtual float ZoomFactorForDeviceScaleFactor() = 0;
+  // Gets the device scale zoom that will be factored into the viewport layout
+  // width.
+  virtual float ZoomFactorForViewportLayout() = 0;
 
   // Override the screen orientation override.
   virtual void SetScreenOrientationOverrideForTesting(
@@ -332,7 +344,7 @@ class WebView {
   // Popup menu ----------------------------------------------------------
 
   // Sets whether select popup menus should be rendered by the browser.
-  BLINK_EXPORT static void SetUseExternalPopupMenus(bool);
+  static void SetUseExternalPopupMenus(bool);
 
   // Cancels and hides the current popup (datetime, select...) if any.
   virtual void CancelPagePopup() = 0;
@@ -344,19 +356,24 @@ class WebView {
 
   // Tells all WebView instances to update the visited link state for the
   // specified hash.
-  BLINK_EXPORT static void UpdateVisitedLinkState(uint64_t hash);
+  static void UpdateVisitedLinkState(uint64_t hash);
 
   // Tells all WebView instances to update the visited state for all
   // their links. Use invalidateVisitedLinkHashes to inform that the visitedlink
   // table was changed and the salt was changed too. And all cached visitedlink
   // hashes need to be recalculated.
-  BLINK_EXPORT static void ResetVisitedLinkState(
-      bool invalidate_visited_link_hashes);
+  static void ResetVisitedLinkState(bool invalidate_visited_link_hashes);
 
   // Custom colors -------------------------------------------------------
 
   virtual void SetDeviceColorSpaceForTesting(
       const gfx::ColorSpace& color_space) = 0;
+
+  // Sets the initial color maps for this WebView. All frames in a WebView
+  // share the same color map; updates to the color map will be broadcast
+  // over the `UpdateColorProviders()` Mojo IPC.
+  virtual void SetColorProviders(
+      const ColorProviderColorMaps& color_provider_colors) = 0;
 
   // Scheduling -----------------------------------------------------------
 
@@ -396,7 +413,7 @@ class WebView {
   // third_party/blink/public/platform/autoplay.mojom
   virtual void AddAutoplayFlags(int32_t flags) = 0;
   virtual void ClearAutoplayFlags() = 0;
-  virtual int32_t AutoplayFlagsForTest() = 0;
+  virtual int32_t AutoplayFlagsForTest() const = 0;
   virtual gfx::Size GetPreferredSizeForTest() = 0;
 
   // Non-composited support -----------------------------------------------
@@ -435,9 +452,8 @@ class WebView {
   // Web preferences ---------------------------------------------------
 
   // Applies blink related preferences to this view.
-  BLINK_EXPORT static void ApplyWebPreferences(
-      const web_pref::WebPreferences& prefs,
-      WebView* web_view);
+  static void ApplyWebPreferences(const web_pref::WebPreferences& prefs,
+                                  WebView* web_view);
 
   virtual void SetWebPreferences(
       const web_pref::WebPreferences& preferences) = 0;
@@ -465,7 +481,12 @@ class WebView {
   // Misc -------------------------------------------------------------
 
   // Returns the number of live WebView instances in this process.
-  BLINK_EXPORT static size_t GetWebViewCount();
+  static size_t GetWebViewCount();
+
+  // Sets whether web or OS-level Attribution Reporting is supported. See
+  // https://github.com/WICG/attribution-reporting-api/blob/main/app_to_web.md
+  virtual void SetPageAttributionSupport(
+      network::mojom::AttributionSupport support) = 0;
 
  protected:
   ~WebView() = default;

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,12 +40,11 @@ class APIBindingPerfBrowserTest : public ExtensionBrowserTest {
   }
 
   base::TimeDelta RunTestAndReportTime() {
-    double time_elapsed_ms = 0;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractDouble(
-        browser()->tab_strip_model()->GetActiveWebContents(),
-        "runTest(time => window.domAutomationController.send(time))",
-        &time_elapsed_ms));
-    return base::Milliseconds(time_elapsed_ms);
+    return base::Milliseconds(
+        content::EvalJs(
+            browser()->tab_strip_model()->GetActiveWebContents(),
+            "new Promise(resolve => runTest(time => resolve(time)))")
+            .ExtractDouble());
   }
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,13 +16,11 @@ CastAudioManagerHelper::CastAudioManagerHelper(
     ::media::AudioManagerBase* audio_manager,
     Delegate* delegate,
     base::RepeatingCallback<CmaBackendFactory*()> backend_factory_getter,
-    scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
-    external_service_support::ExternalConnector* connector)
+    scoped_refptr<base::SingleThreadTaskRunner> media_task_runner)
     : audio_manager_(audio_manager),
       delegate_(delegate),
       backend_factory_getter_(std::move(backend_factory_getter)),
-      media_task_runner_(std::move(media_task_runner)),
-      audio_thread_connector_(connector->Clone()) {
+      media_task_runner_(std::move(media_task_runner)) {
   DCHECK(audio_manager_);
   DCHECK(delegate_);
   DCHECK(backend_factory_getter_);
@@ -47,11 +45,6 @@ bool CastAudioManagerHelper::IsAudioOnlySession(const std::string& session_id) {
 
 bool CastAudioManagerHelper::IsGroup(const std::string& session_id) {
   return delegate_->IsGroup(session_id);
-}
-
-external_service_support::ExternalConnector*
-CastAudioManagerHelper::GetConnector() {
-  return audio_thread_connector_.get();
 }
 
 }  // namespace media

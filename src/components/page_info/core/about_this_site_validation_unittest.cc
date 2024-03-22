@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,14 +41,6 @@ proto::MoreAbout GetSampleMoreAbout() {
   return more_about;
 }
 
-proto::BannerInfo GetBannerInfo() {
-  proto::BannerInfo banner_info;
-  banner_info.set_title("Title");
-  banner_info.set_label("Example description");
-  *banner_info.mutable_url() = GetSampleSource();
-  return banner_info;
-}
-
 proto::AboutThisSiteMetadata GetSampleMetaData() {
   proto::AboutThisSiteMetadata metadata;
   auto* site_info = metadata.mutable_site_info();
@@ -68,30 +60,17 @@ TEST(AboutThisSiteValidation, ValidateProtos) {
   EXPECT_EQ(ValidateMetadata(metadata), AboutThisSiteStatus::kValid);
 }
 
-// Tests that correct proto messages are accepted.
-TEST(AboutThisSiteValidation, ValidateBanner) {
-  auto banner = GetBannerInfo();
-  EXPECT_EQ(ValidateBannerInfo(banner), AboutThisSiteStatus::kValid);
-
-  // The proto should still be valid without a title.
-  banner.clear_title();
-  EXPECT_EQ(ValidateBannerInfo(banner), AboutThisSiteStatus::kValid);
-}
-
 TEST(AboutThisSiteValidation, InvalidSiteInfoProto) {
   proto::AboutThisSiteMetadata metadata;
   EXPECT_EQ(ValidateMetadata(metadata), AboutThisSiteStatus::kMissingSiteInfo);
   metadata.mutable_site_info();
   EXPECT_EQ(ValidateMetadata(metadata), AboutThisSiteStatus::kEmptySiteInfo);
-  metadata = GetSampleMetaData();
-  metadata.mutable_site_info()->clear_description();
-  EXPECT_EQ(ValidateMetadata(metadata),
-            AboutThisSiteStatus::kMissingDescription);
 }
 
 TEST(AboutThisSiteValidation, InvalidDescription) {
   proto::SiteDescription description = GetSampleDescription();
   description.clear_description();
+
   EXPECT_EQ(ValidateDescription(description),
             AboutThisSiteStatus::kMissingDescriptionDescription);
 
@@ -109,6 +88,13 @@ TEST(AboutThisSiteValidation, InvalidDescription) {
   description.clear_source();
   EXPECT_EQ(ValidateDescription(description),
             AboutThisSiteStatus::kMissingDescriptionSource);
+}
+
+TEST(AboutThisSiteValidation, OnlyMoreAbout) {
+  proto::SiteInfo site_info;
+  *site_info.mutable_more_about() = GetSampleMoreAbout();
+
+  EXPECT_EQ(ValidateSiteInfo(site_info), AboutThisSiteStatus::kValid);
 }
 
 TEST(AboutThisSiteValidation, InvalidSource) {
@@ -152,18 +138,7 @@ TEST(AboutThisSiteValidation, InvalidMoreAbout) {
             AboutThisSiteStatus::kInvalidMoreAbout);
 }
 
-TEST(AboutThisSiteValidation, MissingMoreAbout_FeatureEDisabled) {
-  proto::AboutThisSiteMetadata meta_data = GetSampleMetaData();
-  EXPECT_EQ(ValidateMetadata(meta_data), AboutThisSiteStatus::kValid);
-
-  meta_data.mutable_site_info()->clear_more_about();
-  EXPECT_EQ(ValidateMetadata(meta_data), AboutThisSiteStatus::kValid);
-}
-
-TEST(AboutThisSiteValidation, MissingMoreAbout_FeatureEnabled) {
-  base::test::ScopedFeatureList features;
-  features.InitAndEnableFeature(kPageInfoAboutThisSiteMoreInfo);
-
+TEST(AboutThisSiteValidation, MissingMoreAbout) {
   proto::AboutThisSiteMetadata meta_data = GetSampleMetaData();
   EXPECT_EQ(ValidateMetadata(meta_data), AboutThisSiteStatus::kValid);
 

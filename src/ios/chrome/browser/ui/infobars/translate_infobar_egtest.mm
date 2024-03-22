@@ -1,44 +1,41 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <XCTest/XCTest.h>
 
-#include <memory>
-#include <string>
+#import <memory>
+#import <string>
 
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/translate/core/browser/translate_pref_names.h"
-#include "components/translate/core/common/translate_constants.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#import "ios/chrome/browser/translate/translate_app_interface.h"
+#import "components/translate/core/browser/translate_pref_names.h"
+#import "components/translate/core/common/translate_constants.h"
+#import "components/translate/core/common/translate_util.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/translate/model/translate_app_interface.h"
 #import "ios/chrome/browser/ui/badges/badge_constants.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_constants.h"
 #import "ios/chrome/browser/ui/infobars/infobar_constants.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_constants.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_translate_modal_constants.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_constants.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
-#include "ios/components/webui/web_ui_url_constants.h"
+#import "ios/components/webui/web_ui_url_constants.h"
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ios/web/public/test/http_server/data_response_provider.h"
+#import "ios/web/public/test/http_server/data_response_provider.h"
 #import "ios/web/public/test/http_server/http_server.h"
-#include "ios/web/public/test/http_server/http_server_util.h"
-#include "net/base/url_util.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/test/http_server/http_server_util.h"
+#import "net/base/url_util.h"
+#import "ui/base/l10n/l10n_util_mac.h"
+#import "url/gurl.h"
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForUIElementTimeout;
@@ -105,10 +102,10 @@ const char kFrenchPageWithLinkPath[] = "/frenchpagewithlink/";
 const char kFrenchPageNoTranslateContent[] = "/frenchpagenotranslatecontent/";
 const char kFrenchPageNoTranslateValue[] = "/frenchpagenotranslatevalue/";
 const char kTranslateScriptPath[] = "/translatescript/";
-const char kTranslateScript[] = "Fake Translate Script";
+const char kTranslateScript[] = "Fake_Translate_Script";
 
 // Body text for /languagepath/.
-const char kLanguagePathText[] = "Some text here.";
+const char kLanguagePathText[] = "123456";
 
 // Builds a HTML document with a French text and the given `html` and `meta`
 // tags.
@@ -177,10 +174,10 @@ void TestResponseProvider::GetResponseHeadersAndBody(
     return;
   } else if (url.path() == kLinkPath) {
     // Link to a page with "Content Language" headers.
-    GURL url = web::test::HttpServer::MakeUrl(kSomeLanguageUrl);
+    GURL some_language_url = web::test::HttpServer::MakeUrl(kSomeLanguageUrl);
     *response_body = base::StringPrintf(
         "<html><body><a href='%s' id='click'>Click</a></body></html>",
-        url.spec().c_str());
+        some_language_url.spec().c_str());
     return;
   } else if (url.path() == kFrenchPagePath) {
     *response_body = GetFrenchPageHtml(kHtmlAttribute, "");
@@ -334,7 +331,8 @@ void TestResponseProvider::GetLanguageResponse(
 }
 
 // Tests that history.pushState triggers a new detection.
-- (void)testLanguageDetectionWithPushState {
+// TODO(crbug.com/1442963): This test is flaky.
+- (void)FLAKY_testLanguageDetectionWithPushState {
   const GURL URL = web::test::HttpServer::MakeUrl(
       "http://scenarioLanguageDetectionPushState");
   std::map<GURL, std::string> responses;
@@ -399,8 +397,7 @@ void TestResponseProvider::GetLanguageResponse(
 }
 
 // Tests that language in http content is detected.
-// TODO(crbug.com/1328970): Re-enable when translate works in HTTP
-- (void)DISABLED_testLanguageDetectionHttpContentLanguage {
+- (void)testLanguageDetectionHttpContentLanguage {
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));
@@ -437,8 +434,7 @@ void TestResponseProvider::GetLanguageResponse(
 }
 
 // Tests that language in http content is detected when navigating to a link.
-// TODO(crbug.com/1328970): Re-enable when translate works in HTTP
-- (void)DISABLED_testLanguageDetectionHttpContentLanguageBehindLink {
+- (void)testLanguageDetectionHttpContentLanguageBehindLink {
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));
@@ -480,14 +476,15 @@ void TestResponseProvider::GetLanguageResponse(
   [self assertContentLanguage:@"" htmlRootLanguage:@"fr" adoptedLanguage:@"fr"];
 }
 
-// Tests that language detection is not performed when translate is disabled.
+// Tests that language detection is performed but no infobar is triggered when
+// translate is disabled.
 - (void)testLanguageDetectionDisabled {
-  const GURL URL = web::test::HttpServer::MakeUrl(
-      "http://scenarioLanguageDetectionDisabled");
-  std::map<GURL, std::string> responses;
-  // A page with some text.
-  responses[URL] = "<html><body>Hello world!</body></html>";
-  web::test::SetUpSimpleHttpServer(responses);
+  std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
+  web::test::SetUpHttpServer(std::move(provider));
+
+  // Load a page with French text.
+  GURL URL = web::test::HttpServer::MakeUrl(
+      base::StringPrintf("http://%s", kFrenchPagePath));
 
   // Disable translate.
   [ChromeEarlGreyAppInterface
@@ -497,9 +494,14 @@ void TestResponseProvider::GetLanguageResponse(
 
   // Open some webpage.
   [ChromeEarlGrey loadURL:URL];
-  // Check that no language has been detected.
-  GREYAssertFalse([self waitForLanguageDetection],
-                  @"A language has been detected");
+  // Wait to be sure language detection has time to happen and benner to appear.
+  base::test::ios::SpinRunLoopWithMaxDelay(base::Seconds(2));
+
+  // Check that language has been detected.
+  GREYAssert([self waitForLanguageDetection], @"Language not detected");
+  // Check Banner was not presented.
+  GREYAssertFalse([self isBeforeTranslateBannerVisible],
+                  @"Before Translate banner was found");
 
   // Enable translate.
   [ChromeEarlGreyAppInterface
@@ -632,8 +634,7 @@ void TestResponseProvider::GetLanguageResponse(
 
 // Test that the Show Original banner dismisses with a longer delay since it is
 // a high priority banner.
-// TODO(crbug.com/1316562): Re-enable the test.
-- (void)DISABLED_testInfobarAcceptedBannerDismissWithHighPriorityDelay {
+- (void)testInfobarAcceptedBannerDismissWithHighPriorityDelay {
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));
@@ -656,12 +657,13 @@ void TestResponseProvider::GetLanguageResponse(
 
   // Wait for banner to dismiss.
   BOOL showOriginalBannerDismiss = WaitUntilConditionOrTimeout(
-      kInfobarBannerLongPresentationDurationInSeconds + 1.0, ^{
+      kInfobarBannerLongPresentationDuration + base::Seconds(1), ^{
         NSError* error = nil;
         [[EarlGrey
             selectElementWithMatcher:
                 grey_allOf(
-                    grey_accessibilityID(kInfobarBannerViewIdentifier),
+                    grey_accessibilityID(
+                        kInfobarBannerLabelsStackViewIdentifier),
                     grey_accessibilityLabel(l10n_util::GetNSString(
                         IDS_IOS_TRANSLATE_INFOBAR_AFTER_TRANSLATE_BANNER_TITLE)),
                     nil)] assertWithMatcher:grey_nil() error:&error];
@@ -728,7 +730,7 @@ void TestResponseProvider::GetLanguageResponse(
 // Tests that the target language can be changed. TODO(crbug.com/1046629):
 // implement test for changing source language.
 // TODO(crbug.com/1116012): This test is failing flaky on iOS14.
-- (void)DISABLED_testInfobarChangeTargetLanguage {
+- (void)testInfobarChangeTargetLanguage {
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));
@@ -963,12 +965,6 @@ void TestResponseProvider::GetLanguageResponse(
 // translate is available and it brings up the Translate infobar and translates
 // the page when tapped.
 - (void)testTranslateManualTrigger {
-// TODO(crbug.com/1209349): test failing on ipad device
-#if !TARGET_IPHONE_SIMULATOR
-  if ([ChromeEarlGrey isIPadIdiom]) {
-    EARL_GREY_TEST_SKIPPED(@"This test doesn't pass on iPad device.");
-  }
-#endif
   // Start the HTTP server.
   std::unique_ptr<web::DataResponseProvider> provider(new TestResponseProvider);
   web::test::SetUpHttpServer(std::move(provider));
@@ -1032,7 +1028,9 @@ void TestResponseProvider::GetLanguageResponse(
                      kTranslateInfobarModalTranslateTargetLanguageItemAXId)]
       performAction:grey_tap()];
   // Select "Dutch" from the table view.
-  [[[EarlGrey selectElementWithMatcher:grey_accessibilityLabel(@"Dutch")]
+  [[[EarlGrey
+      selectElementWithMatcher:grey_allOf(grey_accessibilityLabel(@"Dutch"),
+                                          grey_sufficientlyVisible(), nil)]
          usingSearchAction:grey_scrollInDirection(kGREYDirectionDown, 300)
       onElementWithMatcher:grey_accessibilityID(
                                kTranslateInfobarLanguageSelectionTableViewAXId)]
@@ -1082,7 +1080,7 @@ void TestResponseProvider::GetLanguageResponse(
     [[EarlGrey
         selectElementWithMatcher:
             grey_allOf(
-                grey_accessibilityID(kInfobarBannerViewIdentifier),
+                grey_accessibilityID(kInfobarBannerLabelsStackViewIdentifier),
                 grey_accessibilityLabel(l10n_util::GetNSString(
                     IDS_IOS_TRANSLATE_INFOBAR_BEFORE_TRANSLATE_BANNER_TITLE)),
                 nil)] assertWithMatcher:grey_notNil() error:&error];
@@ -1099,7 +1097,8 @@ void TestResponseProvider::GetLanguageResponse(
         [[EarlGrey
             selectElementWithMatcher:
                 grey_allOf(
-                    grey_accessibilityID(kInfobarBannerViewIdentifier),
+                    grey_accessibilityID(
+                        kInfobarBannerLabelsStackViewIdentifier),
                     grey_accessibilityLabel(l10n_util::GetNSString(
                         IDS_IOS_TRANSLATE_INFOBAR_AFTER_TRANSLATE_BANNER_TITLE)),
                     nil)] assertWithMatcher:grey_notNil() error:&error];

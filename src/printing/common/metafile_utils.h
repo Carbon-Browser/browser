@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/unguessable_token.h"
 #include "third_party/skia/include/core/SkDocument.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
@@ -36,9 +36,16 @@ using PictureSerializationContext = ContentToProxyTokenMap;
 // Stores the set of typeface unique ids used by the picture frame content.
 using TypefaceSerializationContext = ContentProxySet;
 
-sk_sp<SkDocument> MakePdfDocument(base::StringPiece creator,
-                                  const ui::AXTreeUpdate& accessibility_tree,
-                                  SkWStream* stream);
+enum class GeneratePdfDocumentOutline : bool {
+  kNone = false,
+  kFromHeaders = true,
+};
+
+sk_sp<SkDocument> MakePdfDocument(
+    base::StringPiece creator,
+    const ui::AXTreeUpdate& accessibility_tree,
+    GeneratePdfDocumentOutline generate_document_outline,
+    SkWStream* stream);
 
 SkSerialProcs SerializationProcs(PictureSerializationContext* picture_ctx,
                                  TypefaceSerializationContext* typeface_ctx);

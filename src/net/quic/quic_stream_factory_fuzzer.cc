@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,11 @@
 
 #include <fuzzer/FuzzedDataProvider.h>
 
-#include "base/cxx17_backports.h"
-#include "net/base/network_isolation_key.h"
+#include <algorithm>
+
+#include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/test_completion_callback.h"
 #include "net/cert/ct_policy_enforcer.h"
 #include "net/cert/do_nothing_ct_verifier.h"
@@ -15,11 +18,13 @@
 #include "net/cert/x509_certificate.h"
 #include "net/dns/context_host_resolver.h"
 #include "net/dns/fuzzed_host_resolver_util.h"
+#include "net/dns/host_resolver_system_task.h"
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/http/http_server_properties.h"
 #include "net/http/transport_security_state.h"
 #include "net/quic/mock_crypto_client_stream_factory.h"
 #include "net/quic/mock_quic_context.h"
+#include "net/quic/quic_context.h"
 #include "net/quic/quic_http_stream.h"
 #include "net/quic/test_task_runner.h"
 #include "net/socket/fuzzed_datagram_client_socket.h"
@@ -53,9 +58,14 @@ const char kMethod[] = "GET";
 const size_t kBufferSize = 4096;
 const int kCertVerifyFlags = 0;
 
-// Static initialization for persistent factory data
-struct Env {
-  Env() : scheme_host_port(url::kHttpsScheme, kServerHostName, kServerPort) {
+// Persistent factory data, statically initialized on the first time
+// LLVMFuzzerTestOneInput is called.
+struct FuzzerEnvironment {
+  FuzzerEnvironment()
+      : scheme_host_port(url::kHttpsScheme, kServerHostName, kServerPort) {
+    net::SetSystemDnsResolutionTaskRunnerForTesting(  // IN-TEST
+        base::SequencedTaskRunner::GetCurrentDefault());
+
     quic_context.AdvanceTime(quic::QuicTime::Delta::FromSeconds(1));
     ssl_config_service = std::make_unique<SSLConfigServiceDefaults>();
     crypto_client_stream_factory.set_use_mock_crypter(true);
@@ -65,6 +75,7 @@ struct Env {
     CHECK(verify_details.cert_verify_result.verified_cert);
     verify_details.cert_verify_result.is_issued_by_known_root = true;
   }
+  ~FuzzerEnvironment() = default;
 
   std::unique_ptr<SSLConfigService> ssl_config_service;
   ProofVerifyDetailsChromium verify_details;
@@ -79,10 +90,15 @@ struct Env {
   MockQuicContext quic_context;
 };
 
-static struct Env* env = new Env();
+FuzzerEnvironment* GetFuzzerEnvironment() {
+  static base::NoDestructor<FuzzerEnvironment> fuzzer_environment;
+  return &*fuzzer_environment;
+}
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   FuzzedDataProvider data_provider(data, size);
+
+  FuzzerEnvironment* env = GetFuzzerEnvironment();
 
   std::unique_ptr<ContextHostResolver> host_resolver =
       CreateFuzzedContextHostResolver(HostResolver::ManagerOptions(), nullptr,
@@ -99,9 +115,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   params.close_sessions_on_ip_change = data_provider.ConsumeBool();
   params.allow_server_migration = data_provider.ConsumeBool();
   params.estimate_initial_rtt = data_provider.ConsumeBool();
-  params.headers_include_h2_stream_dependency = data_provider.ConsumeBool();
   params.enable_socket_recv_optimization = data_provider.ConsumeBool();
-  params.race_stale_dns_on_connection = data_provider.ConsumeBool();
 
   env->crypto_client_stream_factory.AddProofVerifyDetails(&env->verify_details);
 
@@ -136,7 +150,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   QuicStreamRequest request(factory.get());
   TestCompletionCallback callback;
   NetErrorDetails net_error_details;
-  quic::ParsedQuicVersionVector versions = quic::AllSupportedVersions();
+  quic::ParsedQuicVersionVector versions = AllSupportedQuicVersions();
   quic::ParsedQuicVersion version =
       versions[data_provider.ConsumeIntegralInRange<size_t>(
           0, versions.size() - 1)];
@@ -145,7 +159,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 
   request.Request(
       env->scheme_host_port, version, PRIVACY_MODE_DISABLED, DEFAULT_PRIORITY,
-      SocketTag(), NetworkIsolationKey(), SecureDnsPolicy::kAllow,
+      SocketTag(), NetworkAnonymizationKey(), SecureDnsPolicy::kAllow,
       true /* use_dns_aliases */, false /* require_dns_https_alpn */,
       kCertVerifyFlags, GURL(kUrl), env->net_log, &net_error_details,
       /*failed_on_default_network_callback=*/CompletionOnceCallback(),
@@ -182,8 +196,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   }
   callback.WaitForResult();
 
-  scoped_refptr<net::IOBuffer> buffer =
-      base::MakeRefCounted<net::IOBuffer>(kBufferSize);
+  auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
   rv = stream->ReadResponseBody(buffer.get(), kBufferSize, callback.callback());
   if (rv == ERR_IO_PENDING)
     callback.WaitForResult();

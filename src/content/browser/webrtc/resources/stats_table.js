@@ -1,10 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.m.js';
+import {$} from 'chrome://resources/js/util.js';
 
 import {GetSsrcFromReport, SsrcInfoManager} from './ssrc_info_manager.js';
+import {generateStatsLabel} from './stats_helper.js';
 
 /**
  * Maintains the stats table.
@@ -32,42 +33,11 @@ export class StatsTable {
    *     the value.
    */
   addStatsReport(peerConnectionElement, report) {
-    if (report.type === 'codec') {
-      return;
-    }
     const statsTable = this.ensureStatsTable_(peerConnectionElement, report);
 
-    if (['outbound-rtp', 'inbound-rtp'].includes(report.type)
-        && report.stats.values) {
-      let summary = report.id + ' (' + report.type;
-      // Show mid, rid and codec for inbound-rtp and outbound-rtp.
-      // Note: values is an array [key1, val1, key2, val2, ...] so searching
-      // for a certain key needs to ensure it does not collide with a value.
-      const midIndex = report.stats.values.findIndex((value, index) => {
-        return value === 'mid' && index % 2 === 0;
-      });
-      if (midIndex !== -1) {
-        const midInfo = report.stats.values[midIndex + 1];
-        summary += ', mid=' + midInfo;
-      }
-      const ridIndex = report.stats.values.findIndex((value, index) => {
-        return value === 'rid' && index % 2 === 0;
-      });
-      if (ridIndex !== -1) {
-        const ridInfo = report.stats.values[ridIndex + 1];
-        summary += ', rid=' + ridInfo;
-      }
-
-      const codecIndex = report.stats.values.findIndex((value, index) => {
-        return value === '[codec]' && index % 2 === 0;
-      });
-      if (codecIndex !== -1) {
-        const codecInfo = report.stats.values[codecIndex + 1].split(' ')[0];
-        summary += ', ' + codecInfo;
-      }
-      // Update the summary.
-      statsTable.parentElement.firstElementChild.innerText = summary + ')';
-    }
+    // Update the label since information may have changed.
+    statsTable.parentElement.firstElementChild.innerText =
+        generateStatsLabel(report);
 
     if (report.stats) {
       this.addStatsToTable_(
@@ -77,7 +47,10 @@ export class StatsTable {
 
   clearStatsLists(peerConnectionElement) {
     const containerId = peerConnectionElement.id + '-table-container';
-    const container = $(containerId);
+    // Disable getElementById restriction here, since |containerId| is not
+    // always a valid selector.
+    // eslint-disable-next-line no-restricted-properties
+    const container = document.getElementById(containerId);
     if (container) {
       peerConnectionElement.removeChild(container);
       this.ensureStatsTableContainer_(peerConnectionElement);
@@ -94,7 +67,10 @@ export class StatsTable {
    */
   ensureStatsTableContainer_(peerConnectionElement) {
     const containerId = peerConnectionElement.id + '-table-container';
-    let container = $(containerId);
+    // Disable getElementById restriction here, since |containerId| is not
+    // always a valid selector.
+    // eslint-disable-next-line no-restricted-properties
+    let container = document.getElementById(containerId);
     if (!container) {
       container = document.createElement('div');
       container.id = containerId;
@@ -102,6 +78,14 @@ export class StatsTable {
       const head = document.createElement('div');
       head.textContent = 'Stats Tables';
       container.appendChild(head);
+      const label = document.createElement('label');
+      label.innerText = 'Filter statistics by type including ';
+      container.appendChild(label);
+      const input = document.createElement('input');
+      input.placeholder = 'separate multiple values by `,`';
+      input.size = 25;
+      input.oninput = (e) => this.filterStats(e, container);
+      container.appendChild(input);
       peerConnectionElement.appendChild(container);
     }
     return container;
@@ -121,14 +105,18 @@ export class StatsTable {
    */
   ensureStatsTable_(peerConnectionElement, report) {
     const tableId = peerConnectionElement.id + '-table-' + report.id;
-    let table = $(tableId);
+    // Disable getElementById restriction here, since |tableId| is not
+    // always a valid selector.
+    // eslint-disable-next-line no-restricted-properties
+    let table = document.getElementById(tableId);
     if (!table) {
       const container = this.ensureStatsTableContainer_(peerConnectionElement);
       const details = document.createElement('details');
+      details.attributes['data-statsType'] = report.type;
       container.appendChild(details);
 
       const summary = document.createElement('summary');
-      summary.textContent = report.id + ' (' + report.type + ')';
+      summary.textContent = generateStatsLabel(report);
       details.appendChild(summary);
 
       table = document.createElement('table');
@@ -138,6 +126,8 @@ export class StatsTable {
 
       table.appendChild($('trth-template').content.cloneNode(true));
       table.rows[0].cells[0].textContent = 'Statistics ' + report.id;
+
+      // Only for legacy stats.
       if (report.type === 'ssrc') {
         table.insertRow(1);
         table.rows[1].appendChild(
@@ -158,6 +148,31 @@ export class StatsTable {
    * @private
    */
   addStatsToTable_(statsTable, time, statsData) {
+    const definedMetrics = new Set();
+    for (let i = 0; i < statsData.length - 1; i = i + 2) {
+      definedMetrics.add(statsData[i]);
+    }
+    // For any previously reported metric that is no longer defined, replace its
+    // now obsolete value with the magic string "(removed)".
+    const metricsContainer = statsTable.firstChild;
+    for (let i = 0; i < metricsContainer.children.length; ++i) {
+      const metricElement = metricsContainer.children[i];
+      // `metricElement` IDs have the format `bla-bla-bla-bla-${metricName}`.
+      let metricName =
+          metricElement.id.substring(metricElement.id.lastIndexOf('-') + 1);
+      if (metricName.endsWith(']')) {
+        // Computed metrics may contain the '-' character (e.g.
+        // `DifferenceCalculator` based metrics) in which case `metricName` will
+        // not have been parsed correctly. Instead look for starting '['.
+        metricName =
+            metricElement.id.substring(metricElement.id.indexOf('['));
+      }
+      if (metricName && metricName != 'timestamp' &&
+          !definedMetrics.has(metricName)) {
+        this.updateStatsTableRow_(statsTable, metricName, '(removed)');
+      }
+    }
+    // Add or update all "metric: value" that have a defined value.
     const date = new Date(time);
     this.updateStatsTableRow_(statsTable, 'timestamp', date.toLocaleString());
     for (let i = 0; i < statsData.length - 1; i = i + 2) {
@@ -176,7 +191,10 @@ export class StatsTable {
    */
   updateStatsTableRow_(statsTable, rowName, value) {
     const trId = statsTable.id + '-' + rowName;
-    let trElement = $(trId);
+    // Disable getElementById restriction here, since |trId| is not always
+    // a valid selector.
+    // eslint-disable-next-line no-restricted-properties
+    let trElement = document.getElementById(trId);
     const activeConnectionClass = 'stats-table-active-connection';
     if (!trElement) {
       trElement = document.createElement('tr');
@@ -196,5 +214,28 @@ export class StatsTable {
         statsTable.parentElement.classList.remove(activeConnectionClass);
       }
     }
+  }
+
+  /**
+   * Apply a filter to the stats table
+   * @param event InputEvent from the filter input field.
+   * @param container stats table container element.
+   * @private
+   */
+  filterStats(event, container) {
+    const filter = event.target.value;
+    const filters = filter.split(',');
+    container.childNodes.forEach(node => {
+      if (node.nodeName !== 'DETAILS') {
+        return;
+      }
+      const statsType = node.attributes['data-statsType'];
+      if (!filter || filters.includes(statsType) ||
+          filters.find(f => statsType.includes(f))) {
+        node.style.display = 'block';
+      } else {
+        node.style.display = 'none';
+      }
+    });
   }
 }

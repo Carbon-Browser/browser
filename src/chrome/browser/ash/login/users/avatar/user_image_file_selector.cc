@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,8 +47,9 @@ UserImageFileSelector::UserImageFileSelector(content::WebUI* web_ui)
     : web_ui_(web_ui) {}
 
 UserImageFileSelector::~UserImageFileSelector() {
-  if (select_file_dialog_.get())
+  if (select_file_dialog_.get()) {
     select_file_dialog_->ListenerDestroyed();
+  }
 }
 
 void UserImageFileSelector::SelectFile(
@@ -67,22 +68,21 @@ void UserImageFileSelector::SelectFile(
       std::make_unique<ChromeSelectFilePolicy>(web_ui_->GetWebContents()));
 
   base::FilePath downloads_path;
-  if (!base::PathService::Get(chrome::DIR_DEFAULT_DOWNLOADS, &downloads_path))
+  if (!base::PathService::Get(chrome::DIR_DEFAULT_DOWNLOADS, &downloads_path)) {
     return;
+  }
 
   ui::SelectFileDialog::FileTypeInfo file_type_info(GetUserImageFileTypeInfo());
 
   select_file_dialog_->SelectFile(
       ui::SelectFileDialog::SELECT_OPEN_FILE,
       l10n_util::GetStringUTF16(IDS_DOWNLOAD_TITLE), downloads_path,
-      &file_type_info, 0, FILE_PATH_LITERAL(""), GetBrowserWindow(), NULL);
+      &file_type_info, 0, FILE_PATH_LITERAL(""), GetBrowserWindow(), nullptr);
 }
 
 gfx::NativeWindow UserImageFileSelector::GetBrowserWindow() {
-  Browser* browser =
-      chrome::FindBrowserWithWebContents(web_ui_->GetWebContents());
-  return browser ? browser->window()->GetNativeWindow()
-                 : gfx::kNullNativeWindow;
+  Browser* browser = chrome::FindBrowserWithTab(web_ui_->GetWebContents());
+  return browser ? browser->window()->GetNativeWindow() : gfx::NativeWindow();
 }
 
 void UserImageFileSelector::FileSelected(const base::FilePath& path,
@@ -93,8 +93,9 @@ void UserImageFileSelector::FileSelected(const base::FilePath& path,
 }
 
 void UserImageFileSelector::FileSelectionCanceled(void* params) {
-  if (!canceled_cb_.is_null())
+  if (!canceled_cb_.is_null()) {
     std::move(canceled_cb_).Run();
+  }
 
   select_file_dialog_.reset();
 }

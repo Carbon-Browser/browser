@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,24 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
+#include "skia/ext/font_utils.h"
 #include "skia/ext/legacy_display_globals.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/effects/SkGradientShader.h"
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLBackendSurface.h"
+#include "third_party/skia/include/gpu/ganesh/gl/GrGLDirectContext.h"
 #include "third_party/skia/include/gpu/gl/GrGLAssembleInterface.h"
 #include "third_party/skia/include/gpu/gl/GrGLInterface.h"
+#include "third_party/skia/include/gpu/gl/GrGLTypes.h"
+#include "third_party/skia/include/private/chromium/GrDeferredDisplayList.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gl/gl_bindings.h"
@@ -75,7 +81,7 @@ bool SkiaGlRenderer::Initialize() {
   // TODO(csmartdalton): enable internal multisampling after the related Skia
   // rolls are in.
   options.fInternalMultisampleCount = 0;
-  gr_context_ = GrDirectContext::MakeGL(std::move(native_interface), options);
+  gr_context_ = GrDirectContexts::MakeGL(std::move(native_interface), options);
   DCHECK(gr_context_);
 
   PostRenderFrameTask(gfx::SwapCompletionResult(gfx::SwapResult::SWAP_ACK));
@@ -92,17 +98,17 @@ void SkiaGlRenderer::RenderFrame() {
     GrGLFramebufferInfo framebuffer_info;
     framebuffer_info.fFBOID = 0;
     framebuffer_info.fFormat = GL_RGBA8;
-    GrBackendRenderTarget render_target(size_.width(), size_.height(), 0, 8,
-                                        framebuffer_info);
+    auto render_target = GrBackendRenderTargets::MakeGL(
+        size_.width(), size_.height(), 0, 8, framebuffer_info);
 
-    sk_surface_ = SkSurface::MakeFromBackendRenderTarget(
+    sk_surface_ = SkSurfaces::WrapBackendRenderTarget(
         gr_context_.get(), render_target, kBottomLeft_GrSurfaceOrigin,
         kRGBA_8888_SkColorType, nullptr, &surface_props);
   }
 
   if (use_ddl_) {
     StartDDLRenderThreadIfNecessary(sk_surface_.get());
-    sk_surface_->draw(GetDDL());
+    skgpu::ganesh::DrawDDL(sk_surface_, GetDDL());
   } else {
     Draw(sk_surface_->getCanvas(), NextFraction());
   }
@@ -114,11 +120,13 @@ void SkiaGlRenderer::RenderFrame() {
         base::BindOnce(&SkiaGlRenderer::PostRenderFrameTask,
                        weak_ptr_factory_.GetWeakPtr()),
         base::BindOnce(&SkiaGlRenderer::OnPresentation,
-                       weak_ptr_factory_.GetWeakPtr()));
+                       weak_ptr_factory_.GetWeakPtr()),
+        gfx::FrameData());
   } else {
-    PostRenderFrameTask(
-        gfx::SwapCompletionResult(gl_surface_->SwapBuffers(base::BindOnce(
-            &SkiaGlRenderer::OnPresentation, weak_ptr_factory_.GetWeakPtr()))));
+    PostRenderFrameTask(gfx::SwapCompletionResult(
+        gl_surface_->SwapBuffers(base::BindOnce(&SkiaGlRenderer::OnPresentation,
+                                                weak_ptr_factory_.GetWeakPtr()),
+                                 gfx::FrameData())));
   }
 }
 
@@ -126,7 +134,7 @@ void SkiaGlRenderer::PostRenderFrameTask(gfx::SwapCompletionResult result) {
   if (!result.release_fence.is_null())
     gfx::GpuFence(std::move(result.release_fence)).Wait();
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SkiaGlRenderer::RenderFrame,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
@@ -160,7 +168,7 @@ void SkiaGlRenderer::Draw(SkCanvas* canvas, float fraction) {
   // Draw a message with a nice black paint
   paint.setColor(SK_ColorBLACK);
 
-  SkFont font;
+  SkFont font = skia::DefaultFont();
   font.setSize(32);
   font.setSubpixel(true);
 
@@ -201,7 +209,7 @@ void SkiaGlRenderer::StopDDLRenderThread() {
     return;
   {
     base::AutoLock auto_lock_(lock_);
-    surface_charaterization_ = SkSurfaceCharacterization();
+    surface_charaterization_ = GrSurfaceCharacterization();
     condition_variable_.Signal();
   }
   ddl_render_thread_->Join();
@@ -210,7 +218,7 @@ void SkiaGlRenderer::StopDDLRenderThread() {
     ddls_.pop();
 }
 
-sk_sp<SkDeferredDisplayList> SkiaGlRenderer::GetDDL() {
+sk_sp<GrDeferredDisplayList> SkiaGlRenderer::GetDDL() {
   base::AutoLock auto_lock_(lock_);
   DCHECK(surface_charaterization_.isValid());
   // Wait until DDL is generated by DDL render thread.
@@ -233,8 +241,8 @@ void SkiaGlRenderer::Run() {
     if (!surface_charaterization_.isValid())
       break;
     DCHECK_LT(ddls_.size(), kMaxPendingDDLS);
-    SkDeferredDisplayListRecorder recorder(surface_charaterization_);
-    sk_sp<SkDeferredDisplayList> ddl;
+    GrDeferredDisplayListRecorder recorder(surface_charaterization_);
+    sk_sp<GrDeferredDisplayList> ddl;
     {
       base::AutoUnlock auto_unlock(lock_);
       Draw(recorder.getCanvas(), NextFraction());

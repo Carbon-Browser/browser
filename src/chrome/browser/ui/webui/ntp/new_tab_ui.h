@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,7 +71,7 @@ class NewTabUI : public content::WebUIController {
 
    private:
     // Pointer back to the original profile.
-    raw_ptr<Profile> profile_;
+    raw_ptr<Profile, FlakyDanglingUntriaged> profile_;
   };
 
   void OnShowBookmarkBarChanged();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,32 +8,31 @@
 #include <memory>
 #include <utility>
 
+#include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
-#include "content/public/browser/browser_xr_runtime.h"
-#include "device/vr/public/mojom/vr_service.mojom-shared.h"
-
-#if BUILDFLAG(IS_ANDROID)
-#include "base/android/android_hardware_buffer_compat.h"
-#endif
-
-#include "base/callback_helpers.h"
-#include "base/containers/contains.h"
-#include "base/cxx17_backports.h"
-#include "build/build_config.h"
 #include "content/browser/xr/service/vr_service_impl.h"
 #include "content/browser/xr/xr_utils.h"
+#include "content/public/browser/browser_xr_runtime.h"
 #include "content/public/browser/xr_install_helper.h"
 #include "content/public/browser/xr_integration_client.h"
 #include "content/public/common/content_features.h"
 #include "device/vr/buildflags/buildflags.h"
 #include "device/vr/public/cpp/session_mode.h"
+#include "device/vr/public/mojom/vr_service.mojom-shared.h"
+#include "device/vr/public/mojom/xr_device.mojom-shared.h"
+#include "device/vr/public/mojom/xr_session.mojom-shared.h"
+#include "ui/gfx/geometry/decomposed_transform.h"
 #include "ui/gfx/geometry/transform.h"
-#include "ui/gfx/geometry/transform_util.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/windows_types.h"
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/android_hardware_buffer_compat.h"
 #endif
 
 namespace content {
@@ -42,12 +41,12 @@ bool IsValidTransform(const gfx::Transform& transform) {
   if (!transform.IsInvertible() || transform.HasPerspective())
     return false;
 
-  gfx::DecomposedTransform decomp;
-  if (!DecomposeTransform(&decomp, transform))
+  absl::optional<gfx::DecomposedTransform> decomp = transform.Decompose();
+  if (!decomp)
     return false;
 
   float kEpsilon = 0.1f;
-  if (abs(decomp.perspective[3] - 1) > kEpsilon) {
+  if (abs(decomp->perspective[3] - 1) > kEpsilon) {
     // If testing with unexpectedly high values, catch on debug builds rather
     // than silently change data.  On release builds its better to be safe and
     // validate.
@@ -55,11 +54,11 @@ bool IsValidTransform(const gfx::Transform& transform) {
     return false;
   }
   for (int i = 0; i < 3; ++i) {
-    if (abs(decomp.scale[i] - 1) > kEpsilon)
+    if (abs(decomp->scale[i] - 1) > kEpsilon)
       return false;
-    if (abs(decomp.skew[i]) > kEpsilon)
+    if (abs(decomp->skew[i]) > kEpsilon)
       return false;
-    if (abs(decomp.perspective[i]) > kEpsilon)
+    if (abs(decomp->perspective[i]) > kEpsilon)
       return false;
   }
 
@@ -114,10 +113,10 @@ device::mojom::XRViewPtr ValidateXRView(const device::mojom::XRView* view) {
   DCHECK_GT(view->viewport.width() + view->viewport.x(), kMinSize);
   DCHECK_GT(view->viewport.height() + view->viewport.y(), kMinSize);
   ret->viewport =
-      gfx::Rect(base::clamp(view->viewport.x(), 0, kMaxSize),
-                base::clamp(view->viewport.y(), 0, kMaxSize),
-                base::clamp(view->viewport.width(), kMinSize, kMaxSize),
-                base::clamp(view->viewport.height(), kMinSize, kMaxSize));
+      gfx::Rect(std::clamp(view->viewport.x(), 0, kMaxSize),
+                std::clamp(view->viewport.y(), 0, kMaxSize),
+                std::clamp(view->viewport.width(), kMinSize, kMaxSize),
+                std::clamp(view->viewport.height(), kMinSize, kMaxSize));
   return ret;
 }
 
@@ -189,11 +188,18 @@ bool BrowserXRRuntimeImpl::SupportsAllFeatures(
 
 bool BrowserXRRuntimeImpl::SupportsCustomIPD() const {
   switch (id_) {
-    case device::mojom::XRDeviceId::ARCORE_DEVICE_ID:
     case device::mojom::XRDeviceId::WEB_TEST_DEVICE_ID:
     case device::mojom::XRDeviceId::FAKE_DEVICE_ID:
     case device::mojom::XRDeviceId::ORIENTATION_DEVICE_ID:
+#if BUILDFLAG(ENABLE_ARCORE)
+    case device::mojom::XRDeviceId::ARCORE_DEVICE_ID:
+#endif  // ENABLE_ARCORE
+#if BUILDFLAG(ENABLE_GVR_SERVICES)
     case device::mojom::XRDeviceId::GVR_DEVICE_ID:
+#endif  // ENABLE_GVR_SERVICES
+#if BUILDFLAG(ENABLE_CARDBOARD)
+    case device::mojom::XRDeviceId::CARDBOARD_DEVICE_ID:
+#endif  // ENABLE_CARDBOARD
       return false;
 #if BUILDFLAG(ENABLE_OPENXR)
     case device::mojom::XRDeviceId::OPENXR_DEVICE_ID:
@@ -206,16 +212,25 @@ bool BrowserXRRuntimeImpl::SupportsCustomIPD() const {
 
 bool BrowserXRRuntimeImpl::SupportsNonEmulatedHeight() const {
   switch (id_) {
-    case device::mojom::XRDeviceId::ARCORE_DEVICE_ID:
     case device::mojom::XRDeviceId::WEB_TEST_DEVICE_ID:
     case device::mojom::XRDeviceId::FAKE_DEVICE_ID:
     case device::mojom::XRDeviceId::ORIENTATION_DEVICE_ID:
+#if BUILDFLAG(ENABLE_ARCORE)
+    case device::mojom::XRDeviceId::ARCORE_DEVICE_ID:
+#endif  // ENABLE_ARCORE
       return false;
+#if BUILDFLAG(ENABLE_GVR_SERVICES)
     case device::mojom::XRDeviceId::GVR_DEVICE_ID:
+      return true;
+#endif  // ENABLE_GVR_SERVICES
+#if BUILDFLAG(ENABLE_CARDBOARD)
+    case device::mojom::XRDeviceId::CARDBOARD_DEVICE_ID:
+      return true;
+#endif  // ENABLE_CARDBOARD
 #if BUILDFLAG(ENABLE_OPENXR)
     case device::mojom::XRDeviceId::OPENXR_DEVICE_ID:
-#endif
       return true;
+#endif  // ENABLE_OPENXR
   }
 
   NOTREACHED();
@@ -321,6 +336,7 @@ void BrowserXRRuntimeImpl::RequestImmersiveSession(
   DVLOG(2) << __func__ << ": id=" << id_;
   // base::Unretained is safe because we won't be called back after runtime_ is
   // destroyed.
+  has_pending_immersive_session_request_ = true;
   runtime_->RequestSession(
       options->Clone(),
       base::BindOnce(&BrowserXRRuntimeImpl::OnRequestSessionResult,
@@ -333,6 +349,7 @@ void BrowserXRRuntimeImpl::OnRequestSessionResult(
     device::mojom::XRRuntimeSessionOptionsPtr options,
     RequestSessionCallback callback,
     device::mojom::XRRuntimeSessionResultPtr session_result) {
+  has_pending_immersive_session_request_ = false;
   if (session_result && service) {
     DVLOG(2) << __func__ << ": id=" << id_;
     if (device::XRSessionModeUtils::IsImmersive(options->mode)) {
@@ -438,6 +455,11 @@ void BrowserXRRuntimeImpl::BeforeRuntimeRemoved() {
   // Since this no-ops if we don't have an active immersive session, try to end
   // any immersive session we may be currently responsible for.
   StopImmersiveSession(base::DoNothing());
+}
+
+std::vector<device::mojom::XRSessionFeature>
+BrowserXRRuntimeImpl::GetSupportedFeatures() {
+  return device_data_->supported_features;
 }
 
 #if BUILDFLAG(IS_WIN)

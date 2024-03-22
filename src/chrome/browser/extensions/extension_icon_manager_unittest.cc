@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,10 +21,9 @@
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/common/extension.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/display/display_list.h"
 #include "ui/display/display_switches.h"
-#include "ui/display/test/scoped_screen_override.h"
 #include "ui/display/test/test_screen.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/gfx/geometry/skia_conversions.h"
@@ -45,8 +44,7 @@ class ScopedSetDeviceScaleFactor {
         switches::kForceDeviceScaleFactor, base::StringPrintf("%3.2f", scale));
     // This has to be inited after fiddling with the command line.
     test_screen_ = std::make_unique<display::test::TestScreen>();
-    screen_override_ = std::make_unique<display::test::ScopedScreenOverride>(
-        test_screen_.get());
+    display::Screen::SetScreenInstance(test_screen_.get());
   }
 
   ScopedSetDeviceScaleFactor(const ScopedSetDeviceScaleFactor&) = delete;
@@ -54,12 +52,12 @@ class ScopedSetDeviceScaleFactor {
       delete;
 
   ~ScopedSetDeviceScaleFactor() {
+    display::Screen::SetScreenInstance(nullptr);
     display::Display::ResetForceDeviceScaleFactorForTesting();
   }
 
  private:
   std::unique_ptr<display::test::TestScreen> test_screen_;
-  std::unique_ptr<display::test::ScopedScreenOverride> screen_override_;
   base::test::ScopedCommandLine command_line_;
 };
 
@@ -121,14 +119,15 @@ TEST_F(ExtensionIconManagerTest, LoadRemoveLoad) {
       "extensions/image_loading_tracker/app.json");
 
   JSONFileValueDeserializer deserializer(manifest_path);
-  std::unique_ptr<base::DictionaryValue> manifest =
-      base::DictionaryValue::From(deserializer.Deserialize(NULL, NULL));
-  ASSERT_TRUE(manifest.get() != NULL);
+  std::unique_ptr<base::Value> manifest =
+      deserializer.Deserialize(nullptr, nullptr);
+  ASSERT_TRUE(manifest.get());
+  ASSERT_TRUE(manifest->is_dict());
 
   std::string error;
   scoped_refptr<Extension> extension(Extension::Create(
       manifest_path.DirName(), mojom::ManifestLocation::kInvalidLocation,
-      *manifest, Extension::NO_FLAGS, &error));
+      manifest->GetDict(), Extension::NO_FLAGS, &error));
   ASSERT_TRUE(extension.get());
   ExtensionIconManager icon_manager;
   icon_manager.set_observer(this);
@@ -164,14 +163,15 @@ TEST_F(ExtensionIconManagerTest, LoadComponentExtensionResource) {
       "extensions/file_manager/app.json");
 
   JSONFileValueDeserializer deserializer(manifest_path);
-  std::unique_ptr<base::DictionaryValue> manifest =
-      base::DictionaryValue::From(deserializer.Deserialize(NULL, NULL));
-  ASSERT_TRUE(manifest.get() != NULL);
+  std::unique_ptr<base::Value> manifest =
+      deserializer.Deserialize(nullptr, nullptr);
+  ASSERT_TRUE(manifest.get());
+  ASSERT_TRUE(manifest->is_dict());
 
   std::string error;
   scoped_refptr<Extension> extension(Extension::Create(
       manifest_path.DirName(), mojom::ManifestLocation::kComponent,
-      *manifest.get(), Extension::NO_FLAGS, &error));
+      manifest->GetDict(), Extension::NO_FLAGS, &error));
   ASSERT_TRUE(extension.get());
 
   ExtensionIconManager icon_manager;
@@ -208,14 +208,15 @@ TEST_F(ExtensionIconManagerTest, ScaleFactors) {
       test_dir.AppendASCII("extensions/context_menus/icons/manifest.json");
 
   JSONFileValueDeserializer deserializer(manifest_path);
-  std::unique_ptr<base::DictionaryValue> manifest =
-      base::DictionaryValue::From(deserializer.Deserialize(nullptr, nullptr));
-  ASSERT_TRUE(manifest);
+  std::unique_ptr<base::Value> manifest =
+      deserializer.Deserialize(nullptr, nullptr);
+  ASSERT_TRUE(manifest.get());
+  ASSERT_TRUE(manifest->is_dict());
 
   std::string error;
   scoped_refptr<Extension> extension(Extension::Create(
       manifest_path.DirName(), mojom::ManifestLocation::kInvalidLocation,
-      *manifest, Extension::NO_FLAGS, &error));
+      manifest->GetDict(), Extension::NO_FLAGS, &error));
   ASSERT_TRUE(extension);
 
   constexpr int kMaxIconSizeInManifest = 32;
@@ -275,10 +276,11 @@ TEST_F(ExtensionIconManagerTest, ScaleFactors) {
       const bool has_representation = image_skia.HasRepresentation(scale);
       // We shouldn't have a representation if the extension didn't provide a
       // big enough icon.
-      if (gfx::kFaviconSize * scale > kMaxIconSizeInManifest)
+      if (gfx::kFaviconSize * scale > kMaxIconSizeInManifest) {
         EXPECT_FALSE(has_representation);
-      else
-        EXPECT_EQ(ui::IsSupportedScale(scale), has_representation);
+      } else {
+        EXPECT_EQ(ui::IsScaleFactorSupported(scale_factor), has_representation);
+      }
     }
   }
 

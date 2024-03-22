@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,16 +33,13 @@ public class JsonLogger {
             mBaseJsonObject.put("global_tags", new JSONArray());
             mBaseJsonObject.put("all_tests", new JSONArray());
             mBaseJsonObject.put("disabled_tests", new JSONArray());
-            mBaseJsonObject.put("per_iteration_data",
-                                new JSONArray().put(mBaseTestInfoJsonObject));
+            mBaseJsonObject.put("per_iteration_data", new JSONArray().put(mBaseTestInfoJsonObject));
         } catch (JSONException e) {
             System.err.println("Unable to create json output.");
         }
     }
 
-    /**
-     *  Add the results of a test run to the json output.
-     */
+    /** Add the results of a test run to the json output. */
     public void addTestResultInfo(Description test, boolean passed, long elapsedTimeMillis) {
         JSONObject testInfoJsonObject = new JSONObject();
 
@@ -63,23 +60,10 @@ public class JsonLogger {
         }
     }
 
-    /**
-     *  Writes the json output to a file.
-     */
-    public void writeJsonToFile() {
-        try {
-            PrintStream stream = new PrintStream(new FileOutputStream(mOutputFile));
-            try {
-                stream.print(mBaseJsonObject);
-            } finally {
-                try {
-                    stream.close();
-                } catch (RuntimeException e) {
-                    System.err.println("Unable to close output file: " + mOutputFile.getPath());
-                }
-            }
-        } catch (FileNotFoundException e) {
-            System.err.println("File not found: " + mOutputFile.getPath());
+    /** Writes the json output to a file. */
+    public void writeJsonToFile() throws FileNotFoundException {
+        try (PrintStream stream = new PrintStream(new FileOutputStream(mOutputFile))) {
+            stream.print(mBaseJsonObject);
         }
     }
 

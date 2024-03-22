@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/features.h"
 #include "net/base/net_errors.h"
 #include "net/disk_cache/disk_cache_test_util.h"
@@ -329,7 +328,7 @@ MockDiskEntry::~MockDiskEntry() = default;
 void MockDiskEntry::CallbackLater(base::OnceClosure callback) {
   if (ignore_callbacks_)
     return StoreAndDeliverCallbacks(true, this, std::move(callback));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MockDiskEntry::RunCallback, this, std::move(callback)));
 }
@@ -618,7 +617,8 @@ void MockDiskCache::ReleaseAll() {
 }
 
 void MockDiskCache::CallbackLater(base::OnceClosure callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(callback));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(callback));
 }
 
 bool MockDiskCache::IsDiskEntryDoomed(const std::string& key) {
@@ -698,7 +698,7 @@ bool MockHttpCache::ReadResponseInfo(disk_cache::Entry* disk_entry,
   int size = disk_entry->GetDataSize(0);
 
   TestCompletionCallback cb;
-  scoped_refptr<IOBuffer> buffer = base::MakeRefCounted<IOBuffer>(size);
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(size);
   int rv = disk_entry->ReadData(0, 0, buffer.get(), size, cb.callback());
   rv = cb.GetResult(rv);
   EXPECT_EQ(size, rv);
@@ -716,9 +716,9 @@ bool MockHttpCache::WriteResponseInfo(disk_cache::Entry* disk_entry,
       &pickle, skip_transient_headers, response_truncated);
 
   TestCompletionCallback cb;
-  scoped_refptr<WrappedIOBuffer> data = base::MakeRefCounted<WrappedIOBuffer>(
-      reinterpret_cast<const char*>(pickle.data()));
   int len = static_cast<int>(pickle.size());
+  scoped_refptr<WrappedIOBuffer> data = base::MakeRefCounted<WrappedIOBuffer>(
+      reinterpret_cast<const char*>(pickle.data()), len);
 
   int rv = disk_entry->WriteData(0, 0, data.get(), len, cb.callback(), true);
   rv = cb.GetResult(rv);

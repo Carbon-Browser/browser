@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include <string>
-
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/debug/crash_logging.h"
 
 namespace extensions {
 
@@ -55,9 +55,22 @@ struct PortContext {
   bool is_for_service_worker() const { return worker.has_value(); }
   bool is_for_native_host() const { return !frame && !worker; }
 
-  absl::optional<FrameContext> frame;
-  absl::optional<WorkerContext> worker;
+  std::optional<FrameContext> frame;
+  std::optional<WorkerContext> worker;
 };
+
+namespace debug {
+
+class ScopedPortContextCrashKeys {
+ public:
+  explicit ScopedPortContextCrashKeys(const PortContext& port_context);
+  ~ScopedPortContextCrashKeys();
+
+ private:
+  std::optional<base::debug::ScopedCrashKeyString> extension_id_;
+};
+
+}  // namespace debug
 
 }  // namespace extensions
 

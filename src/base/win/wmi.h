@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,9 @@
 #include <wbemidl.h>
 #include <wrl/client.h>
 
+#include <string_view>
+
 #include "base/base_export.h"
-#include "base/strings/string_piece.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
@@ -67,6 +68,16 @@ BASE_EXPORT bool CreateLocalWmiConnection(
     bool set_blanket,
     Microsoft::WRL::ComPtr<IWbemServices>* wmi_services);
 
+// Creates an instance of the WMI service connected to the resource and
+// returns its COM interface. If |set_blanket| is set to true, the basic COM
+// security blanket is applied to the returned interface. This is almost
+// always desirable unless you set the parameter to false and apply a custom
+// COM security blanket.
+// Returns a valid ComPtr<IWbemServices> on success, nullptr on failure.
+BASE_EXPORT Microsoft::WRL::ComPtr<IWbemServices> CreateWmiConnection(
+    bool set_blanket,
+    const std::wstring& resource);
+
 // Creates a WMI method using from a WMI class named |class_name| that
 // contains a method named |method_name|. Only WMI classes that are CIM
 // classes can be created using this function.
@@ -74,8 +85,8 @@ BASE_EXPORT bool CreateLocalWmiConnection(
 // WMI method that you can fill with parameter values using SetParameter.
 BASE_EXPORT bool CreateWmiClassMethodObject(
     IWbemServices* wmi_services,
-    WStringPiece class_name,
-    WStringPiece method_name,
+    std::wstring_view class_name,
+    std::wstring_view method_name,
     Microsoft::WRL::ComPtr<IWbemClassObject>* class_instance);
 
 // Creates a new process from |command_line|. The advantage over CreateProcess

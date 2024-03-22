@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,11 @@
 #include <utility>
 #include <vector>
 
+#include "base/feature_list.h"
 #include "chrome/browser/favicon/favicon_utils.h"
-#include "chrome/browser/ui/tab_ui_helper.h"
-#include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_keyed_service.h"
-#include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_model.h"
-#include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_service_factory.h"
 #include "chrome/browser/ui/tabs/tab_group_controller.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/tab_groups/tab_group_id.h"
 #include "components/tab_groups/tab_group_visual_data.h"
@@ -54,14 +52,12 @@ std::u16string TabGroup::GetContentString() const {
   gfx::Range tabs_in_group = ListTabs();
   DCHECK_GT(tabs_in_group.length(), 0u);
 
-  TabUIHelper* const tab_ui_helper = TabUIHelper::FromWebContents(
-      controller_->GetWebContentsAt(tabs_in_group.start()));
   constexpr size_t kContextMenuTabTitleMaxLength = 30;
   std::u16string format_string = l10n_util::GetPluralStringFUTF16(
       IDS_TAB_CXMENU_PLACEHOLDER_GROUP_TITLE, tabs_in_group.length() - 1);
   std::u16string short_title;
-  gfx::ElideString(tab_ui_helper->GetTitle(), kContextMenuTabTitleMaxLength,
-                   &short_title);
+  gfx::ElideString(controller_->GetTitleAt(tabs_in_group.start()),
+                   kContextMenuTabTitleMaxLength, &short_title);
   return base::ReplaceStringPlaceholders(format_string, {short_title}, nullptr);
 }
 
@@ -90,10 +86,6 @@ bool TabGroup::IsEmpty() const {
 
 bool TabGroup::IsCustomized() const {
   return is_customized_;
-}
-
-bool TabGroup::IsSaved() const {
-  return is_saved_;
 }
 
 absl::optional<int> TabGroup::GetFirstTab() const {
@@ -131,33 +123,4 @@ gfx::Range TabGroup::ListTabs() const {
   }
 
   return gfx::Range(first_tab, last_tab + 1);
-}
-
-void TabGroup::SaveGroup() {
-  is_saved_ = true;
-
-  std::vector<SavedTabGroupTab> urls;
-  const gfx::Range tab_range = ListTabs();
-  for (auto i = tab_range.start(); i < tab_range.end(); ++i) {
-    content::WebContents* web_contents = controller_->GetWebContentsAt(i);
-    const GURL& url = web_contents->GetVisibleURL();
-    const std::u16string& tab_title = web_contents->GetTitle();
-    const gfx::Image& favicon =
-        favicon::TabFaviconFromWebContents(web_contents);
-    urls.emplace_back(SavedTabGroupTab(url, tab_title, favicon));
-  }
-
-  SavedTabGroupKeyedService* backend =
-      SavedTabGroupServiceFactory::GetForProfile(controller_->GetProfile());
-  SavedTabGroup saved_tab_group(visual_data_->title(), visual_data_->color(),
-                                urls, absl::nullopt, id_);
-  backend->model()->Add(saved_tab_group);
-}
-
-void TabGroup::UnsaveGroup() {
-  is_saved_ = false;
-
-  SavedTabGroupKeyedService* backend =
-      SavedTabGroupServiceFactory::GetForProfile(controller_->GetProfile());
-  backend->model()->Remove(id_);
 }

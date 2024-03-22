@@ -1,10 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Note we can only import from 'receiver.js': other modules are rolled-up into
 // it, and already loaded.
 import {TEST_ONLY} from './receiver.js';
+
+/**
+ * @typedef {{
+ *     name: string,
+ *     message: string,
+ *     stack: string,
+ * }}
+ */
+let GenericErrorResponse;
+
 const {
   RenameResult,
   DELEGATE,

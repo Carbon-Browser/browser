@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,15 @@ StyleSVGResource::StyleSVGResource(SVGResource* resource,
 StyleSVGResource::~StyleSVGResource() = default;
 
 void StyleSVGResource::AddClient(SVGResourceClient& client) {
-  if (resource_)
+  if (resource_) {
     resource_->AddClient(client);
+  }
 }
 
 void StyleSVGResource::RemoveClient(SVGResourceClient& client) {
-  if (resource_)
+  if (resource_) {
     resource_->RemoveClient(client);
+  }
 }
 
 }  // namespace blink

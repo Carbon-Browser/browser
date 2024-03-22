@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include "third_party/blink/renderer/core/animation/css_color_interpolation_type.h"
 #include "third_party/blink/renderer/core/animation/element_animations.h"
 #include "third_party/blink/renderer/core/css/css_color.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
-#include "third_party/blink/renderer/core/layout/layout_object.h"
 
 namespace blink {
 
@@ -23,12 +23,12 @@ BoxShadowPaintDefinition::BoxShadowPaintDefinition(LocalFrame& local_root)
           &local_root,
           PaintWorkletInput::PaintWorkletInputType::kClipPath) {}
 
-sk_sp<PaintRecord> BoxShadowPaintDefinition::Paint(
+PaintRecord BoxShadowPaintDefinition::Paint(
     const CompositorPaintWorkletInput* compositor_input,
     const CompositorPaintWorkletJob::AnimatedPropertyValues&
         animated_property_values) {
   // TODO(crbug.com/1258126): implement me.
-  return nullptr;
+  return PaintRecord();
 }
 
 scoped_refptr<Image> BoxShadowPaintDefinition::Paint() {

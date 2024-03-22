@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define BASE_STRINGS_ABSEIL_STRING_NUMBER_CONVERSIONS_H_
 
 #include "base/base_export.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "third_party/abseil-cpp/absl/numeric/int128.h"
 
 namespace base {

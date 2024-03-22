@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@ package org.chromium.components.signin.base;
 
 import androidx.annotation.NonNull;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
 /**
  * Represents the id of an account, which can be either a Gaia ID or email depending on the
@@ -16,9 +16,7 @@ import org.chromium.base.annotations.CalledByNative;
 public class CoreAccountId {
     private final String mId;
 
-    /**
-     * Constructs a new CoreAccountId from a String representation of the account ID.
-     */
+    /** Constructs a new CoreAccountId from a String representation of the account ID. */
     @CalledByNative
     public CoreAccountId(@NonNull String id) {
         assert id != null;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,11 +18,8 @@ namespace autofill {
 
 // Interface for credit card-specific keyboard accessory controller between the
 // ManualFillingController and Autofill backend logic.
-class CreditCardAccessoryController
-    : public base::SupportsWeakPtr<CreditCardAccessoryController>,
-      public AccessoryController,
-      public PersonalDataManagerObserver,
-      public CreditCardAccessManager::Accessor {
+class CreditCardAccessoryController : public AccessoryController,
+                                      public PersonalDataManagerObserver {
  public:
   CreditCardAccessoryController() = default;
   ~CreditCardAccessoryController() override = default;
@@ -49,6 +46,9 @@ class CreditCardAccessoryController
 
   // Fetches suggestions and propagates to the frontend.
   virtual void RefreshSuggestions() = 0;
+
+  // Get a WeakPtr to the instance.
+  virtual base::WeakPtr<CreditCardAccessoryController> AsWeakPtr() = 0;
 };
 
 }  // namespace autofill

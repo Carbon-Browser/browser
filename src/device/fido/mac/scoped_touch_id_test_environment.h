@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@
 #include "base/component_export.h"
 #include "device/fido/mac/authenticator_config.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 
 class FakeTouchIdContext;
 class ScopedFakeKeychain;
@@ -50,6 +48,9 @@ class COMPONENT_EXPORT(DEVICE_FIDO) ScopedTouchIdTestEnvironment {
   // instantiation of the test environment is true.
   bool SetTouchIdAvailable(bool available);
 
+  // Will prevent the next call to PromptTouchId from running the callback.
+  void DoNotResolveNextPrompt();
+
  private:
   static std::unique_ptr<TouchIdContext> ForwardCreate();
   static bool ForwardTouchIdAvailable(AuthenticatorConfig);
@@ -68,8 +69,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) ScopedTouchIdTestEnvironment {
   bool touch_id_available_ = true;
 };
 
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac
 
 #endif  // DEVICE_FIDO_MAC_SCOPED_TOUCH_ID_TEST_ENVIRONMENT_H_

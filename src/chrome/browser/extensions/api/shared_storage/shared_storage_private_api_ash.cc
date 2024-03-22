@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,20 +31,21 @@ SharedStoragePrivateGetFunction::~SharedStoragePrivateGetFunction() = default;
 ExtensionFunction::ResponseAction SharedStoragePrivateGetFunction::Run() {
   PrefService* prefs =
       Profile::FromBrowserContext(browser_context())->GetPrefs();
-  return RespondNow(OneArgument(prefs->Get(prefs::kSharedStorage)->Clone()));
+  return RespondNow(
+      WithArguments(prefs->GetValue(prefs::kSharedStorage).Clone()));
 }
 
 SharedStoragePrivateSetFunction::SharedStoragePrivateSetFunction() = default;
 SharedStoragePrivateSetFunction::~SharedStoragePrivateSetFunction() = default;
 
 ExtensionFunction::ResponseAction SharedStoragePrivateSetFunction::Run() {
-  std::unique_ptr<shared_api::Set::Params> params =
+  absl::optional<shared_api::Set::Params> params =
       shared_api::Set::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   PrefService* prefs =
       Profile::FromBrowserContext(browser_context())->GetPrefs();
-  DictionaryPrefUpdate update(prefs, prefs::kSharedStorage);
-  update.Get()->MergeDictionary(&params->items.additional_properties);
+  ScopedDictPrefUpdate update(prefs, prefs::kSharedStorage);
+  update->Merge(std::move(params->items.additional_properties));
   return RespondNow(NoArguments());
 }
 
@@ -54,15 +55,15 @@ SharedStoragePrivateRemoveFunction::~SharedStoragePrivateRemoveFunction() =
     default;
 
 ExtensionFunction::ResponseAction SharedStoragePrivateRemoveFunction::Run() {
-  std::unique_ptr<shared_api::Remove::Params> params =
+  absl::optional<shared_api::Remove::Params> params =
       shared_api::Remove::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   PrefService* prefs =
       Profile::FromBrowserContext(browser_context())->GetPrefs();
-  DictionaryPrefUpdate update(prefs, prefs::kSharedStorage);
-  base::Value* items = update.Get();
+  ScopedDictPrefUpdate update(prefs, prefs::kSharedStorage);
+  base::Value::Dict& items = update.Get();
   for (const auto& key : params->keys) {
-    items->RemoveKey(key);
+    items.Remove(key);
   }
   return RespondNow(NoArguments());
 }

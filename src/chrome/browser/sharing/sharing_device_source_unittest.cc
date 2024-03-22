@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sharing/sharing_device_source.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/test/bind.h"
 #include "chrome/browser/sharing/mock_sharing_device_source.h"
 #include "components/sync_device_info/device_info.h"

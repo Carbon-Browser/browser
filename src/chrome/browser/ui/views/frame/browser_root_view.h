@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,6 +82,7 @@ class BrowserRootView : public views::internal::RootView {
   DropCallback GetDropCallback(const ui::DropTargetEvent& event) override;
   bool OnMouseWheel(const ui::MouseWheelEvent& event) override;
   void OnMouseExited(const ui::MouseEvent& event) override;
+  gfx::Size CalculatePreferredSize() const override;
 
  protected:
   // views::View:
@@ -95,7 +96,7 @@ class BrowserRootView : public views::internal::RootView {
     DropInfo();
     ~DropInfo();
 
-    raw_ptr<DropTarget> target = nullptr;
+    raw_ptr<DropTarget, DanglingUntriaged> target = nullptr;
 
     // Where to drop the url.
     absl::optional<DropIndex> index;
@@ -107,9 +108,6 @@ class BrowserRootView : public views::internal::RootView {
     // TODO(sangwoo108) Try removing this memeber.
     bool file_supported = true;
   };
-
-  // ui::EventProcessor:
-  void OnEventProcessingStarted(ui::Event* event) override;
 
   // Converts the event from the hosts coordinate system to the view's
   // coordinate system.
@@ -131,12 +129,14 @@ class BrowserRootView : public views::internal::RootView {
   bool GetPasteAndGoURL(const ui::OSExchangeData& data, GURL* url);
 
   // Navigates to the dropped URL.
-  void NavigateToDropUrl(std::unique_ptr<DropInfo> drop_info,
-                         const ui::DropTargetEvent& event,
-                         ui::mojom::DragOperation& output_drag_op);
+  void NavigateToDropUrl(
+      std::unique_ptr<DropInfo> drop_info,
+      const ui::DropTargetEvent& event,
+      ui::mojom::DragOperation& output_drag_op,
+      std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner);
 
   // The BrowserView.
-  raw_ptr<BrowserView> browser_view_ = nullptr;
+  raw_ptr<BrowserView, AcrossTasksDanglingUntriaged> browser_view_ = nullptr;
 
   // Used to calculate partial offsets in scrolls that occur for a smooth
   // scroll device.

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/core/animation/css_number_interpolation_type.h"
 #include "third_party/blink/renderer/core/animation/interpolation_value.h"
 #include "third_party/blink/renderer/core/animation/underlying_value.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
@@ -55,8 +56,7 @@ class TestUnderlyingValue : public UnderlyingValue {
     return *interpolation_value_.interpolable_value;
   }
 
-  void SetInterpolableValue(
-      std::unique_ptr<InterpolableValue> interpolable_value) final {
+  void SetInterpolableValue(InterpolableValue* interpolable_value) final {
     interpolation_value_.interpolable_value = std::move(interpolable_value);
   }
 
@@ -80,7 +80,7 @@ InterpolationValue CreateInterpolableList(
   return ListInterpolationFunctions::CreateList(
       values.size(), [&values](wtf_size_t i) {
         return InterpolationValue(
-            std::make_unique<InterpolableNumber>(values[i].first),
+            MakeGarbageCollected<InterpolableNumber>(values[i].first),
             TestNonInterpolableValue::Create(values[i].second));
       });
 }
@@ -91,7 +91,7 @@ InterpolationValue CreateInterpolableList(const Vector<double>& values) {
   return ListInterpolationFunctions::CreateList(
       values.size(), [&values](wtf_size_t i) {
         return InterpolationValue(
-            std::make_unique<InterpolableNumber>(values[i]), nullptr);
+            MakeGarbageCollected<InterpolableNumber>(values[i]), nullptr);
       });
 }
 
@@ -100,7 +100,7 @@ InterpolationValue CreateInterpolableList(const Vector<double>& values) {
 InterpolationValue CreateNonInterpolableList(const Vector<int>& values) {
   return ListInterpolationFunctions::CreateList(
       values.size(), [&values](wtf_size_t i) {
-        return InterpolationValue(std::make_unique<InterpolableNumber>(0),
+        return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(0),
                                   TestNonInterpolableValue::Create(values[i]));
       });
 }

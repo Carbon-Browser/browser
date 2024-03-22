@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,10 +26,10 @@ namespace {
 std::unique_ptr<views::TooltipIcon> CreateInfoIcon() {
   auto explanation_tooltip = std::make_unique<views::TooltipIcon>(
       password_manager::GetLeakDetectionTooltip());
-  explanation_tooltip->set_bubble_width(
+  explanation_tooltip->SetBubbleWidth(
       ChromeLayoutProvider::Get()->GetDistanceMetric(
           views::DISTANCE_BUBBLE_PREFERRED_WIDTH));
-  explanation_tooltip->set_anchor_point_arrow(
+  explanation_tooltip->SetAnchorPointArrow(
       views::BubbleBorder::Arrow::TOP_RIGHT);
   return explanation_tooltip;
 }

@@ -1,15 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/url_request/url_request_context_builder.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "net/base/cronet_buildflags.h"
 #include "net/base/mock_network_change_notifier.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/request_priority.h"
 #include "net/base/test_completion_callback.h"
 #include "net/dns/host_resolver.h"
@@ -45,8 +48,14 @@
 
 #if BUILDFLAG(ENABLE_REPORTING)
 #include "base/files/scoped_temp_dir.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "net/extras/sqlite/sqlite_persistent_reporting_and_nel_store.h"
+
+#if !BUILDFLAG(CRONET_BUILD)
+// gn check does not account for BUILDFLAG(). So, for Cronet builds, it will
+// complain about a missing dependency on the target exposing this header. Add a
+// nogncheck to stop it from yelling.
+#include "net/extras/sqlite/sqlite_persistent_reporting_and_nel_store.h"  // nogncheck
+#endif  // !BUILDFLAG(CRONET_BUILD)
+
 #include "net/reporting/reporting_context.h"
 #include "net/reporting/reporting_policy.h"
 #include "net/reporting/reporting_service.h"
@@ -63,16 +72,17 @@ class MockHttpAuthHandlerFactory : public HttpAuthHandlerFactory {
       : return_code_(return_code), supported_scheme_(supported_scheme) {}
   ~MockHttpAuthHandlerFactory() override = default;
 
-  int CreateAuthHandler(HttpAuthChallengeTokenizer* challenge,
-                        HttpAuth::Target target,
-                        const SSLInfo& ssl_info,
-                        const NetworkIsolationKey& network_isolation_key,
-                        const url::SchemeHostPort& scheme_host_port,
-                        CreateReason reason,
-                        int nonce_count,
-                        const NetLogWithSource& net_log,
-                        HostResolver* host_resolver,
-                        std::unique_ptr<HttpAuthHandler>* handler) override {
+  int CreateAuthHandler(
+      HttpAuthChallengeTokenizer* challenge,
+      HttpAuth::Target target,
+      const SSLInfo& ssl_info,
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const url::SchemeHostPort& scheme_host_port,
+      CreateReason reason,
+      int nonce_count,
+      const NetLogWithSource& net_log,
+      HostResolver* host_resolver,
+      std::unique_ptr<HttpAuthHandler>* handler) override {
     handler->reset();
 
     return challenge->auth_scheme() == supported_scheme_
@@ -144,7 +154,7 @@ TEST_F(URLRequestContextBuilderTest, DefaultHttpAuthHandlerFactory) {
   EXPECT_EQ(OK,
             context->http_auth_handler_factory()->CreateAuthHandlerFromString(
                 "basic", HttpAuth::AUTH_SERVER, null_ssl_info,
-                NetworkIsolationKey(), scheme_host_port, NetLogWithSource(),
+                NetworkAnonymizationKey(), scheme_host_port, NetLogWithSource(),
                 host_resolver_.get(), &handler));
 }
 
@@ -161,21 +171,21 @@ TEST_F(URLRequestContextBuilderTest, CustomHttpAuthHandlerFactory) {
   EXPECT_EQ(kBasicReturnCode,
             context->http_auth_handler_factory()->CreateAuthHandlerFromString(
                 "ExtraScheme", HttpAuth::AUTH_SERVER, null_ssl_info,
-                NetworkIsolationKey(), scheme_host_port, NetLogWithSource(),
+                NetworkAnonymizationKey(), scheme_host_port, NetLogWithSource(),
                 host_resolver_.get(), &handler));
 
   // Verify that the default basic handler isn't present
   EXPECT_EQ(ERR_UNSUPPORTED_AUTH_SCHEME,
             context->http_auth_handler_factory()->CreateAuthHandlerFromString(
                 "basic", HttpAuth::AUTH_SERVER, null_ssl_info,
-                NetworkIsolationKey(), scheme_host_port, NetLogWithSource(),
+                NetworkAnonymizationKey(), scheme_host_port, NetLogWithSource(),
                 host_resolver_.get(), &handler));
 
   // Verify that a handler isn't returned for a bogus scheme.
   EXPECT_EQ(ERR_UNSUPPORTED_AUTH_SCHEME,
             context->http_auth_handler_factory()->CreateAuthHandlerFromString(
                 "Bogus", HttpAuth::AUTH_SERVER, null_ssl_info,
-                NetworkIsolationKey(), scheme_host_port, NetLogWithSource(),
+                NetworkAnonymizationKey(), scheme_host_port, NetLogWithSource(),
                 host_resolver_.get(), &handler));
 }
 
@@ -193,13 +203,51 @@ TEST_F(URLRequestContextBuilderTest, ShutDownNELAndReportingWithPendingUpload) {
       ConfiguredProxyResolutionService::CreateDirect());
   builder_.set_reporting_policy(std::make_unique<ReportingPolicy>());
   builder_.set_network_error_logging_enabled(true);
+
+  std::unique_ptr<URLRequestContext> context(builder_.Build());
+  ASSERT_TRUE(context->network_error_logging_service());
+  ASSERT_TRUE(context->reporting_service());
+
+  // Queue a pending upload.
+  GURL url("https://www.foo.test");
+  context->reporting_service()->GetContextForTesting()->uploader()->StartUpload(
+      url::Origin::Create(url), url, IsolationInfo::CreateTransient(),
+      "report body", 0,
+      /*eligible_for_credentials=*/false, base::DoNothing());
+  base::RunLoop().RunUntilIdle();
+  ASSERT_EQ(1, context->reporting_service()
+                   ->GetContextForTesting()
+                   ->uploader()
+                   ->GetPendingUploadCountForTesting());
+  ASSERT_TRUE(mock_host_resolver->has_pending_requests());
+
+  // This should shut down and destroy the NEL and Reporting services, including
+  // the PendingUpload, and should not cause a crash.
+  context.reset();
+}
+
+#if !BUILDFLAG(CRONET_BUILD)
+// See crbug.com/935209. This test ensures that shutdown occurs correctly and
+// does not crash while destoying the NEL and Reporting services in the process
+// of destroying the URLRequestContext whilst Reporting has a pending upload.
+TEST_F(URLRequestContextBuilderTest,
+       ShutDownNELAndReportingWithPendingUploadAndPersistentStorage) {
+  std::unique_ptr<MockHostResolver> host_resolver =
+      std::make_unique<MockHostResolver>();
+  host_resolver->set_ondemand_mode(true);
+  MockHostResolver* mock_host_resolver = host_resolver.get();
+  builder_.set_host_resolver(std::move(host_resolver));
+  builder_.set_proxy_resolution_service(
+      ConfiguredProxyResolutionService::CreateDirect());
+  builder_.set_reporting_policy(std::make_unique<ReportingPolicy>());
+  builder_.set_network_error_logging_enabled(true);
   base::ScopedTempDir scoped_temp_dir;
   ASSERT_TRUE(scoped_temp_dir.CreateUniqueTempDir());
   builder_.set_persistent_reporting_and_nel_store(
       std::make_unique<SQLitePersistentReportingAndNelStore>(
           scoped_temp_dir.GetPath().Append(
               FILE_PATH_LITERAL("ReportingAndNelStore")),
-          base::ThreadTaskRunnerHandle::Get(),
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
           base::ThreadPool::CreateSequencedTaskRunner(
               {base::MayBlock(),
                net::GetReportingAndNelStoreBackgroundSequencePriority(),
@@ -229,6 +277,7 @@ TEST_F(URLRequestContextBuilderTest, ShutDownNELAndReportingWithPendingUpload) {
   // the PendingUpload, and should not cause a crash.
   context.reset();
 }
+#endif  // !BUILDFLAG(CRONET_BUILD)
 #endif  // BUILDFLAG(ENABLE_REPORTING)
 
 TEST_F(URLRequestContextBuilderTest, ShutdownHostResolverWithPendingRequest) {
@@ -241,7 +290,7 @@ TEST_F(URLRequestContextBuilderTest, ShutdownHostResolverWithPendingRequest) {
 
   std::unique_ptr<HostResolver::ResolveHostRequest> request =
       context->host_resolver()->CreateRequest(
-          HostPortPair("example.com", 1234), NetworkIsolationKey(),
+          HostPortPair("example.com", 1234), NetworkAnonymizationKey(),
           NetLogWithSource(), absl::nullopt);
   TestCompletionCallback callback;
   int rv = request->Start(callback.callback());
@@ -290,7 +339,7 @@ TEST_F(URLRequestContextBuilderTest, BindToNetworkFinalConfiguration) {
 
   // The actual network handle doesn't really matter, this test just wants to
   // check that all the pieces are in place and configured correctly.
-  constexpr NetworkChangeNotifier::NetworkHandle network = 2;
+  constexpr handles::NetworkHandle network = 2;
   auto scoped_mock_network_change_notifier =
       std::make_unique<test::ScopedMockNetworkChangeNotifier>();
   test::MockNetworkChangeNotifier* mock_ncn =
@@ -335,7 +384,7 @@ TEST_F(URLRequestContextBuilderTest, BindToNetworkCustomManagerOptions) {
 
   // The actual network handle doesn't really matter, this test just wants to
   // check that all the pieces are in place and configured correctly.
-  constexpr NetworkChangeNotifier::NetworkHandle network = 2;
+  constexpr handles::NetworkHandle network = 2;
   auto scoped_mock_network_change_notifier =
       std::make_unique<test::ScopedMockNetworkChangeNotifier>();
   test::MockNetworkChangeNotifier* mock_ncn =
@@ -355,6 +404,27 @@ TEST_F(URLRequestContextBuilderTest, BindToNetworkCustomManagerOptions) {
 #else   // !BUILDFLAG(IS_ANDROID)
   GTEST_SKIP() << "BindToNetwork is supported only on Android";
 #endif  // BUILDFLAG(IS_ANDROID)
+}
+
+TEST_F(URLRequestContextBuilderTest, MigrateSessionsOnNetworkChangeV2Default) {
+  std::unique_ptr<URLRequestContext> context = builder_.Build();
+
+  const QuicParams* quic_params = context->quic_context()->params();
+#if BUILDFLAG(IS_ANDROID)
+  EXPECT_FALSE(quic_params->migrate_sessions_on_network_change_v2);
+#else   // !BUILDFLAG(IS_ANDROID)
+  EXPECT_FALSE(quic_params->migrate_sessions_on_network_change_v2);
+#endif  // BUILDFLAG(IS_ANDROID)
+}
+
+TEST_F(URLRequestContextBuilderTest, MigrateSessionsOnNetworkChangeV2Override) {
+  base::test::ScopedFeatureList scoped_list;
+  scoped_list.InitAndDisableFeature(
+      net::features::kMigrateSessionsOnNetworkChangeV2);
+  std::unique_ptr<URLRequestContext> context = builder_.Build();
+
+  const QuicParams* quic_params = context->quic_context()->params();
+  EXPECT_FALSE(quic_params->migrate_sessions_on_network_change_v2);
 }
 
 }  // namespace

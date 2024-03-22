@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,49 +19,46 @@ class StubWebView : public WebView {
   bool IsServiceWorker() const override;
   std::string GetId() override;
   bool WasCrashed() override;
-  Status ConnectIfNecessary() override;
-  Status SetUpDevTools() override;
+  Status HandleEventsUntil(const ConditionalFunc& conditional_func,
+                           const Timeout& timeout) override;
   Status HandleReceivedEvents() override;
   Status GetUrl(std::string* url) override;
   Status Load(const std::string& url, const Timeout* timeout) override;
   Status Reload(const Timeout* timeout) override;
   Status Freeze(const Timeout* timeout) override;
   Status Resume(const Timeout* timeout) override;
+  Status StartBidiServer(std::string bidi_mapper_script) override;
+  Status PostBidiCommand(base::Value::Dict command) override;
   Status SendCommand(const std::string& cmd,
-                     const base::DictionaryValue& params) override;
+                     const base::Value::Dict& params) override;
   Status SendCommandFromWebSocket(const std::string& cmd,
-                                  const base::DictionaryValue& params,
+                                  const base::Value::Dict& params,
                                   const int client_cmd_id) override;
   Status SendCommandAndGetResult(const std::string& cmd,
-                                 const base::DictionaryValue& params,
+                                 const base::Value::Dict& params,
                                  std::unique_ptr<base::Value>* value) override;
   Status TraverseHistory(int delta, const Timeout* timeout) override;
   Status EvaluateScript(const std::string& frame,
                         const std::string& function,
-                        const bool awaitPromise,
+                        const bool await_promise,
                         std::unique_ptr<base::Value>* result) override;
   Status CallFunction(const std::string& frame,
                       const std::string& function,
-                      const base::ListValue& args,
+                      const base::Value::List& args,
                       std::unique_ptr<base::Value>* result) override;
-  Status CallAsyncFunction(const std::string& frame,
-                           const std::string& function,
-                           const base::ListValue& args,
-                           const base::TimeDelta& timeout,
-                           std::unique_ptr<base::Value>* result) override;
   Status CallUserAsyncFunction(const std::string& frame,
                                const std::string& function,
-                               const base::ListValue& args,
+                               const base::Value::List& args,
                                const base::TimeDelta& timeout,
                                std::unique_ptr<base::Value>* result) override;
   Status CallUserSyncScript(const std::string& frame,
                             const std::string& script,
-                            const base::ListValue& args,
+                            const base::Value::List& args,
                             const base::TimeDelta& timeout,
                             std::unique_ptr<base::Value>* result) override;
   Status GetFrameByFunction(const std::string& frame,
                             const std::string& function,
-                            const base::ListValue& args,
+                            const base::Value::List& args,
                             std::string* out_frame) override;
   Status DispatchMouseEvents(const std::vector<MouseEvent>& events,
                              const std::string& frame,
@@ -86,9 +83,9 @@ class StubWebView : public WebView {
                    const std::string& value,
                    const std::string& domain,
                    const std::string& path,
-                   const std::string& sameSite,
+                   const std::string& same_site,
                    bool secure,
-                   bool httpOnly,
+                   bool http_only,
                    double expiry) override;
   Status WaitForPendingNavigations(const std::string& frame_id,
                                    const Timeout& timeout,
@@ -103,11 +100,9 @@ class StubWebView : public WebView {
       const NetworkConditions& network_conditions) override;
   Status OverrideDownloadDirectoryIfNeeded(
       const std::string& download_directory) override;
-  Status CaptureScreenshot(
-      std::string* screenshot,
-      const base::DictionaryValue& params) override;
-  Status PrintToPDF(const base::DictionaryValue& params,
-                    std::string* pdf) override;
+  Status CaptureScreenshot(std::string* screenshot,
+                           const base::Value::Dict& params) override;
+  Status PrintToPDF(const base::Value::Dict& params, std::string* pdf) override;
   Status SetFileInputFiles(const std::string& frame,
                            const base::Value& element,
                            const std::vector<base::FilePath>& files,
@@ -125,6 +120,7 @@ class StubWebView : public WebView {
                                  int yoffset) override;
   bool IsNonBlocking() const override;
   FrameTracker* GetFrameTracker() const override;
+  Status GetFedCmTracker(FedCmTracker** out_tracker) override;
   std::unique_ptr<base::Value> GetCastSinks() override;
   std::unique_ptr<base::Value> GetCastIssueMessage() override;
   void SetFrame(const std::string& new_frame_id) override;

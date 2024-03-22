@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,8 @@ gaia::GaiaSource MirrorLandingAccountReconcilorDelegate::GetGaiaApiSource()
 
 bool MirrorLandingAccountReconcilorDelegate::ShouldRevokeTokensOnCookieDeleted()
     const {
+  // TODO(https://crbug.com.1464523): Migrate away from `ConsentLevel::kSync` on
+  // Lacros.
   return !is_main_profile_ &&
          !identity_manager_->HasPrimaryAccount(ConsentLevel::kSync);
 }

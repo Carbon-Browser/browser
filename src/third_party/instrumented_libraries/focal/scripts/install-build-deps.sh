@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -32,14 +32,17 @@ expat \
 fontconfig \
 freetype \
 gdk-pixbuf \
+git \
 glib2.0 \
 gnome-common \
 gnome-keyring \
 gobject-introspection \
 graphite2 \
 gtk+3.0 \
+gyp \
 ido \
 jasper-initramfs \
+libappindicator3-1 \
 libcap2 \
 libdbusmenu \
 libdbusmenu-gtk3-dev \
@@ -48,9 +51,11 @@ libgpg-error \
 libidn \
 libindicator \
 libjpeg-turbo \
+libldap-2.4-2 \
 libmicrohttpd \
 libpng1.6 \
-libsasl2-dev \
+libsasl2-2 \
+libssl1.1 \
 libunity \
 libx11 \
 libxau \
@@ -70,6 +75,7 @@ libxss \
 libxtst \
 nspr \
 nss \
+opensc-pkcs11 \
 p11-kit \
 pango1.0 \
 pciutils \

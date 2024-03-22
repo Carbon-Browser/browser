@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,6 +58,14 @@ void DrmNativeDisplayDelegate::Configure(
                                       modeset_flag);
 }
 
+void DrmNativeDisplayDelegate::SetHdcpKeyProp(
+    int64_t display_id,
+    const std::string& key,
+    display::SetHdcpKeyPropCallback callback) {
+  DrmDisplayHost* display = display_manager_->GetDisplay(display_id);
+  display->SetHdcpKeyProp(key, std::move(callback));
+}
+
 void DrmNativeDisplayDelegate::GetHDCPState(
     const display::DisplaySnapshot& output,
     display::GetHDCPStateCallback callback) {
@@ -84,10 +92,10 @@ bool DrmNativeDisplayDelegate::SetColorMatrix(
 
 bool DrmNativeDisplayDelegate::SetGammaCorrection(
     int64_t display_id,
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
+    const display::GammaCurve& degamma,
+    const display::GammaCurve& gamma) {
   DrmDisplayHost* display = display_manager_->GetDisplay(display_id);
-  display->SetGammaCorrection(degamma_lut, gamma_lut);
+  display->SetGammaCorrection(degamma, gamma);
   return true;
 }
 

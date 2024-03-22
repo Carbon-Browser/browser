@@ -1,7 +1,7 @@
 // GENERATED CONTENT - DO NOT EDIT
 // Content was automatically extracted by Reffy into webref
 // (https://github.com/w3c/webref)
-// Source: CSS Font Loading Module Level 3 (https://drafts.csswg.org/css-font-loading/)
+// Source: CSS Font Loading Module Level 3 (https://drafts.csswg.org/css-font-loading-3/)
 
 typedef (ArrayBuffer or ArrayBufferView) BinaryData;
 
@@ -10,7 +10,6 @@ dictionary FontFaceDescriptors {
   CSSOMString weight = "normal";
   CSSOMString stretch = "normal";
   CSSOMString unicodeRange = "U+0-10FFFF";
-  CSSOMString variant = "normal";
   CSSOMString featureSettings = "normal";
   CSSOMString variationSettings = "normal";
   CSSOMString display = "auto";
@@ -30,7 +29,6 @@ interface FontFace {
   attribute CSSOMString weight;
   attribute CSSOMString stretch;
   attribute CSSOMString unicodeRange;
-  attribute CSSOMString variant;
   attribute CSSOMString featureSettings;
   attribute CSSOMString variationSettings;
   attribute CSSOMString display;

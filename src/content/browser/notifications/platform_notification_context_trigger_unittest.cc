@@ -1,11 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -49,7 +50,7 @@ class PlatformNotificationContextTriggerTest : public ::testing::Test {
         base::MakeRefCounted<PlatformNotificationContextImpl>(
             base::FilePath(), &browser_context_, nullptr);
     platform_notification_context_->SetTaskRunnerForTesting(
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     platform_notification_context_->Initialize();
     base::RunLoop().RunUntilIdle();
   }
@@ -277,9 +278,6 @@ TEST_F(PlatformNotificationContextTriggerTest, RecordDisplayDelay) {
 
   // Trigger notification |display_delay| after it should have been displayed.
   TriggerNotifications();
-
-  histogram_tester.ExpectUniqueSample("Notifications.Triggers.DisplayDelay",
-                                      display_delay.InMilliseconds(), 1);
 }
 
 }  // namespace content

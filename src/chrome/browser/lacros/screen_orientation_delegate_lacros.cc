@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@ ui::WaylandOrientationLockType ToWaylandOrientationLockType(
     device::mojom::ScreenOrientationLockType blink_orientation_lock) {
   switch (blink_orientation_lock) {
     case device::mojom::ScreenOrientationLockType::DEFAULT:
-      // [[fallthrough]];
     case device::mojom::ScreenOrientationLockType::ANY:
       return ui::WaylandOrientationLockType::kAny;
     case device::mojom::ScreenOrientationLockType::PORTRAIT:

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,6 +62,11 @@ class CORE_EXPORT ScriptWebBundle final
   class ReleaseResourceTask;
 
  private:
+  // Returns true if the bundle's URL and |element_document_|'s frame have the
+  // same origin. Note: Since a redirect is not supported yet, this check is
+  // done by checking the bundle's URL specified in ScriptWebBundleRule.
+  bool IsSameOriginBundle() const;
+
   bool will_be_released_ = false;
   // We store both |element_| and |element_document_| here,
   // because we need |element_| for dispatching load/error events

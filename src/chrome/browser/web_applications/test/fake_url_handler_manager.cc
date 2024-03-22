@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,17 +13,18 @@ FakeUrlHandlerManager::FakeUrlHandlerManager(Profile* profile)
 
 FakeUrlHandlerManager::~FakeUrlHandlerManager() = default;
 
-void FakeUrlHandlerManager::RegisterUrlHandlers(const AppId& app_id,
+void FakeUrlHandlerManager::RegisterUrlHandlers(const webapps::AppId& app_id,
                                                 ResultCallback callback) {
   std::move(callback).Run(Result::kOk);
 }
 
-bool FakeUrlHandlerManager::UnregisterUrlHandlers(const AppId& app_id) {
+bool FakeUrlHandlerManager::UnregisterUrlHandlers(
+    const webapps::AppId& app_id) {
   return true;
 }
 
 void FakeUrlHandlerManager::UpdateUrlHandlers(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     base::OnceCallback<void(bool success)> callback) {
   std::move(callback).Run(true);
 }

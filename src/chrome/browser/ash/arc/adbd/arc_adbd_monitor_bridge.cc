@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,17 +12,19 @@
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/arc_util.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chrome/browser/ash/guest_os/guest_os_session_tracker.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Enable VLOG level 1.
@@ -45,8 +47,6 @@ constexpr const char kCrosUdcEnabled[] = "dev_enable_udc";
 constexpr const char kAdbdJson[] = "/etc/arc/adbd.json";
 
 bool g_enable_adb_over_usb_for_testing = false;
-constexpr const char kSerialNumberInTesting[] = "AAAABBBBCCCCDDDD1234";
-constexpr int64_t kCidInTesting = 123;
 
 // Singleton factory for ArcAdbdMonitorBridge.
 class ArcAdbdMonitorBridgeFactory
@@ -87,7 +87,7 @@ bool IsAdbOverUsbEnabled() {
   bool has_adbd_json = base::PathExists(base::FilePath(kAdbdJson));
   // True when the *host* is running on a VM.
   bool is_host_on_vm =
-      chromeos::system::StatisticsProvider::GetInstance()->IsRunningOnVm();
+      ash::system::StatisticsProvider::GetInstance()->IsRunningOnVm();
   bool is_adb_over_usb_enabled =
       ShouldStartAdbd(is_dev_mode, is_host_on_vm, has_adbd_json, udc_disabled);
   return g_enable_adb_over_usb_for_testing || is_adb_over_usb_enabled;
@@ -95,10 +95,14 @@ bool IsAdbOverUsbEnabled() {
 
 // Returns cid from vm info. Otherwise, return nullopt.
 absl::optional<int64_t> GetCid() {
-  if (g_enable_adb_over_usb_for_testing)
-    return kCidInTesting;
-
-  const auto& vm_info = arc::ArcSessionManager::Get()->GetVmInfo();
+  Profile* const profile = arc::ArcSessionManager::Get()->profile();
+  if (!profile) {
+    LOG(ERROR) << "Profile is not ready";
+    return absl::nullopt;
+  }
+  const auto& vm_info =
+      guest_os::GuestOsSessionTracker::GetForProfile(profile)->GetVmInfo(
+          kArcVmName);
   if (!vm_info) {
     LOG(ERROR) << "ARCVM is NOT ready";
     return absl::nullopt;
@@ -107,8 +111,6 @@ absl::optional<int64_t> GetCid() {
 }
 
 std::string GetSerialNumber() {
-  if (g_enable_adb_over_usb_for_testing)
-    return kSerialNumberInTesting;
   return arc::ArcSessionManager::Get()->GetSerialNumber();
 }
 
@@ -174,13 +176,12 @@ void ArcAdbdMonitorBridge::EnableAdbOverUsbForTesting() {
   g_enable_adb_over_usb_for_testing = true;
 }
 
-void ArcAdbdMonitorBridge::OnStartArcVmAdbdTesting(
+void ArcAdbdMonitorBridge::OnAdbdStartedForTesting(
     chromeos::VoidDBusMethodCallback callback) {
-  VLOG(1) << "Starting arcvm-adbd";
   StartArcVmAdbd(std::move(callback));
 }
 
-void ArcAdbdMonitorBridge::OnStopArcVmAdbdTesting(
+void ArcAdbdMonitorBridge::OnAdbdStoppedForTesting(
     chromeos::VoidDBusMethodCallback callback) {
   StopArcVmAdbd(std::move(callback));
 }
@@ -250,6 +251,11 @@ void ArcAdbdMonitorBridge::StopArcVmAdbdInternal(
                                    UpstartOperation::JOB_STOP,
                                    std::move(environment.value())}};
   ConfigureUpstartJobs(std::move(jobs), std::move(callback));
+}
+
+// static
+void ArcAdbdMonitorBridge::EnsureFactoryBuilt() {
+  ArcAdbdMonitorBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

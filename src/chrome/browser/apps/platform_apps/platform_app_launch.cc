@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,6 +88,13 @@ bool OpenExtensionApplicationWindow(Profile* profile,
   if (launch_container == LaunchContainer::kLaunchContainerTab)
     return false;
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_FUCHSIA)
+  if (OpenDeprecatedApplicationPrompt(profile, app_id)) {
+    return false;
+  }
+#endif
+
   RecordCmdLineAppHistogram(app->GetType());
 
   apps::AppLaunchParams params(app_id, launch_container,
@@ -112,6 +119,13 @@ bool OpenExtensionApplicationTab(Profile* profile, const std::string& app_id) {
   // If the user doesn't want to open a tab, fail.
   if (launch_container != apps::LaunchContainer::kLaunchContainerTab)
     return false;
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_FUCHSIA)
+  if (OpenDeprecatedApplicationPrompt(profile, app_id)) {
+    return false;
+  }
+#endif
 
   RecordCmdLineAppHistogram(app->GetType());
 
@@ -143,7 +157,7 @@ bool OpenDeprecatedApplicationPrompt(Profile* profile,
 
   NavigateParams params(browser, url, ui::PAGE_TRANSITION_AUTO_TOPLEVEL);
   params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
-  params.tabstrip_add_types = TabStripModel::ADD_ACTIVE;
+  params.tabstrip_add_types = AddTabTypes::ADD_ACTIVE;
   Navigate(&params);
 
   browser->window()->Show();
@@ -161,6 +175,13 @@ bool OpenExtensionApplicationWithReenablePrompt(
   if (!GetPlatformApp(profile, app_id))
     return false;
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_FUCHSIA)
+  if (OpenDeprecatedApplicationPrompt(profile, app_id)) {
+    return false;
+  }
+#endif
+
   RecordCmdLineAppHistogram(extensions::Manifest::TYPE_PLATFORM_APP);
   apps::AppLaunchParams params(
       app_id, apps::LaunchContainer::kLaunchContainerNone,
@@ -177,6 +198,12 @@ content::WebContents* OpenExtensionAppShortcutWindow(Profile* profile,
                                          ->enabled_extensions()
                                          .GetAppByURL(url);
   if (app) {
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_FUCHSIA)
+    if (OpenDeprecatedApplicationPrompt(profile, app->id())) {
+      return nullptr;
+    }
+#endif
     RecordCmdLineAppHistogram(app->GetType());
   } else {
     extensions::RecordAppLaunchType(
@@ -194,6 +221,13 @@ void RecordExtensionAppLaunchOnTabRestored(Profile* profile, const GURL& url) {
           .GetAppByURL(url);
   if (!extension)
     return;
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_FUCHSIA)
+  if (OpenDeprecatedApplicationPrompt(profile, extension->id())) {
+    return;
+  }
+#endif
 
   extensions::RecordAppLaunchType(
       extension_misc::APP_LAUNCH_NTP_RECENTLY_CLOSED, extension->GetType());

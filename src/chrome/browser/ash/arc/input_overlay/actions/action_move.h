@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,33 +10,36 @@
 #include "chrome/browser/ash/arc/input_overlay/ui/action_view.h"
 #include "ui/aura/window.h"
 
-namespace arc {
-namespace input_overlay {
+namespace arc::input_overlay {
 // UI specs.
 constexpr int kActionMoveMinRadius = 99;
+
+class TouchInjector;
 
 // ActionMoveKey transforms key/mouse events to touch events with touch
 // move involved.
 class ActionMove : public Action {
  public:
-  explicit ActionMove(aura::Window* window);
+  explicit ActionMove(TouchInjector* touch_injector);
   ActionMove(const ActionMove&) = delete;
   ActionMove& operator=(const ActionMove&) = delete;
   ~ActionMove() override;
 
   // Override from Action.
-  bool ParseFromJson(const base::Value& value) override;
+  bool ParseFromJson(const base::Value::Dict& value) override;
+  bool InitByAddingNewAction(const gfx::Point& target_pos) override;
+  void InitByChangingActionType(Action* action) override;
   bool RewriteEvent(const ui::Event& origin,
-                    const gfx::RectF& content_bounds,
                     const bool is_mouse_locked,
                     const gfx::Transform* rotation_transform,
                     std::list<ui::TouchEvent>& touch_events,
                     bool& keep_original_event) override;
-  gfx::PointF GetUICenterPosition(const gfx::RectF& content_bounds) override;
+  gfx::PointF GetUICenterPosition() override;
   std::unique_ptr<ActionView> CreateView(
-      DisplayOverlayController* display_overlay_controller,
-      const gfx::RectF& content_bounds) override;
-  void Unbind(const InputElement& input_element) override;
+      DisplayOverlayController* display_overlay_controller) override;
+  void UnbindInput(const InputElement& input_element) override;
+  std::unique_ptr<ActionProto> ConvertToProtoIfCustomized() const override;
+  ActionType GetType() const override;
 
   void set_move_distance(int move_distance) { move_distance_ = move_distance; }
   int move_distance() { return move_distance_; }
@@ -61,7 +64,7 @@ class ActionMove : public Action {
   //     {}
   //   ]
   // }
-  bool ParseJsonFromKeyboard(const base::Value& value);
+  bool ParseJsonFromKeyboard(const base::Value::Dict& value);
   // Json value format:
   // {
   //   "id": 0,
@@ -85,7 +88,7 @@ class ActionMove : public Action {
   //       {}
   //   }
   // }
-  bool ParseJsonFromMouse(const base::Value& value);
+  bool ParseJsonFromMouse(const base::Value::Dict& value);
   bool RewriteKeyEvent(const ui::KeyEvent* key_event,
                        const gfx::RectF& content_bounds,
                        const gfx::Transform* rotation_transform,
@@ -97,7 +100,7 @@ class ActionMove : public Action {
 
   // For key-bound move.
   void CalculateMoveVector(gfx::PointF& touch_press_pos,
-                           int direction_index,
+                           size_t direction_index,
                            bool key_press,
                            const gfx::RectF& content_bounds,
                            const gfx::Transform* rotation_transform);
@@ -106,8 +109,8 @@ class ActionMove : public Action {
   // Return the bounds in the root window.
   absl::optional<gfx::RectF> CalculateApplyArea(
       const gfx::RectF& content_bound);
-  // Transform mouse location from app window to the |target_area_| if
-  // |target_area_| exists. Input values are in root window's coordinate system.
+  // Transform mouse location from app window to the `target_area_` if
+  // `target_area_` exists. Input values are in root window's coordinate system.
   // Return the point pixel to the host window's.
   gfx::PointF TransformLocationInPixels(const gfx::RectF& content_bounds,
                                         const gfx::PointF& point);
@@ -124,7 +127,6 @@ class ActionMove : public Action {
   std::vector<std::unique_ptr<Position>> target_area_;
 };
 
-}  // namespace input_overlay
-}  // namespace arc
+}  // namespace arc::input_overlay
 
 #endif  // CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_ACTIONS_ACTION_MOVE_H_

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -416,6 +416,23 @@ scoped_refptr<media::VideoFrame> ConvertFromMappedWebRtcVideoFrameBuffer(
       // video formats, so conversion and cast is needed.
       video_frame = media::VideoFrame::WrapExternalYuvData(
           media::PIXEL_FORMAT_YUV422P10, size, gfx::Rect(size), size,
+          yuv_buffer->StrideY() * 2, yuv_buffer->StrideU() * 2,
+          yuv_buffer->StrideV() * 2,
+          const_cast<uint8_t*>(
+              reinterpret_cast<const uint8_t*>(yuv_buffer->DataY())),
+          const_cast<uint8_t*>(
+              reinterpret_cast<const uint8_t*>(yuv_buffer->DataU())),
+          const_cast<uint8_t*>(
+              reinterpret_cast<const uint8_t*>(yuv_buffer->DataV())),
+          timestamp);
+      break;
+    }
+    case webrtc::VideoFrameBuffer::Type::kI410: {
+      const webrtc::I410BufferInterface* yuv_buffer = buffer->GetI410();
+      // WebRTC defines I410 data as uint16 whereas Chromium uses uint8 for all
+      // video formats, so conversion and cast is needed.
+      video_frame = media::VideoFrame::WrapExternalYuvData(
+          media::PIXEL_FORMAT_YUV444P10, size, gfx::Rect(size), size,
           yuv_buffer->StrideY() * 2, yuv_buffer->StrideU() * 2,
           yuv_buffer->StrideV() * 2,
           const_cast<uint8_t*>(

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_clock.h"
@@ -68,7 +68,8 @@ image_fetcher::ImageFetcherService* ImageFetcherServiceFactory::GetForKey(
 
 // static
 ImageFetcherServiceFactory* ImageFetcherServiceFactory::GetInstance() {
-  return base::Singleton<ImageFetcherServiceFactory>::get();
+  static base::NoDestructor<ImageFetcherServiceFactory> instance;
+  return instance.get();
 }
 
 ImageFetcherServiceFactory::ImageFetcherServiceFactory()

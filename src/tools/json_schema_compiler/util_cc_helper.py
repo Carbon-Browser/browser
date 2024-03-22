@@ -1,4 +1,4 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -25,6 +25,12 @@ class UtilCCHelper(object):
     |src| The variable to convert, either a vector or std::unique_ptr<vector>.
     """
     return '%s::CreateValueFromArray(%s)' % (_API_UTIL_NAMESPACE, src)
+
+  def AppendToContainer(self, container, value):
+    """Appends |value| to |container|.
+    """
+    return '%s::AppendToContainer(%s, %s);' % (
+      _API_UTIL_NAMESPACE, container, value)
 
   def GetIncludePath(self):
     return '#include "tools/json_schema_compiler/util.h"'

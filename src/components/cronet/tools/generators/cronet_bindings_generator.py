@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 import argparse
 import hashlib
-import imp
+import importlib.util
 import json
 import os
 import re
@@ -67,8 +67,10 @@ def LoadGenerators(generators_string):
     else:
       print("Unknown generator name %s" % generator_name)
       sys.exit(1)
-    generator_module = imp.load_source(os.path.basename(generator_name)[:-3],
-                                       generator_name)
+    spec = importlib.util.spec_from_file_location(
+        os.path.basename(generator_name)[:-3], generator_name)
+    generator_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator_module)
     generators[language] = generator_module
   return generators
 

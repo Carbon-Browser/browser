@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -342,6 +342,15 @@ class VIEWS_EXPORT TableView : public views::View,
   // Updates the |x| and |width| of each of the columns in |visible_columns_|.
   void UpdateVisibleColumnSizes();
 
+  // Returns to the src icon bounds. If it exceeds the drawn boundary.It needs
+  // to be clipped, and this method has done so for the caller.
+  gfx::Rect GetPaintIconSrcBounds(const gfx::Size& image_size,
+                                  int image_dest_width) const;
+
+  // Returns the paint icon bounds in the cell.
+  gfx::Rect GetPaintIconDestBounds(const gfx::Rect& cell_bounds,
+                                   int text_bounds_x) const;
+
   // Returns the cell's that need to be painted for the specified region.
   // |bounds| is in terms of |this|.
   PaintRegion GetPaintRegion(const gfx::Rect& bounds) const;
@@ -511,7 +520,7 @@ class VIEWS_EXPORT TableView : public views::View,
   // is selected then.
   bool select_on_remove_ = true;
 
-  raw_ptr<TableViewObserver> observer_ = nullptr;
+  raw_ptr<TableViewObserver, DanglingUntriaged> observer_ = nullptr;
   // If |sort_on_paint_| is true, table will sort before painting.
   bool sort_on_paint_ = false;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,11 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gl/gl_context_stub.h"
+#include "ui/gl/gl_display.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_mock.h"
 #include "ui/gl/gl_surface_stub.h"
+#include "ui/gl/gl_utils.h"
 #include "ui/gl/init/gl_factory.h"
 #include "ui/gl/test/gl_surface_test_support.h"
 
@@ -143,8 +145,8 @@ class GPUInfoCollectorTest
     context_->MakeCurrent(surface_.get());
 
     EXPECT_CALL(*gl_, GetString(GL_VERSION))
-        .WillRepeatedly(Return(reinterpret_cast<const GLubyte*>(
-            test_values_.gl_version.c_str())));
+        .WillRepeatedly(Return(
+            reinterpret_cast<const GLubyte*>(test_values_.gl_version.c_str())));
 
     EXPECT_CALL(*gl_, GetString(GL_RENDERER))
         .WillRepeatedly(Return(reinterpret_cast<const GLubyte*>(
@@ -157,9 +159,9 @@ class GPUInfoCollectorTest
               test_values_.gl_extensions.c_str())));
     } else {
       split_extensions_.clear();
-      split_extensions_ = base::SplitString(
-          test_values_.gl_extensions, " ",
-          base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+      split_extensions_ =
+          base::SplitString(test_values_.gl_extensions, " ",
+                            base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
       EXPECT_CALL(*gl_, GetIntegerv(GL_NUM_EXTENSIONS, _))
           .WillRepeatedly(SetArgPointee<1>(split_extensions_.size()));
       for (size_t ii = 0; ii < split_extensions_.size(); ++ii) {
@@ -172,8 +174,8 @@ class GPUInfoCollectorTest
         .WillRepeatedly(Return(reinterpret_cast<const GLubyte*>(
             gl_shading_language_version_)));
     EXPECT_CALL(*gl_, GetString(GL_VENDOR))
-        .WillRepeatedly(Return(reinterpret_cast<const GLubyte*>(
-            test_values_.gl_vendor.c_str())));
+        .WillRepeatedly(Return(
+            reinterpret_cast<const GLubyte*>(test_values_.gl_vendor.c_str())));
     EXPECT_CALL(*gl_, GetString(GL_RENDERER))
         .WillRepeatedly(Return(reinterpret_cast<const GLubyte*>(
             test_values_.gl_renderer.c_str())));
@@ -216,7 +218,7 @@ INSTANTIATE_TEST_SUITE_P(GPUConfig,
 // be fixed.
 TEST_P(GPUInfoCollectorTest, CollectGraphicsInfoGL) {
   GPUInfo gpu_info;
-  CollectGraphicsInfoGL(&gpu_info);
+  CollectGraphicsInfoGL(&gpu_info, gl::GetDefaultDisplay());
 #if BUILDFLAG(IS_WIN)
   if (GetParam() == kMockedWindows) {
     EXPECT_EQ(test_values_.gpu.driver_vendor, gpu_info.gpu.driver_vendor);
@@ -240,10 +242,8 @@ TEST_P(GPUInfoCollectorTest, CollectGraphicsInfoGL) {
   }
 #endif
 
-  EXPECT_EQ(test_values_.pixel_shader_version,
-            gpu_info.pixel_shader_version);
-  EXPECT_EQ(test_values_.vertex_shader_version,
-            gpu_info.vertex_shader_version);
+  EXPECT_EQ(test_values_.pixel_shader_version, gpu_info.pixel_shader_version);
+  EXPECT_EQ(test_values_.vertex_shader_version, gpu_info.vertex_shader_version);
   EXPECT_EQ(test_values_.gl_version, gpu_info.gl_version);
   EXPECT_EQ(test_values_.gl_renderer, gpu_info.gl_renderer);
   EXPECT_EQ(test_values_.gl_vendor, gpu_info.gl_vendor);

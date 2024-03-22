@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_types.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/media/router/providers/openscreen/network_service_async_packet_sender.h"
 
 namespace media_router {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,9 @@ import org.chromium.android_webview.AwCookieManager;
 import org.chromium.base.Callback;
 import org.chromium.base.test.util.CallbackHelper;
 
-/**
- * Useful functions for testing the CookieManager.
- */
+/** Useful functions for testing the CookieManager. */
 public class CookieUtils {
-    private CookieUtils() {
-    }
+    private CookieUtils() {}
 
     /**
      * A CallbackHelper for use with setCookie/removeXXXCookie.
@@ -73,8 +70,7 @@ public class CookieUtils {
         final TestCallback<Boolean> callback = new TestCallback<Boolean>();
         int callCount = callback.getOnResultHelper().getCallCount();
 
-        instr.runOnMainSync(
-                () -> cookieManager.removeAllCookies(callback));
+        instr.runOnMainSync(() -> cookieManager.removeAllCookies(callback));
         callback.getOnResultHelper().waitForCallback(callCount);
         Assert.assertFalse(cookieManager.hasCookies());
     }

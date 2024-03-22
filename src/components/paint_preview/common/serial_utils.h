@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,8 @@ struct PictureSerializationContext {
 };
 
 // Maps a typeface ID to a glyph usage tracker.
-using TypefaceUsageMap = base::flat_map<SkFontID, std::unique_ptr<GlyphUsage>>;
+using TypefaceUsageMap =
+    base::flat_map<SkTypefaceID, std::unique_ptr<GlyphUsage>>;
 
 // Tracks typeface deduplication and handles subsetting.
 struct TypefaceSerializationContext {
@@ -50,7 +51,7 @@ struct TypefaceSerializationContext {
   ~TypefaceSerializationContext();
 
   raw_ptr<TypefaceUsageMap> usage;
-  base::flat_set<SkFontID> finished;  // Should be empty on first use.
+  base::flat_set<SkTypefaceID> finished;  // Should be empty on first use.
 };
 
 struct ImageSerializationContext {

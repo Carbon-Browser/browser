@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/bits.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "media/base/bind_to_current_loop.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/limits.h"
 #include "media/base/media_log.h"
@@ -141,9 +142,9 @@ SupportedVideoDecoderConfigs Dav1dVideoDecoder::SupportedConfigs() {
            /*require_encrypted=*/false}};
 }
 
-Dav1dVideoDecoder::Dav1dVideoDecoder(MediaLog* media_log,
+Dav1dVideoDecoder::Dav1dVideoDecoder(std::unique_ptr<MediaLog> media_log,
                                      OffloadState offload_state)
-    : media_log_(media_log),
+    : media_log_(std::move(media_log)),
       bind_callbacks_(offload_state == OffloadState::kNormal) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
@@ -166,8 +167,9 @@ void Dav1dVideoDecoder::Initialize(const VideoDecoderConfig& config,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(config.IsValidConfig());
 
-  InitCB bound_init_cb = bind_callbacks_ ? BindToCurrentLoop(std::move(init_cb))
-                                         : std::move(init_cb);
+  InitCB bound_init_cb =
+      bind_callbacks_ ? base::BindPostTaskToCurrentDefault(std::move(init_cb))
+                      : std::move(init_cb);
   if (config.is_encrypted()) {
     std::move(bound_init_cb)
         .Run(DecoderStatus::Codes::kUnsupportedEncryptionMode);
@@ -230,9 +232,9 @@ void Dav1dVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
   DCHECK_NE(state_, DecoderState::kUninitialized)
       << "Called Decode() before successful Initialize()";
 
-  DecodeCB bound_decode_cb = bind_callbacks_
-                                 ? BindToCurrentLoop(std::move(decode_cb))
-                                 : std::move(decode_cb);
+  DecodeCB bound_decode_cb =
+      bind_callbacks_ ? base::BindPostTaskToCurrentDefault(std::move(decode_cb))
+                      : std::move(decode_cb);
 
   if (state_ == DecoderState::kError) {
     std::move(bound_decode_cb).Run(DecoderStatus::Codes::kFailed);
@@ -255,8 +257,8 @@ void Dav1dVideoDecoder::Reset(base::OnceClosure reset_cb) {
   dav1d_flush(dav1d_decoder_);
 
   if (bind_callbacks_)
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(reset_cb));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(reset_cb));
   else
     std::move(reset_cb).Run();
 }
@@ -353,17 +355,18 @@ bool Dav1dVideoDecoder::DecodeBuffer(scoped_refptr<DecoderBuffer> buffer) {
                                 : gfx::ColorSpace::RangeID::LIMITED);
 
     // If the frame doesn't specify a color space, use the container's.
-    if (!color_space.IsSpecified())
-      color_space = config_.color_space_info();
+    auto gfx_cs = color_space.ToGfxColorSpace();
+    if (!gfx_cs.IsValid()) {
+      gfx_cs = config_.color_space_info().ToGfxColorSpace();
+    }
 
-    frame->set_color_space(color_space.ToGfxColorSpace());
+    frame->set_color_space(gfx_cs);
     frame->metadata().power_efficient = false;
     frame->set_hdr_metadata(config_.hdr_metadata());
 
     // When we use bind mode, our image data is dependent on the Dav1dPicture,
     // so we must ensure it stays alive along enough.
-    frame->AddDestructionObserver(
-        base::BindOnce([](ScopedPtrDav1dPicture) {}, std::move(p)));
+    frame->AddDestructionObserver(base::DoNothingWithBoundArgs(std::move(p)));
     output_cb_.Run(std::move(frame));
   }
 
@@ -387,7 +390,8 @@ scoped_refptr<VideoFrame> Dav1dVideoDecoder::BindImageToVideoFrame(
   const bool needs_fake_uv_planes = pic->p.layout == DAV1D_PIXEL_LAYOUT_I400;
   if (needs_fake_uv_planes) {
     // UV planes are half the size of the Y plane.
-    uv_plane_stride = base::bits::AlignUp(pic->stride[0] / 2, ptrdiff_t{2});
+    uv_plane_stride =
+        base::bits::AlignUpDeprecatedDoNotUse(pic->stride[0] / 2, ptrdiff_t{2});
     const auto uv_plane_height = (pic->p.h + 1) / 2;
     const size_t size_needed = uv_plane_stride * uv_plane_height;
 

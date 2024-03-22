@@ -1,15 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/test/test_navigation_observer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_url_handler.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/test/browser_test_utils.h"
 
 namespace content {
 
@@ -110,9 +111,7 @@ TestNavigationObserver::TestNavigationObserver(
                              quit_mode,
                              ignore_uncommitted_navigations) {}
 
-TestNavigationObserver::~TestNavigationObserver() {
-  StopWatchingNewWebContents();
-}
+TestNavigationObserver::~TestNavigationObserver() = default;
 
 void TestNavigationObserver::Wait() {
   was_event_consumed_ = false;
@@ -137,13 +136,13 @@ void TestNavigationObserver::WaitForNavigationFinished() {
 }
 
 void TestNavigationObserver::StartWatchingNewWebContents() {
-  WebContentsImpl::FriendWrapper::AddCreatedCallbackForTesting(
-      web_contents_created_callback_);
+  creation_subscription_ = RegisterWebContentsCreationCallback(
+      base::BindRepeating(&TestNavigationObserver::OnWebContentsCreated,
+                          base::Unretained(this)));
 }
 
 void TestNavigationObserver::StopWatchingNewWebContents() {
-  WebContentsImpl::FriendWrapper::RemoveCreatedCallbackForTesting(
-      web_contents_created_callback_);
+  creation_subscription_ = base::CallbackListSubscription();
 }
 
 void TestNavigationObserver::WatchExistingWebContents() {
@@ -172,11 +171,7 @@ TestNavigationObserver::TestNavigationObserver(
       ignore_uncommitted_navigations_(ignore_uncommitted_navigations),
       last_navigation_succeeded_(false),
       last_net_error_code_(net::OK),
-      last_navigation_type_(NAVIGATION_TYPE_UNKNOWN),
-      message_loop_runner_(new MessageLoopRunner(quit_mode)),
-      web_contents_created_callback_(
-          base::BindRepeating(&TestNavigationObserver::OnWebContentsCreated,
-                              base::Unretained(this))) {
+      message_loop_runner_(new MessageLoopRunner(quit_mode)) {
   if (web_contents)
     RegisterAsObserver(web_contents);
 }
@@ -276,16 +271,16 @@ void TestNavigationObserver::OnDidFinishNavigation(
   last_navigation_url_ = navigation_handle->GetURL();
   last_navigation_initiator_origin_ = request->common_params().initiator_origin;
   last_initiator_frame_token_ = navigation_handle->GetInitiatorFrameToken();
-  last_initiator_process_id_ = navigation_handle->GetInitiatorProcessID();
+  last_initiator_process_id_ = navigation_handle->GetInitiatorProcessId();
   last_navigation_succeeded_ =
       navigation_handle->HasCommitted() && !navigation_handle->IsErrorPage();
+  last_navigation_initiator_activation_and_ad_status_ =
+      navigation_handle->GetNavigationInitiatorActivationAndAdStatus();
   last_net_error_code_ = navigation_handle->GetNetErrorCode();
-  last_navigation_type_ = navigation_handle->HasCommitted()
-                              ? request->navigation_type()
-                              : NAVIGATION_TYPE_UNKNOWN;
   last_nav_entry_id_ =
       NavigationRequest::From(navigation_handle)->nav_entry_id();
   last_source_site_instance_ = navigation_handle->GetSourceSiteInstance();
+  next_page_ukm_source_id_ = navigation_handle->GetNextPageUkmSourceId();
 
   // Allow extending classes to fetch data available via navigation_handle.
   NavigationOfInterestDidFinish(navigation_handle);

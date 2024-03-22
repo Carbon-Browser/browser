@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,9 @@ enum ShellWindowId {
   // We can't take a screenshot of the root itself, otherwise subsequent
   // screenshots will screenshot previous screenshots.
   kShellWindowId_ScreenAnimationContainer = 0,
+
+  // The container that displays booting animations.
+  kShellWindowId_BootingAnimationContainer,
 
   // The magnified container which contains everything that would be magnified
   // when docked magnifier is enabled.
@@ -63,11 +66,10 @@ enum ShellWindowId {
   //   - There are no direct mapping between `kShellWindowId_DeskContainerA` and
   //     Desk 1, or `kShellWindowId_DeskContainerB` and Desk 2. The containers
   //     are reused as desks are created and deleted.
+  //   - Keep the desk container IDs sequential here.
   //   - **DO NOT** use these container IDs directly, instead use
   //     `desks_util::GetActiveDeskContainerId()`.
-  // TODO(afakhry): Rename this container, unexpose it, and add the rest of the
-  // containers.
-  kShellWindowId_DefaultContainerDeprecated,
+  kShellWindowId_DeskContainerA,
   kShellWindowId_DeskContainerB,
   kShellWindowId_DeskContainerC,
   kShellWindowId_DeskContainerD,
@@ -75,12 +77,19 @@ enum ShellWindowId {
   kShellWindowId_DeskContainerF,
   kShellWindowId_DeskContainerG,
   kShellWindowId_DeskContainerH,
+  kShellWindowId_DeskContainerI,
+  kShellWindowId_DeskContainerJ,
+  kShellWindowId_DeskContainerK,
+  kShellWindowId_DeskContainerL,
+  kShellWindowId_DeskContainerM,
+  kShellWindowId_DeskContainerN,
+  kShellWindowId_DeskContainerO,
+  kShellWindowId_DeskContainerP,
 
   // The container for top-level windows with the 'always-on-top' flag set.
   kShellWindowId_AlwaysOnTopContainer,
 
   // The container for the floating window.
-  // Experimental feature, please don't use this container.
   kShellWindowId_FloatContainer,
 
   // The container for the app list.
@@ -140,15 +149,23 @@ enum ShellWindowId {
   // The container for menus.
   kShellWindowId_MenuContainer,
 
-  // The container for drag/drop images and tooltips.
+  // The container for drag/drop images, tooltips and widgets that are tagged
+  // with ui::ZOrderLevel::kSecuritySurface.
   kShellWindowId_DragImageAndTooltipContainer,
 
   // The container for the fullscreen power button menu.
   kShellWindowId_PowerMenuContainer,
 
   // The container for bubbles briefly overlaid onscreen to show settings
-  // changes (volume, brightness, input method bubbles, etc.).
+  // changes (volume, brightness, input method bubbles, etc.), tray bubbles and
+  // notifier elements such as notification popups, toasts and system nudges.
   kShellWindowId_SettingBubbleContainer,
+
+  // The container for help bubbles which are anchored to views for the purpose
+  // of user education. In the case of the Welcome Tour, which walks new users
+  // through ChromeOS System UI, a background blur will be applied to the
+  // container with a masked cut out for the help bubble anchor view.
+  kShellWindowId_HelpBubbleContainer,
 
   // Contains special accessibility windows that can inset the display work area
   // (e.g. the ChromeVox spoken feedback window).
@@ -210,22 +227,15 @@ enum NonContainerWindowId {
   // window (if one exists).
   kShellWindowId_CaptureModeFolderSelectionDialogOwner,
 
-  // The window that shows the "Save desk as template" button and `Save desk for
-  // later` button below the Virtual Desks bar. There's only one such window on
-  // each display when overview mode is active.
-  kShellWindowId_SaveDeskButtonContainer,
-
-  // The window that shows the Saved Desk Library in overview.
-  kShellWindowId_SavedDeskLibraryWindow,
-
-  // The window that shows the "No recent items" label in overview.
-  kShellWindowId_OverviewNoWindowsLabelWindow,
+  // The window that notifies the user that an admin user was present on the
+  // host device when the remote desktop session was curtained.
+  kShellWindowId_AdminWasPresentNotificationWindow,
 };
 
 // A list of system modal container IDs. The order of the list is important that
 // the more restrictive container appears before the less restrictive ones.
 constexpr int kSystemModalContainerIds[] = {
-    kShellWindowId_LockSystemModalContainer,
+    kShellWindowId_LockSystemModalContainer, kShellWindowId_HelpBubbleContainer,
     kShellWindowId_SystemModalContainer};
 
 // Returns the list of container ids of containers which may contain windows

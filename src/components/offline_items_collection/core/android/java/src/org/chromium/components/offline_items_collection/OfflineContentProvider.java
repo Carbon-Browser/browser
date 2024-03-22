@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ public interface OfflineContentProvider {
     void pauseDownload(ContentId id);
 
     /** See OfflineContentProvider::ResumeDownload(...). */
-    void resumeDownload(ContentId id, boolean hasUserGesture);
+    void resumeDownload(ContentId id);
 
     /** See OfflineContentProvider::GetItemById(...). */
     void getItemById(ContentId id, Callback<OfflineItem> callback);

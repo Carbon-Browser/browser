@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/history/history_service_factory.h"
@@ -113,8 +114,7 @@ void CustomHomePagesTableModel::MoveURLs(
   }
 
   // Insert moved elements.
-  std::copy(moved_entries.begin(), moved_entries.end(),
-      entries_.begin() + insert_before);
+  base::ranges::copy(moved_entries, entries_.begin() + insert_before);
 
   // Possibly large change, so tell the view to just rebuild itself.
   if (observer_)
@@ -269,7 +269,7 @@ void CustomHomePagesTableModel::OnGotOneOfManyTitles(
 void CustomHomePagesTableModel::OnGotTitle(const GURL& entry_url,
                                            bool observable,
                                            history::QueryURLResult result) {
-  Entry* entry = NULL;
+  Entry* entry = nullptr;
   size_t entry_index = 0;
   for (size_t i = 0; i < entries_.size(); ++i) {
     if (entries_[i].url == entry_url) {

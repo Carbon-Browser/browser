@@ -1,17 +1,19 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DESKS_STORAGE_CORE_DESK_MODEL_WRAPPER_H_
 #define COMPONENTS_DESKS_STORAGE_CORE_DESK_MODEL_WRAPPER_H_
 
+#include <stddef.h>
+
 #include <map>
 #include <memory>
 
 #include "ash/public/cpp/desk_template.h"
-#include "base/guid.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/uuid.h"
 #include "components/account_id/account_id.h"
 #include "components/desks_storage/core/desk_model.h"
 #include "components/desks_storage/core/desk_sync_bridge.h"
@@ -34,27 +36,27 @@ class DeskModelWrapper : public DeskModel {
   ~DeskModelWrapper() override;
 
   // DeskModel:
-  void GetAllEntries(GetAllEntriesCallback callback) override;
-  void GetEntryByUUID(const std::string& uuid,
-                      GetEntryByUuidCallback callback) override;
+  DeskModel::GetAllEntriesResult GetAllEntries() override;
+  DeskModel::GetEntryByUuidResult GetEntryByUUID(
+      const base::Uuid& uuid) override;
   void AddOrUpdateEntry(std::unique_ptr<ash::DeskTemplate> new_entry,
                         AddOrUpdateEntryCallback callback) override;
-  void DeleteEntry(const std::string& uuid,
+  void DeleteEntry(const base::Uuid& uuid,
                    DeleteEntryCallback callback) override;
   void DeleteAllEntries(DeleteEntryCallback callback) override;
-  std::size_t GetEntryCount() const override;
-  std::size_t GetMaxEntryCount() const override;
-  std::size_t GetSaveAndRecallDeskEntryCount() const override;
-  std::size_t GetDeskTemplateEntryCount() const override;
-  std::size_t GetMaxSaveAndRecallDeskEntryCount() const override;
-  std::size_t GetMaxDeskTemplateEntryCount() const override;
-  std::vector<base::GUID> GetAllEntryUuids() const override;
+  size_t GetEntryCount() const override;
+  size_t GetSaveAndRecallDeskEntryCount() const override;
+  size_t GetDeskTemplateEntryCount() const override;
+  size_t GetMaxSaveAndRecallDeskEntryCount() const override;
+  size_t GetMaxDeskTemplateEntryCount() const override;
+  std::set<base::Uuid> GetAllEntryUuids() const override;
   bool IsReady() const override;
   bool IsSyncing() const override;
   ash::DeskTemplate* FindOtherEntryWithName(
       const std::u16string& name,
       ash::DeskTemplateType type,
-      const base::GUID& uuid) const override;
+      const base::Uuid& uuid) const override;
+  std::string GetCacheGuid() override;
 
   // Setter method to set `desk_template_model_` to the correct `bridge`.
   void SetDeskSyncBridge(desks_storage::DeskSyncBridge* bridge) {
@@ -64,26 +66,19 @@ class DeskModelWrapper : public DeskModel {
  private:
   desks_storage::DeskSyncBridge* GetDeskTemplateModel() const;
 
-  // Wrapper for GetAllEntriesCallback to consolidate entries from both storage
-  // models into one.
-  void OnGetAllEntries(
-      const std::vector<const ash::DeskTemplate*>& template_entries,
-      DeskModel::GetAllEntriesCallback callback,
-      desks_storage::DeskModel::GetAllEntriesStatus status,
-      const std::vector<const ash::DeskTemplate*>& entries);
-
   // Wrapper for DeleteEntryCallback to consolidate deleting all entries from
   // both storage models.
   void OnDeleteAllEntries(DeskModel::DeleteEntryCallback callback,
                           desks_storage::DeskModel::DeleteEntryStatus status);
 
-  desks_storage::DeskModel* save_and_recall_desks_model_;
+  raw_ptr<desks_storage::DeskModel, ExperimentalAsh>
+      save_and_recall_desks_model_;
 
-  desks_storage::DeskSyncBridge* desk_template_model_;
+  raw_ptr<desks_storage::DeskSyncBridge, ExperimentalAsh> desk_template_model_;
 
   base::WeakPtrFactory<DeskModelWrapper> weak_ptr_factory_{this};
 };
 
 }  // namespace desks_storage
 
-#endif  // COMPONENTS_DESKS_STORAGE_CORE_LOCAL_DESK_DATA_MANAGER_H_
+#endif  // COMPONENTS_DESKS_STORAGE_CORE_DESK_MODEL_WRAPPER_H_

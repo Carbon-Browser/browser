@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SERVICES_APP_SERVICE_PUBLIC_CPP_INTENT_FILTER_H_
 #define COMPONENTS_SERVICES_APP_SERVICE_PUBLIC_CPP_INTENT_FILTER_H_
 
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
@@ -13,7 +14,6 @@
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
 #include "components/services/app_service/public/cpp/macros.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace apps {
@@ -26,8 +26,8 @@ namespace apps {
 enum class IntentFilterMatchLevel {
   kNone = 0,
   kScheme = 1,
-  kHost = 2,
-  kPattern = 4,
+  kAuthority = 2,
+  kPath = 4,
   kMimeType = 8,
 };
 
@@ -35,35 +35,43 @@ enum class IntentFilterMatchLevel {
 // field will be matched against.
 // Values are persisted to disk by preferred_apps_converter.h, so should not be
 // changed or removed without migrating existing data.
-ENUM(ConditionType,
-     // Matches the URL scheme (e.g. https, tel).
-     kScheme,
-     // Matches the URL host (e.g. www.google.com).
-     kHost,
-     // Matches the URL path (e.g. /abc/*). Does not include the URL query or
-     // hash.
-     kPattern,
-     // Matches the action type (e.g. view, send).
-     kAction,
-     // Matches the top-level mime type (e.g. text/plain).
-     kMimeType,
-     // Matches against files. All files in the Intent must separately match a
-     // ConditionValue for this Condition to match. kFile conditions may only
-     // use the following PatternMatchTypes: kMimeType, kFileExtension,
-     // kIsDirectory, and kGlob.
-     kFile)
+enum class ConditionType {
+  // Matches the URL scheme (e.g. https, tel).
+  kScheme = 0,
+  // Matches the URL host and optional port (e.g. www.google.com:443).
+  // ConditionValue strings should be set using AuthorityView::Encode() however
+  // it is acceptable to supply just a host name; an absence of port will match
+  // on any port.
+  // PatternMatchType will only apply to the host part, the port if present will
+  // use kLiteral matching.
+  kAuthority = 1,
+  // Matches the URL path (e.g. /abc/*). Does not include the URL query or
+  // hash.
+  kPath = 2,
+  // Matches the action type (e.g. view, send).
+  kAction = 3,
+  // Matches the top-level mime type (e.g. text/plain).
+  kMimeType = 4,
+  // Matches against files. All files in the Intent must separately match a
+  // ConditionValue for this Condition to match. kFile conditions may only
+  // use the following PatternMatchTypes: kMimeType, kFileExtension,
+  // kIsDirectory, and kGlob.
+  kFile = 5
+};
 
 // Describes what pattern matching rules are applied to a ConditionValue.
 // Values are persisted to disk by preferred_apps_converter.h, so should not be
-// changed or removed without migrating existing data.
+// changed or removed without migrating existing data and the integer values
+// should be preserved
 enum class PatternMatchType {
-  kNone = 0,
+  // kNone    Deprecated. Use kLiteral which has the same function
+
   // The ConditionValue is a literal string which must match the value in the
   // Intent exactly.
-  kLiteral,
+  kLiteral = 1,
   // The ConditionValue matches if it is a prefix of the value in the Intent.
   // For example, a ConditionValue of "/users/" matches a value of "/users/me".
-  kPrefix,
+  kPrefix = 2,
   // The ConditionValue is a simple glob pattern which matches against the value
   // in the Intent. The syntax allows the following special characters:
   //  *  - match 0 or more occurrences of the previous character
@@ -71,22 +79,23 @@ enum class PatternMatchType {
   //  \  - escape character
   // All wildcard matching is non-greedy. This syntax is the same as Android:
   // https://developer.android.com/reference/android/os/PatternMatcher#PATTERN_SIMPLE_GLOB
-  kGlob,
+  kGlob = 3,
   // The ConditionValue is a mime type with optional wildcards (e.g.
   // "image/png", or "image/*", or "*/*"), which matches against a mime type
   // from the Intent.
-  kMimeType,
+  kMimeType = 4,
   // The ConditionValue is a file extension (e.g. "png") or a wildcard ("*")
   // which is matched against file names in the Intent. Common double extension
   // file types are supported: for example, a file named "file.tar.gz" matches
-  // both "gz" and "tar.gz" ConditionValues.
-  kFileExtension,
+  // both "gz" and "tar.gz" ConditionValues. File extension matching is
+  // case-insensitive.
+  kFileExtension = 5,
   // The ConditionValue matches any files which are directories.
-  kIsDirectory,
+  kIsDirectory = 6,
   // The ConditionValue matches if it is a suffix of the value in the Intent.
   // For example, a ConditionValue of ".google.com" matches a value of
   // "maps.google.com".
-  kSuffix
+  kSuffix = 7
 };
 
 // A ConditionValue is a possible value that is accepted by a Condition. The
@@ -165,10 +174,6 @@ struct COMPONENT_EXPORT(APP_TYPES) IntentFilter {
   void GetMimeTypesAndExtensions(std::set<std::string>& mime_types,
                                  std::set<std::string>& file_extensions);
 
-  // Returns all of the links that this intent filter would accept, to be used
-  // in listing all of the supported links for a given app.
-  std::set<std::string> GetSupportedLinksForAppManagement();
-
   // Returns true if the filter is a browser filter, i.e. can handle all https
   // or http scheme.
   bool IsBrowserFilter();
@@ -212,56 +217,6 @@ bool IsEqual(const IntentFilters& source, const IntentFilters& target);
 COMPONENT_EXPORT(APP_TYPES)
 bool Contains(const IntentFilters& intent_filters,
               const IntentFilterPtr& intent_filter);
-
-// TODO(crbug.com/1253250): Remove these functions after migrating to non-mojo
-// AppService.
-COMPONENT_EXPORT(APP_TYPES)
-ConditionType ConvertMojomConditionTypeToConditionType(
-    const apps::mojom::ConditionType& mojom_condition_type);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::ConditionType ConvertConditionTypeToMojomConditionType(
-    const ConditionType& condition_type);
-
-COMPONENT_EXPORT(APP_TYPES)
-PatternMatchType ConvertMojomPatternMatchTypeToPatternMatchType(
-    const apps::mojom::PatternMatchType& mojom_pattern_match_type);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::PatternMatchType ConvertPatternMatchTypeToMojomPatternMatchType(
-    const PatternMatchType& pattern_match_type);
-
-COMPONENT_EXPORT(APP_TYPES)
-ConditionValuePtr ConvertMojomConditionValueToConditionValue(
-    const apps::mojom::ConditionValuePtr& mojom_condition_value);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::ConditionValuePtr ConvertConditionValueToMojomConditionValue(
-    const ConditionValuePtr& condition_value);
-
-COMPONENT_EXPORT(APP_TYPES)
-ConditionPtr ConvertMojomConditionToCondition(
-    const apps::mojom::ConditionPtr& mojom_condition);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::ConditionPtr ConvertConditionToMojomCondition(
-    const ConditionPtr& condition);
-
-COMPONENT_EXPORT(APP_TYPES)
-IntentFilterPtr ConvertMojomIntentFilterToIntentFilter(
-    const apps::mojom::IntentFilterPtr& mojom_intent_filter);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::IntentFilterPtr ConvertIntentFilterToMojomIntentFilter(
-    const IntentFilterPtr& intent_filter);
-
-COMPONENT_EXPORT(APP_TYPES)
-IntentFilters ConvertMojomIntentFiltersToIntentFilters(
-    const std::vector<apps::mojom::IntentFilterPtr>& mojom_intent_filters);
-
-COMPONENT_EXPORT(APP_TYPES)
-std::vector<apps::mojom::IntentFilterPtr>
-ConvertIntentFiltersToMojomIntentFilters(const IntentFilters& intent_filters);
 
 }  // namespace apps
 

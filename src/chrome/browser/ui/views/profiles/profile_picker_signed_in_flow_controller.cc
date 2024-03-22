@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,34 @@
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/signin/signin_util.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
+#include "chrome/browser/ui/views/profiles/profile_management_types.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_turn_sync_on_delegate.h"
 #include "chrome/browser/ui/webui/signin/signin_url_utils.h"
+#include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "chrome/browser/ui/webui/signin/sync_confirmation_ui.h"
 #include "chrome/browser/ui/webui/signin/turn_sync_on_helper.h"
 #include "chrome/common/webui_url_constants.h"
+#include "components/signin/public/base/signin_metrics.h"
 #include "components/signin/public/identity_manager/account_info.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/context_menu_params.h"
 #include "content/public/browser/render_frame_host.h"
 
 ProfilePickerSignedInFlowController::ProfilePickerSignedInFlowController(
     ProfilePickerWebContentsHost* host,
     Profile* profile,
+    const CoreAccountInfo& account_info,
     std::unique_ptr<content::WebContents> contents,
+    signin_metrics::AccessPoint signin_access_point,
     absl::optional<SkColor> profile_color)
     : host_(host),
       profile_(profile),
+      account_info_(account_info),
       contents_(std::move(contents)),
+      signin_access_point_(signin_access_point),
       profile_color_(profile_color) {
   DCHECK(profile_);
   DCHECK(contents_);
@@ -41,24 +50,29 @@ ProfilePickerSignedInFlowController::~ProfilePickerSignedInFlowController() {
 }
 
 void ProfilePickerSignedInFlowController::Init() {
+  DCHECK(!IsInitialized());
+
   contents()->SetDelegate(this);
 
   const CoreAccountInfo& account_info =
-      IdentityManagerFactory::GetForProfile(profile_)->GetPrimaryAccountInfo(
-          signin::ConsentLevel::kSignin);
-  DCHECK(!account_info.IsEmpty()) << "A profile with valid (unconsented) "
-                                     "primary account must be passed in.";
+      IdentityManagerFactory::GetForProfile(profile_)->FindExtendedAccountInfo(
+          account_info_);
+  DCHECK(!account_info.IsEmpty())
+      << "A profile with a valid account must be passed in.";
   email_ = account_info.email;
 
-  base::OnceClosure sync_consent_completed_closure = base::BindOnce(
-      &ProfilePickerSignedInFlowController::FinishAndOpenBrowser,
-      weak_ptr_factory_.GetWeakPtr(), ProfilePicker::BrowserOpenedCallback());
+  base::OnceClosure sync_consent_completed_closure =
+      base::BindOnce(&ProfilePickerSignedInFlowController::FinishAndOpenBrowser,
+                     weak_ptr_factory_.GetWeakPtr(), PostHostClearedCallback());
 
   // TurnSyncOnHelper deletes itself once done.
   new TurnSyncOnHelper(
-      profile_, signin_metrics::AccessPoint::ACCESS_POINT_USER_MANAGER,
+      profile_, signin_access_point_,
       signin_metrics::PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO,
-      signin_metrics::Reason::kSigninPrimaryAccount, account_info.account_id,
+      signin_util::IsForceSigninEnabled()
+          ? signin_metrics::Reason::kForcedSigninPrimaryAccount
+          : signin_metrics::Reason::kSigninPrimaryAccount,
+      account_info.account_id,
       TurnSyncOnHelper::SigninAbortedMode::KEEP_ACCOUNT,
       std::make_unique<ProfilePickerTurnSyncOnDelegate>(
           weak_ptr_factory_.GetWeakPtr(), profile_),
@@ -69,9 +83,6 @@ void ProfilePickerSignedInFlowController::Cancel() {}
 
 void ProfilePickerSignedInFlowController::SwitchToSyncConfirmation() {
   DCHECK(IsInitialized());
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  PreShowScreenForDebug();
-#endif
   host_->ShowScreen(contents(), GetSyncConfirmationURL(/*loading=*/false),
                     /*navigation_finished_closure=*/
                     base::BindOnce(&ProfilePickerSignedInFlowController::
@@ -82,12 +93,9 @@ void ProfilePickerSignedInFlowController::SwitchToSyncConfirmation() {
 }
 
 void ProfilePickerSignedInFlowController::SwitchToEnterpriseProfileWelcome(
-    EnterpriseProfileWelcomeUI::ScreenType type,
+    ManagedUserProfileNoticeUI::ScreenType type,
     signin::SigninChoiceCallback proceed_callback) {
   DCHECK(IsInitialized());
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  PreShowScreenForDebug();
-#endif
   host_->ShowScreen(contents(),
                     GURL(chrome::kChromeUIEnterpriseProfileWelcomeURL),
                     /*navigation_finished_closure=*/
@@ -99,15 +107,19 @@ void ProfilePickerSignedInFlowController::SwitchToEnterpriseProfileWelcome(
                                    std::move(proceed_callback)));
 }
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+void ProfilePickerSignedInFlowController::SwitchToLacrosIntro(
+    signin::SigninChoiceCallback proceed_callback) {
+  NOTREACHED();
+}
+#endif
+
 void ProfilePickerSignedInFlowController::SwitchToProfileSwitch(
     const base::FilePath& profile_path) {
   DCHECK(IsInitialized());
   // The sign-in flow is finished, no profile window should be shown in the end.
   Cancel();
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  PreShowScreenForDebug();
-#endif
   switch_profile_path_ = profile_path;
   host_->ShowScreenInPickerContents(
       GURL(chrome::kChromeUIProfilePickerUrl).Resolve("profile-switch"));
@@ -127,7 +139,7 @@ GURL ProfilePickerSignedInFlowController::GetSyncConfirmationURL(bool loading) {
   GURL url = GURL(chrome::kChromeUISyncConfirmationURL);
   return AppendSyncConfirmationQueryParams(
       loading ? url.Resolve(chrome::kChromeUISyncConfirmationLoadingPath) : url,
-      /*is_modal=*/false);
+      SyncConfirmationStyle::kWindow);
 }
 
 std::unique_ptr<content::WebContents>
@@ -142,6 +154,12 @@ bool ProfilePickerSignedInFlowController::HandleContextMenu(
   return true;
 }
 
+bool ProfilePickerSignedInFlowController::HandleKeyboardEvent(
+    content::WebContents* source,
+    const content::NativeWebKeyboardEvent& event) {
+  return host_->GetWebContentsDelegate()->HandleKeyboardEvent(source, event);
+}
+
 void ProfilePickerSignedInFlowController::SwitchToSyncConfirmationFinished() {
   DCHECK(IsInitialized());
   // Initialize the WebUI page once we know it's committed.
@@ -153,23 +171,22 @@ void ProfilePickerSignedInFlowController::SwitchToSyncConfirmationFinished() {
 
 void ProfilePickerSignedInFlowController::
     SwitchToEnterpriseProfileWelcomeFinished(
-        EnterpriseProfileWelcomeUI::ScreenType type,
+        ManagedUserProfileNoticeUI::ScreenType type,
         signin::SigninChoiceCallback proceed_callback) {
   DCHECK(IsInitialized());
   // Initialize the WebUI page once we know it's committed.
-  EnterpriseProfileWelcomeUI* enterprise_profile_welcome_ui =
+  ManagedUserProfileNoticeUI* managed_user_profile_notice_ui =
       contents()
           ->GetWebUI()
           ->GetController()
-          ->GetAs<EnterpriseProfileWelcomeUI>();
+          ->GetAs<ManagedUserProfileNoticeUI>();
 
-  enterprise_profile_welcome_ui->Initialize(
+  managed_user_profile_notice_ui->Initialize(
       /*browser=*/nullptr, type,
       IdentityManagerFactory::GetForProfile(profile_)
           ->FindExtendedAccountInfoByEmailAddress(email_),
       /*profile_creation_required_by_policy=*/false,
-      /*show_link_data_option=*/false, GetProfileColor(),
-      std::move(proceed_callback));
+      /*show_link_data_option=*/false, std::move(proceed_callback));
 }
 
 bool ProfilePickerSignedInFlowController::IsInitialized() const {

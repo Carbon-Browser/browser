@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,7 @@ class ChromeExtensionsDispatcherDelegate
   void InitializeBindingsSystem(
       extensions::Dispatcher* dispatcher,
       extensions::NativeExtensionBindingsSystem* bindings_system) override;
+  void EnableCustomElementAllowlist() override;
 };
 
 #endif  // CHROME_RENDERER_EXTENSIONS_CHROME_EXTENSIONS_DISPATCHER_DELEGATE_H_

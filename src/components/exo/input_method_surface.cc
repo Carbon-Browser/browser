@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,8 @@ InputMethodSurface::InputMethodSurface(InputMethodSurfaceManager* manager,
           surface,
           true /* can_minimize */,
           ash::kShellWindowId_ArcVirtualKeyboardContainer,
-          default_scale_cancellation),
+          default_scale_cancellation,
+          /*supports_floated_state=*/false),
       manager_(manager),
       input_method_bounds_() {
   host_window()->SetName("ExoInputMethodSurface");
@@ -86,12 +87,13 @@ void InputMethodSurface::OnSurfaceCommit() {
   }
 }
 
-void InputMethodSurface::SetWidgetBounds(const gfx::Rect& bounds) {
+void InputMethodSurface::SetWidgetBounds(const gfx::Rect& bounds,
+                                         bool adjusted_by_server) {
   if (bounds == widget_->GetWindowBoundsInScreen())
     return;
 
   widget_->SetBounds(bounds);
-  UpdateSurfaceBounds();
+  UpdateHostWindowOrigin();
 
   // Bounds change requests will be ignored in client side.
 }

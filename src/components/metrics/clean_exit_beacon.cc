@@ -1,15 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/metrics/clean_exit_beacon.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
 #include "base/check_op.h"
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_string_value_serializer.h"
@@ -143,7 +143,7 @@ void MaybeIncrementCrashStreak(bool did_previous_session_exit_cleanly,
     local_state->SetInteger(kVariationsCrashStreak, num_crashes);
   }
   base::UmaHistogramSparse("Variations.SafeMode.Streak.Crashes",
-                           base::clamp(num_crashes, 0, 100));
+                           std::clamp(num_crashes, 0, 100));
 }
 
 // Records |file_state| in a histogram.
@@ -186,17 +186,17 @@ std::unique_ptr<base::Value> MaybeGetFileContents(
         error_code);
     return nullptr;
   }
-  if (!beacon_file_contents->is_dict() || beacon_file_contents->DictEmpty()) {
+  if (!beacon_file_contents->is_dict() ||
+      beacon_file_contents->GetDict().empty()) {
     RecordBeaconFileState(BeaconFileState::kMissingDictionary);
     return nullptr;
   }
-  if (!beacon_file_contents->FindKeyOfType(kVariationsCrashStreak,
-                                           base::Value::Type::INTEGER)) {
+  const base::Value::Dict& beacon_dict = beacon_file_contents->GetDict();
+  if (!beacon_dict.FindInt(kVariationsCrashStreak)) {
     RecordBeaconFileState(BeaconFileState::kMissingCrashStreak);
     return nullptr;
   }
-  if (!beacon_file_contents->FindKeyOfType(prefs::kStabilityExitedCleanly,
-                                           base::Value::Type::BOOLEAN)) {
+  if (!beacon_dict.FindBool(prefs::kStabilityExitedCleanly)) {
     RecordBeaconFileState(BeaconFileState::kMissingBeacon);
     return nullptr;
   }
@@ -211,14 +211,12 @@ const base::FilePath::CharType kCleanExitBeaconFilename[] =
 
 CleanExitBeacon::CleanExitBeacon(const std::wstring& backup_registry_key,
                                  const base::FilePath& user_data_dir,
-                                 PrefService* local_state,
-                                 version_info::Channel channel)
+                                 PrefService* local_state)
     : backup_registry_key_(backup_registry_key),
       user_data_dir_(user_data_dir),
       local_state_(local_state),
       initial_browser_last_live_timestamp_(
-          local_state->GetTime(prefs::kStabilityBrowserLastLiveTimeStamp)),
-      channel_(channel) {
+          local_state->GetTime(prefs::kStabilityBrowserLastLiveTimeStamp)) {
   DCHECK_NE(PrefService::INITIALIZATION_STATUS_WAITING,
             local_state_->GetInitializationStatus());
 }
@@ -426,26 +424,22 @@ bool CleanExitBeacon::IsBeaconFileSupported() const {
 }
 
 void CleanExitBeacon::WriteBeaconFile(bool exited_cleanly) const {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetBoolKey(prefs::kStabilityExitedCleanly, exited_cleanly);
-  dict.SetIntKey(kVariationsCrashStreak,
-                 local_state_->GetInteger(kVariationsCrashStreak));
+  base::Value::Dict dict;
+  dict.Set(prefs::kStabilityExitedCleanly, exited_cleanly);
+  dict.Set(kVariationsCrashStreak,
+           local_state_->GetInteger(kVariationsCrashStreak));
 
   std::string json_string;
   JSONStringValueSerializer serializer(&json_string);
   bool success = serializer.Serialize(dict);
   DCHECK(success);
-  int data_size = static_cast<int>(json_string.size());
-  DCHECK_NE(data_size, 0);
-  int bytes_written;
+  DCHECK(!json_string.empty());
   {
     base::ScopedAllowBlocking allow_io;
-    // WriteFile() returns -1 on error.
-    bytes_written =
-        base::WriteFile(beacon_file_path_, json_string.data(), data_size);
+    success = base::WriteFile(beacon_file_path_, json_string);
   }
   base::UmaHistogramBoolean("Variations.ExtendedSafeMode.BeaconFileWrite",
-                            bytes_written != -1);
+                            success);
 }
 
 }  // namespace metrics

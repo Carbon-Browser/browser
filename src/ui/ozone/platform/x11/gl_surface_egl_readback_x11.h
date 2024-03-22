@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,8 @@ namespace ui {
 // GLSurface implementation that copies pixels from readback to an XWindow.
 class GLSurfaceEglReadbackX11 : public GLSurfaceEglReadback {
  public:
-  explicit GLSurfaceEglReadbackX11(gfx::AcceleratedWidget window);
+  GLSurfaceEglReadbackX11(gl::GLDisplayEGL* display,
+                          gfx::AcceleratedWidget window);
 
   GLSurfaceEglReadbackX11(const GLSurfaceEglReadbackX11&) = delete;
   GLSurfaceEglReadbackX11& operator=(const GLSurfaceEglReadbackX11&) = delete;

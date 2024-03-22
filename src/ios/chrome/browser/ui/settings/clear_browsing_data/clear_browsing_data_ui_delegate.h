@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,13 @@ class GURL;
 
 // Opens URL in a new non-incognito tab and dismisses the clear browsing data
 // view.
-- (void)openURL:(const GURL&)URL;
-// Notifies the delegate that Clear Browsing Data should be dismissed.
-- (void)dismissClearBrowsingData;
+- (void)clearBrowsingDataTableViewController:
+            (ClearBrowsingDataTableViewController*)controller
+                              wantsToOpenURL:(const GURL&)URL;
+// Notifies the delegate that Clear Browsing Data wants to be dismissed.
+- (void)clearBrowsingDataTableViewControllerWantsDismissal:
+    (ClearBrowsingDataTableViewController*)controller;
+
 // Called when the view controller is removed from its parent.
 - (void)clearBrowsingDataTableViewControllerWasRemoved:
     (ClearBrowsingDataTableViewController*)controller;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,17 +61,20 @@ void CrostiniAnsiblePlaybookExternalDataHandler::OnExternalDataFetched(
 }
 
 void CrostiniAnsiblePlaybookExternalDataHandler::RemoveForAccountId(
-    const AccountId& account_id) {
+    const AccountId& account_id,
+    base::OnceClosure on_removed) {
   Profile* profile =
       ash::ProfileHelper::Get()->GetProfileByAccountId(account_id);
   if (!profile) {
     LOG(ERROR) << "No profile for user is specified";
+    std::move(on_removed).Run();
     return;
   }
   profile->GetPrefs()->ClearPref(
       crostini::prefs::kCrostiniAnsiblePlaybookFilePath);
   profile->GetPrefs()->ClearPref(
       crostini::prefs::kCrostiniDefaultContainerConfigured);
+  std::move(on_removed).Run();
 }
 
 }  // namespace policy

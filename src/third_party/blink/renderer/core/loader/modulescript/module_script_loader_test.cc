@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -42,6 +41,7 @@
 #include "third_party/blink/renderer/platform/testing/mock_context_lifecycle_notifier.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 #include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
 
 namespace blink {
@@ -65,7 +65,7 @@ class TestModuleScriptLoaderClient final
   }
 
   bool WasNotifyFinished() const { return was_notify_finished_; }
-  ModuleScript* GetModuleScript() { return module_script_; }
+  ModuleScript* GetModuleScript() { return module_script_.Get(); }
 
  private:
   bool was_notify_finished_ = false;
@@ -85,7 +85,7 @@ class ModuleScriptLoaderTestModulator final : public DummyModulator {
     return KURL(base_url, module_request);
   }
 
-  ScriptState* GetScriptState() override { return script_state_; }
+  ScriptState* GetScriptState() override { return script_state_.Get(); }
 
   ModuleScriptFetcher* CreateModuleScriptFetcher(
       ModuleScriptCustomFetchType custom_fetch_type,
@@ -94,8 +94,7 @@ class ModuleScriptLoaderTestModulator final : public DummyModulator {
     if (auto* scope = DynamicTo<WorkletGlobalScope>(execution_context)) {
       EXPECT_EQ(ModuleScriptCustomFetchType::kWorkletAddModule,
                 custom_fetch_type);
-      return MakeGarbageCollected<WorkletModuleScriptFetcher>(
-          scope->GetModuleResponsesMap(), pass_key);
+      return MakeGarbageCollected<WorkletModuleScriptFetcher>(scope, pass_key);
     }
     EXPECT_EQ(ModuleScriptCustomFetchType::kNone, custom_fetch_type);
     return MakeGarbageCollected<DocumentModuleScriptFetcher>(pass_key);
@@ -148,7 +147,6 @@ class ModuleScriptLoaderTest : public PageTestBase {
   const base::TickClock* GetTickClock() override {
     return platform_->test_task_runner()->GetMockTickClock();
   }
-  base::test::ScopedFeatureList scoped_feature_list_;
 
  protected:
   const KURL url_;
@@ -169,7 +167,6 @@ void ModuleScriptLoaderTest::SetUp() {
 ModuleScriptLoaderTest::ModuleScriptLoaderTest()
     : url_("https://example.test"),
       security_origin_(SecurityOrigin::Create(url_)) {
-  scoped_feature_list_.InitAndEnableFeature(blink::features::kJSONModules);
   platform_->AdvanceClockSeconds(1.);  // For non-zero DocumentParserTimings
 }
 
@@ -215,12 +212,12 @@ void ModuleScriptLoaderTest::InitializeForWorklet() {
       MakeGarbageCollected<WorkletModuleResponsesMap>(),
       mojo::NullRemote() /* browser_interface_broker */,
       mojo::NullRemote() /* code_cache_host_interface */,
-      BeginFrameProviderParams(), nullptr /* parent_permissions_policy */,
+      mojo::NullRemote() /* blob_url_store */, BeginFrameProviderParams(),
+      nullptr /* parent_permissions_policy */,
       base::UnguessableToken::Create() /* agent_cluster_id */);
   creation_params->parent_context_token = GetFrame().GetLocalFrameToken();
   global_scope_ = MakeGarbageCollected<FakeWorkletGlobalScope>(
-      std::move(creation_params), *reporting_proxy_, &GetFrame(),
-      false /* create_microtask_queue */);
+      std::move(creation_params), *reporting_proxy_, &GetFrame());
   global_scope_->ScriptController()->Initialize(NullURL());
   modulator_ = MakeGarbageCollected<ModuleScriptLoaderTestModulator>(
       global_scope_->ScriptController()->GetScriptState());

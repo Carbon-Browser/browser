@@ -61,9 +61,7 @@ SVGGeometryElement::SVGGeometryElement(const QualifiedName& tag_name,
                                        Document& document,
                                        ConstructionType construction_type)
     : SVGGraphicsElement(tag_name, document, construction_type),
-      path_length_(MakeGarbageCollected<SVGAnimatedPathLength>(this)) {
-  AddToPropertyMap(path_length_);
-}
+      path_length_(MakeGarbageCollected<SVGAnimatedPathLength>(this)) {}
 
 void SVGGeometryElement::SvgAttributeChanged(
     const SvgAttributeChangedParams& params) {
@@ -122,7 +120,7 @@ bool SVGGeometryElement::isPointInStroke(SVGPointTearOff* point) const {
     // Un-scale to get back to the root-transform (cheaper than re-computing
     // the root transform from scratch).
     root_transform.Scale(layout_shape.StyleRef().EffectiveZoom())
-        .Multiply(transform);
+        .PreConcat(transform);
   } else {
     root_transform = layout_shape.ComputeRootTransform();
   }
@@ -230,7 +228,7 @@ float SVGGeometryElement::PathLengthScaleFactor(float computed_path_length,
   // However, since 0 * Infinity is not zero (but rather NaN) per
   // IEEE, we need to make sure to clamp the result below - avoiding
   // the actual Infinity (and using max()) instead.
-  return ClampTo<float>(computed_path_length / author_path_length);
+  return ClampTo<float>(computed_path_length / std::fabs(author_path_length));
 }
 
 void SVGGeometryElement::GeometryPresentationAttributeChanged(
@@ -247,12 +245,27 @@ void SVGGeometryElement::GeometryAttributeChanged() {
     layout_object->SetNeedsShapeUpdate();
     MarkForLayoutAndParentResourceInvalidation(*layout_object);
   }
+  NotifyResourceClients();
 }
 
-LayoutObject* SVGGeometryElement::CreateLayoutObject(const ComputedStyle&,
-                                                     LegacyLayout) {
+LayoutObject* SVGGeometryElement::CreateLayoutObject(const ComputedStyle&) {
   // By default, any subclass is expected to do path-based drawing.
   return MakeGarbageCollected<LayoutSVGPath>(this);
+}
+
+SVGAnimatedPropertyBase* SVGGeometryElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kPathLengthAttr) {
+    return path_length_.Get();
+  } else {
+    return SVGGraphicsElement::PropertyFromAttribute(attribute_name);
+  }
+}
+
+void SVGGeometryElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{path_length_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGGraphicsElement::SynchronizeAllSVGAttributes();
 }
 
 }  // namespace blink

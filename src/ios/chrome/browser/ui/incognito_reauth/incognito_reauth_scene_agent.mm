@@ -1,33 +1,30 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_scene_agent.h"
 
-#include "base/check.h"
+#import "base/check.h"
 #import "base/ios/crb_protocol_observers.h"
-#include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/metrics/user_metrics.h"
-#include "base/metrics/user_metrics_action.h"
-#include "base/strings/sys_string_conversions.h"
-#include "components/pref_registry/pref_registry_syncable.h"
-#include "components/prefs/pref_service.h"
-#include "ios/chrome/browser/application_context.h"
-#import "ios/chrome/browser/main/browser.h"
-#include "ios/chrome/browser/pref_names.h"
+#import "base/metrics/histogram_functions.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/metrics/user_metrics.h"
+#import "base/metrics/user_metrics_action.h"
+#import "base/strings/sys_string_conversions.h"
+#import "components/pref_registry/pref_registry_syncable.h"
+#import "components/prefs/pref_service.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_util.h"
-#import "ios/chrome/browser/ui/main/browser_interface_provider.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "ios/chrome/common/ui/reauthentication/reauthentication_protocol.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/web_state.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 @interface IncognitoReauthObserverList
     : CRBProtocolObservers <IncognitoReauthObserver>
@@ -89,6 +86,12 @@
 
   if (!self.isAuthenticationRequired) {
     [self notifyObservers];
+    // If reauthentication is not required, it should be considered a success
+    // for the caller, but do not update the authenticatedSinceLastForeground
+    // as the authentication did not happen.
+    if (completion) {
+      completion(YES);
+    }
     return;
   }
 
@@ -97,7 +100,7 @@
 
   NSString* authReason = l10n_util::GetNSStringF(
       IDS_IOS_INCOGNITO_REAUTH_SYSTEM_DIALOG_REASON,
-      base::SysNSStringToUTF16(biometricAuthenticationTypeString()));
+      base::SysNSStringToUTF16(BiometricAuthenticationTypeString()));
 
   __weak IncognitoReauthSceneAgent* weakSelf = self;
   void (^completionHandler)(ReauthenticationResult) =
@@ -124,7 +127,7 @@
   [self.observers removeObserver:observer];
 }
 
-#pragma mark properties
+#pragma mark - properties
 
 - (void)setAuthenticatedSinceLastForeground:(BOOL)authenticated {
   _authenticatedSinceLastForeground = authenticated;
@@ -135,9 +138,9 @@
 
 - (void)updateWindowHasIncognitoContent:(SceneState*)sceneState {
   BOOL hasIncognitoContent = YES;
-  if (sceneState.interfaceProvider.hasIncognitoInterface) {
+  if (sceneState.browserProviderInterface.hasIncognitoBrowserProvider) {
     hasIncognitoContent =
-        sceneState.interfaceProvider.incognitoInterface.browser
+        sceneState.browserProviderInterface.incognitoBrowserProvider.browser
             ->GetWebStateList()
             ->count() > 0;
     // If there is no tabs, act as if the user authenticated since last
@@ -178,11 +181,14 @@
     self.authenticatedSinceLastForeground = NO;
   } else if (level >= SceneActivationLevelForegroundInactive) {
     [self updateWindowHasIncognitoContent:sceneState];
-    [self logEnabledHistogramOnce];
     // Close media presentations when the app is foregrounded rather than
     // backgrounded to avoid freezes.
     [self closeMediaPresentations];
   }
+}
+
+- (void)sceneStateDidEnableUI:(SceneState*)sceneState {
+  [self logEnabledHistogramOnce];
 }
 
 #pragma mark - private
@@ -230,7 +236,7 @@
     return;
 
   Browser* browser =
-      self.sceneState.interfaceProvider.incognitoInterface.browser;
+      self.sceneState.browserProviderInterface.incognitoBrowserProvider.browser;
   if (browser) {
     if (browser->GetWebStateList() &&
         browser->GetWebStateList()->GetActiveWebState()) {

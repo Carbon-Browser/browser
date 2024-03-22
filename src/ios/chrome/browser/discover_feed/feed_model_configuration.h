@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,15 +17,15 @@
 // Creates the configuration for a Discover feed.
 + (instancetype)discoverFeedModelConfiguration;
 
-// Creates the configuration for a Following feed with a given |sortType|.
+// Creates the configuration for a Following feed with a given `sortType`.
 + (instancetype)followingModelConfigurationWithSortType:
     (FollowingFeedSortType)sortType;
 
 // The type of feed to be created.
 @property(nonatomic, readonly) FeedType feedType;
 
-// The sorting order for the Following feed. Only used if |feedType| is
-// the Following feed. Otherwise, returns |FollowingFeedSortTypeUndefined|.
+// The sorting order for the Following feed. Only used if `feedType` is
+// the Following feed. Otherwise, returns `FollowingFeedSortTypeUndefined`.
 @property(nonatomic, readonly) FollowingFeedSortType followingFeedSortType;
 
 @end

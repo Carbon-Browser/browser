@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,8 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
-#include "ash/strings/grit/ash_strings.h"
 #include "ash/system/toast/toast_manager_impl.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "components/live_caption/views/caption_bubble.h"
 #include "components/live_caption/views/caption_bubble_model.h"
 #include "ui/aura/window.h"
@@ -51,7 +50,13 @@ constexpr char kProjectorSaveErrorNotificationId[] =
     "projector_save_error_notification";
 
 ProjectorAnnotationTray* GetProjectorAnnotationTrayForRoot(aura::Window* root) {
-  DCHECK(root);
+  // It may happen that root is nullptr. This may happen in the event that
+  // the annotation tray is hidden before the canvas finishes its
+  // initialization.
+  if (!root) {
+    return nullptr;
+  }
+
   DCHECK(root->IsRootWindow());
 
   // Recording can end when a display being fullscreen-captured gets removed, in
@@ -85,9 +90,9 @@ void ToggleAnnotatorCanvas() {
   // |CaptureModeController| asserts all invariants via DCHECKs, and those
   // tests would crash. Remove any unnecessary mocks and test the real thing
   // if possible.
-  if (capture_mode_controller->is_recording_in_progress())
+  if (capture_mode_controller->is_recording_in_progress()) {
     capture_mode_controller->ToggleRecordingOverlayEnabled();
-  return;
+  }
 }
 
 // Shows a Projector-related notification to the user with the given parameters.
@@ -101,7 +106,7 @@ void ShowNotification(
     scoped_refptr<message_center::NotificationDelegate> delegate = nullptr,
     const gfx::VectorIcon& notification_icon = kPaletteTrayIconProjectorIcon) {
   std::unique_ptr<message_center::Notification> notification =
-      CreateSystemNotification(
+      CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE, notification_id,
           l10n_util::GetStringUTF16(title_id),
           l10n_util::GetStringUTF16(message_id),
@@ -122,11 +127,11 @@ void ShowNotification(
 }  // namespace
 
 // static
-void ProjectorUiController::ShowFailureNotification(int message_id) {
+void ProjectorUiController::ShowFailureNotification(int message_id,
+                                                    int title_id) {
   RecordCreationFlowError(message_id);
   ShowNotification(
-      kProjectorErrorNotificationId, IDS_ASH_PROJECTOR_FAILURE_TITLE,
-      message_id,
+      kProjectorErrorNotificationId, title_id, message_id,
       message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,16 @@
 #include "ash/style/style_util.h"
 #include "ash/system/media/unified_media_controls_controller.h"
 #include "ash/system/tray/tray_constants.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "components/media_message_center/media_notification_util.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/paint_vector_icon.h"
-#include "ui/views/accessibility/accessibility_paint_checks.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
@@ -88,6 +89,9 @@ const gfx::VectorIcon& GetVectorIconForMediaAction(MediaSessionAction action) {
     case MediaSessionAction::kHangUp:
     case MediaSessionAction::kRaise:
     case MediaSessionAction::kSetMute:
+    case MediaSessionAction::kPreviousSlide:
+    case MediaSessionAction::kNextSlide:
+    case MediaSessionAction::kEnterAutoPictureInPicture:
       NOTREACHED();
       break;
   }
@@ -117,7 +121,7 @@ UnifiedMediaControlsView::MediaActionButton::MediaActionButton(
               },
               controller,
               this),
-          IconButton::Type::kSmall,
+          IconButton::Type::kMedium,
           &GetVectorIconForMediaAction(action),
           accessible_name_id),
       action_(action) {
@@ -133,8 +137,11 @@ void UnifiedMediaControlsView::MediaActionButton::SetAction(
   action_ = action;
   set_tag(static_cast<int>(action));
   SetTooltipText(accessible_name);
-  UpdateVectorIcon();
+  SetVectorIcon(GetVectorIconForMediaAction(action));
 }
+
+BEGIN_METADATA(UnifiedMediaControlsView, MediaActionButton, IconButton)
+END_METADATA
 
 UnifiedMediaControlsView::UnifiedMediaControlsView(
     UnifiedMediaControlsController* controller)
@@ -145,10 +152,6 @@ UnifiedMediaControlsView::UnifiedMediaControlsView(
           },
           this)),
       controller_(controller) {
-  // TODO(crbug.com/1218186): Remove this, this is in place temporarily to be
-  // able to submit accessibility checks. This crashes if fetching a11y node
-  // data during paint because message_view_ is null.
-  SetProperty(views::kSkipAccessibilityPaintChecks, true);
   SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
   SetBackground(views::CreateRoundedRectBackground(GetBackgroundColor(),
                                                    kMediaControlsCornerRadius));
@@ -222,6 +225,15 @@ UnifiedMediaControlsView::UnifiedMediaControlsView(
       IDS_ASH_MEDIA_NOTIFICATION_ACTION_NEXT_TRACK));
 
   button_row_ = AddChildView(std::move(button_row));
+
+  // Focusable views must have an accessible name when shown/painted so that
+  // the screen reader knows what to present to the user. SetTitle sets the
+  // accessible name using a string which includes the title of the song being
+  // played. That seems like the wrong string to use upon creation if nothing
+  // is playing. Therefore setting the name to a string which lacks the "now
+  // playing" information.
+  SetAccessibleName(l10n_util::GetStringUTF16(
+      IDS_ASH_QUICK_SETTINGS_BUBBLE_MEDIA_CONTROLS_SUB_MENU_ACCESSIBLE_DESCRIPTION));
 }
 
 void UnifiedMediaControlsView::SetIsPlaying(bool playing) {
@@ -237,7 +249,7 @@ void UnifiedMediaControlsView::SetIsPlaying(bool playing) {
 }
 
 void UnifiedMediaControlsView::SetArtwork(
-    absl::optional<gfx::ImageSkia> artwork) {
+    std::optional<gfx::ImageSkia> artwork) {
   if (!artwork.has_value()) {
     artwork_view_->SetImage(nullptr);
     artwork_view_->SetVisible(false);
@@ -362,5 +374,8 @@ SkPath UnifiedMediaControlsView::GetArtworkClipPath() {
                     kArtworkCornerRadius, kArtworkCornerRadius);
   return path;
 }
+
+BEGIN_METADATA(UnifiedMediaControlsView)
+END_METADATA
 
 }  // namespace ash

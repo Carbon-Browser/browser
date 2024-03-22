@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/ui_devtools/views/view_element.h"
 
-#include <algorithm>
-
+#include "base/containers/contains.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -91,11 +91,9 @@ ViewElement::~ViewElement() = default;
 
 void ViewElement::OnChildViewRemoved(views::View* parent, views::View* view) {
   DCHECK_EQ(parent, view_);
-  auto iter = std::find_if(
-      children().begin(), children().end(), [view](UIElement* child) {
-        return view ==
-               UIElement::GetBackingElement<views::View, ViewElement>(child);
-      });
+  auto iter = base::ranges::find(children(), view, [](UIElement* child) {
+    return UIElement::GetBackingElement<views::View, ViewElement>(child);
+  });
   if (iter == children().end()) {
     RebuildTree();
     return;
@@ -107,12 +105,9 @@ void ViewElement::OnChildViewRemoved(views::View* parent, views::View* view) {
 
 void ViewElement::OnChildViewAdded(views::View* parent, views::View* view) {
   DCHECK_EQ(parent, view_);
-  auto iter = std::find_if(
-      children().begin(), children().end(), [view](UIElement* child) {
-        return view ==
-               UIElement::GetBackingElement<views::View, ViewElement>(child);
-      });
-  if (iter != children().end()) {
+  if (base::Contains(children(), view, [](UIElement* child) {
+        return UIElement::GetBackingElement<views::View, ViewElement>(child);
+      })) {
     RebuildTree();
     return;
   }
@@ -121,18 +116,16 @@ void ViewElement::OnChildViewAdded(views::View* parent, views::View* view) {
 
 void ViewElement::OnChildViewReordered(views::View* parent, views::View* view) {
   DCHECK_EQ(parent, view_);
-  auto iter = std::find_if(
-      children().begin(), children().end(), [view](UIElement* child) {
-        return view ==
-               UIElement::GetBackingElement<views::View, ViewElement>(child);
-      });
+  auto iter = base::ranges::find(children(), view, [](UIElement* child) {
+    return UIElement::GetBackingElement<views::View, ViewElement>(child);
+  });
   if (iter == children().end() ||
       children().size() != view_->children().size()) {
     RebuildTree();
     return;
   }
   UIElement* child_element = *iter;
-  ReorderChild(child_element, parent->GetIndexOf(view));
+  ReorderChild(child_element, parent->GetIndexOf(view).value());
 }
 
 void ViewElement::OnViewBoundsChanged(views::View* view) {
@@ -150,7 +143,7 @@ void ViewElement::SetBounds(const gfx::Rect& bounds) {
 
 std::vector<std::string> ViewElement::GetAttributes() const {
   // TODO(lgrey): Change name to class after updating tests.
-  return {"name", view_->GetClassName()};
+  return {"class", view_->GetClassName(), "name", view_->GetObjectName()};
 }
 
 std::pair<gfx::NativeWindow, gfx::Rect>
@@ -186,9 +179,9 @@ void ViewElement::PaintRect() const {
 
 bool ViewElement::FindMatchByElementID(
     const ui::ElementIdentifier& identifier) {
-  auto result = views::ElementTrackerViews::GetInstance()
-                    ->GetAllMatchingViewsInAnyContext(identifier);
-  return std::find(result.begin(), result.end(), view_) != result.end();
+  return base::Contains(views::ElementTrackerViews::GetInstance()
+                            ->GetAllMatchingViewsInAnyContext(identifier),
+                        view_);
 }
 
 bool ViewElement::DispatchMouseEvent(protocol::DOM::MouseEvent* event) {

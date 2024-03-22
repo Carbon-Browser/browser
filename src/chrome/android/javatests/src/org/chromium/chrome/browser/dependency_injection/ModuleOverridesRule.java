@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ import org.junit.runner.Description;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A TestRule for overriding Dagger Module factories.
- */
+/** A TestRule for overriding Dagger Module factories. */
 public class ModuleOverridesRule extends TestWatcher {
     private final List<Pair<Class<?>, ?>> mOverrides = new ArrayList<>();
 

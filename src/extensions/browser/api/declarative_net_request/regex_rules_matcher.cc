@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/declarative_net_request/regex_rules_matcher.h"
 
-#include <algorithm>
-
+#include "base/containers/contains.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "components/url_pattern_index/url_pattern_index.h"
@@ -30,15 +30,8 @@ bool IsExtraHeadersMatcherInternal(
                 "Modify this method to ensure IsExtraHeadersMatcherInternal is "
                 "updated as new actions are added.");
 
-  return std::any_of(regex_list->begin(), regex_list->end(),
-                     [](const flat::RegexRule* regex_rule) {
-                       return regex_rule->action_type() ==
-                              flat::ActionType_modify_headers;
-                     });
-}
-
-re2::StringPiece ToRE2StringPiece(const ::flatbuffers::String& str) {
-  return re2::StringPiece(str.c_str(), str.size());
+  return base::Contains(*regex_list, flat::ActionType_modify_headers,
+                        &flat::RegexRule::action_type);
 }
 
 // Helper to check if the |rule| metadata matches the given request |params|.
@@ -102,9 +95,17 @@ RegexRulesMatcher::RegexRulesMatcher(const ExtensionId& extension_id,
 
 RegexRulesMatcher::~RegexRulesMatcher() = default;
 
+bool RegexRulesMatcher::IsExtraHeadersMatcher() const {
+  return is_extra_headers_matcher_;
+}
+
+size_t RegexRulesMatcher::GetRulesCount() const {
+  return regex_list_->size();
+}
+
 std::vector<RequestAction> RegexRulesMatcher::GetModifyHeadersActions(
     const RequestParams& params,
-    absl::optional<uint64_t> min_priority) const {
+    std::optional<uint64_t> min_priority) const {
   const std::vector<RegexRuleInfo>& potential_matches =
       GetPotentialMatches(params);
 
@@ -125,36 +126,34 @@ std::vector<RequestAction> RegexRulesMatcher::GetModifyHeadersActions(
   return GetModifyHeadersActionsFromMetadata(params, rules, *metadata_list_);
 }
 
-absl::optional<RequestAction> RegexRulesMatcher::GetAllowAllRequestsAction(
+std::optional<RequestAction> RegexRulesMatcher::GetAllowAllRequestsAction(
     const RequestParams& params) const {
   const std::vector<RegexRuleInfo>& potential_matches =
       GetPotentialMatches(params);
-  auto info = std::find_if(potential_matches.begin(), potential_matches.end(),
-                           [&params](const RegexRuleInfo& info) {
-                             return info.regex_rule->action_type() ==
-                                        flat::ActionType_allow_all_requests &&
-                                    re2::RE2::PartialMatch(params.url->spec(),
-                                                           *info.regex);
-                           });
+  auto info = base::ranges::find_if(
+      potential_matches, [&params](const RegexRuleInfo& info) {
+        return info.regex_rule->action_type() ==
+                   flat::ActionType_allow_all_requests &&
+               re2::RE2::PartialMatch(params.url->spec(), *info.regex);
+      });
   if (info == potential_matches.end())
-    return absl::nullopt;
+    return std::nullopt;
 
   return CreateAllowAllRequestsAction(params, *info->regex_rule->url_rule());
 }
 
-absl::optional<RequestAction>
+std::optional<RequestAction>
 RegexRulesMatcher::GetBeforeRequestActionIgnoringAncestors(
     const RequestParams& params) const {
   const std::vector<RegexRuleInfo>& potential_matches =
       GetPotentialMatches(params);
-  auto info = std::find_if(
-      potential_matches.begin(), potential_matches.end(),
-      [&params](const RegexRuleInfo& info) {
+  auto info = base::ranges::find_if(
+      potential_matches, [&params](const RegexRuleInfo& info) {
         return IsBeforeRequestAction(info.regex_rule->action_type()) &&
                re2::RE2::PartialMatch(params.url->spec(), *info.regex);
       });
   if (info == potential_matches.end())
-    return absl::nullopt;
+    return std::nullopt;
 
   const flat_rule::UrlRule& rule = *info->regex_rule->url_rule();
   switch (info->regex_rule->action_type()) {
@@ -180,7 +179,7 @@ RegexRulesMatcher::GetBeforeRequestActionIgnoringAncestors(
       break;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void RegexRulesMatcher::InitializeMatcher() {
@@ -201,7 +200,7 @@ void RegexRulesMatcher::InitializeMatcher() {
     // regexes and modify FilteredRE2 to take a regex object directly.
     int re2_id;
     re2::RE2::ErrorCode error_code = filtered_re2_.Add(
-        ToRE2StringPiece(*rule->url_pattern()),
+        rule->url_pattern()->string_view(),
         CreateRE2Options(is_case_sensitive, require_capturing), &re2_id);
 
     // Ideally there shouldn't be any error, since we had already validated the
@@ -224,12 +223,10 @@ void RegexRulesMatcher::InitializeMatcher() {
 
   // FilteredRE2 guarantees that the returned set of candidate strings is
   // lower-cased.
-  DCHECK(std::all_of(strings_to_match.begin(), strings_to_match.end(),
-                     [](const std::string& s) {
-                       return std::all_of(s.begin(), s.end(), [](const char c) {
-                         return !base::IsAsciiUpper(c);
-                       });
-                     }));
+  DCHECK(base::ranges::all_of(strings_to_match, [](const std::string& s) {
+    return base::ranges::all_of(
+        s, [](const char c) { return !base::IsAsciiUpper(c); });
+  }));
 
   // Convert |strings_to_match| to MatcherStringPatterns. This is necessary to
   // use url_matcher::SubstringSetMatcher.
@@ -248,7 +245,7 @@ void RegexRulesMatcher::InitializeMatcher() {
 }
 
 bool RegexRulesMatcher::IsEmpty() const {
-  return regex_list_->Length() == 0;
+  return regex_list_->size() == 0;
 }
 
 const std::vector<RegexRuleInfo>& RegexRulesMatcher::GetPotentialMatches(
@@ -310,7 +307,7 @@ const std::vector<RegexRuleInfo>& RegexRulesMatcher::GetPotentialMatches(
   return result.first->second;
 }
 
-absl::optional<RequestAction>
+std::optional<RequestAction>
 RegexRulesMatcher::CreateRegexSubstitutionRedirectAction(
     const RequestParams& params,
     const RegexRuleInfo& info) const {
@@ -322,7 +319,7 @@ RegexRulesMatcher::CreateRegexSubstitutionRedirectAction(
   std::string redirect_str = params.url->spec();
   bool success =
       RE2::Replace(&redirect_str, *info.regex,
-                   ToRE2StringPiece(*info.regex_rule->regex_substitution()));
+                   info.regex_rule->regex_substitution()->string_view());
   if (!success) {
     // This should generally not happen since we had already checked for a
     // match and during indexing, had verified that the substitution pattern
@@ -333,7 +330,7 @@ RegexRulesMatcher::CreateRegexSubstitutionRedirectAction(
         info.regex->pattern().c_str(),
         info.regex_rule->regex_substitution()->c_str(),
         params.url->spec().c_str());
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   GURL redirect_url(redirect_str);
@@ -341,7 +338,7 @@ RegexRulesMatcher::CreateRegexSubstitutionRedirectAction(
   // Redirects to JavaScript urls are not allowed.
   // TODO(crbug.com/1033780): this results in counterintuitive behavior.
   if (redirect_url.SchemeIs(url::kJavaScriptScheme))
-    return absl::nullopt;
+    return std::nullopt;
 
   return CreateRedirectAction(params, *info.regex_rule->url_rule(),
                               std::move(redirect_url));

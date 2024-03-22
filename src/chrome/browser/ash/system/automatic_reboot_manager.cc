@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,21 +15,22 @@
 #include <utility>
 
 #include "ash/constants/ash_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/timer/wall_clock_timer.h"
@@ -48,7 +49,10 @@ namespace system {
 
 namespace {
 
-const int kMinRebootUptimeMs = 60 * 60 * 1000;     // 1 hour.
+constexpr base::TimeDelta kMinRebootUptime = base::Hours(1);  // 1 hour.
+constexpr char kMinRebootUptimeMsSwitch[] =
+    "min-reboot-uptime-ms";  // Switch to override |kMinRebootUptime| for
+                             // testing
 const int kLoginManagerIdleTimeoutMs = 60 * 1000;  // 60 seconds.
 const int kGracePeriodMs = 24 * 60 * 60 * 1000;    // 24 hours.
 const int kOneKilobyte = 1 << 10;                  // 1 kB in bytes.
@@ -161,7 +165,7 @@ AutomaticRebootManager::AutomaticRebootManager(
       browser_shutdown::AddAppTerminatingCallback(base::BindOnce(
           &AutomaticRebootManager::OnAppTerminating, base::Unretained(this)));
 
-  PowerManagerClient::Get()->AddObserver(this);
+  chromeos::PowerManagerClient::Get()->AddObserver(this);
   UpdateEngineClient::Get()->AddObserver(this);
 
   // If no user is logged in, a reboot may be performed whenever the user is
@@ -188,7 +192,7 @@ AutomaticRebootManager::~AutomaticRebootManager() {
   for (auto& observer : observers_)
     observer.WillDestroyAutomaticRebootManager();
 
-  PowerManagerClient::Get()->RemoveObserver(this);
+  chromeos::PowerManagerClient::Get()->RemoveObserver(this);
   UpdateEngineClient::Get()->RemoveObserver(this);
   if (ui::UserActivityDetector::Get())
     ui::UserActivityDetector::Get()->RemoveObserver(this);
@@ -214,7 +218,7 @@ void AutomaticRebootManager::SuspendDone(base::TimeDelta sleep_duration) {
   // is a user session, there is an additional check in the Reboot method below.
   // We post a delayed task to ensure that we run any due grace timers and
   // update |reboot_requested_| flag before we try to reboot.
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&AutomaticRebootManager::MaybeReboot,
                      base::Unretained(this), true),
@@ -338,12 +342,27 @@ void AutomaticRebootManager::Reschedule() {
 
   // Safeguard against reboot loops: Ensure that the uptime after which a reboot
   // is actually requested and the grace period begins is never less than
-  // |kMinRebootUptimeMs|.
+  // |kMinRebootUptime| or the value passed in |kMinRebootUptimeMsSwitch|.
+  base::TimeDelta minRebootUptime = kMinRebootUptime;
+
+  if (auto* command_line = base::CommandLine::ForCurrentProcess();
+      command_line && command_line->HasSwitch(kMinRebootUptimeMsSwitch)) {
+    int parsed_value = 0;
+    std::string switch_value =
+        command_line->GetSwitchValueASCII(kMinRebootUptimeMsSwitch);
+
+    if (base::StringToInt(switch_value, &parsed_value)) {
+      minRebootUptime = base::Milliseconds(parsed_value);
+    } else {
+      LOG(WARNING) << "Failed to parse kMinRebootUptimeMsSwitch's value "
+                   << switch_value;
+    }
+  }
+
   const base::TimeTicks now = tick_clock_->NowTicks();
   const base::Time wall_clock_now = clock_->Now();
   const base::TimeTicks grace_start_time =
-      std::max(reboot_request_time,
-               *boot_time_ + base::Milliseconds(kMinRebootUptimeMs));
+      std::max(reboot_request_time, *boot_time_ + minRebootUptime);
 
   // Set up a timer for the start of the grace period. If the grace period
   // started in the past, the timer is still used with its delay set to zero.
@@ -410,7 +429,7 @@ void AutomaticRebootManager::Reboot() {
   grace_start_timer_.reset();
   grace_end_timer_.reset();
   VLOG(1) << "Rebooting immediately.";
-  PowerManagerClient::Get()->RequestRestart(
+  chromeos::PowerManagerClient::Get()->RequestRestart(
       power_manager::REQUEST_RESTART_OTHER, "automatic reboot manager");
 }
 

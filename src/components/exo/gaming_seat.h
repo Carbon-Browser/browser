@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/containers/flat_map.h"
-#include "base/memory/weak_ptr.h"
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/exo/gamepad.h"
@@ -44,7 +44,8 @@ class GamingSeat : public aura::client::FocusChangeObserver,
 
  private:
   // The delegate that handles gamepad_added.
-  GamingSeatDelegate* const delegate_;
+  const raw_ptr<GamingSeatDelegate, DanglingUntriaged | ExperimentalAsh>
+      delegate_;
 
   // Contains the delegate for each gamepad device.
   base::flat_map<int, std::unique_ptr<Gamepad>> gamepads_;

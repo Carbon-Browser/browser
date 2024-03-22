@@ -1,6 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #ifndef CHROME_COMMON_EXTENSIONS_EXTENSION_CONSTANTS_H_
 #define CHROME_COMMON_EXTENSIONS_EXTENSION_CONSTANTS_H_
@@ -53,9 +57,6 @@ extern const char kGooglePlayMusicAppId[];
 // The extension id of the Google+ application.
 extern const char kGooglePlusAppId[];
 
-// The extension id of the Identity API UI application.
-extern const char kIdentityApiUiAppId[];
-
 // The extension id of the Text Editor application.
 extern const char kTextEditorAppId[];
 
@@ -64,6 +65,9 @@ extern const char kInAppPaymentsSupportAppId[];
 
 // The extension id of virtual keyboard extension.
 extern const char kKeyboardExtensionId[];
+
+// The extension id of adblock ml extension.
+extern const char kEyeoMlServiceExtensionId[];
 
 // A list of all the first party extension IDs, last entry is null.
 extern const char* const kBuiltInFirstPartyExtensionIds[];
@@ -167,8 +171,14 @@ extern const char kGnubbyV3ExtensionId[];
 extern const char kGCSEExtensionId[];
 // The extension id of the Contact Center Insights chrome component extension.
 extern const char kContactCenterInsightsExtensionId[];
+// The extension id of the Desk API chrome component extension.
+extern const char kDeskApiExtensionId[];
 // The extension id of the Bruschetta Security Key Forwarder extension.
 extern const char kBruSecurityKeyForwarderExtensionId[];
+// The extension id of the OneDrive FS external component extension.
+extern const char kODFSExtensionId[];
+// The extension id of Perfetto UI extension.
+extern const char kPerfettoUIExtensionId[];
 #endif
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // The extension id of the Accessibility Common extension.
@@ -187,6 +197,8 @@ extern const char kChromeVoxExtensionPath[];
 extern const char kChromeVoxManifestFilename[];
 // The guest manifest filename of the ChromeVox extension.
 extern const char kChromeVoxGuestManifestFilename[];
+// The path to the ChromeVox extension's options page.
+extern const char kChromeVoxOptionsPath[];
 // The extension id of the Enhanced network TTS engine extension.
 extern const char kEnhancedNetworkTtsExtensionId[];
 // Path to preinstalled Enhanced network TTS engine extension (relative to
@@ -212,8 +224,12 @@ extern const char kSwitchAccessExtensionId[];
 extern const char kSwitchAccessExtensionPath[];
 // The manifest filename of the Switch Access extension.
 extern const char kSwitchAccessManifestFilename[];
+// The manifest v3 filename of the Switch Access extension.
+extern const char kSwitchAccessManifestV3Filename[];
 // The guest manifest filename of the Switch Access extension.
 extern const char kSwitchAccessGuestManifestFilename[];
+// The guest manifest v3 filename of the Switch Access extension.
+extern const char kSwitchAccessGuestManifestV3Filename[];
 // Name of the manifest file in an extension when a special manifest is used
 // for guest mode.
 extern const char kGuestManifestFilename[];
@@ -223,13 +239,30 @@ extern const char kFirstRunDialogId[];
 extern const char kGoogleSpeechSynthesisExtensionPath[];
 // The extension id of the Google speech synthesis extension.
 extern const char kGoogleSpeechSynthesisExtensionId[];
+// The path to the Google speech synthesis extension's options page.
+extern const char kGoogleSpeechSynthesisOptionsPath[];
 // Path to preinstalled eSpeak-NG speech synthesis extension.
 extern const char kEspeakSpeechSynthesisExtensionPath[];
 // The extension id of the eSpeak-NG speech synthesis extension.
 extern const char kEspeakSpeechSynthesisExtensionId[];
+// The path to the eSpeak-NG speech synthesis extension's options page.
+extern const char kEspeakSpeechSynthesisOptionsPath[];
 // The extension id of official HelpApp extension.
 extern const char kHelpAppExtensionId[];
-#endif
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+// The extension id of the Lacros accessibility helper extension.
+extern const char kEmbeddedA11yHelperExtensionId[];
+// The path to the Lacros accessibility helper extension.
+extern const char kEmbeddedA11yHelperExtensionPath[];
+// The name of the manifest file for the Lacros accessibility helper extension.
+extern const char kEmbeddedA11yHelperManifestFilename[];
+// The extension id of the Lacros ChromeVox helper extension.
+extern const char kChromeVoxHelperExtensionId[];
+// The path to the Lacros ChromeVox helper extension.
+extern const char kChromeVoxHelperExtensionPath[];
+// The name of the manifest file for the Lacros ChromeVox helper extension.
+extern const char kChromeVoxHelperManifestFilename[];
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 // What causes an extension to be installed? Used in histograms, so don't
 // change existing values.

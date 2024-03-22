@@ -1,15 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/power/auto_screen_brightness/brightness_monitor_impl.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
@@ -37,7 +37,8 @@ void BrightnessMonitorImpl::Init() {
           ? kBrightnessSampleDelay
           : base::Seconds(brightness_sample_delay_seconds);
 
-  power_manager_client_observation_.Observe(PowerManagerClient::Get());
+  power_manager_client_observation_.Observe(
+      chromeos::PowerManagerClient::Get());
 }
 
 void BrightnessMonitorImpl::AddObserver(
@@ -63,7 +64,7 @@ void BrightnessMonitorImpl::PowerManagerBecameAvailable(
     OnInitializationComplete();
     return;
   }
-  PowerManagerClient::Get()->GetScreenBrightnessPercent(
+  chromeos::PowerManagerClient::Get()->GetScreenBrightnessPercent(
       base::BindOnce(&BrightnessMonitorImpl::OnReceiveInitialBrightnessPercent,
                      weak_ptr_factory_.GetWeakPtr()));
 }
@@ -86,7 +87,7 @@ void BrightnessMonitorImpl::ScreenBrightnessChanged(
     // instead of throwing it away.
     LogDataError(DataError::kBrightnessPercent);
     brightness_percent_received =
-        base::clamp(brightness_percent_received, 0.0, 100.0);
+        std::clamp(brightness_percent_received, 0.0, 100.0);
   }
 
   if (change.cause() ==

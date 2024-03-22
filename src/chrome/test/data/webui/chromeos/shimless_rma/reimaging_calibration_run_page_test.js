@@ -1,25 +1,25 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {PromiseResolver} from 'chrome://resources/ash/common/promise_resolver.js';
 import {FakeShimlessRmaService} from 'chrome://shimless-rma/fake_shimless_rma_service.js';
 import {setShimlessRmaServiceForTesting} from 'chrome://shimless-rma/mojo_interface_provider.js';
 import {ReimagingCalibrationRunPage} from 'chrome://shimless-rma/reimaging_calibration_run_page.js';
 import {ShimlessRma} from 'chrome://shimless-rma/shimless_rma.js';
 import {CalibrationOverallStatus, CalibrationStatus, ComponentType} from 'chrome://shimless-rma/shimless_rma_types.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertDeepEquals, assertEquals, assertFalse, assertNotEquals, assertTrue} from '../../chai_assert.js';
-import {flushTasks} from '../../test_util.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-export function reimagingCalibrationRunPageTest() {
+suite('reimagingCalibrationRunPageTest', function() {
   /**
    * ShimlessRma is needed to handle the 'transition-state' event used
    * when handling calibration overall progress signals.
    * @type {?ShimlessRma}
    */
-  let shimless_rma_component = null;
+  let shimlessRmaComponent = null;
 
   /** @type {?ReimagingCalibrationRunPage} */
   let component = null;
@@ -28,7 +28,7 @@ export function reimagingCalibrationRunPageTest() {
   let service = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
     service = new FakeShimlessRmaService();
     setShimlessRmaServiceForTesting(service);
   });
@@ -36,8 +36,8 @@ export function reimagingCalibrationRunPageTest() {
   teardown(() => {
     component.remove();
     component = null;
-    shimless_rma_component.remove();
-    shimless_rma_component = null;
+    shimlessRmaComponent.remove();
+    shimlessRmaComponent = null;
     service.reset();
   });
 
@@ -47,10 +47,10 @@ export function reimagingCalibrationRunPageTest() {
   function initializeCalibrationRunPage() {
     assertFalse(!!component);
 
-    shimless_rma_component =
+    shimlessRmaComponent =
         /** @type {!ShimlessRma} */ (document.createElement('shimless-rma'));
-    assertTrue(!!shimless_rma_component);
-    document.body.appendChild(shimless_rma_component);
+    assertTrue(!!shimlessRmaComponent);
+    document.body.appendChild(shimlessRmaComponent);
 
     component = /** @type {!ReimagingCalibrationRunPage} */ (
         document.createElement('reimaging-calibration-run-page'));
@@ -174,4 +174,4 @@ export function reimagingCalibrationRunPageTest() {
 
         assertEquals(1, continueCalibrationCalls);
       });
-}
+});

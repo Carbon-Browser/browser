@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ XRReferenceSpace::~XRReferenceSpace() = default;
 
 XRPose* XRReferenceSpace::getPose(const XRSpace* other_space) const {
   if (type_ == ReferenceSpaceType::kViewer) {
-    absl::optional<TransformationMatrix> other_offset_from_viewer =
+    absl::optional<gfx::Transform> other_offset_from_viewer =
         other_space->OffsetFromViewer();
     if (!other_offset_from_viewer) {
       return nullptr;
@@ -77,8 +77,8 @@ void XRReferenceSpace::SetMojoFromFloor() const {
 
   if (stage_parameters) {
     // Use the transform given by stage_parameters if available.
-    mojo_from_floor_ = std::make_unique<TransformationMatrix>(
-        stage_parameters->mojo_from_floor);
+    mojo_from_floor_ =
+        std::make_unique<gfx::Transform>(stage_parameters->mojo_from_floor);
   } else {
     mojo_from_floor_.reset();
   }
@@ -86,7 +86,7 @@ void XRReferenceSpace::SetMojoFromFloor() const {
   stage_parameters_id_ = session()->StageParametersId();
 }
 
-absl::optional<TransformationMatrix> XRReferenceSpace::MojoFromNative() const {
+absl::optional<gfx::Transform> XRReferenceSpace::MojoFromNative() const {
   DVLOG(3) << __func__ << ": type_=" << type_;
 
   switch (type_) {
@@ -101,8 +101,7 @@ absl::optional<TransformationMatrix> XRReferenceSpace::MojoFromNative() const {
         // it's not tracked; but for any other type if it's not locatable, we
         // return nullopt.
         return type_ == ReferenceSpaceType::kViewer
-                   ? absl::optional<TransformationMatrix>(
-                         TransformationMatrix{})
+                   ? absl::optional<gfx::Transform>(gfx::Transform{})
                    : absl::nullopt;
       }
 
@@ -126,8 +125,8 @@ absl::optional<TransformationMatrix> XRReferenceSpace::MojoFromNative() const {
       }
 
       // local_from_floor-local transform corresponding to the default height.
-      auto local_from_floor = TransformationMatrix().Translate3d(
-          0, kDefaultEmulationHeightMeters, 0);
+      auto local_from_floor =
+          gfx::Transform::MakeTranslation(0, kDefaultEmulationHeightMeters);
 
       return *mojo_from_local * local_from_floor;
     }
@@ -138,14 +137,14 @@ absl::optional<TransformationMatrix> XRReferenceSpace::MojoFromNative() const {
   }
 }
 
-absl::optional<TransformationMatrix> XRReferenceSpace::NativeFromViewer(
-    const absl::optional<TransformationMatrix>& mojo_from_viewer) const {
+absl::optional<gfx::Transform> XRReferenceSpace::NativeFromViewer(
+    const absl::optional<gfx::Transform>& mojo_from_viewer) const {
   if (type_ == ReferenceSpaceType::kViewer) {
     // Special case for viewer space, always return an identity matrix
     // explicitly. In theory the default behavior of multiplying NativeFromMojo
     // onto MojoFromViewer would be equivalent, but that would likely return an
     // almost-identity due to rounding errors.
-    return TransformationMatrix();
+    return gfx::Transform();
   }
 
   if (!mojo_from_viewer)
@@ -155,15 +154,15 @@ absl::optional<TransformationMatrix> XRReferenceSpace::NativeFromViewer(
   auto native_from_viewer = NativeFromMojo();
   if (!native_from_viewer)
     return absl::nullopt;
-  native_from_viewer->Multiply(*mojo_from_viewer);
+  native_from_viewer->PreConcat(*mojo_from_viewer);
   return native_from_viewer;
 }
 
-TransformationMatrix XRReferenceSpace::NativeFromOffsetMatrix() const {
+gfx::Transform XRReferenceSpace::NativeFromOffsetMatrix() const {
   return origin_offset_->TransformMatrix();
 }
 
-TransformationMatrix XRReferenceSpace::OffsetFromNativeMatrix() const {
+gfx::Transform XRReferenceSpace::OffsetFromNativeMatrix() const {
   return origin_offset_->InverseTransformMatrix();
 }
 
@@ -185,8 +184,7 @@ ReferenceSpaceType XRReferenceSpace::GetType() const {
 
 XRReferenceSpace* XRReferenceSpace::getOffsetReferenceSpace(
     XRRigidTransform* additional_offset) const {
-  auto matrix =
-      NativeFromOffsetMatrix().Multiply(additional_offset->TransformMatrix());
+  auto matrix = NativeFromOffsetMatrix() * additional_offset->TransformMatrix();
 
   auto* result_transform = MakeGarbageCollected<XRRigidTransform>(matrix);
   return cloneWithOriginOffset(result_transform);

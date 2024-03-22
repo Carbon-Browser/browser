@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -497,7 +497,7 @@ class NoThrowBuffer {
   }
 
  protected:
-  raw_ptr<T> buffer_;
+  raw_ptr<T, DanglingUntriaged | AllowPtrArithmetic> buffer_;
   size_t size_;  // how much of the buffer we're using.
   size_t alloc_size_;  // how much space we have allocated.
   Allocator alloc_;

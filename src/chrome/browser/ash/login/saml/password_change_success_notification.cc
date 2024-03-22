@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,7 +78,7 @@ void PasswordChangeSuccessNotification::Show(Profile* profile) {
   const scoped_refptr<NotificationDelegate> delegate =
       base::MakeRefCounted<NotificationDelegate>();
 
-  std::unique_ptr<Notification> notification = CreateSystemNotification(
+  Notification notification = CreateSystemNotification(
       kNotificationType, kNotificationId, title, body, *kEmptyDisplaySource,
       *kEmptyOriginUrl, *kNotifierId, rich_notification_data, delegate, kIcon,
       kWarningLevel);
@@ -88,7 +88,7 @@ void PasswordChangeSuccessNotification::Show(Profile* profile) {
   // Calling close before display ensures that the notification pops up again
   // even if it is already shown.
   nds->Close(kNotificationHandlerType, kNotificationId);
-  nds->Display(kNotificationHandlerType, *notification, /*metadata=*/nullptr);
+  nds->Display(kNotificationHandlerType, notification, /*metadata=*/nullptr);
 }
 
 }  // namespace ash

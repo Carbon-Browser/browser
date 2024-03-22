@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "base/component_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/accessibility/ax_export.h"
 
 namespace ui {
 
@@ -24,7 +24,7 @@ struct AXPropertyFilter;
 // property are given in parentheses like a conventional function call, for
 // example, AXCellForColumnAndRow([0, 0]) will call AXCellForColumnAndRow
 // parameterized property for column/row 0 indexes.
-class AX_EXPORT AXPropertyNode final {
+class COMPONENT_EXPORT(AX_PLATFORM) AXPropertyNode final {
  public:
   // Parses a property node from a string or a property filter.
   static AXPropertyNode From(const std::string& property,

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "device/bluetooth/bluetooth_adapter.h"
@@ -78,6 +78,10 @@ class MockBluetoothAdapter : public BluetoothAdapter {
                void(bool discoverable,
                     base::OnceClosure callback,
                     ErrorCallback error_callback));
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  MOCK_CONST_METHOD0(GetDiscoverableTimeout, base::TimeDelta());
+#endif
+
   MOCK_CONST_METHOD0(IsDiscovering, bool());
   MOCK_METHOD2(
       StartScanWithFilter_,
@@ -143,7 +147,7 @@ class MockBluetoothAdapter : public BluetoothAdapter {
       void(const std::string& address,
            const absl::optional<BluetoothDevice::AddressType>& address_type,
            ConnectDeviceCallback callback,
-           ErrorCallback error_callback));
+           ConnectDeviceErrorCallback error_callback));
 
 #endif
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <memory>
 #include <utility>
 
-#include "ash/constants/ash_features.h"
 #include "base/json/json_writer.h"
 #include "base/strings/escape.h"
 #include "base/values.h"
@@ -26,8 +25,7 @@ const char kAnyPath[] = "anyPath";
 const char kAnyPathOrUrl[] = "anyPathOrUrl";
 
 // Converts a numeric dialog type to a string.
-std::string GetDialogTypeAsString(
-    ui::SelectFileDialog::Type dialog_type) {
+std::string GetDialogTypeAsString(ui::SelectFileDialog::Type dialog_type) {
   std::string type_str;
   switch (dialog_type) {
     case ui::SelectFileDialog::SELECT_NONE:
@@ -62,8 +60,7 @@ std::string GetDialogTypeAsString(
 }  // namespace
 
 GURL GetFileManagerMainPageUrl() {
-  return GetFileManagerURL().Resolve(
-      ash::features::IsFileManagerSwaEnabled() ? "" : "/main.html");
+  return GetFileManagerURL().Resolve("");
 }
 
 GURL GetFileManagerMainPageUrlWithParams(
@@ -83,8 +80,9 @@ GURL GetFileManagerMainPageUrlWithParams(
   arg_value.Set("currentDirectoryURL", current_directory_url.spec());
   arg_value.Set("selectionURL", selection_url.spec());
   // |targetName| is only relevant for SaveAs.
-  if (type == ui::SelectFileDialog::Type::SELECT_SAVEAS_FILE)
+  if (type == ui::SelectFileDialog::Type::SELECT_SAVEAS_FILE) {
     arg_value.Set("targetName", target_name);
+  }
   arg_value.Set("searchQuery", search_query);
   arg_value.Set("showAndroidPickerApps", show_android_picker_apps);
 
@@ -92,8 +90,9 @@ GURL GetFileManagerMainPageUrlWithParams(
     base::Value::List types_list;
     for (size_t i = 0; i < file_types->extensions.size(); ++i) {
       base::Value::List extensions_list;
-      for (size_t j = 0; j < file_types->extensions[i].size(); ++j)
+      for (size_t j = 0; j < file_types->extensions[i].size(); ++j) {
         extensions_list.Append(file_types->extensions[i][j]);
+      }
 
       base::Value::Dict dict;
       dict.Set("extensions", std::move(extensions_list));
@@ -131,8 +130,9 @@ GURL GetFileManagerMainPageUrlWithParams(
 
   if (!volume_filter.empty()) {
     base::Value::List volume_filter_list;
-    for (const auto& item : volume_filter)
+    for (const auto& item : volume_filter) {
       volume_filter_list.Append(item);
+    }
     arg_value.Set("volumeFilter", std::move(volume_filter_list));
   }
 

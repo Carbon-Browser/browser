@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -11,10 +11,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file.h"
 #include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/values.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
 #include "storage/browser/file_system/isolated_context.h"
 #include "third_party/blink/public/mojom/choosers/file_chooser.mojom-forward.h"
@@ -22,11 +23,6 @@
 #include "url/origin.h"
 
 class Profile;
-
-namespace base {
-class DictionaryValue;
-class ListValue;
-}  // namespace base
 
 namespace content {
 class RenderFrameHost;
@@ -48,7 +44,7 @@ namespace util {
 struct FileDefinition {
   base::FilePath virtual_path;
   base::FilePath absolute_path;
-  bool is_directory;
+  bool is_directory = false;
 };
 
 // Contains all information needed to create an Entry object in custom bindings.
@@ -59,11 +55,11 @@ struct EntryDefinition {
 
   std::string file_system_root_url;  // Used to create DOMFileSystem.
   std::string file_system_name;      // Value of DOMFileSystem.name.
-  base::FilePath full_path;    // Value of Entry.fullPath.
+  base::FilePath full_path;          // Value of Entry.fullPath.
   // Whether to create FileEntry or DirectoryEntry when the corresponding entry
   // is not found.
-  bool is_directory;
-  base::File::Error error;
+  bool is_directory = false;
+  base::File::Error error = base::File::FILE_ERROR_FAILED;
 };
 
 typedef std::vector<FileDefinition> FileDefinitionList;
@@ -159,15 +155,15 @@ void ConvertFileDefinitionListToEntryDefinitionList(
 // Converts SelectedFileInfoList into FileChooserFileInfoList.
 void ConvertSelectedFileInfoListToFileChooserFileInfoList(
     storage::FileSystemContext* context,
-    const GURL& origin,
+    const url::Origin& origin,
     const SelectedFileInfoList& selected_info_list,
     FileChooserFileInfoListCallback callback);
 
 // Converts EntryDefinition to something File API stack can understand.
-std::unique_ptr<base::DictionaryValue> ConvertEntryDefinitionToValue(
+base::Value::Dict ConvertEntryDefinitionToValue(
     const EntryDefinition& entry_definition);
 
-std::unique_ptr<base::ListValue> ConvertEntryDefinitionListToListValue(
+base::Value::List ConvertEntryDefinitionListToListValue(
     const EntryDefinitionList& entry_definition_list);
 
 // Checks if a directory exists at |directory_path| absolute path.
@@ -180,7 +176,7 @@ void CheckIfDirectoryExists(
 void GetMetadataForPath(
     scoped_refptr<storage::FileSystemContext> file_system_context,
     const base::FilePath& entry_path,
-    int fields,
+    storage::FileSystemOperationRunner::GetMetadataFieldSet fields,
     storage::FileSystemOperationRunner::GetMetadataCallback callback);
 
 // Groups a FileSystemURL and a related ScopedFSHandle.
@@ -195,7 +191,7 @@ struct FileSystemURLAndHandle {
 // external file system.
 FileSystemURLAndHandle CreateIsolatedURLFromVirtualPath(
     const storage::FileSystemContext& context,
-    const GURL& origin,
+    const url::Origin& origin,
     const base::FilePath& virtual_path);
 
 // Given a |destination_folder| and a |filename|, returns a suitable path inside

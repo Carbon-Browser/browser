@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,7 @@ static const base::android::RegistrationMethod kGvrRegisteredMethods[] = {
 };
 
 bool RegisterGvrJni(JNIEnv* env) {
-  if (!base::android::IsSelectiveJniRegistrationEnabled(env) &&
-      !RegisterNativeMethods(env, kGvrRegisteredMethods,
+  if (!RegisterNativeMethods(env, kGvrRegisteredMethods,
                              std::size(kGvrRegisteredMethods))) {
     return false;
   }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "content/common/content_export.h"
 #include "content/public/common/content_client.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
@@ -17,7 +18,7 @@
 namespace mojo {
 class BinderMap;
 class ServiceFactory;
-}
+}  // namespace mojo
 
 namespace content {
 
@@ -64,9 +65,6 @@ class CONTENT_EXPORT ContentUtilityClient {
   //
   // Only called from the main thread.
   virtual void RegisterMainThreadServices(mojo::ServiceFactory& services) {}
-
-  virtual void RegisterNetworkBinders(
-      service_manager::BinderRegistry* registry) {}
 };
 
 }  // namespace content

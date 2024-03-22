@@ -36,6 +36,7 @@ using ImageClassifierOptionsCpp =
     ::tflite::task::vision::ImageClassifierOptions;
 using FrameBufferCpp = ::tflite::task::vision::FrameBuffer;
 using ::tflite::support::TfLiteSupportStatus;
+using ::tflite::task::core::TfLiteSettingsProtoFromCOptions;
 
 StatusOr<ImageClassifierOptionsCpp> CreateImageClassifierCppOptionsFromCOptions(
     const TfLiteImageClassifierOptions* c_options) {
@@ -53,15 +54,12 @@ StatusOr<ImageClassifierOptionsCpp> CreateImageClassifierCppOptionsFromCOptions(
     cpp_options.mutable_base_options()->mutable_model_file()->set_file_name(
         c_options->base_options.model_file.file_path);
 
-  // c_options->base_options.compute_settings.num_threads is expected to be
-  // set to value > 0 or -1. Otherwise invoking
-  // ImageClassifierCpp::CreateFromOptions() results in a not ok status.
-  cpp_options.mutable_base_options()
-      ->mutable_compute_settings()
-      ->mutable_tflite_settings()
-      ->mutable_cpu_settings()
-      ->set_num_threads(
-          c_options->base_options.compute_settings.cpu_settings.num_threads);
+  // Sets the generic TfLiteSettings (CPU, Core ML Delegate, etc.) proto.
+  *(cpp_options.mutable_base_options()
+        ->mutable_compute_settings()
+        ->mutable_tflite_settings()) =
+      TfLiteSettingsProtoFromCOptions(
+          &c_options->base_options.compute_settings);
 
   for (int i = 0; i < c_options->classification_options.label_denylist.length;
        i++)
@@ -110,8 +108,7 @@ TfLiteImageClassifierOptions TfLiteImageClassifierOptionsCreate(void) {
 }
 
 TfLiteImageClassifier* TfLiteImageClassifierFromOptions(
-    const TfLiteImageClassifierOptions* options,
-    TfLiteSupportError** error) {
+    const TfLiteImageClassifierOptions* options, TfLiteSupportError** error) {
   StatusOr<ImageClassifierOptionsCpp> cpp_option_status =
       CreateImageClassifierCppOptionsFromCOptions(options);
 
@@ -179,8 +176,7 @@ TfLiteClassificationResult* GetClassificationResultCStruct(
 
 TfLiteClassificationResult* TfLiteImageClassifierClassifyWithRoi(
     const TfLiteImageClassifier* classifier,
-    const TfLiteFrameBuffer* frame_buffer,
-    const TfLiteBoundingBox* roi,
+    const TfLiteFrameBuffer* frame_buffer, const TfLiteBoundingBox* roi,
     TfLiteSupportError** error) {
   if (classifier == nullptr) {
     tflite::support::CreateTfLiteSupportError(
@@ -223,8 +219,7 @@ TfLiteClassificationResult* TfLiteImageClassifierClassifyWithRoi(
 
 TfLiteClassificationResult* TfLiteImageClassifierClassify(
     const TfLiteImageClassifier* classifier,
-    const TfLiteFrameBuffer* frame_buffer,
-    TfLiteSupportError** error) {
+    const TfLiteFrameBuffer* frame_buffer, TfLiteSupportError** error) {
   return TfLiteImageClassifierClassifyWithRoi(classifier, frame_buffer, nullptr,
                                               error);
 }

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,10 @@ bool FakePictureLayer::Update() {
   bool updated = PictureLayer::Update();
   update_count_++;
   return updated || always_update_resources_;
+}
+
+bool FakePictureLayer::RequiresSetNeedsDisplayOnHdrHeadroomChange() const {
+  return reraster_on_hdr_change_;
 }
 
 }  // namespace cc

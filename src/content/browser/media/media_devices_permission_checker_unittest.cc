@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/media/media_devices_permission_checker.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
@@ -15,6 +15,7 @@
 #include "content/test/test_render_view_host.h"
 #include "content/test/test_web_contents.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
+#include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "url/origin.h"
 
@@ -29,7 +30,7 @@ class TestWebContentsDelegate : public content::WebContentsDelegate {
   ~TestWebContentsDelegate() override {}
 
   bool CheckMediaAccessPermission(RenderFrameHost* render_Frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) override {
     return true;
   }
@@ -53,11 +54,15 @@ class MediaDevicesPermissionCheckerTest : public RenderViewHostImplTestHarness {
       bool enabled) {
     auto navigation = NavigationSimulator::CreateBrowserInitiated(
         origin_.GetURL(), web_contents());
-    std::vector<url::Origin> allowlist;
-    if (enabled)
-      allowlist.push_back(origin_);
-    navigation->SetPermissionsPolicyHeader(
-        {{feature, allowlist, false, false}});
+    std::vector<blink::OriginWithPossibleWildcards> allowlist;
+    if (enabled) {
+      allowlist.emplace_back(
+          *blink::OriginWithPossibleWildcards::FromOrigin(origin_));
+    }
+    navigation->SetPermissionsPolicyHeader({{feature, allowlist,
+                                             /*self_if_matches=*/absl::nullopt,
+                                             /*matches_all_origins=*/false,
+                                             /*matches_opaque_src=*/false}});
     navigation->Commit();
   }
 
@@ -100,19 +105,19 @@ TEST_F(MediaDevicesPermissionCheckerTest,
        CheckPermissionWithPermissionsPolicy) {
   // Mic and Camera should be enabled by default for a frame (if permission is
   // granted).
-  EXPECT_TRUE(CheckPermission(MediaDeviceType::MEDIA_AUDIO_INPUT));
-  EXPECT_TRUE(CheckPermission(MediaDeviceType::MEDIA_VIDEO_INPUT));
+  EXPECT_TRUE(CheckPermission(MediaDeviceType::kMediaAudioInput));
+  EXPECT_TRUE(CheckPermission(MediaDeviceType::kMediaVideoInput));
 
   RefreshPageAndSetHeaderPolicy(
       blink::mojom::PermissionsPolicyFeature::kMicrophone,
       /*enabled=*/false);
-  EXPECT_FALSE(CheckPermission(MediaDeviceType::MEDIA_AUDIO_INPUT));
-  EXPECT_TRUE(CheckPermission(MediaDeviceType::MEDIA_VIDEO_INPUT));
+  EXPECT_FALSE(CheckPermission(MediaDeviceType::kMediaAudioInput));
+  EXPECT_TRUE(CheckPermission(MediaDeviceType::kMediaVideoInput));
 
   RefreshPageAndSetHeaderPolicy(blink::mojom::PermissionsPolicyFeature::kCamera,
                                 /*enabled=*/false);
-  EXPECT_TRUE(CheckPermission(MediaDeviceType::MEDIA_AUDIO_INPUT));
-  EXPECT_FALSE(CheckPermission(MediaDeviceType::MEDIA_VIDEO_INPUT));
+  EXPECT_TRUE(CheckPermission(MediaDeviceType::kMediaAudioInput));
+  EXPECT_FALSE(CheckPermission(MediaDeviceType::kMediaVideoInput));
 }
 
 }  // namespace

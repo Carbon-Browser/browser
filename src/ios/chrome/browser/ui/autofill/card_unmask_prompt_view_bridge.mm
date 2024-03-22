@@ -1,16 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/card_unmask_prompt_view_bridge.h"
 
 #import "base/notreached.h"
+#import "base/strings/sys_string_conversions.h"
 #import "components/autofill/core/browser/ui/payments/card_unmask_prompt_controller.h"
 #import "ios/chrome/browser/ui/autofill/card_unmask_prompt_view_controller.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace autofill {
 
@@ -26,28 +23,26 @@ CardUnmaskPromptViewBridge::CardUnmaskPromptViewBridge(
 }
 
 CardUnmaskPromptViewBridge::~CardUnmaskPromptViewBridge() {
+  [prompt_view_controller_ disconnectFromBridge];
   if (controller_) {
     controller_->OnUnmaskDialogClosed();
   }
 }
 
 void CardUnmaskPromptViewBridge::Show() {
-  view_controller_ =
+  prompt_view_controller_ =
       [[CardUnmaskPromptViewController alloc] initWithBridge:this];
 
-  UINavigationController* navigation_controller =
-      [[UINavigationController alloc]
-          initWithRootViewController:view_controller_];
-  [navigation_controller
+  navigation_controller_ = [[UINavigationController alloc]
+      initWithRootViewController:prompt_view_controller_];
+  [navigation_controller_
       setModalPresentationStyle:UIModalPresentationFormSheet];
-  [navigation_controller
+  [navigation_controller_
       setModalTransitionStyle:UIModalTransitionStyleCoverVertical];
-  // If this prompt is swiped away, it cannot be opened again. Work
-  // around this bug by preventing swipe-to-dismiss.
-  // TODO(crbug.com/1346060)
-  [navigation_controller setModalInPresentation:YES];
+  navigation_controller_.presentationController.delegate =
+      prompt_view_controller_;
 
-  [base_view_controller_ presentViewController:navigation_controller
+  [base_view_controller_ presentViewController:navigation_controller_
                                       animated:YES
                                     completion:nil];
 }
@@ -58,29 +53,47 @@ void CardUnmaskPromptViewBridge::ControllerGone() {
 }
 
 void CardUnmaskPromptViewBridge::DisableAndWaitForVerification() {
-  NOTIMPLEMENTED();
+  [prompt_view_controller_ showLoadingState];
 }
 
 void CardUnmaskPromptViewBridge::GotVerificationResult(
     const std::u16string& error_message,
     bool allow_retry) {
-  NOTIMPLEMENTED();
+  // No error. Dismiss the prompt.
+  if (error_message.empty()) {
+    PerformClose();
+  } else {
+    [prompt_view_controller_
+        showErrorAlertWithMessage:base::SysUTF16ToNSString(error_message)
+                   closeOnDismiss:!allow_retry];
+  }
 }
 
 CardUnmaskPromptController* CardUnmaskPromptViewBridge::GetController() {
+  // This public accessor is used by the view controller, which shouldn't access
+  // the controller after it was released. Adding a CHECK to explicitly catch
+  // any UAF errors.
+  CHECK(controller_);
   return controller_;
 }
 
 void CardUnmaskPromptViewBridge::PerformClose() {
+  // Disconnect the vc from the bride, dismiss it and delete the bridge.
+  [prompt_view_controller_ disconnectFromBridge];
+
   base::WeakPtr<CardUnmaskPromptViewBridge> weak_this =
       weak_ptr_factory_.GetWeakPtr();
-  [view_controller_.navigationController
+  [navigation_controller_
       dismissViewControllerAnimated:YES
                          completion:^{
                            if (weak_this) {
-                             weak_this->DeleteSelf();
+                             weak_this->NavigationControllerDismissed();
                            }
                          }];
+}
+
+void CardUnmaskPromptViewBridge::NavigationControllerDismissed() {
+  DeleteSelf();
 }
 
 void CardUnmaskPromptViewBridge::DeleteSelf() {

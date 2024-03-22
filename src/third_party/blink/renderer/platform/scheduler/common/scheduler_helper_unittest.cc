@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/scheduler/common/scheduler_helper.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/task/sequence_manager/lazy_now.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
 #include "base/task/single_thread_task_runner.h"
@@ -14,6 +14,7 @@
 #include "base/test/task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_scheduler_helper.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -53,9 +54,12 @@ class SchedulerHelperTest : public testing::Test {
       : task_environment_(
             base::test::TaskEnvironment::TimeSource::MOCK_TIME,
             base::test::TaskEnvironment::ThreadPoolExecutionMode::QUEUED) {
+    auto settings = base::sequence_manager::SequenceManager::Settings::Builder()
+                        .SetPrioritySettings(CreatePrioritySettings())
+                        .Build();
     sequence_manager_ = base::sequence_manager::SequenceManagerForTest::Create(
         nullptr, task_environment_.GetMainThreadTaskRunner(),
-        task_environment_.GetMockTickClock());
+        task_environment_.GetMockTickClock(), std::move(settings));
     scheduler_helper_ = std::make_unique<NonMainThreadSchedulerHelper>(
         sequence_manager_.get(), nullptr, TaskType::kInternalTest);
     scheduler_helper_->AttachToCurrentThread();

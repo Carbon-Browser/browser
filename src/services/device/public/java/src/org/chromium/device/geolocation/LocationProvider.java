@@ -1,12 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.device.geolocation;
 
-/**
- * LocationProvider interface.
- */
+/** LocationProvider interface. */
 public interface LocationProvider {
     /**
      * Start listening for location updates. Calling several times before stop() is interpreted
@@ -15,13 +13,9 @@ public interface LocationProvider {
      */
     public void start(boolean enableHighAccuracy);
 
-    /**
-     * Stop listening for location updates.
-     */
+    /** Stop listening for location updates. */
     public void stop();
 
-    /**
-     * Returns true if we are currently listening for location updates, false if not.
-     */
+    /** Returns true if we are currently listening for location updates, false if not. */
     public boolean isRunning();
 }

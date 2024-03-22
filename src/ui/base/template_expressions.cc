@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <ostream>
 
 #include "base/check_op.h"
+#include "base/no_destructor.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_piece.h"
 #include "base/values.h"
@@ -126,7 +127,8 @@ bool HasUnexpectedPlaceholder(const std::string& key,
   if (key == "displayResolutionText")
     return false;
 #endif
-  return re2::RE2::PartialMatch(replacement, re2::RE2(R"(\$\d)"));
+  static const base::NoDestructor<re2::RE2> placeholder_regex(R"(\$\d)");
+  return re2::RE2::PartialMatch(replacement, *placeholder_regex.get());
 }
 #endif  // DCHECK_IS_ON()
 

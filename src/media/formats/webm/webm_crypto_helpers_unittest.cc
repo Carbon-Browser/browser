@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,6 @@ const uint8_t kKeyId[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
 }  // namespace
 
 namespace media {
-
-inline bool operator==(const SubsampleEntry& lhs, const SubsampleEntry& rhs) {
-  return lhs.clear_bytes == rhs.clear_bytes &&
-         lhs.cypher_bytes == rhs.cypher_bytes;
-}
 
 TEST(WebMCryptoHelpersTest, EmptyData) {
   std::unique_ptr<DecryptConfig> decrypt_config;

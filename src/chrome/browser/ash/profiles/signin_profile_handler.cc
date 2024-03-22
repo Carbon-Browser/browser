@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser_list.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
 #include "components/crx_file/id_util.h"
 #include "components/user_manager/user_manager.h"
 #include "extensions/browser/extension_system.h"
@@ -106,7 +107,10 @@ void SigninProfileHandler::ClearSigninProfile(base::OnceClosure callback) {
     OnSigninProfileCleared();
     return;
   }
-  auto* signin_profile = ProfileHelper::GetSigninProfile();
+  auto* signin_profile = Profile::FromBrowserContext(
+      ash::BrowserContextHelper::Get()->GetSigninBrowserContext());
+  CHECK(signin_profile);
+
   on_clear_profile_stage_finished_ = base::BarrierClosure(
       3, base::BindOnce(&SigninProfileHandler::OnSigninProfileCleared,
                         weak_factory_.GetWeakPtr()));

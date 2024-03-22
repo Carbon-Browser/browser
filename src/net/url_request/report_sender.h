@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <map>
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "net/base/net_export.h"
 #include "net/http/transport_security_state.h"
@@ -19,7 +19,7 @@ class GURL;
 
 namespace net {
 
-class NetworkIsolationKey;
+class NetworkAnonymizationKey;
 class URLRequestContext;
 
 // ReportSender asynchronously sends serialized reports to a URI.
@@ -55,7 +55,7 @@ class NET_EXPORT ReportSender
   void Send(const GURL& report_uri,
             base::StringPiece content_type,
             base::StringPiece report,
-            const NetworkIsolationKey& network_isolation_key,
+            const NetworkAnonymizationKey& network_anonymization_key,
             SuccessCallback success_callback,
             ErrorCallback error_callback) override;
 

@@ -19,7 +19,7 @@ from collections import defaultdict, OrderedDict
 from io import IOBase
 from itertools import chain, product
 from html5lib import html5parser
-from typing import ClassVar, List, Set, Tuple
+from typing import ClassVar, List, Optional, Set, Tuple
 
 from localpaths import repo_root  # type: ignore
 
@@ -97,7 +97,7 @@ class WrapperHandler:
 
     __meta__ = abc.ABCMeta
 
-    headers = []  # type: ClassVar[List[Tuple[str, str]]]
+    headers: ClassVar[List[Tuple[str, str]]] = []
 
     def __init__(self, base_path=None, url_base="/"):
         self.base_path = base_path
@@ -214,18 +214,18 @@ class WrapperHandler:
 
 
 class HtmlWrapperHandler(WrapperHandler):
-    global_type = None  # type: ClassVar[str]
+    global_type: ClassVar[Optional[str]] = None
     headers = [('Content-Type', 'text/html')]
 
     def check_exposure(self, request):
-        if self.global_type:
-            globals = ""
+        if self.global_type is not None:
+            global_variants = ""
             for (key, value) in self._get_metadata(request):
                 if key == "global":
-                    globals = value
+                    global_variants = value
                     break
 
-            if self.global_type not in parse_variants(globals):
+            if self.global_type not in parse_variants(global_variants):
                 raise HTTPException(404, "This test cannot be loaded in %s mode" %
                                     self.global_type)
 
@@ -423,7 +423,7 @@ class ShadowRealmHandler(HtmlWrapperHandler):
 <script>
 (async function() {
   const r = new ShadowRealm();
-
+  r.evaluate("globalThis.self = globalThis; undefined;");
   await new Promise(r.evaluate(`
     (resolve, reject) => {
       (async () => {
@@ -569,11 +569,12 @@ class RoutesBuilder:
             ("GET", "*.any.worker.js", ClassicWorkerHandler),
             ("GET", "*.any.worker-module.js", ModuleWorkerHandler),
             ("GET", "*.asis", handlers.AsIsHandler),
-            ("GET", "/.well-known/origin-policy", handlers.PythonScriptHandler),
             ("*", "/.well-known/attribution-reporting/report-event-attribution", handlers.PythonScriptHandler),
             ("*", "/.well-known/attribution-reporting/debug/report-event-attribution", handlers.PythonScriptHandler),
             ("*", "/.well-known/attribution-reporting/report-aggregate-attribution", handlers.PythonScriptHandler),
             ("*", "/.well-known/attribution-reporting/debug/report-aggregate-attribution", handlers.PythonScriptHandler),
+            ("*", "/.well-known/attribution-reporting/debug/verbose", handlers.PythonScriptHandler),
+            ("*", "/.well-known/private-aggregation/*", handlers.PythonScriptHandler),
             ("*", "/.well-known/web-identity", handlers.PythonScriptHandler),
             ("*", "*.py", handlers.PythonScriptHandler),
             ("GET", "*", handlers.FileHandler)
@@ -621,19 +622,19 @@ class ServerProc:
     def start(self, init_func, host, port, paths, routes, bind_address, config, log_handlers, **kwargs):
         self.proc = self.mp_context.Process(target=self.create_daemon,
                                             args=(init_func, host, port, paths, routes, bind_address,
-                                                  config, log_handlers),
+                                                  config, log_handlers, dict(**os.environ)),
                                             name='%s on port %s' % (self.scheme, port),
                                             kwargs=kwargs)
         self.proc.daemon = True
         self.proc.start()
 
     def create_daemon(self, init_func, host, port, paths, routes, bind_address,
-                      config, log_handlers, **kwargs):
+                      config, log_handlers, env, **kwargs):
         # Ensure that when we start this in a new process we have the global lock
         # in the logging module unlocked
         importlib.reload(logging)
-
-        logger = get_logger(config.log_level, log_handlers)
+        os.environ = env
+        logger = get_logger(config.logging["level"], log_handlers)
 
         if sys.platform == "darwin":
             # on Darwin, NOFILE starts with a very low limit (256), so bump it up a little
@@ -670,8 +671,11 @@ class ServerProc:
                 logger.critical(traceback.format_exc())
                 raise
 
-    def stop(self, timeout=None):
-        self.stop_flag.set()
+    def request_shutdown(self):
+        if self.is_alive():
+            self.stop_flag.set()
+
+    def wait(self, timeout=None):
         self.proc.join(timeout)
 
     def is_alive(self):
@@ -715,7 +719,8 @@ def check_subdomains(logger, config, routes, mp_context, log_handlers):
             logger.critical(f"Failed probing domain {domain}. {EDIT_HOSTS_HELP}")
             sys.exit(1)
 
-    wrapper.stop()
+    wrapper.request_shutdown()
+    wrapper.wait()
 
 
 def make_hosts_file(config, host):
@@ -960,10 +965,6 @@ def _make_subdomains_product(s: Set[str], depth: int = 2) -> Set[str]:
     return {".".join(x) for x in chain(*(product(s, repeat=i) for i in range(1, depth+1)))}
 
 
-def _make_origin_policy_subdomains(limit: int) -> Set[str]:
-    return {"op%d" % x for x in range(1,limit+1)}
-
-
 _subdomains = {"www",
                "www1",
                "www2",
@@ -973,12 +974,6 @@ _subdomains = {"www",
 _not_subdomains = {"nonexistent"}
 
 _subdomains = _make_subdomains_product(_subdomains)
-
-# Origin policy subdomains need to not be reused by any other tests, since origin policies have
-# origin-wide impacts like installing a CSP or Feature Policy that could interfere with features
-# under test.
-# See https://github.com/web-platform-tests/rfcs/pull/44.
-_subdomains |= _make_origin_policy_subdomains(99)
 
 _not_subdomains = _make_subdomains_product(_not_subdomains)
 
@@ -1009,7 +1004,6 @@ class ConfigBuilder(config.ConfigBuilder):
             "webtransport-h3": ["auto"],
         },
         "check_subdomains": True,
-        "log_level": "info",
         "bind_address": True,
         "ssl": {
             "type": "pregenerated",
@@ -1028,7 +1022,11 @@ class ConfigBuilder(config.ConfigBuilder):
             },
             "none": {}
         },
-        "aliases": []
+        "aliases": [],
+        "logging": {
+            "level": "info",
+            "suppress_handler_traceback": False
+        }
     }
 
     computed_properties = ["ws_doc_root"] + config.ConfigBuilder.computed_properties
@@ -1088,7 +1086,7 @@ def build_config(logger, override_path=None, config_cls=ConfigBuilder, **kwargs)
             raise ValueError("Config path %s does not exist" % other_path)
 
     if kwargs.get("verbose"):
-        rv.log_level = "debug"
+        rv.logging["level"] = "DEBUG"
 
     setattr(rv, "inject_script", kwargs.get("inject_script"))
 
@@ -1180,7 +1178,7 @@ def run(config_cls=ConfigBuilder, route_builder=None, mp_context=None, log_handl
                       config_cls=config_cls,
                       **kwargs) as config:
         # This sets the right log level
-        logger = get_logger(config.log_level, log_handlers)
+        logger = get_logger(config.logging["level"], log_handlers)
 
         bind_address = config["bind_address"]
 
@@ -1223,14 +1221,15 @@ def run(config_cls=ConfigBuilder, route_builder=None, mp_context=None, log_handl
 
             failed_subproc = 0
             for server in iter_servers(servers):
-                subproc = server.proc
-                if subproc.is_alive():
-                    logger.info('Status of subprocess "%s": running', subproc.name)
-                    server.stop(timeout=1)
+                logger.info('Status of subprocess "%s": running', server.proc.name)
+                server.request_shutdown()
 
+            for server in iter_servers(servers):
+                server.wait(timeout=1)
                 if server.proc.exitcode == 0:
-                    logger.info('Status of subprocess "%s": exited correctly', subproc.name)
+                    logger.info('Status of subprocess "%s": exited correctly', server.proc.name)
                 else:
+                    subproc = server.proc
                     logger.warning('Status of subprocess "%s": failed. Exit with non-zero status: %d',
                                    subproc.name, subproc.exitcode)
                     failed_subproc += 1

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,18 +11,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/infobars/core/confirm_infobar_delegate.h"
 #include "components/infobars/core/infobar.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/subresource_filter/content/browser/content_subresource_filter_throttle_manager.h"
 #include "components/subresource_filter/content/browser/content_subresource_filter_web_contents_helper.h"
 #include "components/subresource_filter/content/browser/devtools_interaction_tracker.h"
@@ -150,7 +151,9 @@ class SubresourceFilterSafeBrowsingActivationThrottleTest
     : public content::RenderViewHostTestHarness,
       public content::WebContentsObserver {
  public:
-  SubresourceFilterSafeBrowsingActivationThrottleTest() {}
+  SubresourceFilterSafeBrowsingActivationThrottleTest()
+      : content::RenderViewHostTestHarness(
+            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
 
   SubresourceFilterSafeBrowsingActivationThrottleTest(
       const SubresourceFilterSafeBrowsingActivationThrottleTest&) = delete;
@@ -169,7 +172,7 @@ class SubresourceFilterSafeBrowsingActivationThrottleTest
     ASSERT_NO_FATAL_FAILURE(test_ruleset_creator_.CreateRulesetWithRules(
         rules, &test_ruleset_pair_));
     ruleset_dealer_ = std::make_unique<VerifiedRulesetDealer::Handle>(
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     ruleset_dealer_->TryOpenAndSetRulesetFile(test_ruleset_pair_.indexed.path,
                                               /*expected_checksum=*/0,
                                               base::DoNothing());
@@ -301,7 +304,7 @@ class SubresourceFilterSafeBrowsingActivationThrottleTest
     // TODO(csharrison): Consider adding finer grained control to the
     // NavigationSimulator by giving it an option to be driven by a
     // TestMockTimeTaskRunner. Also see https://crbug.com/703346.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&base::TestMockTimeTaskRunner::RunUntilIdle,
                        base::Unretained(test_io_task_runner_.get())));
@@ -397,14 +400,15 @@ class SubresourceFilterSafeBrowsingActivationThrottleInfoBarUiTest
   bool presenting_ads_blocked_infobar() {
     auto* infobar_manager = infobars::ContentInfoBarManager::FromWebContents(
         content::RenderViewHostTestHarness::web_contents());
-    if (infobar_manager->infobar_count() == 0)
+    if (infobar_manager->infobars().empty()) {
       return false;
+    }
 
     // No infobars other than the ads blocked infobar should be displayed in the
     // context of these tests.
-    EXPECT_EQ(infobar_manager->infobar_count(), 1u);
-    auto* infobar = infobar_manager->infobar_at(0);
-    EXPECT_EQ(infobar->delegate()->GetIdentifier(),
+    EXPECT_EQ(infobar_manager->infobars().size(), 1u);
+    auto* infobar = infobar_manager->infobars()[0];
+    EXPECT_EQ(infobar->GetIdentifier(),
               infobars::InfoBarDelegate::ADS_BLOCKED_INFOBAR_DELEGATE_ANDROID);
 
     return true;
@@ -970,13 +974,28 @@ TEST_F(SubresourceFilterSafeBrowsingActivationThrottleTest,
 
   // Flush the pending tasks on the IO thread, so the delayed task surely gets
   // posted.
-  test_io_task_runner()->RunUntilIdle();
+  if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    task_environment()->RunUntilIdle();
+  } else {
+    test_io_task_runner()->RunUntilIdle();
+  }
 
   // Expect one delayed task, and fast forward time.
   base::TimeDelta expected_delay =
       SubresourceFilterSafeBrowsingClientRequest::kCheckURLTimeout;
-  EXPECT_EQ(expected_delay, test_io_task_runner()->NextPendingTaskDelay());
-  test_io_task_runner()->FastForwardBy(expected_delay);
+
+  if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    // When the safe browsing code runs on the UI thread, can't check
+    // task_environment()->NextMainThreadPendingTaskDelay() since there are many
+    // other tasks posted.
+    // EXPECT_EQ(expected_delay,
+    // task_environment()->NextMainThreadPendingTaskDelay());
+    task_environment()->FastForwardBy(expected_delay);
+  } else {
+    EXPECT_EQ(expected_delay, test_io_task_runner()->NextPendingTaskDelay());
+    test_io_task_runner()->FastForwardBy(expected_delay);
+  }
+
   SimulateCommitAndExpectProceed();
   EXPECT_EQ(mojom::ActivationLevel::kDisabled,
             *observer()->GetPageActivationForLastCommittedLoad());
@@ -984,9 +1003,8 @@ TEST_F(SubresourceFilterSafeBrowsingActivationThrottleTest,
   tester().ExpectTotalCount(kSafeBrowsingCheckTime, 1);
 }
 
-// Flaky on Win, Chromium and Linux. http://crbug.com/748524
 TEST_P(SubresourceFilterSafeBrowsingActivationThrottleParamTest,
-       DISABLED_ListMatchedOnStart_NoDelay) {
+       ListMatchedOnStart_NoDelay) {
   const ActivationListTestData& test_data = GetParam();
   const GURL url(kURL);
   ConfigureForMatchParam(url);
@@ -1006,9 +1024,8 @@ TEST_P(SubresourceFilterSafeBrowsingActivationThrottleParamTest,
                                  base::Milliseconds(0), 1);
 }
 
-// Flaky on Win, Chromium and Linux. http://crbug.com/748524
 TEST_P(SubresourceFilterSafeBrowsingActivationThrottleParamTest,
-       DISABLED_ListMatchedOnRedirect_NoDelay) {
+       ListMatchedOnRedirect_NoDelay) {
   const ActivationListTestData& test_data = GetParam();
   const GURL url(kURL);
   const GURL redirect_url(kRedirectURL);
@@ -1145,9 +1162,8 @@ TEST_F(SubresourceFilterSafeBrowsingActivationThrottleInfoBarUiTest,
 #endif
 }
 
-// Disabled due to flaky failures: https://crbug.com/753669.
 TEST_P(SubresourceFilterSafeBrowsingActivationThrottleParamTest,
-       DISABLED_ListMatchedOnStartWithRedirect_NoActivation) {
+       ListMatchedOnStartWithRedirect_NoActivation) {
   const GURL url(kURL);
   const GURL redirect_url(kRedirectURL);
   ConfigureForMatchParam(url);

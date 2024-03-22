@@ -1,17 +1,21 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
- * @fileoverview Implements support for live regions in ChromeVox Next.
+ * @fileoverview Implements support for live regions in ChromeVox.
  */
+import {AutomationPredicate} from '../../common/automation_predicate.js';
+import {AutomationUtil} from '../../common/automation_util.js';
 import {CursorRange} from '../../common/cursors/range.js';
+import {QueueMode, TtsCategory} from '../common/tts_types.js';
 
-import {ChromeVoxState} from './chromevox_state.js';
+import {ChromeVoxRange} from './chromevox_range.js';
 import {Output} from './output/output.js';
-import {OutputEventType} from './output/output_types.js';
+import {OutputCustomEvent} from './output/output_types.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
+const EventType = chrome.automation.EventType;
 const RoleType = chrome.automation.RoleType;
 const StateType = chrome.automation.StateType;
 const TreeChange = chrome.automation.TreeChange;
@@ -19,20 +23,17 @@ const TreeChangeObserverFilter = chrome.automation.TreeChangeObserverFilter;
 const TreeChangeType = chrome.automation.TreeChangeType;
 
 /**
- * ChromeVox live region handler.
+ * Handles events and announcements associated with "live regions", which are
+ * regions marked as likely to change and important to announce.
  */
 export class LiveRegions {
-  /**
-   * @param {!ChromeVoxState} chromeVoxState The ChromeVox state object,
-   *     keeping track of the current mode and current range.
-   * @private
-   */
-  constructor(chromeVoxState) {
-    /**
-     * @type {!ChromeVoxState}
-     * @private
-     */
-    this.chromeVoxState_ = chromeVoxState;
+  /** @private */
+  constructor() {
+    /** @private {!Date} */
+    this.lastDesktopLiveRegionChangedTime_ = new Date(0);
+
+    /** @private {string} */
+    this.lastDesktopLiveRegionChangedText_ = '';
 
     /**
      * The time the last live region event was output.
@@ -57,18 +58,50 @@ export class LiveRegions {
 
     chrome.automation.addTreeChangeObserver(
         TreeChangeObserverFilter.LIVE_REGION_TREE_CHANGES,
-        this.onTreeChange.bind(this));
+        treeChange => this.onTreeChange(treeChange));
   }
 
-  /**
-   * @param {!ChromeVoxState} chromeVoxState The ChromeVox state object,
-   *     keeping track of the current mode and current range.
-   */
-  static init(chromeVoxState) {
+  static init() {
     if (LiveRegions.instance) {
       throw 'Error: Trying to create two instances of singleton LiveRegions';
     }
-    LiveRegions.instance = new LiveRegions(chromeVoxState);
+    LiveRegions.instance = new LiveRegions();
+  }
+
+  /** @param {!AutomationNode} area */
+  static announceDesktopLiveRegionChanged(area) {
+    const desktopOrApplication =
+        AutomationPredicate.roles([RoleType.DESKTOP, RoleType.APPLICATION]);
+    if (!area.root || !desktopOrApplication(area.root)) {
+      return;
+    }
+
+    const output = new Output();
+    if (area.containerLiveStatus === 'assertive') {
+      output.withQueueMode(QueueMode.CATEGORY_FLUSH);
+    } else if (area.containerLiveStatus === 'polite') {
+      output.withQueueMode(QueueMode.QUEUE);
+    } else {
+      return;
+    }
+
+    const withinDelay =
+        (new Date() - LiveRegions.instance.lastDesktopLiveRegionChangedTime_) <
+        DESKTOP_CHANGE_DELAY_MS;
+
+    output
+        .withRichSpeechAndBraille(
+            CursorRange.fromNode(area), null, EventType.LIVE_REGION_CHANGED)
+        .withSpeechCategory(TtsCategory.LIVE);
+    if (withinDelay &&
+        output.toString() ===
+            LiveRegions.instance.lastDesktopLiveRegionChangedText_) {
+      return;
+    }
+
+    LiveRegions.instance.lastDesktopLiveRegionChangedTime_ = new Date();
+    LiveRegions.instance.lastDesktopLiveRegionChangedText_ = output.toString();
+    output.go();
   }
 
   /**
@@ -173,7 +206,7 @@ export class LiveRegions {
     // Queue live regions coming from background tabs.
     let hostView = AutomationUtil.getTopLevelRoot(node);
     hostView = hostView ? hostView.parent : null;
-    const currentRange = this.chromeVoxState_.currentRange;
+    const currentRange = ChromeVoxRange.current;
     const forceQueue = !hostView || !hostView.state.focused ||
         (currentRange && currentRange.start.node.root !== node.root) ||
         node.containerLiveStatus === 'polite';
@@ -192,7 +225,7 @@ export class LiveRegions {
     if (opt_prependFormatStr) {
       output.format(opt_prependFormatStr);
     }
-    output.withSpeech(range, range, OutputEventType.NAVIGATE);
+    output.withSpeech(range, range, OutputCustomEvent.NAVIGATE);
 
     if (!output.hasSpeech && node.liveAtomic) {
       output.format('$joinedDescendants', node);
@@ -207,7 +240,6 @@ export class LiveRegions {
     // describe their tree changes especially during page load within the
     // LiveRegions.LIVE_REGION_MIN_SAME_NODE_MS to prevent excessive chatter.
     this.addNodeToNodeSetRecursive_(node);
-    window.prev = output;
     output.go();
     this.lastLiveRegionTime_ = currentTime;
   }
@@ -233,7 +265,7 @@ export class LiveRegions {
       return false;
     }
 
-    const currentRange = this.chromeVoxState_.currentRange;
+    const currentRange = ChromeVoxRange.current;
     if (currentRange && currentRange.start.node.root === node.root) {
       return false;
     }
@@ -279,3 +311,10 @@ LiveRegions.announceLiveRegionsFromBackgroundTabs_ = false;
 
 /** @type {LiveRegions} */
 LiveRegions.instance;
+
+/**
+ * Time to wait until processing more live region change events on the same
+ * text content.
+ * @const {number}
+ */
+const DESKTOP_CHANGE_DELAY_MS = 100;

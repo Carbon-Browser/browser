@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@
 #include "components/webdata/common/web_database.h"
 
 namespace base {
-class SingleThreadTaskRunner;
+class SequencedTaskRunner;
 }
 
 class TokenWebDataBackend;
@@ -43,11 +43,11 @@ struct TokenResult {
 class TokenWebData : public WebDataServiceBase {
  public:
   TokenWebData(scoped_refptr<WebDatabaseService> wdbs,
-               scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-               scoped_refptr<base::SingleThreadTaskRunner> db_task_runner);
+               scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
+               scoped_refptr<base::SequencedTaskRunner> db_task_runner);
 
-  TokenWebData(scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-               scoped_refptr<base::SingleThreadTaskRunner> db_task_runner);
+  TokenWebData(scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
+               scoped_refptr<base::SequencedTaskRunner> db_task_runner);
 
   TokenWebData(const TokenWebData&) = delete;
   TokenWebData& operator=(const TokenWebData&) = delete;

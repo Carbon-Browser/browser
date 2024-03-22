@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,23 +59,20 @@ void ForceInstalledTestBase::SetUp() {
 }
 
 void ForceInstalledTestBase::SetupForceList(ExtensionOrigin origin) {
-  base::Value list(base::Value::Type::LIST);
+  base::Value::List list;
   const std::string update_url = origin == ExtensionOrigin::kWebStore
                                      ? kExtensionUpdateUrl
                                      : kOffStoreUpdateUrl;
   list.Append(base::StrCat({kExtensionId1, ";", update_url}));
   list.Append(base::StrCat({kExtensionId2, ";", update_url}));
-  std::unique_ptr<base::Value> dict =
-      DictionaryBuilder()
+  base::Value::Dict dict =
+      base::Value::Dict()
           .Set(kExtensionId1,
-               DictionaryBuilder()
-                   .Set(ExternalProviderImpl::kExternalUpdateUrl, update_url)
-                   .Build())
+               base::Value::Dict().Set(ExternalProviderImpl::kExternalUpdateUrl,
+                                       update_url))
           .Set(kExtensionId2,
-               DictionaryBuilder()
-                   .Set(ExternalProviderImpl::kExternalUpdateUrl, update_url)
-                   .Build())
-          .Build();
+               base::Value::Dict().Set(ExternalProviderImpl::kExternalUpdateUrl,
+                                       update_url));
   prefs_->SetManagedPref(pref_names::kInstallForceList, std::move(dict));
 
   EXPECT_CALL(policy_provider_, IsInitializationComplete(testing::_))
@@ -86,14 +83,13 @@ void ForceInstalledTestBase::SetupForceList(ExtensionOrigin origin) {
   policy::PolicyMap map;
   map.Set("ExtensionInstallForcelist", policy::POLICY_LEVEL_MANDATORY,
           policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_PLATFORM,
-          std::move(list), nullptr);
+          base::Value(std::move(list)), nullptr);
   policy_provider_.UpdateChromePolicy(map);
   base::RunLoop().RunUntilIdle();
 }
 
 void ForceInstalledTestBase::SetupEmptyForceList() {
-  std::unique_ptr<base::Value> dict = DictionaryBuilder().Build();
-  prefs_->SetManagedPref(pref_names::kInstallForceList, std::move(dict));
+  prefs_->SetManagedPref(pref_names::kInstallForceList, base::Value::Dict());
 
   EXPECT_CALL(policy_provider_, IsInitializationComplete(testing::_))
       .WillRepeatedly(testing::Return(true));

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <string>
 #include <vector>
 
+#include "build/build_config.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/gfx_export.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/buildflags.h"
 #if BUILDFLAG(OZONE_PLATFORM_X11)
 #define USE_OZONE_PLATFORM_X11

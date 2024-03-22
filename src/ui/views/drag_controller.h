@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,9 @@ class VIEWS_EXPORT DragController {
   virtual bool CanStartDragForView(View* sender,
                                    const gfx::Point& press_pt,
                                    const gfx::Point& p) = 0;
+
+  // Called when the drag on view will start.
+  virtual void OnWillStartDragForView(View* dragged_view) {}
 
  protected:
   virtual ~DragController() = default;

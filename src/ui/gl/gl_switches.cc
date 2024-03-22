@@ -1,13 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/gl/gl_switches.h"
 
 #include "build/build_config.h"
+#include "ui/gl/gl_display_manager.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+#include <vulkan/vulkan_core.h>
+#include "third_party/angle/src/gpu_info_util/SystemInfo.h"  // nogncheck
 #endif
 
 namespace gl {
@@ -54,17 +60,6 @@ const char kSwapChainFormatBGRA[] = "bgra";
 }  // namespace gl
 
 namespace switches {
-
-// Disables use of D3D11.
-const char kDisableD3D11[]                  = "disable-d3d11";
-
-// Disables use of ES3 backend (use ES2 backend instead).
-const char kDisableES3GLContext[]           = "disable-es3-gl-context";
-
-// Disables use of ES3 backend at a lower level, for testing purposes.
-// This isn't guaranteed to work everywhere, so it's test-only.
-const char kDisableES3GLContextForTesting[] =
-    "disable-es3-gl-context-for-testing";
 
 // Disable workarounds for various GPU driver bugs.
 const char kDisableGpuDriverBugWorkarounds[] =
@@ -139,27 +134,14 @@ const char kDisableGLExtensions[] = "disable-gl-extensions";
 // Enables SwapBuffersWithBounds if it is supported.
 const char kEnableSwapBuffersWithBounds[] = "enable-swap-buffers-with-bounds";
 
-// Disables DirectComposition surface.
-const char kDisableDirectComposition[] = "disable-direct-composition";
-
 // Enables using DirectComposition video overlays, even if hardware overlays
 // aren't supported.
 const char kEnableDirectCompositionVideoOverlays[] =
     "enable-direct-composition-video-overlays";
 
-// Disables using DirectComposition video overlays, even if hardware overlays
-// are supported.
-const char kDisableDirectCompositionVideoOverlays[] =
-    "disable-direct-composition-video-overlays";
-
 // Initialize the GPU process using the adapter with the specified LUID. This is
 // only used on Windows, as LUID is a Windows specific structure.
 const char kUseAdapterLuid[] = "use-adapter-luid";
-
-// Enable kDirectCompositionForceFullDamage feature regardless of overlay
-// support.
-const char kDirectCompositionForceFullDamageForTesting[] =
-    "direct-composition-force-full-damage-for-testing";
 
 // Used for overriding the swap chain format for direct composition SDR video
 // overlays.
@@ -172,9 +154,6 @@ const char kDirectCompositionVideoSwapChainFormat[] =
 const char* const kGLSwitchesCopiedFromGpuProcessHost[] = {
     kDisableGpuDriverBugWorkarounds,
     kDisableGpuVsync,
-    kDisableD3D11,
-    kDisableES3GLContext,
-    kDisableES3GLContextForTesting,
     kEnableGPUServiceLogging,
     kEnableGPUServiceTracing,
     kEnableSgiVideoSync,
@@ -183,47 +162,56 @@ const char* const kGLSwitchesCopiedFromGpuProcessHost[] = {
     kOverrideUseSoftwareGLForTests,
     kUseANGLE,
     kEnableSwapBuffersWithBounds,
-    kDisableDirectComposition,
     kEnableDirectCompositionVideoOverlays,
-    kDisableDirectCompositionVideoOverlays,
-    kDirectCompositionForceFullDamageForTesting,
     kDirectCompositionVideoSwapChainFormat,
 };
-const int kGLSwitchesCopiedFromGpuProcessHostNumSwitches =
+const size_t kGLSwitchesCopiedFromGpuProcessHostNumSwitches =
     std::size(kGLSwitchesCopiedFromGpuProcessHost);
 
 }  // namespace switches
 
 namespace features {
 
+// Enable DComp debug visualizations. This can be useful to determine how much
+// work DWM is doing when we update our tree.
+//
+// Please be aware that some of these visualizations result in quickly flashing
+// colors.
+BASE_FEATURE(kDCompDebugVisualization,
+             "DCompDebugVisualization",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 // Use BufferCount of 3 for the direct composition root swap chain.
-const base::Feature kDCompTripleBufferRootSwapChain{
-    "DCompTripleBufferRootSwapChain", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDCompTripleBufferRootSwapChain,
+             "DCompTripleBufferRootSwapChain",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Use BufferCount of 3 for direct composition video swap chains.
-const base::Feature kDCompTripleBufferVideoSwapChain{
-    "DCompTripleBufferVideoSwapChain", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDCompTripleBufferVideoSwapChain,
+             "DCompTripleBufferVideoSwapChain",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Forces Chrome's main backbuffer to full damage if the actual damage
-// is large enough and allows DWM to consider the main backbuffer as an
-// an overlay candidate.
-const base::Feature kDirectCompositionForceFullDamage{
-    "DirectCompositionForceFullDamage", base::FEATURE_DISABLED_BY_DEFAULT};
+// Enables incremental update of dcomp visual tree.
+BASE_FEATURE(kDCompVisualTreeOptimization,
+             "DCompVisualTreeOptimization",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Use presentation feedback event queries (must be enabled) to limit latency.
-const base::Feature kDirectCompositionLowLatencyPresentation{
-    "DirectCompositionLowLatencyPresentation",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDirectCompositionLowLatencyPresentation,
+             "DirectCompositionLowLatencyPresentation",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Allow overlay swapchain to present on all GPUs even if they only support
 // software overlays. GPU deny lists limit it to NVIDIA only at the moment.
-const base::Feature kDirectCompositionSoftwareOverlays{
-    "DirectCompositionSoftwareOverlays", base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kDirectCompositionSoftwareOverlays,
+             "DirectCompositionSoftwareOverlays",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // TODO(crbug.com/1269749): This is used temporarily for verifying
 // the draw offset bug. The code should be removed once the bug is fixed.
-const base::Feature kDirectCompositionVerifyDrawOffset{
-    "DirectCompositionVerifyDrawOffset", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDirectCompositionVerifyDrawOffset,
+             "DirectCompositionVerifyDrawOffset",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 const base::FeatureParam<int> kVerifyDrawOffsetX{
     &kDirectCompositionVerifyDrawOffset, "verify_draw_offset_x", 0};
@@ -231,33 +219,87 @@ const base::FeatureParam<int> kVerifyDrawOffsetX{
 const base::FeatureParam<int> kVerifyDrawOffsetY{
     &kDirectCompositionVerifyDrawOffset, "verify_draw_offset_y", 0};
 
+// Adjust the letterbox video size and position to the center of the screen so
+// that DWM power optimization can be turned on.
+BASE_FEATURE(kDirectCompositionLetterboxVideoOptimization,
+             "DirectCompositionLetterboxVideoOptimization",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Do not consider hardware YUV overlay count when promoting quads to DComp
+// visuals. If there are more videos than hardware overlay planes, there may be
+// a performance hit compared to drawing all the videos into a single swap
+// chain. This feature is intended for testing and debugging.
+BASE_FEATURE(kDirectCompositionUnlimitedOverlays,
+             "DirectCompositionUnlimitedOverlays",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Allow dual GPU rendering through EGL where supported, i.e., allow a WebGL
+// or WebGPU context to be on the high performance GPU if preferred and Chrome
+// internal rendering to be on the low power GPU.
+BASE_FEATURE(kEGLDualGPURendering,
+             "EGLDualGPURendering",
+#if BUILDFLAG(IS_MAC)
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
+
 // Allow overlay swapchain to use Intel video processor for super resolution.
-const base::Feature kIntelVpSuperResolution{"IntelVpSuperResolution",
-                                            base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kIntelVpSuperResolution,
+             "IntelVpSuperResolution",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Allow overlay swapchain to use NVIDIA video processor for super resolution.
+BASE_FEATURE(kNvidiaVpSuperResolution,
+             "NvidiaVpSuperResolution",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Allow overlay swapchain to use NVIDIA video processor for trueHDR.
+BASE_FEATURE(kNvidiaVpTrueHDR,
+             "NvidiaVpTrueHDR",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Default to using ANGLE's OpenGL backend
-const base::Feature kDefaultANGLEOpenGL{"DefaultANGLEOpenGL",
-                                        base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDefaultANGLEOpenGL,
+             "DefaultANGLEOpenGL",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Default to using ANGLE's Metal backend.
-const base::Feature kDefaultANGLEMetal{"DefaultANGLEMetal",
-                                       base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDefaultANGLEMetal,
+             "DefaultANGLEMetal",
+#if BUILDFLAG(IS_IOS)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
 
 // Default to using ANGLE's Vulkan backend.
-const base::Feature kDefaultANGLEVulkan{"DefaultANGLEVulkan",
-                                        base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDefaultANGLEVulkan,
+             "DefaultANGLEVulkan",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Track current program's shaders at glUseProgram() call for crash report
 // purpose. Only effective on Windows because the attached shaders may only
 // be reliably retrieved with ANGLE backend.
-const base::Feature kTrackCurrentShaders{"TrackCurrentShaders",
-                                         base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kTrackCurrentShaders,
+             "TrackCurrentShaders",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Enable sharing Vulkan device queue with ANGLE's Vulkan backend.
-const base::Feature kVulkanFromANGLE{"VulkanFromANGLE",
-                                     base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kVulkanFromANGLE,
+             "VulkanFromANGLE",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enable ANGLE's debug layer.
+BASE_FEATURE(kANGLEDebugLayer,
+             "ANGLEDebugLayer",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsDefaultANGLEVulkan() {
+#if defined(MEMORY_SANITIZER)
+  return false;
+#else
 #if BUILDFLAG(IS_ANDROID)
   // No support for devices before Q -- exit before checking feature flags
   // so that devices are not counted in finch trials.
@@ -265,15 +307,60 @@ bool IsDefaultANGLEVulkan() {
       base::android::SDK_VERSION_Q)
     return false;
 #endif  // BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_LINUX)
+  angle::SystemInfo system_info;
+  if (!angle::GetSystemInfoVulkan(&system_info))
+    return false;
+
+  if (static_cast<size_t>(system_info.activeGPUIndex) >=
+      system_info.gpus.size()) {
+    return false;
+  }
+
+  const auto& active_gpu = system_info.gpus[system_info.activeGPUIndex];
+
+  // Vulkan 1.1 is required.
+  if (active_gpu.driverApiVersion < VK_VERSION_1_1)
+    return false;
+
+  // AMDVLK driver is buggy, so disable Vulkan with AMDVLK for now.
+  // crbug.com/1340081
+  if (active_gpu.driverId == VK_DRIVER_ID_AMD_OPEN_SOURCE)
+    return false;
+
+  // The performance of MESA llvmpipe is really bad.
+  if (active_gpu.driverId == VK_DRIVER_ID_MESA_LLVMPIPE) {
+    return false;
+  }
+
+#endif
   return base::FeatureList::IsEnabled(kDefaultANGLEVulkan);
+#endif  // defined(MEMORY_SANITIZER)
 }
 
 // Use waitable swap chain on Windows to reduce display latency.
-const base::Feature kDXGIWaitableSwapChain{"DXGIWaitableSwapChain",
-                                           base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDXGIWaitableSwapChain,
+             "DXGIWaitableSwapChain",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // If using waitable swap chain, specify the maximum number of queued frames.
 const base::FeatureParam<int> kDXGIWaitableSwapChainMaxQueuedFrames{
     &kDXGIWaitableSwapChain, "DXGIWaitableSwapChainMaxQueuedFrames", 2};
+
+// Force a present interval of 0. This asks Windows to cancel the remaining time
+// on the previously presented frame instead of synchronizing with vblank(s).
+// Frames may be discarded if they are presented more frequently than one per
+// vblank.
+BASE_FEATURE(kDXGISwapChainPresentInterval0,
+             "DXGISwapChainPresentInterval0",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool SupportsEGLDualGPURendering() {
+#if defined(USE_EGL) && (BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC))
+  return base::FeatureList::IsEnabled(kEGLDualGPURendering);
+#else
+  return false;
+#endif  // USE_EGL && (IS_WIN || IS_MAC)
+}
 
 }  // namespace features

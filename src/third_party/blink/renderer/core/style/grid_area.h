@@ -33,7 +33,7 @@
 
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
-#include "third_party/blink/renderer/core/style/grid_positions_resolver.h"
+#include "third_party/blink/renderer/core/style/grid_enums.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
@@ -46,7 +46,7 @@ namespace blink {
 // Legacy grid expands out auto-repeaters, so it has a lower cap than GridNG.
 // Note that this actually allows a [-999,999] range.
 const int kLegacyGridMaxTracks = 1000;
-const int kGridMaxTracks = INT_MAX - 1;
+const int kGridMaxTracks = 10000000;
 
 // A span in a single direction (either rows or columns). Note that |start_line|
 // and |end_line| are grid lines' indexes.
@@ -82,6 +82,14 @@ struct GridSpan {
   bool operator<=(const GridSpan& o) const {
     DCHECK(IsTranslatedDefinite());
     return *this < o || *this == o;
+  }
+
+  bool Contains(wtf_size_t line) const {
+    DCHECK(IsTranslatedDefinite());
+    DCHECK_GE(start_line_, 0);
+    DCHECK_GE(end_line_, 0);
+    return line >= static_cast<wtf_size_t>(start_line_) &&
+           line <= static_cast<wtf_size_t>(end_line_);
   }
 
   wtf_size_t IntegerSpan() const {
@@ -156,17 +164,16 @@ struct GridSpan {
 
   template <typename T>
   GridSpan(T start_line, T end_line, GridSpanType type) : type_(type) {
-    const int grid_max_tracks = RuntimeEnabledFeatures::LayoutNGEnabled()
-                                    ? kGridMaxTracks
-                                    : kLegacyGridMaxTracks;
+    const int grid_max_tracks = kGridMaxTracks;
     start_line_ =
         ClampTo<int>(start_line, -grid_max_tracks, grid_max_tracks - 1);
     end_line_ = ClampTo<int>(end_line, start_line_ + 1, grid_max_tracks);
 
 #if DCHECK_IS_ON()
     DCHECK_LT(start_line_, end_line_);
-    if (type == kTranslatedDefinite)
+    if (type == kTranslatedDefinite) {
       DCHECK_GE(start_line_, 0);
+    }
 #endif
   }
 
@@ -192,10 +199,11 @@ struct GridArea {
   }
 
   void SetSpan(const GridSpan& span, GridTrackSizingDirection track_direction) {
-    if (track_direction == kForColumns)
+    if (track_direction == kForColumns) {
       columns = span;
-    else
+    } else {
       rows = span;
+    }
   }
 
   wtf_size_t StartLine(GridTrackSizingDirection track_direction) const {

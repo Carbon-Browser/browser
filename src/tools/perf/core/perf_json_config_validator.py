@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,25 +17,24 @@ _VALID_SWARMING_DIMENSIONS = {
 }
 _DEFAULT_VALID_PERF_POOLS = {
     'chrome.tests.perf',
+    'chrome.tests.perf-pgo',
     'chrome.tests.perf-webview',
-    'chrome.tests.perf-weblayer',
     'chrome.tests.perf-fyi',
     'chrome.tests.perf-webview-fyi',
 }
 _VALID_PERF_POOLS = {
     'android-builder-perf': {'chrome.tests'},
     'android_arm64-builder-perf': {'chrome.tests'},
-    'android-pixel4a_power-perf': {'chrome.tests.pinpoint'},
-    'android-pixel4a_power-perf-pgo': {'chrome.tests.pinpoint'},
     'chromecast-linux-builder-perf': {'chrome.tests'},
     'chromeos-kevin-perf-fyi': {'chrome.tests'},
     'chromeos-amd64-generic-lacros-builder-perf': {'chrome.tests'},
     'chromeos-arm-generic-lacros-builder-perf': {'chrome.tests'},
-    'fuchsia-perf-fyi': {'chrome.tests'},
-    'fuchsia-perf-atlas-fyi': {'chrome.tests'},
-    'fuchsia-perf-sherlock-fyi': {'chrome.tests'},
+    'chromeos-arm64-generic-lacros-builder-perf': {'chrome.tests'},
+    'fuchsia-perf-nsn': {'chrome.tests'},
+    'fuchsia-perf-shk': {'chrome.tests'},
     'linux-builder-perf': {'chrome.tests'},
     'mac-arm-builder-perf': {'chrome.tests'},
+    'mac-arm-builder-perf-pgo': {'chrome.tests'},
     'mac-builder-perf': {'chrome.tests'},
     'win64-builder-perf': {'chrome.tests'},
 }
@@ -66,7 +65,6 @@ def _ValidateSwarmingDimension(builder_name, swarming_dimensions):
         raise ValueError('Invalid perf pool %s in %s' % (v, builder_name))
       if k == 'os' and v == 'Android':
         if (not 'device_type' in dimension.keys() or
-            not 'device_os' in dimension.keys() or
             not 'device_os_flavor' in dimension.keys()):
           raise ValueError(
               'Invalid android dimensions %s in %s' % (v, builder_name))
@@ -125,6 +123,7 @@ def _ValidateBrowserType(builder_name, test_config):
   elif 'Android' in builder_name or 'android' in builder_name:
     android_browsers = ('android-chromium', 'android-chrome',
                         'android-chrome-bundle', 'android-chrome-64-bundle',
+                        'android-trichrome-chrome-google-64-32-bundle',
                         'android-trichrome-bundle', 'exact')
     if browser_options.browser not in android_browsers:
       raise ValueError( 'The browser type for %s must be one of %s' % (
@@ -160,7 +159,7 @@ def ValidateTestingBuilder(builder_name, builder_data):
     _ValidateSwarmingDimension(
         builder_name,
         swarming_dimensions=test_config['swarming'].get('dimension_sets', {}))
-    if test_config['isolate_name'] in _PERFORMANCE_TEST_SUITES:
+    if test_config['test'] in _PERFORMANCE_TEST_SUITES:
       _ValidateShardingData(builder_name, test_config)
       _ValidateBrowserType(builder_name, test_config)
 

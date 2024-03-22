@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics.h"
@@ -142,7 +142,7 @@ TEST(OSMetricsTest, GivesNonZeroResults) {
   EXPECT_GT(dump.platform_private_footprint->rss_anon_bytes, 0u);
 #elif BUILDFLAG(IS_WIN)
   EXPECT_GT(dump.platform_private_footprint->private_bytes, 0u);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   EXPECT_GT(dump.platform_private_footprint->internal_bytes, 0u);
 #endif
 }

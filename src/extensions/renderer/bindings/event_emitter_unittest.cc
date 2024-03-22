@@ -1,11 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/renderer/bindings/event_emitter.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ref.h"
 #include "base/values.h"
 #include "extensions/common/mojom/event_dispatcher.mojom.h"
 #include "extensions/renderer/bindings/api_binding_test.h"
@@ -141,17 +142,17 @@ TEST_F(EventEmitterUnittest, ListenersDestroyingContext) {
   v8::Local<v8::Context> context = MainContext();
 
   struct ListenerClosureData {
-    EventEmitterUnittest& test;
+    const raw_ref<EventEmitterUnittest, ExperimentalRenderer> test;
     bool did_invalidate_context;
-  } closure_data = {*this, false};
+  } closure_data = {raw_ref(*this), false};
 
   // A wrapper that just calls DisposeContextWrapper() on the curried in data.
   auto listener_wrapper = [](const v8::FunctionCallbackInfo<v8::Value>& info) {
     ASSERT_TRUE(info.Data()->IsExternal());
     auto& data = *static_cast<ListenerClosureData*>(
         info.Data().As<v8::External>()->Value());
-    data.test.DisposeContextWrapper(&data.did_invalidate_context,
-                                    info.GetIsolate()->GetCurrentContext());
+    data.test->DisposeContextWrapper(&data.did_invalidate_context,
+                                     info.GetIsolate()->GetCurrentContext());
   };
 
   ListenerTracker tracker;
@@ -185,7 +186,7 @@ TEST_F(EventEmitterUnittest, ListenersDestroyingContext) {
 
   EXPECT_EQ(kNumListeners, event->GetNumListeners());
 
-  std::vector<v8::Local<v8::Value>> args;
+  v8::LocalVector<v8::Value> args(isolate());
   event->Fire(context, &args, nullptr, JSRunner::ResultCallback());
 
   EXPECT_TRUE(closure_data.did_invalidate_context);

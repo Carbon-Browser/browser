@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,15 +29,19 @@
 #include "ui/base/ime/input_method_minimal.h"
 #include "ui/display/display.h"
 #include "ui/display/screen_base.h"
-#include "ui/display/test/scoped_screen_override.h"
 #include "ui/events/event.h"
 #include "ui/events/event_dispatcher.h"
+#include "ui/events/event_utils.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/gfx/geometry/rect.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chromeos/dbus/power/fake_power_manager_client.h"
+#endif
+
+#if BUILDFLAG(IS_OZONE)
+#include "ui/events/ozone/events_ozone.h"
 #endif
 
 namespace extensions {
@@ -62,8 +66,7 @@ class ShellDesktopControllerAuraTest : public ShellTestBaseAura {
     screen_->display_list().AddDisplay(
         display::Display(200, gfx::Rect(1920, 1080, 800, 600)),
         display::DisplayList::Type::NOT_PRIMARY);
-    screen_override_ =
-        std::make_unique<display::test::ScopedScreenOverride>(screen_.get());
+    display::Screen::SetScreenInstance(screen_.get());
     ShellTestBaseAura::SetUp();
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -80,7 +83,7 @@ class ShellDesktopControllerAuraTest : public ShellTestBaseAura {
     chromeos::PowerManagerClient::Shutdown();
 #endif
     ShellTestBaseAura::TearDown();
-    screen_override_.reset();
+    display::Screen::SetScreenInstance(nullptr);
     screen_.reset();
   }
 
@@ -94,7 +97,6 @@ class ShellDesktopControllerAuraTest : public ShellTestBaseAura {
   }
 
   std::unique_ptr<display::ScreenBase> screen_;
-  std::unique_ptr<display::test::ScopedScreenOverride> screen_override_;
   std::unique_ptr<ShellDesktopControllerAura> controller_;
 };
 
@@ -131,7 +133,13 @@ TEST_F(ShellDesktopControllerAuraTest, InputEvents) {
   EXPECT_EQ(0, client.insert_char_count());
 
   // Dispatch a keypress on the window tree host to verify it is processed.
-  ui::KeyEvent key_press(u'a', ui::VKEY_A, ui::DomCode::NONE, ui::EF_NONE);
+  ui::KeyEvent key_press = ui::KeyEvent::FromCharacter(
+      u'a', ui::VKEY_A, ui::DomCode::NONE, ui::EF_NONE);
+#if BUILDFLAG(IS_OZONE)
+  // Mark IME ignoring flag for ozone platform to be just a key event skipping
+  // IME handling, which is referred in some IME handling code based on ozone.
+  ui::SetKeyboardImeFlags(&key_press, ui::kPropertyKeyboardImeIgnoredFlag);
+#endif
   ui::EventDispatchDetails details =
       controller_->GetPrimaryHost()->dispatcher()->DispatchEvent(
           controller_->GetPrimaryHost()->window(), &key_press);

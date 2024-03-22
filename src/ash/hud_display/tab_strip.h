@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/hud_display/hud_constants.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/view.h"
@@ -78,7 +79,7 @@ class HUDTabStrip : public views::View {
   void ActivateTab(HUDDisplayMode mode);
 
  private:
-  HUDDisplayView* hud_;
+  raw_ptr<HUDDisplayView, ExperimentalAsh> hud_;
   std::vector<HUDTabButton*> tabs_;  // Ordered list of child tabs.
 };
 

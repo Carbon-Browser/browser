@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/task_traits.h"
 #include "base/test/bind.h"
@@ -114,12 +114,11 @@ class FormInteractionTabHelperWithChildTest
       public testing::WithParamInterface<ChildFrameType> {
  public:
   FormInteractionTabHelperWithChildTest() {
-    std::vector<base::test::ScopedFeatureList::FeatureAndParams> enabled;
+    std::vector<base::test::FeatureRefAndParams> enabled;
     enabled.push_back(
         {blink::features::kFencedFrames, {{"implementation_type", "mparch"}}});
-    enabled.push_back({blink::features::kInitialNavigationEntry, {}});
     scoped_feature_list_.InitWithFeaturesAndParameters(
-        enabled, std::vector<base::Feature>());
+        enabled, std::vector<base::test::FeatureRef>());
   }
   ~FormInteractionTabHelperWithChildTest() override = default;
 

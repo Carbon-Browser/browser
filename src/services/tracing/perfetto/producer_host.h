@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,8 @@ class ProducerHost : public tracing::mojom::ProducerHost,
   void OnTracingSetup() override;
   void Flush(perfetto::FlushRequestID,
              const perfetto::DataSourceInstanceID* raw_data_source_ids,
-             size_t num_data_sources) override;
+             size_t num_data_sources,
+             perfetto::FlushFlags) override;
   void ClearIncrementalState(
       const perfetto::DataSourceInstanceID* data_source_ids,
       size_t num_data_sources) override;

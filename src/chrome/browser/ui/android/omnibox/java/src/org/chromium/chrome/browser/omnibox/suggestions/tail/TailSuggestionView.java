@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@ import org.chromium.chrome.browser.omnibox.R;
 /** Container view for omnibox tail suggestions. */
 public class TailSuggestionView extends TextView {
     private AlignmentManager mAlignmentManager;
-    private TextView mTextLine2;
     private int mFullTextWidth;
     private int mQueryTextWidth;
 
@@ -38,12 +37,14 @@ public class TailSuggestionView extends TextView {
      */
     void setAlignmentManager(AlignmentManager coordinator) {
         mAlignmentManager = coordinator;
-        mAlignmentManager.registerView(this);
+        if (mAlignmentManager != null) {
+            mAlignmentManager.registerView(this);
+        }
     }
 
     /**
-     * Specify query full text.
-     * This text is used for measurement purposes and is not displayed anywhere.
+     * Specify query full text. This text is used for measurement purposes and is not displayed
+     * anywhere.
      *
      * @param fullText Full query text that will be executed if user selects this suggestion.
      */
@@ -64,8 +65,9 @@ public class TailSuggestionView extends TextView {
     @Override
     public void layout(int left, int top, int right, int bottom) {
         if (mAlignmentManager != null) {
-            final int pad = mAlignmentManager.requestStartPadding(
-                    this, mQueryTextWidth, mFullTextWidth, right - left);
+            final int pad =
+                    mAlignmentManager.requestStartPadding(
+                            this, mQueryTextWidth, mFullTextWidth, right - left);
             if (getLayoutDirection() == LAYOUT_DIRECTION_RTL) {
                 right -= pad;
             } else {

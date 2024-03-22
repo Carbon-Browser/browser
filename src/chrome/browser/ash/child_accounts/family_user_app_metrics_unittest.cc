@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,17 +13,17 @@
 #include "base/time/time.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/apps/app_service/app_service_test.h"
 #include "chrome/browser/extensions/extension_service_test_with_install.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/supervised_user/supervised_user_service.h"
-#include "chrome/browser/supervised_user/supervised_user_service_factory.h"
-#include "components/services/app_service/public/cpp/app_registry_cache.h"
+#include "chrome/browser/supervised_user/supervised_user_extensions_delegate_impl.h"
+#include "chrome/browser/supervised_user/supervised_user_test_util.h"
 #include "components/services/app_service/public/cpp/app_types.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "components/services/app_service/public/cpp/instance.h"
 #include "components/services/app_service/public/cpp/instance_registry.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "content/public/test/browser_task_environment.h"
+#include "extensions/browser/api/management/management_api.h"
+#include "extensions/browser/supervised_user_extensions_delegate.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_set.h"
 #include "extensions/common/manifest.h"
@@ -89,15 +89,19 @@ class FamilyUserAppMetricsTest
     EXPECT_LT(base::TimeDelta(), forward_by);
     task_environment()->AdvanceClock(forward_by);
 
-    ExtensionServiceInitParams params = CreateDefaultInitParams();
+    ExtensionServiceInitParams params;
     params.profile_is_supervised = IsFamilyLink();
     InitializeExtensionService(params);
+    WaitForAppServiceProxyReady(
+        apps::AppServiceProxyFactory::GetForProfile(profile()));
 
     EXPECT_EQ(IsFamilyLink(), profile()->IsChild());
 
-    supervised_user_service()->Init();
-    supervised_user_service()
-        ->SetSupervisedUserExtensionsMayRequestPermissionsPrefForTesting(true);
+    supervised_user_extensions_delegate_ =
+        std::make_unique<extensions::SupervisedUserExtensionsDelegateImpl>(
+            profile());
+    supervised_user_test_util::
+        SetSupervisedUserExtensionsMayRequestPermissionsPref(profile(), true);
 
     family_user_app_metrics_ =
         std::make_unique<FamilyUserAppMetricsDerivedForTest>(profile());
@@ -131,9 +135,7 @@ class FamilyUserAppMetricsTest
     const extensions::Extension* extension3 = InstallCRX(path, expected_state);
     ASSERT_TRUE(extension3);
     if (IsFamilyLink()) {
-      supervised_user_service()->UpdateApprovedExtensionForTesting(
-          extension3->id(),
-          SupervisedUserService::ApprovedExtensionChange::kAdd);
+      supervised_user_extensions_delegate()->AddExtensionApproval(*extension3);
     }
     EXPECT_TRUE(registry()->enabled_extensions().Contains(extension3->id()));
     EXPECT_FALSE(
@@ -142,9 +144,8 @@ class FamilyUserAppMetricsTest
 
   void InstallApps() {
     std::vector<apps::AppPtr> deltas;
-    apps::AppRegistryCache& cache =
-        apps::AppServiceProxyFactory::GetForProfile(profile())
-            ->AppRegistryCache();
+    apps::AppServiceProxy* proxy =
+        apps::AppServiceProxyFactory::GetForProfile(profile());
     deltas.push_back(MakeApp(/*app_id=*/"u", /*app_name=*/"unknown",
                              /*last_launch_time=*/base::Time::Now(),
                              apps::AppType::kUnknown));
@@ -190,36 +191,27 @@ class FamilyUserAppMetricsTest
     deltas.push_back(MakeApp(/*app_id=*/"s", /*app_name=*/"systemweb",
                              /*last_launch_time=*/base::Time::Now(),
                              apps::AppType::kSystemWeb));
-    if (base::FeatureList::IsEnabled(
-            apps::kAppServiceOnAppUpdateWithoutMojom)) {
-      cache.OnApps(std::move(deltas), apps::AppType::kUnknown,
-                   false /* should_notify_initialized */);
-    } else {
-      std::vector<apps::mojom::AppPtr> mojom_deltas;
-      for (const auto& delta : deltas) {
-        mojom_deltas.push_back(apps::ConvertAppToMojomApp(delta));
-      }
-      cache.OnApps(std::move(mojom_deltas), apps::mojom::AppType::kUnknown,
-                   false /* should_notify_initialized */);
-    }
+    proxy->OnApps(std::move(deltas), apps::AppType::kUnknown,
+                  false /* should_notify_initialized */);
 
-    apps::InstanceRegistry& instance_registry =
-        apps::AppServiceProxyFactory::GetForProfile(profile())
-            ->InstanceRegistry();
+    apps::InstanceRegistry& instance_registry = proxy->InstanceRegistry();
     window_ = std::make_unique<aura::Window>(nullptr);
     window_->Init(ui::LAYER_NOT_DRAWN);
     instance_registry.CreateOrUpdateInstance(
         apps::InstanceParams(/*app_id=*/"a", window_.get()));
   }
 
-  SupervisedUserService* supervised_user_service() {
-    return SupervisedUserServiceFactory::GetForProfile(profile());
+  extensions::SupervisedUserExtensionsDelegate*
+  supervised_user_extensions_delegate() {
+    return supervised_user_extensions_delegate_.get();
   }
 
   bool IsFamilyLink() const { return GetParam(); }
 
   std::unique_ptr<FamilyUserAppMetricsDerivedForTest> family_user_app_metrics_;
   std::unique_ptr<aura::Window> window_;
+  std::unique_ptr<extensions::SupervisedUserExtensionsDelegate>
+      supervised_user_extensions_delegate_;
 };
 
 // Tests the UMA metrics that count the number of installed and enabled

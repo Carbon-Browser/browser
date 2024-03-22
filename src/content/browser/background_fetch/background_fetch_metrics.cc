@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,11 +18,6 @@ namespace background_fetch {
 
 // Exponential bucket spacing for UKM event data.
 const double kUkmEventDataBucketSpacing = 2.0;
-
-void RecordRegistrationsOnStartup(int num_registrations) {
-  UMA_HISTOGRAM_COUNTS_100("BackgroundFetch.IncompleteFetchesOnStartup",
-                           num_registrations);
-}
 
 void RecordBackgroundFetchUkmEvent(
     const blink::StorageKey& storage_key,

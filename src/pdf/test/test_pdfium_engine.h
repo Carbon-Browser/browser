@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,7 +69,11 @@ class TestPDFiumEngine : public PDFiumEngine {
               (const DocumentLayout::Options&),
               (override));
 
+  MOCK_METHOD(bool, CanEditText, (), (const override));
+
   MOCK_METHOD(bool, HasPermission, (DocumentPermission), (const override));
+
+  MOCK_METHOD(void, SelectAll, (), (override));
 
   const std::vector<DocumentAttachmentInfo>& GetDocumentAttachmentInfoList()
       const override;

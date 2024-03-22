@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ PersistentTombstoneEntity::~PersistentTombstoneEntity() = default;
 std::unique_ptr<LoopbackServerEntity>
 PersistentTombstoneEntity::CreateFromEntity(const sync_pb::SyncEntity& entity) {
   return CreateNewInternal(entity.id_string(), entity.version(),
-                           entity.client_defined_unique_tag());
+                           entity.client_tag_hash());
 }
 
 // static
@@ -72,7 +72,7 @@ void PersistentTombstoneEntity::SerializeAsProto(
     sync_pb::SyncEntity* proto) const {
   LoopbackServerEntity::SerializeBaseProtoFields(proto);
   if (!client_tag_hash_.empty())
-    proto->set_client_defined_unique_tag(client_tag_hash_);
+    proto->set_client_tag_hash(client_tag_hash_);
 }
 
 bool PersistentTombstoneEntity::IsDeleted() const {

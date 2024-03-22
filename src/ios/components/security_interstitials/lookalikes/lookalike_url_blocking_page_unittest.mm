@@ -1,30 +1,26 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_blocking_page.h"
 
-#include "base/strings/string_number_conversions.h"
+#import "base/strings/string_number_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "base/test/metrics/histogram_tester.h"
-#include "base/values.h"
-#include "components/lookalikes/core/lookalike_url_util.h"
-#include "components/security_interstitials/core/metrics_helper.h"
-#include "components/ukm/ios/ukm_url_recorder.h"
-#include "components/ukm/test_ukm_recorder.h"
-#include "ios/components/security_interstitials/lookalikes/lookalike_url_controller_client.h"
-#include "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
+#import "base/test/metrics/histogram_tester.h"
+#import "base/values.h"
+#import "components/lookalikes/core/lookalike_url_util.h"
+#import "components/security_interstitials/core/metrics_helper.h"
+#import "components/ukm/ios/ukm_url_recorder.h"
+#import "components/ukm/test_ukm_recorder.h"
+#import "ios/components/security_interstitials/lookalikes/lookalike_url_controller_client.h"
+#import "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "services/metrics/public/cpp/ukm_builders.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/test/web_task_environment.h"
+#import "services/metrics/public/cpp/ukm_builders.h"
+#import "services/metrics/public/cpp/ukm_source_id.h"
+#import "testing/platform_test.h"
 
 using security_interstitials::IOSSecurityInterstitialPage;
 using security_interstitials::SecurityInterstitialCommand;
@@ -39,12 +35,12 @@ const char kInterstitialDecisionMetric[] = "interstitial.lookalike.decision";
 const char kInterstitialInteractionMetric[] =
     "interstitial.lookalike.interaction";
 const ukm::SourceId kTestSourceId = 1;
-const LookalikeUrlMatchType kTestMatchType =
-    LookalikeUrlMatchType::kSkeletonMatchTop500;
+const lookalikes::LookalikeUrlMatchType kTestMatchType =
+    lookalikes::LookalikeUrlMatchType::kSkeletonMatchTop500;
 
 using UkmEntry = ukm::builders::LookalikeUrl_NavigationSuggestion;
 
-// Creates a LookalikeUrlBlockingPage with a given |safe_url|.
+// Creates a LookalikeUrlBlockingPage with a given `safe_url`.
 std::unique_ptr<LookalikeUrlBlockingPage> CreateBlockingPage(
     web::WebState* web_state,
     const GURL& safe_url,
@@ -78,9 +74,7 @@ class LookalikeUrlBlockingPageTest : public PlatformTest {
   }
 
   void SendCommand(SecurityInterstitialCommand command) {
-    page_->HandleCommand(command, url_,
-                         /*user_is_interacting=*/true,
-                         /*sender_frame=*/nullptr);
+    page_->HandleCommand(command);
   }
 
   // Checks that UKM recorded an event with the given metric name and value.
@@ -133,7 +127,8 @@ TEST_F(LookalikeUrlBlockingPageTest, HandleProceedCommand) {
   histogram_tester_.ExpectBucketCount(kInterstitialInteractionMetric,
                                       MetricsHelper::TOTAL_VISITS, 1);
   CheckUkm("MatchType", kTestMatchType);
-  CheckUkm("UserAction", LookalikeUrlBlockingPageUserAction::kClickThrough);
+  CheckUkm("UserAction",
+           lookalikes::LookalikeUrlBlockingPageUserAction::kClickThrough);
 }
 
 // Tests that the blocking page handles the don't proceed command by navigating
@@ -161,7 +156,8 @@ TEST_F(LookalikeUrlBlockingPageTest, HandleDontProceedCommand) {
   histogram_tester_.ExpectBucketCount(kInterstitialInteractionMetric,
                                       MetricsHelper::TOTAL_VISITS, 1);
   CheckUkm("MatchType", kTestMatchType);
-  CheckUkm("UserAction", LookalikeUrlBlockingPageUserAction::kAcceptSuggestion);
+  CheckUkm("UserAction",
+           lookalikes::LookalikeUrlBlockingPageUserAction::kAcceptSuggestion);
 }
 
 // Tests that the blocking page handles the don't proceed command by going back
@@ -196,7 +192,8 @@ TEST_F(LookalikeUrlBlockingPageTest,
   histogram_tester_.ExpectBucketCount(kInterstitialInteractionMetric,
                                       MetricsHelper::TOTAL_VISITS, 1);
   CheckUkm("MatchType", kTestMatchType);
-  CheckUkm("UserAction", LookalikeUrlBlockingPageUserAction::kAcceptSuggestion);
+  CheckUkm("UserAction",
+           lookalikes::LookalikeUrlBlockingPageUserAction::kAcceptSuggestion);
 }
 
 // Tests that the blocking page handles the don't proceed command by closing the
@@ -228,5 +225,6 @@ TEST_F(LookalikeUrlBlockingPageTest,
   histogram_tester_.ExpectBucketCount(kInterstitialInteractionMetric,
                                       MetricsHelper::TOTAL_VISITS, 1);
   CheckUkm("MatchType", kTestMatchType);
-  CheckUkm("UserAction", LookalikeUrlBlockingPageUserAction::kAcceptSuggestion);
+  CheckUkm("UserAction",
+           lookalikes::LookalikeUrlBlockingPageUserAction::kAcceptSuggestion);
 }

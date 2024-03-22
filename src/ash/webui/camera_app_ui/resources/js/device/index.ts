@@ -1,15 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 
 export {CameraManager} from './camera_manager.js';
-export {
-  getDefaultScanCorners,
-  GifResult,
-  PhotoResult,
-  setAvc1Parameters,
-  VideoResult,
-} from './mode/index.js';
-export {CameraInfo, CameraUI, CameraViewUI} from './type.js';
-export {CameraConfig} from './type.js';
+export {getDefaultScanCorners, setAvc1Parameters} from './mode/index.js';
+export type{GifResult, PhotoResult, VideoResult} from './mode/index.js';
+export {CameraInfo} from './type.js';
+export type{CameraUI, CameraViewUI} from './type.js';
+export type{CameraConfig} from './type.js';

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/notifications/scheduler/internal/collection_store.h"
 #include "chrome/browser/notifications/scheduler/public/notification_scheduler_types.h"
 #include "third_party/skia/include/core/SkBitmap.h"

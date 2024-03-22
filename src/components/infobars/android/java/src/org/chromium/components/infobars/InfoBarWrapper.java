@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,15 +14,11 @@ import android.widget.FrameLayout;
 
 import org.chromium.components.browser_ui.styles.ChromeColors;
 
-/**
- * Layout that holds an infobar's contents and provides a background color and a top shadow.
- */
+/** Layout that holds an infobar's contents and provides a background color and a top shadow. */
 class InfoBarWrapper extends FrameLayout {
     private final InfoBarUiItem mItem;
 
-    /**
-     * Constructor for inflating from Java.
-     */
+    /** Constructor for inflating from Java. */
     InfoBarWrapper(Context context, InfoBarUiItem item) {
         super(context);
         mItem = item;
@@ -49,7 +45,8 @@ class InfoBarWrapper extends FrameLayout {
 
     @Override
     public void onViewAdded(View child) {
-        child.setLayoutParams(new LayoutParams(
-                LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP));
+        child.setLayoutParams(
+                new LayoutParams(
+                        LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP));
     }
 }

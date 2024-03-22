@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "base/files/file_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/themes/theme_service.h"
@@ -23,21 +23,37 @@
 #include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_toolbar_button_container.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chrome/test/base/ui_test_utils.h"
-#include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
 #include "ui/base/hit_test.h"
-#include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/views/test/test_views.h"
 #include "ui/views/view_utils.h"
 
 #if BUILDFLAG(IS_LINUX)
 #include "ui/linux/linux_ui.h"
+#include "ui/linux/linux_ui_factory.h"
+#include "ui/linux/linux_ui_getter.h"
+
+class FakeLinuxUiGetter : public ui::LinuxUiGetter {
+ public:
+  explicit FakeLinuxUiGetter(bool use_system_theme)
+      : use_system_theme_(use_system_theme) {}
+
+  ui::LinuxUiTheme* GetForWindow(aura::Window* window) override {
+    return GetForProfile(nullptr);
+  }
+
+  ui::LinuxUiTheme* GetForProfile(Profile* profile) override {
+    return use_system_theme_ ? ui::GetDefaultLinuxUiTheme() : nullptr;
+  }
+
+ private:
+  const bool use_system_theme_;
+};
 #endif
 
 // Tests web-app windows that use the OpaqueBrowserFrameView implementation
@@ -58,19 +74,18 @@ class WebAppOpaqueBrowserFrameViewTest : public InProcessBrowserTest {
   void SetUpOnMainThread() override {
     SetThemeMode(ThemeMode::kDefault);
 #if BUILDFLAG(IS_LINUX)
-    ui::LinuxUi::instance()->SetUseSystemThemeCallback(
-        base::BindRepeating([](aura::Window* window) { return false; }));
+    ui::LinuxUiGetter::set_instance(nullptr);
 #endif
   }
 
   bool InstallAndLaunchWebApp(
       absl::optional<SkColor> theme_color = absl::nullopt) {
-    auto web_app_info = std::make_unique<WebAppInstallInfo>();
+    auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
     web_app_info->start_url = GetAppURL();
     web_app_info->scope = GetAppURL().GetWithoutFilename();
     web_app_info->theme_color = theme_color;
 
-    web_app::AppId app_id = web_app::test::InstallWebApp(
+    webapps::AppId app_id = web_app::test::InstallWebApp(
         browser()->profile(), std::move(web_app_info));
     Browser* app_browser =
         web_app::LaunchWebAppBrowser(browser()->profile(), app_id);
@@ -92,8 +107,7 @@ class WebAppOpaqueBrowserFrameViewTest : public InProcessBrowserTest {
 
     opaque_browser_frame_view_ =
         static_cast<OpaqueBrowserFrameView*>(frame_view);
-    web_app_frame_toolbar_ =
-        opaque_browser_frame_view_->web_app_frame_toolbar_for_testing();
+    web_app_frame_toolbar_ = browser_view_->web_app_frame_toolbar_for_testing();
     DCHECK(web_app_frame_toolbar_);
     DCHECK(web_app_frame_toolbar_->GetVisible());
 
@@ -110,6 +124,10 @@ class WebAppOpaqueBrowserFrameViewTest : public InProcessBrowserTest {
   };
 
   void SetThemeMode(ThemeMode theme_mode) {
+#if BUILDFLAG(IS_LINUX)
+    bool use_system_theme = theme_mode == ThemeMode::kSystem;
+    linux_ui_getter_ = std::make_unique<FakeLinuxUiGetter>(use_system_theme);
+#endif
     ThemeService* theme_service =
         ThemeServiceFactory::GetForProfile(browser()->profile());
     if (theme_mode == ThemeMode::kSystem)
@@ -120,13 +138,14 @@ class WebAppOpaqueBrowserFrameViewTest : public InProcessBrowserTest {
               theme_mode == ThemeMode::kDefault);
   }
 
-  raw_ptr<BrowserView> browser_view_ = nullptr;
-  raw_ptr<OpaqueBrowserFrameView> opaque_browser_frame_view_ = nullptr;
-  raw_ptr<WebAppFrameToolbarView> web_app_frame_toolbar_ = nullptr;
-
-  // Disable animations.
-  ui::ScopedAnimationDurationScaleMode scoped_animation_duration_scale_mode_{
-      ui::ScopedAnimationDurationScaleMode::ZERO_DURATION};
+  raw_ptr<BrowserView, AcrossTasksDanglingUntriaged> browser_view_ = nullptr;
+  raw_ptr<OpaqueBrowserFrameView, AcrossTasksDanglingUntriaged>
+      opaque_browser_frame_view_ = nullptr;
+  raw_ptr<WebAppFrameToolbarView, AcrossTasksDanglingUntriaged>
+      web_app_frame_toolbar_ = nullptr;
+#if BUILDFLAG(IS_LINUX)
+  std::unique_ptr<ui::LinuxUiGetter> linux_ui_getter_;
+#endif
 };
 
 IN_PROC_BROWSER_TEST_F(WebAppOpaqueBrowserFrameViewTest, NoThemeColor) {
@@ -205,7 +224,7 @@ IN_PROC_BROWSER_TEST_F(WebAppOpaqueBrowserFrameViewTest, StaticTitleBarHeight) {
   if (!InstallAndLaunchWebApp())
     return;
 
-  opaque_browser_frame_view_->Layout();
+  RunScheduledLayouts();
   const int title_bar_height = GetRestoredTitleBarHeight();
   EXPECT_GT(title_bar_height, 0);
 
@@ -213,78 +232,12 @@ IN_PROC_BROWSER_TEST_F(WebAppOpaqueBrowserFrameViewTest, StaticTitleBarHeight) {
   const int container_height = web_app_frame_toolbar_->height();
   web_app_frame_toolbar_->get_right_container_for_testing()->AddChildView(
       new views::StaticSizedView(gfx::Size(1, title_bar_height * 2)));
-  opaque_browser_frame_view_->Layout();
+  RunScheduledLayouts();
 
   // The height of the web app frame toolbar and title bar should not be
   // affected.
   EXPECT_EQ(container_height, web_app_frame_toolbar_->height());
   EXPECT_EQ(title_bar_height, GetRestoredTitleBarHeight());
-}
-
-// Tests for the appearance of the origin text in the titlebar. The origin text
-// shows and then hides both when the window is first opened and any time the
-// titlebar's appearance changes.
-// TODO(crbug.com/1337118): Revise this test.
-IN_PROC_BROWSER_TEST_F(WebAppOpaqueBrowserFrameViewTest, OriginTextVisibility) {
-  ui_test_utils::UrlLoadObserver url_observer(
-      GetAppURL(), content::NotificationService::AllSources());
-
-  if (!InstallAndLaunchWebApp())
-    return;
-
-  views::View* web_app_origin_text =
-      web_app_frame_toolbar_->GetViewByID(VIEW_ID_WEB_APP_ORIGIN_TEXT);
-  // Keep track of the number of times the view is made visible or hidden.
-  int visible_count = 0, hidden_count = 0;
-  auto visibility_change_counter = [](views::View* view, int* visible_count,
-                                      int* hidden_count) {
-    if (view->GetVisible())
-      (*visible_count)++;
-    else
-      (*hidden_count)++;
-  };
-  auto subscription = web_app_origin_text->AddVisibleChangedCallback(
-      base::BindRepeating(visibility_change_counter, web_app_origin_text,
-                          &visible_count, &hidden_count));
-
-  // Starts off visible, then animates out.
-  {
-    EXPECT_TRUE(web_app_origin_text->GetVisible());
-    base::RunLoop view_hidden_runloop;
-    auto callback_subscription = web_app_origin_text->AddVisibleChangedCallback(
-        view_hidden_runloop.QuitClosure());
-    view_hidden_runloop.Run();
-    EXPECT_EQ(0, visible_count);
-    EXPECT_EQ(1, hidden_count);
-    EXPECT_FALSE(web_app_origin_text->GetVisible());
-  }
-
-  // The app changes the theme. The origin text should show again and then hide.
-  {
-    base::RunLoop view_hidden_runloop;
-    base::RunLoop view_shown_runloop;
-    auto quit_runloop = base::BindLambdaForTesting(
-        [&web_app_origin_text, &view_hidden_runloop, &view_shown_runloop]() {
-          if (web_app_origin_text->GetVisible())
-            view_shown_runloop.Quit();
-          else
-            view_hidden_runloop.Quit();
-        });
-    auto callback_subscription =
-        web_app_origin_text->AddVisibleChangedCallback(quit_runloop);
-    // Make sure the navigation has finished before proceeding.
-    url_observer.Wait();
-    ASSERT_TRUE(ExecJs(
-        browser_view_->GetActiveWebContents()->GetPrimaryMainFrame(),
-        "var meta = document.head.appendChild(document.createElement('meta'));"
-        "meta.name = 'theme-color';"
-        "meta.content = '#123456';"));
-    view_shown_runloop.Run();
-    EXPECT_EQ(1, visible_count);
-    view_hidden_runloop.Run();
-    EXPECT_EQ(2, hidden_count);
-    EXPECT_FALSE(web_app_origin_text->GetVisible());
-  }
 }
 
 IN_PROC_BROWSER_TEST_F(WebAppOpaqueBrowserFrameViewTest, Fullscreen) {
@@ -306,10 +259,7 @@ IN_PROC_BROWSER_TEST_F(WebAppOpaqueBrowserFrameViewTest, Fullscreen) {
 class WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest
     : public InProcessBrowserTest {
  public:
-  WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kWebAppWindowControlsOverlay);
-  }
+  WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest() = default;
   WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest(
       const WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest&) = delete;
   WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest& operator=(
@@ -331,16 +281,17 @@ class WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest
                          .LoadWindowControlsOverlayTestPageWithDataAndGetURL(
                              embedded_test_server(), &temp_dir_);
 
-    auto web_app_info = std::make_unique<WebAppInstallInfo>();
+    auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
     web_app_info->start_url = start_url;
     web_app_info->scope = start_url.GetWithoutFilename();
     web_app_info->display_mode = blink::mojom::DisplayMode::kStandalone;
-    web_app_info->user_display_mode = web_app::UserDisplayMode::kStandalone;
+    web_app_info->user_display_mode =
+        web_app::mojom::UserDisplayMode::kStandalone;
     web_app_info->title = u"A Web App";
     web_app_info->display_override = {
         blink::mojom::DisplayMode::kWindowControlsOverlay};
 
-    web_app::AppId app_id = web_app::test::InstallWebApp(
+    webapps::AppId app_id = web_app::test::InstallWebApp(
         browser()->profile(), std::move(web_app_info));
 
     Browser* app_browser =
@@ -363,7 +314,7 @@ class WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest
     opaque_browser_frame_view_ =
         static_cast<OpaqueBrowserFrameView*>(frame_view);
     auto* web_app_frame_toolbar =
-        opaque_browser_frame_view_->web_app_frame_toolbar_for_testing();
+        browser_view_->web_app_frame_toolbar_for_testing();
     DCHECK(web_app_frame_toolbar);
     DCHECK(web_app_frame_toolbar->GetVisible());
 
@@ -373,17 +324,19 @@ class WebAppOpaqueBrowserFrameViewWindowControlsOverlayTest
   void ToggleWindowControlsOverlayEnabledAndWait() {
     auto* web_contents = browser_view_->GetActiveWebContents();
     web_app_frame_toolbar_helper_.SetupGeometryChangeCallback(web_contents);
-    browser_view_->ToggleWindowControlsOverlayEnabled();
+    base::test::TestFuture<void> future;
+    browser_view_->ToggleWindowControlsOverlayEnabled(future.GetCallback());
+    EXPECT_TRUE(future.Wait());
     content::TitleWatcher title_watcher(web_contents, u"ongeometrychange");
     std::ignore = title_watcher.WaitAndGetTitle();
   }
 
-  raw_ptr<BrowserView> browser_view_ = nullptr;
-  raw_ptr<OpaqueBrowserFrameView> opaque_browser_frame_view_ = nullptr;
+  raw_ptr<BrowserView, AcrossTasksDanglingUntriaged> browser_view_ = nullptr;
+  raw_ptr<OpaqueBrowserFrameView, AcrossTasksDanglingUntriaged>
+      opaque_browser_frame_view_ = nullptr;
   WebAppFrameToolbarTestHelper web_app_frame_toolbar_helper_;
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
   base::ScopedTempDir temp_dir_;
 };
 

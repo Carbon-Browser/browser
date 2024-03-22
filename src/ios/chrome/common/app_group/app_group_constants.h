@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,20 @@ namespace app_group {
 enum AppGroupApplications {
   APP_GROUP_CHROME = 0,
   APP_GROUP_TODAY_EXTENSION,
+};
+
+// The different types of outcome used for UMA and created by the open
+// extension.
+// The entries should not be removed or reordered.
+// Also add the name of the enum and histogram.
+enum class OpenExtensionOutcome : NSInteger {
+  kSuccess = 0,
+  kInvalid = 1,
+  kFailureInvalidURL = 2,
+  kFailureURLNotFound = 3,
+  kFailureOpenInNotFound = 4,
+  kFailureUnsupportedScheme = 5,
+  kMaxValue = kFailureUnsupportedScheme,
 };
 
 // The different types of item that can be created by the share extension.
@@ -52,7 +66,7 @@ extern const char kChromeAppGroupCommandPreference[];
 extern const char kChromeAppGroupCommandAppPreference[];
 
 // The key in kChromeAppGroupCommandPreference containing the command requested
-// by |kChromeAppGroupCommandAppPreference|.
+// by `kChromeAppGroupCommandAppPreference`.
 extern const char kChromeAppGroupCommandCommandPreference[];
 
 // The command to open a URL. Parameter must contain the URL.
@@ -79,8 +93,14 @@ extern const char kChromeAppGroupIncognitoSearchCommand[];
 // The command to open the QR Code scanner.
 extern const char kChromeAppGroupQRScannerCommand[];
 
+// The command to open Lens.
+extern const char kChromeAppGroupLensCommand[];
+
+// The command to open the Password Manager's search page.
+extern const char kChromeAppGroupSearchPasswordsCommand[];
+
 // The key in kChromeAppGroupCommandPreference containing a NSDate at which
-// |kChromeAppGroupCommandAppPreference| issued the command.
+// `kChromeAppGroupCommandAppPreference` issued the command.
 extern const char kChromeAppGroupCommandTimePreference[];
 
 // The key in kChromeAppGroupCommandPreference containing the text use for the
@@ -98,6 +118,15 @@ extern const char kChromeAppGroupCommandIndexPreference[];
 // The key of a preference containing whether the current default search engine
 // supports Search by Image.
 extern const char kChromeAppGroupSupportsSearchByImage[];
+
+// The key of a preference containing whether Google is the default search
+// engine.
+extern const char kChromeAppGroupIsGoogleDefaultSearchEngine[];
+
+// The key of a preference containing whether the home screen widget should show
+// a shortcut to Lens instead of the QR scanner if Google is the default search
+// provider.
+extern const char kChromeAppGroupEnableLensInWidget[];
 
 // The key of a preference containing Chrome client ID reported in the metrics
 // client ID. If the user does not opt in, this value must be cleared from the
@@ -117,19 +146,24 @@ extern NSString* const kShareItemDate;
 extern NSString* const kShareItemCancel;
 extern NSString* const kShareItemType;
 
-// The value used by Chrome Share extension in |kShareItemSource|.
+// The value used by Chrome Share extension in `kShareItemSource`.
 extern NSString* const kShareItemSourceShareExtension;
 
 // The values used by Chrome extensions in
-// |kChromeAppGroupCommandAppPreference|.
+// `kChromeAppGroupCommandAppPreference`.
 extern NSString* const kOpenCommandSourceTodayExtension;
 extern NSString* const kOpenCommandSourceContentExtension;
 extern NSString* const kOpenCommandSourceSearchExtension;
 extern NSString* const kOpenCommandSourceShareExtension;
 extern NSString* const kOpenCommandSourceCredentialsExtension;
+extern NSString* const kOpenCommandSourceOpenExtension;
 
 // The value of the key for the sharedDefaults used by the Content Widget.
 extern NSString* const kSuggestedItems;
+
+// The value of the key for the sharedDefaults last modification date used by
+// the Shortcuts Widget.
+extern NSString* const kSuggestedItemsLastModificationDate;
 
 // The current epoch time, on the first run of chrome on this machine. It is set
 // once and must be attached to metrics reports forever thereafter.
@@ -138,6 +172,23 @@ extern const char kInstallDate[];
 // The brand code string associated with the install. This brand code will be
 // added to metrics logs.
 extern const char kBrandCode[];
+
+// The five keys of the outcomes by the open extension to Chrome (Success,
+// FailureInvalidURL, FailureURLNotFound, FailureOpenInNotFound,
+// FailureUnsupportedScheme).
+extern NSString* const kOpenExtensionOutcomeSuccess;
+extern NSString* const kOpenExtensionOutcomeFailureInvalidURL;
+extern NSString* const kOpenExtensionOutcomeFailureURLNotFound;
+extern NSString* const kOpenExtensionOutcomeFailureOpenInNotFound;
+extern NSString* const kOpenExtensionOutcomeFailureUnsupportedScheme;
+
+// A key in the application group NSUserDefault that contains
+// the outcomes of the Open Extension.
+extern NSString* const kOpenExtensionOutcomes;
+
+// Conversion helpers between keys and OpenExtensionOutcome.
+NSString* KeyForOpenExtensionOutcomeType(OpenExtensionOutcome);
+OpenExtensionOutcome OutcomeTypeFromKey(NSString*);
 
 // Gets the application group.
 NSString* ApplicationGroup();
@@ -177,7 +228,7 @@ NSUserDefaults* GetGroupUserDefaults();
 // [NSUserDefaults standardUserDefaults].
 NSUserDefaults* GetCommonGroupUserDefaults();
 
-// The application name of |application|.
+// The application name of `application`.
 NSString* ApplicationName(AppGroupApplications application);
 
 }  // namespace app_group

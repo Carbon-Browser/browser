@@ -1,11 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
  * @fileoverview A drop-down menu in the ChromeVox panel.
  */
+import {BridgeCallbackManager} from '../common/bridge_callback_manager.js';
 import {Msgs} from '../common/msgs.js';
+import {PanelNodeMenuItemData} from '../common/panel_menu_data.js';
 
 import {PanelMenuItem} from './panel_menu_item.js';
 
@@ -39,13 +41,13 @@ export class PanelMenu {
 
     /**
      * The items in the menu.
-     * @type {Array<PanelMenuItem>}
+     * @type {!Array<!PanelMenuItem>}
      * @private
      */
     this.items_ = [];
 
     /**
-     * The return value from window.setTimeout for a function to update the
+     * The return value from setTimeout for a function to update the
      * scroll bars after an item has been added to a menu. Used so that we
      * don't re-layout too many times.
      * @type {?number}
@@ -69,10 +71,12 @@ export class PanelMenu {
 
   /**
    * @param {string} menuItemTitle The title of the menu item.
-   * @param {string} menuItemShortcut The keystrokes to select this item.
-   * @param {string} menuItemBraille
-   * @param {string} gesture
-   * @param {Function} callback The function to call if this item is selected.
+   * @param {string|undefined} menuItemShortcut The keystrokes to select this
+   *     item.
+   * @param {string|undefined} menuItemBraille
+   * @param {string|undefined} gesture
+   * @param {function(): !Promise} callback The function to call if this item
+   *     is selected.
    * @param {string=} opt_id An optional id for the menu item element.
    * @return {!PanelMenuItem} The menu item just created.
    */
@@ -96,7 +100,7 @@ export class PanelMenu {
     // to avoid excessive layout, schedule this once per batch of adding
     // menu items rather than after each add.
     if (!this.updateScrollbarsTimeout_) {
-      this.updateScrollbarsTimeout_ = window.setTimeout(
+      this.updateScrollbarsTimeout_ = setTimeout(
           (function() {
             const menuBounds = this.menuElement.getBoundingClientRect();
             const maxHeight = window.innerHeight - menuBounds.top;
@@ -169,7 +173,7 @@ export class PanelMenu {
     this.menuBarItemElement.classList.remove('active');
     this.activeIndex_ = -1;
 
-    window.setTimeout(
+    setTimeout(
         (function() {
           this.menuContainerElement.style.visibility = 'hidden';
         }).bind(this),
@@ -236,7 +240,7 @@ export class PanelMenu {
 
   /**
    * Get the callback for the active menu item.
-   * @return {Function} The callback.
+   * @return {?function() : !Promise} The callback.
    */
   getCallbackForCurrentItem() {
     if (this.activeIndex_ >= 0 && this.activeIndex_ < this.items_.length) {
@@ -248,7 +252,7 @@ export class PanelMenu {
   /**
    * Get the callback for a menu item given its DOM element.
    * @param {Element} element The DOM element.
-   * @return {Function} The callback.
+   * @return {?function() : !Promise} The callback.
    */
   getCallbackForElement(element) {
     for (let i = 0; i < this.items_.length; i++) {
@@ -285,7 +289,7 @@ export class PanelMenu {
   }
 
   /**
-   * @return {Array<PanelMenuItem>}
+   * @return {!Array<!PanelMenuItem>}
    */
   get items() {
     return this.items_;
@@ -325,10 +329,11 @@ export class PanelNodeMenu extends PanelMenu {
 
   /** @param {!PanelNodeMenuItemData} data */
   addItemFromData(data) {
-    this.addMenuItem(
-        data.title, '', '', '',
-        () => BackgroundBridge.PanelBackground.nodeMenuCallback(
-            data.callbackNodeIndex));
+    this.addMenuItem(data.title, '', '', '', async () => {
+      if (data.callbackId) {
+        BridgeCallbackManager.performCallback(data.callbackId);
+      }
+    });
     if (data.isActive) {
       this.activeIndex_ = this.items_.length - 1;
     }

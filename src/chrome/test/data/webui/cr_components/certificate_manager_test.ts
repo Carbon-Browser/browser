@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ import {CertificatePasswordDecryptionDialogElement} from 'chrome://resources/cr_
 import {CertificatePasswordEncryptionDialogElement} from 'chrome://resources/cr_components/certificate_manager/certificate_password_encryption_dialog.js';
 import {CertificateSubentryElement} from 'chrome://resources/cr_components/certificate_manager/certificate_subentry.js';
 import {CaTrustInfo, CertificatesBrowserProxy, CertificatesBrowserProxyImpl, CertificatesError, CertificatesOrgGroup, CertificateSubnode, CertificateType} from 'chrome://resources/cr_components/certificate_manager/certificates_browser_proxy.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {keyEventOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
@@ -200,7 +200,7 @@ suite('CaTrustEditDialogTests', function() {
     browserProxy.setCaCertificateTrust(caTrustInfo);
 
     CertificatesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     dialog = document.createElement('ca-trust-edit-dialog');
   });
 
@@ -286,7 +286,7 @@ suite('CertificateDeleteConfirmationDialogTests', function() {
   setup(function() {
     browserProxy = new TestCertificatesBrowserProxy();
     CertificatesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     dialog = document.createElement('certificate-delete-confirmation-dialog');
     dialog.model = model;
     dialog.certificateType = CertificateType.PERSONAL;
@@ -335,7 +335,7 @@ suite('CertificatePasswordEncryptionDialogTests', function() {
   setup(function() {
     browserProxy = new TestCertificatesBrowserProxy();
     CertificatesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     dialog = document.createElement('certificate-password-encryption-dialog');
     document.body.appendChild(dialog);
   });
@@ -407,7 +407,7 @@ suite('CertificatePasswordDecryptionDialogTests', function() {
   setup(function() {
     browserProxy = new TestCertificatesBrowserProxy();
     CertificatesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     dialog = document.createElement('certificate-password-decryption-dialog');
     document.body.appendChild(dialog);
   });
@@ -468,7 +468,7 @@ suite('CertificateSubentryTests', function() {
   setup(function() {
     browserProxy = new TestCertificatesBrowserProxy();
     CertificatesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     subentry = document.createElement('certificate-subentry');
     subentry.model = createSampleCertificateSubnode();
     subentry.certificateType = CertificateType.PERSONAL;
@@ -600,7 +600,7 @@ suite('CertificateManagerTests', function() {
   setup(function() {
     browserProxy = new TestCertificatesBrowserProxy();
     CertificatesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     page = document.createElement('certificate-manager');
     document.body.appendChild(page);
   });
@@ -863,7 +863,7 @@ suite('CertificateListTests', function() {
   setup(function() {
     browserProxy = new TestCertificatesBrowserProxy();
     CertificatesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     element = document.createElement('certificate-list');
     document.body.appendChild(element);
   });

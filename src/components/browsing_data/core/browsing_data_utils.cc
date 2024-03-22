@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,14 @@
 #include "base/metrics/user_metrics.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "components/browsing_data/core/counters/autofill_counter.h"
 #include "components/browsing_data/core/counters/history_counter.h"
 #include "components/browsing_data/core/counters/passwords_counter.h"
 #include "components/browsing_data/core/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/strings/grit/components_strings.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace browsing_data {
@@ -52,6 +54,9 @@ base::Time CalculateBeginDeleteTime(TimePeriod time_period) {
   base::TimeDelta diff;
   base::Time delete_begin_time = base::Time::Now();
   switch (time_period) {
+    case TimePeriod::LAST_15_MINUTES:
+      diff = base::Minutes(15);
+      break;
     case TimePeriod::LAST_HOUR:
       diff = base::Hours(1);
       break;
@@ -81,6 +86,10 @@ base::Time CalculateEndDeleteTime(TimePeriod time_period) {
 
 void RecordDeletionForPeriod(TimePeriod period) {
   switch (period) {
+    case TimePeriod::LAST_15_MINUTES:
+      base::RecordAction(
+          base::UserMetricsAction("ClearBrowsingData_Last15Minutes"));
+      break;
     case TimePeriod::LAST_HOUR:
       base::RecordAction(base::UserMetricsAction("ClearBrowsingData_LastHour"));
       break;
@@ -107,6 +116,10 @@ void RecordDeletionForPeriod(TimePeriod period) {
 
 void RecordTimePeriodChange(TimePeriod period) {
   switch (period) {
+    case TimePeriod::LAST_15_MINUTES:
+      base::RecordAction(base::UserMetricsAction(
+          "ClearBrowsingData_TimePeriodChanged_Last15Minutes"));
+      break;
     case TimePeriod::LAST_HOUR:
       base::RecordAction(base::UserMetricsAction(
           "ClearBrowsingData_TimePeriodChanged_LastHour"));
@@ -132,6 +145,10 @@ void RecordTimePeriodChange(TimePeriod period) {
           "ClearBrowsingData_TimePeriodChanged_OlderThan30Days"));
       break;
   }
+}
+
+void RecordDeleteBrowsingDataAction(DeleteBrowsingDataAction cbd_action) {
+  UMA_HISTOGRAM_ENUMERATION("Privacy.DeleteBrowsingData.Action", cbd_action);
 }
 
 std::u16string GetCounterTextFromResult(
@@ -362,7 +379,7 @@ bool GetDeletionPreferenceFromDataType(
   return false;
 }
 
-BrowsingDataType GetDataTypeFromDeletionPreference(
+absl::optional<BrowsingDataType> GetDataTypeFromDeletionPreference(
     const std::string& pref_name) {
   using DataTypeMap = base::flat_map<std::string, BrowsingDataType>;
   static base::NoDestructor<DataTypeMap> preference_to_datatype(
@@ -381,8 +398,23 @@ BrowsingDataType GetDataTypeFromDeletionPreference(
       });
 
   auto iter = preference_to_datatype->find(pref_name);
-  DCHECK(iter != preference_to_datatype->end());
-  return iter->second;
+  if (iter != preference_to_datatype->end()) {
+    return iter->second;
+  }
+  return absl::nullopt;
+}
+
+bool IsHttpsCookieSourceScheme(net::CookieSourceScheme cookie_source_scheme) {
+  switch (cookie_source_scheme) {
+    case net::CookieSourceScheme::kSecure:
+      return true;
+    case net::CookieSourceScheme::kNonSecure:
+      return false;
+    case net::CookieSourceScheme::kUnset:
+      // Older cookies don't have a source scheme. Associate them with https
+      // since the majority of pageloads are https.
+      return true;
+  }
 }
 
 }  // namespace browsing_data

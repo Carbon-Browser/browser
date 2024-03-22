@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "base/feature_list.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/escape.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pdf_util.h"
 #include "content/public/browser/download_utils.h"
@@ -59,14 +59,11 @@ WEB_CONTENTS_USER_DATA_KEY_IMPL(PdfWebContentsLifetimeHelper);
 // also sets |is_stale| to true if the plugin list needs a reload.
 bool IsPDFPluginEnabled(content::NavigationHandle* navigation_handle,
                         bool* is_stale) {
-  content::WebContents* web_contents = navigation_handle->GetWebContents();
-  int process_id = web_contents->GetPrimaryMainFrame()->GetProcess()->GetID();
-
   content::WebPluginInfo plugin_info;
   return content::PluginService::GetInstance()->GetPluginInfo(
-      process_id, navigation_handle->GetURL(), kPDFMimeType,
-      false /* allow_wildcard */, is_stale, &plugin_info,
-      nullptr /* actual_mime_type */);
+      navigation_handle->GetWebContents()->GetBrowserContext(),
+      navigation_handle->GetURL(), kPDFMimeType, false /* allow_wildcard */,
+      is_stale, &plugin_info, nullptr /* actual_mime_type */);
 }
 #endif
 
@@ -106,8 +103,9 @@ PDFIFrameNavigationThrottle::WillProcessResponse() {
 
   // We MUST download responses marked as attachments rather than showing
   // a placeholder.
-  if (content::download_utils::MustDownload(navigation_handle()->GetURL(),
-                                            response_headers, mime_type)) {
+  if (content::download_utils::MustDownload(
+          navigation_handle()->GetWebContents()->GetBrowserContext(),
+          navigation_handle()->GetURL(), response_headers, mime_type)) {
     return content::NavigationThrottle::PROCEED;
   }
 
@@ -167,7 +165,7 @@ void PDFIFrameNavigationThrottle::LoadPlaceholderHTML() {
   PdfWebContentsLifetimeHelper::CreateForWebContents(web_contents);
   PdfWebContentsLifetimeHelper* helper =
       PdfWebContentsLifetimeHelper::FromWebContents(web_contents);
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&PdfWebContentsLifetimeHelper::NavigateIFrameToPlaceholder,
                      helper->GetWeakPtr(), std::move(params)));

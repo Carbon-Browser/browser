@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@ namespace android_webview {
 
 class AwSafeBrowsingUIManager;
 
+// Lifetime: Temporary
 class AwSafeBrowsingBlockingPage : public safe_browsing::BaseBlockingPage {
  public:
   typedef security_interstitials::UnsafeResource UnsafeResource;
@@ -78,6 +79,9 @@ class AwSafeBrowsingBlockingPage : public safe_browsing::BaseBlockingPage {
   // Holds a copy of the resource request that triggered this blocking page,
   // only used with committed interstitials.
   std::unique_ptr<AwWebResourceRequest> resource_request_;
+
+  // Timestamp of when the safe browsing blocking page was shown to the user.
+  int64_t warning_shown_ts_;
 };
 
 }  // namespace android_webview

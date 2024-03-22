@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ TEST(SpecificsTranslationTest, SpecificsToPrinter) {
   specifics.set_make_and_model(kMakeAndModel);
   specifics.set_uri(kUri);
   specifics.set_uuid(kUuid);
-  specifics.set_updated_timestamp(kUpdateTime.ToJavaTime());
+  specifics.set_updated_timestamp(kUpdateTime.InMillisecondsSinceUnixEpoch());
 
   sync_pb::PrinterPPDReference ppd;
   ppd.set_effective_make_and_model(kEffectiveMakeAndModel);
@@ -67,7 +67,7 @@ TEST(SpecificsTranslationTest, SpecificsToPrinterSocketUriWithPath) {
   specifics.set_make_and_model(kMakeAndModel);
   specifics.set_uri("socket://abc.def:1234/path1/path2");
   specifics.set_uuid(kUuid);
-  specifics.set_updated_timestamp(kUpdateTime.ToJavaTime());
+  specifics.set_updated_timestamp(kUpdateTime.InMillisecondsSinceUnixEpoch());
 
   sync_pb::PrinterPPDReference ppd;
   ppd.set_effective_make_and_model(kEffectiveMakeAndModel);

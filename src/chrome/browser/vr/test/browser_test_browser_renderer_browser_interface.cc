@@ -1,9 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/vr/test/browser_test_browser_renderer_browser_interface.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/vr/browser_renderer.h"
 #include "chrome/browser/vr/test/ui_utils.h"
 

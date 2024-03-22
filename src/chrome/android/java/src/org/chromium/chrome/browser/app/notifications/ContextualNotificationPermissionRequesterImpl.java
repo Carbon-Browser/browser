@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,7 @@ public class ContextualNotificationPermissionRequesterImpl
                 new ContextualNotificationPermissionRequesterImpl();
     }
 
-    /**
-     * Called to initialize the singleton instance.
-     */
+    /** Called to initialize the singleton instance. */
     public static void initialize() {
         ContextualNotificationPermissionRequester.setInstance(LazyHolder.INSTANCE);
     }
@@ -38,12 +36,13 @@ public class ContextualNotificationPermissionRequesterImpl
         boolean isContextualPermissionRequestEnabled =
                 ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
                         ChromeFeatureList.NOTIFICATION_PERMISSION_VARIANT,
-                        FIELD_TRIAL_ENABLE_CONTEXTUAL_PERMISSION_REQUESTS, false);
+                        FIELD_TRIAL_ENABLE_CONTEXTUAL_PERMISSION_REQUESTS,
+                        false);
         if (!isContextualPermissionRequestEnabled) return;
         NotificationPermissionController permissionController =
                 getNotificationPermissionController();
         if (permissionController == null) return;
-        permissionController.requestPermissionIfNeeded(true /* contextual */);
+        permissionController.requestPermissionIfNeeded(/* contextual= */ true);
     }
 
     @Override

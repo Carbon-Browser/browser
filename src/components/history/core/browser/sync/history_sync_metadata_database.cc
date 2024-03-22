@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,14 @@ bool HistorySyncMetadataDatabase::GetAllSyncMetadata(
   return true;
 }
 
-bool HistorySyncMetadataDatabase::UpdateSyncMetadata(
+bool HistorySyncMetadataDatabase::ClearAllEntityMetadata() {
+  sql::Statement s(
+      db_->GetUniqueStatement("DELETE FROM history_sync_metadata"));
+
+  return s.Run();
+}
+
+bool HistorySyncMetadataDatabase::UpdateEntityMetadata(
     syncer::ModelType model_type,
     const std::string& storage_key,
     const sync_pb::EntityMetadata& metadata) {
@@ -85,7 +92,7 @@ bool HistorySyncMetadataDatabase::UpdateSyncMetadata(
   return s.Run();
 }
 
-bool HistorySyncMetadataDatabase::ClearSyncMetadata(
+bool HistorySyncMetadataDatabase::ClearEntityMetadata(
     syncer::ModelType model_type,
     const std::string& storage_key) {
   DCHECK_EQ(model_type, syncer::HISTORY)

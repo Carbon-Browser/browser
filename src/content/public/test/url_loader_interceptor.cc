@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -22,7 +22,9 @@
 #include "build/build_config.h"
 #include "content/browser/loader/navigation_url_loader_impl.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/service_worker/embedded_worker_instance.h"
+#include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/browser/url_loader_factory_getter.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -30,7 +32,6 @@
 #include "content/public/test/mock_render_process_host.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
-#include "net/cookies/parsed_cookie.h"
 #include "net/http/http_util.h"
 #include "net/test/embedded_test_server/request_handler_util.h"
 #include "services/network/public/cpp/features.h"
@@ -44,7 +45,7 @@ namespace {
 
 base::FilePath GetDataFilePath(const std::string& relative_path) {
   base::FilePath root_path;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &root_path));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &root_path));
   return root_path.AppendASCII(relative_path);
 }
 
@@ -184,9 +185,12 @@ class URLLoaderClientInterceptor : public network::mojom::URLLoaderClient {
     original_client_->OnReceiveEarlyHints(std::move(early_hints));
   }
 
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
-                         mojo::ScopedDataPipeConsumerHandle body) override {
-    original_client_->OnReceiveResponse(std::move(head), std::move(body));
+  void OnReceiveResponse(
+      network::mojom::URLResponseHeadPtr head,
+      mojo::ScopedDataPipeConsumerHandle body,
+      absl::optional<mojo_base::BigBuffer> cached_metadata) override {
+    original_client_->OnReceiveResponse(std::move(head), std::move(body),
+                                        std::move(cached_metadata));
   }
 
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
@@ -199,10 +203,6 @@ class URLLoaderClientInterceptor : public network::mojom::URLLoaderClient {
                         base::OnceCallback<void()> callback) override {
     original_client_->OnUploadProgress(current_position, total_size,
                                        std::move(callback));
-  }
-
-  void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override {
-    original_client_->OnReceiveCachedMetadata(std::move(data));
   }
 
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override {
@@ -455,6 +455,11 @@ URLLoaderInterceptor::URLLoaderInterceptor(
           &URLLoaderInterceptor::InterceptNavigationRequestCallback,
           base::Unretained(this)));
 
+  ServiceWorkerContextWrapper::SetURLLoaderFactoryInterceptorForTesting(
+      base::BindRepeating(
+          &URLLoaderInterceptor::InterceptNavigationRequestCallback,
+          base::Unretained(this)));
+
   if (BrowserThread::IsThreadInitialized(BrowserThread::IO)) {
     if (use_runloop_) {
       base::RunLoop run_loop;
@@ -496,6 +501,9 @@ URLLoaderInterceptor::~URLLoaderInterceptor() {
 
   NavigationURLLoaderImpl::SetURLLoaderFactoryInterceptorForTesting(
       NavigationURLLoaderImpl::URLLoaderFactoryInterceptor());
+
+  ServiceWorkerContextWrapper::SetURLLoaderFactoryInterceptorForTesting(
+      ServiceWorkerContextWrapper::URLLoaderFactoryInterceptor());
 
   MockRenderProcessHost::SetNetworkFactory(
       MockRenderProcessHost::CreateNetworkFactoryCallback());
@@ -586,14 +594,6 @@ void URLLoaderInterceptor::WriteResponse(
         network::PopulateParsedHeaders(response->headers.get(), *url);
   }
   response->ssl_info = std::move(ssl_info);
-  size_t iter = 0;
-  std::string cookie_line;
-  while (info.headers->EnumerateHeader(&iter, "Set-Cookie", &cookie_line)) {
-    if (net::ParsedCookie(cookie_line).IsPartitioned()) {
-      response->has_partitioned_cookie = true;
-      break;
-    }
-  }
 
   mojo::ScopedDataPipeProducerHandle producer_handle;
   mojo::ScopedDataPipeConsumerHandle consumer_handle;
@@ -613,7 +613,8 @@ void URLLoaderInterceptor::WriteResponse(
                                       MOJO_WRITE_DATA_FLAG_ALL_OR_NONE);
   CHECK_EQ(result, MOJO_RESULT_OK);
 
-  client->OnReceiveResponse(std::move(response), std::move(consumer_handle));
+  client->OnReceiveResponse(std::move(response), std::move(consumer_handle),
+                            absl::nullopt);
 
   network::URLLoaderCompletionStatus status;
   status.decoded_body_length = body.size();

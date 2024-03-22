@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,6 +42,23 @@ TEST_F(CachedTextInputInfoTest, Basic) {
   EXPECT_EQ(PlainTextRange(1, 1),
             GetInputMethodController().GetSelectionOffsets());
   EXPECT_EQ("abX", GetCachedTextInputInfo().GetText());
+}
+
+// http://crbug.com/1382425
+TEST_F(CachedTextInputInfoTest, InlineElementEditable) {
+  GetFrame().Selection().SetSelectionAndEndTyping(
+      SetSelectionTextToBody("<span contenteditable><img>|a</img></span>"));
+
+  EXPECT_EQ(PlainTextRange(1, 1),
+            GetInputMethodController().GetSelectionOffsets());
+  EXPECT_EQ(String(u"\uFFFCa"), GetCachedTextInputInfo().GetText());
+
+  auto& span = *GetDocument().QuerySelector(AtomicString("span"));
+  span.replaceChild(Text::Create(GetDocument(), "12345"), span.firstChild());
+
+  EXPECT_EQ(PlainTextRange(5, 5),
+            GetInputMethodController().GetSelectionOffsets());
+  EXPECT_EQ("12345a", GetCachedTextInputInfo().GetText());
 }
 
 // http://crbug.com/1194349

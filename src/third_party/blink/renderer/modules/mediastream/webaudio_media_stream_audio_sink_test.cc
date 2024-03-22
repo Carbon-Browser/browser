@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,15 +22,17 @@ class WebAudioMediaStreamAudioSinkTest : public testing::Test {
  protected:
   void SetUp() override {
     source_params_.Reset(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                         media::CHANNEL_LAYOUT_MONO, 48000, 480);
+                         media::ChannelLayoutConfig::Mono(), 48000, 480);
     const int context_sample_rate = 44100;
     sink_params_.Reset(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                       media::CHANNEL_LAYOUT_STEREO, context_sample_rate,
+                       media::ChannelLayoutConfig::Stereo(),
+                       context_sample_rate,
                        WebAudioMediaStreamAudioSink::kWebAudioRenderBufferSize);
     sink_bus_ = media::AudioBus::Create(sink_params_);
     auto* audio_source = MakeGarbageCollected<MediaStreamSource>(
         String::FromUTF8("dummy_source_id"), MediaStreamSource::kTypeAudio,
-        String::FromUTF8("dummy_source_name"), false /* remote */);
+        String::FromUTF8("dummy_source_name"), /*remote=*/false,
+        /*platform_source=*/nullptr);
     component_ = MakeGarbageCollected<MediaStreamComponentImpl>(
         String::FromUTF8("audio_track"), audio_source,
         std::make_unique<MediaStreamAudioTrack>(true));

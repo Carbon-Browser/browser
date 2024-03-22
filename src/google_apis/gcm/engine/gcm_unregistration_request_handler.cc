@@ -1,11 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "google_apis/gcm/engine/gcm_unregistration_request_handler.h"
 
 #include "base/logging.h"
-#include "base/metrics/histogram_macros.h"
 #include "google_apis/gcm/base/gcm_util.h"
 
 namespace gcm {
@@ -48,13 +47,6 @@ UnregistrationRequest::Status GCMUnregistrationRequestHandler::ParseResponse(
   DVLOG(1) << "Not able to parse a meaningful output from response body."
            << response;
   return UnregistrationRequest::RESPONSE_PARSING_FAILED;
-}
-
-void GCMUnregistrationRequestHandler::ReportUMAs(
-    UnregistrationRequest::Status status) {
-  UMA_HISTOGRAM_ENUMERATION("GCM.UnregistrationRequestStatus",
-                            status,
-                            UnregistrationRequest::UNREGISTRATION_STATUS_COUNT);
 }
 
 }  // namespace gcm

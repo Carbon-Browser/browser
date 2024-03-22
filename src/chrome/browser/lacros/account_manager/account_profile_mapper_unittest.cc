@@ -1,17 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/lacros/account_manager/account_profile_mapper.h"
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/test/mock_callback.h"
@@ -25,8 +26,8 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/account_manager_core/account.h"
-#include "components/account_manager_core/account_addition_result.h"
 #include "components/account_manager_core/account_manager_facade.h"
+#include "components/account_manager_core/account_upsertion_result.h"
 #include "components/account_manager_core/mock_account_manager_facade.h"
 #include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
@@ -36,9 +37,9 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 using account_manager::Account;
-using account_manager::AccountAdditionResult;
 using account_manager::AccountKey;
 using account_manager::AccountManagerFacade;
+using account_manager::AccountUpsertionResult;
 using testing::Field;
 
 namespace {
@@ -49,9 +50,14 @@ const char kLacrosAccountIdsPref[] =
 constexpr account_manager::AccountType kGaiaType =
     account_manager::AccountType::kGaia;
 
-// Map from profile path to a vector of GaiaIds.
+// Map from profile path to a set of GaiaIds.
 using AccountMapping =
     base::flat_map<base::FilePath, base::flat_set<std::string>>;
+
+// Map from profile path to a vector of account error updates.
+using AccountErrorMapping =
+    base::flat_map<base::FilePath,
+                   std::vector<std::pair<std::string, GoogleServiceAuthError>>>;
 
 using MockAddAccountCallback = base::MockOnceCallback<void(
     const absl::optional<AccountProfileMapper::AddAccountResult>&)>;
@@ -63,11 +69,17 @@ class MockAccountProfileMapperObserver : public AccountProfileMapper::Observer {
 
   MOCK_METHOD(void,
               OnAccountUpserted,
-              (const base::FilePath& profile_path, const Account&),
+              (const base::FilePath&, const Account&),
               (override));
   MOCK_METHOD(void,
               OnAccountRemoved,
-              (const base::FilePath& profile_path, const Account&),
+              (const base::FilePath&, const Account&),
+              (override));
+  MOCK_METHOD(void,
+              OnAuthErrorChanged,
+              (const base::FilePath&,
+               const account_manager::AccountKey&,
+               const GoogleServiceAuthError&),
               (override));
 };
 
@@ -290,6 +302,28 @@ class AccountProfileMapperTest : public testing::Test {
     }
   }
 
+  // Setup gMock expectations for `OnAuthErrorChanged()` calls.
+  void ExpectOnAuthErrorChanged(MockAccountProfileMapperObserver* mock_observer,
+                                const AccountErrorMapping& account_errors_map) {
+    if (account_errors_map.empty()) {
+      EXPECT_CALL(*mock_observer,
+                  OnAuthErrorChanged(testing::_, testing::_, testing::_))
+          .Times(0);
+      return;
+    }
+    for (const auto& path_account_errors : account_errors_map) {
+      const base::FilePath profile_path = path_account_errors.first;
+
+      for (const std::pair<std::string, GoogleServiceAuthError>& account_error :
+           path_account_errors.second) {
+        const AccountKey account_key{account_error.first, kGaiaType};
+        const GoogleServiceAuthError error = account_error.second;
+        EXPECT_CALL(*mock_observer,
+                    OnAuthErrorChanged(profile_path, account_key, error));
+      }
+    }
+  }
+
   // Checks that the `ProfileAttributesStorage` matches `accounts_map`.
   // Tests should normally use `VerifyAccountsInPrefs()` instead to verify local
   // state as well.
@@ -352,16 +386,16 @@ class AccountProfileMapperTest : public testing::Test {
       AccountManagerFacade::AccountAdditionSource source,
       const absl::optional<Account>& new_account) {
     EXPECT_CALL(mock_facade_, ShowAddAccountDialog(source, testing::_))
-        .WillOnce(
-            [new_account](AccountManagerFacade::AccountAdditionSource,
-                          base::OnceCallback<void(const AccountAdditionResult&)>
-                              callback) {
-              std::move(callback).Run(
-                  new_account.has_value()
-                      ? AccountAdditionResult::FromAccount(new_account.value())
-                      : AccountAdditionResult::FromStatus(
-                            AccountAdditionResult::Status::kCancelledByUser));
-            });
+        .WillOnce([new_account](
+                      AccountManagerFacade::AccountAdditionSource,
+                      base::OnceCallback<void(const AccountUpsertionResult&)>
+                          callback) {
+          std::move(callback).Run(
+              new_account.has_value()
+                  ? AccountUpsertionResult::FromAccount(new_account.value())
+                  : AccountUpsertionResult::FromStatus(
+                        AccountUpsertionResult::Status::kCancelledByUser));
+        });
   }
 
   void CompleteFacadeGetAccountsGaia(const std::vector<std::string>& gaia_ids) {
@@ -415,17 +449,17 @@ class AccountProfileMapperTest : public testing::Test {
 
   void SetLacrosAccountsInLocalState(
       const base::flat_set<std::string>& account_ids) {
-    base::Value list(base::Value::Type::LIST);
+    base::Value::List list;
     for (const auto& gaia_id : account_ids)
       list.Append(gaia_id);
-    local_state()->Set(kLacrosAccountIdsPref, list);
+    local_state()->SetList(kLacrosAccountIdsPref, std::move(list));
   }
 
   base::flat_set<std::string> GetLacrosAccountsFromLocalState() {
     const base::Value& list = local_state()->GetValue(kLacrosAccountIdsPref);
     EXPECT_TRUE(list.is_list());
     return base::MakeFlatSet<std::string>(
-        list.GetListDeprecated(), {},
+        list.GetList(), {},
         [](const base::Value& value) { return value.GetString(); });
   }
 
@@ -826,6 +860,28 @@ TEST_F(AccountProfileMapperTest, ObserveAccountReadded) {
   // Account B gets re-added as an unassigned account.
   ExpectOnAccountUpserted(&mock_observer, {{base::FilePath(), {"B"}}});
   CompleteFacadeGetAccountsGaia({"A", "B"});
+}
+
+// Tests that observers are notified about changes to accounts' error status.
+TEST_F(AccountProfileMapperTest, ObserveAuthErrorChanged) {
+  base::FilePath second_path = GetProfilePath("Second");
+  base::FilePath third_path = GetProfilePath("Third");
+  AccountProfileMapper* mapper = CreateMapper(
+      {{main_path(), {"A", "B"}}, {second_path, {"A"}}, {third_path, {"B"}}});
+  MockAccountProfileMapperObserver mock_observer;
+  base::ScopedObservation<AccountProfileMapper, AccountProfileMapper::Observer>
+      observation{&mock_observer};
+  observation.Observe(mapper);
+
+  GoogleServiceAuthError error =
+      GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
+          GoogleServiceAuthError::InvalidGaiaCredentialsReason::
+              CREDENTIALS_REJECTED_BY_SERVER);
+  ExpectOnAuthErrorChanged(&mock_observer,
+                           {{main_path(), {std::make_pair("A", error)}},
+                            {second_path, {std::make_pair("A", error)}}});
+  mapper->OnAuthErrorChanged(account_manager::AccountKey{"A", kGaiaType},
+                             error);
 }
 
 // Tests that a managed syncing secondary profile gets deleted after its primary
@@ -1367,7 +1423,7 @@ TEST_F(AccountProfileMapperTest,
       AccountProfileMapper::AddAccountResult{other_path, account_c};
   AccountManagerFacade::AccountAdditionSource source =
       AccountManagerFacade::AccountAdditionSource::kOgbAddAccount;
-  base::OnceCallback<void(const AccountAdditionResult&)>
+  base::OnceCallback<void(const AccountUpsertionResult&)>
       show_add_account_dialog_facade_callback;
 
   // No events fire before the account manager invokes the account added
@@ -1376,12 +1432,12 @@ TEST_F(AccountProfileMapperTest,
   EXPECT_CALL(mock_observer, OnAccountUpserted(testing::_, testing::_))
       .Times(0);
   EXPECT_CALL(*mock_facade(), ShowAddAccountDialog(source, testing::_))
-      .WillOnce(
-          [&show_add_account_dialog_facade_callback](
-              AccountManagerFacade::AccountAdditionSource,
-              base::OnceCallback<void(const AccountAdditionResult&)> callback) {
-            show_add_account_dialog_facade_callback = std::move(callback);
-          });
+      .WillOnce([&show_add_account_dialog_facade_callback](
+                    AccountManagerFacade::AccountAdditionSource,
+                    base::OnceCallback<void(const AccountUpsertionResult&)>
+                        callback) {
+        show_add_account_dialog_facade_callback = std::move(callback);
+      });
   ExpectFacadeGetAccountsCalled();
   mapper->ShowAddAccountDialog(other_path, source,
                                account_added_callback.Get());
@@ -1400,7 +1456,7 @@ TEST_F(AccountProfileMapperTest,
               OnAccountUpserted(other_path, AccountEqual(account_c)));
   ExpectFacadeGetAccountsCalled();
   std::move(show_add_account_dialog_facade_callback)
-      .Run(AccountAdditionResult::FromAccount(account_c));
+      .Run(AccountUpsertionResult::FromAccount(account_c));
   // `mapper` updates the account list after it adds an account.
   CompleteFacadeGetAccountsGaia({"A", "B", "C"});
   VerifyAccountsInPrefs({{main_path(), {"A"}}, {other_path, {"B", "C"}}});
@@ -1624,4 +1680,35 @@ TEST_F(AccountProfileMapperTest, MigrateAshProfile) {
 
   // All accounts have been assigned to the main profile.
   VerifyAccountsInPrefs({{main_path(), {"A", "B", "C"}}});
+}
+
+TEST_F(AccountProfileMapperTest, ReportAuthError) {
+  base::FilePath second_path = GetProfilePath("Second");
+  AccountProfileMapper* mapper =
+      CreateMapper({{main_path(), {"A", "B"}}, {second_path, {"A"}}});
+
+  const account_manager::AccountKey account_key{"A", kGaiaType};
+  const GoogleServiceAuthError error =
+      GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
+          GoogleServiceAuthError::InvalidGaiaCredentialsReason::
+              CREDENTIALS_REJECTED_BY_SERVER);
+  EXPECT_CALL(*mock_facade(), ReportAuthError(account_key, error));
+
+  mapper->ReportAuthError(second_path, account_key, error);
+}
+
+TEST_F(AccountProfileMapperTest,
+       ReportAuthErrorForUnknownProfileAccountMapping) {
+  base::FilePath second_path = GetProfilePath("Second");
+  AccountProfileMapper* mapper =
+      CreateMapper({{main_path(), {"A", "B"}}, {second_path, {"B"}}});
+
+  const account_manager::AccountKey account_key{"A", kGaiaType};
+  const GoogleServiceAuthError error =
+      GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
+          GoogleServiceAuthError::InvalidGaiaCredentialsReason::
+              CREDENTIALS_REJECTED_BY_SERVER);
+  EXPECT_CALL(*mock_facade(), ReportAuthError(account_key, error)).Times(0);
+
+  mapper->ReportAuthError(second_path, account_key, error);
 }

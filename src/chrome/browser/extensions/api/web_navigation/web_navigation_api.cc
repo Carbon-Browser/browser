@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -426,33 +426,28 @@ bool WebNavigationTabObserver::IsReferenceFragmentNavigation(
   if (existing_url == url)
     return false;
 
-  GURL::Replacements replacements;
-  replacements.ClearRef();
-  return existing_url.ReplaceComponents(replacements) ==
-         url.ReplaceComponents(replacements);
+  return existing_url.EqualsIgnoringRef(url);
 }
 
 void WebNavigationTabObserver::RenderFrameHostPendingDeletion(
-    content::RenderFrameHost* pending_delete_rfh) {
-  // The |pending_delete_rfh| and its children are now pending deletion.
-  // Stop tracking them.
+    content::RenderFrameHost* pending_delete_render_frame_host) {
+  // The |pending_delete_render_frame_host| and its children are now pending
+  // deletion. Stop tracking them.
 
-  pending_delete_rfh->ForEachRenderFrameHost(base::BindRepeating(
-      [](WebNavigationTabObserver* observer,
-         content::RenderFrameHost* render_frame_host) {
+  pending_delete_render_frame_host->ForEachRenderFrameHost(
+      [this](content::RenderFrameHost* render_frame_host) {
         auto* navigation_state =
             FrameNavigationState::GetForCurrentDocument(render_frame_host);
         if (navigation_state) {
-          observer->RenderFrameDeleted(render_frame_host);
+          RenderFrameDeleted(render_frame_host);
           FrameNavigationState::DeleteForCurrentDocument(render_frame_host);
         }
-      },
-      this));
+      });
 }
 
 ExtensionFunction::ResponseAction WebNavigationGetFrameFunction::Run() {
-  std::unique_ptr<GetFrame::Params> params(GetFrame::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<GetFrame::Params> params = GetFrame::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   int tab_id = api::tabs::TAB_ID_NONE;
   int frame_id = -1;
@@ -473,7 +468,7 @@ ExtensionFunction::ResponseAction WebNavigationGetFrameFunction::Run() {
             document_id);
 
     if (!render_frame_host)
-      return RespondNow(OneArgument(base::Value()));
+      return RespondNow(WithArguments(base::Value()));
 
     content::WebContents* web_contents =
         content::WebContents::FromRenderFrameHost(render_frame_host);
@@ -481,7 +476,7 @@ ExtensionFunction::ResponseAction WebNavigationGetFrameFunction::Run() {
     // see if the WebContents is actually in our BrowserContext.
     if (!ExtensionTabUtil::IsWebContentsInContext(
             web_contents, browser_context(), include_incognito_information())) {
-      return RespondNow(OneArgument(base::Value()));
+      return RespondNow(WithArguments(base::Value()));
     }
 
     tab_id = ExtensionTabUtil::GetTabId(web_contents);
@@ -491,7 +486,7 @@ ExtensionFunction::ResponseAction WebNavigationGetFrameFunction::Run() {
     // return.
     if ((params->details.tab_id && *params->details.tab_id != tab_id) ||
         (params->details.frame_id && *params->details.frame_id != frame_id)) {
-      return RespondNow(OneArgument(base::Value()));
+      return RespondNow(WithArguments(base::Value()));
     }
   } else {
     // If documentId is not provided, tab_id and frame_id must be. Return early
@@ -509,7 +504,7 @@ ExtensionFunction::ResponseAction WebNavigationGetFrameFunction::Run() {
                                       include_incognito_information(),
                                       &web_contents) ||
         !web_contents) {
-      return RespondNow(OneArgument(base::Value()));
+      return RespondNow(WithArguments(base::Value()));
     }
 
     render_frame_host = ExtensionApiFrameIdMap::Get()->GetRenderFrameHostById(
@@ -521,11 +516,11 @@ ExtensionFunction::ResponseAction WebNavigationGetFrameFunction::Run() {
           ? FrameNavigationState::GetForCurrentDocument(render_frame_host)
           : nullptr;
   if (!frame_navigation_state)
-    return RespondNow(OneArgument(base::Value()));
+    return RespondNow(WithArguments(base::Value()));
 
   GURL frame_url = frame_navigation_state->GetUrl();
   if (!FrameNavigationState::IsValidUrl(frame_url))
-    return RespondNow(OneArgument(base::Value()));
+    return RespondNow(WithArguments(base::Value()));
 
   GetFrame::Results::Details frame_details;
   frame_details.url = frame_url.spec();
@@ -538,21 +533,21 @@ ExtensionFunction::ResponseAction WebNavigationGetFrameFunction::Run() {
   // Only set the parentDocumentId value if we have a parent.
   if (content::RenderFrameHost* parent_frame_host =
           render_frame_host->GetParentOrOuterDocument()) {
-    frame_details.parent_document_id = std::make_unique<std::string>(
-        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString());
+    frame_details.parent_document_id =
+        ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host).ToString();
   }
   frame_details.frame_type =
-      ToString(ExtensionApiFrameIdMap::GetFrameType(render_frame_host));
+      ExtensionApiFrameIdMap::GetFrameType(render_frame_host);
   frame_details.document_lifecycle =
-      ToString(ExtensionApiFrameIdMap::GetDocumentLifecycle(render_frame_host));
+      ExtensionApiFrameIdMap::GetDocumentLifecycle(render_frame_host);
 
   return RespondNow(ArgumentList(GetFrame::Results::Create(frame_details)));
 }
 
 ExtensionFunction::ResponseAction WebNavigationGetAllFramesFunction::Run() {
-  std::unique_ptr<GetAllFrames::Params> params(
-      GetAllFrames::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<GetAllFrames::Params> params =
+      GetAllFrames::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
   int tab_id = params->details.tab_id;
 
   content::WebContents* web_contents = nullptr;
@@ -560,18 +555,17 @@ ExtensionFunction::ResponseAction WebNavigationGetAllFramesFunction::Run() {
                                     include_incognito_information(),
                                     &web_contents) ||
       !web_contents) {
-    return RespondNow(OneArgument(base::Value()));
+    return RespondNow(WithArguments(base::Value()));
   }
 
   std::vector<GetAllFrames::Results::DetailsType> result_list;
 
   // We currently do not expose back/forward cached frames in the GetAllFrames
   // API, but we do explicitly include prerendered frames.
-  web_contents->ForEachRenderFrameHost(
-      base::BindRepeating(
-          [](content::WebContents* web_contents,
-             std::vector<GetAllFrames::Results::DetailsType>& result_list,
-             content::RenderFrameHost* render_frame_host) {
+  web_contents
+      ->ForEachRenderFrameHostWithAction(
+          [web_contents,
+           &result_list](content::RenderFrameHost* render_frame_host) {
             // Don't expose inner WebContents for the getFrames API.
             if (content::WebContents::FromRenderFrameHost(render_frame_host) !=
                 web_contents) {
@@ -607,21 +601,19 @@ ExtensionFunction::ResponseAction WebNavigationGetAllFramesFunction::Run() {
             // Only set the parentDocumentId value if we have a parent.
             if (content::RenderFrameHost* parent_frame_host =
                     render_frame_host->GetParentOrOuterDocument()) {
-              frame.parent_document_id = std::make_unique<std::string>(
+              frame.parent_document_id =
                   ExtensionApiFrameIdMap::GetDocumentId(parent_frame_host)
-                      .ToString());
+                      .ToString();
             }
-            frame.frame_type = ToString(
-                ExtensionApiFrameIdMap::GetFrameType(render_frame_host));
+            frame.frame_type =
+                ExtensionApiFrameIdMap::GetFrameType(render_frame_host);
             frame.document_lifecycle =
-                ToString(ExtensionApiFrameIdMap::GetDocumentLifecycle(
-                    render_frame_host));
+                ExtensionApiFrameIdMap::GetDocumentLifecycle(render_frame_host);
             frame.process_id = render_frame_host->GetProcess()->GetID();
             frame.error_occurred = navigation_state->GetErrorOccurredInFrame();
             result_list.push_back(std::move(frame));
             return content::RenderFrameHost::FrameIterationAction::kContinue;
-          },
-          web_contents, std::ref(result_list)));
+          });
 
   return RespondNow(ArgumentList(GetAllFrames::Results::Create(result_list)));
 }

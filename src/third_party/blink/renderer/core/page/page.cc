@@ -24,11 +24,11 @@
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/page/color_provider_color_maps.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/web/blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/media_feature_overrides.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
@@ -40,7 +40,6 @@
 #include "third_party/blink/renderer/core/editing/drag_caret.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker_controller.h"
 #include "third_party/blink/renderer/core/frame/browser_controls.h"
-#include "third_party/blink/renderer/core/frame/dom_timer.h"
 #include "third_party/blink/renderer/core/frame/event_handler_registry.h"
 #include "third_party/blink/renderer/core/frame/frame_console.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -56,7 +55,6 @@
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
 #include "third_party/blink/renderer/core/html/fenced_frame/document_fenced_frames.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
-#include "third_party/blink/renderer/core/html/portal/document_portals.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/inspector/console_message_storage.h"
 #include "third_party/blink/renderer/core/inspector/inspector_issue_storage.h"
@@ -74,24 +72,28 @@
 #include "third_party/blink/renderer/core/page/plugin_data.h"
 #include "third_party/blink/renderer/core/page/plugins_changed_observer.h"
 #include "third_party/blink/renderer/core/page/pointer_lock_controller.h"
+#include "third_party/blink/renderer/core/page/scoped_browsing_context_group_pauser.h"
 #include "third_party/blink/renderer/core/page/scoped_page_pauser.h"
-#include "third_party/blink/renderer/core/page/scrolling/overscroll_controller.h"
 #include "third_party/blink/renderer/core/page/scrolling/scrolling_coordinator.h"
 #include "third_party/blink/renderer/core/page/scrolling/top_document_root_scroller_controller.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation_controller.h"
 #include "third_party/blink/renderer/core/page/validation_message_client_impl.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
+#include "third_party/blink/renderer/core/preferences/preference_overrides.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_overlay_mobile.h"
 #include "third_party/blink/renderer/core/scroll/smooth_scroll_sequencer.h"
 #include "third_party/blink/renderer/core/svg/graphics/svg_image_chrome_client.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/scheduler/public/agent_group_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/color/color_provider.h"
+#include "ui/color/color_provider_utils.h"
 
 namespace blink {
 
@@ -145,21 +147,21 @@ HeapVector<Member<Page>> Page::RelatedPages() {
   return result;
 }
 
-Page* Page::CreateNonOrdinary(
-    ChromeClient& chrome_client,
-    scheduler::WebAgentGroupScheduler& agent_group_scheduler) {
-  return MakeGarbageCollected<Page>(base::PassKey<Page>(), chrome_client,
-                                    agent_group_scheduler,
-                                    /*is_ordinary=*/false);
+Page* Page::CreateNonOrdinary(ChromeClient& chrome_client,
+                              AgentGroupScheduler& agent_group_scheduler) {
+  return MakeGarbageCollected<Page>(
+      base::PassKey<Page>(), chrome_client, agent_group_scheduler,
+      BrowsingContextGroupInfo::CreateUnique(), /*is_ordinary=*/false);
 }
 
 Page* Page::CreateOrdinary(
     ChromeClient& chrome_client,
     Page* opener,
-    scheduler::WebAgentGroupScheduler& agent_group_scheduler) {
-  Page* page = MakeGarbageCollected<Page>(base::PassKey<Page>(), chrome_client,
-                                          agent_group_scheduler,
-                                          /*is_ordinary=*/true);
+    AgentGroupScheduler& agent_group_scheduler,
+    const BrowsingContextGroupInfo& browsing_context_group_info) {
+  Page* page = MakeGarbageCollected<Page>(
+      base::PassKey<Page>(), chrome_client, agent_group_scheduler,
+      browsing_context_group_info, /*is_ordinary=*/true);
 
   if (opener) {
     // Before: ... -> opener -> next -> ...
@@ -172,22 +174,28 @@ Page* Page::CreateOrdinary(
   }
 
   OrdinaryPages().insert(page);
-  if (ScopedPagePauser::IsActive())
+
+  bool should_pause = false;
+  if (base::FeatureList::IsEnabled(
+          features::kPausePagesPerBrowsingContextGroup)) {
+    should_pause = ScopedBrowsingContextGroupPauser::IsActive(*page);
+  } else {
+    should_pause = ScopedPagePauser::IsActive();
+  }
+  if (should_pause) {
     page->SetPaused(true);
+  }
+
   return page;
 }
 
 Page::Page(base::PassKey<Page>,
            ChromeClient& chrome_client,
-           scheduler::WebAgentGroupScheduler& agent_group_scheduler,
+           AgentGroupScheduler& agent_group_scheduler,
+           const BrowsingContextGroupInfo& browsing_context_group_info,
            bool is_ordinary)
     : SettingsDelegate(std::make_unique<Settings>()),
       main_frame_(nullptr),
-      fenced_frames_impl_(
-          features::IsFencedFramesEnabled()
-              ? absl::optional<features::FencedFramesImplementationType>(
-                    features::kFencedFramesImplementationTypeParam.Get())
-              : absl::nullopt),
       agent_group_scheduler_(agent_group_scheduler),
       animator_(MakeGarbageCollected<PageAnimator>(*this)),
       autoscroll_controller_(MakeGarbageCollected<AutoscrollController>(*this)),
@@ -206,9 +214,6 @@ Page::Page(base::PassKey<Page>,
       global_root_scroller_controller_(
           MakeGarbageCollected<TopDocumentRootScrollerController>(*this)),
       visual_viewport_(MakeGarbageCollected<VisualViewport>(*this)),
-      overscroll_controller_(
-          MakeGarbageCollected<OverscrollController>(GetVisualViewport(),
-                                                     GetChromeClient())),
       link_highlight_(MakeGarbageCollected<LinkHighlight>(*this)),
       plugin_data_(nullptr),
       // TODO(pdr): Initialize |validation_message_client_| lazily.
@@ -224,12 +229,18 @@ Page::Page(base::PassKey<Page>,
       next_related_page_(this),
       prev_related_page_(this),
       autoplay_flags_(0),
-      web_text_autosizer_page_info_({0, 0, 1.f}) {
+      web_text_autosizer_page_info_({0, 0, 1.f}),
+      v8_compile_hints_producer_(
+          MakeGarbageCollected<
+              v8_compile_hints::V8CrowdsourcedCompileHintsProducer>(this)),
+      v8_compile_hints_consumer_(
+          MakeGarbageCollected<
+              v8_compile_hints::V8CrowdsourcedCompileHintsConsumer>()),
+      browsing_context_group_info_(browsing_context_group_info) {
   DCHECK(!AllPages().Contains(this));
   AllPages().insert(this);
 
-  page_scheduler_ =
-      agent_group_scheduler.AsAgentGroupScheduler().CreatePageScheduler(this);
+  page_scheduler_ = agent_group_scheduler_->CreatePageScheduler(this);
   // The scheduler should be set before the main frame.
   DCHECK(!main_frame_);
   if (auto* virtual_time_controller =
@@ -246,6 +257,31 @@ Page::~Page() {
   DCHECK(!main_frame_);
 }
 
+// Closing a window/FrameTree happens asynchronously. It's important to keep
+// track of the "current" Page because it might change, e.g. if a navigation
+// committed in between the time the task gets posted but before the task runs.
+// This class keeps track of the "current" Page and ensures that the window
+// close happens on the correct Page.
+class Page::CloseTaskHandler : public GarbageCollected<Page::CloseTaskHandler> {
+ public:
+  explicit CloseTaskHandler(WeakMember<Page> page) : page_(page) {}
+  ~CloseTaskHandler() = default;
+
+  void DoDeferredClose() {
+    if (page_) {
+      CHECK(page_->MainFrame());
+      page_->GetChromeClient().CloseWindow();
+    }
+  }
+
+  void SetPage(Page* page) { page_ = page; }
+
+  void Trace(Visitor* visitor) const { visitor->Trace(page_); }
+
+ private:
+  WeakMember<Page> page_;
+};
+
 void Page::CloseSoon() {
   // Make sure this Page can no longer be found by JS.
   is_closing_ = true;
@@ -254,7 +290,28 @@ void Page::CloseSoon() {
   if (auto* main_local_frame = DynamicTo<LocalFrame>(main_frame_.Get()))
     main_local_frame->Loader().StopAllLoaders(/*abort_client=*/true);
 
-  GetChromeClient().CloseWindowSoon();
+  // If the client is a popup, immediately close the window. This preserves the
+  // previous behavior where we do the closing synchronously.
+  if (GetChromeClient().IsPopup()) {
+    GetChromeClient().CloseWindow();
+    return;
+  }
+  // If the client is a WebView, post a task to close the window asynchronously.
+  // This is because we could be called from deep in Javascript.  If we ask the
+  // WebView to close now, the window could be closed before the JS finishes
+  // executing, thanks to nested message loops running and handling the
+  // resulting disconnecting PageBroadcast. So instead, post a message back to
+  // the message loop, which won't run until the JS is complete, and then the
+  // close request can be sent. Note that we won't post this task if the Page is
+  // already marked as being destroyed: in that case, `MainFrame()` will be
+  // null.
+  if (!close_task_handler_ && MainFrame()) {
+    close_task_handler_ = MakeGarbageCollected<Page::CloseTaskHandler>(this);
+    GetPageScheduler()->GetAgentGroupScheduler().DefaultTaskRunner()->PostTask(
+        FROM_HERE,
+        WTF::BindOnce(&Page::CloseTaskHandler::DoDeferredClose,
+                      WrapWeakPersistent(close_task_handler_.Get())));
+  }
 }
 
 ViewportDescription Page::GetViewportDescription() const {
@@ -318,14 +375,6 @@ const VisualViewport& Page::GetVisualViewport() const {
   return *visual_viewport_;
 }
 
-OverscrollController& Page::GetOverscrollController() {
-  return *overscroll_controller_;
-}
-
-const OverscrollController& Page::GetOverscrollController() const {
-  return *overscroll_controller_;
-}
-
 LinkHighlight& Page::GetLinkHighlight() {
   return *link_highlight_;
 }
@@ -336,6 +385,19 @@ void Page::SetMainFrame(Frame* main_frame) {
   main_frame_ = main_frame;
 
   page_scheduler_->SetIsMainFrameLocal(main_frame->IsLocalFrame());
+}
+
+void Page::TakeCloseTaskHandler(Page* old_page) {
+  // Setting the CloseTaskHandler using this function should only be done
+  // when transferring the CloseTaskHandler from a previous Page to the new
+  // Page during LocalFrame <-> LocalFrame swap. The new Page should not have
+  // a CloseTaskHandler yet at this point.
+  CHECK(!close_task_handler_);
+  close_task_handler_ = old_page->close_task_handler_;
+  old_page->close_task_handler_ = nullptr;
+  if (close_task_handler_) {
+    close_task_handler_->SetPage(this);
+  }
 }
 
 LocalFrame* Page::DeprecatedLocalMainFrame() const {
@@ -402,6 +464,37 @@ void Page::ColorSchemeChanged() {
 void Page::ColorProvidersChanged() {
   for (Page* page : AllPages())
     page->InvalidatePaint();
+}
+
+void Page::UpdateColorProviders(
+    const ColorProviderColorMaps& color_provider_colors) {
+  if (color_provider_colors.IsEmpty()) {
+    return;
+  }
+
+  // TODO(samomekarajr): Might want to only create new ColorProviders if the
+  // renderer color maps do not match the existing ColorProviders.
+  light_color_provider_ = std::make_unique<ui::ColorProvider>(
+      ui::CreateColorProviderFromRendererColorMap(
+          color_provider_colors.light_colors_map));
+  dark_color_provider_ = std::make_unique<ui::ColorProvider>(
+      ui::CreateColorProviderFromRendererColorMap(
+          color_provider_colors.dark_colors_map));
+  forced_colors_color_provider_ = std::make_unique<ui::ColorProvider>(
+      ui::CreateColorProviderFromRendererColorMap(
+          color_provider_colors.forced_colors_map));
+}
+
+const ui::ColorProvider* Page::GetColorProviderForPainting(
+    mojom::blink::ColorScheme color_scheme,
+    bool in_forced_colors) const {
+  if (in_forced_colors) {
+    return forced_colors_color_provider_.get();
+  }
+
+  return color_scheme == mojom::blink::ColorScheme::kDark
+             ? dark_color_provider_.get()
+             : light_color_provider_.get();
 }
 
 void Page::InitialStyleChanged() {
@@ -536,21 +629,43 @@ void Page::SetVisibilityState(
     bool is_initial_state) {
   if (lifecycle_state_->visibility == visibility_state)
     return;
+
+  // Are we entering / leaving a state that would map to the "visible" state, in
+  // the `document.visibilityState` sense?
+  const bool was_visible = lifecycle_state_->visibility ==
+                           mojom::blink::PageVisibilityState::kVisible;
+  const bool is_visible =
+      visibility_state == mojom::blink::PageVisibilityState::kVisible;
+
   lifecycle_state_->visibility = visibility_state;
 
   if (is_initial_state)
     return;
 
-  page_visibility_observer_set_.ForEachObserver(
-      [](PageVisibilityObserver* observer) {
-        observer->PageVisibilityChanged();
-      });
+  for (auto observer : page_visibility_observer_set_) {
+    observer->PageVisibilityChanged();
+  }
 
   if (main_frame_) {
     if (lifecycle_state_->visibility ==
-        mojom::blink::PageVisibilityState::kVisible)
+        mojom::blink::PageVisibilityState::kVisible) {
       RestoreSVGImageAnimations();
-    main_frame_->DidChangeVisibilityState();
+    }
+    // If we're eliding visibility transitions between the two `kHidden*`
+    // states, then we never get here unless one state was `kVisible` and the
+    // other was not.  However, if we aren't eliding those transitions, then we
+    // need to do so now; from the Frame's point of view, nothing is changing if
+    // this is a change between the two `kHidden*` states.  Both map to "hidden"
+    // in the sense of `document.visibilityState`, and dispatching an event when
+    // the web-exposed state hasn't changed is confusing.
+    //
+    // This check could be enabled for both cases, and the result in the
+    // "eliding" case shouldn't change.  It's not, just to be safe, since this
+    // is intended as a fall-back to previous behavior.
+    if (!RuntimeEnabledFeatures::DispatchHiddenVisibilityTransitionsEnabled() ||
+        was_visible || is_visible) {
+      main_frame_->DidChangeVisibilityState();
+    }
   }
 }
 
@@ -607,12 +722,6 @@ void CheckFrameCountConsistency(int expected_frame_count, Frame* frame) {
   DCHECK_GE(expected_frame_count, 0);
 
   int actual_frame_count = 0;
-
-  if (auto* local_frame = DynamicTo<LocalFrame>(frame)) {
-    if (auto* portals = DocumentPortals::Get(*local_frame->GetDocument())) {
-      actual_frame_count += static_cast<int>(portals->GetPortals().size());
-    }
-  }
 
   for (; frame; frame = frame->Tree().TraverseNext()) {
     ++actual_frame_count;
@@ -715,19 +824,17 @@ void Page::SettingsChanged(ChangeType change_type) {
       }
       break;
     case ChangeType::kAccessibilityState:
-      if (!MainFrame() || !MainFrame()->IsLocalFrame())
+      if (!MainFrame() || !MainFrame()->IsLocalFrame()) {
         break;
-      DeprecatedLocalMainFrame()
-          ->GetDocument()
-          ->AXObjectCacheOwner()
-          .ClearAXObjectCache();
+      }
+      DeprecatedLocalMainFrame()->GetDocument()->RefreshAccessibilityTree();
       break;
-    case ChangeType::kViewportRule: {
+    case ChangeType::kViewportStyle: {
       auto* main_local_frame = DynamicTo<LocalFrame>(MainFrame());
       if (!main_local_frame)
         break;
       if (Document* doc = main_local_frame->GetDocument())
-        doc->GetStyleEngine().ViewportRulesChanged();
+        doc->GetStyleEngine().ViewportStyleSettingChanged();
       break;
     }
     case ChangeType::kTextTrackKindUserPreference:
@@ -749,7 +856,7 @@ void Page::SettingsChanged(ChangeType change_type) {
         if (auto* window = DynamicTo<LocalDOMWindow>(frame->DomWindow())) {
           // Forcibly instantiate WindowProxy.
           window->GetScriptController().WindowProxy(
-              DOMWrapperWorld::MainWorld());
+              DOMWrapperWorld::MainWorld(window->GetIsolate()));
         }
       }
       break;
@@ -856,8 +963,8 @@ void Page::InvalidatePaint() {
 }
 
 void Page::NotifyPluginsChanged() const {
-  HeapVector<Member<PluginsChangedObserver>, 32> observers;
-  CopyToVector(plugins_changed_observers_, observers);
+  HeapVector<Member<PluginsChangedObserver>, 32> observers(
+      plugins_changed_observers_);
   for (PluginsChangedObserver* observer : observers)
     observer->PluginsChanged();
 }
@@ -888,7 +995,6 @@ void Page::DidCommitLoad(LocalFrame* frame) {
     // TODO(loonybear): Most of this doesn't appear to take into account that
     // each SVGImage gets it's own Page instance.
     GetDeprecation().ClearSuppression();
-    GetVisualViewport().SendUMAMetrics();
     // Need to reset visual viewport position here since before commit load we
     // would update the previous history item, Page::didCommitLoad is called
     // after a new history item is created in FrameLoader.
@@ -898,6 +1004,22 @@ void Page::DidCommitLoad(LocalFrame* frame) {
                                         mojom::blink::ScrollBehavior::kInstant,
                                         ScrollableArea::ScrollCallback());
   }
+  // crbug/1312107: If DevTools has "Highlight ad frames" checked when the
+  // main frame is refreshed or the ad frame is navigated to a different
+  // process, DevTools calls `Settings::SetHighlightAds` so early that the
+  // local frame is still in provisional state (not swapped in). Explicitly
+  // invalidate the settings here as `Page::DidCommitLoad` is only fired after
+  // the navigation is committed, at which point the local frame must already
+  // be swapped-in.
+  //
+  // This explicit update is placed outside the above if-block to accommodate
+  // iframes. The iframes share the same Page (frame tree) as the main frame,
+  // but local frame swap can happen to any of the iframes.
+  //
+  // TODO(crbug/1357763): Properly apply the settings when the local frame
+  // becomes the main frame of the page (i.e. when the navigation is
+  // committed).
+  frame->UpdateAdHighlight();
   GetLinkHighlight().ResetForPageNavigation();
 }
 
@@ -932,15 +1054,19 @@ void Page::Trace(Visitor* visitor) const {
   visitor->Trace(console_message_storage_);
   visitor->Trace(global_root_scroller_controller_);
   visitor->Trace(visual_viewport_);
-  visitor->Trace(overscroll_controller_);
   visitor->Trace(link_highlight_);
   visitor->Trace(spatial_navigation_controller_);
   visitor->Trace(main_frame_);
+  visitor->Trace(previous_main_frame_for_local_swap_);
   visitor->Trace(plugin_data_);
   visitor->Trace(validation_message_client_);
   visitor->Trace(plugins_changed_observers_);
   visitor->Trace(next_related_page_);
   visitor->Trace(prev_related_page_);
+  visitor->Trace(agent_group_scheduler_);
+  visitor->Trace(v8_compile_hints_producer_);
+  visitor->Trace(v8_compile_hints_consumer_);
+  visitor->Trace(close_task_handler_);
   Supplementable<Page>::Trace(visitor);
 }
 
@@ -969,6 +1095,8 @@ void Page::WillBeDestroyed() {
     main_frame->Detach(FrameDetachType::kRemove);
   }
 
+  // Only begin clearing state after JS has run, since running JS itself can
+  // sometimes alter Page's state.
   DCHECK(AllPages().Contains(this));
   AllPages().erase(this);
   OrdinaryPages().erase(this);
@@ -993,13 +1121,17 @@ void Page::WillBeDestroyed() {
     validation_message_client_->WillBeDestroyed();
   main_frame_ = nullptr;
 
-  page_visibility_observer_set_.ForEachObserver(
-      [](PageVisibilityObserver* observer) {
-        observer->ObserverSetWillBeCleared();
-      });
-  page_visibility_observer_set_.Clear();
+  for (auto observer : page_visibility_observer_set_) {
+    observer->ObserverSetWillBeCleared();
+  }
+  page_visibility_observer_set_.clear();
 
   page_scheduler_ = nullptr;
+
+  if (close_task_handler_) {
+    close_task_handler_->SetPage(nullptr);
+    close_task_handler_ = nullptr;
+  }
 }
 
 void Page::RegisterPluginsChangedObserver(PluginsChangedObserver* observer) {
@@ -1015,8 +1147,8 @@ ScrollbarTheme& Page::GetScrollbarTheme() const {
   return ScrollbarTheme::GetTheme();
 }
 
-scheduler::WebAgentGroupScheduler& Page::GetAgentGroupScheduler() const {
-  return agent_group_scheduler_;
+AgentGroupScheduler& Page::GetAgentGroupScheduler() const {
+  return *agent_group_scheduler_;
 }
 
 PageScheduler* Page::GetPageScheduler() const {
@@ -1047,13 +1179,6 @@ bool Page::RequestBeginMainFrameNotExpected(bool new_state) {
   return true;
 }
 
-bool Page::LocalMainFrameNetworkIsAlmostIdle() const {
-  LocalFrame* frame = DynamicTo<LocalFrame>(MainFrame());
-  if (!frame)
-    return true;
-  return frame->GetIdlenessDetector()->NetworkIsAlmostIdle();
-}
-
 void Page::AddAutoplayFlags(int32_t value) {
   autoplay_flags_ |= value;
 }
@@ -1064,20 +1189,6 @@ void Page::ClearAutoplayFlags() {
 
 int32_t Page::AutoplayFlags() const {
   return autoplay_flags_;
-}
-
-void Page::SetInsidePortal(bool inside_portal) {
-  if (inside_portal_ == inside_portal)
-    return;
-
-  inside_portal_ = inside_portal;
-
-  if (MainFrame() && MainFrame()->IsLocalFrame())
-    DeprecatedLocalMainFrame()->PortalStateChanged();
-}
-
-bool Page::InsidePortal() const {
-  return inside_portal_;
 }
 
 void Page::SetIsMainFrameFencedFrameRoot() {
@@ -1091,7 +1202,7 @@ bool Page::IsMainFrameFencedFrameRoot() const {
 void Page::SetMediaFeatureOverride(const AtomicString& media_feature,
                                    const String& value) {
   if (!media_feature_overrides_) {
-    if (value.IsEmpty())
+    if (value.empty())
       return;
     media_feature_overrides_ = std::make_unique<MediaFeatureOverrides>();
   }
@@ -1105,6 +1216,28 @@ void Page::SetMediaFeatureOverride(const AtomicString& media_feature,
 
 void Page::ClearMediaFeatureOverrides() {
   media_feature_overrides_.reset();
+  SettingsChanged(ChangeType::kMediaQuery);
+  SettingsChanged(ChangeType::kColorScheme);
+}
+
+void Page::SetPreferenceOverride(const AtomicString& media_feature,
+                                 const String& value) {
+  if (!preference_overrides_) {
+    if (value.empty()) {
+      return;
+    }
+    preference_overrides_ = std::make_unique<PreferenceOverrides>();
+  }
+  preference_overrides_->SetOverride(media_feature, value);
+  if (media_feature == "prefers-color-scheme") {
+    SettingsChanged(ChangeType::kColorScheme);
+  } else {
+    SettingsChanged(ChangeType::kMediaQuery);
+  }
+}
+
+void Page::ClearPreferenceOverrides() {
+  preference_overrides_.reset();
   SettingsChanged(ChangeType::kMediaQuery);
   SettingsChanged(ChangeType::kColorScheme);
 }
@@ -1138,6 +1271,41 @@ void Page::UpdateLifecycle(LocalFrame& root,
   }
 }
 
+const base::UnguessableToken& Page::BrowsingContextGroupToken() {
+  return browsing_context_group_info_.browsing_context_group_token;
+}
+
+const base::UnguessableToken& Page::CoopRelatedGroupToken() {
+  return browsing_context_group_info_.coop_related_group_token;
+}
+
+void Page::UpdateBrowsingContextGroup(
+    const blink::BrowsingContextGroupInfo& browsing_context_group_info) {
+  if (browsing_context_group_info_ == browsing_context_group_info) {
+    return;
+  }
+
+  if (base::FeatureList::IsEnabled(
+          features::kPausePagesPerBrowsingContextGroup) &&
+      ScopedBrowsingContextGroupPauser::IsActive(*this)) {
+    CHECK(paused_);
+    SetPaused(false);
+  }
+
+  browsing_context_group_info_ = browsing_context_group_info;
+
+  if (base::FeatureList::IsEnabled(
+          features::kPausePagesPerBrowsingContextGroup) &&
+      ScopedBrowsingContextGroupPauser::IsActive(*this)) {
+    SetPaused(true);
+  }
+}
+
+void Page::SetAttributionSupport(
+    network::mojom::AttributionSupport attribution_support) {
+  attribution_support_ = attribution_support;
+}
+
 template class CORE_TEMPLATE_EXPORT Supplement<Page>;
 
 const char InternalSettingsPageSupplementBase::kSupplementName[] =
@@ -1149,8 +1317,13 @@ void Page::PrepareForLeakDetection() {
   // depending on whether the garbage collector(s) are able to find the settings
   // object through the Page supplement. Prepares for leak detection by removing
   // all InternalSetting objects from Pages.
-  for (Page* page : OrdinaryPages())
+  for (Page* page : OrdinaryPages()) {
     page->RemoveSupplement<InternalSettingsPageSupplementBase>();
+
+    // V8CrowdsourcedCompileHintsProducer keeps v8::Script objects alive until
+    // the page becomes interactive. Give it a chance to clean up.
+    page->v8_compile_hints_producer_->ClearData();
+  }
 }
 
 // Ensure the 10 bits reserved for connected frame count in NodeRareData are

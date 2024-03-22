@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_MEDIA_ANALYTICS_FAKE_MEDIA_ANALYTICS_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_MEDIA_ANALYTICS_FAKE_MEDIA_ANALYTICS_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/media_analytics/media_analytics_client.h"
@@ -33,12 +33,14 @@ class COMPONENT_EXPORT(MEDIA_ANALYTICS_CLIENT) FakeMediaAnalyticsClient
   // Inherited from MediaAnalyticsClient.
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
-  void GetState(DBusMethodCallback<mri::State> callback) override;
+  void GetState(chromeos::DBusMethodCallback<mri::State> callback) override;
   void SetState(const mri::State& state,
-                DBusMethodCallback<mri::State> callback) override;
-  void GetDiagnostics(DBusMethodCallback<mri::Diagnostics> callback) override;
-  void BootstrapMojoConnection(base::ScopedFD file_descriptor,
-                               VoidDBusMethodCallback callback) override;
+                chromeos::DBusMethodCallback<mri::State> callback) override;
+  void GetDiagnostics(
+      chromeos::DBusMethodCallback<mri::Diagnostics> callback) override;
+  void BootstrapMojoConnection(
+      base::ScopedFD file_descriptor,
+      chromeos::VoidDBusMethodCallback callback) override;
 
   // Fires a fake media perception event.
   bool FireMediaPerceptionEvent(const mri::MediaPerception& media_perception);
@@ -55,10 +57,11 @@ class COMPONENT_EXPORT(MEDIA_ANALYTICS_CLIENT) FakeMediaAnalyticsClient
 
  private:
   // Echoes back the previously set state.
-  void OnState(DBusMethodCallback<mri::State> callback);
+  void OnState(chromeos::DBusMethodCallback<mri::State> callback);
 
   // Runs callback with the Diagnostics proto provided in SetDiagnostics.
-  void OnGetDiagnostics(DBusMethodCallback<mri::Diagnostics> callback);
+  void OnGetDiagnostics(
+      chromeos::DBusMethodCallback<mri::Diagnostics> callback);
 
   // Notifies observers with a MediaPerception proto provided in
   // FireMediaPerceptionEvent.

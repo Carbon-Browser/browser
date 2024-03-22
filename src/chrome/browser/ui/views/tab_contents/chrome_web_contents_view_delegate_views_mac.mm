@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@
 #include "chrome/browser/ui/views/tab_contents/chrome_web_contents_view_focus_helper.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/drop_data.h"
 #include "ui/views/widget/widget.h"
 
 ChromeWebContentsViewDelegateViewsMac::ChromeWebContentsViewDelegateViewsMac(
@@ -33,18 +34,19 @@ ChromeWebContentsViewDelegateViewsMac::
     ~ChromeWebContentsViewDelegateViewsMac() = default;
 
 gfx::NativeWindow ChromeWebContentsViewDelegateViewsMac::GetNativeWindow() {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   return browser ? browser->window()->GetNativeWindow() : nullptr;
 }
 
 NSObject<RenderWidgetHostViewMacDelegate>*
-ChromeWebContentsViewDelegateViewsMac::CreateRenderWidgetHostViewDelegate(
+ChromeWebContentsViewDelegateViewsMac::GetDelegateForHost(
     content::RenderWidgetHost* render_widget_host,
     bool is_popup) {
   // We don't need a delegate for popups since they don't have
   // overscroll.
-  if (is_popup)
+  if (is_popup) {
     return nil;
+  }
   return [[ChromeRenderWidgetHostViewMacDelegate alloc]
       initWithRenderWidgetHost:render_widget_host];
 }
@@ -82,10 +84,10 @@ bool ChromeWebContentsViewDelegateViewsMac::TakeFocus(bool reverse) {
   return GetFocusHelper()->TakeFocus(reverse);
 }
 
-void ChromeWebContentsViewDelegateViewsMac::OnPerformDrop(
+void ChromeWebContentsViewDelegateViewsMac::OnPerformingDrop(
     const content::DropData& drop_data,
     DropCompletionCallback callback) {
-  HandleOnPerformDrop(web_contents_, drop_data, std::move(callback));
+  HandleOnPerformingDrop(web_contents_, drop_data, std::move(callback));
 }
 
 std::unique_ptr<RenderViewContextMenuBase>

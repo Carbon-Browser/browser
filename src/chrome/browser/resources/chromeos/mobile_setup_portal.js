@@ -1,13 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 cr.define('mobile', function() {
   /** @enum {number} */
-  var NetworkState = {UNKNOWN: 0, PORTAL_REACHABLE: 1, PORTAL_UNREACHABLE: 2};
+  const NetworkState = {UNKNOWN: 0, PORTAL_REACHABLE: 1, PORTAL_UNREACHABLE: 2};
 
   /** @enum {number} */
-  var StatusMessageType = {NOT_SET: 0, PORTAL_OFFLINE: 1};
+  const StatusMessageType = {NOT_SET: 0, PORTAL_OFFLINE: 1};
 
   function PortalImpl() {
     // Mobile device information.
@@ -17,7 +17,13 @@ cr.define('mobile', function() {
     this.statusMessageType_ = StatusMessageType.NOT_SET;
   }
 
-  cr.addSingletonGetter(PortalImpl);
+  /** @type {?PortalImpl} */
+  let instance = null;
+
+  /** @return {!PortalImpl} */
+  PortalImpl.getInstance = function() {
+    return instance || (instance = new PortalImpl());
+  };
 
   PortalImpl.prototype = {
     initialize() {

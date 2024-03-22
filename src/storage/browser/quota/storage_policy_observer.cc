@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 
 #include <utility>
 
-#include "base/feature_list.h"
-#include "storage/browser/quota/quota_features.h"
+#include "base/task/sequenced_task_runner.h"
 #include "url/origin.h"
 
 namespace storage {
@@ -60,7 +59,7 @@ StoragePolicyObserver::StoragePolicyObserver(
     return;
 
   storage_policy_observer_ = base::SequenceBound<StoragePolicyObserverIOThread>(
-      std::move(io_task_runner), base::SequencedTaskRunnerHandle::Get(),
+      std::move(io_task_runner), base::SequencedTaskRunner::GetCurrentDefault(),
       storage_policy_, weak_factory_.GetWeakPtr());
 }
 
@@ -125,12 +124,6 @@ bool StoragePolicyObserver::ShouldPurgeOnShutdown(const GURL& origin) {
 
 void StoragePolicyObserver::OnPolicyChangedForOrigins(
     const std::vector<std::pair<const GURL, OriginState>*>& updated_origins) {
-  if (!base::FeatureList::IsEnabled(
-          features::kOnlySendStoragePolicyUpdatesForModifiedOrigins)) {
-    OnPolicyChanged();
-    return;
-  }
-
   std::vector<storage::mojom::StoragePolicyUpdatePtr> policy_updates;
   for (auto* entry : updated_origins)
     AddPolicyUpdate(entry, &policy_updates);

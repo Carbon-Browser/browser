@@ -1,10 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/web_applications/web_app_ui_utils.h"
 
-#include "base/feature_list.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -15,10 +14,8 @@
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/common/features.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chromeos/crosapi/mojom/app_service.mojom.h"
@@ -29,21 +26,13 @@ namespace web_app {
 
 namespace {
 
-absl::optional<AppId> GetAppIdForManagementLinkInWebContents(
+absl::optional<webapps::AppId> GetAppIdForManagementLinkInWebContents(
     content::WebContents* web_contents) {
-  bool show_app_link_in_tabbed_browser =
-      base::FeatureList::IsEnabled(blink::features::kFileHandlingAPI);
-
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser)
     return absl::nullopt;
 
-  if (!web_app::AppBrowserController::IsWebApp(browser) &&
-      !show_app_link_in_tabbed_browser) {
-    return absl::nullopt;
-  }
-
-  const web_app::AppId* app_id =
+  const webapps::AppId* app_id =
       web_app::WebAppTabHelper::GetAppId(web_contents);
   if (!app_id)
     return absl::nullopt;
@@ -52,7 +41,7 @@ absl::optional<AppId> GetAppIdForManagementLinkInWebContents(
     return absl::nullopt;
 
   if (!WebAppProvider::GetForWebApps(browser->profile())
-           ->registrar()
+           ->registrar_unsafe()
            .IsInstalled(*app_id)) {
     return absl::nullopt;
   }
@@ -61,25 +50,15 @@ absl::optional<AppId> GetAppIdForManagementLinkInWebContents(
 }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-void ShowAppManagementPage(const AppId& app_id) {
+bool ShowAppManagementPageInAsh(const webapps::AppId& app_id) {
   auto* service = chromeos::LacrosService::Get();
   if (!service || !service->IsAvailable<crosapi::mojom::AppServiceProxy>()) {
     LOG(ERROR) << "AppServiceProxy not available.";
-    return;
+    return false;
   }
-
-  auto remote_version =
-      service->GetInterfaceVersion(crosapi::mojom::AppServiceProxy::Uuid_);
-
-  if (remote_version < int{crosapi::mojom::AppServiceProxy::MethodMinVersions::
-                               kShowAppManagementPageMinVersion}) {
-    LOG(WARNING) << "Ash AppServiceProxy version " << remote_version
-                 << " does not support ShowAppManagementPage().";
-    return;
-  }
-
   service->GetRemote<crosapi::mojom::AppServiceProxy>()->ShowAppManagementPage(
       app_id);
+  return true;
 }
 #endif
 
@@ -89,7 +68,7 @@ bool GetLabelIdsForAppManagementLinkInPageInfo(
     content::WebContents* web_contents,
     int* link_text_id,
     int* tooltip_text_id) {
-  absl::optional<AppId> app_id =
+  absl::optional<webapps::AppId> app_id =
       GetAppIdForManagementLinkInWebContents(web_contents);
   if (!app_id)
     return false;
@@ -101,7 +80,7 @@ bool GetLabelIdsForAppManagementLinkInPageInfo(
 
 bool HandleAppManagementLinkClickedInPageInfo(
     content::WebContents* web_contents) {
-  absl::optional<AppId> app_id =
+  absl::optional<webapps::AppId> app_id =
       GetAppIdForManagementLinkInWebContents(web_contents);
   if (!app_id)
     return false;
@@ -112,12 +91,25 @@ bool HandleAppManagementLinkClickedInPageInfo(
       ash::settings::AppManagementEntryPoint::kPageInfoView);
   return true;
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  ShowAppManagementPage(*app_id);
-  return true;
+  return ShowAppManagementPageInAsh(*app_id);
 #else
-  chrome::ShowWebAppSettings(chrome::FindBrowserWithWebContents(web_contents),
-                             *app_id, AppSettingsPageEntryPoint::kPageInfoView);
+  chrome::ShowWebAppSettings(chrome::FindBrowserWithTab(web_contents), *app_id,
+                             AppSettingsPageEntryPoint::kPageInfoView);
   return true;
+#endif
+}
+
+void OpenAppSettingsForParentApp(const webapps::AppId& parent_app_id,
+                                 Profile* profile) {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  ShowAppManagementPageInAsh(parent_app_id);
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
+  chrome::ShowAppManagementPage(
+      profile, parent_app_id,
+      ash::settings::AppManagementEntryPoint::kSubAppsInstallPrompt);
+#else
+  chrome::ShowWebAppSettings(profile, parent_app_id,
+                             AppSettingsPageEntryPoint::kSubAppsInstallPrompt);
 #endif
 }
 

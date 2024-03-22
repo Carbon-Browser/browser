@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,6 +48,10 @@ static WebFeature AlgorithmIdToFeature(WebCryptoAlgorithmId id) {
       return WebFeature::kCryptoAlgorithmHkdf;
     case kWebCryptoAlgorithmIdPbkdf2:
       return WebFeature::kCryptoAlgorithmPbkdf2;
+    case kWebCryptoAlgorithmIdEd25519:
+      return WebFeature::kCryptoAlgorithmEd25519;
+    case kWebCryptoAlgorithmIdX25519:
+      return WebFeature::kCryptoAlgorithmX25519;
   }
 
   NOTREACHED();
@@ -133,6 +137,16 @@ void HistogramAlgorithmAndKey(ExecutionContext* context,
   // context.
   HistogramAlgorithm(context, algorithm);
   HistogramKey(context, key);
+}
+
+void HistogramDeriveBitsTruncation(ExecutionContext* context,
+                                   unsigned int length_bits,
+                                   WebCryptoWarningType status) {
+  if (length_bits == 0) {
+    UseCounter::Count(context, WebFeature::kSubtleCryptoDeriveBitsZeroLength);
+  } else if (status == blink::kWebCryptoWarningTypeDeriveBitsTruncated) {
+    UseCounter::Count(context, WebFeature::kSubtleCryptoDeriveBitsTruncation);
+  }
 }
 
 }  // namespace blink

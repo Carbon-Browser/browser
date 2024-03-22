@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 # as that sometimes breaks build. Which is why we have this file.
 
 # Also, some packages may or may not have an autogen script, depending on
-# version. Rather than clutter the GYP file with conditionals, we simply do
+# version. Rather than clutter the GN file with conditionals, we simply do
 # nothing if the file is not present.
 
 if [ -x ./autogen.sh ]

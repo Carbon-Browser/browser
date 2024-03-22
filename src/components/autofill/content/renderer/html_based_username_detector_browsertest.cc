@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/strings/stringprintf.h"
 #include "components/autofill/content/renderer/form_autofill_util.h"
 #include "components/autofill/content/renderer/html_based_username_detector.h"
+#include "components/autofill/core/common/field_data_manager.h"
 #include "content/public/test/render_view_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/web/web_document.h"
@@ -65,8 +66,10 @@ class HtmlBasedUsernameDetectorTest : public content::RenderViewTest {
   FormData GetFormDataFromForm(const WebFormElement& form) {
     FormData form_data;
     EXPECT_TRUE(form_util::WebFormElementToFormData(
-        form, WebFormControlElement(), nullptr, form_util::EXTRACT_NONE,
-        &form_data, nullptr));
+        form, WebFormControlElement(),
+        *base::MakeRefCounted<FieldDataManager>(), /*extract_options=*/{},
+        &form_data,
+        /*field=*/nullptr));
 
     return form_data;
   }
@@ -75,8 +78,7 @@ class HtmlBasedUsernameDetectorTest : public content::RenderViewTest {
     const WebLocalFrame* frame = GetMainFrame();
     const WebElement& element = frame->GetDocument().GetElementById(id);
     EXPECT_FALSE(element.IsNull());
-    return FieldRendererId(
-        element.To<blink::WebInputElement>().UniqueRendererFormControlId());
+    return form_util::GetFieldRendererId(element.To<blink::WebInputElement>());
   }
 
   WebFormElement GetFormElement() {
@@ -126,7 +128,7 @@ TEST_F(HtmlBasedUsernameDetectorTest, DeveloperGroupAttributes) {
   // Each test case consists of a set of parameters to be plugged into
   // the TestCase struct, plus the corresponding expectations.  The test data
   // contains cases that are identified by HTML detector, and not by
-  // base heuristic. Thus, username field does not necessarely have to
+  // base heuristic. Thus, username field does not necessarily have to
   // be right before password field.  These tests basically check
   // searching in developer group (i.e. name and id attribute,
   // concatenated, with "$" guard in between).
@@ -196,7 +198,7 @@ TEST_F(HtmlBasedUsernameDetectorTest, UserGroupAttributes) {
   // Each test case consists of a set of parameters to be plugged into
   // the TestCase struct, plus the corresponding expectations.  The test data
   // contains cases that are identified by HTML detector, and not by
-  // base heuristic. Thus, username field does not necessarely have to
+  // base heuristic. Thus, username field does not necessarily have to
   // be right before password field.  These tests basically check
   // searching in user group
   const TestCase test_cases[] = {
@@ -301,7 +303,7 @@ TEST_F(HtmlBasedUsernameDetectorTest, HTMLDetectorCache) {
   ASSERT_EQ(1u, cache.size());
   EXPECT_TRUE(field_ids.empty());
   const WebFormElement& form = GetFormElement();
-  EXPECT_EQ(FormRendererId(form.UniqueRendererFormId()), cache.begin()->first);
+  EXPECT_EQ(form_util::GetFormRendererId(form), cache.begin()->first);
   EXPECT_TRUE(cache.begin()->second.empty());
 
   // Changing attributes would change the classifier's output. But the output
@@ -312,7 +314,7 @@ TEST_F(HtmlBasedUsernameDetectorTest, HTMLDetectorCache) {
       control_elements, form_data, &cache, GetFormElement());
   ASSERT_EQ(1u, cache.size());
   EXPECT_TRUE(field_ids.empty());
-  EXPECT_EQ(FormRendererId(form.UniqueRendererFormId()), cache.begin()->first);
+  EXPECT_EQ(form_util::GetFormRendererId(form), cache.begin()->first);
   EXPECT_TRUE(cache.begin()->second.empty());
 
   // Clear the cache. The classifier will find username field and cache it.
@@ -322,9 +324,9 @@ TEST_F(HtmlBasedUsernameDetectorTest, HTMLDetectorCache) {
       control_elements, form_data, &cache, GetFormElement());
   ASSERT_EQ(1u, cache.size());
   EXPECT_EQ(1u, field_ids.size());
-  EXPECT_EQ(FormRendererId(form.UniqueRendererFormId()), cache.begin()->first);
+  EXPECT_EQ(form_util::GetFormRendererId(form), cache.begin()->first);
   ASSERT_EQ(1u, cache.begin()->second.size());
-  EXPECT_EQ(FieldRendererId(control_elements[0].UniqueRendererFormControlId()),
+  EXPECT_EQ(form_util::GetFieldRendererId(control_elements[0]),
             cache.begin()->second[0]);
 
   // Change the attributes again ("username" is stronger signal than "id"),
@@ -336,9 +338,9 @@ TEST_F(HtmlBasedUsernameDetectorTest, HTMLDetectorCache) {
 
   ASSERT_EQ(1u, cache.size());
   EXPECT_EQ(1u, field_ids.size());
-  EXPECT_EQ(FormRendererId(form.UniqueRendererFormId()), cache.begin()->first);
+  EXPECT_EQ(form_util::GetFormRendererId(form), cache.begin()->first);
   ASSERT_EQ(1u, cache.begin()->second.size());
-  EXPECT_EQ(FieldRendererId(control_elements[0].UniqueRendererFormControlId()),
+  EXPECT_EQ(form_util::GetFieldRendererId(control_elements[0]),
             cache.begin()->second[0]);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,9 @@
 #define COMPONENTS_MIRRORING_SERVICE_MIRRORING_SERVICE_H_
 
 #include "base/component_export.h"
+#include "base/sequence_checker.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/values.h"
 #include "components/mirroring/mojom/mirroring_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -14,6 +17,7 @@
 namespace mirroring {
 
 class Session;
+class OpenscreenSessionHost;
 
 class COMPONENT_EXPORT(MIRRORING_SERVICE) MirroringService final
     : public mojom::MirroringService {
@@ -35,12 +39,25 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) MirroringService final
              mojo::PendingRemote<mojom::CastMessageChannel> outbound_channel,
              mojo::PendingReceiver<mojom::CastMessageChannel> inbound_channel)
       override;
+  void SwitchMirroringSourceTab() override;
+
+  void GetMirroringStats(GetMirroringStatsCallback callback) override;
 
   void OnDisconnect();
 
+  // The receiver for the mirroring service API.
   mojo::Receiver<mojom::MirroringService> receiver_;
+
+  // The IO task runner for this utility process.
   const scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
-  std::unique_ptr<Session> session_;  // Current mirroring session.
+
+  // The current legacy mirroring session, if any.
+  std::unique_ptr<Session> session_;
+
+  // The current Open Screen session host, if any.
+  std::unique_ptr<OpenscreenSessionHost> session_host_;
+
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 }  // namespace mirroring

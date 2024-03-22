@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,10 @@ MagnifierE2ETest = class extends E2ETestBase {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule('RectUtil', '/common/rect_util.js');
+    await Promise.all([
+      importModule('RectUtil', '/common/rect_util.js'),
+      importModule('KeyCode', '/common/key_code.js'),
+    ]);
   }
 
   async getPref(name) {

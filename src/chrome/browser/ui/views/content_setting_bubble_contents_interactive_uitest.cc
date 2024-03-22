@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/content_setting_bubble_contents.h"
 
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -14,6 +15,7 @@
 #include "components/permissions/test/permission_request_observer.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/prerender_test_util.h"
+#include "ui/events/test/test_event.h"
 #include "ui/views/test/widget_test.h"
 
 class ContentSettingBubbleContentsInteractiveTest
@@ -26,7 +28,7 @@ class ContentSettingBubbleContentsInteractiveTest
   ~ContentSettingBubbleContentsInteractiveTest() override = default;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     InProcessBrowserTest::SetUp();
   }
 
@@ -38,12 +40,9 @@ class ContentSettingBubbleContentsInteractiveTest
       ContentSettingImageModel::ImageType image_type) {
     LocationBarView* location_bar_view =
         BrowserView::GetBrowserViewForBrowser(browser())->GetLocationBarView();
-    return **std::find_if(
-        location_bar_view->GetContentSettingViewsForTest().begin(),
-        location_bar_view->GetContentSettingViewsForTest().end(),
-        [image_type](ContentSettingImageView* view) {
-          return view->GetTypeForTesting() == image_type;
-        });
+    return **base::ranges::find(
+        location_bar_view->GetContentSettingViewsForTest(), image_type,
+        &ContentSettingImageView::GetTypeForTesting);
   }
 
   content::test::PrerenderTestHelper* prerender_helper() {
@@ -90,19 +89,14 @@ class BubbleWidgetObserver : public views::WidgetObserver {
   std::unique_ptr<base::RunLoop> run_loop_;
 };
 
-class DummyEvent : public ui::Event {
- public:
-  DummyEvent() : ui::Event(ui::ET_UNKNOWN, base::TimeTicks(), 0) {}
-};
-
 IN_PROC_BROWSER_TEST_F(ContentSettingBubbleContentsInteractiveTest,
                        PrerenderDoesNotCloseBubble) {
   ASSERT_TRUE(embedded_test_server()->Start());
 
-  // Dismiss any prompts so that content setting icons appear.
+  // Accept any prompts so that content setting icons appear.
   permissions::PermissionRequestManager::FromWebContents(web_contents())
       ->set_auto_response_for_test(
-          permissions::PermissionRequestManager::DISMISS);
+          permissions::PermissionRequestManager::ACCEPT_ALL);
 
   // Navigate to the test page.
   EXPECT_TRUE(content::NavigateToURL(
@@ -116,18 +110,19 @@ IN_PROC_BROWSER_TEST_F(ContentSettingBubbleContentsInteractiveTest,
   // Geolocation icon should be off in the beginning.
   EXPECT_FALSE(geolocation_icon.GetVisible());
 
-  // Attempt to use geolocation but the permission request will be dismissed.
+  // Access geolocation which will trigger a prompt which will be accepted
   permissions::PermissionRequestObserver request_observer(web_contents());
   ASSERT_TRUE(content::ExecJs(web_contents(), "geolocate();"));
   request_observer.Wait();
 
   // Geolocation icon should be on since geolocation API is used.
   EXPECT_TRUE(geolocation_icon.GetVisible());
+
   // Make sure its content setting bubble doesn't show yet.
   EXPECT_FALSE(geolocation_icon.IsBubbleShowing());
 
   // Click the geolocation icon.
-  geolocation_icon.ShowBubble(DummyEvent());
+  geolocation_icon.ShowBubble(ui::test::TestEvent());
 
   // Make sure its content setting bubble is shown.
   EXPECT_TRUE(geolocation_icon.IsBubbleShowing());

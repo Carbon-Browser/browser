@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,10 +40,6 @@ class ModelTypeConnector {
   //
   // No-op if the type is not connected.
   virtual void DisconnectDataType(ModelType type) = 0;
-
-  // Propagates whether PROXY_TABS is enabled, which influences a bit exposed to
-  // the server during commits.
-  virtual void SetProxyTabsDatatypeEnabled(bool enabled) = 0;
 };
 
 }  // namespace syncer

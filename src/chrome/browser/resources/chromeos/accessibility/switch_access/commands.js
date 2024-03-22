@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,41 +6,35 @@ import {ActionManager} from './action_manager.js';
 import {AutoScanManager} from './auto_scan_manager.js';
 import {Navigator} from './navigator.js';
 
-const SwitchAccessCommand = chrome.accessibilityPrivate.SwitchAccessCommand;
+const Command = chrome.accessibilityPrivate.SwitchAccessCommand;
 
-/**
- * Runs user commands.
- */
-export class Commands {
-  /** @private */
+/** Runs user commands. */
+export class SACommands {
   constructor() {
     /**
      * A map from command name to the function binding for the command.
-     * @private {!Map<!SwitchAccessCommand, !function(): void>}
+     * @private {!Map<!Command, !function(): void>}
      */
     this.commandMap_ = new Map([
-      [SwitchAccessCommand.SELECT, ActionManager.onSelect],
-      [
-        SwitchAccessCommand.NEXT,
-        Navigator.byItem.moveForward.bind(Navigator.byItem),
-      ],
-      [
-        SwitchAccessCommand.PREVIOUS,
-        Navigator.byItem.moveBackward.bind(Navigator.byItem),
-      ],
+      [Command.SELECT, ActionManager.onSelect],
+      [Command.NEXT, () => Navigator.byItem.moveForward()],
+      [Command.PREVIOUS, () => Navigator.byItem.moveBackward()],
     ]);
 
     chrome.accessibilityPrivate.onSwitchAccessCommand.addListener(
         command => this.runCommand_(command));
   }
 
-  static initialize() {
-    Commands.instance = new Commands();
+  static init() {
+    if (SACommands.instance) {
+      throw new Error('Cannot create more than one SACommands instance.');
+    }
+    SACommands.instance = new SACommands();
   }
 
   /**
    * Run the function binding for the specified command.
-   * @param {!SwitchAccessCommand} command
+   * @param {!Command} command
    * @private
    */
   runCommand_(command) {
@@ -48,3 +42,6 @@ export class Commands {
     AutoScanManager.restartIfRunning();
   }
 }
+
+/** @type {SACommands} */
+SACommands.instance;

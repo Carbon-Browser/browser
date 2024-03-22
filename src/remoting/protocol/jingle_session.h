@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/threading/thread_checker.h"
@@ -22,15 +21,14 @@
 #include "remoting/protocol/session_config.h"
 #include "remoting/signaling/iq_sender.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class JingleSessionManager;
 class Transport;
 
-// JingleSessionManager and JingleSession implement the subset of the
-// Jingle protocol used in Chromoting. Instances of this class are
-// created by the JingleSessionManager.
+// JingleSessionManager and JingleSession implement the subset of the Jingle
+// protocol used in Chromoting. Instances of this class are created by the
+// JingleSessionManager.
 class JingleSession : public Session {
  public:
   JingleSession(const JingleSession&) = delete;
@@ -66,7 +64,8 @@ class JingleSession : public Session {
   void AcceptIncomingConnection(const JingleMessage& initiate_message);
 
   // Callback for Transport interface to send transport-info messages.
-  void SendTransportInfo(std::unique_ptr<jingle_xmpp::XmlElement> transport_info);
+  void SendTransportInfo(
+      std::unique_ptr<jingle_xmpp::XmlElement> transport_info);
 
   // Sends |message| to the peer. The session is closed if the send fails or no
   // response is received within a reasonable time. All other responses are
@@ -136,8 +135,6 @@ class JingleSession : public Session {
   // sequence ID encoded.
   std::string GetNextOutgoingId();
 
-  base::ThreadChecker thread_checker_;
-
   raw_ptr<JingleSessionManager> session_manager_;
   SignalingAddress peer_address_;
   raw_ptr<Session::EventHandler> event_handler_;
@@ -185,10 +182,11 @@ class JingleSession : public Session {
   // The SessionPlugins attached to this session.
   std::vector<SessionPlugin*> plugins_;
 
+  THREAD_CHECKER(thread_checker_);
+
   base::WeakPtrFactory<JingleSession> weak_factory_{this};
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_JINGLE_SESSION_H_

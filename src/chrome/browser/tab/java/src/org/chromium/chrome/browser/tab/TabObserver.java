@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,10 @@ import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.ui.mojom.VirtualKeyboardMode;
 import org.chromium.url.GURL;
 
-/**
- * An observer that is notified of changes to a {@link Tab} object.
- */
+/** An observer that is notified of changes to a {@link Tab} object. */
 public interface TabObserver {
     /**
      * Called when a {@link Tab} finished initialization. The {@link TabState} contains,
@@ -106,8 +105,9 @@ public interface TabObserver {
      * Called when the favicon of a {@link Tab} has been updated.
      * @param tab The notifying {@link Tab}.
      * @param icon The favicon that was received.
+     * @param iconUrl The URL that the icon was fetched from.
      */
-    void onFaviconUpdated(Tab tab, Bitmap icon);
+    void onFaviconUpdated(Tab tab, Bitmap icon, GURL iconUrl);
 
     /**
      * Called when the title of a {@link Tab} changes.
@@ -216,11 +216,11 @@ public interface TabObserver {
     void onDidStartNavigationInPrimaryMainFrame(Tab tab, NavigationHandle navigationHandle);
 
     /**
-     * TODO(crbug.com/1337446) Remove when NotifyJavaSpuriouslyToMeasurePerf experiment is finished.
-     * No-op, for measuring performance of calling didStartNavigation in only the primary main
-     * frame vs calling it in all frames.
+     * TODO(crbug.com/1434461) Temporary fix for LocationBarModel not properly
+     * caching same document navigation state. Will be removed later, see bug for more
+     * details.
      */
-    void onDidStartNavigationNoop(Tab tab, NavigationHandle navigationHandle);
+    void onDidFinishNavigationEnd();
 
     /**
      * Called when a navigation is redirected in the WebContents.
@@ -231,12 +231,13 @@ public interface TabObserver {
     void onDidRedirectNavigation(Tab tab, NavigationHandle navigationHandle);
 
     /**
-     * Called when a navigation is finished i.e. committed, aborted or replaced by a new one.
+     * Called when a navigation is finished i.e. committed, aborted or replaced by a new one, in the
+     * primary main frame.
      * @param tab The notifying {@link Tab}.
      * @param navigationHandle Pointer to a NavigationHandle representing the navigation.
      *                         Its lifetime end at the end of this function.
      */
-    void onDidFinishNavigation(Tab tab, NavigationHandle navigation);
+    void onDidFinishNavigationInPrimaryMainFrame(Tab tab, NavigationHandle navigation);
 
     /**
      * Called when the page has painted something non-empty.
@@ -257,6 +258,13 @@ public interface TabObserver {
      * @param color The current background color.
      */
     void onBackgroundColorChanged(Tab tab, int color);
+
+    /**
+     * Called when the virtual keyboard mode in the tab's current page has been changed.
+     * @param tab The notifying {@link Tab}.
+     * @param mode The current virtual keyboard mode.
+     */
+    void onVirtualKeyboardModeChanged(Tab tab, @VirtualKeyboardMode.EnumType int mode);
 
     /**
      * Called when the Tab is attached or detached from an {@code Activity}. By default, this will
@@ -318,8 +326,12 @@ public interface TabObserver {
      * @param topControlsMinHeightOffsetY The Y offset of the current top controls min-height.
      * @param bottomControlsMinHeightOffsetY The Y offset of the current bottom controls min-height.
      */
-    void onBrowserControlsOffsetChanged(Tab tab, int topControlsOffsetY, int bottomControlsOffsetY,
-            int contentOffsetY, int topControlsMinHeightOffsetY,
+    void onBrowserControlsOffsetChanged(
+            Tab tab,
+            int topControlsOffsetY,
+            int bottomControlsOffsetY,
+            int contentOffsetY,
+            int topControlsMinHeightOffsetY,
             int bottomControlsMinHeightOffsetY);
 
     /**
@@ -328,10 +340,28 @@ public interface TabObserver {
      */
     void onContentViewScrollingStateChanged(boolean scrolling);
 
+    /** Back press refactor related. Called when navigation state is invalidated. */
+    void onNavigationStateChanged();
+
     /**
-     * Called when the Tab stops scrolling.
-     * @param verticalScrollDelta The delta between the vertical offsets when the scroll started and
-     *         currently. It is negative when the tab scrolled down and positive when scrolled up.
+     * CloseWatcher web API support. If the currently focused frame has a CloseWatcher registered in
+     * JavaScript, the CloseWatcher should receive the next "close" operation, based on what the OS
+     * convention for closing is. This function is called when the focused frame changes or a
+     * CloseWatcher registered/unregistered to update whether the CloseWatcher should intercept.
      */
-    void onContentViewScrollingEnded(int verticalScrollDelta);
+    void onDidChangeCloseSignalInterceptStatus();
+
+    /**
+     * Broadcast that the timestamp on a {@link Tab} has changed
+     * @param tab {@link Tab} timestamp has changed on
+     * @param timestampMillis new value of the timestamp
+     */
+    default void onTimestampChanged(Tab tab, long timestampMillis) {}
+
+    /**
+     * Broadcast that root identifier on a {@link Tab} has changed
+     * @param tab {@link Tab} root identifier has changed on
+     * @param newRootId new value of new root id
+     */
+    default void onRootIdChanged(Tab tab, int newRootId) {}
 }

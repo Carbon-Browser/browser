@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/common/gpu/context_provider.h"
@@ -74,7 +74,7 @@ class Gpu : public gpu::GpuChannelEstablishFactory {
 
   // Sends a request to establish a gpu channel. If a request is currently
   // pending this will do nothing.
-  void SendEstablishGpuChannelRequest();
+  void SendEstablishGpuChannelRequest(base::WaitableEvent* waitable_event);
 
   // Handles results of request to establish a gpu channel in
   // |pending_request_|.

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,20 @@
  * @fileoverview
  * `settings-checkbox` is a checkbox that controls a supplied preference.
  */
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.m.js';
-import '../settings_shared.css.js';
+import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.js';
+// <if expr='chromeos_ash'>
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
 
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
+// </if>
+
+import {SettingsBooleanControlMixin} from '/shared/settings/controls/settings_boolean_control_mixin.js';
+import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {SettingsBooleanControlMixin} from './settings_boolean_control_mixin.js';
 import {getTemplate} from './settings_checkbox.html.js';
 
 export interface SettingsCheckboxElement {
@@ -55,14 +61,14 @@ export class SettingsCheckboxElement extends SettingsCheckboxElementBase {
   }
 
   private onSubLabelChanged_() {
-    this.$.checkbox.ariaDescription = this.$.subLabel.textContent;
+    this.$.checkbox.ariaDescription = this.$.subLabel.textContent!;
   }
 
   /**
    * Don't let clicks on a link inside the secondary label reach the checkbox.
    */
   private onSubLabelHtmlChanged_() {
-    const links = this.shadowRoot!.querySelectorAll('.secondary.label a');
+    const links = this.$.subLabel.querySelectorAll('a');
     links.forEach((link) => {
       link.addEventListener('click', this.stopPropagation_.bind(this));
     });
@@ -74,6 +80,10 @@ export class SettingsCheckboxElement extends SettingsCheckboxElementBase {
 
   private hasSubLabel_(subLabel: string, subLabelHtml: string): boolean {
     return !!subLabel || !!subLabelHtml;
+  }
+
+  private sanitizeInnerHtml_(rawString: string): TrustedHTML {
+    return sanitizeInnerHtml(rawString);
   }
 }
 

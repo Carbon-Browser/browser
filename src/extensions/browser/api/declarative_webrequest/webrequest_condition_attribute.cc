@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "extensions/browser/api/declarative/deduping_factory.h"
@@ -31,7 +32,6 @@
 #include "net/http/http_util.h"
 
 using base::CaseInsensitiveCompareASCII;
-using base::ListValue;
 using base::Value;
 
 namespace helpers = extension_web_request_api_helpers;
@@ -88,9 +88,9 @@ base::LazyInstance<WebRequestConditionAttributeFactory>::Leaky
 // WebRequestConditionAttribute
 //
 
-WebRequestConditionAttribute::WebRequestConditionAttribute() {}
+WebRequestConditionAttribute::WebRequestConditionAttribute() = default;
 
-WebRequestConditionAttribute::~WebRequestConditionAttribute() {}
+WebRequestConditionAttribute::~WebRequestConditionAttribute() = default;
 
 bool WebRequestConditionAttribute::Equals(
     const WebRequestConditionAttribute* other) const {
@@ -405,7 +405,7 @@ HeaderMatcher::StringMatchTest::Create(const base::Value& data,
       new StringMatchTest(data.GetString(), type, case_sensitive));
 }
 
-HeaderMatcher::StringMatchTest::~StringMatchTest() {}
+HeaderMatcher::StringMatchTest::~StringMatchTest() = default;
 
 bool HeaderMatcher::StringMatchTest::Matches(
     const std::string& str) const {
@@ -419,10 +419,11 @@ bool HeaderMatcher::StringMatchTest::Matches(
              base::StartsWith(str, data_, case_sensitive_);
     case kContains:
       if (case_sensitive_ == base::CompareCase::INSENSITIVE_ASCII) {
-        return std::search(str.begin(), str.end(), data_.begin(), data_.end(),
-                           CaseInsensitiveCompareASCII<char>()) != str.end();
+        return base::ranges::search(str, data_,
+                                    CaseInsensitiveCompareASCII<char>()) !=
+               str.end();
       } else {
-        return str.find(data_) != std::string::npos;
+        return base::Contains(str, data_);
       }
   }
   // We never get past the "switch", but the compiler worries about no return.
@@ -446,7 +447,7 @@ HeaderMatcher::HeaderMatchTest::HeaderMatchTest(
     : name_match_(std::move(name_match)),
       value_match_(std::move(value_match)) {}
 
-HeaderMatcher::HeaderMatchTest::~HeaderMatchTest() {}
+HeaderMatcher::HeaderMatchTest::~HeaderMatchTest() = default;
 
 // static
 std::unique_ptr<const HeaderMatcher::HeaderMatchTest>
@@ -710,9 +711,9 @@ WebRequestConditionAttributeStages::
 
 namespace {
 
-// Reads strings stored in |value|, which is expected to be a ListValue, and
-// sets corresponding bits (see RequestStage) in |out_stages|. Returns true on
-// success, false otherwise.
+// Reads strings stored in |value|, which is expected to be a Value of type
+// LIST, and sets corresponding bits (see RequestStage) in |out_stages|.
+// Returns true on success, false otherwise.
 bool ParseListOfStages(const base::Value& value, int* out_stages) {
   if (!value.is_list())
     return false;

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "chromeos/ash/components/network/onc/network_onc_utils.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 ManagedNetworkConfigurationHandler::~ManagedNetworkConfigurationHandler() =
     default;
@@ -29,9 +29,10 @@ ManagedNetworkConfigurationHandler::InitializeForTesting(
                 /*managed_cellular_pref_handler=*/nullptr,
                 network_state_handler, network_profile_handler,
                 network_configuration_handler, network_device_handler,
-                /*prohibitied_technologies_handler=*/nullptr);
+                /*prohibited_technologies_handler=*/nullptr,
+                /*hotspot_controller=*/nullptr);
   handler->set_ui_proxy_config_service(ui_proxy_config_service);
   return base::WrapUnique(handler);
 }
 
-}  // namespace chromeos
+}  // namespace ash

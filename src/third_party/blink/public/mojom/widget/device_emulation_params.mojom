@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module blink.mojom;
 
+import "services/device/public/mojom/device_posture_provider.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
 import "ui/display/mojom/screen_orientation.mojom";
 
@@ -49,4 +50,7 @@ struct DeviceEmulationParams {
 
   // Screen window segments dimensions.
   array<gfx.mojom.Rect> window_segments;
+
+  // Posture of the device.
+  device.mojom.DevicePostureType device_posture;
 };

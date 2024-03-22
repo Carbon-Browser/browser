@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -249,12 +249,6 @@ void CollectModuleVerificationData(
 
     if (module_state->modified_state() == ModuleState::MODULE_STATE_UNMODIFIED)
       continue;
-
-    if (module_state->modified_state() == ModuleState::MODULE_STATE_MODIFIED) {
-      UMA_HISTOGRAM_COUNTS_10000(
-          "ModuleIntegrityVerification.BytesModified.WithoutByteSet",
-          num_bytes_different);
-    }
 
     process->mutable_module_state()->AddAllocated(module_state.release());
   }

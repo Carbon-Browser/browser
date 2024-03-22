@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,40 +6,35 @@
  * @fileoverview This implements a common button control, bound to command.
  */
 
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {getPropertyDescriptor, PropertyKind} from 'chrome://resources/js/cr.m.js';
-import {decorate} from 'chrome://resources/js/cr/ui.m.js';
-import {Command} from 'chrome://resources/js/cr/ui/command.m.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+
+import {decorate} from '../../../common/js/cr_ui.js';
+
+import {Command} from './command.js';
 
 /**
  * Creates a new button element.
- * @extends {HTMLButtonElement}
  */
-export class CommandButton {
+export class CommandButton extends CrButtonElement {
   constructor() {
+    super();
+
     /**
      * Associated command.
-     * @private {Command}
+     * @private @type {?Command}
      */
     this.command_ = null;
   }
 
   /**
    * Decorates the given element.
-   * @param {!Element} element Item to be decorated.
+   * @param {!HTMLElement} element Item to be decorated.
    * @return {!CommandButton} Decorated item.
    */
   static decorate(element) {
-    // Add the CommandButton methods to the element we're
-    // decorating, leaving it's prototype chain intact.
-    Object.getOwnPropertyNames(CommandButton.prototype).forEach(name => {
-      if (name !== 'constructor') {
-        element[name] = CommandButton.prototype[name];
-      }
-    });
-    element = /** @type {!CommandButton} */ (element);
-    element.decorate();
-    return element;
+    decorate(element, CommandButton);
+    return /** @type {!CommandButton} */ (element);
   }
 
   /**
@@ -56,7 +51,7 @@ export class CommandButton {
 
   /**
    * Returns associated command.
-   * @return {Command} associated command.
+   * @return {?Command} associated command.
    */
   getCommand() {
     return this.command_;
@@ -71,12 +66,24 @@ export class CommandButton {
     if (this.command_) {
       this.command_.removeEventListener(
           'labelChange',
+          // @ts-ignore: error TS2352: Conversion of type 'this' to type
+          // 'EventListener' may be a mistake because neither type sufficiently
+          // overlaps with the other. If this was intentional, convert the
+          // expression to 'unknown' first.
           /** @type {EventListener} */ (this));
       this.command_.removeEventListener(
           'disabledChange',
+          // @ts-ignore: error TS2352: Conversion of type 'this' to type
+          // 'EventListener' may be a mistake because neither type sufficiently
+          // overlaps with the other. If this was intentional, convert the
+          // expression to 'unknown' first.
           /** @type {EventListener} */ (this));
       this.command_.removeEventListener(
           'hiddenChange',
+          // @ts-ignore: error TS2352: Conversion of type 'this' to type
+          // 'EventListener' may be a mistake because neither type sufficiently
+          // overlaps with the other. If this was intentional, convert the
+          // expression to 'unknown' first.
           /** @type {EventListener} */ (this));
     }
 
@@ -99,12 +106,24 @@ export class CommandButton {
 
       this.command_.addEventListener(
           'labelChange',
+          // @ts-ignore: error TS2352: Conversion of type 'this' to type
+          // 'EventListener' may be a mistake because neither type sufficiently
+          // overlaps with the other. If this was intentional, convert the
+          // expression to 'unknown' first.
           /** @type {EventListener} */ (this));
       this.command_.addEventListener(
           'disabledChange',
+          // @ts-ignore: error TS2352: Conversion of type 'this' to type
+          // 'EventListener' may be a mistake because neither type sufficiently
+          // overlaps with the other. If this was intentional, convert the
+          // expression to 'unknown' first.
           /** @type {EventListener} */ (this));
       this.command_.addEventListener(
           'hiddenChange',
+          // @ts-ignore: error TS2352: Conversion of type 'this' to type
+          // 'EventListener' may be a mistake because neither type sufficiently
+          // overlaps with the other. If this was intentional, convert the
+          // expression to 'unknown' first.
           /** @type {EventListener} */ (this));
     }
   }
@@ -137,10 +156,10 @@ export class CommandButton {
 
   /**
    * Handles click event and dispatches associated command.
-   * @param {Event} e The mouseup event object.
+   * @param {Event} _e The mouseup event object.
    * @private
    */
-  handleClick_(e) {
+  handleClick_(_e) {
     if (!this.disabled && this.command_) {
       this.command_.execute(this);
     }
@@ -153,28 +172,17 @@ export class CommandButton {
   handleEvent(e) {
     switch (e.type) {
       case 'disabledChange':
+        // @ts-ignore: error TS2531: Object is possibly 'null'.
         this.disabled = this.command_.disabled;
         break;
       case 'hiddenChange':
+        // @ts-ignore: error TS2531: Object is possibly 'null'.
         this.hidden = this.command_.hidden;
         break;
       case 'labelChange':
+        // @ts-ignore: error TS2531: Object is possibly 'null'.
         this.setLabel(this.command_.label);
         break;
     }
   }
 }
-
-/**
- * Whether the button is disabled or not.
- * @type {boolean}
- */
-CommandButton.prototype.disabled;
-
-/**
- * Whether the button is hidden or not.
- * @type {boolean}
- */
-CommandButton.prototype.hidden;
-
-CommandButton.prototype.__proto__ = HTMLButtonElement.prototype;

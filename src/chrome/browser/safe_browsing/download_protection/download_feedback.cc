@@ -1,11 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/download_protection/download_feedback.h"
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/task_runner.h"
 #include "chrome/browser/safe_browsing/download_protection/two_phase_uploader.h"
@@ -113,6 +113,11 @@ DownloadFeedbackImpl::~DownloadFeedbackImpl() {
 void DownloadFeedbackImpl::Start(base::OnceClosure finish_callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(!uploader_);
+
+  if (!url_loader_factory_) {
+    std::move(finish_callback).Run();
+    return;
+  }
 
   ClientDownloadReport report_metadata;
 

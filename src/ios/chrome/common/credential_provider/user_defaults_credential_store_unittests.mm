@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,8 @@
 
 #import "base/test/ios/wait_util.h"
 #import "ios/chrome/common/credential_provider/archivable_credential.h"
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
 
 namespace {
 
@@ -38,13 +34,13 @@ class UserDefaultsCredentialStoreTest : public PlatformTest {
 
 ArchivableCredential* TestCredential() {
   return [[ArchivableCredential alloc] initWithFavicon:@"favicon"
-                                    keychainIdentifier:@"keychainIdentifier"
+                                              password:@"qwerty123"
                                                   rank:5
                                       recordIdentifier:@"recordIdentifier"
                                      serviceIdentifier:@"serviceIdentifier"
                                            serviceName:@"serviceName"
                                                   user:@"user"
-                                  validationIdentifier:@"validationIdentifier"];
+                                                  note:@"note"];
 }
 
 // Tests that an UserDefaultsCredentialStore can be created.
@@ -79,15 +75,15 @@ TEST_F(UserDefaultsCredentialStoreTest, update) {
   [credentialStore addCredential:credential];
   EXPECT_EQ(1u, credentialStore.credentials.count);
 
-  ArchivableCredential* updatedCredential = [[ArchivableCredential alloc]
-           initWithFavicon:@"other_favicon"
-        keychainIdentifier:@"other_keychainIdentifier"
-                      rank:credential.rank + 10
-          recordIdentifier:@"recordIdentifier"
-         serviceIdentifier:@"other_serviceIdentifier"
-               serviceName:@"other_serviceName"
-                      user:@"other_user"
-      validationIdentifier:@"other_validationIdentifier"];
+  ArchivableCredential* updatedCredential =
+      [[ArchivableCredential alloc] initWithFavicon:@"other_favicon"
+                                           password:@"Qwerty123!"
+                                               rank:credential.rank + 10
+                                   recordIdentifier:@"recordIdentifier"
+                                  serviceIdentifier:@"other_serviceIdentifier"
+                                        serviceName:@"other_serviceName"
+                                               user:@"other_user"
+                                               note:@"other_note"];
 
   [credentialStore updateCredential:updatedCredential];
   EXPECT_EQ(1u, credentialStore.credentials.count);

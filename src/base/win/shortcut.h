@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,7 +105,7 @@ struct BASE_EXPORT ShortcutProperties {
   int icon_index = -1;
   // The app model id for the shortcut.
   std::wstring app_id;
-  // Whether this is a dual mode shortcut (Win8+).
+  // Whether this is a dual mode shortcut (Windows).
   bool dual_mode = false;
   // The CLSID of the COM object registered with the OS via the shortcut. This
   // is for app activation via user interaction with a toast notification in the
@@ -151,20 +151,6 @@ BASE_EXPORT bool ResolveShortcutProperties(const FilePath& shortcut_path,
 BASE_EXPORT bool ResolveShortcut(const FilePath& shortcut_path,
                                  FilePath* target_path,
                                  std::wstring* args);
-
-// Pin to taskbar is only supported on Windows 7 and Windows 8. Returns true on
-// those platforms.
-BASE_EXPORT bool CanPinShortcutToTaskbar();
-
-// Pins a shortcut to the taskbar on Windows 7 and 8. The |shortcut| file must
-// already exist and be a shortcut that points to an executable. The app id of
-// the shortcut is used to group windows and must be set correctly.
-BASE_EXPORT bool PinShortcutToTaskbar(const FilePath& shortcut);
-
-// Unpins a shortcut from the Windows 7+ taskbar. The |shortcut| must exist and
-// already be pinned to the taskbar. The app id of the shortcut is used as the
-// identifier for the taskbar item to remove and must be set correctly.
-BASE_EXPORT bool UnpinShortcutFromTaskbar(const FilePath& shortcut);
 
 }  // namespace win
 }  // namespace base

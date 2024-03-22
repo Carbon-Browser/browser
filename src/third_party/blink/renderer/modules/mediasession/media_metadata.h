@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class MODULES_EXPORT MediaMetadata final : public ScriptWrappable {
   String title() const;
   String artist() const;
   String album() const;
-  Vector<v8::Local<v8::Value>> artwork(ScriptState*) const;
+  v8::LocalVector<v8::Value> artwork(ScriptState*) const;
 
   // Internal use only, returns a reference to m_artwork instead of a Frozen
   // copy of a MediaImage array.

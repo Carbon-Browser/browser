@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/webui/eche_app_ui/mojom/eche_app.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 
@@ -24,6 +25,7 @@ extern const char kEcheAppInactivityNotifierId[];
 extern const char kEcheAppFromWebWithoutButtonNotifierId[];
 extern const char kEcheAppLearnMoreUrl[];
 extern const char kEcheAppToastId[];
+extern const char kEcheAppNetworkSettingNotifierId[];
 
 // Implements the ShowNotification interface to allow WebUI show the native
 // notification and toast.
@@ -48,8 +50,9 @@ class EcheAlertGenerator : public mojom::NotificationGenerator {
   void OnEnableScreenLockChanged();
 
   mojo::Receiver<mojom::NotificationGenerator> notification_receiver_{this};
-  LaunchAppHelper* launch_app_helper_;
-  PrefService* pref_service_;
+  raw_ptr<LaunchAppHelper, DanglingUntriaged | ExperimentalAsh>
+      launch_app_helper_;
+  raw_ptr<PrefService, ExperimentalAsh> pref_service_;
   PrefChangeRegistrar pref_change_registrar_;
 };
 

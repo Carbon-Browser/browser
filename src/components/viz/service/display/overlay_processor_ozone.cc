@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/timer/elapsed_timer.h"
@@ -22,6 +22,7 @@
 #include "components/viz/service/display/overlay_strategy_underlay.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/size_conversions.h"
@@ -41,6 +42,7 @@ void ConvertToOzoneOverlaySurface(
     ui::OverlaySurfaceCandidate* ozone_candidate) {
   ozone_candidate->transform = primary_plane.transform;
   ozone_candidate->format = primary_plane.format;
+  ozone_candidate->color_space = primary_plane.color_space;
   ozone_candidate->display_rect = primary_plane.display_rect;
   ozone_candidate->crop_rect = primary_plane.uv_rect;
   ozone_candidate->clip_rect.reset();
@@ -57,6 +59,7 @@ void ConvertToOzoneOverlaySurface(
     ui::OverlaySurfaceCandidate* ozone_candidate) {
   ozone_candidate->transform = overlay_candidate.transform;
   ozone_candidate->format = overlay_candidate.format;
+  ozone_candidate->color_space = overlay_candidate.color_space;
   ozone_candidate->display_rect = overlay_candidate.display_rect;
   ozone_candidate->crop_rect = overlay_candidate.uv_rect;
   ozone_candidate->clip_rect = overlay_candidate.clip_rect;
@@ -81,6 +84,11 @@ uint32_t MailboxToUInt32(const gpu::Mailbox& mailbox) {
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+bool IsYUVColorSpace(const gfx::ColorSpace& color_space) {
+  SkYUVColorSpace yuv_color_space;
+  return color_space.ToSkYUVColorSpace(&yuv_color_space);
+}
+
 bool AllowColorSpaceCombination(
     gfx::BufferFormat source_format,
     const gfx::ColorSpace& source_color_space,
@@ -102,20 +110,27 @@ bool AllowColorSpaceCombination(
   // don't want to reject all of them for overlays because the visual difference
   // between BT.601/narrow and BT.709/narrow is not expected to be much.
   // Therefore, in being consistent with the values we provide for
-  // EGL_YUV_COLOR_SPACE_HINT_EXT/EGL_SAMPLE_RANGE_HINT_EXT (see
-  // https://crrev.com/c/3662321), we'll only allow frames that use non-BT.2020
-  // with non-full range. In those cases, the compositor and the display
-  // controller are expected to render the frames equally (and decently - with
-  // the understanding that the final result may not be fully correct).
+  // EGL_YUV_COLOR_SPACE_HINT_EXT/EGL_SAMPLE_RANGE_HINT_EXT, we'll only allow
+  // frames that use non-BT.2020 with non-full range. In those cases, the
+  // compositor and the display controller are expected to render the frames
+  // equally (and decently - with the understanding that the final result may
+  // not be fully correct).
   //
   // TODO(b/233667677): Remove this when we've plumbed the YUV encoding and
   // range to DRM/KMS. At that point, we need to ensure that
   // EGL_YUV_COLOR_SPACE_HINT_EXT/EGL_SAMPLE_RANGE_HINT_EXT would also get the
   // same values as DRM/KMS.
+  //
+  // TODO(b/243150091): Remove the call to IsYUVColorSpace() or turn it into a
+  // DCHECK() once LaCrOS plumbs the correct color space.
+  bool is_yuv_color_space = features::IsLacrosColorManagementEnabled() ||
+                            IsYUVColorSpace(source_color_space);
   if ((source_format == gfx::BufferFormat::YUV_420_BIPLANAR ||
-       source_format == gfx::BufferFormat::YVU_420) &&
-      (source_color_space.GetPrimaryID() ==
-           gfx::ColorSpace::PrimaryID::BT2020 ||
+       source_format == gfx::BufferFormat::YVU_420 ||
+       source_format == gfx::BufferFormat::P010) &&
+      is_yuv_color_space &&
+      (source_color_space.GetMatrixID() ==
+           gfx::ColorSpace::MatrixID::BT2020_NCL ||
        source_color_space.GetRangeID() == gfx::ColorSpace::RangeID::FULL)) {
     return false;
   }
@@ -207,6 +222,27 @@ void OverlayProcessorOzone::CheckOverlaySupportImpl(
         bool result = SetNativePixmapForCandidate(&(*ozone_surface_iterator),
                                                   primary_plane->mailbox,
                                                   /*is_primary=*/true);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+        if (!result) {
+          // For ChromeOS HW protected content, there's a race condition that
+          // can occur here where the mailbox for the native pixmap isn't
+          // registered yet so we will fail to promote to overlay due to this
+          // check. Allow us to proceed even w/out the native pixmap in that
+          // case as it will still succeed and would otherwise cause black
+          // flashing between frames while the race condition is completing.
+          // We don't know if we have a required overlay yet, so we need to
+          // go through all the candidates to see if one is present.
+          for (auto surface_iterator = surfaces->cbegin();
+               surface_iterator < surfaces->cend(); surface_iterator++) {
+            if (surface_iterator->requires_overlay) {
+              DLOG(WARNING)
+                  << "Allowing required overlay with missing primary pixmap";
+              result = true;
+              break;
+            }
+          }
+        }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
         // We cannot validate an overlay configuration without the buffer for
         // primary plane present.
         if (!result) {
@@ -252,12 +288,8 @@ void OverlayProcessorOzone::CheckOverlaySupportImpl(
                                                   /*is_primary=*/false);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
         if (!result && surface_iterator->requires_overlay) {
-          // For ChromeOS HW protected content, there's a race condition that
-          // can occur here where the mailbox for the native pixmap isn't
-          // registered yet so we will fail to promote to overlay due to this
-          // check. Allow us to proceed even w/out the native pixmap in that
-          // case as it will still succeed and would otherwise cause black
-          // flashing between frames while the race condition is completing.
+          // For ChromeOS HW protected content, same condition as above
+          // regarding missing pixmaps.
           result = true;
           DLOG(WARNING) << "Allowing required overlay with missing pixmap";
         }
@@ -334,9 +366,6 @@ void OverlayProcessorOzone::MaybeObserveHardwareCapabilities() {
 
 void OverlayProcessorOzone::ReceiveHardwareCapabilities(
     ui::HardwareCapabilities hardware_capabilities) {
-  UMA_HISTOGRAM_BOOLEAN(
-      "Compositing.Display.OverlayProcessorOzone.HardwareCapabilitiesIsValid",
-      hardware_capabilities.is_valid);
   if (hardware_capabilities.is_valid) {
     // Subtract 1 because one of these overlay capable planes will be needed for
     // the primary plane.

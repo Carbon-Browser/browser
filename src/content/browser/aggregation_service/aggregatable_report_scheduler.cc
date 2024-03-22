@@ -1,27 +1,29 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/aggregation_service/aggregatable_report_scheduler.h"
 
-#include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/check_op.h"
+#include "base/command_line.h"
 #include "base/containers/cxx20_erase.h"
-#include "base/location.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/sequence_bound.h"
 #include "base/time/time.h"
 #include "content/browser/aggregation_service/aggregatable_report.h"
+#include "content/browser/aggregation_service/aggregation_service.h"
 #include "content/browser/aggregation_service/aggregation_service_storage.h"
 #include "content/browser/aggregation_service/aggregation_service_storage_context.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "content/public/common/content_switches.h"
 
 namespace content {
 
@@ -32,12 +34,14 @@ AggregatableReportScheduler::AggregatableReportScheduler(
         on_scheduled_report_time_reached)
     : storage_context_(*storage_context),
       timer_delegate_(
-          *(new TimerDelegate(storage_context,
-                              std::move(on_scheduled_report_time_reached)))),
-      timer_(base::WrapUnique(&*timer_delegate_)) {
+          new TimerDelegate(storage_context,
+                            std::move(on_scheduled_report_time_reached))),
+      timer_(base::WrapUnique(timer_delegate_.get())) {
   DCHECK(storage_context);
 }
-AggregatableReportScheduler::~AggregatableReportScheduler() = default;
+AggregatableReportScheduler::~AggregatableReportScheduler() {
+  timer_delegate_ = nullptr;
+}
 
 void AggregatableReportScheduler::ScheduleRequest(
     AggregatableReportRequest request) {
@@ -55,20 +59,47 @@ void AggregatableReportScheduler::NotifyInProgressRequestSucceeded(
   storage_context_->GetStorage()
       .AsyncCall(&AggregationServiceStorage::DeleteRequest)
       .WithArgs(request_id)
-      .Then(base::BindOnce(&TimerDelegate::NotifyRequestCompleted,
+      .Then(base::BindOnce(&TimerDelegate::NotifySendAttemptCompleted,
                            timer_delegate_->GetWeakPtr(), request_id));
 }
 
-void AggregatableReportScheduler::NotifyInProgressRequestFailed(
-    AggregationServiceStorage::RequestId request_id) {
-  // TODO(crbug.com/1340040): Implement retry handling. Ideally also handle
-  // different errors differently. Also, ensure this composes well with offline
-  // handling.
+bool AggregatableReportScheduler::NotifyInProgressRequestFailed(
+    AggregationServiceStorage::RequestId request_id,
+    int previous_failed_attempts) {
+  DCHECK_GE(previous_failed_attempts, 0);
+  std::optional<base::TimeDelta> delay =
+      GetFailedReportDelay(previous_failed_attempts + 1);
+
+  if (delay.has_value()) {
+    base::Time next_report_time = base::Time::Now() + *delay;
+    storage_context_->GetStorage()
+        .AsyncCall(&AggregationServiceStorage::UpdateReportForSendFailure)
+        .WithArgs(request_id, next_report_time)
+        .Then(base::BindOnce(&TimerDelegate::NotifySendAttemptCompleted,
+                             timer_delegate_->GetWeakPtr(), request_id));
+
+    timer_.MaybeSet(next_report_time);
+    return true;
+  }
+
+  // no retries left, dropping request
   storage_context_->GetStorage()
       .AsyncCall(&AggregationServiceStorage::DeleteRequest)
       .WithArgs(request_id)
-      .Then(base::BindOnce(&TimerDelegate::NotifyRequestCompleted,
+      .Then(base::BindOnce(&TimerDelegate::NotifySendAttemptCompleted,
                            timer_delegate_->GetWeakPtr(), request_id));
+  return false;
+}
+
+std::optional<base::TimeDelta>
+AggregatableReportScheduler::GetFailedReportDelay(int failed_send_attempts) {
+  DCHECK_GT(failed_send_attempts, 0);
+
+  if (failed_send_attempts > kMaxRetries)
+    return std::nullopt;
+
+  return kInitialRetryDelay *
+         std::pow(kRetryDelayFactor, failed_send_attempts - 1);
 }
 
 AggregatableReportScheduler::TimerDelegate::TimerDelegate(
@@ -78,13 +109,16 @@ AggregatableReportScheduler::TimerDelegate::TimerDelegate(
         on_scheduled_report_time_reached)
     : storage_context_(*storage_context),
       on_scheduled_report_time_reached_(
-          std::move(on_scheduled_report_time_reached)) {
+          std::move(on_scheduled_report_time_reached)),
+      should_not_delay_reports_(
+          base::CommandLine::ForCurrentProcess()->HasSwitch(
+              switches::kPrivateAggregationDeveloperMode)) {
   DCHECK(storage_context);
 }
 AggregatableReportScheduler::TimerDelegate::~TimerDelegate() = default;
 
 void AggregatableReportScheduler::TimerDelegate::GetNextReportTime(
-    base::OnceCallback<void(absl::optional<base::Time>)> callback,
+    base::OnceCallback<void(std::optional<base::Time>)> callback,
     base::Time now) {
   storage_context_->GetStorage()
       .AsyncCall(&AggregationServiceStorage::NextReportTimeAfter)
@@ -96,19 +130,31 @@ void AggregatableReportScheduler::TimerDelegate::OnReportingTimeReached(
     base::Time now) {
   storage_context_->GetStorage()
       .AsyncCall(&AggregationServiceStorage::GetRequestsReportingOnOrBefore)
-      .WithArgs(now)
+      .WithArgs(now, /*limit=*/std::nullopt)
       .Then(base::BindOnce(&AggregatableReportScheduler::TimerDelegate::
                                OnRequestsReturnedFromStorage,
                            weak_ptr_factory_.GetWeakPtr()));
 }
 
 void AggregatableReportScheduler::TimerDelegate::AdjustOfflineReportTimes(
-    base::OnceCallback<void(absl::optional<base::Time>)> maybe_set_timer_cb) {
-  // TODO(crbug.com/1340042): Implement offline and startup handling
-  std::move(maybe_set_timer_cb).Run(absl::nullopt);
+    base::OnceCallback<void(std::optional<base::Time>)> maybe_set_timer_cb) {
+  if (should_not_delay_reports_) {
+    // No need to adjust the report times, just set the timer as appropriate.
+    storage_context_->GetStorage()
+        .AsyncCall(&AggregationServiceStorage::NextReportTimeAfter)
+        .WithArgs(base::Time::Min())
+        .Then(std::move(maybe_set_timer_cb));
+    return;
+  }
+
+  storage_context_->GetStorage()
+      .AsyncCall(&AggregationServiceStorage::AdjustOfflineReportTimes)
+      .WithArgs(base::Time::Now(), kOfflineReportTimeMinimumDelay,
+                kOfflineReportTimeMaximumDelay)
+      .Then(std::move(maybe_set_timer_cb));
 }
 
-void AggregatableReportScheduler::TimerDelegate::NotifyRequestCompleted(
+void AggregatableReportScheduler::TimerDelegate::NotifySendAttemptCompleted(
     AggregationServiceStorage::RequestId request_id) {
   in_progress_requests_.erase(request_id);
 }

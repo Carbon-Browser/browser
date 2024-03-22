@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,12 @@
 #include "ash/public/cpp/app_menu_constants.h"
 #include "ash/public/cpp/multi_user_window_manager.h"
 #include "ash/public/cpp/shelf_types.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
 #include "base/containers/extend.h"
 #include "base/feature_list.h"
+#include "base/files/safe_base_name.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/scoped_observation.h"
 #include "base/strings/stringprintf.h"
@@ -28,35 +29,41 @@
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/extension_apps_utils.h"
 #include "chrome/browser/apps/app_service/intent_util.h"
+#include "chrome/browser/apps/app_service/launch_result_type.h"
 #include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/apps/app_service/menu_util.h"
 #include "chrome/browser/apps/app_service/metrics/app_service_metrics.h"
 #include "chrome/browser/apps/app_service/publishers/extension_apps_util.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/app_list/extension_app_utils.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limit_interface.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/crosapi/hosted_app_util.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
+#include "chrome/browser/ash/extensions/gfx_utils.h"
 #include "chrome/browser/ash/file_manager/app_id.h"
 #include "chrome/browser/ash/file_manager/file_browser_handlers.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/arc/arc_web_contents_data.h"
-#include "chrome/browser/chromeos/extensions/gfx_utils.h"
+#include "chrome/browser/chromeos/extensions/web_file_handlers/intent_util.h"
 #include "chrome/browser/extensions/extension_keeplist_chromeos.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_uninstall_dialog.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/extensions/launch_util.h"
+#include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/policy/system_features_disable_list_policy_handler.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "chrome/browser/ui/app_list/extension_app_utils.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/browser/ui/ash/session_controller_client_impl.h"
+#include "chrome/browser/web_applications/app_service/publisher_helper.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/extensions/api/file_browser_handlers/file_browser_handler.h"
 #include "chrome/common/extensions/extension_constants.h"
@@ -68,19 +75,25 @@
 #include "components/app_restore/app_launch_info.h"
 #include "components/app_restore/full_restore_utils.h"
 #include "components/policy/core/common/policy_pref_names.h"
+#include "components/services/app_service/public/cpp/icon_types.h"
 #include "components/services/app_service/public/cpp/instance.h"
 #include "components/services/app_service/public/cpp/intent.h"
 #include "components/services/app_service/public/cpp/intent_filter.h"
 #include "components/services/app_service/public/cpp/intent_filter_util.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "content/public/browser/clear_site_data_utils.h"
 #include "extensions/browser/app_window/app_window.h"
 #include "extensions/browser/extension_system.h"
+#include "extensions/browser/extension_util.h"
 #include "extensions/browser/management_policy.h"
+#include "extensions/browser/path_util.h"
 #include "extensions/browser/ui_util.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension_urls.h"
+#include "extensions/common/manifest_handlers/app_display_info.h"
+#include "extensions/common/manifest_handlers/file_handler_info.h"
 #include "extensions/common/manifest_handlers/options_page_info.h"
+#include "extensions/common/manifest_handlers/web_file_handlers_info.h"
+#include "net/base/url_util.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_url.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -103,6 +116,75 @@ std::string GetLaunchId(extensions::AppWindow* app_window) {
   return launch_id;
 }
 
+std::string GetSourceFromAppListSource(ash::ShelfLaunchSource source) {
+  switch (source) {
+    case ash::LAUNCH_FROM_APP_LIST:
+      return std::string(extension_urls::kLaunchSourceAppList);
+    case ash::LAUNCH_FROM_APP_LIST_SEARCH:
+      return std::string(extension_urls::kLaunchSourceAppListSearch);
+    default:
+      return std::string();
+  }
+}
+
+ash::ShelfLaunchSource ConvertLaunchSource(apps::LaunchSource launch_source) {
+  switch (launch_source) {
+    case apps::LaunchSource::kUnknown:
+    case apps::LaunchSource::kFromParentalControls:
+      return ash::LAUNCH_FROM_UNKNOWN;
+    case apps::LaunchSource::kFromAppListGrid:
+    case apps::LaunchSource::kFromAppListGridContextMenu:
+      return ash::LAUNCH_FROM_APP_LIST;
+    case apps::LaunchSource::kFromAppListQuery:
+    case apps::LaunchSource::kFromAppListQueryContextMenu:
+    case apps::LaunchSource::kFromAppListRecommendation:
+      return ash::LAUNCH_FROM_APP_LIST_SEARCH;
+    case apps::LaunchSource::kFromShelf:
+      return ash::LAUNCH_FROM_SHELF;
+    case apps::LaunchSource::kFromFileManager:
+    case apps::LaunchSource::kFromLink:
+    case apps::LaunchSource::kFromOmnibox:
+    case apps::LaunchSource::kFromChromeInternal:
+    case apps::LaunchSource::kFromKeyboard:
+    case apps::LaunchSource::kFromOtherApp:
+    case apps::LaunchSource::kFromMenu:
+    case apps::LaunchSource::kFromInstalledNotification:
+    case apps::LaunchSource::kFromTest:
+    case apps::LaunchSource::kFromArc:
+    case apps::LaunchSource::kFromSharesheet:
+    case apps::LaunchSource::kFromReleaseNotesNotification:
+    case apps::LaunchSource::kFromFullRestore:
+    case apps::LaunchSource::kFromSmartTextContextMenu:
+    case apps::LaunchSource::kFromDiscoverTabNotification:
+    case apps::LaunchSource::kFromManagementApi:
+    case apps::LaunchSource::kFromKiosk:
+    case apps::LaunchSource::kFromCommandLine:
+    case apps::LaunchSource::kFromBackgroundMode:
+    case apps::LaunchSource::kFromNewTabPage:
+    case apps::LaunchSource::kFromIntentUrl:
+    case apps::LaunchSource::kFromOsLogin:
+    case apps::LaunchSource::kFromProtocolHandler:
+    case apps::LaunchSource::kFromUrlHandler:
+    case apps::LaunchSource::kFromLockScreen:
+    case apps::LaunchSource::kFromAppHomePage:
+    case apps::LaunchSource::kFromReparenting:
+    case apps::LaunchSource::kFromProfileMenu:
+    case apps::LaunchSource::kFromSysTrayCalendar:
+    case apps::LaunchSource::kFromInstaller:
+      return ash::LAUNCH_FROM_UNKNOWN;
+  }
+}
+
+void MaybeAssociateWebContentsWithArcContext(
+    apps::LaunchSource launch_source,
+    content::WebContents* web_contents) {
+  if (launch_source == apps::LaunchSource::kFromArc && web_contents) {
+    // Add a flag to remember this web_contents originated in the ARC context.
+    web_contents->SetUserData(
+        &arc::ArcWebContentsData::kArcTransitionFlag,
+        std::make_unique<arc::ArcWebContentsData>(web_contents));
+  }
+}
 }  // namespace
 
 namespace apps {
@@ -110,14 +192,17 @@ namespace apps {
 ExtensionAppsChromeOs::ExtensionAppsChromeOs(AppServiceProxy* proxy,
                                              AppType app_type)
     : ExtensionAppsBase(proxy, app_type),
-      instance_registry_(&proxy->InstanceRegistry()) {
+      instance_registry_(&proxy->InstanceRegistry()),
+      web_file_handlers_permission_handler_(
+          std::make_unique<extensions::WebFileHandlersPermissionHandler>(
+              profile())) {
   DCHECK(instance_registry_);
 }
 
 ExtensionAppsChromeOs::~ExtensionAppsChromeOs() {
   app_window_registry_.Reset();
 
-  // In unit tests, AppServiceProxy might be ReInitializeForTesting, so
+  // In unit tests, AppServiceProxy might be ReinitializeForTesting, so
   // ExtensionApps might be destroyed without calling Shutdown, so arc_prefs_
   // needs to be removed from observer in the destructor function.
   if (arc_prefs_) {
@@ -154,14 +239,16 @@ void ExtensionAppsChromeOs::Initialize() {
     return;
   }
 
-  media_dispatcher_.Observe(MediaCaptureDevicesDispatcher::GetInstance());
+  media_dispatcher_.Observe(MediaCaptureDevicesDispatcher::GetInstance()
+                                ->GetMediaStreamCaptureIndicator()
+                                .get());
 
   notification_display_service_.Observe(
       NotificationDisplayServiceFactory::GetForProfile(profile()));
 
   profile_pref_change_registrar_.Init(profile()->GetPrefs());
   profile_pref_change_registrar_.Add(
-      prefs::kHideWebStoreIcon,
+      policy::policy_prefs::kHideWebStoreIcon,
       base::BindRepeating(&ExtensionAppsBase::OnHideWebStoreIconPrefChanged,
                           GetWeakPtr()));
 
@@ -180,6 +267,17 @@ void ExtensionAppsChromeOs::Initialize() {
   }
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+void ExtensionAppsChromeOs::GetCompressedIconData(
+    const std::string& app_id,
+    int32_t size_in_dip,
+    ui::ResourceScaleFactor scale_factor,
+    LoadIconCallback callback) {
+  apps::GetChromeAppCompressedIconData(profile(), app_id, size_in_dip,
+                                       scale_factor, std::move(callback));
+}
+#endif
+
 void ExtensionAppsChromeOs::LaunchAppWithParamsImpl(AppLaunchParams&& params,
                                                     LaunchCallback callback) {
   const auto* extension = MaybeGetExtension(params.app_id);
@@ -193,67 +291,155 @@ void ExtensionAppsChromeOs::LaunchAppWithParamsImpl(AppLaunchParams&& params,
   if (extension->is_app() || is_quickoffice) {
     auto launch_source = params.launch_source;
     content::WebContents* web_contents = LaunchImpl(std::move(params));
-
-    if (launch_source == apps::LaunchSource::kFromArc && web_contents) {
-      // Add a flag to remember this web_contents originated in the ARC context.
-      web_contents->SetUserData(
-          &arc::ArcWebContentsData::kArcTransitionFlag,
-          std::make_unique<arc::ArcWebContentsData>(web_contents));
-    }
+    MaybeAssociateWebContentsWithArcContext(launch_source, web_contents);
   } else {
     DCHECK(extension->is_extension());
     // TODO(petermarshall): Set Arc flag as above?
     auto event_flags = apps::GetEventFlags(params.disposition,
                                            /*prefer_container=*/false);
-    auto window_info = apps::MakeWindowInfo(params.display_id);
     LaunchExtension(params.app_id, event_flags, std::move(params.intent),
                     params.launch_source,
-                    ConvertMojomWindowInfoToWindowInfo(window_info),
+                    std::make_unique<WindowInfo>(params.display_id),
                     base::DoNothing());
   }
 }
 
-void ExtensionAppsChromeOs::LaunchAppWithIntent(
+void ExtensionAppsChromeOs::LaunchAppWithArgumentsCallback(
+    LaunchSource launch_source,
     const std::string& app_id,
     int32_t event_flags,
-    apps::mojom::IntentPtr intent,
-    apps::mojom::LaunchSource launch_source,
-    apps::mojom::WindowInfoPtr window_info,
-    LaunchAppWithIntentCallback callback) {
-  const auto* extension = MaybeGetExtension(app_id);
-  if (!extension) {
-    std::move(callback).Run(/*success=*/false);
+    IntentPtr intent,
+    WindowInfoPtr window_info,
+    LaunchCallback callback,
+    bool should_open) {
+  // Exit early, while notifying, in case `Don't open` was chosen.
+  if (!should_open) {
+    std::move(callback).Run(LaunchResult(State::FAILED));
     return;
   }
+
+  content::WebContents* web_contents = LaunchAppWithIntentImpl(
+      app_id, event_flags, std::move(intent), launch_source,
+      std::move(window_info), std::move(callback));
+  MaybeAssociateWebContentsWithArcContext(launch_source, web_contents);
+}
+
+void ExtensionAppsChromeOs::LaunchAppWithIntent(const std::string& app_id,
+                                                int32_t event_flags,
+                                                IntentPtr intent,
+                                                LaunchSource launch_source,
+                                                WindowInfoPtr window_info,
+                                                LaunchCallback callback) {
+  // `extension` is required.
+  const auto* extension = MaybeGetExtension(app_id);
+  if (!extension) {
+    std::move(callback).Run(LaunchResult(State::FAILED));
+    return;
+  }
+
+  // Launch Web File Handlers if they're supported by the extension.
+  if (extensions::WebFileHandlers::SupportsWebFileHandlers(*extension)) {
+    std::vector<base::SafeBaseName> base_names =
+        extensions::GetBaseNamesForIntent(*intent);
+
+    // This vector cannot be empty because this is reached after explicitly
+    // opening one or more files.
+    if (base_names.empty()) {
+      std::move(callback).Run(LaunchResult(State::FAILED));
+      return;
+    }
+
+    // Confirm that the extension can open the file and then call the callback.
+    web_file_handlers_permission_handler_->Confirm(
+        *extension, base_names,
+        base::BindOnce(&ExtensionAppsChromeOs::LaunchAppWithArgumentsCallback,
+                       weak_factory_.GetWeakPtr(), launch_source, app_id,
+                       event_flags, std::move(intent), std::move(window_info),
+                       std::move(callback)));
+
+    return;
+  }
+
   bool is_quickoffice = extension_misc::IsQuickOfficeExtension(extension->id());
+
+  // Launch legacy app.
   if (extension->is_app() || is_quickoffice) {
     content::WebContents* web_contents = LaunchAppWithIntentImpl(
         app_id, event_flags, std::move(intent), launch_source,
         std::move(window_info), std::move(callback));
 
-    if (launch_source == apps::mojom::LaunchSource::kFromArc && web_contents) {
-      // Add a flag to remember this web_contents originated in the ARC context.
-      web_contents->SetUserData(
-          &arc::ArcWebContentsData::kArcTransitionFlag,
-          std::make_unique<arc::ArcWebContentsData>(web_contents));
-    }
-  } else {
-    DCHECK(extension->is_extension());
-    // TODO(petermarshall): Set Arc flag as above?
-    LaunchExtension(app_id, event_flags, ConvertMojomIntentToIntent(intent),
-                    ConvertMojomLaunchSourceToLaunchSource(launch_source),
-                    ConvertMojomWindowInfoToWindowInfo(window_info),
-                    std::move(callback));
+    MaybeAssociateWebContentsWithArcContext(launch_source, web_contents);
+    return;
   }
+
+  // Launch extension.
+  DCHECK(extension->is_extension());
+  // TODO(petermarshall): Set Arc flag as above?
+  LaunchExtension(app_id, event_flags, std::move(intent), launch_source,
+                  std::move(window_info), std::move(callback));
 }
 
-void ExtensionAppsChromeOs::LaunchExtension(
+void ExtensionAppsChromeOs::GetMenuModel(
     const std::string& app_id,
-    int32_t event_flags,
-    IntentPtr intent,
-    LaunchSource launch_source,
-    WindowInfoPtr window_info,
-    LaunchAppWithIntentCallback callback) {
+    MenuType menu_type,
+    int64_t display_id,
+    base::OnceCallback<void(MenuItems)> callback) {
+  MenuItems menu_items;
+  const auto* extension = MaybeGetExtension(app_id);
+  if (!extension) {
+    std::move(callback).Run(std::move(menu_items));
+    return;
+  }
+
+  if (app_id == app_constants::kChromeAppId) {
+    std::move(callback).Run(CreateBrowserMenuItems(profile()));
+    return;
+  }
+
+  bool is_platform_app = extension->is_platform_app();
+  if (!is_platform_app) {
+    CreateOpenNewSubmenu(
+        extensions::GetLaunchType(extensions::ExtensionPrefs::Get(profile()),
+                                  extension) ==
+                extensions::LaunchType::LAUNCH_TYPE_WINDOW
+            ? IDS_APP_LIST_CONTEXT_MENU_NEW_WINDOW
+            : IDS_APP_LIST_CONTEXT_MENU_NEW_TAB,
+        menu_items);
+  }
+
+  if (!is_platform_app && menu_type == MenuType::kAppList &&
+      extensions::util::IsAppLaunchableWithoutEnabling(app_id, profile()) &&
+      extensions::OptionsPageInfo::HasOptionsPage(extension)) {
+    AddCommandItem(ash::OPTIONS, IDS_NEW_TAB_APP_OPTIONS, menu_items);
+  }
+
+  if (menu_type == MenuType::kShelf &&
+      instance_registry_->ContainsAppId(app_id)) {
+    AddCommandItem(ash::MENU_CLOSE, IDS_SHELF_CONTEXT_MENU_CLOSE, menu_items);
+  }
+
+  const extensions::ManagementPolicy* policy =
+      extensions::ExtensionSystem::Get(profile())->management_policy();
+  DCHECK(policy);
+  if (policy->UserMayModifySettings(extension, nullptr) &&
+      !policy->MustRemainInstalled(extension, nullptr)) {
+    AddCommandItem(ash::UNINSTALL, IDS_APP_LIST_UNINSTALL_ITEM, menu_items);
+  }
+
+  if (extensions::AppDisplayInfo::ShouldDisplayInAppLauncher(*extension)) {
+    AddCommandItem(ash::SHOW_APP_INFO, IDS_APP_CONTEXT_MENU_SHOW_INFO,
+                   menu_items);
+  }
+
+  std::move(callback).Run(std::move(menu_items));
+}
+
+void ExtensionAppsChromeOs::LaunchExtension(const std::string& app_id,
+                                            int32_t event_flags,
+                                            IntentPtr intent,
+                                            LaunchSource launch_source,
+                                            WindowInfoPtr window_info,
+                                            LaunchCallback callback) {
   const auto* extension = MaybeGetExtension(app_id);
   DCHECK(extension);
 
@@ -274,13 +460,13 @@ void ExtensionAppsChromeOs::LaunchExtension(
   file_manager::file_browser_handlers::ExecuteFileBrowserHandler(
       profile(), extension, action_id, file_urls,
       base::BindOnce(
-          [](LaunchAppWithIntentCallback callback,
+          [](LaunchCallback callback,
              extensions::api::file_manager_private::TaskResult result,
              std::string error) {
             bool success =
                 result !=
-                extensions::api::file_manager_private::TASK_RESULT_FAILED;
-            std::move(callback).Run(success);
+                extensions::api::file_manager_private::TaskResult::kFailed;
+            std::move(callback).Run(ConvertBoolToLaunchResult(success));
           },
           std::move(callback)));
 }
@@ -289,11 +475,6 @@ void ExtensionAppsChromeOs::PauseApp(const std::string& app_id) {
   if (paused_apps_.MaybeAddApp(app_id)) {
     SetIconEffect(app_id);
   }
-
-  constexpr bool kPaused = true;
-  PublisherBase::Publish(
-      paused_apps_.GetAppWithPauseStatus(mojom_app_type(), app_id, kPaused),
-      subscribers());
   AppPublisher::Publish(paused_apps_.CreateAppWithPauseStatus(
       app_type(), app_id, /*paused=*/true));
 
@@ -312,10 +493,6 @@ void ExtensionAppsChromeOs::UnpauseApp(const std::string& app_id) {
     SetIconEffect(app_id);
   }
 
-  constexpr bool kPaused = false;
-  PublisherBase::Publish(
-      paused_apps_.GetAppWithPauseStatus(mojom_app_type(), app_id, kPaused),
-      subscribers());
   AppPublisher::Publish(paused_apps_.CreateAppWithPauseStatus(
       app_type(), app_id, /*paused=*/false));
 
@@ -325,58 +502,20 @@ void ExtensionAppsChromeOs::UnpauseApp(const std::string& app_id) {
   app_time->ResumeWebActivity(app_id);
 }
 
-void ExtensionAppsChromeOs::GetMenuModel(const std::string& app_id,
-                                         apps::mojom::MenuType menu_type,
-                                         int64_t display_id,
-                                         GetMenuModelCallback callback) {
-  apps::mojom::MenuItemsPtr menu_items = apps::mojom::MenuItems::New();
-  const auto* extension = MaybeGetExtension(app_id);
+void ExtensionAppsChromeOs::UpdateAppSize(const std::string& app_id) {
+  if (app_type() != AppType::kChromeApp) {
+    return;
+  }
+
+  const extensions::Extension* extension = MaybeGetExtension(app_id);
   if (!extension) {
-    std::move(callback).Run(std::move(menu_items));
     return;
   }
 
-  if (app_id == app_constants::kChromeAppId) {
-    std::move(callback).Run(CreateBrowserMenuItems(profile()));
-    return;
-  }
-
-  bool is_platform_app = extension->is_platform_app();
-  if (!is_platform_app) {
-    CreateOpenNewSubmenu(
-        extensions::GetLaunchType(extensions::ExtensionPrefs::Get(profile()),
-                                  extension) ==
-                extensions::LaunchType::LAUNCH_TYPE_WINDOW
-            ? IDS_APP_LIST_CONTEXT_MENU_NEW_WINDOW
-            : IDS_APP_LIST_CONTEXT_MENU_NEW_TAB,
-        &menu_items);
-  }
-
-  if (!is_platform_app && menu_type == apps::mojom::MenuType::kAppList &&
-      extensions::util::IsAppLaunchableWithoutEnabling(app_id, profile()) &&
-      extensions::OptionsPageInfo::HasOptionsPage(extension)) {
-    AddCommandItem(ash::OPTIONS, IDS_NEW_TAB_APP_OPTIONS, &menu_items);
-  }
-
-  if (menu_type == apps::mojom::MenuType::kShelf &&
-      instance_registry_->ContainsAppId(app_id)) {
-    AddCommandItem(ash::MENU_CLOSE, IDS_SHELF_CONTEXT_MENU_CLOSE, &menu_items);
-  }
-
-  const extensions::ManagementPolicy* policy =
-      extensions::ExtensionSystem::Get(profile())->management_policy();
-  DCHECK(policy);
-  if (policy->UserMayModifySettings(extension, nullptr) &&
-      !policy->MustRemainInstalled(extension, nullptr)) {
-    AddCommandItem(ash::UNINSTALL, IDS_APP_LIST_UNINSTALL_ITEM, &menu_items);
-  }
-
-  if (extension->ShouldDisplayInAppLauncher()) {
-    AddCommandItem(ash::SHOW_APP_INFO, IDS_APP_CONTEXT_MENU_SHOW_INFO,
-                   &menu_items);
-  }
-
-  std::move(callback).Run(std::move(menu_items));
+  extensions::path_util::CalculateExtensionDirectorySize(
+      extension->path(),
+      base::BindOnce(&ExtensionAppsChromeOs::OnSizeCalculated,
+                     weak_factory_.GetWeakPtr(), extension->id()));
 }
 
 void ExtensionAppsChromeOs::OnAppWindowAdded(
@@ -452,8 +591,9 @@ void ExtensionAppsChromeOs::OnExtensionUninstalled(
   paused_apps_.MaybeRemoveApp(extension->id());
 
   auto result = media_requests_.RemoveRequests(extension->id());
-  ModifyCapabilityAccess(subscribers(), extension->id(), result.camera,
-                         result.microphone);
+
+  apps::AppPublisher::ModifyCapabilityAccess(extension->id(), result.camera,
+                                             result.microphone);
 
   ExtensionAppsBase::OnExtensionUninstalled(browser_context, extension, reason);
 }
@@ -481,32 +621,18 @@ void ExtensionAppsChromeOs::OnArcAppListPrefsDestroyed() {
   arc_prefs_ = nullptr;
 }
 
-void ExtensionAppsChromeOs::OnRequestUpdate(
-    int render_process_id,
-    int render_frame_id,
-    blink::mojom::MediaStreamType stream_type,
-    const content::MediaRequestState state) {
-  content::WebContents* web_contents =
-      content::WebContents::FromRenderFrameHost(
-          content::RenderFrameHost::FromID(render_process_id, render_frame_id));
-
-  if (!web_contents) {
-    return;
-  }
-
-  Profile* web_profile =
-      Profile::FromBrowserContext(web_contents->GetBrowserContext());
-  if (web_profile != profile()) {
-    return;
-  }
-
-  absl::optional<web_app::AppId> web_app_id =
-      web_app::FindInstalledAppWithUrlInScope(profile(),
-                                              web_contents->GetVisibleURL(),
-                                              /*window_only=*/false);
-  if (web_app_id.has_value()) {
-    // WebAppsChromeOs is responsible for |app_id|.
-    return;
+void ExtensionAppsChromeOs::OnIsCapturingVideoChanged(
+    content::WebContents* web_contents,
+    bool is_capturing_video) {
+  const webapps::AppId* web_app_id =
+      web_app::WebAppTabHelper::GetAppId(web_contents);
+  if (web_app_id) {
+    if (web_app::WebAppProvider::GetForWebApps(profile()) &&
+        !web_app::IsAppServiceShortcut(
+            *web_app_id, *web_app::WebAppProvider::GetForWebApps(profile()))) {
+      // This media access is coming from a web app.
+      return;
+    }
   }
 
   std::string app_id = app_constants::kChromeAppId;
@@ -520,20 +646,25 @@ void ExtensionAppsChromeOs::OnRequestUpdate(
     app_id = extension->id();
   }
 
-  if (media_requests_.IsNewRequest(app_id, web_contents, state)) {
-    content::WebContentsUserData<AppWebContentsData>::CreateForWebContents(
-        web_contents, this);
-  }
-
-  auto result =
-      media_requests_.UpdateRequests(app_id, web_contents, stream_type, state);
-  ModifyCapabilityAccess(subscribers(), app_id, result.camera,
-                         result.microphone);
+  auto result = media_requests_.UpdateCameraState(app_id, web_contents,
+                                                  is_capturing_video);
+  apps::AppPublisher::ModifyCapabilityAccess(app_id, result.camera,
+                                             result.microphone);
 }
 
-void ExtensionAppsChromeOs::OnWebContentsDestroyed(
-    content::WebContents* web_contents) {
-  DCHECK(web_contents);
+void ExtensionAppsChromeOs::OnIsCapturingAudioChanged(
+    content::WebContents* web_contents,
+    bool is_capturing_audio) {
+  const webapps::AppId* web_app_id =
+      web_app::WebAppTabHelper::GetAppId(web_contents);
+  if (web_app_id) {
+    if (web_app::WebAppProvider::GetForWebApps(profile()) &&
+        !web_app::IsAppServiceShortcut(
+            *web_app_id, *web_app::WebAppProvider::GetForWebApps(profile()))) {
+      // This media access is coming from a web app.
+      return;
+    }
+  }
 
   std::string app_id = app_constants::kChromeAppId;
   extensions::ExtensionRegistry* registry =
@@ -541,14 +672,15 @@ void ExtensionAppsChromeOs::OnWebContentsDestroyed(
   DCHECK(registry);
   const extensions::ExtensionSet& extensions = registry->enabled_extensions();
   const extensions::Extension* extension =
-      extensions.GetAppByURL(web_contents->GetLastCommittedURL());
+      extensions.GetAppByURL(web_contents->GetVisibleURL());
   if (extension && Accepts(extension)) {
     app_id = extension->id();
   }
 
-  auto result = media_requests_.OnWebContentsDestroyed(app_id, web_contents);
-  ModifyCapabilityAccess(subscribers(), app_id, result.camera,
-                         result.microphone);
+  auto result = media_requests_.UpdateMicrophoneState(app_id, web_contents,
+                                                      is_capturing_audio);
+  apps::AppPublisher::ModifyCapabilityAccess(app_id, result.camera,
+                                             result.microphone);
 }
 
 void ExtensionAppsChromeOs::OnNotificationDisplayed(
@@ -577,9 +709,6 @@ void ExtensionAppsChromeOs::OnNotificationClosed(
   app_notifications_.RemoveNotification(notification_id);
 
   for (const auto& app_id : app_ids) {
-    PublisherBase::Publish(
-        app_notifications_.GetAppWithHasBadgeStatus(mojom_app_type(), app_id),
-        subscribers());
     AppPublisher::Publish(
         app_notifications_.CreateAppWithHasBadgeStatus(app_type(), app_id));
   }
@@ -599,9 +728,6 @@ bool ExtensionAppsChromeOs::MaybeAddNotification(
   }
 
   app_notifications_.AddNotification(app_id, notification_id);
-  PublisherBase::Publish(
-      app_notifications_.GetAppWithHasBadgeStatus(mojom_app_type(), app_id),
-      subscribers());
   AppPublisher::Publish(
       app_notifications_.CreateAppWithHasBadgeStatus(app_type(), app_id));
   return true;
@@ -654,7 +780,26 @@ bool ExtensionAppsChromeOs::IsBlocklisted(const std::string& app_id) {
   // In the App Service world, there should be a unique app publisher for any
   // given app. In this case, the ArcApps publisher publishes the Play Store
   // app, and the ExtensionApps publisher does not.
-  return app_id == arc::kPlayStoreAppId;
+  if (app_id == arc::kPlayStoreAppId)
+    return true;
+
+  // If lacros chrome apps is enabled, a small list of extension apps or
+  // extensions on ash extension keeplist is allowed to run in both ash and
+  // lacros, don't publish such app or extension if it is blocked for app
+  // service in ash.
+  if (crosapi::browser_util::IsLacrosChromeAppsEnabled()) {
+    if (extensions::ExtensionAppRunsInBothOSAndStandaloneBrowser(app_id) &&
+        extensions::ExtensionAppBlockListedForAppServiceInOS(app_id)) {
+      return true;
+    }
+
+    if (extensions::ExtensionRunsInBothOSAndStandaloneBrowser(app_id) &&
+        extensions::ExtensionBlockListedForAppServiceInOS(app_id)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 void ExtensionAppsChromeOs::UpdateShowInFields(const std::string& app_id) {
@@ -662,12 +807,6 @@ void ExtensionAppsChromeOs::UpdateShowInFields(const std::string& app_id) {
   if (!extension) {
     return;
   }
-
-  apps::mojom::AppPtr mojom_app = apps::mojom::App::New();
-  mojom_app->app_type = mojom_app_type();
-  mojom_app->app_id = app_id;
-  SetShowInFields(mojom_app, extension);
-  PublisherBase::Publish(std::move(mojom_app), subscribers());
 
   auto app = std::make_unique<App>(app_type(), app_id);
   SetShowInFields(extension, *app);
@@ -685,11 +824,8 @@ void ExtensionAppsChromeOs::OnSystemFeaturesPrefChanged() {
     return;
   }
 
-  const base::Value* disabled_system_features_pref =
+  const base::Value::List& disabled_system_features_pref =
       local_state->GetList(policy::policy_prefs::kSystemFeaturesDisableList);
-  if (!disabled_system_features_pref) {
-    return;
-  }
 
   const bool is_pref_disabled_mode_hidden =
       local_state->GetString(
@@ -705,9 +841,17 @@ void ExtensionAppsChromeOs::OnSystemFeaturesPrefChanged() {
 }
 
 bool ExtensionAppsChromeOs::Accepts(const extensions::Extension* extension) {
+  CHECK(extension);
+
   if (app_type() == AppType::kExtension) {
     if (!extension->is_extension() || IsBlocklisted(extension->id())) {
       return false;
+    }
+
+    // Allow MV3 file handlers.
+    if (extensions::WebFileHandlers::SupportsWebFileHandlers(*extension) &&
+        extensions::WebFileHandlers::HasFileHandlers(*extension)) {
+      return true;
     }
 
     // QuickOffice has file_handlers which we need to register.
@@ -718,7 +862,7 @@ bool ExtensionAppsChromeOs::Accepts(const extensions::Extension* extension) {
     }
 
     // Do not publish extensions in Ash if it should run in Lacros instead.
-    if (!apps::ShouldMuxExtensionIds()) {
+    if (crosapi::browser_util::ShouldEnforceAshExtensionKeepList()) {
       return false;
     }
 
@@ -732,6 +876,13 @@ bool ExtensionAppsChromeOs::Accepts(const extensions::Extension* extension) {
   }
 
   if (!extension->is_app() || IsBlocklisted(extension->id())) {
+    return false;
+  }
+
+  // Do not publish legacy packaged apps in Ash if Lacros is user's primary
+  // browser. Legacy packaged apps are deprecated and not supported by Lacros.
+  if (extension->is_legacy_packaged_app() &&
+      crosapi::browser_util::IsLacrosEnabled()) {
     return false;
   }
 
@@ -752,38 +903,39 @@ bool ExtensionAppsChromeOs::Accepts(const extensions::Extension* extension) {
   return true;
 }
 
+AppLaunchParams ExtensionAppsChromeOs::ModifyAppLaunchParams(
+    const std::string& app_id,
+    LaunchSource launch_source,
+    AppLaunchParams params) {
+  ash::ShelfLaunchSource source = ConvertLaunchSource(launch_source);
+  if ((source == ash::LAUNCH_FROM_APP_LIST ||
+       source == ash::LAUNCH_FROM_APP_LIST_SEARCH) &&
+      app_id == extensions::kWebStoreAppId) {
+    // Get the corresponding source string.
+    std::string source_value = GetSourceFromAppListSource(source);
+
+    // Set an override URL to include the source.
+    const auto* extension = MaybeGetExtension(app_id);
+    DCHECK(extension);
+    GURL extension_url = extensions::AppLaunchInfo::GetFullLaunchURL(extension);
+    params.override_url = net::AppendQueryParameter(
+        extension_url, extension_urls::kWebstoreSourceField, source_value);
+  }
+  return params;
+}
+
 void ExtensionAppsChromeOs::SetShowInFields(
     const extensions::Extension* extension,
     App& app) {
   ExtensionAppsBase::SetShowInFields(extension, app);
 
-  // Explicitly mark AudioPlayer and QuickOffice as being able to handle
-  // intents even though they are otherwise hidden from the user. Otherwise,
-  // extensions are only published if they have file_browser_handlers, which
-  // means they need to handle intents.
-  if (extension->id() == file_manager::kAudioPlayerAppId ||
-      extension_misc::IsQuickOfficeExtension(extension->id()) ||
+  // Explicitly mark QuickOffice as being able to handle intents even though it
+  // is otherwise hidden from the user. Otherwise, extensions are only published
+  // if they have file_browser_handlers, which means they need to handle
+  // intents.
+  if (extension_misc::IsQuickOfficeExtension(extension->id()) ||
       extension->is_extension()) {
     app.handles_intents = true;
-  }
-}
-
-void ExtensionAppsChromeOs::SetShowInFields(
-    apps::mojom::AppPtr& app,
-    const extensions::Extension* extension) {
-  ExtensionAppsBase::SetShowInFields(app, extension);
-
-  // Explicitly mark these apps as being able to handle intents even though they
-  // are otherwise hidden from the user.
-  if (extension->id() == file_manager::kAudioPlayerAppId ||
-      extension_misc::IsQuickOfficeExtension(extension->id())) {
-    app->handles_intents = apps::mojom::OptionalBool::kTrue;
-  }
-
-  // Extensions are only published if they have file_browser_handlers, which
-  // means they need to handle intents.
-  if (extension->is_extension()) {
-    app->handles_intents = apps::mojom::OptionalBool::kTrue;
   }
 }
 
@@ -794,6 +946,7 @@ bool ExtensionAppsChromeOs::ShouldShownInLauncher(
 
 AppPtr ExtensionAppsChromeOs::CreateApp(const extensions::Extension* extension,
                                         Readiness readiness) {
+  CHECK(extension);
   // When Lacros is enabled, extensions not on the ash keep list should not be
   // published to the app service at all. Thus this method should not be called.
   DCHECK(!(extension->is_platform_app() &&
@@ -804,8 +957,7 @@ AppPtr ExtensionAppsChromeOs::CreateApp(const extensions::Extension* extension,
   auto app = CreateAppImpl(
       extension, is_app_disabled ? Readiness::kDisabledByPolicy : readiness);
   bool paused = paused_apps_.IsPaused(extension->id());
-  app->icon_key = std::move(
-      *icon_key_factory().CreateIconKey(GetIconEffects(extension, paused)));
+  app->icon_key = IconKey(GetIconEffects(extension, paused));
 
   if (is_app_disabled && is_disabled_apps_mode_hidden_) {
     app->show_in_launcher = false;
@@ -817,58 +969,23 @@ AppPtr ExtensionAppsChromeOs::CreateApp(const extensions::Extension* extension,
   app->has_badge = app_notifications_.HasNotification(extension->id());
   app->paused = paused;
 
-  bool is_quickoffice = extension->is_extension() &&
-                        extension_misc::IsQuickOfficeExtension(extension->id());
-  if (extension->is_app() || is_quickoffice) {
+  if (extension->is_app() ||
+      extensions::IsLegacyQuickOfficeExtension(*extension)) {
     app->intent_filters = apps_util::CreateIntentFiltersForChromeApp(extension);
   } else if (extension->is_extension()) {
     app->intent_filters = apps_util::CreateIntentFiltersForExtension(extension);
   }
-
   return app;
 }
 
-apps::mojom::AppPtr ExtensionAppsChromeOs::Convert(
-    const extensions::Extension* extension,
-    apps::mojom::Readiness readiness) {
-  // When Lacros is enabled, extensions not on the ash keep list should not be
-  // published to the app service at all. Thus this method should not be called.
-  DCHECK(!(extension->is_platform_app() &&
-           crosapi::browser_util::IsLacrosChromeAppsEnabled() &&
-           !extensions::ExtensionAppRunsInOS(extension->id())));
-  const bool is_app_disabled = base::Contains(disabled_apps_, extension->id());
-
-  apps::mojom::AppPtr app = ConvertImpl(
-      extension,
-      is_app_disabled ? apps::mojom::Readiness::kDisabledByPolicy : readiness);
-  bool paused = paused_apps_.IsPaused(extension->id());
-  app->icon_key =
-      icon_key_factory().MakeIconKey(GetIconEffects(extension, paused));
-
-  app->has_badge = app_notifications_.HasNotification(extension->id())
-                       ? apps::mojom::OptionalBool::kTrue
-                       : apps::mojom::OptionalBool::kFalse;
-  app->paused = paused ? apps::mojom::OptionalBool::kTrue
-                       : apps::mojom::OptionalBool::kFalse;
-
-  if (is_app_disabled && is_disabled_apps_mode_hidden_) {
-    app->show_in_launcher = apps::mojom::OptionalBool::kFalse;
-    app->show_in_search = apps::mojom::OptionalBool::kFalse;
-    app->show_in_shelf = apps::mojom::OptionalBool::kFalse;
-    app->handles_intents = apps::mojom::OptionalBool::kFalse;
-  }
-
-  bool is_quickoffice = extension->is_extension() &&
-                        extension_misc::IsQuickOfficeExtension(extension->id());
-  if (extension->is_app() || is_quickoffice) {
-    base::Extend(app->intent_filters,
-                 apps_util::CreateChromeAppIntentFilters(extension));
-  } else if (extension->is_extension()) {
-    base::Extend(app->intent_filters,
-                 apps_util::CreateExtensionIntentFilters(extension));
-  }
-
-  return app;
+void ExtensionAppsChromeOs::OnSizeCalculated(const std::string& app_id,
+                                             int64_t size) {
+  std::vector<AppPtr> apps;
+  auto app = std::make_unique<apps::App>(app_type(), app_id);
+  app->app_size_in_bytes = size;
+  apps.push_back(std::move(app));
+  AppPublisher::Publish(std::move(apps), app_type(),
+                        /*should_notify_initialized=*/true);
 }
 
 IconEffects ExtensionAppsChromeOs::GetIconEffects(
@@ -911,16 +1028,9 @@ void ExtensionAppsChromeOs::SetIconEffect(const std::string& app_id) {
     return;
   }
 
-  apps::mojom::AppPtr mojom_app = apps::mojom::App::New();
-  mojom_app->app_type = mojom_app_type();
-  mojom_app->app_id = app_id;
-  mojom_app->icon_key = icon_key_factory().MakeIconKey(
-      GetIconEffects(extension, paused_apps_.IsPaused(app_id)));
-  PublisherBase::Publish(std::move(mojom_app), subscribers());
-
   auto app = std::make_unique<App>(app_type(), app_id);
-  app->icon_key = std::move(*icon_key_factory().CreateIconKey(
-      GetIconEffects(extension, paused_apps_.IsPaused(app_id))));
+  app->icon_key =
+      IconKey(GetIconEffects(extension, paused_apps_.IsPaused(app_id)));
   AppPublisher::Publish(std::move(app));
 }
 
@@ -995,12 +1105,12 @@ content::WebContents* ExtensionAppsChromeOs::LaunchImpl(
 }
 
 void ExtensionAppsChromeOs::UpdateAppDisabledState(
-    const base::Value* disabled_system_features_pref,
+    const base::Value::List& disabled_system_features_pref,
     int feature,
     const std::string& app_id,
     bool is_disabled_mode_changed) {
-  const bool is_disabled = base::Contains(
-      disabled_system_features_pref->GetListDeprecated(), base::Value(feature));
+  const bool is_disabled =
+      base::Contains(disabled_system_features_pref, base::Value(feature));
   // Sometimes the policy is updated before the app is installed, so this way
   // the disabled_apps_ is updated regardless the Publish should happen or not
   // and the app will be published with the correct readiness upon its
@@ -1024,10 +1134,6 @@ void ExtensionAppsChromeOs::UpdateAppDisabledState(
     return;
   }
 
-  PublisherBase::Publish(
-      Convert(extension, is_disabled ? apps::mojom::Readiness::kDisabledByPolicy
-                                     : apps::mojom::Readiness::kReady),
-      subscribers());
   AppPublisher::Publish(CreateApp(extension, is_disabled
                                                  ? Readiness::kDisabledByPolicy
                                                  : Readiness::kReady));

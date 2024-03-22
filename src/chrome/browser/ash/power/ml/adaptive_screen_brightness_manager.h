@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "chrome/browser/ash/power/ml/boot_clock.h"
 #include "chrome/browser/ash/power/ml/screen_brightness_event.pb.h"
 #include "chromeos/dbus/power/power_manager_client.h"
@@ -18,6 +18,7 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/viz/public/mojom/compositing/video_detector_observer.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/user_activity/user_activity_detector.h"
 #include "ui/base/user_activity/user_activity_observer.h"
 
@@ -40,7 +41,7 @@ class RecentEventsCounter;
 // periodically and also when the screen brightness changes.
 class AdaptiveScreenBrightnessManager
     : public ui::UserActivityObserver,
-      public PowerManagerClient::Observer,
+      public chromeos::PowerManagerClient::Observer,
       public viz::mojom::VideoDetectorObserver {
  public:
   // Duration of inactivity that marks the end of an activity.
@@ -117,8 +118,8 @@ class AdaptiveScreenBrightnessManager
                           chromeos::PowerManagerClient::Observer>
       power_manager_client_observation_{this};
 
-  AccessibilityManager* const accessibility_manager_;
-  MagnificationManager* const magnification_manager_;
+  const raw_ptr<AccessibilityManager, ExperimentalAsh> accessibility_manager_;
+  const raw_ptr<MagnificationManager, ExperimentalAsh> magnification_manager_;
 
   const mojo::Receiver<viz::mojom::VideoDetectorObserver> receiver_;
 

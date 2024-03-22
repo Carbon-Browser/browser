@@ -1,11 +1,11 @@
-/* Copyright 2022 The Chromium Authors. All rights reserved.
+/* Copyright 2022 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
 /* #css_wrapper_metadata_start
  * #type=style
- * #import=chrome://resources/cr_elements/shared_style_css.m.js
- * #import=chrome://resources/cr_elements/shared_vars_css.m.js
+ * #import=chrome://resources/cr_elements/cr_shared_style.css.js
+ * #import=chrome://resources/cr_elements/cr_shared_vars.css.js
  * #include=cr-shared-style
  * #css_wrapper_metadata_end */
 
@@ -20,20 +20,20 @@
   --profile-item-width: 162px;
 }
 
-html {
-  font-family: roboto;
-}
-
-h2 {
+.title {
   color: var(--cr-primary-text-color);
   font-size: 1.85em;
   font-weight: normal;
+  margin-block-end: 20px;
+  margin-block-start: 20px;
 }
 
-h3 {
+.subtitle {
   color: var(--cr-secondary-text-color);
   font-size: var(--text-font-size);
   font-weight: normal;
+  margin-block-end: 15px;
+  margin-block-start: 15px;
 }
 
 .profile-card-info {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,9 +67,12 @@ message TopicTaxonomy {
 
 message PageTopicsModelMetadata {
   reserved 4;
+  reserved 5;
 
-  // The version of the model sent by the server, and thus, will only be
-  // populated by the server.
+  // The version is specified by the client as what functionality outside the
+  // model the client supports (e.g., pre/post processing). When provided from
+  // the server, it specifies which of these support functions for the model is
+  // expected to use.
   optional int64 version = 1;
   // The supported output.
   //
@@ -81,6 +84,6 @@ message PageTopicsModelMetadata {
   // populated by the server.
   optional PageTopicsOutputPostprocessingParams output_postprocessing_params =
       3;
-  // The taxonomy used by this model.
-  optional TopicTaxonomy topic_taxonomy = 5;
+  // The taxonomy version sent by the client to request the corresponding model.
+  optional int64 taxonomy_version = 6;
 }

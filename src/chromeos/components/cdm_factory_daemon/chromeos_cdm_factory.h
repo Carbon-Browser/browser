@@ -1,18 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_COMPONENTS_CDM_FACTORY_DAEMON_CHROMEOS_CDM_FACTORY_H_
 #define CHROMEOS_COMPONENTS_CDM_FACTORY_DAEMON_CHROMEOS_CDM_FACTORY_H_
 
-#include <vector>
-
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/chromeos_buildflags.h"
+#include "chromeos/components/cdm_factory_daemon/chromeos_cdm_context.h"
 #include "chromeos/components/cdm_factory_daemon/mojom/browser_cdm_factory.mojom.h"
 #include "chromeos/components/cdm_factory_daemon/mojom/cdm_factory_daemon.mojom.h"
 #include "media/base/cdm_config.h"
@@ -55,18 +54,19 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) ChromeOsCdmFactory
       const media::SessionExpirationUpdateCB& session_expiration_update_cb,
       media::CdmCreatedCB cdm_created_cb) override;
 
-  using GetHwConfigDataCB =
-      base::OnceCallback<void(bool success,
-                              const std::vector<uint8_t>& config_data)>;
   // Used to get hardware specific configuration data from the daemon to be used
   // for setting up decrypt+decode in the GPU.
-  static void GetHwConfigData(GetHwConfigDataCB callback);
+  static void GetHwConfigData(ChromeOsCdmContext::GetHwConfigDataCB callback);
 
-  using GetScreenResolutionsCB =
-      base::OnceCallback<void(const std::vector<gfx::Size>& resolutions)>;
   // Used to get screen resolutions from the browser process so we can optimize
   // our decode target size.
-  static void GetScreenResolutions(GetScreenResolutionsCB callback);
+  static void GetScreenResolutions(
+      ChromeOsCdmContext::GetScreenResolutionsCB callback);
+
+  // Allocates a secure buffer with ARM TrustZone for the target of decryption.
+  static void AllocateSecureBuffer(
+      uint32_t size,
+      ChromeOsCdmContext::AllocateSecureBufferCB callback);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Invoked in the OOP Video Decoder utility process to set the Mojo connection

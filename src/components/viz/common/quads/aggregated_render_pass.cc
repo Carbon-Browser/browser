@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/stl_util.h"
 #include "base/trace_event/traced_value.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "base/values.h"
 #include "cc/base/math_util.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
@@ -200,14 +200,27 @@ std::unique_ptr<AggregatedRenderPass> AggregatedRenderPass::DeepCopy() const {
     }
     DCHECK(quad->shared_quad_state == *sqs_iter);
 
-    if (quad->material == DrawQuad::Material::kAggregatedRenderPass) {
-      const auto* pass_quad = AggregatedRenderPassDrawQuad::MaterialCast(quad);
+    if (const auto* pass_quad =
+            quad->DynamicCast<AggregatedRenderPassDrawQuad>()) {
       copy_pass->CopyFromAndAppendRenderPassDrawQuad(pass_quad);
     } else {
       copy_pass->CopyFromAndAppendDrawQuad(quad);
     }
   }
   return copy_pass;
+}
+
+bool AggregatedRenderPass::ShouldDrawWithBlending() const {
+  for (auto* quad : quad_list) {
+    if (quad->ShouldDrawWithBlending()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool AggregatedRenderPass::HasCapture() const {
+  return !copy_requests.empty() || video_capture_enabled;
 }
 
 void AggregatedRenderPass::AsValueInto(
@@ -218,6 +231,8 @@ void AggregatedRenderPass::AsValueInto(
                     base::to_underlying(content_color_usage));
 
   value->SetBoolean("is_color_conversion_pass", is_color_conversion_pass);
+
+  value->SetBoolean("video_capture_enabled", video_capture_enabled);
 
   TracedValue::MakeDictIntoImplicitSnapshotWithCategory(
       TRACE_DISABLED_BY_DEFAULT("viz.quads"), value, "AggregatedRenderPass",

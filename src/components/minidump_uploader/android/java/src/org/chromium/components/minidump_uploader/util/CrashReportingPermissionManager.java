@@ -1,12 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.minidump_uploader.util;
 
-/**
- * Interface for crash reporting permissions.
- */
+/** Interface for crash reporting permissions. */
 public interface CrashReportingPermissionManager {
     /**
      * Checks whether this client is in-sample for usage metrics and crash reporting. See

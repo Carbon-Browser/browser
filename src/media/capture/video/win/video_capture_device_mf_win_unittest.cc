@@ -1,22 +1,28 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <d3d11_4.h>
+#include <ks.h>
+#include <ksmedia.h>
 #include <mfapi.h>
 #include <mferror.h>
 #include <stddef.h>
 #include <wincodec.h>
 
-#include <algorithm>
 #include <cmath>
+#include <memory>
+#include <string>
+#include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/win/scoped_handle.h"
-#include "base/win/windows_version.h"
 #include "media/base/win/mf_helpers.h"
 #include "media/capture/video/win/d3d_capture_test_utils.h"
 #include "media/capture/video/win/sink_filter_win.h"
@@ -59,6 +65,7 @@ constexpr GUID GUID_MEDIA_TYPE_INDEX = {
 
 class MockClient : public VideoCaptureDevice::Client {
  public:
+  void OnCaptureConfigurationChanged() override {}
   void OnIncomingCapturedData(const uint8_t* data,
                               int length,
                               const VideoCaptureFormat& frame_format,
@@ -67,20 +74,20 @@ class MockClient : public VideoCaptureDevice::Client {
                               bool flip_y,
                               base::TimeTicks reference_time,
                               base::TimeDelta timestamp,
-                              int frame_feedback_id = 0) override {}
+                              int frame_feedback_id) override {}
 
   void OnIncomingCapturedGfxBuffer(gfx::GpuMemoryBuffer* buffer,
                                    const VideoCaptureFormat& frame_format,
                                    int clockwise_rotation,
                                    base::TimeTicks reference_time,
                                    base::TimeDelta timestamp,
-                                   int frame_feedback_id = 0) override {}
+                                   int frame_feedback_id) override {}
 
   void OnIncomingCapturedExternalBuffer(
       CapturedExternalVideoBuffer buffer,
-      std::vector<CapturedExternalVideoBuffer> scaled_buffers,
       base::TimeTicks reference_time,
-      base::TimeDelta timestamp) override {}
+      base::TimeDelta timestamp,
+      const gfx::Rect& visible_rect) override {}
 
   MOCK_METHOD4(ReserveOutputBuffer,
                ReserveResult(const gfx::Size&, VideoPixelFormat, int, Buffer*));
@@ -184,8 +191,7 @@ class MockAMCameraControl final : public MockInterface<IAMCameraControl> {
         *flags = CameraControl_Flags_Auto;
         return S_OK;
       default:
-        NOTREACHED();
-        return E_NOTIMPL;
+        NOTREACHED_NORETURN();
     }
   }
   IFACEMETHODIMP GetRange(long property,
@@ -209,8 +215,7 @@ class MockAMCameraControl final : public MockInterface<IAMCameraControl> {
         *caps_flags = CameraControl_Flags_Auto | CameraControl_Flags_Manual;
         return S_OK;
       default:
-        NOTREACHED();
-        return E_NOTIMPL;
+        NOTREACHED_NORETURN();
     }
   }
   IFACEMETHODIMP Set(long property, long value, long flags) override {
@@ -239,8 +244,7 @@ class MockAMVideoProcAmp final : public MockInterface<IAMVideoProcAmp> {
         *flags = VideoProcAmp_Flags_Auto;
         return S_OK;
       default:
-        NOTREACHED();
-        return E_NOTIMPL;
+        NOTREACHED_NORETURN();
     }
   }
   IFACEMETHODIMP GetRange(long property,
@@ -267,8 +271,7 @@ class MockAMVideoProcAmp final : public MockInterface<IAMVideoProcAmp> {
         *caps_flags = VideoProcAmp_Flags_Auto | VideoProcAmp_Flags_Manual;
         return S_OK;
       default:
-        NOTREACHED();
-        return E_NOTIMPL;
+        NOTREACHED_NORETURN();
     }
   }
   IFACEMETHODIMP Set(long property, long value, long flags) override {
@@ -279,9 +282,69 @@ class MockAMVideoProcAmp final : public MockInterface<IAMVideoProcAmp> {
   ~MockAMVideoProcAmp() override = default;
 };
 
-class MockMFMediaSource : public MockInterface<IMFMediaSourceEx> {
+class MockMFExtendedCameraControl final
+    : public MockInterface<IMFExtendedCameraControl> {
+ public:
+  MockMFExtendedCameraControl(ULONG property_id) : property_id_(property_id) {}
+  IFACEMETHODIMP CommitSettings() override { return E_NOTIMPL; }
+  IFACEMETHODIMP_(ULONGLONG) GetCapabilities() override {
+    switch (property_id_) {
+      case KSPROPERTY_CAMERACONTROL_EXTENDED_BACKGROUNDSEGMENTATION:
+        return (KSCAMERA_EXTENDEDPROP_BACKGROUNDSEGMENTATION_OFF |
+                KSCAMERA_EXTENDEDPROP_BACKGROUNDSEGMENTATION_BLUR);
+      case KSPROPERTY_CAMERACONTROL_EXTENDED_DIGITALWINDOW:
+        return (KSCAMERA_EXTENDEDPROP_DIGITALWINDOW_AUTOFACEFRAMING |
+                KSCAMERA_EXTENDEDPROP_DIGITALWINDOW_MANUAL);
+      default:
+        return 0;
+    }
+  }
+  IFACEMETHODIMP_(ULONGLONG) GetFlags() override {
+    switch (property_id_) {
+      case KSPROPERTY_CAMERACONTROL_EXTENDED_BACKGROUNDSEGMENTATION:
+        return KSCAMERA_EXTENDEDPROP_BACKGROUNDSEGMENTATION_OFF;
+      case KSPROPERTY_CAMERACONTROL_EXTENDED_DIGITALWINDOW:
+        return KSCAMERA_EXTENDEDPROP_DIGITALWINDOW_MANUAL;
+      default:
+        return 0;
+    }
+  }
+  IFACEMETHODIMP LockPayload(BYTE** payload, ULONG* payload_size) override {
+    return E_NOTIMPL;
+  }
+  IFACEMETHODIMP SetFlags(ULONGLONG flags) override { return E_NOTIMPL; }
+  IFACEMETHODIMP UnlockPayload() override { return E_NOTIMPL; }
+
+ protected:
+  ~MockMFExtendedCameraControl() override = default;
+
+ private:
+  ULONG property_id_;
+};
+
+class MockMFExtendedCameraController final
+    : public MockInterface<IMFExtendedCameraController> {
+ public:
+  IFACEMETHODIMP GetExtendedCameraControl(
+      DWORD stream_index,
+      ULONG property_id,
+      IMFExtendedCameraControl** control) override {
+    if (stream_index == (DWORD)MF_CAPTURE_ENGINE_MEDIASOURCE) {
+      *control = AddReference(new MockMFExtendedCameraControl(property_id));
+      return S_OK;
+    }
+    return E_NOINTERFACE;
+  }
+
+ protected:
+  ~MockMFExtendedCameraController() override = default;
+};
+
+class MockMFMediaSource final : public MockInterface<IMFMediaSourceEx>,
+                                public IMFGetService {
  public:
   // IUnknown
+  IFACEMETHODIMP_(ULONG) AddRef() override { return MockInterface::AddRef(); }
   IFACEMETHODIMP QueryInterface(REFIID riid, void** object) override {
     if (riid == __uuidof(IAMCameraControl)) {
       *object = AddReference(new MockAMCameraControl);
@@ -291,12 +354,17 @@ class MockMFMediaSource : public MockInterface<IMFMediaSourceEx> {
       *object = AddReference(new MockAMVideoProcAmp);
       return S_OK;
     }
+    if (riid == __uuidof(IMFGetService)) {
+      *object = AddReference(static_cast<IMFGetService*>(this));
+      return S_OK;
+    }
     if (riid == __uuidof(IMFMediaSource)) {
       *object = AddReference(static_cast<IMFMediaSource*>(this));
       return S_OK;
     }
     return MockInterface::QueryInterface(riid, object);
   }
+  IFACEMETHODIMP_(ULONG) Release() override { return MockInterface::Release(); }
   // IMFMediaEventGenerator
   IFACEMETHODIMP GetEvent(DWORD dwFlags, IMFMediaEvent** ppEvent) override {
     return E_NOTIMPL;
@@ -340,6 +408,16 @@ class MockMFMediaSource : public MockInterface<IMFMediaSourceEx> {
     return E_NOTIMPL;
   }
   IFACEMETHODIMP SetD3DManager(IUnknown* manager) { return S_OK; }
+  // IMFGetService
+  IFACEMETHODIMP GetService(REFGUID guidService,
+                            REFIID riid,
+                            void** object) override {
+    if (riid == __uuidof(IMFExtendedCameraController)) {
+      *object = AddReference(new MockMFExtendedCameraController);
+      return S_OK;
+    }
+    return MF_E_UNSUPPORTED_SERVICE;
+  }
 
  private:
   ~MockMFMediaSource() override = default;
@@ -645,23 +723,21 @@ class MockDXGIDeviceManager : public DXGIDeviceManager {
         .WillByDefault([this](Microsoft::WRL::ComPtr<ID3D11Device>* device) {
           return DXGIDeviceManager::ResetDevice(*device);
         });
-    ON_CALL(*this, DoGetDevice).WillByDefault([this]() {
+    ON_CALL(*this, GetDevice).WillByDefault([this]() {
       return DXGIDeviceManager::GetDevice();
     });
   }
 
-  virtual HRESULT ResetDevice(
+  HRESULT ResetDevice(
       Microsoft::WRL::ComPtr<ID3D11Device>& d3d_device) override {
     return DoResetDevice(&d3d_device);
   }
 
+  // Can't use Microsoft::WRL::ComPtr<ID3D11Device>& argument type in a mock
+  // due to interaction with ComPtrRef
   MOCK_METHOD1(DoResetDevice, HRESULT(Microsoft::WRL::ComPtr<ID3D11Device>*));
 
-  virtual Microsoft::WRL::ComPtr<ID3D11Device> GetDevice() {
-    return DoGetDevice();
-  }
-
-  MOCK_METHOD0(DoGetDevice, Microsoft::WRL::ComPtr<ID3D11Device>(void));
+  MOCK_METHOD0(GetDevice, Microsoft::WRL::ComPtr<ID3D11Device>(void));
 
  private:
   ~MockDXGIDeviceManager() override = default;
@@ -705,6 +781,16 @@ class StubMFMediaType : public MockInterface<IMFMediaType> {
       value->uintVal = MFVideoInterlace_Progressive;
       return S_OK;
     }
+    if (key == MF_MT_VIDEO_NOMINAL_RANGE) {
+      value->vt = VT_UI4;
+      value->uintVal = MFNominalRange_0_255;
+      return S_OK;
+    }
+    if (key == MF_MT_VIDEO_PRIMARIES) {
+      value->vt = VT_UI4;
+      value->uintVal = MFVideoPrimaries_BT709;
+      return S_OK;
+    }
     return E_FAIL;
   }
   IFACEMETHODIMP GetItemType(REFGUID guidKey,
@@ -730,6 +816,15 @@ class StubMFMediaType : public MockInterface<IMFMediaType> {
       *value = media_type_index_;
       return S_OK;
     }
+    if (key == MF_MT_VIDEO_NOMINAL_RANGE) {
+      *value = MFNominalRange_0_255;
+      return S_OK;
+    }
+    if (key == MF_MT_VIDEO_PRIMARIES) {
+      *value = MFVideoPrimaries_BT709;
+      return S_OK;
+    }
+
     return E_NOTIMPL;
   }
   IFACEMETHODIMP GetUINT64(REFGUID key, UINT64* value) override {
@@ -1107,16 +1202,6 @@ class VideoCaptureDeviceMFWinTest : public ::testing::Test {
     if (media_foundation_supported_)
       return false;
     DVLOG(1) << "Media foundation is not supported by the current platform. "
-                "Skipping test.";
-    return true;
-  }
-
-  bool ShouldSkipD3D11Test() {
-    // D3D11 is only supported with Media Foundation on Windows 8 or later
-    if (base::win::GetVersion() >= base::win::Version::WIN8)
-      return false;
-    DVLOG(1) << "D3D11 with Media foundation is not supported by the current "
-                "platform. "
                 "Skipping test.";
     return true;
   }
@@ -1784,33 +1869,27 @@ TEST_F(VideoCaptureDeviceMFWinTest, GetPhotoStateViaPhotoStream) {
   EXPECT_EQ(state->height->max, kArbitraryValidPhotoHeight);
 
   EXPECT_EQ(state->supported_white_balance_modes.size(), 2u);
-  EXPECT_EQ(std::count(state->supported_white_balance_modes.begin(),
-                       state->supported_white_balance_modes.end(),
-                       mojom::MeteringMode::CONTINUOUS),
+  EXPECT_EQ(base::ranges::count(state->supported_white_balance_modes,
+                                mojom::MeteringMode::CONTINUOUS),
             1);
-  EXPECT_EQ(std::count(state->supported_white_balance_modes.begin(),
-                       state->supported_white_balance_modes.end(),
-                       mojom::MeteringMode::MANUAL),
+  EXPECT_EQ(base::ranges::count(state->supported_white_balance_modes,
+                                mojom::MeteringMode::MANUAL),
             1);
   EXPECT_EQ(state->current_white_balance_mode, mojom::MeteringMode::CONTINUOUS);
   EXPECT_EQ(state->supported_exposure_modes.size(), 2u);
-  EXPECT_EQ(std::count(state->supported_exposure_modes.begin(),
-                       state->supported_exposure_modes.end(),
-                       mojom::MeteringMode::CONTINUOUS),
+  EXPECT_EQ(base::ranges::count(state->supported_exposure_modes,
+                                mojom::MeteringMode::CONTINUOUS),
             1);
-  EXPECT_EQ(std::count(state->supported_exposure_modes.begin(),
-                       state->supported_exposure_modes.end(),
-                       mojom::MeteringMode::MANUAL),
+  EXPECT_EQ(base::ranges::count(state->supported_exposure_modes,
+                                mojom::MeteringMode::MANUAL),
             1);
   EXPECT_EQ(state->current_exposure_mode, mojom::MeteringMode::CONTINUOUS);
   EXPECT_EQ(state->supported_focus_modes.size(), 2u);
-  EXPECT_EQ(std::count(state->supported_focus_modes.begin(),
-                       state->supported_focus_modes.end(),
-                       mojom::MeteringMode::CONTINUOUS),
+  EXPECT_EQ(base::ranges::count(state->supported_focus_modes,
+                                mojom::MeteringMode::CONTINUOUS),
             1);
-  EXPECT_EQ(std::count(state->supported_focus_modes.begin(),
-                       state->supported_focus_modes.end(),
-                       mojom::MeteringMode::MANUAL),
+  EXPECT_EQ(base::ranges::count(state->supported_focus_modes,
+                                mojom::MeteringMode::MANUAL),
             1);
   EXPECT_EQ(state->current_focus_mode, mojom::MeteringMode::CONTINUOUS);
   EXPECT_EQ(state->points_of_interest.size(), 0u);
@@ -1903,6 +1982,24 @@ TEST_F(VideoCaptureDeviceMFWinTest, GetPhotoStateViaPhotoStream) {
 
   EXPECT_EQ(state->red_eye_reduction, mojom::RedEyeReduction::NEVER);
   EXPECT_EQ(state->fill_light_mode.size(), 0u);
+
+  ASSERT_TRUE(state->supported_background_blur_modes);
+  EXPECT_EQ(state->supported_background_blur_modes->size(), 2u);
+  EXPECT_EQ(base::ranges::count(*state->supported_background_blur_modes,
+                                mojom::BackgroundBlurMode::OFF),
+            1);
+  EXPECT_EQ(base::ranges::count(*state->supported_background_blur_modes,
+                                mojom::BackgroundBlurMode::BLUR),
+            1);
+  EXPECT_EQ(state->background_blur_mode, mojom::BackgroundBlurMode::OFF);
+
+  ASSERT_TRUE(state->supported_face_framing_modes);
+  EXPECT_EQ(2u, state->supported_face_framing_modes->size());
+  EXPECT_EQ(1, base::ranges::count(*state->supported_face_framing_modes,
+                                   mojom::MeteringMode::CONTINUOUS));
+  EXPECT_EQ(1, base::ranges::count(*state->supported_face_framing_modes,
+                                   mojom::MeteringMode::NONE));
+  EXPECT_EQ(mojom::MeteringMode::NONE, state->current_face_framing_mode);
 }
 
 // Given an |IMFCaptureSource| offering a video stream and a photo stream to
@@ -2000,14 +2097,11 @@ TEST_P(DepthCameraDeviceMFWinTest, AllocateAndStartDepthCamera) {
 class VideoCaptureDeviceMFWinTestWithDXGI : public VideoCaptureDeviceMFWinTest {
  protected:
   void SetUp() override {
-    if (ShouldSkipD3D11Test())
-      GTEST_SKIP();
-
     Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> mf_dxgi_device_manager;
     UINT d3d_device_reset_token = 0;
     HRESULT hr = MFCreateDXGIDeviceManager(&d3d_device_reset_token,
                                            &mf_dxgi_device_manager);
-    ASSERT_TRUE(SUCCEEDED(hr));
+    ASSERT_EQ(hr, S_OK);
     dxgi_device_manager_ = new MockDXGIDeviceManager(
         std::move(mf_dxgi_device_manager), d3d_device_reset_token);
     VideoCaptureDeviceMFWinTest::SetUp();
@@ -2069,42 +2163,6 @@ TEST_F(VideoCaptureDeviceMFWinTestWithDXGI, EnsureNV12SinkSubtype) {
   task_environment_.RunUntilIdle();
 }
 
-TEST_F(VideoCaptureDeviceMFWinTestWithDXGI, EnsureNoFakeNV12MediaType) {
-  if (ShouldSkipTest())
-    return;
-
-  PrepareMFDeviceWithVideoStreams(
-      {MFVideoFormat_NV12, MFVideoFormat_MJPG, MFVideoFormat_NV12});
-  // First NV12 format should be ignored as fake (MJPG backed).
-  uint32_t kExpectedMediaTypeIndex = 2;
-  EXPECT_CALL(*(engine_.Get()), OnStartPreview());
-  EXPECT_CALL(*client_, OnStarted());
-
-  EXPECT_CALL(*(capture_source_.get()), DoSetCurrentDeviceMediaType(0, _))
-      .WillOnce(Invoke([kExpectedMediaTypeIndex](DWORD stream_index,
-                                                 IMFMediaType* media_type) {
-        GUID source_video_media_subtype;
-        media_type->GetGUID(MF_MT_SUBTYPE, &source_video_media_subtype);
-        uint32_t media_type_index;
-        media_type->GetUINT32(GUID_MEDIA_TYPE_INDEX, &media_type_index);
-        EXPECT_EQ(media_type_index, kExpectedMediaTypeIndex);
-        return S_OK;
-      }));
-
-  VideoCaptureFormat format(gfx::Size(640, 480), 30, media::PIXEL_FORMAT_NV12);
-  VideoCaptureParams video_capture_params;
-  video_capture_params.requested_format = format;
-
-  task_runner_->PostTask(FROM_HERE, base::BindLambdaForTesting([&] {
-                           device_->AllocateAndStart(video_capture_params,
-                                                     std::move(client_));
-                         }));
-  task_environment_.RunUntilIdle();
-
-  capture_preview_sink_->sample_callback->OnSample(nullptr);
-  task_environment_.RunUntilIdle();
-}
-
 TEST_F(VideoCaptureDeviceMFWinTestWithDXGI, DeliverGMBCaptureBuffers) {
   if (ShouldSkipTest())
     return;
@@ -2130,7 +2188,7 @@ TEST_F(VideoCaptureDeviceMFWinTestWithDXGI, DeliverGMBCaptureBuffers) {
 
   Microsoft::WRL::ComPtr<MockD3D11Device> mock_device(new MockD3D11Device());
 
-  EXPECT_CALL(*dxgi_device_manager_.get(), DoGetDevice)
+  EXPECT_CALL(*dxgi_device_manager_.get(), GetDevice)
       .WillOnce(Return(mock_device));
 
   // Create mock source texture (to be provided to capture device from MF

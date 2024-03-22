@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,8 +48,8 @@ class TracedValue;
 class BASE_EXPORT ProcessMemoryDump {
  public:
   struct BASE_EXPORT MemoryAllocatorDumpEdge {
-    bool operator==(const MemoryAllocatorDumpEdge&) const;
-    bool operator!=(const MemoryAllocatorDumpEdge&) const;
+    friend bool operator==(const MemoryAllocatorDumpEdge&,
+                           const MemoryAllocatorDumpEdge&) = default;
 
     MemoryAllocatorDumpGuid source;
     MemoryAllocatorDumpGuid target;

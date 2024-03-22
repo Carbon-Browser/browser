@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "components/sessions/core/session_types.h"
 #include "components/sync/protocol/session_specifics.pb.h"
 #include "components/sync/protocol/sync_enums.pb.h"
+#include "components/sync_device_info/device_info.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sync_sessions {
@@ -50,7 +51,7 @@ void SetSessionTabFromSyncData(const sync_pb::SessionTab& sync_data,
 // property of the window.
 sync_pb::SessionTab SessionTabToSyncData(
     const sessions::SessionTab& tab,
-    absl::optional<sync_pb::SessionWindow::BrowserType> browser_type);
+    absl::optional<sync_pb::SyncEnums::BrowserType> browser_type);
 
 // A Sync wrapper for a SessionWindow.
 struct SyncedSessionWindow {
@@ -65,7 +66,7 @@ struct SyncedSessionWindow {
   sync_pb::SessionWindow ToSessionWindowProto() const;
 
   // Type of the window. See session_specifics.proto.
-  sync_pb::SessionWindow::BrowserType window_type;
+  sync_pb::SyncEnums::BrowserType window_type;
 
   // The SessionWindow this object wraps.
   sessions::SessionWindow wrapped_window;
@@ -74,7 +75,9 @@ struct SyncedSessionWindow {
 // Defines a synced session for use by session sync. A synced session is a
 // list of windows along with a unique session identifer (tag) and meta-data
 // about the device being synced.
+// TODO(1386119): Change struct to class to follow style guides.
 struct SyncedSession {
+ public:
   SyncedSession();
 
   SyncedSession(const SyncedSession&) = delete;
@@ -82,17 +85,17 @@ struct SyncedSession {
 
   ~SyncedSession();
 
-  // Unique tag for each session.
-  std::string session_tag;
-  // User-visible name
-  std::string session_name;
+  void SetSessionTag(const std::string& session_tag);
 
-  // Type of device this session is from.
-  sync_pb::SyncEnums::DeviceType device_type;
+  const std::string& GetSessionTag() const;
 
-  // Last time this session was modified remotely. This is the max of the header
-  // and all children tab mtimes.
-  base::Time modified_time;
+  void SetSessionName(const std::string& session_name);
+
+  const std::string& GetSessionName() const;
+
+  void SetModifiedTime(const base::Time& modified_time);
+
+  const base::Time& GetModifiedTime() const;
 
   // Map of windows that make up this session.
   std::map<SessionID, std::unique_ptr<SyncedSessionWindow>> windows;
@@ -100,6 +103,32 @@ struct SyncedSession {
   // Convert this object to its protocol buffer equivalent. Shallow conversion,
   // does not create SessionTab protobufs.
   sync_pb::SessionHeader ToSessionHeaderProto() const;
+
+  void SetDeviceTypeAndFormFactor(
+      const sync_pb::SyncEnums::DeviceType& local_device_type,
+      const syncer::DeviceInfo::FormFactor& local_device_form_factor);
+
+  syncer::DeviceInfo::FormFactor GetDeviceFormFactor() const;
+
+ private:
+  // Unique tag for each session.
+  std::string session_tag_;
+
+  // User-visible name
+  std::string session_name_;
+
+  // Last time this session was modified remotely. This is the max of the header
+  // and all children tab mtimes.
+  base::Time modified_time_;
+
+  // Type of device this session is from.
+  // It's used only to populate deprecated device_type by
+  // ToSessionHeaderProto().
+  sync_pb::SyncEnums::DeviceType device_type;
+
+  // Form Factor of device this session is from.
+  syncer::DeviceInfo::FormFactor device_form_factor =
+      syncer::DeviceInfo::FormFactor::kUnknown;
 };
 
 }  // namespace sync_sessions

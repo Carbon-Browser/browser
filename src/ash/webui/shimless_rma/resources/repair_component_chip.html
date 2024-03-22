@@ -1,6 +1,6 @@
 <style include="cr-shared-style shimless-rma-shared shimless-fonts">
   :host {
-    padding: 1px;
+    padding: 2px;
   }
 
   :host([checked]) #componentButton {
@@ -81,8 +81,10 @@
 
 <div id="componentButtonWrapper">
   <cr-button id="componentButton" disabled="[[disabled]]"
-      on-click="onComponentButtonClicked_">
-    <div id="labelDiv">
+      on-click="onComponentButtonClicked_"
+      aria-labelledby="componentName componentIdentifier"
+      aria-pressed$="[[isAriaPressed_(checked)]]">
+    <div id="labelDiv" aria-hidden="true">
       <span id="componentName">[[componentName]]</span>
       <div id="componentIdentifier">[[componentIdentifier]]</div>
     </div>
@@ -94,6 +96,7 @@
     </iron-icon>
   </cr-button>
 </div>
-<paper-tooltip for="componentButtonWrapper" hidden="[[!disabled]]">
+<paper-tooltip for="componentButtonWrapper" hidden="[[!disabled]]"
+    aria-hidden="true">
   [[i18n('undetectedComponentText')]]
 </paper-tooltip>

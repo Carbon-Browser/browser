@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/lacros/crosapi_pref_observer.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chromeos/lacros/lacros_service.h"
 
 CrosapiPrefObserver::CrosapiPrefObserver(crosapi::mojom::PrefPath path,

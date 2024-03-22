@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
+#include "chrome/browser/predictors/lcp_critical_path_predictor/lcp_critical_path_predictor_util.h"
 #include "chrome/browser/predictors/loading_predictor.h"
 #include "chrome/browser/predictors/loading_predictor_factory.h"
 #include "chrome/browser/predictors/predictors_enums.h"
@@ -19,15 +21,19 @@
 #include "chrome/browser/predictors/predictors_switches.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/common/chrome_features.h"
 #include "components/google/core/common/google_util.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
-#include "components/optimization_guide/content/browser/optimization_guide_decider.h"
+#include "components/optimization_guide/core/optimization_guide_decider.h"
 #include "components/optimization_guide/proto/hints.pb.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
+#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/loader/lcp_critical_path_predictor_util.h"
+#include "third_party/blink/public/mojom/lcp_critical_path_predictor/lcp_critical_path_predictor.mojom.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom.h"
 
 using content::BrowserThread;
@@ -40,13 +46,17 @@ constexpr char kLoadingPredictorOptimizationHintsReceiveStatusHistogram[] =
     "LoadingPredictor.OptimizationHintsReceiveStatus";
 
 // Called only for subresources.
+// platform/loader/fetch/README.md in blink contains more details on
+// prioritization as well as links to all of the relevant places in the code
+// where priority is determined. If the priority logic is updated here, be sure
+// to update the other code as needed.
 net::RequestPriority GetRequestPriority(
     network::mojom::RequestDestination request_destination) {
   switch (request_destination) {
     case network::mojom::RequestDestination::kStyle:
-    case network::mojom::RequestDestination::kFont:
       return net::HIGHEST;
 
+    case network::mojom::RequestDestination::kFont:
     case network::mojom::RequestDestination::kScript:
       return net::MEDIUM;
 
@@ -70,6 +80,9 @@ net::RequestPriority GetRequestPriority(
     case network::mojom::RequestDestination::kWorker:
     case network::mojom::RequestDestination::kXslt:
     case network::mojom::RequestDestination::kFencedframe:
+    case network::mojom::RequestDestination::kWebIdentity:
+    case network::mojom::RequestDestination::kDictionary:
+    case network::mojom::RequestDestination::kSpeculationRules:
       return net::LOWEST;
   }
 }
@@ -141,6 +154,52 @@ bool ShouldConsultOptimizationGuide(const GURL& current_main_frame_url,
   // Consult the Optimization Guide on all cross-origin page loads.
   return url::Origin::Create(current_main_frame_url) !=
          url::Origin::Create(previous_main_frame_url);
+}
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class LcppHintStatus {
+  kSucceedToSet = 0,
+  kNoLcppData = 1,
+  kInvalidLcppStat = 2,
+  kConversionFailure = 3,
+  kMaxValue = kConversionFailure,
+};
+
+// Attach LCP Critical Path Predictor hint to NavigationHandle, so that it
+// would be sent to the renderer process upon navigation commit.
+void MaybeSetLCPPNavigationHint(content::NavigationHandle& navigation_handle,
+                                LoadingPredictor& predictor) {
+  if (blink::LcppEnabled()) {
+    const GURL& navigation_url = navigation_handle.GetURL();
+    absl::optional<LcppData> lcpp_data =
+        predictor.resource_prefetch_predictor()->GetLcppData(navigation_url);
+    if (!lcpp_data) {
+      base::UmaHistogramEnumeration(
+          "LoadingPredictor.SetLCPPNavigationHint.Status",
+          LcppHintStatus::kNoLcppData);
+      return;
+    }
+    if (!IsValidLcppStat(lcpp_data->lcpp_stat())) {
+      base::UmaHistogramEnumeration(
+          "LoadingPredictor.SetLCPPNavigationHint.Status",
+          LcppHintStatus::kInvalidLcppStat);
+      return;
+    }
+    absl::optional<blink::mojom::LCPCriticalPathPredictorNavigationTimeHint>
+        hint = ConvertLcppDataToLCPCriticalPathPredictorNavigationTimeHint(
+            *lcpp_data);
+    if (hint) {
+      navigation_handle.SetLCPPNavigationHint(*hint);
+      base::UmaHistogramEnumeration(
+          "LoadingPredictor.SetLCPPNavigationHint.Status",
+          LcppHintStatus::kSucceedToSet);
+    } else {
+      base::UmaHistogramEnumeration(
+          "LoadingPredictor.SetLCPPNavigationHint.Status",
+          LcppHintStatus::kConversionFailure);
+    }
+  }
 }
 
 NavigationId GetNextId() {
@@ -248,6 +307,8 @@ void LoadingPredictorTabHelper::DidStartNavigation(
   if (!IsHandledNavigation(navigation_handle))
     return;
 
+  MaybeSetLCPPNavigationHint(*navigation_handle, *predictor_);
+
   PageData& page_data = PageData::CreateForNavigationHandle(*navigation_handle);
 
   page_data.has_local_preconnect_predictions_for_current_navigation_ =
@@ -273,8 +334,8 @@ void LoadingPredictorTabHelper::DidStartNavigation(
   page_data.last_optimization_guide_prediction_->decision =
       optimization_guide::OptimizationGuideDecision::kUnknown;
 
-  optimization_guide_decider_->CanApplyOptimizationAsync(
-      navigation_handle, optimization_guide::proto::LOADING_PREDICTOR,
+  optimization_guide_decider_->CanApplyOptimization(
+      navigation_handle->GetURL(), optimization_guide::proto::LOADING_PREDICTOR,
       base::BindOnce(
           &LoadingPredictorTabHelper::OnOptimizationGuideDecision,
           weak_ptr_factory_.GetWeakPtr(), base::WrapRefCounted(&page_data),
@@ -290,6 +351,8 @@ void LoadingPredictorTabHelper::DidRedirectNavigation(
 
   if (!IsHandledNavigation(navigation_handle))
     return;
+
+  MaybeSetLCPPNavigationHint(*navigation_handle, *predictor_);
 
   auto* page_data = PageData::GetForNavigationHandle(*navigation_handle);
   // PageData may not be created in DidStartNavigation if IsHandledNavigation()
@@ -311,8 +374,8 @@ void LoadingPredictorTabHelper::DidRedirectNavigation(
     return;
 
   // Get an updated prediction for the navigation.
-  optimization_guide_decider_->CanApplyOptimizationAsync(
-      navigation_handle, optimization_guide::proto::LOADING_PREDICTOR,
+  optimization_guide_decider_->CanApplyOptimization(
+      navigation_handle->GetURL(), optimization_guide::proto::LOADING_PREDICTOR,
       base::BindOnce(
           &LoadingPredictorTabHelper::OnOptimizationGuideDecision,
           weak_ptr_factory_.GetWeakPtr(), base::WrapRefCounted(page_data),
@@ -493,8 +556,10 @@ void LoadingPredictorTabHelper::OnOptimizationGuideDecision(
 
   PreconnectPrediction prediction;
   url::Origin main_frame_origin = url::Origin::Create(main_frame_url);
-  net::NetworkIsolationKey network_isolation_key(main_frame_origin,
-                                                 main_frame_origin);
+  net::SchemefulSite main_frame_site = net::SchemefulSite(main_frame_url);
+  auto network_anonymization_key =
+      net::NetworkAnonymizationKey::CreateSameSite(main_frame_site);
+
   std::set<url::Origin> predicted_origins;
   std::vector<GURL> predicted_subresources;
   const auto lp_metadata = metadata.loading_predictor_metadata();
@@ -510,7 +575,7 @@ void LoadingPredictorTabHelper::OnOptimizationGuideDecision(
       if (ShouldPrefetchDestination(destination)) {
         // TODO(falken): Detect duplicates.
         prediction.prefetch_requests.emplace_back(
-            subresource_url, network_isolation_key, destination);
+            subresource_url, network_anonymization_key, destination);
       }
     } else if (should_add_preconnects_to_prediction) {
       url::Origin subresource_origin = url::Origin::Create(subresource_url);
@@ -523,7 +588,7 @@ void LoadingPredictorTabHelper::OnOptimizationGuideDecision(
         continue;
       predicted_origins.insert(subresource_origin);
       prediction.requests.emplace_back(subresource_origin, 1,
-                                       network_isolation_key);
+                                       network_anonymization_key);
     }
   }
 

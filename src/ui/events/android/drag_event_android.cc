@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ std::unique_ptr<DragEventAndroid> DragEventAndroid::CreateFor(
       new_location + (screen_location() - location());
   JNIEnv* env = AttachCurrentThread();
   return std::make_unique<DragEventAndroid>(env, action_, new_location,
-                                            new_screen_location, mime_types_,
+                                            new_screen_location, *mime_types_,
                                             content_.obj());
 }
 

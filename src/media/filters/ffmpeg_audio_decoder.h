@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "media/base/audio_buffer.h"
@@ -116,7 +116,7 @@ class MEDIA_EXPORT FFmpegAudioDecoder : public AudioDecoder {
 
   std::unique_ptr<AudioDiscardHelper> discard_helper_;
 
-  raw_ptr<MediaLog> media_log_;
+  raw_ptr<MediaLog, DanglingUntriaged> media_log_;
 
   scoped_refptr<AudioBufferMemoryPool> pool_;
 

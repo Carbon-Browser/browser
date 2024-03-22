@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
+#include "ash/constants/ash_pref_names.h"
 #include "ash/shell.h"
 #include "base/strings/pattern.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
@@ -17,6 +18,7 @@
 #include "content/public/test/browser_test.h"
 #include "extensions/browser/extension_host_test_helper.h"
 #include "net/dns/mock_host_resolver.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/events/test/event_generator.h"
 #include "url/url_constants.h"
 
@@ -39,27 +41,25 @@ class AccessibilityLiveSiteTest : public InProcessBrowserTest {
   }
 
   void SetUpInProcessBrowserTestFixture() override {
-    // TODO: this logic currently doesn't work and the test never passes due to
-    // inability to lookup docs.google.com. To avoid depending on external
-    // resources, browser tests don't allow non-local DNS queries by default.
-    // Override this for this specific manual test suite.
-    scoped_refptr<net::RuleBasedHostResolverProc> resolver =
-        new net::RuleBasedHostResolverProc(host_resolver());
-    resolver->AllowDirectLookup("*.google.com");
-    resolver->AllowDirectLookup("*.gstatic.com");
-    mock_host_resolver_override_ =
-        std::make_unique<net::ScopedDefaultHostResolverProc>(resolver.get());
-  }
+    // To avoid depending on external resources, browser tests don't allow
+    // non-local DNS queries by default. Override this for this specific manual
+    // test suite.
+    host_resolver()->AllowDirectLookup("*.google.com");
+    host_resolver()->AllowDirectLookup("*.gstatic.com");
 
-  void TearDownInProcessBrowserTestFixture() override {
-    mock_host_resolver_override_.reset();
+    // Pretend that enhanced network voices dialog has been accepted so that the
+    // dialog does not block.
+    browser()->profile()->GetPrefs()->SetBoolean(
+        prefs::kAccessibilitySelectToSpeakEnhancedVoicesDialogShown, true);
+
+    InProcessBrowserTest::SetUpInProcessBrowserTestFixture();
   }
 
   test::SpeechMonitor speech_monitor_;
   std::unique_ptr<ui::test::EventGenerator> generator_;
 
-  std::unique_ptr<net::ScopedDefaultHostResolverProc>
-      mock_host_resolver_override_;
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // This is a sanity check / integration test that Select-to-speak works

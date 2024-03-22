@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,11 @@
 #include "components/ntp_tiles/most_visited_sites.h"
 #include "components/ntp_tiles/webui/ntp_tiles_internals_message_handler.h"
 #include "components/ntp_tiles/webui/ntp_tiles_internals_message_handler_client.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
 #include "ios/chrome/browser/favicon/favicon_service_factory.h"
-#include "ios/chrome/browser/ntp_tiles/ios_most_visited_sites_factory.h"
-#include "ios/chrome/browser/ntp_tiles/ios_popular_sites_factory.h"
+#include "ios/chrome/browser/ntp_tiles/model/ios_most_visited_sites_factory.h"
+#include "ios/chrome/browser/ntp_tiles/model/ios_popular_sites_factory.h"
+#include "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #include "ios/web/public/thread/web_thread.h"
 #include "ios/web/public/webui/web_ui_ios.h"
 #include "ios/web/public/webui/web_ui_ios_data_source.h"
@@ -50,11 +50,11 @@ class IOSNTPTilesInternalsMessageHandlerBridge
   PrefService* GetPrefs() override;
   using MessageCallback =
       base::RepeatingCallback<void(const base::Value::List&)>;
-  void RegisterMessageCallback(const std::string& message,
+  void RegisterMessageCallback(base::StringPiece message,
                                MessageCallback callback) override;
-  void CallJavascriptFunctionVector(
-      const std::string& name,
-      const std::vector<const base::Value*>& values) override;
+  void CallJavascriptFunctionSpan(
+      base::StringPiece name,
+      base::span<const base::ValueView> values) override;
 
   ntp_tiles::NTPTilesInternalsMessageHandler handler_;
 };
@@ -77,7 +77,6 @@ bool IOSNTPTilesInternalsMessageHandlerBridge::DoesSourceExist(
       return true;
     case ntp_tiles::TileSource::CUSTOM_LINKS:
     case ntp_tiles::TileSource::ALLOWLIST:
-    case ntp_tiles::TileSource::EXPLORE:
       return false;
   }
   NOTREACHED();
@@ -95,14 +94,14 @@ PrefService* IOSNTPTilesInternalsMessageHandlerBridge::GetPrefs() {
 }
 
 void IOSNTPTilesInternalsMessageHandlerBridge::RegisterMessageCallback(
-    const std::string& message,
+    base::StringPiece message,
     MessageCallback callback) {
   web_ui()->RegisterMessageCallback(message, std::move(callback));
 }
 
-void IOSNTPTilesInternalsMessageHandlerBridge::CallJavascriptFunctionVector(
-    const std::string& name,
-    const std::vector<const base::Value*>& values) {
+void IOSNTPTilesInternalsMessageHandlerBridge::CallJavascriptFunctionSpan(
+    base::StringPiece name,
+    base::span<const base::ValueView> values) {
   web_ui()->CallJavascriptFunction(name, values);
 }
 

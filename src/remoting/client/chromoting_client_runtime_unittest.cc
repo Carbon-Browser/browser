@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,13 @@ namespace remoting {
 
 // A simple test that starts and stop the runtime. This tests the runtime
 // operates properly and all threads and message loops are valid.
-TEST(ChromotingClientRuntimeTest, StartAndStop) {
+// TODO(https://crbug.com/1422163): Failing on iOS.
+#if BUILDFLAG(IS_IOS)
+#define MAYBE_StartAndStop DISABLED_StartAndStop
+#else
+#define MAYBE_StartAndStop StartAndStop
+#endif
+TEST(ChromotingClientRuntimeTest, MAYBE_StartAndStop) {
   ChromotingClientRuntime* runtime = ChromotingClientRuntime::GetInstance();
 
   ASSERT_TRUE(runtime);

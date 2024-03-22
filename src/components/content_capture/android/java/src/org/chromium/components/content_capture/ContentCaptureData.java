@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,9 @@ import android.graphics.Rect;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
-/**
- * The class is Java's representative of components/content_capture/common/content_capture_data.h
- */
+/** The class is Java's representative of components/content_capture/common/content_capture_data.h */
 public class ContentCaptureData extends ContentCaptureDataBase {
     private String mValue;
 

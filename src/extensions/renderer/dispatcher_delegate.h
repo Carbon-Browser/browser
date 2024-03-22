@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,6 +47,10 @@ class DispatcherDelegate {
   virtual void InitializeBindingsSystem(
       Dispatcher* dispatcher,
       NativeExtensionBindingsSystem* bindings_system) {}
+
+  // Blink maintains an allowlist for custom element names. This method
+  // provides the delegate the ability to add more names to that allowlist.
+  virtual void EnableCustomElementAllowlist() {}
 };
 
 }  // namespace extensions

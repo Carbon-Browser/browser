@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -94,11 +94,11 @@ void ExtensionSyncEventObserver::OnFileSynced(
     ::sync_file_system::SyncDirection direction) {
   base::Value::List params;
 
-  std::unique_ptr<base::DictionaryValue> entry =
+  absl::optional<base::Value::Dict> entry =
       CreateDictionaryValueForFileSystemEntry(url, file_type);
   if (!entry)
     return;
-  params.Append(base::Value::FromUniquePtrValue(std::move(entry)));
+  params.Append(std::move(*entry));
 
   // Status, SyncAction and any optional notes to go here.
   sync_file_system::FileStatus status_enum =

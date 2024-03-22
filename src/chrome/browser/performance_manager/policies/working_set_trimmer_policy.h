@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,9 +71,7 @@ class WorkingSetTrimmerPolicy : public GraphOwned,
   // Sets the last trim time to TimeTicks::Now().
   void SetLastTrimTimeNow(const ProcessNode* process_node);
 
-  // TrimWorkingSet will trim a ProcessNode's working set, it will return true
-  // on success. This is virtual for testing.
-  virtual bool TrimWorkingSet(const ProcessNode* process_node);
+  virtual void TrimWorkingSet(const ProcessNode* process_node);
 
  private:
   friend class WorkingSetTrimmerPolicyTest;
@@ -82,7 +80,8 @@ class WorkingSetTrimmerPolicy : public GraphOwned,
   void SetLastTrimTime(const ProcessNode* process_node, base::TimeTicks time);
 
   // NodeDataDescriber implementation:
-  base::Value DescribeProcessNodeData(const ProcessNode* node) const override;
+  base::Value::Dict DescribeProcessNodeData(
+      const ProcessNode* node) const override;
 };
 
 }  // namespace policies

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ namespace mojo {
 GenericPendingAssociatedReceiver::GenericPendingAssociatedReceiver() = default;
 
 GenericPendingAssociatedReceiver::GenericPendingAssociatedReceiver(
-    base::StringPiece interface_name,
+    std::string_view interface_name,
     mojo::ScopedInterfaceEndpointHandle handle)
     : interface_name_(std::string(interface_name)),
       handle_(std::move(handle)) {}

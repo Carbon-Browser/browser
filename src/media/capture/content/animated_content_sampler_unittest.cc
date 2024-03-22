@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ class AnimatedContentSamplerTest : public ::testing::Test {
   ~AnimatedContentSamplerTest() override = default;
 
   void SetUp() override {
-    rand_seed_ = static_cast<int>(
+    rand_seed_ = static_cast<uint32_t>(
         (InitialTestTimeTicks() - base::TimeTicks()).InMicroseconds());
     sampler_ = std::make_unique<AnimatedContentSampler>(GetMinCapturePeriod());
   }
@@ -90,10 +90,10 @@ class AnimatedContentSamplerTest : public ::testing::Test {
   // builds.  The following is a very simple, deterministic LCG:
   int NextRandomInt() {
     rand_seed_ = (1103515245 * rand_seed_ + 12345) % (1 << 31);
-    return rand_seed_;
+    return static_cast<int>(rand_seed_);
   }
 
-  int rand_seed_;
+  uint32_t rand_seed_;
   std::unique_ptr<AnimatedContentSampler> sampler_;
 };
 

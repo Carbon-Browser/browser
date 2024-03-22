@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,6 +51,10 @@ struct CC_EXPORT TransformNode {
   // transform node. -1 indicates there are no sticky position constraints.
   int sticky_position_constraint_id;
 
+  // This is the data of the scroll container of the default anchor of an
+  // anchor positioned element. -1 indicates there is no such node.
+  int anchor_position_scrollers_data_id;
+
   // This id determines which 3d rendering context the node is in. 0 is a
   // special value and indicates that the node is not in any 3d rendering
   // context.
@@ -90,7 +94,7 @@ struct CC_EXPORT TransformNode {
 
   bool scrolls : 1;
 
-  bool is_fixed_to_viewport : 1;
+  bool should_undo_overscroll : 1;
 
   bool should_be_snapped : 1;
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "cc/cc_export.h"
 #include "cc/resources/ui_resource_bitmap.h"
 #include "cc/resources/ui_resource_client.h"
@@ -40,12 +39,14 @@ class CC_EXPORT ScopedUIResource : public UIResourceClient {
   // Returns the memory usage of the bitmap.
   size_t EstimateMemoryUsage() const { return bitmap_.SizeInBytes(); }
 
+  bool IsUniquelyOwned() const { return bitmap_.IsUniquelyOwned(); }
+
  protected:
   ScopedUIResource(UIResourceManager* ui_resource_manager,
                    const UIResourceBitmap& bitmap);
 
   UIResourceBitmap bitmap_;
-  raw_ptr<UIResourceManager> ui_resource_manager_;
+  raw_ptr<UIResourceManager, DanglingUntriaged> ui_resource_manager_;
   UIResourceId id_;
 };
 

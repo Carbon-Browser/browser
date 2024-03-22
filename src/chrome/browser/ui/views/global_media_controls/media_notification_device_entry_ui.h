@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 #define CHROME_BROWSER_UI_VIEWS_GLOBAL_MEDIA_CONTROLS_MEDIA_NOTIFICATION_DEVICE_ENTRY_UI_H_
 
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/views/media_router/cast_dialog_sink_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
+#include "components/global_media_controls/public/mojom/device_service.mojom.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/color/color_id.h"
 
 enum class DeviceEntryUIType {
   kAudio = 0,
@@ -62,29 +64,46 @@ class AudioDeviceEntryView : public DeviceEntryUI, public HoverButton {
   bool GetHighlighted() const;
 };
 
-class CastDeviceEntryView : public DeviceEntryUI,
-                            public media_router::CastDialogSinkButton {
+class CastDeviceEntryView : public DeviceEntryUI, public HoverButton {
  public:
   METADATA_HEADER(CastDeviceEntryView);
-  CastDeviceEntryView(
-      base::RepeatingCallback<void(CastDeviceEntryView*)> callback,
-      SkColor foreground_color,
-      SkColor background_color,
-      const media_router::UIMediaSink& sink);
-  ~CastDeviceEntryView() override = default;
+  CastDeviceEntryView(base::RepeatingClosure callback,
+                      SkColor foreground_color,
+                      SkColor background_color,
+                      const global_media_controls::mojom::DevicePtr& device);
+  ~CastDeviceEntryView() override;
 
   // DeviceEntryUI
   void OnColorsChanged(SkColor foreground_color,
                        SkColor background_color) override;
   DeviceEntryUIType GetType() const override;
 
-  // media_router::CastDialogSinkButton
-  void OnFocus() override;
+  std::string GetStatusTextForTest() const;
 
  private:
-  void ChangeCastEntryColor(const media_router::UIMediaSink& sink,
-                            SkColor foreground_color,
-                            SkColor background_color);
+  void ChangeCastEntryColor(SkColor foreground_color, SkColor background_color);
+
+  global_media_controls::mojom::DevicePtr device_;
+};
+
+// This media cast device entry UI only shows on Chrome OS ash and when
+// media::kGlobalMediaControlsCrOSUpdatedUI is enabled.
+class CastDeviceEntryViewAsh : public DeviceEntryUI, public HoverButton {
+ public:
+  METADATA_HEADER(CastDeviceEntryViewAsh);
+  CastDeviceEntryViewAsh(PressedCallback callback,
+                         ui::ColorId foreground_color_id,
+                         ui::ColorId background_color_id,
+                         const global_media_controls::mojom::DevicePtr& device);
+  ~CastDeviceEntryViewAsh() override;
+
+  // DeviceEntryUI
+  void OnColorsChanged(SkColor foreground_color,
+                       SkColor background_color) override {}
+  DeviceEntryUIType GetType() const override;
+
+ private:
+  global_media_controls::mojom::DevicePtr device_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_GLOBAL_MEDIA_CONTROLS_MEDIA_NOTIFICATION_DEVICE_ENTRY_UI_H_

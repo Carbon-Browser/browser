@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "build/buildflag.h"
 #include "crypto/ec_private_key.h"
@@ -20,7 +20,7 @@
 #include "net/base/completion_repeating_callback.h"
 #include "net/base/net_error_details.h"
 #include "net/base/net_export.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/request_priority.h"
 #include "net/http/http_auth.h"
 #include "net/http/http_request_headers.h"
@@ -34,6 +34,7 @@
 #include "net/socket/connection_attempts.h"
 #include "net/ssl/ssl_config_service.h"
 #include "net/websockets/websocket_handshake_stream_base.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -50,8 +51,7 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
     : public HttpTransaction,
       public HttpStreamRequest::Delegate {
  public:
-  HttpNetworkTransaction(RequestPriority priority,
-                         HttpNetworkSession* session);
+  HttpNetworkTransaction(RequestPriority priority, HttpNetworkSession* session);
 
   HttpNetworkTransaction(const HttpNetworkTransaction&) = delete;
   HttpNetworkTransaction& operator=(const HttpNetworkTransaction&) = delete;
@@ -93,6 +93,11 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
   void SetEarlyResponseHeadersCallback(
       ResponseHeadersCallback callback) override;
   void SetResponseHeadersCallback(ResponseHeadersCallback callback) override;
+  void SetModifyRequestHeadersCallback(
+      base::RepeatingCallback<void(net::HttpRequestHeaders*)> callback)
+      override;
+  void SetIsSharedDictionaryReadAllowedCallback(
+      base::RepeatingCallback<bool()> callback) override;
   int ResumeNetworkStart() override;
   void CloseConnectionOnDestruction() override;
 
@@ -130,6 +135,14 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
   FRIEND_TEST_ALL_PREFIXES(HttpNetworkTransactionTest, ResetStateForRestart);
   FRIEND_TEST_ALL_PREFIXES(HttpNetworkTransactionTest,
                            CreateWebSocketHandshakeStream);
+  FRIEND_TEST_ALL_PREFIXES(HttpNetworkTransactionTest,
+                           SetProxyInfoInResponse_Direct);
+  FRIEND_TEST_ALL_PREFIXES(HttpNetworkTransactionTest,
+                           SetProxyInfoInResponse_Proxied);
+  FRIEND_TEST_ALL_PREFIXES(HttpNetworkTransactionTest,
+                           SetProxyInfoInResponse_Empty);
+  FRIEND_TEST_ALL_PREFIXES(HttpNetworkTransactionTest,
+                           SetProxyInfoInResponse_IpProtection);
   FRIEND_TEST_ALL_PREFIXES(SpdyNetworkTransactionTest, WindowUpdateReceived);
   FRIEND_TEST_ALL_PREFIXES(SpdyNetworkTransactionTest, WindowUpdateSent);
   FRIEND_TEST_ALL_PREFIXES(SpdyNetworkTransactionTest, WindowUpdateOverflow);
@@ -261,9 +274,33 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
   // proceed.
   bool CheckMaxRestarts();
 
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class RetryReason {
+    kHttpRequestTimeout = 0,
+    kHttpMisdirectedRequest = 1,
+    kHttp11Required = 2,
+    kSslClientAuthSignatureFailed = 3,
+    kConnectionReset = 4,
+    kConnectionClosed = 5,
+    kConnectionAborted = 6,
+    kSocketNotConnected = 7,
+    kEmptyResponse = 8,
+    kEarlyDataRejected = 9,
+    kWrongVersionOnEarlyData = 10,
+    kHttp2PingFailed = 11,
+    kHttp2ServerRefusedStream = 12,
+    // Entries 13, 14, 15 are removed.
+    kQuicHandshakeFailed = 16,
+    kQuicGoawayRequestCanBeRetried = 17,
+    kQuicProtocolError = 18,
+    kMaxValue = kQuicProtocolError,
+  };
+  static absl::optional<RetryReason> GetRetryReasonForIOError(int error);
+
   // Resets the connection and the request headers for resend.  Called when
   // ShouldResendRequest() is true.
-  void ResetConnectionAndRequestForResend();
+  void ResetConnectionAndRequestForResend(RetryReason retry_reason);
 
   // Sets up the state machine to restart the transaction with auth.
   void PrepareForAuthRestart(HttpAuth::Target target);
@@ -312,6 +349,26 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
 
   void ResumeAfterConnected(int result);
 
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class QuicProtocolErrorRetryStatus {
+    kNoRetryExceededMaxRetries = 0,
+    kNoRetryHeaderReceived = 1,
+    kNoRetryNoAlternativeService = 2,
+    kRetryAltServiceBroken = 3,
+    kRetryAltServiceNotBroken = 4,
+    kMaxValue = kRetryAltServiceNotBroken,
+  };
+
+  void RecordQuicProtocolErrorMetrics(
+      QuicProtocolErrorRetryStatus retry_status);
+
+  void RecordMetricsIfError(int rv);
+  void RecordMetrics(int rv);
+
+  static void SetProxyInfoInResponse(const ProxyInfo& proxy_info,
+                                     HttpResponseInfo* response_info);
+
   scoped_refptr<HttpAuthController>
       auth_controllers_[HttpAuth::AUTH_NUM_TARGETS];
 
@@ -337,7 +394,7 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
 
   // Copied from |request_|, as it's needed after the response body has been
   // read.
-  NetworkIsolationKey network_isolation_key_;
+  NetworkAnonymizationKey network_anonymization_key_;
 
   // |proxy_info_| is the ProxyInfo used by the HttpStreamRequest.
   ProxyInfo proxy_info_;
@@ -355,7 +412,7 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
   // configured in this transaction.
   bool configured_client_cert_for_server_ = false;
 
-  // SSL configuration used for the server and proxy, respectively. Note
+  // SSL configuration used for the server and proxies, respectively. Note
   // |server_ssl_config_| may be updated from the HttpStreamFactory, which will
   // be applied on retry.
   //
@@ -363,7 +420,6 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
   // modifications being idempotent. Address this as part of other work to make
   // sense of SSLConfig (related to https://crbug.com/488043).
   SSLConfig server_ssl_config_;
-  SSLConfig proxy_ssl_config_;
 
   HttpRequestHeaders request_headers_;
 #if BUILDFLAG(ENABLE_REPORTING)
@@ -376,8 +432,8 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
   std::string request_referrer_;
   std::string request_user_agent_;
   int request_reporting_upload_depth_ = 0;
-  base::TimeTicks start_timeticks_;
 #endif
+  base::TimeTicks start_timeticks_;
 
   // The size in bytes of the buffer we use to drain the response body that
   // we want to throw away.  The response body is typically a small error
@@ -431,6 +487,11 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
   ResponseHeadersCallback early_response_headers_callback_;
   ResponseHeadersCallback response_headers_callback_;
 
+  // The callback to modify the request header. They will be called just before
+  // sending the request to the network.
+  base::RepeatingCallback<void(net::HttpRequestHeaders*)>
+      modify_headers_callbacks_;
+
   ConnectionAttempts connection_attempts_;
   IPEndPoint remote_endpoint_;
   // Network error details for this transaction.
@@ -449,6 +510,11 @@ class NET_EXPORT_PRIVATE HttpNetworkTransaction
   size_t num_restarts_ = 0;
 
   bool close_connection_on_destruction_ = false;
+
+  // Set to true when the server required HTTP/1.1 fallback.
+  bool http_1_1_was_required_ = false;
+
+  absl::optional<base::TimeDelta> quic_protocol_error_retry_delay_;
 };
 
 }  // namespace net

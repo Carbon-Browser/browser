@@ -192,7 +192,7 @@ TEST(HashSetTest, HashSetOwnPtr) {
 
   set.clear();
   EXPECT_TRUE(deleted2);
-  EXPECT_TRUE(set.IsEmpty());
+  EXPECT_TRUE(set.empty());
 
   deleted1 = false;
   deleted2 = false;
@@ -217,7 +217,7 @@ TEST(HashSetTest, HashSetOwnPtr) {
     own_ptr1 = inner_set.Take(ptr1);
     EXPECT_EQ(1UL, inner_set.size());
     own_ptr2 = inner_set.TakeAny();
-    EXPECT_TRUE(inner_set.IsEmpty());
+    EXPECT_TRUE(inner_set.empty());
   }
   EXPECT_FALSE(deleted1);
   EXPECT_FALSE(deleted2);
@@ -230,27 +230,27 @@ TEST(HashSetTest, HashSetRefPtr) {
   bool is_deleted = false;
   DummyRefCounted::ref_invokes_count_ = 0;
 
-  scoped_refptr<DummyRefCounted> ptr =
+  scoped_refptr<DummyRefCounted> object =
       base::AdoptRef(new DummyRefCounted(is_deleted));
   EXPECT_EQ(0, DummyRefCounted::ref_invokes_count_);
   HashSet<scoped_refptr<DummyRefCounted>> set;
-  set.insert(ptr);
+  set.insert(object);
   // Referenced only once (to store a copy in the container).
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
 
-  DummyRefCounted* raw_ptr = ptr.get();
+  DummyRefCounted* ptr = object.get();
 
-  EXPECT_TRUE(set.Contains(raw_ptr));
-  EXPECT_NE(set.end(), set.find(raw_ptr));
   EXPECT_TRUE(set.Contains(ptr));
   EXPECT_NE(set.end(), set.find(ptr));
+  EXPECT_TRUE(set.Contains(object));
+  EXPECT_NE(set.end(), set.find(object));
 
-  ptr = nullptr;
+  object = nullptr;
   EXPECT_FALSE(is_deleted);
 
-  set.erase(raw_ptr);
+  set.erase(ptr);
   EXPECT_TRUE(is_deleted);
-  EXPECT_TRUE(set.IsEmpty());
+  EXPECT_TRUE(set.empty());
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
 }
 
@@ -383,7 +383,7 @@ HashSet<int> ReturnOneTwoThreeSet() {
 
 TEST(HashSetTest, InitializerList) {
   HashSet<int> empty({});
-  EXPECT_TRUE(empty.IsEmpty());
+  EXPECT_TRUE(empty.empty());
 
   HashSet<int> one({1});
   EXPECT_EQ(1u, one.size());
@@ -401,7 +401,7 @@ TEST(HashSetTest, InitializerList) {
   one_two_three.insert(9999);
 
   empty = {};
-  EXPECT_TRUE(empty.IsEmpty());
+  EXPECT_TRUE(empty.empty());
 
   one = {1};
   EXPECT_EQ(1u, one.size());

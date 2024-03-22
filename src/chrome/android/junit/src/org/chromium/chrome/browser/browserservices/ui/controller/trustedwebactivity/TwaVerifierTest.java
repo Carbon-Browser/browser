@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,23 +28,21 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.Promise;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.browserservices.verification.OriginVerifier;
-import org.chromium.chrome.browser.browserservices.verification.OriginVerifier.OriginVerificationListener;
-import org.chromium.chrome.browser.browserservices.verification.OriginVerifierFactory;
+import org.chromium.chrome.browser.browserservices.verification.ChromeOriginVerifier;
+import org.chromium.chrome.browser.browserservices.verification.ChromeOriginVerifierFactory;
 import org.chromium.chrome.browser.customtabs.CustomTabIntentDataProvider;
 import org.chromium.chrome.browser.customtabs.content.CustomTabActivityTabProvider;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
+import org.chromium.components.content_relationship_verification.OriginVerifier.OriginVerificationListener;
 import org.chromium.components.embedder_support.util.Origin;
 import org.chromium.components.externalauth.ExternalAuthUtils;
 
 import java.util.Collections;
 
-/**
- * Tests for {@link TwaVerifier}.
- */
+/** Tests for {@link TwaVerifier}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 @DisableFeatures(ChromeFeatureList.TRUSTED_WEB_ACTIVITY_POST_MESSAGE)
@@ -52,25 +50,16 @@ public class TwaVerifierTest {
     private static final String INITIAL_URL = "https://www.initialurl.com/page.html";
     private static final String ADDITIONAL_ORIGIN = "https://www.otherverifiedorigin.com";
     private static final String OTHER_URL = "https://www.notverifiedurl.com/page2.html";
-    private static final String PACKAGE_NAME = "some.package.name";
 
-    @Rule
-    public TestRule mFeaturesProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mFeaturesProcessor = new Features.JUnitProcessor();
 
-    @Mock
-    ActivityLifecycleDispatcher mLifecycleDispatcher;
-    @Mock
-    CustomTabIntentDataProvider mIntentDataProvider;
-    @Mock
-    OriginVerifierFactory mOriginVerifierFactory;
-    @Mock
-    OriginVerifier mOriginVerifier;
-    @Mock
-    CustomTabActivityTabProvider mActivityTabProvider;
-    @Mock
-    ClientPackageNameProvider mClientPackageNameProvider;
-    @Mock
-    ExternalAuthUtils mExternalAuthUtils;
+    @Mock ActivityLifecycleDispatcher mLifecycleDispatcher;
+    @Mock CustomTabIntentDataProvider mIntentDataProvider;
+    @Mock ChromeOriginVerifierFactory mOriginVerifierFactory;
+    @Mock ChromeOriginVerifier mOriginVerifier;
+    @Mock CustomTabActivityTabProvider mActivityTabProvider;
+    @Mock ClientPackageNameProvider mClientPackageNameProvider;
+    @Mock ExternalAuthUtils mExternalAuthUtils;
 
     private TwaVerifier mDelegate;
 
@@ -88,17 +77,24 @@ public class TwaVerifierTest {
         when(mClientPackageNameProvider.get()).thenReturn("some.package.name");
 
         mDelegate =
-                new TwaVerifier(mLifecycleDispatcher, mIntentDataProvider, mOriginVerifierFactory,
-                        mActivityTabProvider, mClientPackageNameProvider, mExternalAuthUtils);
+                new TwaVerifier(
+                        mLifecycleDispatcher,
+                        mIntentDataProvider,
+                        mOriginVerifierFactory,
+                        mActivityTabProvider,
+                        mClientPackageNameProvider,
+                        mExternalAuthUtils);
     }
 
     @Test
     public void verifiedScopeIsOrigin() {
         assertEquals(
                 "https://www.example.com", mDelegate.getVerifiedScope("https://www.example.com"));
-        assertEquals("https://www.example.com",
+        assertEquals(
+                "https://www.example.com",
                 mDelegate.getVerifiedScope("https://www.example.com/page1.html"));
-        assertEquals("https://www.example.com",
+        assertEquals(
+                "https://www.example.com",
                 mDelegate.getVerifiedScope("https://www.example.com/dir/page2.html"));
     }
 

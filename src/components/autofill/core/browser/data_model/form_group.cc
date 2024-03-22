@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,6 @@
 
 namespace autofill {
 
-using structured_address::VerificationStatus;
-
 void FormGroup::GetMatchingTypes(const std::u16string& text,
                                  const std::string& app_locale,
                                  ServerFieldTypeSet* matching_types) const {
@@ -29,7 +27,8 @@ void FormGroup::GetMatchingTypes(const std::u16string& text,
     return;
   }
 
-  std::u16string canonicalized_text = comparator.NormalizeForComparison(text);
+  std::u16string canonicalized_text =
+      AutofillProfileComparator::NormalizeForComparison(text);
   ServerFieldTypeSet types;
   GetSupportedTypes(&types);
   for (auto type : types) {
@@ -46,6 +45,15 @@ void FormGroup::GetNonEmptyTypes(const std::string& app_locale,
   GetSupportedTypes(&types);
   for (auto type : types) {
     if (!GetInfo(AutofillType(type), app_locale).empty())
+      non_empty_types->insert(type);
+  }
+}
+
+void FormGroup::GetNonEmptyRawTypes(ServerFieldTypeSet* non_empty_types) const {
+  ServerFieldTypeSet types;
+  GetSupportedTypes(&types);
+  for (auto type : types) {
+    if (!GetRawInfo(type).empty())
       non_empty_types->insert(type);
   }
 }

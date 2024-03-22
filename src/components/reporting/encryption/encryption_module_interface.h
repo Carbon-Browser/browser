@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <atomic>
 
-#include "base/callback.h"
+#include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
@@ -17,16 +18,16 @@
 
 namespace reporting {
 
+// Feature to enable/disable encryption.
+// By default encryption is enabled and supported by server.
+// Disabled only for testing/stress purposes.
+BASE_DECLARE_FEATURE(kEncryptedReportingFeature);
+
 class EncryptionModuleInterface
     : public base::RefCountedThreadSafe<EncryptionModuleInterface> {
  public:
   // Public key id, as defined by Keystore.
   using PublicKeyId = int32_t;
-
-  // Feature to enable/disable encryption.
-  // By default encryption is enabled and supported by server.
-  // Disabled only for testing/stress purposes.
-  static const char kEncryptedReporting[];
 
   explicit EncryptionModuleInterface(
       base::TimeDelta renew_encryption_key_period = base::Days(1));
@@ -39,11 +40,11 @@ class EncryptionModuleInterface
   // the encrypted string and encryption information. EncryptedRecord then can
   // be further updated by the caller.
   void EncryptRecord(
-      base::StringPiece record,
+      std::string_view record,
       base::OnceCallback<void(StatusOr<EncryptedRecord>)> cb) const;
 
   // Records current public asymmetric key. Makes a not about last update time.
-  void UpdateAsymmetricKey(base::StringPiece new_public_key,
+  void UpdateAsymmetricKey(std::string_view new_public_key,
                            PublicKeyId new_public_key_id,
                            base::OnceCallback<void(Status)> response_cb);
 
@@ -68,12 +69,12 @@ class EncryptionModuleInterface
 
   // Implements EncryptRecord for the actual module.
   virtual void EncryptRecordImpl(
-      base::StringPiece record,
+      std::string_view record,
       base::OnceCallback<void(StatusOr<EncryptedRecord>)> cb) const = 0;
 
   // Implements UpdateAsymmetricKey for the actual module.
   virtual void UpdateAsymmetricKeyImpl(
-      base::StringPiece new_public_key,
+      std::string_view new_public_key,
       PublicKeyId new_public_key_id,
       base::OnceCallback<void(Status)> response_cb) = 0;
 

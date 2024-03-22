@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaNotificationBackgroundAshImpl
   bool UpdateCornerRadius(int top_radius, int bottom_radius) override;
   bool UpdateArtworkMaxWidthPct(double max_width_pct) override;
   void UpdateFavicon(const gfx::ImageSkia& icon) override {}
-  void UpdateDeviceSelectorAvailability(bool availability) override {}
+  void UpdateDeviceSelectorVisibility(bool visible) override {}
   SkColor GetBackgroundColor(const views::View& owner) const override;
   SkColor GetForegroundColor(const views::View& owner) const override;
 

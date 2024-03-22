@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -136,7 +136,7 @@ TEST_F(SchemaMapTest, FilterBundle) {
   scoped_refptr<SchemaMap> schema_map = new SchemaMap(std::move(domain_map));
 
   PolicyBundle bundle;
-  schema_map->FilterBundle(&bundle, /*drop_invalid_component_policies=*/true);
+  schema_map->FilterBundle(bundle, /*drop_invalid_component_policies=*/true);
   const PolicyBundle empty_bundle;
   EXPECT_TRUE(bundle.Equals(empty_bundle));
 
@@ -146,34 +146,34 @@ TEST_F(SchemaMapTest, FilterBundle) {
   expected_bundle.Get(chrome_ns).Set("ChromePolicy", POLICY_LEVEL_MANDATORY,
                                      POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
                                      base::Value("value"), nullptr);
-  bundle.CopyFrom(expected_bundle);
+  bundle = expected_bundle.Clone();
 
   // Unknown components are filtered out.
   PolicyNamespace another_extension_ns(POLICY_DOMAIN_EXTENSIONS, "xyz");
   bundle.Get(another_extension_ns)
       .Set("AnotherExtensionPolicy", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
            POLICY_SOURCE_CLOUD, base::Value("value"), nullptr);
-  schema_map->FilterBundle(&bundle, /*drop_invalid_component_policies=*/true);
+  schema_map->FilterBundle(bundle, /*drop_invalid_component_policies=*/true);
   EXPECT_TRUE(bundle.Equals(expected_bundle));
 
   PolicyNamespace extension_ns(POLICY_DOMAIN_EXTENSIONS, "abc");
   PolicyMap& map = expected_bundle.Get(extension_ns);
-  base::ListValue list;
+  base::Value::List list;
   list.Append("a");
   list.Append("b");
   map.Set("list", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
-          POLICY_SOURCE_CLOUD, list.Clone(), nullptr);
+          POLICY_SOURCE_CLOUD, base::Value(std::move(list)), nullptr);
   map.Set("boolean", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
           POLICY_SOURCE_CLOUD, base::Value(true), nullptr);
   map.Set("integer", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
           POLICY_SOURCE_CLOUD, base::Value(1), nullptr);
   map.Set("double", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
           POLICY_SOURCE_CLOUD, base::Value(1.2), nullptr);
-  base::DictionaryValue dict;
-  dict.SetStringKey("a", "b");
-  dict.SetIntKey("b", 2);
+  base::Value::Dict dict;
+  dict.Set("a", "b");
+  dict.Set("b", 2);
   map.Set("object", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
-          POLICY_SOURCE_CLOUD, dict.Clone(), nullptr);
+          POLICY_SOURCE_CLOUD, base::Value(dict.Clone()), nullptr);
   map.Set("string", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
           POLICY_SOURCE_CLOUD, base::Value("value"), nullptr);
 
@@ -182,7 +182,7 @@ TEST_F(SchemaMapTest, FilterBundle) {
       .Set("Unexpected", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
            POLICY_SOURCE_CLOUD, base::Value("to-be-removed"), nullptr);
 
-  schema_map->FilterBundle(&bundle, /*drop_invalid_component_policies=*/true);
+  schema_map->FilterBundle(bundle, /*drop_invalid_component_policies=*/true);
   // Merged twice so this causes a conflict.
   expected_bundle.Get(chrome_ns)
       .GetMutable("ChromePolicy")
@@ -213,7 +213,7 @@ TEST_F(SchemaMapTest, FilterBundle) {
              POLICY_SOURCE_CLOUD, absl::nullopt,
              std::make_unique<ExternalDataFetcher>(nullptr, std::string()));
 
-  schema_map->FilterBundle(&bundle, /*drop_invalid_component_policies=*/true);
+  schema_map->FilterBundle(bundle, /*drop_invalid_component_policies=*/true);
   EXPECT_TRUE(bundle.Equals(empty_bundle));
 }
 
@@ -271,7 +271,7 @@ TEST_F(SchemaMapTest, LegacyComponents) {
       .Set("Surprise", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
            POLICY_SOURCE_CLOUD, base::Value("value 5"), nullptr);
 
-  schema_map->FilterBundle(&bundle, /*drop_invalid_component_policies=*/true);
+  schema_map->FilterBundle(bundle, /*drop_invalid_component_policies=*/true);
   EXPECT_TRUE(bundle.Equals(expected_bundle));
 }
 
@@ -341,7 +341,7 @@ TEST_F(SchemaMapTest, FilterBundleInvalidatesPolicies) {
       bundle.Get(without_schema_ns).Get("Schemaless");
   ASSERT_TRUE(invalid_policy_entry_2);
 
-  schema_map->FilterBundle(&bundle, /*drop_invalid_component_policies=*/false);
+  schema_map->FilterBundle(bundle, /*drop_invalid_component_policies=*/false);
   EXPECT_TRUE(bundle.Equals(expected_bundle));
   EXPECT_TRUE(invalid_policy_entry_1->ignored());
   EXPECT_TRUE(invalid_policy_entry_2->ignored());

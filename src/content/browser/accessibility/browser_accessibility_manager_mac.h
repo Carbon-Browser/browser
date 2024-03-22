@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,12 +20,13 @@
 namespace content {
 
 class BrowserAccessibilityCocoaBrowserTest;
+class WebAXPlatformTreeManagerDelegate;
 
 class CONTENT_EXPORT BrowserAccessibilityManagerMac
     : public BrowserAccessibilityManager {
  public:
   BrowserAccessibilityManagerMac(const ui::AXTreeUpdate& initial_tree,
-                                 BrowserAccessibilityDelegate* delegate);
+                                 WebAXPlatformTreeManagerDelegate* delegate);
 
   BrowserAccessibilityManagerMac(const BrowserAccessibilityManagerMac&) =
       delete;
@@ -36,15 +37,15 @@ class CONTENT_EXPORT BrowserAccessibilityManagerMac
 
   static ui::AXTreeUpdate GetEmptyDocument();
 
-  BrowserAccessibility* GetFocus() const override;
+  // AXTreeManager overrides.
+  void FireFocusEvent(ui::AXNode* node) override;
 
-  // Implementation of BrowserAccessibilityManager.
-  void FireFocusEvent(BrowserAccessibility* node) override;
+  // BrowserAccessibilityManager overrides.
   void FireBlinkEvent(ax::mojom::Event event_type,
                       BrowserAccessibility* node,
                       int action_request_id) override;
   void FireGeneratedEvent(ui::AXEventGenerator::Event event_type,
-                          BrowserAccessibility* node) override;
+                          const ui::AXNode* node) override;
 
   bool OnAccessibilityEvents(
       const AXEventNotificationDetails& details) override;
@@ -61,17 +62,13 @@ class CONTENT_EXPORT BrowserAccessibilityManagerMac
                               bool root_changed,
                               const std::vector<Change>& changes) override;
 
-  // Returns an autoreleased object.
   NSDictionary* GetUserInfoForSelectedTextChangedNotification();
 
-  // Returns an autoreleased object.
   NSDictionary* GetUserInfoForValueChangedNotification(
       const BrowserAccessibilityCocoa* native_node,
       const std::u16string& deleted_text,
       const std::u16string& inserted_text,
       id edit_text_marker) const;
-
-  void AnnounceActiveDescendant(BrowserAccessibility* node) const;
 
   bool IsInGeneratedEventBatch(ui::AXEventGenerator::Event event_type) const;
 

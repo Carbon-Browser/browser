@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,5 @@ std::string GetDeviceBluetoothName(const std::string& bluetooth_address);
 COMPONENT_EXPORT(ASH_CONSTANTS) bool IsGoogleBrandedDevice();
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the Chrome OS source code
-// directory migration is finished.
-namespace chromeos {
-using ::ash::IsGoogleBrandedDevice;
-}  // namespace chromeos
 
 #endif  // ASH_CONSTANTS_DEVICETYPE_H_

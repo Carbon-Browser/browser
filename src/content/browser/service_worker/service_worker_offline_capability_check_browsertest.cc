@@ -1,20 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/task_traits.h"
 #include "base/test/bind.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_fetch_dispatcher.h"
 #include "content/browser/service_worker/service_worker_version.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
@@ -140,8 +140,9 @@ class FetchEventTestHelper {
     fetch_event_dispatch->fetch_dispatcher =
         std::make_unique<ServiceWorkerFetchDispatcher>(
             std::move(request), network::mojom::RequestDestination::kDocument,
-            base::GenerateGUID() /* client_id */, std::move(version),
-            base::DoNothing() /* prepare callback */, std::move(fetch_callback),
+            base::Uuid::GenerateRandomV4().AsLowercaseString() /* client_id */,
+            std::move(version), base::DoNothing() /* prepare callback */,
+            std::move(fetch_callback),
             fetch_event_dispatch->param_and_expected_result.param
                 .is_offline_capability_check);
     fetch_event_dispatch->fetch_dispatcher->Run();
@@ -182,7 +183,8 @@ class ServiceWorkerOfflineCapabilityCheckBrowserTest
     DCHECK(!version_);
     base::RunLoop run_loop;
     GURL url = embedded_test_server()->GetURL("/service_worker/");
-    blink::StorageKey key = blink::StorageKey(url::Origin::Create(url));
+    const blink::StorageKey key =
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(url));
     wrapper()->context()->registry()->FindRegistrationForScope(
         embedded_test_server()->GetURL("/service_worker/"), key,
         base::BindOnce(&ServiceWorkerOfflineCapabilityCheckBrowserTest::
@@ -224,7 +226,7 @@ class ServiceWorkerOfflineCapabilityCheckBrowserTest
     absl::optional<OfflineCapability> out_offline_capability;
     GURL url = embedded_test_server()->GetURL(path);
     wrapper()->CheckOfflineCapability(
-        url, blink::StorageKey(url::Origin::Create(url)),
+        url, blink::StorageKey::CreateFirstParty(url::Origin::Create(url)),
         base::BindLambdaForTesting(
             [&out_offline_capability, &fetch_run_loop](
                 OfflineCapability offline_capability, int64_t registration_id) {
@@ -613,8 +615,9 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerOfflineCapabilityCheckBrowserTest,
 // Sites with a service worker are identified as supporting offline capability
 // only when it returns a valid response in the offline mode.
 
+// TODO(crbug.com/1365409): Flaky on all platforms.
 IN_PROC_BROWSER_TEST_F(ServiceWorkerOfflineCapabilityCheckBrowserTest,
-                       CheckOfflineCapability) {
+                       DISABLED_CheckOfflineCapability) {
   EXPECT_TRUE(NavigateToURL(shell(),
                             embedded_test_server()->GetURL(
                                 "/service_worker/create_service_worker.html")));

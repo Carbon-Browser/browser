@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,15 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "components/account_manager_core/account.h"
-#include "components/account_manager_core/account_addition_result.h"
+#include "components/account_manager_core/account_upsertion_result.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 AddAccountHelper::AddAccountHelper(
@@ -48,7 +48,7 @@ void AddAccountHelper::Start(
         << " to profile " << profile_path;
     OnShowAddAccountDialogCompleted(
         profile_path,
-        account_manager::AccountAdditionResult::FromAccount(*account));
+        account_manager::AccountUpsertionResult::FromAccount(*account));
   } else {
     account_manager_facade_->ShowAddAccountDialog(
         absl::get<account_manager::AccountManagerFacade::AccountAdditionSource>(
@@ -72,7 +72,7 @@ void AddAccountHelper::UpsertAccountForTesting(
       account, token_value);
   OnShowAddAccountDialogCompleted(
       profile_path,
-      account_manager::AccountAdditionResult::FromAccount(account));
+      account_manager::AccountUpsertionResult::FromAccount(account));
 }
 
 void AddAccountHelper::OnAccountCacheUpdated() {
@@ -87,12 +87,12 @@ void AddAccountHelper::OnAccountCacheUpdated() {
 
 void AddAccountHelper::OnShowAddAccountDialogCompleted(
     const base::FilePath& profile_path,
-    const account_manager::AccountAdditionResult& result) {
+    const account_manager::AccountUpsertionResult& result) {
   DCHECK(!account_);
 
   bool add_account_failure =
       result.status() !=
-          account_manager::AccountAdditionResult::Status::kSuccess ||
+          account_manager::AccountUpsertionResult::Status::kSuccess ||
       result.account()->key.account_type() !=
           account_manager::AccountType::kGaia;
   if (add_account_failure) {
@@ -111,30 +111,24 @@ void AddAccountHelper::OnShowAddAccountDialogCompleted(
         profile_attributes_storage_->ChooseNameForNewProfile(icon_index),
         icon_index,
         /*is_hidden=*/true,
-        base::BindRepeating(&AddAccountHelper::OnNewProfileCreated,
-                            weak_factory_.GetWeakPtr()));
+        base::BindOnce(&AddAccountHelper::OnNewProfileInitialized,
+                       weak_factory_.GetWeakPtr()));
   } else {
     OnShowAddAccountDialogCompletedWithProfilePath(profile_path);
   }
 }
 
-void AddAccountHelper::OnNewProfileCreated(Profile* new_profile,
-                                           Profile::CreateStatus status) {
+void AddAccountHelper::OnNewProfileInitialized(Profile* new_profile) {
   DCHECK(account_);
-  switch (status) {
-    case Profile::CREATE_STATUS_CREATED:
-      // Ignore this, wait for profile to be initialized.
-      return;
-    case Profile::CREATE_STATUS_INITIALIZED:
-      OnShowAddAccountDialogCompletedWithProfilePath(new_profile->GetPath());
-      return;
-    case Profile::CREATE_STATUS_LOCAL_FAIL:
-      NOTREACHED() << "Error creating new profile";
-      profile_path_ = base::FilePath();
-      MaybeCompleteAddAccount();
-      // `this` may be deleted.
-      return;
+  if (!new_profile) {
+    NOTREACHED() << "Error creating new profile";
+    profile_path_ = base::FilePath();
+    MaybeCompleteAddAccount();
+    // `this` may be deleted.
+    return;
   }
+
+  OnShowAddAccountDialogCompletedWithProfilePath(new_profile->GetPath());
 }
 
 void AddAccountHelper::OnShowAddAccountDialogCompletedWithProfilePath(

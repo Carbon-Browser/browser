@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "third_party/perfetto/include/perfetto/tracing/track_event_interned_data_index.h"
 #include "third_party/perfetto/protos/perfetto/trace/interned_data/interned_data.pb.h"
 #include "third_party/perfetto/protos/perfetto/trace/trace.pb.h"
+#include "third_party/perfetto/protos/perfetto/trace/track_event/chrome_mojo_event_info.pbzero.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/log_message.pbzero.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/source_location.pb.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/source_location.pbzero.h"
@@ -35,10 +36,19 @@ std::unique_ptr<perfetto::TracingSession> g_tracing_session;
 constexpr const char kRecordAllCategoryFilter[] = "*";
 #endif
 
-void EnableTrace() {
+void EnableTrace(bool filter_debug_annotations = false) {
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   g_tracing_session = perfetto::Tracing::NewTrace();
-  g_tracing_session->Setup(test::TracingEnvironment::GetDefaultTraceConfig());
+  auto config = test::TracingEnvironment::GetDefaultTraceConfig();
+  if (filter_debug_annotations) {
+    for (auto& data_source : *config.mutable_data_sources()) {
+      perfetto::protos::gen::TrackEventConfig track_event_config;
+      track_event_config.set_filter_debug_annotations(true);
+      data_source.mutable_config()->set_track_event_config_raw(
+          track_event_config.SerializeAsString());
+    }
+  }
+  g_tracing_session->Setup(config);
   g_tracing_session->StartBlocking();
 #else   // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   TraceLog::GetInstance()->SetEnabled(TraceConfig(kRecordAllCategoryFilter, ""),
@@ -116,12 +126,20 @@ struct TestTracePacket : public TracePacketHandle::CompletionListener {
   bool emit_empty_called = false;
 };
 
-TrackEventHandle PrepareTrackEvent(TraceEvent*) {
+TrackEventHandle PrepareTrackEvent(bool filter_debug_annotations) {
   CHECK_NE(g_test_track_event, nullptr) << "TestTrackEvent not set yet";
   g_test_track_event->prepare_called = true;
   return TrackEventHandle(g_test_track_event->event.get(),
                           &g_test_track_event->incremental_state,
-                          g_test_track_event);
+                          g_test_track_event, filter_debug_annotations);
+}
+
+TrackEventHandle PrepareTrackEventWithDebugAnnotations(TraceEvent*) {
+  return PrepareTrackEvent(/*filter_debug_annotations=*/false);
+}
+
+TrackEventHandle PrepareTrackEventFilterDebugAnnotations(TraceEvent*) {
+  return PrepareTrackEvent(/*filter_debug_annotations=*/true);
 }
 
 TracePacketHandle PrepareTracePacket() {
@@ -141,15 +159,15 @@ class TypedTraceEventTest : public testing::Test {
  public:
   TypedTraceEventTest() {
     perfetto::internal::TrackRegistry::InitializeInstance();
-    EnableTypedTraceEvents(&PrepareTrackEvent, &PrepareTracePacket,
-                           &EmitEmptyPacket);
+    EnableTypedTraceEvents(&PrepareTrackEventWithDebugAnnotations,
+                           &PrepareTracePacket, &EmitEmptyPacket);
   }
 
   ~TypedTraceEventTest() override { ResetTypedTraceEventsForTesting(); }
 
   void FlushTrace() {
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
-    perfetto::TrackEvent::Flush();
+    TrackEvent::Flush();
     g_tracing_session->StopBlocking();
     std::vector<char> serialized_data = g_tracing_session->ReadTraceBlocking();
     perfetto::protos::Trace trace;
@@ -269,8 +287,8 @@ TEST_F(TypedTraceEventTest, InternedData) {
     // only attributes that are compared are function_name, file_name and
     // line_number.
     const void* dummy_pc = &iid;
-    base::Location base_location =
-        base::Location("TestFunction", "test.cc", 123, dummy_pc);
+    base::Location base_location = base::Location::CreateForTesting(
+        "TestFunction", "test.cc", 123, dummy_pc);
     TraceSourceLocation location3(base_location);
     size_t iid4 = InternedSourceLocation::Get(&ctx, location3);
     EXPECT_EQ(iid, iid4);
@@ -393,6 +411,49 @@ TEST_F(TypedTraceEventTest, MAYBE_EmptyEvent) {
   EXPECT_FALSE(g_test_trace_packet->emit_empty_called);
   PERFETTO_INTERNAL_ADD_EMPTY_EVENT();
   EXPECT_TRUE(g_test_trace_packet->emit_empty_called);
+
+  CancelTrace();
+}
+
+TEST_F(TypedTraceEventTest, ChromeMojoInterfaceTag) {
+  EnableTrace();
+
+  TRACE_EVENT("cat", "Name", [](perfetto::EventContext ctx) {
+    auto* info = ctx.event()->set_chrome_mojo_event_info();
+    if (!ctx.ShouldFilterDebugAnnotations()) {
+      info->set_mojo_interface_tag("MojoInterface");
+    }
+  });
+  auto track_event = ParseTrackEvent();
+  // Be default, debug annotations are enabled in the tests. So
+  // mojo_interface_tag should be emitted.
+  EXPECT_EQ(track_event.chrome_mojo_event_info().mojo_interface_tag(),
+            "MojoInterface");
+
+  CancelTrace();
+}
+
+class TypedTraceEventFilterDebugAnnotationsTest : public TypedTraceEventTest {
+ public:
+  TypedTraceEventFilterDebugAnnotationsTest() {
+    EnableTypedTraceEvents(&PrepareTrackEventFilterDebugAnnotations,
+                           &PrepareTracePacket, &EmitEmptyPacket);
+  }
+};
+
+TEST_F(TypedTraceEventFilterDebugAnnotationsTest, ChromeMojoInterfaceTag) {
+  EnableTrace(/*filter_debug_annotations=*/true);
+
+  TRACE_EVENT("cat", "Name", [](perfetto::EventContext ctx) {
+    auto* info = ctx.event()->set_chrome_mojo_event_info();
+    if (!ctx.ShouldFilterDebugAnnotations()) {
+      info->set_mojo_interface_tag("MojoInterface");
+    }
+  });
+  auto track_event = ParseTrackEvent();
+  // Debug annotations are disabled. So mojo_interface_tag should not be
+  // emitted.
+  EXPECT_FALSE(track_event.chrome_mojo_event_info().has_mojo_interface_tag());
 
   CancelTrace();
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,14 @@
 #include "content/public/browser/download_utils.h"
 
 namespace content {
+class BrowserContext;
+
 namespace download_utils {
 
 // Determines whether given response would result in a download.
 // Note this doesn't handle the case when a plugin exists for the |mime_type|.
-bool IsDownload(const GURL& url,
+bool IsDownload(BrowserContext* browser_context,
+                const GURL& url,
                 const net::HttpResponseHeaders* headers,
                 const std::string& mime_type);
 

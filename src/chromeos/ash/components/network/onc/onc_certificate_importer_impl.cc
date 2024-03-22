@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,13 @@
 #include <stddef.h>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "base/values.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/onc/network_onc_utils.h"
 #include "chromeos/components/onc/onc_parsed_certificates.h"
@@ -41,9 +37,10 @@ CertificateImporterImpl::CertificateImporterImpl(
 CertificateImporterImpl::~CertificateImporterImpl() = default;
 
 void CertificateImporterImpl::ImportAllCertificatesUserInitiated(
-    const std::vector<OncParsedCertificates::ServerOrAuthorityCertificate>&
+    const std::vector<
+        chromeos::onc::OncParsedCertificates::ServerOrAuthorityCertificate>&
         server_or_authority_certificates,
-    const std::vector<OncParsedCertificates::ClientCertificate>&
+    const std::vector<chromeos::onc::OncParsedCertificates::ClientCertificate>&
         client_certificates,
     DoneCallback done_callback) {
   VLOG(2) << "Importing " << server_or_authority_certificates.size()
@@ -57,7 +54,7 @@ void CertificateImporterImpl::ImportAllCertificatesUserInitiated(
 }
 
 void CertificateImporterImpl::ImportClientCertificates(
-    const std::vector<OncParsedCertificates::ClientCertificate>&
+    const std::vector<chromeos::onc::OncParsedCertificates::ClientCertificate>&
         client_certificates,
     DoneCallback done_callback) {
   VLOG(2) << "Permanently importing " << client_certificates.size()
@@ -78,9 +75,8 @@ void CertificateImporterImpl::RunTaskOnIOTaskRunnerAndCallDoneCallback(
                      weak_factory_.GetWeakPtr(), std::move(done_callback));
 
   // The NSSCertDatabase must be accessed on |io_task_runner_|
-  base::PostTaskAndReplyWithResult(io_task_runner_.get(), FROM_HERE,
-                                   std::move(task),
-                                   std::move(callback_to_this));
+  io_task_runner_->PostTaskAndReplyWithResult(FROM_HERE, std::move(task),
+                                              std::move(callback_to_this));
 }
 
 void CertificateImporterImpl::RunDoneCallback(DoneCallback callback,
@@ -92,13 +88,13 @@ void CertificateImporterImpl::RunDoneCallback(DoneCallback callback,
 
 // static
 bool CertificateImporterImpl::StoreClientCertificates(
-    const std::vector<OncParsedCertificates::ClientCertificate>&
+    const std::vector<chromeos::onc::OncParsedCertificates::ClientCertificate>&
         client_certificates,
     net::NSSCertDatabase* nssdb) {
   bool success = true;
 
-  for (const OncParsedCertificates::ClientCertificate& client_certificate :
-       client_certificates) {
+  for (const chromeos::onc::OncParsedCertificates::ClientCertificate&
+           client_certificate : client_certificates) {
     if (!StoreClientCertificate(client_certificate, nssdb)) {
       success = false;
     } else {
@@ -111,14 +107,15 @@ bool CertificateImporterImpl::StoreClientCertificates(
 
 // static
 bool CertificateImporterImpl::StoreAllCertificatesUserInitiated(
-    const std::vector<OncParsedCertificates::ServerOrAuthorityCertificate>&
+    const std::vector<
+        chromeos::onc::OncParsedCertificates::ServerOrAuthorityCertificate>&
         server_or_authority_certificates,
-    const std::vector<OncParsedCertificates::ClientCertificate>&
+    const std::vector<chromeos::onc::OncParsedCertificates::ClientCertificate>&
         client_certificates,
     net::NSSCertDatabase* nssdb) {
   bool success = true;
 
-  for (const OncParsedCertificates::ServerOrAuthorityCertificate&
+  for (const chromeos::onc::OncParsedCertificates::ServerOrAuthorityCertificate&
            server_or_authority_cert : server_or_authority_certificates) {
     if (!StoreServerOrCaCertificateUserInitiated(server_or_authority_cert,
                                                  nssdb)) {
@@ -136,12 +133,15 @@ bool CertificateImporterImpl::StoreAllCertificatesUserInitiated(
 
 // static
 bool CertificateImporterImpl::StoreServerOrCaCertificateUserInitiated(
-    const OncParsedCertificates::ServerOrAuthorityCertificate& certificate,
+    const chromeos::onc::OncParsedCertificates::ServerOrAuthorityCertificate&
+        certificate,
     net::NSSCertDatabase* nssdb) {
+  PRBool is_perm;
   net::ScopedCERTCertificate x509_cert =
       net::x509_util::CreateCERTCertificateFromX509Certificate(
           certificate.certificate().get());
-  if (!x509_cert.get()) {
+  if (!x509_cert ||
+      CERT_GetCertIsPerm(x509_cert.get(), &is_perm) != SECSuccess) {
     NET_LOG(ERROR) << "Unable to create certificate: " << certificate.guid();
     return false;
   }
@@ -153,9 +153,9 @@ bool CertificateImporterImpl::StoreServerOrCaCertificateUserInitiated(
       (certificate.web_trust_requested() ? net::NSSCertDatabase::TRUSTED_SSL
                                          : net::NSSCertDatabase::TRUST_DEFAULT);
 
-  if (x509_cert.get()->isperm) {
+  if (is_perm) {
     net::CertType net_cert_type =
-        certificate.type() == OncParsedCertificates::
+        certificate.type() == chromeos::onc::OncParsedCertificates::
                                   ServerOrAuthorityCertificate::Type::kServer
             ? net::SERVER_CERT
             : net::CA_CERT;
@@ -181,8 +181,8 @@ bool CertificateImporterImpl::StoreServerOrCaCertificateUserInitiated(
     cert_list.push_back(net::x509_util::DupCERTCertificate(x509_cert.get()));
     net::NSSCertDatabase::ImportCertFailureList failures;
     bool success = false;
-    if (certificate.type() ==
-        OncParsedCertificates::ServerOrAuthorityCertificate::Type::kServer)
+    if (certificate.type() == chromeos::onc::OncParsedCertificates::
+                                  ServerOrAuthorityCertificate::Type::kServer)
       success = nssdb->ImportServerCert(cert_list, trust, &failures);
     else  // Authority cert
       success = nssdb->ImportCACerts(cert_list, trust, &failures);
@@ -206,7 +206,7 @@ bool CertificateImporterImpl::StoreServerOrCaCertificateUserInitiated(
 
 // static
 bool CertificateImporterImpl::StoreClientCertificate(
-    const OncParsedCertificates::ClientCertificate& certificate,
+    const chromeos::onc::OncParsedCertificates::ClientCertificate& certificate,
     net::NSSCertDatabase* nssdb) {
   // Since this has a private key, always use the private module.
   crypto::ScopedPK11Slot private_slot(nssdb->GetPrivateSlot());

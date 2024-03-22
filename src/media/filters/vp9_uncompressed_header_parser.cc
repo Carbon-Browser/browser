@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -1078,14 +1078,6 @@ bool Vp9UncompressedHeaderParser::Parse(const uint8_t* stream,
 
   if (fhdr->IsIntra() || fhdr->error_resilient_mode) {
     SetupPastIndependence(fhdr);
-    if (fhdr->IsKeyframe() || fhdr->error_resilient_mode ||
-        fhdr->reset_frame_context == 3) {
-      for (size_t i = 0; i < kVp9NumFrameContexts; ++i)
-        context_->UpdateFrameContext(i, fhdr->frame_context);
-    } else if (fhdr->reset_frame_context == 2) {
-      context_->UpdateFrameContext(fhdr->frame_context_idx,
-                                   fhdr->frame_context);
-    }
     fhdr->frame_context_idx = 0;
   }
 

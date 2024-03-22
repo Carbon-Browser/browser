@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,18 @@ module.exports = {
     'no-extra-boolean-cast': 'error',
     'no-extra-semi': 'error',
     'no-new-wrappers': 'error',
+    'no-restricted-imports': ['error', {
+      'paths': [{
+        'name':  'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js',
+        'importNames': ['Polymer'],
+        'message': 'Use PolymerElement instead.',
+      },
+      {
+        'name':  '//resources/polymer/v3_0/polymer/polymer_bundled.min.js',
+        'importNames': ['Polymer'],
+        'message': 'Use PolymerElement instead.',
+      }],
+    }],
     'no-restricted-properties': [
       'error',
       {
@@ -51,6 +63,10 @@ module.exports = {
         'message': 'Use ES modules or cr.define() instead',
       },
     ],
+    'no-restricted-syntax': ['error', {
+      'selector': 'CallExpression[callee.object.name=JSON][callee.property.name=parse] > CallExpression[callee.object.name=JSON][callee.property.name=stringify]',
+      'message': 'Don\'t use JSON.parse(JSON.stringify(...)) to clone objects. Use structuredClone() instead.',
+    }],
     'no-throw-literal': 'error',
     'no-trailing-spaces': 'error',
     'no-var': 'error',
@@ -69,7 +85,7 @@ module.exports = {
 
   'overrides': [{
     'files': ['**/*.ts'],
-    'parser': './third_party/node/node_modules/@typescript-eslint/parser',
+    'parser': './third_party/node/node_modules/@typescript-eslint/parser/dist/index.js',
     'plugins': [
       '@typescript-eslint',
     ],
@@ -82,6 +98,14 @@ module.exports = {
         }
       ],
 
+      // https://google.github.io/styleguide/tsguide.html#array-constructor
+      // Note: The rule below only partially enforces the styleguide, since it
+      // it does not flag invocations of the constructor with a single
+      // parameter.
+      'no-array-constructor': 'off',
+      '@typescript-eslint/no-array-constructor': 'error',
+
+      // https://google.github.io/styleguide/tsguide.html#automatic-semicolon-insertion
       'semi': 'off',
       '@typescript-eslint/semi': ['error'],
 
@@ -95,12 +119,36 @@ module.exports = {
          assertionStyle: 'as',
       }],
 
+      // https://google.github.io/styleguide/tsguide.html#interfaces-vs-type-aliases
+      '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
+
+      // https://google.github.io/styleguide/tsguide.html#visibility
+      '@typescript-eslint/explicit-member-accessibility': ['error', {
+        accessibility: 'no-public',
+        overrides: {
+          parameterProperties: 'off',
+        },
+      }],
+
       // https://google.github.io/styleguide/jsguide.html#naming
       '@typescript-eslint/naming-convention': [
         'error',
         {
           selector: ['class', 'interface', 'typeAlias', 'enum', 'typeParameter'],
-          format: ['PascalCase'],
+          format: ['StrictPascalCase'],
+          filter: {
+            regex: '^(' +
+                // Exclude TypeScript defined interfaces HTMLElementTagNameMap
+                // and HTMLElementEventMap.
+                'HTMLElementTagNameMap|HTMLElementEventMap|' +
+                // Exclude native DOM types which are always named like HTML<Foo>Element.
+                'HTML[A-Za-z]{0,}Element|' +
+                // Exclude native DOM interfaces.
+                'UIEvent|UIEventInit|DOMError|' +
+                // Exclude the deprecated WebUIListenerBehavior interface.
+                'WebUIListenerBehavior)$',
+            match: false,
+          },
         },
         {
           selector: 'enumMember',
@@ -108,14 +156,22 @@ module.exports = {
         },
         {
           selector: 'classMethod',
-          format: ['camelCase'],
+          format: ['strictCamelCase'],
           modifiers: ['public'],
         },
         {
           selector: 'classMethod',
-          format: ['camelCase'],
+          format: ['strictCamelCase'],
           modifiers: ['private'],
           trailingUnderscore: 'allow',
+
+          // Disallow the 'Tap_' suffix, in favor of 'Click_' in event handlers.
+          // Note: Unfortunately this ESLint rule does not provide a way to
+          // customize the error message to better inform developers.
+          custom: {
+            regex: '^on[a-zA-Z0-9]+Tap$',
+            match: false,
+          },
         },
         {
           selector: 'classProperty',
@@ -149,6 +205,7 @@ module.exports = {
         },
       ],
 
+      // https://google.github.io/styleguide/tsguide.html#member-property-declarations
       '@typescript-eslint/member-delimiter-style': ['error', {
         multiline: {
           delimiter: 'comma',

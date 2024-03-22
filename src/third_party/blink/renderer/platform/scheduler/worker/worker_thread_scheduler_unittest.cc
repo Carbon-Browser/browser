@@ -1,11 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_thread_scheduler.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/sequence_manager/test/fake_task.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
 #include "base/task/single_thread_task_runner.h"
@@ -15,6 +16,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/scheduler/common/process_state.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/test/fake_frame_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/test/recording_task_time_observer.h"
 
@@ -131,8 +133,8 @@ class WorkerThreadSchedulerForTest : public WorkerThreadScheduler {
       std::move(on_microtask_checkpoint_).Run();
   }
 
-  const base::TickClock* clock_;        // Not owned.
-  Vector<String>* timeline_;            // Not owned.
+  raw_ptr<const base::TickClock, ExperimentalRenderer> clock_;  // Not owned.
+  raw_ptr<Vector<String>, ExperimentalRenderer> timeline_;      // Not owned.
   base::OnceClosure on_microtask_checkpoint_;
 };
 
@@ -146,14 +148,18 @@ class WorkerThreadSchedulerTest : public testing::Test {
             base::sequence_manager::SequenceManagerForTest::Create(
                 nullptr,
                 task_environment_.GetMainThreadTaskRunner(),
-                task_environment_.GetMockTickClock())),
+                task_environment_.GetMockTickClock(),
+                base::sequence_manager::SequenceManager::Settings::Builder()
+                    .SetPrioritySettings(CreatePrioritySettings())
+                    .Build())),
         scheduler_(new WorkerThreadSchedulerForTest(
             sequence_manager_.get(),
             task_environment_.GetMockTickClock(),
             &timeline_)) {
     scheduler_->Init();
     scheduler_->AttachToCurrentThread();
-    default_task_queue_ = scheduler_->CreateTaskQueue("test_tq");
+    default_task_queue_ =
+        scheduler_->CreateTaskQueue(base::sequence_manager::QueueName::TEST_TQ);
     default_task_runner_ =
         default_task_queue_->GetTaskRunnerWithDefaultTaskType();
     idle_task_runner_ = scheduler_->IdleTaskRunner();
@@ -428,11 +434,12 @@ TEST_F(WorkerThreadSchedulerTest, TestMicrotaskCheckpointTiming) {
 
   base::TimeTicks start_time = task_environment_.NowTicks();
   default_task_runner_->PostTask(
-      FROM_HERE, WTF::Bind(&base::test::TaskEnvironment::FastForwardBy,
-                           base::Unretained(&task_environment_), kTaskTime));
+      FROM_HERE,
+      WTF::BindOnce(&base::test::TaskEnvironment::FastForwardBy,
+                    base::Unretained(&task_environment_), kTaskTime));
   scheduler_->set_on_microtask_checkpoint(
-      WTF::Bind(&base::test::TaskEnvironment::FastForwardBy,
-                base::Unretained(&task_environment_), kMicrotaskTime));
+      WTF::BindOnce(&base::test::TaskEnvironment::FastForwardBy,
+                    base::Unretained(&task_environment_), kMicrotaskTime));
 
   RecordingTaskTimeObserver observer;
 
@@ -460,11 +467,12 @@ class FrameSchedulerDelegateWithUkmSourceId : public FrameScheduler::Delegate {
   ukm::UkmRecorder* GetUkmRecorder() override { return nullptr; }
 
   ukm::SourceId GetUkmSourceId() override { return source_id_; }
+  void OnTaskCompleted(base::TimeTicks,
+                       base::TimeTicks) override {}
 
   void UpdateTaskTime(base::TimeDelta time) override {}
 
-  void UpdateBackForwardCacheDisablingFeatures(
-      uint64_t features_mask) override {}
+  void UpdateBackForwardCacheDisablingFeatures(BlockingDetails) override {}
 
   const base::UnguessableToken& GetAgentClusterId() const override {
     return base::UnguessableToken::Null();
@@ -486,7 +494,10 @@ class WorkerThreadSchedulerWithProxyTest : public testing::Test {
             base::sequence_manager::SequenceManagerForTest::Create(
                 nullptr,
                 task_environment_.GetMainThreadTaskRunner(),
-                task_environment_.GetMockTickClock())) {
+                task_environment_.GetMockTickClock(),
+                base::sequence_manager::SequenceManager::Settings::Builder()
+                    .SetPrioritySettings(CreatePrioritySettings())
+                    .Build())) {
     frame_scheduler_delegate_ =
         std::make_unique<FrameSchedulerDelegateWithUkmSourceId>(42);
     frame_scheduler_ = FakeFrameScheduler::Builder()

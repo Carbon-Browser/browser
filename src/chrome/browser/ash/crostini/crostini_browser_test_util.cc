@@ -1,8 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crostini/crostini_browser_test_util.h"
+#include "base/memory/raw_ptr.h"
 
 #include <utility>
 
@@ -71,8 +72,9 @@ class CrostiniBrowserTestChromeBrowserMainExtraParts
   // ash::Shell that AshService needs in order to start.
   void PostProfileInit(Profile* profile, bool is_initial_profile) override {
     // The setup below is intended to run for only the initial profile.
-    if (!is_initial_profile)
+    if (!is_initial_profile) {
       return;
+    }
 
     connection_change_simulator_.SetConnectionType(
         network::mojom::ConnectionType::CONNECTION_WIFI);
@@ -88,8 +90,8 @@ class CrostiniBrowserTestChromeBrowserMainExtraParts
 
   std::unique_ptr<BrowserProcessPlatformPartTestApi>
       browser_process_platform_part_test_api_;
-  component_updater::FakeCrOSComponentManager* cros_component_manager_ptr_ =
-      nullptr;
+  raw_ptr<component_updater::FakeCrOSComponentManager, ExperimentalAsh>
+      cros_component_manager_ptr_ = nullptr;
 
   content::NetworkConnectionChangeSimulator connection_change_simulator_;
 };
@@ -110,14 +112,14 @@ void CrostiniBrowserTestBase::DiskMountImpl(
     const std::string& source_format,
     const std::string& mount_label,
     const std::vector<std::string>& mount_options,
-    chromeos::MountType type,
-    chromeos::MountAccessMode access_mode,
+    ash::MountType type,
+    ash::MountAccessMode access_mode,
     ash::disks::DiskMountManager::MountPathCallback callback) {
-  ash::disks::DiskMountManager::MountPointInfo info(
-      source_path, "/path/to/mount", type, ash::disks::MOUNT_CONDITION_NONE);
-  std::move(callback).Run(chromeos::MountError::MOUNT_ERROR_NONE, info);
+  const ash::disks::DiskMountManager::MountPoint info{source_path,
+                                                      "/path/to/mount", type};
+  std::move(callback).Run(ash::MountError::kSuccess, info);
   dmgr_->NotifyMountEvent(ash::disks::DiskMountManager::MountEvent::MOUNTING,
-                          chromeos::MountError::MOUNT_ERROR_NONE, info);
+                          ash::MountError::kSuccess, info);
 }
 
 void CrostiniBrowserTestBase::CreatedBrowserMainParts(
@@ -126,16 +128,12 @@ void CrostiniBrowserTestBase::CreatedBrowserMainParts(
       static_cast<ChromeBrowserMainParts*>(browser_main_parts);
   extra_parts_ =
       new CrostiniBrowserTestChromeBrowserMainExtraParts(register_termina_);
-  chrome_browser_main_parts->AddParts(base::WrapUnique(extra_parts_));
+  chrome_browser_main_parts->AddParts(base::WrapUnique(extra_parts_.get()));
 }
 
 void CrostiniBrowserTestBase::SetUpOnMainThread() {
   browser()->profile()->GetPrefs()->SetBoolean(
       crostini::prefs::kCrostiniEnabled, true);
-
-  guest_os::GuestOsService::GetForProfile(browser()->profile())
-      ->WaylandServer()
-      ->OverrideServerForTesting(vm_tools::launch::TERMINA, nullptr, {});
 }
 
 void CrostiniBrowserTestBase::SetConnectionType(

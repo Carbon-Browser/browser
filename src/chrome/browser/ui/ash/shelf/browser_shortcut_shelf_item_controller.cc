@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,8 @@
 #include "ash/wm/desks/desks_util.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/app_restore/full_restore_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/ash_util.h"
@@ -27,6 +29,7 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/grit/generated_resources.h"
@@ -89,6 +92,11 @@ BrowserShortcutShelfItemController::~BrowserShortcutShelfItemController() {
   BrowserList::RemoveObserver(this);
 }
 
+// This function is responsible for handling mouse and key events that are
+// triggered when Ash is the Chrome browser and when the browser icon on the
+// shelf is clicked, or when the Alt+N accelerator is triggered for the
+// browser. For SWA and PWA please refer to AppShortcutShelfItemController.
+// For Lacros please refer to BrowserAppShelfItemController.
 void BrowserShortcutShelfItemController::ItemSelected(
     std::unique_ptr<ui::Event> event,
     int64_t display_id,
@@ -109,6 +117,36 @@ void BrowserShortcutShelfItemController::ItemSelected(
   auto items =
       GetAppMenuItems(event ? event->flags() : ui::EF_NONE, filter_predicate);
 
+  // Here we check the implicit assumption that the type of the event that gets
+  // passed in is never ui::ET_KEY_PRESSED. One may find it strange as usually
+  // ui::ET_KEY_RELEASED comes in pair with ui::ET_KEY_PRESSED, i.e, if we need
+  // to handle ui::ET_KEY_RELEASED, then we probably need to handle
+  // ui::ET_KEY_PRESSED too. However this is not the case here. The ui::KeyEvent
+  // that gets passed in is manufactured as an ui::ET_KEY_RELEASED typed
+  // KeyEvent right before being passed in. This is similar to the situations of
+  // AppShortcutShelfItemController and BrowserAppShelfItemController.
+  //
+  // One other thing regarding the KeyEvent here that one may find confusing is
+  // that even though the code here says ET_KEY_RELEASED, one only needs to
+  // conduct a press action (e.g., pressing Alt+1 on a physical device without
+  // letting go) to trigger this ItemSelected() function call. The subsequent
+  // key release action is not required. This naming disparity comes from the
+  // fact that while the key accelerator is triggered and handled by
+  // ui::AcceleratorManager::Process() with a KeyEvent instance as one of its
+  // inputs, further down the callstack, the same KeyEvent instance is not
+  // passed over into ash::Shelf::ActivateShelfItemOnDisplay(). Instead, a new
+  // KeyEvent instance is fabricated inside
+  // ash::Shelf::ActivateShelfItemOnDisplay(), with its type being
+  // ET_KEY_RELEASED, to represent the original KeyEvent, whose type is
+  // ET_KEY_PRESSED.
+  //
+  // The fabrication of the release typed key event was first introduced in this
+  // CL in 2013.
+  // https://chromiumcodereview.appspot.com/14551002/patch/41001/42001
+  //
+  // A bug is filed to track future works for fixing this confusing naming
+  // disparity. https://crbug.com/1473895
+  DCHECK(!(event && event->type() == ui::ET_KEY_PRESSED));
   // In case of a keyboard event, we were called by a hotkey. In that case we
   // activate the next item in line if an item of our list is already active.
   if (event && event->type() == ui::ET_KEY_RELEASED) {
@@ -178,8 +216,17 @@ BrowserShortcutShelfItemController::GetAppMenuItems(
               (browser->profile() && browser->profile()->IsIncognitoProfile())
                   ? IDR_ASH_SHELF_LIST_INCOGNITO_BROWSER
                   : IDR_ASH_SHELF_LIST_BROWSER);
-      items.push_back({static_cast<int>(app_menu_items.size() - 1),
-                       controller->GetAppMenuTitle(tab), icon.AsImageSkia()});
+
+      // Set the title of the app menu item to the browser window title if the
+      // user set one on the window. Otherwise, use the title defined in
+      // ChromeShelfController.
+      std::string browser_title = browser->user_title();
+      std::u16string item_title = browser_title.empty()
+                                      ? controller->GetAppMenuTitle(tab)
+                                      : base::UTF8ToUTF16(browser_title);
+
+      items.push_back({static_cast<int>(app_menu_items.size() - 1), item_title,
+                       icon.AsImageSkia()});
     } else {
       base::RecordAction(
           base::UserMetricsAction("Shelf_BrowserShortcutShelfItem_ShowTabs"));
@@ -228,7 +275,7 @@ void BrowserShortcutShelfItemController::ExecuteCommand(bool from_context_menu,
         tab_strip->CloseAllTabs();
       } else if (tab_strip->ContainsIndex(tab_index)) {
         tab_strip->CloseWebContentsAt(tab_index,
-                                      TabStripModel::CLOSE_USER_GESTURE);
+                                      TabCloseTypes::CLOSE_USER_GESTURE);
       }
     } else {
       multi_user_util::MoveWindowToCurrentDesktop(
@@ -286,8 +333,7 @@ BrowserShortcutShelfItemController::ActivateOrAdvanceToNextBrowser() {
     // If there is more than one suitable browser, we advance to the next if
     // |browser| is already active - or - check the last used browser if it can
     // be used.
-    std::vector<Browser*>::iterator i =
-        std::find(items.begin(), items.end(), browser);
+    std::vector<Browser*>::iterator i = base::ranges::find(items, browser);
     if (i != items.end()) {
       if (browser->window()->IsActive())
         browser = (++i == items.end()) ? items[0] : *i;

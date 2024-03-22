@@ -1,12 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/networking_private/network_config_dbus_constants_linux.h"
 
-namespace extensions {
-
-namespace networking_private {
+namespace extensions::networking_private {
 
 // Network manager API strings.
 const char kNetworkManagerPath[] = "/org/freedesktop/NetworkManager";
@@ -37,6 +35,4 @@ const char kNetworkManagerWpaFlagsProperty[] = "WpaFlags";
 const char kNetworkManagerConnectionConfig80211Wireless[] = "802-11-wireless";
 const char kNetworkManagerConnectionConfigSsid[] = "ssid";
 
-}  // namespace networking_private
-
-}  // namespace extensions
+}  // namespace extensions::networking_private

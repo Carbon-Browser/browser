@@ -1,10 +1,9 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/strings/string_util.h"
 
-#include <ctype.h>
 #include <errno.h>
 #include <math.h>
 #include <stdarg.h>
@@ -14,20 +13,22 @@
 #include <string.h>
 #include <time.h>
 #include <wchar.h>
-#include <wctype.h>
 
-#include <algorithm>
 #include <limits>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
 #include "base/check_op.h"
 #include "base/no_destructor.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/string_util_impl_helpers.h"
 #include "base/strings/string_util_internal.h"
 #include "base/strings/utf_string_conversion_utils.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/third_party/icu/icu_utf.h"
 #include "build/build_config.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -80,14 +81,6 @@ std::string ToUpperASCII(StringPiece str) {
 
 std::u16string ToUpperASCII(StringPiece16 str) {
   return internal::ToUpperASCIIImpl(str);
-}
-
-int CompareCaseInsensitiveASCII(StringPiece a, StringPiece b) {
-  return internal::CompareCaseInsensitiveASCIIT(a, b);
-}
-
-int CompareCaseInsensitiveASCII(StringPiece16 a, StringPiece16 b) {
-  return internal::CompareCaseInsensitiveASCIIT(a, b);
 }
 
 const std::string& EmptyString() {
@@ -241,8 +234,8 @@ bool IsStringASCII(StringPiece16 str) {
   return internal::DoIsStringASCII(str.data(), str.length());
 }
 
-#if defined(WCHAR_T_IS_UTF32)
-bool IsStringASCII(WStringPiece str) {
+#if defined(WCHAR_T_IS_32_BIT)
+bool IsStringASCII(std::wstring_view str) {
   return internal::DoIsStringASCII(str.data(), str.length());
 }
 #endif
@@ -256,7 +249,7 @@ bool IsStringUTF8AllowingNoncharacters(StringPiece str) {
 }
 
 bool EqualsASCII(StringPiece16 str, StringPiece ascii) {
-  return std::equal(ascii.begin(), ascii.end(), str.begin(), str.end());
+  return ranges::equal(ascii, str);
 }
 
 bool StartsWith(StringPiece str,
@@ -398,13 +391,29 @@ std::u16string ReplaceStringPlaceholders(
     StringPiece16 format_string,
     const std::vector<std::u16string>& subst,
     std::vector<size_t>* offsets) {
-  return internal::DoReplaceStringPlaceholders(format_string, subst, offsets);
+  absl::optional<std::u16string> replacement =
+      internal::DoReplaceStringPlaceholders(
+          format_string, subst,
+          /*placeholder_prefix*/ u'$',
+          /*should_escape_multiple_placeholder_prefixes*/ true,
+          /*is_strict_mode*/ false, offsets);
+
+  DCHECK(replacement);
+  return replacement.value();
 }
 
 std::string ReplaceStringPlaceholders(StringPiece format_string,
                                       const std::vector<std::string>& subst,
                                       std::vector<size_t>* offsets) {
-  return internal::DoReplaceStringPlaceholders(format_string, subst, offsets);
+  absl::optional<std::string> replacement =
+      internal::DoReplaceStringPlaceholders(
+          format_string, subst,
+          /*placeholder_prefix*/ '$',
+          /*should_escape_multiple_placeholder_prefixes*/ true,
+          /*is_strict_mode*/ false, offsets);
+
+  DCHECK(replacement);
+  return replacement.value();
 }
 
 std::u16string ReplaceStringPlaceholders(const std::u16string& format_string,
@@ -423,6 +432,11 @@ std::u16string ReplaceStringPlaceholders(const std::u16string& format_string,
 size_t strlcpy(char* dst, const char* src, size_t dst_size) {
   return internal::lcpyT(dst, src, dst_size);
 }
+
+size_t u16cstrlcpy(char16_t* dst, const char16_t* src, size_t dst_size) {
+  return internal::lcpyT(dst, src, dst_size);
+}
+
 size_t wcslcpy(wchar_t* dst, const wchar_t* src, size_t dst_size) {
   return internal::lcpyT(dst, src, dst_size);
 }

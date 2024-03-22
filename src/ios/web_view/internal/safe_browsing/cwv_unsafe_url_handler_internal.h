@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_VIEW_INTERNAL_SAFE_BROWSING_CWV_UNSAFE_URL_HANDLER_INTERNAL_H_
 #define IOS_WEB_VIEW_INTERNAL_SAFE_BROWSING_CWV_UNSAFE_URL_HANDLER_INTERNAL_H_
 
-#import "base/callback.h"
+#import "base/functional/callback.h"
 #import "components/security_interstitials/core/unsafe_resource.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web_view/public/cwv_unsafe_url_handler.h"

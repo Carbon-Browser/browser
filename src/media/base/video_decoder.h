@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_VIDEO_DECODER_H_
 #define MEDIA_BASE_VIDEO_DECODER_H_
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/decoder.h"
 #include "media/base/decoder_status.h"
 #include "media/base/media_export.h"
@@ -20,6 +20,10 @@ class DecoderBuffer;
 class VideoDecoderConfig;
 class VideoFrame;
 
+// Interface for all video decoders.
+//
+// VideoDecoders may be constructed on any thread, after which all calls must
+// occur on a single sequence (which may differ from the construction sequence).
 class MEDIA_EXPORT VideoDecoder : public Decoder {
  public:
   // Callback for Decoder initialization.
@@ -113,6 +117,11 @@ class MEDIA_EXPORT VideoDecoder : public Decoder {
 
   // Returns maximum number of parallel decode requests.
   virtual int GetMaxDecodeRequests() const;
+
+  // If true, the VideoDecoder outputs frames that hold resources which must be
+  // kept alive for as long as the decoder's client needs them. This is only
+  // relevant for VideoDecoders owned directly by the MojoVideoDecoderService.
+  virtual bool FramesHoldExternalResources() const;
 
   // Returns the recommended number of threads for software video decoding. If
   // the --video-threads command line option is specified and is valid, that

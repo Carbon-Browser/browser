@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 #import <Foundation/Foundation.h>
 
 class Browser;
+@protocol DiscoverFeedManageDelegate;
 @protocol DiscoverFeedPreviewDelegate;
+@protocol FeedSignInPromoDelegate;
 @protocol UIScrollViewDelegate;
 
 // Configuration object used to create and configure a
@@ -23,6 +25,12 @@ class Browser;
 
 // DiscoverFeedPreviewDelegate used by Discover Feed ViewController.
 @property(nonatomic, weak) id<DiscoverFeedPreviewDelegate> previewDelegate;
+
+// DiscoverFeedManageDelegate used by Discover Feed ViewController.
+@property(nonatomic, weak) id<DiscoverFeedManageDelegate> manageDelegate;
+
+// FeedSignInPromoDelegate used by Discover Feed ViewController.
+@property(nonatomic, weak) id<FeedSignInPromoDelegate> signInPromoDelegate;
 
 @end
 

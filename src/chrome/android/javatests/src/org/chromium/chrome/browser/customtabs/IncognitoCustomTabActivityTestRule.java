@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,12 +30,13 @@ public class IncognitoCustomTabActivityTestRule extends CustomTabActivityTestRul
     private boolean mCustomSessionInitiatedForIntent;
 
     @Rule
-    private final TestRule mModuleOverridesRule = new ModuleOverridesRule().setOverride(
-            AppHooksModule.Factory.class, AppHooksModuleForTest::new);
+    private final TestRule mModuleOverridesRule =
+            new ModuleOverridesRule()
+                    .setOverride(AppHooksModule.Factory.class, AppHooksModuleForTest::new);
 
     /**
-     * To load a fake module in tests we need to bypass a check if package name of module
-     * is Google-signed. This class overrides this check for testing.
+     * To load a fake module in tests we need to bypass a check if package name of module is
+     * Google-signed. This class overrides this check for testing.
      */
     class AppHooksModuleForTest extends AppHooksModule {
         @Override

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/hash/sha1.h"
 #include "base/logging.h"
 #include "base/path_service.h"
@@ -32,8 +32,8 @@ namespace {
 // Computes the SHA-1 of input string, and returns it as an ASCII-encoded string
 // of hex characters.
 std::string SHA1HexEncode(const std::string& in) {
-  std::string raw_sha1 = base::SHA1HashString(in);
-  return base::ToLowerASCII(base::HexEncode(raw_sha1.c_str(), raw_sha1.size()));
+  return base::ToLowerASCII(
+      base::HexEncode(base::SHA1HashSpan(base::as_bytes(base::make_span(in)))));
 }
 
 const char kStartHeader[] = "x-goog-resumable";

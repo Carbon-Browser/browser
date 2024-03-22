@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,12 +24,22 @@
 #include "extensions/common/extension_id.h"
 #include "url/gurl.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
 // Constants defining the IDs for the localized strings sent to the page as
 // load time data.
+extern const char kManagementScreenCaptureEvent[];
+extern const char kManagementScreenCaptureData[];
+#endif  // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+extern const char kManagementDeviceSignalsDisclosure[];
+#endif  // #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+
+#if BUILDFLAG(IS_CHROMEOS)
 extern const char kManagementLogUploadEnabled[];
 extern const char kManagementReportActivityTimes[];
 extern const char kManagementReportDeviceAudioStatus[];
+extern const char kManagementReportDeviceGraphicsStatus[];
 extern const char kManagementReportDevicePeripherals[];
 extern const char kManagementReportNetworkData[];
 extern const char kManagementReportHardwareData[];
@@ -45,7 +55,9 @@ extern const char kManagementCrostini[];
 extern const char kManagementCrostiniContainerConfiguration[];
 extern const char kManagementReportExtensions[];
 extern const char kManagementReportAndroidApplications[];
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+extern const char kManagementOnFileTransferEvent[];
+extern const char kManagementOnFileTransferVisibleData[];
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 extern const char kOnPremReportingExtensionStableId[];
 extern const char kOnPremReportingExtensionBetaId[];
@@ -76,6 +88,8 @@ extern const char kManagementOnPrintVisibleData[];
 extern const char kManagementOnPageVisitedEvent[];
 extern const char kManagementOnPageVisitedVisibleData[];
 
+extern const char kManagementLegacyTechReport[];
+
 extern const char kPolicyKeyReportMachineIdData[];
 extern const char kPolicyKeyReportUserIdData[];
 extern const char kPolicyKeyReportVersionData[];
@@ -90,6 +104,7 @@ extern const char kReportingTypeExtensions[];
 extern const char kReportingTypeSecurity[];
 extern const char kReportingTypeUser[];
 extern const char kReportingTypeUserActivity[];
+extern const char kReportingTypeLegacyTech[];
 
 namespace extensions {
 class Extension;
@@ -97,11 +112,16 @@ class Extension;
 
 namespace policy {
 class DeviceCloudPolicyManagerAsh;
-class DlpRulesManager;
 class PolicyService;
 class StatusCollector;
 class SystemLogUploader;
 }  // namespace policy
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+namespace device_signals {
+class UserPermissionService;
+}  // namespace device_signals
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 
 class Profile;
 
@@ -130,6 +150,21 @@ class ManagementUIHandler : public content::WebUIMessageHandler,
   void OnJavascriptAllowed() override;
   void OnJavascriptDisallowed() override;
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Returns the list of device reporting items for a given profile.
+  static base::Value::List GetDeviceReportingInfo(
+      const policy::DeviceCloudPolicyManagerAsh* manager,
+      Profile* profile);
+  static void AddDlpDeviceReportingElementForTesting(
+      base::Value::List* report_sources,
+      const std::string& message_id);
+  static void AddDeviceReportingInfoForTesting(
+      base::Value::List* report_sources,
+      const policy::StatusCollector* collector,
+      const policy::SystemLogUploader* uploader,
+      Profile* profile);
+#endif
+
  protected:
   // Protected for testing.
   static void InitializeInternal(content::WebUI* web_ui,
@@ -137,21 +172,20 @@ class ManagementUIHandler : public content::WebUIMessageHandler,
                                  Profile* profile);
   void AddReportingInfo(base::Value::List* report_sources);
 
-  base::Value GetContextualManagedData(Profile* profile);
-  base::Value GetThreatProtectionInfo(Profile* profile);
+  base::Value::Dict GetContextualManagedData(Profile* profile);
+  base::Value::Dict GetThreatProtectionInfo(Profile* profile);
   base::Value::List GetManagedWebsitesInfo(Profile* profile) const;
+  base::Value::List GetApplicationsInfo(Profile* profile) const;
   virtual policy::PolicyService* GetPolicyService();
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  virtual device_signals::UserPermissionService* GetUserPermissionService();
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Protected for testing.
   virtual const std::string GetDeviceManager() const;
   virtual const policy::DeviceCloudPolicyManagerAsh*
   GetDeviceCloudPolicyManager() const;
-  virtual const policy::DlpRulesManager* GetDlpRulesManager() const;
-  void AddDeviceReportingInfo(base::Value::List* report_sources,
-                              const policy::StatusCollector* collector,
-                              const policy::SystemLogUploader* uploader,
-                              Profile* profile) const;
   // Virtual for testing
   virtual bool IsUpdateRequiredEol() const;
   // Adds device return instructions for a managed user as an update is required
@@ -159,24 +193,32 @@ class ManagementUIHandler : public content::WebUIMessageHandler,
   // (Auto Update Expiration).
   void AddUpdateRequiredEolInfo(base::Value::Dict* response) const;
 
-  // Adds a boolean which indicates if there's a proxy on the device enforced by
-  // the admin. If true, a warning will be added to the transparency panel to
-  // inform the user that the admin may be able to see their network traffic.
-  void AddProxyServerPrivacyDisclosure(base::Value::Dict* response) const;
+  // Adds a boolean which indicates if the network traffic can be monitored by
+  // the admin via policy configurations, either via a proxy server, via
+  // secure DNS templates with identifiers, or via XDR monitoring. If true, a
+  // warning will be added to the transparency panel to inform the user that the
+  // admin may be able to see their network traffic.
+  void AddMonitoredNetworkPrivacyDisclosure(base::Value::Dict* response);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
  private:
   void GetManagementStatus(Profile* profile, base::Value::Dict* status) const;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
   void HandleGetDeviceReportingInfo(const base::Value::List& args);
   void HandleGetPluginVmDataCollectionStatus(const base::Value::List& args);
   void HandleGetLocalTrustRootsInfo(const base::Value::List& args);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void OnGotDeviceReportSources(base::Value::List report_sources,
+                                bool plugin_vm_data_collection_enabled);
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
   void HandleGetExtensions(const base::Value::List& args);
   void HandleGetContextualManagedData(const base::Value::List& args);
   void HandleGetThreatProtectionInfo(const base::Value::List& args);
   void HandleGetManagedWebsites(const base::Value::List& args);
+  void HandleGetApplications(const base::Value::List& args);
   void HandleInitBrowserReportingInfo(const base::Value::List& args);
 
   void AsyncUpdateLogo();
@@ -221,6 +263,12 @@ class ManagementUIHandler : public content::WebUIMessageHandler,
   GURL logo_url_;
   std::string fetched_image_;
   std::unique_ptr<BitmapFetcher> icon_fetcher_;
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  base::Value::List report_sources_;
+  bool plugin_vm_data_collection_enabled_ = false;
+  base::WeakPtrFactory<ManagementUIHandler> weak_factory_{this};
+#endif
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_MANAGEMENT_MANAGEMENT_UI_HANDLER_H_

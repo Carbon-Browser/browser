@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_default_controller_with_script_scope.h"
 #include "third_party/blink/renderer/core/streams/underlying_source_base.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
 
 namespace blink {
+
+class ScriptState;
 
 // This class is for testing.
 class TestUnderlyingSource final : public UnderlyingSourceBase {
@@ -25,12 +26,14 @@ class TestUnderlyingSource final : public UnderlyingSourceBase {
   void Error(ScriptValue value) { Controller()->Error(value); }
   double DesiredSize() { return Controller()->DesiredSize(); }
 
-  ScriptPromise Start(ScriptState* script_state) override {
+  ScriptPromise Start(ScriptState* script_state, ExceptionState&) override {
     DCHECK(!is_start_called_);
     is_start_called_ = true;
     return ScriptPromise::CastUndefined(script_state);
   }
-  ScriptPromise Cancel(ScriptState* script_state, ScriptValue reason) override {
+  ScriptPromise Cancel(ScriptState* script_state,
+                       ScriptValue reason,
+                       ExceptionState&) override {
     DCHECK(!is_cancelled_);
     DCHECK(!is_cancelled_with_undefined_);
     DCHECK(!is_cancelled_with_null_);

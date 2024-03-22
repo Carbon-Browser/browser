@@ -1,13 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/ash/login/screens/family_link_notice_screen.h"
 
-#include "ash/components/login/auth/stub_authenticator_builder.h"
 #include "ash/constants/ash_features.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
@@ -16,10 +13,13 @@
 #include "chrome/browser/ash/login/test/wizard_controller_screen_exit_waiter.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/family_link_notice_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/family_link_notice_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chrome/common/pref_names.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
+#include "chromeos/ash/components/login/auth/stub_authenticator_builder.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 
@@ -112,7 +112,7 @@ IN_PROC_BROWSER_TEST_F(FamilyLinkNoticeScreenTest, RegularAccount) {
       ->sign_in_as_child = false;
   LoginAsRegularUser();
   WaitForScreenExit();
-  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::SKIPPED);
+  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::kSkipped);
   ExpectHelpAppPrefValue(false);
 }
 
@@ -126,7 +126,7 @@ IN_PROC_BROWSER_TEST_F(FamilyLinkNoticeScreenTest, NonSupervisedChildAccount) {
   OobeScreenWaiter(FamilyLinkNoticeView::kScreenId).Wait();
   ClickContinueButtonOnFamilyLinkScreen();
   WaitForScreenExit();
-  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::DONE);
+  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::kDone);
   ExpectHelpAppPrefValue(true);
 }
 
@@ -160,7 +160,7 @@ IN_PROC_BROWSER_TEST_F(FamilyLinkNoticeScreenChildTest, ChildAccount) {
       ->sign_in_as_child = true;
   LoginAsChildUser();
   WaitForScreenExit();
-  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::SKIPPED);
+  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::kSkipped);
   ExpectHelpAppPrefValue(false);
 }
 
@@ -173,7 +173,7 @@ IN_PROC_BROWSER_TEST_F(FamilyLinkNoticeScreenChildTest,
       ->sign_in_as_child = false;
   LoginAsChildUser();
   WaitForScreenExit();
-  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::SKIPPED);
+  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::kSkipped);
   ExpectHelpAppPrefValue(false);
 }
 
@@ -199,7 +199,7 @@ IN_PROC_BROWSER_TEST_F(FamilyLinkNoticeScreenManagedTest, ManagedAccount) {
   OobeScreenWaiter(FamilyLinkNoticeView::kScreenId).Wait();
   ClickContinueButtonOnFamilyLinkScreen();
   WaitForScreenExit();
-  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::DONE);
+  EXPECT_EQ(screen_result_.value(), FamilyLinkNoticeScreen::Result::kDone);
   ExpectHelpAppPrefValue(false);
 }
 

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Chromium presubmit script for prerender in Web Platform Tests.
@@ -8,8 +8,6 @@ for more details about the presubmit API built into gcl.
 """
 
 import os
-
-USE_PYTHON3 = True
 
 
 def _CheckFileTimeoutMetaTags(f):

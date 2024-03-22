@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,40 +89,7 @@ void RecordConnectGATTOutcome(CacheQueryOutcome outcome) {
   RecordConnectGATTOutcome(UMAConnectGATTOutcome::NO_DEVICE);
 }
 
-void RecordConnectGATTTimeSuccess(const base::TimeDelta& duration) {
-  UMA_HISTOGRAM_MEDIUM_TIMES("Bluetooth.Web.ConnectGATT.TimeSuccess", duration);
-}
-
-void RecordConnectGATTTimeFailed(const base::TimeDelta& duration) {
-  UMA_HISTOGRAM_MEDIUM_TIMES("Bluetooth.Web.ConnectGATT.TimeFailed", duration);
-}
-
 // getPrimaryService & getPrimaryServices
-
-void RecordGetPrimaryServicesOutcome(
-    blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    UMAGetPrimaryServiceOutcome outcome) {
-  switch (quantity) {
-    case blink::mojom::WebBluetoothGATTQueryQuantity::SINGLE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Bluetooth.Web.GetPrimaryService.Outcome", static_cast<int>(outcome),
-          static_cast<int>(UMAGetPrimaryServiceOutcome::COUNT));
-      return;
-    case blink::mojom::WebBluetoothGATTQueryQuantity::MULTIPLE:
-      UMA_HISTOGRAM_ENUMERATION(
-          "Bluetooth.Web.GetPrimaryServices.Outcome", static_cast<int>(outcome),
-          static_cast<int>(UMAGetPrimaryServiceOutcome::COUNT));
-      return;
-  }
-}
-
-void RecordGetPrimaryServicesOutcome(
-    blink::mojom::WebBluetoothGATTQueryQuantity quantity,
-    CacheQueryOutcome outcome) {
-  DCHECK(outcome == CacheQueryOutcome::NO_DEVICE);
-  RecordGetPrimaryServicesOutcome(quantity,
-                                  UMAGetPrimaryServiceOutcome::NO_DEVICE);
-}
 
 void RecordGetPrimaryServicesServices(
     blink::mojom::WebBluetoothGATTQueryQuantity quantity,

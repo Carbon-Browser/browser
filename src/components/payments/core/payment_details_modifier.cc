@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,13 +54,13 @@ bool PaymentDetailsModifier::operator!=(
   return !(*this == other);
 }
 
-base::Value PaymentDetailsModifier::ToValue() const {
-  base::Value result(base::Value::Type::DICTIONARY);
-  result.SetStringKey(kPaymentDetailsModifierSupportedMethods,
-                      method_data.supported_method);
-  result.SetStringKey(kPaymentDetailsModifierData, method_data.data);
+base::Value::Dict PaymentDetailsModifier::ToValueDict() const {
+  base::Value::Dict result;
+  result.Set(kPaymentDetailsModifierSupportedMethods,
+             method_data.supported_method);
+  result.Set(kPaymentDetailsModifierData, method_data.data);
   if (total) {
-    result.SetKey(kPaymentDetailsModifierTotal, total->ToValue());
+    result.Set(kPaymentDetailsModifierTotal, total->ToValueDict());
   }
 
   return result;

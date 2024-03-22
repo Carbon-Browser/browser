@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "content/public/renderer/render_frame.h"
 #include "fuchsia_web/webengine/common/cors_exempt_headers.h"
 #include "fuchsia_web/webengine/renderer/web_engine_content_renderer_client.h"
+#include "third_party/blink/public/web/web_local_frame.h"
 
 WebEngineURLLoaderThrottleProvider::WebEngineURLLoaderThrottleProvider(
     WebEngineContentRendererClient* content_renderer_client)
@@ -22,24 +23,28 @@ WebEngineURLLoaderThrottleProvider::~WebEngineURLLoaderThrottleProvider() {
 
 std::unique_ptr<blink::URLLoaderThrottleProvider>
 WebEngineURLLoaderThrottleProvider::Clone() {
-  // This should only happen for service workers, which we do not support here.
+  // This should only happen for workers, which we do not support here.
   NOTREACHED();
   return nullptr;
 }
 
 blink::WebVector<std::unique_ptr<blink::URLLoaderThrottle>>
 WebEngineURLLoaderThrottleProvider::CreateThrottles(
-    int render_frame_id,
+    base::optional_ref<const blink::LocalFrameToken> local_frame_token,
     const blink::WebURLRequest& request) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_NE(render_frame_id, MSG_ROUTING_NONE);
-
+  CHECK(local_frame_token.has_value());
   blink::WebVector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
-  const auto& rules =
-      content_renderer_client_
-          ->GetWebEngineRenderFrameObserverForRenderFrameId(render_frame_id)
-          ->url_request_rules_receiver()
-          ->GetCachedRules();
+  blink::WebLocalFrame* web_frame =
+      blink::WebLocalFrame::FromFrameToken(local_frame_token.value());
+  if (!web_frame) {
+    return throttles;
+  }
+  auto rules = content_renderer_client_
+                   ->GetWebEngineRenderFrameObserverForFrameToken(
+                       local_frame_token.value())
+                   ->url_request_rules_receiver()
+                   ->GetCachedRules();
   if (rules) {
     throttles.emplace_back(std::make_unique<url_rewrite::URLLoaderThrottle>(
         rules, base::BindRepeating(&IsHeaderCorsExempt)));

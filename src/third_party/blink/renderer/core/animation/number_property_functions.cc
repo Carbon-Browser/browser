@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,11 +42,6 @@ absl::optional<double> NumberPropertyFunctions::GetNumber(
       return style.StrokeOpacity();
     case CSSPropertyID::kWidows:
       return style.Widows();
-
-    case CSSPropertyID::kFontSizeAdjust:
-      if (!style.HasFontSizeAdjust())
-        return absl::optional<double>();
-      return style.FontSizeAdjust();
     case CSSPropertyID::kColumnCount:
       if (style.HasAutoColumnCount())
         return absl::optional<double>();
@@ -100,11 +95,10 @@ double NumberPropertyFunctions::ClampNumber(const CSSProperty& property,
 
     case CSSPropertyID::kFillOpacity:
     case CSSPropertyID::kOpacity:
-      return ClampTo<float>(value, 0, nextafterf(1, 0));
+      return ClampTo<float>(value, 0, 1);
 
     case CSSPropertyID::kFlexGrow:
     case CSSPropertyID::kFlexShrink:
-    case CSSPropertyID::kFontSizeAdjust:
     case CSSPropertyID::kLineHeight:
     case CSSPropertyID::kTabSize:
     case CSSPropertyID::kTextSizeAdjust:
@@ -128,60 +122,60 @@ double NumberPropertyFunctions::ClampNumber(const CSSProperty& property,
 }
 
 bool NumberPropertyFunctions::SetNumber(const CSSProperty& property,
-                                        ComputedStyle& style,
+                                        ComputedStyleBuilder& builder,
                                         double value) {
   DCHECK_EQ(value, ClampNumber(property, value));
   switch (property.PropertyID()) {
     case CSSPropertyID::kFillOpacity:
-      style.SetFillOpacity(value);
+      builder.SetFillOpacity(value);
       return true;
     case CSSPropertyID::kFlexGrow:
-      style.SetFlexGrow(value);
+      builder.SetFlexGrow(value);
       return true;
     case CSSPropertyID::kFlexShrink:
-      style.SetFlexShrink(value);
+      builder.SetFlexShrink(value);
       return true;
     case CSSPropertyID::kFloodOpacity:
-      style.SetFloodOpacity(value);
+      builder.SetFloodOpacity(value);
       return true;
     case CSSPropertyID::kLineHeight:
-      style.SetLineHeight(Length::Percent(value * 100));
+      builder.SetLineHeight(Length::Percent(value * 100));
       return true;
     case CSSPropertyID::kTabSize:
-      style.SetTabSize(TabSize(value));
+      builder.SetTabSize(TabSize(value));
       return true;
     case CSSPropertyID::kOpacity:
-      style.SetOpacity(value);
+      builder.SetOpacity(value);
       return true;
     case CSSPropertyID::kOrder:
-      style.SetOrder(value);
+      builder.SetOrder(value);
       return true;
     case CSSPropertyID::kOrphans:
-      style.SetOrphans(value);
+      builder.SetOrphans(value);
       return true;
     case CSSPropertyID::kShapeImageThreshold:
-      style.SetShapeImageThreshold(value);
+      builder.SetShapeImageThreshold(value);
       return true;
     case CSSPropertyID::kStopOpacity:
-      style.SetStopOpacity(value);
+      builder.SetStopOpacity(value);
       return true;
     case CSSPropertyID::kStrokeMiterlimit:
-      style.SetStrokeMiterLimit(value);
+      builder.SetStrokeMiterLimit(value);
       return true;
     case CSSPropertyID::kStrokeOpacity:
-      style.SetStrokeOpacity(value);
+      builder.SetStrokeOpacity(value);
       return true;
     case CSSPropertyID::kColumnCount:
-      style.SetColumnCount(value);
+      builder.SetColumnCount(value);
       return true;
     case CSSPropertyID::kTextSizeAdjust:
-      style.SetTextSizeAdjust(value / 100.);
+      builder.SetTextSizeAdjust(value / 100.);
       return true;
     case CSSPropertyID::kWidows:
-      style.SetWidows(value);
+      builder.SetWidows(value);
       return true;
     case CSSPropertyID::kZIndex:
-      style.SetZIndex(value);
+      builder.SetZIndex(value);
       return true;
     default:
       return false;

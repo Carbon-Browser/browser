@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,11 +43,20 @@ class CORE_EXPORT ContextFeatureSettings final
     return enable_mojo_js_file_system_access_helper_;
   }
 
+  // ContextEnabled=PrivateAggregationInSharedStorage
+  void EnablePrivateAggregationInSharedStorage(bool enable) {
+    enable_private_aggregation_in_shared_storage_ = enable;
+  }
+  bool isPrivateAggregationInSharedStorageEnabled() const {
+    return enable_private_aggregation_in_shared_storage_;
+  }
+
   void Trace(Visitor*) const override;
 
  private:
   bool enable_mojo_js_ = false;
   bool enable_mojo_js_file_system_access_helper_ = false;
+  bool enable_private_aggregation_in_shared_storage_ = false;
 };
 
 }  // namespace blink

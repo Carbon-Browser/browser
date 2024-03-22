@@ -239,16 +239,6 @@ TEST_F(LocalDOMWindowTest, EnforceSandboxFlags) {
 TEST_F(LocalDOMWindowTest, UserAgent) {
   EXPECT_EQ(GetFrame().DomWindow()->UserAgent(),
             GetFrame().Loader().UserAgent());
-  {
-    ScopedUserAgentReductionForTest s1(true);
-    EXPECT_EQ(GetFrame().DomWindow()->UserAgent(),
-              GetFrame().Loader().ReducedUserAgent());
-  }
-  {
-    ScopedSendFullUserAgentAfterReductionForTest s1(true);
-    EXPECT_EQ(GetFrame().DomWindow()->UserAgent(),
-              GetFrame().Loader().FullUserAgent());
-  }
 }
 
 // Tests ExecutionContext::GetContentSecurityPolicyForCurrentWorld().
@@ -320,7 +310,7 @@ TEST_F(PageTestBase, CSPForWorld) {
 }
 
 TEST_F(LocalDOMWindowTest, ConsoleMessageCategory) {
-  auto unknown_location = SourceLocation::Capture(String(), 0, 0);
+  auto unknown_location = CaptureSourceLocation(String(), 0, 0);
   auto* console_message = MakeGarbageCollected<ConsoleMessage>(
       mojom::blink::ConsoleMessageSource::kJavaScript,
       mojom::blink::ConsoleMessageLevel::kError, "Kaboom!",
@@ -334,6 +324,22 @@ TEST_F(LocalDOMWindowTest, ConsoleMessageCategory) {
     EXPECT_EQ(mojom::blink::ConsoleMessageCategory::Cors,
               *message_storage->at(i)->Category());
   }
+}
+TEST_F(LocalDOMWindowTest, NavigationId) {
+  String navigation_id1 = GetFrame().DomWindow()->GetNavigationId();
+  GetFrame().DomWindow()->GenerateNewNavigationId();
+  String navigation_id2 = GetFrame().DomWindow()->GetNavigationId();
+  GetFrame().DomWindow()->GenerateNewNavigationId();
+  String navigation_id3 = GetFrame().DomWindow()->GetNavigationId();
+  EXPECT_NE(navigation_id1, navigation_id2);
+  EXPECT_NE(navigation_id1, navigation_id3);
+  EXPECT_NE(navigation_id2, navigation_id3);
+}
+
+TEST_F(LocalDOMWindowTest, HasStorageAccess) {
+  EXPECT_FALSE(GetFrame().DomWindow()->HasStorageAccess());
+  GetFrame().DomWindow()->SetHasStorageAccess();
+  EXPECT_TRUE(GetFrame().DomWindow()->HasStorageAccess());
 }
 
 }  // namespace blink

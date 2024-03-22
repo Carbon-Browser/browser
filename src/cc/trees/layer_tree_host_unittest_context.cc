@@ -1,11 +1,11 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "cc/layers/heads_up_display_layer.h"
@@ -65,7 +65,6 @@ class LayerTreeHostContextTest : public LayerTreeTest {
         times_to_expect_create_failed_(0),
         times_create_failed_(0),
         committed_at_least_once_(false),
-        context_should_support_io_surface_(false),
         fallback_context_works_(false),
         async_layer_tree_frame_sink_creation_(false) {
     media::InitializeMediaLibrary();
@@ -87,16 +86,12 @@ class LayerTreeHostContextTest : public LayerTreeTest {
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     base::AutoLock lock(gl_lock_);
 
     auto gl_owned = std::make_unique<viz::TestGLES2Interface>();
-    if (context_should_support_io_surface_) {
-      gl_owned->set_have_extension_io_surface(true);
-      gl_owned->set_have_extension_egl_image(true);
-    }
 
     gl_ = gl_owned.get();
 
@@ -118,13 +113,13 @@ class LayerTreeHostContextTest : public LayerTreeTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame,
                                    DrawResult draw_result) override {
-    if (draw_result == DRAW_ABORTED_MISSING_HIGH_RES_CONTENT) {
+    if (draw_result == DrawResult::kAbortedMissingHighResContent) {
       // Only valid for single-threaded compositing, which activates
       // immediately and will try to draw again when content has finished.
       DCHECK(!host_impl->task_runner_provider()->HasImplThread());
       return draw_result;
     }
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
     if (!times_to_lose_during_draw_)
       return draw_result;
 
@@ -164,8 +159,9 @@ class LayerTreeHostContextTest : public LayerTreeTest {
   // Protects use of gl_ so LoseContext and
   // CreateDisplayLayerTreeFrameSink can both use it on different threads.
   base::Lock gl_lock_;
-  raw_ptr<viz::TestGLES2Interface> gl_ = nullptr;
-  raw_ptr<viz::TestSharedImageInterface> sii_ = nullptr;
+  raw_ptr<viz::TestGLES2Interface, AcrossTasksDanglingUntriaged> gl_ = nullptr;
+  raw_ptr<viz::TestSharedImageInterface, AcrossTasksDanglingUntriaged> sii_ =
+      nullptr;
 
   int times_to_fail_create_;
   int times_to_lose_during_commit_;
@@ -174,7 +170,6 @@ class LayerTreeHostContextTest : public LayerTreeTest {
   int times_to_expect_create_failed_;
   int times_create_failed_;
   bool committed_at_least_once_;
-  bool context_should_support_io_surface_;
   bool fallback_context_works_;
   bool async_layer_tree_frame_sink_creation_;
 };
@@ -467,8 +462,10 @@ class MultipleCompositeDoesNotCreateLayerTreeFrameSink
   }
 
   void BeginTest() override {
-    layer_tree_host()->CompositeForTest(TicksFromMicroseconds(1), false);
-    layer_tree_host()->CompositeForTest(TicksFromMicroseconds(2), false);
+    layer_tree_host()->CompositeForTest(TicksFromMicroseconds(1), false,
+                                        base::OnceClosure());
+    layer_tree_host()->CompositeForTest(TicksFromMicroseconds(2), false,
+                                        base::OnceClosure());
   }
 
   void DidInitializeLayerTreeFrameSink() override { EXPECT_TRUE(false); }
@@ -509,12 +506,14 @@ class FailedCreateDoesNotCreateExtraLayerTreeFrameSink
 
   void BeginTest() override {
     // First composite tries to create a surface.
-    layer_tree_host()->CompositeForTest(TicksFromMicroseconds(1), false);
+    layer_tree_host()->CompositeForTest(TicksFromMicroseconds(1), false,
+                                        base::OnceClosure());
     EXPECT_EQ(num_requests_, 2);
     EXPECT_TRUE(has_failed_);
 
     // Second composite should not request or fail.
-    layer_tree_host()->CompositeForTest(TicksFromMicroseconds(2), false);
+    layer_tree_host()->CompositeForTest(TicksFromMicroseconds(2), false,
+                                        base::OnceClosure());
     EXPECT_EQ(num_requests_, 2);
     EndTest();
   }
@@ -695,7 +694,7 @@ class LayerTreeHostContextTestLostContextAndEvictTextures
  protected:
   bool lose_after_evict_;
   FakeContentLayerClient client_;
-  raw_ptr<LayerTreeHostImpl> impl_host_;
+  raw_ptr<LayerTreeHostImpl, AcrossTasksDanglingUntriaged> impl_host_;
   int num_commits_;
   bool lost_context_;
 };
@@ -812,10 +811,8 @@ class LayerTreeHostContextTestDontUseLostResources
     : public LayerTreeHostContextTest {
  public:
   LayerTreeHostContextTestDontUseLostResources() : lost_context_(false) {
-    context_should_support_io_surface_ = true;
-
-    child_context_provider_ = viz::TestContextProvider::Create();
-    auto result = child_context_provider_->BindToCurrentThread();
+    child_context_provider_ = viz::TestContextProvider::CreateRaster();
+    auto result = child_context_provider_->BindToCurrentSequence();
     CHECK_EQ(result, gpu::ContextResult::kSuccess);
     shared_bitmap_manager_ = std::make_unique<viz::TestSharedBitmapManager>();
     child_resource_provider_ = std::make_unique<viz::ClientResourceProvider>();
@@ -825,12 +822,12 @@ class LayerTreeHostContextTestDontUseLostResources
                                    bool lost) {}
 
   void SetupTree() override {
-    gpu::gles2::GLES2Interface* gl = child_context_provider_->ContextGL();
+    auto* ri = child_context_provider_->RasterInterface();
 
-    gpu::Mailbox mailbox = gpu::Mailbox::Generate();
+    gpu::Mailbox mailbox = gpu::Mailbox::GenerateForSharedImage();
 
     gpu::SyncToken sync_token;
-    gl->GenSyncTokenCHROMIUM(sync_token.GetData());
+    ri->GenSyncTokenCHROMIUM(sync_token.GetData());
 
     scoped_refptr<Layer> root = Layer::Create();
     root->SetBounds(gfx::Size(10, 10));
@@ -846,9 +843,9 @@ class LayerTreeHostContextTestDontUseLostResources
     texture->SetBounds(gfx::Size(10, 10));
     texture->SetIsDrawable(true);
     constexpr gfx::Size size(64, 64);
-    auto resource = viz::TransferableResource::MakeGL(
-        mailbox, GL_LINEAR, GL_TEXTURE_2D, sync_token, size,
-        false /* is_overlay_candidate */);
+    auto resource = viz::TransferableResource::MakeGpu(
+        mailbox, GL_TEXTURE_2D, sync_token, size,
+        viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
     texture->SetTransferableResource(
         resource, base::BindOnce(&LayerTreeHostContextTestDontUseLostResources::
                                      EmptyReleaseCallback));
@@ -933,15 +930,12 @@ class LayerTreeHostContextTestDontUseLostResources
     }
   }
 
-  DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
-                                   LayerTreeHostImpl::FrameData* frame,
-                                   DrawResult draw_result) override {
+  void DrawLayersOnThread(LayerTreeHostImpl* host_impl) override {
     if (host_impl->active_tree()->source_frame_number() == 2) {
       // Lose the context after draw on the second commit. This will cause
       // a third commit to recover.
-      gl_->set_times_bind_texture_succeeds(0);
+      LoseContext();
     }
-    return draw_result;
   }
 
   void RequestNewLayerTreeFrameSink() override {
@@ -1608,7 +1602,7 @@ class SoftwareTileResourceFreedIfLostWhileExported : public LayerTreeTest {
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     // Induce software compositing in cc.
@@ -1677,10 +1671,6 @@ class LayerTreeHostContextTestLoseAfterSendingBeginMainFrame
       return;
     deferred_ = true;
 
-    // TODO(schenney): This should switch back to defer_commits_ because there
-    // is no way in the real code to start deferring main frame updates when
-    // inside WillBeginMainFrame. Defer commits before the BeginFrame completes,
-    // causing it to be delayed.
     scoped_defer_main_frame_update_ = layer_tree_host()->DeferMainFrameUpdate();
     // Meanwhile, lose the context while we are in defer BeginMainFrame.
     ImplThreadTaskRunner()->PostTask(
@@ -1703,8 +1693,6 @@ class LayerTreeHostContextTestLoseAfterSendingBeginMainFrame
   void LoseContextOnImplThread() {
     LoseContext();
 
-    // TODO(schenney): This should switch back to defer_commits_ to match the
-    // change above.
     // After losing the context, stop deferring commits.
     PostReturnDeferMainFrameUpdateToMainThread(
         std::move(scoped_defer_main_frame_update_));

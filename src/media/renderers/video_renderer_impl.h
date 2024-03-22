@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,13 @@
 
 #include <memory>
 
+#include "base/cancelable_callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "media/base/decryptor.h"
@@ -31,11 +33,10 @@
 #include "media/base/video_renderer_sink.h"
 #include "media/filters/decoder_stream.h"
 #include "media/filters/video_renderer_algorithm.h"
-#include "media/renderers/default_renderer_factory.h"
+#include "media/renderers/renderer_impl_factory.h"
 #include "media/video/gpu_memory_buffer_video_frame_pool.h"
 
 namespace base {
-class SingleThreadTaskRunner;
 class TickClock;
 }  // namespace base
 
@@ -56,12 +57,13 @@ class MEDIA_EXPORT VideoRendererImpl
   //
   // Setting |drop_frames_| to true causes the renderer to drop expired frames.
   VideoRendererImpl(
-      const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+      const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
       VideoRendererSink* sink,
       const CreateVideoDecodersCB& create_video_decoders_cb,
       bool drop_frames,
       MediaLog* media_log,
-      std::unique_ptr<GpuMemoryBufferVideoFramePool> gmb_pool);
+      std::unique_ptr<GpuMemoryBufferVideoFramePool> gmb_pool,
+      MediaPlayerLoggingID media_player_id);
 
   VideoRendererImpl(const VideoRendererImpl&) = delete;
   VideoRendererImpl& operator=(const VideoRendererImpl&) = delete;
@@ -182,6 +184,10 @@ class MEDIA_EXPORT VideoRendererImpl
   // duration is before |start_timestamp_|.
   bool IsBeforeStartTime(const VideoFrame& frame);
 
+  // Helper method for checking if we have the best possible first frame to
+  // paint in the queue.
+  bool HasBestFirstFrame(const VideoFrame& frame);
+
   // Attempts to remove frames which are no longer effective for rendering when
   // |buffering_state_| == BUFFERING_HAVE_NOTHING or |was_background_rendering_|
   // is true.  If the current media time as provided by |wall_clock_time_cb_| is
@@ -208,14 +214,18 @@ class MEDIA_EXPORT VideoRendererImpl
   void AttemptReadAndCheckForMetadataChanges(VideoPixelFormat pixel_format,
                                              const gfx::Size& natural_size);
 
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+  // Paints first frame and sets `painted_first_frame_` to true if
+  // `painted_first_frame_` is false.
+  void PaintFirstFrame();
+
+  scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   // Sink which calls into VideoRendererImpl via Render() for video frames.  Do
   // not call any methods on the sink while |lock_| is held or the two threads
   // might deadlock. Do not call Start() or Stop() on the sink directly, use
   // StartSink() and StopSink() to ensure background rendering is started.  Only
   // access these values on |task_runner_|.
-  const raw_ptr<VideoRendererSink> sink_;
+  const raw_ptr<VideoRendererSink, AcrossTasksDanglingUntriaged> sink_;
   bool sink_started_;
 
   // Stores the last decoder config that was passed to
@@ -240,7 +250,12 @@ class MEDIA_EXPORT VideoRendererImpl
   // Passed in during Initialize().
   raw_ptr<DemuxerStream> demuxer_stream_;
 
-  raw_ptr<MediaLog> media_log_;
+  // This dangling raw_ptr occurred in:
+  // webkit_unit_tests: WebMediaPlayerImplTest.MediaPositionState_Playing
+  // https://ci.chromium.org/ui/p/chromium/builders/try/linux-rel/1425143/test-results?q=ExactID%3Aninja%3A%2F%2Fthird_party%2Fblink%2Frenderer%2Fcontroller%3Ablink_unittests%2FWebMediaPlayerImplTest.MediaPositionState_Playing+VHash%3A896f1103f2d1008d&sortby=&groupby=
+  raw_ptr<MediaLog, FlakyDanglingUntriaged> media_log_;
+
+  MediaPlayerLoggingID player_id_;
 
   // Flag indicating low-delay mode.
   bool low_delay_;
@@ -324,6 +339,10 @@ class MEDIA_EXPORT VideoRendererImpl
 
   // Indicates if we've painted the first valid frame after StartPlayingFrom().
   bool painted_first_frame_;
+
+  // Used to paint the first frame if we don't receive the best one in time and
+  // aren't guaranteed to receive anymore.
+  base::CancelableOnceClosure paint_first_frame_cb_;
 
   // The initial value for |min_buffered_frames_| and |max_buffered_frames_|.
   Tuneable<size_t> initial_buffering_size_ = {

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #import <AppKit/AppKit.h>
 
 #include "base/mac/scoped_sending_event.h"
-#include "base/message_loop/message_pump_mac.h"
+#include "base/message_loop/message_pump_apple.h"
 
 // A basic implementation of CrAppProtocol and
 // CrAppControlProtocol. This can be used in tests that need an

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "ash/host/ash_window_tree_host.h"
 #include "ash/host/root_window_transformer.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/compositor/layer.h"
@@ -52,8 +53,8 @@ class SimpleRootWindowTransformer : public RootWindowTransformer {
     gfx::Rect host_bounds_in_pixels(host_size);
     gfx::RectF host_bounds_in_dips = gfx::ConvertRectToDips(
         host_bounds_in_pixels, root_window_->layer()->device_scale_factor());
-    gfx::RectF root_window_bounds = host_bounds_in_dips;
-    GetInverseTransform().TransformRect(&root_window_bounds);
+    gfx::RectF root_window_bounds =
+        GetInverseTransform().MapRect(host_bounds_in_dips);
     return gfx::Rect(gfx::ToFlooredSize(root_window_bounds.size()));
   }
 
@@ -65,7 +66,7 @@ class SimpleRootWindowTransformer : public RootWindowTransformer {
  private:
   ~SimpleRootWindowTransformer() override = default;
 
-  const aura::Window* root_window_;
+  raw_ptr<const aura::Window, ExperimentalAsh> root_window_;
   const gfx::Transform transform_;
 };
 

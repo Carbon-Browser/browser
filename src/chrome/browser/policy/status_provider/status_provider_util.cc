@@ -1,10 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/policy/status_provider/status_provider_util.h"
 
 #include "base/values.h"
+#include "chrome/browser/enterprise/identifiers/profile_id_service_factory.h"
+#include "components/enterprise/browser/identifiers/profile_id_service.h"
+#include "components/policy/core/browser/webui/policy_status_provider.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/policy/off_hours/device_off_hours_controller.h"
@@ -17,10 +20,26 @@
 #include "components/enterprise/browser/controller/browser_dm_token_storage.h"
 #endif
 
-void ExtractDomainFromUsername(base::Value::Dict* dict) {
-  const std::string* username = dict->FindString("username");
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/kiosk/kiosk_utils.h"
+#endif
+
+const char kDevicePolicyStatusDescription[] = "statusDevice";
+const char kUserPolicyStatusDescription[] = "statusUser";
+
+void SetDomainExtractedFromUsername(base::Value::Dict& dict) {
+#if BUILDFLAG(IS_CHROMEOS)
+  if (chromeos::IsKioskSession()) {
+    // In kiosk session `username` is a website (for web kiosk) or an app id
+    // (for ChromeApp kiosk). Since it's not a proper email address, it's
+    // impossible to extract the domain name from it.
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  const std::string* username = dict.FindString(policy::kUsernameKey);
   if (username && !username->empty())
-    dict->Set("domain", gaia::ExtractDomainName(*username));
+    dict.Set(policy::kDomainKey, gaia::ExtractDomainName(*username));
 }
 
 void GetUserAffiliationStatus(base::Value::Dict* dict, Profile* profile) {
@@ -46,6 +65,18 @@ void GetUserAffiliationStatus(base::Value::Dict* dict, Profile* profile) {
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
+void SetProfileId(base::Value::Dict* dict, Profile* profile) {
+  CHECK(profile);
+  auto* profile_id_service =
+      enterprise::ProfileIdServiceFactory::GetForProfile(profile);
+  if (!profile_id_service)
+    return;
+
+  auto profile_id = profile_id_service->GetProfileId();
+  if (profile_id)
+    dict->Set("profileId", profile_id.value());
+}
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 void GetOffHoursStatus(base::Value::Dict* dict) {
   policy::off_hours::DeviceOffHoursController* off_hours_controller =
@@ -61,15 +92,7 @@ void GetUserManager(base::Value::Dict* dict, Profile* profile) {
   absl::optional<std::string> account_manager =
       chrome::GetAccountManagerIdentity(profile);
   if (account_manager) {
-    dict->Set("enterpriseDomainManager", *account_manager);
+    dict->Set(policy::kEnterpriseDomainManagerKey, *account_manager);
   }
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-std::string GetMachineStatusLegendKey() {
-#if BUILDFLAG(IS_ANDROID)
-  return "statusDevice";
-#else
-  return "statusMachine";
-#endif  // BUILDFLAG(IS_ANDROID)
-}

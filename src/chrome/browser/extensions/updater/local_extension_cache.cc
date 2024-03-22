@@ -1,14 +1,14 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/updater/local_extension_cache.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
@@ -170,7 +170,7 @@ void LocalExtensionCache::PutExtension(const std::string& id,
 
   CacheMap::iterator it = FindExtension(cached_extensions_, id, expected_hash);
   if (it != cached_extensions_.end() &&
-      NewerOrSame(it, version, expected_hash, NULL)) {
+      NewerOrSame(it, version, expected_hash, nullptr)) {
     LOG(WARNING) << "Cache contains newer or the same version "
                  << it->second.version << " for extension " << id << " version "
                  << version;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -62,7 +62,7 @@ class BluetoothAdapterWinTest : public testing::Test {
     adapter_win_->InitForTest(
         base::BindOnce(&BluetoothAdapterWinTest::RunInitCallback,
                        base::Unretained(this)),
-        nullptr, nullptr, ui_task_runner_, bluetooth_task_runner_);
+        nullptr, ui_task_runner_, bluetooth_task_runner_);
   }
 
   void SetUp() override {

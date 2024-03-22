@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #import <UIKit/UIKit.h>
 
 #import "ios/chrome/browser/ui/browser_container/browser_container_consumer.h"
+
+@class BrowserEditMenuHandler;
 
 @protocol LinkToTextDelegate;
 
@@ -25,6 +27,9 @@
 
 // The delegate to handle link to text button selection.
 @property(nonatomic, weak) id<LinkToTextDelegate> linkToTextDelegate;
+
+// The handler for the edit menu.
+@property(nonatomic, weak) BrowserEditMenuHandler* browserEditMenuHandler;
 
 // Adds the given `contentView` as a subview and removes the previously added
 // `contentView` or `contentViewController`, if any. If `contentView` is nil

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 
 #include "base/lazy_instance.h"
 #include "base/logging.h"
-#include "base/memory/singleton.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/signin/oauth2_login_manager.h"
 #include "chrome/browser/ash/login/signin/oauth2_login_manager_factory.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/common/url_constants.h"
 #include "components/google/core/common/google_util.h"
 #include "components/user_manager/user_manager.h"
@@ -22,8 +22,7 @@
 #include "services/network/public/cpp/network_connection_tracker.h"
 #include "url/gurl.h"
 
-namespace ash {
-namespace merge_session_throttling_utils {
+namespace ash::merge_session_throttling_utils {
 namespace {
 
 using ::content::BrowserThread;
@@ -34,7 +33,7 @@ const int64_t kMaxSessionRestoreTimeInSec = 60;
 // The set of blocked profiles.
 class ProfileSet : public std::set<Profile*> {
  public:
-  ProfileSet() {}
+  ProfileSet() = default;
 
   ProfileSet(const ProfileSet&) = delete;
   ProfileSet& operator=(const ProfileSet&) = delete;
@@ -184,8 +183,8 @@ bool ShouldDelayUrl(const GURL& url) {
   // we will show delayed loading page instead.
   return !content::GetNetworkConnectionTracker()->IsOffline() &&
          !AreAllSessionMergedAlready() &&
-         google_util::IsGoogleHostname(url.host_piece(),
-                                       google_util::ALLOW_SUBDOMAIN);
+         google_util::IsGoogleDomainUrl(url, google_util::ALLOW_SUBDOMAIN,
+                                        google_util::ALLOW_NON_STANDARD_PORTS);
 }
 
 bool IsSessionRestorePending(Profile* profile) {
@@ -210,5 +209,4 @@ bool IsSessionRestorePending(Profile* profile) {
   return pending_session_restore;
 }
 
-}  // namespace merge_session_throttling_utils
-}  // namespace ash
+}  // namespace ash::merge_session_throttling_utils

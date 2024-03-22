@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,14 @@
 #include <map>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ui/bookmarks/bookmark_stats.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_context_menu.h"
 #include "components/bookmarks/browser/base_bookmark_model_observer.h"
+#include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node_data.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
 #include "ui/views/controls/menu/menu_delegate.h"
@@ -24,10 +26,6 @@ class Profile;
 
 namespace bookmarks {
 class ManagedBookmarkService;
-}
-
-namespace content {
-class PageNavigator;
 }
 
 namespace ui {
@@ -57,10 +55,7 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
     HIDE_PERMANENT_FOLDERS
   };
 
-  BookmarkMenuDelegate(
-      Browser* browser,
-      base::RepeatingCallback<content::PageNavigator*()> get_navigator,
-      views::Widget* parent);
+  BookmarkMenuDelegate(Browser* browser, views::Widget* parent);
 
   BookmarkMenuDelegate(const BookmarkMenuDelegate&) = delete;
   BookmarkMenuDelegate& operator=(const BookmarkMenuDelegate&) = delete;
@@ -196,8 +191,6 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
   const raw_ptr<Browser> browser_;
   raw_ptr<Profile> profile_;
 
-  base::RepeatingCallback<content::PageNavigator*()> get_navigator_;
-
   // Parent of menus.
   raw_ptr<views::Widget> parent_;
 
@@ -233,6 +226,10 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
   // Whether the involved menu uses mnemonics or not. If it does, ampersands
   // inside bookmark titles need to be escaped.
   bool menu_uses_mnemonics_;
+
+  base::ScopedObservation<bookmarks::BookmarkModel,
+                          bookmarks::BaseBookmarkModelObserver>
+      bookmark_model_observation_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_MENU_DELEGATE_H_

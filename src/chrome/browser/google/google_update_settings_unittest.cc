@@ -1,6 +1,8 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include <string>
 
 #include "chrome/installer/util/google_update_settings.h"
 #include "base/compiler_specific.h"
@@ -14,16 +16,39 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 
+#if BUILDFLAG(IS_WIN)
+#include "base/test/test_reg_util_win.h"
+#endif  // BUILDFLAG(IS_WIN)
+
 class GoogleUpdateTest : public PlatformTest {
  public:
   GoogleUpdateTest(const GoogleUpdateTest&) = delete;
   GoogleUpdateTest& operator=(const GoogleUpdateTest&) = delete;
 
+#if BUILDFLAG(IS_WIN)
+  void SetUp() override {
+    // Override HKCU to prevent writing to real keys. On Windows, the metrics
+    // reporting consent is stored in the registry, and it is used to determine
+    // the metrics reporting state when it is unset (e.g. during tests, which
+    // start with fresh user data dirs). Otherwise, this may cause flakiness
+    // since tests will sometimes start with metrics reporting enabled and
+    // sometimes disabled.
+    ASSERT_NO_FATAL_FAILURE(
+        override_manager_.OverrideRegistry(HKEY_CURRENT_USER));
+
+    PlatformTest::SetUp();
+  }
+#endif  // BUILDFLAG(IS_WIN)
+
  protected:
   GoogleUpdateTest() : user_data_dir_override_(chrome::DIR_USER_DATA) {}
-  ~GoogleUpdateTest() override {}
+  ~GoogleUpdateTest() override = default;
 
  private:
+#if BUILDFLAG(IS_WIN)
+  registry_util::RegistryOverrideManager override_manager_;
+#endif  // BUILDFLAG(IS_WIN)
+
   base::ScopedPathOverride user_data_dir_override_;
 };
 
@@ -84,13 +109,20 @@ TEST_F(GoogleUpdateTest, IsOrganicFirstRunBrandCodes) {
 TEST_F(GoogleUpdateTest, IsEnterpriseBrandCodes) {
   EXPECT_TRUE(google_brand::IsEnterprise("GGRV"));
   std::string gce_prefix = "GCE";
-  for (char ch = 'A'; ch <= 'Z'; ++ch)
-    EXPECT_TRUE(google_brand::IsEnterprise(gce_prefix + ch));
+  for (char ch = 'A'; ch <= 'Z'; ++ch) {
+    EXPECT_EQ(google_brand::IsEnterprise(gce_prefix + ch), ch != 'L');
+  }
+  for (const std::string prefix :
+       {"GCC", "GCF", "GCG", "GCH", "GCK", "GCL", "GCM"}) {
+    for (char ch = 'A'; ch <= 'Z'; ++ch) {
+      EXPECT_TRUE(google_brand::IsEnterprise(prefix + ch));
+    }
+  }
   EXPECT_FALSE(google_brand::IsEnterprise("ggrv"));
   EXPECT_FALSE(google_brand::IsEnterprise("gcea"));
   EXPECT_FALSE(google_brand::IsEnterprise("GGRA"));
   EXPECT_FALSE(google_brand::IsEnterprise("AGCE"));
-  EXPECT_FALSE(google_brand::IsEnterprise("GCCE"));
+  EXPECT_FALSE(google_brand::IsEnterprise("GCZE"));
   EXPECT_FALSE(google_brand::IsEnterprise("CHFO"));
   EXPECT_FALSE(google_brand::IsEnterprise("CHMA"));
   EXPECT_FALSE(google_brand::IsEnterprise("EUBA"));

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class ExplicitlyAllowedNetworkPortsPolicyHandler final
   bool CheckListEntry(const base::Value& value) override;
 
   // Converts the values to integers.
-  void ApplyList(base::Value filtered_list, PrefValueMap* prefs) override;
+  void ApplyList(base::Value::List filtered_list, PrefValueMap* prefs) override;
 };
 
 }  // namespace policy

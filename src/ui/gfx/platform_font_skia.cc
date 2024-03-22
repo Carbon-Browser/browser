@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,12 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
+#include "skia/ext/font_utils.h"
 #include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkFontMetrics.h"
 #include "third_party/skia/include/core/SkFontStyle.h"
 #include "third_party/skia/include/core/SkString.h"
+#include "third_party/skia/include/core/SkTypeface.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/font.h"
 #include "ui/gfx/font_list.h"
@@ -206,7 +208,7 @@ void PlatformFontSkia::EnsuresDefaultFontIsInitialized() {
   // returns an instance of SkEmptyTypeface. MakeDefault() should never fail.
   // See https://crbug.com/1287371 for details.
   if (!success) {
-    typeface = SkTypeface::MakeDefault();
+    typeface = skia::DefaultTypeface();
   }
 
   // Ensure there is a typeface available. If none is available, there is

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,13 +17,13 @@ namespace {
 testing::AssertionResult HasArg(const base::Value::List& args,
                                 const char name[]) {
   for (size_t i = 0; i < args.size(); ++i) {
-    const base::Value& arg = args[i];
-    if (!arg.is_dict() || arg.DictSize() != 1) {
+    const base::Value::Dict* arg = args[i].GetIfDict();
+    if (!arg || arg->size() != 1) {
       return testing::AssertionFailure() << " malformed argument for index "
                                          << i;
     }
 
-    if (arg.FindKey(name)) {
+    if (arg->contains(name)) {
       return testing::AssertionSuccess() << " argument '" << name
                                          << "' found at index " << i;
     }
@@ -31,7 +31,8 @@ testing::AssertionResult HasArg(const base::Value::List& args,
 
   return testing::AssertionFailure() << "argument not found: '" << name << "'";
 }
-}
+
+}  // namespace
 
 namespace content {
 
@@ -125,4 +126,4 @@ TEST(SkiaBenchmarkingExtensionTest, BenchmarkingCanvas) {
   EXPECT_TRUE(op_args->empty());
 }
 
-} // namespace content
+}  // namespace content

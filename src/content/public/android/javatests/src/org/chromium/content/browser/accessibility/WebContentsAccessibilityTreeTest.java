@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@ import static org.chromium.content.browser.accessibility.AccessibilityContentShe
 import static org.chromium.content.browser.accessibility.AccessibilityContentShellTestUtils.sClassNameMatcher;
 
 import android.annotation.SuppressLint;
-import android.os.Build;
+import android.os.Build.VERSION_CODES;
+import android.os.Environment;
 
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.test.filters.SmallTest;
@@ -19,19 +20,22 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.test.util.Batch;
+import org.chromium.base.test.util.CriteriaHelper;
+import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.DisabledTest;
-import org.chromium.base.test.util.MinAndroidSdkLevel;
+import org.chromium.base.test.util.DoNotBatch;
+import org.chromium.base.test.util.Restriction;
 import org.chromium.content_public.browser.test.ContentJUnit4ClassRunner;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.ui.test.util.DeviceRestriction;
 
-/**
- * Tests for WebContentsAccessibilityImpl integration with accessibility services.
- */
+import java.io.File;
+
+/** Tests for WebContentsAccessibilityImpl integration with accessibility services. */
 @RunWith(ContentJUnit4ClassRunner.class)
-@MinAndroidSdkLevel(Build.VERSION_CODES.LOLLIPOP)
 @SuppressLint("VisibleForTests")
-@Batch(Batch.PER_CLASS)
+@DoNotBatch(reason = "Flaky tests")
+@Restriction(DeviceRestriction.RESTRICTION_TYPE_NON_AUTO)
 public class WebContentsAccessibilityTreeTest {
     // File path that holds all the relevant tests.
     private static final String BASE_ACCNAME_FILE_PATH = "content/test/data/accessibility/accname/";
@@ -39,6 +43,7 @@ public class WebContentsAccessibilityTreeTest {
     private static final String BASE_CSS_FILE_PATH = "content/test/data/accessibility/css/";
     private static final String BASE_HTML_FILE_PATH = "content/test/data/accessibility/html/";
     private static final String DEFAULT_FILE_SUFFIX = "-expected-android-external.txt";
+    private static final String ASSIST_DATA_FILE_SUFFIX = "-expected-android-assist-data.txt";
 
     @Rule
     public AccessibilityContentShellActivityTestRule mActivityTestRule =
@@ -49,6 +54,8 @@ public class WebContentsAccessibilityTreeTest {
      *      1. Open the given HTML file
      *      2. Generate the full AccessibilityNodeInfo tree
      *      3. Read expectations file and compare with results
+     *      4. Generate an AssistData structure for the page
+     *      5. Read AssistData expectations file and compare with results
      *
      * @param inputFile HTML test input file
      * @param expectationFile TXT expectations file
@@ -59,12 +66,39 @@ public class WebContentsAccessibilityTreeTest {
         mActivityTestRule.setupTestFromFile(expectationFilePath + inputFile);
 
         // Create an extra string to print to logs along with potential error for rebase tool.
-        String errorStringPrefix = String.format("\n\nTesting: %s%s\nExpected output: %s%s",
-                expectationFilePath, inputFile, expectationFilePath, expectationFile);
+        String errorStringPrefix =
+                String.format(
+                        "\n\nTesting: %s%s\nExpected output: %s%s",
+                        expectationFilePath, inputFile, expectationFilePath, expectationFile);
 
         // Generate full AccessibilityNodeInfo tree and verify results.
-        assertResults(expectationFilePath + expectationFile, generateAccessibilityNodeInfoTree(),
+        assertResults(
+                expectationFilePath + expectationFile,
+                generateAccessibilityNodeInfoTree(),
                 errorStringPrefix);
+
+        // TODO(mschillaci): remove this and add to verifyInputFile when upgrade is complete.
+        String assistDataFileName =
+                inputFile.substring(0, inputFile.length() - 5) + ASSIST_DATA_FILE_SUFFIX;
+        String directory =
+                Environment.getExternalStorageDirectory().getPath()
+                        + "/chromium_tests_root/"
+                        + expectationFilePath;
+        File expectedFile = new File(directory, "/" + assistDataFileName);
+        if (expectedFile.exists()) {
+            errorStringPrefix =
+                    String.format(
+                            "\n\nTesting: %s%s\nExpected output: %s%s",
+                            expectationFilePath,
+                            inputFile,
+                            expectationFilePath,
+                            assistDataFileName);
+            // Generate full AssistData tree and verify results.
+            assertResults(
+                    expectationFilePath + "/" + assistDataFileName,
+                    generateViewStructureTree(),
+                    errorStringPrefix);
+        }
     }
 
     // Helper methods to pass-through to the performTest method so each individual test does
@@ -113,12 +147,19 @@ public class WebContentsAccessibilityTreeTest {
      * @param actualResults Actual results generated by the accessibility code
      */
     private void assertResults(String expectationFile, String actualResults, String errorPrefix) {
-        String expectedResults = mActivityTestRule.readExpectationFile(expectationFile);
+        String expectedResults = mActivityTestRule.readExpectationFile(expectationFile).trim();
 
         Assert.assertNotNull(RESULTS_NULL, actualResults);
-        Assert.assertEquals(NODE_ERROR + errorPrefix + "\n\nExpected\n--------\n" + expectedResults
-                        + "\n\nActual\n------\n" + actualResults + "\n<-- End-of-file -->\n\n\n",
-                expectedResults, actualResults);
+        Assert.assertEquals(
+                NODE_ERROR
+                        + errorPrefix
+                        + "\n\nExpected\n--------\n"
+                        + expectedResults
+                        + "\n\nActual\n------\n"
+                        + actualResults
+                        + "\n<-- End-of-file -->\n\n\n",
+                expectedResults,
+                actualResults);
     }
 
     /**
@@ -143,6 +184,16 @@ public class WebContentsAccessibilityTreeTest {
         }
 
         return builder.toString();
+    }
+
+    private String generateViewStructureTree() {
+        TestViewStructure testViewStructure = new TestViewStructure();
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> mActivityTestRule.mWcax.onProvideVirtualStructure(testViewStructure, false));
+        CriteriaHelper.pollUiThread(
+                mActivityTestRule.mWcax::hasFinishedLatestAccessibilitySnapshotForTesting,
+                "Failed to get AssistData.");
+        return testViewStructure.toString();
     }
 
     /**
@@ -242,6 +293,18 @@ public class WebContentsAccessibilityTreeTest {
     @SmallTest
     public void test_ariaBanner() {
         performAriaTest("aria-banner.html");
+    }
+
+    @Test
+    @SmallTest
+    public void test_ariaBrailleLabel() {
+        performAriaTest("aria-braillelabel.html");
+    }
+
+    @Test
+    @SmallTest
+    public void test_ariaBrailleRoleDescription() {
+        performAriaTest("aria-brailleroledescription.html");
     }
 
     @Test
@@ -402,12 +465,6 @@ public class WebContentsAccessibilityTreeTest {
 
     @Test
     @SmallTest
-    public void test_ariaDropeffect() {
-        performAriaTest("aria-dropeffect.html");
-    }
-
-    @Test
-    @SmallTest
     public void test_ariaEmphasis() {
         performAriaTest("aria-emphasis.html");
     }
@@ -525,12 +582,6 @@ public class WebContentsAccessibilityTreeTest {
     @SmallTest
     public void test_ariaInsertionDeletion() {
         performAriaTest("aria-insertion-deletion.html");
-    }
-
-    @Test
-    @SmallTest
-    public void test_ariaInvalid() {
-        performAriaTest("aria-invalid.html");
     }
 
     @Test
@@ -1247,6 +1298,18 @@ public class WebContentsAccessibilityTreeTest {
 
     @Test
     @SmallTest
+    public void test_aside_inside_other_section() {
+        performHtmlTest("aside-inside-other-section.html");
+    }
+
+    @Test
+    @SmallTest
+    public void test_aside_inside_section_role_generic() {
+        performHtmlTest("aside-inside-section-role-generic.html");
+    }
+
+    @Test
+    @SmallTest
     public void test_b() {
         performHtmlTest("b.html");
     }
@@ -1415,6 +1478,12 @@ public class WebContentsAccessibilityTreeTest {
 
     @Test
     @SmallTest
+    public void test_details_name() {
+        performHtmlTest("details-name.html");
+    }
+
+    @Test
+    @SmallTest
     public void test_dfn() {
         performHtmlTest("dfn.html");
     }
@@ -1485,6 +1554,7 @@ public class WebContentsAccessibilityTreeTest {
         performHtmlTest("figure.html");
     }
 
+    @DisableIf.Build(sdk_is_less_than = VERSION_CODES.O, message = "https://crbug.com/1376954")
     @Test
     @SmallTest
     public void test_fixedWidthText() {
@@ -1566,6 +1636,7 @@ public class WebContentsAccessibilityTreeTest {
 
     @Test
     @SmallTest
+    @DisabledTest(message = "https://crbug.com/1181596")
     public void test_iframeAriaHidden() {
         performHtmlTest("iframe-aria-hidden.html");
     }
@@ -1585,6 +1656,7 @@ public class WebContentsAccessibilityTreeTest {
 
     @Test
     @SmallTest
+    @DisabledTest(message = "https://crbug.com/1379850")
     public void test_iframeEmptyPositioned() {
         performHtmlTest("iframe-empty-positioned.html");
     }
@@ -2038,18 +2110,6 @@ public class WebContentsAccessibilityTreeTest {
 
     @Test
     @SmallTest
-    public void test_portalWithWidgetInside() {
-        performHtmlTest("portal-with-widget-inside.html");
-    }
-
-    @Test
-    @SmallTest
-    public void test_portal() {
-        performHtmlTest("portal.html");
-    }
-
-    @Test
-    @SmallTest
     public void test_pre() {
         performHtmlTest("pre.html");
     }
@@ -2106,6 +2166,12 @@ public class WebContentsAccessibilityTreeTest {
     @SmallTest
     public void test_scrollable() {
         performHtmlTest("scrollable.html");
+    }
+
+    @Test
+    @SmallTest
+    public void test_search() {
+        performHtmlTest("search.html");
     }
 
     @Test

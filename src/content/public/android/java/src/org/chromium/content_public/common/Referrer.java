@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ public class Referrer {
     private final String mUrl;
     private final int mPolicy;
 
-    /**
-     * Constructs a referrer with the given url and policy.
-     */
+    /** Constructs a referrer with the given url and policy. */
     public Referrer(String url, int policy) {
         mUrl = url;
         mPolicy = policy;

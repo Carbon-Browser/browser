@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,14 +31,16 @@ public class ContextualSearchCardIconControl extends ViewResourceInflater {
      * @param resourceLoader The resource loader that will handle the snapshot capturing.
      */
     public ContextualSearchCardIconControl(Context context, DynamicResourceLoader resourceLoader) {
-        super(R.layout.contextual_search_card_icon_view, R.id.contextual_search_card_icon_view,
-                context, null, resourceLoader);
+        super(
+                R.layout.contextual_search_card_icon_view,
+                R.id.contextual_search_card_icon_view,
+                context,
+                null,
+                resourceLoader);
         mContext = context;
     }
 
-    /**
-     * Sets the icon to a vector drawable dictionary definition image.
-     */
+    /** Sets the icon to a vector drawable dictionary definition image. */
     void setVectorDrawableDefinitionIcon() {
         setVectorDrawableResourceId(R.drawable.ic_book_round);
     }

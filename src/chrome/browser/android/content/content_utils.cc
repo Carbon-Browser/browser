@@ -1,9 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/jni_string.h"
-#include "chrome/android/chrome_jni_headers/ContentUtils_jni.h"
+#include "chrome/browser/android/content/jni_headers/ContentUtils_jni.h"
 #include "components/embedder_support/user_agent_utils.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/web_contents.h"

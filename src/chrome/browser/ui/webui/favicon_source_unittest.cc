@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
@@ -48,8 +48,6 @@ const char kDummyPrefix[] = "chrome://any-host/";
 
 }  // namespace
 
-void Noop(scoped_refptr<base::RefCountedMemory>) {}
-
 class MockHistoryUiFaviconRequestHandler
     : public favicon::HistoryUiFaviconRequestHandler {
  public:
@@ -79,7 +77,7 @@ class TestFaviconSource : public FaviconSource {
 
   ~TestFaviconSource() override {}
 
-  MOCK_METHOD2(LoadIconBytes, base::RefCountedMemory*(float, int));
+  MOCK_METHOD(base::RefCountedMemory*, LoadIconBytes, (float, int));
 
  protected:
   // FaviconSource:
@@ -178,14 +176,14 @@ TEST_F(FaviconSourceTestWithLegacyFormat, DarkDefault) {
   SetDarkMode(true);
   EXPECT_CALL(*source(), LoadIconBytes(_, IDR_DEFAULT_FAVICON_DARK));
   source()->StartDataRequest(GURL(kDummyPrefix), test_web_contents_getter_,
-                             base::BindOnce(&Noop));
+                             base::DoNothing());
 }
 
 TEST_F(FaviconSourceTestWithLegacyFormat, LightDefault) {
   SetDarkMode(false);
   EXPECT_CALL(*source(), LoadIconBytes(_, IDR_DEFAULT_FAVICON));
   source()->StartDataRequest(GURL(kDummyPrefix), test_web_contents_getter_,
-                             base::BindOnce(&Noop));
+                             base::DoNothing());
 }
 
 TEST_F(FaviconSourceTestWithLegacyFormat,
@@ -199,7 +197,7 @@ TEST_F(FaviconSourceTestWithLegacyFormat,
 
   source()->StartDataRequest(
       GURL(base::StrCat({kDummyPrefix, "size/16@1x/https://www.google.com"})),
-      test_web_contents_getter_, base::BindOnce(&Noop));
+      test_web_contents_getter_, base::DoNothing());
 }
 
 TEST_F(FaviconSourceTestWithLegacyFormat,
@@ -210,6 +208,33 @@ TEST_F(FaviconSourceTestWithLegacyFormat,
       test_web_contents_getter_, base::DoNothing());
   tester.ExpectBucketCount("Extensions.FaviconResourceRequested",
                            extensions::Manifest::TYPE_EXTENSION, 0);
+}
+
+TEST_F(FaviconSourceTestWithLegacyFormat, ShouldNotQueryIfDesiredSizeTooLarge) {
+  EXPECT_CALL(*mock_history_ui_favicon_request_handler_,
+              GetRawFaviconForPageURL)
+      .Times(0);
+  EXPECT_CALL(*mock_favicon_service_, GetRawFavicon).Times(0);
+  EXPECT_CALL(*mock_favicon_service_, GetRawFaviconForPageURL).Times(0);
+
+  // 1000x scale factor runs into the max cap.
+  source()->StartDataRequest(
+      GURL(
+          base::StrCat({kDummyPrefix, "size/16@1000x/https://www.google.com"})),
+      test_web_contents_getter_, base::DoNothing());
+}
+
+TEST_F(FaviconSourceTestWithLegacyFormat, ShouldNotQueryIfInvalidScaleFactor) {
+  EXPECT_CALL(*mock_history_ui_favicon_request_handler_,
+              GetRawFaviconForPageURL)
+      .Times(0);
+  EXPECT_CALL(*mock_favicon_service_, GetRawFavicon).Times(0);
+  EXPECT_CALL(*mock_favicon_service_, GetRawFaviconForPageURL).Times(0);
+
+  // A negative scale factor cannot be parsed.
+  source()->StartDataRequest(
+      GURL(base::StrCat({kDummyPrefix, "size/16@-2x/https://www.google.com"})),
+      test_web_contents_getter_, base::DoNothing());
 }
 
 TEST_F(FaviconSourceTestWithLegacyFormat,
@@ -232,7 +257,7 @@ TEST_F(FaviconSourceTestWithFavicon2Format,
   base::HistogramTester tester;
   source()->StartDataRequest(
       GURL(base::StrCat({kDummyPrefix, "size/16@1x/https://www.google.com"})),
-      test_web_contents_getter_, base::BindOnce(&Noop));
+      test_web_contents_getter_, base::DoNothing());
   std::unique_ptr<base::HistogramSamples> samples(
       tester.GetHistogramSamplesSinceCreation(
           "Extensions.FaviconResourceUsed"));
@@ -244,14 +269,24 @@ TEST_F(FaviconSourceTestWithFavicon2Format, DarkDefault) {
   SetDarkMode(true);
   EXPECT_CALL(*source(), LoadIconBytes(_, IDR_DEFAULT_FAVICON_DARK));
   source()->StartDataRequest(GURL(kDummyPrefix), test_web_contents_getter_,
-                             base::BindOnce(&Noop));
+                             base::DoNothing());
 }
 
 TEST_F(FaviconSourceTestWithFavicon2Format, LightDefault) {
   SetDarkMode(false);
   EXPECT_CALL(*source(), LoadIconBytes(_, IDR_DEFAULT_FAVICON));
   source()->StartDataRequest(GURL(kDummyPrefix), test_web_contents_getter_,
-                             base::BindOnce(&Noop));
+                             base::DoNothing());
+}
+
+TEST_F(FaviconSourceTestWithFavicon2Format, LightOverride) {
+  SetDarkMode(true);
+  EXPECT_CALL(*source(), LoadIconBytes(_, IDR_DEFAULT_FAVICON));
+  source()->StartDataRequest(
+      GURL(base::StrCat({kDummyPrefix,
+                         "?pageUrl=https%3A%2F%2Fwww.google.com"
+                         "&forceLightMode"})),
+      test_web_contents_getter_, base::DoNothing());
 }
 
 TEST_F(FaviconSourceTestWithFavicon2Format,
@@ -266,9 +301,9 @@ TEST_F(FaviconSourceTestWithFavicon2Format,
   source()->StartDataRequest(
       GURL(base::StrCat(
           {kDummyPrefix,
-           "?size=16&scale_factor=1x&pageUrl=https%3A%2F%2Fwww.google."
+           "?size=16&scaleFactor=1x&pageUrl=https%3A%2F%2Fwww.google."
            "com&allowGoogleServerFallback=0"})),
-      test_web_contents_getter_, base::BindOnce(&Noop));
+      test_web_contents_getter_, base::DoNothing());
 }
 
 TEST_F(FaviconSourceTestWithFavicon2Format,
@@ -283,9 +318,9 @@ TEST_F(FaviconSourceTestWithFavicon2Format,
   source()->StartDataRequest(
       GURL(base::StrCat(
           {kDummyPrefix,
-           "?size=16&scale_factor=1x&pageUrl=https%3A%2F%2Fwww.google."
+           "?size=16&scaleFactor=1x&pageUrl=https%3A%2F%2Fwww.google."
            "com&allowGoogleServerFallback=1"})),
-      test_web_contents_getter_, base::BindOnce(&Noop));
+      test_web_contents_getter_, base::DoNothing());
 }
 
 TEST_F(
@@ -301,9 +336,9 @@ TEST_F(
   source()->StartDataRequest(
       GURL(base::StrCat(
           {kDummyPrefix,
-           "?size=16&scale_factor=1x&pageUrl=https%3A%2F%2Fwww.google."
+           "?size=16&scaleFactor=1x&pageUrl=https%3A%2F%2Fwww.google."
            "com&allowGoogleServerFallback=1"})),
-      test_web_contents_getter_, base::BindOnce(&Noop));
+      test_web_contents_getter_, base::DoNothing());
 }
 
 TEST_F(FaviconSourceTestWithFavicon2Format,
@@ -314,8 +349,26 @@ TEST_F(FaviconSourceTestWithFavicon2Format,
   EXPECT_CALL(*mock_favicon_service_, GetRawFavicon).Times(0);
   EXPECT_CALL(*mock_favicon_service_, GetRawFaviconForPageURL).Times(0);
 
-  // 100x scale factor runs into the max cap.
+  // 1000x scale factor runs into the max cap.
   source()->StartDataRequest(
-      GURL(base::StrCat({kDummyPrefix, "size/16@100x/https://www.google.com"})),
-      test_web_contents_getter_, base::BindOnce(&Noop));
+      GURL(base::StrCat(
+          {kDummyPrefix,
+           "?size=16&scaleFactor=1000x&pageUrl=https%3A%2F%2Fwww.google.com"})),
+      test_web_contents_getter_, base::DoNothing());
+}
+
+TEST_F(FaviconSourceTestWithFavicon2Format,
+       ShouldNotQueryIfInvalidScaleFactor) {
+  EXPECT_CALL(*mock_history_ui_favicon_request_handler_,
+              GetRawFaviconForPageURL)
+      .Times(0);
+  EXPECT_CALL(*mock_favicon_service_, GetRawFavicon).Times(0);
+  EXPECT_CALL(*mock_favicon_service_, GetRawFaviconForPageURL).Times(0);
+
+  // A negative scale factor cannot be parsed.
+  source()->StartDataRequest(
+      GURL(base::StrCat(
+          {kDummyPrefix,
+           "?size=16&scaleFactor=-2x&pageUrl=https%3A%2F%2Fwww.google.com"})),
+      test_web_contents_getter_, base::DoNothing());
 }

@@ -1,28 +1,30 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import '//resources/js/util.m.js';
 import '//resources/cr_components/localized_link/localized_link.js';
-import '//resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
-import '//resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
-import '//resources/cr_elements/cr_toggle/cr_toggle.m.js';
-import '//resources/cr_elements/shared_style_css.m.js';
-import '//resources/cr_elements/shared_vars_css.m.js';
+import '//resources/cr_elements/cr_link_row/cr_link_row.js';
+import '//resources/cr_elements/cr_radio_button/cr_radio_button.js';
+import '//resources/cr_elements/cr_radio_group/cr_radio_group.js';
+import '//resources/cr_elements/cr_toggle/cr_toggle.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
+import '//resources/cr_elements/cr_shared_vars.css.js';
+import '//resources/cr_elements/policy/cr_policy_indicator.js';
 import '//resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import '../settings_shared.css.js';
 
-import {assert} from '//resources/js/assert_ts.js';
-import {WebUIListenerMixin} from '//resources/js/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from '//resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from '//resources/js/assert.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {StatusAction, SyncBrowserProxy, SyncBrowserProxyImpl, SyncPrefs, syncPrefsIndividualDataTypes, SyncStatus} from '/shared/settings/people_page/sync_browser_proxy.js';
+// <if expr="chromeos_lacros">
+import {OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
 
-// <if expr="chromeos_ash or chromeos_lacros">
-import {loadTimeData} from '../i18n_setup.js';
 // </if>
 
+import {loadTimeData} from '../i18n_setup.js';
 import {Route, Router} from '../router.js';
 
-import {StatusAction, SyncBrowserProxy, SyncBrowserProxyImpl, SyncPrefs, syncPrefsIndividualDataTypes, SyncStatus} from './sync_browser_proxy.js';
 import {getTemplate} from './sync_controls.html.js';
 
 /**
@@ -34,12 +36,15 @@ enum RadioButtonNames {
   CUSTOMIZE_SYNC = 'customize-sync',
 }
 
+const SYNC_DECOUPLE_ADDRESS_PAYMENT_SETTINGS_FEATURE: string =
+    'syncDecoupleAddressPaymentSettings';
+
 /**
  * @fileoverview
  * 'settings-sync-controls' contains all sync data type controls.
  */
 
-const SettingsSyncControlsElementBase = WebUIListenerMixin(PolymerElement);
+const SettingsSyncControlsElementBase = WebUiListenerMixin(PolymerElement);
 
 export class SettingsSyncControlsElement extends
     SettingsSyncControlsElementBase {
@@ -73,12 +78,25 @@ export class SettingsSyncControlsElement extends
         type: Object,
         observer: 'syncStatusChanged_',
       },
+
+      // <if expr="chromeos_lacros">
+      /**
+       * Whether to show the new UI for OS Sync Settings and
+       * Browser Sync Settings which include sublabel and
+       * Apps toggle shared between Ash and Lacros.
+       */
+      showSyncSettingsRevamp_: {
+        type: Boolean,
+        value: loadTimeData.getBoolean('showSyncSettingsRevamp'),
+      },
+      //</if>
     };
   }
 
   override hidden: boolean;
   syncPrefs?: SyncPrefs;
   syncStatus: SyncStatus;
+  private showSyncSettingsRevamp_: boolean;
   private browserProxy_: SyncBrowserProxy = SyncBrowserProxyImpl.getInstance();
   private cachedSyncPrefs_: {[key: string]: any}|null;
 
@@ -95,7 +113,7 @@ export class SettingsSyncControlsElement extends
   override connectedCallback() {
     super.connectedCallback();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'sync-prefs-changed', this.handleSyncPrefsChanged_.bind(this));
 
     const router = Router.getInstance();
@@ -105,19 +123,10 @@ export class SettingsSyncControlsElement extends
     }
   }
 
-
-  // <if expr="chromeos_ash or chromeos_lacros">
-  private shouldShowLacrosSideBySideWarning_(): boolean {
-    return loadTimeData.getBoolean('shouldShowLacrosSideBySideWarning');
-  }
-
-  private shouldShowOSSyncSettingsLink_(): boolean {
-    // <if expr="chromeos_ash">
-    return loadTimeData.getBoolean('syncSettingsCategorizationEnabled');
-    // </if>
-    // <if expr="chromeos_lacros">
-    return true;  // Should always be shown on Lacros.
-    // </if>
+  // <if expr="chromeos_lacros">
+  private onOsSyncSettingsLinkClick_() {
+    OpenWindowProxyImpl.getInstance().openUrl(
+        loadTimeData.getString('osSyncSettingsUrl'));
   }
   // </if>
 
@@ -128,8 +137,12 @@ export class SettingsSyncControlsElement extends
     this.syncPrefs = syncPrefs;
 
     // If autofill is not registered or synced, force Payments integration off.
-    if (!this.syncPrefs.autofillRegistered || !this.syncPrefs.autofillSynced) {
-      this.set('syncPrefs.paymentsIntegrationEnabled', false);
+    // TODO(crbug.com/1435431): Remove this coupling.
+    if (!loadTimeData.getBoolean(
+            SYNC_DECOUPLE_ADDRESS_PAYMENT_SETTINGS_FEATURE) &&
+        (!this.syncPrefs.autofillRegistered ||
+         !this.syncPrefs.autofillSynced)) {
+      this.set('syncPrefs.paymentsSynced', false);
     }
   }
 
@@ -151,6 +164,19 @@ export class SettingsSyncControlsElement extends
     this.set('syncPrefs.syncAllDataTypes', syncAllDataTypes);
     this.handleSyncAllDataTypesChanged_(syncAllDataTypes);
   }
+
+  // <if expr="chromeos_lacros">
+  private disableAppsToggle_(
+      syncAllDataTypes: boolean, showSyncSettingsRevamp: boolean,
+      appsManaged: boolean): boolean {
+    return syncAllDataTypes || showSyncSettingsRevamp || appsManaged;
+  }
+
+  private showAppsPolicyIndicator_(
+      appsManaged: boolean, showSyncSettingsRevamp: boolean): boolean {
+    return appsManaged && !showSyncSettingsRevamp;
+  }
+  // </if>
 
   private handleSyncAllDataTypesChanged_(syncAllDataTypes: boolean) {
     if (syncAllDataTypes) {
@@ -188,22 +214,42 @@ export class SettingsSyncControlsElement extends
    * Handler for when the autofill data type checkbox is changed.
    */
   private onAutofillDataTypeChanged_() {
-    this.set(
-        'syncPrefs.paymentsIntegrationEnabled', this.syncPrefs!.autofillSynced);
+    if (!loadTimeData.getBoolean(
+            SYNC_DECOUPLE_ADDRESS_PAYMENT_SETTINGS_FEATURE)) {
+      // TODO(crbug.com/1435431): Remove this coupling.
+      this.set('syncPrefs.paymentsSynced', this.syncPrefs!.autofillSynced);
+    }
 
     this.onSingleSyncDataTypeChanged_();
   }
 
-  /**
-   * Handler for when the autofill data type checkbox is changed.
-   */
-  private onTypedUrlsDataTypeChanged_() {
-    this.onSingleSyncDataTypeChanged_();
+  // TODO(crbug.com/1435431): Remove this coupling.
+  private shouldPaymentsCheckboxBeHidden_(
+      paymentsRegistered: boolean, autofillRegistered: boolean): boolean {
+    if (loadTimeData.getBoolean(
+            SYNC_DECOUPLE_ADDRESS_PAYMENT_SETTINGS_FEATURE)) {
+      return !paymentsRegistered;
+    } else {
+      return !paymentsRegistered || !autofillRegistered;
+    }
   }
 
-  private shouldPaymentsCheckboxBeDisabled_(
-      syncAllDataTypes: boolean, autofillSynced: boolean): boolean {
-    return syncAllDataTypes || !autofillSynced;
+  // TODO(crbug.com/1435431): Remove this coupling.
+  private disablePaymentsCheckbox_(
+      syncAllDataTypes: boolean, autofillSynced: boolean,
+      autofillManaged: boolean, paymentsManaged: boolean): boolean {
+    if (loadTimeData.getBoolean(
+            SYNC_DECOUPLE_ADDRESS_PAYMENT_SETTINGS_FEATURE)) {
+      return this.disableTypeCheckBox_(syncAllDataTypes, paymentsManaged);
+    } else {
+      return this.disableTypeCheckBox_(syncAllDataTypes, paymentsManaged) ||
+          !autofillSynced || autofillManaged;
+    }
+  }
+
+  private disableTypeCheckBox_(
+      syncAllDataTypes: boolean, dataTypeManaged: boolean): boolean {
+    return syncAllDataTypes || dataTypeManaged;
   }
 
   private syncStatusChanged_() {

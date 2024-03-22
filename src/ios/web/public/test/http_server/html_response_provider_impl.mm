@@ -1,17 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/public/test/http_server/html_response_provider_impl.h"
 
+#import "base/containers/contains.h"
 #import "ios/web/public/test/http_server/response_provider.h"
-#include "net/http/http_response_headers.h"
-#include "net/http/http_status_code.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/http/http_response_headers.h"
+#import "net/http/http_status_code.h"
+#import "url/gurl.h"
 
 namespace {
 std::map<GURL, HtmlResponseProviderImpl::Response> BuildResponseMap(
@@ -91,7 +88,7 @@ HtmlResponseProviderImpl::~HtmlResponseProviderImpl() {}
 
 bool HtmlResponseProviderImpl::CanHandleRequest(
     const web::ResponseProvider::Request& request) {
-  return responses_.find(request.url) != responses_.end();
+  return base::Contains(responses_, request.url);
 }
 
 void HtmlResponseProviderImpl::GetResponseHeadersAndBody(

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,14 +19,14 @@ import java.util.Map;
  *
  * @param <T> The type of the activation data.
  */
-public class Controller<T> extends Observable<T> {
+public class Controller<T> implements Observable<T> {
     private final Sequencer mSequencer = new Sequencer();
     private final List<Observer<? super T>> mObservers = new ArrayList<>();
     private final Map<Observer<? super T>, Scope> mScopeMap = new HashMap<>();
     private T mData;
 
     @Override
-    public Subscription subscribe(Observer<? super T> observer) {
+    public Scope subscribe(Observer<? super T> observer) {
         mSequencer.sequence(() -> {
             mObservers.add(observer);
             if (mData != null) notifyEnter(observer);

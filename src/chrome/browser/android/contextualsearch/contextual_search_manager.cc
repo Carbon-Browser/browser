@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,16 @@
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
 #include "base/time/time.h"
 #include "chrome/android/chrome_jni_headers/ContextualSearchManager_jni.h"
-#include "chrome/browser/android/contextualsearch/contextual_search_delegate.h"
 #include "chrome/browser/android/contextualsearch/native_contextual_search_context.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
+#include "components/contextual_search/core/browser/contextual_search_delegate_impl.h"
 #include "components/contextual_search/core/browser/resolved_search_term.h"
 #include "components/navigation_interception/intercept_navigation_delegate.h"
 #include "components/variations/variations_associated_data.h"
@@ -41,15 +41,9 @@ ContextualSearchManager::ContextualSearchManager(JNIEnv* env,
   Java_ContextualSearchManager_setNativeManager(
       env, obj, reinterpret_cast<intptr_t>(this));
   Profile* profile = ProfileManager::GetActiveUserProfile();
-  delegate_ = std::make_unique<ContextualSearchDelegate>(
+  delegate_ = std::make_unique<ContextualSearchDelegateImpl>(
       profile->GetURLLoaderFactory(),
-      TemplateURLServiceFactory::GetForProfile(profile),
-      base::BindRepeating(
-          &ContextualSearchManager::OnSearchTermResolutionResponse,
-          base::Unretained(this)),
-      base::BindRepeating(
-          &ContextualSearchManager::OnTextSurroundingSelectionAvailable,
-          base::Unretained(this)));
+      TemplateURLServiceFactory::GetForProfile(profile));
 }
 
 ContextualSearchManager::~ContextualSearchManager() {
@@ -74,8 +68,11 @@ void ContextualSearchManager::StartSearchTermResolutionRequest(
       NativeContextualSearchContext::FromJavaContextualSearchContext(
           j_contextual_search_context);
   // Calls back to OnSearchTermResolutionResponse.
-  delegate_->StartSearchTermResolutionRequest(contextual_search_context,
-                                              base_web_contents);
+  delegate_->StartSearchTermResolutionRequest(
+      contextual_search_context, base_web_contents,
+      base::BindRepeating(
+          &ContextualSearchManager::OnSearchTermResolutionResponse,
+          base::Unretained(this)));
 }
 
 void ContextualSearchManager::GatherSurroundingText(
@@ -89,8 +86,11 @@ void ContextualSearchManager::GatherSurroundingText(
   base::WeakPtr<NativeContextualSearchContext> contextual_search_context =
       NativeContextualSearchContext::FromJavaContextualSearchContext(
           j_contextual_search_context);
-  delegate_->GatherAndSaveSurroundingText(contextual_search_context,
-                                          base_web_contents);
+  delegate_->GatherAndSaveSurroundingText(
+      contextual_search_context, base_web_contents,
+      base::BindRepeating(
+          &ContextualSearchManager::OnTextSurroundingSelectionAvailable,
+          base::Unretained(this)));
 }
 
 void ContextualSearchManager::OnSearchTermResolutionResponse(

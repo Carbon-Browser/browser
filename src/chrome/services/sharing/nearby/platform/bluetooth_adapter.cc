@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/bluetooth_adapter.h"
 #include "base/metrics/histogram_functions.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -67,6 +66,14 @@ std::string BluetoothAdapter::GetName() const {
 }
 
 bool BluetoothAdapter::SetName(absl::string_view name) {
+  return SetName(name, /*persist=*/true);
+}
+
+bool BluetoothAdapter::SetName(absl::string_view name, bool persist) {
+  // The persist parameter is not used by ChromeOS. The function was created
+  // in the base class to support Windows. For ChromeOS, we will always pass
+  // true. If this capability is needed later on, the reference can be found
+  // at b/234135746.
   bool set_name_success = false;
   bool call_success = adapter_->SetName(name.data(), &set_name_success);
 
@@ -85,4 +92,3 @@ std::string BluetoothAdapter::GetMacAddress() const {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

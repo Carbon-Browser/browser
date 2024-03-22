@@ -1,12 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_POLICY_STATUS_COLLECTOR_MANAGED_SESSION_SERVICE_H_
 #define CHROME_BROWSER_ASH_POLICY_STATUS_COLLECTOR_MANAGED_SESSION_SERVICE_H_
 
-#include "ash/components/login/auth/auth_status_consumer.h"
-#include "ash/components/login/session/session_termination_manager.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/scoped_multi_source_observation.h"
@@ -15,14 +14,22 @@
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 #include "chrome/browser/ash/login/app_mode/kiosk_launch_controller.h"
-#include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
+#include "chromeos/ash/components/login/auth/auth_status_consumer.h"
+#include "chromeos/ash/components/login/session/session_termination_manager.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "components/account_id/account_id.h"
-#include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
 #include "components/user_manager/user_manager_base.h"
+
+namespace ash {
+class UserSessionManager;
+}  // namespace ash
+
+namespace session_manager {
+class SessionManager;
+}  // namespace session_manager
 
 namespace policy {
 
@@ -52,8 +59,14 @@ class ManagedSessionService
     // Occurs when the active user has locked the user session.
     virtual void OnLocked() {}
 
+    // TODO(b/247595531): Merge both Unlock functions into one.
     // Occurs when the active user has unlocked the user session.
     virtual void OnUnlocked() {}
+
+    // Occurs when the active user attempts to unlock the user session.
+    virtual void OnUnlockAttempt(
+        const bool success,
+        const session_manager::UnlockType unlock_type) {}
 
     // Occurs when the device recovers from a suspend state, where
     // |suspend_time| is the time when the suspend state
@@ -86,6 +99,9 @@ class ManagedSessionService
   // session_manager::SessionManagerObserver::Observer
   void OnSessionStateChanged() override;
   void OnUserProfileLoaded(const AccountId& account_id) override;
+  void OnUnlockScreenAttempt(
+      const bool success,
+      const session_manager::UnlockType unlock_type) override;
 
   // user_manager::Observer
   void OnUserToBeRemoved(const AccountId& account_id) override;
@@ -98,9 +114,10 @@ class ManagedSessionService
   // chromeos::PowerManagerClient::Observer
   void SuspendDone(base::TimeDelta sleep_duration) override;
 
-  void OnPasswordChangeDetected(const ash::UserContext& user_context) override {
-  }
-  void OnOldEncryptionDetected(const ash::UserContext& user_context,
+  void OnOnlinePasswordUnusable(std::unique_ptr<ash::UserContext> user_context,
+                                bool) override {}
+  void OnPasswordChangeDetectedFor(const AccountId& account) override {}
+  void OnOldEncryptionDetected(std::unique_ptr<ash::UserContext> user_context,
                                bool has_incomplete_migration) override {}
   void OnAuthSuccess(const ash::UserContext& user_context) override {}
 
@@ -119,11 +136,12 @@ class ManagedSessionService
 
   bool is_logged_in_observed_ = false;
 
-  base::Clock* clock_;
+  raw_ptr<base::Clock, ExperimentalAsh> clock_;
 
   base::ObserverList<Observer> observers_;
 
-  session_manager::SessionManager* const session_manager_;
+  const raw_ptr<session_manager::SessionManager, ExperimentalAsh>
+      session_manager_;
 
   base::ScopedMultiSourceObservation<Profile, ProfileObserver>
       profile_observations_{this};
@@ -133,11 +151,8 @@ class ManagedSessionService
   base::ScopedObservation<chromeos::PowerManagerClient,
                           chromeos::PowerManagerClient::Observer>
       power_manager_observation_{this};
-  base::ScopedObservation<
-      ash::UserSessionManager,
-      ash::UserAuthenticatorObserver,
-      &ash::UserSessionManager::AddUserAuthenticatorObserver,
-      &ash::UserSessionManager::RemoveUserAuthenticatorObserver>
+  base::ScopedObservation<ash::UserSessionManager,
+                          ash::UserAuthenticatorObserver>
       authenticator_observation_{this};
 
   base::ScopedObservation<user_manager::UserManager,

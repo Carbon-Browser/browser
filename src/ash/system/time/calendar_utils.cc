@@ -1,37 +1,44 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/time/calendar_utils.h"
 
-#include <map>
+#include <optional>
 #include <string>
 
-#include "ash/components/settings/timezone_settings.h"
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/color_util.h"
 #include "ash/system/time/date_helper.h"
 #include "base/i18n/time_formatting.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
+#include "components/prefs/pref_service.h"
 #include "components/user_manager/user_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/icu/source/i18n/unicode/gregocal.h"
 #include "ui/views/layout/table_layout.h"
 
 namespace ash {
 
 namespace calendar_utils {
 
+bool IsForGlanceablesV2() {
+  return features::AreGlanceablesV2Enabled() &&
+         features::IsGlanceablesV2CalendarViewEnabled();
+}
+
 bool IsToday(const base::Time selected_date) {
   return IsTheSameDay(selected_date, base::Time::Now());
 }
 
-bool IsTheSameDay(absl::optional<base::Time> date_a,
-                  absl::optional<base::Time> date_b) {
-  if (!date_a.has_value() || !date_b.has_value())
+bool IsTheSameDay(std::optional<base::Time> date_a,
+                  std::optional<base::Time> date_b) {
+  if (!date_a.has_value() || !date_b.has_value()) {
     return false;
+  }
 
   return calendar_utils::GetMonthDayYear(date_a.value()) ==
          calendar_utils::GetMonthDayYear(date_b.value());
@@ -139,6 +146,22 @@ std::u16string GetMonthNameAndYear(const base::Time date) {
       DateHelper::GetInstance()->month_name_year_formatter(), date);
 }
 
+std::u16string GetTwelveHourClockHours(const base::Time date) {
+  return calendar_utils::FormatDate(
+      DateHelper::GetInstance()->twelve_hour_clock_hours_formatter(), date);
+}
+
+std::u16string GetTwentyFourHourClockHours(const base::Time date) {
+  return calendar_utils::FormatDate(
+      DateHelper::GetInstance()->twenty_four_hour_clock_hours_formatter(),
+      date);
+}
+
+std::u16string GetMinutes(const base::Time date) {
+  return calendar_utils::FormatDate(
+      DateHelper::GetInstance()->minutes_formatter(), date);
+}
+
 std::u16string FormatTwelveHourClockTimeInterval(const base::Time& start_time,
                                                  const base::Time& end_time) {
   return calendar_utils::FormatInterval(
@@ -155,13 +178,10 @@ std::u16string FormatTwentyFourHourClockTimeInterval(
 }
 
 void SetUpWeekColumns(views::TableLayout* layout) {
-  layout->AddPaddingColumn(views::TableLayout::kFixedSize, kColumnSetPadding);
   for (int i = 0; i < calendar_utils::kDateInOneWeek; ++i) {
-    layout
-        ->AddColumn(views::LayoutAlignment::kStretch,
-                    views::LayoutAlignment::kStretch, 1.0f,
-                    views::TableLayout::ColumnSize::kFixed, 0, 0)
-        .AddPaddingColumn(views::TableLayout::kFixedSize, kColumnSetPadding);
+    layout->AddColumn(views::LayoutAlignment::kStretch,
+                      views::LayoutAlignment::kStretch, 1.0f,
+                      views::TableLayout::ColumnSize::kFixed, 0, 0);
   }
 }
 
@@ -196,7 +216,7 @@ SkColor GetDisabledTextColor() {
   const ash::AshColorProvider* color_provider = ash::AshColorProvider::Get();
   const SkColor primary_color = color_provider->GetContentLayerColor(
       AshColorProvider::ContentLayerType::kTextColorPrimary);
-  return color_provider->GetDisabledColor(primary_color);
+  return ColorUtil::GetDisabledColor(primary_color);
 }
 
 base::Time GetFirstDayOfMonth(const base::Time& date) {
@@ -233,11 +253,22 @@ ASH_EXPORT base::Time GetStartOfNextMonthUTC(base::Time date) {
   return GetStartOfMonthUTC(GetStartOfMonthUTC(date) + base::Days(33));
 }
 
+ASH_EXPORT bool ShouldFetchEvents() {
+  return IsActiveUser() && !IsDisabledByAdmin();
+}
+
 ASH_EXPORT bool IsActiveUser() {
-  absl::optional<user_manager::UserType> user_type =
+  std::optional<user_manager::UserType> user_type =
       Shell::Get()->session_controller()->GetUserType();
-  return (user_type && *user_type == user_manager::USER_TYPE_REGULAR) &&
+  return (user_type && (*user_type == user_manager::USER_TYPE_REGULAR ||
+                        *user_type == user_manager::USER_TYPE_CHILD)) &&
          !Shell::Get()->session_controller()->IsUserSessionBlocked();
+}
+
+ASH_EXPORT bool IsDisabledByAdmin() {
+  auto* pref_service =
+      Shell::Get()->session_controller()->GetActivePrefService();
+  return !pref_service->GetBoolean(prefs::kCalendarIntegrationEnabled);
 }
 
 base::TimeDelta GetTimeDifference(base::Time date) {
@@ -265,8 +296,9 @@ ASH_EXPORT const std::pair<base::Time, base::Time> GetFetchStartEndTimes(
 
 int GetDayOfWeekInt(const base::Time date) {
   int day_int;
-  if (base::StringToInt(GetDayOfWeek(date), &day_int))
+  if (base::StringToInt(GetDayOfWeek(date), &day_int)) {
     return day_int;
+  }
 
   // For a few special locales the day of week is not in a number. In these
   // cases, use the default day of week from time exploded. For example:
@@ -275,6 +307,73 @@ int GetDayOfWeekInt(const base::Time date) {
   base::Time::Exploded local_date_exploded = GetExplodedUTC(date_local);
   // Time exploded uses 0-based day of week (0 = Sunday, etc.)
   return local_date_exploded.day_of_week + 1;
+}
+
+bool IsMultiDayEvent(const google_apis::calendar::CalendarEvent* event) {
+  DCHECK(event);
+  return (GetStartTimeMidnightAdjusted(event) <
+          GetEndTimeMidnightAdjusted(event));
+}
+
+base::Time GetStartTimeAdjusted(
+    const google_apis::calendar::CalendarEvent* event) {
+  base::Time start_time = event->start_time().date_time();
+  return start_time + GetTimeDifference(start_time);
+}
+
+base::Time GetEndTimeAdjusted(
+    const google_apis::calendar::CalendarEvent* event) {
+  base::Time end_time = event->end_time().date_time();
+  return end_time + GetTimeDifference(end_time);
+}
+
+ASH_EXPORT base::Time GetStartTimeMidnightAdjusted(
+    const google_apis::calendar::CalendarEvent* event) {
+  return GetStartTimeAdjusted(event).UTCMidnight();
+}
+
+ASH_EXPORT base::Time GetEndTimeMidnightAdjusted(
+    const google_apis::calendar::CalendarEvent* event) {
+  return GetEndTimeAdjusted(event).UTCMidnight();
+}
+
+ASH_EXPORT const std::tuple<base::Time, base::Time> GetStartAndEndTime(
+    const google_apis::calendar::CalendarEvent* event,
+    const base::Time& selected_date,
+    const base::Time& selected_date_midnight,
+    const base::Time& selected_date_midnight_utc) {
+  const base::Time selected_last_minute =
+      calendar_utils::GetNextDayMidnight(selected_date_midnight) -
+      base::Minutes(1);
+  const base::TimeDelta time_difference =
+      calendar_utils::GetTimeDifference(selected_date);
+  const base::Time selected_last_minute_utc =
+      selected_last_minute - time_difference;
+
+  // If it's an "all day" event, then we want to display 00:00 - 23:59 for the
+  // event. The formatter we use will apply timezone changes to the given
+  // `base::Time` which are set to UTC midnight in the response, so we need to
+  // negate the timezone, so when the formatter formats, it will make the dates
+  // midnight in the local timezone.
+  if (event->all_day_event()) {
+    return std::make_tuple(selected_date_midnight_utc,
+                           selected_last_minute_utc);
+  }
+
+  base::Time start_time = calendar_utils::GetMaxTime(
+      event->start_time().date_time(), selected_date_midnight_utc);
+  base::Time end_time = calendar_utils::GetMinTime(
+      event->end_time().date_time(), selected_last_minute_utc);
+
+  return std::make_tuple(start_time, end_time);
+}
+
+const std::tuple<base::Time, base::Time> GetMidnight(const base::Time time) {
+  const auto time_difference = GetTimeDifference(time);
+  const auto utc_midnight = (time + time_difference).UTCMidnight();
+  const auto local_midnight = utc_midnight - time_difference;
+
+  return std::make_tuple(utc_midnight, local_midnight);
 }
 
 }  // namespace calendar_utils

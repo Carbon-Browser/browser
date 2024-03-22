@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class MEDIA_EXPORT AudioRendererMixerPool {
   virtual AudioRendererMixer* GetMixer(
       const base::UnguessableToken& owner_token,
       const AudioParameters& input_params,
-      AudioLatency::LatencyType latency,
+      AudioLatency::Type latency,
       const OutputDeviceInfo& sink_info,
       scoped_refptr<AudioRendererSink> sink) = 0;
 

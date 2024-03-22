@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,19 @@
 
 #include <surface-augmenter-server-protocol.h>
 
+#include "base/files/scoped_file.h"
 #include "base/notreached.h"
 #include "ui/ozone/platform/wayland/test/mock_surface.h"
 #include "ui/ozone/platform/wayland/test/server_object.h"
 #include "ui/ozone/platform/wayland/test/test_augmented_subsurface.h"
 #include "ui/ozone/platform/wayland/test/test_augmented_surface.h"
+#include "ui/ozone/platform/wayland/test/test_buffer.h"
 
 namespace wl {
 
 namespace {
 
-constexpr uint32_t kSurfaceAugmenterProtocolVersion = 2;
+constexpr uint32_t kSurfaceAugmenterProtocolVersion = 7;
 
 void CreateSolidColorBuffer(struct wl_client* client,
                             struct wl_resource* resource,
@@ -24,7 +26,10 @@ void CreateSolidColorBuffer(struct wl_client* client,
                             struct wl_array* color,
                             int32_t width,
                             int32_t height) {
-  NOTIMPLEMENTED_LOG_ONCE();
+  std::vector<base::ScopedFD> fds;
+  CreateResourceWithImpl<::testing::NiceMock<TestBuffer>>(
+      client, &wl_buffer_interface, wl_resource_get_version(resource),
+      &kTestWlBufferImpl, id, std::move(fds));
 }
 
 void GetGetAugmentedSurface(struct wl_client* client,

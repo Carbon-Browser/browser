@@ -1,16 +1,16 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/tabs/tab_strip_model_stats_recorder.h"
 
-#include <algorithm>
 #include <utility>
 
 #include "base/check.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/supports_user_data.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -66,16 +66,8 @@ void TabStripModelStatsRecorder::TabInfo::UpdateState(TabState new_state) {
 
   switch (current_state_) {
     case TabState::INITIAL:
-      break;
     case TabState::ACTIVE:
-      UMA_HISTOGRAM_ENUMERATION("Tabs.StateTransfer.Target_Active",
-                                static_cast<int>(new_state),
-                                static_cast<int>(TabState::MAX));
-      break;
     case TabState::INACTIVE:
-      UMA_HISTOGRAM_ENUMERATION("Tabs.StateTransfer.Target_Inactive",
-                                static_cast<int>(new_state),
-                                static_cast<int>(TabState::MAX));
       break;
     case TabState::CLOSED:
     case TabState::MAX:
@@ -115,8 +107,7 @@ void TabStripModelStatsRecorder::OnActiveTabChanged(
   // A UMA Histogram must be bounded by some number.
   // We chose 64 as our bound as 99.5% of the users open <64 tabs.
   const int kMaxTabHistory = 64;
-  auto it = std::find(active_tab_history_.cbegin(), active_tab_history_.cend(),
-                      new_contents);
+  auto it = base::ranges::find(active_tab_history_, new_contents);
   int age = (it != active_tab_history_.cend()) ?
       (it - active_tab_history_.cbegin()) : (kMaxTabHistory - 1);
   if (was_inactive) {

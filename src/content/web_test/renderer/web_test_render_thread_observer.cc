@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,9 +41,10 @@ WebTestRenderThreadObserver::~WebTestRenderThreadObserver() {
 
 void WebTestRenderThreadObserver::RegisterMojoInterfaces(
     blink::AssociatedInterfaceRegistry* associated_interfaces) {
-  associated_interfaces->AddInterface(base::BindRepeating(
-      &WebTestRenderThreadObserver::OnWebTestRenderThreadAssociatedRequest,
-      base::Unretained(this)));
+  associated_interfaces->AddInterface<mojom::WebTestRenderThread>(
+      base::BindRepeating(
+          &WebTestRenderThreadObserver::OnWebTestRenderThreadAssociatedRequest,
+          base::Unretained(this)));
 }
 
 void WebTestRenderThreadObserver::UnregisterMojoInterfaces(

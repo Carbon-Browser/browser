@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "ash/components/login/auth/auth_status_consumer.h"
-#include "ash/components/login/auth/public/challenge_response_key.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -21,7 +20,10 @@
 #include "chrome/browser/ash/login/ui/login_display_host_common.h"
 #include "chrome/browser/ash/login/ui/oobe_ui_dialog_delegate.h"
 #include "chrome/browser/ui/ash/login_screen_client_impl.h"
-#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
+#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
+#include "chromeos/ash/components/login/auth/auth_status_consumer.h"
+#include "chromeos/ash/components/login/auth/public/challenge_response_key.h"
+#include "components/user_manager/user.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/user_activity/user_activity_detector.h"
 #include "ui/base/user_activity/user_activity_observer.h"
@@ -34,7 +36,6 @@ class View;
 
 namespace ash {
 class ExistingUserController;
-class LoginDisplayMojo;
 class MojoSystemInfoDispatcher;
 class OobeUIDialogDelegate;
 class UserBoardViewMojo;
@@ -43,7 +44,7 @@ class WizardController;
 // A LoginDisplayHost instance that sends requests to the views-based signin
 // screen.
 class LoginDisplayHostMojo : public LoginDisplayHostCommon,
-                             public LoginScreenClientImpl::Delegate,
+                             public ::LoginScreenClientImpl::Delegate,
                              public AuthStatusConsumer,
                              public OobeUI::Observer,
                              public views::ViewObserver,
@@ -56,17 +57,18 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
 
   ~LoginDisplayHostMojo() override;
 
+  static LoginDisplayHostMojo* Get();
+
   // Called when the gaia dialog is destroyed.
   void OnDialogDestroyed(const OobeUIDialogDelegate* dialog);
 
-  void SetUserCount(int user_count);
+  void SetUsers(const user_manager::UserList& users);
 
   UserSelectionScreen* user_selection_screen() {
     return user_selection_screen_.get();
   }
 
   // LoginDisplayHost:
-  LoginDisplay* GetLoginDisplay() override;
   ExistingUserController* GetExistingUserController() override;
   gfx::NativeWindow GetNativeWindow() const override;
   views::Widget* GetLoginWindowWidget() const override;
@@ -83,8 +85,10 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   void OnStartAppLaunch() override;
   void OnBrowserCreated() override;
   void ShowGaiaDialog(const AccountId& prefilled_account) override;
+  void StartUserRecovery(const AccountId& account_to_recover) override;
   void ShowOsInstallScreen() override;
   void ShowGuestTosScreen() override;
+  void ShowRemoteActivityNotificationScreen() override;
   void HideOobeDialog(bool saml_page_closed = false) override;
   void SetShelfButtonsEnabled(bool enabled) override;
   void UpdateOobeDialogState(OobeDialogState state) override;
@@ -94,9 +98,10 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   void UpdateAddUserButtonStatus() override;
   void RequestSystemInfoUpdate() override;
   bool HasUserPods() override;
-  void VerifyOwnerForKiosk(base::OnceClosure on_success) override;
-  void ShowPasswordChangedDialog(const AccountId& account_id,
-                                 bool show_password_error) override;
+  void UseAlternativeAuthentication(std::unique_ptr<UserContext> user_context,
+                                    bool online_password_mismatch) override;
+  void RunLocalAuthentication(
+      std::unique_ptr<UserContext> user_context) override;
   void StartBrowserDataMigration() override;
   void AddObserver(LoginDisplayHost::Observer* observer) override;
   void RemoveObserver(LoginDisplayHost::Observer* observer) override;
@@ -105,6 +110,9 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   bool GetKeyboardRemappedPrefValue(const std::string& pref_name,
                                     int* value) const final;
   bool IsWebUIStarted() const final;
+
+  // LoginDisplayHostCommon:
+  bool HandleAccelerator(LoginAcceleratorAction action) final;
 
   // LoginScreenClientImpl::Delegate:
   void HandleAuthenticateUserWithPasswordOrPin(
@@ -117,9 +125,7 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   void HandleAuthenticateUserWithChallengeResponse(
       const AccountId& account_id,
       base::OnceCallback<void(bool)> callback) override;
-  void HandleHardlockPod(const AccountId& account_id) override;
   void HandleOnFocusPod(const AccountId& account_id) override;
-  void HandleOnNoPodFocused() override;
   bool HandleFocusLockScreenApps(bool reverse) override;
   void HandleFocusOobeDialog() override;
   void HandleLaunchPublicSession(const AccountId& account_id,
@@ -129,8 +135,8 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   // AuthStatusConsumer:
   void OnAuthFailure(const AuthFailure& error) override;
   void OnAuthSuccess(const UserContext& user_context) override;
-  void OnPasswordChangeDetected(const UserContext& user_context) override;
-  void OnOldEncryptionDetected(const UserContext& user_context,
+  void OnPasswordChangeDetectedFor(const AccountId& account) override;
+  void OnOldEncryptionDetected(std::unique_ptr<UserContext> user_context,
                                bool has_incomplete_migration) override;
 
   // OobeUI::Observer:
@@ -163,6 +169,9 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   void ShowFullScreen();
   void HideDialog();
 
+  // Common part for ShowGaiaDialog/StartUserRecovery.
+  void ShowGaiaDialogImpl(const AccountId& prefilled_account);
+
   // Adds this as a `OobeUI::Observer` if it has not already been added as one.
   void ObserveOobeUI();
 
@@ -173,9 +182,10 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   // consume auth status events.
   void CreateExistingUserController();
 
-  // Consumer kiosk owner authentication functions.
-  void CheckOwnerCredentials(const UserContext& user_context);
-  void OnOwnerSigninSuccess();
+  // Result callback for local authentication dialog.
+  void OnLocalAuthenticationCompleted(
+      bool success,
+      std::unique_ptr<UserContext> user_context);
 
   // Sets an extra flag that can hide/unhide offline login link if the offline
   // login timer has expired for a focused user.
@@ -198,8 +208,6 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   };
   std::unique_ptr<AuthState> pending_auth_state_;
 
-  std::unique_ptr<LoginDisplayMojo> login_display_;
-
   std::unique_ptr<UserBoardViewMojo> user_board_view_mojo_;
   std::unique_ptr<UserSelectionScreen> user_selection_screen_;
 
@@ -209,7 +217,8 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
 
   // Called after host deletion.
   std::vector<base::OnceClosure> completion_callbacks_;
-  OobeUIDialogDelegate* dialog_ = nullptr;  // Not owned.
+  raw_ptr<OobeUIDialogDelegate, ExperimentalAsh> dialog_ =
+      nullptr;  // Not owned.
   std::unique_ptr<WizardController> wizard_controller_;
 
   // Whether or not there are users that are visible in the views login screen.
@@ -234,13 +243,10 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   // Set if this has been added as a `OobeUI::Observer`.
   bool added_as_oobe_observer_ = false;
 
+  bool initialized_ = false;
+
   // Set if Gaia dialog is shown with prefilled email.
   absl::optional<AccountId> gaia_reauth_account_id_;
-
-  // Consumer kiosk owner fields.
-  AccountId owner_account_id_;
-  base::OnceClosure owner_verified_callback_;
-  scoped_refptr<ExtendedAuthenticator> extended_authenticator_;
 
   base::ScopedObservation<views::View, views::ViewObserver> scoped_observation_{
       this};

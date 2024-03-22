@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class EncodedVideoFrame : public WTF::ThreadSafeRefCounted<EncodedVideoFrame> {
   virtual bool IsKeyFrame() const = 0;
 
   // Returns color space stored in the encoded frame.
-  virtual absl::optional<media::VideoColorSpace> ColorSpace() const = 0;
+  virtual absl::optional<gfx::ColorSpace> ColorSpace() const = 0;
 
   // Returns resolution of encoded frame, or 0x0 if not set.
   virtual gfx::Size Resolution() const = 0;

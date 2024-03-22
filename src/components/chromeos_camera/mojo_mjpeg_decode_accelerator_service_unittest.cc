@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/chromeos_camera/mojo_mjpeg_decode_accelerator_service.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -45,8 +45,8 @@ class MojoMjpegDecodeAcceleratorServiceTest : public ::testing::Test {
   }
 
  private:
-  // This is required to allow base::ThreadTaskRunnerHandle::Get() from the
-  // test execution thread.
+  // This is required to allow base::SingleThreadTaskRunner::GetCurrentDefault()
+  // from the test execution thread.
   base::test::TaskEnvironment task_environment_;
 };
 

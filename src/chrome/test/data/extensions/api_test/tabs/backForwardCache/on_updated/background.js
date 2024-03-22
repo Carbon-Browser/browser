@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,14 +40,12 @@ function promise(fun, ...args) {
   });
 }
 
-onload = async function() {
+chrome.test.getConfig(async function(config) {
   let tab = await promise(chrome.tabs.create, {"url": "about:blank"});
-  let config = await promise(chrome.test.getConfig);
   let port = config.testServer.port;
-
-  var URL_A = "http://a.com:" + port +
-        "/extensions/api_test/tabs/backForwardCache/on_updated/a.html";
-  var URL_B = "http://b.com:" + port +
+  let URL_A = "http://a.com:" + port +
+      "/extensions/api_test/tabs/backForwardCache/on_updated/a.html";
+  let URL_B = "http://b.com:" + port +
         "/extensions/api_test/tabs/backForwardCache/on_updated/b.html";
 
   chrome.test.runTests([
@@ -65,5 +63,5 @@ onload = async function() {
 
       chrome.tabs.update(tab.id, { url: URL_A });
     }
-  ]);
-};
+  ])
+});

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/keyboard/ui/keyboard_export.h"
 #include "ash/public/cpp/keyboard/keyboard_types.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/display/display.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/rect.h"
@@ -124,7 +125,7 @@ class KEYBOARD_EXPORT ContainerBehavior {
   virtual void SetAreaToRemainOnScreen(const gfx::Rect& rect) = 0;
 
  protected:
-  Delegate* delegate_;
+  raw_ptr<Delegate, ExperimentalAsh> delegate_;
 
   // The opacity of virtual keyboard container when show animation
   // starts or hide animation finishes. This cannot be zero because we

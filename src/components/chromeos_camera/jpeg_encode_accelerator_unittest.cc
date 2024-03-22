@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include <stddef.h>
@@ -9,10 +9,11 @@
 #include <memory>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/path_service.h"
 #include "base/rand_util.h"
@@ -20,10 +21,10 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/chromeos_camera/gpu_jpeg_encode_accelerator_factory.h"
@@ -342,8 +343,7 @@ class JpegClient : public JpegEncodeAccelerator::Client {
   media::BitstreamBuffer encoded_buffer_;
 
   // Mapped memory of input file.
-  base::UnsafeSharedMemoryRegion in_shm_;
-  base::WritableSharedMemoryMapping in_mapping_;
+  std::unique_ptr<base::MappedReadOnlyRegion> in_shm_;
   // Mapped memory of output buffer from hardware encoder.
   base::UnsafeSharedMemoryRegion hw_out_shm_;
   base::WritableSharedMemoryMapping hw_out_mapping_;
@@ -382,7 +382,8 @@ void JpegClient::CreateJpegEncoder() {
   }
 
   for (const auto& create_jea_func : jea_factories) {
-    encoder_ = create_jea_func.Run(base::ThreadTaskRunnerHandle::Get());
+    encoder_ =
+        create_jea_func.Run(base::SingleThreadTaskRunner::GetCurrentDefault());
     if (encoder_)
       break;
   }
@@ -466,7 +467,7 @@ bool JpegClient::GetSoftwareEncodeResult(int width,
   int y_stride = width;
   int u_stride = width / 2;
   int v_stride = u_stride;
-  uint8_t* yuv_src = in_mapping_.GetMemoryAsSpan<uint8_t>().data();
+  const uint8_t* yuv_src = static_cast<uint8_t*>(in_shm_->mapping.memory());
   const int kBytesPerPixel = 4;
   std::vector<uint8_t> rgba_buffer(width * height * kBytesPerPixel);
   std::vector<uint8_t> encoded;
@@ -577,13 +578,12 @@ void JpegClient::PrepareMemory(int32_t bitstream_buffer_id) {
   }
 
   size_t input_size = test_image->image_data.size();
-  if (!in_mapping_.IsValid() || input_size > in_mapping_.size()) {
-    in_shm_ = base::UnsafeSharedMemoryRegion::Create(input_size);
-    LOG_ASSERT(in_shm_.IsValid());
-    in_mapping_ = in_shm_.Map();
-    LOG_ASSERT(in_mapping_.IsValid());
+  if (!in_shm_ || input_size > in_shm_->mapping.size()) {
+    in_shm_ = std::make_unique<base::MappedReadOnlyRegion>(
+        base::ReadOnlySharedMemoryRegion::Create(input_size));
+    LOG_ASSERT(in_shm_->IsValid());
   }
-  memcpy(in_mapping_.memory(), test_image->image_data.data(), input_size);
+  memcpy(in_shm_->mapping.memory(), test_image->image_data.data(), input_size);
 
   if (!hw_out_shm_.IsValid() || !hw_out_mapping_.IsValid() ||
       test_image->output_size > hw_out_mapping_.size()) {
@@ -626,20 +626,20 @@ void JpegClient::SaveToFile(TestImage* test_image,
   LOG(INFO) << "Writing HW encode results to "
             << out_filename_hw.MaybeAsASCII();
 
-  ASSERT_EQ(static_cast<int>(hw_size),
-            base::WriteFile(
-                out_filename_hw,
-                static_cast<char*>(hw_out_frame_ ? hw_out_frame_->data(0)
-                                                 : hw_out_mapping_.memory()),
-                hw_size));
+  ASSERT_TRUE(base::WriteFile(
+      out_filename_hw,
+      base::make_span(hw_out_frame_
+                          ? hw_out_frame_->data(0)
+                          : static_cast<uint8_t*>(hw_out_mapping_.memory()),
+                      hw_size)));
 
   base::FilePath out_filename_sw = out_filename_hw.InsertBeforeExtension("_sw");
   LOG(INFO) << "Writing SW encode results to "
             << out_filename_sw.MaybeAsASCII();
-  ASSERT_EQ(
-      static_cast<int>(sw_size),
-      base::WriteFile(out_filename_sw,
-                      static_cast<char*>(sw_out_mapping_.memory()), sw_size));
+  ASSERT_TRUE(base::WriteFile(
+      out_filename_sw,
+      base::make_span(static_cast<uint8_t*>(sw_out_mapping_.memory()),
+                      sw_size)));
 }
 
 void JpegClient::StartEncode(int32_t bitstream_buffer_id) {
@@ -655,10 +655,10 @@ void JpegClient::StartEncode(int32_t bitstream_buffer_id) {
       media::VideoFrame::WrapExternalData(
           media::PIXEL_FORMAT_I420, test_image->visible_size,
           gfx::Rect(test_image->visible_size), test_image->visible_size,
-          in_mapping_.GetMemoryAsSpan<uint8_t>().data(),
+          static_cast<uint8_t*>(in_shm_->mapping.memory()),
           test_image->image_data.size(), base::TimeDelta());
   LOG_ASSERT(input_frame_.get());
-  input_frame_->BackWithSharedMemory(&in_shm_);
+  input_frame_->BackWithSharedMemory(&in_shm_->region);
 
   buffer_id_to_start_time_[bitstream_buffer_id] = base::TimeTicks::Now();
   encoder_->Encode(input_frame_, kJpegDefaultQuality,

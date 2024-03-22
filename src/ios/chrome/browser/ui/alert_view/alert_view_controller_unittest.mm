@@ -1,15 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/alert_view/alert_view_controller.h"
 
 #import "ios/chrome/browser/ui/alert_view/alert_action.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
 
 using AlertViewControllerTest = PlatformTest;
 
@@ -39,7 +35,7 @@ TEST_F(AlertViewControllerTest, DeallocWithActions) {
                                style:UIAlertActionStyleDefault
                              handler:^(AlertAction* alert_action){
                              }];
-    [alert setActions:@[ action ]];
+    [alert setActions:@[ @[ action ] ]];
     weakAlert = alert;
   }
   EXPECT_FALSE(weakAlert);

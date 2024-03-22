@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ std::string kFallbackUrl = "https://test.example.org/";
 
 std::string GetTestFileContents(const base::FilePath& path) {
   base::FilePath test_data_dir;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir);
   test_data_dir = test_data_dir.Append(
       base::FilePath(FILE_PATH_LITERAL("components/test/data/web_package")));
 

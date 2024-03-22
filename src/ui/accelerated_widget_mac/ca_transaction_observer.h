@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
@@ -59,7 +59,7 @@ class ACCELERATED_WIDGET_MAC_EXPORT CATransactionCoordinator {
     virtual bool ShouldWaitInPostCommit() = 0;
 
    protected:
-    virtual ~PostCommitObserver() {}
+    virtual ~PostCommitObserver() = default;
 
    private:
     friend class base::RefCountedThreadSafe<PostCommitObserver>;

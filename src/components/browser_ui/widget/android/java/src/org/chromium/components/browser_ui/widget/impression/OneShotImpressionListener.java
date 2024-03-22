@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,7 @@ public class OneShotImpressionListener implements Listener {
         mListener.onImpression();
     }
 
-    /**
-     * Resets this object, so subsequent impressions will be forwarded to its listener again.
-     */
+    /** Resets this object, so subsequent impressions will be forwarded to its listener again. */
     public void reset() {
         mTriggered = false;
     }

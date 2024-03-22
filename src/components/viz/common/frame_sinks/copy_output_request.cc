@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -26,6 +27,8 @@ const char* ResultFormatToShortString(
       return "I420";
     case viz::CopyOutputRequest::ResultFormat::NV12_PLANES:
       return "NV12";
+    case viz::CopyOutputRequest::ResultFormat::NV12_MULTIPLANE:
+      return "NV12_MULTIPLANE";
   }
 }
 
@@ -106,7 +109,8 @@ void CopyOutputRequest::SetUniformScaleRatio(int scale_from, int scale_to) {
 void CopyOutputRequest::set_blit_request(BlitRequest blit_request) {
   DCHECK(!blit_request_);
   DCHECK_EQ(result_destination(), ResultDestination::kNativeTextures);
-  DCHECK_EQ(result_format(), ResultFormat::NV12_PLANES);
+  DCHECK(result_format() == ResultFormat::NV12_PLANES ||
+         result_format() == ResultFormat::NV12_MULTIPLANE);
   DCHECK(has_result_selection());
 
   // Destination region must start at an even offset for NV12 results:
@@ -115,11 +119,9 @@ void CopyOutputRequest::set_blit_request(BlitRequest blit_request) {
 
 #if DCHECK_IS_ON()
   {
-    const gpu::MailboxHolder* first_zeroed_mailbox_it = std::find_if(
-        blit_request.mailboxes().begin(), blit_request.mailboxes().end(),
-        [](const gpu::MailboxHolder& mailbox_holder) {
-          return mailbox_holder.mailbox.IsZero();
-        });
+    const gpu::MailboxHolder* first_zeroed_mailbox_it =
+        base::ranges::find_if(blit_request.mailboxes(), &gpu::Mailbox::IsZero,
+                              &gpu::MailboxHolder::mailbox);
 
     size_t num_nonzeroed_mailboxes =
         first_zeroed_mailbox_it - blit_request.mailboxes().begin();
@@ -130,6 +132,10 @@ void CopyOutputRequest::set_blit_request(BlitRequest blit_request) {
         break;
       case ResultFormat::NV12_PLANES:
         DCHECK_EQ(num_nonzeroed_mailboxes, CopyOutputResult::kNV12MaxPlanes);
+        break;
+      case ResultFormat::NV12_MULTIPLANE:
+        DCHECK_EQ(num_nonzeroed_mailboxes,
+                  CopyOutputResult::kNV12MultiplaneMaxPlanes);
         break;
       case ResultFormat::I420_PLANES:
         DCHECK_EQ(num_nonzeroed_mailboxes, CopyOutputResult::kI420MaxPlanes);

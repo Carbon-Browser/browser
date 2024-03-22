@@ -20,10 +20,10 @@
 #include <algorithm>
 #include <iterator>
 
-#include "base/bind.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/task_traits.h"
@@ -35,6 +35,7 @@
 #include "components/adblock/core/subscription/installed_subscription.h"
 #include "components/adblock/core/subscription/installed_subscription_impl.h"
 #include "components/adblock/core/subscription/subscription.h"
+#include "components/adblock/core/subscription/subscription_validator.h"
 
 namespace adblock {
 namespace {
@@ -50,10 +51,10 @@ GURL UrlFromFlatbufferData(const FlatbufferData& flatbuffer) {
 
 SubscriptionPersistentStorageImpl::SubscriptionPersistentStorageImpl(
     base::FilePath base_storage_dir,
-    scoped_refptr<SubscriptionValidator> validator,
+    std::unique_ptr<SubscriptionValidator> validator,
     SubscriptionPersistentMetadata* persistent_metadata)
     : base_storage_dir_(std::move(base_storage_dir)),
-      validator_(validator),
+      validator_(std::move(validator)),
       persistent_metadata_(persistent_metadata) {}
 
 SubscriptionPersistentStorageImpl::~SubscriptionPersistentStorageImpl() {
@@ -65,7 +66,8 @@ SubscriptionPersistentStorageImpl::LoadedBuffer
 SubscriptionPersistentStorageImpl::WriteSubscription(
     const base::FilePath& storage_dir,
     std::unique_ptr<FlatbufferData> raw_data,
-    scoped_refptr<SubscriptionValidator> validator) {
+    SubscriptionValidator::StoreTrustedSignatureThreadSafeCallback
+        store_signature) {
   // To avoid conflict between existing subscription files, generate a new
   // unique path.
   base::FilePath subscription_path = storage_dir.AppendASCII(
@@ -86,15 +88,16 @@ SubscriptionPersistentStorageImpl::WriteSubscription(
     // TODO(DPD-1278) revert to in-memory buffer?
     return std::make_pair(nullptr, base::FilePath{});
   }
-  validator->StoreTrustedSignature(*raw_data, subscription_path);
-  return std::make_pair(std::move(raw_data), std::move(subscription_path));
+  std::move(store_signature).Run(*buffer, subscription_path);
+  return std::make_pair(std::move(buffer), std::move(subscription_path));
 }
 
 // static
 std::vector<SubscriptionPersistentStorageImpl::LoadedBuffer>
 SubscriptionPersistentStorageImpl::ReadSubscriptionsFromDirectory(
     const base::FilePath& storage_dir,
-    scoped_refptr<SubscriptionValidator> validator) {
+    SubscriptionValidator::IsSignatureValidThreadSafeCallback
+        is_signature_valid) {
   DLOG(INFO) << "[eyeo] Reading subscriptions from directory";
   TRACE_EVENT0("eyeo", "ReadSubscriptionsFromDirectory");
   // Does nothing if directory already exists:
@@ -118,8 +121,8 @@ SubscriptionPersistentStorageImpl::ReadSubscriptionsFromDirectory(
     TRACE_EVENT_END1("eyeo", "ReadFileToString", "path",
                      flatbuffer_path.AsUTF8Unsafe());
     TRACE_EVENT_BEGIN0("eyeo", "VerifySubscriptionBuffer");
-    if (!validator->IsSignatureValid(
-            InMemoryFlatbufferData(std::move(contents)), flatbuffer_path)) {
+    if (!is_signature_valid.Run(InMemoryFlatbufferData(std::move(contents)),
+                                flatbuffer_path)) {
       // This is not a valid subscription file, remove it.
       base::DeleteFile(flatbuffer_path);
       continue;
@@ -147,7 +150,7 @@ void SubscriptionPersistentStorageImpl::LoadSubscriptions(
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock()},
       base::BindOnce(&ReadSubscriptionsFromDirectory, base_storage_dir_,
-                     validator_),
+                     validator_->IsSignatureValid()),
       base::BindOnce(&SubscriptionPersistentStorageImpl::LoadComplete,
                      weak_ptr_factory.GetWeakPtr(), std::move(on_loaded)));
 }
@@ -159,7 +162,7 @@ void SubscriptionPersistentStorageImpl::StoreSubscription(
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock()},
       base::BindOnce(&WriteSubscription, base_storage_dir_, std::move(raw_data),
-                     validator_),
+                     validator_->StoreTrustedSignature()),
       base::BindOnce(&SubscriptionPersistentStorageImpl::SubscriptionStored,
                      weak_ptr_factory.GetWeakPtr(), std::move(on_finished)));
 }
@@ -170,7 +173,7 @@ void SubscriptionPersistentStorageImpl::RemoveSubscription(
   DCHECK(it != backing_file_mapping_.end())
       << "Attempted to remove subscription not governed by this "
          "SubscriptionPersistentStorageImpl";
-  validator_->RemoveStoredSignature(it->second);
+  validator_->RemoveStoredSignature().Run(it->second);
   backing_file_mapping_.erase(it);
   subscription->MarkForPermanentRemoval();
 }
@@ -212,11 +215,13 @@ void SubscriptionPersistentStorageImpl::SubscriptionStored(
       std::move(storage_result.first),
       Subscription::InstallationState::Installed, last_installation_time);
   persistent_metadata_->IncrementDownloadSuccessCount(url);
+  persistent_metadata_->SetLastInstallationTime(url);
   persistent_metadata_->SetExpirationInterval(
       url, installed_subscription->GetExpirationInterval());
   const auto parsed_version = installed_subscription->GetCurrentVersion();
-  if (!parsed_version.empty())
+  if (!parsed_version.empty()) {
     persistent_metadata_->SetVersion(url, parsed_version);
+  }
   backing_file_mapping_[installed_subscription] =
       std::move(storage_result.second);
   std::move(on_finished).Run(installed_subscription);

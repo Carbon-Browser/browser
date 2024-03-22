@@ -1,22 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/web/web_navigation_browser_agent.h"
 
-#include "components/feature_engagement/public/event_constants.h"
-#include "components/feature_engagement/public/tracker.h"
-#include "ios/chrome/browser/feature_engagement/tracker_factory.h"
+#import "components/feature_engagement/public/event_constants.h"
+#import "components/feature_engagement/public/tracker.h"
+#import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
+#import "ios/chrome/browser/lens/model/lens_browser_agent.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/lens_commands.h"
 #import "ios/chrome/browser/web/web_navigation_ntp_delegate.h"
 #import "ios/chrome/browser/web/web_navigation_util.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#include "ios/web/common/user_agent.h"
+#import "ios/web/common/user_agent.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 BROWSER_USER_DATA_KEY_IMPL(WebNavigationBrowserAgent)
 
@@ -25,44 +25,91 @@ WebNavigationBrowserAgent::WebNavigationBrowserAgent(Browser* browser)
 
 WebNavigationBrowserAgent::~WebNavigationBrowserAgent() {}
 
+bool WebNavigationBrowserAgent::CanGoBack(const web::WebState* web_state) {
+  if (!web_state || !web_state->IsRealized()) {
+    return false;
+  }
+
+  const web::NavigationManager* navigation_manager =
+      web_state->GetNavigationManager();
+  DCHECK(navigation_manager);
+  if (navigation_manager->CanGoBack()) {
+    return true;
+  }
+
+  const LensBrowserAgent* lens_browser_agent =
+      LensBrowserAgent::FromBrowser(browser_);
+  if (!lens_browser_agent) {
+    return false;
+  }
+
+  return lens_browser_agent->CanGoBackToLensViewFinder();
+}
+
 bool WebNavigationBrowserAgent::CanGoBack() {
-  return web_state_list_->GetActiveWebState() &&
-         web_state_list_->GetActiveWebState()
-             ->GetNavigationManager()
-             ->CanGoBack();
+  const web::WebState* active_web_state = web_state_list_->GetActiveWebState();
+  return WebNavigationBrowserAgent::CanGoBack(active_web_state);
+}
+
+bool WebNavigationBrowserAgent::CanGoForward(const web::WebState* web_state) {
+  if (!web_state || !web_state->IsRealized()) {
+    return false;
+  }
+
+  const web::NavigationManager* navigation_manager =
+      web_state->GetNavigationManager();
+  DCHECK(navigation_manager);
+  return navigation_manager->CanGoForward();
 }
 
 bool WebNavigationBrowserAgent::CanGoForward() {
-  return web_state_list_->GetActiveWebState() &&
-         web_state_list_->GetActiveWebState()
-             ->GetNavigationManager()
-             ->CanGoForward();
+  const web::WebState* active_web_state = web_state_list_->GetActiveWebState();
+  return WebNavigationBrowserAgent::CanGoForward(active_web_state);
 }
 
 void WebNavigationBrowserAgent::GoBack() {
-  if (web_state_list_->GetActiveWebState())
-    web_navigation_util::GoBack(web_state_list_->GetActiveWebState());
+  web::WebState* active_web_state = web_state_list_->GetActiveWebState();
+  if (!active_web_state) {
+    return;
+  }
+
+  if (active_web_state->GetNavigationManager()->CanGoBack()) {
+    web_navigation_util::GoBack(active_web_state);
+    return;
+  }
+
+  // We are at the bottom of the navigation stack. Check to see if Lens back
+  // navigation should bring the user back to the camera.
+  const LensBrowserAgent* lens_browser_agent =
+      LensBrowserAgent::FromBrowser(browser_);
+  if (lens_browser_agent) {
+    lens_browser_agent->GoBackToLensViewFinder();
+  }
 }
+
 void WebNavigationBrowserAgent::GoForward() {
-  if (web_state_list_->GetActiveWebState())
-    web_navigation_util::GoForward(web_state_list_->GetActiveWebState());
+  web::WebState* active_web_state = web_state_list_->GetActiveWebState();
+  if (active_web_state)
+    web_navigation_util::GoForward(active_web_state);
 }
 
 void WebNavigationBrowserAgent::StopLoading() {
-  if (web_state_list_->GetActiveWebState())
-    web_state_list_->GetActiveWebState()->Stop();
+  web::WebState* active_web_state = web_state_list_->GetActiveWebState();
+  if (active_web_state)
+    active_web_state->Stop();
 }
 
 void WebNavigationBrowserAgent::Reload() {
-  if (!web_state_list_->GetActiveWebState())
+  web::WebState* active_web_state = web_state_list_->GetActiveWebState();
+  if (!active_web_state)
     return;
 
   if (delegate_.NTPActiveForCurrentWebState) {
-    [delegate_ reloadNTPForWebState:web_state_list_->GetActiveWebState()];
+    [delegate_ reloadNTPForWebState:active_web_state];
   } else {
-    // |check_for_repost| is true because the reload is explicitly initiated
+    // `check_for_repost` is true because the reload is explicitly initiated
     // by the user.
-    web_state_list_->GetActiveWebState()->GetNavigationManager()->Reload(
+    active_web_state->GetNavigationManager()->Reload(
         web::ReloadType::NORMAL, true /* check_for_repost */);
   }
 }
@@ -98,11 +145,11 @@ web::UserAgentType WebNavigationBrowserAgent::UserAgentType(
   if (!web_state) {
     return web::UserAgentType::NONE;
   }
-  web::NavigationItem* visibleItem =
+  web::NavigationItem* visible_item =
       web_state->GetNavigationManager()->GetVisibleItem();
-  if (!visibleItem) {
+  if (!visible_item) {
     return web::UserAgentType::NONE;
   }
 
-  return visibleItem->GetUserAgentType();
+  return visible_item->GetUserAgentType();
 }

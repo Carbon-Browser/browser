@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,24 +19,31 @@ using ::base::Bucket;
 using ::testing::IsEmpty;
 using ::testing::UnorderedElementsAre;
 
-namespace autofill::metrics {
+namespace autofill::autofill_metrics {
 
-// These constants mirror the similarly named values in
-// `AutofillPredictionsComparisonResult` in
-// tools/metrics/histograms/metadata/autofill/histograms.xml.
-constexpr int kNameFirstSamePredictionValueAgrees = 19;
-constexpr int kNameFirstSamePredictionValueDisagrees = 20;
-constexpr int kNameFirstDifferentPredictionsValueAgreesWithOld = 21;
-constexpr int kNameFirstDifferentPredictionsValueAgreesWithBoth = 24;
-constexpr int kNameFirstDifferentPredictionsValueAgreesWithNeither = 23;
-constexpr int kEmailAddressDifferentPredictionsValueAgreesWithNew = 58;
-#if BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
-constexpr int kNameFullSamePredictionValueAgrees = 43;
-constexpr int kNameFullDifferentPredictionsValueAgreesWithOld = 45;
-constexpr int kEmailAddressDifferentPredictionsValueAgreesWithOld = 57;
-constexpr int kSearchTermSamePredictionValueDisagrees = 584;
-constexpr int kSearchTermDifferentPredictionsValueAgreesWithNew = 586;
+// These mirrors some of the values of `AutofillPredictionsComparisonResult`
+// defined in tools/metrics/histograms/enums.xml. The
+// `AutofillPredictionsComparisonResult` represents all the type-specific
+// `ShadowPredictionComparison` results returned by `GetShadowPrediction()`.
+// Only a subset of them are tested.
+// This is intentionally not an enum class to implicitly convert the values to
+// ints in comparisons with `GetShadowPrediction()`.
+enum AutofillPredictionsComparisonResult {
+  kNoPrediction = 0,
+  kNameFirstSamePredictionValueAgrees = 19,
+  kNameFirstSamePredictionValueDisagrees = 20,
+  kNameFirstDifferentPredictionsValueAgreesWithOld = 21,
+  kNameFirstDifferentPredictionsValueAgreesWithBoth = 24,
+  kNameFirstDifferentPredictionsValueAgreesWithNeither = 23,
+  kEmailAddressDifferentPredictionsValueAgreesWithNew = 58,
+  kNameFullSamePredictionValueAgrees = 43,
+  kSearchTermDifferentPredictionsValueAgreesWithNew = 586,
+#if BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
+  kNameFullDifferentPredictionsValueAgreesWithOld = 45,
+  kEmailAddressDifferentPredictionsValueAgreesWithOld = 57,
+  kSearchTermSamePredictionValueDisagrees = 584,
 #endif
+};
 
 namespace {
 
@@ -63,8 +70,6 @@ FormData GetFormWith2Fields(const GURL& form_origin) {
 // correct value in the metric enum.
 TEST(AutofillShadowPredictionComparisonTest,
      PredictionsMapToPredictionComparison) {
-  using ::autofill::metrics::GetShadowPrediction;
-
   EXPECT_EQ(kNoPrediction, GetShadowPrediction(NO_SERVER_DATA, NO_SERVER_DATA,
                                                {NO_SERVER_DATA}));
 
@@ -96,7 +101,16 @@ TEST(AutofillShadowPredictionComparisonTest, ComparisonContainsAllTypes) {
   // If this test fails after adding a type, update
   // `AutofillPredictionsComparisonResult` in tools/metrics/histograms/enums.xml
   // and set `last_known_type` to the last entry in the enum.
-  constexpr ServerFieldType last_known_type = IBAN_VALUE;
+  ServerFieldType last_known_type = MAX_VALID_FIELD_TYPE;
+  for (int type_int = MAX_VALID_FIELD_TYPE - 1; type_int >= NO_SERVER_DATA;
+       type_int--) {
+    auto type = ToSafeServerFieldType(type_int, MAX_VALID_FIELD_TYPE);
+    if (type != MAX_VALID_FIELD_TYPE) {
+      last_known_type = type;
+      break;
+    }
+  }
+
   int max_comparison =
       GetShadowPrediction(last_known_type, NAME_FIRST, {NAME_LAST});
 
@@ -105,22 +119,26 @@ TEST(AutofillShadowPredictionComparisonTest, ComparisonContainsAllTypes) {
     auto type = ToSafeServerFieldType(type_int, NO_SERVER_DATA);
     EXPECT_LE(GetShadowPrediction(type, NAME_FIRST, {NAME_LAST}),
               max_comparison)
-        << FieldTypeToStringPiece(type) << " has no mapping.";
+        << FieldTypeToStringView(type) << " has no mapping.";
   }
 }
 
-class AutofillShadowPredictionMetricsTest
-    : public autofill::metrics::AutofillMetricsBaseTest {
+class AutofillShadowPredictionMetricsTest : public AutofillMetricsBaseTest,
+                                            public testing::Test {
  public:
   AutofillShadowPredictionMetricsTest() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
-        {base::test::ScopedFeatureList::FeatureAndParams(
+        {base::test::FeatureRefAndParams(
             features::kAutofillParsingPatternProvider,
             {{"prediction_source", "default"}})},
         {});
   }
 
   ~AutofillShadowPredictionMetricsTest() override = default;
+
+  void SetUp() override { SetUpHelper(); }
+
+  void TearDown() override { TearDownHelper(); }
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
@@ -145,7 +163,7 @@ TEST_F(AutofillShadowPredictionMetricsTest,
   autofill_manager().OnFormSubmitted(form, /*known_success=*/false,
                                      SubmissionSource::FORM_SUBMISSION);
 
-#if BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
+#if BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
   histogram_tester.ExpectBucketCount(
       "Autofill.ShadowPredictions.ExperimentalToDefault", kNoPrediction, 2);
   histogram_tester.ExpectBucketCount(
@@ -160,7 +178,7 @@ TEST_F(AutofillShadowPredictionMetricsTest,
 #endif
 }
 
-#if BUILDFLAG(USE_INTERNAL_AUTOFILL_HEADERS)
+#if BUILDFLAG(USE_INTERNAL_AUTOFILL_PATTERNS)
 // Test that Autofill.ShadowPredictions.* describes the differences between the
 // predictions and the submitted values.
 TEST_F(AutofillShadowPredictionMetricsTest,
@@ -175,13 +193,13 @@ TEST_F(AutofillShadowPredictionMetricsTest,
   autofill_manager().AddSeenForm(
       form,
       {// Field 0
-       {{PatternSource::kDefault, NAME_FULL},
-        {PatternSource::kExperimental, NAME_FULL},
-        {PatternSource::kNextGen, NAME_FIRST}},
+       {{HeuristicSource::kDefault, NAME_FULL},
+        {HeuristicSource::kExperimental, NAME_FULL},
+        {HeuristicSource::kNextGen, NAME_FIRST}},
        // Field 1
-       {{PatternSource::kDefault, SEARCH_TERM},
-        {PatternSource::kExperimental, EMAIL_ADDRESS},
-        {PatternSource::kNextGen, SEARCH_TERM}}},
+       {{HeuristicSource::kDefault, SEARCH_TERM},
+        {HeuristicSource::kExperimental, EMAIL_ADDRESS},
+        {HeuristicSource::kNextGen, SEARCH_TERM}}},
       server_types);
 
   // Simulate form submission.
@@ -209,8 +227,40 @@ TEST_F(AutofillShadowPredictionMetricsTest,
           Bucket(kNameFullDifferentPredictionsValueAgreesWithOld, 1),
           Bucket(kEmailAddressDifferentPredictionsValueAgreesWithOld, 1)));
 }
+
+// Test that Autofill.ShadowPredictions.DefaultHeuristicToDefaultServer compares
+// heuristics to server predictions.
+TEST_F(AutofillShadowPredictionMetricsTest, CompareHeuristicsAndServer) {
+  constexpr HeuristicSource source = HeuristicSource::kDefault;
+
+  FormData form = GetFormWith2Fields(autofill_client_->form_origin());
+  form.fields[0].value = u"Elvis Aaron Presley";  // A known `NAME_FULL`.
+  form.fields[1].value = u"buddy@gmail.com";      // A known `EMAIL_ADDRESS`.
+
+  std::vector<ServerFieldType> server_types = {NAME_FULL, EMAIL_ADDRESS};
+
+  // Simulate having seen this form on page load.
+  autofill_manager().AddSeenForm(form,
+                                 {// Field 0
+                                  {{source, NAME_FULL}},
+                                  // Field 1
+                                  {{source, SEARCH_TERM}}},
+                                 server_types);
+
+  // Simulate form submission.
+  base::HistogramTester histogram_tester;
+  autofill_manager().OnFormSubmitted(form, /*known_success=*/false,
+                                     SubmissionSource::FORM_SUBMISSION);
+
+  EXPECT_THAT(
+      histogram_tester.GetAllSamples(
+          "Autofill.ShadowPredictions.DefaultHeuristicToDefaultServer"),
+      UnorderedElementsAre(
+          Bucket(kNameFullSamePredictionValueAgrees, 1),
+          Bucket(kSearchTermDifferentPredictionsValueAgreesWithNew, 1)));
+}
 #endif
 
 }  // namespace
 
-}  // namespace autofill::metrics
+}  // namespace autofill::autofill_metrics

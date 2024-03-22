@@ -1,16 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_INSTALL_ATTRIBUTES_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_INSTALL_ATTRIBUTES_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
-#include "chromeos/dbus/cryptohome/rpc.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace dbus {
@@ -26,17 +26,20 @@ namespace ash {
 class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) InstallAttributesClient {
  public:
   using InstallAttributesGetCallback =
-      DBusMethodCallback<::user_data_auth::InstallAttributesGetReply>;
+      chromeos::DBusMethodCallback<::user_data_auth::InstallAttributesGetReply>;
   using InstallAttributesSetCallback =
-      DBusMethodCallback<::user_data_auth::InstallAttributesSetReply>;
-  using InstallAttributesFinalizeCallback =
-      DBusMethodCallback<::user_data_auth::InstallAttributesFinalizeReply>;
-  using InstallAttributesGetStatusCallback =
-      DBusMethodCallback<::user_data_auth::InstallAttributesGetStatusReply>;
-  using RemoveFirmwareManagementParametersCallback = DBusMethodCallback<
-      ::user_data_auth::RemoveFirmwareManagementParametersReply>;
-  using SetFirmwareManagementParametersCallback = DBusMethodCallback<
+      chromeos::DBusMethodCallback<::user_data_auth::InstallAttributesSetReply>;
+  using InstallAttributesFinalizeCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::InstallAttributesFinalizeReply>;
+  using InstallAttributesGetStatusCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::InstallAttributesGetStatusReply>;
+  using RemoveFirmwareManagementParametersCallback =
+      chromeos::DBusMethodCallback<
+          ::user_data_auth::RemoveFirmwareManagementParametersReply>;
+  using SetFirmwareManagementParametersCallback = chromeos::DBusMethodCallback<
       ::user_data_auth::SetFirmwareManagementParametersReply>;
+  using GetFirmwareManagementParametersCallback = chromeos::DBusMethodCallback<
+      ::user_data_auth::GetFirmwareManagementParametersReply>;
 
   // Not copyable or movable.
   InstallAttributesClient(const InstallAttributesClient&) = delete;
@@ -58,17 +61,12 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) InstallAttributesClient {
 
   // Runs the callback as soon as the service becomes available.
   virtual void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) = 0;
+      chromeos::WaitForServiceToBeAvailableCallback callback) = 0;
 
   // Retrieves an install attribute.
   virtual void InstallAttributesGet(
       const ::user_data_auth::InstallAttributesGetRequest& request,
       InstallAttributesGetCallback callback) = 0;
-
-  // Set an install attribute.
-  virtual void InstallAttributesSet(
-      const ::user_data_auth::InstallAttributesSetRequest& request,
-      InstallAttributesSetCallback callback) = 0;
 
   // Finalizes the install attribute.
   virtual void InstallAttributesFinalize(
@@ -90,6 +88,11 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) InstallAttributesClient {
   virtual void SetFirmwareManagementParameters(
       const ::user_data_auth::SetFirmwareManagementParametersRequest& request,
       SetFirmwareManagementParametersCallback callback) = 0;
+
+  // Get the firmware management parameters.
+  virtual void GetFirmwareManagementParameters(
+      const ::user_data_auth::GetFirmwareManagementParametersRequest& request,
+      GetFirmwareManagementParametersCallback callback) = 0;
 
   // Blocking version of InstallAttributesGet().
   virtual absl::optional<::user_data_auth::InstallAttributesGetReply>

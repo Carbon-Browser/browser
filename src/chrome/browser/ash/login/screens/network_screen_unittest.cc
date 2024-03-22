@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,14 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
 #include "chrome/browser/ash/login/mock_network_state_helper.h"
 #include "chrome/browser/ash/login/screens/mock_network_screen.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -37,16 +37,13 @@ class NetworkScreenUnitTest : public testing::Test {
 
   // testing::Test:
   void SetUp() override {
-    // Initialize the thread manager.
-    DBusThreadManager::Initialize();
-
     // Configure the browser to use Hands-Off Enrollment.
     base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
         switches::kEnterpriseEnableZeroTouchEnrollment, "hands-off");
 
     // Create the NetworkScreen we will use for testing.
     network_screen_ = std::make_unique<NetworkScreen>(
-        &mock_view_,
+        std::move(mock_view_),
         base::BindRepeating(&NetworkScreenUnitTest::HandleScreenExit,
                             base::Unretained(this)));
     mock_network_state_helper_ = new login::MockNetworkStateHelper();
@@ -59,14 +56,14 @@ class NetworkScreenUnitTest : public testing::Test {
   void TearDown() override {
     TestingBrowserProcess::GetGlobal()->SetShuttingDown(true);
     network_screen_.reset();
-    DBusThreadManager::Shutdown();
   }
 
  protected:
   // A pointer to the NetworkScreen.
   std::unique_ptr<NetworkScreen> network_screen_;
 
-  login::MockNetworkStateHelper* mock_network_state_helper_ = nullptr;
+  raw_ptr<login::MockNetworkStateHelper, DanglingUntriaged | ExperimentalAsh>
+      mock_network_state_helper_ = nullptr;
   absl::optional<NetworkScreen::Result> last_screen_result_;
 
  private:
@@ -79,7 +76,7 @@ class NetworkScreenUnitTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
 
   // More accessory objects needed by NetworkScreen.
-  MockNetworkScreenView mock_view_;
+  base::WeakPtr<NetworkScreenView> mock_view_;
 };
 
 TEST_F(NetworkScreenUnitTest, ContinuesAutomatically) {
@@ -93,14 +90,7 @@ TEST_F(NetworkScreenUnitTest, ContinuesAutomatically) {
   EXPECT_EQ(1, network_screen_->continue_attempts_);
 
   ASSERT_TRUE(last_screen_result_.has_value());
-
-  if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-    EXPECT_EQ(NetworkScreen::Result::CONNECTED_REGULAR_CONSOLIDATED_CONSENT,
-              last_screen_result_.value());
-  } else {
-    EXPECT_EQ(NetworkScreen::Result::CONNECTED_REGULAR,
-              last_screen_result_.value());
-  }
+  EXPECT_EQ(NetworkScreen::Result::CONNECTED, last_screen_result_.value());
 }
 
 TEST_F(NetworkScreenUnitTest, ContinuesOnlyOnce) {
@@ -119,13 +109,7 @@ TEST_F(NetworkScreenUnitTest, ContinuesOnlyOnce) {
   ASSERT_EQ(1, network_screen_->continue_attempts_);
 
   ASSERT_TRUE(last_screen_result_.has_value());
-  if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-    EXPECT_EQ(NetworkScreen::Result::CONNECTED_REGULAR_CONSOLIDATED_CONSENT,
-              last_screen_result_.value());
-  } else {
-    EXPECT_EQ(NetworkScreen::Result::CONNECTED_REGULAR,
-              last_screen_result_.value());
-  }
+  EXPECT_EQ(NetworkScreen::Result::CONNECTED, last_screen_result_.value());
 
   // Stop waiting for another network, net1.
   network_screen_->StopWaitingForConnection(u"net1");

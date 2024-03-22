@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,8 @@ import androidx.annotation.Nullable;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.omaha.VersionNumber;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.settings.SearchEngineSettings;
 import org.chromium.chrome.browser.ui.messages.snackbar.Snackbar;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
@@ -43,10 +44,8 @@ public final class SearchEngineChoiceNotification {
      * page responsible for search engine choice, when button is clicked.
      */
     private static class NotificationSnackbarController implements SnackbarController {
-        @NonNull
-        private final Context mContext;
-        @NonNull
-        private final SettingsLauncher mSettingsLauncher;
+        @NonNull private final Context mContext;
+        @NonNull private final SettingsLauncher mSettingsLauncher;
 
         private NotificationSnackbarController(
                 @NonNull Context context, @NonNull SettingsLauncher settingsLauncher) {
@@ -82,14 +81,18 @@ public final class SearchEngineChoiceNotification {
      * @param snackbarManager Snackbar manager which will shown and manage the Snackbar.
      * @param settingsLauncher Launcher of settings activity.
      */
-    public static void handleSearchEngineChoice(@NonNull Context context,
-            @NonNull SnackbarManager snackbarManager, @NonNull SettingsLauncher settingsLauncher) {
+    public static void handleSearchEngineChoice(
+            @NonNull Context context,
+            @NonNull SnackbarManager snackbarManager,
+            @NonNull SettingsLauncher settingsLauncher) {
         boolean searchEngineChoiceRequested = wasSearchEngineChoiceRequested();
         boolean searchEngineChoicePresented = wasSearchEngineChoicePresented();
         boolean searchEngineChoiceAvailable =
-                !TemplateUrlServiceFactory.get().isDefaultSearchManaged();
+                !TemplateUrlServiceFactory.getForProfile(Profile.getLastUsedRegularProfile())
+                        .isDefaultSearchManaged();
 
-        if (searchEngineChoiceRequested && searchEngineChoiceAvailable
+        if (searchEngineChoiceRequested
+                && searchEngineChoiceAvailable
                 && !searchEngineChoicePresented) {
             snackbarManager.showSnackbar(buildSnackbarNotification(context, settingsLauncher));
             updateSearchEngineChoicePresented();
@@ -104,15 +107,17 @@ public final class SearchEngineChoiceNotification {
 
     private static Snackbar buildSnackbarNotification(
             @NonNull Context context, @NonNull SettingsLauncher settingsLauncher) {
-        int durationSeconds = ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
-                ChromeFeatureList.ANDROID_SEARCH_ENGINE_CHOICE_NOTIFICATION,
-                PARAM_NOTIFICATION_SNACKBAR_DURATION_SECONDS,
-                PARAM_NOTIFICATION_SNACKBAR_DURATION_SECONDS_DEFAULT);
+        int durationSeconds =
+                ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
+                        ChromeFeatureList.ANDROID_SEARCH_ENGINE_CHOICE_NOTIFICATION,
+                        PARAM_NOTIFICATION_SNACKBAR_DURATION_SECONDS,
+                        PARAM_NOTIFICATION_SNACKBAR_DURATION_SECONDS_DEFAULT);
 
-        return Snackbar
-                .make(context.getString(R.string.search_engine_choice_prompt),
+        return Snackbar.make(
+                        context.getString(R.string.search_engine_choice_prompt),
                         new NotificationSnackbarController(context, settingsLauncher),
-                        Snackbar.TYPE_NOTIFICATION, Snackbar.UMA_SEARCH_ENGINE_CHOICE_NOTIFICATION)
+                        Snackbar.TYPE_NOTIFICATION,
+                        Snackbar.UMA_SEARCH_ENGINE_CHOICE_NOTIFICATION)
                 .setAction(context.getString(R.string.settings), null)
                 .setDuration((int) TimeUnit.SECONDS.toMillis(durationSeconds))
                 .setSingleLine(false)
@@ -121,19 +126,21 @@ public final class SearchEngineChoiceNotification {
 
     private static void updateSearchEngineChoiceRequested() {
         long now = System.currentTimeMillis();
-        SharedPreferencesManager.getInstance().writeLong(
-                ChromePreferenceKeys.SEARCH_ENGINE_CHOICE_REQUESTED_TIMESTAMP, now);
+        ChromeSharedPreferences.getInstance()
+                .writeLong(ChromePreferenceKeys.SEARCH_ENGINE_CHOICE_REQUESTED_TIMESTAMP, now);
     }
 
     private static boolean wasSearchEngineChoiceRequested() {
-        return SharedPreferencesManager.getInstance().contains(
-                ChromePreferenceKeys.SEARCH_ENGINE_CHOICE_REQUESTED_TIMESTAMP);
+        return ChromeSharedPreferences.getInstance()
+                .contains(ChromePreferenceKeys.SEARCH_ENGINE_CHOICE_REQUESTED_TIMESTAMP);
     }
 
     private static void updateSearchEngineChoicePresented() {
         String productVersion = VersionInfo.getProductVersion();
-        SharedPreferencesManager.getInstance().writeString(
-                ChromePreferenceKeys.SEARCH_ENGINE_CHOICE_PRESENTED_VERSION, productVersion);
+        ChromeSharedPreferences.getInstance()
+                .writeString(
+                        ChromePreferenceKeys.SEARCH_ENGINE_CHOICE_PRESENTED_VERSION,
+                        productVersion);
     }
 
     private static boolean wasSearchEngineChoicePresented() {
@@ -146,17 +153,18 @@ public final class SearchEngineChoiceNotification {
         return !lastPresentedVersionNumber.isSmallerThan(lowestAcceptedVersionNumber);
     }
 
-    @Nullable
-    private static VersionNumber getLastPresentedVersionNumber() {
-        return VersionNumber.fromString(SharedPreferencesManager.getInstance().readString(
-                ChromePreferenceKeys.SEARCH_ENGINE_CHOICE_PRESENTED_VERSION, null));
+    private static @Nullable VersionNumber getLastPresentedVersionNumber() {
+        return VersionNumber.fromString(
+                ChromeSharedPreferences.getInstance()
+                        .readString(
+                                ChromePreferenceKeys.SEARCH_ENGINE_CHOICE_PRESENTED_VERSION, null));
     }
 
-    @Nullable
-    private static VersionNumber getLowestAcceptedVersionNumber() {
-        return VersionNumber.fromString(ChromeFeatureList.getFieldTrialParamByFeature(
-                ChromeFeatureList.ANDROID_SEARCH_ENGINE_CHOICE_NOTIFICATION,
-                PARAM_NOTIFICATION_INVALIDATING_VERSION_NUMBER));
+    private static @Nullable VersionNumber getLowestAcceptedVersionNumber() {
+        return VersionNumber.fromString(
+                ChromeFeatureList.getFieldTrialParamByFeature(
+                        ChromeFeatureList.ANDROID_SEARCH_ENGINE_CHOICE_NOTIFICATION,
+                        PARAM_NOTIFICATION_INVALIDATING_VERSION_NUMBER));
     }
 
     private static int getNotificationSnackbarDuration() {

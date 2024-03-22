@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ class MAYBE_WebRtcDataBrowserTest : public WebRtcContentBrowserTestBase {
 
  protected:
   // Convenience function since most peerconnection-call.html tests just load
-  // the page, kick off some javascript and wait for the title to change to OK.
+  // the page, and execute some javascript.
   void MakeTypicalPeerConnectionCall(const std::string& javascript) {
     MakeTypicalCall(javascript, "/media/peerconnection-call-data.html");
   }

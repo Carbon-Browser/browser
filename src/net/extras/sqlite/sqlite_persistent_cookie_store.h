@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/task_traits.h"
 #include "net/cookies/cookie_monster.h"
 #include "net/log/net_log_with_source.h"
@@ -42,17 +42,20 @@ class COMPONENT_EXPORT(NET_EXTRAS) SQLitePersistentCookieStore
 
   // Port number to use for cookies whose source port is unknown at the time of
   // database migration to V13. The value -1 comes from url::PORT_UNSPECIFIED.
-  static const int kDefaultUnknownPort = -1;
+  static constexpr int kDefaultUnknownPort = -1;
 
   // All blocking database accesses will be performed on
   // |background_task_runner|, while |client_task_runner| is used to invoke
-  // callbacks.
+  // callbacks. If |enable_exclusive_access| is set to true then sqlite will
+  // be asked to open the database with flag `exclusive=1`. In practice, this is
+  // only respected on Windows.
   SQLitePersistentCookieStore(
       const base::FilePath& path,
       const scoped_refptr<base::SequencedTaskRunner>& client_task_runner,
       const scoped_refptr<base::SequencedTaskRunner>& background_task_runner,
       bool restore_old_session_cookies,
-      CookieCryptoDelegate* crypto_delegate);
+      CookieCryptoDelegate* crypto_delegate,
+      bool enable_exclusive_access);
 
   SQLitePersistentCookieStore(const SQLitePersistentCookieStore&) = delete;
   SQLitePersistentCookieStore& operator=(const SQLitePersistentCookieStore&) =

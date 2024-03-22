@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ TEST(MathUtilTest, ProjectionOfPerpendicularPlane) {
 
   gfx::Transform transform;
   transform.MakeIdentity();
-  transform.matrix().setRC(2, 2, 0);
+  transform.set_rc(2, 2, 0);
 
   gfx::RectF rect = gfx::RectF(0, 0, 1, 1);
   gfx::RectF projected_rect = MathUtil::ProjectClippedRect(transform, rect);
@@ -47,12 +47,11 @@ TEST(MathUtilTest, ProjectionOfAlmostPerpendicularPlane) {
   //   +16331238407143424.0000 +0.0000 -0.0000 +51346917453137000267776.0000
   //   +0.0000 +0.0000 +0.0000 +1.0000 ]
   transform.MakeIdentity();
-  transform.matrix().setRC(0, 2, static_cast<SkScalar>(-1));
-  transform.matrix().setRC(0, 3, static_cast<SkScalar>(3144132.0));
-  transform.matrix().setRC(2, 0, static_cast<SkScalar>(16331238407143424.0));
-  transform.matrix().setRC(2, 2, static_cast<SkScalar>(-1e-33));
-  transform.matrix().setRC(2, 3,
-                           static_cast<SkScalar>(51346917453137000267776.0));
+  transform.set_rc(0, 2, -1);
+  transform.set_rc(0, 3, 3144132.0);
+  transform.set_rc(2, 0, 16331238407143424.0);
+  transform.set_rc(2, 2, -1e-33);
+  transform.set_rc(2, 3, 51346917453137000267776.0);
 
   gfx::RectF rect = gfx::RectF(0, 0, 1, 1);
   gfx::RectF projected_rect = MathUtil::ProjectClippedRect(transform, rect);
@@ -330,14 +329,12 @@ TEST(MathUtilTest, MapEnclosingRectWithLargeTransforms) {
   gfx::Rect input(1, 2, 100, 200);
   gfx::Rect output;
 
-  gfx::Transform large_x_scale;
-  large_x_scale.Scale(SkDoubleToScalar(1e37), 1.0);
+  gfx::Transform large_x_scale = gfx::Transform::MakeScale(1e37, 1.0);
 
   gfx::Transform infinite_x_scale;
   infinite_x_scale = large_x_scale * large_x_scale;
 
-  gfx::Transform large_y_scale;
-  large_y_scale.Scale(1.0, SkDoubleToScalar(1e37));
+  gfx::Transform large_y_scale = gfx::Transform::MakeScale(1.0, 1e37);
 
   gfx::Transform infinite_y_scale;
   infinite_y_scale = large_y_scale * large_y_scale;
@@ -345,33 +342,33 @@ TEST(MathUtilTest, MapEnclosingRectWithLargeTransforms) {
   gfx::Transform rotation;
   rotation.RotateAboutYAxis(170.0);
 
-  int max_int = std::numeric_limits<int>::max();
-
+  // The following code should not crash due to NaNs. The result rects are
+  // empty because either the geometry was saturated or NaNs were set to 0.
   output = MathUtil::MapEnclosingClippedRect(large_x_scale, input);
-  EXPECT_EQ(gfx::Rect(max_int, 2, 0, 200), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output = MathUtil::MapEnclosingClippedRect(large_x_scale * rotation, input);
-  EXPECT_EQ(gfx::Rect(), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output = MathUtil::MapEnclosingClippedRect(infinite_x_scale, input);
-  EXPECT_EQ(gfx::Rect(max_int, 2, 0, 200), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output =
       MathUtil::MapEnclosingClippedRect(infinite_x_scale * rotation, input);
-  EXPECT_EQ(gfx::Rect(), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output = MathUtil::MapEnclosingClippedRect(large_y_scale, input);
-  EXPECT_EQ(gfx::Rect(1, max_int, 100, 0), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output = MathUtil::MapEnclosingClippedRect(large_y_scale * rotation, input);
-  EXPECT_EQ(gfx::Rect(-100, max_int, 100, 0), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output = MathUtil::MapEnclosingClippedRect(infinite_y_scale, input);
-  EXPECT_EQ(gfx::Rect(1, max_int, 100, 0), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output =
       MathUtil::MapEnclosingClippedRect(infinite_y_scale * rotation, input);
-  EXPECT_EQ(gfx::Rect(), output);
+  EXPECT_TRUE(output.IsEmpty());
 }
 
 TEST(MathUtilTest, MapEnclosingRectIgnoringError) {
@@ -379,8 +376,7 @@ TEST(MathUtilTest, MapEnclosingRectIgnoringError) {
   gfx::Rect input(0, 0, 1000, 500);
   gfx::Rect output;
 
-  gfx::Transform transform;
-  transform.Scale(SkDoubleToScalar(scale), SkDoubleToScalar(scale));
+  gfx::Transform transform = gfx::Transform::MakeScale(scale);
   output =
       MathUtil::MapEnclosingClippedRectIgnoringError(transform, input, 0.f);
   EXPECT_EQ(gfx::Rect(0, 0, 2001, 1001), output);
@@ -398,14 +394,12 @@ TEST(MathUtilTest, ProjectEnclosingRectWithLargeTransforms) {
   gfx::Rect input(1, 2, 100, 200);
   gfx::Rect output;
 
-  gfx::Transform large_x_scale;
-  large_x_scale.Scale(SkDoubleToScalar(1e37), 1.0);
+  gfx::Transform large_x_scale = gfx::Transform::MakeScale(1e37, 1.0);
 
   gfx::Transform infinite_x_scale;
   infinite_x_scale = large_x_scale * large_x_scale;
 
-  gfx::Transform large_y_scale;
-  large_y_scale.Scale(1.0, SkDoubleToScalar(1e37));
+  gfx::Transform large_y_scale = gfx::Transform::MakeScale(1.0, 1e37);
 
   gfx::Transform infinite_y_scale;
   infinite_y_scale = large_y_scale * large_y_scale;
@@ -413,38 +407,39 @@ TEST(MathUtilTest, ProjectEnclosingRectWithLargeTransforms) {
   gfx::Transform rotation;
   rotation.RotateAboutYAxis(170.0);
 
-  int max_int = std::numeric_limits<int>::max();
-
+  // The following code should not crash due to NaNs. The result rects are
+  // empty because either the geometry was saturated or NaNs were set to 0.
   output = MathUtil::ProjectEnclosingClippedRect(large_x_scale, input);
-  EXPECT_EQ(gfx::Rect(max_int, 2, 0, 200), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output =
       MathUtil::ProjectEnclosingClippedRect(large_x_scale * rotation, input);
-  EXPECT_EQ(gfx::Rect(), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output = MathUtil::ProjectEnclosingClippedRect(infinite_x_scale, input);
-  EXPECT_EQ(gfx::Rect(max_int, 2, 0, 200), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output =
       MathUtil::ProjectEnclosingClippedRect(infinite_x_scale * rotation, input);
-  EXPECT_EQ(gfx::Rect(), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output = MathUtil::ProjectEnclosingClippedRect(large_y_scale, input);
-  EXPECT_EQ(gfx::Rect(1, max_int, 100, 0), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output =
       MathUtil::ProjectEnclosingClippedRect(large_y_scale * rotation, input);
-  EXPECT_EQ(gfx::Rect(-103, max_int, 102, 0), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output = MathUtil::ProjectEnclosingClippedRect(infinite_y_scale, input);
-  EXPECT_EQ(gfx::Rect(1, max_int, 100, 0), output);
+  EXPECT_TRUE(output.IsEmpty());
 
   output =
       MathUtil::ProjectEnclosingClippedRect(infinite_y_scale * rotation, input);
-  EXPECT_EQ(gfx::Rect(), output);
+  EXPECT_TRUE(output.IsEmpty());
 }
 
 TEST(MathUtilTest, RoundUp) {
+  static_assert(MathUtil::UncheckedRoundUp(45, 10) == 50);
   for (int multiplier = 1; multiplier <= 10; ++multiplier) {
     // Try attempts in descending order, so that we can
     // determine the correct value before it's needed.
@@ -479,6 +474,7 @@ TEST(MathUtilTest, RoundUpOverflow) {
 }
 
 TEST(MathUtilTest, RoundDown) {
+  static_assert(MathUtil::UncheckedRoundDown(45, 10) == 40);
   for (int multiplier = 1; multiplier <= 10; ++multiplier) {
     // Try attempts in ascending order, so that we can
     // determine the correct value before it's needed.
@@ -931,14 +927,14 @@ TEST(MathUtilTest, MapClippedQuadClampWholePlane) {
 
   EXPECT_EQ(clipped_quad[0].x(), 0.0f);
   EXPECT_EQ(clipped_quad[0].y(), 0.0f);
-  EXPECT_EQ(clipped_quad[0].z(), 750000.0f);
+  EXPECT_LE_LE(750000.0f, clipped_quad[0].z(), 750001.0f);
 
   EXPECT_EQ(clipped_quad[1].x(), 0.0f);
-  EXPECT_EQ(clipped_quad[1].y(), 1000000.0f);
+  EXPECT_LE_LE(999999.0f, clipped_quad[1].y(), 1000000.0f);
   EXPECT_LE_LE(-250001.0f, clipped_quad[1].z(), -249999.0f);
 
   EXPECT_LE_LE(14100.0f, clipped_quad[2].x(), 14200.0f);
-  EXPECT_EQ(clipped_quad[2].y(), 1000000.0f);
+  EXPECT_LE_LE(999999.0f, clipped_quad[2].y(), 1000000.0f);
   EXPECT_LE_LE(-250001.0f, clipped_quad[2].z(), -249999.0f);
 
   EXPECT_LE_LE(3500.0f, clipped_quad[3].x(), 3600.0f);
@@ -985,7 +981,7 @@ TEST(MathUtilTest, MapClippedQuadClampWholePlaneBelow) {
 
 TEST(MathUtilTest, MapClippedQuadInfiniteMatrix) {
   // clang-format off
-  gfx::Transform transform(
+  auto transform = gfx::Transform::RowMajor(
       1.0f, 0.0f, 0.0f, 0.0f,
       0.0f, -100.0f, 0.0f, std::numeric_limits<float>::infinity(),
       0.0f, 0.0f, 1.0f, 0.0f,

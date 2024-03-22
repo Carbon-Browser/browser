@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,11 +51,11 @@ class PrintBackendCUPS : public PrintBackend {
   mojom::ResultCode GetPrinterSemanticCapsAndDefaults(
       const std::string& printer_name,
       PrinterSemanticCapsAndDefaults* printer_info) override;
-  mojom::ResultCode GetPrinterCapsAndDefaults(
-      const std::string& printer_name,
-      PrinterCapsAndDefaults* printer_info) override;
-  std::string GetPrinterDriverInfo(const std::string& printer_name) override;
+  std::vector<std::string> GetPrinterDriverInfo(
+      const std::string& printer_name) override;
   bool IsValidPrinter(const std::string& printer_name) override;
+
+  std::string GetPrinterCapabilities(const std::string& printer_name);
 
   // The following functions are wrappers around corresponding CUPS functions.
   // <functions>2() are called when print server is specified, and plain version

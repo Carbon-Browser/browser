@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "third_party/blink/public/mojom/input/pointer_lock_result.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/ime/mojom/virtual_keyboard_types.mojom-forward.h"
 #include "ui/display/screen_infos.h"
 #include "ui/gfx/geometry/point_conversions.h"
 #include "ui/gfx/native_widget_types.h"
@@ -33,7 +34,7 @@ class Size;
 }
 
 namespace ui {
-enum class DomCode;
+enum class DomCode : uint32_t;
 class TextInputClient;
 }
 
@@ -84,9 +85,6 @@ class CONTENT_EXPORT RenderWidgetHostView {
   // Tells the View to size and move itself to the specified size and point in
   // screen space.
   virtual void SetBounds(const gfx::Rect& rect) = 0;
-
-  // Sets a flag that indicates if it is in virtual reality mode.
-  virtual void SetIsInVR(bool is_in_vr) = 0;
 
   // Coordinate points received from a renderer process need to be transformed
   // to the top-level frame's coordinate space. For coordinates received from
@@ -181,6 +179,10 @@ class CONTENT_EXPORT RenderWidgetHostView {
   // Whether the view can trigger pointer lock. This is the same as `HasFocus`
   // on non-Mac platforms, but on Mac it also ensures that the window is key.
   virtual bool CanBeMouseLocked() = 0;
+  // Whether the view is focused in accessibility mode. This is the same as
+  // `HasFocus` on non-Mac platforms, but on Mac it also ensures that the window
+  // is key.
+  virtual bool AccessibilityHasFocus() = 0;
 
   // Start/Stop intercepting future system keyboard events.
   virtual bool LockKeyboard(
@@ -293,14 +295,11 @@ class CONTENT_EXPORT RenderWidgetHostView {
   // have anything to show.
   virtual void TakeFallbackContentFrom(RenderWidgetHostView* view) = 0;
 
-  // Returns true if the overlaycontent flag is set in the JS, else false.
-  // This determines whether to fire geometrychange event to JS and also not
-  // resize the visual/layout viewports in response to keyboard visibility
-  // changes.
-  virtual bool ShouldVirtualKeyboardOverlayContent() = 0;
+  // Returns the virtual keyboard mode requested via author APIs.
+  virtual ui::mojom::VirtualKeyboardMode GetVirtualKeyboardMode() = 0;
 
-  // Create a geometrychange event and forward it to the JS with the
-  // keyboard coordinates.
+  // Create a geometrychange event and forward it to the JS with the keyboard
+  // coordinates. No-op unless VirtualKeyboardMode is kOverlaysContent.
   virtual void NotifyVirtualKeyboardOverlayRect(
       const gfx::Rect& keyboard_rect) = 0;
 

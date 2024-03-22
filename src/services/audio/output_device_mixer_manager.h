@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -58,7 +58,8 @@ class OutputDeviceMixerManager : public DeviceOutputListener {
 
   using OutputDeviceMixers = std::vector<std::unique_ptr<OutputDeviceMixer>>;
   using ListenerToDeviceMap =
-      base::flat_map<base::raw_ptr<ReferenceOutput::Listener>, std::string>;
+      base::flat_map<raw_ptr<ReferenceOutput::Listener, DanglingUntriaged>,
+                     std::string>;
 
   // Forwards device change notifications to OutputDeviceMixers.
   void OnDeviceChange();

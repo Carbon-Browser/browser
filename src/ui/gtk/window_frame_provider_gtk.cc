@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/gtk/window_frame_provider_gtk.h"
 
 #include "base/logging.h"
+#include "third_party/skia/include/core/SkRRect.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
@@ -39,20 +40,23 @@ std::string GetThemeName() {
 }
 
 GtkCssContext WindowContext(bool solid_frame, bool focused) {
-  std::string selector = "#window.background.";
+  std::string selector = "window.background.";
   selector += solid_frame ? "solid-csd" : "csd";
-  if (!focused)
+  if (!focused) {
     selector += ":inactive";
+  }
   return AppendCssNodeToStyleContext({}, selector);
 }
 
 GtkCssContext DecorationContext(bool solid_frame, bool focused) {
   auto context = WindowContext(solid_frame, focused);
   // GTK4 renders the decoration directly on the window.
-  if (!GtkCheckVersion(4))
-    context = AppendCssNodeToStyleContext(context, "#decoration");
-  if (!focused)
+  if (!GtkCheckVersion(4)) {
+    context = AppendCssNodeToStyleContext(context, "decoration");
+  }
+  if (!focused) {
     gtk_style_context_set_state(context, GTK_STATE_FLAG_BACKDROP);
+  }
 
   // The web contents is rendered after the frame border, so remove bottom
   // rounded corners otherwise their borders would get covered up.
@@ -67,9 +71,10 @@ GtkCssContext DecorationContext(bool solid_frame, bool focused) {
 GtkCssContext HeaderContext(bool solid_frame, bool focused) {
   auto context = WindowContext(solid_frame, focused);
   context =
-      AppendCssNodeToStyleContext(context, "#headerbar.header-bar.titlebar");
-  if (!focused)
+      AppendCssNodeToStyleContext(context, "headerbar.header-bar.titlebar");
+  if (!focused) {
     gtk_style_context_set_state(context, GTK_STATE_FLAG_BACKDROP);
+  }
   return context;
 }
 
@@ -86,13 +91,23 @@ SkBitmap PaintBitmap(const gfx::Size& bitmap_size,
 
   auto bounds = render_bounds;
 
+  double opacity = GetOpacityFromContext(context);
+  if (opacity < 1) {
+    cairo_push_group(cr);
+  }
+
   cairo_scale(cr, scale, scale);
   gtk_render_background(context, cr, bounds.x(), bounds.y(), bounds.width(),
                         bounds.height());
   gtk_render_frame(context, cr, bounds.x(), bounds.y(), bounds.width(),
                    bounds.height());
 
-  bitmap.notifyPixelsChanged();
+  if (opacity < 1) {
+    cairo_pop_group_to_source(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+    cairo_paint_with_alpha(cr, opacity);
+  }
+
   bitmap.setImmutable();
   return bitmap;
 }
@@ -135,6 +150,37 @@ int ComputeTopCornerRadius() {
   return bitmap.width();
 }
 
+// Returns true iff any part of the header is transparent (even a single pixel).
+// This is used as an optimization hint to the compositor so that it doesn't
+// have to composite behind opaque regions.  The consequence of a false-negative
+// is rendering artifacts, but the consequence of a false-positive is only a
+// slight performance penalty, so this function is intentionally conservative
+// in deciding if the header is translucent.
+bool HeaderIsTranslucent() {
+  // The arbitrary square size to render a sample header.
+  constexpr int kHeaderSize = 32;
+  auto context = HeaderContext(false, false);
+  double opacity = GetOpacityFromContext(context);
+  if (opacity < 1.0) {
+    return true;
+  }
+  ApplyCssToContext(context, R"(window, headerbar {
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+  })");
+  gfx::Size size_dip{kHeaderSize, kHeaderSize};
+  auto bitmap = PaintHeaderbar(size_dip, context, 1);
+  for (int x = 0; x < kHeaderSize; x++) {
+    for (int y = 0; y < kHeaderSize; y++) {
+      if (SkColorGetA(bitmap.getColor(x, y)) != SK_AlphaOPAQUE) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 // Returns int(scale * 100), which essentially limits the scale to fractions of
 // 100 and secures from rounding errors.
 int ToRoundedScale(float scale) {
@@ -160,8 +206,9 @@ WindowFrameProviderGtk::Asset::~Asset() = default;
 void WindowFrameProviderGtk::Asset::CloneFrom(
     const WindowFrameProviderGtk::Asset& src) {
   valid = src.valid;
-  if (!valid)
+  if (!valid) {
     return;
+  }
 
   frame_size_px = src.frame_size_px;
   frame_thickness_px = src.frame_thickness_px;
@@ -179,15 +226,22 @@ int WindowFrameProviderGtk::GetTopCornerRadiusDip() {
   return top_corner_radius_dip_;
 }
 
+bool WindowFrameProviderGtk::IsTopFrameTranslucent() {
+  MaybeUpdateBitmaps(GetDeviceScaleFactor());
+  return top_frame_is_translucent_;
+}
+
 gfx::Insets WindowFrameProviderGtk::GetFrameThicknessDip() {
   MaybeUpdateBitmaps(GetDeviceScaleFactor());
   return frame_thickness_dip_;
 }
 
-void WindowFrameProviderGtk::PaintWindowFrame(gfx::Canvas* canvas,
-                                              const gfx::Rect& rect_dip,
-                                              int top_area_height_dip,
-                                              bool focused) {
+void WindowFrameProviderGtk::PaintWindowFrame(
+    gfx::Canvas* canvas,
+    const gfx::Rect& rect_dip,
+    int top_area_height_dip,
+    bool focused,
+    ui::WindowTiledEdges tiled_edges) {
   gfx::ScopedCanvas scoped_canvas(canvas);
   float scale = canvas->UndoDeviceScaleFactor();
 
@@ -197,10 +251,16 @@ void WindowFrameProviderGtk::PaintWindowFrame(gfx::Canvas* canvas,
   DCHECK(asset.valid);
 
   auto client_bounds_px = gfx::ScaleToRoundedRect(rect_dip, scale);
-  client_bounds_px.Inset(asset.frame_thickness_px);
+  const auto effective_frame_thickness_px = gfx::Insets::TLBR(
+      tiled_edges.top ? 0 : asset.frame_thickness_px.top(),
+      tiled_edges.left ? 0 : asset.frame_thickness_px.left(),
+      tiled_edges.bottom ? 0 : asset.frame_thickness_px.bottom(),
+      tiled_edges.right ? 0 : asset.frame_thickness_px.right());
+  client_bounds_px.Inset(effective_frame_thickness_px);
 
   gfx::Rect src_rect(gfx::Size(BitmapSizePx(asset), BitmapSizePx(asset)));
-  src_rect.Inset(gfx::Insets(asset.frame_size_px) - asset.frame_thickness_px);
+  src_rect.Inset(gfx::Insets(asset.frame_size_px) -
+                 effective_frame_thickness_px);
 
   auto corner_w = std::min(asset.frame_size_px, client_bounds_px.width() / 2);
   auto corner_h = std::min(asset.frame_size_px, client_bounds_px.height() / 2);
@@ -208,15 +268,16 @@ void WindowFrameProviderGtk::PaintWindowFrame(gfx::Canvas* canvas,
   auto edge_h = client_bounds_px.height() - 2 * corner_h;
 
   auto corner_insets =
-      asset.frame_thickness_px + gfx::Insets::VH(corner_h, corner_w);
+      effective_frame_thickness_px + gfx::Insets::VH(corner_h, corner_w);
 
   auto image = gfx::ImageSkia::CreateFrom1xBitmap(
       focused ? asset.focused_bitmap : asset.unfocused_bitmap);
 
   auto draw_image = [&](int src_x, int src_y, int src_w, int src_h, int dst_x,
                         int dst_y, int dst_w, int dst_h) {
-    if (src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0)
+    if (src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
       return;
+    }
     canvas->DrawImageInt(image, src_x, src_y, src_w, src_h, dst_x, dst_y, dst_w,
                          dst_h, false);
   };
@@ -244,24 +305,24 @@ void WindowFrameProviderGtk::PaintWindowFrame(gfx::Canvas* canvas,
              corner_insets.bottom());
   // Top edge
   draw_image(2 * asset.frame_size_px, src_rect.y(), 1,
-             asset.frame_thickness_px.top(), corner_insets.left(), 0, edge_w,
-             asset.frame_thickness_px.top());
+             effective_frame_thickness_px.top(), corner_insets.left(), 0,
+             edge_w, effective_frame_thickness_px.top());
   // Left edge
   draw_image(src_rect.x(), 2 * asset.frame_size_px,
-             asset.frame_thickness_px.left(), 1, 0, corner_insets.top(),
-             asset.frame_thickness_px.left(), edge_h);
+             effective_frame_thickness_px.left(), 1, 0, corner_insets.top(),
+             effective_frame_thickness_px.left(), edge_h);
   // Bottom edge
   draw_image(2 * asset.frame_size_px, BitmapSizePx(asset) - asset.frame_size_px,
-             1, asset.frame_thickness_px.bottom(), corner_insets.left(),
+             1, effective_frame_thickness_px.bottom(), corner_insets.left(),
              client_bounds_px.bottom(), edge_w,
-             asset.frame_thickness_px.bottom());
+             effective_frame_thickness_px.bottom());
   // Right edge
   draw_image(BitmapSizePx(asset) - asset.frame_size_px, 2 * asset.frame_size_px,
-             asset.frame_thickness_px.right(), 1, client_bounds_px.right(),
-             corner_insets.top(), asset.frame_thickness_px.right(), edge_h);
+             effective_frame_thickness_px.right(), 1, client_bounds_px.right(),
+             corner_insets.top(), effective_frame_thickness_px.right(), edge_h);
 
   int top_area_height_px =
-      top_area_height_dip * scale - asset.frame_thickness_px.top();
+      top_area_height_dip * scale - effective_frame_thickness_px.top();
 
   auto header = PaintHeaderbar({client_bounds_px.width(), top_area_height_px},
                                HeaderContext(solid_frame_, focused), scale);
@@ -289,8 +350,9 @@ void WindowFrameProviderGtk::MaybeUpdateBitmaps(float scale) {
   }
 
   auto& asset = assets_[ToRoundedScale(scale)];
-  if (asset.valid)
+  if (asset.valid) {
     return;
+  }
 
   asset.frame_size_px = std::ceil(kMaxFrameSizeDip * scale);
 
@@ -320,6 +382,7 @@ void WindowFrameProviderGtk::MaybeUpdateBitmaps(float scale) {
   };
 
   top_corner_radius_dip_ = ComputeTopCornerRadius();
+  top_frame_is_translucent_ = !solid_frame_ && HeaderIsTranslucent();
 
   const auto previous_frame_thickness_dip_ = frame_thickness_dip_;
   frame_thickness_dip_ = gfx::Insets::TLBR(

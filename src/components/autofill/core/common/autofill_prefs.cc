@@ -1,15 +1,22 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/autofill/core/common/autofill_prefs.h"
 
 #include "base/base64.h"
+#include "base/feature_list.h"
 #include "build/build_config.h"
+#include "components/autofill/core/common/autofill_features.h"
+#include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "crypto/sha2.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/build_info.h"
+#endif
 
 namespace autofill {
 namespace prefs {
@@ -19,19 +26,12 @@ namespace {
 // was found.
 int GetSyncTransportOptInBitFieldForAccount(const PrefService* prefs,
                                             const std::string& account_hash) {
-  auto* dictionary = prefs->GetDictionary(prefs::kAutofillSyncTransportOptIn);
-
-  // If there is no dictionary it means the account didn't opt-in. Use 0 because
-  // it's the same as not having opted-in to anything.
-  if (!dictionary) {
-    return 0;
-  }
+  const auto& dictionary = prefs->GetDict(prefs::kAutofillSyncTransportOptIn);
 
   // If there is no entry in the dictionary, it means the account didn't opt-in.
   // Use 0 because it's the same as not having opted-in to anything.
-  auto* found =
-      dictionary->FindKeyOfType(account_hash, base::Value::Type::INTEGER);
-  return found ? found->GetInt() : 0;
+  const auto found = dictionary.FindInt(account_hash);
+  return found.value_or(0);
 }
 
 }  // namespace
@@ -50,16 +50,17 @@ const char kAutofillCreditCardFidoAuthOfferCheckboxState[] =
     "autofill.credit_card_fido_auth_offer_checkbox_state";
 #endif
 
-// Number of times the credit card signin promo has been shown.
-const char kAutofillCreditCardSigninPromoImpressionCount[] =
-    "autofill.credit_card_signin_promo_impression_count";
-
 // Boolean that is true if Autofill is enabled and allowed to save data.
 const char kAutofillEnabledDeprecated[] = "autofill.enabled";
 
-// Deprecated 10/2019.
-const char kAutofillJapanCityFieldMigratedDeprecated[] =
-    "autofill.japan_city_field_migrated_to_street_address";
+// Boolean that is true if a form with an IBAN field has ever been submitted, or
+// an IBAN has ever been saved via Chrome payments settings page. This helps to
+// enable IBAN functionality for those users who are not in a country where IBAN
+// is generally available but have used IBAN already.
+const char kAutofillHasSeenIban[] = "autofill.has_seen_iban";
+
+// Boolean that is true if Autofill is enabled and allowed to save IBAN data.
+extern const char kAutofillIbanEnabled[] = "autofill.iban_enabled";
 
 // Integer that is set to the last version where the profile deduping routine
 // was run. This routine will be run once per version.
@@ -77,6 +78,9 @@ const char kAutofillLastVersionDisusedCreditCardsDeleted[] =
 
 // Boolean that is true if the orphan rows in the autofill table were removed.
 const char kAutofillOrphanRowsRemoved[] = "autofill.orphan_rows_removed";
+
+// Boolean that is true, when users can save their CVCs.
+const char kAutofillPaymentCvcStorage[] = "autofill.payment_cvc_storage";
 
 // Boolean that is true if Autofill is enabled and allowed to save profile data.
 const char kAutofillProfileEnabled[] = "autofill.profile_enabled";
@@ -103,37 +107,56 @@ const char kAutofillUploadEvents[] = "autofill.upload_events";
 const char kAutofillUploadEventsLastResetTimestamp[] =
     "autofill.upload_events_last_reset_timestamp";
 
-// Boolean that's true when Wallet card and address import is enabled by the
-// user.
-const char kAutofillWalletImportEnabled[] = "autofill.wallet_import_enabled";
-
-// Boolean that is set to the last choice user made when prompted for saving an
-// unmasked server card locally.
-const char kAutofillWalletImportStorageCheckboxState[] =
-    "autofill.wallet_import_storage_checkbox_state";
-
 // Integer that is set to the last major version where the Autocomplete
 // retention policy was run.
 const char kAutocompleteLastVersionRetentionPolicy[] =
     "autocomplete.retention_policy_last_version";
 
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(IS_IOS)
+// Boolean that is set when payment methods mandatory re-auth is enabled by the
+// user.
+const char kAutofillPaymentMethodsMandatoryReauth[] =
+    "autofill.payment_methods_mandatory_reauth";
+#endif  // #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+        // || BUILDFLAG(IS_IOS)
+
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+// Integer that is incremented when the mandatory re-auth promo is shown. If
+// this is less than `kMaxValueForMandatoryReauthPromoShownCounter`, that
+// implies that the user has not yet decided whether or not to turn on the
+// payments mandatory re-auth feature.
+const char kAutofillPaymentMethodsMandatoryReauthPromoShownCounter[] =
+    "autofill.payment_methods_mandatory_reauth_promo_counter";
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+
+#if BUILDFLAG(IS_ANDROID)
+// Boolean that is true iff Chrome only provdides a virtual view structure that
+// Android Autofill providers can use for filling. This pref is profile bound
+// since each profile may have a preference for filling. It is not syncable as
+// the setup on each device requires steps outside the browser. Enabling this
+// pref on a device without a proper provider may yield a surprising absence of
+// filling.
+const char kAutofillUsingVirtualViewStructure[] =
+    "autofill.using_virtual_view_structure";
+#endif  // BUILDFLAG(IS_ANDROID)
+
 void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   // Synced prefs. Used for cross-device choices, e.g., credit card Autofill.
-  registry->RegisterBooleanPref(
-      prefs::kAutofillEnabledDeprecated, true,
-      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterBooleanPref(
       prefs::kAutofillProfileEnabled, true,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterIntegerPref(
       prefs::kAutofillLastVersionDeduped, 0,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
-
-  registry->RegisterIntegerPref(
-      prefs::kAutofillLastVersionDisusedAddressesDeleted, 0,
+  registry->RegisterBooleanPref(
+      prefs::kAutofillHasSeenIban, false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterBooleanPref(
       prefs::kAutofillCreditCardEnabled, true,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kAutofillPaymentCvcStorage, true,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
 
   // Non-synced prefs. Used for per-device choices, e.g., signin promo.
@@ -143,58 +166,60 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(
       prefs::kAutofillCreditCardFidoAuthOfferCheckboxState, true);
 #endif
-  registry->RegisterIntegerPref(
-      prefs::kAutofillCreditCardSigninPromoImpressionCount, 0);
-  registry->RegisterBooleanPref(prefs::kAutofillWalletImportEnabled, true);
-  registry->RegisterBooleanPref(
-      prefs::kAutofillWalletImportStorageCheckboxState, true);
-  registry->RegisterIntegerPref(
-      prefs::kAutofillLastVersionDisusedCreditCardsDeleted, 0);
   registry->RegisterIntegerPref(prefs::kAutocompleteLastVersionRetentionPolicy,
                                 0);
-  registry->RegisterBooleanPref(prefs::kAutofillOrphanRowsRemoved, false);
   registry->RegisterStringPref(prefs::kAutofillUploadEncodingSeed, "");
   registry->RegisterDictionaryPref(prefs::kAutofillUploadEvents);
   registry->RegisterTimePref(prefs::kAutofillUploadEventsLastResetTimestamp,
                              base::Time());
   registry->RegisterDictionaryPref(prefs::kAutofillSyncTransportOptIn);
+#if BUILDFLAG(IS_ANDROID)
+  // Automotive devices require stricter data protection for user privacy, so
+  // mandatory reauth for autofill payment methods should always be enabled.
+  if (base::android::BuildInfo::GetInstance()->is_automotive()) {
+    registry->RegisterBooleanPref(prefs::kAutofillPaymentMethodsMandatoryReauth,
+                                  true);
+  } else {
+    registry->RegisterBooleanPref(prefs::kAutofillPaymentMethodsMandatoryReauth,
+                                  false);
+  }
+  registry->RegisterIntegerPref(
+      prefs::kAutofillPaymentMethodsMandatoryReauthPromoShownCounter, 0);
+#elif BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+  registry->RegisterBooleanPref(prefs::kAutofillPaymentMethodsMandatoryReauth,
+                                false);
+  registry->RegisterIntegerPref(
+      prefs::kAutofillPaymentMethodsMandatoryReauthPromoShownCounter, 0);
+#elif BUILDFLAG(IS_IOS)
+  registry->RegisterBooleanPref(prefs::kAutofillPaymentMethodsMandatoryReauth,
+                                true);
+#endif
 
   // Deprecated prefs registered for migration.
-  registry->RegisterBooleanPref(kAutofillJapanCityFieldMigratedDeprecated,
+  registry->RegisterBooleanPref(prefs::kAutofillEnabledDeprecated, true);
+  registry->RegisterBooleanPref(prefs::kAutofillOrphanRowsRemoved, false);
+  registry->RegisterBooleanPref(prefs::kAutofillIbanEnabled, true);
+  registry->RegisterIntegerPref(
+      prefs::kAutofillLastVersionDisusedAddressesDeleted, 0);
+  registry->RegisterIntegerPref(
+      prefs::kAutofillLastVersionDisusedCreditCardsDeleted, 0);
+
+#if BUILDFLAG(IS_ANDROID)
+  registry->RegisterBooleanPref(prefs::kAutofillUsingVirtualViewStructure,
                                 false);
+#endif
 }
 
-void MigrateDeprecatedAutofillPrefs(PrefService* prefs) {
-  // If kAutofillCreditCardEnabled and kAutofillProfileEnabled prefs are
-  // currently using their default value and kAutofillEnabledDeprecated has a
-  // non-default value, override the valuAues of the new prefs. The following
-  // blocks should execute only once and are needed for those users who had
-  // Autofill disabled before introduction of the fine-grained prefs.
-  // TODO(crbug.com/870328): Remove these once M70- users are sufficiently low.
-  const PrefService::Preference* deprecated_autofill_pref =
-      prefs->FindPreference(prefs::kAutofillEnabledDeprecated);
-  DCHECK(deprecated_autofill_pref);
-
-  const PrefService::Preference* autofill_credit_card_pref =
-      prefs->FindPreference(prefs::kAutofillCreditCardEnabled);
-  DCHECK(autofill_credit_card_pref);
-  if (autofill_credit_card_pref->IsDefaultValue() &&
-      !deprecated_autofill_pref->IsDefaultValue()) {
-    prefs->SetBoolean(kAutofillCreditCardEnabled,
-                      prefs->GetBoolean(kAutofillEnabledDeprecated));
-  }
-
-  const PrefService::Preference* autofill_profile_pref =
-      prefs->FindPreference(prefs::kAutofillProfileEnabled);
-  DCHECK(autofill_profile_pref);
-  if (autofill_profile_pref->IsDefaultValue() &&
-      !deprecated_autofill_pref->IsDefaultValue()) {
-    prefs->SetBoolean(kAutofillProfileEnabled,
-                      prefs->GetBoolean(kAutofillEnabledDeprecated));
-  }
-
-  // Added 10/2019.
-  prefs->ClearPref(kAutofillJapanCityFieldMigratedDeprecated);
+void MigrateDeprecatedAutofillPrefs(PrefService* pref_service) {
+  // Added 09/2022.
+  pref_service->ClearPref(prefs::kAutofillEnabledDeprecated);
+  // Added 05/2023.
+  pref_service->ClearPref(prefs::kAutofillOrphanRowsRemoved);
+  // Added 09/2023.
+  pref_service->ClearPref(prefs::kAutofillIbanEnabled);
+  // Added 10/2024
+  pref_service->ClearPref(prefs::kAutofillLastVersionDisusedAddressesDeleted);
+  pref_service->ClearPref(prefs::kAutofillLastVersionDisusedCreditCardsDeleted);
 }
 
 bool IsAutocompleteEnabled(const PrefService* prefs) {
@@ -209,12 +234,22 @@ void SetCreditCardFIDOAuthEnabled(PrefService* prefs, bool enabled) {
   prefs->SetBoolean(kAutofillCreditCardFidoAuthEnabled, enabled);
 }
 
-bool IsAutofillCreditCardEnabled(const PrefService* prefs) {
+bool IsAutofillPaymentMethodsEnabled(const PrefService* prefs) {
   return prefs->GetBoolean(kAutofillCreditCardEnabled);
 }
 
-void SetAutofillCreditCardEnabled(PrefService* prefs, bool enabled) {
+void SetAutofillPaymentMethodsEnabled(PrefService* prefs, bool enabled) {
   prefs->SetBoolean(kAutofillCreditCardEnabled, enabled);
+}
+
+bool HasSeenIban(const PrefService* prefs) {
+  return prefs->GetBoolean(kAutofillHasSeenIban);
+}
+
+// If called, always sets the pref to true, and once true, it will follow the
+// user around forever.
+void SetAutofillHasSeenIban(PrefService* prefs) {
+  prefs->SetBoolean(kAutofillHasSeenIban, true);
 }
 
 bool IsAutofillManaged(const PrefService* prefs) {
@@ -237,12 +272,80 @@ void SetAutofillProfileEnabled(PrefService* prefs, bool enabled) {
   prefs->SetBoolean(kAutofillProfileEnabled, enabled);
 }
 
-bool IsPaymentsIntegrationEnabled(const PrefService* prefs) {
-  return prefs->GetBoolean(kAutofillWalletImportEnabled);
+bool IsPaymentMethodsMandatoryReauthEnabled(const PrefService* prefs) {
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(IS_IOS)
+  bool featureEnabled = base::FeatureList::IsEnabled(
+      features::kAutofillEnablePaymentsMandatoryReauth);
+#if BUILDFLAG(IS_ANDROID)
+  if (base::android::BuildInfo::GetInstance()->is_automotive()) {
+    featureEnabled = true;
+  }
+#endif  // BUILDFLAG(IS_ANDROID)
+  return featureEnabled &&
+         prefs->GetBoolean(kAutofillPaymentMethodsMandatoryReauth);
+#else
+  return false;
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID) ||
+        // BUILDFLAG(IS_IOS)
 }
 
-void SetPaymentsIntegrationEnabled(PrefService* prefs, bool enabled) {
-  prefs->SetBoolean(kAutofillWalletImportEnabled, enabled);
+void SetPaymentMethodsMandatoryReauthEnabled(PrefService* prefs, bool enabled) {
+#if BUILDFLAG(IS_ANDROID)
+  // The user should not be able to update the pref value on automotive devices.
+  CHECK(!base::android::BuildInfo::GetInstance()->is_automotive());
+#endif  // BUILDFLAG(IS_ANDROID)
+
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(IS_IOS)
+  prefs->SetBoolean(kAutofillPaymentMethodsMandatoryReauth, enabled);
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID) ||
+        // BUILDFLAG(IS_IOS)
+}
+
+bool IsPaymentMethodsMandatoryReauthSetExplicitly(const PrefService* prefs) {
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+  return prefs->GetUserPrefValue(kAutofillPaymentMethodsMandatoryReauth) !=
+         nullptr;
+#else
+  return false;
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+}
+
+bool IsPaymentMethodsMandatoryReauthPromoShownCounterBelowMaxCap(
+    const PrefService* prefs) {
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+  return prefs->GetInteger(
+             kAutofillPaymentMethodsMandatoryReauthPromoShownCounter) <
+         kMaxValueForMandatoryReauthPromoShownCounter;
+#else
+  return false;
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+}
+
+void IncrementPaymentMethodsMandatoryReauthPromoShownCounter(
+    PrefService* prefs) {
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+  if (prefs->GetInteger(
+          kAutofillPaymentMethodsMandatoryReauthPromoShownCounter) >=
+      kMaxValueForMandatoryReauthPromoShownCounter) {
+    return;
+  }
+
+  prefs->SetInteger(
+      kAutofillPaymentMethodsMandatoryReauthPromoShownCounter,
+      prefs->GetInteger(
+          kAutofillPaymentMethodsMandatoryReauthPromoShownCounter) +
+          1);
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+}
+
+bool IsPaymentCvcStorageEnabled(const PrefService* prefs) {
+  return prefs->GetBoolean(kAutofillPaymentCvcStorage);
+}
+
+void SetPaymentCvcStorage(PrefService* prefs, bool value) {
+  prefs->SetBoolean(kAutofillPaymentCvcStorage, value);
 }
 
 void SetUserOptedInWalletSyncTransport(PrefService* prefs,
@@ -255,23 +358,21 @@ void SetUserOptedInWalletSyncTransport(PrefService* prefs,
   base::Base64Encode(crypto::SHA256HashString(account_id.ToString()),
                      &account_hash);
 
-  DictionaryPrefUpdate update(prefs, prefs::kAutofillSyncTransportOptIn);
+  ScopedDictPrefUpdate update(prefs, prefs::kAutofillSyncTransportOptIn);
   int value = GetSyncTransportOptInBitFieldForAccount(prefs, account_hash);
 
   // If the user has opted in, set that bit while leaving the others intact.
   if (opted_in) {
-    update->SetKey(account_hash,
-                   base::Value(value | sync_transport_opt_in::kWallet));
+    update->Set(account_hash, value | sync_transport_opt_in::kWallet);
     return;
   }
 
   // Invert the mask in order to reset the Wallet bit while leaving the other
   // bits intact, or remove the key entirely if the Wallet was the only opt-in.
   if (value & ~sync_transport_opt_in::kWallet) {
-    update->SetKey(account_hash,
-                   base::Value(value & ~sync_transport_opt_in::kWallet));
+    update->Set(account_hash, value & ~sync_transport_opt_in::kWallet);
   } else {
-    update->RemoveKey(account_hash);
+    update->Remove(account_hash);
   }
 }
 
@@ -293,8 +394,20 @@ bool IsUserOptedInWalletSyncTransport(const PrefService* prefs,
 }
 
 void ClearSyncTransportOptIns(PrefService* prefs) {
-  DictionaryPrefUpdate update(prefs, prefs::kAutofillSyncTransportOptIn);
-  update->DictClear();
+  prefs->SetDict(prefs::kAutofillSyncTransportOptIn, base::Value::Dict());
+}
+
+bool UsesVirtualViewStructureForAutofill(const PrefService* prefs) {
+#if BUILDFLAG(IS_ANDROID)
+  if (!base::FeatureList::IsEnabled(
+          features::kAutofillVirtualViewStructureAndroid)) {
+    return false;
+  }
+
+  return prefs->GetBoolean(kAutofillUsingVirtualViewStructure);
+#else
+  return false;
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 }  // namespace prefs

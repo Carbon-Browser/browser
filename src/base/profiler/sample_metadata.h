@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -162,6 +162,16 @@ BASE_EXPORT void ApplyMetadataToPastSamples(TimeTicks period_start,
                                             int64_t key,
                                             int64_t value,
                                             SampleMetadataScope scope);
+
+// Adds metadata as metadata global to the sampling profile. Has the effect of
+// applying the metadata to all samples in the profile, even ones collected
+// earlier in time. This is probably not what you want for most use cases;
+// prefer using SampleMetadata / ScopedSampleMetadata /
+// ApplyMetadataToPastSamples instead.
+BASE_EXPORT void AddProfileMetadata(StringPiece name,
+                                    int64_t key,
+                                    int64_t value,
+                                    SampleMetadataScope scope);
 
 // Returns the process-global metadata recorder instance used for tracking
 // sampling profiler metadata.

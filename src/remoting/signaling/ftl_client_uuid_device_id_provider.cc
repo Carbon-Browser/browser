@@ -1,15 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/signaling/ftl_client_uuid_device_id_provider.h"
 
-#include "base/guid.h"
+#include "base/uuid.h"
 
 namespace remoting {
 
 FtlClientUuidDeviceIdProvider::FtlClientUuidDeviceIdProvider()
-    : client_uuid_(base::GenerateGUID()) {}
+    : client_uuid_(base::Uuid::GenerateRandomV4().AsLowercaseString()) {}
 
 FtlClientUuidDeviceIdProvider::~FtlClientUuidDeviceIdProvider() = default;
 

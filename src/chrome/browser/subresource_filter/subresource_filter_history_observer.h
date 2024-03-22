@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,8 @@ class SubresourceFilterHistoryObserver
       history_observation_{this};
 
   // Outlives this object.
-  raw_ptr<subresource_filter::SubresourceFilterContentSettingsManager>
+  raw_ptr<subresource_filter::SubresourceFilterContentSettingsManager,
+          AcrossTasksDanglingUntriaged>
       settings_manager_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,24 +7,37 @@ import * as dom from '../dom.js';
 import {I18nString} from '../i18n_string.js';
 import * as state from '../state.js';
 import {ViewName} from '../type.js';
+import {KeyboardShortcut} from '../util.js';
 import {WaitableEvent} from '../waitable_event.js';
 
 export interface DialogEnterOptions {
   /**
-   * Message of the dialog view.
-   */
-  message?: string;
-
-  /**
    * Whether the dialog view is cancellable.
    */
   cancellable?: boolean;
+  /**
+   * Description of the dialog.
+   */
+  description?: I18nString;
+  /**
+   * Message of the dialog view.
+   */
+  message?: string;
+  /**
+   * Title of the dialog.
+   */
+  title?: I18nString;
 }
 
 /**
  * Warning message name.
  */
 type WarningEnterOptions = string;
+
+/**
+ * Flash view processing message name.
+ */
+export type FlashEnterOptions = string;
 
 /**
  * Options for open PTZ panel.
@@ -69,33 +82,41 @@ export class OptionPanelOptions {
 
   readonly onStateChanged: (newState: state.State|null) => void;
 
-  constructor({triggerButton, titleLabel, stateOptions, onStateChanged}: {
+  readonly ariaDescribedByElement: HTMLElement;
+
+  constructor({
+    triggerButton,
+    titleLabel,
+    stateOptions,
+    onStateChanged,
+    ariaDescribedByElement,
+  }: {
     triggerButton: HTMLElement,
     titleLabel: I18nString,
     stateOptions: StateOption[],
     onStateChanged: (newState: state.State|null) => void,
+    ariaDescribedByElement: HTMLElement,
   }) {
     this.triggerButton = triggerButton;
     this.titleLabel = titleLabel;
     this.stateOptions = stateOptions;
     this.onStateChanged = onStateChanged;
+    this.ariaDescribedByElement = ariaDescribedByElement;
   }
 }
 
 // TODO(pihsun): After we migrate all files into TypeScript, we can have some
 // sort of "global" view registration, so we can enforce the enter / leave type
 // at compile time.
-export type EnterOptions =
-    DialogEnterOptions|OptionPanelOptions|PTZPanelOptions|WarningEnterOptions;
+export type EnterOptions = DialogEnterOptions|FlashEnterOptions|
+    OptionPanelOptions|PTZPanelOptions|WarningEnterOptions;
 
 export type LeaveCondition = {
-  kind: 'BACKGROUND_CLICKED',
+  kind: 'BACKGROUND_CLICKED'|'ESC_KEY_PRESSED'|'STREAMING_STOPPED',
 }|{
   kind: 'CLOSED',
   val?: unknown,
-}|{
-  kind: 'ESC_KEY_PRESSED',
-};
+}
 
 interface ViewOptions {
   /**
@@ -113,6 +134,11 @@ interface ViewOptions {
    * tabindex is not -1 when argument is not presented.
    */
   defaultFocusSelector?: string;
+
+  /**
+   * Close the view when the it's opened and the camera stops streaming.
+   */
+  dismissOnStopStreaming?: boolean;
 }
 
 /**
@@ -139,6 +165,7 @@ export class View {
     dismissByEsc = false,
     dismissByBackgroundClick = false,
     defaultFocusSelector = '[tabindex]:not([tabindex="-1"])',
+    dismissOnStopStreaming = false,
   }: ViewOptions = {}) {
     this.root = dom.get(`#${name}`, HTMLElement);
     this.dismissByEsc = dismissByEsc;
@@ -148,6 +175,14 @@ export class View {
       this.root.addEventListener('click', (event) => {
         if (event.target === this.root) {
           this.leave({kind: 'BACKGROUND_CLICKED'});
+        }
+      });
+    }
+
+    if (dismissOnStopStreaming) {
+      state.addObserver(state.State.STREAMING, (streaming) => {
+        if (!streaming && state.get(this.name)) {
+          this.leave({kind: 'STREAMING_STOPPED'});
         }
       });
     }
@@ -176,7 +211,7 @@ export class View {
    * @param key Key to be handled.
    * @return Whether the key has been handled or not.
    */
-  onKeyPressed(key: string): boolean {
+  onKeyPressed(key: KeyboardShortcut): boolean {
     if (this.handlingKey(key)) {
       return true;
     } else if (this.dismissByEsc && key === 'Escape') {
@@ -305,8 +340,7 @@ export class View {
   /**
    * Hook of the subclass for leaving the view.
    *
-   * @param _condition Optional condition for leaving the view.
-   * @return Whether able to leaving the view or not.
+   * @return Whether able to leave the view or not.
    */
   protected leaving(_condition: LeaveCondition): boolean {
     return true;

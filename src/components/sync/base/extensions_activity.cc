@@ -1,14 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/base/extensions_activity.h"
 
 namespace syncer {
-
-ExtensionsActivity::Record::Record() : bookmark_write_count(0U) {}
-
-ExtensionsActivity::Record::~Record() = default;
 
 ExtensionsActivity::ExtensionsActivity() = default;
 

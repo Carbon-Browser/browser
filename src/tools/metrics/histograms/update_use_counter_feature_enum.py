@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -46,10 +46,10 @@ if __name__ == '__main__':
                                     strip_k_prefix=True)
     PrintEnumForDashboard(enum_dict)
   else:
-    UpdateHistogramEnum(
-        histogram_enum_name='FeatureObserver',
-        source_enum_path=source_path,
-        start_marker=START_MARKER,
-        end_marker=END_MARKER,
-        strip_k_prefix=True,
-        calling_script=os.path.basename(__file__))
+    UpdateHistogramEnum('tools/metrics/histograms/enums.xml',
+                        histogram_enum_name='FeatureObserver',
+                        source_enum_path=source_path,
+                        start_marker=START_MARKER,
+                        end_marker=END_MARKER,
+                        strip_k_prefix=True,
+                        calling_script=os.path.basename(__file__))

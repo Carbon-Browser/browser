@@ -1,21 +1,48 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /**
- * @fileoverview Polymer element to handle Gaia authentication. Encapsulates
- * authenticator.js and SAML notice handling.
+ * @fileoverview Polymer element to handle Gaia authentication (Gaia webview,
+ * action buttons, back button events, Gaia dialog beign shown, SAML UI).
+ * Encapsulates authenticator.js and SAML notice handling.
+ *
+ * Events:
+ *   identifierentered: Fired after user types their email.
+ *   loadabort: Fired on the webview error.
+ *   ready: Fired when the webview (not necessarily Gaia) is loaded first time.
+ *   showview: Message from Gaia meaning Gaia UI is ready to be shown.
+ *   startenrollment: User action to start enterprise enrollment.
+ *   closesaml: User closes the dialog on the SAML page.
+ *   backcancel: User presses back button when there is no history in Gaia page.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import '//resources/cr_elements/icons.html.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
+import './buttons/oobe_back_button.js';
+import './buttons/oobe_text_button.js';
+import './common_styles/oobe_common_styles.css.js';
+import './common_styles/oobe_dialog_host_styles.css.js';
+import './dialogs/oobe_content_dialog.js';
+import './quick_start_entry_point.js';
+
+import {sendWithPromise} from '//resources/ash/common/cr.m.js';
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {Authenticator, AuthFlow} from '../../../gaia_auth_host/authenticator.js';
+
+import {OobeDialogHostBehavior} from './behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from './behaviors/oobe_i18n_behavior.js';
+import {OobeTypes} from './oobe_types.js';
 
 /**
  * @constructor
  * @extends {PolymerElement}
  * @implements {OobeI18nBehaviorInterface}
  */
-const GaiaDialogBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, OobeDialogHostBehavior], Polymer.Element);
+const GaiaDialogBase =
+    mixinBehaviors([OobeI18nBehavior, OobeDialogHostBehavior], PolymerElement);
 
 const CHROMEOS_GAIA_PASSWORD_METRIC = 'ChromeOS.Gaia.PasswordFlow';
 
@@ -27,7 +54,9 @@ class GaiaDialog extends GaiaDialogBase {
     return 'gaia-dialog';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -41,7 +70,7 @@ class GaiaDialog extends GaiaDialogBase {
       },
 
       /**
-       * Current auth flow. See cr.login.Authenticator.AuthFlow
+       * Current auth flow. See AuthFlow
        */
       authFlow: {
         type: Number,
@@ -138,7 +167,7 @@ class GaiaDialog extends GaiaDialogBase {
        */
       primaryActionButtonEnabled_: {
         type: Boolean,
-        value: true,
+        value: false,
       },
 
       /**
@@ -156,7 +185,7 @@ class GaiaDialog extends GaiaDialogBase {
        */
       secondaryActionButtonEnabled_: {
         type: Boolean,
-        value: true,
+        value: false,
       },
 
       /**
@@ -179,21 +208,18 @@ class GaiaDialog extends GaiaDialogBase {
         computed: 'showOverlay_(navigationEnabled, isSamlSsoVisible)',
       },
 
-      /**
-       * Whether the redirect to default IdP without interstitial step is
-       * enabled.
-       * @private {boolean}
-       */
-      flagRedirectToDefaultIdPEnabled_: {
-        type: Boolean,
-        value: loadTimeData.getBoolean('isRedirectToDefaultIdPEnabled'),
-      },
-
       isSamlBackButtonHidden_: {
         type: Boolean,
-        computed: 'isSamlBackButtonHidden(isDefaultSsoProvider, isClosable,' +
-            'flagRedirectToDefaultIdPEnabled_)',
+        computed: 'isSamlBackButtonHidden(isDefaultSsoProvider, isClosable)',
       },
+
+      /**
+       * Whether Quick start feature is enabled. If it's enabled the quick start
+       * button will be shown in the signin screen.
+       * @type {boolean}
+       * @private
+       */
+      isQuickStartEnabled_: Boolean,
     };
   }
 
@@ -206,18 +232,14 @@ class GaiaDialog extends GaiaDialogBase {
      * @private
      */
     this.clickPrimaryActionButtonForTesting_ = false;
+
     /**
-     * Emulate click on the primary action button when it is visible and
-     * enabled.
-     * @type {boolean}
-     * @private
-     */
-    this.clickPrimaryActionButtonForTesting_ = false;
-    /**
-     * @type {!cr.login.Authenticator|undefined}
+     * @type {!Authenticator|undefined}
      * @private
      */
     this.authenticator_ = undefined;
+
+    this.isQuickStartEnabled_ = false;
   }
 
   getAuthenticator() {
@@ -228,7 +250,7 @@ class GaiaDialog extends GaiaDialogBase {
   ready() {
     super.ready();
     const webview = /** @type {!WebView} */ (this.$['signin-frame']);
-    this.authenticator_ = new cr.login.Authenticator(webview);
+    this.authenticator_ = new Authenticator(webview);
     /**
      * Event listeners for the events triggered by the authenticator.
      */
@@ -282,13 +304,13 @@ class GaiaDialog extends GaiaDialogBase {
         this.maybeClickPrimaryActionButtonForTesting_();
       },
       'videoEnabledChange': (e) => {
-        this.videoEnabled = e.newValue;
+        this.videoEnabled = e.detail.newValue;
       },
       'authFlowChange': (e) => {
-        this.authFlow = e.newValue;
+        this.authFlow = e.detail.newValue;
       },
       'authDomainChange': (e) => {
-        this.authDomain = e.newValue;
+        this.authDomain = e.detail.newValue;
       },
       'dialogShown': (e) => {
         this.navigationEnabled = false;
@@ -309,7 +331,7 @@ class GaiaDialog extends GaiaDialogBase {
       },
       'apiPasswordAdded': (e) => {
         // Only record the metric for Gaia flow without 3rd-party SAML IdP.
-        if (this.authFlow !== cr.login.Authenticator.AuthFlow.DEFAULT) {
+        if (this.authFlow !== AuthFlow.DEFAULT) {
           return;
         }
         chrome.send(
@@ -319,7 +341,7 @@ class GaiaDialog extends GaiaDialogBase {
       },
       'authCompleted': (e) => {
         // Only record the metric for Gaia flow without 3rd-party SAML IdP.
-        if (this.authFlow === cr.login.Authenticator.AuthFlow.DEFAULT) {
+        if (this.authFlow === AuthFlow.DEFAULT) {
           chrome.send(
               'metricsHandler:recordBooleanHistogram',
               [CHROMEOS_GAIA_PASSWORD_METRIC, true]);
@@ -335,7 +357,7 @@ class GaiaDialog extends GaiaDialogBase {
           eventName, authenticatorEventListeners[eventName].bind(this));
     }
 
-    cr.sendWithPromise('getIsSshConfigured')
+    sendWithPromise('getIsSshConfigured')
         .then(this.updateSshWarningVisibility.bind(this));
   }
 
@@ -406,6 +428,15 @@ class GaiaDialog extends GaiaDialogBase {
   }
 
   /**
+   * Handles clicks on Quick start button.
+   * @private
+   */
+  onQuickStartClicked_() {
+    this.dispatchEvent(new CustomEvent(
+        'quick-start-clicked', {bubbles: true, composed: true}));
+  }
+
+  /**
    * Handles clicks on "PrimaryAction" button.
    * @private
    */
@@ -462,26 +493,23 @@ class GaiaDialog extends GaiaDialogBase {
 
   /**
    * Whether the back button is hidden.
+   * @param {boolean} navigationHidden - whether navigation in general is hidden
    * @param {boolean} hideBackButtonIfCantGoBack - whether it should be hidden.
    * @param {boolean} canGoBack - whether the form can go back.
    * @private
    */
-  isBackButtonHidden(hideBackButtonIfCantGoBack, canGoBack) {
-    return hideBackButtonIfCantGoBack && !canGoBack;
+  isBackButtonHidden(navigationHidden, hideBackButtonIfCantGoBack, canGoBack) {
+    return navigationHidden || (hideBackButtonIfCantGoBack && !canGoBack);
   }
 
   /**
    * Whether the back button on SAML screen is hidden.
    * @param {boolean} isDefaultSsoProvider - whether it is default SAML page.
    * @param {boolean} isClosable - whether the form can be closed.
-   * @param {boolean} flagRedirectToDefaultIdPEnabled - whether redirect to
-   *     default IdP is enabled.
    * @private
    */
-  isSamlBackButtonHidden(
-      isDefaultSsoProvider, isClosable, flagRedirectToDefaultIdPEnabled) {
-    return !flagRedirectToDefaultIdPEnabled ||
-        isDefaultSsoProvider && !isClosable;
+  isSamlBackButtonHidden(isDefaultSsoProvider, isClosable) {
+    return isDefaultSsoProvider && !isClosable;
   }
 
   /**

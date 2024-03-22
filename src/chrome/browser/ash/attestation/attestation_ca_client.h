@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 #include <map>
 #include <string>
 
-#include "ash/components/attestation/attestation_flow.h"
-#include "chromeos/dbus/constants/attestation_constants.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/attestation/attestation_flow.h"
+#include "chromeos/ash/components/dbus/constants/attestation_constants.h"
 
 namespace network {
 
@@ -68,7 +69,8 @@ class AttestationCAClient : public ServerProxy {
   // Loaders used for the processing the requests. Invalidated after completion.
   std::list<std::unique_ptr<network::SimpleURLLoader>> url_loaders_;
 
-  network::mojom::NetworkContext* network_context_for_testing_ = nullptr;
+  raw_ptr<network::mojom::NetworkContext, ExperimentalAsh>
+      network_context_for_testing_ = nullptr;
 };
 
 }  // namespace attestation

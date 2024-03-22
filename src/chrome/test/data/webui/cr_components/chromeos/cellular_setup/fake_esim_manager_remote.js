@@ -1,24 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/** @implements {ash.cellularSetup.mojom.ESimProfile} */
-class FakeProfile {
+import {stringToMojoString16} from 'chrome://resources/js/mojo_type_util.js';
+import {ESimManagerInterface, ESimManagerObserverInterface, ESimOperationResult, ESimProfile, ESimProfileProperties, ESimProfileRemote, EuiccInterface, EuiccProperties, EuiccRemote, ProfileInstallMethod, ProfileInstallResult, ProfileState, QRCode} from 'chrome://resources/mojo/chromeos/ash/services/cellular_setup/public/mojom/esim_manager.mojom-webui.js';
+import {String16} from 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-webui.js';
+
+/** @implements {ESimProfile} */
+export class FakeProfile {
   constructor(eid, iccid, fakeEuicc) {
     this.properties = {
       eid,
       iccid,
       activationCode: 'activation-code-' + iccid,
-      name: {
-        data: this.stringToCharCodeArray_('profile' + iccid),
-      },
-      nickname: {
-        data: this.stringToCharCodeArray_('profile' + iccid),
-      },
-      serviceProvider: {
-        data: this.stringToCharCodeArray_('provider' + iccid),
-      },
-      state: ash.cellularSetup.mojom.ProfileState.kPending,
+      name: stringToMojoString16('profile' + iccid),
+      nickname: stringToMojoString16('profile' + iccid),
+      serviceProvider: stringToMojoString16('provider' + iccid),
+      state: ProfileState.kPending,
     };
 
     this.deferGetProperties_ = false;
@@ -27,9 +25,7 @@ class FakeProfile {
   }
 
   /**
-   * @override
-   * @return {!Promise<{properties:
-   *     ash.cellularSetup.mojom.ESimProfileProperties},}>}
+   * @return {!Promise<{properties: ESimProfileProperties},}>}
    */
   getProperties() {
     if (this.deferGetProperties_) {
@@ -59,16 +55,14 @@ class FakeProfile {
   }
 
   /**
-   * @override
    * @param {string} confirmationCode
    * @return {!Promise<{result:
-   *     ash.cellularSetup.mojom.ProfileInstallResult},}>}
+   *     ProfileInstallResult},}>}
    */
   installProfile(confirmationCode) {
     if (!this.profileInstallResult_ ||
-        this.profileInstallResult_ ===
-            ash.cellularSetup.mojom.ProfileInstallResult.kSuccess) {
-      this.properties.state = ash.cellularSetup.mojom.ProfileState.kActive;
+        this.profileInstallResult_ === ProfileInstallResult.kSuccess) {
+      this.properties.state = ProfileState.kActive;
     }
     this.fakeEuicc_.notifyProfileChangedForTest(this);
     this.fakeEuicc_.notifyProfileListChangedForTest();
@@ -79,35 +73,23 @@ class FakeProfile {
             () => resolve({
               result: this.profileInstallResult_ ?
                   this.profileInstallResult_ :
-                  ash.cellularSetup.mojom.ProfileInstallResult.kSuccess,
+                  ProfileInstallResult.kSuccess,
             }),
             0));
   }
 
   /**
-   * @param {ash.cellularSetup.mojom.ProfileInstallResult} result
+   * @param {ProfileInstallResult} result
    */
   setProfileInstallResultForTest(result) {
     this.profileInstallResult_ = result;
   }
 
   /**
-   * @param {ash.cellularSetup.mojom.ESimOperationResult} result
+   * @param {ESimOperationResult} result
    */
   setEsimOperationResultForTest(result) {
     this.esimOperationResult_ = result;
-  }
-
-  /**
-   * @param {string} string
-   * @private
-   */
-  stringToCharCodeArray_(string) {
-    const res = [];
-    for (let i = 0; i < string.length; i++) {
-      res.push(string.charCodeAt(i));
-    }
-    return res;
   }
 
   /**
@@ -125,15 +107,12 @@ class FakeProfile {
   }
 
   /**
-   * @override
-   * @param {?mojoBase.mojom.String16} nickname
-   * @return {!Promise<{result:
-   *     ash.cellularSetup.mojom.ESimOperationResult},}>}
+   * @param {?String16} nickname
+   * @return {!Promise<{result: ESimOperationResult},}>}
    */
   setProfileNickname(nickname) {
     if (!this.esimOperationResult_ ||
-        this.esimOperationResult_ ===
-            ash.cellularSetup.mojom.ESimOperationResult.kSuccess) {
+        this.esimOperationResult_ === ESimOperationResult.kSuccess) {
       this.properties.nickname = nickname;
     }
 
@@ -144,13 +123,11 @@ class FakeProfile {
   /** @private */
   resolveSetProfileNicknamePromise_() {
     this.deferredSetProfileNicknamePromise_.resolve({
-      result: this.esimOperationResult_ ?
-          this.esimOperationResult_ :
-          ash.cellularSetup.mojom.ESimOperationResult.kSuccess,
+      result: this.esimOperationResult_ ? this.esimOperationResult_ :
+                                          ESimOperationResult.kSuccess,
     });
   }
 
-  /** @override */
   uninstallProfile() {
     this.fakeEuicc_.notifyProfileChangedForTest(this);
     this.defferedUninstallProfilePromise_ = this.deferredPromise_();
@@ -160,8 +137,7 @@ class FakeProfile {
   /** @return {Promise<void>} */
   async resolveUninstallProfilePromise() {
     if (!this.esimOperationResult_ ||
-        this.esimOperationResult_ ===
-            ash.cellularSetup.mojom.ESimOperationResult.kSuccess) {
+        this.esimOperationResult_ === ESimOperationResult.kSuccess) {
       const removeProfileResult =
           await this.fakeEuicc_.removeProfileForTest(this.properties.iccid);
       this.defferedUninstallProfilePromise_.resolve(removeProfileResult);
@@ -169,15 +145,14 @@ class FakeProfile {
     }
 
     this.defferedUninstallProfilePromise_.resolve({
-      result: this.esimOperationResult_ ?
-          this.esimOperationResult_ :
-          ash.cellularSetup.mojom.ESimOperationResult.kSuccess,
+      result: this.esimOperationResult_ ? this.esimOperationResult_ :
+                                          ESimOperationResult.kSuccess,
     });
   }
 }
 
-/** @implements {ash.cellularSetup.mojom.Euicc} */
-class FakeEuicc {
+/** @implements {EuiccInterface} */
+export class FakeEuicc {
   constructor(eid, numProfiles, fakeESimManager) {
     this.fakeESimManager_ = fakeESimManager;
     this.properties = {eid};
@@ -185,23 +160,19 @@ class FakeEuicc {
     for (let i = 0; i < numProfiles; i++) {
       this.addProfile();
     }
-    this.requestPendingProfilesResult_ =
-        ash.cellularSetup.mojom.ESimOperationResult.kSuccess;
+    this.requestPendingProfilesResult_ = ESimOperationResult.kSuccess;
   }
 
   /**
-   * @override
-   * @return {!Promise<{properties:
-   *     ash.cellularSetup.mojom.EuiccProperties},}>}
+   * @return {!Promise<{properties: EuiccProperties},}>}
    */
   getProperties() {
     return Promise.resolve({properties: this.properties});
   }
 
   /**
-   * @override
    * @return {!Promise<{result:
-   *     ash.cellularSetup.mojom.ESimOperationResult},}>}
+   *     ESimOperationResult},}>}
    */
   requestPendingProfiles() {
     return Promise.resolve({
@@ -210,8 +181,21 @@ class FakeEuicc {
   }
 
   /**
-   * @override
-   * @return {!Promise<{profiles: Array<!ESimProfile>,}>}
+   * @return {!Promise<{result:ESimOperationResult,
+   *     profiles:Array<!ESimProfileProperties>,}}
+   *
+   */
+  requestAvailableProfiles() {
+    return Promise.resolve({
+      result: this.requestPendingProfilesResult_,
+      profiles: this.profiles_.map(profile => {
+        return profile.properties;
+      }),
+    });
+  }
+
+  /**
+   * @return {!Promise<{profiles: Array<!ESimProfileRemote>,}>}
    */
   getProfileList() {
     return Promise.resolve({
@@ -220,8 +204,7 @@ class FakeEuicc {
   }
 
   /**
-   * @override
-   * @return {!Promise<{qrCode: ash.cellularSetup.mojom.QRCode} | null>}
+   * @return {!Promise<{qrCode: QRCode| null}>}
    */
   getEidQRCode() {
     if (this.eidQRCode_) {
@@ -232,39 +215,38 @@ class FakeEuicc {
   }
 
   /**
-   * @override
    * @param {string} activationCode
    * @param {string} confirmationCode
-   * @param {boolean} isInstallViaQrCode
-   * @return {!Promise<{result:
-   *     ash.cellularSetup.mojom.ProfileInstallResult},}>}
+   * @param {ProfileInstallMethod} installMethod
+   * @return {!Promise<{result: ProfileInstallResult, profile: ESimProfileRemote
+   *     | null },}>}
    */
   installProfileFromActivationCode(
-      activationCode, confirmationCode, isInstallViaQrCode) {
+      activationCode, confirmationCode, installMethod) {
     this.notifyProfileListChangedForTest();
     return Promise.resolve({
-      result: this.profileInstallResult_ ?
-          this.profileInstallResult_ :
-          ash.cellularSetup.mojom.ProfileInstallResult.kSuccess,
+      result: this.profileInstallResult_ ? this.profileInstallResult_ :
+                                           ProfileInstallResult.kSuccess,
+      profile: null,
     });
   }
 
   /**
-   * @param {ash.cellularSetup.mojom.ESimOperationResult} result
+   * @param {ESimOperationResult} result
    */
   setRequestPendingProfilesResult(result) {
     this.requestPendingProfilesResult_ = result;
   }
 
   /**
-   * @param {ash.cellularSetup.mojom.ProfileInstallResult} result
+   * @param {ProfileInstallResult} result
    */
   setProfileInstallResultForTest(result) {
     this.profileInstallResult_ = result;
   }
 
   /**
-   * @param {ash.cellularSetup.mojom.QRCode} qrcode
+   * @param {QRCode} qrcode
    */
   setEidQRCodeForTest(qrcode) {
     this.eidQRCode_ = qrcode;
@@ -288,9 +270,9 @@ class FakeEuicc {
 
     if (profileRemoved) {
       this.notifyProfileListChangedForTest();
-      return {result: ash.cellularSetup.mojom.ESimOperationResult.kSuccess};
+      return {result: ESimOperationResult.kSuccess};
     }
-    return {result: ash.cellularSetup.mojom.ESimOperationResult.kFailure};
+    return {result: ESimOperationResult.kFailure};
   }
 
   /**
@@ -311,7 +293,7 @@ class FakeEuicc {
   }
 }
 
-/** @implements {ash.cellularSetup.mojom.ESimManagerInterface} */
+/** @implements {ESimManagerInterface} */
 export class FakeESimManagerRemote {
   constructor() {
     this.euiccs_ = [];
@@ -319,8 +301,7 @@ export class FakeESimManagerRemote {
   }
 
   /**
-   * @override
-   * @return {!Promise<{euiccs: !Array<!Euicc>,}>}
+   * @return {!Promise<{euiccs: !Array<!EuiccRemote>,}>}
    */
   getAvailableEuiccs() {
     return Promise.resolve({
@@ -341,7 +322,7 @@ export class FakeESimManagerRemote {
   }
 
   /**
-   * @param {!ash.cellularSetup.mojom.ESimManagerObserverInterface} observer
+   * @param {!ESimManagerObserverInterface} observer
    */
   addObserver(observer) {
     this.observers_.push(observer);
@@ -363,7 +344,7 @@ export class FakeESimManagerRemote {
   }
 
   /**
-   * @param {FakeProfile} profile
+   * @param {FakeProfile|null} profile
    */
   notifyProfileChangedForTest(profile) {
     for (const observer of this.observers_) {

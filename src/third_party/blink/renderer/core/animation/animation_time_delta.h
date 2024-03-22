@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,6 +53,7 @@ class CORE_EXPORT AnimationTimeDelta {
 
   double InSecondsF() const { return delta_; }
   double InMillisecondsF() const { return delta_ * 1000; }
+  double InMicrosecondsF() const { return delta_ * 1000000; }
 
   bool is_max() const {
     return delta_ == std::numeric_limits<double>::infinity();

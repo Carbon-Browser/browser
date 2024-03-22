@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2018 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2018 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <org.chromium.chrome.browser.toolbar.top.TabSwitcherModeTopToolbar
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -30,6 +32,7 @@
             android:paddingEnd="16dp"
             app:tint="@macro/default_icon_color"
             app:srcCompat="@drawable/new_tab_icon"
+            android:duplicateParentState="true"
             android:contentDescription="@string/accessibility_toolbar_btn_new_tab"/>
         <TextView
             android:id="@+id/new_tab_view_desc"
@@ -38,6 +41,7 @@
             android:paddingEnd="16dp"
             android:gravity="center_vertical"
             android:text="@string/button_new_tab"
+            android:duplicateParentState="true"
             android:textAppearance="@style/TextAppearance.TextMediumThick.Primary" />
     </LinearLayout>
 
@@ -50,16 +54,6 @@
         android:paddingEnd="16dp"
         android:contentDescription="@string/accessibility_toolbar_btn_new_tab" />
 
-    <ImageView
-        android:id="@+id/logo"
-        android:layout_width="wrap_content"
-        android:layout_height="32dp"
-        android:layout_gravity="center"
-        android:scaleType="centerInside"
-        app:srcCompat="@drawable/google_logo"
-        android:visibility="gone"
-        android:contentDescription="@null"/>
-
     <ViewStub
         android:id="@+id/incognito_tabs_stub"
         android:inflatedId="@+id/incognito_toggle_tabs"
@@ -69,36 +63,13 @@
         android:layout_gravity="center"
         android:layout_marginBottom="4dp"/>
 
-    <LinearLayout
-        android:id="@+id/tab_switcher_switches_and_menu"
-        android:orientation="horizontal"
+    <FrameLayout
         android:layout_width="wrap_content"
         android:layout_height="match_parent"
         android:layout_gravity="center|end" >
 
-        <!-- TODO(crbug.com/912358): Enable touch highlight on this button. -->
-        <org.chromium.chrome.browser.toolbar.top.ToggleTabStackButton
-            android:id="@+id/tab_switcher_mode_tab_switcher_button"
-            style="@style/ToolbarButton"
-            android:background="@android:color/transparent"
-            android:paddingStart="8dp"
-            android:layout_gravity="top"
-            android:contentDescription="@string/accessibility_toolbar_btn_tabswitcher_toggle_default" />
-
-        <Switch
-            android:id="@+id/incognito_switch"
-            android:layout_gravity="center"
-            android:layout_height="wrap_content"
-            android:layout_width="wrap_content"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:thumb="@drawable/incognito_switch"
-            android:track="@drawable/incognito_switch_track"
-            android:visibility="gone"
-            tools:ignore="UseSwitchCompatOrMaterialXml"/>
-
         <include layout="@layout/menu_button" />
 
-    </LinearLayout>
+    </FrameLayout>
 
 </org.chromium.chrome.browser.toolbar.top.TabSwitcherModeTopToolbar>

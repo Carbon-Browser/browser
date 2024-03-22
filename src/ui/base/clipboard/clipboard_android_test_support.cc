@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,6 @@
 
 namespace ui {
 
-void JNI_ClipboardAndroidTestSupport_Cleanup(JNIEnv* env) {
-  Clipboard::DestroyClipboardForCurrentThread();
-}
-
 jboolean JNI_ClipboardAndroidTestSupport_NativeWriteHtml(
     JNIEnv* env,
     const base::android::JavaParamRef<jstring>& j_html_text) {
@@ -29,7 +25,8 @@ jboolean JNI_ClipboardAndroidTestSupport_NativeWriteHtml(
     base::android::ConvertJavaStringToUTF16(env, j_html_text, &html_text);
     std::string url;
     ScopedClipboardWriter clipboard_writer(ClipboardBuffer::kCopyPaste);
-    clipboard_writer.WriteHTML(html_text, url);
+    clipboard_writer.WriteHTML(html_text, url,
+                               ClipboardContentType::kSanitized);
     clipboard_writer.WriteText(html_text);
   }
   auto* clipboard = Clipboard::GetForCurrentThread();

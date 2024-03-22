@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,7 @@
 
 namespace ash {
 
-class AmbientAnimationStaticResources;
-class AmbientViewDelegateImpl;
+class AmbientUiSettings;
 
 namespace ambient {
 class AmbientOrientationMetricsRecorder;
@@ -25,16 +24,17 @@ class ASH_EXPORT AmbientContainerView : public views::View {
  public:
   METADATA_HEADER(AmbientContainerView);
 
-  // |animation_static_resources| contains the Lottie animation file to render
-  // along with its accompanying static image assets. If null, that means the
-  // slideshow UI should be rendered instead.
-  AmbientContainerView(AmbientViewDelegateImpl* delegate,
-                       std::unique_ptr<AmbientAnimationStaticResources>
-                           animation_static_resources);
+  // |main_rendering_view| should contain the primary content; it becomes a
+  // child of |AmbientContainerView|, and |AmbientContainerView| sets up some
+  // parameters in the view hierarchy that are common to all ambient UIs.
+  AmbientContainerView(AmbientUiSettings ui_settings,
+                       std::unique_ptr<views::View> main_rendering_view);
   ~AmbientContainerView() override;
 
  private:
   friend class AmbientAshTestBase;
+
+  void InitializeCommonSettings();
 
   std::unique_ptr<ambient::AmbientOrientationMetricsRecorder>
       orientation_metrics_recorder_;

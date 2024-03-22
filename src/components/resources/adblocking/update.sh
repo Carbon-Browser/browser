@@ -24,7 +24,10 @@
 # We don't care about perfect ad-filtering quality as we expect these to be
 # replaced very soon.
 wget https://easylist-downloads.adblockplus.org/easylist-minified.txt -O easylist.txt
+gzip -f easylist.txt
 
 wget https://easylist-downloads.adblockplus.org/exceptionrules-minimal.txt -O exceptionrules.txt
+gzip -f exceptionrules.txt
 
 wget https://easylist-downloads.adblockplus.org/abp-filters-anti-cv.txt -O anticv.txt
+gzip -f anticv.txt

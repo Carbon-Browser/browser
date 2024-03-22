@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "remoting/proto/video.pb.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 MonitoredVideoStub::MonitoredVideoStub(VideoStub* video_stub,
                                        base::TimeDelta connectivity_check_delay,
@@ -23,16 +22,15 @@ MonitoredVideoStub::MonitoredVideoStub(VideoStub* video_stub,
           FROM_HERE,
           connectivity_check_delay,
           this,
-          &MonitoredVideoStub::OnConnectivityCheckTimeout) {
-}
+          &MonitoredVideoStub::OnConnectivityCheckTimeout) {}
 
 MonitoredVideoStub::~MonitoredVideoStub() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 }
 
 void MonitoredVideoStub::ProcessVideoPacket(std::unique_ptr<VideoPacket> packet,
                                             base::OnceClosure done) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   connectivity_check_timer_.Reset();
 
@@ -42,7 +40,7 @@ void MonitoredVideoStub::ProcessVideoPacket(std::unique_ptr<VideoPacket> packet,
 }
 
 void MonitoredVideoStub::OnConnectivityCheckTimeout() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   NotifyChannelState(false);
 }
 
@@ -53,5 +51,4 @@ void MonitoredVideoStub::NotifyChannelState(bool connected) {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

@@ -1,0 +1,34 @@
+// Copyright 2023 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+syntax = "proto3";
+
+option optimize_for = LITE_RUNTIME;
+option java_package = "org.chromium.components.optimization_guide.proto";
+
+option java_outer_classname = "ModelQualityMetadataProto";
+
+package optimization_guide.proto;
+
+import "third_party/metrics_proto/system_profile.proto";
+
+// Contains metadata about a specific feature's AiLoggingData (e.g. training
+// opt-out, etc.).
+message LoggingMetadata {
+  reserved 2;
+
+  metrics.SystemProfileProto system_profile = 1;
+
+  // The client's unique identifier. Each ModelExecutionFeature will have a
+  // different ID every day. It should only be used for model quality logging,
+  // and should not be linked to any other data sources.
+  int64 client_id = 3;
+}
+
+// Data about model execution. This includes information about whether it was
+// done on a server or on a device. This includes an ID that can be mapped to
+// the ModelExecutionService logs on the server.
+message ModelExecutionInfo {
+  string server_execution_id = 1;
+}

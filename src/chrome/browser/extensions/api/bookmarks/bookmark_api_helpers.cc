@@ -1,10 +1,8 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/bookmarks/bookmark_api_helpers.h"
-
-#include <math.h>  // For floor()
 
 #include <memory>
 #include <utility>
@@ -17,6 +15,7 @@
 #include "chrome/common/extensions/api/bookmarks.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/managed/managed_bookmark_service.h"
 
 using bookmarks::BookmarkModel;
@@ -63,34 +62,34 @@ void PopulateBookmarkTreeNode(
 
   const BookmarkNode* parent = node->parent();
   if (parent) {
-    out_bookmark_tree_node->parent_id =
-        std::make_unique<std::string>(base::NumberToString(parent->id()));
+    out_bookmark_tree_node->parent_id = base::NumberToString(parent->id());
     out_bookmark_tree_node->index =
-        std::make_unique<int>(parent->GetIndexOf(node));
+        static_cast<int>(parent->GetIndexOf(node).value());
   }
 
   if (!node->is_folder()) {
-    out_bookmark_tree_node->url =
-        std::make_unique<std::string>(node->url().spec());
+    out_bookmark_tree_node->url = node->url().spec();
+    base::Time t = node->date_last_used();
+    if (!t.is_null()) {
+      out_bookmark_tree_node->date_last_used = t.InMillisecondsSinceUnixEpoch();
+    }
   } else {
-    // Javascript Date wants milliseconds since the epoch, ToDoubleT is seconds.
     base::Time t = node->date_folder_modified();
     if (!t.is_null()) {
       out_bookmark_tree_node->date_group_modified =
-          std::make_unique<double>(floor(t.ToDoubleT() * 1000));
+          t.InMillisecondsSinceUnixEpoch();
     }
   }
 
   out_bookmark_tree_node->title = base::UTF16ToUTF8(node->GetTitle());
   if (!node->date_added().is_null()) {
-    // Javascript Date wants milliseconds since the epoch, ToDoubleT is seconds.
     out_bookmark_tree_node->date_added =
-        std::make_unique<double>(floor(node->date_added().ToDoubleT() * 1000));
+        node->date_added().InMillisecondsSinceUnixEpoch();
   }
 
   if (bookmarks::IsDescendantOf(node, managed->managed_node())) {
     out_bookmark_tree_node->unmodifiable =
-        api::bookmarks::BOOKMARK_TREE_NODE_UNMODIFIABLE_MANAGED;
+        api::bookmarks::BookmarkTreeNodeUnmodifiable::kManaged;
   }
 
   if (recurse && node->is_folder()) {
@@ -101,8 +100,7 @@ void PopulateBookmarkTreeNode(
             GetBookmarkTreeNode(managed, child.get(), true, only_folders));
       }
     }
-    out_bookmark_tree_node->children =
-        std::make_unique<std::vector<BookmarkTreeNode>>(std::move(children));
+    out_bookmark_tree_node->children = std::move(children);
   }
 }
 
@@ -143,25 +141,24 @@ bool RemoveNode(BookmarkModel* model,
     return false;
   }
 
-  model->Remove(node);
+  model->Remove(node, bookmarks::metrics::BookmarkEditSource::kExtension);
   return true;
 }
 
 void GetMetaInfo(const BookmarkNode& node,
-                 base::DictionaryValue* id_to_meta_info_map) {
+                 base::Value::Dict& id_to_meta_info_map) {
   if (!node.IsVisible())
     return;
 
   const BookmarkNode::MetaInfoMap* meta_info = node.GetMetaInfoMap();
-  base::Value value(base::Value::Type::DICTIONARY);
+  base::Value::Dict value;
   if (meta_info) {
     BookmarkNode::MetaInfoMap::const_iterator itr;
     for (itr = meta_info->begin(); itr != meta_info->end(); ++itr) {
-      value.SetKey(itr->first, base::Value(itr->second));
+      value.Set(itr->first, itr->second);
     }
   }
-  id_to_meta_info_map->SetKey(base::NumberToString(node.id()),
-                              std::move(value));
+  id_to_meta_info_map.Set(base::NumberToString(node.id()), std::move(value));
 
   if (node.is_folder()) {
     for (const auto& child : node.children())

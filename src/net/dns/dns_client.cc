@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,12 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
 #include "base/values.h"
-#include "net/base/address_list.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
 #include "net/dns/address_sorter.h"
@@ -177,7 +176,7 @@ class DnsClientImpl : public DnsClient {
     return &config->hosts;
   }
 
-  absl::optional<AddressList> GetPresetAddrs(
+  absl::optional<std::vector<IPEndPoint>> GetPresetAddrs(
       const url::SchemeHostPort& endpoint) const override {
     DCHECK(endpoint.IsValid());
     if (!session_)
@@ -199,7 +198,7 @@ class DnsClientImpl : public DnsClient {
         combined.emplace_back(ip, endpoint.port());
       }
     }
-    return AddressList(std::move(combined));
+    return combined;
   }
 
   DnsTransactionFactory* GetTransactionFactory() override {
@@ -216,17 +215,15 @@ class DnsClientImpl : public DnsClient {
     insecure_fallback_failures_ = 0;
   }
 
-  base::Value GetDnsConfigAsValueForNetLog() const override {
+  base::Value::Dict GetDnsConfigAsValueForNetLog() const override {
     const DnsConfig* config = GetEffectiveConfig();
     if (config == nullptr)
-      return base::Value(base::Value::Dict());
-    base::Value value = config->ToValue();
-    DCHECK(value.is_dict());
-    base::Value::Dict& dict = value.GetDict();
+      return base::Value::Dict();
+    base::Value::Dict dict = config->ToDict();
     dict.Set("can_use_secure_dns_transactions", CanUseSecureDnsTransactions());
     dict.Set("can_use_insecure_dns_transactions",
              CanUseInsecureDnsTransactions());
-    return value;
+    return dict;
   }
 
   absl::optional<DnsConfig> GetSystemConfigForTesting() const override {

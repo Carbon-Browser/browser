@@ -1,20 +1,20 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-// <if expr="not chromeos_ash and not chromeos_lacros">
+import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+// <if expr="not is_chromeos">
 import './destination_dialog.js';
 // </if>
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 import './destination_dialog_cros.js';
 // </if>
-// <if expr="not chromeos_ash and not chromeos_lacros">
+// <if expr="not is_chromeos">
 import './destination_select.js';
 // </if>
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 import './destination_select_cros.js';
 // </if>
 import './print_preview_shared.css.js';
@@ -23,30 +23,30 @@ import './throbber.css.js';
 import './settings_section.js';
 import '../strings.m.js';
 
-import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.m.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {beforeNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {createRecentDestinationKey, Destination, isPdfPrinter, makeRecentDestination, PrinterType, RecentDestination} from '../data/destination.js';
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 import {SAVE_TO_DRIVE_CROS_DESTINATION_KEY} from '../data/destination.js';
 // </if>
 import {DestinationErrorType, DestinationStore, DestinationStoreEventType} from '../data/destination_store.js';
 import {Error, State} from '../data/state.js';
 
-// <if expr="not chromeos_ash and not chromeos_lacros">
+// <if expr="not is_chromeos">
 import {PrintPreviewDestinationDialogElement} from './destination_dialog.js';
 // </if>
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 import {PrintPreviewDestinationDialogCrosElement} from './destination_dialog_cros.js';
 // </if>
-// <if expr="not chromeos_ash and not chromeos_lacros">
+// <if expr="not is_chromeos">
 import {PrintPreviewDestinationSelectElement} from './destination_select.js';
 // </if>
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 import {PrintPreviewDestinationSelectCrosElement} from './destination_select_cros.js';
 // </if>
 import {getTemplate} from './destination_settings.html.js';
@@ -60,10 +60,10 @@ export enum DestinationState {
 }
 
 /** Number of recent destinations to save. */
-// <if expr="not chromeos_ash and not chromeos_lacros">
+// <if expr="not is_chromeos">
 export const NUM_PERSISTED_DESTINATIONS: number = 5;
 // </if>
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 export const NUM_PERSISTED_DESTINATIONS: number = 10;
 // </if>
 
@@ -75,12 +75,12 @@ const NUM_UNPINNED_DESTINATIONS: number = 3;
 
 export interface PrintPreviewDestinationSettingsElement {
   $: {
-    // <if expr="not chromeos_ash and not chromeos_lacros">
+    // <if expr="not is_chromeos">
     destinationDialog:
         CrLazyRenderElement<PrintPreviewDestinationDialogElement>,
     destinationSelect: PrintPreviewDestinationSelectElement,
     // </if>
-    // <if expr="chromeos_ash or chromeos_lacros">
+    // <if expr="is_chromeos">
     destinationDialog:
         CrLazyRenderElement<PrintPreviewDestinationDialogCrosElement>,
     destinationSelect: PrintPreviewDestinationSelectCrosElement,
@@ -89,7 +89,7 @@ export interface PrintPreviewDestinationSettingsElement {
 }
 
 const PrintPreviewDestinationSettingsElementBase =
-    I18nMixin(WebUIListenerMixin(SettingsMixin(PolymerElement)));
+    I18nMixin(WebUiListenerMixin(SettingsMixin(PolymerElement)));
 
 export class PrintPreviewDestinationSettingsElement extends
     PrintPreviewDestinationSettingsElementBase {
@@ -137,7 +137,7 @@ export class PrintPreviewDestinationSettingsElement extends
 
       displayedDestinations_: Array,
 
-      // <if expr="chromeos_ash or chromeos_lacros">
+      // <if expr="is_chromeos">
       driveDestinationKey_: {
         type: String,
         value: '',
@@ -179,7 +179,7 @@ export class PrintPreviewDestinationSettingsElement extends
   private destinationStore_: DestinationStore|null;
   private displayedDestinations_: Destination[];
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   private driveDestinationKey_: string;
   private hasPinSetting_: boolean;
   // </if>
@@ -196,7 +196,7 @@ export class PrintPreviewDestinationSettingsElement extends
     super.connectedCallback();
 
     this.destinationStore_ =
-        new DestinationStore(this.addWebUIListener.bind(this));
+        new DestinationStore(this.addWebUiListener.bind(this));
     this.tracker_.add(
         this.destinationStore_, DestinationStoreEventType.DESTINATION_SELECT,
         this.onDestinationSelect_.bind(this));
@@ -216,11 +216,15 @@ export class PrintPreviewDestinationSettingsElement extends
         this.destinationStore_, DestinationStoreEventType.DESTINATIONS_INSERTED,
         this.updateDropdownDestinations_.bind(this));
 
-    // <if expr="chromeos_ash or chromeos_lacros">
+    // <if expr="is_chromeos">
     this.tracker_.add(
         this.destinationStore_,
         DestinationStoreEventType.DESTINATION_EULA_READY,
         this.updateDestinationEulaUrl_.bind(this));
+    this.tracker_.add(
+        this.destinationStore_,
+        DestinationStoreEventType.DESTINATION_PRINTER_STATUS_UPDATE,
+        this.onPrinterStatusUpdate_.bind(this));
     // </if>
   }
 
@@ -234,27 +238,27 @@ export class PrintPreviewDestinationSettingsElement extends
   /**
    * @param defaultPrinter The system default printer ID.
    * @param pdfPrinterDisabled Whether the PDF printer is disabled.
-   * @param isDriveMounted Whether Google Drive is mounted. Only used
-        on Chrome OS.
+   * @param saveToDriveDisabled Whether the 'Save to Google Drive' destination
+   *     is disabled in print preview. Only used on Chrome OS.
    * @param serializedDefaultDestinationRulesStr String with rules
    *     for selecting a default destination.
    */
   init(
       defaultPrinter: string, pdfPrinterDisabled: boolean,
-      isDriveMounted: boolean,
+      saveToDriveDisabled: boolean,
       serializedDefaultDestinationRulesStr: string|null) {
     this.pdfPrinterDisabled_ = pdfPrinterDisabled;
     let recentDestinations =
         this.getSettingValue('recentDestinations') as RecentDestination[];
-    // <if expr="chromeos_ash or chromeos_lacros">
+    // <if expr="is_chromeos">
     this.driveDestinationKey_ =
-        isDriveMounted ? SAVE_TO_DRIVE_CROS_DESTINATION_KEY : '';
+        saveToDriveDisabled ? '' : SAVE_TO_DRIVE_CROS_DESTINATION_KEY;
     // </if>
 
     recentDestinations = recentDestinations.slice(
         0, this.getRecentDestinationsDisplayCount_(recentDestinations));
     this.destinationStore_!.init(
-        this.pdfPrinterDisabled_, isDriveMounted, defaultPrinter,
+        this.pdfPrinterDisabled_, saveToDriveDisabled, defaultPrinter,
         serializedDefaultDestinationRulesStr, recentDestinations);
   }
 
@@ -428,7 +432,7 @@ export class PrintPreviewDestinationSettingsElement extends
           this.destination.type === PrinterType.PDF_PRINTER));
   }
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   private computeHasPinSetting_(): boolean {
     return this.getSetting('pin').available;
   }
@@ -480,7 +484,7 @@ export class PrintPreviewDestinationSettingsElement extends
     return this.destinationStore_;
   }
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   /**
    * @param e Event containing the current destination's EULA URL.
    */
@@ -491,6 +495,44 @@ export class PrintPreviewDestinationSettingsElement extends
 
     this.destination.eulaUrl = e.detail;
     this.notifyPath('destination.eulaUrl');
+  }
+
+  /**
+   * Returns true if at least one non-PDF printer destination is shown in the
+   * destination dropdown.
+   */
+  printerExistsInDisplayedDestinations(): boolean {
+    return this.displayedDestinations_.some(
+        destination => destination.type !== PrinterType.PDF_PRINTER);
+  }
+
+  // Trigger updates to the printer status icons and text for the selected
+  // destination and corresponding dropdown.
+  private onPrinterStatusUpdate_(
+      e: CustomEvent<{destinationKey: string, nowOnline: boolean}>): void {
+    const destinationKey = e.detail.destinationKey;
+
+    // If `destinationKey` matches the currently selected destination, use
+    // notifyPath to trigger the destination to recalculate its status icon and
+    // error status text.
+    if (this.destination && this.destination.key === destinationKey) {
+      this.notifyPath(`destination.printerStatusReason`);
+
+      // If the selected destination was unreachable and now it's online, force
+      // select it again so the capabilities and preview will now load.
+      if (e.detail.nowOnline) {
+        this.destinationStore_!.selectDestination(
+            this.destination, /*refreshDestination=*/ true);
+      }
+    }
+
+    // If this destination is in the dropdown, notify it to recalculate its
+    // status icon.
+    const index = this.displayedDestinations_.findIndex(
+        destination => destination.key === destinationKey);
+    if (index !== -1) {
+      this.notifyPath(`displayedDestinations_.${index}.printerStatusReason`);
+    }
   }
   // </if>
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -187,7 +187,7 @@ class PLATFORM_EXPORT WebGLImageConversion final {
   // ImageBitmap. The format from ImageData is always RGBA8. The formats from
   // DOM elements vary with Graphics ports, but can only be RGBA8 or BGRA8.
   // ImageBitmap can use RGBA16F when colorspace conversion is performed.
-  static ALWAYS_INLINE bool SrcFormatComesFromDOMElementOrImageData(
+  ALWAYS_INLINE static bool SrcFormatComesFromDOMElementOrImageData(
       DataFormat src_format) {
     return src_format == kDataFormatBGRA8 || src_format == kDataFormatRGBA8 ||
            src_format == kDataFormatRGBA16F;

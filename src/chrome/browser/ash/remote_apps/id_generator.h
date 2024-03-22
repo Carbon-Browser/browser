@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ class IdGenerator {
   virtual std::string GenerateId() = 0;
 };
 
-// Generates IDs using |base::GenerateGUID()|.
+// Generates IDs using |base::Uuid::GenerateRandomV4().AsLowercaseString()|.
 class GuidIdGenerator : public IdGenerator {
  public:
   GuidIdGenerator() = default;

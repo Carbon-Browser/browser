@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
@@ -45,7 +45,7 @@ void Allocate(
 }
 
 ValueStore::Status QuotaExceededError(Resource resource) {
-  const char* name = NULL;
+  const char* name = nullptr;
   switch (resource) {
     case QUOTA_BYTES:
       name = "QUOTA_BYTES";
@@ -72,7 +72,7 @@ SettingsStorageQuotaEnforcer::SettingsStorageQuotaEnforcer(
       used_total_(0),
       usage_calculated_(false) {}
 
-SettingsStorageQuotaEnforcer::~SettingsStorageQuotaEnforcer() {}
+SettingsStorageQuotaEnforcer::~SettingsStorageQuotaEnforcer() = default;
 
 size_t SettingsStorageQuotaEnforcer::GetBytesInUse(const std::string& key) {
   LazyCalculateUsage();

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -111,8 +111,7 @@ using FontVariationAxis = FontTagValuePair<float>;
 
 class PLATFORM_EXPORT FontFeatureSettings
     : public FontSettings<FontFeature>,
-      public RefCountedWillBeThreadSafeForParallelTextShaping<
-          FontFeatureSettings> {
+      public RefCounted<FontFeatureSettings> {
  public:
   static scoped_refptr<FontFeatureSettings> Create() {
     return base::AdoptRef(new FontFeatureSettings());
@@ -127,8 +126,7 @@ class PLATFORM_EXPORT FontFeatureSettings
 
 class PLATFORM_EXPORT FontVariationSettings
     : public FontSettings<FontVariationAxis>,
-      public RefCountedWillBeThreadSafeForParallelTextShaping<
-          FontVariationSettings> {
+      public RefCounted<FontVariationSettings> {
  public:
   static scoped_refptr<FontVariationSettings> Create() {
     return base::AdoptRef(new FontVariationSettings());

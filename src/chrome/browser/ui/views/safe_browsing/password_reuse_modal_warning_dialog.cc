@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/safe_browsing/password_reuse_modal_warning_dialog.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -47,7 +47,7 @@ class SafeBrowsingImageView : public NonAccessibleImageView {
   // NonAccessibleImageView:
   void OnThemeChanged() override {
     NonAccessibleImageView::OnThemeChanged();
-    SetImage(*ui::ResourceBundle::GetSharedInstance().GetImageSkiaNamed(
+    SetImage(ui::ImageModel::FromResourceId(
         GetNativeTheme()->ShouldUseDarkColors() ? IDR_PASSWORD_CHECK_DARK
                                                 : IDR_PASSWORD_CHECK));
   }
@@ -277,8 +277,7 @@ void PasswordReuseModalWarningDialog::InvokeActionForTesting(
       Close();
       break;
     default:
-      NOTREACHED();
-      break;
+      NOTREACHED_NORETURN();
   }
 }
 

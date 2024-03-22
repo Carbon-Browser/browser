@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,11 +42,14 @@ class VIEWS_EXAMPLES_EXPORT ButtonExample : public ExampleBase {
   void ImageButtonPressed();
 
   // Example buttons.
-  LabelButton* label_button_ = nullptr;
-  MdTextButton* md_button_ = nullptr;
-  MdTextButton* md_disabled_button_ = nullptr;
-  MdTextButton* md_default_button_ = nullptr;
-  ImageButton* image_button_ = nullptr;
+  raw_ptr<LabelButton> label_button_ = nullptr;
+  raw_ptr<MdTextButton> md_button_ = nullptr;
+  raw_ptr<MdTextButton> md_disabled_button_ = nullptr;
+  raw_ptr<MdTextButton> md_default_button_ = nullptr;
+  raw_ptr<MdTextButton> md_tonal_button_ = nullptr;
+  raw_ptr<MdTextButton> md_text_button_ = nullptr;
+  raw_ptr<MdTextButton> md_icon_text_button_ = nullptr;
+  raw_ptr<ImageButton> image_button_ = nullptr;
 
   raw_ptr<const gfx::ImageSkia> icon_ = nullptr;
 

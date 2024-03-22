@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,54 +9,26 @@
 #include "ash/capture_mode/capture_mode_util.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
-#include "ash/shell.h"
-#include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "ash/shelf/hotseat_widget.h"
+#include "ash/shelf/shelf.h"
+#include "ash/style/typography.h"
 #include "base/check.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/aura/window.h"
 #include "ui/events/event.h"
 #include "ui/events/types/event_type.h"
 #include "ui/views/controls/label.h"
 
-namespace ash {
-namespace bubble_utils {
-namespace {
-
-// A label which invokes a constructor-specified callback in `OnThemeChanged()`.
-class LabelWithThemeChangedCallback : public views::Label {
- public:
-  using ThemeChangedCallback = base::RepeatingCallback<void(views::Label*)>;
-
-  LabelWithThemeChangedCallback(const std::u16string& text,
-                                ThemeChangedCallback theme_changed_callback)
-      : views::Label(text),
-        theme_changed_callback_(std::move(theme_changed_callback)) {}
-
-  LabelWithThemeChangedCallback(const LabelWithThemeChangedCallback&) = delete;
-  LabelWithThemeChangedCallback& operator=(
-      const LabelWithThemeChangedCallback&) = delete;
-  ~LabelWithThemeChangedCallback() override = default;
-
- private:
-  // views::Label:
-  void OnThemeChanged() override {
-    views::Label::OnThemeChanged();
-    theme_changed_callback_.Run(this);
-  }
-
-  ThemeChangedCallback theme_changed_callback_;
-};
-
-}  // namespace
+namespace ash::bubble_utils {
 
 bool ShouldCloseBubbleForEvent(const ui::LocatedEvent& event) {
-  // Should only be called for "press" type events.
+  // Should only be called for "press" or scroll begin type events.
   DCHECK(event.type() == ui::ET_MOUSE_PRESSED ||
          event.type() == ui::ET_TOUCH_PRESSED ||
          event.type() == ui::ET_GESTURE_LONG_PRESS ||
          event.type() == ui::ET_GESTURE_TAP ||
-         event.type() == ui::ET_GESTURE_TWO_FINGER_TAP)
+         event.type() == ui::ET_GESTURE_TWO_FINGER_TAP ||
+         event.type() == ui::ET_GESTURE_SCROLL_BEGIN)
       << event.type();
 
   // Users in a capture session may be trying to capture the bubble.
@@ -91,66 +63,88 @@ bool ShouldCloseBubbleForEvent(const ui::LocatedEvent& event) {
   if (settings_bubble_container->Contains(target))
     return false;
 
+  // Ignore clicks in the help bubble container.
+  aura::Window* help_bubble_container =
+      root_controller->GetContainer(kShellWindowId_HelpBubbleContainer);
+  if (help_bubble_container->Contains(target)) {
+    return false;
+  }
+
+  // Ignore clicks in the shelf area containing app icons. This is to ensure
+  // that the bubble is not closed when you click on a shelf arrow.
+  Shelf* shelf = Shelf::ForWindow(target);
+  if (target == shelf->hotseat_widget()->GetNativeWindow() &&
+      shelf->hotseat_widget()->EventTargetsShelfView(event)) {
+    return false;
+  }
+
   return true;
 }
 
-void ApplyStyle(views::Label* label, LabelStyle style) {
+void ApplyStyle(views::Label* label,
+                TypographyToken style,
+                ui::ColorId text_color_id) {
   label->SetAutoColorReadabilityEnabled(false);
-  AshColorProvider::ContentLayerType text_color;
+  label->SetEnabledColorId(text_color_id);
+
+  if (chromeos::features::IsJellyEnabled()) {
+    TypographyProvider::Get()->StyleLabel(style, *label);
+    return;
+  }
 
   switch (style) {
-    case LabelStyle::kBadge:
-      text_color = AshColorProvider::ContentLayerType::kTextColorPrimary;
-      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 14,
-                                       gfx::Font::Weight::MEDIUM));
-      break;
-    case LabelStyle::kBody:
-      text_color = AshColorProvider::ContentLayerType::kTextColorPrimary;
-      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 14,
-                                       gfx::Font::Weight::NORMAL));
-      break;
-    case LabelStyle::kChipBody:
-      text_color = AshColorProvider::ContentLayerType::kTextColorPrimary;
-      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 10,
-                                       gfx::Font::Weight::MEDIUM));
-      break;
-    case LabelStyle::kChipTitle:
-      text_color = AshColorProvider::ContentLayerType::kTextColorPrimary;
-      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 13,
-                                       gfx::Font::Weight::NORMAL));
-      break;
-    case LabelStyle::kHeader:
-      text_color = AshColorProvider::ContentLayerType::kTextColorPrimary;
-      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 16,
-                                       gfx::Font::Weight::MEDIUM));
-      break;
-    case LabelStyle::kSubtitle:
-      text_color = AshColorProvider::ContentLayerType::kTextColorSecondary;
+    case TypographyToken::kCrosAnnotation1:
       label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 12,
                                        gfx::Font::Weight::NORMAL));
       break;
+    case TypographyToken::kCrosAnnotation2:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 11,
+                                       gfx::Font::Weight::NORMAL));
+      break;
+    case TypographyToken::kCrosBody1:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 14,
+                                       gfx::Font::Weight::NORMAL));
+      break;
+    case TypographyToken::kCrosBody2:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 13,
+                                       gfx::Font::Weight::NORMAL));
+      break;
+    case TypographyToken::kCrosButton1:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 14,
+                                       gfx::Font::Weight::MEDIUM));
+      break;
+    case TypographyToken::kCrosButton2:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 13,
+                                       gfx::Font::Weight::MEDIUM));
+      break;
+    case TypographyToken::kCrosDisplay7:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 18,
+                                       gfx::Font::Weight::MEDIUM));
+      break;
+    case TypographyToken::kCrosHeadline1:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 15,
+                                       gfx::Font::Weight::MEDIUM));
+      break;
+    case TypographyToken::kCrosLabel1:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 10,
+                                       gfx::Font::Weight::MEDIUM));
+      break;
+    case TypographyToken::kCrosTitle1:
+      label->SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 16,
+                                       gfx::Font::Weight::MEDIUM));
+      break;
+    default:
+      NOTREACHED();
+      break;
   }
-
-  label->SetEnabledColor(
-      AshColorProvider::Get()->GetContentLayerColor(text_color));
 }
 
-std::unique_ptr<views::Label> CreateLabel(LabelStyle style,
-                                          const std::u16string& text) {
-  auto label = std::make_unique<LabelWithThemeChangedCallback>(
-      text,
-      /*theme_changed_callback=*/base::BindRepeating(
-          [](LabelStyle style, views::Label* label) {
-            ApplyStyle(label, style);
-          },
-          style));
-  // Apply `style` to `label` manually in case the view is painted without ever
-  // having being added to the view hierarchy. In such cases, the `label` will
-  // not receive an `OnThemeChanged()` event. This occurs, for example, with
-  // holding space drag images.
-  ApplyStyle(label.get(), style);
+std::unique_ptr<views::Label> CreateLabel(TypographyToken style,
+                                          const std::u16string& text,
+                                          ui::ColorId text_color_id) {
+  auto label = std::make_unique<views::Label>(text);
+  ApplyStyle(label.get(), style, text_color_id);
   return label;
 }
 
-}  // namespace bubble_utils
-}  // namespace ash
+}  // namespace ash::bubble_utils

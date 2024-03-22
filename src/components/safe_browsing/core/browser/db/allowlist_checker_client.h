@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SAFE_BROWSING_CORE_BROWSER_DB_ALLOWLIST_CHECKER_CLIENT_H_
 #define COMPONENTS_SAFE_BROWSING_CORE_BROWSER_DB_ALLOWLIST_CHECKER_CLIENT_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -42,7 +42,6 @@ class AllowlistCheckerClient : public SafeBrowsingDatabaseManager::Client {
 
   // SafeBrowsingDatabaseMananger::Client impl
   void OnCheckAllowlistUrlResult(bool is_allowlisted) override;
-  void OnCheckUrlForHighConfidenceAllowlist(bool did_match_allowlist) override;
 
  private:
   // Helper method to instantiate a AllowlistCheckerClient object.

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/threading/thread.h"
-#include "build/chromeos_buildflags.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "components/exo/display.h"
 #include "components/exo/test/exo_test_base.h"
-#else
-#include "components/exo/test/exo_test_base_views.h"
-#endif
 
 namespace exo {
 class SecurityDelegate;
@@ -27,22 +20,45 @@ class Server;
 
 namespace test {
 
-// Use ExoTestBase on Chrome OS because Server starts to depends on ash::Shell,
-// which is unavailable on other platforms so then ExoTestBaseViews instead.
-using TestBase =
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    exo::test::ExoTestBase
-#else
-    exo::test::ExoTestBaseViews
-#endif
-    ;
+// Use ExoTestBase because Server starts to depends on ash::Shell.
+using TestBase = exo::test::ExoTestBase;
 
 // Base class for tests that create an exo's wayland server.
 class WaylandServerTestBase : public TestBase {
  public:
-  static std::string GetUniqueSocketName();
+  // When using on-demand sockets (described on go/securer-exo-ids) the server
+  // does not own the socket and will not clean it up. This class is used to
+  // help manage creation/cleanup of such sockets
+  class ScopedTempSocket {
+   public:
+    ScopedTempSocket();
+
+    // Not copyable.
+    ScopedTempSocket(const ScopedTempSocket&) = delete;
+    ScopedTempSocket& operator=(const ScopedTempSocket&) = delete;
+
+    ~ScopedTempSocket();
+
+    // Once created, this class owns the socket FD. Use this method to move the
+    // FD out of here (and into a wayland server).
+    base::ScopedFD TakeFd();
+
+    const base::FilePath& server_path() const { return server_path_; }
+
+   private:
+    base::ScopedTempDir socket_dir_;
+    base::FilePath server_path_;
+    base::ScopedFD fd_;
+  };
 
   WaylandServerTestBase();
+
+  // Constructs a WaylandServerTestBase with |traits| being forwarded to its
+  // TaskEnvironment. See the corresponding |AshTestBase| constructor.
+  template <typename... TaskEnvironmentTraits>
+  explicit WaylandServerTestBase(TaskEnvironmentTraits&&... traits)
+      : TestBase(std::forward<TaskEnvironmentTraits>(traits)...) {}
+
   WaylandServerTestBase(const WaylandServerTestBase&) = delete;
   WaylandServerTestBase& operator=(const WaylandServerTestBase&) = delete;
   ~WaylandServerTestBase() override;
@@ -57,21 +73,6 @@ class WaylandServerTestBase : public TestBase {
  protected:
   std::unique_ptr<Display> display_;
   base::ScopedTempDir xdg_temp_dir_;
-};
-
-// A class to support a client side code on a separate thread.
-class WaylandClientRunner : base::Thread {
- public:
-  WaylandClientRunner(Server* server, const std::string& name);
-  WaylandClientRunner(const WaylandClientRunner&) = delete;
-  WaylandClientRunner& operator=(const WaylandClientRunner&) = delete;
-  ~WaylandClientRunner() override = default;
-
-  void RunAndWait(base::OnceClosure callback);
-
- private:
-  Server* server_;  // not owned. server must outlive WaylandClientRunner.
-  base::WaitableEvent event_;
 };
 
 }  // namespace test

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/assistant/assistant_interface_binder.h"
 #include "ash/public/cpp/assistant/controller/assistant_interaction_controller.h"
@@ -21,9 +22,11 @@
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/ash/assistant/assistant_setup.h"
 #include "chrome/browser/ui/ash/assistant/device_actions_delegate_impl.h"
+#include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/assistant/public/mojom/assistant_audio_decoder.mojom.h"
+#include "chromeos/crosapi/cpp/gurl_os_handler_utils.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/browser/audio_service.h"
 #include "content/public/browser/browser_context.h"
@@ -35,7 +38,7 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 #if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
-#include "chromeos/services/libassistant/public/mojom/service.mojom.h"
+#include "chromeos/ash/services/libassistant/public/mojom/service.mojom.h"
 #endif  // BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
 
 AssistantBrowserDelegateImpl::AssistantBrowserDelegateImpl() {
@@ -57,7 +60,7 @@ AssistantBrowserDelegateImpl::~AssistantBrowserDelegateImpl() {
 
 void AssistantBrowserDelegateImpl::MaybeInit(Profile* profile) {
   if (assistant::IsAssistantAllowedForProfile(profile) !=
-      chromeos::assistant::AssistantAllowedState::ALLOWED) {
+      ash::assistant::AssistantAllowedState::ALLOWED) {
     return;
   }
 
@@ -77,9 +80,9 @@ void AssistantBrowserDelegateImpl::MaybeInit(Profile* profile) {
   device_actions_ = std::make_unique<DeviceActions>(
       std::make_unique<DeviceActionsDelegateImpl>());
 
-  service_ = std::make_unique<chromeos::assistant::Service>(
+  service_ = std::make_unique<ash::assistant::Service>(
       profile->GetURLLoaderFactory()->Clone(),
-      IdentityManagerFactory::GetForProfile(profile));
+      IdentityManagerFactory::GetForProfile(profile), profile->GetPrefs());
   service_->Init();
 
   assistant_setup_ = std::make_unique<AssistantSetup>();
@@ -96,11 +99,11 @@ void AssistantBrowserDelegateImpl::OnAppTerminating() {
   if (!initialized_)
     return;
 
-  chromeos::assistant::AssistantService::Get()->Shutdown();
+  ash::assistant::AssistantService::Get()->Shutdown();
 }
 
 void AssistantBrowserDelegateImpl::OnAssistantStatusChanged(
-    chromeos::assistant::AssistantStatus new_status) {
+    ash::assistant::AssistantStatus new_status) {
   ash::AssistantState::Get()->NotifyStatusChanged(new_status);
 }
 
@@ -126,8 +129,8 @@ void AssistantBrowserDelegateImpl::RequestAudioStreamFactory(
 }
 
 void AssistantBrowserDelegateImpl::RequestAudioDecoderFactory(
-    mojo::PendingReceiver<
-        chromeos::assistant::mojom::AssistantAudioDecoderFactory> receiver) {
+    mojo::PendingReceiver<ash::assistant::mojom::AssistantAudioDecoderFactory>
+        receiver) {
   content::ServiceProcessHost::Launch(
       std::move(receiver),
       content::ServiceProcessHost::Options()
@@ -154,13 +157,8 @@ void AssistantBrowserDelegateImpl::RequestNetworkConfig(
 }
 
 void AssistantBrowserDelegateImpl::OpenUrl(GURL url) {
-  // OS settings app is implemented in Ash, using `NewWindowDelegate::OpenUrl()`
-  // does not qualify for redirection in Lacros due to security limitations.
-  // Thus we need to explicitly send the request to Ash to launch the OS
-  // settings app.
-  if (crosapi::browser_util::IsLacrosPrimaryBrowser() &&
-      base::StartsWith(url.spec(), chrome::kChromeUIOSSettingsURL,
-                       base::CompareCase::INSENSITIVE_ASCII)) {
+  if (crosapi::browser_util::IsLacrosEnabled() &&
+      ChromeWebUIControllerFactory::GetInstance()->CanHandleUrl(url)) {
     crosapi::UrlHandlerAsh().OpenUrl(url);
   } else {
     // The new tab should be opened with a user activation since the user
@@ -170,16 +168,17 @@ void AssistantBrowserDelegateImpl::OpenUrl(GURL url) {
     // browser tab and Assistant UI state will be updated downstream to respect
     // |in_background|.
     ash::NewWindowDelegate::GetPrimary()->OpenUrl(
-        url, ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction);
+        url, ash::NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+        ash::NewWindowDelegate::Disposition::kNewForegroundTab);
   }
 }
 
 #if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
 void AssistantBrowserDelegateImpl::RequestLibassistantService(
-    mojo::PendingReceiver<chromeos::libassistant::mojom::LibassistantService>
+    mojo::PendingReceiver<ash::libassistant::mojom::LibassistantService>
         receiver) {
   content::ServiceProcessHost::Launch<
-      chromeos::libassistant::mojom::LibassistantService>(
+      ash::libassistant::mojom::LibassistantService>(
       std::move(receiver), content::ServiceProcessHost::Options()
                                .WithDisplayName("Libassistant Service")
                                .Pass());
@@ -203,6 +202,10 @@ void AssistantBrowserDelegateImpl::OnUserProfileLoaded(
 }
 
 void AssistantBrowserDelegateImpl::OnUserSessionStarted(bool is_primary_user) {
+  if (ash::features::IsOobeSkipAssistantEnabled()) {
+    return;
+  }
+
   // Disable the handling for browser tests to prevent the Assistant being
   // enabled unexpectedly.
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
@@ -213,7 +216,7 @@ void AssistantBrowserDelegateImpl::OnUserSessionStarted(bool is_primary_user) {
 }
 
 void AssistantBrowserDelegateImpl::OnAssistantFeatureAllowedChanged(
-    chromeos::assistant::AssistantAllowedState allowed_state) {
+    ash::assistant::AssistantAllowedState allowed_state) {
   Profile* profile = ProfileManager::GetActiveUserProfile();
 
   MaybeInit(profile);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,7 @@ struct SwapResponse {
   SwapTimings timings;
 };
 
-// Sent by GLImages to their GLImage::SwapCompletionCallbacks.
+// Sent as part of finishing a swap.
 struct GFX_EXPORT SwapCompletionResult {
   explicit SwapCompletionResult(gfx::SwapResult swap_result);
   SwapCompletionResult(gfx::SwapResult swap_result,

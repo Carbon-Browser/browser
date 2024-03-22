@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <windows.h>
 #include <stddef.h>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/capture/video/video_capture_device.h"
 #include "media/capture/video/win/filter_base_win.h"
 #include "media/capture/video/win/sink_filter_observer_win.h"

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,13 @@
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_async_file_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root_map.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_watcher_manager.h"
-#include "chrome/browser/chromeos/fileapi/file_system_backend_delegate.h"
+#include "chrome/browser/ash/fileapi/file_system_backend_delegate.h"
 
 namespace arc {
 
 // Implements ARC documents provider filesystem.
 class ArcDocumentsProviderBackendDelegate
-    : public chromeos::FileSystemBackendDelegate {
+    : public ash::FileSystemBackendDelegate {
  public:
   ArcDocumentsProviderBackendDelegate();
 

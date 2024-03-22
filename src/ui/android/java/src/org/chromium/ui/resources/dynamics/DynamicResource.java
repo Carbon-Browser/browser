@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,11 @@ public interface DynamicResource {
     void onResourceRequested();
 
     /**
-     * Sets the way this dynamic resource will use to return the resource that is ready to be used
-     * and drawn.
+     * Adds an callback that will be invoked when the resource is ready to be used and drawn or is
+     * updated.
      */
-    void setOnResourceReadyCallback(Callback<Resource> onResourceReady);
+    void addOnResourceReadyCallback(Callback<Resource> onResourceReady);
+
+    /** Removes a resource ready callback to stop listening for updates to the resource. */
+    void removeOnResourceReadyCallback(Callback<Resource> onResourceReady);
 }

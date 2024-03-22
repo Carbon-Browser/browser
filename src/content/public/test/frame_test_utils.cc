@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,8 @@ std::string ArrangeFramesAndGetContentFromLeaf(
     const GURL& leaf_url) {
   ArrangeFramesAndNavigate(
       web_contents, server,
-      base::StringPrintf(frame_tree_pattern.c_str(), leaf_url.spec().c_str()));
+      base::StringPrintfNonConstexpr(frame_tree_pattern.c_str(),
+                                     leaf_url.spec().c_str()));
   return EvalJs(SelectDescendentFrame(web_contents, leaf_path),
                 "document.body.textContent")
       .ExtractString();
@@ -72,7 +73,8 @@ std::vector<net::CanonicalCookie> ArrangeFramesAndGetCanonicalCookiesForLeaf(
     const GURL& cookie_url) {
   ArrangeFramesAndNavigate(
       web_contents, server,
-      base::StringPrintf(frame_tree_pattern.c_str(), leaf_url.spec().c_str()));
+      base::StringPrintfNonConstexpr(frame_tree_pattern.c_str(),
+                                     leaf_url.spec().c_str()));
   return GetCanonicalCookies(web_contents->GetBrowserContext(), cookie_url);
 }
 

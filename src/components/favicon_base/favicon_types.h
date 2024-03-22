@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,6 +108,8 @@ struct LargeIconResult {
 
   ~LargeIconResult();
 
+  LargeIconResult(LargeIconResult&& result);
+
   // The bitmap from the favicon database if the database has a sufficiently
   // large one.
   FaviconRawBitmapResult bitmap;
@@ -145,6 +147,7 @@ struct LargeIconImageResult {
 // favicon server. Used for UMA enum GoogleFaviconServerRequestStatus, so do not
 // change existing values. Insert new values at the end, and update the
 // histogram definition.
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.favicon
 enum class GoogleFaviconServerRequestStatus {
   // Request sent out and the favicon successfully fetched.
   SUCCESS = 0,

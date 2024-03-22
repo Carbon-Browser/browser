@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 
+#include "components/signin/internal/identity_manager/account_capabilities_fetcher.h"
 #include "components/signin/internal/identity_manager/account_capabilities_fetcher_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -31,6 +32,7 @@ class FakeAccountCapabilitiesFetcherFactory
   // AccountCapabilitiesFetcherFactory:
   std::unique_ptr<AccountCapabilitiesFetcher> CreateAccountCapabilitiesFetcher(
       const CoreAccountInfo& account_info,
+      AccountCapabilitiesFetcher::FetchPriority fetch_priority,
       AccountCapabilitiesFetcher::OnCompleteCallback on_complete_callback)
       override;
 

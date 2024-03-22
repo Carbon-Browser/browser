@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,8 +52,9 @@ class CC_EXPORT ScrollbarLayerImplBase : public LayerImpl {
   void PushPropertiesTo(LayerImpl* layer) override;
 
   // Thumb quad rect in layer space.
-  gfx::Rect ComputeThumbQuadRect() const;
-  gfx::Rect ComputeExpandedThumbQuadRect() const;
+  virtual gfx::Rect ComputeThumbQuadRect() const;
+  virtual gfx::Rect ComputeHitTestableThumbQuadRect() const;
+  virtual gfx::Rect ComputeHitTestableExpandedThumbQuadRect() const;
 
   float thumb_thickness_scale_factor() {
     return thumb_thickness_scale_factor_;
@@ -76,15 +77,23 @@ class CC_EXPORT ScrollbarLayerImplBase : public LayerImpl {
   virtual bool JumpOnTrackClick() const;
   virtual ScrollbarPart IdentifyScrollbarPart(
       const gfx::PointF position_in_widget) const;
-  // Only PaintedOverlayScrollbar(Aura Overlay Scrollbar) need to know
-  // tickmarks's state.
-  virtual bool HasFindInPageTickmarks() const;
+  // Only Aura (PaintedOverlayScrollbar) and Fluent (PaintedScrollbar) overlay
+  // scrollbars need to know tickmarks's state to trigger the painting of the
+  // scrollbar's track.
+  bool has_find_in_page_tickmarks() const {
+    return has_find_in_page_tickmarks_;
+  }
+  void SetHasFindInPageTickmarks(bool has_find_in_page_tickmarks);
 
   // Mac overlay scrollbars are faded during paint but the compositor layer is
   // always fully opaque where as Aura scrollbars fade by animating the layer
   // opacity. This method will return the user visible opacity of an overlay
   // scrollbar regardless of the underlying mechanism or platform.
   virtual float OverlayScrollbarOpacity() const;
+
+  bool IsFluentScrollbarEnabled() const;
+  bool IsFluentOverlayScrollbarEnabled() const;
+  float GetIdleThicknessScale() const;
 
  protected:
   ScrollbarLayerImplBase(LayerTreeImpl* tree_impl,
@@ -118,6 +127,7 @@ class CC_EXPORT ScrollbarLayerImplBase : public LayerImpl {
   // Difference between the clip layer's height and the visible viewport
   // height (which may differ in the presence of top-controls hiding).
   float vertical_adjust_;
+  bool has_find_in_page_tickmarks_;
 
   FRIEND_TEST_ALL_PREFIXES(ScrollbarLayerTest,
                            ScrollElementIdPushedAcrossCommit);

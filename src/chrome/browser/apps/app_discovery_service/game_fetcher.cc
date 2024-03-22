@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,21 +42,6 @@ bool AvailableInCurrentTimezoneLocale(
     }
   }
   return false;
-}
-
-absl::optional<std::vector<std::u16string>> GetPlatforms(
-    const apps::proto::App& app) {
-  if (app.available_stores_size() == 0) {
-    return absl::nullopt;
-  }
-
-  std::vector<std::u16string> store_names;
-  for (const auto& store : app.available_stores()) {
-    if (!store.store_label().empty()) {
-      store_names.push_back(base::UTF8ToUTF16(store.store_label()));
-    }
-  }
-  return store_names;
 }
 
 std::string ReadFileToString(const base::FilePath& path) {
@@ -156,28 +141,27 @@ void GameFetcher::GetIcon(const std::string& app_id,
       base::BindOnce(&DecodeIcon, std::move(callback), size_hint_in_dip));
 }
 
-void GameFetcher::OnAppDataUpdated(const proto::AppWithLocaleList& app_data) {
-  last_results_ = GetAppsForCurrentLocale(app_data);
+void GameFetcher::OnAppWithLocaleListUpdated(
+    const proto::AppWithLocaleList& app_with_locale_list) {
+  last_results_ = GetAppsForCurrentLocale(app_with_locale_list);
   std::map<std::string, Result*> map;
   for (auto& result : last_results_) {
-    map.emplace(result.GetAppId(), &result);
+    map.emplace(result.GetIconId(), &result);
   }
   app_id_to_result_ = map;
   result_callback_list_.Notify(last_results_);
 }
 
 std::vector<Result> GameFetcher::GetAppsForCurrentLocale(
-    const proto::AppWithLocaleList& app_data) {
+    const proto::AppWithLocaleList& app_with_locale_list) {
   std::vector<Result> results;
-  for (const auto& app_with_locale : app_data.app_with_locale()) {
+  for (const auto& app_with_locale : app_with_locale_list.app_with_locale()) {
     if (!AvailableInCurrentLocale(app_with_locale.locale_availability())) {
       continue;
     }
 
     auto extras = std::make_unique<GameExtras>(
-        GetPlatforms(app_with_locale.app()),
         base::UTF8ToUTF16(app_with_locale.app().source_name()),
-        base::UTF8ToUTF16(app_with_locale.app().publisher_name()),
         base::FilePath(app_with_locale.app().icon_info().icon_path()),
         app_with_locale.app().icon_info().is_masking_allowed(),
         GURL(app_with_locale.app().deeplink()));
@@ -197,8 +181,8 @@ std::vector<Result> GameFetcher::GetAppsForCurrentLocale(
 }
 
 void GameFetcher::SetResultsForTesting(
-    const proto::AppWithLocaleList& app_data) {
-  OnAppDataUpdated(app_data);
+    const proto::AppWithLocaleList& app_with_locale_list) {
+  OnAppWithLocaleListUpdated(app_with_locale_list);
 }
 
 void GameFetcher::SetLocaleForTesting(const std::string& country,

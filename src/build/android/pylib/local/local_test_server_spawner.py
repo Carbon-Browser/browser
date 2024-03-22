@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 import json
 import time
 
-from six.moves import range  # pylint: disable=redefined-builtin
 from devil.android import forwarder
 from devil.android import ports
 from pylib.base import test_server

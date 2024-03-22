@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,7 @@ class KioskSessionPluginHandler {
                                  bool is_hung) override;
     void WebContentsDestroyed() override;
 
-    const raw_ptr<KioskSessionPluginHandler> owner_;
+    const raw_ptr<KioskSessionPluginHandler, DanglingUntriaged> owner_;
     std::set<int> hung_plugins_;
     base::OneShotTimer hung_wait_timer_;
   };

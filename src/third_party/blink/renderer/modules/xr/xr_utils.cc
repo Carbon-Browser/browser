@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,46 +10,26 @@
 #include "third_party/blink/renderer/core/geometry/dom_point_read_only.h"
 #include "third_party/blink/renderer/modules/webgl/webgl2_rendering_context.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_rendering_context.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
 DOMFloat32Array* transformationMatrixToDOMFloat32Array(
-    const TransformationMatrix& matrix) {
-  float array[] = {
-      static_cast<float>(matrix.M11()), static_cast<float>(matrix.M12()),
-      static_cast<float>(matrix.M13()), static_cast<float>(matrix.M14()),
-      static_cast<float>(matrix.M21()), static_cast<float>(matrix.M22()),
-      static_cast<float>(matrix.M23()), static_cast<float>(matrix.M24()),
-      static_cast<float>(matrix.M31()), static_cast<float>(matrix.M32()),
-      static_cast<float>(matrix.M33()), static_cast<float>(matrix.M34()),
-      static_cast<float>(matrix.M41()), static_cast<float>(matrix.M42()),
-      static_cast<float>(matrix.M43()), static_cast<float>(matrix.M44())};
-
+    const gfx::Transform& matrix) {
+  float array[16];
+  matrix.GetColMajorF(array);
   return DOMFloat32Array::Create(array, 16);
 }
 
-TransformationMatrix DOMFloat32ArrayToTransformationMatrix(DOMFloat32Array* m) {
+gfx::Transform DOMFloat32ArrayToTransform(DOMFloat32Array* m) {
   DCHECK_EQ(m->length(), 16u);
-
-  auto* data = m->Data();
-
-  return TransformationMatrix(
-      static_cast<double>(data[0]), static_cast<double>(data[1]),
-      static_cast<double>(data[2]), static_cast<double>(data[3]),
-      static_cast<double>(data[4]), static_cast<double>(data[5]),
-      static_cast<double>(data[6]), static_cast<double>(data[7]),
-      static_cast<double>(data[8]), static_cast<double>(data[9]),
-      static_cast<double>(data[10]), static_cast<double>(data[11]),
-      static_cast<double>(data[12]), static_cast<double>(data[13]),
-      static_cast<double>(data[14]), static_cast<double>(data[15]));
+  return gfx::Transform::ColMajorF(m->Data());
 }
 
-TransformationMatrix WTFFloatVectorToTransformationMatrix(
-    const Vector<float>& m) {
-  return TransformationMatrix(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
-                              m[8], m[9], m[10], m[11], m[12], m[13], m[14],
-                              m[15]);
+gfx::Transform WTFFloatVectorToTransform(const Vector<float>& m) {
+  DCHECK_EQ(m.size(), 16u);
+  return gfx::Transform::ColMajorF(m.data());
 }
 
 // Normalize to have length = 1.0
@@ -79,9 +59,8 @@ WebGLRenderingContextBase* webglRenderingContextBaseFromUnion(
   return nullptr;
 }
 
-absl::optional<device::Pose> CreatePose(
-    const blink::TransformationMatrix& matrix) {
-  return device::Pose::Create(matrix.ToTransform());
+absl::optional<device::Pose> CreatePose(const gfx::Transform& matrix) {
+  return device::Pose::Create(matrix);
 }
 
 device::mojom::blink::XRHandJoint StringToMojomHandJoint(
@@ -197,6 +176,117 @@ String MojomHandJointToString(device::mojom::blink::XRHandJoint hand_joint) {
     default:
       NOTREACHED();
       return "";
+  }
+}
+
+absl::optional<device::mojom::XRSessionFeature> StringToXRSessionFeature(
+    const String& feature_string) {
+  if (feature_string == "viewer") {
+    return device::mojom::XRSessionFeature::REF_SPACE_VIEWER;
+  } else if (feature_string == "local") {
+    return device::mojom::XRSessionFeature::REF_SPACE_LOCAL;
+  } else if (feature_string == "local-floor") {
+    return device::mojom::XRSessionFeature::REF_SPACE_LOCAL_FLOOR;
+  } else if (feature_string == "bounded-floor") {
+    return device::mojom::XRSessionFeature::REF_SPACE_BOUNDED_FLOOR;
+  } else if (feature_string == "unbounded") {
+    return device::mojom::XRSessionFeature::REF_SPACE_UNBOUNDED;
+  } else if (feature_string == "hit-test") {
+    return device::mojom::XRSessionFeature::HIT_TEST;
+  } else if (feature_string == "anchors") {
+    return device::mojom::XRSessionFeature::ANCHORS;
+  } else if (feature_string == "dom-overlay") {
+    return device::mojom::XRSessionFeature::DOM_OVERLAY;
+  } else if (feature_string == "light-estimation") {
+    return device::mojom::XRSessionFeature::LIGHT_ESTIMATION;
+  } else if (feature_string == "camera-access") {
+    return device::mojom::XRSessionFeature::CAMERA_ACCESS;
+  } else if (feature_string == "plane-detection") {
+    return device::mojom::XRSessionFeature::PLANE_DETECTION;
+  } else if (feature_string == "depth-sensing") {
+    return device::mojom::XRSessionFeature::DEPTH;
+  } else if (feature_string == "image-tracking") {
+    return device::mojom::XRSessionFeature::IMAGE_TRACKING;
+  } else if (feature_string == "hand-tracking") {
+    return device::mojom::XRSessionFeature::HAND_INPUT;
+  } else if (feature_string == "secondary-views") {
+    return device::mojom::XRSessionFeature::SECONDARY_VIEWS;
+  } else if (feature_string == "layers") {
+    return device::mojom::XRSessionFeature::LAYERS;
+  } else if (feature_string == "front-facing") {
+    return device::mojom::XRSessionFeature::FRONT_FACING;
+  }
+
+  return absl::nullopt;
+}
+
+String XRSessionFeatureToString(device::mojom::XRSessionFeature feature) {
+  switch (feature) {
+    case device::mojom::XRSessionFeature::REF_SPACE_VIEWER:
+      return "viewer";
+    case device::mojom::XRSessionFeature::REF_SPACE_LOCAL:
+      return "local";
+    case device::mojom::XRSessionFeature::REF_SPACE_LOCAL_FLOOR:
+      return "local-floor";
+    case device::mojom::XRSessionFeature::REF_SPACE_BOUNDED_FLOOR:
+      return "bounded-floor";
+    case device::mojom::XRSessionFeature::REF_SPACE_UNBOUNDED:
+      return "unbounded";
+    case device::mojom::XRSessionFeature::DOM_OVERLAY:
+      return "dom-overlay";
+    case device::mojom::XRSessionFeature::HIT_TEST:
+      return "hit-test";
+    case device::mojom::XRSessionFeature::LIGHT_ESTIMATION:
+      return "light-estimation";
+    case device::mojom::XRSessionFeature::ANCHORS:
+      return "anchors";
+    case device::mojom::XRSessionFeature::CAMERA_ACCESS:
+      return "camera-access";
+    case device::mojom::XRSessionFeature::PLANE_DETECTION:
+      return "plane-detection";
+    case device::mojom::XRSessionFeature::DEPTH:
+      return "depth-sensing";
+    case device::mojom::XRSessionFeature::IMAGE_TRACKING:
+      return "image-tracking";
+    case device::mojom::XRSessionFeature::HAND_INPUT:
+      return "hand-tracking";
+    case device::mojom::XRSessionFeature::SECONDARY_VIEWS:
+      return "secondary-views";
+    case device::mojom::XRSessionFeature::LAYERS:
+      return "layers";
+    case device::mojom::XRSessionFeature::FRONT_FACING:
+      return "front-facing";
+  }
+
+  return "";
+}
+
+bool IsFeatureEnabledForContext(device::mojom::XRSessionFeature feature,
+                                const ExecutionContext* context) {
+  switch (feature) {
+    case device::mojom::XRSessionFeature::PLANE_DETECTION:
+      return RuntimeEnabledFeatures::WebXRPlaneDetectionEnabled(context);
+    case device::mojom::XRSessionFeature::IMAGE_TRACKING:
+      return RuntimeEnabledFeatures::WebXRImageTrackingEnabled(context);
+    case device::mojom::XRSessionFeature::HAND_INPUT:
+      return RuntimeEnabledFeatures::WebXRHandInputEnabled(context);
+    case device::mojom::XRSessionFeature::LAYERS:
+      return RuntimeEnabledFeatures::WebXRLayersEnabled(context);
+    case device::mojom::XRSessionFeature::FRONT_FACING:
+      return RuntimeEnabledFeatures::WebXRFrontFacingEnabled(context);
+    case device::mojom::XRSessionFeature::HIT_TEST:
+    case device::mojom::XRSessionFeature::LIGHT_ESTIMATION:
+    case device::mojom::XRSessionFeature::ANCHORS:
+    case device::mojom::XRSessionFeature::CAMERA_ACCESS:
+    case device::mojom::XRSessionFeature::DEPTH:
+    case device::mojom::XRSessionFeature::REF_SPACE_VIEWER:
+    case device::mojom::XRSessionFeature::REF_SPACE_LOCAL:
+    case device::mojom::XRSessionFeature::REF_SPACE_LOCAL_FLOOR:
+    case device::mojom::XRSessionFeature::REF_SPACE_BOUNDED_FLOOR:
+    case device::mojom::XRSessionFeature::REF_SPACE_UNBOUNDED:
+    case device::mojom::XRSessionFeature::DOM_OVERLAY:
+    case device::mojom::XRSessionFeature::SECONDARY_VIEWS:
+      return true;
   }
 }
 

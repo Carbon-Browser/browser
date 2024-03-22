@@ -1,46 +1,46 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/js/cr.m.js';
-import 'chrome://resources/js/util.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../shared/animations.css.js';
 import '../shared/chooser_shared.css.js';
 import '../shared/step_indicator.js';
 import '../strings.m.js';
 
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {isRTL} from 'chrome://resources/js/util.m.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {isRTL} from 'chrome://resources/js/util.js';
 import {IronA11yAnnouncer} from 'chrome://resources/polymer/v3_0/iron-a11y-announcer/iron-a11y-announcer.js';
 import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {navigateToNextStep, NavigationMixin} from '../navigation_mixin.js';
-import {BookmarkBarManager, BookmarkProxy, BookmarkProxyImpl} from '../shared/bookmark_proxy.js';
+import type {BookmarkProxy} from '../shared/bookmark_proxy.js';
+import {BookmarkBarManager, BookmarkProxyImpl} from '../shared/bookmark_proxy.js';
 import {ModuleMetricsManager} from '../shared/module_metrics_proxy.js';
-import {StepIndicatorModel} from '../shared/nux_types.js';
+import type {StepIndicatorModel} from '../shared/nux_types.js';
 
-import {GoogleAppProxy, GoogleAppProxyImpl} from './google_app_proxy.js';
+import type {GoogleAppProxy} from './google_app_proxy.js';
+import {GoogleAppProxyImpl} from './google_app_proxy.js';
 import {GoogleAppsMetricsProxyImpl} from './google_apps_metrics_proxy.js';
 import {getTemplate} from './nux_google_apps.html.js';
 
-type AppItem = {
-  id: number,
-  name: string,
-  icon: string,
-  url: string,
-  bookmarkId: string|null,
-  selected: boolean,
-};
+interface AppItem {
+  id: number;
+  name: string;
+  icon: string;
+  url: string;
+  bookmarkId: string|null;
+  selected: boolean;
+}
 
-type AppItemModel = {
-  item: AppItem,
-  set: (p1: string, p2: boolean) => void,
-};
+interface AppItemModel {
+  item: AppItem;
+  set: (p1: string, p2: boolean) => void;
+}
 
 const KEYBOARD_FOCUSED = 'keyboard-focused';
 
@@ -259,13 +259,13 @@ export class NuxGoogleAppsElement extends NuxGoogleAppsElementBase {
   private updateBookmark_(item: AppItem) {
     if (item.selected && !item.bookmarkId) {
       this.bookmarkBarManager_.setShown(true);
-      this.bookmarkProxy_.addBookmark(
-          {
+      this.bookmarkProxy_
+          .addBookmark({
             title: item.name,
             url: item.url,
             parentId: '1',
-          },
-          result => {
+          })
+          .then(result => {
             item.bookmarkId = result.id;
           });
       // Cache bookmark icon.

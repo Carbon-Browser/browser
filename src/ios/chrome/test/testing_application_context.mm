@@ -1,38 +1,41 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/test/testing_application_context.h"
+#import "ios/chrome/test/testing_application_context.h"
 
-#include "base/check_op.h"
-#include "base/feature_list.h"
-#include "base/memory/ptr_util.h"
-#include "base/notreached.h"
-#include "base/time/default_clock.h"
-#include "base/time/default_tick_clock.h"
-#include "components/network_time/network_time_tracker.h"
-#include "ios/chrome/browser/policy/browser_policy_connector_ios.h"
-#include "ios/chrome/browser/policy/configuration_policy_handler_list_factory.h"
+#import "base/check_op.h"
+#import "base/feature_list.h"
+#import "base/memory/ptr_util.h"
+#import "base/notreached.h"
+#import "base/time/default_clock.h"
+#import "base/time/default_tick_clock.h"
+#import "components/network_time/network_time_tracker.h"
+#import "components/variations/service/variations_service.h"
+#import "ios/chrome/browser/policy/browser_policy_connector_ios.h"
+#import "ios/chrome/browser/policy/configuration_policy_handler_list_factory.h"
+#import "ios/chrome/browser/promos_manager/features.h"
+#import "ios/chrome/browser/promos_manager/mock_promos_manager.h"
 #import "ios/components/security_interstitials/safe_browsing/fake_safe_browsing_service.h"
-#include "ios/public/provider/chrome/browser/signin/signin_sso_api.h"
-#include "net/url_request/url_request_context_getter.h"
-#include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
-#include "services/network/test/test_network_connection_tracker.h"
-#include "services/network/test/test_url_loader_factory.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/public/provider/chrome/browser/push_notification/push_notification_api.h"
+#import "ios/public/provider/chrome/browser/signin/signin_identity_api.h"
+#import "ios/public/provider/chrome/browser/signin/signin_sso_api.h"
+#import "net/url_request/url_request_context_getter.h"
+#import "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
+#import "services/network/test/test_network_connection_tracker.h"
+#import "services/network/test/test_url_loader_factory.h"
 
 TestingApplicationContext::TestingApplicationContext()
     : application_locale_("en"),
+      application_country_("us"),
       local_state_(nullptr),
       chrome_browser_state_manager_(nullptr),
       was_last_shutdown_clean_(false),
       test_url_loader_factory_(
           std::make_unique<network::TestURLLoaderFactory>()),
       test_network_connection_tracker_(
-          network::TestNetworkConnectionTracker::CreateInstance()) {
+          network::TestNetworkConnectionTracker::CreateInstance()),
+      variations_service_(nullptr) {
   DCHECK(!GetApplicationContext());
   SetApplicationContext(this);
 }
@@ -65,6 +68,7 @@ void TestingApplicationContext::SetLocalState(PrefService* local_state) {
 }
 
 void TestingApplicationContext::SetLastShutdownClean(bool clean) {
+  DCHECK(thread_checker_.CalledOnValidThread());
   was_last_shutdown_clean_ = clean;
 }
 
@@ -72,6 +76,19 @@ void TestingApplicationContext::SetChromeBrowserStateManager(
     ios::ChromeBrowserStateManager* manager) {
   DCHECK(thread_checker_.CalledOnValidThread());
   chrome_browser_state_manager_ = manager;
+}
+
+void TestingApplicationContext::SetVariationsService(
+    variations::VariationsService* variations_service) {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  variations_service_ = variations_service;
+}
+
+void TestingApplicationContext::SetSystemIdentityManager(
+    std::unique_ptr<SystemIdentityManager> system_identity_manager) {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK(!system_identity_manager_);
+  system_identity_manager_ = std::move(system_identity_manager);
 }
 
 void TestingApplicationContext::OnAppEnterForeground() {
@@ -117,6 +134,12 @@ const std::string& TestingApplicationContext::GetApplicationLocale() {
   return application_locale_;
 }
 
+const std::string& TestingApplicationContext::GetApplicationCountry() {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK(!application_country_.empty());
+  return application_country_;
+}
+
 ios::ChromeBrowserStateManager*
 TestingApplicationContext::GetChromeBrowserStateManager() {
   DCHECK(thread_checker_.CalledOnValidThread());
@@ -142,7 +165,7 @@ ukm::UkmRecorder* TestingApplicationContext::GetUkmRecorder() {
 variations::VariationsService*
 TestingApplicationContext::GetVariationsService() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  return nullptr;
+  return variations_service_;
 }
 
 net::NetLog* TestingApplicationContext::GetNetLog() {
@@ -211,13 +234,8 @@ TestingApplicationContext::GetBrowserPolicyConnector() {
   return browser_policy_connector_.get();
 }
 
-breadcrumbs::BreadcrumbPersistentStorageManager*
-TestingApplicationContext::GetBreadcrumbPersistentStorageManager() {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  return nullptr;
-}
-
 id<SingleSignOnService> TestingApplicationContext::GetSSOService() {
+  DCHECK(thread_checker_.CalledOnValidThread());
   if (!single_sign_on_service_) {
     single_sign_on_service_ = ios::provider::CreateSSOService();
     DCHECK(single_sign_on_service_);
@@ -225,8 +243,28 @@ id<SingleSignOnService> TestingApplicationContext::GetSSOService() {
   return single_sign_on_service_;
 }
 
+SystemIdentityManager* TestingApplicationContext::GetSystemIdentityManager() {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  if (!system_identity_manager_) {
+    system_identity_manager_ =
+        ios::provider::CreateSystemIdentityManager(GetSSOService());
+  }
+  return system_identity_manager_.get();
+}
+
 segmentation_platform::OTRWebStateObserver*
 TestingApplicationContext::GetSegmentationOTRWebStateObserver() {
   DCHECK(thread_checker_.CalledOnValidThread());
   return nullptr;
+}
+
+PushNotificationService*
+TestingApplicationContext::GetPushNotificationService() {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  if (!push_notification_service_) {
+    push_notification_service_ = ios::provider::CreatePushNotificationService();
+    DCHECK(push_notification_service_);
+  }
+
+  return push_notification_service_.get();
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "components/feature_engagement/internal/persistent_availability_store.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -17,14 +17,10 @@ namespace feature_engagement {
 
 namespace {
 
-const base::Feature kTestFeatureFoo{"test_foo",
-                                    base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kTestFeatureBar{"test_bar",
-                                    base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kTestFeatureQux{"test_qux",
-                                    base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kTestFeatureNop{"test_nop",
-                                    base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kTestFeatureFoo, "test_foo", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kTestFeatureBar, "test_bar", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kTestFeatureQux, "test_qux", base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kTestFeatureNop, "test_nop", base::FEATURE_DISABLED_BY_DEFAULT);
 
 class AvailabilityModelImplTest : public testing::Test {
  public:

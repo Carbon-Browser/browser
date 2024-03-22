@@ -1,18 +1,20 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_math.h"
 #include "base/rand_util.h"
+#include "base/ranges/algorithm.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
+#include "mojo/core/embedder/embedder.h"
 #include "mojo/core/test/mojo_test_base.h"
 #include "mojo/core/user_message_impl.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
@@ -159,7 +161,7 @@ class SimpleMessage : public TestMessageBase {
   }
 
   void SerializePayload(void* buffer) override {
-    std::copy(contents_.begin(), contents_.end(), static_cast<char*>(buffer));
+    base::ranges::copy(contents_, static_cast<char*>(buffer));
   }
 
   const std::string contents_;
@@ -228,7 +230,7 @@ TEST_F(MessageTest, DestroyMessageWithContext) {
 
 const char kTestMessageWithContext1[] = "hello laziness";
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 
 const char kTestMessageWithContext2[] = "my old friend";
 const char kTestMessageWithContext3[] = "something something";
@@ -239,9 +241,18 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceiveMessageNoHandles, MessageTest, h) {
   MojoTestBase::WaitForSignals(h, MOJO_HANDLE_SIGNAL_READABLE);
   auto m = MojoTestBase::ReadMessage(h);
   EXPECT_EQ(kTestMessageWithContext1, m);
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-TEST_F(MessageTest, SerializeSimpleMessageNoHandlesWithContext) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1418597): Test currently fails on iOS.
+#define MAYBE_SerializeSimpleMessageNoHandlesWithContext \
+  DISABLED_SerializeSimpleMessageNoHandlesWithContext
+#else
+#define MAYBE_SerializeSimpleMessageNoHandlesWithContext \
+  SerializeSimpleMessageNoHandlesWithContext
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_SerializeSimpleMessageNoHandlesWithContext) {
   RunTestClient("ReceiveMessageNoHandles", [&](MojoHandle h) {
     auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
     MojoWriteMessage(h, TestMessageBase::MakeMessageHandle(std::move(message)),
@@ -249,7 +260,14 @@ TEST_F(MessageTest, SerializeSimpleMessageNoHandlesWithContext) {
   });
 }
 
-TEST_F(MessageTest, SerializeDynamicallySizedMessage) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1418597): Test currently fails on iOS.
+#define MAYBE_SerializeDynamicallySizedMessage \
+  DISABLED_SerializeDynamicallySizedMessage
+#else
+#define MAYBE_SerializeDynamicallySizedMessage SerializeDynamicallySizedMessage
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_SerializeDynamicallySizedMessage) {
   RunTestClient("ReceiveMessageNoHandles", [&](MojoHandle h) {
     MojoMessageHandle message;
     EXPECT_EQ(MOJO_RESULT_OK, MojoCreateMessage(nullptr, &message));
@@ -280,9 +298,19 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceiveMessageOneHandle, MessageTest, h) {
   EXPECT_EQ(kTestMessageWithContext1, m);
   MojoTestBase::WriteMessage(h1, kTestMessageWithContext2);
   EXPECT_EQ(kTestQuitMessage, MojoTestBase::ReadMessage(h));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h1));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-TEST_F(MessageTest, SerializeSimpleMessageOneHandleWithContext) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1418597): Test currently fails on iOS.
+#define MAYBE_SerializeSimpleMessageOneHandleWithContext \
+  DISABLED_SerializeSimpleMessageOneHandleWithContext
+#else
+#define MAYBE_SerializeSimpleMessageOneHandleWithContext \
+  SerializeSimpleMessageOneHandleWithContext
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_SerializeSimpleMessageOneHandleWithContext) {
   RunTestClient("ReceiveMessageOneHandle", [&](MojoHandle h) {
     auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
     mojo::MessagePipe pipe;
@@ -306,9 +334,22 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceiveMessageWithHandles, MessageTest, h) {
   MojoTestBase::WriteMessage(handles[3], kTestMessageWithContext4);
 
   EXPECT_EQ(kTestQuitMessage, MojoTestBase::ReadMessage(h));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[0]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[1]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[2]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[3]));
 }
 
-TEST_F(MessageTest, SerializeSimpleMessageWithHandlesWithContext) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1418597): Test currently fails on iOS.
+#define MAYBE_SerializeSimpleMessageWithHandlesWithContext \
+  DISABLED_SerializeSimpleMessageWithHandlesWithContext
+#else
+#define MAYBE_SerializeSimpleMessageWithHandlesWithContext \
+  SerializeSimpleMessageWithHandlesWithContext
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_SerializeSimpleMessageWithHandlesWithContext) {
   RunTestClient("ReceiveMessageWithHandles", [&](MojoHandle h) {
     auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
     mojo::MessagePipe pipes[4];
@@ -331,7 +372,7 @@ TEST_F(MessageTest, SerializeSimpleMessageWithHandlesWithContext) {
   });
 }
 
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(USE_BLINK)
 
 TEST_F(MessageTest, SendLocalSimpleMessageWithHandlesWithContext) {
   auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
@@ -440,6 +481,8 @@ TEST_F(MessageTest, GetMessageDataWithHandles) {
                                h, &num_handles));
 
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message_handle));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h[0]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h[1]));
 }
 
 TEST_F(MessageTest, ReadMessageWithContextAsSerializedMessage) {
@@ -544,7 +587,7 @@ TEST_F(MessageTest, ForceSerializeMessageWithContext) {
                                &extracted_handle, &num_handles));
   EXPECT_EQ(std::string(kTestMessageWithContext1).size(), num_bytes);
   EXPECT_EQ(std::string(kTestMessageWithContext1),
-            base::StringPiece(static_cast<char*>(buffer), num_bytes));
+            std::string_view(static_cast<char*>(buffer), num_bytes));
 
   // Confirm that the handle we extracted from the serialized message is still
   // connected to the same peer, despite the fact that its handle value may have
@@ -556,6 +599,7 @@ TEST_F(MessageTest, ForceSerializeMessageWithContext) {
   EXPECT_EQ(kTestMessage, MojoTestBase::ReadMessage(extracted_handle));
 
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message_handle));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(extracted_handle));
 }
 
 TEST_F(MessageTest, DoubleSerialize) {
@@ -816,11 +860,19 @@ TEST_F(MessageTest, CommitInvalidMessageContents) {
                                                   nullptr, nullptr, nullptr));
   UserMessageImpl::FailHandleSerializationForTesting(false);
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(b));
 }
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 
-TEST_F(MessageTest, ExtendPayloadWithHandlesAttached) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1418597): Test currently fails on iOS.
+#define MAYBE_ExtendPayloadWithHandlesAttached \
+  DISABLED_ExtendPayloadWithHandlesAttached
+#else
+#define MAYBE_ExtendPayloadWithHandlesAttached ExtendPayloadWithHandlesAttached
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_ExtendPayloadWithHandlesAttached) {
   // Regression test for https://crbug.com/748996. Verifies that internal
   // message objects do not retain invalid payload pointers across buffer
   // relocations.
@@ -875,9 +927,18 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReadAndIgnoreMessage, MessageTest, h) {
   MojoTestBase::ReadMessageWithHandles(h, handles, 5);
   for (size_t i = 0; i < 5; ++i)
     EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[i]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-TEST_F(MessageTest, ExtendPayloadWithHandlesAttachedViaExtension) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1418597): Test currently fails on iOS.
+#define MAYBE_ExtendPayloadWithHandlesAttachedViaExtension \
+  DISABLED_ExtendPayloadWithHandlesAttachedViaExtension
+#else
+#define MAYBE_ExtendPayloadWithHandlesAttachedViaExtension \
+  ExtendPayloadWithHandlesAttachedViaExtension
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_ExtendPayloadWithHandlesAttachedViaExtension) {
   MojoHandle handles[5];
   CreateMessagePipe(&handles[0], &handles[4]);
   PlatformChannel channel;
@@ -932,9 +993,10 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReadMessageAndCheckPipe, MessageTest, h) {
   EXPECT_EQ(kTestMessage, MojoTestBase::ReadMessage(handles[4]));
   for (size_t i = 0; i < 5; ++i)
     EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[i]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(USE_BLINK)
 
 TEST_F(MessageTest, PartiallySerializedMessagesDontLeakHandles) {
   MojoMessageHandle message;
@@ -962,6 +1024,7 @@ TEST_F(MessageTest, PartiallySerializedMessagesDontLeakHandles) {
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
   EXPECT_EQ(MOJO_RESULT_OK,
             WaitForSignals(handles[1], MOJO_HANDLE_SIGNAL_PEER_CLOSED));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[1]));
 }
 
 }  // namespace

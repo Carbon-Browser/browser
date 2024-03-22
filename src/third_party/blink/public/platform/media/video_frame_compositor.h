@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
@@ -68,7 +68,8 @@ class BLINK_PLATFORM_EXPORT VideoFrameCompositor
       public cc::VideoFrameProvider {
  public:
   // Used to report back the time when the new frame has been processed.
-  using OnNewProcessedFrameCB = base::OnceCallback<void(base::TimeTicks)>;
+  using OnNewProcessedFrameCB =
+      base::OnceCallback<void(base::TimeTicks, bool is_frame_readable)>;
 
   using OnNewFramePresentedCB = base::OnceClosure;
 
@@ -250,7 +251,7 @@ class BLINK_PLATFORM_EXPORT VideoFrameCompositor
   base::RetainingOneShotTimer force_begin_frames_timer_;
 
   // These values are only set and read on the compositor thread.
-  raw_ptr<cc::VideoFrameProvider::Client> client_ = nullptr;
+  raw_ptr<cc::VideoFrameProvider::Client, DanglingUntriaged> client_ = nullptr;
   bool rendering_ = false;
   bool rendered_last_frame_ = false;
   bool is_background_rendering_ = false;

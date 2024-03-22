@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,15 +42,14 @@ class AssistantSuggestionsControllerImpl
   void OnUiVisibilityChanged(
       AssistantVisibility new_visibility,
       AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point) override;
+      std::optional<AssistantEntryPoint> entry_point,
+      std::optional<AssistantExitPoint> exit_point) override;
 
  private:
   // AssistantStateObserver:
   void OnAssistantContextEnabled(bool enabled) override;
   void OnAssistantOnboardingModeChanged(
-      chromeos::assistant::prefs::AssistantOnboardingMode onboarding_mode)
-      override;
+      assistant::prefs::AssistantOnboardingMode onboarding_mode) override;
 
   void UpdateConversationStarters();
   void UpdateOnboardingSuggestions();

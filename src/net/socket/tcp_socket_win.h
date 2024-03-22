@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,13 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/win/object_watcher.h"
 #include "net/base/address_family.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_export.h"
-#include "net/base/network_change_notifier.h"
+#include "net/base/network_handle.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/socket_descriptor.h"
 #include "net/socket/socket_performance_watcher.h"
@@ -38,6 +38,10 @@ class NET_EXPORT TCPSocketWin : public base::win::ObjectWatcher::Delegate {
       std::unique_ptr<SocketPerformanceWatcher> socket_performance_watcher,
       NetLog* net_log,
       const NetLogSource& source);
+
+  TCPSocketWin(
+      std::unique_ptr<SocketPerformanceWatcher> socket_performance_watcher,
+      NetLogWithSource net_log_source);
 
   TCPSocketWin(const TCPSocketWin&) = delete;
   TCPSocketWin& operator=(const TCPSocketWin&) = delete;
@@ -94,6 +98,7 @@ class NET_EXPORT TCPSocketWin : public base::win::ObjectWatcher::Delegate {
   int SetSendBufferSize(int32_t size);
   bool SetKeepAlive(bool enable, int delay);
   bool SetNoDelay(bool no_delay);
+  int SetIPv6Only(bool ipv6_only);
 
   // Gets the estimated RTT. Returns false if the RTT is
   // unavailable. May also return false when estimated RTT is 0.
@@ -123,11 +128,6 @@ class NET_EXPORT TCPSocketWin : public base::win::ObjectWatcher::Delegate {
 
   const NetLogWithSource& net_log() const { return net_log_; }
 
-  // Opens the socket and returns the underlying SocketDescriptor as well as the
-  // result of Open(). This method is used by the socket broker.
-  static int OpenAndReleaseSocketDescriptor(AddressFamily family,
-                                            SocketDescriptor* out);
-
   // Return the underlying SocketDescriptor and clean up this object, which may
   // no longer be used. This method should be used only for testing. No read,
   // write, or accept operations should be pending.
@@ -141,7 +141,7 @@ class NET_EXPORT TCPSocketWin : public base::win::ObjectWatcher::Delegate {
   void ApplySocketTag(const SocketTag& tag);
 
   // Not implemented. Returns ERR_NOT_IMPLEMENTED.
-  int BindToNetwork(NetworkChangeNotifier::NetworkHandle network);
+  int BindToNetwork(handles::NetworkHandle network);
 
   // May return nullptr.
   SocketPerformanceWatcher* socket_performance_watcher() const {

@@ -68,19 +68,13 @@ class PLATFORM_EXPORT MediaStreamDescriptor final
   static int GenerateUniqueId();
 
  public:
-  // Only used for AudioDestinationNode.
-  MediaStreamDescriptor(const MediaStreamSourceVector& audio_sources,
-                        const MediaStreamSourceVector& video_sources);
-  MediaStreamDescriptor(const String& id,
-                        const MediaStreamSourceVector& audio_sources,
-                        const MediaStreamSourceVector& video_sources);
   MediaStreamDescriptor(const MediaStreamComponentVector& audio_components,
                         const MediaStreamComponentVector& video_components);
   MediaStreamDescriptor(const String& id,
                         const MediaStreamComponentVector& audio_components,
                         const MediaStreamComponentVector& video_components);
 
-  MediaStreamDescriptorClient* Client() const { return client_; }
+  MediaStreamDescriptorClient* Client() const { return client_.Get(); }
   void SetClient(MediaStreamDescriptorClient* client) { client_ = client; }
 
   // This is the same as the id of the |MediaStream|. It is unique in most

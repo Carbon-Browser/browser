@@ -1,8 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/components/arc/metrics/stability_metrics_manager.h"
+
+#include <ostream>
 
 #include "ash/components/arc/arc_prefs.h"
 #include "base/metrics/histogram_macros.h"
@@ -47,19 +49,20 @@ StabilityMetricsManager::~StabilityMetricsManager() {
 
 void StabilityMetricsManager::RecordMetricsToUMA() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // GetDictionary() should never return null, but since this may be called
-  // early on browser startup, be paranoid here to prevent going into a crash
-  // loop.
-  if (!local_state_->GetDictionary(prefs::kStabilityMetrics)) {
-    NOTREACHED() << "Local state unavailable, not recording stabiltiy metrics.";
+  // FindPreference(prefs::kStabilityMetrics) should never return null, but
+  // since this may be called early on browser startup, be paranoid here to
+  // prevent going into a crash loop.
+  if (const auto* pref = local_state_->FindPreference(prefs::kStabilityMetrics);
+      !pref || pref->GetType() != base::Value::Type::DICT) {
+    NOTREACHED() << "Local state unavailable, not recording stability metrics.";
     return;
   }
 
-  const absl::optional<bool> enabled_state = GetArcEnabledState();
+  const std::optional<bool> enabled_state = GetArcEnabledState();
   if (enabled_state)
     UMA_STABILITY_HISTOGRAM_ENUMERATION("Arc.State", *enabled_state ? 1 : 0, 2);
 
-  const absl::optional<NativeBridgeType> native_bridge_type =
+  const std::optional<NativeBridgeType> native_bridge_type =
       GetArcNativeBridgeType();
   if (native_bridge_type) {
     UMA_STABILITY_HISTOGRAM_ENUMERATION(
@@ -70,43 +73,40 @@ void StabilityMetricsManager::RecordMetricsToUMA() {
 
 void StabilityMetricsManager::ResetMetrics() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DictionaryPrefUpdate update(local_state_, prefs::kStabilityMetrics);
-  update->DictClear();
+  local_state_->SetDict(prefs::kStabilityMetrics, base::Value::Dict());
 }
 
-absl::optional<bool> StabilityMetricsManager::GetArcEnabledState() {
+std::optional<bool> StabilityMetricsManager::GetArcEnabledState() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const base::Value::Dict& dict =
-      local_state_->GetValueDict(prefs::kStabilityMetrics);
+      local_state_->GetDict(prefs::kStabilityMetrics);
   return dict.FindBool(kArcEnabledStateKey);
 }
 
 void StabilityMetricsManager::SetArcEnabledState(bool enabled) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DictionaryPrefUpdate update(local_state_, prefs::kStabilityMetrics);
-  update->SetBoolKey(kArcEnabledStateKey, enabled);
+  ScopedDictPrefUpdate update(local_state_, prefs::kStabilityMetrics);
+  update->Set(kArcEnabledStateKey, enabled);
 }
 
-absl::optional<NativeBridgeType>
+std::optional<NativeBridgeType>
 StabilityMetricsManager::GetArcNativeBridgeType() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const base::Value::Dict& dict =
-      local_state_->GetValueDict(prefs::kStabilityMetrics);
-  absl::optional<int> native_bridge_type =
-      dict.FindInt(kArcNativeBridgeTypeKey);
+      local_state_->GetDict(prefs::kStabilityMetrics);
+  std::optional<int> native_bridge_type = dict.FindInt(kArcNativeBridgeTypeKey);
   if (native_bridge_type) {
-    return absl::make_optional(
+    return std::make_optional(
         static_cast<NativeBridgeType>(*native_bridge_type));
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void StabilityMetricsManager::SetArcNativeBridgeType(
     NativeBridgeType native_bridge_type) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DictionaryPrefUpdate update(local_state_, prefs::kStabilityMetrics);
-  update->SetIntKey(kArcNativeBridgeTypeKey,
-                    static_cast<int>(native_bridge_type));
+  ScopedDictPrefUpdate update(local_state_, prefs::kStabilityMetrics);
+  update->Set(kArcNativeBridgeTypeKey, static_cast<int>(native_bridge_type));
 }
 
 }  // namespace arc

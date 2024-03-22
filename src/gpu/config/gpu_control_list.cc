@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -120,37 +120,11 @@ bool ProcessANGLEGLRenderer(const std::string& gl_renderer,
                             std::string* vendor,
                             std::string* renderer,
                             std::string* version) {
-  constexpr char kANGLEPrefix[] = "ANGLE (";
-  if (!base::StartsWith(gl_renderer, kANGLEPrefix))
-    return false;
-
-  std::vector<std::string> segments;
-  // ANGLE GL_RENDERER string:
-  // ANGLE (vendor,renderer,version)
-  size_t len = gl_renderer.size();
-  std::string vendor_renderer_version =
-      gl_renderer.substr(sizeof(kANGLEPrefix) - 1, len - sizeof(kANGLEPrefix));
-  segments = base::SplitString(vendor_renderer_version, ",",
-                               base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  if (segments.size() != 3) {
-    LOG(DFATAL) << "Cannot parse ANGLE GL_RENDERER: " << gl_renderer;
-    return false;
-  }
-
-  // Check ANGLE backend.
-  // It could be `OpenGL, D3D, Vulkan, etc`
-  if (!base::StartsWith(segments[2], "OpenGL")) {
-    return false;
-  }
-
-  if (vendor)
-    *vendor = segments[0];
-  if (renderer)
-    *renderer = segments[1];
-  if (version)
-    *version = segments[2];
-
-  return true;
+  DCHECK(vendor);
+  DCHECK(renderer);
+  DCHECK(version);
+  return RE2::FullMatch(gl_renderer, "ANGLE \\((.*), (.*), (.*)\\)", vendor,
+                        renderer, version);
 }
 
 }  // namespace
@@ -339,8 +313,9 @@ bool GpuControlList::DriverInfo::Contains(
 }
 
 bool GpuControlList::GLStrings::Contains(const GPUInfo& gpu_info) const {
-  if (StringMismatch(gpu_info.gl_extensions, gl_extensions))
+  if (StringMismatch(gpu_info.gl_extensions, gl_extensions)) {
     return false;
+  }
 
   std::string vendor;
   std::string renderer;
@@ -384,11 +359,10 @@ bool GpuControlList::MachineModelInfo::Contains(const GPUInfo& gpu_info) const {
 }
 
 bool GpuControlList::More::Contains(const GPUInfo& gpu_info) const {
-  std::string gl_version_string;
-  bool is_angle_gl = ProcessANGLEGLRenderer(gpu_info.gl_renderer, nullptr,
-                                            nullptr, &gl_version_string);
-  if (GLVersionInfoMismatch(is_angle_gl ? gl_version_string
-                                        : gpu_info.gl_version)) {
+  std::string vendor, renderer, version;
+  bool is_angle_gl = ProcessANGLEGLRenderer(gpu_info.gl_renderer, &vendor,
+                                            &renderer, &version);
+  if (GLVersionInfoMismatch(is_angle_gl ? version : gpu_info.gl_version)) {
     return false;
   }
 
@@ -570,8 +544,8 @@ bool GpuControlList::Conditions::Contains(OsType target_os_type,
     // Remove candidate GPUs made by different vendors.
     auto behind_last =
         std::remove_if(candidates.begin(), candidates.end(),
-                       [vendor_id = vendor_id](const GPUInfo::GPUDevice& gpu) {
-                         return (vendor_id && vendor_id != gpu.vendor_id);
+                       [vid = vendor_id](const GPUInfo::GPUDevice& gpu) {
+                         return (vid && vid != gpu.vendor_id);
                        });
     candidates.erase(behind_last, candidates.end());
 
@@ -638,10 +612,12 @@ bool GpuControlList::Conditions::NeedsMoreInfo(const GPUInfo& gpu_info) const {
       gpu_info.gl_version.empty()) {
     return true;
   }
-  if (gl_strings && gl_strings->gl_vendor && gpu_info.gl_vendor.empty())
+  if (gl_strings && gl_strings->gl_vendor && gpu_info.gl_vendor.empty()) {
     return true;
-  if (gl_strings && gl_strings->gl_renderer && gpu_info.gl_renderer.empty())
+  }
+  if (gl_strings && gl_strings->gl_renderer && gpu_info.gl_renderer.empty()) {
     return true;
+  }
   if (more && more->pixel_shader_version.IsSpecified() &&
       gpu_info.pixel_shader_version.empty()) {
     return true;
@@ -662,9 +638,9 @@ bool GpuControlList::Entry::NeedsMoreInfo(const GPUInfo& gpu_info,
   return false;
 }
 
-void GpuControlList::Entry::GetFeatureNames(
-    base::Value& feature_names,
+base::Value::List GpuControlList::Entry::GetFeatureNames(
     const FeatureMap& feature_map) const {
+  base::Value::List feature_names;
   for (size_t ii = 0; ii < feature_size; ++ii) {
     auto iter = feature_map.find(features[ii]);
     DCHECK(iter != feature_map.end());
@@ -675,17 +651,13 @@ void GpuControlList::Entry::GetFeatureNames(
         base::StringPrintf("disable(%s)", disabled_extensions[ii]);
     feature_names.Append(name);
   }
+  return feature_names;
 }
 
-GpuControlList::GpuControlList(const GpuControlListData& data)
-    : entry_count_(data.entry_count),
-      entries_(data.entries),
-      max_entry_id_(0),
-      needs_more_info_(false),
-      control_list_logging_enabled_(false) {
-  DCHECK_LT(0u, entry_count_);
+GpuControlList::GpuControlList(base::span<const Entry> data) : entries_(data) {
+  DCHECK(!entries_.empty());
   // Assume the newly last added entry has the largest ID.
-  max_entry_id_ = entries_[entry_count_ - 1].id;
+  max_entry_id_ = entries_.back().id;
 }
 
 GpuControlList::~GpuControlList() = default;
@@ -722,7 +694,7 @@ std::set<int32_t> GpuControlList::MakeDecision(GpuControlList::OsType os,
   if (pos != std::string::npos)
     processed_os_version = processed_os_version.substr(0, pos);
 
-  for (size_t ii = 0; ii < entry_count_; ++ii) {
+  for (size_t ii = 0; ii < entries_.size(); ++ii) {
     const Entry& entry = entries_[ii];
     DCHECK_NE(0u, entry.id);
     if (!entry.AppliesToTestGroup(target_test_group))
@@ -767,7 +739,6 @@ std::vector<uint32_t> GpuControlList::GetEntryIDsFromIndices(
     const std::vector<uint32_t>& entry_indices) const {
   std::vector<uint32_t> ids;
   for (auto index : entry_indices) {
-    DCHECK_LT(index, entry_count_);
     ids.push_back(entries_[index].id);
   }
   return ids;
@@ -776,7 +747,6 @@ std::vector<uint32_t> GpuControlList::GetEntryIDsFromIndices(
 std::vector<std::string> GpuControlList::GetDisabledExtensions() {
   std::set<std::string> disabled_extensions;
   for (auto index : active_entries_) {
-    DCHECK_LT(index, entry_count_);
     const Entry& entry = entries_[index];
     for (size_t ii = 0; ii < entry.disabled_extension_size; ++ii) {
       disabled_extensions.insert(entry.disabled_extensions[ii]);
@@ -789,7 +759,6 @@ std::vector<std::string> GpuControlList::GetDisabledExtensions() {
 std::vector<std::string> GpuControlList::GetDisabledWebGLExtensions() {
   std::set<std::string> disabled_webgl_extensions;
   for (auto index : active_entries_) {
-    DCHECK_LT(index, entry_count_);
     const Entry& entry = entries_[index];
     for (size_t ii = 0; ii < entry.disabled_webgl_extension_size; ++ii) {
       disabled_webgl_extensions.insert(entry.disabled_webgl_extensions[ii]);
@@ -799,35 +768,33 @@ std::vector<std::string> GpuControlList::GetDisabledWebGLExtensions() {
                                   disabled_webgl_extensions.end());
 }
 
-void GpuControlList::GetReasons(base::Value& problem_list,
+void GpuControlList::GetReasons(base::Value::List& problem_list,
                                 const std::string& tag,
                                 const std::vector<uint32_t>& entries) const {
   for (auto index : entries) {
-    DCHECK_LT(index, entry_count_);
     const Entry& entry = entries_[index];
-    auto problem = base::Value(base::Value::Type::DICTIONARY);
+    base::Value::Dict problem;
 
-    problem.SetStringKey("description", entry.description);
+    problem.Set("description", entry.description);
 
-    auto cr_bugs = base::Value(base::Value::Type::LIST);
+    base::Value::List cr_bugs;
     for (size_t jj = 0; jj < entry.cr_bug_size; ++jj)
       cr_bugs.Append(
           base::Int64ToValue(static_cast<int64_t>(entry.cr_bugs[jj])));
-    problem.SetKey("crBugs", std::move(cr_bugs));
+    problem.Set("crBugs", std::move(cr_bugs));
 
-    auto features = base::Value(base::Value::Type::LIST);
-    entry.GetFeatureNames(features, feature_map_);
-    problem.SetKey("affectedGpuSettings", std::move(features));
+    base::Value::List features = entry.GetFeatureNames(feature_map_);
+    problem.Set("affectedGpuSettings", std::move(features));
 
     DCHECK(tag == "workarounds" || tag == "disabledFeatures");
-    problem.SetStringKey("tag", tag);
+    problem.Set("tag", tag);
 
     problem_list.Append(std::move(problem));
   }
 }
 
 size_t GpuControlList::num_entries() const {
-  return entry_count_;
+  return entries_.size();
 }
 
 uint32_t GpuControlList::max_entry_id() const {
@@ -848,6 +815,8 @@ GpuControlList::OsType GpuControlList::GetOsType() {
   return kOsLinux;
 #elif BUILDFLAG(IS_MAC)
   return kOsMacosx;
+#elif BUILDFLAG(IS_IOS)
+  return kOsIOS;
 #else
   return kOsAny;
 #endif

@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,7 +8,9 @@ import("//components/services/screen_ai/buildflags/features.gni")
 import("//device/vr/buildflags/buildflags.gni")
 import("//media/gpu/args.gni")
 import("//media/media_options.gni")
+import("//mojo/public/tools/bindings/mojom.gni")
 import("//printing/buildflags/buildflags.gni")
+import("//services/accessibility/buildflags.gni")
 
 source_set("utility") {
   # Only the public target should depend on this. All other targets (even
@@ -41,6 +43,7 @@ source_set("utility") {
     "//base",
     "//build:branding_buildflags",
     "//build:chromeos_buildflags",
+    "//components/optimization_guide/core:features",
     "//components/services/screen_ai/buildflags",
     "//components/services/storage",
     "//components/services/storage/public/mojom",
@@ -48,18 +51,22 @@ source_set("utility") {
     "//content/child",
     "//content/public/child:child_sources",
     "//content/public/common:common_sources",
+    "//content/public/common:content_descriptor_keys",
     "//content/services/auction_worklet",
-    "//content/services/shared_storage_worklet",
     "//device/vr/buildflags",
     "//media:media_buildflags",
     "//mojo/public/cpp/bindings",
     "//net",
     "//printing/buildflags",
     "//sandbox",
+    "//services/accessibility:buildflags",
     "//services/audio",
     "//services/data_decoder:lib",
     "//services/data_decoder/public/cpp",
     "//services/network:network_service",
+    "//services/on_device_model:on_device_model_service",
+    "//services/on_device_model/public/cpp",
+    "//services/on_device_model/public/mojom",
     "//services/service_manager/public/cpp",
     "//services/service_manager/public/mojom",
     "//services/shape_detection:lib",
@@ -84,8 +91,8 @@ source_set("utility") {
 
   if (is_chromeos_ash) {
     deps += [
-      "//ash/services/ime:sandbox_hook",
       "//chromeos/ash/components/assistant:buildflags",
+      "//chromeos/ash/services/ime:sandbox_hook",
       "//chromeos/services/tts:sandbox_hook",
     ]
     if (use_vaapi || use_v4l2_codec) {
@@ -93,17 +100,13 @@ source_set("utility") {
     }
   }
 
-  if (is_linux || is_chromeos_ash) {
+  if (is_linux || is_chromeos) {
     deps += [
       "//gpu/config",
       "//media/gpu/sandbox",
+      "//media/mojo/services",
       "//third_party/angle:angle_gpu_info_util",
     ]
-
-    if (use_vaapi || use_v4l2_codec) {
-      # To allow creating media::StableVideoDecoderFactoryService objects.
-      deps += [ "//media/mojo/services" ]
-    }
   }
 
   if (is_chromeos_ash && is_chrome_branded) {
@@ -113,8 +116,11 @@ source_set("utility") {
     ]
   }
 
-  if (enable_cros_libassistant) {
-    deps += [ "//chromeos/services/libassistant:sandbox_hook" ]
+  if (is_chromeos_ash && enable_cros_libassistant) {
+    deps += [
+      "//chromeos/ash/services/libassistant:sandbox_hook",
+      "//chromeos/assistant/internal:libassistant",
+    ]
   }
 
   # PAC execution is done in process on Android.
@@ -132,8 +138,12 @@ source_set("utility") {
     }
   }
 
-  if (is_linux || is_chromeos_ash || is_chromeos_lacros) {
+  if (is_linux || is_chromeos) {
     deps += [ "//components/services/screen_ai:screen_ai_sandbox_hook" ]
+  }
+
+  if (enable_accessibility_service) {
+    deps += [ "//services/accessibility:lib" ]
   }
 
   if (enable_vr && !is_android) {
@@ -141,6 +151,19 @@ source_set("utility") {
       "//content/services/isolated_xr_device:lib",
       "//device/vr/public/mojom:isolated_xr_service",
     ]
+  }
+
+  if (is_win) {
+    deps += [ ":delegate_data" ]
+  }
+}
+
+if (is_win) {
+  mojom("delegate_data") {
+    disable_variants = true
+
+    sources = [ "sandbox_delegate_data.mojom" ]
+    public_deps = [ "//mojo/public/mojom/base" ]
   }
 }
 

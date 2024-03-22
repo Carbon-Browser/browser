@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,9 +57,7 @@ public class SystemNightModeMonitor {
         mObservers.removeObserver(observer);
     }
 
-    /**
-     * Updates the system night mode state, and notifies observers if system night mode changes.
-     */
+    /** Updates the system night mode state, and notifies observers if system night mode changes. */
     public void onApplicationConfigurationChanged() {
         final boolean oldNightMode = mSystemNightModeOn;
         calculateSystemNightMode();

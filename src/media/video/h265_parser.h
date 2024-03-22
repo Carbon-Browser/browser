@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -16,9 +16,15 @@
 #include "media/base/media_export.h"
 #include "media/base/ranges.h"
 #include "media/base/video_color_space.h"
+#include "media/base/video_types.h"
 #include "media/video/h264_bit_reader.h"
 #include "media/video/h264_parser.h"
 #include "media/video/h265_nalu_parser.h"
+
+namespace gfx {
+struct HdrMetadataCta861_3;
+struct HdrMetadataSmpteSt2086;
+}  // namespace gfx
 
 namespace media {
 
@@ -52,6 +58,12 @@ struct MEDIA_EXPORT H265ProfileTierLevel {
   // Syntax elements.
   int general_profile_idc;
   int general_level_idc;  // 30x the actual level.
+  uint32_t general_profile_compatibility_flags;
+  bool general_progressive_source_flag;
+  bool general_interlaced_source_flag;
+  bool general_non_packed_constraint_flag;
+  bool general_frame_only_constraint_flag;
+  bool general_one_picture_only_constraint_flag;
 
   // From Table A.8 - General tier and level limits.
   int GetMaxLumaPs() const;
@@ -73,12 +85,15 @@ struct MEDIA_EXPORT H265ScalingListData {
   // are actually used. Also change it in the accelerator delegate if that is
   // done.
   // Syntax elements.
-  int scaling_list_dc_coef_16x16[kNumScalingListMatrices];
-  int scaling_list_dc_coef_32x32[kNumScalingListMatrices];
-  int scaling_list_4x4[kNumScalingListMatrices][kScalingListSizeId0Count];
-  int scaling_list_8x8[kNumScalingListMatrices][kScalingListSizeId1To3Count];
-  int scaling_list_16x16[kNumScalingListMatrices][kScalingListSizeId1To3Count];
-  int scaling_list_32x32[kNumScalingListMatrices][kScalingListSizeId1To3Count];
+  uint8_t scaling_list_dc_coef_16x16[kNumScalingListMatrices];
+  uint8_t scaling_list_dc_coef_32x32[kNumScalingListMatrices];
+  uint8_t scaling_list_4x4[kNumScalingListMatrices][kScalingListSizeId0Count];
+  uint8_t scaling_list_8x8[kNumScalingListMatrices]
+                          [kScalingListSizeId1To3Count];
+  uint8_t scaling_list_16x16[kNumScalingListMatrices]
+                            [kScalingListSizeId1To3Count];
+  uint8_t scaling_list_32x32[kNumScalingListMatrices]
+                            [kScalingListSizeId1To3Count];
 };
 
 struct MEDIA_EXPORT H265StRefPicSet {
@@ -94,6 +109,7 @@ struct MEDIA_EXPORT H265StRefPicSet {
 
   // Calculated fields.
   int num_delta_pocs;
+  int rps_idx_num_delta_pocs;
 };
 
 struct MEDIA_EXPORT H265VUIParameters {
@@ -111,6 +127,12 @@ struct MEDIA_EXPORT H265VUIParameters {
   int def_disp_win_right_offset;
   int def_disp_win_top_offset;
   int def_disp_win_bottom_offset;
+  bool bitstream_restriction_flag;
+  int min_spatial_segmentation_idc;
+  int max_bytes_per_pic_denom;
+  int max_bits_per_min_cu_denom;
+  int log2_max_mv_length_horizontal;
+  int log2_max_mv_length_vertical;
 };
 
 struct MEDIA_EXPORT H265VPS {
@@ -128,7 +150,9 @@ struct MEDIA_EXPORT H265VPS {
   int vps_max_latency_increase_plus1[kMaxSubLayers];
   int vps_max_layer_id;
   int vps_num_layer_sets_minus1;
-  bool vps_timing_info_present_flag;
+
+  // Computed from ScalabilityId
+  int aux_alpha_layer_id;
 
   // skipped the rest
 };
@@ -139,6 +163,7 @@ struct MEDIA_EXPORT H265SPS {
   // Syntax elements.
   int sps_video_parameter_set_id;
   int sps_max_sub_layers_minus1;
+  bool sps_temporal_id_nesting_flag;
   H265ProfileTierLevel profile_tier_level;
   int sps_seq_parameter_set_id;
   int chroma_format_idc;
@@ -154,7 +179,7 @@ struct MEDIA_EXPORT H265SPS {
   int log2_max_pic_order_cnt_lsb_minus4;
   int sps_max_dec_pic_buffering_minus1[kMaxSubLayers];
   int sps_max_num_reorder_pics[kMaxSubLayers];
-  int sps_max_latency_increase_plus1[kMaxSubLayers];
+  uint32_t sps_max_latency_increase_plus1[kMaxSubLayers];
   int log2_min_luma_coding_block_size_minus3;
   int log2_diff_max_min_luma_coding_block_size;
   int log2_min_luma_transform_block_size_minus2;
@@ -212,12 +237,14 @@ struct MEDIA_EXPORT H265SPS {
   int pic_size_in_ctbs_y;
   int wp_offset_half_range_y;
   int wp_offset_half_range_c;
+  uint32_t sps_max_latency_pictures[kMaxSubLayers];
 
   // Helpers to compute frequently-used values. They do not verify that the
   // results are in-spec for the given profile or level.
   gfx::Size GetCodedSize() const;
   gfx::Rect GetVisibleRect() const;
   VideoColorSpace GetColorSpace() const;
+  VideoChromaSampling GetChromaSampling() const;
 };
 
 struct MEDIA_EXPORT H265PPS {
@@ -260,6 +287,7 @@ struct MEDIA_EXPORT H265PPS {
   int row_height_minus1[kMaxNumTileRowHeight];
   bool loop_filter_across_tiles_enabled_flag;
   bool pps_loop_filter_across_slices_enabled_flag;
+  bool deblocking_filter_control_present_flag;
   bool deblocking_filter_override_enabled_flag;
   bool pps_deblocking_filter_disabled_flag;
   int pps_beta_offset_div2;
@@ -386,6 +414,9 @@ struct MEDIA_EXPORT H265SliceHeader {
   // Number of bits st_ref_pic_set takes after removing emulation prevention
   // bytes.
   int st_rps_bits;
+  // Number of bits lt_ref_pic_set takes after removing emulation prevention
+  // bytes.
+  int lt_rps_bits;
 
   bool IsISlice() const;
   bool IsPSlice() const;
@@ -397,6 +428,65 @@ struct MEDIA_EXPORT H265SliceHeader {
 
     return sps->st_ref_pic_set[curr_rps_idx];
   }
+};
+
+struct MEDIA_EXPORT H265SEIAlphaChannelInfo {
+  bool alpha_channel_cancel_flag;
+  int alpha_channel_use_idc;
+  int alpha_channel_bit_depth_minus8;
+  int alpha_transparent_value;
+  int alpha_opaque_value;
+  bool alpha_channel_incr_flag;
+  bool alpha_channel_clip_flag;
+  bool alpha_channel_clip_type_flag;
+};
+
+struct MEDIA_EXPORT H265SEIContentLightLevelInfo {
+  uint16_t max_content_light_level;
+  uint16_t max_picture_average_light_level;
+
+  gfx::HdrMetadataCta861_3 ToGfx() const;
+};
+
+struct MEDIA_EXPORT H265SEIMasteringDisplayInfo {
+  enum {
+    kNumDisplayPrimaries = 3,
+    kDisplayPrimaryComponents = 2,
+  };
+
+  uint16_t display_primaries[kNumDisplayPrimaries][kDisplayPrimaryComponents];
+  uint16_t white_points[2];
+  uint32_t max_luminance;
+  uint32_t min_luminance;
+
+  gfx::HdrMetadataSmpteSt2086 ToGfx() const;
+};
+
+struct MEDIA_EXPORT H265SEIMessage {
+  H265SEIMessage();
+
+  enum Type {
+    kSEIMasteringDisplayInfo = 137,
+    kSEIContentLightLevelInfo = 144,
+    kSEIAlphaChannelInfo = 165,
+  };
+
+  int type;
+  int payload_size;
+  union {
+    // Placeholder; in future more supported types will contribute to more
+    // union members here.
+    H265SEIAlphaChannelInfo alpha_channel_info;
+    H265SEIContentLightLevelInfo content_light_level_info;
+    H265SEIMasteringDisplayInfo mastering_display_info;
+  };
+};
+
+struct MEDIA_EXPORT H265SEI {
+  H265SEI();
+  ~H265SEI();
+
+  std::vector<H265SEIMessage> msgs;
 };
 
 // Class to parse an Annex-B H.265 stream.
@@ -443,23 +533,24 @@ class MEDIA_EXPORT H265Parser : public H265NaluParser {
                           H265SliceHeader* shdr,
                           H265SliceHeader* prior_shdr);
 
+  // Parse a slice header and return the associated picture parameter set ID.
+  Result ParseSliceHeaderForPictureParameterSets(const H265NALU& nalu,
+                                                 int* pps_id);
+
+  // Parse a SEI, returning it in |*sei|, provided and managed by the caller.
+  Result ParseSEI(H265SEI* sei);
+
   static VideoCodecProfile ProfileIDCToVideoCodecProfile(int profile_idc);
 
  private:
-  // Exp-Golomb code parsing as specified in chapter 9.2 of the spec.
-  // Read one unsigned exp-Golomb code from the stream and return in |*val|.
-  Result ReadUE(int* val);
-
-  // Read one signed exp-Golomb code from the stream and return in |*val|.
-  Result ReadSE(int* val);
-
   Result ParseProfileTierLevel(bool profile_present,
                                int max_num_sub_layers_minus1,
                                H265ProfileTierLevel* profile_tier_level);
   Result ParseScalingListData(H265ScalingListData* scaling_list_data);
   Result ParseStRefPicSet(int st_rps_idx,
                           const H265SPS& sps,
-                          H265StRefPicSet* st_ref_pic_set);
+                          H265StRefPicSet* st_ref_pic_set,
+                          bool is_slice_hdr = false);
   Result ParseVuiParameters(const H265SPS& sps, H265VUIParameters* vui);
   Result ParseAndIgnoreHrdParameters(bool common_inf_present_flag,
                                      int max_num_sub_layers_minus1);

@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_SIGNIN_OAUTH2_LOGIN_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_ASH_LOGIN_SIGNIN_OAUTH2_LOGIN_MANAGER_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -17,7 +17,7 @@ class OAuth2LoginManager;
 // Singleton that owns all OAuth2LoginManager and associates them with
 // Profiles. Listens for the Profile's destruction notification and cleans up
 // the associated OAuth2LoginManager.
-class OAuth2LoginManagerFactory : public BrowserContextKeyedServiceFactory {
+class OAuth2LoginManagerFactory : public ProfileKeyedServiceFactory {
  public:
   // Returns the instance of OAuth2LoginManager associated with this
   // `profile` (creates one if none exists).
@@ -31,22 +31,16 @@ class OAuth2LoginManagerFactory : public BrowserContextKeyedServiceFactory {
       delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<OAuth2LoginManagerFactory>;
+  friend base::NoDestructor<OAuth2LoginManagerFactory>;
 
   OAuth2LoginManagerFactory();
   ~OAuth2LoginManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory implementation.
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OAuth2LoginManagerFactory;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SIGNIN_OAUTH2_LOGIN_MANAGER_FACTORY_H_

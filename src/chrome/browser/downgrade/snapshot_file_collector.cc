@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_constants.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/common/chrome_constants.h"
-#include "components/autofill/core/browser/strike_database.h"
+#include "components/autofill/core/browser/strike_databases/strike_database.h"
 #include "components/bookmarks/common/bookmark_constants.h"
 #include "components/history/core/browser/history_constants.h"
 #include "components/password_manager/core/browser/password_manager_constants.h"
@@ -55,11 +55,12 @@ std::vector<SnapshotItemDetails> CollectUserDataItems() {
 // Returns a list of items to snapshot that should be under a profile directory.
 std::vector<SnapshotItemDetails> CollectProfileItems() {
   // Data mask to delete the pref files if any of the following types is
-  // deleted. When cookies are deleted, the kZeroSuggestCachedResults pref has
-  // to be reset. When history and isolated origins are deleted, the
-  // kPrefLastLaunchTime and kUserTriggeredIsolatedOrigins prefs have to be
-  // reset. When data type content is deleted, blocklisted sites are deleted
-  // from the translation prefs.
+  // deleted. When cookies are deleted, the kZeroSuggestCachedResults and
+  // kZeroSuggestCachedResultsWithURL prefs have to be reset. When history and
+  // isolated origins are deleted, the kPrefLastLaunchTime and
+  // kUserTriggeredIsolatedOrigins prefs have to be reset. When data type
+  // content is deleted, blocklisted sites are deleted from the translation
+  // prefs.
   uint64_t pref_data_type =
       content::BrowsingDataRemover::DATA_TYPE_COOKIES |
       chrome_browsing_data_remover::DATA_TYPE_ISOLATED_ORIGINS |
@@ -87,10 +88,15 @@ std::vector<SnapshotItemDetails> CollectProfileItems() {
                           chrome_browsing_data_remover::DATA_TYPE_HISTORY,
                           SnapshotItemId::kTopSites),
       // Bookmarks
-      SnapshotItemDetails(base::FilePath(bookmarks::kBookmarksFileName),
+      SnapshotItemDetails(
+          base::FilePath(bookmarks::kLocalOrSyncableBookmarksFileName),
+          SnapshotItemDetails::ItemType::kFile,
+          chrome_browsing_data_remover::DATA_TYPE_BOOKMARKS,
+          SnapshotItemId::kLocalOrSyncableBookmarks),
+      SnapshotItemDetails(base::FilePath(bookmarks::kAccountBookmarksFileName),
                           SnapshotItemDetails::ItemType::kFile,
                           chrome_browsing_data_remover::DATA_TYPE_BOOKMARKS,
-                          SnapshotItemId::kBookmarks),
+                          SnapshotItemId::kAccountBookmarks),
       // Tab Restore and sessions
       // TODO(crbug.com/1103458): Remove legacy snapshots in M89
       SnapshotItemDetails(

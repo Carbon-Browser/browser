@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@
 #include "chrome/browser/notifications/notifier_settings_test_observer.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/test/browser_test.h"
 
 namespace {
@@ -50,13 +50,11 @@ class ChromeAshMessageCenterClientBrowserTest : public InProcessBrowserTest {
     ash::NotifierSettingsController::Get()->GetNotifiers();
   }
 
-  void SetNotifierEnabled(web_app::AppId app_id, bool enabled) {
+  void SetNotifierEnabled(webapps::AppId app_id, bool enabled) {
     ash::NotifierSettingsController::Get()->SetNotifierEnabled(
         message_center::NotifierId(message_center::NotifierType::APPLICATION,
                                    app_id),
         enabled);
-    apps::AppServiceProxyFactory::GetForProfile(browser()->profile())
-        ->FlushMojoCallsForTesting();
   }
 
   int GetNumberOfNotifiers() { return test_observer_->notifiers().size(); }
@@ -66,17 +64,14 @@ class ChromeAshMessageCenterClientBrowserTest : public InProcessBrowserTest {
   }
 
   std::string InstallTestPWA() {
-    auto web_app_install_info = std::make_unique<WebAppInstallInfo>();
+    auto web_app_install_info = std::make_unique<web_app::WebAppInstallInfo>();
     web_app_install_info->start_url = GURL(kUrlString);
     web_app_install_info->display_mode = blink::mojom::DisplayMode::kMinimalUi;
     Profile* profile = browser()->profile();
 
     // Install a PWA and wait for app service to see it.
-    web_app::AppId app_id =
+    webapps::AppId app_id =
         web_app::test::InstallWebApp(profile, std::move(web_app_install_info));
-    apps::AppServiceProxy* service =
-        apps::AppServiceProxyFactory::GetForProfile(profile);
-    service->FlushMojoCallsForTesting();
     // Inform notifier controller it should begin observing |profile|'s'
     // AppRegistryCache.
     RefreshNotifiers();

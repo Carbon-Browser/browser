@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/bookmarks/browser/model_loader.h"
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/histogram_functions.h"
@@ -25,38 +25,26 @@ namespace bookmarks {
 
 namespace {
 
-// Adds node to the model's index, recursing through all children as well.
-void AddBookmarksToIndex(BookmarkLoadDetails* details, BookmarkNode* node) {
-  if (node->is_url()) {
-    if (node->url().is_valid())
-      details->index()->Add(node);
-  } else {
-    for (const auto& child : node->children())
-      AddBookmarksToIndex(details, child.get());
-  }
-}
-
 // Loads the bookmarks. This is intended to be called on the background thread.
 // Updates state in |details| based on the load.
 void LoadBookmarks(const base::FilePath& path,
                    BookmarkLoadDetails* details) {
-  bool load_index = false;
   bool bookmark_file_exists = base::PathExists(path);
   if (bookmark_file_exists) {
     // Titles may end up containing invalid utf and we shouldn't throw away
     // all bookmarks if some titles have invalid utf.
     JSONFileValueDeserializer deserializer(
         path, base::JSON_REPLACE_INVALID_CHARACTERS);
-    std::unique_ptr<base::Value> root =
+    std::unique_ptr<base::Value> root_value =
         deserializer.Deserialize(nullptr, nullptr);
 
-    if (root) {
-      // Building the index can take a while, so we do it on the background
-      // thread.
+    if (!root_value) {
+      // The bookmark file exists but was not deserialized.
+    } else if (const auto* root_dict = root_value->GetIfDict()) {
       int64_t max_node_id = 0;
       std::string sync_metadata_str;
       BookmarkCodec codec;
-      codec.Decode(*root, details->bb_node(), details->other_folder_node(),
+      codec.Decode(*root_dict, details->bb_node(), details->other_folder_node(),
                    details->mobile_folder_node(), &max_node_id,
                    &sync_metadata_str);
       details->set_sync_metadata_str(std::move(sync_metadata_str));
@@ -64,23 +52,16 @@ void LoadBookmarks(const base::FilePath& path,
       details->set_computed_checksum(codec.computed_checksum());
       details->set_stored_checksum(codec.stored_checksum());
       details->set_ids_reassigned(codec.ids_reassigned());
-      details->set_guids_reassigned(codec.guids_reassigned());
+      details->set_uuids_reassigned(codec.uuids_reassigned());
       details->set_model_meta_info_map(codec.model_meta_info_map());
-
-      load_index = true;
     }
   }
 
-  if (details->LoadManagedNode())
-    load_index = true;
+  details->LoadManagedNode();
 
-  // Load any extra root nodes now, after the IDs have been potentially
-  // reassigned.
-  if (load_index) {
-    AddBookmarksToIndex(details, details->root_node());
-  }
-
-  details->CreateUrlIndex();
+  // Building the indices can take a while so it's done on the background
+  // thread.
+  details->CreateIndices();
 
   UrlLoadStats stats = details->url_index()->ComputeStats();
   metrics::RecordUrlLoadStatsOnProfileLoad(stats);
@@ -88,6 +69,10 @@ void LoadBookmarks(const base::FilePath& path,
   int64_t file_size_bytes;
   if (bookmark_file_exists && base::GetFileSize(path, &file_size_bytes)) {
     metrics::RecordFileSizeAtStartup(file_size_bytes);
+    metrics::RecordAverageNodeSizeAtStartup(
+        stats.total_url_bookmark_count == 0
+            ? 0
+            : file_size_bytes / stats.total_url_bookmark_count);
   }
 }
 
@@ -95,7 +80,7 @@ void LoadBookmarks(const base::FilePath& path,
 
 // static
 scoped_refptr<ModelLoader> ModelLoader::Create(
-    const base::FilePath& profile_path,
+    const base::FilePath& file_path,
     std::unique_ptr<BookmarkLoadDetails> details,
     LoadCallback callback) {
   // Note: base::MakeRefCounted is not available here, as ModelLoader's
@@ -108,9 +93,8 @@ scoped_refptr<ModelLoader> ModelLoader::Create(
 
   model_loader->backend_task_runner_->PostTaskAndReplyWithResult(
       FROM_HERE,
-      base::BindOnce(
-          &ModelLoader::DoLoadOnBackgroundThread, model_loader, profile_path,
-          std::move(details)),
+      base::BindOnce(&ModelLoader::DoLoadOnBackgroundThread, model_loader,
+                     file_path, std::move(details)),
       std::move(callback));
   return model_loader;
 }
@@ -126,12 +110,27 @@ ModelLoader::ModelLoader()
 ModelLoader::~ModelLoader() = default;
 
 std::unique_ptr<BookmarkLoadDetails> ModelLoader::DoLoadOnBackgroundThread(
-    const base::FilePath& profile_path,
+    const base::FilePath& file_path,
     std::unique_ptr<BookmarkLoadDetails> details) {
-  LoadBookmarks(profile_path, details.get());
+  LoadBookmarks(file_path, details.get());
   history_bookmark_model_ = details->url_index();
   loaded_signal_.Signal();
   return details;
+}
+
+// static
+scoped_refptr<ModelLoader> ModelLoader::CreateForTest(
+    BookmarkLoadDetails* details) {
+  CHECK(details);
+  // Note: base::MakeRefCounted is not available here, as ModelLoader's
+  // constructor is private.
+  details->LoadManagedNode();
+  details->CreateIndices();
+
+  auto model_loader = base::WrapRefCounted(new ModelLoader());
+  model_loader->history_bookmark_model_ = details->url_index();
+  model_loader->loaded_signal_.Signal();
+  return model_loader;
 }
 
 }  // namespace bookmarks

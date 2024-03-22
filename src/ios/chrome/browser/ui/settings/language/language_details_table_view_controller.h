@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#import "ios/chrome/browser/ui/settings/settings_controller_protocol.h"
 #import "ios/chrome/browser/ui/settings/settings_root_table_view_controller.h"
 
 @class LanguageDetailsTableViewController;
@@ -27,7 +28,8 @@
 
 // Controller for the UI that allows the user to choose whether or not Translate
 // should be offered for a given language.
-@interface LanguageDetailsTableViewController : SettingsRootTableViewController
+@interface LanguageDetailsTableViewController
+    : SettingsRootTableViewController <SettingsControllerProtocol>
 
 // The designated initializer. `languageItem` and `delegate` must not be nil.
 // `delegate` will not be retained.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include <utility>
 
 #include "base/check.h"
-#include "base/cxx17_backports.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "cc/paint/paint_flags.h"
@@ -163,13 +162,13 @@ class HueView : public LocatedEventHandlerView {
   void OnPaint(gfx::Canvas* canvas) override;
 
   HueChangedCallback changed_callback_;
-  int level_;
+  int level_ = 0;
   SkColor background_color_;
   SkColor indicator_color_;
 };
 
 HueView::HueView(const HueChangedCallback& changed_callback)
-    : changed_callback_(changed_callback), level_(0) {}
+    : changed_callback_(changed_callback) {}
 
 void HueView::OnThemeChanged() {
   LocatedEventHandlerView::OnThemeChanged();
@@ -286,9 +285,9 @@ class SaturationValueView : public LocatedEventHandlerView {
   void UpdateMarkerColor();
 
   SaturationValueChangedCallback changed_callback_;
-  SkScalar hue_;
-  SkScalar saturation_;
-  SkScalar value_;
+  SkScalar hue_ = 0;
+  SkScalar saturation_ = 0;
+  SkScalar value_ = 0;
   gfx::Point marker_position_;
   SkColor marker_color_;
 };
@@ -296,9 +295,7 @@ class SaturationValueView : public LocatedEventHandlerView {
 SaturationValueView::SaturationValueView(
     const SaturationValueChangedCallback& changed_callback)
     : changed_callback_(changed_callback),
-      hue_(0),
-      saturation_(0),
-      value_(0),
+
       marker_color_(gfx::kPlaceholderColor) {
   SetBorder(CreateSolidBorder(kBorderWidth, gfx::kPlaceholderColor));
 }
@@ -343,8 +340,8 @@ void SaturationValueView::ProcessEventAtLocation(const gfx::Point& point) {
   SkScalar scalar_size = SkIntToScalar(kSaturationValueSize - 1);
   SkScalar saturation = (point.x() - kBorderWidth) / scalar_size;
   SkScalar value = SK_Scalar1 - (point.y() - kBorderWidth) / scalar_size;
-  saturation = base::clamp(saturation, 0.0f, SK_Scalar1);
-  value = base::clamp(value, 0.0f, SK_Scalar1);
+  saturation = std::clamp(saturation, 0.0f, SK_Scalar1);
+  value = std::clamp(value, 0.0f, SK_Scalar1);
   OnSaturationValueChanged(saturation, value);
   changed_callback_.Run(saturation, value);
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/power_monitor/power_monitor.h"
@@ -193,6 +193,46 @@ void PeerConnectionTrackerHost::GetUserMediaFailure(
   }
 }
 
+void PeerConnectionTrackerHost::GetDisplayMedia(
+    int request_id,
+    bool audio,
+    bool video,
+    const std::string& audio_constraints,
+    const std::string& video_constraints) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  for (auto& observer : GetObserverList()) {
+    observer.OnGetDisplayMedia(frame_id_, peer_pid_, request_id, audio, video,
+                               audio_constraints, video_constraints);
+  }
+}
+
+void PeerConnectionTrackerHost::GetDisplayMediaSuccess(
+    int request_id,
+    const std::string& stream_id,
+    const std::string& audio_track_info,
+    const std::string& video_track_info) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  for (auto& observer : GetObserverList()) {
+    observer.OnGetDisplayMediaSuccess(frame_id_, peer_pid_, request_id,
+                                      stream_id, audio_track_info,
+                                      video_track_info);
+  }
+}
+
+void PeerConnectionTrackerHost::GetDisplayMediaFailure(
+    int request_id,
+    const std::string& error,
+    const std::string& error_message) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  for (auto& observer : GetObserverList()) {
+    observer.OnGetDisplayMediaFailure(frame_id_, peer_pid_, request_id, error,
+                                      error_message);
+  }
+}
+
 void PeerConnectionTrackerHost::WebRtcEventLogWrite(
     int lid,
     const std::vector<uint8_t>& output) {
@@ -239,6 +279,11 @@ void PeerConnectionTrackerHost::GetStandardStats() {
 void PeerConnectionTrackerHost::GetLegacyStats() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   tracker_->GetLegacyStats();
+}
+
+void PeerConnectionTrackerHost::GetCurrentState() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  tracker_->GetCurrentState();
 }
 
 void PeerConnectionTrackerHost::BindReceiver(

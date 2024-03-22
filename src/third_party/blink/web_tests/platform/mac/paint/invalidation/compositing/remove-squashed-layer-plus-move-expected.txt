@@ -9,7 +9,6 @@
     {
       "name": "LayoutNGBlockFlow (positioned) DIV",
       "bounds": [1000, 1000],
-      "contentsOpaqueForText": true,
       "drawsContent": false,
       "transform": 1
     },
@@ -18,33 +17,30 @@
       "position": [8, 8],
       "bounds": [100, 50],
       "contentsOpaque": true,
-      "backgroundColor": "#ADD8E6",
-      "invalidations": [
-        [0, 0, 100, 50]
-      ]
+      "backgroundColor": "#ADD8E6"
     },
     {
       "name": "LayoutNGBlockFlow (relative positioned) DIV class='mv-tile'",
       "position": [8, 62],
       "bounds": [1000, 50],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {
       "name": "HorizontalScrollbar",
       "position": [0, 585],
-      "bounds": [785, 15]
+      "bounds": [785, 15],
+      "contentsOpaque": true
     },
     {
       "name": "VerticalScrollbar",
       "position": [785, 0],
-      "bounds": [15, 585]
+      "bounds": [15, 585],
+      "contentsOpaque": true
     },
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [785, 585],
-      "bounds": [15, 15],
-      "contentsOpaqueForText": true
+      "bounds": [15, 15]
     }
   ],
   "transforms": [

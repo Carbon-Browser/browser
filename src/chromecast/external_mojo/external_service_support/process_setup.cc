@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ void CommonProcessInitialization(int argc, const char* const* argv) {
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (!command_line->HasSwitch(switches::kDeferFeatureList)) {
-    base::FeatureList::InitializeInstance(
+    base::FeatureList::InitInstance(
         command_line->GetSwitchValueASCII(switches::kEnableFeatures),
         command_line->GetSwitchValueASCII(switches::kDisableFeatures));
   }

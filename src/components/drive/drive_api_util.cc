@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -181,6 +181,9 @@ bool HasHostedDocumentExtension(const base::FilePath& path) {
   return extension == kUnknownHostedDocumentExtension;
 }
 
+bool IsEncryptedMimeType(const std::string& mime_type) {
+  return base::StartsWith(mime_type, kEncryptedMimeType);
+}
 
 }  // namespace util
 }  // namespace drive

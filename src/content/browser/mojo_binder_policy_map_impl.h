@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 
 #include "base/containers/flat_map.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/mojo_binder_policy_map.h"
 
@@ -37,6 +37,10 @@ class CONTENT_EXPORT MojoBinderPolicyMapImpl : public MojoBinderPolicyMap {
   // This is used when the prerendered page and the page that triggered the
   // prerendering are same origin. Currently this is the only use of this class.
   static const MojoBinderPolicyMapImpl* GetInstanceForSameOriginPrerendering();
+
+  // Returns the instance used by MojoBinderPolicyApplier for preview mode. This
+  // is used when a page is shown in preview mode.
+  static const MojoBinderPolicyMapImpl* GetInstanceForPreview();
 
   // Gets the corresponding policy of a given Mojo interface name.
   // If the interface name is not in `non_associated_policy_map_`, the given

@@ -1,41 +1,47 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef REMOTING_PROTOCOL_CAPABILITY_NAMES_H_
 #define REMOTING_PROTOCOL_CAPABILITY_NAMES_H_
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // Used for negotiating client-host capabilities for touch events.
-constexpr char kTouchEventsCapability[] = "touchEvents";
+inline constexpr char kTouchEventsCapability[] = "touchEvents";
 
-constexpr char kSendInitialResolution[] = "sendInitialResolution";
-constexpr char kRateLimitResizeRequests[] = "rateLimitResizeRequests";
+inline constexpr char kSendInitialResolution[] = "sendInitialResolution";
+inline constexpr char kRateLimitResizeRequests[] = "rateLimitResizeRequests";
 
-constexpr char kFileTransferCapability[] = "fileTransfer";
-constexpr char kRtcLogTransferCapability[] = "rtcLogTransfer";
+inline constexpr char kFileTransferCapability[] = "fileTransfer";
+inline constexpr char kRtcLogTransferCapability[] = "rtcLogTransfer";
 
-constexpr char kRemoteOpenUrlCapability[] = "remoteOpenUrl";
-constexpr char kRemoteWebAuthnCapability[] = "remoteWebAuthn";
+inline constexpr char kRemoteOpenUrlCapability[] = "remoteOpenUrl";
+inline constexpr char kRemoteWebAuthnCapability[] = "remoteWebAuthn";
 
 // TODO(joedow): Ideally these would be dynamically created via the
 // DataChannelManager, we should consider moving them there if we begin using
 // WebRTC data channels for individual features more frequently.
-constexpr char kLockWorkstationAction[] = "lockWorkstationAction";
-constexpr char kSendAttentionSequenceAction[] = "sendAttentionSequenceAction";
+inline constexpr char kLockWorkstationAction[] = "lockWorkstationAction";
+inline constexpr char kSendAttentionSequenceAction[] =
+    "sendAttentionSequenceAction";
 
 // Host supports ICE or SDP restart request from control message. Only used for
 // WebRTC clients.
-constexpr char kWebrtcIceSdpRestartAction[] = "webrtcIceSdpRestartAction";
+inline constexpr char kWebrtcIceSdpRestartAction[] =
+    "webrtcIceSdpRestartAction";
 
 // Host supports creating one video-stream per monitor.
-// TODO(lambroslambrou): Rename to "multiStream" once the feature is fully
-// implemented and working on the host side.
-constexpr char kMultiStreamCapability[] = "multiStream_inProgress";
+inline constexpr char kMultiStreamCapability[] = "multiStream";
 
-}  // namespace protocol
-}  // namespace remoting
+// Host supports display layouts controlled by the client.
+inline constexpr char kClientControlledLayoutCapability[] =
+    "clientControlledLayout";
+
+// Host supports injection of events with fractional coordinates.
+inline constexpr char kFractionalCoordinatesCapability[] =
+    "fractionalCoordinates";
+
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_CAPABILITY_NAMES_H_

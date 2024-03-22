@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 
 #include <string>
 
-#include "ui/accessibility/ax_export.h"
+#include "base/component_export.h"
 
 namespace ui {
 
-class AX_EXPORT AXApiType {
+class COMPONENT_EXPORT(AX_PLATFORM) AXApiType {
  public:
   // Inspect types for all platforms.
   enum TypeConstant {
@@ -27,7 +27,7 @@ class AX_EXPORT AXApiType {
   };
 
   // Type represents a platform-specific accessibility API.
-  class AX_EXPORT Type final {
+  class COMPONENT_EXPORT(AX_PLATFORM) Type final {
    public:
     Type(TypeConstant type) : type_(type) {}
 

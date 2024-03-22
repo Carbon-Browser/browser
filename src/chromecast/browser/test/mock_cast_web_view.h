@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef CHROMECAST_BROWSER_TEST_MOCK_CAST_WEB_VIEW_H_
@@ -16,7 +16,7 @@ namespace chromecast {
 class MockCastWebContents : public CastWebContents {
  public:
   MockCastWebContents();
-  ~MockCastWebContents();
+  ~MockCastWebContents() override;
 
   // CastWebContents implementation
   MOCK_METHOD(int, tab_id, (), (const, override));
@@ -27,7 +27,11 @@ class MockCastWebContents : public CastWebContents {
               url_rewrite_rules_manager,
               (),
               (override));
-  MOCK_METHOD(void, AddRendererFeatures, (base::Value), (override));
+  MOCK_METHOD(const media_control::MediaBlocker*,
+              media_blocker,
+              (),
+              (const override));
+  MOCK_METHOD(void, AddRendererFeatures, (base::Value::Dict), (override));
   MOCK_METHOD(void,
               SetInterfacesForRenderer,
               (mojo::PendingRemote<mojom::RemoteInterfaces>),

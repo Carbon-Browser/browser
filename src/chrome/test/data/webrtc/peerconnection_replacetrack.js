@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 The Chromium Authors. All rights reserved.
+ * Copyright 2017 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -48,7 +48,7 @@ async function testRTCRtpSenderReplaceTrackSendsNewVideoTrack() {
   let receivedColor = await pollNextVideoColor(
       fillRedCanvas, remoteVideo, remoteVideoCanvas);
   if (receivedColor != 'red')
-    throw failTest('Expected red, but received: ' + receivedColor);
+    throw new Error('Expected red, but received: ' + receivedColor);
 
   // Send "blueCanvas" to callee using the existing sender.
   await sender.replaceTrack(blueCanvasStream.getTracks()[0]);
@@ -58,9 +58,9 @@ async function testRTCRtpSenderReplaceTrackSendsNewVideoTrack() {
   receivedColor = await pollNextVideoColor(
       fillBlueCanvas, remoteVideo, remoteVideoCanvas);
   if (receivedColor != 'blue')
-    throw failTest('Expected blue, but received: ' + receivedColor);
+    throw new Error('Expected blue, but received: ' + receivedColor);
 
-  returnToTest('test-passed');
+  return logAndReturn('test-passed');
 }
 
 // Internals.

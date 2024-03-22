@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,17 +11,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/writable_shared_memory_region.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "components/chromeos_camera/common/dmabuf.mojom.h"
 #include "components/chromeos_camera/dmabuf_utils.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/video_frame.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "mojo/public/cpp/system/platform_handle.h"
@@ -98,7 +99,7 @@ void MojoJpegEncodeAcceleratorService::InitializeInternal(
     return;
   }
   accelerator_ = std::move(remaining_accelerator_factory_functions.front())
-                     .Run(base::ThreadTaskRunnerHandle::Get());
+                     .Run(base::SingleThreadTaskRunner::GetCurrentDefault());
   remaining_accelerator_factory_functions.erase(
       remaining_accelerator_factory_functions.begin());
   if (!accelerator_) {
@@ -142,7 +143,7 @@ void MojoJpegEncodeAcceleratorService::OnInitialize(
   // InitializeInternal() may destroy |accelerator_| which could cause a
   // use-after-free if |accelerator_| needs to do more stuff after calling
   // OnInitialize().
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&MojoJpegEncodeAcceleratorService::InitializeInternal,
                      weak_this_factory_.GetWeakPtr(),
@@ -205,13 +206,16 @@ void MojoJpegEncodeAcceleratorService::EncodeWithFD(
         ::chromeos_camera::JpegEncodeAccelerator::Status::PLATFORM_FAILURE);
     return;
   }
-
-  base::UnsafeSharedMemoryRegion input_region =
-      base::UnsafeSharedMemoryRegion::Deserialize(
+  // TODO(b/3832599): Make |input_region| read-only.
+  base::WritableSharedMemoryRegion writable_input_region =
+      base::WritableSharedMemoryRegion::Deserialize(
           base::subtle::PlatformSharedMemoryRegion::Take(
               std::move(input_fd),
-              base::subtle::PlatformSharedMemoryRegion::Mode::kUnsafe,
+              base::subtle::PlatformSharedMemoryRegion::Mode::kWritable,
               input_buffer_size, base::UnguessableToken::Create()));
+  base::ReadOnlySharedMemoryRegion input_region =
+      base::WritableSharedMemoryRegion::ConvertToReadOnly(
+          std::move(writable_input_region));
 
   base::UnsafeSharedMemoryRegion output_shm_region =
       base::UnsafeSharedMemoryRegion::Deserialize(
@@ -248,7 +252,7 @@ void MojoJpegEncodeAcceleratorService::EncodeWithFD(
       task_id, std::move(callback));
   encode_cb_map_.emplace(task_id, std::move(wrapped_callback));
 
-  base::WritableSharedMemoryMapping input_mapping = input_region.Map();
+  base::ReadOnlySharedMemoryMapping input_mapping = input_region.Map();
   if (!input_mapping.IsValid()) {
     DLOG(ERROR) << "Could not map input shared memory for buffer id "
                 << task_id;
@@ -258,7 +262,8 @@ void MojoJpegEncodeAcceleratorService::EncodeWithFD(
     return;
   }
 
-  uint8_t* input_shm_memory = input_mapping.GetMemoryAsSpan<uint8_t>().data();
+  const uint8_t* input_shm_memory =
+      input_mapping.GetMemoryAsSpan<uint8_t>().data();
   scoped_refptr<media::VideoFrame> frame = media::VideoFrame::WrapExternalData(
       media::PIXEL_FORMAT_I420,  // format
       coded_size,                // coded_size
@@ -292,6 +297,8 @@ void MojoJpegEncodeAcceleratorService::EncodeWithDmaBuf(
     int32_t coded_size_width,
     int32_t coded_size_height,
     int32_t quality,
+    bool has_input_modifier,
+    uint64_t input_modifier,
     EncodeWithDmaBufCallback callback) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
@@ -321,7 +328,9 @@ void MojoJpegEncodeAcceleratorService::EncodeWithDmaBuf(
   }
 
   auto input_video_frame = ConstructVideoFrame(
-      std::move(input_planes), ToVideoPixelFormat(input_format), coded_size);
+      std::move(input_planes), ToVideoPixelFormat(input_format), coded_size,
+      has_input_modifier ? input_modifier
+                         : gfx::NativePixmapHandle::kNoModifier);
   if (!input_video_frame) {
     std::move(callback).Run(
         0, ::chromeos_camera::JpegEncodeAccelerator::Status::PLATFORM_FAILURE);

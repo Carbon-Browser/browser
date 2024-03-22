@@ -1,14 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 use std::collections::{hash_map, HashMap};
 use std::sync::{Arc, Condvar, Mutex};
 
-use crate::system::handle::Handle;
-use crate::system::mojo_types;
-use crate::system::mojo_types::{MojoResult, SignalsState};
-use crate::system::trap::{Trap, TrapEvent, TriggerCondition, TriggerId};
+use crate::handle::Handle;
+use crate::mojo_types;
+use crate::mojo_types::{MojoResult, SignalsState};
+use crate::trap::{Trap, TrapEvent, TriggerCondition, TriggerId};
 
 /// Identifies a handle added to `WaitSet`.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

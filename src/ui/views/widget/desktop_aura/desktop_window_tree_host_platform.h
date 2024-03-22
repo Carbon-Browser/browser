@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,10 @@ class PaintContext;
 }  // namespace ui
 
 namespace views {
+
+namespace corewm {
+class TooltipController;
+}
 
 class VIEWS_EXPORT DesktopWindowTreeHostPlatform
     : public aura::WindowTreeHostPlatform,
@@ -80,6 +84,7 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   void SetSize(const gfx::Size& size) override;
   void StackAbove(aura::Window* window) override;
   void StackAtTop() override;
+  bool IsStackedAbove(aura::Window* window) override;
   void CenterWindow(const gfx::Size& size) override;
   void GetWindowPlacement(gfx::Rect* bounds,
                           ui::WindowShowState* show_state) const override;
@@ -89,9 +94,11 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   std::string GetWorkspace() const override;
   gfx::Rect GetWorkAreaBoundsInScreen() const override;
   void SetShape(std::unique_ptr<Widget::ShapeRects> native_shape) override;
+  void SetParent(gfx::AcceleratedWidget parent) override;
   void Activate() override;
   void Deactivate() override;
   bool IsActive() const override;
+  bool CanMaximize() override;
   void Maximize() override;
   void Minimize() override;
   void Restore() override;
@@ -115,10 +122,12 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
   void FrameTypeChanged() override;
-  void SetFullscreen(bool fullscreen) override;
+  bool CanFullscreen() override;
+  void SetFullscreen(bool fullscreen, int64_t display_id) override;
   bool IsFullscreen() const override;
   void SetOpacity(float opacity) override;
-  void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
+  void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                      const gfx::Size& excluded_margin) override;
   void SetWindowIcons(const gfx::ImageSkia& window_icon,
                       const gfx::ImageSkia& app_icon) override;
   void InitModalType(ui::ModalType modal_type) override;
@@ -146,12 +155,14 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   void OnCloseRequest() override;
   void OnAcceleratedWidgetAvailable(gfx::AcceleratedWidget widget) override;
   void OnWillDestroyAcceleratedWidget() override;
+  bool OnRotateFocus(ui::PlatformWindowDelegate::RotateDirection direction,
+                     bool reset) override;
   void OnActivationChanged(bool active) override;
   absl::optional<gfx::Size> GetMinimumSizeForWindow() override;
   absl::optional<gfx::Size> GetMaximumSizeForWindow() override;
   SkPath GetWindowMaskForWindowShapeInPixels() override;
   absl::optional<ui::MenuType> GetMenuType() override;
-  absl::optional<ui::OwnedWindowAnchor> GetOwnedWindowAnchorAndRectInPx()
+  absl::optional<ui::OwnedWindowAnchor> GetOwnedWindowAnchorAndRectInDIP()
       override;
   gfx::Rect ConvertRectToPixels(const gfx::Rect& rect_in_dip) const override;
   gfx::Rect ConvertRectToDIP(const gfx::Rect& rect_in_pixels) const override;
@@ -189,11 +200,14 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   Widget* GetWidget();
   const Widget* GetWidget() const;
 
+  views::corewm::TooltipController* tooltip_controller();
+
  private:
   FRIEND_TEST_ALL_PREFIXES(DesktopWindowTreeHostPlatformTest,
                            UpdateWindowShapeFromWindowMask);
   FRIEND_TEST_ALL_PREFIXES(DesktopWindowTreeHostPlatformTest,
                            MakesParentChildRelationship);
+  FRIEND_TEST_ALL_PREFIXES(DesktopWindowTreeHostPlatformTest, OnRotateFocus);
 
   void ScheduleRelayout();
 
@@ -212,7 +226,13 @@ class VIEWS_EXPORT DesktopWindowTreeHostPlatform
   // Helper method that returns the display for the |window()|.
   display::Display GetDisplayNearestRootWindow() const;
 
-  const raw_ptr<internal::NativeWidgetDelegate> native_widget_delegate_;
+  // Impl for rotation logic.
+  static bool RotateFocusForWidget(
+      Widget& widget,
+      ui::PlatformWindowDelegate::RotateDirection direction,
+      bool reset);
+
+  const base::WeakPtr<internal::NativeWidgetDelegate> native_widget_delegate_;
   const raw_ptr<DesktopNativeWidgetAura> desktop_native_widget_aura_;
 
   bool is_active_ = false;

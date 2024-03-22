@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/singleton_tabs.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/sync_device_info/device_info.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/vector_icon_types.h"
@@ -25,13 +25,13 @@
 namespace {
 
 BrowserWindow* GetWindowFromWebContents(content::WebContents* web_contents) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   return browser ? browser->window() : nullptr;
 }
 
 content::WebContents* GetCurrentWebContents(
     content::WebContents* web_contents) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   return browser ? browser->tab_strip_model()->GetActiveWebContents() : nullptr;
 }
 
@@ -62,7 +62,7 @@ std::u16string SharingUiController::GetTitle(SharingDialogType dialog_type) {
     case SharingSendMessageResult::kCommitTimeout:
       return l10n_util::GetStringFUTF16(
           IDS_BROWSER_SHARING_ERROR_DIALOG_TITLE_GENERIC_ERROR,
-          base::ToLowerASCII(GetContentType()));
+          GetContentType());
 
     case SharingSendMessageResult::kSuccessful:
     case SharingSendMessageResult::kCancelled:
@@ -74,7 +74,7 @@ std::u16string SharingUiController::GetTitle(SharingDialogType dialog_type) {
     case SharingSendMessageResult::kEncryptionError:
       return l10n_util::GetStringFUTF16(
           IDS_BROWSER_SHARING_ERROR_DIALOG_TITLE_INTERNAL_ERROR,
-          base::ToLowerASCII(GetContentType()));
+          GetContentType());
   }
 }
 
@@ -171,6 +171,10 @@ SharingDialogData SharingUiController::CreateDialogData(
 }
 
 bool SharingUiController::ShouldShowLoadingIcon() const {
+  return true;
+}
+
+bool SharingUiController::HasAccessibleUi() const {
   return true;
 }
 

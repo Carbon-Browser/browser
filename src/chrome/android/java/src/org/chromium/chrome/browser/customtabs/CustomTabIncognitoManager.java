@@ -1,11 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.customtabs;
 
 import android.app.Activity;
-import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
 
@@ -31,21 +30,18 @@ import javax.inject.Inject;
  */
 @ActivityScope
 public class CustomTabIncognitoManager implements NativeInitObserver, DestroyObserver {
-    private static final String TAG = "CctIncognito";
-
     private final Activity mActivity;
     private final CustomTabActivityNavigationController mNavigationController;
     private final BrowserServicesIntentDataProvider mIntentDataProvider;
 
-    @Nullable
-    private IncognitoCustomTabHost mIncognitoTabHost;
+    @Nullable private IncognitoCustomTabHost mIncognitoTabHost;
 
     private final IncognitoTabHostRegistry mIncognitoTabHostRegistry;
-
     private final IncognitoCctProfileManager mIncognitoCctProfileManager;
 
     @Inject
-    public CustomTabIncognitoManager(Activity activity,
+    public CustomTabIncognitoManager(
+            Activity activity,
             BrowserServicesIntentDataProvider intentDataProvider,
             CustomTabActivityNavigationController navigationController,
             ActivityLifecycleDispatcher lifecycleDispatcher,
@@ -86,10 +82,14 @@ public class CustomTabIncognitoManager implements NativeInitObserver, DestroyObs
             mIncognitoTabHostRegistry.register(mIncognitoTabHost);
         }
 
-        if (!CommandLine.getInstance().hasSwitch(
-                    ChromeSwitches.ENABLE_INCOGNITO_SNAPSHOTS_IN_ANDROID_RECENTS)) {
-            // Disable taking screenshots and seeing snapshots in recents.
-            mActivity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        maybeCreateIncognitoTabSnapshotController();
+    }
+
+    private void maybeCreateIncognitoTabSnapshotController() {
+        if (!CommandLine.getInstance()
+                .hasSwitch(ChromeSwitches.ENABLE_INCOGNITO_SNAPSHOTS_IN_ANDROID_RECENTS)) {
+            new IncognitoCustomTabSnapshotController(
+                    mActivity.getWindow(), () -> mIntentDataProvider.isIncognito());
         }
     }
 

@@ -1,4 +1,4 @@
-<!-- Copyright 2021 The Chromium Authors. All rights reserved.
+<!-- Copyright 2021 The Chromium Authors
      Use of this source code is governed by a BSD-style license that can be
      found in the LICENSE file. -->
 <!DOCTYPE html>
@@ -7,7 +7,17 @@
     <title></title>
     <meta charset="utf-8">
     <style>
+      html {
+        background-color: var(--cros-bg-color);
+        height: 100%;
+      }
+
+      html:has(body.jelly-enabled) {
+        background-color: var(--cros-sys-app_base_shaded);
+      }
+
       body {
+        height: 100%;
         margin: 0;
       }
     </style>
@@ -19,9 +29,7 @@
   <body>
     <shortcut-customization-app></shortcut-customization-app>
 
-    <script type="module" src="shortcut_customization_app.js"></script>
-    <!-- Below mojo script required to run browser tests -->
-    <script src="chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js">
+    <script type="module" src="/js/shortcut_customization_app.js"></script>
     </script>
   </body>
 </html>

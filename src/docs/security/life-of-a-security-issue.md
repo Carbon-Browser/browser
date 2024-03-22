@@ -56,8 +56,8 @@ concept, and/or suggested patches are encouraged. Please also check the
 
 ## 2. Triage bug
 
-After the bug is filed, a [security sheriff](sheriff.md) will evaluate the
-report. The sheriff does several tasks:
+After the bug is filed, a [security shepherd](shepherd.md) will evaluate the
+report. The shepherd does several tasks:
 
 - Validate that the bug reproduces
 - Searching for any duplicate reports
@@ -68,7 +68,7 @@ report. The sheriff does several tasks:
 
 ## 3. Assign bug
 
-The primary job of the sheriff is to route valid and actionable reports of
+The primary job of the shepherd is to route valid and actionable reports of
 security bugs to the Chromium developer who is best poised to fix the issue.
 
 After the issue is assigned, there may be discussion between the developer(s)
@@ -76,7 +76,9 @@ involved, members of the security team, and the original reporter.
 
 ## 4. Author and land a CL on `main`
 
-The developer will author a fix and a regression test for the security issue.
+The developer will author a fix and a regression test for the security issue
+The CL description should mention the bug number in a
+[`Bug:` or `Fixed:` footer](../contributing.md#cl-footer-reference).
 Once the CL lands, it will not yet be widely available to users, since it is
 only in the `main` branch. Unless further steps are taken (see below), the fix
 will roll out as part of the normal [release
@@ -92,7 +94,7 @@ Once the CL has landed, the developer should set the bug's status to *Fixed*.
 When the bug moves into the *Fixed* state, the security team's automation
 systems begin processing the bug report. In particular, the tools will add
 [merge request](../process/merge_request.md) labels, based on the severity and
-impact assessed by the sheriff during triage.
+impact assessed by the shepherd during triage.
 
 ## 6. Assess for backports
 

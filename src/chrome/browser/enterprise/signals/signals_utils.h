@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,6 @@ namespace utils {
 absl::optional<bool> GetThirdPartyBlockingEnabled(PrefService* local_state);
 
 bool GetBuiltInDnsClientEnabled(PrefService* local_state);
-
-absl::optional<bool> GetChromeCleanupEnabled(PrefService* local_state);
 
 absl::optional<safe_browsing::PasswordProtectionTrigger>
 GetPasswordProtectionWarningTrigger(PrefService* profile_prefs);

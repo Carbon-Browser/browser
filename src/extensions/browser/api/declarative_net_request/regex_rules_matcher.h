@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ struct RegexRuleInfo {
   RegexRuleInfo(const RegexRuleInfo& info);
   RegexRuleInfo& operator=(const RegexRuleInfo& info);
   raw_ptr<const flat::RegexRule> regex_rule;
-  raw_ptr<const re2::RE2> regex;
+  raw_ptr<const re2::RE2, DanglingUntriaged> regex;
 };
 
 // RegexRulesMatcher deals with matching of regular expression rules. It is an
@@ -62,17 +62,15 @@ class RegexRulesMatcher final : public RulesetMatcherBase {
   ~RegexRulesMatcher() override;
   std::vector<RequestAction> GetModifyHeadersActions(
       const RequestParams& params,
-      absl::optional<uint64_t> min_priority) const override;
-  bool IsExtraHeadersMatcher() const override {
-    return is_extra_headers_matcher_;
-  }
-  size_t GetRulesCount() const override { return regex_list_->size(); }
+      std::optional<uint64_t> min_priority) const override;
+  bool IsExtraHeadersMatcher() const override;
+  size_t GetRulesCount() const override;
 
  private:
   // RulesetMatcherBase override:
-  absl::optional<RequestAction> GetAllowAllRequestsAction(
+  std::optional<RequestAction> GetAllowAllRequestsAction(
       const RequestParams& params) const override;
-  absl::optional<RequestAction> GetBeforeRequestActionIgnoringAncestors(
+  std::optional<RequestAction> GetBeforeRequestActionIgnoringAncestors(
       const RequestParams& params) const override;
 
   // Helper to build the necessary data structures for matching.
@@ -89,7 +87,7 @@ class RegexRulesMatcher final : public RulesetMatcherBase {
       const RequestParams& params) const;
 
   // Returns a RequestAction for the the given regex substitution rule.
-  absl::optional<RequestAction> CreateRegexSubstitutionRedirectAction(
+  std::optional<RequestAction> CreateRegexSubstitutionRedirectAction(
       const RequestParams& params,
       const RegexRuleInfo& info) const;
 

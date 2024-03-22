@@ -1,11 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {addEntries, ENTRIES, getCaller, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {navigateWithDirectoryTree, openNewWindow, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {openNewWindow, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_ANDROID_ENTRY_SET, BASIC_ANDROID_ENTRY_SET_WITH_HIDDEN, BASIC_DRIVE_ENTRY_SET, BASIC_DRIVE_ENTRY_SET_WITH_HIDDEN, BASIC_LOCAL_ENTRY_SET, BASIC_LOCAL_ENTRY_SET_WITH_HIDDEN, COMPLEX_DOCUMENTS_PROVIDER_ENTRY_SET} from './test_data.js';
 
 /**
@@ -150,8 +151,8 @@ testcase.showToggleHiddenAndroidFoldersGearMenuItemsInMyFiles = async () => {
   await remoteCall.waitForElement(appId, '#gear-menu[hidden]');
 
   // Navigate to Recent.
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, ['span[root-type-icon=\'recent\']']));
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByLabel('Recent');
 
   // Click the gear menu button.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -220,8 +221,8 @@ testcase.hideCurrentDirectoryByTogglingHiddenAndroidFolders = async () => {
       {ignoreFileSize: true, ignoreLastModifiedTime: true});
 
   // Navigate to "/My files/Play files/A".
-  await remoteCall.navigateWithDirectoryTree(
-      appId, '/A', 'My files/Play files', 'android_files');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/My files/Play files/A');
 
   // Wait until current directory is changed to "/My files/Play files/A".
   await remoteCall.waitUntilCurrentDirectoryIsChanged(
@@ -288,8 +289,7 @@ testcase.showPasteIntoCurrentFolder = async () => {
   await remoteCall.waitForElement(appId, '#gear-menu[hidden]');
 
   // 2. Selecting a single regular file
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [ENTRIES.hello.nameText]));
+  await remoteCall.waitUntilSelected(appId, ENTRIES.hello.nameText);
 
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
       'fakeMouseClick', appId, ['#gear-button']));
@@ -307,8 +307,7 @@ testcase.showPasteIntoCurrentFolder = async () => {
   await remoteCall.waitForElement(appId, '#gear-menu[hidden]');
 
   // 3. When ready to paste a file
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'selectFile', appId, [ENTRIES.hello.nameText]));
+  await remoteCall.waitUntilSelected(appId, ENTRIES.hello.nameText);
 
   // Ctrl-C to copy the selected file
   await remoteCall.fakeKeyDown(appId, '#file-list', 'c', true, false, false);
@@ -395,7 +394,8 @@ testcase.newFolderInDownloads = async () => {
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.hello], []);
 
   // Focus the directory tree.
-  await remoteCall.callRemoteTestUtil('focus', appId, ['#directory-tree']);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.focusTree();
 
   // Open the gear menu.
   await remoteCall.waitForElement(appId, '#gear-button');
@@ -413,11 +413,45 @@ testcase.newFolderInDownloads = async () => {
 };
 
 /**
+ * Tests that the "Files settings" button appears in the gear menu and properly
+ * opens the Files section of the Settings page.
+ */
+testcase.showFilesSettingsButton = async () => {
+  const settingsWindowOrigin = 'chrome://os-settings';
+  const filesSettingsWindowURL = 'chrome://os-settings/files';
+
+  // Open Files.App on Downloads and wait for the gear menu button to appear.
+  const appId = await openNewWindow(RootPath.DOWNLOADS);
+  await remoteCall.waitForElement(appId, '#gear-button');
+
+  // Click the gear menu button.
+  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
+      'fakeMouseClick', appId, ['#gear-button']));
+
+  // Wait for the gear menu to appear.
+  await remoteCall.waitForElement(appId, '#gear-menu:not([hidden])');
+
+  // Check that there is no Settings window opened.
+  chrome.test.assertFalse(
+      await remoteCall.windowOriginExists(settingsWindowOrigin));
+
+  // Click #files-settings, which should be shown and enabled.
+  await remoteCall.waitAndClickElement(
+      appId,
+      '#gear-menu:not([hidden]) cr-menu-item' +
+          '[command=\'#files-settings\']' +
+          ':not([disabled]):not([hidden])');
+
+  // Check that the settings window is opened on the Files subpage.
+  await remoteCall.waitForLastOpenedBrowserTabUrl(filesSettingsWindowURL);
+};
+
+/**
  * Tests that the "Send feedback" button appears in the gear menu and properly
  * opens the feedback window.
  */
 testcase.showSendFeedbackAction = async () => {
-  const feedbackWindowUrl = 'chrome://feedback/';
+  const feedbackWindowOrigin = 'chrome://os-feedback';
 
   // Open Files.App on Downloads.
   const appId = await openNewWindow(RootPath.DOWNLOADS);
@@ -434,7 +468,8 @@ testcase.showSendFeedbackAction = async () => {
   await remoteCall.waitForElement(appId, '#gear-menu:not([hidden])');
 
   // Check that there is no feedback window opened.
-  chrome.test.assertFalse(await remoteCall.windowUrlExists(feedbackWindowUrl));
+  chrome.test.assertFalse(
+      await remoteCall.windowOriginExists(feedbackWindowOrigin));
 
   // Click #send-feedback, which should be shown and enabled.
   await remoteCall.waitAndClickElement(
@@ -446,8 +481,8 @@ testcase.showSendFeedbackAction = async () => {
   // Check that the feedback window is open.
   const caller = getCaller();
   return repeatUntil(async () => {
-    if (!await remoteCall.windowUrlExists(feedbackWindowUrl)) {
-      return pending(caller, `Waiting for ${feedbackWindowUrl} to open`);
+    if (!await remoteCall.windowOriginExists(feedbackWindowOrigin)) {
+      return pending(caller, `Waiting for ${feedbackWindowOrigin} to open`);
     }
   });
 };
@@ -526,8 +561,8 @@ testcase.enableDisableStorageSettingsLink = async () => {
   await remoteCall.waitForElement(appId, '#volume-space-info[disabled]');
 
   // Navigate to Android files.
-  await remoteCall.waitAndClickElement(
-      appId, '#directory-tree [entry-label="Play files"]');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByLabel('Play files');
 
   // Click the gear menu button.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -540,8 +575,7 @@ testcase.enableDisableStorageSettingsLink = async () => {
   await sendTestMessage({name: 'mountFakeUsbEmpty'});
 
   // Wait for the USB mount.
-  await remoteCall.waitAndClickElement(
-      appId, '#directory-tree [volume-type-icon="removable"]');
+  await directoryTree.selectItemByType('removable');
 
   // Click the gear menu button.
   chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
@@ -575,10 +609,14 @@ testcase.showAvailableStorageMyFiles = async () => {
 };
 
 /**
- * Tests that the "xGB available message appears in the gear menu for
+ * Tests that the "xGB available" message appears in the gear menu for
  * the "Google Drive" volume.
  */
 testcase.showAvailableStorageDrive = async () => {
+  // Mock the pooled storage quota to have 1 MB available.
+  await remoteCall.setPooledStorageQuotaUsage(
+      1 * 1024 * 1024, 2 * 1024 * 1024, false);
+
   // Open Files app on Drive containing ENTRIES.hello.
   const appId =
       await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.hello]);
@@ -589,17 +627,19 @@ testcase.showAvailableStorageDrive = async () => {
   // Wait for the gear menu to appear.
   await remoteCall.waitForElement(appId, '#gear-menu:not([hidden])');
 
-  // Check #volume-storage is shown and disabled (can't manage Drive
-  // storage).
-  await remoteCall.waitForElement(
+  // Check #volume-storage is displayed and get a reference to it.
+  const driveMenuEntry = await remoteCall.waitForElement(
       appId,
       '#gear-menu:not([hidden]) cr-menu-item' +
           '[command=\'#volume-storage\']' +
           ':not([hidden])');
+
+  // Check that it correctly indicates the available storage.
+  chrome.test.assertTrue(driveMenuEntry.text.trim() === '1 MB available');
 };
 
 /**
- * Tests that the "xGB available message appears in the gear menu for
+ * Tests that the "xGB available" message appears in the gear menu for
  * an SMB volume.
  */
 testcase.showAvailableStorageSmbfs = async () => {
@@ -613,7 +653,8 @@ testcase.showAvailableStorageSmbfs = async () => {
   const appId =
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.photos], []);
 
-  await navigateWithDirectoryTree(appId, '/SMB Share');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/SMB Share');
 
   // Wait for the volume's file list to appear.
   const files = TestEntryInfo.getExpectedRows(BASIC_LOCAL_ENTRY_SET);
@@ -639,8 +680,7 @@ testcase.showAvailableStorageSmbfs = async () => {
  * the DocumentsProvider volume.
  */
 testcase.showAvailableStorageDocProvider = async () => {
-  const documentsProviderVolumeQuery =
-      '[has-children="true"] [volume-type-icon="documents_provider"]';
+  const documentsProviderVolumeType = 'documents_provider';
 
   // Add files to the DocumentsProvider volume.
   await addEntries(
@@ -650,13 +690,12 @@ testcase.showAvailableStorageDocProvider = async () => {
   const appId = await openNewWindow(RootPath.DOWNLOADS);
 
   // Wait for the DocumentsProvider volume to mount.
-  await remoteCall.waitForElement(appId, documentsProviderVolumeQuery);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForItemToHaveChildrenByType(
+      documentsProviderVolumeType, /* hasChildren= */ true);
 
   // Click to open the DocumentsProvider volume.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId, [documentsProviderVolumeQuery]),
-      'fakeMouseClick failed');
+  await directoryTree.selectItemByType(documentsProviderVolumeType);
 
   // Check: the DocumentsProvider files should appear in the file list.
   const files =
@@ -710,7 +749,8 @@ testcase.showManageMirrorSyncShowsOnlyInLocalRoot = async () => {
           '[command=\'#manage-mirrorsync\']:not([disabled][hidden])');
 
   // Navigate to the Google Drive root.
-  await navigateWithDirectoryTree(appId, '/My Drive');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/My Drive');
 
   // Wait for the gear menu button to appear and click it.
   await remoteCall.waitAndClickElement(appId, '#gear-button');

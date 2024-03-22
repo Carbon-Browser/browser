@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,8 @@
 #include "ash/public/cpp/tablet_mode.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -82,7 +83,8 @@ class AppListKeyboardControllerTest : public AshTestBase,
   }
 
  private:
-  AppListTestHelper* app_list_test_helper_ = nullptr;
+  raw_ptr<AppListTestHelper, DanglingUntriaged | ExperimentalAsh>
+      app_list_test_helper_ = nullptr;
 };
 
 INSTANTIATE_TEST_SUITE_P(IsInTabletMode,

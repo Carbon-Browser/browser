@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,21 +10,25 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/reload_type.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/site_instance.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/referrer.h"
 #include "services/network/public/cpp/resource_request_body.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
+#include "third_party/blink/public/mojom/navigation/system_entropy.mojom.h"
 #include "third_party/blink/public/mojom/navigation/was_activated_option.mojom.h"
+#include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/gfx/geometry/rect.h"
@@ -112,6 +116,10 @@ struct NavigateParams {
   // The origin of the initiator of the navigation.
   absl::optional<url::Origin> initiator_origin;
 
+  // The base url of the initiator of the navigation. This is only set if the
+  // url is about:blank or about:srcdoc.
+  absl::optional<GURL> initiator_base_url;
+
   // The frame name to be used for the main frame.
   std::string frame_name;
 
@@ -140,7 +148,8 @@ struct NavigateParams {
 
   // Input parameter.
   // Only used by Singleton tabs. Causes a tab-switch in addition to navigation.
-  raw_ptr<content::WebContents> switch_to_singleton_tab = nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
+      switch_to_singleton_tab = nullptr;
 
   // Output parameter.
   // The WebContents in which the navigation occurred or that was inserted.
@@ -150,7 +159,11 @@ struct NavigateParams {
   // new WebContents, this field will remain NULL and the WebContents deleted if
   // the WebContents it created is not added to a TabStripModel before
   // Navigate() returns.
-  content::WebContents* navigated_or_inserted_contents = nullptr;
+  //
+  // This field is not a raw_ptr<> because of missing |.get()| in not-rewritten
+  // platform specific code.
+  RAW_PTR_EXCLUSION content::WebContents* navigated_or_inserted_contents =
+      nullptr;
 
   // [in]  The WebContents that initiated the Navigate() request if such
   //       context is necessary. Default is NULL, i.e. no context.
@@ -159,7 +172,8 @@ struct NavigateParams {
   //       Navigate(). However, if the originating page is from a different
   //       profile (e.g. an OFF_THE_RECORD page originating from a non-OTR
   //       window), then |source_contents| is reset to NULL.
-  raw_ptr<content::WebContents> source_contents = nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> source_contents =
+      nullptr;
 
   // The disposition requested by the navigation source. Default is
   // CURRENT_TAB. What follows is a set of coercions that happen to this value
@@ -171,10 +185,10 @@ struct NavigateParams {
   // NEW_BACKGROUND_TAB   target browser is an app browser  NEW_FOREGROUND_TAB
   // OFF_THE_RECORD       target browser profile is incog.  NEW_FOREGROUND_TAB
   //
-  // If disposition is NEW_BACKGROUND_TAB, TabStripModel::ADD_ACTIVE is
+  // If disposition is NEW_BACKGROUND_TAB, AddTabTypes::ADD_ACTIVE is
   // removed from |tabstrip_add_types| automatically.
   // If disposition is one of NEW_WINDOW, NEW_POPUP, NEW_FOREGROUND_TAB or
-  // SINGLETON_TAB, then TabStripModel::ADD_ACTIVE is automatically added to
+  // SINGLETON_TAB, then AddTabTypes::ADD_ACTIVE is automatically added to
   // |tabstrip_add_types|.
   WindowOpenDisposition disposition = WindowOpenDisposition::CURRENT_TAB;
 
@@ -199,12 +213,8 @@ struct NavigateParams {
   // If non-empty, the new tab is an app tab.
   std::string app_id;
 
-  // If non-empty, specifies the desired initial position and size of the
-  // window if |disposition| == NEW_POPUP.
-  // TODO(beng): Figure out if this can be used to create Browser windows
-  //             for other callsites that use set_override_bounds, or
-  //             remove this comment.
-  gfx::Rect window_bounds;
+  // Specifies the desired window features if `disposition` is NEW_POPUP.
+  blink::mojom::WindowFeatures window_features;
 
   // Determines if and how the target window should be made visible at the end
   // of the call to Navigate().
@@ -227,6 +237,10 @@ struct NavigateParams {
   // Whether the browser is being created for captive portal resolution. If
   // true, |disposition| should be NEW_POPUP.
   bool is_captive_portal_popup = false;
+
+  // Whether the browser popup is being created as a tab modal. If true,
+  // `disposition` should be NEW_POPUP.
+  bool is_tab_modal_popup = false;
 
   // If false then the navigation was not initiated by a user gesture.
   bool user_gesture = true;
@@ -253,7 +267,7 @@ struct NavigateParams {
   //       Navigate(), the caller is responsible for showing it so that its
   //       window can assume responsibility for the Browser's lifetime (Browser
   //       objects are deleted when the user closes a visible browser window).
-  raw_ptr<Browser> browser = nullptr;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser = nullptr;
 
   // The group the caller would like the tab to be added to.
   absl::optional<tab_groups::TabGroupId> group;
@@ -261,7 +275,7 @@ struct NavigateParams {
   // A bitmask of values defined in TabStripModel::AddTabTypes. Helps
   // determine where to insert a new tab and whether or not it should be
   // selected, among other properties.
-  int tabstrip_add_types = TabStripModel::ADD_ACTIVE;
+  int tabstrip_add_types = AddTabTypes::ADD_ACTIVE;
 #endif
 
   // The profile that is initiating the navigation. If there is a non-NULL
@@ -331,10 +345,15 @@ struct NavigateParams {
   // observed and fall back to using http scheme if necessary.
   bool is_using_https_as_default_scheme = false;
 
-  // Indicates the degree of privacy sensitivity for the navigation.
-  // Can be used to drive privacy decisions.
-  enum class PrivacySensitivity { CROSS_OTR, CROSS_PROFILE, DEFAULT };
-  PrivacySensitivity privacy_sensitivity = PrivacySensitivity::DEFAULT;
+  // True if the navigation was initiated by typing in the omnibox and the typed
+  // text had an explicit http scheme.
+  bool url_typed_with_http_scheme = false;
+
+  // Indicates if the page load occurs during a non-optimal performance state.
+  // This value is only suggested based upon the load context, and can be
+  // overridden by other factors.
+  blink::mojom::SystemEntropy suggested_system_entropy =
+      blink::mojom::SystemEntropy::kNormal;
 
  private:
   NavigateParams();

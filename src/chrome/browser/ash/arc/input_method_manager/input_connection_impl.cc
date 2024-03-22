@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,8 @@
 
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "third_party/abseil-cpp/absl/utility/utility.h"
 #include "ui/base/ime/ash/ime_bridge.h"
 #include "ui/base/ime/ash/ime_keymap.h"
@@ -48,10 +47,9 @@ bool IsControlChar(const std::u16string& text) {
 }
 
 ui::TextInputClient* GetTextInputClient() {
-  ui::IMEBridge* bridge = ui::IMEBridge::Get();
+  ash::IMEBridge* bridge = ash::IMEBridge::Get();
   DCHECK(bridge);
-  ui::IMEInputContextHandlerInterface* handler =
-      bridge->GetInputContextHandler();
+  ash::TextInputTarget* handler = bridge->GetInputContextHandler();
   if (!handler)
     return nullptr;
   ui::TextInputClient* client = handler->GetInputMethod()->GetTextInputClient();
@@ -208,18 +206,27 @@ void InputConnectionImpl::SetComposingText(
 
   StartStateUpdateTimer();
 
-  const int selection_start = new_selection_range
-                                  ? new_selection_range.value().start()
-                                  : new_cursor_pos;
-  const int selection_end =
-      new_selection_range ? new_selection_range.value().end() : new_cursor_pos;
-
   ui::TextInputClient* client = GetTextInputClient();
   if (!client)
     return;
 
-  gfx::Range selection_range;
+  // Calculate the position of composition insertion point
+  gfx::Range selection_range, composition_range;
   client->GetEditableSelectionRange(&selection_range);
+  client->GetCompositionTextRange(&composition_range);
+
+  const int insertion_point = composition_range.is_empty()
+                                  ? selection_range.start()
+                                  : composition_range.start();
+
+  const int selection_start =
+      new_selection_range
+          ? new_selection_range.value().start() - insertion_point
+          : new_cursor_pos;
+  const int selection_end =
+      new_selection_range ? new_selection_range.value().end() - insertion_point
+                          : new_cursor_pos;
+
   if (text.empty() &&
       selection_range.start() == static_cast<uint32_t>(selection_start) &&
       selection_range.end() == static_cast<uint32_t>(selection_end)) {
@@ -234,7 +241,7 @@ void InputConnectionImpl::SetComposingText(
           selection_end, new_cursor_pos,
           std::vector<ash::input_method::InputMethodEngine::SegmentInfo>(),
           &error)) {
-    LOG(ERROR) << "SetComposingText failed: pos=" << new_cursor_pos
+    LOG(ERROR) << "SetComposition failed: pos=" << new_cursor_pos
                << ", error=\"" << error << "\"";
     return;
   }
@@ -286,8 +293,6 @@ void InputConnectionImpl::SetCompositionRange(
 
   StartStateUpdateTimer();
 
-  const int before = selection_range.start() - new_composition_range.start();
-  const int after = new_composition_range.end() - selection_range.end();
   ash::input_method::InputMethodEngine::SegmentInfo segment_info;
   segment_info.start = 0;
   segment_info.end = new_composition_range.length();
@@ -295,9 +300,10 @@ void InputConnectionImpl::SetCompositionRange(
       ash::input_method::InputMethodEngine::SEGMENT_STYLE_UNDERLINE;
 
   std::string error;
-  if (!ime_engine_->ash::input_method::InputMethodEngine::SetCompositionRange(
-          input_context_id_, before, after, {segment_info}, &error)) {
-    LOG(ERROR) << "SetCompositionRange failed: range="
+  if (!ime_engine_->ash::input_method::InputMethodEngine::SetComposingRange(
+          input_context_id_, new_composition_range.start(),
+          new_composition_range.end(), {segment_info}, &error)) {
+    LOG(ERROR) << "SetComposingRange failed: range="
                << new_composition_range.ToString() << ", error=\"" << error
                << "\"";
   }

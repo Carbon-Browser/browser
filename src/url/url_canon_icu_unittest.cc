@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class UConvScoper {
 
   ~UConvScoper() {
     if (converter_)
-      ucnv_close(converter_);
+      ucnv_close(converter_.ExtractAsDangling());
   }
 
   // Returns the converter object, may be NULL.
@@ -92,7 +92,7 @@ TEST(URLCanonIcuTest, ICUCharsetConverter) {
     RawCanonOutput<static_size> output;
     converter.ConvertFromUTF16(input.c_str(), static_cast<int>(input.length()),
                                &output);
-    EXPECT_EQ(input.length(), static_cast<size_t>(output.length()));
+    EXPECT_EQ(input.length(), output.length());
   }
 }
 

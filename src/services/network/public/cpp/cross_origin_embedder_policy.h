@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ struct COMPONENT_EXPORT(NETWORK_CPP_CROSS_ORIGIN)
   ~CrossOriginEmbedderPolicy();
   CrossOriginEmbedderPolicy(const CrossOriginEmbedderPolicy&);
   CrossOriginEmbedderPolicy(CrossOriginEmbedderPolicy&&);
+  explicit CrossOriginEmbedderPolicy(mojom::CrossOriginEmbedderPolicyValue);
   CrossOriginEmbedderPolicy& operator=(const CrossOriginEmbedderPolicy&);
   CrossOriginEmbedderPolicy& operator=(CrossOriginEmbedderPolicy&&);
   bool operator==(const CrossOriginEmbedderPolicy&) const;

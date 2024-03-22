@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/input_method/native_input_method_engine.h"
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
-#include "base/guid.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -19,7 +19,6 @@
 #include "chrome/browser/ash/input_method/stub_input_method_engine_observer.h"
 #include "chrome/browser/ash/input_method/suggestion_enums.h"
 #include "chrome/browser/ash/input_method/textinput_test_helper.h"
-#include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -30,18 +29,16 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
-#include "components/autofill/core/browser/personal_data_manager_observer.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/ime/ash/ime_bridge.h"
-#include "ui/base/ime/ash/ime_engine_handler_interface.h"
 #include "ui/base/ime/ash/input_method_ash.h"
 #include "ui/base/ime/ash/mock_ime_input_context_handler.h"
+#include "ui/base/ime/ash/text_input_method.h"
 #include "ui/base/ime/dummy_text_input_client.h"
-#include "ui/base/ime/input_method_delegate.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/base/ime/text_input_flags.h"
 #include "ui/events/event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
@@ -49,6 +46,7 @@
 
 namespace ash {
 namespace input_method {
+
 namespace {
 
 constexpr char kEmojiData[] = "happy,😀;😃;😄";
@@ -60,11 +58,10 @@ class TestObserver : public StubInputMethodEngineObserver {
   TestObserver(const TestObserver&) = delete;
   TestObserver& operator=(const TestObserver&) = delete;
 
-  void OnKeyEvent(
-      const std::string& engine_id,
-      const ui::KeyEvent& event,
-      ui::IMEEngineHandlerInterface::KeyEventDoneCallback callback) override {
-    std::move(callback).Run(/*handled=*/false);
+  void OnKeyEvent(const std::string& engine_id,
+                  const ui::KeyEvent& event,
+                  TextInputMethod::KeyEventDoneCallback callback) override {
+    std::move(callback).Run(ui::ime::KeyEventHandledState::kNotHandled);
   }
   void OnInputMethodOptionsChanged(const std::string& engine_id) override {
     changed_engine_id_ = engine_id;
@@ -76,36 +73,16 @@ class TestObserver : public StubInputMethodEngineObserver {
   std::string changed_engine_id_;
 };
 
-class TestPersonalDataManagerObserver
-    : public autofill::PersonalDataManagerObserver {
- public:
-  explicit TestPersonalDataManagerObserver(Profile* profile) {
-    observed_personal_data_manager_.Observe(
-        autofill::PersonalDataManagerFactory::GetForProfile(profile));
-  }
-  ~TestPersonalDataManagerObserver() override = default;
-
-  // Waits for the PersonalDataManager's list of profiles to be updated.
-  void Wait() { run_loop_.Run(); }
-
-  // PersonalDataManagerObserver:
-  void OnPersonalDataChanged() override { run_loop_.Quit(); }
-
- private:
-  base::RunLoop run_loop_;
-  base::ScopedObservation<autofill::PersonalDataManager,
-                          autofill::PersonalDataManagerObserver>
-      observed_personal_data_manager_{this};
-};
-
 class KeyProcessingWaiter {
  public:
-  ui::IMEEngineHandlerInterface::KeyEventDoneCallback CreateCallback() {
+  TextInputMethod::KeyEventDoneCallback CreateCallback() {
     return base::BindOnce(&KeyProcessingWaiter::OnKeyEventDone,
                           base::Unretained(this));
   }
 
-  void OnKeyEventDone(bool consumed) { run_loop_.Quit(); }
+  void OnKeyEventDone(ui::ime::KeyEventHandledState handled_state) {
+    run_loop_.Quit();
+  }
 
   void Wait() { run_loop_.Run(); }
 
@@ -121,14 +98,11 @@ class KeyProcessingWaiter {
 // TODO(crbug/1197005): Migrate all these to unit tests.
 class NativeInputMethodEngineWithoutImeServiceTest
     : public InProcessBrowserTest,
-      public ui::internal::InputMethodDelegate {
+      public ui::ImeKeyEventDispatcher {
  public:
   NativeInputMethodEngineWithoutImeServiceTest() : input_method_(this) {
     feature_list_.InitWithFeatures(
-        /*enabled_features=*/{features::kAssistPersonalInfo,
-                              features::kAssistPersonalInfoEmail,
-                              features::kAssistPersonalInfoName,
-                              features::kMultilingualTyping,
+        /*enabled_features=*/{features::kMultilingualTyping,
                               features::kOnDeviceGrammarCheck},
         /*disabled_features=*/{});
   }
@@ -143,8 +117,8 @@ class NativeInputMethodEngineWithoutImeServiceTest
     // so just avoid it outright instead of relying on implicit luck.
     engine_ =
         NativeInputMethodEngine::CreateForTesting(/*use_ime_service=*/false);
-    ui::IMEBridge::Get()->SetInputContextHandler(&input_method_);
-    ui::IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
+    IMEBridge::Get()->SetInputContextHandler(&input_method_);
+    IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
 
     auto observer = std::make_unique<TestObserver>();
     observer_ = observer.get();
@@ -152,7 +126,7 @@ class NativeInputMethodEngineWithoutImeServiceTest
     profile_ = browser()->profile();
     prefs_ = profile_->GetPrefs();
     prefs_->Set(::prefs::kLanguageInputMethodSpecificSettings,
-                base::DictionaryValue());
+                base::Value(base::Value::Type::DICT));
     engine_->Initialize(std::move(observer), /*extension_id=*/"", profile_);
     engine_->get_assistive_suggester_for_testing()
         ->get_emoji_suggester_for_testing()
@@ -170,8 +144,8 @@ class NativeInputMethodEngineWithoutImeServiceTest
     // observes ChromeKeyboardControllerClient, which is tied to the browser
     // lifetime.
     engine_.reset();
-    ui::IMEBridge::Get()->SetInputContextHandler(nullptr);
-    ui::IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
+    IMEBridge::Get()->SetInputContextHandler(nullptr);
+    IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
     InProcessBrowserTest::TearDownOnMainThread();
   }
 
@@ -191,7 +165,7 @@ class NativeInputMethodEngineWithoutImeServiceTest
     SetFocus(helper.GetTextInputClient());
   }
 
-  // Overridden from ui::internal::InputMethodDelegate:
+  // Overridden from ui::ImeKeyEventDispatcher:
   ui::EventDispatchDetails DispatchKeyEventPostIME(
       ui::KeyEvent* event) override {
     return ui::EventDispatchDetails();
@@ -229,12 +203,12 @@ class NativeInputMethodEngineWithoutImeServiceTest
   }
 
   std::unique_ptr<NativeInputMethodEngine> engine_;
-  Profile* profile_;
-  PrefService* prefs_;
-  TestObserver* observer_;
+  raw_ptr<Profile, DanglingUntriaged | ExperimentalAsh> profile_;
+  raw_ptr<PrefService, DanglingUntriaged | ExperimentalAsh> prefs_;
+  raw_ptr<TestObserver, DanglingUntriaged | ExperimentalAsh> observer_;
 
  private:
-  ui::InputMethodAsh input_method_;
+  InputMethodAsh input_method_;
   base::test::ScopedFeatureList feature_list_;
 };
 
@@ -242,236 +216,6 @@ class NativeInputMethodEngineWithoutImeServiceTest
 constexpr char kEngineIdUs[] = "xkb:us::eng";
 
 }  // namespace
-
-IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
-                       SuggestUserEmail) {
-  base::HistogramTester histogram_tester;
-
-  signin::IdentityManager* identity_manager =
-      IdentityManagerFactory::GetForProfileIfExists(profile_);
-  signin::SetPrimaryAccount(identity_manager, "johnwayne@me.xyz",
-                            signin::ConsentLevel::kSync);
-
-  engine_->Enable(kEngineIdUs);
-
-  TextInputTestHelper helper(GetBrowserInputMethod());
-  SetUpTextInput(helper);
-
-  const std::u16string prefix_text = u"my email is ";
-  const std::u16string expected_result_text = u"my email is johnwayne@me.xyz";
-
-  helper.GetTextInputClient()->InsertText(
-      prefix_text,
-      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
-  helper.WaitForSurroundingTextChanged(prefix_text);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Match",
-                                      AssistiveType::kPersonalEmail, 1);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Coverage",
-                                      AssistiveType::kPersonalEmail, 1);
-
-  DispatchKeyPress(ui::VKEY_DOWN, false);
-  DispatchKeyPress(ui::VKEY_RETURN, false);
-  helper.WaitForSurroundingTextChanged(expected_result_text);
-
-  EXPECT_EQ(expected_result_text, helper.GetSurroundingText());
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Success",
-                                      AssistiveType::kPersonalEmail, 1);
-
-  SetFocus(nullptr);
-}
-
-IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
-                       DoesntSuggestWhenTheCursorIsWithinGrammarError) {
-  ui::MockIMEInputContextHandler mock_ime_input_context_handler;
-  ui::IMEBridge::Get()->SetInputContextHandler(&mock_ime_input_context_handler);
-
-  base::HistogramTester histogram_tester;
-
-  signin::IdentityManager* identity_manager =
-      IdentityManagerFactory::GetForProfileIfExists(profile_);
-  signin::SetPrimaryAccount(identity_manager, "johnwayne@me.xyz",
-                            signin::ConsentLevel::kSync);
-
-  engine_->Enable(kEngineIdUs);
-
-  TextInputTestHelper helper(GetBrowserInputMethod());
-  SetUpTextInput(helper);
-
-  const std::u16string text = u"my email is  Peter";
-
-  helper.GetTextInputClient()->InsertText(
-      text,
-      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
-  mock_ime_input_context_handler.AddGrammarFragments(
-      {ui::GrammarFragment(gfx::Range(0, 16), "test")});
-  helper.GetTextInputClient()->SetEditableSelectionRange(gfx::Range(12, 12));
-  helper.WaitForSurroundingTextChanged(text);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Match",
-                                      AssistiveType::kPersonalEmail, 1);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Coverage",
-                                      AssistiveType::kPersonalEmail, 0);
-  SetFocus(nullptr);
-}
-
-IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
-                       SuggestsWhenTheCursorIsOutsideGrammarError) {
-  ui::MockIMEInputContextHandler mock_ime_input_context_handler;
-  ui::IMEBridge::Get()->SetInputContextHandler(&mock_ime_input_context_handler);
-
-  mock_ime_input_context_handler.AddGrammarFragments(
-      {ui::GrammarFragment(gfx::Range(0, 5), "test")});
-
-  base::HistogramTester histogram_tester;
-
-  signin::IdentityManager* identity_manager =
-      IdentityManagerFactory::GetForProfileIfExists(profile_);
-  signin::SetPrimaryAccount(identity_manager, "johnwayne@me.xyz",
-                            signin::ConsentLevel::kSync);
-
-  engine_->Enable(kEngineIdUs);
-
-  TextInputTestHelper helper(GetBrowserInputMethod());
-  SetUpTextInput(helper);
-
-  const std::u16string text = u"my email is  Peter";
-
-  helper.GetTextInputClient()->InsertText(
-      text,
-      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
-  helper.GetTextInputClient()->SetEditableSelectionRange(gfx::Range(12, 12));
-  helper.WaitForSurroundingTextChanged(text);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Match",
-                                      AssistiveType::kPersonalEmail, 1);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Coverage",
-                                      AssistiveType::kPersonalEmail, 1);
-  SetFocus(nullptr);
-}
-
-IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
-                       DismissPersonalInfoSuggestion) {
-  base::HistogramTester histogram_tester;
-
-  signin::IdentityManager* identity_manager =
-      IdentityManagerFactory::GetForProfileIfExists(profile_);
-  signin::SetPrimaryAccount(identity_manager, "johnwayne@me.xyz",
-                            signin::ConsentLevel::kSync);
-
-  engine_->Enable(kEngineIdUs);
-
-  TextInputTestHelper helper(GetBrowserInputMethod());
-  SetUpTextInput(helper);
-
-  const std::u16string prefix_text = u"my email is ";
-  const std::u16string expected_result_text = u"my email is john@abc.com";
-
-  helper.GetTextInputClient()->InsertText(
-      prefix_text,
-      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
-  helper.WaitForSurroundingTextChanged(prefix_text);
-
-  DispatchKeyPress(ui::VKEY_ESCAPE, false);
-  // This down and enter should make no effect.
-  DispatchKeyPress(ui::VKEY_DOWN, false);
-  DispatchKeyPress(ui::VKEY_RETURN, false);
-  helper.GetTextInputClient()->InsertText(
-      u"john@abc.com",
-      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
-  helper.WaitForSurroundingTextChanged(expected_result_text);
-
-  EXPECT_EQ(expected_result_text, helper.GetSurroundingText());
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Success",
-                                      AssistiveType::kPersonalEmail, 0);
-
-  SetFocus(nullptr);
-}
-
-IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
-                       SuggestUserName) {
-  base::HistogramTester histogram_tester;
-
-  TestPersonalDataManagerObserver personal_data_observer(profile_);
-  autofill::AutofillProfile autofill_profile(base::GenerateGUID(),
-                                             autofill::test::kEmptyOrigin);
-  autofill_profile.SetRawInfo(autofill::ServerFieldType::NAME_FULL,
-                              u"John Wayne");
-  autofill::PersonalDataManagerFactory::GetForProfile(profile_)->AddProfile(
-      autofill_profile);
-  personal_data_observer.Wait();
-
-  engine_->Enable(kEngineIdUs);
-
-  TextInputTestHelper helper(GetBrowserInputMethod());
-  SetUpTextInput(helper);
-
-  const std::u16string prefix_text = u"my name is ";
-  const std::u16string expected_result_text = u"my name is John Wayne";
-
-  helper.GetTextInputClient()->InsertText(
-      prefix_text,
-      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
-  helper.WaitForSurroundingTextChanged(prefix_text);
-  histogram_tester.ExpectUniqueSample(
-      "InputMethod.Assistive.Disabled.PersonalInfo", DisabledReason::kNone, 1);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Match",
-                                      AssistiveType::kPersonalName, 1);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Coverage",
-                                      AssistiveType::kPersonalName, 1);
-
-  // Keep typing
-  helper.GetTextInputClient()->InsertText(
-      u"jo",
-      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
-  helper.WaitForSurroundingTextChanged(u"my name is jo");
-
-  DispatchKeyPress(ui::VKEY_DOWN, false);
-  DispatchKeyPress(ui::VKEY_RETURN, false);
-  helper.WaitForSurroundingTextChanged(expected_result_text);
-
-  EXPECT_EQ(expected_result_text, helper.GetSurroundingText());
-
-  // Make sure we do not emit multiple Coverage metrics when users keep typing.
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Coverage",
-                                      AssistiveType::kPersonalName, 1);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.Success",
-                                      AssistiveType::kPersonalName, 1);
-
-  SetFocus(nullptr);
-}
-
-IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
-                       PersonalInfoDisabledReasonkUserSettingsOff) {
-  base::HistogramTester histogram_tester;
-  prefs_->SetBoolean(prefs::kAssistPersonalInfoEnabled, false);
-
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL(chrome::kChromeUINewTabURL)));
-  ui_test_utils::SendToOmniboxAndSubmit(browser(), "my name is ");
-
-  histogram_tester.ExpectUniqueSample(
-      "InputMethod.Assistive.Disabled.PersonalInfo",
-      DisabledReason::kUserSettingsOff, 1);
-}
-
-IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
-                       PersonalInfoDisabledReasonkUrlOrAppNotAllowed) {
-  base::HistogramTester histogram_tester;
-
-  histogram_tester.ExpectUniqueSample(
-      "InputMethod.Assistive.Disabled.PersonalInfo",
-      DisabledReason::kUrlOrAppNotAllowed, 0);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.NotAllowed",
-                                      AssistiveType::kPersonalName, 0);
-
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL(chrome::kChromeUINewTabURL)));
-  ui_test_utils::SendToOmniboxAndSubmit(browser(), "my name is ");
-
-  histogram_tester.ExpectUniqueSample(
-      "InputMethod.Assistive.Disabled.PersonalInfo",
-      DisabledReason::kUrlOrAppNotAllowed, 1);
-  histogram_tester.ExpectUniqueSample("InputMethod.Assistive.NotAllowed",
-                                      AssistiveType::kPersonalName, 1);
-}
 
 IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
                        SuggestEmoji) {
@@ -571,7 +315,7 @@ IN_PROC_BROWSER_TEST_F(
   base::UserActionTester user_action_tester;
   ui::ime::AssistiveWindowButton button;
   button.id = ui::ime::ButtonId::kLearnMore;
-  button.window_type = ui::ime::AssistiveWindowType::kEmojiSuggestion;
+  button.window_type = ash::ime::AssistiveWindowType::kEmojiSuggestion;
 
   engine_->AssistiveWindowButtonClicked(button);
 
@@ -579,38 +323,29 @@ IN_PROC_BROWSER_TEST_F(
                    "ChromeOS.Settings.SmartInputs.EmojiSuggestions.Open"));
 }
 
-IN_PROC_BROWSER_TEST_F(
-    NativeInputMethodEngineWithoutImeServiceTest,
-    OnSettingLinkButtonClickedOpensPersonalInfoSuggestionSettingsPage) {
-  base::UserActionTester user_action_tester;
-  ui::ime::AssistiveWindowButton button;
-  button.id = ui::ime::ButtonId::kSmartInputsSettingLink;
-
-  engine_->AssistiveWindowButtonClicked(button);
-
-  EXPECT_EQ(1,
-            user_action_tester.GetActionCount(
-                "ChromeOS.Settings.SmartInputs.PersonalInfoSuggestions.Open"));
-}
-
 IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
                        FiresOnInputMethodOptionsChangedEvent) {
-  base::DictionaryValue settings;
-
-  // Add key will trigger event.
-  base::Value pinyin1(base::Value::Type::DICTIONARY);
-  pinyin1.SetBoolKey("foo", true);
-  settings.SetPath("pinyin", std::move(pinyin1));
-  prefs_->Set(::prefs::kLanguageInputMethodSpecificSettings, settings);
-  EXPECT_EQ(observer_->changed_engine_id(), "pinyin");
-  observer_->ClearChangedEngineId();
-
-  // Change key will trigger event.
-  base::Value pinyin2(base::Value::Type::DICTIONARY);
-  pinyin2.SetBoolKey("foo", false);
-  settings.SetPath("pinyin", std::move(pinyin2));
-  prefs_->Set(::prefs::kLanguageInputMethodSpecificSettings, settings);
-  EXPECT_EQ(observer_->changed_engine_id(), "pinyin");
+  {
+    base::Value::Dict settings;
+    // Add key will trigger event.
+    base::Value::Dict pinyin1;
+    pinyin1.Set("foo", true);
+    settings.SetByDottedPath("pinyin", std::move(pinyin1));
+    prefs_->Set(::prefs::kLanguageInputMethodSpecificSettings,
+                base::Value(std::move(settings)));
+    EXPECT_EQ(observer_->changed_engine_id(), "pinyin");
+    observer_->ClearChangedEngineId();
+  }
+  {
+    base::Value::Dict settings;
+    // Change key will trigger event.
+    base::Value::Dict pinyin2;
+    pinyin2.Set("foo", false);
+    settings.SetByDottedPath("pinyin", std::move(pinyin2));
+    prefs_->Set(::prefs::kLanguageInputMethodSpecificSettings,
+                base::Value(std::move(settings)));
+    EXPECT_EQ(observer_->changed_engine_id(), "pinyin");
+  }
 }
 
 IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
@@ -623,37 +358,35 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
 IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
                        HighlightsOnAutocorrectThenDismissesHighlight) {
   engine_->Enable(kEngineIdUs);
+  TextInputTestHelper helper(GetBrowserInputMethod());
   ui::DummyTextInputClient text_input_client(ui::TEXT_INPUT_TYPE_TEXT);
   SetFocus(&text_input_client);
-  // Input the corrected word.
-  DispatchKeyPresses(
-      {
-          ui::VKEY_C,
-          ui::VKEY_O,
-          ui::VKEY_R,
-          ui::VKEY_R,
-          ui::VKEY_E,
-          ui::VKEY_C,
-          ui::VKEY_T,
-          ui::VKEY_E,
-          ui::VKEY_D,
-      },
-      false);
 
   engine_->OnAutocorrect(u"typed", u"corrected", 0);
 
-  EXPECT_FALSE(engine_->GetAutocorrectRange().is_empty());
+  // Input the corrected word.
+  helper.GetTextInputClient()->InsertText(
+      u"corrected ",
+      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
 
-  DispatchKeyPress(ui::KeyboardCode::VKEY_A, false);
-  DispatchKeyPress(ui::KeyboardCode::VKEY_A, false);
-  DispatchKeyPress(ui::KeyboardCode::VKEY_A, false);
+  helper.WaitForSurroundingTextChanged(u"corrected ");
 
-  // Highlighting should only go away after 4 keypresses.
-  EXPECT_FALSE(engine_->GetAutocorrectRange().is_empty());
+  EXPECT_FALSE(text_input_client.GetAutocorrectRange().is_empty());
 
-  DispatchKeyPress(ui::KeyboardCode::VKEY_A, false);
+  helper.GetTextInputClient()->InsertText(
+      u"aa",
+      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
+  helper.WaitForSurroundingTextChanged(u"corrected aa");
 
-  EXPECT_TRUE(engine_->GetAutocorrectRange().is_empty());
+  // Highlighting should only go away after inserting 3 characters.
+  EXPECT_FALSE(text_input_client.GetAutocorrectRange().is_empty());
+
+  helper.GetTextInputClient()->InsertText(
+      u"a",
+      ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
+  helper.WaitForSurroundingTextChanged(u"corrected aaa");
+
+  EXPECT_TRUE(text_input_client.GetAutocorrectRange().is_empty());
 
   SetFocus(nullptr);
 }
@@ -672,7 +405,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
   engine_->OnAutocorrect(u"typed", u"corrected", 0);
 
   auto* controller =
-      ((AssistiveWindowController*)(ui::IMEBridge::Get()
+      ((AssistiveWindowController*)(IMEBridge::Get()
                                         ->GetAssistiveWindowHandler()));
 
   EXPECT_FALSE(controller->GetUndoWindowForTesting());
@@ -698,7 +431,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
       corrected_text,
       ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
   helper.WaitForSurroundingTextChanged(corrected_text);
-  EXPECT_EQ(ui::IMEBridge::Get()
+  EXPECT_EQ(IMEBridge::Get()
                 ->GetInputContextHandler()
                 ->GetSurroundingTextInfo()
                 .surrounding_text,
@@ -718,7 +451,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
 
   helper.WaitForSurroundingTextChanged(typed_text);
 
-  EXPECT_EQ(ui::IMEBridge::Get()
+  EXPECT_EQ(IMEBridge::Get()
                 ->GetInputContextHandler()
                 ->GetSurroundingTextInfo()
                 .surrounding_text,
@@ -739,7 +472,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
       corrected_text,
       ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
   helper.WaitForSurroundingTextChanged(corrected_text);
-  EXPECT_EQ(ui::IMEBridge::Get()
+  EXPECT_EQ(IMEBridge::Get()
                 ->GetInputContextHandler()
                 ->GetSurroundingTextInfo()
                 .surrounding_text,
@@ -758,7 +491,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
 
   helper.WaitForSurroundingTextChanged(typed_text);
 
-  EXPECT_EQ(ui::IMEBridge::Get()
+  EXPECT_EQ(IMEBridge::Get()
                 ->GetInputContextHandler()
                 ->GetSurroundingTextInfo()
                 .surrounding_text,
@@ -780,7 +513,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
       corrected_text,
       ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
   helper.WaitForSurroundingTextChanged(corrected_text);
-  EXPECT_EQ(ui::IMEBridge::Get()
+  EXPECT_EQ(IMEBridge::Get()
                 ->GetInputContextHandler()
                 ->GetSurroundingTextInfo()
                 .surrounding_text,
@@ -845,7 +578,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
   // enabled via above ChangeInputMethod step) is effectively ignored.
   // TODO(crbug/1197005): Migrate to unit tests to avoid all such weirdness.
   engine_->Enable(input_method_id);
-  ui::IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
+  IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
 
   TextInputTestHelper helper(GetBrowserInputMethod());
   SetUpTextInput(helper);
@@ -855,7 +588,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
       corrected_text,
       ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
   helper.WaitForSurroundingTextChanged(corrected_text);
-  EXPECT_EQ(ui::IMEBridge::Get()
+  EXPECT_EQ(IMEBridge::Get()
                 ->GetInputContextHandler()
                 ->GetSurroundingTextInfo()
                 .surrounding_text,
@@ -942,7 +675,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
   // enabled via above ChangeInputMethod step) is effectively ignored.
   // TODO(crbug/1197005): Migrate to unit tests to avoid all such weirdness.
   engine_->Enable(input_method_id);
-  ui::IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
+  IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
 
   TextInputTestHelper helper(GetBrowserInputMethod());
   SetUpTextInput(helper);
@@ -952,7 +685,7 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
       corrected_text,
       ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
   helper.WaitForSurroundingTextChanged(corrected_text);
-  EXPECT_EQ(ui::IMEBridge::Get()
+  EXPECT_EQ(IMEBridge::Get()
                 ->GetInputContextHandler()
                 ->GetSurroundingTextInfo()
                 .surrounding_text,
@@ -1010,69 +743,26 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
 }
 #endif
 
-// These use the browser test framework but tamper with the environment through
-// global singletons, effectively bypassing CrOS IMF "input method management".
-// Test subject is a bespoke NativeInputMethodEngine instance manually attached
-// to the environment, shadowing those created and managed by CrOS IMF (an
-// integral part of the "browser" environment set up by the browser test).
-// TODO(crbug/1197005): Migrate all these to unit tests.
-class NativeInputMethodEngineWithoutImeServiceAssistiveOff
-    : public InProcessBrowserTest {
- public:
-  NativeInputMethodEngineWithoutImeServiceAssistiveOff() {
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{features::kAssistPersonalInfoName},
-        /*disabled_features=*/{features::kAssistPersonalInfo});
-  }
-  ~NativeInputMethodEngineWithoutImeServiceAssistiveOff() override = default;
+IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceTest,
+                       ReplaceSurroundingTextPerformsAtomicInsertText) {
+  engine_->Enable(kEngineIdUs);
 
- protected:
-  void SetUpOnMainThread() override {
-    // Passing |false| for |use_ime_service| so NativeInputMethodEngine won't
-    // launch the IME Service which typically tries to load libimedecoder.so
-    // unsupported in browser tests. None of these tests require the IME Service
-    // so just avoid it outright instead of relying on implicit luck.
-    engine_ =
-        NativeInputMethodEngine::CreateForTesting(/*use_ime_service=*/false);
-    ui::IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
+  TextInputTestHelper helper(GetBrowserInputMethod());
+  SetUpTextInput(helper);
+  content::WebContents* tab =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  ASSERT_TRUE(content::ExecJs(
+      tab, "document.getElementById('text_id').value = 'original'"));
+  ASSERT_TRUE(content::ExecJs(
+      tab, "document.getElementById('text_id').setSelectionRange(4,4)"));
 
-    auto observer = std::make_unique<TestObserver>();
-    observer_ = observer.get();
+  helper.GetTextInputClient()->ExtendSelectionAndReplace(3, 2, u"replaced");
+  helper.WaitForSurroundingTextChanged(u"oreplacedal");
 
-    profile_ = browser()->profile();
-    engine_->Initialize(std::move(observer), "", profile_);
-    InProcessBrowserTest::SetUpOnMainThread();
-  }
+  EXPECT_EQ(helper.GetElementInnerText("text_events", tab),
+            "replaced;insertText;false\n");
 
-  void TearDownOnMainThread() override {
-    // Reset the engine before shutting down the browser because the engine
-    // observes ChromeKeyboardControllerClient, which is tied to the browser
-    // lifetime.
-    engine_.reset();
-    ui::IMEBridge::Get()->SetInputContextHandler(nullptr);
-    ui::IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
-    InProcessBrowserTest::TearDownOnMainThread();
-  }
-
-  std::unique_ptr<NativeInputMethodEngine> engine_;
-  Profile* profile_;
-  TestObserver* observer_;
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithoutImeServiceAssistiveOff,
-                       PersonalInfoSuggestionDisabledReasonkFeatureFlagOff) {
-  base::HistogramTester histogram_tester;
-
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL(chrome::kChromeUINewTabURL)));
-  ui_test_utils::SendToOmniboxAndSubmit(browser(), "my name is ");
-
-  histogram_tester.ExpectUniqueSample(
-      "InputMethod.Assistive.Disabled.PersonalInfo",
-      DisabledReason::kFeatureFlagOff, 1);
+  SetFocus(nullptr);
 }
 
 }  // namespace input_method

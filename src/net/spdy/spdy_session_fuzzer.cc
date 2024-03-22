@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <fuzzer/FuzzedDataProvider.h>
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "net/base/host_port_pair.h"
@@ -40,8 +41,7 @@ class FuzzerDelegate : public net::SpdyStream::Delegate {
   void OnHeadersSent() override {}
   void OnEarlyHintsReceived(const spdy::Http2HeaderBlock& headers) override {}
   void OnHeadersReceived(
-      const spdy::Http2HeaderBlock& response_headers,
-      const spdy::Http2HeaderBlock* pushed_request_headers) override {}
+      const spdy::Http2HeaderBlock& response_headers) override {}
   void OnDataReceived(std::unique_ptr<net::SpdyBuffer> buffer) override {}
   void OnDataSent() override {}
   void OnTrailers(const spdy::Http2HeaderBlock& trailers) override {}
@@ -126,12 +126,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
       net::SpdySessionDependencies::SpdyCreateSessionWithSocketFactory(
           &deps, &socket_factory));
 
-  net::ProxyServer direct_connect(net::ProxyServer::Direct());
-  net::SpdySessionKey session_key(net::HostPortPair("127.0.0.1", 80),
-                                  direct_connect, net::PRIVACY_MODE_DISABLED,
-                                  net::SpdySessionKey::IsProxySession::kFalse,
-                                  net::SocketTag(), net::NetworkIsolationKey(),
-                                  net::SecureDnsPolicy::kAllow);
+  net::ProxyChain direct_connect(net::ProxyChain::Direct());
+  net::SpdySessionKey session_key(
+      net::HostPortPair("127.0.0.1", 80), direct_connect,
+      net::PRIVACY_MODE_DISABLED, net::SpdySessionKey::IsProxySession::kFalse,
+      net::SocketTag(), net::NetworkAnonymizationKey(),
+      net::SecureDnsPolicy::kAllow);
   base::WeakPtr<net::SpdySession> spdy_session(net::CreateSpdySession(
       http_session.get(), session_key, net_log_with_source));
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,7 @@ class ContentPasswordManagerDriverFactoryTestApi {
  public:
   static std::unique_ptr<ContentPasswordManagerDriverFactory> Create(
       content::WebContents* web_contents,
-      PasswordManagerClient* password_manager_client,
-      autofill::AutofillClient* autofill_client);
+      PasswordManagerClient* password_manager_client);
 };
 
 }  // namespace password_manager

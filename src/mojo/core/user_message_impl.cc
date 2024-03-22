@@ -1,10 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "mojo/core/user_message_impl.h"
 
-#include <algorithm>
 #include <atomic>
 #include <vector>
 
@@ -13,6 +12,7 @@
 #include "base/no_destructor.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/numerics/safe_math.h"
+#include "base/ranges/algorithm.h"
 #include "base/trace_event/memory_allocator_dump.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_provider.h"
@@ -503,8 +503,8 @@ MojoResult UserMessageImpl::AppendData(uint32_t additional_payload_size,
     // In order to avoid rather expensive message resizing on every handle
     // attachment operation, we merely lock and prepare the handle for transit
     // here, deferring serialization until |CommitSize()|.
-    std::copy(dispatchers.begin(), dispatchers.end(),
-              std::back_inserter(pending_handle_attachments_));
+    base::ranges::copy(dispatchers,
+                       std::back_inserter(pending_handle_attachments_));
 
     if (additional_payload_size) {
       size_t header_offset =

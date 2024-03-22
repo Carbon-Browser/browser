@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/memory/raw_ptr.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
@@ -141,12 +140,11 @@ class ResponseHeadersCheckingNavigationSimulatorTest
   }
 
   void DidFinishNavigation(content::NavigationHandle* handle) override {
-    if (handle->GetResponseHeaders()) {
-      response_headers_ = handle->GetResponseHeaders();
-    }
+    EXPECT_TRUE(handle->GetResponseHeaders()->HasHeaderValue("My-Test-Header",
+                                                             "my-test-value"));
   }
 
-  raw_ptr<const net::HttpResponseHeaders> response_headers_;
+  scoped_refptr<net::HttpResponseHeaders> response_headers_;
 };
 
 TEST_F(NavigationSimulatorTest, AutoAdvanceOff) {
@@ -216,14 +214,12 @@ TEST_F(ResponseHeadersCheckingNavigationSimulatorTest, CheckResponseHeaders) {
           GURL("https://example.test/"), main_rfh());
   simulator->Start();
 
-  auto response_headers =
+  response_headers_ =
       base::MakeRefCounted<net::HttpResponseHeaders>("HTTP/1.1 200 OK");
-  response_headers->SetHeader("My-Test-Header", "my-test-value");
-  simulator->SetResponseHeaders(response_headers);
+  response_headers_->SetHeader("My-Test-Header", "my-test-value");
+  simulator->SetResponseHeaders(response_headers_);
   simulator->ReadyToCommit();
   simulator->Commit();
-  EXPECT_TRUE(
-      response_headers_->HasHeaderValue("My-Test-Header", "my-test-value"));
 }
 
 // Stress test the navigation simulator by having a navigation throttle cancel

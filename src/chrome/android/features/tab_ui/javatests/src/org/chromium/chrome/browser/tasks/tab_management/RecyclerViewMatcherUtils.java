@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
 
-/**
- * Contains useful RecyclerViewMatcher.
- */
+/** Contains useful RecyclerViewMatcher. */
 public class RecyclerViewMatcherUtils {
     /**
      * This view matcher matches a RecyclerView that has a given number of items in its adapter.

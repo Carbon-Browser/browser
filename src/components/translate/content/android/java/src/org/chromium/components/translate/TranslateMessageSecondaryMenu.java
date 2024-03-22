@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@ import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.ListView;
 
-import org.chromium.components.browser_ui.widget.listmenu.ListMenu;
 import org.chromium.components.translate.TranslateMessage.MenuItem;
 import org.chromium.ui.UiUtils;
+import org.chromium.ui.listmenu.ListMenu;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -31,8 +31,11 @@ class TranslateMessageSecondaryMenu implements ListMenu, OnItemClickListener {
     private final ListView mListView;
     private final List<Runnable> mClickRunnables;
 
-    public TranslateMessageSecondaryMenu(Context context, Handler handler,
-            DataSetObserver dataSetObserver, MenuItem[] menuItems) {
+    public TranslateMessageSecondaryMenu(
+            Context context,
+            Handler handler,
+            DataSetObserver dataSetObserver,
+            MenuItem[] menuItems) {
         mHandler = handler;
         mAdapter = new TranslateMessageSecondaryMenuAdapter(context, menuItems);
         // The dataSetObserver *must* be registered on mAdapter before the call to

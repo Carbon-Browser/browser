@@ -24,6 +24,8 @@
 
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/html_names.h"
+#include "third_party/blink/renderer/core/style/computed_style.h"
+#include "third_party/blink/renderer/platform/fonts/font_description.h"
 
 namespace blink {
 
@@ -34,6 +36,24 @@ HTMLQuoteElement::HTMLQuoteElement(const QualifiedName& tag_name,
          HasTagName(html_names::kBlockquoteTag));
 }
 
+void HTMLQuoteElement::AdjustPseudoStyleLocale(
+    ComputedStyleBuilder& pseudo_style_builder) {
+  // For quote, pseudo elements should use parent locale. We need to change the
+  // pseudo_style before QuoteContentData::CreateLayoutObject, where the
+  // computed style is a const. Having the change here ensures correct pseudo
+  // locale is rendered after style changes.
+  // https://github.com/w3c/csswg-drafts/issues/5478
+  FontDescription font_description = pseudo_style_builder.GetFontDescription();
+  Element* parent = this->ParentOrShadowHostElement();
+  if (parent) {
+    font_description.SetLocale(
+        LayoutLocale::Get(parent->ComputeInheritedLanguage()));
+  } else {
+    font_description.SetLocale(&LayoutLocale::GetDefault());
+  }
+  pseudo_style_builder.SetFontDescription(font_description);
+}
+
 bool HTMLQuoteElement::IsURLAttribute(const Attribute& attribute) const {
   return attribute.GetName() == html_names::kCiteAttr ||
          HTMLElement::IsURLAttribute(attribute);
@@ -42,10 +62,6 @@ bool HTMLQuoteElement::IsURLAttribute(const Attribute& attribute) const {
 bool HTMLQuoteElement::HasLegalLinkAttribute(const QualifiedName& name) const {
   return name == html_names::kCiteAttr ||
          HTMLElement::HasLegalLinkAttribute(name);
-}
-
-const QualifiedName& HTMLQuoteElement::SubResourceAttributeName() const {
-  return html_names::kCiteAttr;
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,8 +71,6 @@ class FailingSSLClientSocket : public SSLClientSocket {
 
   bool WasEverUsed() const override { return false; }
 
-  bool WasAlpnNegotiated() const override { return false; }
-
   NextProto GetNegotiatedProtocol() const override { return kProtoUnknown; }
 
   bool GetSSLInfo(SSLInfo* ssl_info) override { return false; }
@@ -85,9 +83,9 @@ class FailingSSLClientSocket : public SSLClientSocket {
   void ApplySocketTag(const net::SocketTag& tag) override {}
 
   // SSLSocket implementation:
-  int ExportKeyingMaterial(const base::StringPiece& label,
+  int ExportKeyingMaterial(base::StringPiece label,
                            bool has_context,
-                           const base::StringPiece& context,
+                           base::StringPiece context,
                            unsigned char* out,
                            unsigned int outlen) override {
     NOTREACHED();

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,8 @@ void AddEventInfoFromEventMetricsList(
         scroll_update_metrics->predicted_delta(),
         scroll_update_metrics->last_timestamp(),
         type == EventMetrics::EventType::kFirstGestureScrollUpdate
-            ? AverageLagTracker::EventType::ScrollBegin
-            : AverageLagTracker::EventType::ScrollUpdate);
+            ? AverageLagTracker::EventType::kScrollbegin
+            : AverageLagTracker::EventType::kScrollupdate);
   }
 }
 

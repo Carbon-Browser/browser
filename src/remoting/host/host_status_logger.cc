@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/host/host_status_logger.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/base/constants.h"
 #include "remoting/host/host_status_monitor.h"
 #include "remoting/host/server_log_entry_host.h"
@@ -35,8 +35,9 @@ void HostStatusLogger::LogSessionStateChange(const std::string& jid,
   AddHostFieldsToLogEntry(entry.get());
   entry->AddModeField(log_to_server_->mode());
 
-  if (connected && connection_route_type_.count(jid) > 0)
+  if (connected && connection_route_type_.count(jid) > 0) {
     AddConnectionTypeToLogEntry(entry.get(), connection_route_type_[jid]);
+  }
 
   log_to_server_->Log(*entry.get());
 }

@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,6 +7,7 @@ import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/compiler/compiler.gni")
 import("//build/config/nacl/config.gni")
 import("//components/nacl/features.gni")
+import("//components/nacl/toolchain.gni")
 import("//testing/test.gni")
 
 assert(enable_nacl)
@@ -33,6 +34,8 @@ if (current_cpu != "arm64") {
       "//base",
       "//components/nacl/common:minimal",
       "//components/nacl/common:mojo_bindings",
+      "//components/power_monitor",
+      "//content/public/common:main_function_params",
       "//crypto",
       "//ipc",
       "//mojo/core/embedder",
@@ -42,14 +45,6 @@ if (current_cpu != "arm64") {
       "//sandbox",
       "//services/service_manager/public/cpp",
     ]
-
-    if (is_win) {
-      sources += [ "nacl_main_platform_delegate_win.cc" ]
-    }
-
-    if (is_mac) {
-      sources += [ "nacl_main_platform_delegate_mac.mm" ]
-    }
 
     if (is_linux || is_chromeos) {
       sources += [ "nacl_main_platform_delegate_linux.cc" ]
@@ -62,14 +57,9 @@ if (current_cpu != "arm64") {
   # as "minimal" (stuff that should not be in the nacl64.exe build).
   source_set("minimal_content_dummy") {
     check_includes = false
-    sources = [ "//content/public/common/main_function_params.h" ]
 
-    # Deps required by the above headers.
-    deps = [ "//media:media_buildflags" ]
+    sources = []
 
-    if (is_win) {
-      sources += [ "//content/public/common/sandbox_init_win.h" ]
-    }
     if (is_linux || is_chromeos) {
       sources += [ "//content/public/common/zygote/sandbox_support_linux.h" ]
     }
@@ -79,7 +69,6 @@ if (current_cpu != "arm64") {
     public_deps = [ ":minimal" ]
     deps = [
       "//components/nacl/common",
-      "//content/public/common",
       "//ppapi/shared_impl",
       "//services/service_manager/public/cpp",
     ]
@@ -119,7 +108,9 @@ if ((is_linux || is_chromeos) && current_cpu != "arm64") {
       "//base",
       "//components/nacl/common:switches",
       "//components/nacl/loader/sandbox_linux",
-      "//content/public/common",
+      "//content/public/common:content_descriptors",
+      "//content/public/common:main_function_params",
+      "//content/public/common:sandbox_support_linux",
       "//crypto",
       "//ipc",
       "//mojo/core/embedder",
@@ -154,6 +145,22 @@ if ((is_linux || is_chromeos) && current_cpu != "arm64") {
 
     data_deps =
         [ "//native_client/src/trusted/service_runtime/linux:bootstrap" ]
+
+    # In order to build ARM32 nacl_helper for ARM64 Chrome OS, we need to
+    # minimize the dependencies on system libraries, including indirect
+    # dependencies through other parts of Chrome (see
+    # https://crbug.com/1339021).
+    assert_no_deps = [
+      "//content/public/common",
+      "//media/audio",
+    ]
+
+    if (is_minimal_toolchain) {
+      assert_no_deps += [
+        "//net",
+        "//skia",
+      ]
+    }
   }
 
   # For setting up nacl_helper.
@@ -167,8 +174,14 @@ if ((is_linux || is_chromeos) && current_cpu != "arm64") {
 # nacl_helper_bootstrap.  Copy them from the build directory for the
 # ARM32 toolchain.
 if ((is_linux || is_chromeos) && current_cpu == "arm64") {
+  if (default_toolchain == "//build/toolchain/cros:target") {
+    toolchain = "//build/toolchain/cros:nacl_helper_arm32"
+  } else {
+    toolchain = "//build/toolchain/linux:clang_arm"
+  }
+
   copy("nacl_helper") {
-    label = ":nacl_helper(//build/toolchain/linux:clang_arm)"
+    label = ":nacl_helper($toolchain)"
     out_dir = get_label_info(label, "root_out_dir")
     sources = [ "${out_dir}/nacl_helper" ]
     outputs = [ "${root_out_dir}/nacl_helper" ]
@@ -180,32 +193,10 @@ if ((is_linux || is_chromeos) && current_cpu == "arm64") {
   }
 
   copy("nacl_helper_bootstrap") {
-    label = "//native_client/src/trusted/service_runtime/linux:bootstrap(//build/toolchain/linux:clang_arm)"
+    label = "//native_client/src/trusted/service_runtime/linux:bootstrap($toolchain)"
     out_dir = get_label_info(label, "root_out_dir")
     sources = [ "${out_dir}/nacl_helper_bootstrap" ]
     outputs = [ "${root_out_dir}/nacl_helper_bootstrap" ]
     deps = [ label ]
-  }
-}
-
-if (is_win && target_cpu == "x86" && current_cpu == "x64") {
-  source_set("nacl_helper_win_64") {
-    sources = [
-      "nacl_helper_win_64.cc",
-      "nacl_helper_win_64.h",
-    ]
-
-    deps = [
-      ":minimal",
-      ":minimal_content_dummy",
-      "//base",
-      "//components/nacl/broker",
-      "//components/nacl/common:switches",
-      "//content/public/common:static_main_function_params",
-      "//content/public/common:static_switches",
-      "//mojo/core/embedder",
-      "//sandbox",
-      "//sandbox/policy",
-    ]
   }
 }

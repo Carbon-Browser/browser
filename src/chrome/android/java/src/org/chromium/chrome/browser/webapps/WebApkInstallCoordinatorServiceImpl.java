@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,11 @@ public class WebApkInstallCoordinatorServiceImpl extends WebApkInstallCoordinato
     private final IWebApkInstallCoordinatorService.Stub mBinder =
             new IWebApkInstallCoordinatorService.Stub() {
                 @Override
-                public void scheduleInstallAsync(byte[] apkProto, Bitmap primaryIcon,
-                        boolean isPrimaryIconMaskable, IOnFinishInstallCallback callback) {
+                public void scheduleInstallAsync(
+                        byte[] apkProto,
+                        Bitmap primaryIcon,
+                        boolean isPrimaryIconMaskable,
+                        IOnFinishInstallCallback callback) {
                     WebApkInstallCoordinatorBridge bridge = new WebApkInstallCoordinatorBridge();
                     bridge.install(apkProto, primaryIcon, isPrimaryIconMaskable, callback);
                 }

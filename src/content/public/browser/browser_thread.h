@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/browser_task_traits.h"
 
 #if defined(UNIT_TEST)
 #include "base/logging.h"
@@ -23,17 +23,12 @@
 
 namespace content {
 
-// TODO(1026641): Include browser_task_traits.h directly when the migration to
-// Get(UI|IO)ThreadTaskrunner() is complete and the cyclic dependency of
-// browser_task_traits.h on BrowserThread::ID is broken.
-class BrowserTaskTraits;
-
 // Use DCHECK_CURRENTLY_ON(BrowserThread::ID) to assert that a function can only
 // be called on the named BrowserThread.
-#define DCHECK_CURRENTLY_ON(thread_identifier)                      \
-  (DCHECK(::content::BrowserThread::CurrentlyOn(thread_identifier)) \
-   << ::content::BrowserThread::GetDCheckCurrentlyOnErrorMessage(   \
-          thread_identifier))
+#define DCHECK_CURRENTLY_ON(thread_identifier)                       \
+  DCHECK(::content::BrowserThread::CurrentlyOn(thread_identifier))   \
+      << ::content::BrowserThread::GetDCheckCurrentlyOnErrorMessage( \
+             thread_identifier)
 
 // The main entry point to post tasks to the UI thread. Tasks posted with the
 // same |traits| will run in posting order (i.e. according to the
@@ -44,16 +39,12 @@ class BrowserTaskTraits;
 //
 // In unit tests, there must be a content::BrowserTaskEnvironment in scope for
 // this API to be available.
-//
-// TODO(1026641): Make default traits |{}| the default param when it's possible
-// to include browser_task_traits.h in this file (see note above on the
-// BrowserTaskTraits fwd-decl).
 CONTENT_EXPORT scoped_refptr<base::SingleThreadTaskRunner>
-GetUIThreadTaskRunner(const BrowserTaskTraits& traits);
+GetUIThreadTaskRunner(const BrowserTaskTraits& traits = {});
 
 // The BrowserThread::IO counterpart to GetUIThreadTaskRunner().
 CONTENT_EXPORT scoped_refptr<base::SingleThreadTaskRunner>
-GetIOThreadTaskRunner(const BrowserTaskTraits& traits);
+GetIOThreadTaskRunner(const BrowserTaskTraits& traits = {});
 
 ///////////////////////////////////////////////////////////////////////////////
 // BrowserThread

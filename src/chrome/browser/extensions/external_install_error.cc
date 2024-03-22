@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/extensions/extension_install_error_menu_item_id_provider.h"
 #include "chrome/browser/extensions/extension_install_prompt_show_params.h"
 #include "chrome/browser/extensions/extension_service.h"
-#include "chrome/browser/extensions/external_install_error_constants.h"
 #include "chrome/browser/extensions/external_install_manager.h"
 #include "chrome/browser/extensions/webstore_data_fetcher.h"
 #include "chrome/browser/profiles/profile.h"
@@ -32,7 +30,6 @@
 #include "chrome/browser/ui/global_error/global_error_service.h"
 #include "chrome/browser/ui/global_error/global_error_service_factory.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/storage_partition.h"
@@ -64,19 +61,6 @@ std::u16string GetMenuItemLabel(const Extension* extension) {
     id = IDS_EXTENSION_EXTERNAL_INSTALL_ALERT_EXTENSION;
 
   return l10n_util::GetStringFUTF16(id, base::UTF8ToUTF16(extension->name()));
-}
-
-ExternalInstallError::DefaultDialogButtonSetting
-MapDefaultButtonStringToSetting(const std::string& button_setting_string) {
-  if (button_setting_string == kDefaultDialogButtonSettingOk)
-    return ExternalInstallError::DIALOG_BUTTON_OK;
-  if (button_setting_string == kDefaultDialogButtonSettingCancel)
-    return ExternalInstallError::DIALOG_BUTTON_CANCEL;
-  if (button_setting_string == kDefaultDialogButtonSettingNoDefault)
-    return ExternalInstallError::NO_DEFAULT_DIALOG_BUTTON;
-
-  NOTREACHED() << "Unexpected default button string: " << button_setting_string;
-  return ExternalInstallError::NOT_SPECIFIED;
 }
 
 // A global error that spawns a dialog when the menu item is clicked.
@@ -133,7 +117,6 @@ class ExternalInstallBubbleAlert : public GlobalErrorWithStandardBubble {
   std::vector<std::u16string> GetBubbleViewMessages() override;
   std::u16string GetBubbleViewAcceptButtonLabel() override;
   std::u16string GetBubbleViewCancelButtonLabel() override;
-  int GetDefaultDialogButton() const override;
   void OnBubbleViewDidClose(Browser* browser) override;
   void BubbleViewAcceptButtonPressed(Browser* browser) override;
   void BubbleViewCancelButtonPressed(Browser* browser) override;
@@ -191,7 +174,7 @@ void ExternalInstallMenuAlert::ShowBubbleView(Browser* browser) {
 }
 
 GlobalErrorBubbleViewBase* ExternalInstallMenuAlert::GetBubbleView() {
-  return NULL;
+  return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -259,20 +242,6 @@ ExternalInstallBubbleAlert::GetBubbleViewMessages() {
   return messages;
 }
 
-int ExternalInstallBubbleAlert::GetDefaultDialogButton() const {
-  switch (error_->default_dialog_button_setting()) {
-    case ExternalInstallError::DIALOG_BUTTON_OK:
-      return ui::DIALOG_BUTTON_OK;
-    case ExternalInstallError::DIALOG_BUTTON_CANCEL:
-      return ui::DIALOG_BUTTON_CANCEL;
-    case ExternalInstallError::NO_DEFAULT_DIALOG_BUTTON:
-      return ui::DIALOG_BUTTON_NONE;
-    case ExternalInstallError::NOT_SPECIFIED:
-      break;
-  }
-  return GlobalErrorWithStandardBubble::GetDefaultDialogButton();
-}
-
 std::u16string ExternalInstallBubbleAlert::GetBubbleViewAcceptButtonLabel() {
   return prompt_->GetAcceptButtonLabel();
 }
@@ -301,29 +270,6 @@ void ExternalInstallBubbleAlert::BubbleViewCancelButtonPressed(
 
 ////////////////////////////////////////////////////////////////////////////////
 // ExternalInstallError
-
-// static
-ExternalInstallError::DefaultDialogButtonSetting
-ExternalInstallError::GetDefaultDialogButton(
-    const base::Value& webstore_response) {
-  const base::Value* value = webstore_response.FindKeyOfType(
-      kExternalInstallDefaultButtonKey, base::Value::Type::STRING);
-  if (value) {
-    return MapDefaultButtonStringToSetting(value->GetString());
-  }
-
-  if (base::FeatureList::IsEnabled(
-          ::features::kExternalExtensionDefaultButtonControl)) {
-    std::string default_button = base::GetFieldTrialParamValueByFeature(
-        ::features::kExternalExtensionDefaultButtonControl,
-        kExternalInstallDefaultButtonKey);
-    if (!default_button.empty()) {
-      return MapDefaultButtonStringToSetting(default_button);
-    }
-  }
-
-  return NOT_SPECIFIED;
-}
 
 ExternalInstallError::ExternalInstallError(
     content::BrowserContext* browser_context,
@@ -364,18 +310,22 @@ void ExternalInstallError::OnInstallPromptDone(
   // If the error isn't removed and deleted as part of handling the user's
   // response (which can happen, e.g., if an uninstall fails), be sure to remove
   // the error directly in order to ensure it's not called twice.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&ExternalInstallError::RemoveError,
                                 weak_factory_.GetWeakPtr()));
 
   switch (payload.result) {
     case ExtensionInstallPrompt::Result::ACCEPTED:
-    case ExtensionInstallPrompt::Result::ACCEPTED_AND_OPTION_CHECKED:
       if (extension) {
         ExtensionSystem::Get(browser_context_)
             ->extension_service()
             ->GrantPermissionsAndEnableExtension(extension);
       }
+      break;
+    case ExtensionInstallPrompt::Result::ACCEPTED_WITH_WITHHELD_PERMISSIONS:
+      // TODO(crbug.com/984069): Handle `ACCEPTED_WITH_WITHHELD_PERMISSIONS`
+      // when it is supported for external installs.
+      NOTREACHED();
       break;
     case ExtensionInstallPrompt::Result::USER_CANCELED:
       if (extension) {
@@ -405,7 +355,7 @@ void ExternalInstallError::ShowDialog(Browser* browser) {
   DCHECK(install_ui_.get());
   DCHECK(prompt_.get());
   DCHECK(browser);
-  content::WebContents* web_contents = NULL;
+  content::WebContents* web_contents = nullptr;
   web_contents = browser->tab_strip_model()->GetActiveWebContents();
   manager_->DidChangeInstallAlertVisibility(this, true);
   ExtensionInstallPrompt::GetDefaultShowDialogCallback().Run(
@@ -427,26 +377,24 @@ void ExternalInstallError::OnWebstoreRequestFailure(
 
 void ExternalInstallError::OnWebstoreResponseParseSuccess(
     const std::string& extension_id,
-    std::unique_ptr<base::DictionaryValue> webstore_data) {
-  std::string localized_user_count;
+    const base::Value::Dict& webstore_data) {
   absl::optional<double> average_rating =
-      webstore_data->FindDoubleKey(kAverageRatingKey);
-  absl::optional<int> rating_count = webstore_data->FindIntKey(kRatingCountKey);
-  if (!webstore_data->GetString(kUsersKey, &localized_user_count) ||
-      !average_rating || !rating_count) {
+      webstore_data.FindDouble(kAverageRatingKey);
+  absl::optional<int> rating_count = webstore_data.FindInt(kRatingCountKey);
+  const std::string* localized_user_count = webstore_data.FindString(kUsersKey);
+  if (!localized_user_count || !average_rating || !rating_count) {
     // If we don't get a valid webstore response, short circuit, and continue
     // to show a prompt without webstore data.
     OnFetchComplete();
     return;
   }
 
-  default_dialog_button_setting_ = GetDefaultDialogButton(*webstore_data.get());
-
   absl::optional<bool> show_user_count =
-      webstore_data->FindBoolKey(kShowUserCountKey);
+      webstore_data.FindBool(kShowUserCountKey);
 
-  prompt_->SetWebstoreData(localized_user_count, show_user_count.value_or(true),
-                           *average_rating, *rating_count);
+  prompt_->SetWebstoreData(*localized_user_count,
+                           show_user_count.value_or(true), *average_rating,
+                           *rating_count);
   OnFetchComplete();
 }
 

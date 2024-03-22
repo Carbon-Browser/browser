@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,15 +39,37 @@ class BaseSystemWebAppUIConfig : public content::WebUIConfig {
 // Default WebUIConfig for the chrome:// component of System Web Apps. It
 // has an implementation of `CreateWebUIController()`, which returns a new
 // `T` and an implementation of `IsWebUIEnabled()` which returns true if
-// System Web Apps are enabled and `swa_type` is enabled.
+// System Web Apps are enabled and `swa_type` is enabled. Optionally,
+// it can take a CreateWebUIControllerFunc that callers can use to inject
+// dependencies into T.
 template <typename T>
 class SystemWebAppUIConfig : public internal::BaseSystemWebAppUIConfig {
  public:
+  using CreateWebUIControllerFunc = base::RepeatingCallback<std::unique_ptr<
+      content::WebUIController>(content::WebUI*, const GURL& url)>;
+
   // Constructs a WebUIConfig for chrome://`host` and enables it if
   // System Web Apps are enabled and `swa_type` is enabled.
   SystemWebAppUIConfig(base::StringPiece host, SystemWebAppType swa_type)
-      : BaseSystemWebAppUIConfig(swa_type, content::kChromeUIScheme, host) {
-    static_assert(!std::is_base_of<ui::UntrustedWebUIController, T>::value,
+      : SystemWebAppUIConfig(
+            host,
+            swa_type,
+            base::BindRepeating(
+                [](content::WebUI* web_ui, const GURL& url)
+                    -> std::unique_ptr<content::WebUIController> {
+                  return std::make_unique<T>(web_ui);
+                })) {}
+
+  // Same as above, but takes in an extra `create_controller_func` argument that
+  // can be used to pass a function to construct T. Used when we need to inject
+  // dependencies into T e.g. T needs a delegate that is implemented in
+  // //chrome.
+  SystemWebAppUIConfig(base::StringPiece host,
+                       SystemWebAppType swa_type,
+                       CreateWebUIControllerFunc create_controller_func)
+      : BaseSystemWebAppUIConfig(swa_type, content::kChromeUIScheme, host),
+        create_controller_func_(create_controller_func) {
+    static_assert(!std::is_base_of_v<ui::UntrustedWebUIController, T>,
                   "Should only be used for chrome:// WebUIs. See "
                   "SystemWebAppUntrustedUIConfig below for chrome-untrusted:// "
                   "WebUIs.");
@@ -56,9 +78,13 @@ class SystemWebAppUIConfig : public internal::BaseSystemWebAppUIConfig {
   ~SystemWebAppUIConfig() override = default;
 
   std::unique_ptr<content::WebUIController> CreateWebUIController(
-      content::WebUI* web_ui) override {
-    return std::make_unique<T>(web_ui);
+      content::WebUI* web_ui,
+      const GURL& url) override {
+    return create_controller_func_.Run(web_ui, url);
   }
+
+ private:
+  CreateWebUIControllerFunc create_controller_func_;
 };
 
 // Default WebUIConfig for the chrome-untrusted:// component of System Web Apps.
@@ -84,7 +110,8 @@ class SystemWebAppUntrustedUIConfig
   ~SystemWebAppUntrustedUIConfig() override = default;
 
   std::unique_ptr<content::WebUIController> CreateWebUIController(
-      content::WebUI* web_ui) override {
+      content::WebUI* web_ui,
+      const GURL& url) override {
     return std::make_unique<T>(web_ui);
   }
 };

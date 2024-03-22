@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,7 @@ namespace api {
 
 // Dispatch events related to "bluetooth" sockets from callback on native socket
 // instances. There is one instance per browser context.
-class BluetoothSocketEventDispatcher
-    : public BrowserContextKeyedAPI,
-      public base::SupportsWeakPtr<BluetoothSocketEventDispatcher> {
+class BluetoothSocketEventDispatcher : public BrowserContextKeyedAPI {
  public:
   explicit BluetoothSocketEventDispatcher(content::BrowserContext* context);
   ~BluetoothSocketEventDispatcher() override;

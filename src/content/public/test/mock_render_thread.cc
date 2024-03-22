@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "content/common/associated_interfaces.mojom.h"
@@ -17,7 +16,6 @@
 #include "content/common/render_message_filter.mojom.h"
 #include "content/public/renderer/render_thread_observer.h"
 #include "content/renderer/render_thread_impl.h"
-#include "content/renderer/render_view_impl.h"
 #include "content/test/test_render_frame.h"
 #include "ipc/ipc_message_utils.h"
 #include "ipc/ipc_sync_message.h"
@@ -44,29 +42,21 @@ class MockRenderMessageFilterImpl : public mojom::RenderMessageFilter {
   MockRenderMessageFilterImpl() = default;
   ~MockRenderMessageFilterImpl() override = default;
 
-  // mojom::RenderMessageFilter:
-  void GenerateRoutingID(GenerateRoutingIDCallback callback) override {
-    std::move(callback).Run(RenderThread::Get()->GenerateRoutingID());
-  }
-
   void GenerateFrameRoutingID(
       GenerateFrameRoutingIDCallback callback) override {
     int routing_id;
     blink::LocalFrameToken frame_token;
     base::UnguessableToken devtools_frame_token;
-    RenderThread::Get()->GenerateFrameRoutingID(routing_id, frame_token,
-                                                devtools_frame_token);
-    std::move(callback).Run(routing_id, frame_token, devtools_frame_token);
+    blink::DocumentToken document_token;
+    RenderThread::Get()->GenerateFrameRoutingID(
+        routing_id, frame_token, devtools_frame_token, document_token);
+    std::move(callback).Run(routing_id, frame_token, devtools_frame_token,
+                            document_token);
   }
 
   void HasGpuProcess(HasGpuProcessCallback callback) override {
     std::move(callback).Run(false);
   }
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  void SetThreadType(int32_t platform_thread_id,
-                     base::ThreadType thread_type) override {}
-#endif
 };
 
 }  // namespace
@@ -102,8 +92,8 @@ bool MockRenderThread::Send(IPC::Message* msg) {
     if (msg->is_sync()) {
       // We actually need to handle deleting the reply deserializer for sync
       // messages.
-      reply_deserializer_.reset(
-          static_cast<IPC::SyncMessage*>(msg)->GetReplyDeserializer());
+      reply_deserializer_ =
+          static_cast<IPC::SyncMessage*>(msg)->TakeReplyDeserializer();
     }
     if (msg->routing_id() == MSG_ROUTING_CONTROL)
       OnControlMessageReceived(*msg);
@@ -142,17 +132,15 @@ void MockRenderThread::AttachTaskRunnerToRoute(
 
 void MockRenderThread::RemoveRoute(int32_t routing_id) {}
 
-int MockRenderThread::GenerateRoutingID() {
-  return GetNextRoutingID();
-}
-
 bool MockRenderThread::GenerateFrameRoutingID(
     int32_t& routing_id,
     blink::LocalFrameToken& frame_token,
-    base::UnguessableToken& devtools_frame_token) {
+    base::UnguessableToken& devtools_frame_token,
+    blink::DocumentToken& document_token) {
   routing_id = GetNextRoutingID();
   frame_token = blink::LocalFrameToken();
   devtools_frame_token = base::UnguessableToken::Create();
+  document_token = blink::DocumentToken();
   return true;
 }
 
@@ -183,9 +171,6 @@ void MockRenderThread::RemoveObserver(RenderThreadObserver* observer) {
   observers_.RemoveObserver(observer);
 }
 
-void MockRenderThread::SetResourceRequestSenderDelegate(
-    blink::WebResourceRequestSenderDelegate* delegate) {}
-
 void MockRenderThread::RecordAction(const base::UserMetricsAction& action) {
 }
 
@@ -208,14 +193,6 @@ void MockRenderThread::SetRendererProcessType(
     blink::scheduler::WebRendererProcessType type) {}
 
 blink::WebString MockRenderThread::GetUserAgent() {
-  return blink::WebString();
-}
-
-blink::WebString MockRenderThread::GetFullUserAgent() {
-  return blink::WebString();
-}
-
-blink::WebString MockRenderThread::GetReducedUserAgent() {
   return blink::WebString();
 }
 
@@ -284,12 +261,13 @@ bool MockRenderThread::OnMessageReceived(const IPC::Message& msg) {
 void MockRenderThread::OnCreateWindow(
     const mojom::CreateNewWindowParams& params,
     mojom::CreateNewWindowReply* reply) {
-  reply->route_id = GetNextRoutingID();
   reply->frame = TestRenderFrame::CreateStubFrameReceiver();
   reply->main_frame_route_id = GetNextRoutingID();
   frame_routing_id_to_initial_browser_brokers_.emplace(
       reply->main_frame_route_id,
       reply->main_frame_interface_broker.InitWithNewPipeAndPassReceiver());
+  reply->associated_interface_provider =
+      TestRenderFrame::CreateStubAssociatedInterfaceProviderRemote();
   reply->cloned_session_storage_namespace_id =
       blink::AllocateSessionStorageNamespaceId();
 
@@ -315,6 +293,15 @@ void MockRenderThread::OnCreateWindow(
   widget_params->visual_properties.screen_infos =
       display::ScreenInfos(display::ScreenInfo());
   reply->widget_params = std::move(widget_params);
+
+  mojo::AssociatedRemote<blink::mojom::PageBroadcast> page_broadcast;
+  reply->page_broadcast =
+      page_broadcast.BindNewEndpointAndPassDedicatedReceiver();
+  page_broadcasts_.push_back(std::move(page_broadcast));
+}
+
+void MockRenderThread::ReleaseAllWebViews() {
+  page_broadcasts_.clear();
 }
 
 }  // namespace content

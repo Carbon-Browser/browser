@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,7 +74,7 @@ class SafetyCheckTableViewController: SettingsRootTableViewController, SafetyChe
   override func viewDidLoad() {
     super.viewDidLoad()
     self.tableView.accessibilityIdentifier = SafetyCheckTableViewController.accessibilityIdentifier
-    self.title = L10NUtils.string(forMessageId: IDS_OPTIONS_ADVANCED_SECTION_TITLE_SAFETY_CHECK)
+    self.title = L10nUtils.string(messageId: IDS_OPTIONS_ADVANCED_SECTION_TITLE_SAFETY_CHECK)
   }
 
   // MARK: SafetyCheckConsumer
@@ -95,7 +95,7 @@ class SafetyCheckTableViewController: SettingsRootTableViewController, SafetyChe
     safetyCheckFooterItem = item
   }
 
-  // MARK: ChromeTableViewController
+  // MARK: LegacyChromeTableViewController
 
   override func loadModel() {
     super.loadModel()

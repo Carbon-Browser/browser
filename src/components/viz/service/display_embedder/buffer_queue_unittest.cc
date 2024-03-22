@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,21 +9,21 @@
 
 #include <memory>
 #include <set>
+#include <string>
 #include <utility>
 
-#include "base/memory/ptr_util.h"
 #include "build/build_config.h"
-#include "components/viz/test/test_context_provider.h"
-#include "gpu/command_buffer/client/shared_image_interface.h"
+#include "components/viz/test/fake_skia_output_surface.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
-#include "gpu/command_buffer/common/sync_token.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using ::testing::_;
+using ::testing::Contains;
 using ::testing::Expectation;
 using ::testing::Ne;
+using ::testing::Not;
 using ::testing::Return;
 
 namespace viz {
@@ -48,11 +48,9 @@ class BufferQueueTest : public ::testing::Test {
   BufferQueueTest() = default;
 
   void SetUp() override {
-    context_provider_ = TestContextProvider::Create(
-        std::make_unique<TestSharedImageInterface>());
-    context_provider_->BindToCurrentThread();
-    buffer_queue_ = std::make_unique<BufferQueue>(
-        context_provider_->SharedImageInterface(), kFakeSurfaceHandle, 3);
+    skia_output_surface_ = FakeSkiaOutputSurface::Create3d();
+    buffer_queue_ = std::make_unique<BufferQueue>(skia_output_surface_.get(),
+                                                  kFakeSurfaceHandle, 3);
   }
 
   void TearDown() override { buffer_queue_.reset(); }
@@ -110,12 +108,13 @@ class BufferQueueTest : public ::testing::Test {
     return true;
   }
 
-  void SendDamagedFrame(const gfx::Rect& damage) {
+  gpu::Mailbox SendDamagedFrame(const gfx::Rect& damage) {
     // We don't care about the GL-level implementation here, just how it uses
     // damage rects.
-    buffer_queue_->GetCurrentBuffer();
+    auto mailbox = buffer_queue_->GetCurrentBuffer();
     buffer_queue_->SwapBuffers(damage);
     buffer_queue_->SwapBuffersComplete();
+    return mailbox;
   }
 
   void SendFullFrame() { SendDamagedFrame(gfx::Rect(buffer_queue_->size_)); }
@@ -130,7 +129,7 @@ class BufferQueueTest : public ::testing::Test {
     return true;
   }
 
-  scoped_refptr<TestContextProvider> context_provider_;
+  std::unique_ptr<FakeSkiaOutputSurface> skia_output_surface_;
   std::unique_ptr<BufferQueue> buffer_queue_;
 };
 
@@ -140,68 +139,37 @@ const gfx::Rect small_damage = gfx::Rect(gfx::Size(10, 10));
 const gfx::Rect large_damage = gfx::Rect(gfx::Size(20, 20));
 const gfx::Rect overlapping_damage = gfx::Rect(gfx::Size(5, 20));
 
-class MockedSharedImageInterface : public TestSharedImageInterface {
+class MockedSkiaOutputSurface : public FakeSkiaOutputSurface {
  public:
-  MockedSharedImageInterface() {
-    ON_CALL(*this, CreateSharedImage(_, _, _, _, _, _, _))
-        .WillByDefault(Return(gpu::Mailbox()));
-    // this, &MockedSharedImageInterface::TestCreateSharedImage));
-  }
+  MockedSkiaOutputSurface() : FakeSkiaOutputSurface(nullptr) {}
   MOCK_METHOD7(CreateSharedImage,
-               gpu::Mailbox(ResourceFormat format,
+               gpu::Mailbox(SharedImageFormat format,
                             const gfx::Size& size,
                             const gfx::ColorSpace& color_space,
-                            GrSurfaceOrigin surface_origin,
-                            SkAlphaType alpha_type,
+                            RenderPassAlphaType alpha_type,
                             uint32_t usage,
+                            base::StringPiece debug_label,
                             gpu::SurfaceHandle surface_handle));
-  MOCK_METHOD2(UpdateSharedImage,
-               void(const gpu::SyncToken& sync_token,
-                    const gpu::Mailbox& mailbox));
-  MOCK_METHOD2(DestroySharedImage,
-               void(const gpu::SyncToken& sync_token,
-                    const gpu::Mailbox& mailbox));
-  // Use this to call CreateSharedImage() defined in TestSharedImageInterface.
-  gpu::Mailbox TestCreateSharedImage(ResourceFormat format,
-                                     const gfx::Size& size,
-                                     const gfx::ColorSpace& color_space,
-                                     GrSurfaceOrigin surface_origin,
-                                     SkAlphaType alpha_type,
-                                     uint32_t usage,
-                                     gpu::SurfaceHandle surface_handle) {
-    return TestSharedImageInterface::CreateSharedImage(
-        format, size, color_space, surface_origin, alpha_type, usage,
-        surface_handle);
-  }
+  MOCK_METHOD1(DestroySharedImage, void(const gpu::Mailbox& mailbox));
 };
 
-scoped_refptr<TestContextProvider> CreateMockedSharedImageInterfaceProvider(
-    MockedSharedImageInterface** sii) {
-  std::unique_ptr<MockedSharedImageInterface> owned_sii(
-      new MockedSharedImageInterface);
-  *sii = owned_sii.get();
-  scoped_refptr<TestContextProvider> context_provider =
-      TestContextProvider::Create(std::move(owned_sii));
-  context_provider->BindToCurrentThread();
-  return context_provider;
-}
-
 TEST(BufferQueueStandaloneTest, BufferCreationAndDestruction) {
-  MockedSharedImageInterface* sii;
-  scoped_refptr<TestContextProvider> context_provider =
-      CreateMockedSharedImageInterfaceProvider(&sii);
+  auto mock_skia_output_surface = std::make_unique<MockedSkiaOutputSurface>();
   std::unique_ptr<BufferQueue> buffer_queue = std::make_unique<BufferQueue>(
-      context_provider->SharedImageInterface(), kFakeSurfaceHandle, 1);
+      mock_skia_output_surface.get(), kFakeSurfaceHandle, 1);
 
   const gpu::Mailbox expected_mailbox = gpu::Mailbox::GenerateForSharedImage();
   {
     testing::InSequence dummy;
-    EXPECT_CALL(*sii, CreateSharedImage(_, _, _, _, _,
-                                        gpu::SHARED_IMAGE_USAGE_SCANOUT |
-                                            gpu::SHARED_IMAGE_USAGE_DISPLAY,
-                                        _))
+    EXPECT_CALL(*mock_skia_output_surface,
+                CreateSharedImage(_, _, _, _,
+                                  gpu::SHARED_IMAGE_USAGE_SCANOUT |
+                                      gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+                                      gpu::SHARED_IMAGE_USAGE_DISPLAY_WRITE,
+                                  _, _))
         .WillOnce(Return(expected_mailbox));
-    EXPECT_CALL(*sii, DestroySharedImage(_, expected_mailbox));
+    EXPECT_CALL(*mock_skia_output_surface,
+                DestroySharedImage(expected_mailbox));
   }
 
   EXPECT_TRUE(buffer_queue->Reshape(screen_size, kBufferQueueColorSpace,
@@ -286,8 +254,8 @@ TEST_F(BufferQueueTest, CheckDoubleBuffering) {
   // Check buffer flow through double buffering path.
 
   // Create a BufferQueue with only 2 buffers.
-  buffer_queue_ = std::make_unique<BufferQueue>(
-      context_provider_->SharedImageInterface(), kFakeSurfaceHandle, 2);
+  buffer_queue_ = std::make_unique<BufferQueue>(skia_output_surface_.get(),
+                                                kFakeSurfaceHandle, 2);
 
   EXPECT_EQ(0, CountBuffers());
   EXPECT_TRUE(buffer_queue_->Reshape(screen_size, kBufferQueueColorSpace,
@@ -540,6 +508,122 @@ TEST_F(BufferQueueTest, EnsureMinNumberOfBuffers) {
   // will also have small damage.
   EXPECT_EQ(buffer_queue_->CurrentBufferDamage(), small_damage);
   SendDamagedFrame(small_damage);
+}
+
+TEST_F(BufferQueueTest, GetLastSwappedBuffer) {
+  // No images allocated, so zero-mailbox is returned.
+  EXPECT_TRUE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+
+  // After reshape we'll get the last buffer in the queue.
+  EXPECT_TRUE(buffer_queue_->Reshape(screen_size, kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+  gpu::Mailbox last_swapped1 = buffer_queue_->GetLastSwappedBuffer();
+  EXPECT_FALSE(last_swapped1.IsZero());
+
+  // The last swapped buffer won't change until calling SwapBuffersComplete.
+  gpu::Mailbox mailbox1 = buffer_queue_->GetCurrentBuffer();
+  EXPECT_NE(last_swapped1, mailbox1);
+  EXPECT_EQ(last_swapped1, buffer_queue_->GetLastSwappedBuffer());
+  buffer_queue_->SwapBuffers(screen_rect);
+  EXPECT_EQ(last_swapped1, buffer_queue_->GetLastSwappedBuffer());
+  buffer_queue_->SwapBuffersComplete();
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox1);
+
+  // Swap another frame. Last swapped only updates after SwapBuffersComplete().
+  gpu::Mailbox mailbox2 = buffer_queue_->GetCurrentBuffer();
+  buffer_queue_->SwapBuffers(screen_rect);
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox1);
+  buffer_queue_->SwapBuffersComplete();
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox2);
+
+  // Swap a third frame. Last swapped only updates after SwapBuffersComplete().
+  gpu::Mailbox mailbox3 = buffer_queue_->GetCurrentBuffer();
+  // The third mailbox is the first one we got from GetLastSwappedBuffer().
+  EXPECT_EQ(mailbox3, last_swapped1);
+  buffer_queue_->SwapBuffers(screen_rect);
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox2);
+  buffer_queue_->SwapBuffersComplete();
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox3);
+
+  // Empty swap, Last swapped stays the same.
+  buffer_queue_->SwapBuffers(gfx::Rect());
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox3);
+  buffer_queue_->SwapBuffersComplete();
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox3);
+
+  // Swap a fourth frame. Last swapped only updates after SwapBuffersComplete().
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mailbox1);
+  buffer_queue_->SwapBuffers(screen_rect);
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox3);
+  buffer_queue_->SwapBuffersComplete();
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox1);
+}
+
+TEST_F(BufferQueueTest, RecreateBuffers) {
+  EXPECT_TRUE(buffer_queue_->Reshape(screen_size, kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+  auto mb1 = SendDamagedFrame(small_damage);
+  auto mb2 = SendDamagedFrame(small_damage);
+  auto mb3 = SendDamagedFrame(small_damage);
+  std::vector<gpu::Mailbox> original_buffers = {mb1, mb2, mb3};
+
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb1);
+  buffer_queue_->SwapBuffers(small_damage);
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb2);
+  buffer_queue_->SwapBuffers(small_damage);
+
+  buffer_queue_->RecreateBuffers();
+  buffer_queue_->SwapBuffersComplete();  // mb1
+
+  auto mb4 = buffer_queue_->GetCurrentBuffer();
+  EXPECT_THAT(original_buffers, Not(Contains(mb4)));
+  buffer_queue_->SwapBuffers(small_damage);
+
+  buffer_queue_->SwapBuffersComplete();  // mb2
+
+  auto mb5 = buffer_queue_->GetCurrentBuffer();
+  EXPECT_THAT(original_buffers, Not(Contains(mb5)));
+  buffer_queue_->SwapBuffers(small_damage);
+  buffer_queue_->SwapBuffersComplete();  // mb4
+  buffer_queue_->SwapBuffersComplete();  // mb5
+
+  auto mb6 = SendDamagedFrame(small_damage);
+  EXPECT_THAT(original_buffers, Not(Contains(mb6)));
+
+  // New queue of buffers loops.
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb4);
+}
+
+TEST_F(BufferQueueTest, DestroyBuffers) {
+  EXPECT_TRUE(buffer_queue_->Reshape(screen_size, kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+  auto mb1 = SendDamagedFrame(small_damage);
+  auto mb2 = SendDamagedFrame(small_damage);
+  auto mb3 = SendDamagedFrame(small_damage);
+  std::vector<gpu::Mailbox> original_buffers = {mb1, mb2, mb3};
+
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb1);
+  buffer_queue_->SwapBuffers(small_damage);
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb2);
+  buffer_queue_->SwapBuffers(small_damage);
+
+  buffer_queue_->DestroyBuffers();
+
+  // All buffers are destroyed, and GetLastSwappedBuffer should not recreate
+  // them.
+  EXPECT_TRUE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+  buffer_queue_->SwapBuffersComplete();  // mb1
+  EXPECT_TRUE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+  // Reshape should not reallocate buffers.
+  EXPECT_TRUE(buffer_queue_->Reshape(gfx::Size(20, 20), kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+  EXPECT_TRUE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+
+  // GetCurrentBuffer should create the new buffers.
+  auto mb4 = buffer_queue_->GetCurrentBuffer();
+  EXPECT_FALSE(mb4.IsZero());
+  EXPECT_THAT(original_buffers, Not(Contains(mb4)));
+  EXPECT_FALSE(buffer_queue_->GetLastSwappedBuffer().IsZero());
 }
 
 }  // namespace viz

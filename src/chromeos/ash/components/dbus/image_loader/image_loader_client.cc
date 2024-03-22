@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/image_loader/fake_image_loader_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -34,7 +35,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
   void RegisterComponent(const std::string& name,
                          const std::string& version,
                          const std::string& component_folder_abs_path,
-                         DBusMethodCallback<bool> callback) override {
+                         chromeos::DBusMethodCallback<bool> callback) override {
     dbus::MethodCall method_call(imageloader::kImageLoaderServiceInterface,
                                  imageloader::kRegisterComponent);
     dbus::MessageWriter writer(&method_call);
@@ -46,8 +47,9 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
                                       std::move(callback)));
   }
 
-  void LoadComponent(const std::string& name,
-                     DBusMethodCallback<std::string> callback) override {
+  void LoadComponent(
+      const std::string& name,
+      chromeos::DBusMethodCallback<std::string> callback) override {
     dbus::MethodCall method_call(imageloader::kImageLoaderServiceInterface,
                                  imageloader::kLoadComponent);
     dbus::MessageWriter writer(&method_call);
@@ -60,7 +62,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
   void LoadComponentAtPath(
       const std::string& name,
       const base::FilePath& path,
-      DBusMethodCallback<base::FilePath> callback) override {
+      chromeos::DBusMethodCallback<base::FilePath> callback) override {
     dbus::MethodCall method_call(imageloader::kImageLoaderServiceInterface,
                                  imageloader::kLoadComponentAtPath);
     dbus::MessageWriter writer(&method_call);
@@ -72,7 +74,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
   }
 
   void RemoveComponent(const std::string& name,
-                       DBusMethodCallback<bool> callback) override {
+                       chromeos::DBusMethodCallback<bool> callback) override {
     dbus::MethodCall method_call(imageloader::kImageLoaderServiceInterface,
                                  imageloader::kRemoveComponent);
     dbus::MessageWriter writer(&method_call);
@@ -84,7 +86,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
 
   void RequestComponentVersion(
       const std::string& name,
-      DBusMethodCallback<std::string> callback) override {
+      chromeos::DBusMethodCallback<std::string> callback) override {
     dbus::MethodCall method_call(imageloader::kImageLoaderServiceInterface,
                                  imageloader::kGetComponentVersion);
     dbus::MessageWriter writer(&method_call);
@@ -95,7 +97,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
   }
 
   void UnmountComponent(const std::string& name,
-                        DBusMethodCallback<bool> callback) override {
+                        chromeos::DBusMethodCallback<bool> callback) override {
     dbus::MethodCall method_call(imageloader::kImageLoaderServiceInterface,
                                  imageloader::kUnmountComponent);
     dbus::MessageWriter writer(&method_call);
@@ -105,7 +107,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
                                       std::move(callback)));
   }
 
-  // DBusClient override.
+  // chromeos::DBusClient override.
   void Init(dbus::Bus* bus) override {
     proxy_ = bus->GetObjectProxy(
         imageloader::kImageLoaderServiceName,
@@ -113,7 +115,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
   }
 
  private:
-  static void OnBoolMethod(DBusMethodCallback<bool> callback,
+  static void OnBoolMethod(chromeos::DBusMethodCallback<bool> callback,
                            dbus::Response* response) {
     if (!response) {
       std::move(callback).Run(absl::nullopt);
@@ -129,7 +131,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
     std::move(callback).Run(result);
   }
 
-  static void OnStringMethod(DBusMethodCallback<std::string> callback,
+  static void OnStringMethod(chromeos::DBusMethodCallback<std::string> callback,
                              dbus::Response* response) {
     if (!response) {
       std::move(callback).Run(absl::nullopt);
@@ -145,8 +147,9 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
     std::move(callback).Run(std::move(result));
   }
 
-  static void OnFilePathMethod(DBusMethodCallback<base::FilePath> callback,
-                               dbus::Response* response) {
+  static void OnFilePathMethod(
+      chromeos::DBusMethodCallback<base::FilePath> callback,
+      dbus::Response* response) {
     if (!response) {
       std::move(callback).Run(absl::nullopt);
       return;
@@ -161,7 +164,7 @@ class ImageLoaderClientImpl : public ImageLoaderClient {
     std::move(callback).Run(base::FilePath(std::move(result)));
   }
 
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> proxy_ = nullptr;
 };
 
 }  // namespace

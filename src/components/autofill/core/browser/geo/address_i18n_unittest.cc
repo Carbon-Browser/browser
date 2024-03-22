@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,21 @@
 #include <string>
 #include <vector>
 
-#include "base/guid.h"
+#include "base/containers/contains.h"
+#include "base/uuid.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/field_types.h"
+#include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_data.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_field.h"
+
+namespace i18n::addressinput {
+
+using ::operator<<;
+
+}  // namespace i18n::addressinput
 
 namespace autofill {
 namespace i18n {
@@ -100,7 +108,7 @@ TEST(AddressI18nTest, UnconvertableServerFields) {
 }
 
 TEST(AddressI18nTest, CreateAddressDataFromAutofillProfile) {
-  AutofillProfile profile(base::GenerateGUID(), "http://www.example.com/");
+  AutofillProfile profile(i18n_model_definition::kLegacyHierarchyCountryCode);
   test::SetProfileInfo(&profile, "John", "H.", "Doe", "johndoe@hades.com",
                        "Underworld", "666 Erebus St.", "Apt 8", "Elysium", "CA",
                        "91111", "US", "16502111111");

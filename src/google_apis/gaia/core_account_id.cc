@@ -1,17 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "google_apis/gaia/core_account_id.h"
 
 #include "base/check.h"
+#include "base/containers/contains.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 
 namespace {
 // Returns whether the string looks like an email (the test is
 // crude an only checks whether it includes an '@').
 bool IsEmailString(const std::string& string) {
-  return string.find('@') != std::string::npos;
+  return base::Contains(string, '@');
 }
 }  // anonymous namespace
 

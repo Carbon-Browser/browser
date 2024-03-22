@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,9 +71,12 @@ ScopedJavaLocalRef<jobject> ProfileAndroid::GetLastUsedRegularProfile(
 
 void ProfileAndroid::DestroyWhenAppropriate(JNIEnv* env,
                                             const JavaParamRef<jobject>& obj) {
+  CHECK(profile_->IsOffTheRecord())
+      << "Only OTR profiles can be destroyed from Java as regular profiles are "
+         "owned by the C++ ProfileManager.";
   // Don't delete the Profile directly because the corresponding
   // RenderViewHost might not be deleted yet.
-  ProfileDestroyer::DestroyProfileWhenAppropriate(profile_);
+  ProfileDestroyer::DestroyOTRProfileWhenAppropriate(profile_);
 }
 
 base::android::ScopedJavaLocalRef<jobject> ProfileAndroid::GetOriginalProfile(

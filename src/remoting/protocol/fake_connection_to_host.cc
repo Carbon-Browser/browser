@@ -1,14 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/fake_connection_to_host.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/protocol/authenticator.h"
 #include "remoting/protocol/transport_context.h"
 
-namespace remoting {
-namespace test {
+namespace remoting::test {
 
 FakeConnectionToHost::FakeConnectionToHost()
     : session_config_(protocol::SessionConfig::ForTest()) {}
@@ -106,5 +106,4 @@ void FakeConnectionToHost::SetState(State state, protocol::ErrorCode error) {
   }
 }
 
-}  // namespace test
-}  // namespace remoting
+}  // namespace remoting::test

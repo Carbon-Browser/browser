@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,7 @@ class TestGraphics3D : public TestCase {
   std::string TestFrameGL();
   std::string TestFramePPAPI();
   std::string TestBadResource();
+  std::string TestAttributes();
 
   // Utils used by various tests.
   int32_t SwapBuffersSync(pp::Graphics3D* context);

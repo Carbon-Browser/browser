@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <vector>
 
 #include "chrome/browser/web_applications/web_app_database_factory.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "components/webapps/common/web_app_id.h"
 
 namespace syncer {
 class ModelTypeStore;
@@ -21,9 +21,6 @@ namespace web_app {
 
 class WebAppProto;
 
-// Requires base::MessageLoop message_loop_ in test fixture. Reason:
-// InMemoryStore needs a SequencedTaskRunner.
-// MessageLoop ctor calls MessageLoop::SetThreadTaskRunnerHandle().
 class FakeWebAppDatabaseFactory : public AbstractWebAppDatabaseFactory {
  public:
   FakeWebAppDatabaseFactory();
@@ -32,14 +29,14 @@ class FakeWebAppDatabaseFactory : public AbstractWebAppDatabaseFactory {
       delete;
   ~FakeWebAppDatabaseFactory() override;
 
+  syncer::ModelTypeStore* GetStore();
+
   // AbstractWebAppDatabaseFactory interface implementation.
   syncer::OnceModelTypeStoreFactory GetStoreFactory() override;
 
-  syncer::ModelTypeStore* store() { return store_.get(); }
+  Registry ReadRegistry();
 
-  Registry ReadRegistry() const;
-
-  std::set<AppId> ReadAllAppIds() const;
+  std::set<webapps::AppId> ReadAllAppIds();
 
   void WriteProtos(const std::vector<std::unique_ptr<WebAppProto>>& protos);
   void WriteRegistry(const Registry& registry);

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 
+#include "base/containers/flat_map.h"
 #include "components/history/core/browser/history_types.h"
 
 namespace history {
@@ -52,16 +53,16 @@ class VisitIDRemapper {
     VisitID originator_opener_visit_id;
   };
 
-  VisitID FindLocalVisitID(const std::string& originator_cache_guid,
-                           VisitID originator_visit_id);
+  VisitID FindLocalVisitID(
+      const std::string& originator_cache_guid,
+      const base::flat_map<VisitID, VisitInfo>& visits_by_originator_id,
+      VisitID originator_visit_id);
 
   const raw_ptr<HistoryBackendForSync> history_backend_;
 
-  // All of the visits with to-be-remapped IDs, indexed first by originator
-  // cache guid, then originator visit ID.
-  // TODO(crbug.com/1335055): Consider whether using flat_maps would be more
-  // efficient.
-  std::map<std::string, std::map<VisitID, VisitInfo>> visits_by_originator_id_;
+  // All of the visits with to-be-remapped IDs, indexed by originator cache
+  // guid, and paired with their originator visit ID.
+  std::map<std::string, std::vector<std::pair<VisitID, VisitInfo>>> visits_;
 };
 
 }  // namespace history

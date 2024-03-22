@@ -1,49 +1,50 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/action_link_css.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
+import 'chrome://resources/cr_elements/action_link.css.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/js/action_link.js';
 import './profile_picker_shared.css.js';
-import './icons.js';
 
 import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {assertNotReached} from 'chrome://resources/js/assert.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
+// clang-format off
 // <if expr="chromeos_lacros">
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-// </if>
-
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// <if expr="chromeos_lacros">
+import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {afterNextRender} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 // </if>
+
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+// clang-format on
+
+
 
 import {ManageProfilesBrowserProxy, ManageProfilesBrowserProxyImpl, ProfileState} from './manage_profiles_browser_proxy.js';
 import {getTemplate} from './profile_card_menu.html.js';
 
-export type Statistics = {
-  BrowsingHistory: number,
-  Passwords: number,
-  Bookmarks: number,
-  Autofill: number,
-};
+export interface Statistics {
+  BrowsingHistory: number;
+  Passwords: number;
+  Bookmarks: number;
+  Autofill: number;
+}
 
 /**
  * This is the data structure sent back and forth between C++ and JS.
  */
-export type StatisticsResult = {
-  profilePath: string,
-  statistics: Statistics,
-};
+export interface StatisticsResult {
+  profilePath: string;
+  statistics: Statistics;
+}
 
 /**
  * Profile statistics data types.
@@ -65,7 +66,7 @@ export interface ProfileCardMenuElement {
 }
 
 const ProfileCardMenuElementBase =
-    WebUIListenerMixin(I18nMixin(PolymerElement));
+    WebUiListenerMixin(I18nMixin(PolymerElement));
 
 export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
   static get is() {
@@ -105,11 +106,18 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
         ],
       },
 
+      moreActionsButtonAriaLabel_: {
+        type: String,
+        computed: 'computeMoreActionsButtonAriaLabel_(profileState)',
+      },
+
       removeWarningText_: {
         type: String,
         // <if expr="chromeos_lacros">
         value() {
-          return loadTimeData.getString('removeWarningProfileLacros');
+          return sanitizeInnerHtml(
+              loadTimeData.getString('removeWarningProfileLacros'),
+              {attrs: ['is']});
         },
         // </if>
         // <if expr="not chromeos_lacros">
@@ -133,7 +141,7 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
   }
 
   profileState: ProfileState;
-  private statistics_: {[key: string]: number};
+  private statistics_: Statistics;
   private profileStatistics_: ProfileStatistics[];
   private removeWarningText_: string;
   private removeWarningTitle_: string;
@@ -145,11 +153,11 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
 
   override connectedCallback() {
     super.connectedCallback();
-    this.addWebUIListener(
+    this.addWebUiListener(
         'profiles-list-changed', () => this.handleProfilesUpdated_());
-    this.addWebUIListener(
+    this.addWebUiListener(
         'profile-removed', this.handleProfileRemoved_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'profile-statistics-received',
         this.handleProfileStatsReceived_.bind(this));
   }
@@ -162,6 +170,11 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
           .addEventListener('click', () => this.onAccountSettingsClicked_());
     });
     // </if>
+  }
+
+  private computeMoreActionsButtonAriaLabel_(): string {
+    return this.i18n(
+        'profileMenuAriaLabel', this.profileState.localProfileName);
   }
 
   // <if expr="not chromeos_lacros">
@@ -232,11 +245,10 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
         return this.i18n('removeWarningAutofill');
       default:
         assertNotReached();
-        return '';
     }
   }
 
-  private getProfileStatisticCount_(dataType: string): string {
+  private getProfileStatisticCount_(dataType: keyof Statistics): string {
     const count = this.statistics_[dataType];
     return (count === undefined) ? this.i18n('removeWarningCalculating') :
                                    count.toString();
@@ -251,6 +263,7 @@ export class ProfileCardMenuElement extends ProfileCardMenuElementBase {
 
   private onRemoveCancelClicked_() {
     this.$.removeConfirmationDialog.cancel();
+    this.manageProfilesBrowserProxy_.closeProfileStatistics();
   }
 
   // <if expr="chromeos_lacros">

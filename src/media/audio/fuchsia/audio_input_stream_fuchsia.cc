@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -175,7 +175,7 @@ void AudioInputStreamFuchsia::OnPacketProduced(
                                        packet.payload_offset),
         num_frames);
     callback_->OnData(audio_bus_.get(), base::TimeTicks::FromZxTime(packet.pts),
-                      /*volume=*/1.0);
+                      /*volume=*/1.0, {});
   }
 
   capturer_->ReleasePacket(std::move(packet));

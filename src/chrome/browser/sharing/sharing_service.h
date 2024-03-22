@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,8 @@
 #include "chrome/browser/sharing/sharing_message_sender.h"
 #include "chrome/browser/sharing/sharing_send_message_result.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/sync/driver/sync_service_observer.h"
 #include "components/sync/protocol/device_info_specifics.pb.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "net/base/backoff_entry.h"
 
 #if BUILDFLAG(IS_ANDROID)

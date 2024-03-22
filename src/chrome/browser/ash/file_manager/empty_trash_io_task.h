@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,8 @@ class EmptyTrashIOTask : public IOTask {
       blink::StorageKey storage_key,
       Profile* profile,
       scoped_refptr<storage::FileSystemContext> file_system_context,
-      base::FilePath base_path);
+      base::FilePath base_path,
+      bool show_notification = true);
 
   ~EmptyTrashIOTask() override;
 
@@ -49,12 +50,13 @@ class EmptyTrashIOTask : public IOTask {
  private:
   // Removes the entire trash subdirectory (e.g. .Trash/files) recursively. It
   // only iterates over the enabled trash locations.
-  void RemoveTrashSubDirectory(TrashPathsMap::const_iterator& trash_location,
-                               const std::string& folder_name_to_remove);
+  void RemoveTrashSubDirectory(
+      trash::TrashPathsMap::const_iterator& trash_location,
+      const std::string& folder_name_to_remove);
 
   // After removing the trash directory, continue iterating until there are no
   // more enabled trash directories left.
-  void OnRemoveTrashSubDirectory(TrashPathsMap::const_iterator& it,
+  void OnRemoveTrashSubDirectory(trash::TrashPathsMap::const_iterator& it,
                                  const std::string& removed_folder_name,
                                  base::File::Error status);
 
@@ -73,7 +75,7 @@ class EmptyTrashIOTask : public IOTask {
   raw_ptr<Profile> profile_;
 
   // A map containing paths which are enabled for trashing.
-  TrashPathsMap enabled_trash_locations_;
+  trash::TrashPathsMap enabled_trash_locations_;
 
   // Stores the id of the restore operation if one is in progress. Used to stop
   // the empty trash operation.

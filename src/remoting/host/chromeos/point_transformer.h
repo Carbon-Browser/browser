@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,7 +66,7 @@ class PointTransformer {
       gfx::PointF location_in_screen_in_dip);
 
   static gfx::PointF ConvertWindowInPixelToScreenInDip(
-      const aura::Window* window,
+      const aura::Window& window,
       gfx::PointF location_in_window_in_pixels);
 };
 

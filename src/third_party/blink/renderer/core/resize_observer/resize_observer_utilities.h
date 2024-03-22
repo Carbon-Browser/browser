@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,12 @@ class SizeF;
 
 namespace blink {
 
-class LayoutSize;
-class DOMRectReadOnly;
-class LayoutObject;
 class ComputedStyle;
-class LayoutRect;
+class DOMRectReadOnly;
+class LayoutBox;
+class LayoutObject;
+struct LogicalSize;
+struct PhysicalRect;
 
 // Helper functions for ResizeObserverEntry and ResizeObservation.
 class ResizeObserverUtilities {
@@ -27,17 +28,21 @@ class ResizeObserverUtilities {
   // mode, effective zoom (for non-device-pixel boxes) and pixel snapping for
   // device-pixel boxes.
   static gfx::SizeF ComputeZoomAdjustedBox(ResizeObserverBoxOptions box_option,
-                                           LayoutObject* layout_object,
+                                           const LayoutBox& layout_box,
                                            const ComputedStyle& style);
 
   // Compute a scaled and pixel snapped device pixel content box for svg
   // bounding boxes.
   static gfx::SizeF ComputeSnappedDevicePixelContentBox(
-      LayoutSize box_size,
-      LayoutObject* layout_object,
+      LogicalSize box_size,
+      const LayoutObject& layout_object,
+      const ComputedStyle& style);
+  static gfx::SizeF ComputeSnappedDevicePixelContentBox(
+      const gfx::SizeF& box_size,
+      const LayoutObject& layout_object,
       const ComputedStyle& style);
 
-  static DOMRectReadOnly* ZoomAdjustedLayoutRect(LayoutRect content_rect,
+  static DOMRectReadOnly* ZoomAdjustedLayoutRect(PhysicalRect content_rect,
                                                  const ComputedStyle& style);
 };
 

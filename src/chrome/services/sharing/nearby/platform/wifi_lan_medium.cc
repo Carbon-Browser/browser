@@ -1,12 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/wifi_lan_medium.h"
 
-#include "ash/services/nearby/public/cpp/tcp_server_socket_port.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
@@ -15,11 +14,11 @@
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "chromeos/ash/services/nearby/public/cpp/tcp_server_socket_port.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "net/base/net_errors.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -113,6 +112,12 @@ bool WifiLanMedium::IsNetworkConnected() const {
 std::unique_ptr<api::WifiLanSocket> WifiLanMedium::ConnectToService(
     const NsdServiceInfo& remote_service_info,
     CancellationFlag* cancellation_flag) {
+  if (cancellation_flag && cancellation_flag->Cancelled()) {
+    LOG(WARNING) << "WifiLanMedium::" << __func__
+                 << ": Cancelled before connect attempt";
+    return nullptr;
+  }
+
   return ConnectToService(remote_service_info.GetIPAddress(),
                           remote_service_info.GetPort(), cancellation_flag);
 }
@@ -121,8 +126,6 @@ std::unique_ptr<api::WifiLanSocket> WifiLanMedium::ConnectToService(
     const std::string& ip_address,
     int port,
     CancellationFlag* cancellation_flag) {
-  // TODO(https://crbug.com/1261238): Possibly utilize cancellation_flag.
-
   net::IPAddress ip(reinterpret_cast<const uint8_t*>(ip_address.data()),
                     ip_address.length());
   const net::AddressList address_list =
@@ -139,6 +142,13 @@ std::unique_ptr<api::WifiLanSocket> WifiLanMedium::ConnectToService(
                      address_list, &connected_socket_parameters,
                      &connect_waitable_event));
   connect_waitable_event.Wait();
+
+  if (cancellation_flag && cancellation_flag->Cancelled()) {
+    LOG(WARNING) << "WifiLanMedium::" << __func__
+                 << ": Cancelled during connect to "
+                 << address_list.back().ToString();
+    return nullptr;
+  }
 
   bool success = connected_socket_parameters.has_value();
   if (!success) {
@@ -544,4 +554,3 @@ void WifiLanMedium::Shutdown(base::WaitableEvent* shutdown_waitable_event) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

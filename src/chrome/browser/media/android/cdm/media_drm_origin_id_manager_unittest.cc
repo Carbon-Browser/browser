@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/json/values_util.h"
 #include "base/memory/raw_ptr.h"
@@ -20,6 +20,7 @@
 #include "base/unguessable_token.h"
 #include "chrome/browser/media/android/cdm/media_drm_origin_id_manager_factory.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/prefs/scoped_user_pref_update.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
 #include "media/base/android/media_drm_bridge.h"
@@ -32,6 +33,7 @@
 
 namespace {
 
+using testing::InvokeWithoutArgs;
 using testing::Return;
 using MediaDrmOriginId = MediaDrmOriginIdManager::MediaDrmOriginId;
 
@@ -65,7 +67,7 @@ class MediaDrmOriginIdManagerTest : public testing::Test {
                             base::Unretained(this)));
   }
 
-  MOCK_METHOD0(GetProvisioningResult, bool());
+  MOCK_METHOD0(GetProvisioningResult, MediaDrmOriginId());
 
   // Call MediaDrmOriginIdManager::GetOriginId() synchronously.
   MediaDrmOriginId GetOriginId() {
@@ -93,19 +95,23 @@ class MediaDrmOriginIdManagerTest : public testing::Test {
     origin_id_manager_->PreProvisionIfNecessary();
   }
 
-  std::string DisplayPref(const base::Value* value) {
+  std::string DisplayPref(const base::Value::Dict& value) {
     std::string output;
     JSONStringValueSerializer serializer(&output);
-    EXPECT_TRUE(serializer.Serialize(*value));
+    EXPECT_TRUE(serializer.Serialize(value));
     return output;
   }
 
-  const PrefService::Preference* FindPreference(const std::string& path) const {
-    return profile_->GetTestingPrefService()->FindPreference(path);
+  const base::Value::Dict& GetDict(const std::string& path) const {
+    return profile_->GetTestingPrefService()->GetDict(path);
   }
 
-  const base::Value* GetDictionary(const std::string& path) const {
-    return profile_->GetTestingPrefService()->GetDictionary(path);
+  void VerifyListSize() {
+    auto& dict = GetDict(kMediaDrmOriginIds);
+    DVLOG(1) << DisplayPref(dict);
+    const auto* list = dict.FindList(kAvailableOriginIds);
+    EXPECT_TRUE(list);
+    EXPECT_EQ(list->size(), kExpectedPreferenceListSize);
   }
 
   // On devices that support per-application provisioning pre-provisioning
@@ -113,28 +119,23 @@ class MediaDrmOriginIdManagerTest : public testing::Test {
   // provisioning succeeds). On devices that don't the list should be empty.
   void CheckPreferenceForPreProvisioning() {
     DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-    auto* pref = FindPreference(kMediaDrmOriginIds);
-    EXPECT_TRUE(pref);
-    EXPECT_EQ(kMediaDrmOriginIds, pref->name());
-    EXPECT_EQ(base::Value::Type::DICTIONARY, pref->GetType());
 
-    auto* dict = pref->GetValue();
-    EXPECT_TRUE(dict->is_dict());
-    DVLOG(1) << DisplayPref(pref->GetValue());
+    auto& dict = GetDict(kMediaDrmOriginIds);
+    DVLOG(1) << DisplayPref(dict);
 
-    auto* list = dict->FindKey(kAvailableOriginIds);
+    const auto* list = dict.FindList(kAvailableOriginIds);
     if (media::MediaDrmBridge::IsPerApplicationProvisioningSupported()) {
       // PreProvision() should have pre-provisioned
       // |kExpectedPreferenceListSize| origin IDs.
       DVLOG(1) << "Per-application provisioning is supported.";
-      EXPECT_TRUE(list->is_list());
-      EXPECT_EQ(list->GetListDeprecated().size(), kExpectedPreferenceListSize);
+      EXPECT_TRUE(list);
+      EXPECT_EQ(list->size(), kExpectedPreferenceListSize);
     } else {
       // No pre-provisioned origin IDs should exist. In fact, the dictionary
       // should not have any entries.
       DVLOG(1) << "Per-application provisioning is NOT supported.";
       EXPECT_FALSE(list);
-      EXPECT_EQ(dict->DictSize(), 0u);
+      EXPECT_EQ(dict.size(), 0u);
     }
   }
 
@@ -159,21 +160,23 @@ TEST_F(MediaDrmOriginIdManagerTest, DisablePreProvisioningAtStartup) {
 
   task_environment_.RunUntilIdle();
 
-  // Preference should not exist. Not using GetDictionary() as it will
+  // Preference should not exist. Not using GetDict() as it will
   // create the preference if it doesn't exist.
   EXPECT_FALSE(
       profile_->GetTestingPrefService()->HasPrefPath(kMediaDrmOriginIds));
 }
 
 TEST_F(MediaDrmOriginIdManagerTest, OneOriginId) {
-  EXPECT_CALL(*this, GetProvisioningResult()).WillRepeatedly(Return(true));
+  EXPECT_CALL(*this, GetProvisioningResult())
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize();
 
   EXPECT_TRUE(GetOriginId());
 }
 
 TEST_F(MediaDrmOriginIdManagerTest, TwoOriginIds) {
-  EXPECT_CALL(*this, GetProvisioningResult()).WillRepeatedly(Return(true));
+  EXPECT_CALL(*this, GetProvisioningResult())
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize();
 
   MediaDrmOriginId origin_id1 = GetOriginId();
@@ -187,7 +190,8 @@ TEST_F(MediaDrmOriginIdManagerTest, PreProvision) {
   // On devices that support per-application provisioning PreProvision() will
   // pre-provisioned several origin IDs and populate the preference. On devices
   // that don't, the list will be empty.
-  EXPECT_CALL(*this, GetProvisioningResult()).WillRepeatedly(Return(true));
+  EXPECT_CALL(*this, GetProvisioningResult())
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize();
 
   PreProvision();
@@ -200,7 +204,8 @@ TEST_F(MediaDrmOriginIdManagerTest, PreProvisionAtStartup) {
   // Initialize without disabling kMediaDrmPreprovisioningAtStartup. Check
   // that pre-provisioning actually runs at profile creation (on devices
   // that support it).
-  EXPECT_CALL(*this, GetProvisioningResult()).WillRepeatedly(Return(true));
+  EXPECT_CALL(*this, GetProvisioningResult())
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize(true);
 
   DVLOG(1) << "Advancing Time";
@@ -214,7 +219,7 @@ TEST_F(MediaDrmOriginIdManagerTest, PreProvisionFailAtStartup) {
   // Initialize without disabling kMediaDrmPreprovisioningAtStartup. Have
   // provisioning fail at startup, if it is attempted.
   if (media::MediaDrmBridge::IsPerApplicationProvisioningSupported()) {
-    EXPECT_CALL(*this, GetProvisioningResult()).WillOnce(Return(false));
+    EXPECT_CALL(*this, GetProvisioningResult()).WillOnce(Return(absl::nullopt));
   } else {
     // If per-application provisioning is NOT supported, no attempt will be made
     // to pre-provision any origin IDs at startup.
@@ -229,23 +234,24 @@ TEST_F(MediaDrmOriginIdManagerTest, PreProvisionFailAtStartup) {
 
   // Pre-provisioning should have failed.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-  auto* dict = GetDictionary(kMediaDrmOriginIds);
+  auto& dict = GetDict(kMediaDrmOriginIds);
   DVLOG(1) << DisplayPref(dict);
 
   // After failure the preference should not contain |kExpireableToken| as that
   // should only be set if the user requested an origin ID on devices that
   // support per-application provisioning.
-  EXPECT_FALSE(dict->FindKey(kExpirableToken));
+  EXPECT_FALSE(dict.Find(kExpirableToken));
 
   // There should be no pre-provisioned origin IDs.
-  EXPECT_FALSE(dict->FindKey(kAvailableOriginIds));
+  EXPECT_FALSE(dict.Find(kAvailableOriginIds));
 
   // Now let provisioning succeed.
   if (media::MediaDrmBridge::IsPerApplicationProvisioningSupported()) {
     // If per-application provisioning is NOT supported, no attempt will be made
     // to pre-provision any origin IDs. So only expect calls if per-application
     // provisioning is supported.
-    EXPECT_CALL(*this, GetProvisioningResult()).WillRepeatedly(Return(true));
+    EXPECT_CALL(*this, GetProvisioningResult())
+        .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   }
 
   // Trigger a network connection to force pre-provisioning to run again.
@@ -262,30 +268,23 @@ TEST_F(MediaDrmOriginIdManagerTest, GetOriginIdCreatesList) {
   // After fetching an origin ID the code should pre-provision more origins
   // and fill up the list. This is independent of whether the device supports
   // per-application provisioning or not.
-  EXPECT_CALL(*this, GetProvisioningResult()).WillRepeatedly(Return(true));
+  EXPECT_CALL(*this, GetProvisioningResult())
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize();
 
   GetOriginId();
   task_environment_.RunUntilIdle();
 
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-  auto* pref = FindPreference(kMediaDrmOriginIds);
-  EXPECT_TRUE(pref);
-
-  auto* dict = pref->GetValue();
-  EXPECT_TRUE(dict->is_dict());
-  DVLOG(1) << DisplayPref(pref->GetValue());
-
-  auto* list = dict->FindKey(kAvailableOriginIds);
-  EXPECT_TRUE(list->is_list());
-  EXPECT_EQ(list->GetListDeprecated().size(), kExpectedPreferenceListSize);
+  VerifyListSize();
 }
 
 TEST_F(MediaDrmOriginIdManagerTest, OriginIdNotInList) {
   // After fetching one origin ID MediaDrmOriginIdManager will create the list
   // of pre-provisioned origin IDs (asynchronously). It doesn't matter if the
   // device supports per-application provisioning or not.
-  EXPECT_CALL(*this, GetProvisioningResult()).WillRepeatedly(Return(true));
+  EXPECT_CALL(*this, GetProvisioningResult())
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize();
 
   MediaDrmOriginId origin_id = GetOriginId();
@@ -293,16 +292,15 @@ TEST_F(MediaDrmOriginIdManagerTest, OriginIdNotInList) {
 
   // Check that the preference does not contain |origin_id|.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-  auto* dict = GetDictionary(kMediaDrmOriginIds);
-  auto* list = dict->FindKey(kAvailableOriginIds);
+  auto& dict = GetDict(kMediaDrmOriginIds);
+  auto* list = dict.FindList(kAvailableOriginIds);
   EXPECT_FALSE(
-      base::Contains(list->GetListDeprecated(),
-                     base::UnguessableTokenToValue(origin_id.value())));
+      base::Contains(*list, base::UnguessableTokenToValue(origin_id.value())));
 }
 
 TEST_F(MediaDrmOriginIdManagerTest, ProvisioningFail) {
   // Provisioning fails, so GetOriginId() returns an empty origin ID.
-  EXPECT_CALL(*this, GetProvisioningResult()).WillOnce(testing::Return(false));
+  EXPECT_CALL(*this, GetProvisioningResult()).WillOnce(Return(absl::nullopt));
   Initialize();
 
   EXPECT_FALSE(GetOriginId());
@@ -312,23 +310,23 @@ TEST_F(MediaDrmOriginIdManagerTest, ProvisioningFail) {
   // After failure the preference should contain |kExpireableToken| only if
   // per-application provisioning is NOT supported.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-  auto* dict = GetDictionary(kMediaDrmOriginIds);
+  auto& dict = GetDict(kMediaDrmOriginIds);
   DVLOG(1) << DisplayPref(dict);
 
   if (media::MediaDrmBridge::IsPerApplicationProvisioningSupported()) {
     DVLOG(1) << "Per-application provisioning is supported.";
-    EXPECT_FALSE(dict->FindKey(kExpirableToken));
+    EXPECT_FALSE(dict.Find(kExpirableToken));
   } else {
     DVLOG(1) << "Per-application provisioning is NOT supported.";
-    EXPECT_TRUE(dict->FindKey(kExpirableToken));
+    EXPECT_TRUE(dict.Find(kExpirableToken));
   }
 }
 
 TEST_F(MediaDrmOriginIdManagerTest, ProvisioningSuccessAfterFail) {
   // Provisioning fails, so GetOriginId() returns an empty origin ID.
   EXPECT_CALL(*this, GetProvisioningResult())
-      .WillOnce(Return(false))
-      .WillRepeatedly(Return(true));
+      .WillOnce(Return(absl::nullopt))
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize();
 
   EXPECT_FALSE(GetOriginId());
@@ -339,37 +337,38 @@ TEST_F(MediaDrmOriginIdManagerTest, ProvisioningSuccessAfterFail) {
 
   // After success the preference should not contain |kExpireableToken|.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-  auto* dict = GetDictionary(kMediaDrmOriginIds);
+  auto& dict = GetDict(kMediaDrmOriginIds);
   DVLOG(1) << DisplayPref(dict);
-  EXPECT_FALSE(dict->FindKey(kExpirableToken));
+  EXPECT_FALSE(dict.Find(kExpirableToken));
 
   // As well, the list of available pre-provisioned origin IDs should be full.
-  auto* list = dict->FindKey(kAvailableOriginIds);
-  EXPECT_TRUE(list->is_list());
-  EXPECT_EQ(list->GetListDeprecated().size(), kExpectedPreferenceListSize);
+  VerifyListSize();
 }
 
 TEST_F(MediaDrmOriginIdManagerTest, ProvisioningAfterExpiration) {
   // Provisioning fails, so GetOriginId() returns an empty origin ID.
   DVLOG(1) << "Current time: " << base::Time::Now();
   EXPECT_CALL(*this, GetProvisioningResult())
-      .WillOnce(Return(false))
-      .WillRepeatedly(Return(true));
+      .WillOnce(Return(absl::nullopt))
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize();
 
   EXPECT_FALSE(GetOriginId());
   task_environment_.RunUntilIdle();
 
-  // Check that |kAvailableOriginIds| in the preference is empty.
-  DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-  auto* dict = GetDictionary(kMediaDrmOriginIds);
-  DVLOG(1) << DisplayPref(dict);
-  EXPECT_FALSE(dict->FindKey(kAvailableOriginIds));
+  {
+    // Check that |kAvailableOriginIds| in the preference is empty.
+    DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
+    auto& dict = GetDict(kMediaDrmOriginIds);
+    DVLOG(1) << DisplayPref(dict);
+    EXPECT_FALSE(dict.Find(kAvailableOriginIds));
 
-  // Check that |kExpirableToken| is only set if per-application provisioning is
-  // not supported.
-  EXPECT_TRUE(media::MediaDrmBridge::IsPerApplicationProvisioningSupported() ||
-              dict->FindKey(kExpirableToken));
+    // Check that |kExpirableToken| is only set if per-application provisioning
+    // is not supported.
+    EXPECT_TRUE(
+        media::MediaDrmBridge::IsPerApplicationProvisioningSupported() ||
+        dict.Find(kExpirableToken));
+  }
 
   // Advance clock by |kExpirationDelta| (plus one minute) and attempt to
   // pre-provision more origin Ids.
@@ -382,24 +381,24 @@ TEST_F(MediaDrmOriginIdManagerTest, ProvisioningAfterExpiration) {
 
   // Look at the preference again.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds << " again";
-  dict = GetDictionary(kMediaDrmOriginIds);
+  auto& dict = GetDict(kMediaDrmOriginIds);
   DVLOG(1) << DisplayPref(dict);
-  auto* list = dict->FindKey(kAvailableOriginIds);
+  auto* list = dict.FindList(kAvailableOriginIds);
 
   if (media::MediaDrmBridge::IsPerApplicationProvisioningSupported()) {
     // If per-application provisioning is supported, it's OK to attempt
     // to pre-provision origin IDs any time.
     DVLOG(1) << "Per-application provisioning is supported.";
-    EXPECT_EQ(list->GetListDeprecated().size(), kExpectedPreferenceListSize);
-    EXPECT_FALSE(dict->FindKey(kExpirableToken));
+    ASSERT_TRUE(list);
+    EXPECT_EQ(list->size(), kExpectedPreferenceListSize);
   } else {
     // Per-application provisioning is not supported, so attempting to
     // pre-provision origin IDs after |kExpirationDelta| should not do anything.
     // As well, |kExpirableToken| should be removed.
     DVLOG(1) << "Per-application provisioning is NOT supported.";
     EXPECT_FALSE(list);
-    EXPECT_FALSE(dict->FindKey(kExpirableToken));
   }
+  EXPECT_FALSE(dict.Find(kExpirableToken));
 }
 
 TEST_F(MediaDrmOriginIdManagerTest, Incognito) {
@@ -419,8 +418,8 @@ TEST_F(MediaDrmOriginIdManagerTest, NetworkChange) {
   // provisioning fails. Update this once it returns an empty origin ID when
   // pre-provisioning fails.
   EXPECT_CALL(*this, GetProvisioningResult())
-      .WillOnce(Return(false))
-      .WillRepeatedly(Return(true));
+      .WillOnce(Return(absl::nullopt))
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
   Initialize();
 
   EXPECT_FALSE(GetOriginId());
@@ -428,9 +427,11 @@ TEST_F(MediaDrmOriginIdManagerTest, NetworkChange) {
 
   // Check that |kAvailableOriginIds| in the preference is empty.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-  auto* dict = GetDictionary(kMediaDrmOriginIds);
-  DVLOG(1) << DisplayPref(dict);
-  EXPECT_FALSE(dict->FindKey(kAvailableOriginIds));
+  {
+    auto& dict = GetDict(kMediaDrmOriginIds);
+    DVLOG(1) << DisplayPref(dict);
+    EXPECT_FALSE(dict.Find(kAvailableOriginIds));
+  }
 
   // Provisioning will now "succeed", so trigger a network change to
   // unconnected.
@@ -440,9 +441,11 @@ TEST_F(MediaDrmOriginIdManagerTest, NetworkChange) {
 
   // Check that |kAvailableOriginIds| is still empty.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds << " again";
-  dict = GetDictionary(kMediaDrmOriginIds);
-  DVLOG(1) << DisplayPref(dict);
-  EXPECT_FALSE(dict->FindKey(kAvailableOriginIds));
+  {
+    auto& dict = GetDict(kMediaDrmOriginIds);
+    DVLOG(1) << DisplayPref(dict);
+    EXPECT_FALSE(dict.Find(kAvailableOriginIds));
+  }
 
   // Now trigger a network change to connected.
   network::TestNetworkConnectionTracker::GetInstance()->SetConnectionType(
@@ -451,10 +454,7 @@ TEST_F(MediaDrmOriginIdManagerTest, NetworkChange) {
 
   // Pre-provisioning should have run and filled up the list.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds << " again";
-  dict = GetDictionary(kMediaDrmOriginIds);
-  DVLOG(1) << DisplayPref(dict);
-  auto* list = dict->FindKey(kAvailableOriginIds);
-  EXPECT_EQ(list->GetListDeprecated().size(), kExpectedPreferenceListSize);
+  VerifyListSize();
 }
 
 TEST_F(MediaDrmOriginIdManagerTest, NetworkChangeFails) {
@@ -469,7 +469,7 @@ TEST_F(MediaDrmOriginIdManagerTest, NetworkChangeFails) {
   // pre-provisioning fails.
   EXPECT_CALL(*this, GetProvisioningResult())
       .Times(kConnectionAttempts + 1)
-      .WillOnce(Return(false));
+      .WillOnce(Return(absl::nullopt));
   Initialize();
 
   EXPECT_FALSE(GetOriginId());
@@ -477,9 +477,11 @@ TEST_F(MediaDrmOriginIdManagerTest, NetworkChangeFails) {
 
   // Check that |kAvailableOriginIds| in the preference is empty.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds;
-  auto* dict = GetDictionary(kMediaDrmOriginIds);
-  DVLOG(1) << DisplayPref(dict);
-  EXPECT_FALSE(dict->FindKey(kAvailableOriginIds));
+  {
+    auto& dict = GetDict(kMediaDrmOriginIds);
+    DVLOG(1) << DisplayPref(dict);
+    EXPECT_FALSE(dict.Find(kAvailableOriginIds));
+  }
 
   // Trigger multiple network connections (provisioning still fails). Call more
   // than |kConnectionAttempts| to ensure that the network change is ignored
@@ -492,7 +494,42 @@ TEST_F(MediaDrmOriginIdManagerTest, NetworkChangeFails) {
 
   // Check that |kAvailableOriginIds| is still empty.
   DVLOG(1) << "Checking preference " << kMediaDrmOriginIds << " again";
-  dict = GetDictionary(kMediaDrmOriginIds);
-  DVLOG(1) << DisplayPref(dict);
-  EXPECT_FALSE(dict->FindKey(kAvailableOriginIds));
+  {
+    auto& dict = GetDict(kMediaDrmOriginIds);
+    DVLOG(1) << DisplayPref(dict);
+    EXPECT_FALSE(dict.Find(kAvailableOriginIds));
+  }
+}
+
+TEST_F(MediaDrmOriginIdManagerTest, InvalidEntry) {
+  // After fetching an origin ID the code should pre-provision more origins
+  // and fill up the list. This is independent of whether the device supports
+  // per-application provisioning or not.
+  EXPECT_CALL(*this, GetProvisioningResult())
+      .WillRepeatedly(InvokeWithoutArgs(&base::UnguessableToken::Create));
+  Initialize();
+
+  EXPECT_TRUE(GetOriginId());
+  task_environment_.RunUntilIdle();
+  VerifyListSize();
+
+  // Fetching the first origin ID has now filled up the list. Replace the
+  // first entry in the list with something (a boolean value) that cannot
+  // be converted to a base::UnguessableToken.
+  {
+    ScopedDictPrefUpdate update(profile_->GetTestingPrefService(),
+                                kMediaDrmOriginIds);
+    base::Value::List* origin_ids = update->FindList(kAvailableOriginIds);
+    EXPECT_FALSE(origin_ids->empty());
+    auto first_entry = origin_ids->begin();
+    *first_entry = base::Value(true);
+  }
+
+  // Next GetOriginId() call should attempt to use the invalid entry. Since
+  // it's invalid, a new origin ID will be created and used. And then an
+  // additional one is created to replace the one that should have been taken
+  // from the list.
+  EXPECT_TRUE(GetOriginId());
+  task_environment_.RunUntilIdle();
+  VerifyListSize();
 }

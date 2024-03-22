@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,9 @@ import org.chromium.base.ThreadUtils;
 @Implements(AsyncLayoutInflater.class)
 public class ShadowAsyncLayoutInflater {
     @Implementation
-    public void inflate(@LayoutRes int resid, @Nullable ViewGroup parent,
+    public void inflate(
+            @LayoutRes int resid,
+            @Nullable ViewGroup parent,
             @NonNull AsyncLayoutInflater.OnInflateFinishedListener callback) {
         Context context =
                 parent != null ? parent.getContext() : ContextUtils.getApplicationContext();

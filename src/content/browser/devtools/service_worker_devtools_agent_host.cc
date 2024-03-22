@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/devtools/service_worker_devtools_agent_host.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "content/browser/devtools/devtools_renderer_channel.h"
 #include "content/browser/devtools/devtools_session.h"
@@ -230,7 +230,8 @@ bool ServiceWorkerDevToolsAgentHost::AttachSession(DevToolsSession* session,
   session->CreateAndAddHandler<protocol::InspectorHandler>();
   session->CreateAndAddHandler<protocol::NetworkHandler>(
       GetId(), devtools_worker_token_, GetIOContext(), base::DoNothing(),
-      session->GetClient()->MayReadLocalFiles());
+      session->GetClient()->MayReadLocalFiles(),
+      session->GetClient()->IsTrusted());
 
   session->CreateAndAddHandler<protocol::FetchHandler>(
       GetIOContext(),
@@ -241,7 +242,7 @@ bool ServiceWorkerDevToolsAgentHost::AttachSession(DevToolsSession* session,
 
   auto* target_handler = session->CreateAndAddHandler<protocol::TargetHandler>(
       protocol::TargetHandler::AccessMode::kAutoAttachOnly, GetId(),
-      auto_attacher_.get(), session->GetRootSession());
+      auto_attacher_.get(), session);
   DCHECK(target_handler);
   target_handler->DisableAutoAttachOfServiceWorkers();
 
@@ -318,14 +319,11 @@ void ServiceWorkerDevToolsAgentHost::UpdateProcessHost() {
     process_observation_.Observe(rph);
 }
 
-// TODO(caseq): this is only relevant for shutdown, where a RPH may
-// go along with StoragePartition and we won't receive any signals from
-// the DevToolsWorkerManager, so agents would be still attached and
-// may access the storage partition. This is meant to be a temporary
-// workaround, the proper fix is likely to have ServiceWorkerInstance
-// deleted in such case.
 void ServiceWorkerDevToolsAgentHost::RenderProcessHostDestroyed(
     RenderProcessHost* host) {
+  scoped_refptr<DevToolsAgentHost> retain_this;
+  if (context_wrapper_->process_manager()->IsShutdown())
+    retain_this = ForceDetachAllSessionsImpl();
   GetRendererChannel()->SetRenderer(mojo::NullRemote(), mojo::NullReceiver(),
                                     ChildProcessHost::kInvalidUniqueID);
   process_observation_.Reset();
@@ -365,12 +363,12 @@ void ServiceWorkerDevToolsAgentHost::UpdateLoaderFactories(
   }
 
   auto script_bundle = EmbeddedWorkerInstance::CreateFactoryBundle(
-      rph, worker_route_id_, origin, client_security_state_.Clone(),
+      rph, worker_route_id_, version->key(), client_security_state_.Clone(),
       std::move(coep_reporter_for_script_loader),
       ContentBrowserClient::URLLoaderFactoryType::kServiceWorkerScript,
       GetId());
   auto subresource_bundle = EmbeddedWorkerInstance::CreateFactoryBundle(
-      rph, worker_route_id_, origin, client_security_state_.Clone(),
+      rph, worker_route_id_, version->key(), client_security_state_.Clone(),
       std::move(coep_reporter_for_subresource_loader),
       ContentBrowserClient::URLLoaderFactoryType::kServiceWorkerSubResource,
       GetId());
@@ -385,13 +383,11 @@ DevToolsAgentHostImpl::NetworkLoaderFactoryParamsAndInfo
 ServiceWorkerDevToolsAgentHost::CreateNetworkFactoryParamsForDevTools() {
   RenderProcessHost* rph = RenderProcessHost::FromID(worker_process_id_);
   const url::Origin origin = url::Origin::Create(url_);
+  const auto* version = context_wrapper_->GetLiveVersion(version_id_);
   // TODO(crbug.com/1231019): make sure client_security_state is no longer
   // nullptr anywhere.
   auto factory = URLLoaderFactoryParamsHelper::CreateForWorker(
-      rph, origin,
-      net::IsolationInfo::Create(net::IsolationInfo::RequestType::kOther,
-                                 origin, origin,
-                                 net::SiteForCookies::FromOrigin(origin)),
+      rph, origin, version->key().ToPartialNetIsolationInfo(),
       /*coep_reporter=*/mojo::NullRemote(),
       static_cast<StoragePartitionImpl*>(rph->GetStoragePartition())
           ->CreateAuthCertObserverForServiceWorker(),

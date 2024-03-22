@@ -14,6 +14,7 @@ pausable. Some internal task queues are not.
 | Networking                        | No          | No                      |  Yes       | Yes       | Yes      | No           |
 | NetworkingWithURLLoaderAnnotation | No          | No                      |  Yes       | Yes       | Yes      | No           |
 | NetworkingControl                 | No          | No                      |  Yes       | Yes       | Yes      | No           |
+| LowPriorityScriptExecution        | No          | No                      |  Yes       | Yes       | Yes      | No           |
 | HistoryTraversal                  | No          | No                      |  Yes       | Yes       | Yes      | Yes          |
 | Embed                             | No          | No                      |  Yes       | Yes       | Yes      | Yes          |
 | MediaElementEvent                 | No          | No                      |  No        | Yes       | Yes      | Yes          |
@@ -43,6 +44,7 @@ pausable. Some internal task queues are not.
 | ServiceWorkerClientMessage        | No          | No                      |  No        | Yes       | Yes      | Yes          |
 | WebLocks                          | No          | No                      |  No        | No        | No       | Yes          |
 | WakeLock                          | No          | No                      |  Yes       | Yes       | Yes      | Yes          |
+| Storage                           | No          | No                      |  Yes       | Yes       | Yes      | Yes          |
 | WebSchedulingPostedTask           | Yes [^3]    | Yes [^3]                |  Yes       | Yes       | Yes      | Yes          |
 | InternalDefault                   | No          | No                      |  Yes       | Yes       | Yes      | Yes          |
 | InternalLoading                   | No          | No                      |  Yes       | Yes       | Yes      | No           |

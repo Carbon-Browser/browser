@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,9 @@ typedef NS_ENUM(NSUInteger, SigninScreenConsumerScreenIntent) {
 // Sets the sign-in status, see SigninScreenConsumerSigninStatus.
 // This property needs to be set before the view is loaded.
 @property(nonatomic, assign) SigninScreenConsumerSigninStatus signinStatus;
+// In case the general sync-related UI is disabled: Shows a subtitle with
+// benefits related to sync if the value is YES, a generic one otherwise.
+@property(nonatomic, assign) BOOL syncEnabled;
 
 // Sets the `userName`, `email`, `givenName` and `avatar` of the selected
 // identity. The `userName` and `givenName` can be nil. Notifies the UI that an

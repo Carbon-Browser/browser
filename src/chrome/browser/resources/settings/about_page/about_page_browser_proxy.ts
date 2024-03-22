@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,22 +26,22 @@ export enum UpdateStatus {
 }
 
 // <if expr="_google_chrome and is_macosx">
-export type PromoteUpdaterStatus = {
-  hidden: boolean,
-  disabled: boolean,
-  actionable: boolean,
-  text?: string,
-};
+export interface PromoteUpdaterStatus {
+  hidden: boolean;
+  disabled: boolean;
+  actionable: boolean;
+  text?: string;
+}
 // </if>
 
-export type UpdateStatusChangedEvent = {
-  status: UpdateStatus,
-  progress?: number,
-  message?: string,
-  connectionTypes?: string,
-  version?: string,
-  size?: string,
-};
+export interface UpdateStatusChangedEvent {
+  status: UpdateStatus;
+  progress?: number;
+  message?: string;
+  connectionTypes?: string;
+  version?: string;
+  size?: string;
+}
 
 
 export interface AboutPageBrowserProxy {

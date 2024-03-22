@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,14 @@
 #include "components/segmentation_platform/internal/ukm_data_manager.h"
 #include "components/segmentation_platform/public/config.h"
 #include "components/segmentation_platform/public/field_trial_register.h"
+#include "components/sync_device_info/device_info_tracker.h"
+#include "components/sync_device_info/fake_device_info_tracker.h"
 
 namespace segmentation_platform {
 
 namespace {
+
+using syncer::DeviceInfoTracker;
 
 class MockFieldTrialRegister : public FieldTrialRegister {
  public:
@@ -37,23 +41,32 @@ std::vector<std::unique_ptr<Config>> CreateTestConfigs() {
     std::unique_ptr<Config> config = std::make_unique<Config>();
     config->segmentation_key = kTestSegmentationKey1;
     config->segment_selection_ttl = base::Days(28);
-    config->segment_ids = {SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB,
-                           SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE};
+    config->AddSegmentId(SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB);
+    config->AddSegmentId(SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE);
     configs.push_back(std::move(config));
   }
   {
     std::unique_ptr<Config> config = std::make_unique<Config>();
     config->segmentation_key = kTestSegmentationKey2;
     config->segment_selection_ttl = base::Days(10);
-    config->segment_ids = {SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE,
-                           SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE};
+    config->AddSegmentId(SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE);
+    config->AddSegmentId(SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_VOICE);
     configs.push_back(std::move(config));
   }
   {
     std::unique_ptr<Config> config = std::make_unique<Config>();
     config->segmentation_key = kTestSegmentationKey3;
     config->segment_selection_ttl = base::Days(14);
-    config->segment_ids = {SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB};
+    config->AddSegmentId(SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB);
+    configs.push_back(std::move(config));
+  }
+  {
+    std::unique_ptr<Config> config = std::make_unique<Config>();
+    config->segmentation_key = kTestSegmentationKey4;
+    config->segment_selection_ttl = base::Days(14);
+    config->AddSegmentId(
+        SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHOPPING_USER);
+    config->auto_execute_and_cache = false;
     configs.push_back(std::move(config));
   }
   {
@@ -71,9 +84,13 @@ std::vector<std::unique_ptr<Config>> CreateTestConfigs() {
 constexpr char kTestSegmentationKey1[] = "test_key1";
 constexpr char kTestSegmentationKey2[] = "test_key2";
 constexpr char kTestSegmentationKey3[] = "test_key3";
+constexpr char kTestSegmentationKey4[] = "test_key4";
+constexpr char kTestProfileId[] = "test_id";
 
-SegmentationPlatformServiceTestBase::SegmentationPlatformServiceTestBase() =
-    default;
+SegmentationPlatformServiceTestBase::SegmentationPlatformServiceTestBase() {
+  device_info_tracker_ = std::make_unique<syncer::FakeDeviceInfoTracker>();
+}
+
 SegmentationPlatformServiceTestBase::~SegmentationPlatformServiceTestBase() =
     default;
 
@@ -103,24 +120,27 @@ void SegmentationPlatformServiceTestBase::InitPlatform(
   std::vector<std::unique_ptr<Config>> configs = CreateTestConfigs();
   base::flat_set<SegmentId> all_segment_ids;
   for (const auto& config : configs) {
-    for (const auto& segment_id : config->segment_ids)
-      all_segment_ids.insert(segment_id);
+    for (const auto& segment_id : config->segments)
+      all_segment_ids.insert(segment_id.first);
   }
   auto storage_service = std::make_unique<StorageService>(
       std::move(segment_db), std::move(signal_db),
-      std::move(segment_storage_config_db), &test_clock_, ukm_data_manager,
-      all_segment_ids, model_provider_factory.get());
+      std::move(segment_storage_config_db), task_runner_, &test_clock_,
+      ukm_data_manager, std::move(configs), model_provider_factory.get(),
+      &pref_service_, base::DoNothing());
 
   auto params = std::make_unique<SegmentationPlatformServiceImpl::InitParams>();
+  params->profile_id = kTestProfileId;
   params->storage_service = std::move(storage_service);
-  params->model_provider =
-      std::make_unique<TestModelProviderFactory>(&model_provider_data_);
+  params->model_provider = std::move(model_provider_factory);
   params->profile_prefs = &pref_service_;
   params->history_service = history_service;
   params->task_runner = task_runner_;
   params->clock = &test_clock_;
-  params->configs = std::move(configs);
   params->field_trial_register = std::make_unique<MockFieldTrialRegister>();
+  params->device_info_tracker = device_info_tracker_.get();
+  params->input_delegate_holder =
+      std::make_unique<processing::InputDelegateHolder>();
   segmentation_platform_service_impl_ =
       std::make_unique<SegmentationPlatformServiceImpl>(std::move(params));
 }
@@ -133,13 +153,13 @@ void SegmentationPlatformServiceTestBase::DestroyPlatform() {
 }
 
 void SegmentationPlatformServiceTestBase::SetUpPrefs() {
-  DictionaryPrefUpdate update(&pref_service_, kSegmentationResultPref);
-  base::Value* dictionary = update.Get();
+  ScopedDictPrefUpdate update(&pref_service_, kSegmentationResultPref);
+  base::Value::Dict& dictionary = update.Get();
 
-  base::Value segmentation_result(base::Value::Type::DICTIONARY);
-  segmentation_result.SetIntKey(
-      "segment_id", SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE);
-  dictionary->SetKey(kTestSegmentationKey1, std::move(segmentation_result));
+  base::Value::Dict segmentation_result;
+  segmentation_result.Set("segment_id",
+                          SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SHARE);
+  dictionary.Set(kTestSegmentationKey1, std::move(segmentation_result));
 }
 
 std::vector<std::unique_ptr<Config>>

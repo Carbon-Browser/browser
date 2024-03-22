@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <algorithm>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
 #include "media/base/video_codecs.h"
@@ -89,8 +90,14 @@ class PLATFORM_EXPORT StatsCollectingEncoder
   base::Lock lock_;
 
   const std::unique_ptr<webrtc::VideoEncoder> encoder_;
-  webrtc::EncodedImageCallback* encoded_callback_{nullptr};
-  size_t highest_observed_spatial_index_ = 0;
+  raw_ptr<webrtc::EncodedImageCallback, ExperimentalRenderer> encoded_callback_{
+      nullptr};
+  // We only care about the highest layer...
+  // - In simulcast, the stream index refers to the simulcast index.
+  // - In SVC, the stream index refers to the spatial index.
+  // The mixed simulcast-SVC case is not considered because it is not supported
+  // by WebRTC.
+  size_t highest_observed_stream_index_ = 0;
 
   bool first_frame_encoded_{false};
   base::TimeTicks last_check_for_simultaneous_encoders_;

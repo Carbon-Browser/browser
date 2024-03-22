@@ -1,16 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.offline_items_collection.bridges;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
 import org.chromium.components.offline_items_collection.FailState;
 import org.chromium.components.offline_items_collection.OfflineItem;
 import org.chromium.components.offline_items_collection.OfflineItemFilter;
 import org.chromium.components.offline_items_collection.OfflineItemProgressUnit;
-import org.chromium.components.offline_items_collection.OfflineItemSchedule;
 import org.chromium.components.offline_items_collection.OfflineItemState;
 import org.chromium.components.offline_items_collection.PendingState;
 import org.chromium.components.offline_items_collection.UpdateDelta;
@@ -46,18 +46,44 @@ public final class OfflineItemBridge {
      * @return The newly created {@link OfflineItem} based on the passed in parameters.
      */
     @CalledByNative
-    private static OfflineItem createOfflineItemAndMaybeAddToList(ArrayList<OfflineItem> list,
-            String nameSpace, String id, String title, String description,
-            @OfflineItemFilter int filter, boolean isTransient, boolean isSuggested,
-            boolean isAccelerated, boolean promoteOrigin, long totalSizeBytes,
-            boolean externallyRemoved, long creationTimeMs, long completionTimeMs,
-            long lastAccessedTimeMs, boolean isOpenable, String filePath, String mimeType, GURL url,
-            GURL originalUrl, boolean isOffTheRecord, String otrProfileId,
-            @OfflineItemState int state, @FailState int failState, @PendingState int pendingState,
-            boolean isResumable, boolean allowMetered, long receivedBytes, long progressValue,
-            long progressMax, @OfflineItemProgressUnit int progressUnit, long timeRemainingMs,
-            boolean isDangerous, boolean canRename, boolean ignoreVisuals,
-            double contentQualityScore, OfflineItemSchedule schedule) {
+    private static OfflineItem createOfflineItemAndMaybeAddToList(
+            ArrayList<OfflineItem> list,
+            String nameSpace,
+            String id,
+            String title,
+            String description,
+            @OfflineItemFilter int filter,
+            boolean isTransient,
+            boolean isSuggested,
+            boolean isAccelerated,
+            boolean promoteOrigin,
+            long totalSizeBytes,
+            boolean externallyRemoved,
+            long creationTimeMs,
+            long completionTimeMs,
+            long lastAccessedTimeMs,
+            boolean isOpenable,
+            String filePath,
+            String mimeType,
+            GURL url,
+            GURL originalUrl,
+            boolean isOffTheRecord,
+            String otrProfileId,
+            GURL referrerUrl,
+            @OfflineItemState int state,
+            @FailState int failState,
+            @PendingState int pendingState,
+            boolean isResumable,
+            boolean allowMetered,
+            long receivedBytes,
+            long progressValue,
+            long progressMax,
+            @OfflineItemProgressUnit int progressUnit,
+            long timeRemainingMs,
+            boolean isDangerous,
+            boolean canRename,
+            boolean ignoreVisuals,
+            double contentQualityScore) {
         OfflineItem item = new OfflineItem();
         item.id.namespace = nameSpace;
         item.id.id = id;
@@ -80,20 +106,21 @@ public final class OfflineItemBridge {
         item.originalUrl = originalUrl;
         item.isOffTheRecord = isOffTheRecord;
         item.otrProfileId = otrProfileId;
+        item.referrerUrl = referrerUrl;
         item.state = state;
         item.failState = failState;
         item.pendingState = pendingState;
         item.isResumable = isResumable;
         item.allowMetered = allowMetered;
         item.receivedBytes = receivedBytes;
-        item.progress = new OfflineItem.Progress(
-                progressValue, progressMax == -1 ? null : progressMax, progressUnit);
+        item.progress =
+                new OfflineItem.Progress(
+                        progressValue, progressMax == -1 ? null : progressMax, progressUnit);
         item.timeRemainingMs = timeRemainingMs;
         item.isDangerous = isDangerous;
         item.canRename = canRename;
         item.ignoreVisuals = ignoreVisuals;
         item.contentQualityScore = contentQualityScore;
-        item.schedule = schedule;
 
         if (list != null) list.add(item);
         return item;
@@ -110,11 +137,5 @@ public final class OfflineItemBridge {
         updateDelta.stateChanged = stateChanged;
         updateDelta.visualsChanged = visualsChanged;
         return updateDelta;
-    }
-
-    @CalledByNative
-    private static OfflineItemSchedule createOfflineItemSchedule(
-            boolean onlyOnWifi, long startTimeMs) {
-        return new OfflineItemSchedule(onlyOnWifi, startTimeMs);
     }
 }

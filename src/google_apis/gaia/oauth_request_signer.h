@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,15 @@
 #include <map>
 #include <string>
 
+#include "base/component_export.h"
+
 class GURL;
 
 // Implements the OAuth request signing process as described here:
 //   http://oauth.net/core/1.0/#signing_process
 //
 // NOTE: Currently the only supported SignatureMethod is HMAC_SHA1_SIGNATURE
-class OAuthRequestSigner {
+class COMPONENT_EXPORT(GOOGLE_APIS) OAuthRequestSigner {
  public:
   enum SignatureMethod {
     HMAC_SHA1_SIGNATURE,

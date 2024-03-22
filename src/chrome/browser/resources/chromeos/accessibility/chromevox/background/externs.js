@@ -1,11 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Common external variables when compiling ChromeVox background code
 
 var localStorage = {};
-var sessionStorage = {};
 var PhoneticDictionaries = {};
 
 /** Speech Rule Engine. See sre_browser.js. */

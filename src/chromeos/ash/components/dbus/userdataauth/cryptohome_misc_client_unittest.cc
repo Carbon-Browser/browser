@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 #include "dbus/mock_bus.h"
 #include "dbus/mock_object_proxy.h"
 #include "dbus/object_path.h"
@@ -109,7 +111,7 @@ class CryptohomeMiscClientTest : public testing::Test {
 
     EXPECT_CALL(*proxy_.get(), DoCallMethod(_, _, _))
         .WillRepeatedly(Invoke(this, &CryptohomeMiscClientTest::OnCallMethod));
-    EXPECT_CALL(*proxy_.get(), CallMethodAndBlockWithErrorDetails(_, _, _))
+    EXPECT_CALL(*proxy_.get(), CallMethodAndBlock(_, _))
         .WillRepeatedly(
             Invoke(this, &CryptohomeMiscClientTest::OnBlockingCallMethod));
 
@@ -131,7 +133,7 @@ class CryptohomeMiscClientTest : public testing::Test {
   scoped_refptr<dbus::MockObjectProxy> proxy_;
 
   // Convenience pointer to the global instance.
-  CryptohomeMiscClient* client_;
+  raw_ptr<CryptohomeMiscClient, DanglingUntriaged | ExperimentalAsh> client_;
 
   // The expected replies to the respective D-Bus calls.
   ::user_data_auth::GetSystemSaltReply expected_get_system_salt_reply_;
@@ -141,7 +143,6 @@ class CryptohomeMiscClientTest : public testing::Test {
   ::user_data_auth::LockToSingleUserMountUntilRebootReply
       expected_lock_to_single_user_mount_until_reboot_reply_;
   ::user_data_auth::GetRsuDeviceIdReply expected_get_rsu_device_id_reply_;
-  ::user_data_auth::CheckHealthReply expected_check_health_reply_;
 
   // The expected replies to the respective blocking D-Bus calls.
   ::user_data_auth::GetSanitizedUsernameReply
@@ -178,8 +179,6 @@ class CryptohomeMiscClientTest : public testing::Test {
           expected_lock_to_single_user_mount_until_reboot_reply_);
     } else if (method_call->GetMember() == ::user_data_auth::kGetRsuDeviceId) {
       writer.AppendProtoAsArrayOfBytes(expected_get_rsu_device_id_reply_);
-    } else if (method_call->GetMember() == ::user_data_auth::kCheckHealth) {
-      writer.AppendProtoAsArrayOfBytes(expected_check_health_reply_);
     } else {
       ASSERT_FALSE(true) << "Unrecognized member: " << method_call->GetMember();
     }
@@ -188,11 +187,9 @@ class CryptohomeMiscClientTest : public testing::Test {
                                   std::move(response)));
   }
 
-  // Handles blocking call to |proxy_|'s `CallMethodAndBlockWithErrorDetails`.
-  std::unique_ptr<dbus::Response> OnBlockingCallMethod(
-      dbus::MethodCall* method_call,
-      int timeout_ms,
-      dbus::ScopedDBusError* error) {
+  // Handles blocking call to |proxy_|'s `CallMethodAndBlock`.
+  base::expected<std::unique_ptr<dbus::Response>, dbus::Error>
+  OnBlockingCallMethod(dbus::MethodCall* method_call, int timeout_ms) {
     std::unique_ptr<dbus::Response> response(dbus::Response::CreateEmpty());
     dbus::MessageWriter writer(response.get());
     if (shall_message_parsing_fail_) {
@@ -208,9 +205,8 @@ class CryptohomeMiscClientTest : public testing::Test {
           expected_blocking_get_sanitized_username_reply_);
     } else {
       LOG(FATAL) << "Unrecognized member: " << method_call->GetMember();
-      return nullptr;
     }
-    return response;
+    return base::ok(std::move(response));
   }
 };
 
@@ -292,18 +288,6 @@ TEST_F(CryptohomeMiscClientTest, GetRsuDeviceId) {
   ASSERT_NE(result_reply, absl::nullopt);
   EXPECT_TRUE(
       ProtobufEquals(result_reply.value(), expected_get_rsu_device_id_reply_));
-}
-
-TEST_F(CryptohomeMiscClientTest, CheckHealth) {
-  expected_check_health_reply_.set_requires_powerwash(true);
-  absl::optional<::user_data_auth::CheckHealthReply> result_reply;
-
-  client_->CheckHealth(::user_data_auth::CheckHealthRequest(),
-                       CreateCopyCallback(&result_reply));
-  base::RunLoop().RunUntilIdle();
-  ASSERT_NE(result_reply, absl::nullopt);
-  EXPECT_TRUE(
-      ProtobufEquals(result_reply.value(), expected_check_health_reply_));
 }
 
 TEST_F(CryptohomeMiscClientTest, BlockingGetSanitizedUsername) {

@@ -1,25 +1,26 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_cell_utils.h"
 
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/chip_button.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 // Horizontal spacing between views in `AppendHorizontalConstraintsForViews`.
 constexpr CGFloat kHorizontalSpacing = 16;
 }  // namespace
+
+const CGFloat kButtonHorizontalMargin = 16;
+const CGFloat kChipsHorizontalMargin = -1;
+const CGFloat TopSystemSpacingMultiplier = 2;
+const CGFloat BottomSystemSpacingMultiplier = 2.26;
 
 UIButton* CreateChipWithSelectorAndTarget(SEL action, id target) {
   UIButton* button = [ChipButton buttonWithType:UIButtonTypeCustom];

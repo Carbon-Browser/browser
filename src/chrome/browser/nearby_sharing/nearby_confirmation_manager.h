@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NEARBY_SHARING_NEARBY_CONFIRMATION_MANAGER_H_
 #define CHROME_BROWSER_NEARBY_SHARING_NEARBY_CONFIRMATION_MANAGER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/nearby_sharing/share_target.h"
 #include "chrome/browser/ui/webui/nearby_share/nearby_share.mojom.h"
 
@@ -26,7 +27,7 @@ class NearbyConfirmationManager
   void Cancel(CancelCallback callback) override;
 
  private:
-  NearbySharingService* nearby_service_;
+  raw_ptr<NearbySharingService, ExperimentalAsh> nearby_service_;
   ShareTarget share_target_;
 };
 

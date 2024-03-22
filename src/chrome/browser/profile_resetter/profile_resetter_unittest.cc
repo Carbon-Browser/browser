@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -349,20 +349,19 @@ scoped_refptr<Extension> CreateExtension(const std::u16string& name,
                                          ManifestLocation location,
                                          extensions::Manifest::Type type,
                                          bool installed_by_default) {
-  base::DictionaryValue manifest;
-  manifest.SetStringPath(extensions::manifest_keys::kVersion, "1.0.0.0");
-  manifest.SetStringPath(extensions::manifest_keys::kName, name);
-  manifest.SetIntPath(extensions::manifest_keys::kManifestVersion, 2);
+  base::Value::Dict manifest;
+  manifest.Set(extensions::manifest_keys::kVersion, "1.0.0.0");
+  manifest.Set(extensions::manifest_keys::kName, name);
+  manifest.Set(extensions::manifest_keys::kManifestVersion, 2);
   switch (type) {
     case extensions::Manifest::TYPE_THEME:
-      manifest.SetKey(extensions::manifest_keys::kTheme,
-                      base::DictionaryValue());
+      manifest.Set(extensions::manifest_keys::kTheme, base::Value::Dict());
       break;
     case extensions::Manifest::TYPE_HOSTED_APP:
-      manifest.SetStringPath(extensions::manifest_keys::kLaunchWebURL,
-                             "http://www.google.com");
-      manifest.SetStringPath(extensions::manifest_keys::kUpdateURL,
-                             "http://clients2.google.com/service/update2/crx");
+      manifest.SetByDottedPath(extensions::manifest_keys::kLaunchWebURL,
+                               "http://www.google.com");
+      manifest.Set(extensions::manifest_keys::kUpdateURL,
+                   "http://clients2.google.com/service/update2/crx");
       break;
     case extensions::Manifest::TYPE_EXTENSION:
       // do nothing
@@ -370,7 +369,7 @@ scoped_refptr<Extension> CreateExtension(const std::u16string& name,
     default:
       NOTREACHED();
   }
-  manifest.SetStringPath(extensions::manifest_keys::kOmniboxKeyword, name);
+  manifest.SetByDottedPath(extensions::manifest_keys::kOmniboxKeyword, name);
   std::string error;
   scoped_refptr<Extension> extension = Extension::Create(
       path,
@@ -379,14 +378,14 @@ scoped_refptr<Extension> CreateExtension(const std::u16string& name,
       installed_by_default ? Extension::WAS_INSTALLED_BY_DEFAULT
                            : Extension::NO_FLAGS,
       &error);
-  EXPECT_TRUE(extension.get() != NULL) << error;
+  EXPECT_TRUE(extension.get() != nullptr) << error;
   return extension;
 }
 
 void ReplaceString(std::string* str,
                    const std::string& placeholder,
                    const std::string& substitution) {
-  ASSERT_NE(static_cast<std::string*>(NULL), str);
+  ASSERT_NE(static_cast<std::string*>(nullptr), str);
   size_t placeholder_pos = str->find(placeholder);
   ASSERT_NE(std::string::npos, placeholder_pos);
   str->replace(placeholder_pos, placeholder.size(), substitution);
@@ -406,7 +405,7 @@ TEST_F(ProfileResetterTest, ResetDefaultSearchEngineNonOrganic) {
   TemplateURLService* model =
       TemplateURLServiceFactory::GetForProfile(profile());
   const TemplateURL* default_engine = model->GetDefaultSearchProvider();
-  ASSERT_NE(static_cast<TemplateURL*>(NULL), default_engine);
+  ASSERT_NE(static_cast<TemplateURL*>(nullptr), default_engine);
   EXPECT_EQ(u"first", default_engine->short_name());
   EXPECT_EQ(u"firstkey", default_engine->keyword());
   EXPECT_EQ("http://www.foo.com/s?q={searchTerms}", default_engine->url());
@@ -475,7 +474,8 @@ TEST_F(ProfileResetterTest, ResetContentSettings) {
       continue;
     }
     ContentSetting default_setting =
-        host_content_settings_map->GetDefaultContentSetting(content_type, NULL);
+        host_content_settings_map->GetDefaultContentSetting(content_type,
+                                                            nullptr);
     default_settings[content_type] = default_setting;
     ContentSetting wildcard_setting = default_setting == CONTENT_SETTING_BLOCK
                                           ? CONTENT_SETTING_ALLOW
@@ -490,9 +490,8 @@ TEST_F(ProfileResetterTest, ResetContentSettings) {
     if (info->IsSettingValid(site_setting)) {
       host_content_settings_map->SetContentSettingDefaultScope(
           url, url, content_type, site_setting);
-      ContentSettingsForOneType host_settings;
-      host_content_settings_map->GetSettingsForOneType(content_type,
-                                                       &host_settings);
+      ContentSettingsForOneType host_settings =
+          host_content_settings_map->GetSettingsForOneType(content_type);
       EXPECT_EQ(2U, host_settings.size());
     }
   }
@@ -506,16 +505,15 @@ TEST_F(ProfileResetterTest, ResetContentSettings) {
       continue;
     ContentSetting default_setting =
         host_content_settings_map->GetDefaultContentSetting(content_type,
-                                                              NULL);
+                                                            nullptr);
     EXPECT_TRUE(default_settings.count(content_type));
     EXPECT_EQ(default_settings[content_type], default_setting);
     ContentSetting site_setting = host_content_settings_map->GetContentSetting(
         GURL("example.org"), GURL(), content_type);
     EXPECT_EQ(default_setting, site_setting);
 
-    ContentSettingsForOneType host_settings;
-    host_content_settings_map->GetSettingsForOneType(content_type,
-                                                     &host_settings);
+    ContentSettingsForOneType host_settings =
+        host_content_settings_map->GetSettingsForOneType(content_type);
     EXPECT_EQ(1U, host_settings.size());
   }
 }
@@ -750,7 +748,7 @@ TEST_F(ConfigParserTest, NoConnectivity) {
       url, network::mojom::URLResponseHead::New(), "",
       network::URLLoaderCompletionStatus(net::HTTP_INTERNAL_SERVER_ERROR));
 
-  std::unique_ptr<BrandcodeConfigFetcher> fetcher = WaitForRequest(GURL(url));
+  std::unique_ptr<BrandcodeConfigFetcher> fetcher = WaitForRequest(url);
   EXPECT_FALSE(fetcher->GetSettings());
 }
 
@@ -772,7 +770,7 @@ TEST_F(ConfigParserTest, ParseConfig) {
   test_url_loader_factory().AddResponse(url, std::move(head), xml_config,
                                         status);
 
-  std::unique_ptr<BrandcodeConfigFetcher> fetcher = WaitForRequest(GURL(url));
+  std::unique_ptr<BrandcodeConfigFetcher> fetcher = WaitForRequest(url);
   std::unique_ptr<BrandcodedDefaultSettings> settings = fetcher->GetSettings();
   ASSERT_TRUE(settings);
 
@@ -785,17 +783,43 @@ TEST_F(ConfigParserTest, ParseConfig) {
   EXPECT_TRUE(settings->GetHomepage(&homepage));
   EXPECT_EQ("http://www.foo.com", homepage);
 
-  std::unique_ptr<base::ListValue> startup_list(
+  absl::optional<base::Value::List> startup_list(
       settings->GetUrlsToRestoreOnStartup());
-  EXPECT_TRUE(startup_list);
+  EXPECT_TRUE(startup_list.has_value());
   std::vector<std::string> startup_pages;
-  for (const auto& entry : startup_list->GetListDeprecated()) {
+  for (const auto& entry : *startup_list) {
     ASSERT_TRUE(entry.is_string());
     startup_pages.push_back(entry.GetString());
   }
   ASSERT_EQ(2u, startup_pages.size());
   EXPECT_EQ("http://goo.gl", startup_pages[0]);
   EXPECT_EQ("http://foo.de", startup_pages[1]);
+}
+
+// Return an invalid response from the fetch request and delete the
+// Fetcher object in the callback, which mimics how ResetSettingsHandler uses
+// the class. See https://crbug.com/1491296.
+TEST_F(ConfigParserTest, InvalidResponseDeleteFromCallback) {
+  const GURL url("http://test");
+  auto head = network::mojom::URLResponseHead::New();
+  head->headers = base::MakeRefCounted<net::HttpResponseHeaders>(
+      net::HttpUtil::AssembleRawHeaders(
+          "HTTP/1.1 200 OK\nContent-type: application/custom\n\n"));
+  head->mime_type = "application/custom";
+  test_url_loader_factory().AddResponse(url, std::move(head),
+                                        "Custom app data, not XML",
+                                        network::URLLoaderCompletionStatus());
+
+  base::RunLoop run_loop;
+  std::unique_ptr<BrandcodeConfigFetcher> fetcher;
+  auto callback = base::BindLambdaForTesting([&fetcher, &run_loop] {
+    EXPECT_FALSE(fetcher->GetSettings());
+    fetcher.reset();
+    run_loop.Quit();
+  });
+  fetcher = std::make_unique<BrandcodeConfigFetcher>(&test_url_loader_factory(),
+                                           std::move(callback), url, "ABCD");
+  run_loop.Run();
 }
 
 TEST_F(ProfileResetterTest, CheckSnapshots) {
@@ -941,7 +965,7 @@ struct FeedbackCapture {
 
   MOCK_METHOD0(OnUpdatedList, void(void));
 
-  std::unique_ptr<base::ListValue> list_;
+  base::Value::List list_;
 };
 
 // Make sure GetReadableFeedback handles non-ascii letters.
@@ -980,22 +1004,21 @@ TEST_F(ProfileResetterTest, GetReadableFeedback) {
   ::testing::Mock::VerifyAndClearExpectations(&capture);
   // The homepage and the startup page are in punycode. They are unreadable.
   // Trying to find the extension name.
-  std::unique_ptr<base::ListValue> list = std::move(capture.list_);
-  ASSERT_TRUE(list);
+  base::Value::List list = std::move(capture.list_);
   bool checked_extensions = false;
   bool checked_shortcuts = false;
-  for (size_t i = 0; i < list->GetListDeprecated().size(); ++i) {
-    const base::Value& dict = list->GetListDeprecated()[i];
-    ASSERT_TRUE(dict.is_dict());
-    const std::string* value = dict.FindStringKey("key");
+  for (const auto& entry : list) {
+    const base::Value::Dict* dict = entry.GetIfDict();
+    ASSERT_TRUE(dict);
+    const std::string* value = dict->FindString("key");
     ASSERT_TRUE(value);
     if (*value == "Extensions") {
-      const std::string* extensions = dict.FindStringKey("value");
+      const std::string* extensions = dict->FindString("value");
       ASSERT_TRUE(extensions);
       EXPECT_EQ(*extensions, "Tiësto");
       checked_extensions = true;
     } else if (*value == "Shortcut targets") {
-      const std::string* targets = dict.FindStringKey("value");
+      const std::string* targets = dict->FindString("value");
       ASSERT_TRUE(targets);
       EXPECT_NE(std::string::npos, targets->find("foo.com")) << *targets;
       checked_shortcuts = true;
@@ -1024,6 +1047,7 @@ TEST_F(ProfileResetterTest, ResetNTPCustomizationsTest) {
       GURL("https://background.com"));
   ntp_custom_background_service->SetCustomBackgroundInfo(
       /*background_url=*/GURL("https://background.com"),
+      /*thumbnail_url=*/GURL("https://thumbnail.com"),
       /*attribution_line_1=*/"line 1",
       /*attribution_line_2=*/"line 2",
       /*action_url=*/GURL("https://action.com"),

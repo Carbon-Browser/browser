@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/tflite/src/tensorflow/lite/c/common.h"
 #include "third_party/tflite_support/src/tensorflow_lite_support/cc/task/core/task_utils.h"
 
@@ -33,7 +34,7 @@ void ModelValidatorHandler::OnModelExecutionComplete(
 
 void ModelValidatorHandler::OnModelUpdated(
     optimization_guide::proto::OptimizationTarget optimization_target,
-    const optimization_guide::ModelInfo& model_info) {
+    base::optional_ref<const optimization_guide::ModelInfo> model_info) {
   // First invoke parent to update internal status.
   optimization_guide::ModelHandler<
       float, const std::vector<float>&>::OnModelUpdated(optimization_target,

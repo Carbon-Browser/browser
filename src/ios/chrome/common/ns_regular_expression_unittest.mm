@@ -1,14 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/strings/sys_string_conversions.h"
+#import "base/strings/sys_string_conversions.h"
 #import "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
 
 // Chromium code relies on NSRegularExpression class to match regular
 // expressions.  Any subtle changes in behavior can lead to hard to diagnose
@@ -17,8 +13,8 @@
 
 namespace {
 
-// Checks that capture groups from |testString| substituted into
-// |templateString| matches |expected|.
+// Checks that capture groups from `testString` substituted into
+// `templateString` matches `expected`.
 void ExpectRegexMatched(NSRegularExpression* regex,
                         NSString* testString,
                         NSString* templateString,
@@ -35,7 +31,7 @@ void ExpectRegexMatched(NSRegularExpression* regex,
                         : "'" + base::SysNSStringToUTF8(outputString) + "'");
 }
 
-// Checks that |testString| is not matched by |regex|.
+// Checks that `testString` is not matched by `regex`.
 void ExpectRegexNotMatched(NSRegularExpression* regex, NSString* testString) {
   __block BOOL matched = NO;
   NSRange testRange = NSMakeRange(0, [testString length]);
@@ -56,7 +52,7 @@ void ExpectRegexNotMatched(NSRegularExpression* regex, NSString* testString) {
 }
 
 // Returns an autoreleased NSRegularExpression object from the regular
-// expression |pattern|.
+// expression `pattern`.
 NSRegularExpression* MakeRegularExpression(NSString* pattern) {
   NSError* error = nil;
   return [NSRegularExpression regularExpressionWithPattern:pattern

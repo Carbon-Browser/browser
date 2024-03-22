@@ -1,22 +1,27 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/desks/desks_test_util.h"
 
 #include "ash/shell.h"
+#include "ash/style/close_button.h"
 #include "ash/wm/desks/desk.h"
+#include "ash/wm/desks/desk_action_view.h"
 #include "ash/wm/desks/desk_animation_base.h"
 #include "ash/wm/desks/desk_animation_impl.h"
-#include "ash/wm/desks/desks_bar_view.h"
+#include "ash/wm/desks/desk_mini_view.h"
 #include "ash/wm/desks/desks_histogram_enums.h"
+#include "ash/wm/desks/legacy_desk_bar_view.h"
 #include "ash/wm/desks/root_window_desk_switch_animator_test_api.h"
 #include "ash/wm/gestures/wm_gesture_handler.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_grid.h"
+#include "base/task/single_thread_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/events/base_event_utils.h"
+#include "ui/events/gesture_detection/gesture_configuration.h"
 #include "ui/events/test/event_generator.h"
 
 namespace ash {
@@ -36,25 +41,9 @@ void DeskSwitchAnimationWaiter::Wait() {
   EXPECT_FALSE(controller->AreDesksBeingModified());
 }
 
-void DeskSwitchAnimationWaiter::OnDeskAdded(const Desk* desk) {}
-
-void DeskSwitchAnimationWaiter::OnDeskRemoved(const Desk* desk) {}
-
-void DeskSwitchAnimationWaiter::OnDeskReordered(int old_index, int new_index) {}
-
-void DeskSwitchAnimationWaiter::OnDeskActivationChanged(
-    const Desk* activated,
-    const Desk* deactivated) {}
-
-void DeskSwitchAnimationWaiter::OnDeskSwitchAnimationLaunching() {}
-
 void DeskSwitchAnimationWaiter::OnDeskSwitchAnimationFinished() {
   run_loop_.Quit();
 }
-
-void DeskSwitchAnimationWaiter::OnDeskNameChanged(
-    const Desk* desk,
-    const std::u16string& new_name) {}
 
 void ActivateDesk(const Desk* desk) {
   ASSERT_FALSE(desk->is_active());
@@ -160,13 +149,62 @@ void WaitUntilEndingScreenshotTaken(DeskActivationAnimation* animation) {
   run_loop.Run();
 }
 
-const DesksBarView* GetPrimaryRootDesksBarView() {
+const LegacyDeskBarView* GetPrimaryRootDesksBarView() {
   auto* root_window = Shell::GetPrimaryRootWindow();
   auto* overview_controller = Shell::Get()->overview_controller();
   DCHECK(overview_controller->InOverviewSession());
   return overview_controller->overview_session()
       ->GetGridWithRootWindow(root_window)
       ->desks_bar_view();
+}
+
+const CloseButton* GetCloseDeskButtonForMiniView(
+    const DeskMiniView* mini_view) {
+  // When there are no windows on the desk, the `combine_desks_button` is not
+  // visible, so we need to use the `close_all_button`
+  const DeskActionView* desk_action_view = mini_view->desk_action_view();
+  return desk_action_view->combine_desks_button()->GetVisible()
+             ? desk_action_view->combine_desks_button()
+             : desk_action_view->close_all_button();
+}
+
+bool GetDeskActionVisibilityForMiniView(const DeskMiniView* mini_view) {
+  return mini_view->desk_action_view()->GetVisible();
+}
+
+void WaitForMilliseconds(int milliseconds) {
+  base::RunLoop run_loop;
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(milliseconds));
+  run_loop.Run();
+}
+
+void LongGestureTap(const gfx::Point& screen_location,
+                    ui::test::EventGenerator* event_generator,
+                    bool release_touch) {
+  // Temporarily reconfigure gestures so that the long tap takes 2
+  // milliseconds.
+  ui::GestureConfiguration* gesture_config =
+      ui::GestureConfiguration::GetInstance();
+  const int old_long_press_time_in_ms = gesture_config->long_press_time_in_ms();
+  const base::TimeDelta old_short_press_time =
+      gesture_config->short_press_time();
+  const int old_show_press_delay_in_ms =
+      gesture_config->show_press_delay_in_ms();
+  gesture_config->set_long_press_time_in_ms(1);
+  gesture_config->set_short_press_time(base::Milliseconds(1));
+  gesture_config->set_show_press_delay_in_ms(1);
+
+  event_generator->set_current_screen_location(screen_location);
+  event_generator->PressTouch();
+  WaitForMilliseconds(2);
+
+  gesture_config->set_long_press_time_in_ms(old_long_press_time_in_ms);
+  gesture_config->set_short_press_time(old_short_press_time);
+  gesture_config->set_show_press_delay_in_ms(old_show_press_delay_in_ms);
+
+  if (release_touch)
+    event_generator->ReleaseTouch();
 }
 
 }  // namespace ash

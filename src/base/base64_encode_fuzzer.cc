@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   CHECK_EQ(data_piece, decode_output);
 
   // Also run the StringPiece variant and check that it gives the same results.
-  std::string string_piece_encode_output;
-  base::Base64Encode(data_piece, &string_piece_encode_output);
-  CHECK_EQ(encode_output, string_piece_encode_output);
+  CHECK_EQ(encode_output, base::Base64Encode(data_piece));
 
   return 0;
 }

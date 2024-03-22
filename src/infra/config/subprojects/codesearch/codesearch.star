@@ -1,8 +1,8 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-load("//lib/builders.star", "cpu", "goma", "os")
+load("//lib/builders.star", "cpu", "os", "reclient")
 load("//lib/consoles.star", "consoles")
 load("//lib/try.star", "try_")
 
@@ -34,17 +34,11 @@ try_.defaults.cq_group.set("cq")
 try_.defaults.executable.set("recipe:chromium_codesearch")
 try_.defaults.execution_timeout.set(9 * time.hour)
 try_.defaults.expiration_timeout.set(2 * time.hour)
-try_.defaults.goma_backend.set(goma.backend.RBE_PROD)
 try_.defaults.os.set(os.LINUX_DEFAULT)
 try_.defaults.pool.set("luci.chromium.try")
+try_.defaults.reclient_instance.set(reclient.instance.DEFAULT_UNTRUSTED)
+try_.defaults.reclient_jobs.set(reclient.jobs.LOW_JOBS_FOR_CQ)
 try_.defaults.service_account.set("chromium-try-builder@chops-service-accounts.iam.gserviceaccount.com")
-
-try_.defaults.caches.set([
-    swarming.cache(
-        name = "win_toolchain",
-        path = "win_toolchain",
-    ),
-])
 
 consoles.list_view(
     name = "tryserver.chromium.codesearch",
@@ -52,18 +46,54 @@ consoles.list_view(
 
 try_.builder(
     name = "gen-android-try",
+    properties = {
+        "recipe_properties": {
+            "build_config": "android",
+            "platform": "android",
+        },
+    },
 )
 
 try_.builder(
     name = "gen-chromiumos-try",
+    properties = {
+        "recipe_properties": {
+            "build_config": "chromeos",
+            "platform": "chromeos",
+        },
+    },
 )
 
 try_.builder(
     name = "gen-fuchsia-try",
+    properties = {
+        "recipe_properties": {
+            "build_config": "fuchsia",
+            "platform": "fuchsia",
+        },
+    },
+)
+
+try_.builder(
+    name = "gen-ios-try",
+    os = os.MAC_13,
+    cpu = cpu.ARM64,
+    properties = {
+        "recipe_properties": {
+            "build_config": "ios",
+            "platform": "ios",
+        },
+    },
 )
 
 try_.builder(
     name = "gen-lacros-try",
+    properties = {
+        "recipe_properties": {
+            "build_config": "lacros",
+            "platform": "lacros",
+        },
+    },
 )
 
 try_.builder(
@@ -73,9 +103,30 @@ try_.builder(
 try_.builder(
     name = "gen-mac-try",
     os = os.MAC_10_15,
+    properties = {
+        "recipe_properties": {
+            "build_config": "mac",
+            "platform": "mac",
+        },
+    },
+)
+
+try_.builder(
+    name = "gen-webview-try",
+    properties = {
+        "recipe_properties": {
+            "build_config": "webview",
+            "platform": "webview",
+        },
+    },
 )
 
 try_.builder(
     name = "gen-win-try",
     os = os.WINDOWS_10,
+    properties = {
+        "recipe_properties": {
+            "platform": "win",
+        },
+    },
 )

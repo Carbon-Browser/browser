@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/public/cpp/system_tray.h"
 #include "ash/system/time/calendar_model.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -24,6 +25,9 @@ class TrayNetworkStateModel;
 class UpdateModel;
 class VirtualKeyboardModel;
 class CalendarModel;
+namespace phonehub {
+class PhoneHubManager;
+}
 
 // Top level model of SystemTray.
 class SystemTrayModel : public SystemTray {
@@ -49,12 +53,13 @@ class SystemTrayModel : public SystemTray {
                      const std::string& current_locale_iso_code) override;
   void ShowUpdateIcon(UpdateSeverity severity,
                       bool factory_reset_required,
-                      bool rollback,
-                      UpdateType update_type) override;
+                      bool rollback) override;
   void SetRelaunchNotificationState(
       const RelaunchNotificationState& relaunch_notification_state) override;
   void ResetUpdateState() override;
+  void SetUpdateDeferred(DeferredUpdateState state) override;
   void SetUpdateOverCellularAvailableIconVisible(bool visible) override;
+  void SetShowEolNotice(bool show) override;
   void ShowVolumeSliderBubble() override;
   void ShowNetworkDetailedViewBubble() override;
   void SetPhoneHubManager(
@@ -79,6 +84,7 @@ class SystemTrayModel : public SystemTray {
   }
   SystemTrayClient* client() { return client_; }
   CalendarModel* calendar_model() { return calendar_model_.get(); }
+  phonehub::PhoneHubManager* phone_hub_manager() { return phone_hub_manager_; }
 
  private:
   std::unique_ptr<ClockModel> clock_;
@@ -93,7 +99,11 @@ class SystemTrayModel : public SystemTray {
   std::unique_ptr<CalendarModel> calendar_model_;
 
   // Client interface in chrome browser. May be null in tests.
-  SystemTrayClient* client_ = nullptr;
+  raw_ptr<SystemTrayClient, ExperimentalAsh> client_ = nullptr;
+
+  // Unowned.
+  raw_ptr<phonehub::PhoneHubManager, ExperimentalAsh> phone_hub_manager_ =
+      nullptr;
 };
 
 }  // namespace ash

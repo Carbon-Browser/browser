@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,8 +65,7 @@ void WebSigninBridge::OnAccountsInCookieUpdated(
 
 void WebSigninBridge::OnStateChanged(
     signin_metrics::AccountReconcilorState state) {
-  if (state !=
-      signin_metrics::AccountReconcilorState::ACCOUNT_RECONCILOR_ERROR) {
+  if (state != signin_metrics::AccountReconcilorState::kError) {
     return;
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@ constexpr char kMerchantCartURLType[] = "cart_url";
 constexpr char kMerchantCartURLRegexType[] = "cart_url_regex";
 constexpr char kMerchantCheckoutURLRegexType[] = "checkout_url_regex";
 constexpr char kMerchantPurchaseURLRegexType[] = "purchase_url_regex";
+constexpr char kSkipAddToCartRegexType[] = "skip_add_to_cart_regex";
 
 // CommerceGlobalHeuristics types.
 constexpr char kSkipProductPatternType[] = "sensitive_product_regex";
@@ -25,6 +26,7 @@ constexpr char kRuleDiscountPartnerMerchantPatternType[] =
     "rule_discount_partner_merchant_regex";
 constexpr char kCouponDiscountPartnerMerchantPatternType[] =
     "coupon_discount_partner_merchant_regex";
+constexpr char kNoDiscountMerchantPatternType[] = "no_discount_merchant_regex";
 constexpr char kCartPagetURLPatternType[] = "cart_page_url_regex";
 constexpr char kCheckoutPageURLPatternType[] = "checkout_page_url_regex";
 constexpr char kPurchaseButtonTextPatternType[] = "purchase_button_text_regex";
@@ -76,6 +78,8 @@ bool CommerceHeuristicsData::PopulateDataFromComponent(
       ConstructGlobalRegex(kRuleDiscountPartnerMerchantPatternType);
   coupon_discount_partner_merchant_pattern_ =
       ConstructGlobalRegex(kCouponDiscountPartnerMerchantPatternType);
+  no_discount_merchant_pattern_ =
+      ConstructGlobalRegex(kNoDiscountMerchantPatternType);
   cart_url_pattern_ = ConstructGlobalRegex(kCartPagetURLPatternType);
   checkout_url_pattern_ = ConstructGlobalRegex(kCheckoutPageURLPatternType);
   purchase_button_pattern_ =
@@ -87,6 +91,7 @@ bool CommerceHeuristicsData::PopulateDataFromComponent(
   domain_cart_url_pattern_mapping_.clear();
   domain_checkout_url_pattern_mapping_.clear();
   domain_purchase_url_pattern_mapping_.clear();
+  domain_skip_add_to_cart_pattern_mapping_.clear();
   return true;
 }
 
@@ -136,6 +141,10 @@ CommerceHeuristicsData::GetCouponDiscountPartnerMerchantPattern() {
   return coupon_discount_partner_merchant_pattern_.get();
 }
 
+const re2::RE2* CommerceHeuristicsData::GetNoDiscountMerchantPattern() {
+  return no_discount_merchant_pattern_.get();
+}
+
 const re2::RE2* CommerceHeuristicsData::GetCartPageURLPattern() {
   return cart_url_pattern_.get();
 }
@@ -168,6 +177,13 @@ const re2::RE2* CommerceHeuristicsData::GetPurchasePageURLPatternForDomain(
     const std::string& domain) {
   return GetCommerceHintHeuristicsRegex(domain_purchase_url_pattern_mapping_,
                                         kMerchantPurchaseURLRegexType, domain);
+}
+
+const re2::RE2* CommerceHeuristicsData::GetSkipAddToCartPatternForDomain(
+    const std::string& domain) {
+  return GetCommerceHintHeuristicsRegex(
+      domain_skip_add_to_cart_pattern_mapping_, kSkipAddToCartRegexType,
+      domain);
 }
 
 std::string CommerceHeuristicsData::GetProductIDExtractionJSON() {

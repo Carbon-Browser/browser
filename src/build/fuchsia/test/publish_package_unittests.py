@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """File for testing publish_package.py."""
@@ -20,26 +20,27 @@ class PublishPackageTest(unittest.TestCase):
     """Unittests for publish_package.py."""
 
     def setUp(self) -> None:
-        self._subprocess_patcher = mock.patch('publish_package.subprocess.run')
-        self._subprocess_mock = self._subprocess_patcher.start()
-        self.addCleanup(self._subprocess_mock.stop)
+        self._ffx_patcher = mock.patch('publish_package.run_ffx_command')
+        self._ffx_mock = self._ffx_patcher.start()
+        self.addCleanup(self._ffx_mock.stop)
 
     def test_new_repo(self) -> None:
         """Test setting |new_repo| to True in |publish_packages|."""
 
         publish_package.publish_packages(_PACKAGES, _REPO, True)
-        self.assertEqual(self._subprocess_mock.call_count, 2)
-        first_call = self._subprocess_mock.call_args_list[0]
-        self.assertEqual(['newrepo', '-repo', _REPO], first_call[0][0][1:])
-        second_call = self._subprocess_mock.call_args_list[1]
-        self.assertEqual(['publish', '-a', '-r', _REPO, '-f', _PACKAGES[0]],
-                         second_call[0][0][1:])
+        self.assertEqual(self._ffx_mock.call_count, 2)
+        first_call, second_call = self._ffx_mock.call_args_list
+        self.assertEqual(['repository', 'create', _REPO],
+                         first_call.kwargs['cmd'])
+        self.assertEqual([
+            'repository', 'publish', '--package-archive', _PACKAGES[0], _REPO
+        ], second_call.kwargs['cmd'])
 
     def test_no_new_repo(self) -> None:
         """Test setting |new_repo| to False in |publish_packages|."""
 
         publish_package.publish_packages(['test_package'], 'test_repo', False)
-        self.assertEqual(self._subprocess_mock.call_count, 1)
+        self.assertEqual(self._ffx_mock.call_count, 1)
 
 
     def test_allow_temp_repo(self) -> None:
@@ -76,15 +77,41 @@ class PublishPackageTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 publish_package.main()
 
-    def test_main(self) -> None:
-        """Tests |main| function."""
+    def test_main_no_out_dir_flag(self) -> None:
+        """Tests |main| with `out_dir` omitted."""
 
         with mock.patch('sys.argv', [
                 'publish_package.py', '--packages', _PACKAGES[0], '--repo',
                 _REPO
         ]):
             publish_package.main()
-            self.assertEqual(self._subprocess_mock.call_count, 1)
+            self.assertEqual(self._ffx_mock.call_count, 1)
+
+    @mock.patch('publish_package.read_package_paths')
+    def test_main(self, read_mock) -> None:
+        """Tests |main|."""
+
+        read_mock.return_value = ['out/test/package/path']
+        with mock.patch('sys.argv', [
+                'publish_package.py', '--packages', _PACKAGES[0], '--repo',
+                _REPO, '--out-dir', 'out/test'
+        ]):
+            publish_package.main()
+            self.assertEqual(self._ffx_mock.call_count, 1)
+
+    @mock.patch('publish_package.read_package_paths')
+    @mock.patch('publish_package.make_clean_directory')
+    def test_purge_repo(self, read_mock, make_clean_directory_mock) -> None:
+        """Tests purge_repo flag."""
+
+        read_mock.return_value = ['out/test/package/path']
+        with mock.patch('sys.argv', [
+                'publish_package.py', '--packages', _PACKAGES[0], '--repo',
+                _REPO, '--out-dir', 'out/test', '--purge-repo'
+        ]):
+            publish_package.main()
+            self.assertEqual(self._ffx_mock.call_count, 2)
+            self.assertEqual(make_clean_directory_mock.call_count, 1)
 
 
 if __name__ == '__main__':

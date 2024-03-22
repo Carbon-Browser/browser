@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,8 @@ QuietPermissionPromptModelAndroid GetQuietNotificationPermissionPromptModel(
   }
 
   if (reason == QuietUiReason::kTriggeredDueToAbusiveRequests ||
-      reason == QuietUiReason::kTriggeredDueToAbusiveContent) {
+      reason == QuietUiReason::kTriggeredDueToAbusiveContent ||
+      reason == QuietUiReason::kTriggeredDueToDisruptiveBehavior) {
     model.learn_more_text = l10n_util::GetStringUTF16(IDS_LEARN_MORE);
   }
 

@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_POLICY_REPORTING_INSTALL_EVENT_LOG_COLLECTOR_BASE_H_
 #define CHROME_BROWSER_ASH_POLICY_REPORTING_INSTALL_EVENT_LOG_COLLECTOR_BASE_H_
 
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
 
@@ -31,7 +32,7 @@ class InstallEventLogCollectorBase
  protected:
   // Whether the device is currently online.
   bool online_ = false;
-  Profile* const profile_;
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
 
   bool GetOnlineState();
 

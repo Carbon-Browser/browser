@@ -1,27 +1,27 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './folder_node.js';
 import './item.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {isTextInputElement} from 'chrome://resources/js/util.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
 
 import {changeFolderOpen, deselectItems, selectItem} from './actions.js';
 import {highlightUpdatedItems, trackUpdatedItems} from './api_listener.js';
+import {BookmarkManagerApiProxyImpl} from './bookmark_manager_api_proxy.js';
 import {DropPosition, ROOT_NODE_ID} from './constants.js';
 import {Debouncer} from './debouncer.js';
 import {BookmarksFolderNodeElement} from './folder_node.js';
 import {Store} from './store.js';
-import {BookmarkElement, BookmarkNode, DragData, DropDestination, NodeMap, ObjectMap} from './types.js';
+import {BookmarkElement, BookmarkNode, DragData, DropDestination, NodeMap, ObjectMap, TimerProxy} from './types.js';
 import {canEditNode, canReorderChildren, getDisplayedList, hasChildFolders, isShowingSearch, normalizeNode} from './util.js';
 
-type NormalizedDragData = {
-  elements: BookmarkNode[],
-  sameProfile: boolean,
-};
+interface NormalizedDragData {
+  elements: BookmarkNode[];
+  sameProfile: boolean;
+}
 
 function isBookmarkItem(element: Element): boolean {
   return element.tagName === 'BOOKMARKS-ITEM';
@@ -68,6 +68,10 @@ function getDragElement(path: EventTarget[]): BookmarkElement|null {
 
 function getBookmarkNode(bookmarkElement: BookmarkElement): BookmarkNode {
   return Store.getInstance().data.nodes[bookmarkElement.itemId]!;
+}
+
+function isTextInputElement(element: HTMLElement): boolean {
+  return element.tagName === 'INPUT' || element.tagName === 'TEXTAREA';
 }
 
 /**
@@ -134,7 +138,11 @@ export class DragInfo {
   }
 }
 
-const EXPAND_FOLDER_DELAY: number = 400;
+// Ms to wait during a dragover to open closed folder.
+let folderOpenerTimeoutDelay = 400;
+export function overrideFolderOpenerTimeoutDelay(ms: number) {
+  folderOpenerTimeoutDelay = ms;
+}
 
 /**
  * Manages auto expanding of sidebar folders on hover while dragging.
@@ -142,6 +150,8 @@ const EXPAND_FOLDER_DELAY: number = 400;
 class AutoExpander {
   private lastElement_: BookmarkElement|null = null;
   private debouncer_: Debouncer;
+  private lastX_: number|null = null;
+  private lastY_: number|null = null;
 
   constructor() {
     this.debouncer_ = new Debouncer(() => {
@@ -151,7 +161,11 @@ class AutoExpander {
     });
   }
 
-  update(_e: Event, overElement: BookmarkElement|null) {
+  update(
+      e: Event, overElement: BookmarkElement|null,
+      dropPosition?: DropPosition) {
+    const x = (e as DragEvent).clientX;
+    const y = (e as DragEvent).clientY;
     const itemId = overElement ? overElement.itemId : null;
     const store = Store.getInstance();
 
@@ -165,13 +179,17 @@ class AutoExpander {
     }
 
     // If dragging over the same node, reset the expander delay.
-    if (overElement && overElement === this.lastElement_) {
-      this.debouncer_.restartTimeout(EXPAND_FOLDER_DELAY);
-      return;
+    if (overElement && overElement === this.lastElement_ &&
+        dropPosition === DropPosition.ON) {
+      if (x !== this.lastX_ || y !== this.lastY_) {
+        this.debouncer_.restartTimeout(folderOpenerTimeoutDelay);
+      }
+    } else {
+      // Otherwise, cancel the expander.
+      this.reset();
     }
-
-    // Otherwise, cancel the expander.
-    this.reset();
+    this.lastX_ = x;
+    this.lastY_ = y;
   }
 
   reset() {
@@ -188,7 +206,7 @@ class DropIndicator {
   private removeDropIndicatorTimeoutId_: number|null;
   private lastIndicatorElement_: BookmarkElement|null;
   private lastIndicatorClassName_: string|null;
-  timerProxy: Window;
+  timerProxy: TimerProxy;
 
   constructor() {
     this.removeDropIndicatorTimeoutId_ = null;
@@ -259,13 +277,13 @@ class DropIndicator {
 /**
  * Manages drag and drop events for the bookmarks-app.
  */
-export class DNDManager {
+export class DndManager {
   private dragInfo_: DragInfo|null;
   private dropDestination_: DropDestination|null;
   private dropIndicator_: DropIndicator|null;
   private eventTracker_: EventTracker = new EventTracker();
   private autoExpander_: AutoExpander|null;
-  private timerProxy_: any;
+  private timerProxy_: TimerProxy;
   private lastPointerWasTouch_: boolean;
 
   constructor() {
@@ -282,16 +300,20 @@ export class DNDManager {
     this.dropIndicator_ = new DropIndicator();
     this.autoExpander_ = new AutoExpander();
 
-    this.eventTracker_.add(document, 'dragstart', e => this.onDragStart_(e));
-    this.eventTracker_.add(document, 'dragenter', e => this.onDragEnter_(e));
-    this.eventTracker_.add(document, 'dragover', e => this.onDragOver_(e));
+    this.eventTracker_.add(document, 'dragstart',
+                           (e: Event) => this.onDragStart_(e));
+    this.eventTracker_.add(document, 'dragenter',
+                           (e: Event) => this.onDragEnter_(e));
+    this.eventTracker_.add(document, 'dragover',
+                           (e: Event) => this.onDragOver_(e));
     this.eventTracker_.add(document, 'dragleave', () => this.onDragLeave_());
-    this.eventTracker_.add(document, 'drop', e => this.onDrop_(e));
+    this.eventTracker_.add(document, 'drop',
+                           (e: Event) => this.onDrop_(e));
     this.eventTracker_.add(document, 'dragend', () => this.clearDragData_());
     this.eventTracker_.add(document, 'mousedown', () => this.onMouseDown_());
     this.eventTracker_.add(document, 'touchstart', () => this.onTouchStart_());
 
-    chrome.bookmarkManagerPrivate.onDragEnter.addListener(
+    BookmarkManagerApiProxyImpl.getInstance().onDragEnter.addListener(
         this.handleChromeDragEnter_.bind(this));
     chrome.bookmarkManagerPrivate.onDragLeave.addListener(
         this.clearDragData_.bind(this));
@@ -343,7 +365,7 @@ export class DNDManager {
     const dragNodeIndex = draggedNodes.indexOf(dragElement.itemId);
     assert(dragNodeIndex !== -1);
 
-    chrome.bookmarkManagerPrivate.startDrag(
+    BookmarkManagerApiProxyImpl.getInstance().startDrag(
         draggedNodes, dragNodeIndex, this.lastPointerWasTouch_,
         (e as DragEvent).clientX, (e as DragEvent).clientY);
   }
@@ -354,7 +376,7 @@ export class DNDManager {
 
   private onDrop_(e: Event) {
     // Allow normal DND on text inputs.
-    if (isTextInputElement((e.composedPath()[0] as HTMLElement))) {
+    if (isTextInputElement(e.composedPath()[0] as HTMLElement)) {
       return;
     }
 
@@ -369,9 +391,9 @@ export class DNDManager {
         trackUpdatedItems();
       }
 
-      chrome.bookmarkManagerPrivate.drop(
-          dropInfo.parentId, index,
-          shouldHighlight ? highlightUpdatedItems : undefined);
+      BookmarkManagerApiProxyImpl.getInstance()
+          .drop(dropInfo.parentId, index)
+          .then(shouldHighlight ? highlightUpdatedItems : undefined);
     }
     this.clearDragData_();
   }
@@ -397,8 +419,8 @@ export class DNDManager {
     }
 
     const overElement = getBookmarkElement(e.composedPath());
-    this.autoExpander_!.update(e, overElement);
     if (!overElement) {
+      this.autoExpander_!.update(e, overElement);
       this.dropIndicator_!.finish();
       return;
     }
@@ -408,10 +430,12 @@ export class DNDManager {
     this.dropDestination_ =
         this.calculateDropDestination_((e as DragEvent).clientY, overElement);
     if (!this.dropDestination_) {
+      this.autoExpander_!.update(e, overElement);
       this.dropIndicator_!.finish();
       return;
     }
 
+    this.autoExpander_!.update(e, overElement, this.dropDestination_.position);
     this.dropIndicator_!.update(this.dropDestination_);
   }
 
@@ -657,8 +681,12 @@ export class DNDManager {
         isBookmarkList(dropDestination.element);
   }
 
-  setTimerProxyForTesting(timerProxy: any) {
+  setTimerProxyForTesting(timerProxy: TimerProxy) {
     this.timerProxy_ = timerProxy;
     this.dropIndicator_!.timerProxy = timerProxy;
+  }
+
+  getDragInfoForTesting(): DragInfo|null {
+    return this.dragInfo_;
   }
 }

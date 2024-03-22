@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,8 @@ std::string AppTypeToString(apps::AppType app_type) {
       return "Remote";
     case apps::AppType::kBorealis:
       return "Borealis";
+    case apps::AppType::kBruschetta:
+      return "Bruschetta";
     case apps::AppType::kSystemWeb:
       return "SystemWeb";
   }

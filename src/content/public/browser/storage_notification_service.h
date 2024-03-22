@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_BROWSER_STORAGE_NOTIFICATION_SERVICE_H_
 #define CONTENT_PUBLIC_BROWSER_STORAGE_NOTIFICATION_SERVICE_H_
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "url/origin.h"
 
 namespace blink {
@@ -14,7 +14,7 @@ class StorageKey;
 
 namespace {
 using StoragePressureNotificationCallback =
-    base::RepeatingCallback<void(const blink::StorageKey)>;
+    base::RepeatingCallback<void(const blink::StorageKey&)>;
 }
 
 namespace content {
@@ -39,7 +39,7 @@ class StorageNotificationService {
   // when QuotaManager determines appropriate to alert the user that the device
   // is in a state of storage pressure.
   virtual void MaybeShowStoragePressureNotification(
-      const blink::StorageKey) = 0;
+      const blink::StorageKey& storage_key) = 0;
   virtual StoragePressureNotificationCallback
   CreateThreadSafePressureNotificationCallback() = 0;
 };

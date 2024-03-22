@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ void UIResourceLayer::SetLayerTreeHost(LayerTreeHost* host) {
   // Recreate the resource held against the new LTH.
   RecreateUIResourceIdFromBitmap();
 
-  SetDrawsContent(HasDrawableContent());
+  UpdateDrawsContent();
 }
 
 void UIResourceLayer::SetBitmap(const SkBitmap& bitmap) {
@@ -123,7 +123,7 @@ void UIResourceLayer::RecreateUIResourceIdFromBitmap() {
 
 void UIResourceLayer::SetUIResourceIdInternal(UIResourceId resource_id) {
   resource_id_.Write(*this) = resource_id;
-  SetDrawsContent(HasDrawableContent());
+  UpdateDrawsContent();
   SetNeedsCommit();
 }
 

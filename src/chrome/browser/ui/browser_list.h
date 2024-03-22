@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ref.h"
+#include "base/memory/stack_allocated.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
 
@@ -37,6 +39,22 @@ class BrowserList {
   using const_iterator = BrowserVector::const_iterator;
   using const_reverse_iterator = BrowserVector::const_reverse_iterator;
 
+  struct BrowsersOrderedByActivationRange {
+    const raw_ref<const BrowserList> browser_list;
+
+    const_reverse_iterator begin() const {
+      return browser_list->begin_browsers_ordered_by_activation();
+    }
+    const_reverse_iterator end() const {
+      return browser_list->end_browsers_ordered_by_activation();
+    }
+
+   private:
+    // Stack allocated only to reduce risk of out of bounds lifetime with
+    // |browser_list|.
+    STACK_ALLOCATED();
+  };
+
   BrowserList(const BrowserList&) = delete;
   BrowserList& operator=(const BrowserList&) = delete;
 
@@ -59,6 +77,13 @@ class BrowserList {
   }
   const_reverse_iterator end_browsers_ordered_by_activation() const {
     return browsers_ordered_by_activation_.rend();
+  }
+
+  // Convenience method for iterating over browsers in activation order.
+  // Example:
+  // for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation())
+  BrowsersOrderedByActivationRange OrderedByActivation() const {
+    return {raw_ref(*this)};
   }
 
   // Returns the set of browsers that are currently in the closing state.
@@ -193,10 +218,22 @@ class BrowserList {
   // A vector of the browsers that are currently in the closing state.
   BrowserSet currently_closing_browsers_;
 
+  // If an observer is added while iterating over them and notifying, it should
+  // not be notified as it probably already saw the Browser* being added/removed
+  // in the BrowserList.
+  struct ObserverListTraits : base::internal::LeakyLazyInstanceTraits<
+                                  base::ObserverList<BrowserListObserver>> {
+    static base::ObserverList<BrowserListObserver>* New(void* instance) {
+      return new (instance) base::ObserverList<BrowserListObserver>(
+          base::ObserverListPolicy::EXISTING_ONLY);
+    }
+  };
+
   // A list of observers which will be notified of every browser addition and
   // removal across all BrowserLists.
-  static base::LazyInstance<
-      base::ObserverList<BrowserListObserver>::Unchecked>::Leaky observers_;
+  static base::LazyInstance<base::ObserverList<BrowserListObserver>,
+                            ObserverListTraits>
+      observers_;
 
   static BrowserList* instance_;
 };

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,20 +11,23 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/strings/string_piece.h"
+#include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/bind.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_canvas.h"
 #include "content/public/common/isolated_world_ids.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "content/renderer/render_thread_impl.h"
-#include "content/renderer/render_view_impl.h"
 #include "content/web_test/common/web_test_constants.h"
 #include "content/web_test/common/web_test_string_util.h"
 #include "content/web_test/renderer/app_banner_service.h"
@@ -41,7 +44,7 @@
 #include "gin/wrappable.h"
 #include "mojo/public/mojom/base/text_direction.mojom-forward.h"
 #include "net/base/filename_util.h"
-#include "printing/buildflags/buildflags.h"
+#include "printing/page_range.h"
 #include "services/network/public/mojom/cors.mojom.h"
 #include "third_party/blink/public/common/page/page_zoom.h"
 #include "third_party/blink/public/common/permissions/permission_utils.h"
@@ -50,7 +53,6 @@
 #include "third_party/blink/public/mojom/app_banner/app_banner.mojom.h"
 #include "third_party/blink/public/mojom/clipboard/clipboard.mojom.h"
 #include "third_party/blink/public/platform/file_path_conversion.h"
-#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_cache.h"
 #include "third_party/blink/public/platform/web_data.h"
 #include "third_party/blink/public/platform/web_isolated_world_info.h"
@@ -62,6 +64,7 @@
 #include "third_party/blink/public/web/web_array_buffer_converter.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_document_loader.h"
+#include "third_party/blink/public/web/web_element_collection.h"
 #include "third_party/blink/public/web/web_frame.h"
 #include "third_party/blink/public/web/web_frame_widget.h"
 #include "third_party/blink/public/web/web_input_element.h"
@@ -93,23 +96,31 @@ namespace content {
 
 namespace {
 
+// TODO(https://github.com/web-platform-tests/wpt/issues/40788): According to
+// http://web-platform-tests.org/writing-tests/print-reftests.html the default
+// page size for print reftests is 5 by 3 inches. Margins are not mentioned, but
+// there are tests that expect them to be 0.5in. Firefox also does this. There
+// are 96 CSS pixels per inch, so multiply by that.
+const int kWPTPrintWidth = 5 * 96;
+const int kWPTPrintHeight = 3 * 96;
+const int kWPTPrintMargins = 96 / 2;
+
 // A V8 callback with bound arguments, and the ability to pass additional
 // arguments at time of calling Run().
 using BoundV8Callback =
-    base::OnceCallback<void(const std::vector<v8::Local<v8::Value>>&)>;
+    base::OnceCallback<void(const v8::LocalVector<v8::Value>&)>;
 // Returns an empty set of args for running the BoundV8Callback.
-std::vector<v8::Local<v8::Value>> NoV8Args() {
-  return {};
+v8::LocalVector<v8::Value> NoV8Args(v8::Isolate* isolate) {
+  return v8::LocalVector<v8::Value>(isolate);
 }
 
 // Returns 3 arguments, width, height, and an array of pixel values. Takes a
 // v8::Context::Scope just to prove one exists in the caller.
-std::vector<v8::Local<v8::Value>> ConvertBitmapToV8(
+v8::LocalVector<v8::Value> ConvertBitmapToV8(
+    v8::Isolate* isolate,
     const v8::Context::Scope& context_scope,
     const SkBitmap& bitmap) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
-
-  std::vector<v8::Local<v8::Value>> args;
+  v8::LocalVector<v8::Value> args(isolate);
   // Note that the bitmap size can be 0 if there's no pixels.
   args.push_back(v8::Number::New(isolate, bitmap.info().width()));
   args.push_back(v8::Number::New(isolate, bitmap.info().height()));
@@ -128,8 +139,7 @@ std::vector<v8::Local<v8::Value>> ConvertBitmapToV8(
   bool read = bitmap.readPixels(info, buffer.Data(), row_bytes, 0, 0);
   CHECK(read);
 
-  args.push_back(blink::WebArrayBufferConverter::ToV8Value(
-      &buffer, isolate->GetCurrentContext()->Global(), isolate));
+  args.push_back(blink::WebArrayBufferConverter::ToV8Value(&buffer, isolate));
   return args;
 }
 
@@ -189,18 +199,19 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   // arguments. The callback will do nothing when Run() if the
   // TestRunnerBindings has been destroyed, so it is safe to PostTask(). At the
   // time of Run(), further arguments can be passed to the V8 function.
-  BoundV8Callback WrapV8Callback(
-      v8::Local<v8::Function> v8_callback,
-      std::vector<v8::Local<v8::Value>> args_to_bind = {});
+  BoundV8Callback WrapV8Callback(v8::Local<v8::Function> v8_callback);
+  BoundV8Callback WrapV8Callback(v8::Local<v8::Function> v8_callback,
+                                 v8::LocalVector<v8::Value> args_to_bind);
   // Same as WrapV8Callback but Run() takes no arguments, so only bound
   // arguments can be passed to the V8 function.
-  base::OnceClosure WrapV8Closure(
-      v8::Local<v8::Function> v8_callback,
-      std::vector<v8::Local<v8::Value>> args_to_bind = {});
+  base::OnceClosure WrapV8Closure(v8::Local<v8::Function> v8_callback);
+  base::OnceClosure WrapV8Closure(v8::Local<v8::Function> v8_callback,
+                                  v8::LocalVector<v8::Value> args_to_bind);
   // Calls WrapV8Callback() and then posts the resulting callback to the frame's
   // task runner.
+  void PostV8Callback(v8::Local<v8::Function> v8_callback);
   void PostV8Callback(v8::Local<v8::Function> v8_callback,
-                      std::vector<v8::Local<v8::Value>> args = {});
+                      v8::LocalVector<v8::Value> args);
 
   blink::WebLocalFrame* GetWebFrame() {
     CHECK(!invalid_);
@@ -220,7 +231,7 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
     void OnDestruct() override { bindings_->OnFrameDestroyed(); }
 
    private:
-    TestRunnerBindings* const bindings_;
+    const raw_ptr<TestRunnerBindings, ExperimentalRenderer> bindings_;
   };
 
   explicit TestRunnerBindings(TestRunner* test_runner,
@@ -270,6 +281,9 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void DumpTitleChanges();
   void DumpUserGestureInFrameLoadCallbacks();
   void EvaluateScriptInIsolatedWorld(int world_id, const std::string& script);
+  void EvaluateScriptInOwnTask(const std::string& script,
+                               const std::string& source_url,
+                               v8::Local<v8::Function> v8_callback);
   void ExecCommand(gin::Arguments* args);
   void TriggerTestInspectorIssue(gin::Arguments* args);
   void FocusDevtoolsSecondaryWindow();
@@ -296,7 +310,6 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void RemoveSpellCheckResolvedCallback();
   void RemoveWebPageOverlay();
   void ResolveBeforeInstallPromptPromise(const std::string& platform);
-  void RunIdleTasks(v8::Local<v8::Function> callback);
   void SendBluetoothManualChooserEvent(const std::string& event,
                                        const std::string& argument);
   void SetAcceptLanguages(const std::string& accept_languages);
@@ -343,7 +356,7 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void SetPopupBlockingEnabled(bool block_popups);
   void SetPrinting();
   void SetPrintingForFrame(const std::string& frame_name);
-  void SetScriptsAllowed(bool allowed);
+  void SetPrintingSize(int width, int height);
   void SetShouldGeneratePixelResults(bool);
   void SetShouldStayOnPageAfterHandlingBeforeUnload(bool value);
   void SetSpellCheckResolvedCallback(v8::Local<v8::Function> callback);
@@ -369,6 +382,8 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
                             int min_height,
                             int max_width,
                             int max_height);
+  void DisableAutomaticDragDrop();
+  void GoToOffset(int offset);
   v8::Local<v8::Value> EvaluateScriptInIsolatedWorldAndReturnValue(
       int world_id,
       const std::string& script);
@@ -385,14 +400,13 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   void ZoomPageOut();
   void SetPageZoomFactor(double factor);
   std::string TooltipText();
-  void DisableEndDocumentTransition();
 
   int WebHistoryItemCount();
   int WindowCount();
 
   void InvokeV8Callback(v8::UniquePersistent<v8::Function> callback,
                         std::vector<v8::UniquePersistent<v8::Value>> bound_args,
-                        const std::vector<v8::Local<v8::Value>>& runtime_args);
+                        const v8::LocalVector<v8::Value>& runtime_args);
 
   // Hears about the RenderFrame in |frame_| being destroyed. The
   // TestRunningBindings should not do anything thereafter.
@@ -407,9 +421,9 @@ class TestRunnerBindings : public gin::Wrappable<TestRunnerBindings> {
   // stop doing anything.
   bool invalid_ = false;
 
-  TestRunner* runner_;
-  WebFrameTestProxy* const frame_;
-  SpellCheckClient* const spell_check_;
+  raw_ptr<TestRunner, ExperimentalRenderer> runner_;
+  const raw_ptr<WebFrameTestProxy, ExperimentalRenderer> frame_;
+  const raw_ptr<SpellCheckClient, ExperimentalRenderer> spell_check_;
   TestPreferences prefs_;
   std::unique_ptr<AppBannerService> app_banner_service_;
 
@@ -424,9 +438,9 @@ void TestRunnerBindings::Install(TestRunner* test_runner,
                                  SpellCheckClient* spell_check,
                                  bool is_wpt_test,
                                  bool is_main_test_window) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
-  v8::HandleScope handle_scope(isolate);
   blink::WebLocalFrame* web_frame = frame->GetWebFrame();
+  v8::Isolate* isolate = web_frame->GetAgentGroupScheduler()->Isolate();
+  v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = web_frame->MainWorldScriptContext();
   CHECK(!context.IsEmpty());
 
@@ -478,7 +492,12 @@ void TestRunnerBindings::Install(TestRunner* test_runner,
                 mutations.forEach(function(mutation) {
                   if (!target.classList.contains('reftest-wait') &&
                       !target.classList.contains('test-wait')) {
-                    window.testRunner.notifyDone();
+                    // This is the same as https://github.com/web-platform-tests/wpt/blob/master/tools/wptrunner/wptrunner/executors/test-wait.js
+                    requestAnimationFrame(() => {
+                      requestAnimationFrame(() => {
+                        window.testRunner.notifyDone();
+                      });
+                    });
                   }
                 });
               });
@@ -594,6 +613,8 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
                  &TestRunnerBindings::EnableAutoResizeMode)
       .SetMethod("evaluateScriptInIsolatedWorld",
                  &TestRunnerBindings::EvaluateScriptInIsolatedWorld)
+      .SetMethod("evaluateScriptInOwnTask",
+                 &TestRunnerBindings::EvaluateScriptInOwnTask)
       .SetMethod(
           "evaluateScriptInIsolatedWorldAndReturnValue",
           &TestRunnerBindings::EvaluateScriptInIsolatedWorldAndReturnValue)
@@ -665,10 +686,6 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
                  &TestRunnerBindings::RemoveWebPageOverlay)
       .SetMethod("resolveBeforeInstallPromptPromise",
                  &TestRunnerBindings::ResolveBeforeInstallPromptPromise)
-      // Immediately run all pending idle tasks, including all pending
-      // requestIdleCallback calls.  Invoke the callback when all
-      // idle tasks are complete.
-      .SetMethod("runIdleTasks", &TestRunnerBindings::RunIdleTasks)
       .SetMethod("selectionAsMarkup", &TestRunnerBindings::SelectionAsMarkup)
 
       // The Bluetooth functions are specified at
@@ -758,7 +775,7 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
       .SetMethod("setPrinting", &TestRunnerBindings::SetPrinting)
       .SetMethod("setPrintingForFrame",
                  &TestRunnerBindings::SetPrintingForFrame)
-      .SetMethod("setScriptsAllowed", &TestRunnerBindings::SetScriptsAllowed)
+      .SetMethod("setPrintingSize", &TestRunnerBindings::SetPrintingSize)
       .SetMethod("setScrollbarPolicy", &TestRunnerBindings::NotImplemented)
       .SetMethod("setShouldGeneratePixelResults",
                  &TestRunnerBindings::SetShouldGeneratePixelResults)
@@ -814,22 +831,28 @@ gin::ObjectTemplateBuilder TestRunnerBindings::GetObjectTemplateBuilder(
       .SetProperty("webHistoryItemCount",
                    &TestRunnerBindings::WebHistoryItemCount)
       .SetMethod("windowCount", &TestRunnerBindings::WindowCount)
+      .SetMethod("disableAutomaticDragDrop",
+                 &TestRunnerBindings::DisableAutomaticDragDrop)
+      .SetMethod("goToOffset", &TestRunnerBindings::GoToOffset);
+}
 
-      // document-transition functionality to avoid ending the animation.
-      .SetMethod("disableEndDocumentTransition",
-                 &TestRunnerBindings::DisableEndDocumentTransition);
+BoundV8Callback TestRunnerBindings::WrapV8Callback(
+    v8::Local<v8::Function> v8_callback) {
+  v8::Isolate* isolate = GetWebFrame()->GetAgentGroupScheduler()->Isolate();
+  return WrapV8Callback(v8_callback, NoV8Args(isolate));
 }
 
 BoundV8Callback TestRunnerBindings::WrapV8Callback(
     v8::Local<v8::Function> v8_callback,
-    std::vector<v8::Local<v8::Value>> args_to_bind) {
-  auto persistent_callback = v8::UniquePersistent<v8::Function>(
-      blink::MainThreadIsolate(), std::move(v8_callback));
+    v8::LocalVector<v8::Value> args_to_bind) {
+  v8::Isolate* isolate = GetWebFrame()->GetAgentGroupScheduler()->Isolate();
+  auto persistent_callback =
+      v8::UniquePersistent<v8::Function>(isolate, std::move(v8_callback));
 
   std::vector<v8::UniquePersistent<v8::Value>> persistent_args;
   persistent_args.reserve(args_to_bind.size());
   for (auto& arg : args_to_bind)
-    persistent_args.emplace_back(blink::MainThreadIsolate(), std::move(arg));
+    persistent_args.emplace_back(isolate, std::move(arg));
 
   return base::BindOnce(
       &TestRunnerBindings::InvokeV8Callback, weak_ptr_factory_.GetWeakPtr(),
@@ -837,16 +860,27 @@ BoundV8Callback TestRunnerBindings::WrapV8Callback(
 }
 
 base::OnceClosure TestRunnerBindings::WrapV8Closure(
-    v8::Local<v8::Function> v8_callback,
-    std::vector<v8::Local<v8::Value>> args_to_bind) {
-  return base::BindOnce(
-      WrapV8Callback(std::move(v8_callback), std::move(args_to_bind)),
-      NoV8Args());
+    v8::Local<v8::Function> v8_callback) {
+  v8::Isolate* isolate = GetWebFrame()->GetAgentGroupScheduler()->Isolate();
+  return WrapV8Closure(v8_callback, NoV8Args(isolate));
 }
 
-void TestRunnerBindings::PostV8Callback(
+base::OnceClosure TestRunnerBindings::WrapV8Closure(
     v8::Local<v8::Function> v8_callback,
-    std::vector<v8::Local<v8::Value>> args) {
+    v8::LocalVector<v8::Value> args_to_bind) {
+  v8::Isolate* isolate = GetWebFrame()->GetAgentGroupScheduler()->Isolate();
+  return base::BindOnce(
+      WrapV8Callback(std::move(v8_callback), std::move(args_to_bind)),
+      NoV8Args(isolate));
+}
+
+void TestRunnerBindings::PostV8Callback(v8::Local<v8::Function> v8_callback) {
+  v8::Isolate* isolate = GetWebFrame()->GetAgentGroupScheduler()->Isolate();
+  return PostV8Callback(v8_callback, NoV8Args(isolate));
+}
+
+void TestRunnerBindings::PostV8Callback(v8::Local<v8::Function> v8_callback,
+                                        v8::LocalVector<v8::Value> args) {
   if (invalid_)
     return;
   const auto& task_runner =
@@ -858,23 +892,24 @@ void TestRunnerBindings::PostV8Callback(
 void TestRunnerBindings::InvokeV8Callback(
     v8::UniquePersistent<v8::Function> callback,
     std::vector<v8::UniquePersistent<v8::Value>> bound_args,
-    const std::vector<v8::Local<v8::Value>>& runtime_args) {
+    const v8::LocalVector<v8::Value>& runtime_args) {
   if (invalid_)
     return;
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  blink::WebLocalFrame* web_frame = GetWebFrame();
+  v8::Isolate* isolate = web_frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
 
-  v8::Local<v8::Context> context = GetWebFrame()->MainWorldScriptContext();
+  v8::Local<v8::Context> context = web_frame->MainWorldScriptContext();
   CHECK(!context.IsEmpty());
   v8::Context::Scope context_scope(context);
 
-  std::vector<v8::Local<v8::Value>> local_args;
+  v8::LocalVector<v8::Value> local_args(isolate);
   for (auto& arg : bound_args)
     local_args.push_back(v8::Local<v8::Value>::New(isolate, std::move(arg)));
   for (const auto& arg : runtime_args)
     local_args.push_back(arg);
 
-  GetWebFrame()->CallFunctionEvenIfScriptDisabled(
+  web_frame->CallFunctionEvenIfScriptDisabled(
       v8::Local<v8::Function>::New(isolate, std::move(callback)),
       context->Global(), local_args.size(), local_args.data());
 }
@@ -954,12 +989,6 @@ int TestRunnerBindings::WindowCount() {
   if (invalid_)
     return 0;
   return runner_->InProcessWindowCount();
-}
-
-void TestRunnerBindings::DisableEndDocumentTransition() {
-  if (invalid_)
-    return;
-  frame_->GetLocalRootFrameWidgetTestHelper()->DisableEndDocumentTransition();
 }
 
 void TestRunnerBindings::SetTabKeyCyclesThroughElements(
@@ -1107,6 +1136,34 @@ void TestRunnerBindings::EvaluateScriptInIsolatedWorld(
       world_id, source, blink::BackForwardCacheAware::kAllow);
 }
 
+void TestRunnerBindings::EvaluateScriptInOwnTask(
+    const std::string& script,
+    const std::string& url,
+    v8::Local<v8::Function> v8_callback) {
+  if (invalid_) {
+    return;
+  }
+
+  blink::WebScriptSource source(blink::WebString::FromUTF8(script),
+                                blink::WebURL(GURL(url)));
+  GetWebFrame()
+      ->GetTaskRunner(blink::TaskType::kInternalTest)
+      ->PostTask(
+          FROM_HERE,
+          base::BindOnce(
+              [](base::WeakPtr<TestRunnerBindings> weak_this,
+                 blink::WebScriptSource source, base::OnceClosure closure) {
+                if (!weak_this || weak_this->invalid_) {
+                  return;
+                }
+
+                weak_this->GetWebFrame()->ExecuteScript(source);
+                std::move(closure).Run();
+              },
+              weak_ptr_factory_.GetWeakPtr(), std::move(source),
+              WrapV8Closure(v8_callback)));
+}
+
 void TestRunnerBindings::SetIsolatedWorldInfo(
     int world_id,
     v8::Local<v8::Value> security_origin,
@@ -1131,16 +1188,19 @@ void TestRunnerBindings::SetIsolatedWorldInfo(
   if (content_security_policy->IsString() && security_origin->IsNull())
     return;
 
+  blink::WebLocalFrame* web_frame = GetWebFrame();
   blink::WebIsolatedWorldInfo info;
   if (security_origin->IsString()) {
     info.security_origin = blink::WebSecurityOrigin::CreateFromString(
         web_test_string_util::V8StringToWebString(
-            blink::MainThreadIsolate(), security_origin.As<v8::String>()));
+            web_frame->GetAgentGroupScheduler()->Isolate(),
+            security_origin.As<v8::String>()));
   }
 
   if (content_security_policy->IsString()) {
     info.content_security_policy = web_test_string_util::V8StringToWebString(
-        blink::MainThreadIsolate(), content_security_policy.As<v8::String>());
+        web_frame->GetAgentGroupScheduler()->Isolate(),
+        content_security_policy.As<v8::String>());
   }
 
   // Clear the document->isolated world CSP mapping.
@@ -1506,12 +1566,6 @@ void TestRunnerBindings::SetImagesAllowed(bool allowed) {
   runner_->SetImagesAllowed(allowed);
 }
 
-void TestRunnerBindings::SetScriptsAllowed(bool allowed) {
-  if (invalid_)
-    return;
-  runner_->SetScriptsAllowed(allowed);
-}
-
 void TestRunnerBindings::SetStorageAllowed(bool allowed) {
   if (invalid_)
     return;
@@ -1561,6 +1615,12 @@ void TestRunnerBindings::SetPrintingForFrame(const std::string& frame_name) {
   if (invalid_)
     return;
   runner_->SetPrintingForFrame(frame_name);
+}
+
+void TestRunnerBindings::SetPrintingSize(int width, int height) {
+  if (invalid_)
+    return;
+  runner_->SetPrintingSize(width, height);
 }
 
 void TestRunnerBindings::ClearTrustTokenState(
@@ -1676,7 +1736,7 @@ void TestRunnerBindings::SetBackingScaleFactor(
   frame_->GetLocalRootWebFrameWidget()->SetDeviceScaleFactorForTesting(
       limited_value);
 
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
 
   WrapV8Closure(std::move(v8_callback)).Run();
@@ -1725,7 +1785,7 @@ static void GetBluetoothManualChooserEventsReply(
   if (!test_runner)  // This guards the validity of the |frame|.
     return;
 
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
 
   // gin::TryConvertToV8() requires a v8::Context.
@@ -1737,9 +1797,9 @@ static void GetBluetoothManualChooserEventsReply(
   bool converted = gin::TryConvertToV8(isolate, events, &arg);
   CHECK(converted);
 
-  std::move(callback).Run({
-      arg,
-  });
+  std::move(callback).Run(v8::LocalVector<v8::Value>(isolate, {
+                                                                  arg,
+                                                              }));
 }
 
 void TestRunnerBindings::GetBluetoothManualChooserEvents(
@@ -1876,17 +1936,19 @@ void TestRunnerBindings::SetAnimationRequiresRaster(bool do_raster) {
   runner_->SetAnimationRequiresRaster(do_raster);
 }
 
-static void GetManifestReply(BoundV8Callback callback,
+static void GetManifestReply(v8::Isolate* isolate,
+                             BoundV8Callback callback,
                              const blink::WebURL& manifest_url) {
-  std::move(callback).Run(NoV8Args());
+  std::move(callback).Run(NoV8Args(isolate));
 }
 
 void TestRunnerBindings::GetManifestThen(v8::Local<v8::Function> v8_callback) {
   if (invalid_)
     return;
+  v8::Isolate* isolate = GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   blink::WebManifestManager::RequestManifestForTesting(
-      GetWebFrame(),
-      base::BindOnce(GetManifestReply, WrapV8Callback(std::move(v8_callback))));
+      GetWebFrame(), base::BindOnce(GetManifestReply, isolate,
+                                    WrapV8Callback(std::move(v8_callback))));
 }
 
 #if BUILDFLAG(ENABLE_PRINTING)
@@ -1894,20 +1956,21 @@ void TestRunnerBindings::CapturePrintingPixelsThen(
     v8::Local<v8::Function> v8_callback) {
   if (invalid_)
     return;
-  SkBitmap bitmap = PrintFrameToBitmap(GetWebFrame());
+  blink::WebLocalFrame* frame = GetWebFrame();
+  SkBitmap bitmap = PrintFrameToBitmap(
+      frame, runner_->GetPrintingPageSize(frame), runner_->GetPrintingMargin(),
+      runner_->GetPrintingPageRanges(frame));
 
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
 
   // ConvertBitmapToV8() requires a v8::Context.
-  v8::Local<v8::Context> context = GetWebFrame()->MainWorldScriptContext();
+  v8::Local<v8::Context> context = frame->MainWorldScriptContext();
   CHECK(!context.IsEmpty());
   v8::Context::Scope context_scope(context);
 
   WrapV8Callback(std::move(v8_callback))
-      .Run({
-          ConvertBitmapToV8(context_scope, bitmap),
-      });
+      .Run(ConvertBitmapToV8(isolate, context_scope, bitmap));
 }
 #endif  // BUILDFLAG(ENABLE_PRINTING)
 
@@ -1943,15 +2006,16 @@ void TestRunnerBindings::CopyImageThen(int x,
   SkBitmap bitmap;
   gfx::PNGCodec::Decode(png_data.data(), png_data.size(), &bitmap);
 
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  blink::WebLocalFrame* web_frame = GetWebFrame();
+  v8::Isolate* isolate = web_frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
 
-  v8::Local<v8::Context> context = GetWebFrame()->MainWorldScriptContext();
+  v8::Local<v8::Context> context = web_frame->MainWorldScriptContext();
   CHECK(!context.IsEmpty());
   v8::Context::Scope context_scope(context);
 
   WrapV8Callback(std::move(v8_callback))
-      .Run(ConvertBitmapToV8(context_scope, std::move(bitmap)));
+      .Run(ConvertBitmapToV8(isolate, context_scope, std::move(bitmap)));
 }
 
 void TestRunnerBindings::DropPointerLock() {
@@ -1996,13 +2060,14 @@ void TestRunnerBindings::SetPermission(const std::string& name,
       GURL(embedding_origin));
 }
 
-static void DispatchBeforeInstallPromptEventReply(BoundV8Callback callback,
+static void DispatchBeforeInstallPromptEventReply(v8::Isolate* isolate,
+                                                  BoundV8Callback callback,
                                                   bool cancelled) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
   v8::HandleScope handle_scope(isolate);
-  std::move(callback).Run({
-      v8::Boolean::New(isolate, cancelled),
-  });
+  std::move(callback).Run(v8::LocalVector<v8::Value>(
+      isolate, {
+                   v8::Boolean::New(isolate, cancelled),
+               }));
 }
 
 void TestRunnerBindings::DispatchBeforeInstallPromptEvent(
@@ -2017,8 +2082,11 @@ void TestRunnerBindings::DispatchBeforeInstallPromptEvent(
                                  .PassPipe());
 
   app_banner_service_->SendBannerPromptRequest(
-      event_platforms, base::BindOnce(&DispatchBeforeInstallPromptEventReply,
-                                      WrapV8Callback(std::move(v8_callback))));
+      event_platforms,
+      base::BindOnce(
+          &DispatchBeforeInstallPromptEventReply,
+          base::Unretained(GetWebFrame()->GetAgentGroupScheduler()->Isolate()),
+          WrapV8Callback(std::move(v8_callback))));
 }
 
 void TestRunnerBindings::ResolveBeforeInstallPromptPromise(
@@ -2029,15 +2097,6 @@ void TestRunnerBindings::ResolveBeforeInstallPromptPromise(
     app_banner_service_->ResolvePromise(platform);
     app_banner_service_.reset();
   }
-}
-
-void TestRunnerBindings::RunIdleTasks(v8::Local<v8::Function> v8_callback) {
-  if (invalid_)
-    return;
-  blink::scheduler::WebThreadScheduler* scheduler =
-      content::RenderThreadImpl::current()->GetWebMainThreadScheduler();
-  blink::scheduler::RunIdleTasksForTesting(
-      scheduler, WrapV8Closure(std::move(v8_callback)));
 }
 
 std::string TestRunnerBindings::PlatformName() {
@@ -2149,9 +2208,10 @@ int TestRunnerBindings::WebHistoryItemCount() {
   if (invalid_)
     return 0;
 
-  // Returns the length of the session history of this RenderView. Note that
-  // this only coincides with the actual length of the session history if this
-  // RenderView is the currently active RenderView of a WebContents.
+  // Returns the length of the session history of this `blink::WebView`. Note
+  // that this only coincides with the actual length of the session history if
+  // this `blink::WebView` is the currently active `blink::WebView` of a
+  // WebContents.
   return frame_->GetWebFrame()->View()->HistoryBackListCount() +
          frame_->GetWebFrame()->View()->HistoryForwardListCount() + 1;
 }
@@ -2174,9 +2234,23 @@ void TestRunnerBindings::ForceNextDrawingBufferCreationToFail() {
   blink::ForceNextDrawingBufferCreationToFailForTest();
 }
 
+void TestRunnerBindings::DisableAutomaticDragDrop() {
+  if (invalid_) {
+    return;
+  }
+  runner_->DisableAutomaticDragDrop();
+}
+
+void TestRunnerBindings::GoToOffset(int offset) {
+  if (invalid_) {
+    return;
+  }
+  runner_->GoToOffset(offset);
+}
+
 void TestRunnerBindings::NotImplemented(const gin::Arguments& args) {}
 
-// This class helps track active main windows and when the RenderView is
+// This class helps track active main windows and when the `blink::WebView` is
 // destroyed it will remove it from TestRunner's list.
 class TestRunner::MainWindowTracker : public blink::WebViewObserver {
  public:
@@ -2188,7 +2262,7 @@ class TestRunner::MainWindowTracker : public blink::WebViewObserver {
   }
 
  private:
-  TestRunner* const test_runner_;
+  const raw_ptr<TestRunner, ExperimentalRenderer> test_runner_;
 };
 
 TestRunner::WorkQueue::WorkQueue(TestRunner* controller)
@@ -2449,6 +2523,101 @@ bool TestRunner::CanDumpPixelsFromRenderer() const {
          web_test_runtime_flags_.is_printing();
 }
 
+#if BUILDFLAG(ENABLE_PRINTING)
+gfx::Size TestRunner::GetPrintingPageSize(blink::WebLocalFrame* frame) const {
+  const int printing_width = web_test_runtime_flags_.printing_width();
+  const int printing_height = web_test_runtime_flags_.printing_height();
+
+  if (printing_width > 0 && printing_height > 0) {
+    return gfx::Size(printing_width, printing_height);
+  }
+
+  blink::WebFrameWidget* widget = frame->LocalRoot()->FrameWidget();
+  widget->UpdateAllLifecyclePhases(blink::DocumentUpdateReason::kTest);
+  return widget->Size();
+}
+
+int TestRunner::GetPrintingMargin() const {
+  return web_test_runtime_flags_.printing_margin();
+}
+
+static std::string GetPageRangesStringFromMetadata(
+    blink::WebLocalFrame* frame) {
+  blink::WebElementCollection meta_iter =
+      frame->GetDocument().GetElementsByHTMLTagName("meta");
+  std::string result = "-";
+
+  if (!meta_iter.IsNull()) {
+    for (blink::WebElement meta = meta_iter.FirstItem(); !meta.IsNull();
+         meta = meta_iter.NextItem()) {
+      if (meta.GetAttribute("name") == "reftest-pages") {
+        blink::WebString pages = meta.GetAttribute("content");
+
+        if (!pages.IsNull()) {
+          result = pages.Ascii();
+        }
+        break;  // We only take the ranges from the first tag.
+      }
+    }
+  }
+
+  return result;
+}
+
+printing::PageRanges TestRunner::GetPrintingPageRanges(
+    blink::WebLocalFrame* frame) const {
+  const std::string page_ranges_string = GetPageRangesStringFromMetadata(frame);
+  const std::vector<base::StringPiece> range_strings =
+      base::SplitStringPiece(page_ranges_string, ",", base::TRIM_WHITESPACE,
+                             base::SPLIT_WANT_NONEMPTY);
+  printing::PageRanges result;
+
+  for (const base::StringPiece& range_string : range_strings) {
+    // The format for each range is "<int> | <int>? - <int>?" where the page
+    // numbers are 1-indexed.
+    const std::vector<base::StringPiece> page_strings = base::SplitStringPiece(
+        range_string, "-", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+    bool invalid = false;
+
+    if (page_strings.size() == 1) {
+      uint32_t page;
+      if (base::StringToUint(range_string, &page)) {
+        result.push_back(printing::PageRange{.from = page - 1, .to = page - 1});
+      } else {
+        invalid = true;
+      }
+    } else if (page_strings.size() > 2) {
+      invalid = true;
+    } else {
+      std::array<uint32_t, 2> page_nums{0, printing::PageRange::kMaxPage};
+
+      for (const int i : {0, 1}) {
+        if (!page_strings[i].empty()) {
+          if (base::StringToUint(page_strings[i], &page_nums[i])) {
+            --page_nums[i];  // Change 1-indexing to 0-indexing.
+          } else {
+            invalid = true;
+            break;
+          }
+        }
+      }
+
+      if (!invalid) {
+        result.push_back(
+            printing::PageRange{.from = page_nums[0], .to = page_nums[1]});
+      }
+    }
+
+    if (invalid) {
+      DLOG(WARNING) << "Invalid page range \"" << range_string << "\".\n";
+    }
+  }
+
+  printing::PageRange::Normalize(result);
+  return result;
+}
+#endif
+
 SkBitmap TestRunner::DumpPixelsInRenderer(blink::WebLocalFrame* main_frame) {
   DCHECK(!main_frame->Parent());
   DCHECK(CanDumpPixelsFromRenderer());
@@ -2474,7 +2643,9 @@ SkBitmap TestRunner::DumpPixelsInRenderer(blink::WebLocalFrame* main_frame) {
     if (frame_to_print && frame_to_print->IsWebLocalFrame())
       target_frame = frame_to_print->ToWebLocalFrame();
   }
-  return PrintFrameToBitmap(target_frame);
+  return PrintFrameToBitmap(target_frame, GetPrintingPageSize(target_frame),
+                            GetPrintingMargin(),
+                            GetPrintingPageRanges(target_frame));
 #else
   NOTREACHED();
   return SkBitmap();
@@ -2837,15 +3008,27 @@ void TestRunner::SetMainWindowAndTestConfiguration(
   if (!test_config_.protocol_mode)
     SetShouldDumpAsLayout(true);
 
+  bool wpt_printing_test = test_config_.wpt_print_mode;
+
   // For http/tests/loading/, which is served via httpd and becomes /loading/.
   if (spec.find("/loading/") != std::string::npos)
     SetShouldDumpFrameLoadCallbacks(true);
 
-  if (spec.find("/external/wpt/") != std::string::npos ||
-      spec.find("/external/csswg-test/") != std::string::npos ||
-      spec.find("://web-platform.test") != std::string::npos ||
-      spec.find("/harness-tests/wpt/") != std::string::npos)
+  if (IsWebPlatformTest(spec)) {
     SetIsWebPlatformTestsMode();
+
+    if (spec.find("/print/") != std::string::npos ||
+        spec.find("-print.html") != std::string::npos) {
+      wpt_printing_test = true;
+    }
+  }
+
+  if (wpt_printing_test) {
+    SetPrinting();
+    view->GetSettings()->SetShouldPrintBackgrounds(true);
+    SetPrintingSize(kWPTPrintWidth, kWPTPrintHeight);
+    SetPrintingMargin(kWPTPrintMargins);
+  }
 
   view->GetSettings()->SetV8CacheOptions(
       is_devtools_test ? blink::mojom::V8CacheOptions::kNone
@@ -3040,11 +3223,6 @@ void TestRunner::SetImagesAllowed(bool allowed) {
   OnWebTestRuntimeFlagsChanged();
 }
 
-void TestRunner::SetScriptsAllowed(bool allowed) {
-  web_test_runtime_flags_.set_scripts_allowed(allowed);
-  OnWebTestRuntimeFlagsChanged();
-}
-
 void TestRunner::SetStorageAllowed(bool allowed) {
   web_test_runtime_flags_.set_storage_allowed(allowed);
   OnWebTestRuntimeFlagsChanged();
@@ -3076,6 +3254,17 @@ void TestRunner::SetPrinting() {
 void TestRunner::SetPrintingForFrame(const std::string& frame_name) {
   web_test_runtime_flags_.set_printing_frame(frame_name);
   web_test_runtime_flags_.set_is_printing(true);
+  OnWebTestRuntimeFlagsChanged();
+}
+
+void TestRunner::SetPrintingSize(int width, int height) {
+  web_test_runtime_flags_.set_printing_width(width);
+  web_test_runtime_flags_.set_printing_height(height);
+  OnWebTestRuntimeFlagsChanged();
+}
+
+void TestRunner::SetPrintingMargin(int size) {
+  web_test_runtime_flags_.set_printing_margin(size);
   OnWebTestRuntimeFlagsChanged();
 }
 
@@ -3273,6 +3462,7 @@ void TestRunner::FinishTest() {
   // Clean out the lifecycle if needed before capturing the web tree
   // dump and pixels from the compositor.
   auto* web_frame = main_frame->GetWebFrame();
+  web_frame->FrameWidget()->PrepareForFinalLifecyclUpdateForTesting();
   web_frame->FrameWidget()->UpdateAllLifecyclePhases(
       blink::DocumentUpdateReason::kTest);
 
@@ -3386,4 +3576,12 @@ void TestRunner::HandleBluetoothFakeAdapterSetterDisconnected() {
   bluetooth_fake_adapter_setter_.reset();
 }
 
+void TestRunner::DisableAutomaticDragDrop() {
+  web_test_runtime_flags_.set_auto_drag_drop_enabled(false);
+  OnWebTestRuntimeFlagsChanged();
+}
+
+bool TestRunner::AutomaticDragDropEnabled() {
+  return web_test_runtime_flags_.auto_drag_drop_enabled();
+}
 }  // namespace content

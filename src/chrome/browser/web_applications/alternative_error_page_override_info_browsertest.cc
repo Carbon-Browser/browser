@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
+#include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
 #include "chrome/browser/web_applications/test/web_app_icon_waiter.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/url_formatter/url_formatter.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/common/alternative_error_page_override_info.mojom.h"
 #include "content/public/common/content_client.h"
 #include "content/public/test/browser_test.h"
@@ -25,11 +26,10 @@
 
 // Class to test browser error page display info.
 class AlternativeErrorPageOverrideInfoBrowserTest
-    : public InProcessBrowserTest {
+    : public web_app::WebAppControllerBrowserTest {
  public:
   AlternativeErrorPageOverrideInfoBrowserTest() {
-    feature_list_.InitWithFeatures({features::kDesktopPWAsDefaultOfflinePage,
-                                    blink::features::kWebAppEnableDarkMode},
+    feature_list_.InitWithFeatures({blink::features::kWebAppEnableDarkMode},
                                    {});
   }
 
@@ -60,62 +60,15 @@ class AlternativeErrorPageOverrideInfoBrowserTest
 
  private:
   void SetUpOnMainThread() override {
-    InProcessBrowserTest::SetUpOnMainThread();
+    WebAppControllerBrowserTest::SetUpOnMainThread();
   }
 
   void TearDownOnMainThread() override {
-    InProcessBrowserTest::TearDownOnMainThread();
+    WebAppControllerBrowserTest::TearDownOnMainThread();
   }
 
   base::test::ScopedFeatureList feature_list_;
 };
-
-// Testing app manifest with no theme or background color.
-IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest, Manifest) {
-  ASSERT_TRUE(embedded_test_server()->Start());
-  content::mojom::AlternativeErrorPageOverrideInfoPtr info =
-      GetErrorPageInfo("/banners/manifest_no_service_worker.html");
-
-  // Expect mojom struct with default background and theme colors.
-  EXPECT_TRUE(info);
-  EXPECT_EQ(
-      *info->alternative_error_page_params.Find("customized_background_color"),
-      white_);
-  EXPECT_EQ(*info->alternative_error_page_params.Find("theme_color"), black_);
-}
-
-// Testing app manifest with theme color.
-IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
-                       ManifestWithThemeColor) {
-  ASSERT_TRUE(embedded_test_server()->Start());
-  content::mojom::AlternativeErrorPageOverrideInfoPtr info =
-      GetErrorPageInfo("/banners/theme-color.html");
-
-  // Expect mojom struct with customized theme color and default background
-  // color.
-  EXPECT_TRUE(info);
-  EXPECT_EQ(
-      *info->alternative_error_page_params.Find("customized_background_color"),
-      white_);
-  EXPECT_EQ(*info->alternative_error_page_params.Find("theme_color"),
-            skia::SkColorToHexString(SkColorSetRGB(0xAA, 0xCC, 0xEE)));
-}
-
-// Testing app manifest with background color.
-IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
-                       ManifestWithBackgroundColor) {
-  ASSERT_TRUE(embedded_test_server()->Start());
-  content::mojom::AlternativeErrorPageOverrideInfoPtr info =
-      GetErrorPageInfo("/banners/background-color.html");
-
-  // Expect mojom struct with default theme color and customized background
-  // color.
-  EXPECT_TRUE(info);
-  EXPECT_EQ(
-      *info->alternative_error_page_params.Find("customized_background_color"),
-      blue_);
-  EXPECT_EQ(*info->alternative_error_page_params.Find("theme_color"), black_);
-}
 
 // Testing url outside the scope of an installed app.
 IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
@@ -202,56 +155,6 @@ IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
             base::UTF16ToUTF8(url_formatter::FormatUrl(app_url)));
 }
 
-// Testing app with manifest and no service worker.
-IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
-                       ManifestAndNoServiceWorker) {
-  ASSERT_TRUE(embedded_test_server()->Start());
-  content::mojom::AlternativeErrorPageOverrideInfoPtr info =
-      GetErrorPageInfo("/banners/no-sw-with-colors.html");
-
-  // Expect mojom struct with custom theme and background color.
-  EXPECT_TRUE(info);
-  EXPECT_EQ(
-      *info->alternative_error_page_params.Find("customized_background_color"),
-      yellow_);
-  EXPECT_EQ(*info->alternative_error_page_params.Find("theme_color"), green_);
-}
-
-// Testing app manifest with dark mode theme and background colors.
-IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
-                       ManifestWithDarkModeThemeAndBackgroundColor) {
-  ASSERT_TRUE(embedded_test_server()->Start());
-  ui::NativeTheme::GetInstanceForNativeUi()->set_use_dark_colors(true);
-  content::mojom::AlternativeErrorPageOverrideInfoPtr info =
-      GetErrorPageInfo("/web_apps/get_manifest.html?color_scheme_dark.json");
-
-  // Expect mojom struct with dark mode theme color and dark mode background
-  // color.
-  EXPECT_TRUE(info);
-  EXPECT_EQ(
-      *info->alternative_error_page_params.Find("dark_mode_background_color"),
-      red_);
-  EXPECT_EQ(*info->alternative_error_page_params.Find("dark_mode_theme_color"),
-            red_);
-}
-
-// Testing app manifest with no dark mode theme or background color.
-IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
-                       ManifestWithNoDarkModeThemeAndBackgroundColor) {
-  ASSERT_TRUE(embedded_test_server()->Start());
-  ui::NativeTheme::GetInstanceForNativeUi()->set_use_dark_colors(true);
-  content::mojom::AlternativeErrorPageOverrideInfoPtr info =
-      GetErrorPageInfo("/banners/no-sw-with-colors.html");
-
-  // Expect mojom struct light mode background and theme color stored.
-  EXPECT_TRUE(info);
-  EXPECT_EQ(
-      *info->alternative_error_page_params.Find("dark_mode_background_color"),
-      yellow_);
-  EXPECT_EQ(*info->alternative_error_page_params.Find("dark_mode_theme_color"),
-            green_);
-}
-
 // Testing manifest with icon.
 IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
                        ManifestWithIcon) {
@@ -266,25 +169,30 @@ IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
   Profile* profile = browser()->profile();
   web_app::WebAppProvider* web_app_provider =
       web_app::WebAppProvider::GetForTest(profile);
-  const absl::optional<web_app::AppId> app_id =
-      web_app_provider->registrar().FindAppWithUrlInScope(app_url);
+  const absl::optional<webapps::AppId> app_id =
+      web_app_provider->registrar_unsafe().FindAppWithUrlInScope(app_url);
   WebAppIconWaiter(profile, app_id.value()).Wait();
   content::mojom::AlternativeErrorPageOverrideInfoPtr info =
       browser_client.GetAlternativeErrorPageOverrideInfo(
           app_url, /*render_frame_host=*/nullptr, profile,
           net::ERR_INTERNET_DISCONNECTED);
 
-  // Expect mojom struct with icon url.
+  // Expect mojom struct with everything (except the icon) filled out.
   EXPECT_TRUE(info);
+  EXPECT_EQ(*info->alternative_error_page_params.Find("app_short_name"),
+            "Manifest test app");
+  // This test may at first glance seem like an end-to-end test of the default
+  // offline experience, but should be considered more of a unit test for just
+  // the initial values provided to the default offline page. For a proper
+  // end-to-end test, see WebAppOfflinePageIconShowing in the
+  // WebAppOfflinePageTest suite.
   EXPECT_EQ(
       *info->alternative_error_page_params.Find("icon_url"),
-      "data:image/"
-      "png;base64,"
-      "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAA4UlEQVQ4jZVSuwqFMAw1"
-      "8baI2M3FyUXXfoGT3+FvC/"
-      "6A4iQKUrFDcweht7fWwUwhOSc5eUDXddEbw1foKIo+"
-      "1iOiIAIAiAgAfIINubh7KtABALTWxhjOuYVax58BAM7zLIqirmtEvMS4an8EIkJEpZSU"
-      "smkaIYQQwhjjSUK3tmVmWaaUWtc1jmNvGbGU0m3COZ/neRiGtm3zPO/"
-      "7Pk3T8JYuSVrrsiyrqjqOY5omzrkx5nGtRMQYG8dx33et9bZtSZK46D+"
-      "Cy1yWBREvtJcNH44xdg8GZrh3u5d7fI0ne/2tX8uNb4qnIrpWAAAAAElFTkSuQmCC");
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACk"
+      "lEQVR42mMAAQAABQABoIJXOQAAAABJRU5ErkJggg==");
+  EXPECT_EQ(
+      *info->alternative_error_page_params.Find("web_app_error_page_message"),
+      "You're offline");
+  EXPECT_EQ(*info->alternative_error_page_params.Find("supplementary_icon"),
+            "offlineIcon");
 }

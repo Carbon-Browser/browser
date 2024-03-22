@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 #include <vector>
 
 #include "base/strings/string_piece.h"
+#include "base/values.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/host_mapping_rules.h"
 #include "net/base/net_export.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/dns/dns_config.h"
 #include "net/dns/host_resolver.h"
 #include "net/log/net_log_with_source.h"
@@ -40,7 +41,7 @@ class NET_EXPORT MappedHostResolver : public HostResolver {
   //   "EXCLUDE" <hostname_pattern>
   //
   // The <replacement_host> can be either a hostname, or an IP address literal,
-  // or "~NOTFOUND". If it is "~NOTFOUND" then all matched hostnames will fail
+  // or "^NOTFOUND". If it is "^NOTFOUND" then all matched hostnames will fail
   // to be resolved with ERR_NAME_NOT_RESOLVED.
   //
   // Returns true if the rule was successfully parsed and added.
@@ -56,18 +57,18 @@ class NET_EXPORT MappedHostResolver : public HostResolver {
   // HostResolver methods:
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       url::SchemeHostPort host,
-      NetworkIsolationKey network_isolation_key,
+      NetworkAnonymizationKey network_anonymization_key,
       NetLogWithSource net_log,
       absl::optional<ResolveHostParameters> optional_parameters) override;
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       const HostPortPair& host,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const NetLogWithSource& net_log,
       const absl::optional<ResolveHostParameters>& optional_parameters)
       override;
   std::unique_ptr<ProbeRequest> CreateDohProbeRequest() override;
   HostCache* GetHostCache() override;
-  base::Value GetDnsConfigAsValue() const override;
+  base::Value::Dict GetDnsConfigAsValue() const override;
   void SetRequestContext(URLRequestContext* request_context) override;
   HostResolverManager* GetManagerForTesting() override;
 

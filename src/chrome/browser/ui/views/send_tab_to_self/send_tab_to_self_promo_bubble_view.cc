@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/signin_view_controller.h"
+#include "chrome/browser/ui/signin/signin_view_controller.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/send_tab_to_self/manage_account_devices_link_view.h"
 #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_bubble_controller.h"
@@ -33,7 +33,7 @@ SendTabToSelfPromoBubbleView::SendTabToSelfPromoBubbleView(
   DCHECK(controller_);
 
   SetShowCloseButton(true);
-  SetTitle(IDS_CONTEXT_MENU_SEND_TAB_TO_SELF);
+  SetTitle(IDS_SEND_TAB_TO_SELF);
 
   auto* provider = ChromeLayoutProvider::Get();
   set_fixed_width(
@@ -70,13 +70,13 @@ SendTabToSelfPromoBubbleView::SendTabToSelfPromoBubbleView(
   }
 
   SetButtons(ui::DIALOG_BUTTON_NONE);
-  auto* link_view =
-      AddChildView(BuildManageAccountDevicesLinkView(controller_));
+  auto* link_view = AddChildView(
+      BuildManageAccountDevicesLinkView(/*show_link=*/false, controller_));
   link_view->SetProperty(
       views::kMarginsKey,
-      gfx::Insets::TLBR(provider->GetDistanceMetric(
-                            views::DISTANCE_DIALOG_CONTENT_MARGIN_BOTTOM_TEXT),
-                        0, 0, 0));
+      gfx::Insets::VH(provider->GetDistanceMetric(
+                          views::DISTANCE_CONTROL_VERTICAL_TEXT_PADDING),
+                      0));
 }
 
 SendTabToSelfPromoBubbleView::~SendTabToSelfPromoBubbleView() {
@@ -103,13 +103,14 @@ void SendTabToSelfPromoBubbleView::AddedToWidget() {
 
 void SendTabToSelfPromoBubbleView::OnSignInButtonClicked() {
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
-  chrome::FindBrowserWithWebContents(web_contents())
+  chrome::FindBrowserWithTab(web_contents())
       ->signin_view_controller()
       ->ShowDiceAddAccountTab(
           signin_metrics::AccessPoint::ACCESS_POINT_SEND_TAB_TO_SELF_PROMO,
           /*email_hint=*/std::string());
 #else
-  NOTREACHED() << "The promo bubble shouldn't show if dice-support is disabled";
+  NOTREACHED_NORETURN()
+      << "The promo bubble shouldn't show if dice-support is disabled";
 #endif
 }
 

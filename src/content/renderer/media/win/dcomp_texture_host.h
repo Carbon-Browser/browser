@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/unguessable_token.h"
 #include "base/win/windows_types.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
@@ -42,7 +44,7 @@ class DCOMPTextureHost : public gpu::mojom::DCOMPTextureClient {
   DCOMPTextureHost(
       scoped_refptr<gpu::GpuChannelHost> channel,
       int32_t route_id,
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner,
       mojo::PendingAssociatedRemote<gpu::mojom::DCOMPTexture> texture,
       Listener* listener);
   DCOMPTextureHost(const DCOMPTextureHost&) = delete;
@@ -65,8 +67,9 @@ class DCOMPTextureHost : public gpu::mojom::DCOMPTextureClient {
 
   scoped_refptr<gpu::GpuChannelHost> channel_;
   const int32_t route_id_;
-  Listener* const listener_;  // Raw pointer is safe because the `listener_`
-                              // (DCOMPTextureWrapperImpl) owns `this`.
+  const raw_ptr<Listener, ExperimentalRenderer>
+      listener_;  // Raw pointer is safe because the `listener_`
+                  // (DCOMPTextureWrapperImpl) owns `this`.
 
   // Calls into the DCOMPTexture in the GPU process.
   mojo::AssociatedRemote<gpu::mojom::DCOMPTexture> texture_remote_;

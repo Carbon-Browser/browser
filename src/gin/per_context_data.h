@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class GIN_EXPORT PerContextData : public base::SupportsUserData {
   ContextHolder* context_holder() { return context_holder_; }
 
  private:
-  raw_ptr<ContextHolder> context_holder_;
+  raw_ptr<ContextHolder, DanglingUntriaged> context_holder_;
   raw_ptr<Runner> runner_;
 };
 

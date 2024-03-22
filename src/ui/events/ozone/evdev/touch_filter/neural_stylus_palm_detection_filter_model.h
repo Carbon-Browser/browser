@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,10 +38,12 @@ struct COMPONENT_EXPORT(EVDEV) NeuralStylusPalmDetectionFilterModelConfig {
   // Maximum sample count.
   uint32_t max_sample_count = 0;
 
+  // Convert the provided 'sample_count' to an equivalent time duration.
+  // Should only be called when resampling is enabled.
+  base::TimeDelta GetEquivalentDuration(uint32_t sample_count) const;
+
   // Minimum count of samples for a stroke to be considered as a neighbor.
   uint32_t neighbor_min_sample_count = 0;
-
-  uint32_t max_sequence_start_count_for_inference = 0;
 
   bool include_sequence_count_in_strokes = false;
 

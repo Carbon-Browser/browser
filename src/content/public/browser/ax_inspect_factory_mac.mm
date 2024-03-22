@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,8 @@ std::unique_ptr<ui::AXEventRecorder> AXInspectFactory::CreatePlatformRecorder(
     BrowserAccessibilityManager*,
     base::ProcessId pid,
     const ui::AXTreeSelector& selector) {
-  return AXInspectFactory::CreateRecorder(ui::AXApiType::kMac, nullptr, pid,
-                                          selector);
+  return AXInspectFactory::CreateRecorder(ui::AXApiType::kMac,
+                                          /*manager=*/nullptr, pid, selector);
 }
 
 // static

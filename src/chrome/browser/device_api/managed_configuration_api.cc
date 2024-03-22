@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
@@ -189,12 +189,13 @@ const std::set<url::Origin>& ManagedConfigurationAPI::GetManagedOrigins()
 
 void ManagedConfigurationAPI::OnConfigurationPolicyChanged() {
   const base::Value::List& managed_configurations =
-      profile_->GetPrefs()->GetValueList(prefs::kManagedConfigurationPerOrigin);
+      profile_->GetPrefs()->GetList(prefs::kManagedConfigurationPerOrigin);
 
   std::set<url::Origin> current_origins;
 
   for (const auto& entry : managed_configurations) {
-    const std::string* url = entry.FindStringKey(kOriginKey);
+    const auto& entry_dict = entry.GetDict();
+    const std::string* url = entry_dict.FindString(kOriginKey);
     if (!url)
       continue;
     const url::Origin origin = url::Origin::Create(GURL(*url));
@@ -202,9 +203,9 @@ void ManagedConfigurationAPI::OnConfigurationPolicyChanged() {
       continue;
 
     const std::string* configuration_url =
-        entry.FindStringKey(kManagedConfigurationUrlKey);
+        entry_dict.FindString(kManagedConfigurationUrlKey);
     const std::string* configuration_hash =
-        entry.FindStringKey(kManagedConfigurationHashKey);
+        entry_dict.FindString(kManagedConfigurationHashKey);
     current_origins.insert(origin);
 
     if (!configuration_url || !configuration_hash)
@@ -248,8 +249,8 @@ void ManagedConfigurationAPI::UpdateStoredDataForOrigin(
     const std::string& configuration_hash) {
   const std::string* last_hash_value =
       profile_->GetPrefs()
-          ->GetDictionary(prefs::kLastManagedConfigurationHashForOrigin)
-          ->FindStringKey(GetOriginEncoded(origin));
+          ->GetDict(prefs::kLastManagedConfigurationHashForOrigin)
+          .FindString(GetOriginEncoded(origin));
 
   // Nothing to be stored here, the hash value is the same.
   if (last_hash_value && *last_hash_value == configuration_hash)
@@ -302,9 +303,9 @@ void ManagedConfigurationAPI::ProcessDecodedConfiguration(
     PostStoreConfiguration(origin, base::Value::Dict());
     return;
   }
-  DictionaryPrefUpdate update(profile_->GetPrefs(),
+  ScopedDictPrefUpdate update(profile_->GetPrefs(),
                               prefs::kLastManagedConfigurationHashForOrigin);
-  update.Get()->SetStringKey(GetOriginEncoded(origin), url_hash);
+  update->Set(GetOriginEncoded(origin), url_hash);
 
   // We need to transform each value into a string.
   base::Value::Dict result_dict;

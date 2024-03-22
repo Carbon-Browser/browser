@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,8 @@ class TestDataOffer : public TestSelectionOffer {
   TestDataOffer& operator=(const TestDataOffer&) = delete;
 
   ~TestDataOffer() override;
+
+  static TestDataOffer* FromResource(wl_resource* resource);
 
   void SetActions(uint32_t dnd_actions, uint32_t preferred_action);
 

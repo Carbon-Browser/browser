@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "chromeos/lacros/lacros_service.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "crypto/scoped_nss_types.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/cert/cert_database.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -73,7 +74,8 @@ class CertDbInitializerImpl : public CertDbInitializer,
 
   // Called when there's a change in certificate database in Ash.
   // Forwards the notification to the CertDatabase.
-  void OnCertsChangedInAsh() override;
+  void OnCertsChangedInAsh(
+      crosapi::mojom::CertDatabaseChangeType change_type) override;
 
  private:
   void InitializeForMainProfile();

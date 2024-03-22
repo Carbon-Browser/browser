@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,8 @@
                            primary:(BOOL)isPrimary;
 
 // Creates and adds a mock characteristic.
-- (void)addCharacteristicWithUUID:(CBUUID*)cb_uuid properties:(int)properties;
-- (void)removeCharacteristicMock:(MockCBCharacteristic*)characteristic_mock;
+- (void)addCharacteristicWithUUID:(CBUUID*)uuid properties:(int)properties;
+- (void)removeCharacteristicMock:(MockCBCharacteristic*)characteristicMock;
 
 @end
 

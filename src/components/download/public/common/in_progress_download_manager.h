@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -219,9 +219,9 @@ class COMPONENTS_DOWNLOAD_EXPORT InProgressDownloadManager
       std::unique_ptr<InputStream> input_stream,
       URLLoaderFactoryProvider::URLLoaderFactoryProviderPtr
           url_loader_factory_provider,
-      UrlDownloadHandler* downloader,
+      UrlDownloadHandlerID downloader,
       DownloadUrlParameters::OnStartedCallback callback) override;
-  void OnUrlDownloadStopped(UrlDownloadHandler* downloader) override;
+  void OnUrlDownloadStopped(UrlDownloadHandlerID downloader) override;
   void OnUrlDownloadHandlerCreated(
       UrlDownloadHandler::UniqueUrlDownloadHandlerPtr downloader) override;
 
@@ -251,7 +251,7 @@ class COMPONENTS_DOWNLOAD_EXPORT InProgressDownloadManager
   void NotifyDownloadsInitialized();
 
   // Cancels the given UrlDownloadHandler.
-  void CancelUrlDownload(UrlDownloadHandler* downloader, bool user_cancel);
+  void CancelUrlDownload(UrlDownloadHandlerID downloader, bool user_cancel);
 
   // Active download handlers.
   std::vector<UrlDownloadHandler::UniqueUrlDownloadHandlerPtr>

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 // controller.
 @protocol SafetyCheckNavigationCommands
 
-// Shows password issues page.
-- (void)showPasswordIssuesPage;
+// Shows the Password Checkup page.
+- (void)showPasswordCheckupPage;
 
 // Opens update page at `location`.
 - (void)showUpdateAtLocation:(NSString*)location;

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/features.h"
 #include "net/base/network_isolation_key.h"
+#include "net/cookies/cookie_setting_override.h"
 #include "net/cookies/site_for_cookies.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -76,8 +77,9 @@ class DevtoolsNetworkResourceLoaderTest : public ContentBrowserTest {
         frame->GetIsolationInfoForSubresources(),
         frame->BuildClientSecurityState(),
         /**coep_reporter=*/mojo::NullRemote(), frame->GetProcess(),
-        network::mojom::TrustTokenRedemptionPolicy::kForbid,
-        "DevtoolsNetworkResourceLoaderTest");
+        network::mojom::TrustTokenOperationPolicyVerdict::kForbid,
+        network::mojom::TrustTokenOperationPolicyVerdict::kForbid,
+        net::CookieSettingOverrides(), "DevtoolsNetworkResourceLoaderTest");
     // Let DevTools fetch resources without CORS and CORB. Source maps are valid
     // JSON and would otherwise require a CORS fetch + correct response headers.
     // See BUG(chromium:1076435) for more context.

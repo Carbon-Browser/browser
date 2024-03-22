@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/views/background.h"
@@ -38,6 +40,7 @@ const char* kAlignments[] = {"Left", "Center", "Right", "Head"};
 // A Label with a clamped preferred width to demonstrate eliding or wrapping.
 class ExamplePreferredSizeLabel : public Label {
  public:
+  METADATA_HEADER(ExamplePreferredSizeLabel);
   ExamplePreferredSizeLabel() {
     SetBorder(
         CreateThemedSolidBorder(1, ExamplesColorIds::kColorLabelExampleBorder));
@@ -50,12 +53,17 @@ class ExamplePreferredSizeLabel : public Label {
   ~ExamplePreferredSizeLabel() override = default;
 
   // Label:
-  gfx::Size CalculatePreferredSize() const override {
-    return gfx::Size(50, Label::CalculatePreferredSize().height());
+  gfx::Size CalculatePreferredSize(
+      const SizeBounds& available_size) const override {
+    return gfx::Size(50,
+                     Label::CalculatePreferredSize(available_size).height());
   }
 
   static const char* kElideBehaviors[];
 };
+
+BEGIN_METADATA(ExamplePreferredSizeLabel, Label)
+END_METADATA
 
 // static
 const char* ExamplePreferredSizeLabel::kElideBehaviors[] = {
@@ -186,7 +194,7 @@ void LabelExample::AddCustomLabel(View* container) {
       u"this custom label.");
   textfield_->SetEditableSelectionRange(gfx::Range());
   textfield_->set_controller(this);
-  textfield_->SetAssociatedLabel(content_label);
+  textfield_->SetAccessibleName(content_label);
 
   alignment_ =
       AddCombobox(table, u"Alignment: ", kAlignments, std::size(kAlignments),

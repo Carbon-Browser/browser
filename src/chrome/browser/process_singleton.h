@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,10 @@
 #include "base/win/windows_types.h"
 #endif  // BUILDFLAG(IS_WIN)
 
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/process/process.h"
 #include "ui/gfx/native_widget_types.h"
@@ -127,6 +127,9 @@ class ProcessSingleton {
   // another process should call this directly.
   bool Create();
 
+  // Start watching for notifications from other processes.
+  void StartWatching();
+
   // Clear any lock state during shutdown.
   void Cleanup();
 
@@ -217,6 +220,7 @@ class ProcessSingleton {
 
   // Temporary directory to hold the socket.
   base::ScopedTempDir socket_dir_;
+  int sock_ = -1;
 
   // Helper class for linux specific messages.  LinuxWatcher is ref counted
   // because it posts messages between threads.

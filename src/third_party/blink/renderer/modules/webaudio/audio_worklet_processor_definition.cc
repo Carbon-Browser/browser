@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ const AudioParamDescriptor*
         const String& key) const {
   for (const auto& descriptor : audio_param_descriptors_) {
     if (descriptor->name() == key) {
-      return descriptor;
+      return descriptor.Get();
     }
   }
   return nullptr;

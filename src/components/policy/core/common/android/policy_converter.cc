@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,9 @@
 #include "base/check_op.h"
 #include "base/json/json_reader.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_split.h"
 #include "base/values.h"
 #include "components/policy/android/jni_headers/PolicyConverter_jni.h"
 #include "components/policy/core/common/policy_bundle.h"
@@ -29,8 +31,29 @@ using base::android::JavaRef;
 namespace policy {
 namespace android {
 
+namespace {
+
+// Tries to parse lists as comma-separated values. Extra spaces are ignored, so
+// "foo,bar" and "foo, bar" are equivalent. This is best effort and intended to
+// cover common cases applicable to the majority of policies. Use JSON encoding
+// to handle corner cases not covered by this.
+absl::optional<base::Value> SplitCommaSeparatedList(
+    const std::string& str_value) {
+  DCHECK(!str_value.empty());
+
+  base::Value::List as_list;
+  std::vector<std::string> items_as_vector = base::SplitString(
+      str_value, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+  base::ranges::for_each(items_as_vector, [&as_list](const std::string& item) {
+    as_list.Append(base::Value(item));
+  });
+  return base::Value(std::move(as_list));
+}
+
+}  // namespace
+
 PolicyConverter::PolicyConverter(const Schema* policy_schema)
-    : policy_schema_(policy_schema), policy_bundle_(new PolicyBundle) {
+    : policy_schema_(policy_schema) {
   JNIEnv* env = base::android::AttachCurrentThread();
   java_obj_.Reset(
       env,
@@ -43,9 +66,9 @@ PolicyConverter::~PolicyConverter() {
                                          java_obj_);
 }
 
-std::unique_ptr<PolicyBundle> PolicyConverter::GetPolicyBundle() {
-  std::unique_ptr<PolicyBundle> filled_bundle(std::move(policy_bundle_));
-  policy_bundle_ = std::make_unique<PolicyBundle>();
+PolicyBundle PolicyConverter::GetPolicyBundle() {
+  PolicyBundle filled_bundle = std::move(policy_bundle_);
+  policy_bundle_ = PolicyBundle();
   return filled_bundle;
 }
 
@@ -82,11 +105,11 @@ void PolicyConverter::SetPolicyStringArray(JNIEnv* env,
                                            const JavaRef<jstring>& policyKey,
                                            const JavaRef<jobjectArray>& array) {
   SetPolicyValue(ConvertJavaStringToUTF8(env, policyKey),
-                 ConvertJavaStringArrayToListValue(env, array));
+                 base::Value(ConvertJavaStringArrayToListValue(env, array)));
 }
 
 // static
-base::Value PolicyConverter::ConvertJavaStringArrayToListValue(
+base::Value::List PolicyConverter::ConvertJavaStringArrayToListValue(
     JNIEnv* env,
     const JavaRef<jobjectArray>& array) {
   DCHECK(!array.is_null());
@@ -94,7 +117,7 @@ base::Value PolicyConverter::ConvertJavaStringArrayToListValue(
   DCHECK_GE(array_reader.size(), 0)
       << "Invalid array length: " << array_reader.size();
 
-  base::Value list_value(base::Value::Type::LIST);
+  base::Value::List list_value;
   for (auto j_str : array_reader)
     list_value.Append(ConvertJavaStringToUTF8(env, j_str));
 
@@ -113,7 +136,6 @@ absl::optional<base::Value> PolicyConverter::ConvertValueToSchema(
       return base::Value();
 
     case base::Value::Type::BOOLEAN: {
-      std::string string_value;
       if (value.is_string()) {
         const std::string& string_value = value.GetString();
         if (string_value.compare("true") == 0)
@@ -162,18 +184,35 @@ absl::optional<base::Value> PolicyConverter::ConvertValueToSchema(
     }
 
     // Complex types have to be deserialized from JSON.
-    case base::Value::Type::DICTIONARY:
+    case base::Value::Type::DICT: {
+      if (value.is_string()) {
+        const std::string str_value = value.GetString();
+        // Do not try to convert empty string to list/dictionaries, since most
+        // likely the value was not simply not set by the UEM.
+        if (str_value.empty()) {
+          return absl::nullopt;
+        }
+        absl::optional<base::Value> decoded_value = base::JSONReader::Read(
+            str_value, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
+        if (decoded_value) {
+          return decoded_value;
+        }
+      }
+      return value;
+    }
+
     case base::Value::Type::LIST: {
       if (value.is_string()) {
         const std::string str_value = value.GetString();
         // Do not try to convert empty string to list/dictionaries, since most
         // likely the value was not simply not set by the UEM.
-        if (str_value.empty())
+        if (str_value.empty()) {
           return absl::nullopt;
+        }
         absl::optional<base::Value> decoded_value = base::JSONReader::Read(
             str_value, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS);
-        if (decoded_value.has_value())
-          return decoded_value;
+        return decoded_value ? std::move(decoded_value)
+                             : SplitCommaSeparatedList(str_value);
       }
       return value;
     }
@@ -198,9 +237,9 @@ void PolicyConverter::SetPolicyValue(const std::string& key,
     // Do not set list/dictionary policies that are sent as empty strings from
     // the UEM. This is common on Android when the UEM pushes the policy with
     // managed configurations.
-    policy_bundle_->Get(ns).Set(key, POLICY_LEVEL_MANDATORY,
-                                POLICY_SCOPE_MACHINE, POLICY_SOURCE_PLATFORM,
-                                std::move(converted_value), nullptr);
+    policy_bundle_.Get(ns).Set(key, POLICY_LEVEL_MANDATORY,
+                               POLICY_SCOPE_MACHINE, POLICY_SOURCE_PLATFORM,
+                               std::move(converted_value), nullptr);
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,8 @@ pub fn add_two_ints_via_rust(x: i32, y: i32) -> i32 {
     x + y
 }
 
-// The next function is used from the
-// AllocatorTest.RustComponentUsesPartitionAlloc unit test.
+// The next function is used from the RustComponentUsesPartitionAlloc unit
+// tests.
 pub fn allocate_via_rust() -> Box<ffi::SomeStruct> {
     Box::new(ffi::SomeStruct { a: 43 })
 }

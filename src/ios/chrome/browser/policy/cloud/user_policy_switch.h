@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 
 namespace policy {
 
-extern const char kEnableUserPolicy[];
+// True if User Policy is enabled for sign-in or sync consent levels.
+bool IsUserPolicyEnabledForSigninOrSyncConsentLevel();
 
-// Enables User Policy with the commandline switch.
-void EnableUserPolicy();
+// True if User Policy is only enabled for sign-in consent level.
+bool IsUserPolicyEnabledForSigninAndNoSyncConsentLevel();
 
-// True if User Policy is enabled.
-bool IsUserPolicyEnabled();
+// True if any User Policy feature is enabled.
+bool IsAnyUserPolicyFeatureEnabled();
 
 }  // namespace policy
 

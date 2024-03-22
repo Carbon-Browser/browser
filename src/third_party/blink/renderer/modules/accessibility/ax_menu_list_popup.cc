@@ -35,6 +35,16 @@ namespace blink {
 AXMenuListPopup::AXMenuListPopup(AXObjectCacheImpl& ax_object_cache)
     : AXMockObject(ax_object_cache), active_index_(-1) {}
 
+void AXMenuListPopup::Init(AXObject* parent) {
+  owner_ = parent;
+  AXMockObject::Init(parent);
+}
+
+void AXMenuListPopup::Detach() {
+  owner_ = nullptr;
+  AXMockObject::Detach();
+}
+
 ax::mojom::blink::Role AXMenuListPopup::NativeRoleIgnoringAria() const {
   return ax::mojom::blink::Role::kMenuListPopup;
 }
@@ -59,8 +69,9 @@ AXRestriction AXMenuListPopup::Restriction() const {
 bool AXMenuListPopup::ComputeAccessibilityIsIgnored(
     IgnoredReasons* ignored_reasons) const {
   // Base whether the menupopup is ignored on the containing <select>.
-  if (parent_)
+  if (parent_) {
     return parent_->ComputeAccessibilityIsIgnored(ignored_reasons);
+  }
 
   return kIgnoreObject;
 }
@@ -94,7 +105,7 @@ bool AXMenuListPopup::OnNativeClickAction() {
 }
 
 void AXMenuListPopup::AddChildren() {
-#if DCHECK_IS_ON()
+#if defined(AX_FAIL_FAST_BUILD)
   DCHECK(!IsDetached());
   DCHECK(!is_adding_children_) << " Reentering method on " << GetNode();
   base::AutoReset<bool> reentrancy_protector(&is_adding_children_, true);
@@ -111,27 +122,17 @@ void AXMenuListPopup::AddChildren() {
   if (!html_select_element)
     return;
 
-  DCHECK(children_.IsEmpty());
+  DCHECK(children_.empty());
   DCHECK(children_dirty_);
   children_dirty_ = false;
 
-  if (active_index_ == -1)
+  if (active_index_ == -1) {
     active_index_ = GetSelectedIndex();
+  }
 
   for (auto* const option_element : html_select_element->GetOptionList()) {
-#if DCHECK_IS_ON()
-    AXObject* ax_preexisting = AXObjectCache().Get(option_element);
-    DCHECK(!ax_preexisting ||
-           !ax_preexisting->AccessibilityIsIncludedInTree() ||
-           !ax_preexisting->CachedParentObject() ||
-           ax_preexisting->CachedParentObject() == this)
-        << "\nChild = " << ax_preexisting->ToString(true, true)
-        << "\n  IsAXMenuListOption? " << IsA<AXMenuListOption>(ax_preexisting)
-        << "\nNew parent = " << ToString(true, true)
-        << "\nPreexisting parent = "
-        << ax_preexisting->CachedParentObject()->ToString(true, true);
-#endif
     AXMenuListOption* option = MenuListOptionAXObject(option_element);
+    CHECK_EQ(option->ParentObject(), this);
     if (option && option->AccessibilityIsIncludedInTree()) {
       DCHECK(!option->IsDetached());
       children_.push_back(option);
@@ -158,9 +159,9 @@ void AXMenuListPopup::DidUpdateActiveOption(int option_index,
 
   if (option_index >= 0 && option_index < static_cast<int>(children_.size())) {
     AXObject* child = children_[option_index].Get();
-    cache.PostNotification(this, ax::mojom::Event::kChildrenChanged);
-    cache.PostNotification(this, ax::mojom::Event::kActiveDescendantChanged);
     cache.MarkAXObjectDirtyWithCleanLayout(child);
+    cache.PostNotification(this,
+                           ax::mojom::blink::Event::kActiveDescendantChanged);
   }
 }
 
@@ -168,10 +169,9 @@ void AXMenuListPopup::DidHide() {
   AXObjectCacheImpl& cache = AXObjectCache();
   AXObject* descendant = ActiveDescendant();
   cache.PostNotification(this, ax::mojom::Event::kHide);
-  if (descendant) {
-    cache.PostNotification(this, ax::mojom::Event::kChildrenChanged);
-    cache.MarkAXObjectDirtyWithCleanLayout(descendant);
-  }
+  if (descendant)  // TODO(accessibility) Try removing. Line below is enough.
+    cache.MarkAXObjectDirtyWithCleanLayout(this);
+  cache.MarkAXSubtreeDirtyWithCleanLayout(ParentObject());
 }
 
 void AXMenuListPopup::DidShow() {
@@ -186,6 +186,7 @@ void AXMenuListPopup::DidShow() {
   } else {
     cache.PostNotification(parent_, ax::mojom::Event::kFocus);
   }
+  cache.MarkAXSubtreeDirtyWithCleanLayout(ParentObject());
 }
 
 AXObject* AXMenuListPopup::ActiveDescendant() {
@@ -204,6 +205,11 @@ AXObject* AXMenuListPopup::ActiveDescendant() {
   HTMLOptionElement* option = select->item(active_index_);
   DCHECK(option);
   return AXObjectCache().Get(option);
+}
+
+void AXMenuListPopup::Trace(Visitor* visitor) const {
+  visitor->Trace(owner_);
+  AXMockObject::Trace(visitor);
 }
 
 }  // namespace blink

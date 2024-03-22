@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/background_fetch/storage/database_helpers.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_registration.h"
@@ -78,13 +78,8 @@ void GetDeveloperIdsTask::DidGetUniqueIds(
 
 void GetDeveloperIdsTask::FinishWithError(
     blink::mojom::BackgroundFetchError error) {
-  ReportStorageError();
   std::move(callback_).Run(error, std::move(developer_ids_));
   Finished();  // Destroys |this|.
-}
-
-std::string GetDeveloperIdsTask::HistogramName() const {
-  return "GetDeveloperIdsTask";
 }
 
 }  // namespace background_fetch

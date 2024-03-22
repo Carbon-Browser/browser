@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
@@ -24,7 +24,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/crash/core/browser/crashes_ui_util.h"
 #include "components/grit/components_scaled_resources.h"
 #include "components/grit/dev_ui_components_resources.h"
@@ -38,7 +38,7 @@
 #include "ui/base/resource/resource_bundle.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -50,9 +50,9 @@ using content::WebUIMessageHandler;
 
 namespace {
 
-content::WebUIDataSource* CreateCrashesUIHTMLSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUICrashesHost);
+void CreateAndAddCrashesUIHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUICrashesHost);
 
   for (size_t i = 0; i < crash_reporter::kCrashesUILocalizedStringsCount; ++i) {
     source->AddLocalizedString(
@@ -70,7 +70,6 @@ content::WebUIDataSource* CreateCrashesUIHTMLSource() {
   source->AddResourcePath(crash_reporter::kCrashesUISadTabSVG,
                           IDR_CRASH_SADTAB_SVG);
   source->SetDefaultResource(IDR_CRASH_CRASHES_HTML);
-  return source;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -159,8 +158,7 @@ void CrashesDOMHandler::HandleRequestCrashes(const base::Value::List& args) {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 void CrashesDOMHandler::HandleRequestUploads(const base::Value::List& args) {
-  chromeos::DebugDaemonClient* debugd_client =
-      chromeos::DebugDaemonClient::Get();
+  ash::DebugDaemonClient* debugd_client = ash::DebugDaemonClient::Get();
   DCHECK(debugd_client);
 
   debugd_client->UploadCrashes(base::BindOnce([](bool success) {
@@ -187,17 +185,6 @@ void CrashesDOMHandler::UpdateUI() {
   system_crash_reporter = true;
 #endif
 
-  bool using_crashpad = false;
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
-  using_crashpad = true;
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  // ChromeOS uses crash_sender instead of Crashpad for uploads even when
-  // Crashpad is enabled for dump generation.
-  using_crashpad = crash_reporter::IsCrashpadEnabled();
-#endif
-
   bool is_internal = false;
   auto* identity_manager =
       IdentityManagerFactory::GetForProfile(Profile::FromWebUI(web_ui()));
@@ -207,15 +194,18 @@ void CrashesDOMHandler::UpdateUI() {
             .email);
   }
 
-  // Manual uploads currently are supported only for Crashpad-using platforms
-  // and only if crash uploads are not disabled by policy.
-  bool support_manual_uploads =
-      using_crashpad &&
+  bool manual_uploads_supported = false;
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_ANDROID)
+  manual_uploads_supported = true;
+#endif
+  bool allow_manual_uploads =
+      manual_uploads_supported &&
       (crash_reporting_enabled || !IsMetricsReportingPolicyManaged());
 
-  // Show crash reports regardless of |crash_reporting_enabled| when using
-  // Crashpad so that users can manually upload those reports.
-  bool upload_list = using_crashpad || crash_reporting_enabled;
+  // Show crash reports regardless of |crash_reporting_enabled| when it is
+  // possible to manually upload reports.
+  bool upload_list = manual_uploads_supported || crash_reporting_enabled;
 
   base::Value::List crash_list;
   if (upload_list)
@@ -224,14 +214,13 @@ void CrashesDOMHandler::UpdateUI() {
   base::Value::Dict result;
   result.Set("enabled", crash_reporting_enabled);
   result.Set("dynamicBackend", system_crash_reporter);
-  result.Set("manualUploads", support_manual_uploads);
+  result.Set("manualUploads", allow_manual_uploads);
   result.Set("crashes", std::move(crash_list));
   result.Set("version", version_info::GetVersionNumber());
   result.Set("os", base::SysInfo::OperatingSystemName() + " " +
                        base::SysInfo::OperatingSystemVersion());
   result.Set("isGoogleAccount", is_internal);
-  FireWebUIListener(crash_reporter::kCrashesUIUpdateCrashList,
-                    base::Value(std::move(result)));
+  FireWebUIListener(crash_reporter::kCrashesUIUpdateCrashList, result);
 }
 
 void CrashesDOMHandler::HandleRequestSingleCrashUpload(
@@ -258,8 +247,7 @@ CrashesUI::CrashesUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<CrashesDOMHandler>());
 
   // Set up the chrome://crashes/ source.
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, CreateCrashesUIHTMLSource());
+  CreateAndAddCrashesUIHTMLSource(Profile::FromWebUI(web_ui));
 }
 
 // static

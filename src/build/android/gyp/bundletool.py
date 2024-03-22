@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -24,12 +24,10 @@ BUNDLETOOL_DIR = os.path.abspath(os.path.join(
 BUNDLETOOL_JAR_PATH = os.path.join(BUNDLETOOL_DIR, 'bundletool.jar')
 
 
-def RunBundleTool(args, warnings_as_errors=(), print_stdout=False):
-  # Use () instead of None because command-line flags are None by default.
-  verify = warnings_as_errors == () or warnings_as_errors
+def RunBundleTool(args, print_stdout=False):
   # ASAN builds failed with the default of 1GB (crbug.com/1120202).
   # Bug for bundletool: https://issuetracker.google.com/issues/165911616
-  cmd = build_utils.JavaCmd(verify, xmx='4G')
+  cmd = build_utils.JavaCmd(xmx='4G')
   cmd += ['-jar', BUNDLETOOL_JAR_PATH]
   cmd += args
   logging.debug(' '.join(cmd))

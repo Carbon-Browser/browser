@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/storage_service_impl.h"
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "components/services/storage/dom_storage/storage_area_impl.h"
 #include "components/services/storage/filesystem_proxy_factory.h"
@@ -76,7 +76,7 @@ void StorageServiceImpl::SetDataDirectory(
       io_task_runner_,
       base::BindRepeating(&StorageServiceImpl::BindDataDirectoryReceiver,
                           weak_ptr_factory_.GetWeakPtr()),
-      base::SequencedTaskRunnerHandle::Get()));
+      base::SequencedTaskRunner::GetCurrentDefault()));
 
   // Prevent SQLite from trying to use mmap, as SandboxedVfs does not currently
   // support this.

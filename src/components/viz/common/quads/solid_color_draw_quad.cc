@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,7 @@ void SolidColorDrawQuad::SetAll(const SharedQuadState* shared_quad_state,
 
 const SolidColorDrawQuad* SolidColorDrawQuad::MaterialCast(
     const DrawQuad* quad) {
-  DCHECK(quad->material == DrawQuad::Material::kSolidColor);
+  CHECK_EQ(quad->material, DrawQuad::Material::kSolidColor);
   return static_cast<const SolidColorDrawQuad*>(quad);
 }
 

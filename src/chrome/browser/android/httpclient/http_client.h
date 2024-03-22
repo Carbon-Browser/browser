@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "url/gurl.h"
@@ -58,14 +58,6 @@ class HttpClient {
             ResponseCallback callback);
 
  private:
-  void DoSend(
-      const GURL& gurl,
-      const std::string& request_type,
-      std::vector<uint8_t>&& request_body,
-      std::vector<std::string>&& header_keys,
-      std::vector<std::string>&& header_values,
-      const net::NetworkTrafficAnnotationTag& network_traffic_annotation,
-      ResponseCallback callback);
   void OnSimpleLoaderComplete(ResponseCallback response_callback,
                               network::SimpleURLLoader* simple_loader,
                               std::unique_ptr<std::string> response);

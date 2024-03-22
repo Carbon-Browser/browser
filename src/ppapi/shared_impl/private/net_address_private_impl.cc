@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/check.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
+#include "components/nacl/common/buildflags.h"
 #include "ppapi/c/pp_var.h"
 #include "ppapi/c/private/ppb_net_address_private.h"
 #include "ppapi/shared_impl/proxy_lock.h"
@@ -22,7 +23,8 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#elif BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
+#elif BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL) && \
+    !BUILDFLAG(IS_MINIMAL_TOOLCHAIN)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -220,15 +222,12 @@ std::string ConvertIPv6AddressToString(const NetAddress* net_addr,
       address16[2] == 0 && address16[3] == 0 &&
       address16[4] == 0 &&
       (address16[5] == 0 || address16[5] == 0xffff)) {
-    base::StringAppendF(
-        &description,
-        address16[5] == 0 ? "::%u.%u.%u.%u" : "::ffff:%u.%u.%u.%u",
-        net_addr->address[12],
-        net_addr->address[13],
-        net_addr->address[14],
-        net_addr->address[15]);
+    base::StringAppendF(&description, "::%s%u.%u.%u.%u",
+                        address16[5] == 0 ? "" : "ffff:", net_addr->address[12],
+                        net_addr->address[13], net_addr->address[14],
+                        net_addr->address[15]);
 
-  // "Real" IPv6 addresses.
+    // "Real" IPv6 addresses.
   } else {
     // Find the first longest run of 0s (of length > 1), to collapse to "::".
     int longest_start = 0;
@@ -257,7 +256,7 @@ std::string ConvertIPv6AddressToString(const NetAddress* net_addr,
         i += longest_length;
       } else {
         uint16_t v = ConvertFromNetEndian16(address16[i]);
-        base::StringAppendF(&description, need_sep ? ":%x" : "%x", v);
+        base::StringAppendF(&description, "%s%x", need_sep ? ":" : "", v);
         need_sep = true;
         i++;
       }
@@ -389,7 +388,7 @@ GetPPB_NetAddress_Private_1_1_Thunk() {
 }  // namespace thunk
 
 // For the NaCl target, all we need are the API functions and the thunk.
-#if !BUILDFLAG(IS_NACL)
+#if !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_MINIMAL_TOOLCHAIN)
 
 // static
 bool NetAddressPrivateImpl::ValidateNetAddress(
@@ -484,7 +483,7 @@ bool NetAddressPrivateImpl::NetAddressToIPEndPoint(
   address->Assign(net_addr->address, address_size);
   return true;
 }
-#endif  // !BUILDFLAG(IS_NACL)
+#endif  // !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_MINIMAL_TOOLCHAIN)
 
 // static
 std::string NetAddressPrivateImpl::DescribeNetAddress(

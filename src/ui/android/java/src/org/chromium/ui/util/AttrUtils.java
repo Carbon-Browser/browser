@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,15 +19,21 @@ public final class AttrUtils {
     /** Returns the given boolean attribute from the theme. */
     public static boolean resolveBoolean(Theme theme, @AttrRes int attrRes) {
         TypedValue typedValue = new TypedValue();
-        theme.resolveAttribute(attrRes, typedValue, /*resolveRefs=*/true);
+        theme.resolveAttribute(attrRes, typedValue, /* resolveRefs= */ true);
         return typedValue.data != 0;
     }
 
     /** Returns the given color attribute from the theme. */
     public static @ColorInt int resolveColor(Theme theme, @AttrRes int attrRes) {
         TypedValue typedValue = new TypedValue();
-        theme.resolveAttribute(attrRes, typedValue, /*resolveRefs=*/true);
-        return typedValue.data;
+        theme.resolveAttribute(attrRes, typedValue, /* resolveRefs= */ true);
+        if (typedValue.resourceId != 0) {
+            // Color State List
+            return theme.getResources().getColor(typedValue.resourceId, theme);
+        } else {
+            // Color Int
+            return typedValue.data;
+        }
     }
 
     /**
@@ -37,7 +43,7 @@ public final class AttrUtils {
     public static @ColorInt int resolveColor(
             Theme theme, @AttrRes int attrRes, @ColorRes int defaultColorRes) {
         TypedValue typedValue = new TypedValue();
-        if (theme.resolveAttribute(attrRes, typedValue, /*resolveRefs=*/true)) {
+        if (theme.resolveAttribute(attrRes, typedValue, /* resolveRefs= */ true)) {
             return typedValue.data;
         } else {
             return theme.getResources().getColor(defaultColorRes, theme);

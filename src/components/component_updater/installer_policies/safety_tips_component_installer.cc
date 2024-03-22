@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/thread_pool.h"
-#include "components/reputation/core/safety_tips.pb.h"
-#include "components/reputation/core/safety_tips_config.h"
+#include "base/values.h"
+#include "components/lookalikes/core/safety_tips.pb.h"
+#include "components/lookalikes/core/safety_tips_config.h"
 
 using component_updater::ComponentUpdateService;
 
@@ -68,7 +69,7 @@ bool SafetyTipsComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 SafetyTipsComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& /* manifest */,
+    const base::Value::Dict& /* manifest */,
     const base::FilePath& /* install_dir */) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -83,7 +84,7 @@ base::FilePath SafetyTipsComponentInstallerPolicy::GetInstalledPath(
 void SafetyTipsComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value /* manifest */) {
+    base::Value::Dict /* manifest */) {
   DVLOG(1) << "Component ready, version " << version.GetString() << " in "
            << install_dir.value();
 
@@ -97,12 +98,12 @@ void SafetyTipsComponentInstallerPolicy::ComponentReady(
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
       base::BindOnce(&LoadSafetyTipsProtoFromDisk, pb_path),
-      base::BindOnce(&reputation::SetSafetyTipsRemoteConfigProto));
+      base::BindOnce(&lookalikes::SetSafetyTipsRemoteConfigProto));
 }
 
 // Called during startup and installation before ComponentReady().
 bool SafetyTipsComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& /* manifest */,
+    const base::Value::Dict& /* manifest */,
     const base::FilePath& install_dir) const {
   // No need to actually validate the proto here, since we'll do the checking
   // in PopulateFromDynamicUpdate().

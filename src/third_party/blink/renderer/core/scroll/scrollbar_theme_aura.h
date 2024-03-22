@@ -40,7 +40,7 @@ namespace blink {
 class CORE_EXPORT ScrollbarThemeAura : public ScrollbarTheme {
  public:
   int ScrollbarThickness(float scale_from_dip,
-                         EScrollbarWidth scrollbar_width) override;
+                         EScrollbarWidth scrollbar_width) const override;
 
  protected:
   bool NativeThemeHasButtons() override { return true; }
@@ -76,6 +76,9 @@ class CORE_EXPORT ScrollbarThemeAura : public ScrollbarTheme {
   bool SupportsDragSnapBack() const override;
   bool ShouldSnapBackToDragOrigin(const Scrollbar&,
                                   const WebMouseEvent&) override;
+  virtual gfx::Size ButtonSize(const Scrollbar&) const;
+
+  float Proportion(EScrollbarWidth scrollbar_width) const;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(ScrollbarThemeAuraTest, ButtonSizeHorizontal);
@@ -83,7 +86,6 @@ class CORE_EXPORT ScrollbarThemeAura : public ScrollbarTheme {
   FRIEND_TEST_ALL_PREFIXES(ScrollbarThemeAuraTest, NoButtonsReturnsSize0);
 
   virtual bool HasScrollbarButtons(ScrollbarOrientation) const;
-  gfx::Size ButtonSize(const Scrollbar&);
 };
 
 }  // namespace blink

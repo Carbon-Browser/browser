@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,8 @@
 //
 // If you just use Views, then the RootView handles focus traversal for you. The
 // default traversal order is the order in which the views have been added to
-// their container. You can call View::SetNextFocusableView to modify this
-// order.
+// their container. You can call View::Insert{Before,After}InFocusList() to
+// explicitly control the focus order.
 //
 // If you are embedding a native view containing a nested RootView (for example
 // by adding a view that contains a native widget as its native component),
@@ -377,7 +377,7 @@ class VIEWS_EXPORT FocusManager : public ViewObserver {
   // Count of SetFocusedViewWithReason() in the current stack.
   // This value is ideally 0 or 1, i.e. no nested focus change.
   // See crbug.com/1203960.
-  int setting_focused_view_entrance_count = 0;
+  int setting_focused_view_entrance_count_ = 0;
 };
 
 }  // namespace views

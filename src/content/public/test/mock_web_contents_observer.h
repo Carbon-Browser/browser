@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,11 +86,6 @@ class MockWebContentsObserver : public WebContentsObserver {
   MOCK_METHOD(void,
               DidFinishNavigation,
               (NavigationHandle* navigation_handle),
-              (override));
-  MOCK_METHOD(void,
-              DidActivatePortal,
-              (WebContents* predecessor_web_contents,
-               base::TimeTicks activation_time),
               (override));
   MOCK_METHOD(void, DidStartLoading, (), (override));
   MOCK_METHOD(void, DidStopLoading, (), (override));
@@ -242,6 +237,10 @@ class MockWebContentsObserver : public WebContentsObserver {
               OnIsConnectedToBluetoothDeviceChanged,
               (bool is_connected_to_bluetooth_device),
               (override));
+  MOCK_METHOD(void,
+              OnIsConnectedToUsbDeviceChanged,
+              (bool is_connected_to_usb_device),
+              (override));
   MOCK_METHOD(void, DidUpdateAudioMutingState, (bool muted), (override));
   MOCK_METHOD(void,
               DidToggleFullscreenModeForTab,
@@ -253,10 +252,7 @@ class MockWebContentsObserver : public WebContentsObserver {
               (viz::VerticalScrollDirection scroll_direction),
               (override));
   MOCK_METHOD(void, BeforeFormRepostWarningShow, (), (override));
-  MOCK_METHOD(void,
-              BeforeUnloadFired,
-              (bool proceed, const base::TimeTicks& proceed_time),
-              (override));
+  MOCK_METHOD(void, BeforeUnloadFired, (bool proceed), (override));
   MOCK_METHOD(void, BeforeUnloadDialogCancelled, (), (override));
   MOCK_METHOD(void, AXTreeIDForMainFrameHasChanged, (), (override));
   MOCK_METHOD(void,

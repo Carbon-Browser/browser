@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,13 @@
 
 namespace autofill {
 
+class AutofillClient;
+
 class MockSingleFieldFormFillRouter : public SingleFieldFormFillRouter {
  public:
   explicit MockSingleFieldFormFillRouter(
       AutocompleteHistoryManager* autocomplete_history_manager,
+      IbanManager* iban_manager,
       MerchantPromoCodeManager* merchant_promo_code_manager);
   ~MockSingleFieldFormFillRouter() override;
 
@@ -24,15 +27,12 @@ class MockSingleFieldFormFillRouter : public SingleFieldFormFillRouter {
                const FormStructure* form_structure,
                bool is_autocomplete_enabled),
               (override));
-  MOCK_METHOD(void,
+  MOCK_METHOD(bool,
               OnGetSingleFieldSuggestions,
-              (int query_id,
-               bool is_autocomplete_enabled,
-               bool autoselect_first_suggestion,
-               const std::u16string& name,
-               const std::u16string& prefix,
-               const std::string& form_control_type,
-               base::WeakPtr<SingleFieldFormFiller::SuggestionsHandler> handler,
+              (AutofillSuggestionTriggerSource trigger_source,
+               const FormFieldData& field,
+               const AutofillClient& client,
+               SingleFieldFormFiller::OnSuggestionsReturnedCallback callback,
                const SuggestionsContext& context),
               (override));
   MOCK_METHOD(void,
@@ -40,17 +40,14 @@ class MockSingleFieldFormFillRouter : public SingleFieldFormFillRouter {
               (const std::vector<FormFieldData>& fields,
                bool is_autocomplete_enabled),
               (override));
-  MOCK_METHOD(void,
-              CancelPendingQueries,
-              (const SingleFieldFormFiller::SuggestionsHandler*),
-              (override));
+  MOCK_METHOD(void, CancelPendingQueries, (), (override));
   MOCK_METHOD(void,
               OnRemoveCurrentSingleFieldSuggestion,
-              (const std::u16string&, const std::u16string&, int),
+              (const std::u16string&, const std::u16string&, PopupItemId),
               (override));
   MOCK_METHOD(void,
               OnSingleFieldSuggestionSelected,
-              (const std::u16string&, int),
+              (const std::u16string&, PopupItemId),
               (override));
 };
 

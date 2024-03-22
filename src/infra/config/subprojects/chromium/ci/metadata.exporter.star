@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Definitions of builders in the metadata.exporter builder group."""
@@ -8,10 +8,10 @@ load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
 
 ci.defaults.set(
-    cores = 8,
-    execution_timeout = ci.DEFAULT_EXECUTION_TIMEOUT,
-    os = os.LINUX_DEFAULT,
     pool = ci.DEFAULT_POOL,
+    cores = 8,
+    os = os.LINUX_DEFAULT,
+    execution_timeout = ci.DEFAULT_EXECUTION_TIMEOUT,
 )
 
 consoles.console_view(
@@ -29,11 +29,12 @@ tool.
 
 ci.builder(
     name = "metadata-exporter",
+    description_html = description,
+    executable = "recipe:chromium_export_metadata",
     console_view_entry = consoles.console_view_entry(
         console_view = "metadata.exporter",
     ),
-    executable = "recipe:chromium_export_metadata",
     notifies = "metadata-mapping",
     service_account = "component-mapping-updater@chops-service-accounts.iam.gserviceaccount.com",
-    description_html = description,
+    shadow_service_account = "chromium-try-builder@chops-service-accounts.iam.gserviceaccount.com",
 )

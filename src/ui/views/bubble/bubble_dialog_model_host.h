@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/types/pass_key.h"
 #include "ui/base/models/dialog_model.h"
@@ -32,6 +32,8 @@ class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
                                            public ui::DialogModelHost {
  public:
   enum class FieldType { kText, kControl, kMenuItem };
+
+  class ContentsView;
 
   class VIEWS_EXPORT CustomView : public ui::DialogModelCustomField::Field {
    public:
@@ -78,12 +80,14 @@ class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
   View* GetInitiallyFocusedView() override;
   void OnWidgetInitialized() override;
 
+  View* GetContentsViewForTesting();
+
   // ui::DialogModelHost:
   void Close() override;
   void OnFieldAdded(ui::DialogModelField* field) override;
+  void OnFieldChanged(ui::DialogModelField* field) override;
 
  private:
-  class ContentsView;
   // TODO(pbos): Consider externalizing this functionality into a different
   // format that could feasibly be adopted by LayoutManagers. This is used for
   // BoxLayouts (but could be others) to agree on columns' preferred width as a
@@ -109,30 +113,51 @@ class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
     base::flat_set<View*> children_;
   };
 
+  // This class observes the ContentsView theme to make sure that the window
+  // icon updates with the theme.
+  class ThemeChangedObserver : public ViewObserver {
+   public:
+    ThemeChangedObserver(BubbleDialogModelHost* parent,
+                         ContentsView* contents_view);
+    ThemeChangedObserver(const ThemeChangedObserver&) = delete;
+    ThemeChangedObserver& operator=(const ThemeChangedObserver&) = delete;
+    ~ThemeChangedObserver() override;
+
+    // ViewObserver:
+    void OnViewThemeChanged(View*) override;
+
+   private:
+    const raw_ptr<BubbleDialogModelHost> parent_;
+    base::ScopedObservation<View, ViewObserver> observation_{this};
+  };
+
   struct DialogModelHostField {
-    ui::DialogModelField* dialog_model_field;
+    raw_ptr<ui::DialogModelField> dialog_model_field = nullptr;
 
     // View representing the entire field.
-    View* field_view;
+    raw_ptr<View, DanglingUntriaged> field_view = nullptr;
 
     // Child view to |field_view|, if any, that's used for focus. For instance,
     // a textfield row would be a container that contains both a
     // views::Textfield and a descriptive label. In this case |focusable_view|
     // would refer to the views::Textfield which is also what would gain focus.
-    View* focusable_view;
+    raw_ptr<View, DanglingUntriaged> focusable_view = nullptr;
   };
 
   void OnWindowClosing();
 
   void AddInitialFields();
-  void AddOrUpdateBodyText(ui::DialogModelBodyText* model_field);
+  void AddOrUpdateParagraph(ui::DialogModelParagraph* model_field);
   void AddOrUpdateCheckbox(ui::DialogModelCheckbox* model_field);
   void AddOrUpdateCombobox(ui::DialogModelCombobox* model_field);
   void AddOrUpdateMenuItem(ui::DialogModelMenuItem* model_field);
   void AddOrUpdateSeparator(ui::DialogModelField* model_field);
   void AddOrUpdateTextfield(ui::DialogModelTextfield* model_field);
+  void UpdateButton(ui::DialogModelButton* model_field);
 
+  void UpdateWindowIcon();
   void UpdateSpacingAndMargins();
+  void UpdateFieldVisibility(ui::DialogModelField* field);
 
   void AddViewForLabelAndField(ui::DialogModelField* model_field,
                                const std::u16string& label_text,
@@ -147,6 +172,9 @@ class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
       const ui::DialogModelLabel& dialog_label);
   std::unique_ptr<Label> CreateLabelForDialogModelLabel(
       const ui::DialogModelLabel& dialog_label);
+  std::unique_ptr<View> CreateViewForParagraphWithHeader(
+      const ui::DialogModelLabel& dialog_label,
+      const std::u16string header);
 
   void AddDialogModelHostField(std::unique_ptr<View> view,
                                const DialogModelHostField& field_view_info);
@@ -163,6 +191,7 @@ class VIEWS_EXPORT BubbleDialogModelHost : public BubbleDialogDelegate,
 
   std::unique_ptr<ui::DialogModel> model_;
   const raw_ptr<ContentsView> contents_view_;
+  ThemeChangedObserver theme_observer_;
 
   std::vector<DialogModelHostField> fields_;
   std::vector<base::CallbackListSubscription> property_changed_subscriptions_;

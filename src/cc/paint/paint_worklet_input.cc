@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,6 +76,13 @@ void PaintWorkletInput::PropertyValue::reset() {
 
 bool PaintWorkletInput::KnownToBeOpaque() const {
   return false;
+}
+
+bool PaintWorkletInput::ValueChangeShouldCauseRepaint(
+    const PropertyValue& val1,
+    const PropertyValue& val2) const {
+  return val1.color_value != val1.color_value ||
+         val1.float_value != val2.float_value;
 }
 
 }  // namespace cc

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,10 @@
 #include <vector>
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
@@ -22,7 +24,6 @@
 #include "build/build_config.h"
 #include "components/network_session_configurator/common/network_features.h"
 #include "components/network_session_configurator/common/network_switches.h"
-#include "components/variations/variations_associated_data.h"
 #include "components/variations/variations_switches.h"
 #include "net/base/host_mapping_rules.h"
 #include "net/http/http_network_session.h"
@@ -31,7 +32,7 @@
 #include "net/quic/set_quic_flag.h"
 #include "net/spdy/spdy_session.h"
 #include "net/spdy/spdy_session_pool.h"
-#include "net/third_party/quiche/overrides/quiche_platform_impl/quic_flags_impl.h"
+#include "net/third_party/quiche/src/quiche/common/platform/api/quiche_flags.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_tag.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_protocol.h"
@@ -72,6 +73,11 @@ const std::string& GetVariationParam(
     return base::EmptyString();
 
   return it->second;
+}
+
+bool doesVariationParamExist(const std::map<std::string, std::string>& params,
+                             const std::string& key) {
+  return params.find(key) != params.end();
 }
 
 spdy::SettingsMap GetHttp2Settings(
@@ -294,14 +300,6 @@ bool ShouldQuicEstimateInitialRtt(
       GetVariationParam(quic_trial_params, "estimate_initial_rtt"), "true");
 }
 
-bool ShouldQuicHeadersIncludeH2StreamDependencies(
-    const VariationParameters& quic_trial_params) {
-  return base::EqualsCaseInsensitiveASCII(
-      GetVariationParam(quic_trial_params,
-                        "headers_include_h2_stream_dependency"),
-      "true");
-}
-
 bool ShouldQuicMigrateSessionsOnNetworkChangeV2(
     const VariationParameters& quic_trial_params) {
   return base::EqualsCaseInsensitiveASCII(
@@ -321,6 +319,16 @@ bool ShouldQuicAllowPortMigration(
     const VariationParameters& quic_trial_params) {
   return !base::EqualsCaseInsensitiveASCII(
       GetVariationParam(quic_trial_params, "allow_port_migration"), "false");
+}
+
+int GetMultiPortProbingInterval(const VariationParameters& quic_trial_params) {
+  int value;
+  if (base::StringToInt(
+          GetVariationParam(quic_trial_params, "multi_port_probing_interval"),
+          &value)) {
+    return value;
+  }
+  return 0;
 }
 
 bool ShouldQuicRetryOnAlternateNetworkBeforeHandshake(
@@ -444,12 +452,12 @@ int GetInitialDelayForBrokenAlternativeServiceSeconds(
   return 0;
 }
 
-bool NotDelayMainJobWithAvailableSpdySession(
+bool DelayMainJobWithAvailableSpdySession(
     const VariationParameters& quic_trial_params) {
   return base::EqualsCaseInsensitiveASCII(
       GetVariationParam(quic_trial_params,
                         "delay_main_job_with_available_spdy_session"),
-      "false");
+      "true");
 }
 
 void SetQuicFlags(const VariationParameters& quic_trial_params) {
@@ -480,35 +488,20 @@ quic::ParsedQuicVersionVector GetQuicVersions(
       GetVariationParam(quic_trial_params, "quic_version");
   quic::ParsedQuicVersionVector trial_versions =
       quic::ParseQuicVersionVectorString(trial_versions_str);
-  const bool obsolete_versions_allowed = base::EqualsCaseInsensitiveASCII(
-      GetVariationParam(quic_trial_params, "obsolete_versions_allowed"),
-      "true");
-  if (!obsolete_versions_allowed) {
-    quic::ParsedQuicVersionVector filtered_versions;
-    quic::ParsedQuicVersionVector obsolete_versions =
-        net::ObsoleteQuicVersions();
-    bool found_obsolete_version = false;
-    for (const quic::ParsedQuicVersion& version : trial_versions) {
-      if (std::find(obsolete_versions.begin(), obsolete_versions.end(),
-                    version) == obsolete_versions.end()) {
-        filtered_versions.push_back(version);
-      } else {
-        found_obsolete_version = true;
-      }
+  quic::ParsedQuicVersionVector filtered_versions;
+  quic::ParsedQuicVersionVector obsolete_versions = net::ObsoleteQuicVersions();
+  bool found_obsolete_version = false;
+  for (const quic::ParsedQuicVersion& version : trial_versions) {
+    if (!base::Contains(obsolete_versions, version)) {
+      filtered_versions.push_back(version);
+    } else {
+      found_obsolete_version = true;
     }
-    if (found_obsolete_version) {
-      UMA_HISTOGRAM_BOOLEAN("Net.QuicSession.FinchObsoleteVersion", true);
-    }
-    trial_versions = filtered_versions;
   }
-  return trial_versions;
-}
-
-bool ShouldEnableServerPushCancelation(
-    const VariationParameters& quic_trial_params) {
-  return base::EqualsCaseInsensitiveASCII(
-      GetVariationParam(quic_trial_params, "enable_server_push_cancellation"),
-      "true");
+  if (found_obsolete_version) {
+    UMA_HISTOGRAM_BOOLEAN("Net.QuicSession.FinchObsoleteVersion", true);
+  }
+  return filtered_versions;
 }
 
 bool AreQuicParamsValid(const base::CommandLine& command_line,
@@ -552,7 +545,6 @@ void ConfigureQuicParams(const base::CommandLine& command_line,
                          base::StringPiece quic_trial_group,
                          const VariationParameters& quic_trial_params,
                          bool is_quic_force_disabled,
-                         const std::string& quic_user_agent_id,
                          net::HttpNetworkSessionParams* params,
                          net::QuicParams* quic_params) {
   if (ShouldDisableQuic(quic_trial_group, quic_trial_params,
@@ -567,9 +559,6 @@ void ConfigureQuicParams(const base::CommandLine& command_line,
     // Skip parsing of invalid params.
     return;
   }
-
-  params->enable_server_push_cancellation =
-      ShouldEnableServerPushCancelation(quic_trial_params);
 
   quic_params->retry_without_alt_svc_on_quic_errors =
       ShouldRetryWithoutAltSvcOnQuicErrors(quic_trial_params);
@@ -612,10 +601,11 @@ void ConfigureQuicParams(const base::CommandLine& command_line,
     }
     quic_params->estimate_initial_rtt =
         ShouldQuicEstimateInitialRtt(quic_trial_params);
-    quic_params->headers_include_h2_stream_dependency =
-        ShouldQuicHeadersIncludeH2StreamDependencies(quic_trial_params);
-    quic_params->migrate_sessions_on_network_change_v2 =
-        ShouldQuicMigrateSessionsOnNetworkChangeV2(quic_trial_params);
+    if (doesVariationParamExist(quic_trial_params,
+                                "migrate_sessions_on_network_change_v2")) {
+      quic_params->migrate_sessions_on_network_change_v2 =
+          ShouldQuicMigrateSessionsOnNetworkChangeV2(quic_trial_params);
+    }
     quic_params->migrate_sessions_early_v2 =
         ShouldQuicMigrateSessionsEarlyV2(quic_trial_params);
     quic_params->allow_port_migration =
@@ -649,6 +639,11 @@ void ConfigureQuicParams(const base::CommandLine& command_line,
       quic_params->idle_session_migration_period =
           base::Seconds(idle_session_migration_period_seconds);
     }
+    int multi_port_probing_interval =
+        GetMultiPortProbingInterval(quic_trial_params);
+    if (multi_port_probing_interval > 0) {
+      quic_params->multi_port_probing_interval = multi_port_probing_interval;
+    }
     int max_time_on_non_default_network_seconds =
         GetQuicMaxTimeOnNonDefaultNetworkSeconds(quic_trial_params);
     if (max_time_on_non_default_network_seconds > 0) {
@@ -678,8 +673,8 @@ void ConfigureQuicParams(const base::CommandLine& command_line,
     }
     quic_params->exponential_backoff_on_initial_delay =
         GetExponentialBackOffOnInitialDelay(quic_trial_params);
-    if (NotDelayMainJobWithAvailableSpdySession(quic_trial_params)) {
-      quic_params->delay_main_job_with_available_spdy_session = false;
+    if (DelayMainJobWithAvailableSpdySession(quic_trial_params)) {
+      quic_params->delay_main_job_with_available_spdy_session = true;
     }
     SetQuicFlags(quic_trial_params);
   }
@@ -688,8 +683,6 @@ void ConfigureQuicParams(const base::CommandLine& command_line,
   if (max_packet_length != 0) {
     quic_params->max_packet_length = max_packet_length;
   }
-
-  quic_params->user_agent_id = quic_user_agent_id;
 
   quic::ParsedQuicVersionVector supported_versions =
       GetQuicVersions(quic_trial_params);
@@ -703,7 +696,6 @@ namespace network_session_configurator {
 
 void ParseCommandLineAndFieldTrials(const base::CommandLine& command_line,
                                     bool is_quic_force_disabled,
-                                    const std::string& quic_user_agent_id,
                                     net::HttpNetworkSessionParams* params,
                                     net::QuicParams* quic_params) {
   is_quic_force_disabled |= command_line.HasSwitch(switches::kDisableQuic);
@@ -711,18 +703,18 @@ void ParseCommandLineAndFieldTrials(const base::CommandLine& command_line,
   std::string quic_trial_group =
       base::FieldTrialList::FindFullName(kQuicFieldTrialName);
   VariationParameters quic_trial_params;
-  if (!variations::GetVariationParams(kQuicFieldTrialName, &quic_trial_params))
+  if (!base::GetFieldTrialParams(kQuicFieldTrialName, &quic_trial_params)) {
     quic_trial_params.clear();
+  }
   ConfigureQuicParams(command_line, quic_trial_group, quic_trial_params,
-                      is_quic_force_disabled, quic_user_agent_id, params,
-                      quic_params);
+                      is_quic_force_disabled, params, quic_params);
 
   std::string http2_trial_group =
       base::FieldTrialList::FindFullName(kHttp2FieldTrialName);
   VariationParameters http2_trial_params;
-  if (!variations::GetVariationParams(kHttp2FieldTrialName,
-                                      &http2_trial_params))
+  if (!base::GetFieldTrialParams(kHttp2FieldTrialName, &http2_trial_params)) {
     http2_trial_params.clear();
+  }
   ConfigureHttp2Params(command_line, http2_trial_group, http2_trial_params,
                        params);
 
@@ -771,6 +763,10 @@ void ParseCommandLineAndFieldTrials(const base::CommandLine& command_line,
           quic_params->origins_to_force_quic_on.insert(quic_origin);
       }
     }
+
+    if (command_line.HasSwitch(switches::kWebTransportDeveloperMode)) {
+      quic_params->webtransport_developer_mode = true;
+    }
   }
 
   // Parameters only controlled by command line.
@@ -780,9 +776,6 @@ void ParseCommandLineAndFieldTrials(const base::CommandLine& command_line,
   if (command_line.HasSwitch(switches::kIgnoreCertificateErrors)) {
     params->ignore_certificate_errors = true;
   }
-  UMA_HISTOGRAM_BOOLEAN(
-      "Net.Certificate.IgnoreErrors",
-      command_line.HasSwitch(switches::kIgnoreCertificateErrors));
   if (command_line.HasSwitch(switches::kTestingFixedHttpPort)) {
     params->testing_fixed_http_port =
         GetSwitchValueAsInt(command_line, switches::kTestingFixedHttpPort);
@@ -807,24 +800,20 @@ net::URLRequestContextBuilder::HttpCacheParams::Type ChooseCacheType() {
     return net::URLRequestContextBuilder::HttpCacheParams::DISK_BLOCKFILE;
   }
 
-  // Blockfile breaks on OSX 10.14 (see https://crbug.com/899874); so use
-  // SimpleCache even when we don't enable it via experiment, as long as we
-  // don't force it off (not used at this time). This unfortunately
-  // muddles the experiment data, but as this was written to be considered for
-  // backport, having it behave differently than in stable would be a bigger
-  // problem.
-#if BUILDFLAG(IS_MAC)
-  if (base::mac::IsAtLeastOS10_14())
-    return net::URLRequestContextBuilder::HttpCacheParams::DISK_SIMPLE;
-#endif  // BUILDFLAG(IS_MAC)
-
   if (base::StartsWith(experiment_name, "ExperimentYes",
                        base::CompareCase::INSENSITIVE_ASCII)) {
     return net::URLRequestContextBuilder::HttpCacheParams::DISK_SIMPLE;
   }
 #endif  // #if !BUILDFLAG(IS_ANDROID)
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  // Blockfile breaks on macOS 10.14 (see https://crbug.com/899874); so use
+  // SimpleCache even when we don't enable it via experiment, as long as we
+  // don't force it off (not used at this time). This unfortunately
+  // muddles the experiment data, but as this was written to be considered for
+  // backport, having it behave differently than in stable would be a bigger
+  // problem. TODO: Does this work in later macOS releases?
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
+    BUILDFLAG(IS_MAC)
   return net::URLRequestContextBuilder::HttpCacheParams::DISK_SIMPLE;
 #else
   return net::URLRequestContextBuilder::HttpCacheParams::DISK_BLOCKFILE;

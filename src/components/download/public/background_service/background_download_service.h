@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/download/public/background_service/clients.h"
 #include "components/download/public/task/download_task_types.h"
@@ -24,6 +23,11 @@ struct DownloadParams;
 struct SchedulingParams;
 
 using TaskFinishedCallback = base::OnceCallback<void(bool)>;
+
+#if BUILDFLAG(IS_IOS)
+// Identifier for background download service.
+extern const char kBackgroundDownloadIdentifierPrefix[];
+#endif  // BUILDFLAG(IS_IOS)
 
 // A service responsible for helping facilitate the scheduling and downloading
 // of file content from the web.  See |DownloadParams| for more details on the
@@ -97,6 +101,12 @@ class BackgroundDownloadService : public KeyedService {
   // Returns a Logger instance that is meant to be used by logging and debug UI
   // components in the larger system.
   virtual Logger* GetLogger() = 0;
+
+#if BUILDFLAG(IS_IOS)
+  // Called by the  system to handle events for background URL session. Once
+  // done, the passed function should be called.
+  virtual void HandleEventsForBackgroundURLSession(base::OnceClosure) {}
+#endif  // BUILDFLAG(IS_IOS)
 
   BackgroundDownloadService(const BackgroundDownloadService&) = delete;
   BackgroundDownloadService& operator=(const BackgroundDownloadService&) =

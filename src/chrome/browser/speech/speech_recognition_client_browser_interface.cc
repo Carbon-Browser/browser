@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,13 @@
 
 #include <memory>
 
+#include "base/feature_list.h"
+#include "base/unguessable_token.h"
+#include "build/build_config.h"
+#include "chrome/browser/accessibility/live_caption/live_caption_controller_factory.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/live_caption/live_caption_controller.h"
+#include "components/live_caption/live_caption_ui_remote_driver.h"
 #include "components/live_caption/pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
@@ -21,6 +27,7 @@ SpeechRecognitionClientBrowserInterface::
     SpeechRecognitionClientBrowserInterface(content::BrowserContext* context) {
   Profile* profile = Profile::FromBrowserContext(context);
   profile_prefs_ = profile->GetPrefs();
+  controller_ = captions::LiveCaptionControllerFactory::GetForProfile(profile);
 
   pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
   pref_change_registrar_->Init(profile_prefs_);
@@ -35,6 +42,11 @@ SpeechRecognitionClientBrowserInterface::
       prefs::kLiveCaptionLanguageCode,
       base::BindRepeating(&SpeechRecognitionClientBrowserInterface::
                               OnSpeechRecognitionLanguageChanged,
+                          base::Unretained(this)));
+  pref_change_registrar_->Add(
+      prefs::kLiveCaptionMaskOffensiveWords,
+      base::BindRepeating(&SpeechRecognitionClientBrowserInterface::
+                              OnSpeechRecognitionMaskOffensiveWordsChanged,
                           base::Unretained(this)));
   speech::SodaInstaller::GetInstance()->AddObserver(this);
 }
@@ -58,11 +70,31 @@ void SpeechRecognitionClientBrowserInterface::
   OnSpeechRecognitionAvailabilityChanged();
 }
 
+void SpeechRecognitionClientBrowserInterface::BindRecognizerToRemoteClient(
+    mojo::PendingReceiver<media::mojom::SpeechRecognitionRecognizerClient>
+        client_receiver,
+    mojo::PendingReceiver<media::mojom::SpeechRecognitionSurfaceClient>
+        surface_client_receiver,
+    mojo::PendingRemote<media::mojom::SpeechRecognitionSurface> surface_remote,
+    media::mojom::SpeechRecognitionSurfaceMetadataPtr metadata) {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  ui_drivers_.Add(
+      std::make_unique<captions::LiveCaptionUiRemoteDriver>(
+          controller_, std::move(surface_client_receiver),
+          std::move(surface_remote), metadata->session_id.ToString()),
+      std::move(client_receiver));
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+}
+
 void SpeechRecognitionClientBrowserInterface::OnSodaInstalled(
     speech::LanguageCode language_code) {
   if (!prefs::IsLanguageCodeForLiveCaption(language_code, profile_prefs_))
     return;
   NotifyObservers(profile_prefs_->GetBoolean(prefs::kLiveCaptionEnabled));
+
+  if (base::FeatureList::IsEnabled(media::kLiveCaptionMultiLanguage)) {
+    OnSpeechRecognitionLanguageChanged();
+  }
 }
 
 void SpeechRecognitionClientBrowserInterface::
@@ -86,9 +118,19 @@ void SpeechRecognitionClientBrowserInterface::
 
 void SpeechRecognitionClientBrowserInterface::
     OnSpeechRecognitionLanguageChanged() {
+  const std::string language =
+      prefs::GetLiveCaptionLanguageCode(profile_prefs_);
   for (auto& observer : speech_recognition_availibility_observers_) {
-    observer->SpeechRecognitionLanguageChanged(
-        prefs::GetLiveCaptionLanguageCode(profile_prefs_));
+    observer->SpeechRecognitionLanguageChanged(language);
+  }
+}
+
+void SpeechRecognitionClientBrowserInterface::
+    OnSpeechRecognitionMaskOffensiveWordsChanged() {
+  bool mask_offensive_words =
+      profile_prefs_->GetBoolean(prefs::kLiveCaptionMaskOffensiveWords);
+  for (auto& observer : speech_recognition_availibility_observers_) {
+    observer->SpeechRecognitionMaskOffensiveWordsChanged(mask_offensive_words);
   }
 }
 

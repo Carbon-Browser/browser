@@ -1,15 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/showcase/core/showcase_model.h"
 
-#include "base/check.h"
+#import "base/check.h"
 #import "ios/showcase/core/showcase_model_buildflags.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -55,6 +51,11 @@ BOOL IsShowcaseModelValid(NSArray<showcase::ModelRow*>* model) {
       showcase::kUseCaseKey : @"Credential Provider Consent UI",
     },
     @{
+      showcase::kClassForDisplayKey : @"LaunchScreenViewController",
+      showcase::kClassForInstantiationKey : @"LaunchScreenViewController",
+      showcase::kUseCaseKey : @"Launch screen",
+    },
+    @{
       showcase::kClassForDisplayKey : @"EnterpriseLoadScreenViewController",
       showcase::
       kClassForInstantiationKey : @"EnterpriseLoadScreenViewController",
@@ -98,30 +99,9 @@ BOOL IsShowcaseModelValid(NSArray<showcase::ModelRow*>* model) {
       showcase::kUseCaseKey : @"Bubble",
     },
     @{
-      showcase::kClassForDisplayKey : @"GridViewController",
-      showcase::kClassForInstantiationKey : @"SCGridCoordinator",
-      showcase::kUseCaseKey : @"Grid UI",
-    },
-    @{
-      showcase::kClassForDisplayKey : @"GridCell",
-      showcase::kClassForInstantiationKey : @"SCGridCellViewController",
-      showcase::kUseCaseKey : @"Grid cells",
-    },
-    @{
-      showcase::kClassForDisplayKey : @"TabGridViewController",
-      showcase::kClassForInstantiationKey : @"SCTabGridCoordinator",
-      showcase::kUseCaseKey : @"Full tab grid UI",
-    },
-    @{
-      showcase::
-      kClassForDisplayKey : @"TabGridTopToolbar, TabGridBottomToolbar",
-      showcase::kClassForInstantiationKey : @"SCToolbarsViewController",
-      showcase::kUseCaseKey : @"Toolbars for tab grid",
-    },
-    @{
-      showcase::kClassForDisplayKey : @"TopAlignedImageView",
-      showcase::kClassForInstantiationKey : @"SCImageViewController",
-      showcase::kUseCaseKey : @"ImageView with top aligned aspect fill",
+      showcase::kClassForDisplayKey : @"SideSwipeBubbleView",
+      showcase::kClassForInstantiationKey : @"SCSideSwipeBubbleViewController",
+      showcase::kUseCaseKey : @"Side Swipe Bubble",
     },
     @{
       showcase::kClassForDisplayKey : @"RecentTabsTableViewController",
@@ -198,6 +178,24 @@ BOOL IsShowcaseModelValid(NSArray<showcase::ModelRow*>* model) {
       showcase::kClassForDisplayKey : @"SCFollowViewController",
       showcase::kClassForInstantiationKey : @"SCFollowViewController",
       showcase::kUseCaseKey : @"Web Channels First Follow and Follow Mgmt UI",
+    },
+    @{
+      showcase::kClassForDisplayKey : @"SCFeedSignInPromoViewController",
+      showcase::kClassForInstantiationKey : @"SCFeedSignInPromoCoordinator",
+      showcase::kUseCaseKey :
+          @"Sign in promo half sheet for feed personalization menu options",
+    },
+    @{
+      showcase::kClassForDisplayKey : @"SCUserPolicyPromptViewController",
+      showcase::kClassForInstantiationKey : @"SCUserPolicyPromptCoordinator",
+      showcase::kUseCaseKey : @"User Policy prompt half sheet",
+    },
+    @{
+      showcase::
+      kClassForDisplayKey : @"SCContentNotificationPromoViewController",
+      showcase::kClassForInstantiationKey :
+          @"SCContentNotificationFullscreenPromoCoordinator",
+      showcase::kUseCaseKey : @"Contnet Notification fullscreen promo sheet",
     },
   ];
   DCHECK(IsShowcaseModelValid(model));

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,14 +23,12 @@ class RTCSessionDescriptionRequestPromiseImpl final
     : public RTCSessionDescriptionRequest {
  public:
   static RTCSessionDescriptionRequestPromiseImpl* Create(
-      RTCCreateSessionDescriptionOperation,
       RTCPeerConnection*,
       ScriptPromiseResolver*,
       const char* interface_name,
       const char* property_name);
 
-  RTCSessionDescriptionRequestPromiseImpl(RTCCreateSessionDescriptionOperation,
-                                          RTCPeerConnection*,
+  RTCSessionDescriptionRequestPromiseImpl(RTCPeerConnection*,
                                           ScriptPromiseResolver*,
                                           const char* interface_name,
                                           const char* property_name);
@@ -45,7 +43,6 @@ class RTCSessionDescriptionRequestPromiseImpl final
  private:
   void Clear();
 
-  RTCCreateSessionDescriptionOperation operation_;
   Member<RTCPeerConnection> requester_;
   Member<ScriptPromiseResolver> resolver_;
   const char* interface_name_;

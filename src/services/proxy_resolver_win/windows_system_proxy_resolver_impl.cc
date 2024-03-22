@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,17 @@
 #include <cwchar>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/proxy_server.h"
 #include "net/proxy_resolution/proxy_list.h"
 #include "services/proxy_resolver_win/winhttp_api_wrapper_impl.h"
-#include "services/proxy_resolver_win/winhttp_proxy_resolver_functions.h"
 #include "url/gurl.h"
 #include "url/url_canon.h"
 
@@ -76,13 +74,11 @@ bool GetProxyServerFromWinHttpResultEntry(
   if (!base::IsStringASCII(host_wide)) {
     const int kInitialBufferSize = 256;
     url::RawCanonOutputT<char16_t, kInitialBufferSize> punycode_output;
-    if (!url::IDNToASCII(base::as_u16cstr(host_wide), host_wide.length(),
-                         &punycode_output)) {
+    if (!url::IDNToASCII(base::AsStringPiece16(host_wide), &punycode_output)) {
       return false;
     }
 
-    host_wide.assign(base::as_wcstr(punycode_output.data()),
-                     punycode_output.length());
+    host_wide = base::AsWString(punycode_output.view());
   }
 
   // At this point the string in `host_wide` is ASCII.
@@ -152,7 +148,7 @@ WindowsSystemProxyResolverImpl::Request::Request(
     : parent_(parent),
       callback_(std::move(callback)),
       resolver_handle_(nullptr),
-      sequenced_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      sequenced_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 WindowsSystemProxyResolverImpl::Request::~Request() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -380,13 +376,6 @@ net::WinHttpStatus WindowsSystemProxyResolverImpl::EnsureInitialized() {
 
   // TODO(https://crbug.com/1032820): Limit the number of times this can
   // fail to initialize.
-
-  if (!WinHttpProxyResolverFunctions::GetInstance()
-           .are_all_functions_loaded()) {
-    LOG(ERROR) << "Failed to load functions necessary for "
-                  "WindowsSystemProxyResolutionService!";
-    return net::WinHttpStatus::kFunctionsNotLoaded;
-  }
 
   // The `winhttp_api_wrapper_` is intended to only get set when initialization
   // is successful. However, it may have been pre-populated via

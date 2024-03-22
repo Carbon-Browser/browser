@@ -1,4 +1,4 @@
-// Copyright 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <algorithm>
 #include <unordered_set>
 #include <utility>
@@ -16,6 +17,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -34,7 +36,7 @@
 #include "cc/trees/transform_node.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
-#include "components/viz/common/shared_element_resource_id.h"
+#include "components/viz/common/view_transition_element_resource_id.h"
 #include "third_party/skia/include/core/SkImageFilter.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
@@ -62,7 +64,7 @@ struct SameSizeAsLayer : public base::RefCounted<SameSizeAsLayer>,
   int int_fields[7];
   gfx::Vector2dF offset;
   unsigned bitfields;
-  raw_ptr<void> debug_info;
+  std::unique_ptr<int> debug_info;
 };
 
 static_assert(sizeof(Layer) == sizeof(SameSizeAsLayer),
@@ -77,24 +79,11 @@ LayerDebugInfo::LayerDebugInfo() = default;
 LayerDebugInfo::LayerDebugInfo(const LayerDebugInfo&) = default;
 LayerDebugInfo::~LayerDebugInfo() = default;
 
-Layer::Inputs::Inputs()
-    : hit_testable(false),
-      contents_opaque(false),
-      contents_opaque_for_text(false),
-      is_drawable(false),
-      double_sided(true),
-      background_color(SkColors::kTransparent) {}
+Layer::Inputs::Inputs() = default;
 
 Layer::Inputs::~Inputs() = default;
 
-Layer::LayerTreeInputs::LayerTreeInputs()
-    : masks_to_bounds(false),
-      is_fast_rounded_corner(false),
-      user_scrollable_horizontal(true),
-      user_scrollable_vertical(true),
-      trilinear_filtering(false),
-      hide_layer_and_subtree(false),
-      scrollable(false) {}
+Layer::LayerTreeInputs::LayerTreeInputs() = default;
 
 Layer::LayerTreeInputs::~LayerTreeInputs() = default;
 
@@ -213,8 +202,12 @@ void Layer::SetDebugName(const std::string& name) {
   EnsureDebugInfo().name = name;
 }
 
-viz::SharedElementResourceId Layer::DocumentTransitionResourceId() const {
-  return viz::SharedElementResourceId();
+viz::ViewTransitionElementResourceId Layer::ViewTransitionResourceId() const {
+  return viz::ViewTransitionElementResourceId();
+}
+
+bool Layer::IsSolidColorLayerForTesting() const {
+  return false;
 }
 
 void Layer::SetNeedsFullTreeSync() {
@@ -378,11 +371,8 @@ void Layer::ReplaceChild(Layer* reference, scoped_refptr<Layer> new_layer) {
 
   // Find the index of |reference| in |children_|.
   auto& inputs = inputs_.Write(*this);
-  auto reference_it =
-      std::find_if(inputs.children.begin(), inputs.children.end(),
-                   [reference](const scoped_refptr<Layer>& layer) {
-                     return layer.get() == reference;
-                   });
+  auto reference_it = base::ranges::find(inputs.children, reference,
+                                         &scoped_refptr<Layer>::get);
   DCHECK(reference_it != inputs.children.end());
   size_t reference_index = reference_it - inputs.children.begin();
   reference->RemoveFromParent();
@@ -510,8 +500,8 @@ void Layer::RequestCopyOfOutput(
   auto& inputs = EnsureLayerTreeInputs();
   if (request->has_source()) {
     const base::UnguessableToken& source = request->source();
-    auto it = std::find_if(
-        inputs.copy_requests.begin(), inputs.copy_requests.end(),
+    auto it = base::ranges::find_if(
+        inputs.copy_requests,
         [&source](const std::unique_ptr<viz::CopyOutputRequest>& x) {
           return x->has_source() && x->source() == source;
         });
@@ -546,10 +536,9 @@ void Layer::SetSafeOpaqueBackgroundColor(SkColor4f background_color) {
   SetNeedsPushProperties();
 }
 
-SkColor4f Layer::SafeOpaqueBackgroundColor(
-    SkColor4f host_background_color) const {
+SkColor4f Layer::SafeOpaqueBackgroundColor() const {
   if (contents_opaque()) {
-    if (!IsAttached() || !IsUsingLayerLists()) {
+    if (!IsUsingLayerLists()) {
       // In layer tree mode, PropertyTreeBuilder should have calculated the safe
       // opaque background color and called SetSafeOpaqueBackgroundColor().
       DCHECK(layer_tree_inputs());
@@ -558,12 +547,8 @@ SkColor4f Layer::SafeOpaqueBackgroundColor(
     }
     // In layer list mode, the PropertyTreeBuilder algorithm doesn't apply
     // because it depends on the layer tree hierarchy. Instead we use
-    // background_color() if it's not transparent, or layer_tree_host_'s
-    // background_color(), with the alpha channel forced to be opaque.
-    SkColor4f color = background_color() == SkColors::kTransparent
-                          ? host_background_color
-                          : background_color();
-    return color.makeOpaque();
+    // background_color() made opaque.
+    return background_color().makeOpaque();
   }
   if (background_color().isOpaque()) {
     // The layer is not opaque while the background color is, meaning that the
@@ -573,13 +558,6 @@ SkColor4f Layer::SafeOpaqueBackgroundColor(
     return SkColors::kTransparent;
   }
   return background_color();
-}
-
-SkColor4f Layer::SafeOpaqueBackgroundColor() const {
-  SkColor4f host_background_color =
-      IsAttached() ? layer_tree_host()->pending_commit_state()->background_color
-                   : layer_tree_inputs()->safe_opaque_background_color;
-  return SafeOpaqueBackgroundColor(host_background_color);
 }
 
 void Layer::SetMasksToBounds(bool masks_to_bounds) {
@@ -728,8 +706,10 @@ void Layer::UpdateMaskFilterInfo(const gfx::RoundedCornersF* corner_radii,
   if (property_trees && effect_tree_index() != kInvalidPropertyNodeId &&
       (node =
            property_trees->effect_tree_mutable().Node(effect_tree_index()))) {
+    gfx::RectF effective_clip_rect = EffectiveClipRect();
+    effective_clip_rect += offset_to_transform_parent();
     node->mask_filter_info = gfx::MaskFilterInfo(
-        EffectiveClipRect(), inputs.corner_radii, inputs.gradient_mask);
+        effective_clip_rect, inputs.corner_radii, inputs.gradient_mask);
     node->effect_changed = true;
     property_trees->effect_tree_mutable().set_needs_update(true);
   } else {
@@ -864,18 +844,20 @@ void Layer::SetBlendMode(SkBlendMode blend_mode) {
   SetPropertyTreesNeedRebuild();
 }
 
-void Layer::SetHitTestable(bool should_hit_test) {
+void Layer::SetHitTestOpaqueness(HitTestOpaqueness opaqueness) {
   DCHECK(IsPropertyChangeAllowed());
   auto& inputs = inputs_.Write(*this);
-  if (inputs.hit_testable == should_hit_test)
+  if (inputs.hit_test_opaqueness == opaqueness) {
     return;
-  inputs.hit_testable = should_hit_test;
+  }
+  inputs.hit_test_opaqueness = opaqueness;
   SetPropertyTreesNeedRebuild();
   SetNeedsCommit();
 }
 
-bool Layer::HitTestable() const {
-  return inputs_.Read(*this).hit_testable;
+void Layer::SetHitTestable(bool hit_testable) {
+  SetHitTestOpaqueness(hit_testable ? HitTestOpaqueness::kMixed
+                                    : HitTestOpaqueness::kTransparent);
 }
 
 void Layer::SetContentsOpaque(bool opaque) {
@@ -946,7 +928,7 @@ bool Are2dAxisAligned(const gfx::Transform& a, const gfx::Transform& b) {
     return true;
   }
 
-  gfx::Transform inverse(gfx::Transform::kSkipInitialization);
+  gfx::Transform inverse;
   if (b.GetInverse(&inverse)) {
     inverse *= a;
     return inverse.Preserves2dAxisAlignment();
@@ -1401,14 +1383,15 @@ std::string Layer::ToString() const {
       "  name: %s\n"
       "  Bounds: %s\n"
       "  ElementId: %s\n"
-      "  HitTestable: %d\n"
+      "  HitTestOpaqueness: %s\n"
       "  OffsetToTransformParent: %s\n"
       "  clip_tree_index: %d\n"
       "  effect_tree_index: %d\n"
       "  scroll_tree_index: %d\n"
       "  transform_tree_index: %d\n",
       id(), DebugName().c_str(), bounds().ToString().c_str(),
-      element_id().ToString().c_str(), HitTestable(),
+      element_id().ToString().c_str(),
+      HitTestOpaquenessToString(hit_test_opaqueness()),
       offset_to_transform_parent().ToString().c_str(), clip_tree_index(),
       effect_tree_index(), scroll_tree_index(), transform_tree_index());
 }
@@ -1419,7 +1402,7 @@ void Layer::SetIsDrawable(bool is_drawable) {
     return;
 
   inputs_.Write(*this).is_drawable = is_drawable;
-  SetDrawsContent(HasDrawableContent());
+  UpdateDrawsContent();
 }
 
 void Layer::SetHideLayerAndSubtree(bool hide) {
@@ -1446,6 +1429,10 @@ void Layer::SetNeedsDisplayRect(const gfx::Rect& dirty_rect) {
     layer_tree_host()->SetNeedsUpdateLayers();
 }
 
+bool Layer::RequiresSetNeedsDisplayOnHdrHeadroomChange() const {
+  return false;
+}
+
 bool Layer::IsSnappedToPixelGridInTarget() const {
   return false;
 }
@@ -1466,8 +1453,7 @@ void Layer::PushPropertiesTo(LayerImpl* layer,
   layer->SetElementId(inputs.element_id);
   layer->SetHasTransformNode(has_transform_node());
   layer->SetBackgroundColor(inputs.background_color);
-  layer->SetSafeOpaqueBackgroundColor(
-      SafeOpaqueBackgroundColor(commit_state.background_color));
+  layer->SetSafeOpaqueBackgroundColor(SafeOpaqueBackgroundColor());
   layer->SetBounds(inputs.bounds);
   layer->SetTransformTreeIndex(transform_tree_index(property_trees));
   layer->SetEffectTreeIndex(effect_tree_index(property_trees));
@@ -1475,7 +1461,7 @@ void Layer::PushPropertiesTo(LayerImpl* layer,
   layer->SetScrollTreeIndex(scroll_tree_index(property_trees));
   layer->SetOffsetToTransformParent(offset_to_transform_parent_.Read(*this));
   layer->SetDrawsContent(draws_content());
-  layer->SetHitTestable(HitTestable());
+  layer->SetHitTestOpaqueness(inputs.hit_test_opaqueness);
   // subtree_property_changed_ is propagated to all descendants while building
   // property trees. So, it is enough to check it only for the current layer.
   if (subtree_property_changed_.Read(*this))
@@ -1555,7 +1541,8 @@ bool Layer::HasDrawableContent() const {
   return inputs_.Read(*this).is_drawable;
 }
 
-void Layer::SetDrawsContent(bool value) {
+void Layer::UpdateDrawsContent() {
+  bool value = HasDrawableContent();
   DCHECK(inputs_.Read(*this).is_drawable || !value);
   if (!SetBitFlag(value, kDrawsContentFlagMask, /*invalidate=*/true))
     return;

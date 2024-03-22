@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "ash/style/ash_color_provider.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/controls/styled_label.h"
 #include "ui/views/layout/box_layout.h"
 
@@ -67,5 +68,8 @@ void SystemNudgeLabel::OnThemeChanged() {
     styled_label_->AddStyleRange(gfx::Range(i, text_length), text_style);
   }
 }
+
+BEGIN_METADATA(SystemNudgeLabel)
+END_METADATA
 
 }  // namespace ash

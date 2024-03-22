@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,7 +80,7 @@ class TranslatePrefsTest : public testing::Test {
   void ExpectBlockedLanguageListContent(
       const std::vector<std::string>& list) const {
     const base::Value::List& never_prompt_list =
-        prefs_.GetValueList(prefs::kBlockedLanguages);
+        prefs_.GetList(prefs::kBlockedLanguages);
     ExpectEqualLanguageLists(never_prompt_list, list);
   }
 
@@ -238,7 +238,7 @@ TEST_F(TranslatePrefsTest, GetTranslatableContentLanguagesCorrectLocale) {
   EXPECT_THAT(result_codes, expected_translatable_codes);
 
   // Test with only untranslatable languages.
-  content_languages = {"wa", "ln"};
+  content_languages = {"wa", "vo"};
   expected_translatable_codes = {};
   accept_languages_tester_->SetLanguagePrefs(content_languages);
 
@@ -938,13 +938,13 @@ TEST_F(TranslatePrefsTest, MigrateNeverPromptSites) {
       TranslatePrefs::kPrefNeverPromptSitesDeprecated, "unmigrated.com");
   translate_prefs_->AddValueToNeverPromptList(
       TranslatePrefs::kPrefNeverPromptSitesDeprecated, "migratedWrong.com");
-  EXPECT_EQ(prefs_.GetValueList(TranslatePrefs::kPrefNeverPromptSitesDeprecated)
-                .size(),
-            2u);
+  EXPECT_EQ(
+      prefs_.GetList(TranslatePrefs::kPrefNeverPromptSitesDeprecated).size(),
+      2u);
   // Also put one of those sites on the new pref but migrated incorrectly.
-  DictionaryPrefUpdate never_prompt_list_update(
-      &prefs_, TranslatePrefs::kPrefNeverPromptSitesWithTime);
-  base::Value::Dict& never_prompt_list = never_prompt_list_update->GetDict();
+  ScopedDictPrefUpdate never_prompt_list_update(
+      &prefs_, prefs::kPrefNeverPromptSitesWithTime);
+  base::Value::Dict& never_prompt_list = never_prompt_list_update.Get();
   never_prompt_list.Set("migratedWrong.com", 0);
 
   // Now migrate and fix the prefs.
@@ -952,17 +952,17 @@ TEST_F(TranslatePrefsTest, MigrateNeverPromptSites) {
   EXPECT_THAT(translate_prefs_->GetNeverPromptSitesBetween(
                   base::Time::Now() - base::Days(1), base::Time::Max()),
               ElementsAre("migratedWrong.com", "unmigrated.com"));
-  EXPECT_EQ(prefs_.GetValueList(TranslatePrefs::kPrefNeverPromptSitesDeprecated)
-                .size(),
-            0u);
+  EXPECT_EQ(
+      prefs_.GetList(TranslatePrefs::kPrefNeverPromptSitesDeprecated).size(),
+      0u);
 }
 
 // Regression test for https://crbug.com/1295549
 TEST_F(TranslatePrefsTest, InvalidNeverPromptSites) {
   // Add sites with invalid times.
-  DictionaryPrefUpdate never_prompt_list_update(
-      &prefs_, TranslatePrefs::kPrefNeverPromptSitesWithTime);
-  base::Value::Dict& never_prompt_list = never_prompt_list_update->GetDict();
+  ScopedDictPrefUpdate never_prompt_list_update(
+      &prefs_, prefs::kPrefNeverPromptSitesWithTime);
+  base::Value::Dict& never_prompt_list = never_prompt_list_update.Get();
   never_prompt_list.Set("not-a-string.com", 0);
   never_prompt_list.Set("not-a-valid-time.com", "foo");
   // Add the null time (valid time).
@@ -975,11 +975,11 @@ TEST_F(TranslatePrefsTest, InvalidNeverPromptSites) {
 }
 
 TEST_F(TranslatePrefsTest, MigrateInvalidNeverPromptSites) {
-  ListPrefUpdate update(&prefs_,
-                        TranslatePrefs::kPrefNeverPromptSitesDeprecated);
-  base::Value* never_prompt_list = update.Get();
-  never_prompt_list->Append(1);
-  never_prompt_list->Append("unmigrated.com");
+  ScopedListPrefUpdate update(&prefs_,
+                              TranslatePrefs::kPrefNeverPromptSitesDeprecated);
+  base::Value::List& never_prompt_list = update.Get();
+  never_prompt_list.Append(1);
+  never_prompt_list.Append("unmigrated.com");
   translate_prefs_->MigrateNeverPromptSites();
   EXPECT_THAT(translate_prefs_->GetNeverPromptSitesBetween(
                   base::Time::Now() - base::Days(1), base::Time::Max()),
@@ -987,20 +987,24 @@ TEST_F(TranslatePrefsTest, MigrateInvalidNeverPromptSites) {
 }
 
 TEST_F(TranslatePrefsTest, SiteNeverPromptList) {
-  translate_prefs_->AddSiteToNeverPromptList("a.com");
-  base::Time t = base::Time::Now();
-  base::PlatformThread::Sleep(TestTimeouts::tiny_timeout());
-  translate_prefs_->AddSiteToNeverPromptList("b.com");
+  base::Time a_insert = base::Time::Now();
+  base::Time after_a_insert = a_insert + base::Seconds(2);
+  base::Time b_insert = a_insert + base::Seconds(4);
+  base::Time after_b_insert = a_insert + base::Seconds(6);
+  translate_prefs_->AddSiteToNeverPromptList("a.com", a_insert);
+  translate_prefs_->AddSiteToNeverPromptList("b.com", b_insert);
   EXPECT_TRUE(translate_prefs_->IsSiteOnNeverPromptList("a.com"));
   EXPECT_TRUE(translate_prefs_->IsSiteOnNeverPromptList("b.com"));
 
   EXPECT_EQ(std::vector<std::string>({"a.com"}),
-            translate_prefs_->GetNeverPromptSitesBetween(base::Time(), t));
+            translate_prefs_->GetNeverPromptSitesBetween(base::Time(),
+                                                         after_a_insert));
   EXPECT_EQ(std::vector<std::string>({"a.com", "b.com"}),
             translate_prefs_->GetNeverPromptSitesBetween(base::Time(),
-                                                         base::Time::Max()));
+                                                         after_b_insert));
 
-  translate_prefs_->DeleteNeverPromptSitesBetween(t, base::Time::Max());
+  translate_prefs_->DeleteNeverPromptSitesBetween(after_a_insert,
+                                                  base::Time::Max());
   EXPECT_TRUE(translate_prefs_->IsSiteOnNeverPromptList("a.com"));
   EXPECT_FALSE(translate_prefs_->IsSiteOnNeverPromptList("b.com"));
 
@@ -1161,11 +1165,7 @@ TEST_F(TranslatePrefsTest, CanTranslateLanguage) {
 
   {  // English in force translate experiment scoped feature.
     base::test::ScopedFeatureList scoped_feature_list;
-    scoped_feature_list.InitAndEnableFeatureWithParameters(
-        language::kOverrideTranslateTriggerInIndia,
-        {{"override_model", "heuristic"},
-         {"enforce_ranker", "false"},
-         {"backoff_threshold", "1"}});
+    translate_prefs_->SetShouldForceTriggerTranslateOnEnglishPagesForTesting();
     EXPECT_TRUE(translate_prefs_->CanTranslateLanguage("en"));
   }
 }
@@ -1230,10 +1230,9 @@ TEST_F(TranslatePrefsMigrationTest,
   // migration should occur during construction.
   TranslatePrefs translate_prefs(&prefs_);
 
-  EXPECT_EQ(
-      prefs_.GetValueDict(TranslatePrefs::kPrefAlwaysTranslateListDeprecated),
-      old_always_translate_map);
-  EXPECT_EQ(prefs_.GetValueDict(prefs::kPrefAlwaysTranslateList),
+  EXPECT_EQ(prefs_.GetDict(TranslatePrefs::kPrefAlwaysTranslateListDeprecated),
+            old_always_translate_map);
+  EXPECT_EQ(prefs_.GetDict(prefs::kPrefAlwaysTranslateList),
             new_always_translate_map);
 }
 
@@ -1279,7 +1278,7 @@ TEST_F(TranslatePrefsMigrationTest,
   expected_always_translate_map.Set("hi", "en");
   expected_always_translate_map.Set("fr", "en");
 
-  EXPECT_EQ(prefs_.GetValueDict(prefs::kPrefAlwaysTranslateList),
+  EXPECT_EQ(prefs_.GetDict(prefs::kPrefAlwaysTranslateList),
             expected_always_translate_map);
 }
 

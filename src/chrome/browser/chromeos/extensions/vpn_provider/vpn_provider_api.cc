@@ -1,15 +1,14 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/extensions/vpn_provider/vpn_provider_api.h"
 
-#include <memory>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
@@ -106,45 +105,42 @@ void ConvertParameters(const api_vpn::Parameters& parameters,
                         base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
   CHECK_EQ(2u, cidr_parts.size());
 
-  parameter_value->Set(shill::kAddressParameterThirdPartyVpn,
-                       base::Value(cidr_parts[0]));
+  parameter_value->Set(shill::kAddressParameterThirdPartyVpn, cidr_parts[0]);
 
   parameter_value->Set(shill::kSubnetPrefixParameterThirdPartyVpn,
-                       base::Value(cidr_parts[1]));
+                       cidr_parts[1]);
 
   std::string ip_delimiter(1, shill::kIPDelimiter);
   parameter_value->Set(
       shill::kExclusionListParameterThirdPartyVpn,
-      base::Value(base::JoinString(parameters.exclusion_list, ip_delimiter)));
+      base::JoinString(parameters.exclusion_list, ip_delimiter));
 
   parameter_value->Set(
       shill::kInclusionListParameterThirdPartyVpn,
-      base::Value(base::JoinString(parameters.inclusion_list, ip_delimiter)));
+      base::JoinString(parameters.inclusion_list, ip_delimiter));
 
   if (parameters.mtu) {
-    parameter_value->Set(shill::kMtuParameterThirdPartyVpn,
-                         base::Value(*parameters.mtu));
+    parameter_value->Set(shill::kMtuParameterThirdPartyVpn, *parameters.mtu);
   }
 
   if (parameters.broadcast_address) {
     parameter_value->Set(shill::kBroadcastAddressParameterThirdPartyVpn,
-                         base::Value(*parameters.broadcast_address));
+                         *parameters.broadcast_address);
   }
 
   std::string non_ip_delimiter(1, shill::kNonIPDelimiter);
   if (parameters.domain_search) {
-    parameter_value->Set(shill::kDomainSearchParameterThirdPartyVpn,
-                         base::Value(base::JoinString(*parameters.domain_search,
-                                                      non_ip_delimiter)));
+    parameter_value->Set(
+        shill::kDomainSearchParameterThirdPartyVpn,
+        base::JoinString(*parameters.domain_search, non_ip_delimiter));
   }
 
-  parameter_value->Set(
-      shill::kDnsServersParameterThirdPartyVpn,
-      base::Value(base::JoinString(parameters.dns_servers, ip_delimiter)));
+  parameter_value->Set(shill::kDnsServersParameterThirdPartyVpn,
+                       base::JoinString(parameters.dns_servers, ip_delimiter));
 
   if (parameters.reconnect) {
     parameter_value->Set(shill::kReconnectParameterThirdPartyVpn,
-                         base::Value(*parameters.reconnect));
+                         *parameters.reconnect);
   }
 
   return;
@@ -160,7 +156,7 @@ void VpnThreadExtensionFunction::SignalCallCompletionSuccess() {
 
 void VpnThreadExtensionFunction::SignalCallCompletionSuccessWithId(
     const std::string& configuration_name) {
-  Respond(OneArgument(base::Value(configuration_name)));
+  Respond(WithArguments(configuration_name));
 }
 
 void VpnThreadExtensionFunction::SignalCallCompletionFailure(
@@ -178,8 +174,8 @@ void VpnThreadExtensionFunction::SignalCallCompletionFailure(
 VpnProviderCreateConfigFunction::~VpnProviderCreateConfigFunction() = default;
 
 ExtensionFunction::ResponseAction VpnProviderCreateConfigFunction::Run() {
-  std::unique_ptr<api_vpn::CreateConfig::Params> params(
-      api_vpn::CreateConfig::Params::Create(args()));
+  absl::optional<api_vpn::CreateConfig::Params> params =
+      api_vpn::CreateConfig::Params::Create(args());
   if (!params) {
     return RespondNow(Error("Invalid arguments."));
   }
@@ -205,8 +201,8 @@ ExtensionFunction::ResponseAction VpnProviderCreateConfigFunction::Run() {
 VpnProviderDestroyConfigFunction::~VpnProviderDestroyConfigFunction() = default;
 
 ExtensionFunction::ResponseAction VpnProviderDestroyConfigFunction::Run() {
-  std::unique_ptr<api_vpn::DestroyConfig::Params> params(
-      api_vpn::DestroyConfig::Params::Create(args()));
+  absl::optional<api_vpn::DestroyConfig::Params> params =
+      api_vpn::DestroyConfig::Params::Create(args());
   if (!params) {
     return RespondNow(Error("Invalid arguments."));
   }
@@ -231,8 +227,8 @@ ExtensionFunction::ResponseAction VpnProviderDestroyConfigFunction::Run() {
 VpnProviderSetParametersFunction::~VpnProviderSetParametersFunction() = default;
 
 ExtensionFunction::ResponseAction VpnProviderSetParametersFunction::Run() {
-  std::unique_ptr<api_vpn::SetParameters::Params> params(
-      api_vpn::SetParameters::Params::Create(args()));
+  absl::optional<api_vpn::SetParameters::Params> params =
+      api_vpn::SetParameters::Params::Create(args());
   if (!params) {
     return RespondNow(Error("Invalid arguments."));
   }
@@ -264,8 +260,8 @@ ExtensionFunction::ResponseAction VpnProviderSetParametersFunction::Run() {
 VpnProviderSendPacketFunction::~VpnProviderSendPacketFunction() = default;
 
 ExtensionFunction::ResponseAction VpnProviderSendPacketFunction::Run() {
-  std::unique_ptr<api_vpn::SendPacket::Params> params(
-      api_vpn::SendPacket::Params::Create(args()));
+  absl::optional<api_vpn::SendPacket::Params> params =
+      api_vpn::SendPacket::Params::Create(args());
   if (!params) {
     return RespondNow(Error("Invalid arguments."));
   }
@@ -293,8 +289,8 @@ VpnProviderNotifyConnectionStateChangedFunction::
 
 ExtensionFunction::ResponseAction
 VpnProviderNotifyConnectionStateChangedFunction::Run() {
-  std::unique_ptr<api_vpn::NotifyConnectionStateChanged::Params> params(
-      api_vpn::NotifyConnectionStateChanged::Params::Create(args()));
+  absl::optional<api_vpn::NotifyConnectionStateChanged::Params> params =
+      api_vpn::NotifyConnectionStateChanged::Params::Create(args());
   if (!params) {
     return RespondNow(Error("Invalid arguments."));
   }
@@ -308,8 +304,7 @@ VpnProviderNotifyConnectionStateChangedFunction::Run() {
   // Cannot be VPN_CONNECTION_STATE_NONE at this point -- see !params guard
   // above.
   bool connection_success =
-      params->state ==
-      api_vpn::VpnConnectionState::VPN_CONNECTION_STATE_CONNECTED;
+      params->state == api_vpn::VpnConnectionState::kConnected;
   service->NotifyConnectionStateChanged(
       extension_id(), connection_success,
       base::BindOnce(&VpnProviderNotifyConnectionStateChangedFunction::

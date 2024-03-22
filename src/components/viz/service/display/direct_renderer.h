@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/viz/common/quads/aggregated_render_pass.h"
@@ -22,11 +23,13 @@
 #include "components/viz/service/display/display_resource_provider.h"
 #include "components/viz/service/display/overlay_candidate.h"
 #include "components/viz/service/display/overlay_processor_interface.h"
+#include "components/viz/service/display/render_pass_alpha_type.h"
 #include "components/viz/service/viz_service_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/ca_layer_result.h"
 #include "ui/gfx/delegated_ink_metadata.h"
 #include "ui/gfx/display_color_spaces.h"
+#include "ui/gfx/geometry/axis_transform2d.h"
 #include "ui/gfx/geometry/quad_f.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/gpu_fence_handle.h"
@@ -40,6 +43,10 @@ namespace gfx {
 class ColorSpace;
 class RRectF;
 }  // namespace gfx
+
+namespace gpu {
+struct SwapBuffersCompleteParams;
+}
 
 namespace viz {
 class BspWalkActionDrawPolygon;
@@ -73,6 +80,7 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
 
   bool use_partial_swap() const { return use_partial_swap_; }
 
+  void SetOutputSurfaceClipRect(const gfx::Rect& clip_rect);
   void SetVisible(bool visible);
   void ReallocatedFrameBuffers();
   void DecideRenderPassAllocationsForFrame(
@@ -100,15 +108,18 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
     SwapFrameData& operator=(const SwapFrameData&) = delete;
 
     std::vector<ui::LatencyInfo> latency_info;
+    int64_t seq = -1;
     bool top_controls_visible_height_changed = false;
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
     gfx::CALayerResult ca_layer_error_code = gfx::kCALayerSuccess;
 #endif
     absl::optional<int64_t> choreographer_vsync_id;
+    int64_t swap_trace_id = -1;
   };
   virtual void SwapBuffers(SwapFrameData swap_frame_data) = 0;
   virtual void SwapBuffersSkipped() {}
-  virtual void SwapBuffersComplete(gfx::GpuFenceHandle release_fence) {}
+  virtual void SwapBuffersComplete(const gpu::SwapBuffersCompleteParams& params,
+                                   gfx::GpuFenceHandle release_fence) {}
   virtual void BuffersPresented() {}
   virtual void DidReceiveReleasedOverlays(
       const std::vector<gpu::Mailbox>& released_overlays) {}
@@ -118,19 +129,19 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
     DrawingFrame();
     ~DrawingFrame();
 
-    raw_ptr<const AggregatedRenderPassList, DanglingUntriaged>
-        render_passes_in_draw_order = nullptr;
-    raw_ptr<const AggregatedRenderPass, DanglingUntriaged> root_render_pass =
+    raw_ptr<const AggregatedRenderPassList> render_passes_in_draw_order =
         nullptr;
-    const AggregatedRenderPass* current_render_pass = nullptr;
+    raw_ptr<const AggregatedRenderPass> root_render_pass = nullptr;
+    // This field is not a raw_ptr<> because of a reference to raw_ptr in
+    // not-rewritten platform specific code and #addr-of.
+    RAW_PTR_EXCLUSION const AggregatedRenderPass* current_render_pass = nullptr;
 
     gfx::Rect root_damage_rect;
     std::vector<gfx::Rect> root_content_bounds;
     gfx::Size device_viewport_size;
     gfx::DisplayColorSpaces display_color_spaces;
 
-    gfx::Transform projection_matrix;
-    gfx::Transform window_matrix;
+    gfx::AxisTransform2d target_to_device_transform;
 
     OverlayProcessorInterface::CandidateList overlay_list;
     // When we have a buffer queue, the output surface could be treated as an
@@ -153,6 +164,11 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
     return last_root_render_pass_scissor_rect_;
   }
 
+  base::flat_set<AggregatedRenderPassId>*
+  GetLastSkippedRenderPassIdsForTesting() {
+    return &skipped_render_pass_ids_;
+  }
+
   virtual DelegatedInkPointRendererBase* GetDelegatedInkPointRenderer(
       bool create_if_necessary);
   virtual void SetDelegatedInkMetadata(
@@ -165,6 +181,21 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   // Puts the draw time wall in trace file relative to the |ready_timestamp|.
   virtual void AddCompositeTimeTraces(base::TimeTicks ready_timestamp);
 
+  // Returns the current frame buffer damage.
+  virtual gfx::Rect GetCurrentFramebufferDamage() const;
+
+  // Reshapes the output surface.
+  virtual void Reshape(const OutputSurface::ReshapeParams& reshape_params);
+
+  // Set the number of frame buffers to use when
+  // `supports_dynamic_frame_buffer_allocation` is true. `n` must satisfy
+  // 0 < n <= capabilities_.number_of_buffers.
+  virtual void EnsureMinNumberOfBuffers(int n) {}
+
+  // Gets a mailbox that can be used for overlay testing the primary plane. This
+  // does not need to be the next mailbox that will be swapped.
+  virtual gpu::Mailbox GetPrimaryPlaneOverlayTestingMailbox();
+
   // Return the bounding rect of previously drawn delegated ink trail.
   gfx::Rect GetDelegatedInkTrailDamageRect();
 
@@ -174,15 +205,17 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   friend class DelegatedInkPointPixelTestHelper;
   friend class DelegatedInkDisplayTest;
 
-  enum SurfaceInitializationMode {
-    SURFACE_INITIALIZATION_MODE_PRESERVE,
-    SURFACE_INITIALIZATION_MODE_SCISSORED_CLEAR,
-    SURFACE_INITIALIZATION_MODE_FULL_SURFACE_CLEAR,
-  };
-
   struct RenderPassRequirements {
     gfx::Size size;
     bool generate_mipmap = false;
+    SharedImageFormat format;
+    gfx::ColorSpace color_space;
+    RenderPassAlphaType alpha_type = RenderPassAlphaType::kPremul;
+    // Render pass wants scanout
+    bool is_scanout = false;
+    // Render pass wants to synchronize updates with other overlays, on Windows
+    // this means a DComp surface.
+    bool scanout_dcomp_surface = false;
   };
 
   static gfx::RectF QuadVertexRect();
@@ -207,9 +240,11 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   void SetScissorTestRectInDrawSpace(const gfx::Rect& draw_space_rect);
 
   gfx::Size CalculateTextureSizeForRenderPass(
-      const AggregatedRenderPass* render_pass);
+      const AggregatedRenderPass* render_pass) const;
   gfx::Size CalculateSizeForOutputSurface(
       const gfx::Size& device_viewport_size);
+  RenderPassRequirements CalculateRenderPassRequirements(
+      const AggregatedRenderPass* render_pass) const;
 
   void FlushPolygons(
       base::circular_deque<std::unique_ptr<DrawPolygon>>* poly_list,
@@ -253,14 +288,16 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   virtual void BindFramebufferToTexture(
       const AggregatedRenderPassId render_pass_id) = 0;
   virtual void SetScissorTestRect(const gfx::Rect& scissor_rect) = 0;
-  virtual void PrepareSurfaceForPass(
-      SurfaceInitializationMode initialization_mode,
-      const gfx::Rect& render_pass_scissor) = 0;
+  // |render_pass_update_rect| is in render pass backing buffer space.
+  virtual void BeginDrawingRenderPass(
+      bool needs_clear,
+      const gfx::Rect& render_pass_update_rect) = 0;
   // |clip_region| is a (possibly null) pointer to a quad in the same
   // space as the quad. When non-null only the area of the quad that overlaps
   // with clip_region will be drawn.
   virtual void DoDrawQuad(const DrawQuad* quad,
                           const gfx::QuadF* clip_region) = 0;
+  virtual void FinishDrawingRenderPass() {}
   virtual void BeginDrawingFrame() = 0;
   virtual void FinishDrawingFrame() = 0;
   // If a pass contains a single tile draw quad and can be drawn without
@@ -268,15 +305,14 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   // return that quad, otherwise return null.
   virtual const DrawQuad* CanPassBeDrawnDirectly(
       const AggregatedRenderPass* pass);
-  virtual void FinishDrawingQuadList() {}
   virtual bool FlippedFramebuffer() const = 0;
-  virtual void EnsureScissorTestEnabled() = 0;
   virtual void EnsureScissorTestDisabled() = 0;
   virtual void DidChangeVisibility() = 0;
   virtual void CopyDrawnRenderPass(
       const copy_output::RenderPassGeometry& geometry,
       std::unique_ptr<CopyOutputRequest> request) = 0;
   virtual void GenerateMipmap() = 0;
+  virtual bool SupportsBGRA() const;
 
   gfx::Size surface_size_for_swap_buffers() const {
     return reshape_params_ ? reshape_params_->size : gfx::Size();
@@ -291,6 +327,10 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   float CurrentFrameSDRWhiteLevel() const;
   gfx::ColorSpace RootRenderPassColorSpace() const;
   gfx::ColorSpace CurrentRenderPassColorSpace() const;
+  gfx::ColorSpace RenderPassColorSpace(
+      const AggregatedRenderPass* render_pass) const;
+  SharedImageFormat GetColorSpaceSharedImageFormat(
+      gfx::ColorSpace color_space) const;
   // Return the SkColorSpace for rendering to the current render pass. Unlike
   // CurrentRenderPassColorSpace, this color space has the value of
   // CurrentFrameSDRWhiteLevel incorporated into it.
@@ -303,15 +343,16 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   // Points to the viz-global singleton.
   const raw_ptr<const DebugRendererSettings> debug_settings_;
   const raw_ptr<OutputSurface> output_surface_;
-  const raw_ptr<DisplayResourceProvider, DanglingUntriaged> resource_provider_;
+  const raw_ptr<DisplayResourceProvider> resource_provider_;
   // This can be replaced by test implementations.
   // TODO(weiliangc): For SoftwareRenderer and tests where overlay is not used,
   // use OverlayProcessorStub so this pointer is never null.
-  raw_ptr<OverlayProcessorInterface, DanglingUntriaged> overlay_processor_;
+  raw_ptr<OverlayProcessorInterface> overlay_processor_;
 
-  // Whether it's valid to SwapBuffers with an empty rect. Trivially true when
-  // using partial swap.
-  bool allow_empty_swap_ = false;
+  // If the non-root render pass and its embedded child render passes are not
+  // damaged, skip the rendering.
+  const bool allow_undamaged_nonroot_render_pass_to_skip_;
+
   // Whether partial swap can be used.
   bool use_partial_swap_ = false;
 
@@ -331,6 +372,13 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
       render_pass_backdrop_filter_bounds_;
   base::flat_map<AggregatedRenderPassId, gfx::Rect>
       backdrop_filter_output_rects_;
+
+  // Whether a render pass with foreground filters that move pixels is found in
+  // this frame.
+  bool has_pixel_moving_foreground_filters_ = false;
+
+  // Track skipped non-root render passes in DrawRenderPass.
+  base::flat_set<AggregatedRenderPassId> skipped_render_pass_ids_;
 
   bool visible_ = false;
   bool disable_color_checks_for_testing_ = false;
@@ -360,6 +408,10 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   gfx::ColorSpace reshape_color_space() const {
     DCHECK(reshape_params_);
     return reshape_params_->color_space;
+  }
+  RenderPassAlphaType reshape_alpha_type() const {
+    DCHECK(reshape_params_);
+    return reshape_params_->alpha_type;
   }
 
   // Sets a DelegatedInkPointRendererSkiaForTest to be used for testing only, in
@@ -391,6 +443,10 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   // to prevent use of uninitialized values. The size in these parameters
   // may be larger than the `device_viewport_size_` that users see.
   absl::optional<OutputSurface::ReshapeParams> reshape_params_;
+
+  // If present additionally restricts drawing to the OutputSurface. WebView
+  // gets this rect from the HWUI.
+  absl::optional<gfx::Rect> output_surface_clip_rect_;
   gfx::Size device_viewport_size_;
   gfx::OverlayTransform reshape_display_transform_ =
       gfx::OVERLAY_TRANSFORM_INVALID;

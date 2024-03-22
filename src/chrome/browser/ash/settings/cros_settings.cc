@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,19 @@
 
 #include <stddef.h>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/system_settings_provider.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "chrome/browser/ash/settings/device_settings_provider.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/browser/ash/settings/supervised_user_cros_settings_provider.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/system_settings_provider.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 
 namespace ash {
@@ -99,12 +100,12 @@ CrosSettings::~CrosSettings() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-bool CrosSettings::IsCrosSettings(const std::string& path) {
+bool CrosSettings::IsCrosSettings(base::StringPiece path) {
   return base::StartsWith(path, kCrosSettingsPrefix,
                           base::CompareCase::SENSITIVE);
 }
 
-const base::Value* CrosSettings::GetPref(const std::string& path) const {
+const base::Value* CrosSettings::GetPref(base::StringPiece path) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   CrosSettingsProvider* provider = GetProvider(path);
   if (provider)
@@ -125,8 +126,7 @@ CrosSettingsProvider::TrustedStatus CrosSettings::PrepareTrustedValues(
   return CrosSettingsProvider::TRUSTED;
 }
 
-bool CrosSettings::GetBoolean(const std::string& path,
-                              bool* bool_value) const {
+bool CrosSettings::GetBoolean(base::StringPiece path, bool* bool_value) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const base::Value* value = GetPref(path);
   if (value && value->is_bool()) {
@@ -136,8 +136,7 @@ bool CrosSettings::GetBoolean(const std::string& path,
   return false;
 }
 
-bool CrosSettings::GetInteger(const std::string& path,
-                              int* out_value) const {
+bool CrosSettings::GetInteger(base::StringPiece path, int* out_value) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const base::Value* value = GetPref(path);
   if (value && value->is_int()) {
@@ -147,8 +146,7 @@ bool CrosSettings::GetInteger(const std::string& path,
   return false;
 }
 
-bool CrosSettings::GetDouble(const std::string& path,
-                             double* out_value) const {
+bool CrosSettings::GetDouble(base::StringPiece path, double* out_value) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // `GetIfDouble` incapsulates type check.
   absl::optional<double> maybe_value = GetPref(path)->GetIfDouble();
@@ -159,7 +157,7 @@ bool CrosSettings::GetDouble(const std::string& path,
   return false;
 }
 
-bool CrosSettings::GetString(const std::string& path,
+bool CrosSettings::GetString(base::StringPiece path,
                              std::string* out_value) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const base::Value* value = GetPref(path);
@@ -170,24 +168,25 @@ bool CrosSettings::GetString(const std::string& path,
   return false;
 }
 
-bool CrosSettings::GetList(const std::string& path,
-                           const base::ListValue** out_value) const {
+bool CrosSettings::GetList(base::StringPiece path,
+                           const base::Value::List** out_value) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const base::Value* value = GetPref(path);
   if (value && value->is_list()) {
-    *out_value = &base::Value::AsListValue(*value);
+    *out_value = &value->GetList();
     return true;
   }
   return false;
 }
 
-bool CrosSettings::GetDictionary(
-    const std::string& path,
-    const base::DictionaryValue** out_value) const {
+bool CrosSettings::GetDictionary(base::StringPiece path,
+                                 const base::Value::Dict** out_value) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const base::Value* value = GetPref(path);
-  if (value)
-    return value->GetAsDictionary(out_value);
+  if (value && value->is_dict()) {
+    *out_value = &value->GetDict();
+    return true;
+  }
   return false;
 }
 
@@ -218,18 +217,18 @@ bool CrosSettings::FindEmailInList(const std::string& path,
                                    bool* wildcard_match) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  const base::ListValue* list;
+  const base::Value::List* list;
   if (!GetList(path, &list)) {
     if (wildcard_match)
       *wildcard_match = false;
     return false;
   }
 
-  return FindEmailInList(list->GetListDeprecated(), email, wildcard_match);
+  return FindEmailInList(*list, email, wildcard_match);
 }
 
 // static
-bool CrosSettings::FindEmailInList(const base::Value::ConstListView& list,
+bool CrosSettings::FindEmailInList(const base::Value::List& list,
                                    const std::string& email,
                                    bool* wildcard_match) {
   std::string canonicalized_email(
@@ -289,11 +288,8 @@ bool CrosSettings::AddSettingsProvider(
 std::unique_ptr<CrosSettingsProvider> CrosSettings::RemoveSettingsProvider(
     CrosSettingsProvider* provider) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  auto it = std::find_if(
-      providers_.begin(), providers_.end(),
-      [provider](const std::unique_ptr<CrosSettingsProvider>& ptr) {
-        return ptr.get() == provider;
-      });
+  auto it = base::ranges::find(providers_, provider,
+                               &std::unique_ptr<CrosSettingsProvider>::get);
   if (it != providers_.end()) {
     std::unique_ptr<CrosSettingsProvider> ptr = std::move(*it);
     providers_.erase(it);
@@ -323,11 +319,11 @@ base::CallbackListSubscription CrosSettings::AddSettingsObserver(
   return registry->Add(std::move(callback));
 }
 
-CrosSettingsProvider* CrosSettings::GetProvider(
-    const std::string& path) const {
-  for (size_t i = 0; i < providers_.size(); ++i) {
-    if (providers_[i]->HandlesSetting(path))
-      return providers_[i].get();
+CrosSettingsProvider* CrosSettings::GetProvider(base::StringPiece path) const {
+  for (const auto& provider : providers_) {
+    if (provider->HandlesSetting(path)) {
+      return provider.get();
+    }
   }
   return nullptr;
 }

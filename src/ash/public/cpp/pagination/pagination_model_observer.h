@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace ash {
 
 class ASH_PUBLIC_EXPORT PaginationModelObserver {
  public:
-  // Invoked when the total number of page is changed.
+  // Invoked when the total number of pages is changed.
   virtual void TotalPagesChanged(int previous_page_count, int new_page_count) {}
 
   // Invoked when the selected page index is changed.

@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/breakout_box/media_stream_video_track_underlying_source.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
 #include "media/capture/video/video_capture_buffer_pool_util.h"
@@ -43,7 +44,7 @@ class MediaStreamVideoTrackUnderlyingSourceTest : public testing::Test {
             MediaStreamSource::kTypeVideo,
             "dummy_source_name",
             false /* remote */,
-            base::WrapUnique(pushable_video_source_))) {}
+            base::WrapUnique(pushable_video_source_.get()))) {}
 
   ~MediaStreamVideoTrackUnderlyingSourceTest() override {
     RunIOUntilIdle();
@@ -110,7 +111,8 @@ class MediaStreamVideoTrackUnderlyingSourceTest : public testing::Test {
   }
 
   ScopedTestingPlatformSupport<IOTaskRunnerTestingPlatformSupport> platform_;
-  PushableMediaStreamVideoSource* const pushable_video_source_;
+  const raw_ptr<PushableMediaStreamVideoSource, ExperimentalRenderer>
+      pushable_video_source_;
   const Persistent<MediaStreamSource> media_stream_source_;
 };
 
@@ -202,13 +204,13 @@ TEST_F(MediaStreamVideoTrackUnderlyingSourceTest,
   for (wtf_size_t i = 1; i <= buffer_size; ++i) {
     VideoFrame* video_frame =
         ReadObjectFromStream<VideoFrame>(v8_scope, reader);
-    EXPECT_EQ(base::Microseconds(*video_frame->timestamp()), base::Seconds(i));
+    EXPECT_EQ(base::Microseconds(video_frame->timestamp()), base::Seconds(i));
   }
 
   // Pulling causes a pending pull since there are no frames available for
   // reading.
   EXPECT_EQ(source->NumPendingPullsForTesting(), 0);
-  source->pull(script_state);
+  source->Pull(script_state, ASSERT_NO_EXCEPTION);
   EXPECT_EQ(source->NumPendingPullsForTesting(), 1);
 
   source->Close();
@@ -420,7 +422,7 @@ TEST_F(MediaStreamVideoTrackUnderlyingSourceTest, FrameLimiter) {
   // These frames are queued, pending to be read.
   for (size_t i = 0; i < max_frame_count; ++i) {
     auto video_frame = create_video_frame();
-    int frame_id = video_frame->unique_id();
+    media::VideoFrame::ID frame_id = video_frame->unique_id();
     push_frame_sync(std::move(video_frame));
     EXPECT_EQ(monitor.NumFrames(device_id), i + 1);
     EXPECT_EQ(monitor.NumRefs(device_id, frame_id), 1);
@@ -428,7 +430,7 @@ TEST_F(MediaStreamVideoTrackUnderlyingSourceTest, FrameLimiter) {
   {
     // Push another video frame with the limit reached.
     auto video_frame = create_video_frame();
-    int frame_id = video_frame->unique_id();
+    media::VideoFrame::ID frame_id = video_frame->unique_id();
     push_frame_sync(std::move(video_frame));
     EXPECT_EQ(monitor.NumFrames(device_id), max_frame_count);
     EXPECT_EQ(monitor.NumRefs(device_id, frame_id), 1);
@@ -455,7 +457,7 @@ TEST_F(MediaStreamVideoTrackUnderlyingSourceTest, FrameLimiter) {
   // that can be replaced.
   {
     auto video_frame = create_video_frame();
-    int frame_id = video_frame->unique_id();
+    media::VideoFrame::ID frame_id = video_frame->unique_id();
     push_frame_sync(std::move(video_frame));
     EXPECT_EQ(monitor.NumFrames(device_id), max_frame_count);
     EXPECT_EQ(monitor.NumRefs(device_id, frame_id), 0);

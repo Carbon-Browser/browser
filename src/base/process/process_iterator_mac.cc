@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,7 @@
 namespace base {
 
 ProcessIterator::ProcessIterator(const ProcessFilter* filter)
-    : index_of_kinfo_proc_(0),
-      filter_(filter) {
+    : filter_(filter) {
   // Get a snapshot of all of my processes (yes, as we loop it can go stale, but
   // but trying to find where we were in a constantly changing list is basically
   // impossible.
@@ -68,8 +67,7 @@ ProcessIterator::ProcessIterator(const ProcessFilter* filter)
   }
 }
 
-ProcessIterator::~ProcessIterator() {
-}
+ProcessIterator::~ProcessIterator() = default;
 
 bool ProcessIterator::CheckForNextProcess() {
   std::string data;
@@ -131,8 +129,10 @@ bool ProcessIterator::CheckForNextProcess() {
 }
 
 bool NamedProcessIterator::IncludeEntry() {
-  return (executable_name_ == entry().exe_file() &&
-          ProcessIterator::IncludeEntry());
+  const bool name_match =
+      use_prefix_match_ ? base::StartsWith(entry().exe_file(), executable_name_)
+                        : executable_name_ == entry().exe_file();
+  return name_match && ProcessIterator::IncludeEntry();
 }
 
 }  // namespace base

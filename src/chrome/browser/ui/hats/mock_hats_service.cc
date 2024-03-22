@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,8 @@
 
 using ::testing::NiceMock;
 
-MockHatsService::MockHatsService(Profile* profile) : HatsService(profile) {}
+MockHatsService::MockHatsService(Profile* profile)
+    : HatsServiceDesktop(profile) {}
 
 MockHatsService::~MockHatsService() = default;
 

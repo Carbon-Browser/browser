@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,13 +14,27 @@
 #include "content/shell/browser/shell_devtools_bindings.h"
 #include "content/shell/browser/shell_devtools_manager_delegate.h"
 
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+#include "base/command_line.h"
+#include "content/shell/common/shell_switches.h"
+#endif
+
 namespace content {
 
 namespace {
 static GURL GetFrontendURL() {
   int port = ShellDevToolsManagerDelegate::GetHttpHandlerPort();
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  const char* query_string = "";
+#else
+  const char* query_string = base::CommandLine::ForCurrentProcess()->HasSwitch(
+                                 switches::kContentShellDevToolsTabTarget)
+                                 ? "?targetType=tab"
+                                 : "";
+#endif
+
   return GURL(base::StringPrintf(
-      "http://127.0.0.1:%d/devtools/devtools_app.html", port));
+      "http://127.0.0.1:%d/devtools/devtools_app.html%s", port, query_string));
 }
 }  // namespace
 

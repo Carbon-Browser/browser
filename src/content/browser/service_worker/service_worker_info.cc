@@ -1,31 +1,29 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/service_worker/service_worker_info.h"
 
-#include "content/browser/service_worker/embedded_worker_status.h"
 #include "content/browser/service_worker/service_worker_consts.h"
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 #include "ipc/ipc_message.h"
+#include "third_party/blink/public/common/service_worker/embedded_worker_status.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_object.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
 
 namespace content {
 
 ServiceWorkerVersionInfo::ServiceWorkerVersionInfo()
-    : running_status(EmbeddedWorkerStatus::STOPPED),
+    : running_status(blink::EmbeddedWorkerStatus::kStopped),
       status(ServiceWorkerVersion::NEW),
-      fetch_handler_existence(
-          ServiceWorkerVersion::FetchHandlerExistence::UNKNOWN),
       thread_id(ServiceWorkerConsts::kInvalidEmbeddedWorkerThreadId),
       devtools_agent_route_id(MSG_ROUTING_NONE),
       ukm_source_id(ukm::kInvalidSourceId) {}
 
 ServiceWorkerVersionInfo::ServiceWorkerVersionInfo(
-    EmbeddedWorkerStatus running_status,
+    blink::EmbeddedWorkerStatus running_status,
     ServiceWorkerVersion::Status status,
-    ServiceWorkerVersion::FetchHandlerExistence fetch_handler_existence,
+    absl::optional<ServiceWorkerVersion::FetchHandlerType> fetch_handler_type,
     const GURL& script_url,
     const GURL& scope,
     const blink::StorageKey& storage_key,
@@ -35,7 +33,8 @@ ServiceWorkerVersionInfo::ServiceWorkerVersionInfo(
     int thread_id,
     int devtools_agent_route_id,
     ukm::SourceId ukm_source_id,
-    blink::mojom::AncestorFrameType ancestor_frame_type)
+    blink::mojom::AncestorFrameType ancestor_frame_type,
+    absl::optional<std::string> router_rules)
     : ServiceWorkerVersionBaseInfo(scope,
                                    storage_key,
                                    registration_id,
@@ -44,11 +43,12 @@ ServiceWorkerVersionInfo::ServiceWorkerVersionInfo(
                                    ancestor_frame_type),
       running_status(running_status),
       status(status),
-      fetch_handler_existence(fetch_handler_existence),
+      fetch_handler_type(fetch_handler_type),
       script_url(script_url),
       thread_id(thread_id),
       devtools_agent_route_id(devtools_agent_route_id),
-      ukm_source_id(ukm_source_id) {}
+      ukm_source_id(ukm_source_id),
+      router_rules(router_rules) {}
 
 ServiceWorkerVersionInfo::ServiceWorkerVersionInfo(
     const ServiceWorkerVersionInfo& other) = default;

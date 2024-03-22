@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,23 +8,22 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/sync/user_event_service_factory.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/sync/driver/fake_sync_service.h"
-#include "components/sync/driver/sync_internals_util.h"
-#include "components/sync/driver/sync_service.h"
 #include "components/sync/model/type_entities_count.h"
+#include "components/sync/service/sync_internals_util.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/test/fake_sync_service.h"
 #include "components/sync_user_events/fake_user_event_service.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/test_web_ui.h"
 
-using base::DictionaryValue;
 using sync_pb::UserEventSpecifics;
 using syncer::FakeUserEventService;
 using syncer::SyncService;
@@ -53,8 +52,7 @@ class TestSyncService : public syncer::FakeSyncService {
   }
 
   void GetAllNodesForDebugging(
-      base::OnceCallback<void(std::unique_ptr<base::ListValue>)> callback)
-      override {
+      base::OnceCallback<void(base::Value::List)> callback) override {
     get_all_nodes_callback_ = std::move(callback);
   }
 
@@ -67,16 +65,14 @@ class TestSyncService : public syncer::FakeSyncService {
 
   int add_observer_count() const { return add_observer_count_; }
   int remove_observer_count() const { return remove_observer_count_; }
-  base::OnceCallback<void(std::unique_ptr<base::ListValue>)>
-  get_all_nodes_callback() {
+  base::OnceCallback<void(base::Value::List)> get_all_nodes_callback() {
     return std::move(get_all_nodes_callback_);
   }
 
  private:
   int add_observer_count_ = 0;
   int remove_observer_count_ = 0;
-  base::OnceCallback<void(std::unique_ptr<base::ListValue>)>
-      get_all_nodes_callback_;
+  base::OnceCallback<void(base::Value::List)> get_all_nodes_callback_;
 };
 
 static std::unique_ptr<KeyedService> BuildTestSyncService(
@@ -103,7 +99,7 @@ class SyncInternalsMessageHandlerTest : public ChromeRenderViewHostTestHarness {
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
 
-    about_information_.SetStringKey("some_sync_state", "some_value");
+    about_information_.Set("some_sync_state", "some_value");
 
     web_ui_.set_web_contents(web_contents());
     test_sync_service_ = static_cast<TestSyncService*>(
@@ -127,13 +123,11 @@ class SyncInternalsMessageHandlerTest : public ChromeRenderViewHostTestHarness {
   }
 
   // Returns copies of the same constant dictionary, |about_information_|.
-  std::unique_ptr<DictionaryValue> ConstructFakeAboutInformation(
-      SyncService* service,
-      const std::string& channel) {
+  base::Value::Dict ConstructFakeAboutInformation(SyncService* service,
+                                                  const std::string& channel) {
     ++about_sync_data_delegate_call_count_;
     last_delegate_sync_service_ = service;
-    return base::DictionaryValue::From(
-        base::Value::ToUniquePtrValue(about_information_.Clone()));
+    return about_information_.Clone();
   }
 
   void ValidateAboutInfoCall() {
@@ -194,13 +188,14 @@ class SyncInternalsMessageHandlerTest : public ChromeRenderViewHostTestHarness {
 
  private:
   content::TestWebUI web_ui_;
-  raw_ptr<TestSyncService> test_sync_service_;
-  raw_ptr<FakeUserEventService> fake_user_event_service_;
+  raw_ptr<TestSyncService, DanglingUntriaged> test_sync_service_ = nullptr;
+  raw_ptr<FakeUserEventService, DanglingUntriaged> fake_user_event_service_ =
+      nullptr;
   std::unique_ptr<TestableSyncInternalsMessageHandler> handler_;
   int about_sync_data_delegate_call_count_ = 0;
-  raw_ptr<SyncService> last_delegate_sync_service_ = nullptr;
+  raw_ptr<SyncService, DanglingUntriaged> last_delegate_sync_service_ = nullptr;
   // Fake return value for sync_ui_util::ConstructAboutInformation().
-  base::DictionaryValue about_information_;
+  base::Value::Dict about_information_;
 };
 
 TEST_F(SyncInternalsMessageHandlerTest, AddRemoveObservers) {
@@ -244,28 +239,25 @@ TEST_F(SyncInternalsMessageHandlerTest, AddRemoveObserversSyncDisabled) {
 }
 
 TEST_F(SyncInternalsMessageHandlerTest, HandleGetAllNodes) {
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append("getAllNodes_0");
-  handler()->HandleGetAllNodes(args.GetList());
-  test_sync_service()->get_all_nodes_callback().Run(
-      std::make_unique<base::ListValue>());
+  handler()->HandleGetAllNodes(args);
+  test_sync_service()->get_all_nodes_callback().Run(base::Value::List());
   EXPECT_EQ(1, CallCountWithName("cr.webUIResponse"));
 
-  base::Value args2(base::Value::Type::LIST);
+  base::Value::List args2;
   args2.Append("getAllNodes_1");
-  handler()->HandleGetAllNodes(args2.GetList());
+  handler()->HandleGetAllNodes(args2);
   // This  breaks the weak ref the callback is hanging onto. Which results in
   // the call count not incrementing.
   handler()->DisallowJavascript();
-  test_sync_service()->get_all_nodes_callback().Run(
-      std::make_unique<base::ListValue>());
+  test_sync_service()->get_all_nodes_callback().Run(base::Value::List());
   EXPECT_EQ(1, CallCountWithName("cr.webUIResponse"));
 
-  base::Value args3(base::Value::Type::LIST);
+  base::Value::List args3;
   args3.Append("getAllNodes_2");
-  handler()->HandleGetAllNodes(args3.GetList());
-  test_sync_service()->get_all_nodes_callback().Run(
-      std::make_unique<base::ListValue>());
+  handler()->HandleGetAllNodes(args3);
+  test_sync_service()->get_all_nodes_callback().Run(base::Value::List());
   EXPECT_EQ(2, CallCountWithName("cr.webUIResponse"));
 }
 
@@ -290,10 +282,10 @@ TEST_F(SyncInternalsMessageHandlerTest, SendAboutInfoSyncDisabled) {
 }
 
 TEST_F(SyncInternalsMessageHandlerTest, WriteUserEvent) {
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append("1000000000000000000");
   args.Append("-1");
-  handler()->HandleWriteUserEvent(args.GetList());
+  handler()->HandleWriteUserEvent(args);
 
   ASSERT_EQ(1u, fake_user_event_service()->GetRecordedUserEvents().size());
   const UserEventSpecifics& event =
@@ -304,10 +296,10 @@ TEST_F(SyncInternalsMessageHandlerTest, WriteUserEvent) {
 }
 
 TEST_F(SyncInternalsMessageHandlerTest, WriteUserEventBadParse) {
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append("123abc");
   args.Append("abcdefghijklmnopqrstuvwxyz");
-  handler()->HandleWriteUserEvent(args.GetList());
+  handler()->HandleWriteUserEvent(args);
 
   ASSERT_EQ(1u, fake_user_event_service()->GetRecordedUserEvents().size());
   const UserEventSpecifics& event =
@@ -318,10 +310,10 @@ TEST_F(SyncInternalsMessageHandlerTest, WriteUserEventBadParse) {
 }
 
 TEST_F(SyncInternalsMessageHandlerTest, WriteUserEventBlank) {
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append("");
   args.Append("");
-  handler()->HandleWriteUserEvent(args.GetList());
+  handler()->HandleWriteUserEvent(args);
 
   ASSERT_EQ(1u, fake_user_event_service()->GetRecordedUserEvents().size());
   const UserEventSpecifics& event =
@@ -335,10 +327,10 @@ TEST_F(SyncInternalsMessageHandlerTest, WriteUserEventBlank) {
 }
 
 TEST_F(SyncInternalsMessageHandlerTest, WriteUserEventZero) {
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append("0");
   args.Append("0");
-  handler()->HandleWriteUserEvent(args.GetList());
+  handler()->HandleWriteUserEvent(args);
 
   ASSERT_EQ(1u, fake_user_event_service()->GetRecordedUserEvents().size());
   const UserEventSpecifics& event =

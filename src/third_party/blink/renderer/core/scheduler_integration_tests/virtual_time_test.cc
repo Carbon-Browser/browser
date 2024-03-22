@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,22 +15,25 @@
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/scheduler/public/page_scheduler.h"
+#include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 namespace virtual_time_test {
 
-class ScriptExecutionCallbackHelper : public WebScriptExecutionCallback {
+class ScriptExecutionCallbackHelper final {
  public:
   const String Result() const { return result_; }
-
- private:
-  void Completed(const WebVector<v8::Local<v8::Value>>& values) override {
-    if (!values.empty() && !values[0].IsEmpty() && values[0]->IsString()) {
-      result_ = ToCoreString(v8::Local<v8::String>::Cast(values[0]));
-    }
+  void Completed(absl::optional<base::Value> value,
+                 base::TimeTicks start_time) {
+    if (!value)
+      return;
+    if (std::string* str = value->GetIfString())
+      result_ = String(*str);
   }
 
+ private:
   String result_;
 };
 
@@ -40,6 +43,7 @@ class VirtualTimeTest : public SimTest {
     return WebView().Scheduler()->GetVirtualTimeController();
   }
   void SetUp() override {
+    ThreadState::Current()->CollectAllGarbageForTesting();
     SimTest::SetUp();
     GetVirtualTimeController()->EnableVirtualTime(base::Time());
   }
@@ -48,10 +52,15 @@ class VirtualTimeTest : public SimTest {
     ScriptExecutionCallbackHelper callback_helper;
     WebScriptSource source(script_source);
     WebView().MainFrame()->ToWebLocalFrame()->RequestExecuteScript(
-        DOMWrapperWorld::kMainWorldId, base::make_span(&source, 1), false,
-        WebLocalFrame::kSynchronous, &callback_helper,
+        DOMWrapperWorld::kMainWorldId, base::make_span(&source, 1u),
+        mojom::blink::UserActivationOption::kDoNotActivate,
+        mojom::blink::EvaluationTiming::kSynchronous,
+        mojom::blink::LoadEventBlockingOption::kDoNotBlock,
+        WTF::BindOnce(&ScriptExecutionCallbackHelper::Completed,
+                      base::Unretained(&callback_helper)),
         BackForwardCacheAware::kAllow,
-        WebLocalFrame::PromiseBehavior::kDontWait);
+        mojom::blink::WantResultOption::kWantResult,
+        mojom::blink::PromiseResultOption::kDoNotWait);
 
     return callback_helper.Result();
   }
@@ -75,15 +84,17 @@ class VirtualTimeTest : public SimTest {
   void RunTasksForPeriod(double delay_ms) {
     scheduler::GetSingleThreadTaskRunnerForTesting()->PostDelayedTask(
         FROM_HERE,
-        WTF::Bind(&VirtualTimeTest::StopVirtualTimeAndExitRunLoop,
-                  WTF::Unretained(this)),
+        WTF::BindOnce(&VirtualTimeTest::StopVirtualTimeAndExitRunLoop,
+                      WTF::Unretained(this)),
         base::Milliseconds(delay_ms));
     test::EnterRunLoop();
   }
+
+  ScopedTestingPlatformSupport<TestingPlatformSupport> platform_;
 };
 
 // http://crbug.com/633321
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 #define MAYBE_SetInterval DISABLED_SetInterval
 #else
 #define MAYBE_SetInterval SetInterval
@@ -111,7 +122,7 @@ TEST_F(VirtualTimeTest, MAYBE_SetInterval) {
 }
 
 // http://crbug.com/633321
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 #define MAYBE_AllowVirtualTimeToAdvance DISABLED_AllowVirtualTimeToAdvance
 #else
 #define MAYBE_AllowVirtualTimeToAdvance AllowVirtualTimeToAdvance
@@ -140,7 +151,7 @@ TEST_F(VirtualTimeTest, MAYBE_AllowVirtualTimeToAdvance) {
 }
 
 // http://crbug.com/633321
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 #define MAYBE_VirtualTimeNotAllowedToAdvanceWhileResourcesLoading \
   DISABLED_VirtualTimeNotAllowedToAdvanceWhileResourcesLoading
 #else

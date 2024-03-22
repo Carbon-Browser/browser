@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 import 'chrome://resources/cr_elements/cr_tab_box/cr_tab_box.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
 
 import {createElementFromText} from './utils.js';
 
@@ -66,7 +66,7 @@ function clearLogs() {
   const logEntries = document.querySelector<HTMLElement>('#log-entries');
   assert(logEntries);
   assert(window.trustedTypes);
-  logEntries.innerHTML = window.trustedTypes.emptyHTML as unknown as string;
+  logEntries.innerHTML = window.trustedTypes.emptyHTML;
 }
 
 /**
@@ -103,7 +103,7 @@ function main() {
   refreshServiceStatus();
   refreshNotificationSource();
 
-  addWebUIListener('service-status-changed', onGetServiceStatus);
+  addWebUiListener('service-status-changed', onGetServiceStatus);
 
   // TODO: Look for a way to push entries to the page when necessary.
   window.setInterval(refreshLog, 1000);

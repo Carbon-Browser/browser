@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ namespace {
 
 class AXSystemCaretWinTest : public test::DesktopWidgetTest {
  public:
-  AXSystemCaretWinTest() : self_(CHILDID_SELF) {}
+  AXSystemCaretWinTest()
+      : widget_(nullptr), textfield_(nullptr), self_(CHILDID_SELF) {}
   AXSystemCaretWinTest(const AXSystemCaretWinTest&) = delete;
   AXSystemCaretWinTest& operator=(const AXSystemCaretWinTest&) = delete;
   ~AXSystemCaretWinTest() override = default;
@@ -62,8 +63,8 @@ class AXSystemCaretWinTest : public test::DesktopWidgetTest {
   }
 
  protected:
-  raw_ptr<Widget> widget_;
-  raw_ptr<Textfield> textfield_;
+  raw_ptr<Widget, DanglingUntriaged> widget_;
+  raw_ptr<Textfield, DanglingUntriaged> textfield_;
   base::win::ScopedVariant self_;
 };
 

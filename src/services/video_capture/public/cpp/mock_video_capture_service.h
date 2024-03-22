@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,10 +19,6 @@ class MockVideoCaptureService
   MockVideoCaptureService();
   ~MockVideoCaptureService() override;
 
-  void ConnectToDeviceFactory(
-      mojo::PendingReceiver<video_capture::mojom::DeviceFactory> receiver)
-      override;
-
   void ConnectToVideoSourceProvider(
       mojo::PendingReceiver<video_capture::mojom::VideoSourceProvider> receiver)
       override;
@@ -32,10 +28,18 @@ class MockVideoCaptureService
       mojo::PendingRemote<video_capture::mojom::AcceleratorFactory>
           accelerator_factory) override;
 
+  void BindVideoCaptureDeviceFactory(
+      mojo::PendingReceiver<crosapi::mojom::VideoCaptureDeviceFactory> receiver)
+      override;
+
   MOCK_METHOD1(
       DoInjectGpuDependencies,
       void(mojo::PendingRemote<video_capture::mojom::AcceleratorFactory>
                accelerator_factory));
+
+  MOCK_METHOD1(DoBindVideoCaptureDeviceFactory,
+               void(mojo::PendingReceiver<
+                    crosapi::mojom::VideoCaptureDeviceFactory> receiver));
 
   void ConnectToCameraAppDeviceBridge(
       mojo::PendingReceiver<cros::mojom::CameraAppDeviceBridge>) override {}
@@ -45,13 +49,9 @@ class MockVideoCaptureService
       mojo::PendingReceiver<mojom::TestingControls>) override {}
 
   MOCK_METHOD1(SetShutdownDelayInSeconds, void(float seconds));
-  MOCK_METHOD1(DoConnectToDeviceFactory,
-               void(mojo::PendingReceiver<video_capture::mojom::DeviceFactory>
-                        receiver));
   MOCK_METHOD1(DoConnectToVideoSourceProvider,
                void(mojo::PendingReceiver<
                     video_capture::mojom::VideoSourceProvider> receiver));
-  MOCK_METHOD1(SetRetryCount, void(int32_t));
 
 #if BUILDFLAG(IS_WIN)
   MOCK_METHOD1(OnGpuInfoUpdate, void(const CHROME_LUID&));

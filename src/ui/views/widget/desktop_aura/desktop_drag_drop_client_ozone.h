@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/aura/client/drag_drop_client.h"
@@ -24,11 +24,9 @@
 #include "ui/platform_window/wm/wm_drop_handler.h"
 #include "ui/views/views_export.h"
 
-namespace aura {
-namespace client {
+namespace aura::client {
 class DragDropDelegate;
-}
-}  // namespace aura
+}  // namespace aura::client
 
 namespace ui {
 class DropTargetEvent;
@@ -89,6 +87,10 @@ class VIEWS_EXPORT DesktopDragDropClientOzone
       const gfx::Point& root_location,
       int allowed_operations,
       ui::mojom::DragEventSource source) override;
+#if BUILDFLAG(IS_LINUX)
+  void UpdateDragImage(const gfx::ImageSkia& image,
+                       const gfx::Vector2d& offset) override;
+#endif
   void DragCancel() override;
   bool IsDragDropInProgress() override;
   void AddObserver(aura::client::DragDropClientObserver* observer) override;
@@ -136,7 +138,7 @@ class VIEWS_EXPORT DesktopDragDropClientOzone
   aura::Window* root_window() { return root_window_; }
 
  private:
-  const raw_ptr<aura::Window> root_window_;
+  const raw_ptr<aura::Window, DanglingUntriaged> root_window_;
 
   const raw_ptr<ui::WmDragHandler> drag_handler_;
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.lens;
@@ -9,9 +9,7 @@ import org.chromium.base.Callback;
 import org.chromium.chrome.browser.contextmenu.ChipRenderParams;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * A class which manages communication with the Lens SDK.
- */
+/** A class which manages communication with the Lens SDK. */
 public class LensController {
     private static LensController sInstance = new LensController();
 

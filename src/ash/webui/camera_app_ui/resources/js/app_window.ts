@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -140,8 +140,6 @@ export class AppWindow {
 
   /**
    * Reports error and makes it visible on Tast side.
-   *
-   * @param errorInfo Information of the error.
    */
   reportError(errorInfo: ErrorInfo): void {
     this.errors.push(errorInfo);

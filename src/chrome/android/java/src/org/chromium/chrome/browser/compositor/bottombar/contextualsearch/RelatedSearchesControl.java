@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.Px;
 import androidx.annotation.VisibleForTesting;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -27,6 +26,7 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.components.browser_ui.widget.chips.ChipProperties;
 import org.chromium.components.browser_ui.widget.chips.ChipsCoordinator;
 import org.chromium.ui.base.LocalizationUtils;
+import org.chromium.ui.base.ViewUtils;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -44,15 +44,24 @@ public class RelatedSearchesControl {
     private static final int INVALID_VIEW_ID = 0;
     private static final int NO_SELECTED_CHIP = -1;
 
+    /**
+     * In the carousel UI, the first chip is the default search, so the related search start from
+     * the index 1.
+     */
+    public static final int INDEX_OF_THE_FIRST_RELATED_SEARCHES = 1;
+
     /** The Android {@link Context} used to inflate the View. */
     private final Context mContext;
+
     /** The container View used to inflate the View. */
     private final ViewGroup mViewContainer;
+
     /** The resource loader that will handle the snapshot capturing. */
     private final DynamicResourceLoader mResourceLoader;
 
     /** Whether this control is enabled or not. Even if enabled it may not have a View created. */
     private final boolean mIsEnabled;
+
     private final OverlayPanel mOverlayPanel;
 
     /** The pixel density. */
@@ -65,16 +74,10 @@ public class RelatedSearchesControl {
      * The inflated View, or {@code null} if the associated Feature is not enabled,
      * or {@link #destroy} has been called.
      */
-    @Nullable
-    private RelatedSearchesControlView mControlView;
+    @Nullable private RelatedSearchesControlView mControlView;
 
     /** The query suggestions for this feature, or {@code null} if we don't have any. */
     private @Nullable List<String> mRelatedSearchesSuggestions;
-
-    /** Whether the first query is the default query. */
-    private boolean mDisplayDefaultQuery;
-
-    private @Px int mDefaultQueryTextMaxWidthPx = ChipProperties.SHOW_WHOLE_TEXT;
 
     /** Whether the view is visible. */
     private boolean mIsVisible;
@@ -94,9 +97,6 @@ public class RelatedSearchesControl {
     /** The reference to the host for this part of the panel (callbacks to the Panel). */
     private RelatedSearchesSectionHost mPanelSectionHost;
 
-    /** Whether this control is for a view that appears in the Bar vs the panel's content area. */
-    boolean mIsInBarControl;
-
     /** The number of chips that have been selected so far. */
     private int mChipsSelected;
 
@@ -112,16 +112,16 @@ public class RelatedSearchesControl {
     /**
      * @param panel             The panel.
      * @param panelSectionHost  A reference to the host of this panel section for notifications.
-     * @param isInBarControl    Whether this control is for a control that appears in the Bar as
-     *                          opposed to appearing in the content area of the Panel.
      * @param context           The Android Context used to inflate the View.
      * @param container         The container View used to inflate the View.
      * @param resourceLoader    The resource loader that will handle the snapshot capturing.
      */
-    RelatedSearchesControl(OverlayPanel panel, RelatedSearchesSectionHost panelSectionHost,
-            boolean isInBarControl, Context context, ViewGroup container,
+    RelatedSearchesControl(
+            OverlayPanel panel,
+            RelatedSearchesSectionHost panelSectionHost,
+            Context context,
+            ViewGroup container,
             DynamicResourceLoader resourceLoader) {
-        mIsInBarControl = isInBarControl;
         mContext = context;
         mViewContainer = container;
         mResourceLoader = resourceLoader;
@@ -166,8 +166,8 @@ public class RelatedSearchesControl {
     public float getRedundantPadding() {
         return !mIsVisible || mControlView == null
                 ? 0f
-                : mContext.getResources().getDimension(
-                        R.dimen.related_searches_in_bar_redundant_padding);
+                : mContext.getResources()
+                        .getDimension(R.dimen.related_searches_in_bar_redundant_padding);
     }
 
     /** Returns the ID of the view, or {@code INVALID_VIEW_ID} if there's no view. */
@@ -178,16 +178,14 @@ public class RelatedSearchesControl {
     /** Returns whether the SERP is showing due to a Related Searches suggestion. */
     public boolean isShowingRelatedSearchSerp() {
         if (!mIsEnabled) return false;
-        return mSelectedChip >= firstRelatedSearchesCarouselIndex();
+        return mSelectedChip >= INDEX_OF_THE_FIRST_RELATED_SEARCHES;
     }
 
     // ============================================================================================
     // Package-private API
     // ============================================================================================
 
-    /**
-     * Shows the View. This includes inflating the View and setting its initial state.
-     */
+    /** Shows the View. This includes inflating the View and setting its initial state. */
     void show() {
         if (mIsVisible || !hasReleatedSearchesToShow()) return;
 
@@ -198,9 +196,7 @@ public class RelatedSearchesControl {
         mHeightPx = mContentHeightPx;
     }
 
-    /**
-     * Hides the View
-     */
+    /** Hides the View */
     void hide() {
         if (!mIsVisible) return;
 
@@ -213,29 +209,22 @@ public class RelatedSearchesControl {
     /**
      * Sets the Related Searches suggestions to show in this view.
      * @param relatedSearches An {@code List} of suggested queries or {@code null} when none.
-     * @param firstQueryIsDefault Whether the first query is the default query.
-     * @param defaultQueryTextMaxWidthPx The default query text max width in pixels.
      */
-    void setRelatedSearchesSuggestions(@Nullable List<String> relatedSearches,
-            boolean displayDefaultQuery, @Px int defaultQueryTextMaxWidthPx) {
+    void setRelatedSearchesSuggestions(@Nullable List<String> relatedSearches) {
         if (mControlView == null) {
-            int layoutId = mIsInBarControl
-                    ? R.layout.contextual_search_related_searches_view
-                    : R.layout.contextual_search_related_searches_in_content_view;
-            int viewId = mIsInBarControl
-                    ? R.id.contextual_search_related_searches_view_id
-                    : R.id.contextual_search_related_searches_in_content_view_id;
-            int controlId = mIsInBarControl
-                    ? R.id.contextual_search_related_searches_view_control_id
-                    : R.id.contextual_search_related_searches_in_content_view_id;
-            mControlView = new RelatedSearchesControlView(mOverlayPanel, mContext, mViewContainer,
-                    mResourceLoader, layoutId, viewId, controlId);
+            mControlView =
+                    new RelatedSearchesControlView(
+                            mOverlayPanel,
+                            mContext,
+                            mViewContainer,
+                            mResourceLoader,
+                            R.layout.contextual_search_related_searches_view,
+                            R.id.contextual_search_related_searches_view_id,
+                            R.id.contextual_search_related_searches_view_control_id);
         }
         assert mChipsSelected == 0 || hasReleatedSearchesToShow();
         mRelatedSearchesSuggestions = relatedSearches;
         mChips.clear();
-        mDisplayDefaultQuery = displayDefaultQuery;
-        mDefaultQueryTextMaxWidthPx = defaultQueryTextMaxWidthPx;
         if (hasReleatedSearchesToShow()) {
             show();
         } else {
@@ -259,7 +248,8 @@ public class RelatedSearchesControl {
 
     /** Returns whether we have Related Searches to show or not.  */
     boolean hasReleatedSearchesToShow() {
-        return mIsEnabled && mRelatedSearchesSuggestions != null
+        return mIsEnabled
+                && mRelatedSearchesSuggestions != null
                 && mRelatedSearchesSuggestions.size() > 0;
     }
 
@@ -273,17 +263,14 @@ public class RelatedSearchesControl {
     // Test support API
     // ============================================================================================
 
-    @VisibleForTesting
     public void selectChipForTest(int chipIndex) {
         handleChipTapped(mChips.get(chipIndex).model);
     }
 
-    @VisibleForTesting
     public ModelList getChipsForTest() {
         return mControlView.getChipsForTest(); // IN-TEST
     }
 
-    @VisibleForTesting
     public int getSelectedChipForTest() {
         return mSelectedChip;
     }
@@ -303,12 +290,7 @@ public class RelatedSearchesControl {
         // The View snapshot should be fully visible here.
         updateAppearance(1.0f);
 
-        // Only the Bar is on screen, so show if this is an in-bar control and hide otherwise.
-        if (mIsInBarControl) {
-            showView(true);
-        } else {
-            hideView();
-        }
+        showView(true);
     }
 
     /**
@@ -329,9 +311,7 @@ public class RelatedSearchesControl {
         updateViewAndNativeAppearance(percentage);
     }
 
-    /**
-     * Destroys as much of this instance as possible.
-     */
+    /** Destroys as much of this instance as possible. */
     void destroy() {
         if (hasReleatedSearchesToShow()) {
             RelatedSearchesUma.logNumberOfSuggestionsClicked(mChipsSelected);
@@ -387,8 +367,9 @@ public class RelatedSearchesControl {
      */
     private void updateAppearance(float percentage) {
         if (mIsVisible) {
-            mHeightPx = Math.round(
-                    MathUtils.clamp(percentage * mContentHeightPx, 0.f, mContentHeightPx));
+            mHeightPx =
+                    Math.round(
+                            MathUtils.clamp(percentage * mContentHeightPx, 0.f, mContentHeightPx));
         } else {
             mHeightPx = 0.f;
         }
@@ -419,7 +400,7 @@ public class RelatedSearchesControl {
             offsetX = -offsetX;
         }
 
-        if (mDisplayDefaultQuery && mSelectedChip == NO_SELECTED_CHIP && !fromCloseToPeek) {
+        if (mSelectedChip == NO_SELECTED_CHIP && !fromCloseToPeek) {
             mSelectedChip = 0;
             mChips.get(mSelectedChip).model.set(ChipProperties.SELECTED, true);
         }
@@ -429,15 +410,13 @@ public class RelatedSearchesControl {
         view.setVisibility(View.VISIBLE);
 
         // NOTE: We need to call requestLayout, otherwise the View will not become visible.
-        view.requestLayout();
+        ViewUtils.requestLayout(view, "RelatedSearchesControl.showView");
 
         mIsShowingView = true;
         mViewY = y;
     }
 
-    /**
-     * Hides the Android View. See {@link #showView()}.
-     */
+    /** Hides the Android View. See {@link #showView()}. */
     private void hideView() {
         if (mControlView == null) return;
 
@@ -483,18 +462,13 @@ public class RelatedSearchesControl {
         mPanelSectionHost.onSuggestionClicked(suggestionIndex);
         // TODO(donnd): add infrastructure to check if the suggestion is an RS before logging.
         RelatedSearchesUma.logSelectedCarouselIndex(suggestionIndex);
-        RelatedSearchesUma.logSelectedSuggestionIndex(
-                suggestionIndex + (mDisplayDefaultQuery ? 0 : 1));
+        RelatedSearchesUma.logSelectedSuggestionIndex(suggestionIndex);
         mChipsSelected++;
-        boolean isRelatedSearchesSuggestion = suggestionIndex > 0 || !mDisplayDefaultQuery;
+        boolean isRelatedSearchesSuggestion =
+                suggestionIndex >= INDEX_OF_THE_FIRST_RELATED_SEARCHES;
         ContextualSearchUma.logAllSearches(isRelatedSearchesSuggestion);
 
         mControlView.smoothScrollToPosition(suggestionIndex);
-    }
-
-    /** The position of the first Related Searches suggestion in the carousel UI. */
-    private int firstRelatedSearchesCarouselIndex() {
-        return mDisplayDefaultQuery ? 1 : 0;
     }
 
     // ============================================================================================
@@ -510,8 +484,12 @@ public class RelatedSearchesControl {
                 ListItem chip =
                         ChipsCoordinator.buildChipListItem(index, suggestion, selectedCallback);
 
-                if (index == 0 && mDisplayDefaultQuery) {
-                    chip.model.set(ChipProperties.TEXT_MAX_WIDTH_PX, mDefaultQueryTextMaxWidthPx);
+                if (index < INDEX_OF_THE_FIRST_RELATED_SEARCHES) {
+                    chip.model.set(
+                            ChipProperties.TEXT_MAX_WIDTH_PX,
+                            mContext.getResources()
+                                    .getDimensionPixelSize(
+                                            R.dimen.contextual_search_chip_max_width));
                 }
                 mChips.add(chip);
             }
@@ -557,27 +535,36 @@ public class RelatedSearchesControl {
          * @param viewId            The id of the root View of the Layout.
          * @param controlId         The id of the control View.
          */
-        RelatedSearchesControlView(OverlayPanel panel, Context context, ViewGroup container,
-                DynamicResourceLoader resourceLoader, int layoutId, int viewId, int controlId) {
+        RelatedSearchesControlView(
+                OverlayPanel panel,
+                Context context,
+                ViewGroup container,
+                DynamicResourceLoader resourceLoader,
+                int layoutId,
+                int viewId,
+                int controlId) {
             super(panel, layoutId, viewId, context, container, resourceLoader);
             mControlId = controlId;
 
             // Setup Chips handling
             mChipsCoordinator = new ChipsCoordinator(context, mChips);
             mChipsCoordinator.setSpaceItemDecoration(
-                    context.getResources().getDimensionPixelSize(
-                            R.dimen.contextual_search_chip_list_chip_spacing),
-                    context.getResources().getDimensionPixelSize(
-                            R.dimen.contextual_search_chip_list_side_padding));
+                    context.getResources()
+                            .getDimensionPixelSize(
+                                    R.dimen.contextual_search_chip_list_chip_spacing),
+                    context.getResources()
+                            .getDimensionPixelSize(
+                                    R.dimen.contextual_search_chip_list_side_padding));
 
             RecyclerView recyclerView = (RecyclerView) mChipsCoordinator.getView();
-            recyclerView.addOnScrollListener(new OnScrollListener() {
-                @Override
-                public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
-                    if (newState == RecyclerView.SCROLL_STATE_DRAGGING) mScrolled = true;
-                    if (newState == RecyclerView.SCROLL_STATE_IDLE) invalidate(false);
-                }
-            });
+            recyclerView.addOnScrollListener(
+                    new OnScrollListener() {
+                        @Override
+                        public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
+                            if (newState == RecyclerView.SCROLL_STATE_DRAGGING) mScrolled = true;
+                            if (newState == RecyclerView.SCROLL_STATE_IDLE) invalidate(false);
+                        }
+                    });
         }
 
         /**
@@ -663,7 +650,6 @@ public class RelatedSearchesControl {
             return false;
         }
 
-        @VisibleForTesting
         ModelList getChipsForTest() {
             updateChips();
             return mChips;

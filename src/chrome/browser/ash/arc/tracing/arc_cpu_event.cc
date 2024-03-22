@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/tracing/arc_cpu_event.h"
 
 #include "base/logging.h"
+#include "base/types/cxx23_to_underlying.h"
 
 namespace arc {
 
@@ -120,10 +121,10 @@ bool AddAllCpuEvent(AllCpuEvents* all_cpu_events,
   return AddCpuEvent(&(*all_cpu_events)[cpu_id], timestamp, type, tid);
 }
 
-base::ListValue SerializeCpuEvents(const CpuEvents& cpu_events) {
-  base::ListValue list;
+base::Value::List SerializeCpuEvents(const CpuEvents& cpu_events) {
+  base::Value::List list;
   for (const auto& event : cpu_events) {
-    base::ListValue event_value;
+    base::Value::List event_value;
     event_value.Append(base::Value(static_cast<int>(event.type)));
     event_value.Append(base::Value(static_cast<double>(event.timestamp)));
     event_value.Append(base::Value(static_cast<int>(event.tid)));
@@ -132,8 +133,8 @@ base::ListValue SerializeCpuEvents(const CpuEvents& cpu_events) {
   return list;
 }
 
-base::ListValue SerializeAllCpuEvents(const AllCpuEvents& all_cpu_events) {
-  base::ListValue list;
+base::Value::List SerializeAllCpuEvents(const AllCpuEvents& all_cpu_events) {
+  base::Value::List list;
   for (const auto& cpu_events : all_cpu_events)
     list.Append(SerializeCpuEvents(cpu_events));
   return list;
@@ -144,13 +145,13 @@ bool LoadCpuEvents(const base::Value* value, CpuEvents* cpu_events) {
     return false;
 
   uint64_t previous_timestamp = 0;
-  for (const auto& entry : value->GetListDeprecated()) {
-    if (!entry.is_list() || entry.GetListDeprecated().size() != 3)
+  for (const auto& entry : value->GetList()) {
+    if (!entry.is_list() || entry.GetList().size() != 3)
       return false;
-    if (!entry.GetListDeprecated()[0].is_int())
+    if (!entry.GetList()[0].is_int())
       return false;
     const ArcCpuEvent::Type type =
-        static_cast<ArcCpuEvent::Type>(entry.GetListDeprecated()[0].GetInt());
+        static_cast<ArcCpuEvent::Type>(entry.GetList()[0].GetInt());
     switch (type) {
       case ArcCpuEvent::Type::kIdleIn:
       case ArcCpuEvent::Type::kIdleOut:
@@ -160,15 +161,14 @@ bool LoadCpuEvents(const base::Value* value, CpuEvents* cpu_events) {
       default:
         return false;
     }
-    if (!entry.GetListDeprecated()[1].is_double() &&
-        !entry.GetListDeprecated()[1].is_int())
+    if (!entry.GetList()[1].is_double() && !entry.GetList()[1].is_int())
       return false;
-    const uint64_t timestamp = entry.GetListDeprecated()[1].GetDouble();
+    const uint64_t timestamp = entry.GetList()[1].GetDouble();
     if (timestamp < previous_timestamp)
       return false;
-    if (!entry.GetListDeprecated()[2].is_int())
+    if (!entry.GetList()[2].is_int())
       return false;
-    const int tid = entry.GetListDeprecated()[2].GetInt();
+    const int tid = entry.GetList()[2].GetInt();
     cpu_events->emplace_back(timestamp, type, tid);
     previous_timestamp = timestamp;
   }
@@ -180,7 +180,7 @@ bool LoadAllCpuEvents(const base::Value* value, AllCpuEvents* all_cpu_events) {
   if (!value || !value->is_list())
     return false;
 
-  for (const auto& entry : value->GetListDeprecated()) {
+  for (const auto& entry : value->GetList()) {
     CpuEvents cpu_events;
     if (!LoadCpuEvents(&entry, &cpu_events))
       return false;
@@ -191,9 +191,7 @@ bool LoadAllCpuEvents(const base::Value* value, AllCpuEvents* all_cpu_events) {
 }
 
 std::ostream& operator<<(std::ostream& os, ArcCpuEvent::Type event_type) {
-  return os
-         << static_cast<typename std::underlying_type<ArcCpuEvent::Type>::type>(
-                event_type);
+  return os << base::to_underlying(event_type);
 }
 
 }  // namespace arc

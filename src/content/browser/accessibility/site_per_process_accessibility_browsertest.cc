@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,6 @@
 #include "content/browser/renderer_host/render_widget_host_view_child_frame.h"
 #include "content/browser/site_per_process_browsertest.h"
 #include "content/browser/web_contents/web_contents_impl.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/accessibility_notification_waiter.h"
@@ -110,7 +107,8 @@ IN_PROC_BROWSER_TEST_P(MAYBE_SitePerProcessAccessibilityBrowserTest,
 
   // Assert that we can walk from the main frame down into the child frame
   // directly, getting correct roles and data along the way.
-  BrowserAccessibility* ax_root = main_frame_manager->GetRoot();
+  BrowserAccessibility* ax_root =
+      main_frame_manager->GetBrowserAccessibilityRoot();
   EXPECT_EQ(ax::mojom::Role::kRootWebArea, ax_root->GetRole());
   ASSERT_EQ(1U, ax_root->PlatformChildCount());
 
@@ -249,7 +247,8 @@ IN_PROC_BROWSER_TEST_P(
 
   // Assert that we can walk from the main frame down into the child frame
   // directly, getting correct roles and data along the way.
-  BrowserAccessibility* ax_root = main_frame_manager->GetRoot();
+  BrowserAccessibility* ax_root =
+      main_frame_manager->GetBrowserAccessibilityRoot();
   EXPECT_EQ(ax::mojom::Role::kRootWebArea, ax_root->GetRole());
   ASSERT_EQ(1U, ax_root->PlatformChildCount());
 

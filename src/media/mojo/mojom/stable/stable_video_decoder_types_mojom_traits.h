@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,41 @@
 #define MEDIA_MOJO_MOJOM_STABLE_STABLE_VIDEO_DECODER_TYPES_MOJOM_TRAITS_H_
 
 #include "base/notreached.h"
-#include "media/base/video_frame.h"
+#include "media/base/cdm_context.h"
 #include "media/base/video_frame_metadata.h"
 #include "media/mojo/mojom/stable/stable_video_decoder_types.mojom.h"
 #include "mojo/public/cpp/bindings/optional_as_pointer.h"
 
 namespace mojo {
+
+template <>
+struct EnumTraits<media::stable::mojom::CdmContextEvent,
+                  ::media::CdmContext::Event> {
+  static media::stable::mojom::CdmContextEvent ToMojom(
+      ::media::CdmContext::Event input) {
+    switch (input) {
+      case ::media::CdmContext::Event::kHasAdditionalUsableKey:
+        return media::stable::mojom::CdmContextEvent::kHasAdditionalUsableKey;
+      case ::media::CdmContext::Event::kHardwareContextReset:
+        return media::stable::mojom::CdmContextEvent::kHardwareContextReset;
+    }
+
+    NOTREACHED_NORETURN();
+  }
+
+  static bool FromMojom(media::stable::mojom::CdmContextEvent input,
+                        ::media::CdmContext::Event* output) {
+    switch (input) {
+      case media::stable::mojom::CdmContextEvent::kHasAdditionalUsableKey:
+        *output = ::media::CdmContext::Event::kHasAdditionalUsableKey;
+        return true;
+      case media::stable::mojom::CdmContextEvent::kHardwareContextReset:
+        *output = ::media::CdmContext::Event::kHardwareContextReset;
+        return true;
+    }
+    NOTREACHED_NORETURN();
+  }
+};
 
 template <>
 struct EnumTraits<media::stable::mojom::ColorSpacePrimaryID,
@@ -53,8 +82,7 @@ struct EnumTraits<media::stable::mojom::ColorSpacePrimaryID,
         return media::stable::mojom::ColorSpacePrimaryID::kCustom;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::ColorSpacePrimaryID::kInvalid;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -112,8 +140,7 @@ struct EnumTraits<media::stable::mojom::ColorSpacePrimaryID,
         return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -177,8 +204,7 @@ struct EnumTraits<media::stable::mojom::ColorSpaceTransferID,
         return media::stable::mojom::ColorSpaceTransferID::kScrgbLinear80Nits;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::ColorSpaceTransferID::kInvalid;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -266,8 +292,7 @@ struct EnumTraits<media::stable::mojom::ColorSpaceTransferID,
         return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -303,8 +328,7 @@ struct EnumTraits<media::stable::mojom::ColorSpaceMatrixID,
         return media::stable::mojom::ColorSpaceMatrixID::kGBR;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::ColorSpaceMatrixID::kInvalid;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -350,8 +374,7 @@ struct EnumTraits<media::stable::mojom::ColorSpaceMatrixID,
         return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -371,8 +394,7 @@ struct EnumTraits<media::stable::mojom::ColorSpaceRangeID,
         return media::stable::mojom::ColorSpaceRangeID::kDerived;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::ColorSpaceRangeID::kInvalid;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -394,8 +416,7 @@ struct EnumTraits<media::stable::mojom::ColorSpaceRangeID,
         return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -420,21 +441,21 @@ struct StructTraits<media::stable::mojom::ColorSpaceDataView, gfx::ColorSpace> {
 
 template <>
 struct StructTraits<media::stable::mojom::ColorVolumeMetadataDataView,
-                    gfx::ColorVolumeMetadata> {
-  static const gfx::PointF& primary_r(const gfx::ColorVolumeMetadata& input);
+                    gfx::HdrMetadataSmpteSt2086> {
+  static gfx::PointF primary_r(const gfx::HdrMetadataSmpteSt2086& input);
 
-  static const gfx::PointF& primary_g(const gfx::ColorVolumeMetadata& input);
+  static gfx::PointF primary_g(const gfx::HdrMetadataSmpteSt2086& input);
 
-  static const gfx::PointF& primary_b(const gfx::ColorVolumeMetadata& input);
+  static gfx::PointF primary_b(const gfx::HdrMetadataSmpteSt2086& input);
 
-  static const gfx::PointF& white_point(const gfx::ColorVolumeMetadata& input);
+  static gfx::PointF white_point(const gfx::HdrMetadataSmpteSt2086& input);
 
-  static float luminance_max(const gfx::ColorVolumeMetadata& input);
+  static float luminance_max(const gfx::HdrMetadataSmpteSt2086& input);
 
-  static float luminance_min(const gfx::ColorVolumeMetadata& input);
+  static float luminance_min(const gfx::HdrMetadataSmpteSt2086& input);
 
   static bool Read(media::stable::mojom::ColorVolumeMetadataDataView data,
-                   gfx::ColorVolumeMetadata* output);
+                   gfx::HdrMetadataSmpteSt2086* output);
 };
 
 template <>
@@ -461,7 +482,7 @@ struct StructTraits<media::stable::mojom::DecoderBufferDataView,
 
   static bool is_key_frame(const scoped_refptr<media::DecoderBuffer>& input);
 
-  static std::vector<uint8_t> side_data(
+  static std::vector<uint8_t> raw_side_data(
       const scoped_refptr<media::DecoderBuffer>& input);
 
   static std::unique_ptr<media::DecryptConfig> decrypt_config(
@@ -473,8 +494,23 @@ struct StructTraits<media::stable::mojom::DecoderBufferDataView,
   static base::TimeDelta back_discard(
       const scoped_refptr<media::DecoderBuffer>& input);
 
+  static absl::optional<media::DecoderBufferSideData> side_data(
+      const scoped_refptr<media::DecoderBuffer>& input);
+
   static bool Read(media::stable::mojom::DecoderBufferDataView input,
                    scoped_refptr<media::DecoderBuffer>* output);
+};
+
+template <>
+struct StructTraits<media::stable::mojom::DecoderBufferSideDataDataView,
+                    media::DecoderBufferSideData> {
+  static std::vector<uint32_t> spatial_layers(
+      media::DecoderBufferSideData input);
+  static std::vector<uint8_t> alpha_data(media::DecoderBufferSideData input);
+  static uint64_t secure_handle(media::DecoderBufferSideData input);
+
+  static bool Read(media::stable::mojom::DecoderBufferSideDataDataView data,
+                   media::DecoderBufferSideData* output);
 };
 
 template <>
@@ -508,6 +544,42 @@ struct StructTraits<media::stable::mojom::DecryptConfigDataView,
 };
 
 template <>
+struct EnumTraits<media::stable::mojom::DecryptStatus,
+                  ::media::Decryptor::Status> {
+  static media::stable::mojom::DecryptStatus ToMojom(
+      ::media::Decryptor::Status input) {
+    switch (input) {
+      case ::media::Decryptor::Status::kSuccess:
+        return media::stable::mojom::DecryptStatus::kSuccess;
+      case ::media::Decryptor::Status::kNoKey:
+        return media::stable::mojom::DecryptStatus::kNoKey;
+      case ::media::Decryptor::Status::kNeedMoreData:
+        return media::stable::mojom::DecryptStatus::kFailure;
+      case ::media::Decryptor::Status::kError:
+        return media::stable::mojom::DecryptStatus::kFailure;
+    }
+
+    NOTREACHED_NORETURN();
+  }
+
+  static bool FromMojom(media::stable::mojom::DecryptStatus input,
+                        ::media::Decryptor::Status* output) {
+    switch (input) {
+      case media::stable::mojom::DecryptStatus::kSuccess:
+        *output = ::media::Decryptor::Status::kSuccess;
+        return true;
+      case media::stable::mojom::DecryptStatus::kNoKey:
+        *output = ::media::Decryptor::Status::kNoKey;
+        return true;
+      case media::stable::mojom::DecryptStatus::kFailure:
+        *output = ::media::Decryptor::Status::kError;
+        return true;
+    }
+    NOTREACHED_NORETURN();
+  }
+};
+
+template <>
 struct EnumTraits<media::stable::mojom::EncryptionScheme,
                   ::media::EncryptionScheme> {
   static media::stable::mojom::EncryptionScheme ToMojom(
@@ -521,8 +593,7 @@ struct EnumTraits<media::stable::mojom::EncryptionScheme,
         return media::stable::mojom::EncryptionScheme::kCbcs;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::EncryptionScheme::kUnencrypted;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -541,8 +612,7 @@ struct EnumTraits<media::stable::mojom::EncryptionScheme,
         return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -553,7 +623,7 @@ struct StructTraits<media::stable::mojom::HDRMetadataDataView,
 
   static uint32_t max_frame_average_light_level(const gfx::HDRMetadata& input);
 
-  static const gfx::ColorVolumeMetadata& color_volume_metadata(
+  static gfx::HdrMetadataSmpteSt2086 color_volume_metadata(
       const gfx::HDRMetadata& input);
 
   static bool Read(media::stable::mojom::HDRMetadataDataView data,
@@ -576,8 +646,7 @@ struct EnumTraits<media::stable::mojom::MediaLogRecord_Type,
         return media::stable::mojom::MediaLogRecord_Type::kMediaStatus;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::MediaLogRecord_Type::kMessage;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -599,8 +668,7 @@ struct EnumTraits<media::stable::mojom::MediaLogRecord_Type,
         return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -611,7 +679,7 @@ struct StructTraits<media::stable::mojom::MediaLogRecordDataView,
 
   static media::MediaLogRecord::Type type(const media::MediaLogRecord& input);
 
-  static const base::Value& params(const media::MediaLogRecord& input);
+  static const base::Value::Dict& params(const media::MediaLogRecord& input);
 
   static base::TimeTicks time(const media::MediaLogRecord& input);
 
@@ -653,7 +721,7 @@ struct StructTraits<media::stable::mojom::StatusDataDataView,
 
   static std::string message(const media::internal::StatusData& input);
 
-  static base::span<const base::Value> frames(
+  static const base::Value::List& frames(
       const media::internal::StatusData& input);
 
   static absl::optional<media::internal::StatusData> cause(
@@ -728,8 +796,7 @@ struct EnumTraits<media::stable::mojom::VideoCodec, ::media::VideoCodec> {
         return media::stable::mojom::VideoCodec::kAV1;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::VideoCodec::kUnknown;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -772,8 +839,7 @@ struct EnumTraits<media::stable::mojom::VideoCodec, ::media::VideoCodec> {
         return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -872,10 +938,48 @@ struct EnumTraits<media::stable::mojom::VideoCodecProfile,
         return media::stable::mojom::VideoCodecProfile::kDolbyVisionProfile8;
       case ::media::VideoCodecProfile::DOLBYVISION_PROFILE9:
         return media::stable::mojom::VideoCodecProfile::kDolbyVisionProfile9;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN10:
+        return ::media::stable::mojom::VideoCodecProfile::kVVCProfileMain10;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN12:
+        return ::media::stable::mojom::VideoCodecProfile::kVVCProfileMain12;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN12_INTRA:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMain12Intra;
+      case ::media::VideoCodecProfile::VVCPROIFLE_MULTILAYER_MAIN10:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMultilayerMain10;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN10_444:
+        return ::media::stable::mojom::VideoCodecProfile::kVVCProfileMain10444;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN12_444:
+        return ::media::stable::mojom::VideoCodecProfile::kVVCProfileMain12444;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN16_444:
+        return ::media::stable::mojom::VideoCodecProfile::kVVCProfileMain16444;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN12_444_INTRA:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMain12444Intra;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN16_444_INTRA:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMain16444Intra;
+      case ::media::VideoCodecProfile::VVCPROFILE_MULTILAYER_MAIN10_444:
+        return ::media::stable::mojom::VideoCodecProfile::kVVCProfileMain10444;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN10_STILL_PICTURE:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMain10Still;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN12_STILL_PICTURE:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMain12Still;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN10_444_STILL_PICTURE:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMain10444Still;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMain12444Still;
+      case ::media::VideoCodecProfile::VVCPROFILE_MAIN16_444_STILL_PICTURE:
+        return ::media::stable::mojom::VideoCodecProfile::
+            kVVCProfileMain16444Still;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::VideoCodecProfile::kVideoCodecProfileUnknown;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -1003,10 +1107,58 @@ struct EnumTraits<media::stable::mojom::VideoCodecProfile,
       case media::stable::mojom::VideoCodecProfile::kDolbyVisionProfile9:
         *output = ::media::VideoCodecProfile::DOLBYVISION_PROFILE9;
         return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain10:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN10;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain12:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN12;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain12Intra:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN12_INTRA;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMultilayerMain10:
+        *output = ::media::VideoCodecProfile::VVCPROIFLE_MULTILAYER_MAIN10;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain10444:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN10_444;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain12444:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN12_444;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain16444:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN16_444;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain12444Intra:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN12_444_INTRA;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain16444Intra:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN16_444_INTRA;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::
+          kVVCProfileMultilayerMain10444:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MULTILAYER_MAIN10_444;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain10Still:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN10_STILL_PICTURE;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain12Still:
+        *output = ::media::VideoCodecProfile::VVCPROFILE_MAIN12_STILL_PICTURE;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain10444Still:
+        *output =
+            ::media::VideoCodecProfile::VVCPROFILE_MAIN10_444_STILL_PICTURE;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain12444Still:
+        *output =
+            ::media::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE;
+        return true;
+      case media::stable::mojom::VideoCodecProfile::kVVCProfileMain16444Still:
+        *output =
+            ::media::VideoCodecProfile::VVCPROFILE_MAIN16_444_STILL_PICTURE;
+        return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -1059,6 +1211,7 @@ struct EnumTraits<media::stable::mojom::VideoDecoderType,
       case ::media::VideoDecoderType::kTesting:
         return media::stable::mojom::VideoDecoderType::kTesting;
       case ::media::VideoDecoderType::kUnknown:
+        return media::stable::mojom::VideoDecoderType::kUnknown;
       case ::media::VideoDecoderType::kFFmpeg:
       case ::media::VideoDecoderType::kVpx:
       case ::media::VideoDecoderType::kAom:
@@ -1067,14 +1220,15 @@ struct EnumTraits<media::stable::mojom::VideoDecoderType,
       case ::media::VideoDecoderType::kDav1d:
       case ::media::VideoDecoderType::kFuchsia:
       case ::media::VideoDecoderType::kMediaCodec:
-      case ::media::VideoDecoderType::kGav1:
       case ::media::VideoDecoderType::kD3D11:
       case ::media::VideoDecoderType::kBroker:
-        return media::stable::mojom::VideoDecoderType::kUnknown;
+      case ::media::VideoDecoderType::kOutOfProcess:
+      case ::media::VideoDecoderType::kVideoToolbox:
+        // Only decoders used on CrOS are supported.
+        NOTREACHED_NORETURN();
     }
 
-    NOTREACHED();
-    return media::stable::mojom::VideoDecoderType::kUnknown;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -1099,67 +1253,16 @@ struct EnumTraits<media::stable::mojom::VideoDecoderType,
         return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
-};
-
-template <>
-struct StructTraits<media::stable::mojom::VideoFrameDataView,
-                    scoped_refptr<media::VideoFrame>> {
-  static bool IsNull(const scoped_refptr<media::VideoFrame>& input) {
-    return !input;
-  }
-
-  static void SetToNull(scoped_refptr<media::VideoFrame>* input) {
-    *input = nullptr;
-  }
-
-  static media::VideoPixelFormat format(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static const gfx::Size& coded_size(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static const gfx::Rect& visible_rect(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static const gfx::Size& natural_size(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static base::TimeDelta timestamp(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static gfx::ColorSpace color_space(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static const absl::optional<gfx::HDRMetadata>& hdr_metadata(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static media::stable::mojom::VideoFrameDataPtr data(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static const media::VideoFrameMetadata& metadata(
-      const scoped_refptr<media::VideoFrame>& input);
-
-  static bool Read(media::stable::mojom::VideoFrameDataView input,
-                   scoped_refptr<media::VideoFrame>* output);
 };
 
 template <>
 struct StructTraits<media::stable::mojom::VideoFrameMetadataDataView,
                     media::VideoFrameMetadata> {
-  static bool allow_overlay(const media::VideoFrameMetadata& input);
-
-  static bool end_of_stream(const media::VideoFrameMetadata& input);
-
-  static bool read_lock_fences_enabled(const media::VideoFrameMetadata& input);
-
   static bool protected_video(const media::VideoFrameMetadata& input);
 
   static bool hw_protected(const media::VideoFrameMetadata& input);
-
-  static bool power_efficient(const media::VideoFrameMetadata& input);
 
   static bool Read(media::stable::mojom::VideoFrameMetadataDataView input,
                    media::VideoFrameMetadata* output);
@@ -1243,10 +1346,11 @@ struct EnumTraits<media::stable::mojom::VideoPixelFormat,
         return media::stable::mojom::VideoPixelFormat::kPixelFormatYUV422AP10;
       case ::media::VideoPixelFormat::PIXEL_FORMAT_YUV444AP10:
         return media::stable::mojom::VideoPixelFormat::kPixelFormatYUV444AP10;
+      case ::media::VideoPixelFormat::PIXEL_FORMAT_NV12A:
+        return media::stable::mojom::VideoPixelFormat::kPixelFormatNV12A;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::VideoPixelFormat::kPixelFormatUnknown;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -1362,10 +1466,12 @@ struct EnumTraits<media::stable::mojom::VideoPixelFormat,
       case media::stable::mojom::VideoPixelFormat::kPixelFormatYUV444AP10:
         *output = ::media::VideoPixelFormat::PIXEL_FORMAT_YUV444AP10;
         return true;
+      case media::stable::mojom::VideoPixelFormat::kPixelFormatNV12A:
+        *output = ::media::VideoPixelFormat::PIXEL_FORMAT_NV12A;
+        return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 
@@ -1380,10 +1486,11 @@ struct EnumTraits<media::stable::mojom::WaitingReason, media::WaitingReason> {
         return media::stable::mojom::WaitingReason::kNoDecryptionKey;
       case media::WaitingReason::kDecoderStateLost:
         return media::stable::mojom::WaitingReason::kDecoderStateLost;
+      case media::WaitingReason::kSecureSurfaceLost:
+        return media::stable::mojom::WaitingReason::kSecureSurfaceLost;
     }
 
-    NOTREACHED();
-    return media::stable::mojom::WaitingReason::kNoCdm;
+    NOTREACHED_NORETURN();
   }
 
   // Returning false results in deserialization failure and causes the
@@ -1400,10 +1507,12 @@ struct EnumTraits<media::stable::mojom::WaitingReason, media::WaitingReason> {
       case media::stable::mojom::WaitingReason::kDecoderStateLost:
         *output = media::WaitingReason::kDecoderStateLost;
         return true;
+      case media::stable::mojom::WaitingReason::kSecureSurfaceLost:
+        *output = media::WaitingReason::kSecureSurfaceLost;
+        return true;
     }
 
-    NOTREACHED();
-    return false;
+    NOTREACHED_NORETURN();
   }
 };
 

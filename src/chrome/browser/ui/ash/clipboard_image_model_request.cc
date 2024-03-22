@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/base64.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/render_view_host.h"
@@ -62,8 +63,9 @@ ClipboardImageModelRequest::Params::~Params() = default;
 
 // ClipboardImageModelFactory::TestParams: -------------------------------------
 
-ClipboardImageModelRequest::TestParams::TestParams(RequestStopCallback callback,
-                                                   bool enforce_auto_resize)
+ClipboardImageModelRequest::TestParams::TestParams(
+    RequestStopCallback callback,
+    const absl::optional<bool>& enforce_auto_resize)
     : callback(callback), enforce_auto_resize(enforce_auto_resize) {}
 
 ClipboardImageModelRequest::TestParams::~TestParams() = default;
@@ -110,6 +112,8 @@ ClipboardImageModelRequest::ClipboardImageModelRequest(
       web_view_(new views::WebView(profile)),
       on_request_finished_callback_(std::move(on_request_finished_callback)),
       request_creation_time_(base::TimeTicks::Now()) {
+  CHECK(profile);
+
   views::Widget::InitParams widget_params;
   widget_params.type = views::Widget::InitParams::TYPE_WINDOW_FRAMELESS;
   widget_params.ownership =
@@ -289,7 +293,7 @@ void ClipboardImageModelRequest::PostCopySurfaceTask() {
   copy_surface_weak_ptr_factory_.InvalidateWeakPtrs();
   DCHECK(
       web_contents()->GetRenderWidgetHostView()->IsSurfaceAvailableForCopy());
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ClipboardImageModelRequest::CopySurface,
                      copy_surface_weak_ptr_factory_.GetWeakPtr()),
@@ -332,8 +336,9 @@ void ClipboardImageModelRequest::OnTimeout() {
 }
 
 bool ClipboardImageModelRequest::ShouldEnableAutoResizeMode() const {
-  if (g_test_params)
-    return g_test_params->enforce_auto_resize;
+  // Prefer to use the auto resize mode specified by `g_test_params` if any.
+  if (g_test_params && g_test_params->enforce_auto_resize)
+    return *g_test_params->enforce_auto_resize;
 
   // Use auto resize mode if `bounding_box_size_` is not meaningful.
   if (bounding_box_size_.IsEmpty())

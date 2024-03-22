@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <utility>
 
 #include "base/big_endian.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
@@ -175,8 +175,8 @@ bool AudioSocket::SendProto(int type,
       buffer = buffer_pool_->GetBuffer();
     }
     if (!buffer) {
-      buffer =
-          base::MakeRefCounted<net::IOBuffer>(sizeof(uint16_t) + total_size);
+      buffer = base::MakeRefCounted<net::IOBufferWithSize>(sizeof(uint16_t) +
+                                                           total_size);
     }
     ptr = buffer->data();
     base::WriteBigEndian(ptr, static_cast<uint16_t>(total_size));

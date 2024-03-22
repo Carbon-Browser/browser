@@ -1,12 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
 import 'chrome://settings/lazy_load.js';
 
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {CrInputElement, SettingsSyncEncryptionOptionsElement, SettingsSyncPageElement} from 'chrome://settings/lazy_load.js';
 // <if expr="not chromeos_ash">
@@ -15,7 +15,7 @@ import {CrDialogElement} from 'chrome://settings/lazy_load.js';
 
 import {CrButtonElement, CrRadioButtonElement, CrRadioGroupElement, PageStatus, Router, routes, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {waitBeforeNextRender} from 'chrome://webui-test/test_util.js';
+import {waitBeforeNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
 // <if expr="not chromeos_ash">
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
@@ -40,7 +40,7 @@ suite('SyncSettingsTests', function() {
   let encryptWithPassphrase: CrRadioButtonElement;
 
   function setupSyncPage() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     syncPage = document.createElement('settings-sync-page');
     const router = Router.getInstance();
     router.navigateTo((router.getRoutes() as SyncRoutes).SYNC);
@@ -156,9 +156,17 @@ suite('SyncSettingsTests', function() {
         syncPage.shadowRoot!.querySelector<HTMLElement>(
                                 '#sync-separator')!.hidden);
     assertTrue(otherItems.classList.contains('list-frame'));
-    assertEquals(
-        otherItems.querySelectorAll(':scope > cr-expand-button').length, 1);
-    assertEquals(otherItems.querySelectorAll(':scope > cr-link-row').length, 3);
+    assertEquals(otherItems.querySelectorAll('cr-expand-button').length, 1);
+
+    // <if expr="not chromeos_lacros">
+    assertEquals(otherItems.querySelectorAll('cr-link-row').length, 3);
+    // </if>
+
+    // <if expr="chromeos_lacros">
+    assertEquals(otherItems.querySelectorAll('cr-link-row').length, 4);
+    assertTrue(!!otherItems.querySelector('#os-sync-device-row'));
+    // </if>
+
 
     // Test sync paused state.
     syncPage.syncStatus = {
@@ -448,6 +456,39 @@ suite('SyncSettingsTests', function() {
             .querySelector<HTMLElement>(
                 '#encryptionRadioGroupContainer')!.style.display,
         'none');
+  });
+
+  test('EnterPassphraseLabelWhenNoPassphraseTime', () => {
+    const prefs = getSyncAllPrefs();
+    prefs.encryptAllData = true;
+    prefs.passphraseRequired = true;
+    webUIListenerCallback('sync-prefs-changed', prefs);
+    flush();
+    const enterPassphraseLabel =
+        syncPage.shadowRoot!.querySelector<HTMLElement>(
+            '#enterPassphraseLabel')!;
+
+    assertEquals(
+        'Your data is encrypted with your sync passphrase. Enter it to start' +
+            ' sync.',
+        enterPassphraseLabel.innerText);
+  });
+
+  test('EnterPassphraseLabelWhenHasPassphraseTime', () => {
+    const prefs = getSyncAllPrefs();
+    prefs.encryptAllData = true;
+    prefs.passphraseRequired = true;
+    prefs.explicitPassphraseTime = 'Jan 01, 1970';
+    webUIListenerCallback('sync-prefs-changed', prefs);
+    flush();
+    const enterPassphraseLabel =
+        syncPage.shadowRoot!.querySelector<HTMLElement>(
+            '#enterPassphraseLabel')!;
+
+    assertEquals(
+        `Your data was encrypted with your sync passphrase on ${
+            prefs.explicitPassphraseTime}. Enter it to start sync.`,
+        enterPassphraseLabel.innerText);
   });
 
   test(

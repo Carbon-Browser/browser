@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,15 @@ package org.chromium.chrome.browser.lens;
 
 import androidx.annotation.IntDef;
 
-@IntDef({LensEntryPoint.CONTEXT_MENU_SEARCH_MENU_ITEM, LensEntryPoint.CONTEXT_MENU_SHOP_MENU_ITEM,
-        LensEntryPoint.CONTEXT_MENU_CHIP, LensEntryPoint.OMNIBOX, LensEntryPoint.NEW_TAB_PAGE,
-        LensEntryPoint.TASKS_SURFACE, LensEntryPoint.QUICK_ACTION_SEARCH_WIDGET})
+@IntDef({
+    LensEntryPoint.CONTEXT_MENU_SEARCH_MENU_ITEM,
+    LensEntryPoint.CONTEXT_MENU_SHOP_MENU_ITEM,
+    LensEntryPoint.CONTEXT_MENU_CHIP,
+    LensEntryPoint.OMNIBOX,
+    LensEntryPoint.NEW_TAB_PAGE,
+    LensEntryPoint.TASKS_SURFACE,
+    LensEntryPoint.QUICK_ACTION_SEARCH_WIDGET
+})
 public @interface LensEntryPoint {
     int CONTEXT_MENU_SEARCH_MENU_ITEM = 0;
     int CONTEXT_MENU_SHOP_MENU_ITEM = 1;

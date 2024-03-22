@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/printing/print_servers_policy_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/printing/print_servers_provider.h"
 #include "chrome/browser/ash/printing/print_servers_provider_factory.h"
 #include "chrome/browser/browser_process.h"
@@ -28,7 +28,12 @@ PrintServersPolicyProvider::PrintServersPolicyProvider(
   device_policy_provider_->AddObserver(this);
 }
 
-PrintServersPolicyProvider::~PrintServersPolicyProvider() = default;
+PrintServersPolicyProvider::~PrintServersPolicyProvider() {
+  if (device_policy_provider_)
+    device_policy_provider_->RemoveObserver(this);
+  if (user_policy_provider_)
+    user_policy_provider_->RemoveObserver(this);
+}
 
 // static
 std::unique_ptr<PrintServersPolicyProvider> PrintServersPolicyProvider::Create(
@@ -55,32 +60,37 @@ PrintServersPolicyProvider::CreateForTesting(
                                                       device_policy_provider);
 }
 
-void PrintServersPolicyProvider::SetListener(
-    const OnPrintServersChanged& callback) {
-  callback_ = std::make_unique<OnPrintServersChanged>(callback);
+void PrintServersPolicyProvider::SetListener(OnPrintServersChanged callback) {
+  callback_ = std::move(callback);
+  RecalculateServersAndNotifyListener();
 }
 
 void PrintServersPolicyProvider::OnServersChanged(
     bool unused_complete,
     const std::vector<PrintServer>& unused_servers) {
-  if (callback_) {
-    std::map<GURL, PrintServer> all_servers;
-    auto device_servers = device_policy_provider_->GetPrintServers();
-    if (device_servers.has_value()) {
-      for (const auto& server : device_servers.value()) {
-        all_servers.emplace(server.GetUrl(), server);
-      }
-    }
-    auto user_servers = user_policy_provider_->GetPrintServers();
-    if (user_servers.has_value()) {
-      for (const auto& server : user_servers.value()) {
-        all_servers.emplace(server.GetUrl(), server);
-      }
-    }
-    bool is_complete = user_servers.has_value() || device_servers.has_value();
-    ServerPrintersFetchingMode fetching_mode = GetFetchingMode(all_servers);
-    callback_->Run(is_complete, all_servers, fetching_mode);
+  RecalculateServersAndNotifyListener();
+}
+
+void PrintServersPolicyProvider::RecalculateServersAndNotifyListener() {
+  if (!callback_) {
+    return;
   }
+  std::map<GURL, PrintServer> all_servers;
+  auto device_servers = device_policy_provider_->GetPrintServers();
+  if (device_servers.has_value()) {
+    for (const auto& server : device_servers.value()) {
+      all_servers.emplace(server.GetUrl(), server);
+    }
+  }
+  auto user_servers = user_policy_provider_->GetPrintServers();
+  if (user_servers.has_value()) {
+    for (const auto& server : user_servers.value()) {
+      all_servers.emplace(server.GetUrl(), server);
+    }
+  }
+  bool is_complete = user_servers.has_value() || device_servers.has_value();
+  ServerPrintersFetchingMode fetching_mode = GetFetchingMode(all_servers);
+  callback_.Run(is_complete, all_servers, fetching_mode);
 }
 
 ServerPrintersFetchingMode PrintServersPolicyProvider::GetFetchingMode(

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,9 +60,6 @@ SecurityContextInit::SecurityContextInit(ExecutionContext* context)
 void SecurityContextInit::ApplyDocumentPolicy(
     DocumentPolicy::ParsedDocumentPolicy& document_policy,
     const String& report_only_document_policy_header) {
-  if (!RuntimeEnabledFeatures::DocumentPolicyEnabled())
-    return;
-
   // Because Document-Policy http header is parsed in DocumentLoader,
   // when origin trial context is not initialized yet.
   // Needs to filter out features that are not in origin trial after
@@ -106,7 +103,9 @@ void SecurityContextInit::ApplyPermissionsPolicy(
     LocalFrame& frame,
     const ResourceResponse& response,
     const FramePolicy& frame_policy,
-    const absl::optional<ParsedPermissionsPolicy>& isolated_app_policy) {
+    const absl::optional<ParsedPermissionsPolicy>& isolated_app_policy,
+    const base::span<const mojom::blink::PermissionsPolicyFeature>
+        effective_enabled_permissions) {
   const url::Origin origin =
       execution_context_->GetSecurityOrigin()->ToUrlOrigin();
   // If we are a HTMLViewSourceDocument we use container, header or
@@ -121,7 +120,7 @@ void SecurityContextInit::ApplyPermissionsPolicy(
       response.HttpHeaderField(http_names::kPermissionsPolicy);
   const String& report_only_permissions_policy_header =
       response.HttpHeaderField(http_names::kPermissionsPolicyReportOnly);
-  if (!permissions_policy_header.IsEmpty())
+  if (!permissions_policy_header.empty())
     UseCounter::Count(execution_context_, WebFeature::kPermissionsPolicyHeader);
 
   PolicyParserMessageBuffer feature_policy_logger(
@@ -137,7 +136,7 @@ void SecurityContextInit::ApplyPermissionsPolicy(
   WTF::StringBuilder policy_builder;
   policy_builder.Append(response.HttpHeaderField(http_names::kFeaturePolicy));
   String feature_policy_header = policy_builder.ToString();
-  if (!feature_policy_header.IsEmpty())
+  if (!feature_policy_header.empty())
     UseCounter::Count(execution_context_, WebFeature::kFeaturePolicyHeader);
 
   permissions_policy_header_ = PermissionsPolicyParser::ParseHeader(
@@ -153,8 +152,7 @@ void SecurityContextInit::ApplyPermissionsPolicy(
           report_only_feature_policy_logger,
           report_only_permissions_policy_logger, execution_context_);
 
-  if (!response.HttpHeaderField(http_names::kFeaturePolicyReportOnly)
-           .IsEmpty()) {
+  if (!response.HttpHeaderField(http_names::kFeaturePolicyReportOnly).empty()) {
     UseCounter::Count(execution_context_,
                       WebFeature::kFeaturePolicyReportOnlyHeader);
   }
@@ -201,10 +199,14 @@ void SecurityContextInit::ApplyPermissionsPolicy(
         std::move(permissions_policy));
   } else {
     std::unique_ptr<PermissionsPolicy> permissions_policy;
-    if (frame.IsInFencedFrameTree()) {
-      // In Fenced Frames, all permission policy gated features must be disabled
-      // for privacy reasons.
-      permissions_policy = PermissionsPolicy::CreateForFencedFrame(origin);
+    if (frame.IsFencedFrameRoot()) {
+      // Fenced frames have a list of required permission policies to load and
+      // can't be granted extra policies, so use the required policies instead
+      // of inheriting from its parent. Note that the parent policies must allow
+      // the required policies, which is checked separately in
+      // NavigationRequest::CheckPermissionsPoliciesForFencedFrames.
+      permissions_policy = PermissionsPolicy::CreateForFencedFrame(
+          origin, effective_enabled_permissions);
     } else {
       auto* parent_permissions_policy = frame.Tree().Parent()
                                             ? frame.Tree()

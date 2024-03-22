@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,7 +85,8 @@ void NtpFeedContentFetcher::FetchFollowingFeedArticles(
   feedwire::Request request = CreateFeedQueryRefreshRequest(
       StreamType(StreamKind::kFollowing),
       feedwire::FeedQuery::INTERACTIVE_WEB_FEED, RequestMetadata(),
-      /*consistency_token=*/std::string());
+      /*consistency_token=*/std::string(), SingleWebFeedEntryPoint::kOther,
+      /*doc_view_counts=*/{});
 
   feedwire::ClientInfo* client_info =
       request.mutable_feed_request()->mutable_client_info();

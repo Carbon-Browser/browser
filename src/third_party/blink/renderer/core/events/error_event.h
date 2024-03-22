@@ -35,11 +35,11 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/world_safe_v8_reference.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
@@ -51,7 +51,9 @@ class CORE_EXPORT ErrorEvent final : public Event {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  static ErrorEvent* Create() { return MakeGarbageCollected<ErrorEvent>(); }
+  static ErrorEvent* Create(ScriptState* script_state) {
+    return MakeGarbageCollected<ErrorEvent>(script_state);
+  }
   static ErrorEvent* Create(const String& message,
                             std::unique_ptr<SourceLocation> location,
                             DOMWrapperWorld* world) {
@@ -76,7 +78,7 @@ class CORE_EXPORT ErrorEvent final : public Event {
   // Creates an error for a script whose errors are muted.
   static ErrorEvent* CreateSanitizedError(ScriptState* script_state);
 
-  ErrorEvent();
+  explicit ErrorEvent(ScriptState* script_state);
   ErrorEvent(const String& message,
              std::unique_ptr<SourceLocation>,
              ScriptValue error,
@@ -93,8 +95,8 @@ class CORE_EXPORT ErrorEvent final : public Event {
 
   // Not exposed to JavaScript, prefers |unsanitized_message_|.
   const String& MessageForConsole() const {
-    return !unsanitized_message_.IsEmpty() ? unsanitized_message_
-                                           : sanitized_message_;
+    return !unsanitized_message_.empty() ? unsanitized_message_
+                                         : sanitized_message_;
   }
   SourceLocation* Location() const { return location_.get(); }
 

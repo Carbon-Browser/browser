@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -137,8 +137,11 @@ public class StateListDrawableBuilder {
         for (int i = 0; i < transitionsSize; ++i) {
             Transition transition = mTransitions.get(i);
             Drawable drawable = AppCompatResources.getDrawable(mContext, transition.getDrawable());
-            result.addTransition(transition.getFromId(), transition.getToId(),
-                    (Drawable & Animatable) (drawable), false);
+            result.addTransition(
+                    transition.getFromId(),
+                    transition.getToId(),
+                    (Drawable & Animatable) (drawable),
+                    false);
         }
         return result;
     }

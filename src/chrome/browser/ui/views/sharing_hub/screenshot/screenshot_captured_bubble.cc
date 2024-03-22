@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/strcat.h"
 #include "base/task/thread_pool.h"
@@ -52,40 +52,19 @@ namespace {
 constexpr int kImageWidthPx = 336;
 constexpr int kImageHeightPx = 252;
 
-static base::FilePath WriteTemporaryFile(
-    const std::vector<unsigned char>& image_bytes) {
-  base::FilePath file_path;
-  base::CreateTemporaryFile(&file_path);
-  if (!file_path.empty()) {
-    if (!base::WriteFile(file_path, base::make_span(image_bytes.data(),
-                                                    image_bytes.size()))) {
-      file_path.clear();
-    }
-  }
-  return file_path;
-}
-
 }  // namespace
 
 namespace sharing_hub {
-
-bool IsEditorInstalled() {
-  return base::FeatureList::IsEnabled(share::kSharingDesktopScreenshotsEdit) &&
-         image_editor::ImageEditorComponentInfo::GetInstance()
-             ->IsImageEditorAvailable();
-}
 
 ScreenshotCapturedBubble::ScreenshotCapturedBubble(
     views::View* anchor_view,
     content::WebContents* web_contents,
     const gfx::Image& image,
-    Profile* profile,
-    base::OnceCallback<void(NavigateParams*)> edit_callback)
+    Profile* profile)
     : LocationBarBubbleDelegateView(anchor_view, nullptr),
       image_(image),
       web_contents_(web_contents->GetWeakPtr()),
-      profile_(profile),
-      edit_callback_(std::move(edit_callback)) {
+      profile_(profile) {
   SetButtons(ui::DIALOG_BUTTON_NONE);
   SetTitle(IDS_BROWSER_SHARING_SCREENSHOT_POST_CAPTURE_TITLE);
 }
@@ -158,17 +137,9 @@ void ScreenshotCapturedBubble::Init() {
                                 .SetPreferredSize(
                                     GetImageSize() +
                                     gfx::Size(border_radius, border_radius))
-                                .SetImage(image_.ToImageSkia())
+                                .SetImage(ui::ImageModel::FromImage(image_))
                                 .SetVisible(true)
                                 .CopyAddressTo(&image_view_)));
-  auto edit_button =
-      views::Builder<views::MdTextButton>()
-          .SetCallback(
-              base::BindRepeating(&ScreenshotCapturedBubble::EditButtonPressed,
-                                  weak_factory_.GetWeakPtr()))
-          .SetText(l10n_util::GetStringUTF16(
-              IDS_BROWSER_SHARING_SCREENSHOT_DIALOG_EDIT_BUTTON_LABEL))
-          .Build();
 
   auto download_button =
       views::Builder<views::MdTextButton>()
@@ -181,30 +152,12 @@ void ScreenshotCapturedBubble::Init() {
           .Build();
 
   auto download_row = views::Builder<views::TableLayoutView>();
-  if (IsEditorInstalled()) {
-    const int kPaddingEditDownloadButtonPx =
-        kImageWidthPx - edit_button->CalculatePreferredSize().width() -
-        download_button->CalculatePreferredSize().width();
-
-    download_row
-        .AddColumn(views::LayoutAlignment::kStart,
-                   views::LayoutAlignment::kCenter, 1.0,
-                   views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
-        .AddPaddingColumn(views::TableLayout::kFixedSize,
-                          kPaddingEditDownloadButtonPx);
-  }
 
   // Column for download button
   download_row
       .AddColumn(views::LayoutAlignment::kEnd, views::LayoutAlignment::kCenter,
                  1.0, views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
       .AddRows(1, views::TableLayout::kFixedSize, 0);
-
-  if (IsEditorInstalled()) {
-    download_row.AddChild(
-        views::Builder<views::MdTextButton>(std::move(edit_button))
-            .CopyAddressTo(&edit_button_));
-  }
   download_row.AddChild(
       views::Builder<views::MdTextButton>(std::move(download_button))
           .CopyAddressTo(&download_button_));
@@ -231,7 +184,7 @@ void ScreenshotCapturedBubble::DownloadButtonPressed() {
   if (!web_contents_)
     return;
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_.get());
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_.get());
   content::DownloadManager* download_manager =
       browser->profile()->GetDownloadManager();
   // TODO(crbug.com/1186839): Update the annotation's |setting| and
@@ -242,7 +195,9 @@ void ScreenshotCapturedBubble::DownloadButtonPressed() {
         sender: "Desktop Screenshots"
         description:
           "The user may capture a selection of the current page. This bubble "
-          "view has a download button to save the generated image to disk. "
+          "view has a download button to save the generated image via a data "
+          "URL to the disk on the local client. The feature is only for Mac, "
+          "Windows and Linux OS."
         trigger: "User clicks 'download' in a bubble view launched from the "
           "omnibox after the 'Screenshot' option is selected in the sharing "
           "hub and a selection is made on the page. "
@@ -253,7 +208,8 @@ void ScreenshotCapturedBubble::DownloadButtonPressed() {
         cookies_allowed: NO
         setting:
           "No user-visible setting for this feature. Experiment and rollout to "
-          "be coordinated via Chrome Variations."
+          "be coordinated via Chrome Variations. This feature reads settings "
+          "from prefs::kDisableScreenshots which is controlled by this policy."
         policy_exception_justification:
           "Not implemented, considered not required."
       })");
@@ -267,40 +223,6 @@ void ScreenshotCapturedBubble::DownloadButtonPressed() {
   download_manager->DownloadUrl(std::move(params));
   base::RecordAction(base::UserMetricsAction(
       "SharingDesktopScreenshot.ScreenshotSavedViaBubble"));
-}
-
-void ScreenshotCapturedBubble::EditButtonPressed() {
-  base::RecordAction(
-      base::UserMetricsAction("SharingDesktopScreenshot.ScreenshotEdited"));
-  const gfx::ImageSkia& image_ref = image_view_->GetImage();
-  const gfx::ImageSkiaRep& image_rep = image_ref.GetRepresentation(1.0f);
-  const SkBitmap& captured_skbitmap = image_rep.GetBitmap();
-
-  std::vector<unsigned char> image_bytes;
-  gfx::PNGCodec::EncodeBGRASkBitmap(captured_skbitmap, false, &image_bytes);
-
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock()},
-      base::BindOnce(&WriteTemporaryFile, image_bytes),
-      base::BindOnce(&ScreenshotCapturedBubble::NavigateToImageEditor,
-                     weak_factory_.GetWeakPtr()));
-}
-
-void ScreenshotCapturedBubble::NavigateToImageEditor(
-    const base::FilePath& screenshot_file_path) {
-  auto screenshot_data =
-      std::make_unique<image_editor::ScreenshotCapturedData>();
-  screenshot_data->screenshot_filepath = screenshot_file_path;
-  profile_->SetUserData(image_editor::ScreenshotCapturedData::kDataKey,
-                        std::move(screenshot_data));
-
-  GURL url(chrome::kChromeUIImageEditorURL);
-  NavigateParams params(profile_, url, ui::PAGE_TRANSITION_LINK);
-  params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
-  params.window_action = NavigateParams::SHOW_WINDOW;
-  if (edit_callback_) {
-    std::move(edit_callback_).Run(&params);
-  }
 }
 
 // Calculates the size of the image with padding.

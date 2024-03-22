@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 #include <iomanip>
 #include <iostream>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/nearby_sharing/certificates/common.h"
 #include "chrome/browser/nearby_sharing/certificates/constants.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
 #include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
 #include "chrome/services/sharing/public/proto/wire_format.pb.h"
+#include "components/cross_device/logging/logging.h"
 
 namespace {
 
@@ -106,8 +106,8 @@ void PairedKeyVerificationRunner::Run(
 void PairedKeyVerificationRunner::OnReadPairedKeyEncryptionFrame(
     absl::optional<sharing::mojom::V1FramePtr> frame) {
   if (!frame) {
-    NS_LOG(WARNING) << __func__
-                    << ": Failed to read remote paired key encrpytion";
+    CD_LOG(WARNING, Feature::NS)
+        << __func__ << ": Failed to read remote paired key encrpytion";
     std::move(callback_).Run(PairedKeyVerificationResult::kFail);
     return;
   }
@@ -117,18 +117,19 @@ void PairedKeyVerificationRunner::OnReadPairedKeyEncryptionFrame(
   PairedKeyVerificationResult remote_public_certificate_result =
       VerifyRemotePublicCertificate(*frame);
   verification_results.push_back(remote_public_certificate_result);
-  NS_LOG(VERBOSE) << __func__
-                  << ": Remote public certificate verification result "
-                  << remote_public_certificate_result;
+  CD_LOG(VERBOSE, Feature::NS)
+      << __func__ << ": Remote public certificate verification result "
+      << remote_public_certificate_result;
 
   if (remote_public_certificate_result ==
       PairedKeyVerificationResult::kSuccess) {
     SendCertificateInfo();
   } else if (restrict_to_contacts_) {
-    NS_LOG(VERBOSE) << __func__
-                    << ": we are only allowing connections with contacts. "
-                       "Rejecting connection from unknown ShareTarget - "
-                    << share_target_.id;
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__
+        << ": we are only allowing connections with contacts. "
+           "Rejecting connection from unknown ShareTarget - "
+        << share_target_.id;
     std::move(callback_).Run(PairedKeyVerificationResult::kFail);
     return;
   }
@@ -136,8 +137,9 @@ void PairedKeyVerificationRunner::OnReadPairedKeyEncryptionFrame(
   PairedKeyVerificationResult local_result =
       VerifyPairedKeyEncryptionFrame(*frame);
   verification_results.push_back(local_result);
-  NS_LOG(VERBOSE) << __func__ << ": Paired key encryption verification result "
-                  << local_result;
+  CD_LOG(VERBOSE, Feature::NS)
+      << __func__ << ": Paired key encryption verification result "
+      << local_result;
 
   SendPairedKeyResultFrame(local_result);
 
@@ -153,7 +155,8 @@ void PairedKeyVerificationRunner::OnReadPairedKeyResultFrame(
     std::vector<PairedKeyVerificationResult> verification_results,
     absl::optional<sharing::mojom::V1FramePtr> frame) {
   if (!frame) {
-    NS_LOG(WARNING) << __func__ << ": Failed to read remote paired key result";
+    CD_LOG(WARNING, Feature::NS)
+        << __func__ << ": Failed to read remote paired key result";
     std::move(callback_).Run(PairedKeyVerificationResult::kFail);
     return;
   }
@@ -161,13 +164,13 @@ void PairedKeyVerificationRunner::OnReadPairedKeyResultFrame(
   PairedKeyVerificationResult key_result =
       Convert(frame.value()->get_paired_key_result()->status);
   verification_results.push_back(key_result);
-  NS_LOG(VERBOSE) << __func__ << ": Paired key result frame result "
-                  << key_result;
+  CD_LOG(VERBOSE, Feature::NS)
+      << __func__ << ": Paired key result frame result " << key_result;
 
   PairedKeyVerificationResult combined_result =
       MergeResults(verification_results);
-  NS_LOG(VERBOSE) << __func__ << ": Combined verification result "
-                  << combined_result;
+  CD_LOG(VERBOSE, Feature::NS)
+      << __func__ << ": Combined verification result " << combined_result;
   std::move(callback_).Run(combined_result);
 }
 
@@ -208,8 +211,9 @@ void PairedKeyVerificationRunner::SendCertificateInfo() {
   // TODO(https://crbug.com/1114765): Update once the bug is resolved.
   std::vector<nearbyshare::proto::PublicCertificate> certificates;
 
-  if (certificates.empty())
+  if (certificates.empty()) {
     return;
+  }
 
   sharing::nearby::Frame frame;
   frame.set_version(sharing::nearby::Frame::V1);
@@ -275,13 +279,13 @@ PairedKeyVerificationRunner::VerifyRemotePublicCertificate(
       certificate_manager_->HashAuthenticationTokenWithPrivateCertificate(
           visibility_, raw_token_);
   if (hash && *hash == frame->get_paired_key_encryption()->secret_id_hash) {
-    NS_LOG(VERBOSE) << __func__
-                    << ": Successfully verified remote public certificate.";
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__ << ": Successfully verified remote public certificate.";
     return PairedKeyVerificationResult::kSuccess;
   }
 
-  NS_LOG(VERBOSE) << __func__
-                  << ": Unable to verify remote public certificate.";
+  CD_LOG(VERBOSE, Feature::NS)
+      << __func__ << ": Unable to verify remote public certificate.";
   return PairedKeyVerificationResult::kUnable;
 }
 
@@ -289,29 +293,50 @@ PairedKeyVerificationRunner::PairedKeyVerificationResult
 PairedKeyVerificationRunner::VerifyPairedKeyEncryptionFrame(
     const sharing::mojom::V1FramePtr& frame) {
   if (!certificate_) {
-    NS_LOG(VERBOSE) << __func__
-                    << ": Unable to verify remote paired key encryption frame. "
-                       "Certificate not found.";
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__
+        << ": Unable to verify remote paired key encryption frame. "
+           "Certificate not found.";
     return PairedKeyVerificationResult::kUnable;
   }
 
   if (!certificate_->VerifySignature(
           PadPrefix(remote_prefix_, raw_token_),
           frame->get_paired_key_encryption()->signed_data)) {
-    NS_LOG(VERBOSE) << __func__
-                    << ": Unable to verify remote paired key encryption frame. "
-                       "Signature verification failed.";
-    return PairedKeyVerificationResult::kFail;
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__
+        << ": Unable to verify remote paired key encryption frame. "
+           "Signature verification failed.";
+
+    if (!frame->get_paired_key_encryption()->optional_signed_data) {
+      CD_LOG(VERBOSE, Feature::NS)
+          << __func__ << ": No fallback signature to verify.";
+      return PairedKeyVerificationResult::kFail;
+    }
+
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__
+        << ": Attempting to verify fallback signature for relaxed visibility.";
+    if (!certificate_->VerifySignature(
+            PadPrefix(remote_prefix_, raw_token_),
+            *frame->get_paired_key_encryption()->optional_signed_data)) {
+      CD_LOG(VERBOSE, Feature::NS)
+          << __func__
+          << ": Unable to verify remote paired key encryption frame. "
+             "Fallback signature verification failed.";
+      return PairedKeyVerificationResult::kFail;
+    }
   }
 
   if (!share_target_.is_known) {
-    NS_LOG(VERBOSE) << __func__
-                    << ": Unable to verify remote paired key encryption frame. "
-                       "Remote side is not a known share target.";
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__
+        << ": Unable to verify remote paired key encryption frame. "
+           "Remote side is not a known share target.";
     return PairedKeyVerificationResult::kUnable;
   }
 
-  NS_LOG(VERBOSE)
+  CD_LOG(VERBOSE, Feature::NS)
       << __func__
       << ": Successfully verified remote paired key encryption frame.";
   return PairedKeyVerificationResult::kSuccess;
@@ -322,11 +347,13 @@ PairedKeyVerificationRunner::MergeResults(
     const std::vector<PairedKeyVerificationResult>& results) {
   bool all_success = true;
   for (const auto& result : results) {
-    if (result == PairedKeyVerificationResult::kFail)
+    if (result == PairedKeyVerificationResult::kFail) {
       return result;
+    }
 
-    if (result != PairedKeyVerificationResult::kSuccess)
+    if (result != PairedKeyVerificationResult::kSuccess) {
       all_success = false;
+    }
   }
 
   return all_success ? PairedKeyVerificationResult::kSuccess

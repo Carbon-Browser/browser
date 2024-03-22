@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #import <Cocoa/Cocoa.h>
 #include <stddef.h>
 
+#include <algorithm>
 #include <utility>
 
-#include "base/cxx17_backports.h"
+#include "base/i18n/rtl.h"
 #include "base/mac/mac_util.h"
 #include "base/memory/singleton.h"
 #include "build/branding_buildflags.h"
@@ -59,6 +60,7 @@ const struct AcceleratorMapping {
 
     // Accelerators used in the Main Menu, but not the toolbar menu.
     {IDC_OPTIONS, ui::EF_COMMAND_DOWN, ui::VKEY_OEM_COMMA},
+    {IDC_WEB_APP_SETTINGS, ui::EF_COMMAND_DOWN, ui::VKEY_OEM_COMMA},
     {IDC_HIDE_APP, ui::EF_COMMAND_DOWN, ui::VKEY_H},
     {IDC_EXIT, ui::EF_COMMAND_DOWN, ui::VKEY_Q},
     {IDC_OPEN_FILE, ui::EF_COMMAND_DOWN, ui::VKEY_O},
@@ -115,7 +117,7 @@ ui::Accelerator enterFullscreenAccelerator() {
   int modifiers = ui::EF_COMMAND_DOWN | ui::EF_CONTROL_DOWN;
 
   // The default keyboard accelerator for Enter Full Screen changed in macOS 12.
-  if (base::mac::IsAtLeastOS12()) {
+  if (base::mac::MacOSMajorVersion() >= 12) {
     modifiers = ui::EF_FUNCTION_DOWN;
   }
 
@@ -143,6 +145,17 @@ AcceleratorsCocoa::AcceleratorsCocoa() {
                        ui::Accelerator(ui::VKEY_SPACE, ui::EF_CONTROL_DOWN)));
     DCHECK(result.second);
   }
+
+  if (!base::i18n::IsRTL())
+    return;
+
+  // If running in RTL, swap the keyboard shortcuts for History -> Forward
+  // and Back.
+  ui::Accelerator history_forward = accelerators_[IDC_FORWARD];
+  ui::Accelerator history_back = accelerators_[IDC_BACK];
+
+  accelerators_[IDC_FORWARD] = history_back;
+  accelerators_[IDC_BACK] = history_forward;
 }
 
 AcceleratorsCocoa::~AcceleratorsCocoa() {}

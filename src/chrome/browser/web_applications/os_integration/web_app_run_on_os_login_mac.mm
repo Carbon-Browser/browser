@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,7 @@
 #import "chrome/browser/web_applications/os_integration/web_app_shortcut_mac.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 
-namespace web_app {
-
-namespace internals {
+namespace web_app::internals {
 
 bool RegisterRunOnOsLogin(const ShortcutInfo& shortcut_info) {
   base::FilePath shortcut_data_dir = GetShortcutDataDir(shortcut_info);
@@ -28,6 +26,4 @@ Result UnregisterRunOnOsLogin(const std::string& app_id,
   return Result::kOk;
 }
 
-}  // namespace internals
-
-}  // namespace web_app
+}  // namespace web_app::internals

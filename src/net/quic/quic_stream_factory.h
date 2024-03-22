@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,13 +18,16 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "net/base/address_list.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/host_port_pair.h"
+#include "net/base/ip_endpoint.h"
 #include "net/base/net_export.h"
 #include "net/base/network_change_notifier.h"
+#include "net/base/network_handle.h"
 #include "net/base/proxy_server.h"
 #include "net/cert/cert_database.h"
 #include "net/dns/public/secure_dns_policy.h"
@@ -40,7 +43,9 @@
 #include "net/quic/quic_session_key.h"
 #include "net/socket/client_socket_pool.h"
 #include "net/ssl/ssl_config_service.h"
+#include "net/third_party/quiche/src/quiche/quic/core/deterministic_connection_id_generator.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_config.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_connection_id.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_crypto_stream.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_server_id.h"
@@ -53,8 +58,11 @@ class Value;
 namespace quic {
 class QuicAlarmFactory;
 class QuicClock;
-class QuicRandom;
 }  // namespace quic
+
+namespace quiche {
+class QuicRandom;
+}  // namespace quiche
 
 namespace net {
 
@@ -62,9 +70,10 @@ class CTPolicyEnforcer;
 class CertVerifier;
 class ClientSocketFactory;
 class HostResolver;
+struct HostResolverEndpointResult;
 class HttpServerProperties;
 class NetLog;
-class NetworkIsolationKey;
+class NetworkAnonymizationKey;
 class QuicChromiumConnectionHelper;
 class QuicCryptoClientStreamFactory;
 class QuicServerInfo;
@@ -84,8 +93,8 @@ class QuicStreamFactoryPeer;
 //
 // TODO(mmenke): Should figure out a reasonable value of this, using field
 // trials. The optimal value may increase over time, as QUIC becomes more
-// prevalent. Whether or not NetworkIsolationKeys end up including subframe URLs
-// will also influence the ideal value.
+// prevalent. Whether or not NetworkAnonymizationKeys end up including subframe
+// URLs will also influence the ideal value.
 const int kMaxRecentCryptoConfigs = 100;
 
 enum QuicPlatformNotification {
@@ -100,7 +109,17 @@ enum QuicPlatformNotification {
 enum AllActiveSessionsGoingAwayReason {
   kClockSkewDetected,
   kIPAddressChanged,
-  kCertDBChanged
+  kCertDBChanged,
+  kCertVerifierChanged
+};
+
+enum CreateSessionFailure {
+  CREATION_ERROR_CONNECTING_SOCKET,
+  CREATION_ERROR_SETTING_RECEIVE_BUFFER,
+  CREATION_ERROR_SETTING_SEND_BUFFER,
+  CREATION_ERROR_SETTING_DO_NOT_FRAGMENT,
+  CREATION_ERROR_SETTING_RECEIVE_ECN,
+  CREATION_ERROR_MAX
 };
 
 // Encapsulates a pending request for a QuicChromiumClientSession.
@@ -128,7 +147,7 @@ class NET_EXPORT_PRIVATE QuicStreamRequest {
               PrivacyMode privacy_mode,
               RequestPriority priority,
               const SocketTag& socket_tag,
-              const NetworkIsolationKey& network_isolation_key,
+              const NetworkAnonymizationKey& network_anonymization_key,
               SecureDnsPolicy secure_dns_policy,
               bool use_dns_aliases,
               bool require_dns_https_alpn,
@@ -155,6 +174,22 @@ class NET_EXPORT_PRIVATE QuicStreamRequest {
   // Will be called by the associated QuicStreamFactory::Job when host
   // resolution completes asynchronously after Request().
   void OnHostResolutionComplete(int rv);
+
+  // This function must be called after Request() returns ERR_IO_PENDING.
+  // Returns true if no QUIC session has been created yet. If true is returned,
+  // `callback` will be run when the QUIC session has been created and will be
+  // called with the result of OnCreateSessionComplete. For example, if session
+  // creation returned OK but CryptoConnect returns ERR_IO_PENDING then
+  // `callback` will be run with ERR_IO_PENDING.
+  bool WaitForQuicSessionCreation(CompletionOnceCallback callback);
+
+  // Tells QuicStreamRequest it should expect OnQuicSessionCreationComplete()
+  // to be called in the future.
+  void ExpectQuicSessionCreation();
+
+  // Will be called by the associated QuicStreamFactory::Job when session
+  // creation completes asynchronously after Request().
+  void OnQuicSessionCreationComplete(int rv);
 
   void OnRequestComplete(int rv);
 
@@ -183,13 +218,14 @@ class NET_EXPORT_PRIVATE QuicStreamRequest {
 
   const NetLogWithSource& net_log() const { return net_log_; }
 
-  bool CanUseExistingSession(const GURL& url,
-                             PrivacyMode privacy_mode,
-                             const SocketTag& socket_tag,
-                             const NetworkIsolationKey& network_isolation_key,
-                             SecureDnsPolicy secure_dns_policy,
-                             bool require_dns_https_alpn,
-                             const url::SchemeHostPort& destination) const;
+  bool CanUseExistingSession(
+      const GURL& url,
+      PrivacyMode privacy_mode,
+      const SocketTag& socket_tag,
+      const NetworkAnonymizationKey& network_anonymization_key,
+      SecureDnsPolicy secure_dns_policy,
+      bool require_dns_https_alpn,
+      const url::SchemeHostPort& destination) const;
 
  private:
   raw_ptr<QuicStreamFactory> factory_;
@@ -203,15 +239,20 @@ class NET_EXPORT_PRIVATE QuicStreamRequest {
   // Set in Request(). If true, then OnHostResolutionComplete() is expected to
   // be called in the future.
   bool expect_on_host_resolution_ = false;
+
+  bool expect_on_quic_session_creation_ = false;
   // Callback passed to WaitForHostResolution().
   CompletionOnceCallback host_resolution_callback_;
+
+  CompletionOnceCallback create_session_callback_;
 };
 
 // A factory for fetching QuicChromiumClientSessions.
 class NET_EXPORT_PRIVATE QuicStreamFactory
     : public NetworkChangeNotifier::IPAddressObserver,
       public NetworkChangeNotifier::NetworkObserver,
-      public CertDatabase::Observer {
+      public CertDatabase::Observer,
+      public CertVerifier::Observer {
  public:
   // This class encompasses |destination| and |server_id|.
   // |destination| is a HostPortPair which is resolved
@@ -313,20 +354,48 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   void ClearCachedStatesInCryptoConfig(
       const base::RepeatingCallback<bool(const GURL&)>& origin_filter);
 
+  // Helper method that connects a DatagramClientSocket. Socket is
+  // bound to the default network if the |network| param is
+  // handles::kInvalidNetworkHandle. This method calls
+  // DatagramClientSocket::ConnectAsync and completes asynchronously. Returns
+  // ERR_IO_PENDING.
+  int ConnectAndConfigureSocket(CompletionOnceCallback callback,
+                                DatagramClientSocket* socket,
+                                IPEndPoint addr,
+                                handles::NetworkHandle network,
+                                const SocketTag& socket_tag);
+
+  // Helper method that configures a DatagramClientSocket once
+  // DatagramClientSocket::ConnectAsync completes. Posts a task to run
+  // `callback` with a net_error code.
+  virtual void FinishConnectAndConfigureSocket(CompletionOnceCallback callback,
+                                               DatagramClientSocket* socket,
+                                               const SocketTag& socket_tag,
+                                               int rv);
+
+  void OnFinishConnectAndConfigureSocketError(CompletionOnceCallback callback,
+                                              enum CreateSessionFailure error,
+                                              int rv);
+
+  void DoCallback(CompletionOnceCallback callback, int rv);
+
   // Helper method that configures a DatagramClientSocket. Socket is
   // bound to the default network if the |network| param is
-  // NetworkChangeNotifier::kInvalidNetworkHandle.
-  // Returns net_error code.
+  // handles::kInvalidNetworkHandle. This method calls
+  // DatagramClientSocket::Connect and completes synchronously. Returns
+  // net_error code.
+  // TODO(liza): Remove this once QuicStreamFactory::Job calls
+  // ConnectAndConfigureSocket.
   int ConfigureSocket(DatagramClientSocket* socket,
                       IPEndPoint addr,
-                      NetworkChangeNotifier::NetworkHandle network,
+                      handles::NetworkHandle network,
                       const SocketTag& socket_tag);
 
   // Finds an alternative to |old_network| from the platform's list of connected
-  // networks. Returns NetworkChangeNotifier::kInvalidNetworkHandle if no
+  // networks. Returns handles::kInvalidNetworkHandle if no
   // alternative is found.
-  NetworkChangeNotifier::NetworkHandle FindAlternateNetwork(
-      NetworkChangeNotifier::NetworkHandle old_network);
+  handles::NetworkHandle FindAlternateNetwork(
+      handles::NetworkHandle old_network);
 
   // Creates a datagram socket. |source| is the NetLogSource for the entity
   // trying to create the socket, if it has one.
@@ -341,19 +410,19 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   void OnIPAddressChanged() override;
 
   // NetworkChangeNotifier::NetworkObserver methods:
-  void OnNetworkConnected(
-      NetworkChangeNotifier::NetworkHandle network) override;
-  void OnNetworkDisconnected(
-      NetworkChangeNotifier::NetworkHandle network) override;
-  void OnNetworkSoonToDisconnect(
-      NetworkChangeNotifier::NetworkHandle network) override;
-  void OnNetworkMadeDefault(
-      NetworkChangeNotifier::NetworkHandle network) override;
+  void OnNetworkConnected(handles::NetworkHandle network) override;
+  void OnNetworkDisconnected(handles::NetworkHandle network) override;
+  void OnNetworkSoonToDisconnect(handles::NetworkHandle network) override;
+  void OnNetworkMadeDefault(handles::NetworkHandle network) override;
 
   // CertDatabase::Observer methods:
 
   // We close all sessions when certificate database is changed.
-  void OnCertDBChanged() override;
+  void OnTrustStoreChanged() override;
+
+  // CertVerifier::Observer:
+  // We close all sessions when certificate verifier settings have changed.
+  void OnCertVerifierChanged() override;
 
   bool is_quic_known_to_work_on_current_network() const {
     return is_quic_known_to_work_on_current_network_;
@@ -376,13 +445,7 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
 
   quic::QuicAlarmFactory* alarm_factory() { return alarm_factory_.get(); }
 
-  void set_server_push_delegate(ServerPushDelegate* push_delegate) {
-    push_delegate_ = push_delegate;
-  }
-
-  NetworkChangeNotifier::NetworkHandle default_network() const {
-    return default_network_;
-  }
+  handles::NetworkHandle default_network() const { return default_network_; }
 
   // Returns the stored DNS aliases for the session key.
   const std::set<std::string>& GetDnsAliasesForSessionKey(
@@ -392,6 +455,7 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   class Job;
   class QuicCryptoClientConfigOwner;
   class CryptoClientConfigHandle;
+  friend class MockQuicStreamFactory;
   friend class test::QuicStreamFactoryPeer;
 
   using SessionMap = std::map<QuicSessionKey, QuicChromiumClientSession*>;
@@ -406,25 +470,61 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   using DnsAliasesBySessionKeyMap =
       std::map<QuicSessionKey, std::set<std::string>>;
   using QuicCryptoClientConfigMap =
-      std::map<NetworkIsolationKey,
+      std::map<NetworkAnonymizationKey,
                std::unique_ptr<QuicCryptoClientConfigOwner>>;
 
   bool HasMatchingIpSession(const QuicSessionAliasKey& key,
-                            const AddressList& address_list,
+                            const std::vector<IPEndPoint>& ip_endpoints,
+                            const std::set<std::string>& aliases,
                             bool use_dns_aliases);
   void OnJobComplete(Job* job, int rv);
   bool HasActiveSession(const QuicSessionKey& session_key) const;
   bool HasActiveJob(const QuicSessionKey& session_key) const;
-  int CreateSession(const QuicSessionAliasKey& key,
-                    quic::ParsedQuicVersion quic_version,
-                    int cert_verify_flags,
-                    bool require_confirmation,
-                    const AddressList& address_list,
-                    base::TimeTicks dns_resolution_start_time,
-                    base::TimeTicks dns_resolution_end_time,
-                    const NetLogWithSource& net_log,
-                    QuicChromiumClientSession** session,
-                    NetworkChangeNotifier::NetworkHandle* network);
+  int CreateSessionSync(const QuicSessionAliasKey& key,
+                        quic::ParsedQuicVersion quic_version,
+                        int cert_verify_flags,
+                        bool require_confirmation,
+                        const HostResolverEndpointResult& endpoint_result,
+                        base::TimeTicks dns_resolution_start_time,
+                        base::TimeTicks dns_resolution_end_time,
+                        const NetLogWithSource& net_log,
+                        QuicChromiumClientSession** session,
+                        handles::NetworkHandle* network);
+  int CreateSessionAsync(CompletionOnceCallback callback,
+                         const QuicSessionAliasKey& key,
+                         quic::ParsedQuicVersion quic_version,
+                         int cert_verify_flags,
+                         bool require_confirmation,
+                         const HostResolverEndpointResult& endpoint_result,
+                         base::TimeTicks dns_resolution_start_time,
+                         base::TimeTicks dns_resolution_end_time,
+                         const NetLogWithSource& net_log,
+                         QuicChromiumClientSession** session,
+                         handles::NetworkHandle* network);
+  void FinishCreateSession(CompletionOnceCallback callback,
+                           const QuicSessionAliasKey& key,
+                           quic::ParsedQuicVersion quic_version,
+                           int cert_verify_flags,
+                           bool require_confirmation,
+                           const HostResolverEndpointResult& endpoint_result,
+                           base::TimeTicks dns_resolution_start_time,
+                           base::TimeTicks dns_resolution_end_time,
+                           const NetLogWithSource& net_log,
+                           QuicChromiumClientSession** session,
+                           handles::NetworkHandle* network,
+                           std::unique_ptr<DatagramClientSocket> socket,
+                           int rv);
+  bool CreateSessionHelper(const QuicSessionAliasKey& key,
+                           quic::ParsedQuicVersion quic_version,
+                           int cert_verify_flags,
+                           bool require_confirmation,
+                           const HostResolverEndpointResult& endpoint_result,
+                           base::TimeTicks dns_resolution_start_time,
+                           base::TimeTicks dns_resolution_end_time,
+                           const NetLogWithSource& net_log,
+                           QuicChromiumClientSession** session,
+                           handles::NetworkHandle* network,
+                           std::unique_ptr<DatagramClientSocket> socket);
   void ActivateSession(const QuicSessionAliasKey& key,
                        QuicChromiumClientSession* session,
                        std::set<std::string> dns_aliases);
@@ -434,7 +534,7 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
 
   void ConfigureInitialRttEstimate(
       const quic::QuicServerId& server_id,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       quic::QuicConfig* config);
 
   // Returns |srtt| in micro seconds from ServerNetworkStats. Returns 0 if there
@@ -442,14 +542,14 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   // have ServerNetworkStats for the given |server_id|.
   int64_t GetServerNetworkStatsSmoothedRttInMicroseconds(
       const quic::QuicServerId& server_id,
-      const NetworkIsolationKey& network_isolation_key) const;
+      const NetworkAnonymizationKey& network_anonymization_key) const;
 
   // Returns |srtt| from ServerNetworkStats. Returns null if there
   // is no |http_server_properties_| or if |http_server_properties_| doesn't
   // have ServerNetworkStats for the given |server_id|.
   const base::TimeDelta* GetServerNetworkStatsSmoothedRtt(
       const quic::QuicServerId& server_id,
-      const NetworkIsolationKey& network_isolation_key) const;
+      const NetworkAnonymizationKey& network_anonymization_key) const;
 
   // Helper methods.
   bool WasQuicRecentlyBroken(const QuicSessionKey& session_key) const;
@@ -486,13 +586,14 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   // `session` from `session_aliases_`.
   void UnmapSessionFromSessionAliases(QuicChromiumClientSession* session);
 
-  // Creates a CreateCryptoConfigHandle for the specified NetworkIsolationKey.
-  // If there's already a corresponding entry in |active_crypto_config_map_|,
-  // reuses it. If there's a corresponding entry in |recent_crypto_config_map_|,
-  // promotes it to |active_crypto_config_map_| and then reuses it. Otherwise,
-  // creates a new entry in |active_crypto_config_map_|.
+  // Creates a CreateCryptoConfigHandle for the specified
+  // NetworkAnonymizationKey. If there's already a corresponding entry in
+  // |active_crypto_config_map_|, reuses it. If there's a corresponding entry in
+  // |recent_crypto_config_map_|, promotes it to |active_crypto_config_map_| and
+  // then reuses it. Otherwise, creates a new entry in
+  // |active_crypto_config_map_|.
   std::unique_ptr<CryptoClientConfigHandle> CreateCryptoConfigHandle(
-      const NetworkIsolationKey& network_isolation_key);
+      const NetworkAnonymizationKey& network_anonymization_key);
 
   // Salled when the indicated member of |active_crypto_config_map_| has no
   // outstanding references. The QuicCryptoClientConfigOwner is then moved to
@@ -506,14 +607,14 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   // metrics from |connectivity_monitor_| and add to histograms.
   void CollectDataOnPlatformNotification(
       enum QuicPlatformNotification notification,
-      NetworkChangeNotifier::NetworkHandle affected_network) const;
+      handles::NetworkHandle affected_network) const;
 
   std::unique_ptr<QuicCryptoClientConfigHandle> GetCryptoConfigForTesting(
-      const NetworkIsolationKey& network_isolation_key);
+      const NetworkAnonymizationKey& network_anonymization_key);
 
   bool CryptoConfigCacheIsEmptyForTesting(
       const quic::QuicServerId& server_id,
-      const NetworkIsolationKey& network_isolation_key);
+      const NetworkAnonymizationKey& network_anonymization_key);
 
   const quic::ParsedQuicVersionVector& supported_versions() const {
     return params_.supported_versions;
@@ -525,11 +626,10 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   // the broken alternative service map in HttpServerProperties.
   bool is_quic_known_to_work_on_current_network_ = false;
 
-  raw_ptr<NetLog> net_log_;
+  NetLogWithSource net_log_;
   raw_ptr<HostResolver> host_resolver_;
   raw_ptr<ClientSocketFactory> client_socket_factory_;
   raw_ptr<HttpServerProperties> http_server_properties_;
-  raw_ptr<ServerPushDelegate> push_delegate_ = nullptr;
   const raw_ptr<CertVerifier> cert_verifier_;
   const raw_ptr<CTPolicyEnforcer> ct_policy_enforcer_;
   const raw_ptr<TransportSecurityState> transport_security_state_;
@@ -575,9 +675,9 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   // |recent_crypto_config_map_|. If reused before it is evicted from LRUCache,
   // it will be removed from the cache and return to the active config map.
   // These two maps should never both have entries with the same
-  // NetworkIsolationKey.
+  // NetworkAnonymizationKey.
   QuicCryptoClientConfigMap active_crypto_config_map_;
-  base::LRUCache<NetworkIsolationKey,
+  base::LRUCache<NetworkAnonymizationKey,
                  std::unique_ptr<QuicCryptoClientConfigOwner>>
       recent_crypto_config_map_;
 
@@ -601,7 +701,7 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
   // If |migrate_sessions_early_v2_| is true, tracks the current default
   // network, and is updated OnNetworkMadeDefault.
   // Otherwise, always set to NetworkChangeNotifier::kInvalidNetwork.
-  NetworkChangeNotifier::NetworkHandle default_network_;
+  handles::NetworkHandle default_network_;
 
   // Local address of socket that was created in CreateSession.
   IPEndPoint local_address_;
@@ -612,25 +712,26 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
 
   NetworkConnection network_connection_;
 
-  int num_push_streams_created_ = 0;
-
   QuicConnectivityMonitor connectivity_monitor_;
 
-  raw_ptr<const base::TickClock> tick_clock_ = nullptr;
+  raw_ptr<const base::TickClock, DanglingUntriaged> tick_clock_ = nullptr;
 
-  raw_ptr<base::SequencedTaskRunner> task_runner_ = nullptr;
+  raw_ptr<base::SequencedTaskRunner, DanglingUntriaged> task_runner_ = nullptr;
 
   const raw_ptr<SSLConfigService> ssl_config_service_;
 
-  // Whether NetworkIsolationKeys should be used for
+  // Whether NetworkAnonymizationKeys should be used for
   // |active_crypto_config_map_|. If false, there will just be one config with
-  // an empty NetworkIsolationKey. Whether QuicSessionAliasKeys all have an
+  // an empty NetworkAnonymizationKey. Whether QuicSessionAliasKeys all have an
   // empty NIK is based on whether socket pools are respecting NIKs, but whether
   // those NIKs are also used when accessing |active_crypto_config_map_| is also
   // gated this, which is set based on whether HttpServerProperties is
   // respecting NIKs, as that data is fed into the crypto config map using the
   // corresponding NIK.
-  const bool use_network_isolation_key_for_crypto_configs_;
+  const bool use_network_anonymization_key_for_crypto_configs_;
+
+  quic::DeterministicConnectionIdGenerator connection_id_generator_{
+      quic::kQuicDefaultConnectionIdLength};
 
   base::WeakPtrFactory<QuicStreamFactory> weak_factory_{this};
 };

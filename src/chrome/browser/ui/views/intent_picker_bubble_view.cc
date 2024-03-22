@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,23 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/apps/intent_helper/intent_picker_constants.h"
-#include "chrome/browser/apps/intent_helper/intent_picker_features.h"
-#include "chrome/browser/apps/intent_helper/intent_picker_helpers.h"
+#include "chrome/browser/apps/link_capturing/link_capturing_features.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/sharing/click_to_call/click_to_call_ui_controller.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
@@ -41,12 +39,13 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
 #include "ui/color/color_id.h"
+#include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/text_constants.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/button.h"
@@ -60,6 +59,7 @@
 #include "ui/views/layout/table_layout.h"
 #include "ui/views/layout/table_layout_view.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/view_class_properties.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -81,6 +81,8 @@ constexpr int kGridItemInset = 2;
 constexpr int kGridItemInteriorPadding = 8;
 constexpr int kGridItemBorderRadius = 4;
 constexpr int kGridItemGroupId = 1;
+
+bool g_auto_accept_intent_picker_bubble_for_testing = false;
 
 bool IsKeyboardCodeArrow(ui::KeyboardCode key_code) {
   return key_code == ui::VKEY_UP || key_code == ui::VKEY_DOWN ||
@@ -206,7 +208,10 @@ class IntentPickerAppGridButton : public views::Button {
   }
 
   void OnPressed(const ui::Event& event) {
-    selected_callback_.Run(IsDoubleClick(event));
+    bool should_open = IsDoubleClick(event) ||
+                       (event.IsKeyEvent() &&
+                        event.AsKeyEvent()->key_code() == ui::VKEY_RETURN);
+    selected_callback_.Run(should_open);
   }
 
   bool selected_ = false;
@@ -341,8 +346,9 @@ class IntentPickerLabelButton : public views::LabelButton {
         provider->GetDistanceMetric(DISTANCE_CONTENT_LIST_VERTICAL_MULTI),
         provider->GetInsetsMetric(views::INSETS_DIALOG).left())));
     views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-    views::InkDrop::Get(this)->SetBaseColorCallback(
-        base::BindRepeating(&HoverButton::GetInkDropColor, this));
+    views::InkDrop::Get(this)->SetBaseColorId(
+        views::TypographyProvider::Get().GetColorId(
+            views::style::CONTEXT_BUTTON, views::style::STYLE_SECONDARY));
   }
   IntentPickerLabelButton(const IntentPickerLabelButton&) = delete;
   IntentPickerLabelButton& operator=(const IntentPickerLabelButton&) = delete;
@@ -389,11 +395,9 @@ class IntentPickerAppListView
     DCHECK(!contents()->children().empty());
     const int row_height =
         contents()->children().front()->GetPreferredSize().height();
-    // TODO(djacobo): Replace this limit to correctly reflect the UI mocks,
-    // which now instead of limiting the results to 3.5 will allow whatever fits
-    // in 256pt. Using |kMaxAppResults| as a measure of how many apps we want to
-    // show.
-    ClipHeightTo(row_height, (apps::kMaxAppResults + 0.5) * row_height);
+    // Use |kMaxAppResults| as a measure of how many apps we want to show.
+    constexpr int kMaxAppResults = 3;
+    ClipHeightTo(row_height, (kMaxAppResults + 0.5) * row_height);
   }
 
   ~IntentPickerAppListView() override = default;
@@ -428,8 +432,7 @@ class IntentPickerAppListView
         delta = base::i18n::IsRTL() ? -1 : 1;
         break;
       default:
-        NOTREACHED();
-        break;
+        NOTREACHED_NORETURN();
     }
 
     SetSelectedAppIndex(CalculateNextAppIndex(delta), nullptr);
@@ -521,10 +524,20 @@ views::Widget* IntentPickerBubbleView::ShowBubble(
   }
 
   DCHECK(intent_picker_bubble_->HasCandidates());
-  widget->Show();
+  intent_picker_bubble_->ShowForReason(DisplayReason::USER_GESTURE);
 
   intent_picker_bubble_->SelectDefaultItem();
+  if (g_auto_accept_intent_picker_bubble_for_testing) {
+    intent_picker_bubble_->AcceptDialog();
+  }
   return widget;
+}
+
+// static
+base::AutoReset<bool>
+IntentPickerBubbleView::SetAutoAcceptIntentPickerBubbleForTesting() {
+  return base::AutoReset<bool>(&g_auto_accept_intent_picker_bubble_for_testing,
+                               true);
 }
 
 // static
@@ -610,7 +623,7 @@ IntentPickerBubbleView::IntentPickerBubbleView(
     : LocationBarBubbleDelegateView(anchor_view, web_contents),
       intent_picker_cb_(std::move(intent_picker_cb)),
       app_info_(std::move(app_info)),
-      use_grid_view_(apps::features::LinkCapturingUiUpdateEnabled() &&
+      use_grid_view_(apps::features::ShouldShowLinkCapturingUX() &&
                      bubble_type == BubbleType::kLinkCapturing),
       show_stay_in_chrome_(show_stay_in_chrome && !use_grid_view_),
       show_remember_selection_(show_remember_selection),
@@ -775,13 +788,7 @@ void IntentPickerBubbleView::UpdateCheckboxState(size_t index) {
   if (!remember_selection_checkbox_)
     return;
   auto selected_app_type = app_info_[index].type;
-  bool should_enable = true;
-  if (selected_app_type == apps::PickerEntryType::kDevice) {
-    // TODO(crbug.com/1000037): Allow persisting remote devices.
-    should_enable = false;
-  } else if (selected_app_type == apps::PickerEntryType::kWeb) {
-    should_enable = apps::IntentPickerPwaPersistenceEnabled();
-  }
+  bool should_enable = selected_app_type != apps::PickerEntryType::kDevice;
 
   // Reset the checkbox state to the default unchecked if becomes disabled.
   if (!should_enable)

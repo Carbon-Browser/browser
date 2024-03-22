@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ Profile* GetProfileForSystemExtensions(Profile* profile) {
   if (profile->IsSystemProfile())
     return nullptr;
 
-  if (!ash::ProfileHelper::IsRegularProfile(profile))
+  if (!ash::ProfileHelper::IsUserProfile(profile))
     return nullptr;
 
   if (!ash::ProfileHelper::IsPrimaryProfile(profile))

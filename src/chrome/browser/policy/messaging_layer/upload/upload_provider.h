@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,9 @@
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/policy/messaging_layer/upload/upload_client.h"
 #include "components/reporting/proto/synced/record.pb.h"
-#include "components/reporting/resources/resource_interface.h"
-#include "components/reporting/storage/storage_module_interface.h"
+#include "components/reporting/resources/resource_manager.h"
 
 namespace reporting {
 

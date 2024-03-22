@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,18 +53,10 @@ class COMPONENTS_PREFS_EXPORT PrefRegistrySimple : public PrefRegistry {
                         uint32_t flags = NO_REGISTRATION_FLAGS);
 
   void RegisterListPref(const std::string& path,
-                        base::Value default_value,
-                        uint32_t flags = NO_REGISTRATION_FLAGS);
-
-  void RegisterListPref(const std::string& path,
                         base::Value::List default_value,
                         uint32_t flags = NO_REGISTRATION_FLAGS);
 
   void RegisterDictionaryPref(const std::string& path,
-                              uint32_t flags = NO_REGISTRATION_FLAGS);
-
-  void RegisterDictionaryPref(const std::string& path,
-                              base::Value default_value,
                               uint32_t flags = NO_REGISTRATION_FLAGS);
 
   void RegisterDictionaryPref(const std::string& path,

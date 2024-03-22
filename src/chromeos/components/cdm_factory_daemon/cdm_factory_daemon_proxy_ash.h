@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,6 +65,8 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) CdmFactoryDaemonProxyAsh
   void GetAndroidHwKeyData(const std::vector<uint8_t>& key_id,
                            const std::vector<uint8_t>& hw_identifier,
                            GetAndroidHwKeyDataCallback callback) override;
+  void AllocateSecureBuffer(uint32_t size,
+                            AllocateSecureBufferCallback callback) override;
 
  private:
   void EstablishDaemonConnection(base::OnceClosure callback);
@@ -74,6 +76,8 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) CdmFactoryDaemonProxyAsh
   void ProxyGetAndroidHwKeyData(const std::vector<uint8_t>& key_id,
                                 const std::vector<uint8_t>& hw_identifier,
                                 GetAndroidHwKeyDataCallback callback);
+  void ProxyAllocateSecureBuffer(uint32_t size,
+                                 AllocateSecureBufferCallback callback);
   void SendDBusRequest(base::ScopedFD fd, base::OnceClosure callback);
   void OnBootstrapMojoConnection(base::OnceClosure callback, bool result);
   void CompleteOemCryptoConnection(

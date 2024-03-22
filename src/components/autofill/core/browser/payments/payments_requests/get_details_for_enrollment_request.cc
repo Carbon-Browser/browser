@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,21 +18,21 @@ const char kGetDetailsForEnrollmentRequestPath[] =
 // The billable service number for the request if the enrollment happens after
 // a local card upload.
 const int kUpstreamEnrollBillableServiceNumber =
-    kUploadCardBillableServiceNumber;
+    kUploadPaymentMethodBillableServiceNumber;
 
 // The billable service number for the request if the enrollment happens after a
 // server card retrieval or in the settings page.
 const int kDownstreamEnrollBillableServiceNumber =
-    kUnmaskCardBillableServiceNumber;
+    kUnmaskPaymentMethodBillableServiceNumber;
 
 }  // namespace
 
 GetDetailsForEnrollmentRequest::GetDetailsForEnrollmentRequest(
-    const PaymentsClient::GetDetailsForEnrollmentRequestDetails&
+    const PaymentsNetworkInterface::GetDetailsForEnrollmentRequestDetails&
         request_details,
-    base::OnceCallback<
-        void(AutofillClient::PaymentsRpcResult,
-             const PaymentsClient::GetDetailsForEnrollmentResponseDetails&)>
+    base::OnceCallback<void(AutofillClient::PaymentsRpcResult,
+                            const PaymentsNetworkInterface::
+                                GetDetailsForEnrollmentResponseDetails&)>
         callback)
     : request_details_(request_details), callback_(std::move(callback)) {}
 
@@ -47,10 +47,10 @@ std::string GetDetailsForEnrollmentRequest::GetRequestContentType() {
 }
 
 std::string GetDetailsForEnrollmentRequest::GetRequestContent() {
-  base::Value request_dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict request_dict;
 
-  base::Value context(base::Value::Type::DICTIONARY);
-  context.SetKey("language_code", base::Value(request_details_.app_locale));
+  base::Value::Dict context;
+  context.Set("language_code", request_details_.app_locale);
   int billable_service_number = 0;
   switch (request_details_.source) {
     case VirtualCardEnrollmentSource::kUpstream:
@@ -64,30 +64,29 @@ std::string GetDetailsForEnrollmentRequest::GetRequestContent() {
       NOTREACHED();
       break;
   }
-  context.SetKey("billable_service", base::Value(billable_service_number));
+  context.Set("billable_service", billable_service_number);
   if (request_details_.billing_customer_number != 0) {
-    context.SetKey("customer_context",
-                   BuildCustomerContextDictionary(
-                       request_details_.billing_customer_number));
+    context.Set("customer_context",
+                BuildCustomerContextDictionary(
+                    request_details_.billing_customer_number));
   }
-  request_dict.SetKey("context", std::move(context));
+  request_dict.Set("context", std::move(context));
 
-  request_dict.SetKey(
-      "instrument_id",
-      base::Value(base::NumberToString(request_details_.instrument_id)));
+  request_dict.Set("instrument_id",
+                   base::NumberToString(request_details_.instrument_id));
 
   if (!request_details_.risk_data.empty()) {
-    request_dict.SetKey("risk_data_encoded",
-                        BuildRiskDictionary(request_details_.risk_data));
+    request_dict.Set("risk_data_encoded",
+                     BuildRiskDictionary(request_details_.risk_data));
   }
 
   switch (request_details_.source) {
     case VirtualCardEnrollmentSource::kUpstream:
-      request_dict.SetKey("channel_type", base::Value("CHROME_UPSTREAM"));
+      request_dict.Set("channel_type", "CHROME_UPSTREAM");
       break;
     case VirtualCardEnrollmentSource::kDownstream:
     case VirtualCardEnrollmentSource::kSettingsPage:
-      request_dict.SetKey("channel_type", base::Value("CHROME_DOWNSTREAM"));
+      request_dict.Set("channel_type", "CHROME_DOWNSTREAM");
       break;
     case VirtualCardEnrollmentSource::kNone:
       NOTREACHED();
@@ -101,24 +100,24 @@ std::string GetDetailsForEnrollmentRequest::GetRequestContent() {
 }
 
 void GetDetailsForEnrollmentRequest::ParseResponse(
-    const base::Value& response) {
-  const base::Value* google_legal_message = response.FindKeyOfType(
-      "google_legal_message", base::Value::Type::DICTIONARY);
+    const base::Value::Dict& response) {
+  const base::Value::Dict* google_legal_message =
+      response.FindDict("google_legal_message");
   if (google_legal_message) {
     LegalMessageLine::Parse(*google_legal_message,
                             &response_details_.google_legal_message,
                             /*escape_apostrophes=*/true);
   }
 
-  const base::Value* external_legal_message = response.FindKeyOfType(
-      "external_legal_message", base::Value::Type::DICTIONARY);
+  const base::Value::Dict* external_legal_message =
+      response.FindDict("external_legal_message");
   if (external_legal_message) {
     LegalMessageLine::Parse(*external_legal_message,
                             &response_details_.issuer_legal_message,
                             /*escape_apostrophes=*/true);
   }
 
-  const auto* context_token = response.FindStringKey("context_token");
+  const auto* context_token = response.FindString("context_token");
   response_details_.vcn_context_token =
       context_token ? *context_token : std::string();
 }

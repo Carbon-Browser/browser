@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ui/ash/assistant/device_actions.h"
 #include "chromeos/ash/components/assistant/buildflags.h"
@@ -26,7 +27,7 @@ class Profile;
 
 // Class to handle all Assistant in-browser-process functionalities.
 class AssistantBrowserDelegateImpl
-    : public chromeos::assistant::AssistantBrowserDelegate,
+    : public ash::assistant::AssistantBrowserDelegate,
       public signin::IdentityManager::Observer,
       public session_manager::SessionManagerObserver,
       public ash::AssistantStateObserver {
@@ -42,7 +43,7 @@ class AssistantBrowserDelegateImpl
 
   // chromeos::assistant::AssisantClient overrides:
   void OnAssistantStatusChanged(
-      chromeos::assistant::AssistantStatus new_status) override;
+      ash::assistant::AssistantStatus new_status) override;
   void RequestAssistantVolumeControl(
       mojo::PendingReceiver<ash::mojom::AssistantVolumeControl> receiver)
       override;
@@ -54,9 +55,8 @@ class AssistantBrowserDelegateImpl
       mojo::PendingReceiver<media::mojom::AudioStreamFactory> receiver)
       override;
   void RequestAudioDecoderFactory(
-      mojo::PendingReceiver<
-          chromeos::assistant::mojom::AssistantAudioDecoderFactory> receiver)
-      override;
+      mojo::PendingReceiver<ash::assistant::mojom::AssistantAudioDecoderFactory>
+          receiver) override;
   void RequestAudioFocusManager(
       mojo::PendingReceiver<media_session::mojom::AudioFocusManager> receiver)
       override;
@@ -69,7 +69,7 @@ class AssistantBrowserDelegateImpl
   void OpenUrl(GURL url) override;
 #if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
   void RequestLibassistantService(
-      mojo::PendingReceiver<chromeos::libassistant::mojom::LibassistantService>
+      mojo::PendingReceiver<ash::libassistant::mojom::LibassistantService>
           receiver) override;
 #endif  // BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
 
@@ -88,13 +88,13 @@ class AssistantBrowserDelegateImpl
 
   // ash::AssistantStateObserver:
   void OnAssistantFeatureAllowedChanged(
-      chromeos::assistant::AssistantAllowedState allowed_state) override;
+      ash::assistant::AssistantAllowedState allowed_state) override;
 
   // Called when the application is terminating
   void OnAppTerminating();
 
   std::unique_ptr<DeviceActions> device_actions_;
-  std::unique_ptr<chromeos::assistant::Service> service_;
+  std::unique_ptr<ash::assistant::Service> service_;
   std::unique_ptr<AssistantSetup> assistant_setup_;
 
   bool initialized_ = false;
@@ -102,8 +102,8 @@ class AssistantBrowserDelegateImpl
   base::CallbackListSubscription subscription_;
 
   // Non-owning pointers.
-  Profile* profile_ = nullptr;
-  signin::IdentityManager* identity_manager_ = nullptr;
+  raw_ptr<Profile, ExperimentalAsh> profile_ = nullptr;
+  raw_ptr<signin::IdentityManager, ExperimentalAsh> identity_manager_ = nullptr;
 
   base::ScopedObservation<ash::AssistantStateBase, ash::AssistantStateObserver>
       assistant_state_observation_{this};

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@
 #include "ui/gfx/x/connection.h"
 #include "ui/gfx/x/future.h"
 #include "ui/gfx/x/shape.h"
+#include "ui/gfx/x/window_event_manager.h"
 #include "ui/gfx/x/xproto.h"
 
 namespace x11 {
@@ -29,7 +30,6 @@ Window GetWindowAtPoint(const gfx::Point& point_px,
                         const base::flat_set<Window>* ignore = nullptr);
 
 class Connection;
-class XScopedEventSelector;
 
 class ScopedShapeEventSelector {
  public:
@@ -69,7 +69,7 @@ class COMPONENT_EXPORT(X11) WindowCache : public EventObserver {
     absl::optional<std::vector<Rectangle>> bounding_rects_px;
     absl::optional<std::vector<Rectangle>> input_rects_px;
 
-    std::unique_ptr<XScopedEventSelector> events;
+    ScopedEventSelector events;
     std::unique_ptr<ScopedShapeEventSelector> shape_events;
   };
 
@@ -154,7 +154,7 @@ class COMPONENT_EXPORT(X11) WindowCache : public EventObserver {
   const raw_ptr<Connection> connection_;
   const Window root_;
   const Atom gtk_frame_extents_;
-  std::unique_ptr<XScopedEventSelector> root_events_;
+  ScopedEventSelector root_events_;
 
   std::unordered_map<Window, WindowInfo> windows_;
 

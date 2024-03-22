@@ -25,6 +25,10 @@ namespace adblock {
 
 const char kSiteKeyHeaderKey[] = "x-adblock-key";
 
+const char kAllowlistEverythingFilter[] = "@@*$document";
+
+const char kAdblockFilteringConfigurationName[] = "adblock";
+
 const char kBlankHtml[] =
     "data:text/html,<!DOCTYPE html><html><head></head><body></body></html>";
 
@@ -109,27 +113,9 @@ const std::string& CurrentSchemaVersion() {
   return kCurrentSchemaVersion;
 }
 
-const GURL& AcceptableAdsUrl() {
-  static GURL kAcceptableAds(
-      "https://easylist-downloads.adblockplus.org/exceptionrules.txt");
-  return kAcceptableAds;
-}
-
-const GURL& AntiCVUrl() {
-  static GURL kAntiCV(
-      "https://easylist-downloads.adblockplus.org/abp-filters-anti-cv.txt");
-  return kAntiCV;
-}
-
-const GURL& DefaultSubscriptionUrl() {
-  static GURL kEasylistUrl(
-      "https://easylist-downloads.adblockplus.org/easylist.txt");
-  return kEasylistUrl;
-}
-
 const GURL& TestPagesSubscriptionUrl() {
   static GURL kTestPagesUrl(
-      "https://testpages.adblockplus.org/en/abp-testcase-subscription.txt");
+      "https://abptestpages.org/en/abp-testcase-subscription.txt");
   return kTestPagesUrl;
 }
 
@@ -138,7 +124,7 @@ const GURL& CustomFiltersUrl() {
   return kCustomFiltersUrl;
 }
 
-base::StringPiece RewriteUrl(flat::AbpResource type) {
+std::string_view RewriteUrl(flat::AbpResource type) {
   switch (type) {
     case flat::AbpResource_BlankText:
       return "data:text/plain,";
@@ -163,6 +149,26 @@ base::StringPiece RewriteUrl(flat::AbpResource type) {
     default:
       return {};
   }
+}
+
+bool g_eyeo_disable_filtering_by_default = EYEO_DISABLE_FILTERING_BY_DEFAULT;
+
+bool IsEyeoFilteringDisabledByDefault() {
+  return g_eyeo_disable_filtering_by_default;
+}
+
+base::AutoReset<bool> OverrideEyeoFilteringDisabledByDefault(bool val) {
+  return base::AutoReset<bool>(&g_eyeo_disable_filtering_by_default, val);
+}
+
+bool g_eyeo_disable_aa_by_default = EYEO_DISABLE_AA_BY_DEFAULT;
+
+bool IsAcceptableAdsDisabledByDefault() {
+  return g_eyeo_disable_aa_by_default;
+}
+
+base::AutoReset<bool> OverrideAcceptableAdsDisabledByDefault(bool val) {
+  return base::AutoReset<bool>(&g_eyeo_disable_aa_by_default, val);
 }
 
 }  // namespace adblock

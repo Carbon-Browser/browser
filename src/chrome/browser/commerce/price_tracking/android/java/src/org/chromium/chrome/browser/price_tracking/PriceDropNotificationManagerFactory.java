@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,12 @@ import org.chromium.base.ContextUtils;
 import org.chromium.components.browser_ui.notifications.NotificationManagerProxy;
 import org.chromium.components.browser_ui.notifications.NotificationManagerProxyImpl;
 
-/**
- * A factory class to create a {@link PriceDropNotificationManager}.
- */
+/** A factory class to create a {@link PriceDropNotificationManager}. */
 public class PriceDropNotificationManagerFactory {
     /** Builds a {@link PriceDropNotificationManager} instance. */
     public static PriceDropNotificationManager create() {
-        return new PriceDropNotificationManagerImpl(ContextUtils.getApplicationContext(),
+        return new PriceDropNotificationManagerImpl(
+                ContextUtils.getApplicationContext(),
                 new NotificationManagerProxyImpl(ContextUtils.getApplicationContext()));
     }
 

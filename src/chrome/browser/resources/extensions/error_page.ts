@@ -1,24 +1,23 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_icons.css.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
 import './code_section.js';
 import './shared_style.css.js';
 
-import {CrContainerShadowMixin} from 'chrome://resources/cr_elements/cr_container_shadow_mixin.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {FocusOutlineManager} from 'chrome://resources/js/cr/ui/focus_outline_manager.m.js';
-import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {afterNextRender, DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './error_page.html.js';
@@ -75,9 +74,7 @@ export interface ExtensionsErrorPageElement {
   };
 }
 
-const ExtensionsErrorPageElementBase = CrContainerShadowMixin(PolymerElement);
-
-export class ExtensionsErrorPageElement extends ExtensionsErrorPageElementBase {
+export class ExtensionsErrorPageElement extends PolymerElement {
   static get is() {
     return 'extensions-error-page';
   }
@@ -168,11 +165,11 @@ export class ExtensionsErrorPageElement extends ExtensionsErrorPageElementBase {
     }
   }
 
-  private onCloseButtonTap_() {
+  private onCloseButtonClick_() {
     navigation.navigateTo({page: Page.LIST});
   }
 
-  private onClearAllTap_() {
+  private onClearAllClick_() {
     const ids = this.entries_.map(entry => entry.id);
     this.delegate.deleteErrors(this.data.id, ids);
   }
@@ -198,7 +195,7 @@ export class ExtensionsErrorPageElement extends ExtensionsErrorPageElementBase {
     if (!this.inDevMode) {
       // Wait until next render cycle in case error page is loading.
       setTimeout(() => {
-        this.onCloseButtonTap_();
+        this.onCloseButtonClick_();
       }, 0);
     }
   }
@@ -228,8 +225,15 @@ export class ExtensionsErrorPageElement extends ExtensionsErrorPageElementBase {
         break;
       case chrome.developerPrivate.ErrorType.RUNTIME:
         const runtimeError = error as RuntimeError;
-        // slice(1) because pathname starts with a /.
-        args.pathSuffix = new URL(runtimeError.source).pathname.slice(1);
+        try {
+          // slice(1) because pathname starts with a /.
+          args.pathSuffix = new URL(runtimeError.source).pathname.slice(1);
+        } catch (e) {
+          // Swallow the invalid URL error and return early. This prevents the
+          // uncaught error from causing a runtime error as seen in
+          // crbug.com/1257170.
+          return;
+        }
         args.lineNumber =
             runtimeError.stackTrace && runtimeError.stackTrace[0] ?
             runtimeError.stackTrace[0].lineNumber :
@@ -300,7 +304,7 @@ export class ExtensionsErrorPageElement extends ExtensionsErrorPageElementBase {
         .then(code => this.code_ = code);
   }
 
-  private onStackFrameTap_(
+  private onStackFrameClick_(
       e: DomRepeatEvent<chrome.developerPrivate.StackFrame>) {
     const frame = e.model.item;
     this.updateSelected_(frame);

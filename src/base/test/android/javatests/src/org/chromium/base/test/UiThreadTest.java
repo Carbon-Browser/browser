@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
 /**
  * Annotation that runs a test method on the UI thread.
  *
- * This is used in place of android.support.test.annotation.UiThreadTest, as ActivityTestRule will
+ * This is used in place of androidx.test.annotation.UiThreadTest, as ActivityTestRule will
  * run on the UI thread if that annotation is present, possibly causing other Rules to unexpectedly
  * run on the UI thread as well.
  *

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -191,16 +191,16 @@ const char* ServiceWorkerLoaderHelpers::FetchResponseSourceToSuffix(
   // Don't change these returned strings. They are used for recording UMAs.
   switch (source) {
     case network::mojom::FetchResponseSource::kUnspecified:
-      return ".Unspecified";
+      return "Unspecified";
     case network::mojom::FetchResponseSource::kNetwork:
-      return ".Network";
+      return "Network";
     case network::mojom::FetchResponseSource::kHttpCache:
-      return ".HttpCache";
+      return "HttpCache";
     case network::mojom::FetchResponseSource::kCacheStorage:
-      return ".CacheStorage";
+      return "CacheStorage";
   }
   NOTREACHED();
-  return ".Unknown";
+  return "Unknown";
 }
 
 }  // namespace blink

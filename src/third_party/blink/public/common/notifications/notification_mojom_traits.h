@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,7 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::NotificationDataDataView,
   }
 
   static double timestamp(const blink::PlatformNotificationData& data) {
-    return data.timestamp.ToJsTime();
+    return data.timestamp.InMillisecondsFSinceUnixEpoch();
   }
 
   static bool renotify(const blink::PlatformNotificationData& data) {
@@ -98,6 +98,11 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::NotificationDataDataView,
   static absl::optional<base::Time> show_trigger_timestamp(
       const blink::PlatformNotificationData& data) {
     return data.show_trigger_timestamp;
+  }
+
+  static blink::mojom::NotificationScenario scenario(
+      const blink::PlatformNotificationData& data) {
+    return data.scenario;
   }
 
   static bool Read(blink::mojom::NotificationDataDataView notification_data,

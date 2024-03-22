@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/devtools/worker_devtools_agent_host.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/browser/devtools/devtools_session.h"
 #include "content/browser/devtools/protocol/io_handler.h"
 #include "content/browser/devtools/protocol/network_handler.h"
@@ -15,7 +15,7 @@
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/browser/worker_host/dedicated_worker_host.h"
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 
 namespace content {
 
@@ -73,6 +73,7 @@ void WorkerDevToolsAgentHost::SetRenderer(
   GetRendererChannel()->SetRenderer(std::move(agent_remote),
                                     std::move(host_receiver), process_id,
                                     std::move(connection_error));
+  ProcessHostChanged();
 }
 
 void WorkerDevToolsAgentHost::ChildWorkerCreated(
@@ -87,7 +88,7 @@ void WorkerDevToolsAgentHost::ChildWorkerCreated(
 }
 
 void WorkerDevToolsAgentHost::Disconnected() {
-  ForceDetachAllSessions();
+  auto retain_this = ForceDetachAllSessionsImpl();
   GetRendererChannel()->SetRenderer(mojo::NullRemote(), mojo::NullReceiver(),
                                     ChildProcessHost::kInvalidUniqueID);
   std::move(destroyed_callback_).Run(this);
@@ -134,10 +135,11 @@ bool WorkerDevToolsAgentHost::AttachSession(DevToolsSession* session,
   session->CreateAndAddHandler<protocol::IOHandler>(GetIOContext());
   session->CreateAndAddHandler<protocol::TargetHandler>(
       protocol::TargetHandler::AccessMode::kAutoAttachOnly, GetId(),
-      auto_attacher_.get(), session->GetRootSession());
+      auto_attacher_.get(), session);
   session->CreateAndAddHandler<protocol::NetworkHandler>(
       GetId(), devtools_worker_token_, GetIOContext(), base::DoNothing(),
-      session->GetClient()->MayReadLocalFiles());
+      session->GetClient()->MayReadLocalFiles(),
+      session->GetClient()->IsTrusted());
   return true;
 }
 

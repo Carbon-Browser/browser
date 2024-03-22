@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,16 +19,16 @@
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "ipc/ipc.mojom.h"
 #include "ipc/ipc_channel.h"
 #include "ipc/ipc_channel_factory.h"
 #include "ipc/ipc_message_pipe_reader.h"
 #include "ipc/ipc_mojo_bootstrap.h"
-#include "mojo/public/cpp/system/core.h"
 
 namespace IPC {
+
+class UrgentMessageObserver;
 
 // Mojo-based IPC::Channel implementation over a Mojo message pipe.
 //
@@ -50,8 +50,7 @@ class COMPONENT_EXPORT(IPC) ChannelMojo
       Mode mode,
       Listener* listener,
       const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
-      const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner,
-      const scoped_refptr<mojo::internal::MessageQuotaChecker>& quota_checker);
+      const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner);
 
   // Create a factory object for ChannelMojo.
   // The factory is used to create Mojo-based ChannelProxy family.
@@ -79,15 +78,16 @@ class COMPONENT_EXPORT(IPC) ChannelMojo
   void Close() override;
   bool Send(Message* message) override;
   Channel::AssociatedInterfaceSupport* GetAssociatedInterfaceSupport() override;
+  void SetUrgentMessageObserver(UrgentMessageObserver* observer) override;
 
   // These access protected API of IPC::Message, which has ChannelMojo
   // as a friend class.
   static MojoResult WriteToMessageAttachmentSet(
-      absl::optional<std::vector<mojo::native::SerializedHandlePtr>> handles,
+      std::optional<std::vector<mojo::native::SerializedHandlePtr>> handles,
       Message* message);
   static MojoResult ReadFromMessageAttachmentSet(
       Message* message,
-      absl::optional<std::vector<mojo::native::SerializedHandlePtr>>* handles);
+      std::optional<std::vector<mojo::native::SerializedHandlePtr>>* handles);
 
   // MessagePipeReader::Delegate
   void OnPeerPidReceived(int32_t peer_pid) override;
@@ -103,8 +103,7 @@ class COMPONENT_EXPORT(IPC) ChannelMojo
       Mode mode,
       Listener* listener,
       const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
-      const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner,
-      const scoped_refptr<mojo::internal::MessageQuotaChecker>& quota_checker);
+      const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner);
 
   void ForwardMessage(mojo::Message message);
 
@@ -126,7 +125,7 @@ class COMPONENT_EXPORT(IPC) ChannelMojo
 
   const mojo::MessagePipeHandle pipe_;
   std::unique_ptr<MojoBootstrap> bootstrap_;
-  raw_ptr<Listener> listener_;
+  raw_ptr<Listener, DanglingUntriaged> listener_;
 
   std::unique_ptr<internal::MessagePipeReader> message_reader_;
 

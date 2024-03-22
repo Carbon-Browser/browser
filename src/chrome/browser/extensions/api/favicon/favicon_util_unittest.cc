@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/favicon/favicon_util.h"
 
+#include "base/strings/string_piece.h"
 #include "components/favicon_base/favicon_url_parser.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -11,9 +12,9 @@
 namespace extensions {
 
 TEST(FaviconUtilUnittest, Parse) {
-  struct {
+  const struct {
     bool parse_should_succeed;
-    const std::string& url;
+    base::StringPiece url;
   } test_cases[] = {
       {false, "chrome-extension://id"},
       {false, "chrome-extension://id/"},

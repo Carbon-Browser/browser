@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,11 +31,11 @@ class PredictorsHandler : public content::WebUIMessageHandler {
 
  private:
   // Synchronously fetches the database from AutocompleteActionPredictor and
-  // calls into JS with the resulting DictionaryValue.
+  // calls into JS with the resulting `base::Value::Dict`.
   void RequestAutocompleteActionPredictorDb(const base::Value::List& args);
 
   // Fetches stats for the ResourcePrefetchPredictor and returns it as a
-  // DictionaryValue to the JS.
+  // `base::Value::Dict` to the JS.
   void RequestResourcePrefetchPredictorDb(const base::Value::List& args);
 
   // Helpers for RequestResourcePrefetchPredictorDb.

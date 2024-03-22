@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,7 @@ class MockSurface : public ServerObject {
                void(int32_t x, int32_t y, int32_t width, int32_t height));
   MOCK_METHOD0(Commit, void());
   MOCK_METHOD1(SetBufferScale, void(int32_t scale));
+  MOCK_METHOD1(SetBufferTransform, void(int32_t transform));
   MOCK_METHOD4(DamageBuffer,
                void(int32_t x, int32_t y, int32_t width, int32_t height));
 
@@ -95,6 +96,9 @@ class MockSurface : public ServerObject {
     DCHECK(!linux_buffer_releases_.contains(buffer));
     linux_buffer_releases_.emplace(buffer, linux_buffer_release);
   }
+  bool has_linux_buffer_release() const {
+    return !linux_buffer_releases_.empty();
+  }
   void ClearBufferReleases();
 
   wl_resource* attached_buffer() const { return attached_buffer_; }
@@ -115,20 +119,23 @@ class MockSurface : public ServerObject {
   void set_buffer_scale(int32_t buffer_scale) { buffer_scale_ = buffer_scale; }
 
  private:
-  raw_ptr<MockXdgSurface> xdg_surface_ = nullptr;
-  raw_ptr<TestSubSurface> sub_surface_ = nullptr;
-  raw_ptr<TestViewport> viewport_ = nullptr;
-  raw_ptr<TestAlphaBlending> blending_ = nullptr;
-  raw_ptr<TestOverlayPrioritizedSurface> prioritized_surface_ = nullptr;
-  raw_ptr<TestAugmentedSurface> augmented_surface_ = nullptr;
+  raw_ptr<MockXdgSurface, AcrossTasksDanglingUntriaged> xdg_surface_ = nullptr;
+  raw_ptr<TestSubSurface, AcrossTasksDanglingUntriaged> sub_surface_ = nullptr;
+  raw_ptr<TestViewport, AcrossTasksDanglingUntriaged> viewport_ = nullptr;
+  raw_ptr<TestAlphaBlending, AcrossTasksDanglingUntriaged> blending_ = nullptr;
+  raw_ptr<TestOverlayPrioritizedSurface, AcrossTasksDanglingUntriaged>
+      prioritized_surface_ = nullptr;
+  raw_ptr<TestAugmentedSurface, AcrossTasksDanglingUntriaged>
+      augmented_surface_ = nullptr;
   gfx::Rect opaque_region_ = {-1, -1, 0, 0};
   gfx::Rect input_region_ = {-1, -1, 0, 0};
 
-  raw_ptr<wl_resource> frame_callback_ = nullptr;
+  raw_ptr<wl_resource, AcrossTasksDanglingUntriaged> frame_callback_ = nullptr;
   base::flat_map<wl_resource*, wl_resource*> linux_buffer_releases_;
 
-  raw_ptr<wl_resource> attached_buffer_ = nullptr;
-  raw_ptr<wl_resource> prev_attached_buffer_ = nullptr;
+  raw_ptr<wl_resource, AcrossTasksDanglingUntriaged> attached_buffer_ = nullptr;
+  raw_ptr<wl_resource, AcrossTasksDanglingUntriaged> prev_attached_buffer_ =
+      nullptr;
 
   int32_t buffer_scale_ = -1;
 };

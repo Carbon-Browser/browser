@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,6 @@ RenderViewHostDelegateView* RenderViewHostDelegate::GetDelegateView() {
 }
 
 bool RenderViewHostDelegate::IsNeverComposited() {
-  return false;
-}
-
-bool RenderViewHostDelegate::IsJavaScriptDialogShowing() const {
-  return false;
-}
-
-bool RenderViewHostDelegate::ShouldIgnoreUnresponsiveRenderer() {
   return false;
 }
 

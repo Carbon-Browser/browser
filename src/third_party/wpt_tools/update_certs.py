@@ -1,5 +1,5 @@
-#!/usr/bin/env vpython
-# Copyright 2018 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -18,14 +18,14 @@ _DOMAIN = '127.0.0.1'
 def main():
     cert_dir = os.path.join(_THIS_DIR, 'certs')
 
-    print '===> Removing old files...'
+    print('===> Removing old files...')
     old_files = filter(lambda filename: '.sxg.' not in filename,
                        os.listdir(cert_dir))
     old_files = [os.path.join(cert_dir, fn) for fn in old_files]
     if subprocess.call(['git', 'rm'] + old_files) != 0:
         sys.exit(1)
 
-    print '\n===> Regenerating keys and certificates...'
+    print('\n===> Regenerating keys and certificates...')
     env = OpenSSLEnvironment(logging.getLogger(__name__),
                              base_path=cert_dir,
                              force_regenerate=True,
@@ -42,30 +42,32 @@ def main():
         if subprocess.call('git add -v ' + os.path.join(cert_dir, '*'), shell=True) != 0:
             sys.exit(1)
 
-        print '\n===> Updating wpt.config.json and base.py...'
+        print('\n===> Updating config.json and base.py...')
         key_basename = os.path.basename(key_path)
         pem_basename = os.path.basename(pem_path)
-        config_path = os.path.join(_THIS_DIR, 'wpt.config.json')
-        if subprocess.call(['sed', '-i', '', '-E',
+        config_path = os.path.join(_THIS_DIR, os.pardir, 'blink', 'web_tests',
+                                   'external', 'wpt', 'config.json')
+        if subprocess.call(['sed', '-i', '-E',
                             's%/[^/]+[.]key%/{key}%g;s%/[^/]+[.]pem%/{pem}%g'.format(
                                 key=key_basename, pem=pem_basename),
                             config_path]) != 0:
             sys.exit(1)
-        base_py_path = os.path.join(_THIS_DIR, '..', '..',
-                                    'web_tests', 'port', 'base.py')
+        base_py_path = os.path.join(_THIS_DIR, os.pardir, 'blink', 'tools',
+                                    'blinkpy', 'web_tests', 'port', 'base.py')
         proc = subprocess.Popen('openssl x509 -noout -pubkey -in ' + pem_path +
                                 ' | openssl pkey -pubin -outform der'
                                 ' | openssl dgst -sha256 -binary'
                                 ' | base64', shell=True, stdout=subprocess.PIPE)
         base64, _ = proc.communicate()
-        if subprocess.call(['sed', '-i', '', '-E',
+        assert base64.isascii()
+        if subprocess.call(['sed', '-i', '-E',
                             's%WPT_FINGERPRINT = \'.*\'%WPT_FINGERPRINT = \'' +
-                            base64.strip() + '\'%', base_py_path]) != 0:
+                            base64.decode().strip() + '\'%', base_py_path]) != 0:
             sys.exit(1)
         if subprocess.call(['git', 'add', '-v', config_path, base_py_path]) != 0:
             sys.exit(1)
 
-        print '\n===> Certificate validity:'
+        print('\n===> Certificate validity:')
         subprocess.call(['grep', 'Not After', pem_path])
 
 

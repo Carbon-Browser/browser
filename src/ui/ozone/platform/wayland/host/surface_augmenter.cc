@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,11 @@ namespace ui {
 
 namespace {
 constexpr uint32_t kMinVersion = 1;
-constexpr uint32_t kMaxVersion = 3;
+constexpr uint32_t kMaxVersion = 10;
+
+// The minimum version for `augmented_surface_set_rounded_corners_clip_bounds`
+// with a local coordinates bounds.
+constexpr uint32_t kRoundedClipBoundsInLocalSurfaceCoordinatesSinceVersion = 9;
 }
 
 // static
@@ -27,7 +31,8 @@ void SurfaceAugmenter::Instantiate(WaylandConnection* connection,
                                    uint32_t name,
                                    const std::string& interface,
                                    uint32_t version) {
-  DCHECK_EQ(interface, kInterfaceName);
+  CHECK_EQ(interface, kInterfaceName) << "Expected \"" << kInterfaceName
+                                      << "\" but got \"" << interface << "\"";
 
   if (connection->surface_augmenter_ ||
       !wl::CanBind(interface, version, kMinVersion, kMaxVersion)) {
@@ -55,6 +60,26 @@ bool SurfaceAugmenter::SupportsSubpixelAccuratePosition() const {
          SURFACE_AUGMENTER_GET_AUGMENTED_SUBSURFACE_SINCE_VERSION;
 }
 
+bool SurfaceAugmenter::SupportsClipRect() const {
+  return GetSurfaceAugmentorVersion() >=
+         AUGMENTED_SUB_SURFACE_SET_CLIP_RECT_SINCE_VERSION;
+}
+
+bool SurfaceAugmenter::SupportsClipRectOnAugmentedSurface() const {
+  return GetSurfaceAugmentorVersion() >=
+         AUGMENTED_SURFACE_SET_CLIP_RECT_SINCE_VERSION;
+}
+
+bool SurfaceAugmenter::SupportsTransform() const {
+  return GetSurfaceAugmentorVersion() >=
+         AUGMENTED_SUB_SURFACE_SET_TRANSFORM_SINCE_VERSION;
+}
+
+bool SurfaceAugmenter::NeedsRoundedClipBoundsInLocalSurfaceCoordinates() const {
+  return GetSurfaceAugmentorVersion() >=
+         kRoundedClipBoundsInLocalSurfaceCoordinatesSinceVersion;
+}
+
 uint32_t SurfaceAugmenter::GetSurfaceAugmentorVersion() const {
   return surface_augmenter_get_version(augmenter_.get());
 }
@@ -75,7 +100,7 @@ wl::Object<augmented_sub_surface> SurfaceAugmenter::CreateAugmentedSubSurface(
 }
 
 wl::Object<wl_buffer> SurfaceAugmenter::CreateSolidColorBuffer(
-    SkColor color,
+    const SkColor4f& color,
     const gfx::Size& size) {
   wl_array color_data;
   wl_array_init(&color_data);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,23 +17,15 @@ DialogModelMenuModelAdapter::~DialogModelMenuModelAdapter() = default;
 void DialogModelMenuModelAdapter::Close() {
   // TODO(pbos): Implement, or document why menus can't be closed through this
   // interface.
-  NOTREACHED();
+  NOTREACHED_NORETURN();
 }
 
 void DialogModelMenuModelAdapter::OnFieldAdded(DialogModelField* field) {
-  NOTREACHED();
+  NOTREACHED_NORETURN();
 }
 
-bool DialogModelMenuModelAdapter::HasIcons() const {
-  const auto& fields = model_->fields(GetPassKey());
-  for (const auto& field : fields) {
-    if (field->type(GetPassKey()) != DialogModelField::kMenuItem)
-      continue;
-    if (!field->AsMenuItem(GetPassKey())->icon(GetPassKey()).IsEmpty())
-      return true;
-  }
-
-  return false;
+void DialogModelMenuModelAdapter::OnFieldChanged(DialogModelField* field) {
+  NOTREACHED_NORETURN();
 }
 
 size_t DialogModelMenuModelAdapter::GetItemCount() const {
@@ -48,14 +40,14 @@ MenuModel::ItemType DialogModelMenuModelAdapter::GetTypeAt(size_t index) const {
 
 MenuSeparatorType DialogModelMenuModelAdapter::GetSeparatorTypeAt(
     size_t index) const {
-  NOTREACHED();
+  DCHECK_EQ(GetField(index)->type(GetPassKey()), DialogModelField::kSeparator);
   return MenuSeparatorType::NORMAL_SEPARATOR;
 }
 
 int DialogModelMenuModelAdapter::GetCommandIdAt(size_t index) const {
   // TODO(pbos): Figure out what this should be. Combobox seems to offset by
   // 1000. Dunno why.
-  return index + 1234;
+  return static_cast<int>(index + 1234);
 }
 
 std::u16string DialogModelMenuModelAdapter::GetLabelAt(size_t index) const {
@@ -79,8 +71,7 @@ bool DialogModelMenuModelAdapter::IsItemCheckedAt(size_t index) const {
 }
 
 int DialogModelMenuModelAdapter::GetGroupIdAt(size_t index) const {
-  NOTREACHED();
-  return -1;
+  NOTREACHED_NORETURN();
 }
 
 ImageModel DialogModelMenuModelAdapter::GetIconAt(size_t index) const {
@@ -89,8 +80,7 @@ ImageModel DialogModelMenuModelAdapter::GetIconAt(size_t index) const {
 
 ButtonMenuItemModel* DialogModelMenuModelAdapter::GetButtonMenuItemAt(
     size_t index) const {
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 bool DialogModelMenuModelAdapter::IsEnabledAt(size_t index) const {
@@ -101,15 +91,22 @@ bool DialogModelMenuModelAdapter::IsEnabledAt(size_t index) const {
          field->AsMenuItem(GetPassKey())->is_enabled(GetPassKey());
 }
 
+ui::ElementIdentifier DialogModelMenuModelAdapter::GetElementIdentifierAt(
+    size_t index) const {
+  DCHECK_LT(index, GetItemCount());
+
+  const DialogModelField* const field = GetField(index);
+  return field->AsMenuItem(GetPassKey())->id(GetPassKey());
+}
+
 MenuModel* DialogModelMenuModelAdapter::GetSubmenuModelAt(size_t index) const {
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 void DialogModelMenuModelAdapter::ActivatedAt(size_t index) {
   // If this flags investigate why the ActivatedAt(index, event_flags) isn't
   // being called.
-  NOTREACHED();
+  NOTREACHED_NORETURN();
 }
 
 void DialogModelMenuModelAdapter::ActivatedAt(size_t index, int event_flags) {

@@ -1,17 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/task_manager/providers/task_provider_observer.h"
 #include "chrome/browser/task_manager/providers/worker_task_provider.h"
@@ -42,13 +43,6 @@
 namespace task_manager {
 
 namespace {
-
-void OnUnblockOnProfileCreation(base::RunLoop* run_loop,
-                                Profile* profile,
-                                Profile::CreateStatus status) {
-  if (status == Profile::CREATE_STATUS_INITIALIZED)
-    run_loop->Quit();
-}
 
 std::u16string ExpectedTaskTitle(const std::string& title) {
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_SERVICE_WORKER_PREFIX,
@@ -90,14 +84,10 @@ class WorkerTaskProviderBrowserTest : public InProcessBrowserTest,
 
   Browser* CreateNewProfileAndSwitch() {
     ProfileManager* profile_manager = g_browser_process->profile_manager();
-
-    // Create an additional profile.
     base::FilePath new_path =
         profile_manager->GenerateNextProfileDirectoryPath();
-    base::RunLoop run_loop;
-    profile_manager->CreateProfileAsync(
-        new_path, base::BindRepeating(&OnUnblockOnProfileCreation, &run_loop));
-    run_loop.Run();
+    // Create an additional profile.
+    profiles::testing::CreateProfileSync(profile_manager, new_path);
 
     profiles::SwitchToProfile(new_path, /* always_create = */ false,
                               base::DoNothing());
@@ -192,7 +182,7 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest,
       base::CompareCase::INSENSITIVE_ASCII));
 
   GetServiceWorkerContext(browser())->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(0);
 
@@ -230,7 +220,7 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest,
       base::CompareCase::INSENSITIVE_ASCII));
 
   GetServiceWorkerContext(incognito)->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(0);
 
@@ -286,13 +276,13 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest,
                                base::CompareCase::INSENSITIVE_ASCII));
 
   GetServiceWorkerContext(browser_1)->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(1);
   EXPECT_EQ(task_2, tasks()[0]);
 
   GetServiceWorkerContext(browser_2)->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(0);
 
@@ -327,7 +317,7 @@ IN_PROC_BROWSER_TEST_F(WorkerTaskProviderBrowserTest, CreateExistingTasks) {
       base::CompareCase::INSENSITIVE_ASCII));
 
   GetServiceWorkerContext(browser())->StopAllServiceWorkersForStorageKey(
-      blink::StorageKey(
+      blink::StorageKey::CreateFirstParty(
           url::Origin::Create(embedded_test_server()->base_url())));
   WaitUntilTaskCount(0);
 

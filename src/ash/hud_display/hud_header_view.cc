@@ -1,15 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/hud_display/hud_header_view.h"
+
+#include <utility>
 
 #include "ash/hud_display/hud_constants.h"
 #include "ash/hud_display/hud_display.h"
 #include "ash/hud_display/hud_properties.h"
 #include "ash/hud_display/solid_source_background.h"
 #include "ash/hud_display/tab_strip.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/canvas.h"
@@ -71,10 +74,11 @@ class SettingsButton : public views::ImageButton {
   METADATA_HEADER(SettingsButton);
 
   explicit SettingsButton(views::Button::PressedCallback callback)
-      : views::ImageButton(callback) {
-    SetImage(views::Button::ButtonState::STATE_NORMAL,
-             gfx::CreateVectorIcon(vector_icons::kSettingsIcon,
-                                   kHUDSettingsIconSize, kHUDDefaultColor));
+      : views::ImageButton(std::move(callback)) {
+    SetImageModel(
+        views::Button::ButtonState::STATE_NORMAL,
+        ui::ImageModel::FromVectorIcon(vector_icons::kSettingsIcon,
+                                       kHUDDefaultColor, kHUDSettingsIconSize));
     SetBorder(views::CreateEmptyBorder(kHUDSettingsIconBorder));
     SetProperty(kHUDClickHandler, HTCLIENT);
 
@@ -125,8 +129,8 @@ class HUDHeaderLayout : public views::LayoutManager {
   gfx::Size GetPreferredSize(const views::View* host) const override;
 
  private:
-  const views::View* data_view_;
-  views::View* padding_;
+  raw_ptr<const views::View, ExperimentalAsh> data_view_;
+  raw_ptr<views::View, ExperimentalAsh> padding_;
 };
 
 gfx::Size HUDHeaderLayout::GetPreferredSize(const views::View* host) const {

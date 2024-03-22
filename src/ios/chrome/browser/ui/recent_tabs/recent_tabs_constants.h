@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,5 +17,9 @@ extern NSString* const kRecentTabsShowFullHistoryCellAccessibilityIdentifier;
 // section used on empty states.
 extern NSString* const
     kRecentTabsOtherDevicesIllustratedCellAccessibilityIdentifier;
+// Accessibility identifier for the button shown when the user consented to sync
+// but isn't syncing tabs (e.g. because they disabled tab syncs in setting, or
+// hasn't entered their passphrase yet). Tapping the button opens sync settings.
+extern NSString* const kRecentTabsTabSyncOffButtonAccessibilityIdentifier;
 
 #endif  // IOS_CHROME_BROWSER_UI_RECENT_TABS_RECENT_TABS_CONSTANTS_H_

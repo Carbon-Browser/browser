@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,8 +86,13 @@ typedef NS_OPTIONS(NSUInteger, CWVNavigationType) {
   // KEYWORD for more details.
   CWVNavigationTypeKeywordGenerated = 10,
 
+  // Corresponds to a navigation causing the new web view to be created.
+  // It's only used in [web_view.UIDelegate
+  // webView:createWebViewWithConfiguration:forNavigationAction:]
+  CWVNavigationTypeNewWindow = 11,
+
   // ADDING NEW CORE VALUE? Be sure to update ui::PageTransition too.
-  CWVNavigationTypeLastCore = CWVNavigationTypeKeywordGenerated,
+  CWVNavigationTypeLastCore = CWVNavigationTypeNewWindow,
   CWVNavigationTypeCoreMask = 0xFF,
 
   // Qualifiers

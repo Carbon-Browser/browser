@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,7 +71,8 @@ void TestAccessibilityControllerClient::RequestSelectToSpeakStateChange() {
 }
 
 void TestAccessibilityControllerClient::
-    RequestAutoclickScrollableBoundsForPoint(gfx::Point& point_in_screen) {}
+    RequestAutoclickScrollableBoundsForPoint(
+        const gfx::Point& point_in_screen) {}
 
 void TestAccessibilityControllerClient::MagnifierBoundsChanged(
     const gfx::Rect& bounds_in_screen) {}
@@ -88,9 +89,14 @@ void TestAccessibilityControllerClient::OnSelectToSpeakPanelAction(
 void TestAccessibilityControllerClient::SetA11yOverrideWindow(
     aura::Window* a11y_override_window) {}
 
-absl::optional<Sound>
+std::string TestAccessibilityControllerClient::GetDictationDefaultLocale(
+    bool new_user) {
+  return "";
+}
+
+std::optional<Sound>
 TestAccessibilityControllerClient::GetPlayedEarconAndReset() {
-  return std::exchange(sound_key_, absl::nullopt);
+  return std::exchange(sound_key_, std::nullopt);
 }
 
 }  // namespace ash

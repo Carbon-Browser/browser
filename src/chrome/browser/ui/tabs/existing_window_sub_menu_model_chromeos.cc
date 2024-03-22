@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_menu_model_delegate.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ui/wm/desks/desks_helper.h"
 #include "ui/aura/window.h"
@@ -64,13 +65,15 @@ ExistingWindowSubMenuModelChromeOS::ExistingWindowSubMenuModelChromeOS(
                                  context_index) {
   // If we shouldn't group by desk, ExistingWindowSubMenuModel's ctor has
   // already built the menu.
-  if (!ShouldGroupByDesk(GetDesksHelper(
-          tab_menu_model_delegate->GetExistingWindowsForMoveMenu())))
+  std::vector<Browser*> tabbed_browser_windows =
+      tab_menu_model_delegate->GetOtherBrowserWindows(
+          model->delegate()->IsForWebApp());
+  if (!ShouldGroupByDesk(GetDesksHelper(tabbed_browser_windows))) {
     return;
+  }
 
   ClearMenu();
-  BuildMenuGroupedByDesk(
-      tab_menu_model_delegate->GetExistingWindowsForMoveMenu());
+  BuildMenuGroupedByDesk(tabbed_browser_windows);
 }
 
 ExistingWindowSubMenuModelChromeOS::~ExistingWindowSubMenuModelChromeOS() =

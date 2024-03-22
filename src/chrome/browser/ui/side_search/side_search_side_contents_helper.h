@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,12 @@ class SideSearchSideContentsHelper
 
     // Get the WebContents of the associated tab.
     virtual content::WebContents* GetTabWebContents() = 0;
+
+    // When a new tab/window is opened from SRP or side search panel,
+    // this function carries over the side search state to the new tab.
+    virtual void CarryOverSideSearchStateToNewTab(
+        const GURL& search_url,
+        content::WebContents* new_web_contents) = 0;
   };
 
   // Will call MaybeRecordMetricsPerJourney().
@@ -62,6 +68,14 @@ class SideSearchSideContentsHelper
       content::NavigationHandle* handle);
 
   // content::WebContentsObserver:
+  void DidOpenRequestedURL(content::WebContents* new_contents,
+                           content::RenderFrameHost* source_render_frame_host,
+                           const GURL& url,
+                           const content::Referrer& referrer,
+                           WindowOpenDisposition disposition,
+                           ui::PageTransition transition,
+                           bool started_from_context_menu,
+                           bool renderer_initiated) override;
   void PrimaryPageChanged(content::Page& page) override;
   void PrimaryMainFrameRenderProcessGone(
       base::TerminationStatus status) override;
@@ -92,6 +106,14 @@ class SideSearchSideContentsHelper
   // contents.
   void SetDelegate(Delegate* delegate);
 
+  void set_auto_triggered(bool auto_triggered) {
+    auto_triggered_ = auto_triggered;
+  }
+
+  void set_is_created_from_menu_option(bool is_created_from_menu_option) {
+    is_created_from_menu_option_ = is_created_from_menu_option;
+  }
+
  private:
   friend class content::WebContentsUserData<SideSearchSideContentsHelper>;
   explicit SideSearchSideContentsHelper(content::WebContents* web_contents);
@@ -106,10 +128,22 @@ class SideSearchSideContentsHelper
 
   WebuiLoadTimer webui_load_timer_;
 
-  // Only used for metrics.
+  // Tracks the number of times a navigation was committed within the side
+  // panel.
   int navigation_within_side_search_count_ = 0;
+
+  // Tracks the number of times a navigation was redirected to the tab's web
+  // contents.
   int redirection_to_tab_count_ = 0;
-  bool has_loaded_url_ = false;
+
+  // Tracks whether or not the current search journey was automatically
+  // triggered (i.e. the user did not explicitly open the side panel).
+  bool auto_triggered_ = false;
+
+  // Tracks if this helper is created from menu option. It differentiates
+  // how a side panel journey starts (i.e. from omnibox icon, toolbar button, or
+  // menu option) and thus helps emit journey related metrics.
+  bool is_created_from_menu_option_ = false;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

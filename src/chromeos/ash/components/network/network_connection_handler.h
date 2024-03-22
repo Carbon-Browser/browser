@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,23 +9,16 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/cellular_connection_handler.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/managed_network_configuration_handler.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_connection_observer.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/network_state_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 // The NetworkConnectionHandler class is used to manage network connection
 // requests. This is the only class that should make Shill Connect calls.
@@ -44,6 +37,11 @@ namespace chromeos {
 // configuration calls.
 
 enum class ConnectCallbackMode { ON_STARTED, ON_COMPLETED };
+
+class CellularConnectionHandler;
+class NetworkConfigurationHandler;
+class NetworkStateHandler;
+class ManagedNetworkConfigurationHandler;
 
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandler {
  public:
@@ -127,6 +125,10 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandler {
   // Failed due to a connection attempt to a cellular network with a locked SIM.
   // The SIM must be unlocked before a connection can succeed.
   static const char kErrorSimLocked[];
+
+  // Connection attempt failed because SIM is incompatible with Carrier lock
+  // policy.
+  static const char kErrorSimCarrierLocked[];
 
   // Connect failed because cellular device is busy.
   static const char kErrorCellularDeviceBusy[];
@@ -247,7 +249,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandler {
   base::ObserverList<NetworkConnectionObserver, true>::Unchecked observers_;
 
   // Delegate used to start a connection to a tether network.
-  TetherDelegate* tether_delegate_;
+  raw_ptr<TetherDelegate, ExperimentalAsh> tether_delegate_;
 
  private:
   // Only to be used by NetworkConnectionHandler implementation (and not by
@@ -255,12 +257,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandler {
   base::WeakPtrFactory<NetworkConnectionHandler> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace ash {
-using ::chromeos::ConnectCallbackMode;
-using ::chromeos::NetworkConnectionHandler;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CONNECTION_HANDLER_H_

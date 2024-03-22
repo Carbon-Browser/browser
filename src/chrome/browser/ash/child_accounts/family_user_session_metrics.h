@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_CHILD_ACCOUNTS_FAMILY_USER_SESSION_METRICS_H_
 #define CHROME_BROWSER_ASH_CHILD_ACCOUNTS_FAMILY_USER_SESSION_METRICS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/child_accounts/family_user_metrics_service.h"
 #include "chrome/browser/ash/child_accounts/usage_time_state_notifier.h"
@@ -58,7 +59,7 @@ class FamilyUserSessionMetrics : public FamilyUserMetricsService::Observer,
   // duration data to prefs or report to UMA.
   void UpdateUserEngagement(bool is_user_active);
 
-  PrefService* const pref_service_;
+  const raw_ptr<PrefService, ExperimentalAsh> pref_service_;
 
   // The time when the user becomes active. It will be reset to base::Time()
   // when the user becomes inactive.

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,6 @@ import android.os.Bundle;
  * onSaveInstanceState events.
  */
 public interface SaveInstanceStateObserver extends LifecycleObserver {
-    /**
-     * Called before activity begins to stop.
-     */
+    /** Called before activity begins to stop. */
     void onSaveInstanceState(Bundle outState);
 }

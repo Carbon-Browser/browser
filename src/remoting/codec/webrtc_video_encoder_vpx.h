@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "remoting/codec/encoder_bitrate_filter.h"
 #include "remoting/codec/scoped_vpx_codec.h"
+#include "remoting/codec/video_encoder_active_map.h"
 #include "remoting/codec/webrtc_video_encoder.h"
 #include "third_party/libvpx/source/libvpx/vpx/vpx_encoder.h"
 
@@ -42,7 +43,6 @@ class WebrtcVideoEncoderVpx : public WebrtcVideoEncoder {
   void SetTickClockForTests(const base::TickClock* tick_clock);
 
   // WebrtcVideoEncoder interface.
-  void SetLosslessEncode(bool want_lossless) override;
   void SetLosslessColor(bool want_lossless) override;
   void SetEncoderSpeed(int encoder_speed) override;
   void Encode(std::unique_ptr<webrtc::DesktopFrame> frame,
@@ -53,7 +53,7 @@ class WebrtcVideoEncoderVpx : public WebrtcVideoEncoder {
   explicit WebrtcVideoEncoderVpx(bool use_vp9);
 
   // (Re)Configures this instance to encode frames of the specified |size|,
-  // with the configured lossless color & encoding modes.
+  // with the configured lossless color mode.
   void Configure(const webrtc::DesktopSize& size);
 
   // Updates codec configuration.
@@ -78,9 +78,7 @@ class WebrtcVideoEncoderVpx : public WebrtcVideoEncoder {
   // True if the encoder is for VP9, false for VP8.
   const bool use_vp9_;
 
-  // Options controlling VP9 encode quantization, color space, and speed.
-  // These are not used when configuring VP8.
-  bool lossless_encode_ = false;
+  // Controls VP9 color space and encode speed. Not used when configuring VP8.
   bool lossless_color_ = false;
   int vp9_encoder_speed_ = -1;
 
@@ -99,9 +97,10 @@ class WebrtcVideoEncoderVpx : public WebrtcVideoEncoder {
   // VPX image descriptor and pixel buffer.
   scoped_vpx_image image_;
 
-  // Active map used to optimize out processing of un-changed macroblocks.
-  std::unique_ptr<uint8_t[]> active_map_;
-  webrtc::DesktopSize active_map_size_;
+  // Active map used to optimize out processing of unchanged macroblocks.
+  VideoEncoderActiveMap active_map_;
+  // TODO(joedow): Remove this flag after we're done with performance tuning.
+  const bool use_active_map_ = true;
 
   raw_ptr<const base::TickClock> clock_;
 

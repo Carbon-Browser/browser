@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ FieldPropertiesMask FieldDataManager::GetFieldPropertiesMask(
   return field_value_and_properties_map_.at(id).second;
 }
 
-bool FieldDataManager::FindMachedValue(const std::u16string& value) const {
+bool FieldDataManager::FindMatchedValue(const std::u16string& value) const {
   constexpr size_t kMinMatchSize = 3u;
   const auto lowercase = base::i18n::ToLower(value);
   for (const auto& map_key : field_value_and_properties_map_) {
@@ -49,13 +49,13 @@ bool FieldDataManager::FindMachedValue(const std::u16string& value) const {
 }
 
 void FieldDataManager::UpdateFieldDataMap(FieldRendererId id,
-                                          const std::u16string& value,
+                                          std::u16string_view value,
                                           FieldPropertiesMask mask) {
   if (HasFieldData(id)) {
-    field_value_and_properties_map_[id].first = value;
+    field_value_and_properties_map_[id].first = std::u16string(value);
     field_value_and_properties_map_[id].second |= mask;
   } else {
-    field_value_and_properties_map_[id] = {value, mask};
+    field_value_and_properties_map_[id] = {std::u16string(value), mask};
   }
   // Reset kUserTyped and kAutofilled flags if the value is empty.
   if (value.empty()) {

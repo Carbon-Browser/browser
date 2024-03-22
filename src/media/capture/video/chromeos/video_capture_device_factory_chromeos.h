@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,7 @@ class CAPTURE_EXPORT VideoCaptureDeviceFactoryChromeOS final
     : public VideoCaptureDeviceFactory {
  public:
   explicit VideoCaptureDeviceFactoryChromeOS(
-      scoped_refptr<base::SingleThreadTaskRunner>
-          task_runner_for_screen_observer);
+      scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner);
 
   VideoCaptureDeviceFactoryChromeOS(const VideoCaptureDeviceFactoryChromeOS&) =
       delete;
@@ -45,11 +44,16 @@ class CAPTURE_EXPORT VideoCaptureDeviceFactoryChromeOS final
   // succeeds.
   bool Init();
 
-  const scoped_refptr<base::SingleThreadTaskRunner>
-      task_runner_for_screen_observer_;
+  const scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
 
   // Communication interface to the camera HAL.
   std::unique_ptr<CameraHalDelegate> camera_hal_delegate_;
+
+  // VideoCaptureDeviceChromeosDelegate instances saved in
+  // |camera_hal_delegate_| must be freed on the sequence which |CreateDevice()|
+  // was called. To keep thread-safe and avoid dangling pointers,
+  // |camera_hal_delegate_| has to be freed on |vcd_task_runner_|.
+  scoped_refptr<base::SequencedTaskRunner> vcd_task_runner_;
 
   bool initialized_;
 

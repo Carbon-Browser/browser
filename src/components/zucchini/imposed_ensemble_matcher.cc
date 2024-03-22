@@ -1,15 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/zucchini/imposed_ensemble_matcher.h"
 
-#include <algorithm>
 #include <sstream>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "components/zucchini/io_utils.h"
 
 namespace zucchini {
@@ -67,9 +67,8 @@ ImposedMatchParser::Status ImposedMatchParser::Parse(
             });
 
   // Check for overlaps in "new" file.
-  if (std::adjacent_find(
-          matches_.begin(), matches_.end(),
-          [](const ElementMatch& match1, const ElementMatch& match2) {
+  if (base::ranges::adjacent_find(
+          matches_, [](const ElementMatch& match1, const ElementMatch& match2) {
             return match1.new_element.hi() > match2.new_element.lo();
           }) != matches_.end()) {
     return kOverlapInNew;

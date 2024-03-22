@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/display/window_tree_host_manager.h"
+#include "base/memory/raw_ptr.h"
 
 namespace aura {
 class Window;
@@ -97,8 +98,13 @@ class ASH_EXPORT ScreenPinningController
   // aura::WindowObserver:
   void OnWindowDestroying(aura::Window* window) override;
 
+  // Called when `container_` is being destroyed.
+  void OnContainerDestroying(aura::Window* container);
+
   // Pinned window should be on top in the parent window.
-  aura::Window* pinned_window_ = nullptr;
+  raw_ptr<aura::Window, ExperimentalAsh> pinned_window_ = nullptr;
+  // The container `pinned_container_window_observer_` observes.
+  raw_ptr<aura::Window, ExperimentalAsh> container_ = nullptr;
 
   // Owns the WindowDimmers. There is one WindowDimmer for the parent of
   // |pinned_window_| and one for each display other than the display

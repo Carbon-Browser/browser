@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,9 @@ class WithCrosapiParam : public testing::WithParamInterface<CrosapiParam> {
   ~WithCrosapiParam() override;
 
   static std::string ParamToString(testing::TestParamInfo<CrosapiParam> param);
+
+  // Verifies that the Lacros status is same as the param setting.
+  static void VerifyLacrosStatus();
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;

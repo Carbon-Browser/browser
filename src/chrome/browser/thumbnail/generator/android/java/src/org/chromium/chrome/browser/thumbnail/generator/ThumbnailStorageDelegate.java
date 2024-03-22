@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,5 +16,5 @@ public interface ThumbnailStorageDelegate {
      * @param contentId Content ID of the thumbnail retrieved.
      * @param bitmap The thumbnail retrieved.
      */
-    default void onThumbnailRetrieved(@NonNull String contentId, @Nullable Bitmap bitmap){};
+    default void onThumbnailRetrieved(@NonNull String contentId, @Nullable Bitmap bitmap) {}
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,14 @@
 #include "third_party/blink/renderer/platform/heap/visitor.h"
 
 namespace blink {
-NavigationTransition::NavigationTransition(ScriptState* script_state,
+NavigationTransition::NavigationTransition(ExecutionContext* context,
                                            const String& navigation_type,
                                            NavigationHistoryEntry* from)
     : navigation_type_(navigation_type),
       from_(from),
-      finished_(MakeGarbageCollected<FinishedProperty>(
-          ExecutionContext::From(script_state))) {
-  // See comment for the finished promise in navigation_api_navigation.cc for
-  // the reason why we mark finished promises as handled.
+      finished_(MakeGarbageCollected<FinishedProperty>(context)) {
+  // See comment for the finished promise in navigation_api_method_tracker.cc
+  // for the reason why we mark finished promises as handled.
   finished_->MarkAsHandled();
 }
 

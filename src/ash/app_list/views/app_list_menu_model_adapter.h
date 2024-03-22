@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "ash/ash_export.h"
 #include "ui/base/models/simple_menu_model.h"
 #include "ui/base/ui_base_types.h"
-#include "ui/views/controls/menu/menu_types.h"
 
 namespace ash {
 
@@ -29,10 +28,10 @@ class ASH_EXPORT AppListMenuModelAdapter : public AppMenuModelAdapter {
     FULLSCREEN_SEARCH_RESULT = 0,
     FULLSCREEN_SUGGESTED = 1,
     FULLSCREEN_APP_GRID = 2,
-    PEEKING_SUGGESTED = 3,
-    HALF_SEARCH_RESULT = 4,
 
     // Usage removed.
+    // PEEKING_SUGGESTED = 3,
+    // HALF_SEARCH_RESULT = 4,
     // SEARCH_RESULT = 5,
 
     PRODUCTIVITY_LAUNCHER_RECENT_APP = 6,

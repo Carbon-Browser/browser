@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,10 @@ class CONTENT_EXPORT ContentMainDelegate {
 
   // Indicates the delegate is being invoked in a child process. The
   // `kProcessType` switch will hold the precise child process type.
-  struct InvokedInChildProcess {};
+  struct InvokedInChildProcess {
+    // True if the child process was forked from one of the browser's zygotes.
+    bool is_zygote_child = false;
+  };
 
   // The context in which a delegate method is invoked, including the process
   // type and whether it is in a test harness. Can distinguish between
@@ -74,7 +77,10 @@ class CONTENT_EXPORT ContentMainDelegate {
       const std::string& process_type,
       MainFunctionParams main_function_params);
 
-  // Called right before the process exits.
+  // Called right before the process exits. Note: an empty process_type must not
+  // be assumed to be an exclusive browser process, processes that exit early
+  // (e.g. attempt and fail to be the browser process) will also go through this
+  // path.
   virtual void ProcessExiting(const std::string& process_type) {}
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -120,6 +126,14 @@ class CONTENT_EXPORT ContentMainDelegate {
   // created should override and return false.
   virtual bool ShouldCreateFeatureList(InvokedIn invoked_in);
 
+  // Returns true if content should initialize Mojo before calling
+  // PostEarlyInitialization(). Returns true by default. If this returns false,
+  // the embedder must initialize Mojo. Embedders may wish to override this to
+  // control when Mojo is initialized; for example, Mojo needs to be initialized
+  // after FeatureList, so embedders who delay FeatureList setup must also delay
+  // Mojo setup.
+  virtual bool ShouldInitializeMojo(InvokedIn invoked_in);
+
   // Creates and returns the VariationsIdsProvider. If null is returned,
   // a VariationsIdsProvider is created with a mode of `kUseSignedInState`.
   // VariationsIdsProvider is a singleton.
@@ -132,9 +146,9 @@ class CONTENT_EXPORT ContentMainDelegate {
   // won't run until base::ThreadPoolInstance::Start() is called.
   //
   // It is also possible to post tasks to the main thread loop via
-  // base::ThreadTaskRunnerHandle. These tasks won't run until
-  // base::RunLoop::Run() is called on the main thread, which happens after all
-  // ContentMainDelegate entry points.
+  // base::SingleThreadTaskRunner::CurrentDefaultHandle. These tasks won't run
+  // until base::RunLoop::Run() is called on the main thread, which happens
+  // after all ContentMainDelegate entry points.
   //
   // If ShouldCreateFeatureList() returns true for `invoked_in`, the
   // field trials and FeatureList have been initialized. Otherwise, the

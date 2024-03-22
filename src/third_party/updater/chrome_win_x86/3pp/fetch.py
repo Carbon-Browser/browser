@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,7 +11,7 @@ import sys
 import urllib.request
 
 # TODO(crbug.com/1268555): This is compared lexically. Remove it before M1000.
-MIN_VERSION = '100.0.4876.0'
+MIN_VERSION = '119.0.5999.0'
 
 def fetch():
     """

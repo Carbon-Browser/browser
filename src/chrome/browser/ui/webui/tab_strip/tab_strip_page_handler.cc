@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -151,17 +151,6 @@ class WebUITabContextMenu : public ui::SimpleMenuModel::Delegate,
   const int tab_index_;
 };
 
-bool IsSortedAndContiguous(base::span<const int> sequence) {
-  if (sequence.size() < 2)
-    return true;
-
-  if (!std::is_sorted(sequence.begin(), sequence.end()))
-    return false;
-
-  return sequence.back() ==
-         sequence.front() + static_cast<int>(sequence.size()) - 1;
-}
-
 }  // namespace
 
 TabStripPageHandler::~TabStripPageHandler() {
@@ -281,6 +270,14 @@ void TabStripPageHandler::OnTabStripModelChanged(
   if (tab_strip_model->empty())
     return;
 
+  // The context menu model is created when the menu is first shown. However, if
+  // the tab strip model changes, the context menu model may not longer reflect
+  // the current state of the tab strip. Actions then taken from the context
+  // menu may leave the tab strip in an inconsistent state, or result in DCHECK
+  // crashes. To ensure this does not occur close the context menu on a tab
+  // strip model change.
+  embedder_->CloseContextMenu();
+
   switch (change.type()) {
     case TabStripModelChange::kInserted: {
       for (const auto& contents : change.GetInsert()->contents) {
@@ -297,32 +294,6 @@ void TabStripPageHandler::OnTabStripModelChanged(
     }
     case TabStripModelChange::kMoved: {
       auto* move = change.GetMove();
-
-      absl::optional<tab_groups::TabGroupId> tab_group_id =
-          tab_strip_model->GetTabGroupForTab(move->to_index);
-      if (tab_group_id.has_value()) {
-        const gfx::Range tabs_in_group = tab_strip_model->group_model()
-                                             ->GetTabGroup(tab_group_id.value())
-                                             ->ListTabs();
-
-        const ui::ListSelectionModel::SelectedIndices& sel =
-            selection.new_model.selected_indices();
-        const auto& selected_tabs = std::vector<int>(sel.begin(), sel.end());
-        const bool all_tabs_in_group =
-            IsSortedAndContiguous(base::make_span(selected_tabs)) &&
-            selected_tabs.front() == static_cast<int>(tabs_in_group.start()) &&
-            selected_tabs.size() == tabs_in_group.length();
-
-        if (all_tabs_in_group) {
-          // If the selection includes all the tabs within the changed tab's
-          // group, it is an indication that the entire group is being moved.
-          // To prevent sending multiple events for each tab in the group,
-          // ignore these tabs moving as entire group moves will be handled by
-          // TabGroupChange::kMoved.
-          break;
-        }
-      }
-
       page_->TabMoved(extensions::ExtensionTabUtil::GetTabId(move->contents),
                       move->to_index,
                       tab_strip_model->IsTabPinned(move->to_index));
@@ -461,19 +432,17 @@ bool TabStripPageHandler::CanDragEnter(
     const content::DropData& data,
     blink::DragOperationsMask operations_allowed) {
   // TODO(crbug.com/1032592): Prevent dragging across Chromium instances.
-  if (data.custom_data.find(base::ASCIIToUTF16(kWebUITabIdDataType)) !=
-      data.custom_data.end()) {
+  if (auto it = data.custom_data.find(kWebUITabIdDataType);
+      it != data.custom_data.end()) {
     int tab_id;
-    bool found_tab_id = base::StringToInt(
-        data.custom_data.at(base::ASCIIToUTF16(kWebUITabIdDataType)), &tab_id);
+    bool found_tab_id = base::StringToInt(it->second, &tab_id);
     return found_tab_id && extensions::ExtensionTabUtil::GetTabById(
                                tab_id, browser_->profile(), false, nullptr);
   }
 
-  if (data.custom_data.find(base::ASCIIToUTF16(kWebUITabGroupIdDataType)) !=
-      data.custom_data.end()) {
-    std::string group_id = base::UTF16ToUTF8(
-        data.custom_data.at(base::ASCIIToUTF16(kWebUITabGroupIdDataType)));
+  if (auto it = data.custom_data.find(kWebUITabGroupIdDataType);
+      it != data.custom_data.end()) {
+    std::string group_id = base::UTF16ToUTF8(it->second);
     Browser* found_browser = tab_strip_ui::GetBrowserWithGroupId(
         Profile::FromBrowserContext(browser_->profile()), group_id);
     return found_browser != nullptr;
@@ -513,23 +482,29 @@ tab_strip::mojom::TabPtr TabStripPageHandler::GetTabData(
   tab_data->title = base::UTF16ToUTF8(tab_renderer_data.title);
   tab_data->url = tab_renderer_data.visible_url;
 
-  if (!tab_renderer_data.favicon.isNull()) {
+  const ui::ColorProvider& provider =
+      web_ui_->GetWebContents()->GetColorProvider();
+  const gfx::ImageSkia default_favicon =
+      favicon::GetDefaultFaviconModel().Rasterize(&provider);
+  const gfx::ImageSkia raster_favicon =
+      tab_renderer_data.favicon.Rasterize(&provider);
+
+  if (!tab_renderer_data.favicon.IsEmpty()) {
     // Themified icons only apply to a few select chrome URLs.
     if (tab_renderer_data.should_themify_favicon) {
-      tab_data->favicon_url = GURL(webui::EncodePNGAndMakeDataURI(
-          ThemeFavicon(tab_renderer_data.favicon, false),
-          web_ui_->GetDeviceScaleFactor()));
+      tab_data->favicon_url = GURL(
+          webui::EncodePNGAndMakeDataURI(ThemeFavicon(raster_favicon, false),
+                                         web_ui_->GetDeviceScaleFactor()));
       tab_data->active_favicon_url = GURL(webui::EncodePNGAndMakeDataURI(
-          ThemeFavicon(tab_renderer_data.favicon, true),
-          web_ui_->GetDeviceScaleFactor()));
+          ThemeFavicon(raster_favicon, true), web_ui_->GetDeviceScaleFactor()));
     } else {
       tab_data->favicon_url = GURL(webui::EncodePNGAndMakeDataURI(
-          tab_renderer_data.favicon, web_ui_->GetDeviceScaleFactor()));
+          tab_renderer_data.favicon.Rasterize(&provider),
+          web_ui_->GetDeviceScaleFactor()));
     }
 
     tab_data->is_default_favicon =
-        tab_renderer_data.favicon.BackedBySameObjectAs(
-            favicon::GetDefaultFavicon().AsImageSkia());
+        raster_favicon.BackedBySameObjectAs(default_favicon);
   } else {
     tab_data->is_default_favicon = true;
   }
@@ -540,7 +515,6 @@ tab_strip::mojom::TabPtr TabStripPageHandler::GetTabData(
   tab_data->crashed = tab_renderer_data.IsCrashed();
   // TODO(johntlee): Add the rest of TabRendererData
 
-  auto alert_states = std::make_unique<base::ListValue>();
   for (const auto alert_state :
        chrome::GetTabAlertStatesForContents(contents)) {
     tab_data->alert_states.push_back(alert_state);
@@ -786,9 +760,8 @@ void TabStripPageHandler::ShowTabContextMenu(int32_t tab_id,
           browser, embedder_->GetAcceleratorProvider(), tab_index),
       base::BindRepeating(&TabStripPageHandler::NotifyContextMenuClosed,
                           weak_ptr_factory_.GetWeakPtr()));
-  base::UmaHistogramEnumeration(
-      "TabStrip.Tab.WebUI.ActivationAction",
-      TabStripModel::TabActivationTypes::kContextMenu);
+  base::UmaHistogramEnumeration("TabStrip.Tab.WebUI.ActivationAction",
+                                TabActivationTypes::kContextMenu);
 }
 
 void TabStripPageHandler::GetLayout(GetLayoutCallback callback) {
@@ -817,7 +790,7 @@ void TabStripPageHandler::ReportTabActivationDuration(uint32_t duration_ms) {
   UMA_HISTOGRAM_TIMES("WebUITabStrip.TabActivation",
                       base::Milliseconds(duration_ms));
   base::UmaHistogramEnumeration("TabStrip.Tab.WebUI.ActivationAction",
-                                TabStripModel::TabActivationTypes::kTab);
+                                TabActivationTypes::kTab);
 }
 
 void TabStripPageHandler::ReportTabDataReceivedDuration(uint32_t tab_count,

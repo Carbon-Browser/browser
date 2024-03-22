@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ class CONTENT_EXPORT NotificationSource {
 
   // Declaring this const allows Source<T> to be used with both T = Foo and
   // T = const Foo.
-  raw_ptr<const void, DanglingUntriaged> ptr_;
+  raw_ptr<const void, AcrossTasksDanglingUntriaged> ptr_;
 };
 
 template <class T>

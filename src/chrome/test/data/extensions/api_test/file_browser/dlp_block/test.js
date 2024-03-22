@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,7 +88,8 @@ chrome.test.getConfig(async (config) => {
     const destinationDirectory = await getDirectoryEntry('drive', 'subdir');
 
     await chrome.fileManagerPrivate.getDisallowedTransfers(
-        testEntries, destinationDirectory, (disallowed_entries) => {
+        testEntries, destinationDirectory, /*isMove=*/ true,
+        (disallowed_entries) => {
           chrome.test.assertEq(1, disallowed_entries.length);
           chrome.test.succeed();
         });

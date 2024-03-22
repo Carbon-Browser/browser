@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -75,8 +75,10 @@ public interface BrowserPaymentRequest {
      * @param paymentOptions The payment options specified for the request.
      * @return Whether this method has disconnected the mojo pipe.
      */
-    default boolean disconnectIfExtraValidationFails(WebContents webContents,
-            Map<String, PaymentMethodData> methodData, PaymentDetails details,
+    default boolean disconnectIfExtraValidationFails(
+            WebContents webContents,
+            Map<String, PaymentMethodData> methodData,
+            PaymentDetails details,
             PaymentOptions paymentOptions) {
         return false;
     }
@@ -86,13 +88,6 @@ public interface BrowserPaymentRequest {
      * @param spec The validated PaymentRequestSpec.
      */
     void onSpecValidated(PaymentRequestSpec spec);
-
-    /**
-     * Adds the PaymentAppFactory(s) specified by the implementers to the given PaymentAppService.
-     * @param service The PaymentAppService to be added with the factories.
-     * @param delegate The delegate of payment app factory.
-     */
-    void addPaymentAppFactories(PaymentAppService service, PaymentAppFactoryDelegate delegate);
 
     /**
      * @return Whether at least one payment app (including basic-card payment app) is available
@@ -110,7 +105,9 @@ public interface BrowserPaymentRequest {
      * @return The error of the showing if any; null if success.
      */
     @Nullable
-    String showOrSkipAppSelector(boolean isShowWaitingForUpdatedDetails, PaymentItem total,
+    String showOrSkipAppSelector(
+            boolean isShowWaitingForUpdatedDetails,
+            PaymentItem total,
             boolean shouldSkipAppSelector);
 
     /**
@@ -137,14 +134,6 @@ public interface BrowserPaymentRequest {
     boolean onPaymentAppCreated(PaymentApp paymentApp);
 
     /**
-     * @return Whether payment sheet based payment app is supported, e.g., user entering credit
-     *      cards on payment sheet.
-     */
-    default boolean isPaymentSheetBasedPaymentAppSupported() {
-        return false;
-    }
-
-    /**
      * Patches the given payment response if needed.
      * @param response The payment response to be patched in place.
      * @return Whether the patching is successful.
@@ -153,16 +142,7 @@ public interface BrowserPaymentRequest {
         return true;
     }
 
-    /**
-     * Called by the payment app to let Chrome know that the payment app's UI is now hidden, but
-     * the payment details have not been returned yet. This is a good time to show a "loading"
-     * progress indicator UI.
-     */
-    default void onInstrumentDetailsLoading() {}
-
-    /**
-     * Called after retrieving payment details.
-     */
+    /** Called after retrieving payment details. */
     default void onInstrumentDetailsReady() {}
 
     /**
@@ -181,13 +161,12 @@ public interface BrowserPaymentRequest {
 
     /**
      * Opens a payment handler window and creates a WebContents with the given url to display in it.
+     *
      * @param url The url of the page to be opened in the window.
-     * @param isOffTheRecord Whether the profile is off the record.
      * @param ukmSourceId The ukm source id assigned to the payment app.
      * @return The created WebContents.
      */
-    default WebContents openPaymentHandlerWindow(
-            GURL url, boolean isOffTheRecord, long ukmSourceId) {
+    default WebContents openPaymentHandlerWindow(GURL url, long ukmSourceId) {
         return null;
     }
 
@@ -225,4 +204,14 @@ public interface BrowserPaymentRequest {
      *         by {@link PaymentApp#isComplete()}.
      */
     boolean hasAnyCompleteApp();
+
+    /** @return Whether the shipping address section is visible. */
+    default boolean isShippingSectionVisible() {
+        return false;
+    }
+
+    /** @return Whether the contact info section is visible. */
+    default boolean isContactSectionVisible() {
+        return false;
+    }
 }

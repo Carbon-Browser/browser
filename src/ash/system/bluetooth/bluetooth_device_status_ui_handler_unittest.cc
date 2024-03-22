@@ -1,36 +1,33 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/bluetooth/bluetooth_device_status_ui_handler.h"
 
-#include "ash/constants/ash_features.h"
+#include "ash/public/cpp/fake_hats_bluetooth_revamp_trigger_impl.h"
+#include "ash/public/cpp/hats_bluetooth_revamp_trigger.h"
+#include "ash/public/cpp/system/toast_data.h"
 #include "ash/public/cpp/system/toast_manager.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/ash_test_helper.h"
-#include "base/test/scoped_feature_list.h"
-#include "chromeos/services/bluetooth_config/fake_bluetooth_device_status_notifier.h"
-#include "chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
+#include "chromeos/ash/services/bluetooth_config/fake_bluetooth_device_status_notifier.h"
+#include "chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
-
-using chromeos::bluetooth_config::mojom::BatteryProperties;
-using chromeos::bluetooth_config::mojom::BluetoothDeviceProperties;
-using chromeos::bluetooth_config::mojom::DeviceBatteryInfo;
-using chromeos::bluetooth_config::mojom::DeviceBatteryInfoPtr;
-using chromeos::bluetooth_config::mojom::DeviceConnectionState;
-using chromeos::bluetooth_config::mojom::PairedBluetoothDeviceProperties;
-using chromeos::bluetooth_config::mojom::PairedBluetoothDevicePropertiesPtr;
-using testing::NiceMock;
 
 namespace ash {
 
 namespace {
 
+using bluetooth_config::mojom::BluetoothDeviceProperties;
+using bluetooth_config::mojom::PairedBluetoothDeviceProperties;
+using bluetooth_config::mojom::PairedBluetoothDevicePropertiesPtr;
+using ::testing::NiceMock;
+
 class MockBluetoothDeviceStatusUiHandler
     : public BluetoothDeviceStatusUiHandler {
  public:
-  MOCK_METHOD(void, ShowToast, (const ash::ToastData& toast_data), (override));
+  MOCK_METHOD(void, ShowToast, (ash::ToastData toast_data), (override));
 };
 
 }  // namespace
@@ -39,7 +36,9 @@ class BluetoothDeviceStatusUiHandlerTest : public AshTestBase {
  public:
   void SetUp() override {
     AshTestBase::SetUp();
-    feature_list_.InitAndEnableFeature(features::kBluetoothRevamp);
+
+    fake_trigger_impl_ = std::make_unique<FakeHatsBluetoothRevampTriggerImpl>();
+
     device_status_ui_handler_ =
         std::make_unique<NiceMock<MockBluetoothDeviceStatusUiHandler>>();
     base::RunLoop().RunUntilIdle();
@@ -73,16 +72,20 @@ class BluetoothDeviceStatusUiHandlerTest : public AshTestBase {
     return paired_device;
   }
 
+  size_t GetTryToShowSurveyCount() {
+    return fake_trigger_impl_->try_to_show_survey_count();
+  }
+
  private:
-  chromeos::bluetooth_config::FakeBluetoothDeviceStatusNotifier*
+  bluetooth_config::FakeBluetoothDeviceStatusNotifier*
   fake_device_status_notifier() {
     return ash_test_helper()
         ->bluetooth_config_test_helper()
         ->fake_bluetooth_device_status_notifier();
   }
 
+  std::unique_ptr<FakeHatsBluetoothRevampTriggerImpl> fake_trigger_impl_;
   std::unique_ptr<MockBluetoothDeviceStatusUiHandler> device_status_ui_handler_;
-  base::test::ScopedFeatureList feature_list_;
 };
 
 TEST_F(BluetoothDeviceStatusUiHandlerTest, PairedDevice) {
@@ -91,8 +94,10 @@ TEST_F(BluetoothDeviceStatusUiHandlerTest, PairedDevice) {
 }
 
 TEST_F(BluetoothDeviceStatusUiHandlerTest, ConnectedDevice) {
+  EXPECT_EQ(0u, GetTryToShowSurveyCount());
   EXPECT_CALL(device_status_ui_handler(), ShowToast);
   SetConnectedDevice(GetPairedDevice());
+  EXPECT_EQ(2u, GetTryToShowSurveyCount());
 }
 
 TEST_F(BluetoothDeviceStatusUiHandlerTest, DisconnectedDevice) {

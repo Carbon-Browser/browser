@@ -1,8 +1,10 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
+
+#include <utility>
 
 #include "ui/compositor/layer_animation_sequence.h"
 #include "ui/compositor/test/layer_animator_test_controller.h"
@@ -12,8 +14,7 @@ namespace ui {
 
 LayerAnimatorTestController::LayerAnimatorTestController(
     scoped_refptr<LayerAnimator> animator)
-    : animator_(animator) {
-}
+    : animator_(std::move(animator)) {}
 
 LayerAnimatorTestController::~LayerAnimatorTestController() {
 }

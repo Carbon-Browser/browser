@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -34,8 +34,6 @@ namespace {namespace} {{
 const {hash_datatype} kExpiredHistogramsHashes[] = {{
 {hashes}
 }};
-
-const size_t kNumExpiredHistograms = {hashes_size};
 
 }}  // namespace {namespace}
 
@@ -181,13 +179,11 @@ def _GenerateHeaderFileContent(header_filename, namespace,
       "  {hash},  // {name}".format(hash=value, name=histograms_map[value])
       for value in sorted(histograms_map.keys())
   ])
-  return _HEADER.format(
-      script_name=_SCRIPT_NAME,
-      include_guard=include_guard,
-      namespace=namespace,
-      hash_datatype=_HASH_DATATYPE,
-      hashes=hashes,
-      hashes_size=len(histograms_map))
+  return _HEADER.format(script_name=_SCRIPT_NAME,
+                        include_guard=include_guard,
+                        namespace=namespace,
+                        hash_datatype=_HASH_DATATYPE,
+                        hashes=hashes)
 
 
 def _GenerateFileContent(descriptions, branch_file_content,

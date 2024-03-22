@@ -1,13 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_COMMAND_BUFFER_SERVICE_SHARED_IMAGE_SHARED_IMAGE_BACKING_FACTORY_H_
 #define GPU_COMMAND_BUFFER_SERVICE_SHARED_IMAGE_SHARED_IMAGE_BACKING_FACTORY_H_
 
+#include <climits>
+#include <cstdint>
 #include <memory>
 
-#include "components/viz/common/resources/resource_format.h"
+#include "base/memory/weak_ptr.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/config/gpu_preferences.h"
 #include "gpu/gpu_gles2_export.h"
 #include "gpu/ipc/common/surface_handle.h"
@@ -27,55 +31,106 @@ struct Mailbox;
 
 class GPU_GLES2_EXPORT SharedImageBackingFactory {
  public:
-  virtual ~SharedImageBackingFactory() = default;
+  // Mask for all valid usage flags.
+  static constexpr uint32_t kUsageAll = (LAST_SHARED_IMAGE_USAGE << 1) - 1;
+
+  // `valid_usages` is an allowlist of usages that the backing created by
+  // factory can support. Requests to create a new shared image that contain
+  // any usages not in `valid_usages` will be rejected by the factory. However,
+  // if all usages are in `valid_usages` that doesn't imply support as
+  // IsSupported() may contain additional logic.
+  explicit SharedImageBackingFactory(uint32_t valid_usages);
+  virtual ~SharedImageBackingFactory();
+
   virtual std::unique_ptr<SharedImageBacking> CreateSharedImage(
       const Mailbox& mailbox,
-      viz::ResourceFormat format,
+      viz::SharedImageFormat format,
       SurfaceHandle surface_handle,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
       uint32_t usage,
+      std::string debug_label,
       bool is_thread_safe) = 0;
   virtual std::unique_ptr<SharedImageBacking> CreateSharedImage(
       const Mailbox& mailbox,
-      viz::ResourceFormat format,
+      viz::SharedImageFormat format,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
       uint32_t usage,
+      std::string debug_label,
       base::span<const uint8_t> pixel_data) = 0;
   virtual std::unique_ptr<SharedImageBacking> CreateSharedImage(
       const Mailbox& mailbox,
-      int client_id,
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      std::string debug_label,
+      gfx::GpuMemoryBufferHandle handle) = 0;
+  virtual std::unique_ptr<SharedImageBacking> CreateSharedImage(
+      const Mailbox& mailbox,
       gfx::GpuMemoryBufferHandle handle,
       gfx::BufferFormat format,
       gfx::BufferPlane plane,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      std::string debug_label) = 0;
+
+  // This new api is introduced for MappableSI work where client code sends
+  // |buffer_usage| info while creating shared image. This info is used in some
+  // backings to create native handle.
+  // TODO(crbug.com/1466569) : Remove this api once the MappableSI is complete
+  // and we have a mapping between shared image usage and BufferUsage.
+  virtual std::unique_ptr<SharedImageBacking> CreateSharedImage(
+      const Mailbox& mailbox,
+      viz::SharedImageFormat format,
       SurfaceHandle surface_handle,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
-      uint32_t usage) = 0;
-
-  // Only implemented in the D3D backing factory.
-  virtual std::vector<std::unique_ptr<SharedImageBacking>>
-  CreateSharedImageVideoPlanes(base::span<const Mailbox> mailboxes,
-                               gfx::GpuMemoryBufferHandle handle,
-                               gfx::BufferFormat format,
-                               const gfx::Size& size,
-                               uint32_t usage);
+      uint32_t usage,
+      std::string debug_label,
+      bool is_thread_safe,
+      gfx::BufferUsage buffer_usage);
 
   // Returns true if the factory is supported
+  bool CanCreateSharedImage(uint32_t usage,
+                            viz::SharedImageFormat format,
+                            const gfx::Size& size,
+                            bool thread_safe,
+                            gfx::GpuMemoryBufferType gmb_type,
+                            GrContextType gr_context_type,
+                            base::span<const uint8_t> pixel_data);
+
+  base::WeakPtr<SharedImageBackingFactory> GetWeakPtr();
+
+ protected:
+  // Returns true if the factory is supported. This must return false if `usage`
+  // contains any usages from `invalid_usages_`. This is a temporary state to
+  // verify `invalid_usages_` is correct.
   virtual bool IsSupported(uint32_t usage,
-                           viz::ResourceFormat format,
+                           viz::SharedImageFormat format,
+                           const gfx::Size& size,
                            bool thread_safe,
                            gfx::GpuMemoryBufferType gmb_type,
                            GrContextType gr_context_type,
-                           bool* allow_legacy_mailbox,
-                           bool is_pixel_used) = 0;
+                           base::span<const uint8_t> pixel_data) = 0;
+
+  void InvalidateWeakPtrsForTesting();
+
+ private:
+  const uint32_t invalid_usages_;
+  base::WeakPtrFactory<SharedImageBackingFactory> weak_ptr_factory_{this};
 };
 
 }  // namespace gpu

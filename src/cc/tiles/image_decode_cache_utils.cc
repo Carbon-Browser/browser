@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,46 +9,85 @@
 
 #include "base/check.h"
 #include "cc/paint/paint_flags.h"
+#include "components/miracle_parameter/common/public/miracle_parameter.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkPixmap.h"
 
+#if !BUILDFLAG(IS_ANDROID)
+#include "base/system/sys_info.h"
+#endif
+
 namespace cc {
 
-bool ImageDecodeCacheUtils::ScaleToHalfFloatPixmapUsingN32Intermediate(
-    const SkPixmap& source_pixmap,
-    SkPixmap* scaled_pixmap,
-    PaintFlags::FilterQuality filter_quality) {
-  // Target pixmap should be half float backed.
-  DCHECK(scaled_pixmap->colorType() == kRGBA_F16_SkColorType);
-  // Filter quality should be medium or high. This is needed if the device
-  // (Android KitKat and lower) does not support mipmaps properly. Mipmaps are
-  // used only for medium and high filter qualities.
-  DCHECK(filter_quality >= PaintFlags::FilterQuality::kMedium);
+namespace {
 
-  // Convert to kN32 color type if necessary
-  SkPixmap n32_pixmap = source_pixmap;
-  SkBitmap n32_bitmap;
-  if (source_pixmap.info().colorType() == kRGBA_F16_SkColorType) {
-    SkImageInfo n32_image_info =
-        source_pixmap.info().makeColorType(kN32_SkColorType);
-    if (!n32_bitmap.tryAllocPixels(n32_image_info))
+BASE_FEATURE(kImageDecodeConfigurableFeature,
+             "ImageDecodeConfigurableFeature",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+MIRACLE_PARAMETER_FOR_INT(GetDefaultDecodedImageWorkingSetBudgetBytes,
+                          kImageDecodeConfigurableFeature,
+                          "DefaultDecodedImageWorkingSetBudgetBytes",
+                          128 * 1024 * 1024)
+
+#if !BUILDFLAG(IS_ANDROID)
+
+MIRACLE_PARAMETER_FOR_INT(GetDecodedImageWorkingSetBudgetBytesForLowEndDevice,
+                          kImageDecodeConfigurableFeature,
+                          "DecodedImageWorkingSetBudgetBytesForLowEndDevice",
+                          32 * 1024 * 1024)
+
+MIRACLE_PARAMETER_FOR_INT(GetDecodedImageWorkingSetBudgetBytesForAboveThreshold,
+                          kImageDecodeConfigurableFeature,
+                          "DecodedImageWorkingSetBudgetBytesForAboveThreshold",
+                          256 * 1024 * 1024)
+
+MIRACLE_PARAMETER_FOR_INT(GetImageDecodeMemoryThresholdMB,
+                          kImageDecodeConfigurableFeature,
+                          "ImageDecodeMemoryThresholdMB",
+                          4 * 1024)
+
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+}  // namespace
+
+// static
+bool ImageDecodeCacheUtils::ShouldEvictCaches(
+    base::MemoryPressureListener::MemoryPressureLevel memory_pressure_level) {
+  switch (memory_pressure_level) {
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
       return false;
-    n32_pixmap = n32_bitmap.pixmap();
-    source_pixmap.readPixels(n32_pixmap, 0, 0);
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
+      return true;
   }
-  // Scale
-  SkBitmap n32_resized_bitmap;
-  SkImageInfo n32_resize_info =
-      n32_pixmap.info().makeWH(scaled_pixmap->width(), scaled_pixmap->height());
-  if (!n32_resized_bitmap.tryAllocPixels(n32_resize_info))
-    return false;
-  if (!n32_pixmap.scalePixels(
-          n32_resized_bitmap.pixmap(),
-          PaintFlags::FilterQualityToSkSamplingOptions(filter_quality)))
-    return false;
-  // Convert back to f16 and return
-  return n32_resized_bitmap.readPixels(*scaled_pixmap, 0, 0);
+  NOTREACHED();
+  return false;
+}
+
+// static
+size_t ImageDecodeCacheUtils::GetWorkingSetBytesForImageDecode(
+    bool for_renderer) {
+  size_t decoded_image_working_set_budget_bytes =
+      GetDefaultDecodedImageWorkingSetBudgetBytes();
+#if !BUILDFLAG(IS_ANDROID)
+  if (for_renderer) {
+    const bool using_low_memory_policy = base::SysInfo::IsLowEndDevice();
+    // If there's over `kImageDecodeMemoryThresholdMB` of RAM, increase the
+    // working set size to `kDecodedImageWorkingSetBudgetBytesForAboveThreshold`
+    // for both gpu and software.
+    if (using_low_memory_policy) {
+      decoded_image_working_set_budget_bytes =
+          GetDecodedImageWorkingSetBudgetBytesForLowEndDevice();
+    } else if (base::SysInfo::AmountOfPhysicalMemoryMB() >=
+               GetImageDecodeMemoryThresholdMB()) {
+      decoded_image_working_set_budget_bytes =
+          GetDecodedImageWorkingSetBudgetBytesForAboveThreshold();
+    }
+  }
+#endif  // !BUILDFLAG(IS_ANDROID)
+  return decoded_image_working_set_budget_bytes;
 }
 
 }  // namespace cc

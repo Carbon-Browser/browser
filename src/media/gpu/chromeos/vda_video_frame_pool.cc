@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/chromeos/vda_video_frame_pool.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/gpu/chromeos/gpu_buffer_layout.h"
 #include "media/gpu/macros.h"
 #include "media/media_buildflags.h"
@@ -40,7 +41,6 @@ CroStatus::Or<GpuBufferLayout> VdaVideoFramePool::Initialize(
     bool use_linear_buffers) {
   DVLOGF(3);
   DCHECK_CALLED_ON_VALID_SEQUENCE(parent_sequence_checker_);
-  DCHECK(!use_linear_buffers);
 
 #if !BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   if (use_protected) {
@@ -84,7 +84,7 @@ CroStatus::Or<GpuBufferLayout> VdaVideoFramePool::Initialize(
                                          parent_task_runner_, weak_this_)));
   done.Wait();
 
-  if (status_or_layout.has_error())
+  if (!status_or_layout.has_value())
     return status_or_layout;
 
   GpuBufferLayout layout = std::move(status_or_layout).value();
@@ -152,7 +152,11 @@ scoped_refptr<VideoFrame> VdaVideoFramePool::GetFrame() {
   // Update visible_rect and natural_size.
   scoped_refptr<VideoFrame> wrapped_frame = VideoFrame::WrapVideoFrame(
       origin_frame, origin_frame->format(), visible_rect_, natural_size_);
-  DCHECK(wrapped_frame);
+  if (!wrapped_frame) {
+    DLOG(WARNING) << __func__ << "Failed to wrap a VideoFrame";
+    return nullptr;
+  }
+
   wrapped_frame->AddDestructionObserver(
       base::BindOnce(&VdaVideoFramePool::ImportFrameThunk, parent_task_runner_,
                      weak_this_, std::move(origin_frame)));
@@ -178,6 +182,12 @@ void VdaVideoFramePool::ReleaseAllFrames() {
   // TODO(jkardatzke): Implement this when we do protected content on Android
   // for Intel platforms. I will do this in a follow up CL, removing the
   // NOREACHED() for now in order to prevent a DCHECK when this occurs.
+}
+
+absl::optional<GpuBufferLayout> VdaVideoFramePool::GetGpuBufferLayout() {
+  DVLOGF(3);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_sequence_checker_);
+  return layout_;
 }
 
 void VdaVideoFramePool::CallFrameAvailableCbIfNeeded() {

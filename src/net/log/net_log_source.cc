@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/check_op.h"
 #include "base/values.h"
-#include "net/log/net_log_capture_mode.h"
 
 namespace net {
-
-namespace {
-
-base::Value SourceEventParametersCallback(const NetLogSource source) {
-  if (!source.IsValid())
-    return base::Value();
-  base::Value::Dict event_params;
-  source.AddToEventParameters(event_params);
-  return base::Value(std::move(event_params));
-}
-
-}  // namespace
 
 // LoadTimingInfo requires this be 0.
 const uint32_t NetLogSource::kInvalidId = 0;
@@ -56,13 +40,12 @@ void NetLogSource::AddToEventParameters(base::Value::Dict& event_params) const {
   event_params.Set("source_dependency", std::move(dict));
 }
 
-void NetLogSource::AddToEventParameters(base::Value* event_params) const {
-  DCHECK(event_params->is_dict());
-  AddToEventParameters(event_params->GetDict());
-}
-
-base::Value NetLogSource::ToEventParameters() const {
-  return SourceEventParametersCallback(*this);
+base::Value::Dict NetLogSource::ToEventParameters() const {
+  if (!IsValid())
+    return base::Value::Dict();
+  base::Value::Dict event_params;
+  AddToEventParameters(event_params);
+  return event_params;
 }
 
 }  // namespace net

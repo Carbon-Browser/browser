@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 #include <string>
 #include <type_traits>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/containers/contains.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/generic_pending_receiver.h"
@@ -67,6 +68,12 @@ class BinderMapWithContext {
     binders_[Interface::Name_] = std::make_unique<
         internal::GenericCallbackBinderWithContext<ContextType>>(
         Traits::MakeGenericBinder(std::move(binder)), std::move(task_runner));
+  }
+
+  // Returns true if this map contains a binder for `Interface` receivers.
+  template <typename Interface>
+  bool Contains() {
+    return base::Contains(binders_, Interface::Name_);
   }
 
   // Attempts to bind the |receiver| using one of the registered binders in

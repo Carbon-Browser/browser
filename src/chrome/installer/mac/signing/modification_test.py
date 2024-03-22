@@ -1,11 +1,11 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import unittest
 from unittest import mock
 
-from . import model, modification, test_config
+from signing import model, modification, test_config
 
 
 def plist_read(*args):

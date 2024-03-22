@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,31 +8,17 @@
 #include <ostream>
 #include <vector>
 
-#include "base/notreached.h"
-#include "base/threading/thread_restrictions.h"
-#include "skia/ext/skia_utils_base.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/clipboard/clipboard_sequence_number_token.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
-#include "ui/gfx/codec/png_codec.h"
-#include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/skia_util.h"
 
 namespace ui {
 
-// static
-std::vector<uint8_t> ClipboardData::EncodeBitmapData(const SkBitmap& bitmap) {
-  // Encoding a PNG can be a long CPU operation.
-  base::AssertLongCPUWorkAllowed();
-
-  std::vector<uint8_t> data;
-  gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, /*discard_transparency=*/false,
-                                    &data);
-  return data;
-}
-
-ClipboardData::ClipboardData() : web_smart_paste_(false), format_(0) {}
+ClipboardData::ClipboardData() = default;
 
 ClipboardData::ClipboardData(const ClipboardData& other) {
+  sequence_number_token_ = other.sequence_number_token_;
   format_ = other.format_;
   text_ = other.text_;
   markup_data_ = other.markup_data_;
@@ -47,18 +33,26 @@ ClipboardData::ClipboardData(const ClipboardData& other) {
   web_smart_paste_ = other.web_smart_paste_;
   svg_data_ = other.svg_data_;
   filenames_ = other.filenames_;
-  src_ = other.src_ ? std::make_unique<DataTransferEndpoint>(*other.src_.get())
-                    : nullptr;
+  src_ = other.src_;
+
 #if BUILDFLAG(IS_CHROMEOS)
   commit_time_ = other.commit_time_;
 #endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
-ClipboardData::~ClipboardData() = default;
-
 ClipboardData::ClipboardData(ClipboardData&&) = default;
 
+ClipboardData& ClipboardData::operator=(ClipboardData&& rhs) = default;
+
+ClipboardData::~ClipboardData() = default;
+
 bool ClipboardData::operator==(const ClipboardData& that) const {
+  // Two `ClipboardData` instances are equal if they have the same contents.
+  // Their sequence number tokens need not be the same, but if they are, we
+  // can be sure the data contents will be the same as well.
+  if (sequence_number_token_ == that.sequence_number_token_)
+    return true;
+
   bool equal_except_images =
       format_ == that.format() && text_ == that.text() &&
       markup_data_ == that.markup_data() && url_ == that.url() &&
@@ -69,8 +63,8 @@ bool ClipboardData::operator==(const ClipboardData& that) const {
       custom_data_data_ == that.custom_data_data() &&
       web_smart_paste_ == that.web_smart_paste() &&
       svg_data_ == that.svg_data() && filenames_ == that.filenames() &&
-      (src_.get() ? (that.source() && *src_.get() == *that.source())
-                  : !that.source());
+      (src_ ? (that.source().has_value() && *src_ == *that.source())
+            : !that.source().has_value());
   if (!equal_except_images)
     return false;
 
@@ -87,7 +81,7 @@ bool ClipboardData::operator==(const ClipboardData& that) const {
   //   a.SetBitmapData(image);
   //
   //   ClipboardData b;
-  //   b.SetPngData(EncodeBitmapData(image));
+  //   b.SetPngData(clipboard_util::EncodeBitmapToPng(image));
   //
   // Avoid this scenario if possible.
   if (maybe_bitmap_.has_value() != that.maybe_bitmap_.has_value())

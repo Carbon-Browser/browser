@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,19 +29,8 @@ namespace {
 const void* const kDownloadManagerDelegateKey = &kDownloadManagerDelegateKey;
 }  // namespace
 
-class CastBrowserContext::CastResourceContext
-    : public content::ResourceContext {
- public:
-  CastResourceContext() {}
-
-  CastResourceContext(const CastResourceContext&) = delete;
-  CastResourceContext& operator=(const CastResourceContext&) = delete;
-
-  ~CastResourceContext() override {}
-};
-
 CastBrowserContext::CastBrowserContext()
-    : resource_context_(new CastResourceContext) {
+    : resource_context_(new content::ResourceContext()) {
   profile_metrics::SetBrowserProfileType(
       this, profile_metrics::BrowserProfileType::kRegular);
   InitWhileIOAllowed();
@@ -152,6 +141,11 @@ CastBrowserContext::GetBackgroundSyncController() {
 
 content::BrowsingDataRemoverDelegate*
 CastBrowserContext::GetBrowsingDataRemoverDelegate() {
+  return nullptr;
+}
+
+content::ReduceAcceptLanguageControllerDelegate*
+CastBrowserContext::GetReduceAcceptLanguageControllerDelegate() {
   return nullptr;
 }
 

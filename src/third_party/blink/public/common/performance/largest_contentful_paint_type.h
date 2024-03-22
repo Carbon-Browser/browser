@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,9 @@ namespace blink {
 // reported to UKM through UKMPageLoadMetricsObserver.
 enum class LargestContentfulPaintType {
   kNone = 0,
-
-  // kImage and KText are not yet supported and will be added later.
   kImage = 1 << 0,
   kText = 1 << 1,
-
   kAnimatedImage = 1 << 2,
-
-  // The enum values below are not yet used and will be added later.
   kVideo = 1 << 3,
   kDataURI = 1 << 4,
   kPNG = 1 << 5,
@@ -30,6 +25,8 @@ enum class LargestContentfulPaintType {
   kSVG = 1 << 8,
   kGIF = 1 << 9,
   kAVIF = 1 << 10,
+
+  // kFullViewport is not yet supported.
   kFullViewport = 1 << 11,
 
   kAfterMouseover = 1 << 12,

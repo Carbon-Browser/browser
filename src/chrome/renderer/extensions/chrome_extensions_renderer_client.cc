@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/features.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/stl_util.h"
 #include "chrome/common/chrome_isolated_world_ids.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/extensions/extension_constants.h"
@@ -34,6 +33,7 @@
 #include "extensions/common/switches.h"
 #include "extensions/renderer/dispatcher.h"
 #include "extensions/renderer/extension_frame_helper.h"
+#include "extensions/renderer/extension_web_view_helper.h"
 #include "extensions/renderer/extensions_render_frame_observer.h"
 #include "extensions/renderer/extensions_renderer_client.h"
 #include "extensions/renderer/guest_view/mime_handler_view/mime_handler_view_container_manager.h"
@@ -151,6 +151,12 @@ void ChromeExtensionsRendererClient::RenderThreadStarted() {
   thread->AddObserver(extension_dispatcher_.get());
 }
 
+void ChromeExtensionsRendererClient::WebViewCreated(
+    blink::WebView* web_view,
+    const url::Origin* outermost_origin) {
+  new extensions::ExtensionWebViewHelper(web_view, outermost_origin);
+}
+
 void ChromeExtensionsRendererClient::RenderFrameCreated(
     content::RenderFrame* render_frame,
     service_manager::BinderRegistry* registry) {
@@ -187,6 +193,7 @@ bool ChromeExtensionsRendererClient::AllowPopup() {
     case extensions::Feature::WEBUI_CONTEXT:
     case extensions::Feature::WEBUI_UNTRUSTED_CONTEXT:
     case extensions::Feature::OFFSCREEN_EXTENSION_CONTEXT:
+    case extensions::Feature::USER_SCRIPT_CONTEXT:
     case extensions::Feature::LOCK_SCREEN_EXTENSION_CONTEXT:
       return false;
     case extensions::Feature::BLESSED_EXTENSION_CONTEXT:
@@ -214,6 +221,7 @@ ChromeExtensionsRendererClient::GetProtocolHandlerSecurityLevel() {
     case extensions::Feature::OFFSCREEN_EXTENSION_CONTEXT:
     case extensions::Feature::UNBLESSED_EXTENSION_CONTEXT:
     case extensions::Feature::UNSPECIFIED_CONTEXT:
+    case extensions::Feature::USER_SCRIPT_CONTEXT:
     case extensions::Feature::WEBUI_CONTEXT:
     case extensions::Feature::WEBUI_UNTRUSTED_CONTEXT:
     case extensions::Feature::WEB_PAGE_CONTEXT:
@@ -261,8 +269,7 @@ void ChromeExtensionsRendererClient::WillSendRequest(
 
   if (url.ProtocolIs(extensions::kExtensionScheme) &&
       !resource_request_policy_->CanRequestResource(
-          GURL(url), frame, transition_type,
-          base::OptionalFromPtr(initiator_origin))) {
+          GURL(url), frame, transition_type, initiator_origin)) {
     *new_url = GURL(chrome::kExtensionInvalidRequestURL);
   }
 
@@ -271,11 +278,10 @@ void ChromeExtensionsRendererClient::WillSendRequest(
   if (url.ProtocolIs(extensions::kExtensionScheme) &&
       request_url.host_piece() == extension_misc::kDocsOfflineExtensionId) {
     if (!ukm_recorder_) {
-      mojo::PendingRemote<ukm::mojom::UkmRecorderInterface> recorder;
+      mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
       content::RenderThread::Get()->BindHostReceiver(
-          recorder.InitWithNewPipeAndPassReceiver());
-      ukm_recorder_ =
-          std::make_unique<ukm::MojoUkmRecorder>(std::move(recorder));
+          factory.BindNewPipeAndPassReceiver());
+      ukm_recorder_ = ukm::MojoUkmRecorder::Create(*factory);
     }
 
     const ukm::SourceId source_id = frame->GetDocument().GetUkmSourceId();

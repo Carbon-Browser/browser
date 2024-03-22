@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@
 #include "chrome/common/chrome_features.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_service.h"
+#include "components/user_manager/user.h"
 
 namespace {
 
@@ -131,7 +132,7 @@ void CanChangeManagedAdbSideloading(
   DCHECK(is_device_enterprise_managed || is_profile_enterprise_managed);
 
   if (!base::FeatureList::IsEnabled(
-          chromeos::features::kArcManagedAdbSideloadingSupport)) {
+          ash::features::kArcManagedAdbSideloadingSupport)) {
     DVLOG(1) << "adb sideloading is disabled by a feature flag";
     std::move(callback).Run(false);
     return;
@@ -187,6 +188,12 @@ bool CrostiniFeatures::CouldBeAllowed(Profile* profile, std::string* reason) {
   if (!crostini::CrostiniManager::IsDevKvmPresent()) {
     // Hardware is physically incapable, no matter what the user wants.
     VLOG(1) << "Cannot run crostini because /dev/kvm is not present.";
+    *reason = "Virtualization is not supported on this device";
+    return false;
+  }
+
+  if (!crostini::CrostiniManager::IsVmLaunchAllowed()) {
+    VLOG(1) << "Concierge does not allow VM to be launched.";
     *reason = "Virtualization is not supported on this device";
     return false;
   }

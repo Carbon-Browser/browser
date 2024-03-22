@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/shared_gpu_context.h"
 #include "third_party/blink/renderer/platform/graphics/web_graphics_context_3d_video_frame_pool.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
@@ -25,17 +25,17 @@ namespace blink {
 
 namespace {
 
-const base::Feature kBreakoutBoxEagerConversion {
-  "BreakoutBoxEagerConversion",
-  // This feature has the same restrictions as TwoCopyCanvasCapture; see
-  // comments there.
+BASE_FEATURE(kBreakoutBoxEagerConversion,
+             "BreakoutBoxEagerConversion",
+// This feature has the same restrictions as TwoCopyCanvasCapture; see
+// comments there.
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN) || \
     (BUILDFLAG(IS_CHROMEOS) && defined(ARCH_CPU_X86_FAMILY))
-      base::FEATURE_ENABLED_BY_DEFAULT
+             base::FEATURE_ENABLED_BY_DEFAULT
 #else
-      base::FEATURE_DISABLED_BY_DEFAULT
+             base::FEATURE_DISABLED_BY_DEFAULT
 #endif
-};
+);
 
 class TransferringOptimizer : public WritableStreamTransferringOptimizer {
  public:
@@ -54,6 +54,10 @@ class TransferringOptimizer : public WritableStreamTransferringOptimizer {
 };
 
 }  // namespace
+
+MainThreadTaskRunnerRestricted AccessMainThreadForGpuMemoryBufferManager() {
+  return {};
+}
 
 MediaStreamVideoTrackUnderlyingSink::MediaStreamVideoTrackUnderlyingSink(
     scoped_refptr<PushableMediaStreamVideoSource::Broker> source_broker)
@@ -80,8 +84,8 @@ ScriptPromise MediaStreamVideoTrackUnderlyingSink::write(
     WritableStreamDefaultController* controller,
     ExceptionState& exception_state) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  VideoFrame* video_frame = V8VideoFrame::ToImplWithTypeCheck(
-      script_state->GetIsolate(), chunk.V8Value());
+  VideoFrame* video_frame =
+      V8VideoFrame::ToWrappable(script_state->GetIsolate(), chunk.V8Value());
   if (!video_frame) {
     exception_state.ThrowTypeError("Null video frame.");
     return ScriptPromise();
@@ -195,15 +199,17 @@ MediaStreamVideoTrackUnderlyingSink::MaybeConvertToNV12GMBVideoFrame(
     if (accelerated_frame_pool_callback_in_progress_) {
       return absl::nullopt;
     }
-    if (!Thread::MainThread()->IsCurrentThread()) {
+    if (!IsMainThread()) {
       accelerated_frame_pool_callback_in_progress_ = true;
-      Thread::MainThread()->GetTaskRunner()->PostTaskAndReplyWithResult(
-          FROM_HERE, ConvertToBaseOnceCallback(CrossThreadBindOnce([]() {
-            return Platform::Current()->GetGpuMemoryBufferManager();
-          })),
-          WTF::Bind(
-              &MediaStreamVideoTrackUnderlyingSink::CreateAcceleratedFramePool,
-              WrapWeakPersistent(this)));
+      Thread::MainThread()
+          ->GetTaskRunner(AccessMainThreadForGpuMemoryBufferManager())
+          ->PostTaskAndReplyWithResult(
+              FROM_HERE, ConvertToBaseOnceCallback(CrossThreadBindOnce([]() {
+                return Platform::Current()->GetGpuMemoryBufferManager();
+              })),
+              WTF::BindOnce(&MediaStreamVideoTrackUnderlyingSink::
+                                CreateAcceleratedFramePool,
+                            WrapWeakPersistent(this)));
       return absl::nullopt;
     }
     auto* gmb_manager = Platform::Current()->GetGpuMemoryBufferManager();
@@ -221,7 +227,7 @@ MediaStreamVideoTrackUnderlyingSink::MaybeConvertToNV12GMBVideoFrame(
 
   auto resolver =
       WrapPersistent(MakeGarbageCollected<ScriptPromiseResolver>(script_state));
-  auto convert_done_callback = WTF::Bind(
+  auto convert_done_callback = WTF::BindOnce(
       &MediaStreamVideoTrackUnderlyingSink::ConvertDone, WrapPersistent(this),
       resolver, video_frame, estimated_capture_time);
   const bool success = accelerated_frame_pool_->ConvertVideoFrame(

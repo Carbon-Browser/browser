@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ bool StructTraits<
   mojo::MapDataView<mojo::StringDataView, mojo_base::mojom::ValueDataView> view;
   data.GetStorageDataView(&view);
   for (size_t i = 0; i < view.size(); ++i) {
-    base::StringPiece key;
+    std::string_view key;
     base::Value value;
     if (!view.keys().Read(i, &key) || !view.values().Read(i, &value))
       return false;
@@ -38,24 +38,6 @@ bool StructTraits<mojo_base::mojom::ListValueDataView, base::Value::List>::Read(
       return false;
     out->Append(std::move(element));
   }
-  return true;
-}
-
-bool StructTraits<
-    mojo_base::mojom::DeprecatedDictionaryValueDataView,
-    base::Value>::Read(mojo_base::mojom::DeprecatedDictionaryValueDataView data,
-                       base::Value* value_out) {
-  mojo::MapDataView<mojo::StringDataView, mojo_base::mojom::ValueDataView> view;
-  data.GetStorageDataView(&view);
-  base::Value::Dict dict;
-  for (size_t i = 0; i < view.size(); ++i) {
-    base::StringPiece key;
-    base::Value value;
-    if (!view.keys().Read(i, &key) || !view.values().Read(i, &value))
-      return false;
-    dict.Set(key, std::move(value));
-  }
-  *value_out = base::Value(std::move(dict));
   return true;
 }
 
@@ -80,7 +62,7 @@ bool UnionTraits<mojo_base::mojom::ValueDataView, base::Value>::Read(
       return true;
     }
     case mojo_base::mojom::ValueDataView::Tag::kStringValue: {
-      base::StringPiece string_piece;
+      std::string_view string_piece;
       if (!data.ReadStringValue(&string_piece))
         return false;
       *value_out = base::Value(string_piece);

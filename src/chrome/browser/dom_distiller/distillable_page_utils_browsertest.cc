@@ -1,15 +1,15 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <cstring>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/browser.h"
@@ -30,7 +30,6 @@
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || \
     BUILDFLAG(IS_WIN)
 #include "components/ukm/test_ukm_recorder.h"
-#include "testing/gmock/include/gmock/gmock.h"
 #endif
 
 namespace dom_distiller {
@@ -116,7 +115,7 @@ class TestOption : public InProcessBrowserTest {
 
   void QuitAfter(base::TimeDelta delta) {
     DCHECK(delta.is_positive());
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop_->QuitClosure(), delta);
   }
 
@@ -126,7 +125,8 @@ class TestOption : public InProcessBrowserTest {
 
   std::unique_ptr<base::RunLoop> run_loop_;
   MockObserver holder_;
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
   std::unique_ptr<net::test_server::EmbeddedTestServer> https_server_;
 };
 
@@ -270,8 +270,15 @@ IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
       Optional(AllOf(Not(IsDistillable()), IsLast(), Not(IsMobileFriendly()))));
 }
 
+// TODO(crbug.com/1461973): Flaky on Linux MSAN.
+#if BUILDFLAG(IS_LINUX) && defined(MEMORY_SANITIZER)
+#define MAYBE_ObserverNotCalledAfterRemoval \
+  DISABLED_ObserverNotCalledAfterRemoval
+#else
+#define MAYBE_ObserverNotCalledAfterRemoval ObserverNotCalledAfterRemoval
+#endif
 IN_PROC_BROWSER_TEST_F(DistillablePageUtilsBrowserTestAllArticles,
-                       ObserverNotCalledAfterRemoval) {
+                       MAYBE_ObserverNotCalledAfterRemoval) {
   RemoveObserver(web_contents_, &holder_);
   EXPECT_CALL(holder_, OnResult(_)).Times(0);
   NavigateAndWait(kSimpleArticlePath, kWaitNoExpectedCall);

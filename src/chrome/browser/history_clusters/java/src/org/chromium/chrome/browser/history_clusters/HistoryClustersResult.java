@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,8 @@ import java.util.Map;
 
 @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
 /**
-   Result representing the response for a query of clusters of related visits from {@link
-   HistoryClustersBridge}. Should only be used external to the history_clusters package in tests.
+ * Result representing the response for a query of clusters of related visits from {@link
+ * HistoryClustersBridge}. Should only be used external to the history_clusters package in tests.
  */
 public class HistoryClustersResult {
     private final List<HistoryCluster> mClusters;
@@ -33,8 +33,12 @@ public class HistoryClustersResult {
      * Constructs a new HistoryClustersResult. {@code labelCounts} must be a LinkedHashMap so that
      * order is stable and preserved.
      */
-    HistoryClustersResult(List<HistoryCluster> clusters, LinkedHashMap<String, Integer> labelCounts,
-            String query, boolean canLoadMore, boolean isContinuation) {
+    HistoryClustersResult(
+            List<HistoryCluster> clusters,
+            LinkedHashMap<String, Integer> labelCounts,
+            String query,
+            boolean canLoadMore,
+            boolean isContinuation) {
         mClusters = clusters;
         mLabelCounts = labelCounts;
         mQuery = query;

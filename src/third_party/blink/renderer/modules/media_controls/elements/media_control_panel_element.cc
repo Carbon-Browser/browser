@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ void MediaControlPanelElement::MakeOpaque() {
     return;
 
   opaque_ = true;
-  removeAttribute("class");
+  removeAttribute(html_names::kClassAttr);
 
   if (is_displayed_) {
     // Make sure we are listening for the 'transitionend' event.
@@ -62,7 +62,7 @@ void MediaControlPanelElement::MakeTransparent() {
   // Make sure we are listening for the 'transitionend' event.
   EnsureTransitionEventListener();
 
-  setAttribute("class", AtomicString(kTransparentClassName));
+  setAttribute(html_names::kClassAttr, AtomicString(kTransparentClassName));
 
   opaque_ = false;
 }

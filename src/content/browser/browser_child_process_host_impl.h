@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,20 +18,24 @@
 #include "base/synchronization/waitable_event_watcher.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "content/browser/child_process_host_impl.h"
 #include "content/browser/child_process_launcher.h"
 #include "content/browser/tracing/tracing_service_controller.h"
 #include "content/common/child_process.mojom.h"
-#include "content/common/child_process_host_impl.h"
 #include "content/public/browser/browser_child_process_host.h"
 #include "content/public/browser/child_process_data.h"
-#include "content/public/common/child_process_host.h"
-#include "content/public/common/child_process_host_delegate.h"
+#include "content/public/browser/child_process_host.h"
+#include "content/public/browser/child_process_host_delegate.h"
 #include "mojo/public/cpp/system/invitation.h"
 #include "services/resource_coordinator/public/mojom/memory_instrumentation/memory_instrumentation.mojom.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/object_watcher.h"
 #endif
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include "content/browser/child_thread_type_switcher_linux.h"
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 namespace base {
 class CommandLine;
@@ -126,7 +130,9 @@ class BrowserChildProcessHostImpl
       std::unique_ptr<ChildProcessLauncherFileData> file_data,
       bool terminate_on_shutdown);
 
-  static void HistogramBadMessageTerminated(ProcessType process_type);
+#if !BUILDFLAG(IS_ANDROID)
+  void SetProcessPriority(base::Process::Priority priority);
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_ANDROID)
   void EnableWarmUpConnection();
@@ -136,6 +142,7 @@ class BrowserChildProcessHostImpl
   BrowserChildProcessHostDelegate* delegate() const { return delegate_; }
 
   mojo::OutgoingInvitation* GetInProcessMojoInvitation() {
+    in_process_ = true;
     return &child_process_host_->GetMojoInvitation().value();
   }
 
@@ -202,7 +209,7 @@ class BrowserChildProcessHostImpl
   mojo::Receiver<memory_instrumentation::mojom::CoordinatorConnector>
       coordinator_connector_receiver_{this};
 
-  std::unique_ptr<ChildProcessLauncher> child_process_;
+  std::unique_ptr<ChildProcessLauncher> child_process_launcher_;
 
 #if BUILDFLAG(IS_WIN)
   // Watches to see if the child process exits before the IPC channel has
@@ -218,8 +225,26 @@ class BrowserChildProcessHostImpl
   // transferred to the child process.
   base::WritableSharedMemoryRegion metrics_shared_region_;
 
+  // Indicates if the main browser process is used instead of a dedicated child
+  // process.
+  bool in_process_ = false;
+
+  // Indicates if legacy IPC is used to communicate with the child process. In
+  // this mode, the BrowserChildProcessHost waits for OnChannelConnected() to be
+  // called before sending the BrowserChildProcessLaunchedAndConnected
+  // notification.
   bool has_legacy_ipc_channel_ = false;
-  bool notify_child_connection_status_ = true;
+
+  // Indicates if the IPC channel is connected. Always true when not using
+  // legacy IPC.
+  bool is_channel_connected_ = true;
+
+  // Indicates if the BrowserChildProcessLaunchedAndConnected notification was
+  // sent for this instance.
+  bool launched_and_connected_ = false;
+
+  // Whether the child process exited abnormally (killed or crashed).
+  bool exited_abnormally_ = false;
 
 #if BUILDFLAG(IS_ANDROID)
   // whether the child process can use pre-warmed up connection for better
@@ -235,6 +260,10 @@ class BrowserChildProcessHostImpl
   // For child process to connect to the system tracing service.
   std::unique_ptr<tracing::SystemTracingService> system_tracing_service_;
 #endif
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  ChildThreadTypeSwitcher child_thread_type_switcher_;
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
   base::WeakPtrFactory<BrowserChildProcessHostImpl> weak_factory_{this};
 };

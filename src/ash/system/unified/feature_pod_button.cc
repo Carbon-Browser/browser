@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/color_util.h"
+#include "ash/style/style_util.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/unified/feature_pod_controller_base.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
@@ -51,7 +52,7 @@ void ConfigureFeaturePodLabel(views::Label* label,
 FeaturePodIconButton::FeaturePodIconButton(PressedCallback callback,
                                            bool is_togglable)
     : IconButton(std::move(callback),
-                 IconButton::Type::kMedium,
+                 IconButton::Type::kLarge,
                  /*icon=*/nullptr,
                  is_togglable,
                  /*has_border=*/true) {
@@ -84,11 +85,11 @@ FeaturePodLabelButton::FeaturePodLabelButton(PressedCallback callback)
   detailed_view_arrow_->SetCanProcessEventsWithinSubtree(false);
   detailed_view_arrow_->SetVisible(false);
 
-  AddChildView(label_);
-  AddChildView(detailed_view_arrow_);
-  AddChildView(sub_label_);
+  AddChildView(label_.get());
+  AddChildView(detailed_view_arrow_.get());
+  AddChildView(sub_label_.get());
 
-  TrayPopupUtils::ConfigureTrayPopupButton(this);
+  StyleUtil::SetUpInkDropForButton(this);
 
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
@@ -187,17 +188,16 @@ void FeaturePodLabelButton::OnEnabledChanged() {
       ContentLayerType::kTextColorSecondary);
   label_->SetEnabledColor(
       GetEnabled() ? primary_text_color
-                   : AshColorProvider::GetDisabledColor(primary_text_color));
+                   : ColorUtil::GetDisabledColor(primary_text_color));
   sub_label_->SetEnabledColor(
       GetEnabled() ? secondary_text_color
-                   : AshColorProvider::GetDisabledColor(secondary_text_color));
+                   : ColorUtil::GetDisabledColor(secondary_text_color));
 
   const SkColor icon_color =
       color_provider->GetContentLayerColor(ContentLayerType::kIconColorPrimary);
   detailed_view_arrow_->SetImage(gfx::CreateVectorIcon(
       kUnifiedMenuMoreIcon,
-      GetEnabled() ? icon_color
-                   : AshColorProvider::GetDisabledColor(icon_color)));
+      GetEnabled() ? icon_color : ColorUtil::GetDisabledColor(icon_color)));
 }
 
 void FeaturePodLabelButton::LayoutInCenter(views::View* child, int y) {
@@ -228,8 +228,8 @@ FeaturePodButton::FeaturePodButton(FeaturePodControllerBase* controller,
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
 
-  AddChildView(icon_button_);
-  AddChildView(label_button_);
+  AddChildView(icon_button_.get());
+  AddChildView(label_button_.get());
 
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);

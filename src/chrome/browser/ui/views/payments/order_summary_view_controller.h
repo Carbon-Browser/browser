@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,6 +44,9 @@ class OrderSummaryViewController : public PaymentRequestSheetController,
   bool ShouldShowSecondaryButton() override;
   std::u16string GetSheetTitle() override;
   void FillContentView(views::View* content_view) override;
+  bool GetSheetId(DialogViewID* sheet_id) override;
+  bool ShouldAccelerateEnterKey() override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
   base::WeakPtrFactory<OrderSummaryViewController> weak_ptr_factory_{this};
 };

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,14 +45,12 @@ class BASE_EXPORT ThreadControllerImpl : public ThreadController,
 
   // ThreadController:
   void SetWorkBatchSize(int work_batch_size) override;
-  void WillQueueTask(PendingTask* pending_task,
-                     const char* task_queue_name) override;
+  void WillQueueTask(PendingTask* pending_task) override;
   void ScheduleWork() override;
   void BindToCurrentThread(std::unique_ptr<MessagePump> message_pump) override;
   void SetNextDelayedDoWork(LazyNow* lazy_now,
                             absl::optional<WakeUp> wake_up) override;
   void SetSequencedTaskSource(SequencedTaskSource* sequence) override;
-  void SetTimerSlack(TimerSlack timer_slack) override;
   bool RunsTasksInCurrentSequence() override;
   void SetDefaultTaskRunner(scoped_refptr<SingleThreadTaskRunner>) override;
   scoped_refptr<SingleThreadTaskRunner> GetDefaultTaskRunner() override;

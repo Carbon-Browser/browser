@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,21 +9,19 @@
 namespace policy {
 
 // static
-DMToken DMToken::CreateValidTokenForTesting(const std::string& value) {
+DMToken DMToken::CreateValidToken(const std::string& value) {
   return DMToken(Status::kValid, value);
 }
 
 // static
-DMToken DMToken::CreateInvalidTokenForTesting() {
+DMToken DMToken::CreateInvalidToken() {
   return DMToken(Status::kInvalid, "");
 }
 
 // static
-DMToken DMToken::CreateEmptyTokenForTesting() {
+DMToken DMToken::CreateEmptyToken() {
   return DMToken(Status::kEmpty, "");
 }
-
-DMToken::DMToken() : DMToken(Status::kEmpty, "") {}
 
 DMToken::DMToken(Status status, const base::StringPiece value)
     : status_(status), value_(value) {}

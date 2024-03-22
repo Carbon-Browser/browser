@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_POLICY_USER_POLICY_SCENE_AGENT_H_
 #define IOS_CHROME_BROWSER_UI_POLICY_USER_POLICY_SCENE_AGENT_H_
 
-#import "ios/chrome/browser/ui/main/observing_scene_state_agent.h"
+#import "ios/chrome/browser/shared/coordinator/scene/observing_scene_state_agent.h"
 
 @protocol SceneUIProvider;
 class AuthenticationService;
@@ -14,6 +14,7 @@ class PrefService;
 class Browser;
 
 namespace policy {
+class UserCloudPolicyManager;
 class UserPolicySigninService;
 }  // namespace policy
 
@@ -63,6 +64,8 @@ class UserPolicySigninService;
                             mainBrowser:(Browser*)mainBrowser
                           policyService:
                               (policy::UserPolicySigninService*)policyService
+                      userPolicyManager:
+                          (policy::UserCloudPolicyManager*)userPolicyManager
     NS_DESIGNATED_INITIALIZER;
 
 @end

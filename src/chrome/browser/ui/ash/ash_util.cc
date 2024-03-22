@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,16 @@ void SetupWidgetInitParamsForContainer(views::Widget::InitParams* params,
 
   params->parent = ash::Shell::GetContainer(
       ash::Shell::GetRootWindowForNewWindows(), container_id);
+}
+
+void SetupWidgetInitParamsForContainerInPrimary(
+    views::Widget::InitParams* params,
+    int container_id) {
+  DCHECK_GE(container_id, ash::kShellWindowId_MinContainer);
+  DCHECK_LE(container_id, ash::kShellWindowId_MaxContainer);
+
+  params->parent = ash::Shell::GetContainer(ash::Shell::GetPrimaryRootWindow(),
+                                            container_id);
 }
 
 int GetSystemModalDialogContainerId() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -36,7 +36,7 @@ void EventRouterForwarder::BroadcastEventToRenderers(
     const GURL& event_url,
     bool dispatch_to_off_the_record_profiles) {
   HandleEvent(std::string(), histogram_value, event_name, std::move(event_args),
-              0, true, event_url, dispatch_to_off_the_record_profiles);
+              nullptr, true, event_url, dispatch_to_off_the_record_profiles);
 }
 
 void EventRouterForwarder::DispatchEventToRenderers(
@@ -77,7 +77,7 @@ void EventRouterForwarder::HandleEvent(
     return;
 
   ProfileManager* profile_manager = g_browser_process->profile_manager();
-  Profile* profile = NULL;
+  Profile* profile = nullptr;
   if (profile_ptr) {
     if (!profile_manager->IsValidProfile(profile_ptr))
       return;
@@ -108,23 +108,15 @@ void EventRouterForwarder::HandleEvent(
   if (profiles_to_dispatch_to.size() == 0u)
     return;
 
-  // Use the same event_args for each profile (making copies as needed).
-  std::vector<base::Value::List> per_profile_args;
-  per_profile_args.reserve(profiles_to_dispatch_to.size());
-  per_profile_args.emplace_back(std::move(event_args));
-  for (size_t i = 1; i < profiles_to_dispatch_to.size(); ++i)
-    per_profile_args.emplace_back(per_profile_args.front().Clone());
-  DCHECK_EQ(per_profile_args.size(), profiles_to_dispatch_to.size());
-
-  size_t profile_args_index = 0;
   for (Profile* profile_to_dispatch_to : profiles_to_dispatch_to) {
     CallEventRouter(
         profile_to_dispatch_to, extension_id, histogram_value, event_name,
-        std::move(per_profile_args[profile_args_index++]),
+        profile_to_dispatch_to != *std::prev(profiles_to_dispatch_to.end())
+            ? event_args.Clone()
+            : std::move(event_args),
         use_profile_to_restrict_events ? profile_to_dispatch_to : nullptr,
         event_url);
   }
-  DCHECK_EQ(per_profile_args.size(), profile_args_index);
 }
 
 void EventRouterForwarder::CallEventRouter(
@@ -135,22 +127,22 @@ void EventRouterForwarder::CallEventRouter(
     base::Value::List event_args,
     Profile* restrict_to_profile,
     const GURL& event_url) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+  auto* event_router = extensions::EventRouter::Get(profile);
   // Extension does not exist for chromeos login.  This needs to be
   // removed once we have an extension service for login screen.
   // crosbug.com/12856.
-  if (!extensions::EventRouter::Get(profile))
+  //
+  // Extensions are not available on System Profile.
+  if (!event_router)
     return;
-#endif
 
   auto event = std::make_unique<Event>(
       histogram_value, event_name, std::move(event_args), restrict_to_profile);
   event->event_url = event_url;
   if (extension_id.empty()) {
-    extensions::EventRouter::Get(profile)->BroadcastEvent(std::move(event));
+    event_router->BroadcastEvent(std::move(event));
   } else {
-    extensions::EventRouter::Get(profile)
-        ->DispatchEventToExtension(extension_id, std::move(event));
+    event_router->DispatchEventToExtension(extension_id, std::move(event));
   }
 }
 

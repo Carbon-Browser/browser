@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SESSIONS_CORE_SESSION_ID_GENERATOR_H_
 #define COMPONENTS_SESSIONS_CORE_SESSION_ID_GENERATOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/sequence_checker.h"
@@ -56,7 +56,7 @@ class SESSIONS_EXPORT SessionIdGenerator {
   void IncrementValueBy(int increment);
 
   SEQUENCE_CHECKER(sequence_checker_);
-  raw_ptr<PrefService> local_state_;
+  raw_ptr<PrefService, AcrossTasksDanglingUntriaged> local_state_;
   SessionID::id_type last_value_;
 
   // Used to override the random number generator for tests.

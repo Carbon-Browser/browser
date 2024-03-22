@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,9 @@ class DummyInputMethod : public InputMethod {
   ~DummyInputMethod() override;
 
   // InputMethod overrides:
-  void SetDelegate(internal::InputMethodDelegate* delegate) override;
+  void SetImeKeyEventDispatcher(
+      ImeKeyEventDispatcher* ime_key_event_dispatcher) override;
   void OnFocus() override;
-  void OnTouch(ui::EventPointerType pointerType) override;
   void OnBlur() override;
 
 #if BUILDFLAG(IS_WIN)

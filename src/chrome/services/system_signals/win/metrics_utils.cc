@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,11 +62,6 @@ void LogResponse(const base::StringPiece& histogram_variant,
 
 void LogWscAvResponse(const device_signals::WscAvProductsResponse& response) {
   LogResponse(".WSC.AntiVirus", response.av_products.size(),
-              response.query_error, response.parsing_errors);
-}
-
-void LogWmiAvResponse(const device_signals::WmiAvProductsResponse& response) {
-  LogResponse(".WMI.AntiVirus", response.av_products.size(),
               response.query_error, response.parsing_errors);
 }
 

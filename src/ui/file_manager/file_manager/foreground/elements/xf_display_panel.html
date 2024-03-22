@@ -1,12 +1,12 @@
 <style>
   :host {
-    max-width: 400px;
+    max-width: 504px;
     outline: none;
   }
   #container {
     align-items: stretch;
-    background-color: var(--cros-bg-color-elevation-2);
-    border-radius: 4px;
+    background-color: var(--cros-sys-base_elevated);
+    border-radius: 8px;
     box-shadow: var(--cros-elevation-2-shadow);
     display: flex;
     flex-direction: column;
@@ -14,7 +14,7 @@
     z-index: 100;
   }
   #separator {
-    background-color: var(--cros-separator-color);
+    background-color: var(--cros-sys-separator);
     height: 1px;
   }
   /* Limit to 3 visible progress panels before scroll. */
@@ -43,24 +43,24 @@
     75% {
       max-height: calc(192px + 28px);
       opacity: 0;
-      width: 400px;
+      width: 504px;
     }
     100% {
       max-height: calc(192px + 28px);
       opacity: 1;
-      width: 400px;
+      width: 504px;
     }
   }
 
   @keyframes setexpand {
     0% {
       max-height: calc(192px + 28px);
-      max-width: 400px;
+      max-width: 504px;
       opacity: 1;
     }
     25% {
       max-height: calc(192px + 28px);
-      max-width: 400px;
+      max-width: 504px;
       opacity: 0;
     }
     100% {
@@ -71,7 +71,7 @@
   }
   .expanded {
     animation: setcollapse 200ms forwards;
-    width: 400px;
+    width: 504px;
   }
   .collapsed {
     animation: setexpand 200ms forwards;
@@ -83,7 +83,7 @@
     max-height: calc(192px + 28px);
     opacity: 1;
     overflow-y: auto;
-    width: 400px;
+    width: 504px;
   }
   xf-panel-item:not(:only-child) {
     --multi-progress-height: 92px;

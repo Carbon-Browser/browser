@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,10 +44,12 @@ class MockAutofillWebDataBackend : public AutofillWebDataBackend {
               NotifyOfCreditCardChanged,
               (const CreditCardChange& change),
               (override));
-  MOCK_METHOD(void, NotifyOfMultipleAutofillChanges, (), (override));
-  MOCK_METHOD(void, NotifyOfAddressConversionCompleted, (), (override));
   MOCK_METHOD(void,
-              NotifyThatSyncHasStarted,
+              NotifyOfIbanChanged,
+              (const IbanChange& change),
+              (override));
+  MOCK_METHOD(void,
+              NotifyOnAutofillChangedBySync,
               (syncer::ModelType model_type),
               (override));
 };

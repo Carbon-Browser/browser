@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@
 #include <mach/vm_page_size.h>
 #endif
 
-#if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_POSIX)
 #include <sys/mman.h>
 #endif
 
@@ -38,6 +38,12 @@
 #include <windows.h>  // Must be in front of other Windows header files
 
 #include <Psapi.h>
+#endif
+
+#if BUILDFLAG(IS_FUCHSIA)
+#include <tuple>
+
+#include "base/notreached.h"
 #endif
 
 using ProcessSnapshot =
@@ -113,12 +119,9 @@ absl::optional<size_t> ProcessMemoryDump::CountResidentBytes(
 #endif
 
   while (offset < mapped_size) {
-    // TODO(fuchsia): Port and remove [[maybe_unused]], see
-    // https://crbug.com/706592.
-    [[maybe_unused]] uintptr_t chunk_start = (start_pointer + offset);
+    uintptr_t chunk_start = (start_pointer + offset);
     const size_t chunk_size = std::min(mapped_size - offset, kMaxChunkSize);
-    [[maybe_unused]] const size_t page_count =
-        GetSystemPageCount(chunk_size, page_size);
+    const size_t page_count = GetSystemPageCount(chunk_size, page_size);
     size_t resident_page_count = 0;
 #if BUILDFLAG(IS_WIN)
     for (size_t i = 0; i < page_count; i++) {
@@ -132,7 +135,11 @@ absl::optional<size_t> ProcessMemoryDump::CountResidentBytes(
     for (size_t i = 0; i < page_count; i++)
       resident_page_count += vec[i].VirtualAttributes.Valid;
 #elif BUILDFLAG(IS_FUCHSIA)
-    // TODO(fuchsia): Port, see https://crbug.com/706592.
+    // TODO(crbug.com/851760): Implement counting resident bytes.
+    // For now, log and avoid unused variable warnings.
+    NOTIMPLEMENTED_LOG_ONCE();
+    std::ignore = chunk_start;
+    std::ignore = page_count;
 #elif BUILDFLAG(IS_APPLE)
     // mincore in MAC does not fail with EAGAIN.
     failure =
@@ -191,9 +198,9 @@ absl::optional<size_t> ProcessMemoryDump::CountResidentBytesInSharedMemory(
       mapped_size + static_cast<size_t>(static_cast<uint8_t*>(start_address) -
                                         aligned_start_address);
 
-#if BUILDFLAG(IS_MAC)
-  // On macOS, use mach_vm_region instead of mincore for performance
-  // (crbug.com/742042).
+#if BUILDFLAG(IS_APPLE)
+  // On macOS and iOS, use mach_vm_region|vm_region_64 instead of mincore for
+  // performance (crbug.com/742042).
   mach_vm_size_t dummy_size = 0;
   mach_vm_address_t address =
       reinterpret_cast<mach_vm_address_t>(aligned_start_address);
@@ -209,7 +216,7 @@ absl::optional<size_t> ProcessMemoryDump::CountResidentBytesInSharedMemory(
   size_t resident_pages =
       info.private_pages_resident + info.shared_pages_resident;
 
-  // On macOS, measurements for private memory footprint overcount by
+  // On macOS and iOS, measurements for private memory footprint overcount by
   // faulted pages in anonymous shared memory. To discount for this, we touch
   // all the resident pages in anonymous shared memory here, thus making them
   // faulted as well. This relies on two assumptions:
@@ -282,7 +289,7 @@ MemoryAllocatorDump* ProcessMemoryDump::AddAllocatorDumpInternal(
     std::unique_ptr<MemoryAllocatorDump> mad) {
   // In background mode return the black hole dump, if invalid dump name is
   // given.
-  if (dump_args_.level_of_detail == MemoryDumpLevelOfDetail::BACKGROUND &&
+  if (dump_args_.level_of_detail == MemoryDumpLevelOfDetail::kBackground &&
       !IsMemoryAllocatorDumpNameInAllowlist(mad->absolute_name())) {
     return GetBlackHoleMad(mad->absolute_name());
   }
@@ -525,8 +532,9 @@ void ProcessMemoryDump::CreateSharedMemoryOwnershipEdgeInternal(
 void ProcessMemoryDump::AddSuballocation(const MemoryAllocatorDumpGuid& source,
                                          const std::string& target_node_name) {
   // Do not create new dumps for suballocations in background mode.
-  if (dump_args_.level_of_detail == MemoryDumpLevelOfDetail::BACKGROUND)
+  if (dump_args_.level_of_detail == MemoryDumpLevelOfDetail::kBackground) {
     return;
+  }
 
   std::string child_mad_name = target_node_name + "/__" + source.ToString();
   MemoryAllocatorDump* target_child_mad = CreateAllocatorDump(child_mad_name);
@@ -550,17 +558,6 @@ MemoryAllocatorDumpGuid ProcessMemoryDump::GetDumpId(
     const std::string& absolute_name) {
   return MemoryAllocatorDumpGuid(StringPrintf(
       "%s:%s", process_token().ToString().c_str(), absolute_name.c_str()));
-}
-
-bool ProcessMemoryDump::MemoryAllocatorDumpEdge::operator==(
-    const MemoryAllocatorDumpEdge& other) const {
-  return source == other.source && target == other.target &&
-         importance == other.importance && overridable == other.overridable;
-}
-
-bool ProcessMemoryDump::MemoryAllocatorDumpEdge::operator!=(
-    const MemoryAllocatorDumpEdge& other) const {
-  return !(*this == other);
 }
 
 }  // namespace trace_event

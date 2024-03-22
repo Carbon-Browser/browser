@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,16 +63,10 @@ class POLICY_EXPORT PolicyConversionsClient {
   void SetDropDefaultValues(bool enabled);
 
 #if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  // Sets the updater policies.
-  void SetUpdaterPolicies(std::unique_ptr<PolicyMap> policies);
-
-  // Returns true if this client is able to return information on the updater's
-  // policies.
-  bool HasUpdaterPolicies() const;
-  base::Value::Dict GetUpdaterPolicies();
-
-  // Sets the updater policy schemas.
-  void SetUpdaterPolicySchemas(PolicyConversions::PolicyToSchemaMap schemas);
+  base::Value::Dict ConvertUpdaterPolicies(
+      PolicyMap updater_policies,
+      absl::optional<PolicyConversions::PolicyToSchemaMap>
+          updater_policy_schemas);
 #endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
   // Converts the given |value| to JSON, respecting the configuration
@@ -172,10 +166,12 @@ class POLICY_EXPORT PolicyConversionsClient {
 
  private:
   friend class PolicyConversionsClientTest;
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  std::unique_ptr<PolicyMap> updater_policies_;
-  absl::optional<PolicyConversions::PolicyToSchemaMap> updater_policy_schemas_;
-#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING) && BUILDFLAG(IS_WIN)
+
+  // Returns the policy scope to be used for UI. The |policy_scope| from the
+  // input is the generic scope: device or user policy. But in Lacros case we
+  // need to filter the user policies based on per_profile flag.
+  std::string GetPolicyScope(const std::string& policy_name,
+                             const PolicyScope& policy_scope) const;
 
   bool convert_types_enabled_ = true;
   bool convert_values_enabled_ = false;
@@ -184,6 +180,11 @@ class POLICY_EXPORT PolicyConversionsClient {
   bool pretty_print_enabled_ = true;
   bool user_policies_enabled_ = true;
   bool drop_default_values_enabled_ = false;
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void PopulatePerProfileMap();
+  std::unique_ptr<std::map<std::string, bool>> per_profile_map_;
+#endif
 };
 
 }  // namespace policy

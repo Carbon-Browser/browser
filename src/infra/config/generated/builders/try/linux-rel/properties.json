@@ -1,17 +1,20 @@
 {
   "$build/chromium_orchestrator": {
     "compilator": "linux-rel-compilator",
-    "compilator_watcher_git_revision": "7809a690bbd935bcb3b4d922e24cabe168aaabc8"
+    "compilator_watcher_git_revision": "e3cad57252d996ab02463019e7f49343d739b885"
   },
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/linux-rel/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "GPU Linux Builder",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -27,8 +30,7 @@
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "use_clang_coverage",
-                  "enable_reclient"
+                  "use_clang_coverage"
                 ],
                 "config": "chromium"
               }
@@ -38,7 +40,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux Builder",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-linux-archive",
@@ -54,8 +56,7 @@
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "use_clang_coverage",
-                  "enable_reclient"
+                  "use_clang_coverage"
                 ],
                 "config": "chromium"
               }
@@ -65,7 +66,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux Release (NVIDIA)",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -88,7 +89,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "GPU Linux Builder",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           },
@@ -96,7 +97,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux Tests",
-              "project": "chromium"
+              "project": "chromium-m121"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-linux-archive",
@@ -119,7 +120,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "Linux Builder",
-                "project": "chromium"
+                "project": "chromium-m121"
               }
             }
           }
@@ -129,29 +130,26 @@
         {
           "bucket": "ci",
           "builder": "GPU Linux Builder",
-          "project": "chromium"
+          "project": "chromium-m121"
         },
         {
           "bucket": "ci",
           "builder": "Linux Builder",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
       ],
       "builder_ids_in_scope_for_testing": [
         {
           "bucket": "ci",
           "builder": "Linux Release (NVIDIA)",
-          "project": "chromium"
+          "project": "chromium-m121"
         },
         {
           "bucket": "ci",
           "builder": "Linux Tests",
-          "project": "chromium"
+          "project": "chromium-m121"
         }
-      ],
-      "rts_config": {
-        "condition": "QUICK_RUN_ONLY"
-      }
+      ]
     }
   },
   "$build/code_coverage": {
@@ -162,7 +160,8 @@
     "use_clang_coverage": true
   },
   "$build/flakiness": {
-    "check_for_flakiness": true
+    "check_for_flakiness": true,
+    "check_for_flakiness_with_resultdb": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -172,5 +171,6 @@
     ]
   },
   "builder_group": "tryserver.chromium.linux",
+  "cq": "required",
   "recipe": "chromium/orchestrator"
 }

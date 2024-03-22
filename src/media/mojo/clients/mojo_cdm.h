@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -47,6 +48,7 @@ class MojoCdm final : public ContentDecryptionModule,
   // All parameters must be non-null.
   MojoCdm(mojo::Remote<mojom::ContentDecryptionModule> remote_cdm,
           media::mojom::CdmContextPtr cdm_context,
+          const CdmConfig& cdm_config,
           const SessionMessageCB& session_message_cb,
           const SessionClosedCB& session_closed_cb,
           const SessionKeysChangeCB& session_keys_change_cb,
@@ -115,6 +117,9 @@ class MojoCdm final : public ContentDecryptionModule,
                                     mojom::CdmPromiseResultPtr result,
                                     const std::string& session_id);
 
+  // Helper for rejecting promises when connection lost.
+  void RejectPromiseConnectionLost(uint32_t promise_id);
+
   THREAD_CHECKER(thread_checker_);
 
   mojo::Remote<mojom::ContentDecryptionModule> remote_cdm_;
@@ -146,6 +151,8 @@ class MojoCdm final : public ContentDecryptionModule,
 #if BUILDFLAG(IS_WIN)
   bool requires_media_foundation_renderer_ GUARDED_BY(lock_) = false;
 #endif  // BUILDFLAG(IS_WIN)
+
+  CdmConfig cdm_config_;
 
   // Callbacks for firing session events.
   SessionMessageCB session_message_cb_;

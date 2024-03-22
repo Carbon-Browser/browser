@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lifetime/application_lifetime_desktop.h"
 
 #include "base/command_line.h"
 #include "base/test/mock_callback.h"
@@ -107,10 +108,10 @@ IN_PROC_BROWSER_TEST_F(RelaunchIgnoreUnloadHandlersTest, Do) {
       ui_test_utils::NavigateToURL(browser(), GURL(url::kAboutBlankURL)));
   content::WebContents* tab =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ASSERT_TRUE(content::ExecuteScript(
-      tab,
-      "window.addEventListener('beforeunload',"
-      "function(event) { event.returnValue = 'Foo'; });"));
+  ASSERT_TRUE(
+      content::ExecJs(tab,
+                      "window.addEventListener('beforeunload',"
+                      "function(event) { event.returnValue = 'Foo'; });"));
   content::PrepContentsForBeforeUnloadTest(tab);
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(&chrome::RelaunchIgnoreUnloadHandlers));

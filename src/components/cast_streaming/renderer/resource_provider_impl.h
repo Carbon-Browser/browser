@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,23 +8,20 @@
 #include <map>
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "components/cast_streaming/public/mojom/demuxer_connector.mojom.h"
-#include "components/cast_streaming/public/mojom/renderer_controller.mojom.h"
-#include "components/cast_streaming/renderer/demuxer_connector.h"
+#include "base/task/sequenced_task_runner.h"
+#include "components/cast_streaming/common/public/mojom/demuxer_connector.mojom.h"
+#include "components/cast_streaming/common/public/mojom/renderer_controller.mojom.h"
+#include "components/cast_streaming/renderer/control/renderer_controller_proxy.h"
+#include "components/cast_streaming/renderer/frame/demuxer_connector.h"
 #include "components/cast_streaming/renderer/public/resource_provider.h"
-#include "components/cast_streaming/renderer/renderer_controller_proxy.h"
 #include "media/mojo/mojom/renderer.mojom.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "url/gurl.h"
-
-namespace base {
-class SingleThreadTaskRunner;
-}
 
 namespace media {
 class Demuxer;
@@ -85,7 +82,7 @@ class ResourceProviderImpl : public ResourceProvider {
   ReceiverBinder<mojom::DemuxerConnector> GetDemuxerConnectorBinder() override;
   std::unique_ptr<media::Demuxer> MaybeGetDemuxerOverride(
       const GURL& url,
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner) override;
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner) override;
   mojo::PendingReceiver<media::mojom::Renderer> GetRendererCommandReceiver()
       override;
 

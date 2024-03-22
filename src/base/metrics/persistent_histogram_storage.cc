@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -130,6 +130,9 @@ PersistentHistogramStorage::~PersistentHistogramStorage() {
   // Save data using the current time as the filename. The actual filename
   // doesn't matter (so long as it ends with the correct extension) but this
   // works as well as anything.
+  //
+  // NOTE: Cannot use `UnlocalizedTimeFormatWithPattern()` here since `//base`
+  // cannot depend on `//base:i18n`.
   Time::Exploded exploded;
   Time::Now().LocalExplode(&exploded);
   const FilePath file_path =

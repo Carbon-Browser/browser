@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "media/audio/audio_manager.h"
 #include "media/base/audio_parameters.h"
@@ -72,9 +72,8 @@ InputStream::InputStream(
     mojo::PendingRemote<media::mojom::AudioInputStreamObserver> observer,
     mojo::PendingRemote<media::mojom::AudioLog> log,
     media::AudioManager* audio_manager,
-    AecdumpRecordingManager* aecdump_recording_manager,
+    media::AecdumpRecordingManager* aecdump_recording_manager,
     std::unique_ptr<UserInputMonitor> user_input_monitor,
-    InputStreamActivityMonitor* activity_monitor,
     DeviceOutputListener* device_output_listener,
     media::mojom::AudioProcessingConfigPtr processing_config,
     const std::string& device_id,
@@ -98,7 +97,6 @@ InputStream::InputStream(
           &foreign_socket_)),
       user_input_monitor_(std::move(user_input_monitor)) {
   DCHECK(audio_manager);
-  DCHECK(activity_monitor);
   DCHECK(receiver_.is_bound());
   DCHECK(client_);
   DCHECK(created_callback_);
@@ -137,7 +135,7 @@ InputStream::InputStream(
 
   controller_ = InputController::Create(
       audio_manager, this, writer_.get(), user_input_monitor_.get(),
-      activity_monitor, device_output_listener, aecdump_recording_manager,
+      device_output_listener, aecdump_recording_manager,
       std::move(processing_config), params, device_id, enable_agc);
 }
 
@@ -270,7 +268,7 @@ void InputStream::OnError(InputController::ErrorCode error_code) {
   OnStreamError(InputErrorToDisconnectReason(error_code));
 }
 
-void InputStream::OnLog(base::StringPiece message) {
+void InputStream::OnLog(std::string_view message) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(owning_sequence_);
   if (log_)
     log_->OnLogMessage(std::string(message) + " [id=" + id_.ToString() + "]");
@@ -299,7 +297,7 @@ void InputStream::OnStreamError(
   }
 
   // Defer callback so we're not destructed while in the constructor.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&InputStream::CallDeleter, weak_factory_.GetWeakPtr()));
   receiver_.reset();

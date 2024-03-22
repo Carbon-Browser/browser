@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -140,7 +140,8 @@ class MediaControlsRotateToFullscreenDelegateTest
 
   bool IsObservingVisibility() const {
     return GetMediaControls()
-        .rotate_to_fullscreen_delegate_->intersection_observer_;
+               .rotate_to_fullscreen_delegate_->intersection_observer_ !=
+           nullptr;
   }
 
   bool ObservedVisibility() const {
@@ -200,7 +201,7 @@ void MediaControlsRotateToFullscreenDelegateTest::InitScreenAndVideo(
 
   // Set up the WebMediaPlayer instance.
   GetDocument().body()->AppendChild(&GetVideo());
-  GetVideo().SetSrc("https://example.com");
+  GetVideo().SetSrc(AtomicString("https://example.com"));
   test::RunPendingTasks();
   SimulateVideoReadyState(HTMLMediaElement::kHaveMetadata);
 
@@ -255,7 +256,7 @@ TEST_F(MediaControlsRotateToFullscreenDelegateTest, DelegateRequiresVideo) {
 TEST_F(MediaControlsRotateToFullscreenDelegateTest, ComputeVideoOrientation) {
   // Set up the WebMediaPlayer instance.
   GetDocument().body()->AppendChild(&GetVideo());
-  GetVideo().SetSrc("https://example.com");
+  GetVideo().SetSrc(AtomicString("https://example.com"));
   test::RunPendingTasks();
 
   // Video is not yet ready.
@@ -738,7 +739,8 @@ TEST_F(MediaControlsRotateToFullscreenDelegateTest,
 
   EXPECT_FALSE(ObservedVisibility());
 
-  GetVideo().setAttribute("controlslist", "nofullscreen");
+  GetVideo().setAttribute(AtomicString("controlslist"),
+                          AtomicString("nofullscreen"));
 
   PlayVideo();
   UpdateVisibilityObserver();
@@ -786,7 +788,8 @@ TEST_F(MediaControlsRotateToFullscreenDelegateTest,
 
   EXPECT_FALSE(ObservedVisibility());
 
-  GetVideo().setAttribute("controlslist", "nodownload");
+  GetVideo().setAttribute(AtomicString("controlslist"),
+                          AtomicString("nodownload"));
 
   PlayVideo();
   UpdateVisibilityObserver();

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,19 +11,18 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
-#include "base/values.h"
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_constants.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/account_reconcilor_factory.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/sync_ui_util.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/pref_names.h"
 #include "components/browsing_data/content/browsing_data_helper.h"
 #include "components/browsing_data/core/pref_names.h"
+#include "components/history/core/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -37,51 +36,6 @@
 using browsing_data::BrowsingDataType;
 using browsing_data::ClearBrowsingDataTab;
 using content::BrowserThread;
-
-namespace extension_browsing_data_api_constants {
-// Parameter name keys.
-const char kDataRemovalPermittedKey[] = "dataRemovalPermitted";
-const char kDataToRemoveKey[] = "dataToRemove";
-const char kOptionsKey[] = "options";
-
-// Type keys.
-const char kCacheKey[] = "cache";
-const char kCookiesKey[] = "cookies";
-const char kDownloadsKey[] = "downloads";
-const char kFileSystemsKey[] = "fileSystems";
-const char kFormDataKey[] = "formData";
-const char kHistoryKey[] = "history";
-const char kIndexedDBKey[] = "indexedDB";
-const char kLocalStorageKey[] = "localStorage";
-const char kPasswordsKey[] = "passwords";
-const char kPluginDataKeyDeprecated[] = "pluginData";
-const char kServiceWorkersKey[] = "serviceWorkers";
-const char kCacheStorageKey[] = "cacheStorage";
-const char kWebSQLKey[] = "webSQL";
-
-// Option keys.
-const char kExtensionsKey[] = "extension";
-const char kOriginTypesKey[] = "originTypes";
-const char kProtectedWebKey[] = "protectedWeb";
-const char kSinceKey[] = "since";
-const char kOriginsKey[] = "origins";
-const char kExcludeOriginsKey[] = "excludeOrigins";
-const char kUnprotectedWebKey[] = "unprotectedWeb";
-
-// Errors!
-// The placeholder will be filled by the name of the affected data type (e.g.,
-// "history").
-const char kBadDataTypeDetails[] = "Invalid value for data type '%s'.";
-const char kDeleteProhibitedError[] =
-    "Browsing history and downloads are not "
-    "permitted to be removed.";
-const char kNonFilterableError[] =
-    "At least one data type doesn't support filtering by origin.";
-const char kIncompatibleFilterError[] =
-    "Don't set both 'origins' and 'excludeOrigins' at the same time.";
-const char kInvalidOriginError[] = "'%s' is not a valid origin.";
-
-}  // namespace extension_browsing_data_api_constants
 
 namespace {
 
@@ -97,8 +51,9 @@ static_assert((kFilterableDataTypes &
 uint64_t MaskForKey(const char* key) {
   if (strcmp(key, extension_browsing_data_api_constants::kCacheKey) == 0)
     return content::BrowsingDataRemover::DATA_TYPE_CACHE;
-  if (strcmp(key, extension_browsing_data_api_constants::kCookiesKey) == 0)
+  if (strcmp(key, extension_browsing_data_api_constants::kCookiesKey) == 0) {
     return content::BrowsingDataRemover::DATA_TYPE_COOKIES;
+  }
   if (strcmp(key, extension_browsing_data_api_constants::kDownloadsKey) == 0)
     return content::BrowsingDataRemover::DATA_TYPE_DOWNLOADS;
   if (strcmp(key, extension_browsing_data_api_constants::kFileSystemsKey) == 0)
@@ -138,6 +93,9 @@ bool IsRemovalPermitted(uint64_t removal_mask, PrefService* prefs) {
 
 // Returns true if Sync is currently running (i.e. enabled and not in error).
 bool IsSyncRunning(Profile* profile) {
+  if (profile->IsOffTheRecord()) {
+    return false;
+  }
   return GetSyncStatusMessageType(profile) == SyncStatusMessageType::kSynced;
 }
 }  // namespace
@@ -161,15 +119,13 @@ ExtensionFunction::ResponseAction BrowsingDataSettingsFunction::Run() {
   // REMOVE_SITE_DATA in browsing_data_remover.h, the former for the unprotected
   // web, the latter for  protected web data. There is no UI control for
   // extension data.
-  base::Value origin_types(base::Value::Type::DICTIONARY);
-  origin_types.SetBoolKey(
-      extension_browsing_data_api_constants::kUnprotectedWebKey,
-      isDataTypeSelected(BrowsingDataType::COOKIES, tab));
-  origin_types.SetBoolKey(
-      extension_browsing_data_api_constants::kProtectedWebKey,
-      isDataTypeSelected(BrowsingDataType::HOSTED_APPS_DATA, tab));
-  origin_types.SetBoolKey(extension_browsing_data_api_constants::kExtensionsKey,
-                          false);
+  base::Value::Dict origin_types;
+  origin_types.Set(extension_browsing_data_api_constants::kUnprotectedWebKey,
+                   isDataTypeSelected(BrowsingDataType::COOKIES, tab));
+  origin_types.Set(extension_browsing_data_api_constants::kProtectedWebKey,
+                   isDataTypeSelected(BrowsingDataType::HOSTED_APPS_DATA, tab));
+  origin_types.Set(extension_browsing_data_api_constants::kExtensionsKey,
+                   false);
 
   // Fill deletion time period.
   int period_pref =
@@ -180,17 +136,17 @@ ExtensionFunction::ResponseAction BrowsingDataSettingsFunction::Run() {
   double since = 0;
   if (period != browsing_data::TimePeriod::ALL_TIME) {
     base::Time time = browsing_data::CalculateBeginDeleteTime(period);
-    since = time.ToJsTime();
+    since = time.InMillisecondsFSinceUnixEpoch();
   }
 
-  base::Value options(base::Value::Type::DICTIONARY);
-  options.SetKey(extension_browsing_data_api_constants::kOriginTypesKey,
-                 std::move(origin_types));
-  options.SetDoubleKey(extension_browsing_data_api_constants::kSinceKey, since);
+  base::Value::Dict options;
+  options.Set(extension_browsing_data_api_constants::kOriginTypesKey,
+              std::move(origin_types));
+  options.Set(extension_browsing_data_api_constants::kSinceKey, since);
 
   // Fill dataToRemove and dataRemovalPermitted.
-  base::Value selected(base::Value::Type::DICTIONARY);
-  base::Value permitted(base::Value::Type::DICTIONARY);
+  base::Value::Dict selected;
+  base::Value::Dict permitted;
 
   bool delete_site_data =
       isDataTypeSelected(BrowsingDataType::COOKIES, tab) ||
@@ -237,23 +193,23 @@ ExtensionFunction::ResponseAction BrowsingDataSettingsFunction::Run() {
              extension_browsing_data_api_constants::kPasswordsKey,
              isDataTypeSelected(BrowsingDataType::PASSWORDS, tab));
 
-  base::Value result(base::Value::Type::DICTIONARY);
-  result.SetKey(extension_browsing_data_api_constants::kOptionsKey,
-                std::move(options));
-  result.SetKey(extension_browsing_data_api_constants::kDataToRemoveKey,
-                std::move(selected));
-  result.SetKey(extension_browsing_data_api_constants::kDataRemovalPermittedKey,
-                std::move(permitted));
-  return RespondNow(OneArgument(std::move(result)));
+  base::Value::Dict result;
+  result.Set(extension_browsing_data_api_constants::kOptionsKey,
+             std::move(options));
+  result.Set(extension_browsing_data_api_constants::kDataToRemoveKey,
+             std::move(selected));
+  result.Set(extension_browsing_data_api_constants::kDataRemovalPermittedKey,
+             std::move(permitted));
+  return RespondNow(WithArguments(std::move(result)));
 }
 
-void BrowsingDataSettingsFunction::SetDetails(base::Value* selected_dict,
-                                              base::Value* permitted_dict,
+void BrowsingDataSettingsFunction::SetDetails(base::Value::Dict* selected_dict,
+                                              base::Value::Dict* permitted_dict,
                                               const char* data_type,
                                               bool is_selected) {
   bool is_permitted = IsRemovalPermitted(MaskForKey(data_type), prefs_);
-  selected_dict->SetBoolKey(data_type, is_selected && is_permitted);
-  permitted_dict->SetBoolKey(data_type, is_permitted);
+  selected_dict->Set(data_type, is_selected && is_permitted);
+  permitted_dict->Set(data_type, is_permitted);
 }
 
 BrowsingDataRemoverFunction::BrowsingDataRemoverFunction() = default;
@@ -282,25 +238,25 @@ ExtensionFunction::ResponseAction BrowsingDataRemoverFunction::Run() {
   // Grab the initial |options| parameter, and parse out the arguments.
   EXTENSION_FUNCTION_VALIDATE(args().size() >= 1);
   EXTENSION_FUNCTION_VALIDATE(args()[0].is_dict());
-  const base::Value& options = args()[0];
+  const base::Value::Dict& options = args()[0].GetDict();
 
   EXTENSION_FUNCTION_VALIDATE(ParseOriginTypeMask(options, &origin_type_mask_));
 
   // If |ms_since_epoch| isn't set, default it to 0.
   double ms_since_epoch =
-      options.FindDoubleKey(extension_browsing_data_api_constants::kSinceKey)
+      options.FindDouble(extension_browsing_data_api_constants::kSinceKey)
           .value_or(0);
 
   // base::Time takes a double that represents seconds since epoch. JavaScript
   // gives developers milliseconds, so do a quick conversion before populating
   // the object.
-  remove_since_ = base::Time::FromJsTime(ms_since_epoch);
+  remove_since_ = base::Time::FromMillisecondsSinceUnixEpoch(ms_since_epoch);
 
   EXTENSION_FUNCTION_VALIDATE(GetRemovalMask(&removal_mask_));
 
-  const base::Value* origins =
-      options.FindListKey(extension_browsing_data_api_constants::kOriginsKey);
-  const base::Value* exclude_origins = options.FindListKey(
+  const base::Value::List* origins =
+      options.FindList(extension_browsing_data_api_constants::kOriginsKey);
+  const base::Value::List* exclude_origins = options.FindList(
       extension_browsing_data_api_constants::kExcludeOriginsKey);
 
   // Check that only |origins| or |excludeOrigins| can be set.
@@ -310,18 +266,20 @@ ExtensionFunction::ResponseAction BrowsingDataRemoverFunction::Run() {
   }
 
   if (origins) {
-    ResponseValue error_response;
-    if (!ParseOrigins(*origins, &origins_, &error_response))
-      return RespondNow(std::move(error_response));
-    mode_ = content::BrowsingDataFilterBuilder::Mode::kDelete;
-  } else {
-    if (exclude_origins) {
-      ResponseValue error_response;
-      if (!ParseOrigins(*exclude_origins, &origins_, &error_response))
-        return RespondNow(std::move(error_response));
+    OriginParsingResult result = ParseOrigins(*origins);
+    if (!result.has_value()) {
+      return RespondNow(std::move(result.error()));
     }
-    mode_ = content::BrowsingDataFilterBuilder::Mode::kPreserve;
+    origins_ = std::move(*result);
+  } else if (exclude_origins) {
+    OriginParsingResult result = ParseOrigins(*exclude_origins);
+    if (!result.has_value()) {
+      return RespondNow(std::move(result.error()));
+    }
+    origins_ = std::move(*result);
   }
+  mode_ = origins ? content::BrowsingDataFilterBuilder::Mode::kDelete
+                  : content::BrowsingDataFilterBuilder::Mode::kPreserve;
 
   // Check if a filter is set but non-filterable types are selected.
   if ((!origins_.empty() && (removal_mask_ & ~kFilterableDataTypes) != 0)) {
@@ -402,29 +360,27 @@ void BrowsingDataRemoverFunction::StartRemoving() {
 }
 
 bool BrowsingDataRemoverFunction::ParseOriginTypeMask(
-    const base::Value& options,
+    const base::Value::Dict& options,
     uint64_t* origin_type_mask) {
-  DCHECK(options.is_dict());
-
   // Parse the |options| dictionary to generate the origin set mask. Default to
   // UNPROTECTED_WEB if the developer doesn't specify anything.
   *origin_type_mask = content::BrowsingDataRemover::ORIGIN_TYPE_UNPROTECTED_WEB;
 
   const base::Value* origin_type_dict =
-      options.FindKey(extension_browsing_data_api_constants::kOriginTypesKey);
+      options.Find(extension_browsing_data_api_constants::kOriginTypesKey);
   if (!origin_type_dict)
     return true;
 
   if (!origin_type_dict->is_dict())
     return false;
 
-  const base::Value* option = nullptr;
+  const base::Value::Dict& origin_type = origin_type_dict->GetDict();
 
   // The developer specified something! Reset to 0 and parse the dictionary.
   *origin_type_mask = 0;
 
   // Unprotected web.
-  option = origin_type_dict->FindKey(
+  const base::Value* option = origin_type.Find(
       extension_browsing_data_api_constants::kUnprotectedWebKey);
   if (option) {
     if (!option->is_bool())
@@ -437,8 +393,8 @@ bool BrowsingDataRemoverFunction::ParseOriginTypeMask(
   }
 
   // Protected web.
-  option = origin_type_dict->FindKey(
-      extension_browsing_data_api_constants::kProtectedWebKey);
+  option =
+      origin_type.Find(extension_browsing_data_api_constants::kProtectedWebKey);
   if (option) {
     if (!option->is_bool())
       return false;
@@ -450,8 +406,8 @@ bool BrowsingDataRemoverFunction::ParseOriginTypeMask(
   }
 
   // Extensions.
-  option = origin_type_dict->FindKey(
-      extension_browsing_data_api_constants::kExtensionsKey);
+  option =
+      origin_type.Find(extension_browsing_data_api_constants::kExtensionsKey);
   if (option) {
     if (!option->is_bool())
       return false;
@@ -464,26 +420,23 @@ bool BrowsingDataRemoverFunction::ParseOriginTypeMask(
   return true;
 }
 
-bool BrowsingDataRemoverFunction::ParseOrigins(const base::Value& list_value,
-                                               std::vector<url::Origin>* result,
-                                               ResponseValue* error_response) {
-  DCHECK(list_value.is_list());
-  result->reserve(list_value.GetListDeprecated().size());
-  for (const auto& value : list_value.GetListDeprecated()) {
+BrowsingDataRemoverFunction::OriginParsingResult
+BrowsingDataRemoverFunction::ParseOrigins(const base::Value::List& list_value) {
+  std::vector<url::Origin> result;
+  result.reserve(list_value.size());
+  for (const auto& value : list_value) {
     if (!value.is_string()) {
-      *error_response = BadMessage();
-      return false;
+      return base::unexpected(BadMessage());
     }
     url::Origin origin = url::Origin::Create(GURL(value.GetString()));
     if (origin.opaque()) {
-      *error_response = Error(base::StringPrintf(
+      return base::unexpected(Error(base::StringPrintf(
           extension_browsing_data_api_constants::kInvalidOriginError,
-          value.GetString().c_str()));
-      return false;
+          value.GetString().c_str())));
     }
-    result->push_back(std::move(origin));
+    result.push_back(std::move(origin));
   }
-  return true;
+  return result;
 }
 
 // Parses the |dataToRemove| argument to generate the removal mask.
@@ -494,7 +447,7 @@ bool BrowsingDataRemoveFunction::GetRemovalMask(uint64_t* removal_mask) {
     return false;
 
   *removal_mask = 0;
-  for (const auto kv : args()[1].DictItems()) {
+  for (const auto kv : args()[1].GetDict()) {
     if (!kv.second.is_bool())
       return false;
     if (kv.second.GetBool())

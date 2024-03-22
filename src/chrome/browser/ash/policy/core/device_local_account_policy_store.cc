@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/policy/value_validation/onc_user_policy_value_validator.h"
@@ -213,7 +213,8 @@ void DeviceLocalAccountPolicyStore::Validate(
     ValidateCompletionCallback callback,
     bool validate_in_background,
     ash::DeviceSettingsService::OwnershipStatus ownership_status) {
-  DCHECK_NE(ash::DeviceSettingsService::OWNERSHIP_UNKNOWN, ownership_status);
+  DCHECK_NE(ash::DeviceSettingsService::OwnershipStatus::kOwnershipUnknown,
+            ownership_status);
   const em::PolicyData* device_policy_data =
       device_settings_service_->policy_data();
   // Note that the key is obtained through the device settings service instead
@@ -221,9 +222,9 @@ void DeviceLocalAccountPolicyStore::Validate(
   // updated only after the successful installation of the policy.
   scoped_refptr<ownership::PublicKey> key =
       device_settings_service_->GetPublicKey();
-  if (!key.get() || !key->is_loaded() || !device_policy_data) {
+  if (!key.get() || key->is_empty() || !device_policy_data) {
     LOG(ERROR) << "Failed policy validation, key: " << (key.get() != nullptr)
-               << ", is_loaded: " << (key.get() ? key->is_loaded() : false)
+               << ", is_loaded: " << (key.get() ? !key->is_empty() : false)
                << ", device_policy_data: " << (device_policy_data != nullptr);
     std::move(callback).Run(/*signature_validation_public_key=*/std::string(),
                             /*validator=*/nullptr);

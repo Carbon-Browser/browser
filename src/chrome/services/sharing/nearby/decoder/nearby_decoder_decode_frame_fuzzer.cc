@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 #include <memory>
 #include <vector>
 
-#include "ash/services/nearby/public/mojom/nearby_decoder.mojom.h"
-#include "ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_decoder.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -23,11 +23,12 @@ struct Environment {
     mojo::core::Init();
     // Disable noisy logging as per "libFuzzer in Chrome" documentation:
     // testing/libfuzzer/getting_started.md#Disable-noisy-error-message-logging.
-    logging::SetMinLogLevel(logging::LOG_FATAL);
+    logging::SetMinLogLevel(logging::LOGGING_FATAL);
 
     // Create instance once to be reused between fuzzing rounds.
     decoder = std::make_unique<sharing::NearbySharingDecoder>(
-        remote.BindNewPipeAndPassReceiver());
+        remote.BindNewPipeAndPassReceiver(),
+        /*on_disconnect=*/base::DoNothing());
   }
 
   base::SingleThreadTaskExecutor task_executor;

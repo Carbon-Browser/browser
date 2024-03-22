@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
@@ -108,7 +109,9 @@ class FakeAuthorizationServer {
   base::queue<std::string> upload_data_;
 
   // The pending request that is currently being processed.
-  network::TestURLLoaderFactory::PendingRequest* current_request_ = nullptr;
+  raw_ptr<network::TestURLLoaderFactory::PendingRequest,
+          DanglingUntriaged | ExperimentalAsh>
+      current_request_ = nullptr;
 
   network::TestURLLoaderFactory fake_server_;
   base::test::TaskEnvironment task_environment_;

@@ -16,11 +16,34 @@
  */
 
 #include "components/adblock/content/browser/test/mock_resource_classification_runner.h"
+#include "gtest/gtest.h"
 
 namespace adblock {
 
 MockResourceClassificationRunner::MockResourceClassificationRunner() = default;
-
 MockResourceClassificationRunner::~MockResourceClassificationRunner() = default;
+
+void MockResourceClassificationRunner::AddObserver(
+    ResourceClassificationRunner::Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void MockResourceClassificationRunner::RemoveObserver(
+    ResourceClassificationRunner::Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+void MockResourceClassificationRunner::NotifyResourceMatched(
+    const GURL& url,
+    FilterMatchResult result,
+    const std::vector<GURL>& parent_frame_urls,
+    ContentType content_type,
+    content::RenderFrameHost* render_frame_host,
+    const GURL& subscription) {
+  for (auto& observer : observers_) {
+    observer.OnRequestMatched(url, result, parent_frame_urls, content_type,
+                              render_frame_host, subscription, "");
+  }
+}
 
 }  // namespace adblock

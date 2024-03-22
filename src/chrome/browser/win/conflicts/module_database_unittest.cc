@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "chrome/browser/win/conflicts/module_database_observer.h"
 #include "chrome/browser/win/conflicts/module_info.h"
@@ -50,6 +50,7 @@ class ModuleDatabaseTest : public testing::Test {
     module_database_->module_inspector_.SetUtilWinFactoryCallbackForTesting(
         base::BindRepeating(&ModuleDatabaseTest::CreateUtilWinService,
                             base::Unretained(this)));
+    module_database_->StartInspection();
   }
 
   ~ModuleDatabaseTest() override {

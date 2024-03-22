@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "chrome/browser/ui/views/payments/editor_view_controller.h"
 #include "chrome/browser/ui/views/payments/validation_delegate.h"
 
@@ -49,6 +50,7 @@ class ContactInfoEditorViewController : public EditorViewController {
  protected:
   // PaymentRequestSheetController:
   std::u16string GetSheetTitle() override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
  private:
   // Uses the values in the UI fields to populate the corresponding values in
@@ -91,9 +93,12 @@ class ContactInfoEditorViewController : public EditorViewController {
 
     EditorField field_;
     // Outlives this class. Never null.
-    raw_ptr<ContactInfoEditorViewController> controller_;
-    const std::string& locale_;
+    raw_ptr<ContactInfoEditorViewController, DanglingUntriaged> controller_;
+    const raw_ref<const std::string> locale_;
   };
+
+  // Must be the last member of a leaf class.
+  base::WeakPtrFactory<ContactInfoEditorViewController> weak_ptr_factory_{this};
 };
 
 }  // namespace payments

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,8 +53,6 @@ ClientHintToPolicyFeatureMap MakeClientHintToPolicyFeatureMap() {
        mojom::PermissionsPolicyFeature::kClientHintPrefersColorScheme},
       {network::mojom::WebClientHintsType::kUABitness,
        mojom::PermissionsPolicyFeature::kClientHintUABitness},
-      {network::mojom::WebClientHintsType::kUAReduced,
-       mojom::PermissionsPolicyFeature::kClientHintUAReduced},
       {network::mojom::WebClientHintsType::kViewportHeight,
        mojom::PermissionsPolicyFeature::kClientHintViewportHeight},
       {network::mojom::WebClientHintsType::kDeviceMemory,
@@ -67,12 +65,16 @@ ClientHintToPolicyFeatureMap MakeClientHintToPolicyFeatureMap() {
        mojom::PermissionsPolicyFeature::kClientHintViewportWidth},
       {network::mojom::WebClientHintsType::kUAFullVersionList,
        mojom::PermissionsPolicyFeature::kClientHintUAFullVersionList},
-      {network::mojom::WebClientHintsType::kFullUserAgent,
-       mojom::PermissionsPolicyFeature::kClientHintUAFull},
       {network::mojom::WebClientHintsType::kUAWoW64,
        mojom::PermissionsPolicyFeature::kClientHintUAWoW64},
       {network::mojom::WebClientHintsType::kSaveData,
        mojom::PermissionsPolicyFeature::kClientHintSaveData},
+      {network::mojom::WebClientHintsType::kPrefersReducedMotion,
+       mojom::PermissionsPolicyFeature::kClientHintPrefersReducedMotion},
+      {network::mojom::WebClientHintsType::kUAFormFactor,
+       mojom::PermissionsPolicyFeature::kClientHintUAFormFactor},
+      {network::mojom::WebClientHintsType::kPrefersReducedTransparency,
+       mojom::PermissionsPolicyFeature::kClientHintPrefersReducedTransparency},
   };
 }
 
@@ -101,14 +103,6 @@ const PolicyFeatureToClientHintMap& GetPolicyFeatureToClientHintMap() {
       MakePolicyFeatureToClientHintMap());
   return *map;
 }
-
-const char* const kWebEffectiveConnectionTypeMapping[] = {
-    "4g" /* Unknown */, "4g" /* Offline */, "slow-2g" /* Slow 2G */,
-    "2g" /* 2G */,      "3g" /* 3G */,      "4g" /* 4G */
-};
-
-const size_t kWebEffectiveConnectionTypeMappingCount =
-    std::size(kWebEffectiveConnectionTypeMapping);
 
 bool IsClientHintSentByDefault(network::mojom::WebClientHintsType type) {
   switch (type) {

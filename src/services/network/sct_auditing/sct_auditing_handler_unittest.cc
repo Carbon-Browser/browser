@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/sct_auditing/sct_auditing_handler.h"
 
 #include <memory>
+#include <string_view>
 
 #include "base/base64.h"
 #include "base/feature_list.h"
@@ -12,7 +13,6 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/hash_value.h"
@@ -25,7 +25,6 @@
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "services/network/network_context.h"
 #include "services/network/network_service.h"
-#include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/proto/sct_audit_report.pb.h"
 #include "services/network/sct_auditing/sct_auditing_cache.h"
@@ -123,10 +122,6 @@ class SCTAuditingHandlerTest : public testing::Test {
     mojo::PendingRemote<network::mojom::URLLoaderFactory> factory_remote;
     url_loader_factory_.Clone(factory_remote.InitWithNewPipeAndPassReceiver());
     handler_->SetURLLoaderFactoryForTesting(std::move(factory_remote));
-    scoped_feature_list_.InitWithFeatures(
-        {features::kSCTAuditingRetryReports,
-         features::kSCTAuditingPersistReports},
-        {});
 
     // Clear out any pending tasks before starting tests.
     task_environment_.RunUntilIdle();
@@ -174,10 +169,6 @@ class SCTAuditingHandlerTest : public testing::Test {
   }
 
  protected:
-  // Must be first because ScopedFeatureList must be initialized before other
-  // threads are started.
-  base::test::ScopedFeatureList feature_list_{
-      /*enable_feature=*/features::kSCTAuditingPersistReports};
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::MainThreadType::IO,
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
@@ -188,7 +179,6 @@ class SCTAuditingHandlerTest : public testing::Test {
   std::unique_ptr<TestNetworkContextClient> network_context_client_;
   scoped_refptr<net::X509Certificate> chain_;
   std::unique_ptr<SCTAuditingHandler> handler_;
-  base::test::ScopedFeatureList scoped_feature_list_;
   TestURLLoaderFactory url_loader_factory_;
 
   std::unique_ptr<base::RunLoop> run_loop_;
@@ -325,7 +315,7 @@ TEST_F(SCTAuditingHandlerTest, ReportsOnlyIncludesValidSCTs) {
     for (auto& sct_and_status :
          reporter.second->report()->certificate_report(0).included_sct()) {
       // Decode the SCT and check that only the valid SCT was included.
-      base::StringPiece encoded_sct(sct_and_status.serialized_sct());
+      std::string_view encoded_sct(sct_and_status.serialized_sct());
       scoped_refptr<net::ct::SignedCertificateTimestamp> decoded_sct;
       ASSERT_TRUE(net::ct::DecodeSignedCertificateTimestamp(&encoded_sct,
                                                             &decoded_sct));
@@ -960,11 +950,13 @@ TEST_F(SCTAuditingHandlerTest, RestoringMaxRetries) {
 // and log a histogram for this case.
 TEST_F(SCTAuditingHandlerTest, LogNotFound) {
   // Set up an empty CT log list.
-  std::vector<mojom::CTLogInfoPtr> log_list;
-  base::RunLoop run_loop;
-  network_service_->UpdateCtLogList(std::move(log_list), base::Time::Now(),
-                                    run_loop.QuitClosure());
-  run_loop.Run();
+  {
+    std::vector<mojom::CTLogInfoPtr> log_list;
+    base::RunLoop run_loop;
+    network_service_->UpdateCtLogList(std::move(log_list), base::Time::Now(),
+                                      run_loop.QuitClosure());
+    run_loop.Run();
+  }
 
   const net::HostPortPair host_port_pair("example.com", 443);
   net::SignedCertificateTimestampAndStatusList sct_list;
@@ -1150,34 +1142,6 @@ TEST_F(SCTAuditingHandlerTest, PersistedDataWithoutReportAlreadyCounted) {
   for (const auto& reporter : *pending_reporters) {
     EXPECT_FALSE(reporter.second->counted_towards_report_limit());
   }
-}
-
-class NoPersistenceSCTAuditingHandlerTest : public SCTAuditingHandlerTest {
- public:
-  void SetUp() override {
-    SCTAuditingHandlerTest::SetUp();
-    scoped_feature_list_.InitWithFeatures(
-        {features::kSCTAuditingRetryReports},
-        {features::kSCTAuditingPersistReports});
-  }
-
- protected:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-// Test that when the persistence feature is disabled no reports will be
-// persisted on disk.
-TEST_F(NoPersistenceSCTAuditingHandlerTest, PersistenceFeatureDisabled) {
-  mojo::PendingRemote<network::mojom::URLLoaderFactory> factory_remote;
-  url_loader_factory_.Clone(factory_remote.InitWithNewPipeAndPassReceiver());
-
-  SCTAuditingHandler handler(network_context_.get(), persistence_path_);
-  handler.SetMode(mojom::SCTAuditingMode::kEnhancedSafeBrowsingReporting);
-  handler.SetURLLoaderFactoryForTesting(std::move(factory_remote));
-
-  // `file_writer` should not be created for this handler.
-  auto* file_writer = handler.GetFileWriterForTesting();
-  EXPECT_EQ(file_writer, nullptr);
 }
 
 }  // namespace

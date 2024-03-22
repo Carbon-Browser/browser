@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,13 @@ namespace blink {
 
 class ScriptState;
 
-using InstallPropertiesPerFeatureFuncType = void (*)(ScriptState*,
-                                                     OriginTrialFeature);
+using InstallPropertiesPerFeatureFuncType =
+    void (*)(ScriptState*, mojom::blink::OriginTrialFeature);
 
 // Install ES properties associated with the given origin trial feature.
-PLATFORM_EXPORT void InstallPropertiesPerFeature(ScriptState* script_state,
-                                                 OriginTrialFeature feature);
+PLATFORM_EXPORT void InstallPropertiesPerFeature(
+    ScriptState* script_state,
+    mojom::blink::OriginTrialFeature feature);
 
 PLATFORM_EXPORT InstallPropertiesPerFeatureFuncType
 SetInstallPropertiesPerFeatureFunc(InstallPropertiesPerFeatureFuncType func);

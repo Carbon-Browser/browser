@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,26 +11,29 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/extensions/api/commands/command_service.h"
+#include "chrome/browser/extensions/api/developer_private/developer_private_api.h"
 #include "chrome/browser/extensions/api/developer_private/inspectable_views_finder.h"
 #include "chrome/browser/extensions/api/extension_action/extension_action_api.h"
 #include "chrome/browser/extensions/error_console/error_console.h"
 #include "chrome/browser/extensions/extension_allowlist.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_util.h"
-#include "chrome/browser/extensions/scripting_permissions_modifier.h"
 #include "chrome/browser/extensions/shared_module_service.h"
+#include "chrome/browser/extensions/site_permissions_helper.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
 #include "chrome/browser/ui/webui/extensions/extension_icon_source.h"
 #include "chrome/common/extensions/manifest_handlers/app_launch_info.h"
 #include "chrome/common/pref_names.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/supervised_user/core/common/pref_names.h"
 #include "content/public/browser/render_frame_host.h"
 #include "extensions/browser/blocklist_extension_prefs.h"
 #include "extensions/browser/blocklist_state.h"
@@ -53,11 +56,13 @@
 #include "extensions/common/manifest_handlers/icons_handler.h"
 #include "extensions/common/manifest_handlers/offline_enabled_info.h"
 #include "extensions/common/manifest_handlers/options_page_info.h"
+#include "extensions/common/manifest_handlers/permissions_parser.h"
 #include "extensions/common/manifest_url_handlers.h"
 #include "extensions/common/permissions/permission_message_provider.h"
 #include "extensions/common/permissions/permission_message_util.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/grit/extensions_browser_resources.h"
+#include "extensions/strings/grit/extensions_strings.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -67,8 +72,7 @@
 #include "ui/gfx/skbitmap_operations.h"
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "chrome/browser/supervised_user/supervised_user_service.h"
-#include "chrome/browser/supervised_user/supervised_user_service_factory.h"
+#include "components/supervised_user/core/browser/supervised_user_preferences.h"
 #endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
 
 namespace extensions {
@@ -80,28 +84,28 @@ namespace {
 // Given a Manifest::Type, converts it into its developer_private
 // counterpart.
 developer::ExtensionType GetExtensionType(Manifest::Type manifest_type) {
-  developer::ExtensionType type = developer::EXTENSION_TYPE_EXTENSION;
+  developer::ExtensionType type = developer::ExtensionType::kExtension;
   switch (manifest_type) {
     case Manifest::TYPE_EXTENSION:
-      type = developer::EXTENSION_TYPE_EXTENSION;
+      type = developer::ExtensionType::kExtension;
       break;
     case Manifest::TYPE_THEME:
-      type = developer::EXTENSION_TYPE_THEME;
+      type = developer::ExtensionType::kTheme;
       break;
     case Manifest::TYPE_HOSTED_APP:
-      type = developer::EXTENSION_TYPE_HOSTED_APP;
+      type = developer::ExtensionType::kHostedApp;
       break;
     case Manifest::TYPE_LEGACY_PACKAGED_APP:
-      type = developer::EXTENSION_TYPE_LEGACY_PACKAGED_APP;
+      type = developer::ExtensionType::kLegacyPackagedApp;
       break;
     case Manifest::TYPE_PLATFORM_APP:
-      type = developer::EXTENSION_TYPE_PLATFORM_APP;
+      type = developer::ExtensionType::kPlatformApp;
       break;
     case Manifest::TYPE_SHARED_MODULE:
-      type = developer::EXTENSION_TYPE_SHARED_MODULE;
+      type = developer::ExtensionType::kSharedModule;
       break;
     case Manifest::TYPE_CHROMEOS_SYSTEM_EXTENSION:
-      type = developer::EXTENSION_TYPE_EXTENSION;
+      type = developer::ExtensionType::kExtension;
       break;
     default:
       NOTREACHED();
@@ -113,8 +117,9 @@ developer::ExtensionType GetExtensionType(Manifest::Type manifest_type) {
 template <typename ErrorType>
 void PopulateErrorBase(const ExtensionError& error, ErrorType* out) {
   CHECK(out);
-  out->type = error.type() == ExtensionError::MANIFEST_ERROR ?
-      developer::ERROR_TYPE_MANIFEST : developer::ERROR_TYPE_RUNTIME;
+  out->type = error.type() == ExtensionError::MANIFEST_ERROR
+                  ? developer::ErrorType::kManifest
+                  : developer::ErrorType::kRuntime;
   out->extension_id = error.extension_id();
   out->from_incognito = error.from_incognito();
   out->source = base::UTF16ToUTF8(error.source());
@@ -127,10 +132,9 @@ void PopulateErrorBase(const ExtensionError& error, ErrorType* out) {
 developer::ManifestError ConstructManifestError(const ManifestError& error) {
   developer::ManifestError result;
   PopulateErrorBase(error, &result);
-  result.manifest_key = base::UTF16ToUTF8(error.manifest_key());
+  result.manifest_key = error.manifest_key();
   if (!error.manifest_specific().empty()) {
-    result.manifest_specific = std::make_unique<std::string>(
-        base::UTF16ToUTF8(error.manifest_specific()));
+    result.manifest_specific = base::UTF16ToUTF8(error.manifest_specific());
   }
   return result;
 }
@@ -141,16 +145,16 @@ developer::RuntimeError ConstructRuntimeError(const RuntimeError& error) {
   developer::RuntimeError result;
   PopulateErrorBase(error, &result);
   switch (error.level()) {
-    case logging::LOG_VERBOSE:
-    case logging::LOG_INFO:
-      result.severity = developer::ERROR_LEVEL_LOG;
+    case logging::LOGGING_VERBOSE:
+    case logging::LOGGING_INFO:
+      result.severity = developer::ErrorLevel::kLog;
       break;
-    case logging::LOG_WARNING:
-      result.severity = developer::ERROR_LEVEL_WARN;
+    case logging::LOGGING_WARNING:
+      result.severity = developer::ErrorLevel::kWarn;
       break;
-    case logging::LOG_FATAL:
-    case logging::LOG_ERROR:
-      result.severity = developer::ERROR_LEVEL_ERROR;
+    case logging::LOGGING_FATAL:
+    case logging::LOGGING_ERROR:
+      result.severity = developer::ErrorLevel::kError;
       break;
     default:
       NOTREACHED();
@@ -191,8 +195,8 @@ void ConstructCommands(CommandService* command_service,
         base::UTF16ToUTF8(command.accelerator().GetShortcutText());
     command_value.name = command.command_name();
     command_value.is_active = active;
-    command_value.scope = command.global() ? developer::COMMAND_SCOPE_GLOBAL
-                                           : developer::COMMAND_SCOPE_CHROME;
+    command_value.scope = command.global() ? developer::CommandScope::kGlobal
+                                           : developer::CommandScope::kChrome;
     command_value.is_extension_action = is_extension_action;
     return command_value;
   };
@@ -241,76 +245,85 @@ std::vector<developer::SiteControl> GetSpecificSiteControls(
     const PermissionSet& withheld_permissions) {
   std::vector<developer::SiteControl> controls;
 
-  // NOTE(devlin): This is similar, but not identical, to our host collapsing
-  // for permission warnings. The primary difference is that this will not
-  // collapse permissions for sites with separate TLDs; i.e., google.com and
-  // google.net will remain distinct entities in this list.
-  auto get_distinct_hosts = [](const URLPatternSet& patterns) {
-    std::vector<URLPattern> pathless_hosts;
-    for (URLPattern pattern : patterns) {
-      // We only allow addition/removal of full hosts (since from a
-      // permissions point of view, path is irrelevant). We always make the
-      // path wildcard when adding through this UI, but the optional
-      // permissions API may allow adding permissions with paths.
-      // TODO(devlin): Investigate, and possibly change the optional
-      // permissions API.
-      pattern.SetPath("/*");
-      pathless_hosts.push_back(std::move(pattern));
-    }
-
-    // Iterate over the list of hosts and add any that aren't entirely contained
-    // by another pattern. This is pretty inefficient, but the list of hosts
-    // should be reasonably small.
-    std::vector<const URLPattern*> distinct_hosts;
-    for (const URLPattern& host : pathless_hosts) {
-      // If the host is fully contained within the set, we don't add it again.
-      bool consumed_by_other = false;
-      for (const URLPattern* added_host : distinct_hosts) {
-        if (added_host->Contains(host)) {
-          consumed_by_other = true;
-          break;
-        }
-      }
-      if (consumed_by_other)
-        continue;
-
-      // Otherwise, add the host. This might mean we get to prune some hosts
-      // from |distinct_hosts|.
-      base::EraseIf(distinct_hosts, [host](const URLPattern* other_host) {
-        return host.Contains(*other_host);
-      });
-
-      distinct_hosts.push_back(&host);
-    }
-
-    std::vector<std::string> distinct_host_strings;
-    distinct_host_strings.reserve(distinct_hosts.size());
-    for (const URLPattern* host : distinct_hosts)
-      distinct_host_strings.push_back(host->GetAsString());
-
-    return distinct_host_strings;
-  };
-
-  std::vector<std::string> distinct_granted =
-      get_distinct_hosts(granted_permissions.effective_hosts());
-  std::vector<std::string> distinct_withheld =
-      get_distinct_hosts(withheld_permissions.effective_hosts());
+  std::vector<URLPattern> distinct_granted =
+      ExtensionInfoGenerator::GetDistinctHosts(
+          granted_permissions.effective_hosts());
+  std::vector<URLPattern> distinct_withheld =
+      ExtensionInfoGenerator::GetDistinctHosts(
+          withheld_permissions.effective_hosts());
   controls.reserve(distinct_granted.size() + distinct_withheld.size());
 
   for (auto& host : distinct_granted) {
     developer::SiteControl host_control;
-    host_control.host = std::move(host);
+    host_control.host = host.GetAsString();
     host_control.granted = true;
     controls.push_back(std::move(host_control));
   }
   for (auto& host : distinct_withheld) {
     developer::SiteControl host_control;
-    host_control.host = std::move(host);
+    host_control.host = host.GetAsString();
     host_control.granted = false;
     controls.push_back(std::move(host_control));
   }
 
   return controls;
+}
+
+// Creates and returns a RuntimeHostPermissions object with the
+// given extension's host permissions.
+developer::RuntimeHostPermissions CreateRuntimeHostPermissionsInfo(
+    content::BrowserContext* browser_context,
+    const Extension& extension) {
+  developer::RuntimeHostPermissions runtime_host_permissions;
+
+  ExtensionPrefs* extension_prefs = ExtensionPrefs::Get(browser_context);
+  // "Effective" granted permissions are stored in different prefs, based on
+  // whether host permissions are withheld.
+  // TODO(devlin): Create a common helper method to retrieve granted prefs based
+  // on whether host permissions are withheld?
+  std::unique_ptr<const PermissionSet> granted_permissions;
+  // Add the host access data, including the mode and any runtime-granted
+  // hosts.
+  if (!PermissionsManager::Get(browser_context)
+           ->HasWithheldHostPermissions(extension)) {
+    granted_permissions =
+        extension_prefs->GetGrantedPermissions(extension.id());
+    runtime_host_permissions.host_access = developer::HostAccess::kOnAllSites;
+  } else {
+    granted_permissions =
+        extension_prefs->GetRuntimeGrantedPermissions(extension.id());
+    if (granted_permissions->effective_hosts().is_empty()) {
+      runtime_host_permissions.host_access = developer::HostAccess::kOnClick;
+    } else if (granted_permissions->ShouldWarnAllHosts(false)) {
+      runtime_host_permissions.host_access = developer::HostAccess::kOnAllSites;
+    } else {
+      runtime_host_permissions.host_access =
+          developer::HostAccess::kOnSpecificSites;
+    }
+  }
+
+  runtime_host_permissions.hosts = GetSpecificSiteControls(
+      *granted_permissions,
+      extension.permissions_data()->withheld_permissions());
+  constexpr bool kIncludeApiPermissions = false;
+  runtime_host_permissions.has_all_hosts =
+      extension.permissions_data()->withheld_permissions().ShouldWarnAllHosts(
+          kIncludeApiPermissions) ||
+      granted_permissions->ShouldWarnAllHosts(kIncludeApiPermissions);
+  return runtime_host_permissions;
+}
+
+// Returns if the extension can access site data. This checks for host
+// permissions, activeTab and API permissions that will surface a warning for
+// all hosts access.
+bool CanAccessSiteData(PermissionsManager* permissions_manager,
+                       const Extension& extension) {
+  return permissions_manager->ExtensionRequestsHostPermissionsOrActiveTab(
+             extension) ||
+         PermissionsParser::GetRequiredPermissions(&extension)
+             .ShouldWarnAllHosts() ||
+         PermissionsParser::GetOptionalPermissions(&extension)
+             .ShouldWarnAllHosts();
 }
 
 // Populates the |permissions| data for the given |extension|.
@@ -331,10 +344,14 @@ void AddPermissionsInfo(content::BrowserContext* browser_context,
     return permissions;
   };
 
-  ScriptingPermissionsModifier permissions_modifier(
-      browser_context, base::WrapRefCounted(&extension));
+  PermissionsManager* permissions_manager =
+      PermissionsManager::Get(browser_context);
+
+  permissions->can_access_site_data =
+      CanAccessSiteData(permissions_manager, extension);
+
   bool enable_runtime_host_permissions =
-      permissions_modifier.CanAffectExtension();
+      permissions_manager->CanAffectExtension(extension);
 
   if (!enable_runtime_host_permissions) {
     // Without runtime host permissions, everything goes into
@@ -360,45 +377,8 @@ void AddPermissionsInfo(content::BrowserContext* browser_context,
                                             extension.GetType()));
   permissions->simple_permissions = get_permission_messages(api_messages);
 
-  auto runtime_host_permissions =
-      std::make_unique<developer::RuntimeHostPermissions>();
-
-  ExtensionPrefs* extension_prefs = ExtensionPrefs::Get(browser_context);
-  // "Effective" granted permissions are stored in different prefs, based on
-  // whether host permissions are withheld.
-  // TODO(devlin): Create a common helper method to retrieve granted prefs based
-  // on whether host permissions are withheld?
-  std::unique_ptr<const PermissionSet> granted_permissions;
-  // Add the host access data, including the mode and any runtime-granted
-  // hosts.
-  if (!permissions_modifier.HasWithheldHostPermissions()) {
-    granted_permissions =
-        extension_prefs->GetGrantedPermissions(extension.id());
-    runtime_host_permissions->host_access = developer::HOST_ACCESS_ON_ALL_SITES;
-  } else {
-    granted_permissions =
-        extension_prefs->GetRuntimeGrantedPermissions(extension.id());
-    if (granted_permissions->effective_hosts().is_empty()) {
-      runtime_host_permissions->host_access = developer::HOST_ACCESS_ON_CLICK;
-    } else if (granted_permissions->ShouldWarnAllHosts(false)) {
-      runtime_host_permissions->host_access =
-          developer::HOST_ACCESS_ON_ALL_SITES;
-    } else {
-      runtime_host_permissions->host_access =
-          developer::HOST_ACCESS_ON_SPECIFIC_SITES;
-    }
-  }
-
-  runtime_host_permissions->hosts = GetSpecificSiteControls(
-      *granted_permissions,
-      extension.permissions_data()->withheld_permissions());
-  constexpr bool kIncludeApiPermissions = false;
-  runtime_host_permissions->has_all_hosts =
-      extension.permissions_data()->withheld_permissions().ShouldWarnAllHosts(
-          kIncludeApiPermissions) ||
-      granted_permissions->ShouldWarnAllHosts(kIncludeApiPermissions);
-
-  permissions->runtime_host_permissions = std::move(runtime_host_permissions);
+  permissions->runtime_host_permissions =
+      CreateRuntimeHostPermissionsInfo(browser_context, extension);
 }
 
 }  // namespace
@@ -407,16 +387,14 @@ ExtensionInfoGenerator::ExtensionInfoGenerator(
     content::BrowserContext* browser_context)
     : browser_context_(browser_context),
       command_service_(CommandService::Get(browser_context)),
+      cws_info_service_(
+          CWSInfoService::Get(Profile::FromBrowserContext(browser_context))),
       extension_system_(ExtensionSystem::Get(browser_context)),
       extension_prefs_(ExtensionPrefs::Get(browser_context)),
       extension_action_api_(ExtensionActionAPI::Get(browser_context)),
       warning_service_(WarningService::Get(browser_context)),
       error_console_(ErrorConsole::Get(browser_context)),
       image_loader_(ImageLoader::Get(browser_context)),
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-      supervised_user_service_(
-          SupervisedUserServiceFactory::GetForBrowserContext(browser_context)),
-#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
       pending_image_loads_(0u) {
 }
 
@@ -430,21 +408,24 @@ void ExtensionInfoGenerator::CreateExtensionInfo(
       "Only a single generation can be running at a time!";
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context_);
 
-  developer::ExtensionState state = developer::EXTENSION_STATE_NONE;
+  developer::ExtensionState state = developer::ExtensionState::kNone;
   const Extension* ext = nullptr;
   if ((ext = registry->enabled_extensions().GetByID(id)) != nullptr)
-    state = developer::EXTENSION_STATE_ENABLED;
+    state = developer::ExtensionState::kEnabled;
   else if ((ext = registry->disabled_extensions().GetByID(id)) != nullptr)
-    state = developer::EXTENSION_STATE_DISABLED;
+    state = developer::ExtensionState::kDisabled;
   else if ((ext = registry->terminated_extensions().GetByID(id)) != nullptr)
-    state = developer::EXTENSION_STATE_TERMINATED;
+    state = developer::ExtensionState::kTerminated;
+  else if ((ext = registry->blocklisted_extensions().GetByID(id)) != nullptr)
+    state = developer::ExtensionState::kBlacklisted;
 
-  if (ext && ui_util::ShouldDisplayInExtensionSettings(*ext))
+  if (ext && ui_util::ShouldDisplayInExtensionSettings(*ext)) {
     CreateExtensionInfoHelper(*ext, state);
+  }
 
   if (pending_image_loads_ == 0) {
     // Don't call the callback re-entrantly.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), std::move(list_)));
     list_.clear();
   } else {
@@ -467,26 +448,68 @@ void ExtensionInfoGenerator::CreateExtensionsInfo(
 
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser_context_);
   add_to_list(registry->enabled_extensions(),
-              developer::EXTENSION_STATE_ENABLED);
+              developer::ExtensionState::kEnabled);
   if (include_disabled) {
     add_to_list(registry->disabled_extensions(),
-                developer::EXTENSION_STATE_DISABLED);
+                developer::ExtensionState::kDisabled);
     add_to_list(registry->blocklisted_extensions(),
-                developer::EXTENSION_STATE_BLACKLISTED);
+                developer::ExtensionState::kBlacklisted);
   }
   if (include_terminated) {
     add_to_list(registry->terminated_extensions(),
-                developer::EXTENSION_STATE_TERMINATED);
+                developer::ExtensionState::kTerminated);
   }
 
   if (pending_image_loads_ == 0) {
     // Don't call the callback re-entrantly.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), std::move(list_)));
     list_.clear();
   } else {
     callback_ = std::move(callback);
   }
+}
+
+std::vector<URLPattern> ExtensionInfoGenerator::GetDistinctHosts(
+    const URLPatternSet& patterns) {
+  std::vector<URLPattern> pathless_hosts;
+  for (URLPattern pattern : patterns) {
+    // We only allow addition/removal of full hosts (since from a
+    // permissions point of view, path is irrelevant). We always make the
+    // path wildcard when adding through this UI, but the optional
+    // permissions API may allow adding permissions with paths.
+    // TODO(devlin): Investigate, and possibly change the optional
+    // permissions API.
+    pattern.SetPath("/*");
+    pathless_hosts.push_back(std::move(pattern));
+  }
+
+  // Iterate over the list of hosts and add any that aren't entirely contained
+  // by another pattern. This is pretty inefficient, but the list of hosts
+  // should be reasonably small.
+  std::vector<URLPattern> distinct_hosts;
+  for (const URLPattern& host : pathless_hosts) {
+    // If the host is fully contained within the set, we don't add it again.
+    bool consumed_by_other = false;
+    for (const URLPattern& added_host : distinct_hosts) {
+      if (added_host.Contains(host)) {
+        consumed_by_other = true;
+        break;
+      }
+    }
+    if (consumed_by_other)
+      continue;
+
+    // Otherwise, add the host. This might mean we get to prune some hosts
+    // from |distinct_hosts|.
+    base::EraseIf(distinct_hosts, [host](const URLPattern& other_host) {
+      return host.Contains(other_host);
+    });
+
+    distinct_hosts.push_back(host);
+  }
+
+  return distinct_hosts;
 }
 
 void ExtensionInfoGenerator::CreateExtensionInfoHelper(
@@ -518,8 +541,7 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
       break;
   }
   if (blocklist_text != -1) {
-    info->blacklist_text =
-        std::make_unique<std::string>(l10n_util::GetStringUTF8(blocklist_text));
+    info->blacklist_text = l10n_util::GetStringUTF8(blocklist_text);
   }
 
   if (extension_system_->extension_service()->allowlist()->ShouldDisplayWarning(
@@ -530,15 +552,25 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
       ExtensionManagementFactory::GetForBrowserContext(browser_context_);
   Profile* profile = Profile::FromBrowserContext(browser_context_);
 
+  // Safety Hub Strings
+  if (base::FeatureList::IsEnabled(kCWSInfoService)) {
+    absl::optional<CWSInfoService::CWSInfo> cws_info =
+        cws_info_service_->GetCWSInfo(extension);
+    if (cws_info.has_value()) {
+      info->safety_check_text =
+          CreateSafetyCheckDisplayString(*cws_info, state, blocklist_state);
+    }
+  }
+
   // ControlledInfo.
   bool is_policy_location = Manifest::IsPolicyLocation(extension.location());
   if (is_policy_location) {
-    info->controlled_info = std::make_unique<developer::ControlledInfo>();
+    info->controlled_info.emplace();
     info->controlled_info->text =
         l10n_util::GetStringUTF8(IDS_EXTENSIONS_INSTALL_LOCATION_ENTERPRISE);
   }
 
-  bool is_enabled = state == developer::EXTENSION_STATE_ENABLED;
+  bool is_enabled = state == developer::ExtensionState::kEnabled;
 
   // Commands.
   if (is_enabled)
@@ -583,11 +615,14 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
   bool permissions_increase =
       (disable_reasons & disable_reason::DISABLE_PERMISSIONS_INCREASE) != 0;
   info->disable_reasons.parent_disabled_permissions =
-      supervised_user_service_->IsChild() &&
-      !supervised_user_service_
-           ->GetSupervisedUserExtensionsMayRequestPermissionsPref() &&
+      supervised_user::AreExtensionsPermissionsEnabled(*profile->GetPrefs()) &&
+      !profile->GetPrefs()->GetBoolean(
+          prefs::kSupervisedUserExtensionsMayRequestPermissions) &&
       (custodian_approval_required || permissions_increase);
 #endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
+  info->disable_reasons.published_in_store_required =
+      (disable_reasons &
+       disable_reason::DISABLE_PUBLISHED_IN_STORE_REQUIRED_BY_POLICY) != 0;
 
   // Error collection.
   bool error_console_enabled =
@@ -623,6 +658,11 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
   info->incognito_access.is_active =
       util::IsIncognitoEnabled(extension.id(), browser_context_);
 
+  // Safety check warning acknowledge status.
+  extension_prefs_->ReadPrefAsBoolean(
+      extension.id(), extensions::kPrefAcknowledgeSafetyCheckWarning,
+      &info->acknowledge_safety_check_warning);
+
   // Install warnings, but only if unpacked, the error console isn't enabled
   // (otherwise it shows these), and we're in developer mode (normal users don't
   // need to see these).
@@ -637,34 +677,39 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
 
   // Launch url.
   if (extension.is_app()) {
-    info->launch_url = std::make_unique<std::string>(
-        AppLaunchInfo::GetFullLaunchURL(&extension).spec());
+    info->launch_url = AppLaunchInfo::GetFullLaunchURL(&extension).spec();
   }
 
   // Location.
+  bool updates_from_web_store =
+      extension_management->UpdatesFromWebstore(extension);
   if (extension.location() == mojom::ManifestLocation::kInternal &&
-      extension_management->UpdatesFromWebstore(extension)) {
-    info->location = developer::LOCATION_FROM_STORE;
+      updates_from_web_store) {
+    info->location = developer::Location::kFromStore;
   } else if (Manifest::IsUnpackedLocation(extension.location())) {
-    info->location = developer::LOCATION_UNPACKED;
+    info->location = developer::Location::kUnpacked;
+  } else if (extension.was_installed_by_default() &&
+             !extension.was_installed_by_oem() && updates_from_web_store) {
+    info->location = developer::Location::kInstalledByDefault;
   } else if (Manifest::IsExternalLocation(extension.location()) &&
-             extension_management->UpdatesFromWebstore(extension)) {
-    info->location = developer::LOCATION_THIRD_PARTY;
+             updates_from_web_store) {
+    info->location = developer::Location::kThirdParty;
   } else {
-    info->location = developer::LOCATION_UNKNOWN;
+    info->location = developer::Location::kUnknown;
   }
 
   // Location text.
   int location_text = -1;
-  if (info->location == developer::LOCATION_UNKNOWN)
+  if (info->location == developer::Location::kUnknown) {
     location_text = IDS_EXTENSIONS_INSTALL_LOCATION_UNKNOWN;
-  else if (extension.location() == mojom::ManifestLocation::kExternalRegistry)
+  } else if (extension.location() ==
+             mojom::ManifestLocation::kExternalRegistry) {
     location_text = IDS_EXTENSIONS_INSTALL_LOCATION_3RD_PARTY;
-  else if (extension.is_shared_module())
+  } else if (extension.is_shared_module()) {
     location_text = IDS_EXTENSIONS_INSTALL_LOCATION_SHARED_MODULE;
+  }
   if (location_text != -1) {
-    info->location_text =
-        std::make_unique<std::string>(l10n_util::GetStringUTF8(location_text));
+    info->location_text = l10n_util::GetStringUTF8(location_text);
   }
 
   // Runtime/Manifest errors.
@@ -700,7 +745,7 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
 
   // Options page.
   if (OptionsPageInfo::HasOptionsPage(&extension)) {
-    info->options_page = std::make_unique<developer::OptionsPage>();
+    info->options_page.emplace();
     info->options_page->open_in_tab =
         OptionsPageInfo::ShouldOpenInTab(&extension);
     info->options_page->url =
@@ -709,9 +754,9 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
 
   // Path.
   if (Manifest::IsUnpackedLocation(extension.location())) {
-    info->path = std::make_unique<std::string>(extension.path().AsUTF8Unsafe());
-    info->prettified_path = std::make_unique<std::string>(
-        extensions::path_util::PrettifyPath(extension.path()).AsUTF8Unsafe());
+    info->path = extension.path().AsUTF8Unsafe();
+    info->prettified_path =
+        extensions::path_util::PrettifyPath(extension.path()).AsUTF8Unsafe();
   }
 
   AddPermissionsInfo(browser_context_, extension, &info->permissions);
@@ -734,9 +779,26 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
 
   info->version = extension.GetVersionForDisplay();
 
-  if (state != developer::EXTENSION_STATE_TERMINATED) {
+  if (state != developer::ExtensionState::kTerminated) {
     info->views = InspectableViewsFinder(profile).
                       GetViewsForExtension(extension, is_enabled);
+  }
+
+  // Show access requests in toolbar.
+  info->show_access_requests_in_toolbar =
+      SitePermissionsHelper(profile).ShowAccessRequestsInToolbar(
+          extension.id());
+
+  // Pinned to toolbar.
+  // TODO(crbug.com/1477884): Currently this information is only shown for
+  // enabled extensions as only enabled extensions can have actions. However,
+  // this information can be found in prefs, so disabled extensiosn can be
+  // included as well.
+  ToolbarActionsModel* toolbar_actions_model =
+      ToolbarActionsModel::Get(profile);
+  if (toolbar_actions_model->HasAction(extension.id())) {
+    info->pinned_to_toolbar =
+        toolbar_actions_model->IsActionPinned(extension.id());
   }
 
   // The icon.
@@ -758,6 +820,45 @@ void ExtensionInfoGenerator::CreateExtensionInfoHelper(
         base::BindOnce(&ExtensionInfoGenerator::OnImageLoaded,
                        weak_factory_.GetWeakPtr(), std::move(info)));
   }
+}
+
+developer::SafetyCheckStrings
+ExtensionInfoGenerator::CreateSafetyCheckDisplayString(
+    const CWSInfoService::CWSInfo& cws_info,
+    developer::ExtensionState state,
+    BitMapBlocklistState blocklist_state) {
+  developer::SafetyCheckStrings display_strings;
+  std::string detail_page_string;
+  std::string panel_page_string;
+  if (cws_info.is_present) {
+    if (blocklist_state == BitMapBlocklistState::BLOCKLISTED_MALWARE ||
+        cws_info.violation_type == CWSInfoService::CWSViolationType::kMalware) {
+      detail_page_string =
+          l10n_util::GetStringUTF8(IDS_SAFETY_CHECK_EXTENSIONS_MALWARE);
+      panel_page_string = l10n_util::GetStringUTF8(IDS_EXTENSIONS_SC_MALWARE);
+    } else if (blocklist_state ==
+                   BitMapBlocklistState::BLOCKLISTED_CWS_POLICY_VIOLATION ||
+               cws_info.violation_type ==
+                   CWSInfoService::CWSViolationType::kPolicy) {
+      detail_page_string = l10n_util::GetStringUTF8(
+          IDS_SAFETY_CHECK_EXTENSIONS_POLICY_VIOLATION);
+      panel_page_string =
+          state == developer::ExtensionState::kEnabled
+              ? l10n_util::GetStringUTF8(IDS_EXTENSIONS_SC_POLICY_VIOLATION_ON)
+              : l10n_util::GetStringUTF8(
+                    IDS_EXTENSIONS_SC_POLICY_VIOLATION_OFF);
+    } else if (cws_info.unpublished_long_ago) {
+      detail_page_string =
+          l10n_util::GetStringUTF8(IDS_SAFETY_CHECK_EXTENSIONS_UNPUBLISHED);
+      panel_page_string =
+          state == developer::ExtensionState::kEnabled
+              ? l10n_util::GetStringUTF8(IDS_EXTENSIONS_SC_UNPUBLISHED_ON)
+              : l10n_util::GetStringUTF8(IDS_EXTENSIONS_SC_UNPUBLISHED_OFF);
+    }
+  }
+  display_strings.detail_string = detail_page_string;
+  display_strings.panel_string = panel_page_string;
+  return display_strings;
 }
 
 std::string ExtensionInfoGenerator::GetDefaultIconUrl(const std::string& name) {

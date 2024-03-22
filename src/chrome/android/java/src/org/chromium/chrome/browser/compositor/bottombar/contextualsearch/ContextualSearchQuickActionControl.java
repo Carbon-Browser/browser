@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,11 +53,14 @@ public class ContextualSearchQuickActionControl extends ViewResourceInflater {
      * @param context The Android Context used to inflate the View.
      * @param resourceLoader The resource loader that will handle the snapshot capturing.
      */
-    public ContextualSearchQuickActionControl(Context context,
-            DynamicResourceLoader resourceLoader) {
-        super(R.layout.contextual_search_quick_action_icon_view,
+    public ContextualSearchQuickActionControl(
+            Context context, DynamicResourceLoader resourceLoader) {
+        super(
+                R.layout.contextual_search_quick_action_icon_view,
                 R.id.contextual_search_quick_action_icon_view,
-                context, null, resourceLoader);
+                context,
+                null,
+                resourceLoader);
         mContext = context;
     }
 
@@ -137,7 +140,8 @@ public class ContextualSearchQuickActionControl extends ViewResourceInflater {
      */
     public void setQuickAction(
             String quickActionUri, int quickActionCategory, int toolbarBackgroundColor) {
-        if (TextUtils.isEmpty(quickActionUri) || quickActionCategory == QuickActionCategory.NONE
+        if (TextUtils.isEmpty(quickActionUri)
+                || quickActionCategory == QuickActionCategory.NONE
                 || quickActionCategory >= QuickActionCategory.BOUNDARY) {
             reset();
             return;
@@ -202,9 +206,7 @@ public class ContextualSearchQuickActionControl extends ViewResourceInflater {
         return mHasQuickAction;
     }
 
-    /**
-     * Resets quick action data.
-     */
+    /** Resets quick action data. */
     public void reset() {
         mQuickActionUri = "";
         mQuickActionCategory = QuickActionCategory.NONE;
@@ -256,8 +258,9 @@ public class ContextualSearchQuickActionControl extends ViewResourceInflater {
                 ActivityInfo resolveActivityInfo = resolveInfo.activityInfo;
                 boolean matchesPossibleDefaultActivity =
                         TextUtils.equals(resolveActivityInfo.name, possibleDefaultActivityInfo.name)
-                        && TextUtils.equals(resolveActivityInfo.packageName,
-                                possibleDefaultActivityInfo.packageName);
+                                && TextUtils.equals(
+                                        resolveActivityInfo.packageName,
+                                        possibleDefaultActivityInfo.packageName);
 
                 if (matchesPossibleDefaultActivity) {
                     defaultActivityResolveInfo = resolveInfo;
@@ -282,13 +285,16 @@ public class ContextualSearchQuickActionControl extends ViewResourceInflater {
 
             if (mQuickActionCategory != QuickActionCategory.PHONE) {
                 // Use the default app's name to construct the caption.
-                mCaption = mContext.getResources().getString(
-                        getDefaultAppCaptionId(mQuickActionCategory),
-                        defaultActivityResolveInfo.loadLabel(packageManager));
+                mCaption =
+                        mContext.getResources()
+                                .getString(
+                                        getDefaultAppCaptionId(mQuickActionCategory),
+                                        defaultActivityResolveInfo.loadLabel(packageManager));
             } else {
                 // The caption for phone numbers does not use the app's name.
-                mCaption = mContext.getResources().getString(
-                        getDefaultAppCaptionId(mQuickActionCategory));
+                mCaption =
+                        mContext.getResources()
+                                .getString(getDefaultAppCaptionId(mQuickActionCategory));
             }
         } else if (mQuickActionCategory == QuickActionCategory.WEBSITE) {
             // If there is not a default app handler for a URL, open the quick action

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,6 @@
 #include "base/strings/sys_string_conversions.h"
 #include "base/time/time.h"
 #include "net/cert/x509_certificate.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation CWVX509Certificate {
   scoped_refptr<net::X509Certificate> _internalCertificate;

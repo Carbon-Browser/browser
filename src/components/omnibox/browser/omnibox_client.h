@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,22 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "components/omnibox/browser/actions/omnibox_action.h"
+#include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
+#include "components/omnibox/browser/omnibox.mojom-shared.h"
 #include "components/omnibox/browser/omnibox_navigation_observer.h"
 #include "components/omnibox/common/omnibox_focus_state.h"
+#include "components/url_formatter/spoof_checks/idna_metrics.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 
 class AutocompleteResult;
 class GURL;
+class LocationBarModel;
 class SessionID;
 class SkBitmap;
 class TemplateURL;
@@ -32,7 +39,8 @@ class Image;
 struct VectorIcon;
 }
 
-class OmniboxControllerEmitter;
+class AutocompleteControllerEmitter;
+class PrefService;
 
 using BitmapFetchedCallback =
     base::RepeatingCallback<void(int result_index, const SkBitmap& bitmap)>;
@@ -43,9 +51,10 @@ using FaviconFetchedCallback =
 // (e.g., getting information about the current page, retrieving objects
 // associated with the current tab, or performing operations that rely on such
 // objects under the hood).
-class OmniboxClient {
+class OmniboxClient : public base::SupportsWeakPtr<OmniboxClient> {
  public:
-  virtual ~OmniboxClient() {}
+  OmniboxClient() = default;
+  virtual ~OmniboxClient() = default;
 
   // Returns an AutocompleteProviderClient specific to the embedder context.
   virtual std::unique_ptr<AutocompleteProviderClient>
@@ -74,16 +83,20 @@ class OmniboxClient {
   virtual bool IsDefaultSearchProviderEnabled() const;
 
   // Returns the session ID of the current page.
-  virtual const SessionID& GetSessionID() const = 0;
+  virtual SessionID GetSessionID() const = 0;
 
-  // Called when the user changes the selected |index| in the result list.
-  // |match| is the suggestion corresponding to that index. Currently
-  // experimental and only called from select omnibox implementations.
-  virtual void OnSelectedMatchChanged(size_t index,
-                                      const AutocompleteMatch& match) {}
+  // Called when the user changes the selected |index| in the result list via
+  // mouse down or arrow key down. |match| is the suggestion corresponding to
+  // that index. |navigation_predictor| represents the event indicated
+  // navigation was likely.
+  virtual void OnNavigationLikely(
+      size_t index,
+      const AutocompleteMatch& match,
+      omnibox::mojom::NavigationPredictor navigation_predictor) {}
 
+  virtual PrefService* GetPrefs() = 0;
   virtual bookmarks::BookmarkModel* GetBookmarkModel();
-  virtual OmniboxControllerEmitter* GetOmniboxControllerEmitter();
+  virtual AutocompleteControllerEmitter* GetAutocompleteControllerEmitter() = 0;
   virtual TemplateURLService* GetTemplateURLService();
   virtual const AutocompleteSchemeClassifier& GetSchemeClassifier() const = 0;
   virtual AutocompleteClassifier* GetAutocompleteClassifier();
@@ -131,6 +144,10 @@ class OmniboxClient {
   virtual void OnFocusChanged(OmniboxFocusState state,
                               OmniboxFocusChangeReason reason) {}
 
+  // Called to notify the clients that the user has pasted into the omnibox, and
+  // the resulting string in the omnibox is a valid URL.
+  virtual void OnUserPastedInOmniboxResultingInValidURL();
+
   // Called when the autocomplete result has changed. Implementations that
   // support preloading (currently, prefetching or prerendering) of search
   // results pages should preload only if `should_preload` is true. If the
@@ -163,9 +180,6 @@ class OmniboxClient {
                              const AutocompleteResult& result,
                              bool has_focus) {}
 
-  // Called when input has been accepted.
-  virtual void OnInputAccepted(const AutocompleteMatch& match) {}
-
   // Called when the edit model is being reverted back to its unedited state.
   virtual void OnRevert() {}
 
@@ -183,6 +197,28 @@ class OmniboxClient {
 
   // Focuses the `WebContents`, i.e. the web page of the current tab.
   virtual void FocusWebContents() {}
+
+  virtual void OnAutocompleteAccept(
+      const GURL& destination_url,
+      TemplateURLRef::PostContent* post_content,
+      WindowOpenDisposition disposition,
+      ui::PageTransition transition,
+      AutocompleteMatchType::Type match_type,
+      base::TimeTicks match_selection_timestamp,
+      bool destination_url_entered_without_scheme,
+      bool destination_url_entered_with_http_scheme,
+      const std::u16string& text,
+      const AutocompleteMatch& match,
+      const AutocompleteMatch& alternative_nav_match,
+      IDNA2008DeviationCharacter deviation_char_in_hostname) = 0;
+
+  // Called when the view should update itself without restoring any tab state.
+  virtual void OnInputInProgress(bool in_progress) {}
+
+  // Called when the omnibox popup is shown or hidden.
+  virtual void OnPopupVisibilityChanged() {}
+
+  virtual LocationBarModel* GetLocationBarModel() = 0;
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_OMNIBOX_CLIENT_H_

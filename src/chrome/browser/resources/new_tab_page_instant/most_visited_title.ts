@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright 2013 The Chromium Authors. All rights reserved.
+ * Copyright 2013 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -191,26 +191,26 @@ function getTextColor(params: MostVisitedParams, isTitle: boolean): string {
   return c;
 }
 
-type MostVisitedParams = {
-  c?: string,
-  dummy?: string,
-  fs?: string,
-  f?: string,
-  ntl?: string,
-  pos?: string,
-  rid?: string,
-  ta?: string,
-  tf?: string,
-};
+interface MostVisitedParams {
+  c?: string;
+  dummy?: string;
+  fs?: string;
+  f?: string;
+  ntl?: string;
+  pos?: string;
+  rid?: string;
+  ta?: string;
+  tf?: string;
+}
 
-type MostVisitedStyles = {
-  color: string,
-  fontFamily: string,
-  fontSize: number,
-  numTitleLines?: number,
-  textAlign?: string,
-  textFadePos?: number,
-};
+interface MostVisitedStyles {
+  color: string;
+  fontFamily: string;
+  fontSize: number;
+  numTitleLines?: number;
+  textAlign?: string;
+  textFadePos?: number;
+}
 
 /**
  * Decodes most visited styles from URL parameters.

@@ -1,20 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/renderer_host/render_widget_host_view_aura.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/browser/devtools/protocol/devtools_protocol_test_support.h"
 #include "content/browser/renderer_host/delegated_frame_host.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
-#include "content/browser/renderer_host/render_widget_host_view_aura.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_view_host.h"
@@ -42,7 +41,7 @@ const char kMinimalPageDataURL[] =
 // call stack.
 void GiveItSomeTime() {
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(250));
   run_loop.Run();
 }
@@ -96,7 +95,9 @@ class RenderWidgetHostViewAuraBrowserTest : public ContentBrowserTest {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest,
-                       StaleFrameContentOnEvictionNormal) {
+                       // TODO(crbug.com/1377184): Re-enable this test
+                       // TODO(crbug.com/1376643): Re-enable this test
+                       DISABLED_StaleFrameContentOnEvictionNormal) {
   EXPECT_TRUE(NavigateToURL(shell(), GURL(kMinimalPageDataURL)));
 
   // Make sure the renderer submits at least one frame before hiding it.
@@ -117,8 +118,9 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest,
   // Hide the view and evict the frame. This should trigger a copy of the stale
   // frame content.
   GetRenderWidgetHostView()->Hide();
-  static_cast<viz::FrameEvictorClient*>(GetDelegatedFrameHost())
-      ->EvictDelegatedFrame();
+  auto* dfh = GetDelegatedFrameHost();
+  static_cast<viz::FrameEvictorClient*>(dfh)->EvictDelegatedFrame(
+      dfh->GetFrameEvictorForTesting()->CollectSurfaceIdsForEviction());
   EXPECT_EQ(GetDelegatedFrameHost()->frame_eviction_state_,
             DelegatedFrameHost::FrameEvictionState::kPendingEvictionRequests);
 
@@ -157,8 +159,9 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest,
   // Hide the view and evict the frame. This should trigger a copy of the stale
   // frame content.
   GetRenderWidgetHostView()->Hide();
-  static_cast<viz::FrameEvictorClient*>(GetDelegatedFrameHost())
-      ->EvictDelegatedFrame();
+  auto* dfh = GetDelegatedFrameHost();
+  static_cast<viz::FrameEvictorClient*>(dfh)->EvictDelegatedFrame(
+      dfh->GetFrameEvictorForTesting()->CollectSurfaceIdsForEviction());
   EXPECT_EQ(GetDelegatedFrameHost()->frame_eviction_state_,
             DelegatedFrameHost::FrameEvictionState::kPendingEvictionRequests);
 
@@ -197,8 +200,9 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraBrowserTest,
   // Hide the view and evict the frame. This should not trigger a copy of the
   // stale frame content as the WebContentDelegate returns false.
   GetRenderWidgetHostView()->Hide();
-  static_cast<viz::FrameEvictorClient*>(GetDelegatedFrameHost())
-      ->EvictDelegatedFrame();
+  auto* dfh = GetDelegatedFrameHost();
+  static_cast<viz::FrameEvictorClient*>(dfh)->EvictDelegatedFrame(
+      dfh->GetFrameEvictorForTesting()->CollectSurfaceIdsForEviction());
 
   EXPECT_EQ(GetDelegatedFrameHost()->frame_eviction_state_,
             DelegatedFrameHost::FrameEvictionState::kNotStarted);
@@ -327,7 +331,7 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraDevtoolsBrowserTest,
   EXPECT_TRUE(NavigateToURL(shell(), page));
   auto* wc = shell()->web_contents();
   Attach();
-  SendCommand("Debugger.enable", nullptr);
+  SendCommandSync("Debugger.enable");
 
   ASSERT_TRUE(ExecJs(wc, "focusSelectMenu();"));
   SimulateKeyPress(wc, ui::DomKey::FromCharacter(' '), ui::DomCode::SPACE,
@@ -433,10 +437,10 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraDSFBrowserTest,
   // done in `WebFrameWidgetImpl`.
   const base::Value eval_result =
       EvalJs(wc, "getSelectionBounds();").ExtractList();
-  const int x = floor(eval_result.GetListDeprecated()[0].GetDouble());
-  const int right = ceil(eval_result.GetListDeprecated()[1].GetDouble());
-  const int y = floor(eval_result.GetListDeprecated()[2].GetDouble());
-  const int bottom = ceil(eval_result.GetListDeprecated()[3].GetDouble());
+  const int x = floor(eval_result.GetList()[0].GetDouble());
+  const int right = ceil(eval_result.GetList()[1].GetDouble());
+  const int y = floor(eval_result.GetList()[2].GetDouble());
+  const int bottom = ceil(eval_result.GetList()[3].GetDouble());
   const int expected_dip_width = floor(right / scale()) - ceil(x / scale());
   const int expected_dip_height = floor(bottom / scale()) - ceil(y / scale());
 
@@ -465,20 +469,11 @@ class RenderWidgetHostViewAuraActiveWidgetTest : public ContentBrowserTest {
 
   // Helper function to check |isActivated| for a given frame.
   bool FrameIsActivated(content::RenderFrameHost* rfh) {
-    bool active = false;
-    EXPECT_TRUE(ExecuteScriptAndExtractBool(
-        rfh,
-        "window.domAutomationController.send(window.internals.isActivated())",
-        &active));
-    return active;
+    return EvalJs(rfh, "window.internals.isActivated()").ExtractBool();
   }
 
   bool FrameIsFocused(content::RenderFrameHost* rfh) {
-    bool is_focused = false;
-    EXPECT_TRUE(ExecuteScriptAndExtractBool(
-        rfh, "window.domAutomationController.send(document.hasFocus())",
-        &is_focused));
-    return is_focused;
+    return EvalJs(rfh, "document.hasFocus()").ExtractBool();
   }
 
   RenderViewHost* GetRenderViewHost() const {
@@ -575,12 +570,10 @@ IN_PROC_BROWSER_TEST_F(RenderWidgetHostViewAuraActiveWidgetTest,
 
   // Ensure both the main page and the iframe are loaded.
   ASSERT_EQ("OUTER_LOADED",
-            EvalJs(root->current_frame_host(), "notifyWhenLoaded()",
-                   content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+            EvalJs(root->current_frame_host(), "notifyWhenLoaded()"));
   ASSERT_EQ("LOADED", EvalJs(root->current_frame_host(),
                              "document.querySelector(\"iframe\").contentWindow."
-                             "notifyWhenLoaded();",
-                             content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+                             "notifyWhenLoaded();"));
   // TODO(b/204006085): Remove this sleep call and replace with polling.
   GiveItSomeTime();
 

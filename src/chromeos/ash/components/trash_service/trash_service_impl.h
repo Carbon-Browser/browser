@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 
-namespace chromeos::trash_service {
+namespace ash::trash_service {
 
 // Constant representing the maximum buffer to read from a supplied .trashinfo
 // file. The buffer should be made up of:
@@ -55,6 +55,6 @@ class TrashServiceImpl : public mojom::TrashService {
   mojo::ReceiverSet<mojom::TrashService> receivers_;
 };
 
-}  // namespace chromeos::trash_service
+}  // namespace ash::trash_service
 
 #endif  // CHROMEOS_ASH_COMPONENTS_TRASH_SERVICE_TRASH_SERVICE_IMPL_H_

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "chrome/browser/extensions/error_console/error_console.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "extensions/browser/extension_registry_factory.h"
 #include "extensions/browser/extensions_browser_client.h"
 
@@ -23,28 +22,28 @@ ErrorConsole* ErrorConsoleFactory::GetForBrowserContext(
 
 // static
 ErrorConsoleFactory* ErrorConsoleFactory::GetInstance() {
-  return base::Singleton<ErrorConsoleFactory>::get();
+  static base::NoDestructor<ErrorConsoleFactory> instance;
+  return instance.get();
 }
 
 ErrorConsoleFactory::ErrorConsoleFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ErrorConsole",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(ExtensionRegistryFactory::GetInstance());
 }
 
-ErrorConsoleFactory::~ErrorConsoleFactory() {
-}
+ErrorConsoleFactory::~ErrorConsoleFactory() = default;
 
-KeyedService* ErrorConsoleFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ErrorConsoleFactory::BuildServiceInstanceForBrowserContext(
     BrowserContext* context) const {
-  return new ErrorConsole(Profile::FromBrowserContext(context));
-}
-
-BrowserContext* ErrorConsoleFactory::GetBrowserContextToUse(
-    BrowserContext* context) const {
-  // Redirected in incognito.
-  return ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+  return std::make_unique<ErrorConsole>(Profile::FromBrowserContext(context));
 }
 
 }  // namespace extensions

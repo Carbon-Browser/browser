@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,10 +36,10 @@ void StorageBlock<T>::CopyFrom(StorageBlock<T>* other) {
   DCHECK(!modified_);
   DCHECK(!other->modified_);
   Discard();
-  *Data() = *other->Data();
-  file_ = other->file_;
   address_ = other->address_;
   extended_ = other->extended_;
+  file_ = other->file_;
+  *Data() = *other->Data();
 }
 
 template<typename T> void* StorageBlock<T>::buffer() const {
@@ -197,10 +197,10 @@ template<typename T> void StorageBlock<T>::AllocateData() {
 template<typename T> void StorageBlock<T>::DeleteData() {
   if (own_data_) {
     if (!extended_) {
-      delete data_;
+      data_.ClearAndDelete();
     } else {
       data_->~T();
-      delete[] reinterpret_cast<char*>(data_.get());
+      delete[] reinterpret_cast<char*>(data_.ExtractAsDangling().get());
     }
     own_data_ = false;
   }

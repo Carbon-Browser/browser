@@ -1,13 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/signin/identity_test_environment_profile_adaptor.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
@@ -42,7 +42,7 @@ class MultiUserUtilTest : public ChromeAshTestBase {
 
     fake_user_manager_ = new FakeChromeUserManager;
     user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        base::WrapUnique(fake_user_manager_));
+        base::WrapUnique(fake_user_manager_.get()));
 
     profile_.reset(IdentityTestEnvironmentProfileAdaptor::
                        CreateProfileForIdentityTestEnvironment()
@@ -62,11 +62,10 @@ class MultiUserUtilTest : public ChromeAshTestBase {
   CoreAccountId AddUserAndSignIn(const std::string& email) {
     AccountInfo account_info = identity_test_env()->MakePrimaryAccountAvailable(
         email, signin::ConsentLevel::kSync);
-    fake_user_manager_->AddUser(
+    auto* user = fake_user_manager_->AddUser(
         multi_user_util::GetAccountIdFromEmail(account_info.email));
     fake_user_manager_->UserLoggedIn(
-        multi_user_util::GetAccountIdFromEmail(account_info.email),
-        ProfileHelper::GetUserIdHashByUserIdForTesting(account_info.email),
+        user->GetAccountId(), user->username_hash(),
         false /* browser_restart */, false /* is_child */);
 
     return account_info.account_id;
@@ -87,7 +86,8 @@ class MultiUserUtilTest : public ChromeAshTestBase {
   std::unique_ptr<IdentityTestEnvironmentProfileAdaptor>
       identity_test_env_adaptor_;
   // |fake_user_manager_| is owned by |user_manager_enabler_|.
-  FakeChromeUserManager* fake_user_manager_;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged | ExperimentalAsh>
+      fake_user_manager_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
 };
 

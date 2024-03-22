@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,15 +37,21 @@ struct VectorTraits<blink::TraceWrapperV8Reference<T>>
 
   static constexpr bool kNeedsDestruction =
       !std::is_trivially_destructible<blink::TraceWrapperV8Reference<T>>::value;
-  // TraceWrapperV8Reference is not `is_trivially_default_constructible` as it
-  // requires initializing with zero.
+
+  // TraceWrapperV8Reference has non-trivial construction/copying/moving.
+  // However, write barriers in Vector are properly emitted through
+  // ConstructTraits and as such the type can be trivially initialized, cleared,
+  // copied, and moved.
   static constexpr bool kCanInitializeWithMemset = true;
-  static constexpr bool kCanClearUnusedSlotsWithMemset =
-      std::is_trivially_destructible<blink::TraceWrapperV8Reference<T>>::value;
-  static constexpr bool kCanCopyWithMemcpy = std::is_trivially_copy_assignable<
-      blink::TraceWrapperV8Reference<T>>::value;
-  static constexpr bool kCanMoveWithMemcpy = std::is_trivially_move_assignable<
-      blink::TraceWrapperV8Reference<T>>::value;
+  static constexpr bool kCanClearUnusedSlotsWithMemset = true;
+  // v8::TracedReference assumes that references uniquely point to an internal
+  // node.
+  static constexpr bool kCanCopyWithMemcpy = false;
+  // TODO(chromium:1322114): Temporarily disable move with memcpy to evaluate
+  // impact on crashers. Move should always be followed by a clear (non-dtor).
+  static constexpr bool kCanMoveWithMemcpy = false;
+
+  // TraceWrapperV8Reference supports concurrent tracing.
   static constexpr bool kCanTraceConcurrently = true;
 
   // Wanted behavior that should not break for performance reasons.

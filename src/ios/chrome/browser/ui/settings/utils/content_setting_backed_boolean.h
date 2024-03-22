@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #import <Foundation/Foundation.h>
 
 #include "components/content_settings/core/common/content_settings_types.h"
-#import "ios/chrome/browser/ui/settings/utils/observable_boolean.h"
+#import "ios/chrome/browser/shared/model/utils/observable_boolean.h"
 
 class HostContentSettingsMap;
 

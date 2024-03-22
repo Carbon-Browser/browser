@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,7 @@ class CC_PAINT_EXPORT ServiceRawMemoryTransferCacheEntry final
   ~ServiceRawMemoryTransferCacheEntry() final;
   size_t CachedSize() const final;
   bool Deserialize(GrDirectContext* context,
+                   skgpu::graphite::Recorder* graphite_recorder,
                    base::span<const uint8_t> data) final;
   const std::vector<uint8_t>& data() { return data_; }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ PasswordManagerSettingsServiceImpl::PasswordManagerSettingsServiceImpl(
     : pref_service_(pref_service) {}
 
 bool PasswordManagerSettingsServiceImpl::IsSettingEnabled(
-    PasswordManagerSetting setting) {
+    PasswordManagerSetting setting) const {
   switch (setting) {
     case PasswordManagerSetting::kOfferToSavePasswords:
       return pref_service_->GetBoolean(

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,31 +15,34 @@
  *
  * @see chrome/browser/ui/webui/settings/certificates_handler.cc
  */
-export type CertificateProvisioningProcess = {
-  certProfileId: string,
-  certProfileName: string,
-  isDeviceWide: boolean,
-  lastUnsuccessfulMessage: string,
-  status: string,
-  stateId: number,
-  timeSinceLastUpdate: string,
-  publicKey: string,
-};
+export interface CertificateProvisioningProcess {
+  certProfileId: string;
+  certProfileName: string;
+  isDeviceWide: boolean;
+  lastUnsuccessfulMessage: string;
+  status: string;
+  stateId: number;
+  timeSinceLastUpdate: string;
+  publicKey: string;
+}
 
 export interface CertificateProvisioningBrowserProxy {
   /**
    * Refreshes the list of client certificate processes.
    * Triggers the 'certificate-provisioning-processes-changed' event.
-   * This is Chrome OS specific, but always present for simplicity.
    */
   refreshCertificateProvisioningProcesses(): void;
 
   /**
    * Attempts to manually advance/refresh the status of the client certificate
    * provisioning process identified by |certProfileId|.
-   * This is Chrome OS specific, but always present for simplicity.
    */
   triggerCertificateProvisioningProcessUpdate(certProfileId: string): void;
+
+  /**
+   * Resets a particular certificate process.
+   */
+  triggerCertificateProvisioningProcessReset(certProfileId: string): void;
 }
 
 export class CertificateProvisioningBrowserProxyImpl implements
@@ -50,6 +53,10 @@ export class CertificateProvisioningBrowserProxyImpl implements
 
   triggerCertificateProvisioningProcessUpdate(certProfileId: string) {
     chrome.send('triggerCertificateProvisioningProcessUpdate', [certProfileId]);
+  }
+
+  triggerCertificateProvisioningProcessReset(certProfileId: string) {
+    chrome.send('triggerCertificateProvisioningProcessReset', [certProfileId]);
   }
 
   static getInstance(): CertificateProvisioningBrowserProxy {

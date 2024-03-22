@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 from telemetry.page import shared_page_state
@@ -288,6 +288,13 @@ class AccuWeather2018Page(TopRealWorldDesktopPage):
         name_suffix=name_suffix,
         extra_browser_args=extra_browser_args)
 
+  def RunNavigateSteps(self, action_runner):
+    super(AccuWeather2018Page, self).RunNavigateSteps(action_runner)
+
+    # Close a pop-up dialog before scrolling.
+    action_runner.WaitForElement(selector=".fc-button-consent")
+    action_runner.TapElement(selector=".fc-button-consent")
+
 
 class Twitch2018Page(TopRealWorldDesktopPage):
   """ Why: #1 games according to Alexa  """
@@ -324,10 +331,15 @@ class Gmail2018SmoothPage(TopRealWorldDesktopPage):
   BASE_NAME = 'gmail'
   YEAR = '2018'
   URL = 'https://mail.google.com/mail/'
+  EXTRA_BROWSER_ARGUMENTS = ['--allow-browser-signin=false']
 
   def RunNavigateSteps(self, action_runner):
     if self.wpr_mode != wpr_modes.WPR_REPLAY:
-      google_login.NewLoginGoogleAccount(action_runner, 'googletest')
+      if self.wpr_mode in [wpr_modes.WPR_OFF, wpr_modes.WPR_RECORD]:
+        google_login.LoginWithLoginUrl(action_runner, self.URL)
+      else:
+        google_login.NewLoginGoogleAccount(action_runner, 'googletest')
+
     super(Gmail2018SmoothPage, self).RunNavigateSteps(action_runner)
     action_runner.WaitForJavaScriptCondition(
         'window.gmonkey !== undefined &&'
@@ -351,10 +363,14 @@ class GoogleCalendar2018SmoothPage(TopRealWorldDesktopPage):
   BASE_NAME='google_calendar'
   YEAR = '2018'
   URL='https://www.google.com/calendar/'
+  EXTRA_BROWSER_ARGUMENTS = ['--allow-browser-signin=false']
 
   def RunNavigateSteps(self, action_runner):
     if self.wpr_mode != wpr_modes.WPR_REPLAY:
-      google_login.NewLoginGoogleAccount(action_runner, 'googletest')
+      if self.wpr_mode in [wpr_modes.WPR_OFF, wpr_modes.WPR_RECORD]:
+        google_login.LoginWithLoginUrl(action_runner, self.URL)
+      else:
+        google_login.NewLoginGoogleAccount(action_runner, 'googletest')
     super(GoogleCalendar2018SmoothPage, self).RunNavigateSteps(action_runner)
     action_runner.WaitForElement('span[class~="sm8sCf"]')
     action_runner.ExecuteJavaScript("""

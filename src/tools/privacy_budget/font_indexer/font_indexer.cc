@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <iostream>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "content/public/browser/font_list_async.h"
@@ -105,7 +105,7 @@ void FontIndexer::FontListHasLoaded(base::Value::List list) {
     const base::Value::List& font = i.GetList();
 
     std::string non_localized_name = font[0].GetString();
-    PrintAllFontsWithName(non_localized_name.c_str());
+    PrintAllFontsWithName(WTF::AtomicString(non_localized_name.c_str()));
   }
 
   has_font_list_loaded_ = true;

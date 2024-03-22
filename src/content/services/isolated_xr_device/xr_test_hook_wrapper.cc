@@ -1,10 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/services/isolated_xr_device/xr_test_hook_wrapper.h"
-
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace device {
 
@@ -29,9 +28,8 @@ PoseFrameData MojoToDevicePoseFrameData(
     device_test::mojom::PoseFrameDataPtr& pose) {
   PoseFrameData ret = {};
   ret.is_valid = !!pose->device_to_origin;
-  if (ret.is_valid) {
-    pose->device_to_origin->matrix().getColMajor(ret.device_to_origin);
-  }
+  if (ret.is_valid)
+    pose->device_to_origin->GetColMajorF(ret.device_to_origin);
 
   return ret;
 }
@@ -206,7 +204,7 @@ void XRTestHookWrapper::AttachCurrentThread() {
   if (pending_hook_)
     hook_.Bind(std::move(pending_hook_));
 
-  current_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  current_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 void XRTestHookWrapper::DetachCurrentThread() {

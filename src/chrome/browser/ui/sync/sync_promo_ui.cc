@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/signin_promo_util.h"
 #include "chrome/browser/sync/sync_service_factory.h"
-#include "components/sync/base/sync_prefs.h"
+#include "components/sync/service/sync_prefs.h"
 
 bool SyncPromoUI::ShouldShowSyncPromo(Profile* profile) {
   // Don't show sync promo if the sign in promo should not be shown.

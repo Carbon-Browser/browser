@@ -1,11 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {Flags} from '../common/flags.js';
 import {InstanceChecker} from '../common/instance_checker.js';
 
 import {Autoclick} from './autoclick/autoclick.js';
 import {Dictation} from './dictation/dictation.js';
+import {FaceGaze} from './facegaze/facegaze.js';
 import {Magnifier} from './magnifier/magnifier.js';
 
 /**
@@ -20,20 +22,36 @@ export class AccessibilityCommon {
     this.magnifier_ = null;
     /** @private {Dictation} */
     this.dictation_ = null;
+    /** @private {FaceGaze} */
+    this.faceGaze_ = null;
+
+    // For tests.
+    /** @private {?function()} */
+    this.autoclickLoadCallbackForTest_ = null;
+    /** @private {?function()} */
+    this.magnifierLoadCallbackForTest_ = null;
+    /** @private {?function()} */
+    this.dictationLoadCallbackForTest_ = null;
 
     this.init_();
   }
 
-  /**
-   * @return {Autoclick}
-   */
+  static async init() {
+    await Flags.init();
+    globalThis.accessibilityCommon = new AccessibilityCommon();
+  }
+
+  /** @return {Autoclick} */
   getAutoclickForTest() {
     return this.autoclick_;
   }
 
-  /**
-   * @return {Magnifier}
-   */
+  /** @return {FaceGaze} */
+  getFaceGazeForTest() {
+    return this.faceGaze_;
+  }
+
+  /** @return {Magnifier} */
   getMagnifierForTest() {
     return this.magnifier_;
   }
@@ -67,6 +85,27 @@ export class AccessibilityCommon {
     chrome.accessibilityFeatures.dictation.onChange.addListener(
         details => this.onDictationUpdated_(details));
 
+    const faceGazeFeature =
+        chrome.accessibilityPrivate.AccessibilityFeature.FACE_GAZE;
+    chrome.accessibilityPrivate.isFeatureEnabled(faceGazeFeature, enabled => {
+      if (!enabled) {
+        return;
+      }
+      // TODO(b/309121742): Add FaceGaze pref to the accessibilityFeatures
+      // extension API.
+      chrome.settingsPrivate.getPref(
+          AccessibilityCommon.FACEGAZE_PREF_NAME,
+          pref => this.onFaceGazeUpdated_(pref));
+      chrome.settingsPrivate.onPrefsChanged.addListener(prefs => {
+        for (const pref of prefs) {
+          if (pref.key === AccessibilityCommon.FACEGAZE_PREF_NAME) {
+            this.onFaceGazeUpdated_(pref);
+            break;
+          }
+        }
+      });
+    });
+
     // AccessibilityCommon is an IME so it shows in the input methods list
     // when it starts up. Remove from this list, Dictation will add it back
     // whenever needed.
@@ -82,11 +121,31 @@ export class AccessibilityCommon {
     if (details.value && !this.autoclick_) {
       // Initialize the Autoclick extension.
       this.autoclick_ = new Autoclick();
+      if (this.autoclickLoadCallbackForTest_) {
+        this.autoclick_.setOnLoadDesktopCallbackForTest(
+            this.autoclickLoadCallbackForTest_);
+        this.autoclickLoadCallbackForTest_ = null;
+      }
     } else if (!details.value && this.autoclick_) {
       // TODO(crbug.com/1096759): Consider using XHR to load/unload autoclick
       // rather than relying on a destructor to clean up state.
       this.autoclick_.onAutoclickDisabled();
       this.autoclick_ = null;
+    }
+  }
+
+  /**
+   * Called when the FaceGaze feature is fetched enabled or disabled.
+   * @param {*} details
+   * @private
+   */
+  onFaceGazeUpdated_(details) {
+    if (details.value && !this.faceGaze_) {
+      // Initialize the FaceGaze extension.
+      this.faceGaze_ = new FaceGaze();
+    } else if (!details.value && this.faceGaze_) {
+      this.faceGaze_.onFaceGazeDisabled();
+      this.faceGaze_ = null;
     }
   }
 
@@ -98,6 +157,11 @@ export class AccessibilityCommon {
   onMagnifierUpdated_(type, details) {
     if (details.value && !this.magnifier_) {
       this.magnifier_ = new Magnifier(type);
+      if (this.magnifierLoadCallbackForTest_) {
+        this.magnifier_.setOnLoadDesktopCallbackForTest(
+            this.magnifierLoadCallbackForTest_);
+        this.magnifierLoadCallbackForTest_ = null;
+      }
     } else if (
         !details.value && this.magnifier_ && this.magnifier_.type === type) {
       this.magnifier_.onMagnifierDisabled();
@@ -113,12 +177,50 @@ export class AccessibilityCommon {
   onDictationUpdated_(details) {
     if (details.value && !this.dictation_) {
       this.dictation_ = new Dictation();
+      if (this.dictationLoadCallbackForTest_) {
+        this.dictationLoadCallbackForTest_();
+        this.dictationLoadCallbackForTest_ = null;
+      }
     } else if (!details.value && this.dictation_) {
+      this.dictation_.onDictationDisabled();
       this.dictation_ = null;
+    }
+  }
+
+  /**
+   * Used by C++ tests to ensure a feature load is completed.
+   * Set on AccessibilityCommon in case the feature has not started up yet.
+   * @param {string} feature The feature name.
+   * @param {!function()} callback Callback for feature JS load complete.
+   */
+  setFeatureLoadCallbackForTest(feature, callback) {
+    if (feature === 'autoclick') {
+      if (!this.autoclick_) {
+        this.autoclickLoadCallbackForTest_ = callback;
+        return;
+      }
+      // Autoclick already loaded.
+      this.autoclick_.setOnLoadDesktopCallbackForTest(callback);
+    } else if (feature === 'dictation') {
+      if (!this.dictation_) {
+        this.dictationLoadCallbackForTest_ = callback;
+        return;
+      }
+      // Dictation already loaded.
+      callback();
+    } else if (feature === 'magnifier') {
+      if (!this.magnifier_) {
+        this.magnifierLoadCallbackForTest_ = callback;
+        return;
+      }
+      // Magnifier already loaded.
+      this.magnifier_.setOnLoadDesktopCallbackForTest(callback);
     }
   }
 }
 
+AccessibilityCommon.FACEGAZE_PREF_NAME = 'settings.a11y.face_gaze.enabled';
+
 InstanceChecker.closeExtraInstances();
 // Initialize the AccessibilityCommon extension.
-window.accessibilityCommon = new AccessibilityCommon();
+AccessibilityCommon.init();

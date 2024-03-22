@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,6 @@ module storage.mojom;
 
 import "components/services/storage/public/mojom/buckets/bucket_locator.mojom";
 import "mojo/public/mojom/base/file_path.mojom";
-import "mojo/public/mojom/base/values.mojom";
-import "mojo/public/mojom/base/time.mojom";
 
 enum V2SchemaCorruptionStatus {
   CORRUPTION_UNKNOWN,
@@ -27,6 +25,7 @@ enum FailMethod {
   NOTHING,
   COMMIT,
   COMMIT_DISK_FULL,
+  COMMIT_SYNC,
   GET,
   SEEK,
   WRITE,
@@ -79,6 +78,9 @@ interface IndexedDBControlTest {
   // Compacts the backing store for a given `bucket_locator`.
   CompactBackingStoreForTesting(storage.mojom.BucketLocator bucket_locator) =>
       ();
+
+  // Gets the total usage in bytes across all buckets.
+  GetUsageForTesting() => (int64 total_usage);
 
   // Overrides IndexedDB with a mock class factory that can inject failures
   // at specific points.  For now, because this is static, there can only

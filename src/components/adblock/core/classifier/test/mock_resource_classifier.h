@@ -15,8 +15,8 @@
  * along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef COMPONENTS_ADBLOCK_CORE_CLASSIFIER_TEST_MOCK_RESOURCE_CLASSSIFIER_H_
-#define COMPONENTS_ADBLOCK_CORE_CLASSIFIER_TEST_MOCK_RESOURCE_CLASSSIFIER_H_
+#ifndef COMPONENTS_ADBLOCK_CORE_CLASSIFIER_TEST_MOCK_RESOURCE_CLASSIFIER_H_
+#define COMPONENTS_ADBLOCK_CORE_CLASSIFIER_TEST_MOCK_RESOURCE_CLASSIFIER_H_
 
 #include "components/adblock/core/classifier/resource_classifier.h"
 
@@ -29,24 +29,32 @@ class MockResourceClassifier : public ResourceClassifier {
   MockResourceClassifier();
   MOCK_METHOD(ClassificationResult,
               ClassifyRequest,
-              (const SubscriptionCollection&,
+              (const SubscriptionService::Snapshot,
                const GURL&,
                const std::vector<GURL>&,
                ContentType,
                const SiteKey&),
               (override, const));
-  MOCK_METHOD(
-      ClassificationResult,
-      ClassifyPopup,
-      (const SubscriptionCollection&, const GURL&, const GURL&, const SiteKey&),
-      (override, const));
+  MOCK_METHOD(ClassificationResult,
+              ClassifyPopup,
+              (const SubscriptionService::Snapshot&,
+               const GURL&,
+               const std::vector<GURL>&,
+               const SiteKey&),
+              (override, const));
   MOCK_METHOD(ClassificationResult,
               ClassifyResponse,
-              (const SubscriptionCollection&,
+              (const SubscriptionService::Snapshot,
                const GURL&,
                const std::vector<GURL>&,
                ContentType,
                const scoped_refptr<net::HttpResponseHeaders>&),
+              (override, const));
+  MOCK_METHOD(absl::optional<GURL>,
+              CheckRewrite,
+              (const SubscriptionService::Snapshot,
+               const GURL&,
+               const std::vector<GURL>&),
               (override, const));
 
  protected:
@@ -55,4 +63,4 @@ class MockResourceClassifier : public ResourceClassifier {
 
 }  // namespace adblock
 
-#endif  // COMPONENTS_ADBLOCK_CORE_CLASSIFIER_TEST_MOCK_RESOURCE_CLASSSIFIER_H_
+#endif  // COMPONENTS_ADBLOCK_CORE_CLASSIFIER_TEST_MOCK_RESOURCE_CLASSIFIER_H_

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class BluetoothLowEnergyPeripheralBridge {
   BluetoothLowEnergyPeripheralBridge(BluetoothLowEnergyDeviceMac* device_mac)
       : device_mac_(device_mac) {}
 
-  ~BluetoothLowEnergyPeripheralBridge() {}
+  ~BluetoothLowEnergyPeripheralBridge() = default;
 
   void DidModifyServices(NSArray* invalidatedServices) {
     device_mac_->DidModifyServices(invalidatedServices);

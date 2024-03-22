@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/network/policy_certificate_provider.h"
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
@@ -24,7 +25,7 @@
 #include "net/test/test_data_directory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
+namespace ash {
 namespace {
 
 class FakePolicyCertificateProvider : public PolicyCertificateProvider {
@@ -136,8 +137,8 @@ class TestNSSCertDatabase : public net::NSSCertDatabaseChromeOS {
   ~TestNSSCertDatabase() override = default;
 
   // Make this method visible in the public interface.
-  void NotifyObserversCertDBChanged() {
-    NSSCertDatabaseChromeOS::NotifyObserversCertDBChanged();
+  void NotifyObserversClientCertStoreChanged() {
+    NSSCertDatabaseChromeOS::NotifyObserversClientCertStoreChanged();
   }
 };
 
@@ -254,7 +255,7 @@ class NetworkCertLoaderTest : public testing::Test,
     net::ImportClientCertAndKeyFromFile(
         net::GetTestCertsDirectory(), test_cert.cert_pem_filename,
         test_cert.key_pk8_filename, slot_to_use, &client_cert);
-    database_to_notify->NotifyObserversCertDBChanged();
+    database_to_notify->NotifyObserversClientCertStoreChanged();
     return client_cert;
   }
 
@@ -283,7 +284,7 @@ class NetworkCertLoaderTest : public testing::Test,
 
   base::test::TaskEnvironment task_environment_;
 
-  NetworkCertLoader* cert_loader_;
+  raw_ptr<NetworkCertLoader, DanglingUntriaged | ExperimentalAsh> cert_loader_;
 
   // The NSSCertDatabse and underlying slots for the primary user (because
   // NetworkCertLoader uses device-wide certs and primary user's certs).
@@ -873,4 +874,4 @@ TEST_F(NetworkCertLoaderTest, NoUpdateWhenShuttingDown) {
   ASSERT_EQ(0U, GetAndResetCertificatesLoadedEventsCount());
 }
 
-}  // namespace chromeos
+}  // namespace ash

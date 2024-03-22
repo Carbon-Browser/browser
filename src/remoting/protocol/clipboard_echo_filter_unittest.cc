@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,7 @@
 using ::testing::_;
 using ::testing::InSequence;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 using test::EqualsClipboardEvent;
 
@@ -50,20 +49,14 @@ TEST(ClipboardEchoFilterTest, FromClientBlocksIdenticalEventToClient) {
   filter.set_client_stub(&client_stub);
   filter.set_host_stub(&host_stub);
 
-  filter.host_filter()->InjectClipboardEvent(
-      MakeClipboardEvent("text", "a"));
+  filter.host_filter()->InjectClipboardEvent(MakeClipboardEvent("text", "a"));
   // The client has sent ("text", "a") to the host, so make sure the filter
   // will stop the host echoing that item back to the client.
-  filter.client_filter()->InjectClipboardEvent(
-      MakeClipboardEvent("text", "a"));
-  filter.host_filter()->InjectClipboardEvent(
-      MakeClipboardEvent("text", "b"));
-  filter.client_filter()->InjectClipboardEvent(
-      MakeClipboardEvent("text", "a"));
-  filter.host_filter()->InjectClipboardEvent(
-      MakeClipboardEvent("image", "a"));
-  filter.client_filter()->InjectClipboardEvent(
-      MakeClipboardEvent("text", "a"));
+  filter.client_filter()->InjectClipboardEvent(MakeClipboardEvent("text", "a"));
+  filter.host_filter()->InjectClipboardEvent(MakeClipboardEvent("text", "b"));
+  filter.client_filter()->InjectClipboardEvent(MakeClipboardEvent("text", "a"));
+  filter.host_filter()->InjectClipboardEvent(MakeClipboardEvent("image", "a"));
+  filter.client_filter()->InjectClipboardEvent(MakeClipboardEvent("text", "a"));
 }
 
 // Check that the filter will drop events sent to the host, if there is no host
@@ -106,5 +99,4 @@ TEST(ClipboardEchoFilter, NoClientStub) {
   filter.client_filter()->InjectClipboardEvent(event);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

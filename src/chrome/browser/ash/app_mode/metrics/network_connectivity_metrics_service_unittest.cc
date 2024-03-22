@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/components/sync_wifi/network_test_helper.h"
+#include "chromeos/ash/components/sync_wifi/network_test_helper.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
@@ -44,19 +44,9 @@ class NetworkConnectivityMetricsServiceTest : public testing::Test {
   base::HistogramTester* histogram_tester() { return histogram_tester_.get(); }
 
   absl::optional<int> GetNetworkDropsFromLocalState() {
-    const auto* metrics_value =
-        local_state()->GetDictionary(prefs::kKioskMetrics);
-    if (!metrics_value)
-      return absl::nullopt;
-    const auto* metrics_dict = metrics_value->GetIfDict();
-    if (!metrics_dict)
-      return absl::nullopt;
-    const auto* network_drops_value = metrics_dict->Find(kKioskNetworkDrops);
-    if (!network_drops_value) {
-      return absl::nullopt;
-    }
-
-    return network_drops_value->GetIfInt();
+    return local_state()
+        ->GetDict(prefs::kKioskMetrics)
+        .FindInt(kKioskNetworkDrops);
   }
 
   void SimulateConnectionFailure(const NetworkState* network,
@@ -79,7 +69,7 @@ class NetworkConnectivityMetricsServiceTest : public testing::Test {
 
   const NetworkState* CreateNetwork() {
     std::string guid = helper_.ConfigureWiFiNetwork(
-        "ssid", /*is_secured=*/true, /*in_profile=*/true,
+        "ssid", /*is_secured=*/true, helper_.primary_user(),
         /*has_connected=*/true,
         /*owned_by_user=*/true, /*configured_by_sync=*/true);
     return helper_.network_state_helper()
@@ -98,7 +88,7 @@ class NetworkConnectivityMetricsServiceTest : public testing::Test {
 
   base::test::SingleThreadTaskEnvironment task_environment_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
-  chromeos::sync_wifi::NetworkTestHelper helper_;
+  sync_wifi::NetworkTestHelper helper_;
   std::unique_ptr<ScopedTestingLocalState> local_state_;
 };
 

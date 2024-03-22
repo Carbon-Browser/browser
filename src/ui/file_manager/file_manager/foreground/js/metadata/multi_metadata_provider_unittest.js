@@ -1,17 +1,17 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assertArrayEquals, assertEquals, assertNotReached, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {assertArrayEquals, assertEquals, assertNotReached, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
 import {reportPromise} from '../../../common/js/test_error_reporting.js';
-import {VolumeManagerCommon} from '../../../common/js/volume_manager_types.js';
-import {VolumeManager} from '../../../externs/volume_manager.js';
+import {VolumeType} from '../../../common/js/volume_manager_types.js';
 
 import {ContentMetadataProvider} from './content_metadata_provider.js';
 import {DlpMetadataProvider} from './dlp_metadata_provider.js';
 import {ExternalMetadataProvider} from './external_metadata_provider.js';
 import {FileSystemMetadataProvider} from './file_system_metadata_provider.js';
+import {MetadataItem} from './metadata_item.js';
 import {MetadataRequest} from './metadata_request.js';
 import {MultiMetadataProvider} from './multi_metadata_provider.js';
 
@@ -39,36 +39,41 @@ const entryD = /** @type {!Entry} */ ({
   },
 });
 
-const volumeManager = /** @type {!VolumeManager} */ ({
-  getVolumeInfo: function(entry) {
-    if (entry.toURL() === 'filesystem://A') {
-      return {
-        volumeType: VolumeManagerCommon.VolumeType.DOWNLOADS,
-      };
-    } else if (entry.toURL() === 'filesystem://B') {
-      return {
-        volumeType: VolumeManagerCommon.VolumeType.DRIVE,
-      };
-    } else if (entry.toURL() === 'filesystem://C') {
-      return {
-        volumeType: VolumeManagerCommon.VolumeType.DRIVE,
-      };
-    } else if (entry.toURL() === 'filesystem://D') {
-      return {
-        volumeType: VolumeManagerCommon.VolumeType.DOCUMENTS_PROVIDER,
-      };
-    }
-    assertNotReached();
-  },
-});
+const volumeManager =
+    /** @type {!import('../../../externs/volume_manager.js').VolumeManager} */ (
+        {
+          // @ts-ignore: error TS7030: Not all code paths return a value.
+          getVolumeInfo: function(entry) {
+            if (entry.toURL() === 'filesystem://A') {
+              return {
+                volumeType: VolumeType.DOWNLOADS,
+              };
+            } else if (entry.toURL() === 'filesystem://B') {
+              return {
+                volumeType: VolumeType.DRIVE,
+              };
+            } else if (entry.toURL() === 'filesystem://C') {
+              return {
+                volumeType: VolumeType.DRIVE,
+              };
+            } else if (entry.toURL() === 'filesystem://D') {
+              return {
+                volumeType: VolumeType.DOCUMENTS_PROVIDER,
+              };
+            }
+            assertNotReached();
+          },
+        });
 
+/** @param {()=>void} callback */
 export function testMultiMetadataProviderBasic(callback) {
   const model = new MultiMetadataProvider(
       /** @type {!FileSystemMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(1, requests.length);
-          assertEquals('filesystem://A', requests[0].entry.toURL());
-          assertArrayEquals(['size', 'modificationTime'], requests[0].names);
+          const request0 = /** @type {!MetadataRequest} */ (requests[0]);
+          assertEquals('filesystem://A', request0.entry.toURL());
+          assertArrayEquals(['size', 'modificationTime'], request0.names);
           return Promise.resolve(
               [{modificationTime: new Date(2015, 0, 1), size: 1024}]);
         },
@@ -76,8 +81,12 @@ export function testMultiMetadataProviderBasic(callback) {
       /** @type {!ExternalMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(1, requests.length);
-          assertEquals('filesystem://B', requests[0].entry.toURL());
-          assertArrayEquals(['size', 'modificationTime'], requests[0].names);
+          assertEquals(
+              'filesystem://B',
+              /** @type {!MetadataRequest} */ (requests[0]).entry.toURL());
+          assertArrayEquals(
+              ['size', 'modificationTime'],
+              /** @type {!MetadataRequest} */ (requests[0]).names);
           return Promise.resolve(
               [{modificationTime: new Date(2015, 1, 2), size: 2048}]);
         },
@@ -88,10 +97,18 @@ export function testMultiMetadataProviderBasic(callback) {
             return Promise.resolve([]);
           }
           assertEquals(2, requests.length);
-          assertEquals('filesystem://A', requests[0].entry.toURL());
-          assertEquals('filesystem://B', requests[1].entry.toURL());
-          assertArrayEquals(['contentThumbnailUrl'], requests[0].names);
-          assertArrayEquals(['contentThumbnailUrl'], requests[1].names);
+          assertEquals(
+              'filesystem://A',
+              /** @type {!MetadataRequest} */ (requests[0]).entry.toURL());
+          assertEquals(
+              'filesystem://B',
+              /** @type {!MetadataRequest} */ (requests[1]).entry.toURL());
+          assertArrayEquals(
+              ['contentThumbnailUrl'],
+              /** @type {!MetadataRequest} */ (requests[0]).names);
+          assertArrayEquals(
+              ['contentThumbnailUrl'],
+              /** @type {!MetadataRequest} */ (requests[1]).names);
           return Promise.resolve([
             {contentThumbnailUrl: 'THUMBNAIL_URL_A'},
             {contentThumbnailUrl: 'THUMBNAIL_URL_B'},
@@ -101,7 +118,7 @@ export function testMultiMetadataProviderBasic(callback) {
       /** @type {!DlpMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
-          return Promise.resolve([]);
+          return Promise.resolve(/** @type {!Array<MetadataItem>} */ ([]));
         },
       }),
       volumeManager);
@@ -118,20 +135,31 @@ export function testMultiMetadataProviderBasic(callback) {
             assertEquals(2, results.length);
             assertEquals(
                 new Date(2015, 0, 1).toString(),
+                // @ts-ignore: error TS2532: Object is possibly 'undefined'.
                 results[0].modificationTime.toString());
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(1024, results[0].size);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals('THUMBNAIL_URL_A', results[0].contentThumbnailUrl);
             assertEquals(
                 new Date(2015, 1, 2).toString(),
+                // @ts-ignore: error TS2532: Object is possibly 'undefined'.
                 results[1].modificationTime.toString());
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(2048, results[1].size);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals('THUMBNAIL_URL_B', results[1].contentThumbnailUrl);
           }),
       callback);
 }
 
+/** @param {()=>void} callback */
 export function testMultiMetadataProviderExternalAndContentProperty(callback) {
   const model = new MultiMetadataProvider(
+      // @ts-ignore: error TS2352: Conversion of type '{ get: (requests: any) =>
+      // Promise<never[]>; }' to type 'FileSystemMetadataProvider' may be a
+      // mistake because neither type sufficiently overlaps with the other. If
+      // this was intentional, convert the expression to 'unknown' first.
       /** @type {!FileSystemMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
@@ -141,10 +169,18 @@ export function testMultiMetadataProviderExternalAndContentProperty(callback) {
       /** @type {!ExternalMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(2, requests.length);
-          assertEquals('filesystem://B', requests[0].entry.toURL());
-          assertEquals('filesystem://C', requests[1].entry.toURL());
-          assertArrayEquals(['imageWidth', 'present'], requests[0].names);
-          assertArrayEquals(['imageWidth', 'present'], requests[1].names);
+          assertEquals(
+              'filesystem://B',
+              /** @type {!MetadataRequest} */ (requests[0]).entry.toURL());
+          assertEquals(
+              'filesystem://C',
+              /** @type {!MetadataRequest} */ (requests[1]).entry.toURL());
+          assertArrayEquals(
+              ['imageWidth', 'present'],
+              /** @type {!MetadataRequest} */ (requests[0]).names);
+          assertArrayEquals(
+              ['imageWidth', 'present'],
+              /** @type {!MetadataRequest} */ (requests[1]).names);
           return Promise.resolve([
             {present: false, imageWidth: 200},
             {present: true, imageWidth: 400},
@@ -158,14 +194,20 @@ export function testMultiMetadataProviderExternalAndContentProperty(callback) {
             'filesystem://C': {imageWidth: 300},
           };
           assertEquals(1, requests.length);
-          assertTrue(requests[0].entry.toURL() in results);
+          assertTrue(
+              /** @type {!MetadataRequest} */ (requests[0]).entry.toURL() in
+              results);
+          // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+          // because expression of type 'any' can't be used to index type '{
+          // 'filesystem://A': { imageWidth: number; }; 'filesystem://C': {
+          // imageWidth: number; }; }'.
           return Promise.resolve([results[requests[0].entry.toURL()]]);
         },
       }),
       /** @type {!DlpMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
-          return Promise.resolve([]);
+          return Promise.resolve(/** @type {!Array<MetadataItem>} */ ([]));
         },
       }),
       volumeManager);
@@ -179,8 +221,11 @@ export function testMultiMetadataProviderExternalAndContentProperty(callback) {
           ])
           .then(results => {
             assertEquals(3, results.length);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(100, results[0].imageWidth);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(200, results[1].imageWidth);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(300, results[2].imageWidth);
           }),
       callback);
@@ -188,9 +233,14 @@ export function testMultiMetadataProviderExternalAndContentProperty(callback) {
 
 /**
  * Tests that we only use ExternalMetadataProvider for a DocumentsProvider file.
+ * @param {()=>void} callback
  */
 export function testMultiMetadataProviderFileSystemAndExternalForDP(callback) {
   const model = new MultiMetadataProvider(
+      // @ts-ignore: error TS2352: Conversion of type '{ get: (requests: any) =>
+      // Promise<never[]>; }' to type 'FileSystemMetadataProvider' may be a
+      // mistake because neither type sufficiently overlaps with the other. If
+      // this was intentional, convert the expression to 'unknown' first.
       /** @type {!FileSystemMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
@@ -200,7 +250,9 @@ export function testMultiMetadataProviderFileSystemAndExternalForDP(callback) {
       /** @type {!ExternalMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(1, requests.length);
-          assertEquals('filesystem://D', requests[0].entry.toURL());
+          assertEquals(
+              'filesystem://D',
+              /** @type {!MetadataRequest} */ (requests[0]).entry.toURL());
           assertArrayEquals(
               [
                 'canCopy',
@@ -210,7 +262,7 @@ export function testMultiMetadataProviderFileSystemAndExternalForDP(callback) {
                 'modificationTime',
                 'size',
               ],
-              requests[0].names);
+              /** @type {!MetadataRequest} */ (requests[0]).names);
           return Promise.resolve([
             {
               canCopy: true,
@@ -223,6 +275,10 @@ export function testMultiMetadataProviderFileSystemAndExternalForDP(callback) {
           ]);
         },
       }),
+      // @ts-ignore: error TS2352: Conversion of type '{ get: (requests: any) =>
+      // Promise<never[]>; }' to type 'ContentMetadataProvider' may be a mistake
+      // because neither type sufficiently overlaps with the other. If this was
+      // intentional, convert the expression to 'unknown' first.
       /** @type {!ContentMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
@@ -232,7 +288,7 @@ export function testMultiMetadataProviderFileSystemAndExternalForDP(callback) {
       /** @type {!DlpMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
-          return Promise.resolve([]);
+          return Promise.resolve(/** @type {!Array<MetadataItem>} */ ([]));
         },
       }),
       volumeManager);
@@ -252,20 +308,31 @@ export function testMultiMetadataProviderFileSystemAndExternalForDP(callback) {
           ])
           .then(results => {
             assertEquals(1, results.length);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(110, results[0].size);
             assertEquals(
                 new Date(2015, 1, 2).toString(),
+                // @ts-ignore: error TS2532: Object is possibly 'undefined'.
                 results[0].modificationTime.toString());
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(true, results[0].canCopy);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(true, results[0].canDelete);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(true, results[0].canRename);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(true, results[0].canAddChildren);
           }),
       callback);
 }
 
+/** @param {()=>void} callback */
 export function testDlpMetadataProvider(callback) {
   const model = new MultiMetadataProvider(
+      // @ts-ignore: error TS2352: Conversion of type '{ get: (requests: any) =>
+      // Promise<never[]>; }' to type 'FileSystemMetadataProvider' may be a
+      // mistake because neither type sufficiently overlaps with the other. If
+      // this was intentional, convert the expression to 'unknown' first.
       /** @type {!FileSystemMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
@@ -275,9 +342,13 @@ export function testDlpMetadataProvider(callback) {
       /** @type {!ExternalMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
-          return Promise.resolve([]);
+          return Promise.resolve(/** @type {!MetadataItem[]} */ ([]));
         },
       }),
+      // @ts-ignore: error TS2352: Conversion of type '{ get: (requests: any) =>
+      // Promise<never[]>; }' to type 'ContentMetadataProvider' may be a mistake
+      // because neither type sufficiently overlaps with the other. If this was
+      // intentional, convert the expression to 'unknown' first.
       /** @type {!ContentMetadataProvider} */ ({
         get: function(requests) {
           assertEquals(0, requests.length);
@@ -302,7 +373,9 @@ export function testDlpMetadataProvider(callback) {
           ])
           .then(results => {
             assertEquals(1, results.length);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals('url', results[0].sourceUrl);
+            // @ts-ignore: error TS2532: Object is possibly 'undefined'.
             assertEquals(true, results[0].isDlpRestricted);
           }),
       callback);

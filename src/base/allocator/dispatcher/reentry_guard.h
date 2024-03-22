@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,28 +23,34 @@ namespace base::allocator::dispatcher {
 // twice. The scoped guard allows us to detect that.
 //
 // Besides that the implementations of thread_local on macOS and Android
-// seem to allocate memory lazily on the first access to thread_local variables.
-// Make use of pthread TLS instead of C++ thread_local there.
-struct ReentryGuard {
-  ReentryGuard() : allowed_(!pthread_getspecific(entered_key_)) {
+// seem to allocate memory lazily on the first access to thread_local variables
+// (and on Android at least thread_local is implemented on top of pthread so is
+// strictly worse for performance). Make use of pthread TLS instead of C++
+// thread_local there.
+struct BASE_EXPORT ReentryGuard {
+  ALWAYS_INLINE ReentryGuard() : allowed_(!pthread_getspecific(entered_key_)) {
     pthread_setspecific(entered_key_, reinterpret_cast<void*>(true));
   }
 
-  ~ReentryGuard() {
+  ALWAYS_INLINE ~ReentryGuard() {
     if (LIKELY(allowed_))
       pthread_setspecific(entered_key_, nullptr);
   }
 
   explicit operator bool() const noexcept { return allowed_; }
 
-  // This function must be called in very early of the process start-up in
-  // order to acquire a low TLS slot number because glibc TLS implementation
-  // will require a malloc call to allocate storage for a higher slot number
-  // (>= PTHREAD_KEY_2NDLEVEL_SIZE == 32).  c.f. heap_profiling::InitTLSSlot.
-  static void Init() {
-    int error = pthread_key_create(&entered_key_, nullptr);
-    CHECK(!error);
-  }
+  // This function must be called before installing any allocator hooks because
+  // some TLS implementations may allocate (eg. glibc will require a malloc call
+  // to allocate storage for a higher slot number (>= PTHREAD_KEY_2NDLEVEL_SIZE
+  // == 32). This touches the thread-local storage so that any malloc happens
+  // before installing the hooks.
+  static void InitTLSSlot();
+
+  // InitTLSSlot() is called before crash keys are available. At some point
+  // after SetCrashKeyImplementation() is called, this function should be
+  // called to record `entered_key_` to a crash key for debugging. This may
+  // allocate so it must not be called from inside an allocator hook.
+  static void RecordTLSSlotToCrashKey();
 
  private:
   static pthread_key_t entered_key_;
@@ -58,7 +64,8 @@ struct ReentryGuard {
 struct [[maybe_unused]] BASE_EXPORT ReentryGuard {
   constexpr explicit operator bool() const noexcept { return true; }
 
-  static void Init() {}
+  static void InitTLSSlot();
+  static void RecordTLSSlotToCrashKey();
 };
 
 #endif

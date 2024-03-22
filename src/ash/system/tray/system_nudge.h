@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 #include <string>
 
 #include "ash/ash_export.h"
-#include "ash/shelf/shelf.h"
+#include "ash/constants/notifier_catalogs.h"
 #include "ash/shelf/shelf_observer.h"
-#include "ash/shell.h"
 #include "ash/shell_observer.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/system/tray/system_nudge_label.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -31,18 +31,20 @@ class View;
 
 namespace ash {
 
+class Shelf;
+class Shell;
+
 // Creates and manages the nudge widget and its contents view for a contextual
 // system nudge. The nudge displays an icon and a label view in a shelf-colored
 // system bubble with rounded corners.
-class ASH_EXPORT SystemNudge : public ShelfObserver, ShellObserver {
+class ASH_EXPORT SystemNudge : public ShelfObserver, public ShellObserver {
  public:
   SystemNudge(const std::string& name,
+              NudgeCatalogName catalog_name,
               int icon_size,
               int icon_label_spacing,
               int nudge_padding,
-              bool anchor_status_area = false,
-              AshColorProvider::ContentLayerType icon_color_layer_type =
-                  AshColorProvider::ContentLayerType::kIconColorPrimary);
+              ui::ColorId icon_color_id = kColorAshIconColorPrimary);
   SystemNudge(const SystemNudge&) = delete;
   SystemNudge& operator=(const SystemNudge&) = delete;
   ~SystemNudge() override;
@@ -63,6 +65,8 @@ class ASH_EXPORT SystemNudge : public ShelfObserver, ShellObserver {
   void Close();
 
   views::Widget* widget() { return widget_.get(); }
+
+  NudgeCatalogName catalog_name() { return params_.catalog_name; }
 
  protected:
   // Each SystemNudge subclass must override these methods to customize
@@ -85,19 +89,16 @@ class ASH_EXPORT SystemNudge : public ShelfObserver, ShellObserver {
   struct SystemNudgeParams {
     // The name for the widget.
     std::string name;
+    // The catalog name for the system nudge.
+    NudgeCatalogName catalog_name;
     // The size of the icon.
     int icon_size;
     // The size of the space between icon and label.
     int icon_label_spacing;
     // The padding which separates the nudge's border with its inner contents.
     int nudge_padding;
-    // If true, the nudge will be on the same side of the status area.
-    // Otherwise the nudge will be on the left/right side of the window for
-    // non-RTL/RTL locale.
-    bool anchor_status_area = false;
-    // The color of the icon.
-    AshColorProvider::ContentLayerType icon_color_layer_type =
-        AshColorProvider::ContentLayerType::kIconColorPrimary;
+    // The color id of the icon.
+    ui::ColorId icon_color_id = kColorAshIconColorPrimary;
   };
 
   // Calculate and set widget bounds based on a fixed width and a variable
@@ -106,18 +107,15 @@ class ASH_EXPORT SystemNudge : public ShelfObserver, ShellObserver {
 
   views::UniqueWidgetPtr widget_;
 
-  SystemNudgeView* nudge_view_ = nullptr;  // not_owned
+  raw_ptr<SystemNudgeView, DanglingUntriaged | ExperimentalAsh> nudge_view_ =
+      nullptr;  // not_owned
 
-  aura::Window* const root_window_;
+  const raw_ptr<aura::Window, ExperimentalAsh> root_window_;
 
   SystemNudgeParams params_;
 
   base::ScopedObservation<Shelf, ShelfObserver> shelf_observation_{this};
-  base::ScopedObservation<Shell,
-                          ShellObserver,
-                          &Shell::AddShellObserver,
-                          &Shell::RemoveShellObserver>
-      shell_observation_{this};
+  base::ScopedObservation<Shell, ShellObserver> shell_observation_{this};
 
   base::WeakPtrFactory<SystemNudge> weak_factory_{this};
 };

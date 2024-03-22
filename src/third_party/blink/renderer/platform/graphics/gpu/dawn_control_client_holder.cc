@@ -1,12 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/gpu/dawn_control_client_holder.h"
 
 #include "base/check.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/webgpu_resource_provider_cache.h"
+#include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
@@ -94,10 +95,8 @@ bool DawnControlClientHolder::IsContextLost() const {
 }
 
 std::unique_ptr<RecyclableCanvasResource>
-DawnControlClientHolder::GetOrCreateCanvasResource(const SkImageInfo& info,
-                                                   bool is_origin_top_left) {
-  return recyclable_resource_cache_.GetOrCreateCanvasResource(
-      info, is_origin_top_left);
+DawnControlClientHolder::GetOrCreateCanvasResource(const SkImageInfo& info) {
+  return recyclable_resource_cache_.GetOrCreateCanvasResource(info);
 }
 
 void DawnControlClientHolder::Flush() {
@@ -107,7 +106,7 @@ void DawnControlClientHolder::Flush() {
   }
 }
 
-void DawnControlClientHolder::EnsureFlush() {
+void DawnControlClientHolder::EnsureFlush(scheduler::EventLoop& event_loop) {
   auto context_provider = GetContextProviderWeakPtr();
   if (UNLIKELY(!context_provider))
     return;
@@ -118,7 +117,7 @@ void DawnControlClientHolder::EnsureFlush() {
     // is empty. Do nothing.
     return;
   }
-  Microtask::EnqueueMicrotask(WTF::Bind(
+  event_loop.EnqueueMicrotask(WTF::BindOnce(
       [](scoped_refptr<DawnControlClientHolder> dawn_control_client) {
         if (auto context_provider =
                 dawn_control_client->GetContextProviderWeakPtr()) {

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,18 +14,4 @@ style_variable_generator("assistant_colors") {
   ]
 
   cpp_namespace = "assistant_colors"
-}
-
-source_set("assistant_colors_util") {
-  sources = [
-    "assistant_colors_util.cc",
-    "assistant_colors_util.h",
-  ]
-  deps = [
-    ":assistant_colors_views",
-    "//ash/constants",
-    "//ash/public/cpp",
-    "//base",
-    "//skia",
-  ]
 }

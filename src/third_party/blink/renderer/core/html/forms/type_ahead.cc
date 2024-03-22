@@ -53,6 +53,7 @@ static String StripLeadingWhiteSpace(const String& string) {
 }
 
 int TypeAhead::HandleEvent(const KeyboardEvent& event,
+                           UChar charCode,
                            MatchModeFlags match_mode) {
   if (last_type_time_) {
     if (event.PlatformTimeStamp() < *last_type_time_)
@@ -64,12 +65,11 @@ int TypeAhead::HandleEvent(const KeyboardEvent& event,
     // If |last_type_time_| is null, there should be no type ahead session in
     // progress. Thus, |buffer_|, which represents a partial match, should be
     // empty.
-    DCHECK(buffer_.IsEmpty());
+    DCHECK(buffer_.empty());
   }
   last_type_time_ = event.PlatformTimeStamp();
 
-  UChar c = event.charCode();
-  buffer_.Append(c);
+  buffer_.Append(charCode);
 
   int option_count = data_source_->OptionCount();
   if (option_count < 1)
@@ -77,22 +77,22 @@ int TypeAhead::HandleEvent(const KeyboardEvent& event,
 
   int search_start_offset = 1;
   String prefix;
-  if (match_mode & kCycleFirstChar && c == repeating_char_) {
+  if (match_mode & kCycleFirstChar && charCode == repeating_char_) {
     // The user is likely trying to cycle through all the items starting
     // with this character, so just search on the character.
-    prefix = String(&c, 1u);
-    repeating_char_ = c;
+    prefix = String(&charCode, 1u);
+    repeating_char_ = charCode;
   } else if (match_mode & kMatchPrefix) {
     prefix = buffer_.ToString();
     if (buffer_.length() > 1) {
       repeating_char_ = 0;
       search_start_offset = 0;
     } else {
-      repeating_char_ = c;
+      repeating_char_ = charCode;
     }
   }
 
-  if (!prefix.IsEmpty()) {
+  if (!prefix.empty()) {
     int selected = data_source_->IndexOfSelectedOption();
     int index = (selected < 0 ? 0 : selected) + search_start_offset;
     index %= option_count;

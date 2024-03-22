@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,10 +42,7 @@ class HttpsOnlyModeBlockingPage
 
  private:
   void HandleCommand(
-      security_interstitials::SecurityInterstitialCommand command,
-      const GURL& origin_url,
-      bool user_is_interacting,
-      web::WebFrame* sender_frame) override;
+      security_interstitials::SecurityInterstitialCommand command) override;
 
   web::WebState* web_state_ = nullptr;
   HttpsUpgradeService* service_ = nullptr;

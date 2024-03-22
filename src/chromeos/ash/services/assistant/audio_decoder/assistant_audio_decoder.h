@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
 #include "chromeos/ash/services/assistant/public/mojom/assistant_audio_decoder.mojom.h"
 #include "media/filters/blocking_url_protocol.h"
@@ -20,8 +21,7 @@ class AudioBus;
 class DataSource;
 }  // namespace media
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 class AssistantAudioDecoder : public mojom::AssistantAudioDecoder {
  public:
@@ -79,7 +79,6 @@ class AssistantAudioDecoder : public mojom::AssistantAudioDecoder {
   base::WeakPtrFactory<AssistantAudioDecoder> weak_factory_;
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_AUDIO_DECODER_ASSISTANT_AUDIO_DECODER_H_

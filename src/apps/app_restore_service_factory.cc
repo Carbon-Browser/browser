@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "apps/app_restore_service.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "content/public/browser/browser_context.h"
+#include "extensions/browser/extensions_browser_client.h"
 
 namespace apps {
 
@@ -31,13 +32,20 @@ AppRestoreServiceFactory::AppRestoreServiceFactory()
 
 AppRestoreServiceFactory::~AppRestoreServiceFactory() = default;
 
-KeyedService* AppRestoreServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AppRestoreServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new AppRestoreService(context);
+  return std::make_unique<AppRestoreService>(context);
 }
 
 bool AppRestoreServiceFactory::ServiceIsCreatedWithBrowserContext() const {
   return true;
+}
+
+content::BrowserContext* AppRestoreServiceFactory::GetBrowserContextToUse(
+    content::BrowserContext* context) const {
+  return extensions::ExtensionsBrowserClient::Get()
+      ->GetContextRedirectedToOriginal(context, /*force_guest_profile=*/true);
 }
 
 }  // namespace apps

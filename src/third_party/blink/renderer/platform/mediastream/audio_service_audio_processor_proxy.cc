@@ -1,18 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/mediastream/audio_service_audio_processor_proxy.h"
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/timer/timer.h"
 #include "media/base/audio_processor_controls.h"
 
 namespace blink {
 
 AudioServiceAudioProcessorProxy::AudioServiceAudioProcessorProxy()
-    : main_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+    : main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   DCHECK_CALLED_ON_VALID_THREAD(main_thread_checker_);
   weak_this_ = weak_ptr_factory_.GetWeakPtr();
 }

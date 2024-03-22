@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,16 +74,16 @@ CreateIndexBuilders(flatbuffers::FlatBufferBuilder* builder) {
 FlatOffset<flat::UrlTransform> BuildTransformOffset(
     flatbuffers::FlatBufferBuilder* builder,
     const dnr_api::URLTransform& transform) {
-  auto create_string_offset =
-      [builder](const std::unique_ptr<std::string>& str) {
-        if (!str)
-          return FlatStringOffset();
+  auto create_string_offset = [builder](const std::optional<std::string>& str) {
+    if (!str) {
+      return FlatStringOffset();
+    }
 
-        return builder->CreateSharedString(*str);
-      };
+    return builder->CreateSharedString(*str);
+  };
 
   auto skip_separator_and_create_string_offset =
-      [builder](const std::unique_ptr<std::string>& str, char separator) {
+      [builder](const std::optional<std::string>& str, char separator) {
         if (!str)
           return FlatStringOffset();
 
@@ -93,7 +93,7 @@ FlatOffset<flat::UrlTransform> BuildTransformOffset(
         return builder->CreateSharedString(str->c_str() + 1, str->length() - 1);
       };
 
-  auto should_clear_component = [](const std::unique_ptr<std::string>& str) {
+  auto should_clear_component = [](const std::optional<std::string>& str) {
     return str && str->empty();
   };
 
@@ -178,16 +178,16 @@ FlatVectorOffset<flat::ModifyHeaderInfo> BuildModifyHeaderInfoOffset(
     FlatStringOffset header_value;
 
     switch (header_info.operation) {
-      case dnr_api::HeaderOperation::HEADER_OPERATION_NONE:
-      case dnr_api::HEADER_OPERATION_APPEND:
+      case dnr_api::HeaderOperation::kNone:
+      case dnr_api::HeaderOperation::kAppend:
         operation = flat::HeaderOperation_append;
         header_value = builder->CreateSharedString(*header_info.value);
         break;
-      case dnr_api::HEADER_OPERATION_SET:
+      case dnr_api::HeaderOperation::kSet:
         operation = flat::HeaderOperation_set;
         header_value = builder->CreateSharedString(*header_info.value);
         break;
-      case dnr_api::HEADER_OPERATION_REMOVE:
+      case dnr_api::HeaderOperation::kRemove:
         operation = flat::HeaderOperation_remove;
         break;
     }
@@ -297,10 +297,12 @@ void FlatRulesetIndexer::AddUrlRule(const IndexedRule& indexed_rule) {
   }
 
   FlatVectorOffset<flat::ModifyHeaderInfo> request_headers_offset =
-      BuildModifyHeaderInfoOffset(&builder_, indexed_rule.request_headers);
+      BuildModifyHeaderInfoOffset(&builder_,
+                                  indexed_rule.request_headers_to_modify);
 
   FlatVectorOffset<flat::ModifyHeaderInfo> response_headers_offset =
-      BuildModifyHeaderInfoOffset(&builder_, indexed_rule.response_headers);
+      BuildModifyHeaderInfoOffset(&builder_,
+                                  indexed_rule.response_headers_to_modify);
 
   metadata_.push_back(flat::CreateUrlRuleMetadata(
       builder_, indexed_rule.id,
@@ -340,18 +342,18 @@ flatbuffers::DetachedBuffer FlatRulesetIndexer::FinishAndReleaseBuffer() {
 std::vector<FlatRulesetIndexer::UrlPatternIndexBuilder*>
 FlatRulesetIndexer::GetBuilders(const IndexedRule& indexed_rule) {
   switch (indexed_rule.action_type) {
-    case dnr_api::RULE_ACTION_TYPE_BLOCK:
-    case dnr_api::RULE_ACTION_TYPE_ALLOW:
-    case dnr_api::RULE_ACTION_TYPE_REDIRECT:
-    case dnr_api::RULE_ACTION_TYPE_UPGRADESCHEME:
+    case dnr_api::RuleActionType::kBlock:
+    case dnr_api::RuleActionType::kAllow:
+    case dnr_api::RuleActionType::kRedirect:
+    case dnr_api::RuleActionType::kUpgradeScheme:
       return {index_builders_
                   [flat::IndexType_before_request_except_allow_all_requests]
                       .get()};
-    case dnr_api::RULE_ACTION_TYPE_ALLOWALLREQUESTS:
+    case dnr_api::RuleActionType::kAllowAllRequests:
       return {index_builders_[flat::IndexType_allow_all_requests].get()};
-    case dnr_api::RULE_ACTION_TYPE_MODIFYHEADERS:
+    case dnr_api::RuleActionType::kModifyHeaders:
       return {index_builders_[flat::IndexType_modify_headers].get()};
-    case dnr_api::RULE_ACTION_TYPE_NONE:
+    case dnr_api::RuleActionType::kNone:
       break;
   }
   NOTREACHED();

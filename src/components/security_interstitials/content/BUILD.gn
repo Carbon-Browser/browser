@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 import("//components/captive_portal/core/features.gni")
@@ -74,6 +74,7 @@ static_library("security_interstitial_page") {
     "//base",
     "//build:branding_buildflags",
     "//build:chromeos_buildflags",
+    "//components/autofill/core/browser",
     "//components/captive_portal/core",
     "//components/content_settings/core/browser",
     "//components/content_settings/core/common",
@@ -84,6 +85,7 @@ static_library("security_interstitial_page") {
     "//components/pref_registry",
     "//components/prefs:prefs",
     "//components/resources",
+    "//components/safe_browsing/core/common:common",
     "//components/safe_browsing/core/common:safe_browsing_prefs",
     "//components/security_interstitials/core:core",
     "//components/security_interstitials/core:unsafe_resource",
@@ -101,6 +103,8 @@ static_library("security_interstitial_page") {
     "//third_party/protobuf:protobuf_lite",
     "//third_party/re2",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   if (enable_captive_portal_detection) {
     sources += [
@@ -125,6 +129,8 @@ static_library("security_interstitial_page") {
     ]
     deps +=
         [ "//components/security_interstitials/content/android:jni_headers" ]
+  } else {
+    deps += [ "//components/guest_view/browser" ]
   }
 }
 

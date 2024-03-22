@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chrome/common/extensions/api/cookies.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/cookies/cookie_monster.h"
@@ -23,10 +24,6 @@
 
 class Browser;
 class Profile;
-
-namespace base {
-class ListValue;
-}
 
 namespace net {
 class CanonicalCookie;
@@ -54,15 +51,15 @@ api::cookies::Cookie CreateCookie(const net::CanonicalCookie& cookie,
                                   const std::string& store_id);
 
 // Constructs a new CookieStore object as defined by the cookies API.
-api::cookies::CookieStore CreateCookieStore(
-    Profile* profile,
-    std::unique_ptr<base::ListValue> tab_ids);
+api::cookies::CookieStore CreateCookieStore(Profile* profile,
+                                            base::Value::List tab_ids);
 
 // Dispatch a request to the CookieManager for cookies associated with
-// |url|.
+// |url| and |partition_key_collection|.
 void GetCookieListFromManager(
     network::mojom::CookieManager* manager,
     const GURL& url,
+    const net::CookiePartitionKeyCollection& partition_key_collection,
     network::mojom::CookieManager::GetCookieListCallback callback);
 
 // Dispatch a request to the CookieManager for all cookies.
@@ -82,21 +79,54 @@ GURL GetURLFromCanonicalCookie(
 // and are allowed by extension host permissions.
 void AppendMatchingCookiesFromCookieListToVector(
     const net::CookieList& all_cookies,
-    const api::cookies::GetAll::Params::Details* details,
+    api::cookies::GetAll::Params::Details* details,
     const Extension* extension,
-    std::vector<api::cookies::Cookie>* match_vector);
+    std::vector<api::cookies::Cookie>* match_vector,
+    const net::CookiePartitionKeyCollection& cookie_partition_key_collection);
 
 // Same as above except takes a CookieAccessResultList (and ignores the access
 // results).
 void AppendMatchingCookiesFromCookieAccessResultListToVector(
     const net::CookieAccessResultList& all_cookies_with_access_result,
-    const api::cookies::GetAll::Params::Details* details,
+    api::cookies::GetAll::Params::Details* details,
     const Extension* extension,
     std::vector<api::cookies::Cookie>* match_vector);
 
 // Appends the IDs of all tabs belonging to the given browser to the
 // given list.
-void AppendToTabIdList(Browser* browser, base::ListValue* tab_ids);
+void AppendToTabIdList(Browser* browser, base::Value::List& tab_ids);
+
+// Checks if the partition_key provided, which may unknown user input,
+// can be used to deserialize into the net_partition_key.
+// Returns false and populates error_message string if deserialization
+// fails.
+bool ValidateCookieApiPartitionKey(
+    const absl::optional<extensions::api::cookies::CookiePartitionKey>&
+        partition_key,
+    absl::optional<net::CookiePartitionKey>& net_partition_key,
+    std::string& error_message);
+
+// Returns empty collection if no partition_key.
+// Returns CookiePartitionKeyCollection::ContainsAll() if top_level_site has no
+// value. Returns CookiePartitionKeyCollection::FromOptional() if partition_key
+// and top_level_site are both present.
+net::CookiePartitionKeyCollection
+CookiePartitionKeyCollectionFromApiPartitionKey(
+    const absl::optional<extensions::api::cookies::CookiePartitionKey>&
+        partition_key);
+
+// returns true if cookie_partition_key_collection::ContainsAll
+// calls CookieMatchesPartitionKeyInDetails if the collection is not empty
+bool CookieMatchesPartitionKeyCollection(
+    const net::CookiePartitionKeyCollection& cookie_partition_key_collection,
+    const net::CanonicalCookie& cookie);
+
+// Returns true if the top_level_site values match or the optional does not
+// contain a value.
+bool CookieMatchesPartitionKeyInDetails(
+    const absl::optional<extensions::api::cookies::CookiePartitionKey>&
+        partition_key,
+    const net::CanonicalCookie& cookie);
 
 // A class representing the cookie filter parameters passed into
 // cookies.getAll().
@@ -109,11 +139,15 @@ class MatchFilter {
   // Takes the details dictionary argument given by the user as input.
   // This class does not take ownership of the lifetime of the Details
   // object.
-  explicit MatchFilter(const api::cookies::GetAll::Params::Details* details);
+  explicit MatchFilter(api::cookies::GetAll::Params::Details* details);
 
   // Returns true if the given cookie matches the properties in the match
   // filter.
   bool MatchesCookie(const net::CanonicalCookie& cookie);
+
+  // Sets the value for cookie_partition_key_collection_
+  void SetCookiePartitionKeyCollection(
+      const net::CookiePartitionKeyCollection& cookie_partition_key_collection);
 
  private:
   // Returns true if the given cookie domain string matches the filter's
@@ -125,7 +159,8 @@ class MatchFilter {
   // 'foo.bar.com', '.foo.bar.com', and 'baz.foo.bar.com'.
   bool MatchesDomain(const std::string& domain);
 
-  raw_ptr<const api::cookies::GetAll::Params::Details> details_;
+  raw_ptr<api::cookies::GetAll::Params::Details> details_;
+  net::CookiePartitionKeyCollection cookie_partition_key_collection_;
 };
 
 }  // namespace cookies_helpers

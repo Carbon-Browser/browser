@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/feature_engagement/tracker_factory.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/profiles/profile.h"
@@ -17,25 +18,45 @@
 #include "components/media_router/common/pref_names.h"
 #include "components/media_router/common/providers/cast/cast_media_source.h"
 #include "components/prefs/pref_service.h"
+#include "media/base/media_switches.h"
 
 namespace {
 
-// Returns false if a notification item shouldn't be created for |route|.
-// If a route should be hidden, it's not possible to create an item
-// for this route until the next time |OnModuleUpdated()| is called.
-bool ShouldHideNotification(const raw_ptr<Profile> profile,
+// Returns false if a notification item shouldn't be created for |route|. If a
+// route should be hidden, it's impossible to create an item for this route
+// until the next time |OnRoutesUpdated()| is called.
+bool ShouldHideNotification(Profile* profile,
                             const media_router::MediaRoute& route) {
   // TODO(crbug.com/1195382): Display multizone group route.
   if (route.is_connecting()) {
     return true;
   }
-
+  // If the user changes the pref to show all Cast sessions, they won't be shown
+  // until `OnRoutesUpdated()` is called again.
+  // TODO(crbug.com/726823): Ash currently considers Lacros routes non-local
+  // and hides them if the pref is set to false.
+  if (!route.is_local() &&
+      !profile->GetPrefs()->GetBoolean(
+          media_router::prefs::
+              kMediaRouterShowCastSessionsStartedByOtherDevices)) {
+    return true;
+  }
+  std::unique_ptr<media_router::CastMediaSource> source =
+      media_router::CastMediaSource::FromMediaSource(route.media_source());
   if (media_router::GlobalMediaControlsCastStartStopEnabled(profile)) {
-    // Hide a route if it's a mirroring route.
-    if (route.media_source().IsTabMirroringSource() ||
-        route.media_source().IsDesktopMirroringSource() ||
-        route.media_source().IsLocalFileSource())
-      return true;
+    // Show local site-initiated Mirroring routes.
+    if (source && route.is_local() &&
+        media_router::IsSiteInitiatedMirroringSource(source->source_id())) {
+      return false;
+    }
+    // Hide a route if it contains a Streaming App, i.e. Tab/Desktop Mirroring
+    // and Remote Playback routes.
+    if (source && source->ContainsStreamingApp()) {
+      // Don't hide it in case of MirroringType::kOffscreenTab.
+      // This happens when 1UA mode is being used. It uses a URL for MediaSource
+      // and a streaming receiver app for CastMediaSource.
+      return !route.media_source().url().SchemeIsHTTPOrHTTPS();
+    }
   } else if (route.controller_type() !=
              media_router::RouteControllerType::kGeneric) {
     // Hide a route if it doesn't have a generic controller (play, pause etc.).
@@ -46,8 +67,7 @@ bool ShouldHideNotification(const raw_ptr<Profile> profile,
   if (!route.media_source().IsCastPresentationUrl()) {
     return false;
   }
-  std::unique_ptr<media_router::CastMediaSource> source =
-      media_router::CastMediaSource::FromMediaSource(route.media_source());
+
   // If the session is multizone member, then it would appear as a duplicate of
   // the multizone group's session, so it should instead be hidden.
   return source && source->GetAppIds().size() == 1 &&
@@ -89,26 +109,15 @@ std::set<std::string>
 CastMediaNotificationProducer::GetActiveControllableItemIds() const {
   std::set<std::string> ids;
   for (const auto& item : items_) {
-    if (!item.second.is_active())
+    if (!item.second.is_active()) {
       continue;
-
-// kMediaRouterShowCastSessionsStartedByOtherDevices is not registered on
-// Android nor ChromeOS.
-// // TODO(crbug.com/1308053): Enable it on ChromeOS once Cast+GMC ships.
-#if !BUILDFLAG(IS_CHROMEOS)
-    // The non-local Cast session filter should not be put in
-    // |ShouldHideNotification()| because it's used to determine if an item
-    // should be created. It's possible that users later change the pref to
-    // show all Cast sessions.
-    if (media_router::GlobalMediaControlsCastStartStopEnabled(profile_) &&
-        !this->profile_->GetPrefs()->GetBoolean(
+    }
+    if (!profile_->GetPrefs()->GetBoolean(
             media_router::prefs::
                 kMediaRouterShowCastSessionsStartedByOtherDevices) &&
         !item.second.route_is_local()) {
       continue;
     }
-#endif
-
     ids.insert(item.first);
   }
   return ids;
@@ -154,20 +163,16 @@ void CastMediaNotificationProducer::OnRoutesUpdated(
   const bool had_items = HasActiveItems();
 
   base::EraseIf(items_, [&routes](const auto& item) {
-    return std::find_if(routes.begin(), routes.end(),
-                        [&item](const media_router::MediaRoute& route) {
-                          return item.first == route.media_route_id();
-                        }) == routes.end();
+    return !base::Contains(routes, item.first,
+                           &media_router::MediaRoute::media_route_id);
   });
 
   for (const auto& route : routes) {
     if (ShouldHideNotification(profile_, route))
       continue;
 
-    auto item_it =
-        std::find_if(items_.begin(), items_.end(), [&route](const auto& item) {
-          return item.first == route.media_route_id();
-        });
+    auto item_it = base::ranges::find(items_, route.media_route_id(),
+                                      &Items::value_type::first);
     if (item_it == items_.end()) {
       mojo::Remote<media_router::mojom::MediaController> controller_remote;
       mojo::PendingReceiver<media_router::mojom::MediaController>
@@ -201,7 +206,7 @@ bool CastMediaNotificationProducer::HasActiveItems() const {
 }
 
 bool CastMediaNotificationProducer::HasLocalMediaRoute() const {
-  return std::find_if(items_.begin(), items_.end(), [](const auto& item) {
-           return item.second.route_is_local();
-         }) != items_.end();
+  return base::ranges::any_of(items_,
+                              &CastMediaNotificationItem::route_is_local,
+                              &Items::value_type::second);
 }

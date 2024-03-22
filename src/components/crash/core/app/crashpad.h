@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,10 @@
 #include "base/files/file_path.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_mach_port.h"
+#include "base/apple/scoped_mach_port.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -42,7 +43,7 @@ class CrashReportDatabase;
 
 namespace crash_reporter {
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS)
 bool IsCrashpadEnabled();
 #endif
 
@@ -175,8 +176,11 @@ void CrashWithoutDumping(const std::string& message);
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) ||
         // BUILDFLAG(IS_ANDROID)
 
-// Returns the Crashpad database path, only valid in the browser.
-base::FilePath GetCrashpadDatabasePath();
+// Returns the Crashpad database path, only valid in the browser. This will
+// return absl::nullopt if crashpad has not yet been initialized. On Windows,
+// this will also return absl::nullopt if running as part of browser_tests, as
+// there is no crash reporting in that configuration.
+absl::optional<base::FilePath> GetCrashpadDatabasePath();
 
 // Deletes any reports that were recorded or uploaded within the time range.
 void ClearReportsBetween(const base::Time& begin, const base::Time& end);

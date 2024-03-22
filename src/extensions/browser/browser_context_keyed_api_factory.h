@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,6 +33,12 @@ class BrowserContextKeyedAPI : public KeyedService {
   // is true, it returns a separate instance.
   static const bool kServiceRedirectedInIncognito = false;
   static const bool kServiceHasOwnInstanceInIncognito = false;
+
+  // This value forces the Guest profile to set its `ProfileSelection` with the
+  // same value set for the Regular Profile.
+  // If the value is false, then `ProfileSelection::kNone` will be used, and the
+  // service will not be created for Guest profiles.
+  static const bool kServiceIsCreatedInGuestMode = true;
 
   // If set to false, don't start the service at BrowserContext creation time.
   // (The default differs from the BrowserContextKeyedServiceFactory default,
@@ -144,13 +150,18 @@ class BrowserContextKeyedAPIFactory : public BrowserContextKeyedServiceFactory {
   // These can be effectively overridden with template specializations.
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override {
-    if (T::kServiceRedirectedInIncognito)
-      return ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+    if (T::kServiceRedirectedInIncognito) {
+      return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+          context, T::kServiceIsCreatedInGuestMode);
+    }
 
-    if (T::kServiceHasOwnInstanceInIncognito)
-      return context;
+    if (T::kServiceHasOwnInstanceInIncognito) {
+      return ExtensionsBrowserClient::Get()->GetContextOwnInstance(
+          context, T::kServiceIsCreatedInGuestMode);
+    }
 
-    return BrowserContextKeyedServiceFactory::GetBrowserContextToUse(context);
+    return ExtensionsBrowserClient::Get()->GetContextForOriginalOnly(
+        context, T::kServiceIsCreatedInGuestMode);
   }
 
   bool ServiceIsCreatedWithBrowserContext() const override {

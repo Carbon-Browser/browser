@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include "ash/test/ash_test_base.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
-#include "ui/display/fake/fake_display_snapshot.h"
 #include "ui/display/manager/display_manager.h"
+#include "ui/display/manager/test/fake_display_snapshot.h"
 #include "ui/display/test/display_manager_test_api.h"
 #include "ui/display/types/display_snapshot.h"
 

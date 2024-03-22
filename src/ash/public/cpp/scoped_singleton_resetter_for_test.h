@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_PUBLIC_CPP_SCOPED_SINGLETON_RESETTER_FOR_TEST_H_
 #define ASH_PUBLIC_CPP_SCOPED_SINGLETON_RESETTER_FOR_TEST_H_
+
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -21,7 +23,7 @@ class ASH_PUBLIC_EXPORT ScopedSingletonResetterForTest {
  private:
   // Override this method to provide pointer holding singleton instance.
   T*& GetGlobalInstanceHolder();
-  T* const instance_;
+  const raw_ptr<T, ExperimentalAsh> instance_;
 };
 
 }  // namespace ash

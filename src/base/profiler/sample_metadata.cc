@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -101,6 +101,21 @@ void ApplyMetadataToPastSamples(TimeTicks period_start,
   return ApplyMetadataToPastSamplesImpl(period_start, period_end,
                                         HashMetricName(name), key, value,
                                         GetPlatformThreadIdForScope(scope));
+}
+
+void AddProfileMetadataImpl(uint64_t name_hash,
+                            int64_t key,
+                            int64_t value,
+                            absl::optional<PlatformThreadId> thread_id) {
+  StackSamplingProfiler::AddProfileMetadata(name_hash, key, value, thread_id);
+}
+
+void AddProfileMetadata(StringPiece name,
+                        int64_t key,
+                        int64_t value,
+                        SampleMetadataScope scope) {
+  return AddProfileMetadataImpl(HashMetricName(name), key, value,
+                                GetPlatformThreadIdForScope(scope));
 }
 
 MetadataRecorder* GetSampleMetadataRecorder() {

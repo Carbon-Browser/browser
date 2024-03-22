@@ -1,13 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/chunked_data_pipe_upload_data_stream.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/c/system/types.h"
 #include "net/base/io_buffer.h"
 
@@ -24,7 +25,7 @@ ChunkedDataPipeUploadDataStream::ChunkedDataPipeUploadDataStream(
       chunked_data_pipe_getter_(std::move(chunked_data_pipe_getter)),
       handle_watcher_(FROM_HERE,
                       mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                      base::SequencedTaskRunnerHandle::Get()) {
+                      base::SequencedTaskRunner::GetCurrentDefault()) {
   // TODO(yhirano): Turn this to a DCHECK once we find the root cause of
   // https://crbug.com/1156550.
   CHECK(chunked_data_pipe_getter_.is_bound());
@@ -232,7 +233,7 @@ void ChunkedDataPipeUploadDataStream::OnDataPipeGetterClosed() {
   // If the size hasn't been received yet, treat this as receiving an error.
   // Otherwise, this will only be a problem if/when InitInternal() tries to
   // start reading again, so do nothing.
-  if (!size_)
+  if (status_ == net::OK && !size_)
     OnSizeReceived(net::ERR_FAILED, 0);
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,9 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/values.h"
 
-namespace base {
-class Value;
-}
-
-namespace chromeos {
+namespace ash {
 
 class NetworkTypePattern;
 
@@ -22,6 +19,14 @@ class NetworkTypePattern;
 // of UI is handled by the NetworkConnect::Delegate implementation.
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnect {
  public:
+  // Track the source of NetworkConnect calls for metrics.
+  enum class Source {
+    // Opened from the Settings UI.
+    kSettings = 1,
+    // Opened from the QuickSettings UI.
+    kQuickSettings = 2,
+  };
+
   class COMPONENT_EXPORT(CHROMEOS_NETWORK) Delegate {
    public:
     // Shows UI to configure or activate the network specified by |network_id|,
@@ -42,6 +47,13 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnect {
     // Shows UI displaying carrier network account details.
     virtual void ShowCarrierAccountDetail(const std::string& network_id) = 0;
 
+    // Shows UI displaying carrier unlock notification.
+    virtual void ShowCarrierUnlockNotification() = 0;
+
+    // Shows portal signin.
+    virtual void ShowPortalSignin(const std::string& network_id,
+                                  Source source) = 0;
+
     // Shows an error notification. |error_name| is an error defined in
     // NetworkConnectionHandler. |network_id| may be empty.
     virtual void ShowNetworkConnectError(const std::string& error_name,
@@ -51,7 +63,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnect {
     virtual void ShowMobileActivationError(const std::string& network_id) = 0;
 
    protected:
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
   };
 
   // Creates the global NetworkConnect object. |delegate| is owned by the
@@ -81,9 +93,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnect {
   // Enables or disables a network technology. If |technology| refers to
   // cellular and the device cannot be enabled due to a SIM lock, this function
   // will launch the SIM unlock dialog.
-  virtual void SetTechnologyEnabled(
-      const chromeos::NetworkTypePattern& technology,
-      bool enabled_state) = 0;
+  virtual void SetTechnologyEnabled(const NetworkTypePattern& technology,
+                                    bool enabled_state) = 0;
 
   // Determines whether or not a network requires a connection to activate or
   // setup and either shows a notification or opens the mobile setup dialog.
@@ -92,34 +103,37 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnect {
   // Opens the carrier account detail page.
   virtual void ShowCarrierAccountDetail(const std::string& network_id) = 0;
 
+  // Shows carrier unlock notification.
+  virtual void ShowCarrierUnlockNotification() = 0;
+
+  // Opens the portal signin.
+  virtual void ShowPortalSignin(const std::string& network_id,
+                                Source source) = 0;
+
   // Configures a network with a dictionary of Shill properties, then sends a
   // connect request. The profile is set according to 'shared' if allowed.
   // TODO(stevenjb): Use ONC properties instead of shill.
-  virtual void ConfigureNetworkIdAndConnect(const std::string& network_id,
-                                            const base::Value& shill_properties,
-                                            bool shared) = 0;
+  virtual void ConfigureNetworkIdAndConnect(
+      const std::string& network_id,
+      const base::Value::Dict& shill_properties,
+      bool shared) = 0;
 
   // Requests a new network configuration to be created from a dictionary of
   // Shill properties and sends a connect request if the configuration succeeds.
   // The profile used is determined by |shared|.
   // TODO(stevenjb): Use ONC properties instead of shill.
-  virtual void CreateConfigurationAndConnect(base::Value* shill_properties,
+  virtual void CreateConfigurationAndConnect(base::Value::Dict shill_properties,
                                              bool shared) = 0;
 
   // Requests a new network configuration to be created from a dictionary of
   // Shill properties. The profile used is determined by |shared|.
-  virtual void CreateConfiguration(base::Value* shill_properties,
+  virtual void CreateConfiguration(base::Value::Dict shill_properties,
                                    bool shared) = 0;
 
  protected:
   NetworkConnect();
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash
-namespace ash {
-using ::chromeos::NetworkConnect;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CONNECT_H_

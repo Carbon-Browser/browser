@@ -1,26 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_account_chooser/consistency_account_chooser_coordinator.h"
 
+#import "base/metrics/user_metrics.h"
 #import "base/strings/sys_string_conversions.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_account_chooser/consistency_account_chooser_mediator.h"
 #import "ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_account_chooser/consistency_account_chooser_table_view_controller_action_delegate.h"
 #import "ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_account_chooser/consistency_account_chooser_view_controller.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface ConsistencyAccountChooserCoordinator () <
     ConsistencyAccountChooserTableViewControllerActionDelegate>
@@ -34,8 +30,10 @@
 
 @implementation ConsistencyAccountChooserCoordinator
 
-- (void)startWithSelectedIdentity:(ChromeIdentity*)selectedIdentity {
+- (void)startWithSelectedIdentity:(id<SystemIdentity>)selectedIdentity {
   [super start];
+  base::RecordAction(
+      base::UserMetricsAction("Signin_BottomSheet_IdentityChooser_Opened"));
   self.mediator = [[ConsistencyAccountChooserMediator alloc]
       initWithSelectedIdentity:selectedIdentity
          accountManagerService:ChromeAccountManagerServiceFactory::
@@ -54,6 +52,10 @@
 - (void)stop {
   [super stop];
   [self.mediator disconnect];
+  self.mediator = nil;
+  self.accountChooserViewController = nil;
+  base::RecordAction(
+      base::UserMetricsAction("Signin_BottomSheet_IdentityChooser_Closed"));
 }
 
 #pragma mark - Properties
@@ -62,7 +64,7 @@
   return self.accountChooserViewController;
 }
 
-- (ChromeIdentity*)selectedIdentity {
+- (id<SystemIdentity>)selectedIdentity {
   return self.mediator.selectedIdentity;
 }
 
@@ -75,12 +77,11 @@
       ChromeAccountManagerServiceFactory::GetForBrowserState(
           self.browser->GetBrowserState());
 
-  ChromeIdentity* identity = accountManagerService->GetIdentityWithGaiaID(
+  id<SystemIdentity> identity = accountManagerService->GetIdentityWithGaiaID(
       base::SysNSStringToUTF8(gaiaID));
   DCHECK(identity);
   self.mediator.selectedIdentity = identity;
-  [self.delegate
-      consistencyAccountChooserCoordinatorChromeIdentitySelected:self];
+  [self.delegate consistencyAccountChooserCoordinatorIdentitySelected:self];
 }
 
 - (void)consistencyAccountChooserTableViewControllerDidTapOnAddAccount:

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,11 @@ class COMPONENT_EXPORT(TYPECD) FakeTypecdClient : public TypecdClient {
   // signal.
   void EmitThunderboltDeviceConnectedSignal(bool is_thunderbolt_only);
   void EmitCableWarningSignal(typecd::CableWarningType type);
+
+  // TypecdClient:
+  void SetPeripheralDataAccessPermissionState(bool permitted) override;
+  void SetTypeCPortsUsingDisplays(
+      const std::vector<uint32_t>& port_nums) override;
 };
 
 }  // namespace ash

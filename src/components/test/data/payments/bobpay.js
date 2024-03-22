@@ -1,10 +1,8 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
-/* global PaymentRequest:false */
 
 /**
  * Builds a payment request with URL based payment methods.
@@ -14,8 +12,8 @@
 function buildPaymentRequest() {
   return new PaymentRequest(
       [
-        {supportedMethods: 'https://bobpay.com'},
-        {supportedMethods: 'https://alicepay.com'},
+        {supportedMethods: 'https://bobpay.test'},
+        {supportedMethods: 'https://alicepay.test'},
       ],
       {total: {label: 'Total', amount: {currency: 'USD', value: '5.00'}}});
 }
@@ -26,7 +24,7 @@ function buildPaymentRequest() {
  * reads it from the page and the C++ browser test reads the return value.
  * @return {string} - the response or error string.
  */
-async function buy() { // eslint-disable-line no-unused-vars
+async function buy() {
   let responseString;
   try {
     const resp = await buildPaymentRequest().show();
@@ -46,7 +44,7 @@ async function buy() { // eslint-disable-line no-unused-vars
  * and the C++ browser test reads the return value.
  * @return {string} - the result or error string.
  */
-async function canMakePayment() { // eslint-disable-line no-unused-vars
+async function canMakePayment() {
   try {
     const result = await buildPaymentRequest().canMakePayment();
     print(result);

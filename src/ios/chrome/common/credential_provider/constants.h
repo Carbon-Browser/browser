@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,6 @@ NSString* AppGroupUserDefaultsCredentialProviderNewCredentials();
 // Key for the app group user defaults containing whether saving passwords is
 // currently enabled.
 NSString* AppGroupUserDefaulsCredentialProviderSavingPasswordsEnabled();
-
-// An array of deprecated keys to be removed if present.
-NSArray<NSString*>* UnusedUserDefaultsCredentialProviderKeys();
 
 // Key for the app group user defaults indicating if the credentials have been
 // synced with iOS via AuthenticationServices.

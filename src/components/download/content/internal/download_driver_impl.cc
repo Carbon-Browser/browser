@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_usage_estimator.h"
 #include "components/download/internal/background_service/driver_entry.h"
 #include "components/download/network/download_http_utils.h"
@@ -148,7 +148,7 @@ void DownloadDriverImpl::Initialize(DownloadDriver::Client* client) {
 
 void DownloadDriverImpl::HardRecover() {
   // TODO(dtrainor, xingliu): Implement recovery for the DownloadManager.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&DownloadDriverImpl::OnHardRecoverComplete,
                                 weak_ptr_factory_.GetWeakPtr(), true));
 }
@@ -240,7 +240,7 @@ void DownloadDriverImpl::Remove(const std::string& guid, bool remove_file) {
 
   // DownloadItem::Remove will cause the item object removed from memory, post
   // the remove task to avoid the object being accessed in the same call stack.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&DownloadDriverImpl::DoRemoveDownload,
                      weak_ptr_factory_.GetWeakPtr(), guid, remove_file));
@@ -343,7 +343,7 @@ void DownloadDriverImpl::OnDownloadCreated(
   if (guid_to_remove_.find(item->GetGuid()) != guid_to_remove_.end()) {
     // Client has removed the download before content persistence layer created
     // the record, remove the download immediately.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&DownloadDriverImpl::DoRemoveDownload,
                                   weak_ptr_factory_.GetWeakPtr(),
                                   item->GetGuid(), false /* remove_file */));

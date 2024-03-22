@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,7 +65,7 @@ class ProxyPolicyHandlerTest : public ConfigurationPolicyPrefStoreTest {
     const base::Value* value = nullptr;
     ASSERT_TRUE(store_->GetValue(proxy_config::prefs::kProxy, &value));
     ASSERT_TRUE(value->is_dict());
-    ProxyConfigDictionary dict(value->Clone());
+    ProxyConfigDictionary dict(value->GetDict().Clone());
     std::string s;
     bool b;
     if (expected_proxy_server.empty()) {
@@ -210,10 +210,10 @@ TEST_F(ProxyPolicyHandlerTest, PacScriptProxyMode) {
 
 // ProxyPacMandatory can be set only via ProxySettings.
 TEST_F(ProxyPolicyHandlerTest, PacScriptProxyModeWithPacMandatory) {
-  base::Value proxy_settings(base::Value::Type::DICTIONARY);
-  proxy_settings.SetStringKey(kProxyPacUrl, "http://short.org/proxy.pac");
-  proxy_settings.SetStringKey(kProxyMode, ProxyPrefs::kPacScriptProxyModeName);
-  proxy_settings.SetBoolKey(kProxyPacMandatory, true);
+  base::Value proxy_settings(base::Value::Type::DICT);
+  proxy_settings.GetDict().Set(kProxyPacUrl, "http://short.org/proxy.pac");
+  proxy_settings.GetDict().Set(kProxyMode, ProxyPrefs::kPacScriptProxyModeName);
+  proxy_settings.GetDict().Set(kProxyPacMandatory, true);
 
   PolicyMap policy;
   policy.Set(kProxySettings, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,

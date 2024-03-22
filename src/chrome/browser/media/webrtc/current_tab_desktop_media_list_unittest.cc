@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/media/webrtc/desktop_media_list.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -53,6 +52,8 @@ class MockObserver : public DesktopMediaListObserver {
   MOCK_METHOD1(OnSourceNameChanged, void(int index));
   MOCK_METHOD1(OnSourceThumbnailChanged, void(int index));
   MOCK_METHOD1(OnSourcePreviewChanged, void(size_t index));
+  MOCK_METHOD0(OnDelegatedSourceListSelection, void());
+  MOCK_METHOD0(OnDelegatedSourceListDismissed, void());
 };
 
 }  // namespace
@@ -164,7 +165,7 @@ class CurrentTabDesktopMediaListTest : public testing::Test {
   ScopedTestingLocalState local_state_;
 
   std::unique_ptr<content::RenderViewHostTestEnabler> rvh_test_enabler_;
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
   std::unique_ptr<Browser> browser_;
 
   StrictMock<MockObserver> observer_;

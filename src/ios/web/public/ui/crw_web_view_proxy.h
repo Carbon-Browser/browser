@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,14 +43,11 @@
 // Returns the webview's gesture recognizers.
 @property(nonatomic, readonly) NSArray* gestureRecognizers;
 
-// Adds a webview gesture recognizers.
-- (void)addGestureRecognizer:(UIGestureRecognizer*)gestureRecognizer;
-
-// Removes a webview gesture recognizers.
-- (void)removeGestureRecognizer:(UIGestureRecognizer*)gestureRecognizer;
+// A Boolean value indicating whether or not the web page is in fullscreen mode.
+@property(nonatomic, readonly) BOOL isWebPageInFullscreenMode;
 
 // Whether or not the content view should use the content inset when setting
-// |contentInset|. Implementations may or may not respect the setting of this
+// `contentInset`. Implementations may or may not respect the setting of this
 // property.
 @property(nonatomic, assign) BOOL shouldUseViewContentInset;
 
@@ -63,8 +60,8 @@
 // Wrapper around the addSubview method of the webview.
 - (void)addSubview:(UIView*)view;
 
-// Returns the currently visible keyboard accessory, or nil.
-- (UIView*)keyboardAccessory;
+// YES if the keyboard is currently visible for use in the web view.
+@property(nonatomic, readonly, getter=isKeyboardVisible) BOOL keyboardVisible;
 
 // Wrapper around the becomeFirstResponder method of the webview.
 - (BOOL)becomeFirstResponder;

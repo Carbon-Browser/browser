@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/location.h"
 #include "base/numerics/safe_math.h"
+#include "base/strings/string_piece.h"
 #include "components/webcrypto/algorithms/aes.h"
 #include "components/webcrypto/blink_key_handle.h"
 #include "components/webcrypto/status.h"

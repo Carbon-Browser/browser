@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -29,4 +29,14 @@ imageset("default_browser_illustration") {
     "default_browser_illustration.imageset/default_browser_light@2x.png",
     "default_browser_illustration.imageset/default_browser_light@3x.png",
   ]
+}
+
+bundle_data("animation_files") {
+  sources = [
+    "default_browser_animation.json",
+    "default_browser_animation_darkmode.json",
+    "default_browser_animation_rtl.json",
+    "default_browser_animation_rtl_darkmode.json",
+  ]
+  outputs = [ "{{bundle_resources_dir}}/{{source_file_part}}" ]
 }

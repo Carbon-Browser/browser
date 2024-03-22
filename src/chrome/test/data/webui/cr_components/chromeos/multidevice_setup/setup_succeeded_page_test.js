@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
  */
 
 import 'chrome://multidevice-setup/strings.m.js';
-import 'chrome://resources/cr_components/chromeos/multidevice_setup/setup_succeeded_page.m.js';
+import 'chrome://resources/ash/common/multidevice_setup/setup_succeeded_page.js';
 
-import {BrowserProxyImpl} from 'chrome://resources/cr_components/chromeos/multidevice_setup/multidevice_setup_browser_proxy.m.js';
+import {BrowserProxyImpl} from 'chrome://resources/ash/common/multidevice_setup/multidevice_setup_browser_proxy.js';
 
-import {TestBrowserProxy} from '../../../test_browser_proxy.js';
+import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 /**
  * @implements {BrowserProxy}
@@ -45,7 +45,7 @@ suite('MultiDeviceSetup', () => {
 
   setup(async () => {
     browserProxy = new TestMultideviceSetupBrowserProxy();
-    BrowserProxyImpl.instance_ = browserProxy;
+    BrowserProxyImpl.setInstance(browserProxy);
 
     setupSucceededPageElement = document.createElement('setup-succeeded-page');
     document.body.appendChild(setupSucceededPageElement);

@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_WEB_APPLICATIONS_OS_INTEGRATION_WEB_APP_SHORTCUTS_MENU_WIN_H_
 #define CHROME_BROWSER_WEB_APPLICATIONS_OS_INTEGRATION_WEB_APP_SHORTCUTS_MENU_WIN_H_
+
+#include <string>
 
 #include "chrome/browser/web_applications/os_integration/web_app_shortcuts_menu.h"
 
@@ -17,6 +19,9 @@ using UpdateJumpListForTesting = base::RepeatingCallback<
 // Callback when jump list has been registered with Windows.
 void SetUpdateJumpListForTesting(
     UpdateJumpListForTesting updateJumpListForTesting);
+
+std::wstring GenerateAppUserModelId(const base::FilePath& profile_path,
+                                    const webapps::AppId& app_id);
 
 namespace internals {
 

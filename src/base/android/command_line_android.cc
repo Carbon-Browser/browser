@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/base_jni_headers/CommandLine_jni.h"
+#include "base/base_jni/CommandLine_jni.h"
 #include "base/command_line.h"
 
 using base::android::ConvertUTF8ToJavaString;

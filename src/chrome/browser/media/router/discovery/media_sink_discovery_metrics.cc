@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,8 +53,6 @@ const char CastDeviceCountMetrics::kHistogramCastKnownDeviceCount[] =
     "MediaRouter.Cast.Discovery.KnownDevicesCount";
 const char CastDeviceCountMetrics::kHistogramCastConnectedDeviceCount[] =
     "MediaRouter.Cast.Discovery.ConnectedDevicesCount";
-const char CastDeviceCountMetrics::kHistogramCastCachedSinksAvailableCount[] =
-    "MediaRouter.Cast.Discovery.CachedSinksAvailableCount";
 const char CastDeviceCountMetrics::kHistogramCastDiscoverySinkSource[] =
     "MediaRouter.Cast.Discovery.SinkSource";
 
@@ -63,12 +61,6 @@ void CastDeviceCountMetrics::RecordDeviceCounts(size_t available_device_count,
   UMA_HISTOGRAM_COUNTS_100(kHistogramCastConnectedDeviceCount,
                            available_device_count);
   UMA_HISTOGRAM_COUNTS_100(kHistogramCastKnownDeviceCount, known_device_count);
-}
-
-void CastDeviceCountMetrics::RecordCachedSinksAvailableCount(
-    size_t cached_sink_count) {
-  UMA_HISTOGRAM_COUNTS_100(kHistogramCastCachedSinksAvailableCount,
-                           cached_sink_count);
 }
 
 void CastDeviceCountMetrics::RecordCastSinkDiscoverySource(

@@ -1,20 +1,24 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
 #include "base/android/build_info.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "media/base/android/media_drm_bridge.h"
+#include "media/base/media_switches.h"
 #include "media/base/provision_fetcher.h"
+#include "media/cdm/clear_key_cdm_common.h"
 #include "testing/gmock/include/gmock/gmock.h"
+#include "testing/gtest/include/gtest/gtest-spi.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/widevine/cdm/widevine_cdm_common.h"
 
@@ -23,14 +27,14 @@ using ::testing::StrictMock;
 
 namespace media {
 
-#define EXPECT_TRUE_IF_WIDEVINE_AVAILABLE(a)                              \
-  do {                                                                    \
-    if (!MediaDrmBridge::IsKeySystemSupported(kWidevineKeySystem)) {      \
-      VLOG(0) << "Widevine not supported on device.";                     \
-      EXPECT_FALSE(a);                                                    \
-    } else {                                                              \
-      EXPECT_TRUE(a);                                                     \
-    }                                                                     \
+#define EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(a, b)                   \
+  do {                                                              \
+    if (!MediaDrmBridge::IsKeySystemSupported(b)) {                 \
+      VLOG(0) << "Key System " << b << " not supported on device."; \
+      EXPECT_FALSE(a);                                              \
+    } else {                                                        \
+      EXPECT_TRUE(a);                                               \
+    }                                                               \
   } while (0)
 
 const char kAudioMp4[] = "audio/mp4";
@@ -94,6 +98,14 @@ class MediaDrmBridgeTest : public ProvisionFetcher, public testing::Test {
                             base::Unretained(this)));
   }
 
+  void CreateWithoutSessionSupportWithNullCallback(
+      const std::string& key_system,
+      const std::string& origin_id,
+      MediaDrmBridge::SecurityLevel security_level) {
+    media_drm_bridge_ = MediaDrmBridge::CreateWithoutSessionSupport(
+        key_system, origin_id, security_level, base::NullCallback());
+  }
+
   // ProvisionFetcher implementation. Done as a mock method so we can properly
   // check if |media_drm_bridge_| invokes it or not.
   MOCK_METHOD3(Retrieve,
@@ -106,12 +118,16 @@ class MediaDrmBridgeTest : public ProvisionFetcher, public testing::Test {
         &MediaDrmBridgeTest::ProvisioningDone, base::Unretained(this)));
   }
 
+  void Unprovision() { media_drm_bridge_->Unprovision(); }
+
   // MediaDrmBridge::Provision() requires a callback that is called when
   // provisioning completes and indicates if it succeeds or not.
   MOCK_METHOD1(ProvisioningDone, void(bool));
 
  protected:
   scoped_refptr<MediaDrmBridge> media_drm_bridge_;
+
+  base::test::ScopedFeatureList scoped_feature_list_;
 
  private:
   std::unique_ptr<ProvisionFetcher> CreateProvisionFetcher() {
@@ -121,22 +137,38 @@ class MediaDrmBridgeTest : public ProvisionFetcher, public testing::Test {
   base::test::TaskEnvironment task_environment_;
 };
 
+using MediaDrmBridgeDeathTest = MediaDrmBridgeTest;
+
 TEST_F(MediaDrmBridgeTest, IsKeySystemSupported_Widevine) {
   // TODO(xhwang): Enable when b/13564917 is fixed.
   // EXPECT_TRUE_IF_AVAILABLE(
   //     IsKeySystemSupportedWithType(kWidevineKeySystem, kAudioMp4));
-  EXPECT_TRUE_IF_WIDEVINE_AVAILABLE(
-      IsKeySystemSupportedWithType(kWidevineKeySystem, kVideoMp4));
+  EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(
+      IsKeySystemSupportedWithType(kWidevineKeySystem, kVideoMp4),
+      kWidevineKeySystem);
 
-
-  EXPECT_TRUE_IF_WIDEVINE_AVAILABLE(
-        IsKeySystemSupportedWithType(kWidevineKeySystem, kAudioWebM));
-  EXPECT_TRUE_IF_WIDEVINE_AVAILABLE(
-        IsKeySystemSupportedWithType(kWidevineKeySystem, kVideoWebM));
+  EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(
+      IsKeySystemSupportedWithType(kWidevineKeySystem, kAudioWebM),
+      kWidevineKeySystem);
+  EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(
+      IsKeySystemSupportedWithType(kWidevineKeySystem, kVideoWebM),
+      kWidevineKeySystem);
 
   EXPECT_FALSE(IsKeySystemSupportedWithType(kWidevineKeySystem, "unknown"));
   EXPECT_FALSE(IsKeySystemSupportedWithType(kWidevineKeySystem, "video/avi"));
   EXPECT_FALSE(IsKeySystemSupportedWithType(kWidevineKeySystem, "audio/mp3"));
+}
+
+TEST_F(MediaDrmBridgeTest, IsKeySystemSupported_ExternalClearKey) {
+  // Testing that 'kExternalClearKeyForTesting' is disabled by default.
+  EXPECT_FALSE(
+      base::FeatureList::IsEnabled(media::kExternalClearKeyForTesting));
+  scoped_feature_list_.InitWithFeatures({media::kExternalClearKeyForTesting},
+                                        {});
+  EXPECT_TRUE(base::FeatureList::IsEnabled(media::kExternalClearKeyForTesting));
+  EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(
+      IsKeySystemSupportedWithType(kExternalClearKeyKeySystem, kVideoMp4),
+      kExternalClearKeyKeySystem);
 }
 
 // Invalid key system is NOT supported regardless whether MediaDrm is available.
@@ -153,7 +185,19 @@ TEST_F(MediaDrmBridgeTest, IsKeySystemSupported_InvalidKeySystem) {
 
 TEST_F(MediaDrmBridgeTest, CreateWithoutSessionSupport_Widevine) {
   CreateWithoutSessionSupport(kWidevineKeySystem, kTestOrigin, kDefault);
-  EXPECT_TRUE_IF_WIDEVINE_AVAILABLE(media_drm_bridge_);
+  EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(media_drm_bridge_, kWidevineKeySystem);
+}
+
+TEST_F(MediaDrmBridgeTest, CreateWithoutSessionSupport_ExternalClearKey) {
+  CreateWithoutSessionSupport(kExternalClearKeyKeySystem, kTestOrigin,
+                              kDefault);
+  EXPECT_FALSE(media_drm_bridge_);
+  scoped_feature_list_.InitWithFeatures({media::kExternalClearKeyForTesting},
+                                        {});
+  CreateWithoutSessionSupport(kExternalClearKeyKeySystem, kTestOrigin,
+                              kDefault);
+  EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(media_drm_bridge_,
+                                      kExternalClearKeyKeySystem);
 }
 
 // Invalid key system is NOT supported regardless whether MediaDrm is available.
@@ -166,34 +210,27 @@ TEST_F(MediaDrmBridgeTest, CreateWithSecurityLevel_Widevine) {
   // We test "L3" fully. But for "L1" we don't check the result as it depends on
   // whether the test device supports "L1".
   CreateWithoutSessionSupport(kWidevineKeySystem, kTestOrigin, kL3);
-  EXPECT_TRUE_IF_WIDEVINE_AVAILABLE(media_drm_bridge_);
+  EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(media_drm_bridge_, kWidevineKeySystem);
 
   CreateWithoutSessionSupport(kWidevineKeySystem, kTestOrigin, kL1);
+}
+
+TEST_F(MediaDrmBridgeTest, CreateWithSecurityLevel_ExternalClearKey) {
+  scoped_feature_list_.InitWithFeatures({media::kExternalClearKeyForTesting},
+                                        {});
+
+  // ExternalClearKey only initialized with 'kDefault' security level.
+  CreateWithoutSessionSupport(kExternalClearKeyKeySystem, kTestOrigin,
+                              kDefault);
+  EXPECT_TRUE_IF_KEY_SYSTEM_AVAILABLE(media_drm_bridge_,
+                                      kExternalClearKeyKeySystem);
 }
 
 TEST_F(MediaDrmBridgeTest, Provision_Widevine) {
   // Only test this if Widevine is supported. Otherwise
   // CreateWithoutSessionSupport() will return null and it can't be tested.
   if (!MediaDrmBridge::IsKeySystemSupported(kWidevineKeySystem)) {
-    VLOG(0) << "Widevine not supported on device.";
-    return;
-  }
-
-  // Provisioning requires the use of origin isolated storage, so skip this test
-  // if it's not supported.
-  if (!MediaDrmBridge::IsPerOriginProvisioningSupported()) {
-    VLOG(0) << "Origin isolated storage not supported on device.";
-    return;
-  }
-
-  // On Android M occasionally MediaDrm.getProvisionRequest() throws and thus a
-  // request can not be generated. This has been fixed in Android N. As Android
-  // M is unlikely to be fixed, disabling this test if running on Android M.
-  // http://crbug.com/973096#c21
-  if (base::android::BuildInfo::GetInstance()->sdk_int() ==
-      base::android::SDK_VERSION_MARSHMALLOW) {
-    VLOG(0) << "Disabled for Android M.";
-    return;
+    GTEST_SKIP() << "Widevine not supported on device.";
   }
 
   // Calling Provision() later should trigger a provisioning request. As we
@@ -219,8 +256,7 @@ TEST_F(MediaDrmBridgeTest, Provision_Widevine_NoOrigin) {
   // Only test this if Widevine is supported. Otherwise
   // CreateWithoutSessionSupport() will return null and it can't be tested.
   if (!MediaDrmBridge::IsKeySystemSupported(kWidevineKeySystem)) {
-    VLOG(0) << "Widevine not supported on device.";
-    return;
+    GTEST_SKIP() << "Widevine not supported on device.";
   }
 
   // Calling Provision() later should fail as the origin is not provided (or
@@ -236,6 +272,52 @@ TEST_F(MediaDrmBridgeTest, Provision_Widevine_NoOrigin) {
 
   // ProvisioningDone() callback is executed asynchronously.
   base::RunLoop().RunUntilIdle();
+}
+
+// Unprovisioning with a Null Callback should not crash, as callback will not be
+// used.
+TEST_F(MediaDrmBridgeTest, UnprovisionWithNullCallback_Widevine) {
+  // Only test this if Widevine is supported. Otherwise
+  // CreateWithoutSessionSupport() will return null and it can't be
+  // tested.
+  if (!MediaDrmBridge::IsKeySystemSupported(kWidevineKeySystem)) {
+    GTEST_SKIP() << "Widevine not supported on device.";
+  }
+
+  // Create MediaDrmBridge. We only test "L3" as "L1" depends on whether
+  // the test device supports it or not.
+  CreateWithoutSessionSupportWithNullCallback(kWidevineKeySystem, kTestOrigin,
+                                              kL3);
+  EXPECT_TRUE(media_drm_bridge_);
+  Unprovision();
+  // ProvisioningDone() callback is executed asynchronously.
+  base::RunLoop().RunUntilIdle();
+}
+
+// Provisioning with a Null Callback should crash, as CreateFetcherCB becomes
+// 'base::NullCallback()' which cannot be '.Run()'.
+TEST_F(MediaDrmBridgeDeathTest, ProvisionWithNullCallback_Widevine) {
+  // Only test this if Widevine is supported. Otherwise
+  // CreateWithoutSessionSupport() will return null and it can't be
+  // tested.
+  if (!MediaDrmBridge::IsKeySystemSupported(kWidevineKeySystem)) {
+    GTEST_SKIP() << "Widevine not supported on device.";
+  }
+
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
+  EXPECT_DEATH(
+      {
+        // Create MediaDrmBridge. We only test "L3" as "L1" depends on whether
+        // the test device supports it or not.
+        CreateWithoutSessionSupportWithNullCallback(kWidevineKeySystem,
+                                                    kTestOrigin, kL3);
+        EXPECT_TRUE(media_drm_bridge_);
+        Provision();
+
+        // ProvisioningDone() callback is executed asynchronously.
+        base::RunLoop().RunUntilIdle();
+      },
+      "");
 }
 
 }  // namespace media

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@ import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.Acces
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_EXPAND;
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_FOCUS;
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_IME_ENTER;
+import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_LONG_CLICK;
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_NEXT_AT_MOVEMENT_GRANULARITY;
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_NEXT_HTML_ELEMENT;
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_PAGE_DOWN;
@@ -35,10 +36,11 @@ import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.Acces
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_SET_TEXT;
 import static androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_SHOW_ON_SCREEN;
 
-import static org.chromium.content.browser.accessibility.WebContentsAccessibilityImpl.EXTRAS_KEY_OFFSCREEN;
-import static org.chromium.content.browser.accessibility.WebContentsAccessibilityImpl.EXTRAS_KEY_SUPPORTED_ELEMENTS;
-import static org.chromium.content.browser.accessibility.WebContentsAccessibilityImpl.EXTRAS_KEY_UNCLIPPED_BOTTOM;
-import static org.chromium.content.browser.accessibility.WebContentsAccessibilityImpl.EXTRAS_KEY_UNCLIPPED_TOP;
+import static org.chromium.content.browser.accessibility.AccessibilityNodeInfoBuilder.EXTRAS_KEY_CSS_DISPLAY;
+import static org.chromium.content.browser.accessibility.AccessibilityNodeInfoBuilder.EXTRAS_KEY_OFFSCREEN;
+import static org.chromium.content.browser.accessibility.AccessibilityNodeInfoBuilder.EXTRAS_KEY_SUPPORTED_ELEMENTS;
+import static org.chromium.content.browser.accessibility.AccessibilityNodeInfoBuilder.EXTRAS_KEY_UNCLIPPED_BOTTOM;
+import static org.chromium.content.browser.accessibility.AccessibilityNodeInfoBuilder.EXTRAS_KEY_UNCLIPPED_TOP;
 
 import static java.lang.String.CASE_INSENSITIVE_ORDER;
 
@@ -52,9 +54,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Utility class for common actions involving AccessibilityNodeInfo objects.
- */
+/** Utility class for common actions involving AccessibilityNodeInfo objects. */
 public class AccessibilityNodeInfoUtils {
     /**
      * Helper method to perform a custom toString on a given AccessibilityNodeInfo object.
@@ -207,8 +207,15 @@ public class AccessibilityNodeInfoUtils {
         if (info.isSelected()) {
             prefix += "selected, ";
         }
-        return String.format("%srowIndex=%s, rowSpan=%s, colIndex=%s, colSpan=%s]", prefix,
-                info.getRowIndex(), info.getRowSpan(), info.getColumnIndex(), info.getColumnSpan());
+        // Only include row/col span if not equal to 1, the default value.
+        if (info.getRowSpan() != 1) {
+            prefix += String.format("rowSpan=%s, ", info.getRowSpan());
+        }
+        if (info.getColumnSpan() != 1) {
+            prefix += String.format("colSpan=%s, ", info.getColumnSpan());
+        }
+        return String.format(
+                "%srowIndex=%s, colIndex=%s]", prefix, info.getRowIndex(), info.getColumnIndex());
     }
 
     private static String toString(AccessibilityNodeInfoCompat.RangeInfoCompat info) {
@@ -226,11 +233,28 @@ public class AccessibilityNodeInfoUtils {
         StringBuilder builder = new StringBuilder();
         builder.append("[");
         for (AccessibilityNodeInfoCompat.AccessibilityActionCompat action : actionList) {
-            // Four actions are set on all nodes, so ignore those when printing the tree.
+            // Five actions are set on all nodes, so ignore those when printing the tree.
             if (action.equals(ACTION_NEXT_HTML_ELEMENT)
                     || action.equals(ACTION_PREVIOUS_HTML_ELEMENT)
                     || action.equals(ACTION_SHOW_ON_SCREEN)
-                    || action.equals(ACTION_CONTEXT_CLICK)) {
+                    || action.equals(ACTION_CONTEXT_CLICK)
+                    || action.equals(ACTION_LONG_CLICK)) {
+                continue;
+            }
+            // Scroll actions are dependent on screen size, so ignore them to reduce flakiness
+            if (action.equals(ACTION_SCROLL_FORWARD)
+                    || action.equals(ACTION_SCROLL_BACKWARD)
+                    || action.equals(ACTION_SCROLL_DOWN)
+                    || action.equals(ACTION_SCROLL_UP)
+                    || action.equals(ACTION_SCROLL_RIGHT)
+                    || action.equals(ACTION_SCROLL_LEFT)) {
+                continue;
+            }
+            // Page actions are dependent on screen size, so ignore them to reduce flakiness.
+            if (action.equals(ACTION_PAGE_UP)
+                    || action.equals(ACTION_PAGE_DOWN)
+                    || action.equals(ACTION_PAGE_LEFT)
+                    || action.equals(ACTION_PAGE_RIGHT)) {
                 continue;
             }
 
@@ -294,6 +318,8 @@ public class AccessibilityNodeInfoUtils {
             return "COLLAPSE";
         } else if (action == ACTION_SET_PROGRESS.getId()) {
             return "SET_PROGRESS";
+        } else if (action == ACTION_LONG_CLICK.getId()) {
+            return "LONG_CLICK";
         } else {
             return "NOT_IMPLEMENTED";
         }
@@ -344,9 +370,18 @@ public class AccessibilityNodeInfoUtils {
                 continue;
             }
 
+            // CSS Display is very noisy and currently unused, so we exclude it here because we
+            // don't have a way to filter it for certain tests.
+            if (key.equals(EXTRAS_KEY_CSS_DISPLAY)) {
+                continue;
+            }
+
             // Simplify the key String before printing to make test outputs easier to read.
-            bundleStrings.add(key.replace("AccessibilityNodeInfo.", "") + "=\""
-                    + extras.get(key).toString() + "\"");
+            bundleStrings.add(
+                    key.replace("AccessibilityNodeInfo.", "")
+                            + "=\""
+                            + extras.get(key).toString()
+                            + "\"");
         }
         builder.append(TextUtils.join(", ", bundleStrings)).append("]");
 

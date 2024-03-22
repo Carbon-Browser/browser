@@ -1,9 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_VIZ_SERVICE_FRAME_SINKS_VIDEO_DETECTOR_H_
 #define COMPONENTS_VIZ_SERVICE_FRAME_SINKS_VIDEO_DETECTOR_H_
+
+#include <memory>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/task/sequenced_task_runner.h"
@@ -80,7 +83,8 @@ class VIZ_SERVICE_EXPORT VideoDetector : public SurfaceObserver {
   void OnSurfaceActivated(const SurfaceId& surface_id) override {}
   void OnSurfaceMarkedForDestruction(const SurfaceId& surface_id) override {}
   bool OnSurfaceDamaged(const SurfaceId& surface_id,
-                        const BeginFrameAck& ack) override;
+                        const BeginFrameAck& ack,
+                        HandleInteraction handle_interaction) override;
   void OnSurfaceDestroyed(const SurfaceId& surface_id) override {}
   void OnSurfaceDamageExpected(const SurfaceId& surface_id,
                                const BeginFrameArgs& args) override {}

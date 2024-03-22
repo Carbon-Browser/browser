@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/crostini/crostini_test_helper.h"
@@ -22,7 +23,6 @@
 #include "chromeos/ash/components/dbus/seneschal/fake_seneschal_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_service.pb.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "storage/browser/file_system/external_mount_points.h"
@@ -125,7 +125,6 @@ class CrostiniExportImportTest : public testing::Test {
   CrostiniExportImportTest()
       : default_container_id_(DefaultContainerId()),
         custom_container_id_(kCrostiniDefaultVmType, "MyVM", "MyContainer") {
-    chromeos::DBusThreadManager::Initialize();
     ash::ChunneldClient::InitializeFake();
     ash::CiceroneClient::InitializeFake();
     ash::ConciergeClient::InitializeFake();
@@ -142,7 +141,6 @@ class CrostiniExportImportTest : public testing::Test {
     ash::ConciergeClient::Shutdown();
     ash::CiceroneClient::Shutdown();
     ash::ChunneldClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
   void SetUp() override {
@@ -188,15 +186,18 @@ class CrostiniExportImportTest : public testing::Test {
  protected:
   Profile* profile() { return profile_.get(); }
 
-  ash::FakeCiceroneClient* fake_cicerone_client_;
-  ash::FakeSeneschalClient* fake_seneschal_client_;
+  raw_ptr<ash::FakeCiceroneClient, DanglingUntriaged | ExperimentalAsh>
+      fake_cicerone_client_;
+  raw_ptr<ash::FakeSeneschalClient, DanglingUntriaged | ExperimentalAsh>
+      fake_seneschal_client_;
 
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<CrostiniExportImport> crostini_export_import_;
   std::unique_ptr<CrostiniTestHelper> test_helper_;
   std::unique_ptr<NotificationDisplayServiceTester>
       notification_display_service_tester_;
-  StubNotificationDisplayService* notification_display_service_;
+  raw_ptr<StubNotificationDisplayService, DanglingUntriaged | ExperimentalAsh>
+      notification_display_service_;
 
   guest_os::GuestId default_container_id_;
   guest_os::GuestId custom_container_id_;

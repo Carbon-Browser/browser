@@ -1,21 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import './strings.m.js';
 import './shared_vars.css.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './runtime_hosts_dialog.html.js';
@@ -215,7 +215,7 @@ export class ExtensionsRuntimeHostsDialogElement extends
     return getMatchingUserSpecifiedSites(this.restrictedSites, this.site_);
   }
 
-  private onCancelTap_() {
+  private onCancelClick_() {
     this.$.dialog.cancel();
   }
 
@@ -223,7 +223,7 @@ export class ExtensionsRuntimeHostsDialogElement extends
    * The tap handler for the submit button (adds the pattern and closes
    * the dialog).
    */
-  private onSubmitTap_() {
+  private onSubmitClick_() {
     chrome.metricsPrivate.recordUserAction(
         'Extensions.Settings.Hosts.AddHostDialogSubmitted');
     if (this.currentSite !== null) {
@@ -283,7 +283,7 @@ export class ExtensionsRuntimeHostsDialogElement extends
             () => {
               if (restrictedSites.length) {
                 this.delegate.removeUserSpecifiedSites(
-                    chrome.developerPrivate.UserSiteSet.RESTRICTED,
+                    chrome.developerPrivate.SiteSet.USER_RESTRICTED,
                     restrictedSites);
               }
               this.$.dialog.close();

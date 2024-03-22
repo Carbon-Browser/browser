@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@
   DCHECK([app conformsToProtocol:@protocol(CrAppControlProtocol)])
       << "Existing NSApp (class " << [[app className] UTF8String]
       << ") does not conform to required protocol.";
-  DCHECK(base::MessagePumpMac::UsingCrApp())
-      << "MessagePumpMac::Create() was called before "
+  DCHECK(base::message_pump_apple::UsingCrApp())
+      << "message_pump_apple::Create() was called before "
       << "+[MockCrApp sharedApplication]";
   return app;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -61,7 +61,7 @@ class IncludeFinderPPCallbacks : public clang::PPCallbacks {
                           llvm::StringRef file_name,
                           bool is_angled,
                           clang::CharSourceRange range,
-                          llvm::Optional<clang::FileEntryRef> file,
+                          clang::OptionalFileEntryRef file,
                           llvm::StringRef search_path,
                           llvm::StringRef relative_path,
                           const clang::Module* imported,
@@ -158,7 +158,7 @@ void IncludeFinderPPCallbacks::InclusionDirective(
     llvm::StringRef file_name,
     bool is_angled,
     clang::CharSourceRange range,
-    llvm::Optional<clang::FileEntryRef> file,
+    clang::OptionalFileEntryRef file,
     llvm::StringRef search_path,
     llvm::StringRef relative_path,
     const clang::Module* imported,

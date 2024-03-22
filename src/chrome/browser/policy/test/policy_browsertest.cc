@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -13,9 +13,10 @@
 // policy values are copied into local state or Profile prefs. They can be used
 // to enable policy during test.
 //
-// Simple policy to prefs mapping can be tested with policy_test_cases.json. If
-// the conversion is complicated and requires custom policy handler, we
-// recommend to test the handler separately.
+// Simple policy to prefs mapping can be tested with
+// chrome/test/data/policy/pref_mapping/[PolicyName].json. If the conversion is
+// complicated and requires custom policy handler, we recommend to test the
+// handler separately.
 
 #include "base/run_loop.h"
 #include "base/time/time.h"
@@ -48,6 +49,7 @@
 #include "content/public/test/test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/events/platform/platform_event_source.h"
 #include "url/gurl.h"
 
 #if !BUILDFLAG(IS_MAC)
@@ -68,14 +70,11 @@ const int kThreeHoursInMs = 180 * 60 * 1000;
 
 // Checks if WebGL is enabled in the given WebContents.
 bool IsWebGLEnabled(content::WebContents* contents) {
-  bool result = false;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      contents,
-      "var canvas = document.createElement('canvas');"
-      "var context = canvas.getContext('webgl');"
-      "domAutomationController.send(context != null);",
-      &result));
-  return result;
+  return content::EvalJs(contents,
+                         "var canvas = document.createElement('canvas');"
+                         "var context = canvas.getContext('webgl');"
+                         "context != null;")
+      .ExtractBool();
 }
 
 }  // namespace
@@ -119,7 +118,15 @@ IN_PROC_BROWSER_TEST_F(PolicyTest, MAYBE_Disable3DAPIs) {
   EXPECT_TRUE(IsWebGLEnabled(contents));
 }
 
-IN_PROC_BROWSER_TEST_F(PolicyTest, HomepageLocation) {
+// TODO(crbug.com/1378338): Re-enable this flaky test on Linux
+// and lacros asan builder.
+#if BUILDFLAG(IS_LINUX) || \
+    (BUILDFLAG(IS_CHROMEOS) && defined(ADDRESS_SANITIZER))
+#define MAYBE_HomepageLocation DISABLED_HomepageLocation
+#else
+#define MAYBE_HomepageLocation HomepageLocation
+#endif
+IN_PROC_BROWSER_TEST_F(PolicyTest, MAYBE_HomepageLocation) {
   // Verifies that the homepage can be configured with policies.
   // Set a default, and check that the home button navigates there.
   browser()->profile()->GetPrefs()->SetString(prefs::kHomePage,
@@ -190,9 +197,31 @@ IN_PROC_BROWSER_TEST_F(PolicyTest, MAYBE_IncognitoEnabled) {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 
-// Disabled, see http://crbug.com/554728.
-IN_PROC_BROWSER_TEST_F(PolicyTest,
-                       DISABLED_PRE_WaitForInitialUserActivityUnsatisfied) {
+// We need to block mouse events in |WaitForInitialUserActivityUnsatisfied| test
+// to avoid flakiness due to unexpected mouse input.
+class BlockMouseEventPolicyTest : public PolicyTest {
+ public:
+  void SetUp() override {
+    // Backup previous IgnoreNativePlatformEvents value to restore after test.
+    old_ignore_native_platform_events_ =
+        ui::PlatformEventSource::ShouldIgnoreNativePlatformEvents();
+    ui::PlatformEventSource::SetIgnoreNativePlatformEvents(true);
+
+    PolicyTest::SetUp();
+  }
+  void TearDown() override {
+    ui::PlatformEventSource::SetIgnoreNativePlatformEvents(
+        old_ignore_native_platform_events_);
+
+    PolicyTest::TearDown();
+  }
+
+ private:
+  bool old_ignore_native_platform_events_;
+};
+
+IN_PROC_BROWSER_TEST_F(BlockMouseEventPolicyTest,
+                       PRE_WaitForInitialUserActivityUnsatisfied) {
   // Indicate that the session started 2 hours ago and no user activity has
   // occurred yet.
   g_browser_process->local_state()->SetInt64(
@@ -200,9 +229,8 @@ IN_PROC_BROWSER_TEST_F(PolicyTest,
       (base::Time::Now() - base::Hours(2)).ToInternalValue());
 }
 
-// Disabled, see http://crbug.com/554728.
-IN_PROC_BROWSER_TEST_F(PolicyTest,
-                       DISABLED_WaitForInitialUserActivityUnsatisfied) {
+IN_PROC_BROWSER_TEST_F(BlockMouseEventPolicyTest,
+                       WaitForInitialUserActivityUnsatisfied) {
   PolicyTestAppTerminationObserver observer;
 
   // Require initial user activity.

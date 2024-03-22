@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.content.browser.input.ImeAdapterImpl;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Adapts and plumbs android IME service onto the chrome text input API.
- */
+/** Adapts and plumbs android IME service onto the chrome text input API. */
 public interface ImeAdapter {
     /** Composition key code sent when user either hit a key or hit a selection. */
     static final int COMPOSITION_KEY_CODE = 229;
@@ -34,8 +32,10 @@ public interface ImeAdapter {
      * @return the default {@link InputMethodManagerWrapper} that the ImeAdapter uses to
      * make calls to the InputMethodManager.
      */
-    static InputMethodManagerWrapper createDefaultInputMethodManagerWrapper(Context context,
-            WindowAndroid windowAndroid, InputMethodManagerWrapper.Delegate delegate) {
+    static InputMethodManagerWrapper createDefaultInputMethodManagerWrapper(
+            Context context,
+            WindowAndroid windowAndroid,
+            InputMethodManagerWrapper.Delegate delegate) {
         return ImeAdapterImpl.createDefaultInputMethodManagerWrapper(
                 context, windowAndroid, delegate);
     }
@@ -83,10 +83,7 @@ public interface ImeAdapter {
     @VisibleForTesting
     ResultReceiver getNewShowKeyboardReceiver();
 
-    /**
-     * Get the current input connection for testing purposes.
-     */
-    @VisibleForTesting
+    /** Get the current input connection for testing purposes. */
     InputConnection getInputConnectionForTest();
 
     /**
@@ -94,7 +91,6 @@ public interface ImeAdapter {
      * @param text The composing text.
      * @param newCursorPosition The new cursor position around the text.
      */
-    @VisibleForTesting
     void setComposingTextForTest(final CharSequence text, final int newCursorPosition);
 
     /**
@@ -103,14 +99,4 @@ public interface ImeAdapter {
      */
     @VisibleForTesting
     void onShowKeyboardReceiveResult(int resultCode);
-
-    /**
-     * Returns true if the overlaycontent flag is set in the JS, else false.
-     * This determines whether to fire geometrychange event to JS and also not
-     * resize the visual/layout viewports in response to keyboard visibility
-     * changes.
-     *
-     * @return Whether overlaycontent flag is set or not.
-     */
-    boolean shouldVirtualKeyboardOverlayContent();
 }

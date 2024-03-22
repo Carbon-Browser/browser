@@ -29,13 +29,17 @@
 #include <atomic>
 #include <memory>
 
+#include "base/dcheck_is_on.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/synchronization/lock.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/ascii_ctype.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_view.h"
+#include "third_party/blink/renderer/platform/wtf/text/text_codec_cjk.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_codec_icu.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_codec_latin1.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_codec_replacement.h"
@@ -43,7 +47,6 @@
 #include "third_party/blink/renderer/platform/wtf/text/text_codec_utf16.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_codec_utf8.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
-
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 
 namespace WTF {
@@ -51,7 +54,7 @@ namespace WTF {
 const size_t kMaxEncodingNameLength = 63;
 
 // Hash for all-ASCII strings that does case folding.
-struct TextEncodingNameHash {
+struct TextEncodingNameHashTraits : GenericHashTraits<const char*> {
   static bool Equal(const char* s1, const char* s2) {
     char c1;
     char c2;
@@ -83,7 +86,7 @@ struct TextEncodingNameHash {
     }
   }
 
-  static const bool safe_to_compare_to_empty_or_deleted = false;
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
 };
 
 struct TextCodecFactory {
@@ -93,7 +96,7 @@ struct TextCodecFactory {
       : function(f), additional_data(d) {}
 };
 
-typedef HashMap<const char*, const char*, TextEncodingNameHash>
+typedef HashMap<const char*, const char*, TextEncodingNameHashTraits>
     TextEncodingNameMap;
 typedef HashMap<const char*, TextCodecFactory> TextCodecMap;
 
@@ -117,9 +120,9 @@ ALWAYS_INLINE void AtomicSetDidExtendTextCodecMaps() {
 }
 }  // namespace
 
-#if ERROR_DISABLED
+#if !DCHECK_IS_ON()
 
-static inline void checkExistingName(const char*, const char*) {}
+static inline void CheckExistingName(const char*, const char*) {}
 
 #else
 
@@ -206,6 +209,11 @@ static void BuildBaseTextCodecMaps() {
 static void ExtendTextCodecMaps() {
   TextCodecReplacement::RegisterEncodingNames(AddToTextEncodingNameMap);
   TextCodecReplacement::RegisterCodecs(AddToTextCodecMap);
+
+  if (base::FeatureList::IsEnabled(blink::features::kTextCodecCJKEnabled)) {
+    TextCodecCJK::RegisterEncodingNames(AddToTextEncodingNameMap);
+    TextCodecCJK::RegisterCodecs(AddToTextCodecMap);
+  }
 
   TextCodecICU::RegisterEncodingNames(AddToTextEncodingNameMap);
   TextCodecICU::RegisterCodecs(AddToTextCodecMap);

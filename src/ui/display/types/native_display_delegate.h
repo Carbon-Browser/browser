@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/display/types/display_configuration_params.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/display/types/display_types_export.h"
@@ -17,14 +17,15 @@
 
 namespace display {
 class DisplaySnapshot;
+class GammaCurve;
 class NativeDisplayObserver;
 
-struct GammaRampRGBEntry;
 struct DisplayConfigurationParams;
 
 using GetDisplaysCallback =
     base::OnceCallback<void(const std::vector<DisplaySnapshot*>&)>;
 using ConfigureCallback = base::OnceCallback<void(bool)>;
+using SetHdcpKeyPropCallback = base::OnceCallback<void(bool)>;
 using GetHDCPStateCallback =
     base::OnceCallback<void(bool, HDCPState, ContentProtectionMethod)>;
 using SetHDCPStateCallback = base::OnceCallback<void(bool)>;
@@ -62,6 +63,11 @@ class DISPLAY_TYPES_EXPORT NativeDisplayDelegate {
       ConfigureCallback callback,
       uint32_t modeset_flag) = 0;
 
+  // Sets the HDCP Key Property.
+  virtual void SetHdcpKeyProp(int64_t display_id,
+                              const std::string& key,
+                              SetHdcpKeyPropCallback callback) = 0;
+
   // Gets HDCP state of output.
   virtual void GetHDCPState(const DisplaySnapshot& output,
                             GetHDCPStateCallback callback) = 0;
@@ -81,10 +87,9 @@ class DISPLAY_TYPES_EXPORT NativeDisplayDelegate {
   // Sets the given |gamma_lut| and |degamma_lut| on the display with
   // |display_id|. Returns true if the given tables were sent to the GPU process
   // successfully.
-  virtual bool SetGammaCorrection(
-      int64_t display_id,
-      const std::vector<GammaRampRGBEntry>& degamma_lut,
-      const std::vector<GammaRampRGBEntry>& gamma_lut) = 0;
+  virtual bool SetGammaCorrection(int64_t display_id,
+                                  const GammaCurve& degamma,
+                                  const GammaCurve& gamma) = 0;
 
   // Sets the privacy screen state on the display with |display_id|.
   virtual void SetPrivacyScreen(int64_t display_id,

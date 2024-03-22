@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,18 +15,17 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/win/object_watcher.h"
 #include "base/win/scoped_handle.h"
 #include "net/base/address_family.h"
 #include "net/base/completion_once_callback.h"
-#include "net/base/datagram_buffer.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_export.h"
-#include "net/base/network_change_notifier.h"
+#include "net/base/network_handle.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/datagram_socket.h"
 #include "net/socket/diff_serv_code_point.h"
@@ -166,6 +165,9 @@ class NET_EXPORT UDPSocketWin : public base::win::ObjectWatcher::Delegate {
                net::NetLog* net_log,
                const net::NetLogSource& source);
 
+  UDPSocketWin(DatagramSocket::BindType bind_type,
+               NetLogWithSource source_net_log);
+
   UDPSocketWin(const UDPSocketWin&) = delete;
   UDPSocketWin& operator=(const UDPSocketWin&) = delete;
 
@@ -176,7 +178,7 @@ class NET_EXPORT UDPSocketWin : public base::win::ObjectWatcher::Delegate {
   int Open(AddressFamily address_family);
 
   // Not implemented. Returns ERR_NOT_IMPLEMENTED.
-  int BindToNetwork(NetworkChangeNotifier::NetworkHandle network);
+  int BindToNetwork(handles::NetworkHandle network);
 
   // Connects the socket to connect with a certain |address|.
   // Should be called after Open().
@@ -189,7 +191,6 @@ class NET_EXPORT UDPSocketWin : public base::win::ObjectWatcher::Delegate {
   int Bind(const IPEndPoint& address);
 
   // Closes the socket.
-  // TODO(rvargas, hidehiko): Disallow re-Open() after Close().
   void Close();
 
   // Copies the remote udp address into |address| and returns a net error code.
@@ -260,6 +261,10 @@ class NET_EXPORT UDPSocketWin : public base::win::ObjectWatcher::Delegate {
   // there was a problem, but the socket will still be usable. Can not
   // return ERR_IO_PENDING.
   int SetDoNotFragment();
+
+  // Requests that packets received by this socket have the ECN bit set. Returns
+  // a network error code if there was a problem.
+  int SetRecvEcn();
 
   // This is a no-op on Windows.
   void SetMsgConfirm(bool confirm);
@@ -336,37 +341,36 @@ class NET_EXPORT UDPSocketWin : public base::win::ObjectWatcher::Delegate {
   int SetMulticastLoopbackMode(bool loopback);
 
   // Sets the differentiated services flags on outgoing packets. May not do
-  // anything on some platforms.  A return value of ERR_INVALID_HANDLE indicates
+  // anything on some platforms. A return value of ERR_INVALID_HANDLE indicates
   // the value was not set but could succeed on a future call, because
   // initialization is in progress.
   int SetDiffServCodePoint(DiffServCodePoint dscp);
 
+  // Sets IPV6_V6ONLY on the socket. If this flag is true, the socket will be
+  // restricted to only IPv6; false allows both IPv4 and IPv6 traffic.
+  int SetIPv6Only(bool ipv6_only);
+
   // Resets the thread to be used for thread-safety checks.
   void DetachFromThread();
 
-  // This class by default uses overlapped IO. Call this method before Open()
-  // to switch to non-blocking IO.
+  // This class by default uses overlapped IO. Call this method before Open() or
+  // AdoptOpenedSocket() to switch to non-blocking IO.
   void UseNonBlockingIO();
-
-  void SetWriteAsyncEnabled(bool enabled);
-  bool WriteAsyncEnabled();
-  void SetMaxPacketSize(size_t max_packet_size);
-  void SetWriteMultiCoreEnabled(bool enabled);
-  void SetSendmmsgEnabled(bool enabled);
-  void SetWriteBatchingActive(bool active);
-
-  int WriteAsync(DatagramBuffers buffers,
-                 CompletionOnceCallback callback,
-                 const NetworkTrafficAnnotationTag& traffic_annotation);
-  int WriteAsync(const char* buffer,
-                 size_t buf_len,
-                 CompletionOnceCallback callback,
-                 const NetworkTrafficAnnotationTag& traffic_annotation);
-
-  DatagramBuffers GetUnwrittenBuffers();
 
   // Apply |tag| to this socket.
   void ApplySocketTag(const SocketTag& tag);
+
+  // Takes ownership of `socket`, which should be a socket descriptor opened
+  // with the specified address family. The socket should only be created but
+  // not bound or connected to an address. This method must be called after
+  // UseNonBlockingIO, otherwise the adopted socket will not have the
+  // non-blocking IO flag set.
+  int AdoptOpenedSocket(AddressFamily address_family, SOCKET socket);
+
+  uint32_t get_multicast_interface_for_testing() {
+    return multicast_interface_;
+  }
+  bool get_use_non_blocking_io_for_testing() { return use_non_blocking_io_; }
 
  private:
   enum SocketOptions {
@@ -423,6 +427,9 @@ class NET_EXPORT UDPSocketWin : public base::win::ObjectWatcher::Delegate {
   // Bind().
   int SetMulticastOptions();
   int DoBind(const IPEndPoint& address);
+
+  // Configures opened `socket_` depending on whether it uses nonblocking IO.
+  void ConfigureOpenedSocket();
 
   // This is provided to allow QwaveApi mocking in tests. |UDPSocketWin| method
   // implementations should call |GetQwaveApi()| instead of

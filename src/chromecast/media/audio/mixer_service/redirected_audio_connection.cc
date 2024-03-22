@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,6 +58,12 @@ void RedirectedAudioConnection::SetStreamMatchPatterns(
 
 void RedirectedAudioConnection::Connect() {
   MixerConnection::Connect();
+}
+
+void RedirectedAudioConnection::ConnectForTest(
+    std::unique_ptr<MixerSocket> connected_socket_for_test) {
+  DCHECK(connected_socket_for_test);
+  OnConnected(std::move(connected_socket_for_test));
 }
 
 void RedirectedAudioConnection::OnConnected(

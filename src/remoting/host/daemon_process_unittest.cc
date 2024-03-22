@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -75,11 +75,11 @@ class MockDaemonProcess : public DaemonProcess {
               (const std::string&),
               (override));
   MOCK_METHOD(void, SendTerminalDisconnected, (int terminal_id), (override));
+  MOCK_METHOD(void, StartChromotingHostServices, (), (override));
 };
 
 FakeDesktopSession::FakeDesktopSession(DaemonProcess* daemon_process, int id)
-    : DesktopSession(daemon_process, id) {
-}
+    : DesktopSession(daemon_process, id) {}
 
 FakeDesktopSession::~FakeDesktopSession() = default;
 
@@ -134,8 +134,7 @@ class DaemonProcessTest : public testing::Test {
   int terminal_id_;
 };
 
-DaemonProcessTest::DaemonProcessTest() : terminal_id_(0) {
-}
+DaemonProcessTest::DaemonProcessTest() : terminal_id_(0) {}
 
 DaemonProcessTest::~DaemonProcessTest() = default;
 
@@ -157,6 +156,8 @@ void DaemonProcessTest::SetUp() {
   EXPECT_CALL(*daemon_process_, LaunchNetworkProcess())
       .Times(AnyNumber())
       .WillRepeatedly(Invoke(this, &DaemonProcessTest::LaunchNetworkProcess));
+  EXPECT_CALL(*daemon_process_, StartChromotingHostServices())
+      .Times(AnyNumber());
 }
 
 void DaemonProcessTest::TearDown() {

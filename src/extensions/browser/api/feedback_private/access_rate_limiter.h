@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_API_FEEDBACK_PRIVATE_ACCESS_RATE_LIMITER_H_
 #define EXTENSIONS_BROWSER_API_FEEDBACK_PRIVATE_ACCESS_RATE_LIMITER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -76,7 +77,7 @@ class AccessRateLimiter {
   base::TimeDelta counter_;
 
   // Points to a timer clock implementation for keeping track of access times.
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock, ExperimentalAsh> tick_clock_;
 };
 
 }  // namespace extensions

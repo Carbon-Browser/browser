@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/prefs/pref_member.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -17,17 +17,10 @@ namespace ash {
 // Kerberos defaults for canonicalization SPN. (see
 // https://web.mit.edu/kerberos/krb5-1.12/doc/admin/conf_files/krb5_conf.html)
 // Exported for browsertests.
-extern const char kKrb5CnameSettings[];
 
-// Environment variable pointing to credential cache file.
-extern const char kKrb5CCEnvName[];
-// Environment variable pointing to Kerberos config file.
-extern const char kKrb5ConfEnvName[];
-// Prefix for KRB5CCNAME environment variable. Defines credential cache type.
-extern const char kKrb5CCFilePrefix[];
-// Directory in the user home to store Kerberos files.
+// Directory in the user's cryptohome where Kerberos files are stored.
 extern const char kKrb5Directory[];
-// Credential cache file name.
+// Kerberos Credential cache file name.
 extern const char kKrb5CCFile[];
 // Kerberos config file name.
 extern const char kKrb5ConfFile[];
@@ -72,18 +65,5 @@ class KerberosFilesHandler {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-using ::ash::KerberosFilesHandler;
-using ::ash::kKrb5CCEnvName;
-using ::ash::kKrb5CCFile;
-using ::ash::kKrb5CCFilePrefix;
-using ::ash::kKrb5CnameSettings;
-using ::ash::kKrb5ConfEnvName;
-using ::ash::kKrb5ConfFile;
-using ::ash::kKrb5Directory;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_AUTHPOLICY_KERBEROS_FILES_HANDLER_H_

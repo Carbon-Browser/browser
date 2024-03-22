@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/check.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/win/resource_util.h"
+#include "ui/base/resource/resource_scale_factor.h"
 
 namespace ui {
 
@@ -28,19 +29,17 @@ bool ResourceDataDLL::HasResource(uint16_t resource_id) const {
                                               &data_size);
 }
 
-bool ResourceDataDLL::GetStringPiece(uint16_t resource_id,
-                                     base::StringPiece* data) const {
-  DCHECK(data);
+absl::optional<base::StringPiece> ResourceDataDLL::GetStringPiece(
+    uint16_t resource_id) const {
   void* data_ptr;
   size_t data_size;
   if (base::win::GetDataResourceFromModule(module_,
                                            resource_id,
                                            &data_ptr,
                                            &data_size)) {
-    *data = base::StringPiece(static_cast<const char*>(data_ptr), data_size);
-    return true;
+    return base::StringPiece(static_cast<const char*>(data_ptr), data_size);
   }
-  return false;
+  return absl::nullopt;
 }
 
 base::RefCountedStaticMemory* ResourceDataDLL::GetStaticMemory(

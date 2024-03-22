@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/surface_observer.h"
 #include "components/exo/wayland/server_util.h"
 #include "ui/gfx/geometry/size_f.h"
@@ -63,7 +64,7 @@ class Viewport : public SurfaceObserver {
   }
 
  private:
-  Surface* surface_;
+  raw_ptr<Surface, ExperimentalAsh> surface_;
 };
 
 void viewport_destroy(wl_client* client, wl_resource* resource) {

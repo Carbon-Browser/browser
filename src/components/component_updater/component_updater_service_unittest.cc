@@ -1,26 +1,26 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/component_updater/component_updater_service.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "components/component_updater/component_updater_service_internal.h"
 #include "components/prefs/testing_pref_service.h"
@@ -45,7 +45,7 @@ using ::testing::Unused;
 
 namespace component_updater {
 
-class MockInstaller : public CrxInstaller {
+class MockInstaller : public update_client::CrxInstaller {
  public:
   MockInstaller() = default;
   MOCK_METHOD1(OnUpdateError, void(int error));
@@ -81,6 +81,12 @@ class MockUpdateClient : public UpdateClient {
                     CrxStateChangeCallback crx_state_change_callback,
                     bool is_foreground,
                     Callback callback));
+  MOCK_METHOD5(CheckForUpdate,
+               void(const std::string& ids,
+                    CrxDataCallback crx_data_callback,
+                    CrxStateChangeCallback crx_state_change_callback,
+                    bool is_foreground,
+                    Callback callback));
   MOCK_CONST_METHOD2(GetCrxUpdateState,
                      bool(const std::string& id, CrxUpdateItem* update_item));
   MOCK_CONST_METHOD1(IsUpdating, bool(const std::string& id));
@@ -88,6 +94,12 @@ class MockUpdateClient : public UpdateClient {
   MOCK_METHOD3(SendUninstallPing,
                void(const CrxComponent& crx_component,
                     int reason,
+                    Callback callback));
+  MOCK_METHOD5(SendInstallPing,
+               void(const CrxComponent& crx_component,
+                    bool success,
+                    int error_code,
+                    int extra_code1,
                     Callback callback));
   MOCK_METHOD2(SendRegistrationPing,
                void(const CrxComponent& crx_component, Callback callback));
@@ -140,8 +152,8 @@ class LoopHandler {
   void Handle(Callback callback) {
     ++cnt_;
     if (cnt_ >= max_cnt_) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                    std::move(quit_closure_));
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(quit_closure_));
     }
     std::move(callback).Run(update_client::Error::NONE);
   }
@@ -184,10 +196,10 @@ class ComponentUpdaterTest : public testing::Test {
       std::make_unique<TestingPrefServiceSimple>();
   scoped_refptr<TestConfigurator> config_ =
       base::MakeRefCounted<TestConfigurator>(pref_.get());
-  raw_ptr<MockUpdateScheduler> scheduler_;
   scoped_refptr<MockUpdateClient> update_client_ =
       base::MakeRefCounted<MockUpdateClient>();
   std::unique_ptr<ComponentUpdateService> component_updater_;
+  raw_ptr<MockUpdateScheduler> scheduler_;
 };
 
 class OnDemandTester {
@@ -237,7 +249,6 @@ ComponentUpdaterTest::ComponentUpdaterTest() {
 
 ComponentUpdaterTest::~ComponentUpdaterTest() {
   EXPECT_CALL(update_client(), RemoveObserver(_)).Times(1);
-  component_updater_.reset();
 }
 
 void ComponentUpdaterTest::RunThreads() {
@@ -294,8 +305,8 @@ TEST_F(ComponentUpdaterTest, RegisterComponent) {
       base::MakeRefCounted<MockInstaller>();
   EXPECT_CALL(*installer, Uninstall()).WillOnce(Return(true));
 
-  using update_client::jebg_hash;
   using update_client::abag_hash;
+  using update_client::jebg_hash;
 
   const std::string id1 = "abagagagagagagagagagagagagagagag";
   const std::string id2 = "jebgalgnebhfojomionfpkfelancnnkf";
@@ -306,11 +317,11 @@ TEST_F(ComponentUpdaterTest, RegisterComponent) {
   std::vector<uint8_t> hash;
   hash.assign(std::begin(abag_hash), std::end(abag_hash));
   ComponentRegistration component1(id1, {}, hash, base::Version("1.0"), {}, {},
-                                   nullptr, installer, false, true);
+                                   nullptr, installer, false, true, true);
 
   hash.assign(std::begin(jebg_hash), std::end(jebg_hash));
   ComponentRegistration component2(id2, {}, hash, base::Version("0.9"), {}, {},
-                                   nullptr, installer, false, true);
+                                   nullptr, installer, false, true, true);
 
   // Quit after two update checks have fired.
   LoopHandler loop_handler(2, quit_closure());
@@ -370,7 +381,8 @@ TEST_F(ComponentUpdaterTest, OnDemandUpdate) {
     hash.assign(std::begin(jebg_hash), std::end(jebg_hash));
     EXPECT_TRUE(cus.RegisterComponent(ComponentRegistration(
         "jebgalgnebhfojomionfpkfelancnnkf", {}, hash, base::Version("0.9"), {},
-        {}, nullptr, base::MakeRefCounted<MockInstaller>(), false, true)));
+        {}, nullptr, base::MakeRefCounted<MockInstaller>(), false, true,
+        true)));
   }
   {
     using update_client::abag_hash;
@@ -378,7 +390,8 @@ TEST_F(ComponentUpdaterTest, OnDemandUpdate) {
     hash.assign(std::begin(abag_hash), std::end(abag_hash));
     EXPECT_TRUE(cus.RegisterComponent(ComponentRegistration(
         "abagagagagagagagagagagagagagagag", {}, hash, base::Version("0.9"), {},
-        {}, nullptr, base::MakeRefCounted<MockInstaller>(), false, true)));
+        {}, nullptr, base::MakeRefCounted<MockInstaller>(), false, true,
+        true)));
   }
 
   OnDemandTester ondemand_tester;
@@ -417,7 +430,7 @@ TEST_F(ComponentUpdaterTest, MaybeThrottle) {
 
   EXPECT_TRUE(component_updater().RegisterComponent(ComponentRegistration(
       "jebgalgnebhfojomionfpkfelancnnkf", {}, hash, base::Version("0.9"), {},
-      {}, nullptr, base::MakeRefCounted<MockInstaller>(), false, true)));
+      {}, nullptr, base::MakeRefCounted<MockInstaller>(), false, true, true)));
   component_updater().MaybeThrottle("jebgalgnebhfojomionfpkfelancnnkf",
                                     base::DoNothing());
 

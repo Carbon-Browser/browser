@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,22 +11,16 @@
 
 namespace blink {
 
-class PaintLayer;
 class LayoutObject;
 class ComputedStyle;
 
 class CORE_EXPORT CompositingReasonFinder {
-  DISALLOW_NEW();
+  STATIC_ONLY(CompositingReasonFinder);
 
  public:
-  CompositingReasonFinder(const CompositingReasonFinder&) = delete;
-  CompositingReasonFinder& operator=(const CompositingReasonFinder&) = delete;
-
-  // Composited scrolling reason is not included because
-  // PaintLayerScrollableArea needs the result of this function to determine
-  // composited scrolling status.
-  static CompositingReasons DirectReasonsForPaintPropertiesExceptScrolling(
-      const LayoutObject&);
+  static CompositingReasons DirectReasonsForPaintProperties(
+      const LayoutObject&,
+      const LayoutObject* container_for_fixed_position = nullptr);
 
   static bool ShouldForcePreferCompositingToLCDText(
       const LayoutObject&,
@@ -45,10 +39,7 @@ class CORE_EXPORT CompositingReasonFinder {
   // that the LayoutObject does not end up using.
   static CompositingReasons PotentialCompositingReasonsFor3DTransform(
       const ComputedStyle&);
-  static bool RequiresCompositingForRootScroller(const PaintLayer&);
-
-  static CompositingReasons CompositingReasonsForScrollDependentPosition(
-      const PaintLayer&);
+  static bool RequiresCompositingForRootScroller(const LayoutObject&);
 };
 
 }  // namespace blink

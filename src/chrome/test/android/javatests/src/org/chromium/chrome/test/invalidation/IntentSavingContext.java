@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import org.chromium.base.test.util.AdvancedMockContext;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Mock context that saves all intents given to {@code startService}.
- */
+/** Mock context that saves all intents given to {@code startService}. */
 public class IntentSavingContext extends AdvancedMockContext {
     private final List<Intent> mStartedIntents = new ArrayList<Intent>();
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 #include "chrome/browser/media/webrtc/desktop_media_list.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_list_view.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_picker_views.h"
+#include "chrome/browser/ui/views/desktop_capture/rounded_corner_image_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
@@ -49,9 +51,13 @@ DesktopMediaSourceView::DesktopMediaSourceView(
     : parent_(parent),
       source_id_(source_id),
       selected_(false) {
-  AddChildView(icon_view_.get());
-  AddChildView(image_view_.get());
-  AddChildView(label_.get());
+  icon_view_ = AddChildView(std::make_unique<views::ImageView>());
+  image_view_ =
+      AddChildView(base::FeatureList::IsEnabled(kDisplayMediaPickerRedesign) &&
+                           features::IsChromeRefresh2023()
+                       ? std::make_unique<RoundedCornerImageView>()
+                       : std::make_unique<views::ImageView>());
+  label_ = AddChildView(std::make_unique<views::Label>());
   icon_view_->SetCanProcessEventsWithinSubtree(false);
   image_view_->SetCanProcessEventsWithinSubtree(false);
   SetFocusBehavior(FocusBehavior::ALWAYS);
@@ -66,11 +72,11 @@ void DesktopMediaSourceView::SetName(const std::u16string& name) {
 }
 
 void DesktopMediaSourceView::SetThumbnail(const gfx::ImageSkia& thumbnail) {
-  image_view_->SetImage(thumbnail);
+  image_view_->SetImage(ui::ImageModel::FromImageSkia(thumbnail));
 }
 
 void DesktopMediaSourceView::SetIcon(const gfx::ImageSkia& icon) {
-  icon_view_->SetImage(icon);
+  icon_view_->SetImage(ui::ImageModel::FromImageSkia(icon));
 }
 
 void DesktopMediaSourceView::SetSelected(bool selected) {
@@ -91,13 +97,24 @@ void DesktopMediaSourceView::SetSelected(bool selected) {
       }
     }
 
-    image_view_->SetBackground(views::CreateSolidBackground(
-        GetColorProvider()->GetColor(ui::kColorMenuItemBackgroundSelected)));
+    if (base::FeatureList::IsEnabled(kDisplayMediaPickerRedesign) &&
+        features::IsChromeRefresh2023()) {
+      SetBackground(views::CreateRoundedRectBackground(
+          GetColorProvider()->GetColor(ui::kColorSysTonalContainer), 8));
+    } else {
+      image_view_->SetBackground(views::CreateSolidBackground(
+          GetColorProvider()->GetColor(ui::kColorMenuItemBackgroundSelected)));
+    }
     label_->SetFontList(label_->font_list().Derive(0, gfx::Font::NORMAL,
                                                    gfx::Font::Weight::BOLD));
     parent_->OnSelectionChanged();
   } else {
-    image_view_->SetBackground(nullptr);
+    if (base::FeatureList::IsEnabled(kDisplayMediaPickerRedesign) &&
+        features::IsChromeRefresh2023()) {
+      SetBackground(nullptr);
+    } else {
+      image_view_->SetBackground(nullptr);
+    }
     label_->SetFontList(label_->font_list().Derive(0, gfx::Font::NORMAL,
                                                    gfx::Font::Weight::NORMAL));
   }
@@ -115,6 +132,13 @@ void DesktopMediaSourceView::SetStyle(DesktopMediaSourceViewStyle style) {
 
 bool DesktopMediaSourceView::GetSelected() const {
   return selected_;
+}
+
+void DesktopMediaSourceView::ClearSelection() {
+  if (!GetSelected())
+    return;
+  SetSelected(false);
+  parent_->OnSelectionChanged();
 }
 
 views::View* DesktopMediaSourceView::GetSelectedViewForGroup(int group) {
@@ -159,10 +183,11 @@ void DesktopMediaSourceView::OnGestureEvent(ui::GestureEvent* event) {
 
 void DesktopMediaSourceView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->role = ax::mojom::Role::kButton;
-  node_data->SetName(label_->GetText().empty()
-                         ? l10n_util::GetStringUTF16(
-                               IDS_DESKTOP_MEDIA_SOURCE_EMPTY_ACCESSIBLE_NAME)
-                         : label_->GetText());
+  node_data->SetNameChecked(
+      label_->GetText().empty()
+          ? l10n_util::GetStringUTF16(
+                IDS_DESKTOP_MEDIA_SOURCE_EMPTY_ACCESSIBLE_NAME)
+          : label_->GetText());
 }
 
 BEGIN_METADATA(DesktopMediaSourceView, views::View)

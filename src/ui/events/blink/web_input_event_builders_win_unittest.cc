@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -114,29 +114,6 @@ void VerifyWebMouseWheelEventBuilderHistograms(
     EXPECT_EQ(histogram_tester.GetBucketCount(histogram, it->first),
               it->second);
   }
-}
-
-TEST(WebInputEventBuilderTest, TestMouseWheelScrollHistograms) {
-  // Tests mouse wheel horizontal scrolling logging.
-  unsigned long scroll_chars = 1;
-  SystemParametersInfo(SPI_GETWHEELSCROLLCHARS, 0, &scroll_chars, 0);
-  std::vector<int> event_timestamps = {300, 600, 900, 1200};
-  std::map<int, int> histogram_expectations = {
-      {scroll_chars - 1, 0}, {scroll_chars, 4}, {scroll_chars + 1, 0}};
-  VerifyWebMouseWheelEventBuilderHistograms(
-      WM_HSCROLL, blink::WebPointerProperties::PointerType::kTouch,
-      "InputMethod.MouseWheel.ScrollCharacters", event_timestamps,
-      histogram_expectations);
-  // Tests mouse wheel vertical scrolling logging.
-  unsigned long scroll_lines = 1;
-  SystemParametersInfo(SPI_GETWHEELSCROLLLINES, 0, &scroll_lines, 0);
-  histogram_expectations.clear();
-  histogram_expectations = {
-      {scroll_lines - 1, 0}, {scroll_lines, 4}, {scroll_lines + 1, 0}};
-  VerifyWebMouseWheelEventBuilderHistograms(
-      WM_VSCROLL, blink::WebPointerProperties::PointerType::kTouch,
-      "InputMethod.MouseWheel.ScrollLines", event_timestamps,
-      histogram_expectations);
 }
 
 }  // namespace ui

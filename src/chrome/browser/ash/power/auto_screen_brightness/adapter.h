@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/tick_clock.h"
@@ -37,7 +37,7 @@ class Adapter : public AlsReader::Observer,
                 public BrightnessMonitor::Observer,
                 public Modeller::Observer,
                 public ModelConfigLoader::Observer,
-                public PowerManagerClient::Observer {
+                public chromeos::PowerManagerClient::Observer {
  public:
   // How user manual brightness change will affect Adapter.
   // These values are persisted to logs. Entries should not be renumbered and
@@ -285,7 +285,7 @@ class Adapter : public AlsReader::Observer,
       double old_brightness_percent,
       double new_brightness_percent) const;
 
-  Profile* const profile_;
+  const raw_ptr<Profile, ExperimentalAsh> profile_;
 
   base::ScopedObservation<AlsReader, AlsReader::Observer>
       als_reader_observation_{this};
@@ -302,12 +302,12 @@ class Adapter : public AlsReader::Observer,
       power_manager_client_observation_{this};
 
   // Used to report daily metrics to UMA. This may be null in unit tests.
-  MetricsReporter* metrics_reporter_;
+  raw_ptr<MetricsReporter, ExperimentalAsh> metrics_reporter_;
 
   Params params_;
 
   // This will be replaced by a mock tick clock during tests.
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock, ExperimentalAsh> tick_clock_;
 
   // TODO(jiameng): refactor internal states and flags.
 

@@ -1,8 +1,8 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
 
 import {MetadataItem} from './metadata_item.js';
 
@@ -13,7 +13,7 @@ export class MetadataCacheItem {
   constructor() {
     /**
      * Map of property name and MetadataCacheItemProperty.
-     * @private {!Object<!MetadataCacheItemProperty>}
+     * @private @type {!Record<string, !MetadataCacheItemProperty>}
      * @const
      */
     this.properties_ = {};
@@ -28,15 +28,23 @@ export class MetadataCacheItem {
     const loadRequested = [];
     for (let i = 0; i < names.length; i++) {
       const name = names[i];
+      // @ts-ignore: error TS2345: Argument of type 'string | undefined' is not
+      // assignable to parameter of type 'string'.
       assert(!/Error$/.test(name));
       // Check if the property needs to be updated.
+      // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+      // type.
       if (this.properties_[name] &&
+          // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an
+          // index type.
           this.properties_[name].state !==
               MetadataCacheItemPropertyState.INVALIDATED) {
         continue;
       }
       loadRequested.push(name);
     }
+    // @ts-ignore: error TS2322: Type '(string | undefined)[]' is not assignable
+    // to type 'string[]'.
     return loadRequested;
   }
 
@@ -48,11 +56,21 @@ export class MetadataCacheItem {
   startRequests(requestId, names) {
     for (let i = 0; i < names.length; i++) {
       const name = names[i];
+      // @ts-ignore: error TS2345: Argument of type 'string | undefined' is not
+      // assignable to parameter of type 'string'.
       assert(!/Error$/.test(name));
+      // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+      // type.
       if (!this.properties_[name]) {
+        // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+        // type.
         this.properties_[name] = new MetadataCacheItemProperty();
       }
+      // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+      // type.
       this.properties_[name].requestId = requestId;
+      // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+      // type.
       this.properties_[name].state = MetadataCacheItemPropertyState.LOADING;
     }
   }
@@ -67,7 +85,12 @@ export class MetadataCacheItem {
     let changed = false;
     const object = /** @type {!Object} */ (typedObject);
     for (const name in object) {
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type 'Object'.
       if (/.Error$/.test(name) && object[name]) {
+        // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+        // because expression of type 'string' can't be used to index type
+        // 'Object'.
         object[name.substr(0, name.length - 5)] = undefined;
       }
     }
@@ -75,18 +98,35 @@ export class MetadataCacheItem {
       if (/.Error$/.test(name)) {
         continue;
       }
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       if (!this.properties_[name]) {
+        // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+        // because expression of type 'string' can't be used to index type '{}'.
         this.properties_[name] = new MetadataCacheItemProperty();
       }
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       if (requestId < this.properties_[name].requestId ||
+          // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+          // because expression of type 'string' can't be used to index type
+          // '{}'.
           this.properties_[name].state ===
               MetadataCacheItemPropertyState.FULFILLED) {
         continue;
       }
       changed = true;
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       this.properties_[name].requestId = requestId;
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type 'Object'.
       this.properties_[name].value = object[name];
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type 'Object'.
       this.properties_[name].error = object[name + 'Error'];
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       this.properties_[name].state = MetadataCacheItemPropertyState.FULFILLED;
     }
     return changed;
@@ -94,14 +134,26 @@ export class MetadataCacheItem {
 
   /**
    * Marks the caches of all properties in the item as invalidates and forces to
-   * reload at the next time of startRequests.
+   * reload at the next time of startRequests. Optionally, takes an array of
+   * names and only invalidates those.
    * @param {number} requestId Request ID of the invalidation request. This must
-   *     be larger than other requets ID passed to the item before.
+   *     be larger than other requests ID passed to the item before.
+   * @param {!Array<string>} [names]
    */
-  invalidate(requestId) {
-    for (const name in this.properties_) {
+  invalidate(requestId, names) {
+    // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+    // expression of type 'string' can't be used to index type '{}'.
+    const namesToInvalidate = names ? names.filter(n => this.properties_[n]) :
+                                      Object.keys(this.properties_);
+    for (const name of namesToInvalidate) {
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       assert(this.properties_[name].requestId < requestId);
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       this.properties_[name].requestId = requestId;
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       this.properties_[name].state = MetadataCacheItemPropertyState.INVALIDATED;
     }
   }
@@ -116,9 +168,17 @@ export class MetadataCacheItem {
     const result = /** @type {!Object} */ (new MetadataItem());
     for (let i = 0; i < names.length; i++) {
       const name = names[i];
+      // @ts-ignore: error TS2345: Argument of type 'string | undefined' is not
+      // assignable to parameter of type 'string'.
       assert(!/Error$/.test(name));
+      // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+      // type.
       if (this.properties_[name]) {
+        // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+        // type.
         result[name] = this.properties_[name].value;
+        // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+        // type.
         result[name + 'Error'] = this.properties_[name].error;
       }
     }
@@ -132,11 +192,23 @@ export class MetadataCacheItem {
   clone() {
     const clonedItem = new MetadataCacheItem();
     for (const name in this.properties_) {
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       const property = this.properties_[name];
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       clonedItem.properties_[name] = new MetadataCacheItemProperty();
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       clonedItem.properties_[name].value = property.value;
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       clonedItem.properties_[name].error = property.error;
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       clonedItem.properties_[name].requestId = property.requestId;
+      // @ts-ignore: error TS7053: Element implicitly has an 'any' type because
+      // expression of type 'string' can't be used to index type '{}'.
       clonedItem.properties_[name].state = property.state;
     }
     return clonedItem;
@@ -149,7 +221,11 @@ export class MetadataCacheItem {
    */
   hasFreshCache(names) {
     for (let i = 0; i < names.length; i++) {
+      // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an index
+      // type.
       if (!(this.properties_[names[i]] &&
+            // @ts-ignore: error TS2538: Type 'undefined' cannot be used as an
+            // index type.
             this.properties_[names[i]].state ===
                 MetadataCacheItemPropertyState.FULFILLED)) {
         return false;
@@ -175,24 +251,24 @@ export class MetadataCacheItemProperty {
   constructor() {
     /**
      * Cached value of property.
-     * @public {*}
+     * @public @type {*}
      */
     this.value = null;
 
     /**
-     * @public {Error}
+     * @public @type {?Error}
      */
     this.error = null;
 
     /**
      * Last request ID.
-     * @public {number}
+     * @public @type {number}
      */
     this.requestId = -1;
 
     /**
      * Cache state of the property.
-     * @public {MetadataCacheItemPropertyState}
+     * @public @type {MetadataCacheItemPropertyState}
      */
     this.state = MetadataCacheItemPropertyState.INVALIDATED;
   }

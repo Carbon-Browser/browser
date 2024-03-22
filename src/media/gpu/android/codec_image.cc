@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,9 @@
 #include <memory>
 
 #include "base/android/scoped_hardware_buffer_fence_sync.h"
-#include "base/callback_helpers.h"
+#include "base/debug/dump_without_crashing.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "gpu/command_buffer/service/gles2_cmd_decoder.h"
 #include "gpu/command_buffer/service/texture_manager.h"
 #include "gpu/config/gpu_finch_features.h"
@@ -58,80 +60,6 @@ void CodecImage::NotifyUnused() {
   unused_cbs_.clear();
 }
 
-gfx::Size CodecImage::GetSize() {
-  DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
-  return coded_size_;
-}
-
-unsigned CodecImage::GetInternalFormat() {
-  DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
-  return GL_RGBA;
-}
-
-unsigned CodecImage::GetDataType() {
-  DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
-  return GL_UNSIGNED_BYTE;
-}
-
-CodecImage::BindOrCopy CodecImage::ShouldBindOrCopy() {
-  DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
-
-  // If we're using an overlay, then pretend it's bound.  That way, we'll get
-  // calls to ScheduleOverlayPlane.  Otherwise, CopyTexImage needs to be called.
-  return is_texture_owner_backed_ ? COPY : BIND;
-}
-
-bool CodecImage::BindTexImage(unsigned target) {
-  DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
-  DCHECK_EQ(BIND, ShouldBindOrCopy());
-  return true;
-}
-
-void CodecImage::ReleaseTexImage(unsigned target) {}
-
-bool CodecImage::CopyTexImage(unsigned target) {
-  DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
-
-  // This method is only called for SurfaceTexture implementation which can't be
-  // thread-safe.
-  DCHECK(!features::NeedThreadSafeAndroidMedia());
-
-  TRACE_EVENT0("media", "CodecImage::CopyTexImage");
-  DCHECK_EQ(COPY, ShouldBindOrCopy());
-
-  if (target != GL_TEXTURE_EXTERNAL_OES)
-    return false;
-
-  if (!output_buffer_renderer_)
-    return true;
-
-  GLint texture_id = 0;
-  glGetIntegerv(GL_TEXTURE_BINDING_EXTERNAL_OES, &texture_id);
-
-  // CopyTexImage will only be called for TextureOwner's SurfaceTexture
-  // implementation which binds texture to TextureOwner's texture_id on update.
-  DCHECK(output_buffer_renderer_->texture_owner()->binds_texture_on_update());
-  if (texture_id > 0 &&
-      static_cast<unsigned>(texture_id) !=
-          output_buffer_renderer_->texture_owner()->GetTextureId()) {
-    return false;
-  }
-
-  // On some devices GL_TEXTURE_BINDING_EXTERNAL_OES is not supported as
-  // glGetIntegerv() parameter. In this case the value of |texture_id| will be
-  // zero and we assume that it is properly bound to TextureOwner's texture id.
-  output_buffer_renderer_->RenderToTextureOwnerFrontBuffer(
-      BindingsMode::kBindImage,
-      output_buffer_renderer_->texture_owner()->GetTextureId());
-  return true;
-}
-
-bool CodecImage::CopyTexSubImage(unsigned target,
-                                 const gfx::Point& offset,
-                                 const gfx::Rect& rect) {
-  return false;
-}
-
 void CodecImage::NotifyOverlayPromotion(bool promotion,
                                         const gfx::Rect& bounds) {
   AssertAcquiredDrDcLock();
@@ -162,28 +90,31 @@ void CodecImage::NotifyOverlayPromotion(bool promotion,
   }
 }
 
-void CodecImage::OnMemoryDump(base::trace_event::ProcessMemoryDump* pmd,
-                              uint64_t process_tracing_id,
-                              const std::string& dump_name) {}
-
 void CodecImage::ReleaseResources() {
   DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
   ReleaseCodecBuffer();
 }
 
 bool CodecImage::IsUsingGpuMemory() const {
-  DCHECK_CALLED_ON_VALID_THREAD(gpu_main_thread_checker_);
+  // Only the images which are bound to texture accounts for gpu memory. Images
+  // are bound to textures when:
+  //   (a) the image has been rendered to the front buffer via an explicitly
+  //       binding flow or
+  //   (b) the image has been rendered to the front buffer via what would
+  //       usually be a nonbinding flow (e.g., a prerender) but the TextureOwner
+  //       always binds on update (since rendering to the front buffer triggers
+  //       a call to TextureOwner to update the image).
   AssertAcquiredDrDcLock();
-  if (!output_buffer_renderer_)
-    return false;
-
-  // Only the images which are bound to texture accounts for gpu memory.
-  return output_buffer_renderer_->was_tex_image_bound();
+  return (was_rendered_to_front_buffer() &&
+          (rendered_via_binding_flow_ || TextureOwnerBindsOnUpdate()));
 }
 
-void CodecImage::UpdateAndBindTexImage(GLuint service_id) {
+void CodecImage::UpdateAndBindTexImage() {
   AssertAcquiredDrDcLock();
-  RenderToTextureOwnerFrontBuffer(BindingsMode::kBindImage, service_id);
+  RenderToTextureOwnerFrontBuffer();
+  if (was_rendered_to_front_buffer()) {
+    rendered_via_binding_flow_ = true;
+  }
 }
 
 bool CodecImage::HasTextureOwner() const {
@@ -211,13 +142,11 @@ bool CodecImage::RenderToTextureOwnerBackBuffer() {
   return output_buffer_renderer_->RenderToTextureOwnerBackBuffer();
 }
 
-bool CodecImage::RenderToTextureOwnerFrontBuffer(BindingsMode bindings_mode,
-                                                 GLuint service_id) {
+bool CodecImage::RenderToTextureOwnerFrontBuffer() {
   AssertAcquiredDrDcLock();
   if (!output_buffer_renderer_)
     return false;
-  return output_buffer_renderer_->RenderToTextureOwnerFrontBuffer(bindings_mode,
-                                                                  service_id);
+  return output_buffer_renderer_->RenderToTextureOwnerFrontBuffer();
 }
 
 bool CodecImage::RenderToOverlay() {
@@ -228,10 +157,12 @@ bool CodecImage::RenderToOverlay() {
 }
 
 bool CodecImage::TextureOwnerBindsTextureOnUpdate() {
+  return const_cast<const CodecImage*>(this)->TextureOwnerBindsOnUpdate();
+}
+
+bool CodecImage::TextureOwnerBindsOnUpdate() const {
   AssertAcquiredDrDcLock();
-  if (!output_buffer_renderer_)
-    return false;
-  return output_buffer_renderer_->texture_owner()->binds_texture_on_update();
+  return texture_owner() ? texture_owner()->binds_texture_on_update() : false;
 }
 
 void CodecImage::ReleaseCodecBuffer() {
@@ -251,25 +182,31 @@ CodecImage::GetAHardwareBuffer() {
   if (!output_buffer_renderer_)
     return nullptr;
 
-  // Using BindingsMode::kDontBindImage here since we do not want to bind
-  // the image. We just want to get the AHardwareBuffer from the latest image.
-  // Hence pass service_id as 0.
-  RenderToTextureOwnerFrontBuffer(BindingsMode::kDontBindImage,
-                                  0 /* service_id */);
+  // Render to the front buffer to get the AHardwareBuffer from the latest
+  // image.
+  RenderToTextureOwnerFrontBuffer();
   return output_buffer_renderer_->texture_owner()->GetAHardwareBuffer();
-}
-
-bool CodecImage::HasMutableState() const {
-  return false;
 }
 
 CodecImageHolder::CodecImageHolder(
     scoped_refptr<base::SequencedTaskRunner> task_runner,
-    scoped_refptr<CodecImage> codec_image)
+    scoped_refptr<CodecImage> codec_image,
+    scoped_refptr<gpu::RefCountedLock> drdc_lock)
     : base::RefCountedDeleteOnSequence<CodecImageHolder>(
           std::move(task_runner)),
+      gpu::RefCountedLockHelperDrDc(std::move(drdc_lock)),
       codec_image_(std::move(codec_image)) {}
 
-CodecImageHolder::~CodecImageHolder() = default;
+CodecImageHolder::~CodecImageHolder() {
+  // Note that CodecImageHolder is always destroyed on the thread it was created
+  // on which is gpu main thread. CodecImage destructor also has checks to
+  // ensure that it is destroyed on gpu main thread.
+  // Acquiring DrDc lock here to ensure that the lock is held from all the paths
+  // from where |codec_image_| can be destroyed.
+  {
+    auto scoped_lock = GetScopedDrDcLock();
+    codec_image_.reset();
+  }
+}
 
 }  // namespace media

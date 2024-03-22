@@ -1,13 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/test/video_encoder/bitstream_file_writer.h"
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "media/gpu/test/video_test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -104,35 +105,18 @@ std::unique_ptr<BitstreamFileWriter> BitstreamFileWriter::Create(
   return bitstream_file_writer;
 }
 
-void BitstreamFileWriter::ConstructSpatialIndices(
-    const std::vector<gfx::Size>& spatial_layer_resolutions) {
-  SEQUENCE_CHECKER(validator_thread_sequence_checker_);
-  CHECK(!spatial_layer_resolutions.empty());
-  CHECK_LE(spatial_layer_resolutions.size(), spatial_layer_resolutions_.size());
-
-  original_spatial_indices_.resize(spatial_layer_resolutions.size());
-  auto begin = std::find(spatial_layer_resolutions_.begin(),
-                         spatial_layer_resolutions_.end(),
-                         spatial_layer_resolutions.front());
-  CHECK(begin != spatial_layer_resolutions_.end());
-  uint8_t sid_offset = begin - spatial_layer_resolutions_.begin();
-  for (size_t i = 0; i < spatial_layer_resolutions.size(); ++i) {
-    CHECK_LT(sid_offset + i, spatial_layer_resolutions_.size());
-    CHECK_EQ(spatial_layer_resolutions[i],
-             spatial_layer_resolutions_[sid_offset + i]);
-    original_spatial_indices_[i] = sid_offset + i;
-  }
-}
-
 void BitstreamFileWriter::ProcessBitstream(
     scoped_refptr<BitstreamRef> bitstream,
     size_t frame_index) {
   if (spatial_layer_index_to_write_ && bitstream->metadata.vp9) {
     const Vp9Metadata& metadata = *bitstream->metadata.vp9;
-    if (bitstream->metadata.key_frame)
-      ConstructSpatialIndices(metadata.spatial_layer_resolutions);
+    if (bitstream->metadata.key_frame) {
+      begin_active_spatial_layer_index_ =
+          metadata.begin_active_spatial_layer_index;
+    }
 
-    const uint8_t spatial_idx = original_spatial_indices_[metadata.spatial_idx];
+    const uint8_t spatial_idx =
+        begin_active_spatial_layer_index_ + metadata.spatial_idx;
     if (spatial_idx > *spatial_layer_index_to_write_ ||
         (spatial_idx < *spatial_layer_index_to_write_ &&
          !metadata.referenced_by_upper_spatial_layers)) {

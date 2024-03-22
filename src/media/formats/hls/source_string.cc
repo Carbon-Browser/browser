@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,117 +11,75 @@
 
 namespace media::hls {
 
+namespace subtle {
 // static
-template <>
-SourceString SourceString::Create(base::PassKey<SourceLineIterator>,
-                                  size_t line,
-                                  base::StringPiece str) {
-  return SourceString(line, 1, str, {});
-}
-
-// static
-template <>
-ResolvedSourceString ResolvedSourceString::Create(
-    base::PassKey<VariableDictionary>,
-    size_t line,
-    size_t column,
-    base::StringPiece str,
-    ResolvedSourceStringState resolution_state) {
-  return ResolvedSourceString(line, column, str, resolution_state);
+template <typename Self>
+Self SourceStringBase<Self>::CreateForTesting(base::StringPiece str) {
+  return Self(1, 1, str);
 }
 
 // static
-template <typename ResolutionState>
-GenericSourceString<ResolutionState>
-GenericSourceString<ResolutionState>::CreateForTesting(base::StringPiece str) {
-  return GenericSourceString::CreateForTesting(1, 1, str);
+template <typename Self>
+Self SourceStringBase<Self>::CreateForTesting(size_t line,
+                                              size_t column,
+                                              base::StringPiece str) {
+  return Self(line, column, str);
 }
 
-// static
-template <>
-SourceString SourceString::CreateForTesting(size_t line,
-                                            size_t column,
-                                            base::StringPiece str) {
-  return SourceString::CreateForTesting(line, column, str, {});
+template <typename Self>
+Self SourceStringBase<Self>::Substr(size_t pos, size_t count) const {
+  Self result = static_cast<const Self&>(*this);
+  result.column_ = column_ + pos;
+  result.str_ = str_.substr(pos, count);
+  return result;
 }
 
-// static
-template <>
-ResolvedSourceString ResolvedSourceString::CreateForTesting(
-    size_t line,
-    size_t column,
-    base::StringPiece str) {
-  return ResolvedSourceString::CreateForTesting(
-      line, column, str,
-      ResolvedSourceStringState{.contains_substitutions = false});
-}
-
-// static
-template <typename ResolutionState>
-GenericSourceString<ResolutionState>
-GenericSourceString<ResolutionState>::CreateForTesting(
-    size_t line,
-    size_t column,
-    base::StringPiece str,
-    ResolutionState resolution_state) {
-  return GenericSourceString(line, column, str, resolution_state);
-}
-
-template <typename ResolutionState>
-GenericSourceString<ResolutionState>
-GenericSourceString<ResolutionState>::Substr(size_t pos, size_t count) const {
-  const auto column = column_ + pos;
-  return GenericSourceString(line_, column, str_.substr(pos, count),
-                             resolution_state_);
-}
-
-template <typename ResolutionState>
-GenericSourceString<ResolutionState>
-GenericSourceString<ResolutionState>::Consume(size_t count) {
+template <typename Self>
+Self SourceStringBase<Self>::Consume(size_t count) {
   count = std::min(count, str_.size());
 
   auto consumed = Substr(0, count);
-  *this = Substr(count);
+  static_cast<Self&>(*this) = Substr(count);
 
   return consumed;
 }
 
-template <typename ResolutionState>
-GenericSourceString<ResolutionState>
-GenericSourceString<ResolutionState>::ConsumeDelimiter(char c) {
+template <typename Self>
+Self SourceStringBase<Self>::ConsumeDelimiter(char c) {
   const auto index = Str().find_first_of(c);
   const auto prefix = Consume(index);
   Consume(1);
   return prefix;
 }
 
-template <>
+template <typename Self>
+void SourceStringBase<Self>::TrimStart() {
+  auto start = Str().find_first_not_of(" \t");
+  Consume(start);
+}
+
+template <typename Self>
+SourceStringBase<Self>::SourceStringBase(size_t line,
+                                         size_t column,
+                                         base::StringPiece str)
+    : line_(line), column_(column), str_(str) {}
+
+}  // namespace subtle
+
+SourceString::SourceString(size_t line, size_t column, base::StringPiece str)
+    : SourceStringBase(line, column, str) {}
+
+ResolvedSourceString::ResolvedSourceString(size_t line,
+                                           size_t column,
+                                           base::StringPiece str,
+                                           SubstitutionState substitution_state)
+    : SourceStringBase(line, column, str),
+      substitution_state_(substitution_state) {}
+
 ResolvedSourceString SourceString::SkipVariableSubstitution() const {
-  return ResolvedSourceString(
-      Line(), Column(), Str(),
-      ResolvedSourceStringState{.contains_substitutions = false});
+  return ResolvedSourceString::Create(base::PassKey<SourceString>(), Line(),
+                                      Column(), Str());
 }
-
-template <>
-bool SourceString::ContainsSubstitutions() const {
-  return false;
-}
-
-template <>
-bool ResolvedSourceString::ContainsSubstitutions() const {
-  return resolution_state_.contains_substitutions;
-}
-
-template <typename ResolutionState>
-GenericSourceString<ResolutionState>::GenericSourceString(
-    size_t line,
-    size_t column,
-    base::StringPiece str,
-    ResolutionState resolution_state)
-    : line_(line),
-      column_(column),
-      str_(str),
-      resolution_state_(resolution_state) {}
 
 SourceLineIterator::SourceLineIterator(base::StringPiece source)
     : current_line_(1), source_(source) {}
@@ -133,7 +91,8 @@ ParseStatus::Or<SourceString> SourceLineIterator::Next() {
 
   const auto line_end = source_.find_first_of("\r\n");
   if (line_end == base::StringPiece::npos) {
-    return ParseStatusCode::kInvalidEOL;
+    ParseStatus st = ParseStatusCode::kInvalidEOL;
+    return std::move(st).WithData("source", source_);
   }
 
   const auto line_content = source_.substr(0, line_end);
@@ -155,11 +114,11 @@ ParseStatus::Or<SourceString> SourceLineIterator::Next() {
 }
 
 // These forward declarations tell the compiler that we will use
-// `GenericSourceString` with these arguments, allowing us to keep these
+// `SourceStringBase` with these arguments, allowing us to keep these
 // definitions in our .cc without causing linker errors. This also means if
-// anyone tries to instantiate a `GenericSourceString` with anything but these
+// anyone tries to instantiate a `SourceStringBase` with anything but these
 // two specializations they'll most likely get linker errors.
-template class MEDIA_EXPORT GenericSourceString<SourceStringState>;
-template class MEDIA_EXPORT GenericSourceString<ResolvedSourceStringState>;
+template class MEDIA_EXPORT subtle::SourceStringBase<SourceString>;
+template class MEDIA_EXPORT subtle::SourceStringBase<ResolvedSourceString>;
 
 }  // namespace media::hls

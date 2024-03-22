@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,40 @@
  * - Whether or not a prefix key was entered before the discrete keys.
  * - Whether sticky mode was active.
  */
+
+import {Key, KeyCode} from '../../common/key_code.js';
+
+import {Command} from './command.js';
+
+/**
+ * @typedef {{
+ *     command: !Command,
+ *     sequence: !KeySequence,
+ *     keySeq: (string|undefined),
+ *     title: (string|undefined),
+ * }}
+ */
+export let KeyBinding;
+
+/**
+ * @typedef {{
+ *   cvoxModifier: (boolean|undefined),
+ *   doubleTap: (boolean|undefined),
+ *   prefixKey: (boolean|undefined),
+ *   stickyMode: (boolean|undefined),
+ *   keys: {
+ *     keyCode: !Array<!Key.Code>,
+ *     altKey: (!Array<boolean>|undefined),
+ *     altGraphKey: (!Array<boolean>|undefined),
+ *     ctrlKey: (!Array<boolean>|undefined),
+ *     metaKey: (!Array<boolean>|undefined),
+ *     searchKeyHeld: (!Array<boolean>|undefined),
+ *     shiftKey: (!Array<boolean>|undefined),
+ *   },
+ * }}
+ */
+export let SerializedKeySequence;
+
 export class KeySequence {
   /**
    * @param {Event|Object} originalEvent The original key event entered by a
@@ -309,26 +343,22 @@ export class KeySequence {
     // For each modifier that is held down, remove it from the combo.
     // If the combo string becomes empty, then the user has activated the combo.
     if (this.isKeyModifierActive(keyEvent, 'ctrlKey')) {
-      modifierKeyCombo = modifierKeyCombo.filter(function(modifier) {
-        return modifier !== 'Ctrl';
-      });
+      modifierKeyCombo =
+          modifierKeyCombo.filter(modifier => modifier !== 'Ctrl');
     }
     if (this.isKeyModifierActive(keyEvent, 'altKey')) {
-      modifierKeyCombo = modifierKeyCombo.filter(function(modifier) {
-        return modifier !== 'Alt';
-      });
+      modifierKeyCombo =
+          modifierKeyCombo.filter(modifier => modifier !== 'Alt');
     }
     if (this.isKeyModifierActive(keyEvent, 'shiftKey')) {
-      modifierKeyCombo = modifierKeyCombo.filter(function(modifier) {
-        return modifier !== 'Shift';
-      });
+      modifierKeyCombo =
+          modifierKeyCombo.filter(modifier => modifier !== 'Shift');
     }
     if (this.isKeyModifierActive(keyEvent, 'metaKey') ||
         this.isKeyModifierActive(keyEvent, 'searchKeyHeld')) {
       const metaKeyName = this.getMetaKeyName_();
-      modifierKeyCombo = modifierKeyCombo.filter(function(modifier) {
-        return modifier !== metaKeyName;
-      });
+      modifierKeyCombo =
+          modifierKeyCombo.filter(modifier => modifier !== metaKeyName);
     }
     return (modifierKeyCombo.length === 0);
   }
@@ -383,7 +413,7 @@ export class KeySequence {
 
   /**
    * Creates a KeySequence event from a generic object.
-   * @param {Object} sequenceObject The object.
+   * @param {!SerializedKeySequence} sequenceObject The object.
    * @return {!KeySequence} The created KeySequence object.
    */
   static deserialize(sequenceObject) {

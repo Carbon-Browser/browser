@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/profiles/profile.h"
@@ -63,6 +64,7 @@ IN_PROC_BROWSER_TEST_F(TabSearchUIBrowserTest, InitialTabItemsListed) {
       "new Promise((resolve) => {"
       "  const interval = setInterval(() => {"
       "    const tabItems = document.querySelector('tab-search-app').shadowRoot"
+      "        .querySelector('tab-search-page').shadowRoot"
       "        .getElementById('tabsList')"
       "        .querySelectorAll('tab-search-item');"
       "    if (tabItems && tabItems.length === %d) {"
@@ -79,7 +81,13 @@ IN_PROC_BROWSER_TEST_F(TabSearchUIBrowserTest, InitialTabItemsListed) {
   ASSERT_EQ(expected_tab_item_count, tab_item_count);
 }
 
-IN_PROC_BROWSER_TEST_F(TabSearchUIBrowserTest, SwitchToTabAction) {
+// Flaky on ChromeOS. See https://crbug.com/1484897
+#if BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_SwitchToTabAction DISABLED_SwitchToTabAction
+#else
+#define MAYBE_SwitchToTabAction SwitchToTabAction
+#endif
+IN_PROC_BROWSER_TEST_F(TabSearchUIBrowserTest, MAYBE_SwitchToTabAction) {
   int tab_count = browser()->tab_strip_model()->GetTabCount();
   int tab_id = extensions::ExtensionTabUtil::GetTabId(
       browser()->tab_strip_model()->GetWebContentsAt(tab_count - 1));
@@ -90,6 +98,7 @@ IN_PROC_BROWSER_TEST_F(TabSearchUIBrowserTest, SwitchToTabAction) {
 
   const std::string tab_item_js = base::StringPrintf(
       "document.querySelector('tab-search-app').shadowRoot"
+      "    .querySelector('tab-search-page').shadowRoot"
       "    .getElementById('tabsList')"
       "    .querySelector('tab-search-item[id=\"%s\"]')",
       base::NumberToString(tab_id).c_str());
@@ -107,6 +116,7 @@ IN_PROC_BROWSER_TEST_F(TabSearchUIBrowserTest, CloseTabAction) {
 
   const std::string tab_item_button_js = base::StringPrintf(
       "document.querySelector('tab-search-app').shadowRoot"
+      "    .querySelector('tab-search-page').shadowRoot"
       "    .getElementById('tabsList')"
       "    .querySelector('tab-search-item[id=\"%s\"]')"
       "    .shadowRoot.getElementById('closeButton')",
@@ -123,8 +133,7 @@ IN_PROC_BROWSER_TEST_F(TabSearchUIBrowserTest, CloseTabAction) {
     open_tab_ids.push_back(extensions::ExtensionTabUtil::GetTabId(
         browser()->tab_strip_model()->GetWebContentsAt(tab_index)));
   }
-  ASSERT_EQ(open_tab_ids.end(),
-            std::find(open_tab_ids.begin(), open_tab_ids.end(), tab_id));
+  ASSERT_FALSE(base::Contains(open_tab_ids, tab_id));
 }
 
 // When hosting the Tab Search UI as a browser tab, ensure that closing the tab
@@ -163,6 +172,5 @@ IN_PROC_BROWSER_TEST_F(TabSearchUIBrowserTest,
     open_tab_ids.push_back(extensions::ExtensionTabUtil::GetTabId(
         tab_strip_model->GetWebContentsAt(tab_index)));
   }
-  ASSERT_EQ(open_tab_ids.end(),
-            std::find(open_tab_ids.begin(), open_tab_ids.end(), tab_id));
+  ASSERT_FALSE(base::Contains(open_tab_ids, tab_id));
 }

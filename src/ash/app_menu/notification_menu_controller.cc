@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -131,7 +131,7 @@ void NotificationMenuController::InitializeNotificationMenuView() {
   views::MenuItemView* container =
       root_menu_->AppendMenuItem(NOTIFICATION_CONTAINER);
   notification_menu_view_ = new NotificationMenuView(this, this, app_id_);
-  container->AddChildView(notification_menu_view_);
+  container->AddChildView(notification_menu_view_.get());
 
   for (auto* notification :
        message_center::MessageCenter::Get()->FindNotificationsByAppId(

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,12 +52,17 @@ SharingHubIconView::SharingHubIconView(
     : PageActionIconView(command_updater,
                          IDC_SHARING_HUB,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate) {
+                         page_action_icon_delegate,
+                         "SharingHub",
+                         false) {
   SetID(VIEW_ID_SHARING_HUB_BUTTON);
   SetVisible(false);
   SetLabel(
       l10n_util::GetStringUTF16(IDS_BROWSER_SHARING_OMNIBOX_SENDING_LABEL));
   SetUpForInOutAnimation();
+  SetAccessibilityProperties(
+      /*role*/ absl::nullopt,
+      l10n_util::GetStringUTF16(IDS_SHARING_HUB_TOOLTIP));
 }
 
 SharingHubIconView::~SharingHubIconView() = default;
@@ -100,10 +105,6 @@ void SharingHubIconView::OnExecuting(
 
 const gfx::VectorIcon& SharingHubIconView::GetVectorIcon() const {
   return GetSharingHubVectorIcon();
-}
-
-std::u16string SharingHubIconView::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringUTF16(IDS_SHARING_HUB_TOOLTIP);
 }
 
 SharingHubBubbleController* SharingHubIconView::GetController() const {

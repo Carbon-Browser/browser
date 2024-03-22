@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,18 @@ extern const char kBackgroundHistogramServiceWorkerFirstContentfulPaint[];
 extern const char kHistogramServiceWorkerFirstContentfulPaintForwardBack[];
 extern const char
     kHistogramServiceWorkerFirstContentfulPaintForwardBackNoStore[];
+extern const char
+    kHistogramServiceWorkerFirstContentfulPaintSkippableFetchHandler[];
+extern const char
+    kHistogramServiceWorkerFirstContentfulPaintNonSkippableFetchHandler[];
 extern const char kHistogramServiceWorkerParseStartToFirstContentfulPaint[];
 extern const char kHistogramServiceWorkerDomContentLoaded[];
 extern const char kHistogramServiceWorkerLoad[];
 extern const char kHistogramServiceWorkerLargestContentfulPaint[];
-extern const char kHistogramServiceWorkerFirstInputDelay[];
+extern const char
+    kHistogramServiceWorkerLargestContentfulPaintSkippableFetchHandler[];
+extern const char
+    kHistogramServiceWorkerLargestContentfulPaintNonSkippableFetchHandler[];
 extern const char kHistogramServiceWorkerParseStartSearch[];
 extern const char kHistogramServiceWorkerFirstContentfulPaintSearch[];
 extern const char
@@ -58,6 +65,8 @@ class ServiceWorkerPageLoadMetricsObserver
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override;
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override;
   ObservePolicy OnCommit(content::NavigationHandle* navigation_handle) override;
   void OnFirstInputInPage(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
@@ -82,6 +91,9 @@ class ServiceWorkerPageLoadMetricsObserver
  private:
   void RecordTimingHistograms();
   bool IsServiceWorkerControlled();
+  bool IsServiceWorkerFetchHandlerSkippable();
+  bool IsServiceWorkerEligibleForRaceNetworkRequest();
+  void RecordSubresourceLoad();
 
   ui::PageTransition transition_ = ui::PAGE_TRANSITION_LINK;
   bool was_no_store_main_resource_ = false;

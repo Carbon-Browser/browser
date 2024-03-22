@@ -1,13 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/android/overscroll_refresh.h"
 #include "base/android/scoped_java_ref.h"
 #include "cc/input/overscroll_behavior.h"
-#include "cc/layers/layer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/android/overscroll_refresh_handler.h"
+#include "ui/gfx/geometry/point_f.h"
 
 namespace ui {
 

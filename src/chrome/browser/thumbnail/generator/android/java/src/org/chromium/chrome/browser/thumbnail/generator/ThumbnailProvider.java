@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ import org.chromium.base.Callback;
 
 /** Provides thumbnails that represent different files. */
 public interface ThumbnailProvider {
-    /**
-     * Used to request the retrieval of a thumbnail.
-     */
+    /** Used to request the retrieval of a thumbnail. */
     public static interface ThumbnailRequest {
         /** Local storage path to the file. */
         @Nullable

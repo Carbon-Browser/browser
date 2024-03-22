@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,6 @@
 #import "net/test/embedded_test_server/http_response.h"
 #import "net/test/embedded_test_server/request_handler_util.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -81,14 +77,8 @@ void ReshareToPasteboard(const GURL& expected) {
                                           IDS_IOS_SHARED_HIGHLIGHT_RESHARE))]
       performAction:grey_tap()];
 
-  // Wait for the Activity View to show up (look for the Copy action).
-  id<GREYMatcher> copyActivityButton = chrome_test_util::CopyActivityButton();
-  [ChromeEarlGrey
-      waitForSufficientlyVisibleElementWithMatcher:copyActivityButton];
-
   // Tap on the Copy action.
-  [[EarlGrey selectElementWithMatcher:copyActivityButton]
-      performAction:grey_tap()];
+  [ChromeEarlGrey tapButtonInActivitySheetWithID:@"Copy"];
 
   // Wait for the value to be in the pasteboard.
   GREYCondition* getPastedURL = [GREYCondition
@@ -97,7 +87,8 @@ void ReshareToPasteboard(const GURL& expected) {
                     return expected == [ChromeEarlGrey pasteboardURL];
                   }];
   GREYAssert(
-      [getPastedURL waitWithTimeout:base::test::ios::kWaitForActionTimeout],
+      [getPastedURL
+          waitWithTimeout:base::test::ios::kWaitForActionTimeout.InSecondsF()],
       @"Could not get expected URL from pasteboard.");
 }
 
@@ -139,7 +130,7 @@ void ReshareToPasteboard(const GURL& expected) {
 }
 
 // Disabled test due to multiple builder failures.
-// TODO(crbug.com/1298232): re-enable the test with fix.
+// TODO(crbug.com/1296211): re-enable the test with fix.
 - (void)DISABLED_testRemove {
   [ChromeEarlGrey loadURL:self.testServer->GetURL(kURLWithFragment)];
   [ChromeEarlGrey waitForWebStateContainingText:kTestPageTextSample];
@@ -270,9 +261,10 @@ void ReshareToPasteboard(const GURL& expected) {
                     return [ChromeEarlGrey webStateLastCommittedURL].ref() ==
                            "target";
                   }];
-  GREYAssert([finishedSameDocNavigation
-                 waitWithTimeout:base::test::ios::kWaitForActionTimeout],
-             @"Did not navigate within document.");
+  GREYAssert(
+      [finishedSameDocNavigation
+          waitWithTimeout:base::test::ios::kWaitForActionTimeout.InSecondsF()],
+      @"Did not navigate within document.");
 
   // When resharing, the text fragments should persist even though we've
   // added a reference fragment.

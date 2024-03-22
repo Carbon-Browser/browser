@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include "base/files/file_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/stl_util.h"
 #include "base/strings/string_util.h"
+#include "base/types/optional_util.h"
 #include "base/values.h"
 #include "crypto/sha2.h"
 #include "extensions/browser/computed_hashes.h"
@@ -39,7 +39,7 @@ std::unique_ptr<const ContentHashReader> ContentHashReader::Create(
   DCHECK_EQ(ComputedHashes::Status::SUCCESS, hashes_status);
 
   const ComputedHashes& computed_hashes = content_hash->computed_hashes();
-  absl::optional<std::string> root;
+  std::optional<std::string> root;
 
   int block_size;
   std::vector<std::string> block_hashes;
@@ -52,7 +52,7 @@ std::unique_ptr<const ContentHashReader> ContentHashReader::Create(
 
   ContentHash::TreeHashVerificationResult verification =
       content_hash->VerifyTreeHashRoot(relative_path,
-                                       base::OptionalOrNullptr(root));
+                                       base::OptionalToPtr(root));
 
   // Extensions sometimes request resources that do not have an entry in
   // computed_hashes.json or verified_content.json. This can happen, for

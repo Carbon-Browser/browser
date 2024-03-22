@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 namespace WTF {
 
 class AtomicString;
+class CodePointIterator;
 class String;
 
 enum UTF8ConversionMode {
@@ -141,7 +142,7 @@ class WTF_EXPORT StringView {
 #endif
 
   bool IsNull() const { return !bytes_; }
-  bool IsEmpty() const { return !length_; }
+  bool empty() const { return !length_; }
 
   unsigned length() const { return length_; }
 
@@ -196,6 +197,10 @@ class WTF_EXPORT StringView {
     return {static_cast<const UChar*>(bytes_), length_};
   }
 
+  // Returns the Unicode code point starting at the specified offset of this
+  // string. If the offset points an unpaired surrogate, this function returns
+  // the surrogate code unit as is. If you'd like to check such surroagtes,
+  // use U_IS_SURROGATE() defined in unicode/utf.h.
   UChar32 CodepointAt(unsigned i) const;
 
   // Returns i+2 if a pair of [i] and [i+1] is a valid surrogate pair.
@@ -231,6 +236,21 @@ class WTF_EXPORT StringView {
 
   template <bool isSpecialCharacter(UChar)>
   bool IsAllSpecialCharacters() const;
+
+  // Iterator support
+  //
+  // begin() and end() return iterators for UChar32, neither UChar nor LChar.
+  // If you'd like to iterate code units, just use [] and length().
+  //
+  // * Iterate code units
+  //    for (unsigned i = 0; i < view.length(); ++i) {
+  //      UChar code_unit = view[i];
+  //      ...
+  // * Iterate code points
+  //    for (UChar32 code_point : view) {
+  //      ...
+  CodePointIterator begin() const;
+  CodePointIterator end() const;
 
  private:
   void Set(const StringImpl&, unsigned offset, unsigned length);

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,8 @@ TEST_F(SystemIndicatorHandlerTest, BasicTests) {
              "system_indicator": { "default_icon": "icon.png" }
            })";
     scoped_refptr<const Extension> extension = LoadAndExpectSuccess(
-        ManifestData(base::test::ParseJson(base::StringPrintf(kManifest, kKey)),
-                     "icon"));
+        ManifestData(base::test::ParseJson(base::StringPrintf(kManifest, kKey))
+                         .TakeDict()));
     ASSERT_TRUE(extension);
     const ExtensionIconSet* icon =
         SystemIndicatorHandler::GetSystemIndicatorIcon(*extension);
@@ -69,8 +69,8 @@ TEST_F(SystemIndicatorHandlerTest, BasicTests) {
              }
            })";
     scoped_refptr<const Extension> extension = LoadAndExpectSuccess(
-        ManifestData(base::test::ParseJson(base::StringPrintf(kManifest, kKey)),
-                     "icon"));
+        ManifestData(base::test::ParseJson(base::StringPrintf(kManifest, kKey))
+                         .TakeDict()));
     ASSERT_TRUE(extension);
     const ExtensionIconSet* icon =
         SystemIndicatorHandler::GetSystemIndicatorIcon(*extension);
@@ -95,8 +95,8 @@ TEST_F(SystemIndicatorHandlerTest, BasicTests) {
              "system_indicator": {}
            })";
     scoped_refptr<const Extension> extension = LoadAndExpectSuccess(
-        ManifestData(base::test::ParseJson(base::StringPrintf(kManifest, kKey)),
-                     "icon"));
+        ManifestData(base::test::ParseJson(base::StringPrintf(kManifest, kKey))
+                         .TakeDict()));
     ASSERT_TRUE(extension);
     const ExtensionIconSet* icon =
         SystemIndicatorHandler::GetSystemIndicatorIcon(*extension);

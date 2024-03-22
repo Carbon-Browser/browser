@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/payments/content/icon/icon_size.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -42,7 +43,8 @@ void PaymentAppInfoFetcher::Start(
 
   std::unique_ptr<std::vector<GlobalRenderFrameHostId>> frame_routing_ids =
       service_worker_context->GetWindowClientFrameRoutingIds(
-          blink::StorageKey(url::Origin::Create(context_url)));
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(context_url)));
 
   SelfDeleteFetcher* fetcher = new SelfDeleteFetcher(std::move(callback));
   fetcher->Start(context_url, std::move(frame_routing_ids));
@@ -77,7 +79,7 @@ void PaymentAppInfoFetcher::SelfDeleteFetcher::Start(
   }
 
   for (const auto& frame : *frame_routing_ids) {
-    // Find out the render frame host registering the payment app. Although a
+    // Find out the RenderFrameHost registering the payment app. Although a
     // service worker can manage instruments, the first instrument must be set
     // on a page that has a link to a web app manifest, so it can be fetched
     // here.
@@ -146,7 +148,7 @@ void PaymentAppInfoFetcher::SelfDeleteFetcher::Start(
 void PaymentAppInfoFetcher::SelfDeleteFetcher::RunCallbackAndDestroy() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback_),
                                 std::move(fetched_payment_app_info_)));
   delete this;

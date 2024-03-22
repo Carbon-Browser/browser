@@ -1,16 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/scanner/video_preview_view.h"
 
-#include "base/check.h"
-#include "base/mac/foundation_util.h"
-#import "ios/chrome/browser/ui/util/ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/apple/foundation_util.h"
+#import "base/check.h"
+#import "ios/chrome/common/ui/util/ui_util.h"
 
 @interface VideoPreviewView () {
   // The current viewport size.
@@ -35,7 +31,7 @@
 }
 
 - (AVCaptureVideoPreviewLayer*)previewLayer {
-  return base::mac::ObjCCastStrict<AVCaptureVideoPreviewLayer>([self layer]);
+  return base::apple::ObjCCastStrict<AVCaptureVideoPreviewLayer>([self layer]);
 }
 
 - (CGRect)viewportRegionOfInterest {

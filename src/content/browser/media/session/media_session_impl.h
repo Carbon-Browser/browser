@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/id_map.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "content/browser/media/session/audio_focus_delegate.h"
@@ -22,6 +23,7 @@
 #include "content/common/content_export.h"
 #include "content/public/browser/media_session.h"
 #include "content/public/browser/page_user_data.h"
+#include "content/public/browser/presentation_observer.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
@@ -71,7 +73,8 @@ class MediaSessionAndroid;
 // work with it.
 class MediaSessionImpl : public MediaSession,
                          public WebContentsObserver,
-                         public WebContentsUserData<MediaSessionImpl> {
+                         public WebContentsUserData<MediaSessionImpl>,
+                         public PresentationObserver {
  public:
   enum class State { ACTIVE, SUSPENDED, INACTIVE };
 
@@ -252,6 +255,12 @@ class MediaSessionImpl : public MediaSession,
   // Skip ad.
   CONTENT_EXPORT void SkipAd() override;
 
+  // Go back to previous slide.
+  CONTENT_EXPORT void PreviousSlide() override;
+
+  // Go to next slide.
+  CONTENT_EXPORT void NextSlide() override;
+
   // Seek the media session to a specific time.
   void SeekTo(base::TimeDelta seek_time) override;
 
@@ -263,6 +272,10 @@ class MediaSessionImpl : public MediaSession,
 
   // Exit picture-in-picture.
   void ExitPictureInPicture() override;
+
+  // Automatically enter picture-in-picture from a non-user source (e.g. in
+  // reaction to content being hidden).
+  void EnterAutoPictureInPicture() override;
 
   // Routes the audio from this Media Session to the given output device. If
   // |id| is null, we will route to the default output device.
@@ -286,6 +299,13 @@ class MediaSessionImpl : public MediaSession,
 
   // Mute or unmute the media player.
   void SetMute(bool mute) override;
+
+  // Request the media player to start Media Remoting once there are available
+  // sinks.
+  void RequestMediaRemoting() override;
+
+  // PresentationObserver:
+  void OnPresentationsChanged(bool has_presentation) override;
 
   // Downloads the bitmap version of a MediaImage at least |minimum_size_px|
   // and closest to |desired_size_px|. If the download failed, was too small or
@@ -312,6 +332,10 @@ class MediaSessionImpl : public MediaSession,
   // device switching.
   void OnAudioOutputSinkChangingDisabled();
 
+  // Update the value of `remote_playback_metadata_`.
+  CONTENT_EXPORT void SetRemotePlaybackMetadata(
+      media_session::mojom::RemotePlaybackMetadataPtr metadata);
+
   // Returns whether the action should be routed to |routed_service_|.
   bool ShouldRouteAction(media_session::mojom::MediaSessionAction action) const;
 
@@ -323,6 +347,10 @@ class MediaSessionImpl : public MediaSession,
   const base::UnguessableToken& GetRequestId() const;
 
   CONTENT_EXPORT bool HasImageCacheForTest(const GURL& image_url) const;
+
+  // Make sure that all observers have received any pending callbacks from us,
+  // that might otherwise be sitting in a message pipe somewhere.
+  void flush_observers_for_testing() { observers_.FlushForTesting(); }
 
  private:
   friend class content::WebContentsUserData<MediaSessionImpl>;
@@ -353,8 +381,9 @@ class MediaSessionImpl : public MediaSession,
     bool operator==(const PlayerIdentifier& other) const;
     bool operator!=(const PlayerIdentifier& other) const;
     bool operator<(const PlayerIdentifier& other) const;
-
-    MediaSessionPlayerObserver* observer;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #constexpr-ctor-field-initializer, #union
+    RAW_PTR_EXCLUSION MediaSessionPlayerObserver* observer;
     int player_id;
   };
 
@@ -430,6 +459,15 @@ class MediaSessionImpl : public MediaSession,
   // Rebuilds |metadata_| and |images_| and notifies observers if they have
   // changed.
   void RebuildAndNotifyMetadataChanged();
+
+#if BUILDFLAG(IS_CHROMEOS)
+  void BuildPlaceholderMetadata(
+      media_session::MediaMetadata& metadata,
+      std::vector<media_session::MediaImage>& artwork);
+#endif
+
+  void BuildMetadata(media_session::MediaMetadata& metadata,
+                     std::vector<media_session::MediaImage>& artwork);
 
   bool IsPictureInPictureAvailable() const;
 
@@ -596,7 +634,12 @@ class MediaSessionImpl : public MediaSession,
 
   bool should_throttle_duration_update_ = false;
 
+  // Whether the associated WebContents is connected to a presentation.
+  bool has_presentation_ = false;
+
   absl::optional<PlayerIdentifier> guarding_player_id_;
+
+  media_session::mojom::RemotePlaybackMetadataPtr remote_playback_metadata_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

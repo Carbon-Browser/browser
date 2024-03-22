@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,11 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
-#include "base/files/scoped_temp_dir.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/power/auto_screen_brightness/fake_brightness_monitor.h"
 #include "chrome/browser/ash/power/auto_screen_brightness/fake_light_provider.h"
 #include "chrome/browser/ash/power/auto_screen_brightness/fake_model_config_loader.h"
@@ -101,7 +99,7 @@ class FakeModeller : public Modeller {
   base::ObserverList<Observer> observers_;
 };
 
-class TestObserver : public PowerManagerClient::Observer {
+class TestObserver : public chromeos::PowerManagerClient::Observer {
  public:
   TestObserver() = default;
   ~TestObserver() override = default;
@@ -191,10 +189,8 @@ class AdapterTest : public testing::Test {
           ash::prefs::kPowerBatteryScreenBrightnessPercent, 10);
     }
 
-    CHECK(temp_dir_.CreateUniqueTempDir());
     TestingProfile::Builder profile_builder;
     profile_builder.SetProfileName("testuser@gmail.com");
-    profile_builder.SetPath(temp_dir_.GetPath().AppendASCII("TestProfile"));
     profile_builder.SetPrefService(base::WrapUnique(regular_prefs));
 
     profile_ = profile_builder.Build();
@@ -285,7 +281,6 @@ class AdapterTest : public testing::Test {
   }
 
  protected:
-  base::ScopedTempDir temp_dir_;
   content::BrowserTaskEnvironment task_environment_;
 
   TestObserver test_observer_;

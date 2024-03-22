@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,16 @@
 #include "chrome/browser/ui/browser_command_controller.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/view_ids.h"
+#include "chrome/browser/ui/views/autofill/payments/manage_saved_iban_bubble_view.h"
 #include "chrome/browser/ui/views/autofill/payments/save_card_bubble_views.h"
+#include "chrome/browser/ui/views/autofill/payments/save_iban_bubble_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
 
 namespace autofill {
@@ -23,18 +27,25 @@ namespace autofill {
 SavePaymentIconView::SavePaymentIconView(
     CommandUpdater* command_updater,
     IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
-    PageActionIconView::Delegate* page_action_icon_delegate)
+    PageActionIconView::Delegate* page_action_icon_delegate,
+    int command_id)
     : PageActionIconView(command_updater,
-                         IDC_SAVE_CREDIT_CARD_FOR_PAGE,
+                         command_id,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate) {
-  SetID(VIEW_ID_SAVE_CREDIT_CARD_BUTTON);
-
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillCreditCardUploadFeedback)) {
-    InstallLoadingIndicator();
+                         page_action_icon_delegate,
+                         command_id == IDC_SAVE_CREDIT_CARD_FOR_PAGE
+                             ? "SaveCard"
+                             : "SaveIban") {
+  if (command_id == IDC_SAVE_CREDIT_CARD_FOR_PAGE) {
+    SetID(VIEW_ID_SAVE_CREDIT_CARD_BUTTON);
+  } else {
+    DCHECK(command_id == IDC_SAVE_IBAN_FOR_PAGE);
+    SetID(VIEW_ID_SAVE_IBAN_BUTTON);
   }
+  command_id_ = command_id;
   SetUpForInOutAnimation();
+  SetAccessibilityProperties(/*role*/ absl::nullopt,
+                             GetTextForTooltipAndAccessibleName());
 }
 
 SavePaymentIconView::~SavePaymentIconView() = default;
@@ -44,8 +55,19 @@ views::BubbleDialogDelegate* SavePaymentIconView::GetBubble() const {
   if (!controller)
     return nullptr;
 
-  return static_cast<autofill::SaveCardBubbleViews*>(
-      controller->GetSaveBubbleView());
+  switch (controller->GetPaymentBubbleType()) {
+    case SavePaymentIconController::PaymentBubbleType::kUnknown:
+      return nullptr;
+    case SavePaymentIconController::PaymentBubbleType::kCreditCard:
+      return static_cast<autofill::SaveCardBubbleViews*>(
+          controller->GetPaymentBubbleView());
+    case SavePaymentIconController::PaymentBubbleType::kSaveIban:
+      return static_cast<autofill::SaveIbanBubbleView*>(
+          controller->GetPaymentBubbleView());
+    case SavePaymentIconController::PaymentBubbleType::kManageSavedIban:
+      return static_cast<autofill::ManageSavedIbanBubbleView*>(
+          controller->GetPaymentBubbleView());
+  }
 }
 
 void SavePaymentIconView::UpdateImpl() {
@@ -59,7 +81,9 @@ void SavePaymentIconView::UpdateImpl() {
       SetCommandEnabled(controller && controller->IsIconVisible());
   SetVisible(command_enabled);
 
-  if (command_enabled && controller->ShouldShowSavingCardAnimation()) {
+  SetAccessibleName(GetTextForTooltipAndAccessibleName());
+
+  if (command_enabled && controller->ShouldShowSavingPaymentAnimation()) {
     SetEnabled(false);
     SetIsLoading(/*is_loading=*/true);
   } else {
@@ -68,27 +92,18 @@ void SavePaymentIconView::UpdateImpl() {
     SetEnabled(true);
   }
 
-  if (command_enabled && controller->ShouldShowCardSavedLabelAnimation())
-    AnimateIn(IDS_AUTOFILL_CARD_SAVED);
+  if (command_enabled && controller->ShouldShowPaymentSavedLabelAnimation()) {
+    AnimateIn(controller->GetSaveSuccessAnimationStringId());
+  }
 }
 
 void SavePaymentIconView::OnExecuting(
     PageActionIconView::ExecuteSource execute_source) {}
 
 const gfx::VectorIcon& SavePaymentIconView::GetVectorIcon() const {
-  return kCreditCardIcon;
-}
-
-const gfx::VectorIcon& SavePaymentIconView::GetVectorIconBadge() const {
-  SavePaymentIconController* controller = GetController();
-  if (controller && controller->ShouldShowSaveFailureBadge())
-    return vector_icons::kBlockedBadgeIcon;
-
-  return gfx::kNoneIcon;
-}
-
-const char* SavePaymentIconView::GetClassName() const {
-  return "SavePaymentIconView";
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? kCreditCardChromeRefreshIcon
+             : kCreditCardIcon;
 }
 
 std::u16string SavePaymentIconView::GetTextForTooltipAndAccessibleName() const {
@@ -107,7 +122,7 @@ std::u16string SavePaymentIconView::GetTextForTooltipAndAccessibleName() const {
 }
 
 SavePaymentIconController* SavePaymentIconView::GetController() const {
-  return SavePaymentIconController::Get(GetWebContents());
+  return SavePaymentIconController::Get(GetWebContents(), command_id_);
 }
 
 void SavePaymentIconView::AnimationEnded(const gfx::Animation* animation) {
@@ -118,5 +133,8 @@ void SavePaymentIconView::AnimationEnded(const gfx::Animation* animation) {
   if (controller)
     controller->OnAnimationEnded();
 }
+
+BEGIN_METADATA(SavePaymentIconView, PageActionIconView)
+END_METADATA
 
 }  // namespace autofill

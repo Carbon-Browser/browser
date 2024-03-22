@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/ash/policy/core/device_local_account_policy_service.h"
 #include "chrome/browser/ash/policy/external_data/device_local_account_external_data_manager.h"
@@ -51,7 +52,7 @@ class DeviceLocalAccountExternalDataService
                    scoped_refptr<DeviceLocalAccountExternalDataManager>>
       ExternalDataManagerMap;
 
-  DeviceLocalAccountPolicyService* parent_;
+  raw_ptr<DeviceLocalAccountPolicyService, ExperimentalAsh> parent_;
   scoped_refptr<base::SequencedTaskRunner> backend_task_runner_;
   std::unique_ptr<ResourceCache> resource_cache_;
 

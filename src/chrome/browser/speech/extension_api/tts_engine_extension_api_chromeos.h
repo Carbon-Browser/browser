@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 #define CHROME_BROWSER_SPEECH_EXTENSION_API_TTS_ENGINE_EXTENSION_API_CHROMEOS_H_
 
 #include "base/scoped_observation.h"
+#include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/browser/speech/extension_api/tts_engine_extension_api.h"
-
 #include "chromeos/services/tts/public/mojom/tts_service.mojom.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -63,7 +63,7 @@ class TtsExtensionEngineChromeOS
                                              Profile* profile);
 
   // Helper to start audio playback.
-  void Play(std::unique_ptr<base::ListValue> args,
+  void Play(base::Value::List args,
             const std::string& engine_id,
             Profile* profile);
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,11 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_ui_controller.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "content/public/browser/web_ui_message_handler.h"
-
-namespace base {
-class DictionaryValue;
-}  // namespace base
 
 namespace content {
 struct AXEventNotificationDetails;
@@ -71,7 +68,7 @@ class AccessibilityUIMessageHandler : public content::WebUIMessageHandler {
 
   void ToggleAccessibility(const base::Value::List& args);
   void SetGlobalFlag(const base::Value::List& args);
-  void GetRequestTypeAndFilters(const base::DictionaryValue& data,
+  void GetRequestTypeAndFilters(const base::Value::Dict& data,
                                 std::string& request_type,
                                 std::string& allow,
                                 std::string& allow_empty,

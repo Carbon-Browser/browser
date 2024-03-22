@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ void ErrorReporter::SetName(const char* name) {
   path_.back() = name;
 }
 
-void ErrorReporter::AddError(base::StringPiece description) {
+void ErrorReporter::AddError(std::string_view description) {
   std::stringstream error;
   for (size_t i = 0; i < path_.size(); i++) {
     if (!path_[i]) {

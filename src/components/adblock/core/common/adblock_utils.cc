@@ -87,8 +87,9 @@ AppInfo GetAppInfo() {
 }
 
 std::string SerializeLanguages(const std::vector<std::string> languages) {
-  if (languages.empty())
+  if (languages.empty()) {
     return {};
+  }
 
   return std::accumulate(std::next(languages.begin()), languages.end(),
                          languages[0],
@@ -128,23 +129,26 @@ std::unique_ptr<FlatbufferData> MakeFlatbufferDataFromResourceBundle(
           resource_id));
 }
 
-bool RegexMatches(base::StringPiece pattern,
-                  base::StringPiece input,
+bool RegexMatches(std::string_view pattern,
+                  std::string_view input,
                   bool case_sensitive) {
   re2::RE2::Options options;
   options.set_case_sensitive(case_sensitive);
   options.set_never_capture(true);
   options.set_log_errors(false);
+  options.set_encoding(re2::RE2::Options::EncodingLatin1);
   const re2::RE2 re2_pattern(pattern.data(), options);
-  if (re2_pattern.ok())
+  if (re2_pattern.ok()) {
     return re2::RE2::PartialMatch(input.data(), re2_pattern);
+  }
   VLOG(2) << "[eyeo] RE2 does not support filter pattern " << pattern
           << " and return with error message: " << re2_pattern.error();
 
   // Maximum length of the string to match to avoid causing an icu::RegexMatcher
   // stack overflow. (crbug.com/1198219)
-  if (input.size() > url::kMaxURLChars)
+  if (input.size() > url::kMaxURLChars) {
     return false;
+  }
   const icu::UnicodeString icu_pattern(pattern.data(), pattern.length());
   const icu::UnicodeString icu_input(input.data(), input.length());
   UErrorCode status = U_ZERO_ERROR;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,7 +66,7 @@ class MediaServiceThrottlerTest : public testing::Test {
 
   scoped_refptr<FakeSingleThreadTaskRunner> test_task_runner_;
 
-  // Necessary, or else base::ThreadTaskRunnerHandle::Get() fails.
+  // Necessary, or else base::SingleThreadTaskRunner::GetCurrentDefault() fails.
   base::test::SingleThreadTaskEnvironment task_environment_;
 };
 

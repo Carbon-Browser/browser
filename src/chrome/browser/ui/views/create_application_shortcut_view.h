@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/web_applications/os_integration/web_app_shortcut.h"
@@ -57,7 +57,8 @@ class CreateChromeApplicationShortcutView : public views::DialogDelegateView {
  private:
   friend class CreateAppShortcutDialogTest;
 
-  CreateChromeApplicationShortcutView(PrefService* prefs,
+  CreateChromeApplicationShortcutView(Profile* profile,
+                                      bool is_extension,
                                       base::OnceCallback<void(bool)> cb);
 
   // Creates a new check-box with the given text and checked state.
@@ -71,7 +72,9 @@ class CreateChromeApplicationShortcutView : public views::DialogDelegateView {
 
   void OnDialogAccepted();
 
+  raw_ptr<Profile> profile_;
   raw_ptr<PrefService> prefs_;
+  bool is_extension_;
 
   base::OnceCallback<void(bool)> close_callback_;
 

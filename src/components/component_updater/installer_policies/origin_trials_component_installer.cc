@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/values.h"
@@ -64,10 +64,10 @@ void OriginTrialsComponentInstallerPolicy::GetHash(
 }
 
 bool OriginTrialsComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // Test if the "origin-trials" key is present in the manifest.
-  return !!manifest.FindKey(kManifestOriginTrialsKey);
+  return manifest.contains(kManifestOriginTrialsKey);
 }
 
 bool OriginTrialsComponentInstallerPolicy::
@@ -81,7 +81,7 @@ bool OriginTrialsComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 OriginTrialsComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);
 }
@@ -91,7 +91,7 @@ void OriginTrialsComponentInstallerPolicy::OnCustomUninstall() {}
 void OriginTrialsComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {}
+    base::Value::Dict manifest) {}
 
 base::FilePath OriginTrialsComponentInstallerPolicy::GetRelativeInstallDir()
     const {

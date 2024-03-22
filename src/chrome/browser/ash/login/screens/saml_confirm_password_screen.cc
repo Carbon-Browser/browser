@@ -1,16 +1,19 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/saml_confirm_password_screen.h"
-#include "ash/components/login/auth/public/cryptohome_key_constants.h"
+
 #include "ash/constants/ash_features.h"
+#include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ui/webui/chromeos/login/check_passwords_against_cryptohome_helper.h"
-#include "chrome/browser/ui/webui/chromeos/login/saml_confirm_password_handler.h"
+#include "chrome/browser/ui/webui/ash/login/check_passwords_against_cryptohome_helper.h"
+#include "chrome/browser/ui/webui/ash/login/saml_confirm_password_handler.h"
+#include "chromeos/ash/components/login/auth/public/auth_types.h"
+#include "chromeos/ash/components/login/auth/public/cryptohome_key_constants.h"
 
 namespace ash {
 
@@ -39,7 +42,7 @@ void SamlConfirmPasswordScreen::SetContextAndPasswords(
     ::login::StringList scraped_saml_passwords) {
   user_context_ = std::move(user_context);
   scraped_saml_passwords_ = std::move(scraped_saml_passwords);
-  DCHECK_NE(scraped_saml_passwords_.size(), 1);
+  DCHECK_NE(scraped_saml_passwords_.size(), 1u);
 }
 
 void SamlConfirmPasswordScreen::TryPassword(const std::string& password) {
@@ -48,6 +51,7 @@ void SamlConfirmPasswordScreen::TryPassword(const std::string& password) {
   if (scraped_saml_passwords_.empty() ||
       base::Contains(scraped_saml_passwords_, password)) {
     user_context_->SetKey(key);
+    user_context_->SetSamlPassword(SamlPassword{password});
     user_context_->SetPasswordKey(Key(password));
     LoginDisplayHost::default_host()->CompleteLogin(*user_context_);
 
@@ -98,7 +102,7 @@ void SamlConfirmPasswordScreen::HideImpl() {}
 void SamlConfirmPasswordScreen::OnUserAction(const base::Value::List& args) {
   const std::string& action_id = args[0].GetString();
   if (action_id == "inputPassword") {
-    CHECK_EQ(args.size(), 2);
+    CHECK_EQ(args.size(), 2u);
     TryPassword(args[1].GetString());
     return;
   }

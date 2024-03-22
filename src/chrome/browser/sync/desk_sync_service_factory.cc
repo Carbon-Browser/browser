@@ -1,16 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sync/desk_sync_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/model_type_store_service_factory.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/common/channel_info.h"
 #include "components/desks_storage/core/desk_sync_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/sync/model/model_type_store_service.h"
 
 // static
@@ -22,17 +21,24 @@ desks_storage::DeskSyncService* DeskSyncServiceFactory::GetForProfile(
 
 // static
 DeskSyncServiceFactory* DeskSyncServiceFactory::GetInstance() {
-  return base::Singleton<DeskSyncServiceFactory>::get();
+  static base::NoDestructor<DeskSyncServiceFactory> instance;
+  return instance.get();
 }
 
 DeskSyncServiceFactory::DeskSyncServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "DeskSyncService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ModelTypeStoreServiceFactory::GetInstance());
 }
 
-KeyedService* DeskSyncServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+DeskSyncServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   const AccountId account_id =
@@ -43,6 +49,6 @@ KeyedService* DeskSyncServiceFactory::BuildServiceInstanceFor(
 
   // This instance will be wrapped in a |std::unique_ptr|, owned by
   // |KeyedServiceFactory| and associated with the given browser context.
-  return new desks_storage::DeskSyncService(
+  return std::make_unique<desks_storage::DeskSyncService>(
       chrome::GetChannel(), std::move(store_factory), account_id);
 }

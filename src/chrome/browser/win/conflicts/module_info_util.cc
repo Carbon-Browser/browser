@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,14 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/environment.h"
 #include "base/files/file.h"
 #include "base/i18n/case_conversion.h"
 #include "base/logging.h"
 #include "base/scoped_generic.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -207,7 +209,9 @@ void GetCatalogCertificateInfo(const base::FilePath& filename,
 
 }  // namespace
 
-const wchar_t kClassIdRegistryKeyFormat[] = L"CLSID\\%ls\\InProcServer32";
+std::wstring GuidToClsid(std::wstring_view guid) {
+  return base::StrCat({L"CLSID\\", guid, L"\\InProcServer32"});
+}
 
 // ModuleDatabase::CertificateInfo ---------------------------------------------
 

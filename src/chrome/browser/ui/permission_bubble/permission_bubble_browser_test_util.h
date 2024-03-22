@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,8 +49,12 @@ class TestPermissionBubbleViewDelegate
   void Deny() override {}
   void Dismiss() override {}
   void Ignore() override {}
+  void FinalizeCurrentRequests() override {}
+  void OpenHelpCenterLink(const ui::Event& event) override {}
+  void PreIgnoreQuietPrompt() override {}
   void SetManageClicked() override {}
   void SetLearnMoreClicked() override {}
+  void SetHatsShownCallback(base::OnceCallback<void()> callback) override {}
 
   absl::optional<permissions::PermissionUiSelector::QuietUiReason>
   ReasonForUsingQuietUi() const override;
@@ -58,9 +62,10 @@ class TestPermissionBubbleViewDelegate
   bool ShouldDropCurrentRequestIfCannotShowQuietly() const override;
   bool WasCurrentRequestAlreadyDisplayed() override;
   void SetDismissOnTabClose() override {}
-  void SetBubbleShown() override {}
+  void SetPromptShown() override {}
   void SetDecisionTime() override {}
   bool RecreateView() override;
+  content::WebContents* GetAssociatedWebContents() override;
 
   base::WeakPtr<permissions::PermissionPrompt::Delegate> GetWeakPtr() override;
 

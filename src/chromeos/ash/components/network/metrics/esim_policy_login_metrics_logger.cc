@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include "base/metrics/histogram_macros.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
-#include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -64,11 +63,6 @@ void ESimPolicyLoginMetricsLogger::RecordBlockNonManagedCellularBehavior(
 ESimPolicyLoginMetricsLogger::ESimPolicyLoginMetricsLogger() = default;
 
 ESimPolicyLoginMetricsLogger::~ESimPolicyLoginMetricsLogger() {
-  if (network_state_handler_) {
-    network_state_handler_->RemoveObserver(this, FROM_HERE);
-    network_state_handler_ = nullptr;
-  }
-
   if (initialized_ && LoginState::IsInitialized()) {
     LoginState::Get()->RemoveObserver(this);
   }
@@ -80,7 +74,7 @@ void ESimPolicyLoginMetricsLogger::Init(
   network_state_handler_ = network_state_handler;
   managed_network_configuration_handler_ =
       managed_network_configuration_handler;
-  network_state_handler_->AddObserver(this, FROM_HERE);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 
   if (LoginState::IsInitialized())
     LoginState::Get()->AddObserver(this);
@@ -148,6 +142,10 @@ void ESimPolicyLoginMetricsLogger::DeviceListChanged() {
       &ESimPolicyLoginMetricsLogger::LogESimPolicyStatusAtLogin);
 }
 
+void ESimPolicyLoginMetricsLogger::OnShuttingDown() {
+  network_state_handler_observer_.Reset();
+}
+
 void ESimPolicyLoginMetricsLogger::SetIsEnterpriseManaged(
     bool is_enterprise_managed) {
   is_enterprise_managed_ = is_enterprise_managed;
@@ -173,4 +171,4 @@ ESimPolicyLoginMetricsLogger::GetESimPolicyStatusAtLogin(
   return ESimPolicyStatusAtLogin::kNoCellularNetworks;
 }
 
-}  // namespace chromeos
+}  // namespace ash

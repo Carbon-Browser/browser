@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,6 +77,10 @@ class InfoBar : public gfx::AnimationDelegate {
 
   const gfx::SlideAnimation& animation() const { return animation_; }
   int computed_height() const { return height_; }
+
+  InfoBarDelegate::InfoBarIdentifier GetIdentifier() const {
+    return delegate_->GetIdentifier();
+  }
 
  protected:
   // gfx::AnimationDelegate:

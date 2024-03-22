@@ -1,6 +1,33 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+/**
+ * Enum of values to use for the feature select dropdown. If a new feature is
+ * added, add it here.
+ * @enum {number}
+ */
+export const FeatureValues = {
+  NEARBY_SHARE: 0,
+  NEARBY_CONNECTIONS: 1,
+  NEARBY_PRESENCE: 2,
+  FAST_PAIR: 3,
+  CHIME: 4,
+};
+
+/**
+ * Enum of values to use for the action select dropdown. If a new action is
+ * added, add it here.
+ * @enum {number}
+ */
+export const ActionValues = {
+  START_SCAN: 0,
+  STOP_SCAN: 1,
+  SYNC_CREDENTIALS: 2,
+  FIRST_TIME_FLOW: 3,
+  RESET_NEARBY_SHARE: 4,
+  ADD_CHIME_CLIENT: 5,
+};
 
 /**
  * Severity enum based on LogMessage format. Needs to stay in sync with the
@@ -19,6 +46,7 @@ export const Severity = {
  * chrome/browser/ui/webui/nearby_internals/nearby_internals_logs_handler.cc:
  * LogMessageToDictionary()
  * @typedef {{text: string,
+ *            feature: FeatureValues,
  *            time: string,
  *            file: string,
  *            line: number,
@@ -99,6 +127,17 @@ export let TransferMetadataStatus;
  */
 export let TimestampedMessage;
 
+
+/**
+ * A Nearby Presence Device object to be used for displaying nearby devices
+ * during testing.
+ * @typedef {{connectable: boolean,
+ *            type: string,
+ *            endpoint_id: string,
+ *            actions: string}}
+ */
+export let PresenceDevice;
+
 /**
  * Share Target object sent by NearbyInternalsUiTriggerHandler on discovery or
  * lost.
@@ -146,3 +185,11 @@ export let NearbyShareStates;
  *            getLogMessages: function(): Promise<!Array<!LogMessage>> }}
  */
 export let LogProvider;
+
+/**
+ * Select object is used by the arrays which populate the actions drop down with
+ * a list of actions specific to each feature.
+ * @typedef {{name: string,
+ *            value: string}}
+ */
+export let SelectOption;

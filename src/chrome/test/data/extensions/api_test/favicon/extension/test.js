@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,10 @@ window.onload =
         [
           'Load favicon using only pageUrl', true,
           `_favicon/?pageUrl=${visitedPageUrl}`
+        ],
+        [
+          'Succeed with chrome.runtime.getURL', true,
+          chrome.runtime.getURL(`_favicon/?pageUrl=${visitedPageUrl}`)
         ],
         [
           'Load favicon using multiple arguments', true,

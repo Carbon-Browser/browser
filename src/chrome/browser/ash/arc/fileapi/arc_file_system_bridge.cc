@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/posix/eintr_wrapper.h"
@@ -30,7 +30,7 @@
 #include "chrome/browser/ash/drive/file_system_util.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
-#include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
+#include "chrome/browser/ash/fileapi/external_file_url_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/dbus/virtual_file_provider/virtual_file_provider_client.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -66,6 +66,22 @@ bool IsTestImageBuild() {
          track.find(kTestImageRelease) != std::string::npos;
 }
 
+// Returns true if `download` passes validation.
+bool IsMediaStoreDownloadMetadataValid(
+    const mojom::MediaStoreDownloadMetadataPtr& download) {
+  // Download should have non-empty display name and owner package name.
+  if (download->display_name.empty() || download->owner_package_name.empty())
+    return false;
+
+  // Download should have path relative to "Download/" which is the download
+  // directory for the associated profile.
+  const base::FilePath download_path("Download/");
+  return download_path == download->relative_path ||
+         (!download->relative_path.IsAbsolute() &&
+          !download->relative_path.ReferencesParent() &&
+          download_path.IsParent(download->relative_path));
+}
+
 // Returns FileSystemContext.
 scoped_refptr<storage::FileSystemContext> GetFileSystemContext(
     content::BrowserContext* context) {
@@ -80,8 +96,7 @@ file_manager::util::FileSystemURLAndHandle GetFileSystemURL(
     const GURL& url) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   return file_manager::util::CreateIsolatedURLFromVirtualPath(
-      context, /* empty origin */ GURL(),
-      chromeos::ExternalFileURLToVirtualPath(url));
+      context, url::Origin(), ash::ExternalFileURLToVirtualPath(url));
 }
 
 // Retrieves file's metadata on the IO thread, and runs the callback on the UI
@@ -89,7 +104,7 @@ file_manager::util::FileSystemURLAndHandle GetFileSystemURL(
 void GetMetadataOnIOThread(
     scoped_refptr<storage::FileSystemContext> context,
     const storage::FileSystemURL& url,
-    int flags,
+    storage::FileSystemOperation::GetMetadataFieldSet flags,
     storage::FileSystemOperation::GetMetadataCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
   context->operation_runner()->GetMetadata(
@@ -213,8 +228,8 @@ void ArcFileSystemBridge::GetFileSize(const std::string& url,
 void ArcFileSystemBridge::GetFileSizeInternal(const GURL& url_decoded,
                                               GetFileSizeCallback callback) {
   GetMetadata(url_decoded,
-              storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY |
-                  storage::FileSystemOperation::GET_METADATA_FIELD_SIZE,
+              {storage::FileSystemOperation::GetMetadataField::kIsDirectory,
+               storage::FileSystemOperation::GetMetadataField::kSize},
               base::BindOnce([](base::File::Error result,
                                 const base::File::Info& file_info) -> int64_t {
                 if (result == base::File::FILE_OK && !file_info.is_directory &&
@@ -236,7 +251,7 @@ void ArcFileSystemBridge::GetLastModified(const GURL& url,
   }
 
   GetMetadata(url_decoded,
-              storage::FileSystemOperation::GET_METADATA_FIELD_LAST_MODIFIED,
+              {storage::FileSystemOperation::GetMetadataField::kLastModified},
               base::BindOnce([](base::File::Error result,
                                 const base::File::Info& file_info)
                                  -> absl::optional<base::Time> {
@@ -249,7 +264,7 @@ void ArcFileSystemBridge::GetLastModified(const GURL& url,
 
 void ArcFileSystemBridge::GetMetadata(
     const GURL& url_decoded,
-    int flags,
+    storage::FileSystemOperation::GetMetadataFieldSet flags,
     storage::FileSystemOperation::GetMetadataCallback callback) {
   scoped_refptr<storage::FileSystemContext> context =
       GetFileSystemContext(profile_);
@@ -390,6 +405,26 @@ void ArcFileSystemBridge::GetFileSelectorElements(
                                                           std::move(callback));
 }
 
+void ArcFileSystemBridge::OnMediaStoreUriAdded(
+    const GURL& uri,
+    mojom::MediaStoreMetadataPtr metadata) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  // Validate `metadata`.
+  bool is_valid = false;
+  if (metadata->is_download())
+    is_valid = IsMediaStoreDownloadMetadataValid(metadata->get_download());
+
+  if (!is_valid) {
+    LOG(ERROR) << "`OnMediaStoreUriAdded()` called with invalid payload.";
+    NOTREACHED();
+    return;
+  }
+
+  for (auto& observer : observer_list_)
+    observer.OnMediaStoreUriAdded(uri, *metadata);
+}
+
 void ArcFileSystemBridge::GenerateVirtualFileId(
     const GURL& url_decoded,
     GenerateVirtualFileIdCallback callback,
@@ -518,7 +553,7 @@ base::FilePath ArcFileSystemBridge::GetLinuxVFSPathFromExternalFileURL(
     const GURL& url) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  base::FilePath virtual_path = chromeos::ExternalFileURLToVirtualPath(url);
+  base::FilePath virtual_path = ash::ExternalFileURLToVirtualPath(url);
 
   std::string mount_name, cracked_id;
   storage::FileSystemType file_system_type;

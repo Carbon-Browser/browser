@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@
 #include "third_party/blink/public/common/switches.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/audio/cras_audio_handler.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/components/dbus/audio/cras_audio_client.h"
 #endif
 
@@ -82,7 +82,8 @@ GURL PPAPITestBase::GetTestFileUrl(const std::string& test_case) {
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
 
-    EXPECT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_path));
+    EXPECT_TRUE(
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_path));
     test_path = test_path.Append(FILE_PATH_LITERAL("ppapi"));
     test_path = test_path.Append(FILE_PATH_LITERAL("tests"));
     test_path = test_path.Append(FILE_PATH_LITERAL("test_case.html"));

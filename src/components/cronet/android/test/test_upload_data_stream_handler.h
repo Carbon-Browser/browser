@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,28 +36,23 @@ class TestUploadDataStreamHandler {
   ~TestUploadDataStreamHandler();
 
   // Destroys |network_thread_| created by this class.
-  void Destroy(JNIEnv* env,
-               const base::android::JavaParamRef<jobject>& jcaller);
+  void Destroy(JNIEnv* env);
 
   // Posts a task to |network_thread_| to call the corresponding method of
   // net::UploadDataStream on |upload_data_stream_|.
 
-  void Init(JNIEnv* env, const base::android::JavaParamRef<jobject>& jcaller);
-  void Read(JNIEnv* env, const base::android::JavaParamRef<jobject>& jcaller);
-  void Reset(JNIEnv* env, const base::android::JavaParamRef<jobject>& jcaller);
+  void Init(JNIEnv* env);
+  void Read(JNIEnv* env);
+  void Reset(JNIEnv* env);
 
   // Posts a task to |network_thread_| to check whether init complete callback
   // has been invoked by net::UploadDataStream asynchronously, and notifies the
   // Java side of the result.
-  void CheckInitCallbackNotInvoked(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& jcaller);
+  void CheckInitCallbackNotInvoked(JNIEnv* env);
   // Posts a task to |network_thread_| to check whether read complete callback
   // has been invoked by net::UploadDataStream asynchronously, and notifies the
   // Java side of the result.
-  void CheckReadCallbackNotInvoked(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& jcaller);
+  void CheckReadCallbackNotInvoked(JNIEnv* env);
 
  private:
   // Complete callbacks that are passed to the |upload_data_stream_|.

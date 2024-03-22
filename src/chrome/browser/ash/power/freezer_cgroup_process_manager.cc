@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/sys_info.h"
@@ -126,14 +126,9 @@ class FreezerCgroupProcessManager::FileWorker {
  private:
   bool WriteCommandToFile(const std::string& command,
                           const base::FilePath& file) {
-    int bytes = base::WriteFile(file, command.c_str(), command.size());
-    if (bytes == -1) {
+    if (!base::WriteFile(file, command)) {
       PLOG(ERROR) << "Writing " << command << " to " << file.value()
                   << " failed";
-      return false;
-    } else if (bytes != static_cast<int>(command.size())) {
-      LOG(ERROR) << "Only wrote " << bytes << " byte(s) when writing "
-                 << command << " to " << file.value();
       return false;
     }
     return true;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,20 +23,6 @@ namespace {
 
 static constexpr float kSearchTermsScore = 100.0;
 static constexpr float kScoreEpsilon = 1e-8;
-
-bool IsKeywordSimilarToVisitHost(
-    const std::vector<std::u16string>& lowercase_host_parts,
-    const std::u16string& keyword) {
-  std::u16string lowercase_keyword = base::ToLowerASCII(keyword);
-  if (base::Contains(lowercase_host_parts, keyword))
-    return true;
-
-  // Now check if the whitespace-stripped keyword is part of the host.
-  std::u16string stripped_lowercase_keyword;
-  base::RemoveChars(lowercase_keyword, base::kWhitespaceASCIIAs16,
-                    &stripped_lowercase_keyword);
-  return base::Contains(lowercase_host_parts, stripped_lowercase_keyword);
-}
 
 // Computes an keyword score per cluster visit by mulitplying its visit-wise
 // weight and cluster visit score, and applying a weight factor.
@@ -109,9 +95,9 @@ void KeepTopKeywords(
 }  // namespace
 
 KeywordClusterFinalizer::KeywordClusterFinalizer(
-    const base::flat_map<std::string, optimization_guide::EntityMetadata>&
+    base::flat_map<std::string, optimization_guide::EntityMetadata>*
         entity_metadata_map)
-    : entity_metadata_map_(entity_metadata_map) {}
+    : entity_metadata_map_(*entity_metadata_map) {}
 KeywordClusterFinalizer::~KeywordClusterFinalizer() = default;
 
 void KeywordClusterFinalizer::FinalizeCluster(history::Cluster& cluster) {
@@ -124,14 +110,17 @@ void KeywordClusterFinalizer::FinalizeCluster(history::Cluster& cluster) {
       continue;
     }
 
-    std::vector<std::u16string> lowercase_host_parts = base::SplitString(
-        base::ToLowerASCII(
-            base::UTF8ToUTF16(visit.annotated_visit.url_row.url().host())),
-        u".", base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
     for (const auto& entity :
          visit.annotated_visit.content_annotations.model_annotations.entities) {
+      auto entity_metadata_it = entity_metadata_map_->find(entity.id);
+      if (entity_metadata_it == entity_metadata_map_->end()) {
+        continue;
+      }
+      const auto& entity_metadata = entity_metadata_it->second;
+
       base::flat_set<std::u16string> entity_keywords;
-      const std::u16string keyword_u16str = base::UTF8ToUTF16(entity.id);
+      const std::u16string keyword_u16str =
+          base::UTF8ToUTF16(entity_metadata.human_readable_name);
       entity_keywords.insert(keyword_u16str);
 
       // Add an entity to keyword data.
@@ -150,87 +139,36 @@ void KeywordClusterFinalizer::FinalizeCluster(history::Cluster& cluster) {
       }
 
       // Add the top one entity collection to keyword data.
-      const auto it = entity_metadata_map_.find(entity.id);
-      if (it != entity_metadata_map_.end() && !it->second.collections.empty()) {
+      if (!entity_metadata.collections.empty()) {
         keyword_to_data_map[keyword_u16str].entity_collections = {
-            it->second.collections[0]};
+            entity_metadata.collections[0]};
       }
 
       if (GetConfig().keyword_filter_on_entity_aliases) {
-        if (it != entity_metadata_map_.end()) {
-          for (size_t i = 0; i < it->second.human_readable_aliases.size() &&
-                             i < GetConfig().max_entity_aliases_in_keywords;
-               i++) {
-            const auto alias =
-                base::UTF8ToUTF16(it->second.human_readable_aliases[i]);
-            entity_keywords.insert(alias);
-            // Use the same score and collections of an entity for its aliases
-            // as well.
-            auto alias_it = keyword_to_data_map.find(alias);
-            if (alias_it == keyword_to_data_map.end()) {
-              keyword_to_data_map[alias] = history::ClusterKeywordData(
-                  history::ClusterKeywordData::kEntityAlias, entity_score, {});
-            } else {
-              alias_it->second.score += entity_score;
-              alias_it->second.MaybeUpdateKeywordType(
-                  history::ClusterKeywordData::kEntityAlias);
-            }
-            keyword_to_data_map[alias].entity_collections =
-                keyword_to_data_map[keyword_u16str].entity_collections;
+        for (size_t i = 0; i < entity_metadata.human_readable_aliases.size() &&
+                           i < GetConfig().max_entity_aliases_in_keywords;
+             i++) {
+          const auto alias =
+              base::UTF8ToUTF16(entity_metadata.human_readable_aliases[i]);
+          entity_keywords.insert(alias);
+          // Use the same score and collections of an entity for its aliases
+          // as well.
+          auto alias_it = keyword_to_data_map.find(alias);
+          if (alias_it == keyword_to_data_map.end()) {
+            keyword_to_data_map[alias] = history::ClusterKeywordData(
+                history::ClusterKeywordData::kEntityAlias, entity_score, {});
+          } else {
+            alias_it->second.score += entity_score;
+            alias_it->second.MaybeUpdateKeywordType(
+                history::ClusterKeywordData::kEntityAlias);
           }
-        }
-      }
-
-      if (!GetConfig().keyword_filter_on_visit_hosts) {
-        // If we do not want any keywords associated with the visit host, make
-        // sure that none of the keywords associated with the entity look like
-        // they are for the visit host.
-        bool clear_entity_keywords = false;
-        for (const auto& entity_keyword : entity_keywords) {
-          if (IsKeywordSimilarToVisitHost(lowercase_host_parts,
-                                          entity_keyword)) {
-            // One of the keywords is likely for the visit host, so clear out
-            // the keywords for the whole entity.
-            clear_entity_keywords = true;
-            break;
-          }
-        }
-        if (clear_entity_keywords) {
-          for (const auto& keyword : entity_keywords) {
-            keyword_to_data_map.erase(keyword);
-          }
-        }
-      }
-    }
-    if (GetConfig().keyword_filter_on_categories) {
-      for (const auto& category : visit.annotated_visit.content_annotations
-                                      .model_annotations.categories) {
-        std::u16string category_u16string = base::UTF8ToUTF16(category.id);
-        if (!GetConfig().keyword_filter_on_visit_hosts &&
-            IsKeywordSimilarToVisitHost(lowercase_host_parts,
-                                        category_u16string)) {
-          continue;
-        }
-        // Add a discounted keyword score for categories.
-        const float category_score = ComputeKeywordScorePerClusterVisit(
-            category.weight, visit.score,
-            GetConfig().category_keyword_score_weight);
-        auto category_it = keyword_to_data_map.find(category_u16string);
-        if (category_it == keyword_to_data_map.end()) {
-          keyword_to_data_map[category_u16string] = history::ClusterKeywordData(
-              history::ClusterKeywordData::kEntityCategory, category_score,
-              /*entity_collections=*/{});
-        } else {
-          // Accumulate category scores if there are multiple.
-          category_it->second.score += category_score;
-          category_it->second.MaybeUpdateKeywordType(
-              history::ClusterKeywordData::kEntityCategory);
+          keyword_to_data_map[alias].entity_collections =
+              keyword_to_data_map[keyword_u16str].entity_collections;
         }
       }
     }
 
-    if (GetConfig().keyword_filter_on_search_terms &&
-        !visit.annotated_visit.content_annotations.search_terms.empty()) {
+    if (!visit.annotated_visit.content_annotations.search_terms.empty()) {
       const auto& search_terms =
           visit.annotated_visit.content_annotations.search_terms;
       auto search_it = keyword_to_data_map.find(search_terms);

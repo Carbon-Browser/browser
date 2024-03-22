@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,9 @@ class CORE_EXPORT ThreadedWorkletObjectProxy : public ThreadedObjectProxyBase {
  public:
   static std::unique_ptr<ThreadedWorkletObjectProxy> Create(
       ThreadedWorkletMessagingProxy*,
-      ParentExecutionContextTaskRunners*);
+      ParentExecutionContextTaskRunners*,
+      scoped_refptr<base::SingleThreadTaskRunner>
+          parent_agent_group_task_runner);
 
   ThreadedWorkletObjectProxy(const ThreadedWorkletObjectProxy&) = delete;
   ThreadedWorkletObjectProxy& operator=(const ThreadedWorkletObjectProxy&) =
@@ -51,7 +53,9 @@ class CORE_EXPORT ThreadedWorkletObjectProxy : public ThreadedObjectProxyBase {
 
  protected:
   ThreadedWorkletObjectProxy(ThreadedWorkletMessagingProxy*,
-                             ParentExecutionContextTaskRunners*);
+                             ParentExecutionContextTaskRunners*,
+                             scoped_refptr<base::SingleThreadTaskRunner>
+                                 parent_agent_group_task_runner);
 
   CrossThreadWeakPersistent<ThreadedMessagingProxyBase> MessagingProxyWeakPtr()
       final;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ bool IsInputLatencyBeginComponent(ui::LatencyComponentType type) {
 }
 
 constexpr const char kTraceCategoriesForAsyncEvents[] =
-    "benchmark,latencyInfo,rail";
+    "benchmark,latencyInfo,rail,input.scrolling";
 
 struct LatencyInfoEnabledInitializer {
   LatencyInfoEnabledInitializer() :
@@ -92,8 +92,8 @@ bool LatencyInfo::Verify(const std::vector<LatencyInfo>& latency_info,
   if (latency_info.size() > kMaxLatencyInfoNumber) {
     LOG(ERROR) << referring_msg << ", LatencyInfo vector size "
                << latency_info.size() << " is too big.";
-    TRACE_EVENT_INSTANT1("input,benchmark", "LatencyInfo::Verify Fails",
-                         TRACE_EVENT_SCOPE_GLOBAL,
+    TRACE_EVENT_INSTANT1("input,benchmark,latencyInfo",
+                         "LatencyInfo::Verify Fails", TRACE_EVENT_SCOPE_GLOBAL,
                          "size", latency_info.size());
     return false;
   }
@@ -108,7 +108,7 @@ void LatencyInfo::TraceIntermediateFlowEvents(
       continue;
 
     TRACE_EVENT(
-        "input,benchmark", "LatencyInfo.Flow",
+        "input,benchmark,latencyInfo", "LatencyInfo.Flow",
         [&latency, &step](perfetto::EventContext ctx) {
           ChromeLatencyInfo* info = ctx.event()->set_chrome_latency_info();
           info->set_step(step);
@@ -148,11 +148,10 @@ void LatencyInfo::AddLatencyNumber(LatencyComponentType component) {
   AddLatencyNumberWithTimestampImpl(component, base::TimeTicks::Now(), nullptr);
 }
 
-void LatencyInfo::AddLatencyNumberWithTraceName(
-    LatencyComponentType component,
-    const char* trace_name_str) {
-  AddLatencyNumberWithTimestampImpl(component, base::TimeTicks::Now(),
-                                    trace_name_str);
+void LatencyInfo::AddLatencyNumberWithTraceName(LatencyComponentType component,
+                                                const char* trace_name_str,
+                                                base::TimeTicks now) {
+  AddLatencyNumberWithTimestampImpl(component, now, trace_name_str);
 }
 
 void LatencyInfo::AddLatencyNumberWithTimestamp(LatencyComponentType component,
@@ -195,7 +194,7 @@ void LatencyInfo::AddLatencyNumberWithTimestampImpl(
                         perfetto::Track::Global(trace_id_), ts);
     }
 
-    TRACE_EVENT("input,benchmark", "LatencyInfo.Flow",
+    TRACE_EVENT("input,benchmark,latencyInfo", "LatencyInfo.Flow",
                 [this](perfetto::EventContext ctx) {
                   ChromeLatencyInfo* info =
                       ctx.event()->set_chrome_latency_info();
@@ -251,7 +250,7 @@ void LatencyInfo::Terminate() {
         });
   }
 
-  TRACE_EVENT("input,benchmark", "LatencyInfo.Flow",
+  TRACE_EVENT("input,benchmark,latencyInfo", "LatencyInfo.Flow",
               [this](perfetto::EventContext ctx) {
                 ChromeLatencyInfo* info =
                     ctx.event()->set_chrome_latency_info();

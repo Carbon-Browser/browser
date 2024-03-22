@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,14 @@
 
 namespace ui {
 
-extern const base::Feature kWaylandSurfaceSubmissionInPixelCoordinates;
-extern const base::Feature kWaylandOverlayDelegation;
-extern const base::Feature kPrettyPrintDrmModesetConfigLogs;
+BASE_DECLARE_FEATURE(kWaylandSurfaceSubmissionInPixelCoordinates);
+BASE_DECLARE_FEATURE(kWaylandOverlayDelegation);
+BASE_DECLARE_FEATURE(kWaylandFractionalScaleV1);
+BASE_DECLARE_FEATURE(kPrettyPrintDrmModesetConfigLogs);
 
 bool IsWaylandSurfaceSubmissionInPixelCoordinatesEnabled();
 bool IsWaylandOverlayDelegationEnabled();
+bool IsWaylandFractionalScaleV1Enabled();
 bool IsPrettyPrintDrmModesetConfigLogsEnabled();
 
 }  // namespace ui

@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sync/test/integration/committed_all_nudged_changes_checker.h"
 
-#include "components/sync/driver/sync_service_impl.h"
+#include "components/sync/service/sync_service_impl.h"
 
 CommittedAllNudgedChangesChecker::CommittedAllNudgedChangesChecker(
     syncer::SyncServiceImpl* service)

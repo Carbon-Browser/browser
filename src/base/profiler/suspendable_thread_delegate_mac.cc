@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 
 #include <vector>
 
+#include "base/apple/mach_logging.h"
 #include "base/check.h"
-#include "base/mac/mach_logging.h"
 #include "base/profiler/profile_builder.h"
 #include "build/build_config.h"
 

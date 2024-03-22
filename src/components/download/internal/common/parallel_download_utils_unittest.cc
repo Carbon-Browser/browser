@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ class ParallelDownloadUtilsRecoverErrorTest
 
  protected:
   // Stream for sending data into the SourceStream.
-  raw_ptr<StrictMock<MockInputStream>> input_stream_;
+  raw_ptr<StrictMock<MockInputStream>, DanglingUntriaged> input_stream_;
 };
 
 TEST_F(ParallelDownloadUtilsTest, FindSlicesToDownload) {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "chrome/browser/ash/policy/enrollment/enrollment_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part_ash.h"
-#include "chrome/browser/ui/webui/chromeos/login/packaged_license_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/packaged_license_screen_handler.h"
 
 namespace ash {
 namespace {
@@ -43,7 +43,7 @@ PackagedLicenseScreen::PackagedLicenseScreen(
 
 PackagedLicenseScreen::~PackagedLicenseScreen() = default;
 
-bool PackagedLicenseScreen::MaybeSkip(WizardContext* context) {
+bool PackagedLicenseScreen::MaybeSkip(WizardContext& context) {
   policy::EnrollmentConfig config =
       policy::EnrollmentConfig::GetPrescribedEnrollmentConfig();
   // License screen should be shown when device packed with license and other
@@ -52,6 +52,12 @@ bool PackagedLicenseScreen::MaybeSkip(WizardContext* context) {
     // Skip to enroll since GAIA form has welcoming text for enterprise license.
     if (features::IsLicensePackagedOobeFlowEnabled() &&
         config.license_type == policy::LicenseType::kEnterprise) {
+      exit_callback_.Run(Result::NOT_APPLICABLE_SKIP_TO_ENROLL);
+      return true;
+    }
+    // Skip to enroll since GAIA form has welcoming text for education license.
+    if (features::IsEducationEnrollmentOobeFlowEnabled() &&
+        config.license_type == policy::LicenseType::kEducation) {
       exit_callback_.Run(Result::NOT_APPLICABLE_SKIP_TO_ENROLL);
       return true;
     }

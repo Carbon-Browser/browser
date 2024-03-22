@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ class MyXRMock : public MockXRDeviceHookBase {
   unsigned int num_submitted_frames_ = 0;
 
  private:
-  raw_ptr<base::RunLoop> wait_loop_ = nullptr;
+  raw_ptr<base::RunLoop, DanglingUntriaged> wait_loop_ = nullptr;
 };
 
 void MyXRMock::OnFrameSubmitted(

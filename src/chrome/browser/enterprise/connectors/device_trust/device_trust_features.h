@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,12 @@
 
 namespace enterprise_connectors {
 
-// Controls whether the Device Trust connector client code is enabled or not.
-extern const base::Feature kDeviceTrustConnectorEnabled;
+// Controls whether the key rotation flow, triggered by a remote command, is
+// enabled or not.
+BASE_DECLARE_FEATURE(kDTCKeyRotationEnabled);
 
-// Return true if the device trust connector Finch feature is enabled.
-bool IsDeviceTrustConnectorFeatureEnabled();
+// Return true if the key rotation flow is enabled.
+bool IsKeyRotationEnabled();
 
 }  // namespace enterprise_connectors
 

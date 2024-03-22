@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -25,16 +25,12 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_member.h"
 #include "components/privacy_sandbox/privacy_sandbox_settings.h"
-#include "mojo/public/cpp/bindings/remote.h"
-#include "mojo/public/cpp/bindings/remote_set.h"
 #include "net/net_buildflags.h"
 #include "services/cert_verifier/public/mojom/cert_verifier_service_factory.mojom-forward.h"
-#include "services/network/public/mojom/first_party_sets_access_delegate.mojom-forward.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
 class PrefRegistrySimple;
 class Profile;
-class TrialComparisonCertVerifierController;
 
 namespace net {
 class ClientCertStore;
@@ -42,10 +38,10 @@ class ClientCertStore;
 // Enum that specifies which profiles are allowed to do
 // ambient authentication.
 enum class AmbientAuthAllowedProfileTypes {
-  REGULAR_ONLY = 0,
-  INCOGNITO_AND_REGULAR = 1,
-  GUEST_AND_REGULAR = 2,
-  ALL = 3,
+  kRegularOnly = 0,
+  kIncognitoAndRegular = 1,
+  kGuestAndRegular = 2,
+  kAll = 3,
 };
 
 }  // namespace net
@@ -92,6 +88,12 @@ class ProfileNetworkContextService
   static network::mojom::CookieManagerParamsPtr CreateCookieManagerParams(
       Profile* profile,
       const content_settings::CookieSettings& cookie_settings);
+
+  // Flushes a cached client certificate preference for |host| if |certificate|
+  // doesn't match the cached certificate.
+  void FlushCachedClientCertIfNeeded(
+      const net::HostPortPair& host,
+      const scoped_refptr<net::X509Certificate>& certificate);
 
   // Flushes all pending proxy configuration changes.
   void FlushProxyConfigMonitorForTesting();
@@ -148,6 +150,8 @@ class ProfileNetworkContextService
 
   void UpdateCorsNonWildcardRequestHeadersSupport();
 
+  void OnTruncatedCookieBlockingChanged();
+
   // Creates parameters for the NetworkContext. Use |in_memory| instead of
   // |profile_->IsOffTheRecord()| because sometimes normal profiles want off the
   // record partitions (e.g. for webview tag).
@@ -166,7 +170,7 @@ class ProfileNetworkContextService
   // authority certificates for |relative_partition_path|.
   void PopulateInitialAdditionalCerts(
       const base::FilePath& relative_partition_path,
-      network::mojom::NetworkContextParams* network_context_params);
+      cert_verifier::mojom::CertVerifierCreationParams* creation_params);
 
   // content_settings::Observer:
   void OnContentSettingChanged(const ContentSettingsPattern& primary_pattern,
@@ -176,9 +180,11 @@ class ProfileNetworkContextService
   // content_settings::CookieSettings::Observer:
   void OnThirdPartyCookieBlockingChanged(
       bool block_third_party_cookies) override;
+  void OnMitigationsEnabledFor3pcdChanged(bool enable) override;
+  void OnTrackingProtectionEnabledFor3pcdChanged(bool enable) override;
 
   // PrivacySandboxSettings::Observer:
-  void OnTrustTokenBlockingChanged(bool block_trust_tokens) override;
+  void OnFirstPartySetsEnabledChanged(bool enabled) override;
 
   const raw_ptr<Profile> profile_;
 
@@ -199,17 +205,6 @@ class ProfileNetworkContextService
 
   // Used to post schedule CT policy updates
   base::OneShotTimer ct_policy_update_timer_;
-
-#if BUILDFLAG(TRIAL_COMPARISON_CERT_VERIFIER_SUPPORTED)
-  // Controls the cert verification trial. May be null if the trial is disabled
-  // or not allowed for this profile.
-  std::unique_ptr<TrialComparisonCertVerifierController>
-      trial_comparison_cert_verifier_controller_;
-#endif
-
-  // TODO(crbug.com/1325050): Let FirstPartySetsHandlerImpl own it.
-  mojo::RemoteSet<network::mojom::FirstPartySetsAccessDelegate>
-      fps_access_delegate_remote_set_;
 
   // Used for testing.
   base::RepeatingCallback<std::unique_ptr<net::ClientCertStore>()>

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,9 +80,9 @@ class ManageMigrationUiController
 
   bool IsIconVisible() const;
 
-  AutofillBubbleBase* GetBubbleView() const;
-
-  LocalCardMigrationDialog* GetDialogView() const;
+  // Returns the bubble or the dialog view, respectively.
+  AutofillBubbleBase* GetBubbleView();
+  LocalCardMigrationDialog* GetDialogView();
 
   // LocalCardMigrationControllerObserver:
   void OnMigrationNoLongerAvailable() override;
@@ -94,14 +94,16 @@ class ManageMigrationUiController
  private:
   friend class content::WebContentsUserData<ManageMigrationUiController>;
 
+  // Gets the card migration bubble controller for this `WebContents`.
+  LocalCardMigrationBubbleControllerImpl* GetBubbleController();
+  // Gets the card migration dialog controller for this `WebContents`.
+  LocalCardMigrationDialogControllerImpl* GetDialogController();
+
   void ReshowBubble();
 
   void ShowErrorDialog();
 
   void ShowFeedbackDialog();
-
-  raw_ptr<LocalCardMigrationBubbleControllerImpl> bubble_controller_ = nullptr;
-  raw_ptr<LocalCardMigrationDialogControllerImpl> dialog_controller_ = nullptr;
 
   // This indicates what step the migration flow is currently in and
   // what should be shown next.

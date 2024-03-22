@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,8 @@
 #include "ash/test/ash_test_helper.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
@@ -162,6 +162,7 @@ class ScreenRotationAnimatorSlowAnimationTest : public AshTestBase {
 
   // AshTestBase:
   void SetUp() override;
+  void TearDown() override;
 
  protected:
   int64_t display_id() const { return display_.id(); }
@@ -196,6 +197,11 @@ void ScreenRotationAnimatorSlowAnimationTest::SetUp() {
           ui::ScopedAnimationDurationScaleMode::SLOW_DURATION);
 }
 
+void ScreenRotationAnimatorSlowAnimationTest::TearDown() {
+  animator_.reset();
+  AshTestBase::TearDown();
+}
+
 class ScreenRotationAnimatorSmoothAnimationTest
     : public AshTestBase,
       public testing::WithParamInterface<bool> {
@@ -211,6 +217,7 @@ class ScreenRotationAnimatorSmoothAnimationTest
 
   // AshTestBase:
   void SetUp() override;
+  void TearDown() override;
 
   void RemoveSecondaryDisplay(const std::string& specs);
   void QuitWaitForCopyCallback();
@@ -275,6 +282,11 @@ void ScreenRotationAnimatorSmoothAnimationTest::SetUp() {
   non_zero_duration_mode_ =
       std::make_unique<ui::ScopedAnimationDurationScaleMode>(
           ui::ScopedAnimationDurationScaleMode::SLOW_DURATION);
+}
+
+void ScreenRotationAnimatorSmoothAnimationTest::TearDown() {
+  animator_.reset();
+  AshTestBase::TearDown();
 }
 
 void ScreenRotationAnimatorSmoothAnimationTest::SetScreenRotationAnimator(

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 
 #include "ash/constants/ash_pref_names.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/system/sys_info.h"
 #include "base/values.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
@@ -16,7 +16,7 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
-namespace chromeos {
+namespace ash {
 
 FastTransitionObserver::FastTransitionObserver(PrefService* local_state)
     : local_state_(local_state) {
@@ -47,4 +47,4 @@ void FastTransitionObserver::OnPreferenceChanged(const std::string& pref_name) {
       enabled);
 }
 
-}  // namespace chromeos
+}  // namespace ash

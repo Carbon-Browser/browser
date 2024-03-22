@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <ostream>
 #include <string>
+#include <string_view>
 
 #include "base/check_op.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "net/base/proxy_string_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/third_party/mozilla/url_parse.h"
 #include "url/url_canon.h"
 #include "url/url_canon_stdstring.h"
@@ -35,8 +35,8 @@ ProxyServer::ProxyServer(Scheme scheme, const HostPortPair& host_port_pair)
 
 // static
 ProxyServer ProxyServer::FromSchemeHostAndPort(Scheme scheme,
-                                               base::StringPiece host,
-                                               base::StringPiece port_str) {
+                                               std::string_view host,
+                                               std::string_view port_str) {
   // Create INVALID proxies directly using `ProxyServer()`.
   DCHECK_NE(scheme, SCHEME_INVALID);
 
@@ -46,7 +46,7 @@ ProxyServer ProxyServer::FromSchemeHostAndPort(Scheme scheme,
   int port_number =
       url::ParsePort(port_str.data(), url::Component(0, port_str.size()));
   if (port_number == url::PORT_UNSPECIFIED)
-    return FromSchemeHostAndPort(scheme, host, absl::nullopt);
+    return FromSchemeHostAndPort(scheme, host, std::nullopt);
   if (port_number == url::PORT_INVALID)
     return ProxyServer();
 
@@ -58,8 +58,8 @@ ProxyServer ProxyServer::FromSchemeHostAndPort(Scheme scheme,
 
 // static
 ProxyServer ProxyServer::FromSchemeHostAndPort(Scheme scheme,
-                                               base::StringPiece host,
-                                               absl::optional<uint16_t> port) {
+                                               std::string_view host,
+                                               std::optional<uint16_t> port) {
   // Create INVALID proxies directly using `ProxyServer()`.
   DCHECK_NE(scheme, SCHEME_INVALID);
 
@@ -70,7 +70,7 @@ ProxyServer ProxyServer::FromSchemeHostAndPort(Scheme scheme,
   // canonicalization.
   std::string bracketed_host;
   if (!host.empty() && host.front() != '[' &&
-      host.find(":") != base::StringPiece::npos) {
+      host.find(":") != std::string_view::npos) {
     bracketed_host = base::StrCat({"[", host, "]"});
     host = bracketed_host;
   }
@@ -83,13 +83,13 @@ ProxyServer ProxyServer::FromSchemeHostAndPort(Scheme scheme,
                              &canonicalized_output, &component_output)) {
     return ProxyServer();
   }
-  if (!component_output.is_nonempty())
+  if (component_output.is_empty())
     return ProxyServer();
 
   canonicalized_output.Complete();
 
   // Remove IPv6 literal bracketing, as required by HostPortPair.
-  base::StringPiece unbracketed_host = canonicalized_host;
+  std::string_view unbracketed_host = canonicalized_host;
   if (canonicalized_host.front() == '[' && canonicalized_host.back() == ']')
     unbracketed_host = unbracketed_host.substr(1, unbracketed_host.size() - 2);
 

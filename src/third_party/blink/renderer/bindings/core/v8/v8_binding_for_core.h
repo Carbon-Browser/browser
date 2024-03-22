@@ -42,7 +42,6 @@
 #include "third_party/blink/renderer/platform/bindings/dom_data_store.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
@@ -54,19 +53,22 @@
 
 namespace blink {
 
+namespace scheduler {
+class EventLoop;
+}  // namespace scheduler
+
 // This file contains core-specific bindings utility functions. For functions
 // that are core independent, see platform/bindings/V8Binding.h. When adding a
 // new utility function, consider adding it to V8Binding.h instead unless it has
 // dependencies to core/.
 
-class DOMWindow;
 class ExceptionState;
 class ExecutionContext;
-class FlexibleArrayBufferView;
 class Frame;
 class LocalDOMWindow;
 class LocalFrame;
 class XPathNSResolver;
+class ScriptState;
 
 // Determines how a V8 -> C++ union conversion should be performed: when the
 // JavaScript value being converted is either undefined or null, kNullable will
@@ -89,11 +91,11 @@ enum class BlinkState : uint8_t {
   PAINT = 4,
 };
 
-#define ENTER_EMBEDDER_STATE(isolate, frame, state)               \
-  v8::HandleScope scope(isolate);                                 \
-  v8::Local<v8::Context> v8_context =                             \
-      ToV8ContextMaybeEmpty(frame, DOMWrapperWorld::MainWorld()); \
-  v8::EmbedderStateScope embedder_state(                          \
+#define ENTER_EMBEDDER_STATE(isolate, frame, state)                      \
+  v8::HandleScope scope(isolate);                                        \
+  v8::Local<v8::Context> v8_context =                                    \
+      ToV8ContextMaybeEmpty(frame, DOMWrapperWorld::MainWorld(isolate)); \
+  v8::EmbedderStateScope embedder_state(                                 \
       isolate, v8_context, static_cast<v8::EmbedderStateTag>(state));
 
 template <typename CallbackInfo, typename T>
@@ -262,8 +264,9 @@ inline uint64_t ToUInt64(v8::Isolate* isolate,
 // NaNs and +/-Infinity should be 0, otherwise modulo 2^64.
 // Step 8 - 12 of https://webidl.spec.whatwg.org/#abstract-opdef-converttoint
 inline uint64_t DoubleToInteger(double d) {
-  if (std::isnan(d) || std::isinf(d))
+  if (!std::isfinite(d)) {
     return 0;
+  }
   constexpr uint64_t kMaxULL = std::numeric_limits<uint64_t>::max();
 
   // -2^{64} < fmod_value < 2^{64}.
@@ -336,7 +339,7 @@ inline absl::optional<base::Time> ToCoreNullableDate(
   double time_value = object.As<v8::Date>()->ValueOf();
   if (!std::isfinite(time_value))
     return absl::nullopt;
-  return base::Time::FromJsTime(time_value);
+  return base::Time::FromMillisecondsSinceUnixEpoch(time_value);
 }
 
 // USVString conversion helper.
@@ -427,9 +430,11 @@ CORE_EXPORT bool HasCallableIteratorSymbol(v8::Isolate*,
 
 CORE_EXPORT v8::Isolate* ToIsolate(const LocalFrame*);
 
-CORE_EXPORT DOMWindow* ToDOMWindow(v8::Isolate*, v8::Local<v8::Value>);
+CORE_EXPORT LocalDOMWindow* ToLocalDOMWindow(const ScriptState*);
+CORE_EXPORT ExecutionContext* ToExecutionContext(const ScriptState*);
+
 CORE_EXPORT LocalDOMWindow* ToLocalDOMWindow(v8::Local<v8::Context>);
-LocalDOMWindow* EnteredDOMWindow(v8::Isolate*);
+CORE_EXPORT LocalDOMWindow* EnteredDOMWindow(v8::Isolate*);
 LocalDOMWindow* IncumbentDOMWindow(v8::Isolate*);
 CORE_EXPORT LocalDOMWindow* CurrentDOMWindow(v8::Isolate*);
 CORE_EXPORT ExecutionContext* ToExecutionContext(v8::Local<v8::Context>);
@@ -460,15 +465,12 @@ CORE_EXPORT ScriptState* ToScriptState(ExecutionContext*, DOMWrapperWorld&);
 CORE_EXPORT ScriptState* ToScriptState(LocalFrame*, DOMWrapperWorld&);
 // Do not use this method unless you are sure you should use the main world's
 // ScriptState
+CORE_EXPORT ScriptState* ToScriptStateForMainWorld(ExecutionContext*);
 CORE_EXPORT ScriptState* ToScriptStateForMainWorld(LocalFrame*);
 
 // Returns the frame object of the window object associated with
 // a context, if the window is currently being displayed in a Frame.
 CORE_EXPORT LocalFrame* ToLocalFrameIfNotDetached(v8::Local<v8::Context>);
-
-CORE_EXPORT void ToFlexibleArrayBufferView(v8::Isolate*,
-                                           v8::Local<v8::Value>,
-                                           FlexibleArrayBufferView&);
 
 CORE_EXPORT bool IsValidEnum(const String& value,
                              const char* const* valid_values,
@@ -495,7 +497,7 @@ NotSharedType ToNotShared(v8::Isolate* isolate,
                           ExceptionState& exception_state) {
   using DOMTypedArray = typename NotSharedType::TypedArrayType;
   DOMTypedArray* dom_typed_array =
-      V8TypeOf<DOMTypedArray>::Type::ToImplWithTypeCheck(isolate, value);
+      V8TypeOf<DOMTypedArray>::Type::ToWrappable(isolate, value);
   if (dom_typed_array && dom_typed_array->IsShared()) {
     exception_state.ThrowTypeError(
         "The provided ArrayBufferView value must not be shared.");
@@ -512,7 +514,7 @@ MaybeSharedType ToMaybeShared(v8::Isolate* isolate,
                               ExceptionState& exception_state) {
   using DOMTypedArray = typename MaybeSharedType::TypedArrayType;
   DOMTypedArray* dom_typed_array =
-      V8TypeOf<DOMTypedArray>::Type::ToImplWithTypeCheck(isolate, value);
+      V8TypeOf<DOMTypedArray>::Type::ToWrappable(isolate, value);
   return MaybeSharedType(dom_typed_array);
 }
 
@@ -520,8 +522,10 @@ CORE_EXPORT Vector<String> GetOwnPropertyNames(v8::Isolate*,
                                                const v8::Local<v8::Object>&,
                                                ExceptionState&);
 
-v8::MicrotaskQueue* ToMicrotaskQueue(ExecutionContext*);
-v8::MicrotaskQueue* ToMicrotaskQueue(ScriptState*);
+CORE_EXPORT v8::MicrotaskQueue* ToMicrotaskQueue(ExecutionContext*);
+CORE_EXPORT v8::MicrotaskQueue* ToMicrotaskQueue(ScriptState*);
+CORE_EXPORT scheduler::EventLoop& ToEventLoop(ExecutionContext*);
+CORE_EXPORT scheduler::EventLoop& ToEventLoop(ScriptState*);
 
 // Helper finction used in the callback functions to validate context.
 // Returns true if the given execution context and V8 context are capable to run

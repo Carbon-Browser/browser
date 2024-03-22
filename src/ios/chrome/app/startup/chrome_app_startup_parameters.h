@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #import <UIKit/UIKit.h>
 
 #import "ios/chrome/app/app_startup_parameters.h"
-#import "ios/chrome/browser/first_run/first_run_metrics.h"
+#import "ios/chrome/browser/first_run/model/first_run_metrics.h"
 
 // Values of the UMA Startup.MobileSessionCallerApp histogram.
 // These values are persisted to logs. Entries should not be renumbered and
@@ -35,18 +35,22 @@ enum MobileSessionCallerApp {
   // An application launched Chrome with an http/https URL as the default
   // browser.
   CALLER_APP_THIRD_PARTY = 17,
+  CALLER_APP_GOOGLE_CHROME_OPEN_EXTENSION = 18,
   MOBILE_SESSION_CALLER_APP_COUNT,
 };
 
 @interface ChromeAppStartupParameters : AppStartupParameters
 
 - (instancetype)initWithExternalURL:(const GURL&)externalURL
-                        completeURL:(const GURL&)completeURL NS_UNAVAILABLE;
+                        completeURL:(const GURL&)completeURL
+                    applicationMode:(ApplicationModeForTabOpening)mode
+    NS_UNAVAILABLE;
 
 - (instancetype)initWithExternalURL:(const GURL&)externalURL
                   declaredSourceApp:(NSString*)declaredSourceApp
                     secureSourceApp:(NSString*)secureSourceApp
                         completeURL:(NSURL*)completeURL
+                    applicationMode:(ApplicationModeForTabOpening)mode
     NS_DESIGNATED_INITIALIZER;
 
 // Returns a ChromeAppStartupParameters instance containing the URL to

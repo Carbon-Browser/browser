@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,12 @@ bool HistoryMatch::EqualsGURL(const HistoryMatch& h, const GURL& url) {
   return h.url_info.url() == url;
 }
 
+// static
+bool HistoryMatch::IsHostOnly(const GURL& gurl) {
+  return (!gurl.has_path() || (gurl.path_piece() == "/")) &&
+         !gurl.has_query() && !gurl.has_ref();
+}
+
 size_t HistoryMatch::EstimateMemoryUsage() const {
   return base::trace_event::EstimateMemoryUsage(url_info);
 }
@@ -26,8 +32,7 @@ size_t HistoryMatch::EstimateMemoryUsage() const {
 bool HistoryMatch::IsHostOnly() const {
   const GURL& gurl = url_info.url();
   DCHECK(gurl.is_valid());
-  return (!gurl.has_path() || (gurl.path_piece() == "/")) &&
-         !gurl.has_query() && !gurl.has_ref();
+  return IsHostOnly(gurl);
 }
 
 }  // namespace history

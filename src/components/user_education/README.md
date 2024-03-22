@@ -1,22 +1,15 @@
-# User Education component library
+# User Education
 
-This library contains the code that (along with
-[Feature Engagement](/components/feature_engagement/README.md)) will allow you
-to implement **In-Product-Help (IPH)** and **Tutorials** in any framework.
+User Education in Chrome is designed to introduce users to new and
+existing features with which they might not be familiar.
 
-The following libraries are available:
- * [common](./common) - contains platform- and framework-agnostic APIs for
-   working with [HelpBubbles](./common/help_bubble.h),
-   [IPH](./common/feature_promo_specification.h), and
-   [Tutorials](./common/tutorial.h).
- * [views](./views) - contains code required to display a `HelpBubble` in a
-   Views-based UI.
- * [webui](./webui/README.md) - contains code required to display a `HelpBubble`
-   on a WebUI surface.
+The user education system provides a common UX for nudging users towards
+these features, including full, user-initiated tutorials.
 
-The Chrome Browser already builds-in the necessary support for help bubbles
-attached to/embedded in Views, WebUI, and Mac-native context menus. You may
-refer to
-[browser_user_education_service](/chrome/browser/ui/views/user_education/browser_user_education_service.h)
-for an example that could be extended to other (especially Views-based)
-platforms.
+If you want to understand the architecture of the User Education
+subsystem, including its various configuration classes, [read this
+document](/components/user_education/architecture.md).
+
+If you'd like to just dive in and start implementing User Education UX
+for your application or platform of choice, [instructions are provided
+  here](/components/user_education/getting-started.md).

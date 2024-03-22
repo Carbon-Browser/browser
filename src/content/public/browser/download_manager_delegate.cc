@@ -1,12 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/browser/download_manager_delegate.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/download/public/common/download_item.h"
 #include "content/public/browser/web_contents_delegate.h"
 
@@ -72,7 +72,7 @@ void DownloadManagerDelegate::CheckDownloadAllowed(
     CheckDownloadAllowedCallback check_download_allowed_cb) {
   // TODO: Do this directly, if it doesn't crash.
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           [](const WebContents::Getter& web_contents_getter, const GURL& url,
@@ -105,12 +105,6 @@ DownloadManagerDelegate::GetQuarantineConnectionCallback() {
 }
 
 DownloadManagerDelegate::~DownloadManagerDelegate() {}
-
-std::unique_ptr<download::DownloadItemRenameHandler>
-DownloadManagerDelegate::GetRenameHandlerForDownload(
-    download::DownloadItem* download_item) {
-  return nullptr;
-}
 
 download::DownloadItem* DownloadManagerDelegate::GetDownloadByGuid(
     const std::string& guid) {

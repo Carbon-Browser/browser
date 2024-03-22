@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,10 +28,13 @@ class CORE_EXPORT MathMLTokenElement : public MathMLElement {
   void ChildrenChanged(const ChildrenChange&) override;
 
  private:
+  bool IsPresentationAttribute(const QualifiedName&) const final;
+  void CollectStyleForPresentationAttribute(const QualifiedName&,
+                                            const AtomicString&,
+                                            MutableCSSPropertyValueSet*) final;
   TokenContent ParseTokenContent();
   absl::optional<TokenContent> token_content_;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&,
-                                   LegacyLayout legacy) final;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) final;
 };
 
 template <>

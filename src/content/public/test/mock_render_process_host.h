@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/persistent_memory_allocator.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
+#include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_process_host_factory.h"
 #include "content/public/browser/storage_partition_config.h"
@@ -33,7 +35,9 @@
 #include "net/base/network_isolation_key.h"
 
 #if BUILDFLAG(IS_ANDROID)
+#include "base/android/child_process_binding_types.h"
 #include "content/public/browser/android/child_process_importance.h"
+#include "services/network/public/mojom/attribution.mojom-forward.h"
 #endif
 
 namespace blink {
@@ -52,6 +56,8 @@ namespace content {
 
 class MockRenderProcessHostFactory;
 class ProcessLock;
+class RenderProcessHostPriorityClient;
+class SiteInfo;
 class SiteInstance;
 class StoragePartition;
 
@@ -104,7 +110,7 @@ class MockRenderProcessHost : public RenderProcessHost {
   void AddObserver(RenderProcessHostObserver* observer) override;
   void RemoveObserver(RenderProcessHostObserver* observer) override;
   void ShutdownForBadMessage(CrashReportMode crash_report_mode) override;
-  void UpdateClientPriority(PriorityClient* client) override;
+  void UpdateClientPriority(RenderProcessHostPriorityClient* client) override;
   int VisibleClientCount() override;
   unsigned int GetFrameDepth() override;
   bool GetIntersectsViewport() override;
@@ -134,13 +140,16 @@ class MockRenderProcessHost : public RenderProcessHost {
   void Cleanup() override;
   void AddPendingView() override;
   void RemovePendingView() override;
-  void AddPriorityClient(PriorityClient* priority_client) override;
-  void RemovePriorityClient(PriorityClient* priority_client) override;
+  void AddPriorityClient(
+      RenderProcessHostPriorityClient* priority_client) override;
+  void RemovePriorityClient(
+      RenderProcessHostPriorityClient* priority_client) override;
   void SetPriorityOverride(bool foreground) override;
   bool HasPriorityOverride() override;
   void ClearPriorityOverride() override;
 #if BUILDFLAG(IS_ANDROID)
   ChildProcessImportance GetEffectiveImportance() override;
+  base::android::ChildBindingState GetEffectiveChildBindingState() override;
   void DumpProcessStack() override;
 #endif
   void SetSuddenTerminationAllowed(bool allowed) override;
@@ -150,7 +159,7 @@ class MockRenderProcessHost : public RenderProcessHost {
   IPC::ChannelProxy* GetChannel() override;
   void AddFilter(BrowserMessageFilter* filter) override;
   base::TimeDelta GetChildProcessIdleTime() override;
-  void FilterURL(bool empty_allowed, GURL* url) override;
+  FilterURLResult FilterURL(bool empty_allowed, GURL* url) override;
   void EnableAudioDebugRecordings(const base::FilePath& file) override;
   void DisableAudioDebugRecordings() override;
   WebRtcStopRtpDumpCallback StartRtpDump(
@@ -170,14 +179,16 @@ class MockRenderProcessHost : public RenderProcessHost {
   size_t GetShutdownDelayRefCount() const override;
   int GetRenderFrameHostCount() const override;
   void DisableRefCounts() override;
-  void ForEachRenderFrameHost(base::RepeatingCallback<void(RenderFrameHost*)>
-                                  on_render_frame_host) override;
+  void ForEachRenderFrameHost(
+      base::FunctionRef<void(RenderFrameHost*)> on_render_frame_host) override;
   void RegisterRenderFrameHost(
       const GlobalRenderFrameHostId& render_frame_host_id) override;
   void UnregisterRenderFrameHost(
       const GlobalRenderFrameHostId& render_frame_host_id) override;
   void IncrementWorkerRefCount() override;
   void DecrementWorkerRefCount() override;
+  void IncrementPendingReuseRefCount() override;
+  void DecrementPendingReuseRefCount() override;
   bool AreRefCountsDisabled() override;
   mojom::Renderer* GetRendererInterface() override;
   void CreateURLLoaderFactory(
@@ -193,11 +204,14 @@ class MockRenderProcessHost : public RenderProcessHost {
                       const ProcessLock& process_lock) override;
   ProcessLock GetProcessLock() const override;
   bool IsProcessLockedToSiteForTesting() override;
+  void DelayProcessShutdown(const base::TimeDelta& subframe_shutdown_timeout,
+                            const base::TimeDelta& unload_handler_timeout,
+                            const SiteInfo& site_info) override {}
   void StopTrackingProcessForShutdownDelay() override {}
   void BindCacheStorage(
       const network::CrossOriginEmbedderPolicy&,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>,
-      const blink::StorageKey& storage_key,
+      const storage::BucketLocator& bucket,
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver) override;
   void BindFileSystemManager(
       const blink::StorageKey& storage_key,
@@ -207,15 +221,16 @@ class MockRenderProcessHost : public RenderProcessHost {
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::FileSystemAccessManager> receiver)
       override {}
+  void GetSandboxedFileSystemForBucket(
+      const storage::BucketLocator& bucket,
+      blink::mojom::FileSystemAccessManager::GetSandboxedFileSystemCallback
+          callback) override;
   void BindIndexedDB(
       const blink::StorageKey& storage_key,
+      const GlobalRenderFrameHostId& rfh_id,
       mojo::PendingReceiver<blink::mojom::IDBFactory> receiver) override;
-  void BindBucketManagerHostForRenderFrame(
-      const GlobalRenderFrameHostId& render_frame_host_id,
-      mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver)
-      override {}
-  void BindBucketManagerHostForWorker(
-      const url::Origin& origin,
+  void BindBucketManagerHost(
+      base::WeakPtr<BucketContext> bucket_context,
       mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver)
       override {}
   void BindRestrictedCookieManagerForServiceWorker(
@@ -229,6 +244,11 @@ class MockRenderProcessHost : public RenderProcessHost {
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::QuotaManagerHost> receiver) override {
   }
+#if BUILDFLAG(IS_FUCHSIA)
+  void BindMediaCodecProvider(
+      mojo::PendingReceiver<media::mojom::FuchsiaMediaCodecProvider> receiver)
+      override {}
+#endif
   void CreateLockManager(
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::LockManager> receiver) override {}
@@ -249,22 +269,28 @@ class MockRenderProcessHost : public RenderProcessHost {
       mojo::PendingReceiver<payments::mojom::PaymentManager> receiver)
       override {}
   void CreateNotificationService(
-      int render_frame_id,
-      const url::Origin& origin,
+      GlobalRenderFrameHostId rfh_id,
+      RenderProcessHost::NotificationServiceCreatorType creator_type,
+      const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::NotificationService> receiver)
       override {}
   void CreateWebSocketConnector(
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::WebSocketConnector> receiver)
       override {}
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
   void CreateStableVideoDecoder(
       mojo::PendingReceiver<media::stable::mojom::StableVideoDecoder> receiver)
       override {}
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 
   std::string GetInfoForBrowserContextDestructionCrashReporting() override;
   void WriteIntoTrace(perfetto::TracedProto<TraceProto> proto) const override;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void ReinitializeLogging(uint32_t logging_dest,
+                           base::ScopedFD log_file_descriptor) override;
+#endif
 
   void PauseSocketManagerForRenderFrameHost(
       const GlobalRenderFrameHostId& render_frame_host_id) override {}
@@ -307,11 +333,11 @@ class MockRenderProcessHost : public RenderProcessHost {
   int bad_msg_count_;
   int id_;
   bool has_connection_;
-  raw_ptr<BrowserContext> browser_context_;
+  raw_ptr<BrowserContext, DanglingUntriaged> browser_context_;
   base::ObserverList<RenderProcessHostObserver> observers_;
 
   StoragePartitionConfig storage_partition_config_;
-  base::flat_set<PriorityClient*> priority_clients_;
+  base::flat_set<RenderProcessHostPriorityClient*> priority_clients_;
   int prev_routing_id_;
   base::IDMap<IPC::Listener*> listeners_;
   bool shutdown_requested_;
@@ -324,10 +350,12 @@ class MockRenderProcessHost : public RenderProcessHost {
   base::Process process;
   int keep_alive_ref_count_;
   int worker_ref_count_;
+  int pending_reuse_ref_count_;
   int foreground_service_worker_count_;
   std::unique_ptr<mojo::AssociatedRemote<mojom::Renderer>> renderer_interface_;
   std::map<std::string, InterfaceBinder> binder_overrides_;
   bool is_renderer_locked_to_site_ = false;
+  std::set<GlobalRenderFrameHostId> render_frame_host_id_set_;
   std::unique_ptr<network::mojom::URLLoaderFactory> url_loader_factory_;
   mojo::PendingReceiver<blink::mojom::CacheStorage> cache_storage_receiver_;
   mojo::PendingReceiver<blink::mojom::IDBFactory> idb_factory_receiver_;

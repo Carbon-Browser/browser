@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ void JavaScriptTabModalDialogManagerDelegateDesktop::DidCloseDialog() {
 
 void JavaScriptTabModalDialogManagerDelegateDesktop::SetTabNeedsAttention(
     bool attention) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   if (!browser) {
     // It's possible that the WebContents is no longer in the tab strip. If so,
     // just give up. https://crbug.com/786178
@@ -79,7 +79,7 @@ bool JavaScriptTabModalDialogManagerDelegateDesktop::IsWebContentsForemost() {
 }
 
 bool JavaScriptTabModalDialogManagerDelegateDesktop::IsApp() {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   return browser && (browser->is_type_app() || browser->is_type_app_popup());
 }
 

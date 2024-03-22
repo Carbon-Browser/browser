@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace gfx {
 
 // The format needs to be taken into account when mapping a buffer into the
 // client's address space.
-enum class BufferFormat {
+enum class BufferFormat : uint8_t {
   R_8,
   R_16,
   RG_88,
@@ -29,6 +29,7 @@ enum class BufferFormat {
   RGBA_F16,
   YVU_420,
   YUV_420_BIPLANAR,
+  YUVA_420_TRIPLANAR,
   P010,
 
   LAST = P010
@@ -81,42 +82,22 @@ struct BufferUsageAndFormat {
 // SharedImage.
 enum class BufferPlane {
   // For single-plane GpuMemoryBuffer, this refers to that single plane. For
-  // YUV_420, YUV_420_BIPLANAR, and P010 GpuMemoryBuffers, this refers to an
-  // RGB representation of the planes (either bound directly as a texture or
-  // created through an extra copy).
+  // YUV_420, YUV_420_BIPLANAR, YUVA_420_TRIPLANAR, and P010 GpuMemoryBuffers,
+  // this refers to an RGB representation of the planes (either bound directly
+  // as a texture or created through an extra copy).
   DEFAULT,
-  // The Y plane for YUV_420, YUV_420_BIPLANAR, and P010.
+  // The Y plane for YUV_420, YUV_420_BIPLANAR, YUVA_420_TRIPLANAR, and P010.
   Y,
-  // The UV plane for YUV_420_BIPLANAR and P010.
+  // The UV plane for YUV_420_BIPLANAR, YUVA_420_TRIPLANAR and P010.
   UV,
   // The U plane for YUV_420.
   U,
   // The V plane for YUV_420.
   V,
+  // The A plane for YUVA_420_TRIPLANAR.
+  A,
 
-  LAST = V
-};
-
-// This enum is used for histogram states and should only have new values added
-// to the end before kMaxValue. tools/metrics/histograms/enums.xml should be
-// updated together.
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum class OddSize {
-  kEvenWidthAndHeight = 0,
-  kOddWidthOnly = 1,
-  kOddHeightOnly = 2,
-  kOddWidthAndHeight = 3,
-  kMaxValue = kOddWidthAndHeight,
-};
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-enum class OddOffset {
-  kEvenXAndY = 0,
-  kOddXOnly = 1,
-  kOddYOnly = 2,
-  kOddXAndY = 3,
-  kMaxValue = kOddXAndY,
+  LAST = A
 };
 
 }  // namespace gfx

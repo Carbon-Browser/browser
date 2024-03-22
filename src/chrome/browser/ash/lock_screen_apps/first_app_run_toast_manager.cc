@@ -1,12 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/lock_screen_apps/first_app_run_toast_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "chrome/browser/ash/lock_screen_apps/toast_dialog_view.h"
 #include "chrome/browser/profiles/profile.h"
@@ -59,8 +60,8 @@ class FirstAppRunToastManager::AppWidgetObserver
   }
 
  private:
-  FirstAppRunToastManager* manager_;
-  views::Widget* widget_;
+  raw_ptr<FirstAppRunToastManager, ExperimentalAsh> manager_;
+  raw_ptr<views::Widget, ExperimentalAsh> widget_;
 };
 
 FirstAppRunToastManager::FirstAppRunToastManager(Profile* profile)
@@ -78,9 +79,9 @@ void FirstAppRunToastManager::RunForAppWindow(
   DCHECK(app_window->GetNativeWindow());
 
   const extensions::Extension* app = app_window->GetExtension();
-  const base::Value* toast_shown = profile_->GetPrefs()->GetDictionary(
-      prefs::kNoteTakingAppsLockScreenToastShown);
-  if (toast_shown->FindBoolPath(app->id()).value_or(false)) {
+  const base::Value::Dict& toast_shown =
+      profile_->GetPrefs()->GetDict(prefs::kNoteTakingAppsLockScreenToastShown);
+  if (toast_shown.FindBoolByDottedPath(app->id()).value_or(false)) {
     return;
   }
 
@@ -123,7 +124,7 @@ void FirstAppRunToastManager::OnAppWindowActivated(
 
     // Start toast dialog creation asynchronously so it happens after app window
     // activation completes.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FirstAppRunToastManager::CreateAndShowToastDialog,
                        weak_ptr_factory_.GetWeakPtr()));
@@ -138,15 +139,15 @@ void FirstAppRunToastManager::CreateAndShowToastDialog() {
   toast_widget_ = views::BubbleDialogDelegateView::CreateBubble(toast_dialog);
   toast_widget_->Show();
   AdjustToastWidgetBounds();
-  toast_widget_observation_.Observe(toast_widget_);
+  toast_widget_observation_.Observe(toast_widget_.get());
 }
 
 void FirstAppRunToastManager::ToastDialogDismissed() {
   {
     const extensions::Extension* app = app_window_->GetExtension();
-    DictionaryPrefUpdate dict_update(
+    ScopedDictPrefUpdate dict_update(
         profile_->GetPrefs(), prefs::kNoteTakingAppsLockScreenToastShown);
-    dict_update->SetBoolKey(app->id(), true);
+    dict_update->Set(app->id(), true);
   }
   Reset();
 }

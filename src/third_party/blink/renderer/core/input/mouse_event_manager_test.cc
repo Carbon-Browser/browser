@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,14 +78,15 @@ TEST_F(MouseEventManagerTest, DISABLED_MousePressNodeRemoved) {
       </body>
       )HTML");
   Compositor().BeginFrame();
-  EXPECT_FLOAT_EQ(GetDocument().getElementById("scroller")->scrollTop(), 0.0);
+  EXPECT_FLOAT_EQ(
+      GetDocument().getElementById(AtomicString("scroller"))->scrollTop(), 0.0);
 
   // Click on the target node to set the mouse_press_node_.
   GetEventHandler().HandleMousePressEvent(CreateTestMouseEvent(
       WebInputEvent::Type::kMouseDown, gfx::PointF(50, 50)));
 
   // Now remove this node.
-  GetDocument().getElementById("target")->remove();
+  GetDocument().getElementById(AtomicString("target"))->remove();
   Compositor().BeginFrame();
 
   // Now press the down key. This should still scroll the nested scroller as it
@@ -96,7 +97,8 @@ TEST_F(MouseEventManagerTest, DISABLED_MousePressNodeRemoved) {
   Compositor().BeginFrame();
   // Jump to end of scroll animation.
   Compositor().BeginFrame(kScrollAnimationDuration);
-  EXPECT_GT(GetDocument().getElementById("scroller")->scrollTop(), 0.0);
+  EXPECT_GT(GetDocument().getElementById(AtomicString("scroller"))->scrollTop(),
+            0.0);
 }
 
 }  // namespace blink

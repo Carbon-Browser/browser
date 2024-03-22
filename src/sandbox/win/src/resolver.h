@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,14 @@
 #include <stddef.h>
 
 #include "base/memory/raw_ptr_exclusion.h"
-#include "sandbox/win/src/nt_internals.h"
+#include "base/win/windows_types.h"
 
 namespace sandbox {
 
 // A resolver is the object in charge of performing the actual interception of
 // a function. There should be a concrete implementation of a resolver roughly
 // per type of interception.
-class ResolverThunk {
+class [[clang::lto_visibility_public]] ResolverThunk {
  public:
   ResolverThunk() {}
 

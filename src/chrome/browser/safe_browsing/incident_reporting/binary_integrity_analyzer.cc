@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -22,19 +22,6 @@
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 
 namespace safe_browsing {
-
-void RecordSignatureVerificationTime(size_t file_index,
-                                     const base::TimeDelta& verification_time) {
-  static const char kHistogramName[] = "SBIRS.VerifyBinaryIntegrity.";
-
-  base::HistogramBase* signature_verification_time_histogram =
-      base::Histogram::FactoryTimeGet(
-          std::string(kHistogramName) + base::NumberToString(file_index),
-          base::Milliseconds(1), base::Seconds(20), 50,
-          base::Histogram::kUmaTargetedHistogramFlag);
-
-  signature_verification_time_histogram->AddTime(verification_time);
-}
 
 void ClearBinaryIntegrityForFile(IncidentReceiver* incident_receiver,
                                  const std::string& basename) {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,12 +19,17 @@ DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(ASH_PUBLIC_EXPORT, bool*)
 DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(ASH_PUBLIC_EXPORT, float*)
 DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(ASH_PUBLIC_EXPORT, SkRegion*)
 DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(ASH_PUBLIC_EXPORT,
+                                       ash::ArcGameControlsFlag)
+DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(ASH_PUBLIC_EXPORT,
                                        ash::ArcResizeLockType)
 DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(ASH_PUBLIC_EXPORT, ash::ResizeShadowType)
 
 namespace ash {
 
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(std::string, kAppIDKey, nullptr)
+DEFINE_UI_CLASS_PROPERTY_KEY(ArcGameControlsFlag,
+                             kArcGameControlsFlagsKey,
+                             static_cast<ArcGameControlsFlag>(0))
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(std::string, kArcPackageNameKey, nullptr)
 DEFINE_UI_CLASS_PROPERTY_KEY(ArcResizeLockType,
                              kArcResizeLockTypeKey,
@@ -58,10 +63,8 @@ DEFINE_UI_CLASS_PROPERTY_KEY(int32_t, kShelfItemTypeKey, TYPE_UNDEFINED)
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(SkRegion,
                                    kSystemGestureExclusionKey,
                                    nullptr)
-DEFINE_UI_CLASS_PROPERTY_KEY(aura::Window*,
-                             kTabDraggingSourceWindowKey,
-                             nullptr)
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kWindowPositionManagedTypeKey, false)
+DEFINE_UI_CLASS_PROPERTY_KEY(bool, kShowCursorOnKeypress, false)
 
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kWindowPipTypeKey, false)
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::Rect,

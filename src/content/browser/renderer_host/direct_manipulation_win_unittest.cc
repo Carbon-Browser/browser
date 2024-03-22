@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include <objbase.h>
 
-#include "base/win/windows_version.h"
 #include "content/browser/renderer_host/direct_manipulation_test_helper_win.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/ui_base_features.h"
@@ -356,12 +355,6 @@ class DirectManipulationUnitTest : public testing::Test {
   Microsoft::WRL::ComPtr<MockDirectManipulationContent> content_;
   MockWindowEventTarget event_target_;
 };
-
-TEST_F(DirectManipulationUnitTest, HelperShouldCreateForWin10) {
-  // We should create DirectManipulationHelper instance when win version >= 10.
-  EXPECT_EQ(GetDirectManipulationHelper() != nullptr,
-            base::win::GetVersion() >= base::win::Version::WIN10);
-}
 
 TEST_F(DirectManipulationUnitTest, ReceiveSimplePanTransform) {
   if (!GetDirectManipulationHelper())

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,13 @@
 #include <cstdint>
 
 #include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
 #include "base/types/strong_alias.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
@@ -72,10 +74,10 @@ class MODULES_EXPORT OutgoingStream final
   WritableStream* Writable() const {
     DVLOG(1) << "OutgoingStream::writable() called";
 
-    return writable_;
+    return writable_.Get();
   }
 
-  ScriptState* GetScriptState() { return script_state_; }
+  ScriptState* GetScriptState() { return script_state_.Get(); }
 
   // Called from WebTransport via a WebTransportStream.
   void OnOutgoingStreamClosed();
@@ -152,9 +154,9 @@ class MODULES_EXPORT OutgoingStream final
    private:
     // We need the isolate to call |AdjustAmountOfExternalAllocatedMemory| for
     // the memory stored in |buffer_|.
-    v8::Isolate* isolate_;
+    raw_ptr<v8::Isolate, ExperimentalRenderer> isolate_;
     size_t length_ = 0u;
-    uint8_t* buffer_ = nullptr;
+    raw_ptr<uint8_t, ExperimentalRenderer> buffer_ = nullptr;
   };
 
   const Member<ScriptState> script_state_;
@@ -179,6 +181,7 @@ class MODULES_EXPORT OutgoingStream final
   size_t offset_ = 0;
 
   Member<WritableStream> writable_;
+  Member<AbortSignal::AlgorithmHandle> send_stream_abort_handle_;
   Member<WritableStreamDefaultController> controller_;
 
   // If an asynchronous write() on the underlying sink object is pending, this

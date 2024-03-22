@@ -1,20 +1,18 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {dispatchSimpleEvent} from 'chrome://resources/js/cr.m.js';
-import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.m.js';
-import {ArrayDataModel} from 'chrome://resources/js/cr/ui/array_data_model.m.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
+import {dispatchSimpleEvent} from 'chrome://resources/ash/common/cr_deprecated.js';
+import {NativeEventTarget as EventTarget} from 'chrome://resources/ash/common/event_target.js';
 
 import {EntryLocation} from '../../externs/entry_location.js';
 import {FilesAppEntry} from '../../externs/files_app_entry_interfaces.js';
-import {VolumeInfo} from '../../externs/volume_info.js';
 import {VolumeInfoList} from '../../externs/volume_info_list.js';
-import {ExternallyUnmountedEvent, VolumeManager} from '../../externs/volume_manager.js';
 
-import {util} from './util.js';
-import {AllowedPaths, VolumeManagerCommon} from './volume_manager_types.js';
+import {ArrayDataModel} from './array_data_model.js';
+import {isFuseBoxDebugEnabled} from './flags.js';
+import {AllowedPaths, ARCHIVE_OPENED_EVENT_TYPE, isNative, VolumeType} from './volume_manager_types.js';
 
 /**
  * Implementation of VolumeInfoList for FilteredVolumeManager.
@@ -36,44 +34,55 @@ export class FilteredVolumeInfoList {
   }
 
   /** @override */
+  // @ts-ignore: error TS4121: This member cannot have a JSDoc comment with an
+  // '@override' tag because its containing class 'FilteredVolumeInfoList' does
+  // not extend another class.
   get length() {
     return this.list_.length;
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'handler' implicitly has an 'any' type.
   addEventListener(type, handler) {
     this.list_.addEventListener(type, handler);
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'handler' implicitly has an 'any' type.
   removeEventListener(type, handler) {
     this.list_.removeEventListener(type, handler);
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'volumeInfo' implicitly has an 'any'
+  // type.
   add(volumeInfo) {
     throw new Error('FilteredVolumeInfoList.add not allowed in foreground');
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'volumeInfo' implicitly has an 'any'
+  // type.
   remove(volumeInfo) {
     throw new Error('FilteredVolumeInfoList.remove not allowed in foreground');
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'index' implicitly has an 'any' type.
   item(index) {
-    return /** @type {!VolumeInfo} */ (this.list_.item(index));
+    return /** @type {!import('../../externs/volume_info.js').VolumeInfo} */ (
+        this.list_.item(index));
   }
 }
 
 /**
  * Volume types that match the Android 'media-store-files-only' volume filter,
  * viz., the volume content is indexed by the Android MediaStore.
- * @const !Array<!VolumeManagerCommon.VolumeType>
+ * @const !Array<!VolumeType>
  */
 const MEDIA_STORE_VOLUME_TYPES = [
-  VolumeManagerCommon.VolumeType.DOWNLOADS,
-  VolumeManagerCommon.VolumeType.REMOVABLE,
+  VolumeType.DOWNLOADS,
+  VolumeType.REMOVABLE,
 ];
 
 /**
@@ -81,20 +90,23 @@ const MEDIA_STORE_VOLUME_TYPES = [
  * to VolumeManager. This class also filters some "disallowed" volumes;
  * for example, Drive volumes are dropped if Drive is disabled, and read-only
  * volumes are dropped in save-as dialogs.
- *
- * @implements {VolumeManager}
  */
 export class FilteredVolumeManager extends EventTarget {
   /**
    * @param {!AllowedPaths} allowedPaths Which paths are supported in the Files
    *     app dialog.
    * @param {boolean} writableOnly If true, only writable volumes are returned.
-   * @param {!Promise<!VolumeManager>} volumeManagerGetter Promise that resolves
-   *     when the VolumeManager has been initialized.
+   * @param {!Promise<!import('../../externs/volume_manager.js').VolumeManager>}
+   *     volumeManagerGetter Promise that resolves when the VolumeManager has
+   *     been initialized.
    * @param {!Array<string>} volumeFilter Array of Files app mode dependent
    *     volume filter names from Files app launch params, [] typically.
+   * @param {!Array<!VolumeType>} disabledVolumes List of
+   *     volumes that should be visible but can't be selected.
    */
-  constructor(allowedPaths, writableOnly, volumeManagerGetter, volumeFilter) {
+  constructor(
+      allowedPaths, writableOnly, volumeManagerGetter, volumeFilter,
+      disabledVolumes) {
     super();
 
     this.allowedPaths_ = allowedPaths;
@@ -105,7 +117,9 @@ export class FilteredVolumeManager extends EventTarget {
     // Public VolumeManager.volumeInfoList property accessed by callers.
     this.volumeInfoList = new FilteredVolumeInfoList(this.list_);
 
-    /** @private {?VolumeManager} */
+    /**
+     * @private @type {?import('../../externs/volume_manager.js').VolumeManager}
+     */
     this.volumeManager_ = null;
 
     this.onEventBound_ = this.onEvent_.bind(this);
@@ -114,45 +128,64 @@ export class FilteredVolumeManager extends EventTarget {
 
     this.disposed_ = false;
 
-    /** @private {!Promise<!VolumeManager>} */
+    /**
+     * @private @type {!Promise<!import('../../externs/volume_manager.js').VolumeManager>}
+     */
     this.volumeManagerGetter_ = volumeManagerGetter;
 
     /**
      * True if |volumeFilter| contains the 'fusebox-only' filter. SelectFileAsh
      * (Lacros) file picker sets this filter.
-     * @private @const {boolean}
+     * @private @const @type {boolean}
      */
     this.isFuseBoxOnly_ = volumeFilter.includes('fusebox-only');
 
     /**
      * True if |volumeFilter| contains the 'media-store-files-only' filter.
      * Android (ARC) file picker sets this filter.
-     * @private @const {boolean}
+     * @private @const @type {boolean}
      */
     this.isMediaStoreOnly_ = volumeFilter.includes('media-store-files-only');
 
     /**
      * True if chrome://flags#fuse-box-debug is enabled. This shows additional
      * UI elements, for manual fusebox testing.
-     * @private @const {boolean}
+     * @private @const @type {boolean}
      */
-    this.isFuseBoxDebugEnabled_ = util.isFuseBoxDebugEnabled();
+    this.isFuseBoxDebugEnabled_ = isFuseBoxDebugEnabled();
+
+    /**
+     * List of disabled volumes.
+     * @private @const @type {!Array<!VolumeType>}
+     */
+    this.disabledVolumes_ = disabledVolumes;
 
     /**
      * Tracks async initialization of volume manager.
-     * @private @const {!Promise<void> }
+     * @private @const @type {!Promise<void> }
      */
     this.initialized_ = this.initialize_();
   }
 
   /** @override */
+  // @ts-ignore: error TS4122: This member cannot have a JSDoc comment with an
+  // '@override' tag because it is not declared in the base class 'EventTarget'.
   getFuseBoxOnlyFilterEnabled() {
     return this.isFuseBoxOnly_;
   }
 
   /** @override */
+  // @ts-ignore: error TS4122: This member cannot have a JSDoc comment with an
+  // '@override' tag because it is not declared in the base class 'EventTarget'.
   getMediaStoreFilesOnlyFilterEnabled() {
     return this.isMediaStoreOnly_;
+  }
+
+  /**
+   * @return {!Array<!VolumeType>}
+   */
+  get disabledVolumes() {
+    return this.disabledVolumes_;
   }
 
   /**
@@ -162,7 +195,7 @@ export class FilteredVolumeManager extends EventTarget {
    * disallowed for other restrictions. To check if a specific volume is allowed
    * or not, use isAllowedVolume_() instead.
    *
-   * @param {VolumeManagerCommon.VolumeType} volumeType
+   * @param {VolumeType} volumeType
    * @return {boolean}
    * @private
    */
@@ -172,9 +205,8 @@ export class FilteredVolumeManager extends EventTarget {
       case AllowedPaths.ANY_PATH_OR_URL:
         return true;
       case AllowedPaths.NATIVE_PATH:
-        return VolumeManagerCommon.VolumeType.isNative(assert(volumeType));
+        return isNative(assert(volumeType));
     }
-    return false;
   }
 
   /**
@@ -184,29 +216,28 @@ export class FilteredVolumeManager extends EventTarget {
    * @return {boolean}
    * @private
    */
-  isFuseBoxFileSystem(diskFileSystemType) {
+  isFuseBoxFileSystem_(diskFileSystemType) {
     return diskFileSystemType === 'fusebox';
   }
 
   /**
    * True if the volume content is indexed by the Android MediaStore.
    *
-   * @param {!VolumeInfo} volumeInfo
+   * @param {!import('../../externs/volume_info.js').VolumeInfo} volumeInfo
    * @return {boolean}
    * @private
    */
-  isMediaStoreVolume(volumeInfo) {
+  isMediaStoreVolume_(volumeInfo) {
     return MEDIA_STORE_VOLUME_TYPES.indexOf(volumeInfo.volumeType) >= 0;
   }
 
   /**
    * Checks if a volume is allowed.
    *
-   * @param {!VolumeInfo} volumeInfo
+   * @param {!import('../../externs/volume_info.js').VolumeInfo} volumeInfo
    * @return {boolean}
-   * @private
    */
-  isAllowedVolume_(volumeInfo) {
+  isAllowedVolume(volumeInfo) {
     if (!volumeInfo.volumeType) {
       return false;
     }
@@ -217,7 +248,7 @@ export class FilteredVolumeManager extends EventTarget {
 
     // If the media store filter is enabled and the volume is not supported
     // by the Android MediaStore, remove the volume from the UI.
-    if (this.isMediaStoreOnly_ && !this.isMediaStoreVolume(volumeInfo)) {
+    if (this.isMediaStoreOnly_ && !this.isMediaStoreVolume_(volumeInfo)) {
       return false;
     }
 
@@ -227,11 +258,10 @@ export class FilteredVolumeManager extends EventTarget {
       // Do nothing: show the fusebox and non-fusebox versions in the files
       // app UI. Used for manually testing fusebox.
     } else if (this.isFuseBoxOnly_) {
-      // SelectFileAsh requires native volumes. Note: DocumentsProvider and
-      // FSPs return false here, until they are implemented in the fusebox.
-      return this.isFuseBoxFileSystem(volumeInfo.diskFileSystemType) ||
-          VolumeManagerCommon.VolumeType.isNative(volumeInfo.volumeType);
-    } else if (this.isFuseBoxFileSystem(volumeInfo.diskFileSystemType)) {
+      // SelectFileAsh requires fusebox volumes or native volumes.
+      return this.isFuseBoxFileSystem_(volumeInfo.diskFileSystemType) ||
+          isNative(volumeInfo.volumeType);
+    } else if (this.isFuseBoxFileSystem_(volumeInfo.diskFileSystemType)) {
       // Normal Files app: remove fusebox volumes.
       return false;
     }
@@ -260,7 +290,7 @@ export class FilteredVolumeManager extends EventTarget {
     this.volumeManager_.addEventListener(
         'externally-unmounted', this.onEventBound_);
     this.volumeManager_.addEventListener(
-        VolumeManagerCommon.ARCHIVE_OPENED_EVENT_TYPE, this.onEventBound_);
+        ARCHIVE_OPENED_EVENT_TYPE, this.onEventBound_);
 
     // Dispatch 'drive-connection-changed' to listeners, since the return value
     // of FilteredVolumeManager.getDriveConnectionState() can be changed by
@@ -272,12 +302,13 @@ export class FilteredVolumeManager extends EventTarget {
     for (let i = 0; i < this.volumeManager_.volumeInfoList.length; i++) {
       const volumeInfo = this.volumeManager_.volumeInfoList.item(i);
       // TODO(hidehiko): Filter mounted volumes located on Drive File System.
-      if (!this.isAllowedVolume_(volumeInfo)) {
+      if (!this.isAllowedVolume(volumeInfo)) {
         continue;
       }
       volumeInfoList.push(volumeInfo);
     }
     this.list_.splice.apply(
+        // @ts-ignore: error TS2769: No overload matches this call.
         this.list_, [0, this.volumeInfoList.length].concat(volumeInfoList));
 
     // Subscribe to VolumeInfoList.
@@ -316,20 +347,31 @@ export class FilteredVolumeManager extends EventTarget {
     // runtime "The event is already being dispatched." error.
     switch (event.type) {
       case 'drive-connection-changed':
-        if (this.isAllowedVolumeType_(VolumeManagerCommon.VolumeType.DRIVE)) {
+        if (this.isAllowedVolumeType_(VolumeType.DRIVE)) {
           dispatchSimpleEvent(this, 'drive-connection-changed');
         }
         break;
       case 'externally-unmounted':
-        event = /** @type {!ExternallyUnmountedEvent} */ (event);
-        if (this.isAllowedVolume_(event.detail)) {
+        event = /**
+                   @type {!import('../../externs/volume_manager.js').ExternallyUnmountedEvent}
+                     */
+            (event);
+        // @ts-ignore: error TS2339: Property 'detail' does not exist on type
+        // 'Event'.
+        if (this.isAllowedVolume(event.detail)) {
           this.dispatchEvent(
+              // @ts-ignore: error TS2339: Property 'detail' does not exist on
+              // type 'Event'.
               new CustomEvent('externally-unmount', {detail: event.detail}));
         }
         break;
-      case VolumeManagerCommon.ARCHIVE_OPENED_EVENT_TYPE:
+      case ARCHIVE_OPENED_EVENT_TYPE:
+        // @ts-ignore: error TS2339: Property 'detail' does not exist on type
+        // 'Event'.
         if (this.getVolumeInfo(event.detail.mountPoint)) {
           this.dispatchEvent(
+              // @ts-ignore: error TS2339: Property 'detail' does not exist on
+              // type 'Event'.
               new CustomEvent(event.type, {detail: event.detail}));
         }
         break;
@@ -342,32 +384,43 @@ export class FilteredVolumeManager extends EventTarget {
    * @private
    */
   onVolumeInfoListUpdated_(event) {
+    const
+        spliceEventDetail = /**
+                         @type {import('../../definitions/array_data_model_events.js').ArrayDataModelSpliceEvent}
+                           */
+        (event).detail;
     // Filters some volumes.
-    let index = event.index;
-    for (let i = 0; i < event.index; i++) {
-      const volumeInfo = this.volumeManager_.volumeInfoList.item(i);
-      if (!this.isAllowedVolume_(volumeInfo)) {
-        index--;
+    let index = spliceEventDetail.index;
+    if (spliceEventDetail.index && index) {
+      for (let i = 0; i < spliceEventDetail.index; i++) {
+        // @ts-ignore: error TS2531: Object is possibly 'null'.
+        const volumeInfo = this.volumeManager_.volumeInfoList.item(i);
+        if (!this.isAllowedVolume(volumeInfo)) {
+          index--;
+        }
       }
     }
 
     let numRemovedVolumes = 0;
-    for (let i = 0; i < event.removed.length; i++) {
-      const volumeInfo = event.removed[i];
-      if (this.isAllowedVolume_(volumeInfo)) {
+    for (let i = 0; i < spliceEventDetail.removed.length; i++) {
+      const volumeInfo = spliceEventDetail.removed[i];
+      if (this.isAllowedVolume(volumeInfo)) {
         numRemovedVolumes++;
       }
     }
 
     const addedVolumes = [];
-    for (let i = 0; i < event.added.length; i++) {
-      const volumeInfo = event.added[i];
-      if (this.isAllowedVolume_(volumeInfo)) {
+    for (let i = 0; i < spliceEventDetail.added.length; i++) {
+      const volumeInfo = spliceEventDetail.added[i];
+      if (this.isAllowedVolume(volumeInfo)) {
         addedVolumes.push(volumeInfo);
       }
     }
 
     this.list_.splice.apply(
+        // @ts-ignore: error TS2345: Argument of type 'any[]' is not assignable
+        // to parameter of type '[index: number, deleteCount: number,
+        // ...var_args: any[]]'.
         this.list_, [index, numRemovedVolumes].concat(addedVolumes));
   }
 
@@ -375,7 +428,7 @@ export class FilteredVolumeManager extends EventTarget {
    * Ensures the VolumeManager is initialized, and then invokes callback.
    * If the VolumeManager is already initialized, callback will be called
    * immediately.
-   * @param {function()} callback Called on initialization completion.
+   * @param {function():void} callback Called on initialization completion.
    */
   ensureInitialized(callback) {
     this.initialized_.then(callback);
@@ -386,13 +439,10 @@ export class FilteredVolumeManager extends EventTarget {
    *     connection state.
    */
   getDriveConnectionState() {
-    if (!this.isAllowedVolumeType_(VolumeManagerCommon.VolumeType.DRIVE) ||
-        !this.volumeManager_) {
+    if (!this.isAllowedVolumeType_(VolumeType.DRIVE) || !this.volumeManager_) {
       return {
         type: chrome.fileManagerPrivate.DriveConnectionStateType.OFFLINE,
         reason: chrome.fileManagerPrivate.DriveOfflineReason.NO_SERVICE,
-        hasCellularNetworkAccess: false,
-        canPinHostedFiles: false,
       };
     }
 
@@ -400,6 +450,7 @@ export class FilteredVolumeManager extends EventTarget {
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'entry' implicitly has an 'any' type.
   getVolumeInfo(entry) {
     return this.filterDisallowedVolume_(
         this.volumeManager_ && this.volumeManager_.getVolumeInfo(entry));
@@ -407,8 +458,9 @@ export class FilteredVolumeManager extends EventTarget {
 
   /**
    * Obtains a volume information of the current profile.
-   * @param {VolumeManagerCommon.VolumeType} volumeType Volume type.
-   * @return {?VolumeInfo} Found volume info.
+   * @param {VolumeType} volumeType Volume type.
+   * @return {?import('../../externs/volume_info.js').VolumeInfo} Found volume
+   *     info.
    */
   getCurrentProfileVolumeInfo(volumeType) {
     return this.filterDisallowedVolume_(
@@ -417,10 +469,12 @@ export class FilteredVolumeManager extends EventTarget {
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'callback' implicitly has an 'any'
+  // type.
   getDefaultDisplayRoot(callback) {
     this.ensureInitialized(() => {
-      const defaultVolume = this.getCurrentProfileVolumeInfo(
-          VolumeManagerCommon.VolumeType.DOWNLOADS);
+      const defaultVolume =
+          this.getCurrentProfileVolumeInfo(VolumeType.DOWNLOADS);
       if (!defaultVolume) {
         console.warn('Cannot get default display root');
         callback(null);
@@ -455,6 +509,8 @@ export class FilteredVolumeManager extends EventTarget {
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'devicePath' implicitly has an 'any'
+  // type.
   findByDevicePath(devicePath) {
     for (let i = 0; i < this.volumeInfoList.length; i++) {
       const volumeInfo = this.volumeInfoList.item(i);
@@ -470,13 +526,14 @@ export class FilteredVolumeManager extends EventTarget {
    * by {@code volumeId} is created.
    *
    * @param {string} volumeId
-   * @return {!Promise<!VolumeInfo>} The VolumeInfo. Will not resolve
-   *     if the volume is never mounted.
+   * @return {!Promise<!import('../../externs/volume_info.js').VolumeInfo>} The
+   *     VolumeInfo. Will not resolve if the volume is never mounted.
    */
   async whenVolumeInfoReady(volumeId) {
     await this.initialized_;
 
     const volumeInfo = this.filterDisallowedVolume_(
+        // @ts-ignore: error TS2531: Object is possibly 'null'.
         await this.volumeManager_.whenVolumeInfoReady(volumeId));
 
     if (!volumeInfo) {
@@ -487,47 +544,71 @@ export class FilteredVolumeManager extends EventTarget {
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'password' implicitly has an 'any'
+  // type.
   async mountArchive(fileUrl, password) {
     await this.initialized_;
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.volumeManager_.mountArchive(fileUrl, password);
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'fileUrl' implicitly has an 'any' type.
   async cancelMounting(fileUrl) {
     await this.initialized_;
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.volumeManager_.cancelMounting(fileUrl);
   }
 
   /** @override */
+  // @ts-ignore: error TS7006: Parameter 'volumeInfo' implicitly has an 'any'
+  // type.
   async unmount(volumeInfo) {
     await this.initialized_;
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.volumeManager_.unmount(volumeInfo);
   }
 
   /**
    * Requests configuring of the specified volume.
-   * @param {!VolumeInfo} volumeInfo Volume to be configured.
-   * @return {!Promise} Fulfilled on success, otherwise rejected with an error
-   *     message.
+   * @param {!import('../../externs/volume_info.js').VolumeInfo} volumeInfo
+   *     Volume to be configured.
+   * @return {!Promise<void>} Fulfilled on success, otherwise rejected with an
+   *     error message.
    */
   async configure(volumeInfo) {
     await this.initialized_;
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     return this.volumeManager_.configure(volumeInfo);
   }
 
   /**
    * Filters volume info by isAllowedVolume_().
    *
-   * @param {?VolumeInfo} volumeInfo Volume info.
-   * @return {?VolumeInfo} Null if the volume is disallowed. Otherwise just
-   *     returns the volume.
+   * @param {?import('../../externs/volume_info.js').VolumeInfo} volumeInfo
+   *     Volume info.
+   * @return {?import('../../externs/volume_info.js').VolumeInfo} Null if the
+   *     volume is disallowed. Otherwise just returns the volume.
    * @private
    */
   filterDisallowedVolume_(volumeInfo) {
-    if (volumeInfo && this.isAllowedVolume_(volumeInfo)) {
+    if (volumeInfo && this.isAllowedVolume(volumeInfo)) {
       return volumeInfo;
     } else {
       return null;
     }
+  }
+
+  /** @override */
+  // @ts-ignore: error TS4122: This member cannot have a JSDoc comment with an
+  // '@override' tag because it is not declared in the base class 'EventTarget'.
+  hasDisabledVolumes() {
+    return this.disabledVolumes_.length > 0;
+  }
+
+  /** @override */
+  // @ts-ignore: error TS7006: Parameter 'volume' implicitly has an 'any' type.
+  isDisabled(volume) {
+    return this.disabledVolumes_.includes(volume);
   }
 }

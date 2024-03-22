@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,7 @@
 
 #import "ios/chrome/common/ui/util/image_util.h"
 
-#include "ui/gfx/image/resize_image_dimensions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/gfx/image/resize_image_dimensions.h"
 
 UIImage* ResizeImage(UIImage* image,
                      CGSize targetSize,
@@ -33,16 +29,21 @@ UIImage* ResizeImage(UIImage* image,
 
   // Resize photo. Use UIImage drawing methods because they respect
   // UIImageOrientation as opposed to CGContextDrawImage().
-  UIGraphicsBeginImageContextWithOptions(revisedTargetSize, opaque,
-                                         /* scale = */ 0);
-  [image drawInRect:projectTo];
-  UIImage* resizedPhoto = UIGraphicsGetImageFromCurrentImageContext();
-  UIGraphicsEndImageContext();
-  return resizedPhoto;
+  UIGraphicsImageRendererFormat* format =
+      [UIGraphicsImageRendererFormat preferredFormat];
+  format.opaque = opaque;
+
+  UIGraphicsImageRenderer* renderer =
+      [[UIGraphicsImageRenderer alloc] initWithSize:revisedTargetSize
+                                             format:format];
+
+  return [renderer imageWithActions:^(UIGraphicsImageRendererContext* context) {
+    [image drawInRect:projectTo];
+  }];
 }
 
 UIImage* ResizeImageForSearchByImage(UIImage* image) {
-  // Check |image|.
+  // Check `image`.
   if (!image) {
     return nil;
   }

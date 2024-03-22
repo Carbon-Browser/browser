@@ -1,24 +1,26 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import {PromiseResolver} from 'chrome://resources/ash/common/promise_resolver.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {FakeShimlessRmaService} from 'chrome://shimless-rma/fake_shimless_rma_service.js';
 import {setShimlessRmaServiceForTesting} from 'chrome://shimless-rma/mojo_interface_provider.js';
 import {ShimlessRma} from 'chrome://shimless-rma/shimless_rma.js';
 import {RmadErrorCode, ShutdownMethod} from 'chrome://shimless-rma/shimless_rma_types.js';
 import {WrapupRepairCompletePage} from 'chrome://shimless-rma/wrapup_repair_complete_page.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {flushTasks, isVisible} from '../../test_util.js';
+import {isVisible} from '../test_util.js';
 
-export function wrapupRepairCompletePageTest() {
+suite('wrapupRepairCompletePageTest', function() {
   /**
    * ShimlessRma is needed to handle the 'transition-state' event used by
    * the rework button.
    * @type {?ShimlessRma}
    */
-  let shimless_rma_component = null;
+  let shimlessRmaComponent = null;
 
   /** @type {?WrapupRepairCompletePage} */
   let component = null;
@@ -27,7 +29,7 @@ export function wrapupRepairCompletePageTest() {
   let service = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = trustedTypes.emptyHTML;
     service = new FakeShimlessRmaService();
     setShimlessRmaServiceForTesting(service);
   });
@@ -35,8 +37,8 @@ export function wrapupRepairCompletePageTest() {
   teardown(() => {
     component.remove();
     component = null;
-    shimless_rma_component.remove();
-    shimless_rma_component = null;
+    shimlessRmaComponent.remove();
+    shimlessRmaComponent = null;
     service.reset();
   });
 
@@ -46,10 +48,10 @@ export function wrapupRepairCompletePageTest() {
   function initializeRepairCompletePage() {
     assertFalse(!!component);
 
-    shimless_rma_component =
+    shimlessRmaComponent =
         /** @type {!ShimlessRma} */ (document.createElement('shimless-rma'));
-    assertTrue(!!shimless_rma_component);
-    document.body.appendChild(shimless_rma_component);
+    assertTrue(!!shimlessRmaComponent);
+    document.body.appendChild(shimlessRmaComponent);
 
     component = /** @type {!WrapupRepairCompletePage} */ (
         document.createElement('wrapup-repair-complete-page'));
@@ -326,40 +328,16 @@ export function wrapupRepairCompletePageTest() {
 
   test('OpensRmaLogDialog', async () => {
     await initializeRepairCompletePage();
-    await clickButton('#rmaLogButton');
 
-    const logsDialog = component.shadowRoot.querySelector('#logsDialog');
-    assertTrue(!!logsDialog);
-    assertTrue(logsDialog.open);
-  });
-
-  test('SaveLogButtonSavesTheLog', async () => {
-    const resolver = new PromiseResolver();
-    await initializeRepairCompletePage();
-
-    let callCount = 0;
-    service.saveLog = () => {
-      callCount++;
-      return resolver.promise;
+    let openLogsDialogEventFired = false;
+    const eventHandler = (event) => {
+      openLogsDialogEventFired = true;
     };
+    component.addEventListener('open-logs-dialog', eventHandler);
 
-    // Open the logs dialog.
     await clickButton('#rmaLogButton');
-    assertTrue(
-        isVisible(component.shadowRoot.querySelector('#saveLogDialogButton')));
 
-    // Attempt to save the logs.
-    await clickButton('#saveLogDialogButton');
-    resolver.resolve({savePath: 'save/path', error: RmadErrorCode.kOk});
-    await flushTasks();
-
-    assertEquals(1, callCount);
-
-    // The save log button should be replaced by the done button.
-    assertFalse(
-        isVisible(component.shadowRoot.querySelector('#saveLogDialogButton')));
-    assertTrue(isVisible(
-        component.shadowRoot.querySelector('#logSaveDoneDialogButton')));
+    assertTrue(openLogsDialogEventFired);
   });
 
   test('BatteryCutButtonDisabledByDefault', async () => {
@@ -388,18 +366,6 @@ export function wrapupRepairCompletePageTest() {
 
     assertTrue(!!button);
     assertFalse(button.disabled);
-  });
-
-  test('DialogCloses', async () => {
-    await initializeRepairCompletePage();
-    await clickButton('#rmaLogButton');
-    await clickButton('#closeLogDialogButton');
-
-    const logsDialog = component.shadowRoot.querySelector('#logsDialog');
-    assertTrue(!!logsDialog);
-    assertFalse(logsDialog.open);
-
-    await clickButton('#batteryCutButton');
   });
 
   test('PowerwashCancelButtonClosesPowerwashDialog', async () => {
@@ -512,4 +478,4 @@ export function wrapupRepairCompletePageTest() {
     assertTrue(component.shadowRoot.querySelector('#shutDownButton').disabled);
     assertTrue(component.shadowRoot.querySelector('#rebootButton').disabled);
   });
-}
+});

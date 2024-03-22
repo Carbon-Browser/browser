@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,9 @@
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/account_id/account_id.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/session_manager/core/session_manager.h"
+#include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
@@ -41,7 +43,7 @@ void CreateAndStartUserSession(const AccountId& account_id) {
   known_user.SetProfileRequiresPolicy(
       account_id, user_manager::ProfileRequiresPolicy::kNoPolicyRequired);
   const std::string user_id_hash =
-      ProfileHelper::GetUserIdHashByUserIdForTesting(account_id.GetUserEmail());
+      user_manager::FakeUserManager::GetFakeUsernameHash(account_id);
   SessionManager::Get()->CreateSession(account_id, user_id_hash, false);
   profiles::testing::CreateProfileSync(
       g_browser_process->profile_manager(),
@@ -121,16 +123,42 @@ IN_PROC_BROWSER_TEST_F(ChromeNewWindowClientBrowserTest, IncognitoDisabled) {
 
   // Disabling incognito mode disables creation of new incognito windows.
   IncognitoModePrefs::SetAvailability(
-      profile->GetPrefs(), IncognitoModePrefs::Availability::kDisabled);
+      profile->GetPrefs(), policy::IncognitoModeAvailability::kDisabled);
   ChromeNewWindowClient::Get()->NewWindow(
       /*incognito=*/true, /*should_trigger_session_restore=*/true);
   EXPECT_EQ(1u, chrome::GetTotalBrowserCount());
 
   // Enabling incognito mode enables creation of new incognito windows.
   IncognitoModePrefs::SetAvailability(
-      profile->GetPrefs(), IncognitoModePrefs::Availability::kEnabled);
+      profile->GetPrefs(), policy::IncognitoModeAvailability::kEnabled);
   ChromeNewWindowClient::Get()->NewWindow(
       /*incognito=*/true, /*should_trigger_session_restore=*/true);
   EXPECT_EQ(2u, chrome::GetTotalBrowserCount());
   EXPECT_TRUE(GetLastActiveBrowser()->profile()->IsIncognitoProfile());
+}
+
+IN_PROC_BROWSER_TEST_F(ChromeNewWindowClientBrowserTest, IncognitoForced) {
+  Profile* profile = ProfileManager::GetActiveUserProfile();
+
+  // Forcing Incognito mode, opens any consequent window & tabs in Incognito.
+  IncognitoModePrefs::SetAvailability(
+      profile->GetPrefs(), policy::IncognitoModeAvailability::kForced);
+
+  // Deactivating the current normal profile browser
+  Browser* regular_browser = GetLastActiveBrowser();
+  regular_browser->window()->Deactivate();
+
+  // NewTab should open a new browser window in Incognito
+  ChromeNewWindowClient::Get()->NewTab();
+  EXPECT_EQ(2u, chrome::GetTotalBrowserCount());
+
+  Browser* incognito_browser = GetLastActiveBrowser();
+  EXPECT_TRUE(incognito_browser->profile()->IsIncognitoProfile());
+
+  // After deactivating browsers, NewTab should open a new Incognito Tab only
+  incognito_browser->window()->Deactivate();
+  regular_browser->window()->Deactivate();
+  ChromeNewWindowClient::Get()->NewTab();
+  EXPECT_EQ(2u, chrome::GetTotalBrowserCount());
+  EXPECT_EQ(2, incognito_browser->tab_strip_model()->count());
 }

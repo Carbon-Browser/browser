@@ -1,22 +1,26 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/gamepad/wgi_data_fetcher_win.h"
 
+#include <XInput.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <wrl/event.h>
 
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "base/containers/cxx20_erase.h"
 #include "base/containers/flat_map.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_util_win.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/hstring_reference.h"
 #include "base/win/windows_version.h"
@@ -26,10 +30,14 @@
 #include "device/gamepad/gamepad_standard_mappings.h"
 #include "device/gamepad/nintendo_controller.h"
 #include "device/gamepad/wgi_gamepad_device.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
 namespace {
+
+constexpr char16_t kKnownXInputDeviceId[] =
+    u"Xbox 360 Controller (XInput STANDARD GAMEPAD)";
 
 Microsoft::WRL::ComPtr<ABI::Windows::Gaming::Input::IRawGameController>
 GetRawGameController(ABI::Windows::Gaming::Input::IGamepad* gamepad,
@@ -62,29 +70,30 @@ GetRawGameController(ABI::Windows::Gaming::Input::IGamepad* gamepad,
   return raw_game_controller;
 }
 
-GamepadId GetGamepadId(const std::u16string& product_name,
-                       ABI::Windows::Gaming::Input::IGamepad* gamepad,
-                       WgiDataFetcherWin::GetActivationFactoryFunction
-                           get_activation_factory_function) {
+absl::optional<GamepadId> GetGamepadId(
+    const std::u16string& product_name,
+    ABI::Windows::Gaming::Input::IGamepad* gamepad,
+    WgiDataFetcherWin::GetActivationFactoryFunction
+        get_activation_factory_function) {
   std::string product_name_string = base::UTF16ToUTF8(product_name);
   HRESULT hr = S_OK;
   Microsoft::WRL::ComPtr<ABI::Windows::Gaming::Input::IRawGameController>
       raw_game_controller =
           GetRawGameController(gamepad, get_activation_factory_function);
   if (!raw_game_controller) {
-    return GamepadId::kUnknownGamepad;
+    return absl::nullopt;
   }
 
   uint16_t vendor_id;
   hr = raw_game_controller->get_HardwareVendorId(&vendor_id);
   if (FAILED(hr)) {
-    return GamepadId::kUnknownGamepad;
+    return absl::nullopt;
   }
 
   uint16_t product_id;
   hr = raw_game_controller->get_HardwareProductId(&product_id);
   if (FAILED(hr)) {
-    return GamepadId::kUnknownGamepad;
+    return absl::nullopt;
   }
 
   return GamepadIdList::Get().GetGamepadId(product_name_string, vendor_id,
@@ -96,10 +105,6 @@ GamepadId GetGamepadId(const std::u16string& product_name,
 // dedicated data fetchers designed for these gamepads.
 // We want to let those data fetchers handle the gamepad input instead.
 bool ShouldEnumerateGamepad(GamepadId gamepad_id) {
-  if (gamepad_id == GamepadId::kUnknownGamepad) {
-    return false;
-  }
-
   if (NintendoController::IsNintendoController(gamepad_id)) {
     // Nintendo devices are handled by the Nintendo data fetcher.
     return false;
@@ -159,6 +164,8 @@ bool HasTriggerRumbleSupport(GamepadId gamepad_id) {
          gamepad_id == GamepadId::kMicrosoftProduct02ea ||
          // Xbox One S Bluetooth
          gamepad_id == GamepadId::kMicrosoftProduct02e0 ||
+         // Xbox One S USB
+         gamepad_id == GamepadId::kMicrosoftProduct0b06 ||
          // Xbox Series X USB
          gamepad_id == GamepadId::kMicrosoftProduct0b12 ||
          // Xbox Series X Bluetooth
@@ -170,7 +177,7 @@ bool HasTriggerRumbleSupport(GamepadId gamepad_id) {
          // Xbox One Elite Series 2 Bluetooth
          gamepad_id == GamepadId::kMicrosoftProduct0b05 ||
          // Xbox Elite Series 2 Bluetooth 2021 Firmware
-         gamepad_id == GamepadId::kMicrosoftProduct0b05;
+         gamepad_id == GamepadId::kMicrosoftProduct0b22;
 }
 
 }  // namespace
@@ -184,6 +191,8 @@ WgiDataFetcherWin::WgiDataFetcherWin() {
   } else {
     get_activation_factory_function_ = &base::win::RoGetActivationFactory;
   }
+
+  xinput_data_fetcher_ = std::make_unique<XInputDataFetcherWin>();
 }
 
 WgiDataFetcherWin::~WgiDataFetcherWin() {
@@ -201,12 +210,6 @@ GamepadSource WgiDataFetcherWin::source() {
 
 void WgiDataFetcherWin::OnAddedToProvider() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!base::win::HStringReference::ResolveCoreWinRTStringDelayload()) {
-    initialization_state_ =
-        InitializationState::kCoreWinrtStringDelayLoadFailed;
-    return;
-  }
-
   HRESULT hr = get_activation_factory_function_(
       base::win::HStringReference(RuntimeClass_Windows_Gaming_Input_Gamepad)
           .Get(),
@@ -242,7 +245,7 @@ void WgiDataFetcherWin::OnAddedToProvider() {
     UnregisterEventHandlers();
     return;
   }
-
+  xinput_data_fetcher_->InitializeForWgiDataFetcher();
   initialization_state_ = InitializationState::kInitialized;
 }
 
@@ -261,8 +264,16 @@ void WgiDataFetcherWin::OnGamepadAdded(
     return;
 
   const std::u16string display_name = GetGamepadDisplayName(gamepad);
-  GamepadId gamepad_id =
+  absl::optional<GamepadId> gamepad_id_optional =
       GetGamepadId(display_name, gamepad, get_activation_factory_function_);
+
+  // If `gamepad_id_optional` has absl::nullopt, it means that an error has
+  // happened when calling the Windows API's.
+  if (!gamepad_id_optional.has_value()) {
+    return;
+  }
+
+  GamepadId gamepad_id = gamepad_id_optional.value();
   if (!ShouldEnumerateGamepad(gamepad_id)) {
     return;
   }
@@ -273,7 +284,7 @@ void WgiDataFetcherWin::OnGamepadAdded(
     return;
   state->is_initialized = true;
   Gamepad& pad = state->data;
-  pad.SetID(display_name);
+  pad.SetID(BuildGamepadIdString(gamepad_id, display_name, gamepad));
   pad.connected = true;
 
   if (HasTriggerRumbleSupport(gamepad_id)) {
@@ -310,10 +321,18 @@ void WgiDataFetcherWin::OnGamepadRemoved(
 
 void WgiDataFetcherWin::GetGamepadData(bool devices_changed_hint) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // Store a pointer to the WGI PadState with the lowest index, so that we can
+  // redirect any detected meta button presses to it.
+  PadState* lowest_index_wgi_pad_state = nullptr;
   for (const auto& map_entry : devices_) {
     PadState* state = GetPadState(map_entry.first);
     if (!state)
       continue;
+
+    // Check the PadState index and store it.
+    if (!lowest_index_wgi_pad_state ||
+        state->pad_index < lowest_index_wgi_pad_state->pad_index)
+      lowest_index_wgi_pad_state = state;
 
     ABI::Windows::Gaming::Input::GamepadReading reading;
     Microsoft::WRL::ComPtr<ABI::Windows::Gaming::Input::IGamepad> gamepad =
@@ -323,12 +342,7 @@ void WgiDataFetcherWin::GetGamepadData(bool devices_changed_hint) {
 
     Gamepad& pad = state->data;
     pad.timestamp = CurrentTimeInMicroseconds();
-    const uint32_t num_paddles = GetPaddleNumber(gamepad);
-    if (num_paddles == 0) {
-      pad.buttons_length = BUTTON_INDEX_COUNT - 1;  // No meta.
-    } else {
-      pad.buttons_length = BUTTON_INDEX_COUNT + num_paddles;
-    }
+    pad.buttons_length = BUTTON_INDEX_COUNT + GetPaddleNumber(gamepad);
 
     static constexpr struct {
       int button_index;
@@ -395,6 +409,18 @@ void WgiDataFetcherWin::GetGamepadData(bool devices_changed_hint) {
     pad.axes[AXIS_INDEX_LEFT_STICK_Y] = reading.LeftThumbstickY * -1.0f;
     pad.axes[AXIS_INDEX_RIGHT_STICK_X] = reading.RightThumbstickX;
     pad.axes[AXIS_INDEX_RIGHT_STICK_Y] = reading.RightThumbstickY * -1.0f;
+  }
+
+  // We should only call the XInput functions if there are WGI gamepads added.
+  // Only the lowest-index WGI gamepad should receive the meta input. Also, the
+  // XInput meta input should be received even if there is an error while
+  // getting the WGI reading.
+  if (lowest_index_wgi_pad_state) {
+    bool is_meta_pressed = xinput_data_fetcher_->IsAnyMetaButtonPressed();
+    lowest_index_wgi_pad_state->data.buttons[BUTTON_INDEX_META].pressed =
+        is_meta_pressed;
+    lowest_index_wgi_pad_state->data.buttons[BUTTON_INDEX_META].value =
+        is_meta_pressed ? 1.f : 0.f;
   }
 }
 
@@ -480,6 +506,32 @@ std::u16string WgiDataFetcherWin::GetGamepadDisplayName(
   }
   base::win::ScopedHString scoped_display_name(display_name);
   return base::AsString16(scoped_display_name.Get());
+}
+
+std::u16string WgiDataFetcherWin::BuildGamepadIdString(
+    GamepadId gamepad_id,
+    const std::u16string& display_name,
+    ABI::Windows::Gaming::Input::IGamepad* gamepad) {
+  // Return early for GamepadId::kUnknownGamepad because
+  // GetDeviceIdsFromGamepadId has a DCHECK against it.
+  if (gamepad_id == GamepadId::kUnknownGamepad) {
+    return display_name + u" (STANDARD GAMEPAD)";
+  }
+
+  uint16_t vendor_id, product_id;
+  std::tie(vendor_id, product_id) =
+      GamepadIdList::Get().GetDeviceIdsFromGamepadId(gamepad_id);
+  XInputType xinput_type =
+      GamepadIdList::Get().GetXInputType(vendor_id, product_id);
+  if (xinput_type == kXInputTypeNone) {
+    return display_name + base::ASCIIToUTF16(base::StringPrintf(
+                              " (STANDARD GAMEPAD Vendor: %04x Product: %04x)",
+                              vendor_id, product_id));
+  }
+
+  // If the device is an already known XInput device that is now being
+  // enumerated by WGI, return the old XInput id string.
+  return kKnownXInputDeviceId;
 }
 
 void WgiDataFetcherWin::UnregisterEventHandlers() {

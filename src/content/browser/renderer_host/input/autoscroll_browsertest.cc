@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -175,8 +175,9 @@ class AutoscrollBrowserTest : public ContentBrowserTest {
 };
 
 // We don't plan on supporting middle click autoscroll on Android.
-// See https://crbug.com/686223
-#if !BUILDFLAG(IS_ANDROID)
+// See https://crbug.com/686223 We similarly don't plan on supporting
+// this for iOS.
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 IN_PROC_BROWSER_TEST_F(AutoscrollBrowserTest, AutoscrollFling) {
   LoadURL(kAutoscrollDataURL);
 
@@ -346,6 +347,6 @@ IN_PROC_BROWSER_TEST_F(AutoscrollBrowserTest,
   GetWidgetHost()->ForwardMouseEvent(move_down);
   WaitForScroll(observer);
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 }  // namespace content

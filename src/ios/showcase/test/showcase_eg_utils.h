@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,12 @@ void Open(NSString* name);
 
 // Returns to the Showcase home screen from a particular screen.
 void Close();
+
+// Enters a search query into the Showcase table view search bar.
+void Search(NSString* query);
+
+// Clears the search query in the Showcase table view search bar.
+void ClearSearch();
 
 }  // namespace showcase_utils
 

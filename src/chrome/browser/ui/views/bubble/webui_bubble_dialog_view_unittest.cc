@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,8 +72,8 @@ class WebUIBubbleDialogViewTest : public ChromeViewsTestBase {
   std::unique_ptr<TestingProfile> profile_;
   views::UniqueWidgetPtr anchor_widget_;
   std::unique_ptr<TestBubbleContentsWrapper> contents_wrapper_;
-  raw_ptr<Widget> bubble_widget_ = nullptr;
-  raw_ptr<WebUIBubbleDialogView> bubble_view_ = nullptr;
+  raw_ptr<Widget, DanglingUntriaged> bubble_widget_ = nullptr;
+  raw_ptr<WebUIBubbleDialogView, DanglingUntriaged> bubble_view_ = nullptr;
 };
 
 TEST_F(WebUIBubbleDialogViewTest, BubbleRespondsToWebViewPreferredSizeChanges) {

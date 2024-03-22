@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/containers/lru_cache.h"
 #include "base/containers/span.h"
 #include "base/memory/memory_pressure_listener.h"
+#include "base/time/time.h"
 #include "cc/paint/image_transfer_cache_entry.h"
 #include "cc/paint/transfer_cache_entry.h"
 #include "gpu/command_buffer/common/discardable_handle.h"
@@ -59,6 +60,7 @@ class GPU_GLES2_EXPORT ServiceTransferCache
   bool CreateLockedEntry(const EntryKey& key,
                          ServiceDiscardableHandle handle,
                          GrDirectContext* context,
+                         skgpu::graphite::Recorder* graphite_recorder,
                          base::span<uint8_t> data);
   void CreateLocalEntry(const EntryKey& key,
                         std::unique_ptr<cc::ServiceTransferCacheEntry> entry);
@@ -106,13 +108,18 @@ class GPU_GLES2_EXPORT ServiceTransferCache
 
  private:
   struct CacheEntryInternal {
-    CacheEntryInternal(absl::optional<ServiceDiscardableHandle> handle,
+    CacheEntryInternal(std::optional<ServiceDiscardableHandle> handle,
                        std::unique_ptr<cc::ServiceTransferCacheEntry> entry);
     CacheEntryInternal(CacheEntryInternal&& other);
     CacheEntryInternal& operator=(CacheEntryInternal&& other);
     ~CacheEntryInternal();
-    absl::optional<ServiceDiscardableHandle> handle;
+    std::optional<ServiceDiscardableHandle> handle;
     std::unique_ptr<cc::ServiceTransferCacheEntry> entry;
+
+    // For metrics.
+    uint32_t num_reuse = 0u;
+    base::TimeTicks last_use = base::TimeTicks::Now();
+    base::TimeDelta max_last_use_delta;
   };
 
   struct EntryKeyComp {

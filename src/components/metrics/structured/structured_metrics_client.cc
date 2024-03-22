@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 #include "base/no_destructor.h"
 #include "components/metrics/structured/event.h"
 
-namespace metrics {
-namespace structured {
+namespace metrics::structured {
 
 StructuredMetricsClient::StructuredMetricsClient() = default;
 StructuredMetricsClient::~StructuredMetricsClient() = default;
@@ -22,13 +21,9 @@ StructuredMetricsClient* StructuredMetricsClient::Get() {
 }
 
 void StructuredMetricsClient::Record(Event&& event) {
-  if (delegate_ && delegate_->IsReadyToRecord())
+  if (delegate_ && delegate_->IsReadyToRecord()) {
     delegate_->RecordEvent(std::move(event));
-}
-
-void StructuredMetricsClient::Record(EventBase&& event_base) {
-  if (delegate_ && delegate_->IsReadyToRecord())
-    delegate_->Record(std::move(event_base));
+  }
 }
 
 void StructuredMetricsClient::SetDelegate(RecordingDelegate* delegate) {
@@ -39,5 +34,4 @@ void StructuredMetricsClient::UnsetDelegate() {
   delegate_ = nullptr;
 }
 
-}  // namespace structured
-}  // namespace metrics
+}  // namespace metrics::structured

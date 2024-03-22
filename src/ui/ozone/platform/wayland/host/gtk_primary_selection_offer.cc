@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,10 @@ namespace ui {
 GtkPrimarySelectionOffer::GtkPrimarySelectionOffer(
     gtk_primary_selection_offer* data_offer)
     : data_offer_(data_offer) {
-  static constexpr gtk_primary_selection_offer_listener kListener = {&OnOffer};
-  gtk_primary_selection_offer_add_listener(data_offer, &kListener, this);
+  static constexpr gtk_primary_selection_offer_listener
+      kPrimarySelectionOfferListener = {.offer = &OnOffer};
+  gtk_primary_selection_offer_add_listener(
+      data_offer, &kPrimarySelectionOfferListener, this);
 }
 
 GtkPrimarySelectionOffer::~GtkPrimarySelectionOffer() {
@@ -44,9 +46,10 @@ base::ScopedFD GtkPrimarySelectionOffer::Receive(const std::string& mime_type) {
 }
 
 // static
-void GtkPrimarySelectionOffer::OnOffer(void* data,
-                                       gtk_primary_selection_offer* data_offer,
-                                       const char* mime_type) {
+void GtkPrimarySelectionOffer::OnOffer(
+    void* data,
+    gtk_primary_selection_offer* selection_offer,
+    const char* mime_type) {
   auto* self = static_cast<GtkPrimarySelectionOffer*>(data);
   self->AddMimeType(mime_type);
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #import "ios/chrome/common/credential_provider/credential.h"
 
-// Credential that can be archived. |serviceIdentifier| must be unique between
+// Credential that can be archived. `serviceIdentifier` must be unique between
 // credentials, as it is used for equality.
 //
 // Credentials are immutable and don't hold state, and because of this the
@@ -17,14 +17,13 @@
 @interface ArchivableCredential : NSObject <Credential, NSSecureCoding>
 
 - (instancetype)initWithFavicon:(NSString*)favicon
-             keychainIdentifier:(NSString*)keychainIdentifier
+                       password:(NSString*)password
                            rank:(int64_t)rank
                recordIdentifier:(NSString*)recordIdentifier
               serviceIdentifier:(NSString*)serviceIdentifier
                     serviceName:(NSString*)serviceName
                            user:(NSString*)user
-           validationIdentifier:(NSString*)validationIdentifier
-    NS_DESIGNATED_INITIALIZER;
+                           note:(NSString*)note NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
 

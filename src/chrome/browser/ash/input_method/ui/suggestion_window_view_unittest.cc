@@ -1,34 +1,33 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/input_method/ui/suggestion_window_view.h"
+#include "base/memory/raw_ptr.h"
 
 #include <string>
 
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/ash/input_method/assistive_window_properties.h"
 #include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
 #include "chrome/browser/ash/input_method/ui/completion_suggestion_label_view.h"
 #include "chrome/browser/ash/input_method/ui/completion_suggestion_view.h"
+#include "chrome/browser/ash/input_method/ui/mock_assistive_delegate.h"
 #include "chrome/browser/ash/input_method/ui/suggestion_details.h"
 #include "chrome/test/views/chrome_views_test_base.h"
+#include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/events/base_event_utils.h"
 #include "ui/gfx/text_utils.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/link.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/test/button_test_api.h"
 
 namespace ui {
 namespace ime {
-
-class MockAssistiveDelegate : public AssistiveDelegate {
- public:
-  ~MockAssistiveDelegate() override = default;
-  void AssistiveWindowButtonClicked(
-      const ui::ime::AssistiveWindowButton& button) const override {}
-};
 
 class SuggestionWindowViewTest
     : public ChromeViewsTestBase,
@@ -46,6 +45,7 @@ class SuggestionWindowViewTest
     ChromeViewsTestBase::SetUp();
     InitCandidates();
     window_.candidates = candidates_;
+    window_.show_setting_link = true;
 
     suggestion_window_view_ =
         SuggestionWindowView::Create(GetContext(), delegate_.get(), GetParam());
@@ -70,24 +70,23 @@ class SuggestionWindowViewTest
     const auto& children =
         suggestion_window_view_->multiple_candidate_area_for_testing()
             ->children();
-    return std::count_if(
-        children.cbegin(), children.cend(),
-        [](const views::View* v) { return !!v->background(); });
+    return base::ranges::count_if(
+        children, [](const views::View* v) { return !!v->background(); });
   }
 
   absl::optional<int> GetHighlightedIndex() const {
     const auto& children =
         suggestion_window_view_->multiple_candidate_area_for_testing()
             ->children();
-    const auto it =
-        std::find_if(children.cbegin(), children.cend(),
-                     [](const views::View* v) { return !!v->background(); });
+    const auto it = base::ranges::find_if(
+        children, [](const views::View* v) { return !!v->background(); });
     return (it == children.cend())
                ? absl::nullopt
                : absl::make_optional(std::distance(children.cbegin(), it));
   }
 
-  SuggestionWindowView* suggestion_window_view_;
+  raw_ptr<SuggestionWindowView, DanglingUntriaged | ExperimentalAsh>
+      suggestion_window_view_;
   std::unique_ptr<MockAssistiveDelegate> delegate_ =
       std::make_unique<MockAssistiveDelegate>();
   std::vector<std::u16string> candidates_;
@@ -108,10 +107,10 @@ INSTANTIATE_TEST_SUITE_P(
       std::string name;
       switch (info.param) {
         case SuggestionWindowView::Orientation::kHorizontal:
-          name = "Horizontal";
+          name = "InitInHorizontal";
           break;
         case SuggestionWindowView::Orientation::kVertical:
-          name = "Vertical";
+          name = "InitInVertical";
           break;
         default:
           name = "UNKNOWN";
@@ -121,7 +120,7 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 TEST_P(SuggestionWindowViewTest, HighlightOneCandidateWhenIndexIsValid) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   for (int index = 0; index < static_cast<int>(candidates_.size()); index++) {
     candidate_button_.index = index;
     suggestion_window_view_->SetButtonHighlighted(candidate_button_, true);
@@ -132,7 +131,7 @@ TEST_P(SuggestionWindowViewTest, HighlightOneCandidateWhenIndexIsValid) {
 }
 
 TEST_P(SuggestionWindowViewTest, HighlightNoCandidateWhenIndexIsInvalid) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   for (int index : {-1, static_cast<int>(candidates_.size())}) {
     candidate_button_.index = index;
     suggestion_window_view_->SetButtonHighlighted(candidate_button_, true);
@@ -143,7 +142,7 @@ TEST_P(SuggestionWindowViewTest, HighlightNoCandidateWhenIndexIsInvalid) {
 }
 
 TEST_P(SuggestionWindowViewTest, HighlightTheSameCandidateWhenCalledTwice) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   int highlight_index = 0;
   candidate_button_.index = highlight_index;
   suggestion_window_view_->SetButtonHighlighted(candidate_button_, true);
@@ -155,7 +154,7 @@ TEST_P(SuggestionWindowViewTest, HighlightTheSameCandidateWhenCalledTwice) {
 
 TEST_P(SuggestionWindowViewTest,
        HighlightValidCandidateAfterGivingInvalidIndexThenValidIndex) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   int valid_index = 0;
   candidate_button_.index = candidates_.size();
   suggestion_window_view_->SetButtonHighlighted(candidate_button_, true);
@@ -168,7 +167,7 @@ TEST_P(SuggestionWindowViewTest,
 
 TEST_P(SuggestionWindowViewTest,
        KeepHighlightingValidCandidateWhenGivingValidThenInvalidIndex) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   int valid_index = 0;
   candidate_button_.index = valid_index;
   suggestion_window_view_->SetButtonHighlighted(candidate_button_, true);
@@ -180,7 +179,7 @@ TEST_P(SuggestionWindowViewTest,
 }
 
 TEST_P(SuggestionWindowViewTest, UnhighlightCandidateIfCurrentlyHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   candidate_button_.index = 0;
   suggestion_window_view_->SetButtonHighlighted(candidate_button_, true);
   suggestion_window_view_->SetButtonHighlighted(candidate_button_, false);
@@ -191,7 +190,7 @@ TEST_P(SuggestionWindowViewTest, UnhighlightCandidateIfCurrentlyHighlighted) {
 
 TEST_P(SuggestionWindowViewTest,
        DoesNotUnhighlightCandidateIfNotCurrentlyHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   int highlight_index = 0;
   candidate_button_.index = highlight_index;
   suggestion_window_view_->SetButtonHighlighted(candidate_button_, true);
@@ -203,7 +202,7 @@ TEST_P(SuggestionWindowViewTest,
 }
 
 TEST_P(SuggestionWindowViewTest, DoesNotUnhighlightCandidateIfOutOfRange) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   int highlight_index = 0;
   candidate_button_.index = highlight_index;
   suggestion_window_view_->SetButtonHighlighted(candidate_button_, true);
@@ -218,7 +217,7 @@ TEST_P(SuggestionWindowViewTest, DoesNotUnhighlightCandidateIfOutOfRange) {
 }
 
 TEST_P(SuggestionWindowViewTest, HighlightsSettingLinkViewWhenNotHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   suggestion_window_view_->SetButtonHighlighted(setting_link_view_, true);
 
   EXPECT_TRUE(
@@ -228,7 +227,7 @@ TEST_P(SuggestionWindowViewTest, HighlightsSettingLinkViewWhenNotHighlighted) {
 
 TEST_P(SuggestionWindowViewTest,
        HighlightsSettingLinkViewWhenAlreadyHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   suggestion_window_view_->SetButtonHighlighted(setting_link_view_, true);
   suggestion_window_view_->SetButtonHighlighted(setting_link_view_, true);
 
@@ -238,7 +237,7 @@ TEST_P(SuggestionWindowViewTest,
 }
 
 TEST_P(SuggestionWindowViewTest, UnhighlightsSettingLinkViewWhenHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   suggestion_window_view_->SetButtonHighlighted(setting_link_view_, false);
 
   EXPECT_TRUE(
@@ -248,7 +247,7 @@ TEST_P(SuggestionWindowViewTest, UnhighlightsSettingLinkViewWhenHighlighted) {
 
 TEST_P(SuggestionWindowViewTest,
        UnhighlightsKeepSettingLinkViewUnhighlightedWhenAlreadyNotHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   suggestion_window_view_->SetButtonHighlighted(setting_link_view_, false);
   suggestion_window_view_->SetButtonHighlighted(setting_link_view_, false);
 
@@ -258,7 +257,7 @@ TEST_P(SuggestionWindowViewTest,
 }
 
 TEST_P(SuggestionWindowViewTest, HighlightsLearnMoreButtonWhenNotHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   suggestion_window_view_->SetButtonHighlighted(learn_more_button_, true);
 
   EXPECT_TRUE(
@@ -268,7 +267,7 @@ TEST_P(SuggestionWindowViewTest, HighlightsLearnMoreButtonWhenNotHighlighted) {
 
 TEST_P(SuggestionWindowViewTest,
        HighlightsLearnMoreButtonWhenAlreadyHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   suggestion_window_view_->SetButtonHighlighted(learn_more_button_, true);
   suggestion_window_view_->SetButtonHighlighted(learn_more_button_, true);
 
@@ -278,7 +277,7 @@ TEST_P(SuggestionWindowViewTest,
 }
 
 TEST_P(SuggestionWindowViewTest, UnhighlightsLearnMoreButtonWhenHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   suggestion_window_view_->SetButtonHighlighted(learn_more_button_, false);
 
   EXPECT_TRUE(
@@ -288,7 +287,7 @@ TEST_P(SuggestionWindowViewTest, UnhighlightsLearnMoreButtonWhenHighlighted) {
 
 TEST_P(SuggestionWindowViewTest,
        UnhighlightsKeepLearnMoreButtonUnhighlightedWhenAlreadyNotHighlighted) {
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
   suggestion_window_view_->SetButtonHighlighted(learn_more_button_, false);
   suggestion_window_view_->SetButtonHighlighted(learn_more_button_, false);
 
@@ -297,7 +296,7 @@ TEST_P(SuggestionWindowViewTest,
       nullptr);
 }
 
-TEST_P(SuggestionWindowViewTest, DisplaysCorrectOrientationLayout) {
+TEST_P(SuggestionWindowViewTest, SetUpInCorrectOrientationLayoutOnInit) {
   views::BoxLayout::Orientation expected_orientation;
   switch (GetParam()) {
     case SuggestionWindowView::Orientation::kHorizontal:
@@ -309,13 +308,63 @@ TEST_P(SuggestionWindowViewTest, DisplaysCorrectOrientationLayout) {
     default:
       abort();
   }
-  suggestion_window_view_->ShowMultipleCandidates(window_);
+
   views::BoxLayout::Orientation layout_orientation =
+      static_cast<views::BoxLayout*>(
+          suggestion_window_view_->GetLayoutManager())
+          ->GetOrientation();
+  EXPECT_EQ(layout_orientation, expected_orientation);
+}
+
+TEST_P(SuggestionWindowViewTest, HasVerticalLayoutWhenShowSingleCandidate) {
+  suggestion_window_view_->Show({
+      .text = u"good",
+      .confirmed_length = 0,
+  });
+
+  views::BoxLayout::Orientation layout_orientation =
+      static_cast<views::BoxLayout*>(
+          suggestion_window_view_->GetLayoutManager())
+          ->GetOrientation();
+  EXPECT_EQ(layout_orientation, views::BoxLayout::Orientation::kVertical);
+}
+
+TEST_P(SuggestionWindowViewTest,
+       HasHorizontalLayoutWhenShowMultipleCandidateWithHorizontal) {
+  suggestion_window_view_->ShowMultipleCandidates(
+      window_, SuggestionWindowView::Orientation::kHorizontal);
+
+  views::BoxLayout::Orientation layout_orientation =
+      static_cast<views::BoxLayout*>(
+          suggestion_window_view_->GetLayoutManager())
+          ->GetOrientation();
+  views::BoxLayout::Orientation candidate_area_layout_orientation =
       static_cast<views::BoxLayout*>(
           suggestion_window_view_->multiple_candidate_area_for_testing()
               ->GetLayoutManager())
           ->GetOrientation();
-  EXPECT_EQ(layout_orientation, expected_orientation);
+  EXPECT_EQ(layout_orientation, views::BoxLayout::Orientation::kHorizontal);
+  EXPECT_EQ(candidate_area_layout_orientation,
+            views::BoxLayout::Orientation::kHorizontal);
+}
+
+TEST_P(SuggestionWindowViewTest,
+       HasVerticalLayoutWhenShowMultipleCandidateWithVertical) {
+  suggestion_window_view_->ShowMultipleCandidates(
+      window_, SuggestionWindowView::Orientation::kVertical);
+
+  views::BoxLayout::Orientation layout_orientation =
+      static_cast<views::BoxLayout*>(
+          suggestion_window_view_->GetLayoutManager())
+          ->GetOrientation();
+  views::BoxLayout::Orientation candidate_area_layout_orientation =
+      static_cast<views::BoxLayout*>(
+          suggestion_window_view_->multiple_candidate_area_for_testing()
+              ->GetLayoutManager())
+          ->GetOrientation();
+  EXPECT_EQ(layout_orientation, views::BoxLayout::Orientation::kVertical);
+  EXPECT_EQ(candidate_area_layout_orientation,
+            views::BoxLayout::Orientation::kVertical);
 }
 
 TEST_P(SuggestionWindowViewTest,
@@ -347,6 +396,21 @@ TEST_P(SuggestionWindowViewTest,
       CompletionSuggestionLabelView::kFontSize, gfx::Font::Weight::NORMAL);
   EXPECT_EQ(suggestion_window_view_->GetBoundsInScreen().x(),
             100 - kPadding - gfx::GetStringWidth(u"how a", font_list));
+}
+
+TEST_P(SuggestionWindowViewTest,
+       SendsCorrectWindowTypeForLearnMoreButtonClick) {
+  window_.type = ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion;
+  suggestion_window_view_->ShowMultipleCandidates(window_, GetParam());
+  ui::MouseEvent mouse_event(ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(),
+                             ui::EventTimeForNow(), ui::EF_NONE, ui::EF_NONE);
+
+  views::test::ButtonTestApi(
+      suggestion_window_view_->learn_more_button_for_testing())
+      .NotifyClick(mouse_event);
+
+  EXPECT_EQ(MockAssistiveDelegate::last_window_type_,
+            ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion);
 }
 
 }  // namespace ime

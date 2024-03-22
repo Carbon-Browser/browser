@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "base/strings/stringprintf.h"
+#include "base/test/gtest_util.h"
 #include "base/time/time.h"
 #include "cc/animation/animation_delegate.h"
 #include "cc/animation/animation_host.h"
@@ -397,6 +398,9 @@ TEST_F(AnimationTest, AttachTwoAnimationsToOneLayer) {
       element_id_, ElementListType::PENDING, end_opacity);
   client_impl_.ExpectTransformPropertyMutated(
       element_id_, ElementListType::PENDING, transform_x, transform_y);
+
+  animation1->set_animation_delegate(nullptr);
+  animation2->set_animation_delegate(nullptr);
 }
 
 TEST_F(AnimationTest, AddRemoveAnimationToNonAttachedAnimation) {
@@ -470,6 +474,28 @@ TEST_F(AnimationTest, AddRemoveAnimationToNonAttachedAnimation) {
       element_id_, ElementListType::ACTIVE, TargetProperty::FILTER));
 }
 
+using AnimationDeathTest = AnimationTest;
+
+TEST_F(AnimationDeathTest, RemoveAddInSameFrame) {
+  client_.RegisterElementId(element_id_, ElementListType::ACTIVE);
+  host_->AddAnimationTimeline(timeline_);
+  timeline_->AttachAnimation(animation_);
+  animation_->AttachElement(element_id_);
+
+  EXPECT_TRUE(client_.mutators_need_commit());
+  client_.set_mutators_need_commit(false);
+
+  const int keyframe_model_id =
+      AddOpacityTransitionToAnimation(animation_.get(), 1., .7f, .3f, false);
+  host_->PushPropertiesTo(host_impl_, client_.GetPropertyTrees());
+
+  animation_->RemoveKeyframeModel(keyframe_model_id);
+  AddOpacityTransitionToAnimation(animation_.get(), 1., .7f, .3f, false,
+                                  keyframe_model_id);
+  EXPECT_DCHECK_DEATH(
+      host_->PushPropertiesTo(host_impl_, client_.GetPropertyTrees()));
+}
+
 TEST_F(AnimationTest, AddRemoveAnimationCausesSetNeedsCommit) {
   client_.RegisterElementId(element_id_, ElementListType::ACTIVE);
   host_->AddAnimationTimeline(timeline_);
@@ -523,7 +549,7 @@ TEST_F(AnimationTest, SwitchToLayer) {
   EXPECT_EQ(animation_impl_->keyframe_effect()->element_id(), element_id_);
   CheckKeyframeEffectTimelineNeedsPushProperties(false);
 
-  const ElementId new_element_id(element_id_.GetStableId() + 1);
+  const ElementId new_element_id(element_id_.GetInternalValue() + 1);
   animation_->DetachElement();
   animation_->AttachElement(new_element_id);
 

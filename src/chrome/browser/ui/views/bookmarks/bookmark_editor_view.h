@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
+#include "chrome/browser/bookmarks/bookmark_expanded_state_tracker.h"
 #include "chrome/browser/ui/bookmarks/bookmark_editor.h"
-#include "components/bookmarks/browser/bookmark_expanded_state_tracker.h"
 #include "components/bookmarks/browser/bookmark_model_observer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/simple_menu_model.h"
@@ -128,7 +128,8 @@ class BookmarkEditorView : public BookmarkEditor,
                          size_t new_index) override;
   void BookmarkNodeAdded(bookmarks::BookmarkModel* model,
                          const bookmarks::BookmarkNode* parent,
-                         size_t index) override;
+                         size_t index,
+                         bool added_by_user) override;
   void BookmarkNodeRemoved(bookmarks::BookmarkModel* model,
                            const bookmarks::BookmarkNode* parent,
                            size_t index,
@@ -208,9 +209,8 @@ class BookmarkEditorView : public BookmarkEditor,
 
   // If |editor_node| is expanded it's added to |expanded_nodes| and this is
   // recursively invoked for all the children.
-  void UpdateExpandedNodes(
-      EditorNode* editor_node,
-      bookmarks::BookmarkExpandedStateTracker::Nodes* expanded_nodes);
+  void UpdateExpandedNodes(EditorNode* editor_node,
+                           BookmarkExpandedStateTracker::Nodes* expanded_nodes);
 
   enum {
     kContextMenuItemEdit = 1,
@@ -255,6 +255,8 @@ class BookmarkEditorView : public BookmarkEditor,
 
   // Mode used to create nodes from.
   raw_ptr<bookmarks::BookmarkModel> bb_model_;
+  // Corresponding expanded state tracker.
+  raw_ptr<BookmarkExpandedStateTracker> expanded_state_tracker_;
 
   // If true, we're running the menu for the bookmark bar or other bookmarks
   // nodes.

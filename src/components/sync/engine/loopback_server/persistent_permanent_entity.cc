@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,7 @@ std::unique_ptr<LoopbackServerEntity> PersistentPermanentEntity::CreateTopLevel(
     return nullptr;
   }
 
-  string server_tag = syncer::ModelTypeToRootTag(model_type);
+  string server_tag = syncer::ModelTypeToProtocolRootTag(model_type);
   string name = syncer::ModelTypeToDebugString(model_type);
   string id = LoopbackServerEntity::GetTopLevelId(model_type);
   sync_pb::EntitySpecifics entity_specifics;
@@ -97,7 +97,8 @@ PersistentPermanentEntity::CreateUpdatedNigoriEntity(
       current_server_entity.GetId(), current_server_entity.GetVersion(),
       model_type, current_server_entity.GetName(),
       current_server_entity.GetParentId(),
-      syncer::ModelTypeToRootTag(model_type), client_entity.specifics());
+      syncer::ModelTypeToProtocolRootTag(model_type),
+      client_entity.specifics());
 }
 
 PersistentPermanentEntity::PersistentPermanentEntity(

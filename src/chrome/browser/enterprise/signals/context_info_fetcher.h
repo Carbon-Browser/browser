@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/enterprise/signals/signals_common.h"
@@ -37,6 +37,7 @@ struct ContextInfo {
   std::vector<std::string> on_file_attached_providers;
   std::vector<std::string> on_file_downloaded_providers;
   std::vector<std::string> on_bulk_data_entry_providers;
+  std::vector<std::string> on_print_providers;
   std::vector<std::string> on_security_event_providers;
   safe_browsing::EnterpriseRealTimeUrlCheckMode realtime_url_check_mode;
   std::string browser_version;
@@ -45,11 +46,11 @@ struct ContextInfo {
   bool built_in_dns_client_enabled;
   absl::optional<safe_browsing::PasswordProtectionTrigger>
       password_protection_warning_trigger;
-  absl::optional<bool> chrome_cleanup_enabled;
   bool chrome_remote_desktop_app_blocked;
   absl::optional<bool> third_party_blocking_enabled;
   SettingValue os_firewall;
   std::vector<std::string> system_dns_servers;
+  absl::optional<std::string> enterprise_profile_id;
 };
 
 // Interface used by the chrome.enterprise.reportingPrivate.getContextInfo()
@@ -102,7 +103,8 @@ class ContextInfoFetcher {
   raw_ptr<content::BrowserContext> browser_context_;
 
   // |connectors_service| is used to obtain the value of each Connector policy.
-  raw_ptr<enterprise_connectors::ConnectorsService> connectors_service_;
+  raw_ptr<enterprise_connectors::ConnectorsService, DanglingUntriaged>
+      connectors_service_;
 };
 
 #if BUILDFLAG(IS_LINUX)

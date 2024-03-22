@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,14 @@ const IconSet& FakeExtensionProvider::GetIconSet() const {
   return icon_set_;
 }
 
-bool FakeExtensionProvider::RequestMount(Profile* profile) {
+RequestManager* FakeExtensionProvider::GetRequestManager() {
+  NOTREACHED();
+  return nullptr;
+}
+
+bool FakeExtensionProvider::RequestMount(Profile* profile,
+                                         RequestMountCallback callback) {
+  std::move(callback).Run(base::File::Error::FILE_OK);
   return true;
 }
 

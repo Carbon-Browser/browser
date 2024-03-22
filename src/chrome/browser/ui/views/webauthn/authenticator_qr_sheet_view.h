@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,8 @@
 
 #include <memory>
 
-#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/webauthn/authenticator_request_sheet_view.h"
 #include "chrome/browser/ui/webauthn/sheet_models.h"
-
-class AuthenticatorQRViewCentered;
 
 class AuthenticatorQRSheetView : public AuthenticatorRequestSheetView {
  public:
@@ -28,7 +25,6 @@ class AuthenticatorQRSheetView : public AuthenticatorRequestSheetView {
   std::pair<std::unique_ptr<views::View>, AutoFocus> BuildStepSpecificContent()
       override;
 
-  raw_ptr<AuthenticatorQRViewCentered> qr_view_ = nullptr;
   const std::string qr_string_;
 };
 

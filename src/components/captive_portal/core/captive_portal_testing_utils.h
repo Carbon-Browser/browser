@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ class CaptivePortalDetectorTestBase {
   const GURL& get_probe_url() { return detector_->probe_url_; }
 
  protected:
-  raw_ptr<CaptivePortalDetector> detector_;
+  raw_ptr<CaptivePortalDetector, DanglingUntriaged> detector_;
   network::TestURLLoaderFactory test_loader_factory_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,14 @@ struct FormFieldDataPredictions {
   std::string signature;
   std::string heuristic_type;
   std::string server_type;
+  std::string html_type;
   std::string overall_type;
   std::string parseable_name;
   std::string section;
+  size_t rank = 0;
+  size_t rank_in_signature_group = 0;
+  size_t rank_in_host_form = 0;
+  size_t rank_in_host_form_signature_group = 0;
 };
 
 }  // namespace autofill

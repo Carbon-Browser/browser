@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,14 +22,7 @@ self.addEventListener('canmakepayment', e => {
     });
   }));
 
-  e.respondWith(new Promise(resolve => {
-    e.methodData.forEach(methodData => {
-      if (methodData.supportedMethods == 'basic-card') {
-        resolve(true);
-        return;
-      }
-    });
-  }));
+  e.respondWith(true);
 });
 
 self.addEventListener('paymentrequest', e => {
@@ -76,7 +69,7 @@ self.addEventListener('paymentrequest', e => {
     // Open a window for the payment instrument.
     var payment_app_web_page = 'payment_app_window.html';
     if(e.instrumentKey == 'bobpay-payment-app-id') {
-      payment_app_web_page = 'https://bobpay.com';
+      payment_app_web_page = 'https://bobpay.test';
     }
     e.openWindow(payment_app_web_page)
       .then(window_client => {

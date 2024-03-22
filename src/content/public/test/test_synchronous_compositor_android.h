@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,8 @@ class CONTENT_EXPORT TestSynchronousCompositor : public SynchronousCompositor {
 
   void SetClient(SynchronousCompositorClient* client);
 
+  void OnCompositorVisible() override {}
+  void OnCompositorHidden() override {}
   scoped_refptr<FrameFuture> DemandDrawHwAsync(
       const gfx::Size& viewport_size,
       const gfx::Rect& viewport_rect_for_tile_priority,

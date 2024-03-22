@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
-
 #include "base/containers/contains.h"
 #include "base/lazy_instance.h"
 #include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/device_service.h"
@@ -19,10 +20,10 @@
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/event_router_factory.h"
 #include "extensions/common/api/usb.h"
+#include "extensions/common/mojom/event_dispatcher.mojom-forward.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/common/permissions/usb_device_permission.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "services/device/public/mojom/usb_enumeration_options.mojom.h"
 
 namespace usb = extensions::api::usb;
 
@@ -70,9 +71,9 @@ bool WillDispatchDeviceEvent(
     content::BrowserContext* browser_context,
     Feature::Context target_context,
     const Extension* extension,
-    const base::DictionaryValue* listener_filter,
-    std::unique_ptr<base::Value::List>* event_args_out,
-    mojom::EventFilteringInfoPtr* event_filtering_info_out) {
+    const base::Value::Dict* listener_filter,
+    std::optional<base::Value::List>& event_args_out,
+    mojom::EventFilteringInfoPtr& event_filtering_info_out) {
   // Check install-time and optional permissions.
   std::unique_ptr<UsbDevicePermission::CheckParam> param =
       UsbDevicePermission::CheckParam::ForUsbDevice(extension, device_info);
@@ -135,7 +136,7 @@ UsbDeviceManager::UsbDeviceManager(content::BrowserContext* browser_context)
   }
 }
 
-UsbDeviceManager::~UsbDeviceManager() {}
+UsbDeviceManager::~UsbDeviceManager() = default;
 
 void UsbDeviceManager::AddObserver(Observer* observer) {
   EnsureConnectionWithDeviceManager();
@@ -193,7 +194,7 @@ void UsbDeviceManager::GetDevices(
   std::vector<device::mojom::UsbDeviceInfoPtr> device_list;
   for (const auto& pair : devices_)
     device_list.push_back(pair.second->Clone());
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(device_list)));
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,7 @@ TEST_F(WindowMirrorViewTest, LocalWindowOcclusionMadeVisible) {
             widget_window->GetOcclusionState());
 
   auto mirror_widget = CreateTestWidget();
-  auto mirror_view = std::make_unique<WindowMirrorView>(
-      widget_window, /*trilinear_filtering_on_init=*/false);
+  auto mirror_view = std::make_unique<WindowMirrorView>(widget_window);
   mirror_widget->widget_delegate()->GetContentsView()->AddChildView(
       mirror_view.get());
 
@@ -46,13 +45,12 @@ TEST_F(WindowMirrorViewTest, MirrorLayerHasNoTransformWhenNonClientViewShown) {
   // the transform will be copied with it.
   auto widget = CreateTestWidget();
   aura::Window* widget_window = widget->GetNativeWindow();
-  const gfx::Transform transform(1.f, 0.f, 0.f, 1.f, 100.f, 100.f);
+  const auto transform = gfx::Transform::MakeTranslation(100.f, 100.f);
   widget_window->SetTransform(transform);
 
   auto mirror_widget = CreateTestWidget();
   auto mirror_view = std::make_unique<WindowMirrorView>(
-      widget_window, /*trilinear_filtering_on_init=*/false,
-      /*show_non_client_view=*/true);
+      widget_window, /*show_non_client_view=*/true);
   mirror_view->RecreateMirrorLayers();
 
   EXPECT_TRUE(

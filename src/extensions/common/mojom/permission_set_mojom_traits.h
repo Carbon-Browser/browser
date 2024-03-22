@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_COMMON_MOJOM_PERMISSION_SET_MOJOM_TRAITS_H_
 #define EXTENSIONS_COMMON_MOJOM_PERMISSION_SET_MOJOM_TRAITS_H_
 
+#include <optional>
 #include "extensions/common/mojom/api_permission_id.mojom-shared.h"
 #include "extensions/common/mojom/permission_set.mojom-shared.h"
 #include "extensions/common/mojom/url_pattern_set_mojom_traits.h"
@@ -13,7 +14,6 @@
 #include "extensions/common/permissions/permission_set.h"
 #include "mojo/public/cpp/base/values_mojom_traits.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace mojo {
 
@@ -25,12 +25,12 @@ struct StructTraits<extensions::mojom::APIPermissionDataView,
     return permission->id();
   }
 
-  static absl::optional<base::Value> value(
+  static std::optional<base::Value> value(
       const std::unique_ptr<extensions::APIPermission>& permission) {
     std::unique_ptr<base::Value> value = permission->ToValue();
 
     if (value == nullptr)
-      return absl::nullopt;
+      return std::nullopt;
     return base::Value::FromUniquePtrValue(std::move(value));
   }
 
@@ -59,12 +59,12 @@ struct StructTraits<extensions::mojom::ManifestPermissionDataView,
     return permission->id();
   }
 
-  static absl::optional<base::Value> value(
+  static std::optional<base::Value> value(
       const std::unique_ptr<extensions::ManifestPermission>& permission) {
     std::unique_ptr<base::Value> value = permission->ToValue();
 
     if (value == nullptr)
-      return absl::nullopt;
+      return std::nullopt;
     return base::Value::FromUniquePtrValue(std::move(value));
   }
 

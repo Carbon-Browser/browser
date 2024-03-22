@@ -1,11 +1,11 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/app_service/app_icon/dip_px_util.h"
 
 #include "base/check_op.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/size.h"
@@ -37,7 +37,7 @@ int ConvertBetweenDipAndPx(int value,
   if (invert) {
     scale = 1 / scale;
   }
-  return gfx::ScaleToFlooredSize(gfx::Size(value, value), scale).width();
+  return apps_util::ConvertDipToPxForScale(value, scale);
 }
 
 }  // namespace
@@ -50,6 +50,10 @@ int ConvertDipToPx(int dip, bool quantize_to_supported_scale_factor) {
 
 int ConvertPxToDip(int px, bool quantize_to_supported_scale_factor) {
   return ConvertBetweenDipAndPx(px, quantize_to_supported_scale_factor, true);
+}
+
+int ConvertDipToPxForScale(int dip, float scale) {
+  return gfx::ScaleToFlooredSize(gfx::Size(dip, dip), scale).width();
 }
 
 ui::ResourceScaleFactor GetPrimaryDisplayUIScaleFactor() {

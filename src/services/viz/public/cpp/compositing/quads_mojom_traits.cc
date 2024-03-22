@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,6 +61,22 @@ viz::DrawQuad* AllocateAndConstruct(
   }
   NOTREACHED();
   return nullptr;
+}
+
+// static
+bool StructTraits<viz::mojom::RoundedDisplayMasksInfoDataView,
+                  viz::TextureDrawQuad::RoundedDisplayMasksInfo>::
+    Read(viz::mojom::RoundedDisplayMasksInfoDataView data,
+         viz::TextureDrawQuad::RoundedDisplayMasksInfo* out) {
+  viz::TextureDrawQuad::RoundedDisplayMasksInfo* info =
+      static_cast<viz::TextureDrawQuad::RoundedDisplayMasksInfo*>(out);
+  base::span<uint8_t> radii_array(info->radii);
+  if (!data.ReadRadii(&radii_array)) {
+    return false;
+  }
+
+  info->is_horizontally_positioned = data.is_horizontally_positioned();
+  return true;
 }
 
 // static
@@ -149,7 +165,8 @@ bool StructTraits<viz::mojom::TextureQuadStateDataView, viz::DrawQuad>::Read(
       !data.ReadUvBottomRight(&quad->uv_bottom_right) ||
       !data.ReadProtectedVideoType(&protected_video_type) ||
       !data.ReadHdrMetadata(&quad->hdr_metadata) ||
-      !data.ReadOverlayPriorityHint(&overlay_priority_hint)) {
+      !data.ReadOverlayPriorityHint(&overlay_priority_hint) ||
+      !data.ReadRoundedDisplayMasksInfo(&quad->rounded_display_masks_info)) {
     return false;
   }
   quad->protected_video_type = protected_video_type;
@@ -213,10 +230,8 @@ bool StructTraits<viz::mojom::YUVVideoQuadStateDataView, viz::DrawQuad>::Read(
     viz::mojom::YUVVideoQuadStateDataView data,
     viz::DrawQuad* out) {
   viz::YUVVideoDrawQuad* quad = static_cast<viz::YUVVideoDrawQuad*>(out);
-  if (!data.ReadYaTexCoordRect(&quad->ya_tex_coord_rect) ||
-      !data.ReadUvTexCoordRect(&quad->uv_tex_coord_rect) ||
-      !data.ReadYaTexSize(&quad->ya_tex_size) ||
-      !data.ReadUvTexSize(&quad->uv_tex_size) ||
+  if (!data.ReadCodedSize(&quad->coded_size) ||
+      !data.ReadVideoVisibleRect(&quad->video_visible_rect) ||
       !data.ReadVideoColorSpace(&quad->video_color_space) ||
       !data.ReadProtectedVideoType(&quad->protected_video_type) ||
       !data.ReadHdrMetadata(&quad->hdr_metadata) ||
@@ -237,6 +252,10 @@ bool StructTraits<viz::mojom::YUVVideoQuadStateDataView, viz::DrawQuad>::Read(
   static_assert(viz::YUVVideoDrawQuad::kAPlaneResourceIdIndex ==
                     viz::DrawQuad::Resources::kMaxResourceIdCount - 1,
                 "The A plane resource should be the last resource ID.");
+
+  quad->u_scale = data.u_scale();
+  quad->v_scale = data.v_scale();
+
   quad->resources.count =
       quad->resources.ids[viz::YUVVideoDrawQuad::kAPlaneResourceIdIndex] ? 4
                                                                          : 3;

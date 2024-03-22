@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/chromebox_for_meetings/browser/cfm_browser_service.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/chromebox_for_meetings/browser/cfm_memory_details.h"
 #include "chrome/browser/memory_details.h"
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/cfm_hotline_client.h"
@@ -16,7 +16,8 @@ namespace ash::cfm {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 static CfmBrowserService* g_browser_service = nullptr;
@@ -71,10 +72,10 @@ void CfmBrowserService::OnBindService(
 
 void CfmBrowserService::GetVariationsData(GetVariationsDataCallback callback) {
   std::string field_trial_parameters =
-      base::FieldTrialList::AllParamsToString(true, &variations::EscapeValue);
+      base::FieldTrialList::AllParamsToString(&variations::EscapeValue);
 
   std::string field_trial_states;
-  base::FieldTrialList::AllStatesToString(&field_trial_states, true);
+  base::FieldTrialList::AllStatesToString(&field_trial_states);
 
   std::string enabled_features;
   std::string disabled_features;

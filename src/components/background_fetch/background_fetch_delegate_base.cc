@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "components/background_fetch/job_details.h"
 #include "components/content_settings/core/common/content_settings_types.h"
@@ -423,10 +425,8 @@ bool BackgroundFetchDelegateBase::IsGuidOutstanding(
   if (job_details_iter == job_details_map_.end())
     return false;
 
-  const std::vector<std::string>& outstanding_guids =
-      job_details_iter->second.fetch_description->outstanding_guids;
-  return std::find(outstanding_guids.begin(), outstanding_guids.end(), guid) !=
-         outstanding_guids.end();
+  return base::Contains(
+      job_details_iter->second.fetch_description->outstanding_guids, guid);
 }
 
 void BackgroundFetchDelegateBase::RestartPausedDownload(
@@ -468,7 +468,7 @@ void BackgroundFetchDelegateBase::GetUploadData(
   // TODO(crbug.com/779012): When DownloadService fixes cancelled jobs calling
   // client methods, then this can be a DCHECK.
   if (job_it == download_job_id_map_.end()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), /* request_body= */ nullptr));
     return;
@@ -478,7 +478,7 @@ void BackgroundFetchDelegateBase::GetUploadData(
   JobDetails* job_details = GetJobDetails(job_id);
   if (job_details->current_fetch_guids.at(download_guid).status ==
       JobDetails::RequestData::Status::kAbsent) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), /* request_body= */ nullptr));
     return;

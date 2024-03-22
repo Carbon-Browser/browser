@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,8 @@
 #include "base/types/strong_alias.h"
 #include "base/values.h"
 #include "chrome/browser/ui/browser.h"
+#include "components/autofill/core/browser/data_model/autofill_profile.h"
+#include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/test_autofill_clock.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/test/browser_test_utils.h"
@@ -172,6 +174,27 @@ class WebPageReplayServerWrapper {
   bool start_as_replay_;
 };
 
+class ProfileDataController {
+ public:
+  ProfileDataController();
+  ~ProfileDataController();
+
+  const autofill::CreditCard& credit_card() const { return card_; }
+  const autofill::AutofillProfile& profile() { return profile_; }
+  bool AddAutofillProfileInfo(const std::string& field_type,
+                              const std::string& field_value);
+  absl::optional<std::u16string> cvc() const { return cvc_; }
+
+ private:
+  // If a CVC is available in the Action Recorder receipt, this test uses a
+  // server card to autofill the payment form. So the "Enter CVC" dialog will
+  // pop up for card autofill. Otherwise, this test uses a local card to
+  // autofill the payment form.
+  absl::optional<std::u16string> cvc_;
+  autofill::AutofillProfile profile_;
+  autofill::CreditCard card_;
+};
+
 // TestRecipeReplayChromeFeatureActionExecutor
 //
 // TestRecipeReplayChromeFeatureActionExecutor is a helper interface. A
@@ -193,10 +216,12 @@ class TestRecipeReplayChromeFeatureActionExecutor {
   // Chrome Autofill feature methods.
   // Triggers Chrome Autofill in the specified input element on the specified
   // document.
-  virtual bool AutofillForm(const std::string& focus_element_css_selector,
-                            const std::vector<std::string>& iframe_path,
-                            const int attempts,
-                            content::RenderFrameHost* frame);
+  virtual bool AutofillForm(
+      const std::string& focus_element_css_selector,
+      const std::vector<std::string>& iframe_path,
+      const int attempts,
+      content::RenderFrameHost* frame,
+      absl::optional<autofill::ServerFieldType> triggered_field_type);
   virtual bool AddAutofillProfileInfo(const std::string& field_type,
                                       const std::string& field_value);
   virtual bool SetupAutofillProfile();
@@ -235,10 +260,10 @@ class TestRecipeReplayChromeFeatureActionExecutor {
 //    under the src/chrome/test/data/autofill/captured_sites directory.
 class TestRecipeReplayer {
  public:
-  static const int kHostHttpPort = 8080;
-  static const int kHostHttpsPort = 8081;
-  static const int kHostHttpRecordPort = 8082;
-  static const int kHostHttpsRecordPort = 8083;
+  static constexpr int kHostHttpPort = 8080;
+  static constexpr int kHostHttpsPort = 8081;
+  static constexpr int kHostHttpRecordPort = 8082;
+  static constexpr int kHostHttpsRecordPort = 8083;
 
   enum DomElementReadyState {
     kReadyStatePresent = 0,
@@ -255,8 +280,7 @@ class TestRecipeReplayer {
   TestRecipeReplayer& operator=(const TestRecipeReplayer&) = delete;
 
   ~TestRecipeReplayer();
-  void Setup();
-  void Cleanup();
+
   // Replay a test by:
   // 1. Starting a WPR server using the specified capture file.
   // 2. Replaying the specified Test Recipe file.
@@ -402,7 +426,8 @@ class TestRecipeReplayer {
   raw_ptr<TestRecipeReplayChromeFeatureActionExecutor> feature_action_executor_;
   // The Web Page Replay server that serves the captured sites.
   std::unique_ptr<captured_sites_test_utils::WebPageReplayServerWrapper>
-      web_page_replay_server_wrapper_;
+      web_page_replay_server_wrapper_ =
+          std::make_unique<WebPageReplayServerWrapper>(true);
 
   std::vector<testing::AssertionResult> validation_failures_;
 

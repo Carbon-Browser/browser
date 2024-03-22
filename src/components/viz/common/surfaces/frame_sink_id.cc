@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,12 @@ std::string FrameSinkId::ToString(base::StringPiece debug_label) const {
 
 std::ostream& operator<<(std::ostream& out, const FrameSinkId& frame_sink_id) {
   return out << frame_sink_id.ToString();
+}
+
+void FrameSinkId::WriteIntoTrace(
+    perfetto::TracedProto<TraceProto> proto) const {
+  proto->set_frame_sink_client_id(client_id_);
+  proto->set_frame_sink_id(sink_id_);
 }
 
 }  // namespace viz

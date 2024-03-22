@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,8 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/sys_byteorder.h"
 #include "net/base/io_buffer.h"
-#include "net/dns/dns_util.h"
+#include "net/dns/dns_names_util.h"
+#include "net/dns/opt_record_rdata.h"
 #include "net/dns/public/dns_protocol.h"
 #include "net/dns/record_rdata.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -58,31 +59,36 @@ size_t DeterminePaddingSize(size_t unpadded_size,
   }
 }
 
-absl::optional<OptRecordRdata> AddPaddingIfNecessary(
+std::unique_ptr<OptRecordRdata> AddPaddingIfNecessary(
     const OptRecordRdata* opt_rdata,
     DnsQuery::PaddingStrategy padding_strategy,
     size_t no_opt_buffer_size) {
   // If no input OPT record rdata and no padding, no OPT record rdata needed.
   if (!opt_rdata && padding_strategy == DnsQuery::PaddingStrategy::NONE)
-    return absl::nullopt;
+    return nullptr;
 
-  OptRecordRdata merged_opt_rdata;
-  if (opt_rdata)
-    merged_opt_rdata.AddOpts(*opt_rdata);
+  std::unique_ptr<OptRecordRdata> merged_opt_rdata;
+  if (opt_rdata) {
+    merged_opt_rdata = OptRecordRdata::Create(
+        base::StringPiece(opt_rdata->buf().data(), opt_rdata->buf().size()));
+  } else {
+    merged_opt_rdata = std::make_unique<OptRecordRdata>();
+  }
+  DCHECK(merged_opt_rdata);
 
-  size_t unpadded_size = no_opt_buffer_size + OptRecordSize(&merged_opt_rdata);
+  size_t unpadded_size =
+      no_opt_buffer_size + OptRecordSize(merged_opt_rdata.get());
   size_t padding_size = DeterminePaddingSize(unpadded_size, padding_strategy);
 
   if (padding_size > 0) {
     // |opt_rdata| must not already contain padding if DnsQuery is to add
     // padding.
-    DCHECK(!merged_opt_rdata.ContainsOptCode(dns_protocol::kEdnsPadding));
+    DCHECK(!merged_opt_rdata->ContainsOptCode(dns_protocol::kEdnsPadding));
     // OPT header is the minimum amount of padding.
     DCHECK(padding_size >= OptRecordRdata::Opt::kHeaderSize);
 
-    merged_opt_rdata.AddOpt(OptRecordRdata::Opt(
-        dns_protocol::kEdnsPadding,
-        std::string(padding_size - OptRecordRdata::Opt::kHeaderSize, 0)));
+    merged_opt_rdata->AddOpt(std::make_unique<OptRecordRdata::PaddingOpt>(
+        padding_size - OptRecordRdata::Opt::kHeaderSize));
   }
 
   return merged_opt_rdata;
@@ -95,21 +101,22 @@ absl::optional<OptRecordRdata> AddPaddingIfNecessary(
 // bit, which directs the name server to pursue query recursively, and sets
 // the QDCOUNT to 1, meaning the question section has a single entry.
 DnsQuery::DnsQuery(uint16_t id,
-                   const base::StringPiece& qname,
+                   base::span<const uint8_t> qname,
                    uint16_t qtype,
                    const OptRecordRdata* opt_rdata,
                    PaddingStrategy padding_strategy)
     : qname_size_(qname.size()) {
 #if DCHECK_IS_ON()
-  absl::optional<std::string> dotted_name = DnsDomainToString(qname);
+  absl::optional<std::string> dotted_name =
+      dns_names_util::NetworkToDottedName(qname);
   DCHECK(dotted_name && !dotted_name.value().empty());
 #endif  // DCHECK_IS_ON()
 
   size_t buffer_size = kHeaderSize + QuestionSize(qname_size_);
-  absl::optional<OptRecordRdata> merged_opt_rdata =
+  std::unique_ptr<OptRecordRdata> merged_opt_rdata =
       AddPaddingIfNecessary(opt_rdata, padding_strategy, buffer_size);
   if (merged_opt_rdata)
-    buffer_size += OptRecordSize(&merged_opt_rdata.value());
+    buffer_size += OptRecordSize(merged_opt_rdata.get());
 
   io_buffer_ = base::MakeRefCounted<IOBufferWithSize>(buffer_size);
 
@@ -127,7 +134,7 @@ DnsQuery::DnsQuery(uint16_t id,
   writer.WriteU16(dns_protocol::kClassIN);
 
   if (merged_opt_rdata) {
-    DCHECK(!merged_opt_rdata.value().opts().empty());
+    DCHECK_NE(merged_opt_rdata->OptCount(), 0u);
 
     header_->arcount = base::HostToNet16(1);
     // Write OPT pseudo-resource record.
@@ -142,9 +149,9 @@ DnsQuery::DnsQuery(uint16_t id,
     writer.WriteU16(0);  // flags
 
     // rdata
-    writer.WriteU16(merged_opt_rdata.value().buf().size());  // rdata length
-    writer.WriteBytes(merged_opt_rdata.value().buf().data(),
-                      merged_opt_rdata.value().buf().size());
+    writer.WriteU16(merged_opt_rdata->buf().size());  // rdata length
+    writer.WriteBytes(merged_opt_rdata->buf().data(),
+                      merged_opt_rdata->buf().size());
   }
 }
 
@@ -210,8 +217,10 @@ uint16_t DnsQuery::id() const {
   return base::NetToHost16(header_->id);
 }
 
-base::StringPiece DnsQuery::qname() const {
-  return base::StringPiece(io_buffer_->data() + kHeaderSize, qname_size_);
+base::span<const uint8_t> DnsQuery::qname() const {
+  return base::span<const uint8_t>(
+      reinterpret_cast<const uint8_t*>(io_buffer_->data() + kHeaderSize),
+      qname_size_);
 }
 
 uint16_t DnsQuery::qtype() const {
@@ -275,7 +284,7 @@ bool DnsQuery::ReadName(base::BigEndianReader* reader, std::string* out) {
     if (!reader->ReadPiece(&label, label_length)) {
       return false;
     }
-    out->append(label.data(), label.size());
+    out->append(label);
     if (!reader->ReadU8(&label_length)) {
       return false;
     }

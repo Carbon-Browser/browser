@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,8 +64,6 @@ class RemoteCopyMessageHandler : public SharingMessageHandler,
   raw_ptr<Profile> profile_ = nullptr;
   std::unique_ptr<network::SimpleURLLoader> url_loader_;
   std::string device_name_;
-  base::ElapsedTimer timer_;
-  base::OneShotTimer write_detection_timer_;
   GURL allowed_origin_;
 };
 

@@ -28,6 +28,7 @@
 
 #include "third_party/blink/renderer/core/page/spatial_navigation.h"
 
+#include "base/containers/adapters.h"
 #include "third_party/blink/public/mojom/scroll/scrollbar_mode.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -248,14 +249,14 @@ bool IsUnobscured(const FocusCandidate& candidate) {
                         HitTestRequest::kAllowChildFrameContent);
 
   const HitTestResult::NodeSet& nodes = result.ListBasedTestResult();
-  for (auto hit_node = nodes.rbegin(); hit_node != nodes.rend(); ++hit_node) {
-    if (candidate.visible_node->ContainsIncludingHostElements(**hit_node))
+  for (const auto& hit_node : base::Reversed(nodes)) {
+    if (candidate.visible_node->ContainsIncludingHostElements(*hit_node))
       return true;
 
     if (FrameOwnerElement(candidate) &&
         FrameOwnerElement(candidate)
             ->contentDocument()
-            ->ContainsIncludingHostElements(**hit_node))
+            ->ContainsIncludingHostElements(*hit_node))
       return true;
   }
 
@@ -334,8 +335,9 @@ bool IsScrollableNode(const Node* node) {
   if (node->IsDocumentNode())
     return true;
 
-  if (auto* box = DynamicTo<LayoutBox>(node->GetLayoutObject()))
-    return box->CanBeScrolledAndHasScrollableArea();
+  if (auto* box = DynamicTo<LayoutBox>(node->GetLayoutObject())) {
+    return box->IsUserScrollable();
+  }
   return false;
 }
 
@@ -428,19 +430,19 @@ bool CanScrollInDirection(const LocalFrame* frame,
       mojom::blink::ScrollbarMode::kAlwaysOff == vertical_mode)
     return false;
   ScrollableArea* scrollable_area = frame->View()->GetScrollableArea();
-  LayoutSize size(scrollable_area->ContentsSize());
-  LayoutSize offset(scrollable_area->ScrollOffsetInt());
+  gfx::Size size = scrollable_area->ContentsSize();
+  gfx::Vector2d offset = scrollable_area->ScrollOffsetInt();
   PhysicalRect rect(scrollable_area->VisibleContentRect(kIncludeScrollbars));
 
   switch (direction) {
     case SpatialNavigationDirection::kLeft:
-      return offset.Width() > 0;
+      return offset.x() > 0;
     case SpatialNavigationDirection::kUp:
-      return offset.Height() > 0;
+      return offset.y() > 0;
     case SpatialNavigationDirection::kRight:
-      return rect.Width() + offset.Width() < size.Width();
+      return rect.Width() + offset.x() < size.width();
     case SpatialNavigationDirection::kDown:
-      return rect.Height() + offset.Height() < size.Height();
+      return rect.Height() + offset.y() < size.height();
     default:
       NOTREACHED();
       return false;
@@ -838,8 +840,9 @@ PhysicalRect ShrinkInlineBoxToLineBox(const LayoutObject& layout_object,
                                       PhysicalRect node_rect,
                                       int line_boxes) {
   if (!layout_object.IsInline() || layout_object.IsLayoutReplaced() ||
-      layout_object.IsButtonIncludingNG())
+      layout_object.IsButton()) {
     return node_rect;
+  }
 
   // If actual line-height is bigger than the inline box, we shouldn't change
   // anything. This is, for example, needed to not break

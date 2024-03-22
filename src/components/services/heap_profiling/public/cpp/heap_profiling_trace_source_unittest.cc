@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,7 +59,8 @@ std::vector<Sample> MakeTestSamples() {
   std::vector<Sample> samples{Sample(10, 100, 1), Sample(5, 102, 2),
                               Sample(7, 103, 3)};
   for (Sample& s : samples) {
-    s.allocator = base::PoissonAllocationSampler::AllocatorType::kMalloc;
+    s.allocator =
+        base::allocator::dispatcher::AllocationSubsystem::kAllocatorShim;
   }
 
   void* frame1 = reinterpret_cast<void*>(333);

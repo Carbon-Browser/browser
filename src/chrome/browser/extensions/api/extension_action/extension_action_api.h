@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
+#include "base/values.h"
 #include "chrome/browser/ui/extensions/extension_popup_types.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_action.h"
@@ -18,16 +19,13 @@
 #include "extensions/browser/extension_host_registry.h"
 #include "third_party/skia/include/core/SkColor.h"
 
-namespace base {
-class DictionaryValue;
-}
-
 namespace content {
 class BrowserContext;
 class WebContents;
 }
 
 namespace extensions {
+
 class ExtensionHost;
 class ExtensionPrefs;
 
@@ -100,7 +98,7 @@ class ExtensionActionAPI : public BrowserContextKeyedAPI {
                                 const std::string& extension_id,
                                 events::HistogramValue histogram_value,
                                 const std::string& event_name,
-                                std::unique_ptr<base::ListValue> event_args);
+                                base::Value::List event_args);
 
   // BrowserContextKeyedAPI implementation.
   void Shutdown() override;
@@ -138,14 +136,14 @@ class ExtensionActionFunction : public ExtensionFunction {
 
   // All the extension action APIs take a single argument called details that
   // is a dictionary.
-  raw_ptr<base::DictionaryValue> details_;
+  raw_ptr<base::Value::Dict> details_;
 
   // The tab id the extension action function should apply to, if any, or
   // kDefaultTabId if none was specified.
   int tab_id_;
 
   // WebContents for |tab_id_| if one exists.
-  content::WebContents* contents_;
+  raw_ptr<content::WebContents> contents_;
 
   // The extension action for the current extension.
   raw_ptr<ExtensionAction> extension_action_;
@@ -320,6 +318,26 @@ class ActionSetBadgeBackgroundColorFunction
   ~ActionSetBadgeBackgroundColorFunction() override {}
 };
 
+class ActionGetBadgeTextColorFunction : public ExtensionActionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("action.getBadgeTextColor",
+                             ACTION_GETBADGETEXTCOLOR)
+
+ protected:
+  ~ActionGetBadgeTextColorFunction() override = default;
+  ResponseAction RunExtensionAction() override;
+};
+
+class ActionSetBadgeTextColorFunction : public ExtensionActionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("action.setBadgeTextColor",
+                             ACTION_SETBADGETEXTCOLOR)
+
+ protected:
+  ~ActionSetBadgeTextColorFunction() override = default;
+  ResponseAction RunExtensionAction() override;
+};
+
 class ActionEnableFunction : public ExtensionActionShowFunction {
  public:
   DECLARE_EXTENSION_FUNCTION("action.enable", ACTION_ENABLE)
@@ -334,6 +352,15 @@ class ActionDisableFunction : public ExtensionActionHideFunction {
 
  protected:
   ~ActionDisableFunction() override {}
+};
+
+class ActionIsEnabledFunction : public ExtensionActionFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("action.isEnabled", ACTION_ISENABLED)
+
+ protected:
+  ~ActionIsEnabledFunction() override = default;
+  ResponseAction RunExtensionAction() override;
 };
 
 class ActionGetUserSettingsFunction : public ExtensionFunction {

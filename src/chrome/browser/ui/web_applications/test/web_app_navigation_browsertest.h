@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/test/content_mock_cert_verifier.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "url/gurl.h"
@@ -26,7 +28,7 @@ class WebContents;
 
 namespace web_app {
 
-class WebAppNavigationBrowserTest : public InProcessBrowserTest {
+class WebAppNavigationBrowserTest : public WebAppControllerBrowserTest {
  public:
   enum class LinkTarget {
     SELF,
@@ -50,6 +52,18 @@ class WebAppNavigationBrowserTest : public InProcessBrowserTest {
   GetTestNavigationObserver(const GURL& target_url);
 
  protected:
+  // Creates an <a> element, sets its href and target to |link_url| and |target|
+  // respectively, adds it to the DOM, and clicks on it with |modifiers|.
+  // |modifiers| should be based on blink::WebInputEvent::Modifiers.
+  static void ClickLink(
+      content::WebContents* web_contents,
+      const GURL& link_url,
+      LinkTarget target = LinkTarget::SELF,
+      const std::string& rel = "",
+      int modifiers = blink::WebInputEvent::Modifiers::kNoModifiers,
+      blink::WebMouseEvent::Button button =
+          blink::WebMouseEvent::Button::kLeft);
+
   // Creates an <a> element, sets its href and target to |link_url| and |target|
   // respectively, adds it to the DOM, and clicks on it with |modifiers|.
   // Returns once |target_url| has loaded. |modifiers| should be based on
@@ -89,41 +103,38 @@ class WebAppNavigationBrowserTest : public InProcessBrowserTest {
   void TearDownInProcessBrowserTestFixture() override;
   void SetUpCommandLine(base::CommandLine* command_line) override;
   void SetUpOnMainThread() override;
+  void TearDownOnMainThread() override;
 
   Profile* profile();
 
   void InstallTestWebApp();
-  AppId InstallTestWebApp(const std::string& app_host,
-                          const std::string& app_scope);
+  webapps::AppId InstallTestWebApp(const std::string& app_host,
+                                   const std::string& app_scope);
 
   Browser* OpenTestWebApp();
 
   // Navigates the active tab in |browser| to the launching page.
   void NavigateToLaunchingPage(Browser* browser);
 
-  // Checks that no new windows are opened after running |action| and that the
-  // existing |browser| window is still the active one and navigated to
-  // |target_url|. Returns true if there were no errors.
-  bool TestActionDoesNotOpenAppWindow(Browser* browser,
-                                      const GURL& target_url,
-                                      base::OnceClosure action);
-
-  // Checks that no new windows are opened after running |action| and that the
-  // main browser window is still the active one and navigated to |target_url|.
-  // Returns true if there were no errors.
-  bool TestTabActionDoesNotOpenAppWindow(const GURL& target_url,
-                                         base::OnceClosure action);
+  // Checks that no new windows are opened after clicking on a link to the given
+  // `target_url` in the current active web contents of the `browser`.
+  bool ExpectLinkClickNotCapturedIntoAppBrowser(Browser* browser,
+                                                const GURL& target_url,
+                                                const std::string& rel = "");
 
   net::EmbeddedTestServer& https_server() { return https_server_; }
 
-  const AppId& test_web_app_id() const { return test_web_app_; }
+  const webapps::AppId& test_web_app_id() const { return test_web_app_; }
+
+  const GURL& test_web_app_start_url();
 
  private:
   net::EmbeddedTestServer https_server_;
   // Similar to net::MockCertVerifier, but also updates the CertVerifier
   // used by the NetworkService.
   content::ContentMockCertVerifier cert_verifier_;
-  AppId test_web_app_;
+  raw_ptr<Profile, DanglingUntriaged> profile_ = nullptr;
+  webapps::AppId test_web_app_;
   base::HistogramTester histogram_tester_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ namespace {
 
 // Returns a tuple of references to fields of |key|, for comparison purposes.
 auto TieKeyFields(const SSLClientSessionCache::Key& key) {
-  return std::tie(key.server, key.dest_ip_addr, key.network_isolation_key,
+  return std::tie(key.server, key.dest_ip_addr, key.network_anonymization_key,
                   key.privacy_mode, key.disable_legacy_crypto);
 }
 
@@ -101,10 +101,11 @@ void SSLClientSessionCache::ClearEarlyData(const Key& cache_key) {
   }
 }
 
-void SSLClientSessionCache::FlushForServer(const HostPortPair& server) {
+void SSLClientSessionCache::FlushForServers(
+    const base::flat_set<HostPortPair>& servers) {
   auto iter = cache_.begin();
   while (iter != cache_.end()) {
-    if (iter->first.server == server) {
+    if (servers.contains(iter->first.server)) {
       iter = cache_.Erase(iter);
     } else {
       ++iter;

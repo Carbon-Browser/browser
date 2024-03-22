@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "content/browser/bad_message.h"
@@ -18,10 +18,16 @@
 #include "content/browser/renderer_host/media/media_devices_manager.h"
 #include "content/common/content_export.h"
 #include "media/base/scoped_async_trace.h"
+#include "media/capture/mojom/video_capture_types.mojom.h"
 #include "media/capture/video/video_capture_device_descriptor.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/blink/public/mojom/mediastream/media_devices.mojom.h"
 #include "url/origin.h"
+
+namespace features {
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kEnableBackForwardCacheForPagesWithMediaDevicesDispatcherHost);
+}  // namespace features
 
 namespace content {
 
@@ -30,8 +36,7 @@ class MediaStreamManager;
 class CONTENT_EXPORT MediaDevicesDispatcherHost
     : public blink::mojom::MediaDevicesDispatcherHost {
  public:
-  MediaDevicesDispatcherHost(int render_process_id,
-                             int render_frame_id,
+  MediaDevicesDispatcherHost(GlobalRenderFrameHostId render_frame_host_id,
                              MediaStreamManager* media_stream_manager);
 
   MediaDevicesDispatcherHost(const MediaDevicesDispatcherHost&) = delete;
@@ -41,8 +46,7 @@ class CONTENT_EXPORT MediaDevicesDispatcherHost
   ~MediaDevicesDispatcherHost() override;
 
   static void Create(
-      int render_process_id,
-      int render_frame_id,
+      GlobalRenderFrameHostId render_frame_host_id,
       MediaStreamManager* media_stream_manager,
       mojo::PendingReceiver<blink::mojom::MediaDevicesDispatcherHost> receiver);
 
@@ -73,7 +77,9 @@ class CONTENT_EXPORT MediaDevicesDispatcherHost
       blink::mojom::CaptureHandleConfigPtr config) override;
 #if !BUILDFLAG(IS_ANDROID)
   void CloseFocusWindowOfOpportunity(const std::string& label) override;
-  void ProduceCropId(ProduceCropIdCallback callback) override;
+  void ProduceSubCaptureTargetId(
+      media::mojom::SubCaptureTargetType type,
+      ProduceSubCaptureTargetIdCallback callback) override;
 #endif
 
  private:
@@ -82,29 +88,20 @@ class CONTENT_EXPORT MediaDevicesDispatcherHost
   using GetVideoInputDeviceFormatsCallback =
       GetAllVideoInputDeviceFormatsCallback;
 
-  void GetDefaultVideoInputDeviceID(
+  void OnVideoGotSaltAndOrigin(
       GetVideoInputCapabilitiesCallback client_callback,
-      MediaDeviceSaltAndOrigin salt_and_origin);
-
-  void GotDefaultVideoInputDeviceID(
-      GetVideoInputCapabilitiesCallback client_callback,
-      MediaDeviceSaltAndOrigin salt_and_origin,
-      const std::string& default_device_id);
+      const MediaDeviceSaltAndOrigin& salt_and_origin);
 
   void FinalizeGetVideoInputCapabilities(
       GetVideoInputCapabilitiesCallback client_callback,
       const MediaDeviceSaltAndOrigin& salt_and_origin,
-      const std::string& default_device_id,
       const MediaDeviceEnumeration& enumeration);
 
-  void GetDefaultAudioInputDeviceID(
+  void OnAudioGotSaltAndOrigin(
       GetAudioInputCapabilitiesCallback client_callback,
       const MediaDeviceSaltAndOrigin& salt_and_origin);
 
-  void GotDefaultAudioInputDeviceID(const std::string& default_device_id);
-
-  void GotAudioInputEnumeration(const std::string& default_device_id,
-                                const MediaDeviceEnumeration& enumeration);
+  void GotAudioInputEnumeration(const MediaDeviceEnumeration& enumeration);
 
   void GotAudioInputParameters(
       size_t index,
@@ -141,8 +138,7 @@ class CONTENT_EXPORT MediaDevicesDispatcherHost
           void(int, int, blink::mojom::CaptureHandleConfigPtr)> callback);
 
   // The following const fields can be accessed on any thread.
-  const int render_process_id_;
-  const int render_frame_id_;
+  const GlobalRenderFrameHostId render_frame_host_id_;
 
   // The following fields can only be accessed on the IO thread.
   const raw_ptr<MediaStreamManager> media_stream_manager_;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/continuous_search/common/title_validator.h"
+#include "components/continuous_search/renderer/config.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_document.h"
@@ -20,15 +21,6 @@
 #include "url/gurl.h"
 
 namespace continuous_search {
-#if !BUILDFLAG(IS_ANDROID)
-const char kRelatedSearchesId[] = "w3bYAd";
-const char kRelatedSearchesAnchorClassname[] = "k8XOCe";
-const char kRelatedSearchesTitleClassname[] = "s75CSd";
-#else
-const char kRelatedSearchesId[] = "bres";
-const char kRelatedSearchesAnchorClassname[] = "iOJVmb";
-const char kRelatedSearchesTitleClassname[] = "gkd1F";
-#endif  // IS_ANDROID
 
 namespace {
 
@@ -129,8 +121,8 @@ bool ExtractRelatedSearches(blink::WebDocument document,
   auto group = mojom::ResultGroup::New();
   group->type = mojom::ResultType::kRelatedSearches;
 
-  blink::WebElement related_searches_container =
-      document.GetElementById(kRelatedSearchesId);
+  blink::WebElement related_searches_container = document.GetElementById(
+      blink::WebString::FromUTF8(GetConfig().related_searches_id));
   if (related_searches_container.IsNull()) {
     return false;
   }
@@ -148,7 +140,7 @@ bool ExtractRelatedSearches(blink::WebDocument document,
        anchor = anchors.NextItem()) {
     if (!anchor.HasAttribute("class") ||
         !base::Contains(anchor.GetAttribute("class").Utf8(),
-                        kRelatedSearchesAnchorClassname)) {
+                        GetConfig().related_searches_anchor_classname)) {
       continue;
     }
 
@@ -172,7 +164,7 @@ bool ExtractRelatedSearches(blink::WebDocument document,
          !inner_div.IsNull(); inner_div = inner_divs.NextItem()) {
       if (!inner_div.HasAttribute("class") ||
           !base::Contains(inner_div.GetAttribute("class").Utf8(),
-                          kRelatedSearchesTitleClassname)) {
+                          GetConfig().related_searches_title_classname)) {
         continue;
       }
       title = inner_div.TextContent().Utf16();
@@ -211,9 +203,10 @@ SearchResultExtractorImpl* SearchResultExtractorImpl::Create(
 SearchResultExtractorImpl::SearchResultExtractorImpl(
     content::RenderFrame* render_frame)
     : content::RenderFrameObserver(render_frame) {
-  render_frame->GetAssociatedInterfaceRegistry()->AddInterface(
-      base::BindRepeating(&SearchResultExtractorImpl::BindSearchResultExtractor,
-                          weak_ptr_factory_.GetWeakPtr()));
+  render_frame->GetAssociatedInterfaceRegistry()
+      ->AddInterface<mojom::SearchResultExtractor>(base::BindRepeating(
+          &SearchResultExtractorImpl::BindSearchResultExtractor,
+          weak_ptr_factory_.GetWeakPtr()));
 }
 
 SearchResultExtractorImpl::~SearchResultExtractorImpl() = default;
@@ -255,7 +248,8 @@ void SearchResultExtractorImpl::ExtractCurrentSearchResults(
 
 void SearchResultExtractorImpl::OnDestruct() {
   receiver_.reset();
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 void SearchResultExtractorImpl::BindSearchResultExtractor(

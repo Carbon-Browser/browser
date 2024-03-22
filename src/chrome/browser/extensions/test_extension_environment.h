@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,11 +78,11 @@ class TestExtensionEnvironment {
   // The Extension has a default manifest of {name: "Extension",
   // version: "1.0", manifest_version: 2}, and values in
   // manifest_extra override these defaults.
-  const Extension* MakeExtension(const base::Value& manifest_extra);
+  const Extension* MakeExtension(const base::Value::Dict& manifest_extra);
 
   // Use a specific extension ID instead of the default generated in
   // Extension::Create.
-  const Extension* MakeExtension(const base::Value& manifest_extra,
+  const Extension* MakeExtension(const base::Value::Dict& manifest_extra,
                                  const std::string& id);
 
   // Generates a valid packaged app manifest with the given ID. If |install|
@@ -114,7 +114,7 @@ class TestExtensionEnvironment {
 #endif
 
   std::unique_ptr<TestingProfile> profile_;
-  raw_ptr<ExtensionService> extension_service_ = nullptr;
+  raw_ptr<ExtensionService, DanglingUntriaged> extension_service_ = nullptr;
 };
 
 }  // namespace extensions

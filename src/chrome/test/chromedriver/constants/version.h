@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ extern const char kChromeDriverOptionsKeyPrefixed[];
 extern const char kBrowserShortName[];
 extern const char kBrowserCapabilityName[];
 extern const char kUserAgentProductName[];
+extern const char kHeadlessShellCapabilityName[];
 extern const char kHeadlessUserAgentProductName[];
 
 #endif  // CHROME_TEST_CHROMEDRIVER_CONSTANTS_VERSION_H_

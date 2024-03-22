@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,6 +33,12 @@ SANDBOX_POLICY_EXPORT base::FilePath GetCanonicalPath(
 // It CHECKs that the sandbox profile is a valid type, so it always returns a
 // valid result, or crashes.
 SANDBOX_POLICY_EXPORT std::string GetSandboxProfile(
+    sandbox::mojom::Sandbox sandbox_type);
+
+// Returns true if the compiled policy for the sandbox `sandbox_type` can be
+// cached and reused across multiple processes. Some sandbox policies bind
+// parameters that prevent the policy from being reused.
+SANDBOX_POLICY_EXPORT bool CanCacheSandboxPolicy(
     sandbox::mojom::Sandbox sandbox_type);
 
 }  // namespace policy

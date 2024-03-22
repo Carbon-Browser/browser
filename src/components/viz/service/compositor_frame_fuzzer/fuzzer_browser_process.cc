@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "components/viz/common/quads/solid_color_draw_quad.h"
 #include "components/viz/common/quads/surface_draw_quad.h"
@@ -131,13 +131,14 @@ CompositorFrame FuzzerBrowserProcess::BuildBrowserUICompositorFrame(
                gfx::Rect(kBrowserSize), gfx::Transform());
 
   auto* renderer_sqs = pass->CreateAndAppendSharedQuadState();
-  renderer_sqs->SetAll(gfx::Transform(1.0, 0.0, 0.0, 1.0, 0, 80),
+  renderer_sqs->SetAll(gfx::Transform::MakeTranslation(0, 80),
                        gfx::Rect(kRendererFrameSize),
                        gfx::Rect(kRendererFrameSize),
                        /*mask_filter_info=*/gfx::MaskFilterInfo(),
                        /*clip_rect=*/absl::nullopt,
                        /*are_contents_opaque=*/false, /*opacity=*/1,
-                       SkBlendMode::kSrcOver, /*sorting_context_id=*/0);
+                       SkBlendMode::kSrcOver, /*sorting_context_id=*/0,
+                       /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* surface_quad = pass->CreateAndAppendDrawQuad<SurfaceDrawQuad>();
   surface_quad->SetNew(renderer_sqs, gfx::Rect(kRendererFrameSize),
                        gfx::Rect(kRendererFrameSize),
@@ -150,7 +151,7 @@ CompositorFrame FuzzerBrowserProcess::BuildBrowserUICompositorFrame(
       gfx::Transform(), gfx::Rect(kTopBarSize), gfx::Rect(kTopBarSize),
       /*mask_filter_info=*/gfx::MaskFilterInfo(), /*clip_rect=*/absl::nullopt,
       /*are_contents_opaque=*/false, /*opacity=*/1, SkBlendMode::kSrcOver,
-      /*sorting_context_id=*/0);
+      /*sorting_context_id=*/0, /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* color_quad = pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
   color_quad->SetNew(toolbar_sqs, gfx::Rect(kTopBarSize),
                      gfx::Rect(kTopBarSize), SkColors::kLtGray,

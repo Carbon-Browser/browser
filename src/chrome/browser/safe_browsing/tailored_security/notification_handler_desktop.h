@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,9 +37,6 @@ class TailoredSecurityNotificationHandler : public NotificationHandler {
                const absl::optional<std::u16string>& reply,
                base::OnceClosure completed_closure) override;
 };
-
-void DisplayTailoredSecurityConsentedModalDesktop(Profile* profile,
-                                                  bool enable);
 
 void DisplayTailoredSecurityUnconsentedPromotionNotification(Profile* profile);
 

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <!--
-Copyright (c) 2013 The Chromium Authors. All rights reserved.
+Copyright 2013 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -165,6 +165,15 @@ found in the LICENSE file.
         To force accessibility to be enabled at launch, run Chrome with this
         flag:
         <pre>--force-renderer-accessibility</pre>
+      </p>
+      <p>
+        To force the accessibility AXMode to one of the three predefined bundles
+        (basic, form-controls, or complete), run Chrome with the
+        --force-renderer-accessibility flag and optional argument:
+        <pre>--force-renderer-accessibility=[basic|form-controls|complete]</pre>
+
+        If the optional parameter is absent, the AXMode bundle will default to
+        complete.
       </p>
       <p>
         To disable accessibility, run Chrome with this flag:

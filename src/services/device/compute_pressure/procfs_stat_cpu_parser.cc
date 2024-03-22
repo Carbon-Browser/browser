@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/files/file_util.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/system/sys_info.h"
 
@@ -60,16 +59,16 @@ bool ProcfsStatCpuParser::Update() {
   if (!base::ReadFileToString(stat_path_, &stat_bytes))
     return false;
 
-  static constexpr base::StringPiece kNewlineSeparator("\n", 1);
-  std::vector<base::StringPiece> stat_lines = base::SplitStringPiece(
+  static constexpr std::string_view kNewlineSeparator("\n", 1);
+  std::vector<std::string_view> stat_lines = base::SplitStringPiece(
       stat_bytes, kNewlineSeparator, base::WhitespaceHandling::KEEP_WHITESPACE,
       base::SplitResult::SPLIT_WANT_ALL);
-  for (base::StringPiece stat_line : stat_lines) {
+  for (std::string_view stat_line : stat_lines) {
     int core_id = CoreIdFromLine(stat_line);
     if (core_id < 0)
       continue;
 
-    DCHECK_LE(core_times_.size(), size_t{std::numeric_limits<int>::max()});
+    CHECK_LE(core_times_.size(), size_t{std::numeric_limits<int>::max()});
     if (static_cast<int>(core_times_.size()) <= core_id)
       core_times_.resize(core_id + 1);
 
@@ -81,16 +80,17 @@ bool ProcfsStatCpuParser::Update() {
 }
 
 // static
-int ProcfsStatCpuParser::CoreIdFromLine(base::StringPiece stat_line) {
+int ProcfsStatCpuParser::CoreIdFromLine(std::string_view stat_line) {
   // The first token of valid lines is cpu<number>. The token is at least 4
   // characters ("cpu" plus one digit).
   auto space_index = stat_line.find(' ');
-  if (space_index < 4 || space_index == base::StringPiece::npos)
+  if (space_index < 4 || space_index == std::string_view::npos) {
     return -1;
+  }
 
   if (stat_line[0] != 'c' || stat_line[1] != 'p' || stat_line[2] != 'u')
     return -1;
-  base::StringPiece core_id_string = stat_line.substr(3, space_index - 3);
+  std::string_view core_id_string = stat_line.substr(3, space_index - 3);
 
   int core_id;
   if (!base::StringToInt(core_id_string, &core_id) || core_id < 0)
@@ -100,12 +100,12 @@ int ProcfsStatCpuParser::CoreIdFromLine(base::StringPiece stat_line) {
 }
 
 // static
-void ProcfsStatCpuParser::UpdateCore(base::StringPiece core_line,
+void ProcfsStatCpuParser::UpdateCore(std::string_view core_line,
                                      CoreTimes& core_times) {
-  DCHECK_GE(CoreIdFromLine(core_line), 0);
+  CHECK_GE(CoreIdFromLine(core_line), 0);
 
-  static constexpr base::StringPiece kSpaceSeparator(" ", 1);
-  std::vector<base::StringPiece> tokens = base::SplitStringPiece(
+  static constexpr std::string_view kSpaceSeparator(" ", 1);
+  std::vector<std::string_view> tokens = base::SplitStringPiece(
       core_line, kSpaceSeparator, base::WhitespaceHandling::KEEP_WHITESPACE,
       base::SplitResult::SPLIT_WANT_ALL);
 
@@ -117,16 +117,24 @@ void ProcfsStatCpuParser::UpdateCore(base::StringPiece core_line,
   if (tokens.size() < 11)
     return;
 
+  std::vector<uint64_t> parsed_numbers(10, 0);
   for (int i = 0; i < 10; ++i) {
     uint64_t parsed_number;
     if (!base::StringToUint64(tokens[i + 1], &parsed_number))
-      return;
-
-    // Ensure that the reported core usage times are monotonically increasing.
-    // We assume that by any decrease is a temporary blip.
-    if (core_times.times[i] < parsed_number)
-      core_times.times[i] = parsed_number;
+      break;
+    parsed_numbers[i] = parsed_number;
   }
+
+  core_times.set_user(parsed_numbers[0]);
+  core_times.set_nice(parsed_numbers[1]);
+  core_times.set_system(parsed_numbers[2]);
+  core_times.set_idle(parsed_numbers[3]);
+  core_times.set_iowait(parsed_numbers[4]);
+  core_times.set_irq(parsed_numbers[5]);
+  core_times.set_softirq(parsed_numbers[6]);
+  core_times.set_steal(parsed_numbers[7]);
+  core_times.set_guest(parsed_numbers[8]);
+  core_times.set_guest_nice(parsed_numbers[9]);
 }
 
 }  // namespace device

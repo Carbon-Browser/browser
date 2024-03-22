@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,14 +7,13 @@
 # m/a/b/d in the tests.
 
 import json
-import types
 import unittest
 
 from blinkpy.common.system.filesystem_mock import FileSystemTestCase, MockFileSystem
+from blinkpy.common.system.log_testing import LoggingTestCase
 from blinkpy.web_tests import merge_results
 
 from collections import OrderedDict
-from six import StringIO
 from six import BytesIO
 
 
@@ -517,7 +516,7 @@ class MergeFilesMatchingContentsTests(FileSystemTestCase):
         with self.assertFilesAdded(mock_filesystem, {'/output/out2': '2'}):
             merger('/output/out2', ['/s/file2'])
 
-        with self.assertRaises(merge_results.MergeFailure):
+        with self.assertFilesAdded(mock_filesystem, {'/output/out3': '1'}):
             merger('/output/out3', ['/s/file1', '/s/file2'])
 
         with self.assertFilesAdded(mock_filesystem, {'/output/out4': '1'}):
@@ -570,6 +569,27 @@ class MergeFilesKeepFilesTests(FileSystemTestCase):
             merger('/output/out', ['/s1/file1', '/s2/file1', '/s3/file1'])
 
 
+class IgnoreFilesTests(LoggingTestCase):
+    def test(self):
+        mock_filesystem = MockFileSystem(
+            {
+                '/s1/file1': 'a',
+                '/s2/file1': 'b',
+                '/s3/file1': 'c',
+            },
+            dirs=['/output'])
+        files_before = dict(mock_filesystem.files)
+        merger = merge_results.IgnoreFiles(mock_filesystem)
+        merger('/output/out', ['/s1/file1', '/s2/file1', '/s3/file1'])
+        self.assertEqual(files_before, mock_filesystem.files)
+        self.assertLog([
+            'WARNING: Ignoring merge to /output/out:\n',
+            'WARNING:   /s1/file1\n',
+            'WARNING:   /s2/file1\n',
+            'WARNING:   /s3/file1\n',
+        ])
+
+
 class DirMergerTests(FileSystemTestCase):
     def test_success_no_overlapping_files(self):
         mock_filesystem = MockFileSystem({
@@ -610,7 +630,7 @@ class DirMergerTests(FileSystemTestCase):
             '/shard1/file1': '2'
         })
         d = merge_results.DirMerger(mock_filesystem)
-        with self.assertRaises(merge_results.MergeFailure):
+        with self.assertFilesAdded(mock_filesystem, {'/output/file1': '1'}):
             d.merge('/output', ['/shard0', '/shard1'])
 
 
@@ -807,79 +827,6 @@ f1({
                 '/s/filea': b'{"a": 1}',
                 '/s/filef1a': b'f1({"a": 1})',
             }, ('/output/outff4', ['/s/filea', '/s/filef1a']))
-
-
-class JSONWptReportsMerger(unittest.TestCase):
-    def test_time_start(self):
-        merger = merge_results.JSONWptReportsMerger()
-        self.assertEqual({
-            'time_start': 2
-        },
-                         merger.merge([{
-                             'time_start': 3
-                         }, {
-                             'time_start': 2
-                         }]))
-        self.assertEqual({
-            'time_start': 2
-        },
-                         merger.merge([{
-                             'time_start': 2
-                         }, {
-                             'time_start': 3
-                         }]))
-        self.assertEqual({
-            'time_start': 12
-        }, merger.merge([{
-            'time_start': 12
-        }, {}]))
-
-    def test_time_end(self):
-        merger = merge_results.JSONWptReportsMerger()
-        self.assertEqual({
-            'time_end': 3
-        },
-                         merger.merge([{
-                             'time_end': 3
-                         }, {
-                             'time_end': 2
-                         }]))
-        self.assertEqual({
-            'time_end': 3
-        },
-                         merger.merge([{
-                             'time_end': 2
-                         }, {
-                             'time_end': 3
-                         }]))
-        self.assertEqual({
-            'time_end': 12
-        }, merger.merge([{
-            'time_end': 12
-        }, {}]))
-
-    def test_run_info(self):
-        merger = merge_results.JSONWptReportsMerger()
-        self.assertEqual({
-            'run_info': {"os": "linux"}
-        },
-                         merger.merge([{
-                             'run_info': {"os": "linux"}
-                         }, {
-                             'run_info': {"os": "win"}
-                         }]))
-
-    def test_results(self):
-        merger = merge_results.JSONWptReportsMerger()
-        self.assertEqual({
-            'results': [{"test": "/foo/foo.html"},
-                        {"test": "/bar/bar.html"}]
-        },
-                         merger.merge([{
-                             "results": [{"test": "/foo/foo.html"}]
-                         }, {
-                             "results": [{"test": "/bar/bar.html"}]
-                         }]))
 
 
 class JSONTestResultsMerger(unittest.TestCase):

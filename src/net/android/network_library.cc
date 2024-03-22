@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "base/native_library.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/threading/scoped_blocking_call.h"
 #include "net/base/net_errors.h"
 #include "net/dns/public/dns_protocol.h"
 #include "net/net_jni_headers/AndroidNetworkLibrary_jni.h"
@@ -26,11 +27,22 @@
 using base::android::AttachCurrentThread;
 using base::android::ConvertJavaStringToUTF8;
 using base::android::ConvertUTF8ToJavaString;
+using base::android::JavaArrayOfByteArrayToStringVector;
 using base::android::ScopedJavaLocalRef;
 using base::android::ToJavaArrayOfByteArray;
 using base::android::ToJavaByteArray;
 
 namespace net::android {
+
+std::vector<std::string> GetUserAddedRoots() {
+  std::vector<std::string> roots;
+  JNIEnv* env = AttachCurrentThread();
+
+  ScopedJavaLocalRef<jobjectArray> roots_byte_array =
+      Java_AndroidNetworkLibrary_getUserAddedRoots(env);
+  JavaArrayOfByteArrayToStringVector(env, roots_byte_array, &roots);
+  return roots;
+}
 
 void VerifyX509CertChain(const std::vector<std::string>& cert_chain,
                          base::StringPiece auth_type,
@@ -72,18 +84,20 @@ void ClearTestRootCertificates() {
   Java_AndroidNetworkLibrary_clearTestRootCertificates(env);
 }
 
-bool IsCleartextPermitted(const std::string& host) {
+bool IsCleartextPermitted(base::StringPiece host) {
   JNIEnv* env = AttachCurrentThread();
   ScopedJavaLocalRef<jstring> host_string = ConvertUTF8ToJavaString(env, host);
   return Java_AndroidNetworkLibrary_isCleartextPermitted(env, host_string);
 }
 
 bool HaveOnlyLoopbackAddresses() {
+  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
+                                                base::BlockingType::MAY_BLOCK);
   JNIEnv* env = AttachCurrentThread();
   return Java_AndroidNetworkLibrary_haveOnlyLoopbackAddresses(env);
 }
 
-bool GetMimeTypeFromExtension(const std::string& extension,
+bool GetMimeTypeFromExtension(base::StringPiece extension,
                               std::string* result) {
   JNIEnv* env = AttachCurrentThread();
 
@@ -122,7 +136,7 @@ std::string GetWifiSSID() {
 }
 
 void SetWifiEnabledForTesting(bool enabled) {
-  Java_AndroidNetworkLibrary_setWifiEnabled(
+  Java_AndroidNetworkLibrary_setWifiEnabledForTesting(
       base::android::AttachCurrentThread(), enabled);
 }
 
@@ -192,7 +206,7 @@ bool GetDnsServersForNetwork(std::vector<IPEndPoint>* dns_servers,
                              bool* dns_over_tls_active,
                              std::string* dns_over_tls_hostname,
                              std::vector<std::string>* search_suffixes,
-                             NetworkChangeNotifier::NetworkHandle network) {
+                             handles::NetworkHandle network) {
   DCHECK_GE(base::android::BuildInfo::GetInstance()->sdk_int(),
             base::android::SDK_VERSION_P);
 
@@ -247,10 +261,9 @@ LollipopSetNetworkForSocket GetLollipopSetNetworkForSocket() {
 
 }  // namespace
 
-int BindToNetwork(SocketDescriptor socket,
-                  NetworkChangeNotifier::NetworkHandle network) {
+int BindToNetwork(SocketDescriptor socket, handles::NetworkHandle network) {
   DCHECK_NE(socket, kInvalidSocket);
-  if (network == NetworkChangeNotifier::kInvalidNetworkHandle)
+  if (network == handles::kInvalidNetworkHandle)
     return ERR_INVALID_ARGUMENT;
 
   // Android prior to Lollipop didn't have support for binding sockets to
@@ -306,13 +319,12 @@ MarshmallowGetAddrInfoForNetwork GetMarshmallowGetAddrInfoForNetwork() {
 
 }  // namespace
 
-NET_EXPORT_PRIVATE int GetAddrInfoForNetwork(
-    NetworkChangeNotifier::NetworkHandle network,
-    const char* node,
-    const char* service,
-    const struct addrinfo* hints,
-    struct addrinfo** res) {
-  if (network == NetworkChangeNotifier::kInvalidNetworkHandle) {
+NET_EXPORT_PRIVATE int GetAddrInfoForNetwork(handles::NetworkHandle network,
+                                             const char* node,
+                                             const char* service,
+                                             const struct addrinfo* hints,
+                                             struct addrinfo** res) {
+  if (network == handles::kInvalidNetworkHandle) {
     errno = EINVAL;
     return EAI_SYSTEM;
   }

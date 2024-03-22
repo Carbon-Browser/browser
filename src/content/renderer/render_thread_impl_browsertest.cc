@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,27 +10,30 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/debug/leak_annotations.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/discardable_memory.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/test_switches.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "cc/base/switches.h"
 #include "content/app/mojo/mojo_init.h"
 #include "content/common/in_process_child_thread_params.h"
+#include "content/common/pseudonymization_salt.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
+#include "content/public/browser/child_process_host_delegate.h"
 #include "content/public/browser/content_browser_client.h"
-#include "content/public/common/child_process_host.h"
-#include "content/public/common/child_process_host_delegate.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
@@ -48,7 +51,6 @@
 #include "gpu/config/gpu_switches.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/common/switches.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/scheduler/test/web_mock_thread_scheduler.h"
@@ -179,7 +181,7 @@ class RenderThreadImplBrowserTest : public testing::Test,
 
     cmd->AppendSwitchASCII(switches::kLang, "en-US");
 
-    cmd->AppendSwitchASCII(blink::switches::kNumRasterThreads, "1");
+    cmd->AppendSwitchASCII(cc::switches::kNumRasterThreads, "1");
 
     // To avoid creating a GPU channel to query if
     // accelerated_video_decode is blocklisted on older Android system
@@ -194,7 +196,9 @@ class RenderThreadImplBrowserTest : public testing::Test,
     scoped_refptr<base::SingleThreadTaskRunner> test_task_counter(
         test_task_counter_.get());
 
-    base::FieldTrialList::CreateTrialsFromCommandLine(*cmd, -1);
+    // This handles the --force-fieldtrials flag passed to content_browsertests.
+    base::FieldTrialList::CreateTrialsFromString(
+        cmd->GetSwitchValueASCII(::switches::kForceFieldTrials));
     thread_ = new RenderThreadImpl(
         InProcessChildThreadParams(io_task_runner,
                                    &process_host_->GetMojoInvitation().value()),
@@ -212,6 +216,7 @@ class RenderThreadImplBrowserTest : public testing::Test,
   }
 
   void TearDown() override {
+    SetRendererClientForTesting(nullptr);
     CHECK(base::CommandLine::ForCurrentProcess()->HasSwitch(
         switches::kSingleProcessTests));
     // In a single-process mode, we need to avoid destructing `process_`
@@ -277,12 +282,13 @@ class RenderThreadImplBrowserTest : public testing::Test,
   std::unique_ptr<RenderProcess> process_;
   scoped_refptr<QuitOnTestMsgFilter> test_msg_filter_;
 
-  blink::scheduler::WebMockThreadScheduler* main_thread_scheduler_;
+  raw_ptr<blink::scheduler::WebMockThreadScheduler, ExperimentalRenderer>
+      main_thread_scheduler_;
 
   // RenderThreadImpl doesn't currently support a proper shutdown sequence
   // and it's okay when we're running in multi-process mode because renderers
   // get killed by the OS. Memory leaks aren't nice but it's test-only.
-  RenderThreadImpl* thread_;
+  raw_ptr<RenderThreadImpl, ExperimentalRenderer> thread_;
 
   std::unique_ptr<base::RunLoop> run_loop_;
 };
@@ -296,6 +302,12 @@ TEST_F(RenderThreadImplBrowserTest,
   // NOTE other than not being a resource message, the actual message is
   // unimportant.
   sender()->Send(new TestMsg_QuitRunLoop());
+
+  // In-process RenderThreadImpl does not start a browser loop so the random
+  // browser seed is never generated. To allow the ChildProcessHost to correctly
+  // send a seed to the ChildProcess without hitting a DCHECK, set the seed to
+  // an arbitrary non-zero value.
+  SetPseudonymizationSalt(0xDEADBEEF);
 
   run_loop_->Run();
 
@@ -447,7 +459,8 @@ class RenderThreadImplGpuMemoryBufferBrowserTest
         base::Unretained(this)));
   }
 
-  gpu::GpuMemoryBufferManager* memory_buffer_manager_ = nullptr;
+  raw_ptr<gpu::GpuMemoryBufferManager, ExperimentalRenderer>
+      memory_buffer_manager_ = nullptr;
 };
 
 // https://crbug.com/652531

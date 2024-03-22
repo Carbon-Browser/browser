@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,8 +53,7 @@ class PLATFORM_EXPORT RTCRtpSenderPlatform {
   virtual void SetParameters(Vector<webrtc::RtpEncodingParameters>,
                              absl::optional<webrtc::DegradationPreference>,
                              RTCVoidRequest*) = 0;
-  virtual void GetStats(RTCStatsReportCallback,
-                        const Vector<webrtc::NonStandardGroupId>&) = 0;
+  virtual void GetStats(RTCStatsReportCallback) = 0;
   virtual void SetStreams(const Vector<String>& stream_ids) = 0;
   virtual RTCEncodedAudioStreamTransformer* GetEncodedAudioStreamTransformer()
       const {

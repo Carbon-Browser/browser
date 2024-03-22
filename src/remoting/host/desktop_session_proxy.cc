@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,17 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/notreached.h"
 #include "base/process/process_handle.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "ipc/ipc_channel_proxy.h"
-#include "ipc/ipc_message_macros.h"
 #include "remoting/base/capabilities.h"
-#include "remoting/host/chromoting_messages.h"
 #include "remoting/host/client_session.h"
 #include "remoting/host/client_session_control.h"
 #include "remoting/host/crash_process.h"
@@ -33,6 +32,7 @@
 #include "remoting/host/ipc_screen_controls.h"
 #include "remoting/host/ipc_url_forwarder_configurator.h"
 #include "remoting/host/ipc_video_frame_capturer.h"
+#include "remoting/host/mojom/desktop_session.mojom.h"
 #include "remoting/host/remote_open_url/remote_open_url_util.h"
 #include "remoting/host/webauthn/remote_webauthn_delegated_state_change_notifier.h"
 #include "remoting/proto/audio.pb.h"
@@ -147,6 +147,8 @@ std::unique_ptr<ScreenControls> DesktopSessionProxy::CreateScreenControls() {
 std::unique_ptr<DesktopCapturer> DesktopSessionProxy::CreateVideoCapturer() {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
 
+  // Cursor compositing is done by the desktop process if necessary so just
+  // return a non-composing frame capturer.
   return std::make_unique<IpcVideoFrameCapturer>(this);
 }
 
@@ -237,22 +239,8 @@ void DesktopSessionProxy::SetCapabilities(const std::string& capabilities) {
 
 bool DesktopSessionProxy::OnMessageReceived(const IPC::Message& message) {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
-
-  bool handled = true;
-  IPC_BEGIN_MESSAGE_MAP(DesktopSessionProxy, message)
-    IPC_MESSAGE_FORWARD(ChromotingDesktopNetworkMsg_FileResult,
-                        &ipc_file_operations_factory_,
-                        IpcFileOperations::ResultHandler::OnResult)
-    IPC_MESSAGE_FORWARD(ChromotingDesktopNetworkMsg_FileInfoResult,
-                        &ipc_file_operations_factory_,
-                        IpcFileOperations::ResultHandler::OnInfoResult)
-    IPC_MESSAGE_FORWARD(ChromotingDesktopNetworkMsg_FileDataResult,
-                        &ipc_file_operations_factory_,
-                        IpcFileOperations::ResultHandler::OnDataResult)
-  IPC_END_MESSAGE_MAP()
-
-  CHECK(handled) << "Received unexpected IPC type: " << message.type();
-  return handled;
+  NOTREACHED() << "Received unexpected IPC type: " << message.type();
+  return false;
 }
 
 void DesktopSessionProxy::OnChannelConnected(int32_t peer_pid) {
@@ -311,13 +299,14 @@ bool DesktopSessionProxy::AttachToDesktop(
   DCHECK(!desktop_channel_);
 
   // Ignore the attach event if the client session has already disconnected.
-  if (!client_session_control_.get())
+  if (!client_session_control_.get()) {
     return false;
+  }
 
   // Connect to the desktop process.
   desktop_channel_ = IPC::ChannelProxy::Create(
       desktop_pipe.release(), IPC::Channel::MODE_CLIENT, this,
-      io_task_runner_.get(), base::ThreadTaskRunnerHandle::Get());
+      io_task_runner_.get(), base::SingleThreadTaskRunner::GetCurrentDefault());
 
   // Reset the associated remote to allow us to connect to the new desktop
   // process. This is needed as the desktop may crash and the daemon process
@@ -346,6 +335,9 @@ void DesktopSessionProxy::DetachFromDesktop() {
   // can come in before the DetachFromDesktop-AttachToDesktop sequence.
 
   shared_buffers_.clear();
+
+  // Notify interested folks that the IPC has been disconnected.
+  disconnect_handlers_.Notify();
 
   // Generate fake responses to keep the video capturer in sync.
   while (pending_capture_frame_requests_) {
@@ -421,7 +413,7 @@ void DesktopSessionProxy::SetKeyboardLayoutMonitor(
   keyboard_layout_monitor_ = std::move(keyboard_layout_monitor);
 }
 
-const absl::optional<protocol::KeyboardLayout>&
+const std::optional<protocol::KeyboardLayout>&
 DesktopSessionProxy::GetKeyboardCurrentLayout() const {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
 
@@ -432,8 +424,9 @@ void DesktopSessionProxy::DisconnectSession(protocol::ErrorCode error) {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
 
   // Disconnect the client session if it hasn't been disconnected yet.
-  if (client_session_control_.get())
+  if (client_session_control_.get()) {
     client_session_control_->DisconnectSession(error);
+  }
 }
 
 void DesktopSessionProxy::InjectClipboardEvent(
@@ -507,8 +500,9 @@ void DesktopSessionProxy::SetScreenResolution(
   // Desktop-size-restore functionality (via an empty resolution param) does not
   // exist for the Daemon process.  Passing an empty resolution object is
   // treated as a critical error so we want to prevent that here.
-  if (desktop_session_connector_.get() && !screen_resolution_.IsEmpty())
+  if (desktop_session_connector_.get() && !screen_resolution_.IsEmpty()) {
     desktop_session_connector_->SetScreenResolution(this, screen_resolution_);
+  }
 
   // Passing an empty |screen_resolution_| value to the desktop process
   // indicates that the original resolution, if one exists, should be restored.
@@ -537,42 +531,46 @@ void DesktopSessionProxy::ExecuteAction(
   }
 }
 
-void DesktopSessionProxy::ReadFile(std::uint64_t file_id) {
+void DesktopSessionProxy::BeginFileRead(
+    IpcFileOperations::BeginFileReadCallback callback,
+    base::OnceClosure on_disconnect) {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
+  if (!desktop_session_control_) {
+    std::move(callback).Run(
+        mojom::BeginFileReadResult::NewError(protocol::MakeFileTransferError(
+            FROM_HERE, protocol::FileTransfer_Error_Type_UNEXPECTED_ERROR)));
+    return;
+  }
 
-  SendToDesktop(new ChromotingNetworkDesktopMsg_ReadFile(file_id));
+  auto disconnect_handler_subscription =
+      disconnect_handlers_.Add(std::move(on_disconnect));
+  // Unretained is sound as DesktopSessionProxy owns |desktop_session_control_|
+  // and the callback won't be invoked after the remote is destroyed.
+  desktop_session_control_->BeginFileRead(base::BindOnce(
+      &DesktopSessionProxy::OnBeginFileReadResult, base::Unretained(this),
+      std::move(callback), std::move(disconnect_handler_subscription)));
 }
 
-void DesktopSessionProxy::ReadChunk(std::uint64_t file_id, std::uint64_t size) {
+void DesktopSessionProxy::BeginFileWrite(
+    const base::FilePath& file_path,
+    IpcFileOperations::BeginFileWriteCallback callback,
+    base::OnceClosure on_disconnect) {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
+  if (!desktop_session_control_) {
+    std::move(callback).Run(
+        mojom::BeginFileWriteResult::NewError(protocol::MakeFileTransferError(
+            FROM_HERE, protocol::FileTransfer_Error_Type_UNEXPECTED_ERROR)));
+    return;
+  }
 
-  SendToDesktop(new ChromotingNetworkDesktopMsg_ReadFileChunk(file_id, size));
-}
-
-void DesktopSessionProxy::WriteFile(uint64_t file_id,
-                                    const base::FilePath& filename) {
-  DCHECK(caller_task_runner_->BelongsToCurrentThread());
-
-  SendToDesktop(new ChromotingNetworkDesktopMsg_WriteFile(file_id, filename));
-}
-
-void DesktopSessionProxy::WriteChunk(uint64_t file_id,
-                                     std::vector<std::uint8_t> data) {
-  DCHECK(caller_task_runner_->BelongsToCurrentThread());
-
-  SendToDesktop(new ChromotingNetworkDesktopMsg_WriteFileChunk(file_id, data));
-}
-
-void DesktopSessionProxy::Close(uint64_t file_id) {
-  DCHECK(caller_task_runner_->BelongsToCurrentThread());
-
-  SendToDesktop(new ChromotingNetworkDesktopMsg_CloseFile(file_id));
-}
-
-void DesktopSessionProxy::Cancel(uint64_t file_id) {
-  DCHECK(caller_task_runner_->BelongsToCurrentThread());
-
-  SendToDesktop(new ChromotingNetworkDesktopMsg_CancelFile(file_id));
+  auto disconnect_handler_subscription =
+      disconnect_handlers_.Add(std::move(on_disconnect));
+  // Unretained is sound as DesktopSessionProxy owns |desktop_session_control_|
+  // and the callback won't be invoked after the remote is destroyed.
+  desktop_session_control_->BeginFileWrite(
+      file_path, base::BindOnce(&DesktopSessionProxy::OnBeginFileWriteResult,
+                                base::Unretained(this), std::move(callback),
+                                std::move(disconnect_handler_subscription)));
 }
 
 void DesktopSessionProxy::IsUrlForwarderSetUp(
@@ -651,8 +649,9 @@ void DesktopSessionProxy::OnUrlForwarderStateChange(
 DesktopSessionProxy::~DesktopSessionProxy() {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
 
-  if (desktop_session_connector_.get() && is_desktop_session_connected_)
+  if (desktop_session_connector_.get() && is_desktop_session_connected_) {
     desktop_session_connector_->DisconnectTerminal(this);
+  }
 }
 
 scoped_refptr<DesktopSessionProxy::IpcSharedBufferCore>
@@ -755,6 +754,28 @@ void DesktopSessionProxy::OnCaptureResult(mojom::CaptureResultPtr result) {
                                    std::move(frame));
 }
 
+void DesktopSessionProxy::OnBeginFileReadResult(
+    IpcFileOperations::BeginFileReadCallback callback,
+    base::CallbackListSubscription disconnect_handler_subscription,
+    mojom::BeginFileReadResultPtr result) {
+  // This handler is only needed until the pending_remote is returned from the
+  // DesktopSessionAgent as the IpcFileReader will then use the new channel and
+  // hook into its disconnect handler.
+  disconnect_handler_subscription = {};
+  std::move(callback).Run(std::move(result));
+}
+
+void DesktopSessionProxy::OnBeginFileWriteResult(
+    IpcFileOperations::BeginFileWriteCallback callback,
+    base::CallbackListSubscription disconnect_handler_subscription,
+    mojom::BeginFileWriteResultPtr result) {
+  // This handler is only needed until the pending_remote is returned from the
+  // DesktopSessionAgent as the IpcFileWriter will then use the new channel and
+  // hook into its disconnect handler.
+  disconnect_handler_subscription = {};
+  std::move(callback).Run(std::move(result));
+}
+
 void DesktopSessionProxy::OnMouseCursorChanged(
     const webrtc::MouseCursor& mouse_cursor) {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
@@ -789,16 +810,6 @@ void DesktopSessionProxy::SignalWebAuthnExtension() {
 
   if (desktop_session_control_) {
     desktop_session_control_->SignalWebAuthnExtension();
-  }
-}
-
-void DesktopSessionProxy::SendToDesktop(IPC::Message* message) {
-  DCHECK(caller_task_runner_->BelongsToCurrentThread());
-
-  if (desktop_channel_) {
-    desktop_channel_->Send(message);
-  } else {
-    delete message;
   }
 }
 

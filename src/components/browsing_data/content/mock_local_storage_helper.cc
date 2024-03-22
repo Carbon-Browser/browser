@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,16 @@
 
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback.h"
+#include "content/public/browser/storage_partition.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace browsing_data {
 
-MockLocalStorageHelper::MockLocalStorageHelper(content::BrowserContext* context)
-    : browsing_data::LocalStorageHelper(context) {}
+MockLocalStorageHelper::MockLocalStorageHelper(
+    content::StoragePartition* storage_partition)
+    : browsing_data::LocalStorageHelper(storage_partition) {}
 
 MockLocalStorageHelper::~MockLocalStorageHelper() = default;
 
@@ -44,7 +46,7 @@ void MockLocalStorageHelper::AddLocalStorageSamples() {
 void MockLocalStorageHelper::AddLocalStorageForStorageKey(
     const blink::StorageKey& storage_key,
     int64_t size) {
-  response_.emplace_back(storage_key.origin(), size, base::Time());
+  response_.emplace_back(storage_key, size, base::Time());
   storage_keys_[storage_key] = true;
 }
 

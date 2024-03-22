@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
 #include "components/omnibox/browser/autocomplete_scheme_classifier.h"
-#include "components/omnibox/browser/jni_headers/AutocompleteSchemeClassifier_jni.h"
+#include "components/omnibox/browser/scheme_classifier_jni/AutocompleteSchemeClassifier_jni.h"
 
 // static
 AutocompleteSchemeClassifier* AutocompleteSchemeClassifierAndroid::FromJavaObj(

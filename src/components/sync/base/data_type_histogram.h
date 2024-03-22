@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,9 @@ enum class UpdateDropReason {
   kTombstoneForNonexistentInIncrementalUpdate,
   kDecryptionPending,
   kDecryptionPendingForTooLong,
-  kFailedToDecrypt
+  kFailedToDecrypt,
+  // This should effectively replace kCannotGenerateStorageKey in the long run.
+  kDroppedByBridge
 };
 
 // Records that a remote update of an entity of type |type| got dropped into a
@@ -35,6 +37,15 @@ void SyncRecordModelTypeMemoryHistogram(ModelType model_type, size_t bytes);
 // Records |count| into a |model_type| related histogram for count of sync
 // entities.
 void SyncRecordModelTypeCountHistogram(ModelType model_type, size_t count);
+
+// Records sync entity size `bytes` in `model_type` related histogram for
+// distribution of entity sizes.
+void SyncRecordModelTypeEntitySizeHistogram(ModelType model_type, size_t bytes);
+
+// Records when the model (including both data and metadata) was cleared for a
+// given `model_type` due to
+// `WipeModelUponSyncDisabledBehavior::kOnceIfTrackingMetadata`.
+void SyncRecordModelClearedOnceHistogram(ModelType model_type);
 
 }  // namespace syncer
 

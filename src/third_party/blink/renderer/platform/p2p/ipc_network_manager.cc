@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/sys_byteorder.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/webrtc/net_address_utils.h"
 #include "net/base/ip_address.h"
 #include "net/base/network_change_notifier.h"
@@ -77,9 +76,9 @@ void IpcNetworkManager::StartUpdating() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (network_list_received_) {
     // Post a task to avoid reentrancy.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, WTF::Bind(&IpcNetworkManager::SendNetworksChangedSignal,
-                             weak_factory_.GetWeakPtr()));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, WTF::BindOnce(&IpcNetworkManager::SendNetworksChangedSignal,
+                                 weak_factory_.GetWeakPtr()));
   } else {
     VLOG(1) << "IpcNetworkManager::StartUpdating called; still waiting for "
                "network list from browser process.";
@@ -125,8 +124,18 @@ void IpcNetworkManager::OnNetworkListChanged(
     if (adapter_type == rtc::ADAPTER_TYPE_UNKNOWN) {
       adapter_type = rtc::GetAdapterTypeFromName(it->name.c_str());
     }
-    auto network = std::make_unique<rtc::Network>(
-        it->name, it->name, prefix, it->prefix_length, adapter_type);
+    rtc::AdapterType underlying_adapter_type = rtc::ADAPTER_TYPE_UNKNOWN;
+    if (it->mac_address.has_value() && IsVpnMacAddress(*it->mac_address)) {
+      adapter_type = rtc::ADAPTER_TYPE_VPN;
+      // With MAC-based detection we do not know the
+      // underlying adapter type.
+      underlying_adapter_type = rtc::ADAPTER_TYPE_UNKNOWN;
+    }
+    auto network = CreateNetwork(it->name, it->name, prefix, it->prefix_length,
+                                 adapter_type);
+    if (adapter_type == rtc::ADAPTER_TYPE_VPN) {
+      network->set_underlying_type_for_vpn(underlying_adapter_type);
+    }
     network->set_default_local_address_provider(this);
     network->set_mdns_responder_provider(this);
 
@@ -168,8 +177,8 @@ void IpcNetworkManager::OnNetworkListChanged(
   if (Platform::Current()->AllowsLoopbackInPeerConnection()) {
     std::string name_v4("loopback_ipv4");
     rtc::IPAddress ip_address_v4(INADDR_LOOPBACK);
-    auto network_v4 = std::make_unique<rtc::Network>(
-        name_v4, name_v4, ip_address_v4, 32, rtc::ADAPTER_TYPE_UNKNOWN);
+    auto network_v4 = CreateNetwork(name_v4, name_v4, ip_address_v4, 32,
+                                    rtc::ADAPTER_TYPE_UNKNOWN);
     network_v4->set_default_local_address_provider(this);
     network_v4->set_mdns_responder_provider(this);
     network_v4->AddIP(ip_address_v4);
@@ -183,8 +192,8 @@ void IpcNetworkManager::OnNetworkListChanged(
       DCHECK(!ipv6_default_address.IsNil());
       std::string name_v6("loopback_ipv6");
       rtc::IPAddress ip_address_v6(in6addr_loopback);
-      auto network_v6 = std::make_unique<rtc::Network>(
-          name_v6, name_v6, ip_address_v6, 64, rtc::ADAPTER_TYPE_UNKNOWN);
+      auto network_v6 = CreateNetwork(name_v6, name_v6, ip_address_v6, 64,
+                                      rtc::ADAPTER_TYPE_UNKNOWN);
       network_v6->set_default_local_address_provider(this);
       network_v6->set_mdns_responder_provider(this);
       network_v6->AddIP(ip_address_v6);

@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "content/browser/accessibility/browser_accessibility_auralinux.h"
+#include "content/browser/accessibility/web_ax_platform_tree_manager_delegate.h"
+#include "ui/accessibility/ax_selection.h"
 #include "ui/accessibility/platform/ax_platform_node_auralinux.h"
 
 namespace content {
@@ -17,13 +19,13 @@ namespace content {
 // static
 BrowserAccessibilityManager* BrowserAccessibilityManager::Create(
     const ui::AXTreeUpdate& initial_tree,
-    BrowserAccessibilityDelegate* delegate) {
+    WebAXPlatformTreeManagerDelegate* delegate) {
   return new BrowserAccessibilityManagerAuraLinux(initial_tree, delegate);
 }
 
 // static
 BrowserAccessibilityManager* BrowserAccessibilityManager::Create(
-    BrowserAccessibilityDelegate* delegate) {
+    WebAXPlatformTreeManagerDelegate* delegate) {
   return new BrowserAccessibilityManagerAuraLinux(
       BrowserAccessibilityManagerAuraLinux::GetEmptyDocument(), delegate);
 }
@@ -35,12 +37,23 @@ BrowserAccessibilityManager::ToBrowserAccessibilityManagerAuraLinux() {
 
 BrowserAccessibilityManagerAuraLinux::BrowserAccessibilityManagerAuraLinux(
     const ui::AXTreeUpdate& initial_tree,
-    BrowserAccessibilityDelegate* delegate)
+    WebAXPlatformTreeManagerDelegate* delegate)
     : BrowserAccessibilityManager(delegate) {
   Initialize(initial_tree);
 }
 
-BrowserAccessibilityManagerAuraLinux::~BrowserAccessibilityManagerAuraLinux() {}
+BrowserAccessibilityManagerAuraLinux::~BrowserAccessibilityManagerAuraLinux() {
+  if (IsRootFrameManager()) {
+    DCHECK(GetBrowserAccessibilityRoot());
+    gfx::NativeViewAccessible obj =
+        GetBrowserAccessibilityRoot()->GetNativeViewAccessible();
+    // We don't fire state:changed:defunct on every object in order to reduce
+    // event noise, but it is useful for the root node of a document.
+    if (ATK_IS_OBJECT(obj)) {
+      atk_object_notify_state_change(obj, ATK_STATE_DEFUNCT, TRUE);
+    }
+  }
+}
 
 // static
 ui::AXTreeUpdate BrowserAccessibilityManagerAuraLinux::GetEmptyDocument() {
@@ -53,10 +66,23 @@ ui::AXTreeUpdate BrowserAccessibilityManagerAuraLinux::GetEmptyDocument() {
   return update;
 }
 
-void BrowserAccessibilityManagerAuraLinux::FireFocusEvent(
-    BrowserAccessibility* node) {
-  BrowserAccessibilityManager::FireFocusEvent(node);
-  FireEvent(node, ax::mojom::Event::kFocus);
+void BrowserAccessibilityManagerAuraLinux::SetPrimaryWebContentsForWindow(
+    ui::AXNodeID node_id) {
+  DCHECK_NE(node_id, ui::kInvalidAXNodeID);
+  DCHECK(GetFromID(node_id));
+  DCHECK(primary_web_contents_for_window_id_ == node_id ||
+         primary_web_contents_for_window_id_ == ui::kInvalidAXNodeID);
+  primary_web_contents_for_window_id_ = node_id;
+}
+
+ui::AXNodeID
+BrowserAccessibilityManagerAuraLinux::GetPrimaryWebContentsForWindow() const {
+  return primary_web_contents_for_window_id_;
+}
+
+void BrowserAccessibilityManagerAuraLinux::FireFocusEvent(ui::AXNode* node) {
+  ui::AXTreeManager::FireFocusEvent(node);
+  FireEvent(GetFromAXNode(node), ax::mojom::Event::kFocus);
 }
 
 void BrowserAccessibilityManagerAuraLinux::FireSelectedEvent(
@@ -197,18 +223,20 @@ void BrowserAccessibilityManagerAuraLinux::FireSubtreeCreatedEvent(
 
 void BrowserAccessibilityManagerAuraLinux::FireGeneratedEvent(
     ui::AXEventGenerator::Event event_type,
-    BrowserAccessibility* node) {
+    const ui::AXNode* node) {
   BrowserAccessibilityManager::FireGeneratedEvent(event_type, node);
 
+  BrowserAccessibility* wrapper = GetFromAXNode(node);
+  DCHECK(wrapper);
   switch (event_type) {
     case ui::AXEventGenerator::Event::ACTIVE_DESCENDANT_CHANGED:
-      FireEvent(node, ax::mojom::Event::kActiveDescendantChanged);
+      FireEvent(wrapper, ax::mojom::Event::kActiveDescendantChanged);
       break;
     case ui::AXEventGenerator::Event::ATK_TEXT_OBJECT_ATTRIBUTE_CHANGED:
-      FireTextAttributesChangedEvent(node);
+      FireTextAttributesChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::CHECKED_STATE_CHANGED:
-      FireEvent(node, ax::mojom::Event::kCheckedStateChanged);
+      FireEvent(wrapper, ax::mojom::Event::kCheckedStateChanged);
       break;
     case ui::AXEventGenerator::Event::BUSY_CHANGED: {
       // We reliably get busy-changed notifications when the value of aria-busy
@@ -219,17 +247,17 @@ void BrowserAccessibilityManagerAuraLinux::FireGeneratedEvent(
       // loading. Because Orca needs the busy-changed notification to be
       // reliably fired on the document, we do so in response to load-start and
       // load-complete and suppress possible duplication here.
-      if (node->IsPlatformDocument())
+      if (wrapper->IsPlatformDocument())
         return;
-      FireBusyChangedEvent(node, node->GetData().GetBoolAttribute(
-                                     ax::mojom::BoolAttribute::kBusy));
+      FireBusyChangedEvent(wrapper, wrapper->GetData().GetBoolAttribute(
+                                        ax::mojom::BoolAttribute::kBusy));
       break;
     }
     case ui::AXEventGenerator::Event::COLLAPSED:
-      FireExpandedEvent(node, false);
+      FireExpandedEvent(wrapper, false);
       break;
     case ui::AXEventGenerator::Event::DESCRIPTION_CHANGED:
-      FireDescriptionChangedEvent(node);
+      FireDescriptionChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::DOCUMENT_SELECTION_CHANGED: {
       ui::AXNodeID focus_id =
@@ -240,71 +268,74 @@ void BrowserAccessibilityManagerAuraLinux::FireGeneratedEvent(
       break;
     }
     case ui::AXEventGenerator::Event::DOCUMENT_TITLE_CHANGED:
-      FireEvent(node, ax::mojom::Event::kDocumentTitleChanged);
+      FireEvent(wrapper, ax::mojom::Event::kDocumentTitleChanged);
       break;
     case ui::AXEventGenerator::Event::ENABLED_CHANGED:
-      FireEnabledChangedEvent(node);
+      FireEnabledChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::EXPANDED:
-      FireExpandedEvent(node, true);
+      FireExpandedEvent(wrapper, true);
       break;
     case ui::AXEventGenerator::Event::INVALID_STATUS_CHANGED:
-      FireInvalidStatusChangedEvent(node);
+      FireInvalidStatusChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::ARIA_CURRENT_CHANGED:
-      FireAriaCurrentChangedEvent(node);
+      FireAriaCurrentChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::MENU_ITEM_SELECTED:
-      FireSelectedEvent(node);
+      FireSelectedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::MENU_POPUP_END:
-      FireShowingEvent(node, false);
+      FireShowingEvent(wrapper, false);
       break;
     case ui::AXEventGenerator::Event::MENU_POPUP_START:
-      FireShowingEvent(node, true);
+      FireShowingEvent(wrapper, true);
       break;
     case ui::AXEventGenerator::Event::NAME_CHANGED:
-      FireNameChangedEvent(node);
+      FireNameChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::PARENT_CHANGED:
-      FireParentChangedEvent(node);
+      FireParentChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::READONLY_CHANGED:
-      FireReadonlyChangedEvent(node);
+      FireReadonlyChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::RANGE_VALUE_CHANGED:
-      DCHECK(node->GetData().IsRangeValueSupported());
-      FireEvent(node, ax::mojom::Event::kValueChanged);
+      DCHECK(wrapper->GetData().IsRangeValueSupported());
+      FireEvent(wrapper, ax::mojom::Event::kValueChanged);
       break;
     case ui::AXEventGenerator::Event::SELECTED_CHILDREN_CHANGED:
-      FireEvent(node, ax::mojom::Event::kSelectedChildrenChanged);
+      FireEvent(wrapper, ax::mojom::Event::kSelectedChildrenChanged);
       break;
     case ui::AXEventGenerator::Event::SELECTED_CHANGED:
-      FireSelectedEvent(node);
+      FireSelectedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::SELECTED_VALUE_CHANGED:
-      DCHECK(ui::IsSelectElement(node->GetRole()));
-      FireEvent(node, ax::mojom::Event::kValueChanged);
+      DCHECK(ui::IsSelectElement(wrapper->GetRole()));
+      FireEvent(wrapper, ax::mojom::Event::kValueChanged);
       break;
     case ui::AXEventGenerator::Event::SORT_CHANGED:
-      FireSortDirectionChangedEvent(node);
+      FireSortDirectionChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::SUBTREE_CREATED:
-      FireSubtreeCreatedEvent(node);
+      FireSubtreeCreatedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::TEXT_ATTRIBUTE_CHANGED:
-      FireTextAttributesChangedEvent(node);
+      FireTextAttributesChangedEvent(wrapper);
       break;
     case ui::AXEventGenerator::Event::VALUE_IN_TEXT_FIELD_CHANGED:
-      DCHECK(node->IsTextField());
-      FireEvent(node, ax::mojom::Event::kValueChanged);
+      if (!wrapper->IsTextField())
+        return;  // node no longer editable since event originally fired.
+      FireEvent(wrapper, ax::mojom::Event::kValueChanged);
       break;
 
     // Currently unused events on this platform.
+    case ui::AXEventGenerator::Event::NONE:
     case ui::AXEventGenerator::Event::ACCESS_KEY_CHANGED:
     case ui::AXEventGenerator::Event::ALERT:
     case ui::AXEventGenerator::Event::ATOMIC_CHANGED:
     case ui::AXEventGenerator::Event::AUTO_COMPLETE_CHANGED:
+    case ui::AXEventGenerator::Event::AUTOFILL_AVAILABILITY_CHANGED:
     case ui::AXEventGenerator::Event::CARET_BOUNDS_CHANGED:
     case ui::AXEventGenerator::Event::CHECKED_STATE_DESCRIPTION_CHANGED:
     case ui::AXEventGenerator::Event::CHILDREN_CHANGED:
@@ -334,6 +365,7 @@ void BrowserAccessibilityManagerAuraLinux::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::MULTILINE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::MULTISELECTABLE_STATE_CHANGED:
     case ui::AXEventGenerator::Event::OBJECT_ATTRIBUTE_CHANGED:
+    case ui::AXEventGenerator::Event::ORIENTATION_CHANGED:
     case ui::AXEventGenerator::Event::OTHER_ATTRIBUTE_CHANGED:
     case ui::AXEventGenerator::Event::PLACEHOLDER_CHANGED:
     case ui::AXEventGenerator::Event::PORTAL_ACTIVATED:
@@ -347,25 +379,34 @@ void BrowserAccessibilityManagerAuraLinux::FireGeneratedEvent(
     case ui::AXEventGenerator::Event::ROW_COUNT_CHANGED:
     case ui::AXEventGenerator::Event::SCROLL_HORIZONTAL_POSITION_CHANGED:
     case ui::AXEventGenerator::Event::SCROLL_VERTICAL_POSITION_CHANGED:
-    case ui::AXEventGenerator::Event::SELECTION_IN_TEXT_FIELD_CHANGED:
     case ui::AXEventGenerator::Event::SET_SIZE_CHANGED:
     case ui::AXEventGenerator::Event::STATE_CHANGED:
+    case ui::AXEventGenerator::Event::TEXT_SELECTION_CHANGED:
     case ui::AXEventGenerator::Event::WIN_IACCESSIBLE_STATE_CHANGED:
       break;
   }
 }
 
-void BrowserAccessibilityManagerAuraLinux::OnNodeDataWillChange(
+void BrowserAccessibilityManagerAuraLinux::OnNodeDeleted(ui::AXTree* tree,
+                                                         int32_t node_id) {
+  if (primary_web_contents_for_window_id_ == node_id) {
+    primary_web_contents_for_window_id_ = ui::kInvalidAXNodeID;
+  }
+  BrowserAccessibilityManager::OnNodeDeleted(tree, node_id);
+}
+
+void BrowserAccessibilityManagerAuraLinux::OnIgnoredWillChange(
     ui::AXTree* tree,
-    const ui::AXNodeData& old_node_data,
-    const ui::AXNodeData& new_node_data) {
+    ui::AXNode* node,
+    bool is_ignored_new_value,
+    bool is_changing_unignored_parents_children) {
   DCHECK_EQ(ax_tree(), tree);
 
   // Since AuraLinux needs to send the children-changed::remove event with the
   // index in parent, the event must be fired before the node becomes ignored.
   // children-changed:add is handled with the generated Event::IGNORED_CHANGED.
-  if (!old_node_data.IsIgnored() && new_node_data.IsIgnored()) {
-    BrowserAccessibility* obj = GetFromID(old_node_data.id);
+  if (is_ignored_new_value && is_changing_unignored_parents_children) {
+    BrowserAccessibility* obj = GetFromID(node->id());
     if (obj && obj->GetParent()) {
       DCHECK(!obj->IsIgnored());
       if (!CanEmitChildrenChanged(obj))
@@ -380,10 +421,6 @@ void BrowserAccessibilityManagerAuraLinux::OnNodeDataWillChange(
 void BrowserAccessibilityManagerAuraLinux::OnSubtreeWillBeDeleted(
     ui::AXTree* tree,
     ui::AXNode* node) {
-  // Sending events on load/destruction would create a lot of spam, avoid that.
-  if (!GetTreeData().loaded)
-    return;
-
   BrowserAccessibility* obj = GetFromAXNode(node);
   if (!CanEmitChildrenChanged(obj))
     return;
@@ -426,7 +463,7 @@ void BrowserAccessibilityManagerAuraLinux::OnFindInPageResult(int request_id,
 }
 
 void BrowserAccessibilityManagerAuraLinux::OnFindInPageTermination() {
-  static_cast<BrowserAccessibilityAuraLinux*>(GetRoot())
+  static_cast<BrowserAccessibilityAuraLinux*>(GetBrowserAccessibilityRoot())
       ->GetNode()
       ->TerminateFindInPage();
 }

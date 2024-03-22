@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,6 @@
 #include "base/memory/scoped_refptr.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/key_rotation_launcher_impl.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-// #include
-// "components/enterprise/browser/controller/browser_dm_token_storage.h"
-// #include "components/policy/core/common/cloud/device_management_service.h"
 
 namespace enterprise_connectors {
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,13 +33,15 @@ ServiceWorkerTaskQueueFactory::ServiceWorkerTaskQueueFactory()
   DependsOn(ProcessManagerFactory::GetInstance());
 }
 
-ServiceWorkerTaskQueueFactory::~ServiceWorkerTaskQueueFactory() {}
+ServiceWorkerTaskQueueFactory::~ServiceWorkerTaskQueueFactory() = default;
 
-KeyedService* ServiceWorkerTaskQueueFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ServiceWorkerTaskQueueFactory::BuildServiceInstanceForBrowserContext(
     BrowserContext* context) const {
-  ServiceWorkerTaskQueue* task_queue = new ServiceWorkerTaskQueue(context);
+  auto task_queue = std::make_unique<ServiceWorkerTaskQueue>(context);
   BrowserContext* original_context =
-      ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+      ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+          context, /*force_guest_profile=*/true);
   if (original_context != context) {
     // To let incognito context's ServiceWorkerTaskQueue know about extensions
     // that were activated (which has its own instance of
@@ -53,7 +55,8 @@ KeyedService* ServiceWorkerTaskQueueFactory::BuildServiceInstanceFor(
 
 BrowserContext* ServiceWorkerTaskQueueFactory::GetBrowserContextToUse(
     BrowserContext* context) const {
-  return context;
+  return ExtensionsBrowserClient::Get()->GetContextOwnInstance(
+      context, /*force_guest_profile=*/true);
 }
 
 }  // namespace extensions

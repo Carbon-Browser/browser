@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -16,6 +15,7 @@
 #include "base/check_op.h"
 #include "base/memory/ref_counted.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/ranges/algorithm.h"
 #include "base/threading/thread_checker.h"
 #include "base/trace_event/base_tracing.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -23,7 +23,7 @@
 namespace base {
 
 MessagePumpEpoll::MessagePumpEpoll() {
-  epoll_.reset(epoll_create(/*ignored_but_must_be_positive=*/1));
+  epoll_.reset(epoll_create1(/*flags=*/0));
   PCHECK(epoll_.is_valid());
 
   wake_event_.reset(eventfd(0, EFD_NONBLOCK));
@@ -66,7 +66,7 @@ bool MessagePumpEpoll::WatchFileDescriptor(int fd,
     // non-persistent) Interest.
     existing_interest->set_active(true);
   } else {
-    entry.interests->push_back(controller->AssignEpollInterest(params));
+    entry.interests.push_back(controller->AssignEpollInterest(params));
     if (existing_interest) {
       UnregisterInterest(existing_interest);
     }
@@ -96,7 +96,7 @@ void MessagePumpEpoll::Run(Delegate* delegate) {
     }
 
     // Process any immediately ready IO event, but don't wait for more yet.
-    const bool processed_events = WaitForEpollEvent(TimeDelta());
+    const bool processed_events = WaitForEpollEvents(TimeDelta(), delegate);
     if (run_state.should_quit) {
       break;
     }
@@ -119,7 +119,7 @@ void MessagePumpEpoll::Run(Delegate* delegate) {
       timeout = next_work_info.remaining_delay();
     }
     delegate->BeforeWait();
-    WaitForEpollEvent(timeout);
+    WaitForEpollEvents(timeout, delegate);
     if (run_state.should_quit) {
       break;
     }
@@ -181,8 +181,8 @@ void MessagePumpEpoll::UnregisterInterest(
   DCHECK(entry_it != entries_.end());
 
   EpollEventEntry& entry = entry_it->second;
-  auto& interests = entry.interests.container();
-  auto it = std::find(interests.begin(), interests.end(), interest);
+  auto& interests = entry.interests;
+  auto* it = ranges::find(interests, interest);
   DCHECK(it != interests.end());
   interests.erase(it);
 
@@ -195,13 +195,19 @@ void MessagePumpEpoll::UnregisterInterest(
   }
 }
 
-bool MessagePumpEpoll::WaitForEpollEvent(TimeDelta timeout) {
+bool MessagePumpEpoll::WaitForEpollEvents(TimeDelta timeout,
+                                          Delegate* delegate) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  // `timeout` has microsecond resolution, but timeouts accepted by epoll_wait()
+  // are integral milliseconds. Round up to the next millisecond.
+  // TODO(https://crbug.com/1382894): Consider higher-resolution timeouts.
   const int epoll_timeout =
-      timeout.is_max() ? -1 : saturated_cast<int>(timeout.InMilliseconds());
-  epoll_event event;
+      timeout.is_max() ? -1
+                       : saturated_cast<int>(timeout.InMillisecondsRoundedUp());
+  epoll_event events[16];
   const int epoll_result =
-      epoll_wait(epoll_.get(), &event, /*maxevents=*/1, epoll_timeout);
+      epoll_wait(epoll_.get(), events, std::size(events), epoll_timeout);
   if (epoll_result < 0) {
     DPCHECK(errno == EINTR);
     return false;
@@ -211,33 +217,63 @@ bool MessagePumpEpoll::WaitForEpollEvent(TimeDelta timeout) {
     return false;
   }
 
-  DPCHECK(epoll_result == 1);
-  OnEpollEvent(event);
+  delegate->BeginNativeWorkBeforeDoWork();
+  const base::span<epoll_event> ready_events(events,
+                                             static_cast<size_t>(epoll_result));
+  for (auto& e : ready_events) {
+    if (e.data.ptr == &wake_event_) {
+      // Wake-up events are always safe to handle immediately. Unlike other
+      // events used by MessagePumpEpoll they also don't point to an
+      // EpollEventEntry, so we handle them separately here.
+      HandleWakeUp();
+      e.data.ptr = nullptr;
+      continue;
+    }
+
+    // To guard against one of the ready events unregistering and thus
+    // invalidating one of the others here, first link each entry to the
+    // corresponding epoll_event returned by epoll_wait(). We do this before
+    // dispatching any events, and the second pass below will only dispatch an
+    // event if its epoll_event data is still valid.
+    auto& entry = EpollEventEntry::FromEpollEvent(e);
+    DCHECK(!entry.active_event);
+    EpollEventEntry::FromEpollEvent(e).active_event = &e;
+  }
+
+  for (auto& e : ready_events) {
+    if (e.data.ptr) {
+      auto& entry = EpollEventEntry::FromEpollEvent(e);
+      entry.active_event = nullptr;
+      OnEpollEvent(entry, e.events);
+    }
+  }
+
   return true;
 }
 
-void MessagePumpEpoll::OnEpollEvent(const epoll_event& e) {
+void MessagePumpEpoll::OnEpollEvent(EpollEventEntry& entry, uint32_t events) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (e.data.ptr == &wake_event_) {
-    HandleWakeUp();
-    return;
-  }
 
-  const bool readable = (e.events & EPOLLIN) != 0;
-  const bool writable = (e.events & EPOLLOUT) != 0;
+  const bool readable = (events & EPOLLIN) != 0;
+  const bool writable = (events & EPOLLOUT) != 0;
 
   // Under different circumstances, peer closure may raise both/either EPOLLHUP
   // and/or EPOLLERR. Treat them as equivalent.
-  const bool disconnected = (e.events & (EPOLLHUP | EPOLLERR)) != 0;
-
-  DCHECK(e.data.ptr);
-  auto& entry = *static_cast<EpollEventEntry*>(e.data.ptr);
+  const bool disconnected = (events & (EPOLLHUP | EPOLLERR)) != 0;
 
   // Copy the set of Interests, since interests may be added to or removed from
   // `entry` during the loop below. This copy is inexpensive in practice
   // because the size of this vector is expected to be very small (<= 2).
   auto interests = entry.interests;
-  for (const auto& interest : interests.container()) {
+
+  // Any of these interests' event handlers may destroy any of the others'
+  // controllers. Start all of them watching for destruction before we actually
+  // dispatch any events.
+  for (const auto& interest : interests) {
+    interest->WatchForControllerDestruction();
+  }
+
+  for (const auto& interest : interests) {
     if (!interest->active()) {
       continue;
     }
@@ -260,7 +296,13 @@ void MessagePumpEpoll::OnEpollEvent(const epoll_event& e) {
       UpdateEpollEvent(entry);
     }
 
-    HandleEvent(entry.fd, can_read, can_write, interest->controller());
+    if (!interest->was_controller_destroyed()) {
+      HandleEvent(entry.fd, can_read, can_write, interest->controller());
+    }
+  }
+
+  for (const auto& interest : interests) {
+    interest->StopWatchingForControllerDestruction();
   }
 }
 
@@ -286,13 +328,17 @@ void MessagePumpEpoll::HandleEvent(int fd,
       controller->created_from_location().file_name());
   if (can_read && can_write) {
     bool controller_was_destroyed = false;
-    controller->was_destroyed_ = &controller_was_destroyed;
+    bool* previous_was_destroyed_flag =
+        std::exchange(controller->was_destroyed_, &controller_was_destroyed);
+
     controller->OnFdWritable();
     if (!controller_was_destroyed) {
       controller->OnFdReadable();
     }
     if (!controller_was_destroyed) {
-      controller->was_destroyed_ = nullptr;
+      controller->was_destroyed_ = previous_was_destroyed_flag;
+    } else if (previous_was_destroyed_flag) {
+      *previous_was_destroyed_flag = true;
     }
   } else if (can_write) {
     controller->OnFdWritable();
@@ -310,12 +356,17 @@ void MessagePumpEpoll::HandleWakeUp() {
 
 MessagePumpEpoll::EpollEventEntry::EpollEventEntry(int fd) : fd(fd) {}
 
-MessagePumpEpoll::EpollEventEntry::~EpollEventEntry() = default;
+MessagePumpEpoll::EpollEventEntry::~EpollEventEntry() {
+  if (active_event) {
+    DCHECK_EQ(this, active_event->data.ptr);
+    active_event->data.ptr = nullptr;
+  }
+}
 
 uint32_t MessagePumpEpoll::EpollEventEntry::ComputeActiveEvents() {
   uint32_t events = 0;
   bool one_shot = true;
-  for (const auto& interest : interests.container()) {
+  for (const auto& interest : interests) {
     if (!interest->active()) {
       continue;
     }

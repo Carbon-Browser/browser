@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,11 @@ void FakePrintRenderFrame::SetPrintPreviewUI(
     mojo::PendingAssociatedRemote<mojom::PrintPreviewUI> preview) {}
 
 void FakePrintRenderFrame::InitiatePrintPreview(
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     mojo::PendingAssociatedRemote<mojom::PrintRenderer> print_renderer,
-    bool has_selection) {}
+#endif
+    bool has_selection) {
+}
 
 void FakePrintRenderFrame::PrintPreview(base::Value::Dict settings) {}
 
@@ -47,7 +50,7 @@ void FakePrintRenderFrame::PrintFrameContent(
 
 void FakePrintRenderFrame::PrintingDone(bool success) {}
 
-void FakePrintRenderFrame::SetPrintingEnabled(bool enabled) {}
+void FakePrintRenderFrame::ConnectToPdfRenderer() {}
 
 void FakePrintRenderFrame::PrintNodeUnderContextMenu() {}
 

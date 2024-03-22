@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,8 +71,10 @@ public abstract class PolicyData {
 
         @Override
         public void putInBundle(Bundle bundle) {
-            Assert.fail(String.format(
-                    "Attempted to push the '%s' policy without value to a bundle.", getKey()));
+            Assert.fail(
+                    String.format(
+                            "Attempted to push the '%s' policy without value to a bundle.",
+                            getKey()));
         }
 
         @Override

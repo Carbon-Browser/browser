@@ -1,28 +1,24 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <functional>
-#include <string>
+#import <functional>
+#import <string>
 
-#include <TargetConditionals.h>
+#import <TargetConditionals.h>
 
-#include "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ios/testing/embedded_test_server_handlers.h"
-#include "ios/web/common/features.h"
-#include "net/test/embedded_test_server/default_handlers.h"
-#include "net/test/embedded_test_server/http_request.h"
-#include "net/test/embedded_test_server/http_response.h"
-#include "net/test/embedded_test_server/request_handler_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/testing/embedded_test_server_handlers.h"
+#import "ios/web/common/features.h"
+#import "net/test/embedded_test_server/default_handlers.h"
+#import "net/test/embedded_test_server/http_request.h"
+#import "net/test/embedded_test_server/http_response.h"
+#import "net/test/embedded_test_server/request_handler_util.h"
 
 namespace {
 // Returns ERR_CONNECTION_CLOSED error message.
@@ -178,7 +174,7 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 
   // Restore the session but with the page no longer loading.
   self.serverRespondsWithContent = NO;
-  [ChromeEarlGrey triggerRestoreViaTabGridRemoveAllUndo];
+  [self triggerRestoreByRestartingApplication];
   [ChromeEarlGrey waitForWebStateContainingText:GetErrorMessage()];
 
   GREYAssertEqual(1, [ChromeEarlGrey navigationBackListItemsCount],
@@ -189,6 +185,13 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // Loads a URL which redirect to a data URL and check that the navigation is
 // blocked on the first URL.
 - (void)testRedirectToData {
+  // Disable the test on iOS 16.4 as WKWebView handles this internally now as of
+  // https://bugs.webkit.org/show_bug.cgi?id=230158
+  // TODO(crbug.com/1442647): Remove redirect logic completely when dropping iOS
+  // 16.
+  if (@available(iOS 16.4, *)) {
+    EARL_GREY_TEST_DISABLED(@"Test disabled on iOS 16.4.");
+  }
   self.serverRespondsWithContent = YES;
   [ChromeEarlGrey loadURL:self.testServer->GetURL(kRedirectPage)];
   [ChromeEarlGrey waitForWebStateContainingText:net::ErrorToShortString(

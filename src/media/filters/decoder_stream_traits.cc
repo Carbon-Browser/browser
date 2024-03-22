@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -195,9 +195,8 @@ void DecoderStreamTraits<DemuxerStream::VIDEO>::ReportStatistics(
     int bytes_decoded) {
   stats_.video_bytes_decoded = bytes_decoded;
 
-  if (keyframe_distance_average_.count()) {
-    stats_.video_keyframe_distance_average =
-        keyframe_distance_average_.Average();
+  if (keyframe_distance_average_.Count()) {
+    stats_.video_keyframe_distance_average = keyframe_distance_average_.Mean();
   } else {
     // Before we have enough keyframes to calculate the average distance, we
     // will assume the average keyframe distance is infinitely large.

@@ -1,10 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {$} from 'chrome://resources/js/util.m.js';
+import {addWebUiListener, sendWithPromise} from 'chrome://resources/js/cr.js';
+import {$} from 'chrome://resources/js/util.js';
 
+import {createIceCandidateGrid, updateIceCandidateGrid} from './candidate_grid.js';
 import {MAX_STATS_DATA_POINT_BUFFER_SIZE} from './data_series.js';
 import {DumpCreator, peerConnectionDataStore, userMediaRequests} from './dump_creator.js';
 import {PeerConnectionUpdateTable} from './peer_connection_update_table.js';
@@ -13,9 +14,7 @@ import {drawSingleReport, removeStatsReportGraphs} from './stats_graph_helper.js
 import {StatsRatesCalculator, StatsReport} from './stats_rates_calculator.js';
 import {StatsTable} from './stats_table.js';
 import {TabView} from './tab_view.js';
-import {createIceCandidateGrid, updateIceCandidateGrid} from './candidate_grid.js';
-
-const USER_MEDIA_TAB_ID = 'user-media-tab-id';
+import {UserMediaTable} from './user_media_table.js';
 
 const OPTION_GETSTATS_STANDARD = 'Standardized (promise-based) getStats() API';
 const OPTION_GETSTATS_LEGACY =
@@ -26,7 +25,10 @@ let tabView = null;
 let ssrcInfoManager = null;
 let peerConnectionUpdateTable = null;
 let statsTable = null;
+let userMediaTable = null;
 let dumpCreator = null;
+
+const searchParameters = new URLSearchParams(window.location.search);
 
 // Exporting these on window since they are directly accessed by tests.
 window.setCurrentGetStatsMethod = function(method) {
@@ -107,28 +109,42 @@ class PeerConnectionRecord {
 
 function initialize() {
   dumpCreator = new DumpCreator($('content-root'));
+
   $('content-root').appendChild(createStatsSelectionOptionElements());
   tabView = new TabView($('content-root'));
   ssrcInfoManager = new SsrcInfoManager();
   window.ssrcInfoManager = ssrcInfoManager;
   peerConnectionUpdateTable = new PeerConnectionUpdateTable();
   statsTable = new StatsTable(ssrcInfoManager);
+  userMediaTable = new UserMediaTable(tabView, userMediaRequests);
 
   // Add listeners for all the updates that get sent from webrtc_internals.cc.
-  addWebUIListener('add-peer-connection', addPeerConnection);
-  addWebUIListener('update-peer-connection', updatePeerConnection);
-  addWebUIListener('update-all-peer-connections', updateAllPeerConnections);
-  addWebUIListener('remove-peer-connection', removePeerConnection);
-  addWebUIListener('add-standard-stats', addStandardStats);
-  addWebUIListener('add-legacy-stats', addLegacyStats);
-  addWebUIListener('add-get-user-media', addGetUserMedia);
-  addWebUIListener('update-get-user-media', updateGetUserMedia);
-  addWebUIListener(
-      'remove-get-user-media-for-renderer', removeGetUserMediaForRenderer);
-  addWebUIListener(
+  addWebUiListener('add-peer-connection', addPeerConnection);
+  addWebUiListener('update-peer-connection', updatePeerConnection);
+  addWebUiListener('update-all-peer-connections', updateAllPeerConnections);
+  addWebUiListener('remove-peer-connection', removePeerConnection);
+  addWebUiListener('add-standard-stats', addStandardStats);
+  addWebUiListener('add-legacy-stats', addLegacyStats);
+  addWebUiListener('add-media', (data) => {
+    userMediaRequests.push(data);
+    userMediaTable.addMedia(data)
+  });
+  addWebUiListener('update-media', (data) => {
+    userMediaRequests.push(data);
+    userMediaTable.updateMedia(data);
+  });
+  addWebUiListener('remove-media-for-renderer', (data) => {
+    for (let i = userMediaRequests.length - 1; i >= 0; --i) {
+      if (userMediaRequests[i].rid === data.rid) {
+        userMediaRequests.splice(i, 1);
+      }
+    }
+    userMediaTable.removeMediaForRenderer(data);
+  });
+  addWebUiListener(
       'event-log-recordings-file-selection-cancelled',
       eventLogRecordingsFileSelectionCancelled);
-  addWebUIListener(
+  addWebUiListener(
       'audio-debug-recordings-file-selection-cancelled',
       audioDebugRecordingsFileSelectionCancelled);
 
@@ -144,8 +160,18 @@ function initialize() {
         params.eventLogRecordingsToggleable);
   });
 
-  // Requests stats from all peer connections every second.
-  window.setInterval(requestStats, 1000);
+  // Requests stats from all peer connections every second unless specified via
+  // ?statsInterval=(milliseconds >= 100ms)
+  let statsInterval = 1000;
+  if (searchParameters.has('statsInterval')) {
+    statsInterval = Math.max(
+        parseInt(searchParameters.get('statsInterval'), 10),
+        100);
+    if (!isFinite(statsInterval)) {
+      statsInterval = 1000;
+    }
+  }
+  window.setInterval(requestStats, statsInterval);
 }
 document.addEventListener('DOMContentLoaded', initialize);
 
@@ -159,7 +185,10 @@ function createStatsSelectionOptionElements() {
     legacyStatsElement.style.display =
         currentGetStatsMethod === OPTION_GETSTATS_LEGACY ? 'block' : 'none';
     Object.keys(peerConnectionDataStore).forEach(id => {
-      const peerConnectionElement = $(id);
+      // Disable getElementById restriction here, since |id| is not always
+      // a valid selector.
+      // eslint-disable-next-line no-restricted-properties
+      const peerConnectionElement = document.getElementById(id);
       statsTable.clearStatsLists(peerConnectionElement);
       removeStatsReportGraphs(peerConnectionElement);
       peerConnectionDataStore[id].resetStats();
@@ -277,13 +306,18 @@ function addPeerConnectionUpdate(peerConnectionElement, update) {
 
 /**
  * Removes all information about a peer connection.
+ * Use ?keepRemovedConnections url parameter to prevent the removal.
  *
  * @param {!Object<number>} data The object containing the rid and lid of a peer
  *     connection.
  */
 function removePeerConnection(data) {
-  const element = $(getPeerConnectionId(data));
-  if (element) {
+  // Disable getElementById restriction here, since |getPeerConnectionId| does
+  // not return valid selectors.
+  // eslint-disable-next-line no-restricted-properties
+
+  const element = document.getElementById(getPeerConnectionId(data));
+  if (element && !searchParameters.has('keepRemovedConnections')) {
     delete peerConnectionDataStore[element.id];
     tabView.removeTab(element.id);
   }
@@ -304,7 +338,10 @@ function addPeerConnection(data) {
   peerConnectionDataStore[id].initialize(
       data.pid, data.url, data.rtcConfiguration, data.constraints);
 
-  let peerConnectionElement = $(id);
+  // Disable getElementById restriction here, since |id| is not always
+  // a valid selector.
+  // eslint-disable-next-line no-restricted-properties
+  let peerConnectionElement = document.getElementById(id);
   if (!peerConnectionElement) {
     const details = `[ rid: ${data.rid}, lid: ${data.lid}, pid: ${data.pid} ]`;
     peerConnectionElement = tabView.addTab(id, data.url + " " + details);
@@ -326,44 +363,6 @@ function addPeerConnection(data) {
   const deprecationNotices = document.createElement('ul');
   if (data.rtcConfiguration) {
     deprecationNotices.className = 'peerconnection-deprecations';
-    if (data.rtcConfiguration.indexOf('extmapAllowMixed: false') !== -1) {
-      // Hard deprecation, setting "false" will no longer work.
-      appendChildWithText(deprecationNotices, 'li',
-        'Note: The RTCPeerConnection offerAllowExtmapMixed ' +
-        'option is a non-standard feature. This feature will be removed ' +
-        'in M93 (Canary: July 15, 2021; Stable: August 24, 2021). For ' +
-        'interoperability with legacy WebRTC versions that throw errors ' +
-        'when attempting to parse the a=extmap-allow-mixed line in the ' +
-        'SDP remove the line from the SDP during signalling.');
-    }
-    if (data.rtcConfiguration.indexOf('sdpSemantics: "plan-b"') !== -1) {
-      appendChildWithText(deprecationNotices, 'li',
-        'Plan B SDP semantics, which is used when constructing an ' +
-        'RTCPeerConnection with {sdpSemantics:\"plan-b\"}, is a legacy ' +
-        'version of the Session Description Protocol that has severe ' +
-        'compatibility issues on modern browsers. The standardized SDP ' +
-        'format, \"unified-plan\", has been used by default since M72 ' +
-        '(January, 2019). Dropping support for Plan B is targeted for ' +
-        'M93. See https://www.chromestatus.com/feature/5823036655665152 ' +
-        'for more details.');
-    }
-  }
-  if (data.constraints) {
-    if (data.constraints.indexOf('enableDtlsSrtp:') !== -1) {
-      if (data.constraints.indexOf('enableDtlsSrtp: {exact: false}') !== -1) {
-        appendChildWithText(deprecationNotices, 'li',
-          'The constraint "DtlsSrtpKeyAgreement" will be removed. You have ' +
-          'specified a "false" value for this constraint, which is ' +
-          'interpreted as an attempt to use the deprecated "SDES" key ' +
-          'negotiation method. This functionality will be removed; use a ' +
-          'service that supports DTLS key negotiation instead.');
-      } else {
-        appendChildWithText(deprecationNotices, 'li',
-          'The constraint "DtlsSrtpKeyAgreement" will be removed. You have ' +
-          'specified a "true" value for this constraint, which has no ' +
-          'effect, but you can remove this constraint for tidiness.');
-      }
-    }
   }
   peerConnectionElement.appendChild(deprecationNotices);
 
@@ -399,7 +398,11 @@ function addPeerConnection(data) {
  * @param {!PeerConnectionUpdateEntry} data The peer connection update data.
  */
 function updatePeerConnection(data) {
-  const peerConnectionElement = $(getPeerConnectionId(data));
+  // Disable getElementById restriction here, since |getPeerConnectionId| does
+  // not return valid selectors.
+  const peerConnectionElement =
+  // eslint-disable-next-line no-restricted-properties
+      document.getElementById(getPeerConnectionId(data));
   addPeerConnectionUpdate(peerConnectionElement, data);
 }
 
@@ -439,7 +442,13 @@ function addStandardStats(data) {
   if (currentGetStatsMethod != OPTION_GETSTATS_STANDARD) {
     return;  // Obsolete!
   }
-  const peerConnectionElement = $(getPeerConnectionId(data));
+
+  // Disable getElementById restriction here, since |getPeerConnectionId| does
+  // not return valid selectors.
+  // eslint-disable-next-line no-restricted-properties
+  const peerConnectionElement =
+      // eslint-disable-next-line no-restricted-properties
+      document.getElementById(getPeerConnectionId(data));
   if (!peerConnectionElement) {
     return;
   }
@@ -495,17 +504,22 @@ function addStandardStats(data) {
 
     // Mark active local-candidate, remote candidate and candidate pair
     // bold in the table.
+    // Disable getElementById restriction here, since |peerConnectionElement|
+    // doesn't always have a valid selector ID.
     const statsContainer =
+      // eslint-disable-next-line no-restricted-properties
         document.getElementById(peerConnectionElement.id + '-table-container');
     const activeConnectionClass = 'stats-table-active-connection';
     statsContainer.childNodes.forEach(node => {
-      if (node.nodeName !== 'DETAILS') {
+      if (node.nodeName !== 'DETAILS' || !node.children[1]) {
         return;
       }
-      const innerText = node.firstElementChild.innerText;
-      if (innerText.startsWith(activeCandidatePair.id)
-          || innerText.startsWith(localCandidate.id)
-          || innerText.startsWith(remoteCandidate.id)) {
+      const ids = [
+        peerConnectionElement.id + '-table-' + activeCandidatePair.id,
+        peerConnectionElement.id + '-table-' + localCandidate.id,
+        peerConnectionElement.id + '-table-' + remoteCandidate.id,
+      ];
+      if (ids.includes(node.children[1].id)) {
         node.firstElementChild.classList.add(activeConnectionClass);
       } else {
         node.firstElementChild.classList.remove(activeConnectionClass);
@@ -549,7 +563,11 @@ function addLegacyStats(data) {
   if (currentGetStatsMethod != OPTION_GETSTATS_LEGACY) {
     return;  // Obsolete!
   }
-  const peerConnectionElement = $(getPeerConnectionId(data));
+  // Disable getElementById restriction here, since |getPeerConnectionId| does
+  // not return valid selectors.
+  const peerConnectionElement =
+      // eslint-disable-next-line no-restricted-properties
+      document.getElementById(getPeerConnectionId(data));
   if (!peerConnectionElement) {
     return;
   }
@@ -560,121 +578,6 @@ function addLegacyStats(data) {
     drawSingleReport(peerConnectionElement, report, true);
   }
 }
-
-/**
- * Adds a getUserMedia request.
- *
- * @param {!Object} data The object containing rid {number}, pid {number},
- *     origin {string}, request_id {number}, audio {string}, video {string}.
- */
-function addGetUserMedia(data) {
-  userMediaRequests.push(data);
-
-  if (!$(USER_MEDIA_TAB_ID)) {
-    tabView.addTab(USER_MEDIA_TAB_ID, 'GetUserMedia Requests');
-  }
-
-  const requestDiv = document.createElement('div');
-  requestDiv.className = 'user-media-request-div-class';
-  requestDiv.id = ['gum', data.rid, data.pid, data.request_id].join('-');
-  requestDiv.rid = data.rid;
-  $(USER_MEDIA_TAB_ID).appendChild(requestDiv);
-
-  appendChildWithText(requestDiv, 'div', 'Caller origin: ' + data.origin);
-  appendChildWithText(requestDiv, 'div', 'Caller process id: ' + data.pid);
-  const el = appendChildWithText(requestDiv, 'span', 'getUserMedia call');
-  el.style.fontWeight = 'bold';
-  appendChildWithText(el, 'div', 'Time: ' +
-    (new Date(data.timestamp).toTimeString()))
-    .style.fontWeight = 'normal';
-  if (data.audio !== undefined) {
-    appendChildWithText(el, 'div', 'Audio constraints: ' +
-      (data.audio || 'true'))
-      .style.fontWeight = 'normal';
-  }
-  if (data.video !== undefined) {
-    appendChildWithText(el, 'div', 'Video constraints: ' +
-      (data.video || 'true'))
-      .style.fontWeight = 'normal';
-  }
-}
-
-/**
- * Update a getUserMedia request with a result or error.
- *
- * @param {!Object} data The object containing rid {number}, pid {number},
- *     request_id {number}. For getUserMedia results there is also the
- *     stream_id {string}, audio_track_info {string} and
- *     video_track_info {string}. For errors the error {string} and
- *     error_message {string} fields are set.
- */
-function updateGetUserMedia(data) {
-  userMediaRequests.push(data);
-
-  if (!$(USER_MEDIA_TAB_ID)) {
-    tabView.addTab(USER_MEDIA_TAB_ID, 'GetUserMedia Requests');
-  }
-
-  const requestDiv = document.getElementById(
-    ['gum', data.rid, data.pid, data.request_id].join('-'));
-  if (!requestDiv) {
-    console.error('Could not update getUserMedia request', data);
-    return;
-  }
-
-  if (data.error) {
-    const el = appendChildWithText(requestDiv, 'span', 'Error');
-    el.style.fontWeight = 'bold';
-    appendChildWithText(el, 'div', 'Time: ' +
-      (new Date(data.timestamp).toTimeString()))
-      .style.fontWeight = 'normal';
-    appendChildWithText(el, 'div', 'Error: ' + data.error)
-      .style.fontWeight = 'normal';
-    appendChildWithText(el, 'div', 'Error message: ' + data.error_message)
-      .style.fontWeight = 'normal';
-    return;
-  }
-
-  const el = appendChildWithText(requestDiv, 'span', 'getUserMedia result');
-  el.style.fontWeight = 'bold';
-  appendChildWithText(el, 'div', 'Time: ' +
-    (new Date(data.timestamp).toTimeString()))
-    .style.fontWeight = 'normal';
-  appendChildWithText(el, 'div', 'Stream id: ' + data.stream_id)
-    .style.fontWeight = 'normal';
-  if (data.audio_track_info) {
-    appendChildWithText(el, 'div', 'Audio track: ' + data.audio_track_info)
-        .style.fontWeight = 'normal';
-  }
-  if (data.video_track_info) {
-    appendChildWithText(el, 'div', 'Video track: ' + data.video_track_info)
-        .style.fontWeight = 'normal';
-  }
-}
-
-/**
- * Removes the getUserMedia requests from the specified |rid|.
- *
- * @param {!Object} data The object containing rid {number}, the render id.
- */
-function removeGetUserMediaForRenderer(data) {
-  for (let i = userMediaRequests.length - 1; i >= 0; --i) {
-    if (userMediaRequests[i].rid === data.rid) {
-      userMediaRequests.splice(i, 1);
-    }
-  }
-
-  const requests = $(USER_MEDIA_TAB_ID).childNodes;
-  for (let i = 0; i < requests.length; ++i) {
-    if (requests[i].rid === data.rid) {
-      $(USER_MEDIA_TAB_ID).removeChild(requests[i]);
-    }
-  }
-  if ($(USER_MEDIA_TAB_ID).childNodes.length === 0) {
-    tabView.removeTab(USER_MEDIA_TAB_ID);
-  }
-}
-
 
 /**
  * Notification that the audio debug recordings file selection dialog was

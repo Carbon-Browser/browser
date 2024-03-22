@@ -1,19 +1,19 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/renderer/aw_render_frame_ext.h"
 
-#include <map>
 #include <memory>
+#include <utility>
 
 #include "android_webview/common/aw_features.h"
 #include "android_webview/common/mojom/frame.mojom.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/content/renderer/autofill_agent.h"
 #include "components/autofill/content/renderer/password_autofill_agent.h"
+#include "components/autofill/content/renderer/password_generation_agent.h"
 #include "components/content_capture/common/content_capture_features.h"
 #include "components/content_capture/renderer/content_capture_sender.h"
 #include "content/public/renderer/render_frame.h"
@@ -81,11 +81,10 @@ bool RemovePrefixAndAssignIfMatches(const base::StringPiece& prefix,
 
   if (base::StartsWith(spec, prefix)) {
     url::RawCanonOutputW<1024> output;
-    url::DecodeURLEscapeSequences(
-        spec.data() + prefix.length(), spec.length() - prefix.length(),
-        url::DecodeURLMode::kUTF8OrIsomorphic, &output);
-    *dest =
-        base::UTF16ToUTF8(base::StringPiece16(output.data(), output.length()));
+    url::DecodeURLEscapeSequences(spec.substr(prefix.length()),
+                                  url::DecodeURLMode::kUTF8OrIsomorphic,
+                                  &output);
+    *dest = base::UTF16ToUTF8(output.view());
     return true;
   }
   return false;
@@ -144,61 +143,24 @@ void PopulateHitTestData(const GURL& absolute_link_url,
 
 }  // namespace
 
-// Registry for RenderFrame => AwRenderFrameExt lookups
-typedef std::map<content::RenderFrame*, AwRenderFrameExt*> FrameExtMap;
-FrameExtMap* GetFrameExtMap() {
-  static base::NoDestructor<FrameExtMap> map;
-  return map.get();
-}
-
 AwRenderFrameExt::AwRenderFrameExt(content::RenderFrame* render_frame)
     : content::RenderFrameObserver(render_frame) {
-  // TODO(sgurun) do not create a password autofill agent (change
-  // autofill agent to store a weakptr).
-  autofill::PasswordAutofillAgent* password_autofill_agent =
-      new autofill::PasswordAutofillAgent(render_frame, &registry_);
-  new autofill::AutofillAgent(render_frame, password_autofill_agent, nullptr,
+  auto password_autofill_agent =
+      std::make_unique<autofill::PasswordAutofillAgent>(render_frame,
+                                                        &registry_);
+  new autofill::AutofillAgent(render_frame, std::move(password_autofill_agent),
                               nullptr, &registry_);
   if (content_capture::features::IsContentCaptureEnabled())
     new content_capture::ContentCaptureSender(render_frame, &registry_);
 
   // If we are the main frame register an additional mojo interface.
   if (render_frame->IsMainFrame()) {
-    registry_.AddInterface(base::BindRepeating(
+    registry_.AddInterface<mojom::LocalMainFrame>(base::BindRepeating(
         &AwRenderFrameExt::BindLocalMainFrame, base::Unretained(this)));
   }
-
-  // Add myself to the RenderFrame => AwRenderFrameExt register.
-  GetFrameExtMap()->emplace(render_frame, this);
 }
 
-AwRenderFrameExt::~AwRenderFrameExt() {
-  // Remove myself from the RenderFrame => AwRenderFrameExt register. Ideally,
-  // we'd just use render_frame() and erase by key. However, by this time the
-  // render_frame has already been cleared so we have to iterate over all
-  // render_frames in the map and wipe the one(s) that point to this
-  // AwRenderFrameExt
-
-  auto* map = GetFrameExtMap();
-  auto it = map->begin();
-  while (it != map->end()) {
-    if (it->second == this) {
-      it = map->erase(it);
-    } else {
-      ++it;
-    }
-  }
-}
-
-AwRenderFrameExt* AwRenderFrameExt::FromRenderFrame(
-    content::RenderFrame* render_frame) {
-  DCHECK(render_frame != nullptr);
-  auto iter = GetFrameExtMap()->find(render_frame);
-  DCHECK(GetFrameExtMap()->end() != iter)
-      << "Should always exist a render_frame_ext for a render_frame";
-  AwRenderFrameExt* render_frame_ext = iter->second;
-  return render_frame_ext;
-}
+AwRenderFrameExt::~AwRenderFrameExt() = default;
 
 const mojo::AssociatedRemote<mojom::FrameHost>&
 AwRenderFrameExt::GetFrameHost() {

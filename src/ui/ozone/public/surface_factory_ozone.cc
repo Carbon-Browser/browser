@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,7 +78,7 @@ std::unique_ptr<SurfaceOzoneCanvas> SurfaceFactoryOzone::CreateCanvasForWidget(
 
 scoped_refptr<gfx::NativePixmap> SurfaceFactoryOzone::CreateNativePixmap(
     gfx::AcceleratedWidget widget,
-    VkDevice vk_device,
+    gpu::VulkanDeviceQueue* device_queue,
     gfx::Size size,
     gfx::BufferFormat format,
     gfx::BufferUsage usage,
@@ -86,9 +86,16 @@ scoped_refptr<gfx::NativePixmap> SurfaceFactoryOzone::CreateNativePixmap(
   return nullptr;
 }
 
+bool SurfaceFactoryOzone::CanCreateNativePixmapForFormat(
+    gfx::BufferFormat format) {
+  // It's up to specific implementations of this method to report an inability
+  // to create native pixmap handles for a specific format.
+  return true;
+}
+
 void SurfaceFactoryOzone::CreateNativePixmapAsync(
     gfx::AcceleratedWidget widget,
-    VkDevice vk_device,
+    gpu::VulkanDeviceQueue* device_queue,
     gfx::Size size,
     gfx::BufferFormat format,
     gfx::BufferUsage usage,
@@ -118,9 +125,23 @@ void SurfaceFactoryOzone::SetGetProtectedNativePixmapDelegate(
     const GetProtectedNativePixmapCallback&
         get_protected_native_pixmap_callback) {}
 
+bool SurfaceFactoryOzone::SupportsDrmModifiersFilter() const {
+  return false;
+}
+
+void SurfaceFactoryOzone::SetDrmModifiersFilter(
+    std::unique_ptr<DrmModifiersFilter> filter) {
+  NOTIMPLEMENTED();
+}
+
 std::vector<gfx::BufferFormat>
 SurfaceFactoryOzone::GetSupportedFormatsForTexturing() const {
   return std::vector<gfx::BufferFormat>();
+}
+
+absl::optional<gfx::BufferFormat>
+SurfaceFactoryOzone::GetPreferredFormatForSolidColor() const {
+  return absl::nullopt;
 }
 
 }  // namespace ui

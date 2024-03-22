@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,9 @@ class MEDIA_EXPORT LoopbackAudioConverter
   bool empty() { return audio_converter_.empty(); }
 
  private:
-  double ProvideInput(AudioBus* audio_bus, uint32_t frames_delayed) override;
+  double ProvideInput(AudioBus* audio_bus,
+                      uint32_t frames_delayed,
+                      const AudioGlitchInfo& glitch_info) override;
 
   AudioConverter audio_converter_;
 };

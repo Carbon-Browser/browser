@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './strings.m.js';
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {$} from 'chrome://resources/js/util.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {$} from 'chrome://resources/js/util.js';
 
 // List of log levels in priority order.
 const logLevels = ['Debug', 'Event', 'User', 'Error'];
@@ -145,6 +145,23 @@ const setRefresh = function() {
   }
 };
 
+// <if expr="chromeos_ash">
+const updateOsLink = function() {
+  sendWithPromise('isLacrosEnabled').then(function(isLacrosEnabled) {
+    $('os-link-container').hidden = !isLacrosEnabled;
+
+    // we hide the header text if Lacros is enabled because the Ash window doesn't
+    // have the navigation bar and the hint saying "Add a query param in URL to
+    // auto-refresh the page" is no longer helpful for users.
+    $('header').hidden = isLacrosEnabled;
+  });
+
+  $('os-link-href').onclick = function() {
+    chrome.send('openBrowserDeviceLog');
+  };
+};
+// </if>
+
 /**
  * Gets log information from WebUI.
  */
@@ -177,4 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   setRefresh();
   requestLog();
+  // <if expr="chromeos_ash">
+  updateOsLink();
+  // </if>
 });

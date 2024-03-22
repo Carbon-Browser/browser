@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define BASE_TASK_THREAD_POOL_POOLED_PARALLEL_TASK_RUNNER_H_
 
 #include "base/base_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/task_runner.h"
@@ -37,8 +37,7 @@ class BASE_EXPORT PooledParallelTaskRunner : public TaskRunner {
   ~PooledParallelTaskRunner() override;
 
   const TaskTraits traits_;
-  // TODO(crbug.com/1298696): Breaks storage_unittests.
-  const raw_ptr<PooledTaskRunnerDelegate, DegradeToNoOpWhenMTE>
+  const raw_ptr<PooledTaskRunnerDelegate, DanglingUntriaged>
       pooled_task_runner_delegate_;
 };
 

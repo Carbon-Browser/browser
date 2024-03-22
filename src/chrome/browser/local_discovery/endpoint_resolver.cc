@@ -1,12 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/local_discovery/endpoint_resolver.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/local_discovery/service_discovery_shared_client.h"
 #include "chrome/common/chrome_switches.h"

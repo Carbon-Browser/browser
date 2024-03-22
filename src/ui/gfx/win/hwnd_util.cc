@@ -1,9 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/gfx/win/hwnd_util.h"
 
+#include <dwmapi.h>  // DWMWA_CLOAKED
 #include <windows.h>
 
 #include "base/debug/gdi_debug_util_win.h"
@@ -114,6 +115,13 @@ void* GetWindowUserData(HWND hwnd) {
   return reinterpret_cast<void*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
 }
 
+bool IsWindowCloaked(HWND hwnd) {
+  BOOL is_cloaked = FALSE;
+  return SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &is_cloaked,
+                                         sizeof(is_cloaked))) &&
+         is_cloaked;
+}
+
 absl::optional<bool> IsWindowOnCurrentVirtualDesktop(
     HWND window,
     Microsoft::WRL::ComPtr<IVirtualDesktopManager> virtual_desktop_manager) {
@@ -209,6 +217,7 @@ void CheckWindowCreated(HWND hwnd, DWORD last_error) {
   if (!hwnd) {
     switch (last_error) {
       case ERROR_NOT_ENOUGH_MEMORY:
+      case ERROR_NO_MORE_USER_HANDLES:
         base::debug::CollectGDIUsageAndDie();
         break;
       case ERROR_ACCESS_DENIED:

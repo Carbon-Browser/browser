@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -125,9 +125,9 @@ def MaybeUpdateEnumFromFile(file_path):
   xml_dict = ParseProtocolCommandsFromXML()
   CheckDictsForCollisions(pdl_dict, xml_dict)
   files_for_enum_comment = '*.pdl files'
-  update_histogram_enum.UpdateHistogramFromDict('CDPCommands', pdl_dict,
-                                                files_for_enum_comment,
-                                                os.path.basename(__file__))
+  update_histogram_enum.UpdateHistogramFromDict(
+      'tools/metrics/histograms/enums.xml', 'CDPCommands', pdl_dict,
+      files_for_enum_comment, os.path.basename(__file__))
 
 
 def main():

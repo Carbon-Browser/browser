@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/dbus/oobe_config/oobe_config.pb.h"
@@ -103,7 +104,8 @@ class OobeConfigurationClientTest : public testing::Test {
   // The interface name.
   const std::string interface_name_;
   // The client to be tested.
-  OobeConfigurationClient* client_ = nullptr;
+  raw_ptr<OobeConfigurationClient, DanglingUntriaged | ExperimentalAsh>
+      client_ = nullptr;
   // A message loop to emulate asynchronous behavior.
   base::test::SingleThreadTaskEnvironment task_environment_;
   // The mock bus.
@@ -114,7 +116,7 @@ class OobeConfigurationClientTest : public testing::Test {
   // The name of the method which is expected to be called.
   std::string expected_method_name_;
   // The response which the mock proxy returns.
-  dbus::Response* response_;
+  raw_ptr<dbus::Response, DanglingUntriaged | ExperimentalAsh> response_;
   // A callback to intercept and check the method call arguments.
   ArgumentCheckCallback argument_checker_;
 

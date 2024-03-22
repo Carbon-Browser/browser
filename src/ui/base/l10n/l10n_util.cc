@@ -1,10 +1,9 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/l10n/l10n_util.h"
 
-#include <algorithm>
 #include <cstdlib>
 #include <iterator>
 #include <memory>
@@ -23,6 +22,7 @@
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -41,6 +41,10 @@
 #include "ui/base/l10n/l10n_util_android.h"
 #endif
 
+#if BUILDFLAG(IS_IOS)
+#include "ui/base/l10n/l10n_util_ios.h"
+#endif
+
 #if defined(USE_GLIB)
 #include <glib.h>
 #endif
@@ -54,6 +58,7 @@ namespace {
 
 static const char* const kAcceptLanguageList[] = {
     "af",  // Afrikaans
+    "ak",  // Twi
     "am",  // Amharic
     "an",  // Aragonese
     "ar",  // Arabic
@@ -62,9 +67,12 @@ static const char* const kAcceptLanguageList[] = {
 #endif                 // defined(ENABLE_PSEUDOLOCALES)
     "as",              // Assamese
     "ast",             // Asturian
+    "ay",              // Aymara
     "az",              // Azerbaijani
     "be",              // Belarusian
     "bg",              // Bulgarian
+    "bho",             // Bhojpuri
+    "bm",              // Bambara
     "bn",              // Bengali
     "br",              // Breton
     "bs",              // Bosnian
@@ -81,12 +89,16 @@ static const char* const kAcceptLanguageList[] = {
     "de-CH",           // German (Switzerland)
     "de-DE",           // German (Germany)
     "de-LI",           // German (Liechtenstein)
+    "doi",             // Dogri
+    "dv",              // Dhivehi
+    "ee",              // Ewe
     "el",              // Greek
     "en",              // English
     "en-AU",           // English (Australia)
     "en-CA",           // English (Canada)
     "en-GB",           // English (UK)
     "en-GB-oxendict",  // English (UK, OED spelling)
+    "en-IE",           // English (Ireland)
     "en-IN",           // English (India)
     "en-NZ",           // English (New Zealand)
     "en-US",           // English (US)
@@ -95,139 +107,146 @@ static const char* const kAcceptLanguageList[] = {
 #endif        // defined(ENABLE_PSEUDOLOCALES)
     "en-ZA",  // English (South Africa)
     "eo",     // Esperanto
-    // TODO(jungshik) : Do we want to list all es-Foo for Latin-American
-    // Spanish speaking countries?
-    "es",      // Spanish
-    "es-419",  // Spanish (Latin America)
-    "es-AR",   // Spanish (Argentina)
-    "es-CL",   // Spanish (Chile)
-    "es-CO",   // Spanish (Colombia)
-    "es-CR",   // Spanish (Costa Rica)
-    "es-ES",   // Spanish (Spain)
-    "es-HN",   // Spanish (Honduras)
-    "es-MX",   // Spanish (Mexico)
-    "es-PE",   // Spanish (Peru)
-    "es-US",   // Spanish (US)
-    "es-UY",   // Spanish (Uruguay)
-    "es-VE",   // Spanish (Venezuela)
-    "et",      // Estonian
-    "eu",      // Basque
-    "fa",      // Persian
-    "fi",      // Finnish
-    "fil",     // Filipino
-    "fo",      // Faroese
-    "fr",      // French
-    "fr-CA",   // French (Canada)
-    "fr-CH",   // French (Switzerland)
-    "fr-FR",   // French (France)
-    "fy",      // Frisian
-    "ga",      // Irish
-    "gd",      // Scots Gaelic
-    "gl",      // Galician
-    "gn",      // Guarani
-    "gu",      // Gujarati
-    "ha",      // Hausa
-    "haw",     // Hawaiian
-    "he",      // Hebrew
-    "hi",      // Hindi
-    "hmn",     // Hmong
-    "hr",      // Croatian
-    "ht",      // Haitian Creole
-    "hu",      // Hungarian
-    "hy",      // Armenian
-    "ia",      // Interlingua
-    "id",      // Indonesian
-    "ig",      // Igbo
-    "is",      // Icelandic
-    "it",      // Italian
-    "it-CH",   // Italian (Switzerland)
-    "it-IT",   // Italian (Italy)
-    "ja",      // Japanese
-    "jv",      // Javanese
-    "ka",      // Georgian
-    "kk",      // Kazakh
-    "km",      // Cambodian
-    "kn",      // Kannada
-    "ko",      // Korean
-    "kok",     // Konkani
-    "ku",      // Kurdish
-    "ky",      // Kyrgyz
-    "la",      // Latin
-    "lb",      // Luxembourgish
-    "ln",      // Lingala
-    "lo",      // Laothian
-    "lt",      // Lithuanian
-    "lv",      // Latvian
-    "mg",      // Malagasy
-    "mi",      // Maori
-    "mk",      // Macedonian
-    "ml",      // Malayalam
-    "mn",      // Mongolian
-    "mo",      // Moldavian
-    "mr",      // Marathi
-    "ms",      // Malay
-    "mt",      // Maltese
-    "my",      // Burmese
-    "nb",      // Norwegian (Bokmal)
-    "ne",      // Nepali
-    "nl",      // Dutch
-    "nn",      // Norwegian (Nynorsk)
-    "no",      // Norwegian
-    "ny",      // Nyanja
-    "oc",      // Occitan
-    "om",      // Oromo
-    "or",      // Odia (Oriya)
-    "pa",      // Punjabi
-    "pl",      // Polish
-    "ps",      // Pashto
-    "pt",      // Portuguese
-    "pt-BR",   // Portuguese (Brazil)
-    "pt-PT",   // Portuguese (Portugal)
-    "qu",      // Quechua
-    "rm",      // Romansh
-    "ro",      // Romanian
-    "ru",      // Russian
-    "rw",      // Kinyarwanda
-    "sd",      // Sindhi
-    "sh",      // Serbo-Croatian
-    "si",      // Sinhalese
-    "sk",      // Slovak
-    "sl",      // Slovenian
-    "sm",      // Samoan
-    "sn",      // Shona
-    "so",      // Somali
-    "sq",      // Albanian
-    "sr",      // Serbian
-    "st",      // Sesotho
-    "su",      // Sundanese
-    "sv",      // Swedish
-    "sw",      // Swahili
-    "ta",      // Tamil
-    "te",      // Telugu
-    "tg",      // Tajik
-    "th",      // Thai
-    "ti",      // Tigrinya
-    "tk",      // Turkmen
-    "tn",      // Tswana
-    "to",      // Tonga
-    "tr",      // Turkish
-    "tt",      // Tatar
-    "tw",      // Twi
-    "ug",      // Uyghur
-    "uk",      // Ukrainian
-    "ur",      // Urdu
-    "uz",      // Uzbek
-    "vi",      // Vietnamese
-    "wa",      // Walloon
-    "wo",      // Wolof
-    "xh",      // Xhosa
-    "yi",      // Yiddish
-    "yo",      // Yoruba
-    "zh",      // Chinese
-    "zh-CN",   // Chinese (China)
-    "zh-HK",   // Chinese (Hong Kong)
-    "zh-TW",   // Chinese (Taiwan)
-    "zu",      // Zulu
+    "es",     // Spanish
+    "es-419",    // Spanish (Latin America)
+    "es-AR",     // Spanish (Argentina)
+    "es-CL",     // Spanish (Chile)
+    "es-CO",     // Spanish (Colombia)
+    "es-CR",     // Spanish (Costa Rica)
+    "es-ES",     // Spanish (Spain)
+    "es-HN",     // Spanish (Honduras)
+    "es-MX",     // Spanish (Mexico)
+    "es-PE",     // Spanish (Peru)
+    "es-US",     // Spanish (US)
+    "es-UY",     // Spanish (Uruguay)
+    "es-VE",     // Spanish (Venezuela)
+    "et",        // Estonian
+    "eu",        // Basque
+    "fa",        // Persian
+    "fi",        // Finnish
+    "fil",       // Filipino
+    "fo",        // Faroese
+    "fr",        // French
+    "fr-CA",     // French (Canada)
+    "fr-CH",     // French (Switzerland)
+    "fr-FR",     // French (France)
+    "fy",        // Frisian
+    "ga",        // Irish
+    "gd",        // Scots Gaelic
+    "gl",        // Galician
+    "gn",        // Guarani
+    "gu",        // Gujarati
+    "ha",        // Hausa
+    "haw",       // Hawaiian
+    "he",        // Hebrew
+    "hi",        // Hindi
+    "hmn",       // Hmong
+    "hr",        // Croatian
+    "ht",        // Haitian Creole
+    "hu",        // Hungarian
+    "hy",        // Armenian
+    "ia",        // Interlingua
+    "id",        // Indonesian
+    "ig",        // Igbo
+    "ilo",       // Ilocano
+    "is",        // Icelandic
+    "it",        // Italian
+    "it-CH",     // Italian (Switzerland)
+    "it-IT",     // Italian (Italy)
+    "ja",        // Japanese
+    "jv",        // Javanese
+    "ka",        // Georgian
+    "kk",        // Kazakh
+    "km",        // Cambodian
+    "kn",        // Kannada
+    "ko",        // Korean
+    "kok",       // Konkani
+    "kri",       // Krio
+    "ku",        // Kurdish
+    "ky",        // Kyrgyz
+    "la",        // Latin
+    "lb",        // Luxembourgish
+    "lg",        // Luganda
+    "ln",        // Lingala
+    "lo",        // Laothian
+    "lt",        // Lithuanian
+    "lus",       // Mizo
+    "lv",        // Latvian
+    "mai",       // Maithili
+    "mg",        // Malagasy
+    "mi",        // Maori
+    "mk",        // Macedonian
+    "ml",        // Malayalam
+    "mn",        // Mongolian
+    "mni-Mtei",  // Manipuri (Meitei Mayek)
+    "mo",        // Moldavian
+    "mr",        // Marathi
+    "ms",        // Malay
+    "mt",        // Maltese
+    "my",        // Burmese
+    "nb",        // Norwegian (Bokmal)
+    "ne",        // Nepali
+    "nl",        // Dutch
+    "nn",        // Norwegian (Nynorsk)
+    "no",        // Norwegian
+    "nso",       // Sepedi
+    "ny",        // Nyanja
+    "oc",        // Occitan
+    "om",        // Oromo
+    "or",        // Odia (Oriya)
+    "pa",        // Punjabi
+    "pl",        // Polish
+    "ps",        // Pashto
+    "pt",        // Portuguese
+    "pt-BR",     // Portuguese (Brazil)
+    "pt-PT",     // Portuguese (Portugal)
+    "qu",        // Quechua
+    "rm",        // Romansh
+    "ro",        // Romanian
+    "ru",        // Russian
+    "rw",        // Kinyarwanda
+    "sa",        // Sanskrit
+    "sd",        // Sindhi
+    "sh",        // Serbo-Croatian
+    "si",        // Sinhalese
+    "sk",        // Slovak
+    "sl",        // Slovenian
+    "sm",        // Samoan
+    "sn",        // Shona
+    "so",        // Somali
+    "sq",        // Albanian
+    "sr",        // Serbian
+    "st",        // Sesotho
+    "su",        // Sundanese
+    "sv",        // Swedish
+    "sw",        // Swahili
+    "ta",        // Tamil
+    "te",        // Telugu
+    "tg",        // Tajik
+    "th",        // Thai
+    "ti",        // Tigrinya
+    "tk",        // Turkmen
+    "tn",        // Tswana
+    "to",        // Tonga
+    "tr",        // Turkish
+    "ts",        // Tsonga
+    "tt",        // Tatar
+    "tw",        // Twi
+    "ug",        // Uyghur
+    "uk",        // Ukrainian
+    "ur",        // Urdu
+    "uz",        // Uzbek
+    "vi",        // Vietnamese
+    "wa",        // Walloon
+    "wo",        // Wolof
+    "xh",        // Xhosa
+    "yi",        // Yiddish
+    "yo",        // Yoruba
+    "zh",        // Chinese
+    "zh-CN",     // Chinese (China)
+    "zh-HK",     // Chinese (Hong Kong)
+    "zh-TW",     // Chinese (Taiwan)
+    "zu",        // Zulu
 };
 
 // The list of locales that expected on the current platform, generated from the
@@ -518,9 +537,8 @@ std::string GetApplicationLocaleInternalNonMac(const std::string& pref_locale) {
   const std::vector<std::string>& languages = l10n_util::GetLocaleOverrides();
   if (!languages.empty()) {
     candidates.reserve(candidates.size() + languages.size());
-    std::transform(languages.begin(), languages.end(),
-                   std::back_inserter(candidates),
-                   &base::i18n::GetCanonicalLocale);
+    base::ranges::transform(languages, std::back_inserter(candidates),
+                            &base::i18n::GetCanonicalLocale);
   } else {
     // If no override was set, defer to ICU
     candidates.push_back(base::i18n::GetConfiguredLocale());
@@ -602,6 +620,15 @@ bool IsLocaleNameTranslated(const char* locale,
       base::UTF16ToASCII(display_name) != locale;
 }
 
+std::u16string GetDisplayNameForLocaleWithoutCountry(
+    const std::string& locale,
+    const std::string& display_locale,
+    bool is_for_ui,
+    bool disallow_default) {
+  return GetDisplayNameForLocale(GetLanguage(locale), display_locale, is_for_ui,
+                                 disallow_default);
+}
+
 std::u16string GetDisplayNameForLocale(const std::string& locale,
                                        const std::string& display_locale,
                                        bool is_for_ui,
@@ -610,16 +637,20 @@ std::u16string GetDisplayNameForLocale(const std::string& locale,
   // Internally, we use the language code of zh-CN and zh-TW, but we want the
   // display names to be Chinese (Simplified) and Chinese (Traditional) instead
   // of Chinese (China) and Chinese (Taiwan).
-  // Translate uses "tl" (Tagalog) to mean "fil" (Filipino) until Google
-  // translate is changed to understand "fil". Make "tl" alias to "fil".
-  if (locale_code == "zh-CN")
-    locale_code = "zh-Hans";
-  else if (locale_code == "zh-TW")
-    locale_code = "zh-Hant";
-  else if (locale_code == "tl")
-    locale_code = "fil";
-  else if (locale_code == "mo")
+  // Translate uses "tl" (Tagalog) to mean "fil" (Filipino). Until Google
+  // translate is changed to understand "fil", make "tl" alias to "fil".
+  // Translate also uses "gom" (Goan Konkani) for "kok" (Konkani).
+  if (locale_code == "gom") {
+    locale_code = "kok";
+  } else if (locale_code == "mo") {
     locale_code = "ro-MD";
+  } else if (locale_code == "tl") {
+    locale_code = "fil";
+  } else if (locale_code == "zh-CN") {
+    locale_code = "zh-Hans";
+  } else if (locale_code == "zh-TW") {
+    locale_code = "zh-Hant";
+  }
 
   std::u16string display_name;
 
@@ -650,7 +681,7 @@ std::u16string GetDisplayNameForLocale(const std::string& locale,
     UErrorCode error = U_ZERO_ERROR;
     const int kBufferSize = 1024;
 
-    int actual_size;
+    int32_t actual_size;
     // For Country code in ICU64 we need to call uloc_getDisplayCountry
     if (locale_code[0] == '-' || locale_code[0] == '_') {
       actual_size = uloc_getDisplayCountry(
@@ -664,7 +695,7 @@ std::u16string GetDisplayNameForLocale(const std::string& locale,
     if (disallow_default && U_USING_DEFAULT_WARNING == error)
       return std::u16string();
     DCHECK(U_SUCCESS(error));
-    display_name.resize(actual_size);
+    display_name.resize(base::checked_cast<size_t>(actual_size));
   }
 #endif  // BUILDFLAG(IS_IOS)
 
@@ -786,36 +817,33 @@ std::u16string FormatString(const std::u16string& format_string,
                             const std::vector<std::u16string>& replacements,
                             std::vector<size_t>* offsets) {
 #if DCHECK_IS_ON()
-  // Make sure every replacement string is being used, so we don't just
-  // silently fail to insert one. If |offsets| is non-NULL, then don't do this
-  // check as the code may simply want to find the placeholders rather than
-  // actually replacing them.
-  if (!offsets) {
-    // $9 is the highest allowed placeholder.
-    for (size_t i = 0; i < 9; ++i) {
-      bool placeholder_should_exist = replacements.size() > i;
+  // Make sure every replacement string is being used, so we don't just silently
+  // fail to insert one.
+  //
+  // $9 is the highest allowed placeholder.
+  for (size_t i = 0; i < 9; ++i) {
+    bool placeholder_should_exist = i < replacements.size();
 
-      std::u16string placeholder = u"$";
-      placeholder += (L'1' + i);
-      size_t pos = format_string.find(placeholder);
-      if (placeholder_should_exist) {
-        DCHECK_NE(std::string::npos, pos) << " Didn't find a " << placeholder
-                                          << " placeholder in "
-                                          << format_string;
-      } else {
-        DCHECK_EQ(std::string::npos, pos) << " Unexpectedly found a "
-                                          << placeholder << " placeholder in "
-                                          << format_string;
-      }
+    std::u16string placeholder = u"$";
+    placeholder += static_cast<char16_t>('1' + static_cast<char>(i));
+    size_t pos = format_string.find(placeholder);
+    if (placeholder_should_exist) {
+      DCHECK_NE(std::string::npos, pos) << " Didn't find a " << placeholder
+                                        << " placeholder in " << format_string;
+    } else {
+      DCHECK_EQ(std::string::npos, pos)
+          << " Unexpectedly found a " << placeholder << " placeholder in "
+          << format_string;
     }
   }
 #endif
 
-  std::u16string formatted =
-      base::ReplaceStringPlaceholders(format_string, replacements, offsets);
+  // AdjustParagraphDirectionality() may append extra characters. Therefore,
+  // it's important to AdjustParagraphDirectionality() before computing the
+  // offsets in ReplaceStringPlaceholders(). Otherwise, offsets might be wrong.
+  std::u16string formatted = format_string;
   AdjustParagraphDirectionality(&formatted);
-
-  return formatted;
+  return base::ReplaceStringPlaceholders(formatted, replacements, offsets);
 }
 
 std::u16string GetStringFUTF16(int message_id,
@@ -1012,11 +1040,9 @@ void GetAcceptLanguages(std::vector<std::string>* locale_codes) {
 
 bool IsLanguageAccepted(const std::string& display_locale,
                         const std::string& locale) {
-  for (const char* accept_language : kAcceptLanguageList) {
-    if (accept_language == locale &&
-        l10n_util::IsLocaleNameTranslated(locale.c_str(), display_locale)) {
-      return true;
-    }
+  if (std::binary_search(std::begin(kAcceptLanguageList),
+                         std::end(kAcceptLanguageList), locale)) {
+    return l10n_util::IsLocaleNameTranslated(locale.c_str(), display_locale);
   }
   return false;
 }

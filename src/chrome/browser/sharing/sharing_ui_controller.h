@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
@@ -56,9 +56,18 @@ class SharingUiController {
   // If true, shows a loading icon on omnibox when sending out the message.
   virtual bool ShouldShowLoadingIcon() const;
   virtual std::u16string GetTextForTooltipAndAccessibleName() const = 0;
+
+  // If false, any UI associated will be excluded from the accessibility tree,
+  // making it completely undiscoverable and unusable to (at least) screen
+  // reader users. If you override this function, please seek the review of
+  // an accessibility OWNER and clearly document the use case in your code.
+  virtual bool HasAccessibleUi() const;
+
   // Get the name of the feature to be used as a prefix for the metric name.
   virtual SharingFeatureName GetFeatureMetricsPrefix() const = 0;
-  // Describes the content type of shared data.
+  // Describes the content type of shared data. For most languages this
+  // will be lower case as it's intended to be put as a placeholder within
+  // a sentence.
   virtual std::u16string GetContentType() const = 0;
   // Returns the message to be shown in the body of error dialog based on
   // |send_result_|.

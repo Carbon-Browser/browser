@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,7 @@ void AccessibilityTest::SetUp() {
 
 AXObjectCacheImpl& AccessibilityTest::GetAXObjectCache() const {
   DCHECK(GetDocument().View());
-  GetDocument().View()->UpdateAllLifecyclePhasesExceptPaint(
-      DocumentUpdateReason::kAccessibility);
+  GetDocument().View()->UpdateAllLifecyclePhasesForTest();
   auto* ax_object_cache =
       To<AXObjectCacheImpl>(GetDocument().ExistingAXObjectCache());
   DCHECK(ax_object_cache);
@@ -55,7 +54,7 @@ AXObject* AccessibilityTest::GetAXFocusedObject() const {
 
 AXObject* AccessibilityTest::GetAXObjectByElementId(const char* id) const {
   const auto* element = GetElementById(id);
-  return element ? GetAXObjectCache().GetOrCreate(element) : nullptr;
+  return GetAXObjectCache().Get(element);
 }
 
 std::string AccessibilityTest::PrintAXTree() const {

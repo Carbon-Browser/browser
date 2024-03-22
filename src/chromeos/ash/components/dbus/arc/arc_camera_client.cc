@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/arc/fake_arc_camera_client.h"
 #include "dbus/bus.h"
@@ -36,7 +37,7 @@ class ArcCameraClientImpl : public ArcCameraClient {
   // ArcCameraClient overrides:
   void StartService(int fd,
                     const std::string& token,
-                    VoidDBusMethodCallback callback) override {
+                    chromeos::VoidDBusMethodCallback callback) override {
     dbus::MethodCall method_call(arc_camera::kArcCameraServiceInterface,
                                  "StartService");
     dbus::MessageWriter writer(&method_call);
@@ -49,11 +50,12 @@ class ArcCameraClientImpl : public ArcCameraClient {
   }
 
  private:
-  void OnVoidMethod(VoidDBusMethodCallback callback, dbus::Response* response) {
+  void OnVoidMethod(chromeos::VoidDBusMethodCallback callback,
+                    dbus::Response* response) {
     std::move(callback).Run(response);
   }
 
-  dbus::ObjectProxy* proxy_;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> proxy_;
   base::WeakPtrFactory<ArcCameraClientImpl> weak_ptr_factory_{this};
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,10 +35,7 @@ void AXTreeSourceViews::HandleAccessibleAction(const ui::AXActionData& action) {
   // In Views, we only support setting the selection within a single node,
   // not across multiple nodes like on the web.
   if (action.action == ax::mojom::Action::kSetSelection) {
-    if (action.anchor_node_id != action.focus_node_id) {
-      NOTREACHED();
-      return;
-    }
+    CHECK_EQ(action.anchor_node_id, action.focus_node_id);
     id = action.anchor_node_id;
   }
 
@@ -82,10 +79,31 @@ int32_t AXTreeSourceViews::GetId(AXAuraObjWrapper* node) const {
   return node->GetUniqueId();
 }
 
-void AXTreeSourceViews::GetChildren(
-    AXAuraObjWrapper* node,
-    std::vector<AXAuraObjWrapper*>* out_children) const {
-  node->GetChildren(out_children);
+void AXTreeSourceViews::CacheChildrenIfNeeded(AXAuraObjWrapper* node) {
+  if (node->cached_children_) {
+    return;
+  }
+
+  node->cached_children_.emplace();
+
+  node->GetChildren(&(*node->cached_children_));
+}
+
+size_t AXTreeSourceViews::GetChildCount(AXAuraObjWrapper* node) const {
+  std::vector<AXAuraObjWrapper*> children;
+  node->GetChildren(&children);
+  return children.size();
+}
+
+AXAuraObjWrapper* AXTreeSourceViews::ChildAt(AXAuraObjWrapper* node,
+                                             size_t index) const {
+  std::vector<AXAuraObjWrapper*> children;
+  node->GetChildren(&children);
+  return children[index];
+}
+
+void AXTreeSourceViews::ClearChildCache(AXAuraObjWrapper* node) {
+  node->cached_children_.reset();
 }
 
 AXAuraObjWrapper* AXTreeSourceViews::GetParent(AXAuraObjWrapper* node) const {
@@ -106,10 +124,6 @@ bool AXTreeSourceViews::IsIgnored(AXAuraObjWrapper* node) const {
   ui::AXNodeData out_data;
   node->Serialize(&out_data);
   return out_data.IsIgnored();
-}
-
-bool AXTreeSourceViews::IsValid(AXAuraObjWrapper* node) const {
-  return node;
 }
 
 bool AXTreeSourceViews::IsEqual(AXAuraObjWrapper* node1,

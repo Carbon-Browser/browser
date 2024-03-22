@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ class MockAudioSocketBroker : public mojom::AudioSocketBroker {
       : receiver_(this, std::move(pending_receiver)) {}
   MockAudioSocketBroker(const MockAudioSocketBroker&) = delete;
   MockAudioSocketBroker& operator=(const MockAudioSocketBroker&) = delete;
-  ~MockAudioSocketBroker() = default;
+  ~MockAudioSocketBroker() override = default;
 
   MOCK_METHOD(void,
               GetSocketDescriptor,
@@ -146,7 +146,10 @@ TEST_F(OutputConnectionTest, ConnectSucceed) {
 
 TEST_F(OutputConnectionTest, ConnectFail) {
   EXPECT_CALL(*audio_socket_broker_, GetSocketDescriptor(_))
-      .WillRepeatedly(RunOnceCallback<0>(mojo::PlatformHandle()));
+      .WillRepeatedly(
+          [](mojom::AudioSocketBroker::GetSocketDescriptorCallback callback) {
+            std::move(callback).Run(mojo::PlatformHandle());
+          });
   EXPECT_CALL(*output_connection_, OnConnected(_)).Times(0);
   EXPECT_CALL(*output_connection_, OnConnectionFailed()).Times(1);
 

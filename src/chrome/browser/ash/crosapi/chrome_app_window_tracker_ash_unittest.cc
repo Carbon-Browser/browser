@@ -1,8 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/chrome_app_window_tracker_ash.h"
+#include "base/memory/raw_ptr.h"
 
 #include "base/test/task_environment.h"
 #include "chromeos/crosapi/cpp/crosapi_constants.h"
@@ -26,7 +27,8 @@ class ChromeAppWindowTrackerAshFake : public ChromeAppWindowTrackerAsh {
   }
 
   std::string last_updated_app_id_;
-  aura::Window* last_updated_window_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged | ExperimentalAsh>
+      last_updated_window_ = nullptr;
 };
 
 class ChromeAppWindowTrackerAsh : public testing::Test {

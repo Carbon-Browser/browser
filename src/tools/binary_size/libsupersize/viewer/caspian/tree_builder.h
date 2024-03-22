@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,7 @@ class TreeBuilder {
              std::vector<FilterFunc> filters);
   TreeNode* Find(std::string_view path);
   Json::Value Open(const char* path);
+  Json::Value GetAncestryById(uint32_t id);
 
  private:
   void AddFileEntry(GroupedPath source_path,
@@ -38,6 +39,8 @@ class TreeBuilder {
   TreeNode* GetOrMakeParentNode(TreeNode* child_node);
 
   void AttachToParent(TreeNode* child, TreeNode* parent);
+
+  TreeNode* FindNodeById(int32_t id);
 
   ArtifactType ArtifactTypeFromChild(GroupedPath child_path) const;
 
@@ -49,7 +52,9 @@ class TreeBuilder {
   void JoinDexMethodClasses(TreeNode* node);
 
   BaseSizeInfo* size_info_;
-  TreeNode root_;
+  bool diff_mode_;
+  TreeNodeFactory tree_node_factory_;
+  std::unique_ptr<TreeNode> root_;
   std::unordered_map<GroupedPath, TreeNode*> _parents;
 
   // Contained TreeNode hold lightweight string_views to fields in SizeInfo.
@@ -66,6 +71,7 @@ class TreeBuilder {
   char sep_;
   std::vector<FilterFunc> filters_;
   std::vector<const BaseSymbol*> symbols_;
+  std::unordered_map<std::string_view, DiffStatus> source_to_diff_status_;
 };  // TreeBuilder
 }  // namespace caspian
 #endif  // TOOLS_BINARY_SIZE_LIBSUPERSIZE_VIEWER_CASPIAN_TREE_BUILDER_H_

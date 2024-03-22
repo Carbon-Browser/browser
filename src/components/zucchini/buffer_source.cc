@@ -1,40 +1,51 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/zucchini/buffer_source.h"
 
-#include <algorithm>
-
+#include "base/ranges/algorithm.h"
 #include "components/zucchini/algorithm.h"
 
 namespace zucchini {
 
-BufferSource::BufferSource(ConstBufferView buffer) : ConstBufferView(buffer) {}
+BufferSource::BufferSource(const ConstBufferView& buffer)
+    : ConstBufferView(buffer) {}
 
-BufferSource& BufferSource::Skip(size_type n) {
-  remove_prefix(std::min(n, Remaining()));
-  return *this;
+BufferSource::BufferSource(const ConstBufferView& buffer, size_type offset)
+    : ConstBufferView(buffer) {
+  Skip(offset);
+}
+
+bool BufferSource::Skip(size_type n) {
+  if (n > Remaining()) {
+    remove_prefix(Remaining());
+    return false;
+  }
+  remove_prefix(n);
+  return true;
 }
 
 bool BufferSource::CheckNextBytes(std::initializer_list<uint8_t> bytes) const {
-  if (Remaining() < bytes.size())
+  if (Remaining() < bytes.size()) {
     return false;
-  return std::mismatch(bytes.begin(), bytes.end(), begin()).first ==
-         bytes.end();
+  }
+  return base::ranges::mismatch(bytes, *this).first == bytes.end();
 }
 
 bool BufferSource::ConsumeBytes(std::initializer_list<uint8_t> bytes) {
-  if (!CheckNextBytes(bytes))
+  if (!CheckNextBytes(bytes)) {
     return false;
+  }
   remove_prefix(bytes.size());
   return true;
 }
 
 bool BufferSource::GetRegion(size_type count, ConstBufferView* buffer) {
   DCHECK_NE(begin(), nullptr);
-  if (Remaining() < count)
+  if (Remaining() < count) {
     return false;
+  }
   *buffer = ConstBufferView(begin(), count);
   remove_prefix(count);
   return true;

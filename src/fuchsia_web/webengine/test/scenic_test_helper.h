@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class ScenicTestHelper {
   fuchsia::ui::views::ViewRef CloneViewRef();
 
  protected:
-  fuchsia::ui::views::ViewRef view_ref_;
+  FrameImpl* frame_impl_;
 };
 
 #endif  // FUCHSIA_WEB_WEBENGINE_TEST_SCENIC_TEST_HELPER_H_

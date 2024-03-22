@@ -319,20 +319,6 @@ inline int LazyLineBreakIterator::NextBreakablePosition(
 
     is_space = IsBreakableSpace(ch);
     switch (break_space) {
-      case BreakSpaceType::kBeforeEverySpace:
-        if (is_space || IsOtherSpaceSeparator<CharacterType>(ch))
-          return i;
-        break;
-      case BreakSpaceType::kBeforeSpaceRun:
-        // Theoritically, preserved newline characters are different from space
-        // and tab characters. The difference is not implemented because the
-        // LayoutNG line breaker handles preserved newline characters by itself.
-        if (is_space) {
-          if (!is_last_space)
-            return i;
-          continue;
-        }
-        break;
       case BreakSpaceType::kAfterSpaceRun:
         if (is_space)
           continue;
@@ -371,13 +357,23 @@ inline int LazyLineBreakIterator::NextBreakablePosition(
         // prior context.
         if (i || prior_context.length) {
           if (TextBreakIterator* break_iterator = GetIterator(prior_context)) {
-            // Adjust the offset by |start_offset_| because |break_iterator| has
-            // text after |start_offset_|.
-            DCHECK_GE(i + prior_context.length, start_offset_);
-            next_break = break_iterator->following(
-                i - 1 + prior_context.length - start_offset_);
-            if (next_break >= 0) {
-              next_break = next_break + start_offset_ - prior_context.length;
+            next_break = i - 1;
+            for (;;) {
+              // Adjust the offset by |start_offset_| because |break_iterator|
+              // has text after |start_offset_|.
+              // TODO(crbug.com/1500931): `+1` below shouldn't be there, but it
+              // was so before and removing it hits. This is to be investigated.
+              DCHECK_GE(next_break + prior_context.length + 1, start_offset_);
+              next_break = break_iterator->following(
+                  next_break + prior_context.length - start_offset_);
+              if (next_break >= 0) {
+                next_break = next_break + start_offset_ - prior_context.length;
+                if (UNLIKELY(disable_soft_hyphen_) && next_break > 0 &&
+                    UNLIKELY(str[next_break - 1] == kSoftHyphenCharacter)) {
+                  continue;
+                }
+              }
+              break;
             }
           }
         }
@@ -396,14 +392,6 @@ inline int LazyLineBreakIterator::NextBreakablePosition(
     const CharacterType* str,
     int len) const {
   switch (break_space_) {
-    case BreakSpaceType::kBeforeEverySpace:
-      return NextBreakablePosition<CharacterType, lineBreakType,
-                                   BreakSpaceType::kBeforeEverySpace>(pos, str,
-                                                                      len);
-    case BreakSpaceType::kBeforeSpaceRun:
-      return NextBreakablePosition<CharacterType, lineBreakType,
-                                   BreakSpaceType::kBeforeSpaceRun>(pos, str,
-                                                                    len);
     case BreakSpaceType::kAfterSpaceRun:
       return NextBreakablePosition<CharacterType, lineBreakType,
                                    BreakSpaceType::kAfterSpaceRun>(pos, str,
@@ -415,8 +403,7 @@ inline int LazyLineBreakIterator::NextBreakablePosition(
   }
   NOTREACHED();
   return NextBreakablePosition<CharacterType, lineBreakType,
-                               BreakSpaceType::kBeforeEverySpace>(pos, str,
-                                                                  len);
+                               BreakSpaceType::kAfterSpaceRun>(pos, str, len);
 }
 
 template <LineBreakType lineBreakType>
@@ -447,6 +434,7 @@ int LazyLineBreakIterator::NextBreakablePosition(int pos,
                                                  int len) const {
   switch (line_break_type) {
     case LineBreakType::kNormal:
+    case LineBreakType::kPhrase:
       return NextBreakablePosition<LineBreakType::kNormal>(pos, len);
     case LineBreakType::kBreakAll:
       return NextBreakablePosition<LineBreakType::kBreakAll>(pos, len);
@@ -513,6 +501,8 @@ std::ostream& operator<<(std::ostream& ostream, LineBreakType line_break_type) {
       return ostream << "BreakCharacter";
     case LineBreakType::kKeepAll:
       return ostream << "KeepAll";
+    case LineBreakType::kPhrase:
+      return ostream << "Phrase";
   }
   NOTREACHED();
   return ostream << "LineBreakType::" << static_cast<int>(line_break_type);
@@ -520,14 +510,10 @@ std::ostream& operator<<(std::ostream& ostream, LineBreakType line_break_type) {
 
 std::ostream& operator<<(std::ostream& ostream, BreakSpaceType break_space) {
   switch (break_space) {
-    case BreakSpaceType::kBeforeEverySpace:
-      return ostream << "kBeforeEverySpace";
-    case BreakSpaceType::kAfterEverySpace:
-      return ostream << "kAfterEverySpace";
-    case BreakSpaceType::kBeforeSpaceRun:
-      return ostream << "kBeforeSpaceRun";
     case BreakSpaceType::kAfterSpaceRun:
       return ostream << "kAfterSpaceRun";
+    case BreakSpaceType::kAfterEverySpace:
+      return ostream << "kAfterEverySpace";
   }
   NOTREACHED();
   return ostream << "BreakSpaceType::" << static_cast<int>(break_space);

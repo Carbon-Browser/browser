@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ namespace ash {
 class COMPONENT_EXPORT(RGBKBD_CLIENT) RgbkbdClient {
  public:
   using GetRgbKeyboardCapabilitiesCallback =
-      DBusMethodCallback<rgbkbd::RgbKeyboardCapabilities>;
+      chromeos::DBusMethodCallback<rgbkbd::RgbKeyboardCapabilities>;
 
   class Observer : public base::CheckedObserver {
    public:
@@ -56,6 +56,8 @@ class COMPONENT_EXPORT(RGBKBD_CLIENT) RgbkbdClient {
   virtual void SetCapsLockState(bool enabled) = 0;
 
   virtual void SetStaticBackgroundColor(uint8_t r, uint8_t g, uint8_t b) = 0;
+
+  virtual void SetZoneColor(int zone, uint8_t r, uint8_t g, uint8_t b) = 0;
 
   virtual void SetRainbowMode() = 0;
 

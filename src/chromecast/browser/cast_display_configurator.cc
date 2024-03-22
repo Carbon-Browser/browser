@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <algorithm>
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
+#include "build/build_config.h"
 #include "chromecast/base/cast_features.h"
 #include "chromecast/browser/cast_touch_device_manager.h"
 #include "chromecast/chromecast_buildflags.h"
@@ -95,7 +96,7 @@ gfx::Rect GetScreenBounds(const gfx::Size& size_in_pixels,
 
 CastDisplayConfigurator::CastDisplayConfigurator(CastScreen* screen)
     : delegate_(
-#if defined(USE_OZONE) && !BUILDFLAG(IS_CAST_AUDIO_ONLY)
+#if BUILDFLAG(IS_OZONE) && !BUILDFLAG(IS_CAST_AUDIO_ONLY)
           ui::OzonePlatform::GetInstance()->CreateNativeDisplayDelegate()
 #else
           nullptr
@@ -175,12 +176,12 @@ void CastDisplayConfigurator::SetColorMatrix(
 }
 
 void CastDisplayConfigurator::SetGammaCorrection(
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
+    const display::GammaCurve& degamma,
+    const display::GammaCurve& gamma) {
   if (!delegate_ || !display_)
     return;
 
-  delegate_->SetGammaCorrection(display_->display_id(), degamma_lut, gamma_lut);
+  delegate_->SetGammaCorrection(display_->display_id(), degamma, gamma);
   NotifyObservers();
 }
 

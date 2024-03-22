@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,6 +53,8 @@ class GpuThreadAdapter {
       const std::vector<display::DisplayConfigurationParams>& config_requests,
       display::ConfigureCallback callback,
       uint32_t modeset_flag) = 0;
+  virtual bool GpuSetHdcpKeyProp(int64_t display_id,
+                                 const std::string& key) = 0;
   virtual bool GpuGetHDCPState(int64_t display_id) = 0;
   virtual bool GpuSetHDCPState(
       int64_t display_id,
@@ -60,10 +62,9 @@ class GpuThreadAdapter {
       display::ContentProtectionMethod protection_method) = 0;
   virtual bool GpuSetColorMatrix(int64_t display_id,
                                  const std::vector<float>& color_matrix) = 0;
-  virtual bool GpuSetGammaCorrection(
-      int64_t display_id,
-      const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-      const std::vector<display::GammaRampRGBEntry>& gamma_lut) = 0;
+  virtual bool GpuSetGammaCorrection(int64_t display_id,
+                                     const display::GammaCurve& degamma,
+                                     const display::GammaCurve& gamma) = 0;
   virtual void GpuSetPrivacyScreen(
       int64_t display_id,
       bool enabled,

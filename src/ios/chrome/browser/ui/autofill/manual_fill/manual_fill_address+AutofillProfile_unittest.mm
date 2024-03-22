@@ -1,20 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_address+AutofillProfile.h"
 
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/geo/country_names.h"
-#include "ios/chrome/browser/application_context.h"
-#include "testing/platform_test.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
+#import "components/autofill/core/browser/data_model/autofill_profile.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "testing/platform_test.h"
+#import "url/gurl.h"
 
 using autofill::AutofillProfile;
 using ManualFillAddressFormAutofilliOSTest = PlatformTest;
@@ -46,8 +41,6 @@ TEST_F(ManualFillAddressFormAutofilliOSTest, CreationWithMiddleName) {
   NSString* country = @"US";
   NSString* phoneNumber = @"6502345678";
   NSString* emailAddress = @"john@doe";
-
-  autofill::CountryNames::SetLocaleString("en-US");
 
   AutofillProfile* profile = new AutofillProfile();
   SetProfileFieldTypeValue(profile, autofill::NAME_FIRST, firstName);
@@ -97,8 +90,6 @@ TEST_F(ManualFillAddressFormAutofilliOSTest, CreationWithMiddleInitial) {
   NSString* country = @"US";
   NSString* phoneNumber = @"6502345678";
   NSString* emailAddress = @"john@doe";
-
-  autofill::CountryNames::SetLocaleString("en-US");
 
   AutofillProfile* profile = new AutofillProfile();
   SetProfileFieldTypeValue(profile, autofill::NAME_FIRST, firstName);

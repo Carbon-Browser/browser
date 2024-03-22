@@ -1,21 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/overlays/overlay_request_coordinator.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_coordinator+subclassing.h"
 
-#include <ostream>
+#import <ostream>
 
-#include "base/check.h"
-#include "base/notreached.h"
-#include "ios/chrome/browser/overlays/public/overlay_request_support.h"
+#import "base/check.h"
+#import "base/notreached.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request_support.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_mediator.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface OverlayRequestCoordinator () <OverlayRequestMediatorDelegate> {
   // Subclassing properties.

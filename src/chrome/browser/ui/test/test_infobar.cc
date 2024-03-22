@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <iterator>
 
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/infobars/infobar_observer.h"
 #include "chrome/browser/ui/browser.h"
 #include "components/infobars/content/content_infobar_manager.h"
@@ -21,22 +22,13 @@ void TestInfoBar::PreShow() {
 }
 
 bool TestInfoBar::VerifyUi() {
-  absl::optional<InfoBars> infobars = GetNewInfoBars();
+  auto infobars = GetNewInfoBars();
   if (!infobars || infobars->empty()) {
-    ADD_FAILURE() << "No new infobars were displayed.";
     return false;
   }
 
-  bool expected_infobars_found =
-      std::equal(infobars->begin(), infobars->end(),
-                 expected_identifiers_.begin(), expected_identifiers_.end(),
-                 [](infobars::InfoBar* infobar, InfoBarDelegateIdentifier id) {
-                   return infobar->delegate()->GetIdentifier() == id;
-                 });
-  if (!expected_infobars_found)
-    ADD_FAILURE() << "Found unexpected infobars.";
-
-  return expected_infobars_found;
+  return base::ranges::equal(*infobars, expected_identifiers_, {},
+                             &infobars::InfoBar::GetIdentifier);
 }
 
 void TestInfoBar::WaitForUserDismissal() {
@@ -77,11 +69,12 @@ absl::optional<TestInfoBar::InfoBars> TestInfoBar::GetNewInfoBars() const {
   const infobars::ContentInfoBarManager* infobar_manager = GetInfoBarManager();
   if (!infobar_manager)
     return absl::nullopt;
-  const InfoBars& infobars = infobar_manager->infobars_;
+  const auto& infobars = infobar_manager->infobars();
   if ((infobars.size() < starting_infobars_.size()) ||
       !std::equal(starting_infobars_.begin(), starting_infobars_.end(),
-                  infobars.begin()))
+                  infobars.begin())) {
     return absl::nullopt;
+  }
   return InfoBars(std::next(infobars.begin(), starting_infobars_.size()),
                   infobars.end());
 }

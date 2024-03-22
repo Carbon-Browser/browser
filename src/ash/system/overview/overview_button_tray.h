@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,18 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/tablet_mode_observer.h"
+#include "ash/shelf/shelf.h"
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/wm/overview/overview_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event_constants.h"
+
+namespace ui {
+class Event;
+class GestureEvent;
+}  // namespace ui
 
 namespace views {
 class ImageView;
@@ -54,11 +61,6 @@ class ASH_EXPORT OverviewButtonTray : public TrayBackgroundView,
   // views::Button:
   void OnGestureEvent(ui::GestureEvent* event) override;
 
-  // ActionableView:
-  bool PerformAction(const ui::Event& event) override;
-  void HandlePerformActionResult(bool action_performed,
-                                 const ui::Event& event) override;
-
   // SessionObserver:
   void OnSessionStateChanged(session_manager::SessionState state) override;
 
@@ -75,24 +77,33 @@ class ASH_EXPORT OverviewButtonTray : public TrayBackgroundView,
   // TrayBackgroundView:
   void UpdateAfterLoginStatusChange() override;
   void ClickedOutsideBubble() override;
+  void UpdateTrayItemColor(bool is_active) override;
   std::u16string GetAccessibleNameForTray() override;
   void HandleLocaleChange() override;
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override;
   void OnThemeChanged() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
  private:
   friend class OverviewButtonTrayTest;
 
+  // Callback called when this is pressed. Long press is reacted to in
+  // `OnGestureEvent()`, see crbug/1374368.
+  void OnButtonPressed(const ui::Event& event);
+
   void UpdateIconVisibility();
 
+  // Gets the icon image of `icon_`.
+  gfx::ImageSkia GetIconImage();
+
   // Weak pointer, will be parented by TrayContainer for its lifetime.
-  views::ImageView* icon_;
+  raw_ptr<views::ImageView, ExperimentalAsh> icon_;
 
   ScopedSessionObserver scoped_session_observer_;
 
   // Stores the timestamp of the last tap event time that happened while not
   // in overview mode. Used to check for double taps, which invoke quick switch.
-  absl::optional<base::TimeTicks> last_press_event_time_;
+  std::optional<base::TimeTicks> last_press_event_time_;
 };
 
 }  // namespace ash

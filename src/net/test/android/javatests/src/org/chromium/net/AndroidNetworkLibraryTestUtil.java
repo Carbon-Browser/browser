@@ -1,21 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.net;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNativeForTesting;
 
-/**
- * Utility functions for testing features implemented in AndroidNetworkLibrary.
- */
+/** Utility functions for testing features implemented in AndroidNetworkLibrary. */
 public class AndroidNetworkLibraryTestUtil {
     private static int sPerHostCleartextCheckCount;
     private static int sDefaultCleartextCheckCount;
-    /**
-     * Helper for tests that simulates an app controlling cleartext traffic on M and newer.
-     */
-    @CalledByNative
+
+    /** Helper for tests that simulates an app controlling cleartext traffic on M and newer. */
+    @CalledByNativeForTesting
     public static void setUpSecurityPolicyForTesting(boolean cleartextPermitted) {
         sDefaultCleartextCheckCount = 0;
         sPerHostCleartextCheckCount = 0;
@@ -29,6 +26,7 @@ public class AndroidNetworkLibraryTestUtil {
                         }
                         return cleartextPermitted;
                     }
+
                     @Override
                     public boolean isCleartextTrafficPermitted() {
                         ++sDefaultCleartextCheckCount;
@@ -37,12 +35,12 @@ public class AndroidNetworkLibraryTestUtil {
                 });
     }
 
-    @CalledByNative
+    @CalledByNativeForTesting
     private static int getPerHostCleartextCheckCount() {
         return sPerHostCleartextCheckCount;
     }
 
-    @CalledByNative
+    @CalledByNativeForTesting
     private static int getDefaultCleartextCheckCount() {
         return sDefaultCleartextCheckCount;
     }

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,25 +23,19 @@ struct StructTraits<viz::mojom::FilterOperationDataView, cc::FilterOperation> {
   static viz::mojom::FilterType type(const cc::FilterOperation& op);
 
   static float amount(const cc::FilterOperation& operation) {
-    if (operation.type() == cc::FilterOperation::COLOR_MATRIX ||
+    if (operation.type() == cc::FilterOperation::ALPHA_THRESHOLD ||
+        operation.type() == cc::FilterOperation::COLOR_MATRIX ||
         operation.type() == cc::FilterOperation::REFERENCE) {
       return 0.f;
     }
     return operation.amount();
   }
 
-  static float outer_threshold(const cc::FilterOperation& operation) {
-    if (operation.type() != cc::FilterOperation::ALPHA_THRESHOLD &&
-        operation.type() != cc::FilterOperation::STRETCH) {
-      return 0.f;
-    }
-    return operation.outer_threshold();
-  }
-
-  static gfx::Point drop_shadow_offset(const cc::FilterOperation& operation) {
-    if (operation.type() != cc::FilterOperation::DROP_SHADOW)
+  static gfx::Point offset(const cc::FilterOperation& operation) {
+    if (operation.type() != cc::FilterOperation::DROP_SHADOW &&
+        operation.type() != cc::FilterOperation::OFFSET)
       return gfx::Point();
-    return operation.drop_shadow_offset();
+    return operation.offset();
   }
 
   static SkColor4f drop_shadow_color(const cc::FilterOperation& operation) {

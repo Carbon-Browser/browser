@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/numerics/safe_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/blob/blob_registry.mojom-blink.h"
@@ -83,8 +84,9 @@ class FetchDataLoaderAsBlobHandle final : public FetchDataLoader,
         mime_type_ ? mime_type_ : "", /*content_disposition=*/"",
         /*length_hint=*/0, std::move(handle),
         mojo::PendingAssociatedRemote<mojom::blink::ProgressClient>(),
-        WTF::Bind(&FetchDataLoaderAsBlobHandle::FinishedCreatingFromDataPipe,
-                  WrapWeakPersistent(this)));
+        WTF::BindOnce(
+            &FetchDataLoaderAsBlobHandle::FinishedCreatingFromDataPipe,
+            WrapWeakPersistent(this)));
   }
 
   void DidFetchDataLoadedDataPipe() override {
@@ -328,8 +330,12 @@ class FetchDataLoaderAsFormData final : public FetchDataLoader,
             multipart_parser_->AppendData(buffer, available);
         const bool multipart_receive_failed = multipart_parser_->IsCancelled();
         result = consumer_->EndRead(available);
-        if (!buffer_appended || multipart_receive_failed)
-          result = BytesConsumer::Result::kError;
+        if (!buffer_appended || multipart_receive_failed) {
+          // No point in reading any more as the input is invalid.
+          consumer_->Cancel();
+          client_->DidFetchDataLoadFailed();
+          return;
+        }
       }
       switch (result) {
         case BytesConsumer::Result::kOk:
@@ -402,8 +408,8 @@ class FetchDataLoaderAsFormData final : public FetchDataLoader,
         blob_data_ = std::make_unique<BlobData>();
         const AtomicString& content_type =
             header_fields.Get(http_names::kContentType);
-        blob_data_->SetContentType(content_type.IsNull() ? "text/plain"
-                                                         : content_type);
+        blob_data_->SetContentType(
+            content_type.IsNull() ? AtomicString("text/plain") : content_type);
       } else {
         if (!string_decoder_) {
           string_decoder_ = std::make_unique<TextResourceDecoder>(

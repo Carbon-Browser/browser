@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,13 +13,12 @@
 #include "base/observer_list.h"
 #include "chromeos/ash/services/assistant/assistant_manager_service.h"
 #include "chromeos/ash/services/assistant/test_support/fake_assistant_settings_impl.h"
-#include "chromeos/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
+#include "chromeos/ash/services/libassistant/public/mojom/notification_delegate.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 using media_session::mojom::MediaSessionAction;
 
@@ -59,8 +58,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
 
   // Assistant overrides:
   void StartEditReminderInteraction(const std::string& client_id) override;
-  void StartScreenContextInteraction(
-      const std::vector<uint8_t>& assistant_screenshot) override;
   void StartTextInteraction(const std::string& query,
                             AssistantQuerySource source,
                             bool allow_tts) override;
@@ -71,7 +68,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
   void AddRemoteConversationObserver(ConversationObserver* observer) override {}
   void RemoveAssistantInteractionSubscriber(
       AssistantInteractionSubscriber* subscriber) override;
-  mojo::PendingReceiver<chromeos::libassistant::mojom::NotificationDelegate>
+  mojo::PendingReceiver<libassistant::mojom::NotificationDelegate>
   GetPendingNotificationDelegate() override;
   void RetrieveNotification(const AssistantNotification& notification,
                             int action_index) override;
@@ -93,6 +90,8 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
   // Return the Gaia ID that was passed to |SetUser|.
   absl::optional<std::string> gaia_id() { return gaia_id_; }
 
+  void Disconnected();
+
  private:
   // Send out a |AssistantStateObserver::OnStateChange(state)| event if we are
   // transitioning from a prior state to a later state.
@@ -105,7 +104,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) FakeAssistantManagerServiceImpl
   base::ObserverList<StateObserver> state_observers_;
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_TEST_SUPPORT_FAKE_ASSISTANT_MANAGER_SERVICE_IMPL_H_

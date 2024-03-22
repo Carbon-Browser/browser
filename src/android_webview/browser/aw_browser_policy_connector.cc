@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "android_webview/browser/aw_browser_process.h"
 #include "android_webview/browser/enterprise_authentication_app_link_policy_handler.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/policy/core/browser/configuration_policy_handler_list.h"
 #include "components/policy/core/browser/url_blocklist_policy_handler.h"
 #include "components/policy/core/common/android/android_combined_policy_provider.h"

@@ -1,20 +1,21 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/containers/contains.h"
-#include "base/run_loop.h"
+#include <cstdint>
+
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
-#include "chrome/browser/chromeos/app_mode/app_session.h"
+#include "base/test/test_future.h"
+#include "chrome/browser/chromeos/app_mode/kiosk_browser_session.h"
 #include "chrome/browser/lacros/app_mode/kiosk_session_service_lacros.h"
 #include "chrome/browser/lacros/browser_service_lacros.h"
-#include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lacros/profile_util.h"
+#include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
-#include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/sessions/exit_type_service.h"
@@ -25,9 +26,9 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/ui/profile_picker.h"
-#include "chrome/browser/ui/profile_ui_test_utils.h"
-#include "chrome/browser/ui/startup/lacros_first_run_service.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_ui_test_utils.h"
+#include "chrome/browser/ui/startup/first_run_service.h"
 #include "chrome/browser/ui/views/session_crashed_bubble_view.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
@@ -40,10 +41,12 @@
 #include "chromeos/startup/browser_params_proxy.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/window.h"
+#include "ui/display/screen.h"
 
 using crosapi::mojom::BrowserInitParams;
 using crosapi::mojom::BrowserInitParamsPtr;
@@ -56,7 +59,11 @@ constexpr char kNavigationUrl[] = "https://www.google.com/";
 
 class BrowserServiceLacrosBrowserTest : public InProcessBrowserTest {
  public:
-  BrowserServiceLacrosBrowserTest() = default;
+  BrowserServiceLacrosBrowserTest(
+      crosapi::mojom::SessionType session_type =
+          crosapi::mojom::SessionType::kRegularSession)
+      : session_type_(session_type) {}
+
   BrowserServiceLacrosBrowserTest(const BrowserServiceLacrosBrowserTest&) =
       delete;
   BrowserServiceLacrosBrowserTest& operator=(
@@ -67,37 +74,44 @@ class BrowserServiceLacrosBrowserTest : public InProcessBrowserTest {
     InProcessBrowserTest::SetUpOnMainThread();
   }
 
-  void SetSessionType(SessionType type) {
-    BrowserInitParamsPtr init_params = BrowserInitParams::New();
-    init_params->session_type = type;
+  void CreatedBrowserMainParts(
+      content::BrowserMainParts* browser_main_parts) override {
+    crosapi::mojom::BrowserInitParamsPtr init_params =
+        chromeos::BrowserInitParams::GetForTests()->Clone();
+    init_params->session_type = session_type_;
     chromeos::BrowserInitParams::SetInitParamsForTests(std::move(init_params));
+
+    InProcessBrowserTest::CreatedBrowserMainParts(browser_main_parts);
   }
 
   void CreateFullscreenWindow() {
     bool use_callback = false;
     browser_service()->NewFullscreenWindow(
         GURL(kNavigationUrl),
+        display::Screen::GetScreen()->GetDisplayForNewWindows().id(),
         base::BindLambdaForTesting([&](CreationResult result) {
           use_callback = true;
           EXPECT_EQ(result, CreationResult::kSuccess);
         }));
     EXPECT_TRUE(use_callback);
 
-    // Verify `AppSession` object is created when `NewFullscreenWindow` is
-    // called in the Web Kiosk session. Then, disable the `AttemptUserExit`
+    // Verify `KioskBrowserSession` object is created when `NewFullscreenWindow`
+    // is called in the Web Kiosk session. Then, disable the `AttemptUserExit`
     // method to do nothing.
     if (chromeos::BrowserParamsProxy::Get()->SessionType() ==
         SessionType::kWebKioskSession) {
-      chromeos::AppSession* app_session =
-          KioskSessionServiceLacros::Get()->GetAppSessionForTesting();
-      EXPECT_TRUE(app_session);
-      app_session->SetAttemptUserExitForTesting(base::DoNothing());
+      chromeos::KioskBrowserSession* session =
+          KioskSessionServiceLacros::Get()->GetKioskBrowserSessionForTesting();
+      EXPECT_TRUE(session);
+      session->SetAttemptUserExitForTesting(base::DoNothing());
     }
   }
 
   void CreateNewWindow() {
     Browser::Create(Browser::CreateParams(browser()->profile(), false));
   }
+
+  void OpenProfileManager() { browser_service()->OpenProfileManager(); }
 
   void VerifyFullscreenWindow() {
     // Verify the browser status.
@@ -113,18 +127,36 @@ class BrowserServiceLacrosBrowserTest : public InProcessBrowserTest {
     EXPECT_EQ(web_content->GetVisibleURL(), kNavigationUrl);
   }
 
-  void NewWindowSync(bool incognito, bool should_trigger_session_restore) {
-    base::RunLoop run_loop;
-    browser_service()->NewWindow(incognito, should_trigger_session_restore,
-                                 run_loop.QuitClosure());
-    run_loop.Run();
+  void NewWindowSync(bool incognito,
+                     bool should_trigger_session_restore,
+                     absl::optional<uint64_t> profile_id,
+                     CreationResult expected_result) {
+    base::test::TestFuture<CreationResult> new_window_future;
+    browser_service()->NewWindow(
+        incognito, should_trigger_session_restore,
+        display::Screen::GetScreen()->GetDisplayForNewWindows().id(),
+        profile_id, new_window_future.GetCallback());
+    ASSERT_TRUE(new_window_future.Wait())
+        << "NewWindow did not trigger the callback.";
+    EXPECT_EQ(new_window_future.Get(), expected_result);
   }
 
-  void NewTabSync(bool should_trigger_session_restore) {
-    base::RunLoop run_loop;
-    browser_service()->NewTab(should_trigger_session_restore,
-                              run_loop.QuitClosure());
-    run_loop.Run();
+  void NewTabSync(CreationResult expected_result) {
+    base::test::TestFuture<CreationResult> new_tab_future;
+    browser_service()->NewTab(new_tab_future.GetCallback());
+    ASSERT_TRUE(new_tab_future.Wait())
+        << "NewTab did not trigger the callback.";
+    EXPECT_EQ(new_tab_future.Get(), expected_result);
+  }
+
+  void LaunchSync(absl::optional<uint64_t> profile_id,
+                  CreationResult expected_result) {
+    base::test::TestFuture<CreationResult> launch_future;
+    browser_service()->Launch(
+        display::Screen::GetScreen()->GetDisplayForNewWindows().id(),
+        profile_id, launch_future.GetCallback());
+    ASSERT_TRUE(launch_future.Wait()) << "Launch did not trigger the callback.";
+    EXPECT_EQ(launch_future.Get(), expected_result);
   }
 
   BrowserServiceLacros* browser_service() const {
@@ -133,6 +165,7 @@ class BrowserServiceLacrosBrowserTest : public InProcessBrowserTest {
 
  private:
   std::unique_ptr<BrowserServiceLacros> browser_service_;
+  crosapi::mojom::SessionType session_type_;
 };
 
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest, NewFullscreenWindow) {
@@ -141,8 +174,115 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest, NewFullscreenWindow) {
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
+                       NewWindowWithProfileId) {
+  // Keep the browser process running during the test while the browser is
+  // closed.
+  ScopedKeepAlive keep_alive(KeepAliveOrigin::BROWSER,
+                             KeepAliveRestartOption::DISABLED);
+
+  // Start in a state with no browser windows opened.
+  CloseBrowserSynchronously(browser());
+  EXPECT_EQ(0u, chrome::GetTotalBrowserCount());
+
+  // Prepare the main profile.
+  ProfileManager* profile_manager = g_browser_process->profile_manager();
+  const base::FilePath main_profile_path =
+      ProfileManager::GetPrimaryUserProfilePath();
+  Profile* main_profile = profile_manager->GetProfileByPath(main_profile_path);
+  const uint64_t main_profile_id =
+      HashProfilePathToProfileId(main_profile_path);
+
+  // Prepare the secondary profile.
+  const base::FilePath secondary_profile_path =
+      profile_manager->user_data_dir().Append(FILE_PATH_LITERAL("Profile 2"));
+  Profile& profile = profiles::testing::CreateProfileSync(
+      profile_manager, secondary_profile_path);
+  Profile* secondary_profile = &profile;
+  const uint64_t secondary_profile_id =
+      HashProfilePathToProfileId(secondary_profile_path);
+
+  // Create a new browser window with main profile by unset profile ID.
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/absl::nullopt, CreationResult::kSuccess);
+  EXPECT_EQ(1u, chrome::GetBrowserCount(main_profile));
+
+  // Create a new browser window with main profile by profile ID zero.
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/0, CreationResult::kSuccess);
+  EXPECT_EQ(2u, chrome::GetBrowserCount(main_profile));
+
+  // Create a new browser window with main profile by main profile ID.
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                main_profile_id, CreationResult::kSuccess);
+  EXPECT_EQ(3u, chrome::GetBrowserCount(main_profile));
+
+  // Create a new browser window with secondary profile by secondary profile ID.
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                secondary_profile_id, CreationResult::kSuccess);
+  EXPECT_EQ(1u, chrome::GetBrowserCount(secondary_profile));
+
+  // Try to create a new browser window with non-exist profile.
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/1, CreationResult::kProfileNotExist);
+  EXPECT_TRUE(ProfilePicker::IsOpen());
+}
+
+IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest, LaunchWithProfileId) {
+  // Keep the browser process running during the test while the browser is
+  // closed.
+  ScopedKeepAlive keep_alive(KeepAliveOrigin::BROWSER,
+                             KeepAliveRestartOption::DISABLED);
+
+  // Start in a state with no browser windows opened.
+  CloseBrowserSynchronously(browser());
+  EXPECT_EQ(0u, chrome::GetTotalBrowserCount());
+
+  // Prepare the main profile.
+  ProfileManager* profile_manager = g_browser_process->profile_manager();
+  const base::FilePath main_profile_path =
+      ProfileManager::GetPrimaryUserProfilePath();
+  Profile* main_profile = profile_manager->GetProfileByPath(main_profile_path);
+  const uint64_t main_profile_id =
+      HashProfilePathToProfileId(main_profile_path);
+
+  // Prepare the secondary profile.
+  const base::FilePath secondary_profile_path =
+      profile_manager->user_data_dir().Append(FILE_PATH_LITERAL("Profile 2"));
+  Profile& profile = profiles::testing::CreateProfileSync(
+      profile_manager, secondary_profile_path);
+  Profile* secondary_profile = &profile;
+  const uint64_t secondary_profile_id =
+      HashProfilePathToProfileId(secondary_profile_path);
+
+  // Launch a new browser tab with main profile by profile ID zero.
+  LaunchSync(/*profile_id=*/0, CreationResult::kSuccess);
+  ui_test_utils::WaitForBrowserToOpen();
+  EXPECT_EQ(1u, chrome::GetBrowserCount(main_profile));
+
+  // Launch a new browser tab with main profile by main profile ID.
+  LaunchSync(main_profile_id, CreationResult::kSuccess);
+  EXPECT_EQ(1u, chrome::GetBrowserCount(main_profile));
+
+  // Launch a new browser window with secondary profile by secondary profile ID.
+  LaunchSync(secondary_profile_id, CreationResult::kSuccess);
+  ui_test_utils::WaitForBrowserToOpen();
+  EXPECT_EQ(1u, chrome::GetBrowserCount(secondary_profile));
+
+  // Try to launch a new browser window with non-exist profile.
+  LaunchSync(/*profile_id=*/1, CreationResult::kProfileNotExist);
+  EXPECT_TRUE(ProfilePicker::IsOpen());
+}
+
+class BrowserServiceLacrosKioskBrowserTest
+    : public BrowserServiceLacrosBrowserTest {
+ public:
+  BrowserServiceLacrosKioskBrowserTest()
+      : BrowserServiceLacrosBrowserTest(
+            crosapi::mojom::SessionType::kWebKioskSession) {}
+};
+
+IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosKioskBrowserTest,
                        BlockAdditionalWindowsInWebKiosk) {
-  SetSessionType(SessionType::kWebKioskSession);
   CreateFullscreenWindow();
 
   // The new window should be blocked in the web Kiosk session.
@@ -154,13 +294,26 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
                        AllowAdditionalWindowsInRegularSession) {
-  SetSessionType(SessionType::kRegularSession);
   CreateFullscreenWindow();
 
   // The new window should be allowed in the regular session.
   const size_t browser_count = BrowserList::GetInstance()->size();
   CreateNewWindow();
   EXPECT_EQ(BrowserList::GetInstance()->size(), browser_count + 1);
+}
+
+IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
+                       OpenProfileManagerTest) {
+  // Keep the browser process running during the test while the browser is
+  // closed.
+  ScopedKeepAlive keep_alive(KeepAliveOrigin::BROWSER,
+                             KeepAliveRestartOption::DISABLED);
+  // Start in a state with no browser windows opened.
+  CloseBrowserSynchronously(browser());
+  EXPECT_EQ(0u, chrome::GetTotalBrowserCount());
+  EXPECT_FALSE(ProfilePicker::IsOpen());
+  OpenProfileManager();
+  EXPECT_TRUE(ProfilePicker::IsOpen());
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
@@ -177,23 +330,25 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
 
   // `NewWindow()` should create a new window if the system has only one
   // profile.
-  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false);
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/absl::nullopt, CreationResult::kSuccess);
   EXPECT_FALSE(ProfilePicker::IsOpen());
   EXPECT_EQ(1u, chrome::GetTotalBrowserCount());
 
   // Create an additional profile.
   base::FilePath path_profile2 =
       profile_manager->user_data_dir().Append(FILE_PATH_LITERAL("Profile 2"));
-  Profile* profile2 =
+  Profile& profile2 =
       profiles::testing::CreateProfileSync(profile_manager, path_profile2);
   // Open a browser window to make it the last used profile.
-  chrome::NewEmptyWindow(profile2);
+  chrome::NewEmptyWindow(&profile2);
   Browser* browser2 = ui_test_utils::WaitForBrowserToOpen();
   EXPECT_EQ(2u, chrome::GetTotalBrowserCount());
 
   // Profile picker does _not_ open for incognito windows. Instead, the
   // incognito window for the main profile is directly opened.
-  NewWindowSync(/*incognito=*/true, /*should_trigger_session_restore=*/false);
+  NewWindowSync(/*incognito=*/true, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/absl::nullopt, CreationResult::kSuccess);
   EXPECT_FALSE(ProfilePicker::IsOpen());
   EXPECT_EQ(3u, chrome::GetTotalBrowserCount());
   Profile* profile = BrowserList::GetInstance()->GetLastActive()->profile();
@@ -204,7 +359,8 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
   BrowserList::SetLastActive(browser2);
   // Profile picker does _not_ open if Chrome already has opened windows.
   // Instead, a new browser window for the main profile is directly opened.
-  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false);
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/absl::nullopt, CreationResult::kSuccess);
   EXPECT_FALSE(ProfilePicker::IsOpen());
   // A new browser is created for the main profile.
   EXPECT_EQ(BrowserList::GetInstance()->GetLastActive()->profile()->GetPath(),
@@ -213,11 +369,14 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
 
   size_t browser_count = chrome::GetTotalBrowserCount();
   chrome::CloseAllBrowsers();
-  for (size_t i = 0; i < browser_count; ++i)
+  for (size_t i = 0; i < browser_count; ++i) {
     ui_test_utils::WaitForBrowserToClose();
+  }
 
   // `NewWindow()` should open the profile picker.
-  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false);
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/absl::nullopt,
+                CreationResult::kBrowserWindowUnavailable);
   EXPECT_TRUE(ProfilePicker::IsOpen());
 }
 
@@ -233,7 +392,7 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
 
   // `NewTab()` should create a new window if the system has only one
   // profile.
-  NewTabSync(/*should_trigger_session_restore=*/true);
+  NewTabSync(CreationResult::kSuccess);
   EXPECT_EQ(1u, chrome::GetTotalBrowserCount());
   EXPECT_FALSE(ProfilePicker::IsOpen());
   ProfileManager* profile_manager = g_browser_process->profile_manager();
@@ -244,7 +403,7 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
   EXPECT_EQ(1, tab_strip->count());
 
   // Consequent `NewTab()` should add a new tab to an existing browser.
-  NewTabSync(/*should_trigger_session_restore=*/true);
+  NewTabSync(CreationResult::kSuccess);
   EXPECT_EQ(2, tab_strip->count());
   EXPECT_FALSE(ProfilePicker::IsOpen());
 }
@@ -261,16 +420,16 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   base::FilePath profile2_path =
       profile_manager->user_data_dir().Append(FILE_PATH_LITERAL("Profile 2"));
-  Profile* profile2 =
+  Profile& profile2 =
       profiles::testing::CreateProfileSync(profile_manager, profile2_path);
-  chrome::NewEmptyWindow(profile2);
+  chrome::NewEmptyWindow(&profile2);
   ui_test_utils::WaitForBrowserToOpen();
   EXPECT_EQ(2u, chrome::GetTotalBrowserCount());
   auto* tab_strip = browser()->tab_strip_model();
   EXPECT_EQ(1, tab_strip->count());
 
   // `NewTab()` should add a tab to the main profile window;
-  NewTabSync(/*should_trigger_session_restore=*/true);
+  NewTabSync(CreationResult::kSuccess);
   EXPECT_EQ(2, tab_strip->count());
 
   chrome::CloseAllBrowsers();
@@ -280,7 +439,7 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
   EXPECT_EQ(0u, chrome::GetTotalBrowserCount());
 
   // `NewTab()` should open the profile picker.
-  NewTabSync(/*should_trigger_session_restore=*/true);
+  NewTabSync(CreationResult::kBrowserWindowUnavailable);
   EXPECT_EQ(0u, chrome::GetTotalBrowserCount());
   EXPECT_TRUE(ProfilePicker::IsOpen());
 }
@@ -299,68 +458,24 @@ class BrowserServiceLacrosWindowlessBrowserTest
   }
 
   void DisableWelcomePages(const std::vector<Profile*>& profiles) {
-    for (Profile* profile : profiles)
+    for (Profile* profile : profiles) {
       profile->GetPrefs()->SetBoolean(prefs::kHasSeenWelcomePage, true);
+    }
 
     // Also disable What's New.
     PrefService* pref_service = g_browser_process->local_state();
     pref_service->SetInteger(prefs::kLastWhatsNewVersion, CHROME_VERSION_MAJOR);
   }
-
-  // Creates a new profile with a URLS startup preference and an open tab.
-  void SetupSingleProfileWithURLSPreference() {
-    ProfileManager* profile_manager = g_browser_process->profile_manager();
-
-    ASSERT_TRUE(embedded_test_server()->Start());
-
-    // Create two profiles.
-    base::FilePath dest_path = profile_manager->user_data_dir();
-
-    Profile* profile = nullptr;
-    {
-      base::ScopedAllowBlockingForTesting allow_blocking;
-      profile = profile_manager->GetProfile(
-          dest_path.Append(FILE_PATH_LITERAL("New Profile")));
-      ASSERT_TRUE(profile);
-    }
-    DisableWelcomePages({profile});
-
-    // Don't delete Profile too early.
-    ScopedProfileKeepAlive profile_keep_alive(
-        profile, ProfileKeepAliveOrigin::kBrowserWindow);
-
-    // Open some urls in the browser.
-    Browser* browser = Browser::Create(
-        Browser::CreateParams(Browser::TYPE_NORMAL, profile, true));
-    chrome::NewTab(browser);
-    ASSERT_TRUE(ui_test_utils::NavigateToURL(
-        browser, embedded_test_server()->GetURL("/empty.html")));
-
-    // Establish the startup preference.
-    std::vector<GURL> urls;
-    urls.push_back(ui_test_utils::GetTestUrl(
-        base::FilePath(base::FilePath::kCurrentDirectory),
-        base::FilePath(FILE_PATH_LITERAL("title1.html"))));
-    urls.push_back(ui_test_utils::GetTestUrl(
-        base::FilePath(base::FilePath::kCurrentDirectory),
-        base::FilePath(FILE_PATH_LITERAL("title2.html"))));
-
-    // Set different startup preferences for the profile.
-    SessionStartupPref pref(SessionStartupPref::URLS);
-    pref.urls = urls;
-    SessionStartupPref::SetStartupPref(profile, pref);
-    profile->GetPrefs()->CommitPendingWrite();
-
-    // Ensure the session ends with the profile created above.
-    auto last_opened_profiles =
-        g_browser_process->profile_manager()->GetLastOpenedProfiles();
-    EXPECT_EQ(1u, last_opened_profiles.size());
-    EXPECT_TRUE(base::Contains(last_opened_profiles, profile));
-  }
 };
 
+// TODO(crbug.com/1447850) This test constantly fail for internal builder.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#define MAYBE_HandlesUncleanExit DISABLED_HandlesUncleanExit
+#else
+#define MAYBE_HandlesUncleanExit HandlesUncleanExit
+#endif
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
-                       HandlesUncleanExit) {
+                       MAYBE_HandlesUncleanExit) {
   // Browser launch should be suppressed with the kNoStartupWindow switch.
   ASSERT_FALSE(browser());
 
@@ -378,254 +493,13 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
 
   // Opening a new window should suppress the profile picker and the crash
   // restore bubble should be showing.
-  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/true);
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/true,
+                /*profile_id=*/absl::nullopt, CreationResult::kUnknown);
 
   EXPECT_FALSE(ProfilePicker::IsOpen());
   views::BubbleDialogDelegate* crash_bubble_delegate =
       SessionCrashedBubbleView::GetInstanceForTest();
   EXPECT_TRUE(crash_bubble_delegate);
-}
-
-IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
-                       PRE_FullRestoreWithTwoProfiles) {
-  // Simulate a full restore by creating the profiles in a PRE_ test.
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-
-  ASSERT_TRUE(embedded_test_server()->Start());
-
-  // Create two profiles.
-  base::FilePath dest_path = profile_manager->user_data_dir();
-
-  Profile* profile1 = nullptr;
-  Profile* profile2 = nullptr;
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    profile1 = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile 1")));
-    ASSERT_TRUE(profile1);
-
-    profile2 = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
-    ASSERT_TRUE(profile2);
-  }
-  DisableWelcomePages({profile1, profile2});
-
-  // Don't delete Profiles too early.
-  ScopedProfileKeepAlive profile1_keep_alive(
-      profile1, ProfileKeepAliveOrigin::kBrowserWindow);
-  ScopedProfileKeepAlive profile2_keep_alive(
-      profile2, ProfileKeepAliveOrigin::kBrowserWindow);
-
-  // Open some urls with the browsers, and close them.
-  Browser* browser1 = Browser::Create(
-      Browser::CreateParams(Browser::TYPE_NORMAL, profile1, true));
-  chrome::NewTab(browser1);
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser1, embedded_test_server()->GetURL("/empty.html")));
-
-  Browser* browser2 = Browser::Create(
-      Browser::CreateParams(Browser::TYPE_NORMAL, profile2, true));
-  chrome::NewTab(browser2);
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser2, embedded_test_server()->GetURL("/form.html")));
-
-  // Set different startup preferences for the 2 profiles.
-  std::vector<GURL> urls1;
-  urls1.push_back(ui_test_utils::GetTestUrl(
-      base::FilePath(base::FilePath::kCurrentDirectory),
-      base::FilePath(FILE_PATH_LITERAL("title1.html"))));
-  std::vector<GURL> urls2;
-  urls2.push_back(ui_test_utils::GetTestUrl(
-      base::FilePath(base::FilePath::kCurrentDirectory),
-      base::FilePath(FILE_PATH_LITERAL("title2.html"))));
-
-  // Set different startup preferences for the 2 profiles.
-  SessionStartupPref pref1(SessionStartupPref::URLS);
-  pref1.urls = urls1;
-  SessionStartupPref::SetStartupPref(profile1, pref1);
-  SessionStartupPref pref2(SessionStartupPref::URLS);
-  pref2.urls = urls2;
-  SessionStartupPref::SetStartupPref(profile2, pref2);
-
-  profile1->GetPrefs()->CommitPendingWrite();
-  profile2->GetPrefs()->CommitPendingWrite();
-
-  // Ensure the session ends with the above two profiles.
-  auto last_opened_profiles =
-      g_browser_process->profile_manager()->GetLastOpenedProfiles();
-  EXPECT_EQ(2u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile1));
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile2));
-}
-
-IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
-                       FullRestoreWithTwoProfiles) {
-  // Browser launch should be suppressed with the kNoStartupWindow switch.
-  ASSERT_FALSE(browser());
-
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-
-  // Open the two profiles.
-  base::FilePath dest_path = profile_manager->user_data_dir();
-
-  Profile* profile1 = nullptr;
-  Profile* profile2 = nullptr;
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    profile1 = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile 1")));
-    ASSERT_TRUE(profile1);
-
-    profile2 = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile 2")));
-    ASSERT_TRUE(profile2);
-  }
-
-  // The profiles to be restored should match those setup in the PRE_ test.
-  auto last_opened_profiles =
-      g_browser_process->profile_manager()->GetLastOpenedProfiles();
-  EXPECT_EQ(2u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile1));
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile2));
-
-  // Trigger Lacros full restore.
-  base::RunLoop run_loop;
-  testing::SessionsRestoredWaiter restore_waiter(run_loop.QuitClosure(), 2);
-  browser_service()->OpenForFullRestore(/*skip_crash_restore=*/true);
-  run_loop.Run();
-
-  // The startup URLs are ignored, and instead the last open sessions are
-  // restored.
-  EXPECT_TRUE(profile1->restored_last_session());
-  EXPECT_TRUE(profile2->restored_last_session());
-
-  Browser* new_browser = nullptr;
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile1));
-  new_browser = chrome::FindBrowserWithProfile(profile1);
-  ASSERT_TRUE(new_browser);
-  TabStripModel* tab_strip = new_browser->tab_strip_model();
-  ASSERT_EQ(1, tab_strip->count());
-  EXPECT_EQ("/empty.html",
-            tab_strip->GetWebContentsAt(0)->GetLastCommittedURL().path());
-
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile2));
-  new_browser = chrome::FindBrowserWithProfile(profile2);
-  ASSERT_TRUE(new_browser);
-  tab_strip = new_browser->tab_strip_model();
-  ASSERT_EQ(1, tab_strip->count());
-  EXPECT_EQ("/form.html",
-            tab_strip->GetWebContentsAt(0)->GetLastCommittedURL().path());
-}
-
-IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
-                       PRE_FullRestoreDoNotSkipCrashRestore) {
-  // Simulate a full restore by setting up a profile in a PRE_ test.
-  SetupSingleProfileWithURLSPreference();
-}
-
-IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
-                       FullRestoreDoNotSkipCrashRestore) {
-  // Browser launch should be suppressed with the kNoStartupWindow switch.
-  ASSERT_FALSE(browser());
-
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-
-  // Open the profile.
-  base::FilePath dest_path = profile_manager->user_data_dir();
-
-  Profile* profile = nullptr;
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    profile = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile")));
-    ASSERT_TRUE(profile);
-  }
-
-  // The profile to be restored should match the one in the PRE_ test.
-  auto last_opened_profiles =
-      g_browser_process->profile_manager()->GetLastOpenedProfiles();
-  EXPECT_EQ(1u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile));
-
-  // Disable the profile picker and set the exit type to crashed.
-  g_browser_process->local_state()->SetInteger(
-      prefs::kBrowserProfilePickerAvailabilityOnStartup,
-      static_cast<int>(ProfilePicker::AvailabilityOnStartup::kDisabled));
-  ExitTypeService::GetInstanceForProfile(profile)
-      ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
-
-  // Trigger Lacros full restore but do not skip crash restore prompts.
-  browser_service()->OpenForFullRestore(/*skip_crash_restore=*/false);
-
-  // The browser should not be restored but instead we should have the browser's
-  // crash restore bubble prompt.
-  Browser* new_browser = nullptr;
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile));
-  new_browser = chrome::FindBrowserWithProfile(profile);
-  ASSERT_TRUE(new_browser);
-
-  TabStripModel* tab_strip = new_browser->tab_strip_model();
-  ASSERT_EQ(1, tab_strip->count());
-  EXPECT_TRUE(content::WaitForLoadStop(tab_strip->GetWebContentsAt(0)));
-
-  views::BubbleDialogDelegate* crash_bubble_delegate =
-      SessionCrashedBubbleView::GetInstanceForTest();
-  EXPECT_TRUE(crash_bubble_delegate);
-}
-
-IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
-                       PRE_FullRestoreSkipCrashRestore) {
-  // Simulate a full restore by setting up a profile in a PRE_ test.
-  SetupSingleProfileWithURLSPreference();
-}
-
-IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
-                       FullRestoreSkipCrashRestore) {
-  // Browser launch should be suppressed with the kNoStartupWindow switch.
-  ASSERT_FALSE(browser());
-
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-
-  // Open the profile.
-  base::FilePath dest_path = profile_manager->user_data_dir();
-
-  Profile* profile = nullptr;
-  {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    profile = profile_manager->GetProfile(
-        dest_path.Append(FILE_PATH_LITERAL("New Profile")));
-    ASSERT_TRUE(profile);
-  }
-
-  // The profile to be restored should match the one in the PRE_ test.
-  auto last_opened_profiles =
-      g_browser_process->profile_manager()->GetLastOpenedProfiles();
-  EXPECT_EQ(1u, last_opened_profiles.size());
-  EXPECT_TRUE(base::Contains(last_opened_profiles, profile));
-
-  // Disable the profile picker and set the exit type to crashed.
-  g_browser_process->local_state()->SetInteger(
-      prefs::kBrowserProfilePickerAvailabilityOnStartup,
-      static_cast<int>(ProfilePicker::AvailabilityOnStartup::kDisabled));
-  ExitTypeService::GetInstanceForProfile(profile)
-      ->SetLastSessionExitTypeForTest(ExitType::kCrashed);
-
-  // Trigger Lacros full restore and skip crash restore prompts.
-  base::RunLoop run_loop;
-  testing::SessionsRestoredWaiter restore_waiter(run_loop.QuitClosure(), 1);
-  browser_service()->OpenForFullRestore(/*skip_crash_restore=*/true);
-  run_loop.Run();
-
-  // The browser should be restored (ignoring startup preference).
-  Browser* new_browser = nullptr;
-  ASSERT_EQ(1u, chrome::GetBrowserCount(profile));
-  new_browser = chrome::FindBrowserWithProfile(profile);
-  ASSERT_TRUE(new_browser);
-
-  TabStripModel* tab_strip = new_browser->tab_strip_model();
-  ASSERT_EQ(1, tab_strip->count());
-  EXPECT_EQ("/empty.html",
-            tab_strip->GetWebContentsAt(0)->GetLastCommittedURL().path());
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
@@ -669,31 +543,30 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosWindowlessBrowserTest,
   CloseBrowserSynchronously(browser);
   EXPECT_EQ(0u, BrowserList::GetInstance()->size());
 
-  // Trigger a new tab with session restore.
-  base::RunLoop run_loop;
-  testing::SessionsRestoredWaiter restore_waiter(run_loop.QuitClosure(), 1);
-  NewTabSync(/*should_trigger_session_restore=*/true);
-  run_loop.Run();
+  // Open browser with session restore.
+  base::test::TestFuture<void> restore_waiter_future;
+  testing::SessionsRestoredWaiter restore_waiter(
+      restore_waiter_future.GetCallback(), 1);
+  LaunchSync(/*profile_id=*/absl::nullopt, CreationResult::kSuccess);
+  ASSERT_TRUE(restore_waiter_future.Wait())
+      << "restore_waiter did not trigger the callback.";
 
   EXPECT_EQ(1u, BrowserList::GetInstance()->size());
   auto* new_browser = chrome::FindBrowserWithProfile(profile);
   ASSERT_TRUE(new_browser);
   auto* new_tab_strip = new_browser->tab_strip_model();
-  ASSERT_EQ(3, new_tab_strip->count());
+  ASSERT_EQ(2, new_tab_strip->count());
 
-  EXPECT_EQ("",  // The new tab.
-            new_tab_strip->GetWebContentsAt(0)->GetLastCommittedURL().path());
   EXPECT_EQ("/title1.html",
-            new_tab_strip->GetWebContentsAt(1)->GetLastCommittedURL().path());
+            new_tab_strip->GetWebContentsAt(0)->GetLastCommittedURL().path());
   EXPECT_EQ("/title2.html",
-            new_tab_strip->GetWebContentsAt(2)->GetLastCommittedURL().path());
+            new_tab_strip->GetWebContentsAt(1)->GetLastCommittedURL().path());
 
-  // A second call to NewTab() ignores session restore and adds yet another new
-  // tab to the existing browser.
-  NewTabSync(/*should_trigger_session_restore=*/true);
-
+  // A second call to Launch() ignores session restore and adds a new tab to the
+  // existing browser.
+  LaunchSync(/*profile_id=*/absl::nullopt, CreationResult::kSuccess);
   EXPECT_EQ(1u, BrowserList::GetInstance()->size());
-  ASSERT_EQ(4, new_tab_strip->count());
+  ASSERT_EQ(3, new_tab_strip->count());
 }
 
 // Tests that requesting an incognito window when incognito mode is disallowed
@@ -706,9 +579,10 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
       ProfileManager::GetPrimaryUserProfilePath());
   // Disallow incognito.
   IncognitoModePrefs::SetAvailability(
-      main_profile->GetPrefs(), IncognitoModePrefs::Availability::kDisabled);
+      main_profile->GetPrefs(), policy::IncognitoModeAvailability::kDisabled);
   // Request a new incognito window.
-  NewWindowSync(/*incognito=*/true, /*should_trigger_session_restore=*/false);
+  NewWindowSync(/*incognito=*/true, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/absl::nullopt, CreationResult::kSuccess);
   // A regular window opens instead.
   EXPECT_FALSE(ProfilePicker::IsOpen());
   Profile* profile = BrowserList::GetInstance()->GetLastActive()->profile();
@@ -720,6 +594,11 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosBrowserTest,
 class BrowserServiceLacrosNonSyncingProfilesBrowserTest
     : public BrowserServiceLacrosBrowserTest {
  public:
+  BrowserServiceLacrosNonSyncingProfilesBrowserTest(
+      crosapi::mojom::SessionType session_type =
+          crosapi::mojom::SessionType::kRegularSession)
+      : BrowserServiceLacrosBrowserTest(session_type) {}
+
   // BrowserServiceLacrosBrowserTest:
   void SetUpDefaultCommandLine(base::CommandLine* command_line) override {
     BrowserServiceLacrosBrowserTest::SetUpDefaultCommandLine(command_line);
@@ -734,6 +613,12 @@ class BrowserServiceLacrosNonSyncingProfilesBrowserTest
       // will then be available to the subsequent steps of the test.
       command_line->RemoveSwitch(switches::kNoFirstRun);
     }
+  }
+
+  Profile* GetPrimaryProfile() {
+    ProfileManager* profile_manager = g_browser_process->profile_manager();
+    return profile_manager->GetProfile(
+        profile_manager->GetPrimaryUserProfilePath());
   }
 
   const base::HistogramTester& histogram_tester() { return histogram_tester_; }
@@ -755,25 +640,27 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesBrowserTest,
 }
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesBrowserTest,
                        NewWindow_OpensFirstRun) {
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-  EXPECT_TRUE(ShouldOpenPrimaryProfileFirstRun(profile_manager->GetProfile(
-      profile_manager->GetPrimaryUserProfilePath())));
+  EXPECT_TRUE(ShouldOpenFirstRun(GetPrimaryProfile()));
   EXPECT_EQ(0u, BrowserList::GetInstance()->size());
   histogram_tester().ExpectTotalCount(
       "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
 
-  base::RunLoop run_loop;
+  base::test::TestFuture<CreationResult> new_window_future;
   browser_service()->NewWindow(
       /*incognito=*/false, /*should_trigger_session_restore=*/false,
-      /*callback=*/run_loop.QuitClosure());
+      display::Screen::GetScreen()->GetDisplayForNewWindows().id(),
+      /*profile_id=*/absl::nullopt,
+      /*callback=*/new_window_future.GetCallback());
   profiles::testing::CompleteLacrosFirstRun(LoginUIService::ABORT_SYNC);
 
-  run_loop.Run();
+  ASSERT_TRUE(new_window_future.Wait())
+      << "NewWindow did not trigger the callback.";
+  EXPECT_EQ(new_window_future.Get(), CreationResult::kSuccess);
 
   EXPECT_EQ(1u, BrowserList::GetInstance()->size());
   histogram_tester().ExpectUniqueSample(
       "Profile.LacrosPrimaryProfileFirstRunEntryPoint",
-      LacrosFirstRunService::EntryPoint::kOther, 1);
+      FirstRunService::EntryPoint::kOther, 1);
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesBrowserTest,
@@ -782,27 +669,30 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesBrowserTest,
   histogram_tester().ExpectTotalCount(
       "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
 }
+
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesBrowserTest,
                        NewWindow_OpensFirstRun_UiClose) {
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-  EXPECT_TRUE(ShouldOpenPrimaryProfileFirstRun(profile_manager->GetProfile(
-      profile_manager->GetPrimaryUserProfilePath())));
+  EXPECT_TRUE(ShouldOpenFirstRun(GetPrimaryProfile()));
   EXPECT_EQ(0u, BrowserList::GetInstance()->size());
   histogram_tester().ExpectTotalCount(
       "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
 
-  base::RunLoop run_loop;
+  base::test::TestFuture<CreationResult> new_window_future;
   browser_service()->NewWindow(
       /*incognito=*/false, /*should_trigger_session_restore=*/false,
-      /*callback=*/run_loop.QuitClosure());
+      display::Screen::GetScreen()->GetDisplayForNewWindows().id(),
+      /*profile_id=*/absl::nullopt,
+      /*callback=*/new_window_future.GetCallback());
   profiles::testing::CompleteLacrosFirstRun(LoginUIService::UI_CLOSED);
 
-  run_loop.Run();
+  ASSERT_TRUE(new_window_future.Wait())
+      << "NewWindow did not trigger the callback.";
+  EXPECT_EQ(new_window_future.Get(), CreationResult::kProfileNotExist);
 
   EXPECT_EQ(0u, BrowserList::GetInstance()->size());
   histogram_tester().ExpectUniqueSample(
       "Profile.LacrosPrimaryProfileFirstRunEntryPoint",
-      LacrosFirstRunService::EntryPoint::kOther, 1);
+      FirstRunService::EntryPoint::kOther, 1);
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesBrowserTest,
@@ -813,23 +703,81 @@ IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesBrowserTest,
 }
 IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesBrowserTest,
                        NewTab_OpensFirstRun) {
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-  EXPECT_TRUE(ShouldOpenPrimaryProfileFirstRun(profile_manager->GetProfile(
-      profile_manager->GetPrimaryUserProfilePath())));
+  EXPECT_TRUE(ShouldOpenFirstRun(GetPrimaryProfile()));
   EXPECT_EQ(0u, BrowserList::GetInstance()->size());
   histogram_tester().ExpectTotalCount(
       "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
 
-  base::RunLoop run_loop;
+  base::test::TestFuture<CreationResult> new_tab_future;
   browser_service()->NewTab(
-      /*should_trigger_session_restore=*/false,
-      /*callback=*/run_loop.QuitClosure());
+      /*callback=*/new_tab_future.GetCallback());
   profiles::testing::CompleteLacrosFirstRun(LoginUIService::ABORT_SYNC);
 
-  run_loop.Run();
+  ASSERT_TRUE(new_tab_future.Wait()) << "NewTab did not trigger the callback.";
+  EXPECT_EQ(new_tab_future.Get(), CreationResult::kSuccess);
 
   EXPECT_EQ(1u, BrowserList::GetInstance()->size());
   histogram_tester().ExpectUniqueSample(
       "Profile.LacrosPrimaryProfileFirstRunEntryPoint",
-      LacrosFirstRunService::EntryPoint::kOther, 1);
+      FirstRunService::EntryPoint::kOther, 1);
+}
+
+class BrowserServiceLacrosNonSyncingProfilesGuestBrowserTest
+    : public BrowserServiceLacrosNonSyncingProfilesBrowserTest {
+ public:
+  BrowserServiceLacrosNonSyncingProfilesGuestBrowserTest()
+      : BrowserServiceLacrosNonSyncingProfilesBrowserTest(
+            crosapi::mojom::SessionType::kGuestSession) {}
+};
+
+IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesGuestBrowserTest,
+                       PRE_NewWindow_OpensFirstRun) {
+  // Dummy case to set up the primary profile.
+  histogram_tester().ExpectTotalCount(
+      "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
+}
+IN_PROC_BROWSER_TEST_F(BrowserServiceLacrosNonSyncingProfilesGuestBrowserTest,
+                       NewWindow_OpensFirstRun) {
+  EXPECT_FALSE(ShouldOpenFirstRun(GetPrimaryProfile()));
+  EXPECT_EQ(0u, BrowserList::GetInstance()->size());
+  histogram_tester().ExpectTotalCount(
+      "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
+
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/absl::nullopt, CreationResult::kSuccess);
+
+  EXPECT_EQ(1u, BrowserList::GetInstance()->size());
+  histogram_tester().ExpectTotalCount(
+      "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
+}
+
+class BrowserServiceLacrosNonSyncingProfilesWebKioskBrowserTest
+    : public BrowserServiceLacrosNonSyncingProfilesBrowserTest {
+ public:
+  BrowserServiceLacrosNonSyncingProfilesWebKioskBrowserTest()
+      : BrowserServiceLacrosNonSyncingProfilesBrowserTest(
+            crosapi::mojom::SessionType::kWebKioskSession) {}
+};
+
+IN_PROC_BROWSER_TEST_F(
+    BrowserServiceLacrosNonSyncingProfilesWebKioskBrowserTest,
+    PRE_NewWindow_OpensFirstRun) {
+  // Dummy case to set up the primary profile.
+  histogram_tester().ExpectTotalCount(
+      "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
+}
+IN_PROC_BROWSER_TEST_F(
+    BrowserServiceLacrosNonSyncingProfilesWebKioskBrowserTest,
+    NewWindow_OpensFirstRun) {
+  EXPECT_FALSE(ShouldOpenFirstRun(GetPrimaryProfile()));
+  EXPECT_EQ(0u, BrowserList::GetInstance()->size());
+  histogram_tester().ExpectTotalCount(
+      "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
+
+  NewWindowSync(/*incognito=*/false, /*should_trigger_session_restore=*/false,
+                /*profile_id=*/absl::nullopt, CreationResult::kSuccess);
+
+  EXPECT_EQ(1u, BrowserList::GetInstance()->size());
+  histogram_tester().ExpectTotalCount(
+      "Profile.LacrosPrimaryProfileFirstRunEntryPoint", 0);
 }

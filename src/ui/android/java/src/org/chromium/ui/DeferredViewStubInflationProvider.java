@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,10 @@ public class DeferredViewStubInflationProvider<T extends View> implements ViewPr
     public DeferredViewStubInflationProvider(ViewStub viewStub) {
         assert viewStub != null : "ViewStub to inflate may not be null!";
         mViewStub = viewStub;
-        mViewStub.setOnInflateListener((stub, inflated) -> { mViewPromise.fulfill((T) inflated); });
+        mViewStub.setOnInflateListener(
+                (stub, inflated) -> {
+                    mViewPromise.fulfill((T) inflated);
+                });
     }
 
     @Override

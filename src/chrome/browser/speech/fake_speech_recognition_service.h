@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "media/mojo/mojom/audio_data.mojom.h"
 #include "media/mojo/mojom/speech_recognition.mojom.h"
 #include "media/mojo/mojom/speech_recognition_service.mojom.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -69,6 +70,7 @@ class FakeSpeechRecognitionService
   void SendAudioToSpeechRecognitionService(
       media::mojom::AudioDataS16Ptr buffer) override;
   void OnLanguageChanged(const std::string& language) override {}
+  void OnMaskOffensiveWordsChanged(bool mask_offensive_words) override {}
   void MarkDone() override;
 
   // Methods for testing plumbing to SpeechRecognitionRecognizerClient.

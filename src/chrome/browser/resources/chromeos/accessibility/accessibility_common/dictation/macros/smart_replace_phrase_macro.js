@@ -1,7 +1,8 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {Context, ContextChecker} from '../context_checker.js';
 import {InputController} from '../input_controller.js';
 
 import {Macro, MacroError} from './macro.js';
@@ -18,7 +19,9 @@ export class SmartReplacePhraseMacro extends Macro {
    * @param {string} insertPhrase
    */
   constructor(inputController, deletePhrase, insertPhrase) {
-    super(MacroName.SMART_REPLACE_PHRASE);
+    super(
+        MacroName.SMART_REPLACE_PHRASE,
+        new ContextChecker(inputController).add(Context.EMPTY_EDITABLE));
     /** @private {!InputController} */
     this.inputController_ = inputController;
     /** @private {string} */
@@ -26,13 +29,9 @@ export class SmartReplacePhraseMacro extends Macro {
     /** @private {string} */
     this.insertPhrase_ = insertPhrase;
   }
+
   /** @override */
-  checkContext() {
-    return this.createSuccessCheckContextResult_(
-        /*willImmediatelyDisambiguate=*/ false);
-  }
-  /** @override */
-  runMacro() {
+  run() {
     if (!this.inputController_.isActive()) {
       return this.createRunMacroResult_(
           /*isSuccess=*/ false, MacroError.FAILED_ACTUATION);

@@ -25,6 +25,7 @@
 
 #include "third_party/blink/renderer/core/css/css_image_generator_value.h"
 
+#include "base/containers/contains.h"
 #include "third_party/blink/renderer/core/css/css_gradient_value.h"
 #include "third_party/blink/renderer/core/css/css_paint_value.h"
 #include "third_party/blink/renderer/core/loader/resource/image_resource_observer.h"
@@ -37,13 +38,15 @@ using cssvalue::CSSLinearGradientValue;
 using cssvalue::CSSRadialGradientValue;
 
 Image* GeneratedImageCache::GetImage(const gfx::SizeF& size) const {
-  if (size.IsEmpty())
+  if (size.IsEmpty()) {
     return nullptr;
+  }
 
-  DCHECK(sizes_.find(size) != sizes_.end());
+  DCHECK(base::Contains(sizes_, size));
   GeneratedImageMap::const_iterator image_iter = images_.find(size);
-  if (image_iter == images_.end())
+  if (image_iter == images_.end()) {
     return nullptr;
+  }
   return image_iter->value.get();
 }
 
@@ -60,10 +63,10 @@ void GeneratedImageCache::AddSize(const gfx::SizeF& size) {
 
 void GeneratedImageCache::RemoveSize(const gfx::SizeF& size) {
   DCHECK(!size.IsEmpty());
-  SECURITY_DCHECK(sizes_.find(size) != sizes_.end());
+  SECURITY_DCHECK(base::Contains(sizes_, size));
   bool fully_erased = sizes_.erase(size);
   if (fully_erased) {
-    DCHECK(images_.find(size) != images_.end());
+    DCHECK(base::Contains(images_, size));
     images_.erase(images_.find(size));
   }
 }
@@ -75,7 +78,7 @@ CSSImageGeneratorValue::~CSSImageGeneratorValue() = default;
 
 void CSSImageGeneratorValue::AddClient(const ImageResourceObserver* client) {
   DCHECK(client);
-  if (clients_.IsEmpty()) {
+  if (clients_.empty()) {
     DCHECK(!keep_alive_);
     keep_alive_ = this;
   }
@@ -96,10 +99,11 @@ void CSSImageGeneratorValue::RemoveClient(const ImageResourceObserver* client) {
     size_count.size = gfx::SizeF();
   }
 
-  if (!--size_count.count)
+  if (!--size_count.count) {
     clients_.erase(client);
+  }
 
-  if (clients_.IsEmpty()) {
+  if (clients_.empty()) {
     DCHECK(keep_alive_);
     keep_alive_.Clear();
   }

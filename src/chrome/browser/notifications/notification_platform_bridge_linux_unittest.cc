@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/number_formatting.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -28,6 +28,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "ui/gfx/image/image_skia.h"
+#include "ui/gfx/image/image_unittest_util.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
 
@@ -149,38 +150,39 @@ struct TestParams {
         expect_shutdown(true),
         connect_signals(true) {}
 
-  TestParams& SetNameHasOwner(bool name_has_owner) {
-    this->name_has_owner = name_has_owner;
+  TestParams& SetNameHasOwner(bool new_name_has_owner) {
+    this->name_has_owner = new_name_has_owner;
     return *this;
   }
 
-  TestParams& SetCapabilities(const std::vector<std::string>& capabilities) {
-    this->capabilities = capabilities;
+  TestParams& SetCapabilities(
+      const std::vector<std::string>& new_capabilities) {
+    this->capabilities = new_capabilities;
     return *this;
   }
 
-  TestParams& SetServerName(const std::string& server_name) {
-    this->server_name = server_name;
+  TestParams& SetServerName(const std::string& new_server_name) {
+    this->server_name = new_server_name;
     return *this;
   }
 
-  TestParams& SetServerVersion(const std::string& server_version) {
-    this->server_version = server_version;
+  TestParams& SetServerVersion(const std::string& new_server_version) {
+    this->server_version = new_server_version;
     return *this;
   }
 
-  TestParams& SetExpectInitSuccess(bool expect_init_success) {
-    this->expect_init_success = expect_init_success;
+  TestParams& SetExpectInitSuccess(bool new_expect_init_success) {
+    this->expect_init_success = new_expect_init_success;
     return *this;
   }
 
-  TestParams& SetExpectShutdown(bool expect_shutdown) {
-    this->expect_shutdown = expect_shutdown;
+  TestParams& SetExpectShutdown(bool new_expect_shutdown) {
+    this->expect_shutdown = new_expect_shutdown;
     return *this;
   }
 
-  TestParams& SetConnectSignals(bool connect_signals) {
-    this->connect_signals = connect_signals;
+  TestParams& SetConnectSignals(bool new_connect_signals) {
+    this->connect_signals = new_connect_signals;
     return *this;
   }
 
@@ -192,17 +194,6 @@ struct TestParams {
   bool expect_shutdown;
   bool connect_signals;
 };
-
-const SkBitmap CreateBitmap(int width, int height) {
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(width, height);
-  bitmap.eraseARGB(255, 0, 255, 0);
-  return bitmap;
-}
-
-gfx::ImageSkia CreateImageSkia(int width, int height) {
-  return gfx::ImageSkia::CreateFrom1xBitmap(CreateBitmap(width, height));
-}
 
 NotificationRequest ParseRequest(dbus::MethodCall* method_call) {
   // The "Notify" message must have type (susssasa{sv}i).
@@ -588,7 +579,7 @@ TEST_F(NotificationPlatformBridgeLinuxTest, NotificationImages) {
   const int expected_height = kMaxImageHeight / 2;
 
   gfx::Image original_image =
-      gfx::Image(CreateImageSkia(original_width, original_height));
+      gfx::Image(gfx::test::CreateImageSkia(original_width, original_height));
 
   EXPECT_CALL(*mock_notification_proxy_.get(),
               CallMethodAndBlock(Calls("Notify"), _))

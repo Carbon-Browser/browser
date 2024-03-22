@@ -1,9 +1,10 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Web test-specific impl of the unexpected passes' expectations module."""
 
 import os
+from typing import List, Set
 
 from blinkpy.web_tests.stale_expectation_removal import constants
 
@@ -33,8 +34,9 @@ class WebTestExpectations(expectations.Expectations):
         self._expectation_filepaths = None
         self._expectation_file_tag_headers = {}
         self._flag_specific_expectation_files = None
+        self._known_tags = None
 
-    def GetExpectationFilepaths(self):
+    def GetExpectationFilepaths(self) -> List[str]:
         # We don't use the Port classes' expectations_files() and
         # extra_expectations_files() since they do not actually return all
         # expectation files. For example, it only returns the one flag-specific
@@ -52,10 +54,10 @@ class WebTestExpectations(expectations.Expectations):
 
         return self._expectation_filepaths
 
-    def _GetTopLevelExpectationFiles(self):
+    def _GetTopLevelExpectationFiles(self) -> Set[str]:
         return TOP_LEVEL_EXPECTATION_FILES
 
-    def _GetFlagSpecificExpectationFiles(self):
+    def _GetFlagSpecificExpectationFiles(self) -> Set[str]:
         if self._flag_specific_expectation_files is None:
             self._flag_specific_expectation_files = set()
             flag_directory = os.path.join(constants.WEB_TEST_ROOT_DIR,
@@ -65,7 +67,7 @@ class WebTestExpectations(expectations.Expectations):
                     self._flag_specific_expectation_files.add(ef)
         return self._flag_specific_expectation_files
 
-    def _GetExpectationFileTagHeader(self, expectation_file):
+    def _GetExpectationFileTagHeader(self, expectation_file: str) -> str:
         if expectation_file not in self._expectation_file_tag_headers:
             # Copy all the comments and blank lines at the top of the file,
             # which constitutes the header.
@@ -79,3 +81,14 @@ class WebTestExpectations(expectations.Expectations):
                 header += line
             self._expectation_file_tag_headers[expectation_file] = header
         return self._expectation_file_tag_headers[expectation_file]
+
+    def _GetKnownTags(self) -> Set[str]:
+        if self._known_tags is None:
+            self._known_tags = set()
+            for f in self.GetExpectationFilepaths():
+                list_parser = self.ParseTaggedTestListContent(
+                    self._GetExpectationFileTagHeader(f))
+                for ts in list_parser.tag_sets:
+                    self._known_tags |= ts
+            self._known_tags = {t.lower() for t in self._known_tags}
+        return self._known_tags

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_type.h"
@@ -26,7 +26,6 @@
 #include "remoting/base/auto_thread_task_runner.h"
 #include "remoting/host/base/host_exit_codes.h"
 #include "remoting/host/base/screen_resolution.h"
-#include "remoting/host/chromoting_messages.h"
 #include "remoting/host/desktop_process.h"
 #include "remoting/host/fake_keyboard_layout_monitor.h"
 #include "remoting/host/fake_mouse_cursor_monitor.h"
@@ -116,12 +115,8 @@ void MockDaemonListener::Disconnect() {
 }
 
 bool MockNetworkListener::OnMessageReceived(const IPC::Message& message) {
-  bool handled = true;
-
-  // TODO(alexeypa): handle received messages here.
-
-  EXPECT_TRUE(handled);
-  return handled;
+  ADD_FAILURE() << "Unexpected call to OnMessageReceived()";
+  return false;
 }
 
 }  // namespace
@@ -177,6 +172,7 @@ class DesktopProcessTest : public testing::Test {
 
   mojo::AssociatedRemote<mojom::DesktopSessionAgent> desktop_session_agent_;
   mojo::AssociatedRemote<mojom::DesktopSessionControl> desktop_session_control_;
+  mojo::AssociatedRemote<mojom::WorkerProcessControl> worker_process_control_;
 
   // Runs the daemon's end of the channel.
   base::test::SingleThreadTaskEnvironment task_environment_{
@@ -201,7 +197,7 @@ void DesktopProcessTest::CreateNetworkChannel(
     mojo::ScopedMessagePipeHandle desktop_pipe) {
   network_channel_ = IPC::ChannelProxy::Create(
       desktop_pipe.release(), IPC::Channel::MODE_CLIENT, &network_listener_,
-      io_task_runner_.get(), base::ThreadTaskRunnerHandle::Get());
+      io_task_runner_.get(), base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 void DesktopProcessTest::StoreDesktopHandle(
@@ -233,10 +229,8 @@ DesktopProcessTest::CreateDesktopEnvironment() {
       .WillOnce(
           Return(ByMove(std::make_unique<FakeUrlForwarderConfigurator>())));
   EXPECT_CALL(*desktop_environment, CreateFileOperations()).Times(AtMost(1));
-  EXPECT_CALL(*desktop_environment, GetCapabilities())
-      .Times(AtMost(1));
-  EXPECT_CALL(*desktop_environment, SetCapabilities(_))
-      .Times(AtMost(1));
+  EXPECT_CALL(*desktop_environment, GetCapabilities()).Times(AtMost(1));
+  EXPECT_CALL(*desktop_environment, SetCapabilities(_)).Times(AtMost(1));
 
   // Notify the test that the desktop environment has been created.
   network_listener_.OnDesktopEnvironmentCreated();
@@ -255,6 +249,7 @@ void DesktopProcessTest::DisconnectChannels() {
   daemon_listener_.Disconnect();
   desktop_session_agent_.reset();
   desktop_session_control_.reset();
+  worker_process_control_.reset();
 
   network_channel_.reset();
   io_task_runner_ = nullptr;
@@ -282,7 +277,7 @@ void DesktopProcessTest::RunDesktopProcess() {
   mojo::MessagePipe pipe;
   daemon_channel_ = IPC::ChannelProxy::Create(
       pipe.handle0.release(), IPC::Channel::MODE_SERVER, &daemon_listener_,
-      io_task_runner_.get(), base::ThreadTaskRunnerHandle::Get());
+      io_task_runner_.get(), base::SingleThreadTaskRunner::GetCurrentDefault());
 
   std::unique_ptr<MockDesktopEnvironmentFactory> desktop_environment_factory(
       new MockDesktopEnvironmentFactory());
@@ -297,6 +292,8 @@ void DesktopProcessTest::RunDesktopProcess() {
   DesktopProcess desktop_process(ui_task_runner, io_task_runner_,
                                  io_task_runner_, std::move(pipe.handle1));
   EXPECT_TRUE(desktop_process.Start(std::move(desktop_environment_factory)));
+
+  daemon_channel_->GetRemoteAssociatedInterface(&worker_process_control_);
 
   ui_task_runner = nullptr;
   run_loop.Run();
@@ -316,8 +313,8 @@ void DesktopProcessTest::RunDeathTest() {
 
 void DesktopProcessTest::SendCrashRequest() {
   base::Location location = FROM_HERE;
-  daemon_channel_->Send(new ChromotingDaemonMsg_Crash(
-      location.function_name(), location.file_name(), location.line_number()));
+  worker_process_control_->CrashProcess(
+      location.function_name(), location.file_name(), location.line_number());
 }
 
 void DesktopProcessTest::SendStartSessionAgent() {
@@ -361,8 +358,8 @@ TEST_F(DesktopProcessTest, CreateNetworkChannel) {
         CreateNetworkChannel(std::move(desktop_pipe));
       });
   EXPECT_CALL(network_listener_, OnChannelConnected(_))
-      .WillOnce(InvokeWithoutArgs(
-          this, &DesktopProcessTest::DisconnectChannels));
+      .WillOnce(
+          InvokeWithoutArgs(this, &DesktopProcessTest::DisconnectChannels));
 
   RunDesktopProcess();
 }
@@ -383,15 +380,15 @@ TEST_F(DesktopProcessTest, StartSessionAgent) {
   }
 
   EXPECT_CALL(network_listener_, OnDesktopEnvironmentCreated())
-      .WillOnce(InvokeWithoutArgs(
-          this, &DesktopProcessTest::PostDisconnectChannels));
+      .WillOnce(
+          InvokeWithoutArgs(this, &DesktopProcessTest::PostDisconnectChannels));
 
   RunDesktopProcess();
 }
 
 // Run the desktop process and ask it to crash.
 TEST_F(DesktopProcessTest, DeathTest) {
-  testing::GTEST_FLAG(death_test_style) = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
 
   EXPECT_DEATH(RunDeathTest(), "");
 }

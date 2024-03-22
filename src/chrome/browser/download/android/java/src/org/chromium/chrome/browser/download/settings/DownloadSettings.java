@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,30 +7,23 @@ package org.chromium.chrome.browser.download.settings;
 import android.os.Bundle;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 import androidx.preference.Preference;
-import androidx.preference.PreferenceFragmentCompat;
 
 import org.chromium.chrome.browser.download.DownloadDialogBridge;
 import org.chromium.chrome.browser.download.DownloadPromptStatus;
 import org.chromium.chrome.browser.download.R;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.settings.ChromeBaseSettingsFragment;
 import org.chromium.chrome.browser.settings.ChromeManagedPreferenceDelegate;
 import org.chromium.components.browser_ui.settings.ChromeSwitchPreference;
 import org.chromium.components.browser_ui.settings.ManagedPreferenceDelegate;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
-import org.chromium.components.prefs.PrefService;
-import org.chromium.components.user_prefs.UserPrefs;
 
-/**
- * Fragment containing Download settings.
- */
-public class DownloadSettings
-        extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener {
+/** Fragment containing Download settings. */
+public class DownloadSettings extends ChromeBaseSettingsFragment
+        implements Preference.OnPreferenceChangeListener {
     public static final String PREF_LOCATION_CHANGE = "location_change";
     public static final String PREF_LOCATION_PROMPT_ENABLED = "location_prompt_enabled";
 
-    private PrefService mPrefService;
     private DownloadLocationPreference mLocationChangePref;
     private ChromeSwitchPreference mLocationPromptEnabledPref;
     private ManagedPreferenceDelegate mLocationPromptEnabledPrefDelegate;
@@ -39,19 +32,17 @@ public class DownloadSettings
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, String s) {
         getActivity().setTitle(R.string.menu_downloads);
         SettingsUtils.addPreferencesFromResource(this, R.xml.download_preferences);
-        mPrefService = UserPrefs.get(Profile.getLastUsedRegularProfile());
-
-        boolean locationManaged = DownloadDialogBridge.isLocationDialogManaged();
 
         mLocationPromptEnabledPref =
                 (ChromeSwitchPreference) findPreference(PREF_LOCATION_PROMPT_ENABLED);
         mLocationPromptEnabledPref.setOnPreferenceChangeListener(this);
-        mLocationPromptEnabledPrefDelegate = new ChromeManagedPreferenceDelegate() {
-            @Override
-            public boolean isPreferenceControlledByPolicy(Preference preference) {
-                return DownloadDialogBridge.isLocationDialogManaged();
-            }
-        };
+        mLocationPromptEnabledPrefDelegate =
+                new ChromeManagedPreferenceDelegate(getProfile()) {
+                    @Override
+                    public boolean isPreferenceControlledByPolicy(Preference preference) {
+                        return DownloadDialogBridge.isLocationDialogManaged();
+                    }
+                };
         mLocationPromptEnabledPref.setManagedPreferenceDelegate(mLocationPromptEnabledPrefDelegate);
         mLocationChangePref = (DownloadLocationPreference) findPreference(PREF_LOCATION_CHANGE);
     }
@@ -84,8 +75,9 @@ public class DownloadSettings
                     DownloadDialogBridge.getPromptForDownloadPolicy());
         } else {
             // Location prompt is marked enabled if the prompt status is not DONT_SHOW.
-            boolean isLocationPromptEnabled = DownloadDialogBridge.getPromptForDownloadAndroid()
-                    != DownloadPromptStatus.DONT_SHOW;
+            boolean isLocationPromptEnabled =
+                    DownloadDialogBridge.getPromptForDownloadAndroid()
+                            != DownloadPromptStatus.DONT_SHOW;
             mLocationPromptEnabledPref.setChecked(isLocationPromptEnabled);
             mLocationPromptEnabledPref.setEnabled(true);
         }
@@ -109,7 +101,6 @@ public class DownloadSettings
         return true;
     }
 
-    @VisibleForTesting
     public ManagedPreferenceDelegate getLocationPromptEnabledPrefDelegateForTesting() {
         return mLocationPromptEnabledPrefDelegate;
     }

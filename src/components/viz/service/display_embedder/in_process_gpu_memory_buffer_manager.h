@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,8 +55,6 @@ class VIZ_SERVICE_EXPORT InProcessGpuMemoryBufferManager
       gfx::BufferUsage usage,
       gpu::SurfaceHandle surface_handle,
       base::WaitableEvent* shutdown_event) override;
-  void SetDestructionSyncToken(gfx::GpuMemoryBuffer* buffer,
-                               const gpu::SyncToken& sync_token) override;
   void CopyGpuMemoryBufferAsync(
       gfx::GpuMemoryBufferHandle buffer_handle,
       base::UnsafeSharedMemoryRegion memory_region,
@@ -71,8 +69,6 @@ class VIZ_SERVICE_EXPORT InProcessGpuMemoryBufferManager
 
  private:
   // Provided as callback when a GpuMemoryBuffer should be destroyed.
-  void ShouldDestroyGpuMemoryBuffer(gfx::GpuMemoryBufferId id,
-                                    const gpu::SyncToken& sync_token);
   void DestroyGpuMemoryBuffer(gfx::GpuMemoryBufferId id);
 
   gpu::GpuMemoryBufferSupport gpu_memory_buffer_support_;
@@ -85,7 +81,7 @@ class VIZ_SERVICE_EXPORT InProcessGpuMemoryBufferManager
   const raw_ptr<gpu::SyncPointManager> sync_point_manager_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
-  base::flat_map<gfx::GpuMemoryBufferId, AllocatedBufferInfo>
+  base::flat_map<gfx::GpuMemoryBufferId, gpu::AllocatedBufferInfo>
       allocated_buffers_;
 
   base::WeakPtr<InProcessGpuMemoryBufferManager> weak_ptr_;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@
 #endif
 
 #if BUILDFLAG(IS_WIN)
-#include "content/browser/webauth/authenticator_environment_impl.h"
 #include "device/fido/win/authenticator.h"
+#include "device/fido/win/webauthn_api.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -46,21 +46,17 @@ void IsUVPlatformAuthenticatorAvailable(
 
 #elif BUILDFLAG(IS_WIN)
 void IsUVPlatformAuthenticatorAvailable(
+    bool is_off_the_record,
     IsUVPlatformAuthenticatorAvailableCallback callback) {
   device::WinWebAuthnApiAuthenticator::
       IsUserVerifyingPlatformAuthenticatorAvailable(
-          AuthenticatorEnvironmentImpl::GetInstance()->win_webauthn_api(),
+          is_off_the_record, device::WinWebAuthnApi::GetDefault(),
           std::move(callback));
 }
 
 #elif BUILDFLAG(IS_CHROMEOS)
 void IsUVPlatformAuthenticatorAvailable(
     IsUVPlatformAuthenticatorAvailableCallback callback) {
-  if (!base::FeatureList::IsEnabled(
-          device::kWebAuthCrosPlatformAuthenticator)) {
-    std::move(callback).Run(false);
-    return;
-  }
   device::ChromeOSAuthenticator::IsUVPlatformAuthenticatorAvailable(
       std::move(callback));
 }

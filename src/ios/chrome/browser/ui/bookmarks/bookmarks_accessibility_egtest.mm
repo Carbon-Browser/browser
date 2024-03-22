@@ -1,31 +1,28 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
 
-#include "base/ios/ios_util.h"
+#import "base/ios/ios_util.h"
 #import "base/test/ios/wait_util.h"
+#import "components/bookmarks/common/storage_type.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey_ui.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_ui_constants.h"
-#include "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/accessibility_util.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util_mac.h"
 
 using chrome_test_util::ButtonWithAccessibilityLabelId;
 using chrome_test_util::ContextBarLeadingButtonWithLabel;
-using chrome_test_util::TappableBookmarkNodeWithLabel;
 using chrome_test_util::MoveButton;
+using chrome_test_util::TappableBookmarkNodeWithLabel;
 
 // Bookmark accessibility tests for Chrome.
 @interface BookmarksAccessibilityTestCase : WebHttpServerChromeTestCase
@@ -36,14 +33,14 @@ using chrome_test_util::MoveButton;
 - (void)setUp {
   [super setUp];
 
-  [ChromeEarlGrey waitForBookmarksToFinishLoading];
-  [ChromeEarlGrey clearBookmarks];
+  [BookmarkEarlGrey waitForBookmarkModelsLoaded];
+  [BookmarkEarlGrey clearBookmarks];
 }
 
 // Tear down called once per test.
 - (void)tearDown {
   [super tearDown];
-  [ChromeEarlGrey clearBookmarks];
+  [BookmarkEarlGrey clearBookmarks];
   [BookmarkEarlGrey clearBookmarksPositionCache];
 }
 
@@ -51,7 +48,8 @@ using chrome_test_util::MoveButton;
 
 // Tests that all elements on the bookmarks landing page are accessible.
 - (void)testAccessibilityOnBookmarksLandingPage {
-  [BookmarkEarlGrey setupStandardBookmarks];
+  [BookmarkEarlGrey
+      setupStandardBookmarksInStorage:bookmarks::StorageType::kLocalOrSyncable];
   [BookmarkEarlGreyUI openBookmarks];
 
   [ChromeEarlGrey verifyAccessibilityForCurrentScreen];
@@ -59,7 +57,8 @@ using chrome_test_util::MoveButton;
 
 // Tests that all elements on mobile bookmarks are accessible.
 - (void)testAccessibilityOnMobileBookmarks {
-  [BookmarkEarlGrey setupStandardBookmarks];
+  [BookmarkEarlGrey
+      setupStandardBookmarksInStorage:bookmarks::StorageType::kLocalOrSyncable];
   [BookmarkEarlGreyUI openBookmarks];
   [BookmarkEarlGreyUI openMobileBookmarks];
 
@@ -68,7 +67,8 @@ using chrome_test_util::MoveButton;
 
 // Tests that all elements on the bookmarks folder Edit page are accessible.
 - (void)testAccessibilityOnBookmarksFolderEditPage {
-  [BookmarkEarlGrey setupStandardBookmarks];
+  [BookmarkEarlGrey
+      setupStandardBookmarksInStorage:bookmarks::StorageType::kLocalOrSyncable];
   [BookmarkEarlGreyUI openBookmarks];
   [BookmarkEarlGreyUI openMobileBookmarks];
 
@@ -92,7 +92,8 @@ using chrome_test_util::MoveButton;
 
 // Tests that all elements on the bookmarks Edit page are accessible.
 - (void)testAccessibilityOnBookmarksEditPage {
-  [BookmarkEarlGrey setupStandardBookmarks];
+  [BookmarkEarlGrey
+      setupStandardBookmarksInStorage:bookmarks::StorageType::kLocalOrSyncable];
   [BookmarkEarlGreyUI openBookmarks];
   [BookmarkEarlGreyUI openMobileBookmarks];
 
@@ -124,7 +125,8 @@ using chrome_test_util::MoveButton;
 
 // Tests that all elements on the bookmarks Move page are accessible.
 - (void)testAccessibilityOnBookmarksMovePage {
-  [BookmarkEarlGrey setupStandardBookmarks];
+  [BookmarkEarlGrey
+      setupStandardBookmarksInStorage:bookmarks::StorageType::kLocalOrSyncable];
   [BookmarkEarlGreyUI openBookmarks];
   [BookmarkEarlGreyUI openMobileBookmarks];
 
@@ -155,7 +157,8 @@ using chrome_test_util::MoveButton;
 // Tests that all elements on the bookmarks Move to New Folder page are
 // accessible.
 - (void)testAccessibilityOnBookmarksMoveToNewFolderPage {
-  [BookmarkEarlGrey setupStandardBookmarks];
+  [BookmarkEarlGrey
+      setupStandardBookmarksInStorage:bookmarks::StorageType::kLocalOrSyncable];
   [BookmarkEarlGreyUI openBookmarks];
   [BookmarkEarlGreyUI openMobileBookmarks];
 
@@ -167,9 +170,9 @@ using chrome_test_util::MoveButton;
   [[EarlGrey selectElementWithMatcher:MoveButton()] performAction:grey_tap()];
 
   // Tap on "Create New Folder."
-  [[EarlGrey
-      selectElementWithMatcher:grey_accessibilityID(
-                                   kBookmarkCreateNewFolderCellIdentifier)]
+  [[EarlGrey selectElementWithMatcher:
+                 grey_accessibilityID(
+                     kBookmarkCreateNewLocalOrSyncableFolderCellIdentifier)]
       performAction:grey_tap()];
 
   [ChromeEarlGrey verifyAccessibilityForCurrentScreen];
@@ -177,14 +180,15 @@ using chrome_test_util::MoveButton;
 
 // Tests that all elements on bookmarks Delete and Undo are accessible.
 - (void)testAccessibilityOnBookmarksDeleteUndo {
-  [BookmarkEarlGrey setupStandardBookmarks];
+  [BookmarkEarlGrey
+      setupStandardBookmarksInStorage:bookmarks::StorageType::kLocalOrSyncable];
   [BookmarkEarlGreyUI openBookmarks];
   [BookmarkEarlGreyUI openMobileBookmarks];
 
   // Change to edit mode
   [[EarlGrey
       selectElementWithMatcher:grey_accessibilityID(
-                                   kBookmarkHomeTrailingButtonIdentifier)]
+                                   kBookmarksHomeTrailingButtonIdentifier)]
       performAction:grey_tap()];
 
   // Select single URL.
@@ -206,14 +210,15 @@ using chrome_test_util::MoveButton;
 
 // Tests that all elements on the bookmarks Select page are accessible.
 - (void)testAccessibilityOnBookmarksSelect {
-  [BookmarkEarlGrey setupStandardBookmarks];
+  [BookmarkEarlGrey
+      setupStandardBookmarksInStorage:bookmarks::StorageType::kLocalOrSyncable];
   [BookmarkEarlGreyUI openBookmarks];
   [BookmarkEarlGreyUI openMobileBookmarks];
 
   // Change to edit mode
   [[EarlGrey
       selectElementWithMatcher:grey_accessibilityID(
-                                   kBookmarkHomeTrailingButtonIdentifier)]
+                                   kBookmarksHomeTrailingButtonIdentifier)]
       performAction:grey_tap()];
 
   [ChromeEarlGrey verifyAccessibilityForCurrentScreen];

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "base/win/windows_types.h"
 #include "chrome/browser/web_applications/chrome_pwa_launcher/last_browser_file_util.h"
 #include "chrome/browser/web_applications/chrome_pwa_launcher/launcher_log.h"
-#include "chrome/browser/web_applications/chrome_pwa_launcher/launcher_update.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/install_static/install_details.h"
 #include "chrome/install_static/product_install_details.h"
@@ -58,6 +57,13 @@ web_app::WebAppLauncherLaunchResult LaunchPwa(
   // new method.
   command_line.AppendSwitchASCII(switches::kPwaLauncherVersion,
                                  PRODUCT_VERSION);
+
+  // Pass to Chrome the path of the shortcut, if any, that started the launcher.
+  // This is used to record LaunchMode metrics.
+  STARTUPINFOW si = {sizeof(si)};
+  ::GetStartupInfoW(&si);
+  if (si.dwFlags & STARTF_TITLEISLINKNAME)
+    command_line.AppendSwitchNative(switches::kSourceShortcut, si.lpTitle);
 
   base::LaunchOptions launch_options;
   launch_options.current_directory = chrome_path.DirName();

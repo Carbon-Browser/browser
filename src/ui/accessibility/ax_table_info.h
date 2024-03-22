@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class AXNode;
 class AX_EXPORT AXTableInfo {
  public:
   struct CellData {
-    AXNode* cell;
+    raw_ptr<AXNode, DanglingUntriaged> cell;
     AXNodeID cell_id;
     size_t col_index;
     size_t row_index;
@@ -52,6 +52,8 @@ class AX_EXPORT AXTableInfo {
   bool valid() const { return valid_; }
   void Invalidate();
 
+  const AXNode* GetFirstCellInRow(const AXNode*) const;
+
   // The real row count, guaranteed to be at least as large as the
   // maximum row index of any cell.
   size_t row_count = 0;
@@ -63,11 +65,11 @@ class AX_EXPORT AXTableInfo {
   // List of column header nodes IDs for each column index.
   std::vector<std::vector<AXNodeID>> col_headers;
 
+  // All column header cells in a one dimensional array.
+  std::vector<AXNodeID> all_col_headers;
+
   // List of row header node IDs for each row index.
   std::vector<std::vector<AXNodeID>> row_headers;
-
-  // All header cells.
-  std::vector<AXNodeID> all_headers;
 
   // The id of the element with the caption tag or ARIA role.
   AXNodeID caption_id;
@@ -106,15 +108,32 @@ class AX_EXPORT AXTableInfo {
   std::string ToString() const;
 
  private:
+  struct CellBuildState {
+   public:
+    size_t cell_index;
+    size_t current_col_index;
+    size_t current_row_index;
+    size_t spanned_col_index;
+    size_t current_aria_row_index;
+    size_t current_aria_col_index;
+    bool is_first_cell_in_row;
+  };
+
   AXTableInfo(AXTree* tree, AXNode* table_node);
 
   void ClearVectors();
   void BuildCellDataVectorFromRowAndCellNodes(
       const std::vector<AXNode*>& row_node_list,
       const std::vector<std::vector<AXNode*>>& cell_nodes_per_row);
+  void BuildCellDataVectorFromCellNodes(
+      const std::vector<std::vector<AXNode*>>& cell_nodes_per_row);
+  void BuildCellData(AXNode* cell,
+                     AXNode* row_or_first_cell,
+                     CellBuildState& state);
   void BuildCellAndHeaderVectorsFromCellData();
   void UpdateExtraMacNodes();
   void ClearExtraMacNodes();
+
   AXNode* CreateExtraMacColumnNode(size_t col_index);
   AXNode* CreateExtraMacTableHeaderNode();
   void UpdateExtraMacColumnNodeAttributes(size_t col_index);

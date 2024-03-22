@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,17 +31,18 @@ class TestObjectPermissionContext : public ObjectPermissionContextBase {
             PermissionsClient::Get()->GetSettingsMap(browser_context)) {}
   ~TestObjectPermissionContext() override = default;
 
-  bool IsValidObject(const base::Value& object) override {
-    return object.DictSize() == 2 && object.FindKey(kRequiredKey1) &&
-           object.FindKey(kRequiredKey2);
+  bool IsValidObject(const base::Value::Dict& dict) override {
+    return dict.size() == 2 && dict.Find(kRequiredKey1) &&
+           dict.Find(kRequiredKey2);
   }
 
-  std::u16string GetObjectDisplayName(const base::Value& object) override {
+  std::u16string GetObjectDisplayName(
+      const base::Value::Dict& object) override {
     return {};
   }
 
-  std::string GetKeyForObject(const base::Value& object) override {
-    return *object.FindStringKey(kRequiredKey1);
+  std::string GetKeyForObject(const base::Value::Dict& object) override {
+    return *object.FindString(kRequiredKey1);
   }
 };
 
@@ -54,13 +55,11 @@ class ObjectPermissionContextBaseTest : public testing::Test {
         url2_("https://chromium.org"),
         origin1_(url::Origin::Create(url1_)),
         origin2_(url::Origin::Create(url2_)),
-        object1_(base::Value::Type::DICTIONARY),
-        object2_(base::Value::Type::DICTIONARY),
         context_(browser_context()) {
-    object1_.SetStringKey(kRequiredKey1, "value1");
-    object1_.SetStringKey(kRequiredKey2, "value2");
-    object2_.SetStringKey(kRequiredKey1, "value3");
-    object2_.SetStringKey(kRequiredKey2, "value4");
+    object1_.Set(kRequiredKey1, "value1");
+    object1_.Set(kRequiredKey2, "value2");
+    object2_.Set(kRequiredKey1, "value3");
+    object2_.Set(kRequiredKey2, "value4");
   }
 
   ~ObjectPermissionContextBaseTest() override = default;
@@ -77,8 +76,8 @@ class ObjectPermissionContextBaseTest : public testing::Test {
   const GURL url2_;
   const url::Origin origin1_;
   const url::Origin origin2_;
-  base::Value object1_;
-  base::Value object2_;
+  base::Value::Dict object1_;
+  base::Value::Dict object2_;
   TestObjectPermissionContext context_;
 };
 
@@ -103,6 +102,23 @@ TEST_F(ObjectPermissionContextBaseTest, GrantAndRevokeObjectPermissions) {
   EXPECT_CALL(mock_observer, OnPermissionRevoked(origin1_)).Times(2);
   context_.RevokeObjectPermission(origin1_, object1_);
   context_.RevokeObjectPermission(origin1_, object2_);
+  objects = context_.GetGrantedObjects(origin1_);
+  EXPECT_EQ(0u, objects.size());
+}
+
+TEST_F(ObjectPermissionContextBaseTest, GrantAndRevokeAllObjectPermissions) {
+  MockPermissionObserver mock_observer;
+  context_.AddObserver(&mock_observer);
+
+  EXPECT_CALL(mock_observer, OnObjectPermissionChanged(_, _)).Times(3);
+  context_.GrantObjectPermission(origin1_, object1_.Clone());
+  context_.GrantObjectPermission(origin1_, object2_.Clone());
+  auto objects = context_.GetGrantedObjects(origin1_);
+
+  EXPECT_CALL(mock_observer, OnPermissionRevoked(origin1_)).Times(1);
+  context_.RevokeObjectPermissions(origin1_);
+
+  // All permissions have been revoked for the given origin.
   objects = context_.GetGrantedObjects(origin1_);
   EXPECT_EQ(0u, objects.size());
 }
@@ -174,6 +190,20 @@ TEST_F(ObjectPermissionContextBaseTest,
   objects = context_.GetGrantedObjects(origin1_);
   EXPECT_EQ(1u, objects.size());
   EXPECT_EQ(object2_, objects[0]->value);
+}
+
+TEST_F(ObjectPermissionContextBaseTest, GetOriginsWithGrants) {
+  MockPermissionObserver mock_observer;
+  context_.AddObserver(&mock_observer);
+
+  EXPECT_CALL(mock_observer, OnObjectPermissionChanged(_, _)).Times(2);
+  context_.GrantObjectPermission(origin1_, object1_.Clone());
+  context_.GrantObjectPermission(origin2_, object2_.Clone());
+
+  auto origins_with_grants = context_.GetOriginsWithGrants();
+  EXPECT_EQ(2u, origins_with_grants.size());
+  EXPECT_TRUE(base::Contains(origins_with_grants, origin2_));
+  EXPECT_TRUE(base::Contains(origins_with_grants, origin1_));
 }
 
 TEST_F(ObjectPermissionContextBaseTest, GetAllGrantedObjects) {
@@ -295,7 +325,7 @@ TEST_F(ObjectPermissionContextBaseTest, GrantAndUpdateObjectPermission_Keyed) {
   // Update the object without changing the key.
   std::string new_value("new_value");
   auto new_object = objects[0]->value.Clone();
-  new_object.SetStringKey(kRequiredKey2, new_value);
+  new_object.Set(kRequiredKey2, new_value);
   EXPECT_NE(new_object, objects[0]->value);
 
   testing::Mock::VerifyAndClearExpectations(&mock_observer);

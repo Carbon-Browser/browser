@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ void VideoHoleDrawQuad::SetAll(const SharedQuadState* shared_quad_state,
 }
 
 const VideoHoleDrawQuad* VideoHoleDrawQuad::MaterialCast(const DrawQuad* quad) {
-  DCHECK(quad->material == DrawQuad::Material::kVideoHole);
+  CHECK_EQ(quad->material, DrawQuad::Material::kVideoHole);
   return static_cast<const VideoHoleDrawQuad*>(quad);
 }
 

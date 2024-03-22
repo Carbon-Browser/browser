@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sessions/session_data_deleter.h"
 #include "chrome/browser/sessions/session_data_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 // static
 SessionDataService* SessionDataServiceFactory::GetForProfile(Profile* profile) {
@@ -20,24 +19,31 @@ SessionDataService* SessionDataServiceFactory::GetForProfile(Profile* profile) {
 }
 
 SessionDataServiceFactory* SessionDataServiceFactory::GetInstance() {
-  return base::Singleton<SessionDataServiceFactory>::get();
+  static base::NoDestructor<SessionDataServiceFactory> instance;
+  return instance.get();
 }
 
 SessionDataServiceFactory::SessionDataServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SessionDataService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
   DependsOn(CookieSettingsFactory::GetInstance());
 }
 
 SessionDataServiceFactory::~SessionDataServiceFactory() = default;
 
-KeyedService* SessionDataServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SessionDataServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
   Profile* profile = Profile::FromBrowserContext(browser_context);
   auto deleter = std::make_unique<SessionDataDeleter>(profile);
-  return new SessionDataService(profile, std::move(deleter));
+  return std::make_unique<SessionDataService>(profile, std::move(deleter));
 }
 
 bool SessionDataServiceFactory::ServiceIsCreatedWithBrowserContext() const {

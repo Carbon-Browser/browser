@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 
 #include <google/protobuf/message_lite.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_install_attributes_client.h"
 #include "chromeos/dbus/common/blocking_method_caller.h"
@@ -86,14 +87,6 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
                     std::move(callback));
   }
 
-  void InstallAttributesSet(
-      const ::user_data_auth::InstallAttributesSetRequest& request,
-      InstallAttributesSetCallback callback) override {
-    CallProtoMethod(::user_data_auth::kInstallAttributesSet,
-                    ::user_data_auth::kInstallAttributesInterface, request,
-                    std::move(callback));
-  }
-
   void InstallAttributesFinalize(
       const ::user_data_auth::InstallAttributesFinalizeRequest& request,
       InstallAttributesFinalizeCallback callback) override {
@@ -123,6 +116,14 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
       const ::user_data_auth::SetFirmwareManagementParametersRequest& request,
       SetFirmwareManagementParametersCallback callback) override {
     CallProtoMethod(::user_data_auth::kSetFirmwareManagementParameters,
+                    ::user_data_auth::kInstallAttributesInterface, request,
+                    std::move(callback));
+  }
+
+  void GetFirmwareManagementParameters(
+      const ::user_data_auth::GetFirmwareManagementParametersRequest& request,
+      GetFirmwareManagementParametersCallback callback) override {
+    CallProtoMethod(::user_data_auth::kGetFirmwareManagementParameters,
                     ::user_data_auth::kInstallAttributesInterface, request,
                     std::move(callback));
   }
@@ -168,18 +169,19 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
   // passing in |request| as input with |timeout_ms|. Once the (asynchronous)
   // call finishes, |callback| is called with the response proto.
   template <typename RequestType, typename ReplyType>
-  void CallProtoMethodWithTimeout(const char* method_name,
-                                  const char* interface_name,
-                                  int timeout_ms,
-                                  const RequestType& request,
-                                  DBusMethodCallback<ReplyType> callback) {
+  void CallProtoMethodWithTimeout(
+      const char* method_name,
+      const char* interface_name,
+      int timeout_ms,
+      const RequestType& request,
+      chromeos::DBusMethodCallback<ReplyType> callback) {
     dbus::MethodCall method_call(interface_name, method_name);
     dbus::MessageWriter writer(&method_call);
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       LOG(ERROR)
           << "Failed to append protobuf when calling InstallAttributes method "
           << method_name;
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
       return;
     }
@@ -199,7 +201,7 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
   void CallProtoMethod(const char* method_name,
                        const char* interface_name,
                        const RequestType& request,
-                       DBusMethodCallback<ReplyType> callback) {
+                       chromeos::DBusMethodCallback<ReplyType> callback) {
     CallProtoMethodWithTimeout(method_name, interface_name,
                                kInstallAttributesDefaultTimeoutMS, request,
                                std::move(callback));
@@ -209,7 +211,7 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
   // the decoded message. Calls |callback| with std::nullopt on error, including
   // timeout.
   template <typename ReplyType>
-  void HandleResponse(DBusMethodCallback<ReplyType> callback,
+  void HandleResponse(chromeos::DBusMethodCallback<ReplyType> callback,
                       dbus::Response* response) {
     ReplyType reply_proto;
     if (!ParseProto(response, &reply_proto)) {
@@ -236,7 +238,8 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
     }
 
     std::unique_ptr<dbus::Response> response(
-        blocking_method_caller_->CallMethodAndBlock(&method_call));
+        blocking_method_caller_->CallMethodAndBlock(&method_call)
+            .value_or(nullptr));
 
     if (!response) {
       LOG(ERROR) << "DBus call failed for InstallAttributes method (blocking) "
@@ -256,7 +259,7 @@ class InstallAttributesClientImpl : public InstallAttributesClient {
   }
 
   // D-Bus proxy for cryptohomed, not owned.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, ExperimentalAsh> proxy_ = nullptr;
 
   // For making blocking dbus calls.
   std::unique_ptr<chromeos::BlockingMethodCaller> blocking_method_caller_;

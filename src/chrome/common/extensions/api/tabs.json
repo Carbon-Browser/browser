@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,6 +55,7 @@
           "windowId": {"type": "integer", "minimum": 0, "description": "The ID of the window that contains the tab."},
           "openerTabId": {"type": "integer", "minimum": 0, "optional": true, "description": "The ID of the tab that opened this tab, if any. This property is only present if the opener tab still exists."},
           "selected": {"type": "boolean", "description": "Whether the tab is selected.", "deprecated": "Please use $(ref:tabs.Tab.highlighted)."},
+          "lastAccessed": {"type": "number", "optional": true, "description": "The last time the tab was accessed as the number of milliseconds since epoch."},
           "highlighted": {"type": "boolean", "description": "Whether the tab is highlighted."},
           "active": {"type": "boolean", "description": "Whether the tab is active in its window. Does not necessarily mean the window is focused."},
           "pinned": {"type": "boolean", "description": "Whether the tab is pinned."},
@@ -172,7 +173,7 @@
       {
         "name": "getCurrent",
         "type": "function",
-        "description": "Gets the tab that this script call is being made from. May be undefined if called from a non-tab context (for example, a background page or popup view).",
+        "description": "Gets the tab that this script call is being made from. Returns <code>undefined</code> if called from a non-tab context (for example, a background page or popup view).",
         "parameters": [],
         "returns_async": {
           "name": "callback",
@@ -210,7 +211,6 @@
               "documentId": {
                 "type": "string",
                 "optional": true,
-                "nodoc": true,
                 "description": "Open a port to a specific <a href='webNavigation#document_ids'>document</a> identified by <code>documentId</code> instead of all frames in the tab."
               }
             },
@@ -280,7 +280,6 @@
               "documentId": {
                 "type": "string",
                 "optional": true,
-                "nodoc": true,
                 "description": "Send a message to a specific <a href='webNavigation#document_ids'>document</a> identified by <code>documentId</code> instead of all frames in the tab."
               }
             },

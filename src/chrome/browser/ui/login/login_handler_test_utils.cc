@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/login/login_handler_test_utils.h"
 
 #include "base/containers/contains.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/ui/login/login_handler.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -39,7 +40,7 @@ void LoginPromptBrowserTestObserver::AddHandler(LoginHandler* handler) {
 }
 
 void LoginPromptBrowserTestObserver::RemoveHandler(LoginHandler* handler) {
-  auto i = std::find(handlers_.begin(), handlers_.end(), handler);
+  auto i = base::ranges::find(handlers_, handler);
   // Cannot use ASSERT_NE, because gTest on Android confuses iterators with
   // containers.
   //
@@ -60,23 +61,4 @@ void LoginPromptBrowserTestObserver::Register(
 
 void LoginPromptBrowserTestObserver::UnregisterAll() {
   registrar_.RemoveAll();
-}
-
-WindowedLoadStopObserver::WindowedLoadStopObserver(
-    content::NavigationController* controller,
-    int notification_count)
-    : WindowedNavigationObserver<content::NOTIFICATION_LOAD_STOP>(controller),
-      remaining_notification_count_(notification_count) {
-  // This should really be an ASSERT, if those were allowed in a method which
-  // does not return void.
-  EXPECT_LE(0, remaining_notification_count_);
-}
-
-void WindowedLoadStopObserver::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
-  ASSERT_LT(0, remaining_notification_count_);
-  if (--remaining_notification_count_ == 0)
-    WindowedNotificationObserver::Observe(type, source, details);
 }

@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/fonts/win/dwrite_font_format_support.h"
 
+#include "skia/ext/font_utils.h"
 #include "third_party/skia/include/core/SkFontMgr.h"
 #include "third_party/skia/include/core/SkFontStyle.h"
 #include "third_party/skia/include/core/SkTypeface.h"
@@ -22,7 +23,7 @@ bool DWriteVersionSupportsVariations() {
   // the response is 0 or larger, it means, DWrite was able to determine if this
   // is a variable font or not and Variations are supported.
   static bool variations_supported = []() {
-    auto fm(SkFontMgr::RefDefault());
+    sk_sp<SkFontMgr> fm = skia::DefaultFontMgr();
     sk_sp<SkTypeface> probe_typeface =
         fm->legacyMakeTypeface(nullptr, SkFontStyle());
     if (!probe_typeface)

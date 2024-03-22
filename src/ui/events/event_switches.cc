@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ const char kTouchDevices[] = "touch-devices";
 const char kPenDevices[] = "pen-devices";
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 // Tells Chrome to do edge touch filtering. Useful for convertible tablet.
 const char kEdgeTouchFiltering[] = "edge-touch-filtering";
 

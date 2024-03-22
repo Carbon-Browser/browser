@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_CT_LOG_LIST_DISTRIBUTOR_H_
 #define SERVICES_NETWORK_CT_LOG_LIST_DISTRIBUTOR_H_
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "net/cert/multi_log_ct_verifier.h"
 #include "services/network/public/mojom/ct_log_info.mojom.h"
 

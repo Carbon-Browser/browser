@@ -1,19 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/network_context_service_factory.h"
 
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/network_context_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace safe_browsing {
 
 // static
 NetworkContextServiceFactory* NetworkContextServiceFactory::GetInstance() {
-  return base::Singleton<NetworkContextServiceFactory>::get();
+  static base::NoDestructor<NetworkContextServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -24,21 +23,22 @@ NetworkContextService* NetworkContextServiceFactory::GetForBrowserContext(
 }
 
 NetworkContextServiceFactory::NetworkContextServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SafeBrowsingNetworkContextService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
 NetworkContextServiceFactory::~NetworkContextServiceFactory() = default;
 
-KeyedService* NetworkContextServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NetworkContextServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new NetworkContextService(profile);
-}
-
-content::BrowserContext* NetworkContextServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return std::make_unique<NetworkContextService>(profile);
 }
 
 }  // namespace safe_browsing

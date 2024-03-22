@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,10 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/android/vr/vr_controller.h"
 #include "chrome/browser/vr/input_event.h"
-#include "chrome/browser/vr/model/controller_model.h"
 #include "chrome/browser/vr/pose_util.h"
 #include "chrome/browser/vr/render_info.h"
 #include "device/vr/android/gvr/gvr_delegate.h"
-
-namespace {
-constexpr gfx::Vector3dF kForwardVector = {0.0f, 0.0f, -1.0f};
-}
+#include "third_party/gvr-android-sdk/src/libraries/headers/vr/gvr/capi/include/gvr.h"
 
 namespace vr {
 
@@ -33,65 +29,15 @@ gfx::Transform GvrInputDelegate::GetHeadPose() {
 }
 
 void GvrInputDelegate::OnTriggerEvent(bool pressed) {
-  NOTREACHED();
+  if (gvr_api_->GetViewerType() != gvr::ViewerType::GVR_VIEWER_TYPE_DAYDREAM) {
+    NOTREACHED();
+  }
 }
 
 void GvrInputDelegate::UpdateController(const gfx::Transform& head_pose,
                                         base::TimeTicks current_time,
                                         bool is_webxr_frame) {
   controller_->UpdateState(head_pose);
-}
-
-ControllerModel GvrInputDelegate::GetControllerModel(
-    const gfx::Transform& head_pose) {
-  gfx::Vector3dF head_direction = GetForwardVector(head_pose);
-
-  gfx::Vector3dF controller_direction;
-  gfx::Quaternion controller_quat;
-  if (!controller_->IsConnected()) {
-    // No controller detected, set up a gaze cursor that tracks the forward
-    // direction.
-    controller_direction = kForwardVector;
-    controller_quat = gfx::Quaternion(kForwardVector, head_direction);
-  } else {
-    controller_direction = {0.0f, -sin(kErgoAngleOffset),
-                            -cos(kErgoAngleOffset)};
-    controller_quat = controller_->Orientation();
-  }
-  gfx::Transform(controller_quat).TransformVector(&controller_direction);
-
-  ControllerModel controller_model;
-  controller_->GetTransform(&controller_model.transform);
-  controller_model.touchpad_button_state = ControllerModel::ButtonState::kUp;
-  DCHECK(!(controller_->ButtonUpHappened(PlatformController::kButtonSelect) &&
-           controller_->ButtonDownHappened(PlatformController::kButtonSelect)))
-      << "Cannot handle a button down and up event within one frame.";
-  if (controller_->ButtonState(gvr::kControllerButtonClick)) {
-    controller_model.touchpad_button_state =
-        ControllerModel::ButtonState::kDown;
-  }
-  controller_model.app_button_state =
-      controller_->ButtonState(gvr::kControllerButtonApp)
-          ? ControllerModel::ButtonState::kDown
-          : ControllerModel::ButtonState::kUp;
-  controller_model.home_button_state =
-      controller_->ButtonState(gvr::kControllerButtonHome)
-          ? ControllerModel::ButtonState::kDown
-          : ControllerModel::ButtonState::kUp;
-  controller_model.opacity = controller_->GetOpacity();
-  controller_model.laser_direction = controller_direction;
-  controller_model.laser_origin = controller_->GetPointerStart();
-  controller_model.handedness = controller_->GetHandedness();
-  controller_model.recentered = controller_->GetRecentered();
-  controller_model.touching_touchpad = controller_->IsTouchingTrackpad();
-  controller_model.touchpad_touch_position =
-      controller_->GetPositionInTrackpad();
-  controller_model.last_orientation_timestamp =
-      controller_->GetLastOrientationTimestamp();
-  controller_model.last_button_timestamp =
-      controller_->GetLastButtonTimestamp();
-  controller_model.battery_level = controller_->GetBatteryLevel();
-  return controller_model;
 }
 
 InputEventList GvrInputDelegate::GetGestures(base::TimeTicks current_time) {

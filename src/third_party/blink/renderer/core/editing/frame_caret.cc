@@ -26,7 +26,7 @@
 #include "third_party/blink/renderer/core/editing/frame_caret.h"
 
 #include "base/location.h"
-#include "third_party/blink/public/common/features.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/editing/caret_display_item_client.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
@@ -37,7 +37,6 @@
 #include "third_party/blink/renderer/core/editing/visible_position.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
-#include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/html/forms/text_control_element.h"
 #include "third_party/blink/renderer/core/layout/layout_block.h"
 #include "third_party/blink/renderer/core/layout/layout_embedded_content.h"
@@ -46,6 +45,8 @@
 #include "third_party/blink/renderer/platform/graphics/compositing/paint_artifact_compositor.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/graphics/paint/scoped_paint_chunk_properties.h"
+#include "third_party/blink/renderer/platform/widget/frame_widget.h"
+#include "ui/gfx/selection_bound.h"
 
 namespace blink {
 
@@ -61,8 +62,6 @@ FrameCaret::FrameCaret(LocalFrame& frame,
       caret_blink_timer_(frame.GetTaskRunner(TaskType::kInternalDefault),
                          this,
                          &FrameCaret::CaretBlinkTimerFired),
-      is_composited_caret_enabled_(
-          base::FeatureList::IsEnabled(features::kCompositedCaret)),
       effect_(EffectPaintPropertyNode::Create(
           EffectPaintPropertyNode::Root(),
           CaretEffectNodeState(/*visible*/ true,
@@ -95,10 +94,7 @@ EffectPaintPropertyNode::State FrameCaret::CaretEffectNodeState(
       (CompositorElementIdFromUniqueObjectId(
           NewUniqueObjectId(), CompositorElementIdNamespace::kPrimaryEffect)));
   state.compositor_element_id = element_id;
-  if (is_composited_caret_enabled_) {
-    state.direct_compositing_reasons =
-        CompositingReason::kActiveOpacityAnimation;
-  }
+  state.direct_compositing_reasons = CompositingReason::kActiveOpacityAnimation;
   return state;
 }
 
@@ -200,7 +196,7 @@ bool FrameCaret::ShouldPaintCaret(const LayoutBlock& block) const {
 }
 
 bool FrameCaret::ShouldPaintCaret(
-    const NGPhysicalBoxFragment& box_fragment) const {
+    const PhysicalBoxFragment& box_fragment) const {
   return display_item_client_->ShouldPaintCaret(box_fragment);
 }
 
@@ -216,18 +212,15 @@ void FrameCaret::SetVisibleIfActive(bool visible) {
   auto change_type = effect_->Update(
       *effect_->Parent(),
       CaretEffectNodeState(visible, effect_->LocalTransformSpace()));
-  if (is_composited_caret_enabled_) {
-    DCHECK_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues, change_type);
-    if (auto* compositor = frame_->View()->GetPaintArtifactCompositor()) {
-      if (compositor->DirectlyUpdateCompositedOpacityValue(*effect_)) {
-        effect_->CompositorSimpleValuesUpdated();
-        return;
-      }
+  DCHECK_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues, change_type);
+  if (auto* compositor = frame_->View()->GetPaintArtifactCompositor()) {
+    if (compositor->DirectlyUpdateCompositedOpacityValue(*effect_)) {
+      effect_->CompositorSimpleValuesUpdated();
+      return;
     }
   }
   // Fallback to full update if direct update is not available.
-  frame_->View()->SetPaintArtifactCompositorNeedsUpdate(
-      PaintArtifactCompositorUpdateReason::kFrameCaretSetVisible);
+  frame_->View()->SetPaintArtifactCompositorNeedsUpdate();
 }
 
 void FrameCaret::PaintCaret(GraphicsContext& context,
@@ -241,16 +234,24 @@ void FrameCaret::PaintCaret(GraphicsContext& context,
       PaintPropertyChangeType::kUnchanged) {
     // Needs full PaintArtifactCompositor update if the parent or the local
     // transform space changed.
-    frame_->View()->SetPaintArtifactCompositorNeedsUpdate(
-        PaintArtifactCompositorUpdateReason::kFrameCaretPaint);
+    frame_->View()->SetPaintArtifactCompositorNeedsUpdate();
   }
   ScopedPaintChunkProperties scoped_properties(context.GetPaintController(),
                                                *effect_, *display_item_client_,
                                                DisplayItem::kCaret);
 
   display_item_client_->PaintCaret(context, paint_offset, DisplayItem::kCaret);
-  if (frame_->Selection().IsHandleVisible() && !frame_->Selection().IsHidden())
-    display_item_client_->RecordSelection(context, paint_offset);
+
+  if (!frame_->Selection().IsHidden()) {
+    auto type = frame_->Selection().IsHandleVisible()
+                    ? gfx::SelectionBound::Type::CENTER
+                    : gfx::SelectionBound::Type::HIDDEN;
+
+    if (type == gfx::SelectionBound::Type::CENTER ||
+        base::FeatureList::IsEnabled(blink::features::kHiddenSelectionBounds)) {
+      display_item_client_->RecordSelection(context, paint_offset, type);
+    }
+  }
 }
 
 bool FrameCaret::ShouldShowCaret() const {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "android_webview/browser/gfx/display_scheduler_webview.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread_checker.h"
@@ -26,6 +27,7 @@ class ResolvedFrameData;
 }  // namespace viz
 
 namespace android_webview {
+// Lifetime: WebView
 class OverlayProcessorWebView : public viz::OverlayProcessorSurfaceControl,
                                 public OverlaysInfoProvider {
  public:
@@ -37,7 +39,9 @@ class OverlayProcessorWebView : public viz::OverlayProcessorSurfaceControl,
     ~ScopedSurfaceControlAvailable();
 
    private:
-    OverlayProcessorWebView* processor_;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION OverlayProcessorWebView* processor_;
   };
 
   OverlayProcessorWebView(
@@ -45,11 +49,12 @@ class OverlayProcessorWebView : public viz::OverlayProcessorSurfaceControl,
       viz::FrameSinkManagerImpl* frame_sink_manager);
   ~OverlayProcessorWebView() override;
 
-  void ProcessForFrameSinkId(const viz::FrameSinkId& frame_sink_id,
+  // returns false if it failed to update overlays.
+  bool ProcessForFrameSinkId(const viz::FrameSinkId& frame_sink_id,
                              const viz::ResolvedFrameData* frame_data);
   void SetOverlaysEnabledByHWUI(bool enabled);
   void RemoveOverlays();
-  absl::optional<gfx::SurfaceControl::Transaction> TakeSurfaceTransactionOnRT();
+  std::optional<gfx::SurfaceControl::Transaction> TakeSurfaceTransactionOnRT();
   viz::SurfaceId GetOverlaySurfaceId(const viz::FrameSinkId& frame_sink_id);
 
   // viz::OverlayProcessorSurfaceControl overrides:
@@ -57,8 +62,9 @@ class OverlayProcessorWebView : public viz::OverlayProcessorSurfaceControl,
       viz::OverlayCandidateList* candidate_list) override;
   void ScheduleOverlays(
       viz::DisplayResourceProvider* resource_provider) override;
-  void AdjustOutputSurfaceOverlay(absl::optional<OutputSurfaceOverlayPlane>*
-                                      output_surface_plane) override {}
+  void AdjustOutputSurfaceOverlay(
+      std::optional<OutputSurfaceOverlayPlane>* output_surface_plane) override {
+  }
   void CheckOverlaySupportImpl(
       const viz::OverlayProcessorInterface::OutputSurfaceOverlayPlane*
           primary_plane,

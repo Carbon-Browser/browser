@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 
 namespace blink {
 
-class ResourceTimingInfo;
+class ResourceResponse;
 class PerformanceServerTiming;
 
 class CORE_EXPORT PerformanceServerTiming final : public ScriptWrappable {
@@ -30,12 +30,8 @@ class CORE_EXPORT PerformanceServerTiming final : public ScriptWrappable {
   double duration() const { return duration_; }
   const String& description() const { return description_; }
 
-  static Vector<mojom::blink::ServerTimingInfoPtr> ParseServerTimingToMojo(
-      const ResourceTimingInfo&);
-  static Vector<mojom::blink::ServerTimingInfoPtr>
-  ParseServerTimingFromHeaderValueToMojo(const String& value);
   static HeapVector<Member<PerformanceServerTiming>> ParseServerTiming(
-      const ResourceTimingInfo&);
+      const ResourceResponse&);
   static HeapVector<Member<PerformanceServerTiming>> FromParsedServerTiming(
       const Vector<mojom::blink::ServerTimingInfoPtr>&);
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,26 +88,40 @@ IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
                   kCanvasCaptureColorTestHtmlFile);
 }
 
-// TODO(https://crbug.com/1334876): Flaky.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-#define MAYBE_VerifyCanvasWebGLCaptureColor \
-  DISABLED_VerifyCanvasWebGLCaptureColor
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+#define MAYBE_VerifyCanvasWebGLCaptureOpaqueColor \
+  DISABLED_VerifyCanvasWebGLCaptureOpaqueColor
 #else
-#define MAYBE_VerifyCanvasWebGLCaptureColor VerifyCanvasWebGLCaptureColor
-#endif
+#define MAYBE_VerifyCanvasWebGLCaptureOpaqueColor \
+  VerifyCanvasWebGLCaptureOpaqueColor
+#endif  // BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
 IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
-                       MAYBE_VerifyCanvasWebGLCaptureColor) {
-#if !BUILDFLAG(IS_MAC)
-  // TODO(crbug.com/706009): Make this test pass on mac.  Behavior is not buggy
-  // (verified manually) on mac, but for some reason this test fails on the mac
-  // bot.
-  MakeTypicalCall("testCanvasWebGLCaptureColors(true);",
+                       MAYBE_VerifyCanvasWebGLCaptureOpaqueColor) {
+  MakeTypicalCall("testCanvasWebGLCaptureOpaqueColors(true);",
                   kCanvasCaptureColorTestHtmlFile);
-#endif
 }
 
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+#define MAYBE_VerifyCanvasWebGLCaptureAlphaColor \
+  DISABLED_VerifyCanvasWebGLCaptureAlphaColor
+#else
+#define MAYBE_VerifyCanvasWebGLCaptureAlphaColor \
+  VerifyCanvasWebGLCaptureAlphaColor
+#endif  // BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
 IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
-                       VerifyCanvasCapture2DFrames) {
+                       MAYBE_VerifyCanvasWebGLCaptureAlphaColor) {
+  MakeTypicalCall("testCanvasWebGLCaptureAlphaColors(true);",
+                  kCanvasCaptureColorTestHtmlFile);
+}
+
+// TODO(https://crbug.com/1350300): Flaky.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
+#define MAYBE_VerifyCanvasCapture2DFrames DISABLED_VerifyCanvasCapture2DFrames
+#else
+#define MAYBE_VerifyCanvasCapture2DFrames VerifyCanvasCapture2DFrames
+#endif
+IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
+                       MAYBE_VerifyCanvasCapture2DFrames) {
   MakeTypicalCall("testCanvasCapture(draw2d);", kCanvasCaptureTestHtmlFile);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "base/containers/contains.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -15,7 +16,6 @@
 #include "components/exo/shell_surface.h"
 #include "components/exo/test/shell_surface_builder.h"
 #include "components/exo/wm_helper.h"
-#include "components/exo/wm_helper_chromeos.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/web_contents_tester.h"
@@ -35,7 +35,7 @@ class CustomTabSessionImplTest : public InProcessBrowserTest,
   }
 
   void SetUpOnMainThread() override {
-    wm_helper_ = std::make_unique<exo::WMHelperChromeOS>();
+    wm_helper_ = std::make_unique<exo::WMHelper>();
     DCHECK(exo::WMHelper::HasInstance());
   }
 
@@ -65,7 +65,7 @@ class CustomTabSessionImplTest : public InProcessBrowserTest,
 
  private:
   std::unique_ptr<exo::WMHelper> wm_helper_;
-  CustomTabSessionImpl* custom_tab_session_ = nullptr;
+  raw_ptr<CustomTabSessionImpl, ExperimentalAsh> custom_tab_session_ = nullptr;
 };
 
 // Calls |callback| when |browser| is removed from BrowserList.
@@ -85,7 +85,7 @@ class BrowserRemovalObserver final : public BrowserListObserver {
   }
 
  private:
-  Browser* browser_;
+  raw_ptr<Browser, DanglingUntriaged | ExperimentalAsh> browser_;
   base::OnceClosure callback_;
 };
 

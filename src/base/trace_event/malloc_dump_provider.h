@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define BASE_TRACE_EVENT_MALLOC_DUMP_PROVIDER_H_
 
 #include "base/allocator/buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/base_export.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
@@ -20,7 +21,7 @@
 #endif
 
 #if BUILDFLAG(USE_PARTITION_ALLOC)
-#include "base/allocator/partition_allocator/partition_stats.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_stats.h"
 #endif
 
 namespace base {
@@ -82,7 +83,7 @@ class BASE_EXPORT MemoryDumpPartitionStatsDumper final
                                  ProcessMemoryDump* memory_dump,
                                  MemoryDumpLevelOfDetail level_of_detail);
 
-  static const char* kPartitionsDumpName;
+  static constexpr char kPartitionsDumpName[] = "partitions";
 
   // PartitionStatsDumper implementation.
   void PartitionDumpTotals(

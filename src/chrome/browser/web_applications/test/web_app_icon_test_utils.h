@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_install_utils.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/blink/public/common/manifest/manifest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -46,11 +46,13 @@ bool AreColorsEqual(SkColor expected_color,
                     SkColor actual_color,
                     int threshold);
 
-base::FilePath GetAppIconsAnyDir(Profile* profile, const AppId& app_id);
+base::FilePath GetAppIconsAnyDir(Profile* profile,
+                                 const webapps::AppId& app_id);
 
-base::FilePath GetAppIconsMaskableDir(Profile* profile, const AppId& app_id);
+base::FilePath GetAppIconsMaskableDir(Profile* profile,
+                                      const webapps::AppId& app_id);
 
-base::FilePath GetOtherIconsDir(Profile* profile, const AppId& app_id);
+base::FilePath GetOtherIconsDir(Profile* profile, const webapps::AppId& app_id);
 
 // Performs blocking IO and decompression.
 bool ReadBitmap(FileUtilsWrapper* utils,
@@ -101,22 +103,12 @@ void AddIconsToWebAppInstallInfo(
 
 void IconManagerWriteGeneratedIcons(
     WebAppIconManager& icon_manager,
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     const std::vector<GeneratedIconsInfo>& icons_info);
 
-// Favicons are read on WebAppIconManager startup, awaits
-// WebAppIconManager::favicon_read_callback_ synchronously.
-void IconManagerStartAndAwaitFaviconAny(WebAppIconManager& icon_manager,
-                                        const AppId& app_id);
-
-// Monochrome favicons are read on WebAppIconManager startup, awaits
-// WebAppIconManager::favicon_monochrome_read_callback_ synchronously.
-void IconManagerStartAndAwaitFaviconMonochrome(WebAppIconManager& icon_manager,
-                                               const AppId& app_id);
-
 // Synchronous read of an app icon pixel.
-SkColor IconManagerReadAppIconPixel(const WebAppIconManager& icon_manager,
-                                    const AppId& app_id,
+SkColor IconManagerReadAppIconPixel(WebAppIconManager& icon_manager,
+                                    const webapps::AppId& app_id,
                                     SquareSizePx size_px,
                                     int x = 0,
                                     int y = 0);

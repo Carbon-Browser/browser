@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 
 #include "base/strings/string_piece.h"
 #include "build/build_config.h"
@@ -64,7 +65,7 @@ struct UUID {
   //!     parsed, with the object state untouched.
   bool InitializeFromString(const base::StringPiece& string);
 #if BUILDFLAG(IS_WIN) || DOXYGEN
-  bool InitializeFromString(const base::WStringPiece& string);
+  bool InitializeFromString(const std::wstring_view& string);
 #endif  // BUILDFLAG(IS_WIN)
 
   //! \brief Initializes the %UUID using a standard system facility to generate

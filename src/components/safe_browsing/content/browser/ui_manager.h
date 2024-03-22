@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "components/safe_browsing/content/browser/base_ui_manager.h"
 #include "components/safe_browsing/content/browser/safe_browsing_blocking_page_factory.h"
@@ -89,6 +89,13 @@ class SafeBrowsingUIManager : public BaseUIManager {
         const GURL& page_url,
         const std::string& reason,
         int net_error_code) = 0;
+#if !BUILDFLAG(IS_ANDROID)
+    virtual void TriggerUrlFilteringInterstitialExtensionEventIfDesired(
+        content::WebContents* web_contents,
+        const GURL& page_url,
+        const std::string& threat_type,
+        safe_browsing::RTLookupResponse rt_lookup_response) = 0;
+#endif
 
     // Gets the NoStatePrefetchContents instance associated with |web_contents|
     // if one exists (i.e., if |web_contents| is being prerendered).
@@ -135,14 +142,39 @@ class SafeBrowsingUIManager : public BaseUIManager {
   // |resource| is the unsafe resource for which the warning is displayed.
   void StartDisplayingBlockingPage(const UnsafeResource& resource);
 
+  // Determines whether a specific lookup is eligible for the
+  // SafeBrowsingLookupMechanism experiment. Once determined, it posts that
+  // result to the |callback| via the |callback_task_runner|.
+  // TODO(crbug.com/1410253): Deprecate this once the experiment is complete.
+  void CheckLookupMechanismExperimentEligibility(
+      security_interstitials::UnsafeResource resource,
+      base::OnceCallback<void(bool)> callback,
+      scoped_refptr<base::SequencedTaskRunner> callback_task_runner);
+
+  // Helper function that calls |CheckLookupMechanismExperimentEligibility|
+  // first and then |StartDisplayingBlockingPage|. This is lumped into one
+  // method to ensure that the former is performed first on this thread, since
+  // the latter can affect the results of the former.
+  // TODO(crbug.com/1410253): Deprecate this once the experiment is complete.
+  void CheckExperimentEligibilityAndStartBlockingPage(
+      security_interstitials::UnsafeResource resource,
+      base::OnceCallback<void(bool)> callback,
+      scoped_refptr<base::SequencedTaskRunner> callback_task_runner);
+
   // Called to stop or shutdown operations on the UI thread. This may be called
   // multiple times during the life of the UIManager. Should be called
   // on UI thread. If shutdown is true, the manager is disabled permanently.
   void Stop(bool shutdown);
 
-  // Called on the IO thread by the ThreatDetails with the report, so the
-  // service can send it over.
+  // Called on the UI thread by the ThreatDetails with the report, so the
+  // PingManager can send it over.
   void SendThreatDetails(
+      content::BrowserContext* browser_context,
+      std::unique_ptr<ClientSafeBrowsingReportRequest> report) override;
+
+  // Called on the UI thread by the ThreatDetails with the report, so the
+  // HaTS service can later send it over if the user takes the survey.
+  void AttachThreatDetailsAndLaunchSurvey(
       content::BrowserContext* browser_context,
       std::unique_ptr<ClientSafeBrowsingReportRequest> report) override;
 
@@ -157,8 +189,16 @@ class SafeBrowsingUIManager : public BaseUIManager {
   // Report hits to unsafe contents (malware, phishing, unsafe download URL)
   // to the server. Can only be called on UI thread.  The hit report will
   // only be sent if the user has enabled SBER and is not in incognito mode.
-  void MaybeReportSafeBrowsingHit(const safe_browsing::HitReport& hit_report,
+  void MaybeReportSafeBrowsingHit(std::unique_ptr<HitReport> hit_report,
                                   content::WebContents* web_contents) override;
+
+  // Send ClientSafeBrowsingReport for unsafe contents (malware, phishing,
+  // unsafe download URL) to the server. Can only be called on UI thread.  The
+  // report will only be sent if the user has enabled SBER and is not in
+  // incognito mode.
+  void MaybeSendClientSafeBrowsingWarningShownReport(
+      std::unique_ptr<ClientSafeBrowsingReportRequest> report,
+      content::WebContents* web_contents) override;
 
   // Creates the allowlist URL set for tests that create a blocking page
   // themselves and then simulate OnBlockingPageDone(). OnBlockingPageDone()
@@ -181,6 +221,15 @@ class SafeBrowsingUIManager : public BaseUIManager {
       const std::string& reason,
       int net_error_code);
 
+#if !BUILDFLAG(IS_ANDROID)
+  // Invokes TriggerUrlFilteringInterstitialExtensionEventIfDesired() on
+  // |delegate_|.
+  void ForwardUrlFilteringInterstitialExtensionEventToEmbedder(
+      content::WebContents* web_contents,
+      const GURL& page_url,
+      const std::string& threat_type,
+      safe_browsing::RTLookupResponse rt_lookup_response);
+#endif
   SafeBrowsingBlockingPageFactory* blocking_page_factory() {
     return blocking_page_factory_.get();
   }
@@ -198,10 +247,22 @@ class SafeBrowsingUIManager : public BaseUIManager {
   // |observer_list_|.
   void CreateAndSendHitReport(const UnsafeResource& resource) override;
 
+  // Creates a safe browsing report for the given resource and calls
+  // MaybeSendClientSafeBrowsingWarningShownReport.
+  void CreateAndSendClientSafeBrowsingWarningShownReport(
+      const UnsafeResource& resource) override;
+
   // Helper method to ensure hit reports are only sent when the user has
   // opted in to extended reporting and is not currently in incognito mode.
-  bool ShouldSendHitReport(const HitReport& hit_report,
+  bool ShouldSendHitReport(HitReport* hit_report,
                            content::WebContents* web_contents);
+
+  // Helper method to ensure client safe browsing reports are only sent when the
+  // user has opted in to extended reporting and is not currently in incognito
+  // mode.
+  bool ShouldSendClientSafeBrowsingWarningShownReport(
+      ClientSafeBrowsingReportRequest* report,
+      content::WebContents* web_contents);
 
  private:
   friend class SafeBrowsingUIManagerTest;

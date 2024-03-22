@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "chrome/test/chromedriver/net/command_id.h"
 #include "chrome/test/chromedriver/net/timeout.h"
@@ -64,7 +65,7 @@ SyncWebSocketImpl::Core::Core(net::URLRequestContextGetter* context_getter)
     : context_getter_(context_getter),
       is_connected_(false),
       on_update_event_(&lock_),
-      owning_sequence_(base::SequencedTaskRunnerHandle::Get()) {}
+      owning_sequence_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 bool SyncWebSocketImpl::Core::IsConnected() {
   base::AutoLock lock(lock_);
@@ -163,12 +164,13 @@ void SyncWebSocketImpl::Core::DetermineRecipient(const std::string& message,
                                                  bool* send_to_chromedriver) {
   absl::optional<base::Value> message_value =
       base::JSONReader::Read(message, base::JSON_REPLACE_INVALID_CHARACTERS);
-  base::DictionaryValue* message_dict;
-  if (!message_value || !message_value->GetAsDictionary(&message_dict)) {
+  base::Value::Dict* message_dict =
+      message_value ? message_value->GetIfDict() : nullptr;
+  if (!message_dict) {
     *send_to_chromedriver = true;
     return;
   }
-  base::Value* id = message_dict->FindKey("id");
+  base::Value* id = message_dict->Find("id");
   *send_to_chromedriver =
       id == nullptr ||
       (id->is_int() && CommandId::IsChromeDriverCommandId(id->GetInt()));

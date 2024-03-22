@@ -1,17 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.merchant_viewer;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Represents the information for one merchant trust signal event entry.
- */
+/** Represents the information for one merchant trust signal event entry. */
 public class MerchantTrustSignalsEvent {
     private final String mKey;
     private final long mTimestamp;

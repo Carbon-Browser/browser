@@ -1,28 +1,27 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import <objc/runtime.h>
 
-#include "base/bind.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/base_paths.h"
+#import "base/functional/bind.h"
+#import "base/path_service.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_features.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
-#include "ios/net/url_test_util.h"
+#import "ios/net/url_test_util.h"
 #import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/web/common/features.h"
-#include "net/test/embedded_test_server/default_handlers.h"
-#include "net/test/embedded_test_server/http_request.h"
-#include "net/test/embedded_test_server/http_response.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/test/embedded_test_server/default_handlers.h"
+#import "net/test/embedded_test_server/http_request.h"
+#import "net/test/embedded_test_server/http_response.h"
 
 using chrome_test_util::OmniboxText;
 using chrome_test_util::NTPCollectionView;
@@ -33,17 +32,17 @@ namespace {
 
 // Path to two test pages, page1 and page2 with associated contents and titles.
 const char kPageOnePath[] = "/page1.html";
-const char kPageOneContent[] = "page 1 content";
-const char kPageOneTitle[] = "page1";
+const char kPageOneContent[] = "This is the first page.";
+const char kPageOneTitle[] = "The first page title.";
 const char kPageTwoPath[] = "/page2.html";
-const char kPageTwoContent[] = "page 2 content";
-const char kPageTwoTitle[] = "page 2";
+const char kPageTwoContent[] = "This is the second page.";
+const char kPageTwoTitle[] = "The second page title.";
 
 // Path to a test page used to count each page load.
 const char kCountURL[] = "/countme.html";
 
 // Response handler for page1 and page2 that supports 'airplane mode' by
-// returning an empty RawHttpResponse when |responds_with_content| us false.
+// returning an empty RawHttpResponse when `responds_with_content` us false.
 std::unique_ptr<net::test_server::HttpResponse> RestoreResponse(
     const bool& responds_with_content,
     const net::test_server::HttpRequest& request) {
@@ -72,7 +71,7 @@ std::unique_ptr<net::test_server::HttpResponse> RestoreResponse(
   return std::move(http_response);
 }
 
-// Response handler for |kCountURL| that counts the number of page loads.
+// Response handler for `kCountURL` that counts the number of page loads.
 std::unique_ptr<net::test_server::HttpResponse> CountResponse(
     int* counter,
     const net::test_server::HttpRequest& request) {
@@ -88,7 +87,7 @@ std::unique_ptr<net::test_server::HttpResponse> CountResponse(
   return std::move(http_response);
 }
 
-// Returns true when omnibox contains |text|, otherwise returns false after
+// Returns true when omnibox contains `text`, otherwise returns false after
 // after a timeout.
 [[nodiscard]] bool WaitForOmniboxContaining(std::string text) {
   return base::test::ios::WaitUntilConditionOrTimeout(
@@ -103,7 +102,7 @@ std::unique_ptr<net::test_server::HttpResponse> CountResponse(
 }
 
 // Integration tests for restoring session history.
-@interface RestoreTestCase : ChromeTestCase {
+@interface RestoreWithCacheTestCase : ChromeTestCase {
   // Use a second test server to ensure different origin navigations.
   std::unique_ptr<net::EmbeddedTestServer> _secondTestServer;
 }
@@ -129,13 +128,13 @@ std::unique_ptr<net::test_server::HttpResponse> CountResponse(
 
 // Verify that each page visited in -loadTestPages is properly restored by
 // navigating to each page and triggering a restore, confirming that pages are
-// reloaded and back-forward history is preserved.  If |checkServerData| is YES,
+// reloaded and back-forward history is preserved.  If `checkServerData` is YES,
 // also check that the proper content is restored.
 - (void)verifyRestoredTestPages:(BOOL)checkServerData;
 
 @end
 
-@implementation RestoreTestCase
+@implementation RestoreWithCacheTestCase
 
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config = [super appConfigurationForTestCase];
@@ -145,9 +144,8 @@ std::unique_ptr<net::test_server::HttpResponse> CountResponse(
 - (net::EmbeddedTestServer*)secondTestServer {
   if (!_secondTestServer) {
     _secondTestServer = std::make_unique<net::EmbeddedTestServer>();
-    NSString* bundlePath = [NSBundle bundleForClass:[self class]].resourcePath;
     _secondTestServer->ServeFilesFromDirectory(
-        base::FilePath(base::SysNSStringToUTF8(bundlePath))
+        base::PathService::CheckedGet(base::DIR_ASSETS)
             .AppendASCII("ios/testing/data/http_server_files/"));
     net::test_server::RegisterDefaultHandlers(_secondTestServer.get());
   }
@@ -220,8 +218,6 @@ std::unique_ptr<net::test_server::HttpResponse> CountResponse(
       disabled:{}
       relaunchPolicy:ForceRelaunchByKilling];
   // Restore after crash and confirm the background page is not reloaded.
-  [[EarlGrey selectElementWithMatcher:grey_text(@"Restore")]
-      performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:OmniboxText(echoPage.GetContent())]
       assertWithMatcher:grey_notNil()];
   [ChromeEarlGrey waitForWebStateContainingText:"Echo"];
@@ -242,7 +238,6 @@ std::unique_ptr<net::test_server::HttpResponse> CountResponse(
 }
 
 - (void)triggerRestore {
-  [ChromeEarlGrey saveSessionImmediately];
   [[AppLaunchManager sharedManager]
       ensureAppLaunchedWithFeaturesEnabled:{}
                                   disabled:{kStartSurface}
@@ -359,6 +354,25 @@ std::unique_ptr<net::test_server::HttpResponse> CountResponse(
   [self triggerRestore];
   [[EarlGrey selectElementWithMatcher:NTPCollectionView()]
       assertWithMatcher:grey_notNil()];
+}
+
+@end
+
+// Test using synthesize restore.
+@interface RestoreWithSynthesizedTestCase : RestoreWithCacheTestCase
+@end
+
+@implementation RestoreWithSynthesizedTestCase
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config = [super appConfigurationForTestCase];
+  config.features_disabled.push_back(
+      web::features::kForceSynthesizedRestoreSession);
+  return config;
+}
+
+// This is currently needed to prevent this test case from being ignored.
+- (void)testEmpty {
 }
 
 @end

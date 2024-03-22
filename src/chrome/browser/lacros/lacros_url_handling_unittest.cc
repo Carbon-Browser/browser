@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,20 +12,6 @@
 #include "content/public/browser/web_contents.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
-
-TEST(LacrosUrlHandlingTest, IsURLAcceptedByAshOldVersion) {
-  base::test::TaskEnvironment task_environment;
-
-  auto params = crosapi::mojom::BrowserInitParams::New();
-  chromeos::BrowserInitParams::SetInitParamsForTests(std::move(params));
-  EXPECT_TRUE(lacros_url_handling::IsUrlAcceptedByAsh(
-      GURL(chrome::kChromeUIOSSettingsURL)));
-  EXPECT_TRUE(
-      lacros_url_handling::IsUrlAcceptedByAsh(GURL(chrome::kChromeUIFlagsURL)));
-  EXPECT_FALSE(lacros_url_handling::IsUrlAcceptedByAsh(GURL("")));
-  EXPECT_FALSE(
-      lacros_url_handling::IsUrlAcceptedByAsh(GURL("chrome://flags2")));
-}
 
 TEST(LacrosUrlHandlingTest, IsURLAcceptedByAsh) {
   base::test::TaskEnvironment task_environment;

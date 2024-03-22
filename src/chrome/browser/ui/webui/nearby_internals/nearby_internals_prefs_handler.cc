@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/nearby_internals/nearby_internals_prefs_handler.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_prefs.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/cross_device/logging/logging.h"
 
 namespace {
 
@@ -47,6 +47,6 @@ void NearbyInternalsPrefsHandler::HandleClearNearbyPrefs(
 
   // Add log message so users who trigger the Clear Pref button on
   // chrome://nearby-internals know that the Nearby prefs have been cleared.
-  NS_LOG(INFO)
+  CD_LOG(INFO, Feature::NS)
       << "Nearby Share has been disabled and Nearby prefs have been cleared.";
 }

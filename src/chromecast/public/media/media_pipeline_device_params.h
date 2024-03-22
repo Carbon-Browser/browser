@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include <ostream>
 #include <string>
 
+#include "volume_control.h"
+
 namespace service_manager {
 class Connector;
 }  // namespace service_manager
@@ -18,8 +20,6 @@ namespace chromecast {
 class TaskRunner;
 
 namespace media {
-
-enum class AudioContentType;  // See chromecast/public/volume_control.h
 
 enum class AudioChannel {
   kAll = 0,
@@ -44,8 +44,9 @@ struct MediaPipelineDeviceParams {
     kModeIgnorePtsAndVSync = 2,
     // Almost same as kModeSyncPts except two things:
     // 1. When pushing silence to the backend decoder, set an invalid timestamp
-    // to the silence buffer. If the stream uses hardware av sync mode, it will
-    // drop the silence buffer. Otherwise we will play the silence.
+    // to the silence buffer. We always play the silence, but if the stream uses
+    // hardware av sync mode, the invalid timestamp will not be used to do av
+    // sync.
     // 2. When pushing non-silence buffers, do not adjust the timestamp. When
     // calculating the rendering delay, the silence buffer will be counted. But
     // when calculating the current playback position of the real audio data,
@@ -62,6 +63,8 @@ struct MediaPipelineDeviceParams {
     // do not affect output of real audio streams.
     kAudioStreamSoundEffects = 1,
   };
+
+  MediaPipelineDeviceParams();
 
   // TODO(guohuideng): Get rid of these excessive number of constructors, using
   // default arguments.
@@ -81,66 +84,67 @@ struct MediaPipelineDeviceParams {
                             const std::string& device_id_in);
 
   MediaPipelineDeviceParams(const MediaPipelineDeviceParams& other);
+  MediaPipelineDeviceParams& operator=(const MediaPipelineDeviceParams& other);
   MediaPipelineDeviceParams(MediaPipelineDeviceParams&& other);
+  MediaPipelineDeviceParams& operator=(MediaPipelineDeviceParams&& other);
 
-  MediaSyncType sync_type;
-  const AudioStreamType audio_type;
+  MediaSyncType sync_type = kModeSyncPts;
+  AudioStreamType audio_type = kAudioStreamNormal;
 
   // This flag matters only when the implementation of
   // CastMediaShlib::CreateMediaPipelineBackend(...) can return multiple kinds
   // of CastMediaShlib::MediaPipelineBackend. When this flag is true,
   // CastMediaShlib::CreateMediaPipelineBackend(...) should return a backend
   // that supports pass-through audio if it is possible.
-  bool pass_through_audio_support_desired;
+  bool pass_through_audio_support_desired = false;
 
   // task_runner allows backend implementations to post tasks to the media
   // thread.  Since all calls from cast_shell into the backend are made on
   // the media thread, this may simplify thread management and safety for
   // some backends.
-  TaskRunner* const task_runner;
+  TaskRunner* task_runner = nullptr;
 
   // This field is deprecated.
   //
   // TODO(yucliu): Remove this field.
-  service_manager::Connector* const connector;
+  service_manager::Connector* connector = nullptr;
 
   // Identifies the content type for volume control.
-  const AudioContentType content_type;
-  const std::string device_id;
+  AudioContentType content_type = AudioContentType::kMedia;
+  std::string device_id;
 
   // ID of the current session.
   std::string session_id;
 
-  // True if casting to multiple devices, or false otherwise.
-  bool multiroom;
+  // This field is deprecated and ignored.
+  bool multiroom = false;
 
   // Audio channel this device is playing.
-  AudioChannel audio_channel;
+  AudioChannel audio_channel = AudioChannel::kAll;
 
-  // Intrinsic output delay of this device.
-  int64_t output_delay_us;
+  // This field is deprecated and ignored.
+  int64_t output_delay_us = 0;
 };
+
+inline MediaPipelineDeviceParams::MediaPipelineDeviceParams() = default;
 
 inline MediaPipelineDeviceParams::MediaPipelineDeviceParams(
     TaskRunner* task_runner_in,
     AudioContentType content_type_in,
     const std::string& device_id_in)
-    : MediaPipelineDeviceParams(kModeSyncPts,
-                                kAudioStreamNormal,
-                                task_runner_in,
-                                content_type_in,
-                                device_id_in) {}
+    : task_runner(task_runner_in),
+      content_type(content_type_in),
+      device_id(device_id_in) {}
 
 inline MediaPipelineDeviceParams::MediaPipelineDeviceParams(
     MediaSyncType sync_type_in,
     TaskRunner* task_runner_in,
     AudioContentType content_type_in,
     const std::string& device_id_in)
-    : MediaPipelineDeviceParams(sync_type_in,
-                                kAudioStreamNormal,
-                                task_runner_in,
-                                content_type_in,
-                                device_id_in) {}
+    : sync_type(sync_type_in),
+      task_runner(task_runner_in),
+      content_type(content_type_in),
+      device_id(device_id_in) {}
 
 inline MediaPipelineDeviceParams::MediaPipelineDeviceParams(
     MediaSyncType sync_type_in,
@@ -150,19 +154,20 @@ inline MediaPipelineDeviceParams::MediaPipelineDeviceParams(
     const std::string& device_id_in)
     : sync_type(sync_type_in),
       audio_type(audio_type_in),
-      pass_through_audio_support_desired(false),
       task_runner(task_runner_in),
-      connector(nullptr),
       content_type(content_type_in),
-      device_id(device_id_in),
-      multiroom(false),
-      audio_channel(AudioChannel::kAll),
-      output_delay_us(0) {}
+      device_id(device_id_in) {}
 
 inline MediaPipelineDeviceParams::MediaPipelineDeviceParams(
     const MediaPipelineDeviceParams& other) = default;
 
+inline MediaPipelineDeviceParams& MediaPipelineDeviceParams::operator=(
+    const MediaPipelineDeviceParams& other) = default;
+
 inline MediaPipelineDeviceParams::MediaPipelineDeviceParams(
+    MediaPipelineDeviceParams&& other) = default;
+
+inline MediaPipelineDeviceParams& MediaPipelineDeviceParams::operator=(
     MediaPipelineDeviceParams&& other) = default;
 
 inline std::ostream& operator<<(std::ostream& os, AudioChannel audio_channel) {

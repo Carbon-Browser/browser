@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <UIKit/UIKit.h>
 
-// Container view for the popup view hierarchy. It overrides hit-testing so we
-// can dismiss hits on the PopupEmptySpaceView.
+/// Container view for the popup view hierarchy. It overrides hit-testing so we
+/// can dismiss hits on the PopupEmptySpaceView.
 @interface OmniboxPopupContainerView : UIView
 @end
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ scoped_refptr<FakePaintedScrollbarLayer> FakePaintedScrollbarLayer::Create(
     bool has_thumb,
     ElementId scrolling_element_id) {
   return Create(paint_during_update, has_thumb,
-                ScrollbarOrientation::HORIZONTAL, false, false,
+                ScrollbarOrientation::kHorizontal, false, false,
                 scrolling_element_id);
 }
 

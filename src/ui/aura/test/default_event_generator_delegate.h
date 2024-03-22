@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class DefaultEventGeneratorDelegate : public EventGeneratorDelegateAura {
       const Window* window) const override;
 
  private:
-  raw_ptr<Window> root_window_;
+  raw_ptr<Window, AcrossTasksDanglingUntriaged> root_window_;
 };
 
 }  // namespace test

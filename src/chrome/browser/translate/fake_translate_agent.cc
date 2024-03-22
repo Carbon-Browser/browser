@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,11 +49,6 @@ FakeTranslateAgent::BindToNewPageRemote() {
 }
 
 // translate::mojom::TranslateAgent implementation.
-void FakeTranslateAgent::GetWebLanguageDetectionDetails(
-    GetWebLanguageDetectionDetailsCallback callback) {
-  std::move(callback).Run("", "", GURL(), false);
-}
-
 void FakeTranslateAgent::TranslateFrame(const std::string& translate_script,
                                         const std::string& source_lang,
                                         const std::string& target_lang,
@@ -75,18 +70,10 @@ void FakeTranslateAgent::RevertTranslation() {
   called_revert_translation_ = true;
 }
 
-void FakeTranslateAgent::PageTranslated(
-    bool cancelled,
-    const std::string& source_lang,
-    const std::string& target_lang,
-    translate::TranslateErrors::Type error) {
+void FakeTranslateAgent::PageTranslated(bool cancelled,
+                                        const std::string& source_lang,
+                                        const std::string& target_lang,
+                                        translate::TranslateErrors error) {
   std::move(translate_callback_pending_)
       .Run(cancelled, source_lang, target_lang, error);
-}
-
-void FakeTranslateAgent::BindRequest(
-    mojo::ScopedInterfaceEndpointHandle handle) {
-  per_frame_translate_agent_receivers_.Add(
-      this, mojo::PendingAssociatedReceiver<translate::mojom::TranslateAgent>(
-                std::move(handle)));
 }

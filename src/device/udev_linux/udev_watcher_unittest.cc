@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,8 @@ TEST(UdevWatcherTest, FilterParamsReturnCorrectValues) {
   UdevWatcher::Filter subsystem_devtype_filter(kSubsystem, kDevtype);
   EXPECT_TRUE(subsystem_devtype_filter.subsystem());
   EXPECT_TRUE(subsystem_devtype_filter.devtype());
-  base::StringPiece filter_subsystem = subsystem_devtype_filter.subsystem();
-  base::StringPiece filter_devtype = subsystem_devtype_filter.devtype();
+  std::string_view filter_subsystem = subsystem_devtype_filter.subsystem();
+  std::string_view filter_devtype = subsystem_devtype_filter.devtype();
   EXPECT_EQ(kSubsystem, filter_subsystem);
   EXPECT_EQ(kDevtype, filter_devtype);
 }

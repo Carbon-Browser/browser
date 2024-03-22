@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,9 @@
 // tab, if available.
 - (void)readingListListViewController:(UIViewController*)viewController
               openItemOfflineInNewTab:(id<ReadingListListItem>)item;
+
+// Notifies the delegate that the reading list has been loaded.
+- (void)didLoadContent;
 
 @end
 

@@ -30,6 +30,7 @@
 
 #include "third_party/blink/renderer/platform/fonts/font_data_cache.h"
 
+#include "base/auto_reset.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
 
@@ -41,14 +42,6 @@ const unsigned kCTargetInactiveFontData = 200;
 #else
 const unsigned kCMaxInactiveFontData = 225;
 const unsigned kCTargetInactiveFontData = 200;
-#endif
-
-#if defined(USE_PARALLEL_TEXT_SHAPING)
-// static
-FontDataCache& FontDataCache::SharedInstance() {
-  DEFINE_THREAD_SAFE_STATIC_LOCAL(FontDataCache, shared_font_data_cache, ());
-  return shared_font_data_cache;
-}
 #endif
 
 // static
@@ -72,7 +65,6 @@ scoped_refptr<SimpleFontData> FontDataCache::Get(
     return nullptr;
   }
 
-  AutoLockForParallelTextShaping guard(lock_);
   Cache::iterator result = cache_.find(platform_data);
   if (result == cache_.end()) {
     std::pair<scoped_refptr<SimpleFontData>, unsigned> new_value(
@@ -107,14 +99,12 @@ scoped_refptr<SimpleFontData> FontDataCache::Get(
 }
 
 bool FontDataCache::Contains(const FontPlatformData* font_platform_data) const {
-  AutoLockForParallelTextShaping guard(lock_);
   return cache_.Contains(font_platform_data);
 }
 
 void FontDataCache::Release(const SimpleFontData* font_data) {
   DCHECK(!font_data->IsCustomFont());
 
-  AutoLockForParallelTextShaping guard(lock_);
   Cache::iterator it = cache_.find(&(font_data->PlatformData()));
   DCHECK_NE(it, cache_.end());
   if (it == cache_.end())
@@ -126,7 +116,6 @@ void FontDataCache::Release(const SimpleFontData* font_data) {
 }
 
 bool FontDataCache::Purge(PurgeSeverity purge_severity) {
-  AutoLockForParallelTextShaping guard(lock_);
   if (purge_severity == kForcePurge)
     return PurgeLeastRecentlyUsed(INT_MAX);
 
@@ -140,13 +129,10 @@ bool FontDataCache::Purge(PurgeSeverity purge_severity) {
 bool FontDataCache::PurgeLeastRecentlyUsed(int count) {
   // Guard against reentry when e.g. a deleted FontData releases its small caps
   // FontData.
-  static bool is_purging;
-  if (is_purging)
+  if (is_purging_)
     return false;
 
-  lock_.AssertAcquired();
-
-  is_purging = true;
+  base::AutoReset<bool> is_purging_auto_reset(&is_purging_, true);
 
   Vector<scoped_refptr<SimpleFontData>, 20> font_data_to_delete;
   auto end = inactive_font_data_.end();
@@ -170,8 +156,6 @@ bool FontDataCache::PurgeLeastRecentlyUsed(int count) {
   bool did_work = font_data_to_delete.size();
 
   font_data_to_delete.clear();
-
-  is_purging = false;
 
   return did_work;
 }

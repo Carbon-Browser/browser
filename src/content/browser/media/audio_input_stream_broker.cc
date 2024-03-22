@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/read_only_shared_memory_region.h"
@@ -61,7 +61,7 @@ AudioInputStreamBroker::AudioInputStreamBroker(
   renderer_factory_client_.set_disconnect_handler(base::BindOnce(
       &AudioInputStreamBroker::ClientBindingLost, base::Unretained(this)));
 
-  NotifyProcessHostOfStartedStream(render_process_id);
+  NotifyHostOfStartedStream();
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kUseFakeDeviceForMediaStream)) {
@@ -77,7 +77,7 @@ AudioInputStreamBroker::~AudioInputStreamBroker() {
   if (user_input_monitor_)
     user_input_monitor_->DisableKeyPressMonitoring();
 
-  NotifyProcessHostOfStoppedStream(render_process_id());
+  NotifyHostOfStoppedStream();
 
   // TODO(https://crbug.com/829317) update tab recording indicator.
 
@@ -126,7 +126,7 @@ void AudioInputStreamBroker::CreateStream(
   factory->CreateInputStream(
       std::move(stream_receiver), std::move(client), std::move(observer),
       MediaInternals::GetInstance()->CreateMojoAudioLog(
-          media::AudioLogFactory::AudioComponent::AUDIO_INPUT_CONTROLLER,
+          media::AudioLogFactory::AudioComponent::kAudioInputController,
           log_component_id, render_process_id(), render_frame_id()),
       device_id_, params_, shared_memory_count_, enable_agc_,
       std::move(key_press_count_buffer), std::move(processing_config_),

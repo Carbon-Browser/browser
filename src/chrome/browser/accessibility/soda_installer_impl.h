@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,8 @@ class SodaInstallerImpl : public SodaInstaller,
   // SodaInstaller:
   void InstallLanguage(const std::string& language,
                        PrefService* global_prefs) override;
+  void UninstallLanguage(const std::string& language,
+                         PrefService* global_prefs) override;
   std::vector<std::string> GetAvailableLanguages() const override;
 
  protected:

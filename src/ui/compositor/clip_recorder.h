@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_COMPOSITOR_CLIP_RECORDER_H_
 #define UI_COMPOSITOR_CLIP_RECORDER_H_
 
+#include "base/memory/raw_ref.h"
 #include "ui/compositor/compositor_export.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -35,7 +36,7 @@ class COMPOSITOR_EXPORT ClipRecorder {
   void ClipPathWithAntiAliasing(const SkPath& clip_path);
 
  private:
-  const PaintContext& context_;
+  const raw_ref<const PaintContext> context_;
   int num_closers_ = 0;
 };
 

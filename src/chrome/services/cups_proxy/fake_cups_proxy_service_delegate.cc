@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/cups_proxy/fake_cups_proxy_service_delegate.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace cups_proxy {
 
@@ -29,9 +30,6 @@ bool FakeCupsProxyServiceDelegate::IsPrinterInstalled(
     const chromeos::Printer& printer) {
   return false;
 }
-
-void FakeCupsProxyServiceDelegate::PrinterInstalled(
-    const chromeos::Printer& printer) {}
 
 scoped_refptr<base::SingleThreadTaskRunner>
 FakeCupsProxyServiceDelegate::GetIOTaskRunner() {

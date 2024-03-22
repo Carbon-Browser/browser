@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,6 +108,32 @@ TEST(ExtensionIMEUtilTest, IsExperimentalMultilingualTest) {
       extension_ime_util::IsExperimentalMultilingual(
           base::StrCat({"_comp_ime_", "jkghodnilhceideoidjikpgommlajknk",
                         "experimental_hello_world"})));
+}
+
+TEST(ExtensionIMEUtilTest, IsCros1pKoreanTest) {
+  // TODO(crbug.com/1162211): Input method IDs are tuples of extension type,
+  // extension ID, and extension-local input method ID. However, currently
+  // they're just concats of the three constituent pieces of info, hence StrCat
+  // here. Replace StrCat once they're no longer unstructured string concats.
+
+  EXPECT_FALSE(extension_ime_util::IsCros1pKorean(
+      base::StrCat({"some_extension_type", "some_extension_id",
+                    "some_local_input_method_id"})));
+
+  EXPECT_FALSE(extension_ime_util::IsCros1pKorean(base::StrCat(
+      {"_comp_ime_", "some_extension_id", "some_local_input_method_id"})));
+
+  EXPECT_FALSE(extension_ime_util::IsCros1pKorean(
+      base::StrCat({"_comp_ime_", "jkghodnilhceideoidjikpgommlajknk",
+                    "some_local_input_method_id"})));
+
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  EXPECT_TRUE(
+#else
+  EXPECT_FALSE(
+#endif
+      extension_ime_util::IsCros1pKorean(base::StrCat(
+          {"_comp_ime_", "jkghodnilhceideoidjikpgommlajknk", "ko-t-i0-und"})));
 }
 
 }  // namespace ash

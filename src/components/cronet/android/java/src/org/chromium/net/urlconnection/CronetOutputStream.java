@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,9 +35,7 @@ abstract class CronetOutputStream extends OutputStream {
      */
     abstract void checkReceivedEnoughContent() throws IOException;
 
-    /**
-     * Returns {@link UploadDataProvider} implementation.
-     */
+    /** Returns {@link UploadDataProvider} implementation. */
     abstract UploadDataProvider getUploadDataProvider();
 
     /**
@@ -49,9 +47,7 @@ abstract class CronetOutputStream extends OutputStream {
         mRequestCompleted = true;
     }
 
-    /**
-     * Throws an IOException if the stream is closed or the request is done.
-     */
+    /** Throws an IOException if the stream is closed or the request is done. */
     protected void checkNotClosed() throws IOException {
         if (mRequestCompleted) {
             checkNoException();

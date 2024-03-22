@@ -1,29 +1,25 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/browser/favicon/favicon_client_impl.h"
+#import "ios/chrome/browser/favicon/favicon_client_impl.h"
 
-#include <memory>
+#import <memory>
 
-#include "base/bind.h"
-#include "base/check.h"
-#include "base/task/cancelable_task_tracker.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "components/favicon/core/favicon_service.h"
-#include "components/favicon_base/favicon_types.h"
-#include "components/favicon_base/select_favicon_frames.h"
-#include "components/grit/components_scaled_resources.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#include "ios/components/webui/web_ui_url_constants.h"
-#include "ui/base/layout.h"
-#include "ui/base/resource/resource_bundle.h"
-#include "ui/gfx/favicon_size.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/check.h"
+#import "base/functional/bind.h"
+#import "base/task/cancelable_task_tracker.h"
+#import "base/task/single_thread_task_runner.h"
+#import "components/favicon/core/favicon_service.h"
+#import "components/favicon_base/favicon_types.h"
+#import "components/favicon_base/select_favicon_frames.h"
+#import "components/grit/components_scaled_resources.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/components/webui/web_ui_url_constants.h"
+#import "ui/base/resource/resource_bundle.h"
+#import "ui/base/resource/resource_scale_factor.h"
+#import "ui/gfx/favicon_size.h"
+#import "url/gurl.h"
 
 namespace {
 
@@ -45,11 +41,11 @@ void GetFaviconBitmapForNativeURL(
 
   // Use ui::GetSupportedResourceScaleFactors() because native URL favicon comes
   // from resources.
-  std::vector<ui::ResourceScaleFactor> scale_factors =
+  const std::vector<ui::ResourceScaleFactor>& scale_factors =
       ui::GetSupportedResourceScaleFactors();
 
   std::vector<gfx::Size> candidate_sizes;
-  for (ui::ResourceScaleFactor scale_factor : scale_factors) {
+  for (const auto scale_factor : scale_factors) {
     float scale = ui::GetScaleForResourceScaleFactor(scale_factor);
     int candidate_size = static_cast<int>(gfx::kFaviconSize * scale + 0.5f);
     candidate_sizes.push_back(gfx::Size(candidate_size, candidate_size));
@@ -108,6 +104,6 @@ FaviconClientImpl::GetFaviconForNativeApplicationURL(
                                &favicon_bitmap_results);
 
   return tracker->PostTask(
-      base::ThreadTaskRunnerHandle::Get().get(), FROM_HERE,
+      base::SingleThreadTaskRunner::GetCurrentDefault().get(), FROM_HERE,
       base::BindOnce(std::move(callback), std::move(favicon_bitmap_results)));
 }

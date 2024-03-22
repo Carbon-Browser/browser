@@ -1,79 +1,51 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/ash/drive/drive_integration_service.h"
-
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
-#include "chrome/browser/ash/drive/drivefs_test_support.h"
+#include "chrome/browser/ash/drive/drive_integration_service.h"
+#include "chrome/browser/ash/drive/drive_integration_service_browser_test_base.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/test/base/in_process_browser_test.h"
+#include "chromeos/ash/components/drivefs/fake_drivefs.h"
+#include "chromeos/ash/components/drivefs/mojom/drivefs.mojom.h"
+#include "chromeos/ash/components/standalone_browser/feature_refs.h"
+#include "chromeos/components/drivefs/mojom/drivefs_native_messaging.mojom.h"
+#include "chromeos/crosapi/mojom/drive_integration_service.mojom.h"
 #include "components/drive/drive_pref_names.h"
+#include "components/drive/file_errors.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/pref_test_utils.h"
 #include "content/public/test/browser_test.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
+#include "mojo/public/cpp/bindings/receiver.h"
+#include "mojo/public/cpp/bindings/remote.h"
 
 namespace drive {
 
 using ::base::test::RunClosure;
+using ::base::test::RunOnceCallback;
+using testing::_;
 
-class DriveIntegrationServiceBrowserTest : public InProcessBrowserTest {
- public:
-  bool SetUpUserDataDirectory() override {
-    return drive::SetUpUserDataDirectoryForDriveFsTest();
-  }
-
-  void SetUpInProcessBrowserTestFixture() override {
-    create_drive_integration_service_ = base::BindRepeating(
-        &DriveIntegrationServiceBrowserTest::CreateDriveIntegrationService,
-        base::Unretained(this));
-    service_factory_for_test_ = std::make_unique<
-        drive::DriveIntegrationServiceFactory::ScopedFactoryForTest>(
-        &create_drive_integration_service_);
-  }
-
-  drivefs::FakeDriveFs* GetFakeDriveFsForProfile(Profile* profile) {
-    return &fake_drivefs_helpers_[profile]->fake_drivefs();
-  }
-
- protected:
-  virtual drive::DriveIntegrationService* CreateDriveIntegrationService(
-      Profile* profile) {
-    base::ScopedAllowBlockingForTesting allow_blocking;
-    base::FilePath mount_path = profile->GetPath().Append("drivefs");
-    fake_drivefs_helpers_[profile] =
-        std::make_unique<drive::FakeDriveFsHelper>(profile, mount_path);
-    auto* integration_service = new drive::DriveIntegrationService(
-        profile, std::string(), mount_path,
-        fake_drivefs_helpers_[profile]->CreateFakeDriveFsListenerFactory());
-    return integration_service;
-  }
-
- private:
-  drive::DriveIntegrationServiceFactory::FactoryCallback
-      create_drive_integration_service_;
-  std::unique_ptr<drive::DriveIntegrationServiceFactory::ScopedFactoryForTest>
-      service_factory_for_test_;
-  std::map<Profile*, std::unique_ptr<drive::FakeDriveFsHelper>>
-      fake_drivefs_helpers_;
-};
+using DriveIntegrationServiceBrowserTest =
+    DriveIntegrationServiceBrowserTestBase;
 
 // Verify DriveIntegrationService is created during login.
-IN_PROC_BROWSER_TEST_F(DriveIntegrationServiceBrowserTest,
-                       CreatedDuringLogin) {
-  EXPECT_TRUE(DriveIntegrationServiceFactory::FindForProfile(
-      browser()->profile()));
+IN_PROC_BROWSER_TEST_F(DriveIntegrationServiceBrowserTest, CreatedDuringLogin) {
+  EXPECT_TRUE(
+      DriveIntegrationServiceFactory::FindForProfile(browser()->profile()));
 }
 
 IN_PROC_BROWSER_TEST_F(DriveIntegrationServiceBrowserTest,
@@ -242,41 +214,32 @@ IN_PROC_BROWSER_TEST_F(DriveIntegrationServiceBrowserTest, GetMetadata) {
 
 IN_PROC_BROWSER_TEST_F(DriveIntegrationServiceBrowserTest,
                        LocateFilesByItemIds) {
-  base::ScopedAllowBlockingForTesting allow_blocking;
-  auto* drive_service =
-      DriveIntegrationServiceFactory::FindForProfile(browser()->profile());
-  drivefs::FakeDriveFs* fake = GetFakeDriveFsForProfile(browser()->profile());
-
-  base::FilePath mount_path = drive_service->GetMountPointPath();
-  base::FilePath path;
-  base::CreateTemporaryFileInDir(mount_path, &path);
-  base::FilePath some_file("/");
-  CHECK(mount_path.AppendRelativePath(path, &some_file));
-  base::FilePath dir_path;
-  base::CreateTemporaryDirInDir(mount_path, "tmp-", &dir_path);
-  base::CreateTemporaryFileInDir(dir_path, &path);
-  base::FilePath some_other_file("/");
-  CHECK(mount_path.AppendRelativePath(path, &some_other_file));
-
-  fake->SetMetadata(some_file, "text/plain", some_file.BaseName().value(),
-                    false, false, {}, {}, "abc123", "");
-  fake->SetMetadata(some_other_file, "text/plain", some_file.BaseName().value(),
-                    false, false, {}, {}, "qwertyqwerty", "");
-
+  Profile* profile = browser()->profile();
+  InitTestFileMountRoot(profile);
+  AddDriveFileWithRelativePath(profile, /*drive_file_id=*/"abc123",
+                               /*directory_path=*/base::FilePath(""),
+                               /*new_file_relative_path=*/nullptr,
+                               /*new_file_absolute_path=*/nullptr);
+  base::FilePath relative_file_path;
+  AddDriveFileWithRelativePath(profile, /*drive_file_id=*/"qwertyqwerty",
+                               /*directory_path=*/base::FilePath("aa"),
+                               &relative_file_path,
+                               /*new_file_absolute_path=*/nullptr);
   {
     base::RunLoop run_loop;
     auto quit_closure = run_loop.QuitClosure();
-    drive_service->LocateFilesByItemIds(
-        {"qwertyqwerty", "foobar"},
-        base::BindLambdaForTesting(
-            [=](absl::optional<std::vector<drivefs::mojom::FilePathOrErrorPtr>>
-                    result) {
-              ASSERT_EQ(2u, result->size());
-              EXPECT_EQ(some_other_file,
-                        base::FilePath("/").Append(result->at(0)->get_path()));
-              EXPECT_EQ(FILE_ERROR_NOT_FOUND, result->at(1)->get_error());
-              quit_closure.Run();
-            }));
+    DriveIntegrationServiceFactory::FindForProfile(profile)
+        ->LocateFilesByItemIds(
+            {"qwertyqwerty", "foobar"},
+            base::BindLambdaForTesting(
+                [=](absl::optional<
+                    std::vector<drivefs::mojom::FilePathOrErrorPtr>> result) {
+                  ASSERT_EQ(2u, result->size());
+                  EXPECT_EQ(relative_file_path, base::FilePath("/").Append(
+                                                    result->at(0)->get_path()));
+                  EXPECT_EQ(FILE_ERROR_NOT_FOUND, result->at(1)->get_error());
+                  quit_closure.Run();
+                }));
     run_loop.Run();
   }
 }
@@ -338,18 +301,12 @@ IN_PROC_BROWSER_TEST_F(DriveIntegrationServiceBrowserTest,
   }
 }
 
-class DriveMirrorSyncStatusObserver : public DriveIntegrationServiceObserver {
+class DriveMirrorSyncStatusObserver : public DriveIntegrationService::Observer {
  public:
   explicit DriveMirrorSyncStatusObserver(bool expected_status)
       : expected_status_(expected_status) {
     quit_closure_ = run_loop_.QuitClosure();
   }
-
-  DriveMirrorSyncStatusObserver(const DriveMirrorSyncStatusObserver&) = delete;
-  DriveMirrorSyncStatusObserver& operator=(
-      const DriveMirrorSyncStatusObserver&) = delete;
-
-  ~DriveMirrorSyncStatusObserver() override {}
 
   void WaitForStatusChange() { run_loop_.Run(); }
 
@@ -373,8 +330,8 @@ class DriveIntegrationBrowserTestWithMirrorSyncEnabled
     : public DriveIntegrationServiceBrowserTest {
  public:
   DriveIntegrationBrowserTestWithMirrorSyncEnabled() {
-    scoped_feature_list_.InitWithFeatures(
-        {chromeos::features::kDriveFsMirroring}, {});
+    scoped_feature_list_.InitWithFeatures({ash::features::kDriveFsMirroring},
+                                          {});
   }
 
   DriveIntegrationBrowserTestWithMirrorSyncEnabled(
@@ -385,34 +342,36 @@ class DriveIntegrationBrowserTestWithMirrorSyncEnabled
   ~DriveIntegrationBrowserTestWithMirrorSyncEnabled() override {}
 
   void ToggleMirrorSync(bool status) {
-    auto observer = std::make_unique<DriveMirrorSyncStatusObserver>(status);
-    auto* drive_service =
-        DriveIntegrationServiceFactory::FindForProfile(browser()->profile());
-    drive_service->AddObserver(observer.get());
-
-    browser()->profile()->GetPrefs()->SetBoolean(
-        prefs::kDriveFsEnableMirrorSync, status);
-    observer->WaitForStatusChange();
-    EXPECT_EQ(browser()->profile()->GetPrefs()->GetBoolean(
-                  prefs::kDriveFsEnableMirrorSync),
-              status);
-
-    drive_service->RemoveObserver(observer.get());
+    DriveMirrorSyncStatusObserver observer(status);
+    Profile* const profile = browser()->profile();
+    observer.Observe(DriveIntegrationServiceFactory::FindForProfile(profile));
+    PrefService* const prefs = profile->GetPrefs();
+    prefs->SetBoolean(prefs::kDriveFsEnableMirrorSync, status);
+    observer.WaitForStatusChange();
+    EXPECT_EQ(prefs->GetBoolean(prefs::kDriveFsEnableMirrorSync), status);
   }
 
   void AddSyncingPath(const base::FilePath& path) {
-    auto* drive_service =
-        DriveIntegrationServiceFactory::FindForProfile(browser()->profile());
+    drivefs::FakeDriveFs* fake_drivefs =
+        GetFakeDriveFsForProfile(browser()->profile());
+    std::vector<base::FilePath> return_paths{path};
+    EXPECT_CALL(*fake_drivefs, GetSyncingPaths(_))
+        .WillOnce(RunOnceCallback<0>(drive::FileError::FILE_ERROR_OK,
+                                     std::move(return_paths)));
+  }
 
-    base::RunLoop run_loop;
-    auto quit_closure = run_loop.QuitClosure();
-    drive_service->ToggleSyncForPath(
-        path, drivefs::mojom::MirrorPathStatus::kStart,
-        base::BindLambdaForTesting([quit_closure](FileError status) {
-          EXPECT_EQ(FILE_ERROR_OK, status);
-          quit_closure.Run();
-        }));
-    run_loop.Run();
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+class DriveIntegrationBrowserTestWithBulkPinningEnabled
+    : public DriveIntegrationServiceBrowserTest {
+ public:
+  DriveIntegrationBrowserTestWithBulkPinningEnabled() {
+    scoped_feature_list_.InitWithFeatures(
+        {ash::features::kDriveFsBulkPinning,
+         ash::features::kFeatureManagementDriveFsBulkPinning},
+        {});
   }
 
  private:
@@ -537,7 +496,7 @@ IN_PROC_BROWSER_TEST_F(DriveIntegrationBrowserTestWithMirrorSyncEnabled,
         [quit_closure](drive::FileError status,
                        const std::vector<base::FilePath>& paths) {
           EXPECT_EQ(drive::FILE_ERROR_SERVICE_UNAVAILABLE, status);
-          EXPECT_EQ(0, paths.size());
+          EXPECT_EQ(0u, paths.size());
           quit_closure.Run();
         }));
     run_loop.Run();
@@ -569,7 +528,7 @@ IN_PROC_BROWSER_TEST_F(DriveIntegrationBrowserTestWithMirrorSyncEnabled,
         [quit_closure, sync_path](drive::FileError status,
                                   const std::vector<base::FilePath>& paths) {
           EXPECT_EQ(drive::FILE_ERROR_OK, status);
-          EXPECT_EQ(1, paths.size());
+          EXPECT_EQ(1u, paths.size());
           EXPECT_EQ(sync_path, paths[0]);
           quit_closure.Run();
         }));
@@ -609,6 +568,208 @@ IN_PROC_BROWSER_TEST_F(DriveIntegrationBrowserTestWithMirrorSyncEnabled,
   // Kick off the GetMachineRootID method and wait for it to return
   // successfully.
   fake->delegate()->GetMachineRootID(machine_root_id_callback.Get());
+  run_loop.Run();
+}
+
+IN_PROC_BROWSER_TEST_F(DriveIntegrationBrowserTestWithBulkPinningEnabled,
+                       GetTotalPinnedSizeWithErrorIgnoresReturnedSize) {
+  auto* drive_integration_service =
+      DriveIntegrationServiceFactory::FindForProfile(browser()->profile());
+  auto* fake_drivefs = GetFakeDriveFsForProfile(browser()->profile());
+
+  EXPECT_CALL(*fake_drivefs, GetOfflineFilesSpaceUsage(_))
+      .WillOnce(RunOnceCallback<0>(drive::FILE_ERROR_FAILED, 1000));
+
+  base::RunLoop run_loop;
+  base::MockOnceCallback<void(int64_t)> mock_callback;
+  EXPECT_CALL(mock_callback, Run(-1))
+      .WillOnce(RunClosure(run_loop.QuitClosure()));
+
+  drive_integration_service->GetTotalPinnedSize(mock_callback.Get());
+  run_loop.Run();
+}
+
+IN_PROC_BROWSER_TEST_F(DriveIntegrationBrowserTestWithBulkPinningEnabled,
+                       GetTotalPinnedSizeReturnsCorrectSize) {
+  auto* drive_integration_service =
+      DriveIntegrationServiceFactory::FindForProfile(browser()->profile());
+  auto* fake_drivefs = GetFakeDriveFsForProfile(browser()->profile());
+
+  EXPECT_CALL(*fake_drivefs, GetOfflineFilesSpaceUsage(_))
+      .WillOnce(RunOnceCallback<0>(drive::FILE_ERROR_OK, 1024));
+
+  base::RunLoop run_loop;
+  base::MockOnceCallback<void(int64_t)> mock_callback;
+  EXPECT_CALL(mock_callback, Run(1024))
+      .WillOnce(RunClosure(run_loop.QuitClosure()));
+
+  drive_integration_service->GetTotalPinnedSize(mock_callback.Get());
+  run_loop.Run();
+}
+
+IN_PROC_BROWSER_TEST_F(DriveIntegrationBrowserTestWithBulkPinningEnabled,
+                       GetTotalPinnedSizeReturnsCachedSizeOnNextRequest) {
+  auto* drive_integration_service =
+      DriveIntegrationServiceFactory::FindForProfile(browser()->profile());
+  auto* fake_drivefs = GetFakeDriveFsForProfile(browser()->profile());
+
+  EXPECT_CALL(*fake_drivefs, GetOfflineFilesSpaceUsage(_))
+      .WillOnce(RunOnceCallback<0>(drive::FILE_ERROR_OK, 1024));
+
+  // First invocation of `GetTotalPinnedSize` should invoke the fake drivefs.
+  base::RunLoop run_loop;
+  base::MockOnceCallback<void(int64_t)> mock_callback;
+  EXPECT_CALL(mock_callback, Run(1024))
+      .WillOnce(RunClosure(run_loop.QuitClosure()));
+
+  drive_integration_service->GetTotalPinnedSize(mock_callback.Get());
+  run_loop.Run();
+
+  // Second invocation of `GetTotalPinnedSize` should reuse the same value but
+  // cached not calling fake drivefs instead.
+  base::RunLoop run_loop_2;
+  base::MockOnceCallback<void(int64_t)> cached_mock_callback;
+  EXPECT_CALL(cached_mock_callback, Run(1024))
+      .WillOnce(RunClosure(run_loop_2.QuitClosure()));
+
+  drive_integration_service->GetTotalPinnedSize(cached_mock_callback.Get());
+  run_loop_2.Run();
+}
+
+class DriveIntegrationServiceBrowserTestLacros
+    : public DriveIntegrationServiceBrowserTestBase {
+ protected:
+  DriveIntegrationServiceBrowserTestLacros() {
+    scoped_feature_list_.InitWithFeatures(
+        ash::standalone_browser::GetFeatureRefs(), {});
+  }
+
+  // browser() does not exist in Lacros, so get the profile from ProfileManager.
+  Profile* profile() { return ProfileManager::GetPrimaryUserProfile(); }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+class MockDriveFsNativeMessageHostBridge
+    : public crosapi::mojom::DriveFsNativeMessageHostBridge {
+ public:
+  MockDriveFsNativeMessageHostBridge() : receiver_(this) {}
+
+  mojo::Receiver<crosapi::mojom::DriveFsNativeMessageHostBridge>* receiver() {
+    return &receiver_;
+  }
+
+  MOCK_METHOD(void,
+              ConnectToExtension,
+              (drivefs::mojom::ExtensionConnectionParamsPtr,
+               mojo::PendingReceiver<drivefs::mojom::NativeMessagingPort>,
+               mojo::PendingRemote<drivefs::mojom::NativeMessagingHost>,
+               ConnectToExtensionCallback),
+              (override));
+
+ private:
+  mojo::Receiver<crosapi::mojom::DriveFsNativeMessageHostBridge> receiver_;
+};
+
+IN_PROC_BROWSER_TEST_F(DriveIntegrationServiceBrowserTestLacros,
+                       ConnectToExtensionWithPendingRequest) {
+  base::RunLoop run_loop;
+  base::RunLoop run_loop2;
+
+  base::MockCallback<
+      drivefs::mojom::DriveFsDelegate::ConnectToExtensionCallback>
+      mock_callback;
+  EXPECT_CALL(mock_callback,
+              Run(drivefs::mojom::ExtensionConnectionStatus::kUnknownError))
+      .WillOnce(RunClosure(run_loop.QuitClosure()));
+
+  mojo::PendingRemote<drivefs::mojom::NativeMessagingPort> extension_port;
+  mojo::PendingReceiver<drivefs::mojom::NativeMessagingHost> drivefs_host;
+  drivefs::FakeDriveFs* fake_drivefs = GetFakeDriveFsForProfile(profile());
+  fake_drivefs->delegate()->ConnectToExtension(
+      drivefs::mojom::ExtensionConnectionParams::New("extension_id"),
+      extension_port.InitWithNewPipeAndPassReceiver(),
+      drivefs_host.InitWithNewPipeAndPassRemote(), mock_callback.Get());
+
+  // A second connection request should overwrite the first and force the first
+  // request to return an error.
+  base::MockCallback<
+      drivefs::mojom::DriveFsDelegate::ConnectToExtensionCallback>
+      mock_callback2;
+  EXPECT_CALL(mock_callback2,
+              Run(drivefs::mojom::ExtensionConnectionStatus::kSuccess))
+      .WillOnce(RunClosure(run_loop2.QuitClosure()));
+
+  mojo::PendingRemote<drivefs::mojom::NativeMessagingPort> extension_port2;
+  mojo::PendingReceiver<drivefs::mojom::NativeMessagingHost> drivefs_host2;
+  fake_drivefs->delegate()->ConnectToExtension(
+      drivefs::mojom::ExtensionConnectionParams::New("extension_id2"),
+      extension_port2.InitWithNewPipeAndPassReceiver(),
+      drivefs_host2.InitWithNewPipeAndPassRemote(), mock_callback2.Get());
+
+  run_loop.Run();
+
+  // Registering the bridge should cause the second request to succeed.
+  MockDriveFsNativeMessageHostBridge mock_bridge;
+  EXPECT_CALL(mock_bridge, ConnectToExtension(_, _, _, _))
+      .WillOnce([](drivefs::mojom::ExtensionConnectionParamsPtr params, auto,
+                   auto,
+                   crosapi::mojom::DriveFsNativeMessageHostBridge::
+                       ConnectToExtensionCallback callback) {
+        EXPECT_EQ("extension_id2", params->extension_id);
+        std::move(callback).Run(
+            drivefs::mojom::ExtensionConnectionStatus::kSuccess);
+      });
+  auto* drive_service =
+      DriveIntegrationServiceFactory::FindForProfile(profile());
+  drive_service->RegisterDriveFsNativeMessageHostBridge(
+      mock_bridge.receiver()->BindNewPipeAndPassRemote());
+
+  run_loop2.Run();
+}
+
+IN_PROC_BROWSER_TEST_F(DriveIntegrationServiceBrowserTestLacros,
+                       ConnectToExtension) {
+  base::RunLoop run_loop;
+
+  MockDriveFsNativeMessageHostBridge mock_bridge;
+  EXPECT_CALL(mock_bridge, ConnectToExtension(_, _, _, _))
+      .WillOnce([](drivefs::mojom::ExtensionConnectionParamsPtr params, auto,
+                   auto,
+                   crosapi::mojom::DriveFsNativeMessageHostBridge::
+                       ConnectToExtensionCallback callback) {
+        EXPECT_EQ("extension_id", params->extension_id);
+        std::move(callback).Run(
+            drivefs::mojom::ExtensionConnectionStatus::kSuccess);
+      });
+
+  // A second connected bridge should just be ignored.
+  MockDriveFsNativeMessageHostBridge mock_bridge2;
+  EXPECT_CALL(mock_bridge2, ConnectToExtension(_, _, _, _)).Times(0);
+
+  auto* drive_service =
+      DriveIntegrationServiceFactory::FindForProfile(profile());
+  drive_service->RegisterDriveFsNativeMessageHostBridge(
+      mock_bridge.receiver()->BindNewPipeAndPassRemote());
+  drive_service->RegisterDriveFsNativeMessageHostBridge(
+      mock_bridge2.receiver()->BindNewPipeAndPassRemote());
+
+  base::MockCallback<
+      drivefs::mojom::DriveFsDelegate::ConnectToExtensionCallback>
+      mock_callback;
+  EXPECT_CALL(mock_callback,
+              Run(drivefs::mojom::ExtensionConnectionStatus::kSuccess))
+      .WillOnce(RunClosure(run_loop.QuitClosure()));
+
+  mojo::PendingRemote<drivefs::mojom::NativeMessagingPort> extension_port;
+  mojo::PendingReceiver<drivefs::mojom::NativeMessagingHost> drivefs_host;
+  drivefs::FakeDriveFs* fake_drivefs = GetFakeDriveFsForProfile(profile());
+  fake_drivefs->delegate()->ConnectToExtension(
+      drivefs::mojom::ExtensionConnectionParams::New("extension_id"),
+      extension_port.InitWithNewPipeAndPassReceiver(),
+      drivefs_host.InitWithNewPipeAndPassRemote(), mock_callback.Get());
+
   run_loop.Run();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,28 +6,28 @@
  * @fileoverview 'settings-search-engines-page' is the settings page
  * containing search engines settings.
  */
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/js/cr.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/js/cr.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
-import '../controls/controlled_radio_button.js';
-import '../controls/settings_radio_group.js';
-import './search_engine_delete_confirmation_dialog.js';
+import '/shared/settings/controls/controlled_radio_button.js';
+import '/shared/settings/controls/settings_radio_group.js';
+import '../simple_confirmation_dialog.js';
 import './search_engine_edit_dialog.js';
 import './search_engines_list.js';
 import './omnibox_extension_entry.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 
-import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {WebUIListenerMixin, WebUIListenerMixinInterface} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {SettingsRadioGroupElement} from '/shared/settings/controls/settings_radio_group.js';
+import {WebUiListenerMixin, WebUiListenerMixinInterface} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {SettingsRadioGroupElement} from '../controls/settings_radio_group.js';
 import {GlobalScrollTargetMixin} from '../global_scroll_target_mixin.js';
-import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
 
 import {SearchEngine, SearchEnginesBrowserProxy, SearchEnginesBrowserProxyImpl, SearchEnginesInfo, SearchEnginesInteractions} from './search_engines_browser_proxy.js';
@@ -51,8 +51,8 @@ export interface SettingsSearchEnginesPageElement {
 }
 
 const SettingsSearchEnginesPageElementBase =
-    GlobalScrollTargetMixin(WebUIListenerMixin(PolymerElement)) as
-    {new (): PolymerElement & WebUIListenerMixinInterface};
+    GlobalScrollTargetMixin(WebUiListenerMixin(PolymerElement)) as
+    {new (): PolymerElement & WebUiListenerMixinInterface};
 
 export class SettingsSearchEnginesPageElement extends
     SettingsSearchEnginesPageElementBase {
@@ -140,12 +140,6 @@ export class SettingsSearchEnginesPageElement extends
         type: Boolean,
         value: false,
       },
-
-      isActiveSearchEnginesFlagEnabled_: {
-        type: Boolean,
-        value: () =>
-            loadTimeData.getBoolean('isActiveSearchEnginesFlagEnabled'),
-      },
     };
   }
 
@@ -169,7 +163,6 @@ export class SettingsSearchEnginesPageElement extends
   private dialogAnchorElement_: HTMLElement|null;
   private showEditDialog_: boolean;
   private showDeleteConfirmationDialog_: boolean;
-  private isActiveSearchEnginesFlagEnabled_: boolean;
   private browserProxy_: SearchEnginesBrowserProxy =
       SearchEnginesBrowserProxyImpl.getInstance();
 
@@ -178,7 +171,7 @@ export class SettingsSearchEnginesPageElement extends
 
     this.browserProxy_.getSearchEnginesList().then(
         this.enginesChanged_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'search-engines-changed', this.enginesChanged_.bind(this));
 
     this.addEventListener(
@@ -212,9 +205,19 @@ export class SettingsSearchEnginesPageElement extends
   }
 
   private onCloseDeleteConfirmationDialog_() {
+    const dialog =
+        this.shadowRoot!.querySelector('settings-simple-confirmation-dialog');
+    assert(dialog);
+    const confirmed = dialog.wasConfirmed();
     this.showDeleteConfirmationDialog_ = false;
+
+    if (confirmed) {
+      assert(this.dialogModel_);
+      this.browserProxy_.removeSearchEngine(this.dialogModel_.modelIndex);
+      this.dialogAnchorElement_ = null;
+    }
+
     this.dialogModel_ = null;
-    this.dialogAnchorElement_ = null;
   }
 
   private onEditSearchEngine_(e: SearchEngineEditEvent) {
@@ -245,7 +248,7 @@ export class SettingsSearchEnginesPageElement extends
     this.extensions = searchEnginesInfo.extensions;
   }
 
-  private onAddSearchEngineTap_(e: Event) {
+  private onAddSearchEngineClick_(e: Event) {
     e.preventDefault();
     this.openEditDialog_(
         null, this.shadowRoot!.querySelector('#addSearchEngine')!);

@@ -1,10 +1,8 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
-/* global PaymentRequest:false */
 
 /**
  * Launches the PaymentRequest UI that requests an email address and offers free
@@ -12,7 +10,7 @@
  *
  * Legacy entry function until basic-card is removed.
  */
-function buy() { // eslint-disable-line no-unused-vars
+function buy() {
   buyWithMethods(
       [{supportedMethods: 'basic-card', data: {supportedNetworks: ['visa']}}]);
 }

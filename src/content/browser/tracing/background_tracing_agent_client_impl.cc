@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <stdint.h>
 
 #include "base/memory/ptr_util.h"
+#include "base/strings/strcat.h"
+#include "content/browser/child_process_host_impl.h"
 #include "content/browser/tracing/background_tracing_manager_impl.h"
-#include "content/common/child_process_host_impl.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
 namespace content {
@@ -42,12 +43,8 @@ void BackgroundTracingAgentClientImpl::OnInitialized() {
 }
 
 void BackgroundTracingAgentClientImpl::OnTriggerBackgroundTrace(
-    const std::string& name) {
-  BackgroundTracingManagerImpl::GetInstance().OnHistogramTrigger(name);
-}
-
-void BackgroundTracingAgentClientImpl::OnAbortBackgroundTrace() {
-  BackgroundTracingManagerImpl::GetInstance().AbortScenario();
+    tracing::mojom::BackgroundTracingRulePtr rule) {
+  BackgroundTracingManager::EmitNamedTrigger(rule->rule_id);
 }
 
 BackgroundTracingAgentClientImpl::BackgroundTracingAgentClientImpl(

@@ -1,43 +1,39 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <functional>
+#import <functional>
 
-#include "base/bind.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/functional/bind.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "base/test/scoped_feature_list.h"
+#import "base/test/scoped_feature_list.h"
 #import "ios/net/protocol_handler_util.h"
-#include "ios/testing/embedded_test_server_handlers.h"
-#include "ios/web/common/features.h"
-#include "ios/web/navigation/web_kit_constants.h"
+#import "ios/testing/embedded_test_server_handlers.h"
+#import "ios/web/common/features.h"
+#import "ios/web/navigation/web_kit_constants.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/navigation/navigation_manager.h"
-#include "ios/web/public/navigation/reload_type.h"
-#include "ios/web/public/navigation/web_state_policy_decider.h"
-#include "ios/web/public/security/security_style.h"
-#include "ios/web/public/security/ssl_status.h"
-#include "ios/web/public/test/element_selector.h"
+#import "ios/web/public/navigation/reload_type.h"
+#import "ios/web/public/navigation/web_state_policy_decider.h"
+#import "ios/web/public/security/security_style.h"
+#import "ios/web/public/security/ssl_status.h"
+#import "ios/web/public/test/element_selector.h"
 #import "ios/web/public/test/error_test_util.h"
-#include "ios/web/public/test/fakes/fake_browser_state.h"
+#import "ios/web/public/test/fakes/fake_browser_state.h"
 #import "ios/web/public/test/fakes/fake_web_client.h"
-#include "ios/web/public/test/fakes/fake_web_state_observer.h"
+#import "ios/web/public/test/fakes/fake_web_state_observer.h"
 #import "ios/web/public/test/navigation_test_util.h"
 #import "ios/web/public/test/web_test_with_web_state.h"
 #import "ios/web/public/test/web_view_content_test_util.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/public/web_state.h"
-#include "ios/web/test/test_url_constants.h"
+#import "ios/web/test/test_url_constants.h"
 #import "net/base/mac/url_conversions.h"
-#include "net/base/net_errors.h"
-#include "net/test/embedded_test_server/default_handlers.h"
-#include "net/test/embedded_test_server/request_handler_util.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/base/net_errors.h"
+#import "net/test/embedded_test_server/default_handlers.h"
+#import "net/test/embedded_test_server/request_handler_util.h"
+#import "url/gurl.h"
 
 using base::test::ios::kWaitForPageLoadTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -56,7 +52,7 @@ namespace {
                      /*cert_status=*/0));
 }
 
-// The error domain and code presented by |TestWebStatePolicyDecider| for
+// The error domain and code presented by `TestWebStatePolicyDecider` for
 // cancelled navigations.
 NSString* const kCancelledNavigationErrorDomain = @"Error domain";
 const int kCancelledNavigationErrorCode = 123;
@@ -161,13 +157,7 @@ class ErrorPageTest : public WebTestWithWebState {
 
 // Tests that the error page is correctly displayed after navigating back to it
 // multiple times. See http://crbug.com/944037 .
-// TODO(crbug.com/954231): this test is flaky on device.
-#if TARGET_IPHONE_SIMULATOR
-#define MAYBE_BackForwardErrorPage BackForwardErrorPage
-#else
-#define MAYBE_BackForwardErrorPage FLAKY_BackForwardErrorPage
-#endif
-TEST_F(ErrorPageTest, MAYBE_BackForwardErrorPage) {
+TEST_F(ErrorPageTest, BackForwardErrorPage) {
   // TODO(crbug.com/1153261): this test should be fixed in newer versions of
   // WebKit.
   if (@available(iOS 15, *)) {
@@ -572,37 +562,30 @@ TEST_F(ErrorPageTest, RestorationFromInvalidURL) {
                                          /*is_post=*/false, /*is_otr=*/false,
                                          /*cert_status=*/0)));
 
-  // Restore the session.
-  WebState::CreateParams params(GetBrowserState());
-  auto restored_web_state = WebState::CreateWithStorageSession(
-      params, web_state()->BuildSessionStorage());
-
-  restored_web_state->GetNavigationManager()->LoadIfNecessary();
+  // Use Clone() to serialize and then load the session.
+  auto cloned_web_state = web_state()->Clone();
+  cloned_web_state->GetNavigationManager()->LoadIfNecessary();
   ASSERT_TRUE(test::WaitForWebViewContainingText(
-      restored_web_state.get(),
-      testing::GetErrorText(restored_web_state.get(), invalid_webui, error,
+      cloned_web_state.get(),
+      testing::GetErrorText(cloned_web_state.get(), invalid_webui, error,
                             /*is_post=*/false, /*is_otr=*/false,
                             /*cert_status=*/0)));
 
   // Check that there is one item in the back list and no forward item.
   EXPECT_EQ(
-      1UL,
-      restored_web_state->GetNavigationManager()->GetBackwardItems().size());
-  EXPECT_EQ(
-      0UL,
-      restored_web_state->GetNavigationManager()->GetForwardItems().size());
+      1UL, cloned_web_state->GetNavigationManager()->GetBackwardItems().size());
+  EXPECT_EQ(0UL,
+            cloned_web_state->GetNavigationManager()->GetForwardItems().size());
 
-  restored_web_state->GetNavigationManager()->GoBack();
+  cloned_web_state->GetNavigationManager()->GoBack();
   ASSERT_TRUE(
-      test::WaitForWebViewContainingText(restored_web_state.get(), "foo"));
+      test::WaitForWebViewContainingText(cloned_web_state.get(), "foo"));
 
   // Check that there is one item in the forward list and no back item.
   EXPECT_EQ(
-      0UL,
-      restored_web_state->GetNavigationManager()->GetBackwardItems().size());
-  EXPECT_EQ(
-      1UL,
-      restored_web_state->GetNavigationManager()->GetForwardItems().size());
+      0UL, cloned_web_state->GetNavigationManager()->GetBackwardItems().size());
+  EXPECT_EQ(1UL,
+            cloned_web_state->GetNavigationManager()->GetForwardItems().size());
 }
 
 }  // namespace web

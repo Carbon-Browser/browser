@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,7 @@ class CC_EXPORT SnapSelectionStrategy {
   static std::unique_ptr<SnapSelectionStrategy> CreateForEndPosition(
       const gfx::PointF& current_position,
       bool scrolled_x,
-      bool scrolled_y,
-      SnapTargetsPrioritization prioritization =
-          SnapTargetsPrioritization::kIgnore);
+      bool scrolled_y);
 
   // |use_fractional_offsets| should be true when the current position is
   // provided in fractional pixels.
@@ -80,9 +78,9 @@ class CC_EXPORT SnapSelectionStrategy {
   // -closest: snap search result representing closest match.
   // -covering: snap search result representing the original target if it makes
   //            a snaparea covering the snapport.
-  virtual const absl::optional<SnapSearchResult>& PickBestResult(
-      const absl::optional<SnapSearchResult>& closest,
-      const absl::optional<SnapSearchResult>& covering) const = 0;
+  virtual const std::optional<SnapSearchResult>& PickBestResult(
+      const std::optional<SnapSearchResult>& closest,
+      const std::optional<SnapSearchResult>& covering) const = 0;
 
   // Returns true when the current scroll offset is provided in fractional
   // pixels.
@@ -109,7 +107,8 @@ class EndPositionStrategy : public SnapSelectionStrategy {
   EndPositionStrategy(const gfx::PointF& current_position,
                       bool scrolled_x,
                       bool scrolled_y,
-                      SnapTargetsPrioritization snap_targets_prioritization)
+                      SnapTargetsPrioritization snap_targets_prioritization =
+                          SnapTargetsPrioritization::kIgnore)
       : SnapSelectionStrategy(current_position),
         scrolled_x_(scrolled_x),
         scrolled_y_(scrolled_y),
@@ -126,9 +125,9 @@ class EndPositionStrategy : public SnapSelectionStrategy {
   bool HasIntendedDirection() const override;
   bool ShouldPrioritizeSnapTargets() const override;
 
-  const absl::optional<SnapSearchResult>& PickBestResult(
-      const absl::optional<SnapSearchResult>& closest,
-      const absl::optional<SnapSearchResult>& covering) const override;
+  const std::optional<SnapSearchResult>& PickBestResult(
+      const std::optional<SnapSearchResult>& closest,
+      const std::optional<SnapSearchResult>& covering) const override;
 
  private:
   // Whether the x axis and y axis have been scrolled in this scroll gesture.
@@ -169,9 +168,9 @@ class DirectionStrategy : public SnapSelectionStrategy {
   bool IsValidSnapArea(SearchAxis axis,
                        const SnapAreaData& area) const override;
 
-  const absl::optional<SnapSearchResult>& PickBestResult(
-      const absl::optional<SnapSearchResult>& closest,
-      const absl::optional<SnapSearchResult>& covering) const override;
+  const std::optional<SnapSearchResult>& PickBestResult(
+      const std::optional<SnapSearchResult>& closest,
+      const std::optional<SnapSearchResult>& covering) const override;
 
   bool UsingFractionalOffsets() const override;
 
@@ -212,9 +211,9 @@ class EndAndDirectionStrategy : public SnapSelectionStrategy {
 
   bool ShouldRespectSnapStop() const override;
 
-  const absl::optional<SnapSearchResult>& PickBestResult(
-      const absl::optional<SnapSearchResult>& closest,
-      const absl::optional<SnapSearchResult>& covering) const override;
+  const std::optional<SnapSearchResult>& PickBestResult(
+      const std::optional<SnapSearchResult>& closest,
+      const std::optional<SnapSearchResult>& covering) const override;
 
   bool UsingFractionalOffsets() const override;
 

@@ -1,18 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/websockets/websocket_frame_parser.h"
 
 #include <algorithm>
-#include <limits>
+#include <ostream>
 #include <utility>
 #include <vector>
 
 #include "base/big_endian.h"
+#include "base/check.h"
+#include "base/check_op.h"
 #include "base/logging.h"
-#include "base/memory/scoped_refptr.h"
-#include "net/base/io_buffer.h"
 #include "net/websockets/websocket_frame.h"
 
 namespace {

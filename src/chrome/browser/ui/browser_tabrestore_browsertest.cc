@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include <map>
 #include <string>
 
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/sessions/tab_restore_service_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -19,7 +18,6 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "content/public/browser/navigation_controller.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/browser_test.h"
@@ -39,12 +37,9 @@ void AwaitTabsReady(content::DOMMessageQueue* message_queue, int tabs) {
 void CheckVisbility(TabStripModel* tab_strip_model, int visible_index) {
   for (int i = 0; i < tab_strip_model->count(); ++i) {
     content::WebContents* contents = tab_strip_model->GetWebContentsAt(i);
-    std::string document_visibility_state;
-    const char kGetStateJS[] =
-        "window.domAutomationController.send("
-        "window.document.visibilityState);";
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        contents, kGetStateJS, &document_visibility_state));
+    const char kGetStateJS[] = "window.document.visibilityState;";
+    std::string document_visibility_state =
+        content::EvalJs(contents, kGetStateJS).ExtractString();
     if (i == visible_index) {
       EXPECT_EQ("visible", document_visibility_state);
     } else {

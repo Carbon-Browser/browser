@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,15 +43,6 @@ enum DiagnosticsTestId {
 
   // This must always be last in the list.
   DIAGNOSTICS_TEST_ID_COUNT
-};
-
-// Enumeration of metrics for UMA recording of recovery runs.
-enum RecoveryRunMetrics {
-  RECOVERY_NOT_RUN,
-  RECOVERY_CRASH_RUN,
-  RECOVERY_USER_RUN,
-  // Add new items above this line.
-  RECOVERY_RUN_METRICS_COUNT
 };
 
 // Possible enum values for individual test metrics.

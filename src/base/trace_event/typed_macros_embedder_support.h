@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/base_export.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/perfetto/include/perfetto/tracing/internal/track_event_internal.h"
 #include "third_party/perfetto/protos/perfetto/trace/track_event/track_event.pbzero.h"
@@ -34,7 +35,10 @@ class BASE_EXPORT TrackEventHandle {
   // into the event. Note that |listener| must outlive the TRACE_EVENT call,
   // i.e. cannot be destroyed until OnTrackEventCompleted() is called. Ownership
   // of both TrackEvent and the listener remains with the caller.
-  TrackEventHandle(TrackEvent*, IncrementalState*, CompletionListener*);
+  TrackEventHandle(TrackEvent*,
+                   IncrementalState*,
+                   CompletionListener*,
+                   bool filter_debug_annotations);
 
   // Creates an invalid handle.
   TrackEventHandle();
@@ -48,10 +52,17 @@ class BASE_EXPORT TrackEventHandle {
 
   IncrementalState* incremental_state() const { return incremental_state_; }
 
+  bool ShouldFilterDebugAnnotations() const {
+    return filter_debug_annotations_;
+  }
+
  private:
-  raw_ptr<TrackEvent> event_;
-  raw_ptr<IncrementalState> incremental_state_;
-  raw_ptr<CompletionListener> listener_;
+  // These fields not raw_ptr<> for performance reasons: based on this sampling
+  // profiler result on ChromeOS. go/brp-cros-prof-diff-20230403
+  RAW_PTR_EXCLUSION TrackEvent* event_;
+  RAW_PTR_EXCLUSION IncrementalState* incremental_state_;
+  RAW_PTR_EXCLUSION CompletionListener* listener_;
+  const bool filter_debug_annotations_ = false;
 };
 
 // Handle to a TracePacket which notifies a listener upon its destruction (after

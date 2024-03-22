@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,8 @@ class VIZ_SERVICE_EXPORT OverlayCandidateTemporalTracker {
   // candidate is promoted to overlay.
   int GetModeledPowerGain(uint64_t curr_frame,
                           const OverlayCandidateTemporalTracker::Config& config,
-                          int display_area);
+                          int display_area,
+                          bool is_fullscreen) const;
 
   // This function returns true when the time since the |resource_id| changed
   // exceeds a specific threshold.

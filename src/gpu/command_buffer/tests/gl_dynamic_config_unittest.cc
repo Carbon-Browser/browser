@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,14 @@ class GLDynamicConfigTest : public testing::Test {
 };
 
 TEST_F(GLDynamicConfigTest, SwitchConfigurationInNonVirtualizedContextMode) {
-  // TODO(jinsukkim): Enable the test once crbug.com/527126 is handled.
+  // TODO(https://crbug.com/1382560): Fix (or delete) the test. The previous
+  // blocker issue https://crbug.com/527126 was closed as WontFix.
 #if 0
   // Disable usage of virtualized GL context.
   GLManager::SetEnableVirtualContext(false);
 
   GLManager::Options options;
-  // TODO(klausw,jinsukkim): This modification is untested,
+  // TODO(https://crbug.com/1382560): This modification is untested,
   // GLManager::Options does not currently have a surface_format
   // field.
   options.surface_format = gl::GLSurfaceFormat();

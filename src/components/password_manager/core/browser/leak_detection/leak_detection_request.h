@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,8 +49,8 @@ class LeakDetectionRequest : public LeakDetectionRequestInterface {
   // beforehand. If the request failed, |callback| is invoked with |nullptr|,
   // otherwise a SingleLookupResponse is returned.
   void LookupSingleLeak(network::mojom::URLLoaderFactory* url_loader_factory,
-                        const absl::optional<std::string>& access_token,
-                        const absl::optional<std::string>& api_key,
+                        const std::optional<std::string>& access_token,
+                        const std::optional<std::string>& api_key,
                         LookupSingleLeakPayload payload,
                         LookupSingleLeakCallback callback) override;
 

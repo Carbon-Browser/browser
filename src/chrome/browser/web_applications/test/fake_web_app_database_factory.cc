@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,27 +12,32 @@
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "components/sync/model/model_error.h"
 #include "components/sync/model/model_type_store.h"
-#include "components/sync/test/model/model_type_store_test_util.h"
+#include "components/sync/test/model_type_store_test_util.h"
 
 namespace web_app {
 
-FakeWebAppDatabaseFactory::FakeWebAppDatabaseFactory() {
-  // InMemoryStore must be created after message_loop_.
-  store_ = syncer::ModelTypeStoreTestUtil::CreateInMemoryStoreForTest();
-}
+FakeWebAppDatabaseFactory::FakeWebAppDatabaseFactory() = default;
 
 FakeWebAppDatabaseFactory::~FakeWebAppDatabaseFactory() = default;
 
-syncer::OnceModelTypeStoreFactory FakeWebAppDatabaseFactory::GetStoreFactory() {
-  return syncer::ModelTypeStoreTestUtil::FactoryForForwardingStore(
-      store_.get());
+syncer::ModelTypeStore* FakeWebAppDatabaseFactory::GetStore() {
+  // Lazily instantiate to avoid performing blocking operations in tests that
+  // never use web apps at all.
+  // Note InMemoryStore must be created after message_loop_. See class comment.
+  if (!store_)
+    store_ = syncer::ModelTypeStoreTestUtil::CreateInMemoryStoreForTest();
+  return store_.get();
 }
 
-Registry FakeWebAppDatabaseFactory::ReadRegistry() const {
+syncer::OnceModelTypeStoreFactory FakeWebAppDatabaseFactory::GetStoreFactory() {
+  return syncer::ModelTypeStoreTestUtil::FactoryForForwardingStore(GetStore());
+}
+
+Registry FakeWebAppDatabaseFactory::ReadRegistry() {
   Registry registry;
   base::RunLoop run_loop;
 
-  store_->ReadAllData(base::BindLambdaForTesting(
+  GetStore()->ReadAllData(base::BindLambdaForTesting(
       [&](const absl::optional<syncer::ModelError>& error,
           std::unique_ptr<syncer::ModelTypeStore::RecordList> data_records) {
         DCHECK(!error);
@@ -41,7 +46,7 @@ Registry FakeWebAppDatabaseFactory::ReadRegistry() const {
           auto app = WebAppDatabase::ParseWebApp(record.id, record.value);
           DCHECK(app);
 
-          AppId app_id = app->app_id();
+          webapps::AppId app_id = app->app_id();
           registry.emplace(std::move(app_id), std::move(app));
         }
         run_loop.Quit();
@@ -51,8 +56,8 @@ Registry FakeWebAppDatabaseFactory::ReadRegistry() const {
   return registry;
 }
 
-std::set<AppId> FakeWebAppDatabaseFactory::ReadAllAppIds() const {
-  std::set<AppId> app_ids;
+std::set<webapps::AppId> FakeWebAppDatabaseFactory::ReadAllAppIds() {
+  std::set<webapps::AppId> app_ids;
 
   Registry registry = ReadRegistry();
   for (Registry::value_type& kv : registry)
@@ -66,23 +71,24 @@ void FakeWebAppDatabaseFactory::WriteProtos(
   base::RunLoop run_loop;
 
   std::unique_ptr<syncer::ModelTypeStore::WriteBatch> write_batch =
-      store_->CreateWriteBatch();
+      GetStore()->CreateWriteBatch();
 
   for (const std::unique_ptr<WebAppProto>& proto : protos) {
     GURL start_url(proto->sync_data().start_url());
     DCHECK(!start_url.is_empty());
     DCHECK(start_url.is_valid());
-    AppId app_id = GenerateAppId(/*manifest_id=*/absl::nullopt, start_url);
+    webapps::AppId app_id =
+        GenerateAppId(proto->sync_data().relative_manifest_id(), start_url);
     write_batch->WriteData(app_id, proto->SerializeAsString());
   }
 
-  store_->CommitWriteBatch(
+  GetStore()->CommitWriteBatch(
       std::move(write_batch),
-      base::BindOnce(base::BindLambdaForTesting(
+      base::BindLambdaForTesting(
           [&](const absl::optional<syncer::ModelError>& error) {
             DCHECK(!error);
             run_loop.Quit();
-          })));
+          }));
 
   run_loop.Run();
 }

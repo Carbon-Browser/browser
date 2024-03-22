@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,9 @@
 #include "build/buildflag.h"
 #include "components/commerce/core/commerce_heuristics_data.h"
 #include "components/commerce/core/commerce_heuristics_data_metrics_helper.h"
+#include "components/commerce/core/pref_names.h"
+#include "components/commerce/core/test_utils.h"
+#include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -21,6 +24,7 @@ const char kGlobalHeuristicsJSONData[] = R"###(
       {
         "rule_discount_partner_merchant_regex": "baz",
         "coupon_discount_partner_merchant_regex": "qux",
+        "no_discount_merchant_regex": "corge",
         "discount_fetch_delay": "10h"
       }
   )###";
@@ -28,6 +32,7 @@ const char kRuleFeatureParamPartnerMerchantURL[] = "https://www.foo.com";
 const char kCouponFeatureParamPartnerMerchantURL[] = "https://www.bar.com";
 const char kRuleComponentPartnerMerchantURL[] = "https://www.baz.com";
 const char kCouponComponentPartnerMerchantURL[] = "https://www.qux.com";
+const char kNoDiscountMerchantURL[] = "https://www.corge.com";
 #endif  //! BUILDFLAG(IS_ANDROID)
 }  // namespace
 
@@ -131,4 +136,39 @@ TEST_F(CommerceFeatureListTest, TestGetDiscountFetchDelay_FromComponent) {
 
   ASSERT_EQ(commerce::GetDiscountFetchDelay(), base::Hours(10));
 }
+
+TEST_F(CommerceFeatureListTest, TestNoDiscountMerchant) {
+  auto& data = commerce_heuristics::CommerceHeuristicsData::GetInstance();
+  ASSERT_TRUE(
+      data.PopulateDataFromComponent("{}", kGlobalHeuristicsJSONData, "", ""));
+
+  ASSERT_TRUE(commerce::IsNoDiscountMerchant(GURL(kNoDiscountMerchantURL)));
+  ASSERT_FALSE(
+      commerce::IsNoDiscountMerchant(GURL(kCouponComponentPartnerMerchantURL)));
+  // Matching host only.
+  ASSERT_FALSE(
+      commerce::IsNoDiscountMerchant(GURL("https://www.qux.com/corge")));
+}
 #endif  //! BUILDFLAG(IS_ANDROID)
+
+// This test assumes that, at bare minimum, "US" is an allowed country and
+// "en-us" is an allowed locale for the US.
+TEST_F(CommerceFeatureListTest, TestEnabledForCountryAndLocale) {
+  // Check the known success cases with different character cases.
+  ASSERT_TRUE(commerce::IsEnabledForCountryAndLocale(
+      commerce::kShoppingPDPMetricsRegionLaunched, "US", "en-us"));
+  ASSERT_TRUE(commerce::IsEnabledForCountryAndLocale(
+      commerce::kShoppingPDPMetricsRegionLaunched, "us", "en-US"));
+
+  // Test allowed country with disallowed (fake) locale.
+  ASSERT_FALSE(commerce::IsEnabledForCountryAndLocale(
+      commerce::kShoppingPDPMetricsRegionLaunched, "us", "zz-zz"));
+
+  // Test allowed locale in a disallowed (fake) country.
+  ASSERT_FALSE(commerce::IsEnabledForCountryAndLocale(
+      commerce::kShoppingPDPMetricsRegionLaunched, "zz", "en-us"));
+
+  // Ensure empty values don't crash.
+  ASSERT_FALSE(commerce::IsEnabledForCountryAndLocale(
+      commerce::kShoppingPDPMetricsRegionLaunched, "", ""));
+}

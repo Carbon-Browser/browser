@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,8 +53,8 @@ std::unique_ptr<ExtensionError> CreateNewManifestError(
     const std::string& extension_id,
     const std::string& message) {
   return std::unique_ptr<ExtensionError>(
-      new ManifestError(extension_id, base::UTF8ToUTF16(message),
-                        std::u16string(), std::u16string()));
+      new ManifestError(extension_id, base::UTF8ToUTF16(message), std::string(),
+                        std::u16string()));
 }
 
 }  // namespace error_test_util

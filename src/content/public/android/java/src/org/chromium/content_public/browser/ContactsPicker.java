@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,25 +60,37 @@ public final class ContactsPicker {
      *         the scheme omitted.
      * @return whether a contacts picker is successfully shown.
      */
-    public static boolean showContactsPicker(WebContents webContents,
-            ContactsPickerListener listener, boolean allowMultiple, boolean includeNames,
-            boolean includeEmails, boolean includeTel, boolean includeAddresses,
-            boolean includeIcons, String formattedOrigin) {
+    public static boolean showContactsPicker(
+            WebContents webContents,
+            ContactsPickerListener listener,
+            boolean allowMultiple,
+            boolean includeNames,
+            boolean includeEmails,
+            boolean includeTel,
+            boolean includeAddresses,
+            boolean includeIcons,
+            String formattedOrigin) {
         if (sContactsPickerDelegate == null) return false;
         assert sPicker == null;
 
         if (!canShowContactsPicker(webContents)) {
             return false;
         }
-        sPicker = sContactsPickerDelegate.showContactsPicker(webContents.getTopLevelNativeWindow(),
-                listener, allowMultiple, includeNames, includeEmails, includeTel, includeAddresses,
-                includeIcons, formattedOrigin);
+        sPicker =
+                sContactsPickerDelegate.showContactsPicker(
+                        webContents.getTopLevelNativeWindow(),
+                        listener,
+                        allowMultiple,
+                        includeNames,
+                        includeEmails,
+                        includeTel,
+                        includeAddresses,
+                        includeIcons,
+                        formattedOrigin);
         return true;
     }
 
-    /**
-     * Called when the contacts picker dialog has been dismissed.
-     */
+    /** Called when the contacts picker dialog has been dismissed. */
     public static void onContactsPickerDismissed() {
         assert sPicker != null;
         sPicker = null;

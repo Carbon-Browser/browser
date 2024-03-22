@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_UI_USER_ADDING_SCREEN_INPUT_METHODS_CONTROLLER_H_
 #define CHROME_BROWSER_ASH_LOGIN_UI_USER_ADDING_SCREEN_INPUT_METHODS_CONTROLLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/ash/login/ui/user_adding_screen.h"
 #include "ui/base/ime/ash/input_method_manager.h"
@@ -33,10 +34,11 @@ class UserAddingScreenInputMethodsController
   void OnUserAddingFinished() override;
 
  private:
-  UserAddingScreen* screen_;
+  raw_ptr<UserAddingScreen, DanglingUntriaged | ExperimentalAsh> screen_;
 
   scoped_refptr<input_method::InputMethodManager::State> saved_ime_state_;
-  user_manager::User* active_user_on_show_;
+  raw_ptr<user_manager::User, DanglingUntriaged | ExperimentalAsh>
+      active_user_on_show_;
 };
 
 }  // namespace ash

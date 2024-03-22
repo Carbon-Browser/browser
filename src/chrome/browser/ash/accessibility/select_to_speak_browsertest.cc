@@ -1,26 +1,33 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <vector>
 
+#include "ash/accessibility/magnifier/fullscreen_magnifier_controller.h"
 #include "ash/accessibility/ui/accessibility_focus_ring_controller_impl.h"
 #include "ash/accessibility/ui/accessibility_focus_ring_layer.h"
+#include "ash/accessibility/ui/accessibility_highlight_layer.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/ash_view_ids.h"
 #include "ash/public/cpp/system_tray_test_api.h"
 #include "ash/public/cpp/test/shell_test_api.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
+#include "ash/system/accessibility/select_to_speak/select_to_speak_tray.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/unified/unified_system_tray.h"
-#include "base/bind.h"
-#include "base/command_line.h"
+#include "ash/test/ash_test_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
-#include "build/branding_buildflags.h"
-#include "build/build_config.h"
+#include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/ash/accessibility/accessibility_feature_browsertest.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/accessibility/accessibility_test_utils.h"
+#include "chrome/browser/ash/accessibility/automation_test_utils.h"
+#include "chrome/browser/ash/accessibility/magnifier_animation_waiter.h"
+#include "chrome/browser/ash/accessibility/select_to_speak_test_utils.h"
 #include "chrome/browser/ash/accessibility/speech_monitor.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -28,40 +35,41 @@
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "content/public/browser/notification_details.h"
-#include "content/public/browser/notification_service.h"
+#include "content/public/test/accessibility_notification_waiter.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "extensions/browser/browsertest_util.h"
-#include "extensions/browser/extension_host.h"
-#include "extensions/browser/extension_host_test_helper.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/browser/process_manager.h"
-#include "mojo/public/cpp/bindings/remote.h"
-#include "ui/accessibility/accessibility_features.h"
-#include "ui/accessibility/accessibility_switches.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/screen.h"
 #include "ui/display/test/display_manager_test_api.h"
+#include "ui/events/keycodes/keyboard_codes_posix.h"
 #include "ui/events/test/event_generator.h"
 #include "url/url_constants.h"
 
 namespace ash {
 
-class SelectToSpeakTest : public InProcessBrowserTest {
+class SelectToSpeakTest : public AccessibilityFeatureBrowserTest {
  public:
   SelectToSpeakTest(const SelectToSpeakTest&) = delete;
   SelectToSpeakTest& operator=(const SelectToSpeakTest&) = delete;
 
   void OnFocusRingChanged() {
-    if (loop_runner_) {
+    if (loop_runner_ && loop_runner_->running()) {
       loop_runner_->Quit();
     }
   }
 
+  void OnHighlightsAdded() {
+    if (highlights_runner_ && highlights_runner_->running()) {
+      highlights_runner_->Quit();
+    }
+  }
+
   void SetSelectToSpeakState() {
-    if (tray_loop_runner_) {
+    if (tray_loop_runner_ && tray_loop_runner_->running()) {
       tray_loop_runner_->Quit();
     }
   }
@@ -70,78 +78,111 @@ class SelectToSpeakTest : public InProcessBrowserTest {
   SelectToSpeakTest() {}
   ~SelectToSpeakTest() override {}
 
+  // Note that we do not enable Select to Speak in the SetUp method because
+  // tests are less flaky if we load the page URL before loading up the
+  // Select to Speak extension.
   void SetUpOnMainThread() override {
+    AccessibilityFeatureBrowserTest::SetUpOnMainThread();
+
     ASSERT_FALSE(AccessibilityManager::Get()->IsSelectToSpeakEnabled());
     console_observer_ = std::make_unique<ExtensionConsoleErrorObserver>(
-        browser()->profile(), extension_misc::kSelectToSpeakExtensionId);
+        AccessibilityManager::Get()->profile(),
+        extension_misc::kSelectToSpeakExtensionId);
 
     tray_test_api_ = SystemTrayTestApi::Create();
-
-    extensions::ExtensionHostTestHelper host_helper(
-        browser()->profile(), extension_misc::kSelectToSpeakExtensionId);
-    AccessibilityManager::Get()->SetSelectToSpeakEnabled(true);
-    host_helper.WaitForHostCompletedFirstLoad();
-
     aura::Window* root_window = Shell::Get()->GetPrimaryRootWindow();
     generator_ = std::make_unique<ui::test::EventGenerator>(root_window);
 
-    ASSERT_TRUE(
-        ui_test_utils::NavigateToURL(browser(), GURL(url::kAboutBlankURL)));
+    automation_test_utils_ = std::make_unique<AutomationTestUtils>(
+        extension_misc::kSelectToSpeakExtensionId);
 
-    // Select to speak loads part of itself (eventually all of itself) via a
-    // dynamic import. This means that the background page signals a load event
-    // prior to the import being fully finished. Wait for it here.
-    std::string script =
-        R"JS(
-          (async function() {
-            await import("/select_to_speak/select_to_speak_main.js");
-            window.domAutomationController.send('ok');
-          })();
-        )JS";
+    NavigateToUrl(GURL(url::kAboutBlankURL));
 
-    std::string result =
-        extensions::browsertest_util::ExecuteScriptInBackgroundPage(
-            browser()->profile(), extension_misc::kSelectToSpeakExtensionId,
-            script,
-            extensions::browsertest_util::ScriptUserActivation::kDontActivate);
-    ASSERT_EQ(result, "ok");
-  }
-
-  void SetUpInProcessBrowserTestFixture() override {
-    // TODO (leileilei@google.com): Provide a way to disable the pop up dialog.
-    // Disable kEnhancedNetworkVoices To avoid its pop up dialog.
-    scoped_feature_list_.InitAndDisableFeature(
-        ::features::kEnhancedNetworkVoices);
+    // Pretend that enhanced network voices dialog has been accepted so that the
+    // dialog does not block.
+    AccessibilityManager::Get()->profile()->GetPrefs()->SetBoolean(
+        prefs::kAccessibilitySelectToSpeakEnhancedVoicesDialogShown, true);
   }
 
   test::SpeechMonitor sm_;
   std::unique_ptr<ui::test::EventGenerator> generator_;
   std::unique_ptr<SystemTrayTestApi> tray_test_api_;
   std::unique_ptr<ExtensionConsoleErrorObserver> console_observer_;
+  std::unique_ptr<AutomationTestUtils> automation_test_utils_;
 
-  gfx::Rect GetWebContentsBounds() const {
+  gfx::Rect GetWebContentsBounds(const std::string& url) const {
     // TODO(katie): Find a way to get the exact bounds programmatically.
-    gfx::Rect bounds = browser()->window()->GetBounds();
-    bounds.Inset(gfx::Insets::TLBR(8, 8, 8, 75));
+    gfx::Rect bounds = automation_test_utils_->GetBoundsOfRootWebArea(url);
     return bounds;
   }
 
-  void ActivateSelectToSpeakInWindowBounds(std::string url) {
-    ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), GURL(url)));
-    gfx::Rect bounds = GetWebContentsBounds();
+  void LoadURLAndSelectToSpeak(const std::string& url) {
+    if (!AccessibilityManager::Get()->IsSelectToSpeakEnabled()) {
+      sts_test_utils::TurnOnSelectToSpeakForTest(
+          AccessibilityManager::Get()->profile());
+    }
+    automation_test_utils_->SetUpTestSupport();
+    NavigateToUrl(GURL(url));
+    automation_test_utils_->WaitForPageLoad(url);
+  }
 
-    // Hold down Search and drag over the web contents to select everything.
-    generator_->PressKey(ui::VKEY_LWIN, 0 /* flags */);
-    generator_->MoveMouseTo(bounds.x(), bounds.y());
-    generator_->PressLeftButton();
-    generator_->MoveMouseTo(bounds.x() + bounds.width(),
-                            bounds.y() + bounds.height());
-    generator_->ReleaseLeftButton();
-    generator_->ReleaseKey(ui::VKEY_LWIN, 0 /* flags */);
+  virtual void ActivateSelectToSpeakInWindowBounds(const std::string& url) {
+    // Load the URL before Select to Speak to avoid flakes.
+    LoadURLAndSelectToSpeak(url);
+
+    sts_test_utils::StartSelectToSpeakInBrowserWithUrl(
+        url, automation_test_utils_.get(), generator_.get());
+  }
+
+  // Set document selection to be the node with text `text` using Automation
+  // API.
+  void SelectNodeWithText(const std::string& text) {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    std::string script =
+        base::StringPrintf(R"JS(
+        (async function() {
+          chrome.automation.getDesktop(desktop => {
+            const textNode = desktop.find(
+                {role: 'staticText', attributes: {name: '%s'}});
+            chrome.automation.setDocumentSelection({
+              anchorObject: textNode,
+              anchorOffset: %d,
+              focusObject: textNode,
+              focusOffset: %d,
+            });
+            const callback = (() => {
+              desktop.removeEventListener('documentSelectionChanged',
+                  callback, /*capture=*/false);
+              chrome.test.sendScriptResult('ready');
+            });
+            desktop.addEventListener('documentSelectionChanged',
+                callback, /*capture=*/false);
+          });
+        })();
+      )JS",
+                           text.c_str(), 0, static_cast<int>(text.size()));
+    base::Value result =
+        extensions::browsertest_util::ExecuteScriptInBackgroundPage(
+            AccessibilityManager::Get()->profile(),
+            extension_misc::kSelectToSpeakExtensionId, script);
+    ASSERT_EQ("ready", result);
+  }
+
+  void PrepareToWaitForHighlightAdded() {
+    highlights_runner_ = std::make_unique<base::RunLoop>();
+    base::RepeatingCallback<void()> callback = base::BindRepeating(
+        &SelectToSpeakTest::OnHighlightsAdded, GetWeakPtr());
+    AccessibilityManager::Get()->SetHighlightsObserverForTest(callback);
+  }
+
+  void WaitForHighlightAdded() {
+    DCHECK(highlights_runner_);
+    highlights_runner_->Run();
+    highlights_runner_ = nullptr;
   }
 
   void PrepareToWaitForSelectToSpeakStatusChanged() {
-    tray_loop_runner_ = new content::MessageLoopRunner();
+    tray_loop_runner_ = std::make_unique<base::RunLoop>();
   }
 
   // Blocks until the select-to-speak tray status is changed.
@@ -157,7 +198,7 @@ class SelectToSpeakTest : public InProcessBrowserTest {
   }
 
   void PrepareToWaitForFocusRingChanged() {
-    loop_runner_ = new content::MessageLoopRunner();
+    loop_runner_ = std::make_unique<base::RunLoop>();
   }
 
   // Blocks until the focus ring is changed.
@@ -170,42 +211,30 @@ class SelectToSpeakTest : public InProcessBrowserTest {
     return weak_ptr_factory_.GetWeakPtr();
   }
 
-  void RunJavaScriptInSelectToSpeakBackgroundPage(const std::string& script) {
-    extensions::ExtensionHost* host =
-        extensions::ProcessManager::Get(browser()->profile())
-            ->GetBackgroundHostForExtension(
-                extension_misc::kSelectToSpeakExtensionId);
-    CHECK(content::ExecuteScript(host->host_contents(), script));
-  }
-
-  content::WebContents* GetWebContents() {
-    return browser()->tab_strip_model()->GetActiveWebContents();
-  }
-
   void ExecuteJavaScriptAsync(const std::string& script) {
-    content::ExecuteScriptAsync(GetWebContents(), script);
+    content::ExecuteScriptAsync(
+        browser()->tab_strip_model()->GetActiveWebContents(), script);
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-  scoped_refptr<content::MessageLoopRunner> loop_runner_;
-  scoped_refptr<content::MessageLoopRunner> tray_loop_runner_;
+  std::unique_ptr<base::RunLoop> loop_runner_;
+  std::unique_ptr<base::RunLoop> highlights_runner_;
+  std::unique_ptr<base::RunLoop> tray_loop_runner_;
   base::WeakPtrFactory<SelectToSpeakTest> weak_ptr_factory_{this};
 };
 
-/* Test fixture enabling experimental accessibility language detection switch */
-class SelectToSpeakTestWithLanguageDetection : public SelectToSpeakTest {
+class SelectToSpeakTestWithVoiceSwitching : public SelectToSpeakTest {
  protected:
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    SelectToSpeakTest::SetUpCommandLine(command_line);
-    command_line->AppendSwitch(
-        ::switches::kEnableExperimentalAccessibilityLanguageDetection);
+  void SetUpOnMainThread() override {
+    PrefService* prefs = AccessibilityManager::Get()->profile()->GetPrefs();
+    prefs->SetBoolean(prefs::kAccessibilitySelectToSpeakVoiceSwitching, true);
+    SelectToSpeakTest::SetUpOnMainThread();
   }
 };
 
-// The status tray is not active on official builds.
-// Disable the test on Chromium due to flaky: crbug.com/1165749
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, DISABLED_SpeakStatusTray) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, SpeakStatusTray) {
+  sts_test_utils::TurnOnSelectToSpeakForTest(
+      AccessibilityManager::Get()->profile());
   gfx::Rect tray_bounds = Shell::Get()
                               ->GetPrimaryRootWindowController()
                               ->GetStatusAreaWidget()
@@ -223,13 +252,10 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, DISABLED_SpeakStatusTray) {
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_ActivatesWithTapOnSelectToSpeakTray DISABLED_ActivatesWithTapOnSelectToSpeakTray
-#else
-#define MAYBE_ActivatesWithTapOnSelectToSpeakTray ActivatesWithTapOnSelectToSpeakTray
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_ActivatesWithTapOnSelectToSpeakTray) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, ActivatesWithTapOnSelectToSpeakTray) {
+  LoadURLAndSelectToSpeak(
+      "data:text/html;charset=utf-8,<p>This is some text</p>");
+
   base::RepeatingCallback<void()> callback = base::BindRepeating(
       &SelectToSpeakTest::SetSelectToSpeakState, GetWeakPtr());
   AccessibilityManager::Get()->SetSelectToSpeakStateObserverForTest(callback);
@@ -238,10 +264,8 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_ActivatesWithTapOnSelectToSpeakT
 
   // We should be in "selection" mode, so clicking with the mouse should
   // start speech.
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser(),
-      GURL("data:text/html;charset=utf-8,<p>This is some text</p>")));
-  gfx::Rect bounds = GetWebContentsBounds();
+  gfx::Rect bounds = automation_test_utils_->GetNodeBoundsInRoot(
+      "This is some text", "staticText");
   generator_->MoveMouseTo(bounds.x(), bounds.y());
   generator_->PressLeftButton();
   generator_->MoveMouseTo(bounds.x() + bounds.width(),
@@ -252,25 +276,21 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_ActivatesWithTapOnSelectToSpeakT
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_WorksWithTouchSelection DISABLED_WorksWithTouchSelection
-#else
-#define MAYBE_WorksWithTouchSelection WorksWithTouchSelection
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_WorksWithTouchSelection) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, WorksWithTouchSelection) {
+  LoadURLAndSelectToSpeak(
+      "data:text/html;charset=utf-8,<p>This is some text</p>");
+
   base::RepeatingCallback<void()> callback = base::BindRepeating(
       &SelectToSpeakTest::SetSelectToSpeakState, GetWeakPtr());
   AccessibilityManager::Get()->SetSelectToSpeakStateObserverForTest(callback);
+
   // Click in the tray bounds to start 'selection' mode.
   TapSelectToSpeakTray();
 
   // We should be in "selection" mode, so tapping and dragging should
   // start speech.
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser(),
-      GURL("data:text/html;charset=utf-8,<p>This is some text</p>")));
-  gfx::Rect bounds = GetWebContentsBounds();
+  gfx::Rect bounds = automation_test_utils_->GetNodeBoundsInRoot(
+      "This is some text", "staticText");
   generator_->PressTouch(gfx::Point(bounds.x(), bounds.y()));
   generator_->PressMoveAndReleaseTouchTo(bounds.x() + bounds.width(),
                                          bounds.y() + bounds.height());
@@ -290,9 +310,9 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
   // and bring back the console observer.
   console_observer_.reset();
 
-  ash::ShellTestApi shell_test_api;
+  ShellTestApi shell_test_api;
   display::test::DisplayManagerTestApi(shell_test_api.display_manager())
-      .UpdateDisplay("1+0-800x800,801+1-800x800");
+      .UpdateDisplay("1+0-800x700,801+1-800x700");
   ASSERT_EQ(2u, shell_test_api.display_manager()->GetNumDisplays());
   display::test::DisplayManagerTestApi display_manager_test_api(
       shell_test_api.display_manager());
@@ -300,33 +320,40 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
   display::Screen* screen = display::Screen::GetScreen();
   int64_t display2 = display_manager_test_api.GetSecondaryDisplay().id();
   screen->SetDisplayForNewWindows(display2);
-  Browser* browser_on_secondary_display = CreateBrowser(browser()->profile());
 
+  // Ctrl+N to open a new browser window. This will load on the new display.
+  generator_->PressAndReleaseKey(ui::VKEY_N, ui::EF_CONTROL_DOWN);
+
+  std::string url = "data:text/html;charset=utf-8,<p>This is some text</p>";
+  NavigateToUrl(GURL(url));
+
+  sts_test_utils::TurnOnSelectToSpeakForTest(
+      AccessibilityManager::Get()->profile());
+  automation_test_utils_->SetUpTestSupport();
   base::RepeatingCallback<void()> callback = base::BindRepeating(
       &SelectToSpeakTest::SetSelectToSpeakState, GetWeakPtr());
   AccessibilityManager::Get()->SetSelectToSpeakStateObserverForTest(callback);
 
-  // Create a window on the non-primary display.
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser_on_secondary_display,
-      GURL("data:text/html;charset=utf-8,<p>This is some text</p>")));
+  // Also waits for load complete.
+  gfx::Rect bounds = GetWebContentsBounds(url);
+
   // Click in the tray bounds to start 'selection' mode.
   TapSelectToSpeakTray();
   // We should be in "selection" mode, so tapping and dragging should
   // start speech.
-  gfx::Rect bounds = GetWebContentsBounds();
-  generator_->PressTouch(gfx::Point(bounds.x() + 800, bounds.y()));
-  generator_->PressMoveAndReleaseTouchTo(bounds.x() + 800 + bounds.width(),
+  generator_->PressTouch(gfx::Point(bounds.x(), bounds.y()));
+  generator_->PressMoveAndReleaseTouchTo(bounds.x() + bounds.width(),
                                          bounds.y() + bounds.height());
   generator_->ReleaseLeftButton();
 
   sm_.ExpectSpeechPattern("This is some text*");
   sm_.Replay();
-
-  CloseBrowserSynchronously(browser_on_secondary_display);
 }
 
 IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, SelectToSpeakTrayNotSpoken) {
+  sts_test_utils::TurnOnSelectToSpeakForTest(
+      AccessibilityManager::Get()->profile());
+
   base::RepeatingCallback<void()> callback = base::BindRepeating(
       &SelectToSpeakTest::SetSelectToSpeakState, GetWeakPtr());
   AccessibilityManager::Get()->SetSelectToSpeakStateObserverForTest(callback);
@@ -345,13 +372,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, SelectToSpeakTrayNotSpoken) {
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_SmoothlyReadsAcrossInlineUrl DISABLED_SmoothlyReadsAcrossInlineUrl
-#else
-#define MAYBE_SmoothlyReadsAcrossInlineUrl SmoothlyReadsAcrossInlineUrl
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_SmoothlyReadsAcrossInlineUrl) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, SmoothlyReadsAcrossInlineUrl) {
   // Make sure an inline URL is read smoothly.
   ActivateSelectToSpeakInWindowBounds(
       "data:text/html;charset=utf-8,<p>This is some text <a href=\"\">with a"
@@ -363,13 +384,29 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_SmoothlyReadsAcrossInlineUrl) {
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_SmoothlyReadsAcrossMultipleLines DISABLED_SmoothlyReadsAcrossMultipleLines
-#else
-#define MAYBE_SmoothlyReadsAcrossMultipleLines SmoothlyReadsAcrossMultipleLines
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_SmoothlyReadsAcrossMultipleLines) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, SetsWordHighlights) {
+  AccessibilityFocusRingControllerImpl* controller =
+      Shell::Get()->accessibility_focus_ring_controller();
+  EXPECT_FALSE(controller->highlight_layer_for_testing());
+  PrepareToWaitForHighlightAdded();
+  ActivateSelectToSpeakInWindowBounds(
+      "data:text/html;charset=utf-8,<p>Highlight me");
+  sm_.ExpectSpeechPattern("*Highlight me*");
+  sm_.Replay();
+
+  // Some highlighting should have occurred. OK to do this after speech as
+  // Select to Speak refreshes the UI intermittently.
+  WaitForHighlightAdded();
+
+  // Check the highlight exists and the color is as expected.
+  AccessibilityHighlightLayer* highlight_layer =
+      controller->highlight_layer_for_testing();
+  EXPECT_TRUE(highlight_layer);
+  EXPECT_EQ(1u, highlight_layer->rects_for_test().size());
+  EXPECT_EQ(SkColorSetRGB(94, 155, 255), highlight_layer->color_for_test());
+}
+
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, SmoothlyReadsAcrossMultipleLines) {
   // Sentences spanning multiple lines.
   ActivateSelectToSpeakInWindowBounds(
       "data:text/html;charset=utf-8,<div style=\"width:100px\">This"
@@ -383,15 +420,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_SmoothlyReadsAcrossMultipleLines
   sm_.Replay();
 }
 
-// TODO(crbug.com/1225388): Flaky on ChromeOS MSAN bots
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_SmoothlyReadsAcrossFormattedText \
-  DISABLED_SmoothlyReadsAcrossFormattedText
-#else
-#define MAYBE_SmoothlyReadsAcrossFormattedText SmoothlyReadsAcrossFormattedText
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
-                       MAYBE_SmoothlyReadsAcrossFormattedText) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, SmoothlyReadsAcrossFormattedText) {
   // Bold or formatted text
   ActivateSelectToSpeakInWindowBounds(
       "data:text/html;charset=utf-8,<p>This is some text <b>with a node"
@@ -404,16 +433,8 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_ReadsStaticTextWithoutInlineTextChildren \
-  DISABLED_ReadsStaticTextWithoutInlineTextChildren
-#else
-#define MAYBE_ReadsStaticTextWithoutInlineTextChildren \
-  ReadsStaticTextWithoutInlineTextChildren
-#endif
 IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
-                       MAYBE_ReadsStaticTextWithoutInlineTextChildren) {
+                       ReadsStaticTextWithoutInlineTextChildren) {
   // Bold or formatted text
   ActivateSelectToSpeakInWindowBounds(
       "data:text/html;charset=utf-8,<canvas>This is some text</canvas>");
@@ -422,13 +443,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_BreaksAtParagraphBounds DISABLED_BreaksAtParagraphBounds
-#else
-#define MAYBE_BreaksAtParagraphBounds BreaksAtParagraphBounds
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_BreaksAtParagraphBounds) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, BreaksAtParagraphBounds) {
   ActivateSelectToSpeakInWindowBounds(
       "data:text/html;charset=utf-8,<div><p>First paragraph</p>"
       "<p>Second paragraph</p></div>");
@@ -439,51 +454,38 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_BreaksAtParagraphBounds) {
   sm_.Replay();
 }
 
-#if defined(MEMORY_SANITIZER)
-// TODO(crbug.com/1184714): Flaky timeout on MSAN.
-#define MAYBE_LanguageBoundsIgnoredByDefault \
-  DISABLED_LanguageBoundsIgnoredByDefault
-#else
-#define MAYBE_LanguageBoundsIgnoredByDefault \
-  DISABLED_LanguageBoundsIgnoredByDefault
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
-                       MAYBE_LanguageBoundsIgnoredByDefault) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, LanguageBoundsIgnoredByDefault) {
   // Splitting at language bounds is behind a feature flag, test the default
   // behaviour doesn't introduce a regression.
   ActivateSelectToSpeakInWindowBounds(
       "data:text/html;charset=utf-8,<div>"
       "<span lang='en-US'>The first paragraph</span>"
-      "<span lang='fr-FR'>le deuxième paragraphe</span></div>");
+      "<span lang='fr-FR'>le deuxieme paragraphe</span></div>");
 
-  sm_.ExpectSpeechPattern("The first paragraph* le deuxième paragraphe*");
+  sm_.ExpectSpeechPattern("The first paragraph* le deuxieme paragraphe*");
   sm_.Replay();
 }
 
-// TODO(crbug.com/1107958): Re-enable this test after fixing flakes.
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTestWithLanguageDetection,
-                       DISABLED_BreaksAtLanguageBounds) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTestWithVoiceSwitching,
+                       BreaksAtLanguageBounds) {
   ActivateSelectToSpeakInWindowBounds(
       "data:text/html;charset=utf-8,<div>"
       "<span lang='en-US'>The first paragraph</span>"
-      "<span lang='fr-FR'>le deuxième paragraphe</span></div>");
+      "<span lang='fr-FR'>le deuxieme paragraphe</span></div>");
 
-  sm_.ExpectSpeechPatternWithLocale("The first paragraph*", "en-US");
-  sm_.ExpectSpeechPatternWithLocale("le deuxième paragraphe*", "fr-FR");
+  sm_.ExpectSpeech(test::SpeechMonitor::Expectation("The first paragraph*")
+                       .AsPattern()
+                       .WithLocale("en-US"));
+  sm_.ExpectSpeech(test::SpeechMonitor::Expectation("le deuxieme paragraphe*")
+                       .AsPattern()
+                       .WithLocale("fr-FR"));
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_DoesNotCrashWithMousewheelEvent DISABLED_DoesNotCrashWithMousewheelEvent
-#else
-#define MAYBE_DoesNotCrashWithMousewheelEvent DoesNotCrashWithMousewheelEvent
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_DoesNotCrashWithMousewheelEvent) {
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser(),
-      GURL("data:text/html;charset=utf-8,<p>This is some text</p>")));
-  gfx::Rect bounds = GetWebContentsBounds();
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, DoesNotCrashWithMousewheelEvent) {
+  std::string url = "data:text/html;charset=utf-8,<p>This is some text</p>";
+  LoadURLAndSelectToSpeak(url);
+  gfx::Rect bounds = GetWebContentsBounds(url);
 
   // Hold down Search and drag over the web contents to select everything.
   generator_->PressKey(ui::VKEY_LWIN, 0 /* flags */);
@@ -501,20 +503,19 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_DoesNotCrashWithMousewheelEvent)
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_FocusRingMovesWithMouse DISABLED_FocusRingMovesWithMouse
-#else
-#define MAYBE_FocusRingMovesWithMouse FocusRingMovesWithMouse
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_FocusRingMovesWithMouse) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, FocusRingMovesWithMouse) {
+  std::string url =
+      "data:text/html;charset=utf-8,"
+      "<p>This is some text</p>";
+  LoadURLAndSelectToSpeak(url);
+
   // Create a callback for the focus ring observer.
   base::RepeatingCallback<void()> callback =
       base::BindRepeating(&SelectToSpeakTest::OnFocusRingChanged, GetWeakPtr());
   AccessibilityManager::Get()->SetFocusRingObserverForTest(callback);
 
   std::string focus_ring_id = AccessibilityManager::Get()->GetFocusRingId(
-      extension_misc::kSelectToSpeakExtensionId, "");
+      ax::mojom::AssistiveTechnologyType::kSelectToSpeak, "");
 
   AccessibilityFocusRingControllerImpl* controller =
       Shell::Get()->accessibility_focus_ring_controller();
@@ -524,10 +525,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_FocusRingMovesWithMouse) {
   // No focus rings to start.
   EXPECT_EQ(nullptr, focus_ring_group);
 
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL("data:text/html;charset=utf-8,"
-                                                "<p>This is some text</p>")));
-  gfx::Rect bounds = GetWebContentsBounds();
+  gfx::Rect bounds = GetWebContentsBounds(url);
   PrepareToWaitForFocusRingChanged();
   generator_->PressKey(ui::VKEY_LWIN, 0 /* flags */);
   generator_->MoveMouseTo(bounds.x(), bounds.y());
@@ -582,13 +580,53 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_FocusRingMovesWithMouse) {
   EXPECT_EQ(focus_rings.size(), 0u);
 }
 
-// crbug.com/1114854 - Times out on MSAN bots.
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_ContinuesReadingDuringResize DISABLED_ContinuesReadingDuringResize
-#else
-#define MAYBE_ContinuesReadingDuringResize ContinuesReadingDuringResize
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_ContinuesReadingDuringResize) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
+                       SelectToSpeakPansFullscreenMagnifier) {
+  FullscreenMagnifierController* fullscreen_magnifier_controller =
+      Shell::Get()->fullscreen_magnifier_controller();
+  fullscreen_magnifier_controller->SetEnabled(true);
+
+  // Wait for Fullscreen magnifier to initialize.
+  MagnifierAnimationWaiter waiter(fullscreen_magnifier_controller);
+  waiter.Wait();
+  gfx::Point const initial_window_position =
+      fullscreen_magnifier_controller->GetWindowPosition();
+  std::string url =
+      "data:text/html;charset=utf-8,"
+      "<p>This is some text</p>";
+  LoadURLAndSelectToSpeak(url);
+  gfx::Rect bounds = GetWebContentsBounds(url);
+  PrepareToWaitForFocusRingChanged();
+
+  // Hold down Search, and move mouse to start of text.
+  generator_->PressKey(ui::VKEY_LWIN, 0 /* flags */);
+  generator_->MoveMouseTo(bounds.x(), bounds.y());
+
+  // FullscreenMagnifierController moves the magnifier window with animation
+  // when the magnifier is set to be enabled. Wait until the animation
+  // completes, so that the mouse movement controls the position of magnifier
+  // window later.
+  waiter.Wait();
+
+  // Press and drag mouse past bounds of magnified screen, to move the viewport.
+  generator_->PressLeftButton();
+
+  // Move mouse to bottom right area of screen. Multiply by scale as fullscreen
+  // magnifier is enabled, so input needs to be transformed.
+  const float scale = fullscreen_magnifier_controller->GetScale();
+  generator_->MoveMouseTo(
+      (bounds.right() - initial_window_position.x()) * scale,
+      (bounds.bottom() - initial_window_position.y()) * scale);
+
+  gfx::Point const final_window_position =
+      fullscreen_magnifier_controller->GetWindowPosition();
+
+  // Expect Magnifier window to move with mouse drag.
+  EXPECT_GT(final_window_position.x(), initial_window_position.x());
+  EXPECT_GT(final_window_position.y(), initial_window_position.y());
+}
+
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, ContinuesReadingDuringResize) {
   ActivateSelectToSpeakInWindowBounds(
       "data:text/html;charset=utf-8,<p>First paragraph</p>"
       "<div id='resize' style='width:300px; font-size: 1em'>"
@@ -607,18 +645,11 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_ContinuesReadingDuringResize) {
   sm_.Replay();
 }
 
-// Flaky on ChromeOS MSAN bots: https://crbug.com/1227368
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_WorksWithStickyKeys DISABLED_WorksWithStickyKeys
-#else
-#define MAYBE_WorksWithStickyKeys WorksWithStickyKeys
-#endif
-IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_WorksWithStickyKeys) {
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, WorksWithStickyKeys) {
   AccessibilityManager::Get()->EnableStickyKeys(true);
 
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(
-      browser(),
-      GURL("data:text/html;charset=utf-8,<p>This is some text</p>")));
+  std::string url = "data:text/html;charset=utf-8,<p>This is some text</p>";
+  LoadURLAndSelectToSpeak(url);
 
   // Tap Search and click a few pixels into the window bounds.
   generator_->PressKey(ui::VKEY_LWIN, 0 /* flags */);
@@ -626,7 +657,7 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_WorksWithStickyKeys) {
 
   // Sticky keys should remember the 'search' key was clicked, so STS is
   // actually in a capturing mode now.
-  gfx::Rect bounds = GetWebContentsBounds();
+  gfx::Rect bounds = GetWebContentsBounds(url);
   generator_->MoveMouseTo(bounds.x(), bounds.y());
   generator_->PressLeftButton();
   generator_->MoveMouseTo(bounds.x() + bounds.width(),
@@ -641,24 +672,102 @@ IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, MAYBE_WorksWithStickyKeys) {
   sm_.Replay();
 }
 
-// TODO(crbug.com/1227368): Flaky on ChromeOS MSAN bots.
-// TODO(crbug.com/1344562): Flaky on other CrOS bots too.
 IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
-                       DISABLED_SelectToSpeakDoesNotDismissTrayBubble) {
+                       SelectToSpeakDoesNotDismissTrayBubble) {
+  sts_test_utils::TurnOnSelectToSpeakForTest(
+      AccessibilityManager::Get()->profile());
+
   // Open tray bubble menu.
   tray_test_api_->ShowBubble();
 
-  // Search key + click the avatar button.
+  // Search key + click the settings button.
   generator_->PressKey(ui::VKEY_LWIN, 0 /* flags */);
-  tray_test_api_->ClickBubbleView(ViewID::VIEW_ID_USER_AVATAR_BUTTON);
+  tray_test_api_->ClickBubbleView(ViewID::VIEW_ID_QS_SETTINGS_BUTTON);
   generator_->ReleaseKey(ui::VKEY_LWIN, 0 /* flags */);
 
   // Should read out text.
-  sm_.ExpectSpeechPattern("*stub-user@example.com*");
+  sm_.ExpectSpeechPattern("*Settings*");
   sm_.Replay();
 
   // Tray bubble menu should remain open.
   ASSERT_TRUE(tray_test_api_->IsTrayBubbleOpen());
+}
+
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest, ReadsSelectedTextWithSearchS) {
+  std::string text = "This is some selected text";
+  LoadURLAndSelectToSpeak(base::StringPrintf(
+      "data:text/html;charset=utf-8,<p>Not me!</p><p>%s</p><p>Nor me!</p>",
+      text.c_str()));
+  SelectNodeWithText(text);
+
+  generator_->PressKey(ui::VKEY_LWIN, /*flags=*/0);
+  generator_->PressKey(ui::VKEY_S, /*flags=*/0);
+  generator_->ReleaseKey(ui::VKEY_LWIN, /*flags=*/0);
+  generator_->ReleaseKey(ui::VKEY_S, /*flags=*/0);
+
+  sm_.ExpectSpeechPattern(text);
+  sm_.Replay();
+}
+
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
+                       ReadsSelectedTextFromContextMenuClick) {
+  std::string text = "This is some selected text";
+  LoadURLAndSelectToSpeak(base::StringPrintf(
+      "data:text/html;charset=utf-8,<p>Not me!</p><p>%s</p><p>Nor me!</p>",
+      text.c_str()));
+
+  SelectNodeWithText(text);
+
+  gfx::Rect text_bounds =
+      automation_test_utils_->GetNodeBoundsInRoot(text, "staticText");
+  text_bounds.Inset(2.0f);
+  generator_->MoveMouseTo(text_bounds.right_center());
+
+  const std::string name = "Listen to selected text";
+
+  // If the EmbeddedA11yHelper in Lacros hasn't completed loading the helper
+  // extension, the context menu option won't be present. Keep trying until it
+  // is present. For users, it gets installed so quickly in Lacros that they
+  // won't see this type of behavior.
+  while (true) {
+    // Right-click the selected region.
+    generator_->PressRightButton();
+    generator_->ReleaseRightButton();
+
+    // Wait for the copy context menu item to be shown,
+    // this means the menu is displayed.
+    automation_test_utils_->GetNodeBoundsInRoot("Copy Ctrl+C", "menuItem");
+    if (automation_test_utils_->NodeExistsNoWait(name, "menuItem")) {
+      break;
+    }
+    // Close the menu and wait for the close to propagate.
+    generator_->PressAndReleaseKey(ui::VKEY_ESCAPE, /*flags=*/0);
+    automation_test_utils_->WaitForChildrenChangedEvent();
+  }
+
+  // Click the Select to Speak menu item.
+  gfx::Rect menu_item_bounds =
+      automation_test_utils_->GetNodeBoundsInRoot(name, "menuItem");
+  generator_->MoveMouseTo(menu_item_bounds.CenterPoint());
+  generator_->PressLeftButton();
+  generator_->ReleaseLeftButton();
+
+  sm_.ExpectSpeechPattern(text);
+  sm_.Replay();
+}
+
+IN_PROC_BROWSER_TEST_F(SelectToSpeakTest,
+                       ReadsSelectedTextWithContextMenuNotification) {
+  std::string text = "Pick me! Read me!";
+  LoadURLAndSelectToSpeak(base::StringPrintf(
+      "data:text/html;charset=utf-8,<p>Not me!</p><p>%s</p><p>Nor me!</p>",
+      text.c_str()));
+  SelectNodeWithText(text);
+
+  AccessibilityManager::Get()->OnSelectToSpeakContextMenuClick();
+
+  sm_.ExpectSpeechPattern(text);
+  sm_.Replay();
 }
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,12 +62,19 @@ class POLICY_EXPORT CloudPolicyManager
   // Virtual for mocking.
   virtual bool IsClientRegistered() const;
 
+  virtual void Connect(PrefService* local_state,
+                       std::unique_ptr<CloudPolicyClient> client) {}
+
+  // Shuts down the CloudPolicyManager (removes and stops refreshing any
+  // cached cloud policy).
+  virtual void DisconnectAndRemovePolicy() {}
+
   // ConfigurationPolicyProvider:
   void Init(SchemaRegistry* registry) override;
   void Shutdown() override;
   bool IsInitializationComplete(PolicyDomain domain) const override;
   bool IsFirstPolicyLoadComplete(PolicyDomain domain) const override;
-  void RefreshPolicies() override;
+  void RefreshPolicies(PolicyFetchReason reason) override;
 
   // CloudPolicyStore::Observer:
   void OnStoreLoaded(CloudPolicyStore* cloud_policy_store) override;

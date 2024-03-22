@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -137,7 +137,7 @@ class TestAdTracker : public AdTracker {
     if (!execution_context_)
       return AdTracker::GetCurrentExecutionContext();
 
-    return execution_context_;
+    return execution_context_.Get();
   }
 
   bool CalculateIfAdSubresource(ExecutionContext* execution_context,
@@ -145,7 +145,7 @@ class TestAdTracker : public AdTracker {
                                 ResourceType resource_type,
                                 const FetchInitiatorInfo& initiator_info,
                                 bool ad_request) override {
-    if (!ad_suffix_.IsEmpty() && request_url.GetString().EndsWith(ad_suffix_)) {
+    if (!ad_suffix_.empty() && request_url.GetString().EndsWith(ad_suffix_)) {
       ad_request = true;
     }
 
@@ -173,10 +173,10 @@ class TestAdTracker : public AdTracker {
   String url_to_wait_for_;
 };
 
-void SetIsAdSubframe(LocalFrame* frame) {
+void SetIsAdFrame(LocalFrame* frame) {
   DCHECK(frame);
   blink::FrameAdEvidence ad_evidence(frame->Parent() &&
-                                     frame->Parent()->IsAdSubframe());
+                                     frame->Parent()->IsAdFrame());
   ad_evidence.set_created_by_ad_script(
       mojom::FrameCreationStackEvidence::kCreatedByAdScript);
   ad_evidence.set_is_complete();
@@ -202,8 +202,9 @@ class AdTrackerTest : public testing::Test {
 
   void WillExecuteScript(const String& script_url,
                          int script_id = v8::Message::kNoScriptIdInfo) {
+    auto* execution_context = GetExecutionContext();
     ad_tracker_->WillExecuteScript(
-        GetExecutionContext(), v8::Isolate::GetCurrent()->GetCurrentContext(),
+        execution_context, execution_context->GetIsolate()->GetCurrentContext(),
         String(script_url), script_id);
   }
 
@@ -582,7 +583,7 @@ TEST_F(AdTrackerSimTest, ScriptDetectedByContext) {
   main_resource_->Complete("<body><iframe></iframe></body>");
   auto* child_frame =
       To<LocalFrame>(GetDocument().GetFrame()->Tree().FirstChild());
-  SetIsAdSubframe(child_frame);
+  SetIsAdFrame(child_frame);
 
   // Now run unknown script in the child's context. It should be considered an
   // ad based on context alone.
@@ -670,7 +671,7 @@ TEST_F(AdTrackerSimTest, AdResourceDetectedByContext) {
       "<body><iframe src='ad_frame.html'></iframe></body>");
   auto* child_frame =
       To<LocalFrame>(GetDocument().GetFrame()->Tree().FirstChild());
-  SetIsAdSubframe(child_frame);
+  SetIsAdFrame(child_frame);
 
   // Load a resource from the frame. It should be detected as an ad resource due
   // to its context.
@@ -708,8 +709,8 @@ TEST_F(AdTrackerSimTest, InlineAdScriptRunningInNonAdContext) {
 
   // Verify that the new frame is considered created by ad script then set it
   // as an ad subframe. This emulates the embedder tagging a frame as an ad.
-  EXPECT_TRUE(child_frame->IsSubframeCreatedByAdScript());
-  SetIsAdSubframe(child_frame);
+  EXPECT_TRUE(child_frame->IsFrameCreatedByAdScript());
+  SetIsAdFrame(child_frame);
 
   // Create a new sibling frame to the ad frame. The ad context calls the non-ad
   // context's (top frame) appendChild.
@@ -722,9 +723,9 @@ TEST_F(AdTrackerSimTest, InlineAdScriptRunningInNonAdContext) {
     )HTML");
 
   // The new sibling frame should also be identified as created by ad script.
-  EXPECT_TRUE(
-      To<LocalFrame>(GetDocument().GetFrame()->Tree().ScopedChild("ad_sibling"))
-          ->IsSubframeCreatedByAdScript());
+  EXPECT_TRUE(To<LocalFrame>(GetDocument().GetFrame()->Tree().ScopedChild(
+                                 AtomicString("ad_sibling")))
+                  ->IsFrameCreatedByAdScript());
 }
 
 // Image loaded by ad script is tagged as ad.
@@ -903,8 +904,8 @@ TEST_F(AdTrackerSimTest, FrameLoadedWhileExecutingAdScript) {
 
   // Verify that the new frame is considered created by ad script then set it
   // as an ad subframe. This emulates the SubresourceFilterAgent's tagging.
-  EXPECT_TRUE(child_frame->IsSubframeCreatedByAdScript());
-  SetIsAdSubframe(child_frame);
+  EXPECT_TRUE(child_frame->IsFrameCreatedByAdScript());
+  SetIsAdFrame(child_frame);
 
   vanilla_page.Complete("<img src=vanilla_img.jpg></img>");
   vanilla_image.Complete("");
@@ -978,7 +979,7 @@ TEST_F(AdTrackerSimTest, SameOriginSubframeFromAdScript) {
 
   auto* subframe =
       To<LocalFrame>(GetDocument().GetFrame()->Tree().FirstChild());
-  EXPECT_TRUE(subframe->IsSubframeCreatedByAdScript());
+  EXPECT_TRUE(subframe->IsFrameCreatedByAdScript());
 }
 
 TEST_F(AdTrackerSimTest, SameOriginDocWrittenSubframeFromAdScript) {
@@ -1003,7 +1004,7 @@ TEST_F(AdTrackerSimTest, SameOriginDocWrittenSubframeFromAdScript) {
 
   auto* subframe =
       To<LocalFrame>(GetDocument().GetFrame()->Tree().FirstChild());
-  EXPECT_TRUE(subframe->IsSubframeCreatedByAdScript());
+  EXPECT_TRUE(subframe->IsFrameCreatedByAdScript());
 }
 
 // This test class allows easy running of tests that only differ by whether
@@ -1126,7 +1127,7 @@ TEST_P(AdTrackerVanillaOrAdSimTest, ExternalStylesheetInFrame) {
   if (IsAdRun()) {
     auto* subframe =
         To<LocalFrame>(GetDocument().GetFrame()->Tree().FirstChild());
-    SetIsAdSubframe(subframe);
+    SetIsAdFrame(subframe);
   }
 
   frame.Complete(kPageWithVanillaExternalStylesheet);
@@ -1209,7 +1210,7 @@ TEST_P(AdTrackerVanillaOrAdSimTest, StyleTagInSubframe) {
   if (IsAdRun()) {
     auto* subframe =
         To<LocalFrame>(GetDocument().GetFrame()->Tree().FirstChild());
-    SetIsAdSubframe(subframe);
+    SetIsAdFrame(subframe);
   }
 
   frame.Complete(kPageWithStyleTagLoadingVanillaResources);
@@ -1674,7 +1675,7 @@ class AdTrackerDisabledSimTest : public SimTest,
 TEST_F(AdTrackerDisabledSimTest, VerifyAdTrackingDisabled) {
   main_resource_->Complete("<body></body>");
   EXPECT_FALSE(GetDocument().GetFrame()->GetAdTracker());
-  EXPECT_FALSE(GetDocument().GetFrame()->IsAdSubframe());
+  EXPECT_FALSE(GetDocument().GetFrame()->IsAdFrame());
 }
 
 INSTANTIATE_TEST_SUITE_P(All,

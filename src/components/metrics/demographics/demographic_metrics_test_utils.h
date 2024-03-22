@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "components/metrics/metrics_service.h"
 #include "components/network_time/network_time_tracker.h"
 #include "components/prefs/pref_service.h"
-#include "components/sync/test/fake_server/fake_server.h"
+#include "components/sync/test/fake_server.h"
 #include "third_party/metrics_proto/chrome_user_metrics_extension.pb.h"
 #include "third_party/metrics_proto/user_demographics.pb.h"
 
@@ -54,10 +54,10 @@ void UpdateNetworkTime(const base::Time& now,
 int GetMaximumEligibleBirthYear(const base::Time& now);
 
 // Gets the noised birth year of the user, where the |raw_birth_year|
-// is the true birth year, pre-noise, and |pref_service| is the service with the
+// is the true birth year, pre-noise, and |local_state| is the service with the
 // user's noise pref. This function should be run only after a
 // DemographicMetricsProvider has provided user demographics to a report.
-int GetNoisedBirthYear(const PrefService& pref_service, int raw_birth_year);
+int GetNoisedBirthYear(const PrefService* local_state, int raw_birth_year);
 
 // If data are available, creates an UMA log and stores it in the
 // MetricsService's MetricsLogStore.

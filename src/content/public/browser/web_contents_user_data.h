@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,17 @@
 namespace content {
 
 // A base class for classes attached to, and scoped to, the lifetime of a
-// WebContents. For example:
+// WebContents.
+//
+// When considering using this class, please carefully consider the intended
+// lifetime of the data. There are other UserData classes which may more
+// precisely match the intended lifetime. For example, DocumentUserData scopes
+// the data to a document, NavigationHandleUserData to a navigation, etc. It is
+// preferable to use a more specific UserData class, rather than storing
+// non-WebContents state as a WebContentsUserData combined with using a
+// WebContentsObserver to manually reset the state.
+//
+// For example:
 //
 // --- in foo_tab_helper.h ---
 // class FooTabHelper : public content::WebContentsUserData<FooTabHelper> {
@@ -78,7 +88,8 @@ class WebContentsUserData : public base::SupportsUserData::Data {
  private:
   // This is a pointer (rather than a reference) to ensure that go/miracleptr
   // can cover this field (see also //base/memory/raw_ptr.md).
-  const raw_ptr<content::WebContents> web_contents_ = nullptr;
+  const raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ =
+      nullptr;
 };
 
 // This macro declares a static variable inside the class that inherits from

@@ -1,16 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/sequence_manager/task_queue_selector.h"
 
+#include <bit>
 #include <utility>
 
-#include "base/bits.h"
 #include "base/check_op.h"
 #include "base/task/sequence_manager/associated_thread_id.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
 #include "base/task/sequence_manager/work_queue.h"
+#include "base/task/task_features.h"
 #include "base/threading/thread_checker.h"
 #include "base/trace_event/base_tracing.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -19,19 +20,35 @@ namespace base {
 namespace sequence_manager {
 namespace internal {
 
+std::atomic_int TaskQueueSelector::g_max_delayed_starvation_tasks =
+    TaskQueueSelector::kDefaultMaxDelayedStarvationTasks;
+
 TaskQueueSelector::TaskQueueSelector(
     scoped_refptr<const AssociatedThreadId> associated_thread,
     const SequenceManager::Settings& settings)
     : associated_thread_(std::move(associated_thread)),
+#if DCHECK_IS_ON()
+      random_task_selection_(settings.random_task_selection_seed != 0),
+#endif
+      non_empty_set_counts_(
+          std::vector<int>(settings.priority_settings.priority_count(), 0)),
       delayed_work_queue_sets_("delayed", this, settings),
-      immediate_work_queue_sets_("immediate", this, settings) {}
+      immediate_work_queue_sets_("immediate", this, settings) {
+}
 
 TaskQueueSelector::~TaskQueueSelector() = default;
 
-void TaskQueueSelector::AddQueue(internal::TaskQueueImpl* queue) {
+// static
+void TaskQueueSelector::InitializeFeatures() {
+  g_max_delayed_starvation_tasks.store(kMaxDelayedStarvationTasksParam.Get(),
+                                       std::memory_order_relaxed);
+}
+
+void TaskQueueSelector::AddQueue(internal::TaskQueueImpl* queue,
+                                 TaskQueue::QueuePriority priority) {
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
   DCHECK(queue->IsQueueEnabled());
-  AddQueueImpl(queue, TaskQueue::kNormalPriority);
+  AddQueueImpl(queue, priority);
 }
 
 void TaskQueueSelector::RemoveQueue(internal::TaskQueueImpl* queue) {
@@ -57,7 +74,7 @@ void TaskQueueSelector::DisableQueue(internal::TaskQueueImpl* queue) {
 
 void TaskQueueSelector::SetQueuePriority(internal::TaskQueueImpl* queue,
                                          TaskQueue::QueuePriority priority) {
-  DCHECK_LT(priority, TaskQueue::kQueuePriorityCount);
+  DCHECK_LT(priority, priority_count());
   DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
   if (queue->IsQueueEnabled()) {
     ChangeSetIndex(queue, priority);
@@ -68,12 +85,6 @@ void TaskQueueSelector::SetQueuePriority(internal::TaskQueueImpl* queue,
     queue->immediate_work_queue()->AssignSetIndex(priority);
   }
   DCHECK_EQ(priority, queue->GetQueuePriority());
-}
-
-TaskQueue::QueuePriority TaskQueueSelector::NextPriority(
-    TaskQueue::QueuePriority priority) {
-  DCHECK(priority < TaskQueue::kQueuePriorityCount);
-  return static_cast<TaskQueue::QueuePriority>(static_cast<int>(priority) + 1);
 }
 
 void TaskQueueSelector::AddQueueImpl(internal::TaskQueueImpl* queue,
@@ -184,11 +195,21 @@ WorkQueue* TaskQueueSelector::SelectWorkQueueToService(
   // but the resulting queue must be the lower one.
   if (option == SelectTaskOption::kSkipDelayedTask) {
     WorkQueue* queue =
-        ChooseImmediateOnlyWithPriority<SetOperationOldest>(priority);
+#if DCHECK_IS_ON()
+        random_task_selection_
+            ? ChooseImmediateOnlyWithPriority<SetOperationRandom>(priority)
+            :
+#endif
+            ChooseImmediateOnlyWithPriority<SetOperationOldest>(priority);
     return queue;
   }
 
-  WorkQueue* queue = ChooseWithPriority<SetOperationOldest>(priority);
+  WorkQueue* queue =
+#if DCHECK_IS_ON()
+      random_task_selection_ ? ChooseWithPriority<SetOperationRandom>(priority)
+                             :
+#endif
+                             ChooseWithPriority<SetOperationOldest>(priority);
 
   // If we have selected a delayed task while having an immediate task of the
   // same priority, increase the starvation count.
@@ -220,11 +241,11 @@ TaskQueueSelector::GetHighestPendingPriority(SelectTaskOption option) const {
 
   TaskQueue::QueuePriority highest_priority =
       active_priority_tracker_.HighestActivePriority();
+  DCHECK_LT(highest_priority, priority_count());
   if (option != SelectTaskOption::kSkipDelayedTask)
     return highest_priority;
 
-  for (; highest_priority != TaskQueue::kQueuePriorityCount;
-       highest_priority = NextPriority(highest_priority)) {
+  for (; highest_priority != priority_count(); ++highest_priority) {
     if (active_priority_tracker_.IsActive(highest_priority) &&
         !immediate_work_queue_sets_.IsSetEmpty(highest_priority)) {
       return highest_priority;
@@ -250,21 +271,20 @@ TaskQueueSelector::ActivePriorityTracker::ActivePriorityTracker() = default;
 void TaskQueueSelector::ActivePriorityTracker::SetActive(
     TaskQueue::QueuePriority priority,
     bool is_active) {
-  DCHECK_LT(priority, TaskQueue::QueuePriority::kQueuePriorityCount);
+  DCHECK_LT(priority, SequenceManager::PrioritySettings::kMaxPriorities);
   DCHECK_NE(IsActive(priority), is_active);
   if (is_active) {
-    active_priorities_ |= (1u << static_cast<size_t>(priority));
+    active_priorities_ |= (size_t{1} << static_cast<size_t>(priority));
   } else {
-    active_priorities_ &= ~(1u << static_cast<size_t>(priority));
+    active_priorities_ &= ~(size_t{1} << static_cast<size_t>(priority));
   }
 }
 
 TaskQueue::QueuePriority
 TaskQueueSelector::ActivePriorityTracker::HighestActivePriority() const {
-  DCHECK_NE(active_priorities_, 0u)
-      << "CountTrailingZeroBits(0) has undefined behavior";
+  DCHECK_NE(active_priorities_, 0u);
   return static_cast<TaskQueue::QueuePriority>(
-      bits::CountTrailingZeroBits(active_priorities_));
+      std::countr_zero(active_priorities_));
 }
 
 }  // namespace internal

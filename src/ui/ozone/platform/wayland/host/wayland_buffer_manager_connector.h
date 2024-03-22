@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_BUFFER_MANAGER_CONNECTOR_H_
 
 #include "base/memory/raw_ptr.h"
-#include "ui/ozone/public/gpu_platform_support_host.h"
-
+#include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "ui/ozone/platform/wayland/mojom/wayland_buffer_manager.mojom.h"
+#include "ui/ozone/public/gpu_platform_support_host.h"
 
 namespace ui {
 
@@ -51,6 +51,8 @@ class WaylandBufferManagerConnector : public GpuPlatformSupportHost {
   int host_id_ = -1;
 
   THREAD_CHECKER(ui_thread_checker_);
+
+  base::WeakPtrFactory<WaylandBufferManagerConnector> weak_factory_{this};
 };
 
 }  // namespace ui

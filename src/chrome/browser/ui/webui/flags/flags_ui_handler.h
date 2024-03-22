@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,8 @@ class FlagsUIHandler : public content::WebUIMessageHandler {
   // Initializes the UI handler with the provided flags storage and flags
   // access. If there were flags experiments requested from javascript before
   // this was called, it calls |SendExperimentalFeatures|.
-  void Init(flags_ui::FlagsStorage* flags_storage, flags_ui::FlagAccess access);
+  void Init(std::unique_ptr<flags_ui::FlagsStorage> flags_storage,
+            flags_ui::FlagAccess access);
 
   // Sends experimental features lists to the UI.
   void SendExperimentalFeatures();
@@ -50,6 +51,9 @@ class FlagsUIHandler : public content::WebUIMessageHandler {
 
   // Callback for the "setOriginListFlag" message.
   void HandleSetOriginListFlagMessage(const base::Value::List& args);
+
+  // Callback for the "setStringFlag" message.
+  void HandleSetStringFlagMessage(const base::Value::List& args);
 
   // Callback for the "restartBrowser" message. Restores all tabs on restart.
   void HandleRestartBrowser(const base::Value::List& args);

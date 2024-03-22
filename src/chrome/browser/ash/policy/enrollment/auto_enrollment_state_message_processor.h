@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,7 @@ class AutoEnrollmentStateMessageProcessor {
     absl::optional<std::string> disabled_message;
     absl::optional<bool> is_license_packaged_with_device;
     absl::optional<std::string> license_type;
+    absl::optional<std::string> assigned_upgrade_type;
   };
 
   // Returns the request job type. This must match the request filled in

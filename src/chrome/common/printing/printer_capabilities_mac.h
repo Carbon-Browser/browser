@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,11 @@
 #define CHROME_COMMON_PRINTING_PRINTER_CAPABILITIES_MAC_H_
 
 #include "printing/backend/print_backend.h"
+#include "printing/buildflags/buildflags.h"
+
+#if !BUILDFLAG(ENABLE_PRINT_PREVIEW)
+#error "Only used by Print Preview"
+#endif
 
 namespace base {
 class FilePath;

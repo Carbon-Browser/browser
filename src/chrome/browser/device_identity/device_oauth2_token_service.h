@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/device_identity/device_oauth2_token_store.h"
@@ -114,8 +114,7 @@ class DeviceOAuth2TokenService : public OAuth2AccessTokenManager::Delegate,
   // gaia::GaiaOAuthClient::Delegate implementation.
   void OnRefreshTokenResponse(const std::string& access_token,
                               int expires_in_seconds) override;
-  void OnGetTokenInfoResponse(
-      std::unique_ptr<base::DictionaryValue> token_info) override;
+  void OnGetTokenInfoResponse(const base::Value::Dict& token_info) override;
   void OnOAuthError() override;
   void OnNetworkError(int response_code) override;
 

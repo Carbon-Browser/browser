@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -197,6 +197,10 @@ class BASE_EXPORT PlatformSharedMemoryRegion {
   absl::optional<span<uint8_t>> MapAt(uint64_t offset,
                                       size_t size,
                                       SharedMemoryMapper* mapper) const;
+
+  // Unmaps the provided shared memory mapping, which must have previously been
+  // created by calling |MapAt()| above.
+  static void Unmap(span<uint8_t> mapping, SharedMemoryMapper* mapper);
 
   const UnguessableToken& GetGUID() const { return guid_; }
 

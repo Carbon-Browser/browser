@@ -1,17 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/showcase/alert/sc_alert_coordinator.h"
 
+#import "ios/chrome/browser/shared/ui/elements/text_field_configuration.h"
 #import "ios/chrome/browser/ui/alert_view/alert_action.h"
 #import "ios/chrome/browser/ui/alert_view/alert_view_controller.h"
-#import "ios/chrome/browser/ui/elements/text_field_configuration.h"
 #import "ios/chrome/browser/ui/presenters/non_modal_view_controller_presenter.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface SCAlertCoordinator ()
 @property(nonatomic, strong)
@@ -87,6 +83,13 @@
                  action:@selector(showLongAlert)
        forControlEvents:UIControlEventTouchUpInside];
 
+  UIButton* permissionsButton = [UIButton buttonWithType:UIButtonTypeSystem];
+  [permissionsButton setTitle:@"Permissions Alert"
+                     forState:UIControlStateNormal];
+  [permissionsButton addTarget:self
+                        action:@selector(showPermissions)
+              forControlEvents:UIControlEventTouchUpInside];
+
   UILabel* blockAlertsLabel = [[UILabel alloc] init];
   blockAlertsLabel.text = @"Show \"Block Alerts Button\"";
 
@@ -100,7 +103,7 @@
 
   UIStackView* verticalStack = [[UIStackView alloc] initWithArrangedSubviews:@[
     alertButton, promptButton, confirmButton, authButton, longButton,
-    switchStack
+    permissionsButton, switchStack
   ]];
   verticalStack.axis = UILayoutConstraintAxisVertical;
   verticalStack.spacing = 30;
@@ -131,6 +134,7 @@
   [self presentAlertWithTitle:@"chromium.org says"
                       message:@"This is an alert message from a website."
                       actions:@[ action ]
+                     vertical:YES
       textFieldConfigurations:nil];
 }
 
@@ -157,6 +161,7 @@
   [self presentAlertWithTitle:@"chromium.org says"
                       message:@"This is a promp message from a website."
                       actions:@[ OKAction, cancelAction ]
+                     vertical:YES
       textFieldConfigurations:@[ fieldConfiguration ]];
 }
 
@@ -177,6 +182,7 @@
   [self presentAlertWithTitle:@"chromium.org says"
                       message:@"This is a confirm message from a website."
                       actions:@[ OKAction, cancelAction ]
+                     vertical:YES
       textFieldConfigurations:nil];
 }
 
@@ -211,6 +217,7 @@
                       message:@"https://www.chromium.org requires a "
                               @"username and a password."
                       actions:@[ OKAction, cancelAction ]
+                     vertical:YES
       textFieldConfigurations:@[ usernameOptions, passwordOptions ]];
 }
 
@@ -257,12 +264,35 @@
   [self presentAlertWithTitle:@"Long Alert"
                       message:message
                       actions:@[ OKAction, cancelAction ]
+                     vertical:YES
       textFieldConfigurations:@[ usernameOptions, passwordOptions ]];
+}
+
+- (void)showPermissions {
+  __weak __typeof__(self) weakSelf = self;
+  AlertAction* denyAction =
+      [AlertAction actionWithTitle:@"Don't Allow"
+                             style:UIAlertActionStyleCancel
+                           handler:^(AlertAction* action) {
+                             [weakSelf.presenter dismissAnimated:YES];
+                           }];
+  AlertAction* allowAction =
+      [AlertAction actionWithTitle:@"Allow"
+                             style:UIAlertActionStyleDefault
+                           handler:^(AlertAction* action) {
+                             [weakSelf.presenter dismissAnimated:YES];
+                           }];
+  [self presentAlertWithTitle:@"Allow \"chromium.org\" to use your camera?"
+                      message:nil
+                      actions:@[ denyAction, allowAction ]
+                     vertical:NO
+      textFieldConfigurations:nil];
 }
 
 - (void)presentAlertWithTitle:(NSString*)title
                       message:(NSString*)message
                       actions:(NSArray<AlertAction*>*)actions
+                     vertical:(BOOL)vertical
       textFieldConfigurations:
           (NSArray<TextFieldConfiguration*>*)textFieldConfigurations {
   AlertViewController* alert = [[AlertViewController alloc] init];
@@ -270,6 +300,15 @@
   [alert setMessage:message];
   [alert setTextFieldConfigurations:textFieldConfigurations];
 
+  NSMutableArray<NSArray<AlertAction*>*>* formattedActions =
+      [[NSMutableArray<NSArray<AlertAction*>*> alloc] init];
+  if (vertical) {
+    for (AlertAction* action in actions) {
+      [formattedActions addObject:@[ action ]];
+    }
+  } else {
+    [formattedActions addObject:actions];
+  }
   if (self.blockAlertSwitch.isOn) {
     __weak __typeof__(self) weakSelf = self;
     AlertAction* blockAction =
@@ -278,11 +317,13 @@
                              handler:^(AlertAction* action) {
                                [weakSelf.presenter dismissAnimated:YES];
                              }];
-    NSArray* newActions = [actions arrayByAddingObject:blockAction];
-    [alert setActions:newActions];
-  } else {
-    [alert setActions:actions];
+    if (vertical) {
+      [formattedActions addObject:@[ blockAction ]];
+    } else {
+      formattedActions[0] = [actions arrayByAddingObject:blockAction];
+    }
   }
+  [alert setActions:formattedActions];
 
   self.presenter = [[NonModalViewControllerPresenter alloc] init];
   self.presenter.baseViewController = self.presentationContextViewController;

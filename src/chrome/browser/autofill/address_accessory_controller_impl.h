@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,11 +39,13 @@ class AddressAccessoryControllerImpl
   absl::optional<AccessorySheetData> GetSheetData() const override;
   void OnFillingTriggered(FieldGlobalId focused_field_id,
                           const AccessorySheetField& selection) override;
+  void OnPasskeySelected(const std::vector<uint8_t>& passkey_id) override;
   void OnOptionSelected(AccessoryAction selected_action) override;
   void OnToggleChanged(AccessoryAction toggled_action, bool enabled) override;
 
   // AddressAccessoryController:
   void RefreshSuggestions() override;
+  base::WeakPtr<AddressAccessoryController> AsWeakPtr() override;
 
   // PersonalDataManagerObserver:
   void OnPersonalDataChanged() override;
@@ -80,6 +82,8 @@ class AddressAccessoryControllerImpl
   raw_ptr<PersonalDataManager> personal_data_manager_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
+
+  base::WeakPtrFactory<AddressAccessoryControllerImpl> weak_ptr_factory_{this};
 };
 
 }  // namespace autofill

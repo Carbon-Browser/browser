@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,11 @@
 
 namespace flags_ui {
 
-// Resource paths.
-const char kFlagsJS[] = "flags.js";
-const char kFlagsCSS[] = "flags.css";
-#if BUILDFLAG(IS_CHROMEOS)
-const char kFlagsSVG[] = "os_flags_app_icon.svg";
-#endif
-
 // Message handlers.
 const char kEnableExperimentalFeature[] = "enableExperimentalFeature";
 const char kRequestExperimentalFeatures[] = "requestExperimentalFeatures";
 const char kSetOriginListFlag[] = "setOriginListFlag";
+const char kSetStringFlag[] = "setStringFlag";
 const char kResetAllFlags[] = "resetAllFlags";
 #if BUILDFLAG(IS_CHROMEOS)
 const char kCrosUrlFlagsRedirect[] = "crosUrlFlagsRedirect";

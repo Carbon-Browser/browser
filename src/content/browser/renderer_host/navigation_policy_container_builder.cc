@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,6 +102,12 @@ void NavigationPolicyContainerBuilder::SetIsOriginPotentiallyTrustworthy(
     bool value) {
   DCHECK(!HasComputedPolicies());
   delivered_policies_.is_web_secure_context = value;
+}
+
+void NavigationPolicyContainerBuilder::SetAllowCrossOriginIsolation(
+    bool value) {
+  DCHECK(!HasComputedPolicies());
+  delivered_policies_.allow_cross_origin_isolation = value;
 }
 
 void NavigationPolicyContainerBuilder::AddContentSecurityPolicy(
@@ -238,7 +244,7 @@ PolicyContainerPolicies NavigationPolicyContainerBuilder::ComputeFinalPolicies(
     const GURL& url,
     bool is_inside_mhtml,
     network::mojom::WebSandboxFlags frame_sandbox_flags,
-    bool is_anonymous) {
+    bool is_credentialless) {
   PolicyContainerPolicies policies;
 
   // Policies are either inherited from another document for local scheme, or
@@ -258,8 +264,17 @@ PolicyContainerPolicies NavigationPolicyContainerBuilder::ComputeFinalPolicies(
     IncorporateDeliveredPolicies(url, policies);
   }
 
+  // `can_navigate_top_without_user_gesture` is inherited from the parent.
+  // Later in `NavigationRequest::CommitNavigation()` it will either be made
+  // less strict for same-origin navigations, or stricter for cross-origin
+  // navigations that do not explicitly allow top-level navigation without user
+  // gesture.
+  policies.can_navigate_top_without_user_gesture =
+      parent_policies_ ? parent_policies_->can_navigate_top_without_user_gesture
+                       : true;
+
   ComputeSandboxFlags(is_inside_mhtml, frame_sandbox_flags, policies);
-  policies.is_anonymous = is_anonymous;
+  policies.is_credentialless = is_credentialless;
   return policies;
 }
 
@@ -267,15 +282,20 @@ void NavigationPolicyContainerBuilder::ComputePolicies(
     const GURL& url,
     bool is_inside_mhtml,
     network::mojom::WebSandboxFlags frame_sandbox_flags,
-    bool is_anonymous) {
+    bool is_credentialless) {
   DCHECK(!HasComputedPolicies());
   ComputeIsWebSecureContext();
-  SetFinalPolicies(ComputeFinalPolicies(url, is_inside_mhtml,
-                                        frame_sandbox_flags, is_anonymous));
+  SetFinalPolicies(ComputeFinalPolicies(
+      url, is_inside_mhtml, frame_sandbox_flags, is_credentialless));
 }
 
 bool NavigationPolicyContainerBuilder::HasComputedPolicies() const {
   return host_ != nullptr;
+}
+
+void NavigationPolicyContainerBuilder::SetAllowTopNavigationWithoutUserGesture(
+    bool allow_top) {
+  host_->SetCanNavigateTopWithoutUserGesture(allow_top);
 }
 
 void NavigationPolicyContainerBuilder::SetFinalPolicies(
@@ -297,6 +317,14 @@ NavigationPolicyContainerBuilder::CreatePolicyContainerForBlink() {
   DCHECK(HasComputedPolicies());
 
   return host_->CreatePolicyContainerForBlink();
+}
+
+scoped_refptr<PolicyContainerHost>
+NavigationPolicyContainerBuilder::GetPolicyContainerHost() {
+  DCHECK(HasComputedPolicies());
+  CHECK(host_);
+
+  return host_;
 }
 
 scoped_refptr<PolicyContainerHost>

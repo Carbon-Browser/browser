@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "device/bluetooth/floss/floss_adapter_client.h"
@@ -6,10 +6,11 @@
 #include <algorithm>
 #include <map>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/observer_list.h"
+#include "base/strings/string_number_conversions.h"
 #include "dbus/bus.h"
 #include "dbus/exported_object.h"
 #include "dbus/message.h"
@@ -33,7 +34,12 @@ void HandleExported(const std::string& method_name,
 constexpr char FlossAdapterClient::kErrorUnknownAdapter[] =
     "org.chromium.Error.UnknownAdapter";
 constexpr char FlossAdapterClient::kExportedCallbacksPath[] =
-    "/org/chromium/bluetooth/adapterclient";
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    "/org/chromium/bluetooth/adapter/callback/lacros";
+#else
+    "/org/chromium/bluetooth/adapter/callback";
+#endif
+static uint32_t callback_path_index_ = 0;
 
 void FlossAdapterClient::SetName(ResponseCallback<Void> callback,
                                  const std::string& name) {
@@ -42,8 +48,17 @@ void FlossAdapterClient::SetName(ResponseCallback<Void> callback,
 
 void FlossAdapterClient::SetDiscoverable(ResponseCallback<Void> callback,
                                          bool discoverable) {
-  CallAdapterMethod<Void>(std::move(callback), adapter::kSetDiscoverable,
-                          discoverable);
+  SetDiscoverable(std::move(callback),
+                  discoverable ? BtDiscoverableMode::kGeneralDiscoverable
+                               : BtDiscoverableMode::kNonDiscoverable,
+                  /*duration=*/0u);
+}
+
+void FlossAdapterClient::SetDiscoverable(ResponseCallback<Void> callback,
+                                         BtDiscoverableMode mode,
+                                         uint32_t duration) {
+  CallAdapterMethod<Void>(std::move(callback), adapter::kSetDiscoverable, mode,
+                          duration);
 }
 
 void FlossAdapterClient::StartDiscovery(ResponseCallback<Void> callback) {
@@ -85,6 +100,13 @@ void FlossAdapterClient::GetRemoteClass(ResponseCallback<uint32_t> callback,
                               device);
 }
 
+void FlossAdapterClient::GetRemoteAppearance(
+    ResponseCallback<uint16_t> callback,
+    FlossDeviceId device) {
+  CallAdapterMethod<uint16_t>(std::move(callback),
+                              adapter::kGetRemoteAppearance, device);
+}
+
 void FlossAdapterClient::GetConnectionState(ResponseCallback<uint32_t> callback,
                                             const FlossDeviceId& device) {
   CallAdapterMethod<uint32_t>(std::move(callback), adapter::kGetConnectionState,
@@ -96,6 +118,13 @@ void FlossAdapterClient::GetRemoteUuids(
     FlossDeviceId device) {
   CallAdapterMethod<device::BluetoothDevice::UUIDList>(
       std::move(callback), adapter::kGetRemoteUuids, device);
+}
+
+void FlossAdapterClient::GetRemoteVendorProductInfo(
+    ResponseCallback<FlossAdapterClient::VendorProductInfo> callback,
+    FlossDeviceId device) {
+  CallAdapterMethod<FlossAdapterClient::VendorProductInfo>(
+      std::move(callback), adapter::kGetRemoteVendorProductInfo, device);
 }
 
 void FlossAdapterClient::GetBondState(ResponseCallback<uint32_t> callback,
@@ -148,12 +177,44 @@ void FlossAdapterClient::GetBondedDevices() {
       adapter::kGetBondedDevices);
 }
 
+void FlossAdapterClient::GetConnectedDevices() {
+  CallAdapterMethod<std::vector<FlossDeviceId>>(
+      base::BindOnce(&FlossAdapterClient::OnGetConnectedDevices,
+                     weak_ptr_factory_.GetWeakPtr()),
+      adapter::kGetConnectedDevices);
+}
+
+void FlossAdapterClient::SdpSearch(ResponseCallback<bool> callback,
+                                   const FlossDeviceId& device,
+                                   device::BluetoothUUID uuid) {
+  CallAdapterMethod<bool>(std::move(callback), adapter::kSdpSearch, device,
+                          uuid);
+}
+
+void FlossAdapterClient::CreateSdpRecord(ResponseCallback<bool> callback,
+                                         const BtSdpRecord& record) {
+  CallAdapterMethod<bool>(std::move(callback), adapter::kCreateSdpRecord,
+                          record);
+}
+
+void FlossAdapterClient::RemoveSdpRecord(ResponseCallback<bool> callback,
+                                         const int32_t& handle) {
+  CallAdapterMethod<bool>(std::move(callback), adapter::kRemoveSdpRecord,
+                          handle);
+}
+
 void FlossAdapterClient::Init(dbus::Bus* bus,
                               const std::string& service_name,
-                              const std::string& adapter_path) {
+                              const int adapter_index,
+                              base::Version version,
+                              base::OnceClosure on_ready) {
   bus_ = bus;
-  adapter_path_ = dbus::ObjectPath(adapter_path);
+  adapter_path_ = GenerateAdapterPath(adapter_index);
   service_name_ = service_name;
+  exported_callback_path_ =
+      kExportedCallbacksPath + base::NumberToString(callback_path_index_);
+  callback_path_index_++;
+  version_ = version;
 
   dbus::ObjectProxy* object_proxy =
       bus_->GetObjectProxy(service_name_, adapter_path_);
@@ -162,27 +223,8 @@ void FlossAdapterClient::Init(dbus::Bus* bus,
     return;
   }
 
-  dbus::MethodCall mc_get_address(kAdapterInterface, adapter::kGetAddress);
-  object_proxy->CallMethodWithErrorResponse(
-      &mc_get_address, kDBusTimeoutMs,
-      base::BindOnce(&FlossAdapterClient::HandleGetAddress,
-                     weak_ptr_factory_.GetWeakPtr()));
-
-  dbus::MethodCall mc_get_name(kAdapterInterface, adapter::kGetName);
-  object_proxy->CallMethodWithErrorResponse(
-      &mc_get_name, kDBusTimeoutMs,
-      base::BindOnce(&FlossAdapterClient::HandleGetName,
-                     weak_ptr_factory_.GetWeakPtr()));
-
-  dbus::MethodCall mc_get_discoverable(kAdapterInterface,
-                                       adapter::kGetDiscoverable);
-  object_proxy->CallMethodWithErrorResponse(
-      &mc_get_discoverable, kDBusTimeoutMs,
-      base::BindOnce(&FlossAdapterClient::HandleGetDiscoverable,
-                     weak_ptr_factory_.GetWeakPtr()));
-
   dbus::ExportedObject* callbacks =
-      bus_->GetExportedObject(dbus::ObjectPath(kExportedCallbacksPath));
+      bus_->GetExportedObject(dbus::ObjectPath(exported_callback_path_));
   if (!callbacks) {
     LOG(ERROR) << "FlossAdapterClient couldn't export client callbacks";
     return;
@@ -194,24 +236,6 @@ void FlossAdapterClient::Init(dbus::Bus* bus,
       base::BindRepeating(&FlossAdapterClient::OnAdapterPropertyChanged,
                           weak_ptr_factory_.GetWeakPtr()),
       base::BindOnce(&HandleExported, adapter::kOnAdapterPropertyChanged));
-
-  callbacks->ExportMethod(
-      adapter::kCallbackInterface, adapter::kOnAddressChanged,
-      base::BindRepeating(&FlossAdapterClient::OnAddressChanged,
-                          weak_ptr_factory_.GetWeakPtr()),
-      base::BindOnce(&HandleExported, adapter::kOnAddressChanged));
-
-  callbacks->ExportMethod(
-      adapter::kCallbackInterface, adapter::kOnNameChanged,
-      base::BindRepeating(&FlossAdapterClient::OnNameChanged,
-                          weak_ptr_factory_.GetWeakPtr()),
-      base::BindOnce(&HandleExported, adapter::kOnNameChanged));
-
-  callbacks->ExportMethod(
-      adapter::kCallbackInterface, adapter::kOnDiscoverableChanged,
-      base::BindRepeating(&FlossAdapterClient::OnDiscoverableChanged,
-                          weak_ptr_factory_.GetWeakPtr()),
-      base::BindOnce(&HandleExported, adapter::kOnDiscoverableChanged));
 
   callbacks->ExportMethod(
       adapter::kCallbackInterface, adapter::kOnDeviceFound,
@@ -226,6 +250,12 @@ void FlossAdapterClient::Init(dbus::Bus* bus,
       base::BindOnce(&HandleExported, adapter::kOnDeviceCleared));
 
   callbacks->ExportMethod(
+      adapter::kCallbackInterface, adapter::kOnDevicePropertiesChanged,
+      base::BindRepeating(&FlossAdapterClient::OnDevicePropertiesChanged,
+                          weak_ptr_factory_.GetWeakPtr()),
+      base::BindOnce(&HandleExported, adapter::kOnDevicePropertiesChanged));
+
+  callbacks->ExportMethod(
       adapter::kCallbackInterface, adapter::kOnDiscoveringChanged,
       base::BindRepeating(&FlossAdapterClient::OnDiscoveringChanged,
                           weak_ptr_factory_.GetWeakPtr()),
@@ -238,10 +268,34 @@ void FlossAdapterClient::Init(dbus::Bus* bus,
       base::BindOnce(&HandleExported, adapter::kOnSspRequest));
 
   callbacks->ExportMethod(
+      adapter::kCallbackInterface, adapter::kOnPinDisplay,
+      base::BindRepeating(&FlossAdapterClient::OnPinDisplay,
+                          weak_ptr_factory_.GetWeakPtr()),
+      base::BindOnce(&HandleExported, adapter::kOnPinDisplay));
+
+  callbacks->ExportMethod(
+      adapter::kCallbackInterface, adapter::kOnPinRequest,
+      base::BindRepeating(&FlossAdapterClient::OnPinRequest,
+                          weak_ptr_factory_.GetWeakPtr()),
+      base::BindOnce(&HandleExported, adapter::kOnPinRequest));
+
+  callbacks->ExportMethod(
       adapter::kCallbackInterface, adapter::kOnBondStateChanged,
       base::BindRepeating(&FlossAdapterClient::OnBondStateChanged,
                           weak_ptr_factory_.GetWeakPtr()),
       base::BindOnce(&HandleExported, adapter::kOnBondStateChanged));
+
+  callbacks->ExportMethod(
+      adapter::kCallbackInterface, adapter::kOnSdpSearchComplete,
+      base::BindRepeating(&FlossAdapterClient::OnSdpSearchComplete,
+                          weak_ptr_factory_.GetWeakPtr()),
+      base::BindOnce(&HandleExported, adapter::kOnSdpSearchComplete));
+
+  callbacks->ExportMethod(
+      adapter::kCallbackInterface, adapter::kOnSdpRecordCreated,
+      base::BindRepeating(&FlossAdapterClient::OnSdpRecordCreated,
+                          weak_ptr_factory_.GetWeakPtr()),
+      base::BindOnce(&HandleExported, adapter::kOnSdpRecordCreated));
 
   callbacks->ExportMethod(
       adapter::kConnectionCallbackInterface, adapter::kOnDeviceConnected,
@@ -255,29 +309,39 @@ void FlossAdapterClient::Init(dbus::Bus* bus,
                           weak_ptr_factory_.GetWeakPtr()),
       base::BindOnce(&HandleExported, adapter::kOnDeviceDisconnected));
 
-  dbus::MethodCall register_callback(kAdapterInterface,
-                                     adapter::kRegisterCallback);
+  property_address_.Init(
+      this, bus_, service_name_, adapter_path_,
+      dbus::ObjectPath(exported_callback_path_),
+      base::BindRepeating(&FlossAdapterClient::OnAddressChanged,
+                          weak_ptr_factory_.GetWeakPtr()));
 
-  dbus::MessageWriter writer(&register_callback);
-  writer.AppendObjectPath(dbus::ObjectPath(kExportedCallbacksPath));
+  property_name_.Init(this, bus_, service_name_, adapter_path_,
+                      dbus::ObjectPath(exported_callback_path_),
+                      base::BindRepeating(&FlossAdapterClient::OnNameChanged,
+                                          weak_ptr_factory_.GetWeakPtr()));
 
-  object_proxy->CallMethodWithErrorResponse(
-      &register_callback, kDBusTimeoutMs,
-      base::BindOnce(&FlossAdapterClient::DefaultResponse,
-                     weak_ptr_factory_.GetWeakPtr(),
-                     adapter::kRegisterCallback));
+  property_discoverable_.Init(
+      this, bus_, service_name_, adapter_path_,
+      dbus::ObjectPath(exported_callback_path_),
+      base::BindRepeating(&FlossAdapterClient::OnDiscoverableChanged,
+                          weak_ptr_factory_.GetWeakPtr()));
 
-  dbus::MethodCall register_connection_callback(
-      kAdapterInterface, adapter::kRegisterConnectionCallback);
+  UpdateDiscoverableTimeout();
 
-  dbus::MessageWriter writer2(&register_connection_callback);
-  writer2.AppendObjectPath(dbus::ObjectPath(kExportedCallbacksPath));
+  pending_register_calls_ = 2;
 
-  object_proxy->CallMethodWithErrorResponse(
-      &register_connection_callback, kDBusTimeoutMs,
-      base::BindOnce(&FlossAdapterClient::DefaultResponse,
-                     weak_ptr_factory_.GetWeakPtr(),
-                     adapter::kRegisterCallback));
+  CallAdapterMethod<uint32_t>(
+      base::BindOnce(&FlossAdapterClient::OnRegisterCallback,
+                     weak_ptr_factory_.GetWeakPtr()),
+      adapter::kRegisterCallback, dbus::ObjectPath(exported_callback_path_));
+
+  CallAdapterMethod<uint32_t>(
+      base::BindOnce(&FlossAdapterClient::OnRegisterConnectionCallback,
+                     weak_ptr_factory_.GetWeakPtr()),
+      adapter::kRegisterConnectionCallback,
+      dbus::ObjectPath(exported_callback_path_));
+
+  on_ready_ = std::move(on_ready);
 }
 
 void FlossAdapterClient::OnAdapterPropertyChanged(
@@ -304,117 +368,24 @@ void FlossAdapterClient::OnAdapterPropertyChanged(
   std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
 }
 
-void FlossAdapterClient::HandleGetAddress(dbus::Response* response,
-                                          dbus::ErrorResponse* error_response) {
-  if (!response) {
-    LogErrorResponse("FlossAdapterClient::HandleGetAddress", error_response);
-    return;
-  }
-
-  dbus::MessageReader msg(response);
-  std::string address;
-
-  if (msg.PopString(&address)) {
-    adapter_address_ = address;
-    for (auto& observer : observers_) {
-      observer.AdapterAddressChanged(adapter_address_);
-    }
-  }
-}
-
-void FlossAdapterClient::OnAddressChanged(
-    dbus::MethodCall* method_call,
-    dbus::ExportedObject::ResponseSender response_sender) {
-  dbus::MessageReader msg(method_call);
-  std::string address;
-
-  if (!msg.PopString(&address)) {
-    std::move(response_sender)
-        .Run(dbus::ErrorResponse::FromMethodCall(
-            method_call, kErrorInvalidParameters, std::string()));
-    return;
-  }
-
-  adapter_address_ = address;
+void FlossAdapterClient::OnAddressChanged(const std::string& address) {
+  VLOG(1) << "Adapter address updated to " << address;
   for (auto& observer : observers_) {
-    observer.AdapterAddressChanged(adapter_address_);
-  }
-
-  std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
-}
-
-void FlossAdapterClient::HandleGetName(dbus::Response* response,
-                                       dbus::ErrorResponse* error_response) {
-  if (!response) {
-    LogErrorResponse("FlossAdapterClient::HandleGetName", error_response);
-    return;
-  }
-
-  dbus::MessageReader msg(response);
-  std::string name;
-
-  if (msg.PopString(&name)) {
-    adapter_name_ = name;
+    observer.AdapterAddressChanged(address);
   }
 }
 
-void FlossAdapterClient::OnNameChanged(
-    dbus::MethodCall* method_call,
-    dbus::ExportedObject::ResponseSender response_sender) {
-  dbus::MessageReader msg(method_call);
-  std::string name;
-
-  if (!msg.PopString(&name)) {
-    std::move(response_sender)
-        .Run(dbus::ErrorResponse::FromMethodCall(
-            method_call, kErrorInvalidParameters, std::string()));
-    return;
-  }
-
-  adapter_name_ = name;
-
-  std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
+void FlossAdapterClient::OnNameChanged(const std::string& name) {
+  VLOG(1) << "Adapter name updated to " << name;
 }
 
-void FlossAdapterClient::HandleGetDiscoverable(
-    dbus::Response* response,
-    dbus::ErrorResponse* error_response) {
-  if (!response) {
-    LogErrorResponse("FlossAdapterClient::HandleGetDiscoverable",
-                     error_response);
-    return;
-  }
-
-  dbus::MessageReader reader(response);
-  bool discoverable;
-
-  if (ReadAllDBusParams(&reader, &discoverable)) {
-    adapter_discoverable_ = discoverable;
-    for (auto& observer : observers_) {
-      observer.DiscoverableChanged(adapter_discoverable_);
-    }
-  }
-}
-
-void FlossAdapterClient::OnDiscoverableChanged(
-    dbus::MethodCall* method_call,
-    dbus::ExportedObject::ResponseSender response_sender) {
-  dbus::MessageReader reader(method_call);
-  bool discoverable;
-
-  if (!ReadAllDBusParams(&reader, &discoverable)) {
-    std::move(response_sender)
-        .Run(dbus::ErrorResponse::FromMethodCall(
-            method_call, kErrorInvalidParameters, std::string()));
-    return;
-  }
-
-  adapter_discoverable_ = discoverable;
+void FlossAdapterClient::OnDiscoverableChanged(const bool& discoverable) {
   for (auto& observer : observers_) {
-    observer.DiscoverableChanged(adapter_discoverable_);
+    observer.DiscoverableChanged(discoverable);
   }
 
-  std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
+  // Also update the discoverable timeout.
+  UpdateDiscoverableTimeout();
 }
 
 void FlossAdapterClient::OnDiscoveringChanged(
@@ -481,6 +452,32 @@ void FlossAdapterClient::OnDeviceCleared(
   std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
 }
 
+void FlossAdapterClient::OnDevicePropertiesChanged(
+    dbus::MethodCall* method_call,
+    dbus::ExportedObject::ResponseSender response_sender) {
+  dbus::MessageReader reader(method_call);
+  FlossDeviceId device;
+  std::vector<uint32_t> props;
+
+  DVLOG(1) << __func__;
+
+  if (!ReadAllDBusParams(&reader, &device, &props)) {
+    std::move(response_sender)
+        .Run(dbus::ErrorResponse::FromMethodCall(
+            method_call, kErrorInvalidParameters, std::string()));
+    return;
+  }
+
+  for (auto& prop : props) {
+    BtPropertyType prop_type = static_cast<BtPropertyType>(prop);
+    for (auto& observer : observers_) {
+      observer.AdapterDevicePropertyChanged(prop_type, device);
+    }
+  }
+
+  std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
+}
+
 void FlossAdapterClient::OnSspRequest(
     dbus::MethodCall* method_call,
     dbus::ExportedObject::ResponseSender response_sender) {
@@ -495,30 +492,99 @@ void FlossAdapterClient::OnSspRequest(
     return;
   }
 
+  // Block the event in LaCrOS so it won't race with AshChrome. See b/308988818.
+  // TODO(b/274706838): Redesign DBus API so it's only received by the correct
+  // client.
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
   for (auto& observer : observers_) {
     observer.AdapterSspRequest(
         device, cod, static_cast<BluetoothSspVariant>(variant), passkey);
   }
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
+
+  std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
+}
+
+void FlossAdapterClient::OnPinDisplay(
+    dbus::MethodCall* method_call,
+    dbus::ExportedObject::ResponseSender response_sender) {
+  dbus::MessageReader reader(method_call);
+  FlossDeviceId device;
+  std::string pincode;
+
+  if (!ReadAllDBusParams(&reader, &device, &pincode)) {
+    std::move(response_sender)
+        .Run(dbus::ErrorResponse::FromMethodCall(
+            method_call, kErrorInvalidParameters, std::string()));
+    return;
+  }
+
+  // Block the event in LaCrOS so it won't race with AshChrome. See b/308988818.
+  // TODO(b/274706838): Redesign DBus API so it's only received by the correct
+  // client.
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+  for (auto& observer : observers_) {
+    observer.AdapterPinDisplay(device, pincode);
+  }
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
+
+  std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
+}
+
+void FlossAdapterClient::OnPinRequest(
+    dbus::MethodCall* method_call,
+    dbus::ExportedObject::ResponseSender response_sender) {
+  dbus::MessageReader reader(method_call);
+  FlossDeviceId device;
+  uint32_t cod;
+  bool min_16_digit;
+
+  if (!ReadAllDBusParams(&reader, &device, &cod, &min_16_digit)) {
+    std::move(response_sender)
+        .Run(dbus::ErrorResponse::FromMethodCall(
+            method_call, kErrorInvalidParameters, std::string()));
+    return;
+  }
+
+  // Block the event in LaCrOS so it won't race with AshChrome. See b/308988818.
+  // TODO(b/274706838): Redesign DBus API so it's only received by the correct
+  // client.
+#if !BUILDFLAG(IS_CHROMEOS_LACROS)
+  for (auto& observer : observers_) {
+    observer.AdapterPinRequest(device, cod, min_16_digit);
+  }
+#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
   std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
 }
 
 void FlossAdapterClient::OnGetBondedDevices(
-    const absl::optional<std::vector<FlossDeviceId>>& ret,
-    const absl::optional<Error>& error) {
-  if (error.has_value()) {
-    LOG(ERROR) << "Error on GetBondedDevices: " << error->name;
-    return;
-  }
-
+    DBusResult<std::vector<FlossDeviceId>> ret) {
   if (!ret.has_value()) {
-    LOG(ERROR) << "Error on GetBondedDevices: No return value";
+    LOG(ERROR) << "Error on GetBondedDevices: " << ret.error();
     return;
   }
 
   for (const auto& device_id : *ret) {
     for (auto& observer : observers_) {
       observer.AdapterFoundDevice(device_id);
+    }
+  }
+}
+
+void FlossAdapterClient::OnGetConnectedDevices(
+    DBusResult<std::vector<FlossDeviceId>> ret) {
+  if (!ret.has_value()) {
+    LOG(ERROR) << "Error on GetConnectedDevices: " << ret.error();
+    return;
+  }
+
+  for (const auto& device_id : *ret) {
+    for (auto& observer : observers_) {
+      // This usually gets called at start-up. Thus, first send that it was
+      // found and then that it was connected.
+      observer.AdapterFoundDevice(device_id);
+      observer.AdapterDeviceConnected(device_id);
     }
   }
 }
@@ -546,6 +612,47 @@ void FlossAdapterClient::OnBondStateChanged(
   }
 
   std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
+}
+
+void FlossAdapterClient::OnSdpSearchComplete(
+    dbus::MethodCall* method_call,
+    dbus::ExportedObject::ResponseSender response_sender) {
+  dbus::MessageReader reader(method_call);
+  FlossDeviceId device;
+  device::BluetoothUUID uuid;
+  std::vector<BtSdpRecord> sdp_records{};
+
+  if (!ReadAllDBusParams(&reader, &device, &uuid, &sdp_records)) {
+    std::move(response_sender)
+        .Run(dbus::ErrorResponse::FromMethodCall(
+            method_call, kErrorInvalidParameters,
+            /*error_message=*/std::string()));
+    return;
+  }
+
+  for (auto& observer : observers_) {
+    observer.SdpSearchComplete(device, uuid, sdp_records);
+  }
+}
+
+void FlossAdapterClient::OnSdpRecordCreated(
+    dbus::MethodCall* method_call,
+    dbus::ExportedObject::ResponseSender response_sender) {
+  dbus::MessageReader reader(method_call);
+  BtSdpRecord sdp_record;
+  int32_t handle;
+
+  if (!ReadAllDBusParams(&reader, &sdp_record, &handle)) {
+    std::move(response_sender)
+        .Run(dbus::ErrorResponse::FromMethodCall(
+            method_call, kErrorInvalidParameters,
+            /*error_message=*/std::string()));
+    return;
+  }
+
+  for (auto& observer : observers_) {
+    observer.SdpRecordCreated(sdp_record, handle);
+  }
 }
 
 void FlossAdapterClient::OnDeviceConnected(
@@ -588,15 +695,84 @@ void FlossAdapterClient::OnDeviceDisconnected(
   std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
 }
 
+void FlossAdapterClient::UpdateDiscoverableTimeout() {
+  CallAdapterMethod<uint32_t>(
+      base::BindOnce(&FlossAdapterClient::OnDiscoverableTimeout,
+                     weak_ptr_factory_.GetWeakPtr()),
+      adapter::kGetDiscoverableTimeout);
+}
+
+void FlossAdapterClient::OnDiscoverableTimeout(DBusResult<uint32_t> ret) {
+  if (ret.has_value()) {
+    discoverable_timeout_ = *ret;
+  }
+}
+
+void FlossAdapterClient::OnRegisterCallback(DBusResult<uint32_t> ret) {
+  if (!ret.has_value()) {
+    return;
+  }
+
+  callback_id_ = *ret;
+
+  if (pending_register_calls_ > 0) {
+    pending_register_calls_--;
+
+    if (pending_register_calls_ == 0 && on_ready_) {
+      std::move(on_ready_).Run();
+    }
+  }
+}
+
+void FlossAdapterClient::OnRegisterConnectionCallback(
+    DBusResult<uint32_t> ret) {
+  if (!ret.has_value()) {
+    return;
+  }
+
+  connection_callback_id_ = *ret;
+
+  if (pending_register_calls_ > 0) {
+    pending_register_calls_--;
+
+    if (pending_register_calls_ == 0 && on_ready_) {
+      std::move(on_ready_).Run();
+    }
+  }
+}
+
+void FlossAdapterClient::OnUnregisterCallbacks(DBusResult<bool> ret) {
+  if (!ret.has_value() || *ret == false) {
+    LOG(WARNING) << __func__ << ": Failed to unregister callback";
+  }
+}
+
 FlossAdapterClient::FlossAdapterClient() = default;
 FlossAdapterClient::~FlossAdapterClient() {
+  if (callback_id_) {
+    CallAdapterMethod<bool>(
+        base::BindOnce(&FlossAdapterClient::OnUnregisterCallbacks,
+                       weak_ptr_factory_.GetWeakPtr()),
+        adapter::kUnregisterCallback, callback_id_.value());
+  }
+  if (connection_callback_id_) {
+    CallAdapterMethod<bool>(
+        base::BindOnce(&FlossAdapterClient::OnUnregisterCallbacks,
+                       weak_ptr_factory_.GetWeakPtr()),
+        adapter::kUnregisterConnectionCallback,
+        connection_callback_id_.value());
+  }
   if (bus_) {
-    bus_->UnregisterExportedObject(dbus::ObjectPath(kExportedCallbacksPath));
+    bus_->UnregisterExportedObject(dbus::ObjectPath(exported_callback_path_));
   }
 }
 
 void FlossAdapterClient::AddObserver(FlossAdapterClient::Observer* observer) {
   observers_.AddObserver(observer);
+}
+
+bool FlossAdapterClient::HasObserver(FlossAdapterClient::Observer* observer) {
+  return observers_.HasObserver(observer);
 }
 
 void FlossAdapterClient::RemoveObserver(
@@ -609,11 +785,29 @@ std::unique_ptr<FlossAdapterClient> FlossAdapterClient::Create() {
   return std::make_unique<FlossAdapterClient>();
 }
 
+// static
+bool FlossAdapterClient::IsConnectionPaired(uint32_t connection_state) {
+  uint32_t paired =
+      connection_state &
+      static_cast<uint32_t>(FlossAdapterClient::ConnectionState::kPairedBoth);
+
+  // Bit 0 indicates whether device is connected. Bit 1 and 2 indicate whether
+  // it is paired.
+  return (paired >> 1) != 0;
+}
+
 template <>
 void FlossDBusClient::WriteDBusParam(
     dbus::MessageWriter* writer,
     const FlossAdapterClient::BluetoothTransport& data) {
   writer->AppendUint32(static_cast<uint32_t>(data));
+}
+
+template <>
+void FlossDBusClient::WriteDBusParam(
+    dbus::MessageWriter* writer,
+    const FlossAdapterClient::BtDiscoverableMode& mode) {
+  writer->AppendUint32(static_cast<uint32_t>(mode));
 }
 
 // These methods are explicitly instantiated for FlossAdapterClientTest since

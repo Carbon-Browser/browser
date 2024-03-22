@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,8 @@ class VIEWS_EXPORT DesktopWindowTreeHostLinux
     : public DesktopWindowTreeHostPlatform,
       public ui::X11ExtensionDelegate {
  public:
+  static const char kWindowKey[];
+
   DesktopWindowTreeHostLinux(
       internal::NativeWidgetDelegate* native_widget_delegate,
       DesktopNativeWidgetAura* desktop_native_widget_aura);
@@ -74,14 +76,16 @@ class VIEWS_EXPORT DesktopWindowTreeHostLinux
   ui::X11Extension* GetX11Extension();
   const ui::X11Extension* GetX11Extension() const;
 
+  // DesktopWindowTreeHostPlatform:
+  void AddAdditionalInitProperties(
+      const Widget::InitParams& params,
+      ui::PlatformWindowInitProperties* properties) override;
+
  private:
   FRIEND_TEST_ALL_PREFIXES(DesktopWindowTreeHostPlatformImplTestWithTouch,
                            HitTest);
 
-  // DesktopWindowTreeHostPlatform overrides:
-  void AddAdditionalInitProperties(
-      const Widget::InitParams& params,
-      ui::PlatformWindowInitProperties* properties) override;
+  // DesktopWindowTreeHostPlatform:
   base::flat_map<std::string, std::string> GetKeyboardLayoutMap() override;
 
   // Called back by compositor_observer_ if the latter is set.

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class ProfileInternalsHandler : public content::WebUIMessageHandler {
   void PushProfilesList();
 
   // Returns the list of profiles ordered by the local profile name.
-  base::Value GetProfilesList();
+  base::Value::List GetProfilesList();
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_PROFILE_INTERNALS_PROFILE_INTERNALS_HANDLER_H_

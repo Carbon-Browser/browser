@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ void TestRuntimeAPIDelegate::OpenURL(const GURL& uninstall_url) {
 bool TestRuntimeAPIDelegate::GetPlatformInfo(PlatformInfo* info) {
   // TODO(rockot): This probably isn't right. Maybe this delegate should just
   // support manual PlatformInfo override for tests if necessary.
-  info->os = api::runtime::PLATFORM_OS_CROS;
+  info->os = api::runtime::PlatformOs::kCros;
   return true;
 }
 

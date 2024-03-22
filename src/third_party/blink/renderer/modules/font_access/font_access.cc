@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <algorithm>
 
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/features.h"
@@ -37,16 +38,11 @@ const char kFeaturePolicyBlocked[] =
 const char FontAccess::kSupplementName[] = "FontAccess";
 
 FontAccess::FontAccess(LocalDOMWindow* window)
-    : ExecutionContextLifecycleObserver(window),
-      Supplement<LocalDOMWindow>(*window) {}
+    : Supplement<LocalDOMWindow>(*window), remote_(window) {}
 
 void FontAccess::Trace(blink::Visitor* visitor) const {
-  ExecutionContextLifecycleObserver::Trace(visitor);
+  visitor->Trace(remote_);
   Supplement<LocalDOMWindow>::Trace(visitor);
-}
-
-void FontAccess::ContextDestroyed() {
-  remote_.reset();
 }
 
 // static
@@ -93,17 +89,19 @@ ScriptPromise FontAccess::QueryLocalFontsImpl(ScriptState* script_state,
   // Connect to font access manager remote if not bound already.
   if (!remote_.is_bound()) {
     context->GetBrowserInterfaceBroker().GetInterface(
-        remote_.BindNewPipeAndPassReceiver());
+        remote_.BindNewPipeAndPassReceiver(
+            context->GetTaskRunner(TaskType::kFontLoading)));
     remote_.set_disconnect_handler(
-        WTF::Bind(&FontAccess::OnDisconnect, WrapWeakPersistent(this)));
+        WTF::BindOnce(&FontAccess::OnDisconnect, WrapWeakPersistent(this)));
   }
   DCHECK(remote_.is_bound());
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
   remote_->EnumerateLocalFonts(resolver->WrapCallbackInScriptScope(
-      WTF::Bind(&FontAccess::DidGetEnumerationResponse,
-                WrapWeakPersistent(this), WrapPersistent(options))));
+      WTF::BindOnce(&FontAccess::DidGetEnumerationResponse,
+                    WrapWeakPersistent(this), WrapPersistent(options))));
 
   return promise;
 }
@@ -155,9 +153,9 @@ void FontAccess::DidGetEnumerationResponse(
     // If the optional postscript name filter is set in QueryOptions,
     // only allow items that match.
     if (hasPostscriptNameFilter &&
-        selection_utf8.find(element.postscript_name().c_str()) ==
-            selection_utf8.end())
+        !base::Contains(selection_utf8, element.postscript_name().c_str())) {
       continue;
+    }
 
     auto entry = FontEnumerationEntry{
         .postscript_name = String::FromUTF8(element.postscript_name().c_str()),

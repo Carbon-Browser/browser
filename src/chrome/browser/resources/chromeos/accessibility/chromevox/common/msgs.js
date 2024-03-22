@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,6 @@
  */
 
 export class Msgs {
-  constructor() {}
-
   /**
    * Return the current locale.
    * @return {string} The locale.
@@ -46,6 +44,20 @@ export class Msgs {
       throw new Error('Invalid ChromeVox message id: ' + messageId);
     }
     return message;
+  }
+
+  /**
+   * Returns the message with the given message ID, formatted for the given
+   * count.
+   *
+   * @param {string} messageId
+   * @param {number} count
+   * @param {Array<string>=} opt_subs Substitution strings.
+   * @return {string} The localized and formatted message.
+   */
+  static getMsgWithCount(messageId, count, opt_subs) {
+    return new goog.i18n.MessageFormat(Msgs.getMsg(messageId, opt_subs))
+        .format({COUNT: count});
   }
 
   /**

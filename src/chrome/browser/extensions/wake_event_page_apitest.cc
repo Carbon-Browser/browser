@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ namespace {
 //
 // Expects a single string replacement of the "background" property, including
 // trailing comma, or nothing if there is no background page.
-const char* kManifestJson =
+constexpr char kManifestJson[] =
     "{\n"
     "  %s\n"
     "  'content_scripts': [{\n"

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@ import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.Callback;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
@@ -55,14 +54,46 @@ public class TestBottomSheetContent implements BottomSheetContent {
     /** Whether this content intercepts back button presses. */
     private boolean mHandleBackPress;
 
-    /** Set to true to ask for an offset controller. */
-    private boolean mContentControlsOffset;
-
-    /** Current offset controller. */
-    @Nullable
-    private Callback<Integer> mOffsetController;
-
     private ObservableSupplierImpl<Boolean> mBackPressStateChangedSupplier;
+
+    /**
+     * @param context A context to inflate views with.
+     * @param priority The content's priority.
+     * @param hasCustomLifecycle Whether the content is browser specific.
+     * @param contentView The view filling the sheet.
+     */
+    public TestBottomSheetContent(
+            Context context,
+            @ContentPriority int priority,
+            boolean hasCustomLifecycle,
+            View contentView) {
+        mPeekHeight = BottomSheetContent.HeightMode.DEFAULT;
+        mHalfHeight = BottomSheetContent.HeightMode.DEFAULT;
+        mFullHeight = BottomSheetContent.HeightMode.DEFAULT;
+        mPriority = priority;
+        mHasCustomLifecycle = hasCustomLifecycle;
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mToolbarView = new View(context);
+                    ViewGroup.LayoutParams params =
+                            new ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT, TOOLBAR_HEIGHT);
+                    mToolbarView.setLayoutParams(params);
+                    mToolbarView.setBackground(new ColorDrawable(Color.WHITE));
+
+                    if (contentView == null) {
+                        mContentView = new View(context);
+                        params =
+                                new ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT);
+                        mContentView.setLayoutParams(params);
+                    } else {
+                        mContentView = contentView;
+                    }
+                    mToolbarView.setBackground(new ColorDrawable(Color.WHITE));
+                });
+    }
 
     /**
      * @param context A context to inflate views with.
@@ -71,29 +102,10 @@ public class TestBottomSheetContent implements BottomSheetContent {
      */
     public TestBottomSheetContent(
             Context context, @ContentPriority int priority, boolean hasCustomLifecycle) {
-        mPeekHeight = BottomSheetContent.HeightMode.DEFAULT;
-        mHalfHeight = BottomSheetContent.HeightMode.DEFAULT;
-        mFullHeight = BottomSheetContent.HeightMode.DEFAULT;
-        mPriority = priority;
-        mHasCustomLifecycle = hasCustomLifecycle;
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mToolbarView = new View(context);
-            ViewGroup.LayoutParams params =
-                    new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, TOOLBAR_HEIGHT);
-            mToolbarView.setLayoutParams(params);
-            mToolbarView.setBackground(new ColorDrawable(Color.WHITE));
-
-            mContentView = new View(context);
-            params = new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-            mContentView.setLayoutParams(params);
-            mToolbarView.setBackground(new ColorDrawable(Color.WHITE));
-        });
+        this(context, priority, hasCustomLifecycle, null);
     }
 
-    /**
-     * @param context A context to inflate views with.
-     */
+    /** @param context A context to inflate views with. */
     public TestBottomSheetContent(Context context) {
         this(/*TestBottomSheetContent(*/ context, ContentPriority.LOW, false);
     }
@@ -180,11 +192,6 @@ public class TestBottomSheetContent implements BottomSheetContent {
     }
 
     @Override
-    public boolean setContentSizeListener(@Nullable ContentSizeListener listener) {
-        return false;
-    }
-
-    @Override
     public boolean handleBackPress() {
         return mHandleBackPress;
     }
@@ -226,23 +233,5 @@ public class TestBottomSheetContent implements BottomSheetContent {
     @Override
     public int getSheetClosedAccessibilityStringId() {
         return android.R.string.copy;
-    }
-
-    @Override
-    public boolean contentControlsOffset() {
-        return mContentControlsOffset;
-    }
-
-    @Override
-    public void setOffsetController(Callback<Integer> offsetController) {
-        mOffsetController = offsetController;
-    }
-
-    public Callback<Integer> getOffsetController() {
-        return mOffsetController;
-    }
-
-    public void setContentControlsOffset(boolean value) {
-        mContentControlsOffset = value;
     }
 }

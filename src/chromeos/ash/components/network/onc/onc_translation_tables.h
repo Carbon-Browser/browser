@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chromeos/components/onc/onc_signature.h"
 
 namespace ash::onc {
@@ -44,6 +44,10 @@ COMPONENT_EXPORT(CHROMEOS_NETWORK)
 extern const StringTranslationEntry kOpenVpnCompressionAlgorithmTable[];
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
 extern const StringTranslationEntry kIKEv2AuthenticationTypeTable[];
+COMPONENT_EXPORT(CHROMEOS_NETWORK)
+extern const StringTranslationEntry kApnAuthenticationTranslationTable[];
+COMPONENT_EXPORT(CHROMEOS_NETWORK)
+extern const StringTranslationEntry kApnIpTypeTranslationTable[];
 
 // A separate translation table for cellular properties that are stored in a
 // Shill Device instead of a Service. The |shill_property_name| entries
@@ -57,7 +61,7 @@ extern const FieldTranslationEntry kCellularDeviceTable[];
 extern const FieldTranslationEntry kIPsecIKEv2Table[];
 
 const FieldTranslationEntry* GetFieldTranslationTable(
-    const OncValueSignature& onc_signature);
+    const chromeos::onc::OncValueSignature& onc_signature);
 
 // Returns the translation table for EAP.Inner based on the value of EAP.Outer
 // represented in Shill, or nullptr if no translation table is available for
@@ -76,7 +80,7 @@ const StringTranslationEntry* GetEapInnerTranslationTableForOncOuter(
 // The default is that values are stored directly in the top level of the Shill
 // dictionary.
 std::vector<std::string> GetPathToNestedShillDictionary(
-    const OncValueSignature& onc_signature);
+    const chromeos::onc::OncValueSignature& onc_signature);
 
 bool GetShillPropertyName(const std::string& onc_field_name,
                           const FieldTranslationEntry table[],
@@ -95,16 +99,5 @@ bool TranslateStringToONC(const StringTranslationEntry table[],
                           std::string* onc_value);
 
 }  // namespace ash::onc
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::onc {
-using ::ash::onc::kNetworkTechnologyTable;
-using ::ash::onc::kNetworkTypeTable;
-using ::ash::onc::kVPNTypeTable;
-using ::ash::onc::kWiFiSecurityTable;
-using ::ash::onc::StringTranslationEntry;
-using ::ash::onc::TranslateStringToONC;
-using ::ash::onc::TranslateStringToShill;
-}  // namespace chromeos::onc
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_ONC_ONC_TRANSLATION_TABLES_H_

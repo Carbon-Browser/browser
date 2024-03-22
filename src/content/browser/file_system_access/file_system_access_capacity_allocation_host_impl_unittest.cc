@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
@@ -53,9 +54,10 @@ class FileSystemAccessCapacityAllocationHostImplTest : public testing::Test {
     ASSERT_TRUE(data_dir_.GetPath().IsAbsolute());
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         /*is_incognito=*/false, data_dir_.GetPath(),
-        base::ThreadTaskRunnerHandle::Get(), special_storage_policy_);
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        special_storage_policy_);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager(), base::SingleThreadTaskRunner::GetCurrentDefault());
     file_system_context_ = storage::CreateFileSystemContextForTesting(
         quota_manager_proxy(), data_dir_.GetPath());
 
@@ -70,6 +72,8 @@ class FileSystemAccessCapacityAllocationHostImplTest : public testing::Test {
     auto test_file_url = file_system_context_->CreateCrackedFileSystemURL(
         kTestStorageKey, storage::kFileSystemTypeTemporary,
         base::FilePath::FromUTF8Unsafe("test"));
+    test_file_url.SetBucket(
+        storage::BucketLocator::ForDefaultBucket(kTestStorageKey));
     mojo::Remote<blink::mojom::FileSystemAccessCapacityAllocationHost>
         allocation_host_remote;
     allocation_host_ =
@@ -118,8 +122,8 @@ TEST_F(FileSystemAccessCapacityAllocationHostImplTest,
   int64_t granted_capacity =
       RequestCapacityChangeSync(allocation_host_.get(), requested_capacity);
   EXPECT_EQ(granted_capacity, requested_capacity);
-  EXPECT_EQ(quota_manager_proxy_->last_notified_storage_key(), kTestStorageKey);
-  EXPECT_EQ(quota_manager_proxy_->last_notified_delta(), requested_capacity);
+  EXPECT_EQ(*quota_manager_proxy_->last_notified_bucket_delta(),
+            requested_capacity);
 }
 
 TEST_F(FileSystemAccessCapacityAllocationHostImplTest,
@@ -130,16 +134,16 @@ TEST_F(FileSystemAccessCapacityAllocationHostImplTest,
   int64_t positive_granted_capacity = RequestCapacityChangeSync(
       allocation_host_.get(), positive_requested_capacity);
   EXPECT_EQ(positive_granted_capacity, positive_requested_capacity);
-  EXPECT_EQ(quota_manager_proxy_->last_notified_delta(),
+  EXPECT_EQ(*quota_manager_proxy_->last_notified_bucket_delta(),
             positive_requested_capacity);
 
   int64_t negative_granted_capacity = RequestCapacityChangeSync(
       allocation_host_.get(), negative_requested_capacity);
   EXPECT_EQ(negative_granted_capacity, negative_requested_capacity);
-  EXPECT_EQ(quota_manager_proxy_->last_notified_delta(),
+  EXPECT_EQ(*quota_manager_proxy_->last_notified_bucket_delta(),
             negative_requested_capacity);
 
-  EXPECT_EQ(quota_manager_proxy_->notify_storage_modified_count(), 2);
+  EXPECT_EQ(quota_manager_proxy_->notify_bucket_modified_count(), 2);
 }
 
 TEST_F(FileSystemAccessCapacityAllocationHostImplTest,
@@ -150,7 +154,7 @@ TEST_F(FileSystemAccessCapacityAllocationHostImplTest,
   int64_t granted_capacity = RequestCapacityChangeSync(
       allocation_host_.get(), negative_requested_capacity);
   EXPECT_EQ(granted_capacity, 0);
-  EXPECT_EQ(quota_manager_proxy_->notify_storage_modified_count(), 0);
+  EXPECT_EQ(quota_manager_proxy_->notify_bucket_modified_count(), 0);
   EXPECT_EQ("A file's size cannot be negative or out of bounds",
             bad_message_observer.WaitForBadMessage());
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 
 namespace gfx {
 class Insets;
@@ -54,7 +55,7 @@ class ASH_EXPORT TransformerHelper {
   gfx::Rect GetTransformedWindowBounds(const gfx::Size& host_size) const;
 
  private:
-  AshWindowTreeHost* ash_host_;
+  raw_ptr<AshWindowTreeHost, ExperimentalAsh> ash_host_;
   std::unique_ptr<RootWindowTransformer> transformer_;
 };
 

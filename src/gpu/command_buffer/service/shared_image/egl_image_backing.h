@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,11 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "gpu/command_buffer/service/shared_image/gl_common_image_backing_factory.h"
-#include "gpu/command_buffer/service/shared_image/gl_texture_image_backing_helper.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_backing.h"
 #include "ui/gfx/buffer_types.h"
 #include "ui/gl/gl_bindings.h"
+#include "ui/gl/scoped_egl_image.h"
 
 namespace gl {
 class GLFenceEGL;
@@ -21,13 +20,7 @@ class SharedGLFenceEGL;
 
 namespace gpu {
 class GpuDriverBugWorkarounds;
-class GLTextureImageRepresentation;
-class SkiaImageRepresentation;
 struct Mailbox;
-
-namespace gles2 {
-class NativeImageBuffer;
-}  // namespace gles2
 
 // Implementation of SharedImageBacking that is used to create EGLImage targets
 // from the same EGLImage object. Hence all the representations created from
@@ -36,20 +29,18 @@ class NativeImageBuffer;
 // group. This is achieved by using locks and fences for proper synchronization.
 class EGLImageBacking : public ClearTrackingSharedImageBacking {
  public:
-  EGLImageBacking(
-      const Mailbox& mailbox,
-      viz::ResourceFormat format,
-      const gfx::Size& size,
-      const gfx::ColorSpace& color_space,
-      GrSurfaceOrigin surface_origin,
-      SkAlphaType alpha_type,
-      uint32_t usage,
-      size_t estimated_size,
-      const GLCommonImageBackingFactory::FormatInfo format_into,
-      const GpuDriverBugWorkarounds& workarounds,
-      const GLTextureImageBackingHelper::UnpackStateAttribs& attribs,
-      bool use_passthrough,
-      base::span<const uint8_t> pixel_data);
+  EGLImageBacking(const Mailbox& mailbox,
+                  viz::SharedImageFormat format,
+                  const gfx::Size& size,
+                  const gfx::ColorSpace& color_space,
+                  GrSurfaceOrigin surface_origin,
+                  SkAlphaType alpha_type,
+                  uint32_t usage,
+                  size_t estimated_size,
+                  const GLCommonImageBackingFactory::FormatInfo& format_into,
+                  const GpuDriverBugWorkarounds& workarounds,
+                  bool use_passthrough,
+                  base::span<const uint8_t> pixel_data);
 
   EGLImageBacking(const EGLImageBacking&) = delete;
   EGLImageBacking& operator=(const EGLImageBacking&) = delete;
@@ -59,7 +50,6 @@ class EGLImageBacking : public ClearTrackingSharedImageBacking {
   // SharedImageBacking implementation.
   SharedImageBackingType GetType() const override;
   void Update(std::unique_ptr<gfx::GpuFence> in_fence) override;
-  bool ProduceLegacyMailbox(MailboxManager* mailbox_manager) override;
   void MarkForDestruction() override;
 
  protected:
@@ -71,10 +61,17 @@ class EGLImageBacking : public ClearTrackingSharedImageBacking {
   ProduceGLTexturePassthrough(SharedImageManager* manager,
                               MemoryTypeTracker* tracker) override;
 
-  std::unique_ptr<SkiaImageRepresentation> ProduceSkia(
+  std::unique_ptr<SkiaGaneshImageRepresentation> ProduceSkiaGanesh(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
       scoped_refptr<SharedContextState> context_state) override;
+
+  std::unique_ptr<DawnImageRepresentation> ProduceDawn(
+      SharedImageManager* manager,
+      MemoryTypeTracker* tracker,
+      const wgpu::Device& device,
+      wgpu::BackendType backend_type,
+      std::vector<wgpu::TextureFormat> view_formats) final;
 
  private:
   class TextureHolder;
@@ -97,14 +94,11 @@ class EGLImageBacking : public ClearTrackingSharedImageBacking {
   scoped_refptr<TextureHolder> GenEGLImageSibling(
       base::span<const uint8_t> pixel_data);
 
-  void SetEndReadFence(scoped_refptr<gl::SharedGLFenceEGL> shared_egl_fence);
-
   const GLCommonImageBackingFactory::FormatInfo format_info_;
   scoped_refptr<TextureHolder> source_texture_holder_;
   raw_ptr<gl::GLApi> created_on_context_;
 
-  // This class encapsulates the EGLImage object for android.
-  scoped_refptr<gles2::NativeImageBuffer> egl_image_buffer_ GUARDED_BY(lock_);
+  gl::ScopedEGLImage egl_image_ GUARDED_BY(lock_);
 
   // All reads and writes must wait for exiting writes to complete.
   // TODO(vikassoni): Use SharedGLFenceEGL here instead of GLFenceEGL here in
@@ -122,7 +116,6 @@ class EGLImageBacking : public ClearTrackingSharedImageBacking {
   base::flat_set<const GLRepresentationShared*> active_readers_
       GUARDED_BY(lock_);
 
-  const GLTextureImageBackingHelper::UnpackStateAttribs gl_unpack_attribs_;
   const bool use_passthrough_;
 };
 

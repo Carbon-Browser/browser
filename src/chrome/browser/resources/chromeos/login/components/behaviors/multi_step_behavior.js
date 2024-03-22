@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-// #import {dom, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// #import {invokePolymerMethod} from '../../display_manager.m.js';
+import {dom, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {invokePolymerMethod} from '../../display_manager.js';
 // clang-format on
 
 /**
@@ -38,7 +39,7 @@
  */
 
 /** @polymerBehavior */
-/* #export */ var MultiStepBehavior = {
+export const MultiStepBehavior = {
   properties: {
     uiStep: {
       type: String,
@@ -140,6 +141,7 @@
       this.hideUIStep_(this.uiStep);
     }
     this.uiStep = step;
+    this.shadowRoot.host.setAttribute('multistep', step);
     this.showUIStep_(this.uiStep);
   },
 
@@ -149,7 +151,7 @@
       return;
     }
     for (const element of this.stepElements_[step] || []) {
-      cr.ui.login.invokePolymerMethod(element, 'onBeforeShow');
+      invokePolymerMethod(element, 'onBeforeShow');
       element.hidden = false;
       // Trigger show() if element is an oobe-dialog
       if (element.show && typeof element.show === 'function') {
@@ -160,7 +162,7 @@
 
   hideUIStep_(step) {
     for (const element of this.stepElements_[step] || []) {
-      cr.ui.login.invokePolymerMethod(element, 'onBeforeHide');
+      invokePolymerMethod(element, 'onBeforeHide');
       element.hidden = true;
     }
   },
@@ -172,7 +174,7 @@
    */
   refreshStepBindings_() {
     this.stepElements_ = {};
-    var matches = Polymer.dom(this.root).querySelectorAll('[for-step]');
+    const matches = dom(this.root).querySelectorAll('[for-step]');
     for (const child of matches) {
       const stepsList = child.getAttribute('for-step');
       for (const stepChunk of stepsList.split(',')) {
@@ -198,7 +200,7 @@
 MultiStepBehavior.Proto;
 
 /** @interface */
-/* #export */ class MultiStepBehaviorInterface {
+export class MultiStepBehaviorInterface {
   setUIStep(step) {}
   /** @return {string} */
   defaultUIStep() {}

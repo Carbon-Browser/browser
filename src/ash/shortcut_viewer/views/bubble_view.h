@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ash/public/cpp/style/color_provider.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/view.h"
 
 namespace gfx {
@@ -43,13 +44,13 @@ class BubbleView : public views::View {
   gfx::Size CalculatePreferredSize() const override;
   void OnPaint(gfx::Canvas* canvas) override;
 
-  views::ImageView* icon_ = nullptr;
+  raw_ptr<views::ImageView, ExperimentalAsh> icon_ = nullptr;
 
-  views::Label* text_ = nullptr;
+  raw_ptr<views::Label, ExperimentalAsh> text_ = nullptr;
 
   std::vector<gfx::ShadowValue> shadows_;
 
-  ash::ColorProvider* color_provider_;  // Not owned.
+  raw_ptr<ash::ColorProvider, ExperimentalAsh> color_provider_;  // Not owned.
 };
 
 }  // namespace keyboard_shortcut_viewer

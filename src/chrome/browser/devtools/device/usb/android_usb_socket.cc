@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <stddef.h>
 
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_address.h"
@@ -208,11 +208,6 @@ const net::NetLogWithSource& AndroidUsbSocket::NetLog() const {
 }
 
 bool AndroidUsbSocket::WasEverUsed() const {
-  NOTIMPLEMENTED();
-  return true;
-}
-
-bool AndroidUsbSocket::WasAlpnNegotiated() const {
   NOTIMPLEMENTED();
   return true;
 }

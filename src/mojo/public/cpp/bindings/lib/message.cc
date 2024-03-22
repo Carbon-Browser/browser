@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include <algorithm>
 #include <atomic>
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_math.h"
+#include "base/ranges/algorithm.h"
 #include "base/threading/sequence_local_storage_slot.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/trace_id_helper.h"
@@ -31,11 +32,42 @@ namespace mojo {
 
 namespace {
 
-base::LazyInstance<
-    base::SequenceLocalStorageSlot<internal::MessageDispatchContext*>>::Leaky
-    g_sls_message_dispatch_context = LAZY_INSTANCE_INITIALIZER;
+BASE_FEATURE(kMojoBindingsInlineSLS,
+             "MojoBindingsInlineSLS",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-void DoNotifyBadMessage(Message message, base::StringPiece error) {
+base::GenericSequenceLocalStorageSlot<internal::MessageDispatchContext*>&
+GetSLSMessageDispatchContext() {
+  static base::GenericSequenceLocalStorageSlot<
+      internal::MessageDispatchContext*>
+      sls;
+  return sls;
+}
+
+base::SmallSequenceLocalStorageSlot<internal::MessageDispatchContext*>&
+GetSmallSLSMessageDispatchContext() {
+  static base::SmallSequenceLocalStorageSlot<internal::MessageDispatchContext*>
+      sls;
+  return sls;
+}
+
+void SetMessageDispatchContext(internal::MessageDispatchContext* context) {
+  if (base::FeatureList::IsEnabled(kMojoBindingsInlineSLS)) {
+    GetSmallSLSMessageDispatchContext().emplace(context);
+  } else {
+    GetSLSMessageDispatchContext().emplace(context);
+  }
+}
+
+internal::MessageDispatchContext* GetMessageDispatchContext() {
+  if (base::FeatureList::IsEnabled(kMojoBindingsInlineSLS)) {
+    return GetSmallSLSMessageDispatchContext().GetOrCreateValue();
+  } else {
+    return GetSLSMessageDispatchContext().GetOrCreateValue();
+  }
+}
+
+void DoNotifyBadMessage(Message message, std::string_view error) {
   message.NotifyBadMessage(error);
 }
 
@@ -158,6 +190,8 @@ void DestroyUnserializedContext(uintptr_t context) {
 Message CreateUnserializedMessage(
     std::unique_ptr<internal::UnserializedMessageContext> context,
     MojoCreateMessageFlags create_message_flags) {
+  context->header()->trace_nonce =
+      static_cast<uint32_t>(base::trace_event::GetNextGlobalTraceId());
   ScopedMessageHandle handle;
   MojoResult rv = CreateMessage(&handle, create_message_flags);
   DCHECK_EQ(MOJO_RESULT_OK, rv);
@@ -271,7 +305,7 @@ Message::Message(base::span<const uint8_t> payload,
 
   void* buffer;
   uint32_t buffer_size;
-  DCHECK(base::IsValueInRangeForNumericType<uint32_t>(payload.size()));
+  CHECK(base::IsValueInRangeForNumericType<uint32_t>(payload.size()));
   DCHECK(base::IsValueInRangeForNumericType<uint32_t>(handles.size()));
   MojoAppendMessageDataOptions options;
   options.struct_size = sizeof(options);
@@ -289,8 +323,7 @@ Message::Message(base::span<const uint8_t> payload,
     std::ignore = handle.release();
 
   payload_buffer_ = internal::Buffer(buffer, payload.size(), payload.size());
-  std::copy(payload.begin(), payload.end(),
-            static_cast<uint8_t*>(payload_buffer_.data()));
+  base::ranges::copy(payload, static_cast<uint8_t*>(payload_buffer_.data()));
   transferable_ = true;
   serialized_ = true;
 }
@@ -425,7 +458,7 @@ ScopedMessageHandle Message::TakeMojoMessage() {
   return handle;
 }
 
-void Message::NotifyBadMessage(base::StringPiece error) {
+void Message::NotifyBadMessage(std::string_view error) {
   DCHECK(handle_.is_valid());
   mojo::NotifyBadMessage(handle_.get(), error);
 }
@@ -532,8 +565,7 @@ void Message::SerializeIfNecessary() {
 }
 
 std::unique_ptr<internal::UnserializedMessageContext>
-Message::TakeUnserializedContext(
-    const internal::UnserializedMessageContext::Tag* tag) {
+Message::TakeUnserializedContext(uintptr_t tag) {
   DCHECK(handle_.is_valid());
   uintptr_t context_value = 0;
   MojoResult rv =
@@ -591,7 +623,7 @@ bool PassThroughFilter::Accept(Message* message) {
   return true;
 }
 
-void ReportBadMessage(base::StringPiece error) {
+void ReportBadMessage(std::string_view error) {
   internal::MessageDispatchContext* context =
       internal::MessageDispatchContext::current();
   DCHECK(context);
@@ -615,17 +647,17 @@ MessageHeaderV2::MessageHeaderV2() = default;
 
 MessageDispatchContext::MessageDispatchContext(Message* message)
     : outer_context_(current()), message_(message) {
-  g_sls_message_dispatch_context.Get().emplace(this);
+  SetMessageDispatchContext(this);
 }
 
 MessageDispatchContext::~MessageDispatchContext() {
   DCHECK_EQ(current(), this);
-  g_sls_message_dispatch_context.Get().emplace(outer_context_);
+  SetMessageDispatchContext(outer_context_);
 }
 
 // static
 MessageDispatchContext* MessageDispatchContext::current() {
-  return g_sls_message_dispatch_context.Get().GetOrCreateValue();
+  return GetMessageDispatchContext();
 }
 
 ReportBadMessageCallback MessageDispatchContext::GetBadMessageCallback() {

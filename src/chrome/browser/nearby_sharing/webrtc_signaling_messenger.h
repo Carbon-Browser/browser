@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 
 #include <string>
 
-#include "ash/services/nearby/public/mojom/webrtc_signaling_messenger.mojom.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/receive_messages_express.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/send_message_express.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/token_fetcher.h"
+#include "chromeos/ash/services/nearby/public/mojom/webrtc_signaling_messenger.mojom.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace signin {
@@ -40,7 +41,7 @@ class WebRtcSignalingMessenger
       StartReceivingMessagesCallback callback) override;
 
  private:
-  signin::IdentityManager* identity_manager_ = nullptr;
+  raw_ptr<signin::IdentityManager, ExperimentalAsh> identity_manager_ = nullptr;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 };
 

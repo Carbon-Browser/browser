@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "chrome/browser/sharing/sharing_sync_preference.h"
 #include "chrome/browser/sync/test/integration/sessions_helper.h"
 #include "chrome/browser/ui/views/sharing/sharing_browsertest.h"
-#include "components/sync/driver/sync_service_impl.h"
+#include "components/sync/service/sync_service_impl.h"
 #include "content/public/test/browser_test.h"
 #include "url/gurl.h"
 

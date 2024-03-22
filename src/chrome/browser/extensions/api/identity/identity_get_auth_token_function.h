@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,19 +10,29 @@
 #include <string>
 
 #include "base/callback_list.h"
+#include "base/feature_list.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/api/identity/gaia_remote_consent_flow.h"
 #include "chrome/browser/extensions/api/identity/identity_mint_queue.h"
+#include "chrome/common/extensions/api/identity.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/browser/extension_function_histogram_value.h"
 #include "google_apis/gaia/google_service_auth_error.h"
-#include "google_apis/gaia/oauth2_access_token_manager.h"
 #include "google_apis/gaia/oauth2_mint_token_flow.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/crosapi/device_oauth2_token_service_ash.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chrome/browser/lacros/device_oauth2_token_service_lacros.h"
+#endif
 
 namespace signin {
 class AccessTokenFetcher;
@@ -31,6 +41,10 @@ struct AccessTokenInfo;
 
 namespace extensions {
 class IdentityGetAuthTokenError;
+
+// Exposed for testing
+inline constexpr base::TimeDelta kGetAuthTokenInactivityTime =
+    base::Minutes(10);
 
 // identity.getAuthToken fetches an OAuth 2 function for the
 // caller. The request has three sub-flows: non-interactive,
@@ -53,11 +67,27 @@ class IdentityGetAuthTokenFunction : public ExtensionFunction,
                                      public GaiaRemoteConsentFlow::Delegate,
                                      public IdentityMintRequestQueue::Request,
                                      public signin::IdentityManager::Observer,
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-                                     public OAuth2AccessTokenManager::Consumer,
-#endif
                                      public OAuth2MintTokenFlow::Delegate {
  public:
+  // Interactive requests showing UIs (like a signin tab or a consent window)
+  // may be rejected to avoid creating unwanted or out-of-context user
+  // interruption.
+  enum class InteractivityStatus {
+    // Interactivity was not requested.
+    kNotRequested = 0,
+    // Interactivity was requested, but the user is inactive. Interactivity is
+    // not allowed.
+    kDisallowedIdle = 1,
+    // Interactivity was requested, and the user is not idle, but signin is
+    // disabled.
+    kDisallowedSigninDisallowed = 2,
+    // Interactivity was requested and allowed because there is a user gesture.
+    kAllowedWithGesture = 3,
+    // Interactivity was requested. There is no user gesture but it is allowed
+    // because the user was recently active.
+    kAllowedWithActivity = 4,
+  };
+
   DECLARE_EXTENSION_FUNCTION("identity.getAuthToken",
                              EXPERIMENTAL_IDENTITY_GETAUTHTOKEN)
 
@@ -81,15 +111,9 @@ class IdentityGetAuthTokenFunction : public ExtensionFunction,
   // Starts a login access token request.
   virtual void StartTokenKeyAccountAccessTokenRequest();
 
-// TODO(blundell): Investigate feasibility of moving the ChromeOS use case
-// to use the Identity Service instead of being an
-// OAuth2AccessTokenManager::Consumer.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  void OnGetTokenSuccess(
-      const OAuth2AccessTokenManager::Request* request,
-      const OAuth2AccessTokenConsumer::TokenResponse& token_response) override;
-  void OnGetTokenFailure(const OAuth2AccessTokenManager::Request* request,
-                         const GoogleServiceAuthError& error) override;
+#if BUILDFLAG(IS_CHROMEOS)
+  void OnAccessTokenForDeviceAccountFetchCompleted(
+      crosapi::mojom::AccessTokenResultPtr result);
 #endif
 
   void OnAccessTokenFetchCompleted(GoogleServiceAuthError error,
@@ -117,10 +141,16 @@ class IdentityGetAuthTokenFunction : public ExtensionFunction,
   // Exposed for testing.
   std::string GetSelectedUserId() const;
 
-  // Pending request for an access token from the device account (via
-  // DeviceOAuth2TokenService).
-  std::unique_ptr<OAuth2AccessTokenManager::Request>
-      device_access_token_request_;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  using DeviceOAuth2TokenFetcher = crosapi::DeviceOAuth2TokenServiceAsh;
+#endif
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  using DeviceOAuth2TokenFetcher = DeviceOAuth2TokenServiceLacros;
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+  std::unique_ptr<DeviceOAuth2TokenFetcher> device_oauth2_token_fetcher_;
+#endif
 
   // Pending fetcher for an access token for |token_key_.account_id| (via
   // IdentityManager).
@@ -138,6 +168,8 @@ class IdentityGetAuthTokenFunction : public ExtensionFunction,
                            ComponentWithNormalClientId);
   FRIEND_TEST_ALL_PREFIXES(GetAuthTokenFunctionTest, InteractiveQueueShutdown);
   FRIEND_TEST_ALL_PREFIXES(GetAuthTokenFunctionTest, NoninteractiveShutdown);
+
+  enum class InteractionType { kSignin, kConsent };
 
   // Request the primary account info.
   // |extension_gaia_id|: The GAIA ID that was set in the parameters for this
@@ -194,7 +226,7 @@ class IdentityGetAuthTokenFunction : public ExtensionFunction,
   void OnRemoteConsentSuccess(
       const RemoteConsentResolutionData& resolution_data) override;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Starts a login access token request for device robot account. This method
   // will be called only in Chrome OS for:
   // 1. Enterprise kiosk mode.
@@ -215,12 +247,27 @@ class IdentityGetAuthTokenFunction : public ExtensionFunction,
   // Returns true if extensions are restricted to the primary account.
   bool IsPrimaryAccountOnly() const;
 
-  bool interactive_ = false;
-  bool should_prompt_for_scopes_ = false;
+  // Computes the interactivity status for consent and sign-in based on the
+  // "interactive" parameter, the idle state and whether signin is allowed.
+  void ComputeInteractivityStatus(
+      const absl::optional<api::identity::TokenDetails>& details);
+
+  // Returns an error for cases when interactivity is not allowed. Must not be
+  // called when interactivity is allowed.
+  IdentityGetAuthTokenError GetErrorFromInteractivityStatus(
+      InteractionType interaction_type) const;
+
+  // For metrics.
+  base::TimeDelta idle_time_;
+  bool interactivity_metrics_recorded_ = false;
+
+  InteractivityStatus interactivity_status_for_consent_ =
+      InteractivityStatus::kNotRequested;
   IdentityMintRequestQueue::MintType mint_token_flow_type_;
   std::unique_ptr<OAuth2MintTokenFlow> mint_token_flow_;
   OAuth2MintTokenFlow::Mode gaia_mint_token_mode_;
-  bool should_prompt_for_signin_ = false;
+  InteractivityStatus interactivity_status_for_signin_ =
+      InteractivityStatus::kNotRequested;
   bool enable_granular_permissions_ = false;
 
   // The gaia id of the account requested by or previously selected for this

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,8 @@ class StreamsPrivateAPI {
       bool embedded,
       int frame_tree_node_id,
       blink::mojom::TransferrableURLLoaderPtr transferrable_loader,
-      const GURL& original_url);
+      const GURL& original_url,
+      const std::string& internal_id);
 };
 
 }  // namespace extensions

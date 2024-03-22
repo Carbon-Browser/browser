@@ -8,10 +8,7 @@ import("//build/config/ios/swift_source_set.gni")
 
 source_set("objc_interop_tests") {
   testonly = true
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   sources = [ "objc_xctest.mm" ]
   deps = [ "//base" ]
   frameworks = [ "Foundation.framework" ]
@@ -25,14 +22,13 @@ source_set("swift_interop_tests_support_files") {
     "classes/outlined_impl.cc",
     "classes/polymorphism.h",
     "enum/enum.h",
-    "language/nodiscard.cc",
-    "language/nodiscard.h",
     "namespace/namespace.h",
     "pointer/object_passing.h",
     "pointer/pointer_returner.cc",
     "pointer/pointer_returner.h",
     "pointer/unique_ptr.cc",
     "pointer/unique_ptr.h",
+    "struct/struct.h",
   ]
 }
 
@@ -45,11 +41,11 @@ swift_source_set("swift_interop_tests") {
     "classes/outlined_xctest.swift",
     "classes/polymorphism_xctest.swift",
     "enum/enum_xctest.swift",
-    "language/nodiscard_xctest.swift",
     "namespace/namespace_xctest.swift",
     "pointer/object_passing_xctest.swift",
     "pointer/pointer_xctest.swift",
     "pointer/unique_ptr_xctest.swift",
+    "struct/struct_xctest.swift",
   ]
   frameworks = [ "UIKit.framework" ]
   deps = [
@@ -61,7 +57,6 @@ swift_source_set("swift_interop_tests") {
 ios_app_bundle("ios_swift_interop_xcuitests") {
   testonly = true
   info_plist = "host-Info.plist"
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [ "test_host.mm" ]
   frameworks = [ "UIKit.framework" ]
 }

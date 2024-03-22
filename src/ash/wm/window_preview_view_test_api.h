@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/wm/window_mirror_view.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/gfx/geometry/rect_f.h"
 
@@ -38,7 +39,7 @@ class WindowPreviewViewTestApi {
   WindowMirrorView* GetMirrorViewForWidget(views::Widget* widget);
 
  private:
-  WindowPreviewView* preview_view_;
+  raw_ptr<WindowPreviewView, DanglingUntriaged | ExperimentalAsh> preview_view_;
 };
 
 }  // namespace ash

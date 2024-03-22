@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,7 +105,7 @@ TEST_F(AXPropertyNodeTest, ParseProperty) {
   EXPECT_EQ(GetArgumentNode("Text({loc: 3, len: 2})").FindIntKey("notexists"),
             absl::nullopt);
 
-  // Dict: FindKey
+  // `AXPropertyNode::FindKey()`
   EXPECT_EQ(GetArgumentNode("Text({anchor: {:1, 0, up}})")
                 .FindKey("anchor")
                 ->ToFlatString(),

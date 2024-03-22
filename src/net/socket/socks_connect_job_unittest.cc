@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/socket/socks_connect_job.h"
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -53,18 +53,22 @@ class SOCKSConnectJobTest : public testing::Test, public WithTaskEnvironment {
         common_connect_job_params_(
             &client_socket_factory_,
             &host_resolver_,
-            nullptr /* http_auth_cache */,
-            nullptr /* http_auth_handler_factory */,
-            nullptr /* spdy_session_pool */,
-            nullptr /* quic_supported_versions */,
-            nullptr /* quic_stream_factory */,
-            nullptr /* proxy_delegate */,
-            nullptr /* http_user_agent_settings */,
-            nullptr /* ssl_client_context */,
-            nullptr /* socket_performance_watcher_factory */,
-            nullptr /* network_quality_estimator */,
+            /*http_auth_cache=*/nullptr,
+            /*http_auth_handler_factory=*/nullptr,
+            /*spdy_session_pool=*/nullptr,
+            /*quic_supported_versions=*/nullptr,
+            /*quic_stream_factory=*/nullptr,
+            /*proxy_delegate=*/nullptr,
+            /*http_user_agent_settings=*/nullptr,
+            /*ssl_client_context=*/nullptr,
+            /*socket_performance_watcher_factory=*/nullptr,
+            /*network_quality_estimator=*/nullptr,
             NetLog::Get(),
-            nullptr /* websocket_endpoint_lock_manager */) {}
+            /*websocket_endpoint_lock_manager=*/nullptr,
+            /*http_server_properties=*/nullptr,
+            /*alpn_protos=*/nullptr,
+            /*application_settings=*/nullptr,
+            /*ignore_certificate_errors=*/nullptr) {}
 
   ~SOCKSConnectJobTest() override = default;
 
@@ -73,14 +77,14 @@ class SOCKSConnectJobTest : public testing::Test, public WithTaskEnvironment {
       SecureDnsPolicy secure_dns_policy = SecureDnsPolicy::kAllow) {
     return base::MakeRefCounted<SOCKSSocketParams>(
         base::MakeRefCounted<TransportSocketParams>(
-            HostPortPair(kProxyHostName, kProxyPort), NetworkIsolationKey(),
+            HostPortPair(kProxyHostName, kProxyPort), NetworkAnonymizationKey(),
             secure_dns_policy, OnHostResolutionCallback(),
             /*supported_alpns=*/base::flat_set<std::string>()),
         socks_version == SOCKSVersion::V5,
         socks_version == SOCKSVersion::V4
             ? HostPortPair(kSOCKS4TestHost, kSOCKS4TestPort)
             : HostPortPair(kSOCKS5TestHost, kSOCKS5TestPort),
-        NetworkIsolationKey(), TRAFFIC_ANNOTATION_FOR_TESTS);
+        NetworkAnonymizationKey(), TRAFFIC_ANNOTATION_FOR_TESTS);
   }
 
  protected:
@@ -122,11 +126,12 @@ TEST_F(SOCKSConnectJobTest, HostResolutionFailureSOCKS4Endpoint) {
     scoped_refptr<SOCKSSocketParams> socket_params =
         base::MakeRefCounted<SOCKSSocketParams>(
             base::MakeRefCounted<TransportSocketParams>(
-                HostPortPair(kProxyHostName, kProxyPort), NetworkIsolationKey(),
-                SecureDnsPolicy::kAllow, OnHostResolutionCallback(),
+                HostPortPair(kProxyHostName, kProxyPort),
+                NetworkAnonymizationKey(), SecureDnsPolicy::kAllow,
+                OnHostResolutionCallback(),
                 /*supported_alpns=*/base::flat_set<std::string>()),
             false /* socks_v5 */, HostPortPair(hostname, kSOCKS4TestPort),
-            NetworkIsolationKey(), TRAFFIC_ANNOTATION_FOR_TESTS);
+            NetworkAnonymizationKey(), TRAFFIC_ANNOTATION_FOR_TESTS);
 
     TestConnectJobDelegate test_delegate;
     SOCKSConnectJob socks_connect_job(
@@ -450,8 +455,10 @@ TEST_F(SOCKSConnectJobTest, ConnectTiming) {
   // Proxy name resolution is not considered resolving the host name for
   // ConnectionInfo. For SOCKS4, where the host name is also looked up via DNS,
   // the resolution time is not currently reported.
-  EXPECT_EQ(base::TimeTicks(), socks_connect_job.connect_timing().dns_start);
-  EXPECT_EQ(base::TimeTicks(), socks_connect_job.connect_timing().dns_end);
+  EXPECT_EQ(base::TimeTicks(),
+            socks_connect_job.connect_timing().domain_lookup_start);
+  EXPECT_EQ(base::TimeTicks(),
+            socks_connect_job.connect_timing().domain_lookup_end);
 
   // The "connect" time for socks proxies includes DNS resolution time.
   EXPECT_EQ(start, socks_connect_job.connect_timing().connect_start);

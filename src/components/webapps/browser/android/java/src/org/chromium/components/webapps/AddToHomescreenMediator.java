@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,19 @@ import android.graphics.Bitmap;
 import android.util.Pair;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.StringRes;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
 
 /**
  * The mediator class in the MVC architecture of the add-to-homescreen component. The C++
- * counterpart of this class calls various Java set methods ({@link #setIcon},
- * {@link #setWebAppInfo}, {@link #setWebAppInfoWithIcon}, and {@link #setNativeAppInfo}) when more
+ * counterpart of this class calls various Java set methods ({@link #setIcon}, {@link
+ * #setWebAppInfo}, {@link #setWebAppInfoWithIcon}, and {@link #setNativeAppInfo}) when more
  * information about the app is available. These methods modify the model that lives on the Java
  * side.
  */
@@ -37,19 +37,19 @@ class AddToHomescreenMediator implements AddToHomescreenViewDelegate {
         mNativeAddToHomescreenMediator = AddToHomescreenMediatorJni.get().initialize(this);
     }
 
-    void startForAppMenu(@NonNull WebContents webContents, @StringRes int titleId) {
+    void startForAppMenu(@NonNull WebContents webContents, int menuItemType) {
         if (mNativeAddToHomescreenMediator == 0) return;
 
-        AddToHomescreenMediatorJni.get().startForAppMenu(
-                mNativeAddToHomescreenMediator, webContents, titleId);
+        AddToHomescreenMediatorJni.get()
+                .startForAppMenu(mNativeAddToHomescreenMediator, webContents, menuItemType);
     }
 
     @CalledByNative
-    void setIcon(Bitmap icon, boolean isAdaptive, boolean needToAddPadding) {
+    void setIcon(Bitmap icon, boolean isAdaptive) {
         Bitmap iconToShow = icon;
-        if (needToAddPadding) {
-            assert isAdaptive;
-            iconToShow = WebappsIconUtils.createHomeScreenIconFromWebIcon(icon, true /*maskable*/);
+        if (isAdaptive) {
+            iconToShow =
+                    WebappsIconUtils.createHomeScreenIconFromWebIcon(icon, /* maskable= */ true);
         }
 
         mModel.set(AddToHomescreenProperties.ICON, new Pair<>(iconToShow, isAdaptive));
@@ -70,7 +70,8 @@ class AddToHomescreenMediator implements AddToHomescreenViewDelegate {
         mModel.set(AddToHomescreenProperties.TYPE, AppType.NATIVE);
         mModel.set(AddToHomescreenProperties.NATIVE_APP_RATING, nativeAppData.rating());
         mModel.set(AddToHomescreenProperties.CAN_SUBMIT, true);
-        mModel.set(AddToHomescreenProperties.NATIVE_INSTALL_BUTTON_TEXT,
+        mModel.set(
+                AddToHomescreenProperties.NATIVE_INSTALL_BUTTON_TEXT,
                 nativeAppData.installButtonText());
     }
 
@@ -118,11 +119,16 @@ class AddToHomescreenMediator implements AddToHomescreenViewDelegate {
     @NativeMethods
     interface Natives {
         long initialize(AddToHomescreenMediator instance);
-        void startForAppMenu(long nativeAddToHomescreenMediator, WebContents webContents,
-                @StringRes int titleId);
+
+        void startForAppMenu(
+                long nativeAddToHomescreenMediator, WebContents webContents, int menuItemType);
+
         void addToHomescreen(long nativeAddToHomescreenMediator, String title);
+
         void onNativeDetailsShown(long nativeAddToHomescreenMediator);
+
         void onUiDismissed(long nativeAddToHomescreenMediator);
+
         void destroy(long nativeAddToHomescreenMediator);
     }
 }

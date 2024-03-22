@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -153,9 +153,7 @@ TEST(PickleTest, LongFrom64Bit) {
   if (sizeof(long) < sizeof(int64_t)) {
     // ReadLong() should return false when the original written value can't be
     // represented as a long.
-#if GTEST_HAS_DEATH_TEST
-    EXPECT_DEATH(std::ignore = iter.ReadLong(&outlong), "");
-#endif
+    EXPECT_FALSE(iter.ReadLong(&outlong));
   } else {
     EXPECT_TRUE(iter.ReadLong(&outlong));
     EXPECT_EQ(testint64, outlong);
@@ -284,7 +282,7 @@ TEST(PickleTest, PeekNext) {
 
   pickle.WriteString("Goooooooooooogle");
 
-  const char* pickle_data = static_cast<const char*>(pickle.data());
+  const char* pickle_data = pickle.data_as_char();
 
   size_t pickle_size;
 
@@ -490,8 +488,7 @@ TEST(PickleTest, EqualsOperator) {
   Pickle source;
   source.WriteInt(1);
 
-  Pickle copy_refs_source_buffer(static_cast<const char*>(source.data()),
-                                 source.size());
+  Pickle copy_refs_source_buffer(source.data_as_char(), source.size());
   Pickle copy;
   copy = copy_refs_source_buffer;
   ASSERT_EQ(source.size(), copy.size());
@@ -635,6 +632,18 @@ TEST(PickleTest, ReachedEnd) {
   EXPECT_TRUE(iter.ReachedEnd());
   EXPECT_FALSE(iter.ReadInt(&out));
   EXPECT_TRUE(iter.ReachedEnd());
+}
+
+// Test that reading a value other than 0 or 1 as a bool does not trigger
+// UBSan.
+TEST(PickleTest, NonCanonicalBool) {
+  Pickle pickle;
+  pickle.WriteInt(0xff);
+
+  PickleIterator iter(pickle);
+  bool b;
+  ASSERT_TRUE(iter.ReadBool(&b));
+  EXPECT_TRUE(b);
 }
 
 }  // namespace base

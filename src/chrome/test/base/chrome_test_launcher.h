@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,6 +53,9 @@ class ChromeTestChromeMainDelegate
   // ChromeMainDelegateOverrides.
   content::ContentBrowserClient* CreateContentBrowserClient() override;
   content::ContentUtilityClient* CreateContentUtilityClient() override;
+#if !BUILDFLAG(IS_ANDROID)
+  absl::optional<int> PostEarlyInitialization(InvokedIn invoked_in) override;
+#endif  // !BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(IS_WIN)
   bool ShouldHandleConsoleControlEvents() override;
 #endif

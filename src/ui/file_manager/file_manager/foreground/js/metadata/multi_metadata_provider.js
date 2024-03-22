@@ -1,17 +1,16 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
 
-import {util} from '../../../common/js/util.js';
-import {VolumeManagerCommon} from '../../../common/js/volume_manager_types.js';
-import {VolumeManager} from '../../../externs/volume_manager.js';
+import {isTrashEntry} from '../../../common/js/entry_utils.js';
+import {VolumeType} from '../../../common/js/volume_manager_types.js';
 
 import {ContentMetadataProvider} from './content_metadata_provider.js';
 import {DlpMetadataProvider} from './dlp_metadata_provider.js';
 import {ExternalMetadataProvider} from './external_metadata_provider.js';
-import {FileSystemMetadataProvider} from './file_system_metadata_provider.js';
+import {FILE_SYSTEM_METADATA_PROPERTY_NAMES, FileSystemMetadataProvider} from './file_system_metadata_provider.js';
 import {MetadataItem} from './metadata_item.js';
 import {MetadataProvider} from './metadata_provider.js';
 import {MetadataRequest} from './metadata_request.js';
@@ -23,29 +22,32 @@ export class MultiMetadataProvider extends MetadataProvider {
    * @param {!ExternalMetadataProvider} externalMetadataProvider
    * @param {!ContentMetadataProvider} contentMetadataProvider
    * @param {!DlpMetadataProvider} dlpMetadataProvider
-   * @param {!VolumeManager} volumeManager
+   * @param {!import('../../../externs/volume_manager.js').VolumeManager}
+   *     volumeManager
    */
   constructor(
       fileSystemMetadataProvider, externalMetadataProvider,
       contentMetadataProvider, dlpMetadataProvider, volumeManager) {
-    super(FileSystemMetadataProvider.PROPERTY_NAMES
+    super(FILE_SYSTEM_METADATA_PROPERTY_NAMES
               .concat(ExternalMetadataProvider.PROPERTY_NAMES)
               .concat(ContentMetadataProvider.PROPERTY_NAMES)
               .concat(DlpMetadataProvider.PROPERTY_NAMES));
 
-    /** @private @const {!FileSystemMetadataProvider} */
+    /** @private @const @type {!FileSystemMetadataProvider} */
     this.fileSystemMetadataProvider_ = fileSystemMetadataProvider;
 
-    /** @private @const {!ExternalMetadataProvider} */
+    /** @private @const @type {!ExternalMetadataProvider} */
     this.externalMetadataProvider_ = externalMetadataProvider;
 
-    /** @private @const {!ContentMetadataProvider} */
+    /** @private @const @type {!ContentMetadataProvider} */
     this.contentMetadataProvider_ = contentMetadataProvider;
 
-    /** @private @const {!DlpMetadataProvider} */
+    /** @private @const @type {!DlpMetadataProvider} */
     this.dlpMetadataProvider_ = dlpMetadataProvider;
 
-    /** @private @const {!VolumeManager} */
+    /**
+     * @private @const @type {!import('../../../externs/volume_manager.js').VolumeManager}
+     */
     this.volumeManager_ = volumeManager;
   }
 
@@ -54,11 +56,24 @@ export class MultiMetadataProvider extends MetadataProvider {
    * @param {!Array<!MetadataRequest>} requests
    * @return {!Promise<!Array<!MetadataItem>>}
    */
+  // @ts-ignore: error TS4119: This member must have a JSDoc comment with an
+  // '@override' tag because it overrides a member in the base class
+  // 'MetadataProvider'.
   get(requests) {
+    // @ts-ignore: error TS7034: Variable 'fileSystemRequests' implicitly has
+    // type 'any[]' in some locations where its type cannot be determined.
     const fileSystemRequests = [];
+    // @ts-ignore: error TS7034: Variable 'externalRequests' implicitly has type
+    // 'any[]' in some locations where its type cannot be determined.
     const externalRequests = [];
+    // @ts-ignore: error TS7034: Variable 'contentRequests' implicitly has type
+    // 'any[]' in some locations where its type cannot be determined.
     const contentRequests = [];
+    // @ts-ignore: error TS7034: Variable 'fallbackContentRequests' implicitly
+    // has type 'any[]' in some locations where its type cannot be determined.
     const fallbackContentRequests = [];
+    // @ts-ignore: error TS7034: Variable 'dlpRequests' implicitly has type
+    // 'any[]' in some locations where its type cannot be determined.
     const dlpRequests = [];
     requests.forEach(request => {
       // Group property names.
@@ -67,10 +82,9 @@ export class MultiMetadataProvider extends MetadataProvider {
       const contentPropertyNames = [];
       const fallbackContentPropertyNames = [];
       const dlpPropertyNames = [];
-      for (let i = 0; i < request.names.length; i++) {
-        const name = request.names[i];
+      for (const name of request.names) {
         const isFileSystemProperty =
-            FileSystemMetadataProvider.PROPERTY_NAMES.indexOf(name) !== -1;
+            FILE_SYSTEM_METADATA_PROPERTY_NAMES.indexOf(name) !== -1;
         const isExternalProperty =
             ExternalMetadataProvider.PROPERTY_NAMES.indexOf(name) !== -1;
         const isContentProperty =
@@ -105,14 +119,16 @@ export class MultiMetadataProvider extends MetadataProvider {
         }
       }
       const volumeInfo = this.volumeManager_.getVolumeInfo(request.entry);
+      // @ts-ignore: error TS7006: Parameter 'names' implicitly has an 'any'
+      // type.
       const addRequests = (list, names) => {
         if (names.length) {
           list.push(new MetadataRequest(request.entry, names));
         }
       };
-      if (volumeInfo && !util.isTrashEntry(request.entry) &&
-          (volumeInfo.volumeType === VolumeManagerCommon.VolumeType.DRIVE ||
-           volumeInfo.volumeType === VolumeManagerCommon.VolumeType.PROVIDED)) {
+      if (volumeInfo && !isTrashEntry(request.entry) &&
+          (volumeInfo.volumeType === VolumeType.DRIVE ||
+           volumeInfo.volumeType === VolumeType.PROVIDED)) {
         // Because properties can be out of sync just after sync completion
         // even if 'dirty' is false, it refers 'present' here to switch the
         // content and the external providers.
@@ -120,13 +136,18 @@ export class MultiMetadataProvider extends MetadataProvider {
             externalPropertyNames.indexOf('present') === -1) {
           externalPropertyNames.push('present');
         }
+        // @ts-ignore: error TS7005: Variable 'externalRequests' implicitly has
+        // an 'any[]' type.
         addRequests(externalRequests, externalPropertyNames);
+        // @ts-ignore: error TS7005: Variable 'contentRequests' implicitly has
+        // an 'any[]' type.
         addRequests(contentRequests, contentPropertyNames);
+        // @ts-ignore: error TS7005: Variable 'fallbackContentRequests'
+        // implicitly has an 'any[]' type.
         addRequests(fallbackContentRequests, fallbackContentPropertyNames);
       } else if (
           volumeInfo &&
-          volumeInfo.volumeType ===
-              VolumeManagerCommon.VolumeType.DOCUMENTS_PROVIDER) {
+          volumeInfo.volumeType === VolumeType.DOCUMENTS_PROVIDER) {
         // When using a documents provider, we need to discard:
         // - contentRequests: since the content sniffing code
         //   can't resolve the file path in the MediaGallery API. See
@@ -135,18 +156,30 @@ export class MultiMetadataProvider extends MetadataProvider {
         //   file size, which DocumentsProvider files may report (all filesystem
         //   request fields are retrieved using external requests instead).
         addRequests(
+            // @ts-ignore: error TS7005: Variable 'externalRequests' implicitly
+            // has an 'any[]' type.
             externalRequests,
             MultiMetadataProvider.DOCUMENTS_PROVIDER_EXTERNAL_PROPERTY_NAMES);
       } else {
+        // @ts-ignore: error TS7005: Variable 'fileSystemRequests' implicitly
+        // has an 'any[]' type.
         addRequests(fileSystemRequests, fileSystemPropertyNames);
         addRequests(
+            // @ts-ignore: error TS7005: Variable 'contentRequests' implicitly
+            // has an 'any[]' type.
             contentRequests,
             contentPropertyNames.concat(fallbackContentPropertyNames));
       }
+      // @ts-ignore: error TS7005: Variable 'dlpRequests' implicitly has an
+      // 'any[]' type.
       addRequests(dlpRequests, dlpPropertyNames);
     });
 
+    // @ts-ignore: error TS7006: Parameter 'inRequests' implicitly has an 'any'
+    // type.
     const get = (provider, inRequests) => {
+      // @ts-ignore: error TS7006: Parameter 'results' implicitly has an 'any'
+      // type.
       return provider.get(inRequests).then(results => {
         return {
           requests: inRequests,
@@ -155,23 +188,39 @@ export class MultiMetadataProvider extends MetadataProvider {
       });
     };
     const fileSystemPromise =
+        // @ts-ignore: error TS7005: Variable 'fileSystemRequests' implicitly
+        // has an 'any[]' type.
         get(this.fileSystemMetadataProvider_, fileSystemRequests);
     const externalPromise =
+        // @ts-ignore: error TS7005: Variable 'externalRequests' implicitly has
+        // an 'any[]' type.
         get(this.externalMetadataProvider_, externalRequests);
+    // @ts-ignore: error TS7005: Variable 'contentRequests' implicitly has an
+    // 'any[]' type.
     const contentPromise = get(this.contentMetadataProvider_, contentRequests);
+    // @ts-ignore: error TS7006: Parameter 'requestsAndResults' implicitly has
+    // an 'any' type.
     const fallbackContentPromise = externalPromise.then(requestsAndResults => {
       const requests = requestsAndResults.requests;
       const results = requestsAndResults.results;
+      // @ts-ignore: error TS7034: Variable 'dirtyMap' implicitly has type
+      // 'any[]' in some locations where its type cannot be determined.
       const dirtyMap = [];
       for (let i = 0; i < results.length; i++) {
         dirtyMap[requests[i].entry.toURL()] = results[i].present;
       }
       return get(
           this.contentMetadataProvider_,
+          // @ts-ignore: error TS7005: Variable 'fallbackContentRequests'
+          // implicitly has an 'any[]' type.
           fallbackContentRequests.filter(request => {
+            // @ts-ignore: error TS7005: Variable 'dirtyMap' implicitly has an
+            // 'any[]' type.
             return dirtyMap[request.entry.toURL()];
           }));
     });
+    // @ts-ignore: error TS7005: Variable 'dlpRequests' implicitly has an
+    // 'any[]' type.
     const dlpPromise = get(this.dlpMetadataProvider_, dlpRequests);
 
     // Merge results.
@@ -191,14 +240,26 @@ export class MultiMetadataProvider extends MetadataProvider {
             assert(inRequests.length === results.length);
             for (let j = 0; j < results.length; j++) {
               const url = inRequests[j].entry.toURL();
+              // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+              // because expression of type 'any' can't be used to index type
+              // '{}'.
               integratedResults[url] =
+                  // @ts-ignore: error TS7053: Element implicitly has an 'any'
+                  // type because expression of type 'any' can't be used to
+                  // index type '{}'.
                   integratedResults[url] || new MetadataItem();
               for (const name in results[j]) {
+                // @ts-ignore: error TS7053: Element implicitly has an 'any'
+                // type because expression of type 'any' can't be used to index
+                // type '{}'.
                 integratedResults[url][name] = results[j][name];
               }
             }
           }
           return requests.map(request => {
+            // @ts-ignore: error TS7053: Element implicitly has an 'any' type
+            // because expression of type 'string' can't be used to index type
+            // '{}'.
             return integratedResults[request.entry.toURL()] ||
                 new MetadataItem();
           });
@@ -217,7 +278,7 @@ export class MultiMetadataProvider extends MetadataProvider {
  * zero-filled property can overwrite a valid property which is already
  * acquired from FileSystemMetadataProvider.
  *
- * @const {!Array<string>}
+ * @const @type {!Array<string>}
  */
 MultiMetadataProvider.DOCUMENTS_PROVIDER_EXTERNAL_PROPERTY_NAMES = [
   'canCopy',

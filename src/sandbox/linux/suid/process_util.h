@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,5 @@
 // the required range of [0, 15]. This may result in some aliasing of
 // values, of course.
 bool AdjustOOMScore(pid_t process, int score);
-
-// This adjusts /sys/kernel/mm/chromeos-low_mem/margin so that
-// the kernel notifies us that we are low on memory when less than
-// |margin_mb| megabytes are available.  Setting |margin_mb| to -1
-// turns off low memory notification.
-bool AdjustLowMemoryMargin(int64_t margin_mb);
 
 #endif  // SANDBOX_LINUX_SUID_PROCESS_UTIL_H_

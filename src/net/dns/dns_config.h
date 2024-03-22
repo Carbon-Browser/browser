@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,12 @@
 #include <vector>
 
 #include "base/time/time.h"
+#include "base/values.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_export.h"
 #include "net/dns/dns_hosts.h"
 #include "net/dns/public/dns_over_https_config.h"
 #include "net/dns/public/secure_dns_mode.h"
-
-namespace base {
-class Value;
-}
 
 namespace net {
 
@@ -43,9 +40,9 @@ struct NET_EXPORT DnsConfig {
 
   void CopyIgnoreHosts(const DnsConfig& src);
 
-  // Returns a Value representation of |this|. For performance reasons, the
-  // Value only contains the number of hosts rather than the full list.
-  base::Value ToValue() const;
+  // Returns a Dict representation of |this|. For performance reasons, the
+  // Dict only contains the number of hosts rather than the full list.
+  base::Value::Dict ToDict() const;
 
   bool IsValid() const {
     return !nameservers.empty() || !doh_config.servers().empty();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
-#include "base/bind.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -21,20 +22,25 @@
 #include "base/time/time.h"
 #include "chrome/browser/apps/app_service/app_icon/app_icon_factory.h"
 #include "chrome/browser/apps/app_service/app_icon/dip_px_util.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service_factory.h"
+#include "chrome/browser/ash/borealis/borealis_app_launcher.h"
 #include "chrome/browser/ash/borealis/borealis_features.h"
 #include "chrome/browser/ash/borealis/borealis_service.h"
+#include "chrome/browser/ash/borealis/borealis_util.h"
+#include "chrome/browser/ash/bruschetta/bruschetta_util.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
-#include "chrome/browser/ash/crostini/crostini_shelf_utils.h"
 #include "chrome/browser/ash/guest_os/guest_os_pref_names.h"
+#include "chrome/browser/ash/guest_os/guest_os_shelf_utils.h"
+#include "chrome/browser/ash/guest_os/public/types.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_features.h"
+#include "chrome/browser/ash/plugin_vm/plugin_vm_files.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/icon_transcoder/svg_icon_transcoder.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service_factory.h"
-#include "chrome/grit/app_icon_resources.h"
+#include "chrome/grit/chromeos_app_icon_resources.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/dbus/vm_applications/apps.pb.h"
 #include "components/crx_file/id_util.h"
@@ -44,7 +50,7 @@
 #include "components/services/app_service/public/cpp/icon_types.h"
 #include "extensions/browser/api/file_handlers/mime_util.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/image/image_skia_operations.h"
 
 using vm_tools::apps::App;
@@ -53,13 +59,54 @@ namespace guest_os {
 
 namespace {
 
+void Launch(vm_tools::apps::VmType vm_type,
+            std::string app_id,
+            Profile* profile,
+            const GURL& url) {
+  switch (vm_type) {
+    case VmType::TERMINA:
+      crostini::LaunchCrostiniApp(profile, app_id, display::kInvalidDisplayId,
+                                  {url.spec()}, base::DoNothing());
+      break;
+
+    case VmType::PLUGIN_VM:
+      plugin_vm::LaunchPluginVmApp(profile, app_id, {url.spec()},
+                                   base::DoNothing());
+      break;
+
+    case VmType::BOREALIS:
+      borealis::BorealisService::GetForProfile(profile)->AppLauncher().Launch(
+          app_id, {url.spec()}, base::DoNothing());
+      break;
+
+    default:
+      // Usual best practice is to exhaustively handle all enum cases, in order
+      // to trigger a compiler warning if a newly-added enum case isn't handled.
+      // However, this enum is generated, and the source proto lives in the CrOS
+      // platform2 repo. If we attempted to exhaustively handle all cases,
+      // adding a new enum entry would unavoidably break Chromium's build (since
+      // warnings are treated as errors). So instead we have this default case,
+      // and log unexpected values.
+      LOG(ERROR) << "Unsupported VmType: " << static_cast<int>(VmType());
+  }
+}
+
+bool AppHandlesProtocol(const GuestOsRegistryService::Registration& app,
+                        const GURL& url) {
+  if (app.VmType() == VmType::BOREALIS &&
+      !borealis::IsExternalURLAllowed(url)) {
+    return false;
+  }
+  return base::Contains(app.MimeTypes(), "x-scheme-handler/" + url.scheme());
+}
+
 // This prefix is used when generating the crostini app list id.
 constexpr char kCrostiniAppIdPrefix[] = "crostini:";
 
 constexpr char kCrostiniIconFolder[] = "crostini.icons";
 
-base::Value ProtoToDictionary(const App::LocaleString& locale_string) {
-  base::Value result(base::Value::Type::DICTIONARY);
+base::Value::Dict ProtoToDictionary(const App::LocaleString& locale_string) {
+  base::Value::Dict result;
   for (const App::LocaleString::Entry& entry : locale_string.values()) {
     const std::string& locale = entry.locale();
 
@@ -71,36 +118,36 @@ base::Value ProtoToDictionary(const App::LocaleString& locale_string) {
       continue;
     }
 
-    result.SetKey(locale, base::Value(entry.value()));
+    result.Set(locale, base::Value(entry.value()));
   }
   return result;
 }
 
-std::set<std::string> ListToStringSet(const base::Value* list,
+std::set<std::string> ListToStringSet(const base::Value::List* list,
                                       bool to_lower_ascii = false) {
   std::set<std::string> result;
   if (!list) {
     return result;
   }
-  for (const base::Value& value : list->GetListDeprecated()) {
+  for (const base::Value& value : *list) {
     result.insert(to_lower_ascii ? base::ToLowerASCII(value.GetString())
                                  : value.GetString());
   }
   return result;
 }
 
-base::Value ProtoToList(
+base::Value::List ProtoToList(
     const google::protobuf::RepeatedPtrField<std::string>& strings) {
-  base::Value result(base::Value::Type::LIST);
+  base::Value::List result;
   for (const std::string& string : strings) {
     result.Append(string);
   }
   return result;
 }
 
-base::Value LocaleStringsProtoToDictionary(
+base::Value::Dict LocaleStringsProtoToDictionary(
     const App::LocaleStrings& repeated_locale_string) {
-  base::Value result(base::Value::Type::DICTIONARY);
+  base::Value::Dict result;
   for (const auto& strings_with_locale : repeated_locale_string.values()) {
     const std::string& locale = strings_with_locale.locale();
 
@@ -111,56 +158,52 @@ base::Value LocaleStringsProtoToDictionary(
         !l10n_util::IsValidLocaleSyntax(locale_with_dashes)) {
       continue;
     }
-    result.SetKey(locale, ProtoToList(strings_with_locale.value()));
+    result.Set(locale, ProtoToList(strings_with_locale.value()));
   }
   return result;
 }
 
 // Populate |pref_registration| based on the given App proto.
 // |name| should be |app.name()| in Dictionary form.
-void PopulatePrefRegistrationFromApp(base::Value& pref_registration,
+void PopulatePrefRegistrationFromApp(base::Value::Dict& pref_registration,
                                      VmType vm_type,
                                      const std::string& vm_name,
                                      const std::string& container_name,
                                      const vm_tools::apps::App& app,
-                                     base::Value name) {
-  pref_registration.SetKey(guest_os::prefs::kAppDesktopFileIdKey,
-                           base::Value(app.desktop_file_id()));
-  pref_registration.SetIntKey(guest_os::prefs::kVmTypeKey,
-                              static_cast<int>(vm_type));
-  pref_registration.SetKey(guest_os::prefs::kVmNameKey, base::Value(vm_name));
-  pref_registration.SetKey(guest_os::prefs::kContainerNameKey,
-                           base::Value(container_name));
-  pref_registration.SetKey(guest_os::prefs::kAppNameKey, std::move(name));
-  pref_registration.SetKey(guest_os::prefs::kAppCommentKey,
-                           ProtoToDictionary(app.comment()));
-  pref_registration.SetKey(guest_os::prefs::kAppExecKey,
-                           base::Value(app.exec()));
-  pref_registration.SetKey(guest_os::prefs::kAppExecutableFileNameKey,
-                           base::Value(app.executable_file_name()));
-  pref_registration.SetKey(guest_os::prefs::kAppExtensionsKey,
-                           ProtoToList(app.extensions()));
-  pref_registration.SetKey(guest_os::prefs::kAppMimeTypesKey,
-                           ProtoToList(app.mime_types()));
-  pref_registration.SetKey(guest_os::prefs::kAppKeywordsKey,
-                           LocaleStringsProtoToDictionary(app.keywords()));
-  pref_registration.SetKey(guest_os::prefs::kAppNoDisplayKey,
-                           base::Value(app.no_display()));
-  pref_registration.SetKey(guest_os::prefs::kAppStartupWMClassKey,
-                           base::Value(app.startup_wm_class()));
-  pref_registration.SetKey(guest_os::prefs::kAppStartupNotifyKey,
-                           base::Value(app.startup_notify()));
-  pref_registration.SetKey(guest_os::prefs::kAppPackageIdKey,
-                           base::Value(app.package_id()));
+                                     base::Value::Dict name) {
+  pref_registration.Set(guest_os::prefs::kAppDesktopFileIdKey,
+                        base::Value(app.desktop_file_id()));
+  pref_registration.Set(guest_os::prefs::kVmTypeKey, static_cast<int>(vm_type));
+  pref_registration.Set(guest_os::prefs::kVmNameKey, base::Value(vm_name));
+  pref_registration.Set(guest_os::prefs::kContainerNameKey,
+                        base::Value(container_name));
+  pref_registration.Set(guest_os::prefs::kAppNameKey, std::move(name));
+  pref_registration.Set(guest_os::prefs::kAppExecKey, base::Value(app.exec()));
+  pref_registration.Set(guest_os::prefs::kAppExecutableFileNameKey,
+                        base::Value(app.executable_file_name()));
+  pref_registration.Set(guest_os::prefs::kAppExtensionsKey,
+                        ProtoToList(app.extensions()));
+  pref_registration.Set(guest_os::prefs::kAppMimeTypesKey,
+                        ProtoToList(app.mime_types()));
+  pref_registration.Set(guest_os::prefs::kAppKeywordsKey,
+                        LocaleStringsProtoToDictionary(app.keywords()));
+  pref_registration.Set(guest_os::prefs::kAppNoDisplayKey,
+                        base::Value(app.no_display()));
+  pref_registration.Set(guest_os::prefs::kAppTerminalKey,
+                        base::Value(app.terminal()));
+  pref_registration.Set(guest_os::prefs::kAppStartupWMClassKey,
+                        base::Value(app.startup_wm_class()));
+  pref_registration.Set(guest_os::prefs::kAppStartupNotifyKey,
+                        base::Value(app.startup_notify()));
+  pref_registration.Set(guest_os::prefs::kAppPackageIdKey,
+                        base::Value(app.package_id()));
 }
 
-bool EqualsExcludingTimestamps(const base::Value& left,
-                               const base::Value& right) {
-  auto left_items = left.DictItems();
-  auto right_items = right.DictItems();
-  auto left_iter = left_items.begin();
-  auto right_iter = right_items.begin();
-  while (left_iter != left_items.end() && right_iter != right_items.end()) {
+bool EqualsExcludingTimestamps(const base::Value::Dict& left,
+                               const base::Value::Dict& right) {
+  auto left_iter = left.begin();
+  auto right_iter = right.begin();
+  while (left_iter != left.end() && right_iter != right.end()) {
     if (left_iter->first == guest_os::prefs::kAppInstallTimeKey ||
         left_iter->first == guest_os::prefs::kAppLastLaunchTimeKey) {
       ++left_iter;
@@ -176,7 +219,7 @@ bool EqualsExcludingTimestamps(const base::Value& left,
     ++left_iter;
     ++right_iter;
   }
-  return left_iter == left_items.end() && right_iter == right_items.end();
+  return left_iter == left.end() && right_iter == right.end();
 }
 
 void InstallIconFromFileThread(const base::FilePath& icon_path,
@@ -185,8 +228,7 @@ void InstallIconFromFileThread(const base::FilePath& icon_path,
 
   base::CreateDirectory(icon_path.DirName());
 
-  int wrote = base::WriteFile(icon_path, content.c_str(), content.size());
-  if (wrote != static_cast<int>(content.size())) {
+  if (!base::WriteFile(icon_path, content)) {
     VLOG(2) << "Failed to write Crostini icon file: "
             << icon_path.MaybeAsASCII();
     if (!base::DeleteFile(icon_path)) {
@@ -249,6 +291,7 @@ static std::string ToString(const vm_tools::apps::App& app) {
          ", comment: " + ToString(app.comment()) +
          ", mime_types: " + ToString(app.mime_types()) +
          ", no_display: " + ToString(app.no_display()) +
+         ", terminal: " + ToString(app.terminal()) +
          ", startup_wm_class: " + ToString(app.startup_wm_class()) +
          ", startup_notify: " + ToString(app.startup_notify()) +
          ", keywords: " + ToString(app.keywords()) +
@@ -278,42 +321,16 @@ static std::string Join(const List& list) {
   return joined;
 }
 
-void SetLocaleString(App::LocaleString* locale_string,
-                     const std::string& locale,
-                     const std::string& value) {
-  DCHECK(!locale.empty());
-  App::LocaleString::Entry* entry = locale_string->add_values();
-  // Add both specified locale, and empty default.
-  for (auto& l : {locale, std::string()}) {
-    entry->set_locale(l);
-    entry->set_value(value);
-  }
-}
-
-void SetLocaleStrings(App::LocaleStrings* locale_strings,
-                      const std::string& locale,
-                      std::vector<std::string> values) {
-  DCHECK(!locale.empty());
-  App::LocaleStrings::StringsWithLocale* strings = locale_strings->add_values();
-  // Add both specified locale, and empty default.
-  for (auto& l : {locale, std::string()}) {
-    strings->set_locale(l);
-    for (auto& v : values) {
-      strings->add_value(v);
-    }
-  }
-}
-
 std::string GetStringKey(const base::Value& dict,
                          const base::StringPiece& key) {
   if (!dict.is_dict()) {
     return std::string();
   }
-  const base::Value* value = dict.FindKeyOfType(key, base::Value::Type::STRING);
+  const std::string* value = dict.GetDict().FindString(key);
   if (!value) {
     return std::string();
   }
-  return value->GetString();
+  return *value;
 }
 
 }  // namespace
@@ -349,10 +366,6 @@ std::string GuestOsRegistryService::Registration::Name() const {
   return GetLocalizedString(guest_os::prefs::kAppNameKey);
 }
 
-std::string GuestOsRegistryService::Registration::Comment() const {
-  return GetLocalizedString(guest_os::prefs::kAppCommentKey);
-}
-
 std::string GuestOsRegistryService::Registration::Exec() const {
   return GetString(guest_os::prefs::kAppExecKey);
 }
@@ -366,9 +379,9 @@ std::set<std::string> GuestOsRegistryService::Registration::Extensions() const {
     return {};
   }
   // Convert to lowercase ASCII to allow case-insensitive match.
-  return ListToStringSet(pref_.FindKeyOfType(guest_os::prefs::kAppExtensionsKey,
-                                             base::Value::Type::LIST),
-                         /*to_lower_ascii=*/true);
+  return ListToStringSet(
+      pref_.GetDict().FindList(guest_os::prefs::kAppExtensionsKey),
+      /*to_lower_ascii=*/true);
 }
 
 std::set<std::string> GuestOsRegistryService::Registration::MimeTypes() const {
@@ -376,9 +389,9 @@ std::set<std::string> GuestOsRegistryService::Registration::MimeTypes() const {
     return {};
   }
   // Convert to lowercase ASCII to allow case-insensitive match.
-  return ListToStringSet(pref_.FindKeyOfType(guest_os::prefs::kAppMimeTypesKey,
-                                             base::Value::Type::LIST),
-                         /*to_lower_ascii=*/true);
+  return ListToStringSet(
+      pref_.GetDict().FindList(guest_os::prefs::kAppMimeTypesKey),
+      /*to_lower_ascii=*/true);
 }
 
 std::set<std::string> GuestOsRegistryService::Registration::Keywords() const {
@@ -389,6 +402,9 @@ bool GuestOsRegistryService::Registration::NoDisplay() const {
   return GetBool(guest_os::prefs::kAppNoDisplayKey);
 }
 
+bool GuestOsRegistryService::Registration::Terminal() const {
+  return GetBool(guest_os::prefs::kAppTerminalKey);
+}
 std::string GuestOsRegistryService::Registration::PackageId() const {
   return GetString(guest_os::prefs::kAppPackageIdKey);
 }
@@ -407,12 +423,16 @@ bool GuestOsRegistryService::Registration::CanUninstall() const {
   // desktop files, and it's better to show an error message (which the user can
   // then Google to learn more) than to just not have an uninstall option at
   // all.
-  const base::Value* package_id = pref_.FindKeyOfType(
-      guest_os::prefs::kAppPackageIdKey, base::Value::Type::STRING);
+  const std::string* package_id =
+      pref_.GetDict().FindString(guest_os::prefs::kAppPackageIdKey);
   if (package_id) {
-    return !package_id->GetString().empty();
+    return !package_id->empty();
   }
   return false;
+}
+
+guest_os::GuestId GuestOsRegistryService::Registration::ToGuestId() const {
+  return guest_os::GuestId(VmType(), VmName(), ContainerName());
 }
 
 base::Time GuestOsRegistryService::Registration::InstallTime() const {
@@ -437,12 +457,8 @@ bool GuestOsRegistryService::Registration::GetBool(
   if (!pref_.is_dict()) {
     return false;
   }
-  const base::Value* value =
-      pref_.FindKeyOfType(key, base::Value::Type::BOOLEAN);
-  if (!value) {
-    return false;
-  }
-  return value->GetBool();
+  const absl::optional<bool> value = pref_.GetDict().FindBool(key);
+  return value.value_or(false);
 }
 
 // This is the companion to GuestOsRegistryService::SetCurrentTime().
@@ -451,10 +467,9 @@ base::Time GuestOsRegistryService::Registration::GetTime(
   if (!pref_.is_dict()) {
     return base::Time();
   }
-  const base::Value* value =
-      pref_.FindKeyOfType(key, base::Value::Type::STRING);
+  const std::string* value = pref_.GetDict().FindString(key);
   int64_t time;
-  if (!value || !base::StringToInt64(value->GetString(), &time)) {
+  if (!value || !base::StringToInt64(*value, &time)) {
     return base::Time();
   }
   return base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(time));
@@ -468,8 +483,7 @@ std::string GuestOsRegistryService::Registration::GetLocalizedString(
   if (!pref_.is_dict()) {
     return std::string();
   }
-  const base::Value* dict =
-      pref_.FindKeyOfType(key, base::Value::Type::DICTIONARY);
+  const base::Value::Dict* dict = pref_.GetDict().FindDict(key);
   if (!dict) {
     return std::string();
   }
@@ -482,10 +496,9 @@ std::string GuestOsRegistryService::Registration::GetLocalizedString(
   locales.push_back(std::string());
 
   for (const std::string& locale : locales) {
-    const base::Value* value =
-        dict->FindKeyOfType(locale, base::Value::Type::STRING);
+    const std::string* value = dict->FindString(locale);
     if (value) {
-      return value->GetString();
+      return *value;
     }
   }
   return std::string();
@@ -496,8 +509,7 @@ std::set<std::string> GuestOsRegistryService::Registration::GetLocalizedList(
   if (!pref_.is_dict()) {
     return {};
   }
-  const base::Value* dict =
-      pref_.FindKeyOfType(key, base::Value::Type::DICTIONARY);
+  const base::Value::Dict* dict = pref_.GetDict().FindDict(key);
   if (!dict) {
     return {};
   }
@@ -510,10 +522,9 @@ std::set<std::string> GuestOsRegistryService::Registration::GetLocalizedList(
   locales.push_back(std::string());
 
   for (const std::string& locale : locales) {
-    const base::Value* value =
-        dict->FindKeyOfType(locale, base::Value::Type::LIST);
-    if (value) {
-      return ListToStringSet(value);
+    const base::Value::List* list = dict->FindList(locale);
+    if (list) {
+      return ListToStringSet(list);
     }
   }
   return {};
@@ -525,7 +536,6 @@ GuestOsRegistryService::GuestOsRegistryService(Profile* profile)
       base_icon_path_(profile->GetPath().AppendASCII(kCrostiniIconFolder)),
       clock_(base::DefaultClock::GetInstance()),
       svg_icon_transcoder_(std::make_unique<apps::SvgIconTranscoder>(profile)) {
-  RecordStartupMetrics();
 }
 
 GuestOsRegistryService::~GuestOsRegistryService() = default;
@@ -536,10 +546,10 @@ base::WeakPtr<GuestOsRegistryService> GuestOsRegistryService::GetWeakPtr() {
 
 std::map<std::string, GuestOsRegistryService::Registration>
 GuestOsRegistryService::GetAllRegisteredApps() const {
-  const base::Value* apps =
-      prefs_->GetDictionary(guest_os::prefs::kGuestOsRegistry);
+  const base::Value::Dict& apps =
+      prefs_->GetDict(guest_os::prefs::kGuestOsRegistry);
   std::map<std::string, GuestOsRegistryService::Registration> result;
-  for (const auto item : apps->DictItems()) {
+  for (const auto item : apps) {
     result.emplace(item.first, Registration(item.first, item.second.Clone()));
   }
   return result;
@@ -599,33 +609,46 @@ GuestOsRegistryService::GetRegisteredApps(VmType vm_type) const {
 
 absl::optional<GuestOsRegistryService::Registration>
 GuestOsRegistryService::GetRegistration(const std::string& app_id) const {
-  const base::Value* apps =
-      prefs_->GetDictionary(guest_os::prefs::kGuestOsRegistry);
+  const base::Value::Dict& apps =
+      prefs_->GetDict(guest_os::prefs::kGuestOsRegistry);
 
-  const base::Value* pref_registration =
-      apps->FindKeyOfType(app_id, base::Value::Type::DICTIONARY);
+  const base::Value::Dict* pref_registration = apps.FindDict(app_id);
   if (!pref_registration) {
     return absl::nullopt;
   }
-  return absl::make_optional<Registration>(app_id, pref_registration->Clone());
+  return absl::make_optional<Registration>(
+      app_id, base::Value(pref_registration->Clone()));
 }
 
-void GuestOsRegistryService::RecordStartupMetrics() {
-  const base::Value* apps =
-      prefs_->GetDictionary(guest_os::prefs::kGuestOsRegistry);
+void GuestOsRegistryService::RegisterTransientUrlHandler(
+    GuestOsUrlHandler handler,
+    CanHandleUrlCallback canHandleCallback) {
+  url_handlers_.emplace_back(handler, canHandleCallback);
+}
 
-  base::flat_map<int, int> num_apps;
-
-  for (const auto item : apps->DictItems()) {
-    absl::optional<bool> no_display =
-        item.second.FindBoolKey(guest_os::prefs::kAppNoDisplayKey);
-    if (no_display && no_display.value()) {
-      continue;
+absl::optional<GuestOsUrlHandler> GuestOsRegistryService::GetHandler(
+    const GURL& url) const {
+  // Transient URL handlers are system-installed, so always take priority.
+  for (const auto& handler : url_handlers_) {
+    if (handler.second.Run(url)) {
+      return handler.first;
     }
-
-    VmType vm_type = VmTypeFromPref(item.second);
-    num_apps[static_cast<int>(vm_type)]++;
   }
+
+  std::map<std::string, Registration> apps = GetEnabledApps();
+  const Registration* result = nullptr;
+  for (auto& [unused, registration] : apps) {
+    if (AppHandlesProtocol(registration, url) &&
+        (!result || registration.LastLaunchTime() > result->LastLaunchTime())) {
+      result = &registration;
+    }
+  }
+  if (!result) {
+    return absl::nullopt;
+  }
+  return absl::make_optional<GuestOsUrlHandler>(
+      result->Name(),
+      base::BindRepeating(Launch, result->VmType(), result->app_id()));
 }
 
 base::FilePath GuestOsRegistryService::GetAppPath(
@@ -666,7 +689,7 @@ void GuestOsRegistryService::LoadIcon(const std::string& app_id,
     auto reg = GetRegistration(app_id);
     if (reg && reg->VmType() == VmType::TERMINA) {
       callback = base::BindOnce(
-          &GuestOsRegistryService::ApplyContainerBadge,
+          &GuestOsRegistryService::ApplyContainerBadgeWithCallback,
           weak_ptr_factory_.GetWeakPtr(),
           crostini::GetContainerBadgeColor(
               profile_, guest_os::GuestId(reg->VmType(), reg->VmName(),
@@ -675,11 +698,12 @@ void GuestOsRegistryService::LoadIcon(const std::string& app_id,
     }
   }
 
-  if (icon_key.resource_id != apps::mojom::IconKey::kInvalidResourceId) {
+  if (icon_key.resource_id != apps::IconKey::kInvalidResourceId) {
     // The icon is a resource built into the Chrome OS binary.
     constexpr bool is_placeholder_icon = false;
     apps::LoadIconFromResource(
-        icon_type, size_hint_in_dip, icon_key.resource_id, is_placeholder_icon,
+        profile_, app_id, icon_type, size_hint_in_dip, icon_key.resource_id,
+        is_placeholder_icon,
         static_cast<apps::IconEffects>(icon_key.icon_effects),
         std::move(callback));
     return;
@@ -712,6 +736,38 @@ void GuestOsRegistryService::LoadIcon(const std::string& app_id,
 }
 
 void GuestOsRegistryService::ApplyContainerBadge(
+    const absl::optional<std::string>& app_id,
+    gfx::ImageSkia* image_skia) {
+  if (crostini::CrostiniFeatures::Get()->IsMultiContainerAllowed(profile_)) {
+    auto reg = GetRegistration(*app_id);
+    if (reg && reg->VmType() == guest_os::VmType::TERMINA) {
+      ApplyContainerBadgeForImageSkiaIcon(
+          crostini::GetContainerBadgeColor(
+              profile_, guest_os::GuestId(reg->VmType(), reg->VmName(),
+                                          reg->ContainerName())),
+          image_skia);
+    }
+  }
+}
+
+void GuestOsRegistryService::ApplyContainerBadgeForImageSkiaIcon(
+    SkColor badge_color,
+    gfx::ImageSkia* icon_out) {
+  gfx::ImageSkia badge_mask =
+      *ui::ResourceBundle::GetSharedInstance().GetImageSkiaNamed(
+          IDR_ICON_BADGE_MASK);
+
+  if (badge_mask.size() != icon_out->size()) {
+    badge_mask = gfx::ImageSkiaOperations::CreateResizedImage(
+        badge_mask, skia::ImageOperations::RESIZE_BEST, icon_out->size());
+  }
+  badge_mask =
+      gfx::ImageSkiaOperations::CreateColorMask(badge_mask, badge_color);
+  *icon_out =
+      gfx::ImageSkiaOperations::CreateSuperimposedImage(*icon_out, badge_mask);
+}
+
+void GuestOsRegistryService::ApplyContainerBadgeWithCallback(
     SkColor badge_color,
     apps::LoadIconCallback callback,
     apps::IconValuePtr icon) {
@@ -785,13 +841,14 @@ void GuestOsRegistryService::OnLoadIconFromVM(
     apps::LoadIconCallback callback,
     std::string compressed_icon_data) {
   if (compressed_icon_data.empty()) {
-    if (fallback_icon_resource_id != apps::mojom::IconKey::kInvalidResourceId) {
+    if (fallback_icon_resource_id != apps::IconKey::kInvalidResourceId) {
       // We load the fallback icon, but we tell AppsService that this is not
       // a placeholder to avoid endless repeat calls since we don't expect to
       // find a better icon than this any time soon.
-      apps::LoadIconFromResource(
-          icon_type, size_hint_in_dip, fallback_icon_resource_id,
-          /*is_placeholder_icon=*/false, icon_effects, std::move(callback));
+      apps::LoadIconFromResource(profile_, app_id, icon_type, size_hint_in_dip,
+                                 fallback_icon_resource_id,
+                                 /*is_placeholder_icon=*/false, icon_effects,
+                                 std::move(callback));
     } else {
       std::move(callback).Run(std::make_unique<apps::IconValue>());
     }
@@ -827,12 +884,12 @@ void GuestOsRegistryService::ClearApplicationList(
     const std::string& vm_name,
     const std::string& container_name) {
   std::vector<std::string> removed_apps;
-  // The DictionaryPrefUpdate should be destructed before calling the observer.
+  // The ScopedDictPrefUpdate should be destructed before calling the observer.
   {
-    DictionaryPrefUpdate update(prefs_, guest_os::prefs::kGuestOsRegistry);
-    base::Value* apps = update.Get();
+    ScopedDictPrefUpdate update(prefs_, guest_os::prefs::kGuestOsRegistry);
+    base::Value::Dict& apps = update.Get();
 
-    for (const auto item : apps->DictItems()) {
+    for (const auto item : apps) {
       Registration registration(item.first, item.second.Clone());
       if (vm_type != registration.VmType()) {
         continue;
@@ -848,7 +905,7 @@ void GuestOsRegistryService::ClearApplicationList(
     }
     for (const std::string& removed_app : removed_apps) {
       RemoveAppData(removed_app);
-      apps->RemoveKey(removed_app);
+      apps.Remove(removed_app);
     }
   }
 
@@ -866,7 +923,13 @@ void GuestOsRegistryService::ClearApplicationList(
 
 void GuestOsRegistryService::UpdateApplicationList(
     const vm_tools::apps::ApplicationList& app_list) {
-  VLOG(1) << "Received ApplicationList : " << ToString(app_list);
+  VLOG(3) << "Received ApplicationList : " << ToString(app_list);
+  // TODO(b/294316866): Special-case Bruschetta VMs until cicerone is updated to
+  // use the correct vm_type.
+  vm_tools::apps::VmType vm_type = app_list.vm_type();
+  if (app_list.vm_name() == bruschetta::kBruschettaVmName) {
+    vm_type = vm_tools::apps::VmType::BRUSCHETTA;
+  }
 
   if (app_list.vm_name().empty()) {
     LOG(WARNING) << "Received app list with missing VM name";
@@ -885,18 +948,18 @@ void GuestOsRegistryService::UpdateApplicationList(
   std::vector<std::string> removed_apps;
   std::vector<std::string> inserted_apps;
 
-  // The DictionaryPrefUpdate should be destructed before calling the observer.
+  // The ScopedDictPrefUpdate should be destructed before calling the observer.
   {
-    DictionaryPrefUpdate update(prefs_, guest_os::prefs::kGuestOsRegistry);
-    base::Value* apps = update.Get();
+    ScopedDictPrefUpdate update(prefs_, guest_os::prefs::kGuestOsRegistry);
+    base::Value::Dict& apps = update.Get();
     for (const App& app : app_list.apps()) {
       if (app.desktop_file_id().empty()) {
         LOG(WARNING) << "Received app with missing desktop file id";
         continue;
       }
 
-      base::Value name = ProtoToDictionary(app.name());
-      if (name.FindKey(base::StringPiece()) == nullptr) {
+      base::Value::Dict name = ProtoToDictionary(app.name());
+      if (name.Find(base::StringPiece()) == nullptr) {
         LOG(WARNING) << "Received app '" << app.desktop_file_id()
                      << "' with missing unlocalized name";
         continue;
@@ -906,12 +969,12 @@ void GuestOsRegistryService::UpdateApplicationList(
           app.desktop_file_id(), app_list.vm_name(), app_list.container_name());
       new_app_ids.insert(app_id);
 
-      base::Value pref_registration(base::Value::Type::DICTIONARY);
+      base::Value::Dict pref_registration;
       PopulatePrefRegistrationFromApp(
-          pref_registration, app_list.vm_type(), app_list.vm_name(),
+          pref_registration, vm_type, app_list.vm_name(),
           app_list.container_name(), app, std::move(name));
 
-      base::Value* old_app = apps->FindKey(app_id);
+      base::Value::Dict* old_app = apps.FindDict(app_id);
       if (old_app && EqualsExcludingTimestamps(pref_registration, *old_app)) {
         continue;
       }
@@ -920,30 +983,29 @@ void GuestOsRegistryService::UpdateApplicationList(
       base::Value* old_last_launch_time = nullptr;
       if (old_app) {
         updated_apps.push_back(app_id);
-        old_install_time =
-            old_app->FindKey(guest_os::prefs::kAppInstallTimeKey);
+        old_install_time = old_app->Find(guest_os::prefs::kAppInstallTimeKey);
         old_last_launch_time =
-            old_app->FindKey(guest_os::prefs::kAppLastLaunchTimeKey);
+            old_app->Find(guest_os::prefs::kAppLastLaunchTimeKey);
       } else {
         inserted_apps.push_back(app_id);
       }
 
       if (old_install_time) {
-        pref_registration.SetKey(guest_os::prefs::kAppInstallTimeKey,
-                                 old_install_time->Clone());
+        pref_registration.Set(guest_os::prefs::kAppInstallTimeKey,
+                              old_install_time->Clone());
       } else {
-        SetCurrentTime(&pref_registration, guest_os::prefs::kAppInstallTimeKey);
+        SetCurrentTime(pref_registration, guest_os::prefs::kAppInstallTimeKey);
       }
 
       if (old_last_launch_time) {
-        pref_registration.SetKey(guest_os::prefs::kAppLastLaunchTimeKey,
-                                 old_last_launch_time->Clone());
+        pref_registration.Set(guest_os::prefs::kAppLastLaunchTimeKey,
+                              old_last_launch_time->Clone());
       }
 
-      apps->SetKey(app_id, std::move(pref_registration));
+      apps.Set(app_id, std::move(pref_registration));
     }
 
-    for (const auto item : apps->DictItems()) {
+    for (const auto item : apps) {
       std::string vm_name =
           GetStringKey(item.second, guest_os::prefs::kVmNameKey);
       std::string container_name =
@@ -960,7 +1022,7 @@ void GuestOsRegistryService::UpdateApplicationList(
 
     for (const std::string& removed_app : removed_apps) {
       RemoveAppData(removed_app);
-      apps->RemoveKey(removed_app);
+      apps.Remove(removed_app);
     }
   }
 
@@ -969,8 +1031,7 @@ void GuestOsRegistryService::UpdateApplicationList(
   // due to the container being offline.
   for (auto retry_iter = retry_icon_requests_.begin();
        retry_iter != retry_icon_requests_.end(); ++retry_iter) {
-    for (ui::ResourceScaleFactor scale_factor :
-         ui::GetSupportedResourceScaleFactors()) {
+    for (const auto scale_factor : ui::GetSupportedResourceScaleFactors()) {
       if (retry_iter->second & (1 << scale_factor)) {
         RequestContainerAppIcon(retry_iter->first, scale_factor);
       }
@@ -983,7 +1044,7 @@ void GuestOsRegistryService::UpdateApplicationList(
   }
 
   for (Observer& obs : observers_) {
-    obs.OnRegistryUpdated(this, app_list.vm_type(), updated_apps, removed_apps,
+    obs.OnRegistryUpdated(this, vm_type, updated_apps, removed_apps,
                           inserted_apps);
   }
 }
@@ -1026,33 +1087,42 @@ void GuestOsRegistryService::RemoveObserver(Observer* observer) {
 }
 
 void GuestOsRegistryService::AppLaunched(const std::string& app_id) {
-  DictionaryPrefUpdate update(prefs_, guest_os::prefs::kGuestOsRegistry);
-  base::Value* apps = update.Get();
-  base::Value* app = apps->FindKey(app_id);
-  DCHECK(app);
+  ScopedDictPrefUpdate update(prefs_, guest_os::prefs::kGuestOsRegistry);
+  base::Value::Dict& app = update->Find(app_id)->GetDict();
   SetCurrentTime(app, guest_os::prefs::kAppLastLaunchTimeKey);
+
+  auto vm_type = app.FindInt(guest_os::prefs::kVmTypeKey);
+  if (!vm_type.has_value()) {
+    LOG(ERROR) << "Failed to find " << guest_os::prefs::kVmTypeKey
+               << " for app " << app_id;
+    return;
+  }
+
+  for (Observer& obs : observers_) {
+    obs.OnAppLastLaunchTimeUpdated(static_cast<VmType>(vm_type.value()), app_id,
+                                   clock_->Now());
+  }
 }
 
-void GuestOsRegistryService::SetCurrentTime(base::Value* dictionary,
+void GuestOsRegistryService::SetCurrentTime(base::Value::Dict& dictionary,
                                             const char* key) const {
-  DCHECK(dictionary);
   int64_t time = clock_->Now().ToDeltaSinceWindowsEpoch().InMicroseconds();
-  dictionary->SetKey(key, base::Value(base::NumberToString(time)));
+  dictionary.Set(key, base::Value(base::NumberToString(time)));
 }
 
 void GuestOsRegistryService::SetAppScaled(const std::string& app_id,
                                           bool scaled) {
-  DictionaryPrefUpdate update(prefs_, guest_os::prefs::kGuestOsRegistry);
-  base::Value* apps = update.Get();
+  ScopedDictPrefUpdate update(prefs_, guest_os::prefs::kGuestOsRegistry);
+  base::Value::Dict& apps = update.Get();
 
-  base::Value* app = apps->FindKey(app_id);
+  base::Value::Dict* app = apps.FindDict(app_id);
   if (!app) {
     LOG(ERROR)
         << "Tried to set display scaled property on the app with this app_id "
         << app_id << " that doesn't exist in the registry.";
     return;
   }
-  app->SetKey(guest_os::prefs::kAppScaledKey, base::Value(scaled));
+  app->Set(guest_os::prefs::kAppScaledKey, scaled);
 }
 
 // static

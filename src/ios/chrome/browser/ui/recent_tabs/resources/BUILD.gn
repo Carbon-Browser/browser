@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,15 +9,5 @@ imageset("recent_tabs_other_devices_empty") {
     "recent_tabs_other_devices_empty.imageset/Contents.json",
     "recent_tabs_other_devices_empty.imageset/recent_tabs_other_devices_empty.pdf",
     "recent_tabs_other_devices_empty.imageset/recent_tabs_other_devices_empty_dark.pdf",
-  ]
-}
-
-imageset("show_history") {
-  sources = [
-    "show_history.imageset/Contents.json",
-    "show_history.imageset/show_history@2x.png",
-    "show_history.imageset/show_history@3x.png",
-    "show_history.imageset/show_history_dark@2x.png",
-    "show_history.imageset/show_history_dark@3x.png",
   ]
 }

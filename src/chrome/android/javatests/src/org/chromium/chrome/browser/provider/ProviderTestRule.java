@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,8 @@ import org.chromium.base.ContextUtils;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 /**
- * Base class for Chrome's ContentProvider tests.
- * Sets up a local ChromeBrowserProvider associated to a mock resolver in an isolated context.
+ * Base class for Chrome's ContentProvider tests. Sets up a local ChromeBrowserProvider associated
+ * to a mock resolver in an isolated context.
  */
 public class ProviderTestRule implements TestRule {
     private IsolatedContext mContext;
@@ -42,11 +42,12 @@ public class ProviderTestRule implements TestRule {
         Context context = ContextUtils.getApplicationContext();
 
         final ContentProvider provider = new ChromeBrowserProvider();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ProviderInfo providerInfo = new ProviderInfo();
-            providerInfo.authority = ChromeBrowserProviderImpl.getApiAuthority(context);
-            provider.attachInfo(context, providerInfo);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ProviderInfo providerInfo = new ProviderInfo();
+                    providerInfo.authority = ChromeBrowserProviderImpl.getApiAuthority(context);
+                    provider.attachInfo(context, providerInfo);
+                });
 
         MockContentResolver resolver = new MockContentResolver();
         resolver.addProvider(ChromeBrowserProviderImpl.getApiAuthority(context), provider);

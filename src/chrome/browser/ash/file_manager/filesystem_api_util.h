@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "storage/common/file_system/file_system_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -24,9 +24,6 @@ class FilePath;
 
 namespace file_manager {
 namespace util {
-
-// Obtains whether |type| is non-native file system or not.
-bool IsNonNativeFileSystemType(storage::FileSystemType type);
 
 // Checks whether the given |path| points to a non-local filesystem that
 // requires special handling.

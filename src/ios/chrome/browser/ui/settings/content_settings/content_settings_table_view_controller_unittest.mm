@@ -1,32 +1,36 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/settings/content_settings/content_settings_table_view_controller.h"
 
-#include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "testing/gtest_mac.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/apple/foundation_util.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/grit/ios_strings.h"
+#import "ios/web/common/features.h"
+#import "ios/web/public/test/web_task_environment.h"
+#import "testing/gtest_mac.h"
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
 
 class ContentSettingsTableViewControllerTest
-    : public ChromeTableViewControllerTest {
+    : public LegacyChromeTableViewControllerTest {
  protected:
   ContentSettingsTableViewControllerTest() {
     browser_state_ = TestChromeBrowserState::Builder().Build();
     browser_ = std::make_unique<TestBrowser>(browser_state_.get());
   }
 
-  ChromeTableViewController* InstantiateController() override {
+  void TearDown() override {
+    [base::apple::ObjCCastStrict<ContentSettingsTableViewController>(
+        controller()) settingsWillBeDismissed];
+    LegacyChromeTableViewControllerTest::TearDown();
+  }
+
+  LegacyChromeTableViewController* InstantiateController() override {
     return [[ContentSettingsTableViewController alloc]
         initWithBrowser:browser_.get()];
   }
@@ -37,15 +41,20 @@ class ContentSettingsTableViewControllerTest
   std::unique_ptr<TestBrowser> browser_;
 };
 
-// Tests that there are 3 items in Content Settings.
+// Tests that the number of items in Content Settings is correct.
 TEST_F(ContentSettingsTableViewControllerTest,
        TestModelWithLanguageSettingsUI) {
   CreateController();
   CheckController();
   CheckTitleWithId(IDS_IOS_CONTENT_SETTINGS_TITLE);
 
-  ASSERT_EQ(1, NumberOfSections());
-  ASSERT_EQ(3, NumberOfItemsInSection(0));
+  if (web::features::IsWebInspectorSupportEnabled()) {
+    ASSERT_EQ(2, NumberOfSections());
+    ASSERT_EQ(1, NumberOfItemsInSection(1));
+  } else {
+    ASSERT_EQ(1, NumberOfSections());
+  }
+  ASSERT_EQ(4, NumberOfItemsInSection(0));
   CheckDetailItemTextWithIds(IDS_IOS_BLOCK_POPUPS, IDS_IOS_SETTING_ON, 0, 0);
 }
 

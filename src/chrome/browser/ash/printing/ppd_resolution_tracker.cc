@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,16 +88,6 @@ const chromeos::Printer::PpdReference& PpdResolutionTracker::GetPpdReference(
 bool PpdResolutionTracker::PrinterStateExists(
     const std::string& printer_id) const {
   return base::Contains(printer_state_, printer_id);
-}
-
-void PpdResolutionTracker::MarkPrinterAsNotAutoconfigurable(
-    const std::string& printer_id) {
-  printer_state_.at(printer_id).MarkPrinterAsNotAutoconfigurable();
-}
-
-bool PpdResolutionTracker::IsMarkedAsNotAutoconfigurable(
-    const std::string& printer_id) const {
-  return printer_state_.at(printer_id).IsMarkedAsNotAutoconfigurable();
 }
 
 }  // namespace ash

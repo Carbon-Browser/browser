@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,11 +24,10 @@ import org.chromium.ui.util.TokenHolder;
  * Determines the desired visibility of the browser controls based on the current state of the
  * running activity.
  */
-public class BrowserStateBrowserControlsVisibilityDelegate
-        extends BrowserControlsVisibilityDelegate implements Destroyable {
+public class BrowserStateBrowserControlsVisibilityDelegate extends BrowserControlsVisibilityDelegate
+        implements Destroyable {
     /** Minimum duration (in milliseconds) that the controls are shown when requested. */
-    @VisibleForTesting
-    static final long MINIMUM_SHOW_DURATION_MS = 3000;
+    @VisibleForTesting static final long MINIMUM_SHOW_DURATION_MS = 3000;
 
     private static boolean sDisableOverridesForTesting;
 
@@ -67,14 +66,12 @@ public class BrowserStateBrowserControlsVisibilityDelegate
         if (currentShowingTime >= MINIMUM_SHOW_DURATION_MS) return;
 
         final int temporaryToken = mTokenHolder.acquireToken();
-        mHandler.postDelayed(()
-                                     -> mTokenHolder.releaseToken(temporaryToken),
+        mHandler.postDelayed(
+                () -> mTokenHolder.releaseToken(temporaryToken),
                 MINIMUM_SHOW_DURATION_MS - currentShowingTime);
     }
 
-    /**
-     * Trigger a temporary showing of the browser controls.
-     */
+    /** Trigger a temporary showing of the browser controls. */
     public void showControlsTransient() {
         if (!mTokenHolder.hasTokens()) mCurrentShowingStartTime = SystemClock.uptimeMillis();
         ensureControlsVisibleForMinDuration();
@@ -112,13 +109,24 @@ public class BrowserStateBrowserControlsVisibilityDelegate
      */
     public void releasePersistentShowingToken(int token) {
         if (mTokenHolder.containsOnly(token)) {
-            ensureControlsVisibleForMinDuration();
+            // Toolbar capture suppression logic sometimes locks the controls right as a scroll
+            // starts. This is a significantly different usage than locking controls for 3 seconds
+            // upon navigation. It feels wrong for the controls to stay locked for the min duration,
+            // there wasn't any significant change to the screen. They should unlock as soon as the
+            // capture logic thinks it's safe to do so. Long term this can probably be removed for
+            // all.
+            boolean useSuppression =
+                    (FeatureList.isInitialized()
+                            && ChromeFeatureList.isEnabled(
+                                    ChromeFeatureList.SUPPRESS_TOOLBAR_CAPTURES));
+            if (!useSuppression) {
+                ensureControlsVisibleForMinDuration();
+            }
         }
         mTokenHolder.releaseToken(token);
     }
 
-    @BrowserControlsState
-    private int calculateVisibilityConstraints() {
+    private @BrowserControlsState int calculateVisibilityConstraints() {
         if (mPersistentFullscreenMode.get()) {
             return BrowserControlsState.HIDDEN;
         } else if (mTokenHolder.hasTokens() && !sDisableOverridesForTesting) {
@@ -134,16 +142,12 @@ public class BrowserStateBrowserControlsVisibilityDelegate
         set(calculateVisibilityConstraints());
     }
 
-    /**
-     * Disable any browser visibility overrides for testing.
-     */
+    /** Disable any browser visibility overrides for testing. */
     public static void disableForTesting() {
         sDisableOverridesForTesting = true;
     }
 
-    /**
-     * Performs clean-up.
-     */
+    /** Performs clean-up. */
     @Override
     public void destroy() {
         mHandler.removeCallbacksAndMessages(null);

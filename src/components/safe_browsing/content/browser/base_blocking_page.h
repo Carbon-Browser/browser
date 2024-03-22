@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,6 +77,8 @@ class BaseBlockingPage
   virtual void CreatedPostCommitErrorPageNavigation(
       content::NavigationHandle* error_page_navigation_handle) {}
 
+  BaseSafeBrowsingErrorUI* sb_error_ui() const;
+
  protected:
   // Don't instantiate this class directly, use ShowBlockingPage instead.
   BaseBlockingPage(
@@ -125,8 +127,6 @@ class BaseBlockingPage
   bool proceeded() const;
 
   int64_t threat_details_proceed_delay() const;
-
-  BaseSafeBrowsingErrorUI* sb_error_ui() const;
 
   void set_proceeded(bool proceeded);
 

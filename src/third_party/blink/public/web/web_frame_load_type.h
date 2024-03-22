@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,13 +32,17 @@ namespace blink {
 //   Bypasses any caches, memory and disk cache in the browser, and caches in
 //   proxy servers, to fetch fresh contents directly from the end server.
 //   Used in Shift-Reload.
-//
+// kRestore:
+//   Used in  session restore (e.g., restoring all the tabs in a previous
+//   session) and tab restore (e.g., re-opening a closed tab, or duplicating a
+//   tab). This behaves the same as kBackForward.
 enum class WebFrameLoadType {
   kStandard,
   kBackForward,
   kReload,
   kReplaceCurrentItem,
   kReloadBypassingCache,
+  kRestore,
 };
 
 }  // namespace blink

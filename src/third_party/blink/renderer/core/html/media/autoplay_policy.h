@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -124,6 +124,10 @@ class CORE_EXPORT AutoplayPolicy final
 
   // Returns whether the media element is eligible to autoplay muted.
   bool IsEligibleForAutoplayMuted() const;
+
+  // Returns whether the transient user activation state is active for either
+  // the frame or the opener of the media element.
+  bool HasTransientUserActivation() const;
 
   bool ShouldAutoplay();
 

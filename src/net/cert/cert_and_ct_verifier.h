@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,8 @@ class NET_EXPORT CertAndCTVerifier : public CertVerifier {
              std::unique_ptr<Request>* out_req,
              const NetLogWithSource& net_log) override;
   void SetConfig(const Config& config) override;
+  void AddObserver(Observer* observer) override;
+  void RemoveObserver(Observer* observer) override;
 
  private:
   void OnCertVerifyComplete(const RequestParams& params,

@@ -1,15 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/command_line.h"
 #include "third_party/blink/renderer/platform/fonts/font.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
-#include "third_party/blink/renderer/platform/fonts/ng_text_fragment_paint_info.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/caching_word_shaper.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/harfbuzz_shaper.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result_bloberizer.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result_view.h"
+#include "third_party/blink/renderer/platform/fonts/text_fragment_paint_info.h"
 #include "third_party/blink/renderer/platform/fonts/text_run_paint_info.h"
 #include "third_party/blink/renderer/platform/testing/blink_fuzzer_test_support.h"
 
@@ -52,12 +52,11 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   // BloberizeNG
   scoped_refptr<ShapeResultView> result_view =
       ShapeResultView::Create(result.get());
-  NGTextFragmentPaintInfo text_info{StringView(string), 0, string.length(),
-                                    result_view.get()};
+  TextFragmentPaintInfo text_info{StringView(string), 0, string.length(),
+                                  result_view.get()};
   ShapeResultBloberizer::FillGlyphsNG bloberizer_ng(
-      font.GetFontDescription(), false, text_info.text, text_info.from,
-      text_info.to, text_info.shape_result,
-      ShapeResultBloberizer::Type::kEmitText);
+      font.GetFontDescription(), text_info.text, text_info.from, text_info.to,
+      text_info.shape_result, ShapeResultBloberizer::Type::kEmitText);
   bloberizer_ng.Blobs();
 
   // Bloberize
@@ -79,7 +78,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     ShapeResultBuffer buffer;
     word_shaper.FillResultBuffer(subrun_info, &buffer);
     ShapeResultBloberizer::FillGlyphs bloberizer(
-        font.GetFontDescription(), false, subrun_info, buffer,
+        font.GetFontDescription(), subrun_info, buffer,
         ShapeResultBloberizer::Type::kEmitText);
     bloberizer.Blobs();
   }

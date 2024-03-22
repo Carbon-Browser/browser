@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,15 @@
  * @fileoverview A confirmation dialog allowing the user to delete various types
  * of certificates.
  */
-import '../../cr_elements/cr_button/cr_button.m.js';
-import '../../cr_elements/cr_dialog/cr_dialog.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import './certificate_shared.css.js';
 
+import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {CrDialogElement} from '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import {assertNotReached} from '../../js/assert_ts.js';
-import {I18nMixin} from '../../js/i18n_mixin.js';
-import {loadTimeData} from '../../js/load_time_data.m.js';
 
 import {getTemplate} from './certificate_delete_confirmation_dialog.html.js';
 import {CertificatesBrowserProxyImpl, CertificateSubnode, CertificateType} from './certificates_browser_proxy.js';
@@ -89,11 +88,11 @@ export class CertificateDeleteConfirmationDialogElement extends
     }
   }
 
-  private onCancelTap_() {
+  private onCancelClick_() {
     this.$.dialog.close();
   }
 
-  private onOkTap_() {
+  private onOkClick_() {
     CertificatesBrowserProxyImpl.getInstance()
         .deleteCertificate(this.model.id)
         .then(

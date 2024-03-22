@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_SENSOR_SENSOR_PROXY_H_
 
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
+#include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer_reader.h"
 #include "services/device/public/mojom/sensor.mojom-blink-forward.h"
 #include "services/device/public/mojom/sensor_provider.mojom-blink.h"
@@ -83,7 +84,7 @@ class SensorProxy : public GarbageCollected<SensorProxy>,
   virtual void Suspend() {}
   virtual void Resume() {}
 
-  SensorProviderProxy* sensor_provider_proxy() const { return provider_; }
+  SensorProviderProxy* sensor_provider_proxy() const { return provider_.Get(); }
 
   device::mojom::blink::SensorType type_;
   using ObserversSet = HeapHashSet<WeakMember<Observer>>;

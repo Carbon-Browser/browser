@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,13 +52,13 @@ class CORE_EXPORT ReadableStreamGenericReader : public ScriptWrappable {
                                 ReadableStreamGenericReader*,
                                 ReadableStream*);
 
-  StreamPromiseResolver* ClosedPromise() const { return closed_promise_; }
+  StreamPromiseResolver* ClosedPromise() const { return closed_promise_.Get(); }
 
   void Trace(Visitor*) const override;
 
  private:
+  friend class PipeToEngine;
   friend class ReadableStreamDefaultController;
-  friend class ReadableStream;
 
   Member<StreamPromiseResolver> closed_promise_;
 

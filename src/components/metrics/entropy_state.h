@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,15 @@ class EntropyState final {
   // Registers low_entropy_source and old_low_entropy_source in the prefs.
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Overriding the entropy source preferences with new values as given by
+  // Ash upon initialization, before the MetricsService gets created.
+  static void SetExternalPrefs(PrefService* local_state,
+                               int low_entropy_source,
+                               int old_low_entropy_source,
+                               int pseudo_low_entropy_source);
+#endif
+
   // Returns the high entropy source for this client, which is composed of a
   // client ID and the low entropy source. This is intended to be unique for
   // each install. |initial_client_id| is the client_id that was used to
@@ -51,6 +60,14 @@ class EntropyState final {
   // value, but instead returns |kLowEntropySourceNotSet|, if there is none. See
   // the |old_low_entropy_source_| comment for more info.
   int GetOldLowEntropySource();
+
+  // The argument used to generate a non-identifying entropy source. We want no
+  // more than 13 bits of entropy, so use this max to return a number in the
+  // range [0, 7999] as the entropy source (12.97 bits of entropy).
+  //
+  // The value should be kept consistent with
+  // LowEntropySource.MAX_LOW_ENTROPY_SIZE in Java.
+  static constexpr int kMaxLowEntropySize = 8000;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(EntropyStateTest, LowEntropySourceNotReset);

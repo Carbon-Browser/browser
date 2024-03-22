@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@
 
 #include <stddef.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "google_apis/gcm/engine/connection_event_tracker.h"
 #include "google_apis/gcm/engine/connection_handler.h"
@@ -95,8 +96,8 @@ class GCM_EXPORT ConnectionFactoryImpl
 
   // Callback for Socket connection completion. This is public for testing.
   void OnConnectDone(int result,
-                     const absl::optional<net::IPEndPoint>& local_addr,
-                     const absl::optional<net::IPEndPoint>& peer_addr,
+                     const std::optional<net::IPEndPoint>& local_addr,
+                     const std::optional<net::IPEndPoint>& peer_addr,
                      mojo::ScopedDataPipeConsumerHandle receive_stream,
                      mojo::ScopedDataPipeProducerHandle send_stream);
 

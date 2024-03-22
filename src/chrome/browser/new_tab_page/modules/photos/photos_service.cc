@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -138,9 +138,9 @@ void PhotosService::OnPrimaryAccountChanged(
   }
 }
 
-void PhotosService::GetMemories(GetMemoriesCallback callback) {
+void PhotosService::GetMemories(GetMemoriesCallback get_memories_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  callbacks_.push_back(std::move(callback));
+  callbacks_.push_back(std::move(get_memories_callback));
   if (callbacks_.size() > 1) {
     return;
   }
@@ -421,7 +421,7 @@ void PhotosService::OnJsonParsed(
     return;
   }
 
-  auto* memories = result->FindListPath("memory");
+  auto* memories = result->GetDict().FindList("memory");
   if (!memories) {
     base::UmaHistogramCustomCounts("NewTabPage.Photos.DataResponseCount", 0, 0,
                                    10, 11);
@@ -434,14 +434,14 @@ void PhotosService::OnJsonParsed(
   std::vector<photos::mojom::MemoryPtr> memory_list;
 
   base::UmaHistogramCustomCounts("NewTabPage.Photos.DataResponseCount",
-                                 memories->GetListDeprecated().size(), 0, 10,
-                                 11);
-  for (const auto& memory : memories->GetListDeprecated()) {
-    auto* title = memory.FindStringPath("title.header");
-    auto* memory_id = memory.FindStringPath("memoryMediaKey");
-    auto* cover_id = memory.FindStringPath("coverMediaKey");
-    auto* cover_url = memory.FindStringPath("coverUrl");
-    auto* cover_dat_url = memory.FindStringPath("coverDatUrl");
+                                 memories->size(), 0, 10, 11);
+  for (const auto& memory : *memories) {
+    const auto& memory_dict = memory.GetDict();
+    auto* title = memory_dict.FindStringByDottedPath("title.header");
+    auto* memory_id = memory_dict.FindString("memoryMediaKey");
+    auto* cover_id = memory_dict.FindString("coverMediaKey");
+    auto* cover_url = memory_dict.FindString("coverUrl");
+    auto* cover_dat_url = memory_dict.FindString("coverDatUrl");
     if (!title || !memory_id || !cover_id || (!cover_url && !cover_dat_url)) {
       continue;
     }

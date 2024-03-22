@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,21 +10,18 @@
 namespace storage {
 
 BigIOBuffer::BigIOBuffer(mojo_base::BigBuffer buffer)
-    : net::IOBufferWithSize(nullptr, buffer.size()),
-      buffer_(std::move(buffer)) {
+    : net::IOBuffer(nullptr, buffer.size()), buffer_(std::move(buffer)) {
   data_ = reinterpret_cast<char*>(buffer_.data());
 }
 
 BigIOBuffer::BigIOBuffer(size_t size)
-    : net::IOBufferWithSize(nullptr, size),
-      buffer_(mojo_base::BigBuffer(size)) {
+    : net::IOBuffer(nullptr, size), buffer_(mojo_base::BigBuffer(size)) {
   data_ = reinterpret_cast<char*>(buffer_.data());
   DCHECK(data_);
 }
 
 BigIOBuffer::~BigIOBuffer() {
-  // Must clear `data_` so base class doesn't attempt to delete[] a pointer
-  // it doesn't own.
+  // Must clear `data_` so base class doesn't hold a dangling ptr.
   data_ = nullptr;
   size_ = 0UL;
 }

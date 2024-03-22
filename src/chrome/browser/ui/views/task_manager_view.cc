@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <stddef.h>
 
-#include "base/callback_helpers.h"
 #include "base/containers/adapters.h"
+#include "base/functional/callback_helpers.h"
+#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/task_manager/task_manager_interface.h"
 #include "chrome/browser/task_manager/task_manager_observer.h"
@@ -22,7 +22,7 @@
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -48,6 +48,7 @@
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_WIN)
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/shell_integration_win.h"
 #include "ui/base/win/shell.h"
 #include "ui/views/win/hwnd_util.h"
@@ -123,14 +124,17 @@ bool TaskManagerView::IsColumnVisible(int column_id) const {
   return tab_table_->IsColumnVisible(column_id);
 }
 
-void TaskManagerView::SetColumnVisibility(int column_id, bool new_visibility) {
+bool TaskManagerView::SetColumnVisibility(int column_id, bool new_visibility) {
   // Check if there is at least 1 visible column before changing the visibility.
   // If this column would be the last column to be visible and its hiding, then
   // prevent this column visibility change. see crbug.com/1320307 for details.
-  if (!new_visibility && tab_table_->visible_columns().size() <= 1)
-    return;
+  if (!new_visibility && tab_table_->visible_columns().size() <= 1) {
+    return false;
+  }
 
+  const bool currently_visible = tab_table_->IsColumnVisible(column_id);
   tab_table_->SetColumnVisibility(column_id, new_visibility);
+  return new_visibility != currently_visible;
 }
 
 bool TaskManagerView::IsTableSorted() const {
@@ -187,6 +191,7 @@ bool TaskManagerView::ExecuteWindowsCommand(int command_id) {
 }
 
 ui::ImageModel TaskManagerView::GetWindowIcon() {
+  TRACE_EVENT0("ui", "TaskManagerView::GetWindowIcon");
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // TODO(crbug.com/1162514): Move apps::CreateStandardIconImage to some
   // where lower in the stack.
@@ -391,11 +396,9 @@ void TaskManagerView::RetrieveSavedAlwaysOnTopState() {
   if (!g_browser_process->local_state())
     return;
 
-  if (const base::Value* dictionary =
-          g_browser_process->local_state()->GetDictionary(GetWindowName())) {
-    is_always_on_top_ =
-        dictionary->FindBoolKey("always_on_top").value_or(false);
-  }
+  const base::Value::Dict& dictionary =
+      g_browser_process->local_state()->GetDict(GetWindowName());
+  is_always_on_top_ = dictionary.FindBool("always_on_top").value_or(false);
 }
 
 BEGIN_METADATA(TaskManagerView, views::DialogDelegateView)

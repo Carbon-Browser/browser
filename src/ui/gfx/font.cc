@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,8 @@ Font& Font::operator=(const Font& other) {
 }
 
 #if BUILDFLAG(IS_APPLE)
-Font::Font(NativeFont native_font)
-    : platform_font_(PlatformFont::CreateFromNativeFont(native_font)) {
-}
+Font::Font(CTFontRef ct_font)
+    : platform_font_(PlatformFont::CreateFromCTFont(ct_font)) {}
 #endif
 
 Font::Font(PlatformFont* platform_font) : platform_font_(platform_font) {
@@ -95,8 +94,8 @@ const FontRenderParams& Font::GetFontRenderParams() const {
 }
 
 #if BUILDFLAG(IS_APPLE)
-NativeFont Font::GetNativeFont() const {
-  return platform_font_->GetNativeFont();
+CTFontRef Font::GetCTFont() const {
+  return platform_font_->GetCTFont();
 }
 #endif
 

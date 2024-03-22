@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
 #include "google_apis/gaia/oauth2_access_token_consumer.h"
 
@@ -21,7 +22,7 @@
 //
 // This class can handle one request at a time. To parallelize requests,
 // create multiple instances.
-class OAuth2AccessTokenFetcher {
+class COMPONENT_EXPORT(GOOGLE_APIS) OAuth2AccessTokenFetcher {
  public:
   explicit OAuth2AccessTokenFetcher(OAuth2AccessTokenConsumer* consumer);
 

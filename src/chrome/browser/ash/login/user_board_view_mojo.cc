@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include <utility>
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/login_screen.h"
 #include "ash/public/cpp/login_screen_model.h"
 #include "ash/public/cpp/login_types.h"
@@ -14,55 +13,6 @@
 #include "chrome/browser/ui/ash/login_screen_client_impl.h"
 
 namespace ash {
-namespace {
-
-EasyUnlockIconState GetEasyUnlockIconStateFromUserPodCustomIconId(
-    proximity_auth::ScreenlockBridge::UserPodCustomIcon icon) {
-  switch (icon) {
-    case proximity_auth::ScreenlockBridge::USER_POD_CUSTOM_ICON_NONE:
-      return EasyUnlockIconState::NONE;
-    case proximity_auth::ScreenlockBridge::USER_POD_CUSTOM_ICON_HARDLOCKED:
-      return EasyUnlockIconState::HARDLOCKED;
-    case proximity_auth::ScreenlockBridge::USER_POD_CUSTOM_ICON_LOCKED:
-      return EasyUnlockIconState::LOCKED;
-    case proximity_auth::ScreenlockBridge::
-        USER_POD_CUSTOM_ICON_LOCKED_TO_BE_ACTIVATED:
-      return EasyUnlockIconState::LOCKED_TO_BE_ACTIVATED;
-    case proximity_auth::ScreenlockBridge::
-        USER_POD_CUSTOM_ICON_LOCKED_WITH_PROXIMITY_HINT:
-      return EasyUnlockIconState::LOCKED_WITH_PROXIMITY_HINT;
-    case proximity_auth::ScreenlockBridge::USER_POD_CUSTOM_ICON_UNLOCKED:
-      return EasyUnlockIconState::UNLOCKED;
-    case proximity_auth::ScreenlockBridge::USER_POD_CUSTOM_ICON_SPINNER:
-      return EasyUnlockIconState::SPINNER;
-  }
-}
-
-// Converts parameters to a mojo struct that can be sent to the
-// screenlock view-based UI.
-EasyUnlockIconInfo ToEasyUnlockIconInfo(
-    const proximity_auth::ScreenlockBridge::UserPodCustomIconInfo&
-        user_pod_icon_info) {
-  EasyUnlockIconInfo easy_unlock_icon_info;
-  easy_unlock_icon_info.icon_state =
-      GetEasyUnlockIconStateFromUserPodCustomIconId(user_pod_icon_info.icon());
-
-  if (!user_pod_icon_info.tooltip().empty()) {
-    easy_unlock_icon_info.tooltip = user_pod_icon_info.tooltip();
-    easy_unlock_icon_info.autoshow_tooltip =
-        user_pod_icon_info.autoshow_tooltip();
-  }
-
-  if (!user_pod_icon_info.aria_label().empty())
-    easy_unlock_icon_info.aria_label = user_pod_icon_info.aria_label();
-
-  if (user_pod_icon_info.hardlock_on_click())
-    easy_unlock_icon_info.hardlock_on_click = true;
-
-  return easy_unlock_icon_info;
-}
-
-}  // namespace
 
 UserBoardViewMojo::UserBoardViewMojo() {}
 
@@ -77,10 +27,9 @@ void UserBoardViewMojo::SetPublicSessionDisplayName(
 
 void UserBoardViewMojo::SetPublicSessionLocales(
     const AccountId& account_id,
-    std::unique_ptr<base::ListValue> locales,
+    base::Value::List locales,
     const std::string& default_locale,
     bool multiple_recommended_locales) {
-  DCHECK(locales);
   LoginScreen::Get()->GetModel()->SetPublicSessionLocales(
       account_id,
       lock_screen_utils::FromListValueToLocaleItem(std::move(locales)),
@@ -106,30 +55,15 @@ void UserBoardViewMojo::ShowBannerMessage(const std::u16string& message,
   LoginScreen::Get()->GetModel()->UpdateWarningMessage(message);
 }
 
-void UserBoardViewMojo::ShowUserPodCustomIcon(
-    const AccountId& account_id,
-    const proximity_auth::ScreenlockBridge::UserPodCustomIconInfo& icon_info) {
-  LoginScreen::Get()->GetModel()->ShowEasyUnlockIcon(
-      account_id, ToEasyUnlockIconInfo(icon_info));
-}
-
-void UserBoardViewMojo::HideUserPodCustomIcon(const AccountId& account_id) {
-  LoginScreen::Get()->GetModel()->ShowEasyUnlockIcon(account_id, {});
-}
-
 void UserBoardViewMojo::SetSmartLockState(const AccountId& account_id,
                                           SmartLockState state) {
-  if (base::FeatureList::IsEnabled(ash::features::kSmartLockUIRevamp)) {
-    LoginScreen::Get()->GetModel()->SetSmartLockState(account_id, state);
-  }
+  LoginScreen::Get()->GetModel()->SetSmartLockState(account_id, state);
 }
 
 void UserBoardViewMojo::NotifySmartLockAuthResult(const AccountId& account_id,
                                                   bool success) {
-  if (base::FeatureList::IsEnabled(ash::features::kSmartLockUIRevamp)) {
-    LoginScreen::Get()->GetModel()->NotifySmartLockAuthResult(account_id,
-                                                              success);
-  }
+  LoginScreen::Get()->GetModel()->NotifySmartLockAuthResult(account_id,
+                                                            success);
 }
 
 void UserBoardViewMojo::SetAuthType(const AccountId& account_id,

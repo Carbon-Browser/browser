@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/guid.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "components/browser_sync/browser_sync_switches.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/engine/active_devices_invalidation_info.h"
@@ -42,9 +42,11 @@ std::unique_ptr<DeviceInfo> CreateFakeDeviceInfo(
     const ModelTypeSet& interested_data_types,
     base::Time last_updated_timestamp) {
   return std::make_unique<syncer::DeviceInfo>(
-      base::GUID::GenerateRandomV4().AsLowercaseString(), name,
+      base::Uuid::GenerateRandomV4().AsLowercaseString(), name,
       "chrome_version", "user_agent", sync_pb::SyncEnums::TYPE_UNSET,
-      "device_id", "manufacturer_name", "model_name", "full_hardware_class",
+      syncer::DeviceInfo::OsType::kUnknown,
+      syncer::DeviceInfo::FormFactor::kUnknown, "device_id",
+      "manufacturer_name", "model_name", "full_hardware_class",
       last_updated_timestamp, base::Minutes(kPulseIntervalMinutes),
       /*send_tab_to_self_receiving_enabled=*/false,
       /*sharing_info=*/absl::nullopt, /*paask_info=*/absl::nullopt,
@@ -184,6 +186,62 @@ TEST_F(ActiveDevicesProviderImplTest,
       {syncer::BOOKMARKS}));
 }
 
+TEST_F(ActiveDevicesProviderImplTest,
+       ShouldReturnSingleClientForOldInvalidations) {
+  // Add only devices with standalone invalidations.
+  AddDevice("local_device", /*fcm_registration_token=*/"token_1",
+            DefaultInterestedDataTypes(), clock_.Now());
+  AddDevice("remote_device", /*fcm_registration_token=*/"token_2",
+            DefaultInterestedDataTypes(), clock_.Now());
+
+  EXPECT_TRUE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
+
+  // Add a remote device subscribed to old invalidatoins.
+  AddDevice("remote_deivce_2", /*fcm_registration_token=*/"",
+            DefaultInterestedDataTypes(), clock_.Now());
+
+  EXPECT_FALSE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
+}
+
+TEST_F(ActiveDevicesProviderImplTest,
+       ShouldReturnSingleClientForOldInvalidationsForInterestedDataTypes) {
+  AddDevice("local_device", /*fcm_registration_token=*/"token_1",
+            DefaultInterestedDataTypes(), clock_.Now());
+
+  // Add a remote device which is not interested in SESSIONS.
+  AddDevice("remote_device", /*fcm_registration_token=*/"",
+            Difference(DefaultInterestedDataTypes(), {syncer::SESSIONS}),
+            clock_.Now());
+
+  EXPECT_FALSE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
+  EXPECT_TRUE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::SESSIONS}));
+
+  // Add a remote device which does not support interested data types.
+  AddDevice("old_remote_device", /*fcm_registration_token=*/"",
+            /*interested_data_types=*/{}, clock_.Now());
+
+  EXPECT_FALSE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
+  EXPECT_FALSE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::SESSIONS}));
+}
+
 TEST_F(ActiveDevicesProviderImplTest, ShouldReturnZeroDevices) {
   const ActiveDevicesInvalidationInfo result =
       active_devices_provider_.CalculateInvalidationInfo(
@@ -196,6 +254,8 @@ TEST_F(ActiveDevicesProviderImplTest, ShouldReturnZeroDevices) {
   EXPECT_FALSE(result.IsSingleClientForTypes({syncer::BOOKMARKS}));
   EXPECT_FALSE(result.IsSingleClientWithStandaloneInvalidationsForTypes(
       {syncer::BOOKMARKS}));
+  EXPECT_FALSE(
+      result.IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
   EXPECT_THAT(
       result.GetFcmRegistrationTokensForInterestedClients({syncer::BOOKMARKS}),
       IsEmpty());

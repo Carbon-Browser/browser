@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,9 +33,10 @@ bool AwPageLoadMetricsMemoryTrackerFactory::ServiceIsCreatedWithBrowserContext()
   return base::FeatureList::IsEnabled(features::kV8PerFrameMemoryMonitoring);
 }
 
-KeyedService* AwPageLoadMetricsMemoryTrackerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AwPageLoadMetricsMemoryTrackerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new page_load_metrics::PageLoadMetricsMemoryTracker();
+  return std::make_unique<page_load_metrics::PageLoadMetricsMemoryTracker>();
 }
 
 content::BrowserContext*

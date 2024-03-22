@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,6 +28,10 @@ public class WebappConstants {
     public static final String EXTRA_THEME_COLOR = "org.chromium.chrome.browser.theme_color";
     public static final String EXTRA_BACKGROUND_COLOR =
             "org.chromium.chrome.browser.background_color";
+    public static final String EXTRA_DARK_THEME_COLOR =
+            "org.chromium.chrome.browser.dark_theme_color";
+    public static final String EXTRA_DARK_BACKGROUND_COLOR =
+            "org.chromium.chrome.browser.dark_background_color";
     public static final String EXTRA_IS_ICON_GENERATED =
             "org.chromium.chrome.browser.is_icon_generated";
     public static final String EXTRA_IS_ICON_ADAPTIVE =

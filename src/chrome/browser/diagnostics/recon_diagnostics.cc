@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ const int64_t kOneKilobyte = 1024;
 const int64_t kOneMegabyte = 1024 * kOneKilobyte;
 
 class InstallTypeTest;
-InstallTypeTest* g_install_type = 0;
+InstallTypeTest* g_install_type = nullptr;
 
 // Check that the disk space in the volume where the user data directory
 // normally lives is not dangerously low.
@@ -297,7 +297,7 @@ class VersionTest : public DiagnosticsTest {
   VersionTest& operator=(const VersionTest&) = delete;
 
   bool ExecuteImpl(DiagnosticsModel::Observer* observer) override {
-    std::string current_version = version_info::GetVersionNumber();
+    std::string current_version(version_info::GetVersionNumber());
     if (current_version.empty()) {
       RecordFailure(DIAG_RECON_EMPTY_VERSION, "Empty Version");
       return true;
@@ -324,9 +324,16 @@ std::unique_ptr<DiagnosticsTest> MakeInstallTypeTest() {
   return std::make_unique<InstallTypeTest>();
 }
 
-std::unique_ptr<DiagnosticsTest> MakeBookMarksTest() {
+std::unique_ptr<DiagnosticsTest> MakeLocalOrSyncableBookmarksTest() {
   base::FilePath path = DiagnosticsTest::GetUserDefaultProfileDir();
-  path = path.Append(bookmarks::kBookmarksFileName);
+  path = path.Append(bookmarks::kLocalOrSyncableBookmarksFileName);
+  return std::make_unique<JSONTest>(path, DIAGNOSTICS_JSON_BOOKMARKS_TEST,
+                                    2 * kOneMegabyte, JSONTest::NON_CRITICAL);
+}
+
+std::unique_ptr<DiagnosticsTest> MakeAccountBookmarksTest() {
+  base::FilePath path = DiagnosticsTest::GetUserDefaultProfileDir();
+  path = path.Append(bookmarks::kAccountBookmarksFileName);
   return std::make_unique<JSONTest>(path, DIAGNOSTICS_JSON_BOOKMARKS_TEST,
                                     2 * kOneMegabyte, JSONTest::NON_CRITICAL);
 }

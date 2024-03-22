@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {str, util} from '../../../common/js/util.js';
+import {unwrapEntry} from '../../../common/js/entry_utils.js';
+import {str} from '../../../common/js/translations.js';
 
 import {ConfirmDialog} from './dialogs.js';
 
@@ -22,6 +23,7 @@ export class ImportCrostiniImageDialog extends ConfirmDialog {
     super(parentNode);
     super.setOkLabel(str('IMPORT_CROSTINI_IMAGE_DIALOG_OK_LABEL'));
 
+    // @ts-ignore: error TS2531: Object is possibly 'null'.
     this.container.classList.add('files-ng');
   }
 
@@ -34,6 +36,7 @@ export class ImportCrostiniImageDialog extends ConfirmDialog {
     super.showWithTitle(
         str('IMPORT_CROSTINI_IMAGE_DIALOG_TITLE'),
         str('IMPORT_CROSTINI_IMAGE_DIALOG_DESCRIPTION'),
-        chrome.fileManagerPrivate.importCrostiniImage.bind(null, entry));
+        chrome.fileManagerPrivate.importCrostiniImage.bind(
+            null, /** @type {!Entry} */ (unwrapEntry(entry))));
   }
 }

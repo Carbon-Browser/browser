@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,16 +13,14 @@ namespace content_settings {
 
 ContentSettingsInfo::ContentSettingsInfo(
     const WebsiteSettingsInfo* website_settings_info,
-    const std::vector<std::string>& allowlisted_schemes,
+    const std::vector<std::string>& allowlisted_primary_schemes,
     const std::set<ContentSetting>& valid_settings,
     IncognitoBehavior incognito_behavior,
-    StorageBehavior storage_behavior,
     OriginRestriction origin_restriction)
     : website_settings_info_(website_settings_info),
-      allowlisted_schemes_(allowlisted_schemes),
+      allowlisted_primary_schemes_(allowlisted_primary_schemes),
       valid_settings_(valid_settings),
       incognito_behavior_(incognito_behavior),
-      storage_behavior_(storage_behavior),
       origin_restriction_(origin_restriction) {}
 
 ContentSettingsInfo::~ContentSettingsInfo() {}

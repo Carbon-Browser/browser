@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,56 +10,60 @@
  * this class via languageHelper.
  */
 
-import '../prefs/prefs.js';
+import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 
-import {assert} from '//resources/js/assert_ts.js';
-import {PromiseResolver} from '//resources/js/promise_resolver.m.js';
+import {assert} from '//resources/js/assert.js';
+import {PromiseResolver} from '//resources/js/promise_resolver.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
-import {CrSettingsPrefs} from '../prefs/prefs_types.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+import {CrSettingsPrefs} from 'chrome://resources/cr_components/settings_prefs/prefs_types.js';
 
 import {LanguagesBrowserProxy, LanguagesBrowserProxyImpl} from './languages_browser_proxy.js';
 import {LanguageHelper, LanguagesModel, LanguageState, SpellCheckLanguageState} from './languages_types.js';
 
-type SpellCheckLanguages = {
-  on: SpellCheckLanguageState[],
-  off: SpellCheckLanguageState[],
-};
+interface SpellCheckLanguages {
+  on: SpellCheckLanguageState[];
+  off: SpellCheckLanguageState[];
+}
 
 const MoveType = chrome.languageSettingsPrivate.MoveType;
 
-// Translate server treats some language codes the same.
-// See also: components/translate/core/common/translate_util.cc.
-const kLanguageCodeToTranslateCode: {[key: string]: string} = {
-  'nb': 'no',
-  'fil': 'tl',
-  'zh-HK': 'zh-TW',
-  'zh-MO': 'zh-TW',
-  'zh-SG': 'zh-CN',
-};
+// For some codes translate uses a different version from Chrome.  Some are
+// ISO 639 codes that have been renamed (e.g. "he" to "iw"). While others are
+// languages that Translate considers similar (e.g. "nb" and "no").
+// See also: components/language/core/common/language_util.cc.
+const kChromeToTranslateCode: Map<string, string> = new Map([
+  ['fil', 'tl'],
+  ['he', 'iw'],
+  ['jv', 'jw'],
+  ['kok', 'gom'],
+  ['nb', 'no'],
+]);
 
-// Some ISO 639 language codes have been renamed, e.g. "he" to "iw", but
-// Translate still uses the old versions. TODO(michaelpg): Chrome does too.
-// Follow up with Translate owners to understand the right thing to do.
-const kTranslateLanguageSynonyms: {[key: string]: string} = {
-  'he': 'iw',
-  'jv': 'jw',
-};
+// Reverse of the map above. Just the languages code that translate uses but
+// Chrome has a different code for.
+const kTranslateToChromeCode: Map<string, string> = new Map([
+  ['gom', 'kok'],
+  ['iw', 'he'],
+  ['jw', 'jv'],
+  ['no', 'nb'],
+  ['tl', 'fil'],
+]);
 
 // The fake language name used for ARC IMEs. The value must be in sync with the
 // one in ui/base/ime/ash/extension_ime_util.h.
 const kArcImeLanguage: string = '_arc_ime_language_';
 
-type ModelArgs = {
-  supportedLanguages: chrome.languageSettingsPrivate.Language[],
-  translateTarget: string,
-  alwaysTranslateCodes: string[],
-  neverTranslateCodes: string[],
-  startingUILanguage: string,
-  supportedInputMethods?: chrome.languageSettingsPrivate.InputMethod[],
-  currentInputMethodId?: string,
-};
+interface ModelArgs {
+  supportedLanguages: chrome.languageSettingsPrivate.Language[];
+  translateTarget: string;
+  alwaysTranslateCodes: string[];
+  neverTranslateCodes: string[];
+  neverTranslateSites: string[];
+  startingUILanguage: string;
+  supportedInputMethods?: chrome.languageSettingsPrivate.InputMethod[];
+  currentInputMethodId?: string;
+}
 
 /**
  * Singleton element that generates the languages model on start-up and
@@ -132,8 +136,10 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
           'prefs.translate_allowlists.value.*, languages)',
       'neverTranslateLanguagesPrefChanged_(' +
           'prefs.translate_blocked_languages.value.*, languages)',
+      'neverTranslateSitesPrefChanged_(' +
+          'prefs.translate_site_blocklist_with_time.value.*, languages)',
       // <if expr="is_win">
-      'prospectiveUILanguageChanged_(prefs.intl.app_locale.value, languages)',
+      'prospectiveUiLanguageChanged_(prefs.intl.app_locale.value, languages)',
       // </if>
       'preferredLanguagesPrefChanged_(' +
           'prefs.intl.accept_languages.value, languages)',
@@ -196,6 +202,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
       translateTarget: '',
       alwaysTranslateCodes: [],
       neverTranslateCodes: [],
+      neverTranslateSites: [],
       startingUILanguage: '',
 
       // Only used by ChromeOS
@@ -209,38 +216,35 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
 
     // Get the language list.
     promises.push(
-        new Promise<chrome.languageSettingsPrivate.Language[]>(resolve => {
-          this.languageSettingsPrivate_.getLanguageList(resolve);
-        }).then(result => {
+        this.languageSettingsPrivate_.getLanguageList().then(result => {
           args.supportedLanguages = result;
         }));
 
     // Get the translate target language.
-    promises.push(new Promise<string>(resolve => {
-                    this.languageSettingsPrivate_.getTranslateTargetLanguage(
-                        resolve);
-                  }).then(result => args.translateTarget = result));
+    promises.push(
+        this.languageSettingsPrivate_.getTranslateTargetLanguage().then(
+            result => {
+              args.translateTarget = result;
+            }));
 
     // Get the list of language-codes to always translate.
-    promises.push(new Promise<string[]>(resolve => {
-                    this.languageSettingsPrivate_.getAlwaysTranslateLanguages(
-                        resolve);
-                  }).then(result => {
-      args.alwaysTranslateCodes = result;
-    }));
+    promises.push(
+        this.languageSettingsPrivate_.getAlwaysTranslateLanguages().then(
+            result => {
+              args.alwaysTranslateCodes = result;
+            }));
 
     // Get the list of language-codes to never translate.
-    promises.push(new Promise<string[]>(resolve => {
-                    this.languageSettingsPrivate_.getNeverTranslateLanguages(
-                        resolve);
-                  }).then(result => {
-      args.neverTranslateCodes = result;
-    }));
+    promises.push(
+        this.languageSettingsPrivate_.getNeverTranslateLanguages().then(
+            result => {
+              args.neverTranslateCodes = result;
+            }));
 
     // <if expr="is_win">
     // Fetch the starting UI language, which affects which actions should be
     // enabled.
-    promises.push(this.browserProxy_.getProspectiveUILanguage().then(
+    promises.push(this.browserProxy_.getProspectiveUiLanguage().then(
         prospectiveUILanguage => {
           this.originalProspectiveUILanguage_ =
               prospectiveUILanguage || window.navigator.language;
@@ -261,7 +265,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
           this.onSpellcheckDictionariesChanged_.bind(this);
       this.languageSettingsPrivate_.onSpellcheckDictionariesChanged.addListener(
           this.boundOnSpellcheckDictionariesChanged_);
-      this.languageSettingsPrivate_.getSpellcheckDictionaryStatuses(
+      this.languageSettingsPrivate_.getSpellcheckDictionaryStatuses().then(
           this.boundOnSpellcheckDictionariesChanged_);
       // </if>
 
@@ -285,7 +289,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
   /**
    * Updates the prospective UI language based on the new pref value.
    */
-  private prospectiveUILanguageChanged_(prospectiveUILanguage: string) {
+  private prospectiveUiLanguageChanged_(prospectiveUILanguage: string) {
     this.set(
         'languages.prospectiveUILanguage',
         prospectiveUILanguage || this.originalProspectiveUILanguage_);
@@ -313,15 +317,13 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
 
     // <if expr="not is_macosx">
     if (this.boundOnSpellcheckDictionariesChanged_) {
-      this.languageSettingsPrivate_.getSpellcheckDictionaryStatuses(
+      this.languageSettingsPrivate_.getSpellcheckDictionaryStatuses().then(
           this.boundOnSpellcheckDictionariesChanged_);
     }
     // </if>
 
     // Update translate target language.
-    new Promise(resolve => {
-      this.languageSettingsPrivate_.getTranslateTargetLanguage(resolve);
-    }).then(result => {
+    this.languageSettingsPrivate_.getTranslateTargetLanguage().then(result => {
       this.set('languages.translateTarget', result);
     });
   }
@@ -334,12 +336,12 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
       return;
     }
 
-    const spellCheckSet =
-        this.makeSetFromArray_(this.getPref('spellcheck.dictionaries').value);
+    const spellCheckSet = this.makeSetFromArray_(
+        this.getPref<string[]>('spellcheck.dictionaries').value);
     const spellCheckForcedSet = this.makeSetFromArray_(
-        this.getPref('spellcheck.forced_dictionaries').value);
+        this.getPref<string[]>('spellcheck.forced_dictionaries').value);
     const spellCheckBlockedSet = this.makeSetFromArray_(
-        this.getPref('spellcheck.blocked_dictionaries').value);
+        this.getPref<string[]>('spellcheck.blocked_dictionaries').value);
 
     for (let i = 0; i < this.languages.enabled.length; i++) {
       const languageState = this.languages.enabled[i];
@@ -379,7 +381,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
      */
     const getPrefAndDedupe = (prefName: string): string[] => {
       const result =
-          this.getPref(prefName).value.filter((x: string) => !seenCodes.has(x));
+          this.getPref<string[]>(prefName).value.filter(x => !seenCodes.has(x));
       result.forEach((code: string) => seenCodes.add(code));
       return result;
     };
@@ -451,7 +453,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
     const alwaysTranslateCodes =
         Object.keys(this.getPref('translate_allowlists').value);
     const alwaysTranslateLanguages =
-        alwaysTranslateCodes.map(code => this.getLanguage(code));
+        alwaysTranslateCodes.map((code: string) => this.getLanguage(code));
     this.set('languages.alwaysTranslate', alwaysTranslateLanguages);
   }
 
@@ -463,10 +465,22 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
       return;
     }
     const neverTranslateCodes =
-        this.getPref('translate_blocked_languages').value;
+        this.getPref<string[]>('translate_blocked_languages').value;
     const neverTranslateLanguages =
-        neverTranslateCodes.map((code: string) => this.getLanguage(code));
+        neverTranslateCodes.map(code => this.getLanguage(code));
     this.set('languages.neverTranslate', neverTranslateLanguages);
+  }
+
+  /**
+   * Updates the list of never translate sites from translate prefs.
+   */
+  private neverTranslateSitesPrefChanged_() {
+    if (this.prefs === undefined || this.languages === undefined) {
+      return;
+    }
+    const neverTranslateSites =
+        Object.keys(this.getPref('translate_site_blocklist_with_time').value);
+    this.set('languages.neverTranslateSites', neverTranslateSites);
   }
 
   private translateLanguagesPrefChanged_() {
@@ -516,7 +530,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
     let prospectiveUILanguage;
     // <if expr="is_win">
     // eslint-disable-next-line prefer-const
-    prospectiveUILanguage = this.getPref('intl.app_locale').value ||
+    prospectiveUILanguage = this.getPref<string>('intl.app_locale').value ||
         this.originalProspectiveUILanguage_;
     // </if>
 
@@ -534,7 +548,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
     const alwaysTranslateLanguages =
         args.alwaysTranslateCodes.map(code => this.getLanguage(code)!);
 
-    const neverTranslateLangauges =
+    const neverTranslateLanguages =
         args.neverTranslateCodes.map(code => this.getLanguage(code)!);
 
     const model = {
@@ -542,7 +556,8 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
       enabled: enabledLanguageStates,
       translateTarget: args.translateTarget,
       alwaysTranslate: alwaysTranslateLanguages,
-      neverTranslate: neverTranslateLangauges,
+      neverTranslate: neverTranslateLanguages,
+      neverTranslateSites: args.neverTranslateSites,
       spellCheckOnLanguages,
       spellCheckOffLanguages,
       // <if expr="is_win">
@@ -567,13 +582,14 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
       prospectiveUILanguage: string|undefined): LanguageState[] {
     assert(CrSettingsPrefs.isInitialized);
 
-    const pref = this.getPref('intl.accept_languages');
+    const pref = this.getPref<string>('intl.accept_languages');
     const enabledLanguageCodes = pref.value.split(',');
-    const languagesForcedPref = this.getPref('intl.forced_languages');
-    const spellCheckPref = this.getPref('spellcheck.dictionaries');
-    const spellCheckForcedPref = this.getPref('spellcheck.forced_dictionaries');
+    const languagesForcedPref = this.getPref<string[]>('intl.forced_languages');
+    const spellCheckPref = this.getPref<string[]>('spellcheck.dictionaries');
+    const spellCheckForcedPref =
+        this.getPref<string[]>('spellcheck.forced_dictionaries');
     const spellCheckBlockedPref =
-        this.getPref('spellcheck.blocked_dictionaries');
+        this.getPref<string[]>('spellcheck.blocked_dictionaries');
     const languageForcedSet = this.makeSetFromArray_(languagesForcedPref.value);
     const spellCheckSet = this.makeSetFromArray_(
         spellCheckPref.value.concat(spellCheckForcedPref.value));
@@ -583,7 +599,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
         this.makeSetFromArray_(spellCheckBlockedPref.value);
 
     const translateBlockedPrefValue =
-        this.getPref('translate_blocked_languages').value as string[];
+        this.getPref<string[]>('translate_blocked_languages').value;
     const translateBlockedSet =
         this.makeSetFromArray_(translateBlockedPrefValue);
 
@@ -712,8 +728,8 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
    * Sets the prospective UI language to the chosen language. This won't affect
    * the actual UI language until a restart.
    */
-  setProspectiveUILanguage(languageCode: string) {
-    this.browserProxy_.setProspectiveUILanguage(languageCode);
+  setProspectiveUiLanguage(languageCode: string) {
+    this.browserProxy_.setProspectiveUiLanguage(languageCode);
   }
 
   /**
@@ -733,6 +749,20 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
   }
 
   /**
+   * @param language
+   * @return the [displayName] - [nativeDisplayName] if displayName and
+   * nativeDisplayName are different.
+   * If they're the same than only returns the displayName.
+   */
+  getFullName(language: chrome.languageSettingsPrivate.Language): string {
+    let fullName = language.displayName;
+    if (language.displayName !== language.nativeDisplayName) {
+      fullName += ' - ' + language.nativeDisplayName;
+    }
+    return fullName;
+  }
+
+  /**
    * @return True if the language is for ARC IMEs.
    */
   isLanguageCodeForArcIme(languageCode: string): boolean {
@@ -740,20 +770,37 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
   }
 
   /**
-   *  @return True if the language can be translated by Chrome.
+   *  @return True if the language is supported by Translate as a base and not
+   * an extended sub-code (i.e. "it-CH" and "es-MX" are both marked as
+   * supporting translation but only "it" and "es" are actually supported by the
+   * Translate server.
    */
-  isLanguageTranslatable(language: chrome.languageSettingsPrivate.Language):
+  isTranslateBaseLanguage(language: chrome.languageSettingsPrivate.Language):
       boolean {
+    // The language must be marked as translatable.
+    if (!language.supportsTranslate) {
+      return false;
+    }
+
     if (language.code === 'zh-CN' || language.code === 'zh-TW') {
       // In Translate, general Chinese is not used, and the sub code is
       // necessary as a language code for the Translate server.
       return true;
     }
-    if (language.code === this.getLanguageCodeWithoutRegion(language.code) &&
-        language.supportsTranslate) {
+
+    if (language.code === 'mni-Mtei') {
+      // Translate uses the Meitei Mayek script for Manipuri
       return true;
     }
-    return false;
+
+    const baseLanguage = this.getBaseLanguage(language.code);
+    if (baseLanguage === 'nb') {
+      // Norwegian Bokmål (nb) is listed as supporting translate but the
+      // Translate server only supports Norwegian (no).
+      return false;
+    }
+    // For all other languages only base languages are supported
+    return language.code === baseLanguage;
   }
 
   /**
@@ -789,25 +836,17 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
     this.languageSettingsPrivate_.disableLanguage(languageCode);
   }
 
-  isOnlyTranslateBlockedLanguage(languageState: LanguageState): boolean {
-    return !languageState.translateEnabled &&
-        this.languages!.enabled.filter(lang => !lang.translateEnabled)
-            .length === 1;
-  }
-
-  canDisableLanguage(languageState: LanguageState): boolean {
+  canDisableLanguage(_languageState: LanguageState): boolean {
+    // <if expr="is_win">
     // Cannot disable the prospective UI language.
-    if (languageState.language.code === this.languages!.prospectiveUILanguage) {
+    if (_languageState.language.code ===
+        this.languages!.prospectiveUILanguage) {
       return false;
     }
+    // </if>
 
     // Cannot disable the only enabled language.
     if (this.languages!.enabled.length === 1) {
-      return false;
-    }
-
-    // Cannot disable the last translate blocked language.
-    if (this.isOnlyTranslateBlockedLanguage(languageState)) {
       return false;
     }
 
@@ -879,8 +918,7 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
   }
 
   /**
-   * Sets the translate target language and adds it to the content languages if
-   * not already there.
+   * Sets the translate target language.
    */
   setTranslateTargetLanguage(languageCode: string) {
     this.languageSettingsPrivate_.setTranslateTargetLanguage(languageCode);
@@ -903,61 +941,44 @@ class SettingsLanguagesElement extends SettingsLanguagesElementBase implements
   }
 
   /**
-   * Converts the language code for translate. There are some differences
-   * between the language set the Translate server uses and that for
-   * Accept-Language.
+   * Converts the language code to Translate server format where some deprecated
+   * ISO 639 codes are used. The only sub-codes that Translate supports are for
+   * "zh" where zh-HK is equivalent to zh-TW. For all other languages only
+   * the base language is returned.
    */
   convertLanguageCodeForTranslate(languageCode: string): string {
-    if (languageCode in kLanguageCodeToTranslateCode) {
-      return kLanguageCodeToTranslateCode[languageCode];
+    const base = this.getBaseLanguage(languageCode);
+    if (base === 'zh') {
+      return languageCode === 'zh-HK' ? 'zh-TW' : languageCode;
     }
 
-    const main = languageCode.split('-')[0];
-    if (main === 'zh') {
-      // In Translate, general Chinese is not used, and the sub code is
-      // necessary as a language code for the Translate server.
-      return languageCode;
-    }
-    if (main in kTranslateLanguageSynonyms) {
-      return kTranslateLanguageSynonyms[main];
-    }
-
-    return main;
+    return kChromeToTranslateCode.get(base) || base;
   }
 
   /**
-   * Given a language code, returns just the base language. E.g., converts
-   * 'en-GB' to 'en'.
+   * Converts deprecated ISO 639 language codes to Chrome format.
    */
-  getLanguageCodeWithoutRegion(languageCode: string): string {
-    // The Norwegian languages fall under the 'no' macrolanguage.
-    if (languageCode === 'nb' || languageCode === 'nn') {
-      return 'no';
-    }
+  convertLanguageCodeForChrome(languageCode: string): string {
+    return kTranslateToChromeCode.get(languageCode) || languageCode;
+  }
 
-    // The installer still uses the old language code "iw", instead of "he",
-    // for Hebrew. It needs to be converted to "he", otherwise it will not be
-    // found in supportedLanguageMap_.
-    //
-    // Note that this value is saved in the user's local state. Even
-    // if the installer is changed to use "he", because the installer does not
-    // overwrite this value, the conversion is still needed for old users.
-    if (languageCode === 'iw') {
-      return 'he';
-    }
-
-    // Match the characters before the hyphen.
-    const result = languageCode.match(/^([^-]+)-?/)!;
-    assert(result.length === 2);
-    return result[1];
+  /**
+   * Given a language code, returns just the base language without sub-codes.
+   */
+  getBaseLanguage(languageCode: string): string {
+    return languageCode.split('-')[0];
   }
 
   getLanguage(languageCode: string): chrome.languageSettingsPrivate.Language
       |undefined {
-    // If a languageCode is not found, try language without location.
-    return this.supportedLanguageMap_.get(languageCode) ||
-        this.supportedLanguageMap_.get(
-            this.getLanguageCodeWithoutRegion(languageCode));
+    if (this.supportedLanguageMap_.has(languageCode)) {
+      return this.supportedLanguageMap_.get(languageCode);
+    }
+
+    // If no languageCode is found, try the base Chrome format.
+    const chromeLanguage =
+        this.convertLanguageCodeForChrome(this.getBaseLanguage(languageCode));
+    return this.supportedLanguageMap_.get(chromeLanguage);
   }
 
   /**

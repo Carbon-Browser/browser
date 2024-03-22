@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list_threadsafe.h"
 #include "chrome/browser/sync_file_system/local/local_file_sync_status.h"
 #include "chrome/browser/sync_file_system/sync_status_code.h"
@@ -58,11 +58,6 @@ class CannedSyncableFileSystem
   typedef base::RepeatingCallback<void(int64_t)> WriteCallback;
   typedef storage::FileSystemOperation::FileEntryList FileEntryList;
 
-  enum QuotaMode {
-    QUOTA_ENABLED,
-    QUOTA_DISABLED,
-  };
-
   CannedSyncableFileSystem(
       const GURL& origin,
       bool in_memory_file_system,
@@ -75,7 +70,7 @@ class CannedSyncableFileSystem
   ~CannedSyncableFileSystem() override;
 
   // SetUp must be called before using this instance.
-  void SetUp(QuotaMode quota_mode);
+  void SetUp();
 
   // TearDown must be called before destructing this instance.
   void TearDown();

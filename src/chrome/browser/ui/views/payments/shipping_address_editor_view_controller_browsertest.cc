@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
 #include "chrome/browser/ui/views/payments/validating_textfield.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/geo/autofill_country.h"
 #include "components/autofill/core/browser/geo/test_region_data_loader.h"
@@ -48,7 +49,8 @@ const char16_t kCountryWithoutStates[] = u"Albania";
 const char16_t kCountryWithoutStatesCode[] = u"AL";
 const char16_t kCountryWithoutStatesPhoneNumber[] = u"+35542223446";
 
-const base::Time kJanuary2017 = base::Time::FromDoubleT(1484505871);
+const base::Time kJanuary2017 =
+    base::Time::FromSecondsSinceUnixEpoch(1484505871);
 
 }  // namespace
 
@@ -194,7 +196,7 @@ class DISABLED_PaymentRequestShippingAddressEditorTest
     }
     country_combobox->SetSelectedRow(i);
     country_combobox->OnBlur();
-    WaitForObservedEvent();
+    ASSERT_TRUE(WaitForObservedEvent());
   }
 
   PersonalDataLoadedObserverMock personal_data_observer_;
@@ -281,8 +283,8 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
       .WillOnce(QuitMessageLoop(&data_loop));
   views::View* editor_sheet = dialog_view()->GetViewByID(
       static_cast<int>(DialogViewID::SHIPPING_ADDRESS_EDITOR_SHEET));
-  editor_sheet->AcceleratorPressed(
-      ui::Accelerator(ui::VKEY_RETURN, ui::EF_NONE));
+  EXPECT_TRUE(editor_sheet->AcceleratorPressed(
+      ui::Accelerator(ui::VKEY_RETURN, ui::EF_NONE)));
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
@@ -409,7 +411,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
     country_combobox = nullptr;
     country_model = nullptr;
     region_combobox = nullptr;
-    WaitForObservedEvent();
+    ASSERT_TRUE(WaitForObservedEvent());
 
     // Some types could have been lost in previous countries and may now
     // available in this country.
@@ -507,7 +509,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   ResetEventWaiter(DialogEvent::EDITOR_VIEW_UPDATED);
   test_region_data_loader_.SendAsynchronousData(
       std::vector<std::pair<std::string, std::string>>());
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Now any textual value can be set for the ADDRESS_HOME_STATE.
   SetFieldTestValue(autofill::ADDRESS_HOME_STATE);
@@ -541,11 +543,9 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
                        SelectingIncompleteAddress) {
   NavigateTo("/payment_request_dynamic_shipping_test.html");
   // Add incomplete address.
-  autofill::AutofillProfile profile;
+  autofill::AutofillProfile profile(
+      AddressCountryCode(base::UTF16ToUTF8(kCountryWithoutStatesCode)));
   profile.SetInfo(autofill::NAME_FULL, kNameFull, kLocale);
-  // Also set non-default country, to make sure proper fields will be used.
-  profile.SetInfo(autofill::ADDRESS_HOME_COUNTRY, kCountryWithoutStates,
-                  kLocale);
   AddAutofillProfile(profile);
 
   InvokePaymentRequestUI();
@@ -609,7 +609,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
 }
 
 // Flaky on ozone: https://crbug.com/1216184
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #define MAYBE_FocusFirstField_Name DISABLED_FocusFirstField_Name
 #else
 #define MAYBE_FocusFirstField_Name FocusFirstField_Name
@@ -638,7 +638,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
 }
 
 // Flaky on ozone: https://crbug.com/1216184
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #define MAYBE_FocusFirstInvalidField_NotName \
   DISABLED_FocusFirstInvalidField_NotName
 #else
@@ -648,7 +648,8 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
                        MAYBE_FocusFirstInvalidField_NotName) {
   NavigateTo("/payment_request_dynamic_shipping_test.html");
   // Add address with only the name set, so that another view takes focus.
-  autofill::AutofillProfile profile;
+  autofill::AutofillProfile profile(
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode);
   profile.SetInfo(autofill::NAME_FULL, kNameFull, "fr_CA");
   AddAutofillProfile(profile);
 
@@ -1361,7 +1362,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
                                DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED});
   ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   EXPECT_EQ(u"ADDRESS LINE ERROR",
             GetErrorLabelForType(autofill::ADDRESS_HOME_STREET_ADDRESS));
